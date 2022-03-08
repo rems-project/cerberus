@@ -257,6 +257,11 @@ module CHERI (C:Capability with type vaddr = N.num) : Memory = struct
 
   type integer_value =
     | IV of provenance * Nat_big_num.num
+    | IC of provenance * C.t
+
+  let num_of_int = function
+    | IV (_,n) -> n
+    | IC (_,c) -> C.cap_get_value c
 
   type floating_value =
     (* TODO: hack hack hack ==> OCaml's float are 64bits *)
@@ -300,10 +305,28 @@ module CHERI (C:Capability with type vaddr = N.num) : Memory = struct
                             true
                          | MC_eq (IV (prov1, n1), IV (prov2, n2)) ->
                             Nat_big_num.equal n1 n2
+                         | MC_eq (IV (prov1, n), IC (prov2, c)) ->
+                            Nat_big_num.equal n (C.cap_get_value c)
+                         | MC_eq (IC (prov1, c), IV (prov2, n)) ->
+                            Nat_big_num.equal n (C.cap_get_value c)
+                         | MC_eq (IC (prov1, c1), IC (prov2, c2)) ->
+                            Nat_big_num.equal (C.cap_get_value c1) (C.cap_get_value c2)
                          | MC_le (IV (prov1, n1), IV (prov2, n2)) ->
                             Nat_big_num.less_equal n1 n2
+                         | MC_le (IV (prov1, n), IC (prov2, c)) ->
+                            Nat_big_num.less_equal n (C.cap_get_value c)
+                         | MC_le (IC (prov1, c), IV (prov2, n)) ->
+                            Nat_big_num.less_equal (C.cap_get_value c) n
+                         | MC_le (IC (prov1, c1), IC (prov2, c2)) ->
+                            Nat_big_num.less_equal (C.cap_get_value c1) (C.cap_get_value c2)
                          | MC_lt (IV (prov1, n1), IV (prov2, n2)) ->
                             Nat_big_num.less n1 n2
+                         | MC_lt (IV (prov1, n), IC (prov2, c)) ->
+                            Nat_big_num.less n (C.cap_get_value c)
+                         | MC_lt (IC (prov1, c), IV (prov2, n)) ->
+                            Nat_big_num.less (C.cap_get_value c) n
+                         | MC_lt (IC (prov1, c1), IC (prov2, c2)) ->
+                            Nat_big_num.less (C.cap_get_value c1) (C.cap_get_value c2)
                          | MC_in_device _ ->
                             failwith "TODO: Concrete, with_constraints: MC_in_device"
                          | MC_or (cs1, cs2) ->
@@ -504,11 +527,19 @@ module CHERI (C:Capability with type vaddr = N.num) : Memory = struct
        (* TODO: remove this idiotic hack when Lem's nat_big_num library expose "format" *)
        P.parens (!^ (string_of_provenance prov) ^^ P.comma ^^^ !^ (C.to_string n))
 
-  let pp_integer_value (IV (prov, n)) =
-    if !Debug_ocaml.debug_level >= 3 then
-      !^ ("<" ^ string_of_provenance prov ^ ">:" ^ Nat_big_num.to_string n)
-    else
-      !^ (Nat_big_num.to_string n)
+  let pp_integer_value = function
+    | (IV (prov, n)) ->
+       if !Debug_ocaml.debug_level >= 3 then
+         !^ ("<" ^ string_of_provenance prov ^ ">:" ^ Nat_big_num.to_string n)
+       else
+         !^ (Nat_big_num.to_string n)
+    | (IC (prov, c)) ->
+       (* TODO: better pretty-printing of capabilities *)
+       let n = (C.cap_get_value c) in
+       if !Debug_ocaml.debug_level >= 3 then
+         !^ ("<" ^ string_of_provenance prov ^ ">:" ^ Nat_big_num.to_string n)
+       else
+         !^ (Nat_big_num.to_string n)
 
   let pp_integer_value_for_core = pp_integer_value
 
@@ -1039,6 +1070,10 @@ module CHERI (C:Capability with type vaddr = N.num) : Memory = struct
                    (AilTypesAux.is_signed_ity ity)
                    (sizeof (Ctype ([], Basic (Integer ity)))) n
                end
+    | MVinteger (ity, IC (prov, c)) ->
+       (* TODO: see if we need special handling for NULL *)
+       (* TODO: see if we need to check here validity tag *)
+       ret @@ List.mapi (fun i b -> AbsByte.v prov ~copy_offset:(Some i) (Some b)) @@ C.encode c
     | MVfloating (fty, fval) ->
        ret @@ List.map (AbsByte.v Prov_none) begin
                   bytes_of_int
@@ -1149,7 +1184,8 @@ module CHERI (C:Capability with type vaddr = N.num) : Memory = struct
     return (alloc_id, addr)
 
 
-  let allocate_object tid pref (IV (_, align)) ty init_opt : pointer_value memM =
+  let allocate_object tid pref int_val ty init_opt : pointer_value memM =
+    let align = num_of_int int_val in
     (*    print_bytemap "ENTERING ALLOC_STATIC" >>= fun () -> *)
     let size = N.of_int (sizeof ty) in
     allocator size align >>= fun (alloc_id, addr) ->
@@ -1253,7 +1289,9 @@ module CHERI (C:Capability with type vaddr = N.num) : Memory = struct
     | _ ->
        return None
 
-  let allocate_region tid pref (IV (_, align_n)) (IV (_, size_n)) =
+  let allocate_region tid pref align_int size_int =
+    let align_n = num_of_int align_int in
+    let size_n = num_of_int size_int in
     allocator size_n align_n >>= fun (alloc_id, addr) ->
     Debug_ocaml.print_debug 1 [] (fun () ->
         "DYNAMIC ALLOC - pref: " ^ String_symbol.string_of_prefix pref ^ (* pref will always be Core *)
@@ -1927,45 +1965,20 @@ module CHERI (C:Capability with type vaddr = N.num) : Memory = struct
     | PV (Prov_none, _) ->
        return false
 
-
   (* _ is integer type *)
-  let ptrfromint int_ty ref_ty (IV (prov, n)) =
-    if not (N.equal n N.zero) then
-      (* STD §6.3.2.3#5 *)
-      Debug_ocaml.warn [] (fun () ->
-          "implementation defined cast from integer to pointer"
-        );
-
-    match int_ty with
-    | Ctype.(Unsigned Intptr_t)| Ctype.(Signed Intptr_t) ->
+  let ptrfromint int_ty ref_ty int_v =
+    match int_ty, int_v with
+    | ((Unsigned Intptr_t),(IC (prov, c)) | (Signed Intptr_t),(IC (prov, c))) ->
        begin
-         let n =
-           let (min, max) = match (Ocaml_implementation.get ()).sizeof_pointer with
-             | Some sz ->
-                let open Nat_big_num in
-                (of_int 0, sub (pow_int (of_int 2) (8*sz)) (of_int 1))
-             | None ->
-                failwith "the concrete memory model requires a complete implementation sizeof POINTER" in
-           (* wrapI *)
-           let dlt = N.succ (N.sub max min) in
-           let r = N.integerRem_f n dlt in
-           if N.less_equal r max then
-             r
-           else
-             N.sub r dlt in
-         let c =
-           let tag = true in (* TODO: load tag *)
-           match C.decode_num n tag with
-           | Some c -> c
-           | None -> failwith "error decoding capability in int to pointer cast"
-         in
+         let addr = C.cap_get_value c in
          if is_PNVI () then
+           (* TODO: not sure if this whole branch is correct for CHERI *)
            (* TODO: device memory? *)
-           if N.equal n N.zero then
+           if N.equal addr N.zero then
              return (PV (Prov_none, PVnull ref_ty))
            else
              get >>= fun st ->
-             begin match find_overlaping st n with
+             begin match find_overlaping st addr with
              | `NoAlloc ->
                 return Prov_none
              | `SingleAlloc alloc_id ->
@@ -1980,20 +1993,36 @@ module CHERI (C:Capability with type vaddr = N.num) : Memory = struct
            match prov with
            | Prov_none ->
               (* TODO: check (in particular is that ok to only allow device pointers when there is no provenance? *)
-              if List.exists (fun (min, max) -> N.less_equal min n && N.less_equal n max) device_ranges then
+              if List.exists (fun (min, max) -> N.less_equal min addr && N.less_equal addr max) device_ranges then
                 return (PV (Prov_device, PVconcrete c))
-              else if N.equal n N.zero then
+              else if N.equal addr N.zero then
                 (* All 0-address capabilities regardless of their
                    validity decoded as NULL. This is defacto behaviour
                    of morello Clang. See intptr3.c example.  *)
                 return (PV (Prov_none, PVnull ref_ty))
               else
+                (* C could be an invalid cap. Consider raising error instead *)
                 return (PV (Prov_none, PVconcrete c))
            | _ ->
+              (* C could be an invalid cap. Consider raising error instead *)
               return (PV (prov, PVconcrete c))
        end
-    | _ -> fail (MerrCHERI CheriMerrIntFromPtr)
-
+    | (Ctype.(Unsigned Intptr_t),(IV (_, _)) | Ctype.(Signed Intptr_t),(IV (_, _))) ->
+       failwith "ptrfromint: invalid encoding for [u]intptr_t"
+    | _, (IV (prov, n)) ->
+       if N.equal n N.zero then
+         if is_PNVI () then
+           (* TODO: device memory? *)
+           return (PV (Prov_none, PVnull ref_ty))
+         else
+           (* All 0-address capabilities regardless of their
+              validity decoded as NULL. This is defacto behaviour
+              of morello Clang. See intptr3.c example.  *)
+           return (PV (Prov_none, PVnull ref_ty))
+       else
+         fail (MerrCHERI CheriMerrIntFromPtr)
+    | _, _ ->
+       fail (MerrCHERI CheriMerrIntFromPtr)
 
   let offsetof_ival tagDefs tag_sym memb_ident =
     let (xs, _) = offsetsof tagDefs tag_sym in
@@ -2007,12 +2036,16 @@ module CHERI (C:Capability with type vaddr = N.num) : Memory = struct
 
   (* will not be used by CHERI. TODO; replace with failwith to make
      sure it is never called *)
-  let array_shift_ptrval (PV (prov, ptrval_)) ty (IV (_, ival)) =
+  let array_shift_ptrval (PV (prov, ptrval_)) ty _ =
     failwith "pure array_shift_ptrval not used in CHERI"
 
   (* TODO: use effectful variant instead. Needs to be added *)
   let member_shift_ptrval (PV (prov, ptrval_)) tag_sym memb_ident =
-    let IV (_, offset) = offsetof_ival (Tags.tagDefs ()) tag_sym memb_ident in
+    let offset =
+      match offsetof_ival (Tags.tagDefs ()) tag_sym memb_ident with
+      | IV (_, offset) -> offset
+      | IC (_, c) -> C.cap_get_value c
+    in
     PV (prov, match ptrval_ with
               | PVnull ty ->
                  (* TODO: unsure, this might just be undefined (gcc-torture assumes the
@@ -2030,7 +2063,8 @@ module CHERI (C:Capability with type vaddr = N.num) : Memory = struct
                  PVconcrete c)
 
   (* this will be used for pointer arithmetics *)
-  let eff_array_shift_ptrval loc ptrval ty (IV (_, ival)) =
+  let eff_array_shift_ptrval loc ptrval ty ival_int =
+    let ival = num_of_int ival_int in
     (* KKK print_endline ("HELLO eff_array_shift_ptrval ==> " ^ Pp_utils.to_plain_string (pp_pointer_value ptrval)); *)
     let offset = (Nat_big_num.(mul (of_int (sizeof ty)) ival)) in
     match ptrval with
@@ -2100,7 +2134,8 @@ module CHERI (C:Capability with type vaddr = N.num) : Memory = struct
                     | `NoCollapse ->
                        return ()
                   end >>= fun () ->
-                return (PV (prov, PVconcrete shifted_addr))
+                (* Could produce invalid cap. Consider raising error instead *)
+                return (PV (prov, PVconcrete (C.cap_set_value c shifted_addr)))
               else
                 (* TODO: this is yucky *)
                 precond alloc_id1 >>=
@@ -2116,40 +2151,47 @@ module CHERI (C:Capability with type vaddr = N.num) : Memory = struct
                               fail (MerrArrayShift loc)
                          end
                   end >>= fun () ->
-                return (PV (prov, PVconcrete shifted_addr))
+                (* Could produce invalid cap. Consider raising error instead *)
+                return (PV (prov, PVconcrete (C.cap_set_value c shifted_addr)))
            | `Single alloc_id ->
               precond alloc_id >>=
                 begin function
                   | true ->
-                     return (PV (prov, PVconcrete shifted_addr))
+                     (* Could produce invalid cap. Consider raising error instead *)
+                     return (PV (prov, PVconcrete (C.cap_set_value c shifted_addr)))
                   | false ->
                      fail (MerrArrayShift loc)
                 end
          end
 
-    | PV (Prov_some alloc_id, PVconcrete addr) ->
+    | PV (Prov_some alloc_id, PVconcrete c) ->
        (* TODO: is it correct to use the "ty" as the lvalue_ty? *)
-       let shifted_addr = N.add addr offset in
+       let shifted_addr = N.add (C.cap_get_value c) offset in
        if    Switches.(has_switch (SW_pointer_arith `STRICT))
              || (is_PNVI () && not (Switches.(has_switch (SW_pointer_arith `PERMISSIVE)))) then
          get_allocation alloc_id >>= fun alloc ->
          if    N.less_equal alloc.base shifted_addr
                && N.less_equal (N.add shifted_addr (N.of_int (sizeof ty)))
                     (N.add (N.add alloc.base alloc.size) (N.of_int (sizeof ty))) then
-           return (PV (Prov_some alloc_id, PVconcrete shifted_addr))
+           (* Could produce invalid cap. Consider raising error instead *)
+           return (PV (Prov_some alloc_id, PVconcrete (C.cap_set_value c shifted_addr)))
          else
            fail (MerrArrayShift loc)
        else
-         return (PV (Prov_some alloc_id, PVconcrete shifted_addr))
-    | PV (Prov_none, PVconcrete addr) ->
+         (* Could produce invalid cap. Consider raising error instead *)
+         return (PV (Prov_some alloc_id, PVconcrete (C.cap_set_value c shifted_addr)))
+    | PV (Prov_none, PVconcrete c) ->
+       let shifted_addr = N.add (C.cap_get_value c) offset in
        if    Switches.(has_switch (SW_pointer_arith `STRICT))
              || (is_PNVI () && not (Switches.(has_switch (SW_pointer_arith `PERMISSIVE)))) then
          fail (MerrOther "out-of-bound pointer arithmetic (Prov_none)")
        else
-         return (PV (Prov_none, PVconcrete (N.add addr offset)))
-    | PV (Prov_device, PVconcrete addr) ->
-       (* TODO: check *)
-       return (PV (Prov_device, PVconcrete (N.add addr offset)))
+         (* Could produce invalid cap. Consider raising error instead *)
+         return (PV (Prov_none, PVconcrete (C.cap_set_value c shifted_addr)))
+    | PV (Prov_device, PVconcrete c) ->
+       let shifted_addr = N.add (C.cap_get_value c) offset in
+       (* Could produce invalid cap. Consider raising error instead *)
+       return (PV (Prov_device, PVconcrete (C.cap_set_value c shifted_addr)))
 
   let concurRead_ival ity sym =
     failwith "TODO: concurRead_ival"
@@ -2157,6 +2199,7 @@ module CHERI (C:Capability with type vaddr = N.num) : Memory = struct
   let integer_ival n =
     IV (Prov_none, n)
 
+  (* TODO: implement special values for intptr_t *)
   let max_ival ity =
     let open Nat_big_num in
     IV (Prov_none, begin match (Ocaml_implementation.get ()).sizeof_ity ity with
@@ -2190,6 +2233,7 @@ module CHERI (C:Capability with type vaddr = N.num) : Memory = struct
                       failwith "the concrete memory model requires a complete implementation MAX"
                    end)
 
+  (* TODO: implement special values for intptr_t *)
   let min_ival ity =
     let open Nat_big_num in
     IV (Prov_none, begin match ity with
@@ -2226,7 +2270,8 @@ module CHERI (C:Capability with type vaddr = N.num) : Memory = struct
        return (mk_ival prov Nat_big_num.zero)
     | PVfunction (Symbol.Symbol (_, n, _)) ->
        return (mk_ival prov (Nat_big_num.of_int n))
-    | PVconcrete addr ->
+    | PVconcrete c ->
+       let addr = C.cap_get_value c in
        begin if Switches.(has_switch (SW_PNVI `AE) || has_switch (SW_PNVI `AE_UDI)) then
                (* PNVI-ae, PNVI-ae-udi *)
                match prov with
@@ -2237,8 +2282,8 @@ module CHERI (C:Capability with type vaddr = N.num) : Memory = struct
              else
                return ()
        end >>= fun () ->
-       let IV (_, ity_max) = max_ival ity in
-       let IV (_, ity_min) = min_ival ity in
+       let ity_max = num_of_int (max_ival ity) in
+       let ity_min = num_of_int (min_ival ity) in
        if N.(less addr ity_min || less ity_max addr) then
          fail MerrIntFromPtr
        else
@@ -2308,11 +2353,17 @@ module CHERI (C:Capability with type vaddr = N.num) : Memory = struct
   let alignof_ival ty =
     IV (Prov_none, Nat_big_num.of_int (alignof ty))
 
-  let bitwise_complement_ival _ (IV (prov, n)) =
-    (* NOTE: for PNVI we assume that prov = Prov_none *)
-    (* TODO *)
-    (* prerr_endline "CHERI.bitwise_complement ==> HACK"; *)
-    IV (prov, Nat_big_num.(sub (negate n) (of_int 1)))
+  let bitwise_complement_ival _ = function
+    | (IV (prov, n)) ->
+        (* NOTE: for PNVI we assume that prov = Prov_none *)
+        (* TODO *)
+        (* prerr_endline "CHERI.bitwise_complement ==> HACK"; *)
+        IV (prov, Nat_big_num.(sub (negate n) (of_int 1)))
+    | (IC (prov, c)) ->
+        let n = C.cap_get_value c in
+        let c = C.cap_set_value c n in
+        let c = C.cap_invalidate c in
+        IC (prov, c)
 
   let bitwise_and_ival _ (IV (prov1, n1)) (IV (prov2, n2)) =
     (* NOTE: for PNVI we assume that prov1 = prov2 = Prov_none *)
@@ -2360,7 +2411,8 @@ module CHERI (C:Capability with type vaddr = N.num) : Memory = struct
   let le_fval fval1 fval2 =
     fval1 <= fval2
 
-  let fvfromint (IV (_, n)) =
+  let fvfromint ni =
+    let n = num_of_int ni in
     (* NOTE: if n is too big, the float will be truncated *)
     float_of_string (N.to_string n)
 
@@ -2393,16 +2445,16 @@ module CHERI (C:Capability with type vaddr = N.num) : Memory = struct
            N.sub r dlt in
        IV (Prov_none, (wrapI (N.of_int64 (Int64.of_float fval))))
 
-  let eq_ival _ (IV (_, n1)) (IV (_, n2)) =
-    Some (Nat_big_num.equal n1 n2)
-  let lt_ival _ (IV (_, n1)) (IV (_, n2)) =
-    Some (Nat_big_num.compare n1 n2 = -1)
-  let le_ival _ (IV (_, n1)) (IV (_, n2)) =
-    let cmp = Nat_big_num.compare n1 n2 in
+  let eq_ival _ n1 n2 =
+    Some (Nat_big_num.equal (num_of_int n1) (num_of_int n2))
+  let lt_ival _ n1 n2 =
+    Some (Nat_big_num.compare (num_of_int n1) (num_of_int n2) = -1)
+  let le_ival _ n1 n2 =
+    let cmp = Nat_big_num.compare (num_of_int n1) (num_of_int n2) in
     Some (cmp = -1 || cmp = 0)
 
-  let eval_integer_value (IV (_, n)) =
-    Some n
+  let eval_integer_value n =
+    Some (num_of_int n)
 
   let unspecified_mval ty =
     MVunspecified ty
@@ -2447,7 +2499,8 @@ module CHERI (C:Capability with type vaddr = N.num) : Memory = struct
   let pp_pretty_mem_value _ = pp_mem_value
 
   (* TODO check *)
-  let memcpy ptrval1 ptrval2 (IV (_, size_n)) =
+  let memcpy ptrval1 ptrval2 size_int =
+    let size_n = num_of_int size_int in
     let loc = Location_ocaml.other "memcpy" in
     (* TODO: if ptrval1 and ptrval2 overlap ==> UB *)
     (* TODO: copy ptrval2 into ptrval1 *)
@@ -2462,7 +2515,8 @@ module CHERI (C:Capability with type vaddr = N.num) : Memory = struct
 
 
   (* TODO: validate more, but looks good *)
-  let memcmp ptrval1 ptrval2 (IV (_, size_n)) =
+  let memcmp ptrval1 ptrval2 size_int =
+    let size_n = num_of_int size_int in
     let rec get_bytes ptrval acc = function
       | 0 ->
          return (List.rev acc)
@@ -2487,7 +2541,8 @@ module CHERI (C:Capability with type vaddr = N.num) : Memory = struct
        allocate_region tid (Symbol.PrefOther "realloc") align size
     | PV (Prov_none, _) ->
        fail (MerrWIP "realloc no provenance")
-    | PV (Prov_some alloc_id, PVconcrete addr) ->
+    | PV (Prov_some alloc_id, PVconcrete c) ->
+       let addr = C.cap_get_value c in
        is_dynamic addr >>= begin function
                              | false ->
                                 fail (MerrUndefinedRealloc)
@@ -2496,7 +2551,7 @@ module CHERI (C:Capability with type vaddr = N.num) : Memory = struct
                                 if alloc.base = addr then
                                   allocate_region tid (Symbol.PrefOther "realloc") align size >>= fun new_ptr ->
                                   let size_to_copy =
-                                    let IV (_, size_n) = size in
+                                    let size_n = num_of_int size in
                                     IV (Prov_none, Nat_big_num.min alloc.size size_n) in
                                   memcpy new_ptr ptr size_to_copy >>= fun _ ->
                                   kill (Location_ocaml.other "realloc") true ptr >>= fun () ->
@@ -2628,14 +2683,23 @@ module CHERI (C:Capability with type vaddr = N.num) : Memory = struct
        | _ ->
           mk_scalar `Basic (N.to_string n) prov None
        end
+    | MVinteger (cty, IC(prov, c)) ->
+       begin match cty with
+       | Signed Intptr_t | Unsigned Intptr_t ->
+          (* TODO: better JSON representation of caps *)
+          mk_scalar `Intptr (N.to_string (C.cap_get_value c)) prov None
+       | _ ->
+          failwith "mk_ui_values invalid encoding of [u]intptr_t"
+       end
     | MVfloating (_, f) ->
        mk_scalar `Basic (string_of_float f) Prov_none None
     | MVpointer (_, PV(prov, pv)) ->
        begin match pv with
        | PVnull _ ->
           mk_scalar `Pointer "NULL" Prov_none None
-       | PVconcrete n ->
-          mk_scalar `Pointer (N.to_string n) prov (Some bs)
+       | PVconcrete c ->
+          (* TODO: better JSON representation of caps *)
+          mk_scalar `Pointer (N.to_string (C.cap_get_value c)) prov (Some bs)
        | PVfunction sym ->
           mk_scalar `Funptr (Pp_symbol.to_string_pretty sym) Prov_none None
        end
