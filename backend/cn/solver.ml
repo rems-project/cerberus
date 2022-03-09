@@ -63,8 +63,6 @@ let solver_params = [
 
 let rewriter_params = [
     ("rewriter.expand_nested_stores", "true");
-    ("rewriter.expand_power", "true");
-    (* ("rewriter.push_ite_arith", "true"); *)
   ]
 
 let model_params = [
@@ -331,14 +329,15 @@ module Translate = struct
             in
             term (sum (bit_width - 1))
          | Blast ((i1, s, v, i2), body) ->
-            let rec make i =
-              if i <= i2 then 
-                let inst = IT.subst (IT.make_subst [(s, int_ i)]) body in
-                ite_ (eq_ (v, int_ i), inst, make (i + 1))
-              else
-                default_ Integer
+            let inst_body i = IT.subst (IT.make_subst [(s, int_ i)]) body in
+            let v_blasted_values = 
+              ite_ (or_ [v %< int_ i1; v %> int_ i2], default_ Integer, int_ 0) ::
+                if i1 > i2 then [] else
+                  List.init (i2 - i1 + 1) (fun i ->
+                      ite_ (eq_ (v, int_ i), inst_body i, int_ 0)
+                    )
             in
-            term (make i1)
+            term (List.fold_right (fun i j -> add_ (i, j)) v_blasted_values (int_ 0))
          end
       | Bool_op bool_op -> 
          let open Z3.Boolean in
@@ -589,12 +588,8 @@ let tactics context ts =
   | [t] -> t
   | t1::t2::ts -> Z3.Tactic.and_then context t1 t2 ts
 
-let tactic context = 
+let _tactic context = 
   tactics context [
-      (* "simplify"; *)
-      (* "propagate-values"; *)
-      (* "elim-term-ite"; *)
-      (* "simplify"; *)
       "solve-eqs";
       "aufnira";
     ]
@@ -614,8 +609,8 @@ let make struct_decls : solver =
   let incremental = Z3.Solver.mk_simple_solver context in
   Z3.Solver.set_parameters incremental params;
 
-  let fancy = Z3.Solver.mk_solver_t context (tactic context) in
-  (* let fancy = Z3.Solver.mk_solver_s context "AUFLIA" in *)
+  (* let fancy = Z3.Solver.mk_solver_t context (tactic context) in *)
+  let fancy = Z3.Solver.mk_solver_s context "AUFLIA" in
 
   { context; incremental; fancy }
 

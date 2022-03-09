@@ -198,7 +198,14 @@ let rec simp (struct_decls : Memory.struct_decls) values equalities some_known_f
           IT (Arith_op (Div (a, b)), bt) 
        end
     | Exp (a, b) ->
-       IT (Arith_op (Exp (aux a, aux b)), bt) 
+       let a = aux a in
+       let b = aux b in
+       begin match a, b with
+       | IT (Lit (Z a), _), IT (Lit (Z b), _) when Z.fits_int b ->
+          z_ (Z.pow a (Z.to_int b))
+       | _ ->
+          IT.exp_ (a, b)
+       end
     | Rem (a, b) ->
        let a = aux a in
        let b = aux b in 
