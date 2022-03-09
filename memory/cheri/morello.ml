@@ -92,7 +92,7 @@ module Morello_permission : Cap_permission = struct
     }
 end
 
-module Morello_capability: Capability =
+module Morello_capability: Capability with type vaddr = N.num =
   struct
     module P = Morello_permission
     type vaddr = N.num
