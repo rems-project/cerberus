@@ -1966,63 +1966,68 @@ module CHERI (C:Capability with type vaddr = N.num) : Memory = struct
        return false
 
   (* _ is integer type *)
-  let ptrfromint int_ty ref_ty int_v =
-    match int_ty, int_v with
-    | ((Unsigned Intptr_t),(IC (prov, c)) | (Signed Intptr_t),(IC (prov, c))) ->
-       begin
-         let addr = C.cap_get_value c in
-         if is_PNVI () then
-           (* TODO: not sure if this whole branch is correct for CHERI *)
-           (* TODO: device memory? *)
-           if N.equal addr N.zero then
-             return (PV (Prov_none, PVnull ref_ty))
+  let ptrfromint (int_cty:ctype) ref_ty int_v =
+    match int_cty with
+    | Ctype (_, (Basic (Integer int_ty)))
+      -> begin
+        match int_ty, int_v with
+        | ((Unsigned Intptr_t),(IC (prov, c)) | (Signed Intptr_t),(IC (prov, c))) ->
+           begin
+             let addr = C.cap_get_value c in
+             if is_PNVI () then
+               (* TODO: not sure if this whole branch is correct for CHERI *)
+               (* TODO: device memory? *)
+               if N.equal addr N.zero then
+                 return (PV (Prov_none, PVnull ref_ty))
+               else
+                 get >>= fun st ->
+                 begin match find_overlaping st addr with
+                 | `NoAlloc ->
+                    return Prov_none
+                 | `SingleAlloc alloc_id ->
+                    return (Prov_some alloc_id)
+                 | `DoubleAlloc alloc_ids ->
+                    add_iota alloc_ids >>= fun iota ->
+                    return (Prov_symbolic iota)
+                 end >>= fun prov ->
+                 (* cast int to pointer *)
+                 return (PV (prov, PVconcrete c))
+             else
+               match prov with
+               | Prov_none ->
+                  (* TODO: check (in particular is that ok to only allow device pointers when there is no provenance? *)
+                  if List.exists (fun (min, max) -> N.less_equal min addr && N.less_equal addr max) device_ranges then
+                    return (PV (Prov_device, PVconcrete c))
+                  else if N.equal addr N.zero then
+                    (* All 0-address capabilities regardless of their
+                       validity decoded as NULL. This is defacto behaviour
+                       of morello Clang. See intptr3.c example.  *)
+                    return (PV (Prov_none, PVnull ref_ty))
+                  else
+                    (* C could be an invalid cap. Consider raising error instead *)
+                    return (PV (Prov_none, PVconcrete c))
+               | _ ->
+                  (* C could be an invalid cap. Consider raising error instead *)
+                  return (PV (prov, PVconcrete c))
+           end
+        | (Ctype.(Unsigned Intptr_t),(IV (_, _)) | Ctype.(Signed Intptr_t),(IV (_, _))) ->
+           failwith "ptrfromint: invalid encoding for [u]intptr_t"
+        | _, (IV (prov, n)) ->
+           if N.equal n N.zero then
+             if is_PNVI () then
+               (* TODO: device memory? *)
+               return (PV (Prov_none, PVnull ref_ty))
+             else
+               (* All 0-address capabilities regardless of their
+                  validity decoded as NULL. This is defacto behaviour
+                  of morello Clang. See intptr3.c example.  *)
+               return (PV (Prov_none, PVnull ref_ty))
            else
-             get >>= fun st ->
-             begin match find_overlaping st addr with
-             | `NoAlloc ->
-                return Prov_none
-             | `SingleAlloc alloc_id ->
-                return (Prov_some alloc_id)
-             | `DoubleAlloc alloc_ids ->
-                add_iota alloc_ids >>= fun iota ->
-                return (Prov_symbolic iota)
-             end >>= fun prov ->
-             (* cast int to pointer *)
-             return (PV (prov, PVconcrete c))
-         else
-           match prov with
-           | Prov_none ->
-              (* TODO: check (in particular is that ok to only allow device pointers when there is no provenance? *)
-              if List.exists (fun (min, max) -> N.less_equal min addr && N.less_equal addr max) device_ranges then
-                return (PV (Prov_device, PVconcrete c))
-              else if N.equal addr N.zero then
-                (* All 0-address capabilities regardless of their
-                   validity decoded as NULL. This is defacto behaviour
-                   of morello Clang. See intptr3.c example.  *)
-                return (PV (Prov_none, PVnull ref_ty))
-              else
-                (* C could be an invalid cap. Consider raising error instead *)
-                return (PV (Prov_none, PVconcrete c))
-           | _ ->
-              (* C could be an invalid cap. Consider raising error instead *)
-              return (PV (prov, PVconcrete c))
-       end
-    | (Ctype.(Unsigned Intptr_t),(IV (_, _)) | Ctype.(Signed Intptr_t),(IV (_, _))) ->
-       failwith "ptrfromint: invalid encoding for [u]intptr_t"
-    | _, (IV (prov, n)) ->
-       if N.equal n N.zero then
-         if is_PNVI () then
-           (* TODO: device memory? *)
-           return (PV (Prov_none, PVnull ref_ty))
-         else
-           (* All 0-address capabilities regardless of their
-              validity decoded as NULL. This is defacto behaviour
-              of morello Clang. See intptr3.c example.  *)
-           return (PV (Prov_none, PVnull ref_ty))
-       else
-         fail (MerrCHERI CheriMerrIntFromPtr)
-    | _, _ ->
-       fail (MerrCHERI CheriMerrIntFromPtr)
+             fail (MerrCHERI CheriMerrIntFromPtr)
+        | _, _ ->
+           fail (MerrCHERI CheriMerrIntFromPtr)
+      end
+    | _ -> fail (MerrCHERI CheriMerrIntFromPtr) (* non-int type *)
 
   let offsetof_ival tagDefs tag_sym memb_ident =
     let (xs, _) = offsetsof tagDefs tag_sym in
@@ -2320,6 +2325,7 @@ module CHERI (C:Capability with type vaddr = N.num) : Memory = struct
        failwith "CHERI.combine_prov: found a Prov_symbolic"
 
 
+  (* TODO: more cases of IC values *)
   let op_ival iop (IV (prov1, n1)) (IV (prov2, n2)) =
     (* NOTE: for PNVI we assume that prov1 = prov2 = Prov_none *)
     match iop with
@@ -2635,7 +2641,9 @@ module CHERI (C:Capability with type vaddr = N.num) : Memory = struct
     (* cast_ptrval_to_ival(uintptr_t,𝑝1),cast_ival_to_ptrval(void,𝑥) *)
     (* the first ctype is the original referenced type, the integerType is the target integer type *)
     intfromptr Ctype.void Ctype.(Unsigned Intptr_t) ptrval >>= fun _ ->
-    ptrfromint Ctype.(Unsigned Intptr_t) Ctype.void ival
+    ptrfromint
+      (Ctype ([], (Basic (Integer (Unsigned Intptr_t)))))
+      Ctype.void ival
 
   (* JSON serialisation: Memory layout for UI *)
 
