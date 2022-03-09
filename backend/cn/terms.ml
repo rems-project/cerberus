@@ -27,6 +27,7 @@ type 'bt arith_op =
   | IntToReal of 'bt term
   | RealToInt of 'bt term
   | XOR of Sctypes.IntegerTypes.t * 'bt term * 'bt term
+  | Blast of (int * Sym.t * 'bt term * int) * 'bt term
 
 and 'bt bool_op = 
   | And of 'bt term list
@@ -101,7 +102,7 @@ and 'bt term_ =
   | CT_pred of 'bt ct_pred
   | Map_op of 'bt map_op
   (* | Option_op of 'bt option_op *)
-  | Let of (Sym.t * 'bt term) * 'bt term
+  (* | Let of (Sym.t * 'bt term) * 'bt term *)
 
 and 'bt term =
   | IT of 'bt term_ * 'bt

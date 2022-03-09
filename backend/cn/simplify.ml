@@ -284,6 +284,8 @@ let rec simp (struct_decls : Memory.struct_decls) values equalities some_known_f
        let a = aux a in
        let b = aux b in
        IT (Arith_op (XOR (ity, a, b)), bt)
+    | Blast ((i1, s, v, i2), body) ->
+       IT (Arith_op (Blast ((i1, s, v, i2), body)), bt)
   in
   
   let bool_op it bt = 
@@ -599,13 +601,13 @@ let rec simp (struct_decls : Memory.struct_decls) values equalities some_known_f
   (*      IT (Option_op (Get_some_value t), bt) *)
   (* in *)
 
-  let letb (s, bound) body bt =
-    let bound = aux bound in
-    let s' = Sym.fresh_same s in
-    let body = IndexTerms.subst (make_subst [(s, sym_ (s', IT.bt bound))]) body in
-    let body = aux body in
-    IT (Let ((s', bound), body), bt)
-  in
+  (* let letb (s, bound) body bt = *)
+  (*   let bound = aux bound in *)
+  (*   let s' = Sym.fresh_same s in *)
+  (*   let body = IndexTerms.subst (make_subst [(s, sym_ (s', IT.bt bound))]) body in *)
+  (*   let body = aux body in *)
+  (*   IT (Let ((s', bound), body), bt) *)
+  (* in *)
 
   fun it ->
   if List.mem IT.equal it some_known_facts then bool_ true else
@@ -623,7 +625,7 @@ let rec simp (struct_decls : Memory.struct_decls) values equalities some_known_f
     | CT_pred c -> ct_pred c bt
     | Map_op a -> map_op a bt
     (* | Option_op o -> option_op o bt *)
-    | Let ((s, bound), body) -> letb (s, bound) body bt
+    (* | Let ((s, bound), body) -> letb (s, bound) body bt *)
 
 
 let simp ?(some_known_facts = []) struct_decls lcs it = 

@@ -30,11 +30,12 @@ type model_with_q = model * (Sym.t * BT.t) option
 
 
 let logging_params = 
-  if !Debug_ocaml.debug_level > 0 then [
+  (* if !Debug_ocaml.debug_level > 0 then  *)
+    [
       ("solver.smtlib2_log", Filename.get_temp_dir_name () ^ "/z3_log.smt");
     ]
-  else
-    []
+  (* else *)
+  (*   [] *)
 
 let no_automation_params = [
     ("auto_config", "false");
@@ -62,6 +63,8 @@ let solver_params = [
 
 let rewriter_params = [
     ("rewriter.expand_nested_stores", "true");
+    ("rewriter.expand_power", "true");
+    (* ("rewriter.push_ite_arith", "true"); *)
   ]
 
 let model_params = [
@@ -327,6 +330,15 @@ module Translate = struct
               else add_ (sum (pos - 1), mul_ (xor_pos t1 t2 pos, exp_ (int_ 2, int_ pos)))
             in
             term (sum (bit_width - 1))
+         | Blast ((i1, s, v, i2), body) ->
+            let rec make i =
+              if i <= i2 then 
+                let inst = IT.subst (IT.make_subst [(s, int_ i)]) body in
+                ite_ (eq_ (v, int_ i), inst, make (i + 1))
+              else
+                default_ Integer
+            in
+            term (make i1)
          end
       | Bool_op bool_op -> 
          let open Z3.Boolean in
@@ -443,10 +455,9 @@ module Translate = struct
       (*       let something_value_accessor = hd (List.nth (Z3.Datatype.get_accessors (sort (IT.bt t))) 1) in *)
       (*       Z3.Expr.mk_app context something_value_accessor [term t] *)
       (*    end *)
-      | Let ((s, bound), body) ->
-         term 
-           (Simplify.simp struct_decls (SymMap.empty, [])
-              (IT.subst (IT.make_subst [(s, bound)]) body))
+      (* | Let ((s, bound), body) -> *)
+         (* let bound = term bound in *)
+         (* term (IT.subst (IT.make_subst [(s, bound)]) body)) *)
 
          (* let body = IT.subst (IT.make_subst [(s, bound)]) body in
           * term body *)
@@ -457,9 +468,9 @@ module Translate = struct
             and
             https://gitter.im/chc-comp/Lobby?at=5b1ae86e106f3c24bde6fea4
             *)
-         (* let sym_s, sym = IT.fresh (IT.bt bound) in
-          * let body = IT.subst (IT.make_subst [(s, sym)]) body in
-          * Z3.Expr.substitute_one (term body) (term sym) (term bound) *)
+         (* let sym_s, sym = IT.fresh (IT.bt bound) in *)
+         (* let body = IT.subst (IT.make_subst [(s, sym)]) body in *)
+         (* Z3.Expr.substitute_one (term body) (term sym) (term bound) *)
       end
 
     in
@@ -578,9 +589,14 @@ let tactics context ts =
   | [t] -> t
   | t1::t2::ts -> Z3.Tactic.and_then context t1 t2 ts
 
-let _tactic context = 
+let tactic context = 
   tactics context [
-      "smt";
+      (* "simplify"; *)
+      (* "propagate-values"; *)
+      (* "elim-term-ite"; *)
+      (* "simplify"; *)
+      "solve-eqs";
+      "aufnira";
     ]
 
 let make struct_decls : solver = 
@@ -598,8 +614,8 @@ let make struct_decls : solver =
   let incremental = Z3.Solver.mk_simple_solver context in
   Z3.Solver.set_parameters incremental params;
 
-  (* let fancy = Z3.Solver.mk_solver_t context (tactic context) in *)
-  let fancy = Z3.Solver.mk_solver context None in
+  let fancy = Z3.Solver.mk_solver_t context (tactic context) in
+  (* let fancy = Z3.Solver.mk_solver_s context "AUFLIA" in *)
 
   { context; incremental; fancy }
 
@@ -697,6 +713,7 @@ let provable ~loc ~shortcut_false ~solver ~global ~trace_length ~assumptions ~po
      | Z3.Solver.UNSATISFIABLE -> rtrue ()
      | Z3.Solver.SATISFIABLE -> rfalse (Some solver.incremental)
      | Z3.Solver.UNKNOWN ->
+        (* print stdout (item "checking" !^(Z3.Expr.to_string t)); *)
         let add sc = Z3.Solver.add solver.fancy [sc] in
         Z3.Solver.reset solver.fancy;
         debug 5 (lazy (format [] "Z3(inc) unknown/timeout, running full solver"));

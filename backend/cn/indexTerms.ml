@@ -79,6 +79,8 @@ let pp =
           c_app !^"realToInt" [aux false t]
        | XOR (ity, t1, t2) -> 
           c_app !^"xor" [Sctypes.IntegerTypes.pp ity ; aux false t1; aux false t2]
+       | Blast ((i1, s, v, i2), t) ->
+          c_app !^"blast" [int i1; Sym.pp s ^^ equals ^^ aux true v; int i2] ^^ braces (aux false t)
        end
     | Bool_op bool_op -> 
        begin match bool_op with
@@ -188,8 +190,8 @@ let pp =
     (*    | Is_something t -> c_app !^"is_something" [aux false t] *)
     (*    | Get_some_value t -> c_app !^"value" [aux false t] *)
     (*    end *)
-    | Let ((s, bound), body) ->
-       !^"let" ^^^ Sym.pp s ^^^ equals ^^^ aux true bound ^^^ semi ^^^ parens (aux false body)
+    (* | Let ((s, bound), body) -> *)
+    (*    !^"let" ^^^ Sym.pp s ^^^ equals ^^^ aux true bound ^^^ semi ^^^ parens (aux false body) *)
   in
   fun (it : 'bt term) -> aux false it
 
@@ -213,6 +215,7 @@ let add_subterms : 'bt. ('bt term) list -> 'bt term -> ('bt term) list =
      | IntToReal t -> [t] @ ts
      | RealToInt t -> [t] @ ts
      | XOR (_, it, it') -> [it; it'] @ ts
+     | Blast ((_, _s, v, _), _body) -> [v] @ ts
      end
   | Bool_op bool_op ->
      begin match bool_op with
@@ -274,15 +277,16 @@ let add_subterms : 'bt. ('bt term) list -> 'bt term -> ('bt term) list =
      | Get (t, arg) -> [t; arg] @ ts
      | Def ((s, _), body) -> (* in binders *) [] @ ts
      end
-  | Let ((s, bound), body) -> [bound] @ ts (* s/body in binders *)
+  (* | Let ((s, bound), body) -> [bound] @ ts (\* s/body in binders *\) *)
   | _ -> [] @ ts
 
 let subterm_binder : 'bt. 'bt term -> (Sym.t * 'bt term) option =
   fun (IT (it, _)) ->
   match it with
+  | Arith_op (Blast ((_, s, _v, _), body)) -> Some (s, body)
   | Bool_op (EachI ((_, s, _), t)) -> Some (s, t)
   | Map_op (Def ((s, _), body)) -> Some (s, body)
-  | Let ((s, bound), body) -> Some (s, body)
+  (* | Let ((s, bound), body) -> Some (s, body) *)
   | _ -> None
 
 let fold_subterms : 'a 'bt. (Sym.t list -> 'a -> 'bt term -> 'a) -> 'a -> 'bt term -> 'a =
@@ -356,6 +360,15 @@ let rec subst (su : typed subst) (IT (it, bt)) =
        | IntToReal it -> IntToReal (subst su it)
        | RealToInt it -> RealToInt (subst su it)
        | XOR (ity, it, it') -> XOR (ity, subst su it, subst su it')
+       | Blast ((i1, s, v, i2), body) ->
+          let v = subst su v in
+          if SymSet.mem s su.relevant then
+            let s' = Sym.fresh_same s in
+            let body = subst (make_subst [(s, IT (Lit (Sym s'), BT.Integer))]) body in
+            let body = subst su body in
+            Blast ((i1, s', v, i2), body)
+          else
+            Blast ((i1, s, v, i2), subst su body)
      in
      IT (Arith_op arith_op, bt)
   | Bool_op bool_op -> 
@@ -467,15 +480,15 @@ let rec subst (su : typed subst) (IT (it, bt)) =
   (*      | Get_some_value t -> Get_some_value (subst su t) *)
   (*    in *)
   (*    IT (Option_op option_op, bt) *)
-  | Let ((s, bound), body) ->
-     let bound = subst su bound in
-     if SymSet.mem s su.relevant then
-       let s' = Sym.fresh_same s in
-       let body = subst (make_subst [(s, IT (Lit (Sym s'), basetype bound))]) body in
-       let body = subst su body in
-       IT (Let ((s', bound), body), bt)
-     else
-       IT (Let ((s, bound), subst su body), bt)
+  (* | Let ((s, bound), body) -> *)
+  (*    let bound = subst su bound in *)
+  (*    if SymSet.mem s su.relevant then *)
+  (*      let s' = Sym.fresh_same s in *)
+  (*      let body = subst (make_subst [(s, IT (Lit (Sym s'), basetype bound))]) body in *)
+  (*      let body = subst su body in *)
+  (*      IT (Let ((s', bound), body), bt) *)
+  (*    else *)
+  (*      IT (Let ((s, bound), subst su body), bt) *)
 
 
 
@@ -567,6 +580,7 @@ let ne__ it it' = ne_ (it, it')
 
 
 let eachI_ (i1, s, i2) t = IT (Bool_op (EachI ((i1, s, i2), t)), BT.Bool)
+let blast_ (i1, s, v, i2) t = IT (Arith_op (Blast ((i1, s, v, i2), t)), BT.Integer)
 
 (* arith_op *)
 let add_ (it, it') = IT (Arith_op (Add (it, it')), bt it)
@@ -757,11 +771,11 @@ let map_def_ (s, abt) body =
 (*   IT (Option_op (Get_some_value t), vbt) *)
 
 
-let let_ (s, bound) body = 
-  IT (Let ((s, bound), body), basetype body)
-let let__ (name, bound) body =
-  let s = Sym.fresh_named name in
-  let_ (s, bound) (body (sym_ (s, basetype bound)))
+(* let let_ (s, bound) body =  *)
+(*   IT (Let ((s, bound), body), basetype body) *)
+(* let let__ (name, bound) body = *)
+(*   let s = Sym.fresh_named name in *)
+(*   let_ (s, bound) (body (sym_ (s, basetype bound))) *)
 
 
 
@@ -827,7 +841,7 @@ let hash (IT (it, _bt)) =
   | Set_op _ -> 8
   | Map_op _ -> 9
   (* | Option_op _ -> 10 *)
-  | Let _ -> 11
+  (* | Let _ -> 11 *)
   | Lit lit ->
      begin match lit with
      | Z z -> 20

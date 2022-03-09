@@ -605,7 +605,7 @@ let resolve_index_term loc
        let@ (t_original, _) = resolve t (StringMap.find "start" mappings) quantifiers in
        let@ (t_new, _) = resolve t mapping quantifiers in
        return (eq_ (t_new, t_original), None)
-    | For (i, s, j, t) ->
+    | For ((i, s, j), t) ->
        let sym = Sym.fresh_pretty s in
        let@ (t, _) = resolve t mapping ((s, (sym, Integer)) :: quantifiers) in
        let make_int z = 
@@ -617,6 +617,19 @@ let resolve_index_term loc
        if j - i > 20 
        then fail {loc; msg = Generic !^"Quantifying over too large integer space using 'for'"} 
        else return (eachI_ (i, sym, j) t, None)
+    | Blast ((i, s, v, j), t) ->
+       let@ (v, _) = resolve v mapping quantifiers in
+       let sym = Sym.fresh_pretty s in
+       let@ (t, _) = resolve t mapping ((s, (sym, Integer)) :: quantifiers) in
+       let make_int z = 
+         try return (Z.to_int z) with
+         | Z.Overflow -> fail {loc; msg = Generic !^"Too small/large integer"}
+       in
+       let@ i = make_int i in
+       let@ j = make_int j in
+       if j - i > 20 
+       then fail {loc; msg = Generic !^"Quantifying over too large integer space using 'blast'"} 
+       else return (blast_ (i, sym, v, j) t, None)
   in
   resolve term (StringMap.find default_mapping_name mappings) quantifiers
 

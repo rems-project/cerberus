@@ -39,7 +39,8 @@ module Terms = struct
     | App of term * term
     | Env of term * string
     | Unchanged of term
-    | For of Z.t * string * Z.t * term
+    | For of (Z.t * string * Z.t) * term
+    | Blast of (Z.t * string * term * Z.t) * term
   [@@deriving eq, ord]
 
 
@@ -125,9 +126,13 @@ module Terms = struct
        parens (pp false t) ^^ at ^^ !^e
     | Unchanged t ->
        parens (pp false t) ^^^ !^"unchanged"
-    | For (i, name, j, body) ->
+    | For ((i, name, j), body) ->
        mparens atomic
          (!^"for" ^^ parens(!^(Z.to_string i) ^^ comma ^^^ !^name ^^ comma ^^^ !^(Z.to_string j)) ^^^
+            braces (pp false body))
+    | Blast ((i, name, v, j), body) ->
+       mparens atomic
+         (c_app !^"blast" [!^(Z.to_string i); !^name ^^ equals ^^ pp true v; !^(Z.to_string j)] ^^^
             braces (pp false body))
        
 
@@ -213,79 +218,10 @@ module Terms = struct
          true
       | Unchanged _ ->
          true
-      | For (_, _, _, body) ->
+      | For (_, body) ->
          aux body
-    in
-    aux t
-
-  let contains_env_or_unchanged_expression t = 
-    let rec aux = function
-      | Addr bn -> 
-         false
-      | Var bn -> 
-         false
-      | Pointee p -> 
-         false
-      | PredOutput (pr,a) -> 
-         false
-      | Member (p, m) -> 
-         aux p
-      | Bool b -> 
-         false
-      | Integer i -> 
-         false
-      | Addition (t1, t2) -> 
-         aux t1 || aux t2
-      | Subtraction (t1, t2) -> 
-         aux t1 || aux t2
-      | Multiplication (t1, t2) -> 
-         aux t1 || aux t2
-      | Division (t1, t2) -> 
-         aux t1 || aux t2
-      | Exponentiation (t1, t2) -> 
-         aux t1 || aux t2
-      | Remainder (t1, t2) -> 
-         aux t1 || aux t2
-      | Equality (t1, t2) -> 
-         aux t1 || aux t2
-      | Inequality (t1, t2) -> 
-         aux t1 || aux t2
-      | ITE (t1, t2, t3) ->
-         aux t1 || aux t2 || aux t3
-      | Or (t1, t2) ->
-         aux t1 || aux t2
-      | And (t1, t2) ->
-         aux t1 || aux t2
-      | Not t ->
-         aux t
-      | LessThan (t1, t2) -> 
-         aux t1 || aux t2
-      | LessOrEqual (t1, t2) -> 
-         aux t1 || aux t2
-      | GreaterThan (t1, t2) -> 
-         aux t1 || aux t2
-      | GreaterOrEqual (t1, t2) -> 
-         aux t1 || aux t2
-      | IntegerToPointerCast t ->
-         aux t
-      | PointerToIntegerCast t ->
-         aux t
-      | Null ->
-         false
-      | OffsetOf {tag; member} ->
-         false
-      | CellPointer ((t1, t2), (t3, t4), t5) ->
-         aux t1 || aux t2 || aux t3 || aux t4 || aux t5
-      | Disjoint ((t1, t2), (t3, t4)) ->
-         aux t1 || aux t2 || aux t3 || aux t4
-      | App (t1, t2) ->
-         aux t1 || aux t2
-      | Env (t, _) ->
-         true
-      | Unchanged _ ->
-         true
-      | For (_, _, _, body) ->
-         aux body
+      | Blast ((_, _, v, _), body) ->
+         aux v || aux body
     in
     aux t
   

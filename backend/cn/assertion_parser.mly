@@ -64,6 +64,7 @@ open Assertion_parser_util
 
 %token EACH
 %token FOR
+%token BLAST
 
 %token WHERE
 %token WITH
@@ -146,6 +147,10 @@ atomic_term:
       { Ast.Unchanged t }
   | DISJOINT LPAREN p1=term COMMA sz1=term COMMA p2=term COMMA sz2=term RPAREN
       { Ast.Disjoint ((p1, sz1), (p2, sz2)) }
+  | FOR LPAREN i = integer COMMA s = NAME COMMA j = integer RPAREN LBRACE body=term RBRACE
+      { Ast.For ((i, s, j), body) }
+  | BLAST LPAREN i = integer COMMA s = NAME EQUAL v = term COMMA j = integer RPAREN LBRACE body=term RBRACE
+      { Ast.Blast ((i, s, v, j), body) }
 
 arith_term:
   | a1=arith_or_atomic_term PLUS a2=arith_or_atomic_term
@@ -196,8 +201,6 @@ term:
       { Ast.PointerToIntegerCast a1 }
   | a1=atomic_term LBRACKET a2=term RBRACKET
       { Ast.App (a1, a2) } 
-  | FOR LPAREN i = integer COMMA s = NAME COMMA j = integer RPAREN LBRACE body=term RBRACE
-      { Ast.For (i, s, j, body) }
 
 term_with_name:
   | name=NAME EQUAL t=term

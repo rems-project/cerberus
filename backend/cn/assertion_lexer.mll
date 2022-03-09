@@ -68,6 +68,7 @@ rule main = parse
 
   | "each" {T.EACH }
   | "for" {T.FOR }
+  | "blast" {T.BLAST }
 
   | "where" {T.WHERE }
   | "with" {T.WITH }

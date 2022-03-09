@@ -139,28 +139,18 @@ module PageAlloc = struct
       let qarg = Some 0 in
 
 
-      let two_to_the_order (f,t) o = 
-        let rec make i = 
-          if i <= t then ite_ (o %== int_ i, exp_ (int_ 2, int_ i), make (i + 1))
-          else default_ Integer
-        in
-        make f
-      in
-
       let body = 
-        let__ ("page_pointer", arrayShift_ (vmemmap_pointer, struct_ct hyp_page_tag, page_index)) (fun page_pointer ->
-        let__ ("pool", pool) (fun pool ->
-        let__ ("vmemmap", vmemmap) (fun vmemmap ->
-        let__ ("page", map_get_ vmemmap page_index) (fun page ->
-        let__ ("self_node_pointer",
-               memberShift_ (page_pointer, hyp_page_tag, Id.id "node")) (fun self_node_pointer ->
-        let__ ("pool_free_area_pointer",
-               arrayShift_
-                 (memberShift_ (pool_pointer, hyp_pool_tag, Id.id "free_area"),
-                  struct_ct list_head_tag,
-                  page %. "order")) (fun pool_free_area_pointer ->
-        let__ ("prev", (page %. "node") %. "prev") (fun prev ->
-        let__ ("next", (page %. "node") %. "next") (fun next ->
+        let page_pointer = arrayShift_ (vmemmap_pointer, struct_ct hyp_page_tag, page_index) in
+        let page = map_get_ vmemmap page_index in
+        let self_node_pointer = memberShift_ (page_pointer, hyp_page_tag, Id.id "node") in
+        let pool_free_area_pointer =
+          arrayShift_
+            (memberShift_ (pool_pointer, hyp_pool_tag, Id.id "free_area"),
+             struct_ct list_head_tag,
+             page %. "order")
+        in
+        let prev = (page %. "node") %. "prev" in
+        let next = (page %. "node") %. "next" in
         and_ [
             (* refcount is also valid signed int: for hyp_page_count *)
             representable_ (integer_ct (Signed Int_), page %. "refcount");
@@ -184,10 +174,12 @@ module PageAlloc = struct
             );
             (impl_ (
                  (page %. "order") %!= int_ hHYP_NO_ORDER,
-                 (and_ 
-                    [(rem_ (page_index, two_to_the_order (0, mMAX_ORDER - 1) (page %. "order"))) %== int_ 0;
-                     ((page_index %* int_ pPAGE_SIZE) %+ ((two_to_the_order (0, mMAX_ORDER - 1) (page %. "order")) %* int_ pPAGE_SIZE)) %<= (pool %. "range_end");]
-                 )
+                 (let o = Sym.fresh () in 
+                  let two_to_the_o = blast_ (0, o, page %. "order", mMAX_ORDER - 1) (exp_ (int_ 2, sym_ (o, Integer))) in
+                  (and_ 
+                    [(rem_ (page_index, two_to_the_o )) %== int_ 0;
+                     ((page_index %+ two_to_the_o) %* int_ pPAGE_SIZE) %<= (pool %. "range_end");]
+                 ))
             ));
             (impl_ (
                  (page %. "order") %== int_ hHYP_NO_ORDER,
@@ -242,7 +234,6 @@ module PageAlloc = struct
                   )
               ]
           ]
-          ))))))))
       in
 
 
@@ -296,10 +287,7 @@ module PageAlloc = struct
 
 
       let body = 
-        let__ ("pool", pool) (fun pool ->
-        let__ ("vmemmap", vmemmap) (fun vmemmap ->
-        let__ ("cell_index", cell_index) (fun cell_index ->
-        let__ ("cell", (map_get_ (pool %. "free_area") cell_index)) (fun cell ->
+        let cell = (map_get_ (pool %. "free_area") cell_index) in
         let order = cell_index in
         let free_area_pointer = memberShift_ (pool_pointer, hyp_pool_tag, Id.id "free_area") in
         let cell_pointer = arrayShift_ (free_area_pointer, struct_ct list_head_tag, cell_index) in
@@ -330,7 +318,6 @@ module PageAlloc = struct
                    end
               ];
           ]
-          ))))
       in
 
       let infer_arguments =
@@ -384,24 +371,23 @@ module PageAlloc = struct
 
 
       let body = 
-        let__ ("pool", pool) (fun pool ->
-        let__ ("range_start", pool %. "range_start") (fun range_start ->
-        let__ ("range_end", pool %. "range_end") (fun range_end ->
-        let__ ("max_order", pool %. "max_order") (fun max_order ->
-        let__ ("beyond_range_end_cell_pointer",
-               (arrayShift_ 
-                  (vmemmap_pointer, struct_ct hyp_page_tag,
-                   range_end %/ (int_ pPAGE_SIZE)))) (fun beyond_range_end_cell_pointer ->
+        let range_start = pool %. "range_start" in
+        let range_end = pool %. "range_end" in
+        let max_order = pool %. "max_order" in
+        let beyond_range_end_cell_pointer =
+          (arrayShift_ 
+             (vmemmap_pointer, struct_ct hyp_page_tag,
+              range_end %/ (int_ pPAGE_SIZE))) in
         (* (for the final disjointness condition) the vmemamp can be
            bigger than just the part managed by this allocator *)
-        let__ ("start_i", (pool %. "range_start") %/ (int_ pPAGE_SIZE)) (fun start_i ->
-        let__ ("end_i", (pool %. "range_end") %/ (int_ pPAGE_SIZE)) (fun end_i ->
-        let__ ("vmemmap_start_pointer",
-               arrayShift_ (vmemmap_pointer, struct_ct hyp_page_tag, start_i)) (fun vmemmap_start_pointer ->
+        let start_i = (pool %. "range_start") %/ (int_ pPAGE_SIZE) in
+        let end_i = (pool %. "range_end") %/ (int_ pPAGE_SIZE) in
+        let vmemmap_start_pointer =
+          arrayShift_ (vmemmap_pointer, struct_ct hyp_page_tag, start_i) in
         (* end_i is the first index outside the vmemmap *)
-        let__ ("vmemmap_length",
-               (end_i %- start_i) %* 
-                 (int_ (Memory.size_of_struct hyp_page_tag))) (fun vmemmap_length ->
+        let vmemmap_length =
+          (end_i %- start_i) %* 
+            (int_ (Memory.size_of_struct hyp_page_tag)) in
         and_ [
             (* metadata well formedness *)
             good_ (pointer_ct void_ct, integerToPointerCast_ range_start);
@@ -432,7 +418,6 @@ module PageAlloc = struct
               (hyp_physvirt_offset %+ z_ (Z.of_string "18446744073709551616"), int_ 1)
               (range_start, range_end);
           ] 
-          )))))))))
       in
 
       let infer_arguments = 
