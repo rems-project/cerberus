@@ -2362,7 +2362,8 @@ module CHERI (C:Capability with type vaddr = N.num) : Memory = struct
     | (IC (prov, c)) ->
         let n = C.cap_get_value c in
         let c = C.cap_set_value c n in
-        let c = C.cap_invalidate c in
+        (* TODO: check if it should invalidate *)
+        (* let c = C.cap_invalidate c in *)
         IC (prov, c)
 
   let bitwise_and_ival _ (IV (prov1, n1)) (IV (prov2, n2)) =
