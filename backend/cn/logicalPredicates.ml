@@ -143,12 +143,6 @@ module PageAlloc = struct
         let page_pointer = arrayShift_ (vmemmap_pointer, struct_ct hyp_page_tag, page_index) in
         let page = map_get_ vmemmap page_index in
         let self_node_pointer = memberShift_ (page_pointer, hyp_page_tag, Id.id "node") in
-        let pool_free_area_pointer =
-          arrayShift_
-            (memberShift_ (pool_pointer, hyp_pool_tag, Id.id "free_area"),
-             struct_ct list_head_tag,
-             page %. "order")
-        in
         let prev = (page %. "node") %. "prev" in
         let next = (page %. "node") %. "next" in
         and_ [
@@ -162,6 +156,19 @@ module PageAlloc = struct
             ]]);              
             (* points back to the pool *)
             ((page %. "pool") %== pool_pointer);
+            (* (impl_ ( *)
+            (*      (page %. "order") %!= int_ hHYP_NO_ORDER, *)
+            (*      (let o = Sym.fresh () in  *)
+            (*       let two_to_the_o = blast_ (0, o, page %. "order", mMAX_ORDER - 1) (exp_ (int_ 2, sym_ (o, Integer))) in *)
+            (*       (and_  *)
+            (*         [(rem_ (page_index, two_to_the_o )) %== int_ 0; *)
+            (*          (page_index %+ two_to_the_o) %<= ((pool %. "range_end") %/ int_ pPAGE_SIZE);] *)
+            (*      )) *)
+            (* )); *)
+            (impl_ (
+                 (page %. "order") %== int_ hHYP_NO_ORDER,
+                 (page %. "refcount") %== (int_ 0))
+            );
             (* list emptiness via next and prev is equivalent ("prev/next" points back at node for index i_t) *)
             eq_ (next %== self_node_pointer, prev %== self_node_pointer);
             (* list non-empty in the above sense implies refcount 0 and order != NYP_NO_ORDER *)
@@ -172,19 +179,78 @@ module PageAlloc = struct
                    ]
                )
             );
-            (impl_ (
-                 (page %. "order") %!= int_ hHYP_NO_ORDER,
-                 (let o = Sym.fresh () in 
-                  let two_to_the_o = blast_ (0, o, page %. "order", mMAX_ORDER - 1) (exp_ (int_ 2, sym_ (o, Integer))) in
-                  (and_ 
-                    [(rem_ (page_index, two_to_the_o )) %== int_ 0;
-                     (page_index %+ two_to_the_o) %<= ((pool %. "range_end") %/ int_ pPAGE_SIZE);]
-                 ))
-            ));
-            (impl_ (
-                 (page %. "order") %== int_ hHYP_NO_ORDER,
-                 (page %. "refcount") %== (int_ 0))
-            );
+          ]
+      in
+
+
+      let infer_arguments = 
+        AT.Computational ((page_index_s, IT.bt page_index), (loc, None),
+        AT.Computational ((vmemmap_pointer_s, IT.bt vmemmap_pointer), (loc, None), 
+        AT.Logical ((vmemmap_s, IT.bt vmemmap), (loc, None), 
+        AT.Computational ((pool_pointer_s, IT.bt pool_pointer), (loc, None),
+        AT.Computational ((pool_s, IT.bt pool), (loc, None),
+        AT.Resource ((Aux.vmemmap_resource ~vmemmap_pointer ~vmemmap 
+                        ~range_start:(pool %. "range_start")
+                        ~range_end:(pool %. "range_end") 
+                        (bool_ true)), (loc, None),
+        AT.I OutputDef.[
+            {loc; name = "page_index"; value = page_index};
+            {loc; name = "vmemmap_pointer"; value = vmemmap_pointer};
+            {loc; name = "vmemmap"; value = vmemmap};
+            {loc; name = "pool_pointer"; value = pool_pointer};
+            {loc; name = "pool"; value = pool};
+          ]))))))
+      in
+
+      (id, {loc; args; body; qarg; infer_arguments} )
+    in
+
+
+
+
+
+
+
+    let vmemmap_page_wf_list =
+
+      let id = "Vmemmap_page_wf_list" in
+      let loc = Loc.other "internal (Vmemmap_page_wf_list)" in
+
+      let page_index_s, page_index = IT.fresh_named Integer "page_index" in
+
+      (* let page_pointer_s, page_pointer = IT.fresh_named Loc "page_pointer" in *)
+      let vmemmap_pointer_s, vmemmap_pointer = IT.fresh_named Loc "vmemmap_pointer" in
+      let pool_pointer_s, pool_pointer = IT.fresh_named Loc "pool_pointer" in
+      let pool_s, pool = IT.fresh_named (BT.Struct hyp_pool_tag) "pool" in
+
+      let vmemmap_s, vmemmap = 
+        IT.fresh_named (BT.Map (Integer, BT.Struct hyp_page_tag)) "vmemmap" 
+      in
+
+      let args = [
+          (page_index_s, IT.bt page_index);
+          (vmemmap_pointer_s, IT.bt vmemmap_pointer);
+          (vmemmap_s, IT.bt vmemmap);
+          (pool_pointer_s, IT.bt pool_pointer);
+          (pool_s, IT.bt pool);
+        ]
+      in
+      let qarg = Some 0 in
+
+
+      let body = 
+        let page_pointer = arrayShift_ (vmemmap_pointer, struct_ct hyp_page_tag, page_index) in
+        let page = map_get_ vmemmap page_index in
+        let self_node_pointer = memberShift_ (page_pointer, hyp_page_tag, Id.id "node") in
+        let pool_free_area_pointer =
+          arrayShift_
+            (memberShift_ (pool_pointer, hyp_pool_tag, Id.id "free_area"),
+             struct_ct list_head_tag,
+             page %. "order")
+        in
+        let prev = (page %. "node") %. "prev" in
+        let next = (page %. "node") %. "next" in
+        and_ [
             or_ [
                 (* either empty list (pointer to itself) *)
                 prev %== self_node_pointer;
@@ -258,6 +324,11 @@ module PageAlloc = struct
 
       (id, {loc; args; body; qarg; infer_arguments} )
     in
+
+
+
+
+
 
 
 
@@ -450,9 +521,11 @@ module PageAlloc = struct
 
 
     [vmemmap_page_wf;
+     vmemmap_page_wf_list;
      free_area_cell_wf;
      hyp_pool_wf;
      make_guarded_definition vmemmap_page_wf;
+     make_guarded_definition vmemmap_page_wf_list;
      make_guarded_definition free_area_cell_wf;
     ]
 

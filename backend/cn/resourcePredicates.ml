@@ -352,6 +352,24 @@ let page_alloc_predicates struct_decls =
           pred = { name = "Vmemmap_page_wf"; args };
         }
     in
+  
+    let vmemmap_wf_list = 
+      let i_s, i = IT.fresh_named Integer "i" in
+      let condition = and_ [start_i %<= i; i %<= (sub_ (end_i, int_ 1))] in
+      let args = [
+          i;
+          vmemmap_pointer;
+          vmemmap;
+          pool_pointer;
+          pool
+        ]
+      in
+      QPred {
+          q = (i_s, IT.bt i); 
+          condition = condition;
+          pred = { name = "Vmemmap_page_wf_list"; args };
+        }
+    in
 
   let free_area_wf = 
       let i_s, i = IT.fresh_named Integer "i" in
@@ -384,9 +402,10 @@ let page_alloc_predicates struct_decls =
 
     let wellformedness = 
       LRT.Constraint (vmemmap_wf, (loc, Some "vmemmap_wf"),
+      LRT.Constraint (vmemmap_wf_list, (loc, Some "vmemmap_wf_list"),
       LRT.Constraint (free_area_wf, (loc, Some "free_area_wf"),
       LRT.Constraint (hyp_pool_wf, (loc, Some "hyp_pool_wf"),
-      LRT.I)))
+      LRT.I))))
     in
 
     let page_group_ownership = 

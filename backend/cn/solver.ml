@@ -602,11 +602,11 @@ let tactics context ts =
   | [t] -> t
   | t1::t2::ts -> Z3.Tactic.and_then context t1 t2 ts
 
-let _tactic context = 
+let tactic context = 
   tactics context [
       (* "blast-term-ite"; *)
       (* "cofactor-term-ite"; *)
-      "solve-eqs";
+      (* "solve-eqs"; *)
       (* "simplify"; *)
       "auflia";
     ]
@@ -626,8 +626,8 @@ let make struct_decls : solver =
   let incremental = Z3.Solver.mk_simple_solver context in
   Z3.Solver.set_parameters incremental params;
 
-  (* let fancy = Z3.Solver.mk_solver_t context (tactic context) in *)
-  let fancy = Z3.Solver.mk_solver_s context "AUFLIA" in
+  let fancy = Z3.Solver.mk_solver_t context (tactic context) in
+  (* let fancy = Z3.Solver.mk_solver_s context "AUFLIA" in *)
 
   { context; incremental; fancy }
 
