@@ -608,7 +608,7 @@ let tactic context =
       (* "cofactor-term-ite"; *)
       (* "solve-eqs"; *)
       (* "simplify"; *)
-      "auflia";
+      "aufnira";
     ]
 
 let make struct_decls : solver = 
