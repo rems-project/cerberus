@@ -6,6 +6,13 @@ open IT
 
 exception Failure of Pp.doc
 
+type pack_unpack = Pack | Unpack
+[@@deriving eq, ord]
+
+let str_pack_unpack = function
+  | Pack -> "Pack"
+  | Unpack -> "Unpack"
+
 let lb_str = function
   | None -> "-inf"
   | Some i -> Z.to_string i
@@ -239,8 +246,8 @@ let intersection_action m g (req, req_span) (res, res_span) =
       None
   end
   else
-  let action = if cmp < 0 then "unpack" else "pack" in
-  (* the "inner witnesses" are objects of interior type *)
+  let action = if cmp < 0 then Unpack else Pack in
+  (* the "inner witnesses" are concrete objects of interior type *)
   let witnesses = if cmp < 0
     then get_witnesses req
     else get_witnesses (RE.request res)
@@ -269,6 +276,16 @@ let model_res_spans_or_empty m g req =
       Pp.debug 3 (lazy (Pp.item "failed to extract resource span" pp));
       []
 
+let rec gather_same_actions opts = match opts with
+  | [] -> []
+  | (action, ptr, ct, _) :: _ ->
+    let same (a2, ptr2, ct2, _) = IT.equal ptr ptr2 &&
+            equal_pack_unpack action a2 && Sctypes.equal ct ct2
+    in
+    let oks = List.filter same opts |> List.map (fun (_, _, _, ok) -> ok) in
+    let others = List.filter (fun opt -> not (same opt)) opts in
+    (action, ptr, ct, or_ oks) :: gather_same_actions others
+
 let guess_span_intersection_action ress req m g =
   let diff res = not (Resources.same_type_resource req res) in
   let res_ss = List.filter diff ress
@@ -278,24 +295,24 @@ let guess_span_intersection_action ress req m g =
   let req_ss = model_res_spans_or_empty m g req in
   let interesting = List.filter (fun (_, s) -> List.exists (inter s) req_ss) res_ss
     |> List.sort (fun (_, (lb, _)) (_, (lb2, _)) -> Z.compare lb lb2) in
-  match interesting with
-  | [] ->
-  Pp.debug 3 (lazy (Pp.item "spans as expected for inference" (Pp.string "")));
-  None
-  | _ ->
-  List.find_map (fun (r, s) ->
-  Pp.debug 3 (lazy (Pp.item "resource partial overlap"
-    (Pp.list RER.pp [req; RE.request r])));
-  let req_s = List.find (inter s) req_ss in
-  intersection_action m g (req, req_s) (r, s)
-  ) interesting
-
+  if List.compare_length_with interesting 0 == 0
+  then
+  Pp.debug 3 (lazy (Pp.item "spans as expected for inference" (Pp.string "")))
+  else ();
+  let opts = List.filter_map (fun (r, s) ->
+    Pp.debug 3 (lazy (Pp.item "resource partial overlap"
+      (Pp.list RER.pp [req; RE.request r])));
+    let req_s = List.find (inter s) req_ss in
+    intersection_action m g (req, req_s) (r, s)
+  ) interesting in
+  gather_same_actions opts
 
 let diag_req ress req m g =
   let act = guess_span_intersection_action ress req m g in
   Pp.debug 1 (lazy (match act with
-    | None -> Pp.item "guess intersection action: None" (Pp.string "")
-    | Some (nm, pt, ct, ok) -> Pp.item ("guessed: do " ^ nm) (pp_pt_ct pt ct)
+    | [] -> Pp.item "guess intersection action: none" (Pp.string "")
+    | (pup, pt, ct, ok) :: oth -> Pp.item ("guessed: do " ^ str_pack_unpack pup)
+        (pp_pt_ct pt ct)
   ))
 
 
