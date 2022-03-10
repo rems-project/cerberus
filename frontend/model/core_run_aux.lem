@@ -51,6 +51,8 @@ type stack 'a =
     (* the symbol is that of the procedure being executed *)
   | Stack_cons of maybe Symbol.sym * (*labeled_continuations 'a * *) continuation 'a * stack 'a
     (* TODO: this is for Core_reduction, the previous one is for Core_run *)
+
+  | Stack_base2 of maybe Symbol.sym * context
   | Stack_cons2 of maybe Symbol.sym (* name of the current Core procedure, if any *)
                  * context          (*  *)
                  * stack 'a

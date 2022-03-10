@@ -2,7 +2,14 @@ open Nondeterminism
 open Memory_model
 open Global_ocaml
 
-let runND exec_mode (type cs) cs_module (m: ('a, 'info, 'err, cs, 'st) ndM) (st0: 'st) =
+let pad = ref 0
+
+let prerr str = () (* prerr_endline (String.make !pad ' ' ^ str) *)
+
+let do_red str= "\x1b[31m" ^ str ^ "\x1b[0m"
+
+let runND exec_mode (type cs) cs_module (m: ('a, Driver.step_kind, 'err, cs, 'st) ndM) (st0: 'st) =
+  prerr "ENTERING runND";
   Debug_ocaml.print_debug 1 [] (fun () ->
     "HELLO from Smt2.runND, exec mode= " ^ match exec_mode with
       | Exhaustive ->
@@ -30,10 +37,8 @@ let runND exec_mode (type cs) cs_module (m: ('a, 'info, 'err, cs, 'st) ndM) (st0
     (* TODO: graph export *)
     match m_act st with
       | (NDactive a, st') ->
-(*
-          prerr_endline "NDactive";
+          prerr "NDactive";
           flush_all ();
-*)
           check_sat >>= begin function
             | `UNSAT ->
                 failwith "NDactive found to be UNSATISFIABLE"
@@ -43,49 +48,53 @@ let runND exec_mode (type cs) cs_module (m: ('a, 'info, 'err, cs, 'st) ndM) (st0
           end
 
       | (NDkilled r, st') ->
-(*
-          prerr_endline "NDkilled";
+          prerr "NDkilled";
           flush_all ();
-*)
           CS.string_of_solver >>= fun str ->
           return [(Killed r, str, st')]
 
-      | (NDnd (debug_str, str_ms), st') ->
-(*
-          Printf.printf "NDnd[%s]\n" debug_str;
-          flush_all ();
-*)
-          begin match exec_mode with
+      | (NDnd (info, str_ms), st') ->
+          (* let xx = Random.int 10000 in *)
+          incr pad;
+          (* let str = Printf.sprintf "%sNDnd[%s] <%d> <size: %d>\n" (String.make !pad ' ')
+            (Driver.instance_Show_Show_Driver_step_kind_dict.show_method info)
+            xx
+            (List.length str_ms) in
+          let str = if List.length str_ms > 1 then do_red str else str in
+          prerr_string str;
+          flush_all (); *)
+          let ret = begin match exec_mode with
             | Random ->
                 with_backtracking (fun (_, z) -> aux z st') str_ms
             | Exhaustive ->
-                foldlM (fun acc (_, m_act) ->
+                foldlM (fun acc (idx, (info, m_act)) ->
+                  (* Printf.fprintf stderr "%s<%d>[%d] ==> %s\n" (String.make !pad ' ') xx idx
+                    (Driver.instance_Show_Show_Driver_step_kind_dict.show_method info);
+                  flush_all (); *)
                   (* with_constraints debug_str  *)
                   aux m_act st' >>= fun z ->
                   return (z @ acc)
-                ) [] str_ms
+                ) [] (List.mapi (fun n z -> (n, z)) str_ms)
 (*
             | Interactive ->
                 failwith "Smt2.runND: TODO interactive mode"
 *)
-          end
-      | (NDguard (debug_str, cs, m_act), st') ->
-(*
-          Printf.printf "NDguard[%s]\n" debug_str;
-          flush_all ();
-*)
-          with_constraints debug_str cs begin
+          end in decr pad; ret
+      | (NDguard (info, cs, m_act), st') ->
+          (* Printf.fprintf stderr "%sNDguard[%s]\n" (String.make !pad ' ')
+          (Driver.instance_Show_Show_Driver_step_kind_dict.show_method info);
+          flush_all (); *)
+          with_constraints info cs begin
             check_sat >>= function
               | `UNSAT ->
                   return [] (* backtrack *)
               | `SAT ->
                   aux m_act st'
           end
-      | (NDbranch (debug_str, cs, m_act1, m_act2), st') ->
-(*
-          Printf.printf "NDbranch[%s]\n" debug_str;
-          flush_all ();
-*)
+      | (NDbranch (info, cs, m_act1, m_act2), st') ->
+          (* Printf.fprintf stderr "%sNDbranch[%s]\n"  (String.make !pad ' ')
+          (Driver.instance_Show_Show_Driver_step_kind_dict.show_method info);
+          flush_all (); *)
           begin match exec_mode with
 (*
             | Some Interactive ->
@@ -93,7 +102,7 @@ let runND exec_mode (type cs) cs_module (m: ('a, 'info, 'err, cs, 'st) ndM) (st0
 *)
             | Random ->
                 with_backtracking (fun (cs, m_act) ->
-                  with_constraints debug_str cs begin
+                  with_constraints info cs begin
                     check_sat >>= function
                       | `UNSAT ->
                            return []
@@ -101,14 +110,14 @@ let runND exec_mode (type cs) cs_module (m: ('a, 'info, 'err, cs, 'st) ndM) (st0
                           aux m_act st'
                 end) [(cs, m_act1); (negate cs, m_act2)]
             | Exhaustive ->
-                with_constraints debug_str cs begin
+                with_constraints info cs begin
                   check_sat >>= function
                     | `UNSAT ->
                          return []
                     | `SAT ->
                         aux m_act1 st'
                 end >>= fun xs1 ->
-                with_constraints debug_str (negate cs) begin
+                with_constraints info (negate cs) begin
                   check_sat >>= function
                     | `UNSAT ->
                         return []
@@ -117,7 +126,13 @@ let runND exec_mode (type cs) cs_module (m: ('a, 'info, 'err, cs, 'st) ndM) (st0
                 end >>= fun xs2 ->
                 return (xs1 @ xs2)
                 end
-      | (NDstep (info, str_ms), st') -> aux (ND (fun st -> NDnd (info, str_ms), st)) st'
+      | (NDstep (info, str_ms), st') ->
+          (* Printf.fprintf stderr "%sNDstep[%s]\n" (String.make !pad ' ')
+            (Driver.instance_Show_Show_Driver_step_kind_dict.show_method info);
+          flush_all (); *)
+          aux (ND (fun st -> NDnd (info, str_ms), st)) st'
 
-  in runEff (aux m st0)
+  in let ret = runEff (aux m st0) in
+  (* prerr "EXITING"; *)
+  ret
 

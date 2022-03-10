@@ -1035,6 +1035,8 @@ let ub_short_string = function
       "two declarations of the same object or function specify types that are not compatible"
   | UB033_modifying_string_literal ->
       "the program attempting to modify a string literal"
+  | UB035_unsequenced_race ->
+      "an unsequenced race occurred during the evaluation of an expression"
   | UB038_number_of_args ->
       "the number of arguments does not equal the number of parameters"
   | UB041_function_not_compatible ->
