@@ -27,6 +27,10 @@ type model = Z3.context * Z3.Model.model
 type model_with_q = model * (Sym.t * BT.t) option
 
 
+type handle_blast = 
+  | FlatAdd
+  | NoBlast
+let handle_blast = FlatAdd
 
 
 let logging_params = 
@@ -329,16 +333,25 @@ module Translate = struct
             in
             term (sum (bit_width - 1))
          | Blast ((i1, s, v, i2), body) ->
-            let inst_body i = IT.subst (IT.make_subst [(s, int_ i)]) body in
-            let v_blasted_values = 
-              ite_ (or_ [v %< int_ i1; v %> int_ i2], default_ Integer, int_ 0) ::
-                if i1 > i2 then [] else
-                  List.init (i2 - i1 + 1) (fun i ->
-                      let i = i + i1 in
-                      ite_ (eq_ (v, int_ i), inst_body i, int_ 0)
-                    )
-            in
-            term (List.fold_right (fun i j -> add_ (i, j)) v_blasted_values (int_ 0))
+            begin match handle_blast with
+            | FlatAdd ->
+               let inst_body i = IT.subst (IT.make_subst [(s, int_ i)]) body in
+               let v_blasted_values = 
+                 ite_ (or_ [v %< int_ i1; v %> int_ i2], default_ Integer, int_ 0) ::
+                   if i1 > i2 then [] else
+                     List.init (i2 - i1 + 1) (fun i ->
+                         (* let i = i + i1 in *)
+                         let body = Simplify.simp struct_decls (SymMap.empty, []) (inst_body i) in
+                         ite_ (eq_ (v, int_ i), body, int_ 0)
+                       )
+               in
+               term (List.fold_right (fun i j -> add_ (i, j)) v_blasted_values (int_ 0))
+            | NoBlast ->
+               term
+                 (ite_ (or_ [v %< int_ i1; v %> int_ i2], 
+                        default_ Integer,
+                        IT.subst (IT.make_subst [(s, v)]) body))
+            end
          end
       | Bool_op bool_op -> 
          let open Z3.Boolean in
@@ -591,8 +604,11 @@ let tactics context ts =
 
 let _tactic context = 
   tactics context [
+      (* "blast-term-ite"; *)
+      (* "cofactor-term-ite"; *)
       "solve-eqs";
-      "aufnira";
+      (* "simplify"; *)
+      "auflia";
     ]
 
 let make struct_decls : solver = 

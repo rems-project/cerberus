@@ -178,7 +178,7 @@ module PageAlloc = struct
                   let two_to_the_o = blast_ (0, o, page %. "order", mMAX_ORDER - 1) (exp_ (int_ 2, sym_ (o, Integer))) in
                   (and_ 
                     [(rem_ (page_index, two_to_the_o )) %== int_ 0;
-                     ((page_index %+ two_to_the_o) %* int_ pPAGE_SIZE) %<= (pool %. "range_end");]
+                     (page_index %+ two_to_the_o) %<= ((pool %. "range_end") %/ int_ pPAGE_SIZE);]
                  ))
             ));
             (impl_ (

@@ -432,7 +432,7 @@ module RE = struct
 
   (* assumption: the resource is owned *)
   let derived_lc1 = function
-    | Point p -> 
+    | Point p ->
        [impl_ (p.init, good_ (p.ct, p.value))]
     (* impl_ (p.permission,  *)
     (*        ne_ (p.pointer, null_)) *)
