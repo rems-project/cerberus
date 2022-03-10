@@ -1029,6 +1029,8 @@ let ub_short_string = function
       "a non-array lvalue with an incomplete type is used in a context that requires the value of the designated object"
   | UB015_incompatible_redeclaration ->
       "two declarations of the same object or function specify types that are not compatible"
+  | UB035_unsequenced_race ->
+      "an unsequenced race occurred during the evaluation of an expression"
   | UB038_number_of_args ->
       "the number of arguments does not equal the number of parameters"
   | UB041_function_not_compatible ->

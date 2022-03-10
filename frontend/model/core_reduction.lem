@@ -88,7 +88,7 @@ type core_step2 =
   | Step_action_request2 of string * Loc.t * (* set Cmm.aid * set Cmm.aid * set Cmm.aid * *)
                             Mem_common.thread_id *
                             core_runM (action_request2 thread_state)
-  |Step_aseq of Loc.t * Mem_common.thread_id * action_request2 unit * action_request2 thread_state
+  | Step_aseq of Loc.t * Mem_common.thread_id * action_request2 unit * action_request2 thread_state
   
   | Step_blocked2
   | Step_error2 of string
@@ -98,6 +98,54 @@ type core_step2 =
   | Step_spawn_threads2 of (list Mem_common.thread_id -> thread_state) * list thread_state (* initial states for the children *)
 (*  | Step_fs2 of thread_state * Core_run.fs_oper *)
   | Step_fs2 of thread_state * core_runM Core_run.fs_oper
+
+
+instance (Show core_step2)
+  let show step =
+    match step with
+      | Step_with_runstate2 kind _ ->
+          let kind_str =
+            match kind with
+              | RSK_eval debug_str ->
+                  "RSK_eval[" ^ debug_str ^ "]"
+              | RSK_tau debug_str kind' ->
+                let kind'_str =
+                  match kind' with
+                    | Core_run.TSK_Ccall sym _ ->
+                        "TSK_Ccall(" ^ show sym ^ ")"
+                    | Core_run.TSK_Return sym _ ->
+                        "TSK_Return(" ^ show sym ^ ")"                            
+                    | Core_run.TSK_Misc ->
+                        "TSK_Misc"
+                  end in
+                "RSK_tau[" ^ debug_str ^ ", " ^ kind'_str ^ "]"
+            end in
+          "Step_with_runstate2[" ^ kind_str ^ "]"
+      | Step_eval2 debug_str _  ->
+          "Step_eval2[" ^ debug_str ^ "]"
+      | Step_tau2 debug_str kind _ ->
+          "Step_tau2[" ^ debug_str ^ "]"
+      | Step_action_request2 debug_str loc tid _ ->
+          "Step_action_request2[" ^ debug_str ^ "] -- tid: " ^ show tid ^ " -- at loc: " ^ Loc.stringFromLocation loc
+      | Step_aseq loc tid _(*action_request2 unit*) _ ->
+        "Step_aseq -- tid: " ^ show tid ^ " -- at loc: " ^ Loc.stringFromLocation loc
+      | Step_blocked2 ->
+          "Step_blocked2"
+      | Step_error2 debug_str ->
+          "Step_error2[" ^ debug_str ^ "]"
+      | Step_thread_done2 tid cval ->
+          "Step_thread_done2(tid: " ^ show tid ^ ") -- value: " ^ Pp.stringFromCore_value cval
+      | Step_done2 cval ->
+          "Step_done2 -- value: " ^ Pp.stringFromCore_value cval
+      | Step_memop_request2 memop _ tid _ ->
+          "Step_memop_request2[" ^ show memop ^ "] -- tid: " ^ show tid
+      | Step_spawn_threads2 _ _ ->
+          "Step_spawn_threads2"
+      | Step_fs2 _ _ ->
+          "Step_fs2"
+    end
+end
+
 
 
 (*
@@ -214,6 +262,25 @@ let one_step eval_pexpr full_eval_pexpr env (Expr annots expr_ as expr) =
   if is_irreducible expr then
     Nothing
   else match expr_ with
+    | Epure pe ->
+        match valueFromPexpr pe with
+          | Just _ ->
+              Nothing
+          | Nothing ->
+              Just begin
+              (*     eval e = v
+                -------------------
+                pure(e) --> pure(v) *)
+                EVAL "Epure" begin
+                  let () = Debug.print_debug 1 [] (fun () ->
+                    "HELLO Epure(one_step)"
+                  ) in
+                  full_eval_pexpr pe >>= fun cval ->
+                  E.return (Expr annots (Epure (Caux.mk_value_pe cval)))
+                end
+              end
+      end
+
     (* {A_1} {A_2} E --> {A_1 union A_2} E *)
     | Eannot xs1 (Expr annots2 (Eannot xs2 e)) ->
         Just (TAU "Eannot" env (Expr (annots ++ annots2) (Eannot (combine_dyn_annotations xs1 xs2) e)))
@@ -1015,41 +1082,33 @@ let step_ctx mem_st file core_extern current_tid (parent_tid_opt, th_st) =
     | (CTX, Expr e_annots (Epure (Pexpr _ _ (PEval cval)))) ->
         match th_st.stack with
           | Stack_empty ->
-              (*error "impossible ==> step_ctx ctx = CTX and stack = Stack_empty"*)
-              (* TODO: this indirection is silly... *)
-              Step_done2 cval
+              error "impossible ==> step_ctx ctx = CTX and stack = Stack_empty"
           | Stack_cons2 _ CTX Stack_empty ->
               (* reached the end of the execution of a thread. *)
               match parent_tid_opt with
                 | Just parent_tid ->
-                    let () = Debug.print_debug 3 [] (fun () ->
-                      "TODO: end of normal thread"
-                    ) in
+                    (* reduction: THREAD-DONE *)
                     Step_thread_done2 parent_tid cval
                 | Nothing ->
-                    let () = Debug.print_debug 3 [] (fun () ->
-                      "TODO: end of startup thread"
-                    ) in
                     (* this was the startup thread *)
+                    (* reduction: PROGRAM-DONE *)
                     Step_done2 cval
               end
           | Stack_cons2 current_proc_opt CTX (Stack_cons2 parent_proc_opt caller_ctx sk') ->
-              let () = Debug.print_debug 3 [] (fun () ->
-                "TODO: end of procedure"
-              ) in
               (* reached the end of the execution of a procedure. *)
               let tsk =
                 match current_proc_opt with
                   | Just psym ->
                       match Map.lookup psym file.funinfo with
                         | Just (_, _, ret_ty, _, _, _) ->
-                            Core_run.TSK_Return psym $ Core_aux.memValueFromValue ret_ty cval
+                            Core_run.TSK_Return psym (Core_aux.memValueFromValue ret_ty cval)
                         | Nothing ->
                             Core_run.TSK_Misc
                       end
                   | Nothing ->
                       Core_run.TSK_Misc
                 end in
+              (* reduction: RETURN *)
               Step_tau2 "end of procedure" tsk begin
                 match th_st.env with
                   | [] ->
@@ -1061,10 +1120,13 @@ let step_ctx mem_st file core_extern current_tid (parent_tid_opt, th_st) =
                         env= env' |>
                 end
               end
+(*
           | _ ->
+              (* reduction: *)
               Step_tau2 "value in CTX" Core_run.TSK_Misc begin
-                <| th_st with arena= (*apply_ctx ctx*) (Expr e_annots (Epure (Caux.mk_value_pe cval))) |>
+                <| th_st with arena= (Expr e_annots (Epure (Caux.mk_value_pe cval))) |>
               end
+*)
         end
     
     | (CTX, (Expr _ (Eannot _ (Expr _ (Epure (Pexpr _ _ (PEval _))) as expr')))) ->
@@ -1075,6 +1137,13 @@ let step_ctx mem_st file core_extern current_tid (parent_tid_opt, th_st) =
     
     | (ctx, expr) ->
         let Expr e_annots expr_ = expr in
+        let maybe_loc = Annot.get_loc e_annots in
+        let th_st = match maybe_loc with
+          | Nothing ->
+              th_st
+          | Just loc ->
+              <| th_st with current_loc= loc; |>
+        end in
         let wrap_expr z = <| th_st with arena= apply_ctx ctx z |> in
         let process_action is_excluded wrap_act z =
           match step_action eval_pexpr is_excluded z with
@@ -1116,12 +1185,16 @@ let step_ctx mem_st file core_extern current_tid (parent_tid_opt, th_st) =
               error ("Core_run.step_ctx ==> found a value with ctx <> CTX ==> " ^
                      Pp.stringFromCore_expr expr ^ " <--> " ^ stringFromContext ctx)
           
+(*
+KKK(thesis)
           | Epure pe ->
               (* pe is NOT a value *)
-              Step_with_runstate2 (RSK_eval "Epure") begin
+              (* Step_with_runstate2 (RSK_eval "Epure") begin *)
+              Step_eval2 ("Epure ==> " ^ Pp.stringFromCore_pexpr pe) begin
                 eval_pexpr pe >>= fun pe' ->
-                  E.return (wrap_expr (Expr e_annots (Epure pe')))
+                E.return (wrap_expr (Expr e_annots (Epure pe')))
               end
+*)
           
           | Ebound (Expr _ (Eannot _ (Expr _ (Epure (Pexpr _ _ (PEval _))) as expr'))) ->
               (* bound({A}v)-> v *)
@@ -1487,7 +1560,7 @@ let step_ctx mem_st file core_extern current_tid (parent_tid_opt, th_st) =
                 | Just UNSEQUENCED_RACE ->
                     (* TODO: loc *)
                     Step_eval2 "unsequenced race" begin
-                      E.undef Loc.unknown [Undefined.UB035_unsequenced_race]
+                      E.undef th_st.current_loc [Undefined.UB035_unsequenced_race]
                     end
                 | Just (ILLTYPED str) ->
                     Step_error2 str

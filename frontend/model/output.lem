@@ -633,11 +633,19 @@ let convert eval_conv prec_opt lm_opt cspec args =
 *)
           let (is_illtyped, conv_ty_opt) = match expected_ty_opt with
             | Just expected_ty ->
-                (expected_ty <> arg_ty, _conv_ty_opt)
+                let () = Debug.print_debug 0 [] (fun () -> "expected_ty=    " ^ Pp.stringFromCore_ctype expected_ty) in
+                let () = Debug.print_debug 0 [] (fun () -> "arg_ty=         " ^ Pp.stringFromCore_ctype arg_ty) in  
+                (* TODO: the phrasing in the STD is "If any argument is not the correct type for the corresponding conversion specification".
+                         I can tell if this means that the types have to equal or if it enough to be compatible.
+                         The format seems too strict (makes lots of code UB) *)
+                ( not (AilTypesAux.are_compatible (Ctype.no_qualifiers, expected_ty)
+                                                  (Ctype.no_qualifiers, arg_ty))
+                , _conv_ty_opt)
             | Nothing ->
                 (false, _conv_ty_opt)
           end in
           if is_illtyped then
+            let () = Debug.print_debug 0 [] (fun () -> "are_compatible= " ^ if is_illtyped then "false" else "true") in
             (* TODO: location *)
             Mem.return $
               Right (U.Undef (Loc.other "TODO: printf()") [U.UB153b_illtyped_argument_for_format])
