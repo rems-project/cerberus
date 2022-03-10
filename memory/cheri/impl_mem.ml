@@ -2324,35 +2324,56 @@ module CHERI (C:Capability with type vaddr = N.num) : Memory = struct
       | (_, Prov_symbolic _) ->
        failwith "CHERI.combine_prov: found a Prov_symbolic"
 
+  let int_bin pf vf v1 v2 =
+    (* NOTE: for PNVI we assume that prov1 = prov2 = Prov_none *)
+    match v1,v2 with
+    | IV (prov1, n1), IV (prov2, n2)
+      -> IV (pf prov1 prov2, vf n1 n2)
+    | IC (prov1, c), IV (prov2, n2)
+      ->
+       let n1 = C.cap_get_value c in
+       let c = C.cap_set_value c (vf n1 n2) in
+       IC (pf prov1 prov2, c)
+    | IV (prov1, n1), IC (prov2, c)
+      ->
+       let n2 = C.cap_get_value c in
+       let c = C.cap_set_value c (vf n1 n2) in
+       IC (pf prov1 prov2, c)
+    | IC (prov1, c1), IC (prov2, c2)
+      ->
+       let n1 = C.cap_get_value c1 in
+       let n2 = C.cap_get_value c2 in
+       (* Arbitrary deciding to use 1st cap. TODO: check if it is right *)
+       let c = C.cap_set_value c1 (vf n1 n2) in
+       IC (pf prov1 prov2, c)
 
-  (* TODO: more cases of IC values *)
-  let op_ival iop (IV (prov1, n1)) (IV (prov2, n2)) =
+  let op_ival iop v1 v2 =
     (* NOTE: for PNVI we assume that prov1 = prov2 = Prov_none *)
     match iop with
-    | IntAdd ->
-       IV (combine_prov prov1 prov2, Nat_big_num.add n1 n2)
-    | IntSub ->
-       let prov' = match prov1, prov2 with
-         | Prov_some _, Prov_some _
-           | Prov_none, _ ->
-            Prov_none
-         | _ ->
-            prov1 in
-       IV (prov', Nat_big_num.sub n1 n2)
-    | IntMul ->
-       IV (combine_prov prov1 prov2, Nat_big_num.mul n1 n2)
-    | IntDiv ->
-       IV (combine_prov prov1 prov2, Nat_big_num.(if equal n2 zero then zero else integerDiv_t n1 n2))
-    | IntRem_t ->
-       IV (combine_prov prov1 prov2, Nat_big_num.integerRem_t n1 n2)
-    | IntRem_f ->
-       IV (combine_prov prov1 prov2, Nat_big_num.integerRem_f n1 n2)
+    | IntAdd -> int_bin combine_prov Nat_big_num.add v1 v2
+    | IntSub -> int_bin
+                  (fun prov1 prov2 ->
+                    match prov1, prov2 with
+                    | Prov_some _, Prov_some _
+                      | Prov_none, _ ->
+                       Prov_none
+                    | _ ->
+                       prov1)
+                  Nat_big_num.sub v1 v2
+    | IntMul -> int_bin combine_prov Nat_big_num.mul v1 v2
+    | IntDiv -> int_bin combine_prov
+                  (fun n1 n2 -> Nat_big_num.(if equal n2 zero then zero else integerDiv_t n1 n2))
+                  v1 v2
+    | IntRem_t -> int_bin combine_prov Nat_big_num.integerRem_t v1 v2
+    | IntRem_f -> int_bin combine_prov Nat_big_num.integerRem_f v1 v2
     | IntExp ->
        (* NOTE: this operation doesn't exists in C, but is used in the elaboration of the
           shift operators. And for these we want the provenance of the left operand to be
           the one that is forwarded *)
        (* TODO: fail properly when y is too big? *)
-       IV (Prov_none, Nat_big_num.pow_int n1 (Nat_big_num.to_int n2))
+       int_bin combine_prov (fun n1 n2 ->
+           Nat_big_num.pow_int n1 (Nat_big_num.to_int n2))
+         v1 v2
 
   let sizeof_ival ty =
     IV (Prov_none, Nat_big_num.of_int (sizeof ty))
@@ -2370,18 +2391,14 @@ module CHERI (C:Capability with type vaddr = N.num) : Memory = struct
         let c = C.cap_set_value c n in
         IC (prov, c)
 
-  let bitwise_and_ival _ (IV (prov1, n1)) (IV (prov2, n2)) =
-    (* NOTE: for PNVI we assume that prov1 = prov2 = Prov_none *)
-    IV (combine_prov prov1 prov2, Nat_big_num.bitwise_and n1 n2)
-  let bitwise_or_ival _ (IV (prov1, n1)) (IV (prov2, n2)) =
-    (* NOTE: for PNVI we assume that prov1 = prov2 = Prov_none *)
-    IV (combine_prov prov1 prov2, Nat_big_num.bitwise_or n1 n2)
-  let bitwise_xor_ival _ (IV (prov1, n1)) (IV (prov2, n2)) =
-    (* NOTE: for PNVI we assume that prov1 = prov2 = Prov_none *)
-    IV (combine_prov prov1 prov2, Nat_big_num.bitwise_xor n1 n2)
+  let bitwise_and_ival _  = int_bin combine_prov Nat_big_num.bitwise_and
 
-  let case_integer_value (IV (_, n)) f_concrete _ =
-    f_concrete n
+  let bitwise_or_ival _ = int_bin combine_prov Nat_big_num.bitwise_or
+
+  let bitwise_xor_ival _ = int_bin combine_prov Nat_big_num.bitwise_xor
+
+  let case_integer_value v f_concrete _ =
+    f_concrete (num_of_int v)
 
   let is_specified_ival ival =
     true
