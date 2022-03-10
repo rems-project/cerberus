@@ -540,6 +540,18 @@ let is_eq = function
   | (IT (Bool_op (EQ (lhs, rhs)), _)) -> Some (lhs, rhs)
   | _ -> None
 
+let is_and = function
+  | IT (Bool_op (And its), _) -> Some its
+  | _ -> None
+
+let is_or = function
+  | IT (Bool_op (Or its), _) -> Some its
+  | _ -> None
+
+let is_not = function
+  | IT (Bool_op (Not it), _) -> Some it
+  | _ -> None
+
 
 (* shorthands *)
 

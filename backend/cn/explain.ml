@@ -313,18 +313,10 @@ let app_symbol_it q = function
      SymSet.singleton v_s
   | _ -> SymSet.empty
 
-let same_type_resource req res = begin match (req, res) with
-  | (RER.Point p, RE.Point p2) -> Sctypes.equal p.ct p2.ct
-  | (RER.QPoint qp, RE.QPoint qp2) -> Sctypes.equal qp.ct qp2.ct
-  | (RER.Predicate p, RE.Predicate p2) -> String.equal p.name p2.name
-  | (RER.QPredicate qp, RE.QPredicate qp2) -> String.equal qp.name qp2.name
-  | _ -> false
-  end
-
 let clause_has_resource req c =
   let open ArgumentTypes in
   let rec f = function
-    | Resource (r, _, c) -> same_type_resource req r || f c
+    | Resource (r, _, c) -> Resources.same_type_resource req r || f c
     | Constraint (_, _, c) -> f c
     | Computational (_, _, c) -> f c
     | Logical (_, _, c) -> f c
@@ -611,18 +603,32 @@ let state ctxt {substitution; vclasses; relevant} (model_with_q : Solver.model_w
       ) ctxt.constraints
   in
 
+  let req_entry req = {res = RER.pp (RER.subst substitution req);
+    res_span = Spans.pp_model_spans model ctxt.global req} in
+
+  begin match orequest with
+    | None -> ()
+    | Some req -> Spans.diag_req ctxt.resources req model ctxt.global
+  end;
+
   let requested = match orequest with
     | None -> []
-    | Some req -> [RER.pp (RER.subst substitution req)]
+    | Some req -> [req_entry req]
   in
 
-  let resources = match orequest with
+  let same_resources = match orequest with
     | None -> []
-    | Some req -> begin match List.filter (same_type_resource req) ctxt.resources with
-        | [] -> [!^"(none)"]
-        | rs -> List.map (fun r -> RE.pp (RE.subst substitution r)) rs
+    | Some req -> begin match List.filter (Resources.same_type_resource req) ctxt.resources with
+        | [] -> [{res = !^"(none)"; res_span = !^""}]
+        | rs -> List.map (fun r -> req_entry (RE.request r)) rs
         end
   in
+
+  let other_resource_list = match orequest with
+    | None -> ctxt.resources
+    | Some req -> List.filter (fun re -> not (Resources.same_type_resource req re)) ctxt.resources
+  in
+  let other_resources = List.map (fun r -> req_entry (RE.request r)) other_resource_list in
 
   let predicate_name = match orequest with
     | Some (Predicate p) -> Some p.name
@@ -644,8 +650,9 @@ let state ctxt {substitution; vclasses; relevant} (model_with_q : Solver.model_w
 
   { memory = memory @ memory_var_lines;
     variables = predicate_oargs @ logical_var_lines;
-    requested = requested;
-    resources = resources;
+    requested;
+    same_resources;
+    other_resources;
     predicate_hints = predicate_hints;
     constraints }
 
