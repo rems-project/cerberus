@@ -533,3 +533,18 @@ module RE = struct
 
 end
 
+(* resources of the same type as a request, such that the resource
+   can be used to fulfil the request *)
+let same_type_resource req res = begin match (req, res) with
+  | (Requests.Point p, RE.Point p2) -> Sctypes.equal p.ct p2.ct
+  | (Requests.QPoint qp, RE.Point p2) -> Sctypes.equal qp.ct p2.ct
+  | (Requests.Point p, RE.QPoint qp2) -> Sctypes.equal p.ct qp2.ct
+  | (Requests.QPoint qp, RE.QPoint qp2) -> Sctypes.equal qp.ct qp2.ct
+  | (Requests.Predicate p, RE.Predicate p2) -> String.equal p.name p2.name
+  | (Requests.QPredicate qp, RE.Predicate p2) -> String.equal qp.name p2.name
+  | (Requests.Predicate p, RE.QPredicate qp2) -> String.equal p.name qp2.name
+  | (Requests.QPredicate qp, RE.QPredicate qp2) -> String.equal qp.name qp2.name
+  | _ -> false
+  end
+
+
