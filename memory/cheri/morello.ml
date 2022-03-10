@@ -179,7 +179,15 @@ module Morello_capability: Capability with type vaddr = N.num =
        - SCVALUE in Morello
        - CPYTYPE in Morello
      *)
-    let cap_set_value c cv = c (* TODO *)
+    let cap_set_value c cv =
+      let c = {c with value = cv} in
+      if cap_vaddr_representable c cv then
+        (* TODO: additional checks for "if any bounds bits are taken
+           from the value, ensure the top address bit doesn't
+           change". See `CapSetValue` in morello spec *)
+        c
+      else
+        cap_invalidate c
 
     (* Reducing the Capability Bounds (with rounding)
 
