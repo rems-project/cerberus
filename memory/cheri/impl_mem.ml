@@ -2204,69 +2204,75 @@ module CHERI (C:Capability with type vaddr = N.num) : Memory = struct
   let integer_ival n =
     IV (Prov_none, n)
 
-  (* TODO: implement special values for intptr_t *)
   let max_ival ity =
     let open Nat_big_num in
-    IV (Prov_none, begin match (Ocaml_implementation.get ()).sizeof_ity ity with
-                   | Some n ->
-                      let signed_max =
-                        sub (pow_int (of_int 2) (8*n-1)) (of_int 1) in
-                      let unsigned_max =
-                        sub (pow_int (of_int 2) (8*n)) (of_int 1) in
-                      begin match ity with
-                      | Char ->
-                         if (Ocaml_implementation.get ()).is_signed_ity Char then
-                           signed_max
-                         else
-                           unsigned_max
-                      | Bool ->
-                         (* TODO: not sure about this (maybe it should be 1 and not 255? *)
-                         unsigned_max
-                      | Size_t
-                        | Wchar_t (* TODO: it is implementation defined if unsigned *)
-                        | Unsigned _ ->
-                         unsigned_max
-                      | Ptrdiff_t
-                        | Wint_t (* TODO *)
-                        | Signed _ ->
-                         signed_max
-                      | Enum _ ->
-                         (* TODO: hack, assuming like int *)
-                         sub (pow_int (of_int 2) (8*4-1)) (of_int 1)
-                      end
-                   | None ->
-                      failwith "the concrete memory model requires a complete implementation MAX"
-                   end)
+    let signed_max n =
+      sub (pow_int (of_int 2) (8*n-1)) (of_int 1) in
+    let unsigned_max n =
+      sub (pow_int (of_int 2) (8*n)) (of_int 1) in
+    IV (Prov_none,
+        match ity with
+        | Signed Intptr_t -> signed_max (C.sizeof_vaddr)
+        | Unsigned Intptr_t -> unsigned_max (C.sizeof_vaddr)
+        | _ ->
+           begin match (Ocaml_implementation.get ()).sizeof_ity ity with
+           | Some n ->
+              begin match ity with
+              | Char ->
+                 if (Ocaml_implementation.get ()).is_signed_ity Char then
+                   signed_max n
+                 else
+                   unsigned_max n
+              | Bool ->
+                 (* TODO: not sure about this (maybe it should be 1 and not 255? *)
+                 unsigned_max n
+              | Size_t
+                | Wchar_t (* TODO: it is implementation defined if unsigned *)
+                | Unsigned _ ->
+                 unsigned_max n
+              | Ptrdiff_t
+                | Wint_t (* TODO *)
+                | Signed _ ->
+                 signed_max n
+              | Enum _ ->
+                 (* TODO: hack, assuming like int *)
+                 signed_max 4
+              end
+           | None ->
+              failwith "the concrete memory model requires a complete implementation MAX"
+           end)
 
-  (* TODO: implement special values for intptr_t *)
   let min_ival ity =
     let open Nat_big_num in
-    IV (Prov_none, begin match ity with
-                   | Char ->
-                      if (Ocaml_implementation.get ()).is_signed_ity Char then
-                        negate (pow_int (of_int 2) (8-1))
-                      else
-                        zero
-                   | Bool
-                     | Size_t
-                     | Wchar_t (* TODO: it is implementation defined if unsigned *)
-                     | Wint_t
-                     | Unsigned _ ->
-                      (* all of these are unsigned *)
-                      zero
-                   | Ptrdiff_t
-                     | Signed _ ->
-                      (* and all of these are signed *)
-                      begin match (Ocaml_implementation.get ()).sizeof_ity ity with
-                      | Some n ->
-                         negate (pow_int (of_int 2) (8*n-1))
-                      | None ->
-                         failwith "the concrete memory model requires a complete implementation MIN"
-                      end
-                   | Enum _ ->
-                      (* TODO: hack, assuming like int *)
-                      negate (pow_int (of_int 2) (8*4-1))
-                   end)
+    let signed_min n = negate (pow_int (of_int 2) (8*n-1)) in
+    IV (Prov_none,
+        begin match ity with
+        | Char ->
+           if (Ocaml_implementation.get ()).is_signed_ity Char then
+             signed_min 8
+           else
+             zero
+        | Bool
+          | Size_t
+          | Wchar_t (* TODO: it is implementation defined if unsigned *)
+          | Wint_t
+          | Unsigned _ ->
+           (* all of these are unsigned *)
+           zero
+        | Signed Intptr_t -> signed_min C.sizeof_vaddr
+        | Ptrdiff_t
+          | Signed _ ->
+           (* and all of these are signed *)
+           begin match (Ocaml_implementation.get ()).sizeof_ity ity with
+           | Some n ->
+              signed_min n
+           | None ->
+              failwith "the concrete memory model requires a complete implementation MIN"
+           end
+        | Enum _ ->
+           (* TODO: hack, assuming like int *)
+           signed_min 4
+        end)
 
   (* TODO: conversion? *)
   let intfromptr _ ity (PV (prov, ptrval_)) =

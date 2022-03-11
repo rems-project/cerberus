@@ -98,6 +98,10 @@ module Morello_capability: Capability with type vaddr = N.num =
     type vaddr = N.num
     type otype = N.num (*  15 bits actually. *)
 
+    let min_vaddr  = Nat_big_num.of_int 0
+    let max_vaddr  = let open Nat_big_num in sub (pow_int (of_int 2) 64) (of_int 1)
+    let sizeof_vaddr = 8 (* 64-bit *)
+
     type vaddr_interval = vaddr * vaddr
 
     type cap_seal_t =
