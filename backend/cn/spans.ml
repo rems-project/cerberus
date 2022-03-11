@@ -174,7 +174,62 @@ let req_pt_ct = function
   | RER.QPoint qpt -> (qpt.pointer, qpt.ct, true)
   | _ -> raise (Invalid_argument "foo")
 
-let intersection_action g (req, req_span) (res, res_span) =
+let scan_subterms f t = fold_subterms (fun _ xs t -> match f t with
+  | None -> xs
+  | Some r -> r :: xs) [] t
+
+(* get concrete objects that (probably) exist in this resource/request *)
+let get_witnesses = function
+  | RER.Point pt -> [(pt.pointer, pt.permission)]
+  | RER.QPoint qpt ->
+  let i = sym_ (qpt.q, BT.Integer) in
+  let lbs = scan_subterms is_le qpt.permission
+    |> List.filter (fun (lhs, rhs) -> IT.equal i rhs)
+    |> List.map fst in
+  if List.length lbs <> 0
+  then Pp.debug 3 (lazy (Pp.item "unexpected number of lower bounds"
+    (Pp.list IT.pp lbs)))
+  else ();
+  let eqs = scan_subterms is_eq qpt.permission
+    |> List.filter (fun (lhs, rhs) -> IT.equal i lhs || IT.equal i rhs)
+  in
+  begin match lbs with
+      | [] -> []
+      | (lb :: _) ->
+  List.init (List.length eqs + 1)
+    (fun i -> (arrayShift_ (qpt.pointer, qpt.ct, add_ (lb, z_ (Z.of_int i))),
+        subst (make_subst [(qpt.q, z_ (Z.of_int i))]) qpt.permission))
+  end
+  | _ -> []
+
+let outer_object m g inner_ptr = function
+  | RER.Point pt -> Some (pt.pointer, pt.ct, pt.permission)
+  | RER.QPoint qpt ->
+  (* need to invent an index at which to fold/unfold *)
+  begin try
+    let qptr = eval_extract "q-resource pointer" (m, g) is_pointer qpt.pointer in
+    let iptr = eval_extract "inner object pointer" (m, g) is_pointer inner_ptr in
+    let sz = Z.of_int (Memory.size_of_ctype qpt.ct) in
+    let m_diff = Z.sub iptr qptr in
+    let m_ix = Z.div m_diff sz in
+    let m_offs = Z.sub m_diff (Z.mul m_ix sz) in
+    let ptr = integerToPointerCast_
+        (sub_ (pointerToIntegerCast_ inner_ptr, z_ m_offs)) in
+    let offset = array_offset_of_pointer ~base:qpt.pointer ~pointer:ptr in
+    let index = array_pointer_to_index ~base:qpt.pointer ~item_size:(z_ sz)
+        ~pointer:ptr in
+    let ok = and_ [eq_ (rem_ (offset, z_ sz), int_ 0);
+        subst (make_subst [(qpt.q, index)]) qpt.permission] in
+    Some (ptr, qpt.ct, ok)
+  with
+    Failure pp -> begin
+      Pp.debug 3 (lazy (Pp.item "failed to compute object offsets" pp));
+      None
+    end
+  end
+  | _ -> None
+
+let intersection_action m g (req, req_span) (res, res_span) =
   let (req_pt, req_ct, req_qpt) = req_pt_ct req in
   let (res_pt, res_ct, res_qpt) = req_pt_ct (RE.request res) in
   let cmp = compare_enclosing g req_ct res_ct in
@@ -183,40 +238,56 @@ let intersection_action g (req, req_span) (res, res_span) =
         (Pp.list RER.pp [req; RE.request res])));
       None
   end
-  else if cmp > 0 && not req_qpt
-  then Some ("pack", req_pt, req_ct)
-  else if cmp < 0 && not res_qpt
-  then Some ("unpack", res_pt, res_ct)
-  else None
+  else
+  let action = if cmp < 0 then "unpack" else "pack" in
+  (* the "inner witnesses" are objects of interior type *)
+  let witnesses = if cmp < 0
+    then get_witnesses req
+    else get_witnesses (RE.request res)
+  in
+  Pp.debug 3 (lazy (Pp.item "witnesses"
+    (Pp.list IT.pp (List.map fst witnesses))));
+  let obj = outer_object m g (if cmp < 0 then req_pt else res_pt)
+            (if cmp < 0 then RE.request res else req) in
+  match (witnesses, obj) with
+  | ([], _) -> None
+  | (_, None) -> None
+  | (_, Some (ptr, ct, permission)) ->
+  let sz = Memory.size_of_ctype ct in
+  let upper = integerToPointerCast_ (add_ (pointerToIntegerCast_ ptr,
+      z_ (Z.of_int (sz - 1)))) in
+  let ok = and_ [permission;
+    or_ (List.map (fun (w_ptr, perm) -> and_ [perm; lePointer_ (ptr, w_ptr);
+        lePointer_ (w_ptr, upper)]) witnesses)] in
+  Some (action, ptr, ct, ok)
 
-(*
-  begin match req with
-  | Point pt -> Pp.item "fold here" (pp_fold req.pointer req.ct)
-  | QPoint qpt ->
- Pp.string "folding qpoints is hard"
-  | _ -> Pp.string "this should be impossible"
-  end
-*)
+let model_res_spans_or_empty m g req =
+  try
+    model_res_spans (m, g) req
+  with
+    Failure pp ->
+      Pp.debug 3 (lazy (Pp.item "failed to extract resource span" pp));
+      []
 
 let guess_span_intersection_action ress req m g =
   let diff res = not (Resources.same_type_resource req res) in
   let res_ss = List.filter diff ress
     |> List.map (fun r -> List.map (fun s -> (r, s))
-        (model_res_spans (m, g) (Resources.RE.request r)))
+        (model_res_spans_or_empty m g (Resources.RE.request r)))
     |> List.concat in
-  let req_ss = model_res_spans (m, g) req in
+  let req_ss = model_res_spans_or_empty m g req in
   let interesting = List.filter (fun (_, s) -> List.exists (inter s) req_ss) res_ss
     |> List.sort (fun (_, (lb, _)) (_, (lb2, _)) -> Z.compare lb lb2) in
   match interesting with
   | [] ->
-  Pp.debug 3 (lazy (Pp.item "spans expected for inference" (Pp.string "")));
+  Pp.debug 3 (lazy (Pp.item "spans as expected for inference" (Pp.string "")));
   None
   | _ ->
   List.find_map (fun (r, s) ->
   Pp.debug 3 (lazy (Pp.item "resource partial overlap"
     (Pp.list RER.pp [req; RE.request r])));
   let req_s = List.find (inter s) req_ss in
-  intersection_action g (req, req_s) (r, s)
+  intersection_action m g (req, req_s) (r, s)
   ) interesting
 
 
@@ -224,7 +295,7 @@ let diag_req ress req m g =
   let act = guess_span_intersection_action ress req m g in
   Pp.debug 1 (lazy (match act with
     | None -> Pp.item "guess intersection action: None" (Pp.string "")
-    | Some (nm, pt, ct) -> Pp.item ("guessed: do " ^ nm) (pp_pt_ct pt ct)
+    | Some (nm, pt, ct, ok) -> Pp.item ("guessed: do " ^ nm) (pp_pt_ct pt ct)
   ))
 
 

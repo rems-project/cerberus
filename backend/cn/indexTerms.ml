@@ -552,6 +552,14 @@ let is_not = function
   | IT (Bool_op (Not it), _) -> Some it
   | _ -> None
 
+let is_lt = function
+  | IT (Arith_op (LT (x, y)), _) -> Some (x, y)
+  | _ -> None
+
+let is_le = function
+  | IT (Arith_op (LE (x, y)), _) -> Some (x, y)
+  | _ -> None
+
 
 (* shorthands *)
 
