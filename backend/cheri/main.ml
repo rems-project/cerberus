@@ -50,7 +50,6 @@ let frontend cpp_str filename =
     ; cpp_cmd= cpp_str
     ; cpp_stderr= true
   } in
-  Global_ocaml.(set_cerb_conf false Random false Basic false false false false);
   Cerb_frontend.Ocaml_implementation.(set (MorelloImpl.impl));
   Switches.set ["strict_pointer_equality"] ;
   load_core_stdlib ()                                  >>= fun stdlib ->
@@ -64,7 +63,7 @@ let cpp_str runtime_path traditional =
     (if traditional then "-traditional" else "")
     runtime_path
 
-let cheri debug_level core_file runtime_path traditional filename =
+let cheri exec debug_level core_file runtime_path traditional filename =
   let frontend cpp_str filename =
     let conf = {
         debug_level= 0
@@ -77,7 +76,7 @@ let cheri debug_level core_file runtime_path traditional filename =
       ; cpp_cmd= cpp_str
       ; cpp_stderr= true
       } in
-    Global_ocaml.(set_cerb_conf false Random false Basic false false false false);
+    Global_ocaml.(set_cerb_conf exec Random false Basic false false false false);
     load_core_stdlib ()                                  >>= fun stdlib ->
     load_core_impl stdlib impl_name                      >>= fun impl   ->
     c_frontend (conf, io) (stdlib, impl) ~filename in
@@ -120,7 +119,10 @@ let debug_level =
   let doc = "Set the debug message level to $(docv) (should range over [0-9])." in
   Arg.(value & opt int 0 & info ["d"; "debug"] ~docv:"N" ~doc)
 
+let exec =
+  let doc = "Execute the Core program after the elaboration." in
+  Arg.(value & flag & info ["exec"] ~doc)
 
 let () =
-  let cheri_t = Term.(pure cheri $ debug_level $ core_file $ runtime_path $ traditional $ file) in
+  let cheri_t = Term.(pure cheri $exec $ debug_level $ core_file $ runtime_path $ traditional $ file) in
   Term.exit @@ Term.eval (cheri_t, Term.info "Core cheri")
