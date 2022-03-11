@@ -158,9 +158,9 @@ module PageAlloc = struct
             ((page %. "pool") %== pool_pointer);
             (* (impl_ ( *)
             (*      (page %. "order") %!= int_ hHYP_NO_ORDER, *)
-            (*      (let o = Sym.fresh () in  *)
+            (*      (let o = Sym.fresh () in *)
             (*       let two_to_the_o = blast_ (0, o, page %. "order", mMAX_ORDER - 1) (exp_ (int_ 2, sym_ (o, Integer))) in *)
-            (*       (and_  *)
+            (*       (and_ *)
             (*         [(rem_ (page_index, two_to_the_o )) %== int_ 0; *)
             (*          (page_index %+ two_to_the_o) %<= ((pool %. "range_end") %/ int_ pPAGE_SIZE);] *)
             (*      )) *)
