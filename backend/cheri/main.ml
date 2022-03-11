@@ -58,16 +58,13 @@ let frontend cpp_str filename =
   c_frontend (conf, io) (stdlib, impl) ~filename
 
 
-let cpp_str =
-  "cc -E -C -Werror -nostdinc -undef -D__cerb__"
-  ^ " -D__CHERI_PURE_CAPABILITY__"
-  ^ " -DDEBUG"
-  ^ " -DMAX_CPUS=4"
-  ^ " -DMAX_VMS=2"
-  ^ " -DHEAP_PAGES=10"
+let cpp_str runtime_path traditional =
+  Printf.sprintf
+    "clang %s -E -C -Werror -Wno-builtin-macro-redefined -nostdinc -undef -D__cerb__ -I %s/libc/include"
+    (if traditional then "-traditional" else "")
+    runtime_path
 
-
-let cheri_core filename =
+let cheri debug_level core_file runtime_path traditional filename =
   let frontend cpp_str filename =
     let conf = {
         debug_level= 0
@@ -79,82 +76,26 @@ let cheri_core filename =
       ; sequentialise_core= false
       ; cpp_cmd= cpp_str
       ; cpp_stderr= true
-    } in
+      } in
     Global_ocaml.(set_cerb_conf false Random false Basic false false false false);
     load_core_stdlib ()                                  >>= fun stdlib ->
     load_core_impl stdlib impl_name                      >>= fun impl   ->
-    core_frontend (conf, io) (stdlib, impl) ~filename in
-  match frontend cpp_str filename with
-    | Exception.Exception err ->
-        prerr_endline (Pp_errors.to_string err)
-    | Exception.Result file ->
-        begin match file.Core.main with
-          | None ->
-              assert false
-          | Some sym ->
-              begin match Pmap.lookup sym file.funs with
-                | Some (Core.Proc (_, _, _, e)) ->
-(*
-                    print_endline "===== BEFORE =====";
-                    PPrint.ToChannel.pretty 1.0 80 Stdlib.stdout 
-                      (Pp_core.Basic.pp_pexpr pe);
-                    print_endline "\n===== AFTER =====";
-                    Core_peval.foo (fun z -> PPrint.ToChannel.pretty 1.0 80 Stdlib.stdout z) pe
-*)
-                    let rec loop e =
-                      print_endline "===== BEFORE =====";
-                      PPrint.ToChannel.pretty 1.0 80 Stdlib.stdout 
-                        (Pp_core.Basic.pp_expr e);
-                      flush_all ();
-                      let e' = Core_peval.step_peval_expr file e in
-                      print_endline "\n===== AFTER =====";
-                      PPrint.ToChannel.pretty 1.0 80 Stdlib.stdout 
-                        (Pp_core.Basic.pp_expr e');
-                      flush_all ();
-                      Scanf.scanf "%s\n" (fun _ ->
-                        loop e'
-                      )
-                    in loop e
-
-                | _ ->
-                    assert false
-              end
-        end
-
-
-let cheri filename =
-  match frontend cpp_str filename with
-    | Exception.Exception err ->
-        prerr_endline (Pp_errors.to_string err)
-    | Exception.Result (_, _, file) ->
-        begin match file.Core.main with
-          | None ->
-              assert false
-          | Some sym ->
-              Tags.set_tagDefs file.tagDefs;
-              begin match Pmap.lookup sym file.funs with
-                | Some (Core.Proc (_, _, _, e)) ->
-                    let rec loop e =
-                      print_endline "===== BEFORE =====";
-                      PPrint.ToChannel.pretty 1.0 80 Stdlib.stdout 
-                        (Pp_core.Basic.pp_expr e);
-                      flush_all ();
-                      let e' = Core_peval.step_peval_expr file e in
-                      print_endline "\n===== AFTER =====";
-                      PPrint.ToChannel.pretty 1.0 80 Stdlib.stdout 
-                        (Pp_core.Basic.pp_expr e');
-                      flush_all ();
-                      Scanf.scanf "%s\n" (fun _ ->
-                        loop e'
-                      )
-                    in loop e
-                | _ ->
-                    assert false
-              end
-(*              Core_peval.boom file *)
-              
-        end
-
+    c_frontend (conf, io) (stdlib, impl) ~filename in
+  match frontend (cpp_str runtime_path traditional) filename with
+  | Exception.Exception err ->
+     prerr_endline (Pp_errors.to_string err)
+  | Exception.Result (_, _, file) ->
+     begin
+       (* Save CORE file if requested *)
+       match core_file with
+       | None -> ()
+       | Some core_file ->
+          let f = open_out core_file in
+          Colour.do_colour := false ;
+          PPrint.ToChannel.pretty 1.0 80 f (Pp_core.WithLocationsAndStd.pp_file file);
+          close_out f
+     end
+(* Core_peval.boom file *)
 
 open Cmdliner
 
@@ -162,7 +103,24 @@ let file =
   let doc = "source Core file" in
   Arg.(required & pos ~rev:true 0 (some string) None & info [] ~docv:"FILE" ~doc)
 
+let traditional =
+  let doc = "use \"traditional\" pre-processor" in
+  Arg.(value & flag & info ["t";"traditional"] ~doc)
+
+let runtime_path =
+  let doc = "cerberus runtime directory" in
+  let opam_runtime = (Sys.getenv "OPAM_SWITCH_PREFIX") ^ "/lib/cerberus/runtime" in
+  Arg.(value & opt string opam_runtime & info ["r";"runtime"] ~docv:"DIR" ~doc)
+
+let core_file =
+  let doc = "save Core to file" in
+  Arg.(value & opt (some string) None & info ["core"] ~docv:"FILE" ~doc)
+
+let debug_level =
+  let doc = "Set the debug message level to $(docv) (should range over [0-9])." in
+  Arg.(value & opt int 0 & info ["d"; "debug"] ~docv:"N" ~doc)
+
 
 let () =
-  let cheri_t = Term.(pure cheri(*_core*) $ file) in
+  let cheri_t = Term.(pure cheri $ debug_level $ core_file $ runtime_path $ traditional $ file) in
   Term.exit @@ Term.eval (cheri_t, Term.info "Core cheri")
