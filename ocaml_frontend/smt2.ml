@@ -54,9 +54,9 @@ let runND exec_mode (type cs) cs_module (m: ('a, Driver.step_kind, 'err, cs, 'st
           return [(Killed r, str, st')]
 
       | (NDnd (info, str_ms), st') ->
-          (* let xx = Random.int 10000 in *)
+          (* let xx = Random.int 10000 in
           incr pad;
-          (* let str = Printf.sprintf "%sNDnd[%s] <%d> <size: %d>\n" (String.make !pad ' ')
+          let str = Printf.sprintf "%sNDnd[%s] <%d> <size: %d>\n" (String.make !pad ' ')
             (Driver.instance_Show_Show_Driver_step_kind_dict.show_method info)
             xx
             (List.length str_ms) in
@@ -67,6 +67,11 @@ let runND exec_mode (type cs) cs_module (m: ('a, Driver.step_kind, 'err, cs, 'st
             | Random ->
                 with_backtracking (fun (_, z) -> aux z st') str_ms
             | Exhaustive ->
+                (* List.iter (fun (idx, (info, _)) ->
+                  Printf.fprintf stderr "%s<%d>[%d] ==> %s\n" (String.make !pad ' ') xx idx
+                  (Driver.instance_Show_Show_Driver_step_kind_dict.show_method info);
+                  flush_all ();
+                ) (List.mapi (fun n z -> (n, z)) str_ms); *)
                 foldlM (fun acc (idx, (info, m_act)) ->
                   (* Printf.fprintf stderr "%s<%d>[%d] ==> %s\n" (String.make !pad ' ') xx idx
                     (Driver.instance_Show_Show_Driver_step_kind_dict.show_method info);

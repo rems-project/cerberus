@@ -2,7 +2,7 @@ open import Pervasives Utils Show Core
 import Global Dlist Pp State_exception_undefined Map_extra
 
 open import Errors Core Annot
-import Cmm_csem Mem_common Core_aux
+import Cmm_csem Mem_common Core_aux Ctype
 
 
 (* DEBUG *)
@@ -30,9 +30,27 @@ type context (* core_run_annotation unit Symbol.sym *) =
   | Cunseq of list Annot.annot * list (Core.expr core_run_annotation) * context * list (Core.expr core_run_annotation)
   | Cwseq of list Annot.annot * Core.pattern * context * Core.expr core_run_annotation
   | Csseq of list Annot.annot * Core.pattern * context * Core.expr core_run_annotation
-  | Cannot of list Annot.annot * Core.dyn_annotations * context
+  | Cannot of list Annot.annot * list Core.dyn_annotation * context
   | Cbound of list Annot.annot * context
 
+let rec stringFromContext ctx =
+  match ctx with
+    | CTX ->
+        "CTX"
+    | Cunseq _ _ ctx' _ ->
+        "Cunseq[" ^ stringFromContext ctx' ^ "]"
+    | Cwseq _ _ ctx' _ ->
+        "Cwseq[" ^ stringFromContext ctx' ^ "]"
+    | Csseq _ _ ctx' _ ->
+        "Csseq[" ^ stringFromContext ctx' ^ "]"
+    | Cannot _ _ ctx' ->
+        "Cannot[" ^ stringFromContext ctx' ^ "]"
+    | Cbound _ ctx' ->
+        "Cbound[" ^ stringFromContext ctx' ^ "]"
+  end
+instance (Show context)
+  let show ctx = stringFromContext ctx
+end
 
 
 type continuation_element 'a =
@@ -43,7 +61,7 @@ type continuation_element 'a =
 
 type continuation 'a = list (continuation_element 'a)
 (* type labeled_continuation 'a = list (Symbol.sym * ctype) * expr 'a *)
-type labeled_continuations 'a = map Symbol.sym (list Symbol.sym * expr 'a)
+type labeled_continuations 'a = map Symbol.sym (list (Symbol.sym (* * Ctype.ctype *)) * expr 'a)
 
 
 type stack 'a =
@@ -52,7 +70,6 @@ type stack 'a =
   | Stack_cons of maybe Symbol.sym * (*labeled_continuations 'a * *) continuation 'a * stack 'a
     (* TODO: this is for Core_reduction, the previous one is for Core_run *)
 
-  | Stack_base2 of maybe Symbol.sym * context
   | Stack_cons2 of maybe Symbol.sym (* name of the current Core procedure, if any *)
                  * context          (*  *)
                  * stack 'a
@@ -183,6 +200,7 @@ type thread_state = <|
   env: list (map Symbol.sym value); (* Scoped environment for the Core symbols *)
   
   (* NON-SEMANTIC stuff *)
+  current_proc_opt: maybe Symbol.sym;
   exec_loc: exec_location;
   current_loc: Loc.t;
 |>
