@@ -277,8 +277,15 @@ type dyn_annotation =
   | DA_neg of nat * list nat * Mem.footprint (* the nat is its unique "exclusion ID", the list is its "exclusion set" *)
   | DA_pos of list nat * Mem.footprint (* the list of nat is its "exclusions set" *)
 
-type dyn_annotations =
-  list dyn_annotation
+instance (Show dyn_annotation)
+  let show dannot =
+    match dannot with
+      | DA_neg n excl fp ->
+          "DA_neg(" ^ show n ^ ", " ^ show excl ^ ")"
+      | DA_pos excl fp ->
+          "DA_pos(" ^ show excl ^ ")"
+    end
+end
 
 type generic_expr_ 'a 'bty 'sym =  (* (effectful) expression *)
  | Epure of (generic_pexpr 'bty 'sym)
@@ -301,7 +308,7 @@ type generic_expr_ 'a 'bty 'sym =  (* (effectful) expression *)
  (* This two only exists during the execution *)
  | Ewait of Mem_common.thread_id (* wait for thread termination *)
   
- | Eannot of dyn_annotations * generic_expr 'a 'bty 'sym
+ | Eannot of list dyn_annotation * generic_expr 'a 'bty 'sym
  | Eexcluded of nat * generic_action 'a 'bty 'sym
 
 and generic_expr 'a 'bty 'sym = 

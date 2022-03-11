@@ -1596,6 +1596,7 @@ BEFORE EVAL_PEXPR2
             current_loc= th_st.current_loc;
             exec_loc= ELoc_normal [];
             env= th_st.env;
+            current_proc_opt= Nothing;
           |>) es
         )
     | (Ewait _, _) ->

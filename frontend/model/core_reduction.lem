@@ -22,6 +22,7 @@ module E = struct
   let inline return = SEU.return
   let inline undef  = SEU.undef
   let inline mapM   = SEU.mapM
+  let inline foldlM = SEU.foldM
   
   let fresh_excluded_id =
     SEU.runS (fun run_st ->
@@ -29,9 +30,7 @@ module E = struct
     (n, <| run_st with excluded_supply= n+1 |>)
   )
   
-  
   let eval_pexpr2 th_st core_extern mem_st file pe =
-    let () = Debug.print_debug 5 [] (fun () -> "CALLING Core_run.eval_pexpr2" ) in
     SEU.runEU (Core_eval.eval_pexpr_aux2 th_st.current_loc core_extern th_st.env (Just mem_st) file pe)
 end
 
@@ -51,26 +50,37 @@ let rec full_eval_pexpr th_st core_extern mem_st file pe =
 
 
 type action_request2 'a =
-  (* RequestName  of location * sbBefore * ddBefore * aswBefore
-                     parameters of request *
-                     the new state or a callback *)
-  | AllocRequest2 of Symbol.prefix * Mem.integer_value * Mem.integer_value *
-                    (Cmm.aid -> Mem.pointer_value -> 'a)
+  | AllocRequest2 of Symbol.prefix
+                  *  Mem.integer_value (* alignment constraint *)
+                  *  Mem.integer_value (* size of allocation *)
+                  *  (Cmm.aid -> Mem.pointer_value -> 'a) (* new thread state builder *)
   
-  | CreateRequest2 of Symbol.prefix * Mem.integer_value * Ctype.ctype * maybe Mem.mem_value *
-                     (Cmm.aid -> Mem.pointer_value -> 'a)
+  | CreateRequest2 of Symbol.prefix
+                   *  Mem.integer_value (* alignment constraint *)
+                   *  Ctype.ctype (* C type of allocation *)
+                   *  maybe Mem.mem_value (* optional initialisation value *)
+                   *  (Cmm.aid -> Mem.pointer_value -> 'a)
   
-  | StoreRequest2 of Cmm.memory_order * Ctype.ctype * (* is_locking *)bool * Mem.pointer_value * Mem.mem_value *
-                     (Cmm.aid -> Mem.footprint -> 'a)
+  | StoreRequest2 of Cmm.memory_order (* C11 memory order *)
+                  *  Ctype.ctype (* C type of lvalue *)
+                  *  bool (* whether the store locks the allocation *)
+                  *  Mem.pointer_value
+                  *  Mem.mem_value 
+                  *  (Cmm.aid -> Mem.footprint -> 'a)
   
-  | SeqRMWRequest2 of Ctype.ctype * Mem.pointer_value * (Mem.mem_value -> core_runM Mem.mem_value) * (Cmm.aid -> Mem.footprint -> Mem.mem_value -> Mem.mem_value -> 'a)
-  
-  | LoadRequest2 of (* the request provide a fresh symbolic name to be used by the concurrency if needed *)
-                    Cmm.memory_order * Ctype.ctype * Mem.pointer_value * Symbol.sym *
+  | LoadRequest2 of Cmm.memory_order (* C11 memory order *)
+                 *  Ctype.ctype (* C type of lvalue *)
+                 *  Mem.pointer_value
+              (* *  Symbol.sym  (* the request provide a fresh symbolic name to be used by the concurrency if needed *)
                    (* the argument of the callback is either a concrete value if the memory model
                       is able to give one right away, or is equal to the symbolic value provided by the
-                      present LoadRequest *)
-                   (Cmm.aid -> Mem.footprint -> Mem.mem_value -> 'a)
+                      present LoadRequest *) *)
+                 *  (Cmm.aid -> Mem.footprint -> Mem.mem_value -> 'a)
+  
+  | SeqRMWRequest2 of Ctype.ctype
+                   *  Mem.pointer_value
+                   *  (Mem.mem_value -> core_runM Mem.mem_value)
+                   *  (Cmm.aid -> Mem.footprint -> Mem.mem_value -> Mem.mem_value -> 'a)
   
   (* TODO: RMW, Fence *)
   | KillRequest2 of (* is_dynamic *)bool * Mem.pointer_value * (Cmm.aid -> 'a)
@@ -82,9 +92,8 @@ type runstate_step_kind =
 
 type core_step2 =
   | Step_with_runstate2 of runstate_step_kind * core_runM thread_state
-
-  | Step_eval2 of string * core_runM thread_state
   | Step_tau2 of string * Core_run.core_tau_step_kind * thread_state
+  
   | Step_action_request2 of string * Loc.t * (* set Cmm.aid * set Cmm.aid * set Cmm.aid * *)
                             Mem_common.thread_id *
                             core_runM (action_request2 thread_state)
@@ -98,6 +107,7 @@ type core_step2 =
   | Step_spawn_threads2 of (list Mem_common.thread_id -> thread_state) * list thread_state (* initial states for the children *)
 (*  | Step_fs2 of thread_state * Core_run.fs_oper *)
   | Step_fs2 of thread_state * core_runM Core_run.fs_oper
+  | Step_nd2 of list thread_state
 
 
 instance (Show core_step2)
@@ -114,17 +124,15 @@ instance (Show core_step2)
                     | Core_run.TSK_Ccall sym _ ->
                         "TSK_Ccall(" ^ show sym ^ ")"
                     | Core_run.TSK_Return sym _ ->
-                        "TSK_Return(" ^ show sym ^ ")"                            
+                        "TSK_Return(" ^ show sym ^ ")"
                     | Core_run.TSK_Misc ->
                         "TSK_Misc"
                   end in
                 "RSK_tau[" ^ debug_str ^ ", " ^ kind'_str ^ "]"
             end in
           "Step_with_runstate2[" ^ kind_str ^ "]"
-      | Step_eval2 debug_str _  ->
-          "Step_eval2[" ^ debug_str ^ "]"
       | Step_tau2 debug_str kind _ ->
-          "Step_tau2[" ^ debug_str ^ "]"
+          "Step_tau2<TAU>[" ^ debug_str ^ "]"
       | Step_action_request2 debug_str loc tid _ ->
           "Step_action_request2[" ^ debug_str ^ "] -- tid: " ^ show tid ^ " -- at loc: " ^ Loc.stringFromLocation loc
       | Step_aseq loc tid _(*action_request2 unit*) _ ->
@@ -146,18 +154,7 @@ instance (Show core_step2)
     end
 end
 
-
-
-(*
-  | Step_constrained of string * list (Mem.mem_iv_constraint * core_runM thread_state)
-  | Step_bound of core_runM thread_state
-*)
-
-
-
-
-
-(* ********************************************************************************************** *)
+(* ********************************************************************************************* *)
 
 let is_irreducible = function
     (* annot(..., annot(..., _)) ==> NOTE THE _ may be a value *)
@@ -178,7 +175,7 @@ end
 import Debug
 
 
-val do_race: Core.dyn_annotations -> Core.dyn_annotations -> bool
+val do_race: list Core.dyn_annotation -> list Core.dyn_annotation -> bool
 let do_race xs1 xs2 =
   List.any (function
     | DA_neg id1 exclusion1 fp1 ->
@@ -207,29 +204,19 @@ let do_race xs1 xs2 =
   end) xs1
 
 
-val combine_dyn_annotations: Core.dyn_annotations -> Core.dyn_annotations -> Core.dyn_annotations
+val combine_dyn_annotations: list Core.dyn_annotation -> list Core.dyn_annotation -> list Core.dyn_annotation
 let combine_dyn_annotations xs1 xs2 =
   xs1 ++ xs2
-
-let pp_dyn_annotations fps =
-  let pp_dyn_annotation = function
-    | DA_neg n excl fp ->
-        "DA_neg(" ^ show n ^ ", " ^ show excl ^ ")"
-    | DA_pos excl fp ->
-        "DA_pos(" ^ show excl ^ ")"
-  end in
-  stringFromList pp_dyn_annotation fps
-
 
 
 type one_step =
   | TAU_WITH_RUNSTATE of string * core_runM (list (map Symbol.sym value) * Core.expr core_run_annotation)
   | TAU of string * list (map Symbol.sym value) * Core.expr core_run_annotation
   | EVAL of string * core_runM (Core.expr core_run_annotation)
+  | ND of list (Core.expr core_run_annotation)
   | MEMOP of Mem_common.memop * list Core.value
   | UNSEQUENCED_RACE
   | ILLTYPED of string
-
 
 
 let rec one_step_unseq_aux (fps_acc, cvals_acc) = function
@@ -239,20 +226,20 @@ let rec one_step_unseq_aux (fps_acc, cvals_acc) = function
       one_step_unseq_aux (fps_acc, cval::cvals_acc) xs
   | Expr _ (Eannot fps (Expr _ (Epure (Pexpr _ _ (PEval cval))))) :: xs ->
       if do_race fps fps_acc then
-        (* found an unsequenced race *)
-        let () = Debug.print_debug 1 [] (fun () ->
-          "FOUND RACE: " ^ pp_dyn_annotations fps ^ " <---> " ^ pp_dyn_annotations fps_acc
+        let () = Debug.print_debug 2 [Debug.DB_core_dynamics] (fun () ->
+          "FOUND AN UNSEQUENCED RACE: " ^ show fps ^ " <---> " ^ show fps_acc
         ) in
+        (* we found an unsequenced race (undefined behaviour) *)
         Nothing
       else
         one_step_unseq_aux (combine_dyn_annotations fps fps_acc, cval :: cvals_acc) xs
   | e :: _ ->
       (* all the operand of the unseq() must have already been reduced to values *)
-      error ("Core_run.one_step_unseq_aux ==> " ^ Pp.stringFromCore_expr e)
+      error ("Core_reduction.one_step_unseq_aux ==> " ^ Pp.stringFromCore_expr e)
   end
 
 
-
+(* Effectless reductions *************************************************************************)
 (* NOTE: for performance, we use scoped environment instead of substitutions for bound variables *)
 val one_step:
   (Core.pexpr -> core_runM Core.pexpr) ->
@@ -267,22 +254,21 @@ let one_step eval_pexpr full_eval_pexpr env (Expr annots expr_ as expr) =
           | Just _ ->
               Nothing
           | Nothing ->
+              (* reduction: PURE + PURE-UNDEF *)
               Just begin
               (*     eval e = v
                 -------------------
                 pure(e) --> pure(v) *)
                 EVAL "Epure" begin
-                  let () = Debug.print_debug 1 [] (fun () ->
-                    "HELLO Epure(one_step)"
-                  ) in
                   full_eval_pexpr pe >>= fun cval ->
                   E.return (Expr annots (Epure (Caux.mk_value_pe cval)))
                 end
               end
       end
-
-    (* {A_1} {A_2} E --> {A_1 union A_2} E *)
+    
     | Eannot xs1 (Expr annots2 (Eannot xs2 e)) ->
+        (* {A_1} {A_2} E --> {A_1 union A_2} E *)
+        (* reduction: ANNOTS *)
         Just (TAU "Eannot" env (Expr (annots ++ annots2) (Eannot (combine_dyn_annotations xs1 xs2) e)))
     
     | Ememop memop pes ->
@@ -299,6 +285,7 @@ let one_step eval_pexpr full_eval_pexpr env (Expr annots expr_ as expr) =
     | Ecase (Pexpr _ () (PEconstrained xs)) _ ->
         error "TODO: Core_reduction.one_step, Ecase PEconstrained"
     | Ecase pe pat_es ->
+        (* reduction: CASE + CASE-UNDEF *)
         Just match valueFromPexpr pe with
           | Just cval ->
               (* TODO: stop using subst? *)
@@ -308,42 +295,25 @@ let one_step eval_pexpr full_eval_pexpr env (Expr annots expr_ as expr) =
                 | Nothing ->
                     ILLTYPED ("Ecase, mismatched ==> " ^ Pp.stringFromCore_expr expr)
               end
-
           | Nothing ->
               EVAL "Ecase" begin
                 eval_pexpr pe >>= fun pe' ->
                 E.return (Expr annots (Ecase pe' pat_es))
               end
         end
-(*
+    
     | Elet pat pe1 e2 ->
         match valueFromPexpr pe1 with
           | Just cval ->
               (* let pat = v in E2 --> { v / pat } E2 *)
-              Just (TAU "Elet" (update_env pat cval env) e2)
-          | Nothing ->
-              Just begin
-                EVAL "Elet" begin
-                  eval_pexpr pe1 >>= fun pe1' ->
-                  let () = Debug.print_debug 4 [] (fun () ->
-                    "Elet ==> " ^ Pp.stringFromCore_pexpr pe1 ^
-                    " --> " ^ Pp.stringFromCore_pexpr pe1'
-                  ) in
-                  E.return (Expr annots (Elet pat pe1' e2))
-                end
-              end
-        end
-*)
-    | Elet pat pe1 e2 ->
-        match valueFromPexpr pe1 with
-          | Just cval ->
-              (* let pat = v in E2 --> { v / pat } E2 *)
+              (* reductions: LET(last step) *)
               Just (TAU "Elet" (update_env pat cval env) e2)
           | Nothing ->
               Just begin
               (*              eval e1 = v
                  -------------------------------------
                  let pat = e1 in E2 --> { v / pat } E2 *)
+                (* reductions: LET(first step) + LET-UNDEF *)
                 TAU_WITH_RUNSTATE "Elet" begin
                   full_eval_pexpr pe1 >>= fun cval ->
                   E.return (update_env pat cval env, e2)
@@ -351,25 +321,8 @@ let one_step eval_pexpr full_eval_pexpr env (Expr annots expr_ as expr) =
               end
         end
     
-(*
     | Eif pe1 e2 e3 ->
-        Just match valueFromPexpr pe1 with
-          | Just Vtrue ->
-              (* if true the E2 else E3 --> E2 *)
-              TAU "Eif (true)" env e2
-          | Just Vfalse ->
-              (* if false the E2 else E3 --> E3 *)
-              TAU "Eif (false)" env e3
-          | Just _ ->
-              ILLTYPED "the first operand of an Eif didn't evaluated to a boolean"
-          | Nothing ->
-              EVAL "Eif" begin
-                eval_pexpr pe1 >>= fun pe1' ->
-                E.return (Expr annots (Eif pe1' e2 e3))
-              end
-        end
-*)
-    | Eif pe1 e2 e3 ->
+        (* reductions: IF-TRUE + IF-FALSE + IF-UNDEF *)
         Just begin
           TAU_WITH_RUNSTATE "Eif" begin
             full_eval_pexpr pe1 >>= function
@@ -387,10 +340,12 @@ let one_step eval_pexpr full_eval_pexpr env (Expr annots expr_ as expr) =
         (* assert: List.all is_irreducible es *)
         match one_step_unseq_aux ([], []) es with
           | Nothing ->
+              (* reductions: UNSEQ-RACE *)
               Just UNSEQUENCED_RACE
           | Just (fps, cvals) ->
               (* unseq({A_1}?v1, ..., {A_n}?vn) -->
                  {A_1 ...union... A_n}(v1, ..., v2)    (in the absence of race) *)
+              (* reductions: UNSEQ-PURE + UNSEQ-ANNOT *)
               Just (TAU "Eunseq" env (Expr annots (Eannot fps (Caux.mk_value_e (Vtuple cvals)))))
         end
     
@@ -400,9 +355,7 @@ let one_step eval_pexpr full_eval_pexpr env (Expr annots expr_ as expr) =
               (* letw pat = v in E2 --> { v / pat } E2 *)
               TAU "Ewseq" (update_env pat cval env) e2
           | Nothing ->
-              let mk_wseq z =
-                Expr annots (Ewseq pat (Expr pe1_annots (Epure z)) e2) in
-              EVAL "Ewseq" (mk_wseq <$> eval_pexpr pe1)
+              error "Core_reduction.one_step Ewseq saw a non-evaluated e1"
         end
     | Esseq pat (Expr pe1_annots (Epure pe1)) e2 ->
         Just match valueFromPexpr pe1 with
@@ -410,9 +363,7 @@ let one_step eval_pexpr full_eval_pexpr env (Expr annots expr_ as expr) =
               (* lets pat = v in E2 --> { v / pat } E2 *)
               TAU "Esseq" (update_env pat cval env) e2
           | Nothing ->
-              let mk_sseq z =
-                Expr annots (Esseq pat (Expr pe1_annots (Epure z)) e2) in
-              EVAL "Esseq" (mk_sseq <$> eval_pexpr pe1)
+            error "Core_reduction.one_step Esseq saw a non-evaluated e1"
         end
     
     | Ewseq pat (Expr annots1 (Eannot xs (Expr annots2 (Epure pe1)))) e2 ->
@@ -421,9 +372,7 @@ let one_step eval_pexpr full_eval_pexpr env (Expr annots expr_ as expr) =
               (* letw pat = {A}v in E2 --> {A} { v / pat } E2 *)
               TAU "Ewseq Eannot" (update_env pat cval env) (Expr [] (Eannot xs e2))
           | Nothing ->
-              let mk_wseq z =
-                Expr annots (Ewseq pat (Expr annots1 (Eannot xs (Expr annots2 (Epure z)))) e2) in
-              EVAL "Ewseq Eannot" (mk_wseq <$> eval_pexpr pe1)
+              error "Core_reduction.one_step Ewseq Eannot saw a non-evaluated e1"
         end
     | Esseq pat (Expr annots1 (Eannot xs (Expr annots2 (Epure pe1)))) e2 ->
         Just match valueFromPexpr pe1 with
@@ -431,9 +380,7 @@ let one_step eval_pexpr full_eval_pexpr env (Expr annots expr_ as expr) =
               (* lets pat = {A}v in E2 --> {A} { v / pat } E2 *)
               TAU "Esseq Eannot" (update_env pat cval env) (Expr [] (Eannot xs e2))
           | Nothing ->
-              let mk_sseq z =
-                Expr annots (Esseq pat (Expr annots1 (Eannot xs (Expr annots2 (Epure z)))) e2) in
-              EVAL "Esseq Eannot" (mk_sseq <$> eval_pexpr pe1)
+              error "Core_reduction.one_step Esseq Eannot saw a non-evaluated e1"
         end
     
     | Esave sym_bTy sym_bTy_pes e ->
@@ -455,27 +402,17 @@ let one_step eval_pexpr full_eval_pexpr env (Expr annots expr_ as expr) =
                 E.return (Expr annots (Esave sym_bTy sym_bTy_pes' e))
               end
         end
+    | End es ->
+        (* reduction: ND *)
+        Just (ND es)
+
     | _ ->
         Nothing
   end
 
 
 
-let rec stringFromContext ctx =
-  match ctx with
-    | CTX ->
-        "CTX"
-    | Cunseq _ _ ctx' _ ->
-        "Cunseq[" ^ stringFromContext ctx' ^ "]"
-    | Cwseq _ _ ctx' _ ->
-        "Cwseq[" ^ stringFromContext ctx' ^ "]"
-    | Csseq _ _ ctx' _ ->
-        "Csseq[" ^ stringFromContext ctx' ^ "]"
-    | Cannot _ _ ctx' ->
-        "Cannot[" ^ stringFromContext ctx' ^ "]"
-    | Cbound _ ctx' ->
-        "Cbound[" ^ stringFromContext ctx' ^ "]"
-  end
+
 
 
 val     get_ctx: Core.expr core_run_annotation -> list (context * Core.expr core_run_annotation)
@@ -714,8 +651,7 @@ let step_action eval_pexpr is_excluded (Action loc act_annots act) =
                 "LoadRequest"
                 loc
                 begin
-                  let val_sym = Symbol.fresh () in
-                  LoadRequest2 mo ty ptrval val_sym (fun aid fp mval ->
+                  LoadRequest2 mo ty ptrval (fun aid fp mval ->
                     let dyn_annots =
                       match is_excluded with
                         | Nothing ->
@@ -1082,8 +1018,6 @@ let step_ctx mem_st file core_extern current_tid (parent_tid_opt, th_st) =
     | (CTX, Expr e_annots (Epure (Pexpr _ _ (PEval cval)))) ->
         match th_st.stack with
           | Stack_empty ->
-              error "impossible ==> step_ctx ctx = CTX and stack = Stack_empty"
-          | Stack_cons2 _ CTX Stack_empty ->
               (* reached the end of the execution of a thread. *)
               match parent_tid_opt with
                 | Just parent_tid ->
@@ -1094,10 +1028,10 @@ let step_ctx mem_st file core_extern current_tid (parent_tid_opt, th_st) =
                     (* reduction: PROGRAM-DONE *)
                     Step_done2 cval
               end
-          | Stack_cons2 current_proc_opt CTX (Stack_cons2 parent_proc_opt caller_ctx sk') ->
+          | Stack_cons2 parent_proc_opt caller_ctx sk' ->
               (* reached the end of the execution of a procedure. *)
               let tsk =
-                match current_proc_opt with
+                match th_st.current_proc_opt with
                   | Just psym ->
                       match Map.lookup psym file.funinfo with
                         | Just (_, _, ret_ty, _, _, _) ->
@@ -1116,21 +1050,16 @@ let step_ctx mem_st file core_extern current_tid (parent_tid_opt, th_st) =
                   | _ :: env' ->
                       <| th_st with
                         arena= apply_ctx caller_ctx (Expr e_annots (Epure (Caux.mk_value_pe cval)));
-                        stack= Stack_cons2 parent_proc_opt CTX sk';
-                        env= env' |>
+                        stack= sk';
+                        env= env';
+                        current_proc_opt= parent_proc_opt; |>
                 end
               end
-(*
-          | _ ->
-              (* reduction: *)
-              Step_tau2 "value in CTX" Core_run.TSK_Misc begin
-                <| th_st with arena= (Expr e_annots (Epure (Caux.mk_value_pe cval))) |>
-              end
-*)
         end
     
     | (CTX, (Expr _ (Eannot _ (Expr _ (Epure (Pexpr _ _ (PEval _))) as expr')))) ->
         (* {A}v -> v   (in empty context) *)
+        (* reduction: REMOVE-ANNOT *)
         Step_tau2 "CTX, Eannot(value)" Core_run.TSK_Misc begin
           <| th_st with arena= expr' |>
         end
@@ -1158,8 +1087,8 @@ let step_ctx mem_st file core_extern current_tid (parent_tid_opt, th_st) =
                         AllocRequest2 pref ival1 ival2 (fun aid ptrval ->
                           wrap_expr (mk_expr' aid ptrval)
                         )
-                    | LoadRequest2 mo ty ptrval sym mk_expr' ->
-                        LoadRequest2 mo ty ptrval sym (fun aid fp mval ->
+                    | LoadRequest2 mo ty ptrval mk_expr' ->
+                        LoadRequest2 mo ty ptrval (fun aid fp mval ->
                           wrap_expr (mk_expr' aid fp mval)
                         )
                     | StoreRequest2 mk ty is_locking ptrval mval mk_expr' ->
@@ -1183,27 +1112,18 @@ let step_ctx mem_st file core_extern current_tid (parent_tid_opt, th_st) =
         match expr_ with
           | Epure (Pexpr _ _ (PEval _)) ->
               error ("Core_run.step_ctx ==> found a value with ctx <> CTX ==> " ^
-                     Pp.stringFromCore_expr expr ^ " <--> " ^ stringFromContext ctx)
-          
-(*
-KKK(thesis)
-          | Epure pe ->
-              (* pe is NOT a value *)
-              (* Step_with_runstate2 (RSK_eval "Epure") begin *)
-              Step_eval2 ("Epure ==> " ^ Pp.stringFromCore_pexpr pe) begin
-                eval_pexpr pe >>= fun pe' ->
-                E.return (wrap_expr (Expr e_annots (Epure pe')))
-              end
-*)
+                     Pp.stringFromCore_expr expr ^ " <--> " ^ show ctx)
           
           | Ebound (Expr _ (Eannot _ (Expr _ (Epure (Pexpr _ _ (PEval _))) as expr'))) ->
               (* bound({A}v)-> v *)
+              (* reduction: REMOVE-BOUND *)
               Step_tau2 "CTX, Ebound Eannot(value)" Core_run.TSK_Misc begin
                 wrap_expr expr'
               end
           
           | Ebound (Expr _ (Epure (Pexpr _ _ (PEval _))) as expr') ->
               (* bound(v)-> v *)
+              (* reduction: REMOVE-BOUND *)
               Step_tau2 "CTX, Ebound(value)" Core_run.TSK_Misc begin
                 wrap_expr expr'
               end
@@ -1387,7 +1307,7 @@ KKK(thesis)
 
           
           | Eccall call_annots ty pe pes ->
-              Step_eval2 "Eccall" begin
+              Step_with_runstate2 (RSK_eval "Eccall") begin
                 full_eval_pexpr' pe >>= function
                   | Vloaded (LVspecified (OVpointer pv)) ->
                       E.mapM full_eval_pexpr' pes >>= fun cvals ->
@@ -1409,28 +1329,11 @@ KKK(thesis)
                         ) >>= fun (proc_env, expr) ->
                         E.return <| th_st with
                           arena= expr;
-(* KKK                          stack= push_empty_continuation (Just psym) th_st.stack; *)
-                          stack= Stack_cons2 (Just psym) CTX (match th_st.stack with Stack_cons2 sym_opt CTX sk' -> Stack_cons2 sym_opt ctx sk' end);
+                          stack= Stack_cons2 th_st.current_proc_opt ctx th_st.stack;
                           exec_loc= push_exec_loc psym th_st.exec_loc;
-                          env= proc_env :: th_st.env
+                          env= proc_env :: th_st.env;
+                          current_proc_opt= Just psym;
                         |>
-(*
-                      Step_tau "Eccall" (TSK_Ccall psym mem_values) (
-                        SEU.runEU (
-                          Exception.bind (call_proc core_extern file psym cvals)
-                            EU.return
-                        ) >>= fun (proc_env, expr) ->
-                        (* TODO: HACK here we always annotate the action as being positive, I'm pretty sure this is wrong *)
-                        let a_expr = add_to_sb (Set.map (fun z -> (Pos, z)) annots.sb_before) (* TODO: remove for sequential !!! *) expr in
-
-                        E.return <| th_st with
-                          arena= a_expr;
-                          stack= push_empty_continuation (Just psym) sk;
-                          exec_loc= push_exec_loc psym th_st.exec_loc;
-                          env= proc_env :: th_st.env
-                        |>
-                      )
-*)
                       in
                       Mem.case_ptrval pv
                         (fun _ -> error "null function pointer")
@@ -1444,16 +1347,12 @@ KKK(thesis)
                               error (show addr ^ " does not point to a function (Eccall)")
                         end)
                       (fun _ -> error "function pointer has an unspecified value")
-
-
-
-
                   | _ ->
                       error "TODO(use core_runM) Eccall illtyped first operand"
                 end
               end
           | Eproc _ (Sym psym) pes ->
-              Step_eval2 "Eccall" begin
+              Step_with_runstate2 (RSK_eval "Eccall") begin
                 E.mapM full_eval_pexpr' pes >>= fun cvals ->
                  SEU.runEU (
                    Exception.bind (Core_run.call_proc core_extern file psym cvals)
@@ -1461,9 +1360,10 @@ KKK(thesis)
                  ) >>= fun (proc_env, expr) ->
                  E.return <| th_st with
                    arena= expr;
-                   stack= Stack_cons2 (Just psym) CTX (match th_st.stack with Stack_cons2 sym_opt CTX sk' -> Stack_cons2 sym_opt ctx sk' end);
+                   stack= Stack_cons2 th_st.current_proc_opt ctx th_st.stack;
                    exec_loc= push_exec_loc psym th_st.exec_loc;
-                   env= proc_env :: th_st.env
+                   env= proc_env :: th_st.env;
+                   current_proc_opt= Just psym;
                  |>
                end
           | Eproc _ (Impl iCst) pes ->
@@ -1475,31 +1375,9 @@ KKK(thesis)
               else
                 error "TODO: Eproc Impl not FS"
 
-(*
-
-(Implementation.BuiltinFunction "printf") ->
-                      match cvals with
-                        | [Vlist _ fmt_cvals; Vlist _ args_cvals] ->
-                            let fmt = List.map (charFromMValue "printf") fmt_cvals in
-                            let args_ptrvals = List.map (function
-                              | Vtuple [Vctype ty; Vobject (OVpointer ptr_val)] -> (ty, ptr_val)
-                              | _ -> error "TODO(err monad), printf the second argument should be a list of (ctype, pointer) pairs"
-                            end) args_cvals in
-                            Step_fs2 th_st (FS_PRINTF fmt args_ptrvals)
-                        | _ ->
-                            error ("TODO(err monad), printf giving arguments of wrong types ==> " ^ stringFromList Pp.stringFromCore_value cvals)
-                      end
-                  | Impl _ ->
-                      error "TODO: PROC to impl"
-*)
-(*
-              error "TODO: PROC"
-*)
-          | End es ->
-              error "TODO: ND"
           | Erun run_annots sym pes ->
-              let Stack_cons2 (Just current_proc) _ _ = th_st.stack in
-              Step_eval2 "Erun" begin
+              let Just current_proc = th_st.current_proc_opt in
+              Step_with_runstate2 (RSK_eval "Erun") begin
                 SEU.read (fun st ->
                   let proc_sym = match Map.lookup current_proc core_extern with
                     | Just proc_sym -> proc_sym
@@ -1511,13 +1389,18 @@ KKK(thesis)
                       error ("Erun couldn't resolve label: `" ^ show sym ^
                              "' for procedure `" ^ show current_proc ^ "'")
                   | Just (syms, cont_expr) ->
+                      (* E.mapM (fun (sym, pe) ->
+                        full_eval_pexpr pe >>= fun cval ->
+                        E.return (sym, (bTy, pe'))
+                      ) sym_bTy_pes >>= fun sym_bTy_pes' ->
+                      E.foldlM (fun acc x ->
+                        full_eval_pexpr pe >>= fun cval ->
+                      ) cont_expr (List.zip syms pes) >>= fun cont_expr' -> *)
+                      (* TODO: 11 march 2022 *)
                       let cont_expr' = List.foldl (fun acc (sym, pe) ->
                         unsafe_subst_sym_expr sym pe acc
                       ) cont_expr (List.zip syms pes) in
-                      E.return <| th_st with
-                        arena= cont_expr';
-(*                        stack= push_empty_continuation (Just current_proc) sk;*) (* TODO check *)
-                     |>
+                      E.return <| th_st with arena= cont_expr'; |>
                 end
               end
           | Epar es ->
@@ -1528,15 +1411,16 @@ KKK(thesis)
                 begin
                   List.map (fun e -> <|
                     arena= e;
-                    stack= push_empty_continuation Nothing empty_stack;
+                    stack= Stack_empty;
                     errno= Mem.null_ptrval Ctype.signed_int; (* TODO: allocate errno (do not store 0) *)
                     current_loc= th_st.current_loc;
                     exec_loc= ELoc_normal [];
                     env= th_st.env;
+                    current_proc_opt= Nothing;
                   |>) es
                 end
-          | Ewait tid ->
-              error "WIP: WAIT"
+          | Ewait _ ->
+              Step_blocked2
           | _ ->
               match one_step eval_pexpr full_eval_pexpr' th_st.env expr with
                 | Nothing ->
@@ -1547,19 +1431,22 @@ KKK(thesis)
                       E.return <| th_st with arena= apply_ctx ctx expr'; env= env' |>
                     end
                 | Just (TAU debug_str env' expr') ->
-                    Step_tau2 debug_str Core_run.TSK_Misc <| th_st with arena= apply_ctx ctx expr'; env= env' |>
+                    Step_tau2 debug_str Core_run.TSK_Misc
+                      <| th_st with arena= apply_ctx ctx expr'; env= env' |>
                 | Just (EVAL debug_str eval_m) ->
                     Step_with_runstate2 (RSK_eval debug_str) begin
                       eval_m >>= fun expr' ->
                       E.return (wrap_expr expr')
                     end
+                | Just (ND es) ->
+                    Step_nd2 (List.map wrap_expr es) 
                 | Just (MEMOP memop cvals) ->
                     Step_memop_request2 memop cvals current_tid (fun cval ->
                       wrap_expr (Caux.mk_pure_e (Caux.mk_value_pe cval))
                     )
                 | Just UNSEQUENCED_RACE ->
                     (* TODO: loc *)
-                    Step_eval2 "unsequenced race" begin
+                    Step_with_runstate2 (RSK_eval "unsequenced race") begin
                       E.undef th_st.current_loc [Undefined.UB035_unsequenced_race]
                     end
                 | Just (ILLTYPED str) ->
