@@ -231,6 +231,7 @@ module ResourceInference = struct
 
   let reorder_points = ref true
   let additional_sat_check = ref true
+  let span_actions = ref true
 
   module General = struct
 
@@ -374,6 +375,7 @@ module ResourceInference = struct
               ?(ct_subtype=false)
               ~recursive loc (requested : Resources.Requests.point) = 
       debug 7 (lazy (item "point request" (RER.pp (Point requested))));
+      let@ _ = span_fold_unfolds loc (RER.Point requested) in
       let@ provable = provable loc in
       let@ is_ex = exact_match () in
       let is_exact_re re = !reorder_points && (is_ex (RER.Point requested, re)) in
@@ -453,6 +455,7 @@ module ResourceInference = struct
 
     and qpoint_request_aux loc (requested : Resources.Requests.qpoint) = 
       debug 7 (lazy (item "qpoint request" (RER.pp (QPoint requested))));
+      let@ _ = span_fold_unfolds loc (RER.QPoint requested) in
       let@ provable = provable loc in
       let@ is_ex = exact_match () in
       let is_exact_re re = !reorder_points && (is_ex (RER.QPoint requested, re)) in
@@ -692,7 +695,8 @@ module ResourceInference = struct
          in
          return (Some folded_resource)
 
-    let unfolded_array item_ct base length permission value init =
+
+    and unfolded_array item_ct base length permission value init =
       let q_s, q = IT.fresh_named Integer "i" in
       {
         ct = item_ct;
@@ -703,7 +707,7 @@ module ResourceInference = struct
         permission = and_ [permission; (int_ 0) %<= q; q %<= (int_ (length - 1))]
       }
 
-    let unfold_array ~recursive loc item_ct olength base permission =   
+    and unfold_array ~recursive loc item_ct olength base permission =
       debug 7 (lazy (item "unfold array" Pp.empty));
       debug 7 (lazy (item "item_ct" (Sctypes.pp item_ct)));
       debug 7 (lazy (item "base" (IT.pp base)));
@@ -733,7 +737,7 @@ module ResourceInference = struct
          return (Some qpoint)
 
 
-    let unfolded_struct layout tag pointer_t permission_t value init = 
+    and unfolded_struct layout tag pointer_t permission_t value init =
       let open Memory in
       List.concat_map (fun {offset; size; member_or_padding} ->
           match member_or_padding with
@@ -761,7 +765,7 @@ module ResourceInference = struct
         ) layout
 
 
-    let unfold_struct ~recursive loc tag pointer_t permission_t = 
+    and unfold_struct ~recursive loc tag pointer_t permission_t =
       debug 7 (lazy (item "unfold struct" Pp.empty));
       debug 7 (lazy (item "tag" (Sym.pp tag)));
       debug 7 (lazy (item "pointer" (IT.pp pointer_t)));
@@ -780,6 +784,63 @@ module ResourceInference = struct
             point.value point.init
         in
         return (Some resources)
+
+
+    and span_fold_unfolds loc req =
+      if not (! span_actions)
+      then return ()
+      else
+      let@ ress = all_resources () in
+      let@ global = get_global () in
+      let@ provable = provable loc in
+      match provable (t_ (bool_ false)) with
+        | `True -> return ()
+        | `False ->
+          let@ (model, _) = model () in
+          let opts = Spans.guess_span_intersection_action ress req model global in
+          let confirmed = List.find_opt (fun (act, pt, ct, confirm) ->
+              match provable (t_ confirm) with
+                  | `False -> false
+                  | `True -> true
+          ) opts in
+          begin match confirmed with
+          | None -> return ()
+          | Some (Spans.Pack, pt, ct, _) ->
+              let@ _ = do_pack loc pt ct in
+              span_fold_unfolds loc req
+          | Some (Spans.Unpack, pt, ct, _) ->
+              let@ _ = do_unpack loc pt ct in
+              span_fold_unfolds loc req
+          end
+
+    and do_pack loc pt ct =
+      let@ opt = match ct with
+        | Sctypes.Array (act, Some length) ->
+          fold_array loc act pt length (bool_ true)
+        | Sctypes.Struct tag ->
+          fold_struct ~recursive:true loc tag pt (bool_ true)
+        | _ -> return None
+      in
+      match opt with
+        | None -> return ()
+        | Some resource -> add_r None (RE.Point resource)
+
+    and do_unpack loc pt ct =
+      match ct with
+        | Sctypes.Array (act, Some length) ->
+          let@ oqp = unfold_array ~recursive:true loc act
+              (Some length) pt (bool_ true) in
+          begin match oqp with
+            | None -> return ()
+            | Some qp -> add_r None (RE.QPoint qp)
+          end
+        | Sctypes.Struct tag ->
+          let@ ors = unfold_struct ~recursive:true loc tag pt (bool_ true) in
+          begin match ors with
+            | None -> return ()
+            | Some rs -> add_rs None rs
+          end
+        | _ -> return ()
 
 
     let predicate_request loc (requested : Resources.Requests.predicate) = 

@@ -286,7 +286,17 @@ let rec gather_same_actions opts = match opts with
     let others = List.filter (fun opt -> not (same opt)) opts in
     (action, ptr, ct, or_ oks) :: gather_same_actions others
 
+let is_unknown_array_size = function
+  | RER.Point pt -> begin match pt.ct with
+      | Sctypes.Array (_, None) -> true
+      | _ -> false
+  end
+  | _ -> false
+
 let guess_span_intersection_action ress req m g =
+  if is_unknown_array_size req
+  then []
+  else
   let diff res = not (Resources.same_type_resource req res) in
   let res_ss = List.filter diff ress
     |> List.map (fun r -> List.map (fun s -> (r, s))
