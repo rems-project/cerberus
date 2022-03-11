@@ -65,6 +65,12 @@ module type Capability =
     type vaddr_interval
     type cap_seal_t
 
+    (* Properties of [vadr] *)
+
+    val min_vaddr : vaddr
+    val max_vaddr : vaddr
+    val sizeof_vaddr: int
+
     (** the number of user-defined flags *)
     val cap_flags_len: int
 
