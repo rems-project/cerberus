@@ -1071,8 +1071,8 @@ module CHERI (C:Capability with type vaddr = N.num) : Memory = struct
                    (sizeof (Ctype ([], Basic (Integer ity)))) n
                end
     | MVinteger (ity, IC (prov, c)) ->
-       (* TODO: see if we need special handling for NULL *)
-       (* TODO: see if we need to check here validity tag *)
+       (* TODO(CHERI): see if we need special handling for NULL *)
+       (* TODO(CHERI): see if we need to check here validity tag *)
        ret @@ List.mapi (fun i b -> AbsByte.v prov ~copy_offset:(Some i) (Some b)) @@ C.encode c
     | MVfloating (fty, fval) ->
        ret @@ List.map (AbsByte.v Prov_none) begin
@@ -1092,7 +1092,7 @@ module CHERI (C:Capability with type vaddr = N.num) : Memory = struct
           Debug_ocaml.print_debug 1 [] (fun () -> "NOTE: we fix the representation of all NULL pointers to be 0x0");
           ret @@ List.map (fun b -> AbsByte.v Prov_none (Some b)) @@ C.encode C.cap_c0
        | PVfunction (Symbol.Symbol (file_dig, n, opt_name)) ->
-          (* TODO: *)
+          (* TODO(CHERI): *)
           (begin match opt_name with
            | SD_Id name -> IntMap.add (N.of_int n) (file_dig, name) funptrmap
            | SD_ObjectAddress _ -> funptrmap
@@ -1101,7 +1101,7 @@ module CHERI (C:Capability with type vaddr = N.num) : Memory = struct
            (* | SD_Pointee _ -> funptrmap *)
            (* | SD_PredOutput _ -> funptrmap *)
            | SD_None -> funptrmap
-                          (* TODO: this is wrong. Need to be fixed to return encoded capability, not encoded address *)
+                          (* TODO(CHERI): this is wrong. Need to be fixed to return encoded capability, not encoded address *)
            end, List.map (AbsByte.v prov) begin
                     bytes_of_int
                       false
@@ -1471,7 +1471,7 @@ module CHERI (C:Capability with type vaddr = N.num) : Memory = struct
              | false ->
                 fail (MerrAccess (loc, LoadAccess, OutOfBoundPtr))
              | true ->
-                (* TODO: before calling this, peroform capability
+                (* TODO(CHERI): before calling this, peroform capability
                    bounds, permissions, and validity checks *)
                 do_load None (C.cap_get_value addr)
        end
@@ -1499,7 +1499,7 @@ module CHERI (C:Capability with type vaddr = N.num) : Memory = struct
                             end
                        end in
        resolve_iota precondition iota >>= fun alloc_id ->
-       (* TODO: before calling this, peroform capability
+       (* TODO(CHERI): before calling this, peroform capability
           bounds, permissions, and validity checks *)
        do_load (Some alloc_id) (C.cap_get_value addr)
 
@@ -1521,7 +1521,7 @@ module CHERI (C:Capability with type vaddr = N.num) : Memory = struct
                       | true ->
                          fail (MerrAccess (loc, LoadAccess, AtomicMemberof))
                       | false ->
-                         (* TODO: before calling this, peroform capability
+                         (* TODO(CHERI): before calling this, peroform capability
                             bounds, permissions, and validity checks *)
                          do_load (Some alloc_id) (C.cap_get_value addr)
                 end
@@ -1569,7 +1569,7 @@ module CHERI (C:Capability with type vaddr = N.num) : Memory = struct
                | false ->
                   fail (MerrAccess (loc, StoreAccess, OutOfBoundPtr))
                | true ->
-                  (* TODO: before calling this, peroform capability
+                  (* TODO(CHERI): before calling this, peroform capability
                      bounds, permissions, and validity checks *)
                   do_store None (C.cap_get_value addr)
          end
@@ -1595,7 +1595,7 @@ module CHERI (C:Capability with type vaddr = N.num) : Memory = struct
                          return `OK
                 end in
          resolve_iota precondition iota >>= fun alloc_id ->
-         (* TODO: before calling this, peroform capability
+         (* TODO(CHERI): before calling this, peroform capability
             bounds, permissions, and validity checks *)
          do_store (Some alloc_id) (C.cap_get_value addr) >>= fun fp ->
          begin if is_locking then
@@ -1624,7 +1624,7 @@ module CHERI (C:Capability with type vaddr = N.num) : Memory = struct
                           | true ->
                              fail (MerrAccess (loc, LoadAccess, AtomicMemberof))
                           | false ->
-                             (* TODO: before calling this, peroform capability
+                             (* TODO(CHERI): before calling this, peroform capability
                                 bounds, permissions, and validity checks *)
                              do_store (Some alloc_id) (C.cap_get_value addr) >>= fun fp ->
                              if is_locking then
@@ -1678,7 +1678,7 @@ module CHERI (C:Capability with type vaddr = N.num) : Memory = struct
           None
        end
         *)
-       (* TODO: implement for CHERI. May need different approach *)
+       (* TODO(CHERI): implement for CHERI. May need different approach *)
        failwith "TODO"
     | _ -> None
 
@@ -1975,7 +1975,7 @@ module CHERI (C:Capability with type vaddr = N.num) : Memory = struct
            begin
              let addr = C.cap_get_value c in
              if is_PNVI () then
-               (* TODO: not sure if this whole branch is correct for CHERI *)
+               (* TODO(CHERI): not sure if this whole branch is correct for CHERI *)
                (* TODO: device memory? *)
                if N.equal addr N.zero then
                  return (PV (Prov_none, PVnull ref_ty))
@@ -2039,12 +2039,12 @@ module CHERI (C:Capability with type vaddr = N.num) : Memory = struct
     | None ->
        failwith "CHERI.offsetof_ival: invalid memb_ident"
 
-  (* will not be used by CHERI. TODO; replace with failwith to make
-     sure it is never called *)
   let array_shift_ptrval (PV (prov, ptrval_)) ty _ =
     failwith "pure array_shift_ptrval not used in CHERI"
 
-  (* TODO: use effectful variant instead. Needs to be added *)
+  (* TODO(CHERI): use effectful variant instead, which needs to be added.column
+     One added, replace this one with ~failwith~.
+   *)
   let member_shift_ptrval (PV (prov, ptrval_)) tag_sym memb_ident =
     let offset =
       match offsetof_ival (Tags.tagDefs ()) tag_sym memb_ident with
@@ -2716,7 +2716,7 @@ module CHERI (C:Capability with type vaddr = N.num) : Memory = struct
     | MVinteger (cty, IC(prov, c)) ->
        begin match cty with
        | Signed Intptr_t | Unsigned Intptr_t ->
-          (* TODO: better JSON representation of caps *)
+          (* TODO(CHERI): better JSON representation of caps *)
           mk_scalar `Intptr (N.to_string (C.cap_get_value c)) prov None
        | _ ->
           failwith "mk_ui_values invalid encoding of [u]intptr_t"
@@ -2728,7 +2728,7 @@ module CHERI (C:Capability with type vaddr = N.num) : Memory = struct
        | PVnull _ ->
           mk_scalar `Pointer "NULL" Prov_none None
        | PVconcrete c ->
-          (* TODO: better JSON representation of caps *)
+          (* TODO(CHERI): better JSON representation of caps *)
           mk_scalar `Pointer (N.to_string (C.cap_get_value c)) prov (Some bs)
        | PVfunction sym ->
           mk_scalar `Funptr (Pp_symbol.to_string_pretty sym) Prov_none None
