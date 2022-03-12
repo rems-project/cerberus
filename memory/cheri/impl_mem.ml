@@ -229,7 +229,10 @@ and alignof ?(tagDefs= Tags.tagDefs ()) (Ctype (_, ty) as cty) =
 
 open Capability
 
-module CHERI (C:Capability with type vaddr = N.num) : Memory = struct
+module CHERI (C:Capability
+              with type vaddr = N.num
+              with type vaddr_interval = N.num*N.num
+         ) : Memory = struct
   let name = "CHERI memory model"
 
   (* INTERNAL: only for PNVI-ae-udi (this is iota) *)
@@ -433,6 +436,7 @@ module CHERI (C:Capability with type vaddr = N.num) : Memory = struct
       varargs: (int * (ctype * pointer_value) list) IntMap.t;
       next_varargs_id: N.num;
       bytemap: AbsByte.t IntMap.t;
+      captags: bool IntMap.t;
 
       dead_allocations: storage_instance_id list;
       dynamic_addrs: C.vaddr list;
@@ -449,6 +453,7 @@ module CHERI (C:Capability with type vaddr = N.num) : Memory = struct
       varargs = IntMap.empty;
       next_varargs_id = N.zero;
       bytemap= IntMap.empty;
+      captags= IntMap.empty;
 
       dead_allocations= [];
       dynamic_addrs= [];
@@ -1289,6 +1294,8 @@ module CHERI (C:Capability with type vaddr = N.num) : Memory = struct
     | _ ->
        return None
 
+  let cap_bounds_check (b1,b2) addr sz = None (* TODO(CHERI): implement *)
+
   let allocate_region tid pref align_int size_int =
     let align_n = num_of_int align_int in
     let size_n = num_of_int size_int in
@@ -1428,9 +1435,9 @@ module CHERI (C:Capability with type vaddr = N.num) : Memory = struct
     Debug_ocaml.print_debug 10(*KKK*) [] (fun () ->
         "ENTERING LOAD: " ^ Location_ocaml.location_to_string loc
       );
-    let do_load alloc_id_opt addr =
+    let do_load alloc_id_opt addr sz =
       get >>= fun st ->
-      let bs = fetch_bytes st.bytemap addr (sizeof ty) in
+      let bs = fetch_bytes st.bytemap addr sz in
       let (taint, mval, bs') = abst (find_overlaping st) st.funptrmap ty bs in
       (* PNVI-ae-udi *)
       begin if Switches.(has_switch (SW_PNVI `AE) || has_switch (SW_PNVI `AE_UDI)) then
@@ -1466,14 +1473,27 @@ module CHERI (C:Capability with type vaddr = N.num) : Memory = struct
        fail (MerrAccess (loc, LoadAccess, FunctionPtr))
     | (Prov_none, _) ->
        fail (MerrAccess (loc, LoadAccess, OutOfBoundPtr))
-    | (Prov_device, PVconcrete addr) ->
-       begin is_within_device ty (C.cap_get_value addr) >>= function
+    | (Prov_device, PVconcrete c) ->
+       begin is_within_device ty (C.cap_get_value c) >>= function
              | false ->
                 fail (MerrAccess (loc, LoadAccess, OutOfBoundPtr))
              | true ->
                 (* TODO(CHERI): before calling this, peroform capability
                    bounds, permissions, and validity checks *)
-                do_load None (C.cap_get_value addr)
+                if C.cap_is_valid c then
+                  if C.P.perm_is_load (C.get_perms c) then
+                    let sz = sizeof ty in
+                    let addr = C.cap_get_value c in
+                    let bounds = C.cap_get_bounds c in
+                    match cap_bounds_check bounds addr sz with
+                    | None -> do_load None addr sz
+                    | Some a ->
+                       fail (MerrCHERI
+                               (CheriBoundsErr (bounds, addr, N.of_int sz)))
+                  else
+                    fail (MerrCHERI CheriMerrUnsufficientPermissions)
+                else
+                  fail (MerrCHERI CheriMerrInvalidCap)
        end
 
     (* PNVI-ae-udi *)
@@ -1501,7 +1521,7 @@ module CHERI (C:Capability with type vaddr = N.num) : Memory = struct
        resolve_iota precondition iota >>= fun alloc_id ->
        (* TODO(CHERI): before calling this, peroform capability
           bounds, permissions, and validity checks *)
-       do_load (Some alloc_id) (C.cap_get_value addr)
+       do_load (Some alloc_id) (C.cap_get_value addr) (sizeof ty)
 
     | (Prov_some alloc_id, PVconcrete addr) ->
        is_dead alloc_id >>= begin function
@@ -1523,7 +1543,7 @@ module CHERI (C:Capability with type vaddr = N.num) : Memory = struct
                       | false ->
                          (* TODO(CHERI): before calling this, peroform capability
                             bounds, permissions, and validity checks *)
-                         do_load (Some alloc_id) (C.cap_get_value addr)
+                         do_load (Some alloc_id) (C.cap_get_value addr) (sizeof ty)
                 end
        end
 
@@ -1914,7 +1934,7 @@ module CHERI (C:Capability with type vaddr = N.num) : Memory = struct
     | _ ->
        begin match ptrval with
        | PV (_, PVnull _) ->
-          return true
+          return true (* TODO: check for CHERI *)
        | PV (_, PVfunction _) ->
           fail (MerrOther "called isWellAligned_ptrval on function pointer")
        | PV (_, PVconcrete addr) ->
