@@ -1496,10 +1496,10 @@ BEFORE EVAL_PEXPR2
             | Nothing ->
                 error ("Erun couldn't resolve label: `" ^ show sym ^
                        "' for procedure `" ^ show current_proc ^ "'")
-            | Just (syms, cont_expr) ->
-                let cont_expr' = List.foldl (fun acc (sym, pe) ->
+            | Just (sym_bTys, cont_expr) ->
+                let cont_expr' = List.foldl (fun acc ((sym, _), pe) ->
                   unsafe_subst_sym_expr sym pe acc
-                ) cont_expr (List.zip syms pes) in
+                ) cont_expr (List.zip sym_bTys pes) in
                 E.return <| th_st with
                   arena= cont_expr';
                   stack= push_empty_continuation (Just current_proc) sk;

@@ -2,7 +2,7 @@ open import Pervasives Utils Show Core
 import Global Dlist Pp State_exception_undefined Map_extra
 
 open import Errors Core Annot
-import Cmm_csem Mem_common Core_aux Ctype
+import Cmm_csem Mem_common Core_aux
 
 
 (* DEBUG *)
@@ -61,7 +61,7 @@ type continuation_element 'a =
 
 type continuation 'a = list (continuation_element 'a)
 (* type labeled_continuation 'a = list (Symbol.sym * ctype) * expr 'a *)
-type labeled_continuations 'a = map Symbol.sym (list (Symbol.sym (* * Ctype.ctype *)) * expr 'a)
+type labeled_continuations 'a = map Symbol.sym (list (Symbol.sym * core_base_type) * expr 'a)
 
 
 type stack 'a =
