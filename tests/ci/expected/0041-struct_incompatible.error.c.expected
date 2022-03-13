@@ -1,4 +1,4 @@
-ci/0041-struct_incompatible.error.c:7:8: error: constraint violation: assigning to '[1;36mstruct[0m [32mT[0m' from incompatible type 'struct T'
+ci/0041-struct_incompatible.error.c:7:8: error: constraint violation: assigning to 'struct T' from incompatible type 'struct T'
   s2 = f(); // error: the two structs are incompatible
      ^ ~~~ 
 §6.5.16.1#1: 

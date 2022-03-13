@@ -24,14 +24,14 @@ function report {
 
   #If the test is about undef
   if [[ $1 == *.undef.c ]]; then
-    cat tmp/result tmp/stderr | grep -E "Undefined|UNDEFINED"
+    cat tmp/result tmp/stderr | grep -q -E "Undefined|UNDEFINED"
     res=$?
   fi
 
   # If the test is about something currently not supported
   # This can still test the parser
   if [[ $1 == *.unsup.c ]]; then
-    cat tmp/result tmp/stderr | grep "feature not yet supported"
+    cat tmp/result tmp/stderr | grep -q "feature not yet supported"
     res=$?
   fi
 
@@ -41,7 +41,7 @@ function report {
   else
     res="\033[1m\033[31mFAILED!\033[0m"
     fail=$((fail+1))
-    cat tmp/result tmp/stderr
+    #cat tmp/result tmp/stderr
   fi
 
   echo -e "Test $1: $res"
@@ -50,9 +50,13 @@ function report {
 # Running ci tests
 for file in "${citests[@]}"
 do
-  ../cerberus --exec --batch ci/$file > tmp/result 2> tmp/stderr
+  if [[ $file == *.syntax-only.c ]]; then
+    ../_build/default/backend/driver/main.exe --nolibc ci/$file > tmp/result 2> tmp/stderr
+  else
+    ../_build/default/backend/driver/main.exe --nolibc --exec --batch ci/$file > tmp/result 2> tmp/stderr
+  fi
   if [ -f ./ci/expected/$file.expected ]; then
-    if [[ $file == *.error.c ]]; then
+    if [[ $file == *.error.c || $file == *.syntax-only.c ]]; then
       # removing the last line from stderr (the time stats)
       if [ "$(uname)" == "Linux" ]; then
           sed -i '$ d' tmp/stderr

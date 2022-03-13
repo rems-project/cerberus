@@ -1,6 +1,6 @@
 ci/0201-main-return-type.error.c:1:1: error: undefined behaviour: return type of 'main' should be 'int'
 float main(void) { return 1.; }
-~~~~~ ^
+^~~~~ 
 §5.1.2.2.1#1: 
 1   The function called at program startup is named main. The implementation declares no
     prototype for this function. It shall be defined with a return type of int and with no

@@ -1,6 +1,6 @@
 ci/0202-main-not-function.error.c:1:7: error: undefined behaviour: variable named 'main' with external linkage has undefined behaviour
 float main;
-      ^
+      ^~~~ 
 §5.1.2.2.1#1: 
 1   The function called at program startup is named main. The implementation declares no
     prototype for this function. It shall be defined with a return type of int and with no

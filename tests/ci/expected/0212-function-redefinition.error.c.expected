@@ -1,6 +1,6 @@
 ci/0212-function-redefinition.error.c:2:7: error: constraint violation: redefinition of 'foo'
 float foo() {return 0.;}
-      ^
+      ^~~ 
 §6.9#3: 
 3   There shall be no more than one external definition for each identifier declared with
     internal linkage in a translation unit. Moreover, if an identifier declared with internal
