@@ -29,7 +29,7 @@ let decode_integer_constant str =
 
 
 (* TODO: making the implementation choice of using ASCII for now *)
-let decode_character_constant = function
+let decode_character_constant_aux = function
   (* NOTE: first there are the "basic source and basic execution sets" (see §5.2.1#2) *)
   (* uppercases letters *)
   | "A" -> Nat_big_num.of_int 65
@@ -186,6 +186,26 @@ let decode_character_constant = function
                   failwith ("decode_character_constant, started like an octal constant, but failed: " ^ str)
         else
           failwith ("decode_character_constant: invalid char constant ==> " ^ str)
+
+let decode_character_constant str =
+  let open Ocaml_implementation in
+  let open Nat_big_num in
+  let impl = get () in
+  (* let Some sz = impl.sizeof_ity Ctype.Char in *)
+  let (min, max) =
+    if impl.is_signed_ity Ctype.Char then
+      (negate (pow_int (of_int 2) (8-1)), sub (pow_int (of_int 2) (8-1)) (of_int 1))
+    else
+      (zero, sub (pow_int (of_int 2) (8)) (of_int 1)) in
+  let wrapI n =
+    let dlt = succ (sub max min) in
+    let r = integerRem_f n dlt in
+    if less_equal r max then
+      r
+    else
+      sub r dlt in
+  wrapI (decode_character_constant_aux str)
+
 
 let escaped_char c =
   Char.escaped c
