@@ -1,6 +1,6 @@
 ci/0203-main-params1.error.c:1:11: error: undefined behaviour: invalid parameter type for 'main': first parameter must be of type 'int'
 int main (short argc, char ** argv) { return 0; }
-    ^     ~~~~~ 
+          ^~~~~ 
 §5.1.2.2.1#1: 
 1   The function called at program startup is named main. The implementation declares no
     prototype for this function. It shall be defined with a return type of int and with no
