@@ -432,8 +432,9 @@ module RE = struct
 
   (* assumption: the resource is owned *)
   let derived_lc1 = function
-    | Point p ->
-       [impl_ (p.init, good_ (p.ct, p.value))]
+    (* | Point p -> *)
+    (*    [impl_ (and_ [p.permission; p.init],  *)
+    (*            good_ (p.ct, p.value))] *)
     (* impl_ (p.permission,  *)
     (*        ne_ (p.pointer, null_)) *)
     | _ -> []
@@ -478,7 +479,7 @@ module RE = struct
     let rec aux acc = function
       | [] -> acc
       | r :: rs ->
-         let acc = derived_lc1 r @ (List.concat_map (derived_lc2 r) rs) in 
+         let acc = derived_lc1 r @ (List.concat_map (derived_lc2 r) rs) @ acc in 
          aux acc rs
     in
     fun resources -> aux [] resources
