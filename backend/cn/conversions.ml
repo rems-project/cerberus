@@ -1043,7 +1043,7 @@ let make_fun_spec loc (layouts : Memory.struct_decls) rpredicates lpredicates fs
              resolve_index_term loc layouts 
                "start" mappings [] it
            in
-           let mapping' = [{path = Ast.var name; it; o_sct}] in
+           let mapping' = [{path = Ast.var name; it = sym_ (s, IT.bt it); o_sct}] in
            let mappings = 
              mod_mappings ["start"; "end"] mappings
                (fun mapping -> mapping' @ mapping)
@@ -1133,7 +1133,7 @@ let make_fun_spec loc (layouts : Memory.struct_decls) rpredicates lpredicates fs
              resolve_index_term loc layouts 
                "end" mappings [] it
            in
-           let mapping' = [{path = Ast.var name; it; o_sct}] in
+           let mapping' = [{path = Ast.var name; it = sym_ (s, IT.bt it); o_sct}] in
            let mappings = 
              mod_mapping "end" mappings
                (fun mapping -> mapping' @ mapping)
@@ -1279,7 +1279,7 @@ let make_label_spec
              resolve_index_term loc layouts 
                lname mappings [] it
            in
-           let mapping' = [{path = Ast.var name; it; o_sct}] in
+           let mapping' = [{path = Ast.var name; it = sym_ (s, IT.bt it); o_sct}] in
            let mappings = 
              mod_mapping lname mappings
                (fun mapping -> mapping' @ mapping)
