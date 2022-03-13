@@ -2057,8 +2057,8 @@ let add_std str (Expr annot expr_) =
   Expr (Astd str :: annot) expr_
 
 type collect_saves_state 'a = <|
-  tmp_acc:    map Symbol.sym (list Symbol.sym * Core.expr 'a); (*Core.labeled_continuations 'a; *)
-  closed_acc: map Symbol.sym (list Symbol.sym * Core.expr 'a); (*Core.labeled_continuations 'a; *)
+  tmp_acc:    map Symbol.sym (list (Symbol.sym * core_base_type) * Core.expr 'a); (*Core.labeled_continuations 'a; *)
+  closed_acc: map Symbol.sym (list (Symbol.sym * core_base_type) * Core.expr 'a); (*Core.labeled_continuations 'a; *)
 |>
 
 let empty_saves = <| tmp_acc= Map.empty; closed_acc= Map.empty |>
@@ -2121,7 +2121,7 @@ let rec collect_saves_aux st (Expr annots expr_) =
         st
     | Esave (sym, _) params e ->
         collect_saves_aux
-          <| st with tmp_acc= Map.insert sym (List.map fst params, e) st.tmp_acc |>
+          <| st with tmp_acc= Map.insert sym (List.map (fun (x, (y, _)) -> (x, y)) params, e) st.tmp_acc |>
           e
     | Erun _ _ _ ->
         st
@@ -2141,7 +2141,7 @@ let rec collect_saves_aux st (Expr annots expr_) =
         st
   end
 
-val collect_saves: forall 'a. expr 'a -> map Symbol.sym (list Symbol.sym * expr 'a) (*Core.labeled_continuations 'a *)
+val collect_saves: forall 'a. expr 'a -> map Symbol.sym (list (Symbol.sym * core_base_type) * expr 'a) (*Core.labeled_continuations 'a *)
 let collect_saves expr =
   let st = collect_saves_aux <| tmp_acc= Map.empty; closed_acc= Map.empty |> expr in
   Map.(union) st.tmp_acc st.closed_acc
@@ -2149,7 +2149,7 @@ let collect_saves expr =
 
 import Map_extra
 
-val collect_labeled_continuations_NEW: forall 'a. file 'a -> map Symbol.sym (map Symbol.sym (list Symbol.sym * expr 'a) (*Core.labeled_continuations 'a *))
+val collect_labeled_continuations_NEW: forall 'a. file 'a -> map Symbol.sym (map Symbol.sym (list (Symbol.sym * core_base_type) * expr 'a) (*Core.labeled_continuations 'a *))
 let collect_labeled_continuations_NEW file =
 (*  let xs =  *)
   Map_extra.fold (fun fun_sym decl acc ->
