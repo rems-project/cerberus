@@ -22,18 +22,14 @@ let ctype_equal ty1 ty2 =
       | Struct _
       | Union _ ->
           ty
-      | Function (p, (_, ret_ty), xs, b) ->
+      | Function ((_, ret_ty), xs, b) ->
           Function (
-            p,
             (no_qualifiers, Ctype ([], unqualify ret_ty)),
             List.map (fun (_, ty, _) -> (no_qualifiers, Ctype ([], unqualify ty), false)) xs,
             b
           )
-      | FunctionNoParams (p, (_, ret_ty)) ->
-          FunctionNoParams (
-            p,
-            (no_qualifiers, Ctype ([], unqualify ret_ty))
-          )
+      | FunctionNoParams (_, ret_ty) ->
+          FunctionNoParams (no_qualifiers, Ctype ([], unqualify ret_ty))
       | Array (elem_ty, n_opt) ->
           Array (Ctype ([], unqualify elem_ty), n_opt)
       | Pointer (_, ref_ty) ->

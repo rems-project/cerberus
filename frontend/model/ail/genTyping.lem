@@ -504,9 +504,9 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
         E.add "§6.5.3.2#1" >>
         annotate_expression CTXaddr e >>= fun a_e ->
         match GenTypes.genTypeCategoryOf a_e with
-          | GenRValueType (GenFunction hasProto ty params isVariadic) ->
+          | GenRValueType (GenFunction ty params isVariadic) ->
               (* e is a 'function designator' *)
-              let gty' = GenPointer no_qualifiers (Ctype [] (Function hasProto ty params isVariadic)) in
+              let gty' = GenPointer no_qualifiers (Ctype [] (Function ty params isVariadic)) in
               E.return (AilEunary Address a_e, GenRValueType gty')
           | GenRValueType gty ->
               E.constraint_violation (with_cursor_from (locOf e) loc) (UnaryAddressNotRvalue gty)
@@ -695,7 +695,7 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
               (* NOTE: here sym is a 'function designator', hence it has function type. BUT
                  other part of the typechecker MUST perform the 'function_coercion' as described in
                  (§6.3.2.1#4). *)
-              E.return (AilEident sym, GenRValueType (inject_type (Ctype [Annot.Aloc loc] (Function has_proto (ret_qs, ret_ty) params is_variadic))))
+              E.return (AilEident sym, GenRValueType (inject_type (Ctype [Annot.Aloc loc] (Function (ret_qs, ret_ty) params is_variadic))))
           | _ ->
               error ("gentpying.annotate_expression: AilEident symbol couldn't be resolved => " ^ show sym)
         end
@@ -715,7 +715,7 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
             match object_gty with
               | GenPointer qs object_ty ->
                   let params_wo_ptr = [(qs, Ctype [] $ unatomic_ object_ty, false); (no_qualifiers, memorder_ty, false)] in
-                  let gen_fun_ty = GenRValueType (GenFunction false (qs, Ctype [] Void) ((qs, Ctype [] $ Pointer qs object_ty, false) :: params_wo_ptr) false) in
+                  let gen_fun_ty = GenRValueType (GenFunction (qs, Ctype [] Void) ((qs, Ctype [] $ Pointer qs object_ty, false) :: params_wo_ptr) false) in
                   guard_violation loc_cursor (AtomicAddressArgumentMustBeAtomic AtomicStore object_ty) (AAux.is_atomic object_ty) >>= fun () ->
                   annotate_arguments loc_cursor false false (desired_e :: order_e :: args) params_wo_ptr >>= fun es' ->
                   match memory_order_of_expr order_e with
@@ -739,7 +739,7 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
               | GenPointer qs object_ty ->
                   let ret_ty = Ctype [] (unatomic_ object_ty) in
                   let params_wo_ptr = [(no_qualifiers, memorder_ty, false)] in
-                  let gen_fun_ty = GenRValueType (GenFunction false (qs, ret_ty) ((qs, Ctype [] $ Pointer qs object_ty, false) :: params_wo_ptr) false) in
+                  let gen_fun_ty = GenRValueType (GenFunction (qs, ret_ty) ((qs, Ctype [] $ Pointer qs object_ty, false) :: params_wo_ptr) false) in
                   guard_violation loc_cursor (AtomicAddressArgumentMustBeAtomic AtomicLoad object_ty) (AAux.is_atomic object_ty) >>= fun () ->
                   annotate_arguments loc_cursor false false (order_e :: args) params_wo_ptr >>= fun es' ->
                   match memory_order_of_expr order_e with
@@ -761,7 +761,7 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
               | GenPointer qs object_ty ->
                   let ret_ty = Ctype [] (unatomic_ object_ty) in
                   let params_wo_ptr = [(qs, ret_ty, false); (no_qualifiers, memorder_ty, false)] in
-                  let gen_fun_ty = GenRValueType (GenFunction false (qs, ret_ty) ((qs, Ctype [] $ Pointer qs object_ty, false) :: params_wo_ptr) false) in
+                  let gen_fun_ty = GenRValueType (GenFunction (qs, ret_ty) ((qs, Ctype [] $ Pointer qs object_ty, false) :: params_wo_ptr) false) in
                   guard_violation loc_cursor (AtomicAddressArgumentMustBeAtomic AtomicExchange object_ty) (AAux.is_atomic object_ty) >>= fun () ->
                   annotate_arguments loc_cursor false false args params_wo_ptr >>= fun es' ->
                   E.return (AilEcall (AnnotatedExpression gen_fun_ty annots' loc' $ AilEbuiltin b) (object_e' :: es')
@@ -777,7 +777,7 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
                   let ty = Ctype [] $ unatomic_ object_ty in
                   let params_wo_ptr = [(qs, Ctype [] $ Pointer qs ty, false); (qs, ty, false);
                                        (no_qualifiers, memorder_ty, false); (no_qualifiers, memorder_ty, false)] in
-                  let gen_fun_ty = GenRValueType $GenFunction false (no_qualifiers, Ctype [] $ Basic (Integer Bool))
+                  let gen_fun_ty = GenRValueType $GenFunction (no_qualifiers, Ctype [] $ Basic (Integer Bool))
                                        ((qs, Ctype [] $ Pointer qs object_ty, false) :: params_wo_ptr) false in
                   guard_violation loc_cursor (AtomicAddressArgumentMustBeAtomic AtomicCompareExchange object_ty) (AAux.is_atomic object_ty) >>= fun () ->
                   annotate_arguments loc_cursor false false (expected_e :: desired_e :: order_success_e :: order_failure_e :: args) params_wo_ptr >>= fun es' ->
@@ -802,7 +802,7 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
                   let ty = Ctype [] $ unatomic_ object_ty in
                   let params_wo_ptr = [(qs, Ctype [] $ Pointer qs ty, false); (qs, ty, false);
                                        (no_qualifiers, memorder_ty, false); (no_qualifiers, memorder_ty, false)] in
-                  let gen_fun_ty = GenRValueType $GenFunction false (no_qualifiers, Ctype [] $ Basic (Integer Bool))
+                  let gen_fun_ty = GenRValueType $GenFunction (no_qualifiers, Ctype [] $ Basic (Integer Bool))
                                        ((qs, Ctype [] $ Pointer qs object_ty, false) :: params_wo_ptr) false in
                   guard_violation loc_cursor (AtomicAddressArgumentMustBeAtomic AtomicCompareExchange object_ty) (AAux.is_atomic object_ty) >>= fun () ->
                   annotate_arguments loc_cursor false false (expected_e :: desired_e :: order_success_e :: order_failure_e :: args) params_wo_ptr >>= fun es' ->
@@ -859,7 +859,7 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
             let params = [(no_qualifiers, uintptr_t, false); (no_qualifiers, mk_ctype_pointer no_qualifiers void, false)] in
             annotate_arguments loc_cursor true false [from_e; to_e] params >>= fun es' ->
             E.return (AilEcall begin
-              AnnotatedExpression (GenRValueType (GenFunction true (no_qualifiers, ret_ty) params false)) annots' loc' (AilEbuiltin b)
+              AnnotatedExpression (GenRValueType (GenFunction (no_qualifiers, ret_ty) params false)) annots' loc' (AilEbuiltin b)
             end es', GenRValueType (inject_type ret_ty))
        | (_, _) ->
            error "WIP: typing builtin"
@@ -874,7 +874,7 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
     | AilEcall e es ->
         E.add "§6.5.2.2#1" >>
         annotate_rvalue e >>= function
-          | (e', GenPointer qs (Ctype _ (Function has_proto (ret_qs, ret_ty) params is_variadic))) ->
+          | (e', GenPointer qs (Ctype _ (Function (ret_qs, ret_ty) params is_variadic))) ->
               (* TODO: qualifiers *)
               let () = Debug.warn [] (fun () ->
                 "(unsure) the typing of AilEcall doesn't look at [ret_qs]"
@@ -886,7 +886,7 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
                   E.constraint_violation loc (FunctionCallIncompleteReturnType ret_ty)
               (* TODO: do we need to check if qs is unqualified? *)
               else if AAux.is_unqualified qs then
-                annotate_arguments (locOf e) has_proto is_variadic es params >>= fun es' ->
+                annotate_arguments (locOf e) true(*has proto*) is_variadic es params >>= fun es' ->
                 E.return (AilEcall e' es', GenRValueType (inject_type ret_ty))
               else
                 error "annotate_expression(AilEcall): function decay pointer should not be qualified"
@@ -1559,9 +1559,9 @@ and perform_decays sigm ctx a_expr =
           (* STD §6.3.2.1#4 *)
           (* performing the function decay *)
           E.return match gty with
-            | GenFunction hasProto ty params isVariadic ->
+            | GenFunction ty params isVariadic ->
                 AnnotatedExpression
-                  (GenRValueType (GenPointer no_qualifiers (Ctype [] (Function hasProto ty params isVariadic))))
+                  (GenRValueType (GenPointer no_qualifiers (Ctype [] (Function ty params isVariadic))))
                   std_annots (Loc.locOf a_expr) (AilEfunction_decay a_expr)
             | GenArray elem_ty sz_opt ->
               match a_expr with
@@ -1982,7 +1982,7 @@ let annotate_sigma sigm =
         E.return (ident, decl)
     | (_, _, (Decl_function hasProto ret_ty params isVariadic _ (* isInline *) _ (* isNoreturn *) as decl)) ->
         (* TODO?   ==> AilTyping.well_formed_bindings bs && *)
-        wf_type sigm (Ctype [] (Function hasProto ret_ty params isVariadic)) >>
+        wf_type sigm (Ctype [] (Function ret_ty params isVariadic)) >>
         E.return (ident, decl)
     end
   ) sigm.declarations >>

@@ -78,7 +78,7 @@ let rec wf_type sigm (Ctype _ ty) =
         not (has_flexible_array_member sigm elem_ty)
       ) >>
       wf_type elem_ty
-  | Function _ (ret_qs, ret_ty) params _ ->
+  | Function (ret_qs, ret_ty) params _ ->
       guard (Loc.locOf ret_ty) (TError_ConstraintViolation Constraint.IllegalReturnTypeFunctionDeclarator) (
         not (is_array ret_ty || is_function ret_ty)
       ) >>
@@ -89,7 +89,7 @@ let rec wf_type sigm (Ctype _ ty) =
       ) in
       wf_lvalue_aux ret_qs ret_ty >>
       wf_parameters params
-  | FunctionNoParams _ (ret_qs, ret_ty) ->
+  | FunctionNoParams (ret_qs, ret_ty) ->
       guard (Loc.locOf ret_ty) (TError_ConstraintViolation Constraint.IllegalReturnTypeFunctionDeclarator) (
         not (is_array ret_ty || is_function ret_ty)
       ) >>

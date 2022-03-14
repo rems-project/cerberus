@@ -35,8 +35,10 @@ let rec core_object_type_of_ctype (Ctype _ ty) =
          | Nothing ->
              error "Core_aux.core_object_type_of_ctype: Array found a Nothing"
        end
-   | Function _ (_, ret_ty) xs isVariadic ->
+   | Function (_, ret_ty) xs isVariadic ->
        error "core_object_type_of_ctype: not core function object"
+   | FunctionNoParams _ ->
+       error "core_object_type_of_ctype: not core function (no params) object"
    | Pointer _ _ ->
        Just OTy_pointer
    | Atomic ty ->

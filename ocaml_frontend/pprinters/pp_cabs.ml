@@ -578,8 +578,7 @@ and dtree_of_initializer_list inits =
           dtree_of_initializer_ init
   ) inits
 
-
-let rec dtree_of_cabs_statement (CabsStatement (loc, attrs, stmt_)) =
+and dtree_of_cabs_statement (CabsStatement (loc, attrs, stmt_)) =
   with_attributes attrs
   begin match stmt_ with
   | CabsSlabel (ident, s) ->

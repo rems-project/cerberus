@@ -69,7 +69,7 @@ let rec are_compatible (qs1, Ctype _ ty1) (qs2, Ctype _ ty2) =
              | (Nothing, Just _ ) -> true
              | (Nothing, Nothing) -> true
            end
-    | (Function _ (ret_qs1, ret_ty1) params1 isVariadic1, Function _ (ret_qs2, ret_ty2) params2 isVariadic2) ->
+    | (Function (ret_qs1, ret_ty1) params1 isVariadic1, Function (ret_qs2, ret_ty2) params2 isVariadic2) ->
         (* STD §6.7.6.3#15 *)
         (* TODO: when the two types do not both have a param list *)
            are_compatible (ret_qs1, ret_ty1) (ret_qs2, ret_ty2)

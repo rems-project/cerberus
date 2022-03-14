@@ -69,11 +69,12 @@ type ctype_ (*[name = "^\\([a-z A-Z]*_\\)?ty[0-9]*'?$"]*) =
               the qualifiers in the tuple will be:
                 {no_qualifiers with restrict=true} *)
     (* STD §6.2.5#20, bullet 4 *)
-  | Function of (* has_proto *)bool * (qualifiers * ctype)
+  | Function of (qualifiers * ctype)
               * list (qualifiers * ctype * (* is_register *)bool)
               * (* is_variadic *)bool
     (* this version only exists during desugaring (for function declarations) *)
-  | FunctionNoParams of (* has_proto *)bool * (qualifiers * ctype)
+    (* TODO: the previous comment is wrong *)
+  | FunctionNoParams of (qualifiers * ctype) (* function type with no `prototype' *)
 
     (* STD §6.2.5#20, bullet 5 *)
     (* NOTE: the qualifiers are that of the referenced type *)
@@ -234,9 +235,9 @@ let rec ctypeEqual (Ctype _ ty1) (Ctype _ ty2) =
         1
     | Array _ _ ->
         2
-    | Function _ _ _ _ ->
+    | Function _ _ _ ->
         3
-    | FunctionNoParams _ _ ->
+    | FunctionNoParams _ ->
         4
     | Pointer _ _ ->
         5
@@ -254,14 +255,12 @@ let rec ctypeEqual (Ctype _ ty1) (Ctype _ ty2) =
         bty1 = bty2
     | (Array ty1 n1_opt, Array ty2 n2_opt) ->
         ctypeEqual ty1 ty2 && n1_opt = n2_opt
-    | (Function has_proto1 (qs1, ty1) params1 b1,
-       Function has_proto2 (qs2, ty2) params2 b2) ->
-        has_proto1 = has_proto2 &&
+    | (Function (qs1, ty1) params1 b1,
+       Function (qs2, ty2) params2 b2) ->
         qualifiersEqual qs1 qs2 && ctypeEqual ty1 ty2 &&
         List.all (uncurry paramsEqual) (List.zip params1 params2) && b1 = b2
-    | (FunctionNoParams has_proto1 (qs1, ty1),
-       FunctionNoParams has_proto2 (qs2, ty2)) ->
-        has_proto1 = has_proto2 &&
+    | (FunctionNoParams (qs1, ty1),
+       FunctionNoParams (qs2, ty2)) ->
         qualifiersEqual qs1 qs2 && ctypeEqual ty1 ty2
     | (Atomic ty1, Atomic ty2) ->
         ctypeEqual ty1 ty2

@@ -38,13 +38,12 @@ let rec pp_ctype_human_aux qs (Ctype (_, ty)) =
         prefix_pp_qs ^^ Pp_ail.pp_basicType bty
     | Array (elem_ty, n_opt) ->
         !^ "array" ^^^ P.optional Pp_ail.pp_integer n_opt ^^^ !^ "of" ^^^ pp_ctype_human qs elem_ty
-    | Function (has_proto, (ret_qs, ret_ty), params, is_variadic) ->
+    | Function ((ret_qs, ret_ty), params, is_variadic) ->
         (* TODO: warn if [qs] is not empty, this is an invariant violation *)
         if not (AilTypesAux.is_unqualified qs) then
           print_endline "TODO: warning, found qualifiers in a function type (this is an UB)"; (* TODO: is it really UB? *)
         
         !^ (if is_variadic then "variadic function" else "function") ^^^
-        (if has_proto then !^ "with proto " else P.empty) ^^
         P.parens (
           comma_list (fun (param_qs, param_ty, isRegister) ->
             (fun z -> if isRegister then !^ "register" ^^^ z else z)
@@ -52,13 +51,12 @@ let rec pp_ctype_human_aux qs (Ctype (_, ty)) =
           ) params
         ) ^^^
         !^ "returning" ^^^ pp_ctype_human ret_qs ret_ty
-    | FunctionNoParams (has_proto, (ret_qs, ret_ty)) ->
+    | FunctionNoParams ((ret_qs, ret_ty)) ->
         (* TODO: warn if [qs] is not empty, this is an invariant violation *)
         if not (AilTypesAux.is_unqualified qs) then
           print_endline "TODO: warning, found qualifiers in a function type (this is an UB)"; (* TODO: is it really UB? *)
         
         !^ "function (NO PARAMS)" ^^^
-        (if has_proto then !^ "with proto " else P.empty) ^^
         !^ "returning" ^^^ pp_ctype_human ret_qs ret_ty
     | Pointer (ref_qs, ref_ty) ->
         prefix_pp_qs ^^ !^ "pointer to" ^^^ pp_ctype_human ref_qs ref_ty
@@ -116,16 +114,17 @@ let pp_genType = function
       !^ "GenArray" ^^ P.brackets (pp_ctype_human no_qualifiers ty ^^ P.comma ^^^ !^ "None")
   | GenArray (ty, Some n) ->
       !^ "GenArray" ^^ P.brackets (pp_ctype_human no_qualifiers ty ^^ P.comma ^^^ !^ "Some" ^^ P.brackets (Pp_ail.pp_integer n))
-
-     
- | GenFunction (has_proto, ty, params, is_variadic) ->
+ | GenFunction ((ret_qs, ret_ty), params, is_variadic) ->
       !^ "GenFunction" ^^ P.brackets (
         comma_list (fun (qs, ty, isRegister) ->
           P.parens (pp_ctype_human qs ty ^^
                     P.comma ^^^ !^ (if isRegister then "true" else "false"))
         ) params ^^ P.comma ^^ !^ (if is_variadic then "true" else "false")
-       )
-
+       ) ^^^
+       !^ "returning" ^^^ pp_ctype_human ret_qs ret_ty
+ | GenFunctionNoParams (ret_qs, ret_ty) ->
+      !^ "GenFunctionNoParams" ^^ P.brackets (P.empty) ^^^
+       !^ "returning" ^^^ pp_ctype_human ret_qs ret_ty
  | GenPointer (ref_qs, ref_ty) ->
      !^ "GenPointer" ^^ P.brackets (pp_ctype_human ref_qs ref_ty)
   | GenStruct sym ->
@@ -476,7 +475,7 @@ let dtree_of_declaration (i, (_, decl_attrs, decl)) =
         Dleaf (pp_decl_ctor "Decl_object" ^^^
                Pp_ail.pp_id_obj i  ^^^
                P.squotes (pp_storage msd ^^^ pp_ctype qs cty))
-    | Decl_function (has_proto, (qs, cty), params, is_var, is_inline, is_noreturn) ->
+    | Decl_function (_, (qs, cty), params, is_var, is_inline, is_noreturn) ->
         Dleaf (pp_decl_ctor "Decl_function" ^^^
                Pp_ail.pp_id_func i ^^^
                Colour.pp_ansi_format [Green] begin
@@ -484,7 +483,7 @@ let dtree_of_declaration (i, (_, decl_attrs, decl)) =
                    (pp_cond is_inline !^"inline"
                    (pp_cond is_noreturn !^"_Noreturn"
                    (pp_ctype_human empty_qs
-                      (Ctype ([], Function (has_proto, (qs, cty), params, is_var))))))
+                      (Ctype ([], Function ((qs, cty), params, is_var))))))
                  )
                end)
   end

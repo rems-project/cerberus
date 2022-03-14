@@ -1475,9 +1475,9 @@ let register_function_declaration loc attrs sym is_proto decl =
   let string_of_decl ((ret_qs, ret_ty), params_opt, isVariadic, _, _) =
     let fun_ty = match params_opt with
       | Nothing ->
-        Ctype.Ctype [Annot.Aloc loc] (Ctype.FunctionNoParams is_proto (ret_qs, ret_ty))
+        Ctype.Ctype [Annot.Aloc loc] (Ctype.FunctionNoParams (ret_qs, ret_ty))
       | Just params ->
-          Ctype.Ctype [Annot.Aloc loc] (Ctype.Function is_proto (ret_qs, ret_ty) params isVariadic)
+          Ctype.Ctype [Annot.Aloc loc] (Ctype.Function (ret_qs, ret_ty) params isVariadic)
     end in
     Pp.stringFromAil_ctype Ctype.no_qualifiers fun_ty ^
     (if Maybe.isNothing params_opt && isVariadic then " WARNING: isVariadic when NOPARAMS" else "")

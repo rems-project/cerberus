@@ -250,18 +250,18 @@ let pp_ctype_aux pp_ident_opt qs (Ctype (_, ty) as cty) =
           fun k -> pp_qualifiers qs ^^ pp_basicType bty ^^ k
       | Array (elem_ty, n_opt) ->
           fun k -> aux qs elem_ty k ^^ P.brackets (P.optional pp_integer n_opt)
-      | Function (_, (ret_qs, ret_ty), params, isVariadic) ->
+      | Function ((ret_qs, ret_ty), params, isVariadic) ->
           fun k -> aux ret_qs ret_ty P.empty ^^^
                    P.parens (
                      (if List.length params = 0 then !^"void" else comma_list (fun (qs, ty, _) -> aux qs ty P.empty) params) ^^
                      (if isVariadic then P.comma ^^^ P.dot ^^ P.dot ^^ P.dot else P.empty)
                    ) ^^ k
-      | FunctionNoParams (_, (ret_qs, ret_ty)) ->
+      | FunctionNoParams ((ret_qs, ret_ty)) ->
           fun k -> aux ret_qs ret_ty P.empty ^^^ P.parens (P.empty) ^^ k
       | Pointer (ref_qs, ref_ty) ->
           fun k ->
             begin match ref_ty with
-              | Ctype (_, Function (_, (ret_qs, ret_ty), params, isVariadic)) ->
+              | Ctype (_, Function ((ret_qs, ret_ty), params, isVariadic)) ->
                 aux ret_qs ret_ty P.empty ^^^ P.parens (!^"*") ^^^
                 P.parens (
                   (if List.length params = 0 then !^"void" else comma_list (fun (qs, ty, _) -> aux qs ty P.empty) params) ^^
@@ -363,7 +363,7 @@ let rec pp_ctype_human qs (Ctype (_, ty)) =
     | Array (elem_ty, n_opt) ->
         (* NOTE: here [qs] is that of the element type *)
         !^ "array" ^^^ P.optional pp_integer n_opt ^^^ !^ "of" ^^^ pp_ctype_human qs elem_ty
-    | Function (has_proto, (ret_qs, ret_ty), params, is_variadic) ->
+    | Function ((ret_qs, ret_ty), params, is_variadic) ->
         (* TODO: warn if [qs] is not empty, this is an invariant violation *)
         if not (AilTypesAux.is_unqualified qs) then
           print_endline "TODO: warning, found qualifiers in a function type (this is an UB)"; (* TODO: is it really UB? *)
@@ -376,7 +376,7 @@ let rec pp_ctype_human qs (Ctype (_, ty)) =
           ) params
         ) ^^^
         !^ "returning" ^^^ pp_ctype_human ret_qs ret_ty
-    | FunctionNoParams (has_proto, (ret_qs, ret_ty)) ->
+    | FunctionNoParams ((ret_qs, ret_ty)) ->
         (* TODO: warn if [qs] is not empty, this is an invariant violation *)
         if not (AilTypesAux.is_unqualified qs) then
           print_endline "TODO: warning, found qualifiers in a function type (this is an UB)"; (* TODO: is it really UB? *)
@@ -782,7 +782,7 @@ let pp_program_aux pp_annot (startup, sigm) =
           pp_ansi_format [Red] (
             !^ "// declare" ^^^ pp_id sym ^^^
             (if has_proto then !^ "WITH PROTO " else P.empty) ^^
-            !^ "as" ^^^ pp_ctype_human no_qualifiers (Ctype ([], Function (has_proto, (ret_qs, ret_ty), params, is_variadic)))
+            !^ "as" ^^^ pp_ctype_human no_qualifiers (Ctype ([], Function ((ret_qs, ret_ty), params, is_variadic)))
           ) ^^ P.hardline ^^
           
           (fun k -> if is_inline   then !^ "inline"    ^^^ k else k) (
@@ -866,9 +866,11 @@ let pp_genType = function
       pp_genBasicType gbty
   | GenArray (ty, n_opt) ->
       !^ "array" ^^^ P.optional pp_integer n_opt ^^^ !^ "of" ^^^ pp_ctype no_qualifiers ty
-  | GenFunction (_, (qs, ty), params, is_variadic) ->
+  | GenFunction ((qs, ty), params, is_variadic) ->
       (* TODO: maybe add parameters *)
       !^ "function returning" ^^^ pp_ctype qs ty
+  | GenFunctionNoParams (qs, ty) ->
+      !^ "function (NO PARAMS) returning" ^^^ pp_ctype qs ty
   | GenPointer (ref_qs, ref_ty) ->
       pp_ctype no_qualifiers (Ctype ([], Pointer (ref_qs, ref_ty)))
   | GenStruct tag_sym ->

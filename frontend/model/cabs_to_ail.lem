@@ -100,8 +100,10 @@ let rec wip tagDefs acc path_prefix (outer_path, outer_ty) (Ctype.Ctype _ cty) =
   match cty with
     | Ctype.Void ->
         error "elemPathFromCtype_aux3, Void"
-    | Ctype.Function _ _ _ _ ->
+    | Ctype.Function _ _ _ ->
         error "elemPathFromCtype_aux3, Function"
+    | Ctype.FunctionNoParams _ ->
+        error "elemPathFromCtype_aux3, FunctionNoParams"
     | Ctype.Basic _ ->
         (path_prefix, outer_path, outer_ty) :: acc
     | Ctype.Pointer _ _ ->
@@ -376,8 +378,10 @@ let rec innerCtype tagDefs (Ctype.Ctype _ ty as cty) =
         cty
     | Ctype.Array elem_ty _ ->
         innerCtype tagDefs elem_ty
-    | Ctype.Function _ _ _ _ ->
+    | Ctype.Function _ _ _ ->
         error "innerCtype: Function"
+    | Ctype.FunctionNoParams _ ->
+        error "innerCtype: FunctionNoParams"
     | Ctype.Pointer _ _ ->
         cty
     | Ctype.Atomic atom_ty ->
@@ -1889,9 +1893,9 @@ and desugar_direct_abstract_declarator under_array = function
       let mk_fun_ctype ret_qs_ty =
         match params_opt with
           | Nothing ->
-              Ctype.FunctionNoParams false ret_qs_ty
+              Ctype.FunctionNoParams ret_qs_ty
           | Just params ->
-              Ctype.Function false ret_qs_ty params isVariadic
+              Ctype.Function ret_qs_ty params isVariadic
         end in
       (* TODO: this is morally wrong: it should check that we are not building
         a function type returning a function or an array. Technically, the
@@ -1945,14 +1949,12 @@ and desugar_direct_declarator fundef under_array = function
       (* TODO: this is morally wrong: it should check that we are not building
          a function type returning a function or an array. Technically, the
          Ail typing does catch that error afterwards, but it's still tasteless *)
-      (* NOTE: this function is NEVER called for a function definition, so
-         hasProto = false *)
       let mk_fun_ctype ret_qs_ty =
         match params_opt with
           | Nothing ->
-              Ctype.FunctionNoParams false ret_qs_ty
+              Ctype.FunctionNoParams ret_qs_ty
           | Just params ->
-              Ctype.Function false ret_qs_ty params isVariadic
+              Ctype.Function ret_qs_ty params isVariadic
         end in
       E.return ( attrs_ident
                , fun base_qs base_ty ->
@@ -3660,9 +3662,9 @@ let desugar_declaration_base attrs specifs idecltors =
                 ) >>
                 E.return acc in
               match ty with
-                | Ctype.Function _ return_qs_ty params is_variadic ->
+                | Ctype.Function return_qs_ty params is_variadic ->
                     do_function return_qs_ty (Just params) is_variadic
-                | Ctype.FunctionNoParams _ return_qs_ty ->
+                | Ctype.FunctionNoParams return_qs_ty ->
                     do_function return_qs_ty Nothing false
                 | _ ->
                     check_storage_class_specifiers loc Object_decl_context specifs.storage_classes >>= fun () ->
@@ -3968,7 +3970,7 @@ let rec desugar_statement_aux ctx (CabsStatement loc attrs stmt_) =
                       E.constraint_violation loc IllegalStorageClassIterationStatement
                     
                     else match ty with
-                      | Ctype.Ctype _ (Ctype.Function _ _ _ _) ->
+                      | Ctype.Ctype _ (Ctype.Function _ _ _) ->
                           E.constraint_violation loc IllegalStorageClassIterationStatement
                       | _ ->
                           mk_desug_init () >>= function
@@ -4398,9 +4400,9 @@ let desugar_and_register_function_definition (FunDef fundef_loc fundef_attrs spe
        **specified by the declarator portion of the function definition**, which
        here means `ddecltor' without `specifs' *)
     match mk_qs_ctype Ctype.no_qualifiers (Ctype.Ctype [] Ctype.Void) with
-      | (_, Ctype.Ctype _ (Ctype.Function _ _ _ _)) ->
+      | (_, Ctype.Ctype _ (Ctype.Function _ _ _)) ->
           E.return ()
-      | (_, Ctype.Ctype _ (Ctype.FunctionNoParams _ _)) ->
+      | (_, Ctype.Ctype _ (Ctype.FunctionNoParams _)) ->
           E.return ()
       | _ ->
           (* STD §6.9.1#2 *)
@@ -4445,9 +4447,9 @@ let desugar_and_register_function_definition (FunDef fundef_loc fundef_attrs spe
           desugar_statement stmt >>= fun d_stmt ->
           E.return (Loc.locOf fun_ident, fun_sym, d_stmt) in
         match ty with
-          | Ctype.Ctype _ (Ctype.Function _(*has_proto*) return_qs_ty params isVariadic) ->
+          | Ctype.Ctype _ (Ctype.Function return_qs_ty params isVariadic) ->
               process return_qs_ty (Just params) isVariadic
-          | Ctype.Ctype _ (Ctype.FunctionNoParams _(*has_proto*) return_qs_ty) ->
+          | Ctype.Ctype _ (Ctype.FunctionNoParams return_qs_ty) ->
               process return_qs_ty Nothing false
           | _ ->
               (* This should not be possible due to the earlier check *)
@@ -4548,9 +4550,9 @@ let desugar_and_register_external_declaration edecl =
                 ) in
               (* NOTE: `desugar_init_declarator' takes care of isAtomic *)
               match ty with
-                | Ctype.Ctype _ (Ctype.Function _ return_qs_ty params is_variadic) ->
+                | Ctype.Ctype _ (Ctype.Function return_qs_ty params is_variadic) ->
                     do_function return_qs_ty (Just params) is_variadic
-                | Ctype.Ctype _ (Ctype.FunctionNoParams _ return_qs_ty) ->
+                | Ctype.Ctype _ (Ctype.FunctionNoParams return_qs_ty) ->
                     do_function return_qs_ty Nothing false
                 | ty ->
                     let dur = determinate_storage_duration link specifs.storage_classes in

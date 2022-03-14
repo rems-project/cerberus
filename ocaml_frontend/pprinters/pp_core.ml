@@ -858,14 +858,14 @@ let pp_funinfo finfos =
   let mk_pair (_, ty) = (Ctype.no_qualifiers, ty, false) in
   Pmap.fold (fun sym (_, _, ret_ty, params, is_variadic, has_proto) acc ->
     acc ^^ pp_raw_symbol sym ^^ P.colon
-    ^^^ pp_ctype (Ctype ([], Function (false, (Ctype.no_qualifiers, ret_ty), List.map mk_pair params, is_variadic)))
+    ^^^ pp_ctype (Ctype ([], Function ((Ctype.no_qualifiers, ret_ty), List.map mk_pair params, is_variadic)))
         ^^ P.hardline) finfos P.empty
 
 let pp_funinfo_with_attributes finfos =
   let mk_pair (_, ty) = (Ctype.no_qualifiers, ty, false) in
   Pmap.fold (fun sym (loc, attrs, ret_ty, params, is_variadic, has_proto) acc ->
     acc ^^ pp_raw_symbol sym ^^ P.colon
-    ^^^ pp_ctype (Ctype ([], Function (false, (Ctype.no_qualifiers, ret_ty), List.map mk_pair params, is_variadic)))
+    ^^^ pp_ctype (Ctype ([], Function ((Ctype.no_qualifiers, ret_ty), List.map mk_pair params, is_variadic)))
         ^^^ (* P.at ^^^ Location_ocaml.pp_location loc ^^^ *) Pp_ail.pp_attributes attrs
         ^^ P.hardline) finfos P.empty
 

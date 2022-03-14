@@ -185,7 +185,8 @@ let tmp_implementation =
 
 
 let function_return_type = function
-  | Ctype.Function _ ty _ _ -> ty
+  | Ctype.Function qs_ty _ _     -> qs_ty
+  | Ctype.FunctionNoParams qs_ty -> qs_ty
   | _ -> error "[Translation_aux.function_return_type] impossible case: TODO move to Exception.t"
 end
 

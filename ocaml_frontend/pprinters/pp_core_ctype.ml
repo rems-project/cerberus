@@ -70,11 +70,13 @@ let rec pp_ctype (Ctype (_, ty)) =
       pp_basic_ctype bty
   | Array (elem_ty, n_opt) ->
       pp_ctype elem_ty ^^ P.brackets (P.optional Pp_ail.pp_integer n_opt)
-  | Function (_, (ret_qs, ret_ty), args_tys, is_variadic) ->
+  | Function ((ret_qs, ret_ty), args_tys, is_variadic) ->
         pp_ctype (*TODO: ret_qs*) ret_ty ^^^ P.parens (
           comma_list (fun (qs, ty, _) -> pp_ctype (*TODO: qs*) ty) args_tys ^^
           (if is_variadic then P.comma ^^^ P.dot ^^ P.dot ^^ P.dot else P.empty)
         )
+  | FunctionNoParams (ret_qs, ret_ty) ->
+        pp_ctype (*TODO: ret_qs*) ret_ty ^^^ P.parens (P.empty)
   | Pointer (qs, ref_ty) ->
       pp_ctype (* TODO:qs*) ref_ty ^^ P.star
   | Atomic atom_ty ->

@@ -1102,7 +1102,7 @@ module Pp_standard_typ = (struct
   (* stealing from Pp_core *)
   let pp_ft (ret_ty, params, is_variadic) = 
     let mk_pair (_, ty) = (Ctype.no_qualifiers, ty, false) in
-    pp_ct (Ctype ([], Function (false, (Ctype.no_qualifiers, ret_ty), List.map mk_pair params, is_variadic)))
+    pp_ct (Ctype ([], Function ((Ctype.no_qualifiers, ret_ty), List.map mk_pair params, is_variadic)))
 
     (* let pp_lt = None *)
   (* stealing from Pp_core *)

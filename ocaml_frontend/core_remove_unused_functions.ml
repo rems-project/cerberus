@@ -224,9 +224,11 @@ let deps_of fn_or_impl : ('a,'bty,'sym) name_collector =
     | Void -> return ()
     | Basic _ -> return ()
     | Array (ct,_) -> names_in_ctype ct
-    | Function (_, (_,ct), args, _) ->
+    | Function ((_,ct), args, _) ->
        names_in_ctype ct >>
        iterate args (fun (_,ct,_) -> names_in_ctype ct)
+    | FunctionNoParams qs_ty ->
+        failwith "TODO: names_in_ctype ==> FunctionNoParams"
     | Pointer (_, ct) -> names_in_ctype ct
     | Atomic ct -> names_in_ctype ct
     | Struct sym -> record_dep (Sym sym)

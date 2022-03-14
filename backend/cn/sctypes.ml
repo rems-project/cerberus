@@ -59,7 +59,7 @@ type ctype =
   | Array of ctype * int option
   | Pointer of ctype
   | Struct of Sym.t
-  | Function of (* has_proto *)bool * (qualifiers * ctype)
+  | Function of (qualifiers * ctype)
                 * (ctype * (* is_register *)bool) list
                 * (* is_variadic *)bool
 [@@deriving eq, ord]
@@ -123,14 +123,14 @@ let rec to_ctype (ct_ : ctype) =
        Pointer (Ctype.no_qualifiers, to_ctype t)
     | Struct t -> 
        Struct t
-    | Function (has_proto, (ret_q,ret_ct), args, variadic) ->
+    | Function ((ret_q,ret_ct), args, variadic) ->
        let args = 
          List.map (fun (arg_ct, is_reg) -> 
              (Ctype.no_qualifiers, to_ctype arg_ct, is_reg)
            ) args
        in
        let ret_ct = to_ctype ret_ct in
-       Function (has_proto, (ret_q, ret_ct), args, variadic)
+       Function ((ret_q, ret_ct), args, variadic)
   in
   Ctype ([], ct_)
 
@@ -147,7 +147,7 @@ let rec of_ctype (Ctype.Ctype (_,ct_)) =
   | Ctype.Array (ct,nopt) -> 
      let@ ct = of_ctype ct in
      return (Array (ct, Option.map Z.to_int nopt))
-  | Ctype.Function (has_proto, (ret_q,ret_ct), args, variadic) ->
+  | Ctype.Function ((ret_q,ret_ct), args, variadic) ->
      let@ args = 
        ListM.mapM (fun (_arg_q, arg_ct, is_reg) -> 
            let@ arg_ct = of_ctype arg_ct in
@@ -155,7 +155,7 @@ let rec of_ctype (Ctype.Ctype (_,ct_)) =
          ) args
      in
      let@ ret_ct = of_ctype ret_ct in
-     return (Function (has_proto, (ret_q, ret_ct), args, variadic))
+     return (Function ((ret_q, ret_ct), args, variadic))
   | Ctype.FunctionNoParams _ ->
       fail
   | Ctype.Pointer (qualifiers,ctype) -> 

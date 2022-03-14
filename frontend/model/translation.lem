@@ -278,12 +278,12 @@ type expr_ctx =
 let rec translate_function_designator ctx variadic_env stdlib tagDefs (A.AnnotatedExpression _ _ _ expr as a_expr) =
   let (Ctype.Ctype _ cty as ty) = ctype_of a_expr in
   match (cty, expr) with
-    | (Ctype.Function has_proto _ params is_variadic, A.AilEunary A.Indirection e) ->
+    | (Ctype.Function _ params is_variadic, A.AilEunary A.Indirection e) ->
         let () = Debug.print_debug 1 [] (fun () -> "FUNTION POINTERS: UNARY INDIRECTION") in
         E.wrapped_fresh_symbol (C.BTy_loaded C.OTy_pointer) >>= fun (fun_sym, fun_sym_pat, fun_sym_pe) ->
         translate_expression ctx variadic_env stdlib tagDefs e >>= fun core_e ->
         E.return (Caux.mk_sseq_e fun_sym_pat core_e (Caux.mk_pure_e (Caux.mk_sym_pe fun_sym)))
-    | (Ctype.Function has_proto _ params is_variadic, A.AilEident fid) ->
+    | (Ctype.Function _ params is_variadic, A.AilEident fid) ->
         let fid_pe = match fid with
           | Symbol.Symbol _ _ (Symbol.SD_Id str) ->
               match Map.lookup str stdlib.ailnames with
@@ -2337,7 +2337,7 @@ TODO: #9
       | A.AilEcall e [] -> (* NOTE: if there are no arguments, we don't need all the temporary object creation stuff *)
           (* STD §6.5.2.2 *)
           let ret_ty = match ctype_of e with
-            | Ctype.Ctype _ (Ctype.Pointer _ (Ctype.Ctype _ (Ctype.Function _ (_, ret_ty) params isVariadic))) ->
+            | Ctype.Ctype _ (Ctype.Pointer _ (Ctype.Ctype _ (Ctype.Function (_, ret_ty) params isVariadic))) ->
                 if List.length params = 0 && (not isVariadic) then
                   ret_ty
                 else
@@ -2369,7 +2369,7 @@ TODO: #9
           (* TODO: This is ignoring has_proto, §6.5.2.2#6 is not being considered! *)
           (* STD §6.5.2.2 *)
           let (expect_ret_ty, expect_params, expect_is_variadic) = match ctype_of e with
-            | Ctype.Ctype _ (Ctype.Pointer _ (Ctype.Ctype _ (Ctype.Function _ (_, ret_ty) qs_tys is_variadic))) ->
+            | Ctype.Ctype _ (Ctype.Pointer _ (Ctype.Ctype _ (Ctype.Function (_, ret_ty) qs_tys is_variadic))) ->
                 (ret_ty, qs_tys, is_variadic)
             | (*BISECT-IGNORE*) _ ->
                 illTypedAil loc "AilEcall"

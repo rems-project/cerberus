@@ -923,7 +923,8 @@ let rec ctype_contains_function_pointer (Ctype.Ctype (_, ct_)) =
   | Void -> false
   | Basic _ -> false
   | Array (ct, _) -> ctype_contains_function_pointer ct
-  | Function _ -> true
+  | Function _
+  | FunctionNoParams _ -> true
   | Pointer (_, ct) -> ctype_contains_function_pointer ct
   | Atomic ct -> ctype_contains_function_pointer ct
   | Struct _ -> false

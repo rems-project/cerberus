@@ -98,8 +98,10 @@ let rec mk_zeroInit_aux tagDefs (Ctype.Ctype _ ty) =
         A.ConstantArray elem_ty begin
           List.replicate (natFromInteger n) (mk_zeroInit_aux tagDefs elem_ty)
         end
-    | Ctype.Function _ _ _ _ ->
+    | Ctype.Function _ _ _ ->
         error "[Cabs_to_ail.mk_zeroInit_aux] - internal ERROR: Function"
+    | Ctype.FunctionNoParams _ ->
+        error "[Cabs_to_ail.mk_zeroInit_aux] - internal ERROR: FunctionNoParams"
     | Ctype.Pointer _ _ ->
         A.ConstantNull
     | Ctype.Atomic atom_ty ->
@@ -149,10 +151,10 @@ let oneAil =
 val     wrap_atomic: Ctype.ctype -> Ctype.ctype
 let rec wrap_atomic (Ctype.Ctype annots ty_ as ty) =
   match ty_ with
-    | Ctype.Function has_proto (ret_qs, ret_ty) params is_variadic ->
-        Ctype.Ctype annots (Ctype.Function has_proto (ret_qs, Ctype.Ctype [] (Ctype.Atomic ret_ty)) params is_variadic)
-    | Ctype.FunctionNoParams has_proto (ret_qs, ret_ty) ->
-        Ctype.Ctype annots (Ctype.FunctionNoParams has_proto (ret_qs, Ctype.Ctype [] (Ctype.Atomic ret_ty)))
+    | Ctype.Function (ret_qs, ret_ty) params is_variadic ->
+        Ctype.Ctype annots (Ctype.Function (ret_qs, Ctype.Ctype [] (Ctype.Atomic ret_ty)) params is_variadic)
+    | Ctype.FunctionNoParams (ret_qs, ret_ty) ->
+        Ctype.Ctype annots (Ctype.FunctionNoParams (ret_qs, Ctype.Ctype [] (Ctype.Atomic ret_ty)))
     | Ctype.Pointer ref_qs ref_ty ->
         Ctype.Ctype annots (Ctype.Pointer ref_qs (wrap_atomic ref_ty))
     | Ctype.Atomic _ ->
@@ -205,13 +207,13 @@ let rec export_ctype (Ctype.Ctype annot ty_ as ty) =
         ty
     | Ctype.Array elem_ty n_opt ->
         Ctype.Ctype annot (Ctype.Array (export_ctype elem_ty) n_opt)
-    | Ctype.Function has_proto (ret_qs, ret_ty) params is_variadic ->
+    | Ctype.Function (ret_qs, ret_ty) params is_variadic ->
       Ctype.Ctype annot begin
-          Ctype.Function has_proto (ret_qs, export_ctype ret_ty)
+          Ctype.Function (ret_qs, export_ctype ret_ty)
             (List.map (fun (qs, ty, is_register) -> (qs, export_ctype ty, is_register)) params)
             is_variadic
         end
-    | Ctype.FunctionNoParams _ _ ->
+    | Ctype.FunctionNoParams _ ->
         error "TODO: Cabs_to_ail_aux.export_ctype ==> FunctionNoParams"
     (* | Ctype.FunctionDesug has_proto (ret_qs, ret_ty) Nothing is_variadic ->
         Ctype.Ctype annot begin
