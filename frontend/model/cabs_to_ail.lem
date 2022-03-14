@@ -3967,7 +3967,7 @@ let rec desugar_statement_aux ctx (CabsStatement loc attrs stmt_) =
                                  specifs.storage_classes = [SC_auto] ||
                                  specifs.storage_classes = [SC_register]) then
                       (* NOTE: amusingly, as it is written, the STD doesn't allow the absence of storage-class ... *)
-                      E.constraint_violation loc IllegalStorageClassIterationStatement
+                      E.constraint_violation ident_loc IllegalStorageClassIterationStatement
                     
                     else match ty with
                       | Ctype.Ctype _ (Ctype.Function _ _ _) ->
