@@ -11,6 +11,11 @@ pass=0
 fail=0
 
 
+function doSkip {
+  for f in "${skip[@]}"; do [[ $f == $1 ]] && return 0; done
+  return 1
+}
+
 # Arguments:
 # 1: test case name
 # 2: result (0 is success)
@@ -47,6 +52,10 @@ function report {
   echo -e "Test $1: $res"
 }
 
+if [[ $# == 1 ]]; then
+  citests=($(basename $1))
+fi
+
 # Running ci tests
 for file in "${citests[@]}"
 do
@@ -55,6 +64,12 @@ do
     fail=$((fail+1));
     continue
   fi
+  
+  if doSkip $file; then
+    echo -e "Test $file: \033[1m\033[33mSKIPPING\033[0m";
+    continue
+  fi
+
   if [[ $file == *.syntax-only.c ]]; then
     ../_build/default/backend/driver/main.exe --nolibc ci/$file > tmp/result 2> tmp/stderr
   else
@@ -72,6 +87,9 @@ do
     else
       cmp --silent tmp/result ci/expected/$file.expected
     fi
+  else
+    echo -e "Test $file: \033[1m\033[33mMISSING .expected FILE\033[0m";
+    continue
   fi
   report $file $?
 done
