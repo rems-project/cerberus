@@ -1801,19 +1801,12 @@ let rec infer_value (loc : loc) (v : 'bty mu_value) : (vt, type_error) m =
 (*** pure expression inference ************************************************)
 
 
-(* includes Thomas S's optimisation *)
 let infer_array_shift loc asym1 ct asym2 =
   let@ arg1 = arg_of_asym asym1 in
   let@ arg2 = arg_of_asym asym2 in
   let@ () = ensure_base_type arg1.loc ~expect:Loc arg1.bt in
   let@ () = ensure_base_type arg2.loc ~expect:Integer arg2.bt in
   let v = arrayShift_ (it_of_arg arg1, ct, it_of_arg arg2) in
-  let@ oqpoint = RI.General.unfold_array ~recursive:false loc ct None 
-                  (it_of_arg arg1) (bool_ true) in
-  let@ () = match oqpoint with
-    | Some qpoint -> add_r None (QPoint qpoint) 
-    | None -> return ()
-  in
   return (rt_of_vt loc (BT.Loc, v))
 
 
@@ -1891,11 +1884,6 @@ let infer_pexpr (pe : 'bty mu_pexpr) : (RT.t, type_error) m =
        let@ layout = get_struct_decl loc tag in
        let@ _member_bt = get_member_type loc tag member layout in
        let it = it_of_arg arg in
-       let@ opoints = RI.General.unfold_struct ~recursive:false loc tag it (bool_ true) in
-       let@ () = match opoints with
-         | Some points -> add_rs None points
-         | None -> return () 
-       in
        let vt = (Loc, memberShift_ (it, tag, member)) in
        return (rt_of_vt loc vt)
     | M_PEnot asym ->
