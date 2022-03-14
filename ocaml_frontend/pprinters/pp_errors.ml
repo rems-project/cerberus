@@ -97,7 +97,7 @@ let string_of_constraint_violation = function
       let suffix =
         if AilTypesAux.is_function ty then "a function type"
         else "an incomplete type '" ^ String_ail.string_of_ctype qs ty ^ "'"
-      in "invalid application of 'sizeof' to " ^ suffix
+      in "invalid application of '_Alignof' to " ^ suffix
   | CastInvalidType (qs, ty) ->
       "used type '" ^ String_ail.string_of_ctype qs ty ^ "' where scalar type is required"
   | CastPointerToFloat ->
