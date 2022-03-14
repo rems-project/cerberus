@@ -603,8 +603,11 @@ let state ctxt {substitution; vclasses; relevant} (model_with_q : Solver.model_w
       ) ctxt.constraints
   in
 
-  let req_entry req = {res = RER.pp (RER.subst substitution req);
-    res_span = Spans.pp_model_spans model ctxt.global req} in
+  let req_cmp = Option.bind orequest (Spans.spans_compare_for_pp model ctxt.global) in
+  let req_entry req_cmp same req = {res = RER.pp (RER.subst substitution req);
+    res_span = Spans.pp_model_spans model ctxt.global req_cmp req
+        ^^ (if same then !^" - same-type" else !^"")} in
+  let res_entry req_cmp same res = req_entry req_cmp same (RE.request res) in
 
   begin match orequest with
     | None -> ()
@@ -613,22 +616,18 @@ let state ctxt {substitution; vclasses; relevant} (model_with_q : Solver.model_w
 
   let requested = match orequest with
     | None -> []
-    | Some req -> [req_entry req]
+    | Some req -> [req_entry None false req]
   in
 
-  let same_resources = match orequest with
-    | None -> []
-    | Some req -> begin match List.filter (Resources.same_type_resource req) ctxt.resources with
-        | [] -> [{res = !^"(none)"; res_span = !^""}]
-        | rs -> List.map (fun r -> req_entry (RE.request r)) rs
-        end
+  let (same_res, diff_res) = match orequest with
+    | None -> ([], ctxt.resources)
+    | Some req -> List.partition (Resources.same_type_resource req) ctxt.resources
   in
-
-  let other_resource_list = match orequest with
-    | None -> ctxt.resources
-    | Some req -> List.filter (fun re -> not (Resources.same_type_resource req re)) ctxt.resources
+  let same = match (same_res, orequest) with
+    | ([], Some _) -> [{res = !^""; res_span = !^"(no same-type resources)"}]
+    | _ -> List.map (res_entry req_cmp true) same_res 
   in
-  let other_resources = List.map (fun r -> req_entry (RE.request r)) other_resource_list in
+  let resources = same @ List.map (res_entry req_cmp false) diff_res in
 
   let predicate_name = match orequest with
     | Some (Predicate p) -> Some p.name
@@ -651,8 +650,7 @@ let state ctxt {substitution; vclasses; relevant} (model_with_q : Solver.model_w
   { memory = memory @ memory_var_lines;
     variables = predicate_oargs @ logical_var_lines;
     requested;
-    same_resources;
-    other_resources;
+    resources;
     predicate_hints = predicate_hints;
     constraints }
 

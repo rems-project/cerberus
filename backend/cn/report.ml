@@ -28,8 +28,7 @@ type state_report = {
     memory : state_entry list;
     variables : var_entry list;
     requested : resource_entry list;
-    same_resources : resource_entry list;
-    other_resources : resource_entry list;
+    resources : resource_entry list;
     predicate_hints : predicate_clause_entry list;
     constraints: Pp.doc list;
   }
@@ -206,10 +205,8 @@ let to_html report =
         List.map variable_entry report.variables @
         opt_header report.requested [("requested resource", 2); ("byte span", 1)] @
         List.map resource_entry report.requested @
-        opt_header report.requested [("available same-type resources", 2); ("byte span", 1)] @
-        List.map resource_entry report.same_resources @
-        opt_header report.requested [("differently-typed resources", 2); ("byte span", 1)] @
-        List.map resource_entry report.other_resources @
+        opt_header report.resources [("available resources", 2); ("byte span and match", 1)] @
+        List.map resource_entry report.resources @
         opt_header report.predicate_hints [("possibly relevant predicate clauses", 3)] @
         List.map predicate_info_entry report.predicate_hints @
         header [("constraints",3)] ::

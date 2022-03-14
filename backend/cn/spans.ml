@@ -140,10 +140,24 @@ let model_res_spans m_g res =
       (List.map (fun (i, j) -> (offs i, offs (Z.add j (Z.of_int 1)))) spans)
   | _ -> []
 
-let pp_model_spans m g res =
+let inter (i_lb, i_ub) (j_lb, j_ub) =
+  Z.lt j_lb i_ub && Z.lt i_lb j_ub
+
+let spans_compare_for_pp m g res =
   try
+    let ss = model_res_spans (m, g) res in
+    Some (fun ss2 -> List.exists (fun s -> List.exists (inter s) ss2) ss)
+  with
+    Failure _ -> None
+
+let pp_model_spans m g cmp res =
+  try
+    let open Pp in
     let s = model_res_spans (m, g) res in
-    pp s
+    let doc = pp s in
+    match cmp with
+    | None -> doc
+    | Some f -> if f s then doc ^^ !^" - (spans overlap)" else doc
   with
     Failure s -> s
 
@@ -154,9 +168,6 @@ let pp_pt_ct pt ct =
 let pp_fold pt ct =
   let open Pp in
   !^"fold(" ^^ pp_pt_ct pt ct ^^ !^")"
-
-let inter (i_lb, i_ub) (j_lb, j_ub) =
-  Z.lt j_lb i_ub && Z.lt i_lb j_ub
 
 let rec enclosing_count g = function
   | Sctypes.Struct nm ->
