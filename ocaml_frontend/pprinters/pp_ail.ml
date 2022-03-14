@@ -714,6 +714,19 @@ let rec pp_statement_aux pp_annot (AnnotatedStatement (_, _, stmt)) =
     | AilSreg_store (r, e) ->
         !^("r" ^ string_of_int r) ^^^ P.equals ^^^ pp_expression_aux pp_annot e ^^ P.semi
 
+    | AilSpack (Annot.TPU_Predicate ident, es) ->
+        !^ "__cerb_pack_struct" ^^^ Pp_symbol.pp_identifier ident ^^ P.parens (comma_list (pp_expression_aux pp_annot) es) ^^ P.semi
+    | AilSpack (Annot.TPU_Struct tag, es) ->
+        !^ "__cerb_pack" ^^^ pp_id_type tag ^^ P.parens (comma_list (pp_expression_aux pp_annot) es) ^^ P.semi
+    | AilSunpack (Annot.TPU_Predicate ident, es) ->
+        !^ "__cerb_unpack_struct" ^^^ Pp_symbol.pp_identifier ident ^^ P.parens (comma_list (pp_expression_aux pp_annot) es) ^^ P.semi
+    | AilSunpack (Annot.TPU_Struct tag, es) ->
+        !^ "__cerb_unpack" ^^^ pp_id_type tag ^^ P.parens (comma_list (pp_expression_aux pp_annot) es) ^^ P.semi
+    | AilShave (ident, es) ->
+      !^ "__cerb_have" ^^^ Pp_symbol.pp_identifier ident ^^ P.parens (comma_list (pp_expression_aux pp_annot) es) ^^ P.semi
+    | AilSshow (ident, es) ->
+      !^ "__cerb_show" ^^^ Pp_symbol.pp_identifier ident ^^ P.parens (comma_list (pp_expression_aux pp_annot) es) ^^ P.semi
+
 
 let pp_static_assertion pp_annot (e, lit) =
   pp_keyword "_Static_assert" ^^ P.parens (pp_expression_aux pp_annot e ^^ P.comma ^^^ pp_stringLiteral lit)

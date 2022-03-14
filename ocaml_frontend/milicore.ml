@@ -87,6 +87,8 @@ let rec remove_save expr =
   | Eunpack _ -> expr
   | Ehave _ -> expr
   | Eshow _ -> expr
+  | End es ->
+      wrap (End (List.map remove_save es))
 
 
 let core_to_micore__funmap_decl update_loc = function

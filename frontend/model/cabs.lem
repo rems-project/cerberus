@@ -421,6 +421,8 @@ instance (Located external_declaration)
           end
       | EDecl_decl (Declaration_static_assert (Static_assert e _)) ->
           locOf e
+      | EDecl_predCN pred ->
+          locOf (pred.Cn.cn_pred_name)
     end
 end
 

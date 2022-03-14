@@ -376,6 +376,8 @@ let dtree_of_expression pp_annot expr =
       | AilEfunction_decay e ->
           Dnode ( pp_implicit_ctor "AilEfunction_decay"
                 , (*add_std_annot*) [self e] )
+      | AilEgcc_statement ->
+          Dleaf ( pp_stmt_ctor "AilEgcc_statement" )
     end in
   self expr
 
@@ -384,6 +386,12 @@ let dtree_of_binding (i, ((_, sd, is_reg), qs, ty)) =
          ^^^ Pp_ail.pp_storageDuration sd
          ^^^ pp_cond is_reg (pp_type_keyword "register")
            (P.squotes (pp_ctype qs ty)))
+
+let pp_to_pack_unpack = function
+  | Annot.TPU_Struct sym ->
+      !^ "struct" ^^^ pp_symbol sym
+  | Annot.TPU_Predicate (Symbol.Identifier (_, str)) ->
+      !^ "predicate" ^^^ !^ str
 
 let rec dtree_of_statement pp_annot (AnnotatedStatement (loc, attrs, stmt_)) =
   let dtree_of_expression = dtree_of_expression pp_annot in
@@ -444,6 +452,14 @@ let rec dtree_of_statement pp_annot (AnnotatedStatement (loc, attrs, stmt_)) =
     | AilSreg_store (r, e) ->
         Dnode (pp_stmt_ctor "AilSreg_store" ^^^ !^("r" ^ string_of_int r)
               , [dtree_of_expression e])
+    | AilSpack (ctpu, es) ->
+        Dnode ( pp_stmt_ctor "CabsSpack" ^^ P.parens (pp_to_pack_unpack ctpu), List.map dtree_of_expression es )
+    | AilSunpack (ctpu, es) ->
+        Dnode ( pp_stmt_ctor "CabsSunpack" ^^ P.parens (pp_to_pack_unpack ctpu), List.map dtree_of_expression es )
+    | AilShave (Symbol.Identifier (_, str), es) ->
+        Dnode ( pp_stmt_ctor "CabsShave" ^^ P.parens (!^ str), List.map dtree_of_expression es )
+    | AilSshow (Symbol.Identifier (_, str), es) ->
+        Dnode ( pp_stmt_ctor "CabsSshow" ^^ P.parens (!^ str), List.map dtree_of_expression es )
   end
 
 let dtree_of_function_definition pp_annot (fun_sym, (loc, attrs, param_syms, stmt)) =

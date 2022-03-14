@@ -119,12 +119,15 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
     | M_PEconv_int _
     | M_PEwrapI _ ->
        None
+    | _ ->
+        failwith "FIXME"
 
   let tprecedence = function
     | M_PEcase _ -> None
     | M_PElet _ -> None
     | M_PEif _ -> None
     | M_PEundef _ -> None
+    | M_PEdone _ -> None
 
   let precedence_expr = function
     | M_Epure _
@@ -575,6 +578,8 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
                   | Abmc_id id ->
                       !^"{-" ^^ !^(string_of_int id) ^^ !^"-}" ^^ acc
                   end
+              | Atypedef sym ->
+                !^"{-" ^^ pp_symbol sym ^^ !^"-}" ^^ acc
               | Aattrs _ ->
                   !^ "TODO(Aattrs)"
               | Anot_explode ->

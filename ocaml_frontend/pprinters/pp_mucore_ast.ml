@@ -147,6 +147,8 @@ module Make(PP_Typ : Pp_mucore.PP_Typ) = struct
             assert false
         | M_PEcall (nm, pes) ->
             assert false
+        | _ ->
+            failwith "FIXME"
 
 
 
@@ -164,6 +166,8 @@ module Make(PP_Typ : Pp_mucore.PP_Typ) = struct
                   , [ dtree_of_asym pe1; self pe2; self pe3 ] )
         | M_PEundef (loc, ub) ->
             Dleaf (pp_ctor "PEundef" ^^^ !^ (ansi_format [Red] "TODO"))
+        | _ ->
+            failwith "FIXME"
     (* | _ ->
             Dleaf (pp_ctor ("Pexpr(TODO): " ^ Pp_utils.to_plain_pretty_string (Pp_core.WithLocations.pp_pexpr pexpr))) *)
     in

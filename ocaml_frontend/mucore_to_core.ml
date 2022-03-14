@@ -208,7 +208,8 @@ let mu_to_core__pexpr (env1 : 'bty env) (pexpr2 : 'bty mu_pexpr)
    *    Core.PEbmc_assume (get_pexpr e)
    * | M_PEare_compatible p1 p2 ->
    *    Core.PEare_compatible (get_pexpr p1) (get_pexpr p2) *)
-
+  | _ ->
+      failwith "FIXME"
   ))
 
 let rec mu_to_core__tpexpr (env1 : 'bty env) (pexpr2 : 'bty mu_tpexpr)

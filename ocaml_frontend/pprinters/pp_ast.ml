@@ -73,6 +73,7 @@ let pp_doc_tree dtree =
             (aux ("", '`'))
             dtrees
         end
+    | _ -> assert false
   end ^^ P.hardline
 
 let pp_keyword w      = !^ (ansi_format [Bold; Cyan] w)

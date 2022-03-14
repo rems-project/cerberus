@@ -636,9 +636,11 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
     | AilEbuiltin b ->
         match b with
           | AilBatomic _ ->
-            E.misc (Loc.with_cursor loc) GenericFunctionMustBeDirectlyCalled
+              E.misc (Loc.with_cursor loc) GenericFunctionMustBeDirectlyCalled
           | AilBlinux _ ->
-            E.misc (Loc.with_cursor loc) GenericFunctionMustBeDirectlyCalled
+              E.misc (Loc.with_cursor loc) GenericFunctionMustBeDirectlyCalled
+          | AilBcopy_alloc_id ->
+              E.misc (Loc.with_cursor loc) GenericFunctionMustBeDirectlyCalled
           (* NOTE: other builtins might not need to be call directly *)
         end
 (*

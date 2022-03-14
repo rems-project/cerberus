@@ -46,5 +46,7 @@ let std_of_ail_typing_error = function
       std_of_typing_misc_error e
   | TError_NotYetSupported _ ->
       []
+  | TError_CN _ ->
+      []
 end
 

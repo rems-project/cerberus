@@ -57,6 +57,7 @@ let precedence = function
   | CabsEassign _ -> Some 14
   | CabsEcomma _ -> Some 15
   | CabsEbmc_assume _ -> None
+  | CabsEgcc_statement _ -> None
 
 let lt_precedence p1 p2 =
   match p1, p2 with
@@ -164,6 +165,12 @@ let pp_cabs_string_literal (pref_opt, strs) =
   let strs = List.concat (List.map snd strs) in
   P.optional pp_cabs_encoding_prefix pref_opt ^^ P.dquotes (!^ (String.concat "" strs))
 
+let pp_cabs_to_pack_unpack = function
+  | CTPU_Struct (Symbol.Identifier (_, str))->
+      !^ "struct" ^^^ !^ str
+  | CTPU_Predicate (Symbol.Identifier (_, str)) ->
+      !^ "predicate" ^^^ !^ str
+
 let rec dtree_of_cabs_expression (CabsExpression (loc, expr)) =
   match expr with
     | CabsEident ident ->
@@ -239,6 +246,8 @@ let rec dtree_of_cabs_expression (CabsExpression (loc, expr)) =
         Dnode (pp_stmt_ctor "CabsEprint_type" ^^^ pp_location loc, [dtree_of_cabs_expression e])
     | CabsEbmc_assume e ->
         Dnode (pp_stmt_ctor "CabsEbmc_assume" ^^^ pp_location loc, [dtree_of_cabs_expression e])
+    | CabsEgcc_statement s ->
+        Dnode (pp_stmt_ctor "CabsEgcc_statement" ^^^ pp_location loc, [dtree_of_cabs_statement s])
 
 and dtree_of_cabs_generic_association = function
   | GA_type (tyname, e) ->
@@ -630,6 +639,15 @@ and dtree_of_cabs_statement (CabsStatement (loc, attrs, stmt_)) =
       Dnode (pp_stmt_ctor "CabsSpar", List.map dtree_of_cabs_statement ss)
   | CabsSasm _ ->
       Dleaf (pp_stmt_ctor "CabsSasm") (* TODO *)
+
+  | CabsSpack (ctpu, es) ->
+      Dnode ( pp_stmt_ctor "CabsSpack" ^^ P.parens (pp_cabs_to_pack_unpack ctpu), List.map dtree_of_cabs_expression es )
+  | CabsSunpack (ctpu, es) ->
+      Dnode ( pp_stmt_ctor "CabsSunpack" ^^ P.parens (pp_cabs_to_pack_unpack ctpu), List.map dtree_of_cabs_expression es )
+  | CabsShave (Symbol.Identifier (_, str), es) ->
+      Dnode ( pp_stmt_ctor "CabsShave" ^^ P.parens (!^ str), List.map dtree_of_cabs_expression es )
+  | CabsSshow (Symbol.Identifier (_, str), es) ->
+      Dnode ( pp_stmt_ctor "CabsSshow" ^^ P.parens (!^ str), List.map dtree_of_cabs_expression es )
   end
 
 and dtree_of_for_clause = function
@@ -663,6 +681,7 @@ let filter_external_decl =
     | EDecl_decl (Declaration_base (_, _, InitDecl(loc, _, _)::_)) ->
       Location_ocaml.from_main_file loc
     | EDecl_decl (Declaration_base (_, _, [])) -> true
+    | EDecl_predCN _ -> true
   in List.filter pred
 
 let pp_translation_unit show_include do_colour (TUnit edecls) =

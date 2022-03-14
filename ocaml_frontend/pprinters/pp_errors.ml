@@ -328,6 +328,8 @@ let string_of_ail_typing_error = function
       string_of_ail_typing_misc_error tme
   | TError_NotYetSupported str ->
       "feature not yet supported: " ^ str
+  | TError_CN Cn.CNErr_typing_TODO ->
+      "CN typing error"
 
 let string_of_bty =
   String_core.string_of_core_base_type

@@ -810,6 +810,8 @@ and typecheck_pexpr tagDefs (env: typing_env) (bTy: core_base_type) (Pexpr annot
              if BTy_list cnil_bTy = bTy 
              then E.return (PEctor (Cnil cnil_bTy) [])
              else E.fail loc (Mismatch "Cnil" bTy (BTy_list cnil_bTy))
+          | (Cnil cnil_bTy, _, _) ->
+              E.fail loc (Mismatch "Cnil" bTy (BTy_list cnil_bTy))
           | (Ccons, BTy_list elem_bTy, [pe]) ->
               ret_ctor Ccons <$> typecheck_pexpr tagDefs env elem_bTy pe
           | (Ccons, BTy_list elem_bTy, [pe1; pe2]) ->
@@ -1434,6 +1436,8 @@ let memop_signature = function
       (BTy_object OTy_pointer, [BTy_object OTy_integer; BTy_ctype])
   | Mem_common.Va_end ->
       (BTy_unit, [BTy_object OTy_integer])
+  | Mem_common.Copy_alloc_id ->
+      (BTy_object OTy_pointer, [BTy_object OTy_integer; BTy_object OTy_pointer])
 end
 
 

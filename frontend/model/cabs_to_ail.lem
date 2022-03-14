@@ -4316,6 +4316,9 @@ let desugar_cn_pred = function
   | CN_owned tyname ->
       desugar_type_name tyname >>= fun (_, ty) ->
       E.return (CN_owned ty)
+  | CN_block tyname ->
+      desugar_type_name tyname >>= fun (_, ty) ->
+      E.return (CN_block ty)
   | CN_named ident ->
       E.resolve_cn_ident CN_predicate ident >>= fun sym ->
       E.return (CN_named sym)

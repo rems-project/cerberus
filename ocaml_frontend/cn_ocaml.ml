@@ -25,6 +25,8 @@ let string_of_error = function
         "the logical variable `" ^ str ^ "' is not declared"
   | CNErr_unknown_identifier (CN_predicate, Symbol.Identifier (_, str)) ->
         "the predicate `" ^ str ^ "' is not declared"
+  | CNErr_unknown_identifier (CN_resource, Symbol.Identifier (_, str)) ->
+        "the resource variable `" ^ str ^ "' is not declared"
   | CNErr_missing_oarg sym ->
       "missing an assignment for the oarg `" ^ Pp_symbol.to_string_pretty sym ^ "'" 
     
@@ -62,7 +64,17 @@ module MakePp (Conf: PP_CN) = struct
 
   let pp_cn_binop = function
     | CN_add -> P.plus
+    | CN_sub -> P.minus
+    | CN_mul -> P.star
+    | CN_div -> P.slash
     | CN_equal -> P.equals ^^ P.equals
+    | CN_inequal -> P.backslash ^^ P.equals
+    | CN_lt -> P.langle
+    | CN_gt -> P.rangle
+    | CN_le -> P.langle ^^ P.equals
+    | CN_ge -> P.rangle ^^ P.equals
+    | CN_or -> P.bar ^^ P.bar
+    | CN_and -> P.ampersand ^^ P.ampersand
   
   let rec dtree_of_cn_expr = function
     | CNExpr_NULL ->

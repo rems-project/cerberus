@@ -2844,6 +2844,8 @@ else (* is_pointer *)
             error ((Loc.stringFromLocation (Loc.with_cursor loc)) ^ ": atomic builtins must be directly called")
           | A.AilBlinux _ ->
             error ((Loc.stringFromLocation (Loc.with_cursor loc)) ^ ": atomic linux builtins must be directly called")
+          | A.AilBcopy_alloc_id ->
+            error ((Loc.stringFromLocation (Loc.with_cursor loc)) ^ ": copy_alloc_id() must be directly called")
           (* NOTE: other builtins might be legally desugared here *)
         end
       
@@ -3086,6 +3088,8 @@ else (* is_pointer *)
           end
       | A.AilEfunction_decay e ->
           translate_function_designator ctx variadic_env stdlib tagDefs e
+      | A.AilEgcc_statement ->
+          error ((Loc.stringFromLocation loc) ^ ": GCC statements as expressions not yet supported")
     end
 
 
