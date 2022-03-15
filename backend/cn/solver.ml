@@ -625,6 +625,7 @@ let tactic context =
       (* "cofactor-term-ite"; *)
       "solve-eqs";
       "simplify";
+      (* "elim-term-ite"; *)
       "aufnira";
     ]
 
