@@ -460,7 +460,7 @@ module RE = struct
        (* let index = array_pointer_to_index ~base ~item_size ~pointer:p.pointer in *)
        (* let impossible_match =  *)
        (*   and_ [lePointer_ (base, p.pointer); *)
-       (*         eq_ (rem_ (offset, item_size), int_ 0); *)
+       (*         eq_ (mod_ (offset, item_size), int_ 0); *)
        (*         IT.subst (IT.make_subst [(qp.q, index)]) qp.permission;  *)
        (*         p.permission]  *)
        (* in *)

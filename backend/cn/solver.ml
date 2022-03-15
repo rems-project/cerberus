@@ -429,7 +429,7 @@ module Translate = struct
       | CT_pred ct_pred -> 
          begin match ct_pred with
          | AlignedI t ->
-            term (eq_ (rem_ (pointerToIntegerCast_ t.t, t.align), int_ 0))
+            term (eq_ (mod_ (pointerToIntegerCast_ t.t, t.align), int_ 0))
          | Aligned (t, ct) ->
             term (alignedI_ ~t ~align:(int_ (Memory.align_of_ctype ct)))
          | Representable (ct, t) ->

@@ -62,7 +62,7 @@ let pp =
        | Exp (it1,it2) -> 
           c_app !^"power" [aux true it1; aux true it2]
        | Rem (it1,it2) -> 
-          mparens (flow (break 1) [aux true it1; !^"%"; aux true it2])
+          c_app !^"rem" [aux true it1; aux true it2]
        | Mod (it1,it2) -> 
           c_app !^"mod" [aux true it1; aux true it2]
        | LT (o1,o2) -> 

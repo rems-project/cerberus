@@ -20,6 +20,7 @@ module Terms = struct
     | Division of term * term
     | Exponentiation of term * term
     | Remainder of term * term
+    | Modulus of term * term
     | Equality of term * term
     | Inequality of term * term
     | ITE of term * term * term
@@ -79,7 +80,9 @@ module Terms = struct
     | Exponentiation (t1, t2) -> 
        c_app !^"power" [pp false t1; pp false t2]
     | Remainder (t1, t2) -> 
-       mparens atomic (pp true t1 ^^^ !^"%" ^^^ pp true t2)
+       c_app !^"rem" [pp false t1; pp false t2]
+    | Modulus (t1, t2) -> 
+       c_app !^"mod" [pp false t1; pp false t2]
     | Equality (t1, t2) -> 
        mparens atomic (pp true t1 ^^^ !^"==" ^^^ pp true t2)
     | Inequality (t1, t2) -> 
@@ -179,6 +182,8 @@ module Terms = struct
       | Exponentiation (t1, t2) -> 
          aux t1 || aux t2
       | Remainder (t1, t2) -> 
+         aux t1 || aux t2
+      | Modulus (t1, t2) -> 
          aux t1 || aux t2
       | Equality (t1, t2) -> 
          aux t1 || aux t2

@@ -16,7 +16,8 @@ type token =
   | STAR
   | SLASH
   | POWER
-  | PERCENT
+  | MOD
+  | REM
 
   | FLIPBIT
 

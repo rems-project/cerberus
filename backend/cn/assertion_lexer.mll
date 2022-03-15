@@ -26,7 +26,8 @@ rule main = parse
   | '*'   { T.STAR }
   | '/'   { T.SLASH }
   | "power"   { T.POWER }
-  | "%"   { T.PERCENT }
+  | "mod"   { T.MOD }
+  | "rem"   { T.REM }
 
   | "=="  { T.EQ }
   | "!="  { T.NE }

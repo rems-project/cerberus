@@ -236,7 +236,7 @@ let outer_object m g inner_ptr = function
     let offset = array_offset_of_pointer ~base:qpt.pointer ~pointer:ptr in
     let index = array_pointer_to_index ~base:qpt.pointer ~item_size:(z_ sz)
         ~pointer:ptr in
-    let ok = and_ [eq_ (rem_ (offset, z_ sz), int_ 0);
+    let ok = and_ [eq_ (mod_ (offset, z_ sz), int_ 0);
         subst (make_subst [(qpt.q, index)]) qpt.permission] in
     Some (ptr, qpt.ct, ok)
   with
