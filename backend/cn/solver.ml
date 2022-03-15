@@ -340,9 +340,8 @@ module Translate = struct
                  ite_ (or_ [v %< int_ i1; v %> int_ i2], default_ Integer, int_ 0) ::
                    if i1 > i2 then [] else
                      List.init (i2 - i1 + 1) (fun i ->
-                         (* let i = i + i1 in *)
-                         let body = Simplify.simp struct_decls (SymMap.empty, []) (inst_body i) in
-                         ite_ (eq_ (v, int_ i), body, int_ 0)
+                         let i = i + i1 in
+                         ite_ (eq_ (v, int_ i), inst_body i, int_ 0)
                        )
                in
                term (List.fold_right (fun i j -> add_ (i, j)) v_blasted_values (int_ 0))
