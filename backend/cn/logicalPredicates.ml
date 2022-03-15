@@ -128,10 +128,13 @@ module PageAlloc = struct
         IT.fresh_named (BT.Map (Integer, BT.Struct hyp_page_tag)) "vmemmap" 
       in
 
+      let page_s, page = 
+        IT.fresh_named (BT.Struct hyp_page_tag) "page" in
+
       let args = [
           (page_index_s, IT.bt page_index);
           (vmemmap_pointer_s, IT.bt vmemmap_pointer);
-          (vmemmap_s, IT.bt vmemmap);
+          (page_s, IT.bt page);
           (pool_pointer_s, IT.bt pool_pointer);
           (pool_s, IT.bt pool);
         ]
@@ -141,7 +144,6 @@ module PageAlloc = struct
 
       let body = 
         let page_pointer = arrayShift_ (vmemmap_pointer, struct_ct hyp_page_tag, page_index) in
-        let page = map_get_ vmemmap page_index in
         let self_node_pointer = memberShift_ (page_pointer, hyp_page_tag, Id.id "node") in
         let prev = (page %. "node") %. "prev" in
         let next = (page %. "node") %. "next" in
@@ -196,7 +198,7 @@ module PageAlloc = struct
         AT.I OutputDef.[
             {loc; name = "page_index"; value = page_index};
             {loc; name = "vmemmap_pointer"; value = vmemmap_pointer};
-            {loc; name = "vmemmap"; value = vmemmap};
+            {loc; name = "page"; value = map_get_ vmemmap page_index};
             {loc; name = "pool_pointer"; value = pool_pointer};
             {loc; name = "pool"; value = pool};
           ]))))))

@@ -341,7 +341,7 @@ let page_alloc_predicates struct_decls =
       let args = [
           i;
           vmemmap_pointer;
-          vmemmap;
+          map_get_ vmemmap i;
           pool_pointer;
           pool
         ]
