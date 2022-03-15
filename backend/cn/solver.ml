@@ -300,7 +300,14 @@ module Translate = struct
          | Sub (t1, t2) -> mk_sub context [term t1; term t2]
          | Mul (t1, t2) -> mk_mul context [term t1; term t2]
          | Div (t1, t2) -> mk_div context (term t1) (term t2)
-         | Exp (t1, t2) -> Real.mk_real2int context (mk_power context (term t1) (term t2))
+         | Exp (t1, t2) -> 
+            begin match is_z t1, is_z t2 with
+            | Some z1, Some z2 when Z.fits_int z2 ->
+               term (z_ (Z.pow z1 (Z.to_int z2)))
+            | _, _ ->
+               warn (!^"generating power");
+               Real.mk_real2int context (mk_power context (term t1) (term t2))
+            end
          | Rem (t1, t2) -> Integer.mk_rem context (term t1) (term t2)
          | Mod (t1, t2) -> Integer.mk_mod context (term t1) (term t2)
          | LT (t1, t2) -> mk_lt context (term t1) (term t2)
@@ -622,7 +629,7 @@ let make struct_decls : solver =
   let params = Z3.Params.mk_params context in
   Z3.Params.add_int params (Z3.Symbol.mk_string context "timeout") 500;
 
-  let incremental = Z3.Solver.mk_simple_solver context in
+  let incremental = Z3.Solver.mk_solver_s context "AUFLIRA" in
   Z3.Solver.set_parameters incremental params;
 
   let fancy = Z3.Solver.mk_solver_t context (tactic context) in
