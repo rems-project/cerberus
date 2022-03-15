@@ -28,9 +28,10 @@ type model_with_q = model * (Sym.t * BT.t) option
 
 
 type handle_blast = 
-  | FlatAdd
-  | NoBlast
-let handle_blast = FlatAdd
+  | BlastFlatAdd
+  | BlastITE
+
+let handle_blast = BlastITE
 
 
 let logging_params = 
@@ -57,7 +58,7 @@ let no_randomness_params = [
   ]
 
 let solver_params = [
-    (* ("smt.logic", "AUFLIA"); *)
+    ("smt.logic", "AUFLIRA");
     ("smt.arith.solver", "2");
     ("smt.macro_finder", "true");
     ("smt.pull-nested-quantifiers", "true");
@@ -341,7 +342,7 @@ module Translate = struct
             term (sum (bit_width - 1))
          | Blast ((i1, s, v, i2), body) ->
             begin match handle_blast with
-            | FlatAdd ->
+            | BlastFlatAdd ->
                let inst_body i = IT.subst (IT.make_subst [(s, int_ i)]) body in
                let v_blasted_values = 
                  ite_ (or_ [v %< int_ i1; v %> int_ i2], default_ Integer, int_ 0) ::
@@ -352,11 +353,21 @@ module Translate = struct
                        )
                in
                term (List.fold_right (fun i j -> add_ (i, j)) v_blasted_values (int_ 0))
-            | NoBlast ->
-               term
-                 (ite_ (or_ [v %< int_ i1; v %> int_ i2], 
-                        default_ Integer,
-                        IT.subst (IT.make_subst [(s, v)]) body))
+            | BlastITE ->
+               let inst_body i = IT.subst (IT.make_subst [(s, int_ i)]) body in
+               let v_blasted_values = 
+                 if i1 > i2 then [] else
+                   List.init (i2 - i1 + 1) (fun i ->
+                       let i = i + i1 in
+                       (eq_ (v, int_ i), inst_body i)
+                     )
+               in
+               let value = 
+                 List.fold_right (fun (g,v) acc -> 
+                     ite_ (g, v, acc)
+                   ) v_blasted_values (default_ Integer)
+               in
+               term value
             end
          end
       | Bool_op bool_op -> 
@@ -612,8 +623,8 @@ let tactic context =
   tactics context [
       (* "blast-term-ite"; *)
       (* "cofactor-term-ite"; *)
-      (* "solve-eqs"; *)
-      (* "simplify"; *)
+      "solve-eqs";
+      "simplify";
       "aufnira";
     ]
 
@@ -629,7 +640,7 @@ let make struct_decls : solver =
   let params = Z3.Params.mk_params context in
   Z3.Params.add_int params (Z3.Symbol.mk_string context "timeout") 500;
 
-  let incremental = Z3.Solver.mk_solver_s context "AUFLIRA" in
+  let incremental = Z3.Solver.mk_simple_solver context in
   Z3.Solver.set_parameters incremental params;
 
   let fancy = Z3.Solver.mk_solver_t context (tactic context) in
