@@ -1192,7 +1192,8 @@ module CHERI (C:Capability
   let allocate_object tid pref int_val ty init_opt : pointer_value memM =
     let align = num_of_int int_val in
     (*    print_bytemap "ENTERING ALLOC_STATIC" >>= fun () -> *)
-    let size = N.of_int (sizeof ty) in
+    let sz = sizeof ty in
+    let size = N.of_int sz in
     allocator size align >>= fun (alloc_id, addr) ->
     Debug_ocaml.print_debug 10(*KKK*) [] (fun () ->
         "STATIC ALLOC - pref: " ^ String_symbol.string_of_prefix pref ^
@@ -1211,6 +1212,7 @@ module CHERI (C:Capability
        (* TODO: factorise this with do_store inside CHERI.store *)
        update (fun st ->
            let (funptrmap, pre_bs) = repr st.funptrmap mval in
+           assert (List.length pre_bs == sz) ;
            let bs = List.mapi (fun i b -> (Nat_big_num.add addr (Nat_big_num.of_int i), b)) pre_bs in
            { st with
              allocations= IntMap.add alloc_id alloc st.allocations;
@@ -1466,6 +1468,21 @@ module CHERI (C:Capability
       | _ ->
          fail (MerrWIP "load, bs' <> []")
       end in
+    let do_load_cap alloc_id_opt c sz =
+      if C.cap_is_valid c then
+        let addr = C.cap_get_value c in
+        if C.P.perm_is_load (C.get_perms c) then
+          let bounds = C.cap_get_bounds c in
+          match cap_bounds_check bounds addr sz with
+          | None -> do_load alloc_id_opt addr sz
+          | Some a ->
+             fail (MerrCHERI
+                     (CheriBoundsErr (bounds, addr, N.of_int sz)))
+        else
+          fail (MerrCHERI CheriMerrUnsufficientPermissions)
+      else
+        fail (MerrCHERI CheriMerrInvalidCap)
+    in
     match (prov, ptrval_) with
     | (_, PVnull _) ->
        fail (MerrAccess (loc, LoadAccess, NullPtr))
@@ -1478,22 +1495,7 @@ module CHERI (C:Capability
              | false ->
                 fail (MerrAccess (loc, LoadAccess, OutOfBoundPtr))
              | true ->
-                (* TODO(CHERI): before calling this, peroform capability
-                   bounds, permissions, and validity checks *)
-                if C.cap_is_valid c then
-                  if C.P.perm_is_load (C.get_perms c) then
-                    let sz = sizeof ty in
-                    let addr = C.cap_get_value c in
-                    let bounds = C.cap_get_bounds c in
-                    match cap_bounds_check bounds addr sz with
-                    | None -> do_load None addr sz
-                    | Some a ->
-                       fail (MerrCHERI
-                               (CheriBoundsErr (bounds, addr, N.of_int sz)))
-                  else
-                    fail (MerrCHERI CheriMerrUnsufficientPermissions)
-                else
-                  fail (MerrCHERI CheriMerrInvalidCap)
+                do_load_cap None c (sizeof ty)
        end
 
     (* PNVI-ae-udi *)
@@ -1519,9 +1521,7 @@ module CHERI (C:Capability
                             end
                        end in
        resolve_iota precondition iota >>= fun alloc_id ->
-       (* TODO(CHERI): before calling this, peroform capability
-          bounds, permissions, and validity checks *)
-       do_load (Some alloc_id) (C.cap_get_value addr) (sizeof ty)
+       do_load_cap (Some alloc_id) addr (sizeof ty)
 
     | (Prov_some alloc_id, PVconcrete addr) ->
        is_dead alloc_id >>= begin function
@@ -1541,9 +1541,7 @@ module CHERI (C:Capability
                       | true ->
                          fail (MerrAccess (loc, LoadAccess, AtomicMemberof))
                       | false ->
-                         (* TODO(CHERI): before calling this, peroform capability
-                            bounds, permissions, and validity checks *)
-                         do_load (Some alloc_id) (C.cap_get_value addr) (sizeof ty)
+                         do_load_cap (Some alloc_id) addr (sizeof ty)
                 end
        end
 
@@ -1564,19 +1562,35 @@ module CHERI (C:Capability
           (Pp_utils.to_plain_string (pp_mem_value mval));
         fail (MerrOther "store with an ill-typed memory value")
       end else
-      let do_store alloc_id_opt addr =
-        update begin fun st ->
-          let (funptrmap, pre_bs) = repr st.funptrmap mval in
-          let bs = List.mapi (fun i b -> (Nat_big_num.add addr (Nat_big_num.of_int i), b)) pre_bs in
-          { st with last_used= alloc_id_opt;
-                    bytemap=
-                      List.fold_left (fun acc (addr, b) ->
-                          IntMap.add addr b acc
-                        ) st.bytemap bs;
-                    funptrmap= funptrmap; }
-          end >>= fun () ->
-        print_bytemap ("AFTER STORE => " ^ Location_ocaml.location_to_string loc) >>= fun () ->
-        return (FP (addr, (N.of_int (sizeof ty)))) in
+      let do_store_cap alloc_id_opt c =
+        if C.cap_is_valid c then
+          let addr = C.cap_get_value c in
+          let sz = sizeof ty in
+          if C.P.perm_is_store (C.get_perms c) then
+            let bounds = C.cap_get_bounds c in
+            match cap_bounds_check bounds addr sz with
+            | None ->
+               update begin fun st ->
+                 let (funptrmap, pre_bs) = repr st.funptrmap mval in
+                 assert (List.length pre_bs == sz) ;
+                 let bs = List.mapi (fun i b -> (Nat_big_num.add addr (Nat_big_num.of_int i), b)) pre_bs in
+                 { st with last_used= alloc_id_opt;
+                           bytemap=
+                             List.fold_left (fun acc (addr, b) ->
+                                 IntMap.add addr b acc
+                               ) st.bytemap bs;
+                           funptrmap= funptrmap; }
+                 end >>= fun () ->
+               print_bytemap ("AFTER STORE => " ^ Location_ocaml.location_to_string loc) >>= fun () ->
+               return (FP (addr, (N.of_int sz)))
+            | Some a ->
+               fail (MerrCHERI
+                       (CheriBoundsErr (bounds, addr, N.of_int sz)))
+          else
+            fail (MerrCHERI CheriMerrUnsufficientPermissions)
+        else
+          fail (MerrCHERI CheriMerrInvalidCap)
+      in
       match (prov, ptrval_) with
       | (_, PVnull _) ->
          fail (MerrAccess (loc, StoreAccess, NullPtr))
@@ -1589,9 +1603,7 @@ module CHERI (C:Capability
                | false ->
                   fail (MerrAccess (loc, StoreAccess, OutOfBoundPtr))
                | true ->
-                  (* TODO(CHERI): before calling this, peroform capability
-                     bounds, permissions, and validity checks *)
-                  do_store None (C.cap_get_value addr)
+                  do_store_cap None addr
          end
 
       (* PNVI-ae-udi *)
@@ -1615,9 +1627,7 @@ module CHERI (C:Capability
                          return `OK
                 end in
          resolve_iota precondition iota >>= fun alloc_id ->
-         (* TODO(CHERI): before calling this, peroform capability
-            bounds, permissions, and validity checks *)
-         do_store (Some alloc_id) (C.cap_get_value addr) >>= fun fp ->
+         do_store_cap (Some alloc_id) addr >>= fun fp ->
          begin if is_locking then
                  Eff.update (fun st ->
                      { st with allocations=
@@ -1644,9 +1654,7 @@ module CHERI (C:Capability
                           | true ->
                              fail (MerrAccess (loc, LoadAccess, AtomicMemberof))
                           | false ->
-                             (* TODO(CHERI): before calling this, peroform capability
-                                bounds, permissions, and validity checks *)
-                             do_store (Some alloc_id) (C.cap_get_value addr) >>= fun fp ->
+                             do_store_cap (Some alloc_id) addr >>= fun fp ->
                              if is_locking then
                                Eff.update (fun st ->
                                    { st with allocations=
