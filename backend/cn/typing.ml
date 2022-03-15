@@ -239,10 +239,10 @@ let set_loc_trace tr =
   set ({c with location_trace = tr})
 
 let in_loc_trace tr f =
-  let@ tr = get_loc_trace () in
+  let@ prev_tr = get_loc_trace () in
   let@ _ = set_loc_trace tr in
   let@ x = f () in
-  let@ _ = set_loc_trace tr in
+  let@ _ = set_loc_trace prev_tr in
   return x
 
 

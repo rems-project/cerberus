@@ -335,22 +335,16 @@ let relevant_predicate_clauses global oname req =
   List.filter (fun (nm, c) -> Option.equal String.equal (Some nm) oname
     || clause_has_resource req c) clauses
 
-let rec ugly_print_clause =
-  let module AT = ArgumentTypes in
-  function
-  | AT.Resource (r, _, c) -> !^"Resource(" ^^ ugly_print_clause c ^^ !^")"
-  | AT.Constraint (lc, _, c) -> !^"Constraint(" ^^ ugly_print_clause c ^^ !^")"
-  | AT.Computational (_, _, c) -> !^"Computational(" ^^ ugly_print_clause c ^^ !^")"
-  | AT.Logical (_, _, c) -> !^"Logical(" ^^ ugly_print_clause c ^^ !^")"
-  | AT.Define (_, _, c) -> !^"Define(" ^^ ugly_print_clause c ^^ !^")"
-  | AT.I x -> !^"II"
-
 let state ctxt {substitution; vclasses; relevant} (model_with_q : Solver.model_with_q)
     (orequest : RER.resource option) =
 
   let model, quantifier_counter_model = model_with_q in
 
   let open Report in
+
+  let l_tr = let open Context in ctxt.location_trace in
+  let location_trace = List.map (fun l -> Pp.string (Locations.to_string l))
+    (List.rev l_tr) in
 
   let struct_decls = ctxt.global.struct_decls in
 
@@ -647,7 +641,8 @@ let state ctxt {substitution; vclasses; relevant} (model_with_q : Solver.model_w
   in
   let predicate_hints = List.map doc_clause predicate_clauses in
 
-  { memory = memory @ memory_var_lines;
+  { location_trace;
+    memory = memory @ memory_var_lines;
     variables = predicate_oargs @ logical_var_lines;
     requested;
     resources;

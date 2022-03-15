@@ -25,6 +25,7 @@ type resource_entry = {
 
 
 type state_report = {
+    location_trace: Pp.doc list;
     memory : state_entry list;
     variables : var_entry list;
     requested : resource_entry list;
@@ -179,6 +180,7 @@ let to_html report =
   in
 
   let constraint_entry = full_row_entry "constraint" in
+  let location_entry = full_row_entry "location" in
 
   let header hds = 
     let columns = 
@@ -199,6 +201,8 @@ let to_html report =
   let table = 
     { column_info = ["column1"; "column2"; "column3"];
       rows = (
+        opt_header report.location_trace [("path to error",3)] @
+        List.map location_entry report.location_trace @
         header [("pointer",1); ("addr",1); ("state",1)] ::
         List.map state_entry report.memory @
         header [("expression",1); ("value",2)] ::
