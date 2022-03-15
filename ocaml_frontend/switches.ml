@@ -18,6 +18,7 @@ type cerb_switch =
   | SW_strict_pointer_relationals
   
   | SW_PNVI of [ `PLAIN | `AE | `AE_UDI ]
+  | SW_CHERI
 
 
 
@@ -72,6 +73,8 @@ let set strs =
         Some (SW_PNVI `AE)
     | "PNVI_ae_udi" ->
         Some (SW_PNVI `AE_UDI)
+    | "CHERI" ->
+        Some SW_CHERI
     | _ ->
         None in
   List.iter (fun str ->
@@ -83,6 +86,9 @@ let set strs =
           prerr_endline ("failed to parse switch `" ^ String.escaped str ^ "' --> ignoring.")
   ) strs
 
+
+let is_CHERI () =
+  List.exists (function SW_CHERI -> true | _ -> false) !internal_ref
 
 let is_PNVI () =
   List.exists (function SW_PNVI _ -> true | _ -> false) !internal_ref
