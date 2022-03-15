@@ -34,6 +34,8 @@ val add_c : LogicalConstraints.t -> (unit, 'e) m
 val add_cs : LogicalConstraints.t list -> (unit, 'e) m
 val add_r : Context.where option -> Resources.RE.t -> (unit, 'e) m
 val add_rs : Context.where option -> Resources.RE.t list -> (unit, 'e) m
+val get_loc_trace : unit -> (Locations.loc list, 'e) m
+val in_loc_trace : Locations.loc list -> (unit -> ('a, 'e) m) -> ('a, 'e) m
 
 type changed = 
   | Deleted

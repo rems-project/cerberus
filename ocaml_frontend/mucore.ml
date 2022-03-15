@@ -263,7 +263,7 @@ type have_show =
   and 'TY mu_texpr = 
    | M_TExpr of loc * annot list * ('TY mu_texpr_)
 
-  let loc_of_texpr (M_Expr (loc, _, _)) = loc
+  let loc_of_texpr (M_TExpr (loc, _, _)) = loc
 
 
   let embed_pexpr_expr pe : 'TY mu_expr= 

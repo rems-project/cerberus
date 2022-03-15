@@ -2020,26 +2020,30 @@ let rec check_tpexpr (e : 'bty mu_tpexpr) (typ : RT.t) : (unit, type_error) m =
   | M_PEif (casym, e1, e2) ->
      let@ carg = arg_of_asym casym in
      let@ () = ensure_base_type carg.loc ~expect:Bool carg.bt in
+     let@ loc_trace = get_loc_trace () in
      ListM.iterM (fun (lc, e) ->
-         pure begin
+         in_loc_trace (loc_of_tpexpr e :: loc :: loc_trace)
+         (fun () -> begin
              let@ () = add_c (t_ lc) in
              let@ provable = provable loc in
              match provable (t_ (bool_ false)) with
              | `True -> return ()
              | `False -> check_tpexpr e typ
            end
-       ) [(it_of_arg carg, e1); (not_ (it_of_arg carg), e2)]
+       )) [(it_of_arg carg, e1); (not_ (it_of_arg carg), e2)]
   | M_PEcase (asym, pats_es) ->
      let@ arg = arg_of_asym asym in
+     let@ loc_trace = get_loc_trace () in
      ListM.iterM (fun (pat, pe) ->
-         pure begin 
+         in_loc_trace (loc_of_tpexpr pe :: loc :: loc_trace)
+         (fun () -> begin 
              let@ () = pattern_match (it_of_arg arg) pat in
              let@ provable = provable loc in
              match provable (t_ (bool_ false)) with
              | `True -> return ()
-             | `False -> check_tpexpr e typ
+             | `False -> check_tpexpr pe typ
            end
-       ) pats_es
+       )) pats_es
   | M_PElet (p, e1, e2) ->
      let@ rt = infer_pexpr e1 in
      let@ () = match p with
@@ -2586,8 +2590,10 @@ let rec check_texpr labels (e : 'bty mu_texpr) (typ : RT.t orFalse)
     | M_Eif (casym, e1, e2) ->
        let@ carg = arg_of_asym casym in
        let@ () = ensure_base_type carg.loc ~expect:Bool carg.bt in
+       let@ loc_trace = get_loc_trace () in
        ListM.iterM (fun (lc, nm, e) ->
-           pure begin 
+           in_loc_trace (loc_of_texpr e :: loc :: loc_trace)
+           (fun () -> begin
                let@ () = add_c (t_ lc) in
                let@ provable = provable loc in
                match provable (t_ (bool_ false)) with
@@ -2598,22 +2604,24 @@ let rec check_texpr labels (e : 'bty mu_texpr) (typ : RT.t orFalse)
                  time_log_end start;
                  return r
              end
-         ) [(it_of_arg carg, "true", e1); (not_ (it_of_arg carg), "false", e2)]
+         )) [(it_of_arg carg, "true", e1); (not_ (it_of_arg carg), "false", e2)]
     | M_Ebound (_, e) ->
        check_texpr labels e typ 
     | M_End _ ->
        Debug_ocaml.error "todo: End"
     | M_Ecase (asym, pats_es) ->
        let@ arg = arg_of_asym asym in
+       let@ loc_trace = get_loc_trace () in
        ListM.iterM (fun (pat, pe) ->
-           pure begin 
+           in_loc_trace (loc_of_texpr pe :: loc :: loc_trace)
+           (fun () -> begin
                let@ () = pattern_match (it_of_arg arg) pat in
                let@ provable = provable loc in
                match provable (t_ (bool_ false)) with
                | `True -> return ()
-               | `False -> check_texpr labels e typ
+               | `False -> check_texpr labels pe typ
              end
-         ) pats_es
+         )) pats_es
     | M_Elet (p, e1, e2) ->
        let@ rt = infer_pexpr e1 in
        let@ () = match p with 
@@ -2726,7 +2734,8 @@ let check_function
         let Computational ((sname, sbt), _info, t) = rt in
         ensure_base_type loc ~expect:sbt rbt
       in
-      let@ () = check_tpexpr body rt in
+      let@ () = in_loc_trace [loc]
+        (fun () -> check_tpexpr body rt) in
       return ()
     end
 
