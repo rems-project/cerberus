@@ -2020,30 +2020,26 @@ let rec check_tpexpr (e : 'bty mu_tpexpr) (typ : RT.t) : (unit, type_error) m =
   | M_PEif (casym, e1, e2) ->
      let@ carg = arg_of_asym casym in
      let@ () = ensure_base_type carg.loc ~expect:Bool carg.bt in
-     let@ loc_trace = get_loc_trace () in
      ListM.iterM (fun (lc, e) ->
-         in_loc_trace (loc_of_tpexpr e :: loc :: loc_trace)
-         (fun () -> begin
+         pure begin
              let@ () = add_c (t_ lc) in
              let@ provable = provable loc in
              match provable (t_ (bool_ false)) with
              | `True -> return ()
-             | `False -> check_tpexpr e typ
+             | `False -> check_tpexpr_in [loc_of_tpexpr e; loc] e typ
            end
-       )) [(it_of_arg carg, e1); (not_ (it_of_arg carg), e2)]
+       ) [(it_of_arg carg, e1); (not_ (it_of_arg carg), e2)]
   | M_PEcase (asym, pats_es) ->
      let@ arg = arg_of_asym asym in
-     let@ loc_trace = get_loc_trace () in
      ListM.iterM (fun (pat, pe) ->
-         in_loc_trace (loc_of_tpexpr pe :: loc :: loc_trace)
-         (fun () -> begin 
+         pure begin
              let@ () = pattern_match (it_of_arg arg) pat in
              let@ provable = provable loc in
              match provable (t_ (bool_ false)) with
              | `True -> return ()
-             | `False -> check_tpexpr pe typ
+             | `False -> check_tpexpr_in [loc_of_tpexpr pe; loc] pe typ
            end
-       )) pats_es
+       ) pats_es
   | M_PElet (p, e1, e2) ->
      let@ rt = infer_pexpr e1 in
      let@ () = match p with
@@ -2063,6 +2059,11 @@ let rec check_tpexpr (e : 'bty mu_tpexpr) (typ : RT.t) : (unit, type_error) m =
         let@ model = model () in
         fail (fun ctxt -> {loc; msg = Undefined_behaviour {ub; ctxt; model}})
      end
+
+
+and check_tpexpr_in locs e typ =
+  let@ loc_trace = get_loc_trace () in
+  in_loc_trace (locs @ loc_trace) (fun () -> check_tpexpr e typ)
 
 (*** impure expression inference **********************************************)
 
@@ -2590,38 +2591,34 @@ let rec check_texpr labels (e : 'bty mu_texpr) (typ : RT.t orFalse)
     | M_Eif (casym, e1, e2) ->
        let@ carg = arg_of_asym casym in
        let@ () = ensure_base_type carg.loc ~expect:Bool carg.bt in
-       let@ loc_trace = get_loc_trace () in
        ListM.iterM (fun (lc, nm, e) ->
-           in_loc_trace (loc_of_texpr e :: loc :: loc_trace)
-           (fun () -> begin
+           pure begin
                let@ () = add_c (t_ lc) in
                let@ provable = provable loc in
                match provable (t_ (bool_ false)) with
                | `True -> return ()
                | `False ->
                  let start = time_log_start (nm ^ " branch") (Locations.to_string loc) in
-                 let@ r = check_texpr labels e typ in
+                 let@ r = check_texpr_in [loc_of_texpr e; loc] labels e typ in
                  time_log_end start;
                  return r
              end
-         )) [(it_of_arg carg, "true", e1); (not_ (it_of_arg carg), "false", e2)]
+         ) [(it_of_arg carg, "true", e1); (not_ (it_of_arg carg), "false", e2)]
     | M_Ebound (_, e) ->
        check_texpr labels e typ 
     | M_End _ ->
        Debug_ocaml.error "todo: End"
     | M_Ecase (asym, pats_es) ->
        let@ arg = arg_of_asym asym in
-       let@ loc_trace = get_loc_trace () in
        ListM.iterM (fun (pat, pe) ->
-           in_loc_trace (loc_of_texpr pe :: loc :: loc_trace)
-           (fun () -> begin
+           pure begin
                let@ () = pattern_match (it_of_arg arg) pat in
                let@ provable = provable loc in
                match provable (t_ (bool_ false)) with
                | `True -> return ()
-               | `False -> check_texpr labels pe typ
+               | `False -> check_texpr_in [loc_of_texpr pe; loc] labels pe typ
              end
-         )) pats_es
+         ) pats_es
     | M_Elet (p, e1, e2) ->
        let@ rt = infer_pexpr e1 in
        let@ () = match p with 
@@ -2674,6 +2671,10 @@ let rec check_texpr labels (e : 'bty mu_texpr) (typ : RT.t orFalse)
   in
   return result
 
+
+and check_texpr_in locs labels e typ =
+  let@ loc_trace = get_loc_trace () in
+  in_loc_trace (locs @ loc_trace) (fun () -> check_texpr labels e typ)
 
 
 
@@ -2734,8 +2735,7 @@ let check_function
         let Computational ((sname, sbt), _info, t) = rt in
         ensure_base_type loc ~expect:sbt rbt
       in
-      let@ () = in_loc_trace [loc]
-        (fun () -> check_tpexpr body rt) in
+      let@ () = check_tpexpr_in [loc] body rt in
       return ()
     end
 
@@ -2805,7 +2805,7 @@ let check_procedure
                check_and_bind_arguments False.subst loc args lt 
              in
              let@ () = ListM.iterM (add_r (Some (Label label_name))) resources in
-             let@ () = check_texpr labels body False in
+             let@ () = check_texpr_in [loc] labels body False in
              return ()
           end
       in
