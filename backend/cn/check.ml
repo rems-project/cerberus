@@ -801,11 +801,11 @@ module ResourceInference = struct
           begin match confirmed with
           | None -> return ()
           | Some (Spans.Pack, pt, ct, _) ->
-              let@ _ = do_pack loc pt ct in
-              span_fold_unfolds loc req
+              let@ success = do_pack loc pt ct in
+              if success then span_fold_unfolds loc req else return ()
           | Some (Spans.Unpack, pt, ct, _) ->
-              let@ _ = do_unpack loc pt ct in
-              span_fold_unfolds loc req
+              let@ success = do_unpack loc pt ct in
+              if success then span_fold_unfolds loc req else return ()
           end
 
     and do_pack loc pt ct =
@@ -817,8 +817,10 @@ module ResourceInference = struct
         | _ -> return None
       in
       match opt with
-        | None -> return ()
-        | Some resource -> add_r None (RE.Point resource)
+        | None -> return false
+        | Some resource ->
+            let@ _ = add_r None (RE.Point resource) in
+            return true
 
     and do_unpack loc pt ct =
       match ct with
@@ -826,16 +828,20 @@ module ResourceInference = struct
           let@ oqp = unfold_array ~recursive:true loc act
               length pt (bool_ true) in
           begin match oqp with
-            | None -> return ()
-            | Some qp -> add_r None (RE.QPoint qp)
+            | None -> return false
+            | Some qp ->
+                let@ _ = add_r None (RE.QPoint qp) in
+                return true
           end
         | Sctypes.Struct tag ->
           let@ ors = unfold_struct ~recursive:true loc tag pt (bool_ true) in
           begin match ors with
-            | None -> return ()
-            | Some rs -> add_rs None rs
+            | None -> return false
+            | Some rs ->
+                let@ _ = add_rs None rs in
+                return true
           end
-        | _ -> return ()
+        | _ -> return false
 
 
     let predicate_request loc (requested : Resources.Requests.predicate) = 
