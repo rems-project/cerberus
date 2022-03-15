@@ -30,6 +30,7 @@ type t = {
     resources : RE.t list;
     constraints : LC.t list;
     global : Global.t;
+    location_trace : Locations.loc list;
   }
 
 
@@ -39,6 +40,7 @@ let empty global = {
     resources = [];
     constraints = [];
     global = global;
+    location_trace = [];
   }
 
 

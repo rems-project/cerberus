@@ -5,7 +5,6 @@ type s = {
     solver : Solver.solver;
     sym_eqs : IT.t SymMap.t;
     trace_length : int;             (* for performance debugging *)
-    loc_trace : Locations.loc list;  (* for reporting source trace *)
   }
 
 type ('a, 'e) t = s -> ('a * s, 'e) Result.t
@@ -17,9 +16,8 @@ let run (c : Context.t) (m : ('a, 'e) t) : ('a, 'e) Resultat.t =
   let solver = Solver.make c.global.struct_decls in
   let sym_eqs = SymMap.empty in
   let trace_length = 0 in
-  let loc_trace = [] in
   List.iter (Solver.add solver c.global) c.constraints;
-  let s = { typing_context = c; solver; sym_eqs; trace_length; loc_trace } in
+  let s = { typing_context = c; solver; sym_eqs; trace_length } in
   let outcome = m s in
   match outcome with
   | Ok (a, _) -> Ok a
@@ -233,10 +231,12 @@ let map_and_fold_resources loc (f : RE.t -> 'acc -> changed * 'acc) (acc : 'acc)
   Ok (acc, {s with typing_context = {s.typing_context with resources}})
 
 let get_loc_trace () =
-  fun s -> Ok (s.loc_trace, s)
+  let@ c = get () in
+  return c.location_trace
 
 let set_loc_trace tr = 
-  fun s -> Ok ((), {s with loc_trace = tr})
+  let@ c = get () in
+  set ({c with location_trace = tr})
 
 let in_loc_trace tr f =
   let@ tr = get_loc_trace () in
