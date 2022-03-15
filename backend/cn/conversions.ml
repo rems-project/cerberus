@@ -92,7 +92,10 @@ let struct_decl loc fields (tag : BT.tag) =
     let rec aux members position =
       match members with
       | [] -> 
-         return []
+         let final_position = Memory.size_of_struct tag in
+         if position < final_position 
+         then return [{offset = position; size = final_position - position; member_or_padding = None}]
+         else return []
       | (member, (attrs, qualifiers, ct)) :: members ->
          let sct = sct_of_ct loc ct in
          let offset = member_offset tag member in

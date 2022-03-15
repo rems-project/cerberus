@@ -2865,6 +2865,9 @@ let check mu_file =
   in
   let () = Debug_ocaml.end_csv_timing "tagDefs" in
 
+  print stdout (item "global" (Global.pp ctxt.global));
+
+
   let () = Debug_ocaml.begin_csv_timing "impls" in
   let@ ctxt = 
     (* check and record impls *)
