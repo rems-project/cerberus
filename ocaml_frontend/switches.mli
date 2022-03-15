@@ -18,6 +18,7 @@ type cerb_switch =
   | SW_strict_pointer_relationals
   
   | SW_PNVI of [ `PLAIN | `AE | `AE_UDI ]
+  | SW_CHERI
 
 val get_switches: unit -> cerb_switch list
 val has_switch: cerb_switch -> bool
@@ -25,5 +26,6 @@ val has_switch_pred: (cerb_switch -> bool) -> cerb_switch option
 val set: string list -> unit
 
 
+val is_CHERI: unit -> bool
 val is_PNVI: unit -> bool
 val has_strict_pointer_arith: unit -> bool

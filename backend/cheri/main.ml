@@ -52,6 +52,7 @@ let frontend cpp_str filename =
   } in
   Cerb_frontend.Ocaml_implementation.(set (MorelloImpl.impl));
   Switches.set ["strict_pointer_equality"] ;
+  Switches.set ["CHERI"] ;
   load_core_stdlib ()                                  >>= fun stdlib ->
   load_core_impl stdlib impl_name                      >>= fun impl   ->
   c_frontend (conf, io) (stdlib, impl) ~filename

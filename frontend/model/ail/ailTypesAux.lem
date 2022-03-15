@@ -1,4 +1,4 @@
-open import Pervasives Utils AilSyntax ErrorMonad TypingError Annot Ctype
+open import Pervasives Utils AilSyntax ErrorMonad TypingError Annot Ctype Global
 import Implementation IntegerImpl Loc Debug
 
 (* == Predicates on qualifiers ================================================ *)
@@ -507,12 +507,21 @@ let eq_integer_rank ity1 ity2 =
 
 val lt_integer_rank: integerType -> integerType -> bool
 let lt_integer_rank ity1 ity2 =
-  match (ity1, ity2) with
+  let lt_integer_rank_ISO ity1 ity2 =
+    match (ity1, ity2) with
+    (* Top: "The rank of _Bool shall be less than the rank of all other standard integer types." *)
     | (_, Bool) ->
         false
     | (Bool, _) ->
         true
-    
+
+    (* Bottom: In CHERI C intptr_t types have the highest rank so the capabilities metainfromation
+       will be preserved during integer promotion *)
+    | (Signed Intptr_t, _) ->
+        false
+    | (Unsigned Intptr_t, _) ->
+        false
+
     | (_, Char) ->
         false
     | (_, Signed Ichar) ->
@@ -573,8 +582,20 @@ let lt_integer_rank ity1 ity2 =
     
     | _ ->
         (* TODO: this is probably wrong for macro types *)
-        false
-  end
+       false
+    end in
+  if Global.is_CHERI () then
+    match ity1 with
+      (* Bottom: In CHERI C intptr_t types have the highest rank so
+         the capabilities metainfromation will be preserved during
+         integer promotion *)
+    | Signed Intptr_t -> false
+    | Unsigned Intptr_t -> false
+    | _ ->
+       lt_integer_rank_ISO ity1 ity2
+    end
+  else
+    lt_integer_rank_ISO ity1 ity2
 
 val le_integer_rank: integerType -> integerType -> bool
 let le_integer_rank ity1 ity2 =
