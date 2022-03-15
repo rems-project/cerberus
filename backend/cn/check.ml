@@ -371,9 +371,7 @@ module ResourceInference = struct
 
 
 
-    let rec point_request 
-              ?(ct_subtype=false)
-              ~recursive loc (requested : Resources.Requests.point) = 
+    let rec point_request ~recursive loc (requested : Resources.Requests.point) = 
       debug 7 (lazy (item "point request" (RER.pp (Point requested))));
       let@ _ = span_fold_unfolds loc (RER.Point requested) in
       let@ provable = provable loc in
@@ -382,24 +380,22 @@ module ResourceInference = struct
       let@ global = get_global () in
       let@ simp_lcs = simp_constraints () in
       let needed = requested.permission in 
-      let sub_resource_if = fun cond re (needed, value, init, ct) ->
-            let continue = (Unchanged, (needed, value, init, ct)) in
+      let sub_resource_if = fun cond re (needed, value, init) ->
+            let continue = (Unchanged, (needed, value, init)) in
             if is_false needed || not (cond re) then continue else
             match re with
-            | Point p' when Sctypes.equal requested.ct p'.ct 
-                            || (ct_subtype && Sctypes.subtype p'.ct requested.ct) ->
+            | Point p' when Sctypes.equal requested.ct p'.ct ->
                debug 15 (lazy (item "point/point sub at ptr" (IT.pp p'.pointer)));
                let pmatch = eq_ (requested.pointer, p'.pointer) in
                let took = and_ [pmatch; p'.permission; needed] in
                begin match provable (LC.T took) with
                | `True ->
                   Deleted, 
-                  (bool_ false, p'.value, p'.init, p'.ct)
+                  (bool_ false, p'.value, p'.init)
                | `False -> 
                   continue
                end
-            | QPoint p' when Sctypes.equal requested.ct p'.ct 
-                             || (ct_subtype && Sctypes.subtype p'.ct requested.ct) ->
+            | QPoint p' when Sctypes.equal requested.ct p'.ct ->
                let base = p'.pointer in
                debug 15 (lazy (item "point/qpoint sub at base ptr" (IT.pp base)));
                let item_size = int_ (Memory.size_of_ctype p'.ct) in
@@ -416,23 +412,23 @@ module ResourceInference = struct
                | `True ->
                   let permission' = and_ [p'.permission; ne_ (sym_ (p'.q, Integer), index)] in
                   Changed (QPoint {p' with permission = permission'}), 
-                  (bool_ false, IT.subst subst p'.value, IT.subst subst p'.init, p'.ct)
+                  (bool_ false, IT.subst subst p'.value, IT.subst subst p'.init)
                | `False -> continue
                end
             | _ ->
                continue
       in
-      let@ (needed, value, init, ct) =
+      let@ (needed, value, init) =
         map_and_fold_resources loc (sub_resource_if is_exact_re)
-          (needed, default_ requested.value, default_ requested.init, requested.ct)
+          (needed, default_ requested.value, default_ requested.init)
       in
-      let@ (needed, value, init, ct) =
+      let@ (needed, value, init) =
         map_and_fold_resources loc (sub_resource_if (fun re -> not (is_exact_re re)))
-          (needed, value, init, ct) in
+          (needed, value, init) in
       begin match provable (t_ (not_ needed)) with
       | `True ->
          let r = { 
-             ct = ct;
+             ct = requested.ct;
              pointer = requested.pointer;
              value;
              init;
@@ -707,15 +703,14 @@ module ResourceInference = struct
         permission = and_ [permission; (int_ 0) %<= q; q %<= (int_ (length - 1))]
       }
 
-    and unfold_array ~recursive loc item_ct olength base permission =
+    and unfold_array ~recursive loc item_ct length base permission =
       debug 7 (lazy (item "unfold array" Pp.empty));
       debug 7 (lazy (item "item_ct" (Sctypes.pp item_ct)));
       debug 7 (lazy (item "base" (IT.pp base)));
       debug 7 (lazy (item "permission" (IT.pp permission)));
       let@ result = 
-        let ct_subtype = not (Option.is_some olength) in
-        point_request ~recursive ~ct_subtype loc (Resources.Requests.{
-              ct = array_ct item_ct olength;
+        point_request ~recursive loc (Resources.Requests.{
+              ct = array_ct item_ct (Some length);
               pointer = base;
               value = of_sct (array_ct item_ct None);
               init = BT.Bool;
@@ -829,7 +824,7 @@ module ResourceInference = struct
       match ct with
         | Sctypes.Array (act, Some length) ->
           let@ oqp = unfold_array ~recursive:true loc act
-              (Some length) pt (bool_ true) in
+              length pt (bool_ true) in
           begin match oqp with
             | None -> return ()
             | Some qp -> add_r None (RE.QPoint qp)
