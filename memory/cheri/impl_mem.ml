@@ -47,6 +47,7 @@ module Eff : sig
     ('a, string, 'err, 'cs, 'st) Nondeterminism.ndM
   val return: 'a -> ('a, 'err, 'cs, 'st) eff
   val (>>=): ('a, 'err, 'cs, 'st) eff -> ('a -> ('b, 'err, 'cs, 'st) eff) -> ('b, 'err, 'cs, 'st) eff
+  val (>>): ('a, 'err, 'cs, 'st) eff -> ('b, 'err, 'cs, 'st) eff -> ('b, 'err, 'cs, 'st) eff
   val read: ('st -> 'a) -> ('a, 'err, 'cs, 'st) eff
   val update: ('st -> 'st) -> (unit, 'err, 'cs, 'st) eff
   val modify: ('st -> 'a * 'st) -> ('a, 'err, 'cs, 'st) eff
@@ -61,6 +62,7 @@ end = struct
 
   let return = Nondeterminism.nd_return
   let (>>=) = Nondeterminism.nd_bind
+  let (>>) k f = k >>= fun _ -> f
 
   let read = Nondeterminism.nd_read
   let update = Nondeterminism.nd_update
