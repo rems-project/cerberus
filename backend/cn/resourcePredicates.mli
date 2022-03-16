@@ -13,7 +13,6 @@ type definition = {
     pointer: Sym.t;
     iargs : (Sym.t * LogicalSorts.t) list;
     oargs : (string * LogicalSorts.t) list;
-    permission: Sym.t;
     clauses : clause list;
   }
 

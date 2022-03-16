@@ -38,7 +38,6 @@ type definition = {
     pointer: Sym.t;
     iargs : (Sym.t * LS.t) list;
     oargs : (string * LS.t) list;
-    permission: Sym.t;
     clauses : clause list;
   }
 
@@ -46,7 +45,6 @@ let pp_definition def =
   item "pointer" (Sym.pp def.pointer) ^/^
   item "iargs" (Pp.list (fun (s,_) -> Sym.pp s) def.iargs) ^/^
   item "oargs" (Pp.list (fun (s,_) -> Pp.string s) def.oargs) ^/^
-  item "permission" (Sym.pp def.permission) ^/^
   item "clauses" (Pp.list pp_clause def.clauses)
   
 
@@ -55,13 +53,12 @@ let byte () =
   let id = "Byte" in
   let loc = Loc.other "internal (Byte)" in
   let pointer_s, pointer = IT.fresh_named Loc "pointer" in
-  let permission_s, permission = IT.fresh_named BT.Bool "permission" in
   let value_s, value = IT.fresh_named BT.Integer "value" in
   let init_s, init = IT.fresh_named BT.Bool "init" in
   let point = {
       ct = char_ct; 
       pointer = pointer;
-      permission = permission;
+      permission = bool_ true;
       value = value;
       init = init;
     }
@@ -81,7 +78,6 @@ let byte () =
   let predicate = {
       loc = loc;
       pointer = pointer_s;
-      permission = permission_s;
       iargs = []; 
       oargs = []; 
       clauses = [clause]; 
@@ -94,12 +90,11 @@ let char () =
   let id = "Char" in
   let loc = Loc.other "internal (Char)" in
   let pointer_s, pointer = IT.fresh_named Loc "pointer" in
-  let permission_s, permission = IT.fresh_named BT.Bool "permission" in
   let value_s, value = IT.fresh_named BT.Integer "value" in
   let point = {
       ct = char_ct; 
       pointer = pointer;
-      permission = permission;
+      permission = bool_ true;
       value = value;
       init = bool_ true;
     }
@@ -118,7 +113,6 @@ let char () =
   let predicate = {
       loc = loc;
       pointer = pointer_s;
-      permission = permission_s;
       iargs = []; 
       oargs = [("value", IT.bt value)]; 
       clauses = [clause]; 
@@ -134,11 +128,10 @@ let zerobyte () =
   let id = "ZeroByte" in
   let loc = Loc.other "internal (ZeroByte)" in
   let pointer_s, pointer = IT.fresh_named Loc "pointer" in
-  let permission_s, permission = IT.fresh_named BT.Bool "permission" in
   let point = {
       ct = char_ct; 
       pointer = pointer;
-      permission = permission;
+      permission = bool_ true;
       value = int_ 0;
       init = bool_ true;
     }
@@ -156,7 +149,6 @@ let zerobyte () =
   let predicate = {
       loc = loc;
       pointer = pointer_s;
-      permission = permission_s;
       iargs = []; 
       oargs = []; 
       clauses = [clause]; 
@@ -172,7 +164,6 @@ let page () =
   let pbase_s, pbase = IT.fresh_named Loc "pbase" in
   let pbaseI = pointerToIntegerCast_ pbase in
   let order_s, order = IT.fresh_named Integer "order" in
-  let permission_s, permission = IT.fresh_named BT.Bool "permission" in
   let clause1 = 
     let qp = 
       let length = 
@@ -191,7 +182,7 @@ let page () =
         q = q_s;
         step = Memory.size_of_ctype char_ct;
         permission = 
-          and_ [permission; pbaseI %<= q; q %<= (sub_ (pbaseI %+ length, int_ 1))];
+          and_ [pbaseI %<= q; q %<= (sub_ (pbaseI %+ length, int_ 1))];
         iargs = [];
         oargs = [];
       }
@@ -219,7 +210,6 @@ let page () =
   let predicate = {
       loc = loc;
       pointer = pbase_s;
-      permission = permission_s;
       iargs = [(guardv_s, IT.bt guardv);
                (order_s, IT.bt order);
               ]; 
@@ -241,7 +231,6 @@ let early_alloc () =
   let loc = Loc.other "internal (EarlyAlloc)" in
   let cur_s, cur = IT.fresh_named Loc "cur" in
   let end_s, end_t = IT.fresh_named Integer "end" in
-  let permission_s, permission = IT.fresh_named BT.Bool "permission" in
   let region = 
     let q_s, q = IT.fresh Integer in 
     QPredicate {
@@ -249,7 +238,7 @@ let early_alloc () =
         pointer = pointer_ Z.zero;
         q = q_s;
         step = Memory.size_of_ctype char_ct;
-        permission = and_ [permission; pointerToIntegerCast_ cur %<= q; q %<= (sub_ (end_t, int_ 1))];
+        permission = and_ [pointerToIntegerCast_ cur %<= q; q %<= (sub_ (end_t, int_ 1))];
         iargs = [];
         oargs = [];
       }
@@ -270,7 +259,6 @@ let early_alloc () =
   let predicate = {
       loc = loc;
       pointer = cur_s;
-      permission = permission_s;
       iargs = [
           (end_s, IT.bt end_t);
         ]; 
@@ -293,7 +281,6 @@ let page_alloc_predicates struct_decls =
     let id = "Hyp_pool" in
     let loc = Loc.other "internal (Hyp_pool)" in
     let pool_pointer_s, pool_pointer = IT.fresh_named Loc "pool_pointer" in
-    let permission_s, permission = IT.fresh_named BT.Bool "permission" in
     (* iargs *)
     let vmemmap_pointer_s, vmemmap_pointer = IT.fresh_named Loc "vmemmap_pointer" in
     let hyp_physvirt_offset_s, hyp_physvirt_offset = 
@@ -309,7 +296,7 @@ let page_alloc_predicates struct_decls =
         Point {
             ct = struct_ct hyp_pool_tag;
             pointer = pool_pointer;
-            permission = permission;
+            permission = bool_ true;
             init = bool_ true;
             value = pool;
           }
@@ -325,7 +312,6 @@ let page_alloc_predicates struct_decls =
         Aux.vmemmap_resource ~vmemmap_pointer ~vmemmap
           ~range_start:(pool %. "range_start")
           ~range_end:(pool %. "range_end")
-          permission
       in
       LRT.Logical ((vmemmap_s, IT.bt vmemmap), (loc, None),
       LRT.Resource (resource, (loc, None), 
@@ -411,7 +397,7 @@ let page_alloc_predicates struct_decls =
     let page_group_ownership = 
       let q_s, q = IT.fresh_named Integer "q" in
       let condition = 
-        and_ [permission; start_i %<= q; q %<= (sub_ (end_i, int_ 1));
+        and_ [start_i %<= q; q %<= (sub_ (end_i, int_ 1));
               (((map_get_ vmemmap q)) %. "refcount") %== int_ 0;
               (((map_get_ vmemmap q)) %. "order") %!= int_ hHYP_NO_ORDER;
           ]
@@ -458,7 +444,6 @@ let page_alloc_predicates struct_decls =
     let predicate = {
         loc = loc;
         pointer = pool_pointer_s;
-        permission = permission_s;
         iargs = [
             (vmemmap_pointer_s, IT.bt vmemmap_pointer);
             (hyp_physvirt_offset_s, IT.bt hyp_physvirt_offset);

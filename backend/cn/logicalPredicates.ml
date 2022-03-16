@@ -89,7 +89,7 @@ module PageAlloc = struct
         ~p:pointer
 
 
-    let vmemmap_resource ~vmemmap_pointer ~vmemmap ~range_start ~range_end permission =
+    let vmemmap_resource ~vmemmap_pointer ~vmemmap ~range_start ~range_end =
       let range_start_i = range_start %/ (int_ pPAGE_SIZE) in
       let range_end_i = range_end %/ (int_ pPAGE_SIZE) in
       let q_s, q = IT.fresh_named Integer "q" in
@@ -99,7 +99,7 @@ module PageAlloc = struct
           ct = Struct hyp_page_tag;
           value = map_get_ vmemmap q;
           init = bool_ true;
-          permission = and_ [permission; range_start_i %<= q; q %<= (sub_ (range_end_i, int_ 1))];
+          permission = and_ [range_start_i %<= q; q %<= (sub_ (range_end_i, int_ 1))];
         }
 
 
@@ -193,8 +193,7 @@ module PageAlloc = struct
         AT.Computational ((pool_s, IT.bt pool), (loc, None),
         AT.Resource ((Aux.vmemmap_resource ~vmemmap_pointer ~vmemmap 
                         ~range_start:(pool %. "range_start")
-                        ~range_end:(pool %. "range_end") 
-                        (bool_ true)), (loc, None),
+                        ~range_end:(pool %. "range_end")), (loc, None),
         AT.I OutputDef.[
             {loc; name = "page_index"; value = page_index};
             {loc; name = "vmemmap_pointer"; value = vmemmap_pointer};
@@ -313,8 +312,7 @@ module PageAlloc = struct
         AT.Computational ((pool_s, IT.bt pool), (loc, None),
         AT.Resource ((Aux.vmemmap_resource ~vmemmap_pointer ~vmemmap 
                         ~range_start:(pool %. "range_start")
-                        ~range_end:(pool %. "range_end") 
-                        (bool_ true)), (loc, None),
+                        ~range_end:(pool %. "range_end")), (loc, None),
         AT.I OutputDef.[
             {loc; name = "page_index"; value = page_index};
             {loc; name = "vmemmap_pointer"; value = vmemmap_pointer};
@@ -401,8 +399,7 @@ module PageAlloc = struct
         AT.Computational ((pool_s, IT.bt pool), (loc, None),
         AT.Resource ((Aux.vmemmap_resource ~vmemmap_pointer ~vmemmap 
                         ~range_start:(pool %. "range_start") 
-                        ~range_end:(pool %. "range_end")
-                        (bool_ true)), (loc, None),
+                        ~range_end:(pool %. "range_end")), (loc, None),
         AT.I OutputDef.[
             {loc; name = "cell_index"; value = cell_index};
             {loc; name = "vmemmap_pointer"; value = vmemmap_pointer};

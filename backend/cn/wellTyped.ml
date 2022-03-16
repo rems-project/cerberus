@@ -921,7 +921,6 @@ module WRPD = struct
     pure begin
         let open ResourcePredicates in
         let@ () = add_l pd.pointer BT.Loc in
-        let@ () = add_l pd.permission BT.Bool in
         let@ () = ListM.iterM (fun (s, ls) -> add_l s ls) pd.iargs in
         let module WPackingFT = WPackingFT(struct let name_bts = pd.oargs end)  in
         ListM.iterM (fun {loc; guard; packing_ft} ->

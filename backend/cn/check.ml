@@ -2389,8 +2389,6 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t, type_error) m =
          | _ -> fail (fun _ -> {loc; msg = Generic !^"pointer argument to predicate missing"})
        in
        let@ pointer_arg = arg_of_asym pointer_asym in
-       (* todo: allow other permission amounts *)
-       let permission = bool_ true in
        let@ iargs = args_of_asyms iarg_asyms in
        let@ () = 
          (* "+1" because of pointer argument *)
@@ -2399,7 +2397,6 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t, type_error) m =
          else fail (fun _ -> {loc; msg = Number_arguments {has; expect}})
        in
        let@ () = ensure_base_type pointer_arg.loc ~expect:Loc pointer_arg.bt in
-       let@ () = ensure_base_type loc ~expect:Bool (IT.bt permission) in
        let@ () = 
          ListM.iterM (fun (arg, expected_sort) ->
              ensure_base_type arg.loc ~expect:expected_sort arg.bt
@@ -2409,8 +2406,7 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t, type_error) m =
          let subst = 
            make_subst (
                (def.pointer, it_of_arg pointer_arg) ::
-               (def.permission, permission) ::
-               List.combine (List.map fst def.iargs) (List.map it_of_arg iargs)
+               List.map2 (fun (def_ia, _) ia -> (def_ia, it_of_arg ia)) def.iargs iargs
              )
          in
          List.map (ResourcePredicates.subst_clause subst) def.clauses
@@ -2440,7 +2436,7 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t, type_error) m =
             RI.Special.predicate_request loc (Unpack (TPU_Predicate pname)) ({
                 name = Id.s pname;
                 pointer = it_of_arg pointer_arg;
-                permission = permission;
+                permission = bool_ true;
                 iargs = List.map it_of_arg iargs;
                 oargs = List.map snd def.oargs;
               }, None)
