@@ -943,6 +943,7 @@ module CHERI (C:Capability
        ( `NoTaint (* PNVI-ae-udi *)
        , begin match extract_unspec bs1' with
          | Some cs ->
+            (* TODO(CHERI) Need value *)
             let tag = true in
             begin match C.decode cs tag with
             | None -> (* TODO *)
