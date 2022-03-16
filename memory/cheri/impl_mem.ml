@@ -1956,6 +1956,7 @@ module CHERI (C:Capability
        end
 
   (* Following §6.5.3.3, footnote 102) *)
+  (* TODO(CHERI): This check is not suffficient for CHERI. See notes *)
   let validForDeref_ptrval ref_ty ptrval =
     (*
       begin
@@ -1964,6 +1965,19 @@ module CHERI (C:Capability
       (Pp_utils.to_plain_string (pp_pointer_value ptrval))
       end;
      *)
+    let cap_check c =
+      if C.cap_is_valid c then
+        let sz = sizeof ref_ty in
+        let addr = C.cap_get_value c in
+        let bounds = C.cap_get_bounds c in
+        match cap_bounds_check bounds addr sz with
+        | None -> return ()
+        | Some a ->
+           fail (MerrCHERI
+                   (CheriBoundsErr (bounds, addr, N.of_int sz)))
+      else
+        fail (MerrCHERI CheriMerrInvalidCap)
+    in
     let do_test alloc_id =
       is_dead alloc_id >>= function
       | true ->
@@ -1974,11 +1988,11 @@ module CHERI (C:Capability
     | PV (_, PVnull _)
       | PV (_, PVfunction _) ->
        return false
-    | PV (Prov_device, PVconcrete _) as ptrval ->
-       isWellAligned_ptrval ref_ty ptrval
-
+    | PV (Prov_device, PVconcrete c) as ptrval ->
+       cap_check c >> isWellAligned_ptrval ref_ty ptrval
     (* PNVI-ae-udi *)
-    | PV (Prov_symbolic iota, PVconcrete addr) ->
+    | PV (Prov_symbolic iota, PVconcrete c) ->
+       cap_check c >>
        lookup_iota iota >>= begin function
                               | `Single alloc_id ->
                                  do_test alloc_id
@@ -1990,8 +2004,8 @@ module CHERI (C:Capability
                                                             return true
                                                        end
                             end
-    | PV (Prov_some alloc_id, PVconcrete _) ->
-       do_test alloc_id
+    | PV (Prov_some alloc_id, PVconcrete c) ->
+       cap_check c >> do_test alloc_id
     | PV (Prov_none, _) ->
        return false
 
