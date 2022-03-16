@@ -438,7 +438,7 @@ module CHERI (C:Capability
       varargs: (int * (ctype * pointer_value) list) IntMap.t;
       next_varargs_id: N.num;
       bytemap: AbsByte.t IntMap.t;
-      captags: bool IntMap.t;
+      captags: (bool option) IntMap.t;
 
       dead_allocations: storage_instance_id list;
       dynamic_addrs: C.vaddr list;
