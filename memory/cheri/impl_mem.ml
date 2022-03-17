@@ -438,7 +438,7 @@ module CHERI (C:Capability
       varargs: (int * (ctype * pointer_value) list) IntMap.t;
       next_varargs_id: N.num;
       bytemap: AbsByte.t IntMap.t;
-      captags: (bool option) IntMap.t;
+      captags: bool IntMap.t;
 
       dead_allocations: storage_instance_id list;
       dynamic_addrs: C.vaddr list;
@@ -870,8 +870,17 @@ module CHERI (C:Capability
      forall ty bs bs' mval.
      has_size ty -> |bs| >= sizeof ty -> abst ty bs = (mval, bs') ->
      |bs'| + sizeof ty  = |bs| /\ typeof mval = ty *)
-  let rec abst find_overlaping funptrmap (Ctype (_, ty) as cty) (bs : AbsByte.t list) : [`NoTaint | `NewTaint of storage_instance_id list] * mem_value * AbsByte.t list =
-    let self = abst find_overlaping funptrmap in
+  let rec abst
+            find_overlaping
+            funptrmap
+            (tag_query_f: C.vaddr -> bool option)
+            (addr:C.vaddr)
+            (Ctype (_, ty) as cty)
+            (bs : AbsByte.t list)
+          :
+            [`NoTaint | `NewTaint of storage_instance_id list] * mem_value * AbsByte.t list
+    =
+    let self = abst find_overlaping funptrmap tag_query_f in
     let extract_unspec xs =
       List.fold_left (fun acc_opt c_opt ->
           match acc_opt, c_opt with
@@ -903,6 +912,10 @@ module CHERI (C:Capability
       | FunctionNoParams _ ->
        (* ty must have a known size *)
        assert false
+    | Basic (Integer (Signed Intptr_t)) ->
+       failwith "TODO(CHERI): decode as capability"
+    | Basic (Integer (Unsigned Intptr_t)) ->
+       failwith "TODO(CHERI): decode as capability"
     | Basic (Integer ity) ->
        let (bs1, bs2) = L.split_at (sizeof cty) bs in
        let (prov, _, bs1') = AbsByte.split_bytes bs1 in
@@ -932,7 +945,9 @@ module CHERI (C:Capability
          if n <= 0 then
            (taint_acc, MVarray (List.rev mval_acc), cs)
          else
-           let (taint, mval, cs') = self elem_ty cs in
+           (* TODO(CHERI): Check if anything special needs to be done about alignment here *)
+           let el_addr = N.add addr (N.of_int ((n-1)*(sizeof elem_ty))) in
+           let (taint, mval, cs') = self el_addr elem_ty cs in
            aux (n-1) (merge_taint taint taint_acc, mval :: mval_acc) cs'
        in
        aux (Nat_big_num.to_int n) (`NoTaint, []) bs
@@ -944,65 +959,70 @@ module CHERI (C:Capability
        , begin match extract_unspec bs1' with
          | Some cs ->
             (* TODO(CHERI) Need value *)
-            let tag = true in
-            begin match C.decode cs tag with
-            | None -> (* TODO *)
+            begin match tag_query_f addr with
+            | None ->
+               (* TODO(CHERI): decide on semantics *)
                failwith "could not decode capability"
-            | Some n ->
-               begin match ref_ty with
-               | Ctype (_, Function _) ->
-                  if C.eq n C.cap_c0 then
-                    MVpointer (ref_ty, PV (Prov_none, PVnull ref_ty))
-                  else
-                    (*
-                      (* FIXME: This is wrong. A function pointer with the same id in different files might exist. *)
-                      begin match IntMap.find_opt n funptrmap with
-                      | Some (file_dig, name) ->
-                      MVpointer (ref_ty, PV(prov, PVfunction (Symbol.Symbol (file_dig, N.to_int n, SD_Id name))))
-                      | None ->
-                      failwith ("unknown function pointer: " ^ C.to_string n)
-                      end
-                     *)
-                    (* TODO: implement for CHERI. May need different approach *)
-                    failwith "TODO"
-               | _ ->
-                  if C.eq n C.cap_c0 then
-                    MVpointer (ref_ty, PV (Prov_none, PVnull ref_ty))
-                  else
-                    let prov =
-                      if is_PNVI () then
-                        (*
-                          let () =
-                          print_endline "HELLO ==> PNVI abst (ptr)";
-                          print_endline "BEGIN";
-                          List.iter (fun bt ->
-                          let open AbsByte in
-                          Printf.printf "%s: [%s] - %s\n"
-                          (string_of_provenance bt.prov)
-                          (match bt.copy_offset with Some n -> string_of_int n | None -> "_")
-                          (match bt.value with Some c ->  Char.escaped c | None -> "unspec")
-                          ) bs1;
-                          print_endline "END" in
-                         *)
-                        match prov_status with
-                        | `NotValidPtrProv ->
-                           (* KKK print_endline "NotValidPtrProv"; *)
-                           begin match find_overlaping (C.cap_get_value n) with
-                           | `NoAlloc ->
-                              Prov_none
-                           | `SingleAlloc alloc_id ->
-                              Prov_some alloc_id
-                           | `DoubleAlloc (alloc_id1, alloc_id2) ->
-                              (* FIXME/HACK(VICTOR): This is wrong, but when serialising the memory in the UI, I get this failwith. *)
-                              Prov_some alloc_id1
-                                        (* failwith "TODO(iota): abst => make a iota?" *)
-                           end
-                        | `ValidPtrProv ->
-                           (* KKK print_endline ("ValidPtrProv ==> " ^ string_of_provenance prov); *)
-                           prov
-                      else
-                        prov in
-                    MVpointer (ref_ty, PV (prov, PVconcrete n))
+            | Some tag ->
+               begin match C.decode cs tag with
+               | None -> (* TODO(CHERI): decide on semantics *)
+                  failwith "could not decode capability"
+               | Some n ->
+                  begin match ref_ty with
+                  | Ctype (_, Function _) ->
+                     if C.eq n C.cap_c0 then
+                       MVpointer (ref_ty, PV (Prov_none, PVnull ref_ty))
+                     else
+                       (*
+                         (* FIXME: This is wrong. A function pointer with the same id in different files might exist. *)
+                         begin match IntMap.find_opt n funptrmap with
+                         | Some (file_dig, name) ->
+                         MVpointer (ref_ty, PV(prov, PVfunction (Symbol.Symbol (file_dig, N.to_int n, SD_Id name))))
+                         | None ->
+                         failwith ("unknown function pointer: " ^ C.to_string n)
+                         end
+                        *)
+                       (* TODO: implement for CHERI. May need different approach *)
+                       failwith "TODO(CHERI): implement"
+                  | _ ->
+                     if C.eq n C.cap_c0 then
+                       MVpointer (ref_ty, PV (Prov_none, PVnull ref_ty))
+                     else
+                       let prov =
+                         if is_PNVI () then
+                           (*
+                             let () =
+                             print_endline "HELLO ==> PNVI abst (ptr)";
+                             print_endline "BEGIN";
+                             List.iter (fun bt ->
+                             let open AbsByte in
+                             Printf.printf "%s: [%s] - %s\n"
+                             (string_of_provenance bt.prov)
+                             (match bt.copy_offset with Some n -> string_of_int n | None -> "_")
+                             (match bt.value with Some c ->  Char.escaped c | None -> "unspec")
+                             ) bs1;
+                             print_endline "END" in
+                            *)
+                           match prov_status with
+                           | `NotValidPtrProv ->
+                              (* KKK print_endline "NotValidPtrProv"; *)
+                              begin match find_overlaping (C.cap_get_value n) with
+                              | `NoAlloc ->
+                                 Prov_none
+                              | `SingleAlloc alloc_id ->
+                                 Prov_some alloc_id
+                              | `DoubleAlloc (alloc_id1, alloc_id2) ->
+                                 (* FIXME/HACK(VICTOR): This is wrong, but when serialising the memory in the UI, I get this failwith. *)
+                                 Prov_some alloc_id1
+                                           (* failwith "TODO(iota): abst => make a iota?" *)
+                              end
+                           | `ValidPtrProv ->
+                              (* KKK print_endline ("ValidPtrProv ==> " ^ string_of_provenance prov); *)
+                              prov
+                         else
+                           prov in
+                       MVpointer (ref_ty, PV (prov, PVconcrete n))
+                  end
                end
             end
          | None ->
@@ -1010,12 +1030,14 @@ module CHERI (C:Capability
          end, bs2)
     | Atomic atom_ty ->
        Debug_ocaml.print_debug 1 [] (fun () -> "TODO: Concrete, is it ok to have the repr of atomic types be the same as their non-atomic version??");
-       self atom_ty bs
+       self addr atom_ty bs
     | Struct tag_sym ->
        let (bs1, bs2) = L.split_at (sizeof cty) bs in
        let (taint, rev_xs, _, bs') = List.fold_left (fun (taint_acc, acc_xs, previous_offset, acc_bs) (memb_ident, memb_ty, memb_offset) ->
                                          let pad = memb_offset - previous_offset in
-                                         let (taint, mval, acc_bs') = self memb_ty (L.drop pad acc_bs) in
+                                         (* TODO(CHERI): check of offset is calculated correctly here *)
+                                         let memb_addr = N.add addr (N.of_int memb_offset) in
+                                         let (taint, mval, acc_bs') = self memb_addr memb_ty (L.drop pad acc_bs) in
                                          (merge_taint taint taint_acc, (memb_ident, memb_ty, mval)::acc_xs, memb_offset + sizeof memb_ty, acc_bs')
                                        ) (`NoTaint, [], 0, bs1) (fst (offsetsof (Tags.tagDefs ()) tag_sym)) in
        (* TODO: check that bs' = last padding of the struct *)
@@ -1323,30 +1345,7 @@ module CHERI (C:Capability
 
   (* zap (make unspecified) any pointer in the memory with provenance matching a
      given allocation id *)
-  let zap_pointers alloc_id =
-    modify (fun st ->
-        let bytemap' = IntMap.fold (fun _ alloc acc ->
-                           let bs = fetch_bytes st.bytemap alloc.base (N.to_int alloc.size) in
-                           match alloc.ty with
-                           | None ->
-                              (* TODO: zapping doesn't work yet for dynamically allocated pointers *)
-                              acc
-                           | Some ty ->
-                              begin match abst (find_overlaping st) st.funptrmap ty bs with
-                              | (_, MVpointer (ref_ty, (PV (Prov_some ptr_alloc_id, _))), []) when alloc_id = ptr_alloc_id ->
-                                 let bs' = List.init (N.to_int alloc.size) (fun i ->
-                                               (Nat_big_num.add alloc.base (Nat_big_num.of_int i), AbsByte.v Prov_none None)
-                                             ) in
-                                 List.fold_left (fun acc (addr, b) ->
-                                     IntMap.add addr b acc
-                                   ) acc bs'
-                              | _ ->
-                                 (* TODO: check *)
-                                 acc
-                              end
-                         ) st.allocations st.bytemap in
-        ((), { st with bytemap= bytemap' })
-      )
+  let zap_pointers alloc_id = failwith "zap_pointers is not supported"
 
   let kill loc is_dyn : pointer_value -> unit memM = function
     | PV (_, PVnull _) ->
@@ -1443,7 +1442,15 @@ module CHERI (C:Capability
     let do_load alloc_id_opt addr sz =
       get >>= fun st ->
       let bs = fetch_bytes st.bytemap addr sz in
-      let (taint, mval, bs') = abst (find_overlaping st) st.funptrmap ty bs in
+      let tag_query a =
+        match (Ocaml_implementation.get ()).alignof_pointer with
+        | None -> failwith "alignof_pointer must be specified in Ocaml_implementation"
+        | Some v ->
+           let (q,m) = N.quomod a (N.of_int v) in
+           if m <> N.zero then failwith "Unaligned address in load"
+           else IntMap.find_opt q st.captags
+      in
+      let (taint, mval, bs') = abst (find_overlaping st) st.funptrmap tag_query addr ty bs in
       (* PNVI-ae-udi *)
       begin if Switches.(has_switch (SW_PNVI `AE) || has_switch (SW_PNVI `AE_UDI)) then
               expose_allocations taint
@@ -2735,8 +2742,12 @@ module CHERI (C:Capability
       exposed: bool;
     }
 
-  let rec mk_ui_values st bs ty mval : ui_value list =
-    let mk_ui_values = mk_ui_values st in
+  let rec mk_ui_values
+            st
+            (tag_query_f: C.vaddr -> bool option)
+            (addr:C.vaddr)
+            bs ty mval : ui_value list =
+    let mk_ui_values = mk_ui_values st tag_query_f in
     let mk_scalar kind v p bs_opt =
       [{ kind; size = sizeof ty; path = []; value = v;
          prov = p; typ = Some ty; bytes = bs_opt }] in
@@ -2783,7 +2794,10 @@ module CHERI (C:Capability
        | Ctype (_, Array (elem_ty, _)) ->
           let size = sizeof elem_ty in
           let (rev_rows, _, _) = List.fold_left begin fun (acc, i, acc_bs) mval ->
-                                   let row = List.map (add_path (string_of_int i)) @@ mk_ui_values acc_bs elem_ty mval in
+                                   let row = List.map (add_path (string_of_int i))
+                                             @@ mk_ui_values
+                                                  (* TODO(CHERI): Check if anything special needs to be done about alignment here *)                                                                                      (N.add addr (N.of_int (i*(sizeof elem_ty))))
+                                                  acc_bs elem_ty mval in
                                    (row::acc, i+1, L.drop size acc_bs)
                                    end ([], 0, bs) mvals
           in List.concat @@ (List.rev rev_rows)
@@ -2797,8 +2811,11 @@ module CHERI (C:Capability
                                      fun (acc_rowss, previous_offset, acc_bs) (Symbol.Identifier (_, memb), memb_ty, memb_offset) ->
                                      let pad = memb_offset - previous_offset in
                                      let acc_bs' = L.drop pad acc_bs in
-                                     let (_, mval, acc_bs'') = abst (find_overlaping st) st.funptrmap memb_ty acc_bs' in
-                                     let rows = mk_ui_values acc_bs' memb_ty mval in
+                                     (* TODO(CHERI): check of offset is calculated correctly here *)
+                                     let memb_addr = N.add addr (N.of_int memb_offset) in
+
+                                     let (_, mval, acc_bs'') = abst (find_overlaping st) st.funptrmap tag_query_f memb_addr memb_ty acc_bs' in
+                                     let rows = mk_ui_values memb_addr acc_bs' memb_ty mval in
                                      let rows' = List.map (add_path memb) rows in
                                      (* TODO: set padding value here *)
                                      let rows'' = if pad = 0 then rows' else mk_pad pad "" :: rows' in
@@ -2806,20 +2823,29 @@ module CHERI (C:Capability
                                    end ([], 0, bs1) (fst (offsetsof (Tags.tagDefs ()) tag_sym))
        in List.concat (List.rev rev_rowss)
     | MVunion (tag_sym, Symbol.Identifier (_, memb), mval) ->
-       List.map (add_path memb) (mk_ui_values bs ty mval) (* FIXME: THE TYPE IS WRONG *)
+       (* TODO(CHERI): see if member addresses within union must be aligned. Now we assume they all start from the same address *)
+       List.map (add_path memb) (mk_ui_values addr bs ty mval) (* FIXME: THE TYPE IS WRONG *)
 
   let mk_ui_alloc st id alloc : ui_alloc =
     let ty = match alloc.ty with Some ty -> ty | None -> Ctype ([], Array (Ctype ([], Basic (Integer Char)), Some alloc.size)) in
     let size = N.to_int alloc.size in
     let bs = fetch_bytes st.bytemap alloc.base size in
-    let (_, mval, _) = abst (find_overlaping st) st.funptrmap ty bs in
+    let tag_query a =
+      match (Ocaml_implementation.get ()).alignof_pointer with
+      | None -> failwith "alignof_pointer must be specified in Ocaml_implementation"
+      | Some v ->
+         let (q,m) = N.quomod a (N.of_int v) in
+         if m <> N.zero then failwith "Unaligned address in mk_ui_alloc"
+         else IntMap.find_opt q st.captags
+    in
+    let (_, mval, _) = abst (find_overlaping st) st.funptrmap tag_query alloc.base ty bs in
     { id = id;
       base = N.to_string alloc.base;
       prefix = alloc.prefix;
       dyn = List.mem alloc.base st.dynamic_addrs;
       typ = ty;
       size = size;
-      values = mk_ui_values st bs ty mval;
+      values = mk_ui_values st tag_query alloc.base bs ty mval;
       exposed = (alloc.taint = `Exposed);
     }
 
