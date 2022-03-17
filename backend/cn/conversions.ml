@@ -281,22 +281,25 @@ let make_pred loc (pred, def) ~oname pointer iargs some_oargs ~o_permission =
   let@ some_oargs = some_oargs_map loc some_oargs in
   let (mapping, l, some_oargs, oargs) = 
     List.fold_right (fun (oarg, bt) (mapping, l, some_oargs, oargs) ->
-        let it, l = match StringMap.find_opt oarg some_oargs with
-          | None ->
+        let oarg_name = match Sym.description oarg with
+          | SD_Id oarg_name -> oarg_name
+          | _ -> assert false;
+        in
+        let it, l = match StringMap.find_opt oarg_name some_oargs with
+          | None -> 
              let s, it = IT.fresh bt in
-             let new_l = (`Logical (s, bt), (loc, Some ("output argument '" ^ oarg ^"'"))) in
+             let new_l = (`Logical (s, bt), (loc, Some ("output argument '"^oarg_name^"'"))) in
              (it, new_l :: l)
-          | Some it ->
-             (it, l)
+          | Some it -> (it, l)
         in
         let mapping = match oname with
           | Some name ->
-             let item = {path = Ast.predarg name oarg; it; o_sct = None } in
+             let item = {path = Ast.predarg name oarg_name; it; o_sct = None } in
              item :: mapping 
           | None ->
              mapping
         in
-        let some_oargs = StringMap.remove oarg some_oargs in
+        let some_oargs = StringMap.remove oarg_name some_oargs in
         let oargs = it :: oargs in
         (mapping, l, some_oargs, oargs)
       ) def.oargs ([], [], some_oargs, [])
@@ -324,23 +327,27 @@ let make_qpred loc (pred, def) ~oname ~pointer ~q:(qs,qbt) ~step ~condition iarg
   let@ some_oargs = some_oargs_map loc some_oargs in
   let ((mapping, l, c, oargs), some_oargs) = 
     List.fold_right (fun (oarg, bt) ((mapping, l, c, oargs), some_oargs) ->
-        let it, l, c = match StringMap.find_opt oarg some_oargs with
+        let oarg_name = match Sym.description oarg with
+          | SD_Id name -> name
+          | _ -> assert false
+        in
+        let it, l, c = match StringMap.find_opt oarg_name some_oargs with
           | Some it ->
              (it, l, c)
           | None ->
              let lifted_bt = BT.Map (qbt, bt) in
              let s, it = IT.fresh lifted_bt in
-             let new_l = (`Logical (s, lifted_bt), (loc, Some ("output argument '" ^ oarg ^"'"))) in
+             let new_l = (`Logical (s, lifted_bt), (loc, Some ("output argument '"^oarg_name^"'"))) in
              (it, new_l :: l, c)
         in
         let mapping = match oname with
           | Some name ->
-             let item = {path = Ast.predarg name oarg; it; o_sct = None } in
+             let item = {path = Ast.predarg name oarg_name; it; o_sct = None } in
              item :: mapping 
           | None ->
              mapping
         in
-        let some_oargs = StringMap.remove oarg some_oargs in
+        let some_oargs = StringMap.remove oarg_name some_oargs in
         let oargs = ((map_get_ it (sym_ (qs, qbt)))) :: oargs in
         ((mapping, l, c, oargs), some_oargs)
       ) def.oargs (([], [], [], []), some_oargs)

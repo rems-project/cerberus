@@ -12,7 +12,7 @@ type definition = {
     loc : Locations.t;
     pointer: Sym.t;
     iargs : (Sym.t * LogicalSorts.t) list;
-    oargs : (string * LogicalSorts.t) list;
+    oargs : (Sym.t * LogicalSorts.t) list;
     clauses : clause list;
   }
 

@@ -472,7 +472,7 @@ let state ctxt {substitution; vclasses; relevant} (model_with_q : Solver.model_w
        let oargs = 
          let predicate_def = Option.get (Global.get_resource_predicate_def ctxt.global p.name) in
          List.map2 (fun oarg (name, _) ->
-             let var = !^id ^^ dot ^^ dot ^^ !^name in
+             let var = !^id ^^ dot ^^ dot ^^ Sym.pp name in
              let value = IT.pp oarg ^^^ equals ^^^ (maybe_evaluated (evaluate oarg)) in
              {var; value}
            ) p.oargs predicate_def.oargs
@@ -511,7 +511,7 @@ let state ctxt {substitution; vclasses; relevant} (model_with_q : Solver.model_w
        let oargs = 
          let predicate_def = Option.get (Global.get_resource_predicate_def ctxt.global p.name) in
          List.map2 (fun oarg (name, _) ->
-             let var = !^id ^^ dot ^^ dot ^^ !^name in
+             let var = !^id ^^ dot ^^ dot ^^ Sym.pp name in
              let value = IT.pp oarg ^^^ equals ^^^ maybe_evaluated (evaluate_lambda q oarg) in
              {var; value}
            ) p.oargs predicate_def.oargs

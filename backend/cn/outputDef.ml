@@ -3,7 +3,7 @@ module SymSet = Set.Make(Sym)
 
 type entry = {
     loc : Locations.t;
-    name : string;
+    name : Sym.t;
     value : IndexTerms.t;
   }
 
@@ -12,7 +12,7 @@ let subst_entry substitution {loc; name; value} =
   
 let pp_entry {loc; name; value} = 
   let open Pp in
-  Pp.string name ^^^ !^"==" ^^^ IT.pp value
+  Sym.pp name ^^^ !^"==" ^^^ IT.pp value
 
 
 type t = entry list

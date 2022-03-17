@@ -33,7 +33,7 @@ let make_guarded_definition (id,def) =
     infer_arguments = 
       AT.Computational ((guard_i_s, IT.bt guard_i), (loc, None),
         AT.map (fun output_def ->
-            let guard_entry = OutputDef.{loc; name = "guard"; value = eq_ (guard_i, int_ 1)} in
+            let guard_entry = OutputDef.{loc; name = Sym.fresh_named "guard"; value = eq_ (guard_i, int_ 1)} in
             guard_entry :: output_def
           ) def.infer_arguments
       )
@@ -195,11 +195,11 @@ module PageAlloc = struct
                         ~range_start:(pool %. "range_start")
                         ~range_end:(pool %. "range_end")), (loc, None),
         AT.I OutputDef.[
-            {loc; name = "page_index"; value = page_index};
-            {loc; name = "vmemmap_pointer"; value = vmemmap_pointer};
-            {loc; name = "page"; value = map_get_ vmemmap page_index};
-            {loc; name = "pool_pointer"; value = pool_pointer};
-            {loc; name = "pool"; value = pool};
+            {loc; name = Sym.fresh_named "page_index"; value = page_index};
+            {loc; name = Sym.fresh_named "vmemmap_pointer"; value = vmemmap_pointer};
+            {loc; name = Sym.fresh_named "page"; value = map_get_ vmemmap page_index};
+            {loc; name = Sym.fresh_named "pool_pointer"; value = pool_pointer};
+            {loc; name = Sym.fresh_named "pool"; value = pool};
           ]))))))
       in
 
@@ -314,11 +314,11 @@ module PageAlloc = struct
                         ~range_start:(pool %. "range_start")
                         ~range_end:(pool %. "range_end")), (loc, None),
         AT.I OutputDef.[
-            {loc; name = "page_index"; value = page_index};
-            {loc; name = "vmemmap_pointer"; value = vmemmap_pointer};
-            {loc; name = "vmemmap"; value = vmemmap};
-            {loc; name = "pool_pointer"; value = pool_pointer};
-            {loc; name = "pool"; value = pool};
+            {loc; name = Sym.fresh_named "page_index"; value = page_index};
+            {loc; name = Sym.fresh_named "vmemmap_pointer"; value = vmemmap_pointer};
+            {loc; name = Sym.fresh_named "vmemmap"; value = vmemmap};
+            {loc; name = Sym.fresh_named "pool_pointer"; value = pool_pointer};
+            {loc; name = Sym.fresh_named "pool"; value = pool};
           ]))))))
       in
 
@@ -401,11 +401,11 @@ module PageAlloc = struct
                         ~range_start:(pool %. "range_start") 
                         ~range_end:(pool %. "range_end")), (loc, None),
         AT.I OutputDef.[
-            {loc; name = "cell_index"; value = cell_index};
-            {loc; name = "vmemmap_pointer"; value = vmemmap_pointer};
-            {loc; name = "vmemmap"; value = vmemmap};
-            {loc; name = "pool_pointer"; value = pool_pointer};
-            {loc; name = "pool"; value = pool};
+            {loc; name = Sym.fresh_named "cell_index"; value = cell_index};
+            {loc; name = Sym.fresh_named "vmemmap_pointer"; value = vmemmap_pointer};
+            {loc; name = Sym.fresh_named "vmemmap"; value = vmemmap};
+            {loc; name = Sym.fresh_named "pool_pointer"; value = pool_pointer};
+            {loc; name = Sym.fresh_named "pool"; value = pool};
           ]))))))
       in
 
@@ -496,10 +496,10 @@ module PageAlloc = struct
         AT.Computational ((vmemmap_pointer_s, IT.bt vmemmap_pointer), (loc, None), 
         AT.Computational ((hyp_physvirt_offset_s, IT.bt hyp_physvirt_offset), (loc, None), 
         AT.I OutputDef.[
-            {loc; name = "pool_pointer"; value = pool_pointer};
-            {loc; name = "pool"; value = pool};
-            {loc; name = "vmemmap_pointer"; value = vmemmap_pointer};
-            {loc; name = "hyp_physvirt_offset"; value = hyp_physvirt_offset};
+            {loc; name = Sym.fresh_named "pool_pointer"; value = pool_pointer};
+            {loc; name = Sym.fresh_named "pool"; value = pool};
+            {loc; name = Sym.fresh_named "vmemmap_pointer"; value = vmemmap_pointer};
+            {loc; name = Sym.fresh_named "hyp_physvirt_offset"; value = hyp_physvirt_offset};
           ]))))
       in
 

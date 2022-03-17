@@ -750,7 +750,7 @@ module WFalse = struct
   let mode_check _ ~infos:_ _ = return ()
 end
 
-module type WOutputSpec = sig val name_bts : (string * LS.t) list end
+module type WOutputSpec = sig val name_bts : (Sym.t * LS.t) list end
 module WOutputDef (Spec : WOutputSpec) = struct
   include OutputDef
   type t = OutputDef.t
@@ -760,13 +760,13 @@ module WOutputDef (Spec : WOutputSpec) = struct
       | [], [] -> 
          return ()
       | (name, bt) :: name_bts, {loc; name = name'; value = it} :: assignment 
-           when String.equal name name' ->
+           when Sym.equal name name' ->
          let@ _ = WIT.check loc bt it in
          aux name_bts assignment
       | (name, _) :: _, _ -> 
-         fail (fun _ -> {loc; msg = Generic !^("expected output argument " ^ name)})
+         fail (fun _ -> {loc; msg = Generic (!^"expected output argument" ^^^ Sym.pp name)})
       | _, {loc = loc'; name = name'; _} :: _ -> 
-         fail (fun _ -> {loc; msg = Generic !^("unexpected output argument " ^ name')})
+         fail (fun _ -> {loc; msg = Generic (!^"unexpected output argument" ^^^ Sym.pp name')})
     in
     aux Spec.name_bts assignment
 

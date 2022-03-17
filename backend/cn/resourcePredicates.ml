@@ -37,14 +37,14 @@ type definition = {
     loc : Loc.t;
     pointer: Sym.t;
     iargs : (Sym.t * LS.t) list;
-    oargs : (string * LS.t) list;
+    oargs : (Sym.t * LS.t) list;
     clauses : clause list;
   }
 
 let pp_definition def = 
   item "pointer" (Sym.pp def.pointer) ^/^
   item "iargs" (Pp.list (fun (s,_) -> Sym.pp s) def.iargs) ^/^
-  item "oargs" (Pp.list (fun (s,_) -> Pp.string s) def.oargs) ^/^
+  item "oargs" (Pp.list (fun (s,_) -> Sym.pp s) def.oargs) ^/^
   item "clauses" (Pp.list pp_clause def.clauses)
   
 
@@ -52,9 +52,9 @@ let pp_definition def =
 let byte () = 
   let id = "Byte" in
   let loc = Loc.other "internal (Byte)" in
-  let pointer_s, pointer = IT.fresh_named Loc "pointer" in
-  let value_s, value = IT.fresh_named BT.Integer "value" in
-  let init_s, init = IT.fresh_named BT.Bool "init" in
+  let pointer_s, pointer = IT.fresh Loc in
+  let value_s, value = IT.fresh BT.Integer in
+  let init_s, init = IT.fresh BT.Bool in
   let point = {
       ct = char_ct; 
       pointer = pointer;
@@ -89,8 +89,8 @@ let byte () =
 let char () = 
   let id = "Char" in
   let loc = Loc.other "internal (Char)" in
-  let pointer_s, pointer = IT.fresh_named Loc "pointer" in
-  let value_s, value = IT.fresh_named BT.Integer "value" in
+  let pointer_s, pointer = IT.fresh Loc in
+  let value_s, value = IT.fresh BT.Integer in
   let point = {
       ct = char_ct; 
       pointer = pointer;
@@ -104,17 +104,18 @@ let char () =
     LRT.Resource (Point point, (loc, None),
     LRT.I))
   in
+  let value_s_o = Sym.fresh_named "value" in  
   let clause = {
       loc = loc;
       guard = bool_ true;
-      packing_ft = AT.of_lrt lrt (AT.I [OutputDef.{loc; name = "value"; value}]) 
+      packing_ft = AT.of_lrt lrt (AT.I [OutputDef.{loc; name = value_s_o; value}]) 
     }
   in
   let predicate = {
       loc = loc;
       pointer = pointer_s;
       iargs = []; 
-      oargs = [("value", IT.bt value)]; 
+      oargs = [(value_s_o, IT.bt value)]; 
       clauses = [clause]; 
     } 
   in
@@ -127,7 +128,7 @@ let char () =
 let zerobyte () = 
   let id = "ZeroByte" in
   let loc = Loc.other "internal (ZeroByte)" in
-  let pointer_s, pointer = IT.fresh_named Loc "pointer" in
+  let pointer_s, pointer = IT.fresh Loc in
   let point = {
       ct = char_ct; 
       pointer = pointer;
@@ -160,10 +161,10 @@ let zerobyte () =
 let page () = 
   let id = "Page" in
   let loc = Loc.other "internal (Page)" in
-  let guardv_s, guardv = IT.fresh_named BT.Integer "guardv" in
-  let pbase_s, pbase = IT.fresh_named Loc "pbase" in
+  let guardv_s, guardv = IT.fresh BT.Integer in
+  let pbase_s, pbase = IT.fresh Loc in
   let pbaseI = pointerToIntegerCast_ pbase in
-  let order_s, order = IT.fresh_named Integer "order" in
+  let order_s, order = IT.fresh Integer in
   let clause1 = 
     let qp = 
       let length = 
@@ -229,8 +230,8 @@ let page () =
 let early_alloc () = 
   let id = "EarlyAlloc" in
   let loc = Loc.other "internal (EarlyAlloc)" in
-  let cur_s, cur = IT.fresh_named Loc "cur" in
-  let end_s, end_t = IT.fresh_named Integer "end" in
+  let cur_s, cur = IT.fresh Loc in
+  let end_s, end_t = IT.fresh Integer in
   let region = 
     let q_s, q = IT.fresh Integer in 
     QPredicate {
@@ -280,15 +281,15 @@ let page_alloc_predicates struct_decls =
   let hyp_pool =  
     let id = "Hyp_pool" in
     let loc = Loc.other "internal (Hyp_pool)" in
-    let pool_pointer_s, pool_pointer = IT.fresh_named Loc "pool_pointer" in
+    let pool_pointer_s, pool_pointer = IT.fresh Loc in
     (* iargs *)
-    let vmemmap_pointer_s, vmemmap_pointer = IT.fresh_named Loc "vmemmap_pointer" in
+    let vmemmap_pointer_s, vmemmap_pointer = IT.fresh Loc in
     let hyp_physvirt_offset_s, hyp_physvirt_offset = 
-      IT.fresh_named BT.Integer "hyp_physvirt_offset" in
+      IT.fresh BT.Integer in
     (* oargs *)
-    let pool_s, pool = IT.fresh_named (BT.Struct hyp_pool_tag) "pool" in
+    let pool_s, pool = IT.fresh (BT.Struct hyp_pool_tag) in
     let vmemmap_s, vmemmap = 
-      IT.fresh_named (BT.Map (Integer, (BT.Struct hyp_page_tag))) "vmemmap" in
+      IT.fresh (BT.Map (Integer, (BT.Struct hyp_page_tag))) in
 
 
     let metadata_owned = 
@@ -322,7 +323,7 @@ let page_alloc_predicates struct_decls =
     let end_i = (pool %. "range_end") %/ (int_ pPAGE_SIZE) in
   
     let vmemmap_wf = 
-      let i_s, i = IT.fresh_named Integer "i" in
+      let i_s, i = IT.fresh Integer in
       let condition = and_ [start_i %<= i; i %<= (sub_ (end_i, int_ 1))] in
       let args = [
           i;
@@ -340,7 +341,7 @@ let page_alloc_predicates struct_decls =
     in
   
     let vmemmap_wf_list = 
-      let i_s, i = IT.fresh_named Integer "i" in
+      let i_s, i = IT.fresh Integer in
       let condition = and_ [start_i %<= i; i %<= (sub_ (end_i, int_ 1))] in
       let args = [
           i;
@@ -358,7 +359,7 @@ let page_alloc_predicates struct_decls =
     in
 
   let free_area_wf = 
-      let i_s, i = IT.fresh_named Integer "i" in
+      let i_s, i = IT.fresh Integer in
       let condition = and_ [int_ 0 %<= i; i %<= int_ (mMAX_ORDER - 1)] in
       let args = [
           i;
@@ -395,7 +396,7 @@ let page_alloc_predicates struct_decls =
     in
 
     let page_group_ownership = 
-      let q_s, q = IT.fresh_named Integer "q" in
+      let q_s, q = IT.fresh Integer in
       let condition = 
         and_ [start_i %<= q; q %<= (sub_ (end_i, int_ 1));
               (((map_get_ vmemmap q)) %. "refcount") %== int_ 0;
@@ -429,9 +430,12 @@ let page_alloc_predicates struct_decls =
       @@ page_group_ownership
     in
   
+    let pool_s_o = Sym.fresh_named "pool" in
+    let vmemmap_s_o = Sym.fresh_named "vmemmap" in
+
     let assignment = OutputDef.[
-          {loc; name = "pool"; value = pool};
-          {loc; name = "vmemmap"; value = vmemmap};
+          {loc; name = pool_s_o; value = pool};
+          {loc; name = vmemmap_s_o; value = vmemmap};
       ]
     in
     let clause = {
@@ -450,25 +454,14 @@ let page_alloc_predicates struct_decls =
           ]
         ;
         oargs = [
-            ("pool", IT.bt pool); 
-            ("vmemmap", IT.bt vmemmap);
+            (pool_s_o, IT.bt pool); 
+            (vmemmap_s_o, IT.bt vmemmap);
           ];
         clauses = [clause;]; 
       } 
     in
     (id, predicate)
   in
-
-
-
-
-
-
-
-
-
-
-
 
   [hyp_pool;]
 
