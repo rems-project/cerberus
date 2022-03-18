@@ -77,8 +77,12 @@ module MakePp (Conf: PP_CN) = struct
     | CN_and -> P.ampersand ^^ P.ampersand
   
   let rec dtree_of_cn_expr = function
-    | CNExpr_NULL ->
-        Dleaf (pp_ctor "CNExpr_NULL")
+    | CNExpr_const CNConst_NULL ->
+        Dleaf (pp_ctor "CNExpr_const" ^^^ !^ "NULL")
+    | CNExpr_const CNConst_integer n ->
+        Dleaf (pp_ctor "CNExpr_const" ^^^ !^ (Z.to_string n))
+    | CNExpr_const (CNConst_bool b) ->
+        Dleaf (pp_ctor "CNExpr_const" ^^^ !^ (if b then "true" else "false"))
     | CNExpr_var ident ->
         Dleaf (pp_ctor "CNExpr_var" ^^^ P.squotes (Conf.pp_ident ident))
     | CNExpr_memberof (ident, ident_membr) ->

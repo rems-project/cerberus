@@ -4299,8 +4299,8 @@ end
 
 let rec desugar_cn_expr expr =
   match expr with
-    | CNExpr_NULL ->
-        E.return CNExpr_NULL
+    | CNExpr_const cst ->
+        E.return (CNExpr_const cst)
     | CNExpr_var ident ->
         E.resolve_cn_ident CN_logical ident >>= fun sym ->
         E.return (CNExpr_var sym)

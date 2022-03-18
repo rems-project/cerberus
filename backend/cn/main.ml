@@ -112,9 +112,34 @@ let frontend filename =
   load_core_stdlib () >>= fun stdlib ->
   load_core_impl stdlib impl_name >>= fun impl ->
 
-  c_frontend (conf, io) (stdlib, impl) ~filename >>= fun (_,_,core_file) ->
+  c_frontend (conf, io) (stdlib, impl) ~filename >>= fun (_,ail_program_opt,core_file) ->
   CF.Tags.set_tagDefs core_file.CF.Core.tagDefs;
   print_log_file "original" (CORE core_file);
+
+  let pred_defs =
+    (* PREDICATE FRONTEND *)
+    (* CHRISTOPHER ==> change this to FALSE to test the predicate defs frontend *)
+    if true then
+      []
+    else
+    begin match ail_program_opt with
+    | None ->
+        assert false
+    | Some (_, sigm) ->
+        (* let open Resultat in *)
+        let open Effectful.Make(Resultat) in
+        begin match ListM.mapM CompilePredicates.translate sigm.CF.AilSyntax.cn_predicates with
+          | Result.Error str ->
+              failwith str
+          | Result.Ok xs ->
+              List.iter (fun (sym, def) ->
+                let open Pp in
+                Pp.print stderr (!^ sym ^^ Pp.colon ^^^ ResourcePredicates.pp_definition def)
+              ) xs;
+              prerr_endline "PREDICATE COMPILATION SUCCESS";
+              xs
+        end
+  end in
 
   let core_file = CF.Remove_unspecs.rewrite_file core_file in
   let () = print_log_file "after_remove_unspecified" (CORE core_file) in
@@ -139,7 +164,7 @@ let frontend filename =
 
   let mu_file = CF.Mucore_label_inline.ib_file mu_file in
   print_log_file "after_inlining_break" (MUCORE mu_file);
-  return mu_file
+  return (pred_defs, mu_file)
 
 
 
@@ -185,7 +210,7 @@ let main
   begin match frontend filename with
   | CF.Exception.Exception err ->
      prerr_endline (CF.Pp_errors.to_string err); exit 2
-  | CF.Exception.Result file ->
+  | CF.Exception.Result (pred_defs, file) ->
      try
        let open Resultat in
        Debug_ocaml.maybe_open_csv_timing_file ();
@@ -194,7 +219,7 @@ let main
          | (_, Some times) -> Some (times, "log")
          | _ -> None);
        let result = 
-         let@ file = Retype.retype_file file in
+         let@ file = Retype.retype_file pred_defs file in
          Check.check file 
        in
        Pp.maybe_close_times_channel ();

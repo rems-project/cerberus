@@ -751,6 +751,7 @@ let register_cn_predicate ident mk =
         register_cn_ident Cn.CN_predicate ident >>= fun sym ->
         mk >>= fun (oargs, iargs, clauses) ->
         let pred = <|
+          Cn.cn_pred_loc= Loc.locOf ident;
           Cn.cn_pred_name= sym;
           Cn.cn_pred_oargs= oargs;
           Cn.cn_pred_iargs= iargs;

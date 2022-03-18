@@ -38,9 +38,14 @@ type cn_binop =
 *)
 
 
+type cn_const =
+  | CNConst_NULL
+  | CNConst_integer of integer
+  | CNConst_bool of bool
+
 
 type cn_expr 'a =
-  | CNExpr_NULL
+  | CNExpr_const of cn_const
   | CNExpr_var of 'a
   | CNExpr_memberof of 'a * Symbol.identifier
   | CNExpr_binop of cn_binop * cn_expr 'a * cn_expr 'a
@@ -65,6 +70,7 @@ type cn_clauses 'a 'ty =
   | CN_if of cn_expr 'a * cn_clause 'a 'ty * cn_clauses 'a 'ty
 
 type cn_predicate 'a 'ty = <|
+  cn_pred_loc: Loc.t;
   cn_pred_name: 'a;
   cn_pred_oargs: list (cn_base_type 'a * 'a);
   cn_pred_iargs: list (cn_base_type 'a * 'a);

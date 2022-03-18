@@ -24,8 +24,15 @@ type cn_env = map Symbol.sym cn_kind
 
 
 let rec typecheck_cn_expr env = function
-  | CNExpr_NULL ->
-      E.return (CN_kind_logical CN_loc)
+  | CNExpr_const cst ->
+      match cst with
+        | CNConst_NULL ->
+            E.return (CN_kind_logical CN_loc)
+        | CNConst_integer _ ->
+            E.return (CN_kind_logical CN_integer)
+        | CNConst_bool _ ->
+            E.return (CN_kind_logical CN_bool)
+      end
   | CNExpr_var sym ->
       match Map.lookup sym env with
         | Just kind ->

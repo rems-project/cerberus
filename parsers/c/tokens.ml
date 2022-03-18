@@ -150,6 +150,8 @@ type token =
   | CN_BLOCK
   | CN_EACH
   | CN_NULL
+  | CN_TRUE
+  | CN_FALSE
 
 
 let string_of_token = function
@@ -286,5 +288,7 @@ let string_of_token = function
   | CN_BLOCK -> "CN_BLOCK"
   | CN_EACH -> "CN_EACH"
   | CN_NULL -> "CN_NULL"
+  | CN_TRUE -> "CN_TRUE"
+  | CN_FALSE -> "CN_FALSE"
   | CN_PREDICATE -> "CN_PREDICATE"
 

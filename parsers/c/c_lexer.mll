@@ -108,6 +108,8 @@ let cn_keywords: (string * Tokens.token) list = [
     "Block"         , CN_BLOCK;
     "each"          , CN_EACH;
     "NULL"          , CN_NULL;
+    "true"          , CN_TRUE;
+    "false"         , CN_FALSE;
   ]
 
 let cn_lexicon: (string, token) Hashtbl.t =

@@ -436,7 +436,7 @@ let retype_arg (loc : Loc.t) (sym,acbt) =
 
 
 
-let retype_file (file : 'TY Old.mu_file) : ('TY New.mu_file, type_error) m =
+let retype_file pred_defs (file : 'TY Old.mu_file) : ('TY New.mu_file, type_error) m =
 
   let@ tagDefs =
     let retype_tagDef tag def =
@@ -460,7 +460,7 @@ let retype_file (file : 'TY Old.mu_file) : ('TY New.mu_file, type_error) m =
   in
 
 
-  let resource_predicates = ResourcePredicates.predicate_list struct_decls in
+  let resource_predicates = pred_defs @ ResourcePredicates.predicate_list struct_decls in
   let logical_predicates = LogicalPredicates.predicate_list struct_decls in
 
 

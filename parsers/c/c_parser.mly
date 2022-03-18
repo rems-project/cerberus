@@ -111,7 +111,7 @@ let inject_attr attr_opt (CabsStatement (loc, Annot.Attrs xs, stmt_)) =
 %token CN_PACK CN_UNPACK CN_PACK_STRUCT CN_UNPACK_STRUCT CN_HAVE CN_SHOW
 %token CN_BOOL CN_INTEGER CN_REAL CN_POINTER CN_MAP CN_LIST CN_TUPLE CN_SET
 %token CN_LET CN_OWNED CN_BLOCK CN_EACH CN_PREDICATE
-%token CN_NULL
+%token CN_NULL CN_TRUE CN_FALSE
 
 %token EOF
 
@@ -1730,7 +1730,19 @@ cn_assertion:
 *)
 prim_expr:
 | CN_NULL
-    { Cerb_frontend.Cn.CNExpr_NULL }
+    { Cerb_frontend.Cn.(CNExpr_const CNConst_NULL) }
+| CN_TRUE
+    { Cerb_frontend.Cn.(CNExpr_const (CNConst_bool true)) }
+| CN_FALSE
+    { Cerb_frontend.Cn.(CNExpr_const (CNConst_bool false)) }
+| cst= CONSTANT
+    {
+      match cst with
+        | Cabs.CabsInteger_const (str, None) ->
+            Cerb_frontend.Cn.(CNExpr_const (CNConst_integer (Z.of_string str)))
+        | _ ->
+            raise (C_lexer.Error (Cparser_unexpected_token "TODO cn integer const"))
+    }
 | ident= cn_variable
     { Cerb_frontend.Cn.CNExpr_var ident }
 | ident= cn_variable DOT ident_membr= cn_variable
@@ -1798,7 +1810,9 @@ predicate:
   cn_pred_iargs= delimited(LPAREN, args, RPAREN) EQ
   cn_pred_clauses= delimited(LBRACE, clauses, RBRACE) exit_cn
     { (* TODO: check the name start with upper case *)
-      { cn_pred_name= Symbol.Identifier (Location_ocaml.point $startpos(str), str)
+      let loc = Location_ocaml.point $startpos(str) in
+      { cn_pred_loc= loc
+      ; cn_pred_name= Symbol.Identifier (loc, str)
       ; cn_pred_oargs
       ; cn_pred_iargs
       ; cn_pred_clauses} }
