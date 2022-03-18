@@ -270,6 +270,17 @@ module Morello_capability: Capability
     let cap_c0 =
       match decode (List.init sizeof_cap (Fun.const 'a')) false with
       | Some c -> c
-      | None -> failwith "Could not construct NULL capability (C0)"
+      | None ->
+         (* TODO(CHERI): temporary workaround until decode is implemented *)
+         {
+           valid = false;
+           value = N.of_int 0;
+           obj_type = cap_SEAL_TYPE_UNSEALED;
+           bounds = (N.of_int 0, N.of_int 0);
+           flags = List.init cap_flags_len (fun _ -> false) ;
+           perms = P.perm_p0 ;
+           is_execuvite = false
+         }
+           (* failwith "Could not construct NULL capability (C0)" *)
 
   end
