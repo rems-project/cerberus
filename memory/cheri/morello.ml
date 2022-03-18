@@ -105,6 +105,8 @@ module Morello_capability: Capability
     let max_vaddr  = let open Nat_big_num in sub (pow_int (of_int 2) 64) (of_int 1)
     let sizeof_vaddr = 8 (* 64-bit *)
 
+    let sizeof_cap = 16 (* 128 bit *)
+
     type vaddr_interval = vaddr * vaddr
 
     type cap_seal_t =
@@ -151,16 +153,6 @@ module Morello_capability: Capability
     let get_flags c = c.flags
 
     let get_perms c = c.perms
-
-    let cap_c0 =  {
-        valid = false;
-        value = N.of_int 0;
-        obj_type = cap_SEAL_TYPE_UNSEALED;
-        bounds = (N.of_int 0, N.of_int 0);
-        flags = List.init cap_flags_len (fun _ -> false) ;
-        perms = P.perm_p0 ;
-        is_execuvite = false ;
-      }
 
     (* Capability for newly allocated region *)
     let alloc_cap a size =
@@ -258,7 +250,8 @@ module Morello_capability: Capability
     let cap_unseal c k = (* TODO: check if allowed *)
       {c with obj_type = cap_SEAL_TYPE_UNSEALED}
 
-    let decode bytes tag = None (* TODO implement *)
+
+    let decode (bytes:char list) (tag:bool) = None (* TODO implement *)
 
     let encode c = [] (* TODO implement *)
 
@@ -271,5 +264,12 @@ module Morello_capability: Capability
     let to_string (c:t) =
       ("0x" ^ Z.format "%x" (Z.of_string (N.to_string c.value)))
         (* TODO: print more fields, including permissions *)
+
+    (* In morello the null capabilitiy is defined as encoding of all
+       zeroes. Related pseudocode definition: CapNull *)
+    let cap_c0 =
+      match decode (List.init sizeof_cap (Fun.const 'a')) false with
+      | Some c -> c
+      | None -> failwith "Could not construct NULL capability (C0)"
 
   end
