@@ -912,10 +912,30 @@ module CHERI (C:Capability
       | FunctionNoParams _ ->
        (* ty must have a known size *)
        assert false
-    | Basic (Integer (Signed Intptr_t)) ->
-       failwith "TODO(CHERI): decode as capability"
-    | Basic (Integer (Unsigned Intptr_t)) ->
-       failwith "TODO(CHERI): decode as capability"
+    (* intptr_t in CHERI handled differently from other integers. *)
+    | Basic (Integer ((Signed Intptr_t) as ity))
+      | Basic (Integer ((Unsigned Intptr_t) as ity)) ->
+       let (bs1, bs2) = L.split_at (sizeof cty) bs in
+       let (prov, _, bs1') = AbsByte.split_bytes bs1 in
+       (* PNVI-ae-udi *)
+       ( AbsByte.provs_of_bytes bs1
+       , begin match extract_unspec bs1' with
+         | Some cs ->
+            begin match tag_query_f addr with
+            | None ->
+               (* TODO(CHERI): decide on semantics *)
+               failwith "could not decode capability"
+            | Some tag ->
+               begin match C.decode cs tag with
+               | None -> (* TODO(CHERI): decide on semantics *)
+                  failwith "could not decode capability"
+               | Some n ->
+                  MVinteger (ity, IC (prov,n))
+               end
+            end
+         | None ->
+            MVunspecified cty
+         end , bs2)
     | Basic (Integer ity) ->
        let (bs1, bs2) = L.split_at (sizeof cty) bs in
        let (prov, _, bs1') = AbsByte.split_bytes bs1 in
@@ -958,7 +978,6 @@ module CHERI (C:Capability
        ( `NoTaint (* PNVI-ae-udi *)
        , begin match extract_unspec bs1' with
          | Some cs ->
-            (* TODO(CHERI) Need value *)
             begin match tag_query_f addr with
             | None ->
                (* TODO(CHERI): decide on semantics *)
