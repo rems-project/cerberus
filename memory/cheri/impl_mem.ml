@@ -1138,7 +1138,7 @@ module CHERI (C:Capability
             z in
        begin match ptrval_ with
        | PVnull _ ->
-          Debug_ocaml.print_debug 1 [] (fun () -> "NOTE: we fix the representation of all NULL pointers to be 0x0");
+          Debug_ocaml.print_debug 1 [] (fun () -> "NOTE: we fix the representation of all NULL pointers to be C0");
           ret @@ List.map (fun b -> AbsByte.v Prov_none (Some b)) @@ C.encode C.cap_c0
        | PVfunction (Symbol.Symbol (file_dig, n, opt_name)) ->
           (* TODO(CHERI): *)
@@ -1979,7 +1979,7 @@ module CHERI (C:Capability
     | _ ->
        begin match ptrval with
        | PV (_, PVnull _) ->
-          return true (* TODO: check for CHERI *)
+          return true
        | PV (_, PVfunction _) ->
           fail (MerrOther "called isWellAligned_ptrval on function pointer")
        | PV (_, PVconcrete addr) ->
@@ -2103,11 +2103,16 @@ module CHERI (C:Capability
                   of morello Clang. See intptr3.c example.  *)
                return (PV (Prov_none, PVnull ref_ty))
            else
-             fail (MerrCHERI CheriMerrIntFromPtr)
-        | _, _ ->
-           fail (MerrCHERI CheriMerrIntFromPtr)
+             let c = C.cap_c0 in
+             let c = C.cap_set_value c n in
+             return (PV (prov, PVconcrete c))
+        | _, IC _ ->
+           failwith "invalid integer value (capability for non- [u]intptr_t"
       end
-    | _ -> fail (MerrCHERI CheriMerrIntFromPtr) (* non-int type *)
+    | _ ->
+       (* [ptrfromint] in memory model Lem should be changed to have
+          [integerType] instead of [ctype] as argument. *)
+       failwith "ptrfromint called with non-int type"
 
   let offsetof_ival tagDefs tag_sym memb_ident =
     let (xs, _) = offsetsof tagDefs tag_sym in
