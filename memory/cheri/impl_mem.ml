@@ -1340,7 +1340,12 @@ module CHERI (C:Capability
     | _ ->
        return None
 
-  let cap_bounds_check (b1,b2) addr sz = None (* TODO(CHERI): implement *)
+  (** Checks if memory region starting from [addr] and
+      of size [sz] fits withing inclusuvive interval [b1,b2] *)
+  let cap_bounds_check (b1,b2) addr sz =
+    N.less_equal b1 addr
+    && N.less_equal addr b2
+    && N.less_equal (N.add addr sz) (N.succ b2)
 
   let allocate_region tid pref align_int size_int =
     let align_n = num_of_int align_int in
@@ -1502,11 +1507,12 @@ module CHERI (C:Capability
         let addr = C.cap_get_value c in
         if C.P.perm_is_load (C.get_perms c) then
           let bounds = C.cap_get_bounds c in
-          match cap_bounds_check bounds addr sz with
-          | None -> do_load alloc_id_opt addr sz
-          | Some a ->
-             fail (MerrCHERI
-                     (CheriBoundsErr (bounds, addr, N.of_int sz)))
+          let nsz = N.of_int sz in
+          if cap_bounds_check bounds addr nsz then
+            do_load alloc_id_opt addr sz
+          else
+            fail (MerrCHERI
+                    (CheriBoundsErr (bounds, addr, nsz)))
         else
           fail (MerrCHERI CheriMerrUnsufficientPermissions)
       else
@@ -1597,8 +1603,9 @@ module CHERI (C:Capability
           let sz = sizeof ty in
           if C.P.perm_is_store (C.get_perms c) then
             let bounds = C.cap_get_bounds c in
-            match cap_bounds_check bounds addr sz with
-            | None ->
+            let nsz = N.of_int sz in
+            if cap_bounds_check bounds addr nsz then
+              begin
                update begin fun st ->
                  let (funptrmap, pre_bs) = repr st.funptrmap mval in
                  assert (List.length pre_bs == sz) ;
@@ -1611,10 +1618,11 @@ module CHERI (C:Capability
                            funptrmap= funptrmap; }
                  end >>= fun () ->
                print_bytemap ("AFTER STORE => " ^ Location_ocaml.location_to_string loc) >>= fun () ->
-               return (FP (addr, (N.of_int sz)))
-            | Some a ->
-               fail (MerrCHERI
-                       (CheriBoundsErr (bounds, addr, N.of_int sz)))
+               return (FP (addr, nsz))
+               end
+            else
+              fail (MerrCHERI
+                      (CheriBoundsErr (bounds, addr, N.of_int sz)))
           else
             fail (MerrCHERI CheriMerrUnsufficientPermissions)
         else
@@ -1997,11 +2005,12 @@ module CHERI (C:Capability
         let sz = sizeof ref_ty in
         let addr = C.cap_get_value c in
         let bounds = C.cap_get_bounds c in
-        match cap_bounds_check bounds addr sz with
-        | None -> return ()
-        | Some a ->
-           fail (MerrCHERI
-                   (CheriBoundsErr (bounds, addr, N.of_int sz)))
+        let nsz = N.of_int sz in
+        if cap_bounds_check bounds addr nsz then
+          return ()
+        else
+          fail (MerrCHERI
+                  (CheriBoundsErr (bounds, addr, nsz)))
       else
         fail (MerrCHERI CheriMerrInvalidCap)
     in
