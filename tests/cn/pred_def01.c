@@ -4,13 +4,17 @@ struct T {
   int something;
 };
 
+predicate {integer out1} OtherPred (pointer p) = {
+  return { out1 = 42 } ;
+}
+
 predicate {integer z, integer out2} MyPred (pointer p, integer n) = {
   if ( n == 10 ) {
     let foo = Owned<struct T>(p) ;
     return { z = 42, out2 = 55 } ;
   } else {
     let r = MyPred(p, n + 10) ;
-    let x = n + 30 /*r.z*/ ;
+    let x = n + r.z + r.out2 ;
     return { z = n + 100, out2 = 55 } ;
   }
 }
