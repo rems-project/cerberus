@@ -80,7 +80,7 @@ module type Capability =
 
     val cap_get_obj_type : t -> otype
 
-    (** Returns either inclusive bounds for covered  memory region *)
+    (** Returns inclusive bounds for covered  memory region *)
     val cap_get_bounds: t -> vaddr_interval
 
     (** Get informaiton about "seal" on this capability *)
