@@ -76,7 +76,6 @@ type vip_error =
 
 
 type mem_cheri_error =
-  | CheriMerrIntFromPtr
   | CheriMerrInvalidCap
   | CheriMerrUnsufficientPermissions
   (* bounds,address,length *)
@@ -84,8 +83,6 @@ type mem_cheri_error =
 
 instance (Show mem_cheri_error)
   let show = function
-    | CheriMerrIntFromPtr ->
-       "CheriMerrIntFromPtr"
     | CheriMerrInvalidCap ->
        "CheriMerrInvalidCap"
     | CheriMerrUnsufficientPermissions ->
