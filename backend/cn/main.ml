@@ -117,11 +117,11 @@ let frontend filename =
   print_log_file "original" (CORE core_file);
 
   let pred_defs =
-    (* PREDICATE FRONTEND *)
-    (* CHRISTOPHER ==> change this to FALSE to test the predicate defs frontend *)
-    if true then
-      []
-    else
+    (* (\* PREDICATE FRONTEND *\) *)
+    (* (\* CHRISTOPHER ==> change this to FALSE to test the predicate defs frontend *\) *)
+    (* if true then *)
+    (*   [] *)
+    (* else *)
     begin match ail_program_opt with
     | None ->
         assert false

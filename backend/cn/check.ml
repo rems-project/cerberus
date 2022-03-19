@@ -2916,15 +2916,20 @@ let check mu_file =
   let@ ctxt = 
     (* check and record resource predicate defs *)
     let number_entries = List.length (mu_file.mu_resource_predicates) in
+    let resource_predicates = 
+      List.fold_right (fun (name, def) defs ->
+          StringMap.add name def defs
+        ) mu_file.mu_resource_predicates ctxt.global.resource_predicates
+    in
+    let ctxt = { ctxt with global = { ctxt.global with resource_predicates }} in
     let ping = Pp.progress "resource predicate welltypedness" number_entries in
-    ListM.fold_leftM (fun ctxt (name,def) -> 
-        let@ () = return (ping name) in
-        let@ () = Typing.run ctxt (WellTyped.WRPD.good def) in
-        let resource_predicates =
-          StringMap.add name def ctxt.global.resource_predicates in
-        let global = { ctxt.global with resource_predicates } in
-        return { ctxt with global }
-      ) ctxt mu_file.mu_resource_predicates
+    let@ () = 
+      ListM.iterM (fun (name,def) -> 
+          let@ () = return (ping name) in
+          Typing.run ctxt (WellTyped.WRPD.good def)
+        ) mu_file.mu_resource_predicates
+    in
+    return ctxt
   in
   let () = Debug_ocaml.end_csv_timing "resource predicates" in
 
