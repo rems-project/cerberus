@@ -21,7 +21,7 @@ predicate {integer z, integer out2} MyPred (pointer p, integer n) = {
 
 
 struct int_list_items {
-  int value;
+  int iv;
   struct int_list_items* next;
 };
 
@@ -30,11 +30,11 @@ TODO: list syntax is not done yet
 
 predicate {list<integer> v} IntList(pointer l) = {
   if ( l == NULL ) {
-    return { v = [] } ;
+    return { v = nil } ;
   } else {
     let head_item = Owned<struct int_list_item>(l) ;
-    let tail = IntList(head_item.next) ;
-    return { v = head_item.value :: tail.v } ;
+    let tail = IntList(head_item.value.next) ;
+    return { v = cons(head_item.value.iv, tail.v) } ;
   }
 }
 */
