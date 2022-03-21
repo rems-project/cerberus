@@ -291,8 +291,8 @@ module Morello_capability: Capability
         (vstring c.value)
         (P.to_string c.perms)
         (vstring b0)
-        (* TODO(CHERI): check if this is correct. wiki says " top:
-           Upper bound of capability plus 1. But also we need to
+        (* TODO(CHERI): check if this is correct. wiki says "top:
+           Upper bound of capability plus 1." But also we need to
            consider the fact that our bounds are inclusive *)
         (vstring (Nat_big_num.succ b1))
 
