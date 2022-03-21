@@ -51,7 +51,9 @@ let frontend cpp_str filename =
   } in
   Cerb_frontend.Ocaml_implementation.(set (MorelloImpl.impl));
   (* `SW_zap_dead_pointers` should not be set *)
-  Switches.set ["strict_pointer_equality"; "CHERI"] ;
+  Switches.set ["strict_pointer_equality";
+                "strict_pointer_arith";
+                "CHERI"] ;
   load_core_stdlib ()                                  >>= fun stdlib ->
   load_core_impl stdlib impl_name                      >>= fun impl   ->
   c_frontend (conf, io) (stdlib, impl) ~filename
