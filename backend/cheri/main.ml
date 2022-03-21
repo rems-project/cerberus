@@ -81,9 +81,21 @@ let cheri exec debug_level core_file runtime_path traditional filename =
     load_core_stdlib ()                                  >>= fun stdlib ->
     load_core_impl stdlib impl_name                      >>= fun impl   ->
     c_frontend (conf, io) (stdlib, impl) ~filename in
+  let epilogue n = n in
+  let runM = function
+    | Exception.Exception err ->
+        prerr_endline (Pp_errors.to_string err);
+        epilogue 1
+    | Exception.Result (Either.Left execs) ->
+        List.iter print_string execs;
+        epilogue 0
+    | Exception.Result (Either.Right n) ->
+        epilogue n
+  in
   match frontend (cpp_str runtime_path traditional) filename with
   | Exception.Exception err ->
-     prerr_endline (Pp_errors.to_string err)
+     prerr_endline (Pp_errors.to_string err) ;
+     exit 1
   | Exception.Result (_, _, file) ->
      begin
        (* Save CORE file if requested *)
@@ -94,8 +106,18 @@ let cheri exec debug_level core_file runtime_path traditional filename =
           Colour.do_colour := false ;
           PPrint.ToChannel.pretty 1.0 80 f (Pp_core.WithLocationsAndStd.pp_file file);
           close_out f
-     end
-(* Core_peval.boom file *)
+     end ;
+     if exec then
+       let open Exhaustive_driver in
+       let () = Tags.set_tagDefs file.tagDefs in
+       let driver_conf = {concurrency=false;
+                          experimental_unseq=false;
+                          exec_mode=Random;
+                          fs_dump=false;
+                          trace=false} in
+       runM @@ interp_backend io file ~args:[] ~batch:`NotBatch ~fs:None ~driver_conf
+     else
+       exit 0
 
 open Cmdliner
 
