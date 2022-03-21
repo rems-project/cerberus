@@ -35,7 +35,6 @@ let io =
       end;
   }
 
-
 let impl_name = "gcc_4.9.0_x86_64-apple-darwin10.8.0"
 
 let frontend cpp_str filename =
@@ -51,7 +50,7 @@ let frontend cpp_str filename =
     ; cpp_stderr= true
   } in
   Cerb_frontend.Ocaml_implementation.(set (MorelloImpl.impl));
-  (* TODO(CHERI): make sure `SW_zap_dead_pointers` is unset *)
+  (* `SW_zap_dead_pointers` should not be set *)
   Switches.set ["strict_pointer_equality"; "CHERI"] ;
   load_core_stdlib ()                                  >>= fun stdlib ->
   load_core_impl stdlib impl_name                      >>= fun impl   ->
