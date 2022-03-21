@@ -965,7 +965,6 @@ module CHERI (C:Capability
          if n <= 0 then
            (taint_acc, MVarray (List.rev mval_acc), cs)
          else
-           (* TODO(CHERI): Check if anything special needs to be done about alignment here *)
            let el_addr = N.add addr (N.of_int ((n-1)*(sizeof elem_ty))) in
            let (taint, mval, cs') = self el_addr elem_ty cs in
            aux (n-1) (merge_taint taint taint_acc, mval :: mval_acc) cs'
@@ -1054,7 +1053,6 @@ module CHERI (C:Capability
        let (bs1, bs2) = L.split_at (sizeof cty) bs in
        let (taint, rev_xs, _, bs') = List.fold_left (fun (taint_acc, acc_xs, previous_offset, acc_bs) (memb_ident, memb_ty, memb_offset) ->
                                          let pad = memb_offset - previous_offset in
-                                         (* TODO(CHERI): check of offset is calculated correctly here *)
                                          let memb_addr = N.add addr (N.of_int memb_offset) in
                                          let (taint, mval, acc_bs') = self memb_addr memb_ty (L.drop pad acc_bs) in
                                          (merge_taint taint taint_acc, (memb_ident, memb_ty, mval)::acc_xs, memb_offset + sizeof memb_ty, acc_bs')
@@ -2844,7 +2842,6 @@ module CHERI (C:Capability
                                      fun (acc_rowss, previous_offset, acc_bs) (Symbol.Identifier (_, memb), memb_ty, memb_offset) ->
                                      let pad = memb_offset - previous_offset in
                                      let acc_bs' = L.drop pad acc_bs in
-                                     (* TODO(CHERI): check of offset is calculated correctly here *)
                                      let memb_addr = N.add addr (N.of_int memb_offset) in
 
                                      let (_, mval, acc_bs'') = abst (find_overlaping st) st.funptrmap tag_query_f memb_addr memb_ty acc_bs' in
@@ -2856,7 +2853,6 @@ module CHERI (C:Capability
                                    end ([], 0, bs1) (fst (offsetsof (Tags.tagDefs ()) tag_sym))
        in List.concat (List.rev rev_rowss)
     | MVunion (tag_sym, Symbol.Identifier (_, memb), mval) ->
-       (* TODO(CHERI): see if member addresses within union must be aligned. Now we assume they all start from the same address *)
        List.map (add_path memb) (mk_ui_values addr bs ty mval) (* FIXME: THE TYPE IS WRONG *)
 
   let mk_ui_alloc st id alloc : ui_alloc =
