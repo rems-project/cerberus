@@ -495,7 +495,7 @@ module Concrete : Memory = struct
   (* pretty printing *)
   open PPrint
   open Pp_prelude
-  let pp_pointer_value (PV (prov, ptrval_))=
+  let pp_pointer_value ?(is_verbose=false) (PV (prov, ptrval_))=
     match ptrval_ with
       | PVnull ty ->
           !^ "NULL" ^^ P.parens (Pp_core_ctype.pp_ctype ty)
@@ -2405,7 +2405,7 @@ let combine_prov prov1 prov2 =
   
 
 
-  let pp_pretty_pointer_value = pp_pointer_value
+  let pp_pretty_pointer_value = pp_pointer_value ~is_verbose:false
   let pp_pretty_integer_value _ = pp_integer_value
   let pp_pretty_mem_value _ = pp_mem_value
   

@@ -325,7 +325,7 @@ val stringFromMemValue: Mem.mem_value -> string
 declare ocaml target_rep function stringFromMemValue = `String_mem.string_of_mem_value`
 declare hol   target_rep function stringFromMemValue = `pp$stringFromMemValue`
 
-val stringFromPointerValue: Mem.pointer_value -> string
+val stringFromPointerValue: bool -> Mem.pointer_value -> string
 declare ocaml target_rep function stringFromPointerValue = `String_mem.string_of_pointer_value`
 declare hol   target_rep function stringFromPointerValue =
                                   `pp$stringFromPointerValue`
@@ -360,7 +360,7 @@ let rec load_character_array_aux elem_ty ptrval prec_n_opt acc =
               (fun () -> error "WIP: Output.load_character_array, non constant ival")
           )
           (fun _ _ -> error "Output.load_character_array, found a float")
-          (fun _ ptrval -> error ("Output.load_character_array, found a pointer ==> " ^ stringFromPointerValue ptrval))
+          (fun _ ptrval -> error ("Output.load_character_array, found a pointer ==> " ^ stringFromPointerValue false ptrval))
           (fun _ -> error "Output.load_character_array, found an array")
           (fun _ _ -> error "Output.load_character_array, found a struct")
           (fun _ _ -> error "Output.load_character_array, found a union")
@@ -375,9 +375,9 @@ let load_character_array elem_ty ptrval prec_n_opt =
 
 (* TODO: need the length modifier to perform the loads using the proper ctype *)
 val convert: (Ctype.ctype -> (*Ctype.ctype -> *)Mem.mem_value -> Mem.memM (either Errors.error (Undefined.t Core.value))) ->
-             maybe precision -> maybe length_modifier -> conversion_specifier -> list (Ctype.ctype * Mem.pointer_value) ->
+             maybe precision -> maybe length_modifier -> conversion_specifier -> flags -> list (Ctype.ctype * Mem.pointer_value) ->
              Mem.memM (either Errors.error (U.t (list char * list (Ctype.ctype * Mem.pointer_value))))
-let convert eval_conv prec_opt lm_opt cspec args =
+let convert eval_conv prec_opt lm_opt cspec flags args =
   let prec = match prec_opt with
     | Just (P_num z) ->
         z
@@ -851,7 +851,7 @@ let convert eval_conv prec_opt lm_opt cspec args =
                 match Mem_aux.pointerValueFromMemValue mval with
                   | Just (_, ptrval) ->
                       Mem.return (
-                        Right (U.Defined (String.toCharList (stringFromPointerValue ptrval), args'))
+                        Right (U.Defined (String.toCharList (stringFromPointerValue flags.flag_hash ptrval), args'))
                       )
                   | Nothing ->
                       error "WIP[error message], Output => CS_p, didn't load a pointer"
@@ -882,14 +882,19 @@ let rec printf_aux eval_conv acc fs ty_ptrvals =
     | (F_text str :: fs, ty_ptrvals) ->
         printf_aux eval_conv (acc ++ str) fs ty_ptrvals
     | (F_conv cp :: fs, ty_ptrvals) ->
-        convert eval_conv cp.cp_precision cp.cp_length_modifier cp.cp_conversion_specifier ty_ptrvals >>= function
+        convert eval_conv cp.cp_precision cp.cp_length_modifier cp.cp_conversion_specifier cp.cp_flags ty_ptrvals >>= function
           | Right (U.Defined (str, ty_ptrvals')) ->
+              let hash_CSs =
+                if Global.is_CHERI () then
+                  [CS_o; CS_x; CS_X; CS_f; CS_p] (* NON-STD: CHERI supports # for the %p conversion specifier *)
+                else
+                  [CS_o; CS_x; CS_X; CS_f] in
               if cp.cp_flags.flag_plus && not (isSignedConversion cp.cp_conversion_specifier) then
                 (* TODO: add a proper UB variant *)
                 Mem.return (Right (U.undef (Loc.other "printf() + flag") [U.DUMMY "+ flag with unsigned conversion"]))
               (* TODO: CS_F | CS_e | CS_E | CS_g | CS_G | CS_a | CS_A *)
               else if    cp.cp_flags.flag_hash
-                      && not (List.elem cp.cp_conversion_specifier [CS_o; CS_x; CS_X; CS_f]) then
+                      && not (List.elem cp.cp_conversion_specifier hash_CSs) then
                 Mem.return (Right (U.undef (Loc.other "printf() # flag") [U.UB157]))
               else if    cp.cp_flags.flag_zero
                       && not (List.elem cp.cp_conversion_specifier [CS_di; CS_o; CS_u; CS_x; CS_X; CS_f]) then

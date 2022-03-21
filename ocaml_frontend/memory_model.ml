@@ -192,7 +192,7 @@ module type Memory = sig
   val sequencePoint: unit memM
 
   (* pretty printing *)
-  val pp_pointer_value: pointer_value -> PPrint.document
+  val pp_pointer_value: ?is_verbose:bool -> pointer_value -> PPrint.document
   val pp_integer_value: integer_value -> PPrint.document
   val pp_integer_value_for_core: integer_value -> PPrint.document
   val pp_mem_value: mem_value -> PPrint.document

@@ -1115,7 +1115,7 @@ let string_of_provenance = function
   | Prov_some alloc_id ->
       "@" ^ Nat_big_num.to_string alloc_id
 
-let pp_pointer_value = function
+let pp_pointer_value ?(is_verbose=false) = function
   | PVnull ->
       !^ "NULL"
   | PVloc (prov, addr) ->
@@ -1162,7 +1162,7 @@ let rec pp_mem_value = function
         pp_mem_value mval
       )
 
-let pp_pretty_pointer_value = pp_pointer_value
+let pp_pretty_pointer_value = pp_pointer_value ~is_verbose:false
 let pp_pretty_integer_value _ = pp_integer_value
 let pp_pretty_mem_value _ = pp_mem_value
 
