@@ -2126,6 +2126,15 @@ module CHERI (C:Capability
                   of morello Clang. See intptr3.c example.  *)
                return (PV (Prov_none, PVnull ref_ty))
            else
+             let n =
+               (* wrapI *)
+               let dlt = N.succ (N.sub C.max_vaddr C.min_vaddr) in
+               let r = N.integerRem_f n dlt in
+               if N.less_equal r C.max_vaddr then
+                 r
+               else
+                 N.sub r dlt in
+
              let c = C.cap_c0 in
              let c = C.cap_set_value c n in
              return (PV (prov, PVconcrete c))
