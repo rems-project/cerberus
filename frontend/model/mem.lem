@@ -275,9 +275,9 @@ val case_mem_value: forall 'a.
   'a
 declare ocaml target_rep function case_mem_value = `Impl_mem.case_mem_value`
 
-
-
-
+(* CHERI memory model *)
+val cheri_pointer_hash_printf: bool -> pointer_value -> string
+declare ocaml target_rep function cheri_pointer_hash_printf = `Impl_mem.cheri_pointer_hash_printf`
 
 
 

@@ -1,6 +1,6 @@
 open Defacto_memory_types
 
-val pp_pointer_value: impl_pointer_value -> PPrint.document
+val pp_pointer_value: ?is_verbose:bool -> impl_pointer_value -> PPrint.document
 val pp_integer_value: impl_integer_value -> PPrint.document
 val pp_integer_value_for_core: impl_integer_value -> PPrint.document
 val pp_mem_value: impl_mem_value -> PPrint.document
