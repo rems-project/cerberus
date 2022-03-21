@@ -1,4 +1,7 @@
-module N = Nat_big_num
+module Z = struct
+  include Nat_big_num
+  let format = Z.format
+end
 
 open Capability
 
@@ -93,13 +96,13 @@ module Morello_permission : Cap_permission = struct
 end
 
 module Morello_capability: Capability
-       with type vaddr = N.num
-       with type vaddr_interval = N.num*N.num
+       with type vaddr = Z.num
+       with type vaddr_interval = Z.num*Z.num
   =
   struct
     module P = Morello_permission
-    type vaddr = N.num
-    type otype = N.num (*  15 bits actually. *)
+    type vaddr = Z.num
+    type otype = Z.num (*  15 bits actually. *)
 
     let min_vaddr  = Nat_big_num.of_int 0
     let max_vaddr  = let open Nat_big_num in sub (pow_int (of_int 2) 64) (of_int 1)
@@ -127,10 +130,10 @@ module Morello_capability: Capability
         is_execuvite : bool; (* Morello-spefic? *)
       }
 
-    let cap_SEAL_TYPE_UNSEALED:otype = N.of_int 0
-    let cap_SEAL_TYPE_RB:otype       = N.of_int 1 (* register-based branch *)
-    let cap_SEAL_TYPE_LPB:otype      = N.of_int 2 (* load pair and branch *)
-    let cap_SEAL_TYPE_LB:otype       = N.of_int 3 (* load and branch *)
+    let cap_SEAL_TYPE_UNSEALED:otype = Z.of_int 0
+    let cap_SEAL_TYPE_RB:otype       = Z.of_int 1 (* register-based branch *)
+    let cap_SEAL_TYPE_LPB:otype      = Z.of_int 2 (* load pair and branch *)
+    let cap_SEAL_TYPE_LB:otype       = Z.of_int 3 (* load and branch *)
 
     let cap_flags_len = 8
 
@@ -144,10 +147,10 @@ module Morello_capability: Capability
 
     let cap_get_seal c =
       let x = c.obj_type in
-      if N.equal x cap_SEAL_TYPE_UNSEALED then Cap_Unsealed
-      else (if N.equal x cap_SEAL_TYPE_RB then Cap_SEntry
-            else (if N.equal x cap_SEAL_TYPE_LPB then Cap_Indirect_SEntry
-                  else (if N.equal x cap_SEAL_TYPE_LB then Cap_Indirect_SEntry
+      if Z.equal x cap_SEAL_TYPE_UNSEALED then Cap_Unsealed
+      else (if Z.equal x cap_SEAL_TYPE_RB then Cap_SEntry
+            else (if Z.equal x cap_SEAL_TYPE_LPB then Cap_Indirect_SEntry
+                  else (if Z.equal x cap_SEAL_TYPE_LB then Cap_Indirect_SEntry
                         else Cap_Sealed x)))
 
     let get_flags c = c.flags
@@ -160,7 +163,7 @@ module Morello_capability: Capability
         valid = true ;
         value = a ;
         obj_type = cap_SEAL_TYPE_UNSEALED ;
-        bounds = (a, N.add a size) ;
+        bounds = (a, Z.add a size) ;
         flags = List.init cap_flags_len (fun _ -> false) ;
         perms = P.perm_alloc ;
         is_execuvite = false
@@ -262,7 +265,7 @@ module Morello_capability: Capability
     let value_compare x y = compare x.value y.value
 
     let to_string (c:t) =
-      ("0x" ^ Z.format "%x" (Z.of_string (N.to_string c.value)))
+      ("0x" ^ Z.format "%x" (Z.of_string (Z.to_string c.value)))
         (* TODO: print more fields, including permissions *)
 
     (* In morello the null capabilitiy is defined as encoding of all
@@ -274,9 +277,9 @@ module Morello_capability: Capability
          (* TODO(CHERI): temporary workaround until decode is implemented *)
          {
            valid = false;
-           value = N.of_int 0;
+           value = Z.of_int 0;
            obj_type = cap_SEAL_TYPE_UNSEALED;
-           bounds = (N.of_int 0, N.of_int 0);
+           bounds = (Z.of_int 0, Z.of_int 0);
            flags = List.init cap_flags_len (fun _ -> false) ;
            perms = P.perm_p0 ;
            is_execuvite = false
