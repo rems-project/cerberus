@@ -93,6 +93,17 @@ module Morello_permission : Cap_permission = struct
       permit_mutable_load = false ;
       user_perms = List.init user_perms_len (fun _ -> false)
     }
+
+  (** Returns permission a string in "simplified format".
+
+      Example: "rwRW"
+
+      See also:
+      https://github.com/CTSRD-CHERI/cheri-c-programming/wiki/Displaying-Capabilities#simplified-forma
+   *)
+  let to_string (c:t) = ""
+
+
 end
 
 module Morello_capability: Capability
@@ -264,9 +275,23 @@ module Morello_capability: Capability
     (* compare value only ignoring metadata *)
     let value_compare x y = compare x.value y.value
 
+    (** Returns capability as a string in "simplified format". This
+        function is used from "printf" when "%#p" format is specified.
+
+        Example: "0xfffffff7ff8c [rwRW,0xfffffff7ff88-0xfffffff7ff90]"
+
+        See also:
+        https://github.com/CTSRD-CHERI/cheri-c-programming/wiki/Displaying-Capabilities#simplified-forma
+     *)
     let to_string (c:t) =
-      ("0x" ^ Z.format "%x" (Z.of_string (Z.to_string c.value)))
-        (* TODO(CHERI): print more fields, including permissions *)
+      let vstring x = "0x" ^ (Z.format "%x" x) in
+      let (b0,b1) = c.bounds in
+      (* TODO(CHERI): print flags *)
+      Printf.sprintf "%s [%s,%s-%s]"
+        (vstring c.value)
+        (P.to_string c.perms)
+        (vstring b0)
+        (vstring b1)
 
     (* In morello the null capabilitiy is defined as encoding of all
        zeroes. Related pseudocode definition: CapNull *)
