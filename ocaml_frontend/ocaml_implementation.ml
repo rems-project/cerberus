@@ -179,6 +179,7 @@ module DefaultImpl = struct
     | RealFloating LongDouble ->
         Some 8 (* TODO:hack ==> 16 *)
   
+  (* CAUTION!! new implementions based on DefaultImpl should redefine this *)
   let impl: implementation = {
     name;
     details;
@@ -236,6 +237,21 @@ module MorelloImpl = struct
     | Signed Intptr_t
     | Unsigned Intptr_t -> Some 16
     | ity ->  DefaultImpl.sizeof_ity ity
+
+  let impl: implementation = {
+    name;
+    details;
+    sizeof_pointer;
+    alignof_pointer;
+    is_signed_ity;
+    sizeof_ity;
+    precision_ity;
+    sizeof_fty;
+    alignof_ity;
+    alignof_fty;
+    register_enum;
+    typeof_enum;
+  }
 end
 
 
