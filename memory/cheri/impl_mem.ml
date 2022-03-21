@@ -272,6 +272,18 @@ module CHERI (C:Capability
     (* TODO: hack hack hack ==> OCaml's float are 64bits *)
     float
 
+  (* same as [mem_value] but can contain [mem_error]*)
+  type mem_value_with_err =
+    | MVEunspecified of ctype
+    | MVEinteger of integerType * integer_value
+    | MVEfloating of floatingType * floating_value
+    | MVEpointer of ctype * pointer_value
+    | MVEarray of mem_value_with_err list
+    | MVEstruct of Symbol.sym (*struct/union tag*) * (Symbol.identifier (*member*) * ctype * mem_value_with_err) list
+    | MVEunion of Symbol.sym (*struct/union tag*) * Symbol.identifier (*member*) * mem_value_with_err
+    | MVErr of mem_error
+                 [@@warning "-37"]
+
   type mem_value =
     | MVunspecified of ctype
     | MVinteger of integerType * integer_value
@@ -280,7 +292,6 @@ module CHERI (C:Capability
     | MVarray of mem_value list
     | MVstruct of Symbol.sym (*struct/union tag*) * (Symbol.identifier (*member*) * ctype * mem_value) list
     | MVunion of Symbol.sym (*struct/union tag*) * Symbol.identifier (*member*) * mem_value
-
 
   type mem_iv_constraint = integer_value mem_constraint
   let cs_module = (module struct
@@ -549,6 +560,22 @@ module CHERI (C:Capability
          !^ (Nat_big_num.to_string n)
 
   let pp_integer_value_for_core = pp_integer_value
+
+  let rec mem_value_strip_err x =
+    let open Eff in
+    match x with
+    | MVEunspecified x -> return (MVunspecified x)
+    | MVEinteger (x,y) -> return (MVinteger (x,y))
+    | MVEfloating (x,y) -> return (MVfloating (x,y))
+    | MVEpointer (x,y) -> return (MVpointer (x,y))
+    | MVEarray l ->
+       mapM mem_value_strip_err l >>= (fun x -> return (MVarray x))
+    | MVEstruct (x,y) ->
+       mapM (fun (x,y,z) -> mem_value_strip_err z >>= (fun z' -> return (x,y,z'))) y
+       >>= (fun y' -> return (MVstruct (x,y')))
+    | MVEunion (x,y,z) -> mem_value_strip_err z >>= (fun z' ->
+        return (MVunion (x,y,z')))
+    | MVErr err -> fail err
 
   let rec pp_mem_value = function
     | MVunspecified _ ->
@@ -878,7 +905,7 @@ module CHERI (C:Capability
             (Ctype (_, ty) as cty)
             (bs : AbsByte.t list)
           :
-            [`NoTaint | `NewTaint of storage_instance_id list] * mem_value * AbsByte.t list
+            [`NoTaint | `NewTaint of storage_instance_id list] * mem_value_with_err * AbsByte.t list
     =
     let self = abst find_overlaping funptrmap tag_query_f in
     let extract_unspec xs =
@@ -924,17 +951,18 @@ module CHERI (C:Capability
             begin match tag_query_f addr with
             | None ->
                (* TODO(CHERI): decide on semantics *)
-               failwith "could not decode capability"
+               failwith "unspecified tag value"
             | Some tag ->
                begin match C.decode cs tag with
-               | None -> (* TODO(CHERI): decide on semantics *)
-                  failwith "could not decode capability"
+               | None ->
+                  (* could not decode capability *)
+                  MVErr (MerrCHERI CheriErrDecodingCap)
                | Some n ->
-                  MVinteger (ity, IC (prov,n))
+                  MVEinteger (ity, IC (prov,n))
                end
             end
          | None ->
-            MVunspecified cty
+            MVEunspecified cty
          end , bs2)
     | Basic (Integer ity) ->
        let (bs1, bs2) = L.split_at (sizeof cty) bs in
@@ -943,10 +971,10 @@ module CHERI (C:Capability
        ( AbsByte.provs_of_bytes bs1
        , begin match extract_unspec bs1' with
          | Some cs ->
-            MVinteger ( ity
+            MVEinteger ( ity
                       , mk_ival prov (int_of_bytes (AilTypesAux.is_signed_ity ity) cs))
          | None ->
-            MVunspecified cty
+            MVEunspecified cty
          end , bs2)
     | Basic (Floating fty) ->
        let (bs1, bs2) = L.split_at (sizeof cty) bs in
@@ -955,15 +983,15 @@ module CHERI (C:Capability
        ( `NoTaint
        , begin match extract_unspec bs1' with
          | Some cs ->
-            MVfloating ( fty
+            MVEfloating ( fty
                        , Int64.float_of_bits (N.to_int64 (int_of_bytes true cs)) )
          | None ->
-            MVunspecified cty
+            MVEunspecified cty
          end, bs2)
     | Array (elem_ty, Some n) ->
        let rec aux n (taint_acc, mval_acc) cs =
          if n <= 0 then
-           (taint_acc, MVarray (List.rev mval_acc), cs)
+           (taint_acc, MVEarray (List.rev mval_acc), cs)
          else
            let el_addr = N.add addr (N.of_int ((n-1)*(sizeof elem_ty))) in
            let (taint, mval, cs') = self el_addr elem_ty cs in
@@ -983,13 +1011,14 @@ module CHERI (C:Capability
                failwith "could not decode capability"
             | Some tag ->
                begin match C.decode cs tag with
-               | None -> (* TODO(CHERI): decide on semantics *)
-                  failwith "could not decode capability"
+               | None ->
+                  (* could not decode capability *)
+                  MVErr (MerrCHERI CheriErrDecodingCap)
                | Some n ->
                   begin match ref_ty with
                   | Ctype (_, Function _) ->
                      if C.eq n C.cap_c0 then
-                       MVpointer (ref_ty, PV (Prov_none, PVnull ref_ty))
+                       MVEpointer (ref_ty, PV (Prov_none, PVnull ref_ty))
                      else
                        (*
                          (* FIXME: This is wrong. A function pointer with the same id in different files might exist. *)
@@ -1004,7 +1033,7 @@ module CHERI (C:Capability
                        failwith "TODO(CHERI): implement"
                   | _ ->
                      if C.eq n C.cap_c0 then
-                       MVpointer (ref_ty, PV (Prov_none, PVnull ref_ty))
+                       MVEpointer (ref_ty, PV (Prov_none, PVnull ref_ty))
                      else
                        let prov =
                          if is_PNVI () then
@@ -1039,12 +1068,12 @@ module CHERI (C:Capability
                               prov
                          else
                            prov in
-                       MVpointer (ref_ty, PV (prov, PVconcrete n))
+                       MVEpointer (ref_ty, PV (prov, PVconcrete n))
                   end
                end
             end
          | None ->
-            MVunspecified (Ctype ([], Pointer (no_qualifiers, ref_ty)))
+            MVEunspecified (Ctype ([], Pointer (no_qualifiers, ref_ty)))
          end, bs2)
     | Atomic atom_ty ->
        Debug_ocaml.print_debug 1 [] (fun () -> "TODO: Concrete, is it ok to have the repr of atomic types be the same as their non-atomic version??");
@@ -1058,7 +1087,7 @@ module CHERI (C:Capability
                                          (merge_taint taint taint_acc, (memb_ident, memb_ty, mval)::acc_xs, memb_offset + sizeof memb_ty, acc_bs')
                                        ) (`NoTaint, [], 0, bs1) (fst (offsetsof (Tags.tagDefs ()) tag_sym)) in
        (* TODO: check that bs' = last padding of the struct *)
-       (taint, MVstruct (tag_sym, List.rev rev_xs), bs2)
+       (taint, MVEstruct (tag_sym, List.rev rev_xs), bs2)
     | Union tag_sym ->
        failwith "TODO: abst, Union (as value)"
 
@@ -1473,6 +1502,7 @@ module CHERI (C:Capability
            else IntMap.find_opt q st.captags
       in
       let (taint, mval, bs') = abst (find_overlaping st) st.funptrmap tag_query addr ty bs in
+      mem_value_strip_err mval >>= fun mval ->
       (* PNVI-ae-udi *)
       begin if Switches.(has_switch (SW_PNVI `AE) || has_switch (SW_PNVI `AE_UDI)) then
               expose_allocations taint
@@ -1483,11 +1513,6 @@ module CHERI (C:Capability
       let fp = FP (addr, (N.of_int (sizeof ty))) in
       begin match bs' with
       | [] ->
-         Debug_ocaml.print_debug 10(*KKK*) [] (fun () ->
-             "EXITING LOAD: ty=" ^ String_core_ctype.string_of_ctype ty ^
-               ", @" ^ Pp_utils.to_plain_string (pp_pointer_value (PV (prov, ptrval_))) ^
-                 " ==> mval= " ^ Pp_utils.to_plain_string (pp_mem_value mval)
-           );
          (* controls reads from uninitialized memory *)
          if Switches.(has_switch SW_strict_reads) then
            match mval with
@@ -2787,11 +2812,11 @@ module CHERI (C:Capability
         prov = Prov_none; bytes = None } in
     let add_path p r = { r with path = p :: r.path } in
     match mval with
-    | MVunspecified (Ctype (_, Pointer _)) ->
+    | MVEunspecified (Ctype (_, Pointer _)) ->
        mk_scalar `Unspecptr "unspecified" Prov_none (Some bs)
-    | MVunspecified _ ->
+    | MVEunspecified _ ->
        mk_scalar `Unspec "unspecified" Prov_none (Some bs)
-    | MVinteger (cty, IV(prov, n)) ->
+    | MVEinteger (cty, IV(prov, n)) ->
        begin match cty with
        | Char | Signed Ichar | Unsigned Ichar ->
           mk_scalar `Char (N.to_string n) prov None
@@ -2800,7 +2825,7 @@ module CHERI (C:Capability
        | _ ->
           mk_scalar `Basic (N.to_string n) prov None
        end
-    | MVinteger (cty, IC(prov, c)) ->
+    | MVEinteger (cty, IC(prov, c)) ->
        begin match cty with
        | Signed Intptr_t | Unsigned Intptr_t ->
           (* TODO(CHERI): better JSON representation of caps *)
@@ -2808,9 +2833,9 @@ module CHERI (C:Capability
        | _ ->
           failwith "mk_ui_values invalid encoding of [u]intptr_t"
        end
-    | MVfloating (_, f) ->
+    | MVEfloating (_, f) ->
        mk_scalar `Basic (string_of_float f) Prov_none None
-    | MVpointer (_, PV(prov, pv)) ->
+    | MVEpointer (_, PV(prov, pv)) ->
        begin match pv with
        | PVnull _ ->
           mk_scalar `Pointer "NULL" Prov_none None
@@ -2820,7 +2845,7 @@ module CHERI (C:Capability
        | PVfunction sym ->
           mk_scalar `Funptr (Pp_symbol.to_string_pretty sym) Prov_none None
        end
-    | MVarray mvals ->
+    | MVEarray mvals ->
        begin match ty with
        | Ctype (_, Array (elem_ty, _)) ->
           let size = sizeof elem_ty in
@@ -2835,7 +2860,7 @@ module CHERI (C:Capability
        | _ ->
           failwith "mk_ui_values: array type is wrong"
        end
-    | MVstruct (tag_sym, _) ->
+    | MVEstruct (tag_sym, _) ->
        (* NOTE: we recombine the bytes to get paddings *)
        let (bs1, bs2) = L.split_at (sizeof ty) bs in
        let (rev_rowss, _, bs') = List.fold_left begin
@@ -2852,8 +2877,9 @@ module CHERI (C:Capability
                                      (rows''::acc_rowss, memb_offset + sizeof memb_ty, acc_bs'')
                                    end ([], 0, bs1) (fst (offsetsof (Tags.tagDefs ()) tag_sym))
        in List.concat (List.rev rev_rowss)
-    | MVunion (tag_sym, Symbol.Identifier (_, memb), mval) ->
+    | MVEunion (tag_sym, Symbol.Identifier (_, memb), mval) ->
        List.map (add_path memb) (mk_ui_values addr bs ty mval) (* FIXME: THE TYPE IS WRONG *)
+    | MVErr _ -> failwith "TODO(CHERI) serialize errors"
 
   let mk_ui_alloc st id alloc : ui_alloc =
     let ty = match alloc.ty with Some ty -> ty | None -> Ctype ([], Array (Ctype ([], Basic (Integer Char)), Some alloc.size)) in
