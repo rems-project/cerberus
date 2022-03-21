@@ -37,28 +37,6 @@ let io =
 
 let impl_name = "gcc_4.9.0_x86_64-apple-darwin10.8.0"
 
-let frontend cpp_str filename =
-  let conf = {
-      debug_level= 0
-    ; pprints= []
-    ; astprints= []
-    ; ppflags= []
-    ; typecheck_core= false
-    ; rewrite_core= false
-    ; sequentialise_core= false
-    ; cpp_cmd= cpp_str
-    ; cpp_stderr= true
-  } in
-  Cerb_frontend.Ocaml_implementation.(set (MorelloImpl.impl));
-  (* `SW_zap_dead_pointers` should not be set *)
-  Switches.set ["strict_pointer_equality";
-                "strict_pointer_arith";
-                "CHERI"] ;
-  load_core_stdlib ()                                  >>= fun stdlib ->
-  load_core_impl stdlib impl_name                      >>= fun impl   ->
-  c_frontend (conf, io) (stdlib, impl) ~filename
-
-
 let cpp_str runtime_path traditional =
   Printf.sprintf
     "clang %s -E -C -Werror -Wno-builtin-macro-redefined -nostdinc -undef -D__cerb__ -I %s/libc/include"
@@ -78,6 +56,11 @@ let cheri exec debug_level core_file runtime_path traditional filename =
       ; cpp_cmd= cpp_str
       ; cpp_stderr= true
       } in
+    Cerb_frontend.Ocaml_implementation.(set (MorelloImpl.impl));
+    (* `SW_zap_dead_pointers` should not be set *)
+    Switches.set ["strict_pointer_equality";
+                  "strict_pointer_arith";
+                  "CHERI"] ;
     Global_ocaml.(set_cerb_conf exec Random false Basic false false false false);
     load_core_stdlib ()                                  >>= fun stdlib ->
     load_core_impl stdlib impl_name                      >>= fun impl   ->
