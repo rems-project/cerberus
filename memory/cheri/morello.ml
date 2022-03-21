@@ -266,7 +266,7 @@ module Morello_capability: Capability
 
     let to_string (c:t) =
       ("0x" ^ Z.format "%x" (Z.of_string (Z.to_string c.value)))
-        (* TODO: print more fields, including permissions *)
+        (* TODO(CHERI): print more fields, including permissions *)
 
     (* In morello the null capabilitiy is defined as encoding of all
        zeroes. Related pseudocode definition: CapNull *)
