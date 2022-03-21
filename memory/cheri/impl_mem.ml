@@ -262,7 +262,7 @@ module CHERI (C:Capability
 
   type integer_value =
     | IV of provenance * Nat_big_num.num
-    | IC of provenance * C.t
+    | IC of provenance * C.t (* for [u]intptr_t *)
 
   let num_of_int = function
     | IV (_,n) -> n
@@ -2390,7 +2390,6 @@ module CHERI (C:Capability
     | PVfunction (Symbol.Symbol (_, n, _)) ->
        return (mk_ival prov (Nat_big_num.of_int n))
     | PVconcrete c ->
-       let addr = C.cap_get_value c in
        begin if Switches.(has_switch (SW_PNVI `AE) || has_switch (SW_PNVI `AE_UDI)) then
                (* PNVI-ae, PNVI-ae-udi *)
                match prov with
@@ -2401,12 +2400,18 @@ module CHERI (C:Capability
              else
                return ()
        end >>= fun () ->
-       let ity_max = num_of_int (max_ival ity) in
-       let ity_min = num_of_int (min_ival ity) in
-       if N.(less addr ity_min || less ity_max addr) then
-         fail MerrIntFromPtr
-       else
-         return (mk_ival prov addr)
+          match ity with
+          | Signed Intptr_t
+            | Unsigned Intptr_t ->
+          return (IC (prov, c))
+       | _ ->
+          let ity_max = num_of_int (max_ival ity) in
+          let ity_min = num_of_int (min_ival ity) in
+          let addr = C.cap_get_value c in
+          if N.(less addr ity_min || less ity_max addr) then
+            fail MerrIntFromPtr
+          else
+            return (mk_ival prov addr)
 
   let combine_prov prov1 prov2 =
     match (prov1, prov2) with
