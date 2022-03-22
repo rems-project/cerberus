@@ -101,8 +101,13 @@ module Morello_permission : Cap_permission = struct
       See also:
       https://github.com/CTSRD-CHERI/cheri-c-programming/wiki/Displaying-Capabilities#simplified-forma
    *)
-  let to_string (c:t) = ""
-
+  let to_string (c:t) =
+    let s f l = if f then l else "" in
+    s c.permits_load "l"
+    ^ s c.permits_store "w"
+    ^ s c.permits_execute "x"
+    ^ s c.permits_load_cap "R"
+    ^ s c.permits_store_cap "W"
 
 end
 
@@ -289,7 +294,7 @@ module Morello_capability: Capability
       (* TODO(CHERI): print flags *)
       Printf.sprintf "%s [%s,%s-%s]"
         (vstring c.value)
-        (P.to_string c.perms)
+        ((P.to_string c.perms) ^ (if c.is_execuvite then "E" else ""))
         (vstring b0)
         (* TODO(CHERI): check if this is correct. wiki says "top:
            Upper bound of capability plus 1." But also we need to
