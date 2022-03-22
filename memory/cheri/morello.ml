@@ -280,6 +280,18 @@ module Morello_capability: Capability
     (* compare value only ignoring metadata *)
     let value_compare x y = compare x.value y.value
 
+    (* Helper function to check if capability is sealed (with any kind of seal) *)
+    let is_sealed c =
+      match cap_get_seal c with
+      | Cap_Unsealed -> false
+      | _ -> true
+
+    (* Helper function to check if sealed entry capability *)
+    let is_sentry c =
+      match cap_get_seal c with
+      | Cap_Sealed _ -> true
+      | _ -> false
+
     (** Returns capability as a string in "simplified format". This
         function is used from "printf" when "%#p" format is specified.
 
@@ -291,8 +303,19 @@ module Morello_capability: Capability
     let to_string (c:t) =
       let vstring x = "0x" ^ (Z.format "%x" x) in
       let (b0,b1) = c.bounds in
-      (* TODO(CHERI): print flags *)
-      Printf.sprintf "%s [%s,%s-%s]"
+
+      let flags =
+        let attrs =
+          let a f s l = if f then s::l else l in
+          a (not c.valid) "invald"
+          @@ a (is_sentry c) "sentry"
+          @@ a (is_sealed c) "sealed" []
+        in
+        if List.length attrs = 0 then ""
+        else " (" ^ String.concat "," attrs ^ ")"
+      in
+
+      Printf.sprintf "%s [%s,%s-%s]%s"
         (vstring c.value)
         ((P.to_string c.perms) ^ (if c.is_execuvite then "E" else ""))
         (vstring b0)
@@ -300,6 +323,7 @@ module Morello_capability: Capability
            Upper bound of capability plus 1." But also we need to
            consider the fact that our bounds are inclusive *)
         (vstring (Nat_big_num.succ b1))
+        flags
 
     (* In morello the null capabilitiy is defined as encoding of all
        zeroes. Related pseudocode definition: CapNull *)
