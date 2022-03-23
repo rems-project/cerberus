@@ -398,9 +398,9 @@ module CHERI (C:Capability
                  | `VALID (Prov_symbolic iota1), Prov_symbolic iota2 when iota1 <> iota2 ->
                     `INVALID
                  | `VALID (Prov_symbolic iota1), Prov_some alloc_id' ->
-                    failwith "TODO(iota) split_bytes 1"
+                    failwith "TODO(CHERI) split_bytes 1"
                  | `VALID (Prov_some alloc_id), Prov_symbolic iota ->
-                    failwith "TODO(iota) split_bytes 2"
+                    failwith "TODO(CHERI) split_bytes 2"
                  | `VALID Prov_none, (Prov_some _ as new_prov) ->
                     `VALID new_prov
                  | `VALID Prov_none, (Prov_symbolic _ as new_prov) ->
@@ -427,7 +427,7 @@ module CHERI (C:Capability
                    | Prov_some alloc_id ->
                       alloc_id :: acc
                    | Prov_symbolic iota -> (* of symbolic_storage_instance_id (* only for PNVI-ae-udi *) *)
-                      acc (* TODO(iota) *)
+                      acc (* TODO(CHERI) *)
                    | Prov_device ->
                       acc
                  ) [] bs in
@@ -1061,7 +1061,7 @@ module CHERI (C:Capability
                               | `DoubleAlloc (alloc_id1, alloc_id2) ->
                                  (* FIXME/HACK(VICTOR): This is wrong, but when serialising the memory in the UI, I get this failwith. *)
                                  Prov_some alloc_id1
-                                           (* failwith "TODO(iota): abst => make a iota?" *)
+                                           (* failwith "TODO(CHERI): abst => make a iota?" *)
                               end
                            | `ValidPtrProv ->
                               (* KKK print_endline ("ValidPtrProv ==> " ^ string_of_provenance prov); *)
