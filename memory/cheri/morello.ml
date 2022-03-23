@@ -297,6 +297,10 @@ module Morello_capability: Capability
 
         Example: "0xfffffff7ff8c [rwRW,0xfffffff7ff88-0xfffffff7ff90]"
 
+        TODO(CHERI) "In addition, for null-derived capabilities
+        (capabilities where the tag and upper attribute word are all
+        zero), only the address is displayed (the Basic Format)."
+
         See also:
         https://github.com/CTSRD-CHERI/cheri-c-programming/wiki/Displaying-Capabilities#simplified-forma
      *)
