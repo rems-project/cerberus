@@ -1428,6 +1428,8 @@ let memop_signature = function
       (BTy_object OTy_pointer, [BTy_object OTy_integer; BTy_object OTy_pointer; BTy_object OTy_integer])
   | Mem_common.PtrArrayShift ->
       (BTy_object OTy_pointer, [BTy_object OTy_pointer; BTy_ctype; BTy_object OTy_integer])
+  | Mem_common.PtrMemberShift _ _ ->
+      (BTy_object OTy_pointer, [BTy_object OTy_pointer])
   | Mem_common.Va_start ->
       (BTy_object OTy_integer, [BTy_list (BTy_tuple [BTy_ctype; BTy_object OTy_pointer])])
   | Mem_common.Va_copy ->

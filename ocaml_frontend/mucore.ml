@@ -215,6 +215,7 @@ module Make(T : TYPES) = struct
     | M_PtrValidForDeref of ('TY act * 'TY asym)
     | M_PtrWellAligned of ('TY act * 'TY asym)
     | M_PtrArrayShift of ('TY asym * 'TY act * 'TY asym)
+    | M_PtrMemberShift of (symbol * Symbol.identifier * 'TY asym)
     | M_Memcpy of ('TY asym * 'TY asym * 'TY asym)
     | M_Memcmp of ('TY asym * 'TY asym * 'TY asym)
     | M_Realloc of ('TY asym * 'TY asym * 'TY asym)

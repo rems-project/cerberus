@@ -1,6 +1,6 @@
 (* Concrete types and functions common to all memory layout models *)
 open import Pervasives
-import Loc
+import Loc Symbol
 import Undefined
 
 open import Nondeterminism
@@ -281,7 +281,7 @@ type floating_operator =
 type pure_memop =
   | PURE_MEMOP_TODO
 
-type memop =
+type generic_memop 'sym =
   | PtrEq
   | PtrNe
   | PtrLt
@@ -298,7 +298,8 @@ type memop =
   | PtrWellAligned (* (ctype, address) -> eff boolean *)
   
   | PtrArrayShift (* address -> ctype -> integer -> eff address *)
-  
+  | PtrMemberShift of 'sym * Symbol.identifier (* address -> eff address *)
+
   | Memcpy
   | Memcmp
   | Realloc (* TODO: not sure about this *)
@@ -310,8 +311,9 @@ type memop =
   (* RefinedC *)
   | Copy_alloc_id (* (integer, pointer) -> eff pointer *)
 
+type memop = generic_memop Symbol.sym
 
-instance (Show memop)
+instance forall 'a. Show 'a => (Show (generic_memop 'a))
   let show = function
     | PtrEq ->
         "ptreq"
@@ -343,6 +345,8 @@ instance (Show memop)
         "realloc"
     | PtrArrayShift ->
         "ptrarrayshift"
+    | PtrMemberShift tag_sym membr_ident ->
+        "ptrmembershift[" ^ show tag_sym ^ ", " ^ show membr_ident ^ "]"
     | Va_start ->
         "va_start"
     | Va_copy ->

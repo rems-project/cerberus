@@ -224,6 +224,7 @@ let show_memop =
   | Va_arg -> "Va_arg"
   | Va_end -> "Va_end"
   | PtrArrayShift -> "PtrArrayShift"
+  | PtrMemberShift _ -> "PtrMemberShift"
   | Copy_alloc_id -> "Copy_alloc_id"
 
 let show_binop = function

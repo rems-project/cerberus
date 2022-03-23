@@ -576,7 +576,7 @@ let n_paction loc pa (k : mu_paction -> mu_texpr) : mu_texpr=
 
 
 let show_n_memop = 
-  Mem_common.instance_Show_Show_Mem_common_memop_dict.show_method
+  (Mem_common.instance_Show_Show_Mem_common_generic_memop_dict  Symbol.instance_Show_Show_Symbol_sym_dict).show_method
 
 let n_memop loc memop pexprs k: mu_texpr = 
   let n_pexpr_in_expr_name = n_pexpr_in_expr_name loc in
@@ -627,6 +627,9 @@ let n_memop loc memop pexprs k: mu_texpr =
      let ct1 = (fensure_ctype__pexpr loc "PtrArrayShift: not a ctype" ct1) in
      n_pexpr_in_expr_name_2 (pe1,pe2) (fun (sym1,sym2) ->
      k (M_PtrArrayShift (sym1 ,ct1, sym2)))
+  | (Mem_common.PtrMemberShift (tag_sym, membr_ident), [pe]) ->
+     n_pexpr_in_expr_name pe (fun sym ->
+     k (M_PtrMemberShift (tag_sym, membr_ident, sym)))
   | (Mem_common.Memcpy, [pe1;pe2;pe3]) ->
      n_pexpr_in_expr_name_3 (pe1,pe2,pe3) (fun (sym1,sym2,sym3) ->
      k (M_Memcpy (sym1 ,sym2, sym3)))

@@ -2125,7 +2125,10 @@ module Concrete : Memory = struct
       | PV (Prov_device, PVconcrete addr) ->
           (* TODO: check *)
           return (PV (Prov_device, PVconcrete (N.add addr offset)))
-  
+
+let eff_member_shift_ptrval tag_sym membr_ident ptrval =
+  return (member_shift_ptrval tag_sym membr_ident ptrval)
+
   let concurRead_ival ity sym =
     failwith "TODO: concurRead_ival"
   

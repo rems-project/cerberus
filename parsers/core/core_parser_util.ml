@@ -204,7 +204,8 @@ type token =
   | PURE
   
   | MEMOP
-  | MEMOP_OP of Mem_common.memop
+  | MEMOP_OP of _sym Mem_common.generic_memop
+  | PTRMEMBERSHIFT
   
   | AILNAME
 

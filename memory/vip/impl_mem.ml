@@ -875,7 +875,9 @@ let eff_array_shift_ptrval loc ptrval ty ival : pointer_value memM =
           return (PVloc (Prov_some alloc_id, addr'))
     | PVfunptr sym ->
         fail (MerrVIP (VIP_array_shift VIP_funptr))
-      
+
+let eff_member_shift_ptrval tag_sym membr_ident ptrval =
+  return (member_shift_ptrval tag_sym membr_ident ptrval)
 
 let memcpy ptrval1 ptrval2 sz_ival : pointer_value memM =
   let sz = ival_to_int sz_ival in
