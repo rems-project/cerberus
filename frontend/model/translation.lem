@@ -2768,8 +2768,7 @@ else (* is_pointer *)
             | (*BISECT-IGNORE*) _ ->
                 illTypedAil loc "AilEmemberof"
           end in
-          E.wrapped_fresh_symbol (if is_lvalue then C.BTy_object C.OTy_pointer else C.BTy_loaded oTy)
-             >>= fun (e_sym, e_sym_pat, e_sym_pe) ->
+          E.wrapped_fresh_symbol (if is_lvalue then C.BTy_object C.OTy_pointer else C.BTy_loaded oTy) >>= fun (e_sym, e_sym_pat, e_sym_pe) ->
           self e >>= fun core_e ->
           
           if not is_lvalue then
@@ -2789,7 +2788,11 @@ else (* is_pointer *)
             E.return begin
               C.Expr [Annot.Astd "§6.5.2.3#3, sentence 2"] (
                 C.Esseq e_sym_pat core_e (
-                  Caux.mk_pure_e (Caux.mk_member_shift_pe e_sym_pe tag_sym ident)
+begin if Global.has_strict_pointer_arith () || Global.is_PNVI () then
+                    (Caux.mk_memop_e (Mem_common.PtrMemberShift tag_sym ident) [e_sym_pe])
+else
+                    Caux.mk_pure_e (Caux.mk_member_shift_pe e_sym_pe tag_sym ident)
+end
                 )
               )
             end
@@ -2807,9 +2810,10 @@ else (* is_pointer *)
                 (ref_ty, tag_sym)
             | (*BISECT-IGNORE*) _ -> illTypedAil loc "AilEmemberofptr"
           end in
-          E.wrapped_fresh_symbol (C.BTy_loaded C.OTy_pointer) >>= fun (_, e_sym_pat   , e_sym_pe   ) ->
-          E.wrapped_fresh_symbol (C.BTy_object C.OTy_pointer) >>= fun (_, obj_sym_pat , obj_sym_pe ) ->
-          E.wrapped_fresh_symbol C.BTy_boolean                >>= fun (_, test_sym_pat, test_sym_pe) ->
+          E.wrapped_fresh_symbol (C.BTy_loaded C.OTy_pointer) >>= fun (_      , e_sym_pat   , e_sym_pe   ) ->
+          E.wrapped_fresh_symbol (C.BTy_object C.OTy_pointer) >>= fun (_      , obj_sym_pat , obj_sym_pe ) ->
+          E.wrapped_fresh_symbol C.BTy_boolean                >>= fun (_      , test_sym_pat, test_sym_pe) ->
+          E.wrapped_fresh_symbol (C.BTy_object C.OTy_pointer) >>= fun (res_sym, res_sym_pat , res_sym_pe ) ->
           self e >>= fun core_e ->
           E.return begin
             Caux.add_std "§6.5.2.3#4, sentence 2" $
@@ -2821,6 +2825,17 @@ else (* is_pointer *)
                     , if Global.has_strict_pointer_arith () then
                         Caux.mk_wseq_e test_sym_pat
                           (Caux.mk_memop_e Mem_common.PtrValidForDeref [Caux.mk_ail_ctype_pe ref_ty; obj_sym_pe])
+                      begin if Global.is_CHERI () then
+                        Caux.mk_if_e test_sym_pe
+                          begin
+                            Caux.mk_wseq_e res_sym_pat
+                              (Caux.mk_memop_e (Mem_common.PtrMemberShift tag_sym ident) [e_sym_pe])
+                              (Caux.mk_pure_e (Caux.mk_specified_pe res_sym_pe))
+                          end
+                          (* TODO: make a new UB for this particular case *)
+                          (Caux.mk_pure_e (Caux.mk_std_undef_pe loc "§6.5.3.3#4, sentence 4" Undefined.UB043_indirection_invalid_value))
+                          
+                      else
                           begin
                             Caux.mk_pure_e begin
                               Caux.mk_if_pe_ [Annot.Anot_explode] test_sym_pe
@@ -2829,6 +2844,7 @@ else (* is_pointer *)
                                 (Caux.mk_std_undef_pe loc "§6.5.3.3#4, sentence 4" Undefined.UB043_indirection_invalid_value)
                             end
                           end
+                      end
                       else
                         (* NON-ISO: allowing member_shift on "invalid pointer values" *)
                         Caux.mk_pure_e (Caux.mk_member_shift_pe obj_sym_pe tag_sym ident) ) ]

@@ -54,9 +54,10 @@ type trace_event =
        * integer_value
        * pointer_value
 
-  | ME_member_shift of
-      pointer_value
-       * string
+  | ME_eff_member_shift_ptrval of
+      Symbol.sym
+       * Symbol.identifier
+       * pointer_value
        * pointer_value
 
 (*

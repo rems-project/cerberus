@@ -100,6 +100,7 @@ module type Memory = sig
   val member_shift_ptrval: pointer_value -> Symbol.sym -> Symbol.identifier -> pointer_value
   
   val eff_array_shift_ptrval: Location_ocaml.t -> pointer_value -> Ctype.ctype -> integer_value -> pointer_value memM
+  val eff_member_shift_ptrval: pointer_value -> Symbol.sym -> Symbol.identifier -> pointer_value memM
   
   val memcpy: pointer_value -> pointer_value -> integer_value -> pointer_value memM
   val memcmp: pointer_value -> pointer_value -> integer_value -> integer_value memM

@@ -2315,6 +2315,9 @@ module CHERI (C:Capability
        (* Could produce invalid cap. Consider raising error instead *)
        return (PV (Prov_device, PVconcrete (C.cap_set_value c shifted_addr)))
 
+  let eff_member_shift_ptrval _ _ _ =
+    failwith "TODO: CHERI.eff_member_shift_ptrval"
+
   let concurRead_ival ity sym =
     failwith "TODO: concurRead_ival"
 

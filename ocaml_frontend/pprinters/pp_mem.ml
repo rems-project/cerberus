@@ -46,6 +46,8 @@ let pp_memop = function
       !^ "Va_end"
   | PtrArrayShift ->
       !^ "PtrArrayShift"
+  | PtrMemberShift (tag_sym, membr_ident) ->
+      !^ "PtrArrayShift" ^^ P.brackets (!^ (Pp_symbol.to_string_pretty tag_sym) ^^ P.comma ^^^ Pp_symbol.pp_identifier membr_ident)
   | Copy_alloc_id ->
       !^ "Copy_alloc_id"
 

@@ -137,7 +137,9 @@ declare ocaml target_rep function member_shift_ptrval = `Impl_mem.member_shift_p
 
 (* Effectfull version of pointer shifting constructors *)
 val eff_array_shift_ptrval: Loc.t -> pointer_value -> Ctype.ctype -> integer_value -> memM pointer_value
+val eff_member_shift_ptrval: pointer_value -> Symbol.sym -> Symbol.identifier -> memM pointer_value
 declare ocaml target_rep function eff_array_shift_ptrval = `Impl_mem.eff_array_shift_ptrval`
+declare ocaml target_rep function eff_member_shift_ptrval = `Impl_mem.eff_member_shift_ptrval`
 
 
 val memcpy: pointer_value -> pointer_value -> integer_value -> memM pointer_value
