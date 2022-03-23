@@ -80,7 +80,7 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
 
 
 
-  let rec precedence = function
+  let precedence = function
     | M_PEop (OpExp, _, _) -> Some 1
 
     | M_PEop (OpMul, _, _)
@@ -147,7 +147,7 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
 
 
 
-  let rec precedence_texpr = function
+  let precedence_texpr = function
     | M_Ecase _ -> None
     | M_Ebound _ -> None
     | M_End _ -> None

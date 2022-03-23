@@ -100,7 +100,7 @@ instance (Eq genBasicType)
 end
 
 
-let rec eq_genType gty1 gty2 =
+let eq_genType gty1 gty2 =
   let ord = function
     | GenVoid ->
         (0 : nat)

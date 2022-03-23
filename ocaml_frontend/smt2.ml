@@ -13,7 +13,7 @@ let runND exec_mode (type cs) cs_module (m: ('a, 'info, 'err, cs, 'st) ndM) (st0
   let module CS = (val cs_module : Constraints with type t = cs) in
   let (>>=) = CS.bind in
   let open CS in
-  let rec with_backtracking m xs =
+  let (*rec*) with_backtracking m xs =
     let i = (Random.int (List.length xs)) in
     let x = List.nth xs i in
     (*

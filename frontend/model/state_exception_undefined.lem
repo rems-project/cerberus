@@ -102,8 +102,8 @@ let inline sequence ms =
     ) in
   List.foldr k (return []) ms
 
-val     replicateM: forall 'a 's 'msg. nat -> (stExceptUndefM 'a 's 'msg) -> stExceptUndefM (list 'a) 's 'msg
-let rec replicateM n x =
+val replicateM: forall 'a 's 'msg. nat -> (stExceptUndefM 'a 's 'msg) -> stExceptUndefM (list 'a) 's 'msg
+let replicateM n x =
   sequence (List.replicate n x)
 
 

@@ -59,7 +59,7 @@ module Def = struct
     | Sym of Symbol.sym 
     | Id of string
 
-  let rec equal a b = 
+  let equal a b = 
     match a, b with
     | Impl i1, Impl i2 -> Implementation.implementation_constant_equal i1 i2
     | Sym s1, Sym s2 -> Symbol.symbolEquality s1 s2
@@ -70,7 +70,7 @@ module Def = struct
       ->
        false
 
-  let rec compare a b = 
+  let compare a b = 
     match a, b with
     | Impl i1, Impl i2 -> Implementation.implementation_constant_compare i1 i2
     | Sym s1, Sym s2 -> Symbol.symbol_compare s1 s2

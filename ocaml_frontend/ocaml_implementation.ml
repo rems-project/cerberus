@@ -402,7 +402,7 @@ let hafniumIntImpl: IntegerImpl.implementation =
 (* TODO: this is horrible... *)
 let (set, get) : (implementation -> unit) * (unit -> implementation) =
   (* NOTE: to prevent nasty bugs the setter can only be called once *)
-  let rec selected =
+  let selected =
     ref (false, DefaultImpl.impl) in
   ( begin fun new_impl ->
       if fst !selected then

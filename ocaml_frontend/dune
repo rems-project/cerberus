@@ -4,7 +4,7 @@
  (name cerb_frontend)
  (public_name cerberus.frontend)
  (synopsis "Cerberus frontend")
- (flags (:standard -w -8-9-27-32-33-39))
+ (flags (:standard -w @8@11@12-9-27-33))
  (modules :standard \ pp_naive_memory pp_symbolic pp_constraints pp_cmm pp_sb)
  (virtual_modules impl_mem)
  (libraries lem pprint util sibylfs))

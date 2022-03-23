@@ -21,11 +21,11 @@ type cerb_switch =
 
 
 
-let are_incompatible = function
+(* let are_incompatible = function
   | (SW_PNVI x, SW_PNVI y) ->
       x <> y
   | _ ->
-      false
+      false *)
 
 
 

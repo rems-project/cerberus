@@ -9,7 +9,7 @@ open Location_ocaml
 
 module P = PPrint
 
-let precedence = function
+let _precedence = function
   | CabsEident _
   | CabsEconst _
   | CabsEstring _
@@ -59,19 +59,19 @@ let precedence = function
   | CabsEbmc_assume _ -> None
   | CabsEgcc_statement _ -> None
 
-let lt_precedence p1 p2 =
+let _lt_precedence p1 p2 =
   match p1, p2 with
     | Some n1, Some n2 -> n1 < n2
     | Some _ , None    -> true
     | None   , _       -> false
 
-let pp_colour_keyword k =
+let _pp_colour_keyword k =
   !^(ansi_format [Bold; Cyan] k)
 
-let pp_colour_type_keyword k =
+let _pp_colour_type_keyword k =
   !^(ansi_format [Green] k)
 
-let pp_colour_function_identifier id =
+let _pp_colour_function_identifier id =
   !^(ansi_format [Bold; Blue] id)
 
 let pp_colour_label (Symbol.Identifier (_, str)) =
@@ -99,7 +99,7 @@ let dtree_of_list dtree_of = function
   | xs ->
       Dnode (pp_ctor "List", List.map dtree_of xs)
 
-let leaf_of_option pp = function
+let _leaf_of_option pp = function
   | Some z ->
       Dleaf (pp_ctor "Some" ^^ P.brackets (pp z))
   | None ->
@@ -117,7 +117,7 @@ let node_of_list_option dtree_of = function
   | None ->
       [ Dleaf (pp_ctor "None") ]
 
-let pp_bool = function
+let _pp_bool = function
   | true  -> !^ "true"
   | false -> !^ "false"
 

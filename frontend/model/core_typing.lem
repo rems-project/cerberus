@@ -1106,7 +1106,7 @@ let typecheck_export_pexpr tagDefs env bTy pe =
 
 
 (*val infer_action: foral 'a 'bty. core_tag_definitions -> typing_env -> generic_action 'a 'bty -> E.eff (core_base_type * typed_action 'a) *)
-let rec infer_action tagDefs env (Action loc annot act_) =
+let infer_action tagDefs env (Action loc annot act_) =
   match act_ with
     | Create pe1 pe2 pref ->
         typecheck_export_pexpr tagDefs env (BTy_object OTy_integer) pe1 >>= fun tpe1 ->

@@ -436,6 +436,6 @@ val eval_integer_value_base: integer_value_base -> maybe integer
 let eval_integer_value_base ival_ =
   either (fun n -> Just n) (fun _ -> Nothing) (simplify_integer_value_base ival_)
 
-val     lifted_simplify_integer_value_base: integer_value_base -> integer_value_base
-let rec lifted_simplify_integer_value_base ival_ =
+val lifted_simplify_integer_value_base: integer_value_base -> integer_value_base
+let lifted_simplify_integer_value_base ival_ =
   either (fun n -> IVconcrete n) (fun z -> z) (simplify_integer_value_base ival_)

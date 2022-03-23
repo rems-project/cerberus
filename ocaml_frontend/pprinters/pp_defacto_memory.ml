@@ -2,8 +2,8 @@ open Defacto_memory_types
 open Pp_prelude
 
 (* Use this to pprint things not yet recognised by the Core parser *)
-let nonvalid =
-  P.enclose (!^ "{#") (!^ "#}")
+(* let nonvalid =
+  P.enclose (!^ "{#") (!^ "#}") *)
 
 
 let string_of_integer_operator = function

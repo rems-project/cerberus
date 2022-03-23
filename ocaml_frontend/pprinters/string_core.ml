@@ -39,5 +39,5 @@ let string_of_continuation cont =
   List.fold_left (fun acc cont_elem -> mk_string_of_continuation_element cont_elem acc) "[]" cont
 
 
-let rec string_of_stack sk =
+let string_of_stack sk =
   Pp_utils.to_plain_string (pp_stack sk)

@@ -774,8 +774,8 @@ let rec drive_core_thread tid =
 
 
 (* perform drive_core_thread for all the core threads *)
-val     drive_core_threads: unit -> driverM unit
-let rec drive_core_threads () =
+val drive_core_threads: unit -> driverM unit
+let drive_core_threads () =
   ND.get >>= fun dr_st ->
   ND.mapM_ (fun (tid, _) ->
     ND.print_debug 9 [Debug.DB_driver] (fun () -> "BEFORE drive_core_thread, in drive_core_threads") >>

@@ -108,8 +108,8 @@ and loadedValueFromMemValue mem_val : core_object_type * loaded_value =
     (fun sym ident mem_val -> (OTy_union sym, LVspecified (OVunion sym ident mem_val)))
 
 
-val     valueFromMemValue: Mem.mem_value -> core_object_type * value
-let rec valueFromMemValue mem_val =
+val valueFromMemValue: Mem.mem_value -> core_object_type * value
+let valueFromMemValue mem_val =
   let () = Debug.print_debug 6 [] (fun () ->
     "valueFromMemValue ==> " ^ Mem.stringFromMem_value mem_val
   ) in
@@ -772,8 +772,8 @@ let valueFromPexpr = function
       Nothing
   end
 
-val     valueFromPexprs: list pexpr -> maybe (list value)
-let rec valueFromPexprs pes =
+val valueFromPexprs: list pexpr -> maybe (list value)
+let valueFromPexprs pes =
   List.foldr (fun pe acc_opt ->
     match (valueFromPexpr pe, acc_opt) with
       | (Just cval, Just acc) ->
@@ -793,8 +793,8 @@ let valueOrPEconstrainedFromPexpr pe =
         Nothing
   end
 
-val     valueOrPEconstrainedFromPexprs: list pexpr -> maybe (either (list value) ((nat * (list (Mem.mem_iv_constraint  * pexpr))) * (list pexpr)))
-let rec valueOrPEconstrainedFromPexprs pes =
+val valueOrPEconstrainedFromPexprs: list pexpr -> maybe (either (list value) ((nat * (list (Mem.mem_iv_constraint  * pexpr))) * (list pexpr)))
+let valueOrPEconstrainedFromPexprs pes =
   snd (List.foldr (fun pe (i, acc) ->
       (i+1, match (valueOrPEconstrainedFromPexpr pe, acc) with
         | (Just (Left cval), Just (Left cvals)) ->

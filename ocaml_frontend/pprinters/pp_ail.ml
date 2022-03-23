@@ -907,7 +907,7 @@ let pp_statement s = pp_statement_aux (fun _ d -> d) s
 
 
 
-let pp_annot gtc doc =
+let _pp_annot gtc doc =
   match gtc with
     | GenLValueType (qs, ty, isRegister) ->
         failwith "WIP"

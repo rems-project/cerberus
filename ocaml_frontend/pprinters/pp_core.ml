@@ -63,7 +63,7 @@ let maybe_print_explode_annot : Annot.annot list -> P.document =
     | _ -> P.empty
 
 
-let rec precedence = function
+let precedence = function
   | PEop (OpExp, _, _) -> Some 1
 
   | PEop (OpMul, _, _)
@@ -111,7 +111,7 @@ let rec precedence = function
   | PEbmc_assume _ -> None
   | PEare_compatible _ ->None
 
-let rec precedence_expr = function
+let precedence_expr = function
   | Epure _
   | Ememop _
   | Eaction _
@@ -158,7 +158,7 @@ let pp_control w = !^ (ansi_format [Bold; Blue] w)
 let pp_symbol  a = !^ (ansi_format [Blue] (Pp_symbol.to_string_pretty a))
 (* NOTE: Used to distinguish struct/unions globally *)
 let pp_raw_symbol  a = !^ (ansi_format [Blue] (Pp_symbol.to_string a))
-let pp_number  n = !^ (ansi_format [Yellow] n)
+let _pp_number  n = !^ (ansi_format [Yellow] n)
 let pp_impl    i = P.angles (!^ (ansi_format [Yellow] (Implementation.string_of_implementation_constant i)))
 
 
@@ -196,7 +196,7 @@ let rec pp_core_base_type = function
   | BTy_tuple bTys -> P.parens (P.separate_map P.comma pp_core_base_type bTys)
 
 
-let pp_core_type = function
+let _pp_core_type = function
   | TyBase   baseTy -> pp_core_base_type baseTy
   | TyEffect baseTy -> P.brackets (pp_core_base_type baseTy)
 
@@ -259,7 +259,7 @@ let pp_linux_memory_order = function
   | Linux.RcuUnlock -> pp_keyword "rcu-unlock"
   | Linux.SyncRcu   -> pp_keyword "sync-rcu"
 
-let pp_mem_addr (pref, addr) =
+let _pp_mem_addr (pref, addr) =
 (*
   let rec pp = function
   | Cmm_aux_old.Lbase n          -> Pp_ail.pp_integer n
@@ -748,38 +748,6 @@ and pp_action act =
         P.parens (comma_list pp_pexpr [ty;e1;e2] ^^ P.comma ^^^
                   pp_linux_memory_order mo)
 
-
-
-
-(*
-    | Ptr (ptr_act, es) ->
-       pp_pointer_action ptr_act ^^ P.parens (comma_list pp_pexpr es)
-*)
-
-
-(* TODO: hackish (move to core.lem + some of these are implementation stuff ) *)
-let std = [
-(*
-  "overflow";
-  "conv_int";
-  "conv";
-  "div_zero";
-  "usual_arithmetic";
-  "ctype_width";
-  "exp";
-  "representable";
-  "alignof";
-  "max";
-  "min";
-  "offsetof";
-  "shift";
-  "sizeof";
-*)
-]
-
-let symbol_compare =
-  Symbol.instance_Basic_classes_Ord_Symbol_sym_dict.compare_method
-
 let pp_tagDefinitions tagDefs =
   let tagDefs = Pmap.bindings_list tagDefs in
   let pp (sym, tagDef) =
@@ -851,7 +819,7 @@ let pp_extern_symmap symmap =
       acc ^^ pp_raw_symbol sym_from ^^^ !^"->" ^^^ pp_raw_symbol sym_to ^^ P.break 1
     ) symmap
 
-let mk_comment doc =
+let _mk_comment doc =
   pp_ansi_format [Red] (
     !^ "{-" ^^ P.break 1 ^^ doc ^^ P.break 1 ^^ !^ "-}"
   )

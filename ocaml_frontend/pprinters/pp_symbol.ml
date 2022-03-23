@@ -84,7 +84,7 @@ let pp_colour_identifier id =
   !^(Colour.ansi_format [Yellow] id)
 
 
-let rec pp_prefix = function
+let pp_prefix = function
   | PrefSource (_, syms) ->
       P.braces (P.separate_map P.dot (fun sym -> !^ (to_string_pretty sym)) syms)
   | PrefOther str ->

@@ -62,7 +62,7 @@ let pp_pretty_integer_value = failwith "Impl.pp_pretty_integer_value"
 let pp_pretty_mem_value = failwith "Impl.pp_pretty_mem_value"
 *)
 
-let rec pp_raw_mem_constraint pp constr =
+(* let rec pp_raw_mem_constraint pp constr =
   P.parens begin match constr with
     | MC_empty ->
         P.empty
@@ -80,7 +80,7 @@ let rec pp_raw_mem_constraint pp constr =
         !^ "and" ^^^ P.flow (P.break 1) (List.map (pp_raw_mem_constraint pp) css)
     | MC_not cs ->
         !^ "not" ^^^ pp_raw_mem_constraint pp cs
-  end
+  end *)
 
 let pp_mem_constraint pp constr =
   let prec = function

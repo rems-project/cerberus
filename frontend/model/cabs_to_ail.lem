@@ -1065,8 +1065,8 @@ let desugar_character_constant (pref_opt, str) =
 
 
 
-val     evaluate_integer_constant_expression: Loc.t -> maybe Ctype.ctype -> expression unit -> E.desugM integer
-let rec evaluate_integer_constant_expression loc ty_opt expr =
+val evaluate_integer_constant_expression: Loc.t -> maybe Ctype.ctype -> expression unit -> E.desugM integer
+let evaluate_integer_constant_expression loc ty_opt expr =
   E.get_core_eval_stuff >>= fun core_env ->
   E.get_sigma_sofar >>= fun sigm ->
   E.liftException

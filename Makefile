@@ -166,6 +166,8 @@ $(OCAML_SRC)&: $(LEM_SRC)
 	$(Q)$(SEDI) -e "s/open Operators//" $(PRELUDE_SRC_DIR)/core_run.ml
 	$(Q)$(SEDI) -e "s/open Operators//" $(PRELUDE_SRC_DIR)/driver.ml
 	$(Q)$(SEDI) -e "s/Debug.DB_/Debug_ocaml.DB_/g" $(OCAML_SRC)
+	$(Q)$(SEDI) -e "1 s/.*/&[@@@warning \"-8\"]/" $(PRELUDE_SRC_DIR)/cmm_csem.ml
+	$(Q)$(SEDI) -e "1 s/.*/&[@@@warning \"-8\"]/" $(PRELUDE_SRC_DIR)/cmm_op.ml
 
 # Elaboration PP stuff
 elab_pp:

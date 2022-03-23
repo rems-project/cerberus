@@ -814,7 +814,7 @@ let rec n_expr (loc : Loc.t) (returns : symbol Pset.set)
      k (wrap (M_Elpredicate(Show, id, pes))))
 
 
-let rec normalise_expr (loc : Loc.t) (returns : symbol Pset.set) e : mu_texpr =
+let normalise_expr (loc : Loc.t) (returns : symbol Pset.set) e : mu_texpr =
   let sym = Symbol.fresh () in
   let asym = asym_pack loc [] () sym in
   n_expr loc returns e (fun e ->

@@ -381,8 +381,8 @@ let convert_ctor ctor = ctor (* function
  *       Civfromfloat
  * end *)
 
-val     convert_pattern: Core.generic_pattern Symbol.sym -> Core.pattern
-let rec convert_pattern (Pattern annots pat) = (Pattern annots pat)
+val convert_pattern: Core.generic_pattern Symbol.sym -> Core.pattern
+let convert_pattern (Pattern annots pat) = (Pattern annots pat)
   (* Pattern annots $ match pat with
    *   | CaseBase (sym_opt, bTy) ->
    *       CaseBase (sym_opt, bTy)

@@ -64,7 +64,7 @@ and dtree_of_loaded_value = function
   | LVunspecified ty ->
       Dleaf (pp_pure_ctor "LVunspecified" ^^^ P.squotes (Pp_ail.pp_ctype Ctype.no_qualifiers ty))
 
-let rec dtree_of_value = function
+let dtree_of_value = function
   | Vobject oval ->
       Dnode (pp_pure_ctor "Vobject", [dtree_of_object_value oval])
   | Vloaded lval ->
