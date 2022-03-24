@@ -1802,9 +1802,20 @@ module CHERI (C:Capability
     | (PVfunction (FP_invalid c1), PVfunction (FP_invalid c2)) ->
        (* TODO(CHERI) add test supporting this semantics decision *)
        return (Nat_big_num.equal (C.cap_get_value c1) (C.cap_get_value c2))
+    | (PVfunction (FP_valid sym), PVfunction (FP_invalid c))
+      | (PVfunction (FP_invalid c), PVfunction (FP_valid sym)) ->
+          get >>= fun st ->
+          let n = C.cap_get_value c in
+          begin match IntMap.find_opt n st.funptrmap with
+            | Some (file_dig, name) ->
+                let sym2 = Symbol.Symbol (file_dig, N.to_int n, SD_Id name) in
+                return (Symbol.instance_Basic_classes_Eq_Symbol_sym_dict.Lem_pervasives.isEqual_method sym sym2)
+            | None ->
+                failwith "CHERI.eq_ptrval ==> FP_valid failed to resolve function symbol"
+          end
     | (PVfunction _, _)
-      | (_, PVfunction _) ->
-       return false
+    | (_, PVfunction _) ->
+        return false
     | (PVconcrete addr1, PVconcrete addr2) ->
        if Switches.(has_switch SW_strict_pointer_equality) then
          return (C.value_compare addr1 addr2 == 0)
@@ -2423,8 +2434,7 @@ module CHERI (C:Capability
        return (mk_ival prov Nat_big_num.zero)
     | PVfunction (FP_valid (Symbol.Symbol (_, n, _))) ->
        return (mk_ival prov (Nat_big_num.of_int n))
-    | PVfunction (FP_invalid n) ->
-        return (mk_ival prov n)
+    | PVfunction (FP_invalid c)
     | PVconcrete c ->
        begin if Switches.(has_switch (SW_PNVI `AE) || has_switch (SW_PNVI `AE_UDI)) then
                (* PNVI-ae, PNVI-ae-udi *)
