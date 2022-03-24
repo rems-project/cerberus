@@ -1167,8 +1167,7 @@ module CHERI (C:Capability
                    (sizeof (Ctype ([], Basic (Integer ity)))) n
                end
     | MVinteger (ity, IC (prov, c)) ->
-       (* TODO(CHERI): see if we need special handling for NULL *)
-       (* TODO(CHERI): see if we need to check here validity tag *)
+       (* TODO(CHERI): update and return tagmap *)
        ret @@ List.mapi (fun i b -> AbsByte.v prov ~copy_offset:(Some i) (Some b)) @@ C.encode c
     | MVfloating (fty, fval) ->
        ret @@ List.map (AbsByte.v Prov_none) begin
@@ -1178,19 +1177,14 @@ module CHERI (C:Capability
                 end
     | MVpointer (ref_ty, PV (prov, ptrval_)) ->
        Debug_ocaml.print_debug 1 [] (fun () -> "NOTE: we fix the sizeof pointers to 8 bytes");
-       let ptr_size = match (Ocaml_implementation.get ()).sizeof_pointer with
-         | None ->
-            failwith "the concrete memory model requires a complete implementation"
-         | Some z ->
-            z in
        begin match ptrval_ with
        | PVnull _ ->
           Debug_ocaml.print_debug 1 [] (fun () -> "NOTE: we fix the representation of all NULL pointers to be C0");
           ret @@ List.map (fun b -> AbsByte.v Prov_none (Some b)) @@ C.encode C.cap_c0
        | PVfunction (FP_valid (Symbol.Symbol (file_dig, n, opt_name))) ->
+          let c = C.alloc_fun (Z.add (Z.of_int initial_address) (Z.of_int n)) in
           (begin match opt_name with
            | SD_Id name ->
-              let c = C.alloc_fun (Z.add (Z.of_int initial_address) (Z.of_int n)) in
               IntMap.add (Z.of_int n) (file_dig, name, c) funptrmap
            | SD_ObjectAddress _ -> funptrmap
            | SD_Return -> funptrmap
@@ -1198,14 +1192,12 @@ module CHERI (C:Capability
            (* | SD_Pointee _ -> funptrmap *)
            (* | SD_PredOutput _ -> funptrmap *)
            | SD_None -> funptrmap
-                          (* TODO(CHERI): this is wrong. Need to be fixed to return encoded capability, not encoded address *)
-           end, List.map (AbsByte.v prov) begin
-                    bytes_of_int
-                      false
-                      ptr_size (Z.of_int n)
-                  end)
+           end,
+          (* TODO: update tagmap *)
+           List.mapi (fun i b -> AbsByte.v prov ~copy_offset:(Some i) (Some b)) @@ C.encode c)
        | PVfunction (FP_invalid c)
          | PVconcrete c ->
+          (* TODO: update tagmap *)
           ret @@ List.mapi (fun i b -> AbsByte.v prov ~copy_offset:(Some i) (Some b)) @@ C.encode c
        end
     | MVarray mvals ->
