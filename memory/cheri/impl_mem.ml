@@ -460,13 +460,15 @@ module CHERI (C:Capability
       dynamic_addrs: C.vaddr list;
       last_used: storage_instance_id option;
     }
-
+  
+  let initial_address = 0xFFFFFFFF
+  
   let initial_mem_state = {
       next_alloc_id= Nat_big_num.zero;
       next_iota= N.zero;
       allocations= IntMap.empty;
       iota_map= IntMap.empty;
-      last_address= N.of_int 0xFFFFFFFF; (* TODO: this is a random impl-def choice *)
+      last_address= N.of_int initial_address; (* TODO: this is a random impl-def choice *)
       funptrmap = IntMap.empty;
       varargs = IntMap.empty;
       next_varargs_id = N.zero;
