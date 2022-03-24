@@ -2105,7 +2105,7 @@ module CHERI (C:Capability
            begin
              let addr = C.cap_get_value c in
              if is_PNVI () then
-               (* TODO(CHERI): not sure if this whole branch is correct for CHERI *)
+               (* TODO(CHERI): We may need to carry provenance for [u]intptr_t *)
                (* TODO: device memory? *)
                if Z.equal addr Z.zero then
                  return (PV (Prov_none, PVnull ref_ty))
@@ -2186,9 +2186,6 @@ module CHERI (C:Capability
   let array_shift_ptrval (PV (prov, ptrval_)) ty _ =
     failwith "pure array_shift_ptrval not used in CHERI"
 
-  (* TODO(CHERI): use effectful variant instead, which needs to be added.column
-     One added, replace this one with ~failwith~.
-   *)
   let member_shift_ptrval (PV (prov, ptrval_)) tag_sym memb_ident =
     failwith "members_shift_ptrval (pure) is not supported in CHERI"
 
