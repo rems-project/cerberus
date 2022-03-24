@@ -1775,19 +1775,16 @@ module CHERI (C:Capability
   let case_funsym_opt st (PV (_, ptrval)) =
     match ptrval with
     | PVfunction (FP_valid sym) -> Some sym
-    | PVconcrete addr ->
+    | PVconcrete c ->
        (* FIXME: This is wrong. A function pointer with the same id in different files might exist. *)
-       (*
-       begin match IntMap.find_opt addr st.funptrmap with
+       let n = C.cap_get_value c in
+       begin match IntMap.find_opt n st.funptrmap with
        | Some (file_dig, name) ->
-          Some (Symbol.Symbol (file_dig, N.to_int addr, SD_Id name))
+          Some (Symbol.Symbol (file_dig, N.to_int n, SD_Id name))
        | None ->
           None
        end
-        *)
-       (* TODO(CHERI): implement for CHERI. May need different approach *)
-       failwith "TODO"
-    | _ -> None
+| _ -> None
 
 
   let eq_ptrval (PV (prov1, ptrval_1)) (PV (prov2, ptrval_2)) =
@@ -1800,7 +1797,6 @@ module CHERI (C:Capability
     | (PVfunction (FP_valid sym1), PVfunction (FP_valid sym2)) ->
        return (Symbol.instance_Basic_classes_Eq_Symbol_sym_dict.Lem_pervasives.isEqual_method sym1 sym2)
     | (PVfunction (FP_invalid c1), PVfunction (FP_invalid c2)) ->
-       (* TODO(CHERI) add test supporting this semantics decision *)
        return (Nat_big_num.equal (C.cap_get_value c1) (C.cap_get_value c2))
     | (PVfunction (FP_valid sym), PVfunction (FP_invalid c))
       | (PVfunction (FP_invalid c), PVfunction (FP_valid sym)) ->
