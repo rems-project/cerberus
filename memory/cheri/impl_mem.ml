@@ -2888,7 +2888,11 @@ module CHERI (C:Capability
     | MVEinteger (cty, IC(prov, c)) ->
        begin match cty with
        | Signed Intptr_t | Unsigned Intptr_t ->
-          (* TODO(CHERI): better JSON representation of caps *)
+          (* TODO(CHERI): better JSON representation of caps.
+             For that additional type consturctor to be added
+             to [ui_value] but this change must be syncrhonized
+             with UI changes not to break things.
+           *)
           mk_scalar `Intptr (Z.to_string (C.cap_get_value c)) prov None
        | _ ->
           failwith "mk_ui_values invalid encoding of [u]intptr_t"
@@ -2900,7 +2904,11 @@ module CHERI (C:Capability
        | PVnull _ ->
           mk_scalar `Pointer "NULL" Prov_none None
        | PVconcrete c ->
-          (* TODO(CHERI): better JSON representation of caps *)
+          (* TODO(CHERI): better JSON representation of caps.
+             For that additional type consturctor to be added
+             to [ui_value] but this change must be syncrhonized
+             with UI changes not to break things.
+           *)
           mk_scalar `Pointer (Z.to_string (C.cap_get_value c)) prov (Some bs)
        | PVfunction (FP_valid sym) ->
           mk_scalar `Funptr (Pp_symbol.to_string_pretty sym) Prov_none None
@@ -2914,7 +2922,7 @@ module CHERI (C:Capability
           let (rev_rows, _, _) = List.fold_left begin fun (acc, i, acc_bs) mval ->
                                    let row = List.map (add_path (string_of_int i))
                                              @@ mk_ui_values
-                                                  (* TODO(CHERI): Check if anything special needs to be done about alignment here *)                                                                                      (Z.add addr (Z.of_int (i*(sizeof elem_ty))))
+                                                  (Z.add addr (Z.of_int (i*(sizeof elem_ty))))
                                                   acc_bs elem_ty mval in
                                    (row::acc, i+1, L.drop size acc_bs)
                                    end ([], 0, bs) mvals
@@ -2941,7 +2949,7 @@ module CHERI (C:Capability
        in List.concat (List.rev rev_rowss)
     | MVEunion (tag_sym, Symbol.Identifier (_, memb), mval) ->
        List.map (add_path memb) (mk_ui_values addr bs ty mval) (* FIXME: THE TYPE IS WRONG *)
-    | MVErr _ -> failwith "TODO(CHERI) serialize errors"
+    | MVErr _ -> failwith "TODO(CHERI) serialize errors but need to be done together with changes to UI code."
 
   let mk_ui_alloc st id alloc : ui_alloc =
     let ty = match alloc.ty with Some ty -> ty | None -> Ctype ([], Array (Ctype ([], Basic (Integer Char)), Some alloc.size)) in
