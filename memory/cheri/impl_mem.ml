@@ -1,3 +1,4 @@
+[@@@warning "+8-37"]
 open Ctype
 
 (*open Ocaml_implementation*)
@@ -252,9 +253,13 @@ module CHERI (C:Capability
 
   (* Note: using Z instead of int64 because we need to be able to have
      unsigned 64bits values *)
+  type function_pointer =
+    | FP_valid of Symbol.sym
+    | FP_invalid of Nat_big_num.num
+  
   type pointer_value_base =
     | PVnull of ctype
-    | PVfunction of Symbol.sym
+    | PVfunction of function_pointer
     | PVconcrete of C.t
 
   type pointer_value =
@@ -538,8 +543,10 @@ module CHERI (C:Capability
     match ptrval_ with
     | PVnull ty ->
        !^ "NULL" ^^ P.parens (Pp_core_ctype.pp_ctype ty)
-    | PVfunction sym ->
+    | PVfunction (FP_valid sym) ->
        !^ "Cfunction" ^^ P.parens (!^ (Pp_symbol.to_string_pretty sym))
+    | PVfunction (FP_invalid n) ->
+        !^ "Cfunction" ^^ P.parens (!^ "invalid" ^^ P.colon ^^^ !^ (Nat_big_num.to_string n))
     (* !^ ("<funptr:" ^ Symbol.instance_Show_Show_Symbol_sym_dict.show_method sym ^ ">") *)
     | PVconcrete n ->
        (* TODO: remove this idiotic hack when Lem's nat_big_num library expose "format" *)
@@ -1156,7 +1163,7 @@ module CHERI (C:Capability
                     true (* TODO: check that *)
                     (sizeof (Ctype ([], Basic (Floating fty)))) (N.of_int64 (Int64.bits_of_float fval))
                 end
-    | MVpointer (_, PV (prov, ptrval_)) ->
+    | MVpointer (ref_ty, PV (prov, ptrval_)) ->
        Debug_ocaml.print_debug 1 [] (fun () -> "NOTE: we fix the sizeof pointers to 8 bytes");
        let ptr_size = match (Ocaml_implementation.get ()).sizeof_pointer with
          | None ->
@@ -1167,7 +1174,7 @@ module CHERI (C:Capability
        | PVnull _ ->
           Debug_ocaml.print_debug 1 [] (fun () -> "NOTE: we fix the representation of all NULL pointers to be C0");
           ret @@ List.map (fun b -> AbsByte.v Prov_none (Some b)) @@ C.encode C.cap_c0
-       | PVfunction (Symbol.Symbol (file_dig, n, opt_name)) ->
+       | PVfunction (FP_valid (Symbol.Symbol (file_dig, n, opt_name))) ->
           (* TODO(CHERI): *)
           (begin match opt_name with
            | SD_Id name -> IntMap.add (N.of_int n) (file_dig, name) funptrmap
@@ -1183,6 +1190,12 @@ module CHERI (C:Capability
                       false
                       ptr_size (N.of_int n)
                   end)
+       | PVfunction (FP_invalid n) ->
+          ret @@List.map (AbsByte.v prov) begin
+            bytes_of_int
+              false(* unsigned *)
+              (sizeof (mk_ctype_pointer no_qualifiers ref_ty)) n  
+          end
        | PVconcrete addr ->
           ret @@ List.mapi (fun i b -> AbsByte.v prov ~copy_offset:(Some i) (Some b)) @@ C.encode addr
        end
@@ -1605,7 +1618,7 @@ module CHERI (C:Capability
 
 
   let store loc ty is_locking (PV (prov, ptrval_)) mval =
-    Debug_ocaml.print_debug 10(*KKK*) [] (fun () ->
+    Debug_ocaml.print_debug 0(*KKK*) [] (fun () ->
         "ENTERING STORE: ty=" ^ String_core_ctype.string_of_ctype ty ^
           " -> @" ^ Pp_utils.to_plain_string (pp_pointer_value (PV (prov, ptrval_))) ^
             ", mval= " ^ Pp_utils.to_plain_string (pp_mem_value mval)
@@ -1631,6 +1644,9 @@ module CHERI (C:Capability
               begin
                update begin fun st ->
                  let (funptrmap, pre_bs) = repr st.funptrmap mval in
+                 Debug_ocaml.print_debug 0(*KKK*) [] (fun () ->
+                  "|pre_bs|=" ^ string_of_int (List.length pre_bs) ^ " <---> sz: " ^ string_of_int sz
+                );
                  assert (List.length pre_bs == sz) ;
                  let bs = List.mapi (fun i b -> (Nat_big_num.add addr (Nat_big_num.of_int i), b)) pre_bs in
                  { st with last_used= alloc_id_opt;
@@ -1741,21 +1757,21 @@ module CHERI (C:Capability
     PV (Prov_none, PVnull ty)
 
   let fun_ptrval sym =
-    PV (Prov_none, PVfunction sym)
+    PV (Prov_none, PVfunction (FP_valid sym))
 
   let concrete_ptrval i addr = failwith "concrete_ptrval: integer to pointer cast is not supported"
 
   let case_ptrval pv fnull ffun fconc _ =
     match pv with
     | PV (_, PVnull ty) -> fnull ty
-    | PV (_, PVfunction f) -> ffun f
+    | PV (_, PVfunction (FP_valid sym)) -> ffun sym
     | PV (Prov_none, PVconcrete addr) -> fconc ()
     | PV (Prov_some i, PVconcrete addr) -> fconc ()
     | _ -> failwith "case_ptrval"
 
   let case_funsym_opt st (PV (_, ptrval)) =
     match ptrval with
-    | PVfunction sym -> Some sym
+    | PVfunction (FP_valid sym) -> Some sym
     | PVconcrete addr ->
        (* FIXME: This is wrong. A function pointer with the same id in different files might exist. *)
        (*
@@ -1778,8 +1794,10 @@ module CHERI (C:Capability
     | (PVnull _, _)
       | (_, PVnull _) ->
        return false
-    | (PVfunction sym1, PVfunction sym2) ->
+    | (PVfunction (FP_valid sym1), PVfunction (FP_valid sym2)) ->
        return (Symbol.instance_Basic_classes_Eq_Symbol_sym_dict.Lem_pervasives.isEqual_method sym1 sym2)
+    | (PVfunction (FP_invalid n1), PVfunction (FP_invalid n2)) ->
+        return (Nat_big_num.equal n1 n2)
     | (PVfunction _, _)
       | (_, PVfunction _) ->
        return false
@@ -2399,8 +2417,10 @@ module CHERI (C:Capability
     match ptrval_ with
     | PVnull _ ->
        return (mk_ival prov Nat_big_num.zero)
-    | PVfunction (Symbol.Symbol (_, n, _)) ->
+    | PVfunction (FP_valid (Symbol.Symbol (_, n, _))) ->
        return (mk_ival prov (Nat_big_num.of_int n))
+    | PVfunction (FP_invalid n) ->
+        return (mk_ival prov n)
     | PVconcrete c ->
        begin if Switches.(has_switch (SW_PNVI `AE) || has_switch (SW_PNVI `AE_UDI)) then
                (* PNVI-ae, PNVI-ae-udi *)
@@ -2859,9 +2879,11 @@ module CHERI (C:Capability
        | PVconcrete c ->
           (* TODO(CHERI): better JSON representation of caps *)
           mk_scalar `Pointer (N.to_string (C.cap_get_value c)) prov (Some bs)
-       | PVfunction sym ->
+       | PVfunction (FP_valid sym) ->
           mk_scalar `Funptr (Pp_symbol.to_string_pretty sym) Prov_none None
-       end
+       | PVfunction (FP_invalid n) ->
+          failwith "TODO"
+         end
     | MVEarray mvals ->
        begin match ty with
        | Ctype (_, Array (elem_ty, _)) ->
