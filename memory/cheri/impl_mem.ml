@@ -5,12 +5,17 @@ open Ctype
 open Memory_model
 open Mem_common
 
-module N = Nat_big_num
+module Z = struct
+  include Nat_big_num
+  let format = Z.format
+end
 
 module L = struct
   include List
   include Lem_list
 end
+
+let initial_address = 0xFFFFFFFF
 
 let ident_equal x y =
   Symbol.instance_Basic_classes_Eq_Symbol_identifier_dict.isEqual_method x y
@@ -88,8 +93,8 @@ end
 
 
 module IntMap = Map.Make(struct
-                    type t = Nat_big_num.num
-                    let compare = Nat_big_num.compare
+                    type t = Z.num
+                    let compare = Z.compare
                   end)
 
 
@@ -137,7 +142,7 @@ and sizeof ?(tagDefs= Tags.tagDefs ()) (Ctype (_, ty) as cty) =
      end
   | Array (elem_ty, Some n) ->
      (* TODO: what if too big? *)
-     Nat_big_num.to_int n * sizeof ~tagDefs elem_ty
+     Z.to_int n * sizeof ~tagDefs elem_ty
   | Pointer _ ->
      begin match (Ocaml_implementation.get ()).sizeof_pointer with
      | Some n ->
@@ -233,16 +238,16 @@ and alignof ?(tagDefs= Tags.tagDefs ()) (Ctype (_, ty) as cty) =
 open Capability
 
 module CHERI (C:Capability
-              with type vaddr = N.num
-              with type vaddr_interval = N.num*N.num
+              with type vaddr = Z.num
+              with type vaddr_interval = Z.num*Z.num
          ) : Memory = struct
   let name = "CHERI memory model"
 
   (* INTERNAL: only for PNVI-ae-udi (this is iota) *)
-  type symbolic_storage_instance_id = N.num
+  type symbolic_storage_instance_id = Z.num
 
   (* INTERNAL: storage_instance_id *)
-  type storage_instance_id = N.num
+  type storage_instance_id = Z.num
 
   (* INTERNAL: provenance *)
   type provenance =
@@ -266,7 +271,7 @@ module CHERI (C:Capability
     | PV of provenance * pointer_value_base
 
   type integer_value =
-    | IV of provenance * Nat_big_num.num
+    | IV of provenance * Z.num
     | IC of provenance * C.t (* for [u]intptr_t *)
 
   let num_of_int = function
@@ -325,29 +330,29 @@ module CHERI (C:Capability
                          | MC_empty ->
                             true
                          | MC_eq (IV (prov1, n1), IV (prov2, n2)) ->
-                            Nat_big_num.equal n1 n2
+                            Z.equal n1 n2
                          | MC_eq (IV (prov1, n), IC (prov2, c)) ->
-                            Nat_big_num.equal n (C.cap_get_value c)
+                            Z.equal n (C.cap_get_value c)
                          | MC_eq (IC (prov1, c), IV (prov2, n)) ->
-                            Nat_big_num.equal n (C.cap_get_value c)
+                            Z.equal n (C.cap_get_value c)
                          | MC_eq (IC (prov1, c1), IC (prov2, c2)) ->
-                            Nat_big_num.equal (C.cap_get_value c1) (C.cap_get_value c2)
+                            Z.equal (C.cap_get_value c1) (C.cap_get_value c2)
                          | MC_le (IV (prov1, n1), IV (prov2, n2)) ->
-                            Nat_big_num.less_equal n1 n2
+                            Z.less_equal n1 n2
                          | MC_le (IV (prov1, n), IC (prov2, c)) ->
-                            Nat_big_num.less_equal n (C.cap_get_value c)
+                            Z.less_equal n (C.cap_get_value c)
                          | MC_le (IC (prov1, c), IV (prov2, n)) ->
-                            Nat_big_num.less_equal (C.cap_get_value c) n
+                            Z.less_equal (C.cap_get_value c) n
                          | MC_le (IC (prov1, c1), IC (prov2, c2)) ->
-                            Nat_big_num.less_equal (C.cap_get_value c1) (C.cap_get_value c2)
+                            Z.less_equal (C.cap_get_value c1) (C.cap_get_value c2)
                          | MC_lt (IV (prov1, n1), IV (prov2, n2)) ->
-                            Nat_big_num.less n1 n2
+                            Z.less n1 n2
                          | MC_lt (IV (prov1, n), IC (prov2, c)) ->
-                            Nat_big_num.less n (C.cap_get_value c)
+                            Z.less n (C.cap_get_value c)
                          | MC_lt (IC (prov1, c), IV (prov2, n)) ->
-                            Nat_big_num.less (C.cap_get_value c) n
+                            Z.less (C.cap_get_value c) n
                          | MC_lt (IC (prov1, c1), IC (prov2, c2)) ->
-                            Nat_big_num.less (C.cap_get_value c1) (C.cap_get_value c2)
+                            Z.less (C.cap_get_value c1) (C.cap_get_value c2)
                          | MC_in_device _ ->
                             failwith "TODO: Concrete, with_constraints: MC_in_device"
                          | MC_or (cs1, cs2) ->
@@ -367,7 +372,7 @@ module CHERI (C:Capability
   type allocation = {
       prefix: Symbol.prefix;
       base: C.vaddr;
-      size: N.num; (*TODO: this is probably unnecessary once we have the type *)
+      size: Z.num; (*TODO: this is probably unnecessary once we have the type *)
       ty: ctype option; (* None when dynamically allocated *)
       is_readonly: bool;
       taint: [ `Unexposed | `Exposed ]; (* NOTE: PNVI-ae, PNVI-ae-udi *)
@@ -452,7 +457,7 @@ module CHERI (C:Capability
       iota_map: [ `Single of storage_instance_id | `Double of storage_instance_id * storage_instance_id ] IntMap.t;
       funptrmap: (Digest.t * string * C.t) IntMap.t;
       varargs: (int * (ctype * pointer_value) list) IntMap.t;
-      next_varargs_id: N.num;
+      next_varargs_id: Z.num;
       bytemap: AbsByte.t IntMap.t;
       captags: bool IntMap.t;
 
@@ -461,17 +466,15 @@ module CHERI (C:Capability
       last_used: storage_instance_id option;
     }
   
-  let initial_address = 0xFFFFFFFF
-  
   let initial_mem_state = {
-      next_alloc_id= Nat_big_num.zero;
-      next_iota= N.zero;
+      next_alloc_id= Z.zero;
+      next_iota= Z.zero;
       allocations= IntMap.empty;
       iota_map= IntMap.empty;
-      last_address= N.of_int initial_address; (* TODO: this is a random impl-def choice *)
+      last_address= Z.of_int initial_address; (* TODO: this is a random impl-def choice *)
       funptrmap = IntMap.empty;
       varargs = IntMap.empty;
-      next_varargs_id = N.zero;
+      next_varargs_id = Z.zero;
       bytemap= IntMap.empty;
       captags= IntMap.empty;
 
@@ -482,12 +485,12 @@ module CHERI (C:Capability
 
   type footprint =
     (* base address, size *)
-    | FP of C.vaddr * N.num
+    | FP of C.vaddr * Z.num
 
   let check_overlap (FP (b1, sz1)) (FP (b2, sz2)) =
-    if N.equal b1 b2 && N.equal sz1 sz2 then
+    if Z.equal b1 b2 && Z.equal sz1 sz2 then
       ExactOverlap
-    else if N.(less_equal (add b1 sz1) b2) || N.(less_equal (add b2 sz2) b1) then
+    else if Z.(less_equal (add b1 sz1) b2) || Z.(less_equal (add b2 sz2) b1) then
       Disjoint
     else
       PartialOverlap
@@ -532,9 +535,9 @@ module CHERI (C:Capability
     | Prov_none ->
        "@empty"
     | Prov_some alloc_id ->
-       "@" ^ N.to_string alloc_id
+       "@" ^ Z.to_string alloc_id
     | Prov_symbolic iota ->
-       "@iota(" ^ N.to_string iota ^ ")"
+       "@iota(" ^ Z.to_string iota ^ ")"
     | Prov_device ->
        "@device"
 
@@ -557,16 +560,16 @@ module CHERI (C:Capability
   let pp_integer_value = function
     | (IV (prov, n)) ->
        if !Debug_ocaml.debug_level >= 3 then
-         !^ ("<" ^ string_of_provenance prov ^ ">:" ^ Nat_big_num.to_string n)
+         !^ ("<" ^ string_of_provenance prov ^ ">:" ^ Z.to_string n)
        else
-         !^ (Nat_big_num.to_string n)
+         !^ (Z.to_string n)
     | (IC (prov, c)) ->
        (* TODO: better pretty-printing of capabilities *)
        let n = (C.cap_get_value c) in
        if !Debug_ocaml.debug_level >= 3 then
-         !^ ("<" ^ string_of_provenance prov ^ ">:" ^ Nat_big_num.to_string n)
+         !^ ("<" ^ string_of_provenance prov ^ ">:" ^ Z.to_string n)
        else
-         !^ (Nat_big_num.to_string n)
+         !^ (Z.to_string n)
 
   let pp_integer_value_for_core = pp_integer_value
 
@@ -617,8 +620,8 @@ module CHERI (C:Capability
   let device_ranges : (C.vaddr * C.vaddr) list =
     (* TODO: these are some hardcoded ranges to match the Charon tests... *)
     (* NOTE: these two ranges only have 4 bytes (e.g. one int) *)
-    [ (N.of_int64 0x40000000L, N.of_int64 0x40000004L)
-    ; (N.of_int64 0xABCL, N.of_int64 0XAC0L) ]
+    [ (Z.of_int64 0x40000000L, Z.of_int64 0x40000004L)
+    ; (Z.of_int64 0xABCL, Z.of_int64 0XAC0L) ]
 
 
   let is_PNVI () =
@@ -645,7 +648,7 @@ module CHERI (C:Capability
         get >>= fun st ->
         IntMap.iter AbsByte.(fun addr b ->
           Printf.fprintf stderr "@%s ==> %s: %s%s\n"
-            (N.to_string addr)
+            (Z.to_string addr)
             (string_of_provenance b.prov)
             (match b.value with None -> "UNSPEC" | Some c -> string_of_int (int_of_char c))
             (match b.copy_offset with None -> "" | Some n -> " [" ^ string_of_int n ^ "]")
@@ -669,16 +672,16 @@ module CHERI (C:Capability
     | Some ret ->
        return ret
     | None ->
-       fail (MerrOutsideLifetime ("CHERI.get_allocation, alloc_id=" ^ N.to_string alloc_id))
+       fail (MerrOutsideLifetime ("CHERI.get_allocation, alloc_id=" ^ Z.to_string alloc_id))
 
   let is_within_bound alloc_id lvalue_ty addr =
     get_allocation alloc_id >>= fun alloc ->
-    return (N.less_equal alloc.base addr && N.less_equal (N.add addr (N.of_int (sizeof lvalue_ty))) (N.add alloc.base alloc.size))
+    return (Z.less_equal alloc.base addr && Z.less_equal (Z.add addr (Z.of_int (sizeof lvalue_ty))) (Z.add alloc.base alloc.size))
 
   let is_within_device ty addr =
     return begin
         List.exists (fun (min, max) ->
-            N.less_equal min addr && N.less_equal (N.add addr (N.of_int (sizeof ty))) max
+            Z.less_equal min addr && Z.less_equal (Z.add addr (Z.of_int (sizeof ty))) max
           ) device_ranges
       end
 
@@ -687,7 +690,7 @@ module CHERI (C:Capability
     get_allocation alloc_id >>= fun alloc ->
     match alloc.ty with
     | Some ty when AilTypesAux.is_atomic ty ->
-       if    addr = alloc.base && N.equal (N.of_int (sizeof lvalue_ty)) alloc.size
+       if    addr = alloc.base && Z.equal (Z.of_int (sizeof lvalue_ty)) alloc.size
              && Ctype.ctypeEqual lvalue_ty ty then
          (* the types equality check is to deal with the case where the
             first member is accessed and their are no padding bytes ... *)
@@ -711,7 +714,7 @@ module CHERI (C:Capability
              (*           let offset = n_bytes - 1 - z in *)
              (*KKK*)
              let offset = z in
-             Nat_big_num.(add base_addr (of_int offset))
+             Z.(add base_addr (of_int offset))
       ))
 
 
@@ -724,7 +727,7 @@ module CHERI (C:Capability
             IntMap.add addr b acc
           ) st.bytemap begin
             List.init (List.length bs) (fun z ->
-                (Nat_big_num.(add base_addr (of_int z), L.nth bs z))
+                (Z.(add base_addr (of_int z), L.nth bs z))
               )
           end
       end
@@ -739,15 +742,15 @@ module CHERI (C:Capability
     | (first::_ as cs) ->
        (* NOTE: this is to preserve the binary signedness *)
        let init =
-         if is_signed && N.(equal (succ zero) (extract_num (of_int (int_of_char first)) 7 1)) then
-           N.of_int (-1)
+         if is_signed && Z.(equal (succ zero) (extract_num (of_int (int_of_char first)) 7 1)) then
+           Z.of_int (-1)
          else
-           N.zero in
+           Z.zero in
        let rec aux acc = function
          | [] ->
             acc
          | c::cs' ->
-            aux N.(bitwise_xor (of_int (int_of_char c)) (shift_left acc 8)) cs' in
+            aux Z.(bitwise_xor (of_int (int_of_char c)) (shift_left acc 8)) cs' in
        aux init cs
 
   (* TODO: maybe move somewhere else *)
@@ -772,7 +775,7 @@ module CHERI (C:Capability
     IntMap.fold (fun alloc_id alloc acc ->
         let new_opt =
           if    not (List.mem alloc_id st.dead_allocations)
-                && N.less_equal alloc.base addr && N.less addr (N.add alloc.base alloc.size) then
+                && Z.less_equal alloc.base addr && Z.less addr (Z.add alloc.base alloc.size) then
             (* PNVI-ae, PNVI-ae-udi *)
             if require_exposed && alloc.taint <> `Exposed then
               None
@@ -780,7 +783,7 @@ module CHERI (C:Capability
               Some alloc_id
           else if allow_one_past then
             (* PNVI-ae-udi *)
-            if    N.equal addr (N.add alloc.base alloc.size)
+            if    Z.equal addr (Z.add alloc.base alloc.size)
                   && not (require_exposed && alloc.taint <> `Exposed) then
               Some alloc_id
             else
@@ -800,7 +803,7 @@ module CHERI (C:Capability
            acc
       (*
         if    not (List.mem alloc_id st.dead_allocations)
-        && N.less_equal alloc.base addr && N.less addr (N.add alloc.base alloc.size) then
+        && Z.less_equal alloc.base addr && Z.less addr (Z.add alloc.base alloc.size) then
         (* PNVI-ae, PNVI-ae-udi *)
         if require_exposed && alloc.taint <> `Exposed then
         `NoAlloc
@@ -808,7 +811,7 @@ module CHERI (C:Capability
         `SingleAlloc alloc_id
         else if allow_one_past then
         (* PNVI-ae-udi *)
-        if N.equal addr (N.add alloc.base alloc.size) then
+        if Z.equal addr (Z.add alloc.base alloc.size) then
         match
         IntMap.fold (fun alloc_id' alloc' acc' ->
         match acc' with
@@ -862,7 +865,7 @@ module CHERI (C:Capability
   let add_iota alloc_ids =
     get >>= fun st ->
     let iota = st.next_iota in
-    put {st with next_iota= N.succ st.next_iota;
+    put {st with next_iota= Z.succ st.next_iota;
                  iota_map= IntMap.add iota (`Double alloc_ids) st.iota_map } >>= fun () ->
     return iota
 
@@ -993,7 +996,7 @@ module CHERI (C:Capability
        , begin match extract_unspec bs1' with
          | Some cs ->
             MVEfloating ( fty
-                       , Int64.float_of_bits (N.to_int64 (int_of_bytes true cs)) )
+                       , Int64.float_of_bits (Z.to_int64 (int_of_bytes true cs)) )
          | None ->
             MVEunspecified cty
          end, bs2)
@@ -1002,11 +1005,11 @@ module CHERI (C:Capability
          if n <= 0 then
            (taint_acc, MVEarray (List.rev mval_acc), cs)
          else
-           let el_addr = N.add addr (N.of_int ((n-1)*(sizeof elem_ty))) in
+           let el_addr = Z.add addr (Z.of_int ((n-1)*(sizeof elem_ty))) in
            let (taint, mval, cs') = self el_addr elem_ty cs in
            aux (n-1) (merge_taint taint taint_acc, mval :: mval_acc) cs'
        in
-       aux (Nat_big_num.to_int n) (`NoTaint, []) bs
+       aux (Z.to_int n) (`NoTaint, []) bs
     | Pointer (_, ref_ty) ->
        let (bs1, bs2) = L.split_at (sizeof cty) bs in
        Debug_ocaml.print_debug 1 [] (fun () -> "TODO: Concrete, assuming pointer repr is unsigned??");
@@ -1039,10 +1042,10 @@ module CHERI (C:Capability
                              (* could not decode capability *)
                              MVErr (MerrCHERI CheriErrDecodingCap)
                           | Some c ->
-                             let n = C.cap_get_value c in
+                             let n = (Z.sub (C.cap_get_value c) (Z.of_int initial_address)) in
                              begin match IntMap.find_opt n funptrmap with
-                             | Some (file_dig, name) ->
-                                MVEpointer (ref_ty, PV(prov, PVfunction (FP_valid (Symbol.Symbol (file_dig, N.to_int n, SD_Id name)))))
+                             | Some (file_dig, name, _) ->
+                                MVEpointer (ref_ty, PV(prov, PVfunction (FP_valid (Symbol.Symbol (file_dig, Z.to_int n, SD_Id name)))))
                              | None ->
                                 MVEpointer (ref_ty, PV(prov, PVfunction (FP_invalid c)))
                              end
@@ -1099,7 +1102,7 @@ module CHERI (C:Capability
        let (bs1, bs2) = L.split_at (sizeof cty) bs in
        let (taint, rev_xs, _, bs') = List.fold_left (fun (taint_acc, acc_xs, previous_offset, acc_bs) (memb_ident, memb_ty, memb_offset) ->
                                          let pad = memb_offset - previous_offset in
-                                         let memb_addr = N.add addr (N.of_int memb_offset) in
+                                         let memb_addr = Z.add addr (Z.of_int memb_offset) in
                                          let (taint, mval, acc_bs') = self memb_addr memb_ty (L.drop pad acc_bs) in
                                          (merge_taint taint taint_acc, (memb_ident, memb_ty, mval)::acc_xs, memb_offset + sizeof memb_ty, acc_bs')
                                        ) (`NoTaint, [], 0, bs1) (fst (offsetsof (Tags.tagDefs ()) tag_sym)) in
@@ -1113,19 +1116,19 @@ module CHERI (C:Capability
     let nbits = 8 * size in
     let (min, max) =
       if is_signed then
-        ( N.negate (N.pow_int (N.of_int 2) (nbits-1))
-        , N.sub (N.pow_int (N.of_int 2) (nbits-1)) N.(succ zero) )
+        ( Z.negate (Z.pow_int (Z.of_int 2) (nbits-1))
+        , Z.sub (Z.pow_int (Z.of_int 2) (nbits-1)) Z.(succ zero) )
       else
-        ( N.zero
-        , N.sub (N.pow_int (N.of_int 2) nbits) N.(succ zero) ) in
+        ( Z.zero
+        , Z.sub (Z.pow_int (Z.of_int 2) nbits) Z.(succ zero) ) in
     if not (min <= i && i <= max) || nbits > 128 then begin
         Printf.printf "failed: bytes_of_int(%s), i= %s, nbits= %d, [%s ... %s]\n"
           (if is_signed then "signed" else "unsigned")
-          (N.to_string i) nbits (N.to_string min) (N.to_string max);
+          (Z.to_string i) nbits (Z.to_string min) (Z.to_string max);
         assert false
       end else
       List.init size (fun n ->
-          Some (char_of_int (N.to_int (N.extract_num i (8*n) 8)))
+          Some (char_of_int (Z.to_int (Z.extract_num i (8*n) 8)))
         )
 
   let rec typeof mval =
@@ -1144,7 +1147,7 @@ module CHERI (C:Capability
                | MVarray ((mval::_) as mvals) ->
                   (* TODO: checking all the elements would be stupidly slow, but this
                      feels wrong *)
-                  Array (typeof mval, Some (N.of_int (List.length mvals)))
+                  Array (typeof mval, Some (Z.of_int (List.length mvals)))
                | MVstruct (tag_sym, _) ->
                   Struct tag_sym
                | MVunion (tag_sym, _, _) ->
@@ -1152,7 +1155,7 @@ module CHERI (C:Capability
       )
 
   (* INTERNAL repr *)
-  let rec repr funptrmap mval : ((Digest.t * string) IntMap.t * AbsByte.t list) =
+  let rec repr funptrmap mval : ((Digest.t * string * C.t) IntMap.t * AbsByte.t list) =
     let ret bs = (funptrmap, bs) in
     match mval with
     | MVunspecified ty ->
@@ -1171,7 +1174,7 @@ module CHERI (C:Capability
        ret @@ List.map (AbsByte.v Prov_none) begin
                   bytes_of_int
                     true (* TODO: check that *)
-                    (sizeof (Ctype ([], Basic (Floating fty)))) (N.of_int64 (Int64.bits_of_float fval))
+                    (sizeof (Ctype ([], Basic (Floating fty)))) (Z.of_int64 (Int64.bits_of_float fval))
                 end
     | MVpointer (ref_ty, PV (prov, ptrval_)) ->
        Debug_ocaml.print_debug 1 [] (fun () -> "NOTE: we fix the sizeof pointers to 8 bytes");
@@ -1188,8 +1191,8 @@ module CHERI (C:Capability
           (* TODO(CHERI): *)
           (begin match opt_name with
            | SD_Id name ->
-              let c = C.alloc_fun (Z.add initial_address (N.of_int n)) in
-              IntMap.add (N.of_int n) (file_dig, name, c) funptrmap
+              let c = C.alloc_fun (Z.add (Z.of_int initial_address) (Z.of_int n)) in
+              IntMap.add (Z.of_int n) (file_dig, name, c) funptrmap
            | SD_ObjectAddress _ -> funptrmap
            | SD_Return -> funptrmap
            | SD_FunArg _ -> funptrmap
@@ -1200,7 +1203,7 @@ module CHERI (C:Capability
            end, List.map (AbsByte.v prov) begin
                     bytes_of_int
                       false
-                      ptr_size (N.of_int n)
+                      ptr_size (Z.of_int n)
                   end)
        | PVfunction (FP_invalid c)
          | PVconcrete c ->
@@ -1236,7 +1239,7 @@ module CHERI (C:Capability
   (*
   let dot_of_mem_state st =
     let get_value alloc =
-      let bs = fetch_bytes st.bytemap alloc.base (N.to_int alloc.size) in
+      let bs = fetch_bytes st.bytemap alloc.base (Z.to_int alloc.size) in
       match alloc.ty with
       | Some ty ->
          let (_, mval, _) = abst (find_overlaping st) st.funptrmap ty bs in
@@ -1246,9 +1249,9 @@ module CHERI (C:Capability
     in
     let xs = IntMap.fold (fun alloc_id alloc acc ->
                  Printf.sprintf "alloc%s [shape=\"record\", label=\"{ addr: %s | sz: %s | %s }\"];"
-                   (N.to_string alloc_id)
-                   (N.to_string alloc.base)
-                   (N.to_string alloc.size)
+                   (Z.to_string alloc_id)
+                   (Z.to_string alloc.base)
+                   (Z.to_string alloc.size)
                    (Pp_utils.to_plain_string (pp_mem_value (get_value alloc))) :: acc
                ) st.allocations [] in
     prerr_endline "digraph G{";
@@ -1259,11 +1262,11 @@ module CHERI (C:Capability
 
 
   (* TODO: this module should be made parametric in this function (i.e. the allocator should be impl-def) *)
-  let allocator (size: N.num) (align: N.num) : (storage_instance_id * C.vaddr) memM =
+  let allocator (size: Z.num) (align: Z.num) : (storage_instance_id * C.vaddr) memM =
     get >>= fun st ->
     let alloc_id = st.next_alloc_id in
     begin
-      let open N in
+      let open Z in
       let z = sub st.last_address size in
       let (q,m) = quomod z align in
       let z' = sub z (if less q zero then negate m else m) in
@@ -1273,7 +1276,7 @@ module CHERI (C:Capability
         return z'
     end >>= fun addr ->
     put { st with
-        next_alloc_id= Nat_big_num.succ alloc_id;
+        next_alloc_id= Z.succ alloc_id;
         last_used= Some alloc_id;
         last_address= addr
       } >>= fun () ->
@@ -1284,13 +1287,13 @@ module CHERI (C:Capability
     let align = num_of_int int_val in
     (*    print_bytemap "ENTERING ALLOC_STATIC" >>= fun () -> *)
     let sz = sizeof ty in
-    let size = N.of_int sz in
+    let size = Z.of_int sz in
     allocator size align >>= fun (alloc_id, addr) ->
     Debug_ocaml.print_debug 10(*KKK*) [] (fun () ->
         "STATIC ALLOC - pref: " ^ String_symbol.string_of_prefix pref ^
-          " --> alloc_id= " ^ N.to_string alloc_id ^
-            ", size= " ^ N.to_string size ^
-              ", addr= " ^ N.to_string addr
+          " --> alloc_id= " ^ Z.to_string alloc_id ^
+            ", size= " ^ Z.to_string size ^
+              ", addr= " ^ Z.to_string addr
       );
     begin match init_opt with
     | None ->
@@ -1304,7 +1307,7 @@ module CHERI (C:Capability
        update (fun st ->
            let (funptrmap, pre_bs) = repr st.funptrmap mval in
            assert (List.length pre_bs == sz) ;
-           let bs = List.mapi (fun i b -> (Nat_big_num.add addr (Nat_big_num.of_int i), b)) pre_bs in
+           let bs = List.mapi (fun i b -> (Z.add addr (Z.of_int i), b)) pre_bs in
            { st with
              allocations= IntMap.add alloc_id alloc st.allocations;
              bytemap=
@@ -1343,10 +1346,10 @@ module CHERI (C:Capability
       | Some (Ctype (_, Basic _))
         | Some (Ctype (_, Union _))
         | Some (Ctype (_, Pointer _)) ->
-         let offset = N.sub addr alloc.base in
-         Some (string_of_prefix alloc.prefix ^ " + " ^ N.to_string offset)
+         let offset = Z.sub addr alloc.base in
+         Some (string_of_prefix alloc.prefix ^ " + " ^ Z.to_string offset)
       | Some (Ctype (_, Struct tag_sym)) -> (* TODO: nested structs *)
-         let offset = N.to_int @@ N.sub addr alloc.base in
+         let offset = Z.to_int @@ Z.sub addr alloc.base in
          let (offs, _) = offsetsof (Tags.tagDefs ()) tag_sym in
          let rec find = function
            | [] ->
@@ -1358,9 +1361,9 @@ module CHERI (C:Capability
                 find offs
          in find offs
       | Some (Ctype (_, Array (ty, _))) ->
-         let offset = N.sub addr alloc.base in
-         if N.less offset alloc.size then
-           let n = (N.to_int offset) / sizeof ty in
+         let offset = Z.sub addr alloc.base in
+         if Z.less offset alloc.size then
+           let n = (Z.to_int offset) / sizeof ty in
            Some (string_of_prefix alloc.prefix ^ "[" ^ string_of_int n ^ "]")
          else
            None
@@ -1390,9 +1393,9 @@ module CHERI (C:Capability
   (** Checks if memory region starting from [addr] and
       of size [sz] fits withing inclusuvive interval [b1,b2] *)
   let cap_bounds_check (b1,b2) addr sz =
-    N.less_equal b1 addr
-    && N.less_equal addr b2
-    && N.less_equal (N.add addr sz) (N.succ b2)
+    Z.less_equal b1 addr
+    && Z.less_equal addr b2
+    && Z.less_equal (Z.add addr sz) (Z.succ b2)
 
   let allocate_region tid pref align_int size_int =
     let align_n = num_of_int align_int in
@@ -1400,9 +1403,9 @@ module CHERI (C:Capability
     allocator size_n align_n >>= fun (alloc_id, addr) ->
     Debug_ocaml.print_debug 1 [] (fun () ->
         "DYNAMIC ALLOC - pref: " ^ String_symbol.string_of_prefix pref ^ (* pref will always be Core *)
-          " --> alloc_id= " ^ N.to_string alloc_id ^
-            ", size= " ^ N.to_string size_n ^
-              ", addr= " ^ N.to_string addr
+          " --> alloc_id= " ^ Z.to_string alloc_id ^
+            ", size= " ^ Z.to_string size_n ^
+              ", addr= " ^ Z.to_string addr
       );
     (* TODO: why aren't we using the argument pref? *)
     let alloc = {prefix= Symbol.PrefMalloc; base= addr; size= size_n; ty= None; is_readonly= false; taint= `Unexposed} in
@@ -1440,7 +1443,7 @@ module CHERI (C:Capability
             return (`FAIL (MerrUndefinedFree (loc, Free_static_allocation)))
          | false ->
             get_allocation z >>= fun alloc ->
-            if N.equal (C.cap_get_value addr) alloc.base then
+            if Z.equal (C.cap_get_value addr) alloc.base then
               return `OK
             else
               return (`FAIL (MerrUndefinedFree (loc, Free_out_of_bound))) in
@@ -1489,9 +1492,9 @@ module CHERI (C:Capability
                                    failwith "Concrete: FREE was called on a dead allocation"
                               | false ->
                                  get_allocation alloc_id >>= fun alloc ->
-                                 if N.equal (C.cap_get_value addr) alloc.base then begin
+                                 if Z.equal (C.cap_get_value addr) alloc.base then begin
                                      Debug_ocaml.print_debug 1 [] (fun () ->
-                                         "KILLING alloc_id= " ^ N.to_string alloc_id
+                                         "KILLING alloc_id= " ^ Z.to_string alloc_id
                                        );
                                      update begin fun st ->
                                        {st with dead_allocations= alloc_id :: st.dead_allocations;
@@ -1517,8 +1520,8 @@ module CHERI (C:Capability
         match (Ocaml_implementation.get ()).alignof_pointer with
         | None -> failwith "alignof_pointer must be specified in Ocaml_implementation"
         | Some v ->
-           let (q,m) = N.quomod a (N.of_int v) in
-           if m <> N.zero then failwith "Unaligned address in load"
+           let (q,m) = Z.quomod a (Z.of_int v) in
+           if m <> Z.zero then failwith "Unaligned address in load"
            else IntMap.find_opt q st.captags
       in
       let (taint, mval, bs') = abst (find_overlaping st) st.funptrmap tag_query addr ty bs in
@@ -1530,7 +1533,7 @@ module CHERI (C:Capability
               return ()
       end >>= fun () ->
       update (fun st -> { st with last_used= alloc_id_opt }) >>= fun () ->
-      let fp = FP (addr, (N.of_int (sizeof ty))) in
+      let fp = FP (addr, (Z.of_int (sizeof ty))) in
       begin match bs' with
       | [] ->
          (* controls reads from uninitialized memory *)
@@ -1550,7 +1553,7 @@ module CHERI (C:Capability
         let addr = C.cap_get_value c in
         if C.P.perm_is_load (C.get_perms c) then
           let bounds = C.cap_get_bounds c in
-          let nsz = N.of_int sz in
+          let nsz = Z.of_int sz in
           if cap_bounds_check bounds addr nsz then
             do_load alloc_id_opt addr sz
           else
@@ -1611,7 +1614,7 @@ module CHERI (C:Capability
        begin is_within_bound alloc_id ty (C.cap_get_value addr) >>= function
              | false ->
                 Debug_ocaml.print_debug 1 [] (fun () ->
-                    "LOAD out of bound, alloc_id=" ^ N.to_string alloc_id
+                    "LOAD out of bound, alloc_id=" ^ Z.to_string alloc_id
                   );
                 fail (MerrAccess (loc, LoadAccess, OutOfBoundPtr))
              | true ->
@@ -1646,7 +1649,7 @@ module CHERI (C:Capability
           let sz = sizeof ty in
           if C.P.perm_is_store (C.get_perms c) then
             let bounds = C.cap_get_bounds c in
-            let nsz = N.of_int sz in
+            let nsz = Z.of_int sz in
             if cap_bounds_check bounds addr nsz then
               begin
                update begin fun st ->
@@ -1655,7 +1658,7 @@ module CHERI (C:Capability
                   "|pre_bs|=" ^ string_of_int (List.length pre_bs) ^ " <---> sz: " ^ string_of_int sz
                 );
                  assert (List.length pre_bs == sz) ;
-                 let bs = List.mapi (fun i b -> (Nat_big_num.add addr (Nat_big_num.of_int i), b)) pre_bs in
+                 let bs = List.mapi (fun i b -> (Z.add addr (Z.of_int i), b)) pre_bs in
                  { st with last_used= alloc_id_opt;
                            bytemap=
                              List.fold_left (fun acc (addr, b) ->
@@ -1668,7 +1671,7 @@ module CHERI (C:Capability
                end
             else
               fail (MerrCHERI
-                      (CheriBoundsErr (bounds, addr, N.of_int sz)))
+                      (CheriBoundsErr (bounds, addr, Z.of_int sz)))
           else
             fail (MerrCHERI CheriMerrUnsufficientPermissions)
         else
@@ -1781,10 +1784,10 @@ module CHERI (C:Capability
     | PVfunction (FP_valid sym) -> Some sym
     | PVconcrete c ->
        (* FIXME: This is wrong. A function pointer with the same id in different files might exist. *)
-       let n = C.cap_get_value c in
+       let n = (Z.sub (C.cap_get_value c) (Z.of_int initial_address)) in
        begin match IntMap.find_opt n st.funptrmap with
-       | Some (file_dig, name) ->
-          Some (Symbol.Symbol (file_dig, N.to_int n, SD_Id name))
+       | Some (file_dig, name, _) ->
+          Some (Symbol.Symbol (file_dig, Z.to_int n, SD_Id name))
        | None ->
           None
        end
@@ -1801,14 +1804,14 @@ module CHERI (C:Capability
     | (PVfunction (FP_valid sym1), PVfunction (FP_valid sym2)) ->
        return (Symbol.instance_Basic_classes_Eq_Symbol_sym_dict.Lem_pervasives.isEqual_method sym1 sym2)
     | (PVfunction (FP_invalid c1), PVfunction (FP_invalid c2)) ->
-       return (Nat_big_num.equal (C.cap_get_value c1) (C.cap_get_value c2))
+       return (Z.equal (C.cap_get_value c1) (C.cap_get_value c2))
     | (PVfunction (FP_valid sym), PVfunction (FP_invalid c))
       | (PVfunction (FP_invalid c), PVfunction (FP_valid sym)) ->
           get >>= fun st ->
-          let n = C.cap_get_value c in
+          let n = (Z.sub (C.cap_get_value c) (Z.of_int initial_address)) in
           begin match IntMap.find_opt n st.funptrmap with
-            | Some (file_dig, name) ->
-                let sym2 = Symbol.Symbol (file_dig, N.to_int n, SD_Id name) in
+            | Some (file_dig, name, _) ->
+                let sym2 = Symbol.Symbol (file_dig, Z.to_int n, SD_Id name) in
                 return (Symbol.instance_Basic_classes_Eq_Symbol_sym_dict.Lem_pervasives.isEqual_method sym sym2)
             | None ->
                 failwith "CHERI.eq_ptrval ==> FP_valid failed to resolve function symbol"
@@ -1823,7 +1826,7 @@ module CHERI (C:Capability
             | (Prov_none, Prov_none) ->
                return true
             | (Prov_some alloc_id1, Prov_some alloc_id2) ->
-               return (N.equal alloc_id1 alloc_id2)
+               return (Z.equal alloc_id1 alloc_id2)
             | (Prov_device, Prov_device) ->
                return true
             | (Prov_symbolic iota1, Prov_symbolic iota2) ->
@@ -1832,7 +1835,7 @@ module CHERI (C:Capability
                lookup_iota iota2 >>= fun ids2 ->
                begin match (ids1, ids2) with
                | (`Single alloc_id1, `Single alloc_id2) ->
-                  return (N.equal alloc_id1 alloc_id2)
+                  return (Z.equal alloc_id1 alloc_id2)
                | _ ->
                   return false
                end
@@ -1856,7 +1859,7 @@ module CHERI (C:Capability
     | (PVconcrete addr1, PVconcrete addr2) ->
        if Switches.(has_switch SW_strict_pointer_relationals) then
          match prov1, prov2 with
-         | Prov_some alloc1, Prov_some alloc2 when N.equal alloc1 alloc2 ->
+         | Prov_some alloc1, Prov_some alloc2 when Z.equal alloc1 alloc2 ->
             return (C.value_compare addr1 addr2 < 0)
          | _ ->
             (* TODO: one past case *)
@@ -1917,10 +1920,10 @@ module CHERI (C:Capability
 
   let diff_ptrval diff_ty ptrval1 ptrval2 =
     let precond alloc addr1 addr2 =
-      N.less_equal alloc.base addr1
-      && N.less_equal addr1 (N.add alloc.base alloc.size)
-      && N.less_equal alloc.base addr2
-      && N.less_equal addr2 (N.add alloc.base alloc.size) in
+      Z.less_equal alloc.base addr1
+      && Z.less_equal addr1 (Z.add alloc.base alloc.size)
+      && Z.less_equal alloc.base addr2
+      && Z.less_equal addr2 (Z.add alloc.base alloc.size) in
 
     let valid_postcond addr1 addr2 =
       let diff_ty' = match diff_ty with
@@ -1928,7 +1931,7 @@ module CHERI (C:Capability
            elem_ty
         | _ ->
            diff_ty in
-      return (IV (Prov_none, N.div (N.sub addr1 addr2) (N.of_int (sizeof diff_ty')))) in
+      return (IV (Prov_none, Z.div (Z.sub addr1 addr2) (Z.of_int (sizeof diff_ty')))) in
     let error_postcond =
       fail MerrPtrdiff in
     if Switches.(has_switch (SW_pointer_arith `PERMISSIVE)) then
@@ -1939,7 +1942,7 @@ module CHERI (C:Capability
          error_postcond
     else match ptrval1, ptrval2 with
          | PV (Prov_some alloc_id1, (PVconcrete addr1)), PV (Prov_some alloc_id2, (PVconcrete addr2)) ->
-            if N.equal alloc_id1 alloc_id2 then
+            if Z.equal alloc_id1 alloc_id2 then
               get_allocation alloc_id1 >>= fun alloc ->
               if precond alloc (C.cap_get_value addr1) (C.cap_get_value addr2) then
                 valid_postcond (C.cap_get_value addr1) (C.cap_get_value addr2)
@@ -1957,7 +1960,7 @@ module CHERI (C:Capability
                UB *)
             lookup_iota iota >>= begin function
                                    | `Single alloc_id ->
-                                      if N.equal alloc_id alloc_id' then
+                                      if Z.equal alloc_id alloc_id' then
                                         get_allocation alloc_id >>= fun alloc ->
                                         if precond alloc (C.cap_get_value addr1) (C.cap_get_value addr2) then
                                           valid_postcond (C.cap_get_value addr1) (C.cap_get_value addr2)
@@ -1966,7 +1969,7 @@ module CHERI (C:Capability
                                       else
                                         error_postcond
                                    | `Double (alloc_id1, alloc_id2) ->
-                                      if N.equal alloc_id1 alloc_id' || N.equal alloc_id2 alloc_id' then
+                                      if Z.equal alloc_id1 alloc_id' || Z.equal alloc_id2 alloc_id' then
                                         get_allocation alloc_id' >>= fun alloc ->
                                         if precond alloc (C.cap_get_value addr1) (C.cap_get_value addr2) then
                                           update begin fun st ->
@@ -1988,23 +1991,23 @@ module CHERI (C:Capability
             let inter_ids =
               match ids1, ids2 with
               | `Single x, `Single y ->
-                 if N.equal x y then
+                 if Z.equal x y then
                    `Single x
                  else
                    `None
               | `Single x, `Double (y, z)
                 | `Double (y, z), `Single x ->
-                 if N.equal x y || N.equal x z then
+                 if Z.equal x y || Z.equal x z then
                    `Single x
                  else
                    `None
               | `Double (x1, x2), `Double (y1, y2) ->
-                 if N.equal x1 y1 then
-                   if N.equal x2 y2 then
+                 if Z.equal x1 y1 then
+                   if Z.equal x2 y2 then
                      `Double (x1, x2)
                    else
                      `Single x1
-                 else if N.equal x2 y2 then
+                 else if Z.equal x2 y2 then
                    `Single x2
                  else
                    `None in
@@ -2040,10 +2043,10 @@ module CHERI (C:Capability
           fail (MerrOther "called isWellAligned_ptrval on function pointer")
        | PV (_, PVconcrete addr) ->
           (*
-            Printf.printf "addr: %s\n" (Nat_big_num.to_string addr);
+            Printf.printf "addr: %s\n" (Z.to_string addr);
             Printf.printf "align: %d\n" (alignof ref_ty);
            *)
-          return (N.(equal (modulus (C.cap_get_value addr) (of_int (alignof ref_ty))) zero))
+          return (Z.(equal (modulus (C.cap_get_value addr) (of_int (alignof ref_ty))) zero))
        end
 
   (* Following §6.5.3.3, footnote 102) *)
@@ -2061,7 +2064,7 @@ module CHERI (C:Capability
         let sz = sizeof ref_ty in
         let addr = C.cap_get_value c in
         let bounds = C.cap_get_bounds c in
-        let nsz = N.of_int sz in
+        let nsz = Z.of_int sz in
         if cap_bounds_check bounds addr nsz then
           return ()
         else
@@ -2113,7 +2116,7 @@ module CHERI (C:Capability
              if is_PNVI () then
                (* TODO(CHERI): not sure if this whole branch is correct for CHERI *)
                (* TODO: device memory? *)
-               if N.equal addr N.zero then
+               if Z.equal addr Z.zero then
                  return (PV (Prov_none, PVnull ref_ty))
                else
                  get >>= fun st ->
@@ -2132,9 +2135,9 @@ module CHERI (C:Capability
                match prov with
                | Prov_none ->
                   (* TODO: check (in particular is that ok to only allow device pointers when there is no provenance? *)
-                  if List.exists (fun (min, max) -> N.less_equal min addr && N.less_equal addr max) device_ranges then
+                  if List.exists (fun (min, max) -> Z.less_equal min addr && Z.less_equal addr max) device_ranges then
                     return (PV (Prov_device, PVconcrete c))
-                  else if N.equal addr N.zero then
+                  else if Z.equal addr Z.zero then
                     (* All 0-address capabilities regardless of their
                        validity decoded as NULL. This is defacto behaviour
                        of morello Clang. See intptr3.c example.  *)
@@ -2149,7 +2152,7 @@ module CHERI (C:Capability
         | (Ctype.(Unsigned Intptr_t),(IV (_, _)) | Ctype.(Signed Intptr_t),(IV (_, _))) ->
            failwith "ptrfromint: invalid encoding for [u]intptr_t"
         | _, (IV (prov, n)) ->
-           if N.equal n N.zero then
+           if Z.equal n Z.zero then
              if is_PNVI () then
                (* TODO: device memory? *)
                return (PV (Prov_none, PVnull ref_ty))
@@ -2161,12 +2164,12 @@ module CHERI (C:Capability
            else
              let n =
                (* wrapI *)
-               let dlt = N.succ (N.sub C.max_vaddr C.min_vaddr) in
-               let r = N.integerRem_f n dlt in
-               if N.less_equal r C.max_vaddr then
+               let dlt = Z.succ (Z.sub C.max_vaddr C.min_vaddr) in
+               let r = Z.integerRem_f n dlt in
+               if Z.less_equal r C.max_vaddr then
                  r
                else
-                 N.sub r dlt in
+                 Z.sub r dlt in
 
              let c = C.cap_c0 in
              let c = C.cap_set_value c n in
@@ -2185,7 +2188,7 @@ module CHERI (C:Capability
       ident_equal ident memb_ident in
     match List.find_opt pred xs with
     | Some (_, _, offset) ->
-       IV (Prov_none, N.of_int offset)
+       IV (Prov_none, Z.of_int offset)
     | None ->
        failwith "CHERI.offsetof_ival: invalid memb_ident"
 
@@ -2205,7 +2208,7 @@ module CHERI (C:Capability
               | PVnull ty ->
                  (* TODO: unsure, this might just be undefined (gcc-torture assumes the
                     following behaviour though) *)
-                 if N.equal N.zero offset then
+                 if Z.equal Z.zero offset then
                    PVnull ty
                  else
                    (* The value of C0 could not be changed. *)
@@ -2214,14 +2217,14 @@ module CHERI (C:Capability
                  failwith "CHERI.member_shift_ptrval, PVfunction"
               | PVconcrete c ->
                  let addr = C.cap_get_value c in
-                 let c = C.cap_set_value c (N.add addr offset) in
+                 let c = C.cap_set_value c (Z.add addr offset) in
                  PVconcrete c)
 
   (* this will be used for pointer arithmetics *)
   let eff_array_shift_ptrval loc ptrval ty ival_int =
     let ival = num_of_int ival_int in
     (* KKK print_endline ("HELLO eff_array_shift_ptrval ==> " ^ Pp_utils.to_plain_string (pp_pointer_value ptrval)); *)
-    let offset = (Nat_big_num.(mul (of_int (sizeof ty)) ival)) in
+    let offset = (Z.(mul (of_int (sizeof ty)) ival)) in
     match ptrval with
     | PV (_, PVnull _) ->
        (* TODO: this seems to be undefined in ISO C *)
@@ -2236,15 +2239,15 @@ module CHERI (C:Capability
        (* TODO: this is duplicated code from the Prov_some case (I'm keeping
           PNVI-ae-udi stuff separated to avoid polluting the
           vanilla PNVI code) *)
-       let shifted_addr = N.add (C.cap_get_value c) offset in
+       let shifted_addr = Z.add (C.cap_get_value c) offset in
        let precond z =
          (* TODO: is it correct to use the "ty" as the lvalue_ty? *)
          if    Switches.(has_switch (SW_pointer_arith `STRICT))
                || (is_PNVI () && not (Switches.(has_switch (SW_pointer_arith `PERMISSIVE)))) then
            get_allocation z >>= fun alloc ->
-           if    N.less_equal alloc.base shifted_addr
-                 && N.less_equal (N.add shifted_addr (N.of_int (sizeof ty)))
-                      (N.add (N.add alloc.base alloc.size) (N.of_int (sizeof ty))) then
+           if    Z.less_equal alloc.base shifted_addr
+                 && Z.less_equal (Z.add shifted_addr (Z.of_int (sizeof ty)))
+                      (Z.add (Z.add alloc.base alloc.size) (Z.of_int (sizeof ty))) then
              return true
            else
              return false
@@ -2253,7 +2256,7 @@ module CHERI (C:Capability
        lookup_iota iota >>=
          begin function
            | `Double (alloc_id1, alloc_id2) ->
-              if not (N.equal ival N.zero) then
+              if not (Z.equal ival Z.zero) then
                 (* TODO: this is yucky *)
                 precond alloc_id1 >>=
                   begin function
@@ -2265,8 +2268,8 @@ module CHERI (C:Capability
                                 return `NoCollapse
                               else begin
                                   Printf.printf "id1= %s, id2= %s ==> addr= %s\n"
-                                    (N.to_string alloc_id1) (N.to_string alloc_id2)
-                                    (N.to_string shifted_addr);
+                                    (Z.to_string alloc_id1) (Z.to_string alloc_id2)
+                                    (Z.to_string shifted_addr);
                                   fail (MerrOther "(PNVI-ae-uid) ambiguous non-zero array shift")
                                 end
                            | false ->
@@ -2321,13 +2324,13 @@ module CHERI (C:Capability
 
     | PV (Prov_some alloc_id, PVconcrete c) ->
        (* TODO: is it correct to use the "ty" as the lvalue_ty? *)
-       let shifted_addr = N.add (C.cap_get_value c) offset in
+       let shifted_addr = Z.add (C.cap_get_value c) offset in
        if    Switches.(has_switch (SW_pointer_arith `STRICT))
              || (is_PNVI () && not (Switches.(has_switch (SW_pointer_arith `PERMISSIVE)))) then
          get_allocation alloc_id >>= fun alloc ->
-         if    N.less_equal alloc.base shifted_addr
-               && N.less_equal (N.add shifted_addr (N.of_int (sizeof ty)))
-                    (N.add (N.add alloc.base alloc.size) (N.of_int (sizeof ty))) then
+         if    Z.less_equal alloc.base shifted_addr
+               && Z.less_equal (Z.add shifted_addr (Z.of_int (sizeof ty)))
+                    (Z.add (Z.add alloc.base alloc.size) (Z.of_int (sizeof ty))) then
            (* Could produce invalid cap. Consider raising error instead *)
            return (PV (Prov_some alloc_id, PVconcrete (C.cap_set_value c shifted_addr)))
          else
@@ -2336,7 +2339,7 @@ module CHERI (C:Capability
          (* Could produce invalid cap. Consider raising error instead *)
          return (PV (Prov_some alloc_id, PVconcrete (C.cap_set_value c shifted_addr)))
     | PV (Prov_none, PVconcrete c) ->
-       let shifted_addr = N.add (C.cap_get_value c) offset in
+       let shifted_addr = Z.add (C.cap_get_value c) offset in
        if    Switches.(has_switch (SW_pointer_arith `STRICT))
              || (is_PNVI () && not (Switches.(has_switch (SW_pointer_arith `PERMISSIVE)))) then
          fail (MerrOther "out-of-bound pointer arithmetic (Prov_none)")
@@ -2344,7 +2347,7 @@ module CHERI (C:Capability
          (* Could produce invalid cap. Consider raising error instead *)
          return (PV (Prov_none, PVconcrete (C.cap_set_value c shifted_addr)))
     | PV (Prov_device, PVconcrete c) ->
-       let shifted_addr = N.add (C.cap_get_value c) offset in
+       let shifted_addr = Z.add (C.cap_get_value c) offset in
        (* Could produce invalid cap. Consider raising error instead *)
        return (PV (Prov_device, PVconcrete (C.cap_set_value c shifted_addr)))
 
@@ -2358,7 +2361,7 @@ module CHERI (C:Capability
     IV (Prov_none, n)
 
   let max_ival ity =
-    let open Nat_big_num in
+    let open Z in
     let signed_max n =
       sub (pow_int (of_int 2) (8*n-1)) (of_int 1) in
     let unsigned_max n =
@@ -2396,7 +2399,7 @@ module CHERI (C:Capability
            end)
 
   let min_ival ity =
-    let open Nat_big_num in
+    let open Z in
     let signed_min n = negate (pow_int (of_int 2) (8*n-1)) in
     IV (Prov_none,
         begin match ity with
@@ -2431,9 +2434,9 @@ module CHERI (C:Capability
   let intfromptr _ ity (PV (prov, ptrval_)) =
     match ptrval_ with
     | PVnull _ ->
-       return (mk_ival prov Nat_big_num.zero)
+       return (mk_ival prov Z.zero)
     | PVfunction (FP_valid (Symbol.Symbol (_, n, _))) ->
-       return (mk_ival prov (Nat_big_num.of_int n))
+       return (mk_ival prov (Z.of_int n))
     | PVfunction (FP_invalid c)
     | PVconcrete c ->
        begin if Switches.(has_switch (SW_PNVI `AE) || has_switch (SW_PNVI `AE_UDI)) then
@@ -2454,7 +2457,7 @@ module CHERI (C:Capability
           let ity_max = num_of_int (max_ival ity) in
           let ity_min = num_of_int (min_ival ity) in
           let addr = C.cap_get_value c in
-          if N.(less addr ity_min || less ity_max addr) then
+          if Z.(less addr ity_min || less ity_max addr) then
             fail MerrIntFromPtr
           else
             return (mk_ival prov addr)
@@ -2515,7 +2518,7 @@ module CHERI (C:Capability
   let op_ival iop v1 v2 =
     (* NOTE: for PNVI we assume that prov1 = prov2 = Prov_none *)
     match iop with
-    | IntAdd -> int_bin combine_prov Nat_big_num.add v1 v2
+    | IntAdd -> int_bin combine_prov Z.add v1 v2
     | IntSub -> int_bin
                   (fun prov1 prov2 ->
                     match prov1, prov2 with
@@ -2524,43 +2527,43 @@ module CHERI (C:Capability
                        Prov_none
                     | _ ->
                        prov1)
-                  Nat_big_num.sub v1 v2
-    | IntMul -> int_bin combine_prov Nat_big_num.mul v1 v2
+                  Z.sub v1 v2
+    | IntMul -> int_bin combine_prov Z.mul v1 v2
     | IntDiv -> int_bin combine_prov
-                  (fun n1 n2 -> Nat_big_num.(if equal n2 zero then zero else integerDiv_t n1 n2))
+                  (fun n1 n2 -> Z.(if equal n2 zero then zero else integerDiv_t n1 n2))
                   v1 v2
-    | IntRem_t -> int_bin combine_prov Nat_big_num.integerRem_t v1 v2
-    | IntRem_f -> int_bin combine_prov Nat_big_num.integerRem_f v1 v2
+    | IntRem_t -> int_bin combine_prov Z.integerRem_t v1 v2
+    | IntRem_f -> int_bin combine_prov Z.integerRem_f v1 v2
     | IntExp ->
        (* NOTE: this operation doesn't exists in C, but is used in the elaboration of the
           shift operators. And for these we want the provenance of the left operand to be
           the one that is forwarded *)
        (* TODO: fail properly when y is too big? *)
        int_bin combine_prov (fun n1 n2 ->
-           Nat_big_num.pow_int n1 (Nat_big_num.to_int n2))
+           Z.pow_int n1 (Z.to_int n2))
          v1 v2
 
   let sizeof_ival ty =
-    IV (Prov_none, Nat_big_num.of_int (sizeof ty))
+    IV (Prov_none, Z.of_int (sizeof ty))
   let alignof_ival ty =
-    IV (Prov_none, Nat_big_num.of_int (alignof ty))
+    IV (Prov_none, Z.of_int (alignof ty))
 
   let bitwise_complement_ival _ = function
     | (IV (prov, n)) ->
         (* NOTE: for PNVI we assume that prov = Prov_none *)
         (* TODO *)
         (* prerr_endline "CHERI.bitwise_complement ==> HACK"; *)
-        IV (prov, Nat_big_num.(sub (negate n) (of_int 1)))
+        IV (prov, Z.(sub (negate n) (of_int 1)))
     | (IC (prov, c)) ->
         let n = C.cap_get_value c in
         let c = C.cap_set_value c n in
         IC (prov, c)
 
-  let bitwise_and_ival _  = int_bin combine_prov Nat_big_num.bitwise_and
+  let bitwise_and_ival _  = int_bin combine_prov Z.bitwise_and
 
-  let bitwise_or_ival _ = int_bin combine_prov Nat_big_num.bitwise_or
+  let bitwise_or_ival _ = int_bin combine_prov Z.bitwise_or
 
-  let bitwise_xor_ival _ = int_bin combine_prov Nat_big_num.bitwise_xor
+  let bitwise_xor_ival _ = int_bin combine_prov Z.bitwise_xor
 
   let case_integer_value v f_concrete _ =
     f_concrete (num_of_int v)
@@ -2601,13 +2604,13 @@ module CHERI (C:Capability
   let fvfromint ni =
     let n = num_of_int ni in
     (* NOTE: if n is too big, the float will be truncated *)
-    float_of_string (N.to_string n)
+    float_of_string (Z.to_string n)
 
   let ivfromfloat ity fval =
     (* TODO: hack maybe the elaboration should do that?? *)
     match ity with
     | Bool ->
-       IV (Prov_none, if fval = 0.0 then N.zero else N.(succ zero))
+       IV (Prov_none, if fval = 0.0 then Z.zero else Z.(succ zero))
     | _ ->
        let nbytes = match (Ocaml_implementation.get ()).sizeof_ity ity with
          | None ->
@@ -2618,26 +2621,26 @@ module CHERI (C:Capability
        let is_signed = AilTypesAux.is_signed_ity ity in
        let (min, max) =
          if is_signed then
-           ( N.negate (N.pow_int (N.of_int 2) (nbits-1))
-           , N.sub (N.pow_int (N.of_int 2) (nbits-1)) N.(succ zero) )
+           ( Z.negate (Z.pow_int (Z.of_int 2) (nbits-1))
+           , Z.sub (Z.pow_int (Z.of_int 2) (nbits-1)) Z.(succ zero) )
          else
-           ( N.zero
-           , N.sub (N.pow_int (N.of_int 2) nbits) N.(succ zero) ) in
+           ( Z.zero
+           , Z.sub (Z.pow_int (Z.of_int 2) nbits) Z.(succ zero) ) in
        let wrapI n =
-         let dlt = N.succ (N.sub max min) in
-         let r = N.integerRem_f n dlt in
-         if N.less_equal r max then
+         let dlt = Z.succ (Z.sub max min) in
+         let r = Z.integerRem_f n dlt in
+         if Z.less_equal r max then
            r
          else
-           N.sub r dlt in
-       IV (Prov_none, (wrapI (N.of_int64 (Int64.of_float fval))))
+           Z.sub r dlt in
+       IV (Prov_none, (wrapI (Z.of_int64 (Int64.of_float fval))))
 
   let eq_ival _ n1 n2 =
-    Some (Nat_big_num.equal (num_of_int n1) (num_of_int n2))
+    Some (Z.equal (num_of_int n1) (num_of_int n2))
   let lt_ival _ n1 n2 =
-    Some (Nat_big_num.compare (num_of_int n1) (num_of_int n2) = -1)
+    Some (Z.compare (num_of_int n1) (num_of_int n2) = -1)
   let le_ival _ n1 n2 =
-    let cmp = Nat_big_num.compare (num_of_int n1) (num_of_int n2) in
+    let cmp = Z.compare (num_of_int n1) (num_of_int n2) in
     Some (cmp = -1 || cmp = 0)
 
   let eval_integer_value n =
@@ -2692,13 +2695,13 @@ module CHERI (C:Capability
     (* TODO: if ptrval1 and ptrval2 overlap ==> UB *)
     (* TODO: copy ptrval2 into ptrval1 *)
     let rec aux i =
-      if Nat_big_num.less i size_n then
+      if Z.less i size_n then
         load loc Ctype.unsigned_char (array_shift_ptrval ptrval2 Ctype.unsigned_char (IV (Prov_none, i))) >>= fun (_, mval) ->
         store loc Ctype.unsigned_char false (array_shift_ptrval ptrval1 Ctype.unsigned_char (IV (Prov_none, i))) mval >>= fun _ ->
-        aux (Nat_big_num.succ i)
+        aux (Z.succ i)
       else
         return ptrval1 in
-    aux Nat_big_num.zero
+    aux Z.zero
 
 
   (* TODO: validate more, but looks good *)
@@ -2710,16 +2713,16 @@ module CHERI (C:Capability
       | size ->
          load Location_ocaml.unknown Ctype.unsigned_char ptrval >>= function
          | (_, MVinteger (_, (IV (byte_prov, byte_n)))) ->
-            let ptr' = array_shift_ptrval ptrval Ctype.unsigned_char (IV (Prov_none, Nat_big_num.(succ zero))) in
+            let ptr' = array_shift_ptrval ptrval Ctype.unsigned_char (IV (Prov_none, Z.(succ zero))) in
             get_bytes ptr' (byte_n :: acc) (size-1)
          | _ ->
             assert false in
-    get_bytes ptrval1 [] (Nat_big_num.to_int size_n) >>= fun bytes1 ->
-    get_bytes ptrval2 [] (Nat_big_num.to_int size_n) >>= fun bytes2 ->
+    get_bytes ptrval1 [] (Z.to_int size_n) >>= fun bytes1 ->
+    get_bytes ptrval2 [] (Z.to_int size_n) >>= fun bytes2 ->
 
-    let open Nat_big_num in
+    let open Z in
     return (IV (Prov_none, List.fold_left (fun acc (n1, n2) ->
-                               if equal acc zero then of_int (Nat_big_num.compare n1 n2) else acc
+                               if equal acc zero then of_int (Z.compare n1 n2) else acc
                              ) zero (List.combine bytes1 bytes2)))
 
   let realloc tid align ptr size : pointer_value memM =
@@ -2739,7 +2742,7 @@ module CHERI (C:Capability
                                   allocate_region tid (Symbol.PrefOther "realloc") align size >>= fun new_ptr ->
                                   let size_to_copy =
                                     let size_n = num_of_int size in
-                                    IV (Prov_none, Nat_big_num.min alloc.size size_n) in
+                                    IV (Prov_none, Z.min alloc.size size_n) in
                                   memcpy new_ptr ptr size_to_copy >>= fun _ ->
                                   kill (Location_ocaml.other "realloc") true ptr >>= fun () ->
                                   return new_ptr
@@ -2753,7 +2756,7 @@ module CHERI (C:Capability
     get >>= fun st ->
     let id = st.next_varargs_id in
     update (fun st -> { st with varargs = IntMap.add id (0, args) st.varargs;
-                                next_varargs_id = N.succ st.next_varargs_id;
+                                next_varargs_id = Z.succ st.next_varargs_id;
       } ) >>= fun _ ->
     return (IV (Prov_none, id))
 
@@ -2765,7 +2768,7 @@ module CHERI (C:Capability
        | Some args ->
           let id = st.next_varargs_id in
           update (fun st -> { st with varargs = IntMap.add id args st.varargs;
-                                      next_varargs_id = N.succ st.next_varargs_id;
+                                      next_varargs_id = Z.succ st.next_varargs_id;
             } ) >>= fun _ ->
           return (IV (Prov_none, id))
        | None ->
@@ -2870,17 +2873,17 @@ module CHERI (C:Capability
     | MVEinteger (cty, IV(prov, n)) ->
        begin match cty with
        | Char | Signed Ichar | Unsigned Ichar ->
-          mk_scalar `Char (N.to_string n) prov None
+          mk_scalar `Char (Z.to_string n) prov None
        | Ptrdiff_t | Signed Intptr_t | Unsigned Intptr_t ->
-          mk_scalar `Intptr (N.to_string n) prov None
+          mk_scalar `Intptr (Z.to_string n) prov None
        | _ ->
-          mk_scalar `Basic (N.to_string n) prov None
+          mk_scalar `Basic (Z.to_string n) prov None
        end
     | MVEinteger (cty, IC(prov, c)) ->
        begin match cty with
        | Signed Intptr_t | Unsigned Intptr_t ->
           (* TODO(CHERI): better JSON representation of caps *)
-          mk_scalar `Intptr (N.to_string (C.cap_get_value c)) prov None
+          mk_scalar `Intptr (Z.to_string (C.cap_get_value c)) prov None
        | _ ->
           failwith "mk_ui_values invalid encoding of [u]intptr_t"
        end
@@ -2892,7 +2895,7 @@ module CHERI (C:Capability
           mk_scalar `Pointer "NULL" Prov_none None
        | PVconcrete c ->
           (* TODO(CHERI): better JSON representation of caps *)
-          mk_scalar `Pointer (N.to_string (C.cap_get_value c)) prov (Some bs)
+          mk_scalar `Pointer (Z.to_string (C.cap_get_value c)) prov (Some bs)
        | PVfunction (FP_valid sym) ->
           mk_scalar `Funptr (Pp_symbol.to_string_pretty sym) Prov_none None
        | PVfunction (FP_invalid c) ->
@@ -2905,7 +2908,7 @@ module CHERI (C:Capability
           let (rev_rows, _, _) = List.fold_left begin fun (acc, i, acc_bs) mval ->
                                    let row = List.map (add_path (string_of_int i))
                                              @@ mk_ui_values
-                                                  (* TODO(CHERI): Check if anything special needs to be done about alignment here *)                                                                                      (N.add addr (N.of_int (i*(sizeof elem_ty))))
+                                                  (* TODO(CHERI): Check if anything special needs to be done about alignment here *)                                                                                      (Z.add addr (Z.of_int (i*(sizeof elem_ty))))
                                                   acc_bs elem_ty mval in
                                    (row::acc, i+1, L.drop size acc_bs)
                                    end ([], 0, bs) mvals
@@ -2920,7 +2923,7 @@ module CHERI (C:Capability
                                      fun (acc_rowss, previous_offset, acc_bs) (Symbol.Identifier (_, memb), memb_ty, memb_offset) ->
                                      let pad = memb_offset - previous_offset in
                                      let acc_bs' = L.drop pad acc_bs in
-                                     let memb_addr = N.add addr (N.of_int memb_offset) in
+                                     let memb_addr = Z.add addr (Z.of_int memb_offset) in
 
                                      let (_, mval, acc_bs'') = abst (find_overlaping st) st.funptrmap tag_query_f memb_addr memb_ty acc_bs' in
                                      let rows = mk_ui_values memb_addr acc_bs' memb_ty mval in
@@ -2936,19 +2939,19 @@ module CHERI (C:Capability
 
   let mk_ui_alloc st id alloc : ui_alloc =
     let ty = match alloc.ty with Some ty -> ty | None -> Ctype ([], Array (Ctype ([], Basic (Integer Char)), Some alloc.size)) in
-    let size = N.to_int alloc.size in
+    let size = Z.to_int alloc.size in
     let bs = fetch_bytes st.bytemap alloc.base size in
     let tag_query a =
       match (Ocaml_implementation.get ()).alignof_pointer with
       | None -> failwith "alignof_pointer must be specified in Ocaml_implementation"
       | Some v ->
-         let (q,m) = N.quomod a (N.of_int v) in
-         if m <> N.zero then failwith "Unaligned address in mk_ui_alloc"
+         let (q,m) = Z.quomod a (Z.of_int v) in
+         if m <> Z.zero then failwith "Unaligned address in mk_ui_alloc"
          else IntMap.find_opt q st.captags
     in
     let (_, mval, _) = abst (find_overlaping st) st.funptrmap tag_query alloc.base ty bs in
     { id = id;
-      base = N.to_string alloc.base;
+      base = Z.to_string alloc.base;
       prefix = alloc.prefix;
       dyn = List.mem alloc.base st.dynamic_addrs;
       typ = ty;
@@ -2999,23 +3002,23 @@ module CHERI (C:Capability
   let serialise_prov st = function
     | Prov_some n ->
        `Assoc [("kind", `String "prov");
-               ("value", `Int (N.to_int n))]
+               ("value", `Int (Z.to_int n))]
     | Prov_symbolic i ->
        `Assoc [("kind", `String "iota");
-               ("value", `Int (N.to_int i));
+               ("value", `Int (Z.to_int i));
                ("iota", match IntMap.find_opt i st.iota_map with
                         | None ->
                            `Null (* it should be impossible *)
                         | Some (`Single n) ->
-                           `List [`Int (N.to_int n)]
+                           `List [`Int (Z.to_int n)]
                         | Some (`Double (n1, n2)) ->
-                           `List [`Int (N.to_int n1);
-                                  `Int (N.to_int n2)])]
+                           `List [`Int (Z.to_int n1);
+                                  `Int (Z.to_int n2)])]
     | _ ->
        `Assoc [("kind", `String "empty")]
 
   let serialise_map f m : Json.json =
-    let serialise_entry (k, v) = (N.to_string k, f (N.to_int k) v)
+    let serialise_entry (k, v) = (Z.to_string k, f (Z.to_int k) v)
     in `Assoc (List.map serialise_entry (IntMap.bindings m))
 
   let serialise_ui_values st (v:ui_value) : Json.json =
@@ -3059,7 +3062,7 @@ module CHERI (C:Capability
                      | _ -> false
                    ) st.allocations in
     `Assoc [("map", serialise_map (fun id alloc -> serialise_ui_alloc st @@ mk_ui_alloc st id alloc) allocs);
-            ("last_used", Json.of_option (fun v -> `Int (N.to_int v)) st.last_used);]
+            ("last_used", Json.of_option (fun v -> `Int (Z.to_int v)) st.last_used);]
 
 
 end
