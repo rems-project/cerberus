@@ -450,7 +450,7 @@ module CHERI (C:Capability
       allocations: allocation IntMap.t;
       (* this is only for PNVI-ae-udi *)
       iota_map: [ `Single of storage_instance_id | `Double of storage_instance_id * storage_instance_id ] IntMap.t;
-      funptrmap: (Digest.t * string) IntMap.t;
+      funptrmap: (Digest.t * string * C.t) IntMap.t;
       varargs: (int * (ctype * pointer_value) list) IntMap.t;
       next_varargs_id: N.num;
       bytemap: AbsByte.t IntMap.t;
@@ -1185,7 +1185,9 @@ module CHERI (C:Capability
        | PVfunction (FP_valid (Symbol.Symbol (file_dig, n, opt_name))) ->
           (* TODO(CHERI): *)
           (begin match opt_name with
-           | SD_Id name -> IntMap.add (N.of_int n) (file_dig, name) funptrmap
+           | SD_Id name ->
+              let c = C.alloc_fun (Z.add initial_address (N.of_int n)) in
+              IntMap.add (N.of_int n) (file_dig, name, c) funptrmap
            | SD_ObjectAddress _ -> funptrmap
            | SD_Return -> funptrmap
            | SD_FunArg _ -> funptrmap
