@@ -1188,7 +1188,6 @@ module CHERI (C:Capability
           Debug_ocaml.print_debug 1 [] (fun () -> "NOTE: we fix the representation of all NULL pointers to be C0");
           ret @@ List.map (fun b -> AbsByte.v Prov_none (Some b)) @@ C.encode C.cap_c0
        | PVfunction (FP_valid (Symbol.Symbol (file_dig, n, opt_name))) ->
-          (* TODO(CHERI): *)
           (begin match opt_name with
            | SD_Id name ->
               let c = C.alloc_fun (Z.add (Z.of_int initial_address) (Z.of_int n)) in
@@ -2199,26 +2198,7 @@ module CHERI (C:Capability
      One added, replace this one with ~failwith~.
    *)
   let member_shift_ptrval (PV (prov, ptrval_)) tag_sym memb_ident =
-    let offset =
-      match offsetof_ival (Tags.tagDefs ()) tag_sym memb_ident with
-      | IV (_, offset) -> offset
-      | IC (_, c) -> C.cap_get_value c
-    in
-    PV (prov, match ptrval_ with
-              | PVnull ty ->
-                 (* TODO: unsure, this might just be undefined (gcc-torture assumes the
-                    following behaviour though) *)
-                 if Z.equal Z.zero offset then
-                   PVnull ty
-                 else
-                   (* The value of C0 could not be changed. *)
-                   failwith "CHERI.member_shift_ptrval, shifting NULL"
-              | PVfunction _ ->
-                 failwith "CHERI.member_shift_ptrval, PVfunction"
-              | PVconcrete c ->
-                 let addr = C.cap_get_value c in
-                 let c = C.cap_set_value c (Z.add addr offset) in
-                 PVconcrete c)
+    failwith "members_shift_ptrval (pure) is not supported in CHERI"
 
   (* this will be used for pointer arithmetics *)
   let eff_array_shift_ptrval loc ptrval ty ival_int =
@@ -2351,8 +2331,34 @@ module CHERI (C:Capability
        (* Could produce invalid cap. Consider raising error instead *)
        return (PV (Prov_device, PVconcrete (C.cap_set_value c shifted_addr)))
 
-  let eff_member_shift_ptrval _ _ _ =
-    failwith "TODO: CHERI.eff_member_shift_ptrval"
+  let eff_member_shift_ptrval (PV (prov, ptrval_)) tag_sym memb_ident =
+    let offset =
+      match offsetof_ival (Tags.tagDefs ()) tag_sym memb_ident with
+      | IV (_, offset) -> offset
+      | IC (_, c) ->
+         (* we will never reach this branch as this condition is checked
+            earlier. *)
+         failwith "CHERI.member_shift_ptrval invalid offset value type"
+    in
+    match ptrval_ with
+    | PVnull ty ->
+       (* TODO: unsure, this might just be undefined (gcc-torture assumes the
+          following behaviour though) *)
+       if Z.equal Z.zero offset then
+         return @@ PV (prov, PVnull ty)
+       else
+         (* we will never reach this branch as this condition is checked
+            earlier. *)
+         failwith "CHERI.member_shift_ptrval, shifting NULL"
+    | PVfunction _ ->
+       (* we will never reach this branch as this condition is checked
+          earlier. *)
+       failwith "CHERI.member_shift_ptrval, PVfunction"
+    | PVconcrete c ->
+       let addr = C.cap_get_value c in
+       (* TODO(CHERI): The result address could be unrepresentable *)
+       let c = C.cap_set_value c (Z.add addr offset) in
+       return @@ PV (prov, PVconcrete c)
 
   let concurRead_ival ity sym =
     failwith "TODO: concurRead_ival"
