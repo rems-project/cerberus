@@ -255,7 +255,7 @@ module CHERI (C:Capability
      unsigned 64bits values *)
   type function_pointer =
     | FP_valid of Symbol.sym
-    | FP_invalid of Nat_big_num.num
+    | FP_invalid of C.t
   
   type pointer_value_base =
     | PVnull of ctype
@@ -545,8 +545,8 @@ module CHERI (C:Capability
        !^ "NULL" ^^ P.parens (Pp_core_ctype.pp_ctype ty)
     | PVfunction (FP_valid sym) ->
        !^ "Cfunction" ^^ P.parens (!^ (Pp_symbol.to_string_pretty sym))
-    | PVfunction (FP_invalid n) ->
-        !^ "Cfunction" ^^ P.parens (!^ "invalid" ^^ P.colon ^^^ !^ (Nat_big_num.to_string n))
+    | PVfunction (FP_invalid c) ->
+        !^ "Cfunction" ^^ P.parens (!^ "invalid" ^^ P.colon ^^^ !^ (C.to_string c))
     (* !^ ("<funptr:" ^ Symbol.instance_Show_Show_Symbol_sym_dict.show_method sym ^ ">") *)
     | PVconcrete n ->
        (* TODO: remove this idiotic hack when Lem's nat_big_num library expose "format" *)
@@ -1027,17 +1027,25 @@ module CHERI (C:Capability
                      if C.eq n C.cap_c0 then
                        MVEpointer (ref_ty, PV (Prov_none, PVnull ref_ty))
                      else
-                       (*
-                         (* FIXME: This is wrong. A function pointer with the same id in different files might exist. *)
-                         begin match IntMap.find_opt n funptrmap with
-                         | Some (file_dig, name) ->
-                         MVpointer (ref_ty, PV(prov, PVfunction (Symbol.Symbol (file_dig, N.to_int n, SD_Id name))))
-                         | None ->
-                         failwith ("unknown function pointer: " ^ C.to_string n)
-                         end
-                        *)
-                       (* TODO: implement for CHERI. May need different approach *)
-                       failwith "TODO(CHERI): implement"
+                       begin match tag_query_f addr with
+                       | None ->
+                          (* TODO(CHERI): decide on semantics *)
+                          failwith "unspecified tag value"
+                       | Some tag ->
+                          begin match C.decode cs tag with
+                          | None ->
+                             (* could not decode capability *)
+                             MVErr (MerrCHERI CheriErrDecodingCap)
+                          | Some c ->
+                             let n = C.cap_get_value c in
+                             begin match IntMap.find_opt n funptrmap with
+                             | Some (file_dig, name) ->
+                                MVEpointer (ref_ty, PV(prov, PVfunction (FP_valid (Symbol.Symbol (file_dig, N.to_int n, SD_Id name)))))
+                             | None ->
+                                MVEpointer (ref_ty, PV(prov, PVfunction (FP_invalid c)))
+                             end
+                          end
+                       end
                   | _ ->
                      if C.eq n C.cap_c0 then
                        MVEpointer (ref_ty, PV (Prov_none, PVnull ref_ty))
@@ -1190,14 +1198,9 @@ module CHERI (C:Capability
                       false
                       ptr_size (N.of_int n)
                   end)
-       | PVfunction (FP_invalid n) ->
-          ret @@List.map (AbsByte.v prov) begin
-            bytes_of_int
-              false(* unsigned *)
-              (sizeof (mk_ctype_pointer no_qualifiers ref_ty)) n  
-          end
-       | PVconcrete addr ->
-          ret @@ List.mapi (fun i b -> AbsByte.v prov ~copy_offset:(Some i) (Some b)) @@ C.encode addr
+       | PVfunction (FP_invalid c)
+         | PVconcrete c ->
+          ret @@ List.mapi (fun i b -> AbsByte.v prov ~copy_offset:(Some i) (Some b)) @@ C.encode c
        end
     | MVarray mvals ->
        let (funptrmap, bs_s) =
@@ -1796,8 +1799,9 @@ module CHERI (C:Capability
        return false
     | (PVfunction (FP_valid sym1), PVfunction (FP_valid sym2)) ->
        return (Symbol.instance_Basic_classes_Eq_Symbol_sym_dict.Lem_pervasives.isEqual_method sym1 sym2)
-    | (PVfunction (FP_invalid n1), PVfunction (FP_invalid n2)) ->
-        return (Nat_big_num.equal n1 n2)
+    | (PVfunction (FP_invalid c1), PVfunction (FP_invalid c2)) ->
+       (* TODO(CHERI) add test supporting this semantics decision *)
+       return (Nat_big_num.equal (C.cap_get_value c1) (C.cap_get_value c2))
     | (PVfunction _, _)
       | (_, PVfunction _) ->
        return false
