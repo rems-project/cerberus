@@ -101,6 +101,9 @@ module type Capability =
     (** Capability for newly allocated region *)
     val alloc_cap: vaddr -> vaddr -> t
 
+    (** Capability to allocate function *)
+    val alloc_fun: vaddr -> t
+
     (** Due to encoding, not all capabilities with large bounds have a
         contiguous representable region. This representability check is
         applied when manipulating a Capability Value

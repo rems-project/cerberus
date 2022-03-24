@@ -185,6 +185,18 @@ module Morello_capability: Capability
         is_execuvite = false
       }
 
+    let alloc_fun a =
+      {
+        valid = true ;
+        value = a ;
+        obj_type = cap_SEAL_TYPE_RB ; (* TODO(CHERI): check this *)
+        bounds = (a, Z.succ a) ; (* TODO(CHERI): clarify what are the bounds *)
+        flags = List.init cap_flags_len (fun _ -> false) ;
+        perms = P.perm_alloc ;
+        is_execuvite = true
+      }
+
+
     let cap_vaddr_representable c a = true (* TODO *)
 
     let cap_bounds_representable_exactly c (a0,a1) = true (* TODO *)
