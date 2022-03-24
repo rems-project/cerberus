@@ -2895,7 +2895,7 @@ module CHERI (C:Capability
           mk_scalar `Pointer (N.to_string (C.cap_get_value c)) prov (Some bs)
        | PVfunction (FP_valid sym) ->
           mk_scalar `Funptr (Pp_symbol.to_string_pretty sym) Prov_none None
-       | PVfunction (FP_invalid n) ->
+       | PVfunction (FP_invalid c) ->
           failwith "TODO"
          end
     | MVEarray mvals ->
