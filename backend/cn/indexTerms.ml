@@ -719,7 +719,7 @@ let subarray_condition ~base ~item_size ~from_index ~to_index ~qpointer =
   let offset = array_offset_of_pointer ~base ~pointer:qpointer in
   let index = array_pointer_to_index ~base ~item_size ~pointer:qpointer in
   and_ [lePointer_ (base, qpointer);
-        eq_ (rem_ (offset, item_size), int_ 0);
+        eq_ (mod_ (offset, item_size), int_ 0);
         le_ (from_index, index); lt_ (index, to_index)]  
 
 
