@@ -367,6 +367,11 @@ module CHERI (C:Capability
 
   open Eff
 
+  type access_intention =
+    | ReadIntent
+    | WriteIntent
+    | CallIntent
+
 
   (* INTERNAL: allocation *)
   type allocation = {
@@ -529,8 +534,6 @@ module CHERI (C:Capability
     | None ->
        kill (Other err)
 
-
-
   let string_of_provenance = function
     | Prov_none ->
        "@empty"
@@ -540,6 +543,36 @@ module CHERI (C:Capability
        "@iota(" ^ Z.to_string iota ^ ")"
     | Prov_device ->
        "@device"
+
+
+  (** Checks if memory region starting from [addr] and
+      of size [sz] fits withing inclusuvive interval [b1,b2] *)
+  let cap_bounds_check (b1,b2) addr sz =
+    Z.less_equal b1 addr
+    && Z.less_equal addr b2
+    && Z.less_equal (Z.add addr sz) (Z.succ b2)
+
+  let cap_check c intent sz =
+    if C.cap_is_valid c then
+      let addr = C.cap_get_value c in
+      let pcheck =
+        match intent with
+        | ReadIntent -> C.P.perm_is_load
+        | WriteIntent -> C.P.perm_is_store
+        | CallIntent -> C.P.perm_is_execute (* CHERI(TODO): check if this is righ permission *)
+      in
+      if pcheck (C.get_perms c) then
+        let bounds = C.cap_get_bounds c in
+        let nsz = Z.of_int sz in
+        if cap_bounds_check bounds addr nsz then
+          return ()
+        else
+          fail (MerrCHERI
+                  (CheriBoundsErr (bounds, addr, nsz)))
+      else
+        fail (MerrCHERI CheriMerrUnsufficientPermissions)
+    else
+      fail (MerrCHERI CheriMerrInvalidCap)
 
   (* pretty printing *)
   open PPrint
@@ -1381,13 +1414,6 @@ module CHERI (C:Capability
     | _ ->
        return None
 
-  (** Checks if memory region starting from [addr] and
-      of size [sz] fits withing inclusuvive interval [b1,b2] *)
-  let cap_bounds_check (b1,b2) addr sz =
-    Z.less_equal b1 addr
-    && Z.less_equal addr b2
-    && Z.less_equal (Z.add addr sz) (Z.succ b2)
-
   let allocate_region tid pref align_int size_int =
     let align_n = num_of_int align_int in
     let size_n = num_of_int size_int in
@@ -1540,20 +1566,7 @@ module CHERI (C:Capability
          fail (MerrWIP "load, bs' <> []")
       end in
     let do_load_cap alloc_id_opt c sz =
-      if C.cap_is_valid c then
-        let addr = C.cap_get_value c in
-        if C.P.perm_is_load (C.get_perms c) then
-          let bounds = C.cap_get_bounds c in
-          let nsz = Z.of_int sz in
-          if cap_bounds_check bounds addr nsz then
-            do_load alloc_id_opt addr sz
-          else
-            fail (MerrCHERI
-                    (CheriBoundsErr (bounds, addr, nsz)))
-        else
-          fail (MerrCHERI CheriMerrUnsufficientPermissions)
-      else
-        fail (MerrCHERI CheriMerrInvalidCap)
+      cap_check c ReadIntent sz >> do_load alloc_id_opt (C.cap_get_value c) sz
     in
     match (prov, ptrval_) with
     | (_, PVnull _) ->
@@ -1635,38 +1648,28 @@ module CHERI (C:Capability
         fail (MerrOther "store with an ill-typed memory value")
       end else
       let do_store_cap alloc_id_opt c =
-        if C.cap_is_valid c then
+        let sz = sizeof ty in
+        let nsz = Z.of_int sz in
+        cap_check c WriteIntent sz >>
           let addr = C.cap_get_value c in
-          let sz = sizeof ty in
-          if C.P.perm_is_store (C.get_perms c) then
-            let bounds = C.cap_get_bounds c in
-            let nsz = Z.of_int sz in
-            if cap_bounds_check bounds addr nsz then
-              begin
-               update begin fun st ->
-                 let (funptrmap, pre_bs) = repr st.funptrmap mval in
-                 Debug_ocaml.print_debug 0(*KKK*) [] (fun () ->
+          begin
+            update begin fun st ->
+              let (funptrmap, pre_bs) = repr st.funptrmap mval in
+              Debug_ocaml.print_debug 0(*KKK*) [] (fun () ->
                   "|pre_bs|=" ^ string_of_int (List.length pre_bs) ^ " <---> sz: " ^ string_of_int sz
                 );
-                 assert (List.length pre_bs == sz) ;
-                 let bs = List.mapi (fun i b -> (Z.add addr (Z.of_int i), b)) pre_bs in
-                 { st with last_used= alloc_id_opt;
-                           bytemap=
-                             List.fold_left (fun acc (addr, b) ->
-                                 IntMap.add addr b acc
-                               ) st.bytemap bs;
-                           funptrmap= funptrmap; }
-                 end >>= fun () ->
-               print_bytemap ("AFTER STORE => " ^ Location_ocaml.location_to_string loc) >>= fun () ->
-               return (FP (addr, nsz))
-               end
-            else
-              fail (MerrCHERI
-                      (CheriBoundsErr (bounds, addr, Z.of_int sz)))
-          else
-            fail (MerrCHERI CheriMerrUnsufficientPermissions)
-        else
-          fail (MerrCHERI CheriMerrInvalidCap)
+              assert (List.length pre_bs == sz) ;
+              let bs = List.mapi (fun i b -> (Z.add addr (Z.of_int i), b)) pre_bs in
+              { st with last_used= alloc_id_opt;
+                        bytemap=
+                          List.fold_left (fun acc (addr, b) ->
+                              IntMap.add addr b acc
+                            ) st.bytemap bs;
+                        funptrmap= funptrmap; }
+              end >>= fun () ->
+            print_bytemap ("AFTER STORE => " ^ Location_ocaml.location_to_string loc) >>= fun () ->
+            return (FP (addr, nsz))
+          end
       in
       match (prov, ptrval_) with
       | (_, PVnull _) ->
@@ -2050,20 +2053,6 @@ module CHERI (C:Capability
       (Pp_utils.to_plain_string (pp_pointer_value ptrval))
       end;
      *)
-    let cap_check c =
-      if C.cap_is_valid c then
-        let sz = sizeof ref_ty in
-        let addr = C.cap_get_value c in
-        let bounds = C.cap_get_bounds c in
-        let nsz = Z.of_int sz in
-        if cap_bounds_check bounds addr nsz then
-          return ()
-        else
-          fail (MerrCHERI
-                  (CheriBoundsErr (bounds, addr, nsz)))
-      else
-        fail (MerrCHERI CheriMerrInvalidCap)
-    in
     let do_test alloc_id =
       is_dead alloc_id >>= function
       | true ->
@@ -2075,10 +2064,9 @@ module CHERI (C:Capability
       | PV (_, PVfunction _) ->
        return false
     | PV (Prov_device, PVconcrete c) as ptrval ->
-       cap_check c >> isWellAligned_ptrval ref_ty ptrval
+       isWellAligned_ptrval ref_ty ptrval
     (* PNVI-ae-udi *)
     | PV (Prov_symbolic iota, PVconcrete c) ->
-       cap_check c >>
        lookup_iota iota >>= begin function
                               | `Single alloc_id ->
                                  do_test alloc_id
@@ -2091,7 +2079,7 @@ module CHERI (C:Capability
                                                        end
                             end
     | PV (Prov_some alloc_id, PVconcrete c) ->
-       cap_check c >> do_test alloc_id
+       do_test alloc_id
     | PV (Prov_none, _) ->
        return false
 
