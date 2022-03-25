@@ -1544,6 +1544,12 @@ end = struct
                situation unis info resource
            in
            infer_resources unis (subst_r rt_subst new_subst ftyp)
+        | Define ((s, it), info, ftyp) ->
+           let s' = Sym.fresh () in
+           let bt = IT.bt it in
+           let@ () = add_l s' bt in
+           let@ () = add_c (LC.t_ (def_ s' it)) in
+           infer_resources unis (subst_r rt_subst (IT.make_subst [(s, sym_ (s', bt))]) ftyp)
         | C ftyp ->
            return (unis, ftyp)
       in

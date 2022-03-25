@@ -14,6 +14,7 @@ type 'rt c = I of 'rt
            | Constraint of LC.t * info * 'rt c
 type 'rt r = C of 'rt c 
            | Resource of RE.t * info * 'rt r 
+           | Define of (Sym.t * IT.t) * info * 'rt r
 type 'rt l = R of 'rt r
            | Logical of (Sym.t * LS.t) * info * 'rt l
 type 'rt a = L of 'rt l 
@@ -30,7 +31,8 @@ let mconstraint (bound, oinfo) t =
   Constraint (bound, oinfo, t)
 let mresource (bound, oinfo) t = 
   Resource (bound, oinfo, t)
-
+let mdefine ((name, bound), oinfo) t =
+  Define ((name, bound), oinfo, t)
 
 
 let rec subst_c i_subst substitution = function
@@ -44,6 +46,15 @@ let rec subst_r i_subst substitution = function
   | Resource (re, oinfo, t) ->
      let re = RE.subst substitution re in
      Resource (re, oinfo, subst_r i_subst substitution t)
+  | Define ((name, it), info, t) ->
+     let it = IT.subst substitution it in
+     if SymSet.mem name substitution.relevant then
+       let name' = Sym.fresh_same name in
+       let t' = subst_r i_subst (IT.make_subst [(name, IT.sym_ (name', IT.bt it))]) t in
+       let t'' = subst_r i_subst substitution t' in
+       Define ((name', it), info, t'')
+     else
+       Define ((name, it), info, subst_r i_subst substitution t)
   | C c -> 
      C (subst_c i_subst substitution c)
 
@@ -89,6 +100,8 @@ let (pp_a,pp_l,pp_r,pp_c) =
     | Resource (re, _oinfo, t) ->
        let op = if !unicode then equals ^^ utf8string "\u{2217}" else minus ^^ star in
        (RE.pp re ^^^ op) :: aux_r i_pp t
+    | Define ((s, it), _info, t) ->
+       (!^"let" ^^^ Sym.pp s ^^^ equals ^^^ IT.pp it ^^ semi) :: aux_r i_pp t
     | C c -> aux_c i_pp c
   in
   let rec aux_l i_pp = function
@@ -125,16 +138,21 @@ let normalise rt_subst ft : ('rt t) =
     | AT.Logical ((name, ls), oinfo, ft) -> 
        aux (l@[(name, ls, oinfo)]) r c ft
     | AT.Define ((name, it), oinfo, ft) ->
-       aux l r c (AT.subst rt_subst (IT.make_subst [(name, it)]) ft)
+       aux l (r@[`Define ((name, it), oinfo)]) c ft
     | AT.Resource (re, oinfo, ft) -> 
-       aux l (r@[(re, oinfo)]) c ft
+       aux l (r@[`Resource (re, oinfo)]) c ft
     | AT.Constraint (lc, oinfo, ft) -> 
        aux l r (c@[(lc, oinfo)]) ft
     | AT.I i ->
-       L ((List.fold_right mlogical l)
-            (R ((List.fold_right mresource r)
-                  (C (List.fold_right mconstraint c
-                        (I i))))))
+       let c = List.fold_right mconstraint c (I i) in
+       let r = 
+         List.fold_right (fun resource_or_define r ->
+             match resource_or_define with
+             | `Resource (re, oinfo) -> mresource (re, oinfo) r
+             | `Define ((name, it), oinfo) -> mdefine ((name, it), oinfo) r
+           ) r (C c) in
+       let l = List.fold_right mlogical l (R r) in
+       L l
   in
   aux [] [] [] ft
 
@@ -150,6 +168,8 @@ let rec unnormalise_c = function
 let rec unnormalise_r = function
   | Resource (re, oinfo, t) -> 
      AT.Resource (re, oinfo, unnormalise_r t)
+  | Define ((name, it), info, t) ->
+     AT.Define ((name, it), info, unnormalise_r t)
   | C t -> unnormalise_c t
 
 let rec unnormalise_l = function
