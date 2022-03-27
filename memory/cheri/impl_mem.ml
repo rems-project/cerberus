@@ -1188,8 +1188,8 @@ module CHERI (C:Capability
       )
 
   (* INTERNAL repr *)
-  let rec repr funptrmap mval : ((Digest.t * string * C.t) IntMap.t * AbsByte.t list) =
-    let ret bs = (funptrmap, bs) in
+  let rec repr funptrmap captags mval : ((Digest.t * string * C.t) IntMap.t * bool IntMap.t * AbsByte.t list) =
+    let ret bs = (funptrmap, captags, bs) in
     match mval with
     | MVunspecified ty ->
        ret @@ List.init (sizeof ty) (fun _ -> AbsByte.v Prov_none None)
@@ -1200,8 +1200,9 @@ module CHERI (C:Capability
                    (sizeof (Ctype ([], Basic (Integer ity)))) n
                end
     | MVinteger (ity, IC (prov, c)) ->
-       (* TODO(CHERI): update and return tagmap *)
-       ret @@ List.mapi (fun i b -> AbsByte.v prov ~copy_offset:(Some i) (Some b)) @@ C.encode c
+       (funptrmap,
+        IntMap.add (C.cap_get_value c) (C.cap_is_valid c) captags,
+        List.mapi (fun i b -> AbsByte.v prov ~copy_offset:(Some i) (Some b)) @@ C.encode c)
     | MVfloating (fty, fval) ->
        ret @@ List.map (AbsByte.v Prov_none) begin
                   bytes_of_int
@@ -1213,7 +1214,11 @@ module CHERI (C:Capability
        begin match ptrval_ with
        | PVnull _ ->
           Debug_ocaml.print_debug 1 [] (fun () -> "NOTE: we fix the representation of all NULL pointers to be C0");
-          ret @@ List.map (fun b -> AbsByte.v Prov_none (Some b)) @@ C.encode C.cap_c0
+          (funptrmap,
+           (* Do we really need to maintain tag for C0? Anyway, we do
+              it here for consistency even if it is never read. *)
+           IntMap.add (C.cap_get_value C.cap_c0) (C.cap_is_valid C.cap_c0) captags,
+           List.map (fun b -> AbsByte.v Prov_none (Some b)) @@ C.encode C.cap_c0)
        | PVfunction (FP_valid (Symbol.Symbol (file_dig, n, opt_name))) ->
           let c = C.alloc_fun (Z.add (Z.of_int initial_address) (Z.of_int n)) in
           (begin match opt_name with
@@ -1226,38 +1231,38 @@ module CHERI (C:Capability
            (* | SD_PredOutput _ -> funptrmap *)
            | SD_None -> funptrmap
            end,
-          (* TODO: update tagmap *)
+           IntMap.add (C.cap_get_value c) (C.cap_is_valid c) captags,
            List.mapi (fun i b -> AbsByte.v prov ~copy_offset:(Some i) (Some b)) @@ C.encode c)
        | PVfunction (FP_invalid c)
          | PVconcrete c ->
-          (* TODO: update tagmap *)
-          ret @@ List.mapi (fun i b -> AbsByte.v prov ~copy_offset:(Some i) (Some b)) @@ C.encode c
+          (funptrmap,
+           IntMap.add (C.cap_get_value c) (C.cap_is_valid c) captags,
+           List.mapi (fun i b -> AbsByte.v prov ~copy_offset:(Some i) (Some b)) @@ C.encode c)
        end
     | MVarray mvals ->
-       let (funptrmap, bs_s) =
-         List.fold_left begin fun (funptrmap, bs) mval ->
-           let (funptrmap, bs') = repr funptrmap mval in
-           (funptrmap, bs' :: bs)
-           end (funptrmap, []) mvals in
+       let (funptrmap, captags, bs_s) =
+         List.fold_left begin fun (funptrmap, captags, bs) mval ->
+           let (funptrmap, captags, bs') = repr funptrmap captags mval in
+           (funptrmap, captags, bs' :: bs)
+           end (funptrmap, captags, []) mvals in
        (* TODO: use a fold? *)
-       (funptrmap, L.concat @@ List.rev bs_s)
+       (funptrmap, captags, L.concat @@ List.rev bs_s)
     | MVstruct (tag_sym, xs) ->
        let padding_byte _ = AbsByte.v Prov_none None in
        let (offs, last_off) = offsetsof (Tags.tagDefs ()) tag_sym in
        let final_pad = sizeof (Ctype ([], Struct tag_sym)) - last_off in
        (* TODO: rewrite now that offsetsof returns the paddings *)
-       let (funptrmap, _, bs) = List.fold_left2 begin fun (funptrmap, last_off, acc) (ident, ty, off) (_, _, mval) ->
+       let (funptrmap,captags, _, bs) = List.fold_left2 begin fun (funptrmap, captags,last_off, acc) (ident, ty, off) (_, _, mval) ->
                                   let pad = off - last_off in
-                                  let (funptrmap, bs) = repr funptrmap mval in
-                                  (funptrmap, off + sizeof ty, acc @ List.init pad padding_byte @ bs)
-                                  end (funptrmap, 0, []) offs xs
+                                  let (funptrmap, captags, bs) = repr funptrmap captags mval in
+                                  (funptrmap, captags, off + sizeof ty, acc @ List.init pad padding_byte @ bs)
+                                  end (funptrmap, captags, 0, []) offs xs
        in
-       (funptrmap, bs @ List.init final_pad padding_byte)
+       (funptrmap, captags, bs @ List.init final_pad padding_byte)
     | MVunion (tag_sym, memb_ident, mval) ->
        let size = sizeof (Ctype ([], Union tag_sym)) in
-       let (funptrmap', bs) = repr funptrmap mval in
-       (funptrmap', bs @ List.init (size - List.length bs) (fun _ -> AbsByte.v Prov_none None))
-
+       let (funptrmap', captags', bs) = repr funptrmap captags mval in
+       (funptrmap', captags', bs @ List.init (size - List.length bs) (fun _ -> AbsByte.v Prov_none None))
 
   (* BEGIN DEBUG *)
   (*
@@ -1327,9 +1332,9 @@ module CHERI (C:Capability
          )
     | Some mval ->
        let alloc = {prefix= pref; base= addr; size= size; ty= Some ty; is_readonly= true; taint= `Unexposed} in
-       (* TODO: factorise this with do_store inside CHERI.store *)
+       (* TODO: factorize this with do_store inside CHERI.store *)
        update (fun st ->
-           let (funptrmap, pre_bs) = repr st.funptrmap mval in
+           let (funptrmap, captags, pre_bs) = repr st.funptrmap st.captags mval in
            assert (List.length pre_bs == sz) ;
            let bs = List.mapi (fun i b -> (Z.add addr (Z.of_int i), b)) pre_bs in
            { st with
@@ -1338,7 +1343,9 @@ module CHERI (C:Capability
                List.fold_left (fun acc (addr, b) ->
                    IntMap.add addr b acc
                  ) st.bytemap bs;
-             funptrmap= funptrmap; }
+             funptrmap= funptrmap;
+             captags= captags
+           }
          )
     end >>= fun () ->
     (* memory allocation on stack *)
@@ -1654,7 +1661,7 @@ module CHERI (C:Capability
           let addr = C.cap_get_value c in
           begin
             update begin fun st ->
-              let (funptrmap, pre_bs) = repr st.funptrmap mval in
+              let (funptrmap, captags, pre_bs) = repr st.funptrmap st.captags mval in
               Debug_ocaml.print_debug 0(*KKK*) [] (fun () ->
                   "|pre_bs|=" ^ string_of_int (List.length pre_bs) ^ " <---> sz: " ^ string_of_int sz
                 );
@@ -1665,7 +1672,9 @@ module CHERI (C:Capability
                           List.fold_left (fun acc (addr, b) ->
                               IntMap.add addr b acc
                             ) st.bytemap bs;
-                        funptrmap= funptrmap; }
+                        funptrmap= funptrmap;
+                        captags= captags;
+              }
               end >>= fun () ->
             print_bytemap ("AFTER STORE => " ^ Location_ocaml.location_to_string loc) >>= fun () ->
             return (FP (addr, nsz))
