@@ -2160,6 +2160,7 @@ module CHERI (C:Capability
                  Z.sub r dlt in
 
              let c = C.cap_c0 in
+             (* TODO(CHERI): representability check? *)
              let c = C.cap_set_value c n in
              return (PV (prov, PVconcrete c))
         | _, IC _ ->
@@ -2258,7 +2259,7 @@ module CHERI (C:Capability
                     | `NoCollapse ->
                        return ()
                   end >>= fun () ->
-                (* Could produce invalid cap. Consider raising error instead *)
+                (* TODO(CHERI): representability check? *)
                 return (PV (prov, PVconcrete (C.cap_set_value c shifted_addr)))
               else
                 (* TODO: this is yucky *)
@@ -2275,13 +2276,13 @@ module CHERI (C:Capability
                               fail (MerrArrayShift loc)
                          end
                   end >>= fun () ->
-                (* Could produce invalid cap. Consider raising error instead *)
+                (* TODO(CHERI): representability check? *)
                 return (PV (prov, PVconcrete (C.cap_set_value c shifted_addr)))
            | `Single alloc_id ->
               precond alloc_id >>=
                 begin function
                   | true ->
-                     (* Could produce invalid cap. Consider raising error instead *)
+                     (* TODO(CHERI): representability check? *)
                      return (PV (prov, PVconcrete (C.cap_set_value c shifted_addr)))
                   | false ->
                      fail (MerrArrayShift loc)
@@ -2297,12 +2298,12 @@ module CHERI (C:Capability
          if    Z.less_equal alloc.base shifted_addr
                && Z.less_equal (Z.add shifted_addr (Z.of_int (sizeof ty)))
                     (Z.add (Z.add alloc.base alloc.size) (Z.of_int (sizeof ty))) then
-           (* Could produce invalid cap. Consider raising error instead *)
+           (* TODO(CHERI): representability check? *)
            return (PV (Prov_some alloc_id, PVconcrete (C.cap_set_value c shifted_addr)))
          else
            fail (MerrArrayShift loc)
        else
-         (* Could produce invalid cap. Consider raising error instead *)
+         (* TODO(CHERI): representability check? *)
          return (PV (Prov_some alloc_id, PVconcrete (C.cap_set_value c shifted_addr)))
     | PV (Prov_none, PVconcrete c) ->
        let shifted_addr = Z.add (C.cap_get_value c) offset in
@@ -2310,11 +2311,11 @@ module CHERI (C:Capability
              || (is_PNVI () && not (Switches.(has_switch (SW_pointer_arith `PERMISSIVE)))) then
          fail (MerrOther "out-of-bound pointer arithmetic (Prov_none)")
        else
-         (* Could produce invalid cap. Consider raising error instead *)
+         (* TODO(CHERI): representability check? *)
          return (PV (Prov_none, PVconcrete (C.cap_set_value c shifted_addr)))
     | PV (Prov_device, PVconcrete c) ->
        let shifted_addr = Z.add (C.cap_get_value c) offset in
-       (* Could produce invalid cap. Consider raising error instead *)
+       (* TODO(CHERI): representability check? *)
        return (PV (Prov_device, PVconcrete (C.cap_set_value c shifted_addr)))
 
   let eff_member_shift_ptrval (PV (prov, ptrval_)) tag_sym memb_ident =
@@ -2492,18 +2493,21 @@ module CHERI (C:Capability
     | IC (prov1, c), IV (prov2, n2)
       ->
        let n1 = C.cap_get_value c in
+       (* TODO(CHERI): representability check? *)
        let c = C.cap_set_value c (vf n1 n2) in
        IC (pf prov1 prov2, c)
     | IV (prov1, n1), IC (prov2, c)
       ->
        let n2 = C.cap_get_value c in
+       (* TODO(CHERI): representability check? *)
        let c = C.cap_set_value c (vf n1 n2) in
        IC (pf prov1 prov2, c)
     | IC (prov1, c1), IC (prov2, c2)
       ->
        let n1 = C.cap_get_value c1 in
        let n2 = C.cap_get_value c2 in
-       (* Arbitrary deciding to use 1st cap. TODO: check if it is right *)
+       (* Using 1st cap. *)
+       (* TODO(CHERI): representability check? *)
        let c = C.cap_set_value c1 (vf n1 n2) in
        IC (pf prov1 prov2, c)
 
