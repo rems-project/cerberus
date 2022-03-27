@@ -21,4 +21,8 @@ cerberus-webserver
 config.json
 webcerb.symbolic
 webcerb.concrete
+<<<<<<< HEAD
 .vscode/settings.json
+=======
+/.ignore
+>>>>>>> dcfd686c (ignore .ignore file I use for silver searcher)
