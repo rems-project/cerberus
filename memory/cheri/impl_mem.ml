@@ -2542,14 +2542,17 @@ module CHERI (C:Capability
 
   let bitwise_complement_ival _ = function
     | (IV (prov, n)) ->
-        (* NOTE: for PNVI we assume that prov = Prov_none *)
-        (* TODO *)
-        (* prerr_endline "CHERI.bitwise_complement ==> HACK"; *)
-        IV (prov, Z.(sub (negate n) (of_int 1)))
+       (* NOTE: for PNVI we assume that prov = Prov_none *)
+       (* TODO *)
+       (* prerr_endline "CHERI.bitwise_complement ==> HACK"; *)
+       let cn = Z.(sub (negate n) (of_int 1)) in
+       IV (prov, cn)
     | (IC (prov, c)) ->
-        let n = C.cap_get_value c in
-        let c = C.cap_set_value c n in
-        IC (prov, c)
+       let n = C.cap_get_value c in
+       let cn = Z.(sub (negate n) (of_int 1)) in
+       (* TODO(CHERI): representability check? *)
+       let c = C.cap_set_value c cn in
+       IC (prov, c)
 
   let bitwise_and_ival _  = int_bin combine_prov Z.bitwise_and
 
