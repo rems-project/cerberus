@@ -75,7 +75,7 @@ module type BitType = sig
 end
 
 type 'a return = { return : 'b . 'a -> 'b }
-type 'za zoption = | ZNone of unit | ZSome of 'za;;
+type 'za zoption = | ZNone of unit | ZSome of 'za
 
 let zint_forwards i = string_of_int (Big_int.to_int i)
 
@@ -183,7 +183,7 @@ let rec undefined_vector (len, item) =
 
 let undefined_list _ = []
 
-let rec undefined_bitvector len =
+let undefined_bitvector len =
   if Big_int.equal len Big_int.zero
   then []
   else B0 :: undefined_vector (Big_int.sub len (Big_int.of_int 1), B0)
@@ -533,10 +533,10 @@ module Mem = struct
     end)
 end
 
-let mem_pages = (ref Mem.empty : (Bytes.t Mem.t) ref);;
+let mem_pages = (ref Mem.empty : (Bytes.t Mem.t) ref)
 
 let page_shift_bits = 20 (* 1M page *)
-let page_size_bytes = 1 lsl page_shift_bits;; 
+let page_size_bytes = 1 lsl page_shift_bits
 
 let page_no_of_addr a = Big_int.shift_right a page_shift_bits
 let bottom_addr_of_page p = Big_int.shift_left p page_shift_bits
@@ -603,7 +603,7 @@ let fast_read_ram (data_size, addr) =
   Bytes.iter (fun byte -> vector := (byte_of_int (int_of_char byte)) @ !vector) bytes;
   !vector
 
-let tag_ram = (ref Mem.empty : (bool Mem.t) ref);;
+let tag_ram = (ref Mem.empty : (bool Mem.t) ref)
 
 let write_tag_bool (addr, tag) =
   let addri = uint addr in
@@ -759,9 +759,9 @@ let real_of_string str =
   | [whole] -> Rational.of_int (int_of_string str)
   | _ -> failwith "invalid real literal"
 
-let print str = Pervasives.print_string str
+let print str = Stdlib.print_string str
 
-let prerr str = Pervasives.prerr_string str
+let prerr str = Stdlib.prerr_string str
 
 let print_int (str, x) =
   print_endline (str ^ Big_int.to_string x)

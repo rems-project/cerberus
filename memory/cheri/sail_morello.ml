@@ -1,7 +1,7 @@
-open Sail_lib;;
-module Big_int = Nat_big_num;;
+open Sail_lib
+module Big_int = Nat_big_num
 
-let rec zeq_unit ((_, _) : (unit * unit)) : bool = sail_call (fun r -> true)
+let zeq_unit ((_, _) : (unit * unit)) : bool = sail_call (fun r -> true)
 
 and zneq_int ((zx, zy) : (Big_int.num * Big_int.num)) : bool = sail_call (fun r ->
   not (eq_int (zx, zy)))
@@ -11,9 +11,9 @@ and zneq_bool ((zx, zy) : (bool * bool)) : bool = sail_call (fun r ->
 
 and z__id (zx : (Big_int.num)) : Big_int.num = sail_call (fun r -> zx)
 
-type  zbits = (bit) list;;
+type  zbits = (bit) list
 
-let string_of_zbits (gs19 : zbits) = string_of_bits gs19;;
+let string_of_zbits (gs19 : zbits) = string_of_bits gs19
 
 let rec zneq_bits ((zx, zy) : ((bit) list * (bit) list)) : bool = sail_call (fun r ->
   not (eq_list (zx, zy)))
@@ -40,11 +40,11 @@ and zfdiv_int ((zn, zm) : (Big_int.num * Big_int.num)) : Big_int.num = sail_call
 and zfmod_int ((zn, zm) : (Big_int.num * Big_int.num)) : Big_int.num = sail_call (fun r ->
   sub_int (zn, (mult (zm, (zfdiv_int (zn, zm))))))
 
-type 'za zoption = | ZSome of 'za | ZNone of unit;;
+type 'za zoption = | ZSome of 'za | ZNone of unit
 
-let string_of_zoption _ = "VARIANT";;
+let string_of_zoption _ = "VARIANT"
 
-let rec zundefined_option : 'za. ('za) -> ('za) zoption = fun ztyp_a -> sail_call (fun r ->
+let zundefined_option : 'za. ('za) -> ('za) zoption = fun ztyp_a -> sail_call (fun r ->
   let zu_0 = (undefined_unit ()) in
   let zu_1 = ztyp_a in
   internal_pick [ZSome zu_1; ZNone zu_0])
@@ -71,30 +71,30 @@ and zinteger_subrange ((zi, zhi, zlo) : (Big_int.num * Big_int.num * Big_int.num
 and zSlice_int ((zi, zl, zn) : (Big_int.num * Big_int.num * Big_int.num)) : (bit) list = sail_call (fun r ->
   get_slice_int (zn, zi, zl))
 
-let zCAP_FLAGS_LO_BIT = (Big_int.of_int (56));;
+let zCAP_FLAGS_LO_BIT = (Big_int.of_int (56))
 
-let zCAP_VALUE_HI_BIT = (Big_int.of_int (63));;
+let zCAP_VALUE_HI_BIT = (Big_int.of_int (63))
 
-let zCAP_VALUE_LO_BIT = Big_int.zero;;
+let zCAP_VALUE_LO_BIT = Big_int.zero
 
-let zCAP_VALUE_NUM_BITS = (add_int ((sub_int (zCAP_VALUE_HI_BIT, zCAP_VALUE_LO_BIT)), (Big_int.of_int (1))));;
+let zCAP_VALUE_NUM_BITS = (add_int ((sub_int (zCAP_VALUE_HI_BIT, zCAP_VALUE_LO_BIT)), (Big_int.of_int (1))))
 
-let zCAP_BASE_HI_BIT = (Big_int.of_int (79));;
+let zCAP_BASE_HI_BIT = (Big_int.of_int (79))
 
-let zCAP_BASE_LO_BIT = (Big_int.of_int (64));;
+let zCAP_BASE_LO_BIT = (Big_int.of_int (64))
 
-let zCAP_MW = (add_int ((sub_int (zCAP_BASE_HI_BIT, zCAP_BASE_LO_BIT)), (Big_int.of_int (1))));;
+let zCAP_MW = (add_int ((sub_int (zCAP_BASE_HI_BIT, zCAP_BASE_LO_BIT)), (Big_int.of_int (1))))
 
-let rec zCapBoundsUsesValue (zexp : (Big_int.num)) : bool = sail_call (fun r ->
+let zCapBoundsUsesValue (zexp : (Big_int.num)) : bool = sail_call (fun r ->
   r.return (lt ((add_int (zexp, zCAP_MW)), zCAP_VALUE_NUM_BITS)))
 
-let zCAP_BASE_EXP_HI_BIT = (Big_int.of_int (66));;
+let zCAP_BASE_EXP_HI_BIT = (Big_int.of_int (66))
 
-let zCAP_LIMIT_EXP_HI_BIT = (Big_int.of_int (82));;
+let zCAP_LIMIT_EXP_HI_BIT = (Big_int.of_int (82))
 
-let zCAP_LIMIT_LO_BIT = (Big_int.of_int (80));;
+let zCAP_LIMIT_LO_BIT = (Big_int.of_int (80))
 
-let zCAP_IE_BIT = (Big_int.of_int (94));;
+let zCAP_IE_BIT = (Big_int.of_int (94))
 
 let rec zCapIsInternalExponent (zc : ((bit) list)) : bool = sail_call (fun r ->
   r.return (eq_list ([access (zc, zCAP_IE_BIT)], [B0])))
@@ -106,27 +106,27 @@ and zCapGetExponent (zc : ((bit) list)) : Big_int.num = sail_call (fun r ->
 and zCapGetValue (zc : ((bit) list)) : (bit) list = sail_call (fun r ->
   r.return (subrange (zc, zCAP_VALUE_HI_BIT, zCAP_VALUE_LO_BIT)))
 
-let zCAP_BOUND_NUM_BITS = (add_int (zCAP_VALUE_NUM_BITS, (Big_int.of_int (1))));;
+let zCAP_BOUND_NUM_BITS = (add_int (zCAP_VALUE_NUM_BITS, (Big_int.of_int (1))))
 
-let zCAP_BOUND_MAX = (zSlice_int ((shl_int ((Big_int.of_int (1)), zCAP_VALUE_NUM_BITS)), Big_int.zero, zCAP_BOUND_NUM_BITS));;
+let zCAP_BOUND_MAX = (zSlice_int ((shl_int ((Big_int.of_int (1)), zCAP_VALUE_NUM_BITS)), Big_int.zero, zCAP_BOUND_NUM_BITS))
 
-let zCAP_BOUND_MIN = (zSlice_int ((uint [B0; B0; B0; B0]), Big_int.zero, zCAP_BOUND_NUM_BITS));;
+let zCAP_BOUND_MIN = (zSlice_int ((uint [B0; B0; B0; B0]), Big_int.zero, zCAP_BOUND_NUM_BITS))
 
-let zCAP_MAX_ENCODEABLE_EXPONENT = (Big_int.of_int (63));;
+let zCAP_MAX_ENCODEABLE_EXPONENT = (Big_int.of_int (63))
 
-let zCAP_MAX_EXPONENT = (add_int ((sub_int (zCAP_VALUE_NUM_BITS, zCAP_MW)), (Big_int.of_int (2))));;
+let zCAP_MAX_EXPONENT = (add_int ((sub_int (zCAP_VALUE_NUM_BITS, zCAP_MW)), (Big_int.of_int (2))))
 
-let rec zCapBoundsAddress (zaddress : ((bit) list)) : (bit) list = sail_call (fun r ->
+let zCapBoundsAddress (zaddress : ((bit) list)) : (bit) list = sail_call (fun r ->
   r.return (sign_extend ((subrange (zaddress, (sub_int (zCAP_FLAGS_LO_BIT, (Big_int.of_int (1)))), Big_int.zero)), zCAP_VALUE_NUM_BITS)))
 
-let zCAP_BASE_MANTISSA_LO_BIT = (Big_int.of_int (67));;
+let zCAP_BASE_MANTISSA_LO_BIT = (Big_int.of_int (67))
 
-let rec zCapGetBottom (zc : ((bit) list)) : (bit) list = sail_call (fun r ->
+let zCapGetBottom (zc : ((bit) list)) : (bit) list = sail_call (fun r ->
   if (zCapIsInternalExponent zc) then (r.return (append ((subrange (zc, zCAP_BASE_HI_BIT, zCAP_BASE_MANTISSA_LO_BIT)), [B0; B0; B0]))) else (r.return (subrange (zc, zCAP_BASE_HI_BIT, zCAP_BASE_LO_BIT))))
 
-let zCAP_LIMIT_HI_BIT = (Big_int.of_int (93));;
+let zCAP_LIMIT_HI_BIT = (Big_int.of_int (93))
 
-let zCAP_LIMIT_MANTISSA_LO_BIT = (Big_int.of_int (83));;
+let zCAP_LIMIT_MANTISSA_LO_BIT = (Big_int.of_int (83))
 
 let rec zCapUnsignedLessThan ((za, zb) : ((bit) list * (bit) list)) : bool = sail_call (fun r ->
   r.return (lt ((uint za), (uint zb))))
@@ -228,7 +228,7 @@ and zCapIsRepresentable ((zc, zaddress) : ((bit) list * (bit) list)) : bool = sa
     r.return (zCapBoundsEqual (zc, !znewc))
   end)
 
-let zCAP_TAG_BIT = (Big_int.of_int (128));;
+let zCAP_TAG_BIT = (Big_int.of_int (128))
 
 let rec zCapSetTag ((zc, zt) : ((bit) list * (bit) list)) : (bit) list = sail_call (fun r ->
   let zr = ref (zc : (bit) list) in
@@ -250,23 +250,26 @@ and zCapSetValue ((zc__arg, zv) : ((bit) list * (bit) list)) : (bit) list = sail
     r.return !zc
   end)
 
-let zCAP_PERMS_HI_BIT = (Big_int.of_int (127));;
+let zCAP_PERMS_HI_BIT = (Big_int.of_int (127))
 
-let zCAP_PERMS_LO_BIT = (Big_int.of_int (110));;
+let zCAP_PERMS_LO_BIT = (Big_int.of_int (110))
 
-let zCAP_PERMS_NUM_BITS = (add_int ((sub_int (zCAP_PERMS_HI_BIT, zCAP_PERMS_LO_BIT)), (Big_int.of_int (1))));;
+let zCAP_PERMS_NUM_BITS = (add_int ((sub_int (zCAP_PERMS_HI_BIT, zCAP_PERMS_LO_BIT)), (Big_int.of_int (1))))
 
-let rec zCapGetPermissions (zc : ((bit) list)) : (bit) list = sail_call (fun r ->
+let zCapGetPermissions (zc : ((bit) list)) : (bit) list = sail_call (fun r ->
   r.return (subrange (zc, zCAP_PERMS_HI_BIT, zCAP_PERMS_LO_BIT)))
 
-let zCAP_LENGTH_NUM_BITS = (add_int (zCAP_VALUE_NUM_BITS, (Big_int.of_int (1))));;
+let zCAP_LENGTH_NUM_BITS = (add_int (zCAP_VALUE_NUM_BITS, (Big_int.of_int (1))))
 
 let rec zCapUnsignedGreaterThanOrEqual ((za, zb) : ((bit) list * (bit) list)) : bool = sail_call (fun r ->
   r.return (gteq ((uint za), (uint zb))))
 
 and zCapIsRepresentableFast ((zc, zincrement_name__arg) : ((bit) list * (bit) list)) : bool = sail_call (fun r ->
-  let zincrement_name = ref (zincrement_name__arg : (bit) list) in
+                                                                                                  let zincrement_name = ref (zincrement_name__arg : (bit) list) in
+(*
+
   let zB3 = ref ((undefined_bitvector (add_int (Big_int.zero, (add_int ((sub_int ((sub_int ((add_int ((sub_int ((Big_int.of_int (79)), (Big_int.of_int (64)))), (Big_int.of_int (1)))), (Big_int.of_int (1)))), (sub_int ((add_int ((sub_int ((Big_int.of_int (79)), (Big_int.of_int (64)))), (Big_int.of_int (1)))), (Big_int.of_int (3)))))), (Big_int.of_int (1))))))) : (bit) list) in
+
   let zR = ref ((undefined_bitvector (Big_int.of_int (16))) : (bit) list) in
   let zR3 = ref ((undefined_bitvector (Big_int.of_int (3))) : (bit) list) in
   let za_mid = ref ((undefined_bitvector (add_int (Big_int.zero, (add_int ((sub_int ((sub_int ((add_int ((sub_int ((Big_int.of_int (79)), (Big_int.of_int (64)))), (Big_int.of_int (1)))), (Big_int.of_int (1)))), Big_int.zero)), (Big_int.of_int (1))))))) : (bit) list) in
@@ -274,6 +277,8 @@ and zCapIsRepresentableFast ((zc, zincrement_name__arg) : ((bit) list * (bit) li
   let zdiff1 = ref ((undefined_bitvector (Big_int.of_int (16))) : (bit) list) in
   let zi_mid = ref ((undefined_bitvector (add_int (Big_int.zero, (add_int ((sub_int ((sub_int ((add_int ((sub_int ((Big_int.of_int (79)), (Big_int.of_int (64)))), (Big_int.of_int (1)))), (Big_int.of_int (1)))), Big_int.zero)), (Big_int.of_int (1))))))) : (bit) list) in
   let zi_top = ref ((undefined_bitvector (Big_int.of_int (64))) : (bit) list) in
+ *)
+
   let zexp = (zCapGetExponent zc) in
   if (gteq (zexp, (sub_int (zCAP_MAX_EXPONENT, (Big_int.of_int (2)))))) then (r.return true) else (let za = ref ((zCapGetValue zc) : (bit) list) in
   let za = (zCapBoundsAddress !za) in
@@ -318,7 +323,9 @@ and zCapIsRangeInBounds ((zc, zstart_address, zlength) : ((bit) list * (bit) lis
   end)
 
 and zCapSetBounds ((zc, zreq_len, zexact) : ((bit) list * (bit) list * bool)) : (bit) list = sail_call (fun r ->
+(*
   let zL_ie = ref ((undefined_bitvector (Big_int.of_int (13))) : (bit) list) in
+ *)
   let zobase = ref ((undefined_bitvector (add_int ((add_int ((sub_int ((Big_int.of_int (63)), Big_int.zero)), (Big_int.of_int (1)))), (Big_int.of_int (1))))) : (bit) list) in
   let zolimit = ref ((undefined_bitvector (add_int ((add_int ((sub_int ((Big_int.of_int (63)), Big_int.zero)), (Big_int.of_int (1)))), (Big_int.of_int (1))))) : (bit) list) in
   let zovalid = ref ((undefined_bool ()) : bool) in
@@ -442,5 +449,4 @@ and zCapIsSubSetOf ((za, zb) : ((bit) list * (bit) list)) : bool = sail_call (fu
     r.return (((zboundsSubset && zpermsSubset) && !zavalid) && !zbvalid)
   end)
 
-let zinitializze_registers () = ();;
-
+let zinitializze_registers () = ()
