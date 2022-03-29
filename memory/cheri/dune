@@ -1,6 +1,6 @@
 (library
  (name mem_cheri)
  (public_name cerberus.mem.cheri)
- (private_modules Capability Morello)
+ (private_modules Capability Morello Sail_morello Sail_lib Util)
  (flags (:standard -w -27-32))
  (implements cerb_frontend))

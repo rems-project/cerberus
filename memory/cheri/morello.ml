@@ -4,6 +4,7 @@ module Z = struct
 end
 
 open Capability
+open Sail_morello
 
 module Morello_permission : Cap_permission = struct
   type t =
