@@ -109,7 +109,6 @@ module Morello_permission : Cap_permission = struct
     ^ s c.permits_execute "x"
     ^ s c.permits_load_cap "R"
     ^ s c.permits_store_cap "W"
-
 end
 
 module Morello_capability: Capability
@@ -118,7 +117,7 @@ module Morello_capability: Capability
   =
   struct
     module P = Morello_permission
-    type vaddr = Z.num
+    type vaddr = Z.num (* always unsigned! *)
     type otype = Z.num (*  15 bits actually. *)
 
     let min_vaddr  = Nat_big_num.of_int 0
@@ -282,8 +281,49 @@ module Morello_capability: Capability
     let cap_unseal c k = (* TODO: check if allowed *)
       {c with obj_type = cap_SEAL_TYPE_UNSEALED}
 
+    (* private function to decode bit list *)
+    let decode_bits bits =
+      let open Sail_lib in
+      let value = uint (zCapGetValue bits) in
+      (* TODO(CHERI): check if it is inclusive *)
+      let (bottom', top', flag) = zCapGetBounds bits in
+      if flag then None
+      else
+        let bottom = uint bottom' in
+        let top = uint top' in
+        let perms' = zCapGetPermissions bits  in
+        let is_execuvite = false in  (* TODO *)
+        let decode_flags (bits:Sail_lib.bit list): (bool list) option =
+          (* TODO *)
+          Some (List.init cap_flags_len (fun _ -> false))
+        in
+        let flags' = [] (* TODO *)
+        in
+        match decode_flags flags' with
+        | None -> None
+        | Some flags ->
+           let decode_perms (bits:Sail_lib.bit list): P.t option = None in
+           match decode_perms perms' with
+           | None -> None
+           | Some perms ->
+              let otype = cap_SEAL_TYPE_UNSEALED in
+              Some {
+                  valid = true;
+                  value = value;
+                  obj_type = otype;
+                  bounds = (bottom, top);
+                  flags = flags ;
+                  perms = perms ;
+                  is_execuvite = is_execuvite;
+                }
 
-    let decode (bytes:char list) (tag:bool) = None (* TODO implement *)
+    let decode (bytes:char list) (tag:bool) =
+      let open Sail_lib in
+      let bit_list_of_char c =
+        get_slice_int' (8, (Z.of_int (int_of_char c)), 0) in
+      (* TODO(CHERI): check if bytes and bits order is correct *)
+      let bits = List.concat (List.map bit_list_of_char bytes) in
+      decode_bits bits
 
     let encode c = [] (* TODO implement *)
 
@@ -342,22 +382,10 @@ module Morello_capability: Capability
         (vstring (Nat_big_num.succ b1))
         flags
 
-    (* In morello the null capabilitiy is defined as encoding of all
-       zeroes. Related pseudocode definition: CapNull *)
     let cap_c0 =
-      match decode (List.init sizeof_cap (Fun.const 'a')) false with
+      match decode_bits (zCapNull ()) with
       | Some c -> c
       | None ->
-         (* TODO(CHERI): temporary workaround until decode is implemented *)
-         {
-           valid = false;
-           value = Z.of_int 0;
-           obj_type = cap_SEAL_TYPE_UNSEALED;
-           bounds = (Z.of_int 0, Z.of_int 0);
-           flags = List.init cap_flags_len (fun _ -> false) ;
-           perms = P.perm_p0 ;
-           is_execuvite = false
-         }
-           (* failwith "Could not construct NULL capability (C0)" *)
+         failwith "Could not construct NULL capability (C0)!"
 
   end
