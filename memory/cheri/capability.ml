@@ -50,6 +50,11 @@ module type Cap_permission = sig
 
   val to_string: t -> string
 
+  (* Initialize from list of boolean. The size and
+     contents of the list is implementation-specific.
+     Returns None in case of error *)
+  val of_list: bool list -> t option
+
 end
 
 module type Capability =

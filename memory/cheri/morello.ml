@@ -31,6 +31,34 @@ module Morello_permission : Cap_permission = struct
 
   let user_perms_len = 4
 
+  (* Input list contains permissions in the order listed in Morello
+     spec, from "User" (the head) to "Local" with additional "local"
+     permission appended at the end *)
+  let of_list b =
+    if List.length b <> (user_perms_len + 13) then None
+    else
+      (* offset in list wrt bit index in table R_ZLYBF in Morello spec *)
+      let off = 2 in
+      Some
+        {
+          global = not (List.nth b (18-off));
+
+          permits_load            = List.nth b (17-off) ;
+          permits_store           = List.nth b (16-off) ;
+          permits_execute         = List.nth b (15-off) ;
+          permits_load_cap        = List.nth b (14-off) ;
+          permits_store_cap       = List.nth b (13-off) ;
+          permits_store_local_cap = List.nth b (12-off) ;
+          permits_seal            = List.nth b (11-off) ;
+          permits_unseal          = List.nth b (10-off) ;
+          permits_system_access   = List.nth b (9 -off) ;
+          permits_ccall           = List.nth b (8 -off) ;
+          permit_compartment_id   = List.nth b (7 -off) ;
+          permit_mutable_load     = List.nth b (6 -off) ;
+
+          user_perms = Sail_lib.take user_perms_len b
+        }
+
   let perm_is_global          p = p.global
   let perm_is_execute         p = p.permits_execute
   let perm_is_ccall           p = p.permits_ccall
@@ -302,8 +330,11 @@ module Morello_capability: Capability
         match flags_from_value value' with
         | None -> None
         | Some flags ->
-           let decode_perms (bits:Sail_lib.bit list): P.t option = None in
-           match decode_perms perms' with
+           let perms_data = List.append
+                              (List.map bool_of_bit perms')
+                              [zCapIsLocal bits]
+           in
+           match P.of_list perms_data with
            | None -> None
            | Some perms ->
               let otype = uint (zCapGetObjectType bits) in
