@@ -312,41 +312,43 @@ module Morello_capability: Capability
 
     (* private function to decode bit list *)
     let decode_bits bits =
-      let open Sail_lib in
-      let value' = zCapGetValue bits in
-      let value = uint value' in
-      let (base', limit', isExponentValid) = zCapGetBounds bits in
-      if not isExponentValid then None
+      if List.length bits <> 129 then None
       else
-        let perms' = zCapGetPermissions bits  in
-        let is_execuvite = zCapIsExecutive bits in
-        let flags_from_value (x:Sail_lib.bit list): (bool list) option =
-          let n = List.length x in
-          if n < 8 then None
-          else
-            let flags' = drop (n-8) x in
-            Some (List.map bool_of_bit flags')
-        in
-        match flags_from_value value' with
-        | None -> None
-        | Some flags ->
-           let perms_data = List.append
-                              (List.map bool_of_bit perms')
-                              [zCapIsLocal bits]
-           in
-           match P.of_list perms_data with
-           | None -> None
-           | Some perms ->
-              let otype = uint (zCapGetObjectType bits) in
-              Some {
-                  valid = true;
-                  value = value;
-                  obj_type = otype;
-                  bounds = (uint base', uint limit');
-                  flags = flags ;
-                  perms = perms ;
-                  is_execuvite = is_execuvite;
-                }
+        let open Sail_lib in
+        let value' = zCapGetValue bits in
+        let value = uint value' in
+        let (base', limit', isExponentValid) = zCapGetBounds bits in
+        if not isExponentValid then None
+        else
+          let perms' = zCapGetPermissions bits  in
+          let is_execuvite = zCapIsExecutive bits in
+          let flags_from_value (x:Sail_lib.bit list): (bool list) option =
+            let n = List.length x in
+            if n < 8 then None
+            else
+              let flags' = drop (n-8) x in
+              Some (List.map bool_of_bit flags')
+          in
+          match flags_from_value value' with
+          | None -> None
+          | Some flags ->
+             let perms_data = List.append
+                                (List.map bool_of_bit perms')
+                                [zCapIsLocal bits]
+             in
+             match P.of_list perms_data with
+             | None -> None
+             | Some perms ->
+                let otype = uint (zCapGetObjectType bits) in
+                Some {
+                    valid = zCapIsTagClear bits;
+                    value = value;
+                    obj_type = otype;
+                    bounds = (uint base', uint limit');
+                    flags = flags ;
+                    perms = perms ;
+                    is_execuvite = is_execuvite;
+                  }
 
     let decode (bytes:char list) (tag:bool) =
       let open Sail_lib in
@@ -354,7 +356,7 @@ module Morello_capability: Capability
         get_slice_int' (8, (Z.of_int (int_of_char c)), 0) in
       (* TODO(CHERI): check if bytes and bits order is correct *)
       let bits = List.concat (List.map bit_list_of_char bytes) in
-      decode_bits bits
+      decode_bits (List.append bits [bit_of_bool tag])
 
     let encode c = [] (* TODO implement *)
 
