@@ -190,7 +190,8 @@ module Morello_capability: Capability
         valid = true ;
         value = a ;
         obj_type = cap_SEAL_TYPE_RB ; (* TODO(CHERI): check this *)
-        bounds = (a, Z.succ a) ; (* TODO(CHERI): clarify what are the bounds *)
+        bounds = (a, Z.succ (Z.succ a)) ; (* for all functions to have unique addresses we
+                                             presently allocate 1-byte region for each *)
         flags = List.init cap_flags_len (fun _ -> false) ;
         perms = P.perm_alloc ;
         is_execuvite = true
@@ -286,12 +287,9 @@ module Morello_capability: Capability
       let open Sail_lib in
       let value' = zCapGetValue bits in
       let value = uint value' in
-      (* TODO(CHERI): check bounds are inclusive *)
-      let (bottom', top', flag) = zCapGetBounds bits in
-      if flag then None
+      let (base', limit', isExponentValid) = zCapGetBounds bits in
+      if not isExponentValid then None
       else
-        let bottom = uint bottom' in
-        let top = uint top' in
         let perms' = zCapGetPermissions bits  in
         let is_execuvite = zCapIsExecutive bits in
         let flags_from_value (x:Sail_lib.bit list): (bool list) option =
@@ -313,7 +311,7 @@ module Morello_capability: Capability
                   valid = true;
                   value = value;
                   obj_type = otype;
-                  bounds = (bottom, top);
+                  bounds = (uint base', uint limit');
                   flags = flags ;
                   perms = perms ;
                   is_execuvite = is_execuvite;
@@ -378,10 +376,7 @@ module Morello_capability: Capability
         (vstring c.value)
         ((P.to_string c.perms) ^ (if c.is_execuvite then "E" else ""))
         (vstring b0)
-        (* TODO(CHERI): check if this is correct. wiki says "top:
-           Upper bound of capability plus 1." But also we need to
-           consider the fact that our bounds are inclusive *)
-        (vstring (Nat_big_num.succ b1))
+        (vstring b1)
         flags
 
     let cap_c0 =
