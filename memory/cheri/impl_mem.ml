@@ -546,11 +546,11 @@ module CHERI (C:Capability
 
 
   (** Checks if memory region starting from [addr] and
-      of size [sz] fits withing inclusuvive interval [b1,b2] *)
-  let cap_bounds_check (b1,b2) addr sz =
-    Z.less_equal b1 addr
-    && Z.less_equal addr b2
-    && Z.less_equal (Z.add addr sz) (Z.succ b2)
+      of size [sz] fits withing interval [b1,b2) *)
+  let cap_bounds_check (base,limit) addr sz =
+    Z.less_equal base addr
+    && Z.less addr limit
+    && Z.less_equal (Z.add addr sz) limit
 
   let cap_check c intent sz =
     if C.cap_is_valid c then
