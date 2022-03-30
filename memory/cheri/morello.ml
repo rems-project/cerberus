@@ -153,7 +153,7 @@ module Morello_capability: Capability
 
     let cap_flags_len = 8
 
-    let cap_is_valid c = c.valid (* TODO: maybe more checks *)
+    let cap_is_valid c = c.valid
 
     let cap_get_obj_type c = c.obj_type
 
@@ -284,29 +284,31 @@ module Morello_capability: Capability
     (* private function to decode bit list *)
     let decode_bits bits =
       let open Sail_lib in
-      let value = uint (zCapGetValue bits) in
-      (* TODO(CHERI): check if it is inclusive *)
+      let value' = zCapGetValue bits in
+      let value = uint value' in
+      (* TODO(CHERI): check bounds are inclusive *)
       let (bottom', top', flag) = zCapGetBounds bits in
       if flag then None
       else
         let bottom = uint bottom' in
         let top = uint top' in
         let perms' = zCapGetPermissions bits  in
-        let is_execuvite = false in  (* TODO *)
-        let decode_flags (bits:Sail_lib.bit list): (bool list) option =
-          (* TODO *)
-          Some (List.init cap_flags_len (fun _ -> false))
+        let is_execuvite = zCapIsExecutive bits in
+        let flags_from_value (x:Sail_lib.bit list): (bool list) option =
+          let n = List.length x in
+          if n < 8 then None
+          else
+            let flags' = drop (n-8) x in
+            Some (List.map bool_of_bit flags')
         in
-        let flags' = [] (* TODO *)
-        in
-        match decode_flags flags' with
+        match flags_from_value value' with
         | None -> None
         | Some flags ->
            let decode_perms (bits:Sail_lib.bit list): P.t option = None in
            match decode_perms perms' with
            | None -> None
            | Some perms ->
-              let otype = cap_SEAL_TYPE_UNSEALED in
+              let otype = uint (zCapGetObjectType bits) in
               Some {
                   valid = true;
                   value = value;
