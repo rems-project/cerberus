@@ -1202,7 +1202,7 @@ module CHERI (C:Capability
     | MVinteger (ity, IC (prov, c)) ->
        (funptrmap,
         IntMap.add (C.cap_get_value c) (C.cap_is_valid c) captags,
-        List.mapi (fun i b -> AbsByte.v prov ~copy_offset:(Some i) (Some b)) @@ C.encode c)
+        List.mapi (fun i b -> AbsByte.v prov ~copy_offset:(Some i) (Some b)) @@ C.encode true c)
     | MVfloating (fty, fval) ->
        ret @@ List.map (AbsByte.v Prov_none) begin
                   bytes_of_int
@@ -1218,7 +1218,7 @@ module CHERI (C:Capability
            (* Do we really need to maintain tag for C0? Anyway, we do
               it here for consistency even if it is never read. *)
            IntMap.add (C.cap_get_value C.cap_c0) (C.cap_is_valid C.cap_c0) captags,
-           List.map (fun b -> AbsByte.v Prov_none (Some b)) @@ C.encode C.cap_c0)
+           List.map (fun b -> AbsByte.v Prov_none (Some b)) @@ C.encode true C.cap_c0)
        | PVfunction (FP_valid (Symbol.Symbol (file_dig, n, opt_name))) ->
           let c = C.alloc_fun (Z.add (Z.of_int initial_address) (Z.of_int n)) in
           (begin match opt_name with
@@ -1232,12 +1232,12 @@ module CHERI (C:Capability
            | SD_None -> funptrmap
            end,
            IntMap.add (C.cap_get_value c) (C.cap_is_valid c) captags,
-           List.mapi (fun i b -> AbsByte.v prov ~copy_offset:(Some i) (Some b)) @@ C.encode c)
+           List.mapi (fun i b -> AbsByte.v prov ~copy_offset:(Some i) (Some b)) @@ C.encode true c)
        | PVfunction (FP_invalid c)
          | PVconcrete c ->
           (funptrmap,
            IntMap.add (C.cap_get_value c) (C.cap_is_valid c) captags,
-           List.mapi (fun i b -> AbsByte.v prov ~copy_offset:(Some i) (Some b)) @@ C.encode c)
+           List.mapi (fun i b -> AbsByte.v prov ~copy_offset:(Some i) (Some b)) @@ C.encode true c)
        end
     | MVarray mvals ->
        let (funptrmap, captags, bs_s) =

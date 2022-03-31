@@ -358,7 +358,30 @@ module Morello_capability: Capability
       let bits = List.concat (List.map bit_list_of_char bytes) in
       decode_bits (List.append bits [bit_of_bool tag])
 
-    let encode c = [] (* TODO implement *)
+    let bits_of_uint (x:Z.num): Sail_lib.bit list = [] (* TODO *)
+
+    let encode exact c =
+      let open Sail_lib in
+      let bits = zCapNull () in
+      let bits = zCapSetTag (bits,[bit_of_bool (cap_is_valid c)]) in
+      let bits = zCapSetObjectType (bits, bits_of_uint (cap_get_obj_type c)) in
+      let (base',limit') = cap_get_bounds c in
+      let len' = Z.sub limit' base' in
+      let base = bits_of_uint base' and len = bits_of_uint len' in
+      (* temporary set the value to base *)
+      let bits = zCapSetValue (bits, base) in
+      (* derive new capabilty with len-sized bounds *)
+      let bits = zCapSetBounds (bits, len, exact) in
+      (* now set actual value we want *)
+      let _ = zCapSetValue (bits, bits_of_uint (cap_get_value c)) in
+      (*
+
+        flags: bool list;
+        perms: P.t;
+        is_execuvite : bool; (* Morello-spefic? *)
+       *)
+      [] (* TODO *)
+
 
     (* exact equality. compares capability metadata as well as value *)
     let eq = (=)

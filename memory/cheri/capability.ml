@@ -224,8 +224,11 @@ module type Capability =
         separately, as it is not part of encoding.  *)
     val decode: char list -> bool -> t option
 
-    (** Encode capability as list of bytes *)
-    val encode: t -> char list
+    (** Encode capability as list of bytes.
+        boolean agrument specify if bounds needs to be encoded exactly.
+        if exact encoding requested but no possible, invalid capability will
+        be returned *)
+    val encode: bool ->  t -> char list
 
     (* --- Utility methods --- *)
 
