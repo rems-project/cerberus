@@ -10,6 +10,8 @@ module Morello_permission : Cap_permission = struct
   type t =
     {
       global: bool;
+      executive: bool ;
+
       permits_load: bool;
       permits_store: bool;
       permits_execute: bool ;
@@ -32,34 +34,36 @@ module Morello_permission : Cap_permission = struct
   let user_perms_len = 4
 
   (* Input list contains permissions in the order listed in Morello
-     spec, from "User" (the head) to "Local" with additional "local"
-     permission appended at the end *)
+     spec, from "User" to "Local" with additional "global" and
+     "exectuve" in the begining *)
   let of_list b =
     if List.length b <> (user_perms_len + 13) then None
     else
-      (* offset in list wrt bit index in table R_ZLYBF in Morello spec *)
-      let off = 2 in
       Some
         {
-          global = not (List.nth b (18-off));
 
-          permits_load            = List.nth b (17-off) ;
-          permits_store           = List.nth b (16-off) ;
-          permits_execute         = List.nth b (15-off) ;
-          permits_load_cap        = List.nth b (14-off) ;
-          permits_store_cap       = List.nth b (13-off) ;
-          permits_store_local_cap = List.nth b (12-off) ;
-          permits_seal            = List.nth b (11-off) ;
-          permits_unseal          = List.nth b (10-off) ;
-          permits_system_access   = List.nth b (9 -off) ;
-          permits_ccall           = List.nth b (8 -off) ;
-          permit_compartment_id   = List.nth b (7 -off) ;
-          permit_mutable_load     = List.nth b (6 -off) ;
+          permits_load            = List.nth b 17 ;
+          permits_store           = List.nth b 16 ;
+          permits_execute         = List.nth b 15 ;
+          permits_load_cap        = List.nth b 14 ;
+          permits_store_cap       = List.nth b 13 ;
+          permits_store_local_cap = List.nth b 12 ;
+          permits_seal            = List.nth b 11 ;
+          permits_unseal          = List.nth b 10 ;
+          permits_system_access   = List.nth b 9  ;
+          permits_ccall           = List.nth b 8  ;
+          permit_compartment_id   = List.nth b 7  ;
+          permit_mutable_load     = List.nth b 6  ;
 
-          user_perms = Sail_lib.take user_perms_len b
+          user_perms = Sail_lib.take user_perms_len
+                         (Sail_lib.drop 2 b) ;
+
+          global                 = List.nth b 0;
+          executive              = List.nth b 1;
         }
 
   let perm_is_global          p = p.global
+  let perm_is_executive       p = p.executive
   let perm_is_execute         p = p.permits_execute
   let perm_is_ccall           p = p.permits_ccall
   let perm_is_load            p = p.permits_load
@@ -74,6 +78,7 @@ module Morello_permission : Cap_permission = struct
   let get_user_perms          p = p.user_perms
 
   let perm_clear_global          p = {p with global                  = false}
+  let perm_clear_executive       p = {p with executive               = false}
   let perm_clear_execute         p = {p with permits_execute         = false}
   let perm_clear_ccall           p = {p with permits_ccall           = false}
   let perm_clear_load            p = {p with permits_load            = false}
@@ -90,6 +95,7 @@ module Morello_permission : Cap_permission = struct
   let perm_p0 =
     {
       global = false ;
+      executive = false ;
       permits_load = false ;
       permits_store = false ;
       permits_execute = false ;
@@ -106,21 +112,12 @@ module Morello_permission : Cap_permission = struct
     }
 
   let perm_alloc =
-    {
-      global = false ;
+    { perm_p0 with
       permits_load = true ;
       permits_store = true ;
-      permits_execute = false ;
       permits_load_cap = true ;
       permits_store_cap = true ;
       permits_store_local_cap = true ; (* not sure *)
-      permits_seal = false ;
-      permits_unseal = false ;
-      permits_system_access = false ;
-      permits_ccall = false ;
-      permit_compartment_id = false ;
-      permit_mutable_load = false ;
-      user_perms = List.init user_perms_len (fun _ -> false)
     }
 
   (** Returns permission a string in "simplified format".
@@ -137,6 +134,7 @@ module Morello_permission : Cap_permission = struct
     ^ s c.permits_execute "x"
     ^ s c.permits_load_cap "R"
     ^ s c.permits_store_cap "W"
+    ^ s c.executive "E"
 end
 
 module Morello_capability: Capability
@@ -171,7 +169,6 @@ module Morello_capability: Capability
         bounds: vaddr_interval;
         flags: bool list;
         perms: P.t;
-        is_execuvite : bool; (* Morello-spefic? *)
       }
 
     let cap_SEAL_TYPE_UNSEALED:otype = Z.of_int 0
@@ -210,7 +207,6 @@ module Morello_capability: Capability
         bounds = (a, Z.add a size) ;
         flags = List.init cap_flags_len (fun _ -> false) ;
         perms = P.perm_alloc ;
-        is_execuvite = false
       }
 
     let alloc_fun a =
@@ -222,7 +218,6 @@ module Morello_capability: Capability
                                              presently allocate 1-byte region for each *)
         flags = List.init cap_flags_len (fun _ -> false) ;
         perms = P.perm_alloc ;
-        is_execuvite = true
       }
 
 
@@ -321,7 +316,6 @@ module Morello_capability: Capability
         if not isExponentValid then None
         else
           let perms' = zCapGetPermissions bits  in
-          let is_execuvite = zCapIsExecutive bits in
           let flags_from_value (x:Sail_lib.bit list): (bool list) option =
             let n = List.length x in
             if n < 8 then None
@@ -332,9 +326,11 @@ module Morello_capability: Capability
           match flags_from_value value' with
           | None -> None
           | Some flags ->
-             let perms_data = List.append
-                                (List.map bool_of_bit perms')
-                                [zCapIsLocal bits]
+             let is_execuvite = zCapIsExecutive bits in
+             let is_global = not @@ zCapIsLocal bits in
+             let perms_data =
+               is_global :: is_execuvite ::
+                 (List.map bool_of_bit perms')
              in
              match P.of_list perms_data with
              | None -> None
@@ -347,7 +343,6 @@ module Morello_capability: Capability
                     bounds = (uint base', uint limit');
                     flags = flags ;
                     perms = perms ;
-                    is_execuvite = is_execuvite;
                   }
 
     let decode (bytes:char list) (tag:bool) =
@@ -378,7 +373,6 @@ module Morello_capability: Capability
 
         flags: bool list;
         perms: P.t;
-        is_execuvite : bool; (* Morello-spefic? *)
        *)
       [] (* TODO *)
 
@@ -430,7 +424,7 @@ module Morello_capability: Capability
 
       Printf.sprintf "%s [%s,%s-%s]%s"
         (vstring c.value)
-        ((P.to_string c.perms) ^ (if c.is_execuvite then "E" else ""))
+        (P.to_string c.perms)
         (vstring b0)
         (vstring b1)
         flags
