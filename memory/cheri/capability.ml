@@ -104,7 +104,7 @@ module type Capability =
     val get_perms: t -> P.t
 
     (** Null capability *)
-    val cap_c0: t
+    val cap_c0: unit -> t
 
     (** Capability for newly allocated region *)
     val alloc_cap: vaddr -> vaddr -> t

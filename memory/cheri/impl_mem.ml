@@ -1062,7 +1062,7 @@ module CHERI (C:Capability
                | Some n ->
                   begin match ref_ty with
                   | Ctype (_, Function _) ->
-                     if C.eq n C.cap_c0 then
+                     if C.eq n (C.cap_c0 ()) then
                        MVEpointer (ref_ty, PV (Prov_none, PVnull ref_ty))
                      else
                        begin match tag_query_f addr with
@@ -1085,7 +1085,7 @@ module CHERI (C:Capability
                           end
                        end
                   | _ ->
-                     if C.eq n C.cap_c0 then
+                     if C.eq n (C.cap_c0 ()) then
                        MVEpointer (ref_ty, PV (Prov_none, PVnull ref_ty))
                      else
                        let prov =
@@ -1215,11 +1215,11 @@ module CHERI (C:Capability
        begin match ptrval_ with
        | PVnull _ ->
           Debug_ocaml.print_debug 1 [] (fun () -> "NOTE: we fix the representation of all NULL pointers to be C0");
-          let (cb,ct) = C.encode true C.cap_c0 in
+          let (cb,ct) = C.encode true (C.cap_c0 ()) in
           (funptrmap,
            (* Do we really need to maintain tag for C0? Anyway, we do
               it here for consistency even if it is never read. *)
-           IntMap.add (C.cap_get_value C.cap_c0) ct captags,
+           IntMap.add (C.cap_get_value (C.cap_c0 ())) ct captags,
            List.map (fun b -> AbsByte.v Prov_none (Some b)) cb)
        | PVfunction (FP_valid (Symbol.Symbol (file_dig, n, opt_name))) ->
           let c = C.alloc_fun (Z.add (Z.of_int initial_address) (Z.of_int n)) in
@@ -2163,7 +2163,7 @@ module CHERI (C:Capability
                else
                  Z.sub r dlt in
 
-             let c = C.cap_c0 in
+             let c = C.cap_c0 () in
              (* TODO(CHERI): representability check? *)
              let c = C.cap_set_value c n in
              return (PV (prov, PVconcrete c))
