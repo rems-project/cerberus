@@ -261,7 +261,7 @@ module CHERI (C:Capability
   type function_pointer =
     | FP_valid of Symbol.sym
     | FP_invalid of C.t
-  
+
   type pointer_value_base =
     | PVnull of ctype
     | PVfunction of function_pointer
@@ -470,7 +470,7 @@ module CHERI (C:Capability
       dynamic_addrs: C.vaddr list;
       last_used: storage_instance_id option;
     }
-  
+
   let initial_mem_state = {
       next_alloc_id= Z.zero;
       next_iota= Z.zero;
@@ -584,7 +584,7 @@ module CHERI (C:Capability
     | PVfunction (FP_valid sym) ->
        !^ "Cfunction" ^^ P.parens (!^ (Pp_symbol.to_string_pretty sym))
     | PVfunction (FP_invalid c) ->
-        !^ "Cfunction" ^^ P.parens (!^ "invalid" ^^ P.colon ^^^ !^ (C.to_string c))
+       !^ "Cfunction" ^^ P.parens (!^ "invalid" ^^ P.colon ^^^ !^ (C.to_string c))
     (* !^ ("<funptr:" ^ Symbol.instance_Show_Show_Symbol_sym_dict.show_method sym ^ ">") *)
     | PVconcrete n ->
        (* TODO: remove this idiotic hack when Lem's nat_big_num library expose "format" *)
@@ -1017,7 +1017,7 @@ module CHERI (C:Capability
        , begin match extract_unspec bs1' with
          | Some cs ->
             MVEinteger ( ity
-                      , mk_ival prov (int_of_bytes (AilTypesAux.is_signed_ity ity) cs))
+                       , mk_ival prov (int_of_bytes (AilTypesAux.is_signed_ity ity) cs))
          | None ->
             MVEunspecified cty
          end , bs2)
@@ -1029,7 +1029,7 @@ module CHERI (C:Capability
        , begin match extract_unspec bs1' with
          | Some cs ->
             MVEfloating ( fty
-                       , Int64.float_of_bits (Z.to_int64 (int_of_bytes true cs)) )
+                        , Int64.float_of_bits (Z.to_int64 (int_of_bytes true cs)) )
          | None ->
             MVEunspecified cty
          end, bs2)
@@ -1200,9 +1200,10 @@ module CHERI (C:Capability
                    (sizeof (Ctype ([], Basic (Integer ity)))) n
                end
     | MVinteger (ity, IC (prov, c)) ->
+       let (cb,ct) = C.encode true c in
        (funptrmap,
-        IntMap.add (C.cap_get_value c) (C.cap_is_valid c) captags,
-        List.mapi (fun i b -> AbsByte.v prov ~copy_offset:(Some i) (Some b)) @@ C.encode true c)
+        IntMap.add (C.cap_get_value c) ct captags,
+        List.mapi (fun i b -> AbsByte.v prov ~copy_offset:(Some i) (Some b)) @@ cb)
     | MVfloating (fty, fval) ->
        ret @@ List.map (AbsByte.v Prov_none) begin
                   bytes_of_int
@@ -1214,13 +1215,15 @@ module CHERI (C:Capability
        begin match ptrval_ with
        | PVnull _ ->
           Debug_ocaml.print_debug 1 [] (fun () -> "NOTE: we fix the representation of all NULL pointers to be C0");
+          let (cb,ct) = C.encode true C.cap_c0 in
           (funptrmap,
            (* Do we really need to maintain tag for C0? Anyway, we do
               it here for consistency even if it is never read. *)
-           IntMap.add (C.cap_get_value C.cap_c0) (C.cap_is_valid C.cap_c0) captags,
-           List.map (fun b -> AbsByte.v Prov_none (Some b)) @@ C.encode true C.cap_c0)
+           IntMap.add (C.cap_get_value C.cap_c0) ct captags,
+           List.map (fun b -> AbsByte.v Prov_none (Some b)) cb)
        | PVfunction (FP_valid (Symbol.Symbol (file_dig, n, opt_name))) ->
           let c = C.alloc_fun (Z.add (Z.of_int initial_address) (Z.of_int n)) in
+          let (cb,ct) = C.encode true c in
           (begin match opt_name with
            | SD_Id name ->
               IntMap.add (Z.of_int n) (file_dig, name, c) funptrmap
@@ -1231,13 +1234,14 @@ module CHERI (C:Capability
            (* | SD_PredOutput _ -> funptrmap *)
            | SD_None -> funptrmap
            end,
-           IntMap.add (C.cap_get_value c) (C.cap_is_valid c) captags,
-           List.mapi (fun i b -> AbsByte.v prov ~copy_offset:(Some i) (Some b)) @@ C.encode true c)
+           IntMap.add (C.cap_get_value c) ct captags,
+           List.mapi (fun i b -> AbsByte.v prov ~copy_offset:(Some i) (Some b)) cb)
        | PVfunction (FP_invalid c)
          | PVconcrete c ->
+          let (cb,ct) = C.encode true c in
           (funptrmap,
-           IntMap.add (C.cap_get_value c) (C.cap_is_valid c) captags,
-           List.mapi (fun i b -> AbsByte.v prov ~copy_offset:(Some i) (Some b)) @@ C.encode true c)
+           IntMap.add (C.cap_get_value c) ct captags,
+           List.mapi (fun i b -> AbsByte.v prov ~copy_offset:(Some i) (Some b)) cb)
        end
     | MVarray mvals ->
        let (funptrmap, captags, bs_s) =
@@ -1253,10 +1257,10 @@ module CHERI (C:Capability
        let final_pad = sizeof (Ctype ([], Struct tag_sym)) - last_off in
        (* TODO: rewrite now that offsetsof returns the paddings *)
        let (funptrmap,captags, _, bs) = List.fold_left2 begin fun (funptrmap, captags,last_off, acc) (ident, ty, off) (_, _, mval) ->
-                                  let pad = off - last_off in
-                                  let (funptrmap, captags, bs) = repr funptrmap captags mval in
-                                  (funptrmap, captags, off + sizeof ty, acc @ List.init pad padding_byte @ bs)
-                                  end (funptrmap, captags, 0, []) offs xs
+                                          let pad = off - last_off in
+                                          let (funptrmap, captags, bs) = repr funptrmap captags mval in
+                                          (funptrmap, captags, off + sizeof ty, acc @ List.init pad padding_byte @ bs)
+                                          end (funptrmap, captags, 0, []) offs xs
        in
        (funptrmap, captags, bs @ List.init final_pad padding_byte)
     | MVunion (tag_sym, memb_ident, mval) ->
@@ -1266,23 +1270,23 @@ module CHERI (C:Capability
 
   (* BEGIN DEBUG *)
   (*
-  let dot_of_mem_state st =
+    let dot_of_mem_state st =
     let get_value alloc =
-      let bs = fetch_bytes st.bytemap alloc.base (Z.to_int alloc.size) in
-      match alloc.ty with
-      | Some ty ->
-         let (_, mval, _) = abst (find_overlaping st) st.funptrmap ty bs in
-         mval
-      | None ->
-         failwith "CHERI.dot_of_mem_state: alloc.ty = None"
+    let bs = fetch_bytes st.bytemap alloc.base (Z.to_int alloc.size) in
+    match alloc.ty with
+    | Some ty ->
+    let (_, mval, _) = abst (find_overlaping st) st.funptrmap ty bs in
+    mval
+    | None ->
+    failwith "CHERI.dot_of_mem_state: alloc.ty = None"
     in
     let xs = IntMap.fold (fun alloc_id alloc acc ->
-                 Printf.sprintf "alloc%s [shape=\"record\", label=\"{ addr: %s | sz: %s | %s }\"];"
-                   (Z.to_string alloc_id)
-                   (Z.to_string alloc.base)
-                   (Z.to_string alloc.size)
-                   (Pp_utils.to_plain_string (pp_mem_value (get_value alloc))) :: acc
-               ) st.allocations [] in
+    Printf.sprintf "alloc%s [shape=\"record\", label=\"{ addr: %s | sz: %s | %s }\"];"
+    (Z.to_string alloc_id)
+    (Z.to_string alloc.base)
+    (Z.to_string alloc.size)
+    (Pp_utils.to_plain_string (pp_mem_value (get_value alloc))) :: acc
+    ) st.allocations [] in
     prerr_endline "digraph G{";
     List.iter prerr_endline xs;
     prerr_endline "}"
@@ -1474,11 +1478,11 @@ module CHERI (C:Capability
        begin if is_dyn then
                (* this kill is dynamic one (i.e. free() or friends) *)
                is_dynamic (C.cap_get_value addr) >>= begin function
-                                     | false ->
-                                        fail (MerrUndefinedFree (loc, Free_static_allocation))
-                                     | true ->
-                                        return ()
-                                   end
+                                                       | false ->
+                                                          fail (MerrUndefinedFree (loc, Free_static_allocation))
+                                                       | true ->
+                                                          return ()
+                                                     end
              else
                return ()
        end >>= fun () ->
@@ -1500,11 +1504,11 @@ module CHERI (C:Capability
        begin if is_dyn then
                (* this kill is dynamic one (i.e. free() or friends) *)
                is_dynamic (C.cap_get_value addr) >>= begin function
-                                     | false ->
-                                        fail (MerrUndefinedFree (loc, Free_static_allocation))
-                                     | true ->
-                                        return ()
-                                   end
+                                                       | false ->
+                                                          fail (MerrUndefinedFree (loc, Free_static_allocation))
+                                                       | true ->
+                                                          return ()
+                                                     end
              else
                return ()
        end >>= fun () ->
@@ -1794,7 +1798,7 @@ module CHERI (C:Capability
        | None ->
           None
        end
-| _ -> None
+    | _ -> None
 
 
   let eq_ptrval (PV (prov1, ptrval_1)) (PV (prov2, ptrval_2)) =
@@ -1810,18 +1814,18 @@ module CHERI (C:Capability
        return (Z.equal (C.cap_get_value c1) (C.cap_get_value c2))
     | (PVfunction (FP_valid sym), PVfunction (FP_invalid c))
       | (PVfunction (FP_invalid c), PVfunction (FP_valid sym)) ->
-          get >>= fun st ->
-          let n = (Z.sub (C.cap_get_value c) (Z.of_int initial_address)) in
-          begin match IntMap.find_opt n st.funptrmap with
-            | Some (file_dig, name, _) ->
-                let sym2 = Symbol.Symbol (file_dig, Z.to_int n, SD_Id name) in
-                return (Symbol.instance_Basic_classes_Eq_Symbol_sym_dict.Lem_pervasives.isEqual_method sym sym2)
-            | None ->
-                failwith "CHERI.eq_ptrval ==> FP_valid failed to resolve function symbol"
-          end
+       get >>= fun st ->
+       let n = (Z.sub (C.cap_get_value c) (Z.of_int initial_address)) in
+       begin match IntMap.find_opt n st.funptrmap with
+       | Some (file_dig, name, _) ->
+          let sym2 = Symbol.Symbol (file_dig, Z.to_int n, SD_Id name) in
+          return (Symbol.instance_Basic_classes_Eq_Symbol_sym_dict.Lem_pervasives.isEqual_method sym sym2)
+       | None ->
+          failwith "CHERI.eq_ptrval ==> FP_valid failed to resolve function symbol"
+       end
     | (PVfunction _, _)
-    | (_, PVfunction _) ->
-        return false
+      | (_, PVfunction _) ->
+       return false
     | (PVconcrete addr1, PVconcrete addr2) ->
        if Switches.(has_switch SW_strict_pointer_equality) then
          return (C.value_compare addr1 addr2 == 0)
@@ -2431,7 +2435,7 @@ module CHERI (C:Capability
     | PVfunction (FP_valid (Symbol.Symbol (_, n, _))) ->
        return (mk_ival prov (Z.of_int n))
     | PVfunction (FP_invalid c)
-    | PVconcrete c ->
+      | PVconcrete c ->
        begin if Switches.(has_switch (SW_PNVI `AE) || has_switch (SW_PNVI `AE_UDI)) then
                (* PNVI-ae, PNVI-ae-udi *)
                match prov with
@@ -2442,9 +2446,9 @@ module CHERI (C:Capability
              else
                return ()
        end >>= fun () ->
-          match ity with
-          | Signed Intptr_t
-            | Unsigned Intptr_t ->
+       match ity with
+       | Signed Intptr_t
+         | Unsigned Intptr_t ->
           return (IC (prov, c))
        | _ ->
           let ity_max = num_of_int (max_ival ity) in
@@ -2907,7 +2911,7 @@ module CHERI (C:Capability
           mk_scalar `Funptr (Pp_symbol.to_string_pretty sym) Prov_none None
        | PVfunction (FP_invalid c) ->
           failwith "TODO"
-         end
+       end
     | MVEarray mvals ->
        begin match ty with
        | Ctype (_, Array (elem_ty, _)) ->
