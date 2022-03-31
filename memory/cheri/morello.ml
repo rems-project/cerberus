@@ -373,10 +373,7 @@ module Morello_capability: Capability
       let bits = List.concat (List.map bit_list_of_char bytes) in
       decode_bits (bits @ [bit_of_bool tag])
 
-    let bits_of_uint (x:Z.num): bit list = [] (* TODO *)
-
     let bytes_of_bits (x:bit list) : char list = [] (* TODO *)
-
 
     (* There is no such function in Sail, so we define it here *)
     let zCapSetPermissins ((zc__arg, zp) : (bit list * bit list)) : bit list =
@@ -395,19 +392,19 @@ module Morello_capability: Capability
       let bits = zCapSetTag (bits,[bit_of_bool (cap_is_valid c)]) in
 
       (* otype *)
-      let bits = zCapSetObjectType (bits, bits_of_uint (cap_get_obj_type c)) in
+      let bits = zCapSetObjectType (bits, to_bits' (64, cap_get_obj_type c)) in
 
       (* bounds *)
       let (base',limit') = cap_get_bounds c in
       let len' = Z.sub limit' base' in
-      let base = bits_of_uint base' and len = bits_of_uint len' in
+      let base = to_bits' (64, base') and len = to_bits' (65, len') in
       (* temporary set the value to base *)
       let bits = zCapSetValue (bits, base) in
       (* derive new capabilty with len-sized bounds *)
       let bits = zCapSetBounds (bits, len, exact) in
 
       (* actual value *)
-      let bits = zCapSetValue (bits, bits_of_uint (cap_get_value c)) in
+      let bits = zCapSetValue (bits, to_bits' (64, cap_get_value c)) in
 
       (* flags *)
       let flags = get_flags c |> List.map bit_of_bool in
