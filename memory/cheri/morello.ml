@@ -487,7 +487,7 @@ module Morello_capability: Capability
         (vstring b1)
         flags
 
-    let cap_c0 =
+    let cap_c0 () =
       match decode_bits (zCapNull ()) with
       | Some c -> c
       | None ->
