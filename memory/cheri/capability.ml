@@ -55,6 +55,9 @@ module type Cap_permission = sig
      Returns None in case of error *)
   val of_list: bool list -> t option
 
+  (* inverse of [of_list] *)
+  val to_list: t -> bool list
+
 end
 
 module type Capability =
