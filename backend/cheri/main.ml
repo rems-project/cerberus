@@ -44,6 +44,7 @@ let cpp_str runtime_path traditional =
     runtime_path
 
 let cheri exec debug_level core_file runtime_path traditional filename =
+  Debug_ocaml.debug_level := debug_level;
   let frontend cpp_str filename =
     let conf = {
         debug_level= debug_level
