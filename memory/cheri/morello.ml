@@ -58,9 +58,33 @@ module Morello_permission : Cap_permission = struct
           user_perms = Sail_lib.take user_perms_len
                          (Sail_lib.drop 2 b) ;
 
-          global                 = List.nth b 0;
           executive              = List.nth b 1;
+          global                 = List.nth b 0;
         }
+
+  (* inverse of [of_list] *)
+  let to_list p =
+    List.append
+      (List.append
+         [
+           p.global;
+           p.executive
+         ] p.user_perms (* Do we need List.rev here? *)
+      )
+      [
+        p.permit_mutable_load;
+        p.permit_compartment_id;
+        p.permits_ccall;
+        p.permits_system_access;
+        p.permits_unseal;
+        p.permits_seal;
+        p.permits_store_local_cap;
+        p.permits_store_cap;
+        p.permits_load_cap;
+        p.permits_execute;
+        p.permits_store;
+        p.permits_load;
+      ]
 
   let perm_is_global          p = p.global
   let perm_is_executive       p = p.executive
@@ -355,6 +379,8 @@ module Morello_capability: Capability
 
     let bits_of_uint (x:Z.num): Sail_lib.bit list = [] (* TODO *)
 
+    let bytes_of_bits (x:Sail_lib.bit list) : char list = [] (* TODO *)
+
     let encode exact c =
       let open Sail_lib in
       let bits = zCapNull () in
@@ -368,13 +394,14 @@ module Morello_capability: Capability
       (* derive new capabilty with len-sized bounds *)
       let bits = zCapSetBounds (bits, len, exact) in
       (* now set actual value we want *)
-      let _ = zCapSetValue (bits, bits_of_uint (cap_get_value c)) in
+      let bits = zCapSetValue (bits, bits_of_uint (cap_get_value c)) in
+      let _ = get_perms c |> P.to_list |>  List.map bit_of_bool in
       (*
-
+        TODO:
         flags: bool list;
         perms: P.t;
        *)
-      [] (* TODO *)
+      bytes_of_bits bits
 
 
     (* exact equality. compares capability metadata as well as value *)
