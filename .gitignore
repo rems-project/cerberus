@@ -25,4 +25,8 @@ webcerb.concrete
 .vscode/settings.json
 =======
 /.ignore
+<<<<<<< HEAD
 >>>>>>> dcfd686c (ignore .ignore file I use for silver searcher)
+=======
+/backend/cheri/cerb.prof
+>>>>>>> b71cc316 (debugging cheri memory model)

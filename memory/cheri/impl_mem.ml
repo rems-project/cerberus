@@ -680,8 +680,8 @@ module CHERI (C:Capability
         Printf.fprintf stderr "BEGIN BYTEMAP ==> %s\n" str;
         get >>= fun st ->
         IntMap.iter AbsByte.(fun addr b ->
-          Printf.fprintf stderr "@%s ==> %s: %s%s\n"
-            (Z.to_string addr)
+          Printf.fprintf stderr "@0x%s ==> %s: %s%s\n"
+            (Z.format "%x" addr)
             (string_of_provenance b.prov)
             (match b.value with None -> "UNSPEC" | Some c -> string_of_int (int_of_char c))
             (match b.copy_offset with None -> "" | Some n -> " [" ^ string_of_int n ^ "]")
@@ -690,6 +690,21 @@ module CHERI (C:Capability
         return ()
       end else
       return ()
+
+  let print_captags str =
+    if !Debug_ocaml.debug_level >= 3 then begin
+        Printf.fprintf stderr "BEGIN CAPTAGS ==> %s\n" str;
+        get >>= fun st ->
+        IntMap.iter (fun addr b ->
+            Printf.fprintf stderr "@0x%s ==> %s\n"
+              (Z.format "%x" addr)
+              (string_of_bool b)
+          ) st.captags;
+        prerr_endline "END";
+        return ()
+      end else
+      return ()
+
 
   let is_dynamic addr : bool memM =
     get >>= fun st ->
@@ -1053,7 +1068,9 @@ module CHERI (C:Capability
             begin match tag_query_f addr with
             | None ->
                (* TODO(CHERI): decide on semantics *)
-               failwith "could not decode capability"
+               let cs = "Capability address 0x" ^ Z.format "%x" addr in
+               Debug_ocaml.warn [] (fun () -> cs);
+               failwith ("Could not find tag. " ^ cs)
             | Some tag ->
                begin match C.decode cs tag with
                | None ->
@@ -1211,7 +1228,6 @@ module CHERI (C:Capability
                     (sizeof (Ctype ([], Basic (Floating fty)))) (Z.of_int64 (Int64.bits_of_float fval))
                 end
     | MVpointer (ref_ty, PV (prov, ptrval_)) ->
-       Debug_ocaml.print_debug 1 [] (fun () -> "NOTE: we fix the sizeof pointers to 8 bytes");
        begin match ptrval_ with
        | PVnull _ ->
           Debug_ocaml.print_debug 1 [] (fun () -> "NOTE: we fix the representation of all NULL pointers to be C0");
@@ -1548,9 +1564,9 @@ module CHERI (C:Capability
         match (Ocaml_implementation.get ()).alignof_pointer with
         | None -> failwith "alignof_pointer must be specified in Ocaml_implementation"
         | Some v ->
-           let (q,m) = Z.quomod a (Z.of_int v) in
+           let (_,m) = Z.quomod a (Z.of_int v) in
            if m <> Z.zero then failwith "Unaligned address in load"
-           else IntMap.find_opt q st.captags
+           else IntMap.find_opt a st.captags
       in
       let (taint, mval, bs') = abst (find_overlaping st) st.funptrmap tag_query addr ty bs in
       mem_value_strip_err mval >>= fun mval ->
@@ -1680,7 +1696,9 @@ module CHERI (C:Capability
                         captags= captags;
               }
               end >>= fun () ->
-            print_bytemap ("AFTER STORE => " ^ Location_ocaml.location_to_string loc) >>= fun () ->
+            print_bytemap ("AFTER STORE => " ^ Location_ocaml.location_to_string loc) >>
+              print_captags ("AFTER STORE => " ^ Location_ocaml.location_to_string loc)
+            >>
             return (FP (addr, nsz))
           end
       in
