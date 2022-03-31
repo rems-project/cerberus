@@ -242,8 +242,120 @@ module Morello_capability: Capability
         perms = P.perm_alloc ;
       }
 
+    (* private function to decode bit list *)
+    let decode_bits bits =
+      if List.length bits <> 129 then None
+      else
+        let value' = zCapGetValue bits in
+        let value = uint value' in
+        let (base', limit', isExponentValid) = zCapGetBounds bits in
+        if not isExponentValid then None
+        else
+          let perms' = zCapGetPermissions bits  in
+          let flags_from_value (x:bit list): (bool list) option =
+            let n = List.length x in
+            if n < 8 then None
+            else
+              let flags' = drop (n-8) x in
+              Some (List.map bool_of_bit flags')
+          in
+          match flags_from_value value' with
+          | None -> None
+          | Some flags ->
+             let is_execuvite = zCapIsExecutive bits in
+             let is_global = not @@ zCapIsLocal bits in
+             let perms_data =
+               is_global :: is_execuvite ::
+                 (List.map bool_of_bit perms')
+             in
+             match P.of_list perms_data with
+             | None -> None
+             | Some perms ->
+                let otype = uint (zCapGetObjectType bits) in
+                Some {
+                    valid = zCapIsTagClear bits;
+                    value = value;
+                    obj_type = otype;
+                    bounds = (uint base', uint limit');
+                    flags = flags ;
+                    perms = perms ;
+                  }
 
-    let cap_vaddr_representable c a = true (* TODO *)
+    let decode (bytes:char list) (tag:bool) =
+      let bit_list_of_char c =
+        get_slice_int' (8, (Z.of_int (int_of_char c)), 0) in
+      (* TODO(CHERI): check if bytes' and bits' decoding order is correct *)
+      let bits = List.concat (List.map bit_list_of_char bytes) in
+      decode_bits (bits @ [bit_of_bool tag])
+
+    let bytes_of_bits (b:bit list) : char list =
+      assert((List.length b) mod 8 == 0);
+      (* TODO(CHERI): check if bytes' and bits' encoding order is correct *)
+      let bs = break 8 b in
+      let zs = List.map uint bs in
+      let is = List.map Z.to_int zs in
+      List.map char_of_int is
+
+    (* There is no such function in Sail, so we define it here *)
+    let zCapSetPermissins ((zc__arg, zp) : (bit list * bit list)) : bit list =
+      sail_call (fun r ->
+          let zc = ref (zc__arg : bit list) in
+          begin
+            zc := (update_subrange (!zc, zCAP_PERMS_HI_BIT, zCAP_PERMS_LO_BIT, zp));
+            r.return !zc
+          end)
+
+    let encode_to_bits exact c =
+      (* start with NULL capabiluty *)
+      let bits = zCapNull () in
+
+      (* Set initial tag value. It may change later! *)
+      let bits = zCapSetTag (bits,[bit_of_bool (cap_is_valid c)]) in
+
+      (* otype *)
+      let bits = zCapSetObjectType (bits, to_bits' (64, cap_get_obj_type c)) in
+
+      (* bounds *)
+      let (base',limit') = cap_get_bounds c in
+      let len' = Z.sub limit' base' in
+      let base = to_bits' (64, base') and len = to_bits' (65, len') in
+      (* temporary set the value to base *)
+      let bits = zCapSetValue (bits, base) in
+      (* derive new capabilty with len-sized bounds *)
+      let bits = zCapSetBounds (bits, len, exact) in
+
+      (* actual value *)
+      let bits = zCapSetValue (bits, to_bits' (64, cap_get_value c)) in
+
+      (* flags *)
+      let flags = get_flags c |> List.map bit_of_bool in
+      assert (List.length flags == 8) ;
+      let flags = zero_extend (flags, (Z.of_int 64)) in
+      assert (List.length flags == 64) ;
+      let bits = zCapSetFlags (bits, flags) in
+
+      (* permissions *)
+      let perms = get_perms c |> P.to_list |>  List.map bit_of_bool in
+      assert (List.length perms == 18) ;
+      let bits = zCapSetPermissins (bits, perms) in
+      bits
+
+
+    let encode exact c =
+      let bits = encode_to_bits exact c in
+      (* Convert to bytes *)
+      assert (List.length bits == 129) ;
+      let bytes = bytes_of_bits (take 128 bits) in
+      assert (List.length bytes == 16) ;
+
+      (* extract final tag *)
+      let tag = not @@ zCapIsTagClear bits in
+
+      (bytes, tag)
+
+    let cap_vaddr_representable c a =
+      let cap_bits = encode_to_bits true c in
+      zCapIsRepresentable (cap_bits, (to_bits' (64, a)))
 
     let cap_bounds_representable_exactly c (a0,a1) = true (* TODO *)
 
@@ -256,12 +368,8 @@ module Morello_capability: Capability
        - CPYTYPE in Morello
      *)
     let cap_set_value c cv =
-      let c = {c with value = cv} in
       if cap_vaddr_representable c cv then
-        (* TODO: additional checks for "if any bounds bits are taken
-           from the value, ensure the top address bit doesn't
-           change". See `CapSetValue` in morello spec *)
-        c
+        {c with value = cv}
       else
         cap_invalidate c
 
@@ -326,114 +434,6 @@ module Morello_capability: Capability
      *)
     let cap_unseal c k = (* TODO: check if allowed *)
       {c with obj_type = cap_SEAL_TYPE_UNSEALED}
-
-    (* private function to decode bit list *)
-    let decode_bits bits =
-      if List.length bits <> 129 then None
-      else
-        let value' = zCapGetValue bits in
-        let value = uint value' in
-        let (base', limit', isExponentValid) = zCapGetBounds bits in
-        if not isExponentValid then None
-        else
-          let perms' = zCapGetPermissions bits  in
-          let flags_from_value (x:bit list): (bool list) option =
-            let n = List.length x in
-            if n < 8 then None
-            else
-              let flags' = drop (n-8) x in
-              Some (List.map bool_of_bit flags')
-          in
-          match flags_from_value value' with
-          | None -> None
-          | Some flags ->
-             let is_execuvite = zCapIsExecutive bits in
-             let is_global = not @@ zCapIsLocal bits in
-             let perms_data =
-               is_global :: is_execuvite ::
-                 (List.map bool_of_bit perms')
-             in
-             match P.of_list perms_data with
-             | None -> None
-             | Some perms ->
-                let otype = uint (zCapGetObjectType bits) in
-                Some {
-                    valid = zCapIsTagClear bits;
-                    value = value;
-                    obj_type = otype;
-                    bounds = (uint base', uint limit');
-                    flags = flags ;
-                    perms = perms ;
-                  }
-
-    let decode (bytes:char list) (tag:bool) =
-      let bit_list_of_char c =
-        get_slice_int' (8, (Z.of_int (int_of_char c)), 0) in
-      (* TODO(CHERI): check if bytes' and bits' decoding order is correct *)
-      let bits = List.concat (List.map bit_list_of_char bytes) in
-      decode_bits (bits @ [bit_of_bool tag])
-
-    let bytes_of_bits (b:bit list) : char list =
-      assert((List.length b) mod 8 == 0);
-      (* TODO(CHERI): check if bytes' and bits' encoding order is correct *)
-      let bs = break 8 b in
-      let zs = List.map uint bs in
-      let is = List.map Z.to_int zs in
-      List.map char_of_int is
-
-    (* There is no such function in Sail, so we define it here *)
-    let zCapSetPermissins ((zc__arg, zp) : (bit list * bit list)) : bit list =
-      sail_call (fun r ->
-          let zc = ref (zc__arg : bit list) in
-          begin
-            zc := (update_subrange (!zc, zCAP_PERMS_HI_BIT, zCAP_PERMS_LO_BIT, zp));
-            r.return !zc
-          end)
-
-    let encode exact c =
-      (* start with NULL capabiluty *)
-      let bits = zCapNull () in
-
-      (* Set initial tag value. It may change later! *)
-      let bits = zCapSetTag (bits,[bit_of_bool (cap_is_valid c)]) in
-
-      (* otype *)
-      let bits = zCapSetObjectType (bits, to_bits' (64, cap_get_obj_type c)) in
-
-      (* bounds *)
-      let (base',limit') = cap_get_bounds c in
-      let len' = Z.sub limit' base' in
-      let base = to_bits' (64, base') and len = to_bits' (65, len') in
-      (* temporary set the value to base *)
-      let bits = zCapSetValue (bits, base) in
-      (* derive new capabilty with len-sized bounds *)
-      let bits = zCapSetBounds (bits, len, exact) in
-
-      (* actual value *)
-      let bits = zCapSetValue (bits, to_bits' (64, cap_get_value c)) in
-
-      (* flags *)
-      let flags = get_flags c |> List.map bit_of_bool in
-      assert (List.length flags == 8) ;
-      let flags = zero_extend (flags, (Z.of_int 64)) in
-      assert (List.length flags == 64) ;
-      let bits = zCapSetFlags (bits, flags) in
-
-      (* permissions *)
-      let perms = get_perms c |> P.to_list |>  List.map bit_of_bool in
-      assert (List.length perms == 18) ;
-      let bits = zCapSetPermissins (bits, perms) in
-
-      (* Convert to bytes *)
-      assert (List.length bits == 129) ;
-      let bytes = bytes_of_bits (take 128 bits) in
-      assert (List.length bytes == 16) ;
-
-      (* extract final tag *)
-      let tag = not @@ zCapIsTagClear bits in
-
-      (bytes, tag)
-
 
     (* exact equality. compares capability metadata as well as value *)
     let eq = (=)
