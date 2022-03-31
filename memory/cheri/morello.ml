@@ -369,11 +369,17 @@ module Morello_capability: Capability
     let decode (bytes:char list) (tag:bool) =
       let bit_list_of_char c =
         get_slice_int' (8, (Z.of_int (int_of_char c)), 0) in
-      (* TODO(CHERI): check if bytes and bits order is correct *)
+      (* TODO(CHERI): check if bytes' and bits' decoding order is correct *)
       let bits = List.concat (List.map bit_list_of_char bytes) in
       decode_bits (bits @ [bit_of_bool tag])
 
-    let bytes_of_bits (x:bit list) : char list = [] (* TODO *)
+    let bytes_of_bits (b:bit list) : char list =
+      assert((List.length b) mod 8 == 0);
+      (* TODO(CHERI): check if bytes' and bits' encoding order is correct *)
+      let bs = break 8 b in
+      let zs = List.map uint bs in
+      let is = List.map Z.to_int zs in
+      List.map char_of_int is
 
     (* There is no such function in Sail, so we define it here *)
     let zCapSetPermissins ((zc__arg, zp) : (bit list * bit list)) : bit list =
