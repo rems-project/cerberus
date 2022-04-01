@@ -280,7 +280,7 @@ module Morello_capability: Capability
              | Some perms ->
                 let otype = uint (zCapGetObjectType bits) in
                 Some {
-                    valid = zCapIsTagClear bits;
+                    valid = zCapIsTagSet bits;
                     value = value;
                     obj_type = otype;
                     bounds = (uint base', uint limit');
@@ -347,24 +347,31 @@ module Morello_capability: Capability
       let bits = zCapSetPermissins (bits, perms) in
       bits
 
-
     let encode exact c =
       let bits = encode_to_bits exact c in
       (* Convert to bytes *)
       assert (List.length bits == 129) ;
       let bytes = bytes_of_bits (take 128 bits) in
       assert (List.length bytes == 16) ;
-
-      (* extract final tag *)
-      let tag = not @@ zCapIsTagClear bits in
-
+      (* extract the final tag *)
+      let tag = zCapIsTagSet bits in
       (bytes, tag)
 
     let cap_vaddr_representable c a =
       let cap_bits = encode_to_bits true c in
       zCapIsRepresentable (cap_bits, (to_bits' (64, a)))
 
-    let cap_bounds_representable_exactly c (a0,a1) = true (* TODO *)
+    let cap_bounds_representable_exactly c (base',limit') =
+      (* encode with tag set *)
+      let bits = encode_to_bits true c in
+      let len' = Z.sub limit' base' in
+      let base = to_bits' (64, base') and len = to_bits' (65, len') in
+      (* set the value to base *)
+      let bits = zCapSetValue (bits, base) in
+      (* derive new capabilty with len-sized bounds *)
+      let bits = zCapSetBounds (bits, len, true) in
+      (* if tag is still set, bounds are representable exactly *)
+      zCapIsTagSet bits
 
     let cap_invalidate c = {c with valid = false }
 
