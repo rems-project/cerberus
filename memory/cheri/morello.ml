@@ -38,11 +38,13 @@ module Morello_permission : Cap_permission = struct
      spec, from "User" to "Local" with additional "global" and
      "exectuve" in the begining *)
   let of_list b =
-    if List.length b <> (user_perms_len + 13) then None
+    let np = List.length b in
+    if np <> (user_perms_len + 14) then
+      (Debug_ocaml.warn [] (fun () -> "Morello.P.of_list: invalid lengths permissions: " ^ (Stdlib.string_of_int np));
+      None)
     else
       Some
         {
-
           permits_load            = List.nth b 17 ;
           permits_store           = List.nth b 16 ;
           permits_execute         = List.nth b 15 ;
@@ -244,32 +246,37 @@ module Morello_capability: Capability
 
     (* private function to decode bit list *)
     let decode_bits bits =
-      if List.length bits <> 129 then None
+      if List.length bits <> 129 then
+        (Debug_ocaml.warn [] (fun () -> "Morello.decode: wrong number of cap bits");
+        None)
       else
         let value' = zCapGetValue bits in
         let value = uint value' in
         let (base', limit', isExponentValid) = zCapGetBounds bits in
-        if not isExponentValid then None
+        if not isExponentValid then
+          (Debug_ocaml.warn [] (fun () -> "Morello.decode: invalid exponent");
+          None)
         else
-          let perms' = zCapGetPermissions bits  in
           let flags_from_value (x:bit list): (bool list) option =
             let n = List.length x in
-            if n < 8 then None
+            if n < 8 then
+              (Debug_ocaml.warn [] (fun () -> "Morello.decode: wrong number of cap flag bits");
+              None)
             else
               let flags' = drop (n-8) x in
               Some (List.map bool_of_bit flags')
           in
           match flags_from_value value' with
-          | None -> None
+          | None ->
+             (Debug_ocaml.warn [] (fun () -> "Morello.decode: could not decode flags");
+              None)
           | Some flags ->
-             let is_execuvite = zCapIsExecutive bits in
-             let is_global = not @@ zCapIsLocal bits in
-             let perms_data =
-               is_global :: is_execuvite ::
-                 (List.map bool_of_bit perms')
-             in
+             let perms' = zCapGetPermissions bits  in
+             let perms_data = List.map bool_of_bit perms' in
              match P.of_list perms_data with
-             | None -> None
+             | None ->
+                (Debug_ocaml.warn [] (fun () -> "Morello.decode: could not decode permissions");
+                None)
              | Some perms ->
                 let otype = uint (zCapGetObjectType bits) in
                 Some {
