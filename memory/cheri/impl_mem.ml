@@ -1016,6 +1016,7 @@ module CHERI (C:Capability
                begin match C.decode cs tag with
                | None ->
                   (* could not decode capability *)
+                  Debug_ocaml.warn [] (fun () -> "Error decoding intptr_t cap");
                   MVErr (MerrCHERI CheriErrDecodingCap)
                | Some n ->
                   MVEinteger (ity, IC (prov,n))
@@ -1075,6 +1076,7 @@ module CHERI (C:Capability
                begin match C.decode cs tag with
                | None ->
                   (* could not decode capability *)
+                  Debug_ocaml.warn [] (fun () -> "Error decoding pointer cap");
                   MVErr (MerrCHERI CheriErrDecodingCap)
                | Some n ->
                   begin match ref_ty with
@@ -1090,6 +1092,7 @@ module CHERI (C:Capability
                           begin match C.decode cs tag with
                           | None ->
                              (* could not decode capability *)
+                             Debug_ocaml.warn [] (fun () -> "Error decoding function pointer cap");
                              MVErr (MerrCHERI CheriErrDecodingCap)
                           | Some c ->
                              let n = (Z.sub (C.cap_get_value c) (Z.of_int initial_address)) in
