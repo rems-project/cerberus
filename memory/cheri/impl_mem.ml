@@ -677,8 +677,8 @@ module CHERI (C:Capability
   (* TODO: DEBUG *)
   let print_bytemap str =
     if !Debug_ocaml.debug_level >= 3 then begin
-        Printf.fprintf stderr "BEGIN BYTEMAP ==> %s\n" str;
         get >>= fun st ->
+        Printf.fprintf stderr "BEGIN BYTEMAP ==> %s\n" str;
         IntMap.iter AbsByte.(fun addr b ->
           Printf.fprintf stderr "@0x%s ==> %s: %s%s\n"
             (Z.format "%x" addr)
@@ -686,21 +686,21 @@ module CHERI (C:Capability
             (match b.value with None -> "UNSPEC" | Some c -> string_of_int (int_of_char c))
             (match b.copy_offset with None -> "" | Some n -> " [" ^ string_of_int n ^ "]")
         ) st.bytemap;
-        prerr_endline "END";
+        prerr_endline "END BYTEMAP";
         return ()
       end else
       return ()
 
   let print_captags str =
     if !Debug_ocaml.debug_level >= 3 then begin
-        Printf.fprintf stderr "BEGIN CAPTAGS ==> %s\n" str;
         get >>= fun st ->
+        Printf.fprintf stderr "BEGIN CAPTAGS ==> %s\n" str;
         IntMap.iter (fun addr b ->
             Printf.fprintf stderr "@0x%s ==> %s\n"
               (Z.format "%x" addr)
               (string_of_bool b)
           ) st.captags;
-        prerr_endline "END";
+        prerr_endline "END CAPTAGS";
         return ()
       end else
       return ()
@@ -1205,7 +1205,7 @@ module CHERI (C:Capability
       )
 
   (* INTERNAL repr *)
-  let rec repr funptrmap captags mval : ((Digest.t * string * C.t) IntMap.t * bool IntMap.t * AbsByte.t list) =
+  let rec repr funptrmap captags addr mval : ((Digest.t * string * C.t) IntMap.t * bool IntMap.t * AbsByte.t list) =
     let ret bs = (funptrmap, captags, bs) in
     match mval with
     | MVunspecified ty ->
@@ -1235,7 +1235,7 @@ module CHERI (C:Capability
           (funptrmap,
            (* Do we really need to maintain tag for C0? Anyway, we do
               it here for consistency even if it is never read. *)
-           IntMap.add (C.cap_get_value (C.cap_c0 ())) ct captags,
+           IntMap.add addr ct captags,
            List.map (fun b -> AbsByte.v Prov_none (Some b)) cb)
        | PVfunction (FP_valid (Symbol.Symbol (file_dig, n, opt_name))) ->
           let c = C.alloc_fun (Z.add (Z.of_int initial_address) (Z.of_int n)) in
@@ -1250,22 +1250,25 @@ module CHERI (C:Capability
            (* | SD_PredOutput _ -> funptrmap *)
            | SD_None -> funptrmap
            end,
-           IntMap.add (C.cap_get_value c) ct captags,
+           IntMap.add addr ct captags,
            List.mapi (fun i b -> AbsByte.v prov ~copy_offset:(Some i) (Some b)) cb)
        | PVfunction (FP_invalid c)
          | PVconcrete c ->
           let (cb,ct) = C.encode true c in
           (funptrmap,
-           IntMap.add (C.cap_get_value c) ct captags,
+           IntMap.add addr ct captags,
            List.mapi (fun i b -> AbsByte.v prov ~copy_offset:(Some i) (Some b)) cb)
        end
     | MVarray mvals ->
-       let (funptrmap, captags, bs_s) =
-         List.fold_left begin fun (funptrmap, captags, bs) mval ->
-           let (funptrmap, captags, bs') = repr funptrmap captags mval in
-           (funptrmap, captags, bs' :: bs)
-           end (funptrmap, captags, []) mvals in
-       (* TODO: use a fold? *)
+       let (funptrmap, captags, _, bs_s) =
+         List.fold_left
+           begin
+             fun (funptrmap, captags, addr, bs) mval  ->
+             let (funptrmap, captags, bs') = repr funptrmap captags addr mval in
+             let addr = Z.add addr (Z.of_int (List.length bs')) in
+             (funptrmap, captags, addr, bs' :: bs)
+           end
+           (funptrmap, captags, addr, []) mvals  in
        (funptrmap, captags, L.concat @@ List.rev bs_s)
     | MVstruct (tag_sym, xs) ->
        let padding_byte _ = AbsByte.v Prov_none None in
@@ -1274,14 +1277,14 @@ module CHERI (C:Capability
        (* TODO: rewrite now that offsetsof returns the paddings *)
        let (funptrmap,captags, _, bs) = List.fold_left2 begin fun (funptrmap, captags,last_off, acc) (ident, ty, off) (_, _, mval) ->
                                           let pad = off - last_off in
-                                          let (funptrmap, captags, bs) = repr funptrmap captags mval in
+                                          let (funptrmap, captags, bs) = repr funptrmap captags (Z.add addr (Z.of_int off)) mval in
                                           (funptrmap, captags, off + sizeof ty, acc @ List.init pad padding_byte @ bs)
                                           end (funptrmap, captags, 0, []) offs xs
        in
        (funptrmap, captags, bs @ List.init final_pad padding_byte)
     | MVunion (tag_sym, memb_ident, mval) ->
        let size = sizeof (Ctype ([], Union tag_sym)) in
-       let (funptrmap', captags', bs) = repr funptrmap captags mval in
+       let (funptrmap', captags', bs) = repr funptrmap captags addr mval in
        (funptrmap', captags', bs @ List.init (size - List.length bs) (fun _ -> AbsByte.v Prov_none None))
 
   (* BEGIN DEBUG *)
@@ -1354,7 +1357,7 @@ module CHERI (C:Capability
        let alloc = {prefix= pref; base= addr; size= size; ty= Some ty; is_readonly= true; taint= `Unexposed} in
        (* TODO: factorize this with do_store inside CHERI.store *)
        update (fun st ->
-           let (funptrmap, captags, pre_bs) = repr st.funptrmap st.captags mval in
+           let (funptrmap, captags, pre_bs) = repr st.funptrmap st.captags addr mval in
            assert (List.length pre_bs == sz) ;
            let bs = List.mapi (fun i b -> (Z.add addr (Z.of_int i), b)) pre_bs in
            { st with
@@ -1681,7 +1684,7 @@ module CHERI (C:Capability
           let addr = C.cap_get_value c in
           begin
             update begin fun st ->
-              let (funptrmap, captags, pre_bs) = repr st.funptrmap st.captags mval in
+              let (funptrmap, captags, pre_bs) = repr st.funptrmap st.captags addr mval in
               Debug_ocaml.print_debug 0(*KKK*) [] (fun () ->
                   "|pre_bs|=" ^ string_of_int (List.length pre_bs) ^ " <---> sz: " ^ string_of_int sz
                 );
