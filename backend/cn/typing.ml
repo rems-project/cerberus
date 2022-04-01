@@ -1,4 +1,8 @@
 open Context
+module IT = IndexTerms
+module SymMap = Map.Make(Sym)
+module LCSet = Set.Make(LC)
+
 
 type s = {
     typing_context: Context.t;
@@ -16,7 +20,7 @@ let run (c : Context.t) (m : ('a, 'e) t) : ('a, 'e) Resultat.t =
   let solver = Solver.make c.global.struct_decls in
   let sym_eqs = SymMap.empty in
   let trace_length = 0 in
-  List.iter (Solver.add solver c.global) c.constraints;
+  LCSet.iter (Solver.add solver c.global) c.constraints;
   let s = { typing_context = c; solver; sym_eqs; trace_length } in
   let outcome = m s in
   match outcome with
@@ -167,8 +171,8 @@ let add_sym_eqs sym_eqs =
 let add_c lc = 
   let@ s = get () in
   let@ solver = solver () in
-  let@ scs = simp_constraints () in
-  let lcs = Simplify.simp_lc_flatten s.global.struct_decls scs lc in
+  let@ values, lcs = simp_constraints () in
+  let lcs = Simplify.simp_lc_flatten s.global.struct_decls values lcs lc in
   let s = List.fold_right Context.add_c lcs s in
   let () = List.iter (Solver.add solver s.global) lcs in
   let sym_eqs = List.filter_map (LC.is_sym_lhs_equality) lcs in
@@ -184,8 +188,8 @@ let rec add_cs = function
 
 let add_r oloc r = 
   let@ s = get () in
-  let@ scs = simp_constraints () in
-  match RE.simp_or_empty s.global.struct_decls scs r with
+  let@ values, lcs = simp_constraints () in
+  match RE.simp_or_empty s.global.struct_decls values lcs r with
   | None -> return ()
   | Some r -> set (Context.add_r oloc r s)
 

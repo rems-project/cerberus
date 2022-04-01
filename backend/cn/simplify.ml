@@ -1,6 +1,5 @@
 module LC = LogicalConstraints
 module IT = IndexTerms
-module ITSet = Set.Make(IT)
 open IndexTerms
 open Terms
 
@@ -14,6 +13,9 @@ module ITPair = struct
 end
 
 module ITPairMap = Map.Make(ITPair)
+
+module ITSet = Set.Make(IT)
+module LCSet = Set.Make(LC)
 
 
 let z1 = z_ Z.one
@@ -79,26 +81,23 @@ let simp_int_comp a b =
 let simp_comp_if_int a b = if BaseTypes.equal (IT.basetype a) BaseTypes.Integer
     then simp_int_comp a b else (a, b)
 
-let rec simp (struct_decls : Memory.struct_decls) values equalities some_known_facts =
 
-  let flatten_and = function
-    | IT (Bool_op (And fs), _) -> fs
-    | f -> [f]
+
+let flatten = function
+  | IT (Bool_op (And fs), _) -> List.map LC.t_ fs
+  | f -> [LC.t_ f]
+
+
+
+let rec simp (struct_decls : Memory.struct_decls) values equalities lcs =
+
+  let add_known_facts new_facts lcs = 
+    List.fold_right LCSet.add (List.concat_map flatten new_facts) lcs
   in
 
-  let add_known_fact f some_known_facts = 
-    flatten_and f @ some_known_facts
-  in
 
-  let add_known_facts fs some_known_facts =
-    List.concat_map flatten_and fs @ some_known_facts
-  in
-
-
-  let aux it =
-    simp struct_decls values equalities some_known_facts it in
-  let aux2 some_known_facts it = 
-    simp struct_decls values equalities some_known_facts it in
+  let aux it = simp struct_decls values equalities lcs it in
+  let aux2 lcs it = simp struct_decls values equalities lcs it in
   
   let lit it bt = 
     match it with
@@ -306,7 +305,7 @@ let rec simp (struct_decls : Memory.struct_decls) values equalities some_known_f
             | _ -> and_ (List.rev acc)
             end
          | it :: its ->
-            let it = aux2 (add_known_facts acc some_known_facts) it in
+            let it = aux2 (add_known_facts acc lcs) it in
             begin match it with
             | IT (Lit (Bool true), _) -> make acc its
             | IT (Lit (Bool false), _) -> bool_ false
@@ -368,8 +367,8 @@ let rec simp (struct_decls : Memory.struct_decls) values equalities some_known_f
        end
     | ITE (a, b, c) ->
        let a = aux a in
-       let b = aux2 (add_known_fact a some_known_facts) b in
-       let c = aux2 (add_known_fact (not_ a) some_known_facts) c in
+       let b = aux2 (add_known_facts [a] lcs) b in
+       let c = aux2 (add_known_facts [not_ a] lcs) c in
        begin match a with
        | IT (Lit (Bool true), _) -> b
        | IT (Lit (Bool false), _) -> c
@@ -617,8 +616,8 @@ let rec simp (struct_decls : Memory.struct_decls) values equalities some_known_f
   (* in *)
 
   fun it ->
-  if List.mem IT.equal it some_known_facts then bool_ true else
-  if List.mem IT.equal (not_ it) some_known_facts then bool_ false else
+  if LCSet.mem (LC.T it) lcs then bool_ true else
+  if LCSet.mem (LC.T (not_ it)) lcs then bool_ false else
     let (IT (it_, bt)) = it in
     match it_ with
     | Lit l -> lit l bt
@@ -635,51 +634,45 @@ let rec simp (struct_decls : Memory.struct_decls) values equalities some_known_f
     (* | Let ((s, bound), body) -> letb (s, bound) body bt *)
 
 
-let simp ?(some_known_facts = []) struct_decls lcs it = 
-
-  let (values, gen_lcs) = lcs in
-
-  let equalities = 
-    List.fold_left (fun equalities c ->
-        match c with
-        | LC.T it ->
-           begin match it with
-           | IT (Bool_op (EQ (a, b)), _) ->
+let equalities_of_lcs lcs = 
+  LCSet.fold (fun c equalities ->
+      match c with
+      | LC.T it ->
+         begin match it with
+         | IT (Bool_op (EQ (a, b)), _) ->
               ITPairMap.add (a, b) true equalities
-           | IT (Bool_op (Not (IT (Bool_op (EQ (a, b)), _))), _) ->
-              ITPairMap.add (a, b) false equalities
-           | _ -> 
-              equalities
-           end
-        | _ -> 
-           equalities
-      ) ITPairMap.empty gen_lcs
-  in
+         | IT (Bool_op (Not (IT (Bool_op (EQ (a, b)), _))), _) ->
+            ITPairMap.add (a, b) false equalities
+         | _ -> 
+            equalities
+         end
+      | _ -> 
+         equalities
+    ) lcs ITPairMap.empty 
 
-  let result = simp struct_decls values equalities some_known_facts it in
-
-  result
+let simp struct_decls values lcs it = 
+  simp struct_decls values (equalities_of_lcs lcs) lcs it
   
   
 
 
 
-let simp_flatten ?(some_known_facts = []) struct_decls lcs term =
-  match simp ~some_known_facts struct_decls lcs term with
+let simp_flatten struct_decls values lcs term =
+  match simp struct_decls values lcs term with
   | IT (Lit (Bool true), _) -> []
   | IT (Bool_op (And lcs), _) -> lcs
   | lc -> [lc]
 
 
 
-let simp_lc struct_decls lcs lc = 
+let simp_lc struct_decls values lcs lc = 
   match lc with
-  | LC.T it -> LC.T (simp struct_decls lcs it)
+  | LC.T it -> LC.T (simp struct_decls values lcs it)
   | LC.Forall ((q, qbt), body) ->
      let ((q_new, qbt), body) = 
        LC.alpha_rename_forall (Sym.fresh ()) ((q, qbt), body)
      in
-     let body = simp struct_decls lcs body in
+     let body = simp struct_decls values lcs body in
      let ((q, qbt), body) = LC.alpha_rename_forall q ((q_new, qbt), body) in
      begin match body with
      | IT (Lit (Bool true), _) -> 
@@ -695,7 +688,7 @@ let simp_lc struct_decls lcs lc =
   | _ -> lc
 
 
-let simp_lc_flatten struct_decls lcs lc = 
+let simp_lc_flatten struct_decls values lcs lc = 
   match lc with
-  | LC.T it -> List.map LC.t_ (simp_flatten struct_decls lcs it)
-  | _ -> [simp_lc struct_decls lcs lc]
+  | LC.T it -> List.map LC.t_ (simp_flatten struct_decls values lcs it)
+  | _ -> [simp_lc struct_decls values lcs lc]

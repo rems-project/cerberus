@@ -16,7 +16,7 @@ val provable :
   solver:solver -> 
   global:Global.t -> 
   trace_length:int ->
-  assumptions:LogicalConstraints.t list -> 
+  assumptions:Context.LCSet.t -> 
   pointer_facts:IndexTerms.t list ->
   LogicalConstraints.t -> 
   [> `True | `False ]

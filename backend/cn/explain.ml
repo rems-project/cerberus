@@ -188,7 +188,7 @@ let veclasses ctxt =
       ) ctxt.computational with_logical
   in
   (* merge classes based on variable equalities *)
-  List.fold_right (fun lc g ->
+  Context.LCSet.fold (fun lc g ->
       match is_sym_equality lc with
       | Some (s, s') ->
          let c = find_class (in_class s) g in
@@ -591,10 +591,10 @@ let state ctxt {substitution; vclasses; relevant} (model_with_q : Solver.model_w
       | T (IT (Bool_op (EQ (t, t')), _)) -> IT.equal t t'
       | _ -> false
     in
-    List.filter_map (fun lc ->
+    Context.LCSet.fold (fun lc acc ->
         let lc = LC.subst substitution lc in
-        if trivial lc then None else Some (LC.pp lc)
-      ) ctxt.constraints
+        if trivial lc then acc else LC.pp lc :: acc
+      ) ctxt.constraints []
   in
 
   let req_cmp = Option.bind orequest (Spans.spans_compare_for_pp model ctxt.global) in

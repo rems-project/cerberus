@@ -9,6 +9,7 @@ open List
 open Pp
 open Global
 open LogicalPredicates
+module LCSet = Set.Make(LC)
 
 
 let save_slow_problems = 
@@ -571,12 +572,13 @@ module ReduceQuery = struct
        using the qpred assumptions from the context for the same
        predicate, also instantiated with s_inst *)
     let extra_assumptions =
-      List.filter_map (function
-        | QPred qpred' when String.equal qpred.pred.name qpred'.pred.name ->
-           Some (instantiate qpred')
-        | _ -> 
-           None
-        ) assumptions
+      Context.LCSet.fold (fun lc acc ->
+          match lc with
+          | QPred qpred' when String.equal qpred.pred.name qpred'.pred.name ->
+             instantiate qpred' :: acc
+          | _ -> 
+             acc
+        ) assumptions []
     in
     { lc = impl_ (and_ extra_assumptions, instantiate qpred);
       oq = Some (s_inst, snd qpred.q); }
@@ -672,7 +674,7 @@ let add solver global lc =
 
 (* as similarly suggested by Robbert *)
 let shortcut struct_decls it = 
-  let it = Simplify.simp struct_decls (SymMap.empty, []) it in
+  let it = Simplify.simp struct_decls SymMap.empty LCSet.empty it in
   match it with
   | IT (Lit (Bool true), _) -> `True
   | IT (Lit (Bool false), _) -> `False it

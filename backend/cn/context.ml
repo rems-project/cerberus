@@ -5,11 +5,8 @@ module BT = BaseTypes
 module LS = LogicalSorts
 module RE = Resources.RE
 module LC = LogicalConstraints
-module SymSet = Set.Make(Sym)
-module CF = Cerb_frontend
+module LCSet = Set.Make(LC)
 module Loc = Locations
-module IT = IndexTerms
-module SymMap = Map.Make(Sym)
 
 
 
@@ -28,7 +25,7 @@ type t = {
     computational : (Sym.t * (BT.t * Sym.t)) list;
     logical : (Sym.t * LS.t) list;
     resources : RE.t list;
-    constraints : LC.t list;
+    constraints : LCSet.t;
     global : Global.t;
     location_trace : Locations.loc list;
   }
@@ -38,7 +35,7 @@ let empty global = {
     computational = [];
     logical = [];
     resources = [];
-    constraints = [];
+    constraints = LCSet.empty;
     global = global;
     location_trace = [];
   }
@@ -64,7 +61,7 @@ let pp (ctxt : t) =
          if (!print_level >= 11 || Option.is_none (LC.is_sym_lhs_equality lc))
          then LC.pp lc
          else parens !^"..."
-       ) ctxt.constraints)
+       ) (LCSet.elements ctxt.constraints))
 
 
 let bound_a sym ctxt = 
@@ -90,7 +87,7 @@ let add_ls lvars ctxt =
   List.fold_left (fun ctxt (s,ls) -> add_l s ls ctxt) ctxt lvars
 
 let add_c c (ctxt : t) = 
-  { ctxt with constraints = c :: ctxt.constraints }
+  { ctxt with constraints = LCSet.add c ctxt.constraints }
 
 
 let add_r owhere r (ctxt : t) = 
@@ -113,7 +110,7 @@ let json (ctxt : t) : Yojson.Safe.t =
       ) ctxt.logical
   in
   let resources = List.map RE.json ctxt.resources in
-  let constraints = List.map LC.json ctxt.constraints in
+  let constraints = List.map LC.json (LCSet.elements ctxt.constraints) in
   let json_record = 
     `Assoc [("computational", `List computational);
             ("logical", `List logical);

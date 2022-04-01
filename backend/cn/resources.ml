@@ -6,6 +6,7 @@ module SymMap = Map.Make(Sym)
 module IT = IndexTerms
 open IT
 module LC = LogicalConstraints
+module LCSet = Set.Make(LC)
 
 
 
@@ -18,9 +19,9 @@ module type Output = sig
   val compare : t -> t -> int
   val free_vars : t -> SymSet.t
   val free_vars_list : t list -> SymSet.t
-  val simp : ?some_known_facts:IT.t list ->
-             Memory.struct_decls ->
-             (IT.t SymMap.t * LC.t list) ->
+  val simp : Memory.struct_decls ->
+             IT.t SymMap.t -> 
+             LCSet.t ->
              t ->
              t
 end
@@ -303,78 +304,63 @@ let subst (substitution : IT.t Subst.t) resource =
   
 
 
-  let simp_it struct_decls lcs extra_facts it = 
-    Simplify.simp struct_decls lcs 
-      ~some_known_facts:extra_facts it 
-      
-  let simp_o struct_decls lcs extra_facts = 
-    O.simp ~some_known_facts:extra_facts
-      struct_decls lcs
-  
-  let simp_point ?(only_outputs=false) struct_decls lcs (p : point) =
-    let simp_it = simp_it struct_decls lcs in
-    let simp_o = simp_o struct_decls lcs in
-    {
+  open Simplify
+
+  let simp_point structs values lcs (p : point) ={
       ct = p.ct;
-      pointer = if only_outputs then p.pointer else simp_it [] p.pointer; 
-      permission = if only_outputs then p.permission else simp_it [] p.permission;
-      value = simp_o [] p.value;
-      init = simp_o [] p.init; 
+      pointer = simp structs values lcs p.pointer; 
+      permission = simp structs values lcs p.permission;
+      value = O.simp structs values lcs p.value;
+      init = O.simp structs values lcs p.init; 
     }
 
-  let simp_qpoint ?(only_outputs=false) struct_decls lcs (qp : qpoint) = 
-    let simp_it = simp_it struct_decls lcs in
-    let simp_o = simp_o struct_decls lcs in
+  let simp_qpoint structs values lcs (qp : qpoint) = 
     let old_q = qp.q in
     let qp = alpha_rename_qpoint (Sym.fresh_same old_q) qp in
-    let permission = Simplify.simp_flatten struct_decls lcs qp.permission in
+    let permission = Simplify.simp_flatten structs values lcs qp.permission in
+    let permission_lcs = LCSet.of_list (List.map LC.t_ permission) in
     let qp = { 
         ct = qp.ct;
-        pointer = if only_outputs then qp.pointer else simp_it [] qp.pointer;
+        pointer = simp structs values lcs qp.pointer;
         q = qp.q;
-        permission = if only_outputs then qp.permission else and_ permission;
-        value = simp_o permission qp.value;
-        init = simp_o permission qp.init;
+        permission = and_ permission;
+        value = O.simp structs values (LCSet.union permission_lcs lcs) qp.value;
+        init = O.simp structs values (LCSet.union permission_lcs lcs) qp.init;
       }
     in
     alpha_rename_qpoint old_q qp
 
-  let simp_predicate ?(only_outputs=false) struct_decls lcs (p : predicate) = 
-    let simp_it = simp_it struct_decls lcs in
-    let simp_o = simp_o struct_decls lcs in
-    {
+  let simp_predicate structs values lcs (p : predicate) = {
       name = p.name; 
-      pointer = if only_outputs then p.pointer else simp_it [] p.pointer; 
-      permission = if only_outputs then p.permission else simp_it [] p.permission;
-      iargs = if only_outputs then p.iargs else List.map (simp_it []) p.iargs; 
-      oargs = List.map (simp_o []) p.oargs; 
+      pointer = simp structs values lcs p.pointer; 
+      permission = simp structs values lcs p.permission;
+      iargs = List.map (simp structs values lcs) p.iargs; 
+      oargs = List.map (O.simp structs values lcs) p.oargs; 
     }
 
-  let simp_qpredicate ?(only_outputs=false) struct_decls lcs (qp : qpredicate) = 
-    let simp_it = simp_it struct_decls lcs in
-    let simp_o = simp_o struct_decls lcs in
+  let simp_qpredicate structs values lcs (qp : qpredicate) = 
     let old_q = qp.q in
     let qp = alpha_rename_qpredicate (Sym.fresh_same old_q) qp in
-    let permission = Simplify.simp_flatten struct_decls lcs qp.permission in
+    let permission = Simplify.simp_flatten structs values lcs qp.permission in
+    let permission_lcs = LCSet.of_list (List.map LC.t_ permission) in
     let qp = {
         name = qp.name;
-        pointer = if only_outputs then qp.pointer else simp_it [] qp.pointer;
+        pointer = simp structs values lcs qp.pointer;
         q = qp.q;
         step = qp.step;
-        permission = if only_outputs then qp.permission else and_ permission;
-        iargs = if only_outputs then qp.iargs else List.map (simp_it permission) qp.iargs;
-        oargs = List.map (simp_o permission) qp.oargs;
+        permission = and_ permission;
+        iargs = List.map (simp structs values (LCSet.union permission_lcs lcs)) qp.iargs;
+        oargs = List.map (O.simp structs values (LCSet.union permission_lcs lcs)) qp.oargs;
       }
     in 
     alpha_rename_qpredicate old_q qp
 
 
-  let simp struct_decls lcs resource =
-    match resource with
-    | Point p -> Point (simp_point struct_decls lcs p)
-    | QPoint qp -> QPoint (simp_qpoint struct_decls lcs qp)
-    | Predicate p -> Predicate (simp_predicate struct_decls lcs p)
-    | QPredicate qp -> QPredicate (simp_qpredicate struct_decls lcs qp)
+  let simp structs values lcs = function
+    | Point p -> Point (simp_point structs values lcs p)
+    | QPoint qp -> QPoint (simp_qpoint structs values lcs qp)
+    | Predicate p -> Predicate (simp_predicate structs values lcs p)
+    | QPredicate qp -> QPredicate (simp_qpredicate structs values lcs qp)
 
 
     
@@ -382,8 +368,8 @@ let subst (substitution : IT.t Subst.t) resource =
 
 
 
-  let simp_or_empty struct_decls lcs resource = 
-    match simp struct_decls lcs resource with
+  let simp_or_empty structs values lcs resource = 
+    match simp structs values lcs resource with
     | Point p when IT.is_false p.permission -> None
     | QPoint p when IT.is_false p.permission -> None
     | Predicate p when IT.is_false p.permission -> None
@@ -408,7 +394,7 @@ module Requests =
       let compare = BT.compare
       let free_vars _ = SymSet.empty
       let free_vars_list _ = SymSet.empty
-      let simp ?(some_known_facts:_) _ _ bt = bt
+      let simp _ _ _ bt = bt
     end)
 
 

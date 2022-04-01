@@ -262,8 +262,8 @@ module ResourceInference = struct
 
     let exact_ptr_match () =
       let@ global = get_global () in
-      let@ simp_lcs = simp_constraints () in
-      let simp t = Simplify.simp global.struct_decls simp_lcs t in
+      let@ values, lcs = simp_constraints () in
+      let simp t = Simplify.simp global.struct_decls values lcs t in
       return (fun (p, p') -> is_true (simp (eq_ (p, p'))))
 
     let exact_match () =
@@ -456,8 +456,8 @@ module ResourceInference = struct
       let@ is_ex = exact_match () in
       let is_exact_re re = !reorder_points && (is_ex (RER.QPoint requested, re)) in
       let@ global = get_global () in
-      let@ simp_lcs = simp_constraints () in
-      let simp t = Simplify.simp global.struct_decls simp_lcs t in
+      let@ values, lcs = simp_constraints () in
+      let simp t = Simplify.simp global.struct_decls values lcs t in
       let needed = requested.permission in
       let sub_resource_if = fun cond re (needed, C value, C init) ->
             let continue = (Unchanged, (needed, C value, C init)) in
@@ -922,8 +922,8 @@ module ResourceInference = struct
       debug 7 (lazy (item "qpredicate request" (RER.pp (QPredicate requested))));
       let@ provable = provable loc in
       let@ global = get_global () in
-      let@ simp_lcs = simp_constraints () in
-      let simp it = Simplify.simp global.struct_decls simp_lcs it in
+      let@ values, lcs = simp_constraints () in
+      let simp it = Simplify.simp global.struct_decls values lcs it in
       let needed = requested.permission in
       let@ (needed, oargs) =
         map_and_fold_resources loc (fun re (needed, oargs) ->
@@ -1130,8 +1130,8 @@ let add_eqs_for_infer loc ftyp =
     if fuel <= 10 then return () 
     else
     let@ global = get_global () in
-    let@ simp_lcs = simp_constraints () in
-    let simp t = Simplify.simp global.struct_decls simp_lcs t in
+    let@ values, lcs = simp_constraints () in
+    let simp t = Simplify.simp global.struct_decls values lcs t in
     let poss_eqs = List.filter_map (unknown_eq_in_group simp) ptr_gps in
     debug 7 (lazy (format [] ("investigating " ^
         Int.to_string (List.length poss_eqs) ^ " possible eqs")));
@@ -2547,15 +2547,16 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t, type_error) m =
           let to_check = 
             let body = LP.open_pred global def args in
             let assumptions = 
-              List.filter_map (function
+              LCSet.fold (fun lc acc ->
+                  match lc with
                   | LC.QPred qpred' when String.equal qpred'.pred.name (Id.s pname) ->
                      let su = make_subst [(fst qpred'.q, qarg)] in
                      let condition' = IT.subst su qpred'.condition in
                      let pred_args' = List.map (IT.subst su) qpred'.pred.args in
-                     Some (impl_ (condition', LP.open_pred global def pred_args'))
+                     impl_ (condition', LP.open_pred global def pred_args') :: acc
                   | _ -> 
-                     None
-                ) constraints
+                     acc
+                ) constraints []
             in
             impl_ (and_ assumptions, body)
           in
