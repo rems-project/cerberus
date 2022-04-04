@@ -1348,7 +1348,7 @@ module CHERI (C:Capability
         "STATIC ALLOC - pref: " ^ String_symbol.string_of_prefix pref ^
           " --> alloc_id= " ^ Z.to_string alloc_id ^
             ", size= " ^ Z.to_string size ^
-              ", addr= " ^ Z.to_string addr
+              ", addr= 0x" ^ (Z.format "%x" addr)
       );
     begin match init_opt with
     | None ->
