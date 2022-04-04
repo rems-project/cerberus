@@ -123,19 +123,11 @@ module Env = struct
     X.find_opt sym env.ressources
   
   let lookup_struct sym env =
-    Pmap.iter (fun key _ ->
-      Printf.printf "==> %s\n" (Sym.pp_string key)
-    ) env.tagDefs;
-    (* Printf.printf "|tagDefs| ==> %d\n" (Pmap.cardinal env.tagDefs); *)
     match Pmap.lookup sym env.tagDefs with
       | Some (M_StructDef xs) ->
           Some xs
-      | Some (M_UnionDef _) ->
-          print_endline "M_UnionDef";
+      | Some (M_UnionDef _)| None ->
           None
-      | None ->
-        Printf.printf "NONE ==> %s\n" (Sym.pp_string sym);
-        None
 end
 
 
