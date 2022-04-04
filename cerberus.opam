@@ -30,6 +30,7 @@ depends: [
   "lem" {= "2020-06-03"}
   "menhir" {<= "20211125"}
   "result" {>= "1.4"}
+  "ounit2"
 ]
 build: [
   ["dune" "subst"] {pinned}

@@ -1,6 +1,21 @@
 (library
+ (name capabilities)
+ (public_name cerberus.mem.capabilities)
+ (wrapped false)
+ (libraries cerberus.util)
+ (modules Capability Morello Sail_morello Sail_lib Util)
+ (flags (:standard -w -27-32)))
+
+(library
  (name mem_cheri)
  (public_name cerberus.mem.cheri)
- (private_modules Capability Morello Sail_morello Sail_lib Util)
+ (modules impl_mem)
+ (libraries capabilities)
  (flags (:standard -w -27-32))
  (implements cerb_frontend))
+
+;; Unit tests for capabilities library
+(executable
+ (name captest)
+ (modules captest)
+ (libraries capabilities ounit2 cerb_backend mem_cheri))
