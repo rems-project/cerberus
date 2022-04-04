@@ -110,6 +110,7 @@
 (*  OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN   *)
 (*  IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.                         *)
 (**************************************************************************)
+[@@@warning "-3"] (* this needed for OCaml 4.14.0 as Stream has been deprecated *)
 
 let opt_colors = ref true
 let opt_verbosity = ref 0
