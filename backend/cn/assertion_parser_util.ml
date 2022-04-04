@@ -18,6 +18,7 @@ type token =
   | POWER
   | MOD
   | REM
+  | DIVISIBLE
 
   | FLIPBIT
 

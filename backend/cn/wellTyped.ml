@@ -135,6 +135,10 @@ module WIT = struct
               let@ t = check loc ~context Integer t in
               let@ t' = check loc ~context Integer t' in
               return (Integer, Mod (t, t'))
+           | Divisible (t, t') ->
+              let@ t = check loc ~context Integer t in
+              let@ t' = check loc ~context Integer t' in
+              return (BT.Bool, Divisible (t, t'))
            | LT (t,t') ->
               let@ t = infer loc ~context t in
               let@ () = ensure_integer_or_real_type loc context t in

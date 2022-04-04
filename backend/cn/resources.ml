@@ -439,18 +439,6 @@ module RE = struct
     | Point p, QPoint qp
     | QPoint qp, Point p ->
        []
-       (* (\* copying and adapting code from point_request logic *\) *)
-       (* let base = qp.pointer in *)
-       (* let item_size = int_ (Memory.size_of_ctype qp.ct) in *)
-       (* let offset = array_offset_of_pointer ~base ~pointer:p.pointer in *)
-       (* let index = array_pointer_to_index ~base ~item_size ~pointer:p.pointer in *)
-       (* let impossible_match =  *)
-       (*   and_ [lePointer_ (base, p.pointer); *)
-       (*         eq_ (mod_ (offset, item_size), int_ 0); *)
-       (*         IT.subst (IT.make_subst [(qp.q, index)]) qp.permission;  *)
-       (*         p.permission]  *)
-       (* in *)
-       (* LC.T (not_ impossible_match) *)
     | QPoint qp, QPoint qp' ->
        (* todo: this requires all-quantified constraints *)
        []

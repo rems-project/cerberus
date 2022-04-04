@@ -404,7 +404,7 @@ module ResourceInference = struct
                let pre_match =
                  (* adapting from RE.subarray_condition *)
                  and_ [lePointer_ (base, requested.pointer);
-                       eq_ (mod_ (offset, item_size), int_ 0)]
+                       divisible_ (offset, item_size)]
                in
                let subst = IT.make_subst [(p'.q, index)] in
                let took = and_ [pre_match; IT.subst subst p'.permission; needed] in
@@ -470,7 +470,7 @@ module ResourceInference = struct
                let index = array_pointer_to_index ~base ~item_size ~pointer:p'.pointer in
                let pre_match = 
                  and_ [lePointer_ (base, p'.pointer);
-                       eq_ (mod_ (offset, item_size), int_ 0)]
+                       divisible_ (offset, item_size)]
                in
                let subst = IT.make_subst [(requested.q, index)] in
                let took = and_ [pre_match; IT.subst subst needed; p'.permission] in
@@ -875,7 +875,7 @@ module ResourceInference = struct
                let pre_match = 
                  (* adapting from RE.subarray_condition *)
                  and_ (lePointer_ (base, requested.pointer)
-                       :: eq_ (mod_ (offset, item_size), int_ 0)
+                       :: divisible_ (offset, item_size)
                        :: List.map2 (fun ia ia' -> eq_ (ia, IT.subst subst ia')) requested.iargs p'.iargs)
                in
                let took = and_ [pre_match; needed; IT.subst subst p'.permission] in
@@ -938,7 +938,7 @@ module ResourceInference = struct
                let subst = IT.make_subst [(requested.q, index)] in
                let pre_match = 
                  and_ (lePointer_ (base, p'.pointer)
-                       :: eq_ (mod_ (offset, item_size), int_ 0)
+                       :: divisible_ (offset, item_size)
                        :: List.map2 (fun ia ia' -> eq_ (IT.subst subst ia, ia')) requested.iargs p'.iargs
                    )
                in

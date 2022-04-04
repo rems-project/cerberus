@@ -59,7 +59,7 @@ let no_randomness_params = [
   ]
 
 let solver_params = [
-    ("smt.logic", "AUFLIRA");
+    ("smt.logic", "AUFLIA");
     ("smt.arith.solver", "2");
     ("smt.macro_finder", "true");
     ("smt.pull-nested-quantifiers", "true");
@@ -312,6 +312,9 @@ module Translate = struct
             end
          | Rem (t1, t2) -> Integer.mk_rem context (term t1) (term t2)
          | Mod (t1, t2) -> Integer.mk_mod context (term t1) (term t2)
+         | Divisible (t1, t2) -> 
+            term (t1 %== ((t1 %/ t2) %* t2))
+            (* term (eq_ (mod_ (t1, t2), int_ 0)) *)
          | LT (t1, t2) -> mk_lt context (term t1) (term t2)
          | LE (t1, t2) -> mk_le context (term t1) (term t2)
          | Min (t1, t2) -> term (ite_ (le_ (t1, t2), t1, t2))
@@ -441,7 +444,7 @@ module Translate = struct
       | CT_pred ct_pred -> 
          begin match ct_pred with
          | AlignedI t ->
-            term (eq_ (mod_ (pointerToIntegerCast_ t.t, t.align), int_ 0))
+            term (divisible_ (pointerToIntegerCast_ t.t, t.align))
          | Aligned (t, ct) ->
             term (alignedI_ ~t ~align:(int_ (Memory.align_of_ctype ct)))
          | Representable (ct, t) ->
@@ -621,14 +624,15 @@ let tactics context ts =
   | [t] -> t
   | t1::t2::ts -> Z3.Tactic.and_then context t1 t2 ts
 
-let tactic context = 
+let _tactic context = 
   tactics context [
       (* "blast-term-ite"; *)
       (* "cofactor-term-ite"; *)
-      "solve-eqs";
       "simplify";
+      "purify-arith";
+      "solve-eqs";
       (* "elim-term-ite"; *)
-      "aufnira";
+      "auflia";
     ]
 
 let make struct_decls : solver = 
@@ -646,8 +650,8 @@ let make struct_decls : solver =
   let incremental = Z3.Solver.mk_simple_solver context in
   Z3.Solver.set_parameters incremental params;
 
-  let fancy = Z3.Solver.mk_solver_t context (tactic context) in
-  (* let fancy = Z3.Solver.mk_solver_s context "AUFLIA" in *)
+  (* let fancy = Z3.Solver.mk_solver_t context (tactic context) in *)
+  let fancy = Z3.Solver.mk_solver_s context "AUFLIA" in
 
   { context; incremental; fancy }
 

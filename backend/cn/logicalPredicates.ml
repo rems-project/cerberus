@@ -163,8 +163,10 @@ module PageAlloc = struct
                  (let o = Sym.fresh () in
                   let two_to_the_o = blast_ (0, o, page %. "order", mMAX_ORDER - 1) (exp_ (int_ 2, sym_ (o, Integer))) in
                   (and_
-                    [(mod_ (page_index, two_to_the_o )) %== int_ 0;
-                     (page_index %+ two_to_the_o) %<= ((pool %. "range_end") %/ int_ pPAGE_SIZE);]
+                    [
+                      divisible_ (page_index, two_to_the_o); (* this is the difficult constraint *)
+                      (page_index %+ two_to_the_o) %<= ((pool %. "range_end") %/ int_ pPAGE_SIZE);
+                    ]
                  ))
             ));
             (impl_ (
@@ -467,8 +469,8 @@ module PageAlloc = struct
             good_ (pointer_ct void_ct, integerToPointerCast_ (range_end %- hyp_physvirt_offset));
             good_ (pointer_ct void_ct, integerToPointerCast_ (pointerToIntegerCast_ (null_) %+ hyp_physvirt_offset));
             range_start %< range_end;
-            mod_ (range_start, int_ pPAGE_SIZE) %== int_ 0;
-            mod_ (range_end, int_ pPAGE_SIZE) %== int_ 0;
+            divisible_ (range_start, int_ pPAGE_SIZE);
+            divisible_ (range_end, int_ pPAGE_SIZE);
             (* for hyp_page_to_phys conversion *)
             representable_ (integer_ct Ptrdiff_t, range_end);
             good_ (pointer_ct void_ct, beyond_range_end_cell_pointer);

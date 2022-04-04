@@ -25,6 +25,7 @@ open Assertion_parser_util
 %token POWER
 %token MOD
 %token REM
+%token DIVISIBLE
 
 %token EQ
 %token NE
@@ -168,6 +169,8 @@ arith_term:
       { Ast.Remainder (a1, a2) }
   | MOD LPAREN a1=term COMMA a2=term RPAREN
       { Ast.Modulus (a1, a2) }
+  | DIVISIBLE LPAREN a1=term COMMA a2=term RPAREN
+      { Ast.Divisible (a1, a2) }
 
 arith_or_atomic_term:
   | a=arith_term
