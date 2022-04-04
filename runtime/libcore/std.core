@@ -175,13 +175,17 @@ fun reverse (xs: [integer]): [integer] :=
   reverse_aux (xs, [] : [integer])
 
 proc rev_listFromStr_aux(str: pointer, acc: [integer]) : eff [integer] :=
-  let strong c_: loaded integer = load('char', array_shift(str, 'char', 0)) in
+  let strong shifted: pointer = memop(PtrArrayShift, str, 'char', 0) in
+  let strong c_: loaded integer = load('char', shifted) in
+--  let strong c_: loaded integer = load('char', array_shift(str, 'char', 0)) in
   case c_ of
     | Specified(c: integer) =>
         if c = 0 then
           pure(acc)
         else
-          let strong ret: [integer] = pcall(rev_listFromStr_aux, array_shift(str, 'char', 1), c :: acc) in
+          let strong shifted: pointer = memop(PtrArrayShift, str, 'char', 1) in
+          let strong ret: [integer] = pcall(rev_listFromStr_aux, shifted, c :: acc) in
+--          let strong ret: [integer] = pcall(rev_listFromStr_aux, array_shift(str, 'char', 1), c :: acc) in
           pure(ret)
     | Unspecified(_: ctype) =>
         pure (undef(<<DUMMY(rev_listFromStr_aux)>>)) -- TODO think about that
@@ -195,10 +199,14 @@ proc rev_listFromArray_aux (ptr: pointer, acc: [integer], n: integer): eff [inte
   if n = 0 then
     pure(acc)
   else
-    let strong c_loaded: loaded integer = load('char', array_shift(ptr, 'char', 0)) in
+    let strong shifted: pointer = memop(PtrArrayShift, ptr, 'char', 0) in
+    let strong c_loaded: loaded integer = load('char', shifted) in
+--    let strong c_loaded: loaded integer = load('char', array_shift(ptr, 'char', 0)) in
     case c_loaded of
       | Specified (c: integer) =>
-        pcall(rev_listFromArray_aux, array_shift(ptr, 'char', 1), c :: acc, n - 1)
+          let strong shifted: pointer = memop(PtrArrayShift, ptr, 'char', 1) in
+          pcall(rev_listFromArray_aux, shifted, c :: acc, n - 1)
+--          pcall(rev_listFromArray_aux, array_shift(ptr, 'char', 1), c :: acc, n - 1)
       | Unspecified (_: ctype) =>
         pure (undef(<<DUMMY(rev_listFromPtr_aux)>>))
     end
