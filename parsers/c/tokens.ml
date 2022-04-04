@@ -152,6 +152,8 @@ type token =
   | CN_NULL
   | CN_TRUE
   | CN_FALSE
+  | CN_NIL
+  | CN_CONS
 
 
 let string_of_token = function
@@ -290,5 +292,7 @@ let string_of_token = function
   | CN_NULL -> "CN_NULL"
   | CN_TRUE -> "CN_TRUE"
   | CN_FALSE -> "CN_FALSE"
+  | CN_NIL -> "CN_NIL"
+  | CN_CONS -> "CN_CONS"
   | CN_PREDICATE -> "CN_PREDICATE"
 

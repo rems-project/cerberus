@@ -116,31 +116,6 @@ let frontend filename =
   CF.Tags.set_tagDefs core_file.CF.Core.tagDefs;
   print_log_file "original" (CORE core_file);
 
-  let pred_defs =
-    (* (\* PREDICATE FRONTEND *\) *)
-    (* (\* CHRISTOPHER ==> change this to FALSE to test the predicate defs frontend *\) *)
-    (* if true then *)
-    (*   [] *)
-    (* else *)
-    begin match ail_program_opt with
-    | None ->
-        assert false
-    | Some (_, sigm) ->
-        (* let open Resultat in *)
-        let open Effectful.Make(Resultat) in
-        begin match ListM.mapM CompilePredicates.translate sigm.CF.AilSyntax.cn_predicates with
-          | Result.Error str ->
-              failwith str
-          | Result.Ok xs ->
-              List.iter (fun (sym, def) ->
-                let open Pp in
-                Pp.print stderr (!^ sym ^^ Pp.colon ^^^ ResourcePredicates.pp_definition def)
-              ) xs;
-              prerr_endline "PREDICATE COMPILATION SUCCESS";
-              xs
-        end
-  end in
-
   let core_file = CF.Remove_unspecs.rewrite_file core_file in
   let () = print_log_file "after_remove_unspecified" (CORE core_file) in
 
@@ -164,6 +139,30 @@ let frontend filename =
 
   let mu_file = CF.Mucore_label_inline.ib_file mu_file in
   print_log_file "after_inlining_break" (MUCORE mu_file);
+  
+  let pred_defs =
+    (* (\* PREDICATE FRONTEND *\) *)
+    (* (\* CHRISTOPHER ==> change this to FALSE to test the predicate defs frontend *\) *)
+    (* if true then *)
+    (*   [] *)
+    (* else *)
+    begin match ail_program_opt with
+    | None ->
+        assert false
+    | Some (_, sigm) ->
+        let open Effectful.Make(Resultat) in
+        begin match CompilePredicates.translate mu_file.mu_tagDefs sigm.CF.AilSyntax.cn_predicates with
+          | Result.Error str ->
+              failwith str
+          | Result.Ok xs ->
+              List.iter (fun (sym, def) ->
+                let open Pp in
+                Pp.print stderr (!^ sym ^^ Pp.colon ^^^ ResourcePredicates.pp_definition def)
+              ) xs;
+              prerr_endline "PREDICATE COMPILATION SUCCESS";
+              xs
+        end
+  end in
   return (pred_defs, mu_file)
 
 

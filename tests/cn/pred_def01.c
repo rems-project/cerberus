@@ -25,16 +25,13 @@ struct int_list_items {
   struct int_list_items* next;
 };
 
-/*
-TODO: list syntax is not done yet
 
 predicate {list<integer> v} IntList(pointer l) = {
   if ( l == NULL ) {
-    return { v = nil } ;
+    return { v = nil(integer) } ;
   } else {
-    let head_item = Owned<struct int_list_item>(l) ;
+    let head_item = Owned<struct int_list_items>(l) ;
     let tail = IntList(head_item.value.next) ;
     return { v = cons(head_item.value.iv, tail.v) } ;
   }
 }
-*/

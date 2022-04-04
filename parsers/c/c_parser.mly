@@ -111,7 +111,7 @@ let inject_attr attr_opt (CabsStatement (loc, Annot.Attrs xs, stmt_)) =
 %token CN_PACK CN_UNPACK CN_PACK_STRUCT CN_UNPACK_STRUCT CN_HAVE CN_SHOW
 %token CN_BOOL CN_INTEGER CN_REAL CN_POINTER CN_MAP CN_LIST CN_TUPLE CN_SET
 %token CN_LET CN_OWNED CN_BLOCK CN_EACH CN_PREDICATE
-%token CN_NULL CN_TRUE CN_FALSE
+%token CN_NULL CN_TRUE CN_FALSE CN_NIL CN_CONS
 
 %token EOF
 
@@ -1745,8 +1745,9 @@ prim_expr:
     }
 | ident= cn_variable
     { Cerb_frontend.Cn.CNExpr_var ident }
-| ident= cn_variable DOT ident_membr= cn_variable
-    { Cerb_frontend.Cn.CNExpr_memberof (ident, ident_membr) }
+(* | ident= cn_variable DOT ident_membr= cn_variable *)
+| ident= cn_variable DOT xs= separated_nonempty_list(DOT, cn_variable)
+    { Cerb_frontend.Cn.CNExpr_memberof (ident, xs) }
 | e= delimited(LPAREN, expr, RPAREN)
     { e }
 
@@ -1764,12 +1765,29 @@ rel_expr:
 | e= add_expr
      { e }
 
-expr:
+
+list_expr:
 | e= rel_expr
-     { e }
-| e1= expr EQ_EQ e2= rel_expr
+    { e }
+(* | LBRACK COLON bty= base_type RBRACK *)
+| CN_NIL bty= delimited(LPAREN, base_type, RPAREN)
+    { Cerb_frontend.Cn.CNExpr_nil bty }
+(* | e1= rel_expr COLON_COLON e2= list_expr *)
+| CN_CONS LPAREN e1= list_expr COMMA e2= list_expr RPAREN
+    { Cerb_frontend.Cn.CNExpr_cons (e1, e2) }
+(* | es= delimited(LBRACK, separated_nonempty_list(COMMA, rel_expr), RBRACK)
+    { Cerb_frontend.Cn.CNExpr_list es } *)
+  // | Head of 'bt term
+  // | Tail of 'bt term
+  // | NthList of int * 'bt term
+;
+
+expr:
+| e= list_expr
+    { e }
+| e1= expr EQ_EQ e2= list_expr
     { Cerb_frontend.Cn.(CNExpr_binop (CN_equal, e1, e2)) }
-| e1= expr BANG_EQ e2= rel_expr
+| e1= expr BANG_EQ e2= list_expr
     { Cerb_frontend.Cn.(CNExpr_binop (CN_inequal, e1, e2)) }
 ;
 
@@ -1835,28 +1853,35 @@ oargs_def:
 
 clauses:
 | c= clause SEMICOLON
-    { Cerb_frontend.Cn.CN_clause c}
+    { Cerb_frontend.Cn.CN_clause (Location_ocaml.region $loc NoCursor, c) }
 | IF LPAREN e= expr RPAREN LBRACE c= clause SEMICOLON RBRACE ELSE LBRACE cs= clauses RBRACE
-    { Cerb_frontend.Cn.CN_if (e, c, cs) }
+    { Cerb_frontend.Cn.CN_if (Location_ocaml.region $loc NoCursor, e, c, cs) }
 ;
 
 clause:
 | CN_LET str= NAME VARIABLE EQ res= resource SEMICOLON c= clause
-    { Cerb_frontend.Cn.CN_letResource (Symbol.Identifier (Location_ocaml.point $startpos(str), str), res, c) }
+    { let loc = Location_ocaml.point $startpos(str) in
+      Cerb_frontend.Cn.CN_letResource (loc, Symbol.Identifier (loc, str), res, c) }
 | CN_LET str= NAME VARIABLE EQ e= expr SEMICOLON c= clause
-    { Cerb_frontend.Cn.CN_letExpr (Symbol.Identifier (Location_ocaml.point $startpos(str), str), e, c) }
+    { let loc = Location_ocaml.point $startpos(str) in
+      Cerb_frontend.Cn.CN_letExpr (loc, Symbol.Identifier (loc, str), e, c) }
 | ASSERT e= delimited(LPAREN, expr, RPAREN) SEMICOLON c= clause
-    { Cerb_frontend.Cn.CN_assert (e, c) }
+    { Cerb_frontend.Cn.CN_assert (Location_ocaml.region $loc NoCursor, e, c) }
 | RETURN xs= delimited(LBRACE, oargs_def, RBRACE)
-    { Cerb_frontend.Cn.CN_return (Location_ocaml.region ($startpos(xs), $endpos(xs)) NoCursor, xs) }
+    { Cerb_frontend.Cn.CN_return (Location_ocaml.region $loc(xs) NoCursor, xs) }
 ;
 
 resource:
 | p= pred es= delimited(LPAREN, separated_list(COMMA, expr), RPAREN)
-    { Cerb_frontend.Cn.CN_pred (p, es) }
+    { Cerb_frontend.Cn.CN_pred (Location_ocaml.region $loc(p) NoCursor, p, es) }
 | CN_EACH LPAREN bTy= base_type str= NAME VARIABLE SEMICOLON e1= expr RPAREN
        LBRACE p= pred LPAREN es= separated_list(COMMA, expr) RPAREN RBRACE
-    { Cerb_frontend.Cn.CN_each (Symbol.Identifier (Location_ocaml.point $startpos(str), str), bTy, e1, p, es) }
+    { Cerb_frontend.Cn.CN_each ( Symbol.Identifier (Location_ocaml.point $startpos(str), str)
+                               , bTy
+                               , e1
+                               , Location_ocaml.region $loc(p) NoCursor
+                               , p
+                               , es) }
 ;
 
 pred:

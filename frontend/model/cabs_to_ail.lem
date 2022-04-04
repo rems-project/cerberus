@@ -4304,6 +4304,13 @@ let rec desugar_cn_expr expr =
     | CNExpr_var ident ->
         E.resolve_cn_ident CN_logical ident >>= fun sym ->
         E.return (CNExpr_var sym)
+    | CNExpr_nil bTy ->
+        CNExpr_nil <$> desugar_cn_base_type Loc.unknown bTy
+    | CNExpr_cons e1 e2 ->
+        CNExpr_cons <$> desugar_cn_expr e1
+                    <*> desugar_cn_expr e2
+    | CNExpr_list es ->
+        CNExpr_list <$> E.mapM desugar_cn_expr es
     | CNExpr_memberof ident ident_membr ->
         E.resolve_cn_ident CN_resource ident >>= fun sym ->
         E.return (CNExpr_memberof sym ident_membr)
@@ -4325,32 +4332,33 @@ let desugar_cn_pred = function
 end
 
 let desugar_cn_resource = function
-  | CN_pred pred es ->
-      CN_pred <$> desugar_cn_pred pred
-              <*> E.mapM desugar_cn_expr es
-  | CN_each ident bTy e pred es ->
+  | CN_pred loc pred es ->
+      CN_pred loc <$> desugar_cn_pred pred
+                  <*> E.mapM desugar_cn_expr es
+  | CN_each ident bTy e loc pred es ->
       E.register_cn_ident CN_logical ident >>= fun sym ->
       CN_each sym <$> desugar_cn_base_type (Loc.locOf ident) bTy
                   <*> desugar_cn_expr e
+                  <*> E.return loc
                   <*> desugar_cn_pred pred
                   <*> E.mapM desugar_cn_expr es
 end
 
 let rec desugar_cn_clause clause =
   match clause with
-    | CN_letResource ident res c ->
+    | CN_letResource loc ident res c ->
         desugar_cn_resource res               >>= fun res' ->
         E.register_cn_ident CN_resource ident >>= fun sym  ->
         desugar_cn_clause c                   >>= fun c'   ->
-        E.return (CN_letResource sym res' c')
-    | CN_letExpr ident e c ->
+        E.return (CN_letResource loc sym res' c')
+    | CN_letExpr loc ident e c ->
         desugar_cn_expr e                    >>= fun e'  ->
         E.register_cn_ident CN_logical ident >>= fun sym ->
         desugar_cn_clause c                  >>= fun c'  ->
-        E.return (CN_letExpr sym e' c')
-    | CN_assert e c ->
-        CN_assert <$> desugar_cn_expr e
-                  <*> desugar_cn_clause c
+        E.return (CN_letExpr loc sym e' c')
+    | CN_assert loc e c ->
+        CN_assert loc <$> desugar_cn_expr e
+                      <*> desugar_cn_clause c
     | CN_return loc xs -> 
         E.mapM (fun (x, e) ->
           desugar_cn_expr e >>= fun e' ->
@@ -4361,12 +4369,12 @@ let rec desugar_cn_clause clause =
 
 let rec desugar_cn_clauses clauses =
   match clauses with
-  | CN_clause clause ->
-      CN_clause <$> desugar_cn_clause clause
-  | CN_if e c cs ->
-      CN_if <$> desugar_cn_expr e
-            <*> desugar_cn_clause c
-            <*> desugar_cn_clauses cs
+  | CN_clause loc clause ->
+      CN_clause loc <$> desugar_cn_clause clause
+  | CN_if loc e c cs ->
+      CN_if loc <$> desugar_cn_expr e
+                <*> desugar_cn_clause c
+                <*> desugar_cn_clauses cs
   end
 
 let desugar_cn_arg ns (bTy, ident) =
