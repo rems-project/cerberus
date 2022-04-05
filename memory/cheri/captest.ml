@@ -75,7 +75,19 @@ let tests = "test suite for Morello" >::: [
              c0 c0'
       );
 
-      "encode/decode" >:: (fun _ ->
+      "encode/decode odd" >:: (fun _ ->
+        let c = alloc_cap (Z.of_int (0xfffffff3)) (Z.of_int 16) in
+        let (b,t) = encode true c in
+        match decode b t with
+        | None -> assert_failure "decoding failed"
+        | Some c' ->
+           assert_equal
+             ~cmp:equal
+             ~printer:Morello_capability.show
+             c c'
+      );
+
+      "encode/decode even" >:: (fun _ ->
         let c = alloc_cap (Z.of_int (0xfffffff4)) (Z.of_int 16) in
         let (b,t) = encode true c in
         match decode b t with
