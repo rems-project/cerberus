@@ -29,11 +29,17 @@ let indexed_string_of_bit_list l =
     (String.concat "\n" @@ ibits)
     ^ "\n"
 
-let cap_bits_str b =
+let cap_bits_indexed_str b =
   let bit_list_of_char c =
     Sail_lib.get_slice_int' (8, (Z.of_int (int_of_char c)), 0) in
   let bits = List.concat (List.map bit_list_of_char b) in
   indexed_string_of_bit_list bits
+
+let cap_bits_str b =
+  let bit_list_of_char c =
+    Sail_lib.get_slice_int' (8, (Z.of_int (int_of_char c)), 0) in
+  let bits = List.concat (List.map bit_list_of_char b) in
+  string_of_bit_list bits
 
 
 let tests = "test suite for Morello" >::: [
@@ -68,8 +74,9 @@ let tests = "test suite for Morello" >::: [
       );
 
       "encode/decode" >:: (fun _ ->
-        let c = alloc_cap (Z.of_int (0xfffffff3)) (Z.of_int 16) in
+        let c = alloc_cap (Z.of_int (0xfffffff4)) (Z.of_int 16) in
         let (b,t) = encode true c in
+        Printf.printf "**** %s\n" (cap_bits_str b);
         match decode b t with
         | None -> assert_failure "decoding failed"
         | Some c' ->
@@ -87,7 +94,7 @@ let tests = "test suite for Morello" >::: [
         | Some c' ->
            let (b',_) = encode true c' in
            assert_equal
-             ~printer:cap_bits_str
+             ~printer:cap_bits_indexed_str
              b b'
       )
 
