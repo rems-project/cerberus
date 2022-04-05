@@ -597,12 +597,11 @@ module CHERI (C:Capability
        else
          !^ (Z.to_string n)
     | (IC (prov, c)) ->
-       (* TODO: better pretty-printing of capabilities *)
-       let n = (C.cap_get_value c) in
+       let cs = C.to_string c in
        if !Debug_ocaml.debug_level >= 3 then
-         !^ ("<" ^ string_of_provenance prov ^ ">:" ^ Z.to_string n)
+         !^ ("<" ^ string_of_provenance prov ^ ">:" ^ cs)
        else
-         !^ (Z.to_string n)
+         !^ cs
 
   let pp_integer_value_for_core = pp_integer_value
 
