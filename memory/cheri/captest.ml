@@ -2,6 +2,11 @@ open OUnit2
 open Morello
 open Morello_capability
 
+module Z = struct
+  include Nat_big_num
+  let format = Z.format
+end
+
 let string_of_char_list l =
   let open List in
   "[" ^
@@ -30,6 +35,7 @@ let cap_bits_str b =
   let bits = List.concat (List.map bit_list_of_char b) in
   indexed_string_of_bit_list bits
 
+
 let tests = "test suite for Morello" >::: [
       "C0" >:: (fun _ -> assert_bool "C0 exists"
                            (let c0 = cap_c0 () in
@@ -47,7 +53,32 @@ let tests = "test suite for Morello" >::: [
           ~printer:cap_bits_str
           (List.init 16 (fun _ -> '\000'))
           (fst (encode true (cap_c0 ())))
+      );
+
+      "encode/decode" >:: (fun _ ->
+        let c = alloc_cap (Z.of_int (0xfffffff3)) (Z.of_int 16) in
+        let (b,t) = encode true c in
+        match decode b t with
+        | None -> assert_failure "decoding failed"
+        | Some c' ->
+           assert_equal
+             ~cmp:eq
+             ~printer:Morello_capability.show
+             c c'
+      );
+
+      "encode/decode/encode" >:: (fun _ ->
+        let c = alloc_cap (Z.of_int (0xfffffff3)) (Z.of_int 16) in
+        let (b,t) = encode true c in
+        match decode b t with
+        | None -> assert_failure "decoding failed"
+        | Some c' ->
+           let (b',_) = encode true c' in
+           assert_equal
+             ~printer:cap_bits_str
+             b b'
       )
+
     ]
 
 let _ = run_test_tt_main tests
