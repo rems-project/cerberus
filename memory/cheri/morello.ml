@@ -30,7 +30,7 @@ module Morello_permission : Cap_permission = struct
 
       (* User[N] *)
       user_perms: bool list;
-    }
+    }  [@@deriving show]
 
   let user_perms_len = 4
 
@@ -159,6 +159,7 @@ module Morello_permission : Cap_permission = struct
     ^ s c.permits_load_cap "R"
     ^ s c.permits_store_cap "W"
     ^ s c.executive "E"
+
 end
 
 module Morello_capability: Capability
@@ -168,7 +169,9 @@ module Morello_capability: Capability
   struct
     module P = Morello_permission
     type vaddr = Z.num (* always unsigned! *)
+                   [@@deriving show]
     type otype = Z.num (*  15 bits actually. *)
+                   [@@deriving show]
 
     let min_vaddr  = Nat_big_num.of_int 0
     let max_vaddr  = let open Nat_big_num in sub (pow_int (of_int 2) 64) (of_int 1)
@@ -177,6 +180,7 @@ module Morello_capability: Capability
     let sizeof_cap = 16 (* 128 bit *)
 
     type vaddr_interval = vaddr * vaddr
+                                    [@@deriving show]
 
     type cap_seal_t =
       | Cap_Unsealed
@@ -184,6 +188,7 @@ module Morello_capability: Capability
       | Cap_Indirect_SEntry (* "LB" in Morello *)
       (* | Cap_Indirect_SEntry_Pair *) (* "LBP" in Morello. TODO see why unused *)
       | Cap_Sealed of otype
+                        [@@deriving show]
 
     type t =
       {
@@ -193,7 +198,7 @@ module Morello_capability: Capability
         bounds: vaddr_interval;
         flags: bool list;
         perms: P.t;
-      }
+      }  [@@deriving show]
 
     let cap_SEAL_TYPE_UNSEALED:otype = Z.of_int 0
     let cap_SEAL_TYPE_RB:otype       = Z.of_int 1 (* register-based branch *)

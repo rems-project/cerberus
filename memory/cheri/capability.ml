@@ -1,6 +1,6 @@
 
 module type Cap_permission = sig
-  type t
+  type t [@@deriving show]
 
   (** the number of user-defined flags *)
   val user_perms_len: int
@@ -64,7 +64,7 @@ module type Capability =
   sig
     module P: Cap_permission
 
-    type t
+    type t [@@deriving show]
 
     (** This is a new integer type introduced by CHERI C and should be
         used to hold virtual addresses. vaddr_t should not be directly
