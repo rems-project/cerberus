@@ -2,7 +2,7 @@
  (name capabilities)
  (public_name cerberus.mem.capabilities)
  (wrapped false)
- (preprocess (pps ppx_deriving.show))
+ (preprocess (pps ppx_deriving.show ppx_deriving.eq))
  (libraries cerberus.util)
  (modules Capability Morello Sail_morello Sail_lib Util)
  (flags (:standard -w -27-32)))
