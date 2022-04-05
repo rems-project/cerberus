@@ -300,7 +300,7 @@ module Morello_capability: Capability
         get_slice_int' (8, (Z.of_int (int_of_char c)), 0) in
       (* TODO(CHERI): check if bytes' and bits' decoding order is correct *)
       let bits = List.concat (List.map bit_list_of_char bytes) in
-      decode_bits (bits @ [bit_of_bool tag])
+      decode_bits ([bit_of_bool tag] @ bits)
 
     let bytes_of_bits (b:bit list) : char list =
       assert((List.length b) mod 8 == 0);
@@ -358,7 +358,7 @@ module Morello_capability: Capability
       let bits = encode_to_bits exact c in
       (* Convert to bytes *)
       assert (List.length bits == 129) ;
-      let bytes = bytes_of_bits (take 128 bits) in
+      let bytes = bytes_of_bits (drop 1 bits) in
       assert (List.length bytes == 16) ;
       (* extract the final tag *)
       let tag = zCapIsTagSet bits in

@@ -41,8 +41,9 @@ let cap_bits_str b =
   let bits = List.concat (List.map bit_list_of_char b) in
   string_of_bit_list bits
 
-
 let tests = "test suite for Morello" >::: [
+
+
       "C0" >:: (fun _ -> assert_bool "C0 exists"
                            (let c0 = cap_c0 () in
                             c0 = c0)
@@ -54,6 +55,7 @@ let tests = "test suite for Morello" >::: [
           (snd (encode true (cap_c0 ())))
       );
 
+
       "encode C0 bytes" >:: (fun _ ->
         assert_equal
           ~printer:cap_bits_str
@@ -62,7 +64,7 @@ let tests = "test suite for Morello" >::: [
       );
 
       "encode/decode C0" >:: (fun _ ->
-        let c0 = (cap_c0 ())in
+        let c0 = cap_c0 () in
         let (b,t) = encode true c0 in
         match decode b t with
         | None -> assert_failure "decoding failed"
@@ -76,7 +78,6 @@ let tests = "test suite for Morello" >::: [
       "encode/decode" >:: (fun _ ->
         let c = alloc_cap (Z.of_int (0xfffffff4)) (Z.of_int 16) in
         let (b,t) = encode true c in
-        Printf.printf "**** %s\n" (cap_bits_str b);
         match decode b t with
         | None -> assert_failure "decoding failed"
         | Some c' ->
@@ -97,7 +98,6 @@ let tests = "test suite for Morello" >::: [
              ~printer:cap_bits_indexed_str
              b b'
       )
-
     ]
 
 let _ = run_test_tt_main tests
