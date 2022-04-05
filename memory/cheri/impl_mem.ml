@@ -690,20 +690,24 @@ module CHERI (C:Capability
       end else
       return ()
 
+  (** Prints provided capability tags table *)
+  let print_captags' str captags =
+    Printf.fprintf stderr "BEGIN CAPTAGS ==> %s\n" str;
+    IntMap.iter (fun addr b ->
+        Printf.fprintf stderr "@0x%s ==> %s\n"
+          (Z.format "%x" addr)
+          (string_of_bool b)
+      ) captags;
+    prerr_endline "END CAPTAGS"
+
+  (** Prints capability tags table from memory state *)
   let print_captags str =
     if !Debug_ocaml.debug_level >= 3 then begin
-        get >>= fun st ->
-        Printf.fprintf stderr "BEGIN CAPTAGS ==> %s\n" str;
-        IntMap.iter (fun addr b ->
-            Printf.fprintf stderr "@0x%s ==> %s\n"
-              (Z.format "%x" addr)
-              (string_of_bool b)
-          ) st.captags;
-        prerr_endline "END CAPTAGS";
-        return ()
+        get >>= (fun st ->
+        print_captags' str st.captags;
+        return ())
       end else
       return ()
-
 
   let is_dynamic addr : bool memM =
     get >>= fun st ->
@@ -1221,7 +1225,7 @@ module CHERI (C:Capability
     | MVinteger (ity, IC (prov, c)) ->
        let (cb,ct) = C.encode true c in
        (funptrmap,
-        IntMap.add (C.cap_get_value c) ct captags,
+        IntMap.add addr ct captags,
         List.mapi (fun i b -> AbsByte.v prov ~copy_offset:(Some i) (Some b)) @@ cb)
     | MVfloating (fty, fval) ->
        ret @@ List.map (AbsByte.v Prov_none) begin
