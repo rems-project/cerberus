@@ -227,6 +227,16 @@ module Morello_capability: Capability
 
     let get_perms c = c.perms
 
+    let flags_from_value_bits (x:bit list): bool list =
+      let x = zero_extend (x, Z.of_int 64) in
+      let flags' = drop (64-8) x in
+      List.map bool_of_bit flags'
+
+    let flags_from_value (v:vaddr): bool list =
+      let bits = to_bits' (64, v) in
+      assert(List.length bits = 64);
+      flags_from_value_bits bits
+
     (* Capability for newly allocated region *)
     let alloc_cap a size =
       {
@@ -234,7 +244,7 @@ module Morello_capability: Capability
         value = a ;
         obj_type = cap_SEAL_TYPE_UNSEALED ;
         bounds = (a, Z.add a size) ;
-        flags = List.init cap_flags_len (fun _ -> false) ;
+        flags = flags_from_value a ;
         perms = P.perm_alloc ;
       }
 
@@ -245,7 +255,7 @@ module Morello_capability: Capability
         obj_type = cap_SEAL_TYPE_RB ; (* TODO(CHERI): check this *)
         bounds = (a, Z.succ (Z.succ a)) ; (* for all functions to have unique addresses we
                                              presently allocate 1-byte region for each *)
-        flags = List.init cap_flags_len (fun _ -> false) ;
+        flags = flags_from_value a;
         perms = P.perm_alloc ;
       }
 
@@ -262,36 +272,23 @@ module Morello_capability: Capability
           (Debug_ocaml.warn [] (fun () -> "Morello.decode: invalid exponent");
           None)
         else
-          let flags_from_value (x:bit list): (bool list) option =
-            let n = List.length x in
-            if n < 8 then
-              (Debug_ocaml.warn [] (fun () -> "Morello.decode: wrong number of cap flag bits");
-              None)
-            else
-              let flags' = drop (n-8) x in
-              Some (List.map bool_of_bit flags')
-          in
-          match flags_from_value value' with
+          let flags = flags_from_value_bits value' in
+          let perms' = zCapGetPermissions bits  in
+          let perms_data = List.map bool_of_bit perms' in
+          match P.of_list perms_data with
           | None ->
-             (Debug_ocaml.warn [] (fun () -> "Morello.decode: could not decode flags");
+             (Debug_ocaml.warn [] (fun () -> "Morello.decode: could not decode permissions");
               None)
-          | Some flags ->
-             let perms' = zCapGetPermissions bits  in
-             let perms_data = List.map bool_of_bit perms' in
-             match P.of_list perms_data with
-             | None ->
-                (Debug_ocaml.warn [] (fun () -> "Morello.decode: could not decode permissions");
-                None)
-             | Some perms ->
-                let otype = uint (zCapGetObjectType bits) in
-                Some {
-                    valid = zCapIsTagSet bits;
-                    value = value;
-                    obj_type = otype;
-                    bounds = (uint base', uint limit');
-                    flags = flags ;
-                    perms = perms ;
-                  }
+          | Some perms ->
+             let otype = uint (zCapGetObjectType bits) in
+             Some {
+                 valid = zCapIsTagSet bits;
+                 value = value;
+                 obj_type = otype;
+                 bounds = (uint base', uint limit');
+                 flags = flags ;
+                 perms = perms ;
+               }
 
     let decode (bytes:char list) (tag:bool) =
       let bit_list_of_char c =
@@ -388,7 +385,10 @@ module Morello_capability: Capability
      *)
     let cap_set_value c cv =
       if cap_vaddr_representable c cv then
-        {c with value = cv}
+        {c with
+          value = cv;
+          flags = flags_from_value cv
+        }
       else
         cap_invalidate c
 
@@ -444,7 +444,9 @@ module Morello_capability: Capability
        - ORRFLGS in Morello
        - SCFLGS in Morello
      *)
-    let cap_set_flags c f = {c with flags = f }
+    let cap_set_flags c f =
+      (* TODO(CHERI): also modify value *)
+      {c with flags = f }
 
     (* --- Controlled non-monotonic manipulation --  *)
 
