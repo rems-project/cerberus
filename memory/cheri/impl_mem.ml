@@ -1014,7 +1014,7 @@ module CHERI (C:Capability
             begin match tag_query_f addr with
             | None ->
                (* TODO(CHERI): decide on semantics *)
-               failwith "unspecified tag value"
+               Debug_ocaml.error ("Unspecified tag value for address 0x" ^ (Z.format "%x" addr))
             | Some tag ->
                begin match C.decode cs tag with
                | None ->
@@ -1073,8 +1073,7 @@ module CHERI (C:Capability
             | None ->
                (* TODO(CHERI): decide on semantics *)
                let cs = "Capability address 0x" ^ Z.format "%x" addr in
-               Debug_ocaml.warn [] (fun () -> cs);
-               failwith ("Could not find tag. " ^ cs)
+               Debug_ocaml.error ("Could not find tag. " ^ cs)
             | Some tag ->
                begin match C.decode cs tag with
                | None ->
@@ -1090,7 +1089,7 @@ module CHERI (C:Capability
                        begin match tag_query_f addr with
                        | None ->
                           (* TODO(CHERI): decide on semantics *)
-                          failwith "unspecified tag value"
+                          Debug_ocaml.error ("Unspecified tag value for address 0x" ^ (Z.format "%x" addr))
                        | Some tag ->
                           begin match C.decode cs tag with
                           | None ->
@@ -2459,8 +2458,21 @@ module CHERI (C:Capability
     match ptrval_ with
     | PVnull _ ->
        return (mk_ival prov Z.zero)
-    | PVfunction (FP_valid (Symbol.Symbol (_, n, _))) ->
-       return (mk_ival prov (Z.of_int n))
+    | PVfunction (FP_valid ((Symbol.Symbol (_, n, _)) as sym)) ->
+       get >>= fun st ->
+       begin
+         match ity with
+         | Signed Intptr_t
+           | Unsigned Intptr_t ->
+            begin match IntMap.find_opt (Z.of_int n) st.funptrmap with
+            | Some (file_dig, name, c) ->
+               return (IC (prov, c))
+            | None ->
+               Debug_ocaml.error ("intfromptr: Unknown function: " ^ (Pp_symbol.to_string_pretty sym))
+            end
+         | _ ->
+            return (mk_ival prov (Z.of_int n))
+       end
     | PVfunction (FP_invalid c)
       | PVconcrete c ->
        begin if Switches.(has_switch (SW_PNVI `AE) || has_switch (SW_PNVI `AE_UDI)) then
@@ -2469,7 +2481,7 @@ module CHERI (C:Capability
                | Prov_some alloc_id ->
                   expose_allocation alloc_id
                | _ ->
-                  return ()
+                 return ()
              else
                return ()
        end >>= fun () ->
