@@ -1668,7 +1668,7 @@ module CHERI (C:Capability
 
 
   let store loc ty is_locking (PV (prov, ptrval_)) mval =
-    Debug_ocaml.print_debug 0(*KKK*) [] (fun () ->
+    Debug_ocaml.print_debug 10 [] (fun () ->
         "ENTERING STORE: ty=" ^ String_core_ctype.string_of_ctype ty ^
           " -> @" ^ Pp_utils.to_plain_string (pp_pointer_value (PV (prov, ptrval_))) ^
             ", mval= " ^ Pp_utils.to_plain_string (pp_mem_value mval)
@@ -1691,7 +1691,7 @@ module CHERI (C:Capability
           begin
             update begin fun st ->
               let (funptrmap, captags, pre_bs) = repr st.funptrmap st.captags addr mval in
-              Debug_ocaml.print_debug 0(*KKK*) [] (fun () ->
+              Debug_ocaml.print_debug 10 [] (fun () ->
                   "|pre_bs|=" ^ string_of_int (List.length pre_bs) ^ " <---> sz: " ^ string_of_int sz
                 );
               assert (List.length pre_bs == sz) ;
