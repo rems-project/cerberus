@@ -526,7 +526,7 @@ module CHERI (C:Capability
         | MerrWIP _
         | MerrVIP _
         | MerrCHERI _ ->
-         Location_ocaml.other "Concrete" in
+         Location_ocaml.other "cherimem" in
     let open Nondeterminism in
     match undefinedFromMem_error err with
     | Some ubs ->
@@ -552,7 +552,7 @@ module CHERI (C:Capability
     && Z.less addr limit
     && Z.less_equal (Z.add addr sz) limit
 
-  let cap_check c intent sz =
+  let cap_check loc c intent sz =
     if C.cap_is_valid c then
       let addr = C.cap_get_value c in
       let pcheck =
@@ -567,12 +567,12 @@ module CHERI (C:Capability
         if cap_bounds_check bounds addr nsz then
           return ()
         else
-          fail (MerrCHERI
-                  (CheriBoundsErr (bounds, addr, nsz)))
+          fail (MerrCHERI (loc,
+                  (CheriBoundsErr (bounds, addr, nsz))))
       else
-        fail (MerrCHERI CheriMerrUnsufficientPermissions)
+        fail (MerrCHERI (loc, CheriMerrUnsufficientPermissions))
     else
-      fail (MerrCHERI CheriMerrInvalidCap)
+      fail (MerrCHERI (loc, CheriMerrInvalidCap))
 
   (* pretty printing *)
   open PPrint
@@ -961,6 +961,7 @@ module CHERI (C:Capability
      has_size ty -> |bs| >= sizeof ty -> abst ty bs = (mval, bs') ->
      |bs'| + sizeof ty  = |bs| /\ typeof mval = ty *)
   let rec abst
+            loc
             find_overlaping
             funptrmap
             (tag_query_f: C.vaddr -> bool option)
@@ -970,7 +971,7 @@ module CHERI (C:Capability
           :
             [`NoTaint | `NewTaint of storage_instance_id list] * mem_value_with_err * AbsByte.t list
     =
-    let self = abst find_overlaping funptrmap tag_query_f in
+    let self = abst loc find_overlaping funptrmap tag_query_f in
     let extract_unspec xs =
       List.fold_left (fun acc_opt c_opt ->
           match acc_opt, c_opt with
@@ -1020,7 +1021,7 @@ module CHERI (C:Capability
                | None ->
                   (* could not decode capability *)
                   Debug_ocaml.warn [] (fun () -> "Error decoding intptr_t cap");
-                  MVErr (MerrCHERI CheriErrDecodingCap)
+                  MVErr (MerrCHERI (loc, CheriErrDecodingCap))
                | Some n ->
                   MVEinteger (ity, IC (prov,n))
                end
@@ -1079,7 +1080,7 @@ module CHERI (C:Capability
                | None ->
                   (* could not decode capability *)
                   Debug_ocaml.warn [] (fun () -> "Error decoding pointer cap");
-                  MVErr (MerrCHERI CheriErrDecodingCap)
+                  MVErr (MerrCHERI (loc, CheriErrDecodingCap))
                | Some n ->
                   begin match ref_ty with
                   | Ctype (_, Function _) ->
@@ -1095,7 +1096,7 @@ module CHERI (C:Capability
                           | None ->
                              (* could not decode capability *)
                              Debug_ocaml.warn [] (fun () -> "Error decoding function pointer cap");
-                             MVErr (MerrCHERI CheriErrDecodingCap)
+                             MVErr (MerrCHERI (loc, CheriErrDecodingCap))
                           | Some c ->
                              let n = (Z.sub (C.cap_get_value c) (Z.of_int initial_address)) in
                              begin match IntMap.find_opt n funptrmap with
@@ -1576,7 +1577,7 @@ module CHERI (C:Capability
            if m <> Z.zero then failwith "Unaligned address in load"
            else IntMap.find_opt a st.captags
       in
-      let (taint, mval, bs') = abst (find_overlaping st) st.funptrmap tag_query addr ty bs in
+      let (taint, mval, bs') = abst loc (find_overlaping st) st.funptrmap tag_query addr ty bs in
       mem_value_strip_err mval >>= fun mval ->
       (* PNVI-ae-udi *)
       begin if Switches.(has_switch (SW_PNVI `AE) || has_switch (SW_PNVI `AE_UDI)) then
@@ -1601,7 +1602,7 @@ module CHERI (C:Capability
          fail (MerrWIP "load, bs' <> []")
       end in
     let do_load_cap alloc_id_opt c sz =
-      cap_check c ReadIntent sz >> do_load alloc_id_opt (C.cap_get_value c) sz
+      cap_check loc c ReadIntent sz >> do_load alloc_id_opt (C.cap_get_value c) sz
     in
     match (prov, ptrval_) with
     | (_, PVnull _) ->
@@ -1685,7 +1686,7 @@ module CHERI (C:Capability
       let do_store_cap alloc_id_opt c =
         let sz = sizeof ty in
         let nsz = Z.of_int sz in
-        cap_check c WriteIntent sz >>
+        cap_check loc c WriteIntent sz >>
           let addr = C.cap_get_value c in
           begin
             update begin fun st ->
@@ -2974,8 +2975,8 @@ module CHERI (C:Capability
                                      let pad = memb_offset - previous_offset in
                                      let acc_bs' = L.drop pad acc_bs in
                                      let memb_addr = Z.add addr (Z.of_int memb_offset) in
-
-                                     let (_, mval, acc_bs'') = abst (find_overlaping st) st.funptrmap tag_query_f memb_addr memb_ty acc_bs' in
+                                     let loc = Location_ocaml.other "cherimem" in
+                                     let (_, mval, acc_bs'') = abst loc(find_overlaping st) st.funptrmap tag_query_f memb_addr memb_ty acc_bs' in
                                      let rows = mk_ui_values memb_addr acc_bs' memb_ty mval in
                                      let rows' = List.map (add_path memb) rows in
                                      (* TODO: set padding value here *)
@@ -2999,7 +3000,8 @@ module CHERI (C:Capability
          if m <> Z.zero then failwith "Unaligned address in mk_ui_alloc"
          else IntMap.find_opt q st.captags
     in
-    let (_, mval, _) = abst (find_overlaping st) st.funptrmap tag_query alloc.base ty bs in
+    let loc = Location_ocaml.other "cherimem" in
+    let (_, mval, _) = abst loc (find_overlaping st) st.funptrmap tag_query alloc.base ty bs in
     { id = id;
       base = Z.to_string alloc.base;
       prefix = alloc.prefix;
