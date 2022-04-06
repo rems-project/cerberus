@@ -63,9 +63,11 @@ let cheri exec debug_level core_file runtime_path traditional filename =
                   "strict_pointer_arith";
                   "CHERI"] ;
     Global_ocaml.(set_cerb_conf exec Random false Basic false false false false);
-    load_core_stdlib ()                                  >>= fun stdlib ->
-    load_core_impl stdlib impl_name                      >>= fun impl   ->
-    c_frontend (conf, io) (stdlib, impl) ~filename in
+    load_core_stdlib ()                            >>= fun stdlib                          ->
+    load_core_impl stdlib impl_name                >>= fun impl                            ->
+    c_frontend (conf, io) (stdlib, impl) ~filename >>= fun (tunit_opt, ail_opt, core_file) ->
+    core_passes (conf, io) ~filename core_file     >>= fun core_file'                      ->
+    return (tunit_opt, ail_opt, core_file') in
   let epilogue n = n in
   let runM = function
     | Exception.Exception err ->
