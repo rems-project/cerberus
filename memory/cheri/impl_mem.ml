@@ -769,19 +769,39 @@ module CHERI (C:Capability
       ))
 
 
-  let write_bytes base_addr bs =
-    get >>= fun st ->
-    return begin
-        (* NOTE: the reversal caused by the fold_left is what we want because of
-           little-endianness *)
-        List.fold_left (fun acc (addr, b) ->
-            IntMap.add addr b acc
-          ) st.bytemap begin
-            List.init (List.length bs) (fun z ->
-                (Z.(add base_addr (of_int z), L.nth bs z))
-              )
-          end
-      end
+
+  (** Invalidate capability tags for memory region starting from
+      [addr] with [size].
+
+      All tags which were [true] will be flipped to [false].  For
+      addresses which did not have tags set, they will remain
+      unspecified.  *)
+  let clear_caps addr size (captags:bool IntMap.t): bool IntMap.t =
+    match (Ocaml_implementation.get ()).alignof_pointer with
+    | None -> failwith "alignof_pointer must be specified in Ocaml_implementation"
+    | Some ai ->
+       let align = Z.of_int ai in
+       let lower_a x =
+         let (q,_) = Z.quomod x align in
+         Z.mul q align in
+       let a0 = lower_a addr in
+       let a1 = lower_a (Z.pred (Z.add addr size)) in
+       Debug_ocaml.print_debug 1 [] (fun () ->
+           "Clearing caps in 0x" ^ (Z.format "%x" a0)
+           ^ "- 0x" ^ (Z.format "%x" a1) ^ " range");
+       let rec loop a captags =
+         let upd a ct =
+           match IntMap.find_opt a ct with
+           | Some true -> IntMap.add a false ct
+           | _ -> ct
+         in
+         if a <= a1 then
+           loop
+             (Z.add a align)
+             (upd a captags)
+         else
+           captags
+       in loop a0 captags
 
   let int_of_bytes is_signed bs =
     (* NOTE: the reverse is from little-endianness *)
@@ -1212,27 +1232,35 @@ module CHERI (C:Capability
 
   (* INTERNAL repr *)
   let rec repr funptrmap captags addr mval : ((Digest.t * string * C.t) IntMap.t * bool IntMap.t * AbsByte.t list) =
-    let ret bs = (funptrmap, captags, bs) in
     match mval with
     | MVunspecified ty ->
-       ret @@ List.init (sizeof ty) (fun _ -> AbsByte.v Prov_none None)
+       let sz = sizeof ty in
+       (funptrmap,
+        clear_caps addr (Z.of_int sz) captags,
+        List.init sz (fun _ -> AbsByte.v Prov_none None))
     | MVinteger (ity, IV (prov, n)) ->
-       ret @@List.map (AbsByte.v prov) begin
-                 bytes_of_int
-                   (AilTypesAux.is_signed_ity ity)
-                   (sizeof (Ctype ([], Basic (Integer ity)))) n
-               end
+       let bs = List.map (AbsByte.v prov) begin
+                    bytes_of_int
+                      (AilTypesAux.is_signed_ity ity)
+                      (sizeof (Ctype ([], Basic (Integer ity)))) n
+                  end in
+       (funptrmap,
+        clear_caps addr (Z.of_int (List.length bs)) captags,
+        bs)
     | MVinteger (ity, IC (prov, c)) ->
        let (cb,ct) = C.encode true c in
        (funptrmap,
         IntMap.add addr ct captags,
         List.mapi (fun i b -> AbsByte.v prov ~copy_offset:(Some i) (Some b)) @@ cb)
     | MVfloating (fty, fval) ->
-       ret @@ List.map (AbsByte.v Prov_none) begin
-                  bytes_of_int
-                    true (* TODO: check that *)
-                    (sizeof (Ctype ([], Basic (Floating fty)))) (Z.of_int64 (Int64.bits_of_float fval))
-                end
+       let bs = List.map (AbsByte.v Prov_none) begin
+                    bytes_of_int
+                      true (* TODO: check that *)
+                      (sizeof (Ctype ([], Basic (Floating fty)))) (Z.of_int64 (Int64.bits_of_float fval))
+                  end in
+       (funptrmap,
+        clear_caps addr (Z.of_int (List.length bs)) captags,
+        bs)
     | MVpointer (ref_ty, PV (prov, ptrval_)) ->
        begin match ptrval_ with
        | PVnull _ ->
@@ -1336,7 +1364,9 @@ module CHERI (C:Capability
     put { st with
         next_alloc_id= Z.succ alloc_id;
         last_used= Some alloc_id;
-        last_address= addr
+        last_address= addr;
+        (* clear tags in newly allocated region *)
+        captags= clear_caps addr size st.captags
       } >>= fun () ->
     return (alloc_id, addr)
 
