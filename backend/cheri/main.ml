@@ -57,6 +57,7 @@ let cheri exec debug_level core_file runtime_path traditional filename =
       ; cpp_cmd= cpp_str
       ; cpp_stderr= true
       } in
+    Cerb_runtime.specified_runtime := Some runtime_path;
     Cerb_frontend.Ocaml_implementation.(set (MorelloImpl.impl));
     (* `SW_zap_dead_pointers` should not be set *)
     Switches.set ["strict_pointer_equality";
