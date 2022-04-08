@@ -638,7 +638,7 @@ let case_ptrval ptrval f_null f_funptr f_concrete _ =
     | PVloc (Prov_some alloc_id, addr) ->
         f_concrete ()
     | PVfunptr sym ->
-        f_funptr sym
+        f_funptr (Some sym)
 
 let case_funsym_opt _ ptrval : Symbol.sym option =
   match ptrval with

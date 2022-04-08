@@ -754,7 +754,7 @@ let rec n_expr (loc : Loc.t) (returns : symbol Pset.set)
           | Vloaded (LVspecified (OVpointer ptrval)) ->
              Impl_mem.case_ptrval ptrval
                ( fun ct -> err ())
-               ( fun sym -> asym_pack loc annots bty sym )
+               ( function Some sym -> asym_pack loc annots bty sym | None -> err () )
                ( fun () -> err () )
                ( fun () -> err () )
           | _ -> err ()
