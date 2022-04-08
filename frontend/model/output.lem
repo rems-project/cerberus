@@ -355,8 +355,14 @@ let rec load_character_array_aux elem_ty ptrval prec_n_opt acc =
               (fun n -> if n = 0 then
                 Mem.return (List.reverse acc)
               else
-                let ptrval' = Mem.array_shift_ptrval ptrval elem_ty (Mem.integer_ival 1) in
-                load_character_array_aux elem_ty ptrval' prec_n_opt' ((Decode.encode_character_constant n) :: acc))
+                Mem.bind
+                  begin if Global.is_CHERI () then
+                    Mem.eff_array_shift_ptrval (Loc.other "printf()") ptrval elem_ty (Mem.integer_ival 1)
+                  else
+                    Mem.return (Mem.array_shift_ptrval ptrval elem_ty (Mem.integer_ival 1))
+                  end
+                  (fun ptrval' ->
+                    load_character_array_aux elem_ty ptrval' prec_n_opt' ((Decode.encode_character_constant n) :: acc)))
               (fun () -> error "WIP: Output.load_character_array, non constant ival")
           )
           (fun _ _ -> error "Output.load_character_array, found a float")
@@ -368,7 +374,14 @@ let rec load_character_array_aux elem_ty ptrval prec_n_opt acc =
   end
 val load_character_array: Ctype.ctype -> Mem.pointer_value -> maybe nat -> Mem.memM (list char)
 let load_character_array elem_ty ptrval prec_n_opt =
-  load_character_array_aux elem_ty (Mem.array_shift_ptrval ptrval elem_ty (Mem.integer_ival 0)) prec_n_opt []
+  Mem.bind
+    begin if Global.is_CHERI () then
+      Mem.eff_array_shift_ptrval (Loc.other "printf()") ptrval elem_ty (Mem.integer_ival 0)
+    else
+      Mem.return (Mem.array_shift_ptrval ptrval elem_ty (Mem.integer_ival 0))
+    end
+    (fun ptrval' -> load_character_array_aux elem_ty ptrval' prec_n_opt [])
+  
 
 
 
