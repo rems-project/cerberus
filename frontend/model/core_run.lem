@@ -905,41 +905,49 @@ BEFORE EVAL_PEXPR2
     | (Eccall annots ty pe pes, sk) ->
         one match valueFromPexpr pe with
           | Just (Vloaded (LVspecified (OVpointer pv))) ->
-              let case_funptrval psym =
-                match valueFromPexprs pes with
-                  | Just cvals ->
-                      let mem_values =
-                        match Map.lookup psym file.funinfo with
-                          | Just (_, _, _, param_tys, _, _) ->
-                            List.map (fun (ty, cval) ->
-                              match Core_aux.memValueFromValue (Ctype.Ctype [] (Ctype.Pointer Ctype.no_qualifiers ty)) cval with
-                                | Just mval -> mval
-                                | Nothing -> error "Eccall memvalue"
-                              end) $ List.zip (List.map snd param_tys) cvals
-                          | Nothing ->
-                              error $ "Eccall : function " ^ show psym ^ " not found"
-                        end in
-                      Step_tau "Eccall" (TSK_Ccall psym mem_values) (
-                        SEU.runEU (
-                          Exception.bind (call_proc core_extern file psym cvals)
-                            EU.return
-                        ) >>= fun (proc_env, expr) ->
-                        (* TODO: HACK here we always annotate the action as being positive, I'm pretty sure this is wrong *)
-                        let a_expr = add_to_sb (Set.map (fun z -> (Pos, z)) annots.sb_before) (* TODO: remove for sequential !!! *) expr in
-                        E.return <| th_st with
-                          arena= a_expr;
-                          stack= push_empty_continuation (Just psym) sk;
-                          exec_loc= push_exec_loc psym th_st.exec_loc;
-                          env= proc_env :: th_st.env
-                        |>
-                      )
-                  | Nothing ->
-                      Step_eval "Eccall" (
-                        let () = Debug.print_debug 4 [] (fun () -> "XX 16") in
-                        E.step_eval_pexprs th_st core_extern mem_st file pes >>= fun pes' ->
-                        E.return <| th_st with arena= Expr arena_annots (Eccall annots ty pe pes') |>
-                      )
-                end in
+              let case_funptrval = function
+                | Nothing ->
+                    Step_eval "Eccall" (
+                      E.return <| th_st with
+                        arena= Expr arena_annots (Epure (Core_aux.mk_undef_pe th_st.current_loc Undefined.UB_CERB003_invalid_function_pointer));
+                      |>
+                    )
+                | Just psym ->
+                    match valueFromPexprs pes with
+                      | Just cvals ->
+                          let mem_values =
+                            match Map.lookup psym file.funinfo with
+                              | Just (_, _, _, param_tys, _, _) ->
+                                List.map (fun (ty, cval) ->
+                                  match Core_aux.memValueFromValue (Ctype.Ctype [] (Ctype.Pointer Ctype.no_qualifiers ty)) cval with
+                                    | Just mval -> mval
+                                    | Nothing -> error "Eccall memvalue"
+                                  end) $ List.zip (List.map snd param_tys) cvals
+                              | Nothing ->
+                                  error $ "Eccall : function " ^ show psym ^ " not found"
+                            end in
+                          Step_tau "Eccall" (TSK_Ccall psym mem_values) (
+                            SEU.runEU (
+                              Exception.bind (call_proc core_extern file psym cvals)
+                                EU.return
+                            ) >>= fun (proc_env, expr) ->
+                            (* TODO: HACK here we always annotate the action as being positive, I'm pretty sure this is wrong *)
+                            let a_expr = add_to_sb (Set.map (fun z -> (Pos, z)) annots.sb_before) (* TODO: remove for sequential !!! *) expr in
+                            E.return <| th_st with
+                              arena= a_expr;
+                              stack= push_empty_continuation (Just psym) sk;
+                              exec_loc= push_exec_loc psym th_st.exec_loc;
+                              env= proc_env :: th_st.env
+                            |>
+                          )
+                      | Nothing ->
+                          Step_eval "Eccall" (
+                            let () = Debug.print_debug 4 [] (fun () -> "XX 16") in
+                            E.step_eval_pexprs th_st core_extern mem_st file pes >>= fun pes' ->
+                            E.return <| th_st with arena= Expr arena_annots (Eccall annots ty pe pes') |>
+                          )
+                    end
+              end in
               Mem.case_ptrval pv
                 (fun _ -> error "null function pointer")
                 case_funptrval
@@ -947,7 +955,7 @@ BEFORE EVAL_PEXPR2
                   (* TODO: not sure about this case! it happens when calling a function pointer casted to void* via: ((void ( * )(void))p)(); *)
                   match Mem.case_funsym_opt mem_st pv with
                   | Just sym ->
-                      case_funptrval sym
+                      case_funptrval (Just sym)
                   | None ->
                       error ("the address does not point to a function (Eccall)")
                   end)

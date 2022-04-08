@@ -1849,7 +1849,8 @@ module CHERI (C:Capability
   let case_ptrval pv fnull ffun fconc _ =
     match pv with
     | PV (_, PVnull ty) -> fnull ty
-    | PV (_, PVfunction (FP_valid sym)) -> ffun sym
+    | PV (_, PVfunction (FP_valid sym)) -> ffun (Some sym)
+    | PV (_, PVfunction (FP_invalid _)) -> ffun None
     | PV (Prov_none, PVconcrete addr) -> fconc ()
     | PV (Prov_some i, PVconcrete addr) -> fconc ()
     | _ -> failwith "case_ptrval"

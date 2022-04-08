@@ -691,6 +691,8 @@ type undefined_behaviour =
   | UB_CERB002a_out_of_bound_load
   | UB_CERB002b_out_of_bound_store
 
+  | UB_CERB003_invalid_function_pointer
+
 
 val std_of_undefined_behaviour: undefined_behaviour -> maybe string
 let std_of_undefined_behaviour = function
@@ -987,7 +989,8 @@ let ub_str_bimap =
     ; (UB207_atomic_compare_exchange_memorder, "UB207_atomic_compare_exchange_memorder")
     ; (UB_CERB001_integer_to_dead_pointer, "UB_CERB001_integer_to_dead_pointer")
     ; (UB_CERB002a_out_of_bound_load, "UB_CERB002a_out_of_bound_load")
-    ; (UB_CERB002b_out_of_bound_store, "UB_CERB002b_out_of_bound_store") ]
+    ; (UB_CERB002b_out_of_bound_store, "UB_CERB002b_out_of_bound_store")
+    ; (UB_CERB003_invalid_function_pointer, "UB_CERB003_invalid_function_pointer") ]
 
 
 val stringFromUndefined_behaviour: undefined_behaviour -> string
@@ -1073,6 +1076,8 @@ let ub_short_string = function
       "out of bounds pointer at memory load"
   | UB_CERB002b_out_of_bound_store ->
       "out of bounds pointer at memory store"
+  | UB_CERB003_invalid_function_pointer ->
+      "invalid function pointer"
   | ub ->
       "(UB missing short message): " ^ show ub
 end
@@ -1196,6 +1201,8 @@ let pretty_string_of_undefined_behaviour = function
       "(CERB) provenance check failed during a load"
   | UB_CERB002b_out_of_bound_store ->
       "(CERB) provenance check failed during a store"
+  | UB_CERB003_invalid_function_pointer ->
+      "invalid function pointer"
   | Invalid_format str ->
       "Invalid_format \"" ^ str ^ "\""
   | ub ->
