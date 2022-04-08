@@ -122,12 +122,14 @@ declare ocaml target_rep function isWellAligned_ptrval = `Impl_mem.isWellAligned
 (* Casting operations *)
 (* the first ctype is the original integer type, the second is the target referenced type *)
 (* Note: first argument should probably be Ctype.integerType *)
-val ptrfromint: Ctype.ctype -> Ctype.ctype -> integer_value -> memM pointer_value
+val ptrfromint: Ctype.integerType -> Ctype.ctype -> integer_value -> memM pointer_value
 (* the first ctype is the original referenced type, the integerType is the target integer type *)
 val intfromptr: Ctype.ctype -> Ctype.integerType -> pointer_value -> memM integer_value
 declare ocaml target_rep function ptrfromint = `Impl_mem.ptrfromint`
 declare ocaml target_rep function intfromptr = `Impl_mem.intfromptr`
 
+val intcast: Ctype.integerType -> Ctype.integerType -> integer_value -> memM integer_value
+declare ocaml target_rep function intcast = `Impl_mem.intcast`
 
 (* Pointer shifting constructors *)
 val array_shift_ptrval:  pointer_value -> Ctype.ctype -> integer_value -> pointer_value

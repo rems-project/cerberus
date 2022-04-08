@@ -1052,14 +1052,18 @@ let rec driver with_concurrency =
             liftMem (Mem.intfromptr ref_ty ity ptr_val) >>= fun ival ->
             ND.return (mk_th_st (Core.Vobject (Core.OVinteger ival)))
         
-        | (Mem_common.PtrFromInt, [Core.Vctype ty; Core.Vctype ref_ty; Core.Vobject (Core.OVinteger ival)]) ->
-            liftMem (Mem.ptrfromint ty ref_ty ival) >>= fun ptrval ->
+        | (Mem_common.PtrFromInt, [Core.Vctype (Ctype.Ctype _ (Ctype.Basic (Ctype.Integer ity))); Core.Vctype ref_ty; Core.Vobject (Core.OVinteger ival)]) ->
+            liftMem (Mem.ptrfromint ity ref_ty ival) >>= fun ptrval ->
             ND.return (mk_th_st (Core.Vobject (Core.OVpointer ptrval)))
         
         | (Mem_common.PtrValidForDeref, [Core.Vctype ref_ty; Core.Vobject (Core.OVpointer ptr_val)]) ->
             liftMem (Mem.validForDeref_ptrval ref_ty ptr_val) >>= fun is_valid ->
             ND.return (mk_th_st (if is_valid then Core.Vtrue else Core.Vfalse))
         
+        | (Mem_common.Intcast, [Core.Vctype (Ctype.Ctype _ (Ctype.Basic (Ctype.Integer ity1))); Core.Vctype (Ctype.Ctype _ (Ctype.Basic (Ctype.Integer ity2))); Core.Vobject (Core.OVinteger ival)]) ->
+          liftMem (Mem.intcast ity1 ity2 ival) >>= fun ival' ->
+          ND.return (mk_th_st (Core.Vobject (Core.OVinteger ival')))
+
         | (Mem_common.PtrEq, [Core.Vobject (Core.OVpointer ptr_val1); Core.Vobject (Core.OVpointer ptr_val2)]) ->
             ND.print_debug 2 [Debug.DB_driver] (fun () -> "PtrEq") >> (* DEBUG *)
             liftMem (Mem.eq_ptrval ptr_val1 ptr_val2) >>= fun is_eq ->

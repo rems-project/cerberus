@@ -28,6 +28,8 @@ let pp_memop = function
       !^ "PtrFromInt"
   | PtrValidForDeref ->
       !^ "PtrValidForDeref"
+  | Intcast ->
+      !^ "Intcast"
   | PtrWellAligned ->
       !^ "PtrWellAligned"
   | Memcmp ->
