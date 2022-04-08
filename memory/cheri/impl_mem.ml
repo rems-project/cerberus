@@ -2239,9 +2239,9 @@ module CHERI (C:Capability
   let intcast ity1 ity2 ival =
     let nbytes = match (Ocaml_implementation.get ()).sizeof_ity ity2 with
       | None ->
-        assert false
+         assert false
       | Some z ->
-        z in
+         z in
     let nbits = 8 * nbytes in
     let is_signed = AilTypesAux.is_signed_ity ity2 in
     let (min_ity2, max_ity2) =
@@ -2261,29 +2261,48 @@ module CHERI (C:Capability
         Z.sub r dlt in
     let conv_int n =
       match ity2 with
-        | Ctype.Bool ->
-            if Z.(equal n zero) then Z.zero else Z.(succ zero)
-        | _ ->
-            if Z.(less_equal n min_ity2 && less_equal n max_ity2) then
-              n
-            else
-              wrapI n in
-    let conv_int_lifted = function
-      | IV (prov, n) ->
-          IV (prov, conv_int n)
-      | IC (prov, cap) ->
-          failwith "TODO: Vadim" in
-    match ity1, ity2 with
-      | Ctype.(Unsigned Intptr_t | Signed Intptr_t), Ctype.(Unsigned Intptr_t | Signed Intptr_t) ->
-          return (conv_int_lifted ival)
-      | Ctype.(Unsigned Intptr_t | Signed Intptr_t), _ ->
-          failwith "TODO: cast from [u]intptr"
-      | _, Ctype.(Unsigned Intptr_t | Signed Intptr_t) ->
-          failwith "TODO: cast to [u]intptr"
-      | _, _ ->
-          (* cast between two "normal" integer types *)
-          return (conv_int_lifted ival)
-  
+      | Ctype.Bool ->
+         if Z.(equal n zero) then Z.zero else Z.(succ zero)
+      | _ ->
+         if Z.(less_equal n min_ity2 && less_equal n max_ity2) then
+           n
+         else
+           wrapI n in
+    match ity1, ival, ity2 with
+    | Ctype.Unsigned Intptr_t, _, Ctype.Unsigned Intptr_t ->
+       (* identity *)
+       return ival
+    | Ctype.Signed Intptr_t, _, Ctype.Signed Intptr_t ->
+       (* identity *)
+       return ival
+    | Ctype.Unsigned Intptr_t, IC (prov, cap), Ctype.Signed Intptr_t ->
+       (* unsigned to signed *)
+       let n = C.cap_get_value cap in
+       return (IC (prov, C.cap_set_value cap (wrapI n)))
+    | Ctype.Signed Intptr_t, IC (prov, cap), Ctype.Unsigned Intptr_t  ->
+       (* signed to unsigned *)
+       let n = C.cap_get_value cap in
+       return (IC (prov, C.cap_set_value cap (wrapI n)))
+    | Ctype.Unsigned Intptr_t, IC (prov, cap), _ ->
+       (* from unsigned to int *)
+       let n = C.cap_get_value cap in
+       return (IV (prov, (wrapI n)))
+    | Ctype.Signed Intptr_t, IC (prov, cap), _ ->
+       (* from signed to int *)
+       let n = C.cap_get_value cap in
+       return (IV (prov, (wrapI n)))
+    | _, IV (prov, n), Ctype.Unsigned Intptr_t  ->
+       (* from int to unsigned cap *)
+       failwith "TODO: cast to [u]intptr"
+    | _, IV (prov, n), Ctype.Signed Intptr_t ->
+       (* from int to signed cap *)
+       failwith "TODO: cast to [u]intptr"
+    | _, IV (prov, n), _ ->
+       (* cast between two "normal" integer types *)
+       return (IV (prov, conv_int n))
+    | _, IC _, _ ->
+       failwith "intcast:Invalid integer value. IC for non-intptr_t"
+
   let offsetof_ival tagDefs tag_sym memb_ident =
     let (xs, _) = offsetsof tagDefs tag_sym in
     let pred (ident, _, _) =
