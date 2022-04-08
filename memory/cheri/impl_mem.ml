@@ -1120,8 +1120,18 @@ module CHERI (C:Capability
                           | Some c ->
                              let n = (Z.sub (C.cap_get_value c) (Z.of_int initial_address)) in
                              begin match IntMap.find_opt n funptrmap with
-                             | Some (file_dig, name, _) ->
-                                MVEpointer (ref_ty, PV(prov, PVfunction (FP_valid (Symbol.Symbol (file_dig, Z.to_int n, SD_Id name)))))
+                             | Some (file_dig, name, c') ->
+                                (* check if decoded capability matches
+                                   the one we have in `funptrmap` *)
+                                if C.eq c c' then
+                                  (* If matches, keep symbolic rperesentation *)
+                                  MVEpointer (ref_ty, PV(prov, PVfunction (FP_valid (Symbol.Symbol (file_dig, Z.to_int n, SD_Id name)))))
+                                else
+                                  (* Conflicting capability values for
+                                     given address in funptrmap and in
+                                     memory. The memory takes
+                                     precendence.*)
+                                  MVEpointer (ref_ty, PV(prov, PVfunction (FP_invalid c)))
                              | None ->
                                 MVEpointer (ref_ty, PV(prov, PVfunction (FP_invalid c)))
                              end
@@ -1593,8 +1603,9 @@ module CHERI (C:Capability
                             end
 
   let load loc ty (PV (prov, ptrval_)) =
-    Debug_ocaml.print_debug 10(*KKK*) [] (fun () ->
-        "ENTERING LOAD: " ^ Location_ocaml.location_to_string loc
+    Debug_ocaml.print_debug 10 [] (fun () ->
+        "ENTERING LOAD: ty=" ^ String_core_ctype.string_of_ctype ty ^
+          " -> @" ^ Pp_utils.to_plain_string (pp_pointer_value (PV (prov, ptrval_)))
       );
     let do_load alloc_id_opt addr sz =
       get >>= fun st ->
