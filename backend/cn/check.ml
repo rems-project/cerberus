@@ -373,7 +373,7 @@ module ResourceInference = struct
 
     let rec point_request ~recursive loc (requested : Resources.Requests.point) = 
       debug 7 (lazy (item "point request" (RER.pp (Point requested))));
-      let@ _ = span_fold_unfolds loc (RER.Point requested) in
+      let@ _ = span_fold_unfolds loc (RER.Point requested) false in
       let start_timing = time_log_start "point-request" "" in
       let@ provable = provable loc in
       let@ is_ex = exact_match () in
@@ -454,7 +454,7 @@ module ResourceInference = struct
 
     and qpoint_request_aux loc (requested : Resources.Requests.qpoint) = 
       debug 7 (lazy (item "qpoint request" (RER.pp (QPoint requested))));
-      let@ _ = span_fold_unfolds loc (RER.QPoint requested) in
+      let@ _ = span_fold_unfolds loc (RER.QPoint requested) false in
       let start_timing = time_log_start "qpoint-request" "" in
       let@ provable = provable loc in
       let@ is_ex = exact_match () in
@@ -786,11 +786,12 @@ module ResourceInference = struct
         return (Some resources)
 
 
-    and span_fold_unfolds loc req =
-      let start_timing = time_log_start "span_check" "" in
+    and span_fold_unfolds loc req is_tail_rec =
       if not (! span_actions)
       then return ()
       else
+      let start_timing = if is_tail_rec then 0.0
+          else time_log_start "span_check" "" in
       let@ ress = all_resources () in
       let@ global = get_global () in
       let@ provable = provable loc in
@@ -808,13 +809,13 @@ module ResourceInference = struct
           | None -> return ()
           | Some (Spans.Pack, pt, ct, _) ->
               let@ success = do_pack loc pt ct in
-              if success then span_fold_unfolds loc req else return ()
+              if success then span_fold_unfolds loc req true else return ()
           | Some (Spans.Unpack, pt, ct, _) ->
               let@ success = do_unpack loc pt ct in
-              if success then span_fold_unfolds loc req else return ()
+              if success then span_fold_unfolds loc req true else return ()
           end
       in
-      time_log_end start_timing;
+      if is_tail_rec then () else time_log_end start_timing;
       return ()
 
     and do_pack loc pt ct =
