@@ -374,6 +374,7 @@ module ResourceInference = struct
     let rec point_request ~recursive loc (requested : Resources.Requests.point) = 
       debug 7 (lazy (item "point request" (RER.pp (Point requested))));
       let@ _ = span_fold_unfolds loc (RER.Point requested) in
+      let start_timing = time_log_start "point-request" "" in
       let@ provable = provable loc in
       let@ is_ex = exact_match () in
       let is_exact_re re = !reorder_points && (is_ex (RER.Point requested, re)) in
@@ -425,7 +426,7 @@ module ResourceInference = struct
       let@ (needed, value, init) =
         map_and_fold_resources loc (sub_resource_if (fun re -> not (is_exact_re re)))
           (needed, value, init) in
-      begin match provable (t_ (not_ needed)) with
+      let@ res = begin match provable (t_ (not_ needed)) with
       | `True ->
          let r = { 
              ct = requested.ct;
@@ -446,12 +447,15 @@ module ResourceInference = struct
              requested.permission
          | _ ->
             return None
-      end
+      end in
+      time_log_end start_timing;
+      return res
 
 
     and qpoint_request_aux loc (requested : Resources.Requests.qpoint) = 
       debug 7 (lazy (item "qpoint request" (RER.pp (QPoint requested))));
       let@ _ = span_fold_unfolds loc (RER.QPoint requested) in
+      let start_timing = time_log_start "qpoint-request" "" in
       let@ provable = provable loc in
       let@ is_ex = exact_match () in
       let is_exact_re re = !reorder_points && (is_ex (RER.QPoint requested, re)) in
@@ -553,6 +557,7 @@ module ResourceInference = struct
           (needed, C value, C init) in
 
       let holds = provable (forall_ (requested.q, BT.Integer) (not_ needed)) in
+      time_log_end start_timing;
       begin match holds with
       | `True -> return (Some (C value, C init))
       | `False -> return None
@@ -782,13 +787,14 @@ module ResourceInference = struct
 
 
     and span_fold_unfolds loc req =
+      let start_timing = time_log_start "span_check" "" in
       if not (! span_actions)
       then return ()
       else
       let@ ress = all_resources () in
       let@ global = get_global () in
       let@ provable = provable loc in
-      match provable (t_ (bool_ false)) with
+      let@ _ = match provable (t_ (bool_ false)) with
         | `True -> return ()
         | `False ->
           let@ (model, _) = model () in
@@ -807,6 +813,9 @@ module ResourceInference = struct
               let@ success = do_unpack loc pt ct in
               if success then span_fold_unfolds loc req else return ()
           end
+      in
+      time_log_end start_timing;
+      return ()
 
     and do_pack loc pt ct =
       let@ opt = match ct with
@@ -846,6 +855,7 @@ module ResourceInference = struct
 
     let predicate_request loc (requested : Resources.Requests.predicate) = 
       debug 7 (lazy (item "predicate request" (RER.pp (Predicate requested))));
+      let start_timing = time_log_start "predicate-request" "" in
       let@ provable = provable loc in
       let@ global = get_global () in
       let@ simp_lcs = simp_constraints () in
@@ -901,7 +911,7 @@ module ResourceInference = struct
         map_and_fold_resources loc (sub_predicate_if (fun re -> not (is_exact_re re)))
             (needed, oargs)
       in
-      begin match provable (t_ (not_ needed)) with
+      let@ res = begin match provable (t_ (not_ needed)) with
       | `True ->
          let r = { 
              name = requested.name;
@@ -915,11 +925,14 @@ module ResourceInference = struct
          return (Some r)
       | `False ->
          return None
-      end
+      end in
+      time_log_end start_timing;
+      return res
 
 
     let qpredicate_request loc (requested : Resources.Requests.qpredicate) = 
       debug 7 (lazy (item "qpredicate request" (RER.pp (QPredicate requested))));
+      let start_timing = time_log_start "qpredicate-request" "" in
       let@ provable = provable loc in
       let@ global = get_global () in
       let@ values, lcs = simp_constraints () in
@@ -972,7 +985,7 @@ module ResourceInference = struct
           ) (needed, List.map (fun _ -> C []) requested.oargs)
       in
       let holds = provable (forall_ (requested.q, BT.Integer) (not_ needed)) in
-      begin match holds with
+      let@ res = begin match holds with
       | `True ->
          let q = sym_ (requested.q, Integer) in
          let@ oas = 
@@ -995,7 +1008,9 @@ module ResourceInference = struct
          return (Some r)
       | `False ->
          return None
-      end
+      end in
+      time_log_end start_timing;
+      return res
 
 
 
