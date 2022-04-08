@@ -294,6 +294,7 @@ type generic_memop 'sym =
   | IntFromPtr  (* (ctype, ctype, address) -> eff integer *) (* first type is that of the referenced type, second on is type of integer *)
   | PtrFromInt  (* (ctype, ctype, integer) -> eff address *) (* first type is that of integer, second on is type of reference *)
   | PtrValidForDeref (* (ctype, address) -> eff boolean *)
+  | Intcast (* (ctype, ctype, integer) -> eff integer *) (* first type is that of the input, second is that of the output *)
   
   | PtrWellAligned (* (ctype, address) -> eff boolean *)
   
@@ -335,6 +336,8 @@ instance forall 'a. Show 'a => (Show (generic_memop 'a))
         "ptrfromint"
     | PtrValidForDeref ->
         "ptrvalidforderef"
+    | Intcast ->
+        "intcast"
     | PtrWellAligned ->
         "ptrwellaligned"
     | Memcpy ->

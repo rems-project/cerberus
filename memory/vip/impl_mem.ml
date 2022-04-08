@@ -803,6 +803,9 @@ let intfromptr ref_ty ity ptrval : integer_value memM =
     | PVfunptr sym ->
       fail (MerrVIP (VIP_intcast VIP_funptr))
 
+let intcast _ _ ival =
+  return ival
+
 (* Pointer shifting constructors *)
 let array_shift_ptrval ptrval ty ival : pointer_value =
   (* TODO: "VIP memory model should be called SWITCH strict_pointer_arith" *)

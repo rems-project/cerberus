@@ -1971,6 +1971,9 @@ module Concrete : Memory = struct
         | _ ->
             return (PV (prov, PVconcrete n))
   
+  let intcast _ _ ival =
+    return ival
+
   let offsetof_ival tagDefs tag_sym memb_ident =
     let (xs, _) = offsetsof tagDefs tag_sym in
     let pred (ident, _, _) =

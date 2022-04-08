@@ -2166,84 +2166,124 @@ module CHERI (C:Capability
        return false
 
   (* _ is integer type *)
-  let ptrfromint (int_cty:ctype) ref_ty int_v =
-    match int_cty with
-    | Ctype (_, (Basic (Integer int_ty)))
-      -> begin
-        match int_ty, int_v with
-        | ((Unsigned Intptr_t),(IC (prov, c)) | (Signed Intptr_t),(IC (prov, c))) ->
-           begin
-             let addr = C.cap_get_value c in
-             if is_PNVI () then
-               (* TODO(CHERI): We may need to carry provenance for [u]intptr_t *)
-               (* TODO: device memory? *)
-               if Z.equal addr Z.zero then
-                 return (PV (Prov_none, PVnull ref_ty))
-               else
-                 get >>= fun st ->
-                 begin match find_overlaping st addr with
-                 | `NoAlloc ->
-                    return Prov_none
-                 | `SingleAlloc alloc_id ->
-                    return (Prov_some alloc_id)
-                 | `DoubleAlloc alloc_ids ->
-                    add_iota alloc_ids >>= fun iota ->
-                    return (Prov_symbolic iota)
-                 end >>= fun prov ->
-                 (* cast int to pointer *)
-                 return (PV (prov, PVconcrete c))
-             else
-               match prov with
-               | Prov_none ->
-                  (* TODO: check (in particular is that ok to only allow device pointers when there is no provenance? *)
-                  if List.exists (fun (min, max) -> Z.less_equal min addr && Z.less_equal addr max) device_ranges then
-                    return (PV (Prov_device, PVconcrete c))
-                  else if Z.equal addr Z.zero then
-                    (* All 0-address capabilities regardless of their
-                       validity decoded as NULL. This is defacto behaviour
-                       of morello Clang. See intptr3.c example.  *)
-                    return (PV (Prov_none, PVnull ref_ty))
-                  else
-                    (* C could be an invalid cap. Consider raising error instead *)
-                    return (PV (Prov_none, PVconcrete c))
-               | _ ->
-                  (* C could be an invalid cap. Consider raising error instead *)
-                  return (PV (prov, PVconcrete c))
-           end
-        | (Ctype.(Unsigned Intptr_t),(IV (_, _)) | Ctype.(Signed Intptr_t),(IV (_, _))) ->
-           failwith "ptrfromint: invalid encoding for [u]intptr_t"
-        | _, (IV (prov, n)) ->
-           if Z.equal n Z.zero then
-             if is_PNVI () then
-               (* TODO: device memory? *)
-               return (PV (Prov_none, PVnull ref_ty))
-             else
-               (* All 0-address capabilities regardless of their
-                  validity decoded as NULL. This is defacto behaviour
-                  of morello Clang. See intptr3.c example.  *)
-               return (PV (Prov_none, PVnull ref_ty))
-           else
-             let n =
-               (* wrapI *)
-               let dlt = Z.succ (Z.sub C.max_vaddr C.min_vaddr) in
-               let r = Z.integerRem_f n dlt in
-               if Z.less_equal r C.max_vaddr then
-                 r
-               else
-                 Z.sub r dlt in
+  let ptrfromint (int_ty:integerType) ref_ty int_v =
+    match int_ty, int_v with
+    | ((Unsigned Intptr_t),(IC (prov, c)) | (Signed Intptr_t),(IC (prov, c))) ->
+        begin
+          let addr = C.cap_get_value c in
+          if is_PNVI () then
+            (* TODO(CHERI): We may need to carry provenance for [u]intptr_t *)
+            (* TODO: device memory? *)
+            if Z.equal addr Z.zero then
+              return (PV (Prov_none, PVnull ref_ty))
+            else
+              get >>= fun st ->
+              begin match find_overlaping st addr with
+              | `NoAlloc ->
+                return Prov_none
+              | `SingleAlloc alloc_id ->
+                return (Prov_some alloc_id)
+              | `DoubleAlloc alloc_ids ->
+                add_iota alloc_ids >>= fun iota ->
+                return (Prov_symbolic iota)
+              end >>= fun prov ->
+              (* cast int to pointer *)
+              return (PV (prov, PVconcrete c))
+          else
+            match prov with
+            | Prov_none ->
+              (* TODO: check (in particular is that ok to only allow device pointers when there is no provenance? *)
+              if List.exists (fun (min, max) -> Z.less_equal min addr && Z.less_equal addr max) device_ranges then
+                return (PV (Prov_device, PVconcrete c))
+              else if Z.equal addr Z.zero then
+                (* All 0-address capabilities regardless of their
+                    validity decoded as NULL. This is defacto behaviour
+                    of morello Clang. See intptr3.c example.  *)
+                return (PV (Prov_none, PVnull ref_ty))
+              else
+                (* C could be an invalid cap. Consider raising error instead *)
+                return (PV (Prov_none, PVconcrete c))
+            | _ ->
+              (* C could be an invalid cap. Consider raising error instead *)
+              return (PV (prov, PVconcrete c))
+        end
+    | (Ctype.(Unsigned Intptr_t),(IV (_, _)) | Ctype.(Signed Intptr_t),(IV (_, _))) ->
+        failwith "ptrfromint: invalid encoding for [u]intptr_t"
+    | _, (IV (prov, n)) ->
+        if Z.equal n Z.zero then
+          if is_PNVI () then
+            (* TODO: device memory? *)
+            return (PV (Prov_none, PVnull ref_ty))
+          else
+            (* All 0-address capabilities regardless of their
+              validity decoded as NULL. This is defacto behaviour
+              of morello Clang. See intptr3.c example.  *)
+            return (PV (Prov_none, PVnull ref_ty))
+        else
+          let n =
+            (* wrapI *)
+            let dlt = Z.succ (Z.sub C.max_vaddr C.min_vaddr) in
+            let r = Z.integerRem_f n dlt in
+            if Z.less_equal r C.max_vaddr then
+              r
+            else
+              Z.sub r dlt in
 
-             let c = C.cap_c0 () in
-             (* TODO(CHERI): representability check? *)
-             let c = C.cap_set_value c n in
-             return (PV (prov, PVconcrete c))
-        | _, IC _ ->
-           failwith "invalid integer value (capability for non- [u]intptr_t"
-      end
-    | _ ->
-       (* [ptrfromint] in memory model Lem should be changed to have
-          [integerType] instead of [ctype] as argument. *)
-       failwith "ptrfromint called with non-int type"
+          let c = C.cap_c0 () in
+          (* TODO(CHERI): representability check? *)
+          let c = C.cap_set_value c n in
+          return (PV (prov, PVconcrete c))
+    | _, IC _ ->
+        failwith "invalid integer value (capability for non- [u]intptr_t"
 
+  let intcast ity1 ity2 ival =
+    let nbytes = match (Ocaml_implementation.get ()).sizeof_ity ity2 with
+      | None ->
+        assert false
+      | Some z ->
+        z in
+    let nbits = 8 * nbytes in
+    let is_signed = AilTypesAux.is_signed_ity ity2 in
+    let (min_ity2, max_ity2) =
+      if is_signed then
+        ( Z.negate (Z.pow_int (Z.of_int 2) (nbits-1))
+        , Z.sub (Z.pow_int (Z.of_int 2) (nbits-1)) Z.(succ zero) )
+      else
+        ( Z.zero
+        , Z.sub (Z.pow_int (Z.of_int 2) nbits) Z.(succ zero) ) in
+    (* TODO: factorise with other occurences of wrapI *)
+    let wrapI n =
+      let dlt = Z.succ (Z.sub max_ity2 min_ity2) in
+      let r = Z.integerRem_f n dlt in
+      if Z.less_equal r max_ity2 then
+        r
+      else
+        Z.sub r dlt in
+    let conv_int n =
+      match ity2 with
+        | Ctype.Bool ->
+            if Z.(equal n zero) then Z.zero else Z.(succ zero)
+        | _ ->
+            if Z.(less_equal n min_ity2 && less_equal n max_ity2) then
+              n
+            else
+              wrapI n in
+    let conv_int_lifted = function
+      | IV (prov, n) ->
+          IV (prov, conv_int n)
+      | IC (prov, cap) ->
+          failwith "TODO: Vadim" in
+    match ity1, ity2 with
+      | Ctype.(Unsigned Intptr_t | Signed Intptr_t), Ctype.(Unsigned Intptr_t | Signed Intptr_t) ->
+          return (conv_int_lifted ival)
+      | Ctype.(Unsigned Intptr_t | Signed Intptr_t), _ ->
+          failwith "TODO: cast from [u]intptr"
+      | _, Ctype.(Unsigned Intptr_t | Signed Intptr_t) ->
+          failwith "TODO: cast to [u]intptr"
+      | _, _ ->
+          (* cast between two "normal" integer types *)
+          return (conv_int_lifted ival)
+  
   let offsetof_ival tagDefs tag_sym memb_ident =
     let (xs, _) = offsetsof tagDefs tag_sym in
     let pred (ident, _, _) =
@@ -2909,9 +2949,7 @@ module CHERI (C:Capability
     (* cast_ptrval_to_ival(uintptr_t,𝑝1),cast_ival_to_ptrval(void,𝑥) *)
     (* the first ctype is the original referenced type, the integerType is the target integer type *)
     intfromptr Ctype.void Ctype.(Unsigned Intptr_t) ptrval >>= fun _ ->
-    ptrfromint
-      (Ctype ([], (Basic (Integer (Unsigned Intptr_t)))))
-      Ctype.void ival
+    ptrfromint (Unsigned Intptr_t) Ctype.void ival
 
   (* JSON serialisation: Memory layout for UI *)
 
