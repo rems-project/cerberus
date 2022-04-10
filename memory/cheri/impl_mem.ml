@@ -272,11 +272,13 @@ module CHERI (C:Capability
 
   type integer_value =
     | IV of provenance * Z.num
-    | IC of provenance * C.t (* for [u]intptr_t *)
+    (* for [u]intptr_t: *)
+    | IC of provenance * bool (* is_signed *) * C.t
 
   let num_of_int = function
     | IV (_,n) -> n
-    | IC (_,c) -> C.cap_get_value c
+    | IC (_,_,c) -> (*TODO(CHERI): for signed need unwrap *)
+       C.cap_get_value c
 
   type floating_value =
     (* TODO: hack hack hack ==> OCaml's float are 64bits *)
@@ -596,8 +598,10 @@ module CHERI (C:Capability
          !^ ("<" ^ string_of_provenance prov ^ ">:" ^ Z.to_string n)
        else
          !^ (Z.to_string n)
-    | (IC (prov, c)) ->
-       let cs = C.to_string c in
+    | (IC (prov, is_signed, c)) ->
+       let cs = (C.to_string c)
+                ^ (if is_signed then " (signed)" else " (unsigned)")
+       in
        if !Debug_ocaml.debug_level >= 3 then
          !^ ("<" ^ string_of_provenance prov ^ ">:" ^ cs)
        else
@@ -1043,7 +1047,8 @@ module CHERI (C:Capability
                   Debug_ocaml.warn [] (fun () -> "Error decoding intptr_t cap");
                   MVErr (MerrCHERI (loc, CheriErrDecodingCap))
                | Some n ->
-                  MVEinteger (ity, IC (prov,n))
+                  (* TODO(CHERI): signed/unsigned handling *)
+                  MVEinteger (ity, IC (prov,true, n))
                end
             end
          | None ->
@@ -1257,7 +1262,7 @@ module CHERI (C:Capability
        (funptrmap,
         clear_caps addr (Z.of_int (List.length bs)) captags,
         bs)
-    | MVinteger (ity, IC (prov, c)) ->
+    | MVinteger (ity, IC (prov, _, c)) ->
        let (cb,ct) = C.encode true c in
        (funptrmap,
         IntMap.add addr ct captags,
@@ -2165,10 +2170,9 @@ module CHERI (C:Capability
     | PV (Prov_none, _) ->
        return false
 
-  (* _ is integer type *)
   let ptrfromint (int_ty:integerType) ref_ty int_v =
     match int_ty, int_v with
-    | ((Unsigned Intptr_t),(IC (prov, c)) | (Signed Intptr_t),(IC (prov, c))) ->
+    | ((Unsigned Intptr_t),(IC (prov, _, c)) | (Signed Intptr_t),(IC (prov, _, c))) ->
         begin
           let addr = C.cap_get_value c in
           if is_PNVI () then
@@ -2237,71 +2241,104 @@ module CHERI (C:Capability
         failwith "invalid integer value (capability for non- [u]intptr_t"
 
   let intcast ity1 ity2 ival =
-    let nbytes = match (Ocaml_implementation.get ()).sizeof_ity ity2 with
-      | None ->
-         assert false
-      | Some z ->
-         z in
-    let nbits = 8 * nbytes in
-    let is_signed = AilTypesAux.is_signed_ity ity2 in
+
+    let wrapI min_v max_v n =
+      let dlt = Z.succ (Z.sub max_v min_v) in
+      let r = Z.integerRem_f n dlt in
+      if Z.less_equal r max_v then r
+      else Z.sub r dlt
+    in
+
     let (min_ity2, max_ity2) =
+      let nbits =
+        let nbytes = match (Ocaml_implementation.get ()).sizeof_ity ity2 with
+          | None -> assert false
+          | Some z -> z
+        in
+        8 * nbytes
+      in
+      let is_signed = AilTypesAux.is_signed_ity ity2 in
+
       if is_signed then
         ( Z.negate (Z.pow_int (Z.of_int 2) (nbits-1))
         , Z.sub (Z.pow_int (Z.of_int 2) (nbits-1)) Z.(succ zero) )
       else
         ( Z.zero
-        , Z.sub (Z.pow_int (Z.of_int 2) nbits) Z.(succ zero) ) in
-    (* TODO: factorise with other occurences of wrapI *)
-    let wrapI n =
-      let dlt = Z.succ (Z.sub max_ity2 min_ity2) in
-      let r = Z.integerRem_f n dlt in
-      if Z.less_equal r max_ity2 then
-        r
-      else
-        Z.sub r dlt in
-    let conv_int n =
+        , Z.sub (Z.pow_int (Z.of_int 2) nbits) Z.(succ zero) )
+    in
+
+    let conv_int_to_ity2 n =
       match ity2 with
       | Ctype.Bool ->
          if Z.(equal n zero) then Z.zero else Z.(succ zero)
       | _ ->
-         if Z.(less_equal n min_ity2 && less_equal n max_ity2) then
-           n
-         else
-           wrapI n in
+         if Z.(less_equal n min_ity2 && less_equal n max_ity2)
+         then n
+         else wrapI min_ity2 max_ity2 n
+    in
+
+    let conv_int_to_cap n =
+      if Z.(less_equal n C.min_vaddr && less_equal n C.max_vaddr)
+      then n
+      else wrapI C.min_vaddr C.max_vaddr n
+    in
+
+    (* Convers an unsinged 64 capability value to signed 64 bit integer
+       TODO(CHERI): 64-bit size is hardcoded. Should be abstracted in
+       Capabilty module.
+     *)
+    let unwrap_cap n =
+      let min_v = Z.negate (Z.pow_int (Z.of_int 2) (64-1)) in
+      let max_v = Z.sub (Z.pow_int (Z.of_int 2) (64-1)) Z.(succ zero) in
+      if Z.(less_equal n min_v && less_equal n max_v)
+      then n
+      else wrapI min_v max_v n
+    in
+
     match ity1, ival, ity2 with
-    | Ctype.Unsigned Intptr_t, _, Ctype.Unsigned Intptr_t ->
-       (* identity *)
+    (* [u]intptr_t errors *)
+    | Ctype.Unsigned Intptr_t, IC (prov, true, cap), _
+      | Ctype.Signed Intptr_t, IC (prov, false, cap), _  ->
+       failwith "intcast: Sign mismatch in IC"
+
+    (* [u]intptr_t identity *)
+    | Ctype.Unsigned Intptr_t, _, Ctype.Unsigned Intptr_t
+      | Ctype.Signed Intptr_t, _, Ctype.Signed Intptr_t ->
        return ival
-    | Ctype.Signed Intptr_t, _, Ctype.Signed Intptr_t ->
-       (* identity *)
-       return ival
-    | Ctype.Unsigned Intptr_t, IC (prov, cap), Ctype.Signed Intptr_t ->
-       (* unsigned to signed *)
+
+    (* [u]intptr_t signedness change. just changing sign in IC. Value stays the same (unsigned) *)
+    | Ctype.Unsigned Intptr_t, IC (prov, (false as is_signed), cap), Ctype.Signed Intptr_t
+      | Ctype.Signed Intptr_t, IC (prov, (true as is_signed), cap), Ctype.Unsigned Intptr_t  ->
+       return (IC (prov, not is_signed, cap))
+
+    (* from uintptr_t to int - regular conversion*)
+    | Ctype.Unsigned Intptr_t, IC (prov, false, cap), _ ->
        let n = C.cap_get_value cap in
-       return (IC (prov, C.cap_set_value cap (wrapI n)))
-    | Ctype.Signed Intptr_t, IC (prov, cap), Ctype.Unsigned Intptr_t  ->
-       (* signed to unsigned *)
+       return (IV (prov, (conv_int_to_ity2 n)))
+
+    (* from intptr_t to int. First we recover original signed value
+       via [unwrap] and then perform regular promoion *)
+    | Ctype.Signed Intptr_t, IC (prov, true, cap), _ ->
        let n = C.cap_get_value cap in
-       return (IC (prov, C.cap_set_value cap (wrapI n)))
-    | Ctype.Unsigned Intptr_t, IC (prov, cap), _ ->
-       (* from unsigned to int *)
-       let n = C.cap_get_value cap in
-       return (IV (prov, (wrapI n)))
-    | Ctype.Signed Intptr_t, IC (prov, cap), _ ->
-       (* from signed to int *)
-       let n = C.cap_get_value cap in
-       return (IV (prov, (wrapI n)))
-    | _, IV (prov, n), Ctype.Unsigned Intptr_t  ->
-       (* from int to unsigned cap *)
-       failwith "TODO: cast to [u]intptr"
-    | _, IV (prov, n), Ctype.Signed Intptr_t ->
-       (* from int to signed cap *)
-       failwith "TODO: cast to [u]intptr"
-    | _, IV (prov, n), _ ->
-       (* cast between two "normal" integer types *)
-       return (IV (prov, conv_int n))
+       return (IV (prov, (conv_int_to_ity2 (unwrap_cap n))))
+
+    (* from int to [u]intptr_t *)
+    | _, IV (prov, n), Ctype.Unsigned Intptr_t
+      | _, IV (prov, n), Ctype.Signed Intptr_t ->
+       if Z.equal n Z.zero then
+         return (IC (Prov_none, false, C.cap_c0 ()))
+       else
+         let n = conv_int_to_cap n in
+         let c = C.cap_c0 () in
+         (* TODO(CHERI): representability check? *)
+         let c = C.cap_set_value c n in
+         return (IC (prov, false, c))
+    (* error *)
     | _, IC _, _ ->
-       failwith "intcast:Invalid integer value. IC for non-intptr_t"
+       failwith "intcast: Invalid integer value. IC for non-intptr_t"
+    (* cast between two "normal" integer types *)
+    | _, IV (prov, n), _ ->
+       return (IV (prov, conv_int_to_ity2 n))
 
   let offsetof_ival tagDefs tag_sym memb_ident =
     let (xs, _) = offsetsof tagDefs tag_sym in
