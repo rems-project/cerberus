@@ -2735,12 +2735,12 @@ module CHERI (C:Capability
        (* prerr_endline "CHERI.bitwise_complement ==> HACK"; *)
        let cn = Z.(sub (negate n) (of_int 1)) in
        IV (prov, cn)
-    | (IC (prov, c)) ->
+    | (IC (prov, is_signed, c)) ->
        let n = C.cap_get_value c in
        let cn = Z.(sub (negate n) (of_int 1)) in
        (* TODO(CHERI): representability check? *)
        let c = C.cap_set_value c cn in
-       IC (prov, c)
+       IC (prov, is_signed,c)
 
   let bitwise_and_ival _  = int_bin combine_prov Z.bitwise_and
 
@@ -3060,7 +3060,7 @@ module CHERI (C:Capability
        | _ ->
           mk_scalar `Basic (Z.to_string n) prov None
        end
-    | MVEinteger (cty, IC(prov, c)) ->
+    | MVEinteger (cty, IC(prov, is_signed, c)) ->
        begin match cty with
        | Signed Intptr_t | Unsigned Intptr_t ->
           (* TODO(CHERI): better JSON representation of caps.
@@ -3068,7 +3068,8 @@ module CHERI (C:Capability
              to [ui_value] but this change must be syncrhonized
              with UI changes not to break things.
            *)
-          mk_scalar `Intptr (Z.to_string (C.cap_get_value c)) prov None
+          let ss = if is_signed then "signed " else "unsigned " in
+          mk_scalar `Intptr (ss^ Z.to_string (C.cap_get_value c)) prov None
        | _ ->
           failwith "mk_ui_values invalid encoding of [u]intptr_t"
        end
