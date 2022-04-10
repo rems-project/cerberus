@@ -2491,7 +2491,7 @@ module CHERI (C:Capability
     let offset =
       match offsetof_ival (Tags.tagDefs ()) tag_sym memb_ident with
       | IV (_, offset) -> offset
-      | IC (_, c) ->
+      | IC (_, _, c) ->
          (* we will never reach this branch as this condition is checked
             earlier. *)
          failwith "CHERI.member_shift_ptrval invalid offset value type"
@@ -2605,7 +2605,8 @@ module CHERI (C:Capability
            | Unsigned Intptr_t ->
             begin match IntMap.find_opt (Z.of_int n) st.funptrmap with
             | Some (file_dig, name, c) ->
-               return (IC (prov, c))
+               (* we are using [intcast] to for signed/unsigned handling *)
+               intcast (Unsigned Intptr_t) ity (IC (prov, false, c))
             | None ->
                Debug_ocaml.error ("intfromptr: Unknown function: " ^ (Pp_symbol.to_string_pretty sym))
             end
@@ -2627,7 +2628,8 @@ module CHERI (C:Capability
        match ity with
        | Signed Intptr_t
          | Unsigned Intptr_t ->
-          return (IC (prov, c))
+          (* we are using [intcast] to for signed/unsigned handling *)
+          intcast (Unsigned Intptr_t) ity (IC (prov, false, c))
        | _ ->
           let ity_max = num_of_int (max_ival ity) in
           let ity_min = num_of_int (min_ival ity) in
