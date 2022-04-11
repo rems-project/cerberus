@@ -275,10 +275,34 @@ module CHERI (C:Capability
     (* for [u]intptr_t: *)
     | IC of provenance * bool (* is_signed *) * C.t
 
+  let wrapI min_v max_v n =
+    let dlt = Z.succ (Z.sub max_v min_v) in
+    let r = Z.integerRem_f n dlt in
+    if Z.less_equal r max_v then r
+    else Z.sub r dlt
+
+  (** Convert an arbitrary integer value to 64-bit unsinged cap value *)
+  let wrap_cap n =
+    if Z.(less_equal n C.min_vaddr && less_equal n C.max_vaddr)
+    then n
+    else wrapI C.min_vaddr C.max_vaddr n
+
+  (** Convert an unsinged 64 capability value to signed 64 bit integer
+      TODO(CHERI): 64-bit size is hardcoded. Should be abstracted in
+      Capabilty module.
+   *)
+  let unwrap_cap n =
+    let min_v = Z.negate (Z.pow_int (Z.of_int 2) (64-1)) in
+    let max_v = Z.sub (Z.pow_int (Z.of_int 2) (64-1)) Z.(succ zero) in
+    if Z.(less_equal n min_v && less_equal n max_v)
+    then n
+    else wrapI min_v max_v n
+
   let num_of_int = function
     | IV (_,n) -> n
-    | IC (_,_,c) -> (*TODO(CHERI): for signed need unwrap *)
-       C.cap_get_value c
+    | IC (_,is_signed,c) -> (*TODO(CHERI): for signed need unwrap *)
+       let n = C.cap_get_value c in
+       if is_signed then unwrap_cap n else n
 
   type floating_value =
     (* TODO: hack hack hack ==> OCaml's float are 64bits *)
@@ -329,33 +353,20 @@ module CHERI (C:Capability
 
                      let with_constraints _ cs (Eff ma) =
                        Debug_ocaml.print_debug 1 [] (fun () -> "HELLO: CHERI.with_constraints");
+                       (* Currently using capability values without
+                          meta information in all
+                          comparisons. Signedness is
+                          respected. TODO(CHERI): review this
+                          decsision. *)
                        let rec eval_cs = function
                          | MC_empty ->
                             true
-                         | MC_eq (IV (prov1, n1), IV (prov2, n2)) ->
-                            Z.equal n1 n2
-                         | MC_eq (IV (prov1, n), IC (prov2, c)) ->
-                            Z.equal n (C.cap_get_value c)
-                         | MC_eq (IC (prov1, c), IV (prov2, n)) ->
-                            Z.equal n (C.cap_get_value c)
-                         | MC_eq (IC (prov1, c1), IC (prov2, c2)) ->
-                            Z.equal (C.cap_get_value c1) (C.cap_get_value c2)
-                         | MC_le (IV (prov1, n1), IV (prov2, n2)) ->
-                            Z.less_equal n1 n2
-                         | MC_le (IV (prov1, n), IC (prov2, c)) ->
-                            Z.less_equal n (C.cap_get_value c)
-                         | MC_le (IC (prov1, c), IV (prov2, n)) ->
-                            Z.less_equal (C.cap_get_value c) n
-                         | MC_le (IC (prov1, c1), IC (prov2, c2)) ->
-                            Z.less_equal (C.cap_get_value c1) (C.cap_get_value c2)
-                         | MC_lt (IV (prov1, n1), IV (prov2, n2)) ->
-                            Z.less n1 n2
-                         | MC_lt (IV (prov1, n), IC (prov2, c)) ->
-                            Z.less n (C.cap_get_value c)
-                         | MC_lt (IC (prov1, c), IV (prov2, n)) ->
-                            Z.less (C.cap_get_value c) n
-                         | MC_lt (IC (prov1, c1), IC (prov2, c2)) ->
-                            Z.less (C.cap_get_value c1) (C.cap_get_value c2)
+                         | MC_eq (v1, v2) ->
+                            Z.equal (num_of_int v1) (num_of_int v2)
+                         | MC_le (v1, v2)  ->
+                            Z.less_equal (num_of_int v1) (num_of_int v2)
+                         | MC_lt (v1, v2)->
+                            Z.less (num_of_int v1) (num_of_int v2)
                          | MC_in_device _ ->
                             failwith "TODO: Concrete, with_constraints: MC_in_device"
                          | MC_or (cs1, cs2) ->
@@ -2240,30 +2251,6 @@ module CHERI (C:Capability
           return (PV (prov, PVconcrete c))
     | _, IC _ ->
         failwith "invalid integer value (capability for non- [u]intptr_t"
-
-
-  let wrapI min_v max_v n =
-    let dlt = Z.succ (Z.sub max_v min_v) in
-    let r = Z.integerRem_f n dlt in
-    if Z.less_equal r max_v then r
-    else Z.sub r dlt
-
-  (** Convert an arbitrary integer value to 64-bit unsinged cap value *)
-  let wrap_cap n =
-    if Z.(less_equal n C.min_vaddr && less_equal n C.max_vaddr)
-    then n
-    else wrapI C.min_vaddr C.max_vaddr n
-
-  (** Convert an unsinged 64 capability value to signed 64 bit integer
-      TODO(CHERI): 64-bit size is hardcoded. Should be abstracted in
-      Capabilty module.
-   *)
-  let unwrap_cap n =
-    let min_v = Z.negate (Z.pow_int (Z.of_int 2) (64-1)) in
-    let max_v = Z.sub (Z.pow_int (Z.of_int 2) (64-1)) Z.(succ zero) in
-    if Z.(less_equal n min_v && less_equal n max_v)
-    then n
-    else wrapI min_v max_v n
 
   let intcast ity1 ity2 ival =
     let (min_ity2, max_ity2) =
