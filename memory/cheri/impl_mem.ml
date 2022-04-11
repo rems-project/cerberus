@@ -306,6 +306,7 @@ module CHERI (C:Capability
     | MVunion of Symbol.sym (*struct/union tag*) * Symbol.identifier (*member*) * mem_value
 
   type mem_iv_constraint = integer_value mem_constraint
+
   let cs_module = (module struct
                      type t = mem_iv_constraint
                      let negate x = MC_not x
@@ -2240,15 +2241,31 @@ module CHERI (C:Capability
     | _, IC _ ->
         failwith "invalid integer value (capability for non- [u]intptr_t"
 
+
+  let wrapI min_v max_v n =
+    let dlt = Z.succ (Z.sub max_v min_v) in
+    let r = Z.integerRem_f n dlt in
+    if Z.less_equal r max_v then r
+    else Z.sub r dlt
+
+  (** Convert an arbitrary integer value to 64-bit unsinged cap value *)
+  let wrap_cap n =
+    if Z.(less_equal n C.min_vaddr && less_equal n C.max_vaddr)
+    then n
+    else wrapI C.min_vaddr C.max_vaddr n
+
+  (** Convert an unsinged 64 capability value to signed 64 bit integer
+      TODO(CHERI): 64-bit size is hardcoded. Should be abstracted in
+      Capabilty module.
+   *)
+  let unwrap_cap n =
+    let min_v = Z.negate (Z.pow_int (Z.of_int 2) (64-1)) in
+    let max_v = Z.sub (Z.pow_int (Z.of_int 2) (64-1)) Z.(succ zero) in
+    if Z.(less_equal n min_v && less_equal n max_v)
+    then n
+    else wrapI min_v max_v n
+
   let intcast ity1 ity2 ival =
-
-    let wrapI min_v max_v n =
-      let dlt = Z.succ (Z.sub max_v min_v) in
-      let r = Z.integerRem_f n dlt in
-      if Z.less_equal r max_v then r
-      else Z.sub r dlt
-    in
-
     let (min_ity2, max_ity2) =
       let nbits =
         let nbytes = match (Ocaml_implementation.get ()).sizeof_ity ity2 with
@@ -2275,24 +2292,6 @@ module CHERI (C:Capability
          if Z.(less_equal n min_ity2 && less_equal n max_ity2)
          then n
          else wrapI min_ity2 max_ity2 n
-    in
-
-    let conv_int_to_cap n =
-      if Z.(less_equal n C.min_vaddr && less_equal n C.max_vaddr)
-      then n
-      else wrapI C.min_vaddr C.max_vaddr n
-    in
-
-    (* Convers an unsinged 64 capability value to signed 64 bit integer
-       TODO(CHERI): 64-bit size is hardcoded. Should be abstracted in
-       Capabilty module.
-     *)
-    let unwrap_cap n =
-      let min_v = Z.negate (Z.pow_int (Z.of_int 2) (64-1)) in
-      let max_v = Z.sub (Z.pow_int (Z.of_int 2) (64-1)) Z.(succ zero) in
-      if Z.(less_equal n min_v && less_equal n max_v)
-      then n
-      else wrapI min_v max_v n
     in
 
     match ity1, ival, ity2 with
@@ -2328,7 +2327,7 @@ module CHERI (C:Capability
        if Z.equal n Z.zero then
          return (IC (Prov_none, false, C.cap_c0 ()))
        else
-         let n = conv_int_to_cap n in
+         let n = wrap_cap n in
          let c = C.cap_c0 () in
          (* TODO(CHERI): representability check? *)
          let c = C.cap_set_value c n in
@@ -2669,31 +2668,35 @@ module CHERI (C:Capability
       | (_, Prov_symbolic _) ->
        failwith "CHERI.combine_prov: found a Prov_symbolic"
 
+  (* TODO(CHERI): is_signed selection needs to follow C rules? *)
   let int_bin pf vf v1 v2 =
+    let unwr s n = if s then unwrap_cap n else n in
+    let vfc s n1 n2 = if s then (wrap_cap @@ vf n1 n2) else vf n1 n2 in
     (* NOTE: for PNVI we assume that prov1 = prov2 = Prov_none *)
     match v1,v2 with
     | IV (prov1, n1), IV (prov2, n2)
       -> IV (pf prov1 prov2, vf n1 n2)
-    | IC (prov1, c), IV (prov2, n2)
+    | IC (prov1, is_signed, c), IV (prov2, n2)
       ->
-       let n1 = C.cap_get_value c in
+       let n1 = unwr is_signed @@ C.cap_get_value c in
        (* TODO(CHERI): representability check? *)
-       let c = C.cap_set_value c (vf n1 n2) in
-       IC (pf prov1 prov2, c)
-    | IV (prov1, n1), IC (prov2, c)
+       let c = C.cap_set_value c (vfc is_signed n1 n2) in
+       IC (pf prov1 prov2, is_signed, c)
+    | IV (prov1, n1), IC (prov2, is_signed, c)
       ->
-       let n2 = C.cap_get_value c in
+       let n2 = unwr is_signed @@ C.cap_get_value c in
        (* TODO(CHERI): representability check? *)
-       let c = C.cap_set_value c (vf n1 n2) in
-       IC (pf prov1 prov2, c)
-    | IC (prov1, c1), IC (prov2, c2)
+       let c = C.cap_set_value c (vfc is_signed n1 n2) in
+       IC (pf prov1 prov2, is_signed, c)
+    | IC (prov1, is_signed1, c1), IC (prov2, is_signed2, c2)
       ->
-       let n1 = C.cap_get_value c1 in
-       let n2 = C.cap_get_value c2 in
+       let n1 = unwr is_signed1 @@ C.cap_get_value c1 in
+       let n2 = unwr is_signed2  @@ C.cap_get_value c2 in
        (* Using 1st cap. *)
        (* TODO(CHERI): representability check? *)
-       let c = C.cap_set_value c1 (vf n1 n2) in
-       IC (pf prov1 prov2, c)
+       let is_signed = is_signed1 || is_signed2 in
+       let c = C.cap_set_value c1 (vfc is_signed n1 n2) in
+       IC (pf prov1 prov2, is_signed, c)
 
   let op_ival iop v1 v2 =
     (* NOTE: for PNVI we assume that prov1 = prov2 = Prov_none *)
