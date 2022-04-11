@@ -352,29 +352,8 @@ module CHERI (C:Capability
                        Eff (fun b -> ((if b then `SAT else `UNSAT), b))
 
                      let with_constraints _ cs (Eff ma) =
-                       Debug_ocaml.print_debug 1 [] (fun () -> "HELLO: CHERI.with_constraints");
-                       (* Currently using capability values without
-                          meta information in all
-                          comparisons. Signedness is
-                          respected. TODO(CHERI): review this
-                          decsision. *)
-                       let rec eval_cs = function
-                         | MC_empty ->
-                            true
-                         | MC_eq (v1, v2) ->
-                            Z.equal (num_of_int v1) (num_of_int v2)
-                         | MC_le (v1, v2)  ->
-                            Z.less_equal (num_of_int v1) (num_of_int v2)
-                         | MC_lt (v1, v2)->
-                            Z.less (num_of_int v1) (num_of_int v2)
-                         | MC_in_device _ ->
-                            failwith "TODO: Concrete, with_constraints: MC_in_device"
-                         | MC_or (cs1, cs2) ->
-                            eval_cs cs1 || eval_cs cs2
-                         | MC_conj css ->
-                            List.for_all (fun z -> eval_cs z) css
-                         | MC_not cs ->
-                            not (eval_cs cs)
+                       let eval_cs _ =
+                            failwith "cs_module is not used in CHERI memory model."
                        in
                        Eff (fun b -> ma (b && eval_cs cs))
                    end : Constraints with type t = mem_iv_constraint)
