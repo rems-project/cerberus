@@ -2655,7 +2655,6 @@ module CHERI (C:Capability
       | (_, Prov_symbolic _) ->
        failwith "CHERI.combine_prov: found a Prov_symbolic"
 
-  (* TODO(CHERI): is_signed selection needs to follow C rules? *)
   let int_bin pf vf v1 v2 =
     let unwr s n = if s then unwrap_cap n else n in
     let vfc s n1 n2 = if s then (wrap_cap @@ vf n1 n2) else vf n1 n2 in
@@ -2667,21 +2666,29 @@ module CHERI (C:Capability
       ->
        let n1 = unwr is_signed @@ C.cap_get_value c in
        (* TODO(CHERI): representability check? *)
+       (* The signedess follow IC value as intptr_t is higher
+          rank than any integer *)
        let c = C.cap_set_value c (vfc is_signed n1 n2) in
        IC (pf prov1 prov2, is_signed, c)
     | IV (prov1, n1), IC (prov2, is_signed, c)
       ->
        let n2 = unwr is_signed @@ C.cap_get_value c in
        (* TODO(CHERI): representability check? *)
+       (* The signedess follow IC value as intptr_t is higher
+          rank than any integer *)
        let c = C.cap_set_value c (vfc is_signed n1 n2) in
        IC (pf prov1 prov2, is_signed, c)
     | IC (prov1, is_signed1, c1), IC (prov2, is_signed2, c2)
       ->
        let n1 = unwr is_signed1 @@ C.cap_get_value c1 in
-       let n2 = unwr is_signed2  @@ C.cap_get_value c2 in
-       (* Using 1st cap. *)
+       let n2 = unwr is_signed2 @@ C.cap_get_value c2 in
        (* TODO(CHERI): representability check? *)
-       let is_signed = is_signed1 || is_signed2 in
+       (* Here we have emulate integer promotion rule where
+          if one of argumnets is unsgined the other has
+          to be cast to unsigned as well *)
+       let is_signed = is_signed1 && is_signed2 in
+       let n1 = if not is_signed && is_signed1 then wrap_cap n1 else n1 in
+       let n2 = if not is_signed && is_signed2 then wrap_cap n2 else n2 in
        let c = C.cap_set_value c1 (vfc is_signed n1 n2) in
        IC (pf prov1 prov2, is_signed, c)
 
