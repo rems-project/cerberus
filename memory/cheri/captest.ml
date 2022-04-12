@@ -1,3 +1,8 @@
+(**
+   Capabilty encoding decoding unit tests. To run:
+   dune exec ./captest.exe
+ *)
+
 open OUnit2
 open Morello
 open Morello_capability
@@ -55,7 +60,6 @@ let tests = "test suite for Morello" >::: [
           (snd (encode true (cap_c0 ())))
       );
 
-
       "encode C0 bytes" >:: (fun _ ->
         assert_equal
           ~printer:cap_bits_str
@@ -109,6 +113,30 @@ let tests = "test suite for Morello" >::: [
            assert_equal
              ~printer:cap_bits_indexed_str
              b b'
+      );
+
+      "decode_value" >:: (fun _ ->
+        let b = List.rev @@ List.map char_of_int [120;255;247;255;255;255;0;0;120;255;124;127;0;64;93;220] in
+        match decode b true with
+        | None -> assert_failure "decode failed"
+        | Some c ->
+           assert_equal
+             ~printer:(Z.format "%x")
+             (Z.of_int 0xfffffff7ff78)
+             (cap_get_value c)
+      );
+
+      "two_decode" >:: (fun _ ->
+        let b1 = List.rev @@ List.map char_of_int [0;14;192;0;127;240;255;236;0;0;0;0;255;255;255;236] in
+        let mc1 = decode b1 true in
+        let b2 = List.rev @@ List.map char_of_int  [42;14;192;0;127;240;255;236;0;0;0;0;255;255;255;236] in
+        let mc2 = decode b2 true in
+        match mc1,mc2 with
+        | None, _ -> assert_failure "1st decode failed"
+        | _, None -> assert_failure "2nd decode failed"
+        | Some c1, Some c2 ->
+           if cap_get_value c1 = cap_get_value c2 then
+             assert_failure "vlaue of c1 = value c2 while it should not"
       )
     ]
 
