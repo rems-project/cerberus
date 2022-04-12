@@ -116,7 +116,7 @@ let tests = "test suite for Morello" >::: [
       );
 
       "decode_value" >:: (fun _ ->
-        let b = List.rev @@ List.map char_of_int [120;255;247;255;255;255;0;0;120;255;124;127;0;64;93;220] in
+        let b = List.map char_of_int [120;255;247;255;255;255;0;0;120;255;124;127;0;64;93;220] in
         match decode b true with
         | None -> assert_failure "decode failed"
         | Some c ->
@@ -127,9 +127,9 @@ let tests = "test suite for Morello" >::: [
       );
 
       "two_decode" >:: (fun _ ->
-        let b1 = List.rev @@ List.map char_of_int [0;14;192;0;127;240;255;236;0;0;0;0;255;255;255;236] in
+        let b1 = List.map char_of_int [0;14;192;0;127;240;255;236;0;0;0;0;255;255;255;236] in
         let mc1 = decode b1 true in
-        let b2 = List.rev @@ List.map char_of_int  [42;14;192;0;127;240;255;236;0;0;0;0;255;255;255;236] in
+        let b2 = List.map char_of_int  [42;14;192;0;127;240;255;236;0;0;0;0;255;255;255;236] in
         let mc2 = decode b2 true in
         match mc1,mc2 with
         | None, _ -> assert_failure "1st decode failed"
