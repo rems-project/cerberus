@@ -346,6 +346,7 @@ module Morello_capability: Capability
                }
 
     let decode (bytes:char list) (tag:bool) =
+      let bytes = List.rev bytes in
       Debug_ocaml.print_debug 8 [] (fun () ->
           "morello.decode [" ^
             (String.concat ";"
@@ -426,7 +427,7 @@ module Morello_capability: Capability
       assert (List.length bytes == 16) ;
       (* extract the final tag *)
       let tag = zCapIsTagSet bits in
-      (bytes, tag)
+      (List.rev bytes, tag)
 
     let cap_vaddr_representable c a =
       vaddr_in_range a &&

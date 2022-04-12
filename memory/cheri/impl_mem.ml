@@ -1603,6 +1603,10 @@ module CHERI (C:Capability
         "ENTERING LOAD: ty=" ^ String_core_ctype.string_of_ctype ty ^
           " -> @" ^ Pp_utils.to_plain_string (pp_pointer_value (PV (prov, ptrval_)))
       );
+    print_bytemap ("BEFORE LOAD => " ^ Location_ocaml.location_to_string loc) >>
+      print_captags ("BEFORE LOAD => " ^ Location_ocaml.location_to_string loc)
+    >>
+
     let do_load alloc_id_opt addr sz =
       get >>= fun st ->
       let bs = fetch_bytes st.bytemap addr sz in
