@@ -352,29 +352,8 @@ module CHERI (C:Capability
                        Eff (fun b -> ((if b then `SAT else `UNSAT), b))
 
                      let with_constraints _ cs (Eff ma) =
-                       Debug_ocaml.print_debug 1 [] (fun () -> "HELLO: CHERI.with_constraints");
-                       (* Currently using capability values without
-                          meta information in all
-                          comparisons. Signedness is
-                          respected. TODO(CHERI): review this
-                          decsision. *)
-                       let rec eval_cs = function
-                         | MC_empty ->
-                            true
-                         | MC_eq (v1, v2) ->
-                            Z.equal (num_of_int v1) (num_of_int v2)
-                         | MC_le (v1, v2)  ->
-                            Z.less_equal (num_of_int v1) (num_of_int v2)
-                         | MC_lt (v1, v2)->
-                            Z.less (num_of_int v1) (num_of_int v2)
-                         | MC_in_device _ ->
-                            failwith "TODO: Concrete, with_constraints: MC_in_device"
-                         | MC_or (cs1, cs2) ->
-                            eval_cs cs1 || eval_cs cs2
-                         | MC_conj css ->
-                            List.for_all (fun z -> eval_cs z) css
-                         | MC_not cs ->
-                            not (eval_cs cs)
+                       let eval_cs _ =
+                            failwith "cs_module is not used in CHERI memory model."
                        in
                        Eff (fun b -> ma (b && eval_cs cs))
                    end : Constraints with type t = mem_iv_constraint)
@@ -2655,7 +2634,6 @@ module CHERI (C:Capability
       | (_, Prov_symbolic _) ->
        failwith "CHERI.combine_prov: found a Prov_symbolic"
 
-  (* TODO(CHERI): is_signed selection needs to follow C rules? *)
   let int_bin pf vf v1 v2 =
     let unwr s n = if s then unwrap_cap n else n in
     let vfc s n1 n2 = if s then (wrap_cap @@ vf n1 n2) else vf n1 n2 in
@@ -2667,21 +2645,29 @@ module CHERI (C:Capability
       ->
        let n1 = unwr is_signed @@ C.cap_get_value c in
        (* TODO(CHERI): representability check? *)
+       (* The signedess follow IC value as intptr_t is higher
+          rank than any integer *)
        let c = C.cap_set_value c (vfc is_signed n1 n2) in
        IC (pf prov1 prov2, is_signed, c)
     | IV (prov1, n1), IC (prov2, is_signed, c)
       ->
        let n2 = unwr is_signed @@ C.cap_get_value c in
        (* TODO(CHERI): representability check? *)
+       (* The signedess follow IC value as intptr_t is higher
+          rank than any integer *)
        let c = C.cap_set_value c (vfc is_signed n1 n2) in
        IC (pf prov1 prov2, is_signed, c)
     | IC (prov1, is_signed1, c1), IC (prov2, is_signed2, c2)
       ->
        let n1 = unwr is_signed1 @@ C.cap_get_value c1 in
-       let n2 = unwr is_signed2  @@ C.cap_get_value c2 in
-       (* Using 1st cap. *)
+       let n2 = unwr is_signed2 @@ C.cap_get_value c2 in
        (* TODO(CHERI): representability check? *)
-       let is_signed = is_signed1 || is_signed2 in
+       (* Here we have emulate integer promotion rule where
+          if one of argumnets is unsgined the other has
+          to be cast to unsigned as well *)
+       let is_signed = is_signed1 && is_signed2 in
+       let n1 = if not is_signed && is_signed1 then wrap_cap n1 else n1 in
+       let n2 = if not is_signed && is_signed2 then wrap_cap n2 else n2 in
        let c = C.cap_set_value c1 (vfc is_signed n1 n2) in
        IC (pf prov1 prov2, is_signed, c)
 
