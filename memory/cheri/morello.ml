@@ -246,6 +246,52 @@ module Morello_capability: Capability
       assert(List.length bits = 64);
       flags_from_value_bits bits
 
+    (* Helper function to check if capability is sealed (with any kind of seal) *)
+    let is_sealed c =
+      match cap_get_seal c with
+      | Cap_Unsealed -> false
+      | _ -> true
+
+    (* Helper function to check if sealed entry capability *)
+    let is_sentry c =
+      match cap_get_seal c with
+      | Cap_Sealed _ -> true
+      | _ -> false
+
+    (** Returns capability as a string in "simplified format". This
+        function is used from "printf" when "%#p" format is specified.
+
+        Example: "0xfffffff7ff8c [rwRW,0xfffffff7ff88-0xfffffff7ff90]"
+
+        TODO(CHERI) "In addition, for null-derived capabilities
+        (capabilities where the tag and upper attribute word are all
+        zero), only the address is displayed (the Basic Format)."
+
+        See also:
+        https://github.com/CTSRD-CHERI/cheri-c-programming/wiki/Displaying-Capabilities#simplified-forma
+     *)
+    let to_string (c:t) =
+      let vstring x = "0x" ^ (Z.format "%x" x) in
+      let (b0,b1) = c.bounds in
+
+      let flags =
+        let attrs =
+          let a f s l = if f then s::l else l in
+          a (not c.valid) "invald"
+          @@ a (is_sentry c) "sentry"
+          @@ a (is_sealed c) "sealed" []
+        in
+        if List.length attrs = 0 then ""
+        else " (" ^ String.concat "," attrs ^ ")"
+      in
+
+      Printf.sprintf "%s [%s,%s-%s]%s"
+        (vstring c.value)
+        (P.to_string c.perms)
+        (vstring b0)
+        (vstring b1)
+        flags
+
     (* Capability for newly allocated region *)
     let alloc_cap a size =
       {
@@ -300,11 +346,25 @@ module Morello_capability: Capability
                }
 
     let decode (bytes:char list) (tag:bool) =
+      Debug_ocaml.print_debug 8 [] (fun () ->
+          "morello.decode [" ^
+            (String.concat ";"
+               (List.map (fun x -> Stdlib.string_of_int (int_of_char x)) bytes))
+          ^"]");
       let bit_list_of_char c =
         get_slice_int' (8, (Z.of_int (int_of_char c)), 0) in
       (* TODO(CHERI): check if bytes' and bits' decoding order is correct *)
       let bits = List.concat (List.map bit_list_of_char bytes) in
-      decode_bits ([bit_of_bool tag] @ bits)
+      let mc = decode_bits ([bit_of_bool tag] @ bits) in
+      Debug_ocaml.print_debug 8 [] (fun () ->
+          "morello.decode =" ^
+            begin
+              match mc with
+              | None -> "None"
+              | Some c -> to_string c
+              end
+            );
+      mc
 
     let bytes_of_bits (b:bit list) : char list =
       assert((List.length b) mod 8 == 0);
@@ -479,52 +539,6 @@ module Morello_capability: Capability
 
     (* compare value only ignoring metadata *)
     let value_compare x y = compare x.value y.value
-
-    (* Helper function to check if capability is sealed (with any kind of seal) *)
-    let is_sealed c =
-      match cap_get_seal c with
-      | Cap_Unsealed -> false
-      | _ -> true
-
-    (* Helper function to check if sealed entry capability *)
-    let is_sentry c =
-      match cap_get_seal c with
-      | Cap_Sealed _ -> true
-      | _ -> false
-
-    (** Returns capability as a string in "simplified format". This
-        function is used from "printf" when "%#p" format is specified.
-
-        Example: "0xfffffff7ff8c [rwRW,0xfffffff7ff88-0xfffffff7ff90]"
-
-        TODO(CHERI) "In addition, for null-derived capabilities
-        (capabilities where the tag and upper attribute word are all
-        zero), only the address is displayed (the Basic Format)."
-
-        See also:
-        https://github.com/CTSRD-CHERI/cheri-c-programming/wiki/Displaying-Capabilities#simplified-forma
-     *)
-    let to_string (c:t) =
-      let vstring x = "0x" ^ (Z.format "%x" x) in
-      let (b0,b1) = c.bounds in
-
-      let flags =
-        let attrs =
-          let a f s l = if f then s::l else l in
-          a (not c.valid) "invald"
-          @@ a (is_sentry c) "sentry"
-          @@ a (is_sealed c) "sealed" []
-        in
-        if List.length attrs = 0 then ""
-        else " (" ^ String.concat "," attrs ^ ")"
-      in
-
-      Printf.sprintf "%s [%s,%s-%s]%s"
-        (vstring c.value)
-        (P.to_string c.perms)
-        (vstring b0)
-        (vstring b1)
-        flags
 
     let cap_c0 () =
       match decode_bits (zCapNull ()) with
