@@ -154,8 +154,11 @@ module Translate = struct
 
 
 
-  let symbol context str = 
+  let string context str = 
     Z3.Symbol.mk_string context str
+  let symbol context sym = 
+    Z3.Symbol.mk_string context ("a"^string_of_int (Sym.num sym))
+
   
 
   let bt_name bt = 
@@ -180,7 +183,7 @@ module Translate = struct
 
     fun context struct_decls ->
 
-    let symbol str = symbol context str in
+    let string str = string context str in
 
     let rec translate = function
       | Unit -> Z3.Sort.mk_uninterpreted_s context "unit"
@@ -189,18 +192,18 @@ module Translate = struct
       | Real -> Z3.Arithmetic.Real.mk_sort context
       | Loc -> 
          Z3.Tuple.mk_sort context 
-           (symbol (bt_name Loc))
-           [symbol "loc_to_integer"] 
+           (string (bt_name Loc))
+           [string "loc_to_integer"] 
            [sort BT.Integer]
-      | List bt -> Z3.Z3List.mk_sort context (symbol (bt_name bt)) (sort bt) 
+      | List bt -> Z3.Z3List.mk_sort context (string (bt_name bt)) (sort bt) 
       | Set bt -> Z3.Set.mk_sort context (sort bt)
       | Map (abt, rbt) -> Z3.Z3Array.mk_sort context (sort abt) (sort rbt)
       | Tuple bts ->
-         let bt_symbol = symbol (bt_name (Tuple bts)) in
+         let bt_symbol = string (bt_name (Tuple bts)) in
          Z3Symbol_Table.add z3sym_table bt_symbol (TupleFunc {bts});
          let field_symbols = 
            mapi (fun i _ -> 
-               let sym = symbol (tuple_field_name bts i) in
+               let sym = string (tuple_field_name bts i) in
                Z3Symbol_Table.add z3sym_table sym (CompFunc {bts; i});
                sym
              ) bts 
@@ -208,12 +211,12 @@ module Translate = struct
          let sorts = map sort bts in
          Z3.Tuple.mk_sort context bt_symbol field_symbols sorts
       | Struct tag ->
-         let struct_symbol = symbol (bt_name (Struct tag)) in
+         let struct_symbol = string (bt_name (Struct tag)) in
          Z3Symbol_Table.add z3sym_table struct_symbol (StructFunc {tag});
          let layout = SymMap.find tag struct_decls in
          let member_symbols, member_sorts = 
            map_split (fun (id,sct) -> 
-               let s = symbol (member_name tag id) in
+               let s = string (member_name tag id) in
                Z3Symbol_Table.add z3sym_table s (MemberFunc {tag; member=id});
                (s, sort (BT.of_sct sct))
              ) (Memory.member_types layout)
@@ -253,7 +256,8 @@ module Translate = struct
   let term ?(warn_lambda=true) context struct_decls : IT.t -> expr =
 
     let sort bt = sort context struct_decls bt in
-    let symbol str = symbol context str in
+    let symbol sym = symbol context sym in
+    let string str = string context str in
 
     (* let integer_to_loc_symbol = Z3.FuncDecl.get_name integer_to_loc_fundecl in *)
   
@@ -273,8 +277,7 @@ module Translate = struct
       | Lit lit -> 
          begin match lit with
          | Sym s -> 
-            let str = CF.Pp_symbol.to_string_pretty_cn s in
-            Z3.Expr.mk_const context (symbol str) (sort bt)
+            Z3.Expr.mk_const context (symbol s) (sort bt)
          | Z z -> 
             Z3.Arithmetic.Integer.mk_numeral_s context (Z.to_string z)
          | Q q -> 
@@ -287,7 +290,7 @@ module Translate = struct
          | Bool false -> 
             Z3.Boolean.mk_false context
          | Unit -> 
-            Z3.Expr.mk_const context (symbol "unit") (sort Unit)
+            Z3.Expr.mk_const context (string "unit") (sort Unit)
          | Default bt -> 
             let sym = Z3.Symbol.mk_string context ("default" ^ (bt_name bt)) in
             let () = Z3Symbol_Table.add z3sym_table sym (DefaultFunc {bt}) in
