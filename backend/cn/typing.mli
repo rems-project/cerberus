@@ -47,3 +47,9 @@ val map_and_fold_resources :
   Locations.t ->
   (Resources.RE.t -> 'acc -> changed * 'acc) -> 
   'acc -> ('acc, 'e) m
+
+val get_resource_predicate_def : Locations.t -> string ->
+    (ResourcePredicates.definition, TypeErrors.type_error) m
+val get_logical_predicate_def : Locations.t -> string ->
+    (LogicalPredicates.definition, TypeErrors.type_error) m
+

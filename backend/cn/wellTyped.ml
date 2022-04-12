@@ -469,12 +469,6 @@ module WRE = struct
 
   open Resources.RE
 
-  let get_resource_predicate_def loc name = 
-    let@ global = get_global () in
-    match Global.get_resource_predicate_def global name with
-    | Some def -> return def
-    | None -> fail (fun _ -> {loc; msg = Unknown_resource_predicate name})
-
   let welltyped loc resource = 
     begin match resource with
     | Point b -> 
@@ -493,7 +487,7 @@ module WRE = struct
            return ()
          end
     | Predicate p -> 
-       let@ def = get_resource_predicate_def loc p.name in
+       let@ def = Typing.get_resource_predicate_def loc p.name in
        let@ _ = WIT.check loc BT.Loc p.pointer in
        let@ _ = WIT.check loc BT.Bool p.permission in
        let has_iargs, expect_iargs = List.length p.iargs, List.length def.iargs in
@@ -509,7 +503,7 @@ module WRE = struct
        in
        return ()
     | QPredicate p -> 
-       let@ def = get_resource_predicate_def loc p.name in
+       let@ def = Typing.get_resource_predicate_def loc p.name in
        let@ _ = WIT.check loc BT.Loc p.pointer in
        pure begin 
            let@ () = add_l p.q Integer in
@@ -574,14 +568,8 @@ end
 module WLC = struct
   type t = LogicalConstraints.t
 
-  let get_logical_predicate_def loc name = 
-    let@ global = get_global () in
-    match Global.get_logical_predicate_def global name with
-    | Some def -> return def
-    | None -> fail (fun _ -> {loc; msg = Unknown_logical_predicate name})
-
   let welltyped_pred loc (pred : LC.Pred.t) = 
-    let@ def = get_logical_predicate_def loc pred.name in
+    let@ def = Typing.get_logical_predicate_def loc pred.name in
     let has_args, expect_args = List.length pred.args, List.length def.args in
     let@ () = ensure_same_argument_number loc `General has_args ~expect:expect_args in
     let@ _ = 
@@ -609,7 +597,7 @@ module WLC = struct
            let@ () = add_l s bt in
            let@ _ = WIT.check loc BT.Bool condition in
            let@ () = welltyped_pred loc pred in
-           let@ def = get_logical_predicate_def loc pred.name in
+           let@ def = Typing.get_logical_predicate_def loc pred.name in
            begin match def.qarg with
            | Some n -> 
               begin match IT.is_sym (List.nth pred.args n) with

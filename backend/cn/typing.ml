@@ -249,4 +249,19 @@ let in_loc_trace tr f =
   let@ _ = set_loc_trace prev_tr in
   return x
 
+let get_resource_predicate_def loc id =
+  let@ global = get_global () in
+  let open TypeErrors in
+  match Global.get_resource_predicate_def global id with
+    | Some def -> return def
+    | None -> fail (fun _ -> {loc; msg = Unknown_resource_predicate {id;
+        logical = Option.is_some (Global.get_logical_predicate_def global id)}})
+
+let get_logical_predicate_def loc id =
+  let@ global = get_global () in
+  let open TypeErrors in
+  match Global.get_logical_predicate_def global id with
+    | Some def -> return def
+    | None -> fail (fun _ -> {loc; msg = Unknown_logical_predicate {id;
+        resource = Option.is_some (Global.get_resource_predicate_def global id)}})
 

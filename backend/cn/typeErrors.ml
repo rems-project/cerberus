@@ -83,8 +83,8 @@ type message =
   | Unknown_variable of Sym.t
   | Unknown_function of Sym.t
   | Unknown_struct of BT.tag
-  | Unknown_resource_predicate of string
-  | Unknown_logical_predicate of string
+  | Unknown_resource_predicate of {id: string; logical: bool}
+  | Unknown_logical_predicate of {id: string; resource: bool}
   | Unknown_member of BT.tag * BT.member
 
   | Missing_resource_request of {orequest : RER.t option; situation : situation; oinfo : info option; ctxt : Context.t; model: Solver.model_with_q }
@@ -143,12 +143,18 @@ let pp_message te =
   | Unknown_struct tag ->
      let short = !^"Struct" ^^^ squotes (Sym.pp tag) ^^^ !^"not defined" in
      { short; descr = None; state = None }
-  | Unknown_resource_predicate id ->
+  | Unknown_resource_predicate {id; logical} ->
      let short = !^"Unknown resource predicate" ^^^ squotes (!^id) in
-     { short; descr = None; state = None }
-  | Unknown_logical_predicate id ->
+     let descr = if logical then Some (!^"Note " ^^^ squotes (!^id) ^^^
+             !^" is a known logical predicate.")
+         else None in
+     { short; descr; state = None }
+  | Unknown_logical_predicate {id; resource} ->
      let short = !^"Unknown logical predicate" ^^^ squotes (!^id) in
-     { short; descr = None; state = None }
+     let descr = if resource then Some (!^"Note " ^^^ squotes (!^id) ^^^
+             !^" is a known resource predicate.")
+         else None in
+     { short; descr; state = None }
   | Unknown_member (tag, member) ->
      let short = !^"Unknown member" ^^^ Id.pp member in
      let descr =

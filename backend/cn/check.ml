@@ -2402,10 +2402,7 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t, type_error) m =
        Spine.calltype_ft loc args decl_typ
     | M_Erpredicate (pack_unpack, TPU_Predicate pname, asyms) ->
        let@ global = get_global () in
-       let@ def = match Global.get_resource_predicate_def global (Id.s pname) with
-         | Some def -> return def
-         | None -> fail (fun _ -> {loc; msg = Unknown_resource_predicate (Id.s pname)})
-       in
+       let@ def = Typing.get_resource_predicate_def loc (Id.s pname) in
        let@ pointer_asym, iarg_asyms = match asyms with
          | pointer_asym :: iarg_asyms -> return (pointer_asym, iarg_asyms)
          | _ -> fail (fun _ -> {loc; msg = Generic !^"pointer argument to predicate missing"})
@@ -2520,10 +2517,7 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t, type_error) m =
        end
     | M_Elpredicate (have_show, pname, asyms) ->
        let@ global = get_global () in
-       let@ def = match Global.get_logical_predicate_def global (Id.s pname) with
-         | Some def -> return def
-         | None -> fail (fun _ -> {loc; msg = Unknown_logical_predicate (Id.s pname)})
-       in
+       let@ def = Typing.get_logical_predicate_def loc (Id.s pname) in
        let@ args = 
          restore_resources begin 
            let@ supplied_args = args_of_asyms asyms in
