@@ -2841,8 +2841,8 @@ end
                         Caux.mk_if_e test_sym_pe
                           begin
                             Caux.mk_wseq_e res_sym_pat
-                              (Caux.mk_memop_e (Mem_common.PtrMemberShift tag_sym ident) [e_sym_pe])
-                              (Caux.mk_pure_e (Caux.mk_specified_pe res_sym_pe))
+                              (Caux.mk_memop_e (Mem_common.PtrMemberShift tag_sym ident) [obj_sym_pe])
+                              (Caux.mk_pure_e res_sym_pe)
                           end
                           (* TODO: make a new UB for this particular case *)
                           (Caux.mk_pure_e (Caux.mk_std_undef_pe loc "§6.5.3.3#4, sentence 4" Undefined.UB043_indirection_invalid_value))
