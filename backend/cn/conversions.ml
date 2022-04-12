@@ -703,7 +703,7 @@ let resolve_constraint loc layouts default_mapping_name mappings lc =
 
 
 
-let apply_ownership_spec layouts predicates default_mapping_name mappings (loc, {oq; predicate; arguments; some_oargs; oname; o_permission; typ}) =
+let apply_ownership_spec layouts predicates log_predicates default_mapping_name mappings (loc, {oq; predicate; arguments; some_oargs; oname; o_permission; typ}) =
   let ownership_kind = match predicate with
     | "Owned" -> `Builtin `Owned
     | "Block" -> `Builtin `Block
@@ -817,7 +817,8 @@ let apply_ownership_spec layouts predicates default_mapping_name mappings (loc, 
      in
      let@ def = match List.assoc_opt String.equal predicate predicates with
        | Some def -> return def
-       | None -> fail {loc; msg = Unknown_resource_predicate predicate}
+       | None -> fail {loc; msg = Unknown_resource_predicate {id = predicate;
+               logical = Option.is_some (List.assoc_opt String.equal predicate log_predicates)}}
      in
      let@ iargs_resolved = 
        ListM.mapM (fun arg ->
@@ -1042,7 +1043,7 @@ let make_fun_spec loc (layouts : Memory.struct_decls) rpredicates lpredicates fs
               return (i @ [c], mappings)
            | None ->
               let@ (i', mapping') = 
-                apply_ownership_spec layouts rpredicates
+                apply_ownership_spec layouts rpredicates lpredicates
                   "start" mappings (loc, cond) 
               in
               let mappings = 
@@ -1133,7 +1134,7 @@ let make_fun_spec loc (layouts : Memory.struct_decls) rpredicates lpredicates fs
               return (o @ [c], mappings)
            | None ->
               let@ (o', mapping') = 
-                apply_ownership_spec layouts rpredicates
+                apply_ownership_spec layouts rpredicates lpredicates
                   "end" mappings (loc, cond) 
               in
               let mappings = 
@@ -1280,7 +1281,7 @@ let make_label_spec
               return (i @ [c], mappings)
            | None ->
               let@ (i', mapping') = 
-                apply_ownership_spec layouts rpredicates
+                apply_ownership_spec layouts rpredicates lpredicates
                   lname mappings (loc, cond) in
               let mappings = 
                 mod_mapping lname mappings 
