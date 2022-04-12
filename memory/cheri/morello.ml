@@ -369,9 +369,9 @@ module Morello_capability: Capability
       (bytes, tag)
 
     let cap_vaddr_representable c a =
-      assert(vaddr_in_range a) ;
-      let cap_bits = encode_to_bits true c in
-      zCapIsRepresentable (cap_bits, (to_bits' (64, a)))
+      vaddr_in_range a &&
+      (let cap_bits = encode_to_bits true c in
+      zCapIsRepresentable (cap_bits, (to_bits' (64, a))))
 
     let cap_bounds_representable_exactly c (base',limit') =
       (* encode with tag set *)
@@ -394,7 +394,6 @@ module Morello_capability: Capability
        - CPYTYPE in Morello
      *)
     let cap_set_value c cv =
-      assert(vaddr_in_range cv) ;
       if cap_vaddr_representable c cv then
         {c with
           value = cv;
