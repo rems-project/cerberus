@@ -23,3 +23,4 @@ webcerb.symbolic
 webcerb.concrete
 /.ignore
 /backend/cheri/cerb.prof
+/cerb.prof
