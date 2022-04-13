@@ -46,6 +46,21 @@ let cap_bits_str b =
   let bits = List.concat (List.map bit_list_of_char b) in
   string_of_bit_list bits
 
+let cap_bits_diff (fmt:Format.formatter) (c1,c2) =
+  let bit_list_of_char c =
+    Sail_lib.get_slice_int' (8, (Z.of_int (int_of_char c)), 0) in
+  let b1 = List.map Sail_lib.string_of_bit @@ List.concat (List.map bit_list_of_char c1) in
+  let b2 = List.map Sail_lib.string_of_bit @@ List.concat (List.map bit_list_of_char c2) in
+  assert(List.length b1 = List.length b2);
+  let open Format in
+  pp_force_newline fmt ();
+  for i = 0 to (List.length b1)-1 do
+    let x0 = List.nth b1 i in
+    let x1 = List.nth b2 i in
+    if x0 <> x1 then
+      Format.fprintf fmt "bit %03d: expected %s: but got: %s\n" i x0 x1;
+  done
+
 let tests = "test suite for Morello" >::: [
 
 
@@ -62,14 +77,37 @@ let tests = "test suite for Morello" >::: [
 
       "encode C0 bytes" >:: (fun _ ->
         assert_equal
+          ~pp_diff:cap_bits_diff
           ~printer:cap_bits_str
           (List.init 16 (fun _ -> '\000'))
-          (fst (encode true (cap_c0 ())))
+          (fst (encode false (cap_c0 ())))
       );
 
+      "decode C0" >:: (fun _ ->
+        let b = List.init 16 (fun _ -> '\000') in
+        match decode b false with
+        | None -> assert_failure "decode failed"
+        | Some c ->
+           assert_equal
+             ~cmp:equal
+             ~printer:Morello_capability.show
+             c (cap_c0 ())
+      );
+
+      "decode alt C0" >:: (fun _ ->
+        let b = List.map char_of_int [0;0;0;0;0;0;0;0;5;0;1;0;0;0;0;0] in
+        match decode b false with
+        | None -> assert_failure "decode failed"
+        | Some c ->
+           assert_equal
+             ~cmp:equal
+             ~printer:Morello_capability.show
+             c (cap_c0 ())
+      );
+      
       "encode/decode C0" >:: (fun _ ->
         let c0 = cap_c0 () in
-        let (b,t) = encode true c0 in
+        let (b,t) = encode false c0 in
         match decode b t with
         | None -> assert_failure "decoding failed"
         | Some c0' ->
