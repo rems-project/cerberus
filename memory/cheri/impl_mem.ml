@@ -539,7 +539,7 @@ module CHERI (C:Capability
 
 
   (** Checks if memory region starting from [addr] and
-      of size [sz] fits withing interval [b1,b2) *)
+      of size [sz] fits withing interval \[b1,b2) *)
   let cap_bounds_check (base,limit) addr sz =
     Z.less_equal base addr
     && Z.less addr limit
