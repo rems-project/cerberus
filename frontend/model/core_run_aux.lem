@@ -413,6 +413,8 @@ let rec convert_pexpr (Pexpr annot _ pexpr_) =
      PEarray_shift (convert_pexpr pe1) ty (convert_pexpr pe2)
  | PEmember_shift pe sym ident ->
      PEmember_shift (convert_pexpr pe) sym ident
+ | PEmemop mop pes ->
+    PEmemop mop (List.map convert_pexpr pes)
  | PEnot pe ->
      PEnot (convert_pexpr pe)
  | PEop bop pe1 pe2 ->

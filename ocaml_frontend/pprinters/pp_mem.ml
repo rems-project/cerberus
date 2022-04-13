@@ -4,8 +4,8 @@ open Mem_common
 
 
 let pp_pure_memop = function
-  | PURE_MEMOP_TODO ->
-      !^ "PURE_MEMOP_TODO"
+  | IntcastPure ->
+      !^ "Intcast"
 
 let pp_memop = function
   | PtrEq ->

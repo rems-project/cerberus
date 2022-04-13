@@ -311,6 +311,8 @@ let untype_file (file: 'a Core.typed_file) : 'a Core.file =
           PEarray_shift (untype_pexpr pe1, ty, untype_pexpr pe2)
       | PEmember_shift (pe1, tag_sym, membr_ident) ->
           PEmember_shift (untype_pexpr pe1, tag_sym, membr_ident)
+      | PEmemop (mop, pes) ->
+          PEmemop (mop, List.map untype_pexpr pes)
       | PEnot pe ->
           PEnot (untype_pexpr pe)
       | PEop (binop, pe1, pe2) ->

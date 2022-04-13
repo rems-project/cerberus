@@ -804,7 +804,7 @@ let intfromptr ref_ty ity ptrval : integer_value memM =
       fail (MerrVIP (VIP_intcast VIP_funptr))
 
 let intcast _ _ ival =
-  return ival
+  Either.Right ival
 
 (* Pointer shifting constructors *)
 let array_shift_ptrval ptrval ty ival : pointer_value =

@@ -256,6 +256,8 @@ let rec export_pexpr (Pexpr annot infer pexpr_) =
         PEmember_shift <$> export_pexpr pe1
                        <*> E.return sym
                        <*> E.return member_ident
+    | PEmemop mop pes ->
+      PEmemop mop <$> E.mapM (export_pexpr) pes
     | PEnot pe ->
         PEnot <$> export_pexpr pe
     | PEop binop pe1 pe2 ->

@@ -167,6 +167,8 @@ let rec pull_constrained n (Pexpr _ () pexpr_) =
         wrap_bin (fun pe1 pe2 -> PEarray_shift pe1 cty pe2) pe1 pe2
     | PEmember_shift pe sym cid->
         wrap (fun pe -> PEmember_shift pe sym cid) pe
+    | PEmemop memop pes ->
+        wrap_list (PEmemop memop) pes
     | PEnot pe ->
         wrap PEnot pe
     | PEop binop pe1 pe2 ->
@@ -656,6 +658,24 @@ let rec step_eval_pexpr n loc core_extern env mem_st_opt file hasConstrained pex
           | _ ->
               EU.return $ PEmember_shift pe' tag_sym member_ident
         end
+    | PEmemop memop pes ->
+        EU.mapM self pes >>= fun pes' ->
+        match (memop, Caux.valueFromPexprs pes') with
+          | ( Mem_common.IntcastPure
+            , Just [ Core.Vctype (Ctype.Ctype _ (Ctype.Basic (Ctype.Integer ity1)))
+                   ; Core.Vctype (Ctype.Ctype _ (Ctype.Basic (Ctype.Integer ity2)))
+                   ; Core.Vobject (Core.OVinteger ival) ] ) ->
+              match Mem.intcast ity1 ity2 ival with
+                | Left ub ->
+                    Exception.return (Undefined.undef loc [ub])
+                | Right ival ->
+                    EU.return (PEval (Vobject (OVinteger ival)))
+              end
+          | (Mem_common.IntcastPure, Just _) ->
+              EU.fail $ Illformed_program "PEmemop"
+          | (_, Nothing) ->
+              EU.return (PEmemop memop pes')
+        end        
     | PEnot (Pexpr annot pe_bTy _ as pe) ->
         self pe >>= fun (Pexpr annot pe_bTy pe_' as pe') ->
         match pe_' with

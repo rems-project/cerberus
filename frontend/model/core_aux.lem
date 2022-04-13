@@ -369,6 +369,10 @@ val mk_member_shift_pe: pexpr -> Symbol.sym -> Symbol.identifier -> pexpr
 let mk_member_shift_pe pe1 tag_sym member_ident =
   Pexpr [] () (PEmember_shift pe1 tag_sym member_ident)
 
+val mk_memop_pe: Mem_common.pure_memop -> list pexpr -> pexpr
+let mk_memop_pe mop pes =
+  Pexpr [] () (PEmemop mop pes)
+
 val mk_case_pe: pexpr -> list (pattern * pexpr) -> pexpr
 let mk_case_pe pe pat_pes =
   Pexpr [] () (PEcase pe pat_pes)
@@ -865,6 +869,8 @@ let rec subst_sym_pexpr sym cval (Pexpr annot bty pexpr_) =
         PEarray_shift (subst_sym_pexpr sym cval pe1) ty (subst_sym_pexpr sym cval pe2)
     | PEmember_shift pe tag_sym memb_ident ->
         PEmember_shift (subst_sym_pexpr sym cval pe) tag_sym memb_ident
+    | PEmemop mop pes ->
+        PEmemop mop (List.map (subst_sym_pexpr sym cval) pes)
     | PEnot pe ->
         PEnot (subst_sym_pexpr sym cval pe)
     | PEop bop pe1 pe2 ->
@@ -1137,6 +1143,8 @@ let rec unsafe_subst_sym_pexpr sym (Pexpr annot bty pe_' as pe') (Pexpr _ _ pe_)
         PEarray_shift (unsafe_subst_sym_pexpr sym pe' pe1) ty (unsafe_subst_sym_pexpr sym pe' pe2)
     | PEmember_shift pe tag_sym memb_ident ->
         PEmember_shift (unsafe_subst_sym_pexpr sym pe' pe) tag_sym memb_ident
+    | PEmemop mop pes ->
+        PEmemop mop (List.map (unsafe_subst_sym_pexpr sym pe') pes)
     | PEnot pe ->
         PEnot (unsafe_subst_sym_pexpr sym pe' pe)
     | PEop bop pe1 pe2 ->
