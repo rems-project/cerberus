@@ -95,7 +95,7 @@ module type Memory = sig
   (* the first ctype is the original referenced type, the integerType is the target integer type *)
   val intfromptr: Ctype.ctype -> Ctype.integerType -> pointer_value -> integer_value memM
 
-  val intcast: Ctype.integerType -> Ctype.integerType -> integer_value -> (Undefined.undefined_behaviour, integer_value) Either.either
+  val intcast: (*Ctype.integerType ->*) Ctype.integerType -> integer_value -> (Undefined.undefined_behaviour, integer_value) Either.either
   
   (* Pointer shifting constructors *)
   val array_shift_ptrval:  pointer_value -> Ctype.ctype -> integer_value -> pointer_value

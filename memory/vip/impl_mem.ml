@@ -803,7 +803,7 @@ let intfromptr ref_ty ity ptrval : integer_value memM =
     | PVfunptr sym ->
       fail (MerrVIP (VIP_intcast VIP_funptr))
 
-let intcast _ _ ival =
+let intcast _ ival =
   Either.Right ival
 
 (* Pointer shifting constructors *)
