@@ -341,7 +341,7 @@ proc [ailname = "malloc"] malloc_proxy (size_ptr: pointer) : eff loaded pointer 
   let strong size_: loaded integer = load('size_t', size_ptr) in
   case size_ of
     | Specified(size: integer) =>
-        let strong ptr: pointer = alloc(8 {- TODO -}, size) in
+        let strong ptr: pointer = alloc(16 {-Ivalignof('max_align_t')-}, size) in
         pure(Specified(ptr))
     | Unspecified(_: ctype) =>
         pure(error(<<<malloc_proxy>>>, False))
@@ -352,7 +352,7 @@ proc [ailname = "realloc"] realloc_proxy (old_ptrptr: pointer, size_ptr: pointer
   let strong old_ptrptr_: loaded pointer = load('void *', old_ptrptr) in
   case (size_, old_ptrptr_) of
     | (Specified(size: integer), Specified(old_ptr: pointer)) =>
-        let strong ptr: pointer = memop(Realloc, 8, old_ptr, size) in
+        let strong ptr: pointer = memop(Realloc, 16 {-Ivalignof('max_align_t')-}, old_ptr, size) in
         pure(Specified(ptr))
     | (_: loaded integer, _: loaded pointer) =>
         pure(error(<<<malloc_proxy>>>, False))
