@@ -520,6 +520,9 @@ let rec symbolify_pexpr (Pexpr (annot, (), _pexpr): parsed_pexpr) : pexpr Eff.t 
           | None ->
              Eff.fail (Location_ocaml.(region (snd _tag_sym) NoCursor))
                (Core_parser_unresolved_symbol (fst _tag_sym)))
+    | PEmemop (mop, _pes) ->
+        Eff.mapM symbolify_pexpr _pes >>= fun pes ->
+        Eff.return (Pexpr (annot, (), PEmemop (mop, pes)))
     | PEnot _pe ->
         Caux.mk_not_pe <$> symbolify_pexpr _pe
     | PEop (bop, _pe1, _pe2) ->
@@ -1091,6 +1094,7 @@ let mk_file decls =
 %token <Core_parser_util._sym> SYM
 %token <Implementation.implementation_constant> IMPL
 %token <Undefined.undefined_behaviour> UB
+%token <Mem_common.pure_memop> PURE_MEMOP_OP
 %token <Core_parser_util._sym Mem_common.generic_memop> MEMOP_OP
 %token PTRMEMBERSHIFT
 
@@ -1101,7 +1105,7 @@ let mk_file decls =
 %token CHAR BOOL SIGNED UNSIGNED
 %token INT8_T INT16_T INT32_T INT64_T UINT8_T UINT16_T UINT32_T UINT64_T
 %token INTPTR_T INTMAX_T UINTPTR_T UINTMAX_T
-%token SIZE_T PTRDIFF_T
+%token SIZE_T PTRDIFF_T (* MAX_ALIGN_T *)
 %token STRUCT UNION
 
 (* C11 memory orders *)
@@ -1294,6 +1298,10 @@ integer_type:
     { Ctype.Size_t }
 | PTRDIFF_T
     { Ctype.Ptrdiff_t }
+(*
+| MAX_ALIGN_T
+    { Ctype.Max_align_t }
+*)
 ;
 
 floating_type:
@@ -1585,9 +1593,8 @@ pexpr:
     { Pexpr ([Aloc (Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($1))))], (), PEcfunction _pe) }
 | _pe1= pexpr bop= binary_operator _pe2= pexpr
     { Pexpr ([Aloc (Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos(bop))))], (), PEop (bop, _pe1, _pe2)) }
-(*
-  | PEmemop of Mem.pure_memop * list (generic_pexpr 'ty 'sym)
-*)
+| MEMOP LPAREN memop= PURE_MEMOP_OP COMMA _pes= separated_list(COMMA, pexpr) RPAREN
+    { Pexpr ([Aloc (Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($1))))], (), PEmemop (memop, _pes)) }
 | LPAREN STRUCT _sym=SYM RPAREN _mems= delimited(LBRACE,separated_list (COMMA, member), RBRACE)
     { Pexpr ([Aloc (Location_ocaml.(region ($startpos, $endpos) NoCursor))], (), PEstruct (_sym, _mems)) }
 | LPAREN UNION _sym=SYM RPAREN LBRACE m=member RBRACE

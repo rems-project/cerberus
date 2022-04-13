@@ -96,6 +96,7 @@ let rec precedence = function
   | PEcase _
   | PEarray_shift _
   | PEmember_shift _
+  | PEmemop _
   | PEnot _
   | PEstruct _
   | PEunion _
@@ -494,14 +495,12 @@ let pp_pexpr pe =
             pp_keyword "member_shift" ^^ P.parens (
               pp pe ^^ P.comma ^^^ pp_raw_symbol tag_sym ^^ P.comma ^^^ P.dot ^^ !^ memb_ident
             )
+        | PEmemop (pure_memop, pes) ->
+            pp_keyword "memop" ^^ P.parens (Pp_mem.pp_pure_memop pure_memop ^^ P.comma ^^^ comma_list pp pes)  
         | PEnot pe ->
             pp_keyword "not" ^^ P.parens (pp pe)
         | PEop (bop, pe1, pe2) ->
             pp pe1 ^^^ pp_binop bop ^^^ pp pe2
-(*
-        | PEmemop (pure_memop, pes) ->
-            pp_keyword "memop" ^^ P.parens (Pp_mem.pp_pure_memop pure_memop ^^ P.comma ^^^ comma_list pp pes)
-*)
         | PEstruct (tag_sym, xs) ->
             P.parens (pp_const "struct" ^^^ pp_raw_symbol tag_sym) ^^
             P.braces (
