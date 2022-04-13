@@ -136,15 +136,27 @@ let model () =
   let@ () = upd_models ((m, c) :: ms) in
   return m
 
-let model_with loc prop =
+let check_models_current () =
   let@ ms = get_models () in
   let@ c = get () in
   let ms = List.filter (fun (_, c2) -> Context.constraints_not_extended c c2) ms in
   let@ () = upd_models ms in
+  return (List.map fst ms)
+
+let model_has_prop prop =
   let@ global = get_global () in
   let is_some_true t = Option.is_some t && IT.is_true (Option.get t) in
-  let has_prop m = is_some_true (Solver.eval global.struct_decls (fst m) prop) in
-  match List.find_opt has_prop (List.map fst ms) with
+  return (fun m -> is_some_true (Solver.eval global.struct_decls (fst m) prop))
+
+let prev_models_with loc prop =
+  let@ ms = check_models_current () in
+  let@ has_prop = model_has_prop prop in
+  return (List.filter has_prop ms)
+
+let model_with loc prop =
+  let@ ms = check_models_current () in
+  let@ has_prop = model_has_prop prop in
+  match List.find_opt has_prop ms with
     | Some m -> return (Some m)
     | None -> begin
       let@ prover = provable loc in

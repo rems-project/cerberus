@@ -1125,13 +1125,21 @@ let unknown_eq_in_group simp ptr_gp = List.find_map (fun (p, req) -> if not req 
     else if is_true (simp (eq_ (p, p2))) then None
     else Some (eq_ (p, p2))) ptr_gp) ptr_gp
 
+let upd_ptr_gps_for_model global m ptr_gps =
+  let eval_f p = match Solver.eval global.struct_decls m p with
+    | Some (IT (Lit (Pointer i), _)) -> i
+    | _ -> (print stderr (IT.pp p); assert false)
+  in
+  let eval_eqs = List.map (List.map (fun (p, req) -> (eval_f p, (p, req)))) ptr_gps in
+  let ptr_gps = List.concat (List.map (div_groups_discard Z.compare) eval_eqs) in
+  ptr_gps
+
 let add_eqs_for_infer loc ftyp =
-
-  (* TODO: fix any 'fuel'-related things *)
-
+  (* TODO: tweak 'fuel'-related things *)
   if not (! use_model_eqs) then return ()
   else
   begin
+  let start_eqs = time_log_start "eqs" "" in
   debug 5 (lazy (format [] "pre-inference equality discovery"));
   let reqs = NormalisedArgumentTypes.r_resource_requests ftyp in
   let@ ress = map_and_fold_resources loc (fun re xs -> (Unchanged, re :: xs)) [] in
@@ -1141,11 +1149,17 @@ let add_eqs_for_infer loc ftyp =
   let cmp2 = Lem_basic_classes.pairCompare
         (Lem_basic_classes.pairCompare String.compare String.compare) CT.compare in
   let ptr_gps = div_groups_discard cmp2 ptrs in
+  let@ ms = prev_models_with loc (bool_ true) in
+  let@ global = get_global () in
+  let ptr_gps = List.fold_right (upd_ptr_gps_for_model global)
+        (List.map fst ms) ptr_gps in
   let@ provable = provable loc in
   let rec loop fuel ptr_gps =
-    if fuel <= 10 then return () 
+    if fuel <= 0 then begin
+      debug 5 (lazy (format [] "equality discovery fuel exhausted"));
+      return ()
+    end
     else
-    let@ global = get_global () in
     let@ values, lcs = simp_constraints () in
     let simp t = Simplify.simp global.struct_decls values lcs t in
     let poss_eqs = List.filter_map (unknown_eq_in_group simp) ptr_gps in
@@ -1161,16 +1175,12 @@ let add_eqs_for_infer loc ftyp =
       | `False ->
         let (m, _) = Solver.model () in
         debug 7 (lazy (format [] ("eqs refuted, processing model")));
-        let eval_f p = match Solver.eval global.struct_decls m p with
-          | Some (IT (Lit (Pointer i), _)) -> i
-          | _ -> (print stderr (IT.pp p); assert false)
-        in
-        let eval_eqs = List.map (List.map (fun (p, req) -> (eval_f p, (p, req)))) ptr_gps in
-        let ptr_gps = List.concat (List.map (div_groups_discard Z.compare) eval_eqs) in
+        let ptr_gps = upd_ptr_gps_for_model global m ptr_gps in
         loop (fuel - 1) ptr_gps
   in
   let@ () = loop 10 ptr_gps in
   debug 5 (lazy (format [] "finished equality discovery"));
+  time_log_end start_eqs;
   return ()
   end
 
