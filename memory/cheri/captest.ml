@@ -64,7 +64,7 @@ let tests = "test suite for Morello" >::: [
         assert_equal
           ~printer:cap_bits_str
           (List.init 16 (fun _ -> '\000'))
-          (fst (encode true (cap_c0 ())))
+          (fst (encode false (cap_c0 ())))
       );
 
       "decode alt C0" >:: (fun _ ->
