@@ -58,7 +58,7 @@ let cap_bits_diff (fmt:Format.formatter) (c1,c2) =
     let x0 = List.nth b1 i in
     let x1 = List.nth b2 i in
     if x0 <> x1 then
-      Format.fprintf fmt "%03d %s %s\n" i x0 x1;
+      Format.fprintf fmt "bit %03d: expected %s: but got: %s\n" i x0 x1;
   done
 
 let tests = "test suite for Morello" >::: [
