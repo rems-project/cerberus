@@ -80,7 +80,7 @@ let tests = "test suite for Morello" >::: [
           ~pp_diff:cap_bits_diff
           ~printer:cap_bits_str
           (List.init 16 (fun _ -> '\000'))
-          (fst (encode false (cap_c0 ())))
+          (fst (encode true (cap_c0 ())))
       );
 
       "decode C0" >:: (fun _ ->
@@ -107,7 +107,7 @@ let tests = "test suite for Morello" >::: [
       
       "encode/decode C0" >:: (fun _ ->
         let c0 = cap_c0 () in
-        let (b,t) = encode false c0 in
+        let (b,t) = encode true c0 in
         match decode b t with
         | None -> assert_failure "decoding failed"
         | Some c0' ->
