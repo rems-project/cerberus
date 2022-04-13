@@ -61,7 +61,7 @@ let cap_bits_diff (fmt:Format.formatter) (c1,c2) =
       Format.fprintf fmt "bit %03d: expected %s: but got: %s\n" i x0 x1;
   done
 
-let tests = "test suite for Morello" >::: [
+let tests = "morello_caps" >::: [
 
 
       "C0" >:: (fun _ -> assert_bool "C0 exists"
@@ -80,7 +80,7 @@ let tests = "test suite for Morello" >::: [
           ~pp_diff:cap_bits_diff
           ~printer:cap_bits_str
           (List.init 16 (fun _ -> '\000'))
-          (fst (encode false (cap_c0 ())))
+          (fst (encode true (cap_c0 ())))
       );
 
       "decode C0" >:: (fun _ ->
@@ -107,7 +107,7 @@ let tests = "test suite for Morello" >::: [
       
       "encode/decode C0" >:: (fun _ ->
         let c0 = cap_c0 () in
-        let (b,t) = encode false c0 in
+        let (b,t) = encode true c0 in
         match decode b t with
         | None -> assert_failure "decoding failed"
         | Some c0' ->
@@ -162,6 +162,33 @@ let tests = "test suite for Morello" >::: [
              ~printer:(Z.format "%x")
              (Z.of_int 0xfffffff7ff78)
              (cap_get_value c)
+      );
+
+      "decode_bounds" >:: (fun _ ->
+        let b = List.map char_of_int [120;255;247;255;255;255;0;0;120;255;124;127;0;64;93;220] in
+        match decode b true with
+        | None -> assert_failure "decode failed"
+        | Some c ->
+           assert_equal
+             ~printer:(Z.format "%x")
+             (Z.of_int 0xfffffff7ff7c)
+             (snd (cap_get_bounds c))
+      );
+
+      "encode value and bounds" >:: (fun _ ->
+        let c = alloc_cap (Z.of_int 0xfffffff7ff78) (Z.of_int 4) in
+        let (b,t) = encode true c in
+        match decode b t with
+        | None -> assert_failure "decoding failed"
+        | Some c' ->
+           assert_equal
+             ~printer:(Z.format "%x")
+             (Z.of_int 0xfffffff7ff78)
+             (cap_get_value c');
+           assert_equal
+             ~printer:(Z.format "%x")
+             (Z.of_int 0xfffffff7ff7c)
+             (snd (cap_get_bounds c'))
       );
 
       "two_decode" >:: (fun _ ->
