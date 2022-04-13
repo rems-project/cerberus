@@ -339,12 +339,15 @@ let mk_translation_stdlib (ailnames, stdlib_fun_map) =
        if not (AilTypesAux.is_integer ty) then
          error "mkcall_conv_int called on non integer type"
        else
-         mk_call "conv_int" [Caux.mk_ail_ctype_pe ty; pe]
+         if Global.is_CHERI () then
+           Caux.mk_memop_pe Mem_common.IntcastPure [Caux.mk_ail_ctype_pe ty; pe]
+         else
+          mk_call "conv_int" [Caux.mk_ail_ctype_pe ty; pe]
    ; mkcall_conv_loaded_int= fun ty pe ->
        if not (AilTypesAux.is_integer ty) then
          error "mkcall_conv_loaded_int called on non integer type"
        else
-         mk_call "conv_loaded_int" [Caux.mk_ail_ctype_pe ty; pe]
+         mk_call "conv_loaded_int" [Caux.mk_boolean_pe (Global.is_CHERI ()); Caux.mk_ail_ctype_pe ty; pe]
    ; mkcall_loaded_fvfromint= fun ty pe ->
        if not (AilTypesAux.is_floating ty) then
          error "mkcall_loaded_fvfromint called on a non floating type"
@@ -356,7 +359,7 @@ let mk_translation_stdlib (ailnames, stdlib_fun_map) =
        else
          mk_call "loaded_ivfromfloat" [Caux.mk_ail_ctype_pe ty; pe]
    ; mkcall_conv_loaded_int_= fun pe1 pe2 ->
-       mk_call "conv_loaded_int" [pe1; pe2]
+       mk_call "conv_loaded_int" [Caux.mk_boolean_pe (Global.is_CHERI ()); pe1; pe2]
    ; mkcall_loaded_fvfromint_= fun pe1 pe2 ->
        mk_call "loaded_fvfromint" [pe1; pe2]
    ; mkcall_loaded_ivfromfloat_= fun pe1 pe2 ->

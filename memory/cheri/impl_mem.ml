@@ -2235,7 +2235,7 @@ module CHERI (C:Capability
     | _, IC _ ->
         failwith "invalid integer value (capability for non- [u]intptr_t"
 
-  let internal_intcast ity1 ity2 ival =
+  let internal_intcast (*ity1*) ity2 ival =
     let (min_ity2, max_ity2) =
       let nbits =
         let nbytes = match (Ocaml_implementation.get ()).sizeof_ity ity2 with
@@ -2264,36 +2264,36 @@ module CHERI (C:Capability
          else wrapI min_ity2 max_ity2 n
     in
 
-    match ity1, ival, ity2 with
+    match (*ity1,*) ival, ity2 with
     (* [u]intptr_t errors *)
-    | Ctype.Unsigned Intptr_t, IC (prov, true, cap), _
+    (* | Ctype.Unsigned Intptr_t, IC (prov, true, cap), _
       | Ctype.Signed Intptr_t, IC (prov, false, cap), _  ->
-       failwith "intcast: Sign mismatch in IC"
+       failwith "intcast: Sign mismatch in IC" *)
 
     (* [u]intptr_t identity *)
-    | Ctype.Unsigned Intptr_t, _, Ctype.Unsigned Intptr_t
-      | Ctype.Signed Intptr_t, _, Ctype.Signed Intptr_t ->
+    | (*Ctype.Unsigned Intptr_t,*) IC (_, false, _), Ctype.Unsigned Intptr_t
+      | (*Ctype.Signed Intptr_t,*) IC (_, true, _), Ctype.Signed Intptr_t ->
        Either.Right ival
 
     (* [u]intptr_t signedness change. just changing sign in IC. Value stays the same (unsigned) *)
-    | Ctype.Unsigned Intptr_t, IC (prov, (false as is_signed), cap), Ctype.Signed Intptr_t
-      | Ctype.Signed Intptr_t, IC (prov, (true as is_signed), cap), Ctype.Unsigned Intptr_t  ->
+    | (*Ctype.Unsigned Intptr_t,*) IC (prov, (false as is_signed), cap), Ctype.Signed Intptr_t
+      | (*Ctype.Signed Intptr_t,*) IC (prov, (true as is_signed), cap), Ctype.Unsigned Intptr_t  ->
         Either.Right (IC (prov, not is_signed, cap))
 
     (* from uintptr_t to int - regular conversion*)
-    | Ctype.Unsigned Intptr_t, IC (prov, false, cap), _ ->
+    | (*Ctype.Unsigned Intptr_t,*) IC (prov, false, cap), _ ->
        let n = C.cap_get_value cap in
        Either.Right (IV (prov, (conv_int_to_ity2 n)))
 
     (* from intptr_t to int. First we recover original signed value
        via [unwrap] and then perform regular promoion *)
-    | Ctype.Signed Intptr_t, IC (prov, true, cap), _ ->
+    | (*Ctype.Signed Intptr_t,*) IC (prov, true, cap), _ ->
        let n = C.cap_get_value cap in
        Either.Right (IV (prov, (conv_int_to_ity2 (unwrap_cap n))))
 
     (* from int to [u]intptr_t *)
-    | _, IV (prov, n), Ctype.Unsigned Intptr_t
-      | _, IV (prov, n), Ctype.Signed Intptr_t ->
+    | (*_,*) IV (prov, n), Ctype.Unsigned Intptr_t
+      | (*_,*) IV (prov, n), Ctype.Signed Intptr_t ->
        if Z.equal n Z.zero then
          Either.Right (IC (Prov_none, false, C.cap_c0 ()))
        else
@@ -2303,15 +2303,15 @@ module CHERI (C:Capability
          let c = C.cap_set_value c n in
          Either.Right (IC (prov, false, c))
     (* error *)
-    | _, IC _, _ ->
-       failwith "intcast: Invalid integer value. IC for non-intptr_t"
+    (* | _, IC _, _ ->
+       failwith "intcast: Invalid integer value. IC for non-intptr_t" *)
     (* cast between two "normal" integer types *)
-    | _, IV (prov, n), _ ->
+    | (*_,*) IV (prov, n), _ ->
       Either.Right (IV (prov, conv_int_to_ity2 n))
   
-  let intcast ity1 ity2 ival =
+  let intcast (*ity1*) ity2 ival =
     let open Either in
-    match internal_intcast ity1 ity2 ival with
+    match internal_intcast (*ity1*) ity2 ival with
       | Left err ->
           Left ((failwith "TODO intcast ub"): Undefined.undefined_behaviour)
       | Right ival ->
@@ -2571,8 +2571,8 @@ module CHERI (C:Capability
 
   (* TODO: conversion? *)
   let intfromptr _ ity (PV (prov, ptrval_)) =
-    let wrap_intcast ity1 ity2 ival =
-      match internal_intcast ity1 ity2 ival with
+    let wrap_intcast (*ity1*) ity2 ival =
+      match internal_intcast (*ity1*) ity2 ival with
         | Either.Left err ->
             fail err
         | Right ival ->
@@ -2589,7 +2589,7 @@ module CHERI (C:Capability
             begin match IntMap.find_opt (Z.of_int n) st.funptrmap with
             | Some (file_dig, name, c) ->
                 (* we are using [intcast] to for signed/unsigned handling *)
-                wrap_intcast (Unsigned Intptr_t) ity (IC (prov, false, c))
+                wrap_intcast (*Unsigned Intptr_t*) ity (IC (prov, false, c))
             | None ->
                Debug_ocaml.error ("intfromptr: Unknown function: " ^ (Pp_symbol.to_string_pretty sym))
             end
@@ -2612,7 +2612,7 @@ module CHERI (C:Capability
        | Signed Intptr_t
          | Unsigned Intptr_t ->
           (* we are using [intcast] to for signed/unsigned handling *)
-          wrap_intcast (Unsigned Intptr_t) ity (IC (prov, false, c))
+          wrap_intcast (*Unsigned Intptr_t*) ity (IC (prov, false, c))
        | _ ->
           let ity_max = num_of_int (max_ival ity) in
           let ity_min = num_of_int (min_ival ity) in
