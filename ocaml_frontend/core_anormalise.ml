@@ -367,6 +367,8 @@ and n_pexpr : 'a. Loc.t -> 'a n_pexpr_domain ->
   | PEmember_shift(e', sym1, id1) ->
      n_pexpr_name loc domain e' (fun e' -> 
      k (annotate (M_PEmember_shift(e', sym1, id1))))
+  | PEmemop (mop, pes) ->
+      failwith "TODO: PEmemop"
   | PEnot e' -> 
      n_pexpr_name loc domain e' (fun e' -> 
      k (annotate (M_PEnot e')))

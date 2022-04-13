@@ -272,6 +272,8 @@ let rec subst_sym_pexpr2 sym z (Pexpr (annot, bTy, pexpr_)) =
         wrap (PEarray_shift (subst_sym_pexpr2 sym z pe1, ty, subst_sym_pexpr2 sym z pe2))
     | PEmember_shift (pe, tag_sym, memb_ident) ->
         wrap (PEmember_shift (subst_sym_pexpr2 sym z pe, tag_sym, memb_ident))
+    | PEmemop (mop, pes) ->
+        wrap (PEmemop (mop, List.map (subst_sym_pexpr2 sym z) pes))
     | PEnot pe ->
         wrap (PEnot (subst_sym_pexpr2 sym z pe))
     | PEop (bop, pe1, pe2) ->

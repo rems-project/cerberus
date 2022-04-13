@@ -175,6 +175,9 @@ module Rewriter = functor (Eff: Monad) -> struct
       | PEmember_shift (pe, sym, ident) ->
           aux pe >>= fun pe' ->
           return_wrap (PEmember_shift (pe', sym, ident))
+      | PEmemop (mop, pes) ->
+          mapM aux pes >>= fun pes' ->
+          return_wrap (PEmemop (mop, pes'))
       | PEnot pe ->
           aux pe >>= fun pe' ->
           return_wrap (PEnot pe')

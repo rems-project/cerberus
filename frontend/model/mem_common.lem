@@ -279,7 +279,7 @@ type floating_operator =
 
 
 type pure_memop =
-  | PURE_MEMOP_TODO
+  | IntcastPure (* (ctype, ctype, integer) -> eff integer *) (* first type is that of the input, second is that of the output *)
 
 type generic_memop 'sym =
   | PtrEq
