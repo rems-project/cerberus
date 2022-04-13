@@ -795,10 +795,10 @@ module ResourceInference = struct
       let@ ress = all_resources () in
       let@ global = get_global () in
       let@ provable = provable loc in
-      let@ _ = match provable (t_ (bool_ false)) with
-        | `True -> return ()
-        | `False ->
-          let@ (model, _) = model () in
+      let@ m = model_with loc (bool_ true) in
+      let@ _ = match m with
+        | None -> return ()
+        | Some (model, _) ->
           let opts = Spans.guess_span_intersection_action ress req model global in
           let confirmed = List.find_opt (fun (act, pt, ct, confirm) ->
               match provable (t_ confirm) with

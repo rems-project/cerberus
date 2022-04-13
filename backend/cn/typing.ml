@@ -1,13 +1,13 @@
 open Context
 module IT = IndexTerms
 module SymMap = Map.Make(Sym)
-module LCSet = Set.Make(LC)
 
 
 type s = {
     typing_context: Context.t;
     solver : Solver.solver;
     sym_eqs : IT.t SymMap.t;
+    past_models : (Solver.model_with_q * Context.t) list;
     trace_length : int;             (* for performance debugging *)
   }
 
@@ -19,9 +19,8 @@ type 'e failure = Context.t -> 'e
 let run (c : Context.t) (m : ('a, 'e) t) : ('a, 'e) Resultat.t = 
   let solver = Solver.make c.global.struct_decls in
   let sym_eqs = SymMap.empty in
-  let trace_length = 0 in
   LCSet.iter (Solver.add solver c.global) c.constraints;
-  let s = { typing_context = c; solver; sym_eqs; trace_length } in
+  let s = { typing_context = c; solver; sym_eqs; past_models = []; trace_length = 0 } in
   let outcome = m s in
   match outcome with
   | Ok (a, _) -> Ok a
@@ -81,6 +80,11 @@ let restore_resources (m : ('a, 'e) t) : ('a, 'e) t =
 
 
 
+let get_models () = fun s -> Ok (s.past_models, s)
+
+let upd_models ms = fun s -> Ok ((), {s with past_models = ms})
+
+let drop_models () = upd_models []
 
 let get_trace_length () = 
   fun s -> Ok (s.trace_length, s)
@@ -126,9 +130,30 @@ let provable loc =
   
 
 let model () =
-  return (Solver.model ())
-  
+  let m = Solver.model () in
+  let@ ms = get_models () in
+  let@ c = get () in
+  let@ () = upd_models ((m, c) :: ms) in
+  return m
 
+let model_with loc prop =
+  let@ ms = get_models () in
+  let@ c = get () in
+  let ms = List.filter (fun (_, c2) -> Context.constraints_not_extended c c2) ms in
+  let@ () = upd_models ms in
+  let@ global = get_global () in
+  let is_some_true t = Option.is_some t && IT.is_true (Option.get t) in
+  let has_prop m = is_some_true (Solver.eval global.struct_decls (fst m) prop) in
+  match List.find_opt has_prop (List.map fst ms) with
+    | Some m -> return (Some m)
+    | None -> begin
+      let@ prover = provable loc in
+      match prover (LC.t_ (IT.not_ prop)) with
+        | `True -> return None
+        | `False ->
+            let@ m = model () in
+            return (Some m)
+  end
 
 let bound_a sym = 
   let@ s = get () in
@@ -166,9 +191,10 @@ let add_sym_eqs sym_eqs =
       ) s.sym_eqs sym_eqs 
   in
   Ok ((), { s with sym_eqs })
-  
+
 
 let add_c lc = 
+  let@ _ = drop_models () in
   let@ s = get () in
   let@ solver = solver () in
   let@ values, lcs = simp_constraints () in

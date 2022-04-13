@@ -23,6 +23,7 @@ val provable :
   Locations.t ->
   (?shortcut_false:bool -> LogicalConstraints.t -> [> `True | `False], 'e) m
 val model : unit -> (Solver.model_with_q, 'e) m
+val model_with : Locations.t -> IndexTerms.t -> (Solver.model_with_q option, 'e) m
 val bound_a : Sym.t -> (bool, 'e) m
 val bound_l : Sym.t -> (bool, 'e) m
 val get_a : Sym.t -> (BaseTypes.t * Sym.t, 'e) m

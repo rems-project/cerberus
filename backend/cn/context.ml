@@ -120,5 +120,12 @@ let json (ctxt : t) : Yojson.Safe.t =
   in
   `Variant ("Context", Some json_record)
 
-
+(* Detects if the same variables and constraints are present
+   (things visible to the solver), but ignores whether the
+   resource states are the same. Assumes a related history
+   (that is, one is an extension of the other). *)
+let constraints_not_extended ctxt1 ctxt2 =
+    List.compare_lengths ctxt1.logical ctxt2.logical == 0 &&
+    List.compare_lengths ctxt1.computational ctxt2.computational == 0 &&
+    LCSet.cardinal ctxt1.constraints == LCSet.cardinal ctxt2.constraints
 
