@@ -67,9 +67,20 @@ let tests = "test suite for Morello" >::: [
           (fst (encode true (cap_c0 ())))
       );
 
+      "decode alt C0" >:: (fun _ ->
+        let b = List.map char_of_int [0;0;0;0;0;0;0;0;5;0;1;0;0;0;0;0] in
+        match decode b false with
+        | None -> assert_failure "decode failed"
+        | Some c ->
+           assert_equal
+             ~cmp:equal
+             ~printer:Morello_capability.show
+             c (cap_c0 ())
+      );
+      
       "encode/decode C0" >:: (fun _ ->
         let c0 = cap_c0 () in
-        let (b,t) = encode true c0 in
+        let (b,t) = encode false c0 in
         match decode b t with
         | None -> assert_failure "decoding failed"
         | Some c0' ->
