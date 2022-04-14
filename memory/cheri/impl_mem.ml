@@ -2659,14 +2659,17 @@ module CHERI (C:Capability
     match v1,v2 with
     | IV (prov1, n1), IV (prov2, n2)
       -> IV (pf prov1 prov2, vf n1 n2)
-      (* The two IC vs IV cases correspond to Core arithmetic (e.g. from the body of wrapI()),
-        this means that the IV is a "logical" integer, not an value coming from C *)
+      (* The two IC vs IV cases correspond to Core arithmetic
+         (e.g. from the body of wrapI()), this means that the IV is a
+         "logical" integer, not an value coming from C *)
     | IC (prov1, is_signed, c), IV (prov2, n2) ->
         let n1 = unwr is_signed @@ C.cap_get_value c in
+        (* TODO(CHERI): representability check? *)
         let c = C.cap_set_value c (vfc is_signed n1 n2) in
         IC (pf prov1 prov2, is_signed, c)
     | IV (prov1, n1), IC (prov2, is_signed, c) ->
         let n2 = unwr is_signed @@ C.cap_get_value c in
+        (* TODO(CHERI): representability check? *)
         let c = C.cap_set_value c (vfc is_signed n1 n2) in
         IC (pf prov1 prov2, is_signed, c)
    | IC (prov1, is_signed1, c1), IC (prov2, is_signed2, c2)
