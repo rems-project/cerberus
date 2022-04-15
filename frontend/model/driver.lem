@@ -581,7 +581,7 @@ let rec drive_core_thread2 tid =
             ND.mapM_ drive_core_thread2 spawn_tids >>= fun () ->
             drive_core_thread2 tid )
 
-    | Core_reduction.Step_fs2 th_st m_fs_step ->
+    | Core_reduction.Step_fs2 tid th_st m_fs_step ->
         (* TODO: can m_fs_step change the thread state?, If so this is wrong *)
         ( SK_misc ["fs_step"]
         , liftCore_run m_fs_step                >>= fun fs_step ->
@@ -892,10 +892,10 @@ let can_advance = function
       not is_unseq_with_ccall (* false *)
   | Core_reduction.Step_spawn_threads2 _ _ ->
       error "can_advance: Step_spawn_threads2"
-  | Core_reduction.Step_fs2 _ _ ->
-      error "can_advance: Step_fs2"
+  | Core_reduction.Step_fs2 _ _ _ ->
+      false
   | Core_reduction.Step_nd2 _ ->
-    error "can_advance: Step_nd2"
+      error "can_advance: Step_nd2"
 end
 
 let advance_step tid step =
@@ -992,13 +992,9 @@ let advance_step tid step =
         |>) >>= fun () ->
         error "ND.return (WAKEUP spawn_tids)"
 
-    | Core_reduction.Step_fs2 th_st m_fs_step ->
-        (* TODO: can m_fs_step change the thread state?, If so this is wrong *)
-        liftCore_run m_fs_step                >>= fun fs_step ->
-        ND.get >>= fun dr_st ->
-        drive_fs_step tid th_st dr_st fs_step >>= fun () ->
-        ND.return ()
-
+    | Core_reduction.Step_fs2 _ _ _ ->
+        error "TODO: Step_fs2"
+    
     | Core_reduction.Step_nd2 _ ->
         error "TODO: Step_nd2"
   end
@@ -1289,6 +1285,12 @@ let process_core_step2 with_concurrency driver2 = function
       |>) >>= fun () ->
         driver2 with_concurrency
   
+  | Core_reduction.Step_fs2 tid th_st m_fs_step ->
+      liftCore_run m_fs_step                >>= fun fs_step ->
+      ND.get                                >>= fun dr_st   ->
+      drive_fs_step tid th_st dr_st fs_step >>= fun ()      ->
+      driver2 with_concurrency
+
   | wrong_step ->
       error ("Driver.process_core_step2: WRONG STEP ==> " ^ show wrong_step)
 end
