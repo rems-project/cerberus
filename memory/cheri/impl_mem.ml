@@ -2325,10 +2325,14 @@ module CHERI (C:Capability
   let intcast (*ity1*) ity2 ival =
     let open Either in
     match internal_intcast (Location_ocaml.other "intcast") (*ity1*) ity2 ival with
-      | Left err ->
-          Left ((failwith "TODO intcast ub"): Undefined.undefined_behaviour)
-      | Right ival ->
-          Right ival
+    | Left err ->
+       begin
+         match undefinedFromMem_error err with
+         | Some (u::_) -> Left u
+         | _ -> failwith "TODO(CHERI): memory error not mapped to any UB"
+       end
+    | Right ival ->
+       Right ival
 
   let offsetof_ival tagDefs tag_sym memb_ident =
     let (xs, _) = offsetsof tagDefs tag_sym in
