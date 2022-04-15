@@ -282,7 +282,7 @@ module CHERI (C:Capability
     else Z.sub r dlt
 
   (** Convert an arbitrary integer value to 64-bit unsinged cap value *)
-  let wrap_cap n =
+  let wrap_cap_value n =
     if Z.(less_equal n C.min_vaddr && less_equal n C.max_vaddr)
     then n
     else wrapI C.min_vaddr C.max_vaddr n
@@ -291,7 +291,7 @@ module CHERI (C:Capability
       TODO(CHERI): 64-bit size is hardcoded. Should be abstracted in
       Capabilty module.
    *)
-  let unwrap_cap n =
+  let unwrap_cap_value n =
     let min_v = Z.negate (Z.pow_int (Z.of_int 2) (64-1)) in
     let max_v = Z.sub (Z.pow_int (Z.of_int 2) (64-1)) Z.(succ zero) in
     if Z.(less_equal n min_v && less_equal n max_v)
@@ -300,9 +300,9 @@ module CHERI (C:Capability
 
   let num_of_int = function
     | IV (_,n) -> n
-    | IC (_,is_signed,c) -> (*TODO(CHERI): for signed need unwrap *)
+    | IC (_,is_signed,c) ->
        let n = C.cap_get_value c in
-       if is_signed then unwrap_cap n else n
+       if is_signed then unwrap_cap_value n else n
 
   type floating_value =
     (* TODO: hack hack hack ==> OCaml's float are 64bits *)
@@ -2287,7 +2287,7 @@ module CHERI (C:Capability
        via [unwrap] and then perform regular promoion *)
     | (*Ctype.Signed Intptr_t,*) IC (prov, true, cap), _ ->
        let n = C.cap_get_value cap in
-       Either.Right (IV (prov, (conv_int_to_ity2 (unwrap_cap n))))
+       Either.Right (IV (prov, (conv_int_to_ity2 (unwrap_cap_value n))))
 
     (* from int to [u]intptr_t *)
     | (*_,*) IV (prov, n), Ctype.Unsigned Intptr_t
@@ -2295,7 +2295,7 @@ module CHERI (C:Capability
        if Z.equal n Z.zero then
          Either.Right (IC (Prov_none, false, C.cap_c0 ()))
        else
-         let n = wrap_cap n in
+         let n = wrap_cap_value n in
          let c = C.cap_c0 () in
          (* TODO(CHERI): representability check? *)
          let c = C.cap_set_value c n in
@@ -2651,8 +2651,8 @@ module CHERI (C:Capability
        failwith "CHERI.combine_prov: found a Prov_symbolic"
 
   let int_bin pf vf v1 v2 =
-    let unwr s n = if s then unwrap_cap n else n in
-    let vfc s n1 n2 = if s then (wrap_cap @@ vf n1 n2) else vf n1 n2 in
+    let unwr s n = if s then unwrap_cap_value n else n in
+    let vfc s n1 n2 = if s then (wrap_cap_value @@ vf n1 n2) else vf n1 n2 in
     (* NOTE: for PNVI we assume that prov1 = prov2 = Prov_none *)
     match v1,v2 with
     | IV (prov1, n1), IV (prov2, n2)
@@ -2678,8 +2678,8 @@ module CHERI (C:Capability
          let n1 = unwr is_signed1 @@ C.cap_get_value c1 in
          let n2 = unwr is_signed1 @@ C.cap_get_value c2 in
          (* TODO(CHERI): representability check? *)
-         let n1 = if not is_signed1 then wrap_cap n1 else n1 in
-         let n2 = if not is_signed1 then wrap_cap n2 else n2 in
+         let n1 = if not is_signed1 then wrap_cap_value n1 else n1 in
+         let n2 = if not is_signed1 then wrap_cap_value n2 else n2 in
          let c = C.cap_set_value c1 (vfc is_signed1 n1 n2) in
          IC (pf prov1 prov2, is_signed1, c)
 
