@@ -184,16 +184,8 @@ let pp =
        | Def ((s, abt), body) ->
           braces (BT.pp abt ^^^ Sym.pp s ^^^ !^"->" ^^^ aux false body)
        end
-    (* | Option_op option_op -> *)
-    (*    begin match option_op with *)
-    (*    | Nothing bt -> !^"nothing" *)
-    (*    | Something t -> c_app !^"some" [aux false t] *)
-    (*    | Is_nothing t -> c_app !^"is_nothing" [aux false t] *)
-    (*    | Is_something t -> c_app !^"is_something" [aux false t] *)
-    (*    | Get_some_value t -> c_app !^"value" [aux false t] *)
-    (*    end *)
-    (* | Let ((s, bound), body) -> *)
-    (*    !^"let" ^^^ Sym.pp s ^^^ equals ^^^ aux true bound ^^^ semi ^^^ parens (aux false body) *)
+    | Pred (name, args) ->
+       c_app !^name (List.map (aux false) args)
   in
   fun (it : 'bt term) -> aux false it
 
@@ -475,24 +467,8 @@ let rec subst (su : typed subst) (IT (it, bt)) =
             Def ((s, abt), subst su body)
      in
      IT (Map_op map_op, bt)
-  (* | Option_op option_op ->  *)
-  (*    let option_op = match option_op with *)
-  (*      | Nothing bt -> Nothing bt *)
-  (*      | Something t -> Something (subst su t) *)
-  (*      | Is_nothing t -> Is_nothing (subst su t) *)
-  (*      | Is_something t -> Is_something (subst su t) *)
-  (*      | Get_some_value t -> Get_some_value (subst su t) *)
-  (*    in *)
-  (*    IT (Option_op option_op, bt) *)
-  (* | Let ((s, bound), body) -> *)
-  (*    let bound = subst su bound in *)
-  (*    if SymSet.mem s su.relevant then *)
-  (*      let s' = Sym.fresh_same s in *)
-  (*      let body = subst (make_subst [(s, IT (Lit (Sym s'), basetype bound))]) body in *)
-  (*      let body = subst su body in *)
-  (*      IT (Let ((s', bound), body), bt) *)
-  (*    else *)
-  (*      IT (Let ((s, bound), subst su body), bt) *)
+  | Pred (name, args) ->
+     IT (Pred (name, List.map (subst su) args), bt)
 
 
 
@@ -783,24 +759,8 @@ let map_def_ (s, abt) body =
   IT (Map_op (Def ((s, abt), body)), BT.Map (abt, bt body))
 
 
-(* let nothing_ bt =  *)
-(*   IT (Option_op (Nothing bt), BT.Option bt) *)
-(* let something_ t = *)
-(*   IT (Option_op (Something t), BT.Option (basetype t)) *)
-(* let is_nothing_ t = *)
-(*   IT (Option_op (Is_nothing t), BT.Bool) *)
-(* let is_something_ t = *)
-(*   IT (Option_op (Is_something t), BT.Bool) *)
-(* let get_some_value_ t = *)
-(*   let vbt = BT.option_bt (basetype t) in *)
-(*   IT (Option_op (Get_some_value t), vbt) *)
-
-
-(* let let_ (s, bound) body =  *)
-(*   IT (Let ((s, bound), body), basetype body) *)
-(* let let__ (name, bound) body = *)
-(*   let s = Sym.fresh_named name in *)
-(*   let_ (s, bound) (body (sym_ (s, basetype bound))) *)
+let pred_ name args rbt = 
+  IT (Pred (name, args), rbt)
 
 
 
@@ -839,59 +799,11 @@ let disjoint_ (p1, sz1) (p2, sz2) =
 
 
 
-(* let in_footprint within (pointer, size) = 
- *   and_ [lePointer_ (pointer, within); 
- *         ltPointer_ (within, addPointer_ (pointer, size))] *)
-
-
-
-(* let disjoint_from fp fps =
- *   List.map (fun fp' -> disjoint_ (fp, fp')) fps *)
 
 
 
 
 
-
-(* rubbish hash function *)
-let hash (IT (it, _bt)) =
-  match it with
-  | Arith_op _ -> 1
-  | Bool_op _ -> 2
-  | Tuple_op _ -> 3
-  | Struct_op _ -> 4
-  | Pointer_op _ -> 5
-  | CT_pred _ -> 6
-  | List_op _ -> 7
-  | Set_op _ -> 8
-  | Map_op _ -> 9
-  (* | Option_op _ -> 10 *)
-  (* | Let _ -> 11 *)
-  | Lit lit ->
-     begin match lit with
-     | Z z -> 20
-     | Q q -> 21
-     | Pointer p -> 22
-     | Bool b -> 23
-     | Unit -> 24
-     | Default _ -> 25
-     | Null -> 26
-     | Sym (Symbol (_,i, _)) -> 100 + i
-     end
-
-
-
-
-(* let partiality_check_array ~length ~item_ct value =  *)
-(*   let unmapped =  *)
-(*     let rec aux i acc =  *)
-(*       if i > (length - 1) then acc else  *)
-(*         aux (i + 1) (map_set_ acc (int_ i, default_ (BT.of_sct item_ct))) *)
-(*     in *)
-(*     aux 0 value *)
-(*   in *)
-(*   let empty = const_map_ Integer (default_ (BT.of_sct item_ct)) in *)
-(*   eq_ (unmapped, empty) *)
 
 
 

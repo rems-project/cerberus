@@ -1126,7 +1126,7 @@ let unknown_eq_in_group simp ptr_gp = List.find_map (fun (p, req) -> if not req 
     else Some (eq_ (p, p2))) ptr_gp) ptr_gp
 
 let upd_ptr_gps_for_model global m ptr_gps =
-  let eval_f p = match Solver.eval global.struct_decls m p with
+  let eval_f p = match Solver.eval global m p with
     | Some (IT (Lit (Pointer i), _)) -> i
     | _ -> (print stderr (IT.pp p); assert false)
   in
@@ -2547,49 +2547,33 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t, type_error) m =
         * in *)
        let rt = 
          RT.Computational ((Sym.fresh (), BT.Unit), (loc, None), 
-         LRT.Constraint (Pred {name = Id.s pname; args}, (loc, None),
+         LRT.Constraint (LC.t_ (pred_ (Id.s pname) args def.return_bt), (loc, None),
          LRT.I))
        in
+       let@ def_body = match def.definition with
+         | Def body -> return body
+         | Uninterp -> 
+            let err = Generic !^"cannot use 'have' or 'show' with uninterpreted predicates" in
+            fail (fun _ -> {loc; msg = err})
+       in
        begin match have_show with
-       | Have ->
-          let@ qarg = match def.qarg with
-            | Some n -> return (List.nth args n)
-            | None ->
-               let err = 
-                 "Cannot use predicate " ^ Id.s pname ^ 
-                   " with 'Have' because it \
-                    has no index/quantifier argument."
-               in
-               fail (fun _ -> {loc; msg = Generic !^err})
-          in
-          let@ provable = provable loc in
-          let@ constraints = all_constraints () in
-          let to_check = 
-            let body = LP.open_pred global def args in
-            let assumptions = 
-              LCSet.fold (fun lc acc ->
-                  match lc with
-                  | LC.QPred qpred' when String.equal qpred'.pred.name (Id.s pname) ->
-                     let su = make_subst [(fst qpred'.q, qarg)] in
-                     let condition' = IT.subst su qpred'.condition in
-                     let pred_args' = List.map (IT.subst su) qpred'.pred.args in
-                     impl_ (condition', LP.open_pred global def pred_args') :: acc
-                  | _ -> 
-                     acc
-                ) constraints []
-            in
-            impl_ (and_ assumptions, body)
-          in
-          let@ () = match provable (t_ to_check) with
-            | `True -> return ()
-            | `False ->
-               let@ model = model () in
-               fail (fun ctxt -> {loc; msg = No_quantified_constraints {to_check; ctxt; model}})
-          in
-          return rt
+       | Have
        | Show ->
+          let@ constraints = all_constraints () in
+          let extra_assumptions = match args with
+            | [] -> []
+            | key_arg :: _ ->  
+               let key_arg_bt = IT.bt key_arg in
+               LCSet.fold (fun lc acc ->
+                   match lc with
+                   | Forall ((s, bt), t) when BT.equal bt key_arg_bt ->
+                      IT.subst (IT.make_subst [(s, key_arg)]) t :: acc
+                   | _ -> 
+                      acc
+                 ) constraints []
+          in
           let@ provable = provable loc in
-          let lc = Pred {name = Id.s pname; args} in
+          let lc = LC.t_ (impl_ (and_ extra_assumptions, pred_ (Id.s pname) args def.return_bt)) in
           begin match provable lc with
           | `True -> return rt
           | `False ->

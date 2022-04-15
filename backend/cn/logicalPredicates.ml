@@ -8,48 +8,52 @@ open Sctypes
 open BaseTypes
 
 
+type def_or_uninterp = 
+  | Def of IndexTerms.t
+  | Uninterp
+
 type definition = {
     loc : Locations.t;
     args : (Sym.t * LogicalSorts.t) list;
     (* If the predicate is supposed to get used in a quantified form,
        one of the arguments has to be the index/quantified
        variable. For now at least. *)
-    qarg : int option;
-    body : IndexTerms.t;
+    return_bt: BT.t;
+    definition : def_or_uninterp;
     infer_arguments : ArgumentTypes.packing_ft;
   }
 
 
-let make_guarded_definition (id,def) = 
-  let id = "Guarded" ^ id in
-  let guard_i_s, guard_i = IT.fresh Integer in
-  let guard_b_s, guard_b = IT.fresh Bool in
-  let loc = Loc.other ("internal ("^id^")") in
-  (id, {
-    loc = loc;
-    args = (guard_b_s, IT.bt guard_b) :: def.args;
-    qarg = Option.map ((+) 1) def.qarg;
-    body = impl_ (guard_b, def.body);
-    infer_arguments = 
-      AT.Computational ((guard_i_s, IT.bt guard_i), (loc, None),
-        AT.map (fun output_def ->
-            let guard_entry = OutputDef.{loc; name = Sym.fresh_named "guard"; value = eq_ (guard_i, int_ 1)} in
-            guard_entry :: output_def
-          ) def.infer_arguments
-      )
-  })
 
-
-
-let open_pred global def args =
-  let su = 
-    make_subst
-      (List.map2 (fun (s, _) arg -> (s, arg)) def.args args) 
-  in
-  IT.subst su def.body
+let open_pred global def_args def_body args =
+  let su = make_subst (List.map2 (fun (s, _) arg -> (s, arg)) def_args args) in
+  IT.subst su def_body
 
 
 exception Struct_not_found
+
+
+
+
+
+
+let make_uninterp fname args return_bt = 
+
+  let id = fname in
+  let loc = Loc.other ("internal ("^fname^")") in
+  let args = List.map (fun (s,bt) -> (Sym.fresh_named s, bt)) args in
+  let output_def = 
+    List.map (fun (s, bt) ->
+        OutputDef.{loc; name = Sym.fresh_same s; value = sym_ (s, bt)}
+      ) args
+  in
+  let infer_arguments = 
+    AT.mComputationals (List.map (fun (s, bt) -> (s, bt, (loc, None))) args)
+    (AT.I output_def)
+  in
+  (id, {loc; args; return_bt; definition = Uninterp; infer_arguments})
+
+
 
 module PageAlloc = struct
 
@@ -112,10 +116,32 @@ module PageAlloc = struct
     let open Aux in
 
 
+    let order_aligned = 
+      (* let _body = divisible_ (page_index, exp_ (int_ 2, sym_ (order, Integer))) in *)
+      make_uninterp "order_aligned"
+        [("page_index", Integer);
+         ("order", Integer);]
+        Bool
+    in
+
+    let buddy = 
+      make_uninterp "buddy"
+        [("p", Loc);
+         ("order", Integer);]
+        Loc
+    in
+
+    let page_size_of_order = 
+      make_uninterp "page_size_of_order"
+        [("order", Integer)]
+        Integer
+    in
+
+
     let vmemmap_page_wf =
 
-      let id = "Vmemmap_page_wf" in
-      let loc = Loc.other "internal (Vmemmap_page_wf)" in
+      let id = "vmemmap_page_wf" in
+      let loc = Loc.other "internal (vmemmap_page_wf)" in
 
       let page_index_s, page_index = IT.fresh_named Integer "page_index" in
 
@@ -139,8 +165,6 @@ module PageAlloc = struct
           (pool_s, IT.bt pool);
         ]
       in
-      let qarg = Some 0 in
-
 
       let body = 
         let page_pointer = arrayShift_ (vmemmap_pointer, struct_ct hyp_page_tag, page_index) in
@@ -160,15 +184,12 @@ module PageAlloc = struct
             ((page %. "pool") %== pool_pointer);
             (impl_ (
                  (page %. "order") %!= int_ hHYP_NO_ORDER,
-                 (let o = Sym.fresh () in
-                  let two_to_the_o = blast_ (0, o, page %. "order", mMAX_ORDER - 1) (exp_ (int_ 2, sym_ (o, Integer))) in
-                  (and_
-                    [
-                      divisible_ (page_index, two_to_the_o); (* this is the difficult constraint *)
-                      (page_index %+ two_to_the_o) %<= ((pool %. "range_end") %/ int_ pPAGE_SIZE);
-                    ]
-                 ))
-            ));
+                 pred_ "order_aligned" [page_index; page%."order"] BT.Bool));
+            (impl_ (
+                 (page %. "order") %!= int_ hHYP_NO_ORDER,
+                 (page_index %* int_ pPAGE_SIZE) %+ 
+                   (pred_ "page_size_of_order" [page%."order"] Integer) %<= 
+                     (pool %. "range_end")));
             (impl_ (
                  (page %. "order") %== int_ hHYP_NO_ORDER,
                  (page %. "refcount") %== (int_ 0))
@@ -205,7 +226,7 @@ module PageAlloc = struct
           ]))))))
       in
 
-      (id, {loc; args; body; qarg; infer_arguments} )
+      (id, {loc; args; definition = Def body; return_bt = Bool; infer_arguments} )
     in
 
 
@@ -216,8 +237,8 @@ module PageAlloc = struct
 
     let vmemmap_page_wf_list =
 
-      let id = "Vmemmap_page_wf_list" in
-      let loc = Loc.other "internal (Vmemmap_page_wf_list)" in
+      let id = "vmemmap_page_wf_list" in
+      let loc = Loc.other "internal (vmemmap_page_wf_list)" in
 
       let page_index_s, page_index = IT.fresh_named Integer "page_index" in
 
@@ -238,8 +259,6 @@ module PageAlloc = struct
           (pool_s, IT.bt pool);
         ]
       in
-      let qarg = Some 0 in
-
 
       let body = 
         let page_pointer = arrayShift_ (vmemmap_pointer, struct_ct hyp_page_tag, page_index) in
@@ -324,7 +343,7 @@ module PageAlloc = struct
           ]))))))
       in
 
-      (id, {loc; args; body; qarg; infer_arguments} )
+      (id, {loc; args; definition = Def body; return_bt = Bool; infer_arguments} )
     in
 
 
@@ -338,8 +357,8 @@ module PageAlloc = struct
     (* check: possibly inconsistent *)
     let free_area_cell_wf =
 
-      let id = "FreeArea_cell_wf" in
-      let loc = Loc.other "internal (FreeArea_cell_wf)" in
+      let id = "freeArea_cell_wf" in
+      let loc = Loc.other "internal (freeArea_cell_wf)" in
 
       let cell_index_s, cell_index = IT.fresh_named Integer "cell_index" in
       let vmemmap_pointer_s, vmemmap_pointer = IT.fresh_named Loc "vmemmap_pointer" in
@@ -356,8 +375,6 @@ module PageAlloc = struct
           (pool_s, IT.bt pool);
         ]
       in
-      let qarg = Some 0 in
-
 
       let body = 
         let cell = (map_get_ (pool %. "free_area") cell_index) in
@@ -413,7 +430,7 @@ module PageAlloc = struct
 
 
 
-      (id, {loc; args; body; qarg; infer_arguments} )
+      (id, {loc; args; definition = Def body; return_bt = Bool; infer_arguments} )
     in
 
 
@@ -422,8 +439,8 @@ module PageAlloc = struct
 
 
     let hyp_pool_wf =
-      let id = "Hyp_pool_wf" in
-      let loc = Loc.other "internal (Hyp_pool_wf)" in
+      let id = "hyp_pool_wf" in
+      let loc = Loc.other "internal (hyp_pool_wf)" in
 
       let pool_pointer_s, pool_pointer = IT.fresh_named Loc "pool_pointer" in
       let pool_s, pool = IT.fresh_named (Struct hyp_pool_tag) "pool" in
@@ -438,9 +455,6 @@ module PageAlloc = struct
           (hyp_physvirt_offset_s, IT.bt hyp_physvirt_offset);
         ]
       in
-      let qarg = None in
-
-
 
       let body = 
         let range_start = pool %. "range_start" in
@@ -505,7 +519,7 @@ module PageAlloc = struct
           ]))))
       in
 
-      (id, { loc; args; qarg; body; infer_arguments})
+      (id, { loc; args; return_bt = Bool; definition = Def body; infer_arguments})
       
     in
 
@@ -521,13 +535,13 @@ module PageAlloc = struct
 
 
 
-    [vmemmap_page_wf;
+    [order_aligned;
+     page_size_of_order;
+     vmemmap_page_wf;
      vmemmap_page_wf_list;
      free_area_cell_wf;
      hyp_pool_wf;
-     make_guarded_definition vmemmap_page_wf;
-     make_guarded_definition vmemmap_page_wf_list;
-     make_guarded_definition free_area_cell_wf;
+     buddy;
     ]
 
 

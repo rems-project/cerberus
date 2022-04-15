@@ -7,7 +7,7 @@ val make : Memory.struct_decls -> solver
 
 val push : solver -> unit
 val pop : solver -> unit
-val add : solver -> Global.t -> LogicalConstraints.t -> unit
+val add_assumption : solver -> Global.t -> LogicalConstraints.t -> unit
 
 
 val provable : 
@@ -29,7 +29,7 @@ val model :
 
 
 val eval : 
-  Memory.struct_decls -> 
+  Global.t -> 
   model -> 
   IndexTerms.t -> 
   IndexTerms.t option

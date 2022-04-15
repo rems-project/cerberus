@@ -34,8 +34,7 @@ let pp_open ss =
 
 let eval_extract msg m_g f x =
   let (m, global) = m_g in
-  let open Global in
-  match Solver.eval global.struct_decls m x with
+  match Solver.eval global m x with
   | None -> raise (Failure (Pp.item ("cannot eval: " ^ msg) (IT.pp x)))
   | Some v -> begin match f v with
       | Some y -> y

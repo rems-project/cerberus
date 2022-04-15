@@ -5,8 +5,9 @@ open Assertion_parser_util
 
 
 %token <Z.t> Z
-%token <string> NAME
-%token <string> MEMBER
+%token <string> LNAME
+%token <string> UNAME
+
 
 
 %token TRUE
@@ -16,7 +17,8 @@ open Assertion_parser_util
 %token EQUAL
 %token UNCHANGED
 
-%token DOTDOT
+%token <string> MEMBER
+%token <string> OARG
 
 %token PLUS
 %token MINUS
@@ -86,6 +88,7 @@ open Assertion_parser_util
 /* %nonassoc POINTERCAST */
 %nonassoc MEMBER /* PREDARG */
 
+
 %type <Ast.term>term
 %type <Ast.condition>cond
 %type <Ast.condition>start
@@ -101,11 +104,21 @@ start:
       { cond }
 
 
+name:
+  | n=LNAME
+      { n }
+  | n=UNAME
+      { n }
 
+name2:
+  | n=LNAME
+      { (n, Ast.LogicalPredicate) }
+  | n=UNAME
+      { (n, Ast.ResourcePredicate) }
 
-%inline pred_with_args:
-  | id=NAME LPAREN args=separated_list(COMMA, term) RPAREN
-      { (id, args) }
+%inline args:
+  | LPAREN args=separated_list(COMMA, term) RPAREN
+      { args }
 
 
 integer:
@@ -129,29 +142,29 @@ atomic_term:
   | a1=atomic_term member=MEMBER
 /* taking the location-handling aspect from c_parser.mly */
       { Ast.Member (a1, Id.parse (Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos(member)))) member) }
-  | pred=NAME DOTDOT oarg=NAME
+  | pred=UNAME oarg=OARG
     { Ast. PredOutput (pred, oarg) }
-  | AMPERSAND id=NAME
+  | AMPERSAND id=name
       { Ast.Addr id }
-  | v=NAME
+  | v=name
       { Ast.Var v }
   | STAR p=atomic_term
       { Ast.Pointee p }
   | NULL
       { Ast.Null }
-  | OFFSETOF LPAREN tag = NAME COMMA member= NAME RPAREN
+  | OFFSETOF LPAREN tag = name COMMA member= name RPAREN
       { Ast.OffsetOf {tag; member} }
   | CELLPOINTER LPAREN t1=term COMMA t2=term COMMA t3=term COMMA t4=term COMMA t5=term RPAREN
       { Ast.CellPointer ((t1, t2), (t3, t4), t5) }
-  | LBRACE a=term RBRACE AT l=NAME
+  | LBRACE a=term RBRACE AT l=name
       { Ast.Env (a, l) }
   | LBRACE t=term RBRACE UNCHANGED
       { Ast.Unchanged t }
   | DISJOINT LPAREN p1=term COMMA sz1=term COMMA p2=term COMMA sz2=term RPAREN
       { Ast.Disjoint ((p1, sz1), (p2, sz2)) }
-  | FOR LPAREN i = integer COMMA s = NAME COMMA j = integer RPAREN LBRACE body=term RBRACE
+  | FOR LPAREN i = integer COMMA s = name COMMA j = integer RPAREN LBRACE body=term RBRACE
       { Ast.For ((i, s, j), body) }
-  | BLAST LPAREN i = integer COMMA s = NAME EQUAL v = term COMMA j = integer RPAREN LBRACE body=term RBRACE
+  | BLAST LPAREN i = integer COMMA s = name EQUAL v = term COMMA j = integer RPAREN LBRACE body=term RBRACE
       { Ast.Blast ((i, s, v, j), body) }
 
 arith_term:
@@ -207,9 +220,12 @@ term:
       { Ast.PointerToIntegerCast a1 }
   | a1=atomic_term LBRACKET a2=term RBRACKET
       { Ast.App (a1, a2) } 
+  | predicate = LNAME arguments = args
+      { Ast.Pred (predicate, arguments) }
+
 
 term_with_name:
-  | name=NAME EQUAL t=term
+  | name=name EQUAL t=term
       { (name,t) }
 
 
@@ -224,7 +240,7 @@ basetype:
 ctype:
   | TYPEOF LPAREN t=term RPAREN
       { Ast.Typeof t }
-  | STRUCT name=NAME
+  | STRUCT name=name
       { Ast.Struct name }
   | ct=ctype STAR
       { Ast.Pointer ct }
@@ -246,22 +262,26 @@ ctype:
 
 
 predicate:
-  | predwithargs=pred_with_args oname=option(NAME) maybe_permission=option(if_permission_clause) maybe_typ=option(with_type_clause) maybe_some_oargs=option(where_clause)
-      { let (predicate, arguments) = predwithargs in
+  | predicate=UNAME arguments=args oname=option(name) maybe_permission=option(if_permission_clause) maybe_typ=option(with_type_clause) maybe_some_oargs=option(where_clause)
+      { 
         let some_oargs = Option.value ~default:[] maybe_some_oargs in
-        Ast.{oq = None; predicate; arguments; some_oargs; oname = oname; o_permission = maybe_permission; typ = maybe_typ} }
-  | EACH LPAREN bt=basetype qname=NAME SEMICOLON t=term RPAREN LBRACE predwithargs=pred_with_args maybe_permission=option(if_permission_clause) maybe_typ=option(with_type_clause) RBRACE oname=option(NAME) maybe_some_oargs=option(where_clause)
-      { let (predicate, arguments) = predwithargs in
+        (Ast.{oq = None; predicate; arguments; some_oargs; oname = oname; o_permission = maybe_permission; typ = maybe_typ}, ResourcePredicate)
+      }
+  | EACH LPAREN bt=basetype qname=name SEMICOLON t=term RPAREN LBRACE predicate_and_kind=name2 arguments=args maybe_permission=option(if_permission_clause) maybe_typ=option(with_type_clause) RBRACE oname=option(name) maybe_some_oargs=option(where_clause)
+      { 
+        let (predicate, kind) = predicate_and_kind in
         let some_oargs = Option.value ~default:[] maybe_some_oargs in
-        Ast.{oq = Some (qname,bt,t); predicate; arguments; some_oargs; oname = oname; o_permission = maybe_permission; typ = maybe_typ} }
+        (Ast.{oq = Some (qname,bt,t); predicate; arguments; some_oargs; oname = oname; o_permission = maybe_permission; typ = maybe_typ} , kind)
+      }
+
 
 
 
 cond:
   | c=term
       { Ast.Term c } 
-  | c=predicate
-      { Ast.Predicate c }
-  | LET id=NAME EQUAL t=term
+  | cond_and_kind=predicate
+      { Ast.Predicate (fst cond_and_kind, snd cond_and_kind) }
+  | LET id=name EQUAL t=term
       { Ast.Define (id, t) }
 

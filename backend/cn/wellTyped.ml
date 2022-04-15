@@ -68,6 +68,13 @@ module WIT = struct
     | Some decl -> return decl
     | None -> fail (fun _ -> {loc; msg = Unknown_struct tag})
 
+  let ensure_same_argument_number loc input_output has ~expect =
+    if has = expect then return () else 
+      match input_output with
+      | `General -> fail (fun _ -> {loc; msg = Number_arguments {has; expect}})
+      | `Input -> fail (fun _ -> {loc; msg = Number_input_arguments {has; expect}})
+      | `Output -> fail (fun _ -> {loc; msg = Number_output_arguments {has; expect}})
+
   open BaseTypes
   open LogicalSorts
   open IndexTerms
@@ -399,32 +406,16 @@ module WIT = struct
                 end
          in
          return (IT (Map_op map_op, bt))
-      (* | Option_op option_op -> *)
-      (*    let@ (bt, option_op) = match option_op with *)
-      (*      | Nothing vbt -> return (Option vbt, Nothing vbt) *)
-      (*      | Something t ->  *)
-      (*         let@ t = infer loc ~context t in *)
-      (*         return (Option (IT.bt t), Something t) *)
-      (*      | Is_something t -> *)
-      (*         let@ t = infer loc ~context t in *)
-      (*         let@ _vbt = ensure_option_type loc context t in *)
-      (*         return (BT.Bool, Is_something t) *)
-      (*      | Is_nothing t -> *)
-      (*         let@ t = infer loc ~context t in *)
-      (*         let@ _vbt = ensure_option_type loc context t in *)
-      (*         return (BT.Bool, Is_nothing t) *)
-      (*      | Get_some_value t -> *)
-      (*         let@ t = infer loc ~context t in *)
-      (*         let@ vbt = ensure_option_type  loc context t in *)
-      (*         return (vbt, Get_some_value t) *)
-      (*    in *)
-      (*    return (IT (Option_op option_op, bt)) *)
-      (* | Let ((s, bound), body) -> *)
-      (*    pure begin *)
-      (*        let@ t = infer loc ~context bound in *)
-      (*        let@ () = add_l s (IT.bt t) in *)
-      (*        infer loc ~context body *)
-      (*      end *)
+      | Pred (name, args) ->
+         let@ def = Typing.get_logical_predicate_def loc name in
+         let has_args, expect_args = List.length args, List.length def.args in
+         let@ () = ensure_same_argument_number loc `General has_args ~expect:expect_args in
+         let@ args = 
+           ListM.map2M (fun has_arg (_, def_arg_bt) ->
+               check loc ~context def_arg_bt has_arg
+             ) args def.args
+         in
+         return (IT (Pred (name, args), def.return_bt))
          
          
 
@@ -457,12 +448,7 @@ let unconstrained_lvar loc infos lvar =
   let (loc, odescr) = SymMap.find lvar infos in
   fail (fun _ -> {loc; msg = Unconstrained_logical_variable (lvar, odescr)})
 
-let ensure_same_argument_number loc input_output has ~expect =
-  if has = expect then return () else 
-    match input_output with
-    | `General -> fail (fun _ -> {loc; msg = Number_arguments {has; expect}})
-    | `Input -> fail (fun _ -> {loc; msg = Number_input_arguments {has; expect}})
-    | `Output -> fail (fun _ -> {loc; msg = Number_output_arguments {has; expect}})
+
 
 
 module WRE = struct
@@ -493,8 +479,8 @@ module WRE = struct
        let has_iargs, expect_iargs = List.length p.iargs, List.length def.iargs in
        let has_oargs, expect_oargs = List.length p.oargs, List.length def.oargs in
        (* +1 because of pointer argument *)
-       let@ () = ensure_same_argument_number loc `Input (1 + has_iargs) ~expect:(1 + expect_iargs) in
-       let@ () = ensure_same_argument_number loc `Output has_oargs ~expect:expect_oargs in
+       let@ () = WIT.ensure_same_argument_number loc `Input (1 + has_iargs) ~expect:(1 + expect_iargs) in
+       let@ () = WIT.ensure_same_argument_number loc `Output has_oargs ~expect:expect_oargs in
        let@ _ = 
          ListM.mapM (fun (arg, expected_sort) ->
              WIT.check loc expected_sort arg
@@ -511,8 +497,8 @@ module WRE = struct
            let has_iargs, expect_iargs = List.length p.iargs, List.length def.iargs in
            let has_oargs, expect_oargs = List.length p.oargs, List.length def.oargs in
            (* +1 because of pointer argument *)
-           let@ () = ensure_same_argument_number loc `Input (1 + has_iargs) ~expect:(1 + expect_iargs) in
-           let@ () = ensure_same_argument_number loc `Output has_oargs ~expect:expect_oargs in
+           let@ () = WIT.ensure_same_argument_number loc `Input (1 + has_iargs) ~expect:(1 + expect_iargs) in
+           let@ () = WIT.ensure_same_argument_number loc `Output has_oargs ~expect:expect_oargs in
            let@ _ = 
              ListM.mapM (fun (arg, expected_sort) ->
                  WIT.check loc expected_sort arg
@@ -568,17 +554,6 @@ end
 module WLC = struct
   type t = LogicalConstraints.t
 
-  let welltyped_pred loc (pred : LC.Pred.t) = 
-    let@ def = Typing.get_logical_predicate_def loc pred.name in
-    let has_args, expect_args = List.length pred.args, List.length def.args in
-    let@ () = ensure_same_argument_number loc `General has_args ~expect:expect_args in
-    let@ _ = 
-      ListM.mapM (fun (has_arg, (_, def_arg_bt)) ->
-          WIT.check loc def_arg_bt has_arg
-           ) (List.combine pred.args def.args)
-    in
-    return ()
-
   let welltyped loc lc =
     match lc with
     | LC.T it -> 
@@ -590,31 +565,6 @@ module WLC = struct
            let@ _ = WIT.check loc BT.Bool it in
            return ()
        end
-    | LC.Pred pred ->
-       welltyped_pred loc pred
-    | LC.QPred {q = (s, bt); condition; pred} ->
-       pure begin
-           let@ () = add_l s bt in
-           let@ _ = WIT.check loc BT.Bool condition in
-           let@ () = welltyped_pred loc pred in
-           let@ def = Typing.get_logical_predicate_def loc pred.name in
-           begin match def.qarg with
-           | Some n -> 
-              begin match IT.is_sym (List.nth pred.args n) with
-              | Some (s', bt') when Sym.equal s s' && BT.equal bt bt' -> return ()
-              | _ ->
-                let err = "Index/quantifier argument does not match quantifier" in
-                fail (fun _ -> {loc; msg = Generic !^err})
-              end
-           | None -> 
-              let err = 
-                "Cannot use predicate " ^ pred.name ^ 
-                  " inside a quantifier because it \
-                   has no index/quantifier argument."
-              in
-              fail (fun _ -> {loc; msg = Generic !^err})
-           end
-         end
 
 end
 
@@ -947,8 +897,12 @@ module WLPD = struct
   let welltyped (pd : LogicalPredicates.definition) = 
     pure begin
         let@ () = add_ls pd.args in
-        let@ _ = WIT.check pd.loc BT.Bool pd.body in
-        return ()
+        match pd.definition with
+        | Def body -> 
+           let@ _ = WIT.check pd.loc pd.return_bt body in
+           return ()
+        | Uninterp -> 
+           return ()
       end
 
 

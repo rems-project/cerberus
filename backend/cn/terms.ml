@@ -84,13 +84,6 @@ and 'bt map_op =
   | Get of 'bt term * 'bt term
   | Def of (Sym.t * BaseTypes.t) * 'bt term
 
-(* and 'bt option_op = *)
-(*   | Nothing of BaseTypes.t *)
-(*   | Something of 'bt term *)
-(*   | Is_nothing of 'bt term *)
-(*   | Is_something of 'bt term *)
-(*   | Get_some_value of 'bt term *)
-
 and 'bt term_ =
   | Lit of lit
   | Arith_op of 'bt arith_op
@@ -102,8 +95,7 @@ and 'bt term_ =
   | Set_op of 'bt set_op
   | CT_pred of 'bt ct_pred
   | Map_op of 'bt map_op
-  (* | Option_op of 'bt option_op *)
-  (* | Let of (Sym.t * 'bt term) * 'bt term *)
+  | Pred of string * ('bt term) list
 
 and 'bt term =
   | IT of 'bt term_ * 'bt

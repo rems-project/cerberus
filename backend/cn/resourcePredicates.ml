@@ -167,16 +167,7 @@ let page () =
   let order_s, order = IT.fresh Integer in
   let clause1 = 
     let qp = 
-      let length = 
-        let rec aux i = 
-          if i >= 11 then default_ BT.Integer else 
-            ite_ (eq_ (order, int_ i), 
-                  z_ (Z.pow (Z.of_int 2) (12 + i)), 
-                  aux (i + 1))
-
-        in
-        aux 0
-      in
+      let length = pred_ "page_size_of_order" [order] Integer in
       let q_s, q = IT.fresh Integer in {
         name = "Byte"; 
         pointer = pointer_ Z.zero;
@@ -333,11 +324,9 @@ let page_alloc_predicates struct_decls =
           pool
         ]
       in
-      QPred {
-          q = (i_s, IT.bt i); 
-          condition = condition;
-          pred = { name = "Vmemmap_page_wf"; args };
-        }
+      forall_ (i_s, IT.bt i) (
+          impl_ (condition, pred_ "vmemmap_page_wf" args BT.Bool);
+        )
     in
   
     let vmemmap_wf_list = 
@@ -351,11 +340,10 @@ let page_alloc_predicates struct_decls =
           pool
         ]
       in
-      QPred {
-          q = (i_s, IT.bt i); 
-          condition = condition;
-          pred = { name = "Vmemmap_page_wf_list"; args };
-        }
+      forall_ (i_s, IT.bt i) (
+          impl_ (condition,
+                 pred_ "vmemmap_page_wf_list" args BT.Bool )
+        )
     in
 
   let free_area_wf = 
@@ -369,11 +357,10 @@ let page_alloc_predicates struct_decls =
           pool;
         ]
       in
-      QPred {
-          q = (i_s, IT.bt i); 
-          condition = condition;
-          pred = { name = "FreeArea_cell_wf"; args };
-        }
+      forall_ (i_s, IT.bt i) (
+          impl_ (condition,
+                 pred_ "freeArea_cell_wf" args BT.Bool)
+        )
     in
 
     let hyp_pool_wf = 
@@ -384,7 +371,7 @@ let page_alloc_predicates struct_decls =
           hyp_physvirt_offset;
         ]        
       in
-      Pred { name = "Hyp_pool_wf"; args }
+      LC.t_ (pred_ "hyp_pool_wf" args BT.Bool)
     in
 
     let wellformedness = 

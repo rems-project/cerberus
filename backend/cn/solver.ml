@@ -12,6 +12,7 @@ open LogicalPredicates
 module LCSet = Set.Make(LC)
 
 
+
 let save_slow_problems = 
   ref (if !Debug_ocaml.debug_level > 0
        then (5.0, (Some "slow_smt.txt" : string option))
@@ -251,10 +252,11 @@ module Translate = struct
 
   let integer_to_loc_fundecl context struct_decls = 
     Z3.Tuple.get_mk_decl (sort context struct_decls Loc)
+  
 
+  let term ?(warn_lambda=true) context global : IT.t -> expr =
 
-  let term ?(warn_lambda=true) context struct_decls : IT.t -> expr =
-
+    let struct_decls = global.struct_decls in
     let sort bt = sort context struct_decls bt in
     let symbol sym = symbol context sym in
     let string str = string context str in
@@ -271,6 +273,8 @@ module Translate = struct
     in
 
 
+
+    
 
     let rec term (IT (it_, bt)) =
       begin match it_ with
@@ -474,40 +478,19 @@ module Translate = struct
               (Z3.Quantifier.mk_lambda_const context
                  [term (sym_ (q_s, q_bt))] (term body))
          end
-      (* | Option_op option_op -> *)
-      (*    begin match option_op with *)
-      (*    | Nothing vbt -> *)
-      (*       let nothing_constructor = List.nth (Z3.Datatype.get_constructors (sort bt)) 0 in *)
-      (*       Z3.Expr.mk_app context nothing_constructor [] *)
-      (*    | Something t -> *)
-      (*       let something_constructor = List.nth (Z3.Datatype.get_constructors (sort bt)) 1 in *)
-      (*       Z3.Expr.mk_app context something_constructor [term t] *)
-      (*    | Is_nothing t -> *)
-      (*       let nothing_recogniser = List.nth (Z3.Datatype.get_recognizers (sort (IT.bt t))) 0 in *)
-      (*       Z3.Expr.mk_app context nothing_recogniser [term t] *)
-      (*    | Is_something t -> *)
-      (*       let something_recogniser = List.nth (Z3.Datatype.get_recognizers (sort (IT.bt t))) 1 in *)
-      (*       Z3.Expr.mk_app context something_recogniser [term t] *)
-      (*    | Get_some_value t -> *)
-      (*       let something_value_accessor = hd (List.nth (Z3.Datatype.get_accessors (sort (IT.bt t))) 1) in *)
-      (*       Z3.Expr.mk_app context something_value_accessor [term t] *)
-      (*    end *)
-      (* | Let ((s, bound), body) -> *)
-         (* let bound = term bound in *)
-         (* term (IT.subst (IT.make_subst [(s, bound)]) body)) *)
-
-         (* let body = IT.subst (IT.make_subst [(s, bound)]) body in
-          * term body *)
-         (* reading
-            https://stackoverflow.com/questions/24188626/performance-issues-about-z3-for-java
-            and
-            https://stackoverflow.com/questions/14392957/encoding-let-expressions-in-z3
-            and
-            https://gitter.im/chc-comp/Lobby?at=5b1ae86e106f3c24bde6fea4
-            *)
-         (* let sym_s, sym = IT.fresh (IT.bt bound) in *)
-         (* let body = IT.subst (IT.make_subst [(s, sym)]) body in *)
-         (* Z3.Expr.substitute_one (term body) (term sym) (term bound) *)
+      | Pred (name, args) ->
+         let def = Option.get (get_logical_predicate_def global name) in
+         begin match def.definition with
+         | Def body ->
+            term (LogicalPredicates.open_pred global def.args body args)
+         | Uninterp ->
+            let decl = 
+              Z3.FuncDecl.mk_func_decl context (string name)
+                (List.map (fun it -> sort (IT.bt it)) args)
+                (sort def.return_bt)
+            in
+            Z3.Expr.mk_app context decl (List.map term args)
+       end
       end
 
     in
@@ -516,100 +499,95 @@ module Translate = struct
     term it
 
 
+    
 
 
+  let assumption context global c = 
+    let term it = term context global it in
+    match c with
+    | T it -> 
+       Some (term it)
+    | Forall ((s, bt), body) ->
+       None
+       (* let q =  *)
+       (*   Z3.Quantifier.mk_forall_const context  *)
+       (*     [term (sym_ (s, bt))] (term body)  *)
+       (*     None [] [] None None  *)
+       (* in *)
+       (* Some (Z3.Quantifier.expr_of_quantifier q) *)
 
-end
-
-
-
-let constr context global c = 
-  let open Translate in
-  let term it = term context global.struct_decls it in
-  match c with
-  | T it -> 
-     Some (term it)
-  | Forall ((s, bt), body) ->
-     let q = 
-       Z3.Quantifier.mk_forall_const context 
-         [term (sym_ (s, bt))] (term body) 
-         None [] [] None None 
-     in
-     Some (Z3.Quantifier.expr_of_quantifier q)
-  | Pred pred ->
-     let def = Option.get (get_logical_predicate_def global pred.name) in
-     Some (term (LogicalPredicates.open_pred global def pred.args))
-  | QPred _ ->
-     (* QPreds are not automatically expanded: to avoid
-        all-quantifiers *)
-     None
-     
-
-
-module ReduceQuery = struct
-
-  open Pred
-  open QPred
 
   type reduction = {
-      lc : IT.t;
+      lc : Z3.Expr.expr;
+      extra_assumptions : Z3.Expr.expr list;
       oq : (Sym.t * BT.t) option; (* for UI only *)
     }
 
-  let forall (s, bt) t =
-    let s' = Sym.fresh () in
-    { lc = IT.subst (make_subst [(s, sym_ (s', bt))]) t; 
-      oq = Some (s', bt) }
+  let goal context global assumptions =
 
-  let pred global (pred : LC.Pred.t) = 
-    let def = Option.get (get_logical_predicate_def global pred.name) in
-    { lc = open_pred global def pred.args; 
-      oq = None }
+    let term t = term context global t in
 
-  let qpred global assumptions qpred =
-    let def = Option.get (get_logical_predicate_def global qpred.pred.name) in
-    (* fresh name to instantiate quantifiers with *)
-    let s_inst = Sym.fresh () in
-    let instantiate {q = (s, bt); condition; pred} = 
-      let subst = make_subst [(s, sym_ (s_inst, bt))] in
-      IT.subst subst (impl_ (condition, open_pred global def pred.args))
+    let forall assumptions (s, bt) t =
+      let v = Sym.fresh () in
+      let inst sym term = IT.subst (make_subst [(sym, sym_ (v, bt))]) term in
+      let extra_assumptions = 
+        LCSet.fold (fun lc acc ->
+            match lc with
+            | Forall ((s', bt'), t') when BT.equal bt bt' ->
+               term (inst s' t') :: acc
+            | _ ->
+               acc
+          ) assumptions []
+      in
+      { lc = term (inst s t); 
+        extra_assumptions;
+        oq = Some (v, bt) }
     in
-    (* Want to prove "body[s_inst/s]" assuming 'condition[s_inst/s]',
-       using the qpred assumptions from the context for the same
-       predicate, also instantiated with s_inst *)
-    let extra_assumptions =
-      Context.LCSet.fold (fun lc acc ->
-          match lc with
-          | QPred qpred' when String.equal qpred.pred.name qpred'.pred.name ->
-             instantiate qpred' :: acc
-          | _ -> 
-             acc
-        ) assumptions []
+
+    (* let qpred qpred = *)
+    (*   let open QPred in *)
+    (*   let mk_impl = Z3.Boolean.mk_implies context in *)
+    (*   let mk_and = Z3.Boolean.mk_and context in *)
+    (*   let def = Option.get (get_logical_predicate_def global qpred.pred.name) in *)
+    (*   (\* fresh name to instantiate quantifiers with *\) *)
+    (*   let s_inst = Sym.fresh () in *)
+    (*   let instantiate {q = (s, bt); condition; pred} =  *)
+    (*     let subst = make_subst [(s, sym_ (s_inst, bt))] in *)
+    (*     let condition = IT.subst subst condition in *)
+    (*     let args = List.map (IT.subst subst) pred.args in *)
+    (*     mk_impl (term condition) *)
+    (*       (match def.definition with *)
+    (*        | Def body -> term (open_pred global def.args body args) *)
+    (*        | Uninterp bt -> uninterp pred.name pred.args bt) *)
+    (*   in *)
+    (*   (\* Want to prove "body[s_inst/s]" assuming 'condition[s_inst/s]', *)
+    (*      using the qpred assumptions from the context for the same *)
+    (*      predicate, also instantiated with s_inst *\) *)
+    (*   let extra_assumptions = *)
+    (*     Context.LCSet.fold (fun lc acc -> *)
+    (*         match lc with *)
+    (*         | QPred qpred' when String.equal qpred.pred.name qpred'.pred.name -> *)
+    (*            instantiate qpred' :: acc *)
+    (*         | _ ->  *)
+    (*            acc *)
+    (*       ) assumptions [] *)
+    (*   in *)
+    (*   { lc = mk_impl (mk_and extra_assumptions) (instantiate qpred); *)
+    (*     oq = Some (s_inst, snd qpred.q); } *)
+    (* in *)
+
+    let plain it = 
+      { lc = term it; 
+        extra_assumptions = [];
+        oq = None;
+      }
     in
-    { lc = impl_ (and_ extra_assumptions, instantiate qpred);
-      oq = Some (s_inst, snd qpred.q); }
 
 
-  let plain it = 
-    match it with
-    (* | IT (Bool_op (EachI ((i1, i_s, i2), body)), _) -> *)
-    (*    let i = sym_ (i_s, Integer) in *)
-    (*    let condition = and_ [IT.le_ (int_ i1, i); IT.le_ (i, int_ i2)] in *)
-    (*    forall (i_s, Integer) (impl_ (condition, body)) *)
-    | _ -> 
-       { lc = it;
-         oq = None }
-
-
-
-  let constr global assumptions (lc : LC.t) =
+    fun (lc : LC.t) ->
     match lc with
     | T t -> plain t
-    | Forall ((s, bt), t) -> forall (s, bt) t
-    | Pred predicate -> pred global predicate
-    | QPred qpredicate -> qpred global assumptions qpredicate
-       
-
+    | Forall ((s, bt), t) -> forall assumptions (s, bt) t
 
 end
 
@@ -632,7 +610,7 @@ let _tactic context =
       (* "blast-term-ite"; *)
       (* "cofactor-term-ite"; *)
       "simplify";
-      "purify-arith";
+      (* "purify-arith"; *)
       "solve-eqs";
       (* "elim-term-ite"; *)
       "auflia";
@@ -672,20 +650,19 @@ let pop solver =
   Z3.Solver.pop solver.incremental 1
 
 
-let add solver global lc = 
+let add_assumption solver global lc = 
   (* do nothing to fancy solver, because that is reset for every query *)
-  match constr solver.context global lc with
+  match Translate.assumption solver.context global lc with
   | None -> ()
   | Some sc -> Z3.Solver.add solver.incremental [sc]
 
 
 (* as similarly suggested by Robbert *)
-let shortcut struct_decls it = 
-  let it = Simplify.simp struct_decls SymMap.empty LCSet.empty it in
-  match it with
-  | IT (Lit (Bool true), _) -> `True
-  | IT (Lit (Bool false), _) -> `False it
-  | _ -> `No_shortcut it
+let shortcut struct_decls lc = 
+  let lc = Simplify.simp_lc struct_decls SymMap.empty LCSet.empty lc in
+  match lc with
+  | LC.T (IT (Lit (Bool true), _)) -> `True
+  | _ -> `No_shortcut lc
 
 
 
@@ -719,7 +696,7 @@ let maybe_save_slow_problem solv_inst lc lc_t time solver = match ! save_slow_pr
       (Pp.list (fun pp -> pp) [
           item "time taken" (format [] (Float.to_string time));
           item "constraint" (LC.pp lc);
-          item "reduced constraint" (IT.pp lc_t);
+          item "SMT constraint" !^(Z3.Expr.to_string lc_t);
           if !Pp.print_level >= 10 then item "solver statistics" !^(Z3.Statistics.to_string (Z3.Solver.get_statistics solver)) else Pp.empty;
           if !Pp.print_level >= 11 then item "SMT assertions" (Pp.list (fun e -> format [] (Z3.Expr.to_string e)) (Z3.Solver.get_assertions solv_inst)) else Pp.empty;
       ]))) ();
@@ -730,41 +707,35 @@ let provable ~loc ~shortcut_false ~solver ~global ~trace_length ~assumptions ~po
   let context = solver.context in
   let structs = global.struct_decls in
   (* debug 5 (lazy (item "provable check" (LC.pp lc))); *)
-  let ReduceQuery.{lc = it; oq} = ReduceQuery.constr global assumptions lc in
   (* debug 6 (lazy (item "reduced" (IT.pp it))); *)
   let rtrue () = model_state := No_model; `True in
-  let rfalse = function
-    | Some solver -> model_state := Model (context, solver, oq); `False
-    | None -> model_state := No_model; `False
-  in
-  match shortcut structs it with
+  let rfalse oq solver = model_state := Model (context, solver, oq); `False in
+  match shortcut structs lc with
   | `True -> rtrue ()
-  | `False _ when shortcut_false -> rfalse None
-  | (`False it | `No_shortcut it) ->
-     let translate it = Translate.term context structs it in
-     let t = translate (not_ it) in
-     let assumptions = List.map translate pointer_facts in
-     let res = time_f_logs loc 5 "Z3(inc)" trace_length
-                 (Z3.Solver.check solver.incremental) 
-                 (t :: assumptions) 
+  | `No_shortcut ulc ->
+     let Translate.{lc; extra_assumptions; oq} = Translate.goal context global assumptions ulc in
+     let nlc = Z3.Boolean.mk_not context lc in
+     let assumptions = List.map (Translate.term context global) pointer_facts @ extra_assumptions in
+     let res = 
+       time_f_logs loc 5 "Z3(inc)" trace_length
+         (Z3.Solver.check solver.incremental) 
+         (nlc :: assumptions) 
      in
      match res with
      | Z3.Solver.UNSATISFIABLE -> rtrue ()
-     | Z3.Solver.SATISFIABLE -> rfalse (Some solver.incremental)
+     | Z3.Solver.SATISFIABLE -> rfalse oq solver.incremental
      | Z3.Solver.UNKNOWN ->
-        (* print stdout (item "checking" !^(Z3.Expr.to_string t)); *)
-        let add sc = Z3.Solver.add solver.fancy [sc] in
-        Z3.Solver.reset solver.fancy;
         debug 5 (lazy (format [] "Z3(inc) unknown/timeout, running full solver"));
-        add t;
-        List.iter add assumptions;
-        List.iter add (Z3.Solver.get_assertions solver.incremental);
-        let (elapsed, res) = time_f_elapsed (time_f_logs loc 5 "Z3" trace_length
-                (Z3.Solver.check solver.fancy)) [] in
-        maybe_save_slow_problem solver.fancy lc it elapsed solver.fancy;
+        let (elapsed, res) = 
+          time_f_elapsed 
+            (time_f_logs loc 5 "Z3" trace_length
+               (Z3.Solver.check solver.fancy))
+            (nlc :: assumptions @ Z3.Solver.get_assertions solver.incremental)
+        in
+        maybe_save_slow_problem solver.fancy ulc lc elapsed solver.fancy;
         match res with
         | Z3.Solver.UNSATISFIABLE -> rtrue ()
-        | Z3.Solver.SATISFIABLE -> rfalse (Some solver.fancy)
+        | Z3.Solver.SATISFIABLE -> rfalse oq solver.fancy
         | Z3.Solver.UNKNOWN -> 
            let reason = Z3.Solver.get_reason_unknown solver.fancy in
            failwith ("SMT solver returned 'unknown'; reason: " ^ reason)
@@ -773,7 +744,9 @@ let provable ~loc ~shortcut_false ~solver ~global ~trace_length ~assumptions ~po
 
 exception Unsupported of string
 
-let eval struct_decls (context, model) to_be_evaluated = 
+let eval global (context, model) to_be_evaluated = 
+
+  let struct_decls = global.struct_decls in
 
   let open Translate in
 
@@ -1047,10 +1020,7 @@ let eval struct_decls (context, model) to_be_evaluated =
     aux [] expr
   in
 
-  let expr = 
-    Translate.term ~warn_lambda:false context 
-      struct_decls to_be_evaluated 
-  in
+  let expr = Translate.term ~warn_lambda:false context global to_be_evaluated in
   match Z3.Model.eval model expr true with
   | None -> None
   | Some v -> Some (z3_expr v)

@@ -619,6 +619,11 @@ let rec simp (struct_decls : Memory.struct_decls) values equalities lcs =
   (*   IT (Let ((s', bound), body), bt) *)
   (* in *)
 
+  let pred name args bt =
+    let args = List.map aux args in
+    IT (Pred (name, args), bt)
+  in
+
   fun it ->
   if LCSet.mem (LC.T it) lcs then bool_ true else
   if LCSet.mem (LC.T (not_ it)) lcs then bool_ false else
@@ -634,6 +639,7 @@ let rec simp (struct_decls : Memory.struct_decls) values equalities lcs =
     | Set_op s -> IT (Set_op s, bt)
     | CT_pred c -> ct_pred c bt
     | Map_op a -> map_op a bt
+    | Pred (name, args) -> pred name args bt
     (* | Option_op o -> option_op o bt *)
     (* | Let ((s, bound), body) -> letb (s, bound) body bt *)
 
@@ -689,7 +695,7 @@ let simp_lc struct_decls values lcs lc =
         LC.T (eq_ (a, b))
      | _ -> LC.Forall ((q, qbt), body)
      end
-  | _ -> lc
+
 
 
 let simp_lc_flatten struct_decls values lcs lc = 

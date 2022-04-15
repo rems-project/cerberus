@@ -2,7 +2,10 @@
 
 type token =
   | Z of Z.t
-  | NAME of string
+  | LNAME of string
+  | UNAME of string
+  | MEMBER of string
+  | OARG of string
 
   | TRUE
   | FALSE
@@ -50,8 +53,6 @@ type token =
   | CELLPOINTER
   | DISJOINT
 
-  | MEMBER of string
-  | DOTDOT
 
   | POINTERCAST
   | INTEGERCAST

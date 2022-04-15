@@ -43,6 +43,7 @@ module Terms = struct
     | Unchanged of term
     | For of (Z.t * string * Z.t) * term
     | Blast of (Z.t * string * term * Z.t) * term
+    | Pred of string * term list
   [@@deriving eq, ord]
 
 
@@ -140,6 +141,9 @@ module Terms = struct
        mparens atomic
          (c_app !^"blast" [!^(Z.to_string i); !^name ^^ equals ^^ pp true v; !^(Z.to_string j)] ^^^
             braces (pp false body))
+    | Pred (name, args) ->
+       mparens atomic
+         (c_app !^name (List.map (pp false) args))
        
 
 
@@ -232,6 +236,8 @@ module Terms = struct
          aux body
       | Blast ((_, _, v, _), body) ->
          aux v || aux body
+      | Pred (name, args) ->
+         List.exists aux args
     in
     aux t
   
@@ -252,6 +258,10 @@ type typ =
   | Pointer of typ
 
 
+type predicate_kind = 
+  | LogicalPredicate
+  | ResourcePredicate
+
 type predicate = {
     oq : (string * BT.t * term) option;
     predicate : string;
@@ -264,7 +274,7 @@ type predicate = {
 
 type condition = 
   | Term of term
-  | Predicate of predicate
+  | Predicate of predicate * predicate_kind
   | Define of string * term
 
 

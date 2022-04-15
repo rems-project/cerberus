@@ -82,12 +82,14 @@ rule main = parse
   | '\n' {Lexing.new_line lexbuf; main lexbuf}
 
   (* names *)
-  | ['_' 'a'-'z' 'A'-'Z']['0'-'9' 'A'-'Z' 'a'-'z' '_']* as name
-      { T.NAME name }
+  | ['_' 'a'-'z']['0'-'9' 'A'-'Z' 'a'-'z' '_']* as name
+      { T.LNAME name }
+  | ['A'-'Z']['0'-'9' 'A'-'Z' 'a'-'z' '_']* as name
+      { T.UNAME name }
+  | ".." (['_' 'a'-'z' 'A'-'Z']['0'-'9' 'A'-'Z' 'a'-'z' '_']* as oarg)
+      { T.OARG oarg }
   | '.' (['_' 'a'-'z' 'A'-'Z']['0'-'9' 'A'-'Z' 'a'-'z' '_']* as member)
       { T.MEMBER member }
-  | ".."
-      { T.DOTDOT }
 
 
   | eof  { T.EOF }

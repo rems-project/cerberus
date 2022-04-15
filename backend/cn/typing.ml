@@ -19,7 +19,7 @@ type 'e failure = Context.t -> 'e
 let run (c : Context.t) (m : ('a, 'e) t) : ('a, 'e) Resultat.t = 
   let solver = Solver.make c.global.struct_decls in
   let sym_eqs = SymMap.empty in
-  LCSet.iter (Solver.add solver c.global) c.constraints;
+  LCSet.iter (Solver.add_assumption solver c.global) c.constraints;
   let s = { typing_context = c; solver; sym_eqs; past_models = []; trace_length = 0 } in
   let outcome = m s in
   match outcome with
@@ -146,7 +146,7 @@ let check_models_current () =
 let model_has_prop prop =
   let@ global = get_global () in
   let is_some_true t = Option.is_some t && IT.is_true (Option.get t) in
-  return (fun m -> is_some_true (Solver.eval global.struct_decls (fst m) prop))
+  return (fun m -> is_some_true (Solver.eval global (fst m) prop))
 
 let prev_models_with loc prop =
   let@ ms = check_models_current () in
@@ -212,7 +212,7 @@ let add_c lc =
   let@ values, lcs = simp_constraints () in
   let lcs = Simplify.simp_lc_flatten s.global.struct_decls values lcs lc in
   let s = List.fold_right Context.add_c lcs s in
-  let () = List.iter (Solver.add solver s.global) lcs in
+  let () = List.iter (Solver.add_assumption solver s.global) lcs in
   let sym_eqs = List.filter_map (LC.is_sym_lhs_equality) lcs in
   let@ _ = add_sym_eqs sym_eqs in
   set s
@@ -294,6 +294,7 @@ let get_resource_predicate_def loc id =
     | Some def -> return def
     | None -> fail (fun _ -> {loc; msg = Unknown_resource_predicate {id;
         logical = Option.is_some (Global.get_logical_predicate_def global id)}})
+
 
 let get_logical_predicate_def loc id =
   let@ global = get_global () in

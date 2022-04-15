@@ -346,9 +346,7 @@ let state ctxt {substitution; vclasses; relevant} (model_with_q : Solver.model_w
   let location_trace = List.map (fun l -> Pp.string (Locations.to_string l))
     (List.rev l_tr) in
 
-  let struct_decls = ctxt.global.struct_decls in
-
-  let evaluate it = Solver.eval struct_decls model it in
+  let evaluate it = Solver.eval ctxt.global model it in
 
   let evaluate_lambda (q_s, q_bt) it = 
     let open Option in
