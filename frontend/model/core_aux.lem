@@ -2209,6 +2209,10 @@ val add_std: string -> expr unit -> expr unit
 let add_std str (Expr annot expr_) =
   Expr (Astd str :: annot) expr_
 
+val add_stds: list string -> expr unit -> expr unit
+let add_stds strs (Expr annot expr_) =
+  Expr (List.map (fun z -> Astd z) strs ++ annot) expr_
+  
 type collect_saves_state 'a = <|
   tmp_acc:    Core.labeled_continuations 'a;
   closed_acc: Core.labeled_continuations 'a;
