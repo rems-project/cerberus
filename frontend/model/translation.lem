@@ -651,11 +651,101 @@ and translate_bitwise_operator loc translate usual_arithmetic_conversion stdlib 
   end
 
 
-
-
-
-
-
+and translate_postfix loc self stdlib result_ty op e =
+  let (std_para, core_op, shift_const) =
+    match op with
+      | A.PostfixIncr ->
+          ("#2", C.OpAdd, 1)
+      | A.PostfixDecr ->
+          ("#3", C.OpSub, 0 - 1)
+      | (*BISECT-IGNORE*) _ ->
+          error "[Translation.translate_postfix], 'op' must be a postfix operator"
+    end in
+  let std_sentence_n (n: nat) = "§6.5.2.4" ^ std_para ^ ", sentence " ^ show n in
+  (* STD §6.5.2.4 *)
+  let () =
+    if AilTypesAux.is_atomic (ctype_of e) then
+      Debug.warn [Debug.DB_elaboration] (fun () -> "TODO: elaboration is wrong for atomic types")
+    else
+      () in
+  self e >>= fun core_e ->
+  let () = Debug.print_debug 1 [Debug.DB_elaboration] (fun () -> "TODO: needs to fix this") in
+  let ty  = AilTypesAux.rvalue_coercion (snd (from_lvalue_type e)) in
+  let oTy = force_core_object_type_of_ctype ty    in
+  let core_ty_e = Caux.mk_ail_ctype_pe ty in
+  E.wrapped_fresh_symbol (C.BTy_object C.OTy_pointer) >>= fun (lvalue_sym, lvalue_sym_pat, lvalue_sym_pe) ->
+  E.wrapped_fresh_symbol (C.BTy_loaded oTy)           >>= fun (load_sym,   load_sym_pat,   load_sym_pe)   ->
+  E.wrapped_fresh_symbol (C.BTy_object oTy)           >>= fun (obj_sym,    obj_sym_pat,    obj_sym_pe)    ->
+  let mk_common () =
+    E.return begin
+      Caux.add_stds ["§6.5.2.4"; std_sentence_n 1; std_sentence_n 3] begin
+        Caux.mk_wseq_e lvalue_sym_pat core_e begin
+          C.Expr [Annot.Astd (std_sentence_n 4)] begin
+            C.Easeq (load_sym, C.BTy_loaded oTy)
+              (C.Action loc default (C.Load core_ty_e lvalue_sym_pe Cmm.NA))
+              (C.Paction C.Neg (C.Action loc default (C.Store false(* not locking *)
+                core_ty_e
+                lvalue_sym_pe
+                (Caux.mk_case_pe load_sym_pe
+                  [ ( Caux.mk_specified_pat obj_sym_pat
+                    , Caux.mk_specified_pe $ Caux.mk_std_pe (std_sentence_n 2)
+match Ctype.unatomic_ ty with
+  | Ctype.Basic (Ctype.Integer _) ->
+      (* TODO: check again *)
+      let core_incr = Caux.mk_op_pe core_op obj_sym_pe (Caux.mk_integer_pe 1) in
+      if AilTypesAux.is_signed_integer_type result_ty then
+                        stdlib.mkcall_catch_exceptional_condition result_ty core_incr
+      else (* is unsigned *)
+                        stdlib.mkcall_wrapI result_ty core_incr
+  | Ctype.Basic (Ctype.Floating (Ctype.RealFloating _)) ->
+                        (* TODO: not correct semantics for float *)
+                        Caux.mk_op_pe core_op obj_sym_pe (Caux.mk_floating_value_pe Mem.one_fval)
+  | Ctype.Pointer _ ref_ty ->
+                        Caux.mk_array_shift obj_sym_pe ref_ty (Caux.mk_integer_pe shift_const)
+  | (*BISECT-IGNORE*) _ ->
+      illTypedAil loc "AilEunary PostfixIncr|PostfixDecr"
+end
+                    )
+                  ; ( Caux.mk_unspecified_pat (Caux.mk_empty_pat C.BTy_ctype)
+                    , Caux.mk_unspecified_pe ty(*TODO:check*) )
+                  ] )
+                  Cmm.NA)))
+          end
+        end
+      end
+    end in
+if Global.is_CHERI () then
+  match Ctype.unatomic_ ty with
+    | Ctype.Pointer _ ref_ty ->
+        (* for CHERI we use the effectful array_shift operator *)
+        (* TODO: the load + store are NOT atomic ==> need a new operator in the memory interface ... *)
+        E.wrapped_fresh_symbol (C.BTy_object C.OTy_pointer) >>= fun (_, shift_sym_pat, shift_sym_pe) ->
+        E.return begin
+          Caux.add_stds ["§6.5.2.4"; std_sentence_n 1; std_sentence_n 3] begin
+            Caux.mk_wseq_e lvalue_sym_pat core_e begin
+            Caux.mk_wseq_e load_sym_pat (Caux.pload loc core_ty_e lvalue_sym_pe Cmm.NA) begin
+              Caux.mk_case_e load_sym_pe
+                [ ( Caux.mk_specified_pat obj_sym_pat
+                  , Caux.mk_wseq_e shift_sym_pat
+                      (Caux.mk_memop_e Mem_common.PtrArrayShift [obj_sym_pe; Caux.mk_ail_ctype_pe ref_ty; Caux.mk_integer_pe shift_const])
+                      begin
+                        Caux.mk_wseq_e (Caux.mk_empty_pat C.BTy_unit)
+                          begin
+                            C.Expr [Annot.Astd (std_sentence_n 4)]
+                              (C.Eaction (C.Paction C.Neg (C.Action loc default (C.Store false(* not locking *) core_ty_e lvalue_sym_pe (Caux.mk_specified_pe shift_sym_pe) Cmm.NA))))
+                          end
+                          (Caux.mk_pure_e load_sym_pe)
+                      end )
+                ; ( Caux.mk_unspecified_pat (Caux.mk_empty_pat C.BTy_ctype)
+                  , Caux.mk_pure_e (Caux.mk_unspecified_pe ty(*TODO:check*)) ) ]
+            end end
+          end
+        end
+    | _ ->
+        mk_common ()
+  end
+else
+  mk_common ()
 
 
 and translate_expression ctx variadic_env stdlib (tagDefs : Core.core_tag_definitions) a_expr : E.elabM (C.expr unit) =
@@ -908,68 +998,11 @@ else
       (* NOTE: if I read N2329 correctly, in C2X this will not be an RMW for the atomic case (but a do while
          with compare_exchange_weak with seq_cst, seq_cst) *)
       | A.AilEunary A.PostfixIncr e ->
-          (* STD §6.5.2.4 *)
-          let () = if AilTypesAux.is_atomic (ctype_of e) then
-            Debug.warn [Debug.DB_elaboration] (fun () -> "TODO: elaboration is wrong for atomic types")
-          else
-            () in
-          
-          self e >>= fun core_e ->
-          let () = Debug.print_debug 1 [Debug.DB_elaboration] (fun () -> "TODO: needs to fix this") in
-          let ty  = AilTypesAux.rvalue_coercion (snd (from_lvalue_type e)) in
-          let oTy = force_core_object_type_of_ctype ty    in
-          let core_ty_e = Caux.mk_ail_ctype_pe ty in
-          E.wrapped_fresh_symbol (C.BTy_object C.OTy_pointer) >>= fun (lvalue_sym, lvalue_sym_pat, lvalue_sym_pe) ->
-          E.wrapped_fresh_symbol (C.BTy_loaded oTy)           >>= fun (load_sym,   load_sym_pat,   load_sym_pe)   ->
-          E.wrapped_fresh_symbol (C.BTy_object oTy)           >>= fun (obj_sym,    obj_sym_pat,    obj_sym_pe)    ->
-          
-          E.return (
-            C.Expr [Annot.Astd "§6.5.2.4"; Annot.Astd "§6.5.2.4#2, sentence 1"; Annot.Astd "§6.5.2.4#2, sentence 3"] (
-              C.Ewseq lvalue_sym_pat core_e (
-                C.Expr [Annot.Astd "§6.5.2.4#2, sentence 4"] (
-                  C.Easeq ((load_sym, C.BTy_loaded oTy))
-                    (C.Action loc default (C.Load core_ty_e lvalue_sym_pe Cmm.NA))
-                    (C.Paction C.Neg (C.Action loc default (C.Store false(* not locking *)
-                       core_ty_e
-                       lvalue_sym_pe
-                       (Caux.mk_case_pe load_sym_pe
-                          [ ( Caux.mk_specified_pat obj_sym_pat
-                            , Caux.mk_specified_pe $ Caux.mk_std_pe "§6.5.2.4#2, sentence 2"
-match Ctype.unatomic_ ty with
-  | Ctype.Basic (Ctype.Integer _) ->
-(*
-                              stdlib.mkcall_conv_int (ctype_of e) (Caux.mk_op_pe C.OpAdd obj_sym_pe (Caux.mk_integer_pe 1))
-*)
-                          (* TODO: check again *)
-                          let core_incr = Caux.mk_op_pe C.OpAdd obj_sym_pe (Caux.mk_integer_pe 1) in
-      if AilTypesAux.is_signed_integer_type result_ty then
-                          stdlib.mkcall_catch_exceptional_condition result_ty core_incr
-      else (* is unsigned *)
-                          stdlib.mkcall_wrapI result_ty core_incr
-  | Ctype.Basic (Ctype.Floating (Ctype.RealFloating _)) ->
-                          (* TODO: not correct semantics for float *)
-                          Caux.mk_op_pe C.OpAdd obj_sym_pe (Caux.mk_floating_value_pe Mem.one_fval)
-                              (*error "AilEunary PostfixIncr, floating type"*)
-  | Ctype.Pointer _ ref_ty ->
-                              Caux.mk_array_shift obj_sym_pe ref_ty (Caux.mk_integer_pe 1)
-  | (*BISECT-IGNORE*) _ ->
-      illTypedAil loc "AilEunary PostfixIncr"
-end
-                            )
-                          ; ( C.Pattern [] (C.CaseCtor C.Cunspecified [Caux.mk_empty_pat C.BTy_ctype])
-                            , Caux.mk_unspecified_pe ty(*TODO:check*) )
-                          ] )
-                       Cmm.NA)))
-                )
-              )
-            )
-          )
-      
-      (* TODO: promotion? + atomicity *)
-      (* TODO: factorise with PostfixIncr !!! *)
-      (* NOTE: if I read N2329 correctly, in C2X this will not be an RMW for the atomic case (but seq_cst) *)
+          translate_postfix loc self stdlib result_ty A.PostfixIncr e
       | A.AilEunary A.PostfixDecr e ->
-          (* STD §6.5.2.4 *)
+          translate_postfix loc self stdlib result_ty A.PostfixDecr e
+(*
+        (* STD §6.5.2.4 *)
           let () = if AilTypesAux.is_atomic (ctype_of e) then
             Debug.warn [Debug.DB_elaboration] (fun () -> "TODO: elaboration is wrong for atomic types")
           else
@@ -1026,6 +1059,7 @@ end
                 )
               )
             )
+*)
       
       | A.AilEunary A.Indirection e ->
           (* TODO: if e is a pointer to a function *)
