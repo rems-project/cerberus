@@ -450,8 +450,6 @@ let rec has_ccall (Expr _ expr_) =
         has_ccall e1 || has_ccall e2
     | Esseq _ e1 e2 ->
         has_ccall e1 || has_ccall e2
-    | Easeq _ _ _ ->
-        false
     | Ebound e ->
         has_ccall e (* NOTE: this function should never see this case (for a C program) *)
     | End es ->
@@ -532,8 +530,6 @@ let rec get_ctx (Expr annot expr_ as expr) =
           List.map (fun (ctx, e) ->
             (Csseq annot pat ctx e2, e)
           ) (get_ctx e1)
-    | Easeq _ _ _ ->
-        [(CTX, expr)]
     | Ebound e ->
         if is_irreducible e then
           [(CTX, expr)]
@@ -1213,69 +1209,6 @@ let step_ctx mem_st file core_extern current_tid (parent_tid_opt, th_st) =
               end
           | Eexcluded n act ->
               process_action (Just n)(*is excluded*) (fun z -> Eexcluded n z) act
-          
-          | Easeq sym_bTy act1 act2 ->
-              match step_action full_eval_pexpr' Nothing(*not excluded*) act1 with
-                | ACTION_EVAL debug_str eval_m ->
-                    Step_with_runstate2 (RSK_eval debug_str) begin
-                      eval_m >>= fun act1' ->
-                      E.return (wrap_expr (Expr e_annots (Easeq sym_bTy act1' act2)))
-                     end
-                | ACTION_ILLTYPED str ->
-                    Step_error2 str
-                | ACTION_REQUEST debug_str loc _request ->
-                    error "Easeq"
-(*
-                    match step_action eval_pexpr Nothing act2 with
-                      | ACTION_EVAL debug_str eval_m ->
-                          Step_with_runstate2 (RSK_eval debug_str) begin
-                            eval_m >>= fun act2' ->
-                            E.return (wrap_expr (Expr e_annots (Easeq sym_bTy act1 act2')))
-                          end
-                      | ACTION_ILLTYPED str ->
-                          Step_error2 str
-                      | ACTION_REQUEST _ _ _ ->
-                          (* TODO: this is a horrible hack: in the previous call we pretended this  *)
-                    end
-*)
-
-(*
-          match step_action eval_pexpr is_excluded z with
-            | ACTION_REQUEST debug_str loc _request ->
-                Step_action_request2 debug_str loc current_tid
-                  match _request with
-                    | CreateRequest2 pref ival ty mval_opt mk_expr' ->
-                        CreateRequest2 pref ival ty mval_opt (fun aid ptrval ->
-                          wrap_expr (mk_expr' aid ptrval)
-                        )
-                    | AllocRequest2 pref ival1 ival2 mk_expr' ->
-                        AllocRequest2 pref ival1 ival2 (fun aid ptrval ->
-                          wrap_expr (mk_expr' aid ptrval)
-                        )
-                    | LoadRequest2 mo ty ptrval sym mk_expr' ->
-                        LoadRequest2 mo ty ptrval sym (fun aid fp mval ->
-                          wrap_expr (mk_expr' aid fp mval)
-                        )
-                    | StoreRequest2 mk ty is_locking ptrval mval mk_expr' ->
-                        StoreRequest2 mk ty is_locking ptrval mval (fun aid fp ->
-                          wrap_expr (mk_expr' aid fp)
-                        )
-                    | KillRequest2 is_dynamic ptrval mk_expr' ->
-                        KillRequest2 is_dynamic ptrval (fun aid ->
-                          wrap_expr (mk_expr' aid)
-                        )
-                  end
-            | ACTION_ILLTYPED str ->
-                Step_error2 str
-*)
-
-
-
-              end
-
-
-
-
           
           | Eccall call_annots ty pe pes ->
               (* Step_with_runstate2 (RSK_eval "Eccall") begin *)

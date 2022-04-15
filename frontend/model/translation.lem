@@ -2214,20 +2214,7 @@ end
       
 *)
 
-(*
-      | A.AilEcompoundAssign e1 aop e2 ->
-          self e1 >>= fun core_e1 ->
-          self e2 >>= fun core_e2 ->
-          E.return $
-            C.Ewseq (Caux.mk_tuple_pat [e1_sym_pat; e2_sym_pat]) (C.Eunseq [core_e1; core_e2]) (
-              C.Easeq (Just (atom_sym, bTy) (Caux.pstore loc TODO_ty_pe e1_sym_pe))
-            )
-*)
 
-(*
- | Easeq of maybe ('sym * core_base_type) * (generic_action 'a 'bty 'sym) * (generic_paction 'a 'bty 'sym) (* atomic sequencing *)
-*)
-      
 
 
 

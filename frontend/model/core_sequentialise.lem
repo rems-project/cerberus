@@ -47,8 +47,6 @@ let rec sequentialise_expr (Expr annot expr_) =
         expr_'
     | Esseq pat e1 e2 ->
         Esseq pat (sequentialise_expr e1) (sequentialise_expr e2)
-    | Easeq _ _ _ ->
-        expr_
     | Ebound e ->
         Ebound (sequentialise_expr e)
     | End es ->

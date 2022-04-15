@@ -76,8 +76,6 @@ let rwter_identity = <|
   unseq_rwter=       fun es -> Eunseq es;
   wseq_rwter=        fun _as e1 e2 -> Ewseq _as e1 e2;
   sseq_rwter=        fun _as e1 e2 -> Esseq _as e1 e2;
-  aseq_rwter=        fun a_opt act1 pact2 -> Easeq a_opt act1 pact2;
-  indet_rwter=       fun e -> Eindet e;
   bound_rwter=       fun n e -> Ebound n e;
   save_rwter=        fun k a_tys e -> Esave k a_tys e;
   run_rwter=         fun k a_es -> Erun () k a_es;
@@ -198,9 +196,6 @@ let rec remove_skips (Expr annot expr_ as expr) =
                     Expr annot (Esseq pat e1' e2')
               end
         end
-    | Easeq _ _ _ ->
-        (* unchanged *)
-        expr
     | Ebound e ->
         (* just traversing *)
         Expr annot (Ebound (remove_skips e))
@@ -332,9 +327,6 @@ let rec remove_unseqs (Expr annot expr_ as expr) =
     | Esseq pat e1 e2 ->
         (* just traversing *)
         Expr annot (Esseq pat (remove_unseqs e1) (remove_unseqs e2))
-    | Easeq _ _ _ ->
-        (* unchanged *)
-        expr
     | Ebound e ->
         (* just traversing *)
         Expr annot (Ebound (remove_unseqs e))
@@ -422,8 +414,6 @@ let rec remove_seqs expr =
   | Etry e str_es ->
       Etry (remove_seqs e) (List.map (fun (str, e) -> (str, remove_seqs e)) str_es)
 *)
-  | Eindet e ->
-      Eindet (remove_seqs e)
   | Ebound e ->
       Ebound (remove_seqs e)
   | Esave k sym_tys e ->
@@ -530,8 +520,6 @@ let rec remove_dead_aux (Expr annot expr_ as expr) =
           | Right e1' ->
               Right e1'
         end
-    | Easeq _ _ _ ->
-        Left expr
     | Ebound e ->
         match remove_dead_aux e with
           | Left e' ->
@@ -656,8 +644,6 @@ let rec flatten_seqs (Expr annot expr_ as expr) =
           | (e1', e2') ->
               Expr annot (Esseq pat e1' e2')
         end
-    | Easeq _ _ _ ->
-        expr
     | Ebound e ->
         Expr annot (Ebound (flatten_seqs e))
     | End es ->
@@ -838,8 +824,6 @@ let rec remove_conv_int (Expr annot expr_) =
         Ewseq pat (remove_conv_int e1) (remove_conv_int e2)
     | Esseq pat e1 e2 ->
         Esseq pat (remove_conv_int e1) (remove_conv_int e2)
-    | Easeq a_opt act1 act2 ->
-        Easeq a_opt (remove_conv_int_action act1) (remove_conv_int_action act2)
     | Ebound e ->
         Ebound (remove_conv_int e)
     | End es ->
@@ -975,8 +959,6 @@ let rec sequentialise_creates_kills (Expr annot expr_) =
 *)
     | Esseq pat e1 e2 ->
         Esseq pat (sequentialise_creates_kills e1) (sequentialise_creates_kills e2)
-    | Easeq _ _ _ ->
-        expr_
     | Ebound e ->
         Ebound (sequentialise_creates_kills e)
     | End es ->
@@ -1057,8 +1039,6 @@ let rec pure_propagation expr =
           | Nothing ->
               Esseq pat e1' (pure_propagation e2)
        end
-    | Eindet e ->
-        Eindet (pure_propagation e)
     | Ebound e ->
         Ebound (pure_propagation e)
     | Esave sym sym_tys e ->
@@ -1273,8 +1253,6 @@ let rec pure_propagation2 (Expr annot expr_ as expr) =
           | Nothing ->
               Expr annot (Esseq pat e1' (pure_propagation2 e2))
        end
-    | Easeq _ _ _ ->
-        expr
     | Ebound e ->
         Expr annot (Ebound (pure_propagation2 e))
     | End es ->
@@ -1471,8 +1449,6 @@ let rec simpl_case (Expr annot expr_ as expr) =
         wrap $ Ewseq pat (simpl_case e1) (simpl_case e2)
     | Esseq pat e1 e2 ->
         wrap $ Esseq pat (simpl_case e1) (simpl_case e2)
-    | Easeq _ _ _ ->
-        expr
     | Ebound e ->
         wrap $ Ebound (simpl_case e)
     | End es ->

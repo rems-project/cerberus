@@ -365,10 +365,6 @@ module Rewriter = functor (Eff: Monad) -> struct
           aux e1 >>= fun e1' ->
           aux e2 >>= fun e2' ->
           return_wrap (Esseq (pat, e1', e2'))
-      | Easeq (sym_bTy, act1, act2) ->
-          aux_action act1 >>= fun act1' ->
-          aux_action act2 >>= fun act2' ->
-          return_wrap (Easeq (sym_bTy, act1', act2'))
       | Ebound e ->
           aux e >>= fun e' ->
           return_wrap (Ebound e')

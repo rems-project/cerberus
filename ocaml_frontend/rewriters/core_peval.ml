@@ -342,15 +342,6 @@ let rec subst_sym_expr2 sym z (Expr (annot, expr_)) =
                 Esseq ( pat
                       , subst_sym_expr2 sym z e1
                       , if Core_aux.in_pattern sym pat then e2 else subst_sym_expr2 sym z e2 )
-            | Easeq ((sym', bTy), act1, act2) ->
-                Easeq ( (sym', bTy)
-                      , subst_sym_action2 sym z act1
-                      , begin
-                          if sym = sym' then
-                            act2
-                          else
-                            subst_sym_action2 sym z act2
-                        end )
             | Ebound e ->
                 Ebound (subst_sym_expr2 sym z e)
             | Esave (lab_sym, sym_bTy_pes, e) ->

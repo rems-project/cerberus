@@ -637,13 +637,6 @@ let rec symbolify_expr ((Expr (annot, expr_)) : parsed_expr) : (unit expr) Eff.t
          symbolify_expr _e2     >>= fun e2  ->
          Eff.return (Esseq (pat, e1, e2))
        )
-   | Easeq ((_sym, bTy), Action (loc1, (), _act1_), Action (loc2, (), _act2_)) ->
-       symbolify_action_ _act1_ >>= fun act1_ ->
-       under_scope (
-         register_sym _sym        >>= fun sym   ->
-         symbolify_action_ _act2_ >>= fun act2_ ->
-         Eff.return (Easeq ((sym, bTy), Action (loc1, (), act1_), Action (loc2, (), act2_)))
-       )
    | Ebound _e ->
        symbolify_expr _e >>= fun e ->
        Eff.return (Ebound e)
@@ -794,7 +787,6 @@ let rec register_labels ((Expr (_, expr_)) : parsed_expr) : unit Eff.t  =
     | Eaction _
     | Eccall _
     | Eproc _
-    | Easeq _
     | Erun _
     | Ewait _
     | Epack _ 
@@ -1082,7 +1074,7 @@ let mk_file decls =
 (* %token RAISE REGISTER *)
 
 (* Core sequencing operators *)
-%token LET WEAK STRONG ATOM UNSEQ IN END BOUND PURE MEMOP PCALL CCALL
+%token LET WEAK STRONG UNSEQ IN END BOUND PURE MEMOP PCALL CCALL
 %token SQUOTE LPAREN RPAREN LBRACKET RBRACKET LBRACE RBRACE COLON_EQ COLON SEMICOLON DOT COMMA NEG
 
 
@@ -1608,9 +1600,6 @@ expr:
 | LET STRONG _pat= pattern EQ _e1= expr IN _e2= expr
     { Expr ( [Aloc (Location_ocaml.(region ($startpos, $endpos) NoCursor))]
            , Esseq (_pat, _e1, _e2) ) }
-| LET ATOM _sym= SYM COLON _bTy= core_base_type EQ _act1= action IN _act2= action
-    { Expr ( [Aloc (Location_ocaml.(region ($startpos, $endpos) NoCursor))]
-           , Easeq ((_sym,_bTy), Action (Location_ocaml.unknown, (), _act1), Action (Location_ocaml.unknown, (), _act2)) ) }
 | BOUND _e= delimited(LPAREN, expr, RPAREN)
     { Expr ( [Aloc (Location_ocaml.(region ($startpos, $endpos) NoCursor))]
            , Ebound _e ) }

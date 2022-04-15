@@ -328,8 +328,6 @@ let rec add_to_sb p_aids (Expr annot expr_ as expr) =
           Ewseq _as (add_to_sb p_aids e1) (add_to_sb (Set.filter is_positive p_aids) e2)
       | Esseq _as e1 e2 ->
           Esseq _as (add_to_sb p_aids e1) (add_to_sb p_aids e2)
-      | Easeq _ _ _ ->
-          error "Core_run_aux.add_to_sb, Easeq"
       | Ebound _ ->
           error "Core_run_aux.add_to_sb, Ebound"
       | End es ->
@@ -427,8 +425,6 @@ let rec add_to_asw aids (Expr annot expr_ as expr) =
           Ewseq _as (add_to_asw aids e1) (add_to_asw aids e2) (* TODO this is wrong *)
       | Esseq _as e1 e2 ->
           Esseq _as (add_to_asw aids e1) (add_to_asw aids e2) (* TODO this is wrong *)
-      | Easeq _ _ _ ->
-          error "Core_run_aux.add_to_asw, Easeq"
       | Ebound _ ->
           error "Core_run_aux.add_to_asw, Ebound"
       | Esave sym_bTy xs e ->
@@ -640,8 +636,6 @@ let rec convert_expr (Expr annot expr_) =
         Ewseq (convert_pattern pat) (convert_expr e1) (convert_expr e2)
     | Esseq pat e1 e2 ->
         Esseq (convert_pattern pat) (convert_expr e1) (convert_expr e2)
-    | Easeq sym_opt act1 act2 ->
-        Easeq sym_opt (convert_action act1) (convert_action act2)
     | Ebound e ->
         Ebound (convert_expr e)
     | Esave sym xs e ->

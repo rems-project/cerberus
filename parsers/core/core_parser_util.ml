@@ -85,7 +85,6 @@ type token =
   | UNSEQ
   | WEAK
   | STRONG
-  | ATOM
   | SAVE (* TODO *)
   | RUN (* TODO *)
   | RAISE (* TODO *)

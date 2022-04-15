@@ -342,9 +342,6 @@ let deps_of fn_or_impl : ('a,'bty,'sym) name_collector =
           | Esseq (pat,_,_) ->
              let a () = names_in_pattern pat in
              PostTraverseAction a
-          | Easeq ((sym,cbt),_,_) ->
-             let a () = record_dep (Sym sym) >> names_in_core_base_type cbt in
-             PostTraverseAction a
           | Esave ((sym,cbt),ls,_) ->
              let a () = 
                record_dep (Sym sym) >> 

@@ -392,6 +392,8 @@ module BmcInline = struct
         inline_pe pe2 >>= fun inlined_pe2 ->
         inline_pe pe3 >>= fun inlined_pe3 ->
         return (LinuxRMW(inlined_pe1, inlined_pe2, inlined_pe3, mo))
+    | SeqRMW _ ->
+        failwith "TODO: SeqRMW"  
     ) >>= fun inlined_action ->
     return (Paction(p, Action(loc, a, inlined_action)))
 
@@ -437,7 +439,6 @@ module BmcInline = struct
         inline_e e1  >>= fun inlined_e1 ->
         inline_e e2  >>= fun inlined_e2 ->
         return (Eif (inlined_pe, inlined_e1, inlined_e2))
-    | Eskip -> return Eskip
     | Eccall (a, pe_ty, (Pexpr(_,_,PEsym fn_ptr) as pe_fn), pe_args) ->
         inline_pe pe_ty >>= fun inlined_pe_ty ->
         inline_pe pe_fn >>= fun inlined_pe_fn ->
@@ -568,13 +569,9 @@ module BmcInline = struct
         | Esseq _ -> return (Esseq(pat, inlined_e1, inlined_e2))
         | _ -> assert false
         end
-    | Easeq _ -> assert false
-    | Eindet (n, e) ->
+    | Ebound e ->
         inline_e e >>= fun inlined_e ->
-        return (Eindet(n, inlined_e))
-    | Ebound (n, e) ->
-        inline_e e >>= fun inlined_e ->
-        return (Ebound(n, inlined_e))
+        return (Ebound (inlined_e))
     | End es ->
         mapM inline_e es >>= fun inlined_es ->
         return (End (inlined_es))
@@ -626,6 +623,7 @@ module BmcInline = struct
     | Epack _ | Eunpack _ | Ehave _ | Eshow _ ->
         (* these two are CN specific contructors *)
         assert false
+    | Eannot _ | Eexcluded _ | Ewait _ -> assert false
     ) >>= fun inlined_e ->
     return (Expr(Abmc (Abmc_id id)::annots, inlined_e))
 
@@ -938,6 +936,8 @@ module BmcSSA = struct
         ssa_pe pe2 >>= fun ssad_pe2 ->
         ssa_pe pe3 >>= fun ssad_pe3 ->
         return (LinuxRMW(ssad_pe1, ssad_pe2, ssad_pe3, mo))
+    | SeqRMW _ ->
+        failwith "TODO: SeqRMW"
     ) >>= fun ssad_action ->
     return (Paction(p, Action(loc, a, ssad_action)))
 
@@ -976,8 +976,6 @@ module BmcSSA = struct
         ssa_e e2        >>= fun ssad_e2 ->
         put_sym_table old_table >>
         return (Eif(ssad_pe, ssad_e1, ssad_e2))
-    | Eskip ->
-        return Eskip
     | Eccall (a,pe_ty, pe_ptr, pe_args) ->
         get_inline_expr uid >>= fun inline_e ->
         ssa_e inline_e      >>= fun ssad_inlined_e ->
@@ -997,11 +995,9 @@ module BmcSSA = struct
         ssa_pattern pat >>= fun ssad_pat ->
         ssa_e e2        >>= fun ssad_e2 ->
         return (Esseq(ssad_pat, ssad_e1, ssad_e2))
-    | Easeq _ -> assert false
-    | Eindet _ -> assert false
-    | Ebound (n, e1) ->
+    | Ebound e1 ->
         ssa_e e1 >>= fun ssad_e1 ->
-        return (Ebound(n, ssad_e1))
+        return (Ebound (ssad_e1))
     | End elist ->
         mapM ssa_e elist >>= fun ssad_elist ->
         return (End elist)
@@ -1026,7 +1022,7 @@ module BmcSSA = struct
     | Epar elist ->
         mapM ssa_e elist >>= fun ssad_elist ->
         return (Epar ssad_elist)
-    | Ewait _       ->
+    | Eannot _ | Eexcluded _ | Ewait _ ->
         assert false
     | Epack _ | Eunpack _ | Ehave _ | Eshow _ ->
         (* these two are CN specific contructors *)
@@ -1808,8 +1804,6 @@ module BmcZ3 = struct
         let (guard1, guard2) = (z3d_pe, mk_not z3d_pe) in
         add_guards uid [guard1; guard2] >>
         return (mk_ite guard1 z3d_e1 z3d_e2)
-    | Eskip ->
-        return UnitSort.mk_unit
     | Eccall _ ->
         get_inline_expr uid >>= fun inlined_expr ->
         get_fn_call uid >>= fun fn_sym ->
@@ -1845,9 +1839,7 @@ module BmcZ3 = struct
     | Esseq (_, e1, e2) ->
         z3_e e1 >>= fun _ ->
         z3_e e2
-    | Easeq _  -> assert false
-    | Eindet _ -> assert false
-    | Ebound (_, e) ->
+    | Ebound e ->
         z3_e e
     | End elist ->
         mapM z3_e elist >>= fun z3d_elist ->
@@ -1878,6 +1870,7 @@ module BmcZ3 = struct
     | Epack _ | Eunpack _ | Ehave _ | Eshow _ ->
         (* these two are CN specific contructors *)
         assert false
+    | Eannot _ | Eexcluded _ -> assert false
     ) >>= fun ret ->
     add_expr uid ret >>
     return ret
@@ -2000,8 +1993,6 @@ module BmcDropCont = struct
         drop_cont_e e2 >>= fun drop_e2 ->
         return (mk_or [mk_and [guard1; drop_e1]
                       ;mk_and [guard2; drop_e2]])
-    | Eskip ->
-        return mk_false
     | Eccall _ ->
         get_inline_expr uid      >>= fun inlined_expr ->
         drop_cont_e inlined_expr >>= fun _ ->
@@ -2015,9 +2006,7 @@ module BmcDropCont = struct
         drop_cont_e e1 >>= fun drop_e1 ->
         drop_cont_e e2 >>= fun drop_e2 ->
         return (mk_or [drop_e1; drop_e2])
-    | Easeq _  -> assert false
-    | Eindet _ -> assert false
-    | Ebound (_, e) ->
+    | Ebound e ->
         drop_cont_e e
     | End elist ->
         mapM drop_cont_e elist >>= fun drop_elist ->
@@ -2040,6 +2029,7 @@ module BmcDropCont = struct
     | Epack _ | Eunpack _ | Ehave _ | Eshow _ ->
         (* these two are CN specific contructors *)
         assert false
+    | Eannot _ | Eexcluded _ | Ewait _ -> assert false
     ) >>= fun drop_expr ->
     add_to_drop_cont_map uid drop_expr >>
     return drop_expr
@@ -2421,6 +2411,8 @@ module BmcBind = struct
         bind_pe pe2 >>= fun bound_pe2 ->
         bind_pe pe3 >>= fun bound_pe3 ->
         return (bound_pe1 @ bound_pe2 @ bound_pe3)
+    | SeqRMW _ ->
+        failwith "TODO: SeqRMW"
     )
 
   let rec bind_e (Expr(annots, expr_) as expr: unit typed_expr)
@@ -2479,8 +2471,6 @@ module BmcBind = struct
                 (* Guarded asserts is unnecessary *)
                 (List.map (guard_assert guard) bound_e1) @
                 (List.map (guard_assert (mk_not guard)) bound_e2))
-    | Eskip ->
-        return []
     | Eccall _ ->
         get_inline_expr uid >>= fun inlined_expr ->
         bind_e inlined_expr
@@ -2496,9 +2486,7 @@ module BmcBind = struct
         mk_let_bindings pat z3_e1 >>= fun let_binding ->
         (* TODO: drop_cont guard *)
         return (let_binding :: bound_e1 @ bound_e2)
-    | Easeq _ -> assert false
-    | Eindet _ -> assert false
-    | Ebound (_, e) ->
+    | Ebound e ->
         bind_e e
     | End elist ->
         mapM bind_e elist   >>= fun bound_elist ->
@@ -2521,6 +2509,7 @@ module BmcBind = struct
     | Epack _ | Eunpack _ | Ehave _ | Eshow _ ->
         (* these two are CN specific contructors *)
         assert false
+    | Eannot _ | Eexcluded _ | Ewait _ -> assert false
     )
 
     let bind_globs(gname, glb) : (binding list) eff =
@@ -2815,6 +2804,8 @@ module BmcVC = struct
                  VcDebugStr (string_of_int uid ^ "_RMW_invalid_ptr"))
                  :: vcs_wval)
     | LinuxRMW _ -> assert false
+    | SeqRMW _ ->
+        failwith "TODO: SeqRMW"
 
   let rec vcs_e (Expr(annots, expr_) as expr)
                    : (bmc_vc list) eff =
@@ -2912,7 +2903,6 @@ module BmcVC = struct
         get_expr (get_id_pexpr cond) >>= fun cond_z3 ->
         return (vcs_cond @ (List.map (guard_vc cond_z3) vcs_e1)
                          @ (List.map (guard_vc (mk_not cond_z3)) vcs_e2))
-    | Eskip         -> return []
     | Eccall _      ->
         get_inline_expr uid >>= fun inline_expr ->
         vcs_e inline_expr
@@ -2926,9 +2916,7 @@ module BmcVC = struct
         vcs_e e2 >>= fun vcs_e2 ->
         get_drop_cont (get_id_expr e1) >>= fun e1_drop_cont ->
         return (vcs_e1 @ (List.map (guard_vc (mk_not e1_drop_cont)) vcs_e2))
-    | Easeq _       -> assert false
-    | Eindet _      -> assert false
-    | Ebound (_, e) -> vcs_e e
+    | Ebound e -> vcs_e e
     | End es ->
         get_case_guards uid >>= fun guards ->
         mapM vcs_e es    >>= fun vcss_es ->
@@ -2944,6 +2932,7 @@ module BmcVC = struct
     | Epack _ | Eunpack _ | Ehave _ | Eshow _ ->
         (* these two are CN specific contructors *)
         assert false
+    | Eannot _ | Eexcluded _ -> assert false
 
     let vcs_globs(_, glb) : (bmc_vc list) eff =
       match glb with
@@ -3063,8 +3052,6 @@ module BmcRet = struct
 
         return  ((List.map (mk_implies guard1) ret_e1)
                 @(List.map (mk_implies guard2) ret_e2))
-    | Eskip         ->
-        return []
     | Eccall _ ->
         get_ret_const >>= fun old_ret ->
 
@@ -3088,9 +3075,7 @@ module BmcRet = struct
         get_drop_cont (get_id_expr e1) >>= fun e1_drop_cont ->
         let e2_guard = mk_not e1_drop_cont in
         return (ret_e1 @ (List.map (mk_implies e2_guard) ret_e2))
-    | Easeq _       -> assert false
-    | Eindet _      -> assert false
-    | Ebound (_, e) ->
+    | Ebound e ->
         do_e e
     | End es ->
         mapM do_e es >>= fun ret_es ->
@@ -3118,6 +3103,7 @@ module BmcRet = struct
     | Epack _ | Eunpack _ | Ehave _ | Eshow _ ->
         (* these two are CN specific contructors *)
         assert false
+    | Eannot _ | Eexcluded _ -> assert false
 
   let do_file (file: unit typed_file) (fn_to_check: sym_ty)
               : (Expr.expr * Expr.expr list) eff =
@@ -4194,7 +4180,6 @@ module BmcSeqMem = struct
                            @(List.map (guard_assert guard2) res_e2.bindings)
                ; mod_addr = mod_addr
                }
-    | Eskip         -> return empty_ret
     | Eccall _      ->
         get_inline_expr uid >>= fun inline_expr ->
         do_e inline_expr
@@ -4213,9 +4198,7 @@ module BmcSeqMem = struct
                                      res_e2.bindings)
                ;mod_addr = AddrSet.union res_e1.mod_addr res_e2.mod_addr
               }
-    | Easeq _       -> assert false
-    | Eindet _      -> assert false
-    | Ebound (_, e) ->
+    | Ebound e ->
         do_e e
     | End es ->
         get_memory >>= fun old_memory ->
@@ -4250,6 +4233,7 @@ module BmcSeqMem = struct
     | Epack _ | Eunpack _ | Ehave _ | Eshow _ ->
         (* these two are CN specific contructors *)
         assert false
+    | Eannot _ | Eexcluded _ -> assert false
 
   let do_globs (gname, glb) =
     match glb with
@@ -4888,7 +4872,6 @@ module BmcConcActions = struct
           | _ -> assert false) in
         return ((List.map (guard_action guard1) e1_actions) @
                 (List.map (guard_action guard2) e2_actions))
-    | Eskip         -> return []
     | Eccall _ ->
         get_inline_expr uid >>= fun inline_expr ->
         do_actions_e inline_expr
@@ -4903,9 +4886,7 @@ module BmcConcActions = struct
         get_drop_cont (get_id_expr e1) >>= fun e1_drop_cont ->
         let e2_guard = mk_not e1_drop_cont in
         return (e1_actions @ (List.map (guard_action e2_guard) e2_actions))
-    | Easeq _       -> assert false
-    | Eindet _      -> assert false
-    | Ebound (_, e) ->
+    | Ebound e ->
         do_actions_e e
     | End es ->
         mapM do_actions_e es        >>= fun es_actions ->
@@ -4926,7 +4907,7 @@ module BmcConcActions = struct
           do_actions_e e) elist >>= fun elist_actions ->
         put_tid old_tid >>
         return (List.concat elist_actions)
-    | Ewait _       ->
+    | Eannot _ | Eexcluded _ | Ewait _ ->
         assert false
     | Epack _ | Eunpack _ | Ehave _ | Eshow _ ->
         (* these two are CN specific contructors *)
@@ -5011,7 +4992,6 @@ module BmcConcActions = struct
         do_po_e e1 >>= fun po_e1 ->
         do_po_e e2 >>= fun po_e2 ->
         return (po_e1 @ po_e2)
-    | Eskip         -> return []
     | Eccall _ ->
         get_inline_expr uid >>= fun inline_expr ->
         do_po_e inline_expr
@@ -5048,9 +5028,7 @@ module BmcConcActions = struct
 
         return ((List.map aid_of_bmcaction_rel (cartesian_product actions_e1 actions_e2))
                 @ po_e1 @ po_e2)
-    | Easeq _       -> assert false
-    | Eindet _      -> assert false
-    | Ebound (_, e) ->
+    | Ebound e ->
         do_po_e e
     | End es ->
         mapM do_po_e es >>= fun po_es ->
@@ -5062,7 +5040,7 @@ module BmcConcActions = struct
     | Epar es ->
         mapM do_po_e es >>= fun po_es ->
         return (List.concat po_es)
-    | Ewait _       ->
+    | Eannot _ | Eexcluded _ | Ewait _ ->
         assert false
     | Epack _ | Eunpack _ | Ehave _ | Eshow _ ->
         (* these two are CN specific contructors *)
@@ -5366,8 +5344,6 @@ module BmcConcActions = struct
         let deps = union_deps [deps_e1; deps_e2] in
         return (Pset.union taint_e1 taint_e2,
                 {deps with ctrl = ctrl_deps @ deps.ctrl})
-    | Eskip ->
-        return (Pset.empty Stdlib.compare, empty_deps)
     | Eccall _ ->
         get_inline_expr uid >>= fun inline_expr ->
         do_taint_e inline_expr
@@ -5384,9 +5360,7 @@ module BmcConcActions = struct
         do_taint_pat pat taint_e1 >>
         do_taint_e e2 >>= fun (taint_e2, deps_e2) ->
         return (taint_e2, union_deps [deps_e1; deps_e2])
-    | Easeq _       -> assert false
-    | Eindet _      -> assert false
-    | Ebound (_, e) ->
+    | Ebound e ->
         do_taint_e e
     | End es ->
         mapM do_taint_e es >>= fun taint_es ->
@@ -5400,7 +5374,7 @@ module BmcConcActions = struct
         mapM do_taint_e es >>= fun taint_es ->
         return (union_taints (List.map fst taint_es),
                 union_deps (List.map snd taint_es))
-    | Ewait _       ->
+    | Eannot _ | Eexcluded _ | Ewait _ ->
         assert false
     | Epack _ | Eunpack _ | Ehave _ | Eshow _ ->
         (* these two are CN specific contructors *)

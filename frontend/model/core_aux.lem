@@ -933,13 +933,6 @@ let rec subst_sym_expr sym cval (Expr annot expr_) =
     | Esseq pat e1 e2 ->
         Esseq pat (subst_sym_expr sym cval e1)
           (if in_pattern sym pat then e2 else subst_sym_expr sym cval e2)
-    | Easeq (sym', bTy) act1 act2 ->
-        Easeq (sym', bTy) (subst_sym_action sym cval act1) begin
-          if sym = sym' then
-            act2
-          else
-            subst_sym_action sym cval act2
-        end
     | Ebound e ->
         Ebound (subst_sym_expr sym cval e)
     | Esave lab_sym sym_bTy_pes e ->
@@ -1207,13 +1200,6 @@ let rec unsafe_subst_sym_expr sym pe' (Expr annot expr_) =
         Ewseq pat (unsafe_subst_sym_expr sym pe' e1) (if in_pattern sym pat then e2 else unsafe_subst_sym_expr sym pe' e2)
     | Esseq pat e1 e2 ->
         Esseq pat (unsafe_subst_sym_expr sym pe' e1) (if in_pattern sym pat then e2 else unsafe_subst_sym_expr sym pe' e2)
-    | Easeq (sym', bTy) act1 act2 ->
-        Easeq (sym', bTy) (unsafe_subst_sym_action sym pe' act1) begin
-          if sym = sym' then
-            act2
-          else
-            unsafe_subst_sym_action sym pe' act2
-        end
     | Ebound e ->
         Ebound (unsafe_subst_sym_expr sym pe' e)
     | Esave lab_sym sym_bTy_pes e ->
@@ -1502,8 +1488,6 @@ let rec to_pure (Expr annot expr_) (*(expr : expr 'a)*) =
           | Nothing ->
               Nothing
         end
-    | Easeq _ _ _ ->
-      Nothing
     | Ebound e ->
         (* TODO: check *)
         to_pure e
@@ -1582,8 +1566,6 @@ let rec subst_wait tid v (Expr annot expr_) =
        Ewseq _as (subst_wait tid v e1) (subst_wait tid v e2)
    | Esseq _as e1 e2 ->
        Esseq _as (subst_wait tid v e1) (subst_wait tid v e2)
-   | Easeq _ _ _ ->
-       expr_
    | Ebound e ->
        Ebound (subst_wait tid v e)
 (*
@@ -1690,8 +1672,6 @@ let rec find_labeled_continuation sym (Expr annot expr_) =
           | Nothing ->
               find_labeled_continuation sym e2
         end
-    | Easeq _ _ _ ->
-        Nothing
     | Ebound _ ->
         (* NOTE: Typing forbids labeled continuation bindings inside bound() *)
         Nothing
@@ -1779,8 +1759,6 @@ let rec find_labeled_continuation2_aux acc sym (Expr annot expr_) =
                      (syms, Expr annot (Esseq pat z e2))
                    ) (find_labeled_continuation2_aux Map.empty sym e1) in
         find_labeled_continuation2_aux (Map.(union) acc acc') sym e2
-    | Easeq _ _ _ ->
-        acc
     | Ebound _ ->
         (* NOTE: Typing forbids labeled continuation bindings inside bound() *)
         acc
@@ -1880,8 +1858,6 @@ let rec collect_labeled_continuations (Expr annot expr_) =
     | Esseq _as e1 e2 ->
         Map.(union) (Map.map (fun (a_tys, e) -> (a_tys, Expr annot (Esseq _as e e2))) $ collect_labeled_continuations e1)
                     (collect_labeled_continuations e2)
-    | Easeq _ _ _ ->
-        Map.empty
     | Ebound _ ->
         Map.empty
     | Esave (sym_lab, _) sym_bTys e ->
@@ -1957,10 +1933,6 @@ let rec has_sseqs expr =
         has_sseqs e1 || has_sseqs e2
     | Esseq _ _ _ ->
         true
-    | Easeq _ _ _  ->
-        error "has_sseqs found an Easeq"
-    | Eindet _ e ->
-        has_sseqs e
     | Ebound e ->
         has_sseqs e
     | Esave _ _ e ->
@@ -2203,8 +2175,6 @@ let rec collect_saves_aux st (Expr annots expr_) =
             |>
             st2
         end
-    | Easeq _ _ _ ->
-        st
     | Ebound _ ->
         (* typing forbids "saves" inside a "bound()" *)
         st
