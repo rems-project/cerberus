@@ -52,9 +52,16 @@ function report {
   echo -e "Test $1: $res"
 }
 
+<<<<<<< HEAD
 if [[ $# == 1 ]]; then
   citests=($(basename $1))
 fi
+=======
+# Use the provided path to cerberus, otherwise default to the driver backend build
+# CERB="${WITH_CERB:=dune exec cerberus --no-build -- }"
+CERB="${WITH_CERB:=../_build/default/backend/driver/main.exe}"
+export CERB_RUNTIME=../runtime/
+>>>>>>> fb3ebc1f (forcing `run-ci.sh` to use the local runtime)
 
 # Running ci tests
 for file in "${citests[@]}"
