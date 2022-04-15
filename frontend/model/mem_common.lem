@@ -79,8 +79,8 @@ type mem_cheri_error =
   | CheriErrDecodingCap
   | CheriMerrInvalidCap
   | CheriMerrUnsufficientPermissions
-  (* bounds,address,length *)
-  | CheriBoundsErr of ((integer*integer)*integer*integer)
+  | CheriNonRepresentable of integer
+  | CheriBoundsErr of ((integer*integer)*integer*integer) (* bounds,address,length *)
 
 instance (Show mem_cheri_error)
 let show = function
@@ -90,6 +90,8 @@ let show = function
      "CheriMerrInvalidCap"
   | CheriMerrUnsufficientPermissions ->
      "CheriMerrUnsufficientPermissions"
+  | CheriNonRepresentable v ->
+     "CheriNonRepresentable value=" ^ (show v)
   | CheriBoundsErr _ ->
      "CheriBoundsErr" (* TODO(CHERI): print more *)
   end

@@ -89,9 +89,6 @@ end = struct
     )
 end
 
-
-
-
 module IntMap = Map.Make(struct
                     type t = Z.num
                     let compare = Z.compare
@@ -517,15 +514,27 @@ module CHERI (C:Capability
         | MerrPtrFromInt
         | MerrPtrComparison
         | MerrWIP _
-        | MerrVIP _
-        | MerrCHERI _ ->
-         Location_ocaml.other "cherimem" in
+        | MerrVIP _ ->
+            Location_ocaml.other "cherimem"
+      | MerrCHERI (loc,_) ->
+         loc
+    in
     let open Nondeterminism in
     match undefinedFromMem_error err with
     | Some ubs ->
        kill (Undef0 (loc, ubs))
     | None ->
        kill (Other err)
+
+  let cap_maybe_set_value loc c n =
+    if C.cap_vaddr_representable c n
+    then Either.Right (C.cap_set_value c n)
+    else Either.Left (MerrCHERI (loc, CheriNonRepresentable n))
+
+  let cap_set_value loc c n =
+    match cap_maybe_set_value loc c n with
+    | Either.Right c -> return c
+    | Either.Left err -> fail err
 
   let string_of_provenance = function
     | Prov_none ->
@@ -930,7 +939,7 @@ module CHERI (C:Capability
     get >>= fun st ->
     let iota = st.next_iota in
     put {st with next_iota= Z.succ st.next_iota;
-                 iota_map= IntMap.add iota (`Double alloc_ids) st.iota_map } >>= fun () ->
+                 iota_map= IntMap.add iota (`Double alloc_ids) st.iota_map } >>
     return iota
 
   (* PNVI-ae-udi *)
@@ -963,8 +972,8 @@ module CHERI (C:Capability
                          end >>= fun alloc_id ->
     update begin fun st ->
       {st with iota_map= IntMap.add iota (`Single alloc_id) st.iota_map }
-      end >>= fun () ->
-    return alloc_id
+      end >>
+      return alloc_id
 
 
   (* INTERNAL abst: ctype -> AbsByte.t list -> [`NoTaint | `NewTaint of storage_instance_id list] * mem_value * AbsByte.t list *)
@@ -1033,12 +1042,16 @@ module CHERI (C:Capability
                begin match C.decode cs tag with
                | None ->
                   (* could not decode capability *)
-                  Debug_ocaml.warn [] (fun () -> "Error decoding intptr_t cap");
+                  Debug_ocaml.warn [] (fun () -> "Error decoding [u]intptr_t cap");
                   MVErr (MerrCHERI (loc, CheriErrDecodingCap))
                | Some c ->
                   if AilTypesAux.is_signed_ity ity then
                     let n = C.cap_get_value c in
-                    MVEinteger (ity, IC (prov, true, C.cap_set_value c (wrap_cap_value n)))
+                    match cap_maybe_set_value loc c (wrap_cap_value n) with
+                    | Either.Right c ->
+                       Debug_ocaml.warn [] (fun () -> "Error decoding intptr_t cap value");
+                       MVEinteger (ity, IC (prov, true, c))
+                    | Either.Left e -> MVErr e
                   else
                     MVEinteger (ity, IC (prov, false, c))
                end
@@ -1373,8 +1386,8 @@ module CHERI (C:Capability
         last_address= addr;
         (* clear tags in newly allocated region *)
         captags= clear_caps addr size st.captags
-      } >>= fun () ->
-    return (alloc_id, addr)
+      } >>
+      return (alloc_id, addr)
 
 
   let allocate_object tid pref int_val ty init_opt : pointer_value memM =
@@ -1412,7 +1425,7 @@ module CHERI (C:Capability
              captags= captags
            }
          )
-    end >>= fun () ->
+    end >>
     (* memory allocation on stack *)
     return (PV (Prov_some alloc_id, PVconcrete (C.alloc_cap addr size)))
 
@@ -1502,9 +1515,9 @@ module CHERI (C:Capability
         { st with
           allocations= IntMap.add alloc_id alloc st.allocations;
           dynamic_addrs= addr :: st.dynamic_addrs }
-      ) >>= fun () ->
-    (* malloc *)
-    return (PV (Prov_some alloc_id, PVconcrete (C.alloc_cap addr size_n)))
+      ) >>
+      (* malloc *)
+      return (PV (Prov_some alloc_id, PVconcrete (C.alloc_cap addr size_n)))
 
   (* zap (make unspecified) any pointer in the memory with provenance matching a
      given allocation id *)
@@ -1546,7 +1559,7 @@ module CHERI (C:Capability
                                                      end
              else
                return ()
-       end >>= fun () ->
+       end >>
        resolve_iota precondition iota >>= fun alloc_id ->
        (* TODO: this is duplicated code from the Prov_some case (I'm keeping
           PNVI-ae-udi stuff separated to avoid polluting the
@@ -1555,7 +1568,7 @@ module CHERI (C:Capability
          {st with dead_allocations= alloc_id :: st.dead_allocations;
                   last_used= Some alloc_id;
                   allocations= IntMap.remove alloc_id st.allocations}
-         end >>= fun () ->
+         end >>
        if Switches.(has_switch SW_zap_dead_pointers) then
          zap_pointers alloc_id
        else
@@ -1572,7 +1585,7 @@ module CHERI (C:Capability
                                                      end
              else
                return ()
-       end >>= fun () ->
+       end >>
        is_dead alloc_id >>= begin function
                               | true ->
                                  if is_dyn then
@@ -1589,7 +1602,7 @@ module CHERI (C:Capability
                                        {st with dead_allocations= alloc_id :: st.dead_allocations;
                                                 last_used= Some alloc_id;
                                                 allocations= IntMap.remove alloc_id st.allocations}
-                                       end >>= fun () ->
+                                       end >>
                                      if Switches.(has_switch SW_zap_dead_pointers) then
                                        zap_pointers alloc_id
                                      else
@@ -1625,8 +1638,8 @@ module CHERI (C:Capability
               expose_allocations taint
             else
               return ()
-      end >>= fun () ->
-      update (fun st -> { st with last_used= alloc_id_opt }) >>= fun () ->
+      end >>
+      update (fun st -> { st with last_used= alloc_id_opt }) >>
       let fp = FP (addr, (Z.of_int (sizeof ty))) in
       begin match bs' with
       | [] ->
@@ -1691,7 +1704,7 @@ module CHERI (C:Capability
                                  fail (MerrAccess (loc, LoadAccess, DeadPtr))
                               | false ->
                                  return ()
-                            end >>= fun () ->
+                            end >>
        begin is_within_bound alloc_id ty (C.cap_get_value addr) >>= function
              | false ->
                 Debug_ocaml.print_debug 1 [] (fun () ->
@@ -1745,7 +1758,7 @@ module CHERI (C:Capability
                         funptrmap= funptrmap;
                         captags= captags;
               }
-              end >>= fun () ->
+              end >>
             print_bytemap ("AFTER STORE => " ^ Location_ocaml.location_to_string loc) >>
               print_captags ("AFTER STORE => " ^ Location_ocaml.location_to_string loc)
             >>
@@ -1799,7 +1812,7 @@ module CHERI (C:Capability
                    )
                else
                  return ()
-         end >>= fun () ->
+         end >>
          return fp
 
       | (Prov_some alloc_id, PVconcrete addr) ->
@@ -1823,7 +1836,7 @@ module CHERI (C:Capability
                                                    | Some alloc -> Some { alloc with is_readonly= true }
                                                    | None       -> None
                                                  ) st.allocations }
-                                 ) >>= fun () ->
+                                 ) >>
                                return fp
                              else
                                return fp
@@ -2050,7 +2063,7 @@ module CHERI (C:Capability
                                         if precond alloc (C.cap_get_value addr1) (C.cap_get_value addr2) then
                                           update begin fun st ->
                                             {st with iota_map= IntMap.add iota (`Single alloc_id') st.iota_map }
-                                            end >>= fun () ->
+                                            end >>
                                           valid_postcond (C.cap_get_value addr1) (C.cap_get_value addr2)
                                         else
                                           error_postcond
@@ -2094,7 +2107,7 @@ module CHERI (C:Capability
                update begin fun st ->
                  {st with iota_map= IntMap.add iota1 (`Single alloc_id')
                                       (IntMap.add iota2 (`Single alloc_id') st.iota_map) }
-                 end >>= fun () ->
+                 end >>
                valid_postcond (C.cap_get_value addr1) (C.cap_get_value addr2)
             | `Double (alloc_id1, alloc_id2) ->
                if C.value_compare addr1 addr2 == 0 then
@@ -2227,15 +2240,12 @@ module CHERI (C:Capability
               r
             else
               Z.sub r dlt in
-
-          let c = C.cap_c0 () in
-          (* TODO(CHERI): representability check? *)
-          let c = C.cap_set_value c n in
-          return (PV (prov, PVconcrete c))
+          cap_set_value (Location_ocaml.other "ptrfromint") (C.cap_c0 ()) n >>=
+            (fun c -> return (PV (prov, PVconcrete c)))
     | _, IC _ ->
         failwith "invalid integer value (capability for non- [u]intptr_t"
 
-  let internal_intcast (*ity1*) ity2 ival =
+  let internal_intcast loc (*ity1*) ity2 ival =
     let (min_ity2, max_ity2) =
       let nbits =
         let nbytes = match (Ocaml_implementation.get ()).sizeof_ity ity2 with
@@ -2300,8 +2310,11 @@ module CHERI (C:Capability
          let n = wrap_cap_value n in
          let c = C.cap_c0 () in
          (* TODO(CHERI): representability check? *)
-         let c = C.cap_set_value c n in
-         Either.Right (IC (prov, false, c))
+         begin
+           match cap_maybe_set_value loc c n with
+           | Either.Right c -> Either.Right (IC (prov, false, c))
+           | Either.Left me -> Either.Left me
+         end
     (* error *)
     (* | _, IC _, _ ->
        failwith "intcast: Invalid integer value. IC for non-intptr_t" *)
@@ -2311,7 +2324,7 @@ module CHERI (C:Capability
   
   let intcast (*ity1*) ity2 ival =
     let open Either in
-    match internal_intcast (*ity1*) ity2 ival with
+    match internal_intcast (Location_ocaml.other "intcast") (*ity1*) ity2 ival with
       | Left err ->
           Left ((failwith "TODO intcast ub"): Undefined.undefined_behaviour)
       | Right ival ->
@@ -2404,9 +2417,9 @@ module CHERI (C:Capability
                          end
                     | `NoCollapse ->
                        return ()
-                  end >>= fun () ->
-                (* TODO(CHERI): representability check? *)
-                return (PV (prov, PVconcrete (C.cap_set_value c shifted_addr)))
+                  end >>
+                  cap_set_value loc c shifted_addr >>=
+                  fun c -> return (PV (prov, PVconcrete c))
               else
                 (* TODO: this is yucky *)
                 precond alloc_id1 >>=
@@ -2421,15 +2434,15 @@ module CHERI (C:Capability
                            | false ->
                               fail (MerrArrayShift loc)
                          end
-                  end >>= fun () ->
-                (* TODO(CHERI): representability check? *)
-                return (PV (prov, PVconcrete (C.cap_set_value c shifted_addr)))
+                  end >>
+                  cap_set_value loc c shifted_addr >>=
+                  fun c -> return (PV (prov, PVconcrete c))
            | `Single alloc_id ->
               precond alloc_id >>=
                 begin function
                   | true ->
-                     (* TODO(CHERI): representability check? *)
-                     return (PV (prov, PVconcrete (C.cap_set_value c shifted_addr)))
+                     cap_set_value loc c shifted_addr >>=
+                       fun c -> return (PV (prov, PVconcrete c))
                   | false ->
                      fail (MerrArrayShift loc)
                 end
@@ -2444,25 +2457,25 @@ module CHERI (C:Capability
          if    Z.less_equal alloc.base shifted_addr
                && Z.less_equal (Z.add shifted_addr (Z.of_int (sizeof ty)))
                     (Z.add (Z.add alloc.base alloc.size) (Z.of_int (sizeof ty))) then
-           (* TODO(CHERI): representability check? *)
-           return (PV (Prov_some alloc_id, PVconcrete (C.cap_set_value c shifted_addr)))
+           cap_set_value loc c shifted_addr >>=
+             fun c -> return (PV (Prov_some alloc_id, PVconcrete c))
          else
            fail (MerrArrayShift loc)
        else
-         (* TODO(CHERI): representability check? *)
-         return (PV (Prov_some alloc_id, PVconcrete (C.cap_set_value c shifted_addr)))
+         cap_set_value loc c shifted_addr >>=
+           fun c -> return (PV (Prov_some alloc_id, PVconcrete c))
     | PV (Prov_none, PVconcrete c) ->
        let shifted_addr = Z.add (C.cap_get_value c) offset in
        if    Switches.(has_switch (SW_pointer_arith `STRICT))
              || (is_PNVI () && not (Switches.(has_switch (SW_pointer_arith `PERMISSIVE)))) then
          fail (MerrOther "out-of-bound pointer arithmetic (Prov_none)")
        else
-         (* TODO(CHERI): representability check? *)
-         return (PV (Prov_none, PVconcrete (C.cap_set_value c shifted_addr)))
+         cap_set_value loc c shifted_addr >>=
+           fun c -> return (PV (Prov_none, PVconcrete c))
     | PV (Prov_device, PVconcrete c) ->
        let shifted_addr = Z.add (C.cap_get_value c) offset in
-       (* TODO(CHERI): representability check? *)
-       return (PV (Prov_device, PVconcrete (C.cap_set_value c shifted_addr)))
+       cap_set_value loc c shifted_addr >>=
+         fun c -> return (PV (Prov_device, PVconcrete c))
 
   let eff_member_shift_ptrval (PV (prov, ptrval_)) tag_sym memb_ident =
     let offset =
@@ -2490,8 +2503,8 @@ module CHERI (C:Capability
     | PVconcrete c ->
        let addr = C.cap_get_value c in
        (* TODO(CHERI): The result address could be unrepresentable *)
-       let c = C.cap_set_value c (Z.add addr offset) in
-       return @@ PV (prov, PVconcrete c)
+       cap_set_value (Location_ocaml.other "eff_member_shift_ptrval") c (Z.add addr offset)  >>=
+         fun c -> return @@ PV (prov, PVconcrete c)
 
   let concurRead_ival ity sym =
     failwith "TODO: concurRead_ival"
@@ -2572,7 +2585,7 @@ module CHERI (C:Capability
   (* TODO: conversion? *)
   let intfromptr _ ity (PV (prov, ptrval_)) =
     let wrap_intcast (*ity1*) ity2 ival =
-      match internal_intcast (*ity1*) ity2 ival with
+      match internal_intcast (Location_ocaml.other "intfromptr") (*ity1*) ity2 ival with
         | Either.Left err ->
             fail err
         | Right ival ->
@@ -2607,7 +2620,7 @@ module CHERI (C:Capability
                  return ()
              else
                return ()
-       end >>= fun () ->
+       end >>
        match ity with
        | Signed Intptr_t
          | Unsigned Intptr_t ->
@@ -2652,7 +2665,7 @@ module CHERI (C:Capability
       | (_, Prov_symbolic _) ->
        failwith "CHERI.combine_prov: found a Prov_symbolic"
 
-  let int_bin pf vf v1 v2 =
+  let int_bin loc pf vf v1 v2 =
     let unwr s n = if s then unwrap_cap_value n else n in
     let vfc s n1 n2 = if s then (wrap_cap_value @@ vf n1 n2) else vf n1 n2 in
     (* NOTE: for PNVI we assume that prov1 = prov2 = Prov_none *)
@@ -2663,15 +2676,19 @@ module CHERI (C:Capability
          (e.g. from the body of wrapI()), this means that the IV is a
          "logical" integer, not an value coming from C *)
     | IC (prov1, is_signed, c), IV (prov2, n2) ->
-        let n1 = unwr is_signed @@ C.cap_get_value c in
-        (* TODO(CHERI): representability check? *)
-        let c = C.cap_set_value c (vfc is_signed n1 n2) in
-        IC (pf prov1 prov2, is_signed, c)
+       let n1 = unwr is_signed @@ C.cap_get_value c in
+       begin
+         match cap_maybe_set_value loc c (vfc is_signed n1 n2) with
+         | Either.Right c -> IC (pf prov1 prov2, is_signed, c)
+         | Either.Left _  -> failwith "TODO(CHERI): non-representable value"
+       end
     | IV (prov1, n1), IC (prov2, is_signed, c) ->
-        let n2 = unwr is_signed @@ C.cap_get_value c in
-        (* TODO(CHERI): representability check? *)
-        let c = C.cap_set_value c (vfc is_signed n1 n2) in
-        IC (pf prov1 prov2, is_signed, c)
+       let n2 = unwr is_signed @@ C.cap_get_value c in
+       begin
+         match cap_maybe_set_value loc c (vfc is_signed n1 n2) with
+         | Either.Right c -> IC (pf prov1 prov2, is_signed, c)
+         | Either.Left _  -> failwith "TODO(CHERI): non-representable value"
+       end
    | IC (prov1, is_signed1, c1), IC (prov2, is_signed2, c2)
       ->
        if is_signed1 <> is_signed2
@@ -2679,14 +2696,17 @@ module CHERI (C:Capability
        else
          let n1 = unwr is_signed1 @@ C.cap_get_value c1 in
          let n2 = unwr is_signed1 @@ C.cap_get_value c2 in
-         (* TODO(CHERI): representability check? *)
          let n1 = if not is_signed1 then wrap_cap_value n1 else n1 in
          let n2 = if not is_signed1 then wrap_cap_value n2 else n2 in
-         let c = C.cap_set_value c1 (vfc is_signed1 n1 n2) in
-         IC (pf prov1 prov2, is_signed1, c)
+         begin
+           match cap_maybe_set_value loc c1 (vfc is_signed1 n1 n2) with
+           | Either.Right c -> IC (pf prov1 prov2, is_signed1, c)
+           | Either.Left _  -> failwith "TODO(CHERI): non-representable value"
+         end
 
   let op_ival iop v1 v2 =
     (* NOTE: for PNVI we assume that prov1 = prov2 = Prov_none *)
+    let int_bin = int_bin (Location_ocaml.other "op_ival") in
     match iop with
     | IntAdd -> int_bin combine_prov Z.add v1 v2
     | IntSub -> int_bin
@@ -2728,15 +2748,15 @@ module CHERI (C:Capability
     | (IC (prov, is_signed, c)) ->
        let n = C.cap_get_value c in
        let cn = Z.(sub (negate n) (of_int 1)) in
-       (* TODO(CHERI): representability check? *)
-       let c = C.cap_set_value c cn in
-       IC (prov, is_signed,c)
+       match cap_maybe_set_value (Location_ocaml.other "bitwise_complement_ival") c cn with
+       | Either.Right c -> IC (prov, is_signed,c)
+       | Either.Left _  -> failwith "TODO(CHERI): non-representable value"
 
-  let bitwise_and_ival _  = int_bin combine_prov Z.bitwise_and
+  let bitwise_and_ival _  = int_bin (Location_ocaml.other "bitwise_and_ival") combine_prov Z.bitwise_and
 
-  let bitwise_or_ival _ = int_bin combine_prov Z.bitwise_or
+  let bitwise_or_ival _ = int_bin (Location_ocaml.other "bitwise_or_ival") combine_prov Z.bitwise_or
 
-  let bitwise_xor_ival _ = int_bin combine_prov Z.bitwise_xor
+  let bitwise_xor_ival _ = int_bin (Location_ocaml.other "bitwise_xor_ival") combine_prov Z.bitwise_xor
 
   let case_integer_value v f_concrete _ =
     f_concrete (num_of_int v)
@@ -2920,7 +2940,7 @@ module CHERI (C:Capability
                                     let size_n = num_of_int size in
                                     IV (Prov_none, Z.min alloc.size size_n) in
                                   memcpy new_ptr ptr size_to_copy >>= fun _ ->
-                                  kill (Location_ocaml.other "realloc") true ptr >>= fun () ->
+                                  kill (Location_ocaml.other "realloc") true ptr >>
                                   return new_ptr
                                 else
                                   fail (MerrWIP "realloc: invalid pointer")
