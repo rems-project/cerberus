@@ -76,10 +76,12 @@ let tests = "morello_caps" >::: [
       );
 
       "encode C0 bytes" >:: (fun _ ->
+        (* C0 does not encode to all zeros due to compresison limitations *)
+        let b = List.map char_of_int [0;0;0;0;0;0;0;0;5;0;1;0;0;0;0;0] in
         assert_equal
           ~pp_diff:cap_bits_diff
           ~printer:cap_bits_str
-          (List.init 16 (fun _ -> '\000'))
+          b
           (fst (encode true (cap_c0 ())))
       );
 
