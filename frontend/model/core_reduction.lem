@@ -107,8 +107,7 @@ type core_step2 =
   | Step_done2 of Core.value
   | Step_memop_request2 of Mem_common.memop * list Core.value * Mem_common.thread_id * bool(* is_unseq_with_ccall *) * (Core.value -> thread_state)
   | Step_spawn_threads2 of (list Mem_common.thread_id -> thread_state) * list thread_state (* initial states for the children *)
-(*  | Step_fs2 of thread_state * Core_run.fs_oper *)
-  | Step_fs2 of thread_state * core_runM Core_run.fs_oper
+  | Step_fs2 of Mem_common.thread_id * thread_state * core_runM Core_run.fs_oper
   | Step_nd2 of list thread_state
 
 
@@ -155,8 +154,8 @@ instance (Show core_step2)
           (if is_unseq_with_ccall then " [unseq_with_call]" else "")
       | Step_spawn_threads2 _ _ ->
           "Step_spawn_threads2"
-      | Step_fs2 _ _ ->
-          "Step_fs2"
+      | Step_fs2 tid _ _ ->
+          "Step_fs2 -- tid: " ^ show tid
     end
 end
 
@@ -607,8 +606,8 @@ type action_step =
   | ACTION_ILLTYPED of string
 
 val step_action:
-    (Core.pexpr -> core_runM Core.pexpr) -> maybe nat -> Core.action core_run_annotation -> action_step
-let step_action eval_pexpr is_excluded (Action loc act_annots act) =
+    (Core.pexpr -> core_runM Core.value) -> maybe nat -> Core.action core_run_annotation -> action_step
+let step_action full_eval_pexpr is_excluded (Action loc act_annots act) =
   let wrap z =
     Action loc act_annots z in
   match act with
@@ -625,15 +624,11 @@ let step_action eval_pexpr is_excluded (Action loc act_annots act) =
                 end
           | (Just _, Just _) ->
               ACTION_ILLTYPED "Create"
-          | (Nothing, _) ->
-              ACTION_EVAL "first operand of Create" begin
-                eval_pexpr pe1 >>= fun pe1' ->
-                E.return (wrap (Create pe1' pe2 pref))
-              end
-          | (_, Nothing) ->
-              ACTION_EVAL "second operand of Create" begin
-                eval_pexpr pe2 >>= fun pe2' ->
-                E.return (wrap (Create pe1 pe2' pref))
+          | (_, _) ->
+              ACTION_EVAL "eval operands of Create" begin
+                full_eval_pexpr pe1 >>= fun cval1 ->
+                full_eval_pexpr pe2 >>= fun cval2 ->
+                E.return (wrap (Create (Caux.mk_value_pe cval1) (Caux.mk_value_pe cval2) pref))
               end
         end
     | CreateReadOnly pe1 pe2 pe3 pref ->
@@ -658,20 +653,12 @@ let step_action eval_pexpr is_excluded (Action loc act_annots act) =
               end
           | (Just _, Just _, Just _) ->
               ACTION_ILLTYPED "CreateReadOnly"
-          | (Nothing, _, _) ->
-              ACTION_EVAL "first operand of CreateReadOnly" begin
-                eval_pexpr pe1 >>= fun pe1' ->
-                E.return (wrap (CreateReadOnly pe1' pe2 pe3 pref))
-              end
-          | (_, Nothing, _) ->
-              ACTION_EVAL "second operand of CreateReadOnly" begin
-                eval_pexpr pe2 >>= fun pe2' ->
-                E.return (wrap (CreateReadOnly pe1 pe2' pe3 pref))
-              end
-          | (_, _, Nothing) ->
-              ACTION_EVAL "third operand of CreateReadOnly" begin
-                eval_pexpr pe3 >>= fun pe3' ->
-                E.return (wrap (CreateReadOnly pe1 pe2 pe3' pref))
+          | (_, _, _) ->
+              ACTION_EVAL "eval operands of CreateReadOnly" begin
+                full_eval_pexpr pe1 >>= fun cval1 ->
+                full_eval_pexpr pe2 >>= fun cval2 ->
+                full_eval_pexpr pe3 >>= fun cval3 ->
+                E.return (wrap (CreateReadOnly (Caux.mk_value_pe cval1) (Caux.mk_value_pe cval2) (Caux.mk_value_pe cval3) pref))
               end
         end
     | Store is_locking pe1 pe2 (Pexpr _ () (PEconstrained xs3)) mo ->
@@ -705,20 +692,12 @@ let step_action eval_pexpr is_excluded (Action loc act_annots act) =
               end
           | (Just _, Just _, Just _) ->
               ACTION_ILLTYPED "Store"
-          | (Nothing, _, _) ->
-              ACTION_EVAL "first operand of Store" begin
-                eval_pexpr pe1 >>= fun pe1' ->
-                E.return (wrap (Store is_locking pe1' pe2 pe3 mo))
-              end
-          | (_, Nothing, _) ->
-              ACTION_EVAL "second operand of Store" begin
-                eval_pexpr pe2 >>= fun pe2' ->
-                E.return (wrap (Store is_locking pe1 pe2' pe3 mo))
-              end
-          | (_, _, Nothing) ->
-              ACTION_EVAL "third operand of Store" begin
-                eval_pexpr pe3 >>= fun pe3' ->
-                E.return (wrap (Store is_locking pe1 pe2 pe3' mo))
+          | (_, _, _) ->
+              ACTION_EVAL "eval operands of Store" begin
+                full_eval_pexpr pe1 >>= fun cval1 ->
+                full_eval_pexpr pe2 >>= fun cval2 ->
+                full_eval_pexpr pe3 >>= fun cval3 ->
+                E.return (wrap (Store is_locking (Caux.mk_value_pe cval1) (Caux.mk_value_pe cval2) (Caux.mk_value_pe cval3) mo))
               end
         end
     | Load pe1 pe2 mo ->
@@ -742,15 +721,11 @@ let step_action eval_pexpr is_excluded (Action loc act_annots act) =
                 end
           | (Just _, Just _) ->
               ACTION_ILLTYPED "Load"
-          | (Nothing, _) ->
-              ACTION_EVAL "first operand of Load" begin
-                eval_pexpr pe1 >>= fun pe1' ->
-                E.return (wrap (Load pe1' pe2 mo))
-              end
-          | (_, Nothing) ->
-              ACTION_EVAL "second operand of Load" begin
-                eval_pexpr pe2 >>= fun pe2' ->
-                E.return (wrap (Load pe1 pe2' mo))
+          | (_, _) ->
+              ACTION_EVAL "eval operands of Load" begin
+                full_eval_pexpr pe1 >>= fun cval1 ->
+                full_eval_pexpr pe2 >>= fun cval2 ->
+                E.return (wrap (Load (Caux.mk_value_pe cval1) (Caux.mk_value_pe cval2) mo))
               end
         end
     | Alloc pe1 pe2 pref ->
@@ -766,15 +741,11 @@ let step_action eval_pexpr is_excluded (Action loc act_annots act) =
                 end
           | (Just _, Just _) ->
               ACTION_ILLTYPED "Alloc"
-          | (Nothing, _) ->
-              ACTION_EVAL "first operand of Alloc" begin
-                eval_pexpr pe1 >>= fun pe1' ->
-                E.return (wrap (Alloc pe1' pe2 pref))
-              end
-          | (_, Nothing) ->
-              ACTION_EVAL "second operand of Alloc" begin
-                eval_pexpr pe2 >>= fun pe2' ->
-                E.return (wrap (Alloc pe1 pe2' pref))
+          | (_, _) ->
+              ACTION_EVAL "eval operands of Alloc" begin
+                full_eval_pexpr pe1 >>= fun cval1 ->
+                full_eval_pexpr pe2 >>= fun cval2 ->
+                E.return (wrap (Alloc (Caux.mk_value_pe cval1) (Caux.mk_value_pe cval2) pref))
               end
         end
     | Kill is_dynamic pe ->
@@ -790,9 +761,9 @@ let step_action eval_pexpr is_excluded (Action loc act_annots act) =
           | Just _ ->
               ACTION_ILLTYPED "Kil"
           | Nothing ->
-              ACTION_EVAL "operand of Kill" begin
-                eval_pexpr pe >>= fun pe' ->
-                E.return (wrap (Kill is_dynamic pe'))
+              ACTION_EVAL "eval operand of Kill" begin
+                full_eval_pexpr pe >>= fun cval ->
+                E.return (wrap (Kill is_dynamic (Caux.mk_value_pe cval)))
               end
         end
 end
@@ -1050,7 +1021,7 @@ let step_ctx mem_st file core_extern current_tid (parent_tid_opt, th_st) =
         end in
         let wrap_expr z = <| th_st with arena= apply_ctx ctx z |> in
         let process_action is_excluded wrap_act z =
-          match step_action eval_pexpr is_excluded z with
+          match step_action full_eval_pexpr' is_excluded z with
             | ACTION_REQUEST debug_str loc _request ->
                 Step_action_request2 debug_str loc current_tid (is_unseq_with_ccall ctx) begin
                   E.return match _request with
@@ -1344,7 +1315,7 @@ let step_ctx mem_st file core_extern current_tid (parent_tid_opt, th_st) =
                end
           | Eproc _ (Impl iCst) pes ->
               if true (* iCst is an FS function *) then
-                Step_fs2 th_st begin
+                Step_fs2 current_tid th_st begin
                   E.mapM full_eval_pexpr' pes >>= fun cvals ->
                   E.return (step_fs_proc th_st iCst cvals)
                 end
