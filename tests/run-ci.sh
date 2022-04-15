@@ -50,6 +50,7 @@ function report {
 # Use the provided path to cerberus, otherwise default to the driver backend build
 # CERB="${WITH_CERB:=dune exec cerberus --no-build -- }"
 CERB="${WITH_CERB:=../_build/default/backend/driver/main.exe}"
+export CERB_RUNTIME=../runtime/
 
 # Running ci tests
 for file in "${citests[@]}"
