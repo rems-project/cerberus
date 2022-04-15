@@ -2867,8 +2867,10 @@ module CHERI (C:Capability
     (* TODO: copy ptrval2 into ptrval1 *)
     let rec aux i =
       if Z.less i size_n then
-        load loc Ctype.unsigned_char (array_shift_ptrval ptrval2 Ctype.unsigned_char (IV (Prov_none, i))) >>= fun (_, mval) ->
-        store loc Ctype.unsigned_char false (array_shift_ptrval ptrval1 Ctype.unsigned_char (IV (Prov_none, i))) mval >>= fun _ ->
+        eff_array_shift_ptrval loc ptrval1 Ctype.unsigned_char (IV (Prov_none, i)) >>= fun ptrval1' ->
+        eff_array_shift_ptrval loc ptrval2 Ctype.unsigned_char (IV (Prov_none, i)) >>= fun ptrval2' ->
+        load loc Ctype.unsigned_char ptrval2'             >>= fun (_, mval) ->
+        store loc Ctype.unsigned_char false ptrval1' mval >>= fun _         ->
         aux (Z.succ i)
       else
         return ptrval1 in
@@ -2882,9 +2884,10 @@ module CHERI (C:Capability
       | 0 ->
          return (List.rev acc)
       | size ->
-         load Location_ocaml.unknown Ctype.unsigned_char ptrval >>= function
+        let loc = Location_ocaml.other "memcmp" in
+         load loc Ctype.unsigned_char ptrval >>= function
          | (_, MVinteger (_, (IV (byte_prov, byte_n)))) ->
-            let ptr' = array_shift_ptrval ptrval Ctype.unsigned_char (IV (Prov_none, Z.(succ zero))) in
+            eff_array_shift_ptrval loc ptrval Ctype.unsigned_char (IV (Prov_none, Z.(succ zero))) >>= fun ptr' ->
             get_bytes ptr' (byte_n :: acc) (size-1)
          | _ ->
             assert false in
