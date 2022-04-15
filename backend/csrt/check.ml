@@ -1398,8 +1398,6 @@ let rec infer_expr loc env (e : ('a,'bty) mu_expr) =
        | M_LinuxRMW (ct, sym1, sym2, mo) -> 
           fail loc (Unsupported !^"todo: LinuxRMW")
        end
-    | M_Eskip -> 
-       return (Normal (Computational (fresh (), Unit, I)), env)
     | M_Eccall (_, _ctype, fun_asym, arg_asyms) ->
        let* (args,env) = aargs loc env arg_asyms in
        let (sym1,loc1) = aunpack loc fun_asym in
@@ -1422,7 +1420,7 @@ let rec infer_expr loc env (e : ('a,'bty) mu_expr) =
        let* (args,env) = aargs loc env asyms in
        let* (rt, env) = calltyp loc env args decl_typ in
        return (Normal rt, env)
-    | M_Ebound (n, e) ->
+    | M_Ebound e ->
        infer_expr loc env e
     | M_End _ ->
        fail loc (Unsupported !^"todo: End")

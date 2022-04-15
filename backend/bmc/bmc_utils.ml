@@ -368,15 +368,12 @@ let rec set_uid_e uid n (Expr( annots1, e_)) =
                         (Lem_list.mapi (fun i (pat, e) -> (pat, self (i+ 1) e)) cases))
   | Elet( pat, pe, e) -> Elet( pat, (set_uid_pe uid'( 0) pe), (self( 1) e))
   | Eif( pe, e1, e2) -> Eif( (set_uid_pe uid'( 0) pe), (self( 1) e1), (self( 2) e2))
-  | Eskip -> Eskip
   | Eccall( x, pe1, pe2, args) -> Eccall( x, (set_uid_pe uid'( 0) pe1), (set_uid_pe uid'( 0) pe2), (pure_uids args))
   | Eproc( x, name1, args) -> Eproc( x, name1, (pure_uids args))
   | Eunseq es -> Eunseq (selfs es)
   | Ewseq( pat, e1, e2) -> Ewseq( pat, (self( 1) e1), (self( 2) e2))
   | Esseq( pat, e1, e2) -> Esseq( pat, (self( 1) e1), (self( 2) e2))
-  | Easeq( bty, act, pact) -> Easeq( bty, act, pact)
-  | Eindet( n, e) -> Eindet( n, (self( 1) e))
-  | Ebound( n, e) -> Ebound( n, (self( 1) e))
+  | Ebound e -> Ebound( (self( 1) e))
   | End es -> End (selfs es)
   | Esave( lab_bty, args, e) -> Esave( lab_bty,
       (Lem_list.mapi (fun i (s, (bty, pe)) -> (s, (bty, pure_uid (i+ 1) pe))) args),
@@ -384,6 +381,7 @@ let rec set_uid_e uid n (Expr( annots1, e_)) =
   | Erun( x, lab, pes) -> Erun( x, lab, (pure_uids pes))
   | Epar es -> Epar (selfs es)
   | Ewait thid -> Ewait thid
+  | Eannot _ | Eexcluded _ -> assert false (* runtime only *)
   )))
 
 (*val string_of_symbol: Symbol.sym -> string*)

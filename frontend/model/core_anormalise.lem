@@ -787,8 +787,6 @@ and n_expr loc (e : expr 'a unit) (k : mu_expr 'a -> mu_expr 'a)
   | Esseq pat e1 e2 ->
      n_expr e1 (fun e1 ->
      wrap (M_Esseq (core_to_mu__pattern pat) e1 (n_expr e2 k)))
-  | Easeq b action paction ->
-     failwith "todo Easeq"
   | Ebound e ->
      wrap (M_Ebound (n_expr e k))
   | End es ->

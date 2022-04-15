@@ -121,8 +121,6 @@ let rec precedence_expr = function
       Some 1
   | Elet _ ->
       Some 2
-  | Easeq _ ->
-      Some 3
   | Esseq _ ->
       Some 3
   | Ewseq _ ->
@@ -628,9 +626,6 @@ let rec pp_expr expr =
               P.ifflat doc_e1 (P.nest 2 (P.break 1 ^^ doc_e1)) ^^^ pp_control "in"
             ) ^^
             P.break 1 ^^ (pp e2)
-        | Easeq ((sym, bTy), act1, act2) ->
-            pp_control "let atom" ^^^ pp_symbol sym ^^ P.colon ^^^ pp_core_base_type bTy ^^^ P.equals ^^^
-            pp (Expr ([], Eaction (Paction (Pos, act1)))) ^^^ pp_control "in" ^^^ pp (Expr ([], Eaction (Paction (Pos, act2))))
         | Esave ((sym, bTy), sym_bTy_pes, e) ->
             pp_keyword "save" ^^^ pp_symbol sym ^^ P.colon ^^^ pp_core_base_type bTy ^^^
             P.parens (comma_list (fun (sym, (bTy, pe)) ->

@@ -506,10 +506,6 @@ let rec mu_to_core__expr env (expr : mu_expr 'a 'bty)
                (mu_to_core__pattern pat)
                (mu_to_core__expr env e1)
                (mu_to_core__expr env e2))
-    (* | M_Easeq (s,bt) a pa ->
-     *    Core.Easeq (s,bt) (mu_to_core__action a) (mu_to_core__paction pa) *)
-    (* | M_Eindet n e ->
-     *    Core.Eindet n (mu_to_core__expr env e) *)
     | M_Ebound e ->
        wrap (Core.Ebound (mu_to_core__expr env e))
     | M_End es ->

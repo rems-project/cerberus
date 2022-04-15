@@ -11,7 +11,6 @@ let core_expr_map f (Expr (annot, expr_)) =
    | Eunseq es -> Eunseq (List.map f es)
    | Ewseq (p, e1, e2) -> Ewseq (p, f e1, f e2)
    | Esseq (p, e1, e2) -> Esseq (p, f e1, f e2)
-   | Eindet (n, e) -> Eindet (n, f e)
    | Ebound (n, e) -> Ebound (n, f e)
    | End es -> End (List.map f es)
    | Esave (x, y, e) -> Esave (x, y, f e)

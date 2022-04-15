@@ -122,6 +122,8 @@ let unsafe_substitute_action (map: substitute_map)
                   unsafe_substitute_pexpr map pe2,
                   unsafe_substitute_pexpr map pe3,
                   memorder)
+    | SeqRMW _ ->
+        failwith "TODO: SeqRMW"
   in
   Action(loc, a, ret)
 
@@ -141,7 +143,6 @@ let rec unsafe_substitute_expr (map: substitute_map)
         Elet(pat, unsafe_substitute_pexpr map pe, unsafe_substitute_expr map e)
     | Eif(pe1, e2, e3) ->
         Eif(unsafe_substitute_pexpr map pe1, unsafe_substitute_expr map e2, unsafe_substitute_expr map e3)
-    | Eskip -> Eskip
     | Eccall (a, pe1, pe2, pelist) ->
         Eccall(a, unsafe_substitute_pexpr map pe1,
                   unsafe_substitute_pexpr map pe2,
@@ -154,11 +155,8 @@ let rec unsafe_substitute_expr (map: substitute_map)
         Ewseq(pat, unsafe_substitute_expr map e1, unsafe_substitute_expr map e2)
     | Esseq(pat, e1, e2) ->
         Esseq(pat, unsafe_substitute_expr map e1, unsafe_substitute_expr map e2)
-    | Easeq _
-    | Eindet _ ->
-        assert false
-    | Ebound(i, e) ->
-        Ebound(i, unsafe_substitute_expr map e)
+    | Ebound e ->
+        Ebound (unsafe_substitute_expr map e)
     | End elist ->
         End (List.map (unsafe_substitute_expr map) elist)
     | Esave(label, letlist, e) ->
@@ -171,7 +169,7 @@ let rec unsafe_substitute_expr (map: substitute_map)
     | Erun(a, sym, pelist) ->
         Erun(a, sym, List.map (unsafe_substitute_pexpr map) pelist)
     | Epar _
-    | Ewait _ ->
+    | Eannot _ | Eexcluded _ | Ewait _ ->
         assert false
   in
     Expr(annot, ret)

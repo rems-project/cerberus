@@ -121,8 +121,6 @@ let rec fv_core (Expr (_, e_)) fvs =
     |> fv_core e1
   | Erun (_, _, pes) -> List.fold_left (flip fv_pe) fvs pes
   | Eunseq _ -> raise (Unsupported "fv unseq")
-  | Easeq  _ -> raise (Unsupported "fv aseq")
-  | Eindet _ -> raise (Unsupported "fv indet")
   | Ebound _ -> raise (Unsupported "fv bound")
   | End    _ -> raise (Unsupported "fv end")
   | Elet   _ -> raise (Unsupported "fv let")

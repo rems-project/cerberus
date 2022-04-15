@@ -198,8 +198,6 @@ let rec fetch_types (Expr annot expr_) =
         end
 
 (*
-    | Easeq of ('sym * core_base_type) * (generic_action 'a 'bty 'sym) * (generic_paction 'a 'bty 'sym) (* atomic sequencing *)
-    | Eindet of nat * (generic_expr 'a 'bty 'sym) (* indeterminately sequenced expr *)
     | Ebound of (generic_expr 'a 'bty 'sym) (* $\ldots$and boundary *)
     | End of list (generic_expr 'a 'bty 'sym) (* nondeterministic sequencing *)
           (* the pexpr associated to the symbols are their value when the control flows throught the Esave (i.e. when
@@ -316,8 +314,6 @@ let rec explode_expr env (Expr annot expr_ as expr) =
         wrap (Ewseq pat (self e1) (self e2))
     | Esseq pat e1 e2 ->
         wrap (Esseq pat (self e1) (self e2))
-    | Easeq _ _ _ ->
-        expr
     | Ebound e ->
         wrap (Ebound (self e))
     | End es ->

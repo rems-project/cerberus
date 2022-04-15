@@ -217,7 +217,7 @@ let execute ~conf ~filename (mode: Global_ocaml.execution_mode) =
     end >>= fun core ->
     Tags.set_tagDefs core.tagDefs;
     let open Exhaustive_driver in
-    let driver_conf = {concurrency=false; experimental_unseq=false; exec_mode=mode; fs_dump=false; trace=false; } in
+    let driver_conf = {concurrency=false; exec_mode=mode; fs_dump=false; trace=false; } in
     interp_backend dummy_io core ~args:[] ~batch:`Batch ~fs:None ~driver_conf
     >>= function
     | Either.Left res ->
@@ -276,15 +276,12 @@ let set_uid file =
         Ecase (set_pe pe, List.mapi (fun i (pat, e) -> (pat, set_e e)) cases)
       | Elet (pat, pe, e) -> Elet (pat, set_pe pe, set_e e)
       | Eif (pe, e1, e2) -> Eif (set_pe pe, set_e e1, set_e e2)
-      | Eskip -> Eskip
       | Eccall (x, pe1, pe2, args) -> Eccall (x, set_pe pe1, set_pe pe2, List.map set_pe args)
       | Eproc (x, name, args) -> Eproc (x, name, List.map set_pe args)
       | Eunseq es -> Eunseq (List.map set_e es)
       | Ewseq (pat, e1, e2) -> Ewseq (pat, set_e e1, set_e e2)
       | Esseq (pat, e1, e2) -> Esseq (pat, set_e e1, set_e e2)
-      | Easeq (bty, act, pact) -> Easeq (bty, act, pact)
-      | Eindet (n, e) -> Eindet (n, set_e e)
-      | Ebound (n, e) -> Ebound (n, set_e e)
+      | Ebound e -> Ebound (set_e e)
       | End es -> End (List.map set_e es)
       | Esave (lab_bty, args, e) ->
         Esave (lab_bty,
@@ -293,6 +290,8 @@ let set_uid file =
       | Erun (x, lab, pes) -> Erun (x, lab, List.map set_pe pes)
       | Epar es -> Epar (List.map set_e es)
       | Ewait thid -> Ewait thid
+      | Eannot (fps, e) -> Eannot (fps, set_e e)
+      | Eexcluded (n, act) -> Eexcluded (n, act)
     in Expr (Annot.Auid (fresh ()) :: annots, e_')
   in
   let set_fun fname = function
@@ -551,7 +550,7 @@ let step ~conf ~filename (active_node_opt: Instance_api.active_node option) =
     Tags.set_tagDefs core.tagDefs;
     let core'    = Core_run_aux.convert_file core in
     let st0      = Driver.initial_driver_state core' Sibylfs.fs_initial_state (* TODO *) in
-    let (m, st)  = (Driver.drive false false core' [], st0) in
+    let (m, st)  = (Driver.drive false core' [], st0) in
     last_node_id := 0;
     let node_info= `Init in
     let memory = Impl_mem.serialise_mem_state (get_file_hash core) st.Driver.layout_state in

@@ -95,7 +95,6 @@ let keywords =
       ("unseq",        T.UNSEQ       );
       ("weak",         T.WEAK        );
       ("strong",       T.STRONG      );
-      ("atom",         T.ATOM        );
       ("save",         T.SAVE        );
       ("run",          T.RUN         );
       ("bound",        T.BOUND       );

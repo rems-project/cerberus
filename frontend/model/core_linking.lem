@@ -186,8 +186,6 @@ let rec free_expr acc (Expr _ e) =
       (free_expr (free_expr acc e1) e2) \ (symbols_in_pattern {} pat)
   | Esseq pat e1 e2 ->
       (free_expr (free_expr acc e1) e2) \ (symbols_in_pattern {} pat)
-  | Easeq _ _ _ ->
-      error ("TODO: free_expr Easeq")
   | Ebound e ->
       free_expr acc e
   | End es ->

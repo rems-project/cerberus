@@ -107,7 +107,6 @@ let rec precedence_expr = function
   | M_Eproc _
   | M_Eccall _
   (* | M_Eunseq _ *)
-  (* | M_Eindet _ *)
   | M_Ebound _
   | M_End _
   | M_Erun _
@@ -120,8 +119,6 @@ let rec precedence_expr = function
       Some 1
   | M_Elet _ ->
       Some 2
-  (* | M_Easeq _ ->
-   *     Some 3 *)
   | M_Esseq _ ->
       Some 3
   | M_Ewseq _ ->
@@ -698,11 +695,6 @@ let pp_expr budget expr =
               P.ifflat doc_e1 (P.nest 2 (P.break 1 ^^ doc_e1)) ^^^ pp_control "in"
             ) ^^
             P.break 1 ^^ (pp e2)
-        (* | M_Easeq ((sym, bTy), act1, pact2) ->
-         *     pp_control "let atom" ^^^ pp_symbol sym ^^ P.colon ^^^ pp_core_base_type bTy ^^^ P.equals ^^^
-         *     pp (Expr ([], Eaction (Paction (Pos, act1)))) ^^^ pp_control "in" ^^^ pp (Expr ([], Eaction pact2)) *)
-        (* | M_Eindet (i, e) ->
-         *     pp_control "indet" ^^ P.brackets (!^ (string_of_int i)) ^^ P.parens (pp e) *)
         | M_Esave ((sym, bTy), sym_bTy_pes, e) ->
             pp_keyword "save" ^^^ pp_symbol sym ^^ P.colon ^^^ pp_core_base_type bTy ^^^
             P.parens (comma_list (fun (sym, (bTy, pe)) ->

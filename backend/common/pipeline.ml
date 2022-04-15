@@ -398,8 +398,6 @@ let untype_file (file: 'a Core.typed_file) : 'a Core.file =
           Ewseq (untype_pattern pat, untype_expr e1, untype_expr e2)
       | Esseq (pat, e1, e2) ->
           Esseq (untype_pattern pat, untype_expr e1, untype_expr e2)
-      | Easeq (sym_bTy, act1, act2) ->
-          Easeq (sym_bTy, untype_action act1, untype_action act2)
       | Ebound e ->
           Ebound (untype_expr e)
       | End es ->
