@@ -1027,17 +1027,20 @@ module CHERI (C:Capability
          | Some cs ->
             begin match tag_query_f addr with
             | None ->
-               (* TODO(CHERI): decide on semantics *)
-               Debug_ocaml.error ("Unspecified tag value for address 0x" ^ (Z.format "%x" addr))
+               Debug_ocaml.warn  [] (fun () -> "Unspecified tag value for address 0x" ^ (Z.format "%x" addr));
+               MVEunspecified cty
             | Some tag ->
                begin match C.decode cs tag with
                | None ->
                   (* could not decode capability *)
                   Debug_ocaml.warn [] (fun () -> "Error decoding intptr_t cap");
                   MVErr (MerrCHERI (loc, CheriErrDecodingCap))
-               | Some n ->
-                  (* TODO(CHERI): signed/unsigned handling *)
-                  MVEinteger (ity, IC (prov,true, n))
+               | Some c ->
+                  if AilTypesAux.is_signed_ity ity then
+                    let n = C.cap_get_value c in
+                    MVEinteger (ity, IC (prov, true, C.cap_set_value c (wrap_cap_value n)))
+                  else
+                    MVEinteger (ity, IC (prov, false, c))
                end
             end
          | None ->
@@ -1086,9 +1089,8 @@ module CHERI (C:Capability
          | Some cs ->
             begin match tag_query_f addr with
             | None ->
-               (* TODO(CHERI): decide on semantics *)
-               let cs = "Capability address 0x" ^ Z.format "%x" addr in
-               Debug_ocaml.error ("Could not find tag. " ^ cs)
+               Debug_ocaml.warn  [] (fun () -> "Unspecified tag value for address 0x" ^ (Z.format "%x" addr));
+               MVEunspecified cty
             | Some tag ->
                begin match C.decode cs tag with
                | None ->
@@ -1103,8 +1105,8 @@ module CHERI (C:Capability
                      else
                        begin match tag_query_f addr with
                        | None ->
-                          (* TODO(CHERI): decide on semantics *)
-                          Debug_ocaml.error ("Unspecified tag value for address 0x" ^ (Z.format "%x" addr))
+                          Debug_ocaml.warn  [] (fun () -> "Unspecified tag value for address 0x" ^ (Z.format "%x" addr));
+                          MVEunspecified cty
                        | Some tag ->
                           begin match C.decode cs tag with
                           | None ->
