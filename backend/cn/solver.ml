@@ -29,11 +29,7 @@ type model = Z3.context * Z3.Model.model
 type model_with_q = model * (Sym.t * BT.t) option
 
 
-type handle_blast = 
-  | BlastFlatAdd
-  | BlastITE
 
-let handle_blast = BlastITE
 
 
 let logging_params = 
@@ -351,35 +347,6 @@ module Translate = struct
               else add_ (sum (pos - 1), mul_ (xor_pos t1 t2 pos, exp_ (int_ 2, int_ pos)))
             in
             term (sum (bit_width - 1))
-         | Blast ((i1, s, v, i2), body) ->
-            begin match handle_blast with
-            | BlastFlatAdd ->
-               let inst_body i = IT.subst (IT.make_subst [(s, int_ i)]) body in
-               let v_blasted_values = 
-                 ite_ (or_ [v %< int_ i1; v %> int_ i2], default_ Integer, int_ 0) ::
-                   if i1 > i2 then [] else
-                     List.init (i2 - i1 + 1) (fun i ->
-                         let i = i + i1 in
-                         ite_ (eq_ (v, int_ i), inst_body i, int_ 0)
-                       )
-               in
-               term (List.fold_right (fun i j -> add_ (i, j)) v_blasted_values (int_ 0))
-            | BlastITE ->
-               let inst_body i = IT.subst (IT.make_subst [(s, int_ i)]) body in
-               let v_blasted_values = 
-                 if i1 > i2 then [] else
-                   List.init (i2 - i1 + 1) (fun i ->
-                       let i = i + i1 in
-                       (eq_ (v, int_ i), inst_body i)
-                     )
-               in
-               let value = 
-                 List.fold_right (fun (g,v) acc -> 
-                     ite_ (g, v, acc)
-                   ) v_blasted_values (default_ Integer)
-               in
-               term value
-            end
          end
       | Bool_op bool_op -> 
          let open Z3.Boolean in

@@ -294,8 +294,6 @@ let rec simp (struct_decls : Memory.struct_decls) values equalities lcs =
        let a = aux a in
        let b = aux b in
        IT (Arith_op (XOR (ity, a, b)), bt)
-    | Blast ((i1, s, v, i2), body) ->
-       IT (Arith_op (Blast ((i1, s, v, i2), body)), bt)
   in
   
   let bool_op it bt = 

@@ -176,13 +176,6 @@ module WIT = struct
               let@ t = check loc ~context Integer t in
               let@ t' = check loc ~context Integer t' in
               return (BT.Integer, XOR (ity, t, t'))
-           | Blast ((i1, s, v, i2), body) ->
-              let@ v = check loc ~context Integer v in
-              pure begin
-                  let@ () = add_l s Integer in
-                  let@ body = check loc ~context Integer body in
-                  return (BT.Integer, Blast ((i1, s, v, i2), body))
-                end
          in
          return (IT (Arith_op arith_op, bt))
       | Bool_op bool_op ->

@@ -64,7 +64,7 @@ type token =
 
   | EACH
   | FOR
-  | BLAST
+
 
   | WHERE
   | WITH

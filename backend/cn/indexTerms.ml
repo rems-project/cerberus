@@ -81,8 +81,6 @@ let pp =
           c_app !^"realToInt" [aux false t]
        | XOR (ity, t1, t2) -> 
           c_app !^"xor" [Sctypes.IntegerTypes.pp ity ; aux false t1; aux false t2]
-       | Blast ((i1, s, v, i2), t) ->
-          c_app !^"blast" [int i1; Sym.pp s ^^ equals ^^ aux true v; int i2] ^^ braces (aux false t)
        end
     | Bool_op bool_op -> 
        begin match bool_op with
@@ -210,7 +208,6 @@ let add_subterms : 'bt. ('bt term) list -> 'bt term -> ('bt term) list =
      | IntToReal t -> [t] @ ts
      | RealToInt t -> [t] @ ts
      | XOR (_, it, it') -> [it; it'] @ ts
-     | Blast ((_, _s, v, _), _body) -> [v] @ ts
      end
   | Bool_op bool_op ->
      begin match bool_op with
@@ -278,7 +275,6 @@ let add_subterms : 'bt. ('bt term) list -> 'bt term -> ('bt term) list =
 let subterm_binder : 'bt. 'bt term -> (Sym.t * 'bt term) option =
   fun (IT (it, _)) ->
   match it with
-  | Arith_op (Blast ((_, s, _v, _), body)) -> Some (s, body)
   | Bool_op (EachI ((_, s, _), t)) -> Some (s, t)
   | Map_op (Def ((s, _), body)) -> Some (s, body)
   (* | Let ((s, bound), body) -> Some (s, body) *)
@@ -356,15 +352,6 @@ let rec subst (su : typed subst) (IT (it, bt)) =
        | IntToReal it -> IntToReal (subst su it)
        | RealToInt it -> RealToInt (subst su it)
        | XOR (ity, it, it') -> XOR (ity, subst su it, subst su it')
-       | Blast ((i1, s, v, i2), body) ->
-          let v = subst su v in
-          if SymSet.mem s su.relevant then
-            let s' = Sym.fresh_same s in
-            let body = subst (make_subst [(s, IT (Lit (Sym s'), BT.Integer))]) body in
-            let body = subst su body in
-            Blast ((i1, s', v, i2), body)
-          else
-            Blast ((i1, s, v, i2), subst su body)
      in
      IT (Arith_op arith_op, bt)
   | Bool_op bool_op -> 
@@ -580,7 +567,6 @@ let ne__ it it' = ne_ (it, it')
 
 
 let eachI_ (i1, s, i2) t = IT (Bool_op (EachI ((i1, s, i2), t)), BT.Bool)
-let blast_ (i1, s, v, i2) t = IT (Arith_op (Blast ((i1, s, v, i2), t)), BT.Integer)
 
 (* arith_op *)
 let add_ (it, it') = IT (Arith_op (Add (it, it')), bt it)

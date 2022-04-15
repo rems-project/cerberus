@@ -42,7 +42,6 @@ module Terms = struct
     | Env of term * string
     | Unchanged of term
     | For of (Z.t * string * Z.t) * term
-    | Blast of (Z.t * string * term * Z.t) * term
     | Pred of string * term list
   [@@deriving eq, ord]
 
@@ -137,10 +136,6 @@ module Terms = struct
        mparens atomic
          (!^"for" ^^ parens(!^(Z.to_string i) ^^ comma ^^^ !^name ^^ comma ^^^ !^(Z.to_string j)) ^^^
             braces (pp false body))
-    | Blast ((i, name, v, j), body) ->
-       mparens atomic
-         (c_app !^"blast" [!^(Z.to_string i); !^name ^^ equals ^^ pp true v; !^(Z.to_string j)] ^^^
-            braces (pp false body))
     | Pred (name, args) ->
        mparens atomic
          (c_app !^name (List.map (pp false) args))
@@ -234,8 +229,6 @@ module Terms = struct
          true
       | For (_, body) ->
          aux body
-      | Blast ((_, _, v, _), body) ->
-         aux v || aux body
       | Pred (name, args) ->
          List.exists aux args
     in
