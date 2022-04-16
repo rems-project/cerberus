@@ -1215,7 +1215,7 @@ let step_ctx mem_st file core_extern current_tid (parent_tid_opt, th_st) =
               process_action (Just n)(*is excluded*) (fun z -> Eexcluded n z) act
           
           | Easeq sym_bTy act1 act2 ->
-              match step_action eval_pexpr Nothing(*not excluded*) act1 with
+              match step_action full_eval_pexpr' Nothing(*not excluded*) act1 with
                 | ACTION_EVAL debug_str eval_m ->
                     Step_with_runstate2 (RSK_eval debug_str) begin
                       eval_m >>= fun act1' ->
