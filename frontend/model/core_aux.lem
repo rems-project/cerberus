@@ -2213,7 +2213,7 @@ let rec collect_saves_aux st (Expr annots expr_) =
         st
     | Esave (sym, _) params e ->
         collect_saves_aux
-          <| st with tmp_acc= Map.insert sym (List.map (fun (x, (y, _)) -> (x, y)) params, e) st.tmp_acc |>
+          <| st with tmp_acc= Map.insert sym (List.map (fun (x, ((y, _), _)) -> (x, y)) params, e) st.tmp_acc |>
           e
     | Erun _ _ _ ->
         st
