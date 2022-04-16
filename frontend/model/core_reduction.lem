@@ -1132,7 +1132,7 @@ let step_ctx mem_st file core_extern current_tid (parent_tid_opt, th_st) =
                       let case_funptrval psym =
                         let mem_values =
                           match Map.lookup psym file.funinfo with
-                            | Just (_, param_tys, _, _) ->
+                            | Just (_, _, _, param_tys, _, _) ->
                                 List.map (fun (ty, cval) ->
                                   match Core_aux.memValueFromValue (Ctype.Ctype [] (Ctype.Pointer Ctype.no_qualifiers ty)) cval with
                                     | Just mval -> mval
