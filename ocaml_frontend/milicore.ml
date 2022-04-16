@@ -71,8 +71,8 @@ let rec remove_save expr =
   | Esseq (pat, e1, e2) ->
      wrap (Esseq (pat, remove_save e1, remove_save e2))
   | Easeq _ -> expr
-  | Ebound (n, e) -> 
-     wrap (Ebound (n, remove_save e))
+  | Ebound e -> 
+     wrap (Ebound (remove_save e))
   | Esave ((sym, cbt), args, body) ->
      (* have to check *)
      let args = List.map (fun (_, (_, pe)) -> pe) args in

@@ -875,7 +875,7 @@ let rec add_e ~sequentialise (in_v, out_v) in_pat (Expr (_, e_)) =
   | Easeq _ ->
     (* TODO *)
     assert false
-  | Ebound (_, e) ->
+  | Ebound e ->
     (* NOTE: not sure about this *)
     self (in_v, out_v) in_pat e
   | Esave ((lab, _), params, e) ->
@@ -948,7 +948,7 @@ let rec collect_saves (Expr (_, e_)) =
     self e1 >>= fun _ -> self e2
   | Easeq _ ->
     return ()
-  | Ebound (_, e) ->
+  | Ebound e ->
     self e
   | Esave ((lab, _), params, e) ->
     self e >>= fun _ ->

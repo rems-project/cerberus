@@ -322,7 +322,7 @@ module Make(PP_Typ : Pp_mucore.PP_Typ) = struct
       | Easeq of ('sym * core_base_type) * ('a, 'bty, 'sym) generic_action *
           ('a, 'bty, 'sym) generic_paction
   *)
-      | M_Ebound (_, e) ->
+      | M_Ebound e ->
           Dnode (pp_ctor "Ebound", [self e])
   (*
       | End of ('a, 'bty, 'sym) generic_expr list

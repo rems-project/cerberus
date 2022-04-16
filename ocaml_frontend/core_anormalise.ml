@@ -784,8 +784,8 @@ let rec n_expr (loc : Loc.t) (returns : symbol Pset.set)
      twrap (M_Esseq(M_Pat pat, e1, n_expr e2 k)))
   | Easeq(b, action3, paction2) ->
      error "core_anormalisation: Easeq"
-  | Ebound(n, e) ->
-     twrap (M_Ebound(n, n_expr e k))
+  | Ebound e ->
+     twrap (M_Ebound (n_expr e k))
   | End es ->
      let es = (List.map (fun e -> n_expr e k) es) in
      twrap (M_End es)

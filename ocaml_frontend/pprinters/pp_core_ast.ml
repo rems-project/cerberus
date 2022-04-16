@@ -204,6 +204,10 @@ let pp_action_ctor act =
         "store"
     | Load0 _ ->
         "load"
+    | SeqRMW (false, _, _, _, _) ->
+        "seq_rmw"
+    | SeqRMW (true, _, _, _, _) ->
+        "seq_rmw_with_forward"
     | RMW0 _ ->
         "rmw"
     | Fence0 _ ->
@@ -244,6 +248,17 @@ let dtree_of_action act =
           ( "load"
           , [ dtree_of_pexpr pe1
             ; dtree_of_pexpr pe2 ] )
+      | SeqRMW (b, pe1, pe2, sym, pe3) ->
+          let ctor_str =
+            if b then
+              "seq_rmw_with_forward"
+            else
+              "seq_rmw_with_forward" in
+          ( ctor_str
+          , [ dtree_of_pexpr pe1
+            ; dtree_of_pexpr pe1
+            ; Dleaf (pp_symbol sym)
+            ; dtree_of_pexpr pe3 ] )
       | RMW0 _ ->
           ( "rmw"
           , [] )
@@ -324,7 +339,7 @@ let dtree_of_expr expr =
     | Easeq of ('sym * core_base_type) * ('a, 'bty, 'sym) generic_action *
         ('a, 'bty, 'sym) generic_paction
 *)
-    | Ebound (_, e) ->
+    | Ebound e ->
         Dnode (pp_ctor "Ebound", [self e])
 (*
     | End of ('a, 'bty, 'sym) generic_expr list

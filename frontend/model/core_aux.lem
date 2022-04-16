@@ -2322,7 +2322,7 @@ let rec m_collect_saves_aux st (Expr annots expr_) =
         end
     | Easeq _ _ _ ->
         st
-    | Ebound _ _ ->
+    | Ebound _ ->
         (* typing forbids "saves" inside a "bound()" *)
         st
     | End _ ->

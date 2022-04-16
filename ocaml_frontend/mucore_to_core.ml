@@ -515,8 +515,8 @@ let rec mu_to_core__texpr env1 expr2 : (unit, 'bty, symbol) Core.generic_expr=
                     (mu_to_core__expr env1 e1),
                     (mu_to_core__texpr env1 e2)))
        end
-    | M_Ebound( n, e) ->
-       wrap (Core.Ebound( n, (mu_to_core__texpr env1 e)))
+    | M_Ebound e ->
+       wrap (Core.Ebound( (mu_to_core__texpr env1 e)))
     | M_End es ->
        wrap (Core.End (map (mu_to_core__texpr env1) es))
     | M_Edone asym ->

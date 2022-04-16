@@ -33,8 +33,8 @@ let rec ib_texpr label e =
      wrap (M_Ewseq( pat, e1, taux e2))
   | M_Esseq( pat, e1, e2) ->
      wrap (M_Esseq( pat, e1, taux e2))
-  | M_Ebound( n, e) ->
-     wrap (M_Ebound( n, taux e))
+  | M_Ebound e ->
+     wrap (M_Ebound( taux e))
   | M_End es ->
      wrap (M_End (map taux es))
   | M_Edone asym ->

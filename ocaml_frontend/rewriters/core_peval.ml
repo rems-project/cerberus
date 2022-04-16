@@ -342,17 +342,17 @@ let rec subst_sym_expr2 sym z (Expr (annot, expr_)) =
                 Esseq ( pat
                       , subst_sym_expr2 sym z e1
                       , if Core_aux.in_pattern sym pat then e2 else subst_sym_expr2 sym z e2 )
-            | Easeq ((sym', bTy), act1, pact2) ->
+            | Easeq ((sym', bTy), act1, act2) ->
                 Easeq ( (sym', bTy)
                       , subst_sym_action2 sym z act1
                       , begin
                           if sym = sym' then
-                            pact2
+                            act2
                           else
-                            subst_sym_paction2 sym z pact2
+                            subst_sym_action2 sym z act2
                         end )
-            | Ebound (i, e) ->
-                Ebound (i, subst_sym_expr2 sym z e)
+            | Ebound e ->
+                Ebound (subst_sym_expr2 sym z e)
             | Esave (lab_sym, sym_bTy_pes, e) ->
                 let sym_bTy_pes' = List.map (fun (x, (bTy, pe)) ->
                   (x, (bTy, subst_sym_pexpr2 sym z pe))
@@ -397,6 +397,14 @@ and subst_sym_action_2 sym z = function
       Store0 (b, subst_sym_pexpr2 sym z pe1, subst_sym_pexpr2 sym z pe2, subst_sym_pexpr2 sym z pe3, mo)
   | Load0 (pe1, pe2, mo) ->
       Load0 (subst_sym_pexpr2 sym z pe1, subst_sym_pexpr2 sym z pe2, mo)
+  | SeqRMW (b, pe1, pe2, rmw_sym, pe3) ->
+      (* sym is bound in pe3 *)
+      let pe3' =
+        if Symbol.symbolEquality sym rmw_sym then
+          pe3
+        else
+          subst_sym_pexpr2 sym z pe3 in
+      SeqRMW (b, subst_sym_pexpr2 sym z pe1, subst_sym_pexpr2 sym z pe2, rmw_sym, pe3')
   | RMW0 (pe1, pe2, pe3, pe4, mo1, mo2) ->
       RMW0 ( subst_sym_pexpr2 sym z pe1, subst_sym_pexpr2 sym z pe2
            , subst_sym_pexpr2 sym z pe3, subst_sym_pexpr2 sym z pe4, mo1, mo2 )
@@ -620,7 +628,7 @@ let core_peval file : 'bty RW.rewriter =
     rw_expr=
       RW.RW begin fun _ (Expr (annots, expr_) (*as expr*)) ->
         match expr_ with
-          | Ebound (_, e) ->
+          | Ebound e ->
               ChangeDoChildrenPost
                 ( Identity.return e, Identity.return )
 (*

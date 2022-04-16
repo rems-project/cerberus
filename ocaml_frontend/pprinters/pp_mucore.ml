@@ -782,8 +782,8 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
            *     pp_keyword "wait" ^^ P.parens (pp_thread_id tid) *)
           | M_End es ->
               pp_keyword "nd" ^^ P.parens (comma_list pp es)
-          | M_Ebound (i, e) ->
-              pp_keyword "bound" ^^ P.brackets (!^ (string_of_int i)) ^/^
+          | M_Ebound e ->
+              pp_keyword "bound" ^/^
               P.parens (pp e)
           | M_Edone asym ->
               pp_control "done" ^^^ pp_asym asym
