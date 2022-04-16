@@ -727,19 +727,19 @@ let perform_action_request2 with_concurrency loc tid request =
       action_request_sequential2 loc tid aid request
   end
 
-val perform_memop_request2: Mem_common.memop -> list Core.value -> Mem.thread_id -> (Core.value -> Core_run.thread_state) -> driverM unit
-let perform_memop_request2 memop cvals tid mk_th_st =
+val perform_memop_request2: Loc.t -> Mem_common.memop -> list Core.value -> Mem.thread_id -> (Core.value -> Core_run.thread_state) -> driverM unit
+let perform_memop_request2 loc memop cvals tid mk_th_st =
   match (memop, cvals) with
     | (Mem_common.Ptrdiff, [Core.Vctype ty; Core.Vobject (Core.OVpointer ptr_val1); Core.Vobject (Core.OVpointer ptr_val2)]) ->
         liftMem (Mem.diff_ptrval ty ptr_val1 ptr_val2) >>= fun ival ->
         ND.return (mk_th_st (Core.Vobject (Core.OVinteger ival)))
     
     | (Mem_common.IntFromPtr, [Core.Vctype ref_ty; Core.Vctype (Ctype.Ctype _ (Ctype.Basic (Ctype.Integer ity))); Core.Vobject (Core.OVpointer ptr_val)]) ->
-        liftMem (Mem.intcast_ptrval ref_ty ity ptr_val) >>= fun ival ->
+        liftMem (Mem.intfromptr ref_ty ity ptr_val) >>= fun ival ->
         ND.return (mk_th_st (Core.Vobject (Core.OVinteger ival)))
     
     | (Mem_common.PtrFromInt, [Core.Vctype ty; Core.Vctype ref_ty; Core.Vobject (Core.OVinteger ival)]) ->
-        liftMem (Mem.ptrcast_ival ty ref_ty ival) >>= fun ptrval ->
+        liftMem (Mem.ptrfromint ty ref_ty ival) >>= fun ptrval ->
         ND.return (mk_th_st (Core.Vobject (Core.OVpointer ptrval)))
     
     | (Mem_common.PtrValidForDeref, [Core.Vctype ref_ty; Core.Vobject (Core.OVpointer ptr_val)]) ->
@@ -791,7 +791,7 @@ let perform_memop_request2 memop cvals tid mk_th_st =
         ND.return (mk_th_st (Core.Vobject (Core.OVpointer res)))
 
     | (Mem_common.PtrArrayShift, [Core.Vobject (Core.OVpointer ptrval); Core.Vctype ty; Core.Vobject (Core.OVinteger n_ival)]) ->
-        liftMem (Mem.eff_array_shift_ptrval ptrval ty n_ival) >>= fun res ->
+        liftMem (Mem.eff_array_shift_ptrval loc ptrval ty n_ival) >>= fun res ->
         ND.update (fun dr_st ->
           <| dr_st with
             trace= ME_eff_array_shift_ptrval ptrval ty n_ival res :: dr_st.trace
@@ -835,8 +835,8 @@ let process_core_step2 with_concurrency driver2 = function
       perform_action_request2 with_concurrency loc tid request >>= fun () ->
       driver2 with_concurrency
 
-  | Core_reduction.Step_memop_request2 memop cvals tid mk_th_st ->
-      perform_memop_request2 memop cvals tid mk_th_st >>= fun () ->
+  | Core_reduction.Step_memop_request2 loc memop cvals tid mk_th_st ->
+      perform_memop_request2 loc memop cvals tid mk_th_st >>= fun () ->
       driver2 with_concurrency
 
   | Core_reduction.Step_tau2 _ d_info _ ->

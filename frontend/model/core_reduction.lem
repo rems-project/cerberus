@@ -137,8 +137,8 @@ instance (Show core_step2)
           "Step_thread_done2(tid: " ^ show tid ^ ") -- value: " ^ Pp.stringFromCore_value cval
       | Step_done2 cval ->
           "Step_done2 -- value: " ^ Pp.stringFromCore_value cval
-      | Step_memop_request2 memop _ tid _ ->
-          "Step_memop_request2[" ^ show memop ^ "] -- tid: " ^ show tid
+      | Step_memop_request2 loc memop _ tid _ ->
+          "Step_memop_request2[" ^ show memop ^ "] -- tid: " ^ show tid ^ " -- at loc: " ^ Loc.stringFromLocation loc
       | Step_spawn_threads2 _ _ ->
           "Step_spawn_threads2"
       | Step_fs2 _ _ ->
