@@ -537,6 +537,14 @@ let n_action loc (action : ('a, unit) action1)
      let ctype1 = (fensure_ctype__pexpr loc "Load: not a ctype" e1) in
      n_pexpr_in_expr_name e2 (fun e2 ->
      k (wrap (M_Load(ctype1, e2, mo1))))
+  | SeqRMW (b, e1, e2, sym, e3) ->
+      failwith "TODO: SeqRMW"
+(*
+     let ctype1 = (fensure_ctype__pexpr loc "SeqRMW: not a ctype" e1) in
+     n_pexpr_in_expr_name e2 (fun e2 ->
+     n_pexpr_in_expr_name e3 (fun e3 ->
+     k (wrap (M_SeqRMW(ctype1, e2, sym, e3)))))
+*)
   | RMW0(e1, e2, e3, e4, mo1, mo2) ->
      let ctype1 = (fensure_ctype__pexpr loc "RMW: not a ctype" e1) in
      n_pexpr_in_expr_name e2 (fun e2 ->
