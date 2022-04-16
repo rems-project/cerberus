@@ -2952,9 +2952,9 @@ and foo_aux
                           (path, opath, ty') :: zs
                     end in
                     
-                    let inner_elems = List.map (fun (path, opath, ty) ->
+                    (* let inner_elems = List.map (fun (path, opath, ty) ->
                       (match path with [] -> [] | _::xs -> xs end, match opath with [] -> [] | _::xs -> xs end, ty) (* KKK *)
-                    ) inner_elems in
+                    ) inner_elems in *)
         let () = Debug.print_debug 1 [] (fun () ->
           "ONE"
         ) in
