@@ -1225,7 +1225,7 @@ let new_drive_core_threads () =
     let size = List.length steps in
     let () = 
       if size > 1 then
-        Debug.print_debug 0 [] (fun () ->
+        Debug.print_debug 5 [] (fun () ->
           "picking step for thread(" ^ show tid ^ ") size: " ^ show size ^ " ==> " ^ show steps
         )
       else
@@ -1233,7 +1233,7 @@ let new_drive_core_threads () =
     ND.pick (SK_misc ["new_drive_core_threads"]) steps >>= fun step ->
     let () =
     if size > 1 then
-      Debug.print_debug 0 [] (fun () ->
+      Debug.print_debug 5 [] (fun () ->
         "===> PICKED: " ^ show step
       )
     else
@@ -1342,7 +1342,7 @@ let rec driver2 with_concurrency =
       ) tid_steps in
     begin
       if List.length non_blocked = 0 then
-        let () = Debug.print_debug 0 [] (fun () ->
+        let () = Debug.print_debug 5 [] (fun () ->
           "|tid_steps| = " ^ show (List.length tid_steps) ^ "\n" ^
           show tid_steps
         ) in
