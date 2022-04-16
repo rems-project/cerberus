@@ -98,6 +98,8 @@ let rec subst_wait_stack tid v = function
   | Stack_cons sym_opt cont sk ->
       Stack_cons sym_opt
         (subst_wait_continuation tid v cont) (subst_wait_stack tid v sk)
+  | Stack_cons2 _ _ _ ->
+      error "subst_wait_stack ==> Stack_cons2"
 end
 
 
@@ -146,6 +148,8 @@ let reset_continuation = function
       Stack_empty
   | Stack_cons sym_opt cont sk ->
       Stack_cons sym_opt [] sk
+  | Stack_cons2 _ _ _ ->
+      error "reset_continuation ==> Stack_cons2"
 end
 
 val pop_stack: forall 'a. stack 'a -> Exception.exceptM (continuation 'a * stack 'a) core_run_cause
@@ -154,6 +158,8 @@ let pop_stack = function
       Exception.fail (Found_empty_stack "pop_stack")
   | Stack_cons _ cont sk ->
       Exception.return (cont, sk)
+  | Stack_cons2 _ _ _ ->
+      error "pop_stack ==> Stack_cons2"  
 end
 
 val pop_continuation_element: forall 'a. stack 'a -> Exception.exceptM (continuation_element 'a * stack 'a) core_run_cause
@@ -164,6 +170,8 @@ let pop_continuation_element = function
       Exception.fail Reached_end_of_proc
   | Stack_cons sym_opt (cont_elem :: cont) sk ->
       Exception.return (cont_elem, Stack_cons sym_opt cont sk)
+  | Stack_cons2 _ _ _ ->
+      error "pop_continuation_element ==> Stack_cons2"
 end
 
 
@@ -173,6 +181,8 @@ let push_continuation_element cont_elem = function
       Exception.fail (Found_empty_stack "push_continuation_element")
   | Stack_cons sym_opt cont sk ->
       Exception.return (Stack_cons sym_opt (cont_elem :: cont) sk)
+  | Stack_cons2 _ _ _ ->
+      error "push_continuation_element ==> Stack_cons2"
 end
 
 
@@ -184,6 +194,8 @@ let append_to_current_continuation cont_elem = function
       Exception.fail (Found_empty_stack "append_to_current_continuation")
   | Stack_cons sym_opt cont sk ->
       Exception.return $ Stack_cons sym_opt (cont_elem :: cont) sk
+  | Stack_cons2 _ _ _ ->
+      error "append_to_current_continuation ==> Stack_cons2"
 end
 
 
@@ -386,6 +398,8 @@ let rec add_to_sb_stack p_aids sk =
       | Stack_cons proc_opt cont sk ->
           let () = Debug.warn [] (fun () -> "(UNSURE) Core_run_aux.add_to_sb_stack ==> is not touching lconts") in
           Stack_cons proc_opt (add_to_sb_continuation p_aids cont) (add_to_sb_stack p_aids sk)
+      | Stack_cons2 _ _ _ ->
+          error "add_to_sb_stack ==> Stack_cons2"
    end
   else
     sk
@@ -478,6 +492,8 @@ let rec add_to_asw_stack aids sk =
           Stack_empty
       | Stack_cons proc_opt cont sk ->
           Stack_cons proc_opt (add_to_asw_continuation aids cont) (add_to_asw_stack aids sk)
+      | Stack_cons2 _ _ _ ->
+          error "add_to_asw_stack ==> Stack_cons2"
     end
   else
     sk

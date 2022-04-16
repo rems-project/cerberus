@@ -2443,7 +2443,7 @@ let rec check_texpr labels (e : 'bty mu_texpr) (typ : RT.t orFalse)
              end
          ) [(it_of_arg carg, "true", e1); (not_ (it_of_arg carg), "false", e2)] in
        return (List.concat per_paths)
-    | M_Ebound (_, e) ->
+    | M_Ebound e ->
        check_texpr labels e typ 
     | M_End _ ->
        Debug_ocaml.error "todo: End"

@@ -284,7 +284,7 @@ let core_action_step arena_annots core_extern mem_st file current_tid (parent_ti
   let asw_before = annots.asw_before union asw_before_ in
   match act with
     | Create pe1 pe2 pref ->
-        (* TODO: the russian doll pattern matching is because to to slow on tuples *)
+        (* TODO: the russian doll pattern matching is because Lem is too slow on tuples *)
         match pe1 with
           | Pexpr _ () (PEconstrained xs1) ->
               error "Create PEconstrained 1"
@@ -599,6 +599,8 @@ KKK
                 |>
               )
         end
+    | SeqRMW _ _ _ _ _ ->
+        error "Core_run ==> SeqRMW"
     | RMW pe1 pe2 pe3 pe4 mo1 mo2 ->
         match (valueFromPexpr pe1, valueFromPexpr pe2, valueFromPexpr pe3, valueFromPexpr pe4) with
           | (Just (Vctype ty), Just (Vobject (OVpointer ptr_val)), Just cval_expected, Just cval_desired) ->
@@ -754,6 +756,8 @@ let core_thread_step2 mem_st file core_extern _ (*concur_sym_map*) current_tid (
           <| th_st with current_loc= loc; |>
     end in
   match (expr_, th_st.stack) with
+    | (_, Stack_cons2 _ _ _) ->
+        error "Core_run.core_thread_step2 ==> Stack_cons2"
     | (Eannot _ _, _) ->
         error "Core_run.core_thread_step2 ==> Eannot"
     | (Eexcluded _ _, _) ->
@@ -1535,6 +1539,8 @@ BEFORE EVAL_PEXPR2
         one match valueFromPexpr pe with
           | Just cval ->
               match sk with
+                | Stack_cons2 _ _ _ ->
+                    error "Core_run, Epure ==> Stack_cons2"
                 | Stack_empty ->
                     error "impossible ==> Core_run.core_thread_step2"
                 | Stack_cons _ [] Stack_empty ->

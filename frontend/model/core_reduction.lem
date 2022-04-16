@@ -157,6 +157,8 @@ instance (Show core_step2)
           "Step_spawn_threads2"
       | Step_fs2 tid _ _ ->
           "Step_fs2 -- tid: " ^ show tid
+      | Step_nd2 _ ->
+          "Step_nd2"
     end
 end
 
@@ -462,6 +464,14 @@ let rec has_ccall (Expr _ expr_) =
         false (* because any ccall is in the body of another thread *)
     | Ewait _ ->
         false
+    | Epack _ _ ->
+        false
+    | Eunpack _ _ ->
+        false
+    | Ehave _ _ ->
+        false
+    | Eshow _ _ ->
+        false
     | Eannot _ e ->
         has_ccall e
     | Eexcluded _ _ ->
@@ -733,6 +743,8 @@ let step_action full_eval_pexpr is_excluded (Action loc act_annots act) =
                 E.return (wrap (Load (Caux.mk_value_pe cval1) (Caux.mk_value_pe cval2) mo))
               end
         end
+    | SeqRMW _ _ _ _ _ ->
+        error "Core_reduction.step_action ==> SeqRMW" (* this should not be possible *)
     | Alloc pe1 pe2 pref ->
         match (act_valueFromPexpr pe1, act_valueFromPexpr pe2) with
           | (Just (Vobject (OVinteger ival1)), Just (Vobject (OVinteger ival2))) ->
@@ -1022,6 +1034,8 @@ let step_ctx mem_st file core_extern current_tid (parent_tid_opt, th_st) =
                         current_proc_opt= parent_proc_opt; |>
                 end
               end
+          | Stack_cons _ _ _ ->
+              error "Core_reduction ==> Stack_cons"
         end
     
     | (CTX, (Expr _ (Eannot _ (Expr _ (Epure (Pexpr _ _ (PEval _))) as expr')))) ->
@@ -1066,6 +1080,9 @@ let step_ctx mem_st file core_extern current_tid (parent_tid_opt, th_st) =
                         KillRequest2 is_dynamic ptrval (fun aid ->
                           wrap_expr (mk_expr' aid)
                         )
+                    | SeqRMWRequest2 _ _ _ _ ->
+                        (* this is not possible *)
+                        error "Core_reduction step_action returned SeqRMWRequest2"
                   end
                 end
             | ACTION_EVAL debug_str eval_m ->
@@ -1281,7 +1298,11 @@ let step_ctx mem_st file core_extern current_tid (parent_tid_opt, th_st) =
                 error "TODO: Eproc Impl not FS"
 
           | Erun run_annots sym pes ->
-              let Just current_proc = th_st.current_proc_opt in
+              let current_proc =
+                match th_st.current_proc_opt with
+                  | Just z -> z
+                  | Nothing -> error "Core_reduction ==> Erun outside of a proc"
+                end in
               Step_with_runstate2 (RSK_eval "Erun") begin
                 SEU.read (fun run_st ->
                   let proc_sym = match Map.lookup current_proc core_extern with

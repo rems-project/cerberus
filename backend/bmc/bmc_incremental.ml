@@ -623,7 +623,7 @@ module BmcInline = struct
     | Epack _ | Eunpack _ | Ehave _ | Eshow _ ->
         (* these two are CN specific contructors *)
         assert false
-    | Eannot _ | Eexcluded _ | Ewait _ -> assert false
+    | Eannot _ | Eexcluded _ -> assert false
     ) >>= fun inlined_e ->
     return (Expr(Abmc (Abmc_id id)::annots, inlined_e))
 
@@ -2029,7 +2029,7 @@ module BmcDropCont = struct
     | Epack _ | Eunpack _ | Ehave _ | Eshow _ ->
         (* these two are CN specific contructors *)
         assert false
-    | Eannot _ | Eexcluded _ | Ewait _ -> assert false
+    | Eannot _ | Eexcluded _ -> assert false
     ) >>= fun drop_expr ->
     add_to_drop_cont_map uid drop_expr >>
     return drop_expr
@@ -2509,7 +2509,7 @@ module BmcBind = struct
     | Epack _ | Eunpack _ | Ehave _ | Eshow _ ->
         (* these two are CN specific contructors *)
         assert false
-    | Eannot _ | Eexcluded _ | Ewait _ -> assert false
+    | Eannot _ | Eexcluded _ -> assert false
     )
 
     let bind_globs(gname, glb) : (binding list) eff =

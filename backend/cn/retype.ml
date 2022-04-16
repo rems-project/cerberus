@@ -424,9 +424,9 @@ let rec retype_texpr (Old.M_TExpr (loc, annots, expr_)) =
        let@ expr1 = retype_expr expr1 in
        let@ expr2 = retype_texpr expr2 in
        return (New.M_Esseq (pat,expr1,expr2))
-    | M_Ebound (n,expr) ->
+    | M_Ebound expr ->
        let@ expr = retype_texpr expr in
-       return (New.M_Ebound (n,expr))
+       return (New.M_Ebound expr)
     | M_End es ->
        let@ es = mapM retype_texpr es in
        return (New.M_End es)

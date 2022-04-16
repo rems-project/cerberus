@@ -443,7 +443,7 @@ let drive_fs_step tid th_st dr_st fs_oper =
 
 
 
-
+(*
 val     drive_core_thread2: Mem.thread_id -> driverM (maybe Core_reduction.core_step2)
 let rec drive_core_thread2 tid =
   ND.get >>= fun dr_st ->
@@ -606,6 +606,7 @@ let rec drive_core_thread2 tid =
         ( SK_memop_request
         , ND.return (Just step) )
   end) (Core_reduction.step_ctx dr_st.layout_state dr_st.core_file dr_st.core_extern tid th_info)
+*)
 
 
 
@@ -623,8 +624,7 @@ let rec drive_core_thread2 tid =
 
 
 
-
-
+(* 
 (* perform drive_core_thread for all the core threads *)
 val drive_core_threads: unit -> driverM (list (Mem.thread_id * maybe Core_reduction.core_step2))
 let drive_core_threads () =
@@ -635,7 +635,7 @@ let drive_core_threads () =
     ) >>= fun () ->
     drive_core_thread2 tid >>= fun step ->
     ND.return (tid, step)
-  ) dr_st.core_state.Core_run.thread_states
+  ) dr_st.core_state.Core_run.thread_states *)
 
 
 
@@ -1216,8 +1216,8 @@ end
 *)
 
 
-val     new_drive_core_threads: unit -> driverM (list (Mem.thread_id * maybe Core_reduction.core_step2))
-let rec new_drive_core_threads () =
+val new_drive_core_threads: unit -> driverM (list (Mem.thread_id * maybe Core_reduction.core_step2))
+let new_drive_core_threads () =
   ND.get >>= fun dr_st ->
   let tids = List.map fst dr_st.core_state.Core_run.thread_states in
   drive_nonmemory_steps_aux2 Map.empty (*NEXT*) tids >>= fun m ->
