@@ -20,8 +20,8 @@ let combine_dyn_annotation xs1 xs2 =
   xs1 ++ xs2
 
 (* TODO: use to_pure? *)
-val     get_pure: expr core_run_annotation -> maybe (list Annot.annot * pexpr)
-let rec get_pure (Expr annots expr_) =
+val get_pure: expr core_run_annotation -> maybe (list Annot.annot * pexpr)
+let get_pure (Expr annots expr_) =
   match expr_ with
     | Epure pe ->
         Just (annots, pe)
@@ -332,7 +332,7 @@ let one_step eval_pexpr env (Expr annots expr_ as expr) =
           | Just cvals ->
               TAU "Esave"
                 begin
-                  List.foldl (fun acc ((sym, (bTy, _)), cval) ->
+                  List.foldl (fun acc ((sym, ((bTy , _) , _)), cval) ->
                     update_env (Caux.mk_sym_pat sym bTy) cval acc
                  ) env (List.zip sym_bTy_pes cvals)
                 end
@@ -435,6 +435,14 @@ let rec get_ctx (Expr annot expr_ as expr) =
         [(CTX, expr)]
     | Ewait _ ->
         [(CTX, expr)]
+    | Epack _ _ ->
+        error "TODO: Epack"
+    | Eunpack _ _ ->
+        error "TODO: Eunpack"
+    | Ehave _ _ ->
+        error "TODO: Ehave"
+    | Eshow _ _ ->
+        error "TODO: Eshow"
     | Eannot _ (Expr _ (Eannot _ e)) ->
         [(CTX, expr)]
     | Eannot xs e ->
@@ -526,7 +534,7 @@ type core_step2 =
   | Step_error2 of string
   | Step_thread_done2 of Mem_common.thread_id * Core.value
   | Step_done2 of Core.value
-  | Step_memop_request2 of Mem_common.memop * list Core.value * Mem_common.thread_id * (Core.value -> thread_state)
+  | Step_memop_request2 of Loc.t * Mem_common.memop * list Core.value * Mem_common.thread_id * (Core.value -> thread_state)
 
 
 
@@ -725,25 +733,41 @@ let step_action eval_pexpr is_excluded (Action loc act_annots act) =
                 E.return (wrap (Alloc pe1 pe2' pref))
               end
         end
-    | Kill is_dynamic pe ->
+    | Kill kind pe ->
         match act_valueFromPexpr pe with
           | Just (Vobject (OVpointer ptrval)) ->
               ACTION_REQUEST
                 "KillRequest"
                 loc
                 begin
-                  KillRequest2 is_dynamic ptrval(fun aid ->
+                  KillRequest2 (is_dynamic kind) ptrval(fun aid ->
                     Expr [] (Epure (Pexpr [] () (PEval Vunit)))
                   )
                 end
           | Just _ ->
-              ACTION_ILLTYPED "Kil"
+              ACTION_ILLTYPED "Kill"
           | Nothing ->
               ACTION_EVAL "operand of Kill" begin
                 eval_pexpr pe >>= fun pe' ->
-                E.return (wrap (Kill is_dynamic pe'))
+                E.return (wrap (Kill kind pe'))
               end
         end
+    | RMW _ _ _ _ _ _ ->
+        error "TODO[Core_reduction]: RMW"
+    | Fence _ ->
+        error "TODO[Core_reduction]: Fence"
+    | CompareExchangeStrong _ _ _ _ _ _ ->
+        error "TODO[Core_reduction]: CompareExchangeStrong"
+    | CompareExchangeWeak _ _ _ _ _ _ ->
+        error "TODO[Core_reduction]: CompareExchangeWeak"
+    | LinuxFence _ ->
+        error "TODO[Core_reduction]: LinuxFence"
+    | LinuxLoad _ _ _ ->
+        error "TODO[Core_reduction]: LinuxLoad"
+    | LinuxStore _ _ _ _ ->
+        error "TODO[Core_reduction]: LinuxStore"
+    | LinuxRMW _ _ _ _ ->
+        error "TODO[Core_reduction]: LinuxRMW"
 end
 
 
@@ -956,7 +980,7 @@ let step_ctx mem_st file core_extern current_tid (parent_tid_opt, th_st) =
                 match current_proc_opt with
                   | Just psym ->
                       match Map.lookup psym file.funinfo with
-                        | Just (ret_ty, _, _, _) ->
+                        | Just (_, _, ret_ty, _, _, _) ->
                             Core_run.TSK_Return psym $ Core_aux.memValueFromValue ret_ty cval
                         | Nothing ->
                             Core_run.TSK_Misc
@@ -1149,7 +1173,7 @@ let step_ctx mem_st file core_extern current_tid (parent_tid_opt, th_st) =
                       E.return (wrap_expr expr')
                     end
                 | Just (MEMOP memop cvals) ->
-                    Step_memop_request2 memop cvals current_tid (fun cval ->
+                    Step_memop_request2 th_st.current_loc memop cvals current_tid (fun cval ->
                       wrap_expr (Caux.mk_pure_e (Caux.mk_value_pe cval))
                     )
                 | Just UNSEQUENCED_RACE ->

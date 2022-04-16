@@ -862,7 +862,7 @@ let rec drive_core_thread2 tid =
     | (Core_reduction.Step_action_request2 str _ _ _ as step) ->
         ( SK_action_request str
         , ND.return (Just step) )
-    | (Core_reduction.Step_memop_request2 _ _ _ _ as step) -> 
+    | (Core_reduction.Step_memop_request2 _ _ _ _ _ as step) -> 
         ( SK_memop_request
         , ND.return (Just step) )
   end) (Core_reduction.step_ctx dr_st.layout_state dr_st.core_file dr_st.core_extern tid th_info)
@@ -1404,7 +1404,7 @@ end
 val perform_action_request2:
   bool -> Loc.t -> Mem.thread_id -> Core_reduction.action_request2 Core_run.thread_state -> driverM unit
 let perform_action_request2 with_concurrency loc tid request =
-  let execution_mode_is_random = match Global.current_execution_mode () with
+  let _execution_mode_is_random = match Global.current_execution_mode () with
     | Nothing   -> false
     | Just mode -> mode = Global.Random
   end in
@@ -1440,18 +1440,18 @@ let rec driver2 with_concurrency =
       perform_action_request2 with_concurrency loc tid request >>= fun () ->
       driver2 with_concurrency
 
-  | Core_reduction.Step_memop_request2 memop cvals tid mk_th_st ->
+  | Core_reduction.Step_memop_request2 loc memop cvals tid mk_th_st ->
       match (memop, cvals) with
         | (Mem_common.Ptrdiff, [Core.Vctype ty; Core.Vobject (Core.OVpointer ptr_val1); Core.Vobject (Core.OVpointer ptr_val2)]) ->
             liftMem (Mem.diff_ptrval ty ptr_val1 ptr_val2) >>= fun ival ->
             ND.return (mk_th_st (Core.Vobject (Core.OVinteger ival)))
         
         | (Mem_common.IntFromPtr, [Core.Vctype ref_ty; Core.Vctype (Ctype.Ctype _ (Ctype.Basic (Ctype.Integer ity))); Core.Vobject (Core.OVpointer ptr_val)]) ->
-            liftMem (Mem.intcast_ptrval ref_ty ity ptr_val) >>= fun ival ->
+            liftMem (Mem.intfromptr ref_ty ity ptr_val) >>= fun ival ->
             ND.return (mk_th_st (Core.Vobject (Core.OVinteger ival)))
         
         | (Mem_common.PtrFromInt, [Core.Vctype ty; Core.Vctype ref_ty; Core.Vobject (Core.OVinteger ival)]) ->
-            liftMem (Mem.ptrcast_ival ty ref_ty ival) >>= fun ptrval ->
+            liftMem (Mem.ptrfromint ty ref_ty ival) >>= fun ptrval ->
             ND.return (mk_th_st (Core.Vobject (Core.OVpointer ptrval)))
         
         | (Mem_common.PtrValidForDeref, [Core.Vctype ref_ty; Core.Vobject (Core.OVpointer ptr_val)]) ->
@@ -1503,7 +1503,7 @@ let rec driver2 with_concurrency =
             ND.return (mk_th_st (Core.Vobject (Core.OVpointer res)))
 
         | (Mem_common.PtrArrayShift, [Core.Vobject (Core.OVpointer ptrval); Core.Vctype ty; Core.Vobject (Core.OVinteger n_ival)]) ->
-            liftMem (Mem.eff_array_shift_ptrval ptrval ty n_ival) >>= fun res ->
+            liftMem (Mem.eff_array_shift_ptrval loc ptrval ty n_ival) >>= fun res ->
             ND.update (fun dr_st ->
               <| dr_st with
                 trace= ME_eff_array_shift_ptrval ptrval ty n_ival res :: dr_st.trace
@@ -1592,7 +1592,7 @@ let rec driver2 with_concurrency =
                  "Step_tau2"
              | Just (Core_reduction.Step_action_request2 _ _ _ _) ->
                  "Step_action_request2"
-             | Just (Core_reduction.Step_memop_request2 _ _ _ _) ->
+             | Just (Core_reduction.Step_memop_request2 _ _ _ _ _) ->
                  "Step_memop_request2"
              | Just Core_reduction.Step_blocked2 ->
                  "Step_blocked2"
