@@ -3493,8 +3493,8 @@ let rec translate_stmt stdlib tagDefs f env (A.AnnotatedStatement loc stmt_attrs
             C.Esseq (Caux.mk_empty_pat (maybe C.BTy_unit C.BTy_loaded (Caux.core_object_type_of_ctype (ctype_of e))))
               (C.Expr [] (C.Ebound core_e))
               (Caux.mk_pure_e Caux.mk_unit_pe)
-            )
           end
+        )
     
     | A.AilSblock [] ss ->
         E.mapM self ss >>= fun core_ss ->
@@ -3702,7 +3702,7 @@ let rec translate_stmt stdlib tagDefs f env (A.AnnotatedStatement loc stmt_attrs
             Caux.mk_pure_e (Caux.mk_std_undef_pe loc "§6.7.4#8" Undefined.UB071_noreturn)
           else
             Caux.mk_sseq_e e_sym_pat (C.Expr [] (C.Ebound core_e)) (
-              mk_run_e loc env.return_lab visible_syms [] [ret_pe]
+              mk_run_e loc env.return_lab visible_syms_tys [] [ret_pe]
             )
         end
 
