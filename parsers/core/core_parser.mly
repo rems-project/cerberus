@@ -817,7 +817,6 @@ let rec register_labels ((Expr (_, expr_)) : parsed_expr) : unit Eff.t  =
     | End _es
     | Epar _es ->
         Eff.mapM_ register_labels _es
-    | Ewait _
     | Eannot _ 
     | Eexcluded _ ->
         assert false
@@ -1064,7 +1063,7 @@ let mk_file decls =
 %token ARRAY_SHIFT MEMBER_SHIFT
 %token UNDEF ERROR
 %token<string> CSTRING STRING
-%token SKIP IF THEN ELSE
+%token IF THEN ELSE
 %nonassoc ELSE
 
 (* list expression symbols *)
@@ -1075,7 +1074,7 @@ let mk_file decls =
 (* %token RAISE REGISTER *)
 
 (* Core sequencing operators *)
-%token LET WEAK STRONG ATOM UNSEQ IN END INDET BOUND PURE MEMOP PCALL CCALL
+%token LET WEAK STRONG ATOM UNSEQ IN END BOUND PURE MEMOP PCALL CCALL
 %token SQUOTE LPAREN RPAREN LBRACKET RBRACKET LBRACE RBRACE COLON_EQ COLON SEMICOLON DOT COMMA NEG
 
 

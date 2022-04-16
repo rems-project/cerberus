@@ -133,7 +133,7 @@ let precedence_expr = function
   | Ehave _ 
   | Eshow _
   | Eannot _
-  | Eexcluded _
+  | Eexcluded _ ->
       None
 
   | Eif _ ->

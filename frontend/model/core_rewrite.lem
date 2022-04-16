@@ -864,6 +864,10 @@ let rec remove_conv_int (Expr annot expr_) =
         expr_
     | Eshow _ _ ->
         expr_
+    | Eannot fps e ->
+        Eannot fps (remove_conv_int e)
+    | Eexcluded n act ->
+        Eexcluded n (remove_conv_int_action act)
   end
 
 and remove_conv_int_action_ act_ =

@@ -743,8 +743,6 @@ let rec n_expr (loc : Loc.t) (returns : symbol Pset.set)
         let e3 = (n_expr e3 k) in
         twrap (M_Eif(e1, e2, e3)))
      end
-  | Eskip ->
-     k (wrap (M_Eskip))
   | Eccall(_a, ct1, e2, es) ->
      let ct1 = match ct1 with
        | Core.Pexpr(annots, bty, Core.PEval (Core.Vctype ct1)) -> 
@@ -786,8 +784,6 @@ let rec n_expr (loc : Loc.t) (returns : symbol Pset.set)
      twrap (M_Esseq(M_Pat pat, e1, n_expr e2 k)))
   | Easeq(b, action3, paction2) ->
      error "core_anormalisation: Easeq"
-  | Eindet(n, e) ->
-     error "core_anormalisation: Eindet"
   | Ebound(n, e) ->
      twrap (M_Ebound(n, n_expr e k))
   | End es ->
@@ -823,7 +819,10 @@ let rec n_expr (loc : Loc.t) (returns : symbol Pset.set)
   | Eshow(id, pes) ->
      n_pexpr_in_expr_names pes (fun pes ->
      k (wrap (M_Elpredicate(Show, id, pes))))
-
+  | Eannot _ ->
+      failwith "TODO: Eannot"
+  | Eexcluded _ ->
+      failwith "TODO: Eexcluded"
 
 let normalise_expr (loc : Loc.t) (returns : symbol Pset.set) e : mu_texpr =
   let sym = Symbol.fresh () in

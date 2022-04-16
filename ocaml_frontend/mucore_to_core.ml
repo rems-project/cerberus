@@ -446,7 +446,7 @@ let mu_to_core__expr env1 expr2 : (unit, 'bty, symbol) Core.generic_expr=
     | M_Eaction pa ->
        wrap (Core.Eaction (mu_to_core__paction env1 pa))
     | M_Eskip ->
-       wrap Core.Eskip
+       assert false (* TODO: K has removed Eskip from Core *)
     | M_Eccall( (act), pe2, pes) ->
        wrap (Core.Eccall( (),
                (Core.Pexpr( act.annot, act.type_annot, (Core.PEval (Core.Vctype act.ct)))),

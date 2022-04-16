@@ -300,8 +300,6 @@ let dtree_of_expr expr =
       | Elet of 'sym generic_pattern * ('bty, 'sym) generic_pexpr * ('a, 'bty, 'sym) generic_expr
       | Eif of ('bty, 'sym) generic_pexpr * ('a, 'bty, 'sym) generic_expr * ('a, 'bty, 'sym) generic_expr
 *)
-       | Eskip ->
-           Dleaf (pp_ctor "Eskip")
 
 (*
     | Eccall of 'a * ('bty, 'sym) generic_pexpr *
@@ -326,8 +324,6 @@ let dtree_of_expr expr =
     | Easeq of ('sym * core_base_type) * ('a, 'bty, 'sym) generic_action *
         ('a, 'bty, 'sym) generic_paction
 *)
-    | Eindet (_, e) ->
-        Dnode (pp_ctor "Eindet", [self e])
     | Ebound (_, e) ->
         Dnode (pp_ctor "Ebound", [self e])
 (*

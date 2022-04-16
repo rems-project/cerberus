@@ -419,6 +419,8 @@ let untype_file (file: 'a Core.typed_file) : 'a Core.file =
           Ehave (id, List.map untype_pexpr pes)
       | Eshow (id, pes) ->
           Eshow (id, List.map untype_pexpr pes)
+      | Eannot _ | Eexcluded _ ->
+          assert false (* only exists during Core runtime *)
     in Expr (annots, aux expr_) in
   let untype_generic_fun_map_decl = function
     | Fun (bty, xs, pe) ->

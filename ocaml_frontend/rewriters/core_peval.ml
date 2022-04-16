@@ -310,8 +310,6 @@ let rec subst_sym_expr2 sym z (Expr (annot, expr_)) =
                 Epure (subst_sym_pexpr2 sym z pe)
             | Ememop (memop, pes) ->
                 Ememop (memop, List.map (subst_sym_pexpr2 sym z) pes)
-            | Eskip ->
-                expr_
             | Elet (pat, pe1, e2) ->
                 Elet ( pat
                      , subst_sym_pexpr2 sym z pe1
@@ -353,8 +351,6 @@ let rec subst_sym_expr2 sym z (Expr (annot, expr_)) =
                           else
                             subst_sym_paction2 sym z pact2
                         end )
-            | Eindet (i, e) ->
-                Eindet (i, subst_sym_expr2 sym z e)
             | Ebound (i, e) ->
                 Ebound (i, subst_sym_expr2 sym z e)
             | Esave (lab_sym, sym_bTy_pes, e) ->
@@ -382,6 +378,10 @@ let rec subst_sym_expr2 sym z (Expr (annot, expr_)) =
                 Ehave (id, List.map (subst_sym_pexpr2 sym z) pes)
             | Eshow (id, pes) ->
                 Eshow (id, List.map (subst_sym_pexpr2 sym z) pes)
+            | Eannot (fps, e) ->
+                Eannot (fps, subst_sym_expr2 sym z e)
+            | Eexcluded (n, act) ->
+                Eexcluded (n, subst_sym_action2 sym z act)
     )
 
 and subst_sym_action_2 sym z = function

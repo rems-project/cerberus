@@ -492,6 +492,10 @@ let rec convert_expr (Expr annot expr_) =
         Ehave id (List.map convert_pexpr pes)
     | Eshow id pes ->
         Eshow id (List.map convert_pexpr pes)
+    | Eannot fps e ->
+        Eannot fps (convert_expr e)
+    | Eexcluded n act ->
+        Eexcluded n (convert_action act)
 (*
     | Eloc loc e ->
         Eloc loc (convert_expr e)

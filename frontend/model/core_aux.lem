@@ -1606,6 +1606,7 @@ let rec subst_wait tid v (Expr annot expr_) =
    | Ehave _ _ ->
        expr_
    | Eshow _ _ ->
+       expr_
    | Eannot xs e ->
        Eannot xs (subst_wait tid v e)
    | Eexcluded _ _ ->
@@ -1728,6 +1729,7 @@ let rec find_labeled_continuation sym (Expr annot expr_) =
     | Ehave _ _ ->
         Nothing
     | Eshow _ _ ->
+        Nothing
     | Eannot _ _ ->
         (* NOTE: Eannot only appear at runtime, and inside an Ebound, where
                  typing forbids labeled continuation bindings. *)
@@ -1996,6 +1998,7 @@ let rec collect_labeled_continuations (Expr annot expr_) =
     | Ehave _ _ ->
         Map.empty
     | Eshow _ _ ->
+        Map.empty
     | Eannot _ _ ->
         Map.empty
     | Eexcluded _ _ ->
@@ -2316,6 +2319,7 @@ let rec collect_saves_aux st (Expr annots expr_) =
     | Ehave _ _ ->
         st
     | Eshow _ _ ->
+        st
     | Eannot _ _ ->
         (* typing forbids "saves" inside a "annot()" *)
         st
@@ -2373,8 +2377,6 @@ let rec m_collect_saves_aux st (Expr annots expr_) =
         m_collect_saves_aux st e
     | Eif _ e1 e2 ->
         m_collect_saves_aux (m_collect_saves_aux st e1) e2
-    | Eskip ->
-        st
     | Eccall _ _ _ _ ->
         st
     | Eproc _ _ _ ->
@@ -2407,9 +2409,6 @@ let rec m_collect_saves_aux st (Expr annots expr_) =
         end
     | Easeq _ _ _ ->
         st
-    | Eindet _ _ ->
-        (* typing forbids "saves" inside an "indet()" *)
-        st
     | Ebound _ _ ->
         (* typing forbids "saves" inside a "bound()" *)
         st
@@ -2438,6 +2437,10 @@ let rec m_collect_saves_aux st (Expr annots expr_) =
     | Ehave _ _ ->
         st
     | Eshow _ _ ->
+        st
+    | Eannot _ _ ->
+        st
+    | Eexcluded _ _ ->
         st
   end
 

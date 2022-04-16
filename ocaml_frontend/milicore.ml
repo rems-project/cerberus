@@ -62,7 +62,6 @@ let rec remove_save expr =
      wrap (Elet (pat, pe, remove_save body))
   | Eif (pe, e1, e2) ->
      wrap (Eif (pe, remove_save e1, remove_save e2))
-  | Eskip -> expr
   | Eccall _ -> expr
   | Eproc _ -> expr
   | Eunseq es -> 
@@ -72,8 +71,6 @@ let rec remove_save expr =
   | Esseq (pat, e1, e2) ->
      wrap (Esseq (pat, remove_save e1, remove_save e2))
   | Easeq _ -> expr
-  | Eindet (n, e) -> 
-     wrap (Eindet (n, remove_save e))
   | Ebound (n, e) -> 
      wrap (Ebound (n, remove_save e))
   | Esave ((sym, cbt), args, body) ->
@@ -87,6 +84,8 @@ let rec remove_save expr =
   | Eunpack _ -> expr
   | Ehave _ -> expr
   | Eshow _ -> expr
+  | Eannot (fps, e) -> wrap (Eannot (fps, remove_save e))
+  | Eexcluded _ -> expr
   | End es ->
       wrap (End (List.map remove_save es))
 
