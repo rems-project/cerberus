@@ -2290,8 +2290,6 @@ let rec m_collect_saves_aux st (Expr annots expr_) =
             |>
             st2
         end
-    | Easeq _ _ _ ->
-        st
     | Ebound _ ->
         (* typing forbids "saves" inside a "bound()" *)
         st

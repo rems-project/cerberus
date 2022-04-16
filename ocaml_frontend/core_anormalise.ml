@@ -790,8 +790,6 @@ let rec n_expr (loc : Loc.t) (returns : symbol Pset.set)
      n_expr e1 (fun e1 ->
      let pat = core_to_mu__pattern loc pat in
      twrap (M_Esseq(M_Pat pat, e1, n_expr e2 k)))
-  | Easeq(b, action3, paction2) ->
-     error "core_anormalisation: Easeq"
   | Ebound e ->
      twrap (M_Ebound (n_expr e k))
   | End es ->

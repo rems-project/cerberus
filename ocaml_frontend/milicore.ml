@@ -70,7 +70,6 @@ let rec remove_save expr =
      wrap (Ewseq (pat, remove_save e1, remove_save e2))
   | Esseq (pat, e1, e2) ->
      wrap (Esseq (pat, remove_save e1, remove_save e2))
-  | Easeq _ -> expr
   | Ebound e -> 
      wrap (Ebound (remove_save e))
   | Esave ((sym, cbt), args, body) ->
