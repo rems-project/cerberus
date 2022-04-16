@@ -123,9 +123,9 @@ end : Constraints with type t = mem_iv_constraint)
 type footprint =
   FOOTPRINT
 
-let check_overlap _ _ =
+let do_overlap _ _ =
   (* No unsequenced races detection *)
-  Mem_common.Disjoint
+  false
 
 
 module IntMap = Map.Make(struct
