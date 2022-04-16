@@ -736,7 +736,7 @@ let rec drive_nonmemory_steps_aux (acc: list (Mem.thread_id * Core_reduction.cor
           | Core_reduction.Step_done2 cval ->
               error ("TODO: Step_done2 ==> " ^ Pp.stringFromCore_value cval)
 
-          | Core_reduction.Step_memop_request2 _ _ _ _ ->
+          | Core_reduction.Step_memop_request2 _ _ _ _ _ ->
               (* drive_nonmemory_steps_aux ((tid, step) :: acc) xs' *)
               ND.return (SAVE_STEP step)
 
