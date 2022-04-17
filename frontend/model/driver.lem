@@ -1251,12 +1251,15 @@ let new_drive_core_threads () =
 
 
 
-
-
-
-
-
-
+let prepare_exit core_st cval =
+  match List.find (function (_, (Nothing, _)) -> true | _ -> false end) core_st.Core_run.thread_states with
+    | Nothing ->
+        error "Driver.prepare_exit ==> failed to find the initial thread"
+    | Just (tid0, (_, th_st)) ->
+        let th_st' =
+          <| th_st with Core_run.arena= Core_aux.mk_value_e cval; Core_run.stack= Core_run.Stack_empty |> in
+        <| core_st with Core_run.thread_states= [(tid0, (Nothing, th_st'))] |>
+  end
 
 (* performing all action and memop requests until there are no more *)
 val process_core_step2: bool -> (bool -> driverM unit) -> Core_reduction.core_step2 -> driverM unit
@@ -1286,10 +1289,17 @@ let process_core_step2 with_concurrency driver2 = function
         driver2 with_concurrency
   
   | Core_reduction.Step_fs2 tid th_st m_fs_step ->
-      liftCore_run m_fs_step                >>= fun fs_step ->
-      ND.get                                >>= fun dr_st   ->
-      drive_fs_step tid th_st dr_st fs_step >>= fun ()      ->
-      driver2 with_concurrency
+      liftCore_run m_fs_step >>= function
+        | Core_reduction.FS_done cval ->
+            ND.update (fun dr_st ->
+              (* killing all threads and aborting the main thread and placing [cval] as its result *)
+              <| dr_st with core_state= prepare_exit dr_st.core_state cval |>
+            )
+        | Core_reduction.FS_oper fs_step ->
+            ND.get                                >>= fun dr_st ->
+            drive_fs_step tid th_st dr_st fs_step >>= fun ()    ->
+            driver2 with_concurrency
+      end
 
   | wrong_step ->
       error ("Driver.process_core_step2: WRONG STEP ==> " ^ show wrong_step)

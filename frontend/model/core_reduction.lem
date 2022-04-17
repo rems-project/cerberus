@@ -90,6 +90,10 @@ type runstate_step_kind =
   | RSK_eval of string
   | RSK_tau of string * Core_run.core_tau_step_kind
 
+type fs_oper_or_done =
+  | FS_done of Core.value
+  | FS_oper of Core_run.fs_oper
+
 type core_step2 =
   | Step_ccall2 of Mem_common.thread_id * core_runM thread_state
   | Step_with_runstate2 of runstate_step_kind * core_runM thread_state
@@ -107,7 +111,7 @@ type core_step2 =
   | Step_done2 of Core.value
   | Step_memop_request2 of Loc.t * Mem_common.memop * list Core.value * Mem_common.thread_id * bool(* is_unseq_with_ccall *) * (Core.value -> thread_state)
   | Step_spawn_threads2 of (list Mem_common.thread_id -> thread_state) * list thread_state (* initial states for the children *)
-  | Step_fs2 of Mem_common.thread_id * thread_state * core_runM Core_run.fs_oper
+  | Step_fs2 of Mem_common.thread_id * thread_state * core_runM fs_oper_or_done
   | Step_nd2 of list thread_state
 
 
@@ -954,12 +958,15 @@ let step_fs_proc th_st iCst cvals =
         end
     | _ -> error errmsg
   end in
-  let _forceIntegerFromIntegerValue errmsg ival =
+  let forceIntegerFromIntegerValue errmsg ival =
     match Mem_aux.integerFromIntegerValue ival with
       | Just n -> n
       | Nothing -> error errmsg
     end in
   match iCst with
+    (* ----------------------------------------------------------- *)
+    (* 7.21 Input/output <stdio.h> *)
+    (* ----------------------------------------------------------- *)
     | Implementation.BuiltinFunction "printf" ->
         match cvals with
           | [Vlist _ fmt_cvals; Vlist _ args_cvals] ->
@@ -968,10 +975,35 @@ let step_fs_proc th_st iCst cvals =
                 | Vtuple [Vctype ty; Vobject (OVpointer ptr_val)] -> (ty, ptr_val)
                 | _ -> error "Core_run, printf the second argument should be a list of (ctype, pointer) pairs"
               end) args_cvals in
-              Core_run.FS_PRINTF fmt args_ptrvals
+              FS_oper (Core_run.FS_PRINTF fmt args_ptrvals)
           | _ ->
               error ("Core_run, printf giving arguments of wrong types ==> " ^ stringFromList Pp.stringFromCore_value cvals)
         end
+    | Implementation.BuiltinFunction "vprintf" ->
+        match cvals with
+          | [Vobject (OVinteger fd_ival);
+              Vlist _ fmt_cvals;
+              Vobject (OVinteger ap_ival)] ->
+                let fd = forceIntegerFromIntegerValue "vprintf" fd_ival in
+                let fmt = List.map (charFromMValue "vprintf") fmt_cvals in
+                let ap = forceIntegerFromIntegerValue "vprintf" ap_ival in
+                FS_oper (Core_run.FS_VPRINTF fd fmt ap)
+          | _ ->
+              error ("Core_run, vprintf giving arguments of wrong types ==> " ^ stringFromList Pp.stringFromCore_value cvals)
+        end
+    (* ----------------------------------------------------------- *)
+    (* 7.22 General utilities <stdlib.h> *)
+    (* ----------------------------------------------------------- *)
+    | Implementation.BuiltinFunction "exit" ->
+        (* TODO: it should close all open resources *)
+        match cvals with
+          | [cval] ->
+              FS_done cval
+          | _ ->
+              error ("Core_run, exit giving arguments of wrong types ==> " ^ stringFromList Pp.stringFromCore_value cvals)
+        end
+    | Implementation.BuiltinFunction str ->
+        error ("TODO: Core_reduction.step_fs_proc ==> BuiltinFunction: " ^ str)
     | _ ->
         error "TODO: Eproc ==> impl"
   end
