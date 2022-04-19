@@ -673,13 +673,7 @@ and translate_function_call loc self stdlib e es =
     (* symbolic names for the arguments temporary objects *)
     let n_args = List.length es in
     let arg_ptr_syms = mapi (fun i arg_e -> Symbol.fresh_funarg (locOf arg_e) i) es in
-    let arg_ptr_sym_pats =
-      match arg_ptr_syms with
-        | [sym] ->
-            Caux.mk_sym_pat sym (C.BTy_object C.OTy_pointer)
-        | _ ->
-            Caux.mk_tuple_pat (List.map (fun sym -> Caux.mk_sym_pat sym (C.BTy_object C.OTy_pointer)) arg_ptr_syms)
-      end in
+    let arg_ptr_sym_pats = List.map (fun sym -> Caux.mk_sym_pat sym (C.BTy_object C.OTy_pointer)) arg_ptr_syms in
     let arg_ptr_sym_pes = List.map Caux.mk_sym_pe arg_ptr_syms in
     (* elaborate each argument *)
     E.foldlM (fun (arg_sym_pats, core_arg_es, args_info) arg_e ->
@@ -828,9 +822,9 @@ begin if expect_is_variadic then
             (Caux.mk_op_pe C.OpOr (Caux.mk_not_pe is_variadic_sym_pe)
                             (Caux.mk_not_pe (Caux.mk_are_compatible (Caux.mk_ail_ctype_pe expect_ret_ty) ret_sym_pe)))
             (Caux.mk_pure_e (Caux.mk_std_undef_pe loc "§6.5.2.2#9" Undefined.UB041_function_not_compatible))
-            (Caux.mk_sseq_e arg_ptr_sym_pats
+            (Caux.mk_sseqs
               (* create temporary object *)
-              (Caux.mk_unseq (List.reverse rev_core_creates ++ List.reverse rev_variadic_core_creates))
+              (List.zip arg_ptr_sym_pats (List.reverse rev_core_creates ++ List.reverse rev_variadic_core_creates))
               (Caux.mk_sseq_e call_ret_sym_pat
                 (* do the function call *)
                 (Caux.mk_ccall_e (Caux.mk_ail_ctype_pe (ctype_of e)) call_sym_pe
@@ -870,9 +864,8 @@ else
 begin if Global.has_switch SW_inner_arg_temps then
             (Caux.mk_ccall_e (Caux.mk_ail_ctype_pe (ctype_of e)) call_sym_pe (List.reverse rev_cn_core_args))
 else
-            (Caux.mk_sseq_e arg_ptr_sym_pats
               (* create temporary object *)
-              (Caux.mk_unseq (List.reverse rev_core_creates))
+              (Caux.mk_sseqs (List.zip arg_ptr_sym_pats (List.reverse rev_core_creates))
               (Caux.mk_sseq_e call_ret_sym_pat
                 (* do the function call *)
                 (Caux.mk_ccall_e (Caux.mk_ail_ctype_pe (ctype_of e)) call_sym_pe arg_ptr_sym_pes)
@@ -2588,9 +2581,9 @@ TODO: #9
           E.return $
             (* STD §6.5.2.2#10 *)
             Caux.mk_sseq_e fun_sym_pat core_e
-            (Caux.mk_sseq_e
+            (Caux.mk_let_e
               (Caux.mk_tuple_pat [ret_sym_pat; params_sym_pat; Caux.mk_empty_pat C.BTy_boolean; Caux.mk_empty_pat C.BTy_boolean])
-              (Caux.mk_pure_e (Caux.mk_cfunction_pe fun_sym_pe))
+              (Caux.mk_cfunction_pe fun_sym_pe)
               (Caux.mk_if_e_ [Annot.Anot_explode]
                 (Caux.mk_op_pe C.OpEq (stdlib.mkcall_params_length params_sym_pe) (Caux.mk_integer_pe 0))
                 (Caux.mk_if_e_ [Annot.Anot_explode]
