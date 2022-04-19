@@ -641,6 +641,7 @@ let step_action e_annots full_eval_pexpr is_excluded (Action loc act_annots act)
                 "CreateRequest"
                 loc
                 begin
+                  CreateRequest2 pref ival ty (Cerb_attributes.get_with_address e_annots) Nothing (fun aid ptrval ->
                     Caux.mk_value_e (Vobject (OVpointer ptrval))
                   )
                 end
