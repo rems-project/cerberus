@@ -1277,7 +1277,11 @@ let process_core_step2 with_concurrency driver2 = function
     ND.print_debug 3 [Debug.DB_driver] (fun () ->
       "driver.process_core_step ==> Step_done2 with value: " ^ Pp.stringFromCore_value cval
     ) >> (* DEBUG *)
-    ND.return ()
+    (* ND.return () *)
+    ND.update (fun dr_st ->
+      (* killing all threads and aborting the main thread and placing [cval] as its result *)
+      <| dr_st with core_state= prepare_exit dr_st.core_state cval |>
+    )
   
 
   | Core_reduction.Step_ccall2 tid step_m ->

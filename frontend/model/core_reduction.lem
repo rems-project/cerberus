@@ -949,15 +949,9 @@ let rec add_exclusion n = function
 end
 
 
-let step_fs_proc th_st iCst cvals =
-  let charFromMValue errmsg = function
-    | Vobject (OVinteger ival) ->
-        match Mem_aux.integerFromIntegerValue ival with
-          | Just n -> Decode.encode_character_constant n
-          | Nothing -> error errmsg
-        end
-    | _ -> error errmsg
-  end in
+import Core_reduction_aux
+
+let process_impl_proc full_eval_pexpr wrap_proc wrap_expr th_st iCst pes =
   let forceIntegerFromIntegerValue errmsg ival =
     match Mem_aux.integerFromIntegerValue ival with
       | Just n -> n
@@ -965,51 +959,60 @@ let step_fs_proc th_st iCst cvals =
     end in
   match iCst with
     (* ----------------------------------------------------------- *)
-    (* 7.21 Input/output <stdio.h> *)
+    (* Cerberus headers <any.h> *)
     (* ----------------------------------------------------------- *)
-    | Implementation.BuiltinFunction "printf" ->
-        match cvals with
-          | [Vlist _ fmt_cvals; Vlist _ args_cvals] ->
-              let fmt = List.map (charFromMValue "printf") fmt_cvals in
-              let args_ptrvals = List.map (function
-                | Vtuple [Vctype ty; Vobject (OVpointer ptr_val)] -> (ty, ptr_val)
-                | _ -> error "Core_run, printf the second argument should be a list of (ctype, pointer) pairs"
-              end) args_cvals in
-              FS_oper (Core_run.FS_PRINTF fmt args_ptrvals)
+    | Implementation.BuiltinFunction "any_bounded_int" ->
+        error "TODO Core_reduction ==> any_bounded_int()"
+    (* ----------------------------------------------------------- *)
+    (* 7.5 Errors <errno.h> *)
+    (* ----------------------------------------------------------- *)
+    | Implementation.BuiltinFunction "errno" ->
+        match pes with
+          | [] ->
+              Step_tau2 "errno" Core_run.TSK_Misc (
+                wrap_expr (Caux.mk_pure_e (Caux.mk_specified_pe (Caux.mk_value_pe (Vobject (OVpointer th_st.errno)))))
+              )
           | _ ->
-              error ("Core_run, printf giving arguments of wrong types ==> " ^ stringFromList Pp.stringFromCore_value cvals)
-        end
-    | Implementation.BuiltinFunction "vprintf" ->
-        match cvals with
-          | [Vobject (OVinteger fd_ival);
-              Vlist _ fmt_cvals;
-              Vobject (OVinteger ap_ival)] ->
-                let fd = forceIntegerFromIntegerValue "vprintf" fd_ival in
-                let fmt = List.map (charFromMValue "vprintf") fmt_cvals in
-                let ap = forceIntegerFromIntegerValue "vprintf" ap_ival in
-                FS_oper (Core_run.FS_VPRINTF fd fmt ap)
-          | _ ->
-              error ("Core_run, vprintf giving arguments of wrong types ==> " ^ stringFromList Pp.stringFromCore_value cvals)
+              error "wrong arguments for __builtin_errno"
         end
     (* ----------------------------------------------------------- *)
     (* 7.22 General utilities <stdlib.h> *)
     (* ----------------------------------------------------------- *)
     | Implementation.BuiltinFunction "exit" ->
         (* TODO: it should close all open resources *)
-        match cvals with
-          | [cval] ->
-              FS_done cval
+        match pes with
+          | [pe] ->
+              match valueFromPexpr pe with
+                | Just cval ->
+                    Step_done2 cval
+                | Nothing ->
+                    Step_with_runstate2 (RSK_eval "Eproc exit") begin
+                      full_eval_pexpr pe >>= fun cval ->
+                      E.return (wrap_proc [Caux.mk_value_pe cval])
+                    end
+              end
           | _ ->
-              error ("Core_run, exit giving arguments of wrong types ==> " ^ stringFromList Pp.stringFromCore_value cvals)
+              error ("Core_reduction, exit given more than one argument ==> " ^ stringFromList Pp.stringFromCore_pexpr pes)
         end
-    | Implementation.BuiltinFunction str ->
-        error ("TODO: Core_reduction.step_fs_proc ==> BuiltinFunction: " ^ str)
+    (* NOTE: some GCC builtins needed by Hafnium *)
+    | Implementation.BuiltinFunction "ctz" ->
+        Step_with_runstate2 (RSK_tau "Eproc __builtin_ctz" Core_run.TSK_Misc) begin
+          match pes with
+            | [pe] ->
+                full_eval_pexpr pe >>= function
+                  | Vobject (OVinteger n_ival) ->
+                      let n' = Builtins.gcc_builtin_ctz (forceIntegerFromIntegerValue "ctz" n_ival) in
+                      E.return (wrap_expr (Caux.mk_pure_e (Caux.mk_specified_pe (Caux.mk_integer_pe n'))))
+                  | _ ->
+                      error "TODO: ctz illtyped"
+                end
+            | _ ->
+                error "TODO: ctz wrong number of args"
+          end
+        end
     | _ ->
-        error "TODO: Eproc ==> impl"
+        error "Core_reduction.process_impl_proc ==> TODO"
   end
-
-
-
 
 val step_ctx:
   Mem.mem_state -> Core.file core_run_annotation -> map Symbol.sym Symbol.sym ->
@@ -1084,7 +1087,10 @@ let step_ctx mem_st file core_extern current_tid (parent_tid_opt, th_st) =
           | Nothing ->
               th_st
           | Just loc ->
-              <| th_st with current_loc= loc; |>
+              if Loc.is_library_location loc then
+                th_st
+              else
+                <| th_st with current_loc= loc; |>
         end in
         let wrap_expr z = <| th_st with arena= apply_ctx ctx z |> in
         let process_action is_excluded wrap_act z =
@@ -1320,14 +1326,15 @@ let step_ctx mem_st file core_extern current_tid (parent_tid_opt, th_st) =
                    current_proc_opt= Just psym;
                  |>
                end
-          | Eproc _ (Impl iCst) pes ->
-              if true (* iCst is an FS function *) then
+          | Eproc a (Impl iCst) pes ->
+              if Core_reduction_aux.is_fs_function iCst then
                 Step_fs2 current_tid th_st begin
                   E.mapM full_eval_pexpr' pes >>= fun cvals ->
-                  E.return (step_fs_proc th_st iCst cvals)
+                  E.return (FS_oper (Core_reduction_aux.step_fs_proc th_st iCst cvals))
                 end
               else
-                error "TODO: Eproc Impl not FS"
+                let wrap_proc xs = wrap_expr (Expr e_annots (Eproc a (Impl iCst) xs)) in
+                process_impl_proc full_eval_pexpr' wrap_proc wrap_expr th_st iCst pes
 
           | Erun run_annots sym pes ->
               let current_proc =
