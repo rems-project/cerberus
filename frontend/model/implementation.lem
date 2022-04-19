@@ -657,3 +657,26 @@ let rec normalise_enum (Ctype annots ty_) =
     | Union _ ->
         ty_
   end
+
+
+let is_compatible_with_size_t ity =
+  match (sizeof_ity ity, sizeof_ity Size_t) with
+    | (Just sz1, Just sz2) ->
+        sz1 = sz2 && not (is_signed_ity ity)
+    | _ ->
+        (* the Implementation is not sufficiently specified *)
+        error "Implementation.is_compatible_with_size_t"
+  end
+
+let is_compatible_with_ptrdiff_t ity =
+  match (sizeof_ity ity, sizeof_ity Ptrdiff_t) with
+    | (Just sz1, Just sz2) ->
+        sz1 = sz2 && is_signed_ity ity
+    | _ ->
+        (* the Implementation is not sufficiently specified *)
+        error "Implementation.is_compatible_with_ptrdiff_t"
+  end
+
+  (* val is_signed_ity: Ctype.integerType -> bool
+val sizeof_ity: Ctype.integerType -> maybe nat *)
+

@@ -371,6 +371,20 @@ let load_character_array elem_ty ptrval prec_n_opt =
   load_character_array_aux elem_ty (Mem.array_shift_ptrval ptrval elem_ty (Mem.integer_ival 0)) prec_n_opt []
 
 
+let is_illtyped_conversion expected_ty arg_ty =
+  let arg_ty' = Implementation.normalise_enum arg_ty in
+  if expected_ty = arg_ty' then
+    false
+  else
+    match (expected_ty, arg_ty') with
+      | (Ctype.Ctype _ (Ctype.Basic (Ctype.Integer expected_ity)), Ctype.Ctype _ (Ctype.Basic (Ctype.Integer Ctype.Size_t))) ->
+          not (Implementation.is_compatible_with_size_t expected_ity)
+      | (Ctype.Ctype _ (Ctype.Basic (Ctype.Integer expected_ity)), Ctype.Ctype _ (Ctype.Basic (Ctype.Integer Ctype.Ptrdiff_t))) ->
+          not (Implementation.is_compatible_with_ptrdiff_t expected_ity)
+      | _ ->
+          true
+    end
+
 (* TODO: need the length modifier to perform the loads using the proper ctype *)
 val convert: Loc.t ->
              (Ctype.ctype -> (*Ctype.ctype -> *)Mem.mem_value -> Mem.memM (either Errors.error (Undefined.t Core.value))) ->
@@ -397,7 +411,8 @@ let convert loc eval_conv prec_opt lm_opt cspec args =
                 (* let () = Debug.print_debug 1 [] (fun () -> "expected_ty= " ^ Pp.stringFromCore_ctype expected_ty) in
                 let () = Debug.print_debug 1 [] (fun () -> "arg_ty= " ^ Pp.stringFromCore_ctype arg_ty) in
                 let () = Debug.print_debug 1 [] (fun () -> "arg_ty'= " ^ Pp.stringFromCore_ctype (Implementation.normalise_enum arg_ty)) in *)
-                (expected_ty <> Implementation.normalise_enum arg_ty, _conv_ty_opt)
+                (* (expected_ty <> Implementation.normalise_enum arg_ty, _conv_ty_opt) *)
+                (is_illtyped_conversion expected_ty arg_ty, _conv_ty_opt)
             | Nothing ->
                 (false, _conv_ty_opt)
           end in
