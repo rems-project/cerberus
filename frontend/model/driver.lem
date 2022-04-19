@@ -396,7 +396,7 @@ let drive_fs_step tid th_st dr_st fs_oper =
     | Core_run.FS_CLOSEDIR dir ->
       return $ Fs.fs_closedir dr_st.fs_state dir
     | Core_run.FS_PRINTF fmt args ->
-      liftMem (Output.printf (printf_eval_conv dr_st th_st) fmt args) >>= function
+      liftMem (Output.printf th_st.Core_run.current_loc (printf_eval_conv dr_st th_st) fmt args) >>= function
         | Left err ->
           error "TODO: printf error"
         | Right (Undefined.Defined buf) ->
@@ -407,7 +407,7 @@ let drive_fs_step tid th_st dr_st fs_oper =
           ND.kill (ND.Undef loc ubs)
       end
     | Core_run.FS_VPRINTF fd fmt ap ->
-      liftMem (Output.vprintf (printf_eval_conv dr_st th_st) fmt ap) >>= function
+      liftMem (Output.vprintf th_st.Core_run.current_loc (printf_eval_conv dr_st th_st) fmt ap) >>= function
         | Left err ->
           error "TODO: vprintf error"
         | Right (Undefined.Defined buf) ->
@@ -428,7 +428,7 @@ let drive_fs_step tid th_st dr_st fs_oper =
           ND.kill (ND.Undef loc ubs)
       end
     | Core_run.FS_VSNPRINTF ptr size fmt ap ->
-      liftMem (Output.vsnprintf (printf_eval_conv dr_st th_st) ptr size fmt ap) >>= function
+      liftMem (Output.vsnprintf th_st.Core_run.current_loc (printf_eval_conv dr_st th_st) ptr size fmt ap) >>= function
         | Left err ->
           error "TODO: vprintf error"
         | Right (Undefined.Defined n) ->
