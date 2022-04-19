@@ -46,6 +46,7 @@ module type Memory = sig
     -> Symbol.prefix  (* symbols coming from the Core/C program, for debugging purpose *)
     -> integer_value  (* alignment constraint *)
     -> Ctype.ctype    (* type of the allocation *)
+    -> Z.t option     (* potential requested address (see Cerb_attributes: cerb::with_address()) *)
     -> mem_value option   (* optional initialisation value (if provided the allocation is made read-only) *)
     -> pointer_value memM
   

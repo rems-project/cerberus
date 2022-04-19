@@ -527,7 +527,7 @@ let in_bounds addr alloc =
   N.less_equal alloc.base addr && N.(less_equal addr (add alloc.base alloc.length))
 
 
-let allocate_object tid pref al_ival ty init_opt : pointer_value memM =
+let allocate_object tid pref al_ival ty _ init_opt : pointer_value memM =
   let n = Z.of_int (Common.sizeof ty) in
   allocator n (ival_to_int al_ival) >>= fun (alloc_id, addr) ->
   let init_mval =

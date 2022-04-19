@@ -111,7 +111,8 @@ LEM_CORE          = core.lem errors.lem core_aux.lem core_linking.lem
 LEM_CORE_TYPING   = core_typing.lem core_typing_aux.lem core_typing_effect.lem
 LEM_UTILS         = boot.lem decode.lem exception_undefined.lem multiset.lem \
                     state_exception.lem state_exception_undefined.lem \
-                    std.lem monadic_parsing.lem fs.lem trace_event.lem
+                    std.lem monadic_parsing.lem fs.lem trace_event.lem \
+										cerb_attributes.lem
 LEM_AIL_TYPING    = range.lem integerImpl.lem ailTypesAux.lem \
                     ailSyntaxAux.lem ailWf.lem ailTyping.lem genTypesAux.lem \
                     genTyping.lem

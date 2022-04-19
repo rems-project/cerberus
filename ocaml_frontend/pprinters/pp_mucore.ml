@@ -588,6 +588,7 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
                  !^"{-not-explode-}" ^^ acc
               | Alabel _ -> acc
                  (* !^"{-return-}" ^^ acc *)
+              | Acerb _ -> acc
           ) doc annot
 
   let pp_expr (M_Expr (loc, annot, e) : 'ty mu_expr) =

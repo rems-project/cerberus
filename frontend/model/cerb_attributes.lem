@@ -1,0 +1,49 @@
+open import Pervasives
+open import Annot
+import Decode
+
+(* This implements the 'cerb::with_address("HEXA")' attributes *)
+let decode_with_address (Attrs xs) =
+  let extract attr =
+    match attr.Annot.attr_ns with
+      | Just (Symbol.Identifier _ str_ns) ->
+          let Symbol.Identifier _ str_id = attr.Annot.attr_id in
+          if str_ns = "cerb" && str_id = "with_address" then
+            match attr.Annot.attr_args with
+              | [(_, str, _)] ->
+                  Right (Just (snd (Decode.decode_integer_constant str)))
+              | _ ->
+                  (* invalid instance of cerbb:wih_address() *)
+                  Left ()
+            end
+          else
+            Right Nothing
+       | _ ->
+          Right Nothing
+    end in
+  List.foldl (fun acc attr ->
+    match (acc, extract attr) with
+      | (Right Nothing, Right (Just addr)) ->
+          Right (Just addr)
+      | (Right (Just _), Right (Just _)) ->
+          (* can't have multiple instances *)
+          Left ()
+      | (Right _, Right Nothing) ->
+          acc
+      | (Right _, Left ()) ->
+          Left ()
+      | (Left (), _) ->
+          Left ()
+    end
+  ) (Right Nothing) xs
+
+  val     get_with_address: list annot -> maybe integer
+  let rec get_with_address annots =
+    match annots with
+      | [] ->
+          Nothing
+      | (Acerb (ACerb_with_address addr) :: _) ->
+          Just addr
+      | (_ :: annots') ->
+          get_with_address annots'
+    end

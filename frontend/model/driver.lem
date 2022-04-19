@@ -286,7 +286,7 @@ let drive_fs_step tid th_st dr_st fs_oper =
     let loc = Loc.other "store struct dirent" in
     let dirent_cty = Ctype.Ctype [] (Ctype.Struct sym) in
     let update_mem dir_name =
-      Mem.bind (Mem.allocate_object tid (Symbol.PrefOther "dirent") (Mem.alignof_ival dirent_cty) dirent_cty Nothing) (fun dirent_ptr ->
+      Mem.bind (Mem.allocate_object tid (Symbol.PrefOther "dirent") (Mem.alignof_ival dirent_cty) dirent_cty Nothing Nothing) (fun dirent_ptr ->
         let d_name_ptr = Mem.member_shift_ptrval dirent_ptr sym (Symbol.Identifier loc "d_name") in
         Mem.bind (Output.store_chars_in_array true d_name_ptr dir_name) (fun _ ->
           (Mem.return dirent_ptr)))
@@ -667,9 +667,9 @@ let action_request_sequential2 loc tid aid = function
         |>
       )
   
-  | Core_reduction.CreateRequest2 pref align_ival lvalue_ty init_opt mk_th_st' ->
+  | Core_reduction.CreateRequest2 pref align_ival lvalue_ty req_addr_opt init_opt mk_th_st' ->
       let () = Debug.print_debug_located 3 [Debug.DB_driver] loc (fun () -> "REQUEST CREATE") in (* DEBUG *)
-      liftMem (Mem.allocate_object tid pref align_ival lvalue_ty init_opt) >>= fun ptrval ->
+      liftMem (Mem.allocate_object tid pref align_ival lvalue_ty req_addr_opt init_opt) >>= fun ptrval ->
       ND.update (fun dr_st ->
         <| dr_st with
           core_state= Core_run.update_thread_state tid (mk_th_st' aid ptrval) dr_st.core_state;
@@ -1639,7 +1639,7 @@ let drive (with_concurrency: bool) file (arg_strs: list string) =
                 (* allocating and initialising an object for main.argc *)
                 liftMem (
                   Mem.bind (Mem.allocate_object tid0 (Symbol.PrefSource loc [main_sym; argc_sym])
-                              (Mem.alignof_ival Ctype.signed_int) Ctype.signed_int Nothing) (fun ptr_val ->
+                              (Mem.alignof_ival Ctype.signed_int) Ctype.signed_int Nothing Nothing) (fun ptr_val ->
                     Mem.bind (Mem.store (Loc.other "argc init") Ctype.signed_int false ptr_val argc_mem_val) (fun _ ->
                       Mem.return (Core.Vobject (Core.OVpointer ptr_val))
                     )
@@ -1650,7 +1650,7 @@ let drive (with_concurrency: bool) file (arg_strs: list string) =
               (* allocating and initialising the objects pointed to by the elements of argv *)
               ND.foldlM (fun ptr_vals (arg_mem_val, arg_ty) ->
                 liftMem (
-                  Mem.bind (Mem.allocate_object tid0 (Symbol.PrefOther "argv refs") (Mem.alignof_ival arg_ty) arg_ty Nothing) (fun ptr_val ->
+                  Mem.bind (Mem.allocate_object tid0 (Symbol.PrefOther "argv refs") (Mem.alignof_ival arg_ty) arg_ty Nothing Nothing) (fun ptr_val ->
                     Mem.bind (Mem.store (Loc.other "argv refs init") arg_ty false ptr_val arg_mem_val) (fun _ ->
                       Mem.return (ptr_val :: ptr_vals)
                     )
@@ -1668,14 +1668,14 @@ let drive (with_concurrency: bool) file (arg_strs: list string) =
                 List.map (Mem.pointer_mval Ctype.char) (List.reverse ptr_vals_rev ++ [Mem.null_ptrval Ctype.char]) in
               liftMem (
                 Mem.bind (Mem.allocate_object tid0 (Symbol.PrefSource loc [main_sym; argv_sym(*TODO: change the sym?*)])
-                            (Mem.alignof_ival argv_array_ty) argv_array_ty Nothing) (fun array_ptr_val ->
+                            (Mem.alignof_ival argv_array_ty) argv_array_ty Nothing Nothing) (fun array_ptr_val ->
                 Mem.bind (Mem.store (Loc.other "argv array init") argv_array_ty false array_ptr_val argv_array_mem_val) (fun _ ->
                 
                 (* NOTE: because of argument promotions, the char *argv[] is turned into a char **argv
                    so two objects are allocated: an array and a pointer to that array (which is what argv designate) *)
                 let argv_ty = Ctype.Ctype [] (Ctype.Pointer Ctype.no_qualifiers (Ctype.Ctype [] (Ctype.Pointer Ctype.no_qualifiers Ctype.char))) in
                 Mem.bind (Mem.allocate_object tid0 (Symbol.PrefSource loc [main_sym; argv_sym])
-                            (Mem.alignof_ival argv_ty) argv_ty Nothing) (fun argv_ptr_val ->
+                            (Mem.alignof_ival argv_ty) argv_ty Nothing Nothing) (fun argv_ptr_val ->
                 Mem.bind (Mem.store (Loc.other "argv init") argv_ty false argv_ptr_val
                             (Mem.pointer_mval (Ctype.Ctype [] (Ctype.Pointer Ctype.no_qualifiers Ctype.char)) array_ptr_val)) ( fun _ ->
 
@@ -1707,7 +1707,7 @@ let drive (with_concurrency: bool) file (arg_strs: list string) =
         
         (* allocating and initialising errno *)
         liftMem (
-          Mem.bind (Mem.allocate_object tid0 (Symbol.PrefOther "errno") (Mem.alignof_ival Ctype.signed_int) Ctype.signed_int Nothing) (fun ptr_val ->
+          Mem.bind (Mem.allocate_object tid0 (Symbol.PrefOther "errno") (Mem.alignof_ival Ctype.signed_int) Ctype.signed_int Nothing Nothing) (fun ptr_val ->
             let zero = Mem.integer_value_mval (Ctype.Signed Ctype.Int_) (Mem.integer_ival 0) in
             Mem.bind (Mem.store (Loc.other "errno init") Ctype.signed_int false ptr_val zero) (fun _ ->
               Mem.return ptr_val

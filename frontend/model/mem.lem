@@ -49,10 +49,11 @@ let inline bind = Nondeterminism.bind
 (* Memory actions *)
 val allocate_object:
      Mem_common.thread_id  (* the allocating thread *)
-  -> Symbol.prefix      (* symbols coming from the Core/C program, for debugging purpose *)
-  -> integer_value      (* alignment constraint *)
-  -> Ctype.ctype   (* type of the allocation *)
-  -> maybe mem_value    (* optional initialisation value (if provided the allocation is made read-only) *)
+  -> Symbol.prefix         (* symbols coming from the Core/C program, for debugging purpose *)
+  -> integer_value         (* alignment constraint *)
+  -> Ctype.ctype           (* type of the allocation *)
+  -> maybe integer         (* potential requested address (see Cerb_attributes: cerb::with_address()) *)
+  -> maybe mem_value       (* optional initialisation value (if provided the allocation is made read-only) *)
   -> memM pointer_value
 
 val allocate_region:

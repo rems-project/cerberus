@@ -5,6 +5,8 @@ open import Core Core_aux Core_run_aux
 import State
 import Core_eval Cmm_aux Cmm_csem
 
+import Cerb_attributes
+
 (* TODO *)
 import Core_run
 
@@ -58,6 +60,7 @@ type action_request2 'a =
   | CreateRequest2 of Symbol.prefix
                    *  Mem.integer_value (* alignment constraint *)
                    *  Ctype.ctype (* C type of allocation *)
+                   *  maybe integer (* potential requested address (see Cerb_attributes: cerb::with_address()) *)
                    *  maybe Mem.mem_value (* optional initialisation value *)
                    *  (Cmm.aid -> Mem.pointer_value -> 'a)
   
@@ -625,8 +628,9 @@ type action_step =
   | ACTION_ILLTYPED of string
 
 val step_action:
+    list Annot.annot ->
     (Core.pexpr -> core_runM Core.value) -> maybe nat -> Core.action core_run_annotation -> action_step
-let step_action full_eval_pexpr is_excluded (Action loc act_annots act) =
+let step_action e_annots full_eval_pexpr is_excluded (Action loc act_annots act) =
   let wrap z =
     Action loc act_annots z in
   match act with
@@ -637,7 +641,6 @@ let step_action full_eval_pexpr is_excluded (Action loc act_annots act) =
                 "CreateRequest"
                 loc
                 begin
-                  CreateRequest2 pref ival ty Nothing (fun aid ptrval ->
                     Caux.mk_value_e (Vobject (OVpointer ptrval))
                   )
                 end
@@ -659,7 +662,7 @@ let step_action full_eval_pexpr is_excluded (Action loc act_annots act) =
                       "CreateRequest"
                       loc
                       begin
-                        CreateRequest2 pref ival ty (Just mval) (fun aid ptrval ->
+                        CreateRequest2 pref ival ty (Cerb_attributes.get_with_address e_annots) (Just mval) (fun aid ptrval ->
                           Caux.mk_value_e (Vobject (OVpointer ptrval))
                         )
                       end
@@ -1094,12 +1097,12 @@ let step_ctx mem_st file core_extern current_tid (parent_tid_opt, th_st) =
         end in
         let wrap_expr z = <| th_st with arena= apply_ctx ctx z |> in
         let process_action is_excluded wrap_act z =
-          match step_action full_eval_pexpr' is_excluded z with
+          match step_action e_annots full_eval_pexpr' is_excluded z with
             | ACTION_REQUEST debug_str loc _request ->
                 Step_action_request2 debug_str loc current_tid (is_unseq_with_ccall ctx) begin
                   E.return match _request with
-                    | CreateRequest2 pref ival ty mval_opt mk_expr' ->
-                        CreateRequest2 pref ival ty mval_opt (fun aid ptrval ->
+                    | CreateRequest2 pref ival ty req_addr_opt mval_opt mk_expr' ->
+                        CreateRequest2 pref ival ty req_addr_opt mval_opt (fun aid ptrval ->
                           wrap_expr (mk_expr' aid ptrval)
                         )
                     | AllocRequest2 pref ival1 ival2 mk_expr' ->

@@ -3942,6 +3942,7 @@ val translate_tag_definitions:
 let translate_tag_definitions ctx =
   Map.fromList (List.map (fun (x, (_, y)) -> (x, y)) ctx)
 
+import Cerb_attributes
 
 val translate_program:
   translation_stdlib ->
@@ -3960,7 +3961,13 @@ let translate_program stdlib (startup_sym_opt, sigm) =
       | A.Decl_object _ qs ty ->
           (* elaboration of a global variables *)
           let core_ty     = Caux.mk_ail_ctype_pe ty in
-          let core_create = Caux.pcreate loc (Caux.mk_alignof_pe core_ty) core_ty (Symbol.PrefSource loc [sym]) in
+          let core_create =
+            match Cerb_attributes.decode_with_address decl_attrs with
+              | Right (Just addr) ->
+                  Caux.add_annot (Annot.Acerb (Annot.ACerb_with_address addr))
+              | _ ->
+                  (fun z -> z)
+            end (Caux.pcreate loc (Caux.mk_alignof_pe core_ty) core_ty (Symbol.PrefSource loc [sym])) in
           let sym_global  = Symbol.fresh () in
 
           match List.lookup sym sigm.A.object_definitions with
