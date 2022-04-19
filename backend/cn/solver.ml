@@ -673,7 +673,7 @@ let maybe_save_slow_problem solv_inst lc lc_t time solver = match ! save_slow_pr
     output_string channel "\n";
     close_out channel
 
-let provable ~loc ~shortcut_false ~solver ~global ~trace_length ~assumptions ~pointer_facts lc = 
+let provable ~loc ~solver ~global ~trace_length ~assumptions ~pointer_facts lc = 
   let context = solver.context in
   let structs = global.struct_decls in
   (* debug 5 (lazy (item "provable check" (LC.pp lc))); *)

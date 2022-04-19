@@ -116,8 +116,8 @@ let all_resources () =
 let make_provable loc =
   fun {typing_context = s; solver; trace_length; _} -> 
   let pointer_facts = Resources.RE.pointer_facts s.resources in
-  let f ?(shortcut_false=false) lc = 
-    Solver.provable ~loc ~shortcut_false ~solver ~global:s.global 
+  let f lc = 
+    Solver.provable ~loc ~solver ~global:s.global 
       ~trace_length
       ~assumptions:s.constraints
       ~pointer_facts lc 

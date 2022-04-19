@@ -12,7 +12,6 @@ val add_assumption : solver -> Global.t -> LogicalConstraints.t -> unit
 
 val provable : 
   loc:Locations.t ->
-  shortcut_false:bool -> 
   solver:solver -> 
   global:Global.t -> 
   trace_length:int ->

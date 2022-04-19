@@ -19,9 +19,7 @@ val all_constraints : unit -> (Context.LCSet.t, 'e) m
 val simp_constraints : unit ->
     ((IndexTerms.t IndexTerms.SymMap.t * Context.LCSet.t), 'e) m
 val all_resources : unit -> (Resources.RE.t list, 'e) m
-val provable : 
-  Locations.t ->
-  (?shortcut_false:bool -> LogicalConstraints.t -> [> `True | `False], 'e) m
+val provable : Locations.t -> (LogicalConstraints.t -> [> `True | `False], 'e) m
 val model : unit -> (Solver.model_with_q, 'e) m
 val model_with : Locations.t -> IndexTerms.t -> (Solver.model_with_q option, 'e) m
 val prev_models_with : Locations.t -> IndexTerms.t -> (Solver.model_with_q list, 'e) m
