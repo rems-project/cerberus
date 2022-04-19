@@ -557,16 +557,16 @@ let state ctxt {substitution; vclasses; relevant} (model_with_q : Solver.model_w
 
   let logical_var_lines = 
     
-    let qvars = match quantifier_counter_model with
-      | None -> []
-      | Some (qs, bt) ->
-         let expr = match List.assoc_opt Sym.equal qs substitution.replace with
-           | None -> !^"?QVAR"
-           | Some it -> !^"?QVAR" ^^^ equals ^^^ IT.pp it
+    let qvars = List.mapi (fun i (qs, bt) ->
+         let expr = 
+           !^("?QVAR" ^ string_of_int i) ^^
+             match List.assoc_opt Sym.equal qs substitution.replace with
+             | None -> Pp.empty
+             | Some it -> Pp.space ^^ equals ^^^ IT.pp it
          in
          let value = evaluate (IT.sym_ (qs, bt)) in
-         let entry = {var = expr; value = maybe_evaluated value} in
-         [entry]
+         {var = expr; value = maybe_evaluated value}
+     ) quantifier_counter_model
     in
 
 

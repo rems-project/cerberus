@@ -1,6 +1,6 @@
 type solver
 type model
-type model_with_q = model * (Sym.t * LogicalSorts.t) option
+type model_with_q = model * (Sym.t * LogicalSorts.t) list
 
 
 val make : Memory.struct_decls -> solver

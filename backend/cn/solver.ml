@@ -26,7 +26,7 @@ type solver = {
 type expr = Z3.Expr.expr
 type sort = Z3.Sort.sort
 type model = Z3.context * Z3.Model.model
-type model_with_q = model * (Sym.t * BT.t) option
+type model_with_q = model * (Sym.t * BT.t) list
 
 
 
@@ -488,76 +488,31 @@ module Translate = struct
 
 
   type reduction = {
-      lc : Z3.Expr.expr;
-      extra_assumptions : Z3.Expr.expr list;
-      oq : (Sym.t * BT.t) option; (* for UI only *)
+      expr : Z3.Expr.expr;
+      qs : (Sym.t * BT.t) list;
     }
 
-  let goal context global assumptions =
+  let goal context global lc =
+    let term it = term context global it in
+    match lc with
+    | T it -> 
+       { expr = term it; qs = [] }
+    | Forall ((s, bt), it) -> 
+       let v_s, v = IT.fresh_same bt s in
+       { expr = term (IT.subst (make_subst [(s, v)]) it); 
+         qs = [(v_s, bt)] }
 
-    let term t = term context global t in
 
-    let forall assumptions (s, bt) t =
-      let v = Sym.fresh () in
-      let inst sym term = IT.subst (make_subst [(sym, sym_ (v, bt))]) term in
-      let extra_assumptions = 
+  let extra_assumptions assumptions qs = 
+    List.concat_map (fun (s, bt) ->
+        let v = sym_ (s, bt) in
         LCSet.fold (fun lc acc ->
             match lc with
-            | Forall ((s', bt'), t') when BT.equal bt bt' ->
-               term (inst s' t') :: acc
-            | _ ->
-               acc
+            | Forall ((s', bt'), it') when BT.equal bt bt' ->
+               IT.subst (make_subst [(s', v)]) it' :: acc
+            | _ -> acc
           ) assumptions []
-      in
-      { lc = term (inst s t); 
-        extra_assumptions;
-        oq = Some (v, bt) }
-    in
-
-    (* let qpred qpred = *)
-    (*   let open QPred in *)
-    (*   let mk_impl = Z3.Boolean.mk_implies context in *)
-    (*   let mk_and = Z3.Boolean.mk_and context in *)
-    (*   let def = Option.get (get_logical_predicate_def global qpred.pred.name) in *)
-    (*   (\* fresh name to instantiate quantifiers with *\) *)
-    (*   let s_inst = Sym.fresh () in *)
-    (*   let instantiate {q = (s, bt); condition; pred} =  *)
-    (*     let subst = make_subst [(s, sym_ (s_inst, bt))] in *)
-    (*     let condition = IT.subst subst condition in *)
-    (*     let args = List.map (IT.subst subst) pred.args in *)
-    (*     mk_impl (term condition) *)
-    (*       (match def.definition with *)
-    (*        | Def body -> term (open_pred global def.args body args) *)
-    (*        | Uninterp bt -> uninterp pred.name pred.args bt) *)
-    (*   in *)
-    (*   (\* Want to prove "body[s_inst/s]" assuming 'condition[s_inst/s]', *)
-    (*      using the qpred assumptions from the context for the same *)
-    (*      predicate, also instantiated with s_inst *\) *)
-    (*   let extra_assumptions = *)
-    (*     Context.LCSet.fold (fun lc acc -> *)
-    (*         match lc with *)
-    (*         | QPred qpred' when String.equal qpred.pred.name qpred'.pred.name -> *)
-    (*            instantiate qpred' :: acc *)
-    (*         | _ ->  *)
-    (*            acc *)
-    (*       ) assumptions [] *)
-    (*   in *)
-    (*   { lc = mk_impl (mk_and extra_assumptions) (instantiate qpred); *)
-    (*     oq = Some (s_inst, snd qpred.q); } *)
-    (* in *)
-
-    let plain it = 
-      { lc = term it; 
-        extra_assumptions = [];
-        oq = None;
-      }
-    in
-
-
-    fun (lc : LC.t) ->
-    match lc with
-    | T t -> plain t
-    | Forall ((s, bt), t) -> forall assumptions (s, bt) t
+      ) qs
 
 end
 
@@ -639,7 +594,7 @@ let shortcut struct_decls lc =
 
 
 type model_state =
-  | Model of Z3.context * Z3.Solver.solver * (Sym.t * LogicalSorts.t) option
+  | Model of Z3.context * Z3.Solver.solver * (Sym.t * LogicalSorts.t) list
   | No_model
 
 let model_state = 
@@ -651,10 +606,10 @@ let model () =
   match !model_state with
   | No_model ->
      assert false
-  | Model (context, z3_solver, oq) ->
+  | Model (context, z3_solver, qs) ->
      let omodel = Z3.Solver.get_model z3_solver in
      let model = Option.value_err "SMT solver did not produce a counter model" omodel in
-     ((context, model), oq)
+     ((context, model), qs)
 
 let maybe_save_slow_problem solv_inst lc lc_t time solver = match ! save_slow_problems with
   | (_, None) -> ()
@@ -676,16 +631,16 @@ let maybe_save_slow_problem solv_inst lc lc_t time solver = match ! save_slow_pr
 let provable ~loc ~solver ~global ~trace_length ~assumptions ~pointer_facts lc = 
   let context = solver.context in
   let structs = global.struct_decls in
-  (* debug 5 (lazy (item "provable check" (LC.pp lc))); *)
-  (* debug 6 (lazy (item "reduced" (IT.pp it))); *)
   let rtrue () = model_state := No_model; `True in
-  let rfalse oq solver = model_state := Model (context, solver, oq); `False in
+  let rfalse qs solver = model_state := Model (context, solver, qs); `False in
   match shortcut structs lc with
   | `True -> rtrue ()
-  | `No_shortcut ulc ->
-     let Translate.{lc; extra_assumptions; oq} = Translate.goal context global assumptions ulc in
-     let nlc = Z3.Boolean.mk_not context lc in
-     let assumptions = List.map (Translate.term context global) pointer_facts @ extra_assumptions in
+  | `No_shortcut lc ->
+     let Translate.{expr; qs} = Translate.goal context global lc in
+     let nlc = Z3.Boolean.mk_not context expr in
+     let assumptions = 
+       List.map (Translate.term context global) 
+         (pointer_facts @ Translate.extra_assumptions assumptions qs) in
      let res = 
        time_f_logs loc 5 "Z3(inc)" trace_length
          (Z3.Solver.check solver.incremental) 
@@ -693,7 +648,7 @@ let provable ~loc ~solver ~global ~trace_length ~assumptions ~pointer_facts lc =
      in
      match res with
      | Z3.Solver.UNSATISFIABLE -> rtrue ()
-     | Z3.Solver.SATISFIABLE -> rfalse oq solver.incremental
+     | Z3.Solver.SATISFIABLE -> rfalse qs solver.incremental
      | Z3.Solver.UNKNOWN ->
         debug 5 (lazy (format [] "Z3(inc) unknown/timeout, running full solver"));
         let (elapsed, res) = 
@@ -702,10 +657,10 @@ let provable ~loc ~solver ~global ~trace_length ~assumptions ~pointer_facts lc =
                (Z3.Solver.check solver.fancy))
             (nlc :: assumptions @ Z3.Solver.get_assertions solver.incremental)
         in
-        maybe_save_slow_problem solver.fancy ulc lc elapsed solver.fancy;
+        maybe_save_slow_problem solver.fancy lc expr elapsed solver.fancy;
         match res with
         | Z3.Solver.UNSATISFIABLE -> rtrue ()
-        | Z3.Solver.SATISFIABLE -> rfalse oq solver.fancy
+        | Z3.Solver.SATISFIABLE -> rfalse qs solver.fancy
         | Z3.Solver.UNKNOWN -> 
            let reason = Z3.Solver.get_reason_unknown solver.fancy in
            failwith ("SMT solver returned 'unknown'; reason: " ^ reason)
