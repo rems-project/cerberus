@@ -209,44 +209,44 @@ end
 
 let undefinedFromMem_error = function
   | MerrOutsideLifetime _ ->
-      Just [Undefined.UB009_outside_lifetime]
+      Just Undefined.UB009_outside_lifetime
   | MerrPtrdiff ->
-      Just [Undefined.UB048_disjoint_array_pointers_subtraction]
+      Just Undefined.UB048_disjoint_array_pointers_subtraction
   | MerrAccess _ _ NullPtr ->
-      Just [Undefined.UB019_lvalue_not_an_object]
+      Just Undefined.UB019_lvalue_not_an_object
   | MerrAccess _ _ DeadPtr ->
-      Just [Undefined.UB010_pointer_to_dead_object]
+      Just Undefined.UB010_pointer_to_dead_object
   | MerrIntFromPtr ->
-      Just [Undefined.UB024_out_of_range_pointer_to_integer_conversion]
+      Just Undefined.UB024_out_of_range_pointer_to_integer_conversion
   | MerrPtrFromInt ->
-      Just [Undefined.UB_CERB001_integer_to_dead_pointer]
+      Just Undefined.UB_CERB001_integer_to_dead_pointer
   
   | MerrPtrComparison ->
-      Just [Undefined.UB053_distinct_aggregate_union_pointer_comparison]
+      Just Undefined.UB053_distinct_aggregate_union_pointer_comparison
   | MerrArrayShift _ ->
-      Just [Undefined.UB046_array_pointer_outside]
+      Just Undefined.UB046_array_pointer_outside
   | MerrFreeNullPtr _ ->
       Nothing
 
   
   (* TODO do better *)
   | MerrAccess _ LoadAccess OutOfBoundPtr ->
-      Just [Undefined.UB_CERB002a_out_of_bound_load]
+      Just Undefined.UB_CERB002a_out_of_bound_load
   | MerrAccess _ StoreAccess OutOfBoundPtr ->
-      Just [Undefined.UB_CERB002b_out_of_bound_store]
+      Just Undefined.UB_CERB002b_out_of_bound_store
   
   | MerrAccess _ _ AtomicMemberof ->
-      Just [Undefined.UB042_access_atomic_structUnion_member]
+      Just Undefined.UB042_access_atomic_structUnion_member
   
   | MerrUndefinedFree loc Free_static_allocation ->
-      Just [Undefined.UB179a_static_allocation]
+      Just Undefined.UB179a_static_allocation
   | MerrUndefinedFree loc Free_dead_allocation ->
-      Just [Undefined.UB179b_dead_allocation]
+      Just Undefined.UB179b_dead_allocation
   | MerrUndefinedFree loc Free_out_of_bound ->
       Nothing (* TODO *)
   | MerrUndefinedRealloc ->
       (* TODO *)
-      Just [Undefined.UB179a_static_allocation]
+      Just Undefined.UB179a_static_allocation
   | MerrWriteOnReadOnly _ ->
       (* TODO *)
       Nothing
