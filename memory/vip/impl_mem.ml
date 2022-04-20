@@ -198,8 +198,8 @@ let fail err =
   in
   let open Nondeterminism in
   match MC.undefinedFromMem_error err with
-    | Some ubs ->
-        kill (Undef0 (loc, ubs))
+    | Some ub ->
+        kill (Undef0 (loc, [ub]))
     | None ->
         kill (Other err)
 

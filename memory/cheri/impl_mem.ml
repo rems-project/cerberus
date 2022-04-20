@@ -521,8 +521,8 @@ module CHERI (C:Capability
     in
     let open Nondeterminism in
     match undefinedFromMem_error err with
-    | Some ubs ->
-       kill (Undef0 (loc, ubs))
+    | Some ub ->
+       kill (Undef0 (loc, [ub]))
     | None ->
        kill (Other err)
 
@@ -2328,8 +2328,8 @@ module CHERI (C:Capability
     | Left err ->
        begin
          match undefinedFromMem_error err with
-         | Some (u::_) -> Left u
-         | _ -> failwith "TODO(CHERI): memory error not mapped to any UB"
+         | Some u -> Left u
+         | None -> failwith "TODO(CHERI): memory error not mapped to any UB"
        end
     | Right ival ->
        Right ival

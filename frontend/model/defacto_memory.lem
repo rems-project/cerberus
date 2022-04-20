@@ -102,8 +102,8 @@ let wip str =
 val defacto_fail: forall 'a. mem_error -> impl_memM 'a
 let defacto_fail err =
   match undefinedFromMem_error err with
-    | Just ubs ->
-        kill (Undef Loc.unknown ubs)
+    | Just ub ->
+        kill (Undef Loc.unknown [ub])
     | Nothing ->
         kill (Other err)
   end
