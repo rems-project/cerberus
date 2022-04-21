@@ -4,7 +4,7 @@ open Mem_common
 
 
 let pp_pure_memop = function
-  | DeriveCap bop ->
+  | DeriveCap (bop, is_signed) ->
       !^ "DeriveCap[TODO:bop]"
   | CapAssignValue ->
       !^ "CapAssignValue"

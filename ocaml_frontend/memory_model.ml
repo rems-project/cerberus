@@ -96,10 +96,10 @@ module type Memory = sig
   val intfromptr: Ctype.ctype -> Ctype.integerType -> pointer_value -> integer_value memM
 
   (* New operations for CHERI *)
-  val derive_cap : AilSyntax.binaryOperator -> integer_value -> integer_value -> integer_value
-  val cap_assign_value: integer_value -> integer_value -> (Undefined.undefined_behaviour, integer_value) Either.either
+  val derive_cap : bool(* is_signed *) -> AilSyntax.binaryOperator -> integer_value -> integer_value -> integer_value
+  val cap_assign_value: Location_ocaml.t -> integer_value -> integer_value -> (Undefined.undefined_behaviour, integer_value) Either.either
   val null_cap : bool(* is_signed *) -> integer_value
-  val intcast: Ctype.integerType -> integer_value -> (Undefined.undefined_behaviour, integer_value) Either.either
+  val intcast: Location_ocaml.t -> Ctype.integerType -> integer_value -> (Undefined.undefined_behaviour, integer_value) Either.either
 
   (* Pointer shifting constructors *)
   val array_shift_ptrval:  pointer_value -> Ctype.ctype -> integer_value -> pointer_value

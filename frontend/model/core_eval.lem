@@ -661,17 +661,29 @@ let rec step_eval_pexpr n loc core_extern env mem_st_opt file hasConstrained pex
     | PEmemop memop pes ->
         EU.mapM self pes >>= fun pes' ->
         match (memop, Caux.valueFromPexprs pes') with
+          | ( Mem_common.DeriveCap bop is_signed
+            , Just [ Core.Vobject (Core.OVinteger ival1)
+                   ; Core.Vobject (Core.OVinteger ival2) ] ) ->
+                EU.return (PEval (Vobject (OVinteger (Mem.derive_cap is_signed bop ival1 ival2))))
+          | ( Mem_common.CapAssignValue
+            , Just [ Core.Vobject (Core.OVinteger ival1)
+                   ; Core.Vobject (Core.OVinteger ival2) ] ) ->
+                match Mem.cap_assign_value loc ival1 ival2 with
+                  | Left ub ->
+                      Exception.return (Undefined.undef loc [ub])
+                  | Right ival ->
+                      EU.return (PEval (Vobject (OVinteger ival)))
+                end
           | ( Mem_common.IntcastPure
-            , Just [ (* Core.Vctype (Ctype.Ctype _ (Ctype.Basic (Ctype.Integer ity1))) *)
-                   (*;*) Core.Vctype (Ctype.Ctype _ (Ctype.Basic (Ctype.Integer ity2)))
+            , Just [ Core.Vctype (Ctype.Ctype _ (Ctype.Basic (Ctype.Integer ity2)))
                    ; Core.Vobject (Core.OVinteger ival) ] ) ->
-              match Mem.intcast (*ity1*) ity2 ival with
+              match Mem.intcast loc ity2 ival with
                 | Left ub ->
                     Exception.return (Undefined.undef loc [ub])
                 | Right ival ->
                     EU.return (PEval (Vobject (OVinteger ival)))
               end
-          | (Mem_common.IntcastPure, Just _) ->
+          | (_, Just _) ->
               EU.fail $ Illformed_program "PEmemop"
           | (_, Nothing) ->
               EU.return (PEmemop memop pes')
