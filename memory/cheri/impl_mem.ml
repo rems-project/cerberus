@@ -2709,7 +2709,7 @@ module CHERI (C:Capability
     | IC (prov1, is_signed1, c1), IC (prov2, is_signed2, c2)
       ->
        let n1 = unwr is_signed1 @@ C.cap_get_value c1 in
-       let n2 = unwr is_signed1 @@ C.cap_get_value c2 in
+       let n2 = unwr is_signed2 @@ C.cap_get_value c2 in
        IV (pf prov1 prov2, vf n1 n2)
 
   let op_ival iop v1 v2 =
