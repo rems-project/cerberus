@@ -2247,10 +2247,9 @@ module CHERI (C:Capability
 
   
   let derive_cap is_signed bop ival1 ival2 : integer_value =
-    (* for now no distriction by operator *)
     match ival1, ival2 with
-    | IC _, _ -> ival1
-    | _ , IC _-> ival2
+    | IC (prov,_ ,cap), _
+    | _ , IC (prov,_,cap) -> IC (prov, is_signed, cap)
     | IV _, IV _ -> IC (Prov_none, is_signed, C.cap_c0 ())
 
   let cap_assign_value loc ival_cap ival_n :(Undefined.undefined_behaviour, integer_value) Either.either =
