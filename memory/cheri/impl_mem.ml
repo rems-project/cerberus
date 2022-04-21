@@ -2247,13 +2247,28 @@ module CHERI (C:Capability
 
   
   let derive_cap bop ival1 ival2 : integer_value =
-    failwith "TODO: CHERI.derive_cap"
-  
+    (* for now no distriction by operator *)
+    let is_signed = false in (* TODO(CHERI): add parameter *)
+    match ival1, ival2 with
+    | IC _, _ -> ival1
+    | _ , IC _-> ival2
+    | IV _, IV _ -> IC (Prov_none, is_signed, C.cap_c0 ())
+
   let cap_assign_value ival_cap ival_n :(Undefined.undefined_behaviour, integer_value) Either.either =
-    failwith "TODO: CHERI.cap_assign_value"
-  
+    match ival_cap, ival_n with
+    | IC (prov,is_signed,c), IV (_,n) ->
+       let loc = Location_ocaml.other "cap_assign_value" in (* TODO(CHERI) add loc parameter *)
+       if C.cap_vaddr_representable c n
+       then Either.Right (IC (prov, is_signed, C.cap_set_value c n))
+       else Either.Left
+              (match undefinedFromMem_error (MerrCHERI (loc, CheriNonRepresentable n)) with
+               | Some u -> u
+               | None -> failwith "CheriNonRepresentable must map to UB"
+              )
+    | _, _ -> failwith "Unexpected argument types for cap_assign_value"
+
   let null_cap is_signed : integer_value =
-    failwith "TODO: CHERI.null_cap"
+    IC (Prov_none, is_signed, (C.cap_c0 ()))
 
   let internal_intcast loc (*ity1*) ity2 ival =
     let (min_ity2, max_ity2) =
