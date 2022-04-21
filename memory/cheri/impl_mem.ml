@@ -2747,18 +2747,17 @@ module CHERI (C:Capability
     IV (Prov_none, Z.of_int (alignof ty))
 
   let bitwise_complement_ival _ = function
-    | (IV (prov, n)) ->
+    | IV (prov, n) ->
        (* NOTE: for PNVI we assume that prov = Prov_none *)
        (* TODO *)
        (* prerr_endline "CHERI.bitwise_complement ==> HACK"; *)
        let cn = Z.(sub (negate n) (of_int 1)) in
        IV (prov, cn)
-    | (IC (prov, is_signed, c)) ->
+    | IC (prov, _ , c) ->
        let n = C.cap_get_value c in
+       (* is_signed is not used here as we decided it does not matter for this operation *)
        let cn = Z.(sub (negate n) (of_int 1)) in
-       match cap_maybe_set_value (Location_ocaml.other "bitwise_complement_ival") c cn with
-       | Either.Right c -> IC (prov, is_signed,c)
-       | Either.Left _  -> failwith "TODO(CHERI): non-representable value"
+       IV (prov, cn)
 
   let bitwise_and_ival _  = int_bin (Location_ocaml.other "bitwise_and_ival") combine_prov Z.bitwise_and
 
