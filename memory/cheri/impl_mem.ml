@@ -2704,18 +2704,10 @@ module CHERI (C:Capability
          "logical" integer, not an value coming from C *)
     | IC (prov1, is_signed, c), IV (prov2, n2) ->
        let n1 = unwr is_signed @@ C.cap_get_value c in
-       begin
-         match cap_maybe_set_value loc c (vfc is_signed n1 n2) with
-         | Either.Right c -> IC (pf prov1 prov2, is_signed, c)
-         | Either.Left _  -> failwith "TODO(CHERI): non-representable value"
-       end
+       IV (pf prov1 prov2, vfc is_signed n1 n2)
     | IV (prov1, n1), IC (prov2, is_signed, c) ->
        let n2 = unwr is_signed @@ C.cap_get_value c in
-       begin
-         match cap_maybe_set_value loc c (vfc is_signed n1 n2) with
-         | Either.Right c -> IC (pf prov1 prov2, is_signed, c)
-         | Either.Left _  -> failwith "TODO(CHERI): non-representable value"
-       end
+       IV (pf prov1 prov2, vfc is_signed n1 n2)
    | IC (prov1, is_signed1, c1), IC (prov2, is_signed2, c2)
       ->
        if is_signed1 <> is_signed2
@@ -2723,13 +2715,7 @@ module CHERI (C:Capability
        else
          let n1 = unwr is_signed1 @@ C.cap_get_value c1 in
          let n2 = unwr is_signed1 @@ C.cap_get_value c2 in
-         let n1 = if not is_signed1 then wrap_cap_value n1 else n1 in
-         let n2 = if not is_signed1 then wrap_cap_value n2 else n2 in
-         begin
-           match cap_maybe_set_value loc c1 (vfc is_signed1 n1 n2) with
-           | Either.Right c -> IC (pf prov1 prov2, is_signed1, c)
-           | Either.Left _  -> failwith "TODO(CHERI): non-representable value"
-         end
+         IV (pf prov1 prov2, vfc is_signed1 n1 n2)
 
   let op_ival iop v1 v2 =
     (* NOTE: for PNVI we assume that prov1 = prov2 = Prov_none *)
