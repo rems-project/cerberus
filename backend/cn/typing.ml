@@ -1,4 +1,5 @@
 open Context
+open Simplify
 module IT = IndexTerms
 module SymMap = Map.Make(Sym)
 
@@ -7,6 +8,7 @@ type s = {
     typing_context: Context.t;
     solver : Solver.solver;
     sym_eqs : IT.t SymMap.t;
+    equalities: bool ITPairMap.t;
     past_models : (Solver.model_with_q * Context.t) list;
     trace_length : int;             (* for performance debugging *)
   }
@@ -20,7 +22,15 @@ let run (c : Context.t) (m : ('a, 'e) t) : ('a, 'e) Resultat.t =
   let solver = Solver.make c.global.struct_decls in
   let sym_eqs = SymMap.empty in
   LCSet.iter (Solver.add_assumption solver c.global) c.constraints;
-  let s = { typing_context = c; solver; sym_eqs; past_models = []; trace_length = 0 } in
+  let s = { 
+      typing_context = c; 
+      solver; 
+      sym_eqs; 
+      equalities = ITPairMap.empty;
+      past_models = []; 
+      trace_length = 0 
+    } 
+  in
   let outcome = m s in
   match outcome with
   | Ok (a, _) -> Ok a
@@ -107,7 +117,9 @@ let all_constraints () =
 
 let simp_constraints () =
   fun s ->
-  Ok ((s.sym_eqs, s.typing_context.constraints), s)
+  Ok ((s.sym_eqs, 
+       s.equalities,
+       s.typing_context.constraints), s)
 
 let all_resources () = 
   let@ s = get () in
@@ -204,17 +216,27 @@ let add_sym_eqs sym_eqs =
   in
   Ok ((), { s with sym_eqs })
 
+let add_equalities new_equalities =
+  fun s ->
+  let equalities = 
+    List.fold_left (fun acc ((a, b), eq_or_not) ->
+        ITPairMap.add (a,b) eq_or_not acc
+      )
+      s.equalities new_equalities 
+  in
+  Ok ((), { s with equalities })
+
 
 let add_c lc = 
   let@ _ = drop_models () in
   let@ s = get () in
   let@ solver = solver () in
-  let@ values, lcs = simp_constraints () in
-  let lcs = Simplify.simp_lc_flatten s.global.struct_decls values lcs lc in
+  let@ values, equalities, lcs = simp_constraints () in
+  let lcs = Simplify.simp_lc_flatten s.global.struct_decls values equalities lcs lc in
   let s = List.fold_right Context.add_c lcs s in
   let () = List.iter (Solver.add_assumption solver s.global) lcs in
-  let sym_eqs = List.filter_map (LC.is_sym_lhs_equality) lcs in
-  let@ _ = add_sym_eqs sym_eqs in
+  let@ _ = add_sym_eqs (List.filter_map (LC.is_sym_lhs_equality) lcs) in
+  let@ _ = add_equalities (List.filter_map LC.is_equality lcs) in
   set s
 
 let rec add_cs = function
@@ -226,8 +248,8 @@ let rec add_cs = function
 
 let add_r oloc r = 
   let@ s = get () in
-  let@ values, lcs = simp_constraints () in
-  match RE.simp_or_empty s.global.struct_decls values lcs r with
+  let@ values, equalities, lcs = simp_constraints () in
+  match RE.simp_or_empty s.global.struct_decls values equalities lcs r with
   | None -> return ()
   | Some r -> set (Context.add_r oloc r s)
 

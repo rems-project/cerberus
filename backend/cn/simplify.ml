@@ -642,45 +642,23 @@ let rec simp (struct_decls : Memory.struct_decls) values equalities lcs =
     (* | Let ((s, bound), body) -> letb (s, bound) body bt *)
 
 
-let equalities_of_lcs lcs = 
-  LCSet.fold (fun c equalities ->
-      match c with
-      | LC.T it ->
-         begin match it with
-         | IT (Bool_op (EQ (a, b)), _) ->
-              ITPairMap.add (a, b) true equalities
-         | IT (Bool_op (Not (IT (Bool_op (EQ (a, b)), _))), _) ->
-            ITPairMap.add (a, b) false equalities
-         | _ -> 
-            equalities
-         end
-      | _ -> 
-         equalities
-    ) lcs ITPairMap.empty 
 
-let simp struct_decls values lcs it = 
-  simp struct_decls values (equalities_of_lcs lcs) lcs it
-  
-  
-
-
-
-let simp_flatten struct_decls values lcs term =
-  match simp struct_decls values lcs term with
+let simp_flatten struct_decls values equalities lcs term =
+  match simp struct_decls values equalities lcs term with
   | IT (Lit (Bool true), _) -> []
   | IT (Bool_op (And lcs), _) -> lcs
   | lc -> [lc]
 
 
 
-let simp_lc struct_decls values lcs lc = 
+let simp_lc struct_decls values equalities lcs lc = 
   match lc with
-  | LC.T it -> LC.T (simp struct_decls values lcs it)
+  | LC.T it -> LC.T (simp struct_decls values equalities lcs it)
   | LC.Forall ((q, qbt), body) ->
      let ((q_new, qbt), body) = 
        LC.alpha_rename_forall (Sym.fresh ()) ((q, qbt), body)
      in
-     let body = simp struct_decls values lcs body in
+     let body = simp struct_decls values equalities lcs body in
      let ((q, qbt), body) = LC.alpha_rename_forall q ((q_new, qbt), body) in
      begin match body with
      | IT (Lit (Bool true), _) -> 
@@ -696,7 +674,7 @@ let simp_lc struct_decls values lcs lc =
 
 
 
-let simp_lc_flatten struct_decls values lcs lc = 
+let simp_lc_flatten struct_decls values equalities lcs lc = 
   match lc with
-  | LC.T it -> List.map LC.t_ (simp_flatten struct_decls values lcs it)
-  | _ -> [simp_lc struct_decls values lcs lc]
+  | LC.T it -> List.map LC.t_ (simp_flatten struct_decls values equalities lcs it)
+  | _ -> [simp_lc struct_decls values equalities lcs lc]

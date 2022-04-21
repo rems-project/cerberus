@@ -262,8 +262,8 @@ module ResourceInference = struct
 
     let exact_ptr_match () =
       let@ global = get_global () in
-      let@ values, lcs = simp_constraints () in
-      let simp t = Simplify.simp global.struct_decls values lcs t in
+      let@ values, equalities, lcs = simp_constraints () in
+      let simp t = Simplify.simp global.struct_decls values equalities lcs t in
       return (fun (p, p') -> is_true (simp (eq_ (p, p'))))
 
     let exact_match () =
@@ -460,8 +460,8 @@ module ResourceInference = struct
       let@ is_ex = exact_match () in
       let is_exact_re re = !reorder_points && (is_ex (RER.QPoint requested, re)) in
       let@ global = get_global () in
-      let@ values, lcs = simp_constraints () in
-      let simp t = Simplify.simp global.struct_decls values lcs t in
+      let@ values, equalities, lcs = simp_constraints () in
+      let simp t = Simplify.simp global.struct_decls values equalities lcs t in
       let needed = requested.permission in
       let sub_resource_if = fun cond re (needed, C value, C init) ->
             let continue = (Unchanged, (needed, C value, C init)) in
@@ -936,8 +936,8 @@ module ResourceInference = struct
       let start_timing = time_log_start "qpredicate-request" "" in
       let@ provable = provable loc in
       let@ global = get_global () in
-      let@ values, lcs = simp_constraints () in
-      let simp it = Simplify.simp global.struct_decls values lcs it in
+      let@ values, equalities, lcs = simp_constraints () in
+      let simp it = Simplify.simp global.struct_decls values equalities lcs it in
       let needed = requested.permission in
       let@ (needed, oargs) =
         map_and_fold_resources loc (fun re (needed, oargs) ->
@@ -1160,8 +1160,8 @@ let add_eqs_for_infer loc ftyp =
       return ()
     end
     else
-    let@ values, lcs = simp_constraints () in
-    let simp t = Simplify.simp global.struct_decls values lcs t in
+    let@ values, equalities, lcs = simp_constraints () in
+    let simp t = Simplify.simp global.struct_decls values equalities lcs t in
     let poss_eqs = List.filter_map (unknown_eq_in_group simp) ptr_gps in
     debug 7 (lazy (format [] ("investigating " ^
         Int.to_string (List.length poss_eqs) ^ " possible eqs")));

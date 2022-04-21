@@ -21,6 +21,7 @@ module type Output = sig
   val free_vars_list : t list -> SymSet.t
   val simp : Memory.struct_decls ->
              IT.t SymMap.t -> 
+             bool Simplify.ITPairMap.t ->
              LCSet.t ->
              t ->
              t
@@ -306,61 +307,61 @@ let subst (substitution : IT.t Subst.t) resource =
 
   open Simplify
 
-  let simp_point structs values lcs (p : point) ={
+  let simp_point structs values equalities lcs (p : point) ={
       ct = p.ct;
-      pointer = simp structs values lcs p.pointer; 
-      permission = simp structs values lcs p.permission;
-      value = O.simp structs values lcs p.value;
-      init = O.simp structs values lcs p.init; 
+      pointer = simp structs values equalities lcs p.pointer; 
+      permission = simp structs values equalities lcs p.permission;
+      value = O.simp structs values equalities lcs p.value;
+      init = O.simp structs values equalities lcs p.init; 
     }
 
-  let simp_qpoint structs values lcs (qp : qpoint) = 
+  let simp_qpoint structs values equalities lcs (qp : qpoint) = 
     let old_q = qp.q in
     let qp = alpha_rename_qpoint (Sym.fresh_same old_q) qp in
-    let permission = Simplify.simp_flatten structs values lcs qp.permission in
+    let permission = Simplify.simp_flatten structs values equalities lcs qp.permission in
     let permission_lcs = LCSet.of_list (List.map LC.t_ permission) in
     let qp = { 
         ct = qp.ct;
-        pointer = simp structs values lcs qp.pointer;
+        pointer = simp structs values equalities lcs qp.pointer;
         q = qp.q;
         permission = and_ permission;
-        value = O.simp structs values (LCSet.union permission_lcs lcs) qp.value;
-        init = O.simp structs values (LCSet.union permission_lcs lcs) qp.init;
+        value = O.simp structs values equalities (LCSet.union permission_lcs lcs) qp.value;
+        init = O.simp structs values equalities (LCSet.union permission_lcs lcs) qp.init;
       }
     in
     alpha_rename_qpoint old_q qp
 
-  let simp_predicate structs values lcs (p : predicate) = {
+  let simp_predicate structs values equalities lcs (p : predicate) = {
       name = p.name; 
-      pointer = simp structs values lcs p.pointer; 
-      permission = simp structs values lcs p.permission;
-      iargs = List.map (simp structs values lcs) p.iargs; 
-      oargs = List.map (O.simp structs values lcs) p.oargs; 
+      pointer = simp structs values equalities lcs p.pointer; 
+      permission = simp structs values equalities lcs p.permission;
+      iargs = List.map (simp structs values equalities lcs) p.iargs; 
+      oargs = List.map (O.simp structs values equalities lcs) p.oargs; 
     }
 
-  let simp_qpredicate structs values lcs (qp : qpredicate) = 
+  let simp_qpredicate structs values equalities lcs (qp : qpredicate) = 
     let old_q = qp.q in
     let qp = alpha_rename_qpredicate (Sym.fresh_same old_q) qp in
-    let permission = Simplify.simp_flatten structs values lcs qp.permission in
+    let permission = Simplify.simp_flatten structs values equalities lcs qp.permission in
     let permission_lcs = LCSet.of_list (List.map LC.t_ permission) in
     let qp = {
         name = qp.name;
-        pointer = simp structs values lcs qp.pointer;
+        pointer = simp structs values equalities lcs qp.pointer;
         q = qp.q;
         step = qp.step;
         permission = and_ permission;
-        iargs = List.map (simp structs values (LCSet.union permission_lcs lcs)) qp.iargs;
-        oargs = List.map (O.simp structs values (LCSet.union permission_lcs lcs)) qp.oargs;
+        iargs = List.map (simp structs values equalities (LCSet.union permission_lcs lcs)) qp.iargs;
+        oargs = List.map (O.simp structs values equalities (LCSet.union permission_lcs lcs)) qp.oargs;
       }
     in 
     alpha_rename_qpredicate old_q qp
 
 
-  let simp structs values lcs = function
-    | Point p -> Point (simp_point structs values lcs p)
-    | QPoint qp -> QPoint (simp_qpoint structs values lcs qp)
-    | Predicate p -> Predicate (simp_predicate structs values lcs p)
-    | QPredicate qp -> QPredicate (simp_qpredicate structs values lcs qp)
+  let simp structs values equalities lcs = function
+    | Point p -> Point (simp_point structs values equalities lcs p)
+    | QPoint qp -> QPoint (simp_qpoint structs values equalities lcs qp)
+    | Predicate p -> Predicate (simp_predicate structs values equalities lcs p)
+    | QPredicate qp -> QPredicate (simp_qpredicate structs values equalities lcs qp)
 
 
     
@@ -368,8 +369,8 @@ let subst (substitution : IT.t Subst.t) resource =
 
 
 
-  let simp_or_empty structs values lcs resource = 
-    match simp structs values lcs resource with
+  let simp_or_empty structs values equalities lcs resource = 
+    match simp structs values equalities lcs resource with
     | Point p when IT.is_false p.permission -> None
     | QPoint p when IT.is_false p.permission -> None
     | Predicate p when IT.is_false p.permission -> None
@@ -394,7 +395,7 @@ module Requests =
       let compare = BT.compare
       let free_vars _ = SymSet.empty
       let free_vars_list _ = SymSet.empty
-      let simp _ _ _ bt = bt
+      let simp _ _ _ _ bt = bt
     end)
 
 

@@ -79,3 +79,15 @@ let is_sym_equality t = match is_sym_lhs_equality t with
       end
   | _ -> None
 
+
+
+let is_equality = function
+  | T it ->
+     begin match it with
+     | IT (Bool_op (EQ (a, b)), _) -> Some ((a, b), true)
+     | IT (Bool_op (Not (IT (Bool_op (EQ (a, b)), _))), _) -> Some ((a, b), false)
+     | _ -> None
+     end
+  | _ -> 
+     None
+

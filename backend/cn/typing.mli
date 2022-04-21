@@ -17,7 +17,9 @@ val increase_trace_length : unit -> (unit, 'e) m
 val get_global : unit -> (Global.t, 'e) m
 val all_constraints : unit -> (Context.LCSet.t, 'e) m
 val simp_constraints : unit ->
-    ((IndexTerms.t IndexTerms.SymMap.t * Context.LCSet.t), 'e) m
+    ((IndexTerms.t IndexTerms.SymMap.t 
+      * bool Simplify.ITPairMap.t
+      * Context.LCSet.t), 'e) m
 val all_resources : unit -> (Resources.RE.t list, 'e) m
 val provable : Locations.t -> (LogicalConstraints.t -> [> `True | `False], 'e) m
 val model : unit -> (Solver.model_with_q, 'e) m

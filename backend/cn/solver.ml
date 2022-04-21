@@ -584,7 +584,7 @@ let add_assumption solver global lc =
 
 (* as similarly suggested by Robbert *)
 let shortcut struct_decls lc = 
-  let lc = Simplify.simp_lc struct_decls SymMap.empty LCSet.empty lc in
+  let lc = Simplify.simp_lc struct_decls SymMap.empty Simplify.ITPairMap.empty LCSet.empty lc in
   match lc with
   | LC.T (IT (Lit (Bool true), _)) -> `True
   | _ -> `No_shortcut lc
