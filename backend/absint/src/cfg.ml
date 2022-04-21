@@ -315,7 +315,7 @@ let rec show_texpr te =
   | TEpure_memop (pure_memop, tes) ->
       let str =
         match pure_memop with
-          | Mem_common.DeriveCap bop -> "derive_cap(TODO bop)"
+          | Mem_common.DeriveCap (bop, is_signed) -> "derive_cap(TODO bop)"
           | CapAssignValue -> "cap_assign_value"
           | IntcastPure -> "Intcast"
       in

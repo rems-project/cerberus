@@ -283,7 +283,7 @@ type floating_operator =
 
 type pure_memop =
     (* CHERI *) (* (integer, integer) -> integer *)
-  | DeriveCap of AilSyntax.binaryOperator
+  | DeriveCap of AilSyntax.binaryOperator * bool (* is_signed *)
     (* CHERI*) (* (integer, integer) -> integer (may result in UB) *)
   | CapAssignValue
     (* CHERI *) (* (ctype, ctype, integer) -> integer (may result in UB) *)

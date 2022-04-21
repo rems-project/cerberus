@@ -2246,18 +2246,16 @@ module CHERI (C:Capability
         failwith "invalid integer value (capability for non- [u]intptr_t"
 
   
-  let derive_cap bop ival1 ival2 : integer_value =
+  let derive_cap is_signed bop ival1 ival2 : integer_value =
     (* for now no distriction by operator *)
-    let is_signed = false in (* TODO(CHERI): add parameter *)
     match ival1, ival2 with
     | IC _, _ -> ival1
     | _ , IC _-> ival2
     | IV _, IV _ -> IC (Prov_none, is_signed, C.cap_c0 ())
 
-  let cap_assign_value ival_cap ival_n :(Undefined.undefined_behaviour, integer_value) Either.either =
+  let cap_assign_value loc ival_cap ival_n :(Undefined.undefined_behaviour, integer_value) Either.either =
     match ival_cap, ival_n with
     | IC (prov,is_signed,c), IV (_,n) ->
-       let loc = Location_ocaml.other "cap_assign_value" in (* TODO(CHERI) add loc parameter *)
        if C.cap_vaddr_representable c n
        then Either.Right (IC (prov, is_signed, C.cap_set_value c n))
        else Either.Left
@@ -2347,9 +2345,9 @@ module CHERI (C:Capability
     | (*_,*) IV (prov, n), _ ->
       Either.Right (IV (prov, conv_int_to_ity2 n))
   
-  let intcast (*ity1*) ity2 ival =
+  let intcast loc ity2 ival =
     let open Either in
-    match internal_intcast (Location_ocaml.other "intcast") (*ity1*) ity2 ival with
+    match internal_intcast loc ity2 ival with
     | Left err ->
        begin
          match undefinedFromMem_error err with

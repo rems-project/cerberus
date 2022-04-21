@@ -339,9 +339,9 @@ let mk_translation_stdlib (ailnames, stdlib_fun_map) =
        if not (AilTypesAux.is_integer ty) then
          error "mkcall_conv_int called on non integer type"
        else
-         if Global.is_CHERI () then
+         (* if Global.is_CHERI () then
            Caux.mk_memop_pe Mem_common.IntcastPure [Caux.mk_ail_ctype_pe ty; pe]
-         else
+         else *)
           mk_call "conv_int" [Caux.mk_ail_ctype_pe ty; pe]
    ; mkcall_conv_loaded_int= fun ty pe ->
        if not (AilTypesAux.is_integer ty) then

@@ -1419,7 +1419,7 @@ if AilTypesAux.is_arithmetic (ctype_of e1) && AilTypesAux.is_arithmetic (ctype_o
   if AilTypesAux.is_signed_integer_type result_ty then
     if Global.is_CHERI () && Ctype.is_ptr_t result_ty then
       Caux.mk_let_pe cap_sym_pat
-        (Caux.mk_memop_pe (Mem_common.DeriveCap (A.Arithmetic A.Add)) [obj1_sym_pe; obj2_sym_pe])
+        (Caux.mk_memop_pe (Mem_common.DeriveCap (A.Arithmetic A.Add) true(* is_signed *)) [obj1_sym_pe; obj2_sym_pe])
         (Caux.mk_memop_pe Mem_common.CapAssignValue
           [cap_sym_pe; core_add (*(stdlib.mkcall_catch_exceptional_condition result_ty core_add)*)])
     else
