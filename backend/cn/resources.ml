@@ -431,12 +431,12 @@ module RE = struct
   (* todo, depending on how much we need *)
   let derived_lc2 resource resource' =
     match resource, resource' with
-    | Point p, Point p' -> 
-       [impl_ (
-            and_ [p.permission; p'.permission],
-            ne_ (p.pointer, p'.pointer)
-          )
-       ]
+    | Point p, Point p' -> []
+       (* [impl_ ( *)
+       (*      and_ [p.permission; p'.permission], *)
+       (*      ne_ (p.pointer, p'.pointer) *)
+       (*    ) *)
+       (* ] *)
     | Point p, QPoint qp
     | QPoint qp, Point p ->
        []

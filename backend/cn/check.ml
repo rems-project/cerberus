@@ -2966,11 +2966,11 @@ let check mu_file =
     PmapM.foldM
       (fun fsym (M_funinfo (loc, _attrs, ftyp, trusted, _has_proto)) ctxt ->
         let ctxt = 
-          let lc1 = t_ (ne_ (null_, sym_ (fsym, Loc))) in
-          let lc2 = t_ (representable_ (pointer_ct void_ct, sym_ (fsym, Loc))) in
-          let ctxt = Context.add_l fsym Loc ctxt in
-          let ctxt = Context.add_c lc1 ctxt in
-          let ctxt = Context.add_c lc2 ctxt in
+          (* let lc1 = t_ (ne_ (null_, sym_ (fsym, Loc))) in *)
+          (* let lc2 = t_ (representable_ (pointer_ct void_ct, sym_ (fsym, Loc))) in *)
+          (* let ctxt = Context.add_l fsym Loc ctxt in *)
+          (* let ctxt = Context.add_c lc1 ctxt in *)
+          (* let ctxt = Context.add_c lc2 ctxt in *)
           ctxt
         in
         let fun_decls = SymMap.add fsym (loc, ftyp, trusted) ctxt.global.fun_decls in
