@@ -1848,7 +1848,7 @@ let wrapI ity arg =
   let maxInt = Memory.max_integer_type ity in
   let minInt = Memory.min_integer_type ity in
   let dlt = Z.add (Z.sub maxInt minInt) (Z.of_int 1) in
-  let r = rem_f___ (arg, z_ dlt) in
+  let r = rem_f_ (arg, z_ dlt) in
   ite_ (le_ (r, z_ maxInt), r, sub_ (r, z_ dlt))
 
 
@@ -1934,7 +1934,7 @@ let infer_pexpr (pe : 'bty mu_pexpr) : (RT.t, type_error) m =
          | OpSub ->   return (((Integer, Integer), Integer), IT.sub_ (v1, v2))
          | OpMul ->   return (((Integer, Integer), Integer), IT.mul_ (v1, v2))
          | OpDiv ->   return (((Integer, Integer), Integer), IT.div_ (v1, v2))
-         | OpRem_f -> return (((Integer, Integer), Integer), IT.rem_f___ (v1, v2))
+         | OpRem_f -> return (((Integer, Integer), Integer), IT.rem_f_ (v1, v2))
          | OpExp ->   return (((Integer, Integer), Integer), IT.exp_ (v1, v2))
          | OpEq ->    return (((Integer, Integer), Bool), IT.eq_ (v1, v2))
          | OpGt ->    return (((Integer, Integer), Bool), IT.gt_ (v1, v2))
