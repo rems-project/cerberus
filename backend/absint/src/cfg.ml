@@ -312,8 +312,14 @@ let rec show_texpr te =
                             ^ self te2)
   | TEmember_shift (te, x, Symbol.Identifier (_, memb)) ->
     "member_shift" ^ parens (self te ^ ", " ^ Sym.show x ^ ", " ^ memb)
-  | TEpure_memop (Mem_common.IntcastPure, tes) ->
-      "memop" ^ parens ("Intcast" ^ ", " ^ comma_list self tes)
+  | TEpure_memop (pure_memop, tes) ->
+      let str =
+        match pure_memop with
+          | Mem_common.DeriveCap bop -> "derive_cap(TODO bop)"
+          | CapAssignValue -> "cap_assign_value"
+          | IntcastPure -> "Intcast"
+      in
+      "memop" ^ parens (str ^ ", " ^ comma_list self tes)
   | TEnot te ->
     "not " ^ parens (self te)
   | TEop (bop, te1, te2) ->
