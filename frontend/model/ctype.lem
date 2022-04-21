@@ -537,3 +537,13 @@ val ptrdiff_t: ctype
 let ptrdiff_t =
   Ctype [] (Basic (Integer Ptrdiff_t))
 
+val is_ptr_t: ctype -> bool
+let is_ptr_t (Ctype _ ty_) =
+  match ty_ with
+    | Basic (Integer (Signed Intptr_t)) ->
+        true
+    | Basic (Integer (Unsigned Intptr_t)) ->
+        true
+    | _ ->
+        false
+  end

@@ -2,6 +2,7 @@
 open import Pervasives
 import Loc Symbol
 import Undefined
+import AilSyntax
 
 open import Nondeterminism
 
@@ -280,7 +281,13 @@ type floating_operator =
 
 
 type pure_memop =
-  | IntcastPure (* (ctype, ctype, integer) -> eff integer *) (* first type is that of the input, second is that of the output *)
+    (* CHERI *) (* (integer, integer) -> integer *)
+  | DeriveCap of AilSyntax.binaryOperator
+    (* CHERI*) (* (integer, integer) -> integer (may result in UB) *)
+  | CapAssignValue
+    (* CHERI *) (* (ctype, ctype, integer) -> integer (may result in UB) *)
+    (* first type is that of the input, second is that of the output *)
+  | IntcastPure
 
 type generic_memop 'sym =
   | PtrEq

@@ -2245,6 +2245,16 @@ module CHERI (C:Capability
     | _, IC _ ->
         failwith "invalid integer value (capability for non- [u]intptr_t"
 
+  
+  let derive_cap bop ival1 ival2 : integer_value =
+    failwith "TODO: CHERI.derive_cap"
+  
+  let cap_assign_value ival_cap ival_n :(Undefined.undefined_behaviour, integer_value) Either.either =
+    failwith "TODO: CHERI.cap_assign_value"
+  
+  let null_cap is_signed : integer_value =
+    failwith "TODO: CHERI.null_cap"
+
   let internal_intcast loc (*ity1*) ity2 ival =
     let (min_ity2, max_ity2) =
       let nbits =

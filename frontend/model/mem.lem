@@ -1,5 +1,6 @@
 open import Pervasives
 import Symbol Float Ctype Mem_common
+import AilSyntax
 
 type pointer_value
 type integer_value
@@ -128,7 +129,13 @@ val intfromptr: Ctype.ctype -> Ctype.integerType -> pointer_value -> memM intege
 declare ocaml target_rep function ptrfromint = `Impl_mem.ptrfromint`
 declare ocaml target_rep function intfromptr = `Impl_mem.intfromptr`
 
+val derive_cap : AilSyntax.binaryOperator -> integer_value -> integer_value -> integer_value
+val cap_assign_value: integer_value -> integer_value -> either Undefined.undefined_behaviour integer_value
+val null_cap : bool(* is_signed *) -> integer_value
 val intcast: (*Ctype.integerType ->*) Ctype.integerType -> integer_value -> either Undefined.undefined_behaviour integer_value
+declare ocaml target_rep function derive_cap = `Impl_mem.derive_cap`
+declare ocaml target_rep function cap_assign_value = `Impl_mem.cap_assign_value`
+declare ocaml target_rep function null_cap = `Impl_mem.null_cap`
 declare ocaml target_rep function intcast = `Impl_mem.intcast`
 
 (* Pointer shifting constructors *)

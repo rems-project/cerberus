@@ -1232,6 +1232,8 @@ match ty with
       true
   | Basic (Integer (Signed LongLong)) ->
       true
+  | Basic (Integer (Signed _)) ->
+      true
   | _ ->
       false
 end
@@ -1263,6 +1265,8 @@ match ty with
   | Basic (Integer (Unsigned Long)) ->
       true
   | Basic (Integer (Unsigned LongLong)) ->
+      true
+  | Basic (Integer (Unsigned _)) ->
       true
   | _ ->
       false

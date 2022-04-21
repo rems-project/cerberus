@@ -4,8 +4,13 @@ open Mem_common
 
 
 let pp_pure_memop = function
+  | DeriveCap bop ->
+      !^ "DeriveCap[TODO:bop]"
+  | CapAssignValue ->
+      !^ "CapAssignValue"
   | IntcastPure ->
       !^ "Intcast"
+
 
 let pp_memop = function
   | PtrEq ->

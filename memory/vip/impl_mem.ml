@@ -803,6 +803,15 @@ let intfromptr ref_ty ity ptrval : integer_value memM =
     | PVfunptr sym ->
       fail (MerrVIP (VIP_intcast VIP_funptr))
 
+let derive_cap _ _ _ : integer_value =
+  assert false (* CHERI only *)
+
+let cap_assign_value _ _ :(Undefined.undefined_behaviour, integer_value) Either.either =
+  assert false (* CHERI only *)
+
+let null_cap _ : integer_value =
+  assert false (* CHERI only *)
+
 let intcast _ ival =
   Either.Right ival
 

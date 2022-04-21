@@ -95,8 +95,12 @@ module type Memory = sig
   (* the first ctype is the original referenced type, the integerType is the target integer type *)
   val intfromptr: Ctype.ctype -> Ctype.integerType -> pointer_value -> integer_value memM
 
-  val intcast: (*Ctype.integerType ->*) Ctype.integerType -> integer_value -> (Undefined.undefined_behaviour, integer_value) Either.either
-  
+  (* New operations for CHERI *)
+  val derive_cap : AilSyntax.binaryOperator -> integer_value -> integer_value -> integer_value
+  val cap_assign_value: integer_value -> integer_value -> (Undefined.undefined_behaviour, integer_value) Either.either
+  val null_cap : bool(* is_signed *) -> integer_value
+  val intcast: Ctype.integerType -> integer_value -> (Undefined.undefined_behaviour, integer_value) Either.either
+
   (* Pointer shifting constructors *)
   val array_shift_ptrval:  pointer_value -> Ctype.ctype -> integer_value -> pointer_value
   val member_shift_ptrval: pointer_value -> Symbol.sym -> Symbol.identifier -> pointer_value
