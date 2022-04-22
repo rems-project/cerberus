@@ -65,8 +65,6 @@ let pp =
           c_app !^"rem" [aux true it1; aux true it2]
        | Mod (it1,it2) -> 
           c_app !^"mod" [aux true it1; aux true it2]
-       | Divisible (it1, it2) ->
-          c_app !^"divides" [aux true it1; aux true it2]
        | LT (o1,o2) -> 
           mparens (flow (break 1) [aux true o1; langle; aux true o2])
        | LE (o1,o2) -> 
@@ -200,7 +198,6 @@ let add_subterms : 'bt. ('bt term) list -> 'bt term -> ('bt term) list =
      | Exp (it, it') -> [it; it'] @ ts
      | Rem (it, it') -> [it; it'] @ ts
      | Mod (it, it') -> [it; it'] @ ts
-     | Divisible (it, it') -> [it; it'] @ ts
      | LT (it, it') -> [it; it'] @ ts
      | LE (it, it') -> [it; it'] @ ts
      | Min (it, it') -> [it; it'] @ ts
@@ -344,7 +341,6 @@ let rec subst (su : typed subst) (IT (it, bt)) =
        | Exp (it, it') -> Exp (subst su it, subst su it')
        | Rem (it, it') -> Rem (subst su it, subst su it')
        | Mod (it, it') -> Mod (subst su it, subst su it')
-       | Divisible (it, it') -> Divisible (subst su it, subst su it')
        | LT (it, it') -> LT (subst su it, subst su it')
        | LE (it, it') -> LE (subst su it, subst su it')
        | Min (it, it') -> Min (subst su it, subst su it')
@@ -576,7 +572,7 @@ let div_ (it, it') = IT (Arith_op (Div (it, it')), bt it)
 let exp_ (it, it') = IT (Arith_op (Exp (it, it')), bt it)
 let rem_ (it, it') = IT (Arith_op (Rem (it, it')), BT.Integer)
 let mod_ (it, it') = IT (Arith_op (Mod (it, it')), BT.Integer)
-let divisible_ (it, it') = IT (Arith_op (Divisible (it, it')), BT.Bool)
+let divisible_ (it, it') = eq_ (mod_ (it, it'), int_ 0)
 let rem_f_ (it, it') = mod_ (it, it')
 let min_ (it, it') = IT (Arith_op (Min (it, it')), bt it)
 let max_ (it, it') = IT (Arith_op (Max (it, it')), bt it)
@@ -595,12 +591,6 @@ let (%<) t t' = lt_ (t, t')
 let (%<=) t t' = le_ (t, t')
 let (%>) t t' = gt_ (t, t')
 let (%>=) t t' = ge_ (t, t')
-
-
-let ne_array_prop_ (q : Sym.t) it = 
-  let q = sym_ (q, BT.Integer) in
-  or_ [q %<= (it %- (int_ 1));
-       (it %+ (int_ 1)) %<= q]
 
 
 

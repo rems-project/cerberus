@@ -28,7 +28,6 @@ rule main = parse
   | "power"   { T.POWER }
   | "mod"   { T.MOD }
   | "rem"   { T.REM }
-  | "divisible" { T.DIVISIBLE }
 
   | "=="  { T.EQ }
   | "!="  { T.NE }

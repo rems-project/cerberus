@@ -235,10 +235,6 @@ let rec simp (struct_decls : Memory.struct_decls) values equalities lcs =
        | _ ->
           IT (Arith_op (Mod (a, b)), bt) 
        end
-    | Divisible (a, b) -> 
-       let a = aux a in
-       let b = aux b in
-       IT (Arith_op (Divisible (a, b)), bt)
     | LT (a, b) -> 
       let a = aux a in
       let b = aux b in

@@ -318,9 +318,6 @@ module Translate = struct
             end
          | Rem (t1, t2) -> Integer.mk_rem context (term t1) (term t2)
          | Mod (t1, t2) -> Integer.mk_mod context (term t1) (term t2)
-         | Divisible (t1, t2) -> 
-            term (t1 %== ((t1 %/ t2) %* t2))
-            (* term (eq_ (mod_ (t1, t2), int_ 0)) *)
          | LT (t1, t2) -> mk_lt context (term t1) (term t2)
          | LE (t1, t2) -> mk_le context (term t1) (term t2)
          | Min (t1, t2) -> term (ite_ (le_ (t1, t2), t1, t2))

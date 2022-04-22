@@ -20,7 +20,6 @@ type 'bt arith_op =
   | Exp of 'bt term * 'bt term
   | Rem of 'bt term * 'bt term
   | Mod of 'bt term * 'bt term
-  | Divisible of 'bt term * 'bt term
   | LT of 'bt term * 'bt term
   | LE of 'bt term * 'bt term
   | Min of 'bt term * 'bt term

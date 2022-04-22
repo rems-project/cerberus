@@ -483,10 +483,6 @@ let resolve_index_term loc
        let@ (it, _) = resolve it mapping quantifiers in
        let@ (it', _) = resolve it' mapping quantifiers in
        return (IT (Arith_op (Mod (it, it')), IT.bt it), None)
-    | Divisible (it, it') ->
-       let@ (it, _) = resolve it mapping quantifiers in
-       let@ (it', _) = resolve it' mapping quantifiers in
-       return (IT (Arith_op (Divisible (it, it')), BT.Bool), None)
     | Equality (it, it') -> 
        let@ (it, _) = resolve it mapping quantifiers in
        let@ (it', _) = resolve it' mapping quantifiers in

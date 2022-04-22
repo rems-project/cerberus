@@ -173,15 +173,6 @@ module WIT = struct
                   fail (fun ctxt -> {loc; msg = NIA {context; it = mod_ (t, t'); ctxt; hint}})
               in
               return (IT (Arith_op (Mod (t, t')), Integer))
-           | Divisible (t, t') ->
-              let@ t = check loc ~context Integer t in
-              let@ t' = check loc ~context Integer t' in
-              let@ () = 
-                if Option.is_some (is_lit t') then return () else 
-                  let hint = "Only division by constants is allowed" in
-                  fail (fun ctxt -> {loc; msg = NIA {context; it = divisible_ (t, t'); ctxt; hint}})
-              in
-              return (IT (Arith_op (Divisible (t, t')), BT.Bool))
            | LT (t,t') ->
               let@ t = infer loc ~context t in
               let@ () = ensure_integer_or_real_type loc context t in
