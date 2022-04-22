@@ -2378,15 +2378,13 @@ TODO: #9
           E.wrapped_fresh_symbol (C.BTy_loaded C.OTy_pointer) >>= fun (call_sym, call_sym_pat, call_sym_pe) ->
           E.wrapped_fresh_symbol C.BTy_ctype >>= fun (ret_sym, ret_sym_pat, ret_sym_pe) ->
           E.wrapped_fresh_symbol (C.BTy_list C.BTy_ctype) >>= fun (params_sym, params_sym_pat, params_sym_pe) ->
-          E.wrapped_fresh_symbol (C.BTy_object C.OTy_integer) >>= fun (nparams_sym, nparams_sym_pat, nparams_sym_pe)    ->
           E.wrapped_fresh_symbol C.BTy_boolean >>= fun (is_variadic_sym, is_variadic_sym_pat, is_variadic_sym_pe) ->
           E.wrapped_fresh_symbol C.BTy_boolean >>= fun (has_proto_sym, has_proto_sym_pat, has_proto_sym_pe) ->
           (* elaborate expression that denotes the called function *)
           self e >>= fun core_e ->
           (* symbolic names for the arguments temporary objects *)
           let n_args = List.length es in
-          let arg_ptr_syms_tys = mapi (fun i arg_e -> (Symbol.fresh_funarg (locOf arg_e) i, ctype_of arg_e)) es in
-          let arg_ptr_syms = map fst arg_ptr_syms_tys in
+          let arg_ptr_syms = mapi (fun i arg_e -> Symbol.fresh_funarg (locOf arg_e) i) es in
           let arg_ptr_sym_pats = match arg_ptr_syms with
             | [sym] -> Caux.mk_sym_pat sym (C.BTy_object C.OTy_pointer)
             | _ -> Caux.mk_tuple_pat $ List.map (fun sym -> Caux.mk_sym_pat sym (C.BTy_object C.OTy_pointer)) arg_ptr_syms
@@ -2449,7 +2447,7 @@ TODO: #9
               )
           ) (0,[]) (List.zip expect_params args_info) >>= fun (_, rev_core_creates) ->
           (* variadic arguments *)
-          E.foldlM (fun (rev_arg_ty_pes, rev_variadic_core_creates) (arg_ty, arg_is_null, arg_sym_pe) ->
+          E.foldlM (fun (rev_arg_tys, rev_arg_ty_pes, rev_variadic_core_creates) (arg_ty, arg_is_null, arg_sym_pe) ->
             let (conv_ty, conv_value) =
               if AilTypesAux.is_integer arg_ty then
                 let prom_ty = fromJust "translation: default arguments promotion" (AilTypesAux.promotion integerImpl arg_ty) in
@@ -2458,11 +2456,12 @@ TODO: #9
                 (Ctype.Ctype [] (Ctype.Basic (Ctype.Floating (Ctype.RealFloating Ctype.Double))), arg_sym_pe) (* TODO: convert this to double *)
               else (* TODO: should I add the case for pointers as well? *)
                 (arg_ty, arg_sym_pe)
-            in E.return (Caux.mk_ail_ctype_pe arg_ty :: rev_arg_ty_pes
+            in E.return ( conv_ty :: rev_arg_tys
+                        , Caux.mk_ail_ctype_pe conv_ty :: rev_arg_ty_pes
                         , (Caux.add_std "§6.5.2.2#7, sentences 2 and 3" $
                             stdlib.mkproc_create_and_store (Caux.mk_ail_ctype_pe conv_ty) conv_value
                           ) :: rev_variadic_core_creates)
-          ) ([],[]) variadic_args_info >>= fun (rev_arg_ty_pes, rev_variadic_core_creates) ->
+          ) ([], [],[]) variadic_args_info >>= fun (rev_arg_tys, rev_arg_ty_pes, rev_variadic_core_creates) ->
           (* function call result *)
           let call_bTy = maybe C.BTy_unit C.BTy_loaded (Caux.core_object_type_of_ctype expect_ret_ty) in
           E.wrapped_fresh_symbol call_bTy >>= fun (call_ret_sym, call_ret_sym_pat, call_ret_sym_pe) ->
@@ -2518,7 +2517,10 @@ begin if expect_is_variadic then
                       )
                       (Caux.mk_sseq_e killall_pat
                         (* kill temporary objects *)
-                        (Caux.mk_unseq (List.map (fun (sym,ct) -> Caux.pkill loc (C.Static ct) (Caux.mk_sym_pe sym)) arg_ptr_syms_tys))
+                        (let arg_ptr_syms_tys =
+                          List.zip arg_ptr_syms
+                                   (List.map (fun (_, ty, _) -> ty) expect_params ++ List.reverse rev_arg_tys) in
+                         Caux.mk_unseq (List.map (fun (sym,ct) -> Caux.pkill loc (C.Static ct) (Caux.mk_sym_pe sym)) arg_ptr_syms_tys))
                         (* return function call result *)
                         (Caux.mk_pure_e call_ret_sym_pe)
                       )
@@ -2545,7 +2547,8 @@ else
                       (Caux.mk_ccall_e (Caux.mk_ail_ctype_pe (ctype_of e)) call_sym_pe arg_ptr_sym_pes)
                       (Caux.mk_sseq_e killall_pat
                         (* kill temporary objects *)
-                        (Caux.mk_unseq (List.map (fun (sym,ct) -> Caux.pkill loc (C.Static ct) (Caux.mk_sym_pe sym)) arg_ptr_syms_tys))
+                        (let arg_ptr_syms_tys = List.map (fun (sym, (_, ty, _)) -> (sym, ty)) (List.zip arg_ptr_syms expect_params) in
+                         Caux.mk_unseq (List.map (fun (sym,ct) -> Caux.pkill loc (C.Static ct) (Caux.mk_sym_pe sym)) arg_ptr_syms_tys))
                         (* return function call result *)
                         (Caux.mk_pure_e call_ret_sym_pe)
                       )
