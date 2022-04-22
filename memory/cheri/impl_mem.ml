@@ -2695,7 +2695,7 @@ module CHERI (C:Capability
       | (_, Prov_symbolic _) ->
        failwith "CHERI.combine_prov: found a Prov_symbolic"
 
-  let int_bin loc pf vf v1 v2 =
+  let int_bin pf vf v1 v2 =
     let n1 = num_of_int v1 in
     let n2 = num_of_int v2 in
     let p1 = prov_of_int v1 in
@@ -2704,7 +2704,6 @@ module CHERI (C:Capability
 
   let op_ival iop v1 v2 =
     (* NOTE: for PNVI we assume that prov1 = prov2 = Prov_none *)
-    let int_bin = int_bin (Location_ocaml.other "op_ival") in
     match iop with
     | IntAdd -> int_bin combine_prov Z.add v1 v2
     | IntSub -> int_bin
@@ -2742,11 +2741,11 @@ module CHERI (C:Capability
     let cn = Z.(sub (negate n) (of_int 1)) in
     IV (p, cn)
 
-  let bitwise_and_ival _  = int_bin (Location_ocaml.other "bitwise_and_ival") combine_prov Z.bitwise_and
+  let bitwise_and_ival _  = int_bin combine_prov Z.bitwise_and
 
-  let bitwise_or_ival _ = int_bin (Location_ocaml.other "bitwise_or_ival") combine_prov Z.bitwise_or
+  let bitwise_or_ival _ = int_bin combine_prov Z.bitwise_or
 
-  let bitwise_xor_ival _ = int_bin (Location_ocaml.other "bitwise_xor_ival") combine_prov Z.bitwise_xor
+  let bitwise_xor_ival _ = int_bin combine_prov Z.bitwise_xor
 
   let case_integer_value v f_concrete _ =
     f_concrete (num_of_int v)
