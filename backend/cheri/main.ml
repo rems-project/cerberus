@@ -62,6 +62,7 @@ let cheri exec debug_level core_file runtime_path traditional filename =
     (* `SW_zap_dead_pointers` should not be set *)
     Switches.set ["strict_pointer_equality";
                   "strict_pointer_arith";
+                  "strict_reads";
                   "CHERI"] ;
     Global_ocaml.(set_cerb_conf exec Random false Basic false false false false);
     load_core_stdlib ()                            >>= fun stdlib                          ->
