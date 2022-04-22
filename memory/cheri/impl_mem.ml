@@ -253,8 +253,6 @@ module CHERI (C:Capability
     | Prov_symbolic of symbolic_storage_instance_id (* only for PNVI-ae-udi *)
     | Prov_device
 
-  (* Note: using Z instead of int64 because we need to be able to have
-     unsigned 64bits values *)
   type function_pointer =
     | FP_valid of Symbol.sym
     | FP_invalid of C.t
@@ -278,19 +276,18 @@ module CHERI (C:Capability
     if Z.less_equal r max_v then r
     else Z.sub r dlt
 
-  (** Convert an arbitrary integer value to 64-bit unsinged cap value *)
+  (** Convert an arbitrary integer value to unsinged cap value *)
   let wrap_cap_value n =
     if Z.(less_equal n C.min_vaddr && less_equal n C.max_vaddr)
     then n
     else wrapI C.min_vaddr C.max_vaddr n
 
-  (** Convert an unsinged 64 capability value to signed 64 bit integer
-      TODO(CHERI): 64-bit size is hardcoded. Should be abstracted in
-      Capabilty module.
+  (** Convert an unsinged capability value to signed integer
    *)
   let unwrap_cap_value n =
-    let min_v = Z.negate (Z.pow_int (Z.of_int 2) (64-1)) in
-    let max_v = Z.sub (Z.pow_int (Z.of_int 2) (64-1)) Z.(succ zero) in
+    let vaddr_bits = C.sizeof_vaddr * 8 in
+    let min_v = Z.negate (Z.pow_int (Z.of_int 2) (vaddr_bits-1)) in
+    let max_v = Z.sub (Z.pow_int (Z.of_int 2) (vaddr_bits-1)) Z.(succ zero) in
     if Z.(less_equal n min_v && less_equal n max_v)
     then n
     else wrapI min_v max_v n
@@ -2532,7 +2529,6 @@ module CHERI (C:Capability
        failwith "CHERI.member_shift_ptrval, PVfunction"
     | PVconcrete c ->
        let addr = C.cap_get_value c in
-       (* TODO(CHERI): The result address could be unrepresentable *)
        cap_set_value loc c (Z.add addr offset)  >>=
          fun c -> return @@ PV (prov, PVconcrete c)
 
