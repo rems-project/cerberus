@@ -329,7 +329,7 @@ let guess_span_intersection_action ress req m g =
 
 let diag_req ress req m g =
   let act = guess_span_intersection_action ress req m g in
-  Pp.debug 1 (lazy (match act with
+  Pp.debug 5 (lazy (match act with
     | [] -> Pp.item "guess intersection action: none" (Pp.string "")
     | (pup, pt, ct, ok) :: oth -> Pp.item ("guessed: do " ^ str_pack_unpack pup)
         (pp_pt_ct pt ct)
