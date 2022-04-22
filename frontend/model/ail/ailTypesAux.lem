@@ -1220,8 +1220,13 @@ let is_extended_signed_integer_type _ =
 
 (* STD §6.2.5#4, sentence 4 *)
 val is_signed_integer_type: ctype -> bool
-let is_signed_integer_type ty =
-  is_standard_signed_integer_type ty || is_extended_signed_integer_type ty
+let is_signed_integer_type (Ctype _ ty) =
+  match ty with
+    | Basic (Integer ity) ->
+        is_signed_ity ity
+    | _ ->
+        false
+  end
 
 
 (* STD §6.2.5#6, sentences 1-2 *)
