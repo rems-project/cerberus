@@ -99,6 +99,9 @@ type message =
   | Mismatch of { has: LS.t; expect: LS.t; }
   | Mismatch_lvar of { has: LS.t; expect: LS.t; spec_info: info}
   | Illtyped_it : {context: IT.t; it: IT.t; has: LS.t; expected: string; ctxt : Context.t} -> message (* 'expected' as in Kayvan's Core type checker *)
+  | NIA : {context: IT.t; it: IT.t; hint : string; ctxt : Context.t} -> message
+  | TooBigExponent : {context: IT.t; it: IT.t; ctxt : Context.t} -> message
+  | NegativeExponent : {context: IT.t; it: IT.t; ctxt : Context.t} -> message
   | Polymorphic_it : 'bt IndexTerms.term -> message
   | Write_value_unrepresentable of {ct: Sctypes.t; location: IT.t; value: IT.t; ctxt : Context.t; model : Solver.model_with_q }
   | Write_value_bad of {ct: Sctypes.t; location: IT.t; value: IT.t; ctxt : Context.t; model : Solver.model_with_q }
@@ -267,6 +270,42 @@ let pp_message te =
        !^"Illtyped expression" ^^ squotes context ^^ dot ^^^
          !^"Expected" ^^^ it ^^^ !^"to be" ^^^ squotes !^expected ^^^
            !^"but is" ^^^ squotes (LS.pp has)
+     in
+     { short; descr = Some descr; state = None }
+  | NIA {context; it; hint; ctxt} ->
+     let relevant = IT.free_vars_list [it; context] in
+     let explanation = Explain.explanation ctxt relevant in
+     let it = IT.pp (IT.subst explanation.substitution it) in
+     let context = IT.pp (IT.subst explanation.substitution context) in
+     let short = !^"Type error" in
+     let descr = 
+       !^"Illtyped expression" ^^ squotes context ^^ dot ^^^
+         !^"Non-linear integer arithmetic in the specification term" ^^^ it ^^ dot ^^^
+           !^hint
+     in
+     { short; descr = Some descr; state = None }
+  | TooBigExponent {context; it; ctxt} ->
+     let relevant = IT.free_vars_list [it; context] in
+     let explanation = Explain.explanation ctxt relevant in
+     let it = IT.pp (IT.subst explanation.substitution it) in
+     let context = IT.pp (IT.subst explanation.substitution context) in
+     let short = !^"Type error" in
+     let descr = 
+       !^"Illtyped expression" ^^ squotes context ^^ dot ^^^
+         !^"Too big exponent in the specification term" ^^^ it ^^ dot ^^^
+           !^("Exponent must fit int32 type")
+     in
+     { short; descr = Some descr; state = None }
+  | NegativeExponent {context; it; ctxt} ->
+     let relevant = IT.free_vars_list [it; context] in
+     let explanation = Explain.explanation ctxt relevant in
+     let it = IT.pp (IT.subst explanation.substitution it) in
+     let context = IT.pp (IT.subst explanation.substitution context) in
+     let short = !^"Type error" in
+     let descr = 
+       !^"Illtyped expression" ^^ squotes context ^^ dot ^^^
+         !^"Negative exponent in the specification term" ^^^ it ^^ dot ^^^
+           !^("Exponent must be non-negative")
      in
      { short; descr = Some descr; state = None }
   | Polymorphic_it it ->

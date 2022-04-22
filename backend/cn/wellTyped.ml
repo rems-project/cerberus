@@ -108,76 +108,111 @@ module WIT = struct
          in
          return (IT (Lit lit, bt))
       | Arith_op arith_op ->
-         let@ (bt, arith_op) = match arith_op with
-           | Add (t,t') ->
-              let@ t = infer loc ~context t in
-              let@ () = ensure_integer_or_real_type loc context t in
-              let@ t' = check loc ~context (IT.bt t) t' in
-              return (IT.bt t, Add (t, t'))
-           | Sub (t,t') ->
-              let@ t = infer loc ~context t in
-              let@ () = ensure_integer_or_real_type loc context t in
-              let@ t' = check loc ~context (IT.bt t) t' in
-              return (IT.bt t, Sub (t, t'))
-           | Mul (t,t') ->
-              let@ t = infer loc ~context t in
-              let@ () = ensure_integer_or_real_type loc context t in
-              let@ t' = check loc ~context (IT.bt t) t' in
-              return (IT.bt t, Mul (t, t'))
-           | Div (t,t') ->
-              let@ t = infer loc ~context t in
-              let@ () = ensure_integer_or_real_type loc context t in
-              let@ t' = check loc ~context (IT.bt t) t' in
-              return (IT.bt t, Div (t, t'))
-           | Exp (t,t') ->
-              let@ t = infer loc ~context t in
-              let@ () = ensure_integer_or_real_type loc context t in
-              let@ t' = check loc ~context (IT.bt t) t' in
-              return (IT.bt t, Exp (t, t'))
+         begin match arith_op with
+         | Add (t,t') ->
+            let@ t = infer loc ~context t in
+            let@ () = ensure_integer_or_real_type loc context t in
+            let@ t' = check loc ~context (IT.bt t) t' in
+            return (IT (Arith_op (Add (t, t')), IT.bt t))
+         | Sub (t,t') ->
+            let@ t = infer loc ~context t in
+            let@ () = ensure_integer_or_real_type loc context t in
+            let@ t' = check loc ~context (IT.bt t) t' in
+            return (IT (Arith_op (Sub (t, t')), IT.bt t))
+         | Mul (t,t') ->
+            let@ t = infer loc ~context t in
+            let@ () = ensure_integer_or_real_type loc context t in
+            let@ t' = check loc ~context (IT.bt t) t' in
+            let@ () = 
+              if Option.is_some (is_lit t) || Option.is_some (is_lit t') then return () else
+                let hint = "Only multiplication by constants is allowed" in
+                fail (fun ctxt -> {loc; msg = NIA {context; it = IT.mul_ (t, t'); ctxt; hint}})
+            in
+            return (IT (Arith_op (Mul (t, t')), IT.bt t))
+         | Div (t,t') ->
+            let@ t = infer loc ~context t in
+            let@ () = ensure_integer_or_real_type loc context t in
+            let@ t' = check loc ~context (IT.bt t) t' in
+            let@ () = 
+              if Option.is_some (is_lit t') then return () else 
+                let hint = "Only division by constants is allowed" in
+                fail (fun ctxt -> {loc; msg = NIA {context; it = div_ (t, t'); ctxt; hint}})
+            in
+            return (IT (Arith_op (Div (t, t')), IT.bt t))
+         | Exp (t,t') ->
+            let@ t = infer loc ~context t in
+            let@ () = ensure_integer_or_real_type loc context t in
+            let@ t' = check loc ~context (IT.bt t) t' in
+            begin match is_z t, is_z t' with
+            | Some z, Some z' -> 
+               if Z.lt z' Z.zero then
+                 fail (fun ctxt -> {loc; msg = NegativeExponent {context; it = exp_ (t, t'); ctxt}})
+               else if Z.fits_int32 z' then
+                 return (z_ (Z.pow z (Z.to_int z')))
+               else 
+                 fail (fun ctxt -> {loc; msg = TooBigExponent {context; it = exp_ (t, t'); ctxt}})
+            | _ ->
+               let hint = "Only exponentiation of two constants is allowed" in
+               fail (fun ctxt -> {loc; msg = NIA {context; it = exp_ (t, t'); ctxt; hint}})
+            end
            | Rem (t,t') ->
               let@ t = check loc ~context Integer t in
               let@ t' = check loc ~context Integer t' in
-              return (Integer, Rem (t, t'))
+              let@ () = 
+                if Option.is_some (is_lit t') then return () else 
+                  let hint = "Only division by constants is allowed" in
+                  fail (fun ctxt -> {loc; msg = NIA {context; it = rem_ (t, t'); ctxt; hint}})
+              in
+              return (IT (Arith_op (Rem (t, t')), Integer))
            | Mod (t,t') ->
               let@ t = check loc ~context Integer t in
               let@ t' = check loc ~context Integer t' in
-              return (Integer, Mod (t, t'))
+              let@ () = 
+                if Option.is_some (is_lit t') then return () else 
+                  let hint = "Only division by constants is allowed" in
+                  fail (fun ctxt -> {loc; msg = NIA {context; it = mod_ (t, t'); ctxt; hint}})
+              in
+              return (IT (Arith_op (Mod (t, t')), Integer))
            | Divisible (t, t') ->
               let@ t = check loc ~context Integer t in
               let@ t' = check loc ~context Integer t' in
-              return (BT.Bool, Divisible (t, t'))
+              let@ () = 
+                if Option.is_some (is_lit t') then return () else 
+                  let hint = "Only division by constants is allowed" in
+                  fail (fun ctxt -> {loc; msg = NIA {context; it = divisible_ (t, t'); ctxt; hint}})
+              in
+              return (IT (Arith_op (Divisible (t, t')), BT.Bool))
            | LT (t,t') ->
               let@ t = infer loc ~context t in
               let@ () = ensure_integer_or_real_type loc context t in
               let@ t' = check loc ~context (IT.bt t) t' in
-              return (BT.Bool, LT (t, t'))
+              return (IT (Arith_op (LT (t, t')), BT.Bool))
            | LE (t,t') ->
               let@ t = infer loc ~context t in
               let@ () = ensure_integer_or_real_type loc context t in
               let@ t' = check loc ~context (IT.bt t) t' in
-              return (BT.Bool, LE (t, t'))
+              return (IT (Arith_op (LE (t, t')), BT.Bool))
            | Min (t,t') ->
               let@ t = infer loc ~context t in
               let@ () = ensure_integer_or_real_type loc context t in
               let@ t' = check loc ~context (IT.bt t) t' in
-              return (IT.bt t, Min (t, t'))
+              return (IT (Arith_op (Min (t, t')), IT.bt t))
            | Max (t,t') ->
               let@ t = infer loc ~context t in
               let@ () = ensure_integer_or_real_type loc context t in
               let@ t' = check loc ~context (IT.bt t) t' in
-              return (IT.bt t, Max (t, t'))
+              return (IT (Arith_op (Max (t, t')), IT.bt t))
            | IntToReal t ->
               let@ t = check loc ~context Integer t in
-              return (BT.Real, IntToReal t)
+              return (IT (Arith_op (IntToReal t), BT.Real))
            | RealToInt t ->
               let@ t = check loc ~context Real t in
-              return (BT.Integer, IntToReal t)
+              return (IT (Arith_op (IntToReal t), BT.Integer))
            | XOR (ity, t, t') ->
               let@ t = check loc ~context Integer t in
               let@ t' = check loc ~context Integer t' in
-              return (BT.Integer, XOR (ity, t, t'))
-         in
-         return (IT (Arith_op arith_op, bt))
+              return (IT (Arith_op (XOR (ity, t, t')), BT.Integer))
+         end
       | Bool_op bool_op ->
          let@ (bt, bool_op) = match bool_op with
            | And ts ->

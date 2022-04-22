@@ -573,12 +573,7 @@ let add_ (it, it') = IT (Arith_op (Add (it, it')), bt it)
 let sub_ (it, it') = IT (Arith_op (Sub (it, it')), bt it)
 let mul_ (it, it') = IT (Arith_op (Mul (it, it')), bt it)
 let div_ (it, it') = IT (Arith_op (Div (it, it')), bt it)
-let exp_ (it, it') = 
-  match is_z it, is_z it' with
-  | Some z, Some z' when Z.fits_int z' ->
-     z_ (Z.pow z (Z.to_int z'))
-  | _ ->
-     IT (Arith_op (Exp (it, it')), bt it)
+let exp_ (it, it') = IT (Arith_op (Exp (it, it')), bt it)
 let rem_ (it, it') = IT (Arith_op (Rem (it, it')), BT.Integer)
 let mod_ (it, it') = IT (Arith_op (Mod (it, it')), BT.Integer)
 let divisible_ (it, it') = IT (Arith_op (Divisible (it, it')), BT.Bool)
