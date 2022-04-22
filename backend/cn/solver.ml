@@ -62,9 +62,9 @@ let solver_params = [
     ("smt.pull-nested-quantifiers", "true");
     ("smt.mbqi", "true");
     ("smt.ematching", "true");
-    ("smt.arith.nl", "false");
-    ("smt.arith.nl.branching", "false");
-    ("smt.arith.nl.rounds", "0");
+    (* ("smt.arith.nl", "false"); *)
+    (* ("smt.arith.nl.branching", "false"); *)
+    (* ("smt.arith.nl.rounds", "0"); *)
   ]
 
 let rewriter_params = [
