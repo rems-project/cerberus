@@ -1592,7 +1592,7 @@ let impl_diff_ptrval ty ptrval1 ptrval2 : impl_memM impl_integer_value =
 
     
 (* TODO: looks too simple to be true *)
-let impl_intcast_ptrval ref_ty ity ((PV prov ptr_val_ sh) as ptrval) =
+let impl_intcast_ptrval _ ref_ty ity ((PV prov ptr_val_ sh) as ptrval) =
   let ival = IV prov (IVfromptr ref_ty ity ptr_val_ sh) in
   match ity with
     | Signed Intptr_t ->
@@ -2061,7 +2061,7 @@ let impl_ptrcast_ival int_ty ref_ty (IV prov ival_) =
           end
   end
 *)
-let impl_ptrcast_ival int_ty ref_ty ival =
+let impl_ptrcast_ival _ int_ty ref_ty ival =
   (* TODO: check the types *)
   match ival with
     | IV prov (IVfromptr ty ity ptrval_ sh) ->
