@@ -2910,10 +2910,8 @@ let check mu_file =
   let () = Debug_ocaml.begin_csv_timing "logical predicates" in
   let@ ctxt = 
     (* check and record logical predicate defs *)
-    let number_entries = List.length (mu_file.mu_logical_predicates) in
-    let ping = Pp.progress "logical predicate welltypedness" number_entries in
+    Pp.progress_simple "checking specifications" "logical predicate welltypedness";
     ListM.fold_leftM (fun ctxt (name,(def : LP.definition)) -> 
-        let@ () = return (ping name) in
         let@ () = Typing.run ctxt (WellTyped.WLPD.good def) in
         let logical_predicates =
           StringMap.add name def ctxt.global.logical_predicates in
@@ -2926,17 +2924,15 @@ let check mu_file =
   let () = Debug_ocaml.begin_csv_timing "resource predicates" in
   let@ ctxt = 
     (* check and record resource predicate defs *)
-    let number_entries = List.length (mu_file.mu_resource_predicates) in
     let resource_predicates = 
       List.fold_right (fun (name, def) defs ->
           StringMap.add name def defs
         ) mu_file.mu_resource_predicates ctxt.global.resource_predicates
     in
     let ctxt = { ctxt with global = { ctxt.global with resource_predicates }} in
-    let ping = Pp.progress "resource predicate welltypedness" number_entries in
+    Pp.progress_simple "checking specifications" "resource predicate welltypedness";
     let@ () = 
       ListM.iterM (fun (name,def) -> 
-          let@ () = return (ping name) in
           Typing.run ctxt (WellTyped.WRPD.good def)
         ) mu_file.mu_resource_predicates
     in
@@ -2981,15 +2977,13 @@ let check mu_file =
 
   let () = Debug_ocaml.begin_csv_timing "welltypedness" in
   let@ () =
-    let number_entries = List.length (Pmap.bindings_list mu_file.mu_funinfo) in
-    let ping = Pp.progress "function welltypedness" number_entries in
+    Pp.progress_simple "checking specifications" "function welltypedness";
     PmapM.iterM
       (fun fsym (M_funinfo (loc, _attrs, ftyp, _trusted, _has_proto)) ->
         match !only with
         | Some fname when not (String.equal fname (Sym.pp_string fsym)) ->
            return ()
         | _ ->
-           let@ () = return (ping (Sym.pp_string fsym)) in
            let () = debug 2 (lazy (headline ("checking welltypedness of procedure " ^ Sym.pp_string fsym))) in
            let () = debug 2 (lazy (item "type" (AT.pp RT.pp ftyp))) in
            Typing.run ctxt (WellTyped.WFT.good "global" loc ftyp)

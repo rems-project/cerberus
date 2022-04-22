@@ -319,4 +319,11 @@ let progress title total_number : (string -> unit) =
   in
   print stdout msg
 
+
+let progress_simple title name = 
+  let msg = format [Blue] title ^^ colon ^^^ !^name in
+  print stdout msg
+
   
+
+

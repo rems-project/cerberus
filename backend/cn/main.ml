@@ -141,28 +141,16 @@ let frontend filename =
   print_log_file "after_inlining_break" (MUCORE mu_file);
   
   let pred_defs =
-    (* (\* PREDICATE FRONTEND *\) *)
-    (* (\* CHRISTOPHER ==> change this to FALSE to test the predicate defs frontend *\) *)
-    (* if true then *)
-    (*   [] *)
-    (* else *)
     begin match ail_program_opt with
     | None ->
         assert false
     | Some (_, sigm) ->
         let open Effectful.Make(Resultat) in
-        begin match CompilePredicates.translate mu_file.mu_tagDefs sigm.CF.AilSyntax.cn_predicates with
-          | Result.Error str ->
-              failwith str
-          | Result.Ok xs ->
-              List.iter (fun (sym, def) ->
-                let open Pp in
-                Pp.print stderr (!^ sym ^^ Pp.colon ^^^ ResourcePredicates.pp_definition def)
-              ) xs;
-              prerr_endline "PREDICATE COMPILATION SUCCESS";
-              xs
-        end
-  end in
+        match CompilePredicates.translate mu_file.mu_tagDefs sigm.CF.AilSyntax.cn_predicates with
+        | Result.Error str -> failwith str
+        | Result.Ok xs -> xs
+    end in
+
   return (pred_defs, mu_file)
 
 
@@ -206,6 +194,7 @@ let main
   Check.InferenceEqs.use_model_eqs := not no_model_eqs;
   Check.only := only;
   check_input_file filename;
+  Pp.progress_simple "pre-processing" "translating C code";
   begin match frontend filename with
   | CF.Exception.Exception err ->
      prerr_endline (CF.Pp_errors.to_string err); exit 2
@@ -218,6 +207,7 @@ let main
          | (_, Some times) -> Some (times, "log")
          | _ -> None);
        let result = 
+         Pp.progress_simple "pre-processing" "translating specifications";
          let@ file = Retype.retype_file pred_defs file in
          Check.check file 
        in

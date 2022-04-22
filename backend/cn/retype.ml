@@ -640,15 +640,7 @@ let retype_file pred_defs (file : 'TY Old.mu_file) : ('TY New.mu_file, type_erro
       ) file.mu_stdlib Sym.compare
   in
 
-  let@ funs = 
-    let number_entries = List.length (Pmap.bindings_list file.mu_funs) in
-    let ping = Pp.progress "processing specs" number_entries in
-    PmapM.mapM (fun fsym decl -> 
-        let@ () = return (ping (Sym.pp_string fsym)) in
-        let@ result = retype_fun_map_decl fsym decl in
-        return result
-      ) file.mu_funs Sym.compare
-  in
+  let@ funs = PmapM.mapM (retype_fun_map_decl) file.mu_funs Sym.compare in
 
   let file = 
     New.{ mu_main = file.mu_main;
