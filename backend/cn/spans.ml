@@ -6,12 +6,16 @@ open IT
 
 exception Failure of Pp.doc
 
-type pack_unpack = Pack | Unpack
+type action = Pack of IT.t * Sctypes.t | Unpack of IT.t * Sctypes.t
 [@@deriving eq, ord]
 
-let str_pack_unpack = function
-  | Pack -> "Pack"
-  | Unpack -> "Unpack"
+let pp_pt_ct nm pt ct =
+  let open Pp in
+  !^ nm ^^ !^" (" ^^ IT.pp pt ^^ !^": " ^^ Sctypes.pp ct ^^ !^") ptr)"
+
+let pp_action = function
+  | Pack (pt, ct)  -> pp_pt_ct "Pack" pt ct
+  | Unpack (pt, ct) -> pp_pt_ct "Unpack" pt ct
 
 let lb_str = function
   | None -> "-inf"
@@ -256,7 +260,7 @@ let intersection_action m g (req, req_span) (res, res_span) =
       None
   end
   else
-  let action = if cmp < 0 then Unpack else Pack in
+  let mk_action ptr ct = if cmp < 0 then Unpack (ptr, ct) else Pack (ptr, ct) in
   (* the "inner witnesses" are concrete objects of interior type *)
   let witnesses = if cmp < 0
     then get_witnesses req
@@ -276,7 +280,7 @@ let intersection_action m g (req, req_span) (res, res_span) =
   let ok = and_ [permission;
     or_ (List.map (fun (w_ptr, perm) -> and_ [perm; lePointer_ (ptr, w_ptr);
         lePointer_ (w_ptr, upper)]) witnesses)] in
-  Some (action, ptr, ct, ok)
+  Some (mk_action ptr ct, ok)
 
 let model_res_spans_or_empty m g req =
   try
@@ -288,13 +292,12 @@ let model_res_spans_or_empty m g req =
 
 let rec gather_same_actions opts = match opts with
   | [] -> []
-  | (action, ptr, ct, _) :: _ ->
-    let same (a2, ptr2, ct2, _) = IT.equal ptr ptr2 &&
-            equal_pack_unpack action a2 && Sctypes.equal ct ct2
+  | (action, _) :: _ ->
+    let same (a2, _) = equal_action action a2
     in
-    let oks = List.filter same opts |> List.map (fun (_, _, _, ok) -> ok) in
+    let oks = List.filter same opts |> List.map (fun (_, ok) -> ok) in
     let others = List.filter (fun opt -> not (same opt)) opts in
-    (action, ptr, ct, or_ oks) :: gather_same_actions others
+    (action, or_ oks) :: gather_same_actions others
 
 let is_unknown_array_size = function
   | RER.Point pt -> begin match pt.ct with
@@ -331,8 +334,7 @@ let diag_req ress req m g =
   let act = guess_span_intersection_action ress req m g in
   Pp.debug 5 (lazy (match act with
     | [] -> Pp.item "guess intersection action: none" (Pp.string "")
-    | (pup, pt, ct, ok) :: oth -> Pp.item ("guessed: do " ^ str_pack_unpack pup)
-        (pp_pt_ct pt ct)
+    | (action, ok) :: oth -> Pp.item "guessed span action" (pp_action action)
   ))
 
 

@@ -788,17 +788,17 @@ module ResourceInference = struct
         | None -> return ()
         | Some (model, _) ->
           let opts = Spans.guess_span_intersection_action ress req model global in
-          let confirmed = List.find_opt (fun (act, pt, ct, confirm) ->
+          let confirmed = List.find_opt (fun (act, confirm) ->
               match provable (t_ confirm) with
                   | `False -> false
                   | `True -> true
           ) opts in
           begin match confirmed with
           | None -> return ()
-          | Some (Spans.Pack, pt, ct, _) ->
+          | Some (Spans.Pack (pt, ct), _) ->
               let@ success = do_pack loc pt ct in
               if success then span_fold_unfolds loc req true else return ()
-          | Some (Spans.Unpack, pt, ct, _) ->
+          | Some (Spans.Unpack (pt, ct), _) ->
               let@ success = do_unpack loc pt ct in
               if success then span_fold_unfolds loc req true else return ()
           end
