@@ -753,7 +753,7 @@ let in_range n ity =
 (* Casting operations *)
 (* 'cast_ival_to_ptrval()' in the paper *)
 (* the first ctype is the original integer type, the second is the target referenced type *)
-let ptrfromint ity ref_ty ival : pointer_value memM =
+let ptrfromint _ ity ref_ty ival : pointer_value memM =
   match ival with
     | IVloc (Prov_empty, _) ->
         fail (MerrVIP VIP_ptrcast_empty)
@@ -785,7 +785,7 @@ let ptrfromint ity ref_ty ival : pointer_value memM =
 
 (* 'cast_ptrval_to_ival()' in the paper *)
 (* the first ctype is the original referenced type, the integerType is the target integer type *)
-let intfromptr ref_ty ity ptrval : integer_value memM =
+let intfromptr _ ref_ty ity ptrval : integer_value memM =
   match ptrval with
     | PVnull ->
         (* VIP-cast-ptr-to-int-null *)
@@ -888,7 +888,7 @@ let eff_array_shift_ptrval loc ptrval ty ival : pointer_value memM =
     | PVfunptr sym ->
         fail (MerrVIP (VIP_array_shift VIP_funptr))
 
-let eff_member_shift_ptrval tag_sym membr_ident ptrval =
+let eff_member_shift_ptrval _ tag_sym membr_ident ptrval =
   return (member_shift_ptrval tag_sym membr_ident ptrval)
 
 let memcpy ptrval1 ptrval2 sz_ival : pointer_value memM =

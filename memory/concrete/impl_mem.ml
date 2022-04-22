@@ -1922,7 +1922,7 @@ module Concrete : Memory = struct
           return false
 
   
-  let ptrfromint _ ref_ty (IV (prov, n)) =
+  let ptrfromint _ _ ref_ty (IV (prov, n)) =
     if not (N.equal n N.zero) then
       (* STD §6.3.2.3#5 *)
       Debug_ocaml.warn [] (fun () ->
@@ -2138,7 +2138,7 @@ module Concrete : Memory = struct
           (* TODO: check *)
           return (PV (Prov_device, PVconcrete (N.add addr offset)))
 
-let eff_member_shift_ptrval tag_sym membr_ident ptrval =
+let eff_member_shift_ptrval _ tag_sym membr_ident ptrval =
   return (member_shift_ptrval tag_sym membr_ident ptrval)
 
   let concurRead_ival ity sym =
@@ -2210,7 +2210,7 @@ let eff_member_shift_ptrval tag_sym membr_ident ptrval =
     end)
   
   (* TODO: conversion? *)
-  let intfromptr _ ity (PV (prov, ptrval_)) =
+  let intfromptr _ _ ity (PV (prov, ptrval_)) =
     match ptrval_ with
       | PVnull _ ->
           return (mk_ival prov Nat_big_num.zero)
@@ -2568,8 +2568,8 @@ let combine_prov prov1 prov2 =
   let copy_alloc_id ival ptrval =
     (* cast_ptrval_to_ival(uintptr_t,𝑝1),cast_ival_to_ptrval(void,𝑥) *)
     (* the first ctype is the original referenced type, the integerType is the target integer type *)
-    intfromptr Ctype.void Ctype.(Unsigned Intptr_t) ptrval >>= fun _ ->
-    ptrfromint Ctype.(Unsigned Intptr_t) Ctype.void ival
+    intfromptr Location_ocaml.unknown Ctype.void Ctype.(Unsigned Intptr_t) ptrval >>= fun _ ->
+    ptrfromint Location_ocaml.unknown Ctype.(Unsigned Intptr_t) Ctype.void ival
 
   (* JSON serialisation: Memory layout for UI *)
 

@@ -91,9 +91,9 @@ module type Memory = sig
   
   (* Casting operations *)
   (* the first ctype is the original integer type, the second is the target referenced type *)
-  val ptrfromint: Ctype.integerType -> Ctype.ctype -> integer_value -> pointer_value memM
+  val ptrfromint: Location_ocaml.t -> Ctype.integerType -> Ctype.ctype -> integer_value -> pointer_value memM
   (* the first ctype is the original referenced type, the integerType is the target integer type *)
-  val intfromptr: Ctype.ctype -> Ctype.integerType -> pointer_value -> integer_value memM
+  val intfromptr: Location_ocaml.t -> Ctype.ctype -> Ctype.integerType -> pointer_value -> integer_value memM
 
   (* New operations for CHERI *)
   val derive_cap : bool(* is_signed *) -> AilSyntax.binaryOperator -> integer_value -> integer_value -> integer_value
@@ -106,7 +106,7 @@ module type Memory = sig
   val member_shift_ptrval: pointer_value -> Symbol.sym -> Symbol.identifier -> pointer_value
   
   val eff_array_shift_ptrval: Location_ocaml.t -> pointer_value -> Ctype.ctype -> integer_value -> pointer_value memM
-  val eff_member_shift_ptrval: pointer_value -> Symbol.sym -> Symbol.identifier -> pointer_value memM
+  val eff_member_shift_ptrval: Location_ocaml.t -> pointer_value -> Symbol.sym -> Symbol.identifier -> pointer_value memM
   
   val memcpy: pointer_value -> pointer_value -> integer_value -> pointer_value memM
   val memcmp: pointer_value -> pointer_value -> integer_value -> integer_value memM

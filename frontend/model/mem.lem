@@ -123,9 +123,9 @@ declare ocaml target_rep function isWellAligned_ptrval = `Impl_mem.isWellAligned
 (* Casting operations *)
 (* the first ctype is the original integer type, the second is the target referenced type *)
 (* Note: first argument should probably be Ctype.integerType *)
-val ptrfromint: Ctype.integerType -> Ctype.ctype -> integer_value -> memM pointer_value
+val ptrfromint: Loc.t -> Ctype.integerType -> Ctype.ctype -> integer_value -> memM pointer_value
 (* the first ctype is the original referenced type, the integerType is the target integer type *)
-val intfromptr: Ctype.ctype -> Ctype.integerType -> pointer_value -> memM integer_value
+val intfromptr: Loc.t -> Ctype.ctype -> Ctype.integerType -> pointer_value -> memM integer_value
 declare ocaml target_rep function ptrfromint = `Impl_mem.ptrfromint`
 declare ocaml target_rep function intfromptr = `Impl_mem.intfromptr`
 
@@ -146,7 +146,7 @@ declare ocaml target_rep function member_shift_ptrval = `Impl_mem.member_shift_p
 
 (* Effectfull version of pointer shifting constructors *)
 val eff_array_shift_ptrval: Loc.t -> pointer_value -> Ctype.ctype -> integer_value -> memM pointer_value
-val eff_member_shift_ptrval: pointer_value -> Symbol.sym -> Symbol.identifier -> memM pointer_value
+val eff_member_shift_ptrval: Loc.t -> pointer_value -> Symbol.sym -> Symbol.identifier -> memM pointer_value
 declare ocaml target_rep function eff_array_shift_ptrval = `Impl_mem.eff_array_shift_ptrval`
 declare ocaml target_rep function eff_member_shift_ptrval = `Impl_mem.eff_member_shift_ptrval`
 

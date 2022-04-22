@@ -2182,7 +2182,7 @@ module CHERI (C:Capability
     | PV (Prov_none, _) ->
        return false
 
-  let ptrfromint (int_ty:integerType) ref_ty int_v =
+  let ptrfromint loc (int_ty:integerType) ref_ty int_v =
     match int_ty, int_v with
     | ((Unsigned Intptr_t),(IC (prov, _, c)) | (Signed Intptr_t),(IC (prov, _, c))) ->
         begin
@@ -2244,7 +2244,7 @@ module CHERI (C:Capability
               r
             else
               Z.sub r dlt in
-          cap_set_value (Location_ocaml.other "ptrfromint") (C.cap_c0 ()) n >>=
+          cap_set_value loc (C.cap_c0 ()) n >>=
             (fun c -> return (PV (prov, PVconcrete c)))
     | _, IC _ ->
         failwith "invalid integer value (capability for non- [u]intptr_t"
@@ -2507,7 +2507,7 @@ module CHERI (C:Capability
        cap_set_value loc c shifted_addr >>=
          fun c -> return (PV (Prov_device, PVconcrete c))
 
-  let eff_member_shift_ptrval (PV (prov, ptrval_)) tag_sym memb_ident =
+  let eff_member_shift_ptrval loc (PV (prov, ptrval_)) tag_sym memb_ident =
     let offset =
       match offsetof_ival (Tags.tagDefs ()) tag_sym memb_ident with
       | IV (_, offset) -> offset
@@ -2533,7 +2533,7 @@ module CHERI (C:Capability
     | PVconcrete c ->
        let addr = C.cap_get_value c in
        (* TODO(CHERI): The result address could be unrepresentable *)
-       cap_set_value (Location_ocaml.other "eff_member_shift_ptrval") c (Z.add addr offset)  >>=
+       cap_set_value loc c (Z.add addr offset)  >>=
          fun c -> return @@ PV (prov, PVconcrete c)
 
   let concurRead_ival ity sym =
@@ -2613,9 +2613,9 @@ module CHERI (C:Capability
         end)
 
   (* TODO: conversion? *)
-  let intfromptr _ ity (PV (prov, ptrval_)) =
-    let wrap_intcast (*ity1*) ity2 ival =
-      match internal_intcast (Location_ocaml.other "intfromptr") (*ity1*) ity2 ival with
+  let intfromptr loc _ ity (PV (prov, ptrval_)) =
+    let wrap_intcast ity2 ival =
+      match internal_intcast loc ity2 ival with
         | Either.Left err ->
             fail err
         | Right ival ->
@@ -3008,8 +3008,8 @@ module CHERI (C:Capability
   let copy_alloc_id ival ptrval =
     (* cast_ptrval_to_ival(uintptr_t,𝑝1),cast_ival_to_ptrval(void,𝑥) *)
     (* the first ctype is the original referenced type, the integerType is the target integer type *)
-    intfromptr Ctype.void Ctype.(Unsigned Intptr_t) ptrval >>= fun _ ->
-    ptrfromint (Unsigned Intptr_t) Ctype.void ival
+    intfromptr Location_ocaml.unknown Ctype.void Ctype.(Unsigned Intptr_t) ptrval >>= fun _ ->
+    ptrfromint Location_ocaml.unknown (Unsigned Intptr_t) Ctype.void ival
 
   (* JSON serialisation: Memory layout for UI *)
 

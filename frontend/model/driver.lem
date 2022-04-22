@@ -1049,11 +1049,11 @@ let rec driver with_concurrency =
             ND.return (mk_th_st (Core.Vobject (Core.OVinteger ival)))
         
         | (Mem_common.IntFromPtr, [Core.Vctype ref_ty; Core.Vctype (Ctype.Ctype _ (Ctype.Basic (Ctype.Integer ity))); Core.Vobject (Core.OVpointer ptr_val)]) ->
-            liftMem (Mem.intfromptr ref_ty ity ptr_val) >>= fun ival ->
+            liftMem (Mem.intfromptr loc ref_ty ity ptr_val) >>= fun ival ->
             ND.return (mk_th_st (Core.Vobject (Core.OVinteger ival)))
         
         | (Mem_common.PtrFromInt, [Core.Vctype (Ctype.Ctype _ (Ctype.Basic (Ctype.Integer ity))); Core.Vctype ref_ty; Core.Vobject (Core.OVinteger ival)]) ->
-            liftMem (Mem.ptrfromint ity ref_ty ival) >>= fun ptrval ->
+            liftMem (Mem.ptrfromint loc ity ref_ty ival) >>= fun ptrval ->
             ND.return (mk_th_st (Core.Vobject (Core.OVpointer ptrval)))
         
         | (Mem_common.PtrValidForDeref, [Core.Vctype ref_ty; Core.Vobject (Core.OVpointer ptr_val)]) ->
@@ -1118,7 +1118,7 @@ let rec driver with_concurrency =
             ND.return (mk_th_st (Core.Vobject (Core.OVpointer res)))
 
         | (Mem_common.PtrMemberShift tag_sym membr_ident, [Core.Vobject (Core.OVpointer ptrval)]) ->
-            liftMem (Mem.eff_member_shift_ptrval ptrval tag_sym membr_ident) >>= fun res ->
+            liftMem (Mem.eff_member_shift_ptrval loc ptrval tag_sym membr_ident) >>= fun res ->
             ND.update (fun dr_st ->
               <| dr_st with
                 trace= ME_eff_member_shift_ptrval tag_sym membr_ident ptrval res :: dr_st.trace
