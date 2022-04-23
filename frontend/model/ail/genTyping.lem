@@ -923,7 +923,9 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
                  member type (see §6.5.2.3#3 and #8) *)
               (* NOTE: we use unatomic_ here because §6.5.2.3#1 says the first operand must be
                  "atomic, qualified, or unqualified structure or union type" *)
-              match unatomic_ ty with
+              if AAux.is_incomplete sigm ty then
+                  E.constraint_violation (locOf e) (MemberofIncompleteLvalue qs ty)
+              else match unatomic_ ty with
                 | Struct tag_sym ->
                     let do_fail =
                       E.constraint_violation (Loc.with_cursor_from (Loc.locOf e) (Loc.locOf memb_ident))
@@ -1001,7 +1003,9 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
                   | _ ->
                       error "annotate_expression(AilEmemberof union): failed to find a valid tag definition"
                 end in
-              match gty with
+              if GAux.is_incomplete sigm gty then
+                E.constraint_violation (locOf e) (MemberofIncompleteRvalue gty)
+              else match gty with
                 | GenAtomic (Ctype _ (Struct tag_sym)) ->
                     do_struct tag_sym
                 | GenAtomic (Ctype _ (Union tag_sym)) ->
@@ -1016,7 +1020,6 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
         end
     
     | AilEmemberofptr e memb_ident ->
-      (* TODO: factorize *)
       (* NOTE: the qualifiers of the value are the combination of the ones
          of the referenced type of left operand [e] and the ones in the
          declaration of the member type (see §6.5.2.3#4) *)
@@ -1040,7 +1043,9 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
                     let do_fail =
                       E.constraint_violation (with_cursor_from (locOf e) (locOf memb_ident))
                         (MemberofptrNoMember memb_ident ref_qs ref_ty) in
-                    match lookup_tag_definition sigm tag_sym with
+                    if AAux.is_incomplete sigm ref_ty then
+                      E.constraint_violation (locOf e) (MemberofptrIncomplete ref_qs ref_ty)
+                    else match lookup_tag_definition sigm tag_sym with
                       | Just (StructDef membersDefs flexible_opt) ->
                           match (List.lookup memb_ident membersDefs, flexible_opt) with
                             | (Just (_, memb_qs, memb_ty), _) ->
@@ -1059,7 +1064,9 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
                           error "annotate_expression(AilEmemberofptr struct): failed to find a valid tag definition"
                     end
                 | (ref_qs, Right tag_sym, ref_ty) ->
-                    match lookup_tag_definition sigm tag_sym with
+                    if AAux.is_incomplete sigm ref_ty then
+                      E.constraint_violation (locOf e) (MemberofptrIncomplete ref_qs ref_ty)
+                    else match lookup_tag_definition sigm tag_sym with
                       | Just (UnionDef membersDefs) ->
                           match List.lookup memb_ident membersDefs with
                             | Just (_, memb_qs, memb_ty) ->
@@ -1632,8 +1639,8 @@ and annotate_arguments_aux sigm gamm n_args n_params loc has_proto is_variadic a
         if has_proto then
 *)
           (* TODO: add location *)
-          annotate_assignee Loc.unknown (AAux.rvalue_coercion param_ty1) arg_e          >>= fun a_arg_e ->
-          annotate_arguments_aux args' params' >>= fun a_args' ->
+          annotate_assignee Loc.unknown (AAux.rvalue_coercion param_ty1) arg_e >>= fun a_arg_e ->
+          annotate_arguments_aux args' params'                                 >>= fun a_args' ->
           E.return (a_arg_e :: a_args')
 (*
         else
@@ -1748,7 +1755,7 @@ and annotate_initialization sigm gamm ty e =
 
 
 and annotate_definition_aux sigm gamm (ty, e) =
-  if    (AAux.is_array ty --> AAux.has_unknown_size ty)
+  if    (AAux.is_array ty --> AAux.has_unknown_size sigm ty)
      || (AAux.is_complete_object sigm ty --> not (AAux.is_vla ty)) then
     if AAux.atomic_qualified_unqualified AAux.is_scalar ty then
       E.add "§6.7.9#11, sentence 3" >>

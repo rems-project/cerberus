@@ -41,9 +41,12 @@ type violation =
   | MemberofReferenceBaseTypeRvalue of genType  (* §6.5.2.3#1 *)
   | MemberofNoMemberLvalue of identifier * qualifiers * ctype (* §6.5.2.3#1 *)
   | MemberofNoMemberRvalue of identifier * genType (* §6.5.2.3#1 *)
+  | MemberofIncompleteLvalue of qualifiers * ctype (* §6.5.2.3#1 (indirect consequence of the need for a member to exist) *)
+  | MemberofIncompleteRvalue of genType (* §6.5.2.3#1 (indirect consequence of the need for a member to exist) *)
   | MemberofptrReferenceBaseType of qualifiers * ctype  (* §6.5.2.3#2 *)
   | MemberofptrReferenceTypeNotPointer of genType  (* §6.5.2.3#2 *)
   | MemberofptrNoMember of identifier * qualifiers * ctype (* §6.5.2.3#2 *)
+  | MemberofptrIncomplete of qualifiers * ctype (* §6.5.2.3#1 (indirect consequence of the need for a member to exist) *)
   (* 6.5.2.5 Compound literals *)
   | InvalidTypeCompoundLiteral (* §6.5.2.5#1 *)
   (* 6.5.3.1 Prefix increment and decrement operators *)
@@ -233,11 +236,17 @@ let std_of_violation = function
       ["§6.5.2.3#1"]
   | MemberofNoMemberRvalue _ _ ->
       ["§6.5.2.3#1"]
+  | MemberofIncompleteLvalue _ _ ->
+      ["§6.5.2.3#1"]
+  | MemberofIncompleteRvalue _ ->
+      ["§6.5.2.3#1"]
   | MemberofptrReferenceBaseType _ _ ->
       ["§6.5.2.3#2"]
   | MemberofptrReferenceTypeNotPointer _ ->
       ["§6.5.2.3#2"]
   | MemberofptrNoMember _ _ _ ->
+      ["§6.5.2.3#2"]
+  | MemberofptrIncomplete _ _ ->
       ["§6.5.2.3#2"]
   | InvalidTypeCompoundLiteral ->
       ["§6.5.2.5#1"]

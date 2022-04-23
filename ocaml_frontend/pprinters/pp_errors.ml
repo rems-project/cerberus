@@ -65,6 +65,10 @@ let string_of_constraint_violation = function
       "no member named '" ^ string_of_cid memb ^ "' in '" ^ String_ail.string_of_ctype qs ty ^ "'"
   | MemberofNoMemberRvalue (memb, gty) ->
       "no member named '" ^ string_of_cid memb ^ "' in '" ^ string_of_gentype gty ^ "'"
+  | MemberofIncompleteLvalue (qs, ty) ->
+      "struct/union type '" ^ String_ail.string_of_ctype qs ty ^ "' in . operator is incomplete"
+  | MemberofIncompleteRvalue gty ->
+      "struct/union type '" ^ string_of_gentype gty ^ "' in . operator is incomplete"
   | MemberofptrReferenceTypeNotPointer gty ->
       "member reference type '" ^ string_of_gentype gty ^ "' is not a pointer" ^
       (if GenTypesAux.is_struct_or_union0 gty then "; did you mean to use '.'?" else "")
@@ -72,6 +76,8 @@ let string_of_constraint_violation = function
       "member reference base type '" ^ String_ail.string_of_ctype qs ty ^ "' is not a structure or union"
   | MemberofptrNoMember (memb, qs, ty) ->
       "no member named '" ^ string_of_cid memb ^ "' in '" ^ String_ail.string_of_ctype qs ty ^ "'"
+  | MemberofptrIncomplete (qs, ty) ->
+      "struct/union type '" ^ String_ail.string_of_ctype qs ty ^ "' in -> operator is incomplete"
   | InvalidTypeCompoundLiteral ->
       "compound literal has invalid type"
   | UnaryExpressionNotLvalue ->

@@ -13,10 +13,6 @@ val is_array: genType -> bool
 let is_array = function
   | GenArray _ _ ->
       true
-(*  | GenBuiltin "jmp_buf" ->
-      true
-  | GenBuiltin "fpos_t" ->
-      false *)
   | _ ->
       false
 end
@@ -66,7 +62,6 @@ end
 
 val is_struct: genType -> bool
 let is_struct ty =
-  (* TODO: check atomic *)
   match unatomic ty with
   | GenStruct _ ->
       true
@@ -76,7 +71,6 @@ end
 
 val is_union: genType -> bool
 let is_union ty =
-  (* TODO: check atomic *)
   match unatomic ty with
   | GenUnion _ ->
       true
@@ -345,60 +339,55 @@ let min_interpret_optionIntegerSuffix = function
       min_interpret_integerSuffix suff
 end
 
-(* TODO: check (and sync with the AilTypesAux version *)
+(* STD §6.2.5#1, sentence 4 *)
 val is_complete: forall 'a. sigma 'a -> genType -> bool
 let is_complete sigm gty =
   match unatomic gty with
-   | GenVoid ->
-      (* STD §6.2.5#19 *)
-       false
-   | GenBasic _ ->
-       true
-   | GenArray _ n_opt ->
-       (* STD §6.2.5#22, sentence 1-2 *)
-       (* STD §6.7.6.2#4, sentence 1 *)
-       isJust n_opt
-   | GenPointer _ _ ->
-       true
-     (* STD §6.2.5#22, sentence 3-4 *)
-   | GenStruct sym ->
-       match List.lookup sym sigm.tag_definitions with
-         | Just (_, StructDef _ _) ->
-             (* TODO[note]: as far as I can tell, a struct with a flexible array member
-                            is still a complete type *)
-             true
-         | _ ->
-             let _ = Debug.print_debug 5 [Debug.DB_ail_typing]
-                 (fun () -> "GenTypesAux.is_complete failed on struct tag: " ^ show sym ^ " with env: " ^ show sigm.tag_definitions) in
-             false
-       end
-     (* STD §6.2.5#22, sentence 3-4 *)
-   | GenUnion sym ->
-       match List.lookup sym sigm.tag_definitions with
-         | Just (_, UnionDef _) ->
-             true
-         | _ ->
-             false
-       end
-(*  | GenBuiltin "cnd_t" ->
-      true
-  | GenBuiltin "fpos_t" ->
-      true
-  | GenBuiltin "mtx_t" ->
-      true
-  | GenBuiltin "once_flag" ->
-      true
-  | GenBuiltin "thrd_t" ->
-      true
-  | GenBuiltin "tss_t" ->
-      true
-  | GenBuiltin "va_list" ->
-      true *)
-  | _ ->
-      false
+    | GenVoid ->
+        (* STD §6.2.5#19 *)
+        false
+    | GenBasic _ ->
+        (* STD §6.2.5#14, sentence 2 *)
+        true
+    | GenArray _ n_opt ->
+        (* STD §6.2.5#22, sentence 1-2 *)
+        (* STD §6.7.6.2#4, sentence 1 *)
+        (* NOTE: this function is only called after desugaring,
+            so we don't need to check the element type *)
+        isJust n_opt
+      (* the notion of complete/incomplete types only applies to object types *)
+    | GenFunction _ _ _ ->
+        error "GenTypesAux.is_complete: called an a function type"
+    | GenFunctionNoParams _ ->
+        error "GenTypesAux.is_complete: called an a function type (no params)"
+    | GenPointer _ _ ->
+        true
+    | GenAtomic _ ->
+        (* NOTE: this function is only called after desugaring,
+            so we don't need to check the inner type *)
+        true
+      (* STD §6.2.5#22, sentence 3-4 *)
+    | GenStruct sym ->
+        match List.lookup sym sigm.tag_definitions with
+          | Just (_, StructDef _ _) ->
+              (* TODO[note]: as far as I can tell, a struct with a flexible array member
+                              is still a complete type *)
+              true
+          | _ ->
+              let _ = Debug.print_debug 5 [Debug.DB_ail_typing]
+                  (fun () -> "GenTypesAux.is_complete failed on struct tag: " ^ show sym ^ " with env: " ^ show sigm.tag_definitions) in
+              false
+        end
+      (* STD §6.2.5#22, sentence 3-4 *)
+    | GenUnion sym ->
+        match List.lookup sym sigm.tag_definitions with
+          | Just (_, UnionDef _) ->
+              true
+          | _ ->
+              false
+        end
 end
 
-(* TODO *)
 val is_incomplete: forall 'a. sigma 'a -> genType -> bool
 let is_incomplete sigm gty =
   not (is_complete sigm gty)

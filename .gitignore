@@ -21,3 +21,4 @@ cerberus-webserver
 config.json
 webcerb.symbolic
 webcerb.concrete
+.vscode/settings.json

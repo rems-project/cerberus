@@ -104,7 +104,6 @@ let atomic_qualified_unqualified pred = function
       pred ty
 end
 
-
 (* STD §6.2.5#15, sentence 1 *)
 val is_character: ctype -> bool
 let is_character = function
@@ -126,15 +125,10 @@ let is_Bool = function
       false
 end
 
-(* TODO: STD doc *)
-val     is_array: ctype -> bool
+val is_array: ctype -> bool
 let is_array = function
   | Ctype _ (Array _ _) ->
       true
-(*  | Builtin "jmp_buf" ->
-      true
-  | Builtin "fpos_t" ->
-      false *)
   | _ ->
       false
 end
@@ -186,7 +180,6 @@ val is_struct_or_union: ctype -> bool
 let is_struct_or_union ty =
   is_struct ty || is_union ty
 
-
 val has_flexible_array_member: forall 'a. sigma 'a -> ctype -> bool
 let has_flexible_array_member sigm = function
   | Ctype _ (Struct tag_sym) ->
@@ -195,17 +188,6 @@ let has_flexible_array_member sigm = function
             false
         | Just (_, StructDef _ (Just _)) ->
             true
-(*
-        | Just (_, StructDef membersDefs) ->
-            match List.dest_init membersDefs with
-              | Just (_, (_, (_, _, last_ty))) ->
-                  (* NOTE: this assumes membersDefs is wf
-                     (i.e. it has more than one element) *)
-                  is_array_unknown_size last_ty
-              | Nothing ->
-                  false
-            end
-*)
         | _ ->
             error "AilTypesAux.has_flexible_array_member: Struct, UnionDef or Nothing"
       end
@@ -235,48 +217,19 @@ val is_aggregate: ctype -> bool
 let is_aggregate ty =
   is_array ty || is_struct ty
 
-(* STD §6.2.5#20 *)
-(* NOTE: dead code *)
-val is_derived: ctype -> bool
-let is_derived (Ctype _ ty) =
-  match ty with
-  | Array _ _ -> true
-  | Struct _ -> true
-  | Union _ -> true
-  | Function _ _ _ -> true
-  | FunctionNoParams _ -> true
-  | Pointer _ _ -> true
-  | Atomic _ -> true
-  | _ -> false
-  end
 
-(* STD §6.2.5#24 *)
-(* NOTE: dead code *)
-(*
-val is_derived_declarator: ctype -> bool
-let is_derived_declarator ty =
-  match unatomic_ ty with
-  | Array _ _ -> true
-  | Function _ _ _ _ -> true
-  | Pointer _ _ -> true
-  | _ -> false
-  end
-*)
-
-(* TODO *)
 (* STD §6.2.5#1, sentence 4 *)
 val     is_complete: forall 'a. sigma 'a -> ctype -> bool
 let rec is_complete sigm ty =
   (* NOTE: for atomic types we look at the argument type. The standard doesn't say
-     when/whether atomic types are complete... *)
+     when/whether atomic types are complete...
+     But I assume they are when their inner type is complete *)
   match unatomic_ ty with
   | Void ->
       (* STD §6.2.5#19 *)
       false
   | Basic _ ->
       (* STD §6.2.5#14, sentence 2 *)
-      true
-  | Pointer _ _ ->
       true
   | Array elem_ty n_opt ->
       (* STD §6.2.5#22, sentence 1-2 *)
@@ -285,6 +238,16 @@ let rec is_complete sigm ty =
          to be incomplete: if it is a struct type whose declaration has not yet been completed *)
           is_complete sigm elem_ty
       &&  isJust n_opt
+    (* the notion of complete/incomplete types only applies to object types *)
+  | Function _ _ _ ->
+      error "AilTypesAux.is_complete: called an a function type"
+  | FunctionNoParams _ ->
+      error "AilTypesAux.is_complete: called an a function type (no params)"
+  | Pointer _ _ ->
+      true
+  | Atomic atom_ty ->
+      (* NOTE: same as for Array, after desugaring there will never be an incomplete [atom_ty] *)
+      is_complete sigm atom_ty
     (* STD §6.2.5#22, sentence 3-4 *)
   | Struct sym ->
       match List.lookup sym sigm.tag_definitions with
@@ -292,28 +255,28 @@ let rec is_complete sigm ty =
             (* TODO[note]: as far as I can tell, a struct with a flexible array member
                            is still a complete type *)
             true
-        | _ ->
-            let _ = Debug.print_debug 5 [Debug.DB_ail_typing]
-                (fun () -> "is_complete failed on struct tag: " ^ show sym ^ " with env: " ^ show sigm.tag_definitions) in
+        | Just (_, UnionDef _) ->
+            error "AilTypesAux.is_complete: Struct --> tag resolved to a UnionDef"
+        | Nothing ->
             false
       end
     (* STD §6.2.5#22, sentence 3-4 *)
   | Union sym ->
       match List.lookup sym sigm.tag_definitions with
+        | Just (_, StructDef _ _) ->
+            error "AilTypesAux.is_complete: Struct --> tag resolved to a StructDef"
         | Just (_, UnionDef _) ->
             true
-        | _ ->
+        | Nothing ->
             false
       end
-  | _ ->
-      false
 end
 
-(* TODO *)
 (* STD §6.2.5#1, sentence 4 *)
 val is_incomplete: forall 'a. sigma 'a -> ctype -> bool
 let is_incomplete sigm ty =
   not (is_complete sigm ty)
+
 
 (* ========================================================================= *)
 val in_integer_range: IntegerImpl.implementation -> integer -> integerType -> bool
@@ -743,38 +706,6 @@ let usual_arithmetic_integer impl ity1 ity2 =
             promoted_ity2
           else
             make_corresponding_unsigned promoted_ity2
-
-(*
-        let promoted_ity1 = integer_promotion impl ity1 in
-        let promoted_ity2 = integer_promotion impl ity2 in
-        if is_signed_ity promoted_ity1 then
-          if is_signed_ity promoted_ity2 then
-            if lt_integer_rank promoted_ity2 promoted_ity1 then
-              promoted_ity1
-            else
-              promoted_ity2
-          else
-            if le_integer_rank promoted_ity1 promoted_ity2 then
-              promoted_ity2
-            else
-              if le_integer_range impl promoted_ity2 promoted_ity1 then
-                promoted_ity1
-              else
-                make_corresponding_unsigned promoted_ity1
-        else
-          if is_unsigned_ity promoted_ity2 then
-            if lt_integer_rank promoted_ity2 promoted_ity1 then
-              promoted_ity1
-            else
-              promoted_ity2
-          else
-            if le_integer_rank promoted_ity2 promoted_ity1 then
-              promoted_ity1
-            else if le_integer_range impl promoted_ity1 promoted_ity2 then
-              promoted_ity2
-            else
-              make_corresponding_unsigned promoted_ity2
-*)
   end
 
 
@@ -824,9 +755,6 @@ let is_real (Ctype _ ty) =
     | _ ->
         false
   end
-
-
-
 
 
 (* (§6.2.7) Compatible type *)
@@ -904,56 +832,6 @@ and are_compatible_params params1 params2 =
   are_compatible_params_aux true (params1, params2)
 
 
-
-
-
-
-
-
-
-
-
-(* val            is_composite_params_aux: (ctype -> ctype -> ctype -> bool) -> 
-                                        list (qualifiers * ctype * bool) -> list (qualifiers * ctype * bool) -> list (qualifiers * ctype * bool) -> bool
-let rec ~{coq} is_composite_params_aux is_composite p1 p2 p3 =
-  match (p1, p2, p3) with
-    | ([], [], []) ->
-        true
-    | ((_, ty1, _) :: p1, (_, ty2, _) :: p2, (qs3, ty3, _) :: p3) ->
-        is_unqualified qs3 && is_composite ty1 ty2 ty3 &&
-        is_composite_params_aux is_composite p1 p2 p3
-    | _ ->
-      false
-  end
-
-val            is_composite: ctype -> ctype -> ctype -> bool
-let rec ~{coq} is_composite (Ctype _ ty1) (Ctype _ ty2) (Ctype _ ty3) =
-  let is_composite_params = is_composite_params_aux is_composite in
-  (* TODO: check the qualifiers *)
-  match (ty1, ty2, ty3) with
-    | (Void, Void, Void) ->
-        true
-    | (Basic bty1, Basic bty2, Basic bty3) ->
-        bty1 = bty2 && bty1 = bty3
-    | (Array ty1 n1_opt, Array ty2 n2_opt, Array ty3 n3_opt) ->
-        (* TODO: this is probably wrong regarding the sizes *)
-        is_composite ty1 ty2 ty3 && n1_opt = n2_opt && n1_opt = n3_opt
-    | (Function _ (qs1, ty1) p1 _, Function _ (qs2, ty2) p2 _, Function _ (qs3, ty3) p3 _) ->
-        (* TODO: return qualifiers? *)
-        is_composite ty1 ty2 ty3 && is_composite_params p1 p2 p3
-    | (FunctionNoParams _ (qs1, ty1), FunctionNoParams _ (qs2, ty2), FunctionNoParams _ (qs3, ty3)) ->
-        (* TODO: return qualifiers? *)
-        error "TODO: is_composite ty1 ty2 ty3 && is_composite_params p1 p2 p3"
-    | (Pointer qs1 ty1, Pointer qs2 ty2, Pointer qs3 ty3) ->
-        is_composite ty1 ty2 ty3 && qs1 = qs2 && qs1 = qs3
-    | _ ->
-        false
-  end
-
-val        is_composite_params: list (qualifiers * ctype * bool) -> list (qualifiers * ctype * bool) -> list (qualifiers * ctype * bool) -> bool
-let ~{coq} is_composite_params params1 params2 params3 =
-  is_composite_params_aux is_composite params1 params2 params3 *)
-
 val make_composite_params_aux:
   (ctype -> ctype -> maybe ctype) ->
   (list (qualifiers * ctype * bool) * list (qualifiers * ctype * bool)) ->
@@ -979,7 +857,6 @@ end
 val            make_composite: ctype -> ctype -> maybe ctype
 let rec ~{coq} make_composite (Ctype a1 ty1 as cty1) (Ctype a2 ty2 as cty2) =
   let make_composite_params params1 params2 = make_composite_params_aux make_composite (params1, params2) in
-  
   (* a composite type can only be made from two compatible types *)
   if not (are_compatible (no_qualifiers, cty1) (no_qualifiers, cty2)) then
     Nothing
@@ -1049,7 +926,7 @@ let rec ~{coq} make_composite (Ctype a1 ty1 as cty1) (Ctype a2 ty2 as cty2) =
               Nothing
         end
     | (_, FunctionNoParams _) ->
-        error "AilTypesAux.make_composite ==> FunctionNoParams (right)"
+          error "AilTypesAux.make_composite ==> FunctionNoParams (right)"
     | (Pointer ref_qs1 ref_ty1, Pointer ref_qs2 ref_ty2) ->
         (* thanks to the compatibility test we know ref_qs1 = ref_qs2  *)
         Maybe.map (fun ref_ty -> Ctype (a1++a2) (Pointer ref_qs1 ref_ty)) (make_composite ref_ty1 ref_ty2)
@@ -1120,12 +997,6 @@ let rvalue_coercion ty =
     function_coercion ty
   else
     ty
-
-
-
-
-
-
 
 
 val is_pointer_to_complete_object: forall 'a. sigma 'a -> ctype -> bool
@@ -1266,12 +1137,6 @@ match ty with
 end
 
 
-
-
-
-
-
-
 val variably_modified: ctype -> bool
 let variably_modified _ =
   let () = Debug.warn [] (fun () -> "AilTypesAux.variably_modified is BOGUS") in
@@ -1279,16 +1144,21 @@ let variably_modified _ =
   false
 
 
-
-val had_unknown_size: ctype -> bool
-let has_unknown_size = function
-  | _ ->
-      false (* TODO !!!!!!! *)
+val has_unknown_size: forall 'a. sigma 'a -> ctype -> bool
+let has_unknown_size sigm (Ctype _ ty_) =
+  match ty_ with
+    | Array _ Nothing ->
+        true
+    | Array elem_ty (Just _) ->
+        is_incomplete sigm elem_ty
+    | _ ->
+        error "AilTypesAux.has_unknown_size: not called an Array"
 end
 
 val is_vla: ctype -> bool
 let is_vla = function
   | _ ->
+      let () = Debug.warn [] (fun () -> "AilTypesAux.is_vla is BOGUS") in
       false (* TODO !!!!!!! *)
 end
 
@@ -1356,10 +1226,6 @@ let referenced_type = function
 end
 
 
-
-
-
-
 (* TODO: this is such a bad name ... *)
 val     has_pointer_at_leafs: ctype -> bool
 let rec has_pointer_at_leafs (Ctype _ ty) =
@@ -1383,4 +1249,3 @@ let rec has_pointer_at_leafs (Ctype _ ty) =
     | Union _ ->
         false
   end
-
