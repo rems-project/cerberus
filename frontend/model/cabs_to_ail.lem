@@ -1613,8 +1613,13 @@ let rec desugar_type_specifiers specs =
                  || not (AilTypesAux.is_unqualified qs) then
                 E.constraint_violation loc AtomicTypeConstraint
               else
-                (* TODO: qualifiers *)
-                E.return (qs, Ctype.Ctype [Annot.Aloc loc] (Ctype.Atomic ty))
+                E.is_incomplete ty >>= function
+                  | true ->
+                      E.constraint_violation loc AtomicTypeConstraint
+                  | false ->
+                        (* TODO: qualifiers *)
+                        E.return (qs, Ctype.Ctype [Annot.Aloc loc] (Ctype.Atomic ty))
+                end
           
           | [TSpec loc (TSpec_enum tag_ident_opt (Just enums))] ->
               E.register_tag E.Kind_enum tag_ident_opt >>= fun tag_sym ->
@@ -2043,7 +2048,7 @@ and desugar_parameter_declaration is_first fundef param_decl =
                   let dur = determinate_storage_duration link scs in
                   E.register_internal_object_declaration sym (Loc.locOf ident, dur, isRegister, qs, ty) >>
                   E.return (Just ident, ( qs
-                                      , if isAtomic then Ctype.Ctype [] (Ctype.Atomic ty) else ty
+                                      , if isAtomic then Ctype.mk_ctype_atomic ty else ty
                                       , isRegister ))
             end
     | PDeclaration_abs_decl specifs abs_decltor_opt ->
@@ -2062,7 +2067,7 @@ and desugar_parameter_declaration is_first fundef param_decl =
             mk_qs_ctype (Ctype.combine_qualifiers specs_qs tquals_qs) base_ty in
           let (qs, ty) = AilTypesAux.adjust _qs _ty in
           let ret = (Nothing, ( qs
-                              , if isAtomic then Ctype.Ctype [] (Ctype.Atomic ty) else ty
+                              , if isAtomic then Ctype.mk_ctype_atomic ty else ty
                               , List.elem SC_register specifs.storage_classes )) in
           match fundef with
             | IsFunDef ->
@@ -3180,8 +3185,8 @@ let () = error "DONE" in
     let char_strs = List.concat (List.map snd char_strs) in
     
     let (elem_ty, mk_ty, current_size_opt) = match current_ty with
-      | Ctype.Ctype annots (Ctype.Atomic (Ctype.Ctype annots' (Ctype.Array elem_ty sz))) ->
-          (elem_ty, fun z -> Ctype.Ctype annots (Ctype.Atomic (Ctype.Ctype annots' (Ctype.Array elem_ty z))), sz)
+      (* | Ctype.Ctype annots (Ctype.Atomic (Ctype.Ctype annots' (Ctype.Array elem_ty sz))) ->
+          (elem_ty, fun z -> Ctype.Ctype annots (Ctype.Atomic (Ctype.Ctype annots' (Ctype.Array elem_ty z))), sz) *)
       | Ctype.Ctype annots (Ctype.Array elem_ty sz) ->
           (elem_ty, fun z -> Ctype.Ctype annots (Ctype.Array elem_ty z), sz)
       | _ -> error "TODO(msg): assert false, array_of_character init, no size opt"
@@ -3637,7 +3642,7 @@ let desugar_declaration_base attrs specifs idecltors =
             let (isAtomic, tquals_qs) = translate_type_qualifiers specifs.type_qualifiers in
             let base_qs = Ctype.combine_qualifiers specs_qs tquals_qs in
             desugar_init_declarator_BROKEN base_qs base_ty specifs.storage_classes init >>= fun (ident, is_tentative, (qs, _ty), mk_desug_init) ->
-            let (Ctype.Ctype _ ty as cty) = if isAtomic then Ctype.Ctype [] (Ctype.Atomic _ty) else _ty in
+            let (Ctype.Ctype _ ty as cty) = if isAtomic then Ctype.mk_ctype_atomic _ty else _ty in
             
             if is_tentative then
               (* NOTE: this shouldn't be possible since tentative definition are file scoped *)
@@ -4433,7 +4438,7 @@ let desugar_and_register_function_definition (FunDef fundef_loc fundef_attrs spe
 (*        desugar_declarator (IsFunDef specifs) decltor >>= fun (fun_ident, mk_qs_ctype) -> *)
         desugar_type_specifiers specifs.type_specifiers >>= fun (specs_qs, specs_ty)  ->
         let (isAtomic, tquals_qs) = translate_type_qualifiers specifs.type_qualifiers in
-        let base_ty = if isAtomic then Ctype.Ctype [] (Ctype.Atomic specs_ty) else specs_ty in
+        let base_ty = if isAtomic then Ctype.mk_ctype_atomic specs_ty else specs_ty in
         let base_qs = Ctype.combine_qualifiers specs_qs tquals_qs in
         
         let (qs, ty) = mk_qs_ctype base_qs base_ty in
