@@ -1800,6 +1800,11 @@ let mk_current_ail_sigma =
         A.loop_attributes= Map.empty;
         A.cn_predicates= []; |>
 
+val is_complete_object: Ctype.ctype -> desugM bool
+let cabs_to_ail_is_complete_object ty =
+  mk_current_ail_sigma >>= fun sigm ->
+  return (AilTypesAux.is_complete_object sigm ty)
+let inline is_complete_object = cabs_to_ail_is_complete_object
 
 val is_incomplete: Ctype.ctype -> desugM bool
 let cabs_to_ail_effect_is_incomplete ty =
