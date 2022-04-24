@@ -177,7 +177,7 @@ let update = Nondeterminism.nd_update
 let fail err =
   let loc = match err with
     | MC.MerrAccess (loc, _, _)
-    | MerrWriteOnReadOnly loc
+    | MerrWriteOnReadOnly (_, loc)
     | MerrReadUninit loc
     | MerrUndefinedFree (loc, _)
     | MerrFreeNullPtr loc

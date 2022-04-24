@@ -3,7 +3,7 @@
  *     Victor Gomes
  *)
 
-open import Pervasives Loc Show Symbol
+open import Pervasives Utils Loc Show Symbol
 import Annot
 
 type integerBaseType [name = "^\\(\\|\\([a-z A-Z]+_\\)\\)ibty[0-9]*'?$"] =
@@ -445,8 +445,24 @@ let mk_ctype_pointer qs ty =
 let mk_ctype_integer ity =
   Ctype [] (Basic (Integer ity))
 
-let mk_ctype_atomic cty =
-  Ctype [] (Atomic cty)
+let mk_ctype_atomic (Ctype _ ty_ as cty) =
+  let invalid =
+    match ty_ with
+      | Array _ _ ->
+          true
+      | Function _ _ _ ->
+          true
+      | FunctionNoParams _ ->
+          true
+      | Atomic _ ->
+          true
+      | _ ->
+          false
+    end in
+  if invalid then
+    error "Ctyp.mk_ctype_atomic: called on an invalid inner type"
+  else
+    Ctype [] (Atomic cty)
 
 (** Some standard types *)
 

@@ -923,7 +923,9 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
                  member type (see §6.5.2.3#3 and #8) *)
               (* NOTE: we use unatomic_ here because §6.5.2.3#1 says the first operand must be
                  "atomic, qualified, or unqualified structure or union type" *)
-              match unatomic_ ty with
+              if AAux.is_incomplete sigm ty then
+                  E.constraint_violation (locOf e) (MemberofIncompleteLvalue qs ty)
+              else match unatomic_ ty with
                 | Struct tag_sym ->
                     let do_fail =
                       E.constraint_violation (Loc.with_cursor_from (Loc.locOf e) (Loc.locOf memb_ident))
@@ -1001,7 +1003,9 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
                   | _ ->
                       error "annotate_expression(AilEmemberof union): failed to find a valid tag definition"
                 end in
-              match gty with
+              if GAux.is_incomplete sigm gty then
+                E.constraint_violation (locOf e) (MemberofIncompleteRvalue gty)
+              else match gty with
                 | GenAtomic (Ctype _ (Struct tag_sym)) ->
                     do_struct tag_sym
                 | GenAtomic (Ctype _ (Union tag_sym)) ->
@@ -1016,7 +1020,6 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
         end
     
     | AilEmemberofptr e memb_ident ->
-      (* TODO: factorize *)
       (* NOTE: the qualifiers of the value are the combination of the ones
          of the referenced type of left operand [e] and the ones in the
          declaration of the member type (see §6.5.2.3#4) *)
@@ -1040,7 +1043,9 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
                     let do_fail =
                       E.constraint_violation (with_cursor_from (locOf e) (locOf memb_ident))
                         (MemberofptrNoMember memb_ident ref_qs ref_ty) in
-                    match lookup_tag_definition sigm tag_sym with
+                    if AAux.is_incomplete sigm ref_ty then
+                      E.constraint_violation (locOf e) (MemberofptrIncomplete ref_qs ref_ty)
+                    else match lookup_tag_definition sigm tag_sym with
                       | Just (StructDef membersDefs flexible_opt) ->
                           match (List.lookup memb_ident membersDefs, flexible_opt) with
                             | (Just (_, memb_qs, memb_ty), _) ->
@@ -1059,7 +1064,9 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
                           error "annotate_expression(AilEmemberofptr struct): failed to find a valid tag definition"
                     end
                 | (ref_qs, Right tag_sym, ref_ty) ->
-                    match lookup_tag_definition sigm tag_sym with
+                    if AAux.is_incomplete sigm ref_ty then
+                      E.constraint_violation (locOf e) (MemberofptrIncomplete ref_qs ref_ty)
+                    else match lookup_tag_definition sigm tag_sym with
                       | Just (UnionDef membersDefs) ->
                           match List.lookup memb_ident membersDefs with
                             | Just (_, memb_qs, memb_ty) ->
@@ -1632,8 +1639,8 @@ and annotate_arguments_aux sigm gamm n_args n_params loc has_proto is_variadic a
         if has_proto then
 *)
           (* TODO: add location *)
-          annotate_assignee Loc.unknown (AAux.rvalue_coercion param_ty1) arg_e          >>= fun a_arg_e ->
-          annotate_arguments_aux args' params' >>= fun a_args' ->
+          annotate_assignee Loc.unknown (AAux.rvalue_coercion param_ty1) arg_e >>= fun a_arg_e ->
+          annotate_arguments_aux args' params'                                 >>= fun a_args' ->
           E.return (a_arg_e :: a_args')
 (*
         else
@@ -1748,7 +1755,7 @@ and annotate_initialization sigm gamm ty e =
 
 
 and annotate_definition_aux sigm gamm (ty, e) =
-  if    (AAux.is_array ty --> AAux.has_unknown_size ty)
+  if    (AAux.is_array ty --> AAux.has_unknown_size sigm ty)
      || (AAux.is_complete_object sigm ty --> not (AAux.is_vla ty)) then
     if AAux.atomic_qualified_unqualified AAux.is_scalar ty then
       E.add "§6.7.9#11, sentence 3" >>
@@ -1757,76 +1764,78 @@ and annotate_definition_aux sigm gamm (ty, e) =
       (* TODO: add location *)
       annotate_assignee sigm gamm InitializationAsSimpleAssignment Loc.unknown ty e
       
-      (* TODO: "(...) that has automatic storage duration" *)
-      else if AAux.atomic_qualified_unqualified AAux.is_struct_or_union ty then
-        (* TODO: check *)
-        E.add "§6.7.9#13" >>
-        annotate_rvalue sigm gamm e >>= fun (a_e, gty) ->
-        (* TODO: need to make sure that gty is compatible with ty *)
-        E.return a_e
+    (* TODO: "(...) that has automatic storage duration" *)
+    else if AAux.atomic_qualified_unqualified AAux.is_struct_or_union ty then
+      (* TODO: check *)
+      E.add "§6.7.9#13" >>
+      annotate_assignee sigm gamm InitializationAsSimpleAssignment Loc.unknown ty e
+      (* annotate_rvalue sigm gamm e >>= fun (a_e, gty) ->
+      AilEassign
+      (* TODO: need to make sure that gty is compatible with ty *)
+      E.return a_e *)
       
-      (* STD §6.7.9#15 *)
-      else if AAux.compatibleWithQualifiedUnqualifiedVersionOf ty [wchar_t; char16_t; char32_t] then
-        error "WIP: annotate_definition_aux, compatibleWithQualifiedUnqualifiedVersionOf ty [wchar_t; char16_t; char32_t]"
+    (* STD §6.7.9#15 *)
+    else if AAux.compatibleWithQualifiedUnqualifiedVersionOf ty [wchar_t; char16_t; char32_t] then
+      error "WIP: annotate_definition_aux, compatibleWithQualifiedUnqualifiedVersionOf ty [wchar_t; char16_t; char32_t]"
       
           (* STD §6.7.9#16 *)
 (*          else if  then *) (* KKK *)
 
       (* TODO: at this point we should now have a non character array *)
-      else if AAux.is_array ty then
-        (* TODO: check the std. (not that it says anything useful here ...) *)
-        let ctx =
+    else if AAux.is_array ty then
+      (* TODO: check the std. (not that it says anything useful here ...) *)
+      let ctx =
 (*          if AAux.is_array_of_character ty then *)
-          if AAux.is_array ty then
-            CTXarray_init
-          else
-            CTXother in
-        annotate_expression sigm gamm ctx e >>= fun a_e ->
-          let () = Debug.warn [Debug.DB_ail_typing]
-            (fun () -> "(UNSURE) for the definition of arrays the compatilibity of types is checked for they unqualified versions and ignoring the elem_qs") in
-        match (ty, GenTypes.genTypeCategoryOf a_e) with
-          | (Ctype _ (Array elem_ty1 Nothing), GenRValueType (GenArray elem_ty2 (Just n))) ->
-              if AAux.are_compatible (no_qualifiers, elem_ty1) (no_qualifiers, elem_ty2) then
-                E.return a_e (* (e', GenArray elem_ty1 (Just n)) *)
-              else
-                error ("TODO(annotate_definition_aux, 1): error message: array object definition, types didn't match ==> " ^
-                       Pp.stringFromAil_ctype no_qualifiers elem_ty1 ^ " <-> " ^ Pp.stringFromAil_ctype no_qualifiers elem_ty2)
-         | (Ctype _ (Array elem_ty1 (Just n1)), GenRValueType (GenArray elem_ty2 (Just n2))) ->
-              if AAux.are_compatible (no_qualifiers, elem_ty1) (no_qualifiers, elem_ty2) && n1 = n2 then
-                E.return a_e (* (e', GenArray elem_ty1 (Just n1)) *)
-              else
-                error ("TODO(annotate_definition_aux, 2): error message: array object definition, types didn't match ==> " ^
-                       Pp.stringFromAil_ctype no_qualifiers elem_ty1 ^ " <-> " ^ Pp.stringFromAil_ctype no_qualifiers elem_ty2)
+        if AAux.is_array ty then
+          CTXarray_init
+        else
+          CTXother in
+      annotate_expression sigm gamm ctx e >>= fun a_e ->
+        let () = Debug.warn [Debug.DB_ail_typing]
+          (fun () -> "(UNSURE) for the definition of arrays the compatilibity of types is checked for they unqualified versions and ignoring the elem_qs") in
+      match (ty, GenTypes.genTypeCategoryOf a_e) with
+        | (Ctype _ (Array elem_ty1 Nothing), GenRValueType (GenArray elem_ty2 (Just n))) ->
+            if AAux.are_compatible (no_qualifiers, elem_ty1) (no_qualifiers, elem_ty2) then
+              E.return a_e (* (e', GenArray elem_ty1 (Just n)) *)
+            else
+              error ("TODO(annotate_definition_aux, 1): error message: array object definition, types didn't match ==> " ^
+                      Pp.stringFromAil_ctype no_qualifiers elem_ty1 ^ " <-> " ^ Pp.stringFromAil_ctype no_qualifiers elem_ty2)
+        | (Ctype _ (Array elem_ty1 (Just n1)), GenRValueType (GenArray elem_ty2 (Just n2))) ->
+            if AAux.are_compatible (no_qualifiers, elem_ty1) (no_qualifiers, elem_ty2) && n1 = n2 then
+              E.return a_e (* (e', GenArray elem_ty1 (Just n1)) *)
+            else
+              error ("TODO(annotate_definition_aux, 2): error message: array object definition, types didn't match ==> " ^
+                      Pp.stringFromAil_ctype no_qualifiers elem_ty1 ^ " <-> " ^ Pp.stringFromAil_ctype no_qualifiers elem_ty2)
 
-         | (Ctype _ (Array elem_ty1 (Just n1)), GenLValueType qs2 (Ctype _ (Array elem_ty2 (Just n2))) _) ->
-             (* TODO: isRegister? *)
-             (* TODO: what if n1 < n2? *)
-             (* TODO: check std *)
-             if AAux.are_compatible (no_qualifiers, elem_ty1) (no_qualifiers, elem_ty2) && n1 >= n2 then
-               E.return a_e
-             else
-                error ("TODO(annotate_definition_aux, 3): error message: array object definition, types didn't match ==> " ^
-                       Pp.stringFromAil_ctype no_qualifiers elem_ty1 ^ "[" ^ show n1 ^ "] <-> " ^
-                       Pp.stringFromAil_ctype no_qualifiers elem_ty2 ^ "[" ^ show n2 ^ "]")
-         | _ ->
-             (* STD §6.7.9#14 *)
-             if AAux.is_array_of_character ty then
-               error ("WIP: annotate_definition_aux, is_array_of_character ty ==> " ^
-                      Pp.stringFromAil_ctype no_qualifiers ty ^ " <===> " ^ Pp.stringFromAil_expression a_e)
-             else
-               let () = Debug.print_debug 1 [] (fun () ->
-                 "ty: " ^ Pp.stringFromAil_ctype no_qualifiers ty ^ " <--> gty: " ^
-                 match GenTypes.genTypeCategoryOf a_e with
-                   | GenLValueType qs' ty' _ ->
-                       "lvalue " ^ Pp.stringFromAil_ctype qs' ty'
-                   | GenRValueType gty ->
-                       "rvalue " ^ Pp.stringFromAil_genType gty
-                 end
-               ) in
-               error "WIP: annotate_definition, not(is_scalar ty), not array (or had no size)"
-        end
-      else
-        error "WIP: annotate_definition_aux, final case"
+        | (Ctype _ (Array elem_ty1 (Just n1)), GenLValueType qs2 (Ctype _ (Array elem_ty2 (Just n2))) _) ->
+            (* TODO: isRegister? *)
+            (* TODO: what if n1 < n2? *)
+            (* TODO: check std *)
+            if AAux.are_compatible (no_qualifiers, elem_ty1) (no_qualifiers, elem_ty2) && n1 >= n2 then
+              E.return a_e
+            else
+              error ("TODO(annotate_definition_aux, 3): error message: array object definition, types didn't match ==> " ^
+                      Pp.stringFromAil_ctype no_qualifiers elem_ty1 ^ "[" ^ show n1 ^ "] <-> " ^
+                      Pp.stringFromAil_ctype no_qualifiers elem_ty2 ^ "[" ^ show n2 ^ "]")
+        | _ ->
+            (* STD §6.7.9#14 *)
+            if AAux.is_array_of_character ty then
+              error ("WIP: annotate_definition_aux, is_array_of_character ty ==> " ^
+                    Pp.stringFromAil_ctype no_qualifiers ty ^ " <===> " ^ Pp.stringFromAil_expression a_e)
+            else
+              let () = Debug.print_debug 1 [] (fun () ->
+                "ty: " ^ Pp.stringFromAil_ctype no_qualifiers ty ^ " <--> gty: " ^
+                match GenTypes.genTypeCategoryOf a_e with
+                  | GenLValueType qs' ty' _ ->
+                      "lvalue " ^ Pp.stringFromAil_ctype qs' ty'
+                  | GenRValueType gty ->
+                      "rvalue " ^ Pp.stringFromAil_genType gty
+                end
+              ) in
+              error "WIP: annotate_definition, not(is_scalar ty), not array (or had no size)"
+      end
+    else
+      error "WIP: annotate_definition_aux, final case"
   else
     (* STD §6.7.9#3 *)
     E.constraint_violation (Loc.locOf e) IllegalInitializer

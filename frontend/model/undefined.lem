@@ -106,7 +106,7 @@ type undefined_behaviour =
   (* The identifier__func__is explicitly declared (6.4.2.2). *)
   | UB032
   (* The program attempts to modify a string literal (6.4.5). *)
-  | UB033
+  | UB033_modifying_string_literal
   (* The characters ', \, ", //, or /* occur in the sequence between the < and > delimiters, or the
      characters ', \, //, or /* occur in the sequence between the " delimiters, in a header name
      preprocessing token (6.4.7). *)
@@ -215,7 +215,7 @@ type undefined_behaviour =
   | UB063
   (* An attempt is made to modify an object defined with a const-qualified type through use of an
      lvalue with non-const-qualified type (6.7.3). *)
-  | UB064
+  | UB064_modifying_const
   (* An attempt is made to refer to an object defined with a volatile-qualified type through use of
      an lvalue with non-volatile-qualified type (6.7.3). *)
   | UB065
@@ -718,6 +718,8 @@ let std_of_undefined_behaviour = function
       Just "§6.2.7#2"
   | UB020_nonarray_incomplete_lvalue_conversion ->
       Just "§6.3.2.1#2, sentence 3"
+  | UB033_modifying_string_literal ->
+      Just "§6.4.5#7, sentence 2"
   | UB038_number_of_args ->
       Just "§6.5.2.2#6, sentence 3"
   | UB041_function_not_compatible ->
@@ -736,6 +738,8 @@ let std_of_undefined_behaviour = function
       Just "§6.7.1#7"
   | UB061_no_named_members ->
       Just "§6.7.2.1#8, sentence 3"
+  | UB064_modifying_const ->
+      Just "§6.7.3#6, sentence 1"
   | UB066_qualified_function_specification ->
       Just "§6.7.3#9, sentence 2"
   | UB078_modified_void_parameter ->
@@ -801,7 +805,7 @@ let ub_str_bimap =
     ; (UB030, "UB030")
     ; (UB031, "UB031")
     ; (UB032, "UB032")
-    ; (UB033, "UB033")
+    ; (UB033_modifying_string_literal, "UB033_modifying_string_literal")
     ; (UB034, "UB034")
     ; (UB035_unsequenced_race, "UB035_unsequenced_race")
     ; (UB036_exceptional_condition, "UB036_exceptional_condition")
@@ -838,7 +842,7 @@ let ub_str_bimap =
     ; (UB061_no_named_members, "UB061_no_named_members")
     ; (UB062, "UB062")
     ; (UB063, "UB063")
-    ; (UB064, "UB064")
+    ; (UB064_modifying_const, "UB064_modifying_const")
     ; (UB065, "UB065")
     ; (UB066_qualified_function_specification, "UB066_qualified_function_specification")
     ; (UB067, "UB067")
@@ -1029,6 +1033,8 @@ let ub_short_string = function
       "a non-array lvalue with an incomplete type is used in a context that requires the value of the designated object"
   | UB015_incompatible_redeclaration ->
       "two declarations of the same object or function specify types that are not compatible"
+  | UB033_modifying_string_literal ->
+      "the program attempting to modify a string literal"
   | UB038_number_of_args ->
       "the number of arguments does not equal the number of parameters"
   | UB041_function_not_compatible ->
@@ -1047,6 +1053,8 @@ let ub_short_string = function
       "block scoped function identifier with illegal storage class"
   | UB061_no_named_members ->
       "a structure or union is defined without any named members"
+  | UB064_modifying_const ->
+      "attempting to modify an object defined with a const-qualified type"
   | UB046_array_pointer_outside ->
       "the result of some pointer arithmetic operator was out of bound"
   | UB066_qualified_function_specification ->

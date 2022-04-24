@@ -1613,8 +1613,13 @@ let rec desugar_type_specifiers specs =
                  || not (AilTypesAux.is_unqualified qs) then
                 E.constraint_violation loc AtomicTypeConstraint
               else
-                (* TODO: qualifiers *)
-                E.return (qs, Ctype.Ctype [Annot.Aloc loc] (Ctype.Atomic ty))
+                E.is_incomplete ty >>= function
+                  | true ->
+                      E.constraint_violation loc AtomicTypeConstraint
+                  | false ->
+                        (* TODO: qualifiers *)
+                        E.return (qs, Ctype.Ctype [Annot.Aloc loc] (Ctype.Atomic ty))
+                end
           
           | [TSpec loc (TSpec_enum tag_ident_opt (Just enums))] ->
               E.register_tag E.Kind_enum tag_ident_opt >>= fun tag_sym ->
@@ -2043,7 +2048,7 @@ and desugar_parameter_declaration is_first fundef param_decl =
                   let dur = determinate_storage_duration link scs in
                   E.register_internal_object_declaration sym (Loc.locOf ident, dur, isRegister, qs, ty) >>
                   E.return (Just ident, ( qs
-                                      , if isAtomic then Ctype.Ctype [] (Ctype.Atomic ty) else ty
+                                      , if isAtomic then Ctype.mk_ctype_atomic ty else ty
                                       , isRegister ))
             end
     | PDeclaration_abs_decl specifs abs_decltor_opt ->
@@ -2062,7 +2067,7 @@ and desugar_parameter_declaration is_first fundef param_decl =
             mk_qs_ctype (Ctype.combine_qualifiers specs_qs tquals_qs) base_ty in
           let (qs, ty) = AilTypesAux.adjust _qs _ty in
           let ret = (Nothing, ( qs
-                              , if isAtomic then Ctype.Ctype [] (Ctype.Atomic ty) else ty
+                              , if isAtomic then Ctype.mk_ctype_atomic ty else ty
                               , List.elem SC_register specifs.storage_classes )) in
           match fundef with
             | IsFunDef ->
@@ -2410,55 +2415,15 @@ and desugar_init_declarator_BROKEN base_qs base_ty (scs: list storage_class_spec
         E.determinate_linkage ident E.Namespace_ordinary kind scs >>= fun link ->
         
         (* STD §6.7.9#3 *)
-        (* TODO: STD check+quote *)
-        E.get_tag_definitions >>= fun ident_tagDefs ->
-        let (fake_ail_sigma : sigma unit) = <|
-          declarations= [];
-          object_definitions= [];
-          function_definitions= [];
-          static_assertions= [];
-          tag_definitions=
-            List.foldl (fun acc (ident, tagDef) ->
-              match tagDef with
-                | Struct_definition attrs _ xs flexible_opt ->
-                    (ident, (attrs, Ctype.StructDef xs flexible_opt)) :: acc
-                | Union_definition attrs _ xs ->
-                    (ident, (attrs, Ctype.UnionDef xs)) :: acc
-                | Enum_definition _ ->
-                    acc
-              end
-            ) [] (Map_extra.toList ident_tagDefs);
-          extern_idmap= Map.empty;
-          typedef_attributes= Map.empty;
-          loop_attributes= Map.empty;
-          cn_predicates= [];
-        |> in
+        E.is_complete_object ty >>= fun is_complete_object ->
         if not (   AilTypesAux.is_array_unknown_size ty
-                || (AilTypesAux.is_complete_object fake_ail_sigma ty && not (AilTypesAux.is_vla ty)) ) then
+                || (is_complete_object && not (AilTypesAux.is_vla ty)) ) then
           E.constraint_violation loc IllegalInitializer
         
         (* STD §6.7.9#5 *)
         else if E.is_block_scope scope && (link = Linkage_external || link = Linkage_internal) then
-          E.constraint_violation (Loc.locOf decltor) IllegalLinkageAndInitialization
-        
+            E.constraint_violation (Loc.locOf decltor) IllegalLinkageAndInitialization
         else
-(*
-          if AilTypesAux.is_array ty then
-            (*  *)
-            match init with
-              | Init_expr (CabsExpression e_loc (CabsEstring lit)) ->
-                  error ("initialisation of array with string literal ==> " ^ Loc.stringFromLocation e_loc)
-              | Init_list [(Nothing, Init_expr (CabsExpression e_loc (CabsEstring lit)))] ->
-                  error ("initialisation of array with string literal in braces ==> " ^ Loc.stringFromLocation e_loc)
-              | _ ->
-                  error "initialisation of array with something else"
-            end
-
-          else
-*)
-
-
-
           (* postponing the desugaring of the initialiser since the identifier
              (which gets register after the current function) need to be in scope *)
           let mk_desug_init () =
@@ -2512,28 +2477,29 @@ and desugar_init_declarator attrs isAtomic base_qs base_ty (scs: list storage_cl
           (* TODO: I don't like the fact that we are using this function directly here *)
           E.determinate_linkage ident E.Namespace_ordinary kind scs >>= fun link ->
           (* STD §6.7.9#3 *)
+          E.is_complete_object ty >>= fun is_complete_object ->
           if not (   AilTypesAux.is_array_unknown_size ty
-                  || (AilTypesAux.is_object ty && not (AilTypesAux.is_vla ty)) ) then
+                  || (is_complete_object && not (AilTypesAux.is_vla ty)) ) then
             E.constraint_violation loc IllegalInitializer
           (* STD §6.7.9#5 *)
           else if E.is_block_scope scope && (link = Linkage_external || link = Linkage_internal) then
-            E.constraint_violation (Loc.locOf decltor) IllegalLinkageAndInitialization
-          else
-            (* postponing the desugaring of the initialiser since the identifier
-               (which gets register after the current function) need to be in scope *)
-            let mk_desug_init () =
-              (* NOTE: not using <$> because of a bug in Lem *)
-              wip_desugar_initializer_ loc (determinate_storage_duration link scs) ty init >>= fun z ->
-              E.return (Just z) in
-            
-            let (ctx, ok) =
-              if AilTypesAux.is_function ty then
-                (Function_decl_context, E.OK_function)
-              else
-                (Object_decl_context, E.OK_object false) in
-            check_storage_class_specifiers loc ctx scs >>= fun () ->
-            E.register_ordinary_identifier ident ok scs >>= fun (link, sym) ->
-            E.return (Just (Loc.locOf ident, ident_attrs, link, sym, false, (qs, ty), mk_desug_init))
+              E.constraint_violation (Loc.locOf decltor) IllegalLinkageAndInitialization
+            else
+              (* postponing the desugaring of the initialiser since the identifier
+                (which gets register after the current function) need to be in scope *)
+              let mk_desug_init () =
+                (* NOTE: not using <$> because of a bug in Lem *)
+                wip_desugar_initializer_ loc (determinate_storage_duration link scs) ty init >>= fun z ->
+                E.return (Just z) in
+              
+              let (ctx, ok) =
+                if AilTypesAux.is_function ty then
+                  (Function_decl_context, E.OK_function)
+                else
+                  (Object_decl_context, E.OK_object false) in
+              check_storage_class_specifiers loc ctx scs >>= fun () ->
+              E.register_ordinary_identifier ident ok scs >>= fun (link, sym) ->
+              E.return (Just (Loc.locOf ident, ident_attrs, link, sym, false, (qs, ty), mk_desug_init))
   end
 
 
@@ -3180,8 +3146,8 @@ let () = error "DONE" in
     let char_strs = List.concat (List.map snd char_strs) in
     
     let (elem_ty, mk_ty, current_size_opt) = match current_ty with
-      | Ctype.Ctype annots (Ctype.Atomic (Ctype.Ctype annots' (Ctype.Array elem_ty sz))) ->
-          (elem_ty, fun z -> Ctype.Ctype annots (Ctype.Atomic (Ctype.Ctype annots' (Ctype.Array elem_ty z))), sz)
+      (* | Ctype.Ctype annots (Ctype.Atomic (Ctype.Ctype annots' (Ctype.Array elem_ty sz))) ->
+          (elem_ty, fun z -> Ctype.Ctype annots (Ctype.Atomic (Ctype.Ctype annots' (Ctype.Array elem_ty z))), sz) *)
       | Ctype.Ctype annots (Ctype.Array elem_ty sz) ->
           (elem_ty, fun z -> Ctype.Ctype annots (Ctype.Array elem_ty z), sz)
       | _ -> error "TODO(msg): assert false, array_of_character init, no size opt"
@@ -3637,7 +3603,7 @@ let desugar_declaration_base attrs specifs idecltors =
             let (isAtomic, tquals_qs) = translate_type_qualifiers specifs.type_qualifiers in
             let base_qs = Ctype.combine_qualifiers specs_qs tquals_qs in
             desugar_init_declarator_BROKEN base_qs base_ty specifs.storage_classes init >>= fun (ident, is_tentative, (qs, _ty), mk_desug_init) ->
-            let (Ctype.Ctype _ ty as cty) = if isAtomic then Ctype.Ctype [] (Ctype.Atomic _ty) else _ty in
+            let (Ctype.Ctype _ ty as cty) = if isAtomic then Ctype.mk_ctype_atomic _ty else _ty in
             
             if is_tentative then
               (* NOTE: this shouldn't be possible since tentative definition are file scoped *)
@@ -3672,29 +3638,6 @@ let desugar_declaration_base attrs specifs idecltors =
                       (E.OK_object false) specifs.storage_classes >>= fun (link, sym) ->
                     let ident_loc = Loc.locOf ident in
                     
-                    (* TODO: STD check+quote *)
-                    E.get_tag_definitions >>= fun ident_tagDefs ->
-                    let (fake_ail_sigma : sigma unit) = <|
-                      declarations= [];
-                      object_definitions= [];
-                      function_definitions= [];
-                      static_assertions= [];
-                      tag_definitions=
-                        List.foldl (fun acc (ident, tagDef) ->
-                          match tagDef with
-                            | Struct_definition attrs _ xs flexible_opt ->
-                                (ident, (attrs, Ctype.StructDef xs flexible_opt)) :: acc
-                            | Union_definition attrs _ xs ->
-                                (ident, (attrs, Ctype.UnionDef xs)) :: acc
-                            | Enum_definition _ ->
-                                acc
-                          end
-                        ) [] (Map_extra.toList ident_tagDefs);
-                      extern_idmap= Map.empty;
-                      typedef_attributes= Map.empty;
-                      loop_attributes= Map.empty;
-                      cn_predicates= [];
-                    |> in
                     let dur = determinate_storage_duration link specifs.storage_classes in
                     match link with
                       | Linkage_external ->
@@ -3741,7 +3684,8 @@ let desugar_declaration_base attrs specifs idecltors =
                           else
                             E.return (cty, acc)
                     end >>= fun (ty', ret) ->
-                    if link = Linkage_none && AilTypesAux.is_incomplete fake_ail_sigma ty' then
+                    E.is_incomplete ty' >>= fun is_incomplete ->
+                    if link = Linkage_none && is_incomplete then
                       E.undef (Loc.locOf ident) Undefined.UB059_incomplete_no_linkage_identifier
                     else
                       E.return ret
@@ -4433,7 +4377,7 @@ let desugar_and_register_function_definition (FunDef fundef_loc fundef_attrs spe
 (*        desugar_declarator (IsFunDef specifs) decltor >>= fun (fun_ident, mk_qs_ctype) -> *)
         desugar_type_specifiers specifs.type_specifiers >>= fun (specs_qs, specs_ty)  ->
         let (isAtomic, tquals_qs) = translate_type_qualifiers specifs.type_qualifiers in
-        let base_ty = if isAtomic then Ctype.Ctype [] (Ctype.Atomic specs_ty) else specs_ty in
+        let base_ty = if isAtomic then Ctype.mk_ctype_atomic specs_ty else specs_ty in
         let base_qs = Ctype.combine_qualifiers specs_qs tquals_qs in
         
         let (qs, ty) = mk_qs_ctype base_qs base_ty in
@@ -4570,32 +4514,6 @@ let desugar_and_register_external_declaration edecl =
                     E.register_external_object_declaration sym
                       (isTentative, ident_loc, Annot.combine_attributes attrs ident_attrs, dur, List.elem SC_register specifs.storage_classes, qs, ty) >>
                     
-                    (* TODO: STD check+quote *)
-                    E.get_tag_definitions >>= fun ident_tagDefs ->
-                    let (fake_ail_sigma : sigma unit) = <|
-                      declarations= [];
-                      object_definitions= [];
-                      function_definitions= [];
-                      static_assertions= [];
-                      tag_definitions=
-                        List.reverse begin
-                          List.foldl (fun acc (ident, tagDef) ->
-                            match tagDef with
-                              | Struct_definition attrs _ xs flexible_opt ->
-                                  (ident, (attrs, Ctype.StructDef xs flexible_opt)) :: acc
-                              | Union_definition attrs _ xs ->
-                                  (ident, (attrs, Ctype.UnionDef xs)) :: acc
-                              | Enum_definition _ ->
-                                  acc
-                            end
-                          ) [] (Map_extra.toList ident_tagDefs)
-                        end;
-                      extern_idmap= Map.empty;
-                      typedef_attributes= Map.empty;
-                      loop_attributes= Map.empty;
-                      cn_predicates= [];
-                    |> in
-                    
                     mk_desug_init () >>= function
                       | Just (ty', d_e) ->
                           let () = Debug.print_debug 1 [] (fun () ->
@@ -4611,7 +4529,8 @@ let desugar_and_register_external_declaration edecl =
                             E.return ()
                           end >>
                           (* NOTE: it is the type after the initialisation which must be complete *)
-                          if link = Linkage_none && AilTypesAux.is_incomplete fake_ail_sigma ty' then
+                          E.is_incomplete ty' >>= fun is_incomplete ->
+                          if link = Linkage_none && is_incomplete then
                             E.undef ident_loc Undefined.UB059_incomplete_no_linkage_identifier
                           else
 (* KKK:
@@ -4633,19 +4552,19 @@ let desugar_and_register_external_declaration edecl =
 *)
                                   E.register_global_object_definition2 ident_loc sym link (E.ExternalDefinition d_e)
                       | Nothing ->
-                          if link = Linkage_internal && AilTypesAux.is_incomplete fake_ail_sigma ty then
+                          E.is_incomplete ty >>= fun is_incomplete ->
+                          if link = Linkage_internal && is_incomplete then
                             (* TODO: this is wrong (see tentative definition in the STD) *)
                             E.undef ident_loc Undefined.UB089_tentative_definition_internal_linkage
-                          else if link = Linkage_none && AilTypesAux.is_incomplete fake_ail_sigma ty then
+                          else if link = Linkage_none && is_incomplete then
                             E.undef ident_loc Undefined.UB059_incomplete_no_linkage_identifier
                           else
                             if dur = Static || dur = Thread then
-(*                              E.get_tag_definitions >>= fun tagDefs -> *)
                               (* TODO: not correct for thread? *)
                               if List.elem SC_extern specifs.storage_classes then
                                 E.return ()
                               else
-                                E.register_global_object_definition2 ident_loc sym link (E.Tentative ty (*mk_zeroInit tagDefs ty*))
+                                E.register_global_object_definition2 ident_loc sym link (E.Tentative ident_loc ty (*mk_zeroInit tagDefs ty*))
                             else
                               E.return ()
                     end

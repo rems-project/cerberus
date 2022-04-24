@@ -82,7 +82,7 @@ type mem_error =
   
   | MerrPtrdiff
   | MerrAccess of Loc.t * access_kind * access_error
-  | MerrWriteOnReadOnly of Loc.t
+  | MerrWriteOnReadOnly of bool (* is_string_literal *) * Loc.t
   | MerrReadUninit of Loc.t
 
   
@@ -118,7 +118,7 @@ instance (Show mem_error)
     | MerrAccess loc LoadAccess err ->
         "MerrAccess Load [" ^ Loc.stringFromLocation loc ^ "] " ^
         stringFromAccess_error err
-    | MerrWriteOnReadOnly loc ->
+    | MerrWriteOnReadOnly _ loc ->
         "MerrWriteOnReadOnly [" ^ Loc.stringFromLocation loc ^ "]"
     |   MerrReadUninit loc ->
         "MerrReadUninit [" ^ Loc.stringFromLocation loc ^ "]"
@@ -222,9 +222,10 @@ let undefinedFromMem_error = function
   | MerrUndefinedRealloc ->
       (* TODO *)
       Just [Undefined.UB179a_static_allocation]
-  | MerrWriteOnReadOnly _ ->
-      (* TODO *)
-      Nothing
+  | MerrWriteOnReadOnly true _ ->
+      Just [Undefined.UB033_modifying_string_literal]
+  | MerrWriteOnReadOnly false _ ->
+      Just [Undefined.UB064_modifying_const]
   | MerrReadUninit _ ->
       (* TODO *)
       Nothing
