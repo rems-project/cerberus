@@ -1247,20 +1247,17 @@ let make_label_spec
   in
 
   (* fargs *)
-  let@ (i, mappings) = 
-    ListM.fold_leftM (fun (i, mappings) aarg ->
+  let@ (i, mappings, _) = 
+    ListM.fold_leftM (fun (i, mappings, counter) aarg ->
         let item = aarg_item loc aarg in
-        let@ (i', mapping') = 
-          make_owned ~loc ~oname:None ~pointer:item.it 
-            ~path:item.path ~sct:aarg.typ ~o_permission:None ~o_value:None
-        in
+        let (i', mapping') = make_owned_funarg loc counter item.it item.path aarg.typ in
         let mappings = 
           mod_mapping lname mappings
             (fun mapping -> mapping' @ mapping)
         in
-        return (i @ i', mappings)
+        return (i @ i', mappings, counter + 1)
       )
-      (i, mappings) lspec.function_arguments
+      (i, mappings, 0) lspec.function_arguments
   in
 
   (* largs *)
