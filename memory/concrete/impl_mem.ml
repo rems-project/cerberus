@@ -317,13 +317,17 @@ module Concrete : Memory = struct
   (* INTERNAL: address *)
   type address = N.num
   
+  type readonly_status =
+    | IsWritable
+    | IsReadOnly_string_literal
+    | IsReadOnly
   (* INTERNAL: allocation *)
   type allocation = {
     prefix: Symbol.prefix;
     base: address;
     size: N.num; (*TODO: this is probably unnecessary once we have the type *)
     ty: ctype option; (* None when dynamically allocated *)
-    is_readonly: bool;
+    is_readonly: readonly_status;
     taint: [ `Unexposed | `Exposed ]; (* NOTE: PNVI-ae, PNVI-ae-udi *)
   }
   
@@ -451,7 +455,7 @@ module Concrete : Memory = struct
   let fail err =
     let loc = match err with
       | MerrAccess (loc, _, _)
-      | MerrWriteOnReadOnly loc
+      | MerrWriteOnReadOnly (_, loc)
       | MerrReadUninit loc
       | MerrUndefinedFree (loc, _)
       | MerrFreeNullPtr loc
@@ -1152,12 +1156,18 @@ module Concrete : Memory = struct
     );
     begin match init_opt with
       | None ->
-          let alloc = {prefix= pref; base= addr; size= size; ty= Some ty; is_readonly= false; taint= `Unexposed} in
+          let alloc = {prefix= pref; base= addr; size= size; ty= Some ty; is_readonly= IsWritable; taint= `Unexposed} in
           update (fun st ->
             { st with allocations= IntMap.add alloc_id alloc st.allocations; }
           )
       | Some mval ->
-          let alloc = {prefix= pref; base= addr; size= size; ty= Some ty; is_readonly= true; taint= `Unexposed} in
+          let readonly_status =
+            match pref with
+              | Symbol.PrefStringLiteral _ ->
+                  IsReadOnly_string_literal
+              | _ ->
+                  IsReadOnly_string_literal in
+          let alloc = {prefix= pref; base= addr; size= size; ty= Some ty; is_readonly= readonly_status; taint= `Unexposed} in
           (* TODO: factorise this with do_store inside Concrete.store *)
           update (fun st ->
             let (funptrmap, pre_bs) = repr st.funptrmap mval in
@@ -1252,7 +1262,7 @@ module Concrete : Memory = struct
       ", addr= " ^ N.to_string addr
     );
     (* TODO: why aren't we using the argument pref? *)
-    let alloc = {prefix= Symbol.PrefMalloc; base= addr; size= size_n; ty= None; is_readonly= false; taint= `Unexposed} in
+    let alloc = {prefix= Symbol.PrefMalloc; base= addr; size= size_n; ty= None; is_readonly= IsWritable; taint= `Unexposed} in
     update (fun st ->
       { st with
           allocations= IntMap.add alloc_id alloc st.allocations;
@@ -1527,22 +1537,25 @@ module Concrete : Memory = struct
                   return (`FAIL (MerrAccess (loc, StoreAccess, OutOfBoundPtr)))
               | true ->
                   get_allocation z >>= fun alloc ->
-                  if alloc.is_readonly then
-                    return (`FAIL (MerrWriteOnReadOnly loc))
-                  else
-                    begin is_atomic_member_access z ty addr >>= function
-                      | true ->
-                          return (`FAIL (MerrAccess (loc, LoadAccess, AtomicMemberof)))
-                      | false ->
-                          return `OK
-                    end in
+                  match alloc.is_readonly with
+                    | IsReadOnly ->
+                        return (`FAIL (MerrWriteOnReadOnly (false, loc)))
+                    | IsReadOnly_string_literal ->
+                      return (`FAIL (MerrWriteOnReadOnly (true, loc)))
+                    | IsWritable ->
+                      begin is_atomic_member_access z ty addr >>= function
+                        | true ->
+                            return (`FAIL (MerrAccess (loc, LoadAccess, AtomicMemberof)))
+                        | false ->
+                            return `OK
+                      end in
           resolve_iota precondition iota >>= fun alloc_id ->
           do_store (Some alloc_id) addr >>= fun fp ->
           begin if is_locking then
             Eff.update (fun st ->
               { st with allocations=
                   IntMap.update alloc_id (function
-                    | Some alloc -> Some { alloc with is_readonly= true }
+                    | Some alloc -> Some { alloc with is_readonly= IsReadOnly }
                     | None       -> None
                   ) st.allocations }
             )
@@ -1557,26 +1570,29 @@ module Concrete : Memory = struct
                   fail (MerrAccess (loc, StoreAccess, OutOfBoundPtr))
               | true ->
                   get_allocation alloc_id >>= fun alloc ->
-                  if alloc.is_readonly then
-                    fail (MerrWriteOnReadOnly loc)
-                  else
-                    begin is_atomic_member_access alloc_id ty addr >>= function
-                      | true ->
-                          fail (MerrAccess (loc, LoadAccess, AtomicMemberof))
-                      | false ->
-                          do_store (Some alloc_id) addr >>= fun fp ->
-                          if is_locking then
-                            Eff.update (fun st ->
-                              { st with allocations=
-                                  IntMap.update alloc_id (function
-                                    | Some alloc -> Some { alloc with is_readonly= true }
-                                    | None       -> None
-                                  ) st.allocations }
-                            ) >>= fun () ->
-                            return fp
-                          else
-                            return fp
-                    end
+                  match alloc.is_readonly with
+                    | IsReadOnly ->
+                        fail (MerrWriteOnReadOnly (false, loc))
+                    | IsReadOnly_string_literal ->
+                      fail (MerrWriteOnReadOnly (true, loc))
+                    | IsWritable ->
+                        begin is_atomic_member_access alloc_id ty addr >>= function
+                          | true ->
+                              fail (MerrAccess (loc, LoadAccess, AtomicMemberof))
+                          | false ->
+                              do_store (Some alloc_id) addr >>= fun fp ->
+                              if is_locking then
+                                Eff.update (fun st ->
+                                  { st with allocations=
+                                      IntMap.update alloc_id (function
+                                        | Some alloc -> Some { alloc with is_readonly= IsReadOnly }
+                                        | None       -> None
+                                      ) st.allocations }
+                                ) >>= fun () ->
+                                return fp
+                              else
+                                return fp
+                        end
             end
 
 (*
