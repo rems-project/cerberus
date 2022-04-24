@@ -1774,68 +1774,68 @@ and annotate_definition_aux sigm gamm (ty, e) =
       (* TODO: need to make sure that gty is compatible with ty *)
       E.return a_e *)
       
-      (* STD §6.7.9#15 *)
-      else if AAux.compatibleWithQualifiedUnqualifiedVersionOf ty [wchar_t; char16_t; char32_t] then
-        error "WIP: annotate_definition_aux, compatibleWithQualifiedUnqualifiedVersionOf ty [wchar_t; char16_t; char32_t]"
+    (* STD §6.7.9#15 *)
+    else if AAux.compatibleWithQualifiedUnqualifiedVersionOf ty [wchar_t; char16_t; char32_t] then
+      error "WIP: annotate_definition_aux, compatibleWithQualifiedUnqualifiedVersionOf ty [wchar_t; char16_t; char32_t]"
       
           (* STD §6.7.9#16 *)
 (*          else if  then *) (* KKK *)
 
       (* TODO: at this point we should now have a non character array *)
-      else if AAux.is_array ty then
-        (* TODO: check the std. (not that it says anything useful here ...) *)
-        let ctx =
+    else if AAux.is_array ty then
+      (* TODO: check the std. (not that it says anything useful here ...) *)
+      let ctx =
 (*          if AAux.is_array_of_character ty then *)
-          if AAux.is_array ty then
-            CTXarray_init
-          else
-            CTXother in
-        annotate_expression sigm gamm ctx e >>= fun a_e ->
-          let () = Debug.warn [Debug.DB_ail_typing]
-            (fun () -> "(UNSURE) for the definition of arrays the compatilibity of types is checked for they unqualified versions and ignoring the elem_qs") in
-        match (ty, GenTypes.genTypeCategoryOf a_e) with
-          | (Ctype _ (Array elem_ty1 Nothing), GenRValueType (GenArray elem_ty2 (Just n))) ->
-              if AAux.are_compatible (no_qualifiers, elem_ty1) (no_qualifiers, elem_ty2) then
-                E.return a_e (* (e', GenArray elem_ty1 (Just n)) *)
-              else
-                error ("TODO(annotate_definition_aux, 1): error message: array object definition, types didn't match ==> " ^
-                       Pp.stringFromAil_ctype no_qualifiers elem_ty1 ^ " <-> " ^ Pp.stringFromAil_ctype no_qualifiers elem_ty2)
-         | (Ctype _ (Array elem_ty1 (Just n1)), GenRValueType (GenArray elem_ty2 (Just n2))) ->
-              if AAux.are_compatible (no_qualifiers, elem_ty1) (no_qualifiers, elem_ty2) && n1 = n2 then
-                E.return a_e (* (e', GenArray elem_ty1 (Just n1)) *)
-              else
-                error ("TODO(annotate_definition_aux, 2): error message: array object definition, types didn't match ==> " ^
-                       Pp.stringFromAil_ctype no_qualifiers elem_ty1 ^ " <-> " ^ Pp.stringFromAil_ctype no_qualifiers elem_ty2)
+        if AAux.is_array ty then
+          CTXarray_init
+        else
+          CTXother in
+      annotate_expression sigm gamm ctx e >>= fun a_e ->
+        let () = Debug.warn [Debug.DB_ail_typing]
+          (fun () -> "(UNSURE) for the definition of arrays the compatilibity of types is checked for they unqualified versions and ignoring the elem_qs") in
+      match (ty, GenTypes.genTypeCategoryOf a_e) with
+        | (Ctype _ (Array elem_ty1 Nothing), GenRValueType (GenArray elem_ty2 (Just n))) ->
+            if AAux.are_compatible (no_qualifiers, elem_ty1) (no_qualifiers, elem_ty2) then
+              E.return a_e (* (e', GenArray elem_ty1 (Just n)) *)
+            else
+              error ("TODO(annotate_definition_aux, 1): error message: array object definition, types didn't match ==> " ^
+                      Pp.stringFromAil_ctype no_qualifiers elem_ty1 ^ " <-> " ^ Pp.stringFromAil_ctype no_qualifiers elem_ty2)
+        | (Ctype _ (Array elem_ty1 (Just n1)), GenRValueType (GenArray elem_ty2 (Just n2))) ->
+            if AAux.are_compatible (no_qualifiers, elem_ty1) (no_qualifiers, elem_ty2) && n1 = n2 then
+              E.return a_e (* (e', GenArray elem_ty1 (Just n1)) *)
+            else
+              error ("TODO(annotate_definition_aux, 2): error message: array object definition, types didn't match ==> " ^
+                      Pp.stringFromAil_ctype no_qualifiers elem_ty1 ^ " <-> " ^ Pp.stringFromAil_ctype no_qualifiers elem_ty2)
 
-         | (Ctype _ (Array elem_ty1 (Just n1)), GenLValueType qs2 (Ctype _ (Array elem_ty2 (Just n2))) _) ->
-             (* TODO: isRegister? *)
-             (* TODO: what if n1 < n2? *)
-             (* TODO: check std *)
-             if AAux.are_compatible (no_qualifiers, elem_ty1) (no_qualifiers, elem_ty2) && n1 >= n2 then
-               E.return a_e
-             else
-                error ("TODO(annotate_definition_aux, 3): error message: array object definition, types didn't match ==> " ^
-                       Pp.stringFromAil_ctype no_qualifiers elem_ty1 ^ "[" ^ show n1 ^ "] <-> " ^
-                       Pp.stringFromAil_ctype no_qualifiers elem_ty2 ^ "[" ^ show n2 ^ "]")
-         | _ ->
-             (* STD §6.7.9#14 *)
-             if AAux.is_array_of_character ty then
-               error ("WIP: annotate_definition_aux, is_array_of_character ty ==> " ^
-                      Pp.stringFromAil_ctype no_qualifiers ty ^ " <===> " ^ Pp.stringFromAil_expression a_e)
-             else
-               let () = Debug.print_debug 1 [] (fun () ->
-                 "ty: " ^ Pp.stringFromAil_ctype no_qualifiers ty ^ " <--> gty: " ^
-                 match GenTypes.genTypeCategoryOf a_e with
-                   | GenLValueType qs' ty' _ ->
-                       "lvalue " ^ Pp.stringFromAil_ctype qs' ty'
-                   | GenRValueType gty ->
-                       "rvalue " ^ Pp.stringFromAil_genType gty
-                 end
-               ) in
-               error "WIP: annotate_definition, not(is_scalar ty), not array (or had no size)"
-        end
-      else
-        error "WIP: annotate_definition_aux, final case"
+        | (Ctype _ (Array elem_ty1 (Just n1)), GenLValueType qs2 (Ctype _ (Array elem_ty2 (Just n2))) _) ->
+            (* TODO: isRegister? *)
+            (* TODO: what if n1 < n2? *)
+            (* TODO: check std *)
+            if AAux.are_compatible (no_qualifiers, elem_ty1) (no_qualifiers, elem_ty2) && n1 >= n2 then
+              E.return a_e
+            else
+              error ("TODO(annotate_definition_aux, 3): error message: array object definition, types didn't match ==> " ^
+                      Pp.stringFromAil_ctype no_qualifiers elem_ty1 ^ "[" ^ show n1 ^ "] <-> " ^
+                      Pp.stringFromAil_ctype no_qualifiers elem_ty2 ^ "[" ^ show n2 ^ "]")
+        | _ ->
+            (* STD §6.7.9#14 *)
+            if AAux.is_array_of_character ty then
+              error ("WIP: annotate_definition_aux, is_array_of_character ty ==> " ^
+                    Pp.stringFromAil_ctype no_qualifiers ty ^ " <===> " ^ Pp.stringFromAil_expression a_e)
+            else
+              let () = Debug.print_debug 1 [] (fun () ->
+                "ty: " ^ Pp.stringFromAil_ctype no_qualifiers ty ^ " <--> gty: " ^
+                match GenTypes.genTypeCategoryOf a_e with
+                  | GenLValueType qs' ty' _ ->
+                      "lvalue " ^ Pp.stringFromAil_ctype qs' ty'
+                  | GenRValueType gty ->
+                      "rvalue " ^ Pp.stringFromAil_genType gty
+                end
+              ) in
+              error "WIP: annotate_definition, not(is_scalar ty), not array (or had no size)"
+      end
+    else
+      error "WIP: annotate_definition_aux, final case"
   else
     (* STD §6.7.9#3 *)
     E.constraint_violation (Loc.locOf e) IllegalInitializer
