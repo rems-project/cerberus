@@ -204,7 +204,7 @@ type registration =
   | External
 
 type global_definition =
-  | Tentative of Ctype.ctype
+  | Tentative of Loc.t * Ctype.ctype
   | Definition of A.expression unit
   | ExternalDefinition of A.expression unit
 
@@ -1373,7 +1373,7 @@ let register_global_object_definition2 loc sym link gdef =
         do_update gdef
     | Just prev_gdef ->
         match (prev_gdef, gdef) with
-          | (Tentative prev_ty, Tentative ty) ->
+          | (Tentative _ prev_ty, Tentative loc_def ty) ->
               (* TODO: this function is not correct for desugaring *)
               match AilTypesAux.make_composite prev_ty ty with
                 | Nothing ->
@@ -1383,13 +1383,13 @@ let register_global_object_definition2 loc sym link gdef =
                     ) in
                     error "[register_global_object_definition2] make_composite failed"
                 | Just ty' ->
-                    do_update (Tentative ty')
+                    do_update (Tentative loc_def ty')
               end
-          | (_, Tentative _) ->
+          | (_, Tentative _ _) ->
               (* NOTE: new tentative definitions do not override previous
                  external or "internal" definitions *)
               return ()
-          | (Tentative _, _) ->
+          | (Tentative _ _, _) ->
               (* NOTE: but new external or "internal" definitions do override
                  tentative ones *)
               do_update gdef
@@ -1774,8 +1774,38 @@ let remove_block_scoped_identifiers st xs =
   ) xs
 *)
 
+val mk_current_ail_sigma : desugM (A.sigma unit)
+let mk_current_ail_sigma =
+  get_tag_definitions >>= fun ident_tagDefs ->
+  return
+    <|  A.declarations= [];
+        A.object_definitions= [];
+        A.function_definitions= [];
+        A.static_assertions= [];
+        A.tag_definitions=
+          List.reverse begin
+            List.foldl (fun acc (ident, tagDef) ->
+              match tagDef with
+                | Struct_definition attrs _ xs flexible_opt ->
+                    (ident, (attrs, Ctype.StructDef xs flexible_opt)) :: acc
+                | Union_definition attrs _ xs ->
+                    (ident, (attrs, Ctype.UnionDef xs)) :: acc
+                | Enum_definition _ ->
+                    acc
+              end
+            ) [] (Map_extra.toList ident_tagDefs)
+          end;
+        A.extern_idmap= Map.empty;
+        A.typedef_attributes= Map.empty;
+        A.loop_attributes= Map.empty;
+        A.cn_predicates= []; |>
 
 
+val is_incomplete: Ctype.ctype -> desugM bool
+let cabs_to_ail_effect_is_incomplete ty =
+  mk_current_ail_sigma >>= fun sigm ->
+  return (AilTypesAux.is_incomplete sigm ty)
+let inline is_incomplete = cabs_to_ail_effect_is_incomplete
 
 
 
@@ -1850,7 +1880,7 @@ let extract_program startup_str =
     match (namespace, scope, id_kind, m_link) with
       | (Namespace_ordinary, Scope_file, Kind_ordinary, Just Linkage_external) ->
         let kind = match Map.lookup sym st.global_object_definitions with
-          | Just (Tentative _) -> A.IK_tentative
+          | Just (Tentative _ _) -> A.IK_tentative
           | Just (Definition _) -> A.IK_definition
           | Just (ExternalDefinition _) -> A.IK_definition
           | Nothing ->
@@ -1862,19 +1892,23 @@ let extract_program startup_str =
         acc
     end) st.registered_external_identifiers Map.empty in
   
-  let object_defs =
-    List.map (function
-      | (sym, Tentative (Ctype.Ctype _ (Ctype.Array elem_ty Nothing))) ->
-          (* TODO: check *)
-          (* STD §6.9.2#5 EXAMPLE 2 *)
-          (sym, A.AnnotatedExpression () [] Loc.unknown (A.AilEconst (A.ConstantArray elem_ty [mk_zeroInit_aux st.tag_definitions elem_ty])))
-      | (sym, Tentative ty) ->
-          (sym, mk_zeroInit st.tag_definitions ty)
-      | (sym, Definition e) ->
-          (sym, e)
-      | (sym, ExternalDefinition e) ->
-          (sym, e)
-    end) (Map_extra.toList st.global_object_definitions) in
+  mapM (function
+  | (sym, Tentative loc (Ctype.Ctype _ (Ctype.Array elem_ty Nothing))) ->
+      (* TODO: check *)
+      (* STD §6.9.2#5 EXAMPLE 2 *)
+      return (sym, A.AnnotatedExpression () [] loc (A.AilEconst (A.ConstantArray elem_ty [mk_zeroInit_aux st.tag_definitions elem_ty])))
+  | (sym, Tentative loc ty) ->
+      is_incomplete ty >>= function
+        | true ->
+            fail loc (Errors.Desugar_ConstraintViolation (Constraint.TentativeNotCompleted ty))
+        | false ->
+            return (sym, mk_zeroInit st.tag_definitions ty)
+      end
+    | (sym, Definition e) ->
+        return (sym, e)
+    | (sym, ExternalDefinition e) ->
+      return  (sym, e)
+  end) (Map_extra.toList st.global_object_definitions) >>= fun object_defs ->
   
   mapM (fun ((ident, _), (_, (sym, kind, link_opt))) ->
     (* TODO: the errors should only be for when the identifiers are used in an
@@ -2009,34 +2043,3 @@ let get_sigma_sofar =
        A.cn_predicates=  List.map (fun (_, (_, z)) -> z) (Map_extra.toList st.cn_state.Cn_desugaring.cn_predicates);
       |>
   )
-
-
-val is_incomplete: Ctype.ctype -> desugM bool
-let cabs_to_ail_effect_is_incomplete ty =
-  get_tag_definitions >>= fun ident_tagDefs ->
-  let (fake_ail_sigma : A.sigma unit) = <|
-    A.declarations= [];
-    A.object_definitions= [];
-    A.function_definitions= [];
-    A.static_assertions= [];
-    A.tag_definitions=
-      List.foldl (fun acc (ident, tagDef) ->
-        match tagDef with
-          | Struct_definition attrs _ xs flexible_opt ->
-              (ident, (attrs, Ctype.StructDef xs flexible_opt)) :: acc
-          | Union_definition attrs _ xs ->
-              (ident, (attrs, Ctype.UnionDef xs)) :: acc
-          | Enum_definition _ ->
-              acc
-        end
-      ) [] (Map_extra.toList ident_tagDefs);
-    A.extern_idmap= Map.empty;
-    A.typedef_attributes= Map.empty;
-    A.loop_attributes= Map.empty;
-    A.cn_predicates= [];
-  |> in
-  return (AilTypesAux.is_incomplete fake_ail_sigma ty)
-let inline is_incomplete = cabs_to_ail_effect_is_incomplete
-
-
-

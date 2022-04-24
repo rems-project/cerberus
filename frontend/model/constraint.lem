@@ -165,6 +165,7 @@ type violation =
   | IllegalIdentifierTypeVoidInFunctionDefinition (* §6.9.1#5, sentence 1 *)
   | UniqueVoidParameterInFunctionDefinition (* §6.9.1#5 *)
   | FunctionParameterAsSimpleAssignment of simple_assignment_violation * ctype * genType (* §6.9.1#10 *)
+  | TentativeNotCompleted of ctype (* §6.9.2#2, sentence 2 (implied in conjunction with §6.7.9#3) *)
   (* 7 Library *)
   (* 7.2 Diagnostics <assert.h> *)
   (* 7.2.1.1 The assert macro *)
@@ -412,6 +413,8 @@ let std_of_violation = function
       ["§6.9.1#5, sentence 2"]
   | FunctionParameterAsSimpleAssignment viol _ _ ->
       "§6.9.1#10" :: std_of_assign_violation viol
+  | TentativeNotCompleted _ ->
+      []
   | AssertMacroExpressionScalarType ->
       ["§7.2.1.1#2"]
   | AtomicAddressArgumentMustBeAtomic op _ ->

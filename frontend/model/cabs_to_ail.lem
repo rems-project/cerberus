@@ -4650,7 +4650,7 @@ let desugar_and_register_external_declaration edecl =
                               if List.elem SC_extern specifs.storage_classes then
                                 E.return ()
                               else
-                                E.register_global_object_definition2 ident_loc sym link (E.Tentative ty (*mk_zeroInit tagDefs ty*))
+                                E.register_global_object_definition2 ident_loc sym link (E.Tentative ident_loc ty (*mk_zeroInit tagDefs ty*))
                             else
                               E.return ()
                     end

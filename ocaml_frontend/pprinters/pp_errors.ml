@@ -269,6 +269,8 @@ let string_of_constraint_violation = function
       "passing non arithmetic '" ^ string_of_gentype gty2 ^ "' to parameter of type '" ^ string_of_ctype ty1 ^ "'"
   | FunctionParameterAsSimpleAssignment (BoolExpectsArithmeticOrPointer, ty1, gty2) ->
       "passing non scalar '" ^ string_of_gentype gty2 ^ "' to parameter of type '" ^ string_of_ctype ty1 ^ "'"
+  | TentativeNotCompleted ty ->
+      "tentative definition with type '" ^ string_of_ctype ty ^ "' which is not completed by the end of the translation unit"
   | ExternalRedefinition sym ->
       "redefinition of '" ^ string_of_sym sym ^ "'"
   | AssertMacroExpressionScalarType ->
