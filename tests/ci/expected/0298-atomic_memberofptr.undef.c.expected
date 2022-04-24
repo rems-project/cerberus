@@ -1,1 +1,1 @@
-Undefined behaviour: a member of an atomic structure or union object is accessed at tests/ci/0298-atomic_memberofptr.undef.c:11:3-5
+Undefined behaviour: the operand of the unary '*' operator has an invalid value at ci/0298-atomic_memberofptr.undef.c:11:3-5 (cursor: ci/0298-atomic_memberofptr.undef.c:11:3)

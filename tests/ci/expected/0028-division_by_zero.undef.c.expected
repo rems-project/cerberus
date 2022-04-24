@@ -1,1 +1,1 @@
-Undefined {id: [UB036_exceptional_condition]}
+Undefined behaviour: (UB missing short message): UB045a_division_by_zero at ci/0028-division_by_zero.undef.c:3:7-10 (cursor: ci/0028-division_by_zero.undef.c:3:8)

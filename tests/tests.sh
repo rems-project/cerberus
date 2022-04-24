@@ -84,7 +84,7 @@ citests=(
   0082-OK1.c
   0083-OK2.c
   0084-KO1.error.c
-  0086-literal_access_ub.error.c
+  0086-literal_access.undef.c
   0087-array_with_delayed_size.c
 # 0101-sym_cfunction.c
   0105-incr.c
@@ -142,6 +142,7 @@ citests=(
   0297-atomic_memberof.undef.c
   0298-atomic_memberofptr.undef.c
   0299-qualified_ptrdiff.c
+  0301-declaration_struct_pointer.error.c
 )
 
 # TESTS THAT ARE KNOW TO FAIL (for example .error test for which we need to improve the message)
