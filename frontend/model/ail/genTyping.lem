@@ -1764,13 +1764,15 @@ and annotate_definition_aux sigm gamm (ty, e) =
       (* TODO: add location *)
       annotate_assignee sigm gamm InitializationAsSimpleAssignment Loc.unknown ty e
       
-      (* TODO: "(...) that has automatic storage duration" *)
-      else if AAux.atomic_qualified_unqualified AAux.is_struct_or_union ty then
-        (* TODO: check *)
-        E.add "§6.7.9#13" >>
-        annotate_rvalue sigm gamm e >>= fun (a_e, gty) ->
-        (* TODO: need to make sure that gty is compatible with ty *)
-        E.return a_e
+    (* TODO: "(...) that has automatic storage duration" *)
+    else if AAux.atomic_qualified_unqualified AAux.is_struct_or_union ty then
+      (* TODO: check *)
+      E.add "§6.7.9#13" >>
+      annotate_assignee sigm gamm InitializationAsSimpleAssignment Loc.unknown ty e
+      (* annotate_rvalue sigm gamm e >>= fun (a_e, gty) ->
+      AilEassign
+      (* TODO: need to make sure that gty is compatible with ty *)
+      E.return a_e *)
       
       (* STD §6.7.9#15 *)
       else if AAux.compatibleWithQualifiedUnqualifiedVersionOf ty [wchar_t; char16_t; char32_t] then
