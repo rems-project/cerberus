@@ -1164,7 +1164,7 @@ end
 
 val is_complete_object: forall 'a. sigma 'a -> ctype -> bool
 let is_complete_object S ty =
-  is_complete S ty && is_object ty
+  is_object ty && is_complete S ty
 
 
 (* Adjustment for function parameter types *)
