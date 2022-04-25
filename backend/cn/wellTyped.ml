@@ -17,63 +17,107 @@ open Effectful.Make(Typing)
 
 let check_consistency = ref true
 
+
+let check_bound_l loc s = 
+  let@ is_bound = bound_l s in
+  if is_bound then return ()
+  else fail (fun _ -> {loc; msg = TE.Unknown_variable s})
+
+
+let illtyped_index_term (loc: loc) context it has expected ctxt =
+  {loc = loc; msg = TypeErrors.Illtyped_it {context; it; has; expected; ctxt}}
+
+
+let ensure_integer_or_real_type (loc : loc) context it = 
+  let open BT in
+  match IT.bt it with
+  | (Integer | Real) -> return ()
+  | _ -> 
+     let expect = "integer or real type" in
+     fail (illtyped_index_term loc context it (IT.bt it) expect)
+
+let ensure_set_type loc context it = 
+  let open BT in
+  match IT.bt it with
+  | Set bt -> return bt
+  | _ -> fail (illtyped_index_term loc context it (IT.bt it) "set type")
+
+let ensure_list_type loc context it = 
+  let open BT in
+  match IT.bt it with
+  | List bt -> return bt
+  | _ -> fail (illtyped_index_term loc context it (IT.bt it) "list type")
+
+let ensure_map_type loc context it = 
+  let open BT in
+  match IT.bt it with
+  | Map (abt, rbt) -> return (abt, rbt)
+  | _ -> fail (illtyped_index_term loc context it (IT.bt it) "map/array type")
+
+let get_struct_decl loc tag = 
+  let@ global = get_global () in
+  match SymMap.find_opt tag global.struct_decls with
+  | Some decl -> return decl
+  | None -> fail (fun _ -> {loc; msg = Unknown_struct tag})
+
+let ensure_same_argument_number loc input_output has ~expect =
+  if has = expect then return () else 
+    match input_output with
+    | `General -> fail (fun _ -> {loc; msg = Number_arguments {has; expect}})
+    | `Input -> fail (fun _ -> {loc; msg = Number_input_arguments {has; expect}})
+    | `Output -> fail (fun _ -> {loc; msg = Number_output_arguments {has; expect}})
+
+
+
+module WBT = struct
+
+  open BT
+  let is_bt loc = 
+    let rec aux = function
+      | Unit -> return ()
+      | Bool -> return ()
+      | Integer -> return ()
+      | Real -> return ()
+      | Loc -> return ()
+      | Struct tag -> let@ _ = get_struct_decl loc tag in return ()
+      | Map (abt, rbt) -> ListM.iterM aux [abt; rbt]
+      | List bt -> aux bt
+      | Tuple bts -> ListM.iterM aux bts
+      | Set bt -> aux bt
+    in
+    fun bt -> aux bt
+[@@deriving eq, ord]
+
+end
+
+
+module WLS = struct
+
+  let is_ls loc ls = WBT.is_bt loc ls
+
+end
+
+
+module WCT = struct
+
+  open Sctypes
+
+  let is_ct loc = 
+    let rec aux = function
+      | Void -> return ()
+      | Integer _ -> return ()
+      | Array (ct, _) -> aux ct
+      | Pointer ct -> aux ct
+      | Struct tag -> let@ _ = get_struct_decl loc tag in return ()
+      | Function ((_, rct), args, _) -> ListM.iterM aux (rct :: List.map fst args)
+    in
+    fun ct -> aux ct
+
+end
+
+
 module WIT = struct
 
-
-  let check_bound_l loc s = 
-    let@ is_bound = bound_l s in
-    if is_bound then return ()
-    else fail (fun _ -> {loc; msg = TE.Unknown_variable s})
-
-
-  let illtyped_index_term (loc: loc) context it has expected ctxt =
-    {loc = loc; msg = TypeErrors.Illtyped_it {context; it; has; expected; ctxt}}
-
-
-  let ensure_integer_or_real_type (loc : loc) context it = 
-    let open BT in
-    match IT.bt it with
-    | (Integer | Real) -> return ()
-    | _ -> 
-       let expect = "integer or real type" in
-       fail (illtyped_index_term loc context it (IT.bt it) expect)
-
-  let ensure_set_type loc context it = 
-    let open BT in
-    match IT.bt it with
-    | Set bt -> return bt
-    | _ -> fail (illtyped_index_term loc context it (IT.bt it) "set type")
-
-  (* let ensure_option_type loc context it =  *)
-  (*   let open BT in *)
-  (*   match IT.bt it with *)
-  (*   | Option bt -> return bt *)
-  (*   | _ -> fail (illtyped_index_term loc context it (IT.bt it) "option type") *)
-
-  let ensure_list_type loc context it = 
-    let open BT in
-    match IT.bt it with
-    | List bt -> return bt
-    | _ -> fail (illtyped_index_term loc context it (IT.bt it) "list type")
-
-  let ensure_map_type loc context it = 
-    let open BT in
-    match IT.bt it with
-    | Map (abt, rbt) -> return (abt, rbt)
-    | _ -> fail (illtyped_index_term loc context it (IT.bt it) "map/array type")
-
-  let get_struct_decl loc tag = 
-    let@ global = get_global () in
-    match SymMap.find_opt tag global.struct_decls with
-    | Some decl -> return decl
-    | None -> fail (fun _ -> {loc; msg = Unknown_struct tag})
-
-  let ensure_same_argument_number loc input_output has ~expect =
-    if has = expect then return () else 
-      match input_output with
-      | `General -> fail (fun _ -> {loc; msg = Number_arguments {has; expect}})
-      | `Input -> fail (fun _ -> {loc; msg = Number_input_arguments {has; expect}})
-      | `Output -> fail (fun _ -> {loc; msg = Number_output_arguments {has; expect}})
 
   open BaseTypes
   open LogicalSorts
@@ -102,6 +146,7 @@ module WIT = struct
            | Unit -> 
               return (BT.Unit, Unit)
            | Default bt -> 
+              let@ () = WBT.is_bt loc bt in
               return (bt, Default bt)
            | Null ->
               return (BT.Loc, Null)
@@ -314,8 +359,15 @@ module WIT = struct
               let@ t = check loc ~context Loc t in
               return (Integer, PointerToIntegerCast t)
            | MemberOffset (tag, member) ->
+              let@ layout = get_struct_decl loc tag in
+              let decl_members = Memory.member_types layout in
+              let@ () = match List.assoc_opt Id.equal member decl_members with
+                | Some _ -> return ()
+                | None -> fail (fun _ -> {loc; msg = Unknown_member (tag, member)})
+              in
               return (Integer, MemberOffset (tag, member))
            | ArrayOffset (ct, t) ->
+              let@ () = WCT.is_ct loc ct in
               let@ t = check loc ~context Integer t in
               return (Integer, ArrayOffset (ct, t))
          in
@@ -327,12 +379,15 @@ module WIT = struct
               let@ t_align = check loc ~context Integer t.align in
               return (BT.Bool, AlignedI {t = t_t; align=t_align})
            | Aligned (t, ct) ->
+              let@ () = WCT.is_ct loc ct in
               let@ t = check loc ~context Loc t in
               return (BT.Bool, Aligned (t, ct))
            | Representable (ct, t) ->
+              let@ () = WCT.is_ct loc ct in
               let@ t = check loc ~context (BT.of_sct ct) t in
               return (BT.Bool, Representable (ct, t))
            | Good (ct, t) ->
+              let@ () = WCT.is_ct loc ct in
               let@ t = check loc ~context (BT.of_sct ct) t in
               return (BT.Bool, Good (ct, t))
          in
@@ -404,6 +459,7 @@ module WIT = struct
       | Map_op map_op -> 
          let@ (bt, map_op) = match map_op with
            | Const (index_bt, t) ->
+              let@ () = WBT.is_bt loc index_bt in
               let@ t = infer loc ~context t in
               return (BT.Map (index_bt, IT.bt t), Const (index_bt, t))
            | Set (t1, t2, t3) ->
@@ -418,6 +474,7 @@ module WIT = struct
               let@ arg = check loc ~context abt arg in
               return (bt, Get (t, arg))
            | Def ((s, abt), body) ->
+              let@ () = WBT.is_bt loc abt in
               pure begin
                   let@ () = add_l s abt in
                   let@ body = infer loc ~context body in
@@ -436,11 +493,10 @@ module WIT = struct
          in
          return (IT (Pred (name, args), def.return_bt))
          
-         
-
 
     and check : 'bt. Loc.t -> context:(BT.t IT.term) -> LS.t -> 'bt IT.term -> (IT.t, type_error) m =
       fun loc ~context ls it ->
+      let@ () = WLS.is_ls loc ls in
       match it, ls with
       | IT (List_op Nil, _), List bt ->
          return (IT (List_op Nil, BT.List bt))
@@ -477,12 +533,14 @@ module WRE = struct
   let welltyped loc resource = 
     begin match resource with
     | Point b -> 
+       let@ () = WCT.is_ct loc b.ct in
        let@ _ = WIT.check loc BT.Loc b.pointer in
        let@ _ = WIT.check loc BT.Bool b.permission in
        let@ _ = WIT.check loc (BT.of_sct b.ct) b.value in
        let@ _ = WIT.check loc BT.Bool b.init in
        return ()
     | QPoint b -> 
+       let@ () = WCT.is_ct loc b.ct in
        let@ _ = WIT.check loc BT.Loc b.pointer in
        pure begin 
            let@ () = add_l b.q Integer in
@@ -498,8 +556,8 @@ module WRE = struct
        let has_iargs, expect_iargs = List.length p.iargs, List.length def.iargs in
        let has_oargs, expect_oargs = List.length p.oargs, List.length def.oargs in
        (* +1 because of pointer argument *)
-       let@ () = WIT.ensure_same_argument_number loc `Input (1 + has_iargs) ~expect:(1 + expect_iargs) in
-       let@ () = WIT.ensure_same_argument_number loc `Output has_oargs ~expect:expect_oargs in
+       let@ () = ensure_same_argument_number loc `Input (1 + has_iargs) ~expect:(1 + expect_iargs) in
+       let@ () = ensure_same_argument_number loc `Output has_oargs ~expect:expect_oargs in
        let@ _ = 
          ListM.mapM (fun (arg, expected_sort) ->
              WIT.check loc expected_sort arg
@@ -516,8 +574,8 @@ module WRE = struct
            let has_iargs, expect_iargs = List.length p.iargs, List.length def.iargs in
            let has_oargs, expect_oargs = List.length p.oargs, List.length def.oargs in
            (* +1 because of pointer argument *)
-           let@ () = WIT.ensure_same_argument_number loc `Input (1 + has_iargs) ~expect:(1 + expect_iargs) in
-           let@ () = WIT.ensure_same_argument_number loc `Output has_oargs ~expect:expect_oargs in
+           let@ () = ensure_same_argument_number loc `Input (1 + has_iargs) ~expect:(1 + expect_iargs) in
+           let@ () = ensure_same_argument_number loc `Output has_oargs ~expect:expect_oargs in
            let@ _ = 
              ListM.mapM (fun (arg, expected_sort) ->
                  WIT.check loc expected_sort arg
@@ -579,6 +637,7 @@ module WLC = struct
        let@ _ = WIT.check loc BT.Bool it in
        return ()
     | LC.Forall ((s,bt), it) ->
+       let@ () = WBT.is_bt loc bt in
        pure begin
            let@ () = add_l s bt in
            let@ _ = WIT.check loc BT.Bool it in
@@ -596,6 +655,7 @@ module WLRT = struct
   let welltyped loc lrt = 
     let rec aux = function
       | Logical ((s,ls), info, lrt) -> 
+         let@ () = WLS.is_ls (fst info) ls in
          let s' = Sym.fresh_same s in
          let@ () = add_l s' ls in
          let lrt = subst (IT.make_subst [(s, IT.sym_ (s', ls))]) lrt in
@@ -675,7 +735,8 @@ module WRT = struct
 
   let welltyped loc rt = 
     pure begin match rt with 
-      | Computational ((name,bt), _info, lrt) ->
+      | Computational ((name,bt), info, lrt) ->
+         let@ () = WBT.is_bt (fst info) bt in
          let name' = Sym.fresh_same name in
          let lname = Sym.fresh () in
          let@ () = add_l lname bt in
@@ -724,6 +785,8 @@ module WOutputDef (Spec : WOutputSpec) = struct
            when Sym.equal name name' ->
          let@ _ = WIT.check loc bt it in
          aux name_bts assignment
+      | (name, bt) :: name_bts, {loc; name = name'; value = it} :: _ ->
+         fail (fun _ -> {loc; msg = Generic (!^"expected output argument" ^^^ Sym.pp name ^^^ !^"but found" ^^^ Sym.pp name')})
       | (name, _) :: _, _ -> 
          fail (fun _ -> {loc; msg = Generic (!^"expected output argument" ^^^ Sym.pp name)})
       | _, {loc = loc'; name = name'; _} :: _ -> 
@@ -770,14 +833,16 @@ module WAT (WI: WI_Sig) = struct
 
   let welltyped kind loc (at : t) : (unit, type_error) m = 
     let rec aux = function
-      | AT.Computational ((name,bt), _info, at) ->
+      | AT.Computational ((name,bt), info, at) ->
+         let@ () = WBT.is_bt (fst info) bt in
          let name' = Sym.fresh_same name in
          let lname = Sym.fresh () in
          let@ () = add_l lname bt in
          let@ () = add_a name' (bt, lname) in
          let at = AT.subst WI.subst (IT.make_subst [(name, IT.sym_ (lname, bt))]) at in
          aux at
-      | AT.Logical ((s,ls), _info, at) -> 
+      | AT.Logical ((s,ls), info, at) -> 
+         let@ () = WLS.is_ls (fst info) ls in
          let lname = Sym.fresh_same s in
          let@ () = add_l lname ls in
          let at = AT.subst WI.subst (IT.make_subst [(s, IT.sym_ (lname, ls))]) at in
@@ -882,7 +947,13 @@ module WRPD = struct
     pure begin
         let open ResourcePredicates in
         let@ () = add_l pd.pointer BT.Loc in
-        let@ () = ListM.iterM (fun (s, ls) -> add_l s ls) pd.iargs in
+        let@ () = 
+          ListM.iterM (fun (s, ls) -> 
+              let@ () = WLS.is_ls pd.loc ls in
+              add_l s ls
+            ) pd.iargs 
+        in
+        let@ () = ListM.iterM (WLS.is_ls pd.loc) (List.map snd pd.oargs) in
         let module WPackingFT = WPackingFT(struct let name_bts = pd.oargs end)  in
         ListM.iterM (fun {loc; guard; packing_ft} ->
             let@ _ = WIT.check loc BT.Bool guard in
@@ -892,7 +963,7 @@ module WRPD = struct
 
   let mode_check loc ~infos pd = 
     let open ResourcePredicates in
-    let module WPackingFT = WPackingFT(struct let name_bts = pd.oargs end)  in
+    let module WPackingFT = WPackingFT(struct let name_bts = pd.oargs end) in
     ListM.iterM (fun {loc; guard; packing_ft} ->
         WPackingFT.mode_check loc ~infos packing_ft
       ) pd.clauses
@@ -914,19 +985,34 @@ end
 module WLPD = struct
 
   let welltyped (pd : LogicalPredicates.definition) = 
-    pure begin
-        let@ () = add_ls pd.args in
-        match pd.definition with
-        | Def body -> 
-           let@ _ = WIT.check pd.loc pd.return_bt body in
-           return ()
-        | Uninterp -> 
-           return ()
+    let@ () = 
+      pure begin
+          let@ () = ListM.iterM (WLS.is_ls pd.loc) (List.map snd pd.args) in
+          let@ () = add_ls pd.args in
+          let@ () = WBT.is_bt pd.loc pd.return_bt in
+          match pd.definition with
+          | Def body -> let@ _ = WIT.check pd.loc pd.return_bt body in return ()
+          | Uninterp -> return ()
+        end
+    in
+    pure begin 
+        let module WPackingFT = WPackingFT(struct let name_bts = pd.args end) in
+        WPackingFT.welltyped "argument inference" pd.loc pd.infer_arguments
       end
+
+  let mode_check loc ~infos pd = 
+    let open LogicalPredicates in
+    let module WPackingFT = WPackingFT(struct let name_bts = pd.args end) in
+    WPackingFT.mode_check pd.loc ~infos pd.infer_arguments
 
 
   let good pd =
-    welltyped pd
+    let@ () = welltyped pd in
+    let@ () = 
+      let infos = SymMap.empty in
+      mode_check pd.loc ~infos pd
+    in
+    return ()
 
 end
 
