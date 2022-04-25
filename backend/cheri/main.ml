@@ -6,8 +6,9 @@ let (>>=) = Exception.except_bind
 let (>>) m f = m >>= fun _ -> f
 let return = Exception.except_return
 
-let io =
+let io, get_progress =
   let open Pipeline in
+  let progress = ref 0 in
   { pass_message = begin
         let ref = ref 0 in
         fun str -> Debug_ocaml.print_success (string_of_int !ref ^ ". " ^ str);
@@ -15,7 +16,8 @@ let io =
                    return ()
       end;
     set_progress = begin
-      fun str -> return ()
+      fun _   -> incr progress;
+                 return ()
       end;
     run_pp = begin
       fun opts doc -> run_pp opts doc;
@@ -33,7 +35,7 @@ let io =
       fun mk_str -> Debug_ocaml.warn [] mk_str;
                     return ()
       end;
-  }
+  }, fun () -> !progress
 
 let impl_name = "gcc_4.9.0_x86_64-apple-darwin10.8.0"
 
@@ -43,7 +45,7 @@ let cpp_str runtime_path traditional =
     (if traditional then "-traditional" else "")
     runtime_path
 
-let cheri exec trace debug_level core_file runtime_path traditional filename =
+let cheri exec trace progress batch debug_level core_file runtime_path traditional filename =
   Debug_ocaml.debug_level := debug_level;
   let frontend cpp_str filename =
     let conf = {
@@ -77,7 +79,12 @@ let cheri exec trace debug_level core_file runtime_path traditional filename =
       return (tunit_opt, ail_opt, core_file')
     end in
     (* return (tunit_opt, ail_opt, core_file') in *)
-  let epilogue n = n in
+  let epilogue n =
+    if batch = `Batch then
+      Printf.fprintf stderr "Time spent: %f seconds\n" (Sys.time ());
+    if progress then get_progress ()
+    else n
+  in
   let runM = function
     | Exception.Exception err ->
         prerr_endline (Pp_errors.to_string err);
@@ -116,7 +123,7 @@ let cheri exec trace debug_level core_file runtime_path traditional filename =
                           exec_mode=Random;
                           fs_dump=false;
                           trace} in
-       runM @@ interp_backend io file ~args:[] ~batch:`NotBatch ~fs:None ~driver_conf
+       runM @@ interp_backend io file ~args:[] ~batch ~fs:None ~driver_conf
      else
        exit 0
 
@@ -151,6 +158,19 @@ let trace =
   let doc = "trace memory actions" in
   Arg.(value & flag & info["trace"] ~doc)
 
+let progress =
+  let doc = "Progress mode: the return code indicate how far the source program \
+             went through the pipeline \
+             [1 = total failure, 10 = parsed, 11 = desugared, 12 = typed, \
+             13 = elaborated, 14 = executed]" in
+  Arg.(value & flag & info ["progress"] ~doc)
+
+let batch =
+  let doc = "makes the execution driver produce batch friendly output" in
+  Arg.(value & vflag `NotBatch & [(`Batch, info["batch"] ~doc);
+                                  (`CharonBatch, info["charon-batch"]
+                                     ~doc:(doc^" (for Charon)"))])
+
 let () =
-  let cheri_t = Term.(pure cheri $ exec $ trace $ debug_level $ core_file $ runtime_path $ traditional $ file) in
+  let cheri_t = Term.(pure cheri $ exec $ trace $ progress $ batch $ debug_level $ core_file $ runtime_path $ traditional $ file) in
   Term.exit @@ Term.eval (cheri_t, Term.info "Core cheri")
