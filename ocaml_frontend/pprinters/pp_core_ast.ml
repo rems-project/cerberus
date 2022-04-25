@@ -145,6 +145,9 @@ let dtree_of_pexpr pexpr =
           Dleaf (pp_ctor "PEarray_shift" ^^^ !^ (ansi_format [Red] "TODO"))
       | PEmember_shift (pe, sym, ident) ->
           Dleaf (pp_ctor "PEmember_shift" ^^^ !^ (ansi_format [Red] "TODO"))
+      | PEmemop (memop, pes) ->
+          Dnode (pp_ctor "PEmemop" ^^^ Pp_mem.pp_pure_memop memop
+                , List.map self pes)
       | PEnot pe ->
           Dnode (pp_ctor "PEnot", [self pe])
       | PEop (bop, pe1, pe2) ->

@@ -403,6 +403,9 @@ let mu_to_core__memop env1 memop1:memop*(('a,(Symbol.sym))Core.generic_pexpr)lis
       [msym "PtrArrayShift" sym1; 
        mctype ct1; 
        msym "PtrArrayShift" sym2])
+  | M_PtrMemberShift (tag_sym, membr_ident, sym) ->
+      (PtrMemberShift (tag_sym, membr_ident), 
+       [msym "PtrMemberShift" sym])
   | M_Memcpy (sym1,sym2,sym3) ->
      (Memcpy, 
       [msym "Memcpy" sym1; 
