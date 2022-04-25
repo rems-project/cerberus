@@ -132,10 +132,12 @@ declare ocaml target_rep function intfromptr = `Impl_mem.intfromptr`
 val derive_cap : bool(* is_signed *) -> Mem_common.derivecap_op -> integer_value -> integer_value -> integer_value
 val cap_assign_value: Loc.t -> integer_value -> integer_value -> either Undefined.undefined_behaviour integer_value
 val null_cap : bool(* is_signed *) -> integer_value
+val ptr_t_int_value: integer_value -> integer_value
 val intcast: Loc.t -> Ctype.integerType -> integer_value -> either Undefined.undefined_behaviour integer_value
 declare ocaml target_rep function derive_cap = `Impl_mem.derive_cap`
 declare ocaml target_rep function cap_assign_value = `Impl_mem.cap_assign_value`
 declare ocaml target_rep function null_cap = `Impl_mem.null_cap`
+declare ocaml target_rep function ptr_t_int_value = `Impl_mem.ptr_t_int_value`
 declare ocaml target_rep function intcast = `Impl_mem.intcast`
 
 (* Pointer shifting constructors *)

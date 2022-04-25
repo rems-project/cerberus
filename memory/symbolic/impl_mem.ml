@@ -591,6 +591,7 @@ let ptrfromint = Defacto_memory.impl_ptrcast_ival
 let intfromptr = Defacto_memory.impl_intcast_ptrval
 let derive_cap _ _ _ _ = assert false (* CHERI only *)
 let cap_assign_value _ _ _ = assert false (* CHERI only *)
+let ptr_t_int_value _ = assert false (* CHERI only *)
 let null_cap _ = assert false (* CHERI only *)
 let intcast _ _ ival = Either.Right ival
 let array_shift_ptrval = Defacto_memory.impl_array_shift_ptrval

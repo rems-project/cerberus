@@ -10,6 +10,8 @@ let pp_pure_memop = function
       !^ "CapAssignValue"
   | IntcastPure ->
       !^ "Intcast"
+  | Ptr_tIntValue ->
+      !^ "Ptr_tIntValue"
 
 
 let pp_memop = function

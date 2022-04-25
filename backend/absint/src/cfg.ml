@@ -318,7 +318,8 @@ let rec show_texpr te =
         match pure_memop with
           | Mem_common.DeriveCap (bop, is_signed) -> "derive_cap(TODO bop)"
           | CapAssignValue -> "cap_assign_value"
-          | IntcastPure -> "Intcast"
+          | Ptr_tIntValue -> "ptr_t_int_value"
+          | IntcastPure -> "intcast"
       in
       "memop" ^ parens (str ^ ", " ^ comma_list self tes)
   | TEnot te ->
