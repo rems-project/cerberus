@@ -129,7 +129,7 @@ val intfromptr: Loc.t -> Ctype.ctype -> Ctype.integerType -> pointer_value -> me
 declare ocaml target_rep function ptrfromint = `Impl_mem.ptrfromint`
 declare ocaml target_rep function intfromptr = `Impl_mem.intfromptr`
 
-val derive_cap : bool(* is_signed *) -> AilSyntax.binaryOperator -> integer_value -> integer_value -> integer_value
+val derive_cap : bool(* is_signed *) -> Mem_common.derivecap_op -> integer_value -> integer_value -> integer_value
 val cap_assign_value: Loc.t -> integer_value -> integer_value -> either Undefined.undefined_behaviour integer_value
 val null_cap : bool(* is_signed *) -> integer_value
 val intcast: Loc.t -> Ctype.integerType -> integer_value -> either Undefined.undefined_behaviour integer_value
