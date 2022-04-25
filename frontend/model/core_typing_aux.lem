@@ -204,6 +204,8 @@ let export_ctor loc = function
      E.return Cfvfromint
  | Civfromfloat ->
      E.return Civfromfloat
+ | CivNULLcap is_signed ->
+     E.return (CivNULLcap is_signed)
 end
 
 val     export_pattern: Loc.t -> inferred_pattern -> E.eff typed_pattern

@@ -202,6 +202,7 @@ let show_ctor = function
   | Cunspecified -> "Unspecified"
   | Cfvfromint -> "Cfvfromint"
   | Civfromfloat -> "Civfromfloat"
+  | CivNULLcap is_signed -> "CivNULLcap(" ^ if is_signed then "signed" else "unsigned" ^ ")"
 
 let show_memop =
   let open Mem_common in

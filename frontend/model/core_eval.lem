@@ -581,6 +581,8 @@ let rec step_eval_pexpr n loc core_extern env mem_st_opt file hasConstrained pex
               EU.return $ PEval (Vobject (OVfloating (Mem.fvfromint ival)))
           | (Civfromfloat, Just [Vctype (Ctype.Ctype _ (Ctype.Basic (Ctype.Integer ity))); Vobject (OVfloating fval)]) ->
               EU.return $ PEval (Vobject (OVinteger (Mem.ivfromfloat ity fval)))
+          | (CivNULLcap is_signed, Just []) ->
+              EU.return $ PEval (Vobject (OVinteger (Mem.null_cap is_signed)))
           
           | (_, Just cvals) ->
               if false (*List.any Caux.isConstrainedValue cvals*) then
@@ -661,10 +663,10 @@ let rec step_eval_pexpr n loc core_extern env mem_st_opt file hasConstrained pex
     | PEmemop memop pes ->
         EU.mapM self pes >>= fun pes' ->
         match (memop, Caux.valueFromPexprs pes') with
-          | ( Mem_common.DeriveCap bop is_signed
+          | ( Mem_common.DeriveCap op is_signed
             , Just [ Core.Vobject (Core.OVinteger ival1)
                    ; Core.Vobject (Core.OVinteger ival2) ] ) ->
-                EU.return (PEval (Vobject (OVinteger (Mem.derive_cap is_signed bop ival1 ival2))))
+                EU.return (PEval (Vobject (OVinteger (Mem.derive_cap is_signed op ival1 ival2))))
           | ( Mem_common.CapAssignValue
             , Just [ Core.Vobject (Core.OVinteger ival1)
                    ; Core.Vobject (Core.OVinteger ival2) ] ) ->

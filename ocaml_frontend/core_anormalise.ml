@@ -124,6 +124,7 @@ let core_to_mu__ctor loc ctor : mu_ctor =
   | Core.CivXOR -> error ("core_anormalisation: CivXOR")
   | Core.Cfvfromint-> error ("core_anormalisation: Cfvfromint")
   | Core.Civfromfloat -> error ("core_anormalisation: Civfromfloat")
+  | Core.CivNULLcap _ -> error ("core_anormalisation: CivNULLcap")
   | Core.Civmax -> error ("core_anormalisation: Civmax")
   | Core.Civmin -> error ("core_anormalisation: Civmin")
   | Core.Civsizeof -> error ("core_anormalisation: Civsizeof")
@@ -346,6 +347,8 @@ and n_pexpr : 'a. Loc.t -> 'a n_pexpr_domain ->
         k (annotate (M_Civfromfloat(ct, arg1))))
      | Core.Civfromfloat, _ ->
         error "Civfromfloat applied to wrong number of arguments"
+     | Core.CivNULLcap _, _ ->
+        failwith "TODO: CHERI CivNULLcap"
      | _ ->
         n_pexpr_names loc domain args (fun args -> 
         k (annotate (M_PEctor((core_to_mu__ctor loc ctor), args))))
