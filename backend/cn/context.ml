@@ -31,12 +31,12 @@ type t = {
   }
 
 
-let empty global = {
+let empty = {
     computational = [];
     logical = [];
     resources = [];
     constraints = LCSet.empty;
-    global = global;
+    global = Global.empty;
     location_trace = [];
   }
 

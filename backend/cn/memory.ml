@@ -55,6 +55,7 @@ type struct_member = {
   }
 
 type struct_layout = struct_piece list
+type struct_decl = struct_layout
 type struct_decls = struct_layout SymMap.t
 
 

@@ -89,22 +89,7 @@ let check_computational_bound loc s =
   if is_bound then return () 
   else fail (fun _ -> {loc; msg = Unknown_variable s})
 
-let get_struct_decl loc tag = 
-  let@ global = get_global () in
-  match SymMap.find_opt tag global.struct_decls with
-  | Some decl -> return decl
-  | None -> fail (fun _ -> {loc; msg = Unknown_struct tag})
 
-let get_member_type loc tag member layout = 
-  match List.assoc_opt Id.equal member (Memory.member_types layout) with
-  | Some membertyp -> return membertyp
-  | None -> fail (fun _ -> {loc; msg = Unknown_member (tag, member)})
-
-let get_fun_decl loc fsym = 
-  let@ global = get_global () in
-  match Global.get_fun_decl global fsym with
-  | Some t -> return t
-  | None -> fail (fun _ -> {loc = Loc.unknown; msg = Unknown_function fsym})
 
 
 
@@ -2768,10 +2753,9 @@ let check_function
       (rbt : BT.t) 
       (body : 'bty mu_tpexpr) 
       (function_typ : AT.ft)
-      (ctxt: Context.t)
-    : (unit, type_error) Resultat.t =
+    : (unit, type_error) Typing.m =
   debug 2 (lazy (headline ("checking function " ^ info)));
-  run ctxt begin
+  pure begin
       let@ (rt, resources) = 
         check_and_bind_arguments RT.subst loc arguments function_typ 
       in
@@ -2794,12 +2778,11 @@ let check_procedure
       (body : 'bty mu_texpr)
       (function_typ : AT.ft) 
       (label_defs : 'bty mu_label_defs)
-      (ctxt: Context.t)
-    : (unit, type_error) Resultat.t =
+    : (unit, type_error) Typing.m =
   debug 2 (lazy (headline ("checking procedure " ^ Sym.pp_string fsym)));
   debug 2 (lazy (item "type" (AT.pp RT.pp function_typ)));
 
-  run ctxt begin 
+  pure begin 
       (* check and bind the function arguments *)
       let@ ((rt, label_defs), resources) = 
         let function_typ = AT.map (fun rt -> (rt, label_defs)) function_typ in
@@ -2873,139 +2856,115 @@ let only = ref None
 
 
 let check mu_file = 
-  let open Resultat in
-  let open Effectful.Make(Resultat) in
-
   let () = Debug_ocaml.begin_csv_timing "total" in
 
-  let ctxt = Context.empty Global.empty in
-  
   let () = Debug_ocaml.begin_csv_timing "tagDefs" in
-  let@ ctxt = 
+  let@ () = 
     (* check and record tagDefs *)
-    let open Memory in
-    PmapM.foldM (fun tag def ctxt ->
-        match def with
-        | M_UnionDef _ -> 
-           unsupported Loc.unknown !^"todo: union types"
-        | M_StructDef layout -> 
-           let@ () =
+    let@ () = 
+      PmapM.iterM (fun tag def ->
+          match def with
+          | M_UnionDef _ -> unsupported Loc.unknown !^"todo: union types"
+          | M_StructDef layout -> add_struct_decl tag layout
+        ) mu_file.mu_tagDefs
+    in
+    let@ () = 
+      PmapM.iterM (fun tag def ->
+          let open Memory in
+          match def with
+          | M_UnionDef _ -> 
+             unsupported Loc.unknown !^"todo: union types"
+          | M_StructDef layout -> 
              ListM.iterM (fun piece ->
                  match piece.member_or_padding with
-                 | Some (_, Sctypes.Struct sym2) ->
-                    if SymMap.mem sym2 ctxt.global.struct_decls then return ()
-                    else fail {loc = Loc.unknown; msg = Unknown_struct sym2}
-                 | _ -> return ()
+                 | Some (name, ct) -> WellTyped.WCT.is_ct Loc.unknown ct
+                 | None -> return ()
                ) layout
-           in
-           let struct_decls = SymMap.add tag layout ctxt.global.struct_decls in
-           let global = { ctxt.global with struct_decls } in
-           return { ctxt with global }
-      ) mu_file.mu_tagDefs ctxt
+        ) mu_file.mu_tagDefs
+    in
+    return ()
   in
   let () = Debug_ocaml.end_csv_timing "tagDefs" in
 
 
-
   let () = Debug_ocaml.begin_csv_timing "impls" in
-  let@ ctxt = 
+  let@ () = 
     (* check and record impls *)
     let open Global in
-    PmapM.foldM (fun impl impl_decl ctxt ->
+    PmapM.iterM (fun impl impl_decl ->
         let descr = CF.Implementation.string_of_implementation_constant impl in
         match impl_decl with
         | M_Def (rt, rbt, pexpr) -> 
-           let@ () = Typing.run ctxt (WellTyped.WRT.good Loc.unknown rt) in
-           let@ () = check_function Loc.unknown descr [] rbt pexpr (AT.I rt) ctxt in
-           let ctxt = 
-             let impl_constants = ImplMap.add impl rt ctxt.global.impl_constants in
-             let global = { ctxt.global with impl_constants } in
-             { ctxt with global }                           
-           in
-           return ctxt
+           let@ () = WellTyped.WRT.good Loc.unknown rt in
+           let@ () = WellTyped.WBT.is_bt Loc.unknown rbt in
+           let@ () = check_function Loc.unknown descr [] rbt pexpr (AT.I rt) in
+           add_impl_constant impl rt
         | M_IFun (ft, rbt, args, pexpr) ->
-           let@ () = 
-             let descr = "implementation-defined function" in
-             Typing.run ctxt (WellTyped.WFT.good descr Loc.unknown ft)
-           in
-           let@ () = 
-             let descr = (CF.Implementation.string_of_implementation_constant impl) in
-             check_function Loc.unknown descr args rbt pexpr ft ctxt
-           in
-           let impl_fun_decls = ImplMap.add impl ft ctxt.global.impl_fun_decls in
-           let global = { ctxt.global with impl_fun_decls } in
-           return { ctxt with global }
-      ) mu_file.mu_impl ctxt
+           let@ () = WellTyped.WFT.good "implementation-defined function" Loc.unknown ft in
+           let@ () = WellTyped.WBT.is_bt Loc.unknown rbt in
+           let@ () = check_function Loc.unknown descr args rbt pexpr ft in
+           add_impl_fun_decl impl ft
+      ) mu_file.mu_impl
   in
   let () = Debug_ocaml.end_csv_timing "impls" in
   
 
   let () = Debug_ocaml.begin_csv_timing "logical predicates" in
-  let@ ctxt = 
+  let@ () = 
     (* check and record logical predicate defs *)
     Pp.progress_simple "checking specifications" "logical predicate welltypedness";
-    ListM.fold_leftM (fun ctxt (name,(def : LP.definition)) -> 
-        let@ () = Typing.run ctxt (WellTyped.WLPD.good def) in
-        let logical_predicates =
-          StringMap.add name def ctxt.global.logical_predicates in
-        let global = { ctxt.global with logical_predicates } in
-        return { ctxt with global }
-      ) ctxt mu_file.mu_logical_predicates
+    ListM.iterM (fun (name,(def : LP.definition)) -> 
+        let@ () = WellTyped.WLPD.good def in
+        add_logical_predicate name def
+      ) mu_file.mu_logical_predicates
   in
   let () = Debug_ocaml.end_csv_timing "logical predicates" in
 
   let () = Debug_ocaml.begin_csv_timing "resource predicates" in
-  let@ ctxt = 
+  let@ () = 
     (* check and record resource predicate defs *)
-    let resource_predicates = 
-      List.fold_right (fun (name, def) defs ->
-          StringMap.add name def defs
-        ) mu_file.mu_resource_predicates ctxt.global.resource_predicates
+    let@ () = 
+      ListM.iterM (fun (name, def) -> add_resource_predicate name def)
+        mu_file.mu_resource_predicates
     in
-    let ctxt = { ctxt with global = { ctxt.global with resource_predicates }} in
     Pp.progress_simple "checking specifications" "resource predicate welltypedness";
     let@ () = 
-      ListM.iterM (fun (name,def) -> 
-          Typing.run ctxt (WellTyped.WRPD.good def)
-        ) mu_file.mu_resource_predicates
+      ListM.iterM (fun (name,def) -> WellTyped.WRPD.good def)
+        mu_file.mu_resource_predicates
     in
-    return ctxt
+    return ()
   in
   let () = Debug_ocaml.end_csv_timing "resource predicates" in
 
 
   let () = Debug_ocaml.begin_csv_timing "globals" in
-  let@ ctxt = 
+  let@ () = 
     (* record globals *)
     (* TODO: check the expressions *)
-    ListM.fold_leftM (fun ctxt (sym, def) ->
+    ListM.iterM (fun (sym, def) ->
         match def with
-        | M_GlobalDef (lsym, (_, ct), _)
-        | M_GlobalDecl (lsym, (_, ct)) ->
+        | M_GlobalDef (lsym, (gbt, ct), _)
+        | M_GlobalDecl (lsym, (gbt, ct)) ->
+           let@ () = WellTyped.WBT.is_bt Loc.unknown gbt in
+           let@ () = WellTyped.WCT.is_ct Loc.unknown ct in
            let bt = Loc in
-           let ctxt = Context.add_l lsym bt ctxt in
-           let ctxt = Context.add_a sym (bt, lsym) ctxt in
-           let ctxt = Context.add_c (t_ (IT.good_pointer ~pointee_ct:ct (sym_ (lsym, bt)))) ctxt in
-           return ctxt
-      ) ctxt mu_file.mu_globs 
+           let@ () = add_l lsym bt in
+           let@ () = add_a sym (bt, lsym) in
+           let@ () = add_c (t_ (IT.good_pointer ~pointee_ct:ct (sym_ (lsym, bt)))) in
+           return ()
+      ) mu_file.mu_globs 
   in
   let () = Debug_ocaml.end_csv_timing "globals" in
 
-  let@ ctxt =
-    PmapM.foldM
-      (fun fsym (M_funinfo (loc, _attrs, ftyp, trusted, _has_proto)) ctxt ->
-        let ctxt = 
-          (* let lc1 = t_ (ne_ (null_, sym_ (fsym, Loc))) in *)
-          (* let lc2 = t_ (representable_ (pointer_ct void_ct, sym_ (fsym, Loc))) in *)
-          (* let ctxt = Context.add_l fsym Loc ctxt in *)
-          (* let ctxt = Context.add_c lc1 ctxt in *)
-          (* let ctxt = Context.add_c lc2 ctxt in *)
-          ctxt
-        in
-        let fun_decls = SymMap.add fsym (loc, ftyp, trusted) ctxt.global.fun_decls in
-        let global = { ctxt.global with fun_decls = fun_decls } in
-        return {ctxt with global}
-      ) mu_file.mu_funinfo ctxt
+  let@ () =
+    PmapM.iterM
+      (fun fsym (M_funinfo (loc, _attrs, ftyp, trusted, _has_proto)) ->
+        (* let lc1 = t_ (ne_ (null_, sym_ (fsym, Loc))) in *)
+        (* let lc2 = t_ (representable_ (Pointer Void, sym_ (fsym, Loc))) in *)
+        (* let@ () = add_l fsym Loc in *)
+        (* let@ () = add_cs [lc1; lc2] in *)
+        add_fun_decl fsym (loc, ftyp, trusted)
+      ) mu_file.mu_funinfo
   in
 
   let () = Debug_ocaml.begin_csv_timing "welltypedness" in
@@ -3019,36 +2978,24 @@ let check mu_file =
         | _ ->
            let () = debug 2 (lazy (headline ("checking welltypedness of procedure " ^ Sym.pp_string fsym))) in
            let () = debug 2 (lazy (item "type" (AT.pp RT.pp ftyp))) in
-           Typing.run ctxt (WellTyped.WFT.good "global" loc ftyp)
+           WellTyped.WFT.good "global" loc ftyp
       ) mu_file.mu_funinfo
   in
   let () = Debug_ocaml.end_csv_timing "welltypedness" in
 
   let check_function =
     fun fsym fn ->
-    let decl = Global.get_fun_decl ctxt.global fsym in
+    let@ (loc, ftyp, trusted) = get_fun_decl Locations.unknown fsym in
     let () = Debug_ocaml.begin_csv_timing "functions" in
     let start = time_log_start "function" (CF.Pp_symbol.to_string fsym) in
-    let@ () = match fn, decl with
-      | M_Fun (rbt, args, body), Some (loc, ftyp, trusted) ->
-         begin match trusted with
-         | CF.Mucore.Trusted _ -> return ()
-         | CF.Mucore.Checked -> 
-            check_function loc (Sym.pp_string fsym) args rbt body ftyp ctxt
-         end
-      | M_Fun (rbt, args, body), None ->
-         fail {loc = Loc.unknown; msg = Unknown_function fsym}
-      | M_Proc (loc, rbt, args, body, labels), Some (loc', ftyp, trusted) ->
-         begin match trusted with
-         | CF.Mucore.Trusted _ -> return ()
-         | CF.Mucore.Checked -> 
-            check_procedure loc' fsym args rbt body ftyp labels ctxt
-         end
-      | M_Proc (loc, rbt, args, body, labels), None ->
-         fail {loc; msg = Unknown_function fsym}
-      | M_ProcDecl _, _ -> 
+    let@ () = match trusted, fn with
+      | Trusted _, _ -> 
          return ()
-      | M_BuiltinDecl _, _ -> 
+      | Checked, M_Fun (rbt, args, body) ->
+         check_function loc (Sym.pp_string fsym) args rbt body ftyp
+      | Checked, M_Proc (loc', rbt, args, body, labels) ->
+         check_procedure loc fsym args rbt body ftyp labels
+      | _, (M_ProcDecl _ | M_BuiltinDecl _) -> (* TODO: ? *) 
          return ()
     in
     Debug_ocaml.end_csv_timing "functions";

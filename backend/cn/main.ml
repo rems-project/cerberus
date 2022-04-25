@@ -209,7 +209,7 @@ let main
        let result = 
          Pp.progress_simple "pre-processing" "translating specifications";
          let@ file = Retype.retype_file pred_defs file in
-         Check.check file 
+         Typing.run Context.empty (Check.check file)
        in
        Pp.maybe_close_times_channel ();
        match result with

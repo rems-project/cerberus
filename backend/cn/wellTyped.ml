@@ -54,12 +54,6 @@ let ensure_map_type loc context it =
   | Map (abt, rbt) -> return (abt, rbt)
   | _ -> fail (illtyped_index_term loc context it (IT.bt it) "map/array type")
 
-let get_struct_decl loc tag = 
-  let@ global = get_global () in
-  match SymMap.find_opt tag global.struct_decls with
-  | Some decl -> return decl
-  | None -> fail (fun _ -> {loc; msg = Unknown_struct tag})
-
 let ensure_same_argument_number loc input_output has ~expect =
   if has = expect then return () else 
     match input_output with

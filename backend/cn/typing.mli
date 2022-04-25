@@ -50,8 +50,19 @@ val map_and_fold_resources :
   (Resources.RE.t -> 'acc -> changed * 'acc) -> 
   'acc -> ('acc, 'e) m
 
+val get_struct_decl : Locations.t -> Sym.t -> (Memory.struct_decl, TypeErrors.t) m
+val get_member_type : Locations.t -> Sym.t -> Id.t -> Memory.struct_layout -> (Sctypes.t, TypeErrors.t) m
+val get_fun_decl : Locations.t -> Sym.t -> (Locations.t * Global.AT.ft * Cerb_frontend.Mucore.trusted, TypeErrors.t) m
+
 val get_resource_predicate_def : Locations.t -> string ->
     (ResourcePredicates.definition, TypeErrors.type_error) m
 val get_logical_predicate_def : Locations.t -> string ->
     (LogicalPredicates.definition, TypeErrors.type_error) m
 
+
+val add_struct_decl : Sym.t -> Memory.struct_layout -> (unit, 'e) m
+val add_fun_decl : Sym.t -> (Locations.t * ArgumentTypes.ft * Cerb_frontend.Mucore.trusted) -> (unit, 'e) m
+val add_impl_fun_decl : Cerb_frontend.Implementation.implementation_constant -> ArgumentTypes.ft -> (unit, 'e) m
+val add_impl_constant : Cerb_frontend.Implementation.implementation_constant -> ReturnTypes.t -> (unit, 'e) m
+val add_resource_predicate : string -> ResourcePredicates.definition -> (unit, 'e) m
+val add_logical_predicate : string -> LogicalPredicates.definition -> (unit, 'e) m

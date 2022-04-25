@@ -111,6 +111,11 @@ let get_global () =
   let@ s = get () in
   return (s.global)
 
+let set_global global : (unit, 'e) m = 
+  let@ ctxt = get () in
+  set {ctxt with global}
+
+
 let all_constraints () = 
   let@ s = get () in
   return s.constraints
@@ -326,3 +331,52 @@ let get_logical_predicate_def loc id =
     | None -> fail (fun _ -> {loc; msg = Unknown_logical_predicate {id;
         resource = Option.is_some (Global.get_resource_predicate_def global id)}})
 
+
+let get_struct_decl loc tag = 
+  let open TypeErrors in
+  let@ global = get_global () in
+  match SymMap.find_opt tag global.struct_decls with
+  | Some decl -> return decl
+  | None -> fail (fun _ -> {loc; msg = Unknown_struct tag})
+
+let get_member_type loc tag member layout : (Sctypes.t, TypeErrors.t) m = 
+  let open TypeErrors in
+  match List.assoc_opt Id.equal member (Memory.member_types layout) with
+  | Some membertyp -> return membertyp
+  | None -> fail (fun _ -> {loc; msg = Unknown_member (tag, member)})
+
+let get_fun_decl loc fsym = 
+  let open TypeErrors in
+  let@ global = get_global () in
+  match Global.get_fun_decl global fsym with
+  | Some t -> return t
+  | None -> fail (fun _ -> {loc = Loc.unknown; msg = Unknown_function fsym})
+
+
+
+let add_struct_decl tag layout : (unit, 'e) m = 
+  let@ global = get_global () in
+  set_global { global with struct_decls = SymMap.add tag layout global.struct_decls }
+
+let add_fun_decl fname entry = 
+  let@ global = get_global () in
+  set_global { global with fun_decls = SymMap.add fname entry global.fun_decls }
+
+let add_impl_fun_decl name entry = 
+  let@ global = get_global () in
+  set_global { global with impl_fun_decls = Global.ImplMap.add name entry global.impl_fun_decls }
+
+
+let add_impl_constant name entry = 
+  let@ global = get_global () in
+  set_global { global with impl_constants = Global.ImplMap.add name entry global.impl_constants }
+
+
+let add_resource_predicate name entry = 
+  let@ global = get_global () in
+  set_global { global with resource_predicates = Global.StringMap.add name entry global.resource_predicates }
+
+
+let add_logical_predicate name entry = 
+  let@ global = get_global () in
+  set_global { global with logical_predicates = Global.StringMap.add name entry global.logical_predicates }
