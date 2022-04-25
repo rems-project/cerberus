@@ -395,6 +395,8 @@ let pp_ctor = function
       !^ "Cfvfromint"
   | Civfromfloat ->
       !^ "Civfromfloat"
+  | CivNULLcap is_signed ->
+      !^ "CivNULLcap" ^^ P.parens (!^ (if is_signed then "signed" else "unsigned"))
 
 
 let rec pp_pattern (Pattern (_, pat)) =

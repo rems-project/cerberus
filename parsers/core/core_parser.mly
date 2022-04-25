@@ -498,6 +498,13 @@ let rec symbolify_pexpr (Pexpr (annot, (), _pexpr): parsed_pexpr) : pexpr Eff.t 
           | _ ->
               Eff.fail loc (Core_parser_ctor_wrong_application (2, List.length _pes))
         end
+    | PEctor (CivNULLcap is_signed, _pes) ->
+        begin match _pes with
+          | [] ->
+              Eff.return (Pexpr (annot, (), PEctor (CivNULLcap is_signed, [])))
+          | _ ->
+              Eff.fail loc (Core_parser_ctor_wrong_application (0, List.length _pes))
+        end
     | PEcase (_pe, _pat_pes) ->
         symbolify_pexpr _pe >>= fun pe ->
         Eff.mapM (fun (_pat, _pe) ->

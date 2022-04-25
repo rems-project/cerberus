@@ -330,6 +330,10 @@ val mk_alignof_pe: pexpr -> pexpr
 let mk_alignof_pe pe =
   Pexpr [] () (PEctor Civalignof [pe])
 
+val mk_nullcap_pe: bool -> pexpr
+let mk_nullcap_pe is_signed =
+  Pexpr [] () (PEctor (CivNULLcap is_signed) [])
+
 (* TODO: PEconstrained *)
 
 val mk_undef_pe: Loc.t -> Undefined.undefined_behaviour -> pexpr
@@ -1085,6 +1089,8 @@ let rec subst_pattern_val (Pattern _ pat) cval expr =
               "fvfromint"
           | Civfromfloat ->
               "ivfromfloat"
+          | CivNULLcap is_signed ->
+              "ivNULLcap(" ^ if is_signed then "signed" else "unsigned" ^ ")"
         end in
         error ("WIP: Core_aux.subst_pattern_val ==> ctor= " ^ str_ctor ^ ", |pats|= "
                ^ (show (List.length pats)) ^ " -- " ^ Pp.stringFromCore_value cval)
@@ -1380,6 +1386,8 @@ let rec unsafe_subst_pattern (Pattern _ pat) pe' expr =
               "fvfromint"
           | Civfromfloat ->
               "ivfromfloat"
+          | CivNULLcap is_signed ->
+              "ivNULLcap(" ^ if is_signed then "signed" else "unsigned" ^ ")"  
         end in
         error ("WIP: Core_aux.unsafe_subst_pattern ==> ctor= " ^ str_ctor ^ ", |pats|= "
                ^ (show (List.length pats)) ^ " -- " ^ Pp.stringFromCore_pexpr pe')
@@ -2519,6 +2527,8 @@ let rec update_env_aux (Pattern _ pat) cval env =
               "fvfromint"
           | Civfromfloat ->
               "ivfromfloat"
+          | CivNULLcap is_signed ->
+              "ivNULLcap(" ^ if is_signed then "signed" else "unsigned" ^ ")"  
         end in
         error ("WIP: Core_aux.update_env_aux ==> ctor= " ^ str_ctor ^ ", |pats|= "
                ^ (show (List.length pats)) ^ " -- " ^ Pp.stringFromCore_value cval)

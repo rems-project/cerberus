@@ -206,6 +206,7 @@ type generic_ctor =  (* data constructors *)
  | Cunspecified (* unspecified loaded value *)
  | Cfvfromint (* cast integer to floating value *)
  | Civfromfloat (* cast floating to integer value *)
+ | CivNULLcap of bool (* CHERI: null capability *)
 
 
 type generic_pattern_ 'sym = 

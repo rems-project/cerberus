@@ -140,6 +140,12 @@ let rec infer_pattern (Pattern annots pat) =
                      , Pattern annots (CaseCtor Civfromfloat [tpat1; tpat2]))
         | (Civfromfloat, _) ->
             error "infer_pattern: Cfvfromfloat: wrong number of arguments"
+        | (CivNULLcap is_signed, []) ->
+            E.return ( empty_env
+            , InferredType_object OTy_integer
+            , Pattern annots (CaseCtor (CivNULLcap is_signed) []))
+        | (CivNULLcap _, _) ->
+            error "infer_pattern: CivNULLcap: wrong number of arguments"
       end
 end
 
@@ -281,7 +287,7 @@ and typecheck_pattern expected_bTy (Pattern annots pat) =
             error "typecheck_pattern: Civfromint: wrong number of arguments"
 
         | (Civfromfloat, BTy_object OTy_integer, [pat1; pat2]) ->
-            typecheck_pattern BTy_ctype                pat1  >>= fun (env1, tpat1) ->
+            typecheck_pattern BTy_ctype                 pat1 >>= fun (env1, tpat1) ->
             typecheck_pattern (BTy_object OTy_floating) pat2 >>= fun (env2, tpat2) ->
             E.return ( env_union env1 env2
                      , Pattern annots (CaseCtor Civfromfloat [tpat1; tpat2] ))
@@ -289,6 +295,13 @@ and typecheck_pattern expected_bTy (Pattern annots pat) =
             E.fail loc (Mismatch "Civfromfloat" expected_bTy (BTy_object OTy_integer))
         | (Civfromfloat, _, _) ->
             error "typecheck_pattern: Civfromfloat: wrong number of arguments"
+        | (CivNULLcap is_signed, BTy_object OTy_integer, []) ->
+            E.return ( empty_env
+                     , Pattern annots (CaseCtor (CivNULLcap is_signed) []))
+        | (CivNULLcap _, _, []) ->
+            E.fail loc (Mismatch "CivNULLcap" expected_bTy (BTy_object OTy_integer))
+        | (CivNULLcap _, _, _) ->
+            error "typecheck_pattern: CivNULLcap: wrong number of arguments"  
       end
 end
 
@@ -906,6 +919,10 @@ and typecheck_pexpr tagDefs (env: typing_env) (bTy: core_base_type) (Pexpr annot
               E.return (PEctor Civfromfloat [pe_ty'; pe_fval'])
           | (Civfromfloat, _, _) ->
               E.fail loc (Mismatch "Civfromfloat" bTy (BTy_object OTy_integer))
+          | (CivNULLcap is_signed, BTy_object OTy_integer, []) ->
+              E.return (PEctor (CivNULLcap is_signed) [])
+          | (CivNULLcap _, _, _) ->
+              E.fail loc (Mismatch "CivNULLcap" bTy (BTy_object OTy_integer))
         end
     | PEcase pe cases ->
         infer_pexpr tagDefs env pe >>= fun (Pexpr _ infer _ as pe') ->
