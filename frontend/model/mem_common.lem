@@ -290,6 +290,8 @@ type pure_memop =
   | DeriveCap of derivecap_op * bool (* is_signed *)
     (* CHERI*) (* (integer, integer) -> integer (may result in UB) *)
   | CapAssignValue
+    (* CHERI *) (* integer -> integer *)
+  | Ptr_tIntValue
     (* CHERI *) (* (ctype, ctype, integer) -> integer (may result in UB) *)
     (* first type is that of the input, second is that of the output *)
   | IntcastPure

@@ -809,6 +809,9 @@ let derive_cap _ _ _ _ : integer_value =
 let cap_assign_value _ _ _ :(Undefined.undefined_behaviour, integer_value) Either.either =
   assert false (* CHERI only *)
 
+let ptr_t_int_value ival =
+  ival
+
 let null_cap _ : integer_value =
   assert false (* CHERI only *)
 

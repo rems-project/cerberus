@@ -1332,37 +1332,40 @@ else if AilTypesAux.is_pointer cast_ty && Aaux.is_null_pointer_constant e then
 else if AilTypesAux.is_arithmetic cast_ty && AilTypesAux.is_arithmetic e_ty then
   if AilTypesAux.is_integer cast_ty then
     if AilTypesAux.is_integer e_ty then
-      if Global.is_CHERI () then
-              (* let cast_sym_pat = Caux.mk_sym_pat let_sym (C.BTy_object C.OTy_integer) in *)
-              (* let cast_sym_pe  = Caux.mk_sym_pe let_sym in *)
-              Caux.mk_wseq_e e_sym_pat core_e (
-                Caux.mk_pure_e (
+      if Global.is_CHERI () && not (Ctype.is_ptr_t (ctype_of e)) && Ctype.is_ptr_t cast_ty then
+        Caux.mk_wseq_e e_sym_pat core_e begin
+          Caux.mk_pure_e begin
+            Caux.mk_case_pe e_sym_pe
+              [ ( Caux.mk_specified_pat obj_sym_pat
+                , Caux.mk_specified_pe begin
+                    let is_signed = AilTypesAux.is_signed_integer_type cast_ty in
+                    Caux.mk_memop_pe Mem_common.CapAssignValue [Caux.mk_nullcap_pe is_signed; stdlib.mkcall_conv_int cast_ty obj_sym_pe]
+                  end )
+              ; ( Caux.mk_unspecified_pat (Caux.mk_empty_pat C.BTy_ctype)
+                , Caux.mk_undef_pe loc (Undefined.DUMMY "integer to [u]intptr_t cast") ) ]
+          end
+        end
+      else if Global.is_CHERI () && Ctype.is_ptr_t (ctype_of e) && not (Ctype.is_ptr_t cast_ty) then
+              Caux.mk_wseq_e e_sym_pat core_e begin
+                Caux.mk_pure_e begin
                   Caux.mk_case_pe e_sym_pe
                     [ ( Caux.mk_specified_pat obj_sym_pat
-                      , Caux.mk_specified_pe (Caux.mk_memop_pe Mem_common.IntcastPure [(*Caux.mk_ctype_pe e_ty;*) Caux.mk_ctype_pe cast_ty; obj_sym_pe]) )
+                      , Caux.mk_specified_pe (stdlib.mkcall_conv_int cast_ty (Caux.mk_memop_pe Mem_common.Ptr_tIntValue [obj_sym_pe])) )
                     ; ( Caux.mk_unspecified_pat (Caux.mk_empty_pat C.BTy_ctype)
-                      , Caux.mk_undef_pe loc (Undefined.DUMMY "int to int cast") ) ]
-                )
-                (* Caux.mk_case_e e_sym_pe
-                  [ ( Caux.mk_specified_pat obj_sym_pat
-                    , Caux.mk_wseq_e cast_sym_pat (Caux.mk_memop_e Mem_common.Intcast [Caux.mk_ctype_pe e_ty; Caux.mk_ctype_pe cast_ty; obj_sym_pe])
-                      (Caux.mk_pure_e (Caux.mk_specified_pe cast_sym_pe)) )
-                ; ( Caux.mk_unspecified_pat (Caux.mk_empty_pat C.BTy_ctype)
-                  , Caux.mk_pure_e (Caux.mk_undef_pe loc (Undefined.DUMMY "int to int cast")) ) ] *)
-              )
+                      , Caux.mk_undef_pe loc (Undefined.DUMMY "[u]intptr_t to integer cast") ) ]
+                end
+              end
       else
               (* TODO: check *)
               Caux.mk_wseq_e e_sym_pat core_e (
                 Caux.mk_pure_e (stdlib.mkcall_conv_loaded_int cast_ty e_sym_pe)
               )
     else (* cast_ty is floating since it is an arithmetic type *)
-              (* TODO: this is wrong ==> need to pattern match the Specified *)
               Caux.mk_wseq_e e_sym_pat core_e (
                 Caux.mk_pure_e (stdlib.mkcall_loaded_ivfromfloat cast_ty e_sym_pe)
               )
   else
     if AilTypesAux.is_integer e_ty then
-              (* TODO: this is wrong ==> need to pattern match the Specified *)
               Caux.mk_wseq_e e_sym_pat core_e (
                 Caux.mk_pure_e (stdlib.mkcall_loaded_fvfromint cast_ty e_sym_pe)
               )
