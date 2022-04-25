@@ -1100,8 +1100,6 @@ match ty with
       true
   | Basic (Integer (Signed LongLong)) ->
       true
-  | Basic (Integer (Signed _)) ->
-      true
   | _ ->
       false
 end
@@ -1116,12 +1114,20 @@ let is_extended_signed_integer_type _ =
 val is_signed_integer_type: ctype -> bool
 let is_signed_integer_type (Ctype _ ty) =
   match ty with
+<<<<<<< HEAD
     | Basic (Integer ity) ->
         is_signed_ity ity
     | _ ->
         false
   end
 
+=======
+  | Basic (Integer ity) ->
+      is_signed_ity ity
+  | _ ->
+      false
+end
+>>>>>>> 6368309d (more elaboration of CHERI caps (bitwise operations))
 
 (* STD §6.2.5#6, sentences 1-2 *)
 val is_standard_unsigned_integer_type: ctype -> bool

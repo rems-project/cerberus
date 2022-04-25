@@ -150,6 +150,16 @@ let oneAil_tau =
 
 (* ========================================================================== *)
 
+let mk_cheri_derive_and_assign_cap is_signed cap_op (obj1_sym_pe, obj2_sym_pe) core_pe =
+  E.wrapped_fresh_symbol (C.BTy_object C.OTy_integer) >>= fun (_, cap_sym_pat, cap_sym_pe) ->
+  E.return begin
+    Caux.mk_let_pe cap_sym_pat
+      (Caux.mk_memop_pe (Mem_common.DeriveCap cap_op is_signed)
+        [obj1_sym_pe; obj2_sym_pe])
+      (Caux.mk_memop_pe Mem_common.CapAssignValue
+        [cap_sym_pe; core_pe])
+  end
+
 
 (*
 val shiftPathFromMember: A.program GenTypes.genTypeCategory -> Symbol.sym -> Symbol.identifier -> C.shift_path
@@ -312,6 +322,7 @@ and translate_mul_operator loc self usual_arithmetic_conversion stdlib result_ty
   E.wrapped_fresh_symbol (C.BTy_loaded oTy2) >>= fun (e2_sym  , e2_sym_pat  , e2_sym_pe  ) ->
   E.wrapped_fresh_symbol (C.BTy_object oTy1) >>= fun (obj1_sym, obj1_sym_pat, obj1_sym_pe) ->
   E.wrapped_fresh_symbol (C.BTy_object oTy2) >>= fun (obj2_sym, obj2_sym_pat, obj2_sym_pe) ->
+  E.wrapped_fresh_symbol (C.BTy_object C.OTy_integer) >>= fun (_, cap_sym_pat, cap_sym_pe) ->
   let (promoted1_pe, promoted2_pe) =
     Caux.mk_std_pair_pe "§6.5.5#3"
       (usual_arithmetic_conversion (ctype_of e1) (ctype_of e2) obj1_sym_pe obj2_sym_pe) in
@@ -325,7 +336,14 @@ and translate_mul_operator loc self usual_arithmetic_conversion stdlib result_ty
                (* Both operand are specified *)
                let core_mul = Caux.mk_std_pe "§6.5.5#4" (Caux.mk_op_pe C.OpMul promoted1_pe promoted2_pe) in
                Caux.mk_specified_pe begin
-if AilTypesAux.is_signed_integer_type result_ty then
+if Global.is_CHERI () && Ctype.is_ptr_t result_ty then
+                  Caux.mk_let_pe cap_sym_pat
+                    (Caux.mk_memop_pe (Mem_common.DeriveCap (Mem_common.DCbinary (A.Arithmetic A.Mul)) (AilTypesAux.is_signed_integer_type result_ty))
+                      [obj1_sym_pe; obj2_sym_pe])
+                    (Caux.mk_memop_pe Mem_common.CapAssignValue
+                      [cap_sym_pe; stdlib.mkcall_wrapI result_ty core_mul])
+
+else if AilTypesAux.is_signed_integer_type result_ty then
                  stdlib.mkcall_catch_exceptional_condition result_ty core_mul
 else if AilTypesAux.is_integer result_ty then
                  stdlib.mkcall_wrapI result_ty core_mul
@@ -631,6 +649,12 @@ and translate_bitwise_operator loc translate usual_arithmetic_conversion stdlib 
   let (promoted1_pe, promoted2_pe) =
     Caux.mk_std_pair_pe (std_id ^ "#3")
       (usual_arithmetic_conversion (ctype_of e1) (ctype_of e2) obj1_sym_pe obj2_sym_pe) in
+  let core_bop = stdlib_call result_ty promoted1_pe promoted2_pe in
+  let is_signed = AilTypesAux.is_signed_integer_type result_ty in
+  mk_cheri_derive_and_assign_cap is_signed
+    (Mem_common.DCbinary (A.Arithmetic aop))
+    (obj1_sym_pe, obj2_sym_pe)
+    core_bop >>= fun core_cheri_bop ->
   E.return begin
     C.Expr [Annot.Astd std_id] (
       C.Ewseq (Caux.mk_tuple_pat [ Caux.mk_sym_pat e1_sym (C.BTy_loaded oTy)
@@ -641,7 +665,12 @@ and translate_bitwise_operator loc translate usual_arithmetic_conversion stdlib 
               [ (Caux.mk_tuple_pat [ Caux.mk_specified_pat (Caux.mk_sym_pat obj1_sym (C.BTy_object oTy))
                                    ; Caux.mk_specified_pat (Caux.mk_sym_pat obj2_sym (C.BTy_object oTy)) ],
                  (* Both operand are specified *)
-                Caux.mk_specified_pe (Caux.mk_std_pe (std_id ^ "#4") (stdlib_call result_ty promoted1_pe promoted2_pe)) )
+                Caux.mk_specified_pe (Caux.mk_std_pe (std_id ^ "#4") begin
+                  if Global.is_CHERI () && Ctype.is_ptr_t result_ty then
+                    core_cheri_bop
+                  else
+                    core_bop
+                end) )
               ; (Caux.mk_empty_pat (C.BTy_tuple [C.BTy_loaded oTy; C.BTy_loaded oTy]),
                  Caux.mk_unspecified_pe result_ty) ]
           )
@@ -940,33 +969,48 @@ else
       (* CHECKED IN APR2016 *)
       | A.AilEunary A.Bnot e ->
           (* STD §6.5.3.3#4 *)
-          let obj_sym = Symbol.fresh () in
-          let e_sym   = Symbol.fresh () in
-          self e    >>= fun core_e  ->
+          self e >>= fun core_e ->
           let oTy = force_core_object_type_of_ctype (ctype_of e) in
-          E.return $
-            C.Expr [Annot.Astd "§6.5.3.3#4"] (
-              C.Ewseq (Caux.mk_sym_pat e_sym (C.BTy_loaded oTy)) core_e (
-                C.Expr [] (
-                  C.Epure (
-                    C.Pexpr [] () (
-                      C.PEcase (Caux.mk_sym_pe e_sym)
-                        [ (C.Pattern [] (C.CaseCtor C.Cspecified [Caux.mk_sym_pat obj_sym (C.BTy_object oTy)]),
-                           let promoted_e = Caux.mk_std_pe "§6.5.3.3#4, sentence 2" $ integer_promotion (ctype_of e) (Caux.mk_sym_pe obj_sym) in
-                           (* NOTE: result_ty == promoted type of e *)
-                           Caux.mk_specified_pe (if AilTypesAux.is_unsigned_integer_type result_ty then
-                             (* STD §6.5.3.3#4, sentence 3 *)
-                             Caux.mk_std_pe "§6.5.3.3#4, sentence 3" $ Caux.mk_op_pe C.OpSub (Caux.mk_ivmax_pe (Caux.mk_ail_ctype_pe result_ty)) promoted_e
-                           else
-                             Caux.bitwise_complement_pe (Caux.mk_ail_ctype_pe result_ty) promoted_e))
-                        ; (C.Pattern [] (C.CaseCtor C.Cunspecified [Caux.mk_empty_pat C.BTy_ctype]),
-                           (* TODO: check that result_ty = promoted (ctype_of e) *)
-                           Caux.mk_unspecified_pe result_ty) ]
-                    )
-                  )
-                )
-              )
-            )
+          E.wrapped_fresh_symbol (C.BTy_loaded oTy)           >>= fun (_, e_sym_pat  , e_sym_pe  ) ->
+          E.wrapped_fresh_symbol (C.BTy_object oTy)           >>= fun (_, obj_sym_pat, obj_sym_pe) ->
+          let promoted_e = Caux.mk_std_pe "§6.5.3.3#4, sentence 2" (integer_promotion (ctype_of e) obj_sym_pe) in
+          let core_bnot =
+            if AilTypesAux.is_unsigned_integer_type result_ty then
+              (* STD §6.5.3.3#4, sentence 3 *)
+              Caux.mk_std_pe "§6.5.3.3#4, sentence 3"
+                (Caux.mk_op_pe C.OpSub (Caux.mk_ivmax_pe (Caux.mk_ail_ctype_pe result_ty)) promoted_e)
+            else
+              Caux.bitwise_complement_pe (Caux.mk_ail_ctype_pe result_ty) promoted_e in
+          let is_signed = AilTypesAux.is_signed_integer_type result_ty in
+          mk_cheri_derive_and_assign_cap is_signed
+            (Mem_common.DCunary A.Bnot)
+            (Caux.mk_nullcap_pe is_signed, obj_sym_pe)
+            core_bnot >>= fun core_cheri_bnot ->
+          E.return begin
+            Caux.add_std "§6.5.3.3#4" begin
+              Caux.mk_wseq_e e_sym_pat core_e begin
+                Caux.mk_pure_e begin
+                  Caux.mk_case_pe e_sym_pe
+                    [ ( Caux.mk_specified_pat obj_sym_pat
+                      , (* NOTE: result_ty == promoted type of e *)
+                        Caux.mk_specified_pe begin
+                          if Global.is_CHERI () && Ctype.is_ptr_t result_ty then
+                            core_cheri_bnot
+                            (* let is_signed = AilTypesAux.is_signed_integer_type result_ty in
+                            Caux.mk_let_pe cap_sym_pat
+                              (Caux.mk_memop_pe (Mem_common.DeriveCap (Mem_common.DCunary A.Bnot) is_signed)
+                                [Caux.mk_nullcap_pe is_signed; obj_sym_pe])
+                              (Caux.mk_memop_pe Mem_common.CapAssignValue
+                                [cap_sym_pe; core_bnot]) *)
+                          else 
+                            core_bnot
+                        end )
+                    ; ( Caux.mk_empty_pat (C.BTy_loaded oTy)
+                      , Caux.mk_unspecified_pe result_ty ) ]
+                end
+              end
+            end
+          end
       
       (* CHECKED IN APR2016 *)
       | A.AilEunary A.Address (A.AnnotatedExpression _ _ _ (A.AilEunary A.Indirection e)) ->
@@ -1416,13 +1460,13 @@ if AilTypesAux.is_arithmetic (ctype_of e1) && AilTypesAux.is_arithmetic (ctype_o
                       , (* Both operand are specified *)
                         let core_add = Caux.mk_std_pe "§6.5.6#5" (Caux.mk_op_pe C.OpAdd promoted1_pe promoted2_pe) in
                         Caux.mk_specified_pe (
-  if AilTypesAux.is_signed_integer_type result_ty then
-    if Global.is_CHERI () && Ctype.is_ptr_t result_ty then
-      Caux.mk_let_pe cap_sym_pat
-        (Caux.mk_memop_pe (Mem_common.DeriveCap (A.Arithmetic A.Add) true(* is_signed *)) [obj1_sym_pe; obj2_sym_pe])
-        (Caux.mk_memop_pe Mem_common.CapAssignValue
-          [cap_sym_pe; core_add (*(stdlib.mkcall_catch_exceptional_condition result_ty core_add)*)])
-    else
+  if Global.is_CHERI () && Ctype.is_ptr_t result_ty then
+                          Caux.mk_let_pe cap_sym_pat
+                            (Caux.mk_memop_pe (Mem_common.DeriveCap (Mem_common.DCbinary (A.Arithmetic A.Add)) (AilTypesAux.is_signed_integer_type result_ty))
+                              [obj1_sym_pe; obj2_sym_pe])
+                            (Caux.mk_memop_pe Mem_common.CapAssignValue
+                              [cap_sym_pe; stdlib.mkcall_wrapI result_ty core_add])
+  else if AilTypesAux.is_signed_integer_type result_ty then
                           stdlib.mkcall_catch_exceptional_condition result_ty core_add
   else if AilTypesAux.is_integer result_ty then
                           stdlib.mkcall_wrapI result_ty core_add
@@ -1499,6 +1543,7 @@ if AilTypesAux.is_arithmetic (ctype_of e1) && AilTypesAux.is_arithmetic (ctype_o
           E.wrapped_fresh_symbol (C.BTy_loaded oTy2) >>= fun (e2_sym, e2_sym_pat, e2_sym_pe)       ->
           E.wrapped_fresh_symbol (C.BTy_object oTy1) >>= fun (obj1_sym, obj1_sym_pat, obj1_sym_pe) ->
           E.wrapped_fresh_symbol (C.BTy_object oTy2) >>= fun (obj2_sym, obj2_sym_pat, obj2_sym_pe) ->
+          E.wrapped_fresh_symbol (C.BTy_object C.OTy_integer) >>= fun (_, cap_sym_pat, cap_sym_pe) ->
           let (promoted1_pe, promoted2_pe) =
             Caux.mk_std_pair_pe "§6.5.6#4"
               (usual_arithmetic_conversion (ctype_of e1) (ctype_of e2) obj1_sym_pe obj2_sym_pe) in
@@ -1512,7 +1557,13 @@ if AilTypesAux.is_arithmetic (ctype_of e1) && AilTypesAux.is_arithmetic (ctype_o
                       , (* Both operand are specified *)
                         let core_sub = Caux.mk_std_pe "§6.5.6#6" $ Caux.mk_op_pe C.OpSub promoted1_pe promoted2_pe in
                         Caux.mk_specified_pe $
-  if AilTypesAux.is_signed_integer_type result_ty then
+  if Global.is_CHERI () && Ctype.is_ptr_t result_ty then
+                          Caux.mk_let_pe cap_sym_pat
+                            (Caux.mk_memop_pe (Mem_common.DeriveCap (Mem_common.DCbinary (A.Arithmetic A.Sub)) (AilTypesAux.is_signed_integer_type result_ty))
+                              [obj1_sym_pe; obj2_sym_pe])
+                            (Caux.mk_memop_pe Mem_common.CapAssignValue
+                              [cap_sym_pe; stdlib.mkcall_wrapI result_ty core_sub])
+  else if AilTypesAux.is_signed_integer_type result_ty then
                           stdlib.mkcall_catch_exceptional_condition result_ty core_sub
   else if AilTypesAux.is_integer result_ty then
                           stdlib.mkcall_wrapI result_ty core_sub
