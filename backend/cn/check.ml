@@ -120,6 +120,7 @@ let pattern_match =
     let (M_Pattern (loc, _, pattern) : mu_pattern) = pat in
     match pattern with
     | M_CaseBase (o_s, has_bt) ->
+       let@ () = WellTyped.WBT.is_bt loc has_bt in
        let lsym = Sym.fresh () in 
        let@ () = add_l lsym has_bt in
        begin match o_s with
@@ -132,8 +133,10 @@ let pattern_match =
     | M_CaseCtor (constructor, pats) ->
        match constructor, pats with
        | M_Cnil item_bt, [] ->
+          let@ () = WellTyped.WBT.is_bt loc item_bt in
           return (IT.nil_ ~item_bt)
        | M_Cnil item_bt, _ ->
+          let@ () = WellTyped.WBT.is_bt loc item_bt in
           fail (fun _ -> {loc; msg = Number_arguments {has = List.length pats; expect = 0}})
        | M_Ccons, [p1; p2] ->
           let@ it1 = aux p1 in
@@ -1702,9 +1705,11 @@ let infer_constructor (loc : loc) (constructor : mu_ctor)
   | M_Cspecified, _ ->
      fail (fun _ -> {loc; msg = Number_arguments {has = List.length args; expect = 1}})
   | M_Cnil item_bt, [] -> 
+     let@ () = WellTyped.WBT.is_bt loc item_bt in
      let bt = List item_bt in
      return (bt, nil_ ~item_bt)
   | M_Cnil item_bt, _ -> 
+     let@ () = WellTyped.WBT.is_bt loc item_bt in
      fail (fun _ -> {loc; msg = Number_arguments {has = List.length args; expect=0}})
   | M_Ccons, [arg1; arg2] -> 
      let bt = List arg1.bt in
@@ -1716,12 +1721,18 @@ let infer_constructor (loc : loc) (constructor : mu_ctor)
 
 
 
+
+
 let infer_ptrval (loc : loc) (ptrval : pointer_value) : (vt, type_error) m =
   CF.Impl_mem.case_ptrval ptrval
     ( fun ct -> 
+      let sct = Retype.ct_of_ct loc ct in
+      let@ () = WellTyped.WCT.is_ct loc sct in
       return (Loc, IT.null_) )
     ( fun sym -> 
-      return (Loc, sym_ (sym, BT.Loc)) )
+      let@ _ = get_fun_decl loc sym in
+      return (Loc, sym_ (sym, BT.Loc)) 
+    )
     ( fun _prov loc -> 
       return (Loc, pointer_ loc) )
     ( fun () -> 
@@ -1731,14 +1742,18 @@ let rec infer_mem_value (loc : loc) (mem : mem_value) : (vt, type_error) m =
   let open BT in
   CF.Impl_mem.case_mem_value mem
     ( fun ct -> 
+      let@ () = WellTyped.WCT.is_ct loc (Retype.ct_of_ct loc ct) in
       fail (fun _ -> {loc; msg = Unspecified ct}) )
     ( fun _ _ -> 
       unsupported loc !^"infer_mem_value: concurrent read case" )
-    ( fun it iv -> 
+    ( fun ity iv -> 
+      (* TODO: do anything with ity? *)
       return (Integer, int_ (Memory.int_of_ival iv)) )
     ( fun ft fv -> 
       unsupported loc !^"floats" )
-    ( fun _ ptrval -> 
+    ( fun ct ptrval -> 
+      (* TODO: do anything else with ct? *)
+      let@ () = WellTyped.WCT.is_ct loc (Retype.ct_of_ct loc ct) in
       infer_ptrval loc ptrval  )
     ( fun mem_values -> 
       let@ vts = ListM.mapM (infer_mem_value loc) mem_values in
@@ -1813,6 +1828,7 @@ let rec infer_value (loc : loc) (v : 'bty mu_value) : (vt, type_error) m =
   | M_Vfalse -> 
      return (Bool, IT.bool_ false)
   | M_Vlist (bt, vals) ->
+     let@ () = WellTyped.WBT.is_bt loc bt in
      let@ its = 
        ListM.mapM (fun v -> 
            let@ (i_bt, i_it) = infer_value loc v in
@@ -1834,7 +1850,8 @@ let rec infer_value (loc : loc) (v : 'bty mu_value) : (vt, type_error) m =
 (*** pure expression inference ************************************************)
 
 
-let infer_array_shift loc asym1 ct asym2 =
+let infer_array_shift loc asym1 loc_ct ct asym2 =
+  let@ () = WellTyped.WCT.is_ct loc_ct ct in
   let@ arg1 = arg_of_asym asym1 in
   let@ arg2 = arg_of_asym asym2 in
   let@ () = ensure_base_type arg1.loc ~expect:Loc arg1.bt in
@@ -1907,10 +1924,11 @@ let infer_pexpr (pe : 'bty mu_pexpr) : (RT.t, type_error) m =
        return (rt_of_vt loc vt)
     | M_Cfvfromint _ -> 
        unsupported loc !^"floats"
-    | M_Civfromfloat _ -> 
+    | M_Civfromfloat (act, _) -> 
+       let@ () = WellTyped.WCT.is_ct act.loc act.ct in
        unsupported loc !^"floats"
     | M_PEarray_shift (asym1, ct, asym2) ->
-       infer_array_shift loc asym1 ct asym2
+       infer_array_shift loc asym1 loc ct asym2
     | M_PEmember_shift (asym, tag, member) ->
        let@ arg = arg_of_asym asym in
        let@ () = ensure_base_type arg.loc ~expect:Loc arg.bt in
@@ -1994,6 +2012,7 @@ let infer_pexpr (pe : 'bty mu_pexpr) : (RT.t, type_error) m =
        let vt = (Integer, (ite_ (it_of_arg arg, int_ 1, int_ 0))) in
        return (rt_of_vt loc vt)
     | M_PEconv_int (act, asym) ->
+       let@ () = WellTyped.WCT.is_ct act.loc act.ct in
        let@ arg = arg_of_asym asym in
        let@ () = ensure_base_type arg.loc ~expect:Integer arg.bt in
        (* try to follow conv_int from runtime/libcore/std.core *)
@@ -2177,6 +2196,7 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t, type_error) m =
        | M_PtrGe (asym1, asym2) -> 
           pointer_op gePointer_ asym1 asym2
        | M_Ptrdiff (act, asym1, asym2) -> 
+          let@ () = WellTyped.WCT.is_ct act.loc act.ct in
           let@ arg1 = arg_of_asym asym1 in
           let@ arg2 = arg_of_asym asym2 in
           let@ () = ensure_base_type arg1.loc ~expect:Loc arg1.bt in
@@ -2195,6 +2215,8 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t, type_error) m =
           let vt = (Integer, v) in
           return (rt_of_vt loc vt)
        | M_IntFromPtr (act_from, act_to, asym) ->
+          let@ () = WellTyped.WCT.is_ct act_from.loc act_from.ct in
+          let@ () = WellTyped.WCT.is_ct act_to.loc act_to.ct in
           let@ arg = arg_of_asym asym in
           let@ () = ensure_base_type arg.loc ~expect:Loc arg.bt in
           let v = pointerToIntegerCast_ (it_of_arg arg) in
@@ -2216,23 +2238,27 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t, type_error) m =
           let vt = (Integer, v) in
           return (rt_of_vt loc vt)
        | M_PtrFromInt (act_from, act2_to, asym) ->
+          let@ () = WellTyped.WCT.is_ct act_from.loc act_from.ct in
+          let@ () = WellTyped.WCT.is_ct act2_to.loc act2_to.ct in
           let@ arg = arg_of_asym asym in
           let@ () = ensure_base_type arg.loc ~expect:Integer arg.bt in
           let vt = (Loc, integerToPointerCast_ (it_of_arg arg)) in
           return (rt_of_vt loc vt)
        | M_PtrValidForDeref (act, asym) ->
           (* check *)
+          let@ () = WellTyped.WCT.is_ct act.loc act.ct in
           let@ arg = arg_of_asym asym in
           let@ () = ensure_base_type arg.loc ~expect:Loc arg.bt in
           let vt = (Bool, aligned_ (it_of_arg arg, act.ct)) in
           return (rt_of_vt loc vt)
        | M_PtrWellAligned (act, asym) ->
+          let@ () = WellTyped.WCT.is_ct act.loc act.ct in
           let@ arg = arg_of_asym asym in
           let@ () = ensure_base_type arg.loc ~expect:Loc arg.bt in
           let vt = (Bool, aligned_ (it_of_arg arg, act.ct)) in
           return (rt_of_vt loc vt)
        | M_PtrArrayShift (asym1, act, asym2) ->
-          infer_array_shift loc asym1 act.ct asym2
+          infer_array_shift loc asym1 act.loc act.ct asym2
        | M_Memcpy _ (* (asym 'bty * asym 'bty * asym 'bty) *) ->
           Debug_ocaml.error "todo: M_Memcpy"
        | M_Memcmp _ (* (asym 'bty * asym 'bty * asym 'bty) *) ->
@@ -2251,6 +2277,7 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t, type_error) m =
     | M_Eaction (M_Paction (_pol, M_Action (aloc, action_))) ->
        begin match action_ with
        | M_Create (asym, act, _prefix) -> 
+          let@ () = WellTyped.WCT.is_ct act.loc act.ct in
           let@ arg = arg_of_asym asym in
           let@ () = ensure_base_type arg.loc ~expect:Integer arg.bt in
           let ret = Sym.fresh () in
@@ -2280,6 +2307,7 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t, type_error) m =
        | M_Kill (M_Dynamic, asym) -> 
           Debug_ocaml.error "todo: Free"
        | M_Kill (M_Static ct, asym) -> 
+          let@ () = WellTyped.WCT.is_ct loc ct in
           let@ arg = arg_of_asym asym in
           let@ () = ensure_base_type arg.loc ~expect:Loc arg.bt in
           let@ _ = 
@@ -2294,6 +2322,7 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t, type_error) m =
           let rt = RT.Computational ((Sym.fresh (), Unit), (loc, None), I) in
           return rt
        | M_Store (_is_locking, act, pasym, vasym, mo) -> 
+          let@ () = WellTyped.WCT.is_ct act.loc act.ct in
           let@ parg = arg_of_asym pasym in
           let@ varg = arg_of_asym vasym in
           let@ () = ensure_base_type loc ~expect:(BT.of_sct act.ct) varg.bt in
@@ -2347,6 +2376,7 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t, type_error) m =
           in
           return rt
        | M_Load (act, pasym, _mo) -> 
+          let@ () = WellTyped.WCT.is_ct act.loc act.ct in
           let@ parg = arg_of_asym pasym in
           let@ () = ensure_base_type parg.loc ~expect:Loc parg.bt in
           let@ point = 
@@ -2395,7 +2425,9 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t, type_error) m =
     | M_Eskip -> 
        let rt = RT.Computational ((Sym.fresh (), Unit), (loc, None), I) in
        return rt
-    | M_Eccall (_ctype, afsym, asyms) ->
+    | M_Eccall (act, afsym, asyms) ->
+       (* todo: do anything with act? *)
+       let@ () = WellTyped.WCT.is_ct act.loc act.ct in
        let@ args = args_of_asyms asyms in
        let@ (_loc, ft, _) = get_fun_decl loc afsym.sym in
        Spine.calltype_ft loc args ft
@@ -2493,6 +2525,7 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t, type_error) m =
           return rt
        end
     | M_Erpredicate (pack_unpack, TPU_Struct tag, asyms) ->
+       let@ _layout = get_struct_decl loc tag in
        let@ args = args_of_asyms asyms in
        let@ () = 
          (* "+1" because of pointer argument *)

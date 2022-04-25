@@ -47,6 +47,18 @@ type funinfo_extras = (Sym.t, Ast.function_spec * Mapping.t) Pmap.map
 
 
 
+let map_act f (a : 'TY Old.act) =
+  let ct = f a.ct in
+  let act = New.{ 
+      loc = a.loc;
+      annot = a.annot;
+      type_annot = a.type_annot;
+      ct = ct 
+    }
+  in
+  act
+
+
 let mapM_act f (a : 'TY Old.act) : ('TY New.act, type_error) m =
   let@ ct = f a.ct in
   let act = New.{ 
@@ -68,15 +80,15 @@ type ctype_information = {
 
 let ct_of_ct loc ct = 
   match Sctypes.of_ctype ct with
-  | Some ct -> return ct
-  | None -> return (unsupported loc (!^"ctype" ^^^ CF.Pp_core_ctype.pp_ctype ct))
+  | Some ct -> ct
+  | None -> unsupported loc (!^"ctype" ^^^ CF.Pp_core_ctype.pp_ctype ct)
 
 
 (* for convenience *)
 let ctype_information (loc : Loc.t) ct = 
-  let@ ct = ct_of_ct loc ct in
+  let ct = ct_of_ct loc ct in
   let bt = BT.of_sct ct in
-  return {bt; ct}
+  {bt; ct}
 
 
 
@@ -127,7 +139,7 @@ let rec retype_object_value (loc : Loc.t) = function
   | Old.M_OVstruct (s, members) ->
      let@ members = 
        mapM (fun (id, ct, mv) ->
-           let@ ct = ct_of_ct loc ct in
+           let ct = ct_of_ct loc ct in
            return (id, ct, mv)
          ) members
      in
@@ -176,24 +188,24 @@ let retype_pexpr (Old.M_Pexpr (loc, annots,bty,pexpr_)) =
        let@ ctor = retype_ctor loc ctor in
        return (New.M_PEctor (ctor,asyms))
     | M_CivCOMPL (act, asym) -> 
-       let@ act = mapM_act (ct_of_ct loc) act in
+       let act = map_act (ct_of_ct loc) act in
        return (New.M_CivCOMPL (act, asym))
     | M_CivAND (act, asym1, asym2) -> 
-       let@ act = mapM_act (ct_of_ct loc) act in
+       let act = map_act (ct_of_ct loc) act in
        return (New.M_CivAND (act, asym1, asym2))
     | M_CivOR (act, asym1, asym2) -> 
-       let@ act = mapM_act (ct_of_ct loc) act in
+       let act = map_act (ct_of_ct loc) act in
        return (New.M_CivOR (act, asym1, asym2))
     | M_CivXOR (act, asym1, asym2) -> 
-       let@ act = mapM_act (ct_of_ct loc) act in
+       let act = map_act (ct_of_ct loc) act in
        return (New.M_CivXOR (act, asym1, asym2))
     | M_Cfvfromint asym -> 
        return (New.M_Cfvfromint asym)
     | M_Civfromfloat (act, asym) -> 
-       let@ act = mapM_act (ct_of_ct loc) act in
+       let act = map_act (ct_of_ct loc) act in
        return (New.M_Civfromfloat (act, asym))
     | M_PEarray_shift (asym,ct,asym') ->
-       let@ ict = ct_of_ct loc ct in
+       let ict = ct_of_ct loc ct in
        return (New.M_PEarray_shift (asym,ict,asym'))
     | M_PEmember_shift (asym,sym,id) ->
        return (New.M_PEmember_shift (asym,sym,id))
@@ -214,10 +226,10 @@ let retype_pexpr (Old.M_Pexpr (loc, annots,bty,pexpr_)) =
     | M_PEbool_to_integer asym ->
        return (New.M_PEbool_to_integer asym)
     | M_PEconv_int (act, asym) ->
-       let@ act = mapM_act (ct_of_ct loc) act in
+       let act = map_act (ct_of_ct loc) act in
        return (New.M_PEconv_int (act, asym))
     | M_PEwrapI (act, asym) ->
-       let@ act = mapM_act (ct_of_ct loc) act in
+       let act = map_act (ct_of_ct loc) act in
        return (New.M_PEwrapI (act, asym))
   in
   return (New.M_Pexpr (loc, annots,bty,pexpr_))
@@ -260,24 +272,24 @@ let retype_memop (loc : Loc.t) = function
   | Old.M_PtrLe (asym1,asym2) -> return (New.M_PtrLe (asym1,asym2))
   | Old.M_PtrGe (asym1,asym2) -> return (New.M_PtrGe (asym1,asym2))
   | Old.M_Ptrdiff (act, asym1, asym2) ->
-     let@ act = mapM_act (ct_of_ct loc) act in
+     let act = map_act (ct_of_ct loc) act in
      return (New.M_Ptrdiff (act, asym1, asym2))
   | Old.M_IntFromPtr (act1, act2, asym) ->
-     let@ act1 = mapM_act (ct_of_ct loc) act1 in
-     let@ act2 = mapM_act (ct_of_ct loc) act2 in
+     let act1 = map_act (ct_of_ct loc) act1 in
+     let act2 = map_act (ct_of_ct loc) act2 in
      return (New.M_IntFromPtr (act1, act2, asym))
   | Old.M_PtrFromInt (act1, act2, asym) ->
-     let@ act1 = mapM_act (ct_of_ct loc) act1 in
-     let@ act2 = mapM_act (ct_of_ct loc) act2 in
+     let act1 = map_act (ct_of_ct loc) act1 in
+     let act2 = map_act (ct_of_ct loc) act2 in
      return (New.M_PtrFromInt (act1, act2, asym))
   | Old.M_PtrValidForDeref (act, asym) ->
-     let@ act = mapM_act (ct_of_ct loc) act in
+     let act = map_act (ct_of_ct loc) act in
      return (New.M_PtrValidForDeref (act, asym))
   | Old.M_PtrWellAligned (act, asym) ->
-     let@ act = mapM_act (ct_of_ct loc) act in
+     let act = map_act (ct_of_ct loc) act in
      return (New.M_PtrWellAligned (act, asym))
   | Old.M_PtrArrayShift (asym1, act, asym2) ->
-     let@ act = mapM_act (ct_of_ct loc) act in
+     let act = map_act (ct_of_ct loc) act in
      return (New.M_PtrArrayShift (asym1, act, asym2))
   | Old.M_Memcpy (asym1,asym2,asym3) -> 
      return (New.M_Memcpy (asym1,asym2,asym3))
@@ -289,7 +301,7 @@ let retype_memop (loc : Loc.t) = function
      return (New.M_Va_start (asym1,asym2))
   | Old.M_Va_copy asym -> return (New.M_Va_copy asym)
   | Old.M_Va_arg (asym, act) ->
-     let@ act = mapM_act (ct_of_ct loc) act in
+     let act = map_act (ct_of_ct loc) act in
      return (New.M_Va_arg (asym, act))
   | Old.M_Va_end asym -> return (New.M_Va_end asym)
 
@@ -297,45 +309,45 @@ let retype_memop (loc : Loc.t) = function
 let retype_action (Old.M_Action (loc,action_)) =
   let@ action_ = match action_ with
     | M_Create (asym, act, prefix) ->
-       let@ act = mapM_act (ct_of_ct loc) act in
+       let act = map_act (ct_of_ct loc) act in
        return (New.M_Create (asym, act, prefix))
     | M_CreateReadOnly (asym1, act, asym2, prefix) ->
-       let@ act = mapM_act (ct_of_ct loc) act in
+       let act = map_act (ct_of_ct loc) act in
        return (New.M_CreateReadOnly (asym1, act, asym2, prefix))
     | M_Alloc (asym1, asym2, prefix) ->
        return (New.M_Alloc (asym1, asym2, prefix))
     | M_Kill (M_Dynamic, asym) -> 
        return (New.M_Kill (M_Dynamic, asym))
     | M_Kill (M_Static ct, asym) -> 
-       let@ ict = ct_of_ct loc ct in
+       let ict = ct_of_ct loc ct in
        return (New.M_Kill (M_Static ict, asym))
     | M_Store (m, act, asym1, asym2, mo) ->
-       let@ act = mapM_act (ct_of_ct loc) act in
+       let act = map_act (ct_of_ct loc) act in
        return (New.M_Store (m, act, asym1, asym2, mo))
     | M_Load (act, asym, mo) ->
-       let@ act = mapM_act (ct_of_ct loc) act in
+       let act = map_act (ct_of_ct loc) act in
        return (New.M_Load (act, asym, mo))
     | M_RMW (act, asym1, asym2, asym3, mo1, mo2) ->
-       let@ act = mapM_act (ct_of_ct loc) act in
+       let act = map_act (ct_of_ct loc) act in
        return (New.M_RMW (act, asym1, asym2, asym3, mo1, mo2))
     | M_Fence mo ->
        return (New.M_Fence mo)
     | M_CompareExchangeStrong (act, asym1, asym2, asym3, mo1, mo2) -> 
-       let@ act = mapM_act (ct_of_ct loc) act in
+       let act = map_act (ct_of_ct loc) act in
        return (New.M_CompareExchangeStrong (act, asym1, asym2, asym3, mo1, mo2))
     | M_CompareExchangeWeak (act, asym1, asym2, asym3, mo1, mo2) ->
-       let@ act = mapM_act (ct_of_ct loc) act in
+       let act = map_act (ct_of_ct loc) act in
        return (New.M_CompareExchangeWeak (act, asym1, asym2, asym3, mo1, mo2))
     | M_LinuxFence mo ->
        return (New.M_LinuxFence mo)
     | M_LinuxLoad (act, asym, mo) ->
-       let@ act = mapM_act (ct_of_ct loc) act in
+       let act = map_act (ct_of_ct loc) act in
        return (New.M_LinuxLoad (act, asym, mo))
     | M_LinuxStore (act, asym1, asym2, mo) ->
-       let@ act = mapM_act (ct_of_ct loc) act in
+       let act = map_act (ct_of_ct loc) act in
        return (New.M_LinuxStore (act, asym1, asym2, mo))
     | M_LinuxRMW (act, asym1, asym2, mo) ->
-       let@ act = mapM_act (ct_of_ct loc) act in
+       let act = map_act (ct_of_ct loc) act in
        return (New.M_LinuxRMW (act, asym1, asym2, mo))
   in
   return (New.M_Action (loc,action_))
@@ -361,7 +373,7 @@ let retype_expr (Old.M_Expr (loc, annots, expr_)) =
     | M_Eskip ->
        return (New.M_Eskip)
     | M_Eccall (act,asym,asyms) ->
-       let@ act = mapM_act (ct_of_ct loc) act in
+       let act = map_act (ct_of_ct loc) act in
        return (New.M_Eccall (act,asym,asyms))
     | M_Eproc (name,asyms) ->
        return (New.M_Eproc (name,asyms))
@@ -469,14 +481,14 @@ let retype_file pred_defs (file : 'TY Old.mu_file) : ('TY New.mu_file, type_erro
       let loc = Loc.unknown in
       match glob with
       | Old.M_GlobalDef (lsym, (bt,ct),expr) ->
-         let@ ct = ct_of_ct loc ct in
+         let ct = ct_of_ct loc ct in
          let bt = BT.of_sct ct in
          let@ expr = retype_texpr expr in
          let globs = (sym, New.M_GlobalDef (lsym, (bt,ct),expr)) :: globs in
          let glob_typs = (sym, lsym, ct) :: glob_typs in
          return (globs, glob_typs)
       | M_GlobalDecl (lsym, (bt,ct)) ->
-         let@ ct = ct_of_ct loc ct in
+         let ct = ct_of_ct loc ct in
          let bt = BT.of_sct ct in
          let globs = (sym, New.M_GlobalDecl (lsym, (bt,ct))) :: globs in
          let glob_typs = (sym, lsym, ct) :: glob_typs in
@@ -533,10 +545,10 @@ let retype_file pred_defs (file : 'TY Old.mu_file) : ('TY New.mu_file, type_erro
         let err = !^"Variadic function" ^^^ Sym.pp fsym ^^^ !^"unsupported" in
         unsupported loc err
       else
-        let@ ret_ctype = ct_of_ct loc ret_ctype in
+        let ret_ctype = ct_of_ct loc ret_ctype in
         let@ args = 
           ListM.mapM (fun (msym, ct) ->
-              let@ ct = ct_of_ct loc ct in
+              let ct = ct_of_ct loc ct in
               return (msym, ct)
             ) args
         in
@@ -574,7 +586,7 @@ let retype_file pred_defs (file : 'TY Old.mu_file) : ('TY New.mu_file, type_erro
          ListM.mapM (fun (msym, (ct,by_pointer)) ->
              let sym = Option.value ~default:(Sym.fresh ()) msym in
              let () = if not by_pointer then error "label argument passed as value" in
-             let@ ct = ct_of_ct loc ct in
+             let ct = ct_of_ct loc ct in
              return (sym,ct) 
            ) argtyps
        in
