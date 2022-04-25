@@ -21,16 +21,7 @@ cerberus-webserver
 config.json
 webcerb.symbolic
 webcerb.concrete
-<<<<<<< HEAD
 .vscode/settings.json
-=======
 /.ignore
-<<<<<<< HEAD
->>>>>>> dcfd686c (ignore .ignore file I use for silver searcher)
-=======
 /backend/cheri/cerb.prof
-<<<<<<< HEAD
->>>>>>> b71cc316 (debugging cheri memory model)
-=======
 /cerb.prof
->>>>>>> 39c609d7 (ignore profiling info)

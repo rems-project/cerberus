@@ -21,7 +21,7 @@ depends: [
   "dune" {>= "2.0.0"}
   "sha" {>= "1.12"}
   "pprint" {>= "20180528"}
-  "ppx_sexp_conv" {= "v0.14.3" }
+  "ppx_sexp_conv" {= "v0.14.3"}
   "sexplib" {>= "v0.13.0"}
   "z3" {>= "4.8.9"}
   "cmdliner" {= "1.0.4"}
