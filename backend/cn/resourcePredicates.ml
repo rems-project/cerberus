@@ -158,58 +158,7 @@ let zerobyte () =
   (id, predicate)
 
 
-let page () = 
-  let id = "Page" in
-  let loc = Loc.other "internal (Page)" in
-  let guardv_s, guardv = IT.fresh BT.Integer in
-  let pbase_s, pbase = IT.fresh Loc in
-  let pbaseI = pointerToIntegerCast_ pbase in
-  let order_s, order = IT.fresh Integer in
-  let clause1 = 
-    let qp = 
-      let length = pred_ "page_size_of_order" [order] Integer in
-      let q_s, q = IT.fresh Integer in {
-        name = "Byte"; 
-        pointer = pointer_ Z.zero;
-        q = q_s;
-        step = Memory.size_of_ctype char_ct;
-        permission = 
-          and_ [pbaseI %<= q; q %<= (sub_ (pbaseI %+ length, int_ 1))];
-        iargs = [];
-        oargs = [];
-      }
-    in
-    let lrt =
-      LRT.Resource (QPredicate qp, (loc, None),
-      LRT.Constraint (t_ (IT.good_pointer ~pointee_ct:char_ct pbase), (loc, None),
-      LRT.I))
-    in
-    {
-      loc = loc;
-      guard = ne_ (guardv, int_ 0);
-        (* and_ [ne_ (vbase, null_); *)
-        (*       int_ 0 %<= order; order %<= int_ (mMAX_ORDER - 1)]; *)
-      packing_ft = AT.of_lrt lrt (AT.I []) 
-    }
-  in
-  let clause2 = 
-    {
-      loc = loc;
-      guard = bool_ true;
-      packing_ft = AT.I []
-    }
-  in
-  let predicate = {
-      loc = loc;
-      pointer = pbase_s;
-      iargs = [(guardv_s, IT.bt guardv);
-               (order_s, IT.bt order);
-              ]; 
-      oargs = []; 
-      clauses = [clause1; clause2]; 
-    } 
-  in
-  (id, predicate)
+
 
 
 
@@ -267,6 +216,61 @@ let page_alloc_predicates struct_decls =
 
   let module Aux = LogicalPredicates.PageAlloc.Aux(struct let struct_decls = struct_decls end) in
   let open Aux in
+
+
+  let page = 
+    let id = "Page" in
+    let loc = Loc.other "internal (Page)" in
+    let guardv_s, guardv = IT.fresh BT.Integer in
+    let pbase_s, pbase = IT.fresh Loc in
+    let pbaseI = pointerToIntegerCast_ pbase in
+    let order_s, order = IT.fresh Integer in
+    let clause1 = 
+      let qp = 
+        let length = pred_ "page_size_of_order" [order] Integer in
+        let q_s, q = IT.fresh Integer in {
+          name = "Byte"; 
+          pointer = pointer_ Z.zero;
+          q = q_s;
+          step = Memory.size_of_ctype char_ct;
+          permission = 
+            and_ [pbaseI %<= q; q %<= (sub_ (pbaseI %+ length, int_ 1))];
+          iargs = [];
+          oargs = [];
+        }
+      in
+      let lrt =
+        LRT.Resource (QPredicate qp, (loc, None),
+        LRT.Constraint (t_ (IT.good_pointer ~pointee_ct:char_ct pbase), (loc, None),
+        LRT.I))
+      in
+      {
+        loc = loc;
+        guard = ne_ (guardv, int_ 0);
+          (* and_ [ne_ (vbase, null_); *)
+          (*       int_ 0 %<= order; order %<= int_ (mMAX_ORDER - 1)]; *)
+        packing_ft = AT.of_lrt lrt (AT.I []) 
+      }
+    in
+    let clause2 = 
+      {
+        loc = loc;
+        guard = bool_ true;
+        packing_ft = AT.I []
+      }
+    in
+    let predicate = {
+        loc = loc;
+        pointer = pbase_s;
+        iargs = [(guardv_s, IT.bt guardv);
+                 (order_s, IT.bt order);
+                ]; 
+        oargs = []; 
+        clauses = [clause1; clause2]; 
+      } 
+    in
+    (id, predicate)
+  in
 
 
   let hyp_pool =  
@@ -450,7 +454,7 @@ let page_alloc_predicates struct_decls =
     (id, predicate)
   in
 
-  [hyp_pool;]
+  [page; hyp_pool;]
 
 
 
@@ -470,7 +474,6 @@ let predicate_list struct_decls =
    * zero_region () :: *)
   (* part_zero_region () :: *)
   early_alloc () ::
-  page () ::
   (* for now: *)
   try page_alloc_predicates struct_decls with
   | LogicalPredicates.Struct_not_found -> []
