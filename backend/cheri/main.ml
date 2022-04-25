@@ -43,7 +43,7 @@ let cpp_str runtime_path traditional =
     (if traditional then "-traditional" else "")
     runtime_path
 
-let cheri exec debug_level core_file runtime_path traditional filename =
+let cheri exec trace debug_level core_file runtime_path traditional filename =
   Debug_ocaml.debug_level := debug_level;
   let frontend cpp_str filename =
     let conf = {
@@ -67,9 +67,16 @@ let cheri exec debug_level core_file runtime_path traditional filename =
     Global_ocaml.(set_cerb_conf exec Random false Basic false false false false);
     load_core_stdlib ()                            >>= fun stdlib                          ->
     load_core_impl stdlib impl_name                >>= fun impl                            ->
-    c_frontend (conf, io) (stdlib, impl) ~filename >>= fun (tunit_opt, ail_opt, core_file) ->
-    core_passes (conf, io) ~filename core_file     >>= fun core_file'                      ->
-    return (tunit_opt, ail_opt, core_file') in
+    begin if Filename.check_suffix filename ".core" then
+      core_frontend (conf, io) (stdlib, impl) ~filename
+        >>= core_passes (conf, io) ~filename >>= fun core_file ->
+      return (None, None, core_file)
+    else
+      c_frontend (conf, io) (stdlib, impl) ~filename >>= fun (tunit_opt, ail_opt, core_file) ->
+      core_passes (conf, io) ~filename core_file     >>= fun core_file'                      ->
+      return (tunit_opt, ail_opt, core_file')
+    end in
+    (* return (tunit_opt, ail_opt, core_file') in *)
   let epilogue n = n in
   let runM = function
     | Exception.Exception err ->
@@ -93,7 +100,12 @@ let cheri exec debug_level core_file runtime_path traditional filename =
        | Some core_file ->
           let f = open_out core_file in
           Colour.do_colour := false ;
-          PPrint.ToChannel.pretty 1.0 80 f (Pp_core.WithLocationsAndStd.pp_file file);
+          let pp_file =
+            if Debug_ocaml.get_debug_level () > 0 then
+              Pp_core.WithLocationsAndStd.pp_file
+            else
+              Pp_core.Basic.pp_file in
+          PPrint.ToChannel.pretty 1.0 80 f (pp_file file);
           close_out f
      end ;
      if exec then
@@ -103,7 +115,7 @@ let cheri exec debug_level core_file runtime_path traditional filename =
                           experimental_unseq=false;
                           exec_mode=Random;
                           fs_dump=false;
-                          trace=false} in
+                          trace} in
        runM @@ interp_backend io file ~args:[] ~batch:`NotBatch ~fs:None ~driver_conf
      else
        exit 0
@@ -135,6 +147,10 @@ let exec =
   let doc = "Execute the Core program after the elaboration." in
   Arg.(value & flag & info ["exec"] ~doc)
 
+let trace =
+  let doc = "trace memory actions" in
+  Arg.(value & flag & info["trace"] ~doc)
+
 let () =
-  let cheri_t = Term.(pure cheri $exec $ debug_level $ core_file $ runtime_path $ traditional $ file) in
+  let cheri_t = Term.(pure cheri $ exec $ trace $ debug_level $ core_file $ runtime_path $ traditional $ file) in
   Term.exit @@ Term.eval (cheri_t, Term.info "Core cheri")
