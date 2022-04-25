@@ -3766,7 +3766,7 @@ let rec translate_stmt stdlib tagDefs f env (A.AnnotatedStatement loc _ stmt) : 
         E.mapM (fun (ptr_sym, e) ->
           E.resolve_object_type ptr_sym >>= fun (qs, ty) ->
           let e_bTy = C.BTy_loaded (force_core_object_type_of_ctype (ctype_of e)) in
-          E.wrapped_fresh_symbol e_bTy >>= fun (e_sym, e_sym_pat, e_sym_pe) ->
+          E.wrapped_fresh_symbol e_bTy >>= fun (_, e_sym_pat, e_sym_pe) ->
           match Ctype.unatomic_ ty with
             | Ctype.Pointer _ ref_ty ->
                 let mk_store =
@@ -3779,20 +3779,30 @@ let rec translate_stmt stdlib tagDefs f env (A.AnnotatedStatement loc _ stmt) : 
                   else
                     translate_expression e >>= fun core_e ->
                     E.return (
-                      Caux.mk_sseq_e (Caux.mk_sym_pat e_sym e_bTy) core_e
+                      Caux.mk_sseq_e e_sym_pat core_e
                         (mk_store loc (Caux.mk_ail_ctype_pe ty) (Caux.mk_sym_pe ptr_sym) e_sym_pe Cmm.NA)
                     )
             | ty ->
                 let mk_store =
                   if qs.Ctype.const then Caux.pstore_lock else Caux.pstore in
-                (* we are not dealing with a pointer initialisation *)
                 let cty = Ctype.Ctype [] ty in
                 translate_expression e >>= fun core_e ->
-                E.return (
-                  Caux.mk_sseq_e (Caux.mk_sym_pat e_sym e_bTy) core_e
-                    (mk_store loc (Caux.mk_ail_ctype_pe cty) (Caux.mk_sym_pe ptr_sym)
+                if AilTypesAux.is_pointer (ctype_of e) then
+                  (* we are dealing with the case {_Bool} = {pointer} *)
+                  E.wrapped_fresh_symbol (C.BTy_loaded C.OTy_integer) >>= fun (_, conv_sym_pat, conv_sym_pe) ->
+                  E.return begin
+                    Caux.mk_sseq_e e_sym_pat core_e begin
+                      Caux.mk_sseq_e conv_sym_pat (stdlib.mkproc_loaded_pointer_to_Bool e_sym_pe)
+                        (mk_store loc (Caux.mk_ail_ctype_pe cty) (Caux.mk_sym_pe ptr_sym) conv_sym_pe Cmm.NA)
+                    end
+                  end
+                else
+                  (* we are not dealing with a pointer on either sides *)
+                  E.return (
+                    Caux.mk_sseq_e e_sym_pat core_e
+                      (mk_store loc (Caux.mk_ail_ctype_pe cty) (Caux.mk_sym_pe ptr_sym)
                       (if AilTypesAux.is_arithmetic cty then conv_loaded_arith stdlib (ctype_of e) cty e_sym_pe else e_sym_pe) Cmm.NA)
-                )
+                  )
           end
         ) sym_es >>= fun z ->
         
