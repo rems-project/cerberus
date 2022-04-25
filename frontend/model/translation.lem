@@ -1868,6 +1868,8 @@ end
           )
       
       | A.AilEcompoundAssign e1 aop e2 ->
+          error "Translation ==> AilEcompoundAssign" (* currently the desugaring translates E1 op= E2 into E1 = E1 op E2 *)
+(*
           (* TODO: in C11/C17 this is a seq_cst RMW for atomic types *)
           (* NOTE: but if I read N2329 correctly, in C2X this will not be an RMW for the atomic case (but seq_cst) *)
           let () = Debug.print_debug 1 [] (fun () ->
@@ -1911,7 +1913,7 @@ end
                 (C.Eaction (C.Paction C.Neg (C.Action loc default (C.Store false(* not locking *) lvalue_ty_pe l1_sym_pe stored_pe Cmm.NA))))
             end
           end
-
+*)
 
 
 (*
