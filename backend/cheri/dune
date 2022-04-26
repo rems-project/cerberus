@@ -2,7 +2,7 @@
 
 (executable
  (name main)
- (public_name cheri)
+ (public_name cerberus-cheri)
  (package cerberus)
  (flags (:standard -w -27))
  (libraries cmdliner str unix
