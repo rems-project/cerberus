@@ -254,7 +254,9 @@ let undefinedFromMem_error = function
       Just Undefined.UB064_modifying_const
   | MerrReadUninit _ ->
       (* TODO *)
-      Nothing
+     Nothing
+  | MerrCHERI _ (CheriNonRepresentable _) ->
+     Just Undefined.UB_CHERI_NonRepresentable
   | _ ->
       Nothing
 end

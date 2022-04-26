@@ -693,6 +693,9 @@ type undefined_behaviour =
 
   | UB_CERB003_invalid_function_pointer
 
+  (* CHERI-specific UBs below  *)
+  | UB_CHERI_NonRepresentable
+
 
 val std_of_undefined_behaviour: undefined_behaviour -> maybe string
 let std_of_undefined_behaviour = function
