@@ -173,4 +173,6 @@ let batch =
 
 let () =
   let cheri_t = Term.(pure cheri $ exec $ trace $ progress $ batch $ debug_level $ core_file $ runtime_path $ traditional $ file) in
-  Term.exit @@ Term.eval (cheri_t, Term.info "Core cheri")
+  let version = Version.version in
+  let info = Term.info "cerberus" ~version ~doc:"Cerberus CHERI C semantics"  in
+  Term.exit_status @@ Term.eval (cheri_t, info)
