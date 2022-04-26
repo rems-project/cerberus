@@ -45,7 +45,7 @@ let cpp_str runtime_path traditional =
     (if traditional then "-traditional" else "")
     runtime_path
 
-let cheri exec trace progress batch debug_level core_file runtime_path traditional filename =
+let cheri exec core_obj trace progress batch debug_level core_file runtime_path traditional filename =
   Debug_ocaml.debug_level := debug_level;
   let frontend cpp_str filename =
     let conf = {
@@ -67,18 +67,26 @@ let cheri exec trace progress batch debug_level core_file runtime_path tradition
                   "strict_reads";
                   "CHERI"] ;
     Global_ocaml.(set_cerb_conf exec Random false Basic false false false false);
-    load_core_stdlib ()                            >>= fun stdlib                          ->
-    load_core_impl stdlib impl_name                >>= fun impl                            ->
-    begin if Filename.check_suffix filename ".core" then
-      core_frontend (conf, io) (stdlib, impl) ~filename
+    load_core_stdlib () >>= fun stdlib ->
+    load_core_impl stdlib impl_name >>= fun impl ->
+    begin
+      if Filename.check_suffix filename ".core" then
+        core_frontend (conf, io) (stdlib, impl) ~filename
         >>= core_passes (conf, io) ~filename >>= fun core_file ->
-      return (None, None, core_file)
-    else
-      c_frontend (conf, io) (stdlib, impl) ~filename >>= fun (tunit_opt, ail_opt, core_file) ->
-      core_passes (conf, io) ~filename core_file     >>= fun core_file'                      ->
-      return (tunit_opt, ail_opt, core_file')
+        return (None, None, core_file)
+      else if Filename.check_suffix filename ".co" then
+        let core_file = read_core_object (stdlib, impl) filename in
+        return (None, None, core_file)
+      else if Filename.check_suffix filename ".c" then
+        c_frontend (conf, io) (stdlib, impl) ~filename >>= fun (tunit_opt, ail_opt, core_file) ->
+        core_passes (conf, io) ~filename core_file     >>= fun core_file'                      ->
+        return (tunit_opt, ail_opt, core_file')
+      else
+        Exception.fail (Location_ocaml.unknown,
+                        Errors.UNSUPPORTED
+                          "The file extention is not supported")
     end in
-    (* return (tunit_opt, ail_opt, core_file') in *)
+  (* return (tunit_opt, ail_opt, core_file') in *)
   let epilogue n =
     if batch = `Batch then
       Printf.fprintf stderr "Time spent: %f seconds\n" (Sys.time ());
@@ -87,13 +95,13 @@ let cheri exec trace progress batch debug_level core_file runtime_path tradition
   in
   let runM = function
     | Exception.Exception err ->
-        prerr_endline (Pp_errors.to_string err);
-        epilogue 1
+       prerr_endline (Pp_errors.to_string err);
+       epilogue 1
     | Exception.Result (Either.Left execs) ->
-        List.iter print_string execs;
-        epilogue 0
+       List.iter print_string execs;
+       epilogue 0
     | Exception.Result (Either.Right n) ->
-        epilogue n
+       epilogue n
   in
   match frontend (cpp_str runtime_path traditional) filename with
   | Exception.Exception err ->
@@ -101,6 +109,11 @@ let cheri exec trace progress batch debug_level core_file runtime_path tradition
      exit 1
   | Exception.Result (_, _, file) ->
      begin
+       (* Save CORE object file if requested *)
+       if core_obj then
+         let output_file = Filename.remove_extension filename ^ ".co" in
+         write_core_object file output_file;
+
        (* Save CORE file if requested *)
        match core_file with
        | None -> ()
@@ -150,6 +163,10 @@ let debug_level =
   let doc = "Set the debug message level to $(docv) (should range over [0-9])." in
   Arg.(value & opt int 0 & info ["d"; "debug"] ~docv:"N" ~doc)
 
+let core_obj =
+  let doc = "Run frontend generating a target '.co' core object file." in
+  Arg.(value & flag & info ["c"] ~doc)
+
 let exec =
   let doc = "Execute the Core program after the elaboration." in
   Arg.(value & flag & info ["exec"] ~doc)
@@ -172,7 +189,7 @@ let batch =
                                      ~doc:(doc^" (for Charon)"))])
 
 let () =
-  let cheri_t = Term.(pure cheri $ exec $ trace $ progress $ batch $ debug_level $ core_file $ runtime_path $ traditional $ file) in
+  let cheri_t = Term.(pure cheri $ exec $ core_obj $ trace $ progress $ batch $ debug_level $ core_file $ runtime_path $ traditional $ file) in
   let version = Version.version in
   let info = Term.info "cerberus" ~version ~doc:"Cerberus CHERI C semantics"  in
   Term.exit_status @@ Term.eval (cheri_t, info)
