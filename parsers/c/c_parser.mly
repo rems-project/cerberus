@@ -1751,20 +1751,34 @@ prim_expr:
 | e= delimited(LPAREN, expr, RPAREN)
     { e }
 
-add_expr:
+mul_expr:
 (* TODO *)
 | e= prim_expr
      { e }
-| e1= add_expr PLUS e2= prim_expr
+| e1= mul_expr STAR e2= prim_expr
+    { Cerb_frontend.Cn.(CNExpr_binop (CN_mul, e1, e2)) }
+| e1= mul_expr SLASH e2= prim_expr
+    { Cerb_frontend.Cn.(CNExpr_binop (CN_div, e1, e2)) }
+
+add_expr:
+| e= mul_expr
+     { e }
+| e1= add_expr PLUS e2= mul_expr
     { Cerb_frontend.Cn.(CNExpr_binop (CN_add, e1, e2)) }
-| e1= add_expr MINUS e2= prim_expr
+| e1= add_expr MINUS e2= mul_expr
     { Cerb_frontend.Cn.(CNExpr_binop (CN_sub, e1, e2)) }
 
 rel_expr:
-(* TODO *)
 | e= add_expr
      { e }
-
+| e1= rel_expr LT e2= add_expr
+    { Cerb_frontend.Cn.(CNExpr_binop (CN_lt, e1, e2)) }
+| e1= rel_expr GT e2= add_expr
+    { Cerb_frontend.Cn.(CNExpr_binop (CN_gt, e1, e2)) }
+| e1= rel_expr LT_EQ e2= add_expr
+    { Cerb_frontend.Cn.(CNExpr_binop (CN_le, e1, e2)) }
+| e1= rel_expr GT_EQ e2= add_expr
+    { Cerb_frontend.Cn.(CNExpr_binop (CN_ge, e1, e2)) }
 
 list_expr:
 | e= rel_expr
