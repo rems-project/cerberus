@@ -472,5 +472,5 @@ let translate tagDefs (defs: cn_predicate list) =
     ListM.fold_leftM (fun (env, acc) def ->
       let@ (env', pred_def) = translate_cn_predicate env def in
       return (env', pred_def :: acc)
-    ) (Env.empty tagDefs, []) (List.rev defs) in
-  return xs
+    ) (Env.empty tagDefs, []) defs in
+  return (List.rev xs)
