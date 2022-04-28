@@ -110,9 +110,10 @@ let cheri exec core_obj trace progress batch debug_level core_file runtime_path 
   | Exception.Result (_, _, file) ->
      begin
        (* Save CORE object file if requested *)
-       if core_obj then
+       begin if core_obj then
          let output_file = Filename.remove_extension filename ^ ".co" in
-         write_core_object file output_file;
+         write_core_object file output_file
+       end;
 
        (* Save CORE file if requested *)
        match core_file with
