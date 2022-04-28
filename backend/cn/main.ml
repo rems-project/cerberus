@@ -147,7 +147,7 @@ let frontend filename =
     | Some (_, sigm) ->
         let open Effectful.Make(Resultat) in
         match CompilePredicates.translate mu_file.mu_tagDefs sigm.CF.AilSyntax.cn_predicates with
-        | Result.Error str -> failwith str
+        | Result.Error err -> CompilePredicates.report_error err; exit 1
         | Result.Ok xs -> xs
     end in
 

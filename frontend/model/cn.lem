@@ -44,7 +44,7 @@ type cn_const =
   | CNConst_bool of bool
 
 
-type cn_expr 'a =
+type cn_expr_ 'a =
   | CNExpr_const of cn_const
   | CNExpr_var of 'a
   (* List ops *)
@@ -53,6 +53,9 @@ type cn_expr 'a =
   | CNExpr_list of list (cn_expr 'a)
   | CNExpr_memberof of 'a * list Symbol.identifier (* INVARIANT: non-empty *)
   | CNExpr_binop of cn_binop * cn_expr 'a * cn_expr 'a
+
+and cn_expr 'a =
+  | CNExpr of Loc.t * cn_expr_ 'a
 
 type cn_pred 'a 'ty =
   | CN_owned of 'ty

@@ -34,7 +34,8 @@ let inline foldlM = State_exception.foldlM
 
 val register_cn_ident: cn_namespace -> Symbol.identifier -> cn_desugM Symbol.sym
 let register_cn_ident ns ((Symbol.Identifier loc str) as ident) =
-  begin if ns = CN_predicate then
+  let sym = Symbol.fresh_pretty str in
+  if ns = CN_predicate then
     match str with
       | cons_string c _ ->
           let n = String_extra.ord c in
@@ -45,14 +46,17 @@ let register_cn_ident ns ((Symbol.Identifier loc str) as ident) =
       | _ ->
           (* can't happen because of the parser *)
           return ()
-    end
+    end >>= fun () ->
+    Eff.update (fun st ->
+      <| st with cn_idents= Map.insert (ns, ident) sym st.cn_idents |>
+    ) >>= fun () ->
+    return sym
   else
-    return ()
-  end >>= fun () ->
-  Eff.get >>= fun st ->
-  let sym = Symbol.fresh_pretty str in
-  Eff.put <| st with cn_current_scope= Map.insert (ns, ident) sym st.cn_current_scope |> >>= fun () ->
-  return sym
+    Eff.update (fun st ->
+      <| st with cn_current_scope= Map.insert (ns, ident) sym st.cn_current_scope |>
+    ) >>= fun () ->
+    return sym
+
 
 val resolve_cn_ident: cn_namespace -> Symbol.identifier -> cn_desugM Symbol.sym
 let resolve_cn_ident ns ident =

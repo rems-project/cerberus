@@ -748,7 +748,7 @@ let register_cn_predicate ident mk =
   State_exception.get >>= fun st ->
   match Map.lookup ident st.cn_state.Cn_desugaring.cn_predicates with
     | Nothing ->
-        register_cn_ident Cn.CN_predicate ident >>= fun sym ->
+        resolve_cn_ident Cn.CN_predicate ident >>= fun sym ->
         mk >>= fun (oargs, iargs, clauses) ->
         let pred = <|
           Cn.cn_pred_loc= Loc.locOf ident;
@@ -760,7 +760,6 @@ let register_cn_predicate ident mk =
         liftCnDesug begin
           State_exception.update (fun cn_st' ->
             <| cn_st' with Cn_desugaring.cn_predicates= Map.insert ident (sym, pred) cn_st'.Cn_desugaring.cn_predicates;
-                           Cn_desugaring.cn_idents= Map.insert (Cn.CN_predicate, ident) sym st.cn_state.Cn_desugaring.cn_idents;
                            Cn_desugaring.cn_current_scope= Map.empty; |>
           )
         end

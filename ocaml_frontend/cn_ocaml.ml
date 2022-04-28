@@ -76,27 +76,28 @@ module MakePp (Conf: PP_CN) = struct
     | CN_or -> P.bar ^^ P.bar
     | CN_and -> P.ampersand ^^ P.ampersand
   
-  let rec dtree_of_cn_expr = function
-    | CNExpr_const CNConst_NULL ->
-        Dleaf (pp_ctor "CNExpr_const" ^^^ !^ "NULL")
-    | CNExpr_const CNConst_integer n ->
-        Dleaf (pp_ctor "CNExpr_const" ^^^ !^ (Z.to_string n))
-    | CNExpr_const (CNConst_bool b) ->
-        Dleaf (pp_ctor "CNExpr_const" ^^^ !^ (if b then "true" else "false"))
-    | CNExpr_var ident ->
-        Dleaf (pp_ctor "CNExpr_var" ^^^ P.squotes (Conf.pp_ident ident))
-    | CNExpr_nil bty ->
-        Dleaf (pp_ctor "CNExpr_nil" ^^^ P.squotes (pp_base_type bty))
-    | CNExpr_cons (e1, e2) ->
-        Dnode (pp_ctor "CNExpr_cons", [dtree_of_cn_expr e1; dtree_of_cn_expr e2])
-    | CNExpr_list es ->
-        Dnode (pp_ctor "CNExpr_list", List.map dtree_of_cn_expr es)
-    | CNExpr_memberof (ident, xs) ->
-        Dleaf (pp_ctor "CNExpr_member" ^^^
-               P.squotes (Conf.pp_ident ident) ^^
-               P.flow P.dot (List.map (fun z -> P.squotes (pp_identifier z)) xs))
-    | CNExpr_binop (bop, e1, e2) ->
-        Dnode (pp_ctor "CNExpr_add" ^^^ pp_cn_binop bop, [dtree_of_cn_expr e1; dtree_of_cn_expr e2])
+  let rec dtree_of_cn_expr (CNExpr (_, expr_)) =
+    match expr_ with
+      | CNExpr_const CNConst_NULL ->
+          Dleaf (pp_ctor "CNExpr_const" ^^^ !^ "NULL")
+      | CNExpr_const CNConst_integer n ->
+          Dleaf (pp_ctor "CNExpr_const" ^^^ !^ (Z.to_string n))
+      | CNExpr_const (CNConst_bool b) ->
+          Dleaf (pp_ctor "CNExpr_const" ^^^ !^ (if b then "true" else "false"))
+      | CNExpr_var ident ->
+          Dleaf (pp_ctor "CNExpr_var" ^^^ P.squotes (Conf.pp_ident ident))
+      | CNExpr_nil bty ->
+          Dleaf (pp_ctor "CNExpr_nil" ^^^ P.squotes (pp_base_type bty))
+      | CNExpr_cons (e1, e2) ->
+          Dnode (pp_ctor "CNExpr_cons", [dtree_of_cn_expr e1; dtree_of_cn_expr e2])
+      | CNExpr_list es ->
+          Dnode (pp_ctor "CNExpr_list", List.map dtree_of_cn_expr es)
+      | CNExpr_memberof (ident, xs) ->
+          Dleaf (pp_ctor "CNExpr_member" ^^^
+                P.squotes (Conf.pp_ident ident) ^^
+                P.flow P.dot (List.map (fun z -> P.squotes (pp_identifier z)) xs))
+      | CNExpr_binop (bop, e1, e2) ->
+          Dnode (pp_ctor "CNExpr_add" ^^^ pp_cn_binop bop, [dtree_of_cn_expr e1; dtree_of_cn_expr e2])
 
   let dtree_of_cn_pred = function
     | CN_owned ty ->

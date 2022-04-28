@@ -76,8 +76,50 @@ let mk_translate_binop bop bTy =
 open Resultat
 open Effectful.Make(Resultat)
 
+type message =
+  | First_iarg_missing of { pred_name: Sym.t }
+  | First_iarg_not_pointer of { pred_name: Sym.t; found_bty: BaseTypes.t }
+  | Invalid_oarg_owned of { invalid_ident: Id.t }
+  | Invalid_oarg of { res_name: Sym.t; invalid_ident: Id.t }
+  | Invalid_struct_member of { struct_name: Sym.t; invalid_ident: Id.t }
+  | TypeMismatchBinary of { bTy1: BaseTypes.t; bTy2: BaseTypes.t }
+  | TODO_error of string
+
+type error = {
+  loc: Locations.t;
+  msg: message
+}
+
+let pp_message = let open Pp in function
+  | First_iarg_missing { pred_name } ->
+      !^ "a predicate definition must have at least one iarg (missing from: " ^^ Sym.pp pred_name ^^ !^ ")"
+  | First_iarg_not_pointer { pred_name; found_bty } ->
+      !^ "the first iarg of predicate" ^^^ Pp.squotes (Sym.pp pred_name) ^^^
+      !^ "must have type" ^^^ Pp.squotes (BaseTypes.(pp Loc)) ^^^ !^ "but was found with type" ^^^
+      Pp.squotes (BaseTypes.(pp found_bty))
+  | Invalid_oarg_owned { invalid_ident } ->
+      Pp.squotes (Pp.dot ^^ Id.pp invalid_ident) ^^^ !^ "is not an oarg of 'Owned()' (expecting '.value')"
+  | Invalid_oarg { res_name; invalid_ident } ->
+      Pp.squotes (Pp.dot ^^ Id.pp invalid_ident) ^^^ !^ "is not an oarg of" ^^^
+      Pp.squotes(Sym.pp res_name)
+  | Invalid_struct_member { struct_name; invalid_ident } ->
+      Pp.squotes (Pp.dot ^^ Id.pp invalid_ident) ^^^ !^ "is not a member of" ^^^
+      Pp.squotes(!^ "struct" ^^^ Sym.pp struct_name)
+  | TypeMismatchBinary { bTy1; bTy2 } ->
+      !^ "type mismatch in a binary operator" ^^^ Pp.parens (
+        Pp.squotes (BaseTypes.pp bTy1) ^^^ !^ " <-> " ^^^ Pp.squotes (BaseTypes.pp bTy2)
+      )
+  | TODO_error str ->
+      !^ ("TODO(msg): " ^ str)
+
+
+let report_error {loc; msg} =
+  let doc = pp_message msg in
+  Pp.error loc doc []
+
 module Env = struct
   module X = Map.Make(Sym)
+  module Y = Map.Make(String)
 
   type predicate_sig = {
     pred_iargs: (Sym.t * BaseTypes.t) list;
@@ -89,23 +131,22 @@ module Env = struct
     | RPred_block
     | RPred_named of Sym.t * Sym.t list
 
-  (* type ressource_def = {
-    res_pred: Sym.t;
-    res_oargs: Sym.t list;
-  } *)
-
   type t = {
     logicals: BaseTypes.t X.t;
+    pred_names: Sym.t Y.t;
     predicates: predicate_sig X.t;
     ressources: ressource_def X.t;
     tagDefs: CF.Core_anormalise.Mu.mu_tag_definitions;
   }
 
   let empty tagDefs =
-    { logicals= X.empty; predicates= X.empty; ressources= X.empty; tagDefs }
+    { logicals= X.empty; pred_names= Y.empty; predicates= X.empty; ressources= X.empty; tagDefs }
   
   let add_logical sym bTy env =
     {env with logicals= X.add sym bTy env.logicals }
+  
+  let add_pred_name str sym env =
+    {env with pred_names= Y.add str sym env.pred_names }
   
   let add_predicate sym pred_sig env =
     {env with predicates= X.add sym pred_sig env.predicates }
@@ -115,6 +156,9 @@ module Env = struct
   
   let lookup_logical sym env =
     X.find_opt sym env.logicals
+
+  let lookup_pred_name str env =
+    Y.find_opt str env.pred_names
 
   let lookup_predicate sym env =
     X.find_opt sym env.predicates
@@ -138,7 +182,7 @@ let todo_string_of_sym (CF.Symbol.Symbol (_, _, sd)) =
     | _ ->
         assert false
 
-let translate_member_accesses env res_def xs =
+let translate_member_accesses loc env res_def xs =
   let mk_kind = function
     | BaseTypes.Struct tag_sym ->
         `STRUCT tag_sym
@@ -160,7 +204,7 @@ let translate_member_accesses env res_def xs =
                 let acc' = Some (sym_ (value_sym, bTy)) in
                 aux acc' (mk_kind bTy) xs
               else
-                fail "TODO(msg): only .value is valid for a Owned()"
+                fail {loc; msg= Invalid_oarg_owned {invalid_ident= ident}}
           | `RES Env.RPred_block ->
               failwith "TODO: member access on a ressource bound to a Block() predicate"
           | `RES (Env.RPred_named (pred_sym, res_oargs)) ->
@@ -174,10 +218,7 @@ let translate_member_accesses env res_def xs =
                       )  pred_sig.pred_oargs res_oargs in
                     begin match List.assoc_opt (String.equal) (Id.pp_string ident) oargs with
                       | None ->
-                          let msg =
-                            Printf.sprintf "TODO(msg): .%s is not an oarg of ressource %s"
-                              (Id.pp_string ident) (Sym.pp_string pred_sym) in
-                          fail msg
+                          fail {loc; msg= Invalid_oarg {res_name= pred_sym; invalid_ident= ident}}
                       | Some memb ->
                         let acc' = Some (sym_ memb) in
                         aux acc' (mk_kind (snd memb)) xs
@@ -187,7 +228,7 @@ let translate_member_accesses env res_def xs =
               begin match Env.lookup_struct tag_sym env with
                 | None ->
                     (* TODO: make the desugaring catch this *)
-                    fail ("TODO(msg): unknown struct: " ^ Sym.pp_string tag_sym)
+                    fail {loc; msg= TODO_error ("unknown struct: " ^ Sym.pp_string tag_sym)}
                 | Some (defs_, _) (* TODO flexible *) ->
                     let defs =
                       List.map (fun (membr_ident, (_, _, ty)) ->
@@ -206,13 +247,13 @@ let translate_member_accesses env res_def xs =
                       ) defs_ in
                 begin match List.assoc_opt (String.equal) (Id.pp_string ident) defs with
                   | None ->
-                      fail "TODO(msg): invalid struct member"
+                      fail {loc; msg= Invalid_struct_member {struct_name= tag_sym; invalid_ident= ident}}
                   | Some x ->
                       aux (Some x) (mk_kind (basetype x)) xs
                 end
               end
           | `LOGICAL ->
-              fail "TODO(msg): member access on a scalar"
+              fail {loc; msg= TODO_error "member access on a scalar"}
         end in
   aux None (`RES res_def) xs
 
@@ -220,45 +261,48 @@ let translate_member_accesses env res_def xs =
 let translate_cn_expr (env: Env.t) expr =
   let open IndexTerms in
   let module BT = BaseTypes in
-  let rec self = function
-    | CNExpr_const CNConst_NULL ->
-        return null_
-    | CNExpr_const (CNConst_integer n) ->
-        return (z_ n)
-    | CNExpr_const (CNConst_bool b) ->
-        return (bool_ b)
-    | CNExpr_var sym ->
-        begin match Env.lookup_logical sym env with
-          | None ->
-              fail ("TODO(msg) CNExpr_var lookup failed ==> " ^ todo_string_of_sym sym)
-          | Some bTy ->
-              return (IT (Lit (Sym sym), bTy))
-        end
-    | CNExpr_nil bTy_ ->
-        return (nil_ ~item_bt:(translate_cn_base_type bTy_))
-    | CNExpr_cons (e1_, e2_) ->
-        let@ e1 = self e1_ in
-        let@ e2 = self e2_ in
-        return (cons_ (e1, e2))
-    | CNExpr_list es_ ->
-        let@ es = ListM.mapM self es_ in
-        let item_bt = basetype (List.hd es) in
-        return (list_ ~item_bt es)
-    | CNExpr_memberof (sym, xs) ->
-        begin match Env.lookup_ressource sym env with
-          | None ->
-              (* TODO: (could the case where sym is a C struct) is this allowed? *)
-              failwith ("TODO: CNExpr_memberof ==> " ^ Sym.pp_string sym)
-          | Some res_def ->
-              translate_member_accesses env res_def xs
-        end
-    | CNExpr_binop (bop, e1_, e2_) ->
-        let@ e1 = self e1_ in
-        let@ e2 = self e2_ in
-        if BT.equal (basetype e1) (basetype e2) then
-          return (mk_translate_binop bop (basetype e1) (e1, e2))
-        else
-          fail "CNExpr_binop -- type mismatch"
+  let rec self (CNExpr (loc, expr_)) =
+    match expr_ with
+      | CNExpr_const CNConst_NULL ->
+          return null_
+      | CNExpr_const (CNConst_integer n) ->
+          return (z_ n)
+      | CNExpr_const (CNConst_bool b) ->
+          return (bool_ b)
+      | CNExpr_var sym ->
+          begin match Env.lookup_logical sym env with
+            | None ->
+                fail {loc; msg= TODO_error ("TODO(msg) CNExpr_var lookup failed ==> " ^ todo_string_of_sym sym)}
+            | Some bTy ->
+                return (IT (Lit (Sym sym), bTy))
+          end
+      | CNExpr_nil bTy_ ->
+          return (nil_ ~item_bt:(translate_cn_base_type bTy_))
+      | CNExpr_cons (e1_, e2_) ->
+          let@ e1 = self e1_ in
+          let@ e2 = self e2_ in
+          return (cons_ (e1, e2))
+      | CNExpr_list es_ ->
+          let@ es = ListM.mapM self es_ in
+          let item_bt = basetype (List.hd es) in
+          return (list_ ~item_bt es)
+      | CNExpr_memberof (sym, xs) ->
+          begin match Env.lookup_ressource sym env with
+            | None ->
+                (* TODO: (could the case where sym is a C struct) is this allowed? *)
+                failwith ("TODO: CNExpr_memberof ==> " ^ Sym.pp_string sym)
+            | Some res_def ->
+                translate_member_accesses loc env res_def xs
+          end
+      | CNExpr_binop (bop, e1_, e2_) ->
+          let@ e1 = self e1_ in
+          let@ e2 = self e2_ in
+          let bTy1 = basetype e1 in
+          let bTy2 = basetype e2 in
+          if BT.equal bTy1 bTy2 then
+            return (mk_translate_binop bop (basetype e1) (e1, e2))
+          else
+            fail {loc; msg= TypeMismatchBinary { bTy1; bTy2 }}
   in self expr
 
 
@@ -272,7 +316,7 @@ let translate_cn_clause env clause =
             | CN_pred (pred_loc, CN_owned ty, [expr_]) ->
                 begin match Sctypes.of_ctype ty with
                   | None ->
-                      fail "CN_owned -- of_ctype failed"
+                      fail {loc= Locations.unknown; msg= TODO_error "CN_owned -- of_ctype failed"}
                   | Some scty ->
                       let@ expr = translate_cn_expr env expr_ in
                       let bTy = BaseTypes.of_sct scty in
@@ -288,16 +332,15 @@ let translate_cn_clause env clause =
                           AT.mLogical (value_sym, bTy, (res_loc, None))
                           (AT.mResource (Point pt, (pred_loc, None)) z)
                         end in
-                      (* translate_cn_clause_aux env acc' cl *)
                       let env' = Env.(add_ressource sym (RPred_owned (bTy, value_sym)) env) in
                       translate_cn_clause_aux env' acc' cl
                 end
             | CN_pred (_, CN_owned _, _) ->
-                fail "Owned applied to more/less than 1 argument"
+                fail {loc= Locations.unknown; msg= TODO_error "Owned applied to more/less than 1 argument"}
             | CN_pred (pred_loc, CN_block ty, [expr_]) ->
                 begin match Sctypes.of_ctype ty with
                   | None ->
-                      fail "CN_owned -- of_ctype failed"
+                      fail {loc= Locations.unknown; msg= TODO_error "CN_owned -- of_ctype failed"}
                   | Some scty ->
                       let@ expr = translate_cn_expr env expr_ in
                       let bTy = BaseTypes.of_sct scty in
@@ -318,23 +361,23 @@ let translate_cn_clause env clause =
                       translate_cn_clause_aux env acc' cl
                 end
             | CN_pred (_, CN_block _, _) ->
-                fail "Block applied to more/less than 1 argument"  
+                fail {loc= Locations.unknown; msg= TODO_error "Block applied to more/less than 1 argument"}
             | CN_pred (pred_loc, CN_named pred_sym, es_) ->
                 begin match Env.lookup_predicate pred_sym env with
                   | None ->
-                      fail ("TODO(msg): unknown predicate name ==> " ^ Sym.pp_string pred_sym)
+                      fail {loc= Locations.unknown; msg= TODO_error ("unknown predicate name ==> " ^ Sym.pp_string pred_sym)}
                   | Some pred_sig ->
                       let nargs = List.length es_ in
                       let nexpected = List.length pred_sig.pred_iargs in
                       if nargs <> nexpected then
-                        fail (Printf.sprintf "TODO(msg): predicate %s expecting %d arguments, found %d\n"
-                          (Sym.pp_string pred_sym) nexpected nargs)
+                        fail {loc= Locations.unknown; msg= TODO_error (Printf.sprintf "predicate %s expecting %d arguments, found %d\n"
+                          (Sym.pp_string pred_sym) nexpected nargs)}
                       else
                         let@ es =
                           ListM.mapM (fun ((_, bTy), e_) ->
                             let@ e = translate_cn_expr env e_ in
                             if not (BaseTypes.equal (IT.basetype e) bTy) then
-                              fail (Printf.sprintf "TODO(msg): illtyped argument for predicate %s\n" (Sym.pp_string pred_sym))
+                              fail {loc= Locations.unknown; msg= TODO_error (Printf.sprintf "illtyped argument for predicate %s\n" (Sym.pp_string pred_sym))}
                             else
                               return e
                           ) (List.combine pred_sig.pred_iargs es_) in
@@ -401,76 +444,48 @@ let translate_cn_clauses env clauses =
   let@ xs = self [] clauses in
   return (List.rev xs)
 
-(*
 
-type OutputDef.entry = {
-    loc : Locations.t;
-    name : string;
-    value : IndexTerms.t;
-  }
-
-type OutputDef.t = entry list
-
-
-type clause = {
-    loc : Locations.t;
-    guard : IndexTerms.t;
-    packing_ft : ArgumentTypes.packing_ft
-  }
-
-*)
+let register_cn_predicates tagDefs (defs: cn_predicate list) =
+  let aux env def =
+    let translate_args xs =
+      List.map (fun (bTy, sym) ->
+        (sym, translate_cn_base_type bTy)
+      ) xs in
+    let iargs = translate_args def.cn_pred_iargs in
+    let oargs = translate_args def.cn_pred_oargs in
+    Env.add_predicate def.cn_pred_name { pred_iargs= iargs; pred_oargs= oargs } env in
+  List.fold_left aux (Env.empty tagDefs) defs
 
 
-(*
-
-type 'i ArgumentTypes.t = 
-  | Computational of (Sym.t * BT.t) * info * 'i at
-  | Logical of (Sym.t * LS.t) * info * 'i at
-  | Define of (Sym.t * IT.t) * info * 'i at
-  | Resource of RE.t * info * 'i at
-  | Constraint of LC.t * info * 'i at
-  | I of 'i
-
-type ArgumentTypes.packing_ft = OutputDef.t t
-
-*)
-
-
-
-let translate_cn_predicate env (def: cn_predicate) = (*: CF.Symbol.sym * RP.definition = *)
+let translate_cn_predicate env (def: cn_predicate) =
   let open RP in
-  let translate_args xs =
-    List.map (fun (bTy, sym) ->
-      (sym, translate_cn_base_type bTy)
-    ) xs in
-  let iargs = translate_args def.cn_pred_iargs in
-  let oargs = translate_args def.cn_pred_oargs in
-  let env_with_pred = Env.add_predicate def.cn_pred_name { pred_iargs= iargs; pred_oargs= oargs } env in
+  let (iargs, oargs) =
+    match Env.lookup_predicate def.cn_pred_name env with
+      | None ->
+          assert false
+      | Some pred_sig ->
+          (pred_sig.pred_iargs, pred_sig.pred_oargs) in
   let env' =
     List.fold_left (fun acc (sym, bTy) ->
       Env.add_logical sym bTy acc
-    ) env_with_pred iargs in
+    ) env iargs in
   let@ clauses = translate_cn_clauses env' def.cn_pred_clauses in
   match iargs with
     | (iarg0, BaseTypes.Loc) :: iargs' ->
         return 
-          ( env_with_pred
-          , ( todo_string_of_sym (* TODO *)def.cn_pred_name
-            , { loc= def.cn_pred_loc
-              ; pointer= iarg0
-              ; iargs= iargs'
-              ; oargs= oargs
-              ; clauses= clauses
-              } ) )
-    | (_, _) :: _ ->
-        fail "TODO(msg): error first iarg must be a pointer"
+          ( todo_string_of_sym (* TODO *)def.cn_pred_name
+          , { loc= def.cn_pred_loc
+            ; pointer= iarg0
+            ; iargs= iargs'
+            ; oargs= oargs
+            ; clauses= clauses
+            } )
+    | (_, found_bty) :: _ ->
+        fail { loc= def.cn_pred_loc; msg= First_iarg_not_pointer { pred_name= def.cn_pred_name; found_bty } }
     | [] ->
-        fail "TODO(msg): error missing a first iarg"
+        fail { loc= def.cn_pred_loc; msg= First_iarg_missing { pred_name= def.cn_pred_name} }
 
 let translate tagDefs (defs: cn_predicate list) =
-  let@ (_, xs) =
-    ListM.fold_leftM (fun (env, acc) def ->
-      let@ (env', pred_def) = translate_cn_predicate env def in
-      return (env', pred_def :: acc)
-    ) (Env.empty tagDefs, []) defs in
-  return (List.rev xs)
+  let env_with_preds = register_cn_predicates tagDefs defs in
+  ListM.mapM (translate_cn_predicate env_with_preds) defs
+

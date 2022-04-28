@@ -1730,24 +1730,26 @@ cn_assertion:
 *)
 prim_expr:
 | CN_NULL
-    { Cerb_frontend.Cn.(CNExpr_const CNConst_NULL) }
+    { Cerb_frontend.Cn.(CNExpr (Location_ocaml.point $startpos, CNExpr_const CNConst_NULL)) }
 | CN_TRUE
-    { Cerb_frontend.Cn.(CNExpr_const (CNConst_bool true)) }
+    { Cerb_frontend.Cn.(CNExpr (Location_ocaml.point $startpos, CNExpr_const (CNConst_bool true))) }
 | CN_FALSE
-    { Cerb_frontend.Cn.(CNExpr_const (CNConst_bool false)) }
+    { Cerb_frontend.Cn.(CNExpr (Location_ocaml.point $startpos, CNExpr_const (CNConst_bool false))) }
 | cst= CONSTANT
     {
       match cst with
         | Cabs.CabsInteger_const (str, None) ->
-            Cerb_frontend.Cn.(CNExpr_const (CNConst_integer (Z.of_string str)))
+            Cerb_frontend.Cn.(CNExpr ( Location_ocaml.point $startpos
+                                     , CNExpr_const (CNConst_integer (Z.of_string str)) ))
         | _ ->
             raise (C_lexer.Error (Cparser_unexpected_token "TODO cn integer const"))
     }
 | ident= cn_variable
-    { Cerb_frontend.Cn.CNExpr_var ident }
+    { Cerb_frontend.Cn.(CNExpr (Location_ocaml.point $startpos, CNExpr_var ident)) }
 (* | ident= cn_variable DOT ident_membr= cn_variable *)
 | ident= cn_variable DOT xs= separated_nonempty_list(DOT, cn_variable)
-    { Cerb_frontend.Cn.CNExpr_memberof (ident, xs) }
+    { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
+                               , CNExpr_memberof (ident, xs))) }
 | e= delimited(LPAREN, expr, RPAREN)
     { e }
 
@@ -1756,39 +1758,49 @@ mul_expr:
 | e= prim_expr
      { e }
 | e1= mul_expr STAR e2= prim_expr
-    { Cerb_frontend.Cn.(CNExpr_binop (CN_mul, e1, e2)) }
+    { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
+                               , CNExpr_binop (CN_mul, e1, e2))) }
 | e1= mul_expr SLASH e2= prim_expr
-    { Cerb_frontend.Cn.(CNExpr_binop (CN_div, e1, e2)) }
+    { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
+                               , CNExpr_binop (CN_div, e1, e2))) }
 
 add_expr:
 | e= mul_expr
      { e }
 | e1= add_expr PLUS e2= mul_expr
-    { Cerb_frontend.Cn.(CNExpr_binop (CN_add, e1, e2)) }
+    { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
+                               , CNExpr_binop (CN_add, e1, e2))) }
 | e1= add_expr MINUS e2= mul_expr
-    { Cerb_frontend.Cn.(CNExpr_binop (CN_sub, e1, e2)) }
+    { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
+                               , CNExpr_binop (CN_sub, e1, e2))) }
 
 rel_expr:
 | e= add_expr
      { e }
 | e1= rel_expr LT e2= add_expr
-    { Cerb_frontend.Cn.(CNExpr_binop (CN_lt, e1, e2)) }
+    { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
+                               , CNExpr_binop (CN_lt, e1, e2))) }
 | e1= rel_expr GT e2= add_expr
-    { Cerb_frontend.Cn.(CNExpr_binop (CN_gt, e1, e2)) }
+    { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
+                               , CNExpr_binop (CN_gt, e1, e2))) }
 | e1= rel_expr LT_EQ e2= add_expr
-    { Cerb_frontend.Cn.(CNExpr_binop (CN_le, e1, e2)) }
+    { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
+                               , CNExpr_binop (CN_le, e1, e2))) }
 | e1= rel_expr GT_EQ e2= add_expr
-    { Cerb_frontend.Cn.(CNExpr_binop (CN_ge, e1, e2)) }
+    { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
+                               , CNExpr_binop (CN_ge, e1, e2))) }
 
 list_expr:
 | e= rel_expr
     { e }
 (* | LBRACK COLON bty= base_type RBRACK *)
 | CN_NIL bty= delimited(LPAREN, base_type, RPAREN)
-    { Cerb_frontend.Cn.CNExpr_nil bty }
+    { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) NoCursor)
+                               , CNExpr_nil bty)) }
 (* | e1= rel_expr COLON_COLON e2= list_expr *)
 | CN_CONS LPAREN e1= list_expr COMMA e2= list_expr RPAREN
-    { Cerb_frontend.Cn.CNExpr_cons (e1, e2) }
+    { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) NoCursor)
+                               , CNExpr_cons (e1, e2))) }
 (* | es= delimited(LBRACK, separated_nonempty_list(COMMA, rel_expr), RBRACK)
     { Cerb_frontend.Cn.CNExpr_list es } *)
   // | Head of 'bt term
@@ -1800,9 +1812,11 @@ expr:
 | e= list_expr
     { e }
 | e1= expr EQ_EQ e2= list_expr
-    { Cerb_frontend.Cn.(CNExpr_binop (CN_equal, e1, e2)) }
+    { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
+                               , CNExpr_binop (CN_equal, e1, e2))) }
 | e1= expr BANG_EQ e2= list_expr
-    { Cerb_frontend.Cn.(CNExpr_binop (CN_inequal, e1, e2)) }
+    { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
+                               , CNExpr_binop (CN_inequal, e1, e2))) }
 ;
 
 (* CN predicate definitions **************************************************)
