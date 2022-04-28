@@ -1,8 +1,30 @@
 open Cerb_frontend
 
+(* DIRTY hack to fix col positions when seing a CN keyword *)
+(* obviously this messes-up the col positions when using __cerb_{CN_keyword} directly *)
+let lexer_cn_hack lexbuf =
+  let open Lexing in
+  if !C_lexer.inside_cn then
+    let tok = C_lexer.lexer lexbuf in
+    let pos_cnum' = lexbuf.lex_start_p.pos_cnum + !C_lexer.cnum_hack in
+    (* this should never fail, but better being careful ... *)
+    if pos_cnum' - lexbuf.lex_start_p.pos_bol >= 0 then
+      lexbuf.lex_start_p <- {lexbuf.lex_start_p with pos_cnum= lexbuf.lex_start_p.pos_cnum + !C_lexer.cnum_hack };
+    begin match tok with
+      | Tokens.CN_PREDICATE ->
+          (* removing the length of "__cerb_" *)
+          C_lexer.cnum_hack := !C_lexer.cnum_hack - 7
+      | _ ->
+          ()
+    end;
+    lexbuf.lex_curr_p <- {lexbuf.lex_curr_p with pos_cnum= lexbuf.lex_curr_p.pos_cnum + !C_lexer.cnum_hack };
+    tok
+  else
+    C_lexer.lexer lexbuf
+
 let parse lexbuf =
   try
-    Exception.except_return @@ C_parser.translation_unit C_lexer.lexer lexbuf
+    Exception.except_return @@ C_parser.translation_unit lexer_cn_hack lexbuf
   with
   | C_lexer.Error err ->
     let loc = Location_ocaml.point @@ Lexing.lexeme_start_p lexbuf in

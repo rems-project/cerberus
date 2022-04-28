@@ -6,6 +6,15 @@ open Tokens
 
 exception Error of Errors.cparser_cause
 
+(* HACK fo fix col positions when seing CN keywords (look at C_parser_driver) *)
+let cnum_hack =
+  ref 0
+
+let new_line lexbuf =
+  (* the hacked col offset MUST be reset after every newline *)
+  cnum_hack := 0;
+  Lexing.new_line lexbuf
+
 let offset_location lexbuf pos_fname pos_lnum =
   if pos_lnum > 0 then
     let pos_lnum = pos_lnum - 1 in
@@ -318,9 +327,9 @@ and initial = parse
   | "/*" {let _ = comment lexbuf in initial lexbuf}
 
   (* Single-line comment *)
-  | "//" {let _ = onelinecomment lexbuf in Lexing.new_line lexbuf; initial lexbuf}
+  | "//" {let _ = onelinecomment lexbuf in new_line lexbuf; initial lexbuf}
 
-  | '\n'             { Lexing.new_line lexbuf; initial lexbuf }
+  | '\n'             { new_line lexbuf; initial lexbuf }
   | whitespace_char+ { initial lexbuf }
   | '#'              { hash lexbuf; initial lexbuf }
 
@@ -444,7 +453,18 @@ and initial = parse
   | "}-}" { RBRACES }
 
   | identifier as id
-    { try Hashtbl.find lexicon id
+    { try
+        let tok = Hashtbl.find lexicon id in
+        match tok with
+          | CN_PREDICATE ->
+              (* let old_pos_cnum = lexbuf.lex_curr_p.pos_cnum in
+              let new_pos_cnum = old_pos_cnum - (String.length "__cerb_") in
+              Printf.fprintf stderr "HACK pos_cnum: %d --> %d\n"
+                (old_pos_cnum - lexbuf.lex_curr_p.pos_bol) (new_pos_cnum - lexbuf.lex_curr_p.pos_bol);
+              lexbuf.lex_curr_p <- {lexbuf.lex_curr_p with pos_cnum= new_pos_cnum }; *)
+              CN_PREDICATE
+          | _ ->
+              tok
       with Not_found ->
         if !inside_cn then
           try Hashtbl.find cn_lexicon id
