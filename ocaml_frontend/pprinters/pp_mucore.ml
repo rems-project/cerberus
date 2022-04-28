@@ -103,7 +103,6 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
 
     | M_PEop (OpOr,  _, _) -> Some 7
 
-    | M_PEerror _
     | M_PEval _
     | M_PEconstrained _
     | M_PEsym _
@@ -127,6 +126,7 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
     | M_PElet _ -> None
     | M_PEif _ -> None
     | M_PEundef _ -> None
+    | M_PEerror _ -> None
     | M_PEdone _ -> None
 
   let precedence_expr = function
@@ -164,6 +164,8 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
     | M_Edone _ -> 
        None
     | M_Eundef _ ->
+       None
+    | M_Eerror _ ->
        None
     | M_Erun _ ->
        None
@@ -390,8 +392,6 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
     (maybe_print_location loc) ^^
       begin
         match pe with
-          | M_PEerror (str, pe) ->
-              pp_keyword "error" ^^ P.parens (P.dquotes (!^ str) ^^ P.comma ^^^ pp_asym pe)
           | M_PEval cval ->
               pp_value cval
           | M_PEconstrained xs ->
@@ -505,6 +505,8 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
               pp_control "done" ^^^ pp_asym asym
           | M_PEundef (_, ub) ->
               pp_keyword "undef" ^^ P.parens (pp_undef ub)
+          | M_PEerror (str, pe) ->
+              pp_keyword "error" ^^ P.parens (P.dquotes (!^ str) ^^ P.comma ^^^ pp_asym pe)
       end
     in pp budget None pe
 
@@ -789,6 +791,8 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
               pp_keyword "run" ^^^ pp_symbol sym ^^ P.parens (comma_list pp_asym pes)
           | M_Eundef (_, ub) ->
               pp_keyword "undef" ^^ P.parens (pp_undef ub)        
+          | M_Eerror (str, pe) ->
+              pp_keyword "error" ^^ P.parens (P.dquotes (!^ str) ^^ P.comma ^^^ pp_asym pe)
         end
       end
       in pp budget None expr

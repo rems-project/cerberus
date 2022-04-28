@@ -182,8 +182,6 @@ let retype_pexpr (Old.M_Pexpr (loc, annots,bty,pexpr_)) =
        return (New.M_PEval v)
     | M_PEconstrained cs -> 
        return (New.M_PEconstrained cs)
-    | M_PEerror (err,asym) -> 
-       return (New.M_PEerror (err,asym))
     | M_PEctor (ctor,asyms) -> 
        let@ ctor = retype_ctor loc ctor in
        return (New.M_PEctor (ctor,asyms))
@@ -259,6 +257,8 @@ let rec retype_tpexpr (Old.M_TPexpr (loc, annots,bty,pexpr_)) =
        return (New.M_PEdone asym)
     | M_PEundef (loc,undef) -> 
        return (New.M_PEundef (loc,undef))
+    | M_PEerror (err,asym) -> 
+       return (New.M_PEerror (err,asym))
        
   in
   return (New.M_TPexpr (loc, annots,bty,pexpr_))
@@ -435,6 +435,8 @@ let rec retype_texpr (Old.M_TExpr (loc, annots, expr_)) =
        return (New.M_Erun (sym,asyms))
     | M_Eundef (loc,undef) -> 
        return (New.M_Eundef (loc,undef))
+    | M_Eerror (err,asym) -> 
+       return (New.M_Eerror (err,asym))
   in
   return (New.M_TExpr (loc, annots,expr_))
 

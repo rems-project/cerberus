@@ -132,7 +132,6 @@ module Make(T : TYPES) = struct
    | M_PEimpl of Implementation.implementation_constant (* implementation-defined constant *)
    | M_PEval of 'TY mu_value
    | M_PEconstrained of (Mem.mem_iv_constraint * 'TY asym) list (* constrained value *)
-   | M_PEerror of string * 'TY asym (* impl-defined static error *)
    | M_PEctor of mu_ctor * ('TY asym) list (* data constructor application *)
    | M_CivCOMPL of 'TY act * 'TY asym (* bitwise complement *)
    | M_CivAND of 'TY act * 'TY asym * 'TY asym (* bitwise AND *)
@@ -163,6 +162,7 @@ module Make(T : TYPES) = struct
 
   type 'TY mu_tpexpr_ = 
    | M_PEundef of Location_ocaml.t * Undefined.undefined_behaviour (* undefined behaviour *)
+   | M_PEerror of string * 'TY asym (* impl-defined static error *)
    | M_PEcase of ('TY asym) * (mu_pattern * 'TY mu_tpexpr) list (* pattern matching *)
    | M_PElet of ('TY mu_sym_or_pattern) * ('TY mu_pexpr) * ('TY mu_tpexpr) (* pure let *)
    | M_PEif of 'TY asym * ('TY mu_tpexpr) * ('TY mu_tpexpr) (* pure if *)
@@ -258,6 +258,7 @@ type have_show =
    | M_End of ('TY mu_texpr) list (* nondeterministic choice *)
    | M_Edone of 'TY asym
    | M_Eundef of Location_ocaml.t * Undefined.undefined_behaviour (* undefined behaviour *)
+   | M_Eerror of string * 'TY asym (* impl-defined static error *)
    | M_Erun of symbol * ('TY asym) list (* run from label *)
 
   and 'TY mu_texpr = 

@@ -140,8 +140,6 @@ let mu_to_core__pexpr (env1 : 'bty env) (pexpr2 : 'bty mu_pexpr)
   | M_PEconstrained l -> 
      let l = (mapsnd (get_pexpr "PEconstrained" env1) l) in
      wrap (Core.PEconstrained l)
-  | M_PEerror( err, p) -> 
-     wrap (Core.PEerror( err, (get_pexpr "PEerror" env1 p)))
   | M_PEctor( ctor1, pes) -> 
      wrap (Core.PEctor( 
              (mu_to_core__ctor ctor1),
@@ -245,6 +243,8 @@ let rec mu_to_core__tpexpr (env1 : 'bty env) (pexpr2 : 'bty mu_tpexpr)
      (get_pexpr "PEdone" env1 asym)
   | M_PEundef( loc, undef1) ->
      wrap (Core.PEundef( loc, undef1))
+  | M_PEerror( err, p) -> 
+     wrap (Core.PEerror( err, (get_pexpr "PEerror" env1 p)))
 
 
 
@@ -525,6 +525,8 @@ let rec mu_to_core__texpr env1 expr2 : (unit, 'bty, symbol) Core.generic_expr=
        wrap (Core.Erun( (), sym1, (map (get_pexpr "Erun" env1) pes)))
     | M_Eundef( loc, undef1) ->
        wrap (Core.Epure (Core.Pexpr ([], (), Core.PEundef( loc, undef1))))
+    | M_Eerror( err, p) -> 
+       wrap (Core.Epure (Core.Pexpr ([], (), Core.PEerror( err, (get_pexpr "Eerror" env1 p)))))
 
 
 

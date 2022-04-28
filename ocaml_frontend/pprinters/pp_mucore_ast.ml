@@ -125,9 +125,6 @@ module Make(PP_Typ : Pp_mucore.PP_Typ) = struct
             Dnode (pp_ctor "PEval", [dtree_of_value cval])
         | M_PEconstrained xs ->
             Dleaf (pp_ctor "PEconstrained" ^^^ !^ (ansi_format [Red] "TODO"))
-        | M_PEerror (str, pe) ->
-            Dnode ( pp_ctor "PEerror" ^^^ P.dquotes (!^ (ansi_format [Red] str))
-                  , [dtree_of_asym pe] )
         | M_PEctor (ctor, pes) ->
             Dleaf (pp_ctor "PEctor" ^^^ !^ (ansi_format [Red] "TODO"))
         | M_PEarray_shift (pe1, ty, pe2) ->
@@ -166,6 +163,9 @@ module Make(PP_Typ : Pp_mucore.PP_Typ) = struct
                   , [ dtree_of_asym pe1; self pe2; self pe3 ] )
         | M_PEundef (loc, ub) ->
             Dleaf (pp_ctor "PEundef" ^^^ !^ (ansi_format [Red] "TODO"))
+        | M_PEerror (str, pe) ->
+            Dnode ( pp_ctor "PEerror" ^^^ P.dquotes (!^ (ansi_format [Red] str))
+                  , [dtree_of_asym pe] )
         | _ ->
             failwith "FIXME"
     (* | _ ->
@@ -310,6 +310,10 @@ module Make(PP_Typ : Pp_mucore.PP_Typ) = struct
                                     ; self e2 ] )
       | M_Eundef (loc, ub) ->
          Dleaf (pp_ctor "PEundef" ^^^ !^ (ansi_format [Red] "TODO"))
+
+      | M_Eerror (str, pe) ->
+          Dnode ( pp_ctor "Eerror" ^^^ P.dquotes (!^ (ansi_format [Red] str))
+                , [dtree_of_asym pe] )
       | M_Erun (l, asyms) ->
          Dnode ( pp_pure_ctor "Erun"
                , List.map dtree_of_asym asyms)

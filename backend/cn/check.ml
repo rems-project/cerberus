@@ -1877,16 +1877,6 @@ let infer_pexpr (pe : 'bty mu_pexpr) : (RT.t, type_error) m =
        return (rt_of_vt loc vt)
     | M_PEconstrained _ ->
        Debug_ocaml.error "todo: PEconstrained"
-    | M_PEerror (err, asym) ->
-       let@ arg = arg_of_asym asym in
-       let@ provable = provable loc in
-       begin match provable (t_ (bool_ false)) with
-       | `True ->
-          return (rt_of_vt loc (Unit, IT.unit_))
-       | `False ->
-          let@ model = model () in
-          fail (fun ctxt -> {loc; msg = StaticError {err; ctxt; model}})
-       end
     | M_PEctor (ctor, asyms) ->
        let@ args = args_of_asyms asyms in
        let@ vt = infer_constructor loc ctor args in
@@ -2101,6 +2091,15 @@ let rec check_tpexpr (e : 'bty mu_tpexpr) (typ : RT.t) : (unit, type_error) m =
      | `False ->
         let@ model = model () in
         fail (fun ctxt -> {loc; msg = Undefined_behaviour {ub; ctxt; model}})
+     end
+  | M_PEerror (err, asym) ->
+     let@ arg = arg_of_asym asym in
+     let@ provable = provable loc in
+     begin match provable (t_ (bool_ false)) with
+     | `True -> return ()
+     | `False ->
+        let@ model = model () in
+        fail (fun ctxt -> {loc; msg = StaticError {err; ctxt; model}})
      end
 
 
@@ -2690,6 +2689,15 @@ let rec check_texpr labels (e : 'bty mu_texpr) (typ : RT.t orFalse)
           let@ model = model () in
           fail (fun ctxt -> {loc; msg = Undefined_behaviour {ub; ctxt; model}})
        end
+  | M_Eerror (err, asym) ->
+     let@ arg = arg_of_asym asym in
+     let@ provable = provable loc in
+     begin match provable (t_ (bool_ false)) with
+     | `True -> return ()
+     | `False ->
+        let@ model = model () in
+        fail (fun ctxt -> {loc; msg = StaticError {err; ctxt; model}})
+     end
     | M_Erun (label_sym, asyms) ->
        let@ (lt,lkind) = match SymMap.find_opt label_sym labels with
          | None -> fail (fun _ -> {loc; msg = Generic (!^"undefined code label" ^/^ Sym.pp label_sym)})
