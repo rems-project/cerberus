@@ -405,14 +405,15 @@ let resolve_index_term loc
       (quantifiers : (string * (Sym.t * BT.t)) list)
       (term: Ast.term) 
         : (IT.typed * Sctypes.t option, type_error) m =
-  let lookup term mapping quantifiers = 
+  let lookup term ty mapping quantifiers =
     let search () =
       let found = List.find_opt (fun {path;_} -> Ast.equal path term) mapping in
       match found with
       | Some {it; o_sct; _} -> 
          return (it, o_sct)
       | None -> 
-         fail {loc; msg = Generic (!^"term" ^^^ Ast.Terms.pp false term ^^^ !^"does not apply")}
+         fail {loc; msg = Generic (!^"term" ^^^ Ast.Terms.pp false term
+             ^^^ !^"is not bound as" ^^^ !^ty)}
     in
     match term with
     | Var name ->
@@ -427,13 +428,13 @@ let resolve_index_term loc
         : (IT.typed * Sctypes.t option, type_error) m =
     match term with
     | Addr name ->
-       lookup (Addr name) mapping quantifiers
+       lookup (Addr name) "an address" mapping quantifiers
     | Var ln ->
-       lookup (Var ln) mapping quantifiers
+       lookup (Var ln) "a variable" mapping quantifiers
     | Pointee it ->
-       lookup (Pointee it) mapping quantifiers
+       lookup (Pointee it) "a pointee (i.e. not Owned)" mapping quantifiers
     | PredOutput (name, oarg) ->
-       lookup (PredOutput (name, oarg)) mapping quantifiers
+       lookup (PredOutput (name, oarg)) "a predicate output" mapping quantifiers
     | Bool b -> 
        return (IT (Lit (IT.Bool b), BT.Bool), None)
     | Integer i -> 
