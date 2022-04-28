@@ -1881,7 +1881,8 @@ let infer_pexpr (pe : 'bty mu_pexpr) : (RT.t, type_error) m =
        let@ arg = arg_of_asym asym in
        let@ provable = provable loc in
        begin match provable (t_ (bool_ false)) with
-       | `True -> assert false
+       | `True ->
+          return (rt_of_vt loc (Unit, IT.unit_))
        | `False ->
           let@ model = model () in
           fail (fun ctxt -> {loc; msg = StaticError {err; ctxt; model}})
@@ -2096,7 +2097,7 @@ let rec check_tpexpr (e : 'bty mu_tpexpr) (typ : RT.t) : (unit, type_error) m =
   | M_PEundef (_loc, ub) ->
      let@ provable = provable loc in
      begin match provable (t_ (bool_ false)) with
-     | `True -> assert false;
+     | `True -> return ()
      | `False ->
         let@ model = model () in
         fail (fun ctxt -> {loc; msg = Undefined_behaviour {ub; ctxt; model}})
@@ -2684,7 +2685,7 @@ let rec check_texpr labels (e : 'bty mu_texpr) (typ : RT.t orFalse)
     | M_Eundef (_loc, ub) ->
        let@ provable = provable loc in
        begin match provable (t_ (bool_ false)) with
-       | `True -> assert false
+       | `True -> return ()
        | `False ->
           let@ model = model () in
           fail (fun ctxt -> {loc; msg = Undefined_behaviour {ub; ctxt; model}})
