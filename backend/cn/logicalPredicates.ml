@@ -124,6 +124,15 @@ module PageAlloc = struct
         Bool
     in
 
+    let order_align = 
+      make_uninterp "order_align"
+        [(Sym.fresh_named "page_index", Integer);
+         (Sym.fresh_named "order", Integer);]
+        Integer
+    in
+
+
+
     let buddy = 
       make_uninterp "buddy"
         [(Sym.fresh_named "p", Loc);
@@ -154,13 +163,12 @@ module PageAlloc = struct
         IT.fresh_named (BT.Map (Integer, BT.Struct hyp_page_tag)) "vmemmap" 
       in
 
-      let page_s, page = 
-        IT.fresh_named (BT.Struct hyp_page_tag) "page" in
+      let page = map_get_ vmemmap page_index in
 
       let args = [
           (page_index_s, IT.bt page_index);
           (vmemmap_pointer_s, IT.bt vmemmap_pointer);
-          (page_s, IT.bt page);
+          (vmemmap_s, IT.bt vmemmap);
           (pool_pointer_s, IT.bt pool_pointer);
           (pool_s, IT.bt pool);
         ]
@@ -204,6 +212,16 @@ module PageAlloc = struct
                    ]
                )
             );
+            let o_s, o = IT.fresh Integer in
+            eachI_ (1, o_s, mMAX_ORDER - 1) (
+                impl_ (
+                    let potential_group_start = pred_ "order_align" [page_index; o] Integer in
+                    and_ [ne_ (potential_group_start, page_index);
+                          eq_ ((map_get_ vmemmap potential_group_start) %. "order", o)],
+                    and_ [eq_ ((map_get_ vmemmap page_index) %. "refcount", int_ 0);
+                          eq_ ((map_get_ vmemmap page_index) %. "order", int_ hHYP_NO_ORDER)]
+                  )
+              )
           ]
       in
 
@@ -231,7 +249,7 @@ module PageAlloc = struct
         AT.I OutputDef.[
             {loc; name = page_index_s; value = ia_page_index};
             {loc; name = vmemmap_pointer_s; value = ia_vmemmap_pointer};
-            {loc; name = page_s; value = map_get_ ia_vmemmap ia_page_index};
+            {loc; name = vmemmap_s; value = ia_vmemmap};
             {loc; name = pool_pointer_s; value = ia_pool_pointer};
             {loc; name = pool_s; value = ia_pool};
           ]))))))
@@ -568,6 +586,7 @@ module PageAlloc = struct
 
 
     [order_aligned;
+     order_align;
      page_size_of_order;
      vmemmap_page_wf;
      vmemmap_page_wf_list;

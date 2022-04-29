@@ -241,8 +241,9 @@ let page_alloc_predicates struct_decls =
       in
       let lrt =
         LRT.Resource (QPredicate qp, (loc, None),
+        LRT.Constraint (t_ (ne_ (order, int_ hHYP_NO_ORDER)), (loc, None),
         LRT.Constraint (t_ (IT.good_pointer ~pointee_ct:char_ct pbase), (loc, None),
-        LRT.I))
+        LRT.I)))
       in
       {
         loc = loc;
@@ -323,7 +324,7 @@ let page_alloc_predicates struct_decls =
       let args = [
           i;
           vmemmap_pointer;
-          map_get_ vmemmap i;
+          vmemmap;
           pool_pointer;
           pool
         ]
