@@ -45,6 +45,7 @@ and 'bt tuple_op =
 and 'bt struct_op =
   | Struct of BaseTypes.tag * (BaseTypes.member * 'bt term) list
   | StructMember of 'bt term * BaseTypes.member
+  | StructUpdate of ('bt term * BaseTypes.member) * 'bt term
 
 and 'bt pointer_op = 
   | LTPointer of 'bt term * 'bt term

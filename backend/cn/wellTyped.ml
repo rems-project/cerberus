@@ -334,6 +334,22 @@ module WIT = struct
                    fail (illtyped_index_term loc context t (Struct tag) expected)
               in
               return (bt, StructMember (t, member))
+           | StructUpdate ((t, member), v) ->
+              let@ t = infer loc ~context t in
+              let@ tag = match IT.bt t with
+                | Struct tag -> return tag
+                | has -> fail (illtyped_index_term loc context t has "struct")
+              in
+              let@ layout = get_struct_decl loc tag in
+              let decl_members = Memory.member_types layout in
+              let@ bt = match List.assoc_opt Id.equal member decl_members with
+                | Some sct -> return (BT.of_sct sct)
+                | None -> 
+                   let expected = "struct with member " ^ Id.s member in
+                   fail (illtyped_index_term loc context t (Struct tag) expected)
+              in
+              let@ v = check loc ~context bt v in
+              return (BT.Struct tag, StructUpdate ((t, member), v))
          in
          return (IT (Struct_op struct_op, bt))
       | Pointer_op pointer_op ->

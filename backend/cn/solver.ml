@@ -384,6 +384,20 @@ module Translate = struct
             let n = Option.get (Memory.member_number layout member) in
             let destructors = Z3.Tuple.get_field_decls (sort (IT.bt t)) in
             Z3.Expr.mk_app context (nth destructors n) [term t]
+         | StructUpdate ((t, member), v) ->
+            let tag = BT.struct_bt (IT.bt t) in
+            let layout = SymMap.find (struct_bt (IT.bt t)) struct_decls in
+            let members = Memory.member_types layout in
+            let str =
+              List.map (fun (member', sct) ->
+                  let value = 
+                    if Id.equal member member' then v 
+                    else member_ ~member_bt:(BT.of_sct sct) (tag, t, member')
+                  in
+                  (member', value)
+                ) members
+            in
+            term (struct_ (tag, str))
          end
       | Pointer_op pointer_op -> 
          let open Z3.Arithmetic in

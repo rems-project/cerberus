@@ -110,12 +110,6 @@ name:
   | n=UNAME
       { n }
 
-name2:
-  | n=LNAME
-      { (n, Ast.LogicalPredicate) }
-  | n=UNAME
-      { (n, Ast.ResourcePredicate) }
-
 %inline args:
   | LPAREN args=separated_list(COMMA, term) RPAREN
       { args }
@@ -218,6 +212,10 @@ term:
       { Ast.App (a1, a2) } 
   | predicate = LNAME arguments = args
       { Ast.Pred (predicate, arguments) }
+  | t=atomic_term LBRACE member=MEMBER EQUAL v=atomic_term RBRACE
+      { Ast.StructUpdate ((t, Id.id member), v) }
+  | t=atomic_term LBRACKET i=atomic_term EQUAL v=atomic_term RBRACKET
+      { Ast.ArraySet ((t, i), v) }
 
 
 term_with_name:
@@ -256,28 +254,35 @@ ctype:
 
 
 
+logicalconstraint:
+  | c=term
+      { (None, c) }
+  | EACH LPAREN bt=basetype qname=name SEMICOLON t=term RPAREN LBRACE c=term RBRACE
+      { 
+        (Some (qname,bt,t), c)
+      }
 
-predicate:
+
+resource:
   | predicate=UNAME arguments=args oname=option(name) maybe_permission=option(if_permission_clause) maybe_typ=option(with_type_clause) maybe_some_oargs=option(where_clause)
       { 
         let some_oargs = Option.value ~default:[] maybe_some_oargs in
-        (Ast.{oq = None; predicate; arguments; some_oargs; oname = oname; o_permission = maybe_permission; typ = maybe_typ}, ResourcePredicate)
+        Ast.{oq = None; predicate; arguments; some_oargs; oname = oname; o_permission = maybe_permission; typ = maybe_typ}
       }
-  | EACH LPAREN bt=basetype qname=name SEMICOLON t=term RPAREN LBRACE predicate_and_kind=name2 arguments=args maybe_permission=option(if_permission_clause) maybe_typ=option(with_type_clause) RBRACE oname=option(name) maybe_some_oargs=option(where_clause)
+  | EACH LPAREN bt=basetype qname=name SEMICOLON t=term RPAREN LBRACE predicate=UNAME arguments=args maybe_permission=option(if_permission_clause) maybe_typ=option(with_type_clause) RBRACE oname=option(name) maybe_some_oargs=option(where_clause)
       { 
-        let (predicate, kind) = predicate_and_kind in
         let some_oargs = Option.value ~default:[] maybe_some_oargs in
-        (Ast.{oq = Some (qname,bt,t); predicate; arguments; some_oargs; oname = oname; o_permission = maybe_permission; typ = maybe_typ} , kind)
+        Ast.{oq = Some (qname,bt,t); predicate; arguments; some_oargs; oname = oname; o_permission = maybe_permission; typ = maybe_typ}
       }
 
 
 
 
 cond:
-  | c=term
-      { Ast.Term c } 
-  | cond_and_kind=predicate
-      { Ast.Predicate (fst cond_and_kind, snd cond_and_kind) }
+  | c=logicalconstraint
+      { Ast.Constraint (fst c, snd c) } 
+  | r=resource
+      { Ast.Resource r }
   | LET id=name EQUAL t=term
       { Ast.Define (id, t) }
 

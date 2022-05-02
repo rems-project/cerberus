@@ -114,6 +114,8 @@ let pp =
                     ) members)
        | StructMember (t, member) ->
           aux true t ^^ dot ^^ Id.pp member
+       | StructUpdate ((t, member), v) ->
+          mparens (aux true t ^^ braces (dot ^^ Id.pp member ^^^ equals ^^^ aux true v))
        end
     | Pointer_op pointer_op -> 
        begin match pointer_op with
@@ -224,7 +226,8 @@ let add_subterms : 'bt. ('bt term) list -> 'bt term -> ('bt term) list =
   | Struct_op struct_op ->
      begin match struct_op with
      | Struct (_tag, members) -> map snd members
-     | StructMember (it, s) -> [it;it] @ ts
+     | StructMember (it, m) -> [it;it] @ ts
+     | StructUpdate ((it, m), v) -> [it; v] @ ts
      end
   | Pointer_op pointer_op ->
      begin match pointer_op with
@@ -385,8 +388,10 @@ let rec subst (su : typed subst) (IT (it, bt)) =
               ) members 
           in
           Struct (tag, members)
-       | StructMember (t, f) ->
-          StructMember (subst su t, f)
+       | StructMember (t, m) ->
+          StructMember (subst su t, m)
+       | StructUpdate ((t, m), v) ->
+          StructUpdate ((subst su t, m), subst su v)
      in
      IT (Struct_op struct_op, bt)
   | Pointer_op pointer_op -> 
@@ -563,6 +568,8 @@ let ne__ it it' = ne_ (it, it')
 
 
 let eachI_ (i1, s, i2) t = IT (Bool_op (EachI ((i1, s, i2), t)), BT.Bool)
+(* let existsI_ (i1, s, i2) t = not_ (eachI_ (i1, s, i2) (not_ t)) *)
+
 
 (* arith_op *)
 let add_ (it, it') = IT (Arith_op (Add (it, it')), bt it)

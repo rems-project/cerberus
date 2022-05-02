@@ -478,6 +478,10 @@ let rec simp (struct_decls : Memory.struct_decls) values equalities lcs =
             IT (Struct_op (IT.StructMember (it, member)), bt)
        in
        make it
+    | IT.StructUpdate ((t, m), v) ->
+       let t = aux t in
+       let v = aux v in
+       IT (Struct_op (StructUpdate ((t, m), v)), bt)
   in
   
   (* revisit when memory model changes *)

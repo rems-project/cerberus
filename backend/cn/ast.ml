@@ -12,6 +12,8 @@ module Terms = struct
     | Pointee of term
     | PredOutput of string * string
     | Member of term * Id.t
+    | StructUpdate of (term * Id.t) * term
+    | ArraySet of (term * term) * term
     | Bool of bool
     | Integer of Z.t
     | Addition of term * term
@@ -65,6 +67,10 @@ module Terms = struct
        !^p ^^ dot ^^ dot ^^ !^a
     | Member (p, m) -> 
        pp true p ^^ dot ^^ Id.pp m
+    | StructUpdate ((t, m), v) ->
+       mparens atomic (pp true t ^^ braces (dot ^^ Id.pp m ^^^ equals ^^^ pp true v))
+    | ArraySet ((t, i), v) ->
+       mparens atomic (pp true t ^^ brackets (pp true i ^^^ equals ^^^ pp true v))
     | Bool b -> 
        !^(if b then "true" else "false")
     | Integer z -> 
@@ -166,6 +172,10 @@ module Terms = struct
          false
       | Member (p, m) -> 
          aux p
+      | StructUpdate ((t, m), v) ->
+         aux t || aux v
+      | ArraySet ((t, i), v) ->
+         aux t || aux i || aux v
       | Bool b -> 
          false
       | Integer i -> 
@@ -246,10 +256,6 @@ type typ =
   | Pointer of typ
 
 
-type predicate_kind = 
-  | LogicalPredicate
-  | ResourcePredicate
-
 type predicate = {
     oq : (string * BT.t * term) option;
     predicate : string;
@@ -261,8 +267,8 @@ type predicate = {
   }
 
 type condition = 
-  | Term of term
-  | Predicate of predicate * predicate_kind
+  | Constraint of (string * BT.t * term) option * term
+  | Resource of predicate
   | Define of string * term
 
 
