@@ -609,7 +609,7 @@ let nthTuple_ ~item_bt (n, it) = IT (Tuple_op (NthTuple (n, it)), item_bt)
 (* struct_op *)
 let struct_ (tag, members) = 
   IT (Struct_op (Struct (tag, members)), BT.Struct tag) 
-let member_ ~member_bt (tag, it, member) = 
+let member_ ~member_bt (tag, it, member) =
   IT (Struct_op (StructMember (it, member)), member_bt)
 
 let (%.) struct_decls t member = 
@@ -617,10 +617,12 @@ let (%.) struct_decls t member =
     | BT.Struct tag -> tag
     | _ -> Debug_ocaml.error "illtyped index term. not a struct"
   in
-  let member_bt = 
-    BT.of_sct
-      (List.assoc Id.equal member 
-         (Memory.member_types (SymMap.find tag struct_decls)))
+  let member_bt = match List.assoc_opt Id.equal member
+         (Memory.member_types (SymMap.find tag struct_decls))
+  with
+    | Some sct -> BT.of_sct sct
+    | None -> Debug_ocaml.error ("struct " ^ Sym.pp_string tag ^
+        " does not have member " ^ (Id.pp_string member))
   in
   member_ ~member_bt (tag, t, member)
 

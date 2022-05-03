@@ -426,15 +426,7 @@ module ResourceInference = struct
          in
          return (Some r)
       | `False ->
-         match requested.ct with
-         | Array (act, Some length) when recursive ->
-            fold_array loc act requested.pointer length 
-              requested.permission
-         | Struct tag when recursive ->
-           fold_struct ~recursive loc tag requested.pointer 
-             requested.permission
-         | _ ->
-            return None
+         return None
       end in
       time_log_end start_timing;
       return res
@@ -623,15 +615,14 @@ module ResourceInference = struct
       let open Memory in
       let@ global = get_global () in
       let@ layout = get_struct_decl loc tag in
-      let@ o_values_inits = 
+      let@ values_inits_err =
         ListM.fold_leftM (fun o_values_inits {offset; size; member_or_padding} ->
             match o_values_inits with
-            | None -> return None
-            | Some (values, inits) ->
+            | Result.Error e -> return (Result.Error e)
+            | Result.Ok (values, inits) ->
                match member_or_padding with
                | Some (member, sct) ->
-                  let@ point = 
-                    point_request ~recursive loc {
+                  let (request : Resources.Requests.point) = {
                       ct = sct;
                       pointer = memberShift_ (pointer_t, tag, member);
                       value = BT.of_sct sct;
@@ -639,16 +630,16 @@ module ResourceInference = struct
                       permission = permission_t;
                     }
                   in
+                  let@ point = point_request ~recursive loc request in
                   begin match point with
-                  | None -> return None
+                  | None -> return (Result.Error (RER.Point request))
                   | Some point -> 
-                     return (Some (values @ [(member, point.value)], inits @ [point.init]))
+                     return (Result.Ok (values @ [(member, point.value)], inits @ [point.init]))
                   end
                | None ->
                   let rec bytes i =
-                    if i = size then return true else
-                      let@ result = 
-                        point_request ~recursive loc {
+                    if i = size then return (Result.Ok ()) else
+                      let (request : Resources.Requests.point) = {
                             ct = integer_ct Char;
                             pointer = integerToPointerCast_ (add_ (pointerToIntegerCast_ pointer_t, int_ (offset + i)));
                             permission = permission_t;
@@ -656,18 +647,22 @@ module ResourceInference = struct
                             init = BT.Bool;
                           } 
                       in
+                      let@ result = point_request ~recursive loc request in
                       begin match result with
-                      | None -> return false
+                      | None -> return (Result.Error (RER.Point request))
                       | Some _ -> bytes (i + 1)
                       end
                   in
                   let@ success = bytes 0 in
-                  return (if success then Some (values, inits) else None)
-       ) (Some ([], [])) layout
+                  begin match success with
+                    | Result.Error e -> return (Result.Error e)
+                    | Result.Ok _ -> return (Result.Ok (values, inits))
+                  end
+       ) (Result.Ok ([], [])) layout
       in
-      match o_values_inits with
-      | None -> return None
-      | Some (values, inits) ->
+      match values_inits_err with
+      | Result.Error e -> return (Result.Error e)
+      | Result.Ok (values, inits) ->
          let value_s, value = IT.fresh (Struct tag) in
          let init_s, init = IT.fresh Bool in
          let@ () = add_ls [(value_s, IT.bt value); (init_s, IT.bt init)] in
@@ -682,7 +677,7 @@ module ResourceInference = struct
              permission = permission_t;
            }
          in
-         return (Some folded_resource)
+         return (Result.Ok folded_resource)
 
 
     and unfolded_array item_ct base length permission value init =
@@ -811,7 +806,11 @@ module ResourceInference = struct
         | Sctypes.Array (act, Some length) ->
           fold_array loc act pt length (bool_ true)
         | Sctypes.Struct tag ->
-          fold_struct ~recursive:true loc tag pt (bool_ true)
+          let@ result = fold_struct ~recursive:true loc tag pt (bool_ true) in
+          begin match result with
+            | Result.Ok res -> return (Some res)
+            | _ -> return None
+          end
         | _ -> return None
       in
       match opt with
@@ -1075,8 +1074,8 @@ module ResourceInference = struct
     let fold_struct ~recursive loc situation tag pointer_t permission_t = 
       let@ result = General.fold_struct ~recursive loc tag pointer_t permission_t in
       match result with
-      | Some r -> return r
-      | None -> fail_missing_resource loc situation (None, None)
+      | Result.Ok r -> return r
+      | Result.Error request -> fail_missing_resource loc situation (Some request, None)
 
   end
 
