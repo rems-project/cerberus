@@ -2,6 +2,14 @@ open Cerb_frontend
 open Cerb_backend
 open Pipeline
 
+
+(* Default switches used by CHERI backend. Could be overriden with
+   --switches command line option *)
+let default_switches = ["strict_pointer_equality";
+                        "strict_pointer_arith";
+                        "strict_reads";
+                        "CHERI"]
+
 let (>>=) = Exception.except_bind
 let (>>) m f = m >>= fun _ -> f
 let return = Exception.except_return
@@ -45,7 +53,7 @@ let cpp_str runtime_path traditional =
     (if traditional then "-traditional" else "")
     runtime_path
 
-let cheri exec core_obj trace progress batch debug_level core_file runtime_path traditional filename =
+let cheri exec switches core_obj trace progress batch debug_level core_file runtime_path traditional filename =
   Debug_ocaml.debug_level := debug_level;
   let frontend cpp_str filename =
     let conf = {
@@ -62,10 +70,7 @@ let cheri exec core_obj trace progress batch debug_level core_file runtime_path 
     Cerb_runtime.specified_runtime := Some runtime_path;
     Cerb_frontend.Ocaml_implementation.(set (MorelloImpl.impl));
     (* `SW_zap_dead_pointers` should not be set *)
-    Switches.set ["strict_pointer_equality";
-                  "strict_pointer_arith";
-                  "strict_reads";
-                  "CHERI"] ;
+    Switches.set switches ;
     Global_ocaml.(set_cerb_conf exec Random false Basic false false false false);
     load_core_stdlib () >>= fun stdlib ->
     load_core_impl stdlib impl_name >>= fun impl ->
@@ -175,6 +180,10 @@ let trace =
   let doc = "trace memory actions" in
   Arg.(value & flag & info["trace"] ~doc)
 
+let switches =
+  let doc = "list of semantics switches to turn on (see documentation for the list)" in
+  Arg.(value & opt (list string) default_switches & info ["switches"] ~docv:"SWITCH1,..." ~doc)
+
 let progress =
   let doc = "Progress mode: the return code indicate how far the source program \
              went through the pipeline \
@@ -189,7 +198,7 @@ let batch =
                                      ~doc:(doc^" (for Charon)"))])
 
 let () =
-  let cheri_t = Term.(pure cheri $ exec $ core_obj $ trace $ progress $ batch $ debug_level $ core_file $ runtime_path $ traditional $ file) in
+  let cheri_t = Term.(pure cheri $ exec $ switches $ core_obj $ trace $ progress $ batch $ debug_level $ core_file $ runtime_path $ traditional $ file) in
   let version = Version.version in
   let info = Term.info "cerberus" ~version ~doc:"Cerberus CHERI C semantics"  in
   Term.exit_status @@ Term.eval (cheri_t, info)
