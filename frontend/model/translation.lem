@@ -1520,7 +1520,7 @@ else
                     [ ( Caux.mk_tuple_pat [ Caux.mk_specified_pat (Caux.mk_sym_pat ptr_obj_sym (C.BTy_object C.OTy_pointer))
                                           ; Caux.mk_specified_pat (Caux.mk_sym_pat integer_obj_sym (C.BTy_object C.OTy_integer)) ]
                       , (* Both operand are specified *)
-if Global.has_strict_pointer_arith () || Global.is_PNVI () then
+if Global.has_strict_pointer_arith () || Global.is_CHERI () || Global.is_PNVI () then
                         Caux.mk_wseq_e res_sym_pat
                           (C.Expr [] (C.Ememop Mem_common.PtrArrayShift [ptr_obj_sym_pe; Caux.mk_ail_ctype_pe ref_ty; integer_obj_sym_pe]))
                           (Caux.mk_pure_e (Caux.mk_specified_pe res_sym_pe))
@@ -1653,7 +1653,7 @@ else
                         [ (Caux.mk_tuple_pat [ Caux.mk_specified_pat (Caux.mk_sym_pat ptr_obj_sym (C.BTy_object C.OTy_pointer))
                                            ; Caux.mk_specified_pat (Caux.mk_sym_pat integer_obj_sym (C.BTy_object C.OTy_integer)) ],
                          (* Both operand are specified *)
-if Global.has_strict_pointer_arith () || Global.is_PNVI () then
+if Global.has_strict_pointer_arith () || Global.is_CHERI || Global.is_PNVI () then
                         Caux.mk_wseq_e res_sym_pat
                           (C.Expr [] (C.Ememop Mem_common.PtrArrayShift [ptr_obj_sym_pe; Caux.mk_ail_ctype_pe ref_ty; (Caux.mk_neg_pe integer_obj_sym_pe)]))
                           (Caux.mk_pure_e (Caux.mk_specified_pe res_sym_pe))
@@ -2907,7 +2907,7 @@ else (* is_pointer *)
             E.return begin
               C.Expr [Annot.Astd "§6.5.2.3#3, sentence 2"] (
                 C.Esseq e_sym_pat core_e (
-begin if Global.has_strict_pointer_arith () || Global.is_PNVI () then
+begin if Global.has_strict_pointer_arith () || Global.is_CHERI () || Global.is_PNVI () then
                     (Caux.mk_memop_e (Mem_common.PtrMemberShift tag_sym ident) [e_sym_pe])
 else
                     Caux.mk_pure_e (Caux.mk_member_shift_pe e_sym_pe tag_sym ident)
@@ -2941,7 +2941,7 @@ end
                   [ ( Caux.mk_unspecified_pat (Caux.mk_empty_pat C.BTy_ctype)
                     , Caux.mk_pure_e (Caux.mk_undef_pe loc (Undefined.DUMMY "Elab, AilEmemberofptr")) ) (* TODO: better undef *)
                   ; ( Caux.mk_specified_pat obj_sym_pat
-                    , if Global.has_strict_pointer_arith () then
+                    , if Global.has_strict_pointer_arith () || Global.is_CHERI () then
                         Caux.mk_wseq_e test_sym_pat
                           (Caux.mk_memop_e Mem_common.PtrValidForDeref [Caux.mk_ail_ctype_pe ref_ty; obj_sym_pe])
                       begin if Global.is_CHERI () then
@@ -3209,7 +3209,7 @@ else (* is_pointer *)
                           illTypedAil loc "AilEarray_decay, result_ty not a pointer"
                       | Just ref_ty ->
                           C.Expr [Annot.Astd "§6.3.2.1#3"] (
-if Global.has_strict_pointer_arith () || Global.is_PNVI () then
+if Global.has_strict_pointer_arith () || Global.is_CHERI () || Global.is_PNVI () then
                             C.Ewseq res_sym_pat
                             (C.Expr [] (C.Ememop Mem_common.PtrArrayShift [e_sym_pe; Caux.mk_ail_ctype_pe ref_ty; Caux.mk_integer_pe 0]))
                             (Caux.mk_pure_e (Caux.mk_specified_pe res_sym_pe))
