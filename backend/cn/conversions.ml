@@ -1335,6 +1335,10 @@ let make_label_spec
       (i, mappings) lspec.invariant
   in
 
+  let inv_naming = IT.info_ "Naming" [IT.info_ lname [];
+        get_mappings_info mappings lname] in
+  let i = i @ [(`Constraint (LC.t_ inv_naming), (loc, None))] in
+
   let lt =
     List.fold_right (fun (iarg, info) lt ->
         match iarg with
