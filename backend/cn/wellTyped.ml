@@ -492,6 +492,9 @@ module WIT = struct
                 end
          in
          return (IT (Map_op map_op, bt))
+      | Info (name, args) ->
+         let@ args = ListM.mapM (infer loc ~context) args in
+         return (info_ name args)
       | Pred (name, args) ->
          let@ def = Typing.get_logical_predicate_def loc name in
          let has_args, expect_args = List.length args, List.length def.args in

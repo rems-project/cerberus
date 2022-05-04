@@ -637,6 +637,7 @@ let rec simp (struct_decls : Memory.struct_decls) values equalities lcs =
     | Set_op s -> IT (Set_op s, bt)
     | CT_pred c -> ct_pred c bt
     | Map_op a -> map_op a bt
+    | Info (name, args) -> info_ name (List.map aux args)
     | Pred (name, args) -> pred name args bt
     (* | Option_op o -> option_op o bt *)
     (* | Let ((s, bound), body) -> letb (s, bound) body bt *)

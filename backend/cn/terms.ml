@@ -94,6 +94,7 @@ and 'bt term_ =
   | Set_op of 'bt set_op
   | CT_pred of 'bt ct_pred
   | Map_op of 'bt map_op
+  | Info of string * ('bt term) list
   | Pred of string * ('bt term) list
 
 and 'bt term =

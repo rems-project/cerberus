@@ -182,6 +182,8 @@ let pp =
        | Def ((s, abt), body) ->
           braces (BT.pp abt ^^^ Sym.pp s ^^^ !^"->" ^^^ aux false body)
        end
+    | Info (name, args) ->
+       c_app !^name (List.map (aux false) args)
     | Pred (name, args) ->
        c_app !^name (List.map (aux false) args)
   in
@@ -455,6 +457,8 @@ let rec subst (su : typed subst) (IT (it, bt)) =
             Def ((s, abt), subst su body)
      in
      IT (Map_op map_op, bt)
+  | Info (name, args) ->
+     IT (Info (name, List.map (subst su) args), bt)
   | Pred (name, args) ->
      IT (Pred (name, List.map (subst su) args), bt)
 
@@ -738,7 +742,10 @@ let map_def_ (s, abt) body =
   IT (Map_op (Def ((s, abt), body)), BT.Map (abt, bt body))
 
 
-let pred_ name args rbt = 
+let info_ name args =
+  IT (Info (name, args), BT.Bool)
+
+let pred_ name args rbt =
   IT (Pred (name, args), rbt)
 
 
