@@ -320,7 +320,7 @@ let guess_span_intersection_action ress req m g =
     |> List.sort (fun (_, (lb, _)) (_, (lb2, _)) -> Z.compare lb lb2) in
   if List.compare_length_with interesting 0 == 0
   then
-  Pp.debug 3 (lazy (Pp.item "spans as expected for inference" (Pp.string "")))
+  Pp.debug 3 (lazy (Pp.bold "spans as expected for inference"))
   else ();
   let opts = List.filter_map (fun (r, s) ->
     Pp.debug 3 (lazy (Pp.item "resource partial overlap"
