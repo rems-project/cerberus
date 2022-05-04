@@ -1019,6 +1019,10 @@ let mod_mappings mapping_names mappings f =
         mapping
     ) mappings
 
+let get_mappings_info (mappings : mapping StringMap.t) (mapping_name : string) =
+  info_ "mappings" (StringMap.find mapping_name mappings
+    |> List.map (fun {path; it; _} -> info_ "name" [
+        info_ (Pp.plain (Ast.Terms.pp true path)) []; it]))
 
 let make_fun_spec loc (layouts : Memory.struct_decls) rpredicates lpredicates fsym (fspec : function_spec)
     : (AT.ft * CF.Mucore.trusted * mapping, type_error) m = 
@@ -1106,6 +1110,10 @@ let make_fun_spec loc (layouts : Memory.struct_decls) rpredicates lpredicates fs
       (i, mappings) fspec.pre_condition
   in
 
+  let start_naming = IT.info_ "Naming" [IT.info_ "start" [];
+        get_mappings_info mappings "start"] in
+  let i = i @ [(`Constraint (LC.t_ start_naming), (loc, None))] in
+
   (* ret *)
   let (oA, o, mappings) = 
     let ret = fspec.function_return in
@@ -1186,6 +1194,9 @@ let make_fun_spec loc (layouts : Memory.struct_decls) rpredicates lpredicates fs
       )
       (o, mappings) fspec.post_condition
   in
+
+  let end_naming = IT.info_ "Naming" [IT.info_ "end" []; get_mappings_info mappings "end"] in
+  let o = o @ [(`Constraint (LC.t_ end_naming), (loc, None))] in
 
   let lrt = 
     List.fold_right (fun (oarg, info) lrt ->

@@ -182,6 +182,7 @@ let pp =
        | Def ((s, abt), body) ->
           braces (BT.pp abt ^^^ Sym.pp s ^^^ !^"->" ^^^ aux false body)
        end
+    | Info (name, []) -> Pp.string (Pp.wrap name)
     | Info (name, args) ->
        c_app !^name (List.map (aux false) args)
     | Pred (name, args) ->
