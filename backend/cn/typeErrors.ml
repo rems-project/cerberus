@@ -331,8 +331,8 @@ let pp_message te =
      { short; descr = Some descr; state = Some state }
   | Write_value_bad {ct; location; value; ctxt; model} ->
      let short =
-       !^"Bad write value: not representable at type or misaligned pointer value" ^^^
-         Sctypes.pp ct
+       !^"Bad write value: the value is not representable at type" ^^^
+         Sctypes.pp ct ^^^ !^"or is a misaligned pointer value"
      in
      let explanation =
        Explain.explanation ctxt
