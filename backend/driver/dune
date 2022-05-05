@@ -31,3 +31,16 @@
  (target main_vip.ml)
  (deps main.ml)
  (action (copy main.ml main_vip.ml)))
+
+(executable
+ (name main_cheri)
+ (public_name cerberus-driver-cheri)
+ (package cerberus)
+ (modules main_cheri)
+ (libraries result cmdliner str unix
+  cerb_frontend cerb_backend mem_cheri util))
+
+(rule
+ (target main_cheri.ml)
+ (deps main.ml)
+ (action (copy main.ml main_cheri.ml)))

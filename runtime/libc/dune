@@ -8,7 +8,7 @@
                 --rewrite -o libm.co src/math.c)))
 
 (rule
- (target libc.co)
+ (targets libc.co libc-cheri.co)
  (deps src/ctype.c src/stdio.c src/stdlib.c src/string.c src/time.c
        src/utime.c src/unistd.c src/stat.c src/uio.c src/internal.c
        src/vfscanf.c src/signal.c src/internal.h
@@ -133,14 +133,20 @@
        include/string.h
        src/internal.h)
  (action
-  (run cerberus --nolibc -I include -I include/posix --sequentialise
-                --rewrite -o libc.co src/ctype.c src/stdio.c src/stdlib.c
-                src/string.c src/time.c src/utime.c src/unistd.c src/stat.c
-                src/uio.c src/internal.c src/vfscanf.c src/signal.c)))
+  (progn
+   (run cerberus --nolibc -I include -I include/posix --sequentialise
+                 --rewrite -o libc.co src/ctype.c src/stdio.c src/stdlib.c
+                 src/string.c src/time.c src/utime.c src/unistd.c src/stat.c
+                 src/uio.c src/internal.c src/vfscanf.c src/signal.c)
+   (run cerberus-driver-cheri --nolibc -I include -I include/posix --sequentialise
+                 --rewrite -o libc-cheri.co src/ctype.c src/stdio.c src/stdlib.c
+                 src/string.c src/time.c src/utime.c src/unistd.c src/stat.c
+                 src/uio.c src/internal.c src/vfscanf.c src/signal.c))))
 
 (install
  (files
   (libm.co as runtime/libc/libm.co)
-  (libc.co as runtime/libc/libc.co))
+  (libc.co as runtime/libc/libc.co)
+  (libc-cheri.co as runtime/libc/libc-cheri.co))
  (section lib)
  (package cerberus))

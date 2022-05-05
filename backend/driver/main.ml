@@ -71,7 +71,13 @@ let create_cpp_cmd cpp_cmd nostdinc macros_def macros_undef incl_dirs incl_files
 
 let core_libraries incl lib_paths libs =
   let lib_paths = if incl then in_runtime "libc" :: lib_paths else lib_paths in
-  let libs = if incl then "c" :: libs else libs in
+  let libs =
+    if incl then
+      if Switches.is_CHERI () then
+        "c-cheri" :: libs
+      else
+        "c" :: libs
+    else libs in
   List.map (fun lib ->
       match List.fold_left (fun acc path ->
           match acc with
@@ -124,7 +130,18 @@ let cerberus debug_level progress core_obj
                rewrite_core; sequentialise_core; cpp_cmd; cpp_stderr = true } in
   let prelude =
     (* Looking for and parsing the core standard library *)
+    let switches =
+      match Impl_mem.name with
+        | "CHERI memory model" ->
+            Cerb_frontend.Ocaml_implementation.(set (MorelloImpl.impl));
+            if not (List.mem "CHERI" switches) then
+              "CHERI" :: switches
+            else
+              switches
+        | _ ->
+          switches in
     Switches.set switches;
+    io.pass_message (Printf.sprintf "Using '%s'" Impl_mem.name) >>
     load_core_stdlib () >>= fun core_stdlib ->
     io.pass_message "Core standard library loaded." >>
     (* Looking for and parsing the implementation file *)
