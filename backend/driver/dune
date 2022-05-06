@@ -34,7 +34,7 @@
 
 (executable
  (name main_cheri)
- (public_name cerberus-driver-cheri)
+ (public_name cerberus-cheri)
  (package cerberus)
  (modules main_cheri)
  (libraries result cmdliner str unix
