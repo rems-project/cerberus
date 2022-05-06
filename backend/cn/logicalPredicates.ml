@@ -354,8 +354,10 @@ module PageAlloc = struct
             (next %== self_node_pointer);
             (prev %== self_node_pointer);
             pred_ "order_aligned" [page_index; int_ 0] BT.Bool;
-            (pred_ "page_size_of_order" [page%."order"] Integer) %<= (pool %. "range_end");
-            pred_ "page_group_ok" [page_index; vmemmap_pointer; vmemmap; pool] Bool
+            (page_index %* int_ pPAGE_SIZE) %+ 
+              (pred_ "page_size_of_order" [page%."order"] Integer) %<= 
+                (pool %. "range_end");
+            (* pred_ "page_group_ok" [page_index; vmemmap_pointer; vmemmap; pool] Bool *)
           ]
       in
 
