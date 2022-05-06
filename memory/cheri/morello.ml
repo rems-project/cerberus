@@ -489,7 +489,7 @@ module Morello_capability: Capability
            Some (Z.format "%02hhx" z)
         | 'C'::fs ->
            if cap_is_null_derived cap then
-             numf State.Initial (-1) (-1) false true 'x' cap ('x'::fs)
+             numf State.Initial (-1) (-1) false true 'x' cap ('a'::fs)
            else
              begin
                match loop cap (explode "%#xa [%P,%#xb-%#xt]%? %A") with
@@ -571,7 +571,7 @@ module Morello_capability: Capability
         (* hex could be specificed anywhere and repeated *)
         | _, ('x' as d)::fs
           | _, ('X' as d)::fs ->
-           numf State.Final width prec right_pad true d cap fs
+           numf State.Final width prec right_pad alt d cap fs
 
         (* collaps to final *)
         | Width, _

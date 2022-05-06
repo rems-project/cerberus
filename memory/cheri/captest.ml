@@ -259,7 +259,8 @@ let tests = "morello_caps" >::: [
           (snd (cap_get_bounds c)));
 
       "strfcap C0 addr" >:: (fun _ ->
-        match Morello_capability.strfcap "%a" (cap_c0 ()) with
+        let c = cap_c0 () in
+        match Morello_capability.strfcap "%a" c with
         | None -> assert_failure "strfcap failed"
         | Some s' ->
            assert_equal
@@ -268,13 +269,116 @@ let tests = "morello_caps" >::: [
       );
 
       "strfcap C0 perm" >:: (fun _ ->
-        match Morello_capability.strfcap "%P" (cap_c0 ()) with
+        let c = cap_c0 () in
+        match Morello_capability.strfcap "%P" c with
         | None -> assert_failure "strfcap failed"
         | Some s' ->
            assert_equal
              ~pp_diff:string_diff
              "" s'
       );
+
+      "strfcap alloc_cap perm" >:: (fun _ ->
+        let c = alloc_cap (Z.of_int 1) (Z.of_int 10) in
+        match Morello_capability.strfcap "%P" c with
+        | None -> assert_failure "strfcap failed"
+        | Some s' ->
+           assert_equal
+             ~pp_diff:string_diff
+             "rwRW" s'
+      );
+
+      "strfcap C0 hex addr" >:: (fun _ ->
+        let c = alloc_cap (Z.of_int 65535) (Z.of_int 10) in
+        match Morello_capability.strfcap "%xa" c with
+        | None -> assert_failure "strfcap failed"
+        | Some s' ->
+           assert_equal
+             ~pp_diff:string_diff
+             "ffff" s'
+      );
+
+      "strfcap C0 Hex addr" >:: (fun _ ->
+        let c = alloc_cap (Z.of_int 65535) (Z.of_int 10) in
+        match Morello_capability.strfcap "%Xa" c with
+        | None -> assert_failure "strfcap failed"
+        | Some s' ->
+           assert_equal
+             ~pp_diff:string_diff
+             "FFFF" s'
+      );
+
+      "strfcap C0 0x Hex addr" >:: (fun _ ->
+        let c = alloc_cap (Z.of_int 65535) (Z.of_int 10) in
+        match Morello_capability.strfcap "%#Xa" c with
+        | None -> assert_failure "strfcap failed"
+        | Some s' ->
+           assert_equal
+             ~pp_diff:string_diff
+             "0XFFFF" s'
+      );
+
+      "strfcap C0 padded Hex addr" >:: (fun _ ->
+        let c = alloc_cap (Z.of_int 65535) (Z.of_int 10) in
+        match Morello_capability.strfcap "%10xa" c with
+        | None -> assert_failure "strfcap failed"
+        | Some s' ->
+           assert_equal
+             ~pp_diff:string_diff
+             "      ffff" s'
+      );
+
+      "strfcap C0-derived C-format" >:: (fun _ ->
+        let c = cap_c0 () in
+        match Morello_capability.strfcap "%C" c with
+        | None -> assert_failure "strfcap failed"
+        | Some s' ->
+           assert_equal
+             ~pp_diff:string_diff
+             "0x0" s'
+      );
+
+      "strfcap not C0-derived C-format" >:: (fun _ ->
+        let c = alloc_cap (Z.of_int 65535) (Z.of_int 10) in
+        match Morello_capability.strfcap "%C" c with
+        | None -> assert_failure "strfcap failed"
+        | Some s' ->
+           assert_equal
+             ~pp_diff:string_diff
+             "0xffff [rwRW,0xffff-0x20008]" s'
+      );
+
+      "strfcap v-format" >:: (fun _ ->
+        let c = alloc_cap (Z.of_int 65535) (Z.of_int 10) in
+        match Morello_capability.strfcap "%v" c with
+        | None -> assert_failure "strfcap failed"
+        | Some s' ->
+           assert_equal
+             ~pp_diff:string_diff
+             "1" s'
+      );
+
+      "strfcap C0 v-format" >:: (fun _ ->
+        let c = cap_c0 () in
+        match Morello_capability.strfcap "%v" c with
+        | None -> assert_failure "strfcap failed"
+        | Some s' ->
+           assert_equal
+             ~pp_diff:string_diff
+             "0" s'
+      );
+
+      "strfcap invalid" >:: (fun _ ->
+        let c = alloc_cap (Z.of_int 65535) (Z.of_int 10) in
+        let c = cap_invalidate c in
+        match Morello_capability.strfcap "%C" c with
+        | None -> assert_failure "strfcap failed"
+        | Some s' ->
+           assert_equal
+             ~pp_diff:string_diff
+             "0xffff [rwRW,0xffff-0x20008] (invald)" s'
+      );
+
 
     ]
 
