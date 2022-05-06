@@ -154,6 +154,10 @@ atomic_term:
       { Ast.Env (a, l) }
   | LBRACE t=term RBRACE UNCHANGED
       { Ast.Unchanged t }
+  | LBRACE RBRACE t=term
+      { Ast.PredEqRegulator ([], t) }
+  | LBRACE SLASH names=separated_list(COMMA, name) RBRACE t=term
+      { Ast.PredEqRegulator (names, t) }
   | DISJOINT LPAREN p1=term COMMA sz1=term COMMA p2=term COMMA sz2=term RPAREN
       { Ast.Disjoint ((p1, sz1), (p2, sz2)) }
   | FOR LPAREN i = integer COMMA s = name COMMA j = integer RPAREN LBRACE body=term RBRACE

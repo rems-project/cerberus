@@ -35,6 +35,7 @@ module Terms = struct
     | GreaterOrEqual of term * term
     | IntegerToPointerCast of term
     | PointerToIntegerCast of term
+    | PredEqRegulator of string list * term
     | Null
     | OffsetOf of {tag:string; member:string}
     | CellPointer of (term * term) * (term * term) * term
@@ -91,6 +92,10 @@ module Terms = struct
        c_app !^"mod" [pp false t1; pp false t2]
     | Equality (t1, t2) -> 
        mparens atomic (pp true t1 ^^^ !^"==" ^^^ pp true t2)
+    | PredEqRegulator ([], t) ->
+       mparens atomic (!^"{}" ^^^ pp true t)
+    | PredEqRegulator (ss, t) ->
+       mparens atomic (!^"{/" ^^^ flow comma (List.map (format []) ss) ^^ !^"}" ^^ pp true t)
     | Inequality (t1, t2) -> 
        mparens atomic (pp true t1 ^^^ !^"!=" ^^^ pp true t2)
     | ITE (t1, t2, t3) ->
@@ -196,6 +201,7 @@ module Terms = struct
          aux t1 || aux t2
       | Equality (t1, t2) -> 
          aux t1 || aux t2
+      | PredEqRegulator (_, t) -> aux t
       | Inequality (t1, t2) -> 
          aux t1 || aux t2
       | ITE (t1, t2, t3) ->

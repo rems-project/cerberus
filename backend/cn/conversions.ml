@@ -424,6 +424,24 @@ let resolve_index_term loc
     | _ ->
        search ()
   in
+  let all_rets_of name mapping =
+    List.filter_map (fun {it; path; _} -> match path with
+      | PredOutput (name2, oarg) when String.equal name name2 -> Some (oarg, it)
+      | _ -> None) mapping
+  in
+  let pred_mapping name mapping =
+    let match_name = function
+      | PredOutput (name2, _) -> String.equal name name2
+      | _ -> false
+    in
+    let ms_with = StringMap.bindings mappings
+      |> List.map snd
+      |> List.filter (List.exists (fun {path; _} -> match_name path))
+    in
+    match ms_with with
+      | [mapping] -> mapping
+      | _ -> mapping
+  in
   let rec resolve (term : Ast.term) mapping quantifiers
         : (IT.typed * Sctypes.t option, type_error) m =
     match term with
@@ -434,6 +452,7 @@ let resolve_index_term loc
     | Pointee it ->
        lookup (Pointee it) "a pointee (i.e. not Owned)" mapping quantifiers
     | PredOutput (name, oarg) ->
+       let mapping = pred_mapping name mapping in
        lookup (PredOutput (name, oarg)) "a predicate output" mapping quantifiers
     | Bool b -> 
        return (IT (Lit (IT.Bool b), BT.Bool), None)
@@ -484,6 +503,31 @@ let resolve_index_term loc
        let@ (it, _) = resolve it mapping quantifiers in
        let@ (it', _) = resolve it' mapping quantifiers in
        return (IT (Arith_op (Mod (it, it')), IT.bt it), None)
+    | Equality (it, PredEqRegulator (exclude, it')) ->
+       let@ (nm, nm') = begin match it, it' with
+         | Var nm, Var nm' -> return (nm, nm')
+         | Var _, _ -> fail {loc; msg = Generic (!^ "predicate return eq cannot handle" ^^^
+             Ast.Terms.pp false it')}
+         | _, _ -> fail {loc; msg = Generic (!^ "predicate return eq cannot handle" ^^^
+             Ast.Terms.pp false it)}
+       end in
+       let rets = all_rets_of nm mapping in
+       let@ () = if List.length rets == 0
+           then fail {loc; msg = Generic (!^ nm ^^^ !^ "not a known resource predicate")}
+           else return () in
+       let@ () = ListM.iterM (fun s -> if Option.is_some (List.assoc_opt String.equal s rets)
+           then return ()
+           else fail {loc; msg = Generic (!^s ^^^ !^ "not a return param of" ^^^ !^ nm)})
+         exclude in
+       let eq_rets = List.filter (fun (nm, it) -> not (List.exists (String.equal nm) exclude))
+           rets in
+       let@ eqs = ListM.mapM (fun (arg_nm, it) ->
+           let@ (it', _) = resolve (PredOutput (nm', arg_nm)) mapping quantifiers in
+           return (eq_ (it, it'))) eq_rets in
+       return (IT (Bool_op (And eqs), Bool), None)
+    | PredEqRegulator (_, _) ->
+       fail {loc; msg = Generic (!^ "return param limiter" ^^^ Ast.Terms.pp false term ^^^
+            !^ "only permitted on right-hand-side of equalities")}
     | Equality (it, it') -> 
        let@ (it, _) = resolve it mapping quantifiers in
        let@ (it', _) = resolve it' mapping quantifiers in
