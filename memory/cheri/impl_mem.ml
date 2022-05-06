@@ -562,7 +562,7 @@ module CHERI (C:Capability
         | WriteIntent -> C.P.perm_is_store
         | CallIntent -> C.P.perm_is_execute (* CHERI(TODO): check if this is righ permission *)
       in
-      if pcheck (C.get_perms c) then
+      if pcheck (C.cap_get_perms c) then
         let bounds = C.cap_get_bounds c in
         let nsz = Z.of_int sz in
         if cap_bounds_check bounds addr nsz then

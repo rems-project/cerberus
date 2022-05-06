@@ -106,9 +106,9 @@ module type Capability =
     val cap_get_seal: t -> cap_seal_t
 
     (** user-defined flags *)
-    val get_flags: t -> bool list (* TODO: enforce cap_flags_len? *)
+    val cap_get_flags: t -> bool list (* TODO: enforce cap_flags_len? *)
 
-    val get_perms: t -> P.t
+    val cap_get_perms: t -> P.t
 
     (** Null capability *)
     val cap_c0: unit -> t
