@@ -1,3 +1,8 @@
+module Z = struct
+  include Nat_big_num
+  let format = Z.format
+  let equal_num = equal
+end
 
 module type Cap_permission = sig
   type t [@@deriving eq,show]
@@ -49,6 +54,8 @@ module type Cap_permission = sig
   (* --- Utility methods --- *)
 
   val to_string: t -> string
+  (* raw permissoins in numeric format *)
+  val to_raw: t -> Z.num
 
   (* Initialize from list of boolean. The size and
      contents of the list is implementation-specific.
@@ -240,6 +247,7 @@ module type Capability =
     (* --- Utility methods --- *)
 
     val to_string: t -> string
+    val strfcap: string -> t -> string option
 
     (* --- Equality --- *)
 

@@ -145,21 +145,32 @@ module Morello_permission : Cap_permission = struct
       permits_store_local_cap = true ; (* not sure *)
     }
 
-  (** Returns permission a string in "simplified format".
+  (**  Returns an abbreviated textual representation of permissions
+       listing zero or more of the following characters:
 
-      Example: "rwRW"
+       r  LOAD permission
+       w  STORE permission
+       x  EXECUTE permission
+       R  LOAD_CAP permission
+       W  STORE_CAP permission
+       E  EXECUTIVE permission (Morello only)
 
-      See also:
-      https://github.com/CTSRD-CHERI/cheri-c-programming/wiki/Displaying-Capabilities#simplified-forma
    *)
   let to_string (c:t) =
     let s f l = if f then l else "" in
-    s c.permits_load "l"
+    s c.permits_load "r"
     ^ s c.permits_store "w"
     ^ s c.permits_execute "x"
     ^ s c.permits_load_cap "R"
     ^ s c.permits_store_cap "W"
     ^ s c.executive "E"
+
+  (* raw permissoins as number *)
+  let to_raw (p:t) =
+    List.fold_right
+      (fun b z -> (Z.add (Z.shift_left z 1)
+                     (if b then (Z.succ Z.zero) else Z.zero)))
+      (to_list p) Z.zero
 
 end
 
@@ -258,6 +269,17 @@ module Morello_capability: Capability
       | Cap_Sealed _ -> true
       | _ -> false
 
+    let flags_as_str c =
+      let attrs =
+        let a f s l = if f then s::l else l in
+        a (not c.valid) "invald"
+        @@ a (is_sentry c) "sentry"
+        @@ a (is_sealed c) "sealed" []
+      in
+      if List.length attrs = 0 then ""
+      else " (" ^ String.concat "," attrs ^ ")"
+
+
     (** Returns capability as a string in "simplified format". This
         function is used from "printf" when "%#p" format is specified.
 
@@ -274,23 +296,143 @@ module Morello_capability: Capability
       let vstring x = "0x" ^ (Z.format "%x" x) in
       let (b0,b1) = c.bounds in
 
-      let flags =
-        let attrs =
-          let a f s l = if f then s::l else l in
-          a (not c.valid) "invald"
-          @@ a (is_sentry c) "sentry"
-          @@ a (is_sealed c) "sealed" []
-        in
-        if List.length attrs = 0 then ""
-        else " (" ^ String.concat "," attrs ^ ")"
-      in
-
       Printf.sprintf "%s [%s,%s-%s]%s"
         (vstring c.value)
         (P.to_string c.perms)
         (vstring b0)
         (vstring b1)
-        flags
+        (flags_as_str c)
+
+
+    let is_null_derived c = false (* TODO *)
+
+    (** String representation of permission using
+        format string as in strfcap(3) *)
+    let strfcap formats c =
+      let module State = struct
+          type num_state = | Initial | Precision | Width | Final
+        end in
+      let is_digit = function '0' .. '9' -> true | _ -> false in
+      let as_digit c = Char.code c - Char.code '0' in
+      let as_string = Printf.sprintf "%c" in
+      let (@) s = function
+        | None -> None
+        | Some t -> Some (s ^ t)
+      in
+      let rec loop = function
+        | [] -> Some ""
+        | '%'::fs -> strf false fs
+        | c::fs -> as_string c @ loop fs
+      and strf alt = function
+        | [] ->
+           (Debug_ocaml.warn []
+              (fun () -> "Morello.strfcap: unexpected end of format specifiction in: " ^ formats));
+             None
+        | '#'::fs -> strf true fs (* mutiple # are allowed *)
+        | '%'::fs -> "%" @ loop fs
+        (* non-numeric formats *)
+        | 'A'::fs ->
+           let s = flags_as_str c in
+           s @ loop fs
+        | 'B'::fs ->
+           let s = "TODO" in
+           s @ loop fs
+        | 'C'::fs ->
+           let s = "TODO" in
+           s @ loop fs
+        | 'P'::fs ->
+           let s = "" in
+           s @ loop fs
+        | 'S'::fs ->
+           let s = "" in
+           s @ loop fs
+        | 'T'::fs ->
+           let s = "" in
+           s @ loop fs
+        | '?'::fs -> skip fs
+        (* try numeric formats *)
+        | x::fs as f -> numf State.Initial 1 1 false alt f
+      and numf state width prec right_pad alt f =
+        let strnum z =
+          (* TODO: format z using width, prec, right_pad *)
+          ""
+        in
+        match state, f with
+        | _, [] ->
+           (Debug_ocaml.warn []
+              (fun () -> "Morello.strfcap: unexpected end of numeric format specifiction in: " ^ formats));
+           None
+        (* width *)
+        | Initial, c::fs when is_digit c ->
+           if c='0' then
+             begin
+               (Debug_ocaml.warn []
+                  (fun () -> "Morello.strfcap: leading zero in width not allowed in format specification: " ^ formats));
+               None
+             end
+           else numf State.Width (as_digit c) prec right_pad alt fs
+        | Width, c::fs when is_digit c ->
+           numf State.Width (width*10+(as_digit c)) prec right_pad alt fs
+
+        (* precision *)
+        | Width, '.'::fs | Initial, '.'::fs ->
+           numf State.Precision width 0 right_pad alt fs
+        | Precision, c::fs when is_digit c ->
+           numf State.Precision width (prec*10+(as_digit c)) right_pad alt fs
+
+        (* right pad. could be specificed anywhere and repeated *)
+        | _, '-'::fs ->
+           numf State.Initial width prec true alt fs
+
+        (* alt pad. could be specificed anywhere and repeated *)
+        | _, '#'::fs ->
+           numf State.Final width prec right_pad true fs
+
+        (* collaps to final *)
+        | Width, _ -> numf State.Final width prec right_pad alt f
+        | Precision, _ -> numf State.Final width prec right_pad alt f
+        | Initial, _ -> numf State.Final width prec right_pad alt f
+
+        (* Actual numeric options *)
+        | Final, 'a'::fs ->
+           let z = cap_get_value c in
+           strnum z @ loop fs
+        | Final, 'b'::fs ->
+           let z = fst (cap_get_bounds c) in
+           strnum z @ loop fs
+        | Final, 'l'::fs ->
+           let (base,limit) = cap_get_bounds c in
+           let z = Z.sub limit base in
+           strnum z @ loop fs
+        | Final, 'o'::fs ->
+           let base = fst (cap_get_bounds c) in
+           let addr = cap_get_value c in
+           let z = Z.sub addr base in
+           strnum z @ loop fs
+        | Final, 'p'::fs ->
+           let z = P.to_raw (get_perms c) in
+           strnum z @ loop fs
+        | Final, 's'::fs ->
+           let z = cap_get_obj_type c in (* TODO: check if this is indeed the "type" they mean in the specification *)
+           strnum z @ loop fs
+        | Final, 't'::fs ->
+           let (base,limit) = cap_get_bounds c in
+           let z = Z.add base limit in
+           strnum z @ loop fs
+        | Final, 'v'::fs ->
+           let z = if cap_is_valid c then Z.succ Z.zero else Z.zero in
+           strnum z @ loop fs
+        | Final, c::_ ->
+           (Debug_ocaml.warn []
+              (fun () -> "Morello.strfcap: Unknown format specifier: '" ^
+                           (as_string c) ^
+                           "' in " ^ formats));
+           None
+      and skip = function
+        | [] -> None
+        | ('%'::fs) as f -> loop f
+        | _::fs -> skip fs
+      in loop (List.of_seq (String.to_seq formats))
 
     (* Capability for newly allocated region *)
     let alloc_cap a size =
