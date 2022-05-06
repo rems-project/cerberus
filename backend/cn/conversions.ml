@@ -1020,9 +1020,8 @@ let mod_mappings mapping_names mappings f =
     ) mappings
 
 let get_mappings_info (mappings : mapping StringMap.t) (mapping_name : string) =
-  info_ "mappings" (StringMap.find mapping_name mappings
-    |> List.map (fun {path; it; _} -> info_ "name" [
-        info_ (Pp.plain (Ast.Terms.pp true path)) []; it]))
+  SuggestEqs.make_mappings_info (StringMap.find mapping_name mappings
+    |> List.map (fun {path; it; _} -> (Pp.plain (Ast.Terms.pp true path), it)))
 
 let make_fun_spec loc (layouts : Memory.struct_decls) rpredicates lpredicates fsym (fspec : function_spec)
     : (AT.ft * CF.Mucore.trusted * mapping, type_error) m = 
@@ -1110,8 +1109,7 @@ let make_fun_spec loc (layouts : Memory.struct_decls) rpredicates lpredicates fs
       (i, mappings) fspec.pre_condition
   in
 
-  let start_naming = IT.info_ "Naming" [IT.info_ "start" [];
-        get_mappings_info mappings "start"] in
+  let start_naming = SuggestEqs.make_naming "start" (get_mappings_info mappings "start") in
   let i = i @ [(`Constraint (LC.t_ start_naming), (loc, None))] in
 
   (* ret *)
@@ -1195,7 +1193,7 @@ let make_fun_spec loc (layouts : Memory.struct_decls) rpredicates lpredicates fs
       (o, mappings) fspec.post_condition
   in
 
-  let end_naming = IT.info_ "Naming" [IT.info_ "end" []; get_mappings_info mappings "end"] in
+  let end_naming = SuggestEqs.make_naming "end" (get_mappings_info mappings "end") in
   let o = o @ [(`Constraint (LC.t_ end_naming), (loc, None))] in
 
   let lrt = 
@@ -1335,8 +1333,7 @@ let make_label_spec
       (i, mappings) lspec.invariant
   in
 
-  let inv_naming = IT.info_ "Naming" [IT.info_ lname [];
-        get_mappings_info mappings lname] in
+  let inv_naming = SuggestEqs.make_naming lname (get_mappings_info mappings lname) in
   let i = i @ [(`Constraint (LC.t_ inv_naming), (loc, None))] in
 
   let lt =
