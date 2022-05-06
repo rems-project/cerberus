@@ -2887,7 +2887,7 @@ let check_procedure
       in
       let@ per_path = check_body () in
       let@ per_path = PmapM.foldM check_label label_defs per_path in
-      let@ () = post_typing per_path in
+      let@ () = do_post_typing per_path in
       return ()
     end
 
