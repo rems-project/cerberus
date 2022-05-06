@@ -524,6 +524,8 @@ module Morello_capability: Capability
             ^ (if width > 0 then Stdlib.string_of_int width else "")
             ^ (as_string number_fmt)
           in
+          (if prec <> -1 then
+             Debug_ocaml.warn [] (fun () -> "Morello.P.strfcap: Precision specification is not supported in: " ^ formats));
           Z.format fmt z
         in
         match state, f with
