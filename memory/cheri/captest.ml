@@ -61,6 +61,23 @@ let cap_bits_diff (fmt:Format.formatter) (c1,c2) =
       Format.fprintf fmt "bit %03d: expected %s: but got: %s\n" i x0 x1;
   done
 
+let string_diff fmt (a,b) =
+  let open Format in
+  pp_print_newline fmt ();
+  pp_open_box fmt 0;
+  pp_open_hbox fmt () ;
+  pp_print_string fmt "Expected: '";
+  pp_print_string fmt a;
+  pp_print_string fmt "'";
+  pp_close_box fmt  ();
+  pp_print_newline fmt ();
+  pp_open_hbox fmt () ;
+  pp_print_string fmt "Received: '";
+  pp_print_string fmt b;
+  pp_print_string fmt "'";
+  pp_close_box fmt ();
+  pp_close_box fmt ()
+
 let tests = "morello_caps" >::: [
 
 
@@ -161,7 +178,7 @@ let tests = "morello_caps" >::: [
         | None -> assert_failure "decode failed"
         | Some c ->
            assert_equal
-             ~printer:(Z.format "%x")
+             ~printer:(Z.format "%#x")
              (Z.of_int 0xfffffff7ff78)
              (cap_get_value c)
       );
@@ -172,7 +189,7 @@ let tests = "morello_caps" >::: [
         | None -> assert_failure "decode failed"
         | Some c ->
            assert_equal
-             ~printer:(Z.format "%x")
+             ~printer:(Z.format "%#x")
              (Z.of_int 0xfffffff7ff7c)
              (snd (cap_get_bounds c))
       );
@@ -184,11 +201,11 @@ let tests = "morello_caps" >::: [
         | None -> assert_failure "decoding failed"
         | Some c' ->
            assert_equal
-             ~printer:(Z.format "%x")
+             ~printer:(Z.format "%#x")
              (Z.of_int 0xfffffff7ff78)
              (cap_get_value c');
            assert_equal
-             ~printer:(Z.format "%x")
+             ~printer:(Z.format "%#x")
              (Z.of_int 0xfffffff7ff7c)
              (snd (cap_get_bounds c'))
       );
@@ -204,7 +221,61 @@ let tests = "morello_caps" >::: [
         | Some c1, Some c2 ->
            if cap_get_value c1 = cap_get_value c2 then
              assert_failure "vlaue of c1 = value c2 while it should not"
-      )
+      );
+
+      "C0 is_null_derived" >:: (fun _ ->
+        let c = cap_c0 () in
+        assert_bool
+          "C0 is not null derived!"
+          (Morello_capability.cap_is_null_derived c)
+      );
+
+      "alloc_cap not is_null_derived" >:: (fun _ ->
+        let c = alloc_cap (Z.of_int 1) (Z.of_int 10) in
+        assert_bool
+          "alloc_cap is null derived"
+          (not (Morello_capability.cap_is_null_derived c))
+      );
+
+      "alloc_cap value" >:: (fun _ ->
+        let c = alloc_cap (Z.of_int 1) (Z.of_int 10) in
+        assert_equal
+          ~printer:(Z.format "%#x")
+          (Z.of_int 1)
+          (cap_get_value c));
+
+      "alloc_cap lower bound" >:: (fun _ ->
+        let c = alloc_cap (Z.of_int 1) (Z.of_int 10) in
+        assert_equal
+          ~printer:(Z.format "%#x")
+          (Z.of_int 1)
+          (fst (cap_get_bounds c)));
+
+      "alloc_cap upper bound" >:: (fun _ ->
+        let c = alloc_cap (Z.of_int 1) (Z.of_int 10) in
+        assert_equal
+          ~printer:(Z.format "%#x")
+          (Z.of_int 11)
+          (snd (cap_get_bounds c)));
+
+      "strfcap C0 addr" >:: (fun _ ->
+        match Morello_capability.strfcap "%a" (cap_c0 ()) with
+        | None -> assert_failure "strfcap failed"
+        | Some s' ->
+           assert_equal
+             ~pp_diff:string_diff
+             "0" s'
+      );
+
+      "strfcap C0 perm" >:: (fun _ ->
+        match Morello_capability.strfcap "%P" (cap_c0 ()) with
+        | None -> assert_failure "strfcap failed"
+        | Some s' ->
+           assert_equal
+             ~pp_diff:string_diff
+             "" s'
+      );
+
     ]
 
 let _ = run_test_tt_main tests

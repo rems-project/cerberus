@@ -42,7 +42,7 @@ module Morello_permission : Cap_permission = struct
     let np = List.length b in
     if np <> (user_perms_len + 14) then
       (Debug_ocaml.warn [] (fun () -> "Morello.P.of_list: invalid lengths permissions: " ^ (Stdlib.string_of_int np));
-      None)
+       None)
     else
       Some
         {
@@ -235,7 +235,7 @@ module Morello_capability: Capability
 
     let cap_get_bounds c = c.bounds
 
-    let cap_get_seal c =
+    let rec cap_get_seal c =
       let x = c.obj_type in
       if Z.equal x cap_SEAL_TYPE_UNSEALED then Cap_Unsealed
       else (if Z.equal x cap_SEAL_TYPE_RB then Cap_SEntry
@@ -243,33 +243,33 @@ module Morello_capability: Capability
                   else (if Z.equal x cap_SEAL_TYPE_LB then Cap_Indirect_SEntry
                         else Cap_Sealed x)))
 
-    let cap_get_flags c = c.flags
+    and cap_get_flags c = c.flags
 
-    let cap_get_perms c = c.perms
+    and cap_get_perms c = c.perms
 
-    let flags_from_value_bits (x:bit list): bool list =
+    and flags_from_value_bits (x:bit list): bool list =
       let x = zero_extend (x, Z.of_int 64) in
       let flags' = drop (64-8) x in
       List.map bool_of_bit flags'
 
-    let flags_from_value (v:vaddr): bool list =
+    and flags_from_value (v:vaddr): bool list =
       let bits = to_bits' (64, v) in
       assert(List.length bits = 64);
       flags_from_value_bits bits
 
     (* Helper function to check if capability is sealed (with any kind of seal) *)
-    let is_sealed c =
+    and is_sealed c =
       match cap_get_seal c with
       | Cap_Unsealed -> false
       | _ -> true
 
     (* Helper function to check if sealed entry capability *)
-    let is_sentry c =
+    and is_sentry c =
       match cap_get_seal c with
       | Cap_Sealed _ -> true
       | _ -> false
 
-    let flags_as_str c =
+    and flags_as_str c =
       let attrs =
         let a f s l = if f then s::l else l in
         a (not c.valid) "invald"
@@ -279,9 +279,32 @@ module Morello_capability: Capability
       if List.length attrs = 0 then ""
       else " (" ^ String.concat "," attrs ^ ")"
 
-    let is_null_derived c = false (* TODO(CHERI) *)
+    (* Capability for newly allocated region *)
+    and alloc_cap a size =
+      {
+        valid = true ;
+        value = a ;
+        obj_type = cap_SEAL_TYPE_UNSEALED ;
+        bounds = (a, Z.add a size) ;
+        flags = flags_from_value a ;
+        perms = P.perm_alloc ;
+      }
 
+    and alloc_fun a =
+      {
+        valid = true ;
+        value = a ;
+        obj_type = cap_SEAL_TYPE_RB ; (* TODO(CHERI): check this *)
+        bounds = (a, Z.succ (Z.succ a)) ; (* for all functions to have unique addresses we
+                                             presently allocate 1-byte region for each *)
+        flags = flags_from_value a;
+        perms = P.perm_alloc ;
+      }
 
+    and cap_is_null_derived c =
+      let a = cap_get_value c in
+      let c' = cap_set_value (cap_c0 ()) a in
+      eq c c'
     (** Returns capability as a string in "simplified format". This
         function is used from "printf" when "%#p" format is specified.
 
@@ -294,9 +317,9 @@ module Morello_capability: Capability
         See also:
         https://github.com/CTSRD-CHERI/cheri-c-programming/wiki/Displaying-Capabilities#simplified-forma
      *)
-    let to_string c =
+    and to_string c =
       let vstring x = "0x" ^ (Z.format "%x" x) in
-      if is_null_derived c then
+      if cap_is_null_derived c then
         vstring c.value
       else
         let (b0,b1) = c.bounds in
@@ -307,66 +330,52 @@ module Morello_capability: Capability
           (vstring b1)
           (flags_as_str c)
 
-    (* Capability for newly allocated region *)
-    let alloc_cap a size =
-      {
-        valid = true ;
-        value = a ;
-        obj_type = cap_SEAL_TYPE_UNSEALED ;
-        bounds = (a, Z.add a size) ;
-        flags = flags_from_value a ;
-        perms = P.perm_alloc ;
-      }
-
-    let alloc_fun a =
-      {
-        valid = true ;
-        value = a ;
-        obj_type = cap_SEAL_TYPE_RB ; (* TODO(CHERI): check this *)
-        bounds = (a, Z.succ (Z.succ a)) ; (* for all functions to have unique addresses we
-                                             presently allocate 1-byte region for each *)
-        flags = flags_from_value a;
-        perms = P.perm_alloc ;
-      }
-
     (* private function to decode bit list *)
-    let decode_bits bits =
-      if List.length bits <> 129 then
-        (Debug_ocaml.warn [] (fun () -> "Morello.decode: wrong number of cap bits");
-        None)
-      else
-        let value' = zCapGetValue bits in
-        let value = uint value' in
-        let (base', limit', isExponentValid) = zCapGetBounds bits in
-        if not isExponentValid then
-          (Debug_ocaml.warn [] (fun () -> "Morello.decode: invalid exponent");
-          None)
+    and decode_bits bits =
+      begin
+        if List.length bits <> 129 then
+          (Debug_ocaml.warn [] (fun () -> "Morello.decode: wrong number of cap bits");
+           None)
         else
-          let flags = flags_from_value_bits value' in
-          let perms' = zCapGetPermissions bits  in
-          let perms_data = List.map bool_of_bit perms' in
-          match P.of_list perms_data with
-          | None ->
-             (Debug_ocaml.warn [] (fun () -> "Morello.decode: could not decode permissions");
-              None)
-          | Some perms ->
-             let otype = uint (zCapGetObjectType bits) in
-             Some {
-                 valid = zCapIsTagSet bits;
-                 value = value;
-                 obj_type = otype;
-                 bounds = (uint base', uint limit');
-                 flags = flags ;
-                 perms = perms ;
-               }
+          let value' = zCapGetValue bits in
+          let value = uint value' in
+          let (base', limit', isExponentValid) = zCapGetBounds bits in
+          if not isExponentValid then
+            (Debug_ocaml.warn [] (fun () -> "Morello.decode: invalid exponent");
+             None)
+          else
+            let flags = flags_from_value_bits value' in
+            let perms' = zCapGetPermissions bits  in
+            let perms_data = List.map bool_of_bit perms' in
+            match P.of_list perms_data with
+            | None ->
+               (Debug_ocaml.warn [] (fun () -> "Morello.decode: could not decode permissions");
+                None)
+            | Some perms ->
+               let otype = uint (zCapGetObjectType bits) in
+               Some {
+                   valid = zCapIsTagSet bits;
+                   value = value;
+                   obj_type = otype;
+                   bounds = (uint base', uint limit');
+                   flags = flags ;
+                   perms = perms ;
+                 }
+      end
+    and cap_c0 () =
+      match decode_bits (zCapNull ()) with
+      | Some c -> c
+      | None ->
+         failwith "Could not construct NULL capability (C0)!"
 
-    let decode (bytes:char list) (tag:bool) =
+
+    and decode (bytes:char list) (tag:bool) =
       let bytes = List.rev bytes in
       Debug_ocaml.print_debug 8 [] (fun () ->
           "morello.decode [" ^
             (String.concat ";"
                (List.map (fun x -> Stdlib.string_of_int (int_of_char x)) bytes))
-          ^"]");
+            ^"]");
       let bit_list_of_char c =
         get_slice_int' (8, (Z.of_int (int_of_char c)), 0) in
       (* TODO(CHERI): check if bytes' and bits' decoding order is correct *)
@@ -378,11 +387,11 @@ module Morello_capability: Capability
               match mc with
               | None -> "None"
               | Some c -> to_string c
-              end
-            );
+            end
+        );
       mc
 
-    let bytes_of_bits (b:bit list) : char list =
+    and bytes_of_bits (b:bit list) : char list =
       assert((List.length b) mod 8 == 0);
       (* TODO(CHERI): check if bytes' and bits' encoding order is correct *)
       let bs = break 8 b in
@@ -391,7 +400,7 @@ module Morello_capability: Capability
       List.map char_of_int is
 
     (* There is no such function in Sail, so we define it here *)
-    let zCapSetPermissins ((zc__arg, zp) : (bit list * bit list)) : bit list =
+    and zCapSetPermissins ((zc__arg, zp) : (bit list * bit list)) : bit list =
       sail_call (fun r ->
           let zc = ref (zc__arg : bit list) in
           begin
@@ -399,7 +408,7 @@ module Morello_capability: Capability
             r.return !zc
           end)
 
-    let encode_to_bits exact c =
+    and encode_to_bits exact c =
       (* start with NULL capabiluty *)
       let bits = zCapNull () in
 
@@ -434,7 +443,7 @@ module Morello_capability: Capability
       let bits = zCapSetPermissins (bits, perms) in
       bits
 
-    let encode exact c =
+    and encode exact c =
       let bits = encode_to_bits exact c in
       (* Convert to bytes *)
       assert (List.length bits == 129) ;
@@ -447,7 +456,7 @@ module Morello_capability: Capability
 
     (** String representation of permission using
         format string as in strfcap(3) *)
-    let strfcap formats capability =
+    and strfcap formats capability =
       let module State = struct
           type num_state = | Initial | Precision | Width | Final
         end in
@@ -479,7 +488,7 @@ module Morello_capability: Capability
            let z = uint bits in
            Some (Z.format "%02hhx" z)
         | 'C'::fs ->
-           if is_null_derived cap then
+           if cap_is_null_derived cap then
              numf State.Initial (-1) (-1) false true 'x' cap ('x'::fs)
            else
              begin
@@ -500,18 +509,18 @@ module Morello_capability: Capability
           (* TODO(CHERI) In C implementation of "strfcap" the
              following code is used to format numbers:
 
-		*fmtp++ = '%';
-		if (alt)
-			*fmtp++ = '#';
-		if (right_pad)
-			*fmtp++ = '-';
-		*fmtp++ = '*';
-		*fmtp++ = '.';
-		*fmtp++ = '*';
-		*fmtp++ = 'l';
-		*fmtp++ = number_fmt;
-		*fmtp = '\0';
-		snprintf(tmp, sizeof(tmp), fmt, width, precision, number);
+             *fmtp++ = '%';
+             if (alt)
+             *fmtp++ = '#';
+             if (right_pad)
+             *fmtp++ = '-';
+             *fmtp++ = '*';
+             *fmtp++ = '.';
+             *fmtp++ = '*';
+             *fmtp++ = 'l';
+             *fmtp++ = number_fmt;
+             *fmtp = '\0';
+             snprintf(tmp, sizeof(tmp), fmt, width, precision, number);
 
              Unforntunately [Z.format] does not support precision
              specification for integers, so we just ignore it for
@@ -618,12 +627,12 @@ module Morello_capability: Capability
         | _::fs -> skip cap fs
       in loop capability (explode formats)
 
-    let cap_vaddr_representable c a =
+    and cap_vaddr_representable c a =
       vaddr_in_range a &&
-      (let cap_bits = encode_to_bits true c in
-      zCapIsRepresentable (cap_bits, (to_bits' (64, a))))
+        (let cap_bits = encode_to_bits true c in
+         zCapIsRepresentable (cap_bits, (to_bits' (64, a))))
 
-    let cap_bounds_representable_exactly c (base',limit') =
+    and cap_bounds_representable_exactly c (base',limit') =
       (* encode with tag set *)
       let bits = encode_to_bits true c in
       let len' = Z.sub limit' base' in
@@ -635,7 +644,7 @@ module Morello_capability: Capability
       (* if tag is still set, bounds are representable exactly *)
       zCapIsTagSet bits
 
-    let cap_invalidate c = {c with valid = false }
+    and cap_invalidate c = {c with valid = false }
 
     (* Modifying the Capability Value (vaddress of object type)
 
@@ -643,7 +652,7 @@ module Morello_capability: Capability
        - SCVALUE in Morello
        - CPYTYPE in Morello
      *)
-    let cap_set_value c cv =
+    and cap_set_value c cv =
       if cap_vaddr_representable c cv then
         {c with
           value = cv;
@@ -657,7 +666,7 @@ module Morello_capability: Capability
        Related instructions:
        - SCBNDS (immediate) in Morello?
      *)
-    let cap_narrow_bounds c (a0,a1) =
+    and cap_narrow_bounds c (a0,a1) =
       assert(vaddr_in_range a0) ;
       assert(vaddr_in_range a1) ;
       (* TODO(CHERI) *)
@@ -668,7 +677,7 @@ module Morello_capability: Capability
        Related instructions:
        - SCBNDSE (immediate) in Morello?
      *)
-    let cap_narrow_bounds_exact c (a0,a1) =
+    and cap_narrow_bounds_exact c (a0,a1) =
       assert(vaddr_in_range a0) ;
       assert(vaddr_in_range a1) ;
       (* TODO(CHERI) *)
@@ -679,7 +688,7 @@ module Morello_capability: Capability
        Related instructions:
        - CLRPERM in Morello
      *)
-    let cap_narrow_perms c p = c (* TODO *)
+    and cap_narrow_perms c p = c (* TODO *)
 
     (* Sealing operations *)
 
@@ -688,23 +697,23 @@ module Morello_capability: Capability
        Related instructions:
        - SEAL (capabilitiy) in Morello
      *)
-    let cap_seal c k =
+    and cap_seal c k =
       cap_set_value c (cap_get_value k)
 
     (* Seal Entry
        - SEAL (immediatete) in Morello
      *)
-    let cap_seal_entry c = c (* TODO *)
+    and cap_seal_entry c = c (* TODO *)
 
     (* Seal Indirect Entry
        - SEAL (immediatete) in Morello
      *)
-    let cap_seal_indirect_entry c = c (* TODO *)
+    and cap_seal_indirect_entry c = c (* TODO *)
 
     (* Seal Entry Pair
        - SEAL (immediatete) in Morello
      *)
-    let cap_seal_indirect_entry_pair c = c (* TODO *)
+    and cap_seal_indirect_entry_pair c = c (* TODO *)
 
     (* Modifying the Capability Flags
        - BICFLGS in Morello
@@ -712,7 +721,7 @@ module Morello_capability: Capability
        - ORRFLGS in Morello
        - SCFLGS in Morello
      *)
-    let cap_set_flags c f =
+    and cap_set_flags c f =
       (* TODO(CHERI): also modify value *)
       {c with flags = f }
 
@@ -721,19 +730,15 @@ module Morello_capability: Capability
     (* Unsealing a capability using an unsealing operation.
        - UNSEAL in Morello
      *)
-    let cap_unseal c k = (* TODO: check if allowed *)
+    and cap_unseal c k = (* TODO: check if allowed *)
       {c with obj_type = cap_SEAL_TYPE_UNSEALED}
 
     (* exact equality. compares capability metadata as well as value *)
-    let eq = (=)
+    and eq a b  =
+      encode_to_bits true a = encode_to_bits true b
 
     (* compare value only ignoring metadata *)
-    let value_compare x y = compare x.value y.value
+    and value_compare x y = compare x.value y.value
 
-    let cap_c0 () =
-      match decode_bits (zCapNull ()) with
-      | Some c -> c
-      | None ->
-         failwith "Could not construct NULL capability (C0)!"
 
   end

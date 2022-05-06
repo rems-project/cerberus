@@ -249,6 +249,8 @@ module type Capability =
     val to_string: t -> string
     val strfcap: string -> t -> string option
 
+    val cap_is_null_derived: t -> bool
+
     (* --- Equality --- *)
 
     (** exact equality. compares capability metadata as well as value *)
