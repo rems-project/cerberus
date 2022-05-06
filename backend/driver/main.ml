@@ -107,7 +107,7 @@ let create_executable out =
 
 let cerberus debug_level progress core_obj
              cpp_cmd nostdinc nolibc agnostic macros macros_undef
-             incl_dirs incl_files cpp_only
+             runtime_path_opt incl_dirs incl_files cpp_only
              link_lib_path link_core_obj
              impl_name
              exec exec_mode switches batch experimental_unseq concurrency
@@ -117,6 +117,7 @@ let cerberus debug_level progress core_obj
              output_name
              files args_opt =
   Debug_ocaml.debug_level := debug_level;
+  Cerb_runtime.specified_runtime := runtime_path_opt;
   let cpp_cmd =
     create_cpp_cmd cpp_cmd nostdinc macros macros_undef incl_dirs incl_files nolibc
   in
@@ -314,6 +315,10 @@ let nolibc =
   let doc = "Do not search the standard system directories for include files." in
   Arg.(value & flag & info ["nolibc"] ~doc)
 
+let runtime_path =
+  let doc = "custom Cerberus runtime directory" in
+  Arg.(value & opt (some string) None & info ["r";"runtime"] ~docv:"DIR" ~doc)
+
 let agnostic =
   let doc = "Asks Cerberus to delay looking at implementation settings until as late \
              as possible. This makes the pipeline somewhat implementation agnostic." in
@@ -420,7 +425,7 @@ let args =
 let () =
   let cerberus_t = Term.(pure cerberus $ debug_level $ progress $ core_obj $
                          cpp_cmd $ nostdinc $ nolibc $ agnostic $ macros $ macros_undef $
-                         incl_dir $ incl_file $ cpp_only $
+                         runtime_path $ incl_dir $ incl_file $ cpp_only $
                          link_lib_path $ link_core_obj $
                          impl $
                          exec $ exec_mode $ switches $ batch $
