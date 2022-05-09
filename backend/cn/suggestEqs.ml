@@ -119,10 +119,12 @@ let eqs_from_constraints arg_cs ret_cs =
   begin match starts, ends with
     | [(_, start_ms)], [(_, end_ms)] ->
       let end_not_addr = List.filter (fun (nm, _) -> not (starts_with "&" nm)) end_ms in
+(*
       Pp.debug 3 (lazy (Pp.item "eqs_from_constraints start terms"
           (Pp.list (fun (_, t) -> IT.pp t) start_ms)));
       Pp.debug 3 (lazy (Pp.item "eqs_from_constraints end (not addr) terms"
           (Pp.list (fun (_, t) -> IT.pp t) end_not_addr)));
+*)
       let eqs = search_eqs end_not_addr start_ms arg_cs in
       let ret_explicit_eqs = List.fold_right add_c_eqs ret_cs ITMap.empty in
       let end_eqs = List.filter (fun (_, tm) -> ITMap.mem tm ret_explicit_eqs) end_ms
@@ -184,7 +186,7 @@ let warn_group names gp = match gp with
     let excludes = SSet.diff orig_flds flds in
     let open Pp in
     let exc = if SSet.cardinal excludes == 0 then !^"{}"
-      else !^"{/" ^^^ flow comma (List.map (format []) (SSet.elements excludes)) ^^^ !^ "}" in
+      else !^"{/" ^^^ flow comma (List.map (format []) (SSet.elements excludes)) ^^ !^ "}" in
     [ensures [!^ x ^^^ !^"==" ^^^ exc ^^^ !^ y]]
   | _ -> assert false
 
@@ -197,8 +199,10 @@ let warn_missing_spec_eqs = function
   | per_path_eqs ->
   let data = List.map (function | CA x -> x) per_path_eqs in
   let eq_sets = List.map (fun (eqs, _, _) -> eqs) data in
+(*
   Pp.debug 3 (lazy (Pp.item "spec eqs eq_sets" (Pp.list (fun xs ->
         Pp.brackets (Pp.list debug_pp_pair (SPairSet.elements xs))) eq_sets)));
+*)
   let inter = List.fold_right SPairSet.inter (List.tl eq_sets) (List.hd eq_sets) in
   let has_ret_eq_sets = List.map (fun (_, rets, _) -> rets) data in
   let start_names = List.hd (List.map (fun (_, _, names) -> names) data) in
