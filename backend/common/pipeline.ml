@@ -519,13 +519,12 @@ let interp_backend io core_file ~args ~batch ~fs ~driver_conf =
   (* TODO: temporary hack for the command name *)
   match batch with
   | (`Batch | `CharonBatch) as mode ->
-    let executions = D.batch_drive mode core_file ("cmdname" :: args) fs_state driver_conf in
-    return (Either.Left executions)
+    let executions = D.batch_drive core_file ("cmdname" :: args) fs_state driver_conf in
+    return (Either.Left (mode, executions))
   | `NotBatch ->
     let open Core in
     D.drive core_file ("cmdname" :: args) fs_state driver_conf >>= function
       | (Vloaded (LVspecified (OVinteger ival)) :: _) ->
-          (* TODO: yuck *)
           return (Either.Right begin
             match Impl_mem.eval_integer_value ival with
               | Some n ->

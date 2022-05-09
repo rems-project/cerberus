@@ -166,9 +166,55 @@ let cerberus debug_level progress core_obj
     | Exception.Exception err ->
         prerr_endline (Pp_errors.to_string err);
         epilogue 1
-    | Exception.Result (Either.Left execs) ->
-        List.iter print_string execs;
-        epilogue 0
+    | Exception.Result (Either.Left (batch_mode, execs)) ->
+        let is_charon =
+          match batch_mode with
+            | `CharonBatch -> true
+            | `Batch -> false in
+        let exit =
+          let open Exhaustive_driver in
+          match execs with
+            | [(_, Defined {exit= Specified n; _})] ->
+                begin try
+                  if is_charon then
+                    Z.to_int n
+                  else
+                    0
+                with
+                  | Z.Overflow ->
+                      Debug_ocaml.warn [] (fun () -> "Return value overlows (wrapping it down to 255)");
+                      Z .(to_int (n mod (of_int 256)))
+                end
+            | [(_, (Undefined _ | Error _))] ->
+                1
+            | _ ->
+                0
+          in
+        let has_multiple = List.length execs > 1 in
+        List.iteri (fun i (z3_strs, exec) ->
+          let open Exhaustive_driver in
+          print_batch_output ~is_charon
+            (if has_multiple then Some i else None) (z3_strs, exec)
+          (* match exec_ with
+            | Defined _exec ->
+                let result_str = string_of_batch_output exec_ in
+                if has_multiple then
+                  Printf.printf "%sEXECUTION %d%s:\n%s%s"
+                    (if i>0 then "\n" else "") i exit constr_str result_str
+                else
+                  print_endline result_str
+                  (* print_string (constr_str ^ exec.stdout);
+                  prerr_string exec.stderr *)
+            | Undefined { loc; msg } ->
+                let _ = loc in
+                let _ = msg in
+                failwith "TODO Undefined"
+            | Error { msg } ->
+                let _ = msg in
+                failwith "TODO Error" *)
+        ) execs;
+        (* List.iter print_string execs; *)
+        epilogue exit
     | Exception.Result (Either.Right n) ->
         epilogue n
   in

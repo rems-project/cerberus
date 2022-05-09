@@ -30,53 +30,126 @@ let string_of_driver_error = function
   | Driver.DErr_other str ->
       str
 
+type batch_exit =
+  | Unspecified of Ctype.ctype
+  | Specified of Z.t
+  | OtherValue of Core.value
+
+type batch_output =
+  | Defined of { exit: batch_exit; stdout: string; stderr: string; blocked: bool }
+  | Undefined of { ub: Undefined.undefined_behaviour; loc: Location_ocaml.t }
+  | Error of { msg: string }
+
+let string_of_batch_exit exit =
+  let cval =
+    let open Core in
+    match exit with
+      | Unspecified ty ->
+        Vloaded (LVunspecified ty)
+      | Specified n ->
+          Vloaded (LVspecified (OVinteger (Impl_mem.integer_ival n)))
+      | OtherValue cval ->
+          cval in
+  String_core.string_of_value cval
+
+let print_batch_output ?(is_charon=false) i_opt (z3_strs, exec) =
+  let constrs_str =
+    if !Debug_ocaml.debug_level > 0 then begin
+      match z3_strs with
+        | [] ->
+            "EMPTY CONSTRAINTS\n"
+        | _ ->
+          Colour.(without_colour (fun z ->
+            ansi_format [Blue] (String.concat "\n" z)
+          )) z3_strs
+            |> Printf.sprintf "BEGIN CONSTRAINTS\n%s\nEND CONSTRAINTS\n"
+      end
+    else
+      "" in
+  let has_multiple =
+    match i_opt with
+      | Some i ->
+          Printf.printf "EXECUTION %d" i;
+          true
+      | None ->
+          print_string constrs_str;
+          false in
+  begin match exec with
+    | Defined { exit; stdout; stderr; blocked } ->
+        let exit_str = string_of_batch_exit exit in
+        if is_charon then begin
+          if has_multiple then begin
+            Printf.printf " (exit = %s):\n" exit_str;
+            print_string constrs_str
+          end;
+          print_string stdout;
+          prerr_string stderr
+        end else begin
+          begin if has_multiple then
+            print_endline ":"
+          end;
+          print_string constrs_str;
+          Printf.printf "Defined {value: \"%s\", stdout: \"%s\", stderr: \"%s\", blocked: \"%s\"}"
+            exit_str
+            (String.escaped stdout) (String.escaped stderr)
+            (if blocked then "true" else "false")
+        end
+    | Undefined { ub; loc } ->
+        begin if has_multiple then
+          print_endline ":"
+        end;
+        print_string constrs_str;
+        Printf.printf "Undefined {ub: \"%s\", loc: \"%s\"}%s"
+          (Undefined.stringFromUndefined_behaviour ub)
+          (Location_ocaml.simple_location loc)
+          (if is_charon then "\n" else "")
+    | Error { msg } ->
+        begin if has_multiple then
+          print_endline ":"
+        end;
+        print_string constrs_str;
+        Printf.printf "Error {msg: \"%s\"}%s"
+          msg
+          (if is_charon then "\n" else "")
+  end;
+  (if not is_charon then print_newline () else ());
+  flush_all ()
+
 (* TODO: make the output match the json format from charon2 (or at least add a option for that) *)
-let batch_drive mode (file: 'a Core.file) args fs_state conf : string list =
+let batch_drive (file: 'a Core.file) args fs_state conf =
   Random.self_init ();
-  
   (* changing the annotations type from unit to core_run_annotation *)
   let file = Core_run_aux.convert_file file in
-  
   (* computing the value (or values if exhaustive) *)
   let initial_dr_st = Driver.initial_driver_state file fs_state in
   let values = Smt2.runND conf.exec_mode Impl_mem.cs_module (Driver.drive conf.concurrency conf.experimental_unseq file args) initial_dr_st in
-  let is_charon = match mode with
-    | `Batch       -> false
-    | `CharonBatch -> true in
-  let has_multiple =
-    List.length values > 1 in
-  
   List.mapi (fun i (res, z3_strs, nd_st) ->
-    let (exit, result) = begin match res with
+    let result = begin match res with
       | ND.Active dres ->
-          let str_v = String_core.string_of_value dres.Driver.dres_core_value in
-          if is_charon then
-            (" (exit = "^ str_v ^ ")", dres.Driver.dres_stdout)
-          else
-            ("", "Defined {value: \"" ^ str_v ^ "\", stdout: \"" ^ String.escaped dres.Driver.dres_stdout ^
-            "\", stderr: \"" ^ String.escaped dres.Driver.dres_stderr ^
-            "\", blocked: \"" ^ if dres.Driver.dres_blocked then "true\"}" else "false\"}\n")
+          let exit =
+            match dres.Driver.dres_core_value with
+              | Vloaded (LVspecified (OVinteger ival)) ->
+                  begin match Impl_mem.eval_integer_value ival with
+                    | Some n ->
+                        Specified n
+                    | None ->
+                        OtherValue dres.Driver.dres_core_value
+                  end
+              | Vloaded (LVunspecified ty) ->
+                  Unspecified ty
+              | _ ->
+                  OtherValue dres.Driver.dres_core_value in
+          Defined { exit; stdout= dres.Driver.dres_stdout; stderr= dres.Driver.dres_stderr; blocked= dres.Driver.dres_blocked }
       | ND.Killed (ND.Undef0 (loc, [])) ->
-          (* TODO: this is probably an error *)
-          begin
-            ("", "Undefined behaviour: [empty UB, probably a cerberus BUG] at " ^
-            Location_ocaml.location_to_string ~charon:is_charon loc ^ "\n")
-          end
+          Error { msg= "[empty UB, probably a cerberus BUG]" }
       | ND.Killed (ND.Undef0 (loc, ub::_)) ->
-          begin
-            ("", "Undefined behaviour: " ^ Undefined.ub_short_string ub ^ " at " ^
-            Location_ocaml.location_to_string ~charon:is_charon loc ^ "\n")
-          end
-      | ND.Killed (ND.Error0 (_, str)) ->
-          begin
-            ("", "Error {msg: " ^ str ^ "}\n")
-          end
+          Undefined { ub; loc }
+      | ND.Killed (ND.Error0 (_, msg)) ->
+          Error { msg }
       | ND.Killed (ND.Other dr_err) ->
-          begin
-            ("", "Killed {msg: " ^ string_of_driver_error dr_err ^ "}\n")
-          end
+          Error { msg= string_of_driver_error dr_err }
     end in
-    let constraints =
+    let _constraints =
       if !Debug_ocaml.debug_level > 0 then begin
         match z3_strs with
           | [] ->
@@ -86,10 +159,7 @@ let batch_drive mode (file: 'a Core.file) args fs_state conf : string list =
               |> Printf.sprintf "BEGIN CONSTRAINTS%sEND CONSTRAINTS\n"
       end else ""
     in
-    if has_multiple then
-      (if i>0 then "\n" else "") ^ Printf.sprintf "EXECUTION %d%s:\n%s%s" i exit constraints result
-    else
-      constraints ^ result
+    (z3_strs, result)
   ) values
 
 let drive file args fs_state conf : execution_result =
