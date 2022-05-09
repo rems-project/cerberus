@@ -3941,6 +3941,17 @@ let rec translate_stmt stdlib tagDefs f env (A.AnnotatedStatement loc _ stmt) : 
                           , Caux.mk_pure_e (Caux.mk_undef_pe loc (Undefined.DUMMY "AilSdeclaration")) ) ]
                     end
                   end
+                  E.return begin
+                    Caux.mk_sseq_e e_sym_pat core_e begin
+                      Caux.mk_case_e e_sym_pe
+                        [ ( Caux.mk_specified_pat obj_sym_pat
+                          , mk_store loc (Caux.mk_ail_ctype_pe cty) ptr_sym_e begin
+                              Caux.mk_specified_pe (conv_arith stdlib (ctype_of e) cty (Caux.mk_memop_pe Mem_common.Ptr_tIntValue [obj_sym_pe]))
+                            end Cmm.NA )
+                        ; ( Caux.mk_unspecified_pat (Caux.mk_empty_pat C.BTy_ctype)
+                          , Caux.mk_pure_e (Caux.mk_undef_pe loc (Undefined.DUMMY "[u]intptr_t to integer/floating AilSdeclaration")) ) ]
+                    end
+                  end
                 else
                   E.return begin
                     Caux.mk_sseq_e e_sym_pat core_e
