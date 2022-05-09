@@ -1,1 +1,1 @@
-Undefined behaviour: a member of an atomic structure or union object is accessed at ci/0297-atomic_memberof.undef.c:11:3-5 (cursor: ci/0297-atomic_memberof.undef.c:11:3)
+Undefined {ub: "UB042_access_atomic_structUnion_member", loc: "<11:3--11:5>"}

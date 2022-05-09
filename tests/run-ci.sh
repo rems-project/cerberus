@@ -21,7 +21,7 @@ function doSkip {
 # 2: result (0 is success)
 function report {
   #If the test should fail
-  if [[ $1 == *.error.c ]]; then
+  if [[ $1 == *.error.c || $1 == *.undef.c ]]; then
     res="1 - $2";
   else
     res=$2;
@@ -46,7 +46,7 @@ function report {
   else
     res="\033[1m\033[31mFAILED!\033[0m"
     fail=$((fail+1))
-    #cat tmp/result tmp/stderr
+    cat tmp/result tmp/stderr
   fi
 
   echo -e "Test $1: $res"
@@ -86,7 +86,7 @@ do
       # removing the last line from stderr (the time stats)
       if [ "$(uname)" == "Linux" ]; then
           sed -i '$ d' tmp/stderr
-      else # otherwise we assume this macOS or BSD
+      else # otherwise we assume this is macOS or BSD
           sed -i '' -e '$ d' tmp/stderr
       fi;
       if ! cmp --silent "tmp/stderr" "ci/expected/$file.expected"; then
@@ -94,7 +94,11 @@ do
       fi
     else
       if ! cmp --silent "tmp/result" "ci/expected/$file.expected"; then
-        ret=1;
+        if [[ $file == *.undef.c ]]; then
+          ret=0;
+        else
+          ret=1;
+        fi
       fi
     fi
   else
