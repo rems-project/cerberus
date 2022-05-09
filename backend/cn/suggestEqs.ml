@@ -64,6 +64,11 @@ let add_c_eqs c eqs = match c with
   | LC.T ct -> add_known_eqs ct eqs
   | _ -> eqs
 
+let member_eq_steps t_eqs t = match term t with
+    | Struct_op (StructMember (t2, nm)) ->
+        t_eqs t @ List.map (fun t -> member_simp_ (bt t) t nm) (t_eqs t2)
+    | _ -> t_eqs t
+
 let search_eqs (ms : (string * IT.t) list) (start_ms : (string * IT.t) list) constraints =
   let eqs = List.fold_right add_c_eqs constraints ITMap.empty in
   let start = List.fold_right (fun (nm, t) t_nms -> ITMap.add t (nm :: find_xs t_nms t) t_nms)
@@ -71,7 +76,9 @@ let search_eqs (ms : (string * IT.t) list) (start_ms : (string * IT.t) list) con
   let rec seek seen found = function
     | [] -> found
     | (t :: ts) when ITSet.mem t seen -> seek seen found ts
-    | (t :: ts) -> seek (ITSet.add t seen) (find_xs start t @ found) (find_xs eqs t @ ts)
+    | (t :: ts) ->
+      let eq_ts = member_eq_steps (find_xs eqs) t in
+      seek (ITSet.add t seen) (find_xs start t @ found) (eq_ts @ ts)
   in
   let seek2 t = seek ITSet.empty [] [t] in
   List.concat (List.map (fun (end_nm, t) ->
@@ -91,7 +98,7 @@ let starts_with pfx s =
   String.length s >= String.length pfx &&
   String.equal (String.sub s 0 (String.length pfx)) pfx
 
-module SPair = struct 
+module SPair = struct
   type s_pair = string * string
   [@@deriving eq, ord]
   type t = s_pair
@@ -102,7 +109,7 @@ end
 module SPairSet = Set.Make(SPair)
 module SSet = Set.Make(String)
 
-type constraint_analysis = CA of (SPairSet.t * SSet.t)
+type constraint_analysis = CA of (SPairSet.t * SSet.t * string list)
 
 let eqs_from_constraints arg_cs ret_cs =
   let starts = List.filter_map get_naming_mappings arg_cs
@@ -112,11 +119,15 @@ let eqs_from_constraints arg_cs ret_cs =
   begin match starts, ends with
     | [(_, start_ms)], [(_, end_ms)] ->
       let end_not_addr = List.filter (fun (nm, _) -> not (starts_with "&" nm)) end_ms in
+      Pp.debug 3 (lazy (Pp.item "eqs_from_constraints start terms"
+          (Pp.list (fun (_, t) -> IT.pp t) start_ms)));
+      Pp.debug 3 (lazy (Pp.item "eqs_from_constraints end (not addr) terms"
+          (Pp.list (fun (_, t) -> IT.pp t) end_not_addr)));
       let eqs = search_eqs end_not_addr start_ms arg_cs in
       let ret_explicit_eqs = List.fold_right add_c_eqs ret_cs ITMap.empty in
       let end_eqs = List.filter (fun (_, tm) -> ITMap.mem tm ret_explicit_eqs) end_ms
         |> List.map fst in
-      Some (CA (SPairSet.of_list eqs, SSet.of_list end_eqs))
+      Some (CA (SPairSet.of_list eqs, SSet.of_list end_eqs, List.map fst start_ms))
     | _ -> None
   end
 
@@ -128,41 +139,84 @@ let dot_split s = match String.split_on_char '.' s with
   | [v; x; fld] when String.equal x "" -> Some (v, fld)
   | _ -> None
 
+module Eq_Kinds = struct
+  type eq_kinds =
+    | Eq
+    | PredRet of (string * string)
+    | Other
+    [@@deriving eq, ord]
+  type t = eq_kinds
+  let equal = equal_eq_kinds
+  let compare = compare_eq_kinds
+end
+open Eq_Kinds
+module EKSet = Set.Make(Eq_Kinds)
+
 let v_group x y = match dot_split x, dot_split y, String.equal x y with
-  | (Some (xr, _), Some (yr, _), _) -> xr ^ "-" ^ yr
-  | (Some _, _, _) -> "other"
-  | (_, _, true) -> "eq"
-  | _ -> "other"
+  | (Some (xr, xf), Some (yr, yf), _) when String.equal xf yf -> PredRet (xr, yr)
+  | (Some _, _, _) -> Other
+  | (_, _, true) -> Eq
+  | _ -> Other
 
-let ensures str = "[[cn::ensures(\"" ^ str ^ "\")]]"
+let s_delim = Pp.format [] "\""
 
-let warn_group nm eqs = if String.equal nm "eq"
-  then [ensures ("{" ^ String.concat ", " (List.map (fun (_, _, x) -> x) eqs) ^ "} unchanged")]
-  else if String.equal nm "other"
-  then List.map (fun (g, x, y) -> ensures (x ^ " == {" ^ y ^ "}@start")) eqs
-  else List.map (fun (g, x, y) -> ensures (x ^ " == {" ^ y ^ "}@start")) eqs
+let ensures elts =
+  let open Pp in
+  !^"[[cn::ensures(" ^^ flow comma (List.map (fun e -> s_delim ^^ e ^^ s_delim) elts) ^^ !^ ")]]"
+
+let unchanged x =
+  let open Pp in
+  !^"{" ^^ !^ x ^^ !^ "} unchanged"
+
+let warn_other (_, x, y) =
+  let open Pp in
+  [ensures [!^ x ^^^ !^ "== {" ^^ !^ y ^^ !^ "}@start"]]
+
+let warn_group names gp = match gp with
+  | (Eq, _, _) :: _ -> [ensures (List.map (fun (_, _, x) -> unchanged x) gp)]
+  | [(PredRet _, _, _)] -> warn_other (List.hd gp)
+  | (PredRet (x, y), _, _) :: _ ->
+    let flds = List.map (fun (_, x, _) -> snd (Option.get (dot_split x))) gp
+        |> SSet.of_list in
+    let orig_flds = List.filter_map dot_split names
+        |> List.filter (fun (pred, _) -> String.equal pred y) |> List.map snd |> SSet.of_list in
+    assert (SSet.subset flds orig_flds);
+    let excludes = SSet.diff orig_flds flds in
+    let open Pp in
+    let exc = if SSet.cardinal excludes == 0 then !^"{}"
+      else !^"{/" ^^^ flow comma (List.map (format []) (SSet.elements excludes)) ^^^ !^ "}" in
+    [ensures [!^ x ^^^ !^"==" ^^^ exc ^^^ !^ y]]
+  | _ -> assert false
+
+let debug_pp_pair (x, y) =
+  let open Pp in
+  !^ x ^^ !^ "<==" ^^^ !^ y
 
 let warn_missing_spec_eqs = function
   | [] -> ()
   | per_path_eqs ->
   let data = List.map (function | CA x -> x) per_path_eqs in
-  let eq_sets = List.map fst data in
+  let eq_sets = List.map (fun (eqs, _, _) -> eqs) data in
+  Pp.debug 3 (lazy (Pp.item "spec eqs eq_sets" (Pp.list (fun xs ->
+        Pp.brackets (Pp.list debug_pp_pair (SPairSet.elements xs))) eq_sets)));
   let inter = List.fold_right SPairSet.inter (List.tl eq_sets) (List.hd eq_sets) in
-  let has_ret_eq_sets = List.map snd data in
+  let has_ret_eq_sets = List.map (fun (_, rets, _) -> rets) data in
+  let start_names = List.hd (List.map (fun (_, _, names) -> names) data) in
   let ret_inter = List.fold_right SSet.inter (List.tl has_ret_eq_sets) (List.hd has_ret_eq_sets) in
-  let inter_groups = List.map (fun (x, y) -> (v_group x y, x, y)) (SPairSet.elements inter) in
-  let act_on = List.filter (fun (_, x, _) -> not (SSet.mem x ret_inter)) inter_groups in
-  let act_groups = List.map (fun (g, _, _) -> g) act_on |> SSet.of_list |> SSet.elements in
-  let warns = List.map (fun nm -> warn_group nm
-        (List.filter (fun (g, _, _) -> String.equal g nm) inter_groups)) act_groups
-    |> List.concat in
-  let print_warn w = Pp.print stdout (Pp.format [Colour.Yellow] ("### " ^ w)) in
-  begin match warns with
+  let eqs_w_group = List.map (fun (x, y) -> (v_group x y, x, y)) (SPairSet.elements inter) in
+  let novel = List.filter (fun (_, x, _) -> not (SSet.mem x ret_inter)) eqs_w_group in
+  let act_groups = novel |> List.map (fun (g, _, _) -> g)
+    |> List.filter (fun g -> not (Eq_Kinds.equal Other g)) |> EKSet.of_list |> EKSet.elements in
+  let group_eqs = act_groups
+    |> List.map (fun g -> List.filter (fun (g2, _, _) -> equal_eq_kinds g g2) eqs_w_group) in
+  let other_eqs = List.filter (fun (g, _, _) -> Eq_Kinds.equal Other g) eqs_w_group in
+  let warns = List.map (warn_group start_names) group_eqs @ List.map warn_other other_eqs in
+  begin match List.concat warns with
   | [] -> ()
-  | _ ->
-    print_warn "weak specification, also true:";
-    List.iter print_warn warns
+  | xs ->
+    let open Pp in
+    print stdout (format [Yellow] ("### weak specification, also true:"));
+    List.iter (fun w -> print stdout (format [Yellow] "###" ^^^ w)) xs
   end
-    
 
 
