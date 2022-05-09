@@ -57,6 +57,10 @@ type cn_expr_ 'a =
 and cn_expr 'a =
   | CNExpr of Loc.t * cn_expr_ 'a
 
+type cn_fun_body 'a 'ty =
+  | CN_fb_letExpr of Loc.t * 'a * cn_expr 'a * cn_fun_body 'a 'ty
+  | CN_fb_return of Loc.t * cn_expr 'a
+
 type cn_pred 'a 'ty =
   | CN_owned of 'ty
   | CN_block of 'ty
@@ -76,6 +80,14 @@ type cn_clauses 'a 'ty =
   | CN_clause of Loc.t * cn_clause 'a 'ty
   | CN_if of Loc.t * cn_expr 'a * cn_clause 'a 'ty * cn_clauses 'a 'ty
 
+type cn_function 'a 'ty = <|
+  cn_func_loc: Loc.t;
+  cn_func_name: 'a;
+  cn_func_args: list (cn_base_type 'a * 'a);
+  cn_func_body: maybe (cn_fun_body 'a 'ty);
+  cn_func_return_bty: cn_base_type 'a;
+|>
+
 type cn_predicate 'a 'ty = <|
   cn_pred_loc: Loc.t;
   cn_pred_name: 'a;
@@ -86,6 +98,7 @@ type cn_predicate 'a 'ty = <|
 
 type cn_namespace =
   | CN_predicate
+  | CN_function
   | CN_resource
   | CN_logical
   | CN_oarg
@@ -94,6 +107,7 @@ instance (Show cn_namespace)
   let show ns =
     match ns with
       | CN_predicate -> "predicate"
+      | CN_function -> "function"
       | CN_resource  -> "resource"
       | CN_logical   -> "logical"
       | CN_oarg      -> "oarg"
@@ -101,7 +115,9 @@ instance (Show cn_namespace)
 end
 
 type cn_error =
+  | CNErr_uppercase_function of Symbol.identifier
   | CNErr_lowercase_predicate of Symbol.identifier
+  | CNErr_function_redeclaration
   | CNErr_predicate_redeclaration
   | CNErr_unknown_predicate
   | CNErr_invalid_tag

@@ -48,6 +48,8 @@ let specifiers_of_external_declaration = function
       Nothing
   | EDecl_predCN _ ->
       Nothing
+  | EDecl_funcCN _ ->
+      Nothing
 end
 
 

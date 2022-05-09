@@ -343,6 +343,7 @@ type translation_unit =
 and external_declaration =
   | EDecl_func of function_definition
   | EDecl_decl of cabs_declaration
+  | EDecl_funcCN of Cn.cn_function Symbol.identifier type_name (* CN backend *)
   | EDecl_predCN of Cn.cn_predicate Symbol.identifier type_name (* CN backend *)
 
 (* §6.9.1 Function definitions, Syntax *)
@@ -421,6 +422,8 @@ instance (Located external_declaration)
           end
       | EDecl_decl (Declaration_static_assert (Static_assert e _)) ->
           locOf e
+      | EDecl_funcCN func ->
+          locOf (func.Cn.cn_func_name)
       | EDecl_predCN pred ->
           locOf (pred.Cn.cn_pred_name)
     end

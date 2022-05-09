@@ -11,8 +11,12 @@ module P = PPrint
 
 
 let string_of_error = function
+  | CNErr_uppercase_function (Symbol.Identifier (_, str)) ->
+      "function name `" ^ str ^ "' does not start with a lowercase letter"
   | CNErr_lowercase_predicate (Symbol.Identifier (_, str)) ->
-      "predicate name `" ^ str ^ "' does not start with an uppercase"
+      "predicate name `" ^ str ^ "' does not start with an uppercase letter"
+  | CNErr_function_redeclaration ->
+      "redeclaration of function name"
   | CNErr_predicate_redeclaration ->
       "redeclaration of predicate name"
   | CNErr_unknown_predicate ->
@@ -25,6 +29,8 @@ let string_of_error = function
         "the logical variable `" ^ str ^ "' is not declared"
   | CNErr_unknown_identifier (CN_predicate, Symbol.Identifier (_, str)) ->
         "the predicate `" ^ str ^ "' is not declared"
+  | CNErr_unknown_identifier (CN_function, Symbol.Identifier (_, str)) ->
+        "the specification function `" ^ str ^ "' is not declared"
   | CNErr_unknown_identifier (CN_resource, Symbol.Identifier (_, str)) ->
         "the resource variable `" ^ str ^ "' is not declared"
   | CNErr_missing_oarg sym ->
@@ -114,6 +120,19 @@ module MakePp (Conf: PP_CN) = struct
         Dnode ( pp_stmt_ctor "CN_each" ^^^ P.squotes (Conf.pp_ident ident) ^^^ P.colon ^^^ pp_base_type bTy
               , List.map dtree_of_cn_expr es )
   
+  let rec dtree_of_cn_func_body = function
+    | CN_fb_letExpr (_, ident, e, c) ->
+        Dnode ( pp_stmt_ctor "CN_letExpr" ^^^ P.squotes (Conf.pp_ident ident)
+              , [dtree_of_cn_expr e; dtree_of_cn_func_body c])
+    | CN_fb_return (_, x) ->
+       dtree_of_cn_expr x
+
+
+  let dtree_of_o_cn_func_body = function
+    | None -> Dleaf !^"uninterpreted"
+    | Some body -> Dnode (!^"interpreted", [dtree_of_cn_func_body body])
+
+
   let rec dtree_of_cn_clause = function
     | CN_letResource (_, ident, res, c) ->
         Dnode ( pp_stmt_ctor "CN_letResource" ^^^ P.squotes (Conf.pp_ident ident)
@@ -137,11 +156,19 @@ module MakePp (Conf: PP_CN) = struct
         Dnode (pp_stmt_ctor "CN_if", [dtree_of_cn_expr e; dtree_of_cn_clause c1; dtree_of_cn_clauses c2])
 
 
-  let dtree_of_cn_predicate pred =
-    let dtrees_of_args xs =
-      List.map (fun (bTy, ident) ->
+
+  let dtrees_of_args xs =
+    List.map (fun (bTy, ident) ->
         Dleaf (Conf.pp_ident ident ^^ P.colon ^^^ pp_base_type bTy)
-      ) xs in
+      ) xs
+
+  let dtree_of_cn_function func =
+    Dnode ( pp_ctor "[CN]function" ^^^ P.squotes (Conf.pp_ident func.cn_func_name)
+          , [ Dnode (pp_ctor "[CN]args", dtrees_of_args func.cn_func_args)
+            ; Dnode (pp_ctor "[CN]body", [dtree_of_o_cn_func_body func.cn_func_body])
+            ; Dnode (pp_ctor "[CN]return_bty", [Dleaf (pp_base_type func.cn_func_return_bty)]) ] ) 
+
+  let dtree_of_cn_predicate pred =
     Dnode ( pp_ctor "[CN]predicate" ^^^ P.squotes (Conf.pp_ident pred.cn_pred_name)
           , [ Dnode (pp_ctor "[CN]iargs", dtrees_of_args pred.cn_pred_iargs)
             ; Dnode (pp_ctor "[CN]oargs", dtrees_of_args pred.cn_pred_oargs)

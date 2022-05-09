@@ -744,6 +744,30 @@ let inline resolve_cn_ident ns ident      = liftCnDesug (Cn_desugaring.resolve_c
 (* let inline  fetch_oarg acc ident = function *)
 let inline check_cn_oargs loc xs          = liftCnDesug (Cn_desugaring.check_cn_oargs loc xs)
 
+let register_cn_function ident mk =
+  State_exception.get >>= fun st ->
+  match Map.lookup ident st.cn_state.Cn_desugaring.cn_functions with
+    | Nothing ->
+        resolve_cn_ident Cn.CN_function ident >>= fun sym ->
+        mk >>= fun (return_bty, args, body) ->
+        let func = <|
+          Cn.cn_func_loc= Loc.locOf ident;
+          Cn.cn_func_name= sym;
+          Cn.cn_func_args= args;
+          Cn.cn_func_return_bty= return_bty;
+          Cn.cn_func_body= body;
+        |> in
+        liftCnDesug begin
+          State_exception.update (fun cn_st' ->
+            <| cn_st' with Cn_desugaring.cn_functions= Map.insert ident (sym, func) cn_st'.Cn_desugaring.cn_functions;
+                           Cn_desugaring.cn_current_scope= Map.empty; |>
+          )
+        end
+    | Just _ ->
+        fail (Loc.locOf ident) (Errors.Desugar_CN Cn.CNErr_function_redeclaration)
+  end
+
+
 let register_cn_predicate ident mk =
   State_exception.get >>= fun st ->
   match Map.lookup ident st.cn_state.Cn_desugaring.cn_predicates with

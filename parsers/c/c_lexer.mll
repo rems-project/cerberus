@@ -87,6 +87,7 @@ let keywords: (string * Tokens.token) list = [
 
     (* BEGIN CN *)
     "__cerb_predicate"     , CN_PREDICATE;
+    "__cerb_function"      , CN_FUNCTION;
     "__cerb_pack"          , CN_PACK;
     "__cerb_unpack"        , CN_UNPACK;
     "__cerb_pack_struct"   , CN_PACK_STRUCT;
@@ -456,6 +457,13 @@ and initial = parse
     { try
         let tok = Hashtbl.find lexicon id in
         match tok with
+          | CN_FUNCTION ->
+              (* let old_pos_cnum = lexbuf.lex_curr_p.pos_cnum in
+              let new_pos_cnum = old_pos_cnum - (String.length "__cerb_") in
+              Printf.fprintf stderr "HACK pos_cnum: %d --> %d\n"
+                (old_pos_cnum - lexbuf.lex_curr_p.pos_bol) (new_pos_cnum - lexbuf.lex_curr_p.pos_bol);
+              lexbuf.lex_curr_p <- {lexbuf.lex_curr_p with pos_cnum= new_pos_cnum }; *)
+              CN_FUNCTION
           | CN_PREDICATE ->
               (* let old_pos_cnum = lexbuf.lex_curr_p.pos_cnum in
               let new_pos_cnum = old_pos_cnum - (String.length "__cerb_") in

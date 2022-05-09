@@ -110,7 +110,7 @@ let inject_attr attr_opt (CabsStatement (loc, Annot.Attrs xs, stmt_)) =
 (* %token<string> CN_PREDNAME *)
 %token CN_PACK CN_UNPACK CN_PACK_STRUCT CN_UNPACK_STRUCT CN_HAVE CN_SHOW
 %token CN_BOOL CN_INTEGER CN_REAL CN_POINTER CN_MAP CN_LIST CN_TUPLE CN_SET
-%token CN_LET CN_OWNED CN_BLOCK CN_EACH CN_PREDICATE
+%token CN_LET CN_OWNED CN_BLOCK CN_EACH CN_FUNCTION CN_PREDICATE
 %token CN_NULL CN_TRUE CN_FALSE CN_NIL CN_CONS
 
 %token EOF
@@ -279,6 +279,7 @@ let inject_attr attr_opt (CabsStatement (loc, Annot.Attrs xs, stmt_)) =
 
 
 %type<Symbol.identifier Cerb_frontend.Cn.cn_base_type> base_type
+%type<(Symbol.identifier, Cabs.type_name) Cerb_frontend.Cn.cn_function> cn_function
 %type<(Symbol.identifier, Cabs.type_name) Cerb_frontend.Cn.cn_predicate> predicate
 %type<(Symbol.identifier, Cabs.type_name) Cerb_frontend.Cn.cn_clauses> clauses
 %type<(Symbol.identifier, Cabs.type_name) Cerb_frontend.Cn.cn_clause> clause
@@ -1464,6 +1465,8 @@ external_declaration_list: (* NOTE: the list is in reverse *)
 external_declaration:
 | pred= predicate
     { EDecl_predCN pred }
+| func= cn_function
+    { EDecl_funcCN func }
 | fdef= function_definition
     { EDecl_func fdef }
 | decl= declaration
@@ -1851,11 +1854,24 @@ exit_cn:
 | 
     { C_lexer.inside_cn := false; }
 
+
+
+cn_function:
+| CN_FUNCTION enter_cn cn_func_return_bty=delimited(LPAREN, base_type, RPAREN) str= NAME VARIABLE
+  cn_func_args= delimited(LPAREN, args, RPAREN)
+  cn_func_body= cn_option_func_body exit_cn
+    { (* TODO: check the name starts with lower case *)
+      let loc = Location_ocaml.point $startpos(str) in
+      { cn_func_loc= loc
+      ; cn_func_name= Symbol.Identifier (loc, str)
+      ; cn_func_return_bty
+      ; cn_func_args
+      ; cn_func_body} }
 predicate:
 | CN_PREDICATE enter_cn cn_pred_oargs= delimited(LBRACE, args, RBRACE) str= NAME VARIABLE
-  cn_pred_iargs= delimited(LPAREN, args, RPAREN) EQ
+  cn_pred_iargs= delimited(LPAREN, args, RPAREN)
   cn_pred_clauses= delimited(LBRACE, clauses, RBRACE) exit_cn
-    { (* TODO: check the name start with upper case *)
+    { (* TODO: check the name starts with upper case *)
       let loc = Location_ocaml.point $startpos(str) in
       { cn_pred_loc= loc
       ; cn_pred_name= Symbol.Identifier (loc, str)
@@ -1885,6 +1901,21 @@ clauses:
 | IF LPAREN e= expr RPAREN LBRACE c= clause SEMICOLON RBRACE ELSE LBRACE cs= clauses RBRACE
     { Cerb_frontend.Cn.CN_if (Location_ocaml.region $loc NoCursor, e, c, cs) }
 ;
+
+cn_option_func_body:
+| cn_func_body=delimited(LBRACE, cn_func_body, RBRACE)
+    { Some cn_func_body }
+| 
+    { None }
+
+cn_func_body:
+| CN_LET str= NAME VARIABLE EQ e= expr SEMICOLON c= cn_func_body
+    { let loc = Location_ocaml.point $startpos(str) in
+      Cerb_frontend.Cn.CN_fb_letExpr (loc, Symbol.Identifier (loc, str), e, c) }
+| RETURN e= expr SEMICOLON
+    { Cerb_frontend.Cn.CN_fb_return (Location_ocaml.region $loc(e) NoCursor, e) }
+;
+
 
 clause:
 | CN_LET str= NAME VARIABLE EQ res= resource SEMICOLON c= clause

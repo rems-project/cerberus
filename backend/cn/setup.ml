@@ -11,6 +11,7 @@ let cpp_str =
 let with_cn_keywords str =
   let cn_keywords =
     [ "predicate"
+    ; "function"
     ; "pack"
     ; "unpack"
     ; "pack_struct"

@@ -670,6 +670,8 @@ let dtree_of_external_declaration = function
   | EDecl_decl decl ->
       Dnode (pp_decl_ctor "EDecl_decl", [dtree_of_cabs_declaration decl])
 (* BEGIN CN *)
+  | EDecl_funcCN func ->
+      Dnode (pp_decl_ctor "EDecl_predCN", [Cn_ocaml.PpCabs.dtree_of_cn_function func])
   | EDecl_predCN pred ->
       Dnode (pp_decl_ctor "EDecl_predCN", [Cn_ocaml.PpCabs.dtree_of_cn_predicate pred])
 (* END CN *)
@@ -682,6 +684,7 @@ let filter_external_decl =
       Location_ocaml.from_main_file loc
     | EDecl_decl (Declaration_base (_, _, [])) -> true
     | EDecl_predCN _ -> true
+    | EDecl_funcCN _ -> true
   in List.filter pred
 
 let pp_translation_unit show_include do_colour (TUnit edecls) =

@@ -129,6 +129,7 @@ type token =
   | ASM_VOLATILE
   
   (* CN syntax *)
+  | CN_FUNCTION
   | CN_PREDICATE
   | CN_PACK
   | CN_UNPACK
@@ -294,5 +295,6 @@ let string_of_token = function
   | CN_FALSE -> "CN_FALSE"
   | CN_NIL -> "CN_NIL"
   | CN_CONS -> "CN_CONS"
+  | CN_FUNCTION -> "CN_FUNCTION"
   | CN_PREDICATE -> "CN_PREDICATE"
 
