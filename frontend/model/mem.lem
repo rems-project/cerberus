@@ -295,8 +295,6 @@ declare ocaml target_rep function cheri_pointer_hash_printf = `Impl_mem.cheri_po
 
 (* Memory intrinsics (currently used in CHERI) *)
 
-declare ocaml target_rep type Mem_common.intrinsic_typecheck_result  = `Impl_mem.intrinsic_typecheck_result`
-
 (* typecheck intrinsic. Paramters:
    1. string - name
    2. Ctype.ctype - return type
