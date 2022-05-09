@@ -1986,6 +1986,13 @@ module Concrete : Memory = struct
   let intcast _ _ ival =
     Either.Right ival
 
+  let typcheck_intrinsic _ _ _ =
+    assert false (* CHERI only *)
+
+  let call_intrinsic _ _ =
+    assert false (* CHERI only *)
+
+
   let offsetof_ival tagDefs tag_sym memb_ident =
     let (xs, _) = offsetsof tagDefs tag_sym in
     let pred (ident, _, _) =

@@ -2286,6 +2286,13 @@ module CHERI (C:Capability
   let null_cap is_signed : integer_value =
     IC (Prov_none, is_signed, (C.cap_c0 ()))
 
+  let typcheck_intrinsic _ _ _ =
+    Intrinsic_Not_Found (* TODO(CHERI)  *)
+
+  let call_intrinsic _ _ =
+    assert false (* TODO(CHERI)   *)
+
+
   let internal_intcast loc (*ity1*) ity2 ival =
     let (min_ity2, max_ity2) =
       let nbits =

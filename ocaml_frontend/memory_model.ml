@@ -199,6 +199,12 @@ module type Memory = sig
   (* For race detection *)
   val sequencePoint: unit memM
 
+  (* Memory intrinsics (currently used in CHERI) *)
+
+  type intrinsic_typecheck_result
+  val typcheck_intrinsic: string -> Ctype.ctype -> (Ctype.ctype list) -> intrinsic_typecheck_result
+  val call_intrinsic: Location_ocaml.t -> (mem_value list) -> (mem_value option) memM
+
   (* pretty printing *)
   val pp_pointer_value: ?is_verbose:bool -> pointer_value -> PPrint.document
   val pp_integer_value: integer_value -> PPrint.document

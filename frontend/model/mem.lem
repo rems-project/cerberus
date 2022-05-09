@@ -292,12 +292,18 @@ declare ocaml target_rep function case_mem_value = `Impl_mem.case_mem_value`
 val cheri_pointer_hash_printf: bool -> pointer_value -> string
 declare ocaml target_rep function cheri_pointer_hash_printf = `Impl_mem.cheri_pointer_hash_printf`
 
+
+(* Memory intrinsics (currently used in CHERI) *)
+
+declare ocaml target_rep type Mem_common.intrinsic_typecheck_result  = `Impl_mem.intrinsic_typecheck_result`
+
 (* typecheck intrinsic. Paramters:
    1. string - name
    2. Ctype.ctype - return type
    3. list Ctype.ctype - types of arguments
  *)
 val typcheck_intrinsic: string -> Ctype.ctype -> (list Ctype.ctype) -> Mem_common.intrinsic_typecheck_result
+declare ocaml target_rep function typcheck_intrinsic = `Impl_mem.typcheck_intrinsic`
 
 (* Invoke an intrinsic. Parameters:
    1. Loc.t - location where invoked (to report errors)
@@ -306,6 +312,7 @@ val typcheck_intrinsic: string -> Ctype.ctype -> (list Ctype.ctype) -> Mem_commo
  *)
 
 val call_intrinsic: Loc.t -> list mem_value -> memM (maybe mem_value)
+declare ocaml target_rep function call_intrinsic = `Impl_mem.call_intrinsic`
 
 
 
