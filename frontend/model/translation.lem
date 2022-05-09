@@ -1897,12 +1897,23 @@ else
           let ty2 = ctype_of e2 in
           begin
 if AilTypesAux.atomic_qualified_unqualified AilTypesAux.is_arithmetic ty1 && AilTypesAux.is_arithmetic ty2 then
-            self e2 >>= fun core_e ->
-            E.return (
-              force_core_object_type_of_ctype ty2,
-              core_e,
-              conv_loaded_arith stdlib ty2 (Ctype.unatomic ty1)
-            )
+            begin if Global.is_CHERI () &&
+                    (Ctype.is_ptr_t ty1 && not (Ctype.is_ptr_t ty2) || not (Ctype.is_ptr_t ty1) && Ctype.is_ptr_t ty2 ) then
+              self (A.AnnotatedExpression (GenTypes.GenRValueType (GenTypes.inject_type ty1))
+                      [] loc (A.AilEcast Ctype.no_qualifiers ty1 e2)) >>= fun core_e ->
+              E.return (
+                force_core_object_type_of_ctype ty1,
+                core_e,
+                fun z -> z
+              )
+            else
+              self e2 >>= fun core_e ->
+              E.return (
+                force_core_object_type_of_ctype ty2,
+                core_e,
+                conv_loaded_arith stdlib ty2 (Ctype.unatomic ty1)
+              )
+            end 
 
 else if AilTypesAux.atomic_qualified_unqualified AilTypesAux.is_struct_or_union ty1 then
             (* TODO(check): I don't think that any conversion is needed here. *)
@@ -3941,6 +3952,8 @@ let rec translate_stmt stdlib tagDefs f env (A.AnnotatedStatement loc _ stmt) : 
                           , Caux.mk_pure_e (Caux.mk_undef_pe loc (Undefined.DUMMY "AilSdeclaration")) ) ]
                     end
                   end
+                else if Global.is_CHERI () && not (Ctype.is_ptr_t cty) && Ctype.is_ptr_t (ctype_of e) then
+                  E.wrapped_fresh_symbol (C.BTy_object oTy) >>= fun (_, obj_sym_pat, obj_sym_pe) ->
                   E.return begin
                     Caux.mk_sseq_e e_sym_pat core_e begin
                       Caux.mk_case_e e_sym_pe
