@@ -201,8 +201,8 @@ module type Memory = sig
 
   (* Memory intrinsics (currently used in CHERI) *)
 
-  val typcheck_intrinsic: string -> Ctype.ctype -> (Ctype.ctype list) -> Mem_common.intrinsic_typecheck_result
-  val call_intrinsic: Location_ocaml.t -> (mem_value list) -> (mem_value option) memM
+  val typecheck_intrinsic: string -> Ctype.ctype -> (Ctype.ctype list) -> Mem_common.intrinsic_typecheck_result
+  val call_intrinsic: Location_ocaml.t -> string -> (mem_value list) -> (mem_value option) memM
 
   (* pretty printing *)
   val pp_pointer_value: ?is_verbose:bool -> pointer_value -> PPrint.document

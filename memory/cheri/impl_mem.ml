@@ -325,6 +325,14 @@ module CHERI (C:Capability
 
   type mem_iv_constraint = integer_value mem_constraint
 
+  let cap_of_mem_value = function
+    | MVinteger (_, IC (_,_,c)) -> Some c
+    | MVpointer (_, PV (_, PVconcrete c)) -> Some c
+    | MVpointer (_, PV (_, PVnull _)) -> Some (C.cap_c0 ())
+    | MVpointer (_, PV (_, PVfunction (FP_invalid c))) ->  Some c
+    | MVpointer (_, PV (_, PVfunction (FP_valid sym))) ->  None (* TODO(CHERI) *)
+    | _ -> None
+
   let cs_module = (module struct
                      type t = mem_iv_constraint
                      let negate x = MC_not x
@@ -2286,11 +2294,62 @@ module CHERI (C:Capability
   let null_cap is_signed : integer_value =
     IC (Prov_none, is_signed, (C.cap_c0 ()))
 
-  let typcheck_intrinsic _ _ _ =
-    Intrinsic_Not_Found (* TODO(CHERI)  *)
+  (* Check if this is either a capability pointer or
+     [u]intptr_t *)
+  let is_cap_typ (Ctype (_, ty)) =
+    match ty with
+    | Pointer _ -> true
+    | _ -> false
 
-  let call_intrinsic _ _ =
-    assert false (* TODO(CHERI)   *)
+  let typecheck_intrinsic name ret_type args_types =
+    if name = "cheri_perms_and" then
+      begin
+        (*
+          `cheri_perms_and` intrinsic. The return value and the 1st
+          argument must be capabilities and match (preserving `const`
+          qualifier) 2nd argument must be `size_t` *)
+        if List.length args_types <> 2 then Intrinsic_Signature_Mismatch
+        else
+          let cap_type = List.nth args_types 0 in
+          let mask_type = List.nth args_types 1 in
+          if mask_type <> Ctype.size_t
+             || not (Ctype.ctypeEqual cap_type ret_type)
+             || not (is_cap_typ cap_type)
+             || not (is_cap_typ ret_type)
+          then Intrinsic_Signature_Mismatch
+          else Intrinsic_OK
+      end
+    else
+      Intrinsic_Not_Found
+
+  let bits_of_Z: Z.num -> bool list = fun _ -> [] (* TODO(CHERI) *)
+
+  let call_intrinsic loc name args =
+    if name = "cheri_perms_and" then
+      begin
+        let cap_val = List.nth args 0 in
+        let mask_val = List.nth args 1 in
+        match cap_of_mem_value cap_val with
+        | None -> fail (MerrOther ("CHERI.call_intrinsic: non-cap 1st argument in: '" ^ name ^ "'"))
+        | Some c ->
+           match mask_val with
+           | MVinteger (Size_t, (IV (_,v))) ->
+              begin
+                (* let n = List.length (C.P.to_list (C.cap_get_perms c)) in *)
+                (* TODO: do I need to use bytes_of_int here first? *)
+                let bits = bits_of_Z v in
+                (* TODO: check sizes *)
+                match C.P.of_list bits with
+                | None -> assert false (* TODO(CHERI) *)
+                | Some pmask ->
+                   let _ = C.cap_narrow_perms c pmask in
+                   (* TODO: replace 'c' in 'cap_val' and return *)
+                   assert false
+              end
+           | _ -> fail (MerrOther ("CHERI.call_intrinsic: non-int 2nd argument in: '" ^ name ^ "'"))
+      end
+    else
+      fail (MerrOther ("CHERI.call_intrinsic: unknown intrinsic: '" ^ name ^ "'"))
 
 
   let internal_intcast loc (*ity1*) ity2 ival =

@@ -815,10 +815,10 @@ let ptr_t_int_value ival =
 let null_cap _ : integer_value =
   assert false (* CHERI only *)
 
-let typcheck_intrinsic _ _ _ =
+let typecheck_intrinsic _ _ _ =
   assert false (* CHERI only *)
 
-let call_intrinsic _ _ =
+let call_intrinsic _ _ _ =
   assert false (* CHERI only *)
 
 let intcast _ _ ival =
