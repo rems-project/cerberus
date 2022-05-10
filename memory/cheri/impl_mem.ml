@@ -1216,7 +1216,7 @@ module CHERI (C:Capability
        failwith "TODO: abst, Union (as value)"
 
   (* INTERNAL bytes_of_int *)
-  let bytes_of_int is_signed size i : (char option) list =
+  let bytes_of_int is_signed size i : char list =
     let nbits = 8 * size in
     let (min, max) =
       if is_signed then
@@ -1226,13 +1226,13 @@ module CHERI (C:Capability
         ( Z.zero
         , Z.sub (Z.pow_int (Z.of_int 2) nbits) Z.(succ zero) ) in
     if not (min <= i && i <= max) || nbits > 128 then begin
-        Printf.printf "failed: bytes_of_int(%s), i= %s, nbits= %d, [%s ... %s]\n"
-          (if is_signed then "signed" else "unsigned")
-          (Z.to_string i) nbits (Z.to_string min) (Z.to_string max);
-        assert false
+        let msg = Printf.sprintf "failed: bytes_of_int(%s), i= %s, nbits= %d, [%s ... %s]\n"
+                    (if is_signed then "signed" else "unsigned")
+                    (Z.to_string i) nbits (Z.to_string min) (Z.to_string max) in
+        Debug_ocaml.error msg
       end else
       List.init size (fun n ->
-          Some (char_of_int (Z.to_int (Z.extract_num i (8*n) 8)))
+          char_of_int (Z.to_int (Z.extract_num i (8*n) 8))
         )
 
   let rec typeof mval =
@@ -1267,7 +1267,7 @@ module CHERI (C:Capability
         clear_caps addr (Z.of_int sz) captags,
         List.init sz (fun _ -> AbsByte.v Prov_none None))
     | MVinteger (ity, IV (prov, n)) ->
-       let bs = List.map (AbsByte.v prov) begin
+       let bs = List.map (fun x -> AbsByte.v prov (Some x)) begin
                     bytes_of_int
                       (AilTypesAux.is_signed_ity ity)
                       (sizeof (Ctype ([], Basic (Integer ity)))) n
@@ -1281,7 +1281,7 @@ module CHERI (C:Capability
         IntMap.add addr ct captags,
         List.mapi (fun i b -> AbsByte.v prov ~copy_offset:(Some i) (Some b)) @@ cb)
     | MVfloating (fty, fval) ->
-       let bs = List.map (AbsByte.v Prov_none) begin
+       let bs = List.map (fun x -> AbsByte.v Prov_none (Some x)) begin
                     bytes_of_int
                       true (* TODO: check that *)
                       (sizeof (Ctype ([], Basic (Floating fty)))) (Z.of_int64 (Int64.bits_of_float fval))
@@ -2322,7 +2322,16 @@ module CHERI (C:Capability
     else
       Intrinsic_Not_Found
 
-  let bits_of_Z: Z.num -> bool list = fun _ -> [] (* TODO(CHERI) *)
+  let bool_bits_of_bytes bytes =
+    (* adopted from sail_lib.ml *)
+    let rec get_slice_int' (n, m, o) =
+      if n <= 0 then []
+      else
+        let bit = not ((Z.extract_num m (n + o - 1) 1) == Z.zero) in
+        bit :: get_slice_int' (n-1, m, o) in
+    let bit_list_of_char c =
+      get_slice_int' (8, (Z.of_int (int_of_char c)), 0) in
+    List.concat (List.map bit_list_of_char bytes)
 
   let call_intrinsic loc name args =
     if name = "cheri_perms_and" then
@@ -2333,14 +2342,14 @@ module CHERI (C:Capability
         | None -> fail (MerrOther ("CHERI.call_intrinsic: non-cap 1st argument in: '" ^ name ^ "'"))
         | Some c ->
            match mask_val with
-           | MVinteger (Size_t, (IV (_,v))) ->
+           | MVinteger (Size_t as ity, (IV (_,n))) ->
               begin
-                (* let n = List.length (C.P.to_list (C.cap_get_perms c)) in *)
-                (* TODO: do I need to use bytes_of_int here first? *)
-                let bits = bits_of_Z v in
-                (* TODO: check sizes *)
+                let bytes = bytes_of_int
+                              (AilTypesAux.is_signed_ity ity)
+                              (sizeof (Ctype ([], Basic (Integer ity)))) n in
+                let bits = bool_bits_of_bytes bytes in
                 match C.P.of_list bits with
-                | None -> assert false (* TODO(CHERI) *)
+                | None -> fail (MerrOther ("CHERI.call_intrinsic: error decoding permission bits: '" ^ name ^ "'"))
                 | Some pmask ->
                    let _ = C.cap_narrow_perms c pmask in
                    (* TODO: replace 'c' in 'cap_val' and return *)

@@ -37,10 +37,11 @@ module Morello_permission : Cap_permission = struct
 
   (* Input list contains permissions in the order listed in Morello
      spec, from "User" to "Local" with additional "global" and
-     "exectuve" in the begining *)
+     "exectuve" in the begining. Excessive list elements are
+     ignored. *)
   let of_list b =
     let np = List.length b in
-    if np <> (user_perms_len + 14) then
+    if np < (user_perms_len + 14) then
       (Debug_ocaml.warn [] (fun () -> "Morello.P.of_list: invalid lengths permissions: " ^ (Stdlib.string_of_int np));
        None)
     else
@@ -368,6 +369,17 @@ module Morello_capability: Capability
       | None ->
          failwith "Could not construct NULL capability (C0)!"
 
+    and bits_of_bytes (bytes:char list) =
+      let bit_list_of_char c =
+        get_slice_int' (8, (Z.of_int (int_of_char c)), 0) in
+      List.concat (List.map bit_list_of_char bytes)
+
+    and bytes_of_bits (b:bit list) : char list =
+      assert((List.length b) mod 8 == 0);
+      let bs = break 8 b in
+      let zs = List.map uint bs in
+      let is = List.map Z.to_int zs in
+      List.map char_of_int is
 
     and decode (bytes:char list) (tag:bool) =
       let bytes = List.rev bytes in
@@ -376,10 +388,7 @@ module Morello_capability: Capability
             (String.concat ";"
                (List.map (fun x -> Stdlib.string_of_int (int_of_char x)) bytes))
             ^"]");
-      let bit_list_of_char c =
-        get_slice_int' (8, (Z.of_int (int_of_char c)), 0) in
-      (* TODO(CHERI): check if bytes' and bits' decoding order is correct *)
-      let bits = List.concat (List.map bit_list_of_char bytes) in
+      let bits = bits_of_bytes bytes in
       let mc = decode_bits ([bit_of_bool tag] @ bits) in
       Debug_ocaml.print_debug 8 [] (fun () ->
           "morello.decode =" ^
@@ -390,14 +399,6 @@ module Morello_capability: Capability
             end
         );
       mc
-
-    and bytes_of_bits (b:bit list) : char list =
-      assert((List.length b) mod 8 == 0);
-      (* TODO(CHERI): check if bytes' and bits' encoding order is correct *)
-      let bs = break 8 b in
-      let zs = List.map uint bs in
-      let is = List.map Z.to_int zs in
-      List.map char_of_int is
 
     (* There is no such function in Sail, so we define it here *)
     and zCapSetPermissins ((zc__arg, zp) : (bit list * bit list)) : bit list =
