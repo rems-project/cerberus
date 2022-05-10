@@ -1300,6 +1300,7 @@ module CHERI (C:Capability
            IntMap.add addr ct captags,
            List.map (fun b -> AbsByte.v Prov_none (Some b)) cb)
        | PVfunction (FP_valid (Symbol.Symbol (file_dig, n, opt_name))) ->
+          (* TODO(CHERI): what if is already in the map? *)
           let c = C.alloc_fun (Z.add (Z.of_int initial_address) (Z.of_int n)) in
           let (cb,ct) = C.encode true c in
           (begin match opt_name with
