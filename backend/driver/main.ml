@@ -39,6 +39,9 @@ let io, get_progress =
       end;
   }, fun () -> !progress
 
+let is_cheri_memory () =
+  Impl_mem.name = "CHERI memory model"
+
 let frontend (conf, io) filename core_std =
   if not (Sys.file_exists filename) then
     error ("The file `" ^ filename ^ "' doesn't exist.");
@@ -58,6 +61,7 @@ let create_cpp_cmd cpp_cmd nostdinc macros_def macros_undef incl_dirs incl_files
   let libc_dirs = [in_runtime "bmc"; in_runtime "libc/include"; in_runtime "libc/include/posix"] in
   let incl_dirs = if nostdinc then incl_dirs else libc_dirs @ incl_dirs in
   let macros_def = if nolibc then macros_def else ("CERB_WITH_LIB", None) :: macros_def in
+  let macros_def = if is_cheri_memory () then ("__CHERI__", None) :: macros_def else macros_def in
   String.concat " " begin
     cpp_cmd ::
     List.map (function
@@ -132,15 +136,13 @@ let cerberus debug_level progress core_obj
   let prelude =
     (* Looking for and parsing the core standard library *)
     let switches =
-      match Impl_mem.name with
-        | "CHERI memory model" ->
-            Cerb_frontend.Ocaml_implementation.(set (MorelloImpl.impl));
-            if not (List.mem "CHERI" switches) then
-              "CHERI" :: switches
-            else
-              switches
-        | _ ->
-          switches in
+      if is_cheri_memory () then begin
+        Cerb_frontend.Ocaml_implementation.(set (MorelloImpl.impl));
+        if not (List.mem "CHERI" switches) then
+          "CHERI" :: switches
+        else
+          switches
+      end else switches in
     Switches.set switches;
     io.pass_message (Printf.sprintf "Using '%s'" Impl_mem.name) >>
     load_core_stdlib () >>= fun core_stdlib ->

@@ -641,7 +641,9 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
               E.misc (Loc.with_cursor loc) GenericFunctionMustBeDirectlyCalled
           | AilBcopy_alloc_id ->
               E.misc (Loc.with_cursor loc) GenericFunctionMustBeDirectlyCalled
-          (* NOTE: other builtins might not need to be call directly *)
+          | AilBCHERI _ ->
+              E.misc (Loc.with_cursor loc) GenericFunctionMustBeDirectlyCalled
+            (* NOTE: other builtins might not need to be call directly *)
         end
 (*
 
@@ -863,8 +865,28 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
             E.return (AilEcall begin
               AnnotatedExpression (GenRValueType (GenFunction (no_qualifiers, ret_ty) params false)) annots' loc' (AilEbuiltin b)
             end es', GenRValueType (inject_type ret_ty))
+       |  (AilBCHERI intrinsic_str, _) ->
+            let () = Debug.print_debug 0 [] (fun () ->
+              "TODO: CHERI intrinsics (ail typing)"
+            ) in
+            (* TODO: hardcoding things as a test to get through the pipeline *)
+            match (intrinsic_str, args) with
+              | ("cheri_perms_and", [ptr_e; size_e]) ->
+                  annotate_rvalue ptr_e  >>= fun (ptr_e' , ptr_gty ) ->
+                  annotate_rvalue size_e >>= fun (size_e', size_gty) ->
+                  (* TODO: the checks *)
+                  let ret_ty = mk_ctype_pointer no_qualifiers void in
+                  let params = [(no_qualifiers, mk_ctype_pointer no_qualifiers void, false); (no_qualifiers, uintptr_t, false)] in
+                  E.return (AilEcall begin
+                    AnnotatedExpression (GenRValueType (GenFunction (no_qualifiers, ret_ty) params false)) annots' loc' (AilEbuiltin b)
+                  end [ptr_e'; size_e'], GenRValueType (inject_type ret_ty))
+              | ("cheri_perms_and", _) ->
+                  error "TODO(err) -- cheri_perms_and() wrong number of arguments"
+              | _ ->
+                  error "WIP: CHERI intrinsics"
+            end
        | (_, _) ->
-           error "WIP: typing builtin"
+            error "WIP: typing builtin"
     end
     
     (* TODO: this is wrong in so many ways!! *)

@@ -2393,6 +2393,8 @@ end
               end
           end
 
+      | A.AilEcall (A.AnnotatedExpression _ _ _ (A.AilEbuiltin (A.AilBCHERI _))) _ ->
+          error "TODO: CHERI intrinsic (elaboration)"
 
 
 (*
@@ -2992,6 +2994,8 @@ end
             error ((Loc.stringFromLocation (Loc.with_cursor loc)) ^ ": atomic linux builtins must be directly called")
           | A.AilBcopy_alloc_id ->
             error ((Loc.stringFromLocation (Loc.with_cursor loc)) ^ ": copy_alloc_id() must be directly called")
+          | A.AilBCHERI str ->
+            error ((Loc.stringFromLocation (Loc.with_cursor loc)) ^ ": "^str^"() must be directly called")
           (* NOTE: other builtins might be legally desugared here *)
         end
       

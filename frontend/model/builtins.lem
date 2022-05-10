@@ -465,6 +465,10 @@ let translate_builtin_varnames (Symbol.Identifier _ str) =
     | "__cerbvar_copy_alloc_id" ->
         Just (AilEbuiltin AilBcopy_alloc_id)
     
+    (* CHERI intrinsics *)
+    | "__cerbvar_cheri_perms_and" ->
+        Just (AilEbuiltin (AilBCHERI "cheri_perms_and"))
+    
     | _ ->
       Nothing
 end

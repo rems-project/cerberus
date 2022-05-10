@@ -529,6 +529,8 @@ let pp_ail_builtin = function
     end
   | AilBcopy_alloc_id ->
       !^"copy_alloc_id"
+  | AilBCHERI str ->
+      !^ str
 
 let rec pp_expression_aux mk_pp_annot a_expr =
   let rec pp p (AnnotatedExpression (annot, _, loc, expr)) =
