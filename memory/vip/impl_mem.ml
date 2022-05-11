@@ -818,6 +818,9 @@ let null_cap _ : integer_value =
 let typecheck_intrinsic _ _ _ =
   assert false (* CHERI only *)
 
+let get_intrinsic_type_spec _ =
+  assert false (* CHERI only *)
+
 let call_intrinsic _ _ _ =
   assert false (* CHERI only *)
 

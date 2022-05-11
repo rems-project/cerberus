@@ -1989,6 +1989,9 @@ module Concrete : Memory = struct
   let typecheck_intrinsic _ _ _ =
     assert false (* CHERI only *)
 
+  let get_intrinsic_type_spec _ =
+    assert false (* CHERI only *)
+
   let call_intrinsic _ _ _ =
     assert false (* CHERI only *)
 

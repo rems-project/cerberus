@@ -2303,6 +2303,24 @@ module CHERI (C:Capability
     | Pointer _ -> true
     | _ -> false
 
+  let get_intrinsic_type_spec name =
+    let is_pointer = function
+      | Ctype (_, Pointer _) -> true
+      | _ -> false
+    in
+    if name = "cheri_perms_and" then
+      Some [
+          CopyArg 1;
+          PolymorphicArg [
+              Ctype.ctypeEqual Ctype.intptr_t ;
+              Ctype.ctypeEqual Ctype.uintptr_t ;
+              is_pointer
+            ];
+          ExactArg Ctype.size_t
+        ]
+    else
+      None
+
   let typecheck_intrinsic name ret_type args_types =
     if name = "cheri_perms_and" then
       begin

@@ -203,6 +203,8 @@ module type Memory = sig
 
   val typecheck_intrinsic: string -> Ctype.ctype -> (Ctype.ctype list) -> Mem_common.intrinsic_typecheck_result
   val call_intrinsic: Location_ocaml.t -> string -> (mem_value list) -> (mem_value option) memM
+  val get_intrinsic_type_spec: string -> Mem_common.intrinsics_signature option
+
 
   (* pretty printing *)
   val pp_pointer_value: ?is_verbose:bool -> pointer_value -> PPrint.document

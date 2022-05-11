@@ -3,6 +3,7 @@ open import Pervasives
 import Loc Symbol
 import Undefined
 import AilSyntax
+import Ctype
 
 open import Nondeterminism
 
@@ -431,6 +432,21 @@ type intrinsic_typecheck_result =
   | Intrinsic_Not_Found
   | Intrinsic_Signature_Mismatch
 
+
+type type_predicate = Ctype.ctype -> bool
+
+(* This type describes an element of function specification.
+   It is used for both arguments and return values.
+   Please note, that it allows circular dependencies.
+ *)
+type intrinsics_arg_spec =
+  | ExactArg of Ctype.ctype (* fixed type *)
+  | PolymorphicArg of (list type_predicate) (* any type matchin this perdicate *)
+  | CopyArg of int (* the type of this argument will be derived from the actual type of another argument. Index starts with 0 (return value). Normally it should point to `PolymorphicArg`, but it is permissible to point to `ExactArg`. It should not be used to point to another `CopyArg`. *)
+
+(* An intrinsic signature is a list. First element describes
+   the return value. The remaining ones are for arguments *)
+type intrinsics_signature = list intrinsics_arg_spec
 
 (*
 
