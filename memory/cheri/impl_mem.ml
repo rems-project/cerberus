@@ -326,13 +326,41 @@ module CHERI (C:Capability
 
   type mem_iv_constraint = integer_value mem_constraint
 
-  let cap_of_mem_value = function
-    | MVinteger (_, IC (_,_,c)) -> Some c
-    | MVpointer (_, PV (_, PVconcrete c)) -> Some c
-    | MVpointer (_, PV (_, PVnull _)) -> Some (C.cap_c0 ())
-    | MVpointer (_, PV (_, PVfunction (FP_invalid c))) ->  Some c
-    | MVpointer (_, PV (_, PVfunction (FP_valid sym))) ->  None (* TODO(CHERI) *)
+  (* This function resolves [function_pointer] to a capability.
+     If needed, the new function is allocated in memory and [funptrmap] is updated
+   *)
+  let resolve_function_pointer (funptrmap: (Digest.t * string * C.t) IntMap.t) (fp:function_pointer) =
+    match fp with
+    | FP_valid (Symbol.Symbol (file_dig, n', opt_name)) ->
+       let n = Z.of_int n' in
+       begin
+         match IntMap.find_opt n funptrmap with
+         | Some (_, _, c) -> (funptrmap, c)
+         | None ->
+            let c = C.alloc_fun (Z.add (Z.of_int initial_address) n) in
+            ((match opt_name with
+              | SD_Id name -> IntMap.add n (file_dig, name, c) funptrmap
+              | _ -> funptrmap),
+             c)
+       end
+    | FP_invalid c -> (funptrmap, c)
+
+  let cap_of_mem_value funptrmap = function
+    | MVinteger (_, IC (_,_,c)) -> Some (funptrmap,c)
+    | MVpointer (_, PV (_, PVconcrete c)) -> Some (funptrmap,c)
+    | MVpointer (_, PV (_, PVnull _)) -> Some (funptrmap, C.cap_c0 ())
+    | MVpointer (_, PV (_, PVfunction fp)) ->
+       Some (resolve_function_pointer funptrmap fp)
     | _ -> None
+
+  let update_cap_in_mem_value cap_val c =
+    match cap_val with
+    | MVinteger (ty, IC (prov,is_signed,_)) ->  MVinteger (ty, IC (prov,is_signed,c))
+    | MVpointer (ty, PV (prov, PVconcrete _)) -> MVpointer (ty, PV (prov, PVconcrete c))
+    | MVpointer (ty, PV (prov, PVnull _)) -> MVpointer (ty, PV (prov, PVconcrete c))
+    | MVpointer (ty, PV (prov, PVfunction fp)) ->
+       MVpointer (ty, PV (prov, PVfunction (FP_invalid c)))
+    | other -> other
 
   let cs_module = (module struct
                      type t = mem_iv_constraint
@@ -1300,20 +1328,11 @@ module CHERI (C:Capability
               it here for consistency even if it is never read. *)
            IntMap.add addr ct captags,
            List.map (fun b -> AbsByte.v Prov_none (Some b)) cb)
-       | PVfunction (FP_valid (Symbol.Symbol (file_dig, n, opt_name))) ->
+       | PVfunction ((FP_valid (Symbol.Symbol (file_dig, n, opt_name))) as fp) ->
           (* TODO(CHERI): what if is already in the map? *)
-          let c = C.alloc_fun (Z.add (Z.of_int initial_address) (Z.of_int n)) in
+          let (funptrmap,c) = resolve_function_pointer funptrmap fp in
           let (cb,ct) = C.encode true c in
-          (begin match opt_name with
-           | SD_Id name ->
-              IntMap.add (Z.of_int n) (file_dig, name, c) funptrmap
-           | SD_ObjectAddress _ -> funptrmap
-           | SD_Return -> funptrmap
-           | SD_FunArg _ -> funptrmap
-           (* | SD_Pointee _ -> funptrmap *)
-           (* | SD_PredOutput _ -> funptrmap *)
-           | SD_None -> funptrmap
-           end,
+          (funptrmap,
            IntMap.add addr ct captags,
            List.mapi (fun i b -> AbsByte.v prov ~copy_offset:(Some i) (Some b)) cb)
        | PVfunction (FP_invalid c)
@@ -2355,28 +2374,29 @@ module CHERI (C:Capability
 
   let call_intrinsic loc name args =
     if name = "cheri_perms_and" then
-      begin
-        let cap_val = List.nth args 0 in
-        let mask_val = List.nth args 1 in
-        match cap_of_mem_value cap_val with
+      let cap_val = List.nth args 0 in
+      let mask_val = List.nth args 1 in
+      get >>=
+        begin fun st ->
+        match cap_of_mem_value st.funptrmap cap_val with
         | None -> fail (MerrOther ("CHERI.call_intrinsic: non-cap 1st argument in: '" ^ name ^ "'"))
-        | Some c ->
-           match mask_val with
-           | MVinteger (Size_t as ity, (IV (_,n))) ->
-              begin
-                let bytes = bytes_of_int
-                              (AilTypesAux.is_signed_ity ity)
-                              (sizeof (Ctype ([], Basic (Integer ity)))) n in
-                let bits = bool_bits_of_bytes bytes in
-                match C.P.of_list bits with
-                | None -> fail (MerrOther ("CHERI.call_intrinsic: error decoding permission bits: '" ^ name ^ "'"))
-                | Some pmask ->
-                   let _ = C.cap_narrow_perms c pmask in
-                   (* TODO: replace 'c' in 'cap_val' and return *)
-                   assert false
-              end
-           | _ -> fail (MerrOther ("CHERI.call_intrinsic: non-int 2nd argument in: '" ^ name ^ "'"))
-      end
+        | Some (funptrmap,c) ->
+           update (fun st -> { st with funptrmap=funptrmap }) >>
+             match mask_val with
+             | MVinteger (Size_t as ity, (IV (_,n))) ->
+                begin
+                  let bytes = bytes_of_int
+                                (AilTypesAux.is_signed_ity ity)
+                                (sizeof (Ctype ([], Basic (Integer ity)))) n in
+                  let bits = bool_bits_of_bytes bytes in
+                  match C.P.of_list bits with
+                  | None -> fail (MerrOther ("CHERI.call_intrinsic: error decoding permission bits: '" ^ name ^ "'"))
+                  | Some pmask ->
+                     let c = C.cap_narrow_perms c pmask in
+                     return (Some (update_cap_in_mem_value cap_val c))
+                end
+             | _ -> fail (MerrOther ("CHERI.call_intrinsic: non-int 2nd argument in: '" ^ name ^ "'"))
+        end
     else
       fail (MerrOther ("CHERI.call_intrinsic: unknown intrinsic: '" ^ name ^ "'"))
 
