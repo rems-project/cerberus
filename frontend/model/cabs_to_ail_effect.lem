@@ -1821,6 +1821,7 @@ let mk_current_ail_sigma =
         A.extern_idmap= Map.empty;
         A.typedef_attributes= Map.empty;
         A.loop_attributes= Map.empty;
+        A.cn_functions= [];
         A.cn_predicates= []; |>
 
 val is_complete_object: Ctype.ctype -> desugM bool
@@ -1993,6 +1994,7 @@ let extract_program startup_str =
     A.typedef_attributes= Map.map (fun (z, _, _) -> z) st.typedef_definitions;
     A.loop_attributes = st.loop_attributes;
     A.cn_predicates=  List.map (fun (_, (_, z)) -> z) (Map_extra.toList st.cn_state.Cn_desugaring.cn_predicates);
+    A.cn_functions=  List.map (fun (_, (_, z)) -> z) (Map_extra.toList st.cn_state.Cn_desugaring.cn_functions);
    |>)
 
 
@@ -2069,5 +2071,6 @@ let get_sigma_sofar =
        A.typedef_attributes= Map.map (fun (z, _, _) -> z) st.typedef_definitions;
        A.loop_attributes= st.loop_attributes;
        A.cn_predicates=  List.map (fun (_, (_, z)) -> z) (Map_extra.toList st.cn_state.Cn_desugaring.cn_predicates);
+       A.cn_functions=  List.map (fun (_, (_, z)) -> z) (Map_extra.toList st.cn_state.Cn_desugaring.cn_functions);
       |>
   )

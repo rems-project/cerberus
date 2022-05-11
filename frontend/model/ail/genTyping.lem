@@ -2065,6 +2065,7 @@ let annotate_sigma sigm =
   end) sigm.tag_definitions >>
 
   E.mapM_ (Cn_typing.typecheck_cn_predicate sigm.tag_definitions) sigm.cn_predicates >>= fun () ->
+  E.mapM_ (Cn_typing.typecheck_cn_function sigm.tag_definitions) sigm.cn_functions >>= fun () ->
   
   E.return <|
     declarations=         sigm.declarations;
@@ -2077,6 +2078,7 @@ let annotate_sigma sigm =
     typedef_attributes= sigm.typedef_attributes;
     loop_attributes= sigm.loop_attributes;
     cn_predicates=  sigm.cn_predicates;
+    cn_functions=  sigm.cn_functions;
   |>
 
 

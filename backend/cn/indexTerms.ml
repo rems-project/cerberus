@@ -759,6 +759,10 @@ let pred_ name args rbt =
   IT (Pred (name, args), rbt)
 
 
+let let_ sym e body = 
+  subst (make_subst [(sym, e)]) body
+
+
 
 
 let fresh bt = 

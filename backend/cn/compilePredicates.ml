@@ -9,6 +9,10 @@ open CF.Cn
 type cn_predicate =
   (CF.Symbol.sym, CF.Ctype.ctype) CF.Cn.cn_predicate
 
+type cn_function =
+  (CF.Symbol.sym, CF.Ctype.ctype) CF.Cn.cn_function
+
+
 let rec translate_cn_base_type (bTy: CF.Symbol.sym cn_base_type) =
   let open BaseTypes in
   match bTy with
@@ -121,12 +125,17 @@ module Env = struct
   module X = Map.Make(Sym)
   module Y = Map.Make(String)
 
+  type function_sig = {
+      args: (Sym.t * BaseTypes.t) list;
+      return_bty: BaseTypes.t;
+    }
+
   type predicate_sig = {
     pred_iargs: (Sym.t * BaseTypes.t) list;
     pred_oargs: (Sym.t * BaseTypes.t) list;
   }
   
-  type ressource_def =
+  type resource_def =
     | RPred_owned of BaseTypes.t * Sym.t (* value member *)
     | RPred_block
     | RPred_named of Sym.t * Sym.t list
@@ -134,13 +143,14 @@ module Env = struct
   type t = {
     logicals: BaseTypes.t X.t;
     pred_names: Sym.t Y.t;
+    functions: function_sig X.t;
     predicates: predicate_sig X.t;
-    ressources: ressource_def X.t;
+    resources: resource_def X.t;
     tagDefs: CF.Core_anormalise.Mu.mu_tag_definitions;
   }
 
   let empty tagDefs =
-    { logicals= X.empty; pred_names= Y.empty; predicates= X.empty; ressources= X.empty; tagDefs }
+    { logicals= X.empty; pred_names= Y.empty; functions = X.empty; predicates= X.empty; resources= X.empty; tagDefs }
   
   let add_logical sym bTy env =
     {env with logicals= X.add sym bTy env.logicals }
@@ -148,11 +158,14 @@ module Env = struct
   let add_pred_name str sym env =
     {env with pred_names= Y.add str sym env.pred_names }
   
+  let add_function sym func_sig env =
+    {env with functions= X.add sym func_sig env.functions }
+
   let add_predicate sym pred_sig env =
     {env with predicates= X.add sym pred_sig env.predicates }
   
-  let add_ressource sym res_def env =
-    { env with ressources= X.add sym res_def env.ressources }
+  let add_resource sym res_def env =
+    { env with resources= X.add sym res_def env.resources }
   
   let lookup_logical sym env =
     X.find_opt sym env.logicals
@@ -163,8 +176,8 @@ module Env = struct
   let lookup_predicate sym env =
     X.find_opt sym env.predicates
 
-  let lookup_ressource sym env =
-    X.find_opt sym env.ressources
+  let lookup_resource sym env =
+    X.find_opt sym env.resources
   
   let lookup_struct sym env =
     match Pmap.lookup sym env.tagDefs with
@@ -206,7 +219,7 @@ let translate_member_accesses loc env res_def xs =
               else
                 fail {loc; msg= Invalid_oarg_owned {invalid_ident= ident}}
           | `RES Env.RPred_block ->
-              failwith "TODO: member access on a ressource bound to a Block() predicate"
+              failwith "TODO: member access on a resource bound to a Block() predicate"
           | `RES (Env.RPred_named (pred_sym, res_oargs)) ->
               begin match Env.lookup_predicate pred_sym env with
                 | None ->
@@ -287,7 +300,7 @@ let translate_cn_expr (env: Env.t) expr =
           let item_bt = basetype (List.hd es) in
           return (list_ ~item_bt es)
       | CNExpr_memberof (sym, xs) ->
-          begin match Env.lookup_ressource sym env with
+          begin match Env.lookup_resource sym env with
             | None ->
                 (* TODO: (could the case where sym is a C struct) is this allowed? *)
                 failwith ("TODO: CNExpr_memberof ==> " ^ Sym.pp_string sym)
@@ -332,7 +345,7 @@ let translate_cn_clause env clause =
                           AT.mLogical (value_sym, bTy, (res_loc, None))
                           (AT.mResource (Point pt, (pred_loc, None)) z)
                         end in
-                      let env' = Env.(add_ressource sym (RPred_owned (bTy, value_sym)) env) in
+                      let env' = Env.(add_resource sym (RPred_owned (bTy, value_sym)) env) in
                       translate_cn_clause_aux env' acc' cl
                 end
             | CN_pred (_, CN_owned _, _) ->
@@ -398,7 +411,7 @@ let translate_cn_clause env clause =
                               AT.mLogicals o_sym_bTys
                               (AT.mResource (Predicate pred, (pred_loc, None)) z)
                           end in
-                        let env' = Env.(add_ressource sym (RPred_named (pred_sym, o_syms)) (* { res_pred= pred_sym; res_oargs= o_syms}*) env) in
+                        let env' = Env.(add_resource sym (RPred_named (pred_sym, o_syms)) (* { res_pred= pred_sym; res_oargs= o_syms}*) env) in
                         translate_cn_clause_aux env' acc' cl
                 end
             | CN_each _ ->
@@ -445,6 +458,24 @@ let translate_cn_clauses env clauses =
   return (List.rev xs)
 
 
+let translate_cn_func_body env body =
+  let rec translate_cn_func_body_aux env acc body =
+    match body with
+      | CN_fb_letExpr (loc, sym, e_, cl) ->
+          let@ e = translate_cn_expr env e_ in
+          let acc' =
+            fun z -> acc begin
+              IT.let_ sym e z
+            end in
+            translate_cn_func_body_aux (Env.add_logical sym (IT.basetype e) env) acc' cl
+      | CN_fb_return (loc, x) ->
+         let@ x = translate_cn_expr env x in
+         acc x
+  in
+  translate_cn_func_body_aux env (fun z -> return z) body
+
+
+
 let register_cn_predicates tagDefs (defs: cn_predicate list) =
   let aux env def =
     let translate_args xs =
@@ -455,6 +486,25 @@ let register_cn_predicates tagDefs (defs: cn_predicate list) =
     let oargs = translate_args def.cn_pred_oargs in
     Env.add_predicate def.cn_pred_name { pred_iargs= iargs; pred_oargs= oargs } env in
   List.fold_left aux (Env.empty tagDefs) defs
+
+
+
+
+let translate_and_register_cn_function env (def: cn_function) =
+  let open LogicalPredicates in
+  let args = 
+    List.map (fun (bTy, sym) -> (sym, translate_cn_base_type bTy)
+      ) def.cn_func_args in
+  let env' =
+    List.fold_left (fun acc (sym, bt) -> Env.add_logical sym bt acc
+      ) env args in
+  let@ definition = match def.cn_func_body with
+    | Some body -> 
+       let@ body = translate_cn_func_body env' body in
+       return (Def body)
+    | None -> return Uninterp in
+  let return_bt = translate_cn_base_type def.cn_func_return_bty in
+  return {loc = def.cn_func_loc; args; return_bt; definition; infer_arguments = failwith "asd"}
 
 
 let translate_cn_predicate env (def: cn_predicate) =

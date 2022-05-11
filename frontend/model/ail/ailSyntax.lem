@@ -241,6 +241,7 @@ type sigma 'a = <|
   extern_idmap: map Symbol.identifier (ail_identifier * id_kind);
   typedef_attributes: map ail_identifier Annot.attributes;
   loop_attributes: Annot.loop_attributes;
+  cn_functions: list (Cn.cn_function Symbol.sym Ctype.ctype);
   cn_predicates: list (Cn.cn_predicate Symbol.sym Ctype.ctype);
 |>
 

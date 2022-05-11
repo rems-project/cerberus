@@ -43,6 +43,7 @@ let empty_sigma = <|
   A.typedef_attributes= Map.empty;
   A.loop_attributes= Map.empty;
   A.cn_predicates= [];
+  A.cn_functions= [];
 |>
 
 

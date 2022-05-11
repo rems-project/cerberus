@@ -64,3 +64,6 @@ let rec typecheck_cn_expr env (CNExpr loc expr_) =
 
 let typecheck_cn_predicate tagDefs pred =
   E.return ()
+
+let typecheck_cn_function tagDefs pred = 
+  E.return ()

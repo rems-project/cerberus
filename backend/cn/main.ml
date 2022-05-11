@@ -150,7 +150,7 @@ let frontend filename =
         | Result.Error err -> CompilePredicates.report_error err; exit 1
         | Result.Ok xs -> xs
     end in
-
+  
   return (pred_defs, mu_file)
 
 
