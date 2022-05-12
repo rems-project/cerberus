@@ -69,7 +69,7 @@ let rec map2_ f xs ys acc =
     | (x::xs', y::ys') ->
         map2_ f xs' ys' (f x y :: acc)
     | ([],[]) ->
-        acc
+        List.reverse acc
     | _ ->
         error "[Global.foldl2] the twos weren't of same length"
   end

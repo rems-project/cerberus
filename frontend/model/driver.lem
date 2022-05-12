@@ -1159,7 +1159,7 @@ let rec driver with_concurrency =
             liftMem (Mem.call_intrinsic loc str mvals) >>= fun res_opt ->
             match res_opt with
               | Just res ->
-                  ND.return (mk_th_st (snd (Caux.valueFromMemValue res)))
+                  ND.return (mk_th_st (Core.Vobject (snd (Caux.objectValueFromMemValue res))))
               | Nothing ->
                 ND.return (mk_th_st Core.Vunit)
             end
