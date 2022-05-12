@@ -2393,9 +2393,39 @@ end
               end
           end
 
-      | A.AilEcall (A.AnnotatedExpression _ _ _ (A.AilEbuiltin (A.AilBCHERI _))) _ ->
-          error "TODO: CHERI intrinsic (elaboration)"
-
+      | A.AilEcall (A.AnnotatedExpression _ _ _ (A.AilEbuiltin (A.AilBCHERI str))) es ->
+          E.mapM self es >>= fun core_es ->
+          let oTy_ret = force_core_object_type_of_ctype result_ty in
+          let oTys = List.map (fun e -> force_core_object_type_of_ctype (ctype_of e)) es in
+          E.wrapped_fresh_symbol (C.BTy_object oTy_ret) >>= fun (_, memop_sym_pat, memop_sym_pe) ->
+          (* E.foldlM (fun (sym_pat_acc, sym_pe_acc, obj_pat_acc, obj_pe_acc) oTy ->
+            E.wrapped_fresh_symbol (C.BTy_loaded oTy)  >>= fun (_, sym_pat, sym_pe) ->
+            E.wrapped_fresh_symbol (C.BTy_object oTy)  >>= fun (_, obj_pat, obj_pe) ->
+            E.return ( sym_pat :: sym_pat_acc
+                     , sym_pe  :: sym_pe_acc
+                     , obj_pat :: obj_pat_acc
+                     , obj_pe  :: obj_pe_acc )
+          ) ([], [], [], []) oTys >>= fun (rev_arg_sym_pats, rev_arg_sym_pes, rev_obj_sym_pats, rev_obj_sym_pes) -> *)
+          let args_bTy = C.BTy_tuple (List.map C.BTy_loaded oTys) in
+          E.wrapped_fresh_symbol args_bTy >>= fun (_, args_sym_pat, args_sym_pe) ->
+          E.foldlM (fun (obj_pat_acc, obj_pe_acc) oTy ->
+            E.wrapped_fresh_symbol (C.BTy_object oTy)  >>= fun (_, obj_pat, obj_pe) ->
+            E.return ( obj_pat :: obj_pat_acc
+                     , obj_pe  :: obj_pe_acc )
+          ) ([], []) oTys >>= fun (rev_obj_sym_pats, rev_obj_sym_pes) ->
+          let memop =
+            Mem_common.CHERI_intrinsic str (result_ty, List.map ctype_of es) in
+          E.return begin
+            Caux.mk_sseq_e args_sym_pat (Caux.mk_unseq_e core_es)
+            begin
+              Caux.mk_case_e args_sym_pe
+                [ ( Caux.mk_tuple_pat (List.map Caux.mk_specified_pat (List.reverse rev_obj_sym_pats))
+                  , Caux.mk_wseq_e memop_sym_pat (C.Expr [] (C.Ememop memop (List.reverse rev_obj_sym_pes)))
+                      (Caux.mk_pure_e (Caux.mk_specified_pe memop_sym_pe)) )
+                ; ( Caux.mk_empty_pat args_bTy
+                  , Caux.mk_pure_e (Caux.mk_undef_pe loc (Undefined.DUMMY "Elab, CHERI intrinsics (unspec)")) ) ]
+            end
+          end
 
 (*
      | A.AilEcall (A.AnnotatedExpression _ _ (A.AilEbuiltin "atomic_compare_exchange_strong_explicit")) [object_e; expected_e; desired_e; order_success_e; order_failure_e] ->

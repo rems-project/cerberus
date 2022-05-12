@@ -1499,6 +1499,14 @@ let memop_signature = function
       (BTy_unit, [BTy_object OTy_integer])
   | Mem_common.Copy_alloc_id ->
       (BTy_object OTy_pointer, [BTy_object OTy_integer; BTy_object OTy_pointer])
+  | Mem_common.CHERI_intrinsic str (ret_ty, tys) ->
+      let oTys_opt = Utils.maybe_mapM Core_aux.core_object_type_of_ctype tys in
+      match (core_object_type_of_ctype ret_ty, oTys_opt ) with
+        | (Just ret_oTy, Just oTys) ->
+            (BTy_object ret_oTy, List.map BTy_object oTys)
+        | _ ->
+            error "when typechecking CHERI intrinsics failed to get the params object types"
+      end
 end
 
 

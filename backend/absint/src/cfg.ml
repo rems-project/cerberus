@@ -229,6 +229,7 @@ let show_memop =
   | PtrArrayShift -> "PtrArrayShift"
   | PtrMemberShift _ -> "PtrMemberShift"
   | Copy_alloc_id -> "Copy_alloc_id"
+  | CHERI_intrinsic (str, _) -> "Cheri_" ^ str
 
 let show_binop = function
   | OpAdd -> " + "

@@ -148,9 +148,13 @@ let rec memValueFromValue (Ctype annots ty) cval =
         Nothing
     | (_, Vloaded (LVunspecified ty')) ->
         Just (Mem.unspecified_mval ty') (* TODO: check ty = ty'? *)
+    | (Basic (Integer ity), Vobject (OVinteger ival)) ->
+        Just (Mem.integer_value_mval ity ival)
     | (Basic (Integer ity), Vloaded (LVspecified (OVinteger ival))) ->
         Just (Mem.integer_value_mval ity ival)
     | (Basic (Floating fty), Vloaded (LVspecified (OVfloating fval))) ->
+        Just (Mem.floating_value_mval fty fval)
+    | (Basic (Floating fty), Vobject (OVfloating fval)) ->
         Just (Mem.floating_value_mval fty fval)
     | (Pointer _ ref_ty, Vobject (OVpointer ptr_val)) -> (* TODO: not sure about this *)
         Just (Mem.pointer_mval ref_ty ptr_val)

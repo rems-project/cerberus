@@ -294,7 +294,7 @@ let list_unfoldr x = list_unfoldr_aux [] x
 val     maybe_mapM: forall 'a 'b. ('a -> maybe 'b) -> list 'a -> maybe (list 'b)
 let rec maybe_mapM_aux acc f = function
   | [] ->
-      Just acc
+      Just (List.reverse acc)
   | x::xs' ->
       match f x with
         | Just x' ->

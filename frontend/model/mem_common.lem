@@ -330,6 +330,9 @@ type generic_memop 'sym =
   (* RefinedC *)
   | Copy_alloc_id (* (integer, pointer) -> eff pointer *)
 
+  (* CHERI *)
+  | CHERI_intrinsic of string * (Ctype.ctype * list Ctype.ctype)
+
 type memop = generic_memop Symbol.sym
 
 instance forall 'a. Show 'a => (Show (generic_memop 'a))
@@ -378,6 +381,8 @@ instance forall 'a. Show 'a => (Show (generic_memop 'a))
         "va_end"
     | Copy_alloc_id ->
         "copy_alloc_id"
+    | CHERI_intrinsic str _ ->
+        "cheri_" ^ str
   end
 end
 
