@@ -2439,7 +2439,7 @@ module CHERI (C:Capability
                      let c = C.cap_narrow_perms c pmask in
                      return (Some (update_cap_in_mem_value cap_val c))
                 end
-             | _ -> fail (MerrOther ("CHERI.call_intrinsic: non-int 2nd argument in: '" ^ name ^ "'"))
+             | _ -> fail (MerrOther ("CHERI.call_intrinsic: 2nd argument's type is not size_t in: '" ^ name ^ "'"))
         end
     else
       fail (MerrOther ("CHERI.call_intrinsic: unknown intrinsic: '" ^ name ^ "'"))
