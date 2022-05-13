@@ -438,7 +438,9 @@ type intrinsic_typecheck_result =
   | Intrinsic_Signature_Mismatch
 
 
-type type_predicate = Ctype.ctype -> bool
+type type_predicate =
+  | TyPred of (Ctype.ctype -> bool)
+  | TyIsPointer
 
 (* This type describes an element of function specification.
    It is used for both arguments and return values.
@@ -558,8 +560,8 @@ let try_usual_arithmetic (Ctype.Ctype _ ty1) (Ctype.Ctype _ ty2) =
   end
 
 val resolve_arg:
-  nat -> (nat -> Ctype.ctype) -> (nat -> intrinsics_arg_spec) -> Ctype.ctype -> intrinsics_arg_spec -> either string Ctype.ctype
-let rec resolve_arg n get_arg get_spec arg spec =
+  nat -> (nat -> Ctype.ctype * bool) -> (nat -> intrinsics_arg_spec) -> (Ctype.ctype * bool) -> intrinsics_arg_spec -> either string Ctype.ctype
+let rec resolve_arg n get_arg get_spec (arg, is_null_pointer_constant) spec =
   let resolve_arg = resolve_arg n get_arg get_spec in
   match spec with
     | ExactArg ty ->
@@ -574,20 +576,38 @@ let rec resolve_arg n get_arg get_spec arg spec =
           | Nothing ->
               Left "ExactArg -- type mismatch"
         end
-
-      (* if Ctype.ctypeEqual arg ty
-      then Right arg
-      else Left "ExactArg -- not equal" *)
     | PolymorphicArg tyl ->
-      if List.foldl (fun b p -> b || (p arg)) false tyl
-      then Right arg
-      else Left "PolymorphicArg -- all preds failed"
+      let opt =
+        List.foldl (fun acc p ->
+          match (acc, p) with
+            | (Just ty, _) ->
+                Just ty
+            | (Nothing, TyPred pred) ->
+                if pred arg then
+                  Just arg
+                else
+                  Nothing
+            | (Nothing, TyIsPointer) ->
+                if AilTypesAux.is_pointer arg then
+                  Just arg
+                else if is_null_pointer_constant then
+                  Just (Ctype.mk_ctype_pointer Ctype.no_qualifiers Ctype.void)
+                else
+                  Nothing
+          end
+        ) Nothing tyl in
+      match opt with
+        | Just ty ->
+            Right ty
+        | Nothing ->
+            Left "PolymorphicArg -- all preds failed"
+      end
     | CopyArg i ->
       if i>=n then Left "CopyArg -- invalid index" (* spec error! *)
       else
         match get_spec i with
           | CopyArg _ ->
-              Left "CopyArg -- dual inddirection not allowed!" (* dual inddirection not allowed! *)
+              Left "CopyArg -- dual indirection not allowed!"
           | spec' ->
               resolve_arg (get_arg i) spec'
         end
@@ -601,7 +621,7 @@ let inline get xs idx =
         error "Mem_common.derive_intrinsic_signature: internal error (get)"
   end 
 
-val derive_intrinsic_signature: list Ctype.ctype -> intrinsics_signature -> either string (Ctype.ctype * list Ctype.ctype)
+val derive_intrinsic_signature: list (Ctype.ctype * bool) -> intrinsics_signature -> either string (Ctype.ctype * list Ctype.ctype)
 let derive_intrinsic_signature args (ret_spec, specs) =
   let n = List.length args in
   if n <> List.length specs then Left "|args| <> |specs|"
