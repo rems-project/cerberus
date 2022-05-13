@@ -1561,17 +1561,24 @@ let drive (with_concurrency: bool) (use_experimental_unseq: bool) file (arg_strs
                 ) arg_strs in
               
               (* memory value to be stored in the memory object pointed to by main.argc *)
-              let argc_mem_val = Mem.integer_mval (Ctype.Signed Ctype.Int_) (integerFromNat $ List.length args_mem_val_tys) in
+              let number_of_args = integerFromNat (List.length args_mem_val_tys) in
+              let argc_mem_val = Mem.integer_mval (Ctype.Signed Ctype.Int_) number_of_args in
               
-              (* allocating and initialising an object for main.argc *)
-              liftMem (
-                Mem.bind (Mem.allocate_object tid0 (Symbol.PrefSource loc [main_sym; argc_sym])
-                            (Mem.alignof_ival Ctype.signed_int) Ctype.signed_int Nothing) (fun ptr_val ->
-                  Mem.bind (Mem.store (Loc.other "argc init") Ctype.signed_int false ptr_val argc_mem_val) (fun _ ->
-                    Mem.return ptr_val
+              (* begin if false (*Global.has_switch Global.SW_inner_arg_temps*) then
+                (* in this switch (for CN) Core procedures elaborating C functions
+                   receive values (and to the temp allocation themselves) *)
+                   ND.return (Core.Vobject (Core.OVinteger (Mem.integer_ival number_of_args)))
+              else *)
+                (* allocating and initialising an object for main.argc *)
+                liftMem (
+                  Mem.bind (Mem.allocate_object tid0 (Symbol.PrefSource loc [main_sym; argc_sym])
+                              (Mem.alignof_ival Ctype.signed_int) Ctype.signed_int Nothing) (fun ptr_val ->
+                    Mem.bind (Mem.store (Loc.other "argc init") Ctype.signed_int false ptr_val argc_mem_val) (fun _ ->
+                      Mem.return (Core.Vobject (Core.OVpointer ptr_val))
+                    )
                   )
                 )
-              ) >>= fun argc_ptr_val ->
+              (*end*) >>= fun argc_cval ->
               
               (* allocating and initialising the objects pointed to by the elements of argv *)
               ND.foldlM (fun ptr_vals (arg_mem_val, arg_ty) ->
@@ -1605,9 +1612,9 @@ let drive (with_concurrency: bool) (use_experimental_unseq: bool) file (arg_strs
                 Mem.bind (Mem.store (Loc.other "argv init") argv_ty false argv_ptr_val
                             (Mem.pointer_mval (Ctype.Ctype [] (Ctype.Pointer Ctype.no_qualifiers Ctype.char)) array_ptr_val)) ( fun _ ->
 
-                Mem.return argv_ptr_val
+                Mem.return (Core.Vobject (Core.OVpointer argv_ptr_val))
                 ))))
-              ) >>= fun argv_ptr_val ->
+              ) >>= fun argv_cval ->
               (* Adding the values of argc and argv to the Core symbol environment *)
               get_thread_states >>= function
                 | [(_, (_, th_st))] ->
@@ -1616,11 +1623,11 @@ let drive (with_concurrency: bool) (use_experimental_unseq: bool) file (arg_strs
                         Core_run.env =
                           match th_st.Core_run.env with
                             | [] ->
-                                [Map.fromList [ (argc_sym ,Core.Vobject (Core.OVpointer argc_ptr_val))
-                                              ; (argv_sym, Core.Vobject (Core.OVpointer argv_ptr_val)) ]]
+                                [Map.fromList [ (argc_sym ,argc_cval)
+                                              ; (argv_sym, argv_cval) ]]
                             | (xs :: xs') ->
-                                (Map.insert argc_sym (Core.Vobject (Core.OVpointer argc_ptr_val))
-                                  (Map.insert argv_sym (Core.Vobject (Core.OVpointer argv_ptr_val)) xs)) :: xs'
+                                (Map.insert argc_sym argc_cval
+                                  (Map.insert argv_sym argv_cval xs)) :: xs'
                           end
                    |>
                 | _ ->

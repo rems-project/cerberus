@@ -2,7 +2,7 @@ open import Pervasives
 import Map_extra
 
 open import Utils Errors Loc
-import Exception Pp
+import Exception Pp Global
 
 open import Core Core_aux
 import Mem_common Ctype Core_ctype_aux Implementation
@@ -1559,7 +1559,7 @@ and typecheck_expr tagDefs (env: typing_env) expected_bTy (Expr annot expr_) =
         infer_pexpr tagDefs env pe_ty >>= export_pexpr >>= fun pe_ty' ->
         infer_pexpr tagDefs env pe    >>= export_pexpr >>= fun (Pexpr _ bTy _ as pe') ->
         match (pe_ty, bTy) with
-          | (Pexpr _ _ (PEval (Vctype (Cty.Ctype _ (Cty.Pointer _ (Cty.Ctype _ (Cty.Function (qs, ty) nparams isVariadic))))))
+          | (Pexpr _ _ (PEval (Vctype (Cty.Ctype _ (Cty.Pointer _ (Cty.Ctype _ (Cty.Function (qs, ty) params isVariadic))))))
             , BTy_loaded OTy_pointer) ->
               begin
                 if isVariadic then
@@ -1575,9 +1575,19 @@ and typecheck_expr tagDefs (env: typing_env) expected_bTy (Expr annot expr_) =
                         E.return (first_pes' ++ [last_pe'])
                   end
                 else
-                  E.mapM (fun pe ->
-                    typecheck_export_pexpr tagDefs env (BTy_object OTy_pointer) pe
-                  ) pes
+                  if Global.has_switch Global.SW_inner_arg_temps then
+                    E.mapM (fun ((_, ty, _), pe) ->
+                      match Core_aux.core_object_type_of_ctype ty with
+                        | Just oTy ->
+                            typecheck_export_pexpr tagDefs env (BTy_loaded oTy) pe
+                        | Nothing ->
+                            E.fail loc (CoreTyping_TODO "the first operand of ccall() has a C function type with a non object parameter type")
+                      end
+                    ) (List.zip params pes)
+                  else
+                    E.mapM (fun pe ->
+                      typecheck_export_pexpr tagDefs env (BTy_object OTy_pointer) pe
+                    ) pes
               end >>= fun pes' ->
               let ret_oTy_opt = Core_aux.core_object_type_of_ctype ty in
               guard_match loc "ccall" expected_bTy (maybe BTy_unit BTy_loaded ret_oTy_opt) >>
