@@ -2326,9 +2326,9 @@ module CHERI (C:Capability
     if name = "cheri_perms_and" then
       Some ( CopyRet 0,
            [ PolymorphicArg [
-               Ctype.ctypeEqual Ctype.intptr_t ;
-               Ctype.ctypeEqual Ctype.uintptr_t ;
-               AilTypesAux.is_pointer
+               TyPred (Ctype.ctypeEqual Ctype.intptr_t);
+               TyPred (Ctype.ctypeEqual Ctype.uintptr_t);
+               TyIsPointer
            ];
            ExactArg Ctype.size_t ] )
     else
