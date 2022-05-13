@@ -689,7 +689,17 @@ module Morello_capability: Capability
        Related instructions:
        - CLRPERM in Morello
      *)
-    and cap_narrow_perms c p = c (* TODO *)
+    and cap_narrow_perms c p =
+      let l0 = P.to_list c.perms in
+      let l1 = P.to_list p in
+      let l = List.map2 (&&) l0 l1 in
+      match P.of_list l with
+      | Some p ->
+         if is_sealed c then
+           {c with valid=false; perms=p }
+         else
+           {c with perms=p }
+      | None -> Debug_ocaml.error "cap_narrow_perms: P.of_list failed"
 
     (* Sealing operations *)
 
