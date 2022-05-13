@@ -865,26 +865,62 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
             E.return (AilEcall begin
               AnnotatedExpression (GenRValueType (GenFunction (no_qualifiers, ret_ty) params false)) annots' loc' (AilEbuiltin b)
             end es', GenRValueType (inject_type ret_ty))
-       |  (AilBCHERI intrinsic_str, _) ->
-            let () = Debug.print_debug 0 [] (fun () ->
-              "TODO: CHERI intrinsics (ail typing)"
-            ) in
-            (* TODO: hardcoding things as a test to get through the pipeline *)
-            match (intrinsic_str, args) with
-              | ("cheri_perms_and", [ptr_e; size_e]) ->
-                  annotate_rvalue ptr_e  >>= fun (ptr_e' , ptr_gty ) ->
-                  annotate_rvalue size_e >>= fun (size_e', size_gty) ->
-                  (* TODO: the checks *)
-                  let ret_ty = mk_ctype_pointer no_qualifiers void in
-                  let params = [(no_qualifiers, mk_ctype_pointer no_qualifiers void, false); (no_qualifiers, uintptr_t, false)] in
-                  E.return (AilEcall begin
-                    AnnotatedExpression (GenRValueType (GenFunction (no_qualifiers, ret_ty) params false)) annots' loc' (AilEbuiltin b)
-                  end [ptr_e'; size_e'], GenRValueType (inject_type ret_ty))
-              | ("cheri_perms_and", _) ->
-                  error "TODO(err) -- cheri_perms_and() wrong number of arguments"
-              | _ ->
-                  error "WIP: CHERI intrinsics"
-            end
+       |  (AilBCHERI str, _) ->
+            match Mem.get_intrinsic_type_spec str with
+              | Nothing ->
+                  error ("TODO(msg) unknown CHERI intrinsics '" ^ str ^ "'")
+              | Just [] ->
+                  error "AilBCHERI -- get_intrisic_type_spec returned []"
+              | Just (ret_spec :: specs) ->
+                  let params_n = List.length specs in
+                  let args_n = List.length args in
+                  if params_n <> args_n then
+                    error ("TODO(msg) CHERI intrinsics '" ^ str ^ "' expecting " ^ show params_n ^
+                           " arguments but is given " ^ show args_n)
+                  else
+                    E.mapM annotate_rvalue args >>= fun xs ->
+                    E.mapM (fun (_, gty) ->
+                      GenTypesAux.interpret_genType loc (Implementation.integerImpl ()) gty
+                    ) xs >>= fun tys ->
+                    (* let () = Debug.print_debug 0 [] (fun () ->
+                      "===> tys: " ^ (stringFromList (Pp.stringFromAil_ctype no_qualifiers) tys) ^
+                      "--- specs: " ^ show specs
+                    ) in *)
+                    match Mem_common.derive_intrinsic_signature tys specs with
+                      | Right args_tys ->
+                          (* let () = Debug.print_debug 0 [] (fun () ->
+                            "===> args_tys: " ^ (stringFromList (Pp.stringFromAil_ctype no_qualifiers) args_tys)
+                          ) in
+                          let () = Debug.print_debug 0 [] (fun () ->
+                            "===> args: " ^ (stringFromList (Pp.stringFromAil_expression) args)
+                          ) in *)
+                          let ret_ty =
+                            match ret_spec with
+                              | Mem_common.ExactArg ty ->
+                                  ty
+                              | Mem_common.PolymorphicArg _ ->
+                                  error "CHERI intrinsics -- polymorphic return type"
+                              | Mem_common.CopyArg i ->
+                                  match List.index args_tys i with
+                                    | Just z ->
+                                        z
+                                    | Nothing ->
+                                        error "CHERI intrinsics -- invalid CopyArg in return type"
+                                  end
+                            end in
+                          let params = List.map (fun ty -> (no_qualifiers, ty, false)) args_tys in
+                          annotate_arguments loc true(*has proto*) false args params >>= fun args' ->
+                          let cast_args =
+                            Utils.map2 (fun ty e ->
+                              AnnotatedExpression (GenRValueType (inject_type ty)) [] (Loc.locOf e) (AilEcast no_qualifiers ty e)
+                            ) args_tys args' in
+                          E.return (AilEcall begin
+                            AnnotatedExpression (GenRValueType (GenFunction (no_qualifiers, ret_ty) params false)) annots' loc' (AilEbuiltin b)
+                          end cast_args, GenRValueType (inject_type ret_ty))
+                      | Left msg ->
+                          error ("TODO(msg) CHERI intrinsics failed to derive signature ==> " ^ msg)
+                    end
+              end
        | (_, _) ->
             error "WIP: typing builtin"
     end

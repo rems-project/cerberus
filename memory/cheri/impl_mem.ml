@@ -2329,7 +2329,7 @@ module CHERI (C:Capability
     in
     if name = "cheri_perms_and" then
       Some [
-          CopyArg 1;
+          CopyArg 0;
           PolymorphicArg [
               Ctype.ctypeEqual Ctype.intptr_t ;
               Ctype.ctypeEqual Ctype.uintptr_t ;

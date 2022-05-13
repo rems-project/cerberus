@@ -1,9 +1,9 @@
 (* Concrete types and functions common to all memory layout models *)
-open import Pervasives
+open import Pervasives Utils
 import Loc Symbol
 import Undefined
 import AilSyntax
-import Ctype
+import Ctype AilTypesAux
 
 open import Nondeterminism
 
@@ -447,12 +447,22 @@ type type_predicate = Ctype.ctype -> bool
 type intrinsics_arg_spec =
   | ExactArg of Ctype.ctype (* fixed type *)
   | PolymorphicArg of (list type_predicate) (* any type matchin this perdicate *)
-  | CopyArg of int (* the type of this argument will be derived from the actual type of another argument. Index starts with 0 (return value). Normally it should point to `PolymorphicArg`, but it is permissible to point to `ExactArg`. It should not be used to point to another `CopyArg`. *)
+  | CopyArg of nat (* the type of this argument will be derived from the actual type of another argument. Index starts with 0 (return value). Normally it should point to `PolymorphicArg`, but it is permissible to point to `ExactArg`. It should not be used to point to another `CopyArg`. *)
 
 (* An intrinsic signature is a list. First element describes
    the return value. The remaining ones are for arguments *)
 type intrinsics_signature = list intrinsics_arg_spec
 
+instance (Show intrinsics_arg_spec)
+  let show = function
+    | ExactArg ty ->
+        "ExactArg"
+    | PolymorphicArg _ ->
+        "PolymorphicArg"
+    | CopyArg i ->
+        "CopyArg(" ^ show i ^ ")"
+  end
+end
 (*
 
 
@@ -505,3 +515,94 @@ type memory_flags = <|
 
 type memory_flag =
   | Allow_disjoint_alloc_tests (* allow (for example) pointer equality between different objects *)
+
+
+
+(* https://hoogle.haskell.org/?hoogle=sequence
+  Should be in some generic library module.
+*)
+val     either_sequence: forall 'a 'b. list (either 'a 'b) -> either 'a (list 'b)
+let rec either_sequence xs =
+  match xs with
+    | [] ->
+        Right []
+    | Left msg :: _ ->
+        Left msg
+    | (Right x) :: xs ->
+        match either_sequence xs with
+          | Left msg ->
+              Left msg
+          | Right xs' ->
+              Right (x::xs')
+        end
+  end
+
+(* Function to derive an actual signature given the list
+  of actual argument types and specification as returned
+  by [get_intrinsic_type_spec].
+
+  Returns None in case of error or a signature as a list
+  of types. The first one is the type of return value and
+  the remaining ones are types of arguments.
+
+  TODO: to be moved elsewhere.
+*)
+
+let try_usual_arithmetic (Ctype.Ctype _ ty1) (Ctype.Ctype _ ty2) =
+  match (ty1, ty2) with
+    | (Ctype.Basic (Ctype.Integer ity1), Ctype.Basic (Ctype.Integer ity2)) ->
+        Just (Ctype.Ctype [] (Ctype.Basic (Ctype.Integer (AilTypesAux.usual_arithmetic_integer (Implementation.integerImpl ()) ity1 ity2))))
+    | _ ->
+        Nothing
+  end
+
+val resolve_arg:
+  nat -> (nat -> Ctype.ctype) -> (nat -> intrinsics_arg_spec) -> Ctype.ctype -> intrinsics_arg_spec -> either string Ctype.ctype
+let rec resolve_arg n get_arg get_spec arg spec =
+  let resolve_arg = resolve_arg n get_arg get_spec in
+  match spec with
+    | ExactArg ty ->
+        if Ctype.ctypeEqual arg ty then
+          Right arg
+        else match try_usual_arithmetic ty arg with
+          | Just usual_ty ->
+              if Ctype.ctypeEqual usual_ty ty then
+                Right usual_ty
+              else
+                Left "ExactArg -- common type didn't match"
+          | Nothing ->
+              Left "ExactArg -- type mismatch"
+        end
+
+      (* if Ctype.ctypeEqual arg ty
+      then Right arg
+      else Left "ExactArg -- not equal" *)
+    | PolymorphicArg tyl ->
+      if List.foldl (fun b p -> b || (p arg)) false tyl
+      then Right arg
+      else Left "PolymorphicArg -- all preds failed"
+    | CopyArg i ->
+      if i>=n then Left "CopyArg -- invalid index" (* spec error! *)
+      else
+        match get_spec i with
+          | CopyArg _ ->
+              Left "CopyArg -- dual inddirection not allowed!" (* dual inddirection not allowed! *)
+          | spec' ->
+              resolve_arg (get_arg i) spec'
+        end
+  end
+
+let inline get xs idx =
+  match List.index xs idx with
+    | Just z ->
+        z
+    | Nothing ->
+        error "Mem_common.derive_intrinsic_signature: internal error (get)"
+  end 
+
+val derive_intrinsic_signature: list Ctype.ctype -> intrinsics_signature -> either string (list Ctype.ctype)
+let derive_intrinsic_signature args specs =
+  let n = List.length args in
+  if n <> List.length specs then Left "|args| <> |specs|"
+  else
+    either_sequence (Utils.map2 (resolve_arg n (get args) (get specs)) args specs)
