@@ -19,6 +19,11 @@ type cerb_switch =
   
   | SW_PNVI of [ `PLAIN | `AE | `AE_UDI ]
 
+    (* the elaboration places the allocation/initialisation/deallocation of
+       non-variadic functions inside the body of the Core procedures
+       (instead of at that caller side) *)
+  | SW_inner_arg_temps
+
 val get_switches: unit -> cerb_switch list
 val has_switch: cerb_switch -> bool
 val has_switch_pred: (cerb_switch -> bool) -> cerb_switch option

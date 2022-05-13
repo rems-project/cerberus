@@ -18,20 +18,12 @@ type cerb_switch =
   | SW_strict_pointer_relationals
   
   | SW_PNVI of [ `PLAIN | `AE | `AE_UDI ]
+  
+    (* the elaboration places the allocation/initialisation/deallocation of
+       non-variadic functions inside the body of the Core procedures
+       (instead of at that caller side) *)
+  | SW_inner_arg_temps
 
-
-
-(* let are_incompatible = function
-  | (SW_PNVI x, SW_PNVI y) ->
-      x <> y
-  | _ ->
-      false *)
-
-
-
-(*
-UB when reading uninitialised memory
- *)
 
 let internal_ref =
   ref []
@@ -46,8 +38,6 @@ let has_switch sw =
 
 let has_switch_pred pred =
   List.find_opt pred !internal_ref
-
-
 
 
 let set strs =
@@ -72,6 +62,8 @@ let set strs =
         Some (SW_PNVI `AE)
     | "PNVI_ae_udi" ->
         Some (SW_PNVI `AE_UDI)
+    | "inner_arg_temps" ->
+        Some (SW_inner_arg_temps)
     | _ ->
         None in
   List.iter (fun str ->

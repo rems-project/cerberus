@@ -109,6 +109,7 @@ let frontend filename =
 
   Global_ocaml.(set_cerb_conf false Random false Basic false false false false);
   CF.Ocaml_implementation.(set (HafniumImpl.impl));
+  CF.Switches.(set ["inner_arg_temps"]);
   load_core_stdlib () >>= fun stdlib ->
   load_core_impl stdlib impl_name >>= fun impl ->
 
