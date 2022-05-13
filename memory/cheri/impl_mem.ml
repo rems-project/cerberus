@@ -2323,66 +2323,16 @@ module CHERI (C:Capability
     | _ -> false
 
   let get_intrinsic_type_spec name =
-    let is_pointer = function
-      | Ctype (_, Pointer _) -> true
-      | _ -> false
-    in
     if name = "cheri_perms_and" then
-      Some [
-          CopyArg 0;
-          PolymorphicArg [
-              Ctype.ctypeEqual Ctype.intptr_t ;
-              Ctype.ctypeEqual Ctype.uintptr_t ;
-              is_pointer
-            ];
-          ExactArg Ctype.size_t
-        ]
+      Some ( CopyRet 0,
+           [ PolymorphicArg [
+               Ctype.ctypeEqual Ctype.intptr_t ;
+               Ctype.ctypeEqual Ctype.uintptr_t ;
+               AilTypesAux.is_pointer
+           ];
+           ExactArg Ctype.size_t ] )
     else
       None
-
-  (* https://hoogle.haskell.org/?hoogle=sequence
-     Should be in some generic library module.
-   *)
-  let rec option_sequence = function
-    | [] -> Some []
-    | None::_ -> None
-    | (Some x)::xs ->
-       Option.bind (option_sequence xs)
-         (fun xsv -> Some (x::xsv))
-
-  (* Function to derive an actual signature given the list
-     of actual argument types and specification as returned
-     by [get_intrinsic_type_spec].
-
-     Returns None in case of error or a signature as a list
-     of types. The first one is the type of return value and
-     the remaining ones are types of arguments.
-
-     TODO: to be moved elsewhere.
-   *)
-  let derive_intrinsic_signature args spec =
-    let open List in
-    let n = length args in
-    if n <> length spec then None
-    else
-      let rec resolve_arg a = function
-        | ExactArg ty ->
-           if Ctype.ctypeEqual a ty
-           then Some a
-           else None
-        | PolymorphicArg tyl ->
-           if fold_left (fun b p -> b || (p a)) false tyl
-           then Some a
-           else None
-        | CopyArg i ->
-           if i>=n then None (* spec error! *)
-           else
-             match nth spec i with
-             | CopyArg _ -> None (* dual inddirection not allowed! *)
-             | _ as s -> resolve_arg (nth args i) s
-      in
-      option_sequence (map2 resolve_arg args spec)
-
 
   let typecheck_intrinsic name ret_type args_types =
     if name = "cheri_perms_and" then

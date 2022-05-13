@@ -869,10 +869,8 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
             match Mem.get_intrinsic_type_spec str with
               | Nothing ->
                   error ("TODO(msg) unknown CHERI intrinsics '" ^ str ^ "'")
-              | Just [] ->
-                  error "AilBCHERI -- get_intrisic_type_spec returned []"
-              | Just (ret_spec :: specs) ->
-                  let params_n = List.length specs in
+              | Just spec ->
+                  let params_n = List.length (snd spec) in
                   let args_n = List.length args in
                   if params_n <> args_n then
                     error ("TODO(msg) CHERI intrinsics '" ^ str ^ "' expecting " ^ show params_n ^
@@ -886,28 +884,14 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
                       "===> tys: " ^ (stringFromList (Pp.stringFromAil_ctype no_qualifiers) tys) ^
                       "--- specs: " ^ show specs
                     ) in *)
-                    match Mem_common.derive_intrinsic_signature tys specs with
-                      | Right args_tys ->
+                    match Mem_common.derive_intrinsic_signature tys spec with
+                      | Right (ret_ty, args_tys) ->
                           (* let () = Debug.print_debug 0 [] (fun () ->
                             "===> args_tys: " ^ (stringFromList (Pp.stringFromAil_ctype no_qualifiers) args_tys)
                           ) in
                           let () = Debug.print_debug 0 [] (fun () ->
                             "===> args: " ^ (stringFromList (Pp.stringFromAil_expression) args)
                           ) in *)
-                          let ret_ty =
-                            match ret_spec with
-                              | Mem_common.ExactArg ty ->
-                                  ty
-                              | Mem_common.PolymorphicArg _ ->
-                                  error "CHERI intrinsics -- polymorphic return type"
-                              | Mem_common.CopyArg i ->
-                                  match List.index args_tys i with
-                                    | Just z ->
-                                        z
-                                    | Nothing ->
-                                        error "CHERI intrinsics -- invalid CopyArg in return type"
-                                  end
-                            end in
                           let params = List.map (fun ty -> (no_qualifiers, ty, false)) args_tys in
                           annotate_arguments loc true(*has proto*) false args params >>= fun args' ->
                           let cast_args =

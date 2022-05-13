@@ -444,6 +444,10 @@ type type_predicate = Ctype.ctype -> bool
    It is used for both arguments and return values.
    Please note, that it allows circular dependencies.
  *)
+type instrinsics_ret_spec =
+  | ExactRet of Ctype.ctype
+  | CopyRet of nat
+
 type intrinsics_arg_spec =
   | ExactArg of Ctype.ctype (* fixed type *)
   | PolymorphicArg of (list type_predicate) (* any type matchin this perdicate *)
@@ -451,7 +455,7 @@ type intrinsics_arg_spec =
 
 (* An intrinsic signature is a list. First element describes
    the return value. The remaining ones are for arguments *)
-type intrinsics_signature = list intrinsics_arg_spec
+type intrinsics_signature = instrinsics_ret_spec * list intrinsics_arg_spec
 
 instance (Show intrinsics_arg_spec)
   let show = function
@@ -544,10 +548,7 @@ let rec either_sequence xs =
   Returns None in case of error or a signature as a list
   of types. The first one is the type of return value and
   the remaining ones are types of arguments.
-
-  TODO: to be moved elsewhere.
 *)
-
 let try_usual_arithmetic (Ctype.Ctype _ ty1) (Ctype.Ctype _ ty2) =
   match (ty1, ty2) with
     | (Ctype.Basic (Ctype.Integer ity1), Ctype.Basic (Ctype.Integer ity2)) ->
@@ -600,9 +601,19 @@ let inline get xs idx =
         error "Mem_common.derive_intrinsic_signature: internal error (get)"
   end 
 
-val derive_intrinsic_signature: list Ctype.ctype -> intrinsics_signature -> either string (list Ctype.ctype)
-let derive_intrinsic_signature args specs =
+val derive_intrinsic_signature: list Ctype.ctype -> intrinsics_signature -> either string (Ctype.ctype * list Ctype.ctype)
+let derive_intrinsic_signature args (ret_spec, specs) =
   let n = List.length args in
   if n <> List.length specs then Left "|args| <> |specs|"
   else
-    either_sequence (Utils.map2 (resolve_arg n (get args) (get specs)) args specs)
+    match either_sequence (Utils.map2 (resolve_arg n (get args) (get specs)) args specs) with
+      | Left msg ->
+          Left msg
+      | Right tys ->
+          Right match ret_spec with
+            | ExactRet ty ->
+                (ty, tys)
+            | CopyRet i ->
+                (get tys i, tys)
+          end
+    end
