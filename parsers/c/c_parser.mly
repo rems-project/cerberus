@@ -66,7 +66,17 @@ let inject_attr attr_opt (CabsStatement (loc, Annot.Attrs xs, stmt_)) =
   let Annot.Attrs xs' = to_attrs attr_opt in
   CabsStatement (loc, Annot.Attrs (xs @ xs'), stmt_)
 
+let magic_to_attr magik =
+  let open Annot in
+  { attr_ns= Some (Symbol.Identifier (Location_ocaml.unknown, "cerb"))
+  ; attr_id= Symbol.Identifier (Location_ocaml.unknown, "magic")
+  ; attr_args= List.map (fun z -> (Location_ocaml.unknown, "", [Location_ocaml.unknown, z])) magik }
 
+let magic_to_attrs = function
+  | [] ->
+      Annot.Attrs []
+  | magik ->
+      Annot.Attrs [magic_to_attr magik]
 %}
 
 (* §6.4.1 keywords *)
@@ -412,6 +422,18 @@ declarator_varname:
 declarator_typedefname:
 | decl = declarator
     { LF.declare_typedefname (LF.identifier decl); decl }
+;
+
+fetch_magic:
+| (* empty *)
+  { let xs = !C_lexer.magic_acc in
+    C_lexer.magic_acc := [];
+    List.rev xs }
+;
+
+clear_magic:
+| (* empty *)
+  { C_lexer.magic_acc := [] }
 ;
 
 (* §6.4.4.3 Enumeration constants Primary expressions *)
@@ -1066,7 +1088,7 @@ array_declarator:
 ;
 
 function_declarator:
-| ddecltor= direct_declarator LPAREN ptys_ctxt=scoped(parameter_type_list) RPAREN
+| ddecltor= direct_declarator LPAREN ptys_ctxt=scoped(parameter_type_list) clear_magic RPAREN
     { let (ptys, ctxt) = ptys_ctxt in LF.fun_decl ptys ctxt ddecltor }
 ;
 
@@ -1312,24 +1334,24 @@ selection_statement:
 
 (* §6.8.5 Iteration statements *)
 iteration_statement:
-| WHILE LPAREN expr= expression RPAREN stmt= scoped(statement)
+| WHILE LPAREN expr= expression clear_magic RPAREN magik= fetch_magic stmt= scoped(statement)
     { CabsStatement (Location_ocaml.(region ($startpos, $endpos) NoCursor),
-                     Annot.no_attributes,
+                     magic_to_attrs magik,
                      CabsSwhile (expr, stmt)) }
 | DO stmt= scoped(statement) WHILE LPAREN expr= expression RPAREN SEMICOLON
     { CabsStatement (Location_ocaml.(region ($startpos, $endpos) NoCursor),
                      Annot.no_attributes,
                      CabsSdo (expr, stmt)) }
 | FOR LPAREN expr1_opt= expression? SEMICOLON expr2_opt= expression? SEMICOLON
-  expr3_opt= expression? RPAREN stmt= scoped(statement)
+  expr3_opt= expression? clear_magic RPAREN magik= fetch_magic  stmt= scoped(statement)
     { CabsStatement (Location_ocaml.(region ($startpos, $endpos) NoCursor),
-                     Annot.no_attributes,
+                     magic_to_attrs magik,
                      CabsSfor (map_option (fun x -> FC_expr x) expr1_opt,
                                expr2_opt,expr3_opt, stmt)) }
 | FOR LPAREN decl= declaration expr2_opt= expression? SEMICOLON
-  expr3_opt= expression? RPAREN stmt= scoped(statement)
+  expr3_opt= expression? clear_magic RPAREN magik= fetch_magic  stmt= scoped(statement)
     { CabsStatement (Location_ocaml.(region ($startpos, $endpos) NoCursor),
-                     Annot.no_attributes,
+                     magic_to_attrs magik,
                      CabsSfor (Some (FC_decl decl), expr2_opt, expr3_opt, stmt)) }
 ;
 
@@ -1484,7 +1506,7 @@ function_definition1:
 
 function_definition:
 | specifs_decltor_ctxt= function_definition1 rev_decl_opt= declaration_list?
-  stmt= compound_statement has_semi= boption(SEMICOLON)
+  magik=fetch_magic stmt= compound_statement has_semi= boption(SEMICOLON)
     { if has_semi && not (Global_ocaml.isPermissive ()) then
         prerr_endline (Pp_errors.make_message
                          (Location_ocaml.point $startpos(has_semi))
@@ -1492,6 +1514,10 @@ function_definition:
                          Warning);
       let loc = Location_ocaml.(region ($startpos, $endpos) NoCursor) in
       let (attr_opt, specifs, decltor, ctxt) = specifs_decltor_ctxt in
+(*      let attr_opt' =
+        match attr_opt with
+          | Some xs -> Some (magic_to_attr magik :: xs)
+          | None    -> None in *)
       LF.restore_context ctxt;
       LF.create_function_definition loc attr_opt specifs decltor stmt rev_decl_opt }
 ;

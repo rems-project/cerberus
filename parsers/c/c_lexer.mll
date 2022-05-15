@@ -6,6 +6,9 @@ open Tokens
 
 exception Error of Errors.cparser_cause
 
+let magic_acc =
+  ref []
+
 (* HACK fo fix col positions when seing CN keywords (look at C_parser_driver) *)
 let cnum_hack =
   ref 0
@@ -134,12 +137,15 @@ let inside_cn =
 (* END CN *)
 
 
-
 let lex_comment remainder lexbuf =
   let ch = lexeme_char lexbuf 0 in
-  let prefix = Int64.of_int (Char.code ch) in
   if ch = '\n' then new_line lexbuf;
-  prefix :: remainder lexbuf
+  remainder lexbuf
+
+let lex_magic remainder lexbuf =
+  let ch = lexeme_char lexbuf 0 in
+  if ch = '\n' then new_line lexbuf;
+  ch :: remainder lexbuf
 }
 
 (* ========================================================================== *)
@@ -287,18 +293,23 @@ rule s_char_sequence = parse
   | '"'
       { [] }
 
+and magic = parse
+  (* End of the magic comment *)
+  | "@*/" {[]}
+  | _    {lex_magic magic lexbuf}
+
 (* Consume a comment: /* ... */ *)
 (* STD §6.4.9#1 *)
 and comment = parse
   (* End of the comment *)
-  | "*/" {[]}
+  | "*/" {()}
   | _    {lex_comment comment lexbuf}
 
 
 (* Consume a singleline comment: // ... *)
 (* STD §6.4.9#2 *)
 and onelinecomment = parse
-  | '\n' | eof {[]}
+  | '\n' | eof {()}
   | _          {lex_comment onelinecomment lexbuf}
 
 
@@ -324,6 +335,16 @@ and hash = parse
 
 (* Entry point *)
 and initial = parse
+  | "/*@" { let xs = magic lexbuf in
+            let str = String.init (List.length xs) (List.nth xs) in
+            Printf.printf "MAGIC ==> '%s'\n" str;
+            magic_acc := str :: !magic_acc;
+            (* Printf.printf "==> '%s'\n" (String.escaped str); *)
+            (* List.iteri (fun i x ->
+              Printf.printf "[%i] => '%c'\n" i x
+            ) xs; *)
+            initial lexbuf }
+
   (* Beginning of a comment *)
   | "/*" {let _ = comment lexbuf in initial lexbuf}
 
