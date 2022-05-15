@@ -2195,13 +2195,38 @@ let mk_memop_e mop pes =
   Expr [] (Ememop mop pes)
 
 
+let inline update_annot pred x xs =
+  match List.deleteFirst pred xs with
+    | Nothing ->
+        x :: xs
+    | Just xs' ->
+        x :: xs'
+  end
+
 val add_loc: Loc.t -> expr unit -> expr unit
 let add_loc loc (Expr annot expr_) =
-  Expr (Aloc loc :: annot) expr_
+  let pred = function
+    | Aloc _ -> true
+    | _ -> false
+  end in
+  Expr (update_annot pred (Aloc loc) annot) expr_
 
 val add_std: string -> expr unit -> expr unit
 let add_std str (Expr annot expr_) =
-  Expr (Astd str :: annot) expr_
+  let pred = function
+    | Astd _ -> true
+    | _ -> false
+  end in
+  Expr (update_annot pred (Astd str) annot) expr_
+
+val add_attrs: Annot.attributes -> expr unit -> expr unit
+let add_attrs attrs (Expr annot expr_ as expr) =
+  match attrs with
+    | Attrs [] ->
+        expr
+    | _ ->
+        Expr (Aattrs attrs :: annot) expr_
+  end
 
 type collect_saves_state 'a = <|
   tmp_acc:    Core.labeled_continuations 'a;

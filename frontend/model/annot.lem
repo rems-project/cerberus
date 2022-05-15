@@ -139,13 +139,6 @@ let rec get_attrs annots =
         get_attrs annots'
   end
 
-val get_attrs_: list annot -> attributes
-let get_attrs_ annots = 
-  match get_attrs annots with
-  | Just attrs -> attrs
-  | Nothing -> Attrs []
-  end
-
 val get_label_annot : list annot -> maybe label_annot
 let rec get_label_annot annots = 
   match annots with
