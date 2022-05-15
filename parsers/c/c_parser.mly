@@ -426,14 +426,14 @@ declarator_typedefname:
 
 fetch_magic:
 | (* empty *)
-  { let xs = !C_lexer.magic_acc in
-    C_lexer.magic_acc := [];
+  { let xs = C_lexer.internal_state.magic_acc in
+    C_lexer.internal_state.magic_acc <- [];
     List.rev xs }
 ;
 
 clear_magic:
 | (* empty *)
-  { C_lexer.magic_acc := [] }
+  { C_lexer.internal_state.magic_acc <- [] }
 ;
 
 (* §6.4.4.3 Enumeration constants Primary expressions *)
@@ -1874,11 +1874,11 @@ base_type:
 
 enter_cn:
 | 
-    { C_lexer.inside_cn := true; }
+    { C_lexer.internal_state.inside_cn <- true; }
 
 exit_cn:
 | 
-    { C_lexer.inside_cn := false; }
+    { C_lexer.internal_state.inside_cn <- false; }
 
 
 

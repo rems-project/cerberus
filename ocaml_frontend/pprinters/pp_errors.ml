@@ -44,6 +44,10 @@ let string_of_cparser_cause = function
       "found a semicolon after a function definition"
   | Cparser_KnR_declaration ->
       "found K&R-style declaration (unsupported)"
+  | Cparser_nested_comment ->
+      "nested comment"
+  | Cparser_unterminated_comment str ->
+      "unterminated " ^ str ^ " comment"
 
 
 let string_of_constraint_violation = function

@@ -6,16 +6,23 @@ open Tokens
 
 exception Error of Errors.cparser_cause
 
-let magic_acc =
-  ref []
-
-(* HACK fo fix col positions when seing CN keywords (look at C_parser_driver) *)
-let cnum_hack =
-  ref 0
+type internal_state = {
+  mutable inside_cn: bool;
+  (* HACK fo fix col positions when seing CN keywords (look at C_parser_driver) *)
+  mutable cnum_hack: int;
+  mutable start_of_comment: Lexing.position;
+  mutable magic_acc: string list;
+}
+let internal_state = {
+  inside_cn= false;
+  cnum_hack= 0;
+  start_of_comment= Lexing.dummy_pos;
+  magic_acc= [];
+}
 
 let new_line lexbuf =
   (* the hacked col offset MUST be reset after every newline *)
-  cnum_hack := 0;
+  internal_state.cnum_hack <- 0;
   Lexing.new_line lexbuf
 
 let offset_location lexbuf pos_fname pos_lnum =
@@ -131,9 +138,6 @@ let cn_lexicon: (string, token) Hashtbl.t =
   let cn_lexicon = Hashtbl.create 0 in
   let add (key, builder) = Hashtbl.add cn_lexicon key builder in
   List.iter add cn_keywords; cn_lexicon
-
-let inside_cn =
-  ref false
 (* END CN *)
 
 
@@ -296,6 +300,9 @@ rule s_char_sequence = parse
 and magic = parse
   (* End of the magic comment *)
   | "*/" {[]}
+  | "/*" { raise (Error Errors.Cparser_nested_comment) }
+  | eof  { lexbuf.lex_start_p <- internal_state.start_of_comment;
+           raise (Error (Errors.Cparser_unterminated_comment "/*@")) }
   | _    {lex_magic magic lexbuf}
 
 (* Consume a comment: /* ... */ *)
@@ -303,6 +310,9 @@ and magic = parse
 and comment = parse
   (* End of the comment *)
   | "*/" {()}
+  | "/*" { raise (Error Errors.Cparser_nested_comment) }
+  | eof  { lexbuf.lex_start_p <- internal_state.start_of_comment;
+           raise (Error (Errors.Cparser_unterminated_comment "/*")) }
   | _    {lex_comment comment lexbuf}
 
 
@@ -335,18 +345,21 @@ and hash = parse
 
 (* Entry point *)
 and initial = parse
-  | "/*@" { let xs = magic lexbuf in
+  (* Magic comments *)
+  | "/*@" { internal_state.start_of_comment <- lexbuf.lex_start_p;
+            let xs = magic lexbuf in
             let str = String.init (List.length xs) (List.nth xs) in
             let sz = String.length str in
             (* ignoring magic comment that are not closed with a @*/ (not sure about this) *)
             begin if sz > 0 && String.(get str (sz - 1)) = '@' then
               let magik = String.sub str 0 (sz-1) in
-              magic_acc := magik :: !magic_acc
+              internal_state.magic_acc <- magik :: internal_state.magic_acc
             end;
             initial lexbuf }
 
   (* Beginning of a comment *)
-  | "/*" {let _ = comment lexbuf in initial lexbuf}
+  | "/*" { internal_state.start_of_comment <- lexbuf.lex_start_p;
+           ignore (comment lexbuf); initial lexbuf}
 
   (* Single-line comment *)
   | "//" {let _ = onelinecomment lexbuf in new_line lexbuf; initial lexbuf}
@@ -495,7 +508,7 @@ and initial = parse
           | _ ->
               tok
       with Not_found ->
-        if !inside_cn then
+        if internal_state.inside_cn then
           try Hashtbl.find cn_lexicon id
           with Not_found ->
             NAME id

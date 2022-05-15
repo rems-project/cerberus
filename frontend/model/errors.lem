@@ -57,6 +57,8 @@ type cparser_cause =
   | Cparser_non_standard_string_concatenation
   | Cparser_extra_semi (* semicolon after a function definition (is an extension it least since C++11) *)
   | Cparser_KnR_declaration (* we don't support K&R syntax for declarations *)
+  | Cparser_nested_comment
+  | Cparser_unterminated_comment of string
 
 type core_parser_cause =
   | Core_parser_invalid_symbol

@@ -4,20 +4,20 @@ open Cerb_frontend
 (* obviously this messes-up the col positions when using __cerb_{CN_keyword} directly *)
 let lexer_cn_hack lexbuf =
   let open Lexing in
-  if !C_lexer.inside_cn then
+  if C_lexer.internal_state.inside_cn then
     let tok = C_lexer.lexer lexbuf in
-    let pos_cnum' = lexbuf.lex_start_p.pos_cnum + !C_lexer.cnum_hack in
+    let pos_cnum' = lexbuf.lex_start_p.pos_cnum + C_lexer.internal_state.cnum_hack in
     (* this should never fail, but better being careful ... *)
     if pos_cnum' - lexbuf.lex_start_p.pos_bol >= 0 then
-      lexbuf.lex_start_p <- {lexbuf.lex_start_p with pos_cnum= lexbuf.lex_start_p.pos_cnum + !C_lexer.cnum_hack };
+      lexbuf.lex_start_p <- {lexbuf.lex_start_p with pos_cnum= lexbuf.lex_start_p.pos_cnum + C_lexer.internal_state.cnum_hack };
     begin match tok with
       | Tokens.CN_PREDICATE ->
           (* removing the length of "__cerb_" *)
-          C_lexer.cnum_hack := !C_lexer.cnum_hack - 7
+          C_lexer.internal_state.cnum_hack <- C_lexer.internal_state.cnum_hack - 7
       | _ ->
           ()
     end;
-    lexbuf.lex_curr_p <- {lexbuf.lex_curr_p with pos_cnum= lexbuf.lex_curr_p.pos_cnum + !C_lexer.cnum_hack };
+    lexbuf.lex_curr_p <- {lexbuf.lex_curr_p with pos_cnum= lexbuf.lex_curr_p.pos_cnum + C_lexer.internal_state.cnum_hack };
     tok
   else
     C_lexer.lexer lexbuf
