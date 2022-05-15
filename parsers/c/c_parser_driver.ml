@@ -51,5 +51,7 @@ let parse_from_channel input =
   let parse_channel ic = parse @@ Lexing.from_channel ic in
   read parse_channel input
 
-let parse_from_string str =
-  parse @@ Lexing.from_string str
+let parse_from_string ~filename str =
+  let lexbuf = Lexing.from_string str in
+  Lexing.set_filename lexbuf filename;
+  parse lexbuf

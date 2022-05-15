@@ -145,8 +145,8 @@ let c_frontend (conf, io) (core_stdlib, core_impl) ~filename =
   Fresh.set_digest filename;
   let wrap_fout z = if List.mem FOut conf.ppflags then z else None in
   (* -- *)
-  let parse file_content =
-    C_parser_driver.parse_from_string file_content >>= fun cabs_tunit ->
+  let parse filename file_content =
+    C_parser_driver.parse_from_string ~filename file_content >>= fun cabs_tunit ->
     io.set_progress "CPARS" >>= fun () ->
     io.pass_message "C parsing completed!" >>= fun () ->
     whenM (List.mem Cabs conf.astprints) begin
@@ -194,10 +194,10 @@ let c_frontend (conf, io) (core_stdlib, core_impl) ~filename =
     end >>= fun () -> return ailtau_prog in
   (* -- *)
   io.print_debug 2 (fun () -> "Using the C frontend") >>= fun () ->
-  cpp (conf, io) ~filename  >>= fun file_content ->
-  parse file_content        >>= fun cabs_tunit  ->
-  desugar cabs_tunit        >>= fun ail_prog    ->
-  ail_typechecking ail_prog >>= fun ailtau_prog ->
+  cpp (conf, io) ~filename    >>= fun file_content ->
+  parse filename file_content >>= fun cabs_tunit   ->
+  desugar cabs_tunit          >>= fun ail_prog     ->
+  ail_typechecking ail_prog   >>= fun ailtau_prog  ->
   (* NOTE: the elaboration sets the struct/union tag definitions, so to allow the frontend to be
      used more than once, we need to do reset here *)
   (* TODO(someday): find a better way *)
