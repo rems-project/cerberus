@@ -285,9 +285,9 @@ let to_json loc =
 
 open Colour
 
-let pp_location ?(clever = true) =
+let pp_location =
   let last_pos = ref Lexing.dummy_pos in
-  fun loc ->
+  fun ?(clever = false) loc ->
   let string_of_pos p =
     let open Lexing in
     let ret =
@@ -297,7 +297,7 @@ let pp_location ?(clever = true) =
         "line:" ^ string_of_int p.pos_lnum ^ ":" ^ string_of_int (p.pos_cnum - p.pos_bol)
       else
         "col:" ^ string_of_int (p.pos_cnum - p.pos_bol) in
-    if clever then last_pos := p;
+    begin if clever then last_pos := p end;
     ret in
   let aux_region start_p end_p cur =
     let start_p_str = string_of_pos start_p in

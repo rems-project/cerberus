@@ -91,7 +91,10 @@ let pp_option pp = function
       !^ "None"
 
 let dtree_of_pair dtree_of1 dtree_of2 (x, y) =
-  Dnode (pp_ctor "Pair", [dtree_of1 x; dtree_of2 y])
+  Dnode ( pp_ctor "Pair"
+        , let d_x = dtree_of1 x in
+          let d_y = dtree_of2 y in
+          [ d_x; d_y ] )
 
 let dtree_of_list dtree_of = function
   | [] ->
@@ -172,88 +175,115 @@ let pp_cabs_to_pack_unpack = function
       !^ "predicate" ^^^ !^ str
 
 let rec dtree_of_cabs_expression (CabsExpression (loc, expr)) =
+  let d_loc = pp_location ~clever:true loc in
   match expr with
     | CabsEident ident ->
-        Dleaf (pp_stmt_ctor "CabsEident" ^^^ pp_location loc ^^^ pp_identifier ident)
+        Dleaf (pp_stmt_ctor "CabsEident" ^^^ d_loc ^^^ pp_identifier ident)
     | CabsEconst cst ->
-        Dleaf (pp_stmt_ctor "CabsEconst" ^^^ pp_location loc ^^^ pp_cabs_constant cst)
+        Dleaf (pp_stmt_ctor "CabsEconst" ^^^ d_loc ^^^ pp_cabs_constant cst)
     | CabsEstring lit ->
-        Dleaf (pp_stmt_ctor "CabsEstring" ^^^ pp_location loc ^^^ pp_cabs_string_literal lit)
+        Dleaf (pp_stmt_ctor "CabsEstring" ^^^ d_loc ^^^ pp_cabs_string_literal lit)
     | CabsEgeneric (e, gs) ->
-        Dnode ( pp_stmt_ctor "CabsEgeneric" ^^^ pp_location loc
-              , [dtree_of_cabs_expression e; dtree_of_list dtree_of_cabs_generic_association gs] )
+        Dnode ( pp_stmt_ctor "CabsEgeneric" ^^^ d_loc
+              , let d_e = dtree_of_cabs_expression e in
+                let d_gs = dtree_of_list dtree_of_cabs_generic_association gs in
+                [ d_e; d_gs ] )
     | CabsEsubscript (e1, e2) ->
-        Dnode ( pp_stmt_ctor "CabsEsubscript" ^^^ pp_location loc
-              , [dtree_of_cabs_expression e1; dtree_of_cabs_expression e2] )
+        Dnode ( pp_stmt_ctor "CabsEsubscript" ^^^ d_loc
+              , let d_e1 = dtree_of_cabs_expression e1 in
+                let d_e2 = dtree_of_cabs_expression e2 in
+               [ d_e1; d_e2 ] )
     | CabsEcall (e, es) ->
-        Dnode ( pp_stmt_ctor "CabsEcall" ^^^ pp_location loc
-              , [dtree_of_cabs_expression e; dtree_of_list dtree_of_cabs_expression es] )
+        Dnode ( pp_stmt_ctor "CabsEcall" ^^^ d_loc
+              , let d_e  = dtree_of_cabs_expression e in
+                let d_es = dtree_of_list dtree_of_cabs_expression es in
+                [ d_e; d_es ] )
     | CabsEassert e ->
-        Dnode (pp_stmt_ctor "CabsEassert" ^^^ pp_location loc, [dtree_of_cabs_expression e])
+        Dnode (pp_stmt_ctor "CabsEassert" ^^^ d_loc, [dtree_of_cabs_expression e])
     | CabsEoffsetof (tyname, ident) ->
-        Dnode ( pp_stmt_ctor "CabsEoffsetof" ^^^ pp_location loc ^^^ pp_identifier ident
+        Dnode ( pp_stmt_ctor "CabsEoffsetof" ^^^ d_loc ^^^ pp_identifier ident
               , [dtree_of_type_name tyname] )
     | CabsEmemberof (e, ident) ->
-        Dnode ( pp_stmt_ctor "CabsEmemberof" ^^^ pp_location loc ^^^ P.dot ^^ pp_identifier ident
+        Dnode ( pp_stmt_ctor "CabsEmemberof" ^^^ d_loc ^^^ P.dot ^^ pp_identifier ident
               , [dtree_of_cabs_expression e] )
     | CabsEmemberofptr (e, ident) ->
-        Dnode ( pp_stmt_ctor "CabsEmemberofptr" ^^^ pp_location loc ^^^ P.dot ^^ pp_identifier ident
+        Dnode ( pp_stmt_ctor "CabsEmemberofptr" ^^^ d_loc ^^^ P.dot ^^ pp_identifier ident
               , [dtree_of_cabs_expression e] )
     | CabsEpostincr e ->
-        Dnode (pp_stmt_ctor "CabsEpostincr" ^^^ pp_location loc, [dtree_of_cabs_expression e])
+        Dnode (pp_stmt_ctor "CabsEpostincr" ^^^ d_loc, [dtree_of_cabs_expression e])
     | CabsEpostdecr e ->
-        Dnode (pp_stmt_ctor "CabsEpostdecr" ^^^ pp_location loc, [dtree_of_cabs_expression e])
+        Dnode (pp_stmt_ctor "CabsEpostdecr" ^^^ d_loc, [dtree_of_cabs_expression e])
     | CabsEcompound (tyname, inits) ->
-        Dnode ( pp_stmt_ctor "CabsEcompound" ^^^ pp_location loc
-              , [dtree_of_type_name tyname; dtree_of_initializer_list inits] )
+        Dnode ( pp_stmt_ctor "CabsEcompound" ^^^ d_loc
+              , let d_tyname = dtree_of_type_name tyname in
+                let d_inits  = dtree_of_initializer_list inits in
+                [ d_tyname; d_inits ] )
     | CabsEpreincr e ->
-        Dnode (pp_stmt_ctor "CabsEpreincr" ^^^ pp_location loc, [dtree_of_cabs_expression e])
+        Dnode (pp_stmt_ctor "CabsEpreincr" ^^^ d_loc, [dtree_of_cabs_expression e])
     | CabsEpredecr e ->
-        Dnode (pp_stmt_ctor "CabsEpredecr" ^^^ pp_location loc, [dtree_of_cabs_expression e])
+        Dnode (pp_stmt_ctor "CabsEpredecr" ^^^ d_loc, [dtree_of_cabs_expression e])
     | CabsEunary (uop, e) ->
-        Dnode (pp_stmt_ctor "CabsEunary" ^^^ pp_location loc ^^^ pp_cabs_unary_operator uop, [dtree_of_cabs_expression e])
+        Dnode (pp_stmt_ctor "CabsEunary" ^^^ d_loc ^^^ pp_cabs_unary_operator uop, [dtree_of_cabs_expression e])
     | CabsEsizeof_expr e ->
-        Dnode (pp_stmt_ctor "CabsEsizeof_expr" ^^^ pp_location loc, [dtree_of_cabs_expression e])
+        Dnode (pp_stmt_ctor "CabsEsizeof_expr" ^^^ d_loc, [dtree_of_cabs_expression e])
     | CabsEsizeof_type tyname ->
-        Dnode (pp_stmt_ctor "CabsEsizeof_type" ^^^ pp_location loc, [dtree_of_type_name tyname])
+        Dnode (pp_stmt_ctor "CabsEsizeof_type" ^^^ d_loc, [dtree_of_type_name tyname])
     | CabsEalignof tyname ->
-        Dnode (pp_stmt_ctor "CabsEalignof" ^^^ pp_location loc, [dtree_of_type_name tyname])
+        Dnode (pp_stmt_ctor "CabsEalignof" ^^^ d_loc, [dtree_of_type_name tyname])
     | CabsEcast (tyname, e) ->
-        Dnode (pp_stmt_ctor "CabsEcast" ^^^ pp_location loc, [dtree_of_type_name tyname; dtree_of_cabs_expression e] )
+        Dnode ( pp_stmt_ctor "CabsEcast" ^^^ d_loc
+              , let d_tyname = dtree_of_type_name tyname in
+                let d_e = dtree_of_cabs_expression e in
+                [ d_tyname; d_e ] )
     | CabsEbinary (bop, e1, e2) ->
-        Dnode ( pp_stmt_ctor "CabsEbinary" ^^^ pp_location loc ^^^ pp_cabs_binary_operator bop
-              , [dtree_of_cabs_expression e1; dtree_of_cabs_expression e2] )
+        Dnode ( pp_stmt_ctor "CabsEbinary" ^^^ d_loc ^^^ pp_cabs_binary_operator bop
+              , let d_e1 = dtree_of_cabs_expression e1 in
+                let d_e2 = dtree_of_cabs_expression e2 in
+                [ d_e1; d_e2 ] )
     | CabsEcond (e1, e2, e3) ->
-        Dnode ( pp_stmt_ctor "CabsEcond" ^^^ pp_location loc
-              , [dtree_of_cabs_expression e1; dtree_of_cabs_expression e2; dtree_of_cabs_expression e3] )
+        Dnode ( pp_stmt_ctor "CabsEcond" ^^^ d_loc
+              , let d_e1 = dtree_of_cabs_expression e1 in
+                let d_e2 = dtree_of_cabs_expression e2 in
+                let d_e3 = dtree_of_cabs_expression e3 in
+                [ d_e1; d_e2; d_e3 ] )
     | CabsEassign (aop, e1, e2) ->
-        Dnode ( pp_stmt_ctor "CabsEassign" ^^^ pp_location loc ^^^ pp_cabs_assignment_operator aop
-              , [dtree_of_cabs_expression e1; dtree_of_cabs_expression e2] )
+        Dnode ( pp_stmt_ctor "CabsEassign" ^^^ d_loc ^^^ pp_cabs_assignment_operator aop
+              , let d_e1 = dtree_of_cabs_expression e1 in
+                let d_e2 = dtree_of_cabs_expression e2 in
+                [ d_e1; d_e2 ] )
     | CabsEcomma (e1, e2) ->
-        Dnode ( pp_stmt_ctor "CabsEcomma" ^^^ pp_location loc
-              , [dtree_of_cabs_expression e1; dtree_of_cabs_expression e2] )
+        Dnode ( pp_stmt_ctor "CabsEcomma" ^^^ d_loc
+              , let d_e1 = dtree_of_cabs_expression e1 in
+                let d_e2 = dtree_of_cabs_expression e2 in
+                [ d_e1; d_e2 ] )
     | CabsEva_start (e, ident) ->
-        Dnode ( pp_stmt_ctor "CabsEva_start" ^^^ pp_location loc ^^^ pp_identifier ident
+        Dnode ( pp_stmt_ctor "CabsEva_start" ^^^ d_loc ^^^ pp_identifier ident
               , [dtree_of_cabs_expression e] )
     | CabsEva_copy (e1, e2) ->
-        Dnode ( pp_stmt_ctor "CabsEva_copy" ^^^ pp_location loc
-              , [dtree_of_cabs_expression e1; dtree_of_cabs_expression e2] )
+        Dnode ( pp_stmt_ctor "CabsEva_copy" ^^^ d_loc
+              , let d_e1 = dtree_of_cabs_expression e1 in
+                let d_e2 = dtree_of_cabs_expression e2 in
+                [ d_e1; d_e2 ] )
     | CabsEva_arg (e, tyname) ->
-        Dnode (pp_stmt_ctor "CabsEva_arg" ^^^ pp_location loc, [dtree_of_cabs_expression e; dtree_of_type_name tyname] )
+        Dnode ( pp_stmt_ctor "CabsEva_arg" ^^^ d_loc
+              , let d_e = dtree_of_cabs_expression e in
+                let d_tyname = dtree_of_type_name tyname in
+                [ d_e; d_tyname ] )
     | CabsEva_end (e) ->
-        Dnode (pp_stmt_ctor "CabsEva_arg" ^^^ pp_location loc, [dtree_of_cabs_expression e] )
+        Dnode (pp_stmt_ctor "CabsEva_arg" ^^^ d_loc, [dtree_of_cabs_expression e])
     | CabsEprint_type e ->
-        Dnode (pp_stmt_ctor "CabsEprint_type" ^^^ pp_location loc, [dtree_of_cabs_expression e])
+        Dnode (pp_stmt_ctor "CabsEprint_type" ^^^ d_loc, [dtree_of_cabs_expression e])
     | CabsEbmc_assume e ->
-        Dnode (pp_stmt_ctor "CabsEbmc_assume" ^^^ pp_location loc, [dtree_of_cabs_expression e])
+        Dnode (pp_stmt_ctor "CabsEbmc_assume" ^^^ d_loc, [dtree_of_cabs_expression e])
     | CabsEgcc_statement s ->
-        Dnode (pp_stmt_ctor "CabsEgcc_statement" ^^^ pp_location loc, [dtree_of_cabs_statement s])
+        Dnode (pp_stmt_ctor "CabsEgcc_statement" ^^^ d_loc, [dtree_of_cabs_statement s])
 
 and dtree_of_cabs_generic_association = function
   | GA_type (tyname, e) ->
       Dnode ( pp_ctor "GA_type"
-            , [ dtree_of_type_name tyname
-              ; dtree_of_cabs_expression e] )
+            , let d_tyname = dtree_of_type_name tyname in
+              let d_e = dtree_of_cabs_expression e in
+              [ d_tyname; d_e ] )
   | GA_default e ->
       Dnode (pp_ctor "GA_default", [dtree_of_cabs_expression e])
 
@@ -341,7 +371,8 @@ and dtree_of_cabs_declaration = function
   | Declaration_base (attrs, specifs, idecls) ->
       with_attributes attrs begin
         Dnode ( pp_decl_ctor "Declaration_base"
-              , (dtree_of_specifiers specifs) :: List.map dtree_of_init_declarator idecls )
+              , let d_specifs = dtree_of_specifiers specifs in
+                d_specifs :: List.map dtree_of_init_declarator idecls )
       end
   | Declaration_static_assert sa_decl ->
       Dnode ( pp_decl_ctor "Declaration_static_assert"
@@ -359,7 +390,9 @@ and dtree_of_specifiers specifs =
 and dtree_of_init_declarator = function
   | InitDecl (_, decltor, init_opt) ->
       Dnode ( pp_decl_ctor "InitDecl"
-            , [ dtree_of_declarator decltor; node_of_option dtree_of_initializer_ init_opt ] )
+            , let d_decltor = dtree_of_declarator decltor in
+              let d_init_opt = node_of_option dtree_of_initializer_ init_opt in
+              [ d_decltor; d_init_opt ] )
 
 and pp_storage_class_specifier = function
   | SC_typedef ->
@@ -442,9 +475,11 @@ and dtree_of_struct_declarator = function
           Some (dtree_of_cabs_expression e) ])
 
 and dtree_of_static_assert_declaration = function
-  | Static_assert (e, s) -> Dnode (pp_decl_ctor "Static_assert", [
-      dtree_of_cabs_expression e;
-      Dleaf (pp_cabs_string_literal s)])
+  | Static_assert (e, s) ->
+      Dnode ( pp_decl_ctor "Static_assert"
+            , let d_e = dtree_of_cabs_expression e in
+              let d_s = Dleaf (pp_cabs_string_literal s) in
+              [ d_e ; d_s ] )
 
 and dtree_of_enumerator (id, e_opt) =
   Dnode (pp_identifier id ^^^ P.comma, [node_of_option dtree_of_cabs_expression e_opt])
@@ -474,23 +509,27 @@ and dtree_of_alignment_specifier = function
 and dtree_of_declarator = function
   | Declarator (ptr_decl_opt, ddecl) ->
       Dnode ( pp_decl_ctor "Declarator"
-            , [ node_of_option dtree_of_pointer_declarator ptr_decl_opt
-              ; dtree_of_direct_declarator ddecl ] )
+            , let d_ptr_decl_opt = node_of_option dtree_of_pointer_declarator ptr_decl_opt in
+              let d_ddecl = dtree_of_direct_declarator ddecl in
+              [ d_ptr_decl_opt; d_ddecl ] )
 
 and dtree_of_direct_declarator = function
   | DDecl_identifier (attrs, ident) ->
       with_attributes attrs begin
-        Dleaf (pp_decl_ctor "DDecl_identifier" ^^^ pp_identifier ident)
+        Dleaf (pp_decl_ctor "DDecl_identifier" ^^^ pp_identifier ~clever:true ident)
       end
   | DDecl_declarator decltor ->
       Dnode (pp_decl_ctor "DDecl_declarator", [dtree_of_declarator decltor])
   | DDecl_array (ddecltor, adecltor) ->
       Dnode ( pp_decl_ctor "DDecl_array"
-            , [ dtree_of_direct_declarator ddecltor
-              ; dtree_of_array_declarator adecltor ] )
+            , let d_ddecltor = dtree_of_direct_declarator ddecltor in
+              let d_adecltor = dtree_of_array_declarator adecltor in
+              [ d_ddecltor; d_adecltor ] )
   | DDecl_function (ddecltor, param_tys) ->
       Dnode ( pp_decl_ctor "DDecl_function"
-            , [dtree_of_direct_declarator ddecltor; dtree_of_parameter_type_list param_tys] )
+            , let d_ddecltor = dtree_of_direct_declarator ddecltor in
+              let d_param_tys = dtree_of_parameter_type_list param_tys in
+              [ d_ddecltor; d_param_tys ] )
 
 and dtree_of_array_declarator = function
   | ADecl (_, qs, is_static, a_decltor_size_opt) ->
@@ -521,34 +560,39 @@ and dtree_of_parameter_type_list = function
 and dtree_of_parameter_declaration = function
   | PDeclaration_decl (specifs, decltor) ->
       Dnode ( pp_decl_ctor "PDeclaration_decl"
-            , [dtree_of_specifiers specifs; dtree_of_declarator decltor] )
+            , let d_specifs = dtree_of_specifiers specifs in
+              let d_decltor = dtree_of_declarator decltor in
+              [ d_specifs; d_decltor ] )
   | PDeclaration_abs_decl (specifs, None) ->
       Dnode (pp_ctor "PDeclaration_abs_decl", [dtree_of_specifiers specifs])
   | PDeclaration_abs_decl (specifs, Some abs_decltor) ->
       Dnode ( pp_ctor "PDeclaration_abs_decl"
-              , [dtree_of_specifiers specifs; dtree_of_abstract_declarator abs_decltor] )
+              , let d_specifs = dtree_of_specifiers specifs in
+                let d_abs_decltor = dtree_of_abstract_declarator abs_decltor in
+                [ d_specifs; d_abs_decltor ] )
 
 and dtree_of_type_name = function
-  | Type_name (specs, qs, align_specs, None) ->
-      Dnode ( pp_decl_ctor "Type_name", filter_opt_list [
-        node_opt_list "Type_specifiers" dtree_of_cabs_type_specifier specs;
-        leaf_opt_list "Type_qualifiers" pp_cabs_type_qualifier       qs;
-        node_opt_list "Alignment_specifiers" dtree_of_alignment_specifier align_specs;
-      ] )
-  | Type_name (specs, qs, align_specs, Some a_decltor) ->
-      Dnode ( pp_decl_ctor "Type_name", filter_opt_list [
-        node_opt_list "Type_specifiers" dtree_of_cabs_type_specifier specs;
-        leaf_opt_list "Type_qualifiers" pp_cabs_type_qualifier       qs   ;
-        node_opt_list "Alignment_specifiers" dtree_of_alignment_specifier align_specs;
-        Some (dtree_of_abstract_declarator a_decltor)] )
+  | Type_name (specs, qs, align_specs, a_decltor_opt) ->
+          Dnode ( pp_decl_ctor "Type_name"
+            , let d_specs = node_opt_list "Type_specifiers" dtree_of_cabs_type_specifier specs in
+              let d_qs = leaf_opt_list "Type_qualifiers" pp_cabs_type_qualifier qs in
+              let d_align_specs = node_opt_list "Alignment_specifiers" dtree_of_alignment_specifier align_specs in
+              let d_a_decltor =
+                match a_decltor_opt with
+                  | Some a_decltor ->
+                      [Some (dtree_of_abstract_declarator a_decltor)]
+                  | None ->
+                      [] in
+                filter_opt_list (d_specs :: d_qs :: d_align_specs :: d_a_decltor) )
 
 and dtree_of_abstract_declarator = function
   | AbsDecl_pointer ptr_decltor ->
       Dnode (pp_decl_ctor "AbsDecl_pointer", [dtree_of_pointer_declarator ptr_decltor])
   | AbsDecl_direct (ptr_decltor_opt, dabs_decltor) ->
       Dnode ( pp_decl_ctor "AbsDecl_direct"
-            , [ node_of_option dtree_of_pointer_declarator ptr_decltor_opt
-              ; dtree_of_direct_abstract_declarator dabs_decltor ] )
+            , let d_ptr_decltor_opt = node_of_option dtree_of_pointer_declarator ptr_decltor_opt in
+              let d_dabs_decltor = dtree_of_direct_abstract_declarator dabs_decltor in
+              [ d_ptr_decltor_opt; d_dabs_decltor ] )
 
 and dtree_of_direct_abstract_declarator = function
   | DAbs_abs_declarator abs_decltor ->
@@ -556,12 +600,13 @@ and dtree_of_direct_abstract_declarator = function
             , [dtree_of_abstract_declarator abs_decltor] )
   | DAbs_array (dabs_decltor_opt, abs_decltor) ->
       Dnode ( pp_decl_ctor "DAbs_array"
-            , [ node_of_option dtree_of_direct_abstract_declarator dabs_decltor_opt
-              ; dtree_of_array_declarator abs_decltor ] )
+            , let d_dabs_decltor_opt = node_of_option dtree_of_direct_abstract_declarator dabs_decltor_opt in
+              let d_abs_decltor = dtree_of_array_declarator abs_decltor in
+              [ d_dabs_decltor_opt; d_abs_decltor ] )
   | DAbs_function (dabs_decltor_opt, param_tys) ->
       Dnode ( pp_decl_ctor "DAbs_function"
-            , node_of_option dtree_of_direct_abstract_declarator dabs_decltor_opt ::
-              [dtree_of_parameter_type_list param_tys] )
+            , let d_dabs_decltor_opt = node_of_option dtree_of_direct_abstract_declarator dabs_decltor_opt in
+              d_dabs_decltor_opt :: [dtree_of_parameter_type_list param_tys] )
 
 and dtree_of_initializer_ = function
   | Init_expr e ->
@@ -594,8 +639,10 @@ and dtree_of_cabs_statement (CabsStatement (loc, attrs, stmt_)) =
       Dnode ( pp_stmt_ctor "CabsSlabel" ^^^ pp_colour_label ident,
               [dtree_of_cabs_statement s] )
   | CabsScase (e, s) ->
-      Dnode ( pp_stmt_ctor "CabsScase",
-              [dtree_of_cabs_expression e; dtree_of_cabs_statement s] )
+      Dnode ( pp_stmt_ctor "CabsScase"
+            , let d_e = dtree_of_cabs_expression e in
+              let d_s = dtree_of_cabs_statement s in
+              [ d_e; d_s ] )
   | CabsSdefault s ->
       Dnode (pp_stmt_ctor "CabsSdefault", [dtree_of_cabs_statement s] )
   | CabsSblock [] ->
@@ -609,22 +656,33 @@ and dtree_of_cabs_statement (CabsStatement (loc, attrs, stmt_)) =
   | CabsSexpr e ->
       Dnode ( pp_stmt_ctor "CabsSexpr", [dtree_of_cabs_expression e] )
   | CabsSif (e, s1, s2_opt) ->
-      Dnode ( pp_stmt_ctor "CabsSif",
-              [ dtree_of_cabs_expression e
-              ; dtree_of_cabs_statement s1
-              ; node_of_option dtree_of_cabs_statement s2_opt ] )
+      Dnode ( pp_stmt_ctor "CabsSif"
+            , let d_e = dtree_of_cabs_expression e in
+              let d_s1 = dtree_of_cabs_statement s1 in
+              let d_s2_opt = node_of_option dtree_of_cabs_statement s2_opt in
+              [ d_e; d_s1; d_s2_opt ] )
   | CabsSswitch (e, s) ->
-      Dnode ( pp_stmt_ctor "CabsSswitch", [dtree_of_cabs_expression e; dtree_of_cabs_statement s] )
+      Dnode ( pp_stmt_ctor "CabsSswitch"
+            , let d_e = dtree_of_cabs_expression e in
+              let d_s = dtree_of_cabs_statement s in
+              [ d_e; d_s ] )
   | CabsSwhile (e, s) ->
-      Dnode ( pp_stmt_ctor "CabsSwhile", [dtree_of_cabs_expression e; dtree_of_cabs_statement s] )
+      Dnode ( pp_stmt_ctor "CabsSwhile"
+            , let d_e = dtree_of_cabs_expression e in
+              let d_s = dtree_of_cabs_statement s in
+              [ d_e; d_s ] )
   | CabsSdo (e, s) ->
-      Dnode ( pp_stmt_ctor "CabsSdo", [dtree_of_cabs_expression e; dtree_of_cabs_statement s] )
+      Dnode ( pp_stmt_ctor "CabsSdo"
+            , let d_e = dtree_of_cabs_expression e in
+              let d_s = dtree_of_cabs_statement s in
+              [ d_e; d_s ] )
   | CabsSfor (fc_opt, e1_opt, e2_opt, s) ->
-      Dnode ( pp_stmt_ctor "CabsSfor",
-                [ node_of_option dtree_of_for_clause fc_opt
-                ; node_of_option dtree_of_cabs_expression e1_opt
-                ; node_of_option dtree_of_cabs_expression e2_opt
-                ; dtree_of_cabs_statement s ] )
+      Dnode ( pp_stmt_ctor "CabsSfor"
+            , let d_fc_opt = node_of_option dtree_of_for_clause fc_opt in
+              let d_e1_opt = node_of_option dtree_of_cabs_expression e1_opt in
+              let d_e2_opt = node_of_option dtree_of_cabs_expression e2_opt in
+              let d_s = dtree_of_cabs_statement s in
+              [ d_fc_opt; d_e1_opt; d_e2_opt; d_s ] )
   | CabsSgoto ident ->
       Dleaf (pp_stmt_ctor "CabsSgoto" ^^^ pp_colour_label ident)
   | CabsScontinue ->
@@ -659,10 +717,10 @@ and dtree_of_for_clause = function
 
 let dtree_of_function_definition (FunDef (_, attrs, specifs, decltor, stmt)) =
   Dnode ( pp_ctor "FunDef"
-        , add_dtree_of_attributes attrs
-          [ dtree_of_specifiers specifs
-          ; dtree_of_declarator decltor
-          ; dtree_of_cabs_statement stmt ] )
+        , let d_specifs = dtree_of_specifiers specifs in
+          let d_decltor = dtree_of_declarator decltor in
+          let d_stmt = dtree_of_cabs_statement stmt in
+          add_dtree_of_attributes attrs [ d_specifs; d_decltor; d_stmt ] )
 
 let dtree_of_external_declaration = function
   | EDecl_func fdef ->

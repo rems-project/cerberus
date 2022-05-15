@@ -12,4 +12,4 @@ val pp_prefix: prefix -> PPrint.document
 
 
 
-val pp_identifier: Symbol.identifier -> PPrint.document
+val pp_identifier: ?clever:bool -> Symbol.identifier -> PPrint.document

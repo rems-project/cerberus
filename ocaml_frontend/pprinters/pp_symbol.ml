@@ -99,5 +99,5 @@ let pp_prefix = function
       P.braces (!^ "compound literal")
 
 
-let pp_identifier (Symbol.Identifier (loc, str)) =
-  pp_location loc ^^^ pp_colour_identifier str
+let pp_identifier ?(clever=false) (Symbol.Identifier (loc, str)) =
+  pp_location ~clever loc ^^^ pp_colour_identifier str
