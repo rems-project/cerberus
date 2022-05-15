@@ -120,7 +120,6 @@ let outer_bbox xs =
     ((if pos_lt b bAcc then b else bAcc), (if pos_lt e eAcc then eAcc else e))
   ) (b0, e0) xs
 
-(*let bbox_of loc =  *)
 
 let bbox_location xs =
   let (b, e) = outer_bbox begin
@@ -300,19 +299,26 @@ let pp_location =
     begin if clever then last_pos := p end;
     ret in
   let aux_region start_p end_p cur =
-    let start_p_str = string_of_pos start_p in
-    let end_p_str   = string_of_pos end_p in
-    let cursor_str =
+    let mk_cursor_str () =
       match cur with
         | NoCursor -> ""
         | PointCursor cursor_p -> " " ^ string_of_pos cursor_p
         | RegionCursor (b, e) -> " " ^ string_of_pos b ^ " - " ^ string_of_pos e in
-    P.angles (
-      !^ (ansi_format [Yellow] start_p_str) ^^ P.comma ^^^
-      !^ (ansi_format [Yellow] end_p_str)
-    ) ^^
-    !^ (ansi_format [Yellow] cursor_str) in
-    (* P.optional (fun _ -> !^ (ansi_format [Yellow] cursor_str)) cursor in *)
+    if !last_pos.pos_fname = start_p.pos_fname &&
+       start_p.pos_fname = end_p.pos_fname &&
+       start_p.pos_lnum = end_p.pos_lnum
+    then
+      let start_p_str = string_of_pos start_p in
+      P.angles (
+        !^ (ansi_format [Yellow] (start_p_str ^ " - " ^ string_of_int (end_p.pos_cnum - end_p.pos_bol)))
+      ) ^^ !^ (ansi_format [Yellow] (mk_cursor_str ()))
+    else
+      let start_p_str = string_of_pos start_p in
+      let end_p_str   = string_of_pos end_p in
+      P.angles (
+        !^ (ansi_format [Yellow] start_p_str) ^^ P.comma ^^^
+        !^ (ansi_format [Yellow] end_p_str)
+      ) ^^ !^ (ansi_format [Yellow] (mk_cursor_str ())) in
   match loc with
     | Loc_unknown ->
         P.angles !^ (ansi_format [Yellow] "unknown location")
