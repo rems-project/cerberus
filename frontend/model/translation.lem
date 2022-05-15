@@ -3469,7 +3469,7 @@ val translate_stmt:
   A.statement GenTypes.genTypeCategory ->
   E.elabM (C.expr unit)
 
-let rec translate_stmt stdlib tagDefs f env (A.AnnotatedStatement loc _ stmt) : E.elabM (C.expr unit) =
+let rec translate_stmt stdlib tagDefs f env (A.AnnotatedStatement loc stmt_attrs stmt) : E.elabM (C.expr unit) =
   let translate_expression = translate_expression ECTX_other (env.variadic_sym_opt, env.last_arg_sym_opt) stdlib tagDefs in
   let translate_cases_block case_labs default_lab =
     translate_stmt stdlib tagDefs f <| env with case_labs=   case_labs;
@@ -3477,7 +3477,8 @@ let rec translate_stmt stdlib tagDefs f env (A.AnnotatedStatement loc _ stmt) : 
   in
   let self = translate_stmt stdlib tagDefs f env in
   
-  Caux.add_loc loc <$> match stmt with
+  (Caux.add_loc loc -| Caux.add_attrs stmt_attrs) <$>
+  match stmt with
     | A.AilSskip ->
         E.return Caux.mk_skip_e
     
