@@ -227,7 +227,7 @@ let rec pp_constant = function
 
 let pp_stringLiteral (pref_opt, strs) =
   let strs = List.concat (List.map snd strs) in
-  (P.optional Pp_ail.pp_encodingPrefix pref_opt) ^^ pp_ansi_format [Bold; Cyan] (P.dquotes (!^ (String.concat "" strs)))
+  (P.optional Pp_ail.pp_encodingPrefix pref_opt) ^^ pp_ansi_format [Bold; Cyan] (fun () -> P.dquotes (!^ (String.concat "" strs)))
 
 let empty_qs =
   { const    = false
@@ -241,7 +241,7 @@ let dtree_of_expression pp_annot expr =
     let pp_std_annot =
       match std_annots with
         | [] -> P.empty
-        | _  -> pp_ansi_format [Bold] (P.brackets (semi_list P.string std_annots)) in
+        | _  -> pp_ansi_format [Bold] (fun () -> P.brackets (semi_list P.string std_annots)) in
 
 (*
     let dleaf_std_annot =
@@ -536,7 +536,7 @@ let dtree_of_declaration (i, (_, decl_attrs, decl)) =
     | Decl_function (_, (qs, cty), params, is_var, is_inline, is_noreturn) ->
         Dleaf (pp_decl_ctor "Decl_function" ^^^
                Pp_ail.pp_id_func i ^^^
-               Colour.pp_ansi_format [Green] begin
+               Colour.pp_ansi_format [Green] begin fun () -> 
                  P.squotes (
                    (pp_cond is_inline !^"inline"
                    (pp_cond is_noreturn !^"_Noreturn"
@@ -607,18 +607,13 @@ let pp_annot gtc =
           let ret = P.squotes (pp_ctype_human qs ty) in
           Colour.do_colour := saved;
           ret in
-        pp_ansi_format [Green] qs_ty_doc ^^^
+        pp_ansi_format [Green] (fun () -> qs_ty_doc) ^^^
         !^ (ansi_format [Cyan] "lvalue") ^^
         (if isRegister then P.space ^^ !^ "register" else P.empty)
     | GenRValueType gty ->
-        pp_ansi_format [Green] (
-          (* TODO: do the colour turn off in pp_ansi_format *)
-          let saved = !Colour.do_colour in
-          Colour.do_colour := false;
-          let ret = P.squotes (Pp_ail.pp_genType gty) in
-          Colour.do_colour := saved;
-          ret
-       )
+        pp_ansi_format [Green] (fun () -> 
+          P.squotes (Pp_ail.pp_genType gty)
+        )
 
 let filter_external_decl (id, sigma) =
   let pred (_, (loc, _, _)) = Location_ocaml.from_main_file loc in

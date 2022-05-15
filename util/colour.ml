@@ -2,7 +2,6 @@ module P = PPrint
 let (!^ ) = P.(!^)
 let (^^)  = P.(^^)
 
-
 (* Part of the escape ANSI's "Select Graphic Rendition" parameters *)
 type ansi_style =
   | Black
@@ -49,14 +48,14 @@ let without_colour f x =
 let ansi_format f str =
   if !do_colour then
     let g f = String.concat ";" (List.map (fun z -> string_of_int (int_fg z)) f) ^ "m" in
-    "\x1b[" ^ g f ^ str ^ "\x1b[0m" (* TODO: optimize, someday *)
+    "\x1b[" ^ g f ^ str ^ "\x1b[0m"
   else
     str
 
-
-let pp_ansi_format f doc =
+let pp_ansi_format f mk_doc =
+  let doc = without_colour mk_doc () in
   if !do_colour then
     let g f = String.concat ";" (List.map (fun z -> string_of_int (int_fg z)) f) ^ "m" in
-    !^ ("\x1b[" ^ g f) ^^ doc ^^ !^ "\x1b[0m" (* TODO: optimize, someday *)
+    !^ ("\x1b[" ^ g f) ^^ doc ^^ !^ "\x1b[0m"
   else
     doc

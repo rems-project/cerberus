@@ -43,6 +43,10 @@ module Make (Config: CONFIG) =
 struct
 open Config
 
+let mk_comment mk_doc =
+  pp_ansi_format [Red] (fun () ->
+    !^ "{-" ^^ P.break 1 ^^ mk_doc () ^^ P.break 1 ^^ !^ "-}"
+  )
 
 let maybe_print_location : Annot.annot list -> P.document =
   if not show_locations then 
@@ -564,20 +568,30 @@ let rec pp_expr expr =
                 P.range (handle_location loc) acc
             | Astd str ->
                 if show_std then
-                  !^"{-#" ^^ !^ str ^^ !^"#-}" ^^ P.hardline ^^ acc
+                  mk_comment (fun () -> !^ str) ^^ P.hardline ^^ acc
                 else
                   acc
             | Auid uid ->
                 P.range (handle_uid uid) acc
             | Abmc annot ->
                 begin match annot with
-                | Abmc_id id ->
-                    !^"{-" ^^ !^(string_of_int id) ^^ !^"-}" ^^ acc
+                  | Abmc_id id ->
+                      mk_comment (fun () -> !^ (string_of_int id)) ^^ acc
                 end
             | Atypedef sym ->
-              !^"{-" ^^ pp_symbol sym ^^ !^"-}" ^^ acc
-            | Aattrs _ ->
-                !^ "TODO(Aattrs)"
+                mk_comment (fun () -> pp_symbol sym) ^^ acc
+            | Aattrs (Attrs attrs) ->
+                if Debug_ocaml.get_debug_level () > 3 then
+                  mk_comment begin fun () ->
+                    !^ "ATTRS" ^^ P.brackets (
+                      comma_list (fun attr -> 
+                        P.optional Pp_symbol.pp_identifier attr.attr_ns ^^ P.colon ^^ P.colon ^^
+                        Pp_symbol.pp_identifier attr.attr_id
+                      ) attrs
+                    )
+                  end ^^ acc
+                else
+                  acc
             | Anot_explode ->
                (* !^"{-not-explode-}" ^^  *)
                acc
@@ -818,11 +832,6 @@ let pp_extern_symmap symmap =
   |> Pmap.fold (fun sym_from sym_to acc ->
       acc ^^ pp_raw_symbol sym_from ^^^ !^"->" ^^^ pp_raw_symbol sym_to ^^ P.break 1
     ) symmap
-
-let _mk_comment doc =
-  pp_ansi_format [Red] (
-    !^ "{-" ^^ P.break 1 ^^ doc ^^ P.break 1 ^^ !^ "-}"
-  )
 
 let pp_funinfo finfos =
   let mk_pair (_, ty) = (Ctype.no_qualifiers, ty, false) in

@@ -935,7 +935,7 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
       ) symmap
 
   let mk_comment doc =
-    pp_ansi_format [Red] (
+    pp_ansi_format [Red] (fun () -> 
       !^ "{-" ^^ P.break 1 ^^ doc ^^ P.break 1 ^^ !^ "-}"
     )
 

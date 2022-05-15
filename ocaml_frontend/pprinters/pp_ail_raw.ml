@@ -12,7 +12,7 @@ let comma_list f = P.separate_map (P.comma ^^ P.space) f
 
 let pp_id id = !^ (Pp_symbol.to_string_pretty id)
 
-let pp_ctor w = pp_ansi_format [Bold; Cyan] (!^ w)
+let pp_ctor w = !^ (ansi_format [Bold; Cyan] w)
 
 
 let pp_integerBaseType_raw = function

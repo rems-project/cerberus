@@ -483,7 +483,7 @@ let pp_encodingPrefix pref =
 
 let pp_stringLiteral (pref_opt, strs) =
   let strs = List.concat (List.map snd strs) in
-  (P.optional pp_encodingPrefix pref_opt) ^^ pp_ansi_format [Green] (P.dquotes (!^ (String.concat "" strs)))
+  (P.optional pp_encodingPrefix pref_opt) ^^ pp_ansi_format [Green] (fun () -> P.dquotes (!^ (String.concat "" strs)))
 
 
 let rec pp_constant = function
@@ -776,7 +776,7 @@ let pp_program_aux pp_annot (startup, sigm) =
       | Decl_object (sd, qs, ty) ->
           (* first pprinting in comments, some human-readably declarations *)
           (* TODO: colour hack *)
-          pp_ansi_format [Red] (!^ "// declare" ^^^ pp_id sym ^^^ !^ "as" ^^^ (pp_ctype_human qs ty)) ^^
+          pp_ansi_format [Red] (fun () -> !^ "// declare" ^^^ pp_id sym ^^^ !^ "as" ^^^ (pp_ctype_human qs ty)) ^^
           P.hardline ^^
           
           (if !Debug_ocaml.debug_level > 5 then
@@ -792,7 +792,7 @@ let pp_program_aux pp_annot (startup, sigm) =
       | Decl_function (has_proto, (ret_qs, ret_ty), params, is_variadic, is_inline, is_Noreturn) ->
           (* first pprinting in comments, some human-readably declarations *)
           (* TODO: colour hack *)
-          pp_ansi_format [Red] (
+          pp_ansi_format [Red] (fun () -> 
             !^ "// declare" ^^^ pp_id sym ^^^
             (if has_proto then !^ "WITH PROTO " else P.empty) ^^
             !^ "as" ^^^ pp_ctype_human no_qualifiers (Ctype ([], Function ((ret_qs, ret_ty), params, is_variadic)))
