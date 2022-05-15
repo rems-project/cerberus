@@ -337,7 +337,7 @@ and hash = parse
 and initial = parse
   | "/*@" { let xs = magic lexbuf in
             let str = String.init (List.length xs) (List.nth xs) in
-            Printf.printf "MAGIC ==> '%s'\n" str;
+            (* Printf.printf "MAGIC ==> '%s'\n" str; *)
             magic_acc := str :: !magic_acc;
             (* Printf.printf "==> '%s'\n" (String.escaped str); *)
             (* List.iteri (fun i x ->
