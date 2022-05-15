@@ -295,7 +295,7 @@ rule s_char_sequence = parse
 
 and magic = parse
   (* End of the magic comment *)
-  | "@*/" {[]}
+  | "*/" {[]}
   | _    {lex_magic magic lexbuf}
 
 (* Consume a comment: /* ... */ *)
@@ -337,12 +337,12 @@ and hash = parse
 and initial = parse
   | "/*@" { let xs = magic lexbuf in
             let str = String.init (List.length xs) (List.nth xs) in
-            (* Printf.printf "MAGIC ==> '%s'\n" str; *)
-            magic_acc := str :: !magic_acc;
-            (* Printf.printf "==> '%s'\n" (String.escaped str); *)
-            (* List.iteri (fun i x ->
-              Printf.printf "[%i] => '%c'\n" i x
-            ) xs; *)
+            let sz = String.length str in
+            (* ignoring magic comment that are not closed with a @*/ (not sure about this) *)
+            begin if sz > 0 && String.(get str (sz - 1)) = '@' then
+              let magik = String.sub str 0 (sz-1) in
+              magic_acc := magik :: !magic_acc
+            end;
             initial lexbuf }
 
   (* Beginning of a comment *)
