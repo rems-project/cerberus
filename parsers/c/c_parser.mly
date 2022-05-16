@@ -69,13 +69,13 @@ let inject_attr attr_opt (CabsStatement (loc, Annot.Attrs xs, stmt_)) =
 let magic_to_pre_attr magik =
   ( ( Some (Symbol.Identifier (Location_ocaml.unknown, "cerb"))
     , Symbol.Identifier (Location_ocaml.unknown, "magic") )
-  , Some (List.map (fun z -> (Location_ocaml.unknown, "", [Location_ocaml.unknown, z])) magik) )
+  , Some (List.map (fun (loc, str) -> (loc, str, [loc, str])) magik) )
 
 let magic_to_attr magik : Annot.attribute =
   let open Annot in
   { attr_ns= Some (Symbol.Identifier (Location_ocaml.unknown, "cerb"))
   ; attr_id= Symbol.Identifier (Location_ocaml.unknown, "magic")
-  ; attr_args= List.map (fun z -> (Location_ocaml.unknown, "", [Location_ocaml.unknown, z])) magik }
+  ; attr_args= List.map (fun (loc, str) -> (loc, str, [loc, str])) magik }
 
 let magic_to_attrs = function
   | [] ->

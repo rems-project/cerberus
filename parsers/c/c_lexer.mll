@@ -11,7 +11,7 @@ type internal_state = {
   (* HACK fo fix col positions when seing CN keywords (look at C_parser_driver) *)
   mutable cnum_hack: int;
   mutable start_of_comment: Lexing.position;
-  mutable magic_acc: string list;
+  mutable magic_acc: (Location_ocaml.t * string) list;
 }
 let internal_state = {
   inside_cn= false;
@@ -353,7 +353,10 @@ and initial = parse
             (* ignoring magic comment that are not closed with a @*/ (not sure about this) *)
             begin if sz > 0 && String.(get str (sz - 1)) = '@' then
               let magik = String.sub str 0 (sz-1) in
-              internal_state.magic_acc <- magik :: internal_state.magic_acc
+              let loc = Location_ocaml.(region
+                ( {internal_state.start_of_comment with pos_cnum = internal_state.start_of_comment.pos_cnum + 3}
+                , {lexbuf.lex_curr_p with pos_cnum = lexbuf.lex_curr_p.pos_cnum - 3} ) NoCursor) in
+              internal_state.magic_acc <- (loc, magik) :: internal_state.magic_acc
             end;
             initial lexbuf }
 
