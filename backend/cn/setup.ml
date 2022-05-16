@@ -23,10 +23,10 @@ let with_cn_keywords str =
   ) str cn_keywords
 
 
-let conf (* cpp_str *) = 
+let conf astprints (* cpp_str *) = 
   { debug_level = 0
   ; pprints = []
-  ; astprints = []
+  ; astprints = astprints
   ; ppflags = []
   ; typecheck_core = true
   ; rewrite_core = true

@@ -105,7 +105,7 @@ type named_rewrite = string * rewrite
 
 
 
-let frontend filename =
+let frontend astprints filename =
 
   Global_ocaml.(set_cerb_conf false Random false Basic false false false false);
   CF.Ocaml_implementation.(set (HafniumImpl.impl));
@@ -113,7 +113,7 @@ let frontend filename =
   load_core_stdlib () >>= fun stdlib ->
   load_core_impl stdlib impl_name >>= fun impl ->
 
-  c_frontend (conf, io) (stdlib, impl) ~filename >>= fun (_,ail_program_opt,core_file) ->
+  c_frontend (conf astprints, io) (stdlib, impl) ~filename >>= fun (_,ail_program_opt,core_file) ->
   CF.Tags.set_tagDefs core_file.CF.Core.tagDefs;
   print_log_file "original" (CORE core_file);
 
@@ -179,6 +179,7 @@ let main
       only
       csv_times
       log_times
+      astprints
   =
   if json then begin
       if debug_level > 0 then
@@ -196,7 +197,7 @@ let main
   Check.only := only;
   check_input_file filename;
   Pp.progress_simple "pre-processing" "translating C code";
-  begin match frontend filename with
+  begin match frontend astprints filename with
   | CF.Exception.Exception err ->
      prerr_endline (CF.Pp_errors.to_string err); exit 2
   | CF.Exception.Result (pred_defs, file) ->
@@ -285,6 +286,13 @@ let only =
   let doc = "only type-check this function" in
   Arg.(value & opt (some string) None & info ["only"] ~doc)
 
+(* copy-pasting from backend/driver/main.ml *)
+let astprints =
+  let doc = "Pretty print the intermediate syntax tree for the listed languages \
+             (ranging over {cabs, ail})." in
+  Arg.(value & opt (list (enum ["cabs", Cabs; "ail", Ail])) [] &
+       info ["ast"] ~docv:"LANG1,..." ~doc)
+
 
 let () =
   let open Term in
@@ -302,6 +310,7 @@ let () =
       skip_consistency $
       only $
       csv_times $
-      log_times
+      log_times $
+      astprints
   in
   Term.exit @@ Term.eval (check_t, Term.info "cn")
