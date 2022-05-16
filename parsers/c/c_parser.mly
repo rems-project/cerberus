@@ -1520,9 +1520,11 @@ function_definition:
       let loc = Location_ocaml.(region ($startpos, $endpos) NoCursor) in
       let (attr_opt, specifs, decltor, ctxt) = specifs_decltor_ctxt in
       let attr_opt' =
-        match attr_opt with
-          | Some xs -> Some ( xs @ [[magic_to_pre_attr magik]])
-          | None    -> None in
+        if magik <> [] then
+          match attr_opt with
+            | Some xs -> Some ( xs @ [[magic_to_pre_attr magik]])
+            | None    -> Some [[magic_to_pre_attr magik]]
+        else attr_opt in
       LF.restore_context ctxt;
       LF.create_function_definition loc attr_opt' specifs decltor stmt rev_decl_opt }
 ;
