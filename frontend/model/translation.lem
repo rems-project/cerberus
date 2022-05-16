@@ -4047,16 +4047,32 @@ let translate_program stdlib (startup_sym_opt, sigm) =
                     end )
             
             | Just (loc, _, param_syms, stmt) ->
-                E.mapM (fun bTy ->
-                  E.wrapped_fresh_symbol bTy >>= fun (sym, _, sym_pe) ->
+                E.mapM (fun (s, bTy) ->
+                  let descr = 
+                    if not (Global.has_switch SW_inner_arg_temps) then Symbol.SD_None else
+                      match Symbol.symbol_description s with
+                      | Symbol.SD_ObjectAddress v -> Symbol.SD_FunArgValue v
+                      | _ -> Assert_extra.failwith "function argument does not have SD_ObjectAddress description"
+                      end
+                  in
+                  E.wrapped_fresh_symbol_ descr bTy >>= fun (sym, _, sym_pe) ->
                   E.return (sym, sym_pe)
-                ) param_bTys >>= fun arg_value_decls ->
+                ) (List.zip param_syms param_bTys) >>= fun arg_value_decls ->
                 let finfo =
                   (* NOTE: the attributes in the Ail function declarations includes the ones only present on both
                      the Cabs function declaration and definition *)
                   ( loc, decl_attrs, return_ty
                   (* TODO: check if we need qualifiers too *)
-                  , List.map (fun (sym, (_, ty, _)) -> (Just sym, ty)) (List.zip param_syms params)
+                  , List.map (fun (sym, (_, ty, _)) -> 
+                        if Global.has_switch SW_inner_arg_temps then 
+                          let descr = match Symbol.symbol_description sym with
+                            | Symbol.SD_ObjectAddress v -> Symbol.SD_FunArgValue v
+                            | _ -> Assert_extra.failwith "function argument does not have SD_ObjectAddress description"
+                          end in
+                          (Just (Symbol.set_symbol_description sym descr), ty)
+                        else
+                          (Just sym, ty)
+                      ) (List.zip param_syms params)
                   , is_variadic, has_proto ) in
                 let ret_label = Symbol.fresh_pretty_with_id (fun x -> "ret_" ^ show x) in
                 let stmt = erase_loop_control stmt in
@@ -4180,6 +4196,11 @@ let translate (ailnames, stdlib_fun_map) impl prog =
   let ((core_tagDefs, cglobs, (*cdecls, *) cfuns, funinfo), st) =
     E.runStateM (translate_program translation_stdlib prog) (E.elab_init ())
   in
+  (* let _ =  *)
+  (*   Map.map (fun (_, _, _, args, _, _) -> *)
+  (*       Debug.output_string ("**************" ^ (show (List.map fst args))) *)
+  (*     ) funinfo *)
+  (* in *)
   <| C.main= fst prog;
      C.tagDefs= core_tagDefs;
      C.stdlib= stdlib_fun_map;

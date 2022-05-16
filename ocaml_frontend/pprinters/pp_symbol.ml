@@ -5,7 +5,7 @@ open Location_ocaml
 
 let to_string (Symbol (_, n, sd)) =
   match sd with
-    | SD_Id str | SD_ObjectAddress str ->
+    | SD_Id str | SD_ObjectAddress str | SD_FunArgValue str ->
         str ^ "_" ^ string_of_int n
     | _ ->
         "a_" ^ string_of_int n
@@ -19,7 +19,9 @@ let to_string_pretty (Symbol (_, n, sd)) =
       name
   in
   match sd with
-    | SD_Id str | SD_ObjectAddress str ->
+    | SD_Id str 
+      | SD_ObjectAddress str
+      | SD_FunArgValue str ->
         maybe_add_number str
     | _ ->
         "a_" ^ string_of_int n
@@ -39,6 +41,8 @@ let to_string_cn (Symbol (dig, n, sd)) =
       *    "(" ^ symbol_description_to_string descr ^ ")@" ^ env
       * | SD_PredOutput (env, pred, output) ->
       *    "(" ^ pred ^ ".." ^ output ^ ")@" ^ env        *)
+    | SD_FunArgValue str ->
+       str
     | SD_FunArg (_, i) ->
         "ARG" ^ string_of_int i
   in
@@ -65,6 +69,8 @@ let to_string_pretty_cn (Symbol (_, n, sd) as s) =
       *    "(" ^ symbol_description descr ^ ")@" ^ env
       * | SD_PredOutput (env, pred, output) ->
       *    "(" ^ pred ^ ".." ^ output ^ ")@" ^ env        *)
+    | SD_FunArgValue str ->
+       str
     | SD_FunArg (_, i) ->
         "ARG" ^ string_of_int i
   in

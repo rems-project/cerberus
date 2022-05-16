@@ -1057,6 +1057,7 @@ module Concrete : Memory = struct
                   | SD_ObjectAddress _ -> funptrmap
                   | SD_Return -> funptrmap
                   | SD_FunArg _ -> funptrmap
+                  | SD_FunArgValue _ -> funptrmap
                   (* | SD_Pointee _ -> funptrmap *)
                   (* | SD_PredOutput _ -> funptrmap *)
                   | SD_None -> funptrmap

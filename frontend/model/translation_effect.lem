@@ -30,6 +30,12 @@ let wrapped_fresh_symbol bTy =
   let sym = Symbol.fresh () in
   return (sym, Caux.mk_sym_pat sym bTy, Caux.mk_sym_pe sym)
 
+val wrapped_fresh_symbol_: Symbol.symbol_description -> C.core_base_type -> elabM (Symbol.sym * C.pattern * C.pexpr)
+let wrapped_fresh_symbol_ descr bTy =
+  let sym = Symbol.fresh_description descr in
+  return (sym, Caux.mk_sym_pat sym bTy, Caux.mk_sym_pe sym)
+
+
 (* TODO: this does not need to be in the monad *)
 (* val wrapped_fresh_symbol_descr: C.core_base_type -> Symbol.symbol_description -> elabM (Symbol.sym * C.pattern * C.pexpr)
  * let wrapped_fresh_symbol_descr bTy descr =

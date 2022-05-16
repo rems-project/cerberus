@@ -81,6 +81,8 @@ let good_description s =
   | Sym.SD_Return -> Some (Ast.Var "return")
   | Sym.SD_FunArg (loc, i) -> 
      Some (Ast.Addr ("ARG" ^ string_of_int i ^ "@" ^ Loc.simple_location loc))
+  | Sym.SD_FunArgValue str ->
+     Some (Ast.Var str)
   (* | Sym.SD_Pointee *)
 
 let has_good_description s =

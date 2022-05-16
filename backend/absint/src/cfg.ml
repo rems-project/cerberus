@@ -25,6 +25,8 @@ module Sym = struct
          "return"
       | SD_FunArg (_, n) ->
          "ARG" ^ string_of_int n 
+      | SD_FunArgValue str ->
+         str
       (* | SD_Pointee (env, sd) ->
        *    "(" ^ descr sd ^ ")@" ^ env
        * | SD_PredOutput (env, pred, output) ->

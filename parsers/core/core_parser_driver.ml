@@ -50,6 +50,7 @@ let parse stdlib =
         | SD_ObjectAddress _
         | SD_Return
         | SD_FunArg _
+        | SD_FunArgValue _
         (* | SD_Pointee _ *)
         (* | SD_PredOutput _ *)
         | SD_None ->
