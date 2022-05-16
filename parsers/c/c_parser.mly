@@ -66,7 +66,12 @@ let inject_attr attr_opt (CabsStatement (loc, Annot.Attrs xs, stmt_)) =
   let Annot.Attrs xs' = to_attrs attr_opt in
   CabsStatement (loc, Annot.Attrs (xs @ xs'), stmt_)
 
-let magic_to_attr magik =
+let magic_to_pre_attr magik =
+  ( ( Some (Symbol.Identifier (Location_ocaml.unknown, "cerb"))
+    , Symbol.Identifier (Location_ocaml.unknown, "magic") )
+  , Some (List.map (fun z -> (Location_ocaml.unknown, "", [Location_ocaml.unknown, z])) magik) )
+
+let magic_to_attr magik : Annot.attribute =
   let open Annot in
   { attr_ns= Some (Symbol.Identifier (Location_ocaml.unknown, "cerb"))
   ; attr_id= Symbol.Identifier (Location_ocaml.unknown, "magic")
@@ -1514,12 +1519,12 @@ function_definition:
                          Warning);
       let loc = Location_ocaml.(region ($startpos, $endpos) NoCursor) in
       let (attr_opt, specifs, decltor, ctxt) = specifs_decltor_ctxt in
-(*      let attr_opt' =
+      let attr_opt' =
         match attr_opt with
-          | Some xs -> Some (magic_to_attr magik :: xs)
-          | None    -> None in *)
+          | Some xs -> Some ( xs @ [[magic_to_pre_attr magik]])
+          | None    -> None in
       LF.restore_context ctxt;
-      LF.create_function_definition loc attr_opt specifs decltor stmt rev_decl_opt }
+      LF.create_function_definition loc attr_opt' specifs decltor stmt rev_decl_opt }
 ;
 
 declaration_list: (* NOTE: the list is in reverse *)
