@@ -10,12 +10,7 @@ open CF.Annot
 
 (* adapting from core_parser_driver.ml *)
 
-(* let set_default_label label = 
- *   function 
- *   | None -> Some label
- *   | Some label' -> Some label' *)
-
-let parse_condition default_label (loc, string) = 
+let parse parser_start (loc, string) = 
   let lexbuf = Lexing.from_string string in
   let () = 
     let open Location_ocaml in
@@ -36,7 +31,7 @@ let parse_condition default_label (loc, string) =
     | None -> () 
   in
   let@ parsed_spec =
-    try return (Assertion_parser.start Assertion_lexer.main lexbuf) with
+    try return (parser_start Assertion_lexer.main lexbuf) with
     | Assertion_lexer.Error ->
        let loc = Location_ocaml.point @@ Lexing.lexeme_start_p lexbuf in
        fail {loc; msg = Generic !^"invalid symbol"}
@@ -64,13 +59,13 @@ let cn_attributes attributes =
          in
          [{keyword = (loc, keyword); arguments}]
       | _ ->
-      (* (\* | Some "cerb", "magic" -> *\) *)
-      (*    print stdout !^"here************* "; *)
-      (*    print stdout  *)
-      (*      (item "args" (Pp.list (fun (loc, name, asd) ->  *)
-      (*                        parens (Loc.pp loc ^^ comma ^^^ !^name ^^ comma ^^^ *)
-      (*                                  Pp.list (fun (aloc, str) -> parens (Loc.pp aloc ^^ comma ^^^ !^str)) asd) *)
-      (*                      ) attr.attr_args)); *)
+      (* | Some "cerb", "magic" -> *)
+         print stdout !^"here************* ";
+         print stdout
+           (item "args" (Pp.list (fun (loc, name, asd) ->
+                             parens (Loc.pp loc ^^ comma ^^^ !^name ^^ comma ^^^
+                                       Pp.list (fun (aloc, str) -> parens (Loc.pp aloc ^^ comma ^^^ !^str)) asd)
+                           ) attr.attr_args));
          []
       (* | _ ->  *)
       (*    [] *)
@@ -97,6 +92,9 @@ let make_accessed globals (loc, name) =
   in
   aux globals
 
+let make_accessed_id globals (CF.Symbol.Identifier (loc, name)) =
+  make_accessed globals (loc, name)
+
 
 let parse_function 
       (globals : (Sym.t * Sym.t * Sctypes.t) list)
@@ -107,7 +105,6 @@ let parse_function
   = 
   (* TODO: make it so reverse does not need to happen here *)
   let attributes = List.rev attributes in
-  let cn_attributes = cn_attributes attributes in
   let globals = 
     List.map (fun (asym, lsym, typ) ->
         {asym; lsym; typ; accessed = None}
@@ -115,31 +112,66 @@ let parse_function
   in
   let@ (trusted, globals, pre, post) = 
     ListM.fold_leftM (fun (trusted, globals, pre, post) attr ->
-        match snd attr.keyword with
-        | "trusted" ->
-           let@ () = match attr.arguments with
-             | [] -> return ()
-             | _ -> fail {loc = fst attr.keyword; msg = Generic !^"'trusted' takes no arguments"}
+        let pre_before_post loc post = 
+          match post with
+          | [] -> return ()
+          | _ -> fail {loc = loc; msg = Generic !^"please specify the pre-conditions before the post-conditions"}
+        in
+        let no_inv loc = 
+          fail {loc; msg = Generic !^"'inv' is for loop specifications"}
+        in
+        match Option.map Id.s (attr.attr_ns), Id.s (attr.attr_id) with
+        (* handling attribute syntax *)
+        | Some "cn", _ ->
+           let Identifier (keyword_loc, keyword) = attr.attr_id in
+           let arguments = List.map (fun (loc, arg, _) -> (loc, arg)) attr.attr_args in
+           begin match keyword with
+           | "trusted" ->
+              let@ () = match attr.attr_args with
+                | [] -> return ()
+                | _ -> fail {loc = keyword_loc; 
+                             msg = Generic !^"'trusted' takes no arguments"}
+              in
+              return (CF.Mucore.Trusted keyword_loc, globals, pre, post)
+           | "accesses" -> 
+              let@ globals = ListM.fold_leftM make_accessed globals arguments in
+              return (trusted, globals, pre, post)
+           | "requires" -> 
+              let@ () = pre_before_post keyword_loc post in
+              let@ new_pre = ListM.mapM (parse Assertion_parser.start) arguments in
+              return (trusted, globals, pre @ new_pre, post)
+           | "ensures" -> 
+              let@ new_post = ListM.mapM (parse Assertion_parser.start) arguments in
+              return (trusted, globals, pre, post @ new_post)
+           | "inv" -> no_inv keyword_loc
+           | other -> fail {loc = keyword_loc; msg = Generic !^("unknown keyword '"^other^"'")}
+           end
+        (* handling magic comment syntax *)
+        | Some "cerb", "magic" ->
+           let@ keyword_conditions = 
+             ListM.mapM (fun (loc, arg, _) ->
+                 parse Assertion_parser.keyword_condition (loc, arg)
+               ) attr.attr_args
            in
-           return (CF.Mucore.Trusted (fst attr.keyword), globals, pre, post)
-        | "accesses" -> 
-           let@ globals = ListM.fold_leftM make_accessed globals attr.arguments in
+           ListM.fold_leftM (fun (trusted, globals, pre, post) (loc, keyword_condition) ->
+               match keyword_condition with
+               | Trusted ->
+                  return (CF.Mucore.Trusted loc, globals, pre, post)
+               | Accesses a ->
+                  let@ globals = ListM.fold_leftM make_accessed_id globals a in
+                  return (trusted, globals, pre, post)
+               | Requires condition ->
+                  let@ () = pre_before_post loc post in
+                  return (trusted, globals, pre @ [condition], post)
+               | Ensures condition ->
+                  let@ () = pre_before_post loc post in
+                  return (trusted, globals, pre, post @ [condition])
+               | Inv _ ->
+                  no_inv loc
+             ) (trusted, globals, pre, post) keyword_conditions
+        | _ ->
            return (trusted, globals, pre, post)
-        | "requires" -> 
-           let@ () = match post with
-             | [] -> return ()
-             | _ -> fail {loc = fst attr.keyword; msg = Generic !^"please specify the pre-conditions before the post-conditions"}
-           in
-           let@ new_pre = ListM.mapM (parse_condition "start") attr.arguments in
-           return (trusted, globals, pre @ new_pre, post)
-        | "ensures" -> 
-           let@ new_post = ListM.mapM (parse_condition "end") attr.arguments in
-           return (trusted, globals, pre, post @ new_post)
-        | "inv" ->
-           fail {loc = fst attr.keyword; msg = Generic !^"'inv' is for loop specifications"}
-        | other ->
-           fail {loc = fst attr.keyword; msg = Generic !^("unknown keyword '"^other^"'")}
-      ) (trusted, globals, [], []) cn_attributes
+      ) (trusted, globals, [], []) attributes
   in
   let global_arguments = globals in
   let function_arguments = 
@@ -165,27 +197,55 @@ let parse_label
   (* TODO: make it so reverse does not need to happen here *)
   (* seems to no longer be needed, unclear why *)
   (* let attributes = List.rev attributes in *)
-  let cn_attributes = cn_attributes attributes in
   let arguments = 
     List.map (fun (asym, typ) -> {asym; typ}) arguments 
   in
   let@ inv = 
     ListM.fold_leftM (fun inv attr ->
-        match snd attr.keyword with
-        | "trusted" ->
-           fail {loc = fst attr.keyword; msg = Generic !^("currently 'trusted' only works for functions, not labels")}
-        | "accesses" -> 
-           fail {loc = fst attr.keyword; msg = Generic !^"'accesses' is for function specifications"}
-        | "requires" -> 
-           fail {loc = fst attr.keyword; msg = Generic !^"'requires' is for function specifications"}
-        | "ensures" -> 
-           fail {loc = fst attr.keyword; msg = Generic !^"'ensures' is for function specifications"}
-        | "inv" ->
-           let@ new_inv = ListM.mapM (parse_condition lname) attr.arguments in
-           return (inv @ new_inv)
-        | other ->
-           fail {loc = fst attr.keyword; msg = Generic !^("unknown keyword '"^other^"'")}
-      ) [] cn_attributes
+        let no_trusted loc = 
+          fail {loc; msg = Generic !^("currently 'trusted' only works for functions, not labels")}
+        in
+        let no_accesses loc =
+          fail {loc; msg = Generic !^"'accesses' is for function specifications"}
+        in
+        let no_requires loc = 
+          fail {loc; msg = Generic !^"'requires' is for function specifications"}
+        in
+        let no_ensures loc =
+          fail {loc; msg = Generic !^"'ensures' is for function specifications"}
+        in
+        match Option.map Id.s (attr.attr_ns), Id.s attr.attr_id with
+        | Some "cn", id ->
+           let Identifier (keyword_loc, keyword) = attr.attr_id in
+           let arguments = List.map (fun (loc, arg, _) -> (loc, arg)) attr.attr_args in
+           begin match id with
+           | "trusted" -> no_trusted keyword_loc
+           | "accesses" -> no_accesses keyword_loc
+           | "requires" -> no_requires keyword_loc
+           | "ensures" -> no_ensures keyword_loc
+           | "inv" ->
+              let@ new_inv = ListM.mapM (parse Assertion_parser.start) arguments in
+              return (inv @ new_inv)
+           | other ->
+              fail {loc = keyword_loc; msg = Generic !^("unknown keyword '"^other^"'")}
+           end
+        | Some "cerb", "magic" ->
+           let@ keyword_conditions = 
+             ListM.mapM (fun (loc, arg, _) ->
+                 parse Assertion_parser.keyword_condition (loc, arg)
+               ) attr.attr_args
+           in
+           ListM.fold_leftM (fun inv (loc, keyword_condition) ->
+               match keyword_condition with
+               | Trusted -> no_trusted loc
+               | Accesses _ -> no_accesses loc
+               | Requires _ -> no_requires loc
+               | Ensures _ -> no_ensures loc
+               | Inv condition -> return (inv @ [condition])
+             ) inv keyword_conditions
+        | _, _ ->
+           return inv
+      ) [] attributes
   in
   return { 
       global_arguments = function_spec.global_arguments; 

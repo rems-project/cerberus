@@ -72,4 +72,11 @@ type token =
   | IF
   | STRUCT
 
+  | ACCESSES
+  | TRUSTED
+  | REQUIRES
+  | ENSURES
+  | INV
+
   | EOF
+

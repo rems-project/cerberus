@@ -278,6 +278,13 @@ type condition =
   | Define of string * term
 
 
+type keyword_condition = 
+  | Accesses of Id.t list
+  | Trusted
+  | Requires of (Loc.t * condition)
+  | Ensures of (Loc.t * condition)
+  | Inv of (Loc.t * condition)
+
 
 
 type varg = { vsym : Sym.t; typ : Sctypes.t }

@@ -78,6 +78,14 @@ open Assertion_parser_util
 %token STRUCT
 
 
+%token TRUSTED
+%token ACCESSES
+%token REQUIRES
+%token ENSURES
+%token INV
+
+
+
 %token EOF
 
 /* %left EQ NE GT LT GE LE */
@@ -85,16 +93,17 @@ open Assertion_parser_util
 %left PLUS MINUS
 %left STAR SLASH
 /* %nonassoc POWER */
-/* %nonassoc POINTERCAST */
+%nonassoc POINTERCAST
 %nonassoc MEMBER /* PREDARG */
 
 
 %type <Ast.term>term
 %type <Ast.condition>cond
 %type <Ast.condition>start
+%type <Ast.keyword_condition>keyword_condition
 %type <Z.t>integer
 
-%start start integer
+%start start integer keyword_condition
 
 %%
 
@@ -102,6 +111,7 @@ open Assertion_parser_util
 start:
   | cond=cond EOF
       { cond }
+
 
 
 name:
@@ -124,6 +134,19 @@ integer:
       { z }
 
 
+/* taking the location-handling aspect from c_parser.mly */
+member:
+  | m=MEMBER
+     { Id.parse (Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos(m)))) m }
+
+/* taking the location-handling aspect from c_parser.mly */
+id:
+  | i=name
+     { Id.parse (Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos(i)))) i }
+
+
+
+
 atomic_term:
   | LPAREN t= term RPAREN
       { t }
@@ -133,9 +156,8 @@ atomic_term:
       { Ast.Bool false }
   | z=Z
       { Ast.Integer z }
-  | a1=atomic_term member=MEMBER
-/* taking the location-handling aspect from c_parser.mly */
-      { Ast.Member (a1, Id.parse (Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos(member)))) member) }
+  | a1=atomic_term m=member
+      { Ast.Member (a1, m) }
   | pred=UNAME oarg=OARG
     { Ast. PredOutput (pred, oarg) }
   | AMPERSAND id=name
@@ -290,3 +312,20 @@ cond:
   | LET id=name EQUAL t=term
       { Ast.Define (id, t) }
 
+/* taking the location-handling aspect from c_parser.mly */
+cond_with_loc:
+  | c=cond
+      { ((Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos(c)))), c) }
+
+
+keyword_condition:
+  | ACCESSES a=separated_list(COMMA, id) EOF
+     { Accesses a }
+  | TRUSTED EOF
+     { Trusted }
+  | REQUIRES c=cond_with_loc EOF
+     { Ast.Requires c }
+  | ENSURES c=cond_with_loc EOF
+     { Ast.Ensures c }
+  | INV c=cond_with_loc EOF
+     { Ast.Inv c }
