@@ -109,7 +109,7 @@ let frontend filename =
 
   Global_ocaml.(set_cerb_conf false Random false Basic false false false false);
   CF.Ocaml_implementation.(set (HafniumImpl.impl));
-  CF.Switches.(set ["inner_arg_temps"]); (* UNCOMMENT FOR NEW FUNCTION ELAB *)
+  (* CF.Switches.(set ["inner_arg_temps"]); *) (* UNCOMMENT FOR NEW FUNCTION ELAB *)
   load_core_stdlib () >>= fun stdlib ->
   load_core_impl stdlib impl_name >>= fun impl ->
 
@@ -202,7 +202,6 @@ let main
   | CF.Exception.Result (pred_defs, file) ->
      try
        let open Resultat in
-       print_log_file "final" (MUCORE file);
        Debug_ocaml.maybe_open_csv_timing_file ();
        Pp.maybe_open_times_channel (match (csv_times, log_times) with
          | (Some times, _) -> Some (times, "csv")

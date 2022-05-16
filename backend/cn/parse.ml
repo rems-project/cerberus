@@ -133,7 +133,7 @@ let parse_function
   in
   let global_arguments = globals in
   let function_arguments = 
-    List.map (fun (vsym, typ) -> {vsym; typ}) arguments in
+    List.map (fun (asym, typ) -> {asym; typ}) arguments in
   let function_return = { vsym = Sym.fresh_description SD_Return; typ = return_type } in
   let pre_condition = pre in
   let post_condition = post in
@@ -159,11 +159,6 @@ let parse_label
   let arguments = 
     List.map (fun (asym, typ) -> {asym; typ}) arguments 
   in
-  let function_arguments = 
-    List.map (fun {vsym; typ} ->
-        {asym = vsym; typ}
-      ) function_spec.function_arguments
-  in
   let@ inv = 
     ListM.fold_leftM (fun inv attr ->
         match snd attr.keyword with
@@ -184,7 +179,7 @@ let parse_label
   in
   return { 
       global_arguments = function_spec.global_arguments; 
-      function_arguments = function_arguments; 
+      function_arguments = function_spec.function_arguments; 
       label_arguments = arguments; 
       invariant = inv
     }
