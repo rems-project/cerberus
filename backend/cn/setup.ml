@@ -3,7 +3,7 @@ open Cerb_backend.Pipeline
 let impl_name = "gcc_4.9.0_x86_64-apple-darwin10.8.0"
 
 let cpp_str =
-    "cc -E -C -Werror -nostdinc -undef -D__cerb__"
+    "cc -E -CC -Werror -nostdinc -undef -D__cerb__"
     ^ " -I " ^ Cerb_runtime.in_runtime "libc/include"
     ^ " -I " ^ Cerb_runtime.in_runtime "libcore"
     ^ " -DDEBUG"

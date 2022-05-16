@@ -53,17 +53,27 @@ type cn_attribute = {
 
 let cn_attributes attributes =
   let open CF.Symbol in
-  List.filter_map (fun attr ->
-      match attr.attr_ns with
-      | Some (Identifier (_, id)) when String.equal id "cn"  ->
+  List.concat_map (fun attr ->
+      match Option.map Id.s (attr.attr_ns), Id.s attr.attr_id with
+      | Some "cn", _ ->
          let (Identifier (loc, keyword)) = attr.attr_id in
          let arguments = 
            List.map (fun (loc, arg, _) -> 
                (loc, arg)
              ) attr.attr_args
          in
-         Some {keyword = (loc, keyword); arguments}
-      | _ -> None
+         [{keyword = (loc, keyword); arguments}]
+      | _ ->
+      (* (\* | Some "cerb", "magic" -> *\) *)
+      (*    print stdout !^"here************* "; *)
+      (*    print stdout  *)
+      (*      (item "args" (Pp.list (fun (loc, name, asd) ->  *)
+      (*                        parens (Loc.pp loc ^^ comma ^^^ !^name ^^ comma ^^^ *)
+      (*                                  Pp.list (fun (aloc, str) -> parens (Loc.pp aloc ^^ comma ^^^ !^str)) asd) *)
+      (*                      ) attr.attr_args)); *)
+         []
+      (* | _ ->  *)
+      (*    [] *)
     ) attributes
 
 
