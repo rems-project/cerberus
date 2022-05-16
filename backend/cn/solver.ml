@@ -132,6 +132,8 @@ module Translate = struct
     | StructFunc of { tag : Sym.t }
     | CompFunc of { bts : BT.t list; i : int }
     | TupleFunc of  { bts : BT.t list }
+    | RecordFunc of { mbts : BT.member_types }
+    | RecordMemberFunc of { mbts : BT.member_types; member : Sym.t }
     | DefaultFunc of { bt : BT.t }
     (* | SomethingFunc of { bt : BT.t } *)
     (* | NothingFunc of { bt : BT.t } *)
@@ -168,6 +170,11 @@ module Translate = struct
 
   let tuple_field_name bts i = 
     bt_name (Tuple bts) ^ string_of_int i
+  (* let tuple_field_symbol i = 
+   *   Z3.Symbol.mk_string context (tuple_field_name i) *)
+
+  let record_member_name bts member = 
+    bt_name (Record bts) ^ "_" ^ Sym.pp_string member
   (* let tuple_field_symbol i = 
    *   Z3.Symbol.mk_string context (tuple_field_name i) *)
 
@@ -222,6 +229,19 @@ module Translate = struct
              ) (Memory.member_types layout)
          in
          Z3.Tuple.mk_sort context struct_symbol
+           member_symbols member_sorts
+      | Record members ->
+         let bt_symbol = string (bt_name (Record members)) in
+         Z3Symbol_Table.add z3sym_table bt_symbol (RecordFunc {mbts=members});
+         let member_symbols = 
+           map (fun (member, bt) -> 
+               let sym = string (record_member_name members member) in
+               Z3Symbol_Table.add z3sym_table sym (RecordMemberFunc {mbts=members; member});
+               sym
+             ) members
+         in
+         let member_sorts = map (fun (_, bt) -> sort bt) members in
+         Z3.Tuple.mk_sort context bt_symbol
            member_symbols member_sorts
 
     and sort bt = 
@@ -398,6 +418,30 @@ module Translate = struct
                 ) members
             in
             term (struct_ (tag, str))
+         end
+      | Record_op record_op -> 
+         begin match record_op with
+         | Record mts ->
+            let constructor = Z3.Tuple.get_mk_decl (sort bt) in
+            Z3.Expr.mk_app context constructor (map (fun (_, t) -> term t) mts)
+         | RecordMember (t, member) ->
+            let members = BT.record_bt (IT.bt t) in
+            let members_i = List.mapi (fun i (m, _) -> (m, i)) members in
+            let n = List.assoc Sym.equal member members_i in
+            let destructors = Z3.Tuple.get_field_decls (sort (IT.bt t)) in
+            Z3.Expr.mk_app context (nth destructors n) [term t]
+         | RecordUpdate ((t, member), v) ->
+            let members = BT.record_bt (IT.bt t) in
+            let str =
+              List.map (fun (member', bt) ->
+                  let value = 
+                    if Sym.equal member member' then v 
+                    else IT (Record_op (RecordMember (t, member')), bt)
+                  in
+                  (member', value)
+                ) members
+            in
+            term (IT (Record_op (Record str), IT.bt t))
          end
       | Pointer_op pointer_op -> 
          let open Z3.Arithmetic in
@@ -913,6 +957,12 @@ let eval global (context, model) to_be_evaluated =
               nthTuple_ ~item_bt:comp_bt (i, nth args 0)
            | TupleFunc {bts} ->
               tuple_ args
+           | RecordFunc {mbts} ->
+              IT (Record_op (Record (List.combine (List.map fst mbts) args)), 
+                  Record mbts)
+           | RecordMemberFunc {mbts; member} ->
+              let member_bt = List.assoc Sym.equal member mbts in
+              IT (Record_op (RecordMember (nth args 0, member)), member_bt)
            (* | SomethingFunc { bt } -> *)
            (*    something_ (List.hd args) *)
            (* | NothingFunc { bt }-> *)

@@ -17,12 +17,18 @@ type basetype =
   | Real
   | Loc
   | Struct of tag
+  | Record of member_types
   | Map of basetype * basetype
   | List of basetype
   | Tuple of basetype list
   | Set of basetype
   (* | Option of basetype *)
 [@@deriving eq, ord]
+
+and member_types =
+  (Sym.t * basetype) list
+
+
 
 type t = basetype
 
@@ -38,6 +44,7 @@ let rec pp = function
   | Real -> !^"real"
   | Loc -> !^"pointer"
   | Struct sym -> !^"struct" ^^^ Sym.pp sym
+  | Record members -> braces (flow_map comma (fun (s, bt) -> pp bt ^^^ Sym.pp s) members)
   | Map (abt, rbt) -> !^"map" ^^ angles (pp abt ^^ comma ^^^ pp rbt)
   | List bt -> !^"list" ^^ angles (pp bt)
   | Tuple nbts -> !^"tuple" ^^ angles (flow_map comma pp nbts)
@@ -56,6 +63,11 @@ let struct_bt = function
   | Struct tag -> tag 
   | bt -> Debug_ocaml.error 
            ("illtyped index term: not a struct type: " ^ Pp.plain (pp bt))
+
+let record_bt = function
+  | Record members -> members
+  | bt -> Debug_ocaml.error 
+           ("illtyped index term: not a member type: " ^ Pp.plain (pp bt))
 
 let is_map_bt = function
   | Map (abt, rbt) -> Some (abt, rbt)
@@ -94,4 +106,5 @@ let rec hash = function
   | Set _ -> 7
   (* | Option _ -> 8 *)
   | Struct tag -> 1000 + Sym.num tag
+  | Record _ -> 3000
   | Map (abt,rbt) -> 2000 + hash abt + hash rbt

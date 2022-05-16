@@ -47,6 +47,11 @@ and 'bt struct_op =
   | StructMember of 'bt term * BaseTypes.member
   | StructUpdate of ('bt term * BaseTypes.member) * 'bt term
 
+and 'bt record_op =
+  | Record of (Sym.t * 'bt term) list
+  | RecordMember of 'bt term * Sym.t
+  | RecordUpdate of ('bt term * Sym.t) * 'bt term
+
 and 'bt pointer_op = 
   | LTPointer of 'bt term * 'bt term
   | LEPointer of 'bt term * 'bt term
@@ -89,6 +94,7 @@ and 'bt term_ =
   | Bool_op of 'bt bool_op
   | Tuple_op of 'bt tuple_op
   | Struct_op of 'bt struct_op
+  | Record_op of 'bt record_op
   | Pointer_op of 'bt pointer_op
   | List_op of 'bt list_op
   | Set_op of 'bt set_op

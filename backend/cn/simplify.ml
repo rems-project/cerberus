@@ -483,6 +483,36 @@ let rec simp (struct_decls : Memory.struct_decls) values equalities lcs =
        let v = aux v in
        IT (Struct_op (StructUpdate ((t, m), v)), bt)
   in
+
+  let record_op it bt = 
+    match it with
+    | IT.Record members ->
+       let members = 
+         List.map (fun (member, it) ->
+             (member, aux it)
+           ) members
+       in
+       IT (Record_op (IT.Record members), bt)
+    | IT.RecordMember (it, member) ->
+       let it = aux it in
+       let rec make it = 
+         match it with
+         | IT (Record_op (Record members), _) ->
+            List.assoc Sym.equal member members
+         | IT (Bool_op (ITE (cond, it1, it2)), _) ->
+            (* (if cond then it1 else it2) . member -->
+             (if cond then it1.member else it2.member) *)
+            ite_ (cond, make it1, make it2)
+         | _ ->
+            IT (Record_op (IT.RecordMember (it, member)), bt)
+       in
+       make it
+    | IT.RecordUpdate ((t, m), v) ->
+       let t = aux t in
+       let v = aux v in
+       IT (Record_op (RecordUpdate ((t, m), v)), bt)
+  in
+
   
   (* revisit when memory model changes *)
   let pointer_op it bt = 
@@ -632,6 +662,7 @@ let rec simp (struct_decls : Memory.struct_decls) values equalities lcs =
     | Bool_op b -> bool_op b bt
     | Tuple_op t -> tuple_op t bt
     | Struct_op s -> struct_op s bt
+    | Record_op r -> record_op r bt
     | Pointer_op p -> pointer_op p bt
     | List_op l -> IT (List_op l, bt)
     | Set_op s -> IT (Set_op s, bt)

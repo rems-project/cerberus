@@ -117,6 +117,17 @@ let pp =
        | StructUpdate ((t, member), v) ->
           mparens (aux true t ^^ braces (dot ^^ Id.pp member ^^^ equals ^^^ aux true v))
        end
+    | Record_op record_op -> 
+       begin match record_op with
+       | Record members ->
+          braces (flow_map (comma ^^ break 1) (fun (member,it) -> 
+                      dot ^^ Sym.pp member ^^^ equals ^^^ aux false it 
+                    ) members)
+       | RecordMember (t, member) ->
+          aux true t ^^ dot ^^ Sym.pp member
+       | RecordUpdate ((t, member), v) ->
+          mparens (aux true t ^^ braces (dot ^^ Sym.pp member ^^^ equals ^^^ aux true v))
+       end
     | Pointer_op pointer_op -> 
        begin match pointer_op with
        | LTPointer (o1,o2) -> 
@@ -397,6 +408,21 @@ let rec subst (su : typed subst) (IT (it, bt)) =
           StructUpdate ((subst su t, m), subst su v)
      in
      IT (Struct_op struct_op, bt)
+  | Record_op record_op -> 
+     let record_op = match record_op with
+       | Record members ->
+          let members = 
+            map (fun (member,it) -> 
+                (member,subst su it)
+              ) members 
+          in
+          Record members
+       | RecordMember (t, m) ->
+          RecordMember (subst su t, m)
+       | RecordUpdate ((t, m), v) ->
+          RecordUpdate ((subst su t, m), subst su v)
+     in
+     IT (Record_op record_op, bt)
   | Pointer_op pointer_op -> 
      let pointer_op = match pointer_op with
        | LTPointer (it, it') -> 

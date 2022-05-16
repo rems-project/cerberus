@@ -74,6 +74,7 @@ module WBT = struct
       | Real -> return ()
       | Loc -> return ()
       | Struct tag -> let@ _ = get_struct_decl loc tag in return ()
+      | Record members -> ListM.iterM (fun (_, bt) -> aux bt) members
       | Map (abt, rbt) -> ListM.iterM aux [abt; rbt]
       | List bt -> aux bt
       | Tuple bts -> ListM.iterM aux bts
@@ -352,6 +353,49 @@ module WIT = struct
               return (BT.Struct tag, StructUpdate ((t, member), v))
          in
          return (IT (Struct_op struct_op, bt))
+      | Record_op record_op ->
+         let@ (bt, record_op) = match record_op with
+           | Record members ->
+              let@ members = 
+                ListM.mapM (fun (member,t) ->
+                    let@ t = infer loc ~context t in
+                    return (member, t)
+                  ) members
+              in
+              let member_types = 
+                List.map (fun (member, t) -> (member, IT.bt t)
+                  ) members
+              in
+              return (BT.Record member_types, IT.Record members)
+           | RecordMember (t, member) ->
+              let@ t = infer loc ~context t in
+              let@ members = match IT.bt t with
+                | Record members -> return members
+                | has -> fail (illtyped_index_term loc context t has "struct")
+              in
+              let@ bt = match List.assoc_opt Sym.equal member members with
+                | Some bt -> return bt
+                | None -> 
+                   let expected = "struct with member " ^ Sym.pp_string member in
+                   fail (illtyped_index_term loc context t (IT.bt t) expected)
+              in
+              return (bt, RecordMember (t, member))
+           | RecordUpdate ((t, member), v) ->
+              let@ t = infer loc ~context t in
+              let@ members = match IT.bt t with
+                | Record members -> return members
+                | has -> fail (illtyped_index_term loc context t has "struct")
+              in
+              let@ bt = match List.assoc_opt Sym.equal member members with
+                | Some bt -> return bt
+                | None -> 
+                   let expected = "struct with member " ^ Sym.pp_string member in
+                   fail (illtyped_index_term loc context t (IT.bt t) expected)
+              in
+              let@ v = check loc ~context bt v in
+              return (IT.bt t, RecordUpdate ((t, member), v))
+         in
+         return (IT (Record_op record_op, bt))
       | Pointer_op pointer_op ->
          let@ (bt, pointer_op) = match pointer_op with 
            | LTPointer (t, t') ->
