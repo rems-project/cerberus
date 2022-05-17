@@ -77,6 +77,12 @@ rule main = parse
   | "if" {T.IF }
   | "typeof" {T.TYPEOF }
   | "struct" {T.STRUCT }
+
+  | "requires" {T.REQUIRES}
+  | "ensures" {T.ENSURES}
+  | "accesses" {T.ACCESSES}
+  | "trusted" {T.TRUSTED}
+  | "inv" {T.INV}
   
   | '\n' {Lexing.new_line lexbuf; main lexbuf}
 
@@ -89,12 +95,6 @@ rule main = parse
       { T.OARG oarg }
   | '.' (['_' 'a'-'z' 'A'-'Z']['0'-'9' 'A'-'Z' 'a'-'z' '_']* as member)
       { T.MEMBER member }
-
-  | "requires" {T.REQUIRES}
-  | "ensures" {T.ENSURES}
-  | "accesses" {T.ACCESSES}
-  | "trusted" {T.TRUSTED}
-  | "inv" {T.INV}
 
 
   | eof  { T.EOF }

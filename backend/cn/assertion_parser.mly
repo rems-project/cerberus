@@ -274,7 +274,7 @@ ctype:
       { t }
 
 %inline where_clause:
-  | COMMA WHERE some_oargs=separated_list(COMMA, term_with_name)
+  | WHERE some_oargs=separated_list(COMMA, term_with_name)
       { some_oargs }
 
 
@@ -323,9 +323,9 @@ keyword_condition:
      { Accesses a }
   | TRUSTED EOF
      { Trusted }
-  | REQUIRES c=cond_with_loc EOF
+  | REQUIRES c=separated_list(COMMA, cond_with_loc) EOF
      { Ast.Requires c }
-  | ENSURES c=cond_with_loc EOF
+  | ENSURES c=separated_list(COMMA, cond_with_loc) EOF
      { Ast.Ensures c }
-  | INV c=cond_with_loc EOF
+  | INV c=separated_list(COMMA, cond_with_loc) EOF
      { Ast.Inv c }

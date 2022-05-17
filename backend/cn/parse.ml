@@ -115,7 +115,9 @@ let parse_function
         let pre_before_post loc post = 
           match post with
           | [] -> return ()
-          | _ -> fail {loc = loc; msg = Generic !^"please specify the pre-conditions before the post-conditions"}
+          | _ -> 
+             let () = print stdout (Pp.int (List.length post)) in
+             fail {loc = loc; msg = Generic !^"please specify the pre-conditions before the post-conditions"}
         in
         let no_inv loc = 
           fail {loc; msg = Generic !^"'inv' is for loop specifications"}
@@ -162,10 +164,9 @@ let parse_function
                   return (trusted, globals, pre, post)
                | Requires condition ->
                   let@ () = pre_before_post loc post in
-                  return (trusted, globals, pre @ [condition], post)
+                  return (trusted, globals, pre @ condition, post)
                | Ensures condition ->
-                  let@ () = pre_before_post loc post in
-                  return (trusted, globals, pre, post @ [condition])
+                  return (trusted, globals, pre, post @ condition)
                | Inv _ ->
                   no_inv loc
              ) (trusted, globals, pre, post) keyword_conditions
@@ -241,7 +242,7 @@ let parse_label
                | Accesses _ -> no_accesses loc
                | Requires _ -> no_requires loc
                | Ensures _ -> no_ensures loc
-               | Inv condition -> return (inv @ [condition])
+               | Inv condition -> return (inv @ condition)
              ) inv keyword_conditions
         | _, _ ->
            return inv
