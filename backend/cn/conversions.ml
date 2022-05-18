@@ -647,6 +647,51 @@ let resolve_index_term loc
             fail {loc; msg = Generic err}
        in
        return (IT (Pointer_op (MemberOffset (tag, member)), BT.Integer), None)
+    | MemberShift {pointer =t; member} ->
+       let@ (pointer, osct) = resolve t mapping quantifiers in
+       let ppf () = Ast.Terms.pp false t in
+       let member = Id.parse loc member in
+       let@ tag = match osct with
+         | None -> 
+            fail {loc; msg = Generic (!^"Cannot resolve C type of term" ^^^ 
+                                        Ast.pp false t)}
+
+         | Some (Pointer (Struct tag)) -> return tag
+         | Some (Pointer _) -> 
+            fail {loc; msg = Generic (ppf () ^^^ !^"is not a struct pointer")}
+         | Some _ -> 
+            fail {loc; msg = Generic (ppf () ^^^ !^"is not a pointer")}
+       in
+       let@ layout = match SymMap.find_opt tag layouts with
+         | Some layout -> return layout
+         | None -> fail {loc; msg = Unknown_struct tag}
+       in
+       let decl_members = Memory.member_types layout in
+       let@ sct = match List.assoc_opt Id.equal member decl_members with
+         | Some sct -> 
+            return sct
+         | None -> 
+            let err = 
+              !^"Illtyped index term" ^^^ ppf () ^^ dot ^^^
+                ppf () ^^^ !^"does not have member" ^^^ Id.pp member
+            in
+            fail {loc; msg = Generic err}
+       in
+       return (memberShift_ (pointer, tag, member), Some (Sctypes.Pointer sct))
+    | ArrayShift {pointer =t; index} ->
+       let@ (pointer, osct) = resolve t mapping quantifiers in
+       let@ (index, _) = resolve t mapping quantifiers in
+       let ppf () = Ast.Terms.pp false t in
+       let@ sct = match osct with
+         | None -> 
+            fail {loc; msg = Generic (!^"Cannot resolve C type of term" ^^^ 
+                                        Ast.pp false t)}
+
+         | Some (Pointer sct) -> return sct
+         | Some _ -> 
+            fail {loc; msg = Generic (ppf () ^^^ !^"is not a pointer")}
+       in
+       return (arrayShift_ (pointer, sct, index), Some (Sctypes.Pointer sct))
     | CellPointer ((base, step), (from_index, to_index), pointer) ->
        let@ (base, _) = resolve base mapping quantifiers in
        let@ (step, _) = resolve step mapping quantifiers in

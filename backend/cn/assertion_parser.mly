@@ -36,6 +36,8 @@ open Assertion_parser_util
 %token LE
 %token GE
 
+%token ARROW
+
 %token LPAREN
 %token RPAREN
 %token LBRACKET
@@ -170,6 +172,10 @@ atomic_term:
       { Ast.Null }
   | OFFSETOF LPAREN tag = name COMMA member= name RPAREN
       { Ast.OffsetOf {tag; member} }
+  | AMPERSAND LPAREN t=term ARROW member= name RPAREN
+      { Ast.MemberShift {pointer=t; member} }
+  | AMPERSAND LPAREN t=term LBRACKET index=  term RBRACKET RPAREN
+      { Ast.ArrayShift {pointer=t; index} }
   | CELLPOINTER LPAREN t1=term COMMA t2=term COMMA t3=term COMMA t4=term COMMA t5=term RPAREN
       { Ast.CellPointer ((t1, t2), (t3, t4), t5) }
   | LBRACE a=term RBRACE AT l=name

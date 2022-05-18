@@ -36,6 +36,8 @@ rule main = parse
   | "<="  { T.LE }
   | ">="  { T.GE }
 
+  | "->"  { T.ARROW }
+
   | "flipBit" { T.FLIPBIT }
 
   | "(pointer)"   { T.POINTERCAST }

@@ -38,6 +38,8 @@ module Terms = struct
     | PredEqRegulator of string list * term
     | Null
     | OffsetOf of {tag:string; member:string}
+    | MemberShift of {pointer:term; member:string}
+    | ArrayShift of {pointer:term; index:term}
     | CellPointer of (term * term) * (term * term) * term
     | Disjoint of (term * term) * (term * term)
     | App of term * term
@@ -123,6 +125,10 @@ module Terms = struct
        !^"NULL"
     | OffsetOf {tag; member} ->
        mparens atomic (c_app !^"offsetof" [!^tag; !^member])
+    | MemberShift {pointer; member} ->
+       mparens atomic (!^"&" ^^ parens ((pp true pointer) ^^ !^"->" ^^ !^member))
+    | ArrayShift {pointer; index} ->
+       mparens atomic (!^"&" ^^ parens ((pp true pointer) ^^ brackets (pp false index)))
     | CellPointer ((base, step), (from_index, to_index), pointer) ->
        mparens atomic 
          (c_app !^"cellPointer" 
@@ -228,6 +234,10 @@ module Terms = struct
          false
       | OffsetOf {tag; member} ->
          false
+      | MemberShift {pointer; member} ->
+         aux pointer
+      | ArrayShift {pointer; index} ->
+         aux pointer || aux index
       | CellPointer ((t1, t2), (t3, t4), t5) ->
          aux t1 || aux t2 || aux t3 || aux t4 || aux t5
       | Disjoint ((t1, t2), (t3, t4)) ->

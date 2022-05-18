@@ -31,6 +31,8 @@ type token =
   | LE
   | GE
 
+  | ARROW
+
   | LPAREN
   | RPAREN
   | LBRACKET
