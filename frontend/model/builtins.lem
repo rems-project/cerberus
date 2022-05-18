@@ -39,6 +39,8 @@ let translate_builtin_typenames = function
       Just intptr_t
   | "__cerbty_ptrdiff_t" ->
       Just ptrdiff_t
+  | "__cerbty_vaddr_t" ->
+      Just vaddr_t
   | "__cerbty_uint8_t" ->
       Just (mk_ctype_integer (Unsigned (IntN_t 8)))
   | "__cerbty_uint16_t" ->
@@ -402,6 +404,10 @@ let translate_builtin_varnames (Symbol.Identifier _ str) =
         const_int $ IConstantMin Ptrdiff_t
     | "__cerbvar_PTRDIFF_MAX" ->
         const_int $ IConstantMax Ptrdiff_t
+    | "__cerbvar_VADDR_MIN" ->
+        const_int $ IConstantMin Vaddr_t
+    | "__cerbvar_VADDR_MAX" ->
+        const_int $ IConstantMax Vaddr_t
     | "__cerbvar_INT_LEAST8_MIN" ->
         const_int $ IConstantMin (Signed (Int_leastN_t 8))
     | "__cerbvar_INT_LEAST16_MIN" ->

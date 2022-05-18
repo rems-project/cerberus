@@ -33,6 +33,7 @@ let integerImpl () =
     )
     (Ctype.Size_t)
     (Ctype.Ptrdiff_t)
+    (Ctype.Vaddr_t)
 
 type implementation_constant =
   (* J.3.2 Environment *)

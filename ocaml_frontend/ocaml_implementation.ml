@@ -83,6 +83,8 @@ module DefaultImpl = struct
       | Ptrdiff_t ->
           (* STD §7.19#2 *)
           true
+      | Vaddr_t ->
+          false
 
   let sizeof_ity = function
     | Char
@@ -117,7 +119,9 @@ module DefaultImpl = struct
     | Size_t
     | Ptrdiff_t ->
         Some 8
-  
+    | Vaddr_t ->
+        Some 8
+
   (* NOTE: the code is bit generic here to allow reusability *)
   let precision_ity ity =
     match sizeof_ity ity with
@@ -169,6 +173,8 @@ module DefaultImpl = struct
         Some 4
     | Size_t
     | Ptrdiff_t ->
+        Some 8
+    | Vaddr_t ->
         Some 8
 
   let alignof_fty = function
@@ -315,7 +321,10 @@ module HafniumImpl = struct
     | Ptrdiff_t ->
         (* STD *)
         true
-  
+    | Vaddr_t ->
+        (* STD *)
+        false
+
   let sizeof_ity = function
     | Char ->
         Some 1
@@ -352,7 +361,9 @@ module HafniumImpl = struct
         Some 8
     | Ptrdiff_t ->
         Some 8
-  
+    | Vaddr_t ->
+        Some 8
+
   (* No trap representations *)
   let precision_ity ity =
     match sizeof_ity ity with
@@ -408,7 +419,9 @@ module HafniumImpl = struct
         Some 8
     | Ptrdiff_t ->
         Some 8
-  
+    | Vaddr_t ->
+        Some 8
+
   let alignof_fty = function
     | RealFloating Float ->
         Some 4
@@ -444,6 +457,7 @@ let hafniumIntImpl: IntegerImpl.implementation =
       | None   -> assert false)
   (Size_t)
   (Ptrdiff_t)
+  (Vaddr_t)
 
 
 (* TODO: this is horrible... *)

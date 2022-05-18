@@ -57,6 +57,8 @@ let pp_integerType_raw = function
      pp_ctor "Wint_t"
  | Ptrdiff_t ->
      pp_ctor "Ptrdiff_t"
+ | Vaddr_t ->
+     pp_ctor "Vaddr_t"
 
 
 

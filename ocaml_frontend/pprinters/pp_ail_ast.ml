@@ -92,6 +92,8 @@ let rec pp_genIntegerType_raw = function
      !^ "SizeT"
  | PtrdiffT ->
      !^ "PtrdiffT"
+ | VaddrT ->
+     !^ "VaddrT"
  | Unknown iCst ->
      !^ "Unknown" ^^ P.brackets (Pp_ail.pp_integerConstant iCst)
  | Promote gity ->
