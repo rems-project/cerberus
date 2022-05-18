@@ -2334,27 +2334,6 @@ module CHERI (C:Capability
     else
       None
 
-  let typecheck_intrinsic name ret_type args_types =
-    if name = "cheri_perms_and" then
-      begin
-        (*
-          `cheri_perms_and` intrinsic. The return value and the 1st
-          argument must be capabilities and match (preserving `const`
-          qualifier) 2nd argument must be `size_t` *)
-        if List.length args_types <> 2 then Intrinsic_Signature_Mismatch
-        else
-          let cap_type = List.nth args_types 0 in
-          let mask_type = List.nth args_types 1 in
-          if mask_type <> Ctype.size_t
-             || not (Ctype.ctypeEqual cap_type ret_type)
-             || not (is_cap_typ cap_type)
-             || not (is_cap_typ ret_type)
-          then Intrinsic_Signature_Mismatch
-          else Intrinsic_OK
-      end
-    else
-      Intrinsic_Not_Found
-
   let bool_bits_of_bytes bytes =
     (* adopted from sail_lib.ml *)
     let rec get_slice_int' (n, m, o) =

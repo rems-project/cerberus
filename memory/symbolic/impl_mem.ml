@@ -592,7 +592,6 @@ let intfromptr = Defacto_memory.impl_intcast_ptrval
 let derive_cap _ _ _ _ = assert false (* CHERI only *)
 let cap_assign_value _ _ _ = assert false (* CHERI only *)
 let ptr_t_int_value _ = assert false (* CHERI only *)
-let typecheck_intrinsic _ _ _ =  assert false (* CHERI only *)
 let get_intrinsic_type_spec _ =  assert false (* CHERI only *)
 let call_intrinsic _ _ _ = assert false (* CHERI only *)
 let null_cap _ = assert false (* CHERI only *)

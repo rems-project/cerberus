@@ -432,12 +432,6 @@ instance forall 'a. (Constraints mem_constraint 'a)
   let concat cs1 cs2 = MC_conj [cs1; cs2]
 end
 
-type intrinsic_typecheck_result =
-  | Intrinsic_OK
-  | Intrinsic_Not_Found
-  | Intrinsic_Signature_Mismatch
-
-
 type type_predicate =
   | TyPred of (Ctype.ctype -> bool)
   | TyIsPointer

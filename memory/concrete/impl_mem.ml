@@ -1986,9 +1986,6 @@ module Concrete : Memory = struct
   let intcast _ _ ival =
     Either.Right ival
 
-  let typecheck_intrinsic _ _ _ =
-    assert false (* CHERI only *)
-
   let get_intrinsic_type_spec _ =
     assert false (* CHERI only *)
 
