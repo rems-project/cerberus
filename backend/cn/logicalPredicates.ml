@@ -209,10 +209,10 @@ module PageAlloc = struct
     in
 
 
-    let vmemmap_page_wf =
+    let vmemmap_wf =
 
-      let id = "vmemmap_page_wf" in
-      let loc = Loc.other "internal (vmemmap_page_wf)" in
+      let id = "vmemmap_wf" in
+      let loc = Loc.other "internal (vmemmap_wf)" in
 
       let page_index_s, page_index = IT.fresh_named Integer "page_index" in
 
@@ -397,10 +397,10 @@ module PageAlloc = struct
 
 
 
-    let vmemmap_page_wf_list =
+    let vmemmap_l_wf =
 
-      let id = "vmemmap_page_wf_list" in
-      let loc = Loc.other "internal (vmemmap_page_wf_list)" in
+      let id = "vmemmap_l_wf" in
+      let loc = Loc.other "internal (vmemmap_l_wf)" in
 
       let page_index_s, page_index = IT.fresh_named Integer "page_index" in
 
@@ -487,12 +487,79 @@ module PageAlloc = struct
       in
 
 
+      let infer_arguments = 
+
+        let ia_page_index_s, ia_page_index = IT.fresh (IT.bt page_index) in
+        let ia_vmemmap_pointer_s, ia_vmemmap_pointer = IT.fresh (IT.bt vmemmap_pointer) in
+        let ia_vmemmap_s, ia_vmemmap = IT.fresh (IT.bt vmemmap) in
+        let ia_pool_pointer_s, ia_pool_pointer = IT.fresh (IT.bt pool_pointer) in
+        let ia_pool_s, ia_pool = IT.fresh (IT.bt pool) in
+
+        AT.Computational ((ia_page_index_s, IT.bt ia_page_index), (loc, None),
+        AT.Computational ((ia_vmemmap_pointer_s, IT.bt ia_vmemmap_pointer), (loc, None), 
+        AT.Logical ((ia_vmemmap_s, IT.bt ia_vmemmap), (loc, None), 
+        AT.Computational ((ia_pool_pointer_s, IT.bt ia_pool_pointer), (loc, None),
+        AT.Computational ((ia_pool_s, IT.bt ia_pool), (loc, None),
+        AT.Resource ((Aux.vmemmap_resource 
+                        ~vmemmap_pointer:ia_vmemmap_pointer 
+                        ~vmemmap:ia_vmemmap
+                        ~range_start:(ia_pool %. "range_start")
+                        ~range_end:(ia_pool %. "range_end")), 
+                     (loc, None),
+        AT.I OutputDef.[
+            {loc; name = page_index_s; value = ia_page_index};
+            {loc; name = vmemmap_pointer_s; value = ia_vmemmap_pointer};
+            {loc; name = vmemmap_s; value = ia_vmemmap};
+            {loc; name = pool_pointer_s; value = ia_pool_pointer};
+            {loc; name = pool_s; value = ia_pool};
+          ]))))))
+      in
+
+      (id, {loc; args; definition = Def body; return_bt = Bool; infer_arguments} )
+    in
 
 
 
 
 
 
+
+
+
+
+
+
+    let vmemmap_b_wf =
+
+      let id = "vmemmap_b_wf" in
+      let loc = Loc.other "internal (vmemmap_b_wf)" in
+
+      let page_index_s, page_index = IT.fresh_named Integer "page_index" in
+
+      (* let page_pointer_s, page_pointer = IT.fresh_named Loc "page_pointer" in *)
+      let vmemmap_pointer_s, vmemmap_pointer = IT.fresh_named Loc "vmemmap_pointer" in
+      let pool_pointer_s, pool_pointer = IT.fresh_named Loc "pool_pointer" in
+      let pool_s, pool = IT.fresh_named (BT.Struct hyp_pool_tag) "pool" in
+
+      let vmemmap_s, vmemmap = 
+        IT.fresh_named (BT.Map (Integer, BT.Struct hyp_page_tag)) "vmemmap" 
+      in
+
+      let args = [
+          (page_index_s, IT.bt page_index);
+          (vmemmap_pointer_s, IT.bt vmemmap_pointer);
+          (vmemmap_s, IT.bt vmemmap);
+          (pool_pointer_s, IT.bt pool_pointer);
+          (pool_s, IT.bt pool);
+        ]
+      in
+
+      let body = 
+        and_ [
+            pred_ "vmemmap_wf" [page_index; vmemmap_pointer; vmemmap; pool_pointer; pool] BT.Bool;
+            pred_ "vmemmap_l_wf" [page_index; vmemmap_pointer; vmemmap; pool_pointer; pool] BT.Bool;
+          ]
+      in
 
 
       let infer_arguments = 
@@ -525,6 +592,14 @@ module PageAlloc = struct
 
       (id, {loc; args; definition = Def body; return_bt = Bool; infer_arguments} )
     in
+
+
+
+
+
+
+
+
 
 
 
@@ -730,9 +805,10 @@ module PageAlloc = struct
      order_align;
      page_size_of_order;
      page_group_ok;
-     vmemmap_page_wf;
+     vmemmap_wf;
      init_vmemmap_page;
-     vmemmap_page_wf_list;
+     vmemmap_l_wf;
+     vmemmap_b_wf;
      free_area_cell_wf;
      hyp_pool_wf;
      buddy;
