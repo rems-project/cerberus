@@ -366,11 +366,11 @@ let annotate_stringLiteral (pref_opt, strs) =
                   | Just Enc_U  -> char32_t (* STD §6.4.5#6 sentence 6 *)
                   | Just Enc_L  -> wchar_t  (* STD §6.4.5#6 sentence 5 *)
                 end in
-
-  (* TODO: check the type *)
+  (* the acc is initialised with 1 to take into account the trailing '\0' *)
+  let sz = List.foldl (fun acc (_, str) -> acc + List.length str) 1 strs in
   E.return
     ( AilEstr (pref_opt, strs)
-    , GenLValueType no_qualifiers (Ctype [] (Array elem_ty (Just $ integerFromNatural (naturalFromNat (List.length strs + 1))))) false )
+    , GenLValueType no_qualifiers (Ctype [] (Array elem_ty (Just (integerFromNatural (naturalFromNat sz))))) false )
 
 
 val     typecheck_constant: Loc.t -> constant -> E.errorM genType
