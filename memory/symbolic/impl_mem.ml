@@ -68,7 +68,9 @@ module Constraints = struct
             [Symbol.mk_string ctx "_Unsigned_ity"] [Some integerBaseTypeSort]
             [0(*TODO: no idea with I'm doing*)]
         ; mk_ctor "size_t_ity"
-        ; mk_ctor "ptrdiff_t_ity" ] in
+        ; mk_ctor "ptrdiff_t_ity"
+        ; mk_ctor "vaddr_t_ity"
+        ] in
     
     let basicTypeSort =
       Datatype.mk_sort_s ctx "BasicType"
@@ -286,6 +288,8 @@ let integerType_to_expr slvSt (ity: Ctype.integerType) =
     | Size_t ->
         Expr.mk_app slvSt.ctx (List.nth fdecls 4) []
     | Ptrdiff_t ->
+        Expr.mk_app slvSt.ctx (List.nth fdecls 5) []
+    | Vaddr_t ->
         Expr.mk_app slvSt.ctx (List.nth fdecls 5) []
     | Wint_t
     | Wchar_t ->

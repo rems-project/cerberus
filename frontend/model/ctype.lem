@@ -31,6 +31,7 @@ type integerType (* [name = "^\\(\\|\\([a-z A-Z]+_\\)\\)ity[0-9]*'?$"] *) =
  | Wint_t
  | Size_t
  | Ptrdiff_t
+ | Vaddr_t (* CHERI-specific *)
 
 (* STD §6.2.5#10, sentence 1 *)
 type realFloatingType =
@@ -165,6 +166,8 @@ let integerTypeEqual ity1 ity2 =
         7
     | Ptrdiff_t ->
         8
+    | Vaddr_t ->
+        9
   end in
   match (ity1, ity2) with
     | (Signed ibty1, Signed ibty2) ->
@@ -335,7 +338,9 @@ let setElemCompare_integerType ity1 ity2 =
         7
     | Ptrdiff_t ->
         8
-  end in
+    | Vaddr_t ->
+       9
+end in
   match (ity1, ity2) with
     | (Signed ibty1, Signed ibty2) ->
         setElemCompare ibty1 ibty2
@@ -551,6 +556,10 @@ let size_t =
 val ptrdiff_t: ctype
 let ptrdiff_t =
   Ctype [] (Basic (Integer Ptrdiff_t))
+
+val vaddr_t: ctype
+let vaddr_t =
+  Ctype [] (Basic (Integer Vaddr_t))
 
 val is_ptr_t: ctype -> bool
 let is_ptr_t (Ctype _ ty_) =

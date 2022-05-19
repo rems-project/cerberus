@@ -2330,7 +2330,21 @@ module CHERI (C:Capability
                TyPred (Ctype.ctypeEqual Ctype.uintptr_t);
                TyIsPointer
            ];
+             ExactArg Ctype.size_t ] )
+   (*
+    else if name = "cheri_address_get" then
+      Some ( ExactRet (Ctype.vaddr_t)
+           [ PolymorphicArg [
+               TyPred (Ctype.ctypeEqual Ctype.intptr_t);
+               TyPred (Ctype.ctypeEqual Ctype.uintptr_t);
+               TyIsPointer
+           ];
            ExactArg Ctype.size_t ] )
+    else if name = "cheri_base_get" then
+    else if name = "cheri_length_get" then
+    else if name = "cheri_tag_get" then
+    else if name = "cheri_is_equal_exact" then
+   *)
     else
       None
 
@@ -2674,6 +2688,8 @@ module CHERI (C:Capability
                 | Wint_t (* TODO *)
                 | Signed _ ->
                  signed_max n
+              | Vaddr_t ->
+                 unsigned_max n
               | Enum _ ->
                  (* TODO: hack, assuming like int *)
                  signed_max 4
@@ -2709,6 +2725,7 @@ module CHERI (C:Capability
            | None ->
               failwith "the concrete memory model requires a complete implementation MIN"
            end
+        | Vaddr_t -> zero
         | Enum _ ->
            (* TODO: hack, assuming like int *)
            signed_min 4

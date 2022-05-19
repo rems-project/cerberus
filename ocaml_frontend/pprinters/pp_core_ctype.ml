@@ -44,6 +44,7 @@ let pp_integer_ctype ?(compact = false) ity =
     | Wchar_t          -> !^ "wchar_t"
     | Wint_t           -> !^ "wint_t"
     | Ptrdiff_t        -> !^ "ptrdiff_t"
+    | Vaddr_t          -> !^ "vaddr_t"
 
 let pp_floating_ctype fty =
   match fty with

@@ -2182,6 +2182,8 @@ let eff_member_shift_ptrval _ tag_sym membr_ident ptrval =
             | Wint_t (* TODO *)
             | Signed _ ->
                 signed_max
+            | Vaddr_t ->
+                unsigned_max
             | Enum _ ->
                 (* TODO: hack, assuming like int *)
                 sub (pow_int (of_int 2) (8*4-1)) (of_int 1)
@@ -2214,6 +2216,7 @@ let eff_member_shift_ptrval _ tag_sym membr_ident ptrval =
             | None ->
                 failwith "the concrete memory model requires a complete implementation MIN"
           end
+      | Vaddr_t -> zero
       | Enum _ ->
           (* TODO: hack, assuming like int *)
           negate (pow_int (of_int 2) (8*4-1))
