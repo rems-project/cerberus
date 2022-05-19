@@ -12,6 +12,7 @@ let keywords =
     (Pmap.empty Stdlib.compare)
     [
       (* for Core ctypes *)
+      ("const",       T.CONST      );
       ("_Atomic",     T.ATOMIC     );
       ("_Bool",       T.BOOL       );
       ("char",        T.CHAR       );

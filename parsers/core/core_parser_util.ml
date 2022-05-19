@@ -25,6 +25,7 @@ type result =
 exception Core_error of (Location_ocaml.t * Errors.core_parser_cause)
 
 type token =
+  | CONST
   | SHORT
   | INT
   | LONG

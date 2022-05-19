@@ -1040,7 +1040,8 @@ let mk_file decls =
 %token <Mem_common.memop> MEMOP_OP
 
 (* ctype tokens *)
-%token VOID ATOMIC (* DOTS *)
+%token CONST
+%token VOID ATOMIC DOTS
 %token FLOAT DOUBLE LONG_DOUBLE
 %token ICHAR SHORT INT LONG LONG_LONG
 %token CHAR BOOL SIGNED UNSIGNED
@@ -1261,18 +1262,19 @@ ctype:
 | VOID
     { Ctype.void }
 | bty= basic_type
-  { Ctype.Ctype ([], Ctype.Basic bty) }
+  { Ctype ([], Basic bty) }
 | ty= ctype LBRACKET n_opt= INT_CONST? RBRACKET
-    { Ctype.Ctype ([], Ctype.Array (ty, n_opt)) }
-| ty= ctype tys= delimited(LPAREN, separated_list(COMMA, ctype), RPAREN)
-    { Ctype.Ctype ([], Function ((Ctype.no_qualifiers, ty), List.map (fun ty -> (Ctype.no_qualifiers, ty, false)) tys, false)) }
-(* TODO *)
-(* | ty= ctype LPAREN tys= separated_list(COMMA, ctype) COMMA DOTS RPAREN *)
-(*     { Core_ctype.Function0 (ty, tys, true) } *)
+    { Ctype ([], Array (ty, n_opt)) }
+| ty= ctype params= delimited(LPAREN, params, RPAREN)
+    { let (tys, is_variadic) = params in
+      Ctype ([], Function ( (Ctype.no_qualifiers, ty)
+                          , List.map (fun ty -> (Ctype.no_qualifiers, ty, false)) tys, false)) }
+| CONST ty= ctype STAR
+    { Ctype ([], Pointer ({ no_qualifiers with const= true }, ty)) }
 | ty= ctype STAR
-    { Ctype.Ctype ([], Ctype.Pointer (Ctype.no_qualifiers, ty)) }
+    { Ctype ([], Pointer (no_qualifiers, ty)) }
 | ATOMIC ty= delimited(LPAREN, ctype, RPAREN)
-    { Ctype.Ctype ([], Ctype.Atomic ty) }
+    { Ctype ([], Atomic ty) }
 | (* TODO: check the lexing *) str= SYM
     { match Builtins.translate_builtin_typenames ("__cerbty_" ^ fst str) with
         | Some ty ->
@@ -1286,6 +1288,13 @@ ctype:
 | UNION tag= SYM
     (* NOTE: we only collect the string name here *)
     { Ctype.Ctype ([], Ctype.Union (Symbol.Symbol ("", -1, SD_Id (fst tag)))) }
+;
+
+params:
+| xs= separated_list(COMMA, ctype)
+    { (xs, false) }
+| xs= separated_list(COMMA, ctype) COMMA DOTS
+    { (xs, true) }
 ;
 (* END Ail types *)
 
@@ -1644,9 +1653,9 @@ action:
     { Store0 (true, _pe1, _pe2, _pe3, mo) }
 | LOAD LPAREN _pe1= pexpr COMMA _pe2= pexpr COMMA mo= memory_order RPAREN
     { Load0 (_pe1, _pe2, mo) }
-| SEQ_RMW LPAREN _pe1= pexpr COMMA _pe2= pexpr COMMA _sym= SYM EQ_GT _pe3= pexpr COMMA mo= memory_order RPAREN
+| SEQ_RMW LPAREN _pe1= pexpr COMMA _pe2= pexpr COMMA _sym= SYM EQ_GT _pe3= pexpr (*COMMA mo= memory_order*) RPAREN
     { SeqRMW (false, _pe1, _pe2, _sym, _pe3) }
-| SEQ_RMW_WITH_FORWARD LPAREN _pe1= pexpr COMMA _pe2= pexpr COMMA _sym= SYM EQ_GT _pe3= pexpr COMMA mo= memory_order RPAREN
+| SEQ_RMW_WITH_FORWARD LPAREN _pe1= pexpr COMMA _pe2= pexpr COMMA _sym= SYM EQ_GT _pe3= pexpr (*COMMA mo= memory_order*) RPAREN
     { SeqRMW (true, _pe1, _pe2, _sym, _pe3) }
 
 | RMW LPAREN _pe1= pexpr COMMA _pe2= pexpr COMMA _pe3= pexpr COMMA _pe4= pexpr COMMA mo1= memory_order COMMA mo2= memory_order RPAREN
