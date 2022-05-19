@@ -5,7 +5,6 @@ open Bmc_utils
 open Cerb_frontend
 open Ctype
 open Core
-open Impl_mem
 open Printf
 open Util
 open Z3
@@ -129,7 +128,7 @@ let size_of_ctype (ty: ctype)
 
 let integer_value_to_z3 (ival: Impl_mem.integer_value) : Expr.expr =
   (* TODO: check which is the correct ival->big num function *)
-  match eval_integer_value ival with
+  match Mem.eval_integer_value ival with
   | None -> assert false
   | Some i -> big_num_to_z3 i
 

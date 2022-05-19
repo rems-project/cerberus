@@ -2397,16 +2397,13 @@ let combine_prov prov1 prov2 =
               N.sub r dlt in
           IV (Prov_none, (wrapI (N.of_int64 (Int64.of_float fval))))
   
-  let eq_ival _ (IV (_, n1)) (IV (_, n2)) =
+  let eq_ival (IV (_, n1)) (IV (_, n2)) =
     Some (Nat_big_num.equal n1 n2)
-  let lt_ival _ (IV (_, n1)) (IV (_, n2)) =
+  let lt_ival (IV (_, n1)) (IV (_, n2)) =
     Some (Nat_big_num.compare n1 n2 = -1)
-  let le_ival _ (IV (_, n1)) (IV (_, n2)) =
+  let le_ival (IV (_, n1)) (IV (_, n2)) =
     let cmp = Nat_big_num.compare n1 n2 in
     Some (cmp = -1 || cmp = 0)
-  
-  let eval_integer_value (IV (_, n)) =
-    Some n
   
   let unspecified_mval ty =
     MVunspecified ty

@@ -1,7 +1,7 @@
 module CF = Cerb_frontend
 module BT = BaseTypes
 module SymMap = Map.Make(Sym)
-module IM = CF.Impl_mem
+module IM = struct include CF.Impl_mem include CF.Mem end
 module OI = CF.Ocaml_implementation
 open Sctypes
 

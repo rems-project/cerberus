@@ -523,7 +523,7 @@ let interp_backend io core_file ~args ~batch ~fs ~driver_conf =
       | (Vloaded (LVspecified (OVinteger ival)) :: _) ->
           (* TODO: yuck *)
           return (Either.Right begin
-            match Impl_mem.eval_integer_value ival with
+            match Mem.eval_integer_value ival with
               | Some n ->
                   begin try
                     Z.to_int n

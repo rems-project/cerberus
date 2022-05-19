@@ -202,17 +202,17 @@ declare ocaml target_rep function case_integer_value = `Impl_mem.case_integer_va
 declare ocaml target_rep function is_specified_ival = `Impl_mem.is_specified_ival`
 
 (* Predicates on integer values *)
-val eq_ival: maybe mem_state -> integer_value -> integer_value -> maybe bool
-val lt_ival: maybe mem_state -> integer_value -> integer_value -> maybe bool
-val le_ival: maybe mem_state -> integer_value -> integer_value -> maybe bool
+val eq_ival: integer_value -> integer_value -> maybe bool
+val lt_ival: integer_value -> integer_value -> maybe bool
+val le_ival: integer_value -> integer_value -> maybe bool
 declare ocaml target_rep function eq_ival = `Impl_mem.eq_ival`
 declare ocaml target_rep function lt_ival = `Impl_mem.lt_ival`
 declare ocaml target_rep function le_ival = `Impl_mem.le_ival`
 
-
-val eval_integer_value: integer_value -> maybe integer
-declare ocaml target_rep function eval_integer_value = `Impl_mem.eval_integer_value`
-
+let eval_integer_value ival =
+  case_integer_value ival
+    (fun n -> Just n)
+    (fun () -> Nothing)
 
 (* Floating value constructors *)
 val zero_fval: floating_value

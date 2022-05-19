@@ -986,11 +986,11 @@ let is_specified_ival _ =
   true
 
 (* Predicats on integer values *)
-let eq_ival _ ival1 ival2 =
+let eq_ival ival1 ival2 =
   Some (N.equal (ival_to_int ival1) (ival_to_int ival2))
-let lt_ival _ ival1 ival2 =
+let lt_ival ival1 ival2 =
 Some (N.less (ival_to_int ival1) (ival_to_int ival2))
-let le_ival _ ival1 ival2 =
+let le_ival ival1 ival2 =
 Some (N.less_equal (ival_to_int ival1) (ival_to_int ival2))
 
 let eval_integer_value ival =

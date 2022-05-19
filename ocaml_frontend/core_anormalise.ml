@@ -434,8 +434,8 @@ and n_pexpr : 'a. Loc.t -> 'a n_pexpr_domain ->
              (n_pexpr loc domain e2 k)))
        | Pexpr (_, _, PEval (Vloaded (LVspecified (OVinteger iv1)))), 
          Pexpr (_, _, PEval (Vloaded (LVspecified (OVinteger iv2))))
-            when Option.equal Z.equal (Impl_mem.eval_integer_value iv1) (Some Z.one) &&
-                 Option.equal Z.equal (Impl_mem.eval_integer_value iv2) (Some Z.zero)
+            when Option.equal Z.equal (Mem.eval_integer_value iv1) (Some Z.one) &&
+                 Option.equal Z.equal (Mem.eval_integer_value iv2) (Some Z.zero)
          ->
           n_pexpr_name loc domain e1 (fun e1 ->
           k (annotate (M_PEbool_to_integer e1)))
@@ -736,8 +736,8 @@ let rec n_expr (loc : Loc.t) (returns : symbol Pset.set)
            (n_expr e2 k)))
      | Expr (_, Epure (Pexpr (_, _, PEval (Vloaded (LVspecified (OVinteger iv1)))))), 
        Expr (_, Epure (Pexpr (_, _, PEval (Vloaded (LVspecified (OVinteger iv2))))))
-          when Option.equal Z.equal (Impl_mem.eval_integer_value iv1) (Some Z.one) &&
-                 Option.equal Z.equal (Impl_mem.eval_integer_value iv2) (Some Z.zero)
+          when Option.equal Z.equal (Mem.eval_integer_value iv1) (Some Z.one) &&
+                 Option.equal Z.equal (Mem.eval_integer_value iv2) (Some Z.zero)
        ->
         n_pexpr_name loc expr_n_pexpr_domain e1 (fun e1 ->
         k (wrap (M_Epure (M_Pexpr (loc, [], (), M_PEbool_to_integer e1)))))

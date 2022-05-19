@@ -211,11 +211,11 @@ let rec pull_constrained n (Pexpr _ () pexpr_) =
 
 
 val step_eval_peop:
-  Loc.t -> maybe Mem.mem_state -> (Core.pexpr -> EU.t Core.pexpr core_run_cause) ->
+  Loc.t -> (Core.pexpr -> EU.t Core.pexpr core_run_cause) ->
   Core.binop -> Core.pexpr -> Core.pexpr  ->
   EU.t (Core.generic_pexpr_ unit Symbol.sym) core_run_cause
 
-let step_eval_peop loc mem_st_opt self binop pe1 pe2 =
+let step_eval_peop loc self binop pe1 pe2 =
   self pe1 >>= fun pe1' ->
   self pe2 >>= fun pe2' ->
   match (binop, Caux.valueFromPexpr pe1', Caux.valueFromPexpr pe2') with
@@ -247,7 +247,7 @@ let step_eval_peop loc mem_st_opt self binop pe1 pe2 =
         
         (* Integer equality *)
         | (OpEq, Just (Vobject (OVinteger ival1)), Just (Vobject (OVinteger ival2))) ->
-            match Mem.eq_ival mem_st_opt ival1 ival2 with
+            match Mem.eq_ival ival1 ival2 with
               | Just b ->
                   EU.return (PEval (if b then Vtrue else Vfalse))
               | Nothing ->
@@ -267,7 +267,7 @@ let step_eval_peop loc mem_st_opt self binop pe1 pe2 =
             EU.return (PEval (if Mem.eq_fval fval1 fval2 then Vtrue else Vfalse))
         
         | (OpLt, Just (Vobject (OVinteger ival1)), Just (Vobject (OVinteger ival2))) ->
-            match Mem.lt_ival mem_st_opt ival1 ival2 with
+            match Mem.lt_ival ival1 ival2 with
               | Just b ->
                   EU.return (PEval (if b then Vtrue else Vfalse))
               | Nothing ->
@@ -281,7 +281,7 @@ let step_eval_peop loc mem_st_opt self binop pe1 pe2 =
             EU.return (PEval (if Mem.lt_fval fval1 fval2 then Vtrue else Vfalse))
         
         | (OpLe, Just (Vobject (OVinteger ival1)), Just (Vobject (OVinteger ival2))) ->
-            match Mem.le_ival mem_st_opt ival1 ival2 with
+            match Mem.le_ival ival1 ival2 with
               | Just b ->
                   EU.return (PEval (if b then Vtrue else Vfalse))
               | Nothing ->
@@ -296,7 +296,7 @@ let step_eval_peop loc mem_st_opt self binop pe1 pe2 =
         
         | (OpGe, Just (Vobject (OVinteger ival1)), Just (Vobject (OVinteger ival2))) ->
             (* TODO CHECK *)
-            match Mem.le_ival mem_st_opt ival2 ival1 with
+            match Mem.le_ival ival2 ival1 with
               | Just b ->
                   EU.return (PEval (if b then Vtrue else Vfalse))
               | Nothing ->
@@ -311,7 +311,7 @@ let step_eval_peop loc mem_st_opt self binop pe1 pe2 =
         
         | (OpGt, Just (Vobject (OVinteger ival1)), Just (Vobject (OVinteger ival2))) ->
             (* TODO CHECK *)
-            match Mem.lt_ival mem_st_opt ival2 ival1 with
+            match Mem.lt_ival ival2 ival1 with
               | Just b ->
                   EU.return (PEval (if b then Vtrue else Vfalse))
               | Nothing ->
@@ -680,7 +680,7 @@ let rec step_eval_pexpr n loc core_extern env mem_st_opt file hasConstrained pex
               EU.return (PEnot pe')
         end
     | PEop binop pe1 pe2 ->
-       step_eval_peop loc mem_st_opt self binop pe1 pe2
+       step_eval_peop loc  self binop pe1 pe2
     | PEstruct tag_sym ident_pes ->
         let (idents, pes) = List.unzip ident_pes in
         EU.mapM self pes >>= fun pes' ->

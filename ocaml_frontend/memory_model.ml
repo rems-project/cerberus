@@ -139,12 +139,10 @@ module type Memory = sig
   val is_specified_ival: integer_value -> bool
   
   (* Predicats on integer values *)
-  val eq_ival: mem_state option -> integer_value -> integer_value -> bool option
-  val lt_ival: mem_state option -> integer_value -> integer_value -> bool option
-  val le_ival: mem_state option -> integer_value -> integer_value -> bool option
-  
-  val eval_integer_value: integer_value -> Nat_big_num.num option
-  
+  val eq_ival: integer_value -> integer_value -> bool option
+  val lt_ival: integer_value -> integer_value -> bool option
+  val le_ival: integer_value -> integer_value -> bool option
+
   (* Floating value constructors *)
   val zero_fval: floating_value
   val one_fval: floating_value
