@@ -6,7 +6,7 @@ typedef __cerbty_size_t      size_t;
 typedef __cerbty_wchar_t     wchar_t;
 
 #ifdef __CHERI_PURE_CAPABILITY__
-typedef (void*) max_align_t;
+typedef void* max_align_t;
 typedef __cerbty_vaddr_t   vaddr_t;
 #else
 #define max_align_t          __cerbty_max_align_t;
