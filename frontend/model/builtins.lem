@@ -474,7 +474,17 @@ let translate_builtin_varnames (Symbol.Identifier _ str) =
     (* CHERI intrinsics *)
     | "__cerbvar_cheri_perms_and" ->
         Just (AilEbuiltin (AilBCHERI "cheri_perms_and"))
-    
+    | "__cerbvar_cheri_address_get" ->
+        Just (AilEbuiltin (AilBCHERI "cheri_address_get"))
+    | "__cerbvar_cheri_base_get" ->
+        Just (AilEbuiltin (AilBCHERI "cheri_base_get"))
+    | "__cerbvar_cheri_length_get" ->
+        Just (AilEbuiltin (AilBCHERI "cheri_length_get"))
+    | "__cerbvar_cheri_tag_get" ->
+        Just (AilEbuiltin (AilBCHERI "cheri_tag_get"))
+    | "__cerbvar_cheri_is_equal_exact" ->
+        Just (AilEbuiltin (AilBCHERI "cheri_is_equal_exact"))
+
     | _ ->
       Nothing
 end

@@ -2331,20 +2331,47 @@ module CHERI (C:Capability
                TyIsPointer
            ];
              ExactArg Ctype.size_t ] )
-   (*
     else if name = "cheri_address_get" then
-      Some ( ExactRet (Ctype.vaddr_t)
+      Some ( ExactRet (Ctype.vaddr_t),
            [ PolymorphicArg [
                TyPred (Ctype.ctypeEqual Ctype.intptr_t);
                TyPred (Ctype.ctypeEqual Ctype.uintptr_t);
                TyIsPointer
-           ];
-           ExactArg Ctype.size_t ] )
+           ]])
     else if name = "cheri_base_get" then
+      Some ( ExactRet (Ctype.vaddr_t),
+           [ PolymorphicArg [
+               TyPred (Ctype.ctypeEqual Ctype.intptr_t);
+               TyPred (Ctype.ctypeEqual Ctype.uintptr_t);
+               TyIsPointer
+           ]])
     else if name = "cheri_length_get" then
+      Some ( ExactRet (Ctype.size_t),
+           [ PolymorphicArg [
+               TyPred (Ctype.ctypeEqual Ctype.intptr_t);
+               TyPred (Ctype.ctypeEqual Ctype.uintptr_t);
+               TyIsPointer
+           ]])
     else if name = "cheri_tag_get" then
+      Some ( ExactRet (Ctype( [], (Basic (Integer Bool)))),
+           [ PolymorphicArg [
+               TyPred (Ctype.ctypeEqual Ctype.intptr_t);
+               TyPred (Ctype.ctypeEqual Ctype.uintptr_t);
+               TyIsPointer
+           ]])
     else if name = "cheri_is_equal_exact" then
-   *)
+      Some ( ExactRet (Ctype( [], (Basic (Integer Bool)))),
+           [ PolymorphicArg [
+               TyPred (Ctype.ctypeEqual Ctype.intptr_t);
+               TyPred (Ctype.ctypeEqual Ctype.uintptr_t);
+               TyIsPointer
+               ];
+             PolymorphicArg [
+                 TyPred (Ctype.ctypeEqual Ctype.intptr_t);
+                 TyPred (Ctype.ctypeEqual Ctype.uintptr_t);
+                 TyIsPointer
+               ]
+        ])
     else
       None
 
@@ -2361,6 +2388,7 @@ module CHERI (C:Capability
 
   let call_intrinsic loc name args =
     if name = "cheri_perms_and" then
+      (* this intrinsic modify memory state *)
       let cap_val = List.nth args 0 in
       let mask_val = List.nth args 1 in
       get >>=
@@ -2383,6 +2411,69 @@ module CHERI (C:Capability
                      return (Some (update_cap_in_mem_value cap_val c))
                 end
              | _ -> fail (MerrOther ("CHERI.call_intrinsic: 2nd argument's type is not size_t in: '" ^ name ^ "'"))
+        end
+    else if name = "cheri_address_get" then
+      (* this intrinsic is pure *)
+      let cap_val = List.nth args 0 in
+      get >>=
+        begin fun st ->
+        match cap_of_mem_value st.funptrmap cap_val with
+        | None -> fail (MerrOther ("CHERI.call_intrinsic: non-cap 1st argument in: '" ^ name ^ "'"))
+        | Some (_,c) ->
+           let v = C.cap_get_value c in
+           let p = Prov_none in (* TODO: CHERI provenance? *)
+           return (Some (MVinteger (Vaddr_t, (IV (p,v)))))
+        end
+    else if name = "cheri_base_get" then
+      (* this intrinsic is pure *)
+      let cap_val = List.nth args 0 in
+      get >>=
+        begin fun st ->
+        match cap_of_mem_value st.funptrmap cap_val with
+        | None -> fail (MerrOther ("CHERI.call_intrinsic: non-cap 1st argument in: '" ^ name ^ "'"))
+        | Some (_,c) ->
+           let v = fst (C.cap_get_bounds c) in
+           let p = Prov_none in (* TODO: CHERI provenance? *)
+           return (Some (MVinteger (Vaddr_t, (IV (p,v)))))
+        end
+    else if name = "cheri_length_get" then
+      (* this intrinsic is pure *)
+      let cap_val = List.nth args 0 in
+      get >>=
+        begin fun st ->
+        match cap_of_mem_value st.funptrmap cap_val with
+        | None -> fail (MerrOther ("CHERI.call_intrinsic: non-cap 1st argument in: '" ^ name ^ "'"))
+        | Some (_,c) ->
+           let (base,limit) = C.cap_get_bounds c in
+           let v = Z.sub limit base in
+           let p = Prov_none in (* TODO: CHERI provenance? *)
+           return (Some (MVinteger (Size_t, (IV (p,v)))))
+        end
+    else if name = "cheri_tag_get" then
+      (* this intrinsic is pure *)
+      let cap_val = List.nth args 0 in
+      get >>=
+        begin fun st ->
+        match cap_of_mem_value st.funptrmap cap_val with
+        | None -> fail (MerrOther ("CHERI.call_intrinsic: non-cap 1st argument in: '" ^ name ^ "'"))
+        | Some (_,c) ->
+           let v = if C.cap_is_valid c then Z.succ (Z.zero) else Z.zero  in
+           let p = Prov_none in (* TODO: CHERI provenance? *)
+           return (Some (MVinteger (Bool, (IV (p,v)))))
+        end
+    else if name = "cheri_is_equal_exact" then
+      (* this intrinsic is pure *)
+      let cap_val0 = List.nth args 0 in
+      let cap_val1 = List.nth args 1 in
+      get >>=
+        begin fun st ->
+        match cap_of_mem_value st.funptrmap cap_val0, cap_of_mem_value st.funptrmap cap_val1 with
+        | None,_ -> fail (MerrOther ("CHERI.call_intrinsic: non-cap 1st argument in: '" ^ name ^ "'"))
+        | _,None -> fail (MerrOther ("CHERI.call_intrinsic: non-cap 2nd argument in: '" ^ name ^ "'"))
+        | Some (_,c0), Some (_,c1) ->
+           let v = if C.eq c0 c1 then Z.succ (Z.zero) else Z.zero in
+           let p = Prov_none in (* TODO: CHERI provenance? *)
+           return (Some (MVinteger (Bool, (IV (p,v)))))
         end
     else
       fail (MerrOther ("CHERI.call_intrinsic: unknown intrinsic: '" ^ name ^ "'"))

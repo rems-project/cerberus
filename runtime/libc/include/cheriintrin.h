@@ -6,5 +6,10 @@
 #endif
 
 #define cheri_perms_and  __cerbvar_cheri_perms_and
+#define cheri_address_get __cerbvar_cheri_address_get
+#define cheri_base_get __cerbvar_cheri_base_get
+#define cheri_length_get __cerbvar_cheri_length_get
+#define cheri_tag_get __cerbvar_cheri_tag_get
+#define cheri_is_equal_exact __cerbvar_cheri_is_equal_exact
 
 #endif

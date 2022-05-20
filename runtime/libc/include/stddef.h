@@ -5,9 +5,12 @@ typedef __cerbty_ptrdiff_t   ptrdiff_t;
 typedef __cerbty_size_t      size_t;
 typedef __cerbty_wchar_t     wchar_t;
 
+#ifndef __CHERI__
+typedef __cerbty_vaddr_t   vaddr_t;
+#endif
+
 #ifdef __CHERI_PURE_CAPABILITY__
 typedef void* max_align_t;
-typedef __cerbty_vaddr_t   vaddr_t;
 #else
 #define max_align_t          __cerbty_max_align_t;
 #endif
