@@ -3,7 +3,7 @@
  *     Victor Gomes
  *)
 
-open import Pervasives Utils Loc Show Symbol
+open import Pervasives Utils Loc Show Symbol Global
 import Annot
 
 type integerBaseType [name = "^\\(\\|\\([a-z A-Z]+_\\)\\)ibty[0-9]*'?$"] =
@@ -557,9 +557,12 @@ val ptrdiff_t: ctype
 let ptrdiff_t =
   Ctype [] (Basic (Integer Ptrdiff_t))
 
-val vaddr_t: ctype
-let vaddr_t =
-  Ctype [] (Basic (Integer Vaddr_t))
+val vaddr_t: unit -> ctype
+let vaddr_t _ =
+  if Global.is_CHERI() then
+    Ctype [] (Basic (Integer Vaddr_t))
+  else
+    error "vaddr_t is CHERI-specific"
 
 val is_ptr_t: ctype -> bool
 let is_ptr_t (Ctype _ ty_) =

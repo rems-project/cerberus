@@ -2332,14 +2332,14 @@ module CHERI (C:Capability
            ];
              ExactArg Ctype.size_t ] )
     else if name = "cheri_address_get" then
-      Some ( ExactRet (Ctype.vaddr_t),
+      Some ( ExactRet (Ctype.vaddr_t ()),
            [ PolymorphicArg [
                TyPred (Ctype.ctypeEqual Ctype.intptr_t);
                TyPred (Ctype.ctypeEqual Ctype.uintptr_t);
                TyIsPointer
            ]])
     else if name = "cheri_base_get" then
-      Some ( ExactRet (Ctype.vaddr_t),
+      Some ( ExactRet (Ctype.vaddr_t ()),
            [ PolymorphicArg [
                TyPred (Ctype.ctypeEqual Ctype.intptr_t);
                TyPred (Ctype.ctypeEqual Ctype.uintptr_t);
