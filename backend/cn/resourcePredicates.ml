@@ -56,17 +56,17 @@ let byte () =
   let value_s, value = IT.fresh BT.Integer in
   let init_s, init = IT.fresh BT.Bool in
   let point = {
-      ct = char_ct; 
+      name = Owned (Integer Char); 
       pointer = pointer;
+      iargs = [];
       permission = bool_ true;
-      value = value;
-      init = init;
+      oargs = [value; init];
     }
   in
   let lrt =
     LRT.Logical ((value_s, IT.bt value), (loc, None),
     LRT.Logical ((init_s, IT.bt init), (loc, None),
-    LRT.Resource (Point point, (loc, None),
+    LRT.Resource (P point, (loc, None),
     LRT.I)))
   in
   let clause = {
@@ -92,16 +92,16 @@ let char () =
   let pointer_s, pointer = IT.fresh Loc in
   let value_s, value = IT.fresh BT.Integer in
   let point = {
-      ct = char_ct; 
+      name = Owned (Integer Char); 
       pointer = pointer;
+      iargs = [];
       permission = bool_ true;
-      value = value;
-      init = bool_ true;
+      oargs = [value; bool_ true];
     }
   in
   let lrt =
     LRT.Logical ((value_s, IT.bt value), (loc, None),
-    LRT.Resource (Point point, (loc, None),
+    LRT.Resource (P point, (loc, None),
     LRT.I))
   in
   let value_s_o = Sym.fresh_named "value" in  
@@ -130,15 +130,15 @@ let zerobyte () =
   let loc = Loc.other "internal (ZeroByte)" in
   let pointer_s, pointer = IT.fresh Loc in
   let point = {
-      ct = char_ct; 
+      name = Owned (Integer Char); 
       pointer = pointer;
+      iargs = [];
       permission = bool_ true;
-      value = int_ 0;
-      init = bool_ true;
+      oargs = [int_ 0; bool_ true];
     }
   in
   let lrt =
-    LRT.Resource (Point point, (loc, None),
+    LRT.Resource (P point, (loc, None),
     LRT.I)
   in
   let clause = {
@@ -174,8 +174,8 @@ let early_alloc () =
   let end_s, end_t = IT.fresh Integer in
   let region = 
     let q_s, q = IT.fresh Integer in 
-    QPredicate {
-        name = "Byte";
+    Resources.RE.Q {
+        name = PName "Byte";
         pointer = pointer_ Z.zero;
         q = q_s;
         step = Memory.size_of_ctype char_ct;
@@ -229,7 +229,7 @@ let page_alloc_predicates struct_decls =
       let qp = 
         let length = pred_ "page_size_of_order" [order] Integer in
         let q_s, q = IT.fresh Integer in {
-          name = "Byte"; 
+          name = PName "Byte"; 
           pointer = pointer_ Z.zero;
           q = q_s;
           step = Memory.size_of_ctype char_ct;
@@ -240,7 +240,7 @@ let page_alloc_predicates struct_decls =
         }
       in
       let lrt =
-        LRT.Resource (QPredicate qp, (loc, None),
+        LRT.Resource (Q qp, (loc, None),
         LRT.Constraint (t_ (ne_ (order, int_ hHYP_NO_ORDER)), (loc, None),
         LRT.Constraint (t_ (IT.good_pointer ~pointee_ct:char_ct pbase), (loc, None),
         LRT.I)))
@@ -290,12 +290,12 @@ let page_alloc_predicates struct_decls =
 
     let metadata_owned = 
       let resource = 
-        Point {
-            ct = struct_ct hyp_pool_tag;
+        P {
+            name = Owned (Struct hyp_pool_tag);
             pointer = pool_pointer;
+            iargs = [];
             permission = bool_ true;
-            init = bool_ true;
-            value = pool;
+            oargs = [pool; bool_ true];
           }
       in
       LRT.Logical ((pool_s, IT.bt pool), (loc, None), 
@@ -396,8 +396,8 @@ let page_alloc_predicates struct_decls =
           ]
       in
       let qp = 
-        QPredicate {
-            name = "Page";
+        Resources.RE.Q {
+            name = PName "Page";
             pointer = pointer_ Z.zero;
             q = q_s;
             step = pPAGE_SIZE;

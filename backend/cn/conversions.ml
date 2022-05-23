@@ -138,12 +138,12 @@ let make_owned_funarg floc i (pointer : IndexTerms.t) path sct =
      in
      let r = 
        (`Resource 
-          (RE.Point {
-              ct = sct; 
+          (RE.P {
+              name = Owned sct; 
               pointer; 
               permission = bool_ true; 
-              value = pointee_t; 
-              init = bool_ true
+              iargs = [];
+              oargs = [pointee_t; bool_ true];
             }),
         (floc, Some "ownership of function argument location"))
      in
@@ -178,12 +178,12 @@ let make_owned ~loc ~oname ~pointer ~path ~sct ~o_value ~o_permission =
           mapping
      in
      let r = 
-       (`Resource (RE.Point {
-           ct = sct; 
+       (`Resource (RE.P {
+           name = Owned sct; 
            pointer; 
            permission = Option.value o_permission ~default:(bool_ true); 
-           value = pointee_t; 
-           init = bool_ true
+           iargs = [];
+           oargs = [pointee_t; bool_ true]
           }),
         (loc, Some "ownership"))
      in
@@ -225,13 +225,14 @@ let make_qowned ~loc ~oname ~pointer ~q:(qs,qbt) ~step ~condition ~path ~sct ~o_
           mapping
      in
      let r = 
-       (`Resource (RE.QPoint {
-           ct = sct; 
+       (`Resource (RE.Q {
+           name = Owned sct; 
            pointer; 
            q = qs;
            permission = condition; 
-           value = map_get_ pointee_t (sym_ (qs, qbt)); 
-           init = bool_ true
+           step = Memory.size_of_ctype sct;
+           iargs = [];
+           oargs = [map_get_ pointee_t (sym_ (qs, qbt)); bool_ true]
           }),
         (loc, Some "ownership"))
      in
@@ -253,12 +254,12 @@ let make_block ~loc ~pointer ~path ~sct ~o_permission =
      in
      let mapping = [] in
      let r = 
-       (`Resource (RE.Point {
-            ct = sct; 
+       (`Resource (RE.P {
+            name = Owned sct; 
             pointer;
             permission = Option.value ~default:(bool_ true) o_permission;
-            value = pointee_t;
-            init = init_t
+            iargs = [];
+            oargs = [pointee_t; init_t]
           }),
         (loc, Some "ownership"))
      in
@@ -306,8 +307,8 @@ let make_pred loc (pred, def) ~oname pointer iargs some_oargs ~o_permission =
   in
   let@ () = ensure_some_oargs_empty loc pred some_oargs in
   let r = 
-    (`Resource (RE.Predicate {
-         name = pred; 
+    (`Resource (RE.P {
+         name = PName pred; 
          pointer = pointer;
          iargs; 
          oargs;
@@ -354,8 +355,8 @@ let make_qpred loc (pred, def) ~oname ~pointer ~q:(qs,qbt) ~step ~condition iarg
   in
   let@ () = ensure_some_oargs_empty loc pred some_oargs in
   let r = 
-    (`Resource (RE.QPredicate {
-         name = pred; 
+    (`Resource (RE.Q {
+         name = PName pred; 
          pointer;
          q = qs;
          step;

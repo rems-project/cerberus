@@ -119,16 +119,17 @@ let rec perm_spans m_g q perm =
 
 let model_res_spans m_g res =
   match res with
-  | (RER.Point pt) ->
+  | (RER.P ({name = Owned ct; _} as pt)) ->
       let perm = eval_extract "resource permission" m_g is_bool pt.permission in
       begin match perm with
       | false -> []
       | true ->
           let ptr = eval_extract "resource pointer" m_g is_pointer pt.pointer in
-          let sz = Memory.size_of_ctype pt.ct in
+          let sz = Memory.size_of_ctype ct in
           [(ptr, Z.add ptr (Z.of_int sz))]
       end
-  | (RER.QPoint qpt) ->
+  | (RER.Q ({name = Owned ct; _} as qpt)) ->
+      assert (qpt.step = Memory.size_of_ctype ct);
       let ispans = perm_spans m_g qpt.q qpt.permission in
       if List.compare_length_with ispans 0 == 0
       then []
@@ -138,7 +139,7 @@ let model_res_spans m_g res =
       else
       let spans = List.map (fun (i, j) -> (Option.get i, Option.get j)) ispans in
       let ptr = eval_extract "q-resource pointer" m_g is_pointer qpt.pointer in
-      let sz = Z.of_int (Memory.size_of_ctype qpt.ct) in
+      let sz = Z.of_int (Memory.size_of_ctype ct) in
       let offs i = Z.add ptr (Z.mul i sz) in
       (List.map (fun (i, j) -> (offs i, offs (Z.add j (Z.of_int 1)))) spans)
   | _ -> []
@@ -191,9 +192,9 @@ let compare_enclosing g ct1 ct2 =
   else Int.compare (enclosing_count g ct1) (enclosing_count g ct2)
 
 let req_pt_ct = function
-  | RER.Point pt -> (pt.pointer, pt.ct, false)
-  | RER.QPoint qpt -> (qpt.pointer, qpt.ct, true)
-  | _ -> raise (Invalid_argument "foo")
+  | RER.P ({name = Owned ct; _} as pt) -> (pt.pointer, ct, false)
+  | RER.Q ({name = Owned ct; _} as qpt) -> (qpt.pointer, ct, true)
+  | _ -> assert false
 
 let scan_subterms f t = fold_subterms (fun _ xs t -> match f t with
   | None -> xs
@@ -201,36 +202,37 @@ let scan_subterms f t = fold_subterms (fun _ xs t -> match f t with
 
 (* get concrete objects that (probably) exist in this resource/request *)
 let get_witnesses = function
-  | RER.Point pt -> [(pt.pointer, pt.permission)]
-  | RER.QPoint qpt ->
-  let i = sym_ (qpt.q, BT.Integer) in
-  let lbs = scan_subterms is_le qpt.permission
-    |> List.filter (fun (lhs, rhs) -> IT.equal i rhs)
-    |> List.map fst in
-  if List.length lbs <> 0
-  then Pp.debug 3 (lazy (Pp.item "unexpected number of lower bounds"
-    (Pp.list IT.pp lbs)))
-  else ();
-  let eqs = scan_subterms is_eq qpt.permission
-    |> List.filter (fun (lhs, rhs) -> IT.equal i lhs || IT.equal i rhs)
-  in
-  begin match lbs with
-      | [] -> []
-      | (lb :: _) ->
-  List.init (List.length eqs + 1)
-    (fun i -> (arrayShift_ (qpt.pointer, qpt.ct, add_ (lb, z_ (Z.of_int i))),
-        subst (make_subst [(qpt.q, z_ (Z.of_int i))]) qpt.permission))
-  end
+  | RER.P ({name = Owned _; _} as pt) -> [(pt.pointer, pt.permission)]
+  | RER.Q ({name = Owned ct; _} as qpt) ->
+     assert (qpt.step = Memory.size_of_ctype ct);
+     let i = sym_ (qpt.q, BT.Integer) in
+     let lbs = scan_subterms is_le qpt.permission
+       |> List.filter (fun (lhs, rhs) -> IT.equal i rhs)
+       |> List.map fst in
+     if List.length lbs <> 0
+     then Pp.debug 3 (lazy (Pp.item "unexpected number of lower bounds"
+       (Pp.list IT.pp lbs)))
+     else ();
+     let eqs = scan_subterms is_eq qpt.permission
+       |> List.filter (fun (lhs, rhs) -> IT.equal i lhs || IT.equal i rhs)
+     in
+     begin match lbs with
+         | [] -> []
+         | (lb :: _) ->
+     List.init (List.length eqs + 1)
+       (fun i -> (arrayShift_ (qpt.pointer, ct, add_ (lb, z_ (Z.of_int i))),
+           subst (make_subst [(qpt.q, z_ (Z.of_int i))]) qpt.permission))
+     end
   | _ -> []
 
 let outer_object m g inner_ptr = function
-  | RER.Point pt -> Some (pt.pointer, pt.ct, pt.permission)
-  | RER.QPoint qpt ->
+  | RER.P ({name = Owned ct; _} as pt) -> Some (pt.pointer, ct, pt.permission)
+  | RER.Q ({name = Owned ct; _} as qpt) ->
   (* need to invent an index at which to fold/unfold *)
   begin try
     let qptr = eval_extract "q-resource pointer" (m, g) is_pointer qpt.pointer in
     let iptr = eval_extract "inner object pointer" (m, g) is_pointer inner_ptr in
-    let sz = Z.of_int (Memory.size_of_ctype qpt.ct) in
+    let sz = Z.of_int (Memory.size_of_ctype ct) in
     let m_diff = Z.sub iptr qptr in
     let m_ix = Z.div m_diff sz in
     let m_offs = Z.sub m_diff (Z.mul m_ix sz) in
@@ -241,7 +243,7 @@ let outer_object m g inner_ptr = function
         ~pointer:ptr in
     let ok = and_ [divisible_ (offset, z_ sz);
         subst (make_subst [(qpt.q, index)]) qpt.permission] in
-    Some (ptr, qpt.ct, ok)
+    Some (ptr, ct, ok)
   with
     Failure pp -> begin
       Pp.debug 3 (lazy (Pp.item "failed to compute object offsets" pp));
@@ -300,7 +302,7 @@ let rec gather_same_actions opts = match opts with
     (action, or_ oks) :: gather_same_actions others
 
 let is_unknown_array_size = function
-  | RER.Point pt -> begin match pt.ct with
+  | RER.P ({name = Owned ct; _}) -> begin match ct with
       | Sctypes.Array (_, None) -> true
       | _ -> false
   end

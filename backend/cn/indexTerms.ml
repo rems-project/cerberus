@@ -665,9 +665,14 @@ let rec member_simp_ bt it member = match term it with
     then v
     else member_simp_ bt t member
   | _ ->
+     (* TODO: what's this? *)
     let member_bt = bt in
     member_ ~member_bt ("foo", it, member)
 
+
+let record_ members = 
+  IT (Record_op (Record members), 
+      BT.Record (List.map (fun (s,t) -> (s, basetype t)) members))
 
 
 

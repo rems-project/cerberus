@@ -589,29 +589,18 @@ module WRE = struct
 
   let welltyped loc resource = 
     begin match resource with
-    | Point b -> 
-       let@ () = WCT.is_ct loc b.ct in
-       let@ _ = WIT.check loc BT.Loc b.pointer in
-       let@ _ = WIT.check loc BT.Bool b.permission in
-       let@ _ = WIT.check loc (BT.of_sct b.ct) b.value in
-       let@ _ = WIT.check loc BT.Bool b.init in
-       return ()
-    | QPoint b -> 
-       let@ () = WCT.is_ct loc b.ct in
-       let@ _ = WIT.check loc BT.Loc b.pointer in
-       pure begin 
-           let@ () = add_l b.q Integer in
-           let@ _ = WIT.check loc BT.Bool b.permission in
-           let@ _ = WIT.check loc (BT.of_sct b.ct) b.value in
-           let@ _ = WIT.check loc BT.Bool b.init in
-           return ()
-         end
-    | Predicate p -> 
-       let@ def = Typing.get_resource_predicate_def loc p.name in
+    | P p -> 
+       let@ iargs, oargs = match p.name with
+         | Owned ct ->
+            return (Resources.owned_iargs ct, Resources.owned_oargs ct)
+         | PName name -> 
+            let@ def = Typing.get_resource_predicate_def loc name in
+            return (def.iargs, def. oargs)
+       in
        let@ _ = WIT.check loc BT.Loc p.pointer in
        let@ _ = WIT.check loc BT.Bool p.permission in
-       let has_iargs, expect_iargs = List.length p.iargs, List.length def.iargs in
-       let has_oargs, expect_oargs = List.length p.oargs, List.length def.oargs in
+       let has_iargs, expect_iargs = List.length p.iargs, List.length iargs in
+       let has_oargs, expect_oargs = List.length p.oargs, List.length oargs in
        (* +1 because of pointer argument *)
        let@ () = ensure_same_argument_number loc `Input (1 + has_iargs) ~expect:(1 + expect_iargs) in
        let@ () = ensure_same_argument_number loc `Output has_oargs ~expect:expect_oargs in
@@ -619,17 +608,23 @@ module WRE = struct
          ListM.mapM (fun (arg, expected_sort) ->
              WIT.check loc expected_sort arg
            ) (List.combine (p.iargs @ p.oargs) 
-             (List.map snd def.iargs @ List.map snd def.oargs))
+             (List.map snd iargs @ List.map snd oargs))
        in
        return ()
-    | QPredicate p -> 
-       let@ def = Typing.get_resource_predicate_def loc p.name in
+    | Q p -> 
+       let@ iargs, oargs = match p.name with
+         | Owned ct ->
+            return (Resources.owned_iargs ct, Resources.owned_oargs ct)
+         | PName name -> 
+            let@ def = Typing.get_resource_predicate_def loc name in
+            return (def.iargs, def. oargs)
+       in
        let@ _ = WIT.check loc BT.Loc p.pointer in
        pure begin 
            let@ () = add_l p.q Integer in
            let@ _ = WIT.check loc BT.Bool p.permission in
-           let has_iargs, expect_iargs = List.length p.iargs, List.length def.iargs in
-           let has_oargs, expect_oargs = List.length p.oargs, List.length def.oargs in
+           let has_iargs, expect_iargs = List.length p.iargs, List.length iargs in
+           let has_oargs, expect_oargs = List.length p.oargs, List.length oargs in
            (* +1 because of pointer argument *)
            let@ () = ensure_same_argument_number loc `Input (1 + has_iargs) ~expect:(1 + expect_iargs) in
            let@ () = ensure_same_argument_number loc `Output has_oargs ~expect:expect_oargs in
@@ -637,7 +632,7 @@ module WRE = struct
              ListM.mapM (fun (arg, expected_sort) ->
                  WIT.check loc expected_sort arg
                ) (List.combine (p.iargs @ p.oargs) 
-                 (List.map snd def.iargs @ List.map snd def.oargs))
+                 (List.map snd iargs @ List.map snd oargs))
            in
            return ()
          end
