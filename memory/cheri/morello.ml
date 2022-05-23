@@ -267,7 +267,7 @@ module Morello_capability: Capability
     (* Helper function to check if sealed entry capability *)
     and is_sentry c =
       match cap_get_seal c with
-      | Cap_Sealed _ -> true
+      | Cap_SEntry -> true
       | _ -> false
 
     and flags_as_str c =
@@ -275,7 +275,7 @@ module Morello_capability: Capability
         let a f s l = if f then s::l else l in
         a (not c.valid) "invald"
         @@ a (is_sentry c) "sentry"
-        @@ a (is_sealed c) "sealed" []
+        @@ a ((not (is_sentry c)) && is_sealed c) "sealed" []
       in
       if List.length attrs = 0 then ""
       else " (" ^ String.concat "," attrs ^ ")"
@@ -306,14 +306,11 @@ module Morello_capability: Capability
       let a = cap_get_value c in
       let c' = cap_set_value (cap_c0 ()) a in
       eq c c'
+
     (** Returns capability as a string in "simplified format". This
         function is used from "printf" when "%#p" format is specified.
 
         Example: "0xfffffff7ff8c [rwRW,0xfffffff7ff88-0xfffffff7ff90]"
-
-        TODO(CHERI) "In addition, for null-derived capabilities
-        (capabilities where the tag and upper attribute word are all
-        zero), only the address is displayed (the Basic Format)."
 
         See also:
         https://github.com/CTSRD-CHERI/cheri-c-programming/wiki/Displaying-Capabilities#simplified-forma
