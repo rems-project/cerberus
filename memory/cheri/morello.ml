@@ -146,6 +146,14 @@ module Morello_permission : Cap_permission = struct
       permits_store_local_cap = true ; (* not sure *)
     }
 
+  let perm_alloc_fun =
+    { perm_p0 with
+      permits_load = true ;
+      permits_load_cap = true ;
+      permits_execute = true ;
+      permits_store_local_cap = false ; (* not sure *)
+    }
+
   (**  Returns an abbreviated textual representation of permissions
        listing zero or more of the following characters:
 
@@ -299,7 +307,7 @@ module Morello_capability: Capability
         bounds = (a, Z.succ (Z.succ a)) ; (* for all functions to have unique addresses we
                                              presently allocate 1-byte region for each *)
         flags = flags_from_value a;
-        perms = P.perm_alloc ;
+        perms = P.perm_alloc_fun ;
       }
 
     and cap_is_null_derived c =

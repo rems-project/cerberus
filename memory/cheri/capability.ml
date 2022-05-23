@@ -51,6 +51,9 @@ module type Cap_permission = sig
   (** permissions for newly allocated region *)
   val perm_alloc: t
 
+  (** permissions for newly allocated functin *)
+  val perm_alloc_fun: t
+
   (* --- Utility methods --- *)
 
   val to_string: t -> string
