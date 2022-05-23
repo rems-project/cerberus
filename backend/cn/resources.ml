@@ -196,7 +196,7 @@ let subst (substitution : IT.t Subst.t) = function
     | P p -> O.free_vars_list p.oargs
     | Q p -> SymSet.remove p.q (O.free_vars_list p.oargs)
 
-  let outputs = function
+  let oargs = function
     | P p -> p.oargs
     | Q p -> p.oargs
 

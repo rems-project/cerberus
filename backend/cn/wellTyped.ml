@@ -674,7 +674,7 @@ module WRE = struct
                let u = SymSet.choose undetermined_output in
                let (loc, odescr) = SymMap.find u infos in
                fail (fun _ -> {loc; msg = Logical_variable_not_good_for_unification (u, odescr)})
-        ) (RE.outputs resource)
+        ) (RE.oargs resource)
     in
     return (List.fold_left SymSet.union SymSet.empty fixed)
 

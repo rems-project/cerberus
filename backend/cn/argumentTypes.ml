@@ -38,34 +38,19 @@ let mConstraints t  = List.fold_right mConstraint t
 
 
 
-let subst i_subst =
+let rec subst i_subst =
   let rec aux (substitution: IT.t Subst.t) at =
     match at with
     | Computational ((name, bt), info, t) -> 
-       if SymSet.mem name substitution.relevant then
-         let name' = Sym.fresh_same name in
-         let t' = aux (IT.make_subst [(name, IT.sym_ (name', bt))]) t in
-         let t'' = aux substitution t' in
-         Computational ((name', bt), info, t'')
-       else
-         Computational ((name, bt), info, aux substitution t)
+       let name, t = suitably_alpha_rename i_subst substitution (name, bt) t in
+       Computational ((name, bt), info, aux substitution t)
     | Logical ((name, ls), info, t) -> 
-       if SymSet.mem name substitution.relevant then
-         let name' = Sym.fresh_same name in
-         let t' = aux (IT.make_subst [(name, IT.sym_ (name', ls))]) t in
-         let t'' = aux substitution t' in
-         Logical ((name', ls), info, t'')
-       else
-         Logical ((name, ls), info, aux substitution t)
+       let name, t = suitably_alpha_rename i_subst substitution (name, ls) t in
+       Logical ((name, ls), info, aux substitution t)
     | Define ((name, it), info, t) ->
        let it = IT.subst substitution it in
-       if SymSet.mem name substitution.relevant then
-         let name' = Sym.fresh_same name in
-         let t' = aux (IT.make_subst [(name, IT.sym_ (name', IT.bt it))]) t in
-         let t'' = aux substitution t' in
-         Define ((name', it), info, t'')
-       else
-         Define ((name, it), info, aux substitution t)
+       let name, t = suitably_alpha_rename i_subst substitution (name, IT.bt it) t in
+       Define ((name, it), info, aux substitution t)
     | Resource (re, info, t) -> 
        let re = RE.subst substitution re in
        let t = aux substitution t in
@@ -79,6 +64,15 @@ let subst i_subst =
        I i
   in
   aux
+
+and alpha_rename i_subst (s, ls) t = 
+  let s' = Sym.fresh_same s in
+  (s', subst i_subst (IT.make_subst [(s, IT.sym_ (s', ls))]) t)
+
+and suitably_alpha_rename i_subst su (s, ls) t = 
+  if SymSet.mem s su.Subst.relevant 
+  then alpha_rename i_subst (s, ls) t
+  else (s, t)
 
 
 let pp i_pp ft = 

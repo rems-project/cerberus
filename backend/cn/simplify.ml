@@ -687,20 +687,10 @@ let simp_lc struct_decls values equalities lcs lc =
   match lc with
   | LC.T it -> LC.T (simp struct_decls values equalities lcs it)
   | LC.Forall ((q, qbt), body) ->
-     let ((q_new, qbt), body) = 
-       LC.alpha_rename_forall (Sym.fresh ()) ((q, qbt), body)
-     in
+     let q, body = IT.alpha_rename (q, qbt) body in
      let body = simp struct_decls values equalities lcs body in
-     let ((q, qbt), body) = LC.alpha_rename_forall q ((q_new, qbt), body) in
      begin match body with
-     | IT (Lit (Bool true), _) -> 
-        LC.T (bool_ true)
-     | IT (Bool_op (EQ (  IT (Map_op (Get (a, i)), _)  ,  
-                          IT (Map_op (Get (b, i')), _)  
-             )), _) 
-           when IT.equal i i' && IT.equal i' (sym_ (q, qbt))
-       ->
-        LC.T (eq_ (a, b))
+     | IT (Lit (Bool true), _) -> LC.T (bool_ true)
      | _ -> LC.Forall ((q, qbt), body)
      end
 

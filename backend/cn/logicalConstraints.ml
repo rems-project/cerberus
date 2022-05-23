@@ -27,22 +27,16 @@ let json c : Yojson.Safe.t =
 
 
 
-let alpha_rename_forall s' ((s, bt), body) = 
-  let body = IT.subst (IT.make_subst [(s, IT.sym_ (s', bt))]) body in
-  ((s', bt), body)
-
 let subst su c = 
   match c with
   | T it -> 
      T (IT.subst su it)
   | Forall ((s, bt), body) ->
-     let ((s, bt), body) = 
-       if SymSet.mem s su.relevant 
-       then alpha_rename_forall (Sym.fresh_same s) ((s, bt), body)
-       else ((s, bt), body)
-     in
-     let body = IT.subst su body in
-     Forall ((s, bt), body)
+     let s, body = IT.suitably_alpha_rename su (s, bt) body in
+     Forall ((s, bt), IT.subst su body)
+
+let subst_ su c = 
+  subst (IT.make_subst su) c
 
 
 let free_vars = function
