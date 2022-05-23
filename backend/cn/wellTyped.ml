@@ -708,17 +708,12 @@ module WLRT = struct
     let rec aux = function
       | Logical ((s,ls), info, lrt) -> 
          let@ () = WLS.is_ls (fst info) ls in
-         let s' = Sym.fresh_same s in
-         let@ () = add_l s' ls in
-         let lrt = subst (IT.make_subst [(s, IT.sym_ (s', ls))]) lrt in
+         let@ () = add_l s ls in
          aux lrt
       | Define ((s, it), info, lrt) ->
          let@ it = WIT.infer loc it in
-         let s' = Sym.fresh_same s in
-         let bt = IT.bt it in
-         let@ () = add_l s' bt in
-         let@ () = add_c (LC.t_ (IT.def_ s' it)) in
-         let lrt = subst (IT.make_subst [(s, IT.sym_ (s', bt))]) lrt in
+         let@ () = add_l s (IT.bt it) in
+         let@ () = add_c (LC.t_ (IT.def_ s it)) in
          aux lrt
       | Resource (re, info, lrt) -> 
          let@ () = WRE.welltyped (fst info) re in
@@ -737,20 +732,15 @@ module WLRT = struct
     let rec aux ~infos ~undetermined constraints lrt = 
       match lrt with
       | Logical ((s, ls), info, lrt) ->
-         let s' = Sym.fresh_same s in
-         let lrt = LRT.subst (IT.make_subst [(s, IT.sym_ (s', ls))]) lrt in
-         let undetermined = SymSet.add s' undetermined in
-         let infos = SymMap.add s' info infos in
+         let undetermined = SymSet.add s undetermined in
+         let infos = SymMap.add s info infos in
          aux ~infos ~undetermined constraints lrt
       | Define ((s, it), info, lrt) ->
          let@ () = match SymSet.choose_opt (SymSet.inter (IT.free_vars it) undetermined) with
            | None -> return ()
            | Some lvar -> unconstrained_lvar loc infos lvar 
          in
-         let s' = Sym.fresh_same s in
-         let bt = IT.bt it in
-         let lrt = LRT.subst (IT.make_subst [(s, IT.sym_ (s', bt))]) lrt in
-         let infos = SymMap.add s' info infos in
+         let infos = SymMap.add s info infos in
          aux ~infos ~undetermined constraints lrt
       | Resource (re, info, lrt) ->
          let@ fixed = WRE.mode_check (fst info) ~infos ~undetermined re in
@@ -771,11 +761,7 @@ module WLRT = struct
 
   let good loc lrt = 
     let@ () = welltyped loc lrt in
-    let@ () = 
-      let infos = SymMap.empty in
-      mode_check loc ~infos lrt
-    in
-    return ()
+    mode_check loc ~infos:SymMap.empty lrt
 
 end
 
@@ -789,29 +775,20 @@ module WRT = struct
     pure begin match rt with 
       | Computational ((name,bt), info, lrt) ->
          let@ () = WBT.is_bt (fst info) bt in
-         let name' = Sym.fresh_same name in
-         let lname = Sym.fresh () in
-         let@ () = add_l lname bt in
-         let@ () = add_a name' (bt, lname) in
-         let lrt = LRT.subst (IT.make_subst [(name, IT.sym_ (lname, bt))]) lrt in
+         let@ () = add_l name bt in
+         let@ () = add_a (Sym.fresh_same name) (bt, name) in
          WLRT.welltyped loc lrt
       end
 
   let mode_check loc ~infos rt = 
     match rt with
     | Computational ((s, bt), _info, lrt) ->
-       let s' = Sym.fresh_same s in
-       let lrt = LRT.subst (IT.make_subst [(s, IT.sym_ (s', bt))]) lrt in
        WLRT.mode_check loc ~infos lrt
 
 
   let good loc rt =
     let@ () = welltyped loc rt in
-    let@ () = 
-      let infos = SymMap.empty in
-      mode_check loc ~infos rt
-    in
-    return ()
+    mode_check loc ~infos:SymMap.empty rt
 
 end
 
@@ -887,25 +864,17 @@ module WAT (WI: WI_Sig) = struct
     let rec aux = function
       | AT.Computational ((name,bt), info, at) ->
          let@ () = WBT.is_bt (fst info) bt in
-         let name' = Sym.fresh_same name in
-         let lname = Sym.fresh () in
-         let@ () = add_l lname bt in
-         let@ () = add_a name' (bt, lname) in
-         let at = AT.subst WI.subst (IT.make_subst [(name, IT.sym_ (lname, bt))]) at in
+         let@ () = add_l name bt in
+         let@ () = add_a (Sym.fresh_same name) (bt, name) in
          aux at
       | AT.Logical ((s,ls), info, at) -> 
          let@ () = WLS.is_ls (fst info) ls in
-         let lname = Sym.fresh_same s in
-         let@ () = add_l lname ls in
-         let at = AT.subst WI.subst (IT.make_subst [(s, IT.sym_ (lname, ls))]) at in
+         let@ () = add_l s ls in
          aux at
       | AT.Define ((s, it), info, at) ->
          let@ it = WIT.infer loc it in
-         let s' = Sym.fresh_same s in
-         let bt = IT.bt it in
-         let@ () = add_l s' bt in
-         let@ () = add_c (LC.t_ (IT.def_ s' it)) in
-         let at = AT.subst WI.subst (IT.make_subst [(s, IT.sym_ (s', bt))]) at in
+         let@ () = add_l s (IT.bt it) in
+         let@ () = add_c (LC.t_ (IT.def_ s it)) in
          aux at
       | AT.Resource (re, info, at) -> 
          let@ () = WRE.welltyped (fst info) re in
@@ -934,24 +903,17 @@ module WAT (WI: WI_Sig) = struct
     let rec aux ~infos ~undetermined constraints ft = 
       match ft with
       | AT.Computational ((s, bt), _info, ft) ->
-         let s' = Sym.fresh_same s in
-         let ft = AT.subst WI.subst (IT.make_subst [(s, IT.sym_ (s', bt))]) ft in
          aux ~infos ~undetermined constraints ft
       | Logical ((s, ls), info, ft) ->
-         let s' = Sym.fresh_same s in
-         let ft = AT.subst WI.subst (IT.make_subst [(s, IT.sym_ (s', ls))]) ft in
-         let undetermined = SymSet.add s' undetermined in
-         let infos = SymMap.add s' info infos in
+         let undetermined = SymSet.add s undetermined in
+         let infos = SymMap.add s info infos in
          aux ~infos ~undetermined constraints ft
       | AT.Define ((s, it), info, ft) ->
          let@ () = match SymSet.choose_opt (SymSet.inter (IT.free_vars it) undetermined) with
            | None -> return ()
            | Some lvar -> unconstrained_lvar loc infos lvar 
          in
-         let s' = Sym.fresh_same s in
-         let bt = IT.bt it in
-         let ft = AT.subst WI.subst (IT.make_subst [(s, IT.sym_ (s', bt))]) ft in
-         let infos = SymMap.add s' info infos in
+         let infos = SymMap.add s info infos in
          aux ~infos ~undetermined constraints ft
       | AT.Resource (re, info, ft) ->
          let@ fixed = WRE.mode_check (fst info) ~infos ~undetermined re in
@@ -1023,10 +985,7 @@ module WRPD = struct
   let good pd =
     let () = Debug_ocaml.begin_csv_timing "WPD.good" in
     let@ () = welltyped pd in
-    let@ () = 
-      let infos = SymMap.empty in
-      mode_check pd.loc ~infos pd 
-    in
+    let@ () = mode_check pd.loc ~infos:SymMap.empty pd in
     let () = Debug_ocaml.end_csv_timing "WPD.good" in
     return ()
 
