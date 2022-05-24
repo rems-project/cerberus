@@ -1910,11 +1910,13 @@ module CHERI (C:Capability
     | PV (Prov_some i, PVconcrete addr) -> fconc ()
     | _ -> failwith "case_ptrval"
 
+  (* FIXME: This is wrong. A function pointer with the same id in different files might exist. *)
   let case_funsym_opt st (PV (_, ptrval)) =
     match ptrval with
     | PVfunction (FP_valid sym) -> Some sym
-    | PVconcrete c ->
-       (* FIXME: This is wrong. A function pointer with the same id in different files might exist. *)
+    | PVfunction (FP_invalid c)
+      |  PVconcrete c ->
+       (* Printf.fprintf stderr "case_funsym_opt ==> %s\n" (C.to_string c); *)
        let n = (Z.sub (C.cap_get_value c) (Z.of_int initial_address)) in
        begin match IntMap.find_opt n st.funptrmap with
        | Some (file_dig, name, _) ->
