@@ -172,6 +172,7 @@ let main
       print_level 
       json 
       state_file 
+      lemmata
       no_reorder_points
       no_additional_sat_check
       no_model_eqs
@@ -209,10 +210,16 @@ let main
          | (Some times, _) -> Some (times, "csv")
          | (_, Some times) -> Some (times, "log")
          | _ -> None);
+       (* TODO: user switch for new elaboration in regular (non-lemma) mode *)
+       let calling_mode = if Option.is_some lemmata
+         then `CallByValue else `CallByReference in
        let result = 
          Pp.progress_simple "pre-processing" "translating specifications";
-         let@ file = Retype.retype_file pred_defs file in
-         Typing.run Context.empty (Check.check file)
+         let@ file = Retype.retype_file pred_defs calling_mode file in
+         begin match lemmata with
+           | Some mode -> Lemmata.generate mode file
+           | None -> Typing.run Context.empty (Check.check file)
+         end
        in
        Pp.maybe_close_times_channel ();
        match result with
@@ -258,6 +265,10 @@ let json =
 let state_file =
   let doc = "file in which to output the state" in
   Arg.(value & opt (some string) None & info ["state-file"] ~docv:"FILE" ~doc)
+
+let lemmata =
+  let doc = "lemmata generation mode (target filename)" in
+  Arg.(value & opt (some string) None & info ["lemmata"] ~docv:"FILE" ~doc)
 
 let skip_consistency = 
   let doc = "Skip check for logical consistency of function specifications." in
@@ -305,6 +316,7 @@ let () =
       print_level $
       json $
       state_file $
+      lemmata $
       no_reorder_points $
       no_additional_sat_check $
       no_model_eqs $

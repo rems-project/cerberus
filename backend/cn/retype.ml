@@ -450,7 +450,8 @@ let retype_arg (loc : Loc.t) (sym,acbt) =
 
 
 
-let retype_file pred_defs (file : 'TY Old.mu_file) : ('TY New.mu_file, type_error) m =
+let retype_file pred_defs calling_mode (file : 'TY Old.mu_file)
+    : ('TY New.mu_file, type_error) m =
 
   let@ tagDefs =
     let retype_tagDef tag def =
@@ -557,7 +558,7 @@ let retype_file pred_defs (file : 'TY Old.mu_file) : ('TY New.mu_file, type_erro
         let@ fspec = Parse.parse_function glob_typs trusted args ret_ctype attrs in
         let@ (ftyp, trusted, mappings) = 
           Conversions.make_fun_spec loc struct_decls resource_predicates 
-            logical_predicates fsym fspec 
+            logical_predicates calling_mode fsym fspec
         in
         let funinfo_entry = New.M_funinfo (floc,attrs,ftyp, trusted, has_proto) in
         let funinfo = Pmap.add fsym funinfo_entry funinfo in

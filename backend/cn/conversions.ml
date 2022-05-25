@@ -1116,7 +1116,8 @@ let get_mappings_info (mappings : mapping StringMap.t) (mapping_name : string) =
   SuggestEqs.make_mappings_info (StringMap.find mapping_name mappings
     |> List.map (fun {path; it; _} -> (Pp.plain (Ast.Terms.pp true path), it)))
 
-let make_fun_spec loc (layouts : Memory.struct_decls) rpredicates lpredicates fsym (fspec : function_spec)
+let make_fun_spec loc (layouts : Memory.struct_decls) rpredicates lpredicates
+        calling_mode fsym (fspec : function_spec)
     : (AT.ft * CF.Mucore.trusted * mapping, type_error) m = 
   let open AT in
   let open RT in
@@ -1150,23 +1151,42 @@ let make_fun_spec loc (layouts : Memory.struct_decls) rpredicates lpredicates fs
 
   (* fargs *)
   let@ (i, mappings, _) = 
-    ListM.fold_leftM (fun (i, mappings, counter) (varg : varg) ->
+    ListM.fold_leftM (fun (i, mappings, counter) (earg : earg) ->
+      match calling_mode with
+      | `CallByValue ->
         let descr = "ARG" ^ string_of_int counter in
-        let a = (`Computational (varg.vsym, BT.of_sct varg.typ), (loc, Some descr)) in
+        let a = (`Computational (earg.esym, BT.of_sct earg.typ), (loc, Some descr)) in
+        let varg = {vsym = earg.esym; typ = earg.typ} in
         let item = varg_item loc varg in
         (* let (i', mapping') =  *)
         (*   make_owned_funarg loc counter item.it item.path aarg.typ in *)
-        let c = 
-          (`Constraint (LC.t_ (good_ (varg.typ, item.it))), 
+        let c =
+          (`Constraint (LC.t_ (good_ (varg.typ, item.it))),
            (loc, Some (descr ^ " constraint")))
         in
-        let mappings = 
+        let mappings =
           mod_mappings ["start";"end"] mappings
             (fun mapping -> item :: mapping)
         in
         return (i @ a :: [c], mappings, counter+1)
-      )
-      (i, mappings, 0) fspec.function_arguments
+      | `CallByReference ->
+        let descr = "&ARG" ^ string_of_int counter in
+        let a = (`Computational (earg.esym, BT.Loc), (loc, Some descr)) in
+        let aarg = {asym = earg.esym; typ = earg.typ} in
+        let item = aarg_item loc aarg in
+        let (i', mapping') =
+          make_owned_funarg loc counter item.it item.path aarg.typ in
+        let c =
+          (`Constraint (LC.t_ (good_ (pointer_ct aarg.typ, item.it))),
+           (loc, Some (descr ^ " constraint")))
+        in
+        let mappings =
+          mod_mapping "start" mappings
+            (fun mapping -> (item :: mapping') @ mapping)
+        in
+        return (i @ a :: c :: i', mappings, counter+1)
+    )
+    (i, mappings, 0) fspec.function_arguments
   in
 
   let@ (i, mappings) = 

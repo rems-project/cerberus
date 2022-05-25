@@ -176,7 +176,7 @@ let parse_function
   in
   let global_arguments = globals in
   let function_arguments = 
-    List.map (fun (vsym, typ) -> {vsym; typ}) arguments in
+    List.map (fun (esym, typ) -> {esym; typ}) arguments in
   let function_return = { vsym = Sym.fresh_description SD_Return; typ = return_type } in
   let pre_condition = pre in
   let post_condition = post in
@@ -202,8 +202,8 @@ let parse_label
     List.map (fun (asym, typ) -> {asym; typ}) arguments 
   in
   let function_arguments = 
-    List.map (fun {vsym; typ} ->
-        {asym = vsym; typ}
+    List.map (fun {esym; typ} ->
+        {asym = esym; typ}
       ) function_spec.function_arguments
   in
   let@ inv = 

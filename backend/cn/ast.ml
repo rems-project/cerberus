@@ -299,15 +299,20 @@ type keyword_condition =
 
 
 
+(* arguments with values *)
 type varg = { vsym : Sym.t; typ : Sctypes.t }
+(* arguments with addresses *)
 type aarg = { asym : Sym.t; typ : Sctypes.t }
+(* arguments with either addresses or values *)
+type earg = { esym : Sym.t; typ : Sctypes.t }
+(* global arguments *)
 type garg = { asym : Sym.t; lsym : Sym.t; typ : Sctypes.t; accessed : Loc.t option }
 
 
 type function_spec = { 
     trusted: CF.Mucore.trusted;
     global_arguments : garg list;
-    function_arguments : varg list;
+    function_arguments : earg list;
     function_return : varg;
     pre_condition : (Loc.t * condition) list;
     post_condition : (Loc.t * condition) list;
