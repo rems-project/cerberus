@@ -105,11 +105,11 @@ type named_rewrite = string * rewrite
 
 
 
-let frontend astprints filename =
+let frontend astprints cbv filename =
 
   Global_ocaml.(set_cerb_conf false Random false Basic false false false false);
   CF.Ocaml_implementation.(set (HafniumImpl.impl));
-  CF.Switches.(set ["inner_arg_temps"]); (* UNCOMMENT FOR NEW FUNCTION ELAB *)
+  if cbv then CF.Switches.(set ["inner_arg_temps"]) else ();
   load_core_stdlib () >>= fun stdlib ->
   load_core_impl stdlib impl_name >>= fun impl ->
 
@@ -172,6 +172,7 @@ let main
       print_level 
       json 
       state_file 
+      cbv
       lemmata
       no_reorder_points
       no_additional_sat_check
@@ -198,7 +199,7 @@ let main
   Check.only := only;
   check_input_file filename;
   Pp.progress_simple "pre-processing" "translating C code";
-  begin match frontend astprints filename with
+  begin match frontend astprints cbv filename with
   | CF.Exception.Exception err ->
      prerr_endline (CF.Pp_errors.to_string err); exit 2
   | CF.Exception.Result (pred_defs, file) ->
@@ -210,8 +211,7 @@ let main
          | (Some times, _) -> Some (times, "csv")
          | (_, Some times) -> Some (times, "log")
          | _ -> None);
-       (* TODO: user switch for new elaboration in regular (non-lemma) mode *)
-       let calling_mode = if Option.is_some lemmata
+       let calling_mode = if cbv || Option.is_some lemmata
          then `CallByValue else `CallByReference in
        let result = 
          Pp.progress_simple "pre-processing" "translating specifications";
@@ -266,6 +266,10 @@ let state_file =
   let doc = "file in which to output the state" in
   Arg.(value & opt (some string) None & info ["state-file"] ~docv:"FILE" ~doc)
 
+let cbv =
+  let doc = "switch elaboration to call-by-value style" in
+  Arg.(value & flag & info["cbv"] ~doc)
+
 let lemmata =
   let doc = "lemmata generation mode (target filename)" in
   Arg.(value & opt (some string) None & info ["lemmata"] ~docv:"FILE" ~doc)
@@ -316,6 +320,7 @@ let () =
       print_level $
       json $
       state_file $
+      cbv $
       lemmata $
       no_reorder_points $
       no_additional_sat_check $
