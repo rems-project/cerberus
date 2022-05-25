@@ -337,13 +337,13 @@ let translate_cn_clause env clause =
                       let acc' =
                         fun z -> acc begin
                           let pt =
-                            RE.({ ct= scty
+                            RE.({ name = Owned scty
                                 ; pointer= expr
                                 ; permission= IT.bool_ true
-                                ; value= value_sym_expr
-                                ; init= IT.bool_ true }) in
+                                ; iargs = []
+                                ; oargs= [value_sym_expr; IT.bool_ true] }) in
                           AT.mLogical (value_sym, bTy, (res_loc, None))
-                          (AT.mResource (Point pt, (pred_loc, None)) z)
+                          (AT.mResource (P pt, (pred_loc, None)) z)
                         end in
                       let env' = Env.(add_resource sym (RPred_owned (bTy, value_sym)) env) in
                       translate_cn_clause_aux env' acc' cl
@@ -362,14 +362,14 @@ let translate_cn_clause env clause =
                       let acc' =
                         fun z -> acc begin
                           let pt =
-                            RE.({ ct= scty
+                            RE.({ name = Owned scty
                                 ; pointer= expr
                                 ; permission= IT.bool_ true
-                                ; value= value_sym_expr
-                                ; init= init_sym_expr }) in
+                                ; iargs = []
+                                ; oargs = [value_sym_expr; init_sym_expr] }) in
                           AT.mLogical (value_sym, bTy, (res_loc, None))
                           (AT.mLogical (init_sym, BaseTypes.Bool, (res_loc, None))
-                          (AT.mResource (Point pt, (pred_loc, None)) z))
+                          (AT.mResource (P pt, (pred_loc, None)) z))
                         end in
                       translate_cn_clause_aux env acc' cl
                 end
@@ -402,14 +402,14 @@ let translate_cn_clause env clause =
                         let acc' =
                           fun z -> acc begin
                             let pred =
-                              RE.({ name= (*TODO*) todo_string_of_sym pred_sym
+                              RE.({ name= (*TODO*) PName (todo_string_of_sym pred_sym)
                                   ; pointer= List.hd es
                                   ; permission= IT.bool_ true
                                   ; iargs= List.tl es
                                   ; oargs= o_sym_exprs (* TODO: Christopher please check this *)
                               }) in
                               AT.mLogicals o_sym_bTys
-                              (AT.mResource (Predicate pred, (pred_loc, None)) z)
+                              (AT.mResource (P pred, (pred_loc, None)) z)
                           end in
                         let env' = Env.(add_resource sym (RPred_named (pred_sym, o_syms)) (* { res_pred= pred_sym; res_oargs= o_syms}*) env) in
                         translate_cn_clause_aux env' acc' cl

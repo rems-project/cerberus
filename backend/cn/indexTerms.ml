@@ -376,13 +376,8 @@ let rec subst (su : typed subst) (IT (it, bt)) =
        | ITE (it,it',it'') -> ITE (subst su it, subst su it', subst su it'')
        | EQ (it, it') -> EQ (subst su it, subst su it')
        | EachI ((i1, s, i2), t) ->
-          if SymSet.mem s su.relevant then
-            let s' = Sym.fresh_same s in
-            let t = subst (make_subst [(s, IT (Lit (Sym s'), BT.Integer))]) t in
-            let t = subst su t in
-            EachI ((i1, s', i2), t)
-          else
-            EachI ((i1, s, i2), subst su t)
+          let s, t = suitably_alpha_rename su (s, BT.Integer) t in
+          EachI ((i1, s, i2), subst su t)
      in
      IT (Bool_op bool_op, bt)
   | Tuple_op tuple_op -> 
@@ -475,19 +470,26 @@ let rec subst (su : typed subst) (IT (it, bt)) =
        | Get (it, arg) -> 
           Get (subst su it, subst su arg)
        | Def ((s, abt), body) ->
-          if SymSet.mem s su.relevant then
-            let s' = Sym.fresh_same s in 
-            let body = subst (make_subst [(s, IT (Lit (Sym s'), abt))]) body in
-            let body = subst su body in
-            Def ((s', abt), body)
-          else 
-            Def ((s, abt), subst su body)
+          let s, body = suitably_alpha_rename su (s, abt) body in
+          Def ((s, abt), subst su body)
      in
      IT (Map_op map_op, bt)
   | Info (name, args) ->
      IT (Info (name, List.map (subst su) args), bt)
   | Pred (name, args) ->
      IT (Pred (name, List.map (subst su) args), bt)
+
+and alpha_rename (s, bt) body = 
+  let s' = Sym.fresh_same s in
+  (s', subst (make_subst [(s, IT (Lit (Sym s'), bt))]) body)
+
+and suitably_alpha_rename su (s, bt) body = 
+  if SymSet.mem s su.relevant 
+  then alpha_rename (s, bt) body
+  else (s, body)
+  
+
+
 
 
 
@@ -665,9 +667,14 @@ let rec member_simp_ bt it member = match term it with
     then v
     else member_simp_ bt t member
   | _ ->
+     (* TODO: what's this? *)
     let member_bt = bt in
     member_ ~member_bt ("foo", it, member)
 
+
+let record_ members = 
+  IT (Record_op (Record members), 
+      BT.Record (List.map (fun (s,t) -> (s, basetype t)) members))
 
 
 
