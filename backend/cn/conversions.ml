@@ -1260,25 +1260,28 @@ let make_fun_spec loc (layouts : Memory.struct_decls) rpredicates lpredicates
   in
 
   (* fargs *)
-  (* let@ (o, mappings, _) =  *)
-  (*   ListM.fold_leftM (fun (o, mappings, counter) aarg -> *)
-  (*       let item = aarg_item loc aarg in *)
-  (*       let (o', mapping') =  *)
-  (*         make_owned_funarg loc counter item.it item.path aarg.typ in *)
-  (*       let c =  *)
-  (*         (`Constraint (LC.t_ (good_ (pointer_ct aarg.typ, item.it))),  *)
-  (*          (loc, Some ("&ARG" ^ string_of_int counter ^ " constraint"))) *)
-  (*       in *)
-  (*       let mappings =  *)
-  (*         mod_mapping "end" mappings *)
-  (*           (fun mapping -> (item :: mapping') @ mapping) *)
-  (*       in *)
-  (*       return (o @ [c] @ o', mappings, counter+1) *)
-  (*     ) *)
-  (*     (o, mappings, 0) fspec.function_arguments *)
-  (* in *)
+  let@ (o, mappings, _) = match calling_mode with
+    | `CallByValue -> return (o, mappings, 0)
+    | `CallByReference ->
+    ListM.fold_leftM (fun (o, mappings, counter) earg ->
+        let aarg = {asym = earg.esym; typ = earg.typ} in
+        let item = aarg_item loc aarg in
+        let (o', mapping') =
+          make_owned_funarg loc counter item.it item.path aarg.typ in
+        let c =
+          (`Constraint (LC.t_ (good_ (pointer_ct aarg.typ, item.it))),
+           (loc, Some ("&ARG" ^ string_of_int counter ^ " constraint")))
+        in
+        let mappings =
+          mod_mapping "end" mappings
+            (fun mapping -> (item :: mapping') @ mapping)
+        in
+        return (o @ [c] @ o', mappings, counter+1)
+      )
+      (o, mappings, 0) fspec.function_arguments
+  in
 
-  let@ (o, mappings) = 
+  let@ (o, mappings) =
     ListM.fold_leftM (fun (o, mappings) (loc, spec) ->
         match spec with
         | Ast.Resource cond ->
