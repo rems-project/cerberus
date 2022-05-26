@@ -211,11 +211,11 @@ let main
          | (Some times, _) -> Some (times, "csv")
          | (_, Some times) -> Some (times, "log")
          | _ -> None);
-       let calling_mode = if cbv || Option.is_some lemmata
-         then `CallByValue else `CallByReference in
+       let calling_mode = if cbv then `CallByValue else `CallByReference in
        let result = 
          Pp.progress_simple "pre-processing" "translating specifications";
-         let@ file = Retype.retype_file pred_defs calling_mode file in
+         let opts = Retype.{ calling_mode; drop_labels = Option.is_some lemmata } in
+         let@ file = Retype.retype_file pred_defs opts file in
          begin match lemmata with
            | Some mode -> Lemmata.generate mode file
            | None -> Typing.run Context.empty (Check.check file)

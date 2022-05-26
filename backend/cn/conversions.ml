@@ -1084,7 +1084,7 @@ let varg_item loc (varg : varg) =
       o_sct = Some varg.typ} 
   | sd -> 
      error_with_loc loc
-       ("value argument " ^ Sym.pp_string varg.vsym ^ 
+       ("value argument " ^ Sym.pp_string varg.vsym ^ "\n" ^
           "description: " ^ Sym.show_symbol_description sd)
 
 let garg_item loc (garg : garg) =

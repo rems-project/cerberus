@@ -447,10 +447,14 @@ let retype_arg (loc : Loc.t) (sym,acbt) =
 
 
 
+type retype_opts = {
+  calling_mode : [ `CallByReference | `CallByValue ];
+  drop_labels : bool
+}
 
 
 
-let retype_file pred_defs calling_mode (file : 'TY Old.mu_file)
+let retype_file pred_defs opts (file : 'TY Old.mu_file)
     : ('TY New.mu_file, type_error) m =
 
   let@ tagDefs =
@@ -558,7 +562,7 @@ let retype_file pred_defs calling_mode (file : 'TY Old.mu_file)
         let@ fspec = Parse.parse_function glob_typs trusted args ret_ctype attrs in
         let@ (ftyp, trusted, mappings) = 
           Conversions.make_fun_spec loc struct_decls resource_predicates 
-            logical_predicates calling_mode fsym fspec
+            logical_predicates opts.calling_mode fsym fspec
         in
         let funinfo_entry = New.M_funinfo (floc,attrs,ftyp, trusted, has_proto) in
         let funinfo = Pmap.add fsym funinfo_entry funinfo in
@@ -638,7 +642,9 @@ let retype_file pred_defs calling_mode (file : 'TY Old.mu_file)
       let@ bt = Conversions.bt_of_core_base_type loc cbt in
       let@ args = mapM (retype_arg loc) args in
       let@ expr = retype_texpr expr in
-      let@ labels = PmapM.mapM (retype_label ~fsym) labels Sym.compare in
+      let@ labels = if opts.drop_labels
+          then return (Pmap.empty Sym.compare)
+          else PmapM.mapM (retype_label ~fsym) labels Sym.compare in
       return (New.M_Proc (loc,bt,args,expr,labels))
    | Old.M_ProcDecl (loc,cbt,args) ->
       let@ bt = Conversions.bt_of_core_base_type loc cbt in
