@@ -143,7 +143,8 @@ let make_owned_funarg floc i (pointer : IndexTerms.t) path sct =
               pointer; 
               permission = bool_ true; 
               iargs = [];
-              oargs = [pointee_t; bool_ true];
+              oargs = [(Resources.value_sym, pointee_t); 
+                       (Resources.init_sym, bool_ true)];
             }),
         (floc, Some "ownership of function argument location"))
      in
@@ -183,7 +184,8 @@ let make_owned ~loc ~oname ~pointer ~path ~sct ~o_value ~o_permission =
            pointer; 
            permission = Option.value o_permission ~default:(bool_ true); 
            iargs = [];
-           oargs = [pointee_t; bool_ true]
+           oargs = [(Resources.value_sym, pointee_t); 
+                    (Resources.init_sym, bool_ true)]
           }),
         (loc, Some "ownership"))
      in
@@ -232,7 +234,8 @@ let make_qowned ~loc ~oname ~pointer ~q:(qs,qbt) ~step ~condition ~path ~sct ~o_
            permission = condition; 
            step = Memory.size_of_ctype sct;
            iargs = [];
-           oargs = [map_get_ pointee_t (sym_ (qs, qbt)); bool_ true]
+           oargs = [(Resources.value_sym, map_get_ pointee_t (sym_ (qs, qbt))); 
+                    (Resources.init_sym, bool_ true)]
           }),
         (loc, Some "ownership"))
      in
@@ -259,7 +262,8 @@ let make_block ~loc ~pointer ~path ~sct ~o_permission =
             pointer;
             permission = Option.value ~default:(bool_ true) o_permission;
             iargs = [];
-            oargs = [pointee_t; init_t]
+            oargs = [(Resources.value_sym, pointee_t); 
+                     (Resources.init_sym, init_t)]
           }),
         (loc, Some "ownership"))
      in
@@ -301,7 +305,7 @@ let make_pred loc (pred, def) ~oname pointer iargs some_oargs ~o_permission =
              mapping
         in
         let some_oargs = StringMap.remove oarg_name some_oargs in
-        let oargs = it :: oargs in
+        let oargs = (oarg, it) :: oargs in
         (mapping, l, some_oargs, oargs)
       ) def.oargs ([], [], some_oargs, [])
   in
@@ -311,7 +315,7 @@ let make_pred loc (pred, def) ~oname pointer iargs some_oargs ~o_permission =
          name = PName pred; 
          pointer = pointer;
          iargs; 
-         oargs;
+         oargs = oargs;
          permission = Option.value ~default:(bool_ true) o_permission;
        }),
      (loc, None))
@@ -349,7 +353,7 @@ let make_qpred loc (pred, def) ~oname ~pointer ~q:(qs,qbt) ~step ~condition iarg
              mapping
         in
         let some_oargs = StringMap.remove oarg_name some_oargs in
-        let oargs = ((map_get_ it (sym_ (qs, qbt)))) :: oargs in
+        let oargs = ((oarg, map_get_ it (sym_ (qs, qbt)))) :: oargs in
         ((mapping, l, c, oargs), some_oargs)
       ) def.oargs (([], [], [], []), some_oargs)
   in
@@ -361,7 +365,7 @@ let make_qpred loc (pred, def) ~oname ~pointer ~q:(qs,qbt) ~step ~condition iarg
          q = qs;
          step;
          iargs; 
-         oargs;
+         oargs = oargs;
          permission = condition;
        }),
      (loc, None))

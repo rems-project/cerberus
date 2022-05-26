@@ -58,7 +58,7 @@ module Make (O : Output) = struct
       pointer: IT.t;            (* I *)
       permission: IT.t;         (* I *)
       iargs: IT.t list;         (* I *)
-      oargs: O.t list;          (* O *)
+      oargs: (Sym.t * O.t) list; (* O *)
     }
   [@@deriving eq, ord]
 
@@ -69,7 +69,7 @@ module Make (O : Output) = struct
       step: int;
       permission: IT.t;         (* I, function of q *)
       iargs: IT.t list;         (* I, function of q *)
-      oargs: O.t list;          (* O, function of q *)
+      oargs: (Sym.t * O.t) list; (* O, function of q *)
     }
   [@@deriving eq, ord]
 
@@ -85,24 +85,29 @@ module Make (O : Output) = struct
     | Owned ct -> !^"Owned" ^^ angles (Sctypes.pp ct)
     | PName pn -> !^pn
 
+  let pp_oargs oargs = 
+    flow_map (comma ^^ space) (fun (s, oa) ->
+        Sym.pp s ^^^ O.pp oa
+      ) oargs
+
   let pp_predicate (p : predicate) =
     let args = 
       [IT.pp p.pointer;
        IT.pp p.permission] @
-      List.map IT.pp (p.iargs) @ 
-      List.map O.pp p.oargs 
+      List.map IT.pp (p.iargs)
     in
-    c_app (pp_predicate_name p.name) args
+    c_app (pp_predicate_name p.name) args ^^^ 
+      !^"with" ^^^ pp_oargs p.oargs
 
   let pp_qpredicate (p : qpredicate) =
     let args = 
       [IT.pp p.pointer ^^^ plus ^^^ parens (Sym.pp p.q ^^^ star ^^^ !^(string_of_int p.step));
        IT.pp p.permission] @
-      List.map IT.pp (p.iargs) @ 
-      List.map O.pp p.oargs 
+      List.map IT.pp (p.iargs)
     in
     !^"each" ^^^ Sym.pp p.q ^^ dot ^^^
-    c_app (pp_predicate_name p.name) args
+    c_app (pp_predicate_name p.name) args ^^^
+      !^"with" ^^^ pp_oargs p.oargs
 
 
   let pp = function
@@ -123,7 +128,7 @@ module Make (O : Output) = struct
       step = qp.step;
       permission = IT.subst subst qp.permission;
       iargs = List.map (IT.subst subst) qp.iargs;
-      oargs = List.map (O.subst subst) qp.oargs;
+      oargs = List.map_snd (O.subst subst) qp.oargs;
     }
 
 
@@ -133,7 +138,7 @@ module Make (O : Output) = struct
       pointer = IT.subst substitution p.pointer;
       permission = IT.subst substitution p.permission;
       iargs = List.map (IT.subst substitution) p.iargs;
-      oargs = List.map (O.subst substitution) p.oargs;
+      oargs = List.map_snd (O.subst substitution) p.oargs;
     }
 
   let subst_qpredicate substitution (qp : qpredicate) : qpredicate =
@@ -149,7 +154,7 @@ module Make (O : Output) = struct
       step = qp.step;
       permission = IT.subst substitution qp.permission;
       iargs = List.map (IT.subst substitution) qp.iargs;
-      oargs = List.map (O.subst substitution) qp.oargs;
+      oargs = List.map_snd (O.subst substitution) qp.oargs;
     }
 
 
@@ -168,14 +173,14 @@ let subst (substitution : IT.t Subst.t) = function
     | P p -> 
        SymSet.union
          (IT.free_vars_list (p.pointer :: p.permission :: p.iargs))
-         (O.free_vars_list p.oargs)
+         (O.free_vars_list (List.map snd p.oargs))
     | Q p -> 
        SymSet.union
          (IT.free_vars p.pointer)
          (SymSet.remove p.q
             (SymSet.union
                (IT.free_vars_list (p.permission :: p.iargs))
-               (O.free_vars_list p.oargs)
+               (O.free_vars_list (List.map snd p.oargs))
          ))
 
   let free_vars_list l = 
@@ -193,8 +198,8 @@ let subst (substitution : IT.t Subst.t) = function
          (SymSet.remove p.q (IT.free_vars_list (p.permission :: p.iargs)))
 
   let free_output_vars = function
-    | P p -> O.free_vars_list p.oargs
-    | Q p -> SymSet.remove p.q (O.free_vars_list p.oargs)
+    | P p -> O.free_vars_list (List.map snd p.oargs)
+    | Q p -> SymSet.remove p.q (O.free_vars_list (List.map snd p.oargs))
 
   let oargs = function
     | P p -> p.oargs
@@ -217,7 +222,7 @@ let subst (substitution : IT.t Subst.t) = function
       pointer = simp structs values equalities lcs p.pointer; 
       permission = simp structs values equalities lcs p.permission;
       iargs = List.map (simp structs values equalities lcs) p.iargs; 
-      oargs = List.map (O.simp structs values equalities lcs) p.oargs; 
+      oargs = List.map_snd (O.simp structs values equalities lcs) p.oargs; 
     }
 
   let simp_qpredicate structs values equalities lcs (qp : qpredicate) = 
@@ -225,14 +230,15 @@ let subst (substitution : IT.t Subst.t) = function
     let qp = alpha_rename_qpredicate (Sym.fresh_same old_q) qp in
     let permission = Simplify.simp_flatten structs values equalities lcs qp.permission in
     let permission_lcs = LCSet.of_list (List.map LC.t_ permission) in
+    let simp_lcs = LCSet.union permission_lcs lcs in
     let qp = {
         name = qp.name;
         pointer = simp structs values equalities lcs qp.pointer;
         q = qp.q;
         step = qp.step;
         permission = and_ permission;
-        iargs = List.map (simp structs values equalities (LCSet.union permission_lcs lcs)) qp.iargs;
-        oargs = List.map (O.simp structs values equalities (LCSet.union permission_lcs lcs)) qp.oargs;
+        iargs = List.map (simp structs values equalities simp_lcs) qp.iargs;
+        oargs = List.map_snd (O.simp structs values equalities simp_lcs) qp.oargs;
       }
     in 
     alpha_rename_qpredicate old_q qp
@@ -348,7 +354,7 @@ module RE = struct
       pointer = p.pointer;
       permission = p.permission;
       iargs = p.iargs;
-      oargs = List.map IT.bt p.oargs;
+      oargs = List.map_snd IT.bt p.oargs;
     }
 
   let request_qpredicate (p : qpredicate) : Requests.qpredicate = {
@@ -358,7 +364,7 @@ module RE = struct
       step = p.step;
       permission = p.permission;
       iargs = p.iargs;
-      oargs = List.map IT.bt p.oargs;
+      oargs = List.map_snd IT.bt p.oargs;
     }
 
 

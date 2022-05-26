@@ -341,7 +341,8 @@ let translate_cn_clause env clause =
                                 ; pointer= expr
                                 ; permission= IT.bool_ true
                                 ; iargs = []
-                                ; oargs= [value_sym_expr; IT.bool_ true] }) in
+                                ; oargs= [(Resources.value_sym, value_sym_expr); 
+                                          (Resources.init_sym, IT.bool_ true)] }) in
                           AT.mLogical (value_sym, bTy, (res_loc, None))
                           (AT.mResource (P pt, (pred_loc, None)) z)
                         end in
@@ -366,7 +367,8 @@ let translate_cn_clause env clause =
                                 ; pointer= expr
                                 ; permission= IT.bool_ true
                                 ; iargs = []
-                                ; oargs = [value_sym_expr; init_sym_expr] }) in
+                                ; oargs = [(Resources.value_sym, value_sym_expr); 
+                                           (Resources.init_sym, init_sym_expr)] }) in
                           AT.mLogical (value_sym, bTy, (res_loc, None))
                           (AT.mLogical (init_sym, BaseTypes.Bool, (res_loc, None))
                           (AT.mResource (P pt, (pred_loc, None)) z))
@@ -395,9 +397,9 @@ let translate_cn_clause env clause =
                               return e
                           ) (List.combine pred_sig.pred_iargs es_) in
                         let (o_syms, o_sym_bTys, o_sym_exprs) =
-                          List.fold_left (fun (acc1, acc2, acc3) (_, o_bTy) ->
+                          List.fold_left (fun (acc1, acc2, acc3) (oarg_name, o_bTy) ->
                             let o_sym, o_sym_expr = IT.fresh o_bTy in
-                            (o_sym :: acc1, (o_sym, o_bTy, (res_loc, None)) :: acc2, o_sym_expr :: acc3)
+                            (o_sym :: acc1, (o_sym, o_bTy, (res_loc, None)) :: acc2, (oarg_name, o_sym_expr) :: acc3)
                           ) ([], [], []) (List.rev pred_sig.pred_oargs) in
                         let acc' =
                           fun z -> acc begin

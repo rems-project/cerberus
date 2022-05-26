@@ -242,9 +242,10 @@ let explanation ctxt relevant =
              Option.bind (IT.is_sym p.pointer) 
                (fun (s, _) -> VClassGraph.find_node_opt (in_class s) graph)
            in
-           let ovc2 = 
-             Option.bind (IT.is_sym (List.hd p.oargs))
-               (fun (s, _) -> VClassGraph.find_node_opt (in_class s) graph)
+           let ovc2 = match p.oargs with
+             | [(_, IT (Lit (Sym value_sym), _)); _] ->
+                VClassGraph.find_node_opt (in_class value_sym) graph
+             | _ -> None
            in
            begin match ovc1, ovc2 with
            | Some vc1, Some vc2 -> VClassGraph.add_edge (vc1, vc2) Pointee graph
@@ -371,79 +372,6 @@ let state ctxt {substitution; vclasses; relevant} (model_with_q : Solver.model_w
   let name_subst = IT.subst substitution in
 
   let entry = function
-    (* | Point p -> *)
-    (*    let loc_e, permission_e, init_e, value_e =  *)
-    (*      IT.pp (name_subst p.pointer), *)
-    (*      IT.pp (name_subst p.permission), *)
-    (*      IT.pp (name_subst p.init),  *)
-    (*      IT.pp (name_subst p.value) *)
-    (*    in *)
-    (*    let loc_v, permission_v, init_v, value_v =  *)
-    (*      evaluate p.pointer, *)
-    (*      evaluate p.permission, *)
-    (*      evaluate p.init, *)
-    (*      evaluate p.value *)
-    (*    in *)
-    (*    let state = match Option.bind permission_v is_bool, Option.bind init_v is_bool with *)
-    (*      | Some true, Some true -> *)
-    (*         Sctypes.pp p.ct ^^ colon ^^^ *)
-    (*         value_e ^^^ equals ^^^ maybe_evaluated value_v *)
-    (*      | _ ->  *)
-    (*         let permission = !^"permission" ^^ colon ^^^ maybe_evaluated permission_v in *)
-    (*         let init = !^"init" ^^ colon ^^^ maybe_evaluated init_v in *)
-    (*         Sctypes.pp p.ct ^^^ parens (permission ^^ comma ^^^ init) ^^ colon ^^^ *)
-    (*         value_e ^^^ equals ^^^ maybe_evaluated value_v *)
-    (*    in *)
-    (*    let entry = { *)
-    (*        loc_e = Some loc_e;  *)
-    (*        loc_v = Some (maybe_evaluated loc_v);  *)
-    (*        state = Some state; *)
-    (*      }  *)
-    (*    in *)
-    (*    let reported =  *)
-    (*      List.fold_left SymSet.union SymSet.empty [ *)
-    (*          symbol_it p.pointer;  *)
-    (*          symbol_it p.value; *)
-    (*        ] *)
-    (*    in *)
-    (*    (entry, [], reported) *)
-    (* | QPoint p -> *)
-    (*    let p = alpha_rename_qpoint (Sym.fresh_pretty "i") p in *)
-    (*    let q = (p.q, BT.Integer) in *)
-    (*    let loc_e, permission_e, init_e, value_e =  *)
-    (*      IT.pp (name_subst p.pointer), *)
-    (*      IT.pp (name_subst p.permission), *)
-    (*      IT.pp (name_subst p.init),  *)
-    (*      IT.pp (name_subst p.value) *)
-    (*    in *)
-    (*    let loc_v, permission_v, init_v, value_v =  *)
-    (*      evaluate p.pointer, *)
-    (*      evaluate_lambda q p.permission, *)
-    (*      evaluate_lambda q p.init, *)
-    (*      evaluate_lambda q p.value *)
-    (*    in *)
-    (*    let state =  *)
-    (*      let permission = !^"permission" ^^ colon ^^^ maybe_evaluated permission_v in *)
-    (*      let init = !^"init" ^^ colon ^^^ init_e (\* maybe_evaluated init_v *\) in *)
-    (*      !^"each" ^^^ Sym.pp (fst q) ^^ colon ^^^ *)
-    (*      Sctypes.pp p.ct ^^^ parens (permission ^^ comma ^^^ init) ^^ colon ^^^ *)
-    (*        value_e (\* ^^^ equals ^^^ maybe_evaluated value_v *\) *)
-    (*    in *)
-    (*    let entry = { *)
-    (*        loc_e = Some loc_e; *)
-    (*        loc_v = Some (maybe_evaluated loc_v); *)
-    (*        state = Some state; *)
-    (*      }  *)
-    (*    in *)
-    (*    let reported =  *)
-    (*      (List.fold_left SymSet.union SymSet.empty [ *)
-    (*           symbol_it p.pointer; *)
-    (*           (\* app_symbol_it p.q p.value; *\) *)
-    (*           (\* app_symbol_it p.q p.init; *\) *)
-    (*           app_symbol_it p.q p.permission; *)
-    (*      ]) *)
-    (*    in *)
-    (*    (entry, [], reported) *)
     | P p ->
        let id = make_predicate_name () in
        let loc_e, permission_e, iargs_e = 
@@ -471,18 +399,11 @@ let state ctxt {substitution; vclasses; relevant} (model_with_q : Solver.model_w
            } 
        in
        let oargs = 
-         let predicate_def_oargs = match p.name with
-           | Owned ct ->
-              Resources.owned_oargs ct
-           | PName name ->
-              let predicate_def = Option.get (Global.get_resource_predicate_def ctxt.global name) in
-              predicate_def.oargs
-         in
-         List.map2 (fun oarg (name, _) ->
+         List.map (fun (name, oarg) ->
              let var = !^id ^^ dot ^^ dot ^^ Sym.pp name in
              let value = IT.pp oarg ^^^ equals ^^^ (maybe_evaluated (evaluate oarg)) in
              {var; value}
-           ) p.oargs predicate_def_oargs
+           ) p.oargs
        in
        let reported = 
          (List.fold_left SymSet.union SymSet.empty (
@@ -515,18 +436,12 @@ let state ctxt {substitution; vclasses; relevant} (model_with_q : Solver.model_w
            state = Some state
          } 
        in
-       let oargs = 
-         let predicate_def_oargs = match p.name with
-           | Owned ct ->
-              Resources.owned_oargs ct
-           | PName name ->
-              (Option.get (Global.get_resource_predicate_def ctxt.global name)).oargs
-         in
-         List.map2 (fun oarg (name, _) ->
+       let oargs =
+         List.map (fun (name, oarg) ->
              let var = !^id ^^ dot ^^ dot ^^ Sym.pp name in
              let value = IT.pp oarg ^^^ equals ^^^ maybe_evaluated (evaluate_lambda q oarg) in
              {var; value}
-           ) p.oargs predicate_def_oargs
+           ) p.oargs
        in
        let reported = 
          (List.fold_left SymSet.union SymSet.empty (

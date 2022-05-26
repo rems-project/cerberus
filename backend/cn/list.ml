@@ -65,3 +65,10 @@ let map_split (f : 'a -> 'b * 'c) (xs : 'a list) : 'b list * 'c list =
       (y :: ys, z :: zs)
     ) xs ([], [])
 
+
+
+let map_fst (f : 'a -> 'c) (xs : ('a * 'b) list) : ('c * 'b) list =
+  map (fun (a, b) -> (f a, b)) xs
+
+let map_snd (f : 'b -> 'c) (xs : ('a * 'b) list) : ('a * 'c) list =
+  map (fun (a, b) -> (a, f b)) xs

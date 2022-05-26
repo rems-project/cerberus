@@ -102,7 +102,8 @@ module PageAlloc = struct
           q = q_s;
           pointer = vmemmap_pointer;
           iargs = [];
-          oargs = [map_get_ vmemmap q; bool_ true];
+          oargs = [(Resources.value_sym, map_get_ vmemmap q); 
+                   (Resources.init_sym, bool_ true)];
           step = Memory.size_of_ctype (Struct hyp_page_tag);
           permission = and_ [range_start_i %<= q; q %<= (sub_ (range_end_i, int_ 1))];
         }

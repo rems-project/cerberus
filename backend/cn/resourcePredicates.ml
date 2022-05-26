@@ -60,7 +60,8 @@ let byte () =
       pointer = pointer;
       iargs = [];
       permission = bool_ true;
-      oargs = [value; init];
+      oargs = [(Resources.value_sym, value); 
+               (Resources.init_sym, init)];
     }
   in
   let lrt =
@@ -96,7 +97,8 @@ let char () =
       pointer = pointer;
       iargs = [];
       permission = bool_ true;
-      oargs = [value; bool_ true];
+      oargs = [(Resources.value_sym, value); 
+               (Resources.init_sym, bool_ true)];
     }
   in
   let lrt =
@@ -134,7 +136,8 @@ let zerobyte () =
       pointer = pointer;
       iargs = [];
       permission = bool_ true;
-      oargs = [int_ 0; bool_ true];
+      oargs = [(Resources.value_sym, int_ 0); 
+               (Resources.init_sym, bool_ true)];
     }
   in
   let lrt =
@@ -295,7 +298,8 @@ let page_alloc_predicates struct_decls =
             pointer = pool_pointer;
             iargs = [];
             permission = bool_ true;
-            oargs = [pool; bool_ true];
+            oargs = [(Resources.value_sym, pool); 
+                     (Resources.init_sym, bool_ true)];
           }
       in
       LRT.Logical ((pool_s, IT.bt pool), (loc, None), 

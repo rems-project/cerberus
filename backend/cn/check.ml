@@ -244,7 +244,7 @@ module ResourceInference = struct
           name = Owned (Struct tag);
           pointer = pointer_t;
           iargs = [];
-          oargs = List.map snd (owned_oargs (Struct tag));
+          oargs = owned_oargs (Struct tag);
           permission = permission_t;
       }
 
@@ -360,6 +360,7 @@ module ResourceInference = struct
 
 
 
+    (* TODO: check that oargs are in the same order? *)
     let rec predicate_request ~recursive loc (requested : RER.predicate) =
       match requested.name with
       | Owned requested_ct ->
@@ -405,7 +406,7 @@ module ResourceInference = struct
                   | `True ->
                      let permission' = and_ [p'.permission; ne_ (sym_ (p'.q, Integer), index)] in
                      Changed (Q {p' with permission = permission'}), 
-                     (bool_ false, List.map (IT.subst subst) p'.oargs)
+                     (bool_ false, List.map_snd (IT.subst subst) p'.oargs)
                   | `False -> continue
                   end
                | _ ->
@@ -413,7 +414,7 @@ module ResourceInference = struct
          in
          let@ (needed, oargs) =
            map_and_fold_resources loc (sub_resource_if is_exact_re)
-             (needed, List.map default_ requested.oargs)
+             (needed, List.map_snd default_ requested.oargs)
          in
          let@ (needed, oargs) =
            map_and_fold_resources loc (sub_resource_if (fun re -> not (is_exact_re re)))
@@ -472,7 +473,7 @@ module ResourceInference = struct
                   let took = and_ [pre_match; needed; IT.subst subst p'.permission] in
                   begin match provable (LC.T took) with
                   | `True ->
-                     let oargs = List.map (IT.subst subst) p'.oargs in
+                     let oargs = List.map_snd (IT.subst subst) p'.oargs in
                      let i_match = eq_ (sym_ (p'.q, Integer), index) in
                      let permission' = and_ [p'.permission; not_ i_match] in
                      Changed (Q {p' with permission = permission'}), 
@@ -486,7 +487,7 @@ module ResourceInference = struct
          let is_exact_re re = !reorder_points && (is_ex (RER.P requested, re)) in
          let@ (needed, oargs) =
            map_and_fold_resources loc (sub_predicate_if is_exact_re)
-               (needed, List.map default_ requested.oargs)
+               (needed, List.map_snd default_ requested.oargs)
          in
          let@ (needed, oargs) =
            map_and_fold_resources loc (sub_predicate_if (fun re -> not (is_exact_re re)))
@@ -544,8 +545,9 @@ module ResourceInference = struct
                   | `True -> 
                      let i_match = eq_ (sym_ (requested.q, Integer), index) in
                      let oargs = 
-                       List.map2 (fun (C oargs) oa' ->
-                           C (oargs @ [One {index; value = oa'}])
+                       List.map2 (fun (oarg_name, C oargs) (oarg_name', oa') ->
+                           assert (Sym.equal oarg_name oarg_name');
+                           (oarg_name, C (oargs @ [One {index; value = oa'}]))
                          ) oargs p'.oargs
                      in
                      let needed' = and_ [needed; not_ (i_match)] in
@@ -560,8 +562,8 @@ module ResourceInference = struct
                   | `True ->
                      let took = and_ [requested.permission; p'.permission] in
                      let oargs = 
-                       List.map2 (fun (C oargs) oa' ->
-                           C (oargs @ [Many {guard = took; value = oa'}])
+                       List.map2 (fun (oarg_name, C oargs) (oarg_name', oa') ->
+                           (oarg_name, C (oargs @ [Many {guard = took; value = oa'}]))
                          ) oargs p'.oargs
                      in
                      let needed' = and_ [needed; not_ p'.permission] in
@@ -575,7 +577,8 @@ module ResourceInference = struct
          in
          let@ (needed, oargs) =
            map_and_fold_resources loc (sub_resource_if is_exact_re)
-             (needed, [C []; C []])
+             (needed, [(Resources.value_sym, C []); 
+                       (Resources.init_sym, C [])])
          in
          debug 10 (lazy (item "needed after exact matches:" (IT.pp needed)));
          let k_is = scan_key_indices requested.q needed in
@@ -597,7 +600,7 @@ module ResourceInference = struct
                      name = Owned requested_ct;
                      pointer = p;
                      iargs = [];
-                     oargs = List.map snd (owned_oargs requested_ct);
+                     oargs = owned_oargs requested_ct;
                      permission = bool_ true;
                    }
                in
@@ -657,7 +660,12 @@ module ResourceInference = struct
                   begin match provable (LC.T took) with
                   | `True ->
                      let i_match = eq_ (sym_ (requested.q, Integer), index) in
-                     let oargs = List.map2 (fun (C oa) oa' -> C (oa @ [One {index; value = oa'}])) oargs p'.oargs in
+                     let oargs = 
+                       List.map2 (fun (name, C oa) (name', oa') -> 
+                           assert (Sym.equal name name');
+                           (name, C (oa @ [One {index; value = oa'}]))
+                         ) oargs p'.oargs 
+                     in
                      let needed' = and_ [needed; not_ i_match] in
                      Deleted, 
                      (simp needed', oargs)
@@ -673,14 +681,19 @@ module ResourceInference = struct
                      let took = and_ [iarg_match; requested.permission; p'.permission] in
                      let needed' = and_ [needed; not_ (and_ [iarg_match; p'.permission])] in
                      let permission' = and_ [p'.permission; not_ (and_ [iarg_match; needed])] in
-                     let oargs = List.map2 (fun (C oa) oa' -> C (oa @ [Many {guard = took; value = oa'}])) oargs p'.oargs in
+                     let oargs = 
+                       List.map2 (fun (name, C oa) (name', oa') -> 
+                           assert (Sym.equal name name');
+                           (name, C (oa @ [Many {guard = took; value = oa'}]))
+                         ) oargs p'.oargs 
+                     in
                      Changed (Q {p' with permission = permission'}), 
                      (simp needed', oargs)
                   | `False -> continue
                   end
                | re ->
                   continue
-             ) (needed, List.map (fun _ -> C []) requested.oargs)
+             ) (needed, List.map (fun (name,_) -> (name, C [])) requested.oargs)
          in
          let holds = provable (forall_ (requested.q, BT.Integer) (not_ needed)) in
          begin match holds with
@@ -695,9 +708,10 @@ module ResourceInference = struct
       | Some oargs ->
          let q = sym_ (requested.q, Integer) in
          let@ oas = 
-           ListM.map2M (fun (C oa) oa_bt ->
+           ListM.map2M (fun (name, C oa) (name', oa_bt) ->
+               assert (Sym.equal name name');
                let@ map = cases_to_map (requested.q, Integer) None oa_bt (C oa) in
-               return (map_get_ map q)
+               return (name, map_get_ map q)
              ) oargs requested.oargs
          in
          let r = { 
@@ -726,7 +740,7 @@ module ResourceInference = struct
             q = q_s;
             step = Memory.size_of_ctype item_ct;
             iargs = [];
-            oargs = List.map snd (owned_oargs item_ct);
+            oargs = owned_oargs item_ct;
             permission = and_ [permission; (int_ 0) %<= q; q %<= (int_ (length - 1))];
           }
       in
@@ -734,7 +748,7 @@ module ResourceInference = struct
       | None -> return None
       | Some oargs ->
          let value, init = match oargs with
-           | [C value; C init] -> value, init
+           | [(_, C value); (_, C init)] -> value, init
            | _ -> assert false
          in
          let@ folded_value = 
@@ -750,7 +764,8 @@ module ResourceInference = struct
              name = Owned (Array (item_ct, Some length));
              pointer = base;
              iargs = [];
-             oargs = [value; init];
+             oargs = [(Resources.value_sym, value); 
+                      (Resources.init_sym, init)];
              permission = permission;
            }
          in
@@ -776,7 +791,7 @@ module ResourceInference = struct
                       name = Owned sct;
                       pointer = memberShift_ (pointer_t, tag, member);
                       iargs = [];
-                      oargs = List.map snd (owned_oargs sct);
+                      oargs = owned_oargs sct;
                       permission = permission_t;
                     }
                   in
@@ -784,8 +799,8 @@ module ResourceInference = struct
                   begin match point with
                   | None -> return (Result.Error (RER.P request))
                   | Some point -> 
-                     let value = List.nth point.oargs 0 in
-                     let init = List.nth point.oargs 1 in
+                     let value = snd (List.nth point.oargs 0) in
+                     let init = snd (List.nth point.oargs 1) in
                      return (Result.Ok (values @ [(member, value)], inits @ [init]))
                   end
                | None ->
@@ -796,7 +811,7 @@ module ResourceInference = struct
                             pointer = integerToPointerCast_ (add_ (pointerToIntegerCast_ pointer_t, int_ (offset + i)));
                             permission = permission_t;
                             iargs = [];
-                            oargs = List.map snd (owned_oargs (Integer Char));
+                            oargs = owned_oargs (Integer Char);
                           } 
                       in
                       let@ result = predicate_request ~recursive loc request in
@@ -824,7 +839,8 @@ module ResourceInference = struct
              name = Owned (Struct tag);
              pointer = pointer_t;
              iargs = [];
-             oargs = [value; init];
+             oargs = [(Resources.value_sym, value); 
+                      (Resources.init_sym, init)];
              permission = permission_t;
            }
          in
@@ -839,7 +855,8 @@ module ResourceInference = struct
         step = Memory.size_of_ctype item_ct;
         q = q_s;
         iargs = [];
-        oargs = [(map_get_ value q); init];
+        oargs = [(Resources.value_sym, map_get_ value q); 
+                 (Resources.init_sym, init)];
         permission = and_ [permission; (int_ 0) %<= q; q %<= (int_ (length - 1))]
       }
 
@@ -853,7 +870,8 @@ module ResourceInference = struct
               name = Owned (Array (item_ct, Some length));
               pointer = base;
               iargs = [];
-              oargs = [of_sct (array_ct item_ct None); BT.Bool];
+              oargs = [(Resources.value_sym, of_sct (array_ct item_ct None)); 
+                       (Resources.init_sym, BT.Bool)];
               permission = permission;
           }
         ) 
@@ -867,7 +885,8 @@ module ResourceInference = struct
          in
          let qpoint =
            unfolded_array item_ct base length permission 
-             (List.nth point.oargs 0) (List.nth point.oargs 1)
+             (snd (List.nth point.oargs 0)) 
+             (snd (List.nth point.oargs 1))
          in
          return (Some qpoint)
 
@@ -883,8 +902,8 @@ module ResourceInference = struct
                    pointer = memberShift_ (pointer_t, tag, member);
                    permission = permission_t;
                    iargs = [];
-                   oargs = [member_ ~member_bt:(BT.of_sct sct) (tag, value, member);
-                            init]
+                   oargs = [(Resources.value_sym, member_ ~member_bt:(BT.of_sct sct) (tag, value, member));
+                            (Resources.init_sym, init)]
                  } 
              in
              [resource]
@@ -895,7 +914,8 @@ module ResourceInference = struct
                      pointer = integerToPointerCast_ (add_ (pointerToIntegerCast_ pointer_t, int_ (offset + i)));
                      permission = permission_t;
                      iargs = [];
-                     oargs = [default_ Integer; bool_ false];
+                     oargs = [(Resources.value_sym, default_ Integer); 
+                              (Resources.init_sym, bool_ false)];
                    } 
                )
         ) layout
@@ -917,7 +937,8 @@ module ResourceInference = struct
         let layout = SymMap.find tag global.struct_decls in
         let resources = 
           unfolded_struct layout tag pointer_t permission_t
-            (List.nth point.oargs 0) (List.nth point.oargs 1)
+            (snd (List.nth point.oargs 0)) 
+            (snd (List.nth point.oargs 1))
         in
         return (Some resources)
 
@@ -1227,7 +1248,10 @@ end = struct
     then return ()
     else fail (fun _ -> {loc; msg = Mismatch_lvar { has = IT.bt instantiation; expect; spec_info = info}})
 
-  let unify_or_constrain loc (unis, subst, constrs) (output_spec, output_have) =
+  let unify_or_constrain loc (unis, subst, constrs) 
+        ((output_spec_name, output_spec), 
+         (output_have_name, output_have)) =
+    assert (Sym.equal output_spec_name output_have_name);
     match IT.subst (make_subst subst) output_spec with
     | IT (Lit (Sym s), _) when SymMap.mem s unis ->
        let@ () = ls_matches_spec loc unis s output_have in
@@ -1239,7 +1263,10 @@ end = struct
 
   (* ASSUMES unification variables and quantifier q_s are disjoint,
      and that resource inference has produced a resource with value/oargs v[q] *)
-  let unify_or_constrain_q loc (q_s,q_bt) condition (unis, subst, constrs) (output_spec, output_have) = 
+  let unify_or_constrain_q loc (q_s,q_bt) condition (unis, subst, constrs) 
+        ((output_spec_name, output_spec), 
+         (output_have_name, output_have)) = 
+    assert (Sym.equal output_spec_name output_have_name);
     let q = sym_ (q_s, q_bt) in
     match is_map_get (IT.subst (make_subst subst) output_spec) with
     | Some (IT (Lit (Sym s), _), IT (Lit (Sym q'_s), q'_bt)) 
@@ -2203,7 +2230,8 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t * per_path, type_error) m =
                 pointer = sym_ (ret, Loc);
                 permission = bool_ true;
                 iargs = [];
-                oargs = [value_t; bool_ false];
+                oargs = [(Resources.value_sym, value_t); 
+                         (Resources.init_sym, bool_ false)];
               }
           in
           let rt = 
@@ -2231,7 +2259,7 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t * per_path, type_error) m =
               pointer = it_of_arg arg;
               permission = bool_ true;
               iargs = [];
-              oargs = List.map snd (owned_oargs ct);
+              oargs = owned_oargs ct;
             }, None)
           in
           let rt = RT.Computational ((Sym.fresh (), Unit), (loc, None), I) in
@@ -2272,7 +2300,7 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t * per_path, type_error) m =
                 pointer = it_of_arg parg;
                 permission = bool_ true;
                 iargs = [];
-                oargs = List.map snd (owned_oargs act.ct);
+                oargs = owned_oargs act.ct;
               }, None)
           in
           let resource = 
@@ -2281,7 +2309,8 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t * per_path, type_error) m =
                 pointer = it_of_arg parg;
                 permission = bool_ true;
                 iargs = [];
-                oargs = [it_of_arg varg; bool_ true]
+                oargs = [(Resources.value_sym, it_of_arg varg); 
+                         (Resources.init_sym, bool_ true)]
               }
           in
           let rt = 
@@ -2301,11 +2330,11 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t * per_path, type_error) m =
                      pointer = it_of_arg parg;
                      permission = bool_ true;
                      iargs = [];
-                     oargs = List.map snd (owned_oargs act.ct);
+                     oargs = owned_oargs act.ct;
                    }, None))
           in
-          let value = List.nth point.oargs 0 in
-          let init = List.nth point.oargs 1 in
+          let value = snd (List.nth point.oargs 0) in
+          let init = snd (List.nth point.oargs 1) in
           let@ () = 
             let@ provable = provable loc in
             match provable (t_ init) with
@@ -2418,11 +2447,19 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t * per_path, type_error) m =
                 pointer = it_of_arg pointer_arg;
                 permission = bool_ true;
                 iargs = List.map it_of_arg iargs;
-                oargs = List.map snd def.oargs;
+                oargs = def.oargs;
               }, None)
           in
           let condition, outputs = AT.logical_arguments_and_return right_clause in
-          let lc = and_ (List.map2 (fun it (o : OutputDef.entry) -> eq__ it o.value) pred.oargs outputs) in
+          let lc = 
+            let lcs = 
+              List.map2 (fun (oa_name, it) (o : OutputDef.entry) -> 
+                  assert (Sym.equal oa_name o.name);
+                  eq__ it o.value
+                ) pred.oargs outputs
+            in
+            and_ lcs
+          in
           let lrt = LRT.concat condition (Constraint (t_ lc, (loc, None), I)) in
           return (RT.Computational ((Sym.fresh (), BT.Unit), (loc, None), lrt), [])
        | Pack ->
@@ -2433,7 +2470,7 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t * per_path, type_error) m =
               pointer = it_of_arg pointer_arg;
               permission = bool_ true;
               iargs = List.map it_of_arg iargs;
-              oargs = List.map (fun (o : OutputDef.entry) -> o.value) output_assignment;
+              oargs = List.map (fun (o : OutputDef.entry) -> (o.name, o.value)) output_assignment;
             }
           in
           let rt =

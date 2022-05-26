@@ -600,16 +600,14 @@ module WRE = struct
        let@ _ = WIT.check loc BT.Loc p.pointer in
        let@ _ = WIT.check loc BT.Bool p.permission in
        let has_iargs, expect_iargs = List.length p.iargs, List.length iargs in
-       let has_oargs, expect_oargs = List.length p.oargs, List.length oargs in
        (* +1 because of pointer argument *)
        let@ () = ensure_same_argument_number loc `Input (1 + has_iargs) ~expect:(1 + expect_iargs) in
-       let@ () = ensure_same_argument_number loc `Output has_oargs ~expect:expect_oargs in
        let@ _ = 
-         ListM.mapM (fun (arg, expected_sort) ->
+         ListM.map2M (fun arg (_, expected_sort) ->
              WIT.check loc expected_sort arg
-           ) (List.combine (p.iargs @ p.oargs) 
-             (List.map snd iargs @ List.map snd oargs))
+           ) p.iargs iargs
        in
+       let@ _ = WIT.check loc (Record oargs) (IT.record_ p.oargs) in
        return ()
     | Q p -> 
        let@ iargs, oargs = match p.name with
@@ -624,16 +622,14 @@ module WRE = struct
            let@ () = add_l p.q Integer in
            let@ _ = WIT.check loc BT.Bool p.permission in
            let has_iargs, expect_iargs = List.length p.iargs, List.length iargs in
-           let has_oargs, expect_oargs = List.length p.oargs, List.length oargs in
            (* +1 because of pointer argument *)
            let@ () = ensure_same_argument_number loc `Input (1 + has_iargs) ~expect:(1 + expect_iargs) in
-           let@ () = ensure_same_argument_number loc `Output has_oargs ~expect:expect_oargs in
            let@ _ = 
-             ListM.mapM (fun (arg, expected_sort) ->
+             ListM.map2M (fun arg (_, expected_sort) ->
                  WIT.check loc expected_sort arg
-               ) (List.combine (p.iargs @ p.oargs) 
-                 (List.map snd iargs @ List.map snd oargs))
+               ) p.iargs iargs
            in
+           let@ _ = WIT.check loc (Record oargs) (IT.record_ p.oargs) in
            return ()
          end
     end
@@ -651,7 +647,7 @@ module WRE = struct
        however. *)
     let undetermined = SymSet.diff undetermined (RE.bound resource) in
     let@ fixed = 
-      ListM.mapM (fun output ->
+      ListM.mapM (fun (_, output) ->
           let undetermined_output = SymSet.inter undetermined (IT.free_vars output) in
           if SymSet.is_empty undetermined_output then 
             (* If the logical variables in the output term are already
