@@ -1,6 +1,6 @@
 open Locations
 module SymSet = Set.Make(Sym)
-module Resources = Resources.RE
+module Resources = Resources
 module IT = IndexTerms
 
 

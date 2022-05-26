@@ -1,8 +1,8 @@
 open Report
 module IT = IndexTerms
 module BT = BaseTypes
-module RE = Resources.RE
-module RER = Resources.Requests
+module RE = Resources
+module RET = ResourceTypes
 module LC = LogicalConstraints
 module LS = LogicalSorts
 module SymSet = Set.Make(Sym)
@@ -13,7 +13,7 @@ module C = Context
 module Loc = Locations
 module S = Solver
 
-open Resources.RE
+open ResourceTypes
 open IndexTerms
 open LogicalConstraints
 open Pp
@@ -235,14 +235,14 @@ let explanation ctxt relevant =
   let graph = 
     List.fold_right (fun resource graph ->
         match resource with
-        | RE.P ({name = Owned _; _} as p) ->
+        | (RET.P ({name = Owned _; _} as p), p_oargs) ->
            (* the 'not found' cases should not be fatal: e.g. the
               resource might have 'x + 16' as a pointer *)
            let ovc1 = 
              Option.bind (IT.is_sym p.pointer) 
                (fun (s, _) -> VClassGraph.find_node_opt (in_class s) graph)
            in
-           let ovc2 = match p.oargs with
+           let ovc2 = match p_oargs with
              | [(_, IT (Lit (Sym value_sym), _)); _] ->
                 VClassGraph.find_node_opt (in_class value_sym) graph
              | _ -> None
@@ -322,7 +322,7 @@ let app_symbol_it q = function
 let clause_has_resource req c =
   let open ArgumentTypes in
   let rec f = function
-    | Resource (r, _, c) -> Resources.same_type_resource req r || f c
+    | Resource (r, _, c) -> RET.same_predicate_name req (RE.request r) || f c
     | Constraint (_, _, c) -> f c
     | Computational (_, _, c) -> f c
     | Logical (_, _, c) -> f c
@@ -342,7 +342,7 @@ let relevant_predicate_clauses global oname req =
     || clause_has_resource req c) clauses
 
 let state ctxt {substitution; vclasses; relevant} (model_with_q : Solver.model_with_q)
-    (orequest : RER.resource option) =
+    (orequest : RET.t option) =
 
   let model, quantifier_counter_model = model_with_q in
 
@@ -372,7 +372,7 @@ let state ctxt {substitution; vclasses; relevant} (model_with_q : Solver.model_w
   let name_subst = IT.subst substitution in
 
   let entry = function
-    | P p ->
+    | (P p, p_oargs) ->
        let id = make_predicate_name () in
        let loc_e, permission_e, iargs_e = 
          IT.pp (name_subst p.pointer),
@@ -386,10 +386,10 @@ let state ctxt {substitution; vclasses; relevant} (model_with_q : Solver.model_w
        let state = match Option.bind permission_v is_bool with
          | Some true ->
             !^id ^^^ equals ^^^
-            RE.pp_predicate_name p.name ^^ parens (separate comma (loc_e :: iargs_e))
+            RET.pp_predicate_name p.name ^^ parens (separate comma (loc_e :: iargs_e))
          | _ ->
             !^id ^^^ equals ^^^
-            RE.pp_predicate_name p.name ^^ parens (separate comma (loc_e :: iargs_e)) ^^^
+            RET.pp_predicate_name p.name ^^ parens (separate comma (loc_e :: iargs_e)) ^^^
             parens (!^"permission" ^^ colon ^^^ maybe_evaluated permission_v)
        in
        let entry = {
@@ -403,7 +403,7 @@ let state ctxt {substitution; vclasses; relevant} (model_with_q : Solver.model_w
              let var = !^id ^^ dot ^^ dot ^^ Sym.pp name in
              let value = IT.pp oarg ^^^ equals ^^^ (maybe_evaluated (evaluate oarg)) in
              {var; value}
-           ) p.oargs
+           ) p_oargs
        in
        let reported = 
          (List.fold_left SymSet.union SymSet.empty (
@@ -413,8 +413,8 @@ let state ctxt {substitution; vclasses; relevant} (model_with_q : Solver.model_w
          ))
        in
        (entry, oargs, reported)
-    | Q p ->
-       let p = alpha_rename_qpredicate (Sym.fresh_pretty "i") p in
+    | (Q p, p_oargs) ->
+       let p = RET.alpha_rename_qpredicate_type (Sym.fresh_pretty "i") p in
        let q = (p.q, BT.Integer) in
        let id = make_predicate_name () in
        let loc_e, permission_e, iargs_e = 
@@ -441,7 +441,7 @@ let state ctxt {substitution; vclasses; relevant} (model_with_q : Solver.model_w
              let var = !^id ^^ dot ^^ dot ^^ Sym.pp name in
              let value = IT.pp oarg ^^^ equals ^^^ maybe_evaluated (evaluate_lambda q oarg) in
              {var; value}
-           ) p.oargs
+           ) p_oargs
        in
        let reported = 
          (List.fold_left SymSet.union SymSet.empty (
@@ -525,7 +525,7 @@ let state ctxt {substitution; vclasses; relevant} (model_with_q : Solver.model_w
   in
 
   let req_cmp = Option.bind orequest (Spans.spans_compare_for_pp model ctxt.global) in
-  let req_entry req_cmp same req = {res = RER.pp (RER.subst substitution req);
+  let req_entry req_cmp same req = {res = RET.pp (RET.subst substitution req);
     res_span = Spans.pp_model_spans model ctxt.global req_cmp req
         ^^ (if same then !^" - same-type" else !^"")} in
   let res_entry req_cmp same res = req_entry req_cmp same (RE.request res) in
@@ -542,7 +542,7 @@ let state ctxt {substitution; vclasses; relevant} (model_with_q : Solver.model_w
 
   let (same_res, diff_res) = match orequest with
     | None -> ([], ctxt.resources)
-    | Some req -> List.partition (Resources.same_type_resource req) ctxt.resources
+    | Some req -> List.partition (fun r -> RET.same_predicate_name req (RE.request r)) ctxt.resources
   in
   let same = match (same_res, orequest) with
     | ([], Some _) -> [{res = !^""; res_span = !^"(no same-type resources)"}]

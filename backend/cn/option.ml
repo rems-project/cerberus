@@ -7,6 +7,14 @@ let map f = function
   | Some a -> Some (f a)
   | None -> None
 
+let map_fst f = function
+  | Some (a, b) -> Some (f a, b)
+  | None -> None
+
+let map_snd f = function
+  | Some (a, b) -> Some (a, f b)
+  | None -> None
+
 let is_some = function
   | Some _ -> true
   | None -> false

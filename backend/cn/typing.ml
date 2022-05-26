@@ -2,6 +2,7 @@ open Context
 open Simplify
 module IT = IndexTerms
 module SymMap = Map.Make(Sym)
+module RET = ResourceTypes
 
 
 type s = {
@@ -132,7 +133,7 @@ let all_resources () =
 
 let make_provable loc =
   fun {typing_context = s; solver; trace_length; _} -> 
-  let pointer_facts = Resources.RE.pointer_facts s.resources in
+  let pointer_facts = Resources.pointer_facts s.resources in
   let f lc = 
     Solver.provable ~loc ~solver ~global:s.global 
       ~trace_length
@@ -251,12 +252,12 @@ let rec add_cs = function
      add_cs lcs
 
 
-let add_r oloc r = 
+let add_r oloc (r, oargs) = 
   let@ s = get () in
   let@ values, equalities, lcs = simp_constraints () in
-  match RE.simp_or_empty s.global.struct_decls values equalities lcs r with
+  match RET.simp_or_empty s.global.struct_decls values equalities lcs r with
   | None -> return ()
-  | Some r -> set (Context.add_r oloc r s)
+  | Some r -> set (Context.add_r oloc (r, oargs) s)
 
 
 let rec add_rs oloc = function
@@ -287,7 +288,7 @@ let map_and_fold_resources loc (f : RE.t -> 'acc -> changed * 'acc) (acc : 'acc)
            (res @ resources, acc)
         | Changed re ->
            match re with
-           | Q {q; permission; _} ->
+           | (Q {q; permission; _}, _) ->
               begin match provable (LC.forall_ (q, Integer) (IT.not_ permission)) with
               | `True -> (resources, acc)
               | `False -> (re :: resources, acc)

@@ -1,6 +1,6 @@
 module CF=Cerb_frontend
-module RE = Resources.RE
-module RER = Resources.Requests
+module RE = Resources
+module RET = ResourceTypes
 module IT = IndexTerms
 module BT = BaseTypes
 module LS = LogicalSorts
@@ -28,7 +28,7 @@ open Mu
 open Pp
 open BT
 open Resources
-open Resources.RE
+open ResourceTypes
 open ResourcePredicates
 open LogicalConstraints
 
@@ -223,29 +223,28 @@ module ResourceInference = struct
 
   module General = struct
 
-    type one = {index : IT.t; value : IT.t}
-    type many = {guard: IT.t; value : IT.t}
+    type one = {one_index : IT.t; value : IT.t}
+    type many = {many_guard: IT.t; value : IT.t}
 
     type case =
       | One of one
       | Many of many
 
     let pp_case = function
-      | One {index;value} -> 
-         !^"one" ^^ parens (IT.pp index ^^^ !^"-----" ^^^ IT.pp value)
-      | Many {guard;value} -> 
-         !^"many" ^^ parens (IT.pp guard ^^^ !^"-----" ^^^ IT.pp value)
+      | One {one_index;value} -> 
+         !^"one" ^^ parens (IT.pp one_index ^^ colon ^^^ IT.pp value)
+      | Many {many_guard;value} -> 
+         !^"many" ^^ parens (IT.pp many_guard ^^ colon ^^^ IT.pp value)
 
     type cases = C of case list
 
 
     let unfold_struct_request tag pointer_t permission_t = 
-      Resources.Requests.{
-          name = Owned (Struct tag);
-          pointer = pointer_t;
-          iargs = [];
-          oargs = owned_oargs (Struct tag);
-          permission = permission_t;
+      {
+        name = Owned (Struct tag);
+        pointer = pointer_t;
+        iargs = [];
+        permission = permission_t;
       }
 
     let exact_ptr_match () =
@@ -256,23 +255,27 @@ module ResourceInference = struct
 
     let exact_match () =
       let@ pmatch = exact_ptr_match () in
-      return begin fun (request, resource) -> match (request, resource) with
-      | (RER.P req_p, 
-         RE.P res_p) ->
-        pmatch (req_p.pointer, res_p.pointer)
-      | (RER.Q ({name = Owned _; _} as req_qp), 
-         RE.Q ({name = Owned _; _} as res_qp)) ->
-        pmatch (req_qp.pointer, res_qp.pointer)
-      | _ -> false
-      end
+      let match_f (request, (resource, _)) =
+        match (request, resource) with
+        | (P req_p, 
+           P res_p) ->
+           pmatch (req_p.pointer, res_p.pointer)
+        | (Q ({name = Owned _; _} as req_qp), 
+           Q ({name = Owned _; _} as res_qp)) ->
+           pmatch (req_qp.pointer, res_qp.pointer)
+        | _ -> false
+      in
+      return match_f
 
     let exact_match_point_ptrs ptrs =
       let@ pmatch = exact_ptr_match () in
-      return begin function
-        | RE.P ({name = Owned _; _} as res_p) -> 
+      let match_f (resource, _) = 
+        match resource with
+        | P ({name = Owned _; _} as res_p) -> 
            List.exists (fun p -> pmatch (p, res_p.pointer)) ptrs
         | _ -> false
-      end
+      in
+      return match_f
 
     let scan_key_indices v_nm t =
       let is_i t = match t with
@@ -292,85 +295,39 @@ module ResourceInference = struct
       List.sort_uniq IT.compare xs
 
     
-    let cases_to_qf_map (q_s, q_bt) item_bt (C cases) = 
+    let cases_to_map loc (situation, (orequest, oinfo)) a_bt item_bt (C cases) = 
       let update_with_ones base_array ones =
-        List.fold_left (fun m {index; value} ->
-            if IT.equal value (map_get_ base_array index)
-            then m
-            else map_set_ m (index, value)
+        List.fold_left (fun m {one_index; value} ->
+            map_set_ m (one_index, value)
           ) base_array ones
       in
-      let q = sym_ (q_s, q_bt) in
       let ones, manys = 
-        List.partition_map (function
-            | One c -> Left c
-            | Many c -> Right c
-          ) cases 
+        List.partition_map (function One c -> Left c | Many c -> Right c) cases in
+      let@ base_value = match manys with
+        | [] -> return (default_ (BT.Map (a_bt, item_bt)))
+        | [{many_guard = _; value}] -> return value
+        | _ -> 
+           let@ model = model () in
+           fail (fun ctxt ->
+               let msg = Merging_multiple_arrays {orequest; situation; oinfo; model; ctxt} in
+               {loc; msg})
       in
-      match manys with
-      | [] ->
-         Some (update_with_ones (default_ (BT.Map (q_bt, item_bt))) ones)
-      | [{guard; value = IT (Map_op (Get (base_array,i)),_)}] 
-           when not (SymSet.mem q_s (IT.free_vars base_array))
-                && IT.equal i q ->
-         Some (update_with_ones base_array ones)
-      | [{guard; value}] 
-           when not (SymSet.mem q_s (IT.free_vars value)) ->
-         Some (update_with_ones (const_map_ q_bt value) ones)
-      | _ ->
-         None
+      return (update_with_ones base_value ones)
 
-    let cases_to_map (q_s, q_bt) o_fixed_length item_bt (C cases) = 
-      match cases_to_qf_map (q_s, q_bt) item_bt (C cases) with
-      | Some m_value -> 
-         let m_s, m = IT.fresh (Map (q_bt, item_bt)) in
-         let@ () = add_l m_s (IT.bt m) in
-         let@ () = add_c (t_ (def_ m_s m_value)) in
-         return m
-      | _ ->
-         begin match o_fixed_length with
-         | Some length when length > 20 -> warn !^"generating point-wise constraints for large fixed-size array"
-         | None -> 
-            print stdout (item "cases" (list pp_case cases));
-            warn !^"generating quantified facts for non-fixed-size array"
-         | _ -> ()
-         end;
-         let q = sym_ (q_s, q_bt) in
-         let m_s, m = IT.fresh (Map (q_bt, item_bt)) in
-         let@ () = add_l m_s (IT.bt m) in
-         let@ () = 
-           ListM.iterM (function
-               | One {index; value} -> 
-                  add_c (t_ (eq__ (map_get_ m index) value))
-               | Many {guard; value} -> 
-                  let cs = match o_fixed_length with
-                    | None ->
-                       [forall_ (q_s, q_bt)
-                          (impl_ (guard, eq__ (map_get_ m q) value))]
-                    | Some length ->
-                       [t_ (eachI_ (0, q_s, length - 1)
-                              (impl_ (guard, eq__ (map_get_ m q) value)))] 
-                  in
-                  add_cs cs
-             ) cases
-         in
-         return m
-      
-      
 
 
 
     (* TODO: check that oargs are in the same order? *)
-    let rec predicate_request ~recursive loc (requested : RER.predicate) =
+    let rec predicate_request ~recursive loc uiinfo (requested : RET.predicate_type) =
       match requested.name with
       | Owned requested_ct ->
          assert (match requested.iargs with [] -> true | _ -> false);
-         debug 7 (lazy (item "point request" (RER.pp (P requested))));
-         let@ _ = span_fold_unfolds loc (RER.P requested) false in
+         debug 7 (lazy (item "point request" (RET.pp (P requested))));
+         let@ _ = span_fold_unfolds loc uiinfo (RET.P requested) false in
          let start_timing = time_log_start "point-request" "" in
          let@ provable = provable loc in
          let@ is_ex = exact_match () in
-         let is_exact_re re = !reorder_points && (is_ex (RER.P requested, re)) in
+         let is_exact_re re = !reorder_points && (is_ex (RET.P requested, re)) in
          let@ global = get_global () in
          let@ simp_lcs = simp_constraints () in
          let needed = requested.permission in 
@@ -378,18 +335,18 @@ module ResourceInference = struct
                let continue = (Unchanged, (needed, oargs)) in
                if is_false needed || not (cond re) then continue else
                match re with
-               | P p' when equal_predicate_name (Owned requested_ct) p'.name ->
+               | (P p', p'_oargs) when equal_predicate_name (Owned requested_ct) p'.name ->
                   debug 15 (lazy (item "point/point sub at ptr" (IT.pp p'.pointer)));
                   let pmatch = eq_ (requested.pointer, p'.pointer) in
                   let took = and_ [pmatch; p'.permission; needed] in
                   begin match provable (LC.T took) with
                   | `True ->
                      Deleted, 
-                     (bool_ false, p'.oargs)
+                     (bool_ false, p'_oargs)
                   | `False -> 
                      continue
                   end
-               | Q p' when equal_predicate_name (Owned requested_ct) p'.name ->
+               | (Q p', p'_oargs) when equal_predicate_name (Owned requested_ct) p'.name ->
                   let base = p'.pointer in
                   debug 15 (lazy (item "point/qpoint sub at base ptr" (IT.pp base)));
                   let item_size = int_ (Memory.size_of_ctype requested_ct) in
@@ -405,8 +362,8 @@ module ResourceInference = struct
                   begin match provable (LC.T took) with
                   | `True ->
                      let permission' = and_ [p'.permission; ne_ (sym_ (p'.q, Integer), index)] in
-                     Changed (Q {p' with permission = permission'}), 
-                     (bool_ false, List.map_snd (IT.subst subst) p'.oargs)
+                     Changed (Q {p' with permission = permission'}, p'_oargs), 
+                     (bool_ false, List.map_snd (fun oa' -> map_get_ oa' index) p'_oargs)
                   | `False -> continue
                   end
                | _ ->
@@ -414,20 +371,19 @@ module ResourceInference = struct
          in
          let@ (needed, oargs) =
            map_and_fold_resources loc (sub_resource_if is_exact_re)
-             (needed, List.map_snd default_ requested.oargs)
+             (needed, List.map_snd default_ (owned_oargs requested_ct))
          in
          let@ (needed, oargs) =
            map_and_fold_resources loc (sub_resource_if (fun re -> not (is_exact_re re)))
              (needed, oargs) in
          let@ res = begin match provable (t_ (not_ needed)) with
          | `True ->
-            let r = { 
+            let r = ({ 
                 name = Owned requested_ct;
                 pointer = requested.pointer;
                 iargs = [];
-                oargs = oargs;
                 permission = requested.permission 
-              }
+              }, oargs)
             in
             return (Some r)
          | `False ->
@@ -435,9 +391,10 @@ module ResourceInference = struct
          end in
          time_log_end start_timing;
          return res
-      | PName _ -> 
-         debug 7 (lazy (item "predicate request" (RER.pp (P requested))));
+      | PName pname -> 
+         debug 7 (lazy (item "predicate request" (RET.pp (P requested))));
          let start_timing = time_log_start "predicate-request" "" in
+         let@ def = Typing.get_resource_predicate_def loc pname in
          let@ provable = provable loc in
          let@ global = get_global () in
          let@ simp_lcs = simp_constraints () in
@@ -446,7 +403,7 @@ module ResourceInference = struct
                let continue = (Unchanged, (needed, oargs)) in
                if is_false needed then continue else
                match re with
-               | P p' when equal_predicate_name requested.name p'.name ->
+               | (P p', p'_oargs) when equal_predicate_name requested.name p'.name ->
                   let pmatch = 
                     eq_ (requested.pointer, p'.pointer)
                     :: List.map2 eq__ requested.iargs p'.iargs
@@ -455,10 +412,10 @@ module ResourceInference = struct
                   begin match provable (LC.T took) with
                   | `True ->
                      Deleted, 
-                     (bool_ false, p'.oargs)
+                     (bool_ false, p'_oargs)
                   | `False -> continue
                   end
-               | Q p' when equal_predicate_name requested.name p'.name ->
+               | (Q p', p'_oargs) when equal_predicate_name requested.name p'.name ->
                   let base = p'.pointer in
                   let item_size = int_ p'.step in
                   let offset = array_offset_of_pointer ~base ~pointer:requested.pointer in
@@ -473,10 +430,10 @@ module ResourceInference = struct
                   let took = and_ [pre_match; needed; IT.subst subst p'.permission] in
                   begin match provable (LC.T took) with
                   | `True ->
-                     let oargs = List.map_snd (IT.subst subst) p'.oargs in
+                     let oargs = List.map_snd (fun oa' -> map_get_ oa' index) p'_oargs in
                      let i_match = eq_ (sym_ (p'.q, Integer), index) in
                      let permission' = and_ [p'.permission; not_ i_match] in
-                     Changed (Q {p' with permission = permission'}), 
+                     Changed (Q {p' with permission = permission'}, p'_oargs), 
                      (bool_ false, oargs)
                   | `False -> continue
                   end
@@ -484,10 +441,10 @@ module ResourceInference = struct
                   continue
          in
          let@ is_ex = exact_match () in
-         let is_exact_re re = !reorder_points && (is_ex (RER.P requested, re)) in
+         let is_exact_re re = !reorder_points && (is_ex (P requested, re)) in
          let@ (needed, oargs) =
            map_and_fold_resources loc (sub_predicate_if is_exact_re)
-               (needed, List.map_snd default_ requested.oargs)
+               (needed, List.map_snd default_ def.oargs)
          in
          let@ (needed, oargs) =
            map_and_fold_resources loc (sub_predicate_if (fun re -> not (is_exact_re re)))
@@ -495,13 +452,12 @@ module ResourceInference = struct
          in
          let@ res = begin match provable (t_ (not_ needed)) with
          | `True ->
-            let r = { 
+            let r = ({ 
                 name = requested.name;
                 pointer = requested.pointer;
                 permission = requested.permission;
                 iargs = requested.iargs; 
-                oargs = oargs;
-              }
+              }, oargs)
             in
             (* let r = RE.simp_predicate ~only_outputs:true global.struct_decls all_lcs r in *)
             return (Some r)
@@ -512,16 +468,16 @@ module ResourceInference = struct
          return res
 
 
-    and qpredicate_request_aux loc (requested : RER.qpredicate) =
+    and qpredicate_request_aux loc uiinfo (requested : RET.qpredicate_type) =
       match requested.name with
       | Owned requested_ct ->
          assert (match requested.iargs with [] -> true | _ -> false);
-         debug 7 (lazy (item "qpoint request" (RER.pp (Q requested))));
-         let@ _ = span_fold_unfolds loc (RER.Q requested) false in
+         debug 7 (lazy (item "qpoint request" (RET.pp (Q requested))));
+         let@ _ = span_fold_unfolds loc uiinfo (RET.Q requested) false in
          let start_timing = time_log_start "qpoint-request" "" in
          let@ provable = provable loc in
          let@ is_ex = exact_match () in
-         let is_exact_re re = !reorder_points && (is_ex (RER.Q requested, re)) in
+         let is_exact_re re = !reorder_points && (is_ex (Q requested, re)) in
          let@ global = get_global () in
          let@ values, equalities, lcs = simp_constraints () in
          let simp t = Simplify.simp global.struct_decls values equalities lcs t in
@@ -530,7 +486,7 @@ module ResourceInference = struct
                let continue = (Unchanged, (needed, oargs)) in
                if is_false needed || not (cond re) then continue else
                match re with
-               | P p' when equal_predicate_name (Owned requested_ct) p'.name ->
+               | (P p', p'_oargs) when equal_predicate_name (Owned requested_ct) p'.name ->
                   let base = requested.pointer in
                   let item_size = int_ (Memory.size_of_ctype requested_ct) in
                   let offset = array_offset_of_pointer ~base ~pointer:p'.pointer in
@@ -547,28 +503,29 @@ module ResourceInference = struct
                      let oargs = 
                        List.map2 (fun (oarg_name, C oargs) (oarg_name', oa') ->
                            assert (Sym.equal oarg_name oarg_name');
-                           (oarg_name, C (oargs @ [One {index; value = oa'}]))
-                         ) oargs p'.oargs
+                           (oarg_name, C (oargs @ [One {one_index = index; value = oa'}]))
+                         ) oargs p'_oargs
                      in
                      let needed' = and_ [needed; not_ (i_match)] in
                      Deleted, 
                      (simp needed', oargs)
                   | `False -> continue
                   end
-               | Q p' when equal_predicate_name (Owned requested_ct) p'.name ->
-                  let p' = alpha_rename_qpredicate requested.q p' in
+               | (Q p', p'_oargs) when equal_predicate_name (Owned requested_ct) p'.name ->
+                  let p' = alpha_rename_qpredicate_type requested.q p' in
                   let pmatch = eq_ (requested.pointer, p'.pointer) in
+                  (* todo: check for p' non-emptiness? *)
                   begin match provable (LC.T pmatch) with
                   | `True ->
                      let took = and_ [requested.permission; p'.permission] in
                      let oargs = 
                        List.map2 (fun (oarg_name, C oargs) (oarg_name', oa') ->
-                           (oarg_name, C (oargs @ [Many {guard = took; value = oa'}]))
-                         ) oargs p'.oargs
+                           (oarg_name, C (oargs @ [Many {many_guard = took; value = oa'}]))
+                         ) oargs p'_oargs
                      in
                      let needed' = and_ [needed; not_ p'.permission] in
                      let permission' = and_ [p'.permission; not_ needed] in
-                     Changed (Q {p' with permission = permission'}), 
+                     Changed (Q {p' with permission = permission'}, p'_oargs), 
                      (simp needed', oargs)
                   | `False -> continue
                   end
@@ -577,8 +534,7 @@ module ResourceInference = struct
          in
          let@ (needed, oargs) =
            map_and_fold_resources loc (sub_resource_if is_exact_re)
-             (needed, [(Resources.value_sym, C []); 
-                       (Resources.init_sym, C [])])
+             (needed, List.map_snd (fun _ -> C []) (q_owned_oargs requested_ct))
          in
          debug 10 (lazy (item "needed after exact matches:" (IT.pp needed)));
          let k_is = scan_key_indices requested.q needed in
@@ -596,16 +552,15 @@ module ResourceInference = struct
          let@ () = 
            ListM.iterM (fun (_, p) ->
                let@ r = 
-                 predicate_request ~recursive:true loc {
+                 predicate_request ~recursive:true loc uiinfo {
                      name = Owned requested_ct;
                      pointer = p;
                      iargs = [];
-                     oargs = owned_oargs requested_ct;
                      permission = bool_ true;
                    }
                in
                match r with
-               | Some res -> add_r None (RE.P res)
+               | Some (res, res_oargs) -> add_r None (P res, res_oargs)
                | None -> return ()
              ) necessary_k_ptrs 
          in
@@ -625,15 +580,17 @@ module ResourceInference = struct
          let@ (needed, oargs) =
            map_and_fold_resources loc (sub_resource_if
              (fun re -> not (is_exact_re re) && not (is_exact_k re)))
-             (needed, oargs) in
+             (needed, oargs) 
+         in
          let holds = provable (forall_ (requested.q, BT.Integer) (not_ needed)) in
          time_log_end start_timing;
          begin match holds with
          | `True -> return (Some oargs)
          | `False -> return None
          end
-      | PName _ ->
-         debug 7 (lazy (item "qpredicate request" (RER.pp (Q requested))));
+      | PName pname ->
+         debug 7 (lazy (item "qpredicate request" (RET.pp (Q requested))));
+         let@ def = Typing.get_resource_predicate_def loc pname in
          let@ provable = provable loc in
          let@ global = get_global () in
          let@ values, equalities, lcs = simp_constraints () in
@@ -644,7 +601,7 @@ module ResourceInference = struct
                let continue = (Unchanged, (needed, oargs)) in
                if is_false needed then continue else
                match re with
-               | P p' when equal_predicate_name requested.name p'.name ->
+               | (P p', p'_oargs) when equal_predicate_name requested.name p'.name ->
                   let base = requested.pointer in
                   let item_size = int_ requested.step in
                   let offset = array_offset_of_pointer ~base ~pointer:p'.pointer in
@@ -663,17 +620,17 @@ module ResourceInference = struct
                      let oargs = 
                        List.map2 (fun (name, C oa) (name', oa') -> 
                            assert (Sym.equal name name');
-                           (name, C (oa @ [One {index; value = oa'}]))
-                         ) oargs p'.oargs 
+                           (name, C (oa @ [One {one_index = index; value = oa'}]))
+                         ) oargs p'_oargs 
                      in
                      let needed' = and_ [needed; not_ i_match] in
                      Deleted, 
                      (simp needed', oargs)
                   | `False -> continue
                   end
-               | Q p' when equal_predicate_name requested.name p'.name 
+               | (Q p', p'_oargs) when equal_predicate_name requested.name p'.name 
                            && requested.step = p'.step ->
-                  let p' = alpha_rename_qpredicate requested.q p' in
+                  let p' = alpha_rename_qpredicate_type requested.q p' in
                   let pmatch = eq_ (requested.pointer, p'.pointer) in
                   begin match provable (LC.T pmatch) with
                   | `True ->
@@ -684,16 +641,16 @@ module ResourceInference = struct
                      let oargs = 
                        List.map2 (fun (name, C oa) (name', oa') -> 
                            assert (Sym.equal name name');
-                           (name, C (oa @ [Many {guard = took; value = oa'}]))
-                         ) oargs p'.oargs 
+                           (name, C (oa @ [Many {many_guard = took; value = oa'}]))
+                         ) oargs p'_oargs 
                      in
-                     Changed (Q {p' with permission = permission'}), 
+                     Changed (Q {p' with permission = permission'}, p'_oargs), 
                      (simp needed', oargs)
                   | `False -> continue
                   end
                | re ->
                   continue
-             ) (needed, List.map (fun (name,_) -> (name, C [])) requested.oargs)
+             ) (needed, List.map_snd (fun _ -> C []) def.oargs)
          in
          let holds = provable (forall_ (requested.q, BT.Integer) (not_ needed)) in
          begin match holds with
@@ -701,18 +658,23 @@ module ResourceInference = struct
          | `False -> return None
          end
 
-    and qpredicate_request loc (requested : RER.qpredicate) = 
-      let@ o_oargs = qpredicate_request_aux loc requested in
+    and qpredicate_request loc uiinfo (requested : RET.qpredicate_type) = 
+      let@ o_oargs = qpredicate_request_aux loc uiinfo requested in
+      let@ oarg_item_bts = match requested.name with
+        | Owned ct -> return (owned_oargs ct)
+        | PName pn ->
+           let@ def = Typing.get_resource_predicate_def loc pn in
+           return def.oargs
+      in
       match o_oargs with
       | None -> return None
       | Some oargs ->
-         let q = sym_ (requested.q, Integer) in
          let@ oas = 
            ListM.map2M (fun (name, C oa) (name', oa_bt) ->
                assert (Sym.equal name name');
-               let@ map = cases_to_map (requested.q, Integer) None oa_bt (C oa) in
-               return (name, map_get_ map q)
-             ) oargs requested.oargs
+               let@ map = cases_to_map loc uiinfo Integer oa_bt (C oa) in
+               return (name, map)
+             ) oargs oarg_item_bts
          in
          let r = { 
              name = requested.name;
@@ -721,12 +683,12 @@ module ResourceInference = struct
              step = requested.step;
              permission = requested.permission;
              iargs = requested.iargs; 
-             oargs = oas;
            } 
          in
-         return (Some r)
+         return (Some (r, oas))
 
-    and fold_array loc item_ct base length permission =
+
+    and fold_array loc uiinfo item_ct base length permission =
       debug 7 (lazy (item "fold array" Pp.empty));
       debug 7 (lazy (item "item_ct" (Sctypes.pp item_ct)));
       debug 7 (lazy (item "base" (IT.pp base)));
@@ -734,45 +696,50 @@ module ResourceInference = struct
       debug 7 (lazy (item "permission" (IT.pp permission)));
       let q_s, q = IT.fresh Integer in
       let@ o_values_inits = 
-        qpredicate_request_aux loc {
+        qpredicate_request_aux loc uiinfo {
             name = Owned item_ct;
             pointer = base;
             q = q_s;
             step = Memory.size_of_ctype item_ct;
             iargs = [];
-            oargs = owned_oargs item_ct;
             permission = and_ [permission; (int_ 0) %<= q; q %<= (int_ (length - 1))];
           }
       in
       match o_values_inits with 
       | None -> return None
       | Some oargs ->
-         let value, init = match oargs with
-           | [(_, C value); (_, C init)] -> value, init
-           | _ -> assert false
+         let oarg_bts = owned_oargs item_ct in
+         let@ oargs = 
+           ListM.map2M (fun (name, oa) (name', oa_bt) ->
+               assert (Sym.equal name name');
+               cases_to_map loc uiinfo Integer oa_bt oa
+             ) oargs oarg_bts
          in
-         let@ folded_value = 
-           cases_to_map (q_s, Integer) (Some length) (BT.of_sct item_ct) (C value) in
-         let@ folded_inits = 
-           cases_to_map (q_s, Integer) (Some length) BT.Bool (C init) in
+         let folded_value = List.nth oargs 0 in
+         let folded_inits = List.nth oargs 1 in
          let value_s, value = IT.fresh (IT.bt folded_value) in
-         let init_s, init = IT.fresh BT.Bool in
-         let@ () = add_ls [(value_s, IT.bt value); (init_s, IT.bt init)] in
+         let@ () = add_ls [(value_s, IT.bt value)] in
          let@ () = add_c (t_ (def_ value_s folded_value)) in
-         let@ () = add_c (t_ (def_ init_s (and_ (List.init length (fun i -> map_get_ folded_inits (int_ i)))))) in
-         let folded_resource = {
+         let@ provable = provable loc in
+         let all_initialised = 
+           List.init length (fun i -> map_get_ folded_inits (int_ i)) in
+         let init = match provable (t_ (and_ all_initialised)) with
+           | `True -> bool_ true
+           | `False -> bool_ false
+         in
+         let folded_resource = ({
              name = Owned (Array (item_ct, Some length));
              pointer = base;
              iargs = [];
-             oargs = [(Resources.value_sym, value); 
-                      (Resources.init_sym, init)];
              permission = permission;
-           }
+           }, 
+           [(Resources.value_sym, value); 
+            (Resources.init_sym, init)])
          in
          return (Some folded_resource)
 
 
-    and fold_struct ~recursive loc tag pointer_t permission_t =
+    and fold_struct ~recursive loc uiinfo tag pointer_t permission_t =
       debug 7 (lazy (item "fold struct" Pp.empty));
       debug 7 (lazy (item "tag" (Sym.pp tag)));
       debug 7 (lazy (item "pointer" (IT.pp pointer_t)));
@@ -787,36 +754,35 @@ module ResourceInference = struct
             | Result.Ok (values, inits) ->
                match member_or_padding with
                | Some (member, sct) ->
-                  let request : RER.predicate = {
+                  let request : RET.predicate_type = {
                       name = Owned sct;
                       pointer = memberShift_ (pointer_t, tag, member);
                       iargs = [];
-                      oargs = owned_oargs sct;
                       permission = permission_t;
                     }
                   in
-                  let@ point = predicate_request ~recursive loc request in
+                  let@ point = predicate_request ~recursive loc uiinfo request in
                   begin match point with
-                  | None -> return (Result.Error (RER.P request))
-                  | Some point -> 
-                     let value = snd (List.nth point.oargs 0) in
-                     let init = snd (List.nth point.oargs 1) in
+                  | None -> 
+                     return (Result.Error (RET.P request))
+                  | Some (point, point_oargs) -> 
+                     let value = snd (List.nth point_oargs 0) in
+                     let init = snd (List.nth point_oargs 1) in
                      return (Result.Ok (values @ [(member, value)], inits @ [init]))
                   end
                | None ->
                   let rec bytes i =
                     if i = size then return (Result.Ok ()) else
-                      let (request : RER.predicate) = {
-                            name = Owned (Integer Char);
-                            pointer = integerToPointerCast_ (add_ (pointerToIntegerCast_ pointer_t, int_ (offset + i)));
-                            permission = permission_t;
-                            iargs = [];
-                            oargs = owned_oargs (Integer Char);
-                          } 
+                      let request : RET.predicate_type = {
+                          name = Owned (Integer Char);
+                          pointer = integerToPointerCast_ (add_ (pointerToIntegerCast_ pointer_t, int_ (offset + i)));
+                          permission = permission_t;
+                          iargs = [];
+                        } 
                       in
-                      let@ result = predicate_request ~recursive loc request in
+                      let@ result = predicate_request ~recursive loc uiinfo request in
                       begin match result with
-                      | None -> return (Result.Error (RER.P request))
+                      | None -> return (Result.Error (RET.P request))
                       | Some _ -> bytes (i + 1)
                       end
                   in
@@ -835,58 +801,59 @@ module ResourceInference = struct
          let@ () = add_ls [(value_s, IT.bt value); (init_s, IT.bt init)] in
          let@ () = add_c (t_ (def_ value_s (IT.struct_ (tag, values)))) in
          let@ () = add_c (t_ (def_ init_s (and_ inits))) in
-         let folded_resource : predicate = {
+         let folded_resource = ({
              name = Owned (Struct tag);
              pointer = pointer_t;
              iargs = [];
-             oargs = [(Resources.value_sym, value); 
-                      (Resources.init_sym, init)];
              permission = permission_t;
-           }
+           }, 
+           [(Resources.value_sym, value); 
+            (Resources.init_sym, init)])
          in
          return (Result.Ok folded_resource)
 
 
+    (* HEREHEREHERE *)
+
+
     and unfolded_array item_ct base length permission value init =
-      let q_s, q = IT.fresh_named Integer "i" in
-      {
+      (let q_s, q = IT.fresh_named Integer "i" in
+       {
         name = Owned item_ct;
         pointer = base;
         step = Memory.size_of_ctype item_ct;
         q = q_s;
         iargs = [];
-        oargs = [(Resources.value_sym, map_get_ value q); 
-                 (Resources.init_sym, init)];
         permission = and_ [permission; (int_ 0) %<= q; q %<= (int_ (length - 1))]
-      }
+      },
+       [(Resources.value_sym, value); 
+        (Resources.init_sym, const_map_ Integer init)])
 
-    and unfold_array ~recursive loc item_ct length base permission =
+    and unfold_array ~recursive loc uiinfo item_ct length base permission =
       debug 7 (lazy (item "unfold array" Pp.empty));
       debug 7 (lazy (item "item_ct" (Sctypes.pp item_ct)));
       debug 7 (lazy (item "base" (IT.pp base)));
       debug 7 (lazy (item "permission" (IT.pp permission)));
       let@ result = 
-        predicate_request ~recursive loc (Resources.Requests.{
+        predicate_request ~recursive loc uiinfo ({
               name = Owned (Array (item_ct, Some length));
               pointer = base;
               iargs = [];
-              oargs = [(Resources.value_sym, of_sct (array_ct item_ct None)); 
-                       (Resources.init_sym, BT.Bool)];
               permission = permission;
           }
         ) 
       in
       match result with
       | None -> return None
-      | Some point ->
+      | Some (point, point_oargs) ->
          let length = match point.name with
            | Owned (Array (_, Some length)) -> length
            | _ -> assert false
          in
          let qpoint =
            unfolded_array item_ct base length permission 
-             (snd (List.nth point.oargs 0)) 
-             (snd (List.nth point.oargs 1))
+             (snd (List.nth point_oargs 0)) 
+             (snd (List.nth point_oargs 1))
          in
          return (Some qpoint)
 
@@ -897,53 +864,53 @@ module ResourceInference = struct
           match member_or_padding with
           | Some (member, sct) ->
              let resource = 
-               P {
+               (P {
                    name = Owned sct;
                    pointer = memberShift_ (pointer_t, tag, member);
                    permission = permission_t;
                    iargs = [];
-                   oargs = [(Resources.value_sym, member_ ~member_bt:(BT.of_sct sct) (tag, value, member));
-                            (Resources.init_sym, init)]
-                 } 
+                  },
+                [(Resources.value_sym, member_ ~member_bt:(BT.of_sct sct) (tag, value, member));
+                 (Resources.init_sym, init)])
              in
              [resource]
           | None ->
              List.init size (fun i ->
-                 P {
+                 (P {
                      name = Owned (Integer Char);
                      pointer = integerToPointerCast_ (add_ (pointerToIntegerCast_ pointer_t, int_ (offset + i)));
                      permission = permission_t;
                      iargs = [];
-                     oargs = [(Resources.value_sym, default_ Integer); 
-                              (Resources.init_sym, bool_ false)];
-                   } 
+                   },
+                 [(Resources.value_sym, default_ Integer); 
+                  (Resources.init_sym, bool_ false)])
                )
         ) layout
 
 
-    and unfold_struct ~recursive loc tag pointer_t permission_t =
+    and unfold_struct ~recursive loc uiinfo tag pointer_t permission_t =
       debug 7 (lazy (item "unfold struct" Pp.empty));
       debug 7 (lazy (item "tag" (Sym.pp tag)));
       debug 7 (lazy (item "pointer" (IT.pp pointer_t)));
       debug 7 (lazy (item "permission" (IT.pp permission_t)));
       let@ global = get_global () in
       let@ result = 
-        predicate_request ~recursive loc
+        predicate_request ~recursive loc uiinfo
           (unfold_struct_request tag pointer_t permission_t)
       in
       match result with
       | None -> return None
-      | Some point -> 
-        let layout = SymMap.find tag global.struct_decls in
-        let resources = 
-          unfolded_struct layout tag pointer_t permission_t
-            (snd (List.nth point.oargs 0)) 
-            (snd (List.nth point.oargs 1))
-        in
-        return (Some resources)
+      | Some (point, point_oargs) -> 
+         let layout = SymMap.find tag global.struct_decls in
+         let resources = 
+           unfolded_struct layout tag pointer_t permission_t
+             (snd (List.nth point_oargs 0)) 
+             (snd (List.nth point_oargs 1))
+         in
+         return (Some resources)
 
 
-    and span_fold_unfolds loc req is_tail_rec =
+    and span_fold_unfolds loc uiinfo req is_tail_rec =
       if not (! span_actions)
       then return ()
       else
@@ -965,22 +932,22 @@ module ResourceInference = struct
           begin match confirmed with
           | None -> return ()
           | Some (Spans.Pack (pt, ct), _) ->
-              let@ success = do_pack loc pt ct in
-              if success then span_fold_unfolds loc req true else return ()
+              let@ success = do_pack loc uiinfo pt ct in
+              if success then span_fold_unfolds loc uiinfo req true else return ()
           | Some (Spans.Unpack (pt, ct), _) ->
-              let@ success = do_unpack loc pt ct in
-              if success then span_fold_unfolds loc req true else return ()
+              let@ success = do_unpack loc uiinfo pt ct in
+              if success then span_fold_unfolds loc uiinfo req true else return ()
           end
       in
       if is_tail_rec then () else time_log_end start_timing;
       return ()
 
-    and do_pack loc pt ct =
+    and do_pack loc uiinfo pt ct =
       let@ opt = match ct with
         | Sctypes.Array (act, Some length) ->
-          fold_array loc act pt length (bool_ true)
+          fold_array loc uiinfo act pt length (bool_ true)
         | Sctypes.Struct tag ->
-          let@ result = fold_struct ~recursive:true loc tag pt (bool_ true) in
+          let@ result = fold_struct ~recursive:true loc uiinfo tag pt (bool_ true) in
           begin match result with
             | Result.Ok res -> return (Some res)
             | _ -> return None
@@ -988,43 +955,43 @@ module ResourceInference = struct
         | _ -> return None
       in
       match opt with
-        | None -> return false
-        | Some resource ->
-            let@ _ = add_r None (RE.P resource) in
-            return true
+      | None -> return false
+      | Some (resource, oargs) ->
+         let@ _ = add_r None (P resource, oargs) in
+         return true
 
-    and do_unpack loc pt ct =
+    and do_unpack loc uiinfo pt ct =
       match ct with
         | Sctypes.Array (act, Some length) ->
-          let@ oqp = unfold_array ~recursive:true loc act
-              length pt (bool_ true) in
+          let@ oqp = unfold_array ~recursive:true loc uiinfo act
+                       length pt (bool_ true) in
           begin match oqp with
             | None -> return false
-            | Some qp ->
-                let@ _ = add_r None (RE.Q qp) in
+            | Some (qp, oargs) ->
+                let@ _ = add_r None (Q qp, oargs) in
                 return true
           end
         | Sctypes.Struct tag ->
-          let@ ors = unfold_struct ~recursive:true loc tag pt (bool_ true) in
+          let@ ors = unfold_struct ~recursive:true loc uiinfo tag pt (bool_ true) in
           begin match ors with
             | None -> return false
             | Some rs ->
-                let@ _ = add_rs None rs in
-                return true
+               let@ _ = add_rs None rs in
+               return true
           end
         | _ -> return false
 
 
 
 
-    let resource_request ~recursive loc (request : RER.t) : (RE.t option, type_error) m = 
+    let resource_request ~recursive loc uiinfo (request : RET.t) : (RE.t option, type_error) m = 
       match request with
       | P request ->
-         let@ result = predicate_request ~recursive loc request in
-         return (Option.map (fun point -> P point) result)
+         let@ result = predicate_request ~recursive loc uiinfo request in
+         return (Option.map_fst (fun p -> P p) result)
       | Q request ->
-         let@ result = qpredicate_request loc request in
-         return (Option.map (fun q -> Q q) result)
+         let@ result = qpredicate_request loc uiinfo request in
+         return (Option.map_fst (fun q -> Q q) result)
 
   end
 
@@ -1038,28 +1005,32 @@ module ResourceInference = struct
 
 
     let predicate_request ~recursive loc situation (request, oinfo) = 
-      let@ result = General.predicate_request ~recursive loc request in
+      let uiinfo = (situation, (Some (P request), oinfo)) in
+      let@ result = General.predicate_request ~recursive loc uiinfo request in
       match result with
       | Some r -> return r
       | None -> fail_missing_resource loc situation (Some (P request), oinfo)
 
     let qpredicate_request loc situation (request, oinfo) = 
-      let@ result = General.qpredicate_request loc request in
+      let uiinfo = (situation, (Some (Q request), oinfo)) in
+      let@ result = General.qpredicate_request loc uiinfo request in
       match result with
       | Some r -> return r
       | None -> fail_missing_resource loc situation (Some (Q request), oinfo)
 
     let unfold_struct ~recursive loc situation tag pointer_t permission_t = 
-      let@ result = General.unfold_struct ~recursive loc tag pointer_t permission_t in
+      let request = General.unfold_struct_request tag pointer_t permission_t in
+      let uiinfo = (situation, (Some (P request), None)) in
+      let@ result = General.unfold_struct ~recursive loc uiinfo tag pointer_t permission_t in
       match result with
       | Some resources -> return resources
       | None -> 
-         let request = General.unfold_struct_request tag pointer_t permission_t in
          fail_missing_resource loc situation (Some (P request), None)
       
 
     let fold_struct ~recursive loc situation tag pointer_t permission_t = 
-      let@ result = General.fold_struct ~recursive loc tag pointer_t permission_t in
+      let uiinfo = (situation, (None, None)) in
+      let@ result = General.fold_struct ~recursive loc uiinfo tag pointer_t permission_t in
       match result with
       | Result.Ok r -> return r
       | Result.Error request -> fail_missing_resource loc situation (Some request, None)
@@ -1071,16 +1042,19 @@ end
 
 
 
+
+
+
 module InferenceEqs = struct
 
 let use_model_eqs = ref true
 
 (* todo: what is this? Can we replace this by using the predicate_name
    + information about whether iterated or not? *)
-let res_pointer_kind res = match res with
-  | (RE.P ({name = Owned ct; _} as res_pt)) -> Some ((("", "Pt"), ct), res_pt.pointer)
-  | (RE.Q ({name = Owned ct; _} as res_qpt)) -> Some ((("", "QPt"), ct), res_qpt.pointer)
-  | (RE.P ({name = PName pn; _} as res_pd)) -> Some (((pn, "Pd"), Sctypes.Void), res_pd.pointer)
+let res_pointer_kind (res, _) = match res with
+  | (RET.P ({name = Owned ct; _} as res_pt)) -> Some ((("", "Pt"), ct), res_pt.pointer)
+  | (RET.Q ({name = Owned ct; _} as res_qpt)) -> Some ((("", "QPt"), ct), res_qpt.pointer)
+  | (RET.P ({name = PName pn; _} as res_pd)) -> Some (((pn, "Pd"), Sctypes.Void), res_pd.pointer)
   | _ -> None
 
 let div_groups cmp xs =
@@ -1189,6 +1163,11 @@ module RI = ResourceInference
 
 
 
+(* got until here *)
+
+
+
+
 (*** function call typing, subtyping, and resource inference *****************)
 
 (* spine is parameterised so it can be used both for function and
@@ -1248,7 +1227,7 @@ end = struct
     then return ()
     else fail (fun _ -> {loc; msg = Mismatch_lvar { has = IT.bt instantiation; expect; spec_info = info}})
 
-  let unify_or_constrain loc (unis, subst, constrs) 
+  let unify_or_constrain loc oq (unis, subst, constrs)
         ((output_spec_name, output_spec), 
          (output_have_name, output_have)) =
     assert (Sym.equal output_spec_name output_have_name);
@@ -1257,36 +1236,20 @@ end = struct
        let@ () = ls_matches_spec loc unis s output_have in
        return (SymMap.remove s unis, (s, output_have) :: subst, constrs)
     | _ ->
-       return (unis, subst, eq_ (output_spec, output_have) :: constrs)
+       let constr = match oq with
+         | None -> 
+            eq_ (output_spec, output_have)
+         | Some q -> 
+            eq_ (map_get_ output_spec q, map_get_ output_have q)
+       in
+       let@ () = ensure_base_type loc ~expect:(IT.bt output_spec) (IT.bt output_have) in
+       return (unis, subst, constr :: constrs)
 
-  let unify_or_constrain_list loc = ListM.fold_leftM (unify_or_constrain loc)
-
-  (* ASSUMES unification variables and quantifier q_s are disjoint,
-     and that resource inference has produced a resource with value/oargs v[q] *)
-  let unify_or_constrain_q loc (q_s,q_bt) condition (unis, subst, constrs) 
-        ((output_spec_name, output_spec), 
-         (output_have_name, output_have)) = 
-    assert (Sym.equal output_spec_name output_have_name);
-    let q = sym_ (q_s, q_bt) in
-    match is_map_get (IT.subst (make_subst subst) output_spec) with
-    | Some (IT (Lit (Sym s), _), IT (Lit (Sym q'_s), q'_bt)) 
-         when Sym.equal q'_s q_s && SymMap.mem s unis ->
-       let@ () = ensure_logical_sort loc ~expect:q_bt q'_bt in
-       let (output_have_body, q') = Option.get (is_map_get output_have) in
-       assert (IT.equal q' q);
-       let@ () = ls_matches_spec loc unis s output_have_body in
-       return (SymMap.remove s unis, (s, output_have_body) :: subst, constrs)
-    | _ ->
-       return (unis, subst, eq_ (output_spec, output_have) :: constrs)
-
-  let unify_or_constrain_q_list loc q condition = 
-    ListM.fold_leftM (unify_or_constrain_q loc q condition)
+  let unify_or_constrain_list loc oq = ListM.fold_leftM (unify_or_constrain loc oq)
 
   (* the following functions for matching resources require equality
      on inputs *)
   (* could optimise to delay checking the constraints until later *)
-
-
 
   
   let match_failure loc original_resources situation expect has = 
@@ -1296,40 +1259,34 @@ end = struct
         {loc = loc; msg = Resource_mismatch {expect; has; situation; ctxt; model}}
       )
   
-  let match_predicates loc original_resources situation
-        unis (p_spec : RE.predicate) (p_have : RE.predicate) =
-    assert (equal_predicate_name p_spec.name p_have.name
-            && IT.equal p_spec.pointer p_have.pointer
-            && IT.equal p_spec.permission p_have.permission
-            && List.equal IT.equal p_spec.iargs p_have.iargs);
+  let match_predicates loc original_resources situation unis 
+        ((p_spec : predicate_type), p_spec_oargs) 
+        ((p_have : predicate_type), p_have_oargs) =
+    assert (equal_predicate_type p_spec p_have);
     let@ (unis, subst, constrs) = 
-      unify_or_constrain_list loc (unis, [], [])
-        (List.combine p_spec.oargs p_have.oargs) 
+      unify_or_constrain_list loc None (unis, [], [])
+        (List.combine p_spec_oargs p_have_oargs)
     in
     let@ provable = provable loc in
     let result = provable (t_ (impl_ (p_have.permission, and_ constrs))) in
     match result with
     | `True -> return (unis, make_subst subst) 
     | `False -> match_failure loc original_resources situation
-                  (P p_spec) (P p_have)
+                  (P p_spec, p_spec_oargs) (P p_have, p_have_oargs)
 
-  let match_qpredicates loc original_resources situation
-        unis (p_spec : RE.qpredicate) (p_have : RE.qpredicate) =
+  let match_qpredicates loc original_resources situation unis 
+        ((p_spec : qpredicate_type), p_spec_oargs) 
+        ((p_have : qpredicate_type), p_have_oargs) =
     let p_spec, p_have = 
       let q = Sym.fresh_same p_spec.q in
-      RE.alpha_rename_qpredicate q p_spec,
-      RE.alpha_rename_qpredicate q p_have 
+      alpha_rename_qpredicate_type q p_spec,
+      alpha_rename_qpredicate_type q p_have 
     in
-    assert (equal_predicate_name p_spec.name p_have.name
-            && IT.equal p_spec.pointer p_have.pointer
-            && Sym.equal p_spec.q p_have.q
-            && p_spec.step = p_have.step
-            && IT.equal p_spec.permission p_have.permission
-            && List.equal IT.equal p_spec.iargs p_have.iargs);
+    assert (equal_qpredicate_type p_spec p_have);
+    let q = sym_ (p_have.q, Integer) in
     let@ (unis, subst, constrs) = 
-      unify_or_constrain_q_list loc (p_have.q, Integer) p_have.permission
-        (unis, [], []) 
-        (List.combine p_spec.oargs p_have.oargs) 
+      unify_or_constrain_list loc (Some q) (unis, [], [])
+        (List.combine p_spec_oargs p_have_oargs)
     in
     let@ provable = provable loc in
     let result =
@@ -1340,7 +1297,7 @@ end = struct
     match result with
     | `True -> return (unis, make_subst subst) 
     | `False -> match_failure loc original_resources situation
-                  (Q p_spec) (Q p_have)
+                  (Q p_spec, p_spec_oargs) (Q p_have, p_have_oargs)
     
 
   let request_and_match_resources loc original_resources situation
@@ -1353,23 +1310,20 @@ end = struct
           {loc; msg}
         )
     in
-    let request_and_match make_request_f request_f match_f inject_f resource = 
-      let request = make_request_f resource in
-      let@ result = request_f loc request in
-      let@ resource' = match result with
-        | Some resource' -> return resource'
-        | None -> request_failure (inject_f request)
-      in
-      match_f loc original_resources situation unis resource resource'
-    in
+    let uiinfo = (situation, (Some (fst r_spec), Some info)) in
     match r_spec with
-    | P resource ->
-       request_and_match RE.request_predicate 
-         (RI.General.predicate_request ~recursive:true)
-         match_predicates (fun p -> P p) resource
-    | Q resource ->
-       request_and_match RE.request_qpredicate RI.General.qpredicate_request 
-         match_qpredicates (fun p -> Q p) resource
+    | (P p, r_spec_oargs) ->
+       let@ result = RI.General.predicate_request ~recursive:true loc uiinfo p in
+       begin match result with
+       | Some p' -> match_predicates loc original_resources situation unis (p, r_spec_oargs) p'
+       | None -> request_failure (P p)
+       end
+    | (Q p, r_spec_oargs) ->
+       let@ result = RI.General.qpredicate_request loc uiinfo p in
+       begin match result with
+       | Some p' -> match_qpredicates loc original_resources situation unis (p, r_spec_oargs) p'
+       | None -> request_failure (Q p)
+       end
 
 
 
@@ -1400,7 +1354,7 @@ end = struct
     else
     let reqs1 = NormalisedArgumentTypes.r_resource_requests ftyp in
     let reqs = List.mapi (fun i res -> (i, res)) reqs1 in
-    let res_free_vars r = match r with
+    let res_free_vars (r, _) = match r with
       | P ({name = Owned _; _} as p) -> IT.free_vars p.pointer
       | Q ({name = Owned _; _} as p) -> IT.free_vars p.pointer
       | _ -> SymSet.empty
@@ -2089,8 +2043,8 @@ let all_empty loc =
   let@ all_resources = all_resources () in
   ListM.iterM (fun resource ->
       let constr = match resource with
-        | P p -> t_ (not_ p.permission)
-        | Q p -> forall_ (p.q, BT.Integer) (not_ p.permission)
+        | (P p, _) -> t_ (not_ p.permission)
+        | (Q p, _) -> forall_ (p.q, BT.Integer) (not_ p.permission)
       in
       match provable constr with
       | `True -> return () 
@@ -2225,14 +2179,14 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t * per_path, type_error) m =
           let ret = Sym.fresh () in
           let value_s, value_t = IT.fresh (BT.of_sct act.ct) in
           let resource = 
-            RE.P {
+            (P {
                 name = Owned act.ct; 
                 pointer = sym_ (ret, Loc);
                 permission = bool_ true;
                 iargs = [];
-                oargs = [(Resources.value_sym, value_t); 
-                         (Resources.init_sym, bool_ false)];
-              }
+              },
+             [(Resources.value_sym, value_t); 
+              (Resources.init_sym, bool_ false)])
           in
           let rt = 
             RT.Computational ((ret, Loc), (loc, None),
@@ -2259,7 +2213,6 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t * per_path, type_error) m =
               pointer = it_of_arg arg;
               permission = bool_ true;
               iargs = [];
-              oargs = owned_oargs ct;
             }, None)
           in
           let rt = RT.Computational ((Sym.fresh (), Unit), (loc, None), I) in
@@ -2300,18 +2253,17 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t * per_path, type_error) m =
                 pointer = it_of_arg parg;
                 permission = bool_ true;
                 iargs = [];
-                oargs = owned_oargs act.ct;
               }, None)
           in
           let resource = 
-            RE.P {
+            (P {
                 name = Owned act.ct;
                 pointer = it_of_arg parg;
                 permission = bool_ true;
                 iargs = [];
-                oargs = [(Resources.value_sym, it_of_arg varg); 
-                         (Resources.init_sym, bool_ true)]
-              }
+               },
+             [(Resources.value_sym, it_of_arg varg); 
+              (Resources.init_sym, bool_ true)])
           in
           let rt = 
             RT.Computational ((Sym.fresh (), Unit), (loc, None),
@@ -2323,18 +2275,17 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t * per_path, type_error) m =
           let@ () = WellTyped.WCT.is_ct act.loc act.ct in
           let@ parg = arg_of_asym pasym in
           let@ () = ensure_base_type parg.loc ~expect:Loc parg.bt in
-          let@ point = 
+          let@ (point, point_oargs) = 
             restore_resources 
               (RI.Special.predicate_request ~recursive:true loc (Access (Load None)) ({ 
                      name = Owned act.ct;
                      pointer = it_of_arg parg;
                      permission = bool_ true;
                      iargs = [];
-                     oargs = owned_oargs act.ct;
                    }, None))
           in
-          let value = snd (List.nth point.oargs 0) in
-          let init = snd (List.nth point.oargs 1) in
+          let value = snd (List.nth point_oargs 0) in
+          let init = snd (List.nth point_oargs 1) in
           let@ () = 
             let@ provable = provable loc in
             match provable (t_ init) with
@@ -2440,14 +2391,13 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t * per_path, type_error) m =
        in
        begin match pack_unpack with
        | Unpack ->
-          let@ pred =
+          let@ (pred, pred_oargs) =
             RI.Special.predicate_request ~recursive:false
               loc (Unpack (TPU_Predicate pname)) ({
                 name = PName (Id.s pname);
                 pointer = it_of_arg pointer_arg;
                 permission = bool_ true;
                 iargs = List.map it_of_arg iargs;
-                oargs = def.oargs;
               }, None)
           in
           let condition, outputs = AT.logical_arguments_and_return right_clause in
@@ -2456,7 +2406,7 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t * per_path, type_error) m =
               List.map2 (fun (oa_name, it) (o : OutputDef.entry) -> 
                   assert (Sym.equal oa_name o.name);
                   eq__ it o.value
-                ) pred.oargs outputs
+                ) pred_oargs outputs
             in
             and_ lcs
           in
@@ -2465,13 +2415,13 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t * per_path, type_error) m =
        | Pack ->
           let@ (output_assignment, per_path) = Spine.calltype_packing loc pname right_clause in
           let resource = 
-            P {
+            (P {
               name = PName (Id.s pname);
               pointer = it_of_arg pointer_arg;
               permission = bool_ true;
               iargs = List.map it_of_arg iargs;
-              oargs = List.map (fun (o : OutputDef.entry) -> (o.name, o.value)) output_assignment;
-            }
+            },
+             List.map (fun (o : OutputDef.entry) -> (o.name, o.value)) output_assignment)
           in
           let rt =
             (RT.Computational ((Sym.fresh (), BT.Unit), (loc, None),
@@ -2494,11 +2444,13 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t * per_path, type_error) m =
        begin match pack_unpack with
        | Pack ->
           let situation = TypeErrors.Pack (TPU_Struct tag) in
-          let@ resource = RI.Special.fold_struct ~recursive:true loc situation tag 
-                            (it_of_arg pointer_arg) (bool_ true) in
+          let@ (resource, resource_oargs) = 
+            RI.Special.fold_struct ~recursive:true loc situation tag 
+              (it_of_arg pointer_arg) (bool_ true) 
+          in
           let rt = 
             RT.Computational ((Sym.fresh (), BT.Unit), (loc, None),
-            LRT.Resource (P resource, (loc, None), 
+            LRT.Resource ((P resource, resource_oargs), (loc, None), 
             LRT.I))
           in
           return (rt, [])
@@ -2798,7 +2750,7 @@ let check_procedure
             pure begin 
                 match def with
                 | M_Return (loc, lt) ->
-                   let@ () = WellTyped.WLT.good "return label" loc lt in
+                   let@ () = WellTyped.WLT.welltyped "return label" loc lt in
                    return (SymMap.add sym (lt, Return) acc)
                 | M_Label (loc, lt, _, _, annots) -> 
                    let label_kind = match CF.Annot.get_label_annot annots with
@@ -2890,12 +2842,12 @@ let check mu_file =
         let descr = CF.Implementation.string_of_implementation_constant impl in
         match impl_decl with
         | M_Def (rt, rbt, pexpr) -> 
-           let@ () = WellTyped.WRT.good Loc.unknown rt in
+           let@ () = WellTyped.WRT.welltyped Loc.unknown rt in
            let@ () = WellTyped.WBT.is_bt Loc.unknown rbt in
            let@ () = check_function Loc.unknown descr [] rbt pexpr (AT.I rt) in
            add_impl_constant impl rt
         | M_IFun (ft, rbt, args, pexpr) ->
-           let@ () = WellTyped.WFT.good "implementation-defined function" Loc.unknown ft in
+           let@ () = WellTyped.WFT.welltyped "implementation-defined function" Loc.unknown ft in
            let@ () = WellTyped.WBT.is_bt Loc.unknown rbt in
            let@ () = check_function Loc.unknown descr args rbt pexpr ft in
            add_impl_fun_decl impl ft
@@ -2909,7 +2861,7 @@ let check mu_file =
     (* check and record logical predicate defs *)
     Pp.progress_simple "checking specifications" "logical predicate welltypedness";
     ListM.iterM (fun (name,(def : LP.definition)) -> 
-        let@ () = WellTyped.WLPD.good def in
+        let@ () = WellTyped.WLPD.welltyped def in
         add_logical_predicate name def
       ) mu_file.mu_logical_predicates
   in
@@ -2924,7 +2876,7 @@ let check mu_file =
     in
     Pp.progress_simple "checking specifications" "resource predicate welltypedness";
     let@ () = 
-      ListM.iterM (fun (name,def) -> WellTyped.WRPD.good def)
+      ListM.iterM (fun (name,def) -> WellTyped.WRPD.welltyped def)
         mu_file.mu_resource_predicates
     in
     return ()
@@ -2973,7 +2925,7 @@ let check mu_file =
         | _ ->
            let () = debug 2 (lazy (headline ("checking welltypedness of procedure " ^ Sym.pp_string fsym))) in
            let () = debug 2 (lazy (item "type" (AT.pp RT.pp ftyp))) in
-           WellTyped.WFT.good "global" loc ftyp
+           WellTyped.WFT.welltyped "global" loc ftyp
       ) mu_file.mu_funinfo
   in
   let () = Debug_ocaml.end_csv_timing "welltypedness" in

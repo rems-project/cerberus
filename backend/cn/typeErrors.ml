@@ -6,9 +6,9 @@ module LS=LogicalSorts
 module CF=Cerb_frontend
 module Loc = Locations
 open Report
-module RE = Resources.RE
+module RE = Resources
 module LC = LogicalConstraints
-module RER = Resources.Requests
+module RET = ResourceTypes
 
 type label_kind =
   | Return
@@ -87,7 +87,8 @@ type message =
   | Unknown_logical_predicate of {id: string; resource: bool}
   | Unknown_member of BT.tag * BT.member
 
-  | Missing_resource_request of {orequest : RER.t option; situation : situation; oinfo : info option; ctxt : Context.t; model: Solver.model_with_q }
+  | Missing_resource_request of {orequest : RET.t option; situation : situation; oinfo : info option; ctxt : Context.t; model: Solver.model_with_q }
+  | Merging_multiple_arrays of {orequest : RET.t option; situation : situation; oinfo : info option; ctxt : Context.t; model: Solver.model_with_q }
   | Resource_mismatch of {has: RE.t; expect: RE.t; situation : situation; ctxt : Context.t; model : Solver.model_with_q }
   | Uninitialised_read of {ctxt : Context.t; model : Solver.model_with_q}
   | Unused_resource of {resource: RE.t; ctxt : Context.t; model : Solver.model_with_q}
@@ -135,6 +136,23 @@ type report = {
     state : state_report option;
   }
 
+
+let missing_or_bad_request_description oinfo orequest explanation = 
+  match oinfo, orequest with
+  | Some (spec_loc, Some descr), _ ->
+     let (head, _) = Locations.head_pos_of_location spec_loc in
+     Some (!^"Resource from" ^^^ !^head ^^^ parens !^descr)
+  | Some (spec_loc, None), _ ->
+     let (head, _) = Locations.head_pos_of_location spec_loc in
+     Some (!^"Resource from" ^^^ !^head)
+  | None, Some request ->
+     let re_pp = RET.pp (RET.subst explanation.Explain.substitution request) in
+     Some (!^"Resource" ^^^ squotes re_pp)
+  | None, None ->
+     None  
+
+
+
 let pp_message te =
   match te with
   | Unknown_variable s ->
@@ -170,22 +188,23 @@ let pp_message te =
      let short = !^"Missing resource" ^^^ for_situation situation in
      let relevant = match orequest with
        | None -> IT.SymSet.empty
-       | Some request -> (RER.free_vars request)
+       | Some request -> (RET.free_vars request)
      in
      let explanation = Explain.explanation ctxt relevant in
-     let descr = match oinfo, orequest with
-       | Some (spec_loc, Some descr), _ ->
-          let (head, _) = Locations.head_pos_of_location spec_loc in
-          Some (!^"Missing resource from" ^^^ !^head ^^^ parens !^descr)
-       | Some (spec_loc, None), _ ->
-          let (head, _) = Locations.head_pos_of_location spec_loc in
-          Some (!^"Missing resource from" ^^^ !^head)
-       | None, Some request ->
-          let re_pp = RER.pp (RER.subst explanation.substitution request) in
-          Some (!^"Missing resource" ^^^ squotes re_pp)
-       | None, None ->
-          None
+     let descr = missing_or_bad_request_description oinfo orequest explanation in
+     let state = Explain.state ctxt explanation model orequest in
+     { short; descr = descr; state = Some state }
+  | Merging_multiple_arrays {orequest; situation; oinfo; ctxt; model} ->
+     let short = 
+       !^"Cannot satisfy request for resource" ^^^ for_situation situation ^^ dot ^^^
+         !^"It requires merging multiple arrays."
      in
+     let relevant = match orequest with
+       | None -> IT.SymSet.empty
+       | Some request -> (RET.free_vars request)
+     in
+     let explanation = Explain.explanation ctxt relevant in
+     let descr = missing_or_bad_request_description oinfo orequest explanation in
      let state = Explain.state ctxt explanation model orequest in
      { short; descr = descr; state = Some state }
   | Resource_mismatch {has; expect; situation; ctxt; model} ->

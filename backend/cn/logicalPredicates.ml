@@ -97,16 +97,16 @@ module PageAlloc = struct
       let range_start_i = range_start %/ (int_ pPAGE_SIZE) in
       let range_end_i = range_end %/ (int_ pPAGE_SIZE) in
       let q_s, q = IT.fresh_named Integer "q" in
-      Resources.RE.Q {
+      (ResourceTypes.Q {
           name = Owned (Struct hyp_page_tag);
           q = q_s;
           pointer = vmemmap_pointer;
           iargs = [];
-          oargs = [(Resources.value_sym, map_get_ vmemmap q); 
-                   (Resources.init_sym, bool_ true)];
           step = Memory.size_of_ctype (Struct hyp_page_tag);
           permission = and_ [range_start_i %<= q; q %<= (sub_ (range_end_i, int_ 1))];
-        }
+         }, 
+       [(Resources.value_sym, vmemmap); 
+        (Resources.init_sym, const_map_ Integer (bool_ true))])
 
 
   end

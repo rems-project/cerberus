@@ -2,7 +2,7 @@ open Locations
 module BT = BaseTypes
 module IT = IndexTerms
 module LS = LogicalSorts
-module RE = Resources.RE
+module RE = Resources
 module LC = LogicalConstraints
 module SymSet = Set.Make(Sym)
 

@@ -2,7 +2,8 @@ module LS = LogicalSorts
 module BT = BaseTypes
 module SymSet = Set.Make(Sym)
 module TE = TypeErrors
-module RE = Resources.RE
+module RE = Resources
+module RET = ResourceTypes
 module AT = ArgumentTypes
 
 open Global
@@ -582,97 +583,65 @@ let unconstrained_lvar loc infos lvar =
 
 
 
+module WRET = struct
 
-module WRE = struct
+  open RET
 
-  open Resources.RE
-
-  let welltyped loc resource = 
-    begin match resource with
+  let welltyped loc r = 
+    let@ iargs = match RET.predicate_name r with
+      | Owned ct ->
+         return (Resources.owned_iargs ct)
+      | PName name -> 
+         let@ def = Typing.get_resource_predicate_def loc name in
+         return (def.iargs)
+    in
+    match r with
     | P p -> 
-       let@ iargs, oargs = match p.name with
-         | Owned ct ->
-            return (Resources.owned_iargs ct, Resources.owned_oargs ct)
-         | PName name -> 
-            let@ def = Typing.get_resource_predicate_def loc name in
-            return (def.iargs, def. oargs)
-       in
        let@ _ = WIT.check loc BT.Loc p.pointer in
        let@ _ = WIT.check loc BT.Bool p.permission in
        let has_iargs, expect_iargs = List.length p.iargs, List.length iargs in
        (* +1 because of pointer argument *)
        let@ () = ensure_same_argument_number loc `Input (1 + has_iargs) ~expect:(1 + expect_iargs) in
-       let@ _ = 
-         ListM.map2M (fun arg (_, expected_sort) ->
-             WIT.check loc expected_sort arg
-           ) p.iargs iargs
-       in
-       let@ _ = WIT.check loc (Record oargs) (IT.record_ p.oargs) in
+       let@ _ = ListM.map2M (fun (_, expected) arg -> WIT.check loc expected arg) iargs p.iargs in
        return ()
-    | Q p -> 
-       let@ iargs, oargs = match p.name with
-         | Owned ct ->
-            return (Resources.owned_iargs ct, Resources.owned_oargs ct)
-         | PName name -> 
-            let@ def = Typing.get_resource_predicate_def loc name in
-            return (def.iargs, def. oargs)
-       in
+    | Q p ->
        let@ _ = WIT.check loc BT.Loc p.pointer in
-       pure begin 
-           let@ () = add_l p.q Integer in
-           let@ _ = WIT.check loc BT.Bool p.permission in
-           let has_iargs, expect_iargs = List.length p.iargs, List.length iargs in
-           (* +1 because of pointer argument *)
-           let@ () = ensure_same_argument_number loc `Input (1 + has_iargs) ~expect:(1 + expect_iargs) in
-           let@ _ = 
-             ListM.map2M (fun arg (_, expected_sort) ->
-                 WIT.check loc expected_sort arg
-               ) p.iargs iargs
-           in
-           let@ _ = WIT.check loc (Record oargs) (IT.record_ p.oargs) in
-           return ()
-         end
-    end
+       let@ _ = 
+         pure begin 
+             let@ () = add_l p.q Integer in
+             let@ _ = WIT.check loc BT.Bool p.permission in
+             let has_iargs, expect_iargs = List.length p.iargs, List.length iargs in
+             (* +1 because of pointer argument *)
+             let@ () = ensure_same_argument_number loc `Input (1 + has_iargs) ~expect:(1 + expect_iargs) in
+             ListM.map2M (fun (_, expected) arg -> WIT.check loc expected arg) iargs p.iargs
+           end  
+       in
+       return ()
+end
 
-  let mode_check loc ~infos ~undetermined resource = 
-    (* check inputs *)
-    let undetermined_input_vars = SymSet.inter (RE.free_input_vars resource) undetermined in
-    let@ () = match SymSet.choose_opt undetermined_input_vars with
-      | None -> return ()
-      | Some lvar -> unconstrained_lvar loc infos lvar 
+
+
+module WRE = struct
+
+  open RET
+
+  let welltyped loc ((resource, resource_oargs) : RE.t) = 
+    let@ oargs = match RET.predicate_name resource with
+      | Owned ct ->
+         return (Resources.owned_oargs ct)
+      | PName name -> 
+         let@ def = Typing.get_resource_predicate_def loc name in
+         return (def.oargs)
     in
-    (* check outputs *)
-    (* NOTE: The following line is ok because the quantifier is bound
-       in all the outputs. In principle, this is not necessary,
-       however. *)
-    let undetermined = SymSet.diff undetermined (RE.bound resource) in
-    let@ fixed = 
-      ListM.mapM (fun (_, output) ->
-          let undetermined_output = SymSet.inter undetermined (IT.free_vars output) in
-          if SymSet.is_empty undetermined_output then 
-            (* If the logical variables in the output term are already
-               determined, ok. *)
-            return SymSet.empty
-          else
-            (* otherwise, check that there is a single unification
-               variable that can be resolved by unification *)
-            match RE.quantifier resource, output with
-            | None, 
-              IT (Lit (Sym s), _) -> 
-               return (SymSet.singleton s)
-            | Some (q, _), 
-              IT (Map_op (Get (IT (Lit (Sym map_s), _), 
-                               IT (Lit (Sym arg_s), _))), _)
-                 when Sym.equal arg_s q ->
-               return (SymSet.singleton map_s)
-            (* otherwise, fail *)
-            | _ ->
-               let u = SymSet.choose undetermined_output in
-               let (loc, odescr) = SymMap.find u infos in
-               fail (fun _ -> {loc; msg = Logical_variable_not_good_for_unification (u, odescr)})
-        ) (RE.oargs resource)
+    let@ () = WRET.welltyped loc resource in
+    let@ _ = match resource with
+      | P p -> 
+         WIT.check loc (Record oargs) (IT.record_ resource_oargs)
+      | Q p -> 
+         let spec = BT.Record (List.map_snd (BT.make_map_bt Integer) oargs) in
+         WIT.check loc spec (IT.record_ resource_oargs)
     in
-    return (List.fold_left SymSet.union SymSet.empty fixed)
+    return ()
 
 end
 
@@ -724,40 +693,6 @@ module WLRT = struct
     in
     pure (aux lrt)
 
-  let mode_check loc ~infos lrt = 
-    let rec aux ~infos ~undetermined constraints lrt = 
-      match lrt with
-      | Logical ((s, ls), info, lrt) ->
-         let undetermined = SymSet.add s undetermined in
-         let infos = SymMap.add s info infos in
-         aux ~infos ~undetermined constraints lrt
-      | Define ((s, it), info, lrt) ->
-         let@ () = match SymSet.choose_opt (SymSet.inter (IT.free_vars it) undetermined) with
-           | None -> return ()
-           | Some lvar -> unconstrained_lvar loc infos lvar 
-         in
-         let infos = SymMap.add s info infos in
-         aux ~infos ~undetermined constraints lrt
-      | Resource (re, info, lrt) ->
-         let@ fixed = WRE.mode_check (fst info) ~infos ~undetermined re in
-         let undetermined = SymSet.diff undetermined fixed in
-         aux ~infos ~undetermined constraints lrt
-      | Constraint (lc, info, lrt) ->
-         aux ~infos ~undetermined ((lc, info) :: constraints) lrt
-      | I ->
-         let@ () = match SymSet.choose_opt undetermined with
-           | Some s -> 
-              let (loc, odescr) = SymMap.find s infos in
-              fail (fun _ -> {loc; msg = Unconstrained_logical_variable (s, odescr)})
-           | None -> return ()
-         in
-         return ()
-    in
-    aux ~infos ~undetermined:SymSet.empty [] lrt
-
-  let good loc lrt = 
-    let@ () = welltyped loc lrt in
-    mode_check loc ~infos:SymMap.empty lrt
 
 end
 
@@ -776,16 +711,6 @@ module WRT = struct
          WLRT.welltyped loc lrt
       end
 
-  let mode_check loc ~infos rt = 
-    match rt with
-    | Computational ((s, bt), _info, lrt) ->
-       WLRT.mode_check loc ~infos lrt
-
-
-  let good loc rt =
-    let@ () = welltyped loc rt in
-    mode_check loc ~infos:SymMap.empty rt
-
 end
 
 
@@ -794,14 +719,13 @@ module WFalse = struct
   include False
   type t = False.t
   let welltyped _ _ = return ()
-  let mode_check _ ~infos:_ _ = return ()
 end
 
 module type WOutputSpec = sig val name_bts : (Sym.t * LS.t) list end
 module WOutputDef (Spec : WOutputSpec) = struct
   include OutputDef
   type t = OutputDef.t
-  let check loc assignment =
+  let welltyped loc assignment =
     let rec aux name_bts assignment =
       match name_bts, assignment with
       | [], [] -> 
@@ -819,12 +743,6 @@ module WOutputDef (Spec : WOutputSpec) = struct
     in
     aux Spec.name_bts assignment
 
-  let mode_check loc ~infos assignment = 
-    return ()
-
-  let welltyped loc assignment = 
-    check loc assignment
-
 end
 
 
@@ -835,12 +753,6 @@ module type WI_Sig = sig
   val subst : IndexTerms.t Subst.t -> t -> t
 
   val pp : t -> Pp.document
-
-  val mode_check : 
-    Loc.t -> 
-    infos:(Loc.info SymMap.t) -> 
-    t -> 
-    (unit, type_error) m
 
   val welltyped : 
     Loc.t -> 
@@ -895,54 +807,6 @@ module WAT (WI: WI_Sig) = struct
     pure (aux at)
 
 
-  let mode_check loc ~infos ft = 
-    let rec aux ~infos ~undetermined constraints ft = 
-      match ft with
-      | AT.Computational ((s, bt), _info, ft) ->
-         aux ~infos ~undetermined constraints ft
-      | Logical ((s, ls), info, ft) ->
-         let undetermined = SymSet.add s undetermined in
-         let infos = SymMap.add s info infos in
-         aux ~infos ~undetermined constraints ft
-      | AT.Define ((s, it), info, ft) ->
-         let@ () = match SymSet.choose_opt (SymSet.inter (IT.free_vars it) undetermined) with
-           | None -> return ()
-           | Some lvar -> unconstrained_lvar loc infos lvar 
-         in
-         let infos = SymMap.add s info infos in
-         aux ~infos ~undetermined constraints ft
-      | AT.Resource (re, info, ft) ->
-         let@ fixed = WRE.mode_check (fst info) ~infos ~undetermined re in
-         let undetermined = SymSet.diff undetermined fixed in
-         aux ~infos ~undetermined constraints ft
-      | AT.Constraint (lc, info, ft) ->
-         let constraints = (lc, info) :: constraints in
-         aux ~infos ~undetermined constraints ft
-      | AT.I rt ->
-         let@ () = match SymSet.choose_opt undetermined with
-           | Some s -> 
-              let (loc, odescr) = SymMap.find s infos in
-              fail (fun _ -> {loc; msg = Unconstrained_logical_variable (s, odescr)})
-           | None -> return ()
-         in 
-         WI.mode_check loc ~infos rt
-    in
-    aux ~infos ~undetermined:SymSet.empty [] ft
-
-
-  let good kind loc ft = 
-    let () = Debug_ocaml.begin_csv_timing "WAT.good" in
-    let () = Debug_ocaml.begin_csv_timing "WAT.welltyped" in
-    let@ () = welltyped kind loc ft in
-    let () = Debug_ocaml.end_csv_timing "WAT.welltyped" in
-    let () = Debug_ocaml.begin_csv_timing "WAT.mode_and_bad_value_check" in
-    let@ () = 
-      let infos = SymMap.empty in
-      mode_check loc ~infos ft 
-    in
-    let () = Debug_ocaml.end_csv_timing "WAT.mode_and_bad_value_check" in
-    let () = Debug_ocaml.end_csv_timing "WAT.good" in
-    return ()
 
 end
 
@@ -971,20 +835,6 @@ module WRPD = struct
           ) pd.clauses
       end
 
-  let mode_check loc ~infos pd = 
-    let open ResourcePredicates in
-    let module WPackingFT = WPackingFT(struct let name_bts = pd.oargs end) in
-    ListM.iterM (fun {loc; guard; packing_ft} ->
-        WPackingFT.mode_check loc ~infos packing_ft
-      ) pd.clauses
-
-  let good pd =
-    let () = Debug_ocaml.begin_csv_timing "WPD.good" in
-    let@ () = welltyped pd in
-    let@ () = mode_check pd.loc ~infos:SymMap.empty pd in
-    let () = Debug_ocaml.end_csv_timing "WPD.good" in
-    return ()
-
 end
 
 
@@ -1007,19 +857,6 @@ module WLPD = struct
         WPackingFT.welltyped "argument inference" pd.loc pd.infer_arguments
       end
 
-  let mode_check loc ~infos pd = 
-    let open LogicalPredicates in
-    let module WPackingFT = WPackingFT(struct let name_bts = pd.args end) in
-    WPackingFT.mode_check pd.loc ~infos pd.infer_arguments
-
-
-  let good pd =
-    let@ () = welltyped pd in
-    let@ () = 
-      let infos = SymMap.empty in
-      mode_check pd.loc ~infos pd
-    in
-    return ()
 
 end
 

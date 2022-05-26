@@ -20,7 +20,7 @@ val simp_constraints : unit ->
     ((IndexTerms.t IndexTerms.SymMap.t 
       * bool Simplify.ITPairMap.t
       * Context.LCSet.t), 'e) m
-val all_resources : unit -> (Resources.RE.t list, 'e) m
+val all_resources : unit -> (Resources.t list, 'e) m
 val provable : Locations.t -> (LogicalConstraints.t -> [> `True | `False], 'e) m
 val model : unit -> (Solver.model_with_q, 'e) m
 val model_with : Locations.t -> IndexTerms.t -> (Solver.model_with_q option, 'e) m
@@ -34,20 +34,20 @@ val add_l : Sym.t -> LogicalSorts.t -> (unit, 'e) m
 val add_ls : (Sym.t * LogicalSorts.t) list -> (unit, 'e) m
 val add_c : LogicalConstraints.t -> (unit, 'e) m
 val add_cs : LogicalConstraints.t list -> (unit, 'e) m
-val add_r : Context.where option -> Resources.RE.t -> (unit, 'e) m
-val add_rs : Context.where option -> Resources.RE.t list -> (unit, 'e) m
+val add_r : Context.where option -> Resources.t -> (unit, 'e) m
+val add_rs : Context.where option -> Resources.t list -> (unit, 'e) m
 val get_loc_trace : unit -> (Locations.loc list, 'e) m
 val in_loc_trace : Locations.loc list -> (unit -> ('a, 'e) m) -> ('a, 'e) m
 
 type changed = 
   | Deleted
   | Unchanged
-  | Unfolded of Resources.RE.t list
-  | Changed of Resources.RE.t
+  | Unfolded of Resources.t list
+  | Changed of Resources.t
 
 val map_and_fold_resources : 
   Locations.t ->
-  (Resources.RE.t -> 'acc -> changed * 'acc) -> 
+  (Resources.t -> 'acc -> changed * 'acc) -> 
   'acc -> ('acc, 'e) m
 
 val get_struct_decl : Locations.t -> Sym.t -> (Memory.struct_decl, TypeErrors.t) m

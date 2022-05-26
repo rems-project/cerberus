@@ -1,6 +1,6 @@
 module IT = IndexTerms
-module RER = Resources.Requests
-module RE = Resources.RE
+module RET = ResourceTypes
+module RE = Resources
 
 open IT
 
@@ -117,9 +117,9 @@ let rec perm_spans m_g q perm =
         else let x = eval_extract "idx non-ineq guard term" m_g is_bool perm in
         if x then [(None, None)] else []
 
-let model_res_spans m_g res =
+let model_res_spans m_g (res : ResourceTypes.t) =
   match res with
-  | (RER.P ({name = Owned ct; _} as pt)) ->
+  | (RET.P ({name = Owned ct; _} as pt)) ->
       let perm = eval_extract "resource permission" m_g is_bool pt.permission in
       begin match perm with
       | false -> []
@@ -128,7 +128,7 @@ let model_res_spans m_g res =
           let sz = Memory.size_of_ctype ct in
           [(ptr, Z.add ptr (Z.of_int sz))]
       end
-  | (RER.Q ({name = Owned ct; _} as qpt)) ->
+  | (RET.Q ({name = Owned ct; _} as qpt)) ->
       assert (qpt.step = Memory.size_of_ctype ct);
       let ispans = perm_spans m_g qpt.q qpt.permission in
       if List.compare_length_with ispans 0 == 0
@@ -192,8 +192,8 @@ let compare_enclosing g ct1 ct2 =
   else Int.compare (enclosing_count g ct1) (enclosing_count g ct2)
 
 let req_pt_ct = function
-  | RER.P ({name = Owned ct; _} as pt) -> (pt.pointer, ct, false)
-  | RER.Q ({name = Owned ct; _} as qpt) -> (qpt.pointer, ct, true)
+  | RET.P ({name = Owned ct; _} as pt) -> (pt.pointer, ct, false)
+  | RET.Q ({name = Owned ct; _} as qpt) -> (qpt.pointer, ct, true)
   | _ -> assert false
 
 let scan_subterms f t = fold_subterms (fun _ xs t -> match f t with
@@ -202,8 +202,8 @@ let scan_subterms f t = fold_subterms (fun _ xs t -> match f t with
 
 (* get concrete objects that (probably) exist in this resource/request *)
 let get_witnesses = function
-  | RER.P ({name = Owned _; _} as pt) -> [(pt.pointer, pt.permission)]
-  | RER.Q ({name = Owned ct; _} as qpt) ->
+  | RET.P ({name = Owned _; _} as pt) -> [(pt.pointer, pt.permission)]
+  | RET.Q ({name = Owned ct; _} as qpt) ->
      assert (qpt.step = Memory.size_of_ctype ct);
      let i = sym_ (qpt.q, BT.Integer) in
      let lbs = scan_subterms is_le qpt.permission
@@ -226,8 +226,8 @@ let get_witnesses = function
   | _ -> []
 
 let outer_object m g inner_ptr = function
-  | RER.P ({name = Owned ct; _} as pt) -> Some (pt.pointer, ct, pt.permission)
-  | RER.Q ({name = Owned ct; _} as qpt) ->
+  | RET.P ({name = Owned ct; _} as pt) -> Some (pt.pointer, ct, pt.permission)
+  | RET.Q ({name = Owned ct; _} as qpt) ->
   (* need to invent an index at which to fold/unfold *)
   begin try
     let qptr = eval_extract "q-resource pointer" (m, g) is_pointer qpt.pointer in
@@ -258,7 +258,7 @@ let intersection_action m g (req, req_span) (res, res_span) =
   let cmp = compare_enclosing g req_ct res_ct in
   if cmp = 0 then begin
       Pp.debug 3 (lazy (Pp.item "unexpected overlap of diff same-rank types"
-        (Pp.list RER.pp [req; RE.request res])));
+        (Pp.list RET.pp [req; RE.request res])));
       None
   end
   else
@@ -302,7 +302,7 @@ let rec gather_same_actions opts = match opts with
     (action, or_ oks) :: gather_same_actions others
 
 let is_unknown_array_size = function
-  | RER.P ({name = Owned ct; _}) -> begin match ct with
+  | RET.P ({name = Owned ct; _}) -> begin match ct with
       | Sctypes.Array (_, None) -> true
       | _ -> false
   end
@@ -312,10 +312,10 @@ let guess_span_intersection_action ress req m g =
   if is_unknown_array_size req
   then []
   else
-  let diff res = not (Resources.same_type_resource req res) in
+  let diff res = not (RET.same_predicate_name req (RE.request res)) in
   let res_ss = List.filter diff ress
     |> List.map (fun r -> List.map (fun s -> (r, s))
-        (model_res_spans_or_empty m g (Resources.RE.request r)))
+        (model_res_spans_or_empty m g (RE.request r)))
     |> List.concat in
   let req_ss = model_res_spans_or_empty m g req in
   let interesting = List.filter (fun (_, s) -> List.exists (inter s) req_ss) res_ss
@@ -326,7 +326,7 @@ let guess_span_intersection_action ress req m g =
   else ();
   let opts = List.filter_map (fun (r, s) ->
     Pp.debug 3 (lazy (Pp.item "resource partial overlap"
-      (Pp.list RER.pp [req; RE.request r])));
+      (Pp.list RET.pp [req; RE.request r])));
     let req_s = List.find (inter s) req_ss in
     intersection_action m g (req, req_s) (r, s)
   ) interesting in

@@ -4,12 +4,13 @@ module BT = BaseTypes
 module LS = LogicalSorts
 module LRT = LogicalReturnTypes
 module LC = LogicalConstraints
-module RE = Resources.RE
+module RE = Resources
 module AT = ArgumentTypes
 module StringMap = Map.Make(String)
 module Loc = Locations
 open Pp
-open Resources.RE
+open ResourceTypes
+open Resources
 open BT
 open IT
 open LC
@@ -55,19 +56,19 @@ let byte () =
   let pointer_s, pointer = IT.fresh Loc in
   let value_s, value = IT.fresh BT.Integer in
   let init_s, init = IT.fresh BT.Bool in
-  let point = {
+  let point = (P {
       name = Owned (Integer Char); 
       pointer = pointer;
       iargs = [];
       permission = bool_ true;
-      oargs = [(Resources.value_sym, value); 
-               (Resources.init_sym, init)];
-    }
+    },
+     [(Resources.value_sym, value); 
+      (Resources.init_sym, init)])
   in
   let lrt =
     LRT.Logical ((value_s, IT.bt value), (loc, None),
     LRT.Logical ((init_s, IT.bt init), (loc, None),
-    LRT.Resource (P point, (loc, None),
+    LRT.Resource (point, (loc, None),
     LRT.I)))
   in
   let clause = {
@@ -92,18 +93,18 @@ let char () =
   let loc = Loc.other "internal (Char)" in
   let pointer_s, pointer = IT.fresh Loc in
   let value_s, value = IT.fresh BT.Integer in
-  let point = {
+  let point = (P {
       name = Owned (Integer Char); 
       pointer = pointer;
       iargs = [];
       permission = bool_ true;
-      oargs = [(Resources.value_sym, value); 
-               (Resources.init_sym, bool_ true)];
-    }
+    },
+      [(Resources.value_sym, value); 
+       (Resources.init_sym, bool_ true)])
   in
   let lrt =
     LRT.Logical ((value_s, IT.bt value), (loc, None),
-    LRT.Resource (P point, (loc, None),
+    LRT.Resource (point, (loc, None),
     LRT.I))
   in
   let value_s_o = Sym.fresh_named "value" in  
@@ -131,17 +132,17 @@ let zerobyte () =
   let id = "ZeroByte" in
   let loc = Loc.other "internal (ZeroByte)" in
   let pointer_s, pointer = IT.fresh Loc in
-  let point = {
+  let point = (P {
       name = Owned (Integer Char); 
       pointer = pointer;
       iargs = [];
       permission = bool_ true;
-      oargs = [(Resources.value_sym, int_ 0); 
-               (Resources.init_sym, bool_ true)];
-    }
+    }, 
+      [(Resources.value_sym, int_ 0); 
+       (Resources.init_sym, bool_ true)])
   in
   let lrt =
-    LRT.Resource (P point, (loc, None),
+    LRT.Resource (point, (loc, None),
     LRT.I)
   in
   let clause = {
@@ -177,15 +178,15 @@ let early_alloc () =
   let end_s, end_t = IT.fresh Integer in
   let region = 
     let q_s, q = IT.fresh Integer in 
-    Resources.RE.Q {
+    (ResourceTypes.Q {
         name = PName "Byte";
         pointer = pointer_ Z.zero;
         q = q_s;
         step = Memory.size_of_ctype char_ct;
         permission = and_ [pointerToIntegerCast_ cur %<= q; q %<= (sub_ (end_t, int_ 1))];
         iargs = [];
-        oargs = [];
-      }
+      },
+    [])
   in
   let lrt =
     LRT.Resource (region, (loc, None),
@@ -231,7 +232,8 @@ let page_alloc_predicates struct_decls =
     let clause1 = 
       let qp = 
         let length = pred_ "page_size_of_order" [order] Integer in
-        let q_s, q = IT.fresh Integer in {
+        let q_s, q = IT.fresh Integer in 
+        (ResourceTypes.Q {
           name = PName "Byte"; 
           pointer = pointer_ Z.zero;
           q = q_s;
@@ -239,11 +241,10 @@ let page_alloc_predicates struct_decls =
           permission = 
             and_ [pbaseI %<= q; q %<= (sub_ (pbaseI %+ length, int_ 1))];
           iargs = [];
-          oargs = [];
-        }
+        }, [])
       in
       let lrt =
-        LRT.Resource (Q qp, (loc, None),
+        LRT.Resource (qp, (loc, None),
         LRT.Constraint (t_ (ne_ (order, int_ hHYP_NO_ORDER)), (loc, None),
         LRT.Constraint (t_ (IT.good_pointer ~pointee_ct:char_ct pbase), (loc, None),
         LRT.I)))
@@ -293,14 +294,14 @@ let page_alloc_predicates struct_decls =
 
     let metadata_owned = 
       let resource = 
-        P {
-            name = Owned (Struct hyp_pool_tag);
-            pointer = pool_pointer;
-            iargs = [];
-            permission = bool_ true;
-            oargs = [(Resources.value_sym, pool); 
-                     (Resources.init_sym, bool_ true)];
-          }
+        (P {
+             name = Owned (Struct hyp_pool_tag);
+             pointer = pool_pointer;
+             iargs = [];
+             permission = bool_ true;
+           },
+         [(Resources.value_sym, pool); 
+          (Resources.init_sym, bool_ true)])
       in
       LRT.Logical ((pool_s, IT.bt pool), (loc, None), 
       LRT.Resource (resource, (loc, None), 
@@ -400,15 +401,15 @@ let page_alloc_predicates struct_decls =
           ]
       in
       let qp = 
-        Resources.RE.Q {
+        (ResourceTypes.Q {
             name = PName "Page";
             pointer = pointer_ Z.zero;
             q = q_s;
             step = pPAGE_SIZE;
             permission = condition;
             iargs = [int_ 1; (((map_get_ vmemmap q)) %. "order")];
-            oargs = [];
-          }
+          },
+         [])
       in
       LRT.Resource (qp, (loc, None), 
       LRT.I)

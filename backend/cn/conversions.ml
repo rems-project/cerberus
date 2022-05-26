@@ -11,7 +11,7 @@ module RT = ReturnTypes
 module AT = ArgumentTypes
 open TypeErrors
 open IndexTerms
-open Resources.RE
+open ResourceTypes
 open Sctypes
 open Mapping
 open Ast
@@ -138,14 +138,14 @@ let make_owned_funarg floc i (pointer : IndexTerms.t) path sct =
      in
      let r = 
        (`Resource 
-          (RE.P {
+          (P {
               name = Owned sct; 
               pointer; 
               permission = bool_ true; 
               iargs = [];
-              oargs = [(Resources.value_sym, pointee_t); 
-                       (Resources.init_sym, bool_ true)];
-            }),
+            },
+           [(Resources.value_sym, pointee_t); 
+            (Resources.init_sym, bool_ true)]),
         (floc, Some "ownership of function argument location"))
      in
      ([l;r], mapping)
@@ -179,14 +179,14 @@ let make_owned ~loc ~oname ~pointer ~path ~sct ~o_value ~o_permission =
           mapping
      in
      let r = 
-       (`Resource (RE.P {
+       (`Resource (P {
            name = Owned sct; 
            pointer; 
            permission = Option.value o_permission ~default:(bool_ true); 
            iargs = [];
-           oargs = [(Resources.value_sym, pointee_t); 
-                    (Resources.init_sym, bool_ true)]
-          }),
+          },
+          [(Resources.value_sym, pointee_t); 
+           (Resources.init_sym, bool_ true)]),
         (loc, Some "ownership"))
      in
      return (l@[r], mapping)
@@ -227,16 +227,16 @@ let make_qowned ~loc ~oname ~pointer ~q:(qs,qbt) ~step ~condition ~path ~sct ~o_
           mapping
      in
      let r = 
-       (`Resource (RE.Q {
+       (`Resource (Q {
            name = Owned sct; 
            pointer; 
            q = qs;
            permission = condition; 
            step = Memory.size_of_ctype sct;
            iargs = [];
-           oargs = [(Resources.value_sym, map_get_ pointee_t (sym_ (qs, qbt))); 
-                    (Resources.init_sym, bool_ true)]
-          }),
+          },
+          [(Resources.value_sym, pointee_t); 
+           (Resources.init_sym, const_map_ Integer (bool_ true))]),
         (loc, Some "ownership"))
      in
      return (l@[r], mapping)
@@ -257,14 +257,14 @@ let make_block ~loc ~pointer ~path ~sct ~o_permission =
      in
      let mapping = [] in
      let r = 
-       (`Resource (RE.P {
+       (`Resource (P {
             name = Owned sct; 
             pointer;
             permission = Option.value ~default:(bool_ true) o_permission;
             iargs = [];
-            oargs = [(Resources.value_sym, pointee_t); 
-                     (Resources.init_sym, init_t)]
-          }),
+          },
+          [(Resources.value_sym, pointee_t); 
+           (Resources.init_sym, init_t)]),
         (loc, Some "ownership"))
      in
      return (l@[r], mapping)
@@ -311,13 +311,13 @@ let make_pred loc (pred, def) ~oname pointer iargs some_oargs ~o_permission =
   in
   let@ () = ensure_some_oargs_empty loc pred some_oargs in
   let r = 
-    (`Resource (RE.P {
+    (`Resource (P {
          name = PName pred; 
          pointer = pointer;
          iargs; 
-         oargs = oargs;
          permission = Option.value ~default:(bool_ true) o_permission;
-       }),
+       },
+       oargs),
      (loc, None))
   in
   return (l @ [r], mapping)
@@ -353,21 +353,21 @@ let make_qpred loc (pred, def) ~oname ~pointer ~q:(qs,qbt) ~step ~condition iarg
              mapping
         in
         let some_oargs = StringMap.remove oarg_name some_oargs in
-        let oargs = ((oarg, map_get_ it (sym_ (qs, qbt)))) :: oargs in
+        let oargs = ((oarg, it)) :: oargs in
         ((mapping, l, c, oargs), some_oargs)
       ) def.oargs (([], [], [], []), some_oargs)
   in
   let@ () = ensure_some_oargs_empty loc pred some_oargs in
   let r = 
-    (`Resource (RE.Q {
+    (`Resource (Q {
          name = PName pred; 
          pointer;
          q = qs;
          step;
          iargs; 
-         oargs = oargs;
          permission = condition;
-       }),
+       },
+       oargs),
      (loc, None))
   in
   return (l @ [r] @ c, mapping)

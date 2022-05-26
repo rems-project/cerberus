@@ -3,7 +3,7 @@ open List
 
 module BT = BaseTypes
 module LS = LogicalSorts
-module RE = Resources.RE
+module RE = Resources
 module LC = LogicalConstraints
 module LCSet = Set.Make(LC)
 module Loc = Locations

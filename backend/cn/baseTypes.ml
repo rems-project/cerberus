@@ -78,6 +78,9 @@ let map_bt = function
   | bt -> Debug_ocaml.error 
            ("illtyped index term: not a map type: " ^ Pp.plain (pp bt))
 
+
+let make_map_bt abt rbt = Map (abt, rbt)
+
 (* let option_bt = function *)
 (*   | Option bt -> bt  *)
 (*   | bt -> Debug_ocaml.error  *)

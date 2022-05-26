@@ -1,7 +1,5 @@
+module IT=IndexTerms
 module CF=Cerb_frontend
-module RE = Resources.RE
-module RER = Resources.Requests
-module IT = IndexTerms
 module BT = BaseTypes
 module LS = LogicalSorts
 module LRT = LogicalReturnTypes
