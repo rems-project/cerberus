@@ -133,6 +133,12 @@ module PageAlloc = struct
         Integer
     in
 
+    let pfn_buddy =
+      make_uninterp "pfn_buddy"
+        [(Sym.fresh_named "p", Integer);
+         (Sym.fresh_named "order", Integer);]
+        Integer
+    in
 
     let buddy = 
       make_uninterp "buddy"
