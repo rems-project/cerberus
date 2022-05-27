@@ -731,7 +731,13 @@ let eval global (context, model) to_be_evaluated =
 
   let open Translate in
 
-  let z3_sort (sort : Z3.Sort.sort) = 
+  let rec z3_sort (sort : Z3.Sort.sort) = 
+    let is_array_sort = try let _ = Z3.Z3Array.get_domain sort in true with | _ -> false in
+    if is_array_sort then 
+      let domain = Z3.Z3Array.get_domain sort in
+      let range = Z3.Z3Array.get_range sort in
+      Map (z3_sort domain, z3_sort range)
+    else
     try Sort_Table.find sort_table sort with
     | Not_found -> 
        failwith ("could not find sort '"^Z3.Sort.to_string sort^"' in Sort_Table")
