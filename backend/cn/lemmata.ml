@@ -12,6 +12,7 @@ module LP = LogicalPredicates
 module LC = LogicalConstraints
 
 module StringSet = Set.Make(String)
+module StringMap = Map.Make(String)
 module SymSet = Set.Make(Sym)
 module SymMap = Map.Make(Sym)
 
@@ -53,10 +54,12 @@ let parse_directions directions =
 let header filename =
   !^"(*" ^^^ !^ filename ^^ !^": generated lemma specifications from CN *)"
   ^^ hardline ^^ hardline
-  ^^ !^"Require Import Z."
+  ^^ !^"Require Import ZArith Bool."
   ^^ hardline ^^ hardline
+(*
   ^^ !^"Module Type Lemmas_Required."
   ^^ hardline ^^ hardline
+*)
 
 let fail msg details =
   let open Pp in
@@ -73,6 +76,45 @@ let check_trusted_fun_body fsym = function
     check_noop body
   | _ ->
     fail "non-proc trusted function" (Sym.pp fsym)
+
+let it_uninterp_funs it =
+  let f _ funs it = match IT.term it with
+    | Pred (name, args) -> StringSet.add name funs
+    | _ -> funs
+  in
+  IT.fold_subterms f StringSet.empty it
+
+type scan_res = {res: bool; ret: bool; funs : StringSet.t}
+
+(* recurse over a function type and detect resources (impureness),
+   non-unit return types (non-lemma trusted functions), and the set
+   of uninterpreted functions used. *)
+let scan ftyp =
+  let lc_funs = function
+    | LC.T it -> it_uninterp_funs it
+    | LC.Forall (_, it) -> it_uninterp_funs it
+  in
+  let add_lc_funs lc r = {r with funs = StringSet.union (lc_funs lc) r.funs} in
+  let rec scan_lrt t = match t with
+    | LRT.Logical (_, _, t) -> scan_lrt t
+    | LRT.Define (_, _, t) -> scan_lrt t
+    | LRT.Resource (_, _, t) -> {(scan_lrt t) with res = true}
+    | LRT.Constraint (lc, _, t) -> add_lc_funs lc (scan_lrt t)
+    | LRT.I -> {res = false; ret = false; funs = StringSet.empty}
+  in
+  let scan_rt = function
+    | RT.Computational ((_, bt), _, t) -> {(scan_lrt t) with ret =
+        not (BaseTypes.equal bt BaseTypes.Unit)}
+  in
+  let rec scan_at t = match t with
+    | AT.Computational (_, _, t) -> scan_at t
+    | AT.Logical (_, _, t) -> scan_at t
+    | AT.Define (_, _, t) -> scan_at t
+    | AT.Resource (_, _, t) -> {(scan_at t) with res = true}
+    | AT.Constraint (lc, _, t) -> add_lc_funs lc (scan_at t)
+    | AT.I t -> scan_rt t
+  in
+  scan_at ftyp
 
 (*
 let nat_to_coq ftyp =
@@ -98,16 +140,21 @@ let bt_to_coq bt =
   | BaseTypes.Integer -> !^ "Z"
   | _ -> fail "bt_to_coq: unsupported" (BaseTypes.pp bt)
 
-let it_to_coq it =
+let it_to_coq fun_ret_tys it =
   let open Pp in
   let rec f bool_eq_prop t =
     let aux t = f bool_eq_prop t in
     let binop s x y = parens (aux x ^^^ !^ s ^^^ aux y) in
+    let with_is_true d = if bool_eq_prop
+        then parens (!^ "Is_true" ^^^ d) else d
+    in
+    let pred_with_true nm d = if BaseTypes.equal (StringMap.find nm fun_ret_tys) BaseTypes.Bool
+        then with_is_true d else d
+    in
     match IT.term t with
     | IT.Lit l -> begin match l with
         | IT.Sym sym -> Sym.pp sym
-        | IT.Bool b -> !^ ((if b then "true" else "false")
-            ^ (if bool_eq_prop then " = true" else ""))
+        | IT.Bool b -> with_is_true (!^ (if b then "true" else "false"))
         | IT.Z z -> !^ (Z.to_string z)
         | _ -> fail "it_to_coq: unsupported lit" (IT.pp t)
     end
@@ -134,7 +181,8 @@ let it_to_coq it =
         | IT.EQ (x, y) -> binop (if bool_eq_prop then "=" else "=?") x y
         | _ -> fail "it_to_coq: unsupported bool op" (IT.pp t)
     end
-    | Pred (name, args) -> parens (!^ name ^^^ flow (break 1) (List.map (f false) args))
+    | Pred (name, args) -> pred_with_true name
+        (parens (!^ name ^^^ flow (break 1) (List.map (f false) args)))
     | CT_pred (Good (ct, t)) -> aux (IT.good_value SymMap.empty ct t)
     | _ -> fail "it_to_coq: unsupported" (IT.pp t)
   in
@@ -145,60 +193,86 @@ let mk_forall sym bt doc =
   !^ "forall" ^^^ parens (Sym.pp sym ^^^ !^ ":" ^^^ bt_to_coq bt)
   ^^ !^"," ^^^ doc
 
-let lc_to_coq = function
-  | LC.T it -> it_to_coq it
-  | LC.Forall ((sym, bt), it) -> parens (mk_forall sym bt (it_to_coq it))
+let lc_to_coq fun_ret_tys = function
+  | LC.T it -> it_to_coq fun_ret_tys it
+  | LC.Forall ((sym, bt), it) -> parens (mk_forall sym bt (it_to_coq fun_ret_tys it))
 
-let pure_param_spec sym ftyp =
+let param_spec fun_defs =
+  let open Pp in
+  let open LogicalPredicates in
+  let param (f, def) = match def.definition with
+    | Uninterp ->
+    let arg_tys = List.map (fun (_, bt) -> bt_to_coq bt) def.args in
+    let ret_ty = bt_to_coq def.return_bt in
+    let ty = List.fold_right (fun at rt -> at ^^^ !^ "->" ^^^ rt) arg_tys ret_ty in
+    !^ "  Parameter" ^^^ typ (!^ f) ty ^^ !^ "."
+      ^^ hardline
+    | _ -> fail "param_spec: defined logical fun" (!^ f)
+  in
+  !^"Module Type CN_Lemma_Parameters."
+  ^^ hardline ^^ hardline
+  ^^ flow hardline (List.map param fun_defs)
+  ^^ hardline
+  ^^ !^"End CN_Lemma_Parameters."
+  ^^ hardline ^^ hardline
+
+let ftyp_to_coq fun_ret_tys ftyp =
   let rec lrt_lcs t = match t with
     | LRT.Constraint (lc, _, t) -> lc :: lrt_lcs t
     | LRT.I -> []
-    | _ -> fail "pure_param_spec: unsupported" (LRT.pp t)
+    | _ -> fail "ftyp_to_coq: unsupported" (LRT.pp t)
   in
   let rt_lcs t = match t with
     | RT.Computational ((_, bt), _, t2) -> if BaseTypes.equal bt BaseTypes.Unit
         then lrt_lcs t2
-        else fail "pure_param_spec: unsupported return type" (RT.pp t)
+        else fail "ftyp_to_coq: unsupported return type" (RT.pp t)
   in
   let open Pp in
   let rt_doc t = List.fold_right (fun lc (triv, concl) -> if triv
-        then (false, lc_to_coq lc)
-        else (false, lc_to_coq lc ^^^ !^"/\\" ^^^ concl)) (rt_lcs t) (true, !^ "true = true")
-        |> snd
+        then (false, lc_to_coq fun_ret_tys lc)
+        else (false, lc_to_coq fun_ret_tys lc ^^^ !^"/\\" ^^^ concl))
+    (rt_lcs t) (true, !^ "true = true")
+    |> snd
   in
   let rec at_doc t = match t with
     | AT.Computational ((sym, bt), _, t) -> mk_forall sym bt (at_doc t)
     | AT.Logical ((sym, bt), _, t) -> mk_forall sym bt (at_doc t)
-    | AT.Define _ -> fail "pure_param_spec: unsupported.Define" (AT.pp RT.pp t)
-    | AT.Resource _ -> fail "pure_param_spec: unsupported.Define" (AT.pp RT.pp t)
-    | AT.Constraint (lc, _, t) -> lc_to_coq lc ^^^ !^"->" ^^^ at_doc t
+    | AT.Define _ -> fail "ftyp_to_coq: unsupported Define" (AT.pp RT.pp t)
+    | AT.Resource _ -> fail "ftyp_to_coq: unsupported" (AT.pp RT.pp t)
+    | AT.Constraint (lc, _, t) -> lc_to_coq fun_ret_tys lc ^^^ !^"->" ^^^ at_doc t
     | AT.I t -> rt_doc t
+  in at_doc ftyp
+
+let lemma_type_specs fun_ret_tys lemma_typs =
+  let open Pp in
+  let lemma_ty (nm, typ) =
+    progress_simple "exporting pure lemma" (Sym.pp_string nm);
+    let rhs = ftyp_to_coq fun_ret_tys typ in
+    !^"  Definition" ^^^ Sym.pp nm ^^ !^ "_type :=" ^^^ rhs ^^ !^ "." ^^ hardline
   in
-  !^"Parameter" ^^^ Sym.pp sym ^^^ !^ ":" ^^ hardline ^^
-  !^"  " ^^ at_doc ftyp ^^^ !^ "."
+  !^"Module CN_Lemma_Types (P : CN_Lemma_Parameters)."
+  ^^ hardline ^^ hardline
+  ^^ !^"  Import P." ^^ hardline
+  ^^ !^"  Open Scope Z." ^^ hardline ^^ hardline
+  ^^ flow hardline (List.map lemma_ty lemma_typs)
+  ^^ hardline
+  ^^ !^"End CN_Lemma_Types."
   ^^ hardline ^^ hardline
 
-let category ftyp =
-  let rec lrt_has_res t = match t with
-    | LRT.Logical (_, _, t) -> lrt_has_res t
-    | LRT.Define _ -> fail "unsupported: LRT.Define" (LRT.pp t)
-    | LRT.Resource _ -> true
-    | LRT.Constraint (_, _, t) -> lrt_has_res t
-    | LRT.I -> false
+let mod_spec lemma_nms =
+  let open Pp in
+  let lemma nm =
+    !^"  Parameter" ^^^ typ (Sym.pp nm) (Sym.pp nm ^^ !^ "_type")
+        ^^ !^ "." ^^ hardline
   in
-  let rt_has_res = function
-    | RT.Computational ((_, bt), _, t) -> if BaseTypes.equal bt BaseTypes.Unit
-        then lrt_has_res t else true
-  in
-  let rec at_has_res t = match t with
-    | AT.Computational (_, _, t) -> at_has_res t
-    | AT.Logical (_, _, t) -> at_has_res t
-    | AT.Define _ -> fail "unsupported: AT.Define" (AT.pp RT.pp t)
-    | AT.Resource _ -> true
-    | AT.Constraint (_, _, t) -> at_has_res t
-    | AT.I t -> rt_has_res t
-  in
-  at_has_res ftyp
+  !^"Module Type CN_Lemma_Spec (P : CN_Lemma_Parameters)."
+  ^^ hardline ^^ hardline
+  ^^ !^"  Module Tys := CN_Lemma_Types(P)." ^^ hardline
+  ^^ !^"  Import Tys." ^^ hardline ^^ hardline
+  ^^ flow hardline (List.map lemma lemma_nms)
+  ^^ hardline
+  ^^ !^"End CN_Lemma_Spec."
+  ^^ hardline ^^ hardline
 
 let cmp_line_numbers = function
   | None, None -> 0
@@ -229,29 +303,40 @@ let do_re_retype mu_file trusted_funs prev_mode pred_defs pre_retype_mu_file =
   Retype.retype_file pred_defs `CallByValue prev_cut
 *)
 
+type scanned = {sym : Sym.t; loc: Loc.t; typ: RT.t AT.t; scan_res: scan_res}
+
 let generate directions mu_file =
   let (filename, kinds) = parse_directions directions in
   let channel = open_out filename in
   print channel (header filename);
-  let trusted_funs = Pmap.fold (fun fsym (M_funinfo (loc, _, ftyp, trusted, _)) funs ->
+  let trusted_funs = Pmap.fold (fun fsym (M_funinfo (loc, _, _, trusted, _)) funs ->
     match trusted with
       | Muc.Trusted _ -> SymSet.add fsym funs
       | _ -> funs
     ) mu_file.mu_funinfo SymSet.empty in
-  let trusted_categories = SymSet.elements trusted_funs
-    |> List.map (fun fsym ->
-        let (M_funinfo (loc, _, ftyp, _, _)) = Pmap.find fsym mu_file.mu_funinfo in
-        (fsym, (loc, (category ftyp, ftyp))))
-    |> List.sort (fun x y -> cmp_loc_line_numbers (fst (snd x)) (fst (snd y)))
+  let scan_trusted = SymSet.elements trusted_funs
+    |> List.map (fun sym ->
+        let (M_funinfo (loc, _, typ, _, _)) = Pmap.find sym mu_file.mu_funinfo in
+        {sym; loc; typ; scan_res = scan typ})
+    |> List.sort (fun x y -> cmp_loc_line_numbers x.loc y.loc)
   in
-  let (impure, pure) = List.partition (fun (_, (_, (has_res, _))) -> has_res) trusted_categories in
-  List.iter (fun (sym, _) ->
-    progress_simple "skipping resource lemma" (Sym.pp_string sym)
+  let (impure, pure) = List.partition (fun x -> x.scan_res.res || x.scan_res.ret)
+    scan_trusted in
+  List.iter (fun x ->
+    progress_simple "skipping resource lemma" (Sym.pp_string x.sym)
   ) impure;
-  List.iter (fun (sym, (_, (_, ftyp))) ->
-    progress_simple "exporting pure lemma" (Sym.pp_string sym);
-    print channel (pure_param_spec sym ftyp)
-  ) pure;
+  let funs = List.fold_right (fun x -> StringSet.union x.scan_res.funs) pure StringSet.empty in
+  let fun_defs = StringSet.elements funs
+    |> List.map (fun s -> match List.assoc_opt String.equal s mu_file.mu_logical_predicates with
+      | None -> fail "undefined logical function/predicate" (Pp.string s)
+      | Some def -> (s, def))
+  in
+  print channel (param_spec fun_defs);
+  let fun_ret_tys = List.fold_right (fun (f, def) m ->
+            let open LogicalPredicates in StringMap.add f def.return_bt m)
+        fun_defs StringMap.empty in
+  print channel (lemma_type_specs fun_ret_tys (List.map (fun x -> (x.sym, x.typ)) pure));
+  print channel (mod_spec (List.map (fun x -> x.sym) pure));
   Ok ()
 
 
