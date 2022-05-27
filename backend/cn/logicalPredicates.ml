@@ -819,6 +819,7 @@ module PageAlloc = struct
      vmemmap_b_wf;
      free_area_cell_wf;
      hyp_pool_wf;
+     pfn_buddy;
      buddy;
     ]
 
