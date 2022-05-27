@@ -3110,17 +3110,25 @@ module CHERI (C:Capability
     let size_n = num_of_int size_int in
     let loc = Location_ocaml.other "memcpy" in
     (* TODO: if ptrval1 and ptrval2 overlap ==> UB *)
-    let rec aux i =
+    let rec copy_data i =
       if Z.less i size_n then
         eff_array_shift_ptrval loc ptrval1 Ctype.unsigned_char (IV (Prov_none, i)) >>= fun ptrval1' ->
         eff_array_shift_ptrval loc ptrval2 Ctype.unsigned_char (IV (Prov_none, i)) >>= fun ptrval2' ->
-        copy_tag ptrval1' ptrval2' >>
-          load loc Ctype.unsigned_char ptrval2' >>=
+        load loc Ctype.unsigned_char ptrval2' >>=
           fun (_, mval) ->
           begin
             store loc Ctype.unsigned_char false ptrval1' mval
-            >> aux (Z.succ i)
+            >> copy_data (Z.succ i)
           end
+      else
+          return ptrval1
+    in
+    let rec copy_tags i =
+      if Z.less i size_n then
+        eff_array_shift_ptrval loc ptrval1 Ctype.unsigned_char (IV (Prov_none, i)) >>= fun ptrval1' ->
+        eff_array_shift_ptrval loc ptrval2 Ctype.unsigned_char (IV (Prov_none, i)) >>= fun ptrval2' ->
+        copy_tag ptrval1' ptrval2'
+        >> copy_tags (Z.succ i)
       else
         print_captags "after memcpy" >>
           return ptrval1
@@ -3130,8 +3138,12 @@ module CHERI (C:Capability
           Pp_utils.to_plain_string (pp_pointer_value ptrval1) ^ ", " ^
             Pp_utils.to_plain_string (pp_pointer_value ptrval2) ^ ")"
       );
-    print_captags "before memcpy" >>
-      aux Z.zero
+    (* Not very efficient implmentation but we need to copy tags in a
+       separate pass. Otherwise they will get cleared when we write
+       partial bytes of capabilities *)
+    copy_data Z.zero >>
+      print_captags "before memcpy" >>
+      copy_tags Z.zero
 
   (* TODO: validate more, but looks good *)
   let memcmp ptrval1 ptrval2 size_int =
