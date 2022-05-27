@@ -1647,6 +1647,14 @@ module CHERI (C:Capability
                                    fail (MerrUndefinedFree (loc, Free_out_of_bound))
                             end
 
+  (* Check if address is pointer aligned *)
+  let is_pointer_algined a =
+    match (Ocaml_implementation.get ()).alignof_pointer with
+    | None -> failwith "alignof_pointer must be specified in Ocaml_implementation"
+    | Some v ->
+       let (_,m) = Z.quomod a (Z.of_int v) in
+       m = Z.zero
+
   let load loc ty (PV (prov, ptrval_)) =
     Debug_ocaml.print_debug 10 [] (fun () ->
         "ENTERING LOAD: ty=" ^ String_core_ctype.string_of_ctype ty ^
@@ -1660,12 +1668,9 @@ module CHERI (C:Capability
       get >>= fun st ->
       let bs = fetch_bytes st.bytemap addr sz in
       let tag_query a =
-        match (Ocaml_implementation.get ()).alignof_pointer with
-        | None -> failwith "alignof_pointer must be specified in Ocaml_implementation"
-        | Some v ->
-           let (_,m) = Z.quomod a (Z.of_int v) in
-           if m <> Z.zero then failwith "Unaligned address in load"
-           else IntMap.find_opt a st.captags
+        if is_pointer_algined a
+        then IntMap.find_opt a st.captags
+        else failwith "alignof_pointer must be specified in Ocaml_implementation"
       in
       let (taint, mval, bs') = abst loc (find_overlaping st) st.funptrmap tag_query addr ty bs in
       mem_value_strip_err mval >>= fun mval ->
@@ -3075,30 +3080,58 @@ module CHERI (C:Capability
   let sequencePoint =
     return ()
 
-
-
-
   let pp_pretty_pointer_value = pp_pointer_value ~is_verbose:false
   let pp_pretty_integer_value _ = pp_integer_value
   let pp_pretty_mem_value _ = pp_mem_value
 
-  (* TODO check *)
   let memcpy ptrval1 ptrval2 size_int =
+    let cap_of_pointer_value = function
+      | PV (_, PVconcrete c)
+        | PV (_, PVfunction (FP_invalid c))
+        -> C.cap_get_value c
+      |  _ -> failwith "memcpy: invalid pointer value"
+    in
+    let copy_tag dst_p src_p  =
+      let dst_a = cap_of_pointer_value dst_p in
+      let src_a = cap_of_pointer_value src_p in
+      update begin fun st ->
+        match IntMap.find_opt src_a st.captags with
+        | None -> st (* tag is not set or [src_a] is not aligned *)
+        | Some t ->
+           if not (is_pointer_algined dst_a)
+           then begin
+               Debug_ocaml.warn [] (fun () -> "memcpy: ignoring an attempt to copy tag to non-capabilty algined address");
+               st
+             end
+           else
+             {st with captags = IntMap.add dst_a t st.captags }
+        end
+    in
     let size_n = num_of_int size_int in
     let loc = Location_ocaml.other "memcpy" in
     (* TODO: if ptrval1 and ptrval2 overlap ==> UB *)
-    (* TODO: copy ptrval2 into ptrval1 *)
     let rec aux i =
       if Z.less i size_n then
         eff_array_shift_ptrval loc ptrval1 Ctype.unsigned_char (IV (Prov_none, i)) >>= fun ptrval1' ->
         eff_array_shift_ptrval loc ptrval2 Ctype.unsigned_char (IV (Prov_none, i)) >>= fun ptrval2' ->
-        load loc Ctype.unsigned_char ptrval2'             >>= fun (_, mval) ->
-        store loc Ctype.unsigned_char false ptrval1' mval >>= fun _         ->
-        aux (Z.succ i)
+        copy_tag ptrval1' ptrval2' >>
+          load loc Ctype.unsigned_char ptrval2' >>=
+          fun (_, mval) ->
+          begin
+            store loc Ctype.unsigned_char false ptrval1' mval
+            >> aux (Z.succ i)
+          end
       else
-        return ptrval1 in
-    aux Z.zero
-
+        print_captags "after memcpy" >>
+          return ptrval1
+    in
+    Debug_ocaml.print_debug 3 [] (fun () ->
+        "ENTERING memcpy (" ^
+          Pp_utils.to_plain_string (pp_pointer_value ptrval1) ^ ", " ^
+            Pp_utils.to_plain_string (pp_pointer_value ptrval2) ^ ")"
+      );
+    print_captags "before memcpy" >>
+      aux Z.zero
 
   (* TODO: validate more, but looks good *)
   let memcmp ptrval1 ptrval2 size_int =
