@@ -1287,16 +1287,28 @@ end
                                                                 (Caux.mk_op_pe C.OpEq (stdlib.mkcall_ctype_width result_ty) promoted2_sym_pe))
                               (Caux.mk_std_undef_pe loc "§6.5.7#3, sentence 3" Undefined.UB51b_shift_too_large)
                               (let core_shr = Caux.mk_op_pe C.OpDiv obj1_sym_pe (Caux.mk_op_pe C.OpExp (Caux.mk_integer_pe 2) promoted2_sym_pe) in
-                               Caux.mk_specified_pe $
-if AilTypesAux.is_unsigned_integer_type (ctype_of e1) then
-                               Caux.mk_std_pe "6.5.7#5, sentence 2" core_shr
+                               Caux.mk_specified_pe begin
+begin if Global.is_CHERI () && Ctype.is_ptr_t result_ty then
+    fun z ->
+      Caux.mk_memop_pe Mem_common.CapAssignValue
+      [ Caux.mk_memop_pe
+          (Mem_common.DeriveCap (Mem_common.DCbinary (A.Arithmetic A.Shr)) (AilTypesAux.is_signed_integer_type result_ty))
+          [obj1_sym_pe; obj2_sym_pe]
+      ; z ]
+  else
+    fun z -> z
+end
+begin if AilTypesAux.is_unsigned_integer_type (ctype_of e1) then
+                                 Caux.mk_std_pe "6.5.7#5, sentence 2" core_shr
 else
-                               Caux.mk_std_pe "6.5.7#5, sentence 3" begin
-                                 Caux.mk_if_pe_ [Annot.Anot_explode] (Caux.mk_op_pe C.OpGe promoted1_sym_pe (Caux.mk_integer_pe 0))
-                                   core_shr
-                                   (Caux.mk_call_pe (C.Impl Implementation.SHR_signed_negative)
-                                     [Caux.mk_ail_ctype_pe (ctype_of e1) ; promoted1_sym_pe; promoted2_sym_pe])
-                               end ))))) ]
+                                 Caux.mk_std_pe "6.5.7#5, sentence 3" begin
+                                   Caux.mk_if_pe_ [Annot.Anot_explode] (Caux.mk_op_pe C.OpGe promoted1_sym_pe (Caux.mk_integer_pe 0))
+                                     core_shr
+                                     (Caux.mk_call_pe (C.Impl Implementation.SHR_signed_negative)
+                                       [Caux.mk_ail_ctype_pe (ctype_of e1) ; promoted1_sym_pe; promoted2_sym_pe])
+                                 end
+                               end
+end                                ))))) ]
                   )
               )
             )
