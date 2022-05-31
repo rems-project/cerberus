@@ -99,9 +99,11 @@ let print_batch_output ?(is_charon=false) i_opt (z3_strs, exec) =
           print_endline ":"
         end;
         print_string constrs_str;
-        Printf.printf "Undefined {ub: \"%s\", stderr: \"%s\", loc: \"%s\"}%s"
+        if is_charon then begin
+          prerr_string stderr
+        end;
+        Printf.printf "Undefined {ub: \"%s\", loc: \"%s\"}%s"
           (Undefined.stringFromUndefined_behaviour ub)
-          (String.escaped stderr)
           (Location_ocaml.simple_location loc)
           (if is_charon then "\n" else "")
     | Error { msg } ->
