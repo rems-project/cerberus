@@ -90,16 +90,17 @@ type scan_res = {res: bool; ret: bool; funs : SymSet.t}
    non-unit return types (non-lemma trusted functions), and the set
    of uninterpreted functions used. *)
 let scan ftyp =
+  let add_funs f r = {r with funs = StringSet.union f r.funs} in
   let lc_funs = function
     | LC.T it -> it_uninterp_funs it
     | LC.Forall (_, it) -> it_uninterp_funs it
   in
-  let add_lc_funs lc r = {r with funs = SymSet.union (lc_funs lc) r.funs} in
   let rec scan_lrt t = match t with
-    | LRT.Define (_, _, t) -> scan_lrt t
+    | LRT.Logical (_, _, t) -> scan_lrt t
+    | LRT.Define ((_, it), _, t) -> add_funs (it_uninterp_funs it) (scan_lrt t)
     | LRT.Resource (_, _, t) -> {(scan_lrt t) with res = true}
-    | LRT.Constraint (lc, _, t) -> add_lc_funs lc (scan_lrt t)
-    | LRT.I -> {res = false; ret = false; funs = SymSet.empty}
+    | LRT.Constraint (lc, _, t) -> add_funs (lc_funs lc) (scan_lrt t)
+    | LRT.I -> {res = false; ret = false; funs = StringSet.empty}
   in
   let scan_rt = function
     | RT.Computational ((_, bt), _, t) -> {(scan_lrt t) with ret =
@@ -107,9 +108,10 @@ let scan ftyp =
   in
   let rec scan_at t = match t with
     | AT.Computational (_, _, t) -> scan_at t
-    | AT.Define (_, _, t) -> scan_at t
+    | AT.Logical (_, _, t) -> scan_at t
+    | AT.Define ((_, it), _, t) -> add_funs (it_uninterp_funs it) (scan_at t)
     | AT.Resource (_, _, t) -> {(scan_at t) with res = true}
-    | AT.Constraint (lc, _, t) -> add_lc_funs lc (scan_at t)
+    | AT.Constraint (lc, _, t) -> add_funs (lc_funs lc) (scan_at t)
     | AT.I t -> scan_rt t
   in
   scan_at ftyp
@@ -173,7 +175,7 @@ let it_to_coq fun_ret_tys it =
         | IT.Or [x] -> aux x
         | IT.Or (x :: xs) -> binop (if bool_eq_prop then "\\/" else "||") x (IT.or_ xs)
         | IT.Impl (x, y) -> binop (if bool_eq_prop then "->" else "implb") x y
-        | IT.Not x when not bool_eq_prop -> parens (!^ "negb" ^^^ aux x)
+        | IT.Not x -> with_is_true (parens (!^ "negb" ^^^ f false x))
         | IT.ITE (sw, x, y) -> parens (!^ "if" ^^^ f false sw ^^^ !^ "then"
                 ^^^ aux x ^^^ !^ "else" ^^^ aux y)
         | IT.EQ (x, y) -> binop (if bool_eq_prop then "=" else "=?") x y
@@ -186,14 +188,43 @@ let it_to_coq fun_ret_tys it =
   in
   f true it
 
+let it_adjust it =
+  let rec f t =
+    match IT.term t with
+    | IT.Info _ -> IT.bool_ true
+    | IT.Bool_op op -> begin match op with
+        | IT.And xs ->
+            let xs = List.map f xs |> List.partition IT.is_true |> snd in
+            if List.length xs == 0 then IT.bool_ true else IT.and_ xs
+        | IT.Or xs ->
+            let xs = List.map f xs |> List.partition IT.is_false |> snd in
+            if List.length xs == 0 then IT.bool_ true else IT.or_ xs
+        | IT.EQ (x, y) ->
+            let x = f x in
+            let y = f y in
+            if IT.equal x y then IT.bool_ true else IT.eq__ x y
+        | _ -> t
+    end
+    | CT_pred (Good (ct, t)) -> f (IT.good_value SymMap.empty ct t)
+    | _ -> t
+  in
+  f it
+
 let mk_forall sym bt doc =
   let open Pp in
   !^ "forall" ^^^ parens (Sym.pp sym ^^^ !^ ":" ^^^ bt_to_coq bt)
   ^^ !^"," ^^^ doc
 
-let lc_to_coq fun_ret_tys = function
-  | LC.T it -> it_to_coq fun_ret_tys it
-  | LC.Forall ((sym, bt), it) -> parens (mk_forall sym bt (it_to_coq fun_ret_tys it))
+let mk_let sym rhs_doc doc =
+  let open Pp in
+  !^ "let" ^^^ Sym.pp sym ^^^ !^ ":=" ^^^ rhs_doc ^^^ !^ "in" ^^^ doc
+
+let lc_to_coq_check_triv fun_ret_tys = function
+  | LC.T it -> let it = it_adjust it in
+    if IT.is_true it then None else Some (it_to_coq fun_ret_tys it)
+  | LC.Forall ((sym, bt), it) -> let it = it_adjust it in
+    if IT.is_true it then None
+    else Some (parens (mk_forall sym bt (it_to_coq fun_ret_tys it)))
 
 let param_spec fun_defs =
   let open Pp in
@@ -215,30 +246,41 @@ let param_spec fun_defs =
   ^^ hardline ^^ hardline
 
 let ftyp_to_coq fun_ret_tys ftyp =
-  let rec lrt_lcs t = match t with
-    | LRT.Constraint (lc, _, t) -> lc :: lrt_lcs t
-    | LRT.I -> []
+  let open Pp in
+  let oapp f opt_x y = match opt_x with
+    | Some x -> f x y
+    | None -> y
+  in
+  let mk_and doc doc2 = doc ^^^ !^ "/\\" ^^^ doc2 in
+  let mk_imp doc doc2 = doc ^^^ !^ "->" ^^^ doc2 in
+  let omap_split f = Option.map (fun doc -> f (break 1 ^^ doc)) in
+  let rec lrt_doc t = match t with
+    | LRT.Constraint (lc, _, t) -> begin match lrt_doc t with
+        | None -> lc_to_coq_check_triv fun_ret_tys lc
+        | Some doc -> Some (oapp mk_and (lc_to_coq_check_triv fun_ret_tys lc) (break 1 ^^ doc))
+    end
+    | LRT.Define ((sym, it), _, t) ->
+        omap_split (mk_let sym (it_to_coq fun_ret_tys it)) (lrt_doc t)
+    | LRT.I -> None
     | _ -> fail "ftyp_to_coq: unsupported" (LRT.pp t)
   in
-  let rt_lcs t = match t with
+  let rt_doc t = match t with
     | RT.Computational ((_, bt), _, t2) -> if BaseTypes.equal bt BaseTypes.Unit
-        then lrt_lcs t2
+        then lrt_doc t2
         else fail "ftyp_to_coq: unsupported return type" (RT.pp t)
   in
-  let open Pp in
-  let rt_doc t = List.fold_right (fun lc (triv, concl) -> if triv
-        then (false, lc_to_coq fun_ret_tys lc)
-        else (false, lc_to_coq fun_ret_tys lc ^^^ !^"/\\" ^^^ concl))
-    (rt_lcs t) (true, !^ "true = true")
-    |> snd
-  in
   let rec at_doc t = match t with
-    | AT.Computational ((sym, bt), _, t) -> mk_forall sym bt (at_doc t)
-    | AT.Define _ -> fail "ftyp_to_coq: unsupported Define" (AT.pp RT.pp t)
+    | AT.Computational ((sym, bt), _, t) -> omap_split (mk_forall sym bt) (at_doc t)
+    | AT.Logical ((sym, bt), _, t) -> omap_split (mk_forall sym bt) (at_doc t)
+    | AT.Define ((sym, it), _, t) -> omap_split (mk_let sym (it_to_coq fun_ret_tys it)) (at_doc t)
     | AT.Resource _ -> fail "ftyp_to_coq: unsupported" (AT.pp RT.pp t)
-    | AT.Constraint (lc, _, t) -> lc_to_coq fun_ret_tys lc ^^^ !^"->" ^^^ at_doc t
+    | AT.Constraint (lc, _, t) ->
+        omap_split (oapp mk_imp (lc_to_coq_check_triv fun_ret_tys lc)) (at_doc t)
     | AT.I t -> rt_doc t
-  in at_doc ftyp
+  in
+  match at_doc ftyp with
+  | Some doc -> doc
+  | None -> !^ "true = true"
 
 let lemma_type_specs fun_ret_tys lemma_typs =
   let open Pp in
