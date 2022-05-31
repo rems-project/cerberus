@@ -3091,22 +3091,6 @@ module CHERI (C:Capability
         -> C.cap_get_value c
       |  _ -> failwith "memcpy: invalid pointer value"
     in
-    let copy_tag dst_p src_p  =
-      let dst_a = cap_of_pointer_value dst_p in
-      let src_a = cap_of_pointer_value src_p in
-      update begin fun st ->
-        match IntMap.find_opt src_a st.captags with
-        | None -> st (* tag is not set or [src_a] is not aligned *)
-        | Some t ->
-           if not (is_pointer_algined dst_a)
-           then begin
-               Debug_ocaml.warn [] (fun () -> "memcpy: ignoring an attempt to copy tag to non-capabilty algined address");
-               st
-             end
-           else
-             {st with captags = IntMap.add dst_a t st.captags }
-        end
-    in
     let size_n = num_of_int size_int in
     let loc = Location_ocaml.other "memcpy" in
     (* TODO: if ptrval1 and ptrval2 overlap ==> UB *)
@@ -3124,14 +3108,34 @@ module CHERI (C:Capability
           return ptrval1
     in
     let rec copy_tags i =
-      if Z.less i size_n then
-        eff_array_shift_ptrval loc ptrval1 Ctype.unsigned_char (IV (Prov_none, i)) >>= fun ptrval1' ->
-        eff_array_shift_ptrval loc ptrval2 Ctype.unsigned_char (IV (Prov_none, i)) >>= fun ptrval2' ->
-        copy_tag ptrval1' ptrval2'
-        >> copy_tags (Z.succ i)
-      else
-        print_captags "after memcpy" >>
-          return ptrval1
+      let copy_tag dst_p src_p  =
+        let dst_a = cap_of_pointer_value dst_p in
+        let src_a = cap_of_pointer_value src_p in
+        update begin fun st ->
+          match IntMap.find_opt src_a st.captags with
+          | None -> st (* tag is not set or [src_a] is not aligned *)
+          | Some t ->
+             if not (is_pointer_algined dst_a)
+             then begin
+                 Debug_ocaml.warn [] (fun () -> "memcpy: ignoring an attempt to copy tag to non-capabilty algined address");
+                 st
+               end
+             else
+               {st with captags = IntMap.add dst_a t st.captags }
+          end
+      in
+      match (Ocaml_implementation.get ()).sizeof_pointer with
+      | None ->
+         failwith ("memcpy: sizeof_pointer must be defined")
+      | Some pointer_sizeof ->
+         if Z.less (Z.add i (Z.of_int pointer_sizeof)) (Z.succ size_n) then
+           eff_array_shift_ptrval loc ptrval1 Ctype.unsigned_char (IV (Prov_none, i)) >>= fun ptrval1' ->
+           eff_array_shift_ptrval loc ptrval2 Ctype.unsigned_char (IV (Prov_none, i)) >>= fun ptrval2' ->
+           copy_tag ptrval1' ptrval2'
+           >> copy_tags (Z.succ i)
+         else
+           print_captags "after memcpy" >>
+             return ptrval1
     in
     Debug_ocaml.print_debug 3 [] (fun () ->
         "ENTERING memcpy (" ^
