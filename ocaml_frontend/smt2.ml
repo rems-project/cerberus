@@ -48,7 +48,7 @@ let runND exec_mode (type cs) cs_module (m: ('a, 'info, 'err, cs, 'st) ndM) (st0
           flush_all ();
 *)
           CS.string_of_solver >>= fun str ->
-          return [(Killed r, str, st')]
+          return [(Killed (st', r), str, st')]
 
       | (NDnd (debug_str, str_ms), st') ->
 (*

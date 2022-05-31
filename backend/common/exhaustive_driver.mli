@@ -17,7 +17,7 @@ type batch_exit =
 
 type batch_output =
   | Defined of { exit: batch_exit; stdout: string; stderr: string; blocked: bool }
-  | Undefined of { ub: Undefined.undefined_behaviour; loc: Location_ocaml.t }
+  | Undefined of { ub: Undefined.undefined_behaviour; stderr: string; loc: Location_ocaml.t }
   | Error of { msg: string }
 
 val string_of_batch_exit: batch_exit -> string

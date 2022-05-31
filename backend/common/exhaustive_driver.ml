@@ -37,7 +37,7 @@ type batch_exit =
 
 type batch_output =
   | Defined of { exit: batch_exit; stdout: string; stderr: string; blocked: bool }
-  | Undefined of { ub: Undefined.undefined_behaviour; loc: Location_ocaml.t }
+  | Undefined of { ub: Undefined.undefined_behaviour; stderr: string; loc: Location_ocaml.t }
   | Error of { msg: string }
 
 let string_of_batch_exit exit =
@@ -94,13 +94,14 @@ let print_batch_output ?(is_charon=false) i_opt (z3_strs, exec) =
             (String.escaped stdout) (String.escaped stderr)
             (if blocked then "true" else "false")
         end
-    | Undefined { ub; loc } ->
+    | Undefined { ub; stderr; loc } ->
         begin if has_multiple then
           print_endline ":"
         end;
         print_string constrs_str;
-        Printf.printf "Undefined {ub: \"%s\", loc: \"%s\"}%s"
+        Printf.printf "Undefined {ub: \"%s\", stderr: \"%s\", loc: \"%s\"}%s"
           (Undefined.stringFromUndefined_behaviour ub)
+          (String.escaped stderr)
           (Location_ocaml.simple_location loc)
           (if is_charon then "\n" else "")
     | Error { msg } ->
@@ -140,13 +141,14 @@ let batch_drive (file: 'a Core.file) args fs_state conf =
               | _ ->
                   OtherValue dres.Driver.dres_core_value in
           Defined { exit; stdout= dres.Driver.dres_stdout; stderr= dres.Driver.dres_stderr; blocked= dres.Driver.dres_blocked }
-      | ND.Killed (ND.Undef0 (loc, [])) ->
+      | ND.Killed (_, ND.Undef0 (loc, [])) ->
           Error { msg= "[empty UB, probably a cerberus BUG]" }
-      | ND.Killed (ND.Undef0 (loc, ub::_)) ->
-          Undefined { ub; loc }
-      | ND.Killed (ND.Error0 (_, msg)) ->
+      | ND.Killed (dr_st, ND.Undef0 (loc, ub::_)) ->
+          let stderr = String.concat "" (Dlist.toList dr_st.Driver.core_state.Core_run.io.Core_run.stderr) in
+          Undefined { ub; stderr; loc }
+      | ND.Killed (_, ND.Error0 (_, msg)) ->
           Error { msg }
-      | ND.Killed (ND.Other dr_err) ->
+      | ND.Killed (_, ND.Other dr_err) ->
           Error { msg= string_of_driver_error dr_err }
     end in
     let _constraints =
@@ -183,7 +185,7 @@ let drive file args fs_state conf : execution_result =
       match exec with
         | (ND.Active _, _, _) ->
             assert false
-        | (ND.Killed reason, z3_strs, st) ->
+        | (ND.Killed (_, reason), z3_strs, st) ->
           (*
             let reason_str = match reason with
               | ND.Undef0 (loc, ubs) ->
@@ -250,7 +252,9 @@ else
         if conf.trace then
           PPrint.ToChannel.pretty 1.0 80 stdout (Pp_trace.pp_trace @@ List.rev st.trace);
 
-      | (ND.Killed (ND.Undef0 (loc, ubs)), _, st) ->
+      | (ND.Killed (dr_st, ND.Undef0 (loc, ubs)), _, st) ->
+          let stderr_str = String.concat "" (Dlist.toList dr_st.Driver.core_state.Core_run.io.Core_run.stderr) in
+          Printf.fprintf stderr "BEGIN stderr\n%s\nEND stderr\n" stderr_str;
           prerr_endline (Pp_errors.to_string (loc, Errors.(DRIVER (Driver_UB ubs))));
           if conf.trace then
             PPrint.ToChannel.pretty 1.0 80 stdout (Pp_trace.pp_trace @@ List.rev st.trace)
@@ -270,10 +274,10 @@ else
             ()
         *)
       
-      | (ND.Killed (ND.Error0 (loc, str)), _, _) ->
+      | (ND.Killed (_, ND.Error0 (loc, str)), _, _) ->
           print_endline (Colour.(ansi_format [Red] ("IMPL-DEFINED STATIC ERROR[" ^ Location_ocaml.location_to_string loc ^ "]: " ^ str)))
       
-      | (ND.Killed (ND.Other reason), _, st) ->
+      | (ND.Killed (_, ND.Other reason), _, st) ->
           print_endline (Colour.(ansi_format [Red] ("OTHER ERROR: " ^ string_of_driver_error reason)))
   ) values;
   Exception.except_return !ret
