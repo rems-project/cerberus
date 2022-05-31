@@ -90,17 +90,16 @@ type scan_res = {res: bool; ret: bool; funs : SymSet.t}
    non-unit return types (non-lemma trusted functions), and the set
    of uninterpreted functions used. *)
 let scan ftyp =
-  let add_funs f r = {r with funs = StringSet.union f r.funs} in
+  let add_funs f r = {r with funs = SymSet.union f r.funs} in
   let lc_funs = function
     | LC.T it -> it_uninterp_funs it
     | LC.Forall (_, it) -> it_uninterp_funs it
   in
   let rec scan_lrt t = match t with
-    | LRT.Logical (_, _, t) -> scan_lrt t
     | LRT.Define ((_, it), _, t) -> add_funs (it_uninterp_funs it) (scan_lrt t)
     | LRT.Resource (_, _, t) -> {(scan_lrt t) with res = true}
     | LRT.Constraint (lc, _, t) -> add_funs (lc_funs lc) (scan_lrt t)
-    | LRT.I -> {res = false; ret = false; funs = StringSet.empty}
+    | LRT.I -> {res = false; ret = false; funs = SymSet.empty}
   in
   let scan_rt = function
     | RT.Computational ((_, bt), _, t) -> {(scan_lrt t) with ret =
@@ -108,7 +107,6 @@ let scan ftyp =
   in
   let rec scan_at t = match t with
     | AT.Computational (_, _, t) -> scan_at t
-    | AT.Logical (_, _, t) -> scan_at t
     | AT.Define ((_, it), _, t) -> add_funs (it_uninterp_funs it) (scan_at t)
     | AT.Resource (_, _, t) -> {(scan_at t) with res = true}
     | AT.Constraint (lc, _, t) -> add_funs (lc_funs lc) (scan_at t)
@@ -271,7 +269,6 @@ let ftyp_to_coq fun_ret_tys ftyp =
   in
   let rec at_doc t = match t with
     | AT.Computational ((sym, bt), _, t) -> omap_split (mk_forall sym bt) (at_doc t)
-    | AT.Logical ((sym, bt), _, t) -> omap_split (mk_forall sym bt) (at_doc t)
     | AT.Define ((sym, it), _, t) -> omap_split (mk_let sym (it_to_coq fun_ret_tys it)) (at_doc t)
     | AT.Resource _ -> fail "ftyp_to_coq: unsupported" (AT.pp RT.pp t)
     | AT.Constraint (lc, _, t) ->
