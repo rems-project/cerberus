@@ -105,7 +105,7 @@ type named_rewrite = string * rewrite
 
 
 
-let frontend astprints cbv filename =
+let frontend astprints cbv filename state_file =
 
   Global_ocaml.(set_cerb_conf false Random false Basic false false false false);
   CF.Ocaml_implementation.(set (HafniumImpl.impl));
@@ -148,7 +148,7 @@ let frontend astprints cbv filename =
     | Some (_, sigm) ->
         let open Effectful.Make(Resultat) in
         match CompilePredicates.translate mu_file.mu_tagDefs sigm.CF.AilSyntax.cn_predicates with
-        | Result.Error err -> CompilePredicates.report_error err; exit 1
+        | Result.Error err -> TypeErrors.report ?state_file err; exit 1
         | Result.Ok xs -> xs
     end in
   
@@ -199,7 +199,7 @@ let main
   Check.only := only;
   check_input_file filename;
   Pp.progress_simple "pre-processing" "translating C code";
-  begin match frontend astprints cbv filename with
+  begin match frontend astprints cbv filename state_file with
   | CF.Exception.Exception err ->
      prerr_endline (CF.Pp_errors.to_string err); exit 2
   | CF.Exception.Result (pred_defs, file) ->

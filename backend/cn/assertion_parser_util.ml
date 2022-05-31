@@ -5,7 +5,6 @@ type token =
   | LNAME of string
   | UNAME of string
   | MEMBER of string
-  | OARG of string
 
   | TRUE
   | FALSE

@@ -34,13 +34,26 @@ exception Struct_not_found
 
 
 
+let order_aligned_sym = Sym.fresh_named "order_aligned"
+let order_align_sym = Sym.fresh_named "order_align"
+let pfn_buddy_sym = Sym.fresh_named "pfn_buddy"
+let buddy_sym = Sym.fresh_named "buddy"
+let page_size_of_order_sym = Sym.fresh_named "page_size_of_order"
+let page_group_ok_sym = Sym.fresh_named "page_group_ok"
+let vmemmap_wf_sym = Sym.fresh_named "vmemmap_wf"
+let init_vmemmap_page_sym = Sym.fresh_named "init_vmemmap_page"
+let vmemmap_l_wf_sym = Sym.fresh_named "vmemmap_l_wf"
+let vmemmap_b_wf_sym = Sym.fresh_named "vmemmap_b_wf"
+let freeArea_cell_wf_sym = Sym.fresh_named "freeArea_cell_wf"
+let hyp_pool_wf_sym = Sym.fresh_named "hyp_pool_wf"
 
 
 
-let make_uninterp fname arg_spec return_bt = 
+
+let make_uninterp (fname : Sym.t) arg_spec return_bt = 
 
   let id = fname in
-  let loc = Loc.other ("internal ("^fname^")") in
+  let loc = Loc.other ("internal ("^ Sym.pp_string fname^")") in
   let args = List.map (fun a -> (a, Sym.fresh ())) arg_spec in
   let output_def = 
     List.map (fun ((name, bt), s) ->
@@ -93,20 +106,22 @@ module PageAlloc = struct
         ~p:pointer
 
 
-    let vmemmap_resource ~vmemmap_pointer ~vmemmap ~range_start ~range_end =
+    let vmemmap_resource ~vmemmap_pointer ~range_start ~range_end =
       let range_start_i = range_start %/ (int_ pPAGE_SIZE) in
       let range_end_i = range_end %/ (int_ pPAGE_SIZE) in
       let q_s, q = IT.fresh_named Integer "q" in
-      (ResourceTypes.Q {
-          name = Owned (Struct hyp_page_tag);
-          q = q_s;
-          pointer = vmemmap_pointer;
-          iargs = [];
-          step = Memory.size_of_ctype (Struct hyp_page_tag);
-          permission = and_ [range_start_i %<= q; q %<= (sub_ (range_end_i, int_ 1))];
-         }, 
-       [(Resources.value_sym, vmemmap); 
-        (Resources.init_sym, const_map_ Integer (bool_ true))])
+      let resource =
+        ResourceTypes.Q {
+            name = Owned (Struct hyp_page_tag);
+            q = q_s;
+            pointer = vmemmap_pointer;
+            iargs = [];
+            step = Memory.size_of_ctype (Struct hyp_page_tag);
+            permission = and_ [range_start_i %<= q; q %<= (sub_ (range_end_i, int_ 1))];
+           }
+      in
+      let oargs_spec = Resources.q_owned_oargs (Struct hyp_page_tag) in
+      (resource, oargs_spec)
 
 
   end
@@ -120,43 +135,43 @@ module PageAlloc = struct
 
     let order_aligned = 
       (* let _body = divisible_ (page_index, exp_ (int_ 2, sym_ (order, Integer))) in *)
-      make_uninterp "order_aligned"
+      make_uninterp order_aligned_sym
         [(Sym.fresh_named "page_index", Integer);
          (Sym.fresh_named "order", Integer);]
         Bool
     in
 
     let order_align = 
-      make_uninterp "order_align"
+      make_uninterp order_align_sym
         [(Sym.fresh_named "page_index", Integer);
          (Sym.fresh_named "order", Integer);]
         Integer
     in
 
     let pfn_buddy =
-      make_uninterp "pfn_buddy"
+      make_uninterp pfn_buddy_sym
         [(Sym.fresh_named "p", Integer);
          (Sym.fresh_named "order", Integer);]
         Integer
     in
 
     let buddy = 
-      make_uninterp "buddy"
+      make_uninterp buddy_sym
         [(Sym.fresh_named "p", Loc);
          (Sym.fresh_named "order", Integer);]
         Loc
     in
 
     let page_size_of_order = 
-      make_uninterp "page_size_of_order"
+      make_uninterp page_size_of_order_sym
         [(Sym.fresh_named "order", Integer)]
         Integer
     in
 
 
     let page_group_ok =
-      let id = "page_group_ok" in
-      let loc = Loc.other ("internal ("^id^")") in
+      let id = page_group_ok_sym in
+      let loc = Loc.other ("internal ("^(Sym.pp_string id)^")") in
       let page_index_s, page_index = IT.fresh_named Integer "page_index" in
       let vmemmap_pointer_s, vmemmap_pointer = IT.fresh_named Loc "vmemmap_pointer" in
       let vmemmap_s, vmemmap = 
@@ -176,29 +191,31 @@ module PageAlloc = struct
       let infer_arguments = 
         let ia_page_index_s, ia_page_index = IT.fresh (IT.bt page_index) in
         let ia_vmemmap_pointer_s, ia_vmemmap_pointer = IT.fresh (IT.bt vmemmap_pointer) in
-        let ia_vmemmap_s, ia_vmemmap = IT.fresh (IT.bt vmemmap) in
         let ia_pool_s, ia_pool = IT.fresh (IT.bt pool) in
+        let vmemmap_resource = 
+          (Aux.vmemmap_resource 
+             ~vmemmap_pointer:ia_vmemmap_pointer 
+             ~range_start:(ia_pool %. "range_start")
+             ~range_end:(ia_pool %. "range_end"))
+        in
+        let ia_vmemmap_resource_s, ia_vmemmap_resource = IT.fresh (snd vmemmap_resource) in
+
+        let ia_vmemmap_value = recordMember_ ~member_bt:(Map (Integer, Struct hyp_page_tag)) (ia_vmemmap_resource, Resources.value_sym) in
         AT.Computational ((ia_page_index_s, IT.bt ia_page_index), (loc, None),
-        AT.Computational ((ia_vmemmap_pointer_s, IT.bt ia_vmemmap_pointer), (loc, None), 
-        AT.Logical ((ia_vmemmap_s, IT.bt ia_vmemmap), (loc, None), 
+        AT.Computational ((ia_vmemmap_pointer_s, IT.bt ia_vmemmap_pointer), (loc, None),  
         AT.Computational ((ia_pool_s, IT.bt ia_pool), (loc, None),
-        AT.Resource ((Aux.vmemmap_resource 
-                        ~vmemmap_pointer:ia_vmemmap_pointer 
-                        ~vmemmap:ia_vmemmap 
-                        ~range_start:(ia_pool %. "range_start")
-                        ~range_end:(ia_pool %. "range_end")), 
-                     (loc, None),
+        AT.Resource ((ia_vmemmap_resource_s, vmemmap_resource), (loc, None),
         AT.I OutputDef.[
             {loc; name = page_index_s; value = ia_page_index};
             {loc; name = vmemmap_pointer_s; value = ia_vmemmap_pointer};
-            {loc; name = vmemmap_s; value = ia_vmemmap};
+            {loc; name = vmemmap_s; value = ia_vmemmap_value};
             {loc; name = pool_s; value = ia_pool};
-          ])))))
+          ]))))
       in
 
       let body = 
         let o_s, o = IT.fresh Integer in
-        let oa_i = pred_ "order_align" [page_index; o] Integer in
+        let oa_i = pred_ order_align_sym [page_index; o] Integer in
         let in_page_group =
           and_ [oa_i %< page_index; 
                 (pool %. "range_start") %<= (oa_i %* (int_ pPAGE_SIZE));
@@ -219,7 +236,7 @@ module PageAlloc = struct
 
     let vmemmap_wf =
 
-      let id = "vmemmap_wf" in
+      let id = vmemmap_wf_sym in
       let loc = Loc.other "internal (vmemmap_wf)" in
 
       let page_index_s, page_index = IT.fresh_named Integer "page_index" in
@@ -262,11 +279,11 @@ module PageAlloc = struct
             ((page %. "pool") %== pool_pointer);
             (impl_ (
                  (page %. "order") %!= int_ hHYP_NO_ORDER,
-                 pred_ "order_aligned" [page_index; page%."order"] BT.Bool));
+                 pred_ order_aligned_sym [page_index; page%."order"] BT.Bool));
             (impl_ (
                  (page %. "order") %!= int_ hHYP_NO_ORDER,
                  (page_index %* int_ pPAGE_SIZE) %+ 
-                   (pred_ "page_size_of_order" [page%."order"] Integer) %<= 
+                   (pred_ page_size_of_order_sym [page%."order"] Integer) %<= 
                      (pool %. "range_end")));
             (impl_ (
                  (page %. "order") %== int_ hHYP_NO_ORDER,
@@ -283,7 +300,7 @@ module PageAlloc = struct
                )
             );
 
-            pred_ "page_group_ok" [page_index; vmemmap_pointer; vmemmap; pool] Bool
+            pred_ page_group_ok_sym [page_index; vmemmap_pointer; vmemmap; pool] Bool
           ]
       in
 
@@ -292,29 +309,30 @@ module PageAlloc = struct
 
         let ia_page_index_s, ia_page_index = IT.fresh (IT.bt page_index) in
         let ia_vmemmap_pointer_s, ia_vmemmap_pointer = IT.fresh (IT.bt vmemmap_pointer) in
-        let ia_vmemmap_s, ia_vmemmap = IT.fresh (IT.bt vmemmap) in
         let ia_pool_pointer_s, ia_pool_pointer = IT.fresh (IT.bt pool_pointer) in
         let ia_pool_s, ia_pool = IT.fresh (IT.bt pool) in
+        let vmemmap_resource = 
+          (Aux.vmemmap_resource 
+             ~vmemmap_pointer:ia_vmemmap_pointer 
+             ~range_start:(ia_pool %. "range_start")
+             ~range_end:(ia_pool %. "range_end"))
+        in
+        let ia_vmemmap_resource_s, ia_vmemmap_resource = IT.fresh (snd vmemmap_resource) in
 
+        let ia_vmemmap_value = recordMember_ ~member_bt:(Map (Integer, Struct hyp_page_tag)) (ia_vmemmap_resource, Resources.value_sym) in
 
         AT.Computational ((ia_page_index_s, IT.bt ia_page_index), (loc, None),
         AT.Computational ((ia_vmemmap_pointer_s, IT.bt ia_vmemmap_pointer), (loc, None), 
-        AT.Logical ((ia_vmemmap_s, IT.bt ia_vmemmap), (loc, None), 
         AT.Computational ((ia_pool_pointer_s, IT.bt ia_pool_pointer), (loc, None),
         AT.Computational ((ia_pool_s, IT.bt ia_pool), (loc, None),
-        AT.Resource ((Aux.vmemmap_resource 
-                        ~vmemmap_pointer:ia_vmemmap_pointer 
-                        ~vmemmap:ia_vmemmap 
-                        ~range_start:(ia_pool %. "range_start")
-                        ~range_end:(ia_pool %. "range_end")), 
-                     (loc, None),
+        AT.Resource ((ia_vmemmap_resource_s, vmemmap_resource), (loc, None),
         AT.I OutputDef.[
             {loc; name = page_index_s; value = ia_page_index};
             {loc; name = vmemmap_pointer_s; value = ia_vmemmap_pointer};
-            {loc; name = vmemmap_s; value = ia_vmemmap};
+            {loc; name = vmemmap_s; value = ia_vmemmap_value};
             {loc; name = pool_pointer_s; value = ia_pool_pointer};
             {loc; name = pool_s; value = ia_pool};
-          ]))))))
+          ])))))
       in
 
       (id, {loc; args; definition = Def body; return_bt = Bool; infer_arguments} )
@@ -324,7 +342,7 @@ module PageAlloc = struct
 
     let init_vmemmap_page =
 
-      let id = "init_vmemmap_page" in
+      let id = init_vmemmap_page_sym in
       let loc = Loc.other "internal (init_vmemmap_page)" in
 
       let page_index_s, page_index = IT.fresh_named Integer "page_index" in
@@ -361,9 +379,9 @@ module PageAlloc = struct
             ((page %. "pool") %== pool_pointer);
             (next %== self_node_pointer);
             (prev %== self_node_pointer);
-            pred_ "order_aligned" [page_index; int_ 0] BT.Bool;
+            pred_ order_aligned_sym [page_index; int_ 0] BT.Bool;
             (page_index %* int_ pPAGE_SIZE) %+ 
-              (pred_ "page_size_of_order" [page%."order"] Integer) %<= 
+              (pred_ page_size_of_order_sym [page%."order"] Integer) %<= 
                 (pool %. "range_end");
             (* pred_ "page_group_ok" [page_index; vmemmap_pointer; vmemmap; pool] Bool *)
           ]
@@ -374,29 +392,31 @@ module PageAlloc = struct
 
         let ia_page_index_s, ia_page_index = IT.fresh (IT.bt page_index) in
         let ia_vmemmap_pointer_s, ia_vmemmap_pointer = IT.fresh (IT.bt vmemmap_pointer) in
-        let ia_vmemmap_s, ia_vmemmap = IT.fresh (IT.bt vmemmap) in
         let ia_pool_pointer_s, ia_pool_pointer = IT.fresh (IT.bt pool_pointer) in
         let ia_pool_s, ia_pool = IT.fresh (IT.bt pool) in
 
+        let vmemmap_resource = 
+          (Aux.vmemmap_resource 
+             ~vmemmap_pointer:ia_vmemmap_pointer 
+             ~range_start:(ia_pool %. "range_start")
+             ~range_end:(ia_pool %. "range_end"))
+        in
+        let ia_vmemmap_resource_s, ia_vmemmap_resource = IT.fresh (snd vmemmap_resource) in
+
+        let ia_vmemmap_value = recordMember_ ~member_bt:(Map (Integer, Struct hyp_page_tag)) (ia_vmemmap_resource, Resources.value_sym) in
 
         AT.Computational ((ia_page_index_s, IT.bt ia_page_index), (loc, None),
         AT.Computational ((ia_vmemmap_pointer_s, IT.bt ia_vmemmap_pointer), (loc, None), 
-        AT.Logical ((ia_vmemmap_s, IT.bt ia_vmemmap), (loc, None), 
         AT.Computational ((ia_pool_pointer_s, IT.bt ia_pool_pointer), (loc, None),
         AT.Computational ((ia_pool_s, IT.bt ia_pool), (loc, None),
-        AT.Resource ((Aux.vmemmap_resource 
-                        ~vmemmap_pointer:ia_vmemmap_pointer 
-                        ~vmemmap:ia_vmemmap 
-                        ~range_start:(ia_pool %. "range_start")
-                        ~range_end:(ia_pool %. "range_end")), 
-                     (loc, None),
+        AT.Resource ((ia_vmemmap_resource_s, vmemmap_resource), (loc, None),
         AT.I OutputDef.[
             {loc; name = page_index_s; value = ia_page_index};
             {loc; name = vmemmap_pointer_s; value = ia_vmemmap_pointer};
-            {loc; name = vmemmap_s; value = ia_vmemmap};
+            {loc; name = vmemmap_s; value = ia_vmemmap_value};
             {loc; name = pool_pointer_s; value = ia_pool_pointer};
             {loc; name = pool_s; value = ia_pool};
-          ]))))))
+          ])))))
       in
 
       (id, {loc; args; definition = Def body; return_bt = Bool; infer_arguments} )
@@ -407,7 +427,7 @@ module PageAlloc = struct
 
     let vmemmap_l_wf =
 
-      let id = "vmemmap_l_wf" in
+      let id = vmemmap_l_wf_sym in
       let loc = Loc.other "internal (vmemmap_l_wf)" in
 
       let page_index_s, page_index = IT.fresh_named Integer "page_index" in
@@ -499,28 +519,33 @@ module PageAlloc = struct
 
         let ia_page_index_s, ia_page_index = IT.fresh (IT.bt page_index) in
         let ia_vmemmap_pointer_s, ia_vmemmap_pointer = IT.fresh (IT.bt vmemmap_pointer) in
-        let ia_vmemmap_s, ia_vmemmap = IT.fresh (IT.bt vmemmap) in
         let ia_pool_pointer_s, ia_pool_pointer = IT.fresh (IT.bt pool_pointer) in
         let ia_pool_s, ia_pool = IT.fresh (IT.bt pool) in
 
+        let vmemmap_resource = 
+          (Aux.vmemmap_resource 
+             ~vmemmap_pointer:ia_vmemmap_pointer 
+             ~range_start:(ia_pool %. "range_start")
+             ~range_end:(ia_pool %. "range_end"))
+        in
+
+        let ia_vmemmap_resource_s, ia_vmemmap_resource = IT.fresh (snd vmemmap_resource) in
+
+        let ia_vmemmap_value = recordMember_ ~member_bt:(Map (Integer, Struct hyp_page_tag)) (ia_vmemmap_resource, Resources.value_sym) in
+
+
         AT.Computational ((ia_page_index_s, IT.bt ia_page_index), (loc, None),
         AT.Computational ((ia_vmemmap_pointer_s, IT.bt ia_vmemmap_pointer), (loc, None), 
-        AT.Logical ((ia_vmemmap_s, IT.bt ia_vmemmap), (loc, None), 
         AT.Computational ((ia_pool_pointer_s, IT.bt ia_pool_pointer), (loc, None),
         AT.Computational ((ia_pool_s, IT.bt ia_pool), (loc, None),
-        AT.Resource ((Aux.vmemmap_resource 
-                        ~vmemmap_pointer:ia_vmemmap_pointer 
-                        ~vmemmap:ia_vmemmap
-                        ~range_start:(ia_pool %. "range_start")
-                        ~range_end:(ia_pool %. "range_end")), 
-                     (loc, None),
+        AT.Resource ((ia_vmemmap_resource_s, vmemmap_resource), (loc, None),
         AT.I OutputDef.[
             {loc; name = page_index_s; value = ia_page_index};
             {loc; name = vmemmap_pointer_s; value = ia_vmemmap_pointer};
-            {loc; name = vmemmap_s; value = ia_vmemmap};
+            {loc; name = vmemmap_s; value = ia_vmemmap_value};
             {loc; name = pool_pointer_s; value = ia_pool_pointer};
             {loc; name = pool_s; value = ia_pool};
-          ]))))))
+          ])))))
       in
 
       (id, {loc; args; definition = Def body; return_bt = Bool; infer_arguments} )
@@ -539,7 +564,7 @@ module PageAlloc = struct
 
     let vmemmap_b_wf =
 
-      let id = "vmemmap_b_wf" in
+      let id = vmemmap_b_wf_sym in
       let loc = Loc.other "internal (vmemmap_b_wf)" in
 
       let page_index_s, page_index = IT.fresh_named Integer "page_index" in
@@ -564,8 +589,8 @@ module PageAlloc = struct
 
       let body = 
         and_ [
-            pred_ "vmemmap_wf" [page_index; vmemmap_pointer; vmemmap; pool_pointer; pool] BT.Bool;
-            pred_ "vmemmap_l_wf" [page_index; vmemmap_pointer; vmemmap; pool_pointer; pool] BT.Bool;
+            pred_ vmemmap_wf_sym [page_index; vmemmap_pointer; vmemmap; pool_pointer; pool] BT.Bool;
+            pred_ vmemmap_l_wf_sym [page_index; vmemmap_pointer; vmemmap; pool_pointer; pool] BT.Bool;
           ]
       in
 
@@ -574,28 +599,33 @@ module PageAlloc = struct
 
         let ia_page_index_s, ia_page_index = IT.fresh (IT.bt page_index) in
         let ia_vmemmap_pointer_s, ia_vmemmap_pointer = IT.fresh (IT.bt vmemmap_pointer) in
-        let ia_vmemmap_s, ia_vmemmap = IT.fresh (IT.bt vmemmap) in
         let ia_pool_pointer_s, ia_pool_pointer = IT.fresh (IT.bt pool_pointer) in
         let ia_pool_s, ia_pool = IT.fresh (IT.bt pool) in
 
+        let vmemmap_resource = 
+          (Aux.vmemmap_resource 
+             ~vmemmap_pointer:ia_vmemmap_pointer 
+             ~range_start:(ia_pool %. "range_start")
+             ~range_end:(ia_pool %. "range_end"))
+        in
+
+        let ia_vmemmap_resource_s, ia_vmemmap_resource = IT.fresh (snd vmemmap_resource) in
+
+        let ia_vmemmap_value = recordMember_ ~member_bt:(Map (Integer, Struct hyp_page_tag)) (ia_vmemmap_resource, Resources.value_sym) in
+
+
         AT.Computational ((ia_page_index_s, IT.bt ia_page_index), (loc, None),
         AT.Computational ((ia_vmemmap_pointer_s, IT.bt ia_vmemmap_pointer), (loc, None), 
-        AT.Logical ((ia_vmemmap_s, IT.bt ia_vmemmap), (loc, None), 
         AT.Computational ((ia_pool_pointer_s, IT.bt ia_pool_pointer), (loc, None),
         AT.Computational ((ia_pool_s, IT.bt ia_pool), (loc, None),
-        AT.Resource ((Aux.vmemmap_resource 
-                        ~vmemmap_pointer:ia_vmemmap_pointer 
-                        ~vmemmap:ia_vmemmap
-                        ~range_start:(ia_pool %. "range_start")
-                        ~range_end:(ia_pool %. "range_end")), 
-                     (loc, None),
+        AT.Resource ((ia_vmemmap_resource_s, vmemmap_resource), (loc, None),
         AT.I OutputDef.[
             {loc; name = page_index_s; value = ia_page_index};
             {loc; name = vmemmap_pointer_s; value = ia_vmemmap_pointer};
-            {loc; name = vmemmap_s; value = ia_vmemmap};
+            {loc; name = vmemmap_s; value = ia_vmemmap_value};
             {loc; name = pool_pointer_s; value = ia_pool_pointer};
             {loc; name = pool_s; value = ia_pool};
-          ]))))))
+          ])))))
       in
 
       (id, {loc; args; definition = Def body; return_bt = Bool; infer_arguments} )
@@ -620,7 +650,7 @@ module PageAlloc = struct
     (* check: possibly inconsistent *)
     let free_area_cell_wf =
 
-      let id = "freeArea_cell_wf" in
+      let id = freeArea_cell_wf_sym in
       let loc = Loc.other "internal (freeArea_cell_wf)" in
 
       let cell_index_s, cell_index = IT.fresh_named Integer "cell_index" in
@@ -677,28 +707,33 @@ module PageAlloc = struct
 
         let ia_cell_index_s, ia_cell_index = IT.fresh (IT.bt cell_index) in
         let ia_vmemmap_pointer_s, ia_vmemmap_pointer = IT.fresh (IT.bt vmemmap_pointer) in
-        let ia_vmemmap_s, ia_vmemmap = IT.fresh (IT.bt vmemmap) in
         let ia_pool_pointer_s, ia_pool_pointer = IT.fresh (IT.bt pool_pointer) in
         let ia_pool_s, ia_pool = IT.fresh (IT.bt pool) in
 
+        let vmemmap_resource = 
+          (Aux.vmemmap_resource 
+             ~vmemmap_pointer:ia_vmemmap_pointer
+             ~range_start:(ia_pool %. "range_start") 
+             ~range_end:(ia_pool %. "range_end"))
+        in
+
+        let ia_vmemmap_resource_s, ia_vmemmap_resource = IT.fresh (snd vmemmap_resource) in
+
+        let ia_vmemmap_value = recordMember_ ~member_bt:(Map (Integer, Struct hyp_page_tag)) (ia_vmemmap_resource, Resources.value_sym) in
+
+
         AT.Computational ((ia_cell_index_s, IT.bt ia_cell_index), (loc, None),
         AT.Computational ((ia_vmemmap_pointer_s, IT.bt ia_vmemmap_pointer), (loc, None), 
-        AT.Logical ((ia_vmemmap_s, IT.bt ia_vmemmap), (loc, None), 
         AT.Computational ((ia_pool_pointer_s, IT.bt ia_pool_pointer), (loc, None),
         AT.Computational ((ia_pool_s, IT.bt ia_pool), (loc, None),
-        AT.Resource ((Aux.vmemmap_resource 
-                        ~vmemmap_pointer:ia_vmemmap_pointer
-                        ~vmemmap:ia_vmemmap
-                        ~range_start:(ia_pool %. "range_start") 
-                        ~range_end:(ia_pool %. "range_end")), 
-                     (loc, None),
+        AT.Resource ((ia_vmemmap_resource_s, vmemmap_resource), (loc, None),
         AT.I OutputDef.[
             {loc; name = cell_index_s; value = ia_cell_index};
             {loc; name = vmemmap_pointer_s; value = ia_vmemmap_pointer};
-            {loc; name = vmemmap_s; value = ia_vmemmap};
+            {loc; name = vmemmap_s; value = ia_vmemmap_value};
             {loc; name = pool_pointer_s; value = ia_pool_pointer};
             {loc; name = pool_s; value = ia_pool};
-          ]))))))
+          ])))))
       in
 
 
@@ -712,7 +747,7 @@ module PageAlloc = struct
 
 
     let hyp_pool_wf =
-      let id = "hyp_pool_wf" in
+      let id = hyp_pool_wf_sym in
       let loc = Loc.other "internal (hyp_pool_wf)" in
 
       let pool_pointer_s, pool_pointer = IT.fresh_named Loc "pool_pointer" in

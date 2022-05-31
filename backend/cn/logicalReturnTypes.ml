@@ -1,21 +1,20 @@
 open Locations
 module SymSet = Set.Make(Sym)
-module Resources = Resources
+module BT = BaseTypes
+module RT = ResourceTypes
 module IT = IndexTerms
 
 
 type t = 
-  | Logical of (Sym.t * LogicalSorts.t) * info * t
   | Define of (Sym.t * IT.t) * info * t
-  | Resource of Resources.t * info * t
+  | Resource of (Sym.t * (RT.t * BT.t)) * info * t
   | Constraint of LogicalConstraints.t * info * t
   | I
 
 let rec concat (t1: t) (t2: t) : t = 
   match t1 with
-  | I -> t2
-  | Logical (bound, info, t) -> 
-     Logical (bound, info, concat t t2)
+  | I -> 
+     t2
   | Define (bound, info, t) ->
      Define (bound, info, concat t t2)
   | Resource (bound, info, t) -> 
@@ -26,8 +25,6 @@ let rec concat (t1: t) (t2: t) : t =
 let (@@) = concat
 
 
-let mLogical (name, bound, info) t = 
-  Logical ((name, bound), info, t)
 let mDefine (name, bound, info) t = 
   Define ((name, bound), info, t)
 let mResource (bound, info) t = 
@@ -35,7 +32,6 @@ let mResource (bound, info) t =
 let mConstraint (bound, info) t = 
   Constraint (bound, info, t)
 
-let mLogicals = List.fold_right mLogical
 let mDefines = List.fold_right mDefine
 let mResources = List.fold_right mResource
 let mConstraints = List.fold_right mConstraint
@@ -43,17 +39,15 @@ let mConstraints = List.fold_right mConstraint
 
 let rec subst (substitution: IT.t Subst.t) lrt = 
   match lrt with
-  | Logical ((name, ls), info, t) -> 
-     let name, t = suitably_alpha_rename substitution (name, ls) t in
-     Logical ((name, ls), info, subst substitution t)
   | Define ((name, it), info, t) ->
      let it = IT.subst substitution it in
      let name, t = suitably_alpha_rename substitution (name, IT.bt it) t in
      Define ((name, it), info, subst substitution t)
-  | Resource (re, info, t) -> 
-     let re = Resources.subst substitution re in
+  | Resource ((name, (re, bt)), info, t) -> 
+     let re = RT.subst substitution re in
+     let name, t = suitably_alpha_rename substitution (name, bt) t in
      let t = subst substitution t in
-     Resource (re, info, t)
+     Resource ((name, (re, bt)), info, t)
   | Constraint (lc, info, t) -> 
      let lc = LogicalConstraints.subst substitution lc in
      let t = subst substitution t in
@@ -78,14 +72,10 @@ and suitably_alpha_rename su (s, ls) t =
 let rec pp_aux lrt =
   let open Pp in
   match lrt with
-  | Logical ((name, ls), _info, t) ->
-     let op = if !unicode then utf8string "\u{2203}" else !^"E" in
-     group (op ^^^ typ (Sym.pp name) (LogicalSorts.pp ls) ^^ dot) :: pp_aux t
   | Define ((name, it), _info, t) ->
-     group (!^"let" ^^^ (Sym.pp name) ^^^ equals ^^^ IT.pp it ^^ dot) :: pp_aux t
-  | Resource (re, _info, t) ->
-     let op = star in
-     group (Resources.pp re ^^^ op) :: pp_aux t
+     group (!^"let" ^^^ (Sym.pp name) ^^^ equals ^^^ IT.pp it ^^ semi) :: pp_aux t
+  | Resource ((name, (re, bt)), _info, t) ->
+     group (!^"let" ^^^ (Sym.pp name) ^^^ equals ^^^ RT.pp re ^^ semi) :: pp_aux t
   | Constraint (lc, _info, t) ->
      let op = if !unicode then utf8string "\u{2227}" else slash ^^ backslash in
      group (LogicalConstraints.pp lc ^^^ op) :: pp_aux t
@@ -98,14 +88,6 @@ let pp rt =
 
 
 let rec json = function
-  | Logical ((s, ls), _info, t) ->
-     let args = [
-         ("symbol", Sym.json s);
-         ("sort", LogicalSorts.json ls);
-         ("return_type", json t);
-       ]
-     in
-     `Variant ("Logical", Some (`Assoc args))
   | Define ((s, it), _info, t) ->
      let args = [
          ("symbol", Sym.json s);
@@ -114,9 +96,10 @@ let rec json = function
        ]
      in
      `Variant ("Define", Some (`Assoc args))
-  | Resource (r, _info, t) ->
+  | Resource ((s, (r, _bt)), _info, t) ->
      let args = [
-         ("resource", Resources.json r);
+         ("symbol", Sym.json s);
+         ("resource", RT.json r);
          ("return_type", json t);
        ]
      in

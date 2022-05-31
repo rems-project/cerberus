@@ -197,7 +197,7 @@ let pp =
     | Info (name, args) ->
        c_app !^name (List.map (aux false) args)
     | Pred (name, args) ->
-       c_app !^name (List.map (aux false) args)
+       c_app (Sym.pp name) (List.map (aux false) args)
   in
   fun (it : 'bt term) -> aux false it
 
@@ -675,7 +675,8 @@ let rec member_simp_ bt it member = match term it with
 let record_ members = 
   IT (Record_op (Record members), 
       BT.Record (List.map (fun (s,t) -> (s, basetype t)) members))
-
+let recordMember_ ~member_bt (t, member) = 
+  IT (Record_op (RecordMember (t, member)), member_bt)
 
 
 

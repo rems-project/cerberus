@@ -101,7 +101,7 @@ and 'bt term_ =
   | CT_pred of 'bt ct_pred
   | Map_op of 'bt map_op
   | Info of string * ('bt term) list
-  | Pred of string * ('bt term) list
+  | Pred of Sym.t * ('bt term) list
 
 and 'bt term =
   | IT of 'bt term_ * 'bt

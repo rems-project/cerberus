@@ -33,6 +33,13 @@ let sct_of_ct loc ct =
   | Some ct -> ct
   | None -> unsupported loc (!^"C-type" ^^^ CF.Pp_core_ctype.pp_ctype ct)
 
+let todo_string_of_sym (CF.Symbol.Symbol (_, _, sd)) =
+  match sd with
+    | SD_Id str | SD_ObjectAddress str ->
+        str
+    | _ ->
+        assert false
+
 
 
 
@@ -119,6 +126,16 @@ let struct_decl loc fields (tag : BT.tag) =
 
 
 
+let resource_counter = ref 0
+
+let oarg_name = function
+  | None ->
+     let i = !resource_counter in
+     resource_counter := i + 1;
+     "r" ^ string_of_int i
+  | Some name ->
+     name
+
 
 
 let make_owned_funarg floc i (pointer : IndexTerms.t) path sct =
@@ -128,74 +145,96 @@ let make_owned_funarg floc i (pointer : IndexTerms.t) path sct =
      Debug_ocaml.error "void argument"
   | _ ->
      let descr = "ARG" ^ string_of_int i in
-     let pointee, pointee_t = IT.fresh (BT.of_sct sct) in
-     let l = (`Logical (pointee, IT.bt pointee_t), (floc, Some (descr ^ "value"))) in
+     let oarg_name = oarg_name None in
+     let oarg_s = Sym.fresh_named oarg_name in
+     let oarg_members = Resources.owned_oargs sct in
+     let oarg = sym_ (oarg_s, oarg_members) in
      let mapping = [{
          path = Ast.pointee path; 
-         it = pointee_t;
+         it = recordMember_ ~member_bt:(BT.of_sct sct) (oarg, Resources.value_sym);
          o_sct = Some sct;
        }]
      in
      let r = 
        (`Resource 
-          (P {
+          (oarg_s, P {
               name = Owned sct; 
               pointer; 
               permission = bool_ true; 
               iargs = [];
             },
-           [(Resources.value_sym, pointee_t); 
-            (Resources.init_sym, bool_ true)]),
-        (floc, Some "ownership of function argument location"))
+           oarg_members),
+        (floc, Some (descr ^ " ownership")))
      in
-     ([l;r], mapping)
+     ([r], mapping)
 
 
-let make_owned ~loc ~oname ~pointer ~path ~sct ~o_value ~o_permission =
+let make_owned ~loc ~oname ~pointer ~path ~sct ~o_permission =
   let open Sctypes in
   match sct with
   | Void ->
      fail {loc; msg = Generic !^"cannot make owned void* pointer"}
   | _ ->
-     let l, pointee_t = match o_value with
-       | None -> 
-          let pointee, pointee_t = IT.fresh (BT.of_sct sct) in
-          ([`Logical (pointee, IT.bt pointee_t), (loc, Some "value")], pointee_t)
-       | Some pointee ->
-          ([], pointee)
-     in
+     let oarg_name = oarg_name oname in
+     let oarg_s = Sym.fresh_named oarg_name in
+     let oarg_members = Resources.owned_oargs sct in
+     let oarg = sym_ (oarg_s, oarg_members) in
+     let pointee_t = recordMember_ ~member_bt:(BT.of_sct sct) (oarg, Resources.value_sym) in
      let mapping = [{
          path = Ast.pointee path; 
          it = pointee_t;
          o_sct = Some sct;
        }] 
      in
-     let mapping = match oname with
-       | Some name ->
-          {path = Ast.predarg name "value"; 
-           it = pointee_t; 
-           o_sct = Some sct } :: mapping
-       | None ->
-          mapping
+     let mapping = 
+          {path = Ast.Var oarg_name; 
+           it = oarg; 
+           o_sct = None } :: mapping
      in
      let r = 
-       (`Resource (P {
+       (`Resource (oarg_s, P {
            name = Owned sct; 
            pointer; 
            permission = Option.value o_permission ~default:(bool_ true); 
            iargs = [];
           },
-          [(Resources.value_sym, pointee_t); 
-           (Resources.init_sym, bool_ true)]),
-        (loc, Some "ownership"))
+          oarg_members),
+        (loc, None))
      in
-     return (l@[r], mapping)
+     return ([r], mapping)
+
+
+let make_block ~loc ~oname ~pointer ~path ~sct ~o_permission =
+  let open Sctypes in
+  match sct with
+  | Void ->
+     fail {loc; msg = Generic !^"cannot create 'block' for void* pointer"}
+  | _ ->
+     let oarg_name = oarg_name oname in
+     let oarg_s = Sym.fresh_named oarg_name in
+     let oarg_members = Resources.block_oargs in
+     let oarg = sym_ (oarg_s, oarg_members) in
+     let mapping = 
+       [{path = Ast.Var oarg_name; 
+         it = oarg; 
+         o_sct = None }]
+     in
+     let r = 
+       (`Resource (oarg_s, P {
+           name = Block sct; 
+           pointer; 
+           permission = Option.value o_permission ~default:(bool_ true); 
+           iargs = [];
+          },
+          oarg_members),
+        (loc, None))
+     in
+     return ([r], mapping)
 
 
 
 
-
-let make_qowned ~loc ~oname ~pointer ~q:(qs,qbt) ~step ~condition ~path ~sct ~o_value =
+let make_qowned ~loc ~oname ~pointer ~q:(qs,qbt) ~step ~condition ~path ~sct =
   let open Sctypes in
   let@ () = match qbt with
     | BT.Integer -> return ()
@@ -209,25 +248,17 @@ let make_qowned ~loc ~oname ~pointer ~q:(qs,qbt) ~step ~condition ~path ~sct ~o_
   | Void ->
      fail {loc; msg = Generic !^"cannot make owned void* pointer"}
   | _ ->
-     let l, pointee_t = match o_value with
-       | None ->
-          let pointee, pointee_t = IT.fresh (BT.Map (qbt, BT.of_sct sct)) in
-          ([`Logical (pointee, IT.bt pointee_t), (loc, Some "value")], pointee_t)
-       | Some pointee ->
-          ([], pointee)
-     in
-     let mapping = [] 
-     in
-     let mapping = match oname with
-       | Some name ->
-          {path = Ast.predarg name "value"; 
-           it = pointee_t; 
-           o_sct = Some sct } :: mapping
-       | None ->
-          mapping
+     let oarg_name = oarg_name oname in
+     let oarg_s = Sym.fresh_named oarg_name in
+     let oarg_members = Resources.q_owned_oargs sct in
+     let oarg = sym_ (oarg_s, oarg_members) in
+     let mapping = 
+       [{path = Ast.var oarg_name; 
+         it = oarg; 
+         o_sct = None }]
      in
      let r = 
-       (`Resource (Q {
+       (`Resource (oarg_s, Q {
            name = Owned sct; 
            pointer; 
            q = qs;
@@ -235,131 +266,54 @@ let make_qowned ~loc ~oname ~pointer ~q:(qs,qbt) ~step ~condition ~path ~sct ~o_
            step = Memory.size_of_ctype sct;
            iargs = [];
           },
-          [(Resources.value_sym, pointee_t); 
-           (Resources.init_sym, const_map_ Integer (bool_ true))]),
+          oarg_members),
         (loc, Some "ownership"))
      in
-     return (l@[r], mapping)
+     return ([r], mapping)
 
 
 
-let make_block ~loc ~pointer ~path ~sct ~o_permission =
-  let open Sctypes in
-  match sct with
-  | Void ->
-     fail {loc; msg = Generic !^"cannot make owned void* pointer"}
-  | _ ->
-     let pointee, pointee_t = IT.fresh (BT.of_sct sct) in
-     let init, init_t = IT.fresh BT.Bool in
-     let l = 
-       [(`Logical (pointee, IT.bt pointee_t), (loc, Some "(uninitialised) value"));
-        (`Logical (init, IT.bt init_t), (loc, Some "initialisedness status"))]
-     in
-     let mapping = [] in
-     let r = 
-       (`Resource (P {
-            name = Owned sct; 
-            pointer;
-            permission = Option.value ~default:(bool_ true) o_permission;
-            iargs = [];
-          },
-          [(Resources.value_sym, pointee_t); 
-           (Resources.init_sym, init_t)]),
-        (loc, Some "ownership"))
-     in
-     return (l@[r], mapping)
 
-let some_oargs_map loc some_oargs = 
-  ListM.fold_leftM (fun acc (name, it) ->
-      if StringMap.mem name acc 
-      then fail {loc; msg = Generic !^("already defined '" ^ name ^ "'")}
-      else return (StringMap.add name it acc)
-    ) StringMap.empty some_oargs
-
-
-let ensure_some_oargs_empty loc pred some_oargs =
-  match StringMap.choose_opt some_oargs with
-  | None -> return ()
-  | Some (name, _) -> fail {loc; msg = Generic !^("predicate '"^pred^"' does not have output argument '" ^ name ^ "'")}
-
-let make_pred loc (pred, def) ~oname pointer iargs some_oargs ~o_permission = 
-  let@ some_oargs = some_oargs_map loc some_oargs in
-  let (mapping, l, some_oargs, oargs) = 
-    List.fold_right (fun (oarg, bt) (mapping, l, some_oargs, oargs) ->
-        let oarg_name = match Sym.description oarg with
-          | SD_Id oarg_name -> oarg_name
-          | _ -> assert false;
-        in
-        let it, l = match StringMap.find_opt oarg_name some_oargs with
-          | None -> 
-             let s, it = IT.fresh bt in
-             let new_l = (`Logical (s, bt), (loc, Some ("output argument '"^oarg_name^"'"))) in
-             (it, new_l :: l)
-          | Some it -> (it, l)
-        in
-        let mapping = match oname with
-          | Some name ->
-             let item = {path = Ast.predarg name oarg_name; it; o_sct = None } in
-             item :: mapping 
-          | None ->
-             mapping
-        in
-        let some_oargs = StringMap.remove oarg_name some_oargs in
-        let oargs = (oarg, it) :: oargs in
-        (mapping, l, some_oargs, oargs)
-      ) def.oargs ([], [], some_oargs, [])
+let make_pred loc (pred, def) ~oname pointer iargs ~o_permission = 
+  let oarg_name = oarg_name oname in
+  let oarg_s = Sym.fresh_named oarg_name in
+  let oarg_members = def.oargs in
+  let oarg = sym_ (oarg_s, BT.Record oarg_members) in
+  let mapping = 
+    [{path = Ast.var oarg_name; 
+      it = oarg; 
+      o_sct = None }]
   in
-  let@ () = ensure_some_oargs_empty loc pred some_oargs in
   let r = 
-    (`Resource (P {
+    (`Resource (oarg_s, P {
          name = PName pred; 
          pointer = pointer;
          iargs; 
          permission = Option.value ~default:(bool_ true) o_permission;
        },
-       oargs),
+       BT.Record oarg_members),
      (loc, None))
   in
-  return (l @ [r], mapping)
+  return ([r], mapping)
 
 
 
-let make_qpred loc (pred, def) ~oname ~pointer ~q:(qs,qbt) ~step ~condition iargs some_oargs = 
+let make_qpred loc (pred, def) ~oname ~pointer ~q:(qs,qbt) ~step ~condition iargs = 
   let@ () = match qbt with
     | BT.Integer -> return ()
     | _ -> fail {loc; msg = Generic (!^"Quantifier for iterated resource must be of type 'integer'")}
   in
-  let@ some_oargs = some_oargs_map loc some_oargs in
-  let ((mapping, l, c, oargs), some_oargs) = 
-    List.fold_right (fun (oarg, bt) ((mapping, l, c, oargs), some_oargs) ->
-        let oarg_name = match Sym.description oarg with
-          | SD_Id name -> name
-          | _ -> assert false
-        in
-        let it, l, c = match StringMap.find_opt oarg_name some_oargs with
-          | Some it ->
-             (it, l, c)
-          | None ->
-             let lifted_bt = BT.Map (qbt, bt) in
-             let s, it = IT.fresh lifted_bt in
-             let new_l = (`Logical (s, lifted_bt), (loc, Some ("output argument '"^oarg_name^"'"))) in
-             (it, new_l :: l, c)
-        in
-        let mapping = match oname with
-          | Some name ->
-             let item = {path = Ast.predarg name oarg_name; it; o_sct = None } in
-             item :: mapping 
-          | None ->
-             mapping
-        in
-        let some_oargs = StringMap.remove oarg_name some_oargs in
-        let oargs = ((oarg, it)) :: oargs in
-        ((mapping, l, c, oargs), some_oargs)
-      ) def.oargs (([], [], [], []), some_oargs)
+  let oarg_name = oarg_name oname in
+  let oarg_s = Sym.fresh_named oarg_name in
+  let oarg_members = List.map_snd (BT.make_map_bt qbt) def.oargs in
+  let oarg = sym_ (oarg_s, BT.Record oarg_members) in
+  let mapping = 
+    [{path = Ast.var oarg_name; 
+      it = oarg; 
+      o_sct = None }]
   in
-  let@ () = ensure_some_oargs_empty loc pred some_oargs in
   let r = 
-    (`Resource (Q {
+    (`Resource (oarg_s, Q {
          name = PName pred; 
          pointer;
          q = qs;
@@ -367,33 +321,40 @@ let make_qpred loc (pred, def) ~oname ~pointer ~q:(qs,qbt) ~step ~condition iarg
          iargs; 
          permission = condition;
        },
-       oargs),
+       BT.Record oarg_members),
      (loc, None))
   in
-  return (l @ [r] @ c, mapping)
+  return ([r], mapping)
 
 
 
 
+
+let get_predicate_def_opt id predicates = 
+  let predicates' = List.map (fun (s, def) -> (todo_string_of_sym s, (s, def))) predicates in
+  List.assoc_opt String.equal id predicates'
 
 
 
 (* copying from typing.ml *)
 let get_resource_predicate_def loc id rpredicates lpredicates =
   let open TypeErrors in
-  match List.assoc_opt String.equal id rpredicates with
+  match get_predicate_def_opt id rpredicates with
   | Some def -> return def
-  | None -> fail {loc; msg = Unknown_resource_predicate {id;
-        logical = Option.is_some (List.assoc_opt String.equal id lpredicates)}}
+  | None -> 
+     let logical = Option.is_some (get_predicate_def_opt id lpredicates) in
+     fail {loc; msg = Unknown_resource_predicate {id = Sym.fresh_named id; logical}}
 
 
 (* copying from typing.ml *)
 let get_logical_predicate_def loc id rpredicates lpredicates =
   let open TypeErrors in
-  match List.assoc_opt String.equal id lpredicates with
+  match get_predicate_def_opt id lpredicates with
   | Some def -> return def
-  | None -> fail {loc; msg = Unknown_logical_predicate {id;
-        resource = Option.is_some (List.assoc_opt String.equal id rpredicates)}}
+  | None -> 
+     let resource = Option.is_some (get_predicate_def_opt id lpredicates) in
+     fail {loc; msg = Unknown_logical_predicate {id = Sym.fresh_named id; resource}}
+        
 
 
 
@@ -429,24 +390,24 @@ let resolve_index_term loc
     | _ ->
        search ()
   in
-  let all_rets_of name mapping =
-    List.filter_map (fun {it; path; _} -> match path with
-      | PredOutput (name2, oarg) when String.equal name name2 -> Some (oarg, it)
-      | _ -> None) mapping
-  in
-  let pred_mapping name mapping =
-    let match_name = function
-      | PredOutput (name2, _) -> String.equal name name2
-      | _ -> false
-    in
-    let ms_with = StringMap.bindings mappings
-      |> List.map snd
-      |> List.filter (List.exists (fun {path; _} -> match_name path))
-    in
-    match ms_with with
-      | [mapping] -> mapping
-      | _ -> mapping
-  in
+  (* let all_rets_of name mapping = *)
+  (*   List.filter_map (fun {it; path; _} -> match path with *)
+  (*     | PredOutput (name2, oarg) when String.equal name name2 -> Some (oarg, it) *)
+  (*     | _ -> None) mapping *)
+  (* in *)
+  (* let pred_mapping name mapping = *)
+  (*   let match_name = function *)
+  (*     | PredOutput (name2, _) -> String.equal name name2 *)
+  (*     | _ -> false *)
+  (*   in *)
+  (*   let ms_with = StringMap.bindings mappings *)
+  (*     |> List.map snd *)
+  (*     |> List.filter (List.exists (fun {path; _} -> match_name path)) *)
+  (*   in *)
+  (*   match ms_with with *)
+  (*     | [mapping] -> mapping *)
+  (*     | _ -> mapping *)
+  (* in *)
   let rec resolve (term : Ast.term) mapping quantifiers
         : (IT.typed * Sctypes.t option, type_error) m =
     match term with
@@ -456,9 +417,6 @@ let resolve_index_term loc
        lookup (Var ln) "a variable" mapping quantifiers
     | Pointee it ->
        lookup (Pointee it) "a pointee (i.e. not Owned)" mapping quantifiers
-    | PredOutput (name, oarg) ->
-       let mapping = pred_mapping name mapping in
-       lookup (PredOutput (name, oarg)) "a predicate output" mapping quantifiers
     | Bool b -> 
        return (IT (Lit (IT.Bool b), BT.Bool), None)
     | Integer i -> 
@@ -508,31 +466,31 @@ let resolve_index_term loc
        let@ (it, _) = resolve it mapping quantifiers in
        let@ (it', _) = resolve it' mapping quantifiers in
        return (IT (Arith_op (Mod (it, it')), IT.bt it), None)
-    | Equality (it, PredEqRegulator (exclude, it')) ->
-       let@ (nm, nm') = begin match it, it' with
-         | Var nm, Var nm' -> return (nm, nm')
-         | Var _, _ -> fail {loc; msg = Generic (!^ "predicate return eq cannot handle" ^^^
-             Ast.Terms.pp false it')}
-         | _, _ -> fail {loc; msg = Generic (!^ "predicate return eq cannot handle" ^^^
-             Ast.Terms.pp false it)}
-       end in
-       let rets = all_rets_of nm mapping in
-       let@ () = if List.length rets == 0
-           then fail {loc; msg = Generic (!^ nm ^^^ !^ "not a known resource predicate")}
-           else return () in
-       let@ () = ListM.iterM (fun s -> if Option.is_some (List.assoc_opt String.equal s rets)
-           then return ()
-           else fail {loc; msg = Generic (!^s ^^^ !^ "not a return param of" ^^^ !^ nm)})
-         exclude in
-       let eq_rets = List.filter (fun (nm, it) -> not (List.exists (String.equal nm) exclude))
-           rets in
-       let@ eqs = ListM.mapM (fun (arg_nm, it) ->
-           let@ (it', _) = resolve (PredOutput (nm', arg_nm)) mapping quantifiers in
-           return (eq_ (it, it'))) eq_rets in
-       return (IT (Bool_op (And eqs), Bool), None)
-    | PredEqRegulator (_, _) ->
-       fail {loc; msg = Generic (!^ "return param limiter" ^^^ Ast.Terms.pp false term ^^^
-            !^ "only permitted on right-hand-side of equalities")}
+    (* | Equality (it, PredEqRegulator (exclude, it')) -> *)
+    (*    let@ (nm, nm') = begin match it, it' with *)
+    (*      | Var nm, Var nm' -> return (nm, nm') *)
+    (*      | Var _, _ -> fail {loc; msg = Generic (!^ "predicate return eq cannot handle" ^^^ *)
+    (*          Ast.Terms.pp false it')} *)
+    (*      | _, _ -> fail {loc; msg = Generic (!^ "predicate return eq cannot handle" ^^^ *)
+    (*          Ast.Terms.pp false it)} *)
+    (*    end in *)
+    (*    let rets = all_rets_of nm mapping in *)
+    (*    let@ () = if List.length rets == 0 *)
+    (*        then fail {loc; msg = Generic (!^ nm ^^^ !^ "not a known resource predicate")} *)
+    (*        else return () in *)
+    (*    let@ () = ListM.iterM (fun s -> if Option.is_some (List.assoc_opt String.equal s rets) *)
+    (*        then return () *)
+    (*        else fail {loc; msg = Generic (!^s ^^^ !^ "not a return param of" ^^^ !^ nm)}) *)
+    (*      exclude in *)
+    (*    let eq_rets = List.filter (fun (nm, it) -> not (List.exists (String.equal nm) exclude)) *)
+    (*        rets in *)
+    (*    let@ eqs = ListM.mapM (fun (arg_nm, it) -> *)
+    (*        let@ (it', _) = resolve (PredOutput (nm', arg_nm)) mapping quantifiers in *)
+    (*        return (eq_ (it, it'))) eq_rets in *)
+    (*    return (IT (Bool_op (And eqs), Bool), None) *)
+    (* | PredEqRegulator (_, _) -> *)
+    (*    fail {loc; msg = Generic (!^ "return param limiter" ^^^ Ast.Terms.pp false term ^^^ *)
+    (*         !^ "only permitted on right-hand-side of equalities")} *)
     | Equality (it, it') -> 
        let@ (it, _) = resolve it mapping quantifiers in
        let@ (it', _) = resolve it' mapping quantifiers in
@@ -592,26 +550,39 @@ let resolve_index_term loc
     | Member (t, member) ->
        let@ (st, _) = resolve t mapping quantifiers in
        let ppf () = Ast.Terms.pp false term in
-       let@ tag = match IT.bt st with
-         | Struct tag -> return tag
-         | _ -> fail {loc; msg = Generic (ppf () ^^^ !^"is not a struct")}
-       in
-       let@ layout = match SymMap.find_opt tag layouts with
-         | Some layout -> return layout
-         | None -> fail {loc; msg = Unknown_struct tag}
-       in
-       let decl_members = Memory.member_types layout in
-       let@ sct = match List.assoc_opt Id.equal member decl_members with
-         | Some sct -> 
-            return sct
-         | None -> 
-            let err = 
-              !^"Illtyped index term" ^^^ ppf () ^^ dot ^^^
-                ppf () ^^^ !^"does not have member" ^^^ Id.pp member
+       begin match IT.bt st with
+       | Struct tag -> 
+          let@ layout = match SymMap.find_opt tag layouts with
+            | Some layout -> return layout
+            | None -> fail {loc; msg = Unknown_struct tag}
+          in
+          let decl_members = Memory.member_types layout in
+          let@ sct = match List.assoc_opt Id.equal member decl_members with
+            | Some sct -> 
+               return sct
+            | None -> 
+               let err = 
+                 !^"Illtyped index term" ^^^ ppf () ^^ dot ^^^
+                   ppf () ^^^ !^"does not have member" ^^^ Id.pp member
             in
             fail {loc; msg = Generic err}
-       in
-       return (IT (Struct_op (StructMember (st, member)), BT.of_sct sct), Some sct)
+          in
+          return (IT (Struct_op (StructMember (st, member)), BT.of_sct sct), Some sct)
+       | Record members -> 
+          let members' = List.map (fun (s, bt) -> (todo_string_of_sym s, (s, bt))) members in
+          let@ (member,bt) = match List.assoc_opt String.equal (Id.s member) members' with
+            | Some (s, bt) -> 
+               return (s, bt)
+            | None -> 
+               let err = 
+                 !^"Illtyped index term" ^^^ ppf () ^^ dot ^^^
+                   ppf () ^^^ !^"does not have member" ^^^ Id.pp member
+               in
+               fail {loc; msg = Generic err}
+          in
+          return (IT (Record_op (RecordMember (st, member)), bt), None)
+       | _ -> fail {loc; msg = Generic (ppf () ^^^ !^"is not a struct")}
+       end
     | StructUpdate ((t, m), v) ->
        let@ (t, osct) = resolve t mapping quantifiers in
        let@ (v, _) = resolve v mapping quantifiers in
@@ -660,7 +631,6 @@ let resolve_index_term loc
          | None -> 
             fail {loc; msg = Generic (!^"Cannot resolve C type of term" ^^^ 
                                         Ast.pp false t)}
-
          | Some (Pointer (Struct tag)) -> return tag
          | Some (Pointer _) -> 
             fail {loc; msg = Generic (ppf () ^^^ !^"is not a struct pointer")}
@@ -758,7 +728,7 @@ let resolve_index_term loc
     | Pred (name, args) ->
        let open LogicalPredicates in
        let@ args_oscts = ListM.mapM (fun t -> resolve t mapping quantifiers) args in
-       let@ def = get_logical_predicate_def loc name predicates log_predicates in
+       let@ (name, def) = get_logical_predicate_def loc name predicates log_predicates in
        return (pred_ name (List.map fst args_oscts) def.return_bt, None)
        
   in
@@ -828,7 +798,7 @@ let resolve_constraint loc layouts predicates log_predicates default_mapping_nam
 
 
 
-let apply_ownership_spec layouts predicates log_predicates default_mapping_name mappings (loc, {oq; predicate; arguments; some_oargs; oname; o_permission; typ}) =
+let apply_ownership_spec layouts predicates log_predicates default_mapping_name mappings (loc, {oq; predicate; arguments; oname; o_permission; typ}) =
   let ownership_kind = match predicate with
     | "Owned" -> `Builtin `Owned
     | "Block" -> `Builtin `Block
@@ -860,30 +830,18 @@ let apply_ownership_spec layouts predicates log_predicates default_mapping_name 
        | [] -> return ()
        | _ :: _ -> fail {loc; msg = Generic !^("'"^predicate^"' takes 1 argument, which has to be a path")}
      in
-     let@ o_value = match block_or_owned, some_oargs with
-       | _, [] -> return None
-       | `Owned, [("value", value)] -> 
-          let@ (value, _) = 
-            resolve_index_term loc layouts predicates log_predicates 
-              default_mapping_name mappings 
-              (Option.to_list (Option.map fst oq)) value
-          in
-          return (Some value)
-       | `Block, _ -> fail {loc; msg = Generic !^(""^predicate^"' has no output arguments")}
-       | `Owned, _ -> fail {loc; msg = Generic !^("'"^predicate^"' has a single output argument, named 'value'")}
-     in
      begin match oq with
      | None ->
-        let@ (pointer_resolved, pointer_sct) = 
-          resolve_index_term loc layouts predicates log_predicates 
-            default_mapping_name mappings 
-            (Option.to_list (Option.map fst oq)) pointer 
+        let@ (pointer_resolved, pointer_sct) =
+          resolve_index_term loc layouts predicates log_predicates
+            default_mapping_name mappings
+            (Option.to_list (Option.map fst oq)) pointer
         in
         let@ pointee_sct = match typ, pointer_sct with
           | Some typ, _ ->
-             resolve_typ loc layouts predicates log_predicates default_mapping_name mappings 
+             resolve_typ loc layouts predicates log_predicates default_mapping_name mappings
                (Option.map fst oq) typ
-          | _, Some (Pointer pointee_sct) -> 
+          | _, Some (Pointer pointee_sct) ->
              return pointee_sct
           | _, Some _ ->
              fail {loc; msg = Generic (Ast.Terms.pp false pointer ^^^ !^"is not a pointer")}
@@ -891,51 +849,51 @@ let apply_ownership_spec layouts predicates log_predicates default_mapping_name 
              fail {loc; msg = Generic (!^"cannot assign ownership of" ^^^ (Ast.Terms.pp false pointer))}
         in
         begin match block_or_owned with
-        | `Owned -> 
-           make_owned ~loc ~oname ~pointer:pointer_resolved ~path:pointer 
-             ~sct:pointee_sct ~o_permission ~o_value
-        | `Block -> 
-           make_block ~loc ~pointer:pointer_resolved ~path:pointer ~sct:pointee_sct ~o_permission
+        | `Owned ->
+           make_owned ~loc ~oname ~pointer:pointer_resolved ~path:pointer
+             ~sct:pointee_sct ~o_permission
+        | `Block ->
+           make_block ~loc ~oname ~pointer:pointer_resolved ~path:pointer ~sct:pointee_sct ~o_permission
         end
      | Some ((name, (qs,qbt)), condition) ->
         let@ () = match o_permission with
-          | None -> return () 
-          | Some _ -> 
+          | None -> return ()
+          | Some _ ->
              fail {loc; msg = Generic (!^"cannot use 'if' expression with iterated resources")}
         in
-        let@ (pointer_resolved, step) = 
+        let@ (pointer_resolved, step) =
           match pointer with
-          | Addition (pointer, Multiplication (Var name', Integer step)) 
+          | Addition (pointer, Multiplication (Var name', Integer step))
                  when String.equal name name' ->
-             let@ (pointer,_) = 
-               resolve_index_term loc layouts predicates log_predicates 
-                 default_mapping_name mappings 
-                 [] pointer 
+             let@ (pointer,_) =
+               resolve_index_term loc layouts predicates log_predicates
+                 default_mapping_name mappings
+                 [] pointer
              in
              return (pointer, Z.to_int step)
-          | _ -> 
-             let msg = 
+          | _ ->
+             let msg =
                "Iterated predicate pointer argument must be of the shape "^
                  "(pointer expression + (quantifier variable * integer constant))"
              in
              fail {loc; msg = Generic (!^msg)}
         in
-        let@ (condition, _) = 
-          resolve_index_term loc layouts predicates log_predicates default_mapping_name mappings 
-            [(name, (qs, qbt))] condition 
+        let@ (condition, _) =
+          resolve_index_term loc layouts predicates log_predicates default_mapping_name mappings
+            [(name, (qs, qbt))] condition
         in
         let@ pointee_sct = match typ with
           | Some typ ->
-             resolve_typ loc layouts predicates log_predicates default_mapping_name mappings 
+             resolve_typ loc layouts predicates log_predicates default_mapping_name mappings
                (Option.map fst oq) typ
           | None ->
              fail {loc; msg = Generic (!^"need 'with type' annotation" ^^^ (Ast.Terms.pp false pointer))}
         in
         begin match block_or_owned with
-        | `Owned -> 
-           make_qowned ~loc ~oname ~pointer:pointer_resolved ~q:(qs,qbt) 
-             ~step ~condition ~path:pointer ~sct:pointee_sct ~o_value
-        | `Block -> 
+        | `Owned ->
+           make_qowned ~loc ~oname ~pointer:pointer_resolved ~q:(qs,qbt)
+             ~step ~condition ~path:pointer ~sct:pointee_sct
+        | `Block ->
            fail {loc; msg = Generic !^("cannot use '"^predicate^"' with quantifier")}
         end
      end
@@ -944,11 +902,7 @@ let apply_ownership_spec layouts predicates log_predicates default_mapping_name 
        | None -> return ()
        | Some _ -> fail {loc; msg = Generic !^"cannot use 'type' syntax with predicates"}
      in
-     let@ def = match List.assoc_opt String.equal predicate predicates with
-       | Some def -> return def
-       | None -> fail {loc; msg = Unknown_resource_predicate {id = predicate;
-               logical = Option.is_some (List.assoc_opt String.equal predicate log_predicates)}}
-     in
+     let@ (predicate, def) = get_resource_predicate_def loc predicate predicates log_predicates in
      let@ iargs_resolved = 
        ListM.mapM (fun arg ->
            let@ (t, _) = 
@@ -957,14 +911,6 @@ let apply_ownership_spec layouts predicates log_predicates default_mapping_name 
            return t
          ) arguments
      in
-     let@ some_oargs_resolved = 
-       ListM.mapM (fun (name, arg) ->
-           let@ (t, _) = 
-             resolve_index_term loc layouts predicates log_predicates default_mapping_name mappings 
-               [] arg in      (* quantifier not bound in some_oarg definition *)
-           return (name, t)
-         ) some_oargs
-     in
      let@ result = match oq with
        | None ->
           let@ (pointer_resolved, pointer_sct) = 
@@ -972,7 +918,7 @@ let apply_ownership_spec layouts predicates log_predicates default_mapping_name 
               (Option.to_list (Option.map fst oq)) pointer 
           in
           make_pred loc (predicate, def) 
-            ~oname pointer_resolved iargs_resolved some_oargs_resolved ~o_permission
+            ~oname pointer_resolved iargs_resolved ~o_permission
        | Some ((name, (s, bt)), condition) -> 
           let@ () = match o_permission with
             | None -> return () 
@@ -1008,14 +954,13 @@ let apply_ownership_spec layouts predicates log_predicates default_mapping_name 
             ~step
             ~condition 
             iargs_resolved 
-            some_oargs_resolved
      in
      return result
 
 
 let apply_logical_predicate layouts predicates log_predicates default_mapping_name mappings (loc, cond) =
   let open LogicalPredicates in
-  let@ def = get_logical_predicate_def loc cond.predicate predicates log_predicates in
+  let@ (predicate, def) = get_logical_predicate_def loc cond.predicate predicates log_predicates in
   let@ lc = match cond.oq with
     | None ->
        let@ args_resolved = 
@@ -1027,7 +972,7 @@ let apply_logical_predicate layouts predicates log_predicates default_mapping_na
              return t
            ) cond.arguments
        in
-       return (LC.t_ (pred_ cond.predicate args_resolved def.return_bt))
+       return (LC.t_ (pred_ predicate args_resolved def.return_bt))
     | Some (name, bt, condition) -> 
        let q = Sym.fresh_named name in
        let@ args_resolved = 
@@ -1044,7 +989,7 @@ let apply_logical_predicate layouts predicates log_predicates default_mapping_na
            predicates log_predicates default_mapping_name mappings 
            [(name, (q, bt))] condition
        in
-       let t = pred_ cond.predicate args_resolved def.return_bt in
+       let t = pred_ predicate args_resolved def.return_bt in
        return (LC.forall_ (q, bt) (impl_ (condition, t) ))
   in
   return (`Constraint lc, (loc, None))
@@ -1143,7 +1088,7 @@ let make_fun_spec loc (layouts : Memory.struct_decls) rpredicates lpredicates
         | Some loc -> 
            let@ (i', mapping') = 
              make_owned ~loc ~oname:None ~pointer:item.it 
-               ~path:item.path ~sct:garg.typ ~o_permission:None ~o_value:None 
+               ~path:item.path ~sct:garg.typ ~o_permission:None
            in
            let mappings = 
              mod_mapping "start" mappings
@@ -1252,7 +1197,7 @@ let make_fun_spec loc (layouts : Memory.struct_decls) rpredicates lpredicates
            let item = garg_item loc garg in
            let@ (o', mapping') = 
              make_owned ~loc ~oname:None ~pointer:item.it 
-               ~path:item.path ~sct:garg.typ ~o_permission:None ~o_value:None
+               ~path:item.path ~sct:garg.typ ~o_permission:None
            in
            let mappings =
              mod_mapping "end" mappings
@@ -1320,9 +1265,8 @@ let make_fun_spec loc (layouts : Memory.struct_decls) rpredicates lpredicates
   let lrt = 
     List.fold_right (fun (oarg, info) lrt ->
         match oarg with
-        | `Logical (s, bt) -> LRT.Logical ((s,bt), info, lrt)
         | `Define (s, it) -> LRT.Define ((s, it), info, lrt)
-        | `Resource re -> LRT.Resource (re, info, lrt)
+        | `Resource (s, re, oargs) -> LRT.Resource ((s, (re, oargs)), info, lrt)
         | `Constraint lc -> LRT.Constraint (lc, info, lrt)
       ) o LRT.I
   in
@@ -1332,9 +1276,8 @@ let make_fun_spec loc (layouts : Memory.struct_decls) rpredicates lpredicates
     List.fold_right (fun (iarg, info) lft ->
         match iarg with
         | `Computational (s, bt) -> AT.Computational ((s,bt), info, lft)
-        | `Logical (s, bt) -> AT.Logical ((s,bt), info, lft)
         | `Define (s, it) -> AT.Define ((s, it), info, lft)
-        | `Resource re -> AT.Resource (re, info, lft)
+        | `Resource (s, re, oargs) -> AT.Resource ((s, (re, oargs)), info, lft)
         | `Constraint lc -> AT.Constraint (lc, info, lft)
       ) i (AT.I rt)
   in
@@ -1369,7 +1312,7 @@ let make_label_spec
            let item = garg_item loc garg in
            let@ (i', mapping') = 
              make_owned ~loc ~oname:None ~pointer:item.it 
-               ~path:item.path ~sct:garg.typ ~o_permission:None ~o_value:None
+               ~path:item.path ~sct:garg.typ ~o_permission:None
            in
            let mappings = 
              mod_mapping lname mappings
@@ -1405,7 +1348,7 @@ let make_label_spec
           let item = aarg_item loc aarg in
           let@ (i', mapping') = 
             make_owned ~loc ~oname:None ~pointer:item.it 
-              ~path:item.path ~sct:aarg.typ ~o_permission:None ~o_value:None
+              ~path:item.path ~sct:aarg.typ ~o_permission:None
           in 
           let c = 
             (`Constraint (LC.t_ (good_ (pointer_ct aarg.typ, item.it))),
@@ -1461,9 +1404,8 @@ let make_label_spec
     List.fold_right (fun (iarg, info) lt ->
         match iarg with
         | `Computational (s, bt) -> AT.Computational ((s,bt), info, lt)
-        | `Logical (s, bt) -> AT.Logical ((s,bt), info, lt)
         | `Define (s, it) -> AT.Define ((s, it), info, lt)
-        | `Resource re -> AT.Resource (re, info, lt)
+        | `Resource (s, re, oargs) -> AT.Resource ((s, (re, oargs)), info, lt)
         | `Constraint lc -> AT.Constraint (lc, info, lt)
       ) i (AT.I False.False)
   in

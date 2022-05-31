@@ -28,9 +28,11 @@ type situation =
   | FunctionCall
   | LabelCall of label_kind
   | Subtyping
-  | Pack of CF.Annot.to_pack_unpack
-  | Unpack of CF.Annot.to_pack_unpack
-  | ArgumentInference of Id.t
+  | PackPredicate of Sym.t
+  | PackStruct of Sym.t
+  | UnpackPredicate of Sym.t
+  | UnpackStruct of Sym.t
+  | ArgumentInference of Sym.t
 
 let checking_situation = function
   | Access access -> !^"checking access"
@@ -39,11 +41,11 @@ let checking_situation = function
   | LabelCall Loop -> !^"checking loop entry"
   | LabelCall Other -> !^"checking label call"
   | Subtyping -> !^"checking subtyping"
-  | Pack (TPU_Predicate name) -> !^"packing predicate" ^^^ Id.pp name
-  | Pack (TPU_Struct tag) -> !^"packing struct" ^^^ Sym.pp tag
-  | Unpack (TPU_Predicate name) -> !^"unpacking predicate" ^^^ Id.pp name
-  | Unpack (TPU_Struct tag) -> !^"unpacking struct" ^^^ Sym.pp tag
-  | ArgumentInference id -> !^"argument inference for" ^^^ Id.pp id
+  | PackPredicate name -> !^"packing predicate" ^^^ Sym.pp name
+  | PackStruct tag -> !^"packing struct" ^^^ Sym.pp tag
+  | UnpackPredicate name -> !^"unpacking predicate" ^^^ Sym.pp name
+  | UnpackStruct tag -> !^"unpacking struct" ^^^ Sym.pp tag
+  | ArgumentInference id -> !^"argument inference for" ^^^ Sym.pp id
 
 let for_access = function
   | Kill -> !^"for de-allocating"
@@ -61,11 +63,11 @@ let for_situation = function
   | LabelCall Loop -> !^"for loop"
   | LabelCall Other -> !^"for calling label"
   | Subtyping -> !^"for subtyping"
-  | Pack (TPU_Predicate name) -> !^"for packing predicate" ^^^ Id.pp name
-  | Pack (TPU_Struct tag) -> !^"for packing struct" ^^^ Sym.pp tag
-  | Unpack (TPU_Predicate name) -> !^"for unpacking predicate" ^^^ Id.pp name
-  | Unpack (TPU_Struct tag) -> !^"for unpacking struct" ^^^ Sym.pp tag
-  | ArgumentInference id -> !^"for argument inference for" ^^^ Id.pp id
+  | PackPredicate name -> !^"for packing predicate" ^^^ Sym.pp name
+  | PackStruct tag -> !^"for packing struct" ^^^ Sym.pp tag
+  | UnpackPredicate name -> !^"for unpacking predicate" ^^^ Sym.pp name
+  | UnpackStruct tag -> !^"for unpacking struct" ^^^ Sym.pp tag
+  | ArgumentInference id -> !^"for argument inference for" ^^^ Sym.pp id
 
 
 
@@ -83,9 +85,15 @@ type message =
   | Unknown_variable of Sym.t
   | Unknown_function of Sym.t
   | Unknown_struct of BT.tag
-  | Unknown_resource_predicate of {id: string; logical: bool}
-  | Unknown_logical_predicate of {id: string; resource: bool}
+  | Unknown_resource_predicate of {id: Sym.t; logical: bool}
+  | Unknown_logical_predicate of {id: Sym.t; resource: bool}
   | Unknown_member of BT.tag * BT.member
+  | Unknown_record_member of BT.member_types * Id.t
+
+  (* some from Kayvan's compilePredicates module *)
+  | First_iarg_missing of { pname: ResourceTypes.predicate_name }
+  | First_iarg_not_pointer of { pname : ResourceTypes.predicate_name; found_bty: BaseTypes.t }
+
 
   | Missing_resource_request of {orequest : RET.t option; situation : situation; oinfo : info option; ctxt : Context.t; model: Solver.model_with_q }
   | Merging_multiple_arrays of {orequest : RET.t option; situation : situation; oinfo : info option; ctxt : Context.t; model: Solver.model_with_q }
@@ -100,6 +108,7 @@ type message =
   | Mismatch of { has: LS.t; expect: LS.t; }
   | Mismatch_lvar of { has: LS.t; expect: LS.t; spec_info: info}
   | Illtyped_it : {context: IT.t; it: IT.t; has: LS.t; expected: string; ctxt : Context.t} -> message (* 'expected' as in Kayvan's Core type checker *)
+  | Illtyped_it' : {it: IT.t; has: LS.t; expected: string} -> message (* 'expected' as in Kayvan's Core type checker *)
   | NIA : {context: IT.t; it: IT.t; hint : string; ctxt : Context.t} -> message
   | TooBigExponent : {context: IT.t; it: IT.t; ctxt : Context.t} -> message
   | NegativeExponent : {context: IT.t; it: IT.t; ctxt : Context.t} -> message
@@ -165,14 +174,14 @@ let pp_message te =
      let short = !^"Struct" ^^^ squotes (Sym.pp tag) ^^^ !^"not defined" in
      { short; descr = None; state = None }
   | Unknown_resource_predicate {id; logical} ->
-     let short = !^"Unknown resource predicate" ^^^ squotes (!^id) in
-     let descr = if logical then Some (!^"Note " ^^^ squotes (!^id) ^^^
+     let short = !^"Unknown resource predicate" ^^^ squotes (Sym.pp id) in
+     let descr = if logical then Some (!^"Note " ^^^ squotes (Sym.pp id) ^^^
              !^" is a known logical predicate.")
          else None in
      { short; descr; state = None }
   | Unknown_logical_predicate {id; resource} ->
-     let short = !^"Unknown logical predicate" ^^^ squotes (!^id) in
-     let descr = if resource then Some (!^"Note " ^^^ squotes (!^id) ^^^
+     let short = !^"Unknown logical predicate" ^^^ squotes (Sym.pp id) in
+     let descr = if resource then Some (!^"Note " ^^^ squotes (Sym.pp id) ^^^
              !^" is a known resource predicate.")
          else None in
      { short; descr; state = None }
@@ -182,6 +191,29 @@ let pp_message te =
        !^"struct" ^^^ squotes (Sym.pp tag) ^^^
          !^"does not have member" ^^^
            Id.pp member
+     in
+     { short; descr = Some descr; state = None }
+  | Unknown_record_member (members, member) ->
+     let short = !^"Unknown member" ^^^ Id.pp member in
+     let descr =
+       !^"struct type" ^^^ BT.pp (Record members) ^^^
+         !^"does not have member" ^^^
+           Id.pp member
+     in
+     { short; descr = Some descr; state = None }
+
+  | First_iarg_missing { pname } ->
+     let short = !^"Missing pointer input argument" in
+     let descr = 
+       !^ "a predicate definition must have at least one iarg (missing from: " ^^ ResourceTypes.pp_predicate_name pname ^^ !^ ")"
+     in
+     { short; descr = Some descr; state = None }
+  | First_iarg_not_pointer { pname; found_bty } ->
+     let short = !^"Non-pointer first input argument" in
+     let descr = 
+        !^ "the first iarg of predicate" ^^^ Pp.squotes (ResourceTypes.pp_predicate_name pname) ^^^
+        !^ "must have type" ^^^ Pp.squotes (BaseTypes.(pp Loc)) ^^^ !^ "but was found with type" ^^^
+        Pp.squotes (BaseTypes.(pp found_bty))
      in
      { short; descr = Some descr; state = None }
   | Missing_resource_request {orequest; situation; oinfo; ctxt; model} ->
@@ -287,6 +319,15 @@ let pp_message te =
      let short = !^"Type error" in
      let descr =
        !^"Illtyped expression" ^^ squotes context ^^ dot ^^^
+         !^"Expected" ^^^ it ^^^ !^"to be" ^^^ squotes !^expected ^^^
+           !^"but is" ^^^ squotes (LS.pp has)
+     in
+     { short; descr = Some descr; state = None }
+  | Illtyped_it' {it; has; expected} ->
+     let it = IT.pp it in
+     let short = !^"Type error" in
+     let descr =
+       !^"Illtyped expression" ^^ squotes it ^^ dot ^^^
          !^"Expected" ^^^ it ^^^ !^"to be" ^^^ squotes !^expected ^^^
            !^"but is" ^^^ squotes (LS.pp has)
      in

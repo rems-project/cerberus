@@ -19,4 +19,4 @@ type definition = {
 val pp_definition : definition -> Pp.document
 
 
-val predicate_list : Memory.struct_decls -> (string * definition) list
+val predicate_list : Memory.struct_decls -> (Sym.t * definition) list

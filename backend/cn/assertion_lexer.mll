@@ -73,7 +73,6 @@ rule main = parse
   | "for" {T.FOR }
 
 
-  | "where" {T.WHERE }
   | "with" {T.WITH }
   | "type" {T.TYP }
   | "if" {T.IF }
@@ -93,8 +92,6 @@ rule main = parse
       { T.LNAME name }
   | ['A'-'Z']['0'-'9' 'A'-'Z' 'a'-'z' '_']* as name
       { T.UNAME name }
-  | ".." (['_' 'a'-'z' 'A'-'Z']['0'-'9' 'A'-'Z' 'a'-'z' '_']* as oarg)
-      { T.OARG oarg }
   | '.' (['_' 'a'-'z' 'A'-'Z']['0'-'9' 'A'-'Z' 'a'-'z' '_']* as member)
       { T.MEMBER member }
 

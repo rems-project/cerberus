@@ -34,8 +34,8 @@ module SR_Types = struct
   type gt = ct
   type ut = unit
   type mapping = Mapping.t
-  type resource_predicates = (string * ResourcePredicates.definition) list
-  type logical_predicates = (string * LogicalPredicates.definition) list
+  type resource_predicates = (Sym.t * ResourcePredicates.definition) list
+  type logical_predicates = (Sym.t * LogicalPredicates.definition) list
 end
 
 module Old = CF.Mucore.Make(CF.Mucore.SimpleTypes)
@@ -456,6 +456,9 @@ type retype_opts = {
 
 let retype_file pred_defs opts (file : 'TY Old.mu_file)
     : ('TY New.mu_file, type_error) m =
+
+  let pred_defs = List.map (fun (s, def) -> (Sym.fresh_named s, def)) pred_defs in
+
 
   let@ tagDefs =
     let retype_tagDef tag def =

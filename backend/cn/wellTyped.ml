@@ -19,6 +19,15 @@ open Effectful.Make(Typing)
 let check_consistency = ref true
 
 
+let ensure_logical_sort (loc : loc) ~(expect : LS.t) (has : LS.t) : (unit, type_error) m =
+  if LS.equal has expect 
+  then return () 
+  else fail (fun _ -> {loc; msg = Mismatch {has; expect}})
+
+let ensure_base_type (loc : loc) ~(expect : BT.t) (has : BT.t) : (unit, type_error) m =
+  ensure_logical_sort loc ~expect has
+
+
 let check_bound_l loc s = 
   let@ is_bound = bound_l s in
   if is_bound then return ()
@@ -585,10 +594,10 @@ let unconstrained_lvar loc infos lvar =
 
 module WRET = struct
 
-  open RET
-
   let welltyped loc r = 
     let@ iargs = match RET.predicate_name r with
+      | Block _ ->
+         return (Resources.block_iargs)
       | Owned ct ->
          return (Resources.owned_iargs ct)
       | PName name -> 
@@ -621,29 +630,46 @@ end
 
 
 
+let oargs_spec loc = function
+  | RET.P {name = Block _; _} -> 
+     return (Resources.block_oargs)
+  | RET.P {name = Owned ct; _} -> 
+     return (Resources.owned_oargs ct)
+  | RET.P {name = PName pn; _} ->
+     let@ def = Typing.get_resource_predicate_def loc pn in
+         return (BT.Record def.oargs)
+  | RET.Q {name = Block _; _} -> 
+     return (Resources.q_block_oargs)
+  | RET.Q {name = Owned ct; _} -> 
+     return (Resources.q_owned_oargs ct)
+  | RET.Q {name = PName pn; _} ->
+     let@ def = Typing.get_resource_predicate_def loc pn in
+     return (BT.Record (List.map_snd (BT.make_map_bt Integer) def.oargs))
+
+
+
 module WRE = struct
 
-  open RET
-
-  let welltyped loc ((resource, resource_oargs) : RE.t) = 
-    let@ oargs = match RET.predicate_name resource with
-      | Owned ct ->
-         return (Resources.owned_oargs ct)
-      | PName name -> 
-         let@ def = Typing.get_resource_predicate_def loc name in
-         return (def.oargs)
-    in
+  let welltyped loc ((resource, O resource_oargs) : RE.t) = 
     let@ () = WRET.welltyped loc resource in
-    let@ _ = match resource with
-      | P p -> 
-         WIT.check loc (Record oargs) (IT.record_ resource_oargs)
-      | Q p -> 
-         let spec = BT.Record (List.map_snd (BT.make_map_bt Integer) oargs) in
-         WIT.check loc spec (IT.record_ resource_oargs)
-    in
-    return ()
+    let@ oargs_spec = oargs_spec loc resource in
+    WIT.check loc oargs_spec resource_oargs
 
 end
+
+
+module WRS = struct
+
+  let welltyped loc ((resource, bt)) = 
+    let@ () = WRET.welltyped loc resource in
+    let@ () = WBT.is_bt loc bt in
+    let@ oargs_spec = oargs_spec loc resource in
+    ensure_base_type loc ~expect:oargs_spec bt
+
+end
+
+
+
 
 module WLC = struct
   type t = LogicalConstraints.t
@@ -671,18 +697,15 @@ module WLRT = struct
 
   let welltyped loc lrt = 
     let rec aux = function
-      | Logical ((s,ls), info, lrt) -> 
-         let@ () = WLS.is_ls (fst info) ls in
-         let@ () = add_l s ls in
-         aux lrt
       | Define ((s, it), info, lrt) ->
          let@ it = WIT.infer loc it in
          let@ () = add_l s (IT.bt it) in
          let@ () = add_c (LC.t_ (IT.def_ s it)) in
          aux lrt
-      | Resource (re, info, lrt) -> 
-         let@ () = WRE.welltyped (fst info) re in
-         let@ () = add_r None re in
+      | Resource ((s, (re, re_oa_spec)), info, lrt) -> 
+         let@ () = WRS.welltyped (fst info) (re, re_oa_spec) in
+         let@ () = add_l s re_oa_spec in
+         let@ () = add_r None (re, O (IT.sym_ (s, re_oa_spec))) in
          aux lrt
       | Constraint (lc, info, lrt) ->
          let@ () = WLC.welltyped (fst info) lc in
@@ -775,18 +798,15 @@ module WAT (WI: WI_Sig) = struct
          let@ () = add_l name bt in
          let@ () = add_a (Sym.fresh_same name) (bt, name) in
          aux at
-      | AT.Logical ((s,ls), info, at) -> 
-         let@ () = WLS.is_ls (fst info) ls in
-         let@ () = add_l s ls in
-         aux at
       | AT.Define ((s, it), info, at) ->
          let@ it = WIT.infer loc it in
          let@ () = add_l s (IT.bt it) in
          let@ () = add_c (LC.t_ (IT.def_ s it)) in
          aux at
-      | AT.Resource (re, info, at) -> 
-         let@ () = WRE.welltyped (fst info) re in
-         let@ () = add_r None re in
+      | AT.Resource ((s, (re, re_oa_spec)), info, at) -> 
+         let@ () = WRS.welltyped (fst info) (re, re_oa_spec) in
+         let@ () = add_l s re_oa_spec in
+         let@ () = add_r None (re, O (IT.sym_ (s, re_oa_spec))) in
          aux at
       | AT.Constraint (lc, info, at) ->
          let@ () = WLC.welltyped (fst info) lc in

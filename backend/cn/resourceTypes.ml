@@ -10,13 +10,15 @@ module LCSet = Set.Make(LC)
 
 
 type predicate_name = 
+  | Block of Sctypes.t
   | Owned of Sctypes.t
-  | PName of string
+  | PName of Sym.t
 [@@deriving eq, ord]
 
 let pp_predicate_name = function
+  | Block ct -> !^"Block" ^^ angles (Sctypes.pp ct)
   | Owned ct -> !^"Owned" ^^ angles (Sctypes.pp ct)
-  | PName pn -> !^pn
+  | PName pn -> Sym.pp pn
 
 
 

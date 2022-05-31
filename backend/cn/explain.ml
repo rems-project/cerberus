@@ -18,6 +18,7 @@ open IndexTerms
 open LogicalConstraints
 open Pp
 open C
+open Resources
 
 
 
@@ -235,7 +236,7 @@ let explanation ctxt relevant =
   let graph = 
     List.fold_right (fun resource graph ->
         match resource with
-        | (RET.P ({name = Owned _; _} as p), p_oargs) ->
+        | (RET.P ({name = Owned _; _} as p), O p_oargs) ->
            (* the 'not found' cases should not be fatal: e.g. the
               resource might have 'x + 16' as a pointer *)
            let ovc1 = 
@@ -243,7 +244,7 @@ let explanation ctxt relevant =
                (fun (s, _) -> VClassGraph.find_node_opt (in_class s) graph)
            in
            let ovc2 = match p_oargs with
-             | [(_, IT (Lit (Sym value_sym), _)); _] ->
+             | IT (Record_op (Record [(_, IT (Lit (Sym value_sym), _)); _]), _) ->
                 VClassGraph.find_node_opt (in_class value_sym) graph
              | _ -> None
            in
@@ -322,10 +323,9 @@ let app_symbol_it q = function
 let clause_has_resource req c =
   let open ArgumentTypes in
   let rec f = function
-    | Resource (r, _, c) -> RET.same_predicate_name req (RE.request r) || f c
+    | Resource ((_, (r, _)), _, c) -> RET.same_predicate_name req r || f c
     | Constraint (_, _, c) -> f c
     | Computational (_, _, c) -> f c
-    | Logical (_, _, c) -> f c
     | Define (_, _, c) -> f c
     | I _ -> false
   in
@@ -335,10 +335,10 @@ let clause_has_resource req c =
 let relevant_predicate_clauses global oname req =
   let open Global in
   let open ResourcePredicates in
-  let clauses = StringMap.bindings global.resource_predicates
+  let clauses = SymMap.bindings global.resource_predicates
     |> List.map (fun (nm, def) -> List.map (fun c -> (nm, c)) def.clauses)
     |> List.concat in
-  List.filter (fun (nm, c) -> Option.equal String.equal (Some nm) oname
+  List.filter (fun (nm, c) -> Option.equal Sym.equal (Some nm) oname
     || clause_has_resource req c) clauses
 
 let state ctxt {substitution; vclasses; relevant} (model_with_q : Solver.model_with_q)
@@ -372,7 +372,7 @@ let state ctxt {substitution; vclasses; relevant} (model_with_q : Solver.model_w
   let name_subst = IT.subst substitution in
 
   let entry = function
-    | (P p, p_oargs) ->
+    | (P p, O p_oargs) ->
        let id = make_predicate_name () in
        let loc_e, permission_e, iargs_e = 
          IT.pp (name_subst p.pointer),
@@ -399,11 +399,9 @@ let state ctxt {substitution; vclasses; relevant} (model_with_q : Solver.model_w
            } 
        in
        let oargs = 
-         List.map (fun (name, oarg) ->
-             let var = !^id ^^ dot ^^ dot ^^ Sym.pp name in
-             let value = IT.pp oarg ^^^ equals ^^^ (maybe_evaluated (evaluate oarg)) in
-             {var; value}
-           ) p_oargs
+         let var = !^id in
+         let value = IT.pp p_oargs ^^^ equals ^^^ (maybe_evaluated (evaluate p_oargs)) in
+         {var; value}
        in
        let reported = 
          (List.fold_left SymSet.union SymSet.empty (
@@ -413,7 +411,7 @@ let state ctxt {substitution; vclasses; relevant} (model_with_q : Solver.model_w
          ))
        in
        (entry, oargs, reported)
-    | (Q p, p_oargs) ->
+    | (Q p, O p_oargs) ->
        let p = RET.alpha_rename_qpredicate_type (Sym.fresh_pretty "i") p in
        let q = (p.q, BT.Integer) in
        let id = make_predicate_name () in
@@ -437,11 +435,9 @@ let state ctxt {substitution; vclasses; relevant} (model_with_q : Solver.model_w
          } 
        in
        let oargs =
-         List.map (fun (name, oarg) ->
-             let var = !^id ^^ dot ^^ dot ^^ Sym.pp name in
-             let value = IT.pp oarg ^^^ equals ^^^ maybe_evaluated (evaluate_lambda q oarg) in
-             {var; value}
-           ) p_oargs
+         let var = !^id in
+         let value = IT.pp p_oargs ^^^ equals ^^^ maybe_evaluated (evaluate p_oargs) in
+         {var; value}
        in
        let reported = 
          (List.fold_left SymSet.union SymSet.empty (
@@ -457,7 +453,7 @@ let state ctxt {substitution; vclasses; relevant} (model_with_q : Solver.model_w
     List.fold_right (fun resource acc ->
         let (memory, vars, reported) = acc in
         let (entry', vars', reported') = entry resource in
-        let vars = vars' @ vars in
+        let vars = [vars'] @ vars in
         let reported = SymSet.union reported' reported in
         (entry' :: memory, vars, reported)
       ) ctxt.resources ([], [], SymSet.empty)

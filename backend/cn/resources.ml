@@ -12,29 +12,40 @@ module LCSet = Set.Make(LC)
 open ResourceTypes
 
 let value_sym = Sym.fresh_named "value"
-let init_sym = Sym.fresh_named "init"
+
+let size_sym = Sym.fresh_named "size"
+
 
 let owned_iargs _ct = []
-let owned_oargs ct = 
-  [(value_sym, BT.of_sct ct);
-   (init_sym, BT.Bool)]
-let q_owned_oargs ct = 
-  [(value_sym, BT.Map (Integer, BT.of_sct ct));
-   (init_sym, BT.Map (Integer, BT.Bool))]
+let owned_oargs_list ct = [(value_sym, BT.of_sct ct)]
+let owned_oargs ct = BT.Record (owned_oargs_list ct)
+
+let q_owned_iargs _ct = []    
+let q_owned_oargs_list ct = [(value_sym, BT.Map (Integer, BT.of_sct ct))]
+let q_owned_oargs ct = BT.Record (q_owned_oargs_list ct)
+
+let block_iargs = []
+let block_oargs_list = []
+let block_oargs = BT.Record block_oargs_list
+
+let q_block_iargs = [(value_sym, BT.Integer)]    
+let q_block_oargs_list = []
+let q_block_oargs = BT.Record q_block_oargs_list
+    
 
 
-type oarg = Sym.t * IT.t
-type oargs = oarg list
-
-let pp_oarg (s, oarg) = Sym.pp s ^^^ equals ^^^ IT.pp oarg
-let pp_oargs oargs = flow_map (comma ^^ space) pp_oarg oargs
+type oargs = O of IT.t
+let pp_oargs (O t) = IT.pp t
 
 
+type resource = resource_type * oargs
 
-type t = resource_type * oargs
-
+type t = resource
 
 let request (r, _oargs) = r
+
+let oargs_bt (_re, O oargs) = IT.bt oargs
+
 
 let pp (r, oargs) = ResourceTypes.pp r ^^^ !^"where" ^^^ pp_oargs oargs
 
@@ -42,14 +53,13 @@ let pp (r, oargs) = ResourceTypes.pp r ^^^ !^"where" ^^^ pp_oargs oargs
 let json re : Yojson.Safe.t = `String (Pp.plain (pp re))
 
 
-let subst substitution ((r, oargs) : t) = 
+let subst substitution ((r, O oargs) : t) = 
   (ResourceTypes.subst substitution r,
-   List.map_snd (IT.subst substitution) oargs)
+   O (IT.subst substitution oargs))
 
 
-let free_vars (r, oargs) = 
-  SymSet.union (ResourceTypes.free_vars r)
-    (IT.free_vars_list (List.map snd oargs))
+let free_vars (r, O oargs) = 
+  SymSet.union (ResourceTypes.free_vars r) (IT.free_vars oargs)
     
 
 

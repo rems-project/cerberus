@@ -79,12 +79,12 @@ let check_trusted_fun_body fsym = function
 
 let it_uninterp_funs it =
   let f _ funs it = match IT.term it with
-    | Pred (name, args) -> StringSet.add name funs
+    | Pred (name, args) -> SymSet.add name funs
     | _ -> funs
   in
-  IT.fold_subterms f StringSet.empty it
+  IT.fold_subterms f SymSet.empty it
 
-type scan_res = {res: bool; ret: bool; funs : StringSet.t}
+type scan_res = {res: bool; ret: bool; funs : SymSet.t}
 
 (* recurse over a function type and detect resources (impureness),
    non-unit return types (non-lemma trusted functions), and the set
@@ -94,13 +94,12 @@ let scan ftyp =
     | LC.T it -> it_uninterp_funs it
     | LC.Forall (_, it) -> it_uninterp_funs it
   in
-  let add_lc_funs lc r = {r with funs = StringSet.union (lc_funs lc) r.funs} in
+  let add_lc_funs lc r = {r with funs = SymSet.union (lc_funs lc) r.funs} in
   let rec scan_lrt t = match t with
-    | LRT.Logical (_, _, t) -> scan_lrt t
     | LRT.Define (_, _, t) -> scan_lrt t
     | LRT.Resource (_, _, t) -> {(scan_lrt t) with res = true}
     | LRT.Constraint (lc, _, t) -> add_lc_funs lc (scan_lrt t)
-    | LRT.I -> {res = false; ret = false; funs = StringSet.empty}
+    | LRT.I -> {res = false; ret = false; funs = SymSet.empty}
   in
   let scan_rt = function
     | RT.Computational ((_, bt), _, t) -> {(scan_lrt t) with ret =
@@ -108,7 +107,6 @@ let scan ftyp =
   in
   let rec scan_at t = match t with
     | AT.Computational (_, _, t) -> scan_at t
-    | AT.Logical (_, _, t) -> scan_at t
     | AT.Define (_, _, t) -> scan_at t
     | AT.Resource (_, _, t) -> {(scan_at t) with res = true}
     | AT.Constraint (lc, _, t) -> add_lc_funs lc (scan_at t)
@@ -148,7 +146,7 @@ let it_to_coq fun_ret_tys it =
     let with_is_true d = if bool_eq_prop
         then parens (!^ "Is_true" ^^^ d) else d
     in
-    let pred_with_true nm d = if BaseTypes.equal (StringMap.find nm fun_ret_tys) BaseTypes.Bool
+    let pred_with_true nm d = if BaseTypes.equal (SymMap.find nm fun_ret_tys) BaseTypes.Bool
         then with_is_true d else d
     in
     match IT.term t with
@@ -182,7 +180,7 @@ let it_to_coq fun_ret_tys it =
         | _ -> fail "it_to_coq: unsupported bool op" (IT.pp t)
     end
     | Pred (name, args) -> pred_with_true name
-        (parens (!^ name ^^^ flow (break 1) (List.map (f false) args)))
+        (parens (Sym.pp name ^^^ flow (break 1) (List.map (f false) args)))
     | CT_pred (Good (ct, t)) -> aux (IT.good_value SymMap.empty ct t)
     | _ -> fail "it_to_coq: unsupported" (IT.pp t)
   in
@@ -205,9 +203,9 @@ let param_spec fun_defs =
     let arg_tys = List.map (fun (_, bt) -> bt_to_coq bt) def.args in
     let ret_ty = bt_to_coq def.return_bt in
     let ty = List.fold_right (fun at rt -> at ^^^ !^ "->" ^^^ rt) arg_tys ret_ty in
-    !^ "  Parameter" ^^^ typ (!^ f) ty ^^ !^ "."
+    !^ "  Parameter" ^^^ typ (Sym.pp f) ty ^^ !^ "."
       ^^ hardline
-    | _ -> fail "param_spec: defined logical fun" (!^ f)
+    | _ -> fail "param_spec: defined logical fun" (Sym.pp f)
   in
   !^"Module Type CN_Lemma_Parameters."
   ^^ hardline ^^ hardline
@@ -236,7 +234,6 @@ let ftyp_to_coq fun_ret_tys ftyp =
   in
   let rec at_doc t = match t with
     | AT.Computational ((sym, bt), _, t) -> mk_forall sym bt (at_doc t)
-    | AT.Logical ((sym, bt), _, t) -> mk_forall sym bt (at_doc t)
     | AT.Define _ -> fail "ftyp_to_coq: unsupported Define" (AT.pp RT.pp t)
     | AT.Resource _ -> fail "ftyp_to_coq: unsupported" (AT.pp RT.pp t)
     | AT.Constraint (lc, _, t) -> lc_to_coq fun_ret_tys lc ^^^ !^"->" ^^^ at_doc t
@@ -325,16 +322,16 @@ let generate directions mu_file =
   List.iter (fun x ->
     progress_simple "skipping resource lemma" (Sym.pp_string x.sym)
   ) impure;
-  let funs = List.fold_right (fun x -> StringSet.union x.scan_res.funs) pure StringSet.empty in
-  let fun_defs = StringSet.elements funs
-    |> List.map (fun s -> match List.assoc_opt String.equal s mu_file.mu_logical_predicates with
-      | None -> fail "undefined logical function/predicate" (Pp.string s)
+  let funs = List.fold_right (fun x -> SymSet.union x.scan_res.funs) pure SymSet.empty in
+  let fun_defs = SymSet.elements funs
+    |> List.map (fun s -> match List.assoc_opt Sym.equal s mu_file.mu_logical_predicates with
+      | None -> fail "undefined logical function/predicate" (Sym.pp s)
       | Some def -> (s, def))
   in
   print channel (param_spec fun_defs);
   let fun_ret_tys = List.fold_right (fun (f, def) m ->
-            let open LogicalPredicates in StringMap.add f def.return_bt m)
-        fun_defs StringMap.empty in
+            let open LogicalPredicates in SymMap.add f def.return_bt m)
+        fun_defs SymMap.empty in
   print channel (lemma_type_specs fun_ret_tys (List.map (fun x -> (x.sym, x.typ)) pure));
   print channel (mod_spec (List.map (fun x -> x.sym) pure));
   Ok ()

@@ -15,6 +15,8 @@ open BT
 open IT
 open LC
 
+module LP = LogicalPredicates
+
 type clause = {
     loc : Loc.t;
     guard : IT.t;
@@ -49,27 +51,30 @@ let pp_definition def =
   item "clauses" (Pp.list pp_clause def.clauses)
   
 
+let byte_sym = Sym.fresh_named "Byte"
+let char_sym = Sym.fresh_named "Char"
+let zerobyte_sym = Sym.fresh_named "ZeroByte"
+let early_alloc_sym = Sym.fresh_named "EarlyAlloc"
+let page_sym = Sym.fresh_named "Page"
+let hyp_pool_sym = Sym.fresh_named "Hyp_pool"
+
+
 
 let byte () = 
-  let id = "Byte" in
   let loc = Loc.other "internal (Byte)" in
   let pointer_s, pointer = IT.fresh Loc in
-  let value_s, value = IT.fresh BT.Integer in
-  let init_s, init = IT.fresh BT.Bool in
+  let resource_s, resource = IT.fresh (owned_oargs (Integer Char)) in
   let point = (P {
       name = Owned (Integer Char); 
       pointer = pointer;
       iargs = [];
       permission = bool_ true;
     },
-     [(Resources.value_sym, value); 
-      (Resources.init_sym, init)])
+    owned_oargs (Integer Char))
   in
   let lrt =
-    LRT.Logical ((value_s, IT.bt value), (loc, None),
-    LRT.Logical ((init_s, IT.bt init), (loc, None),
-    LRT.Resource (point, (loc, None),
-    LRT.I)))
+    LRT.Resource ((resource_s, point), (loc, None),
+    LRT.I)
   in
   let clause = {
       loc = loc;
@@ -85,40 +90,42 @@ let byte () =
       clauses = [clause]; 
     } 
   in
-  (id, predicate)
+  (byte_sym, predicate)
 
 
 let char () = 
-  let id = "Char" in
+  let id = char_sym in
   let loc = Loc.other "internal (Char)" in
   let pointer_s, pointer = IT.fresh Loc in
-  let value_s, value = IT.fresh BT.Integer in
+
+
   let point = (P {
       name = Owned (Integer Char); 
       pointer = pointer;
       iargs = [];
       permission = bool_ true;
     },
-      [(Resources.value_sym, value); 
-       (Resources.init_sym, bool_ true)])
+    owned_oargs (Integer Char))
   in
+
+  let resource_s, resource = IT.fresh (snd point) in
+
   let lrt =
-    LRT.Logical ((value_s, IT.bt value), (loc, None),
-    LRT.Resource (point, (loc, None),
-    LRT.I))
+    LRT.Resource ((resource_s, point), (loc, None),
+    LRT.I)
   in
   let value_s_o = Sym.fresh_named "value" in  
   let clause = {
       loc = loc;
       guard = bool_ true;
-      packing_ft = AT.of_lrt lrt (AT.I [OutputDef.{loc; name = value_s_o; value}]) 
+      packing_ft = AT.of_lrt lrt (AT.I [OutputDef.{loc; name = value_s_o; value = recordMember_ ~member_bt:Integer (resource, value_sym)}]) 
     }
   in
   let predicate = {
       loc = loc;
       pointer = pointer_s;
       iargs = []; 
-      oargs = [(value_s_o, IT.bt value)]; 
+      oargs = [(value_s_o, Integer)]; 
       clauses = [clause]; 
     } 
   in
@@ -129,7 +136,7 @@ let char () =
 
 
 let zerobyte () = 
-  let id = "ZeroByte" in
+  let id = zerobyte_sym in
   let loc = Loc.other "internal (ZeroByte)" in
   let pointer_s, pointer = IT.fresh Loc in
   let point = (P {
@@ -138,12 +145,18 @@ let zerobyte () =
       iargs = [];
       permission = bool_ true;
     }, 
-      [(Resources.value_sym, int_ 0); 
-       (Resources.init_sym, bool_ true)])
+    owned_oargs (Integer Char))
   in
+  let resource_s, resource = IT.fresh (snd point) in
+
+  let zero = 
+    eq_ (recordMember_ ~member_bt:BT.Integer (resource, value_sym), int_ 0)
+  in
+
   let lrt =
-    LRT.Resource (point, (loc, None),
-    LRT.I)
+    LRT.Resource ((resource_s, point), (loc, None),
+    LRT.Constraint (t_ zero, (loc, None), 
+    LRT.I))
   in
   let clause = {
       loc = loc;
@@ -172,24 +185,25 @@ let zerobyte () =
 
 
 let early_alloc () = 
-  let id = "EarlyAlloc" in
+  let id = early_alloc_sym in
   let loc = Loc.other "internal (EarlyAlloc)" in
   let cur_s, cur = IT.fresh Loc in
   let end_s, end_t = IT.fresh Integer in
+  let resource_s = Sym.fresh () in
   let region = 
     let q_s, q = IT.fresh Integer in 
     (ResourceTypes.Q {
-        name = PName "Byte";
+        name = PName byte_sym;
         pointer = pointer_ Z.zero;
         q = q_s;
         step = Memory.size_of_ctype char_ct;
         permission = and_ [pointerToIntegerCast_ cur %<= q; q %<= (sub_ (end_t, int_ 1))];
         iargs = [];
       },
-    [])
+     BT.Record [])
   in
   let lrt =
-    LRT.Resource (region, (loc, None),
+    LRT.Resource ((resource_s, region), (loc, None),
     LRT.Constraint (t_ (IT.good_ (pointer_ct char_ct, cur)), (loc, None),
     LRT.Constraint (t_ (IT.good_ (pointer_ct char_ct, integerToPointerCast_ end_t)), (loc, None),
     LRT.Constraint (t_ ((pointerToIntegerCast_ cur) %<= end_t), (loc, None),
@@ -223,28 +237,29 @@ let page_alloc_predicates struct_decls =
 
 
   let page = 
-    let id = "Page" in
+    let id = page_sym in
     let loc = Loc.other "internal (Page)" in
     let guardv_s, guardv = IT.fresh BT.Integer in
     let pbase_s, pbase = IT.fresh Loc in
     let pbaseI = pointerToIntegerCast_ pbase in
     let order_s, order = IT.fresh Integer in
+    let resource_s = Sym.fresh () in
     let clause1 = 
       let qp = 
-        let length = pred_ "page_size_of_order" [order] Integer in
+        let length = pred_ LP.page_size_of_order_sym [order] Integer in
         let q_s, q = IT.fresh Integer in 
         (ResourceTypes.Q {
-          name = PName "Byte"; 
+          name = PName byte_sym; 
           pointer = pointer_ Z.zero;
           q = q_s;
           step = Memory.size_of_ctype char_ct;
           permission = 
             and_ [pbaseI %<= q; q %<= (sub_ (pbaseI %+ length, int_ 1))];
           iargs = [];
-        }, [])
+        }, BT.Record [])
       in
       let lrt =
-        LRT.Resource (qp, (loc, None),
+        LRT.Resource ((resource_s, qp), (loc, None),
         LRT.Constraint (t_ (ne_ (order, int_ hHYP_NO_ORDER)), (loc, None),
         LRT.Constraint (t_ (IT.good_pointer ~pointee_ct:char_ct pbase), (loc, None),
         LRT.I)))
@@ -279,49 +294,56 @@ let page_alloc_predicates struct_decls =
 
 
   let hyp_pool =  
-    let id = "Hyp_pool" in
+    let id = hyp_pool_sym in
     let loc = Loc.other "internal (Hyp_pool)" in
     let pool_pointer_s, pool_pointer = IT.fresh Loc in
     (* iargs *)
     let vmemmap_pointer_s, vmemmap_pointer = IT.fresh Loc in
     let hyp_physvirt_offset_s, hyp_physvirt_offset = 
       IT.fresh BT.Integer in
-    (* oargs *)
-    let pool_s, pool = IT.fresh (BT.Struct hyp_pool_tag) in
-    let vmemmap_s, vmemmap = 
-      IT.fresh (BT.Map (Integer, (BT.Struct hyp_page_tag))) in
+    (* (\* oargs *\) *)
+    (* let pool_s, pool = IT.fresh (BT.Struct hyp_pool_tag) in *)
+    (* let vmemmap_s, vmemmap =  *)
+    (*   IT.fresh (BT.Map (Integer, (BT.Struct hyp_page_tag))) in *)
 
+    let pool_resource = 
+      (P {
+           name = Owned (Struct hyp_pool_tag);
+           pointer = pool_pointer;
+           iargs = [];
+             permission = bool_ true;
+         },
+       owned_oargs (Struct hyp_pool_tag))
+    in
+
+    let pool_oarg_s, pool_oarg = IT.fresh (snd pool_resource) in
 
     let metadata_owned = 
-      let resource = 
-        (P {
-             name = Owned (Struct hyp_pool_tag);
-             pointer = pool_pointer;
-             iargs = [];
-             permission = bool_ true;
-           },
-         [(Resources.value_sym, pool); 
-          (Resources.init_sym, bool_ true)])
-      in
-      LRT.Logical ((pool_s, IT.bt pool), (loc, None), 
-      LRT.Resource (resource, (loc, None), 
-      LRT.I))
+      LRT.Resource ((pool_oarg_s, pool_resource), (loc, None), 
+      LRT.I)
     in
 
+
+    let pool_value = (recordMember_ ~member_bt:(BT.Struct hyp_pool_tag) (pool_oarg, value_sym)) in
+
+    let vmemmap_resource = 
+      Aux.vmemmap_resource ~vmemmap_pointer
+        ~range_start:(pool_value %. "range_start")
+        ~range_end:(pool_value %. "range_end")
+    in
+
+    let vmemmap_oarg_s, vmemmap_oarg = 
+      IT.fresh (snd vmemmap_resource) in
 
     let vmemmap_metadata_owned =
-      let resource = 
-        Aux.vmemmap_resource ~vmemmap_pointer ~vmemmap
-          ~range_start:(pool %. "range_start")
-          ~range_end:(pool %. "range_end")
-      in
-      LRT.Logical ((vmemmap_s, IT.bt vmemmap), (loc, None),
-      LRT.Resource (resource, (loc, None), 
-      LRT.I))
+      LRT.Resource ((vmemmap_oarg_s, vmemmap_resource), (loc, None), 
+      LRT.I)
     in
 
-    let start_i = (pool %. "range_start") %/ (int_ pPAGE_SIZE) in
-    let end_i = (pool %. "range_end") %/ (int_ pPAGE_SIZE) in
+    let vmemmap_value = (recordMember_ ~member_bt:(Map (Integer, BT.Struct hyp_page_tag)) (vmemmap_oarg, value_sym)) in
+
+    let start_i = (pool_value %. "range_start") %/ (int_ pPAGE_SIZE) in
+    let end_i = (pool_value %. "range_end") %/ (int_ pPAGE_SIZE) in
   
     let vmemmap_wf = 
       let i_s, i = IT.fresh Integer in
@@ -329,13 +351,13 @@ let page_alloc_predicates struct_decls =
       let args = [
           i;
           vmemmap_pointer;
-          vmemmap;
+          vmemmap_value;
           pool_pointer;
-          pool
+          pool_value;
         ]
       in
       forall_ (i_s, IT.bt i) (
-          impl_ (condition, pred_ "vmemmap_wf" args BT.Bool);
+          impl_ (condition, pred_ LP.vmemmap_wf_sym args BT.Bool);
         )
     in
   
@@ -345,14 +367,14 @@ let page_alloc_predicates struct_decls =
       let args = [
           i;
           vmemmap_pointer;
-          vmemmap;
+          vmemmap_value;
           pool_pointer;
-          pool
+          pool_value;
         ]
       in
       forall_ (i_s, IT.bt i) (
           impl_ (condition,
-                 pred_ "vmemmap_l_wf" args BT.Bool )
+                 pred_ LP.vmemmap_l_wf_sym args BT.Bool )
         )
     in
 
@@ -362,26 +384,26 @@ let page_alloc_predicates struct_decls =
       let args = [
           i;
           vmemmap_pointer;
-          vmemmap;
+          vmemmap_value;
           pool_pointer;
-          pool;
+          pool_value;
         ]
       in
       forall_ (i_s, IT.bt i) (
           impl_ (condition,
-                 pred_ "freeArea_cell_wf" args BT.Bool)
+                 pred_ LP.freeArea_cell_wf_sym args BT.Bool)
         )
     in
 
     let hyp_pool_wf = 
       let args = [
           pool_pointer;
-          pool;
+          pool_value;
           vmemmap_pointer;
           hyp_physvirt_offset;
         ]        
       in
-      LC.t_ (pred_ "hyp_pool_wf" args BT.Bool)
+      LC.t_ (pred_ LP.hyp_pool_wf_sym args BT.Bool)
     in
 
     let wellformedness = 
@@ -396,22 +418,22 @@ let page_alloc_predicates struct_decls =
       let q_s, q = IT.fresh Integer in
       let condition = 
         and_ [start_i %<= q; q %<= (sub_ (end_i, int_ 1));
-              (((map_get_ vmemmap q)) %. "refcount") %== int_ 0;
-              (((map_get_ vmemmap q)) %. "order") %!= int_ hHYP_NO_ORDER;
+              (((map_get_ vmemmap_value q)) %. "refcount") %== int_ 0;
+              (((map_get_ vmemmap_value q)) %. "order") %!= int_ hHYP_NO_ORDER;
           ]
       in
       let qp = 
         (ResourceTypes.Q {
-            name = PName "Page";
+            name = PName page_sym;
             pointer = pointer_ Z.zero;
             q = q_s;
             step = pPAGE_SIZE;
             permission = condition;
-            iargs = [int_ 1; (((map_get_ vmemmap q)) %. "order")];
+            iargs = [int_ 1; (((map_get_ vmemmap_value q)) %. "order")];
           },
-         [])
+         BT.Record [])
       in
-      LRT.Resource (qp, (loc, None), 
+      LRT.Resource ((Sym.fresh (), qp), (loc, None), 
       LRT.I)
     in
 
@@ -431,8 +453,8 @@ let page_alloc_predicates struct_decls =
     let vmemmap_s_o = Sym.fresh_named "vmemmap" in
 
     let assignment = OutputDef.[
-          {loc; name = pool_s_o; value = pool};
-          {loc; name = vmemmap_s_o; value = vmemmap};
+          {loc; name = pool_s_o; value = pool_value};
+          {loc; name = vmemmap_s_o; value = vmemmap_value};
       ]
     in
     let clause = {
@@ -451,8 +473,8 @@ let page_alloc_predicates struct_decls =
           ]
         ;
         oargs = [
-            (pool_s_o, IT.bt pool); 
-            (vmemmap_s_o, IT.bt vmemmap);
+            (pool_s_o, IT.bt pool_value); 
+            (vmemmap_s_o, IT.bt vmemmap_value);
           ];
         clauses = [clause;]; 
       } 
