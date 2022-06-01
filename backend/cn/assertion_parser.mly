@@ -287,13 +287,13 @@ logicalconstraint:
 
 
 resource:
-  | predicate=UNAME arguments=args oname=option(name) maybe_permission=option(if_permission_clause) maybe_typ=option(with_type_clause)
+  | predicate=UNAME arguments=args maybe_permission=option(if_permission_clause) maybe_typ=option(with_type_clause)
       { 
-        Ast.{oq = None; predicate; arguments; oname = oname; o_permission = maybe_permission; typ = maybe_typ}
+        Ast.{oq = None; predicate; arguments; o_permission = maybe_permission; typ = maybe_typ}
       }
-  | EACH LPAREN bt=basetype qname=name SEMICOLON t=term RPAREN LBRACE predicate=UNAME arguments=args maybe_permission=option(if_permission_clause) maybe_typ=option(with_type_clause) RBRACE oname=option(name)
+  | EACH LPAREN bt=basetype qname=name SEMICOLON t=term RPAREN LBRACE predicate=UNAME arguments=args maybe_permission=option(if_permission_clause) maybe_typ=option(with_type_clause) RBRACE
       { 
-        Ast.{oq = Some (qname,bt,t); predicate; arguments; oname = oname; o_permission = maybe_permission; typ = maybe_typ}
+        Ast.{oq = Some (qname,bt,t); predicate; arguments; o_permission = maybe_permission; typ = maybe_typ}
       }
 
 
@@ -302,9 +302,11 @@ resource:
 cond:
   | c=logicalconstraint
       { Ast.Constraint (fst c, snd c) } 
+  | LET name=UNAME EQUAL r=resource
+      { Ast.Resource (Some name, r) }
   | r=resource
-      { Ast.Resource r }
-  | LET id=name EQUAL t=term
+      { Ast.Resource (None, r) }
+  | LET id=LNAME EQUAL t=term
       { Ast.Define (id, t) }
 
 /* taking the location-handling aspect from c_parser.mly */
@@ -314,13 +316,13 @@ cond_with_loc:
 
 
 keyword_condition:
-  | ACCESSES a=separated_list(COMMA, id) EOF
+  | ACCESSES a=separated_list(SEMICOLON, id) EOF
      { Accesses a }
   | TRUSTED EOF
      { Trusted }
-  | REQUIRES c=separated_list(COMMA, cond_with_loc) EOF
+  | REQUIRES c=separated_list(SEMICOLON, cond_with_loc) EOF
      { Ast.Requires c }
-  | ENSURES c=separated_list(COMMA, cond_with_loc) EOF
+  | ENSURES c=separated_list(SEMICOLON, cond_with_loc) EOF
      { Ast.Ensures c }
-  | INV c=separated_list(COMMA, cond_with_loc) EOF
+  | INV c=separated_list(SEMICOLON, cond_with_loc) EOF
      { Ast.Inv c }

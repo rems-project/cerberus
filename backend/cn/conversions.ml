@@ -798,7 +798,7 @@ let resolve_constraint loc layouts predicates log_predicates default_mapping_nam
 
 
 
-let apply_ownership_spec layouts predicates log_predicates default_mapping_name mappings (loc, {oq; predicate; arguments; oname; o_permission; typ}) =
+let apply_ownership_spec layouts predicates log_predicates default_mapping_name mappings (loc, oname, {oq; predicate; arguments; o_permission; typ}) =
   let ownership_kind = match predicate with
     | "Owned" -> `Builtin `Owned
     | "Block" -> `Builtin `Block
@@ -1142,10 +1142,10 @@ let make_fun_spec loc (layouts : Memory.struct_decls) rpredicates lpredicates
   let@ (i, mappings) = 
     ListM.fold_leftM (fun (i, mappings) (loc, spec) ->
         match spec with
-        | Ast.Resource cond ->
+        | Ast.Resource (oroname, cond) ->
               let@ (i', mapping') = 
                 apply_ownership_spec layouts rpredicates lpredicates
-                  "start" mappings (loc, cond) 
+                  "start" mappings (loc, oroname, cond) 
               in
               let mappings = 
                 mod_mapping "start" mappings
@@ -1233,10 +1233,10 @@ let make_fun_spec loc (layouts : Memory.struct_decls) rpredicates lpredicates
   let@ (o, mappings) =
     ListM.fold_leftM (fun (o, mappings) (loc, spec) ->
         match spec with
-        | Ast.Resource cond ->
+        | Ast.Resource (oroname, cond) ->
               let@ (o', mapping') = 
                 apply_ownership_spec layouts rpredicates lpredicates
-                  "end" mappings (loc, cond) 
+                  "end" mappings (loc, oroname, cond) 
               in
               let mappings = 
                 mod_mapping "end" mappings 
@@ -1369,10 +1369,10 @@ let make_label_spec
   let@ (i, mappings) = 
     ListM.fold_leftM (fun (i, mappings) (loc, spec) ->
         match spec with
-        | Ast.Resource cond ->
+        | Ast.Resource (oroname, cond) ->
               let@ (i', mapping') = 
                 apply_ownership_spec layouts rpredicates lpredicates
-                  lname mappings (loc, cond) in
+                  lname mappings (loc, oroname, cond) in
               let mappings = 
                 mod_mapping lname mappings 
                   (fun mapping -> mapping' @ mapping)

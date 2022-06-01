@@ -272,13 +272,12 @@ type predicate = {
     predicate : string;
     arguments : term list;
     o_permission: term option;
-    oname : string option;
     typ: typ option;
   }
 
 type condition = 
   | Constraint of (string * BT.t * term) option * term
-  | Resource of predicate
+  | Resource of (string option) * predicate
   | Define of string * term
 
 
