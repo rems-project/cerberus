@@ -1264,26 +1264,26 @@ end = struct
     let@ is_ex = RI.General.exact_match () in
     map_and_fold_resources loc (fun re found -> (Unchanged, found || is_ex (RE.request re, r))) false
 
-  (* let prefer_exact loc ftyp = *)
-  (*   if ! RI.reorder_points then return ftyp *)
-  (*   else *)
-  (*   let reqs1 = NormalisedArgumentTypes.r_resource_requests ftyp in *)
-  (*   let unis = SymSet.of_list (List.map fst reqs1) in *)
-  (*   (\* capture avoiding *\) *)
-  (*   assert (SymSet.cardinal unis = List.length reqs1); *)
-  (*   let reqs = List.mapi (fun i res -> (i, res)) reqs1 in *)
-  (*   let res_free_vars ((_, r), _) = match r with *)
-  (*     | P ({name = Owned _; _} as p) -> IT.free_vars p.pointer *)
-  (*     | Q ({name = Owned _; _} as p) -> IT.free_vars p.pointer *)
-  (*     | _ -> SymSet.empty *)
-  (*   in *)
-  (*   let no_unis r = SymSet.for_all (fun x -> not (SymSet.mem x unis)) (res_free_vars r) in *)
-  (*   let reqs = List.filter (fun (_, (_, r)) -> no_unis r) reqs in *)
-  (*   let@ reqs = ListM.filterM (fun (_, (_, r)) -> has_exact loc r) reqs in *)
-  (*   (\* just need an actual preference function *\) *)
-  (*   match List.rev reqs with *)
-  (*     | ((i, _) :: _) -> return (prefer_req i ftyp) *)
-  (*     | [] -> return ftyp *)
+  let prefer_exact loc ftyp = 
+    if ! RI.reorder_points then return ftyp
+    else
+    let reqs1 = NormalisedArgumentTypes.r_resource_requests ftyp in
+    let unis = SymSet.of_list (List.map fst reqs1) in
+    (* capture avoiding *)
+    assert (SymSet.cardinal unis = List.length reqs1);
+    let reqs = List.mapi (fun i res -> (i, res)) reqs1 in
+    let res_free_vars (r, _) = match r with
+      | P ({name = Owned _; _} as p) -> IT.free_vars p.pointer
+      | Q ({name = Owned _; _} as p) -> IT.free_vars p.pointer
+      | _ -> SymSet.empty
+    in
+    let no_unis r = SymSet.for_all (fun x -> not (SymSet.mem x unis)) (res_free_vars r) in
+    let reqs = List.filter (fun (_, (_, r)) -> no_unis r) reqs in
+    let@ reqs = ListM.filterM (fun (_, (_, r)) -> has_exact loc r) reqs in
+    (* just need an actual preference function *)
+    match List.rev reqs with
+      | ((i, _) :: _) -> return (prefer_req i ftyp)
+      | [] -> return ftyp
 
 
 
@@ -1352,7 +1352,7 @@ end = struct
             debug 6 (lazy (item "spec" (pp_r rt_pp ftyp)));
           )
         in
-        (* let@ ftyp = prefer_exact loc ftyp in *)
+        let@ ftyp = prefer_exact loc ftyp in
         match ftyp with
         | Resource ((s, (resource, bt)), info, ftyp) -> 
            let uiinfo = (situation, (Some resource, Some info)) in
