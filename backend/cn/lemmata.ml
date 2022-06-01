@@ -5,7 +5,7 @@ module LS = LogicalSorts
 module LRT = LogicalReturnTypes
 module RT = ReturnTypes
 module AT = ArgumentTypes
-module NAT = NormalisedArgumentTypes
+module LAT = LogicalArgumentTypes
 module TE = TypeErrors
 module Loc = Locations
 module LP = LogicalPredicates
@@ -100,13 +100,25 @@ let try_coerce_res ftyp =
         else LRT.Resource ((name, (re, bt)), info, erase_res r t)
     | LRT.I -> raise Cannot_Coerce (* did not find a matching resource *)
   in
+  let rec coerce_lat t = match t with
+    | LAT.Resource ((name, (re, bt)), info, t) ->
+       let computationals, t = coerce_lat (LAT.map (RT.map (erase_res (name, re))) t) in
+       ((name, bt, info) :: computationals), t
+    | LAT.Define (v, info, t) -> 
+       let computationals, t = coerce_lat t in
+       computationals, LAT.Define (v, info, t)
+    | LAT.Constraint (lc, info, t) -> 
+       let computationals, t = coerce_lat t in
+       computationals, LAT.Constraint (lc, info, t)
+    | LAT.I _ -> 
+       [], t
+  in
   let rec coerce_at t = match t with
-    | AT.Resource ((name, (re, bt)), info, t) ->
-        AT.Computational ((name, bt), info, AT.map (RT.map (erase_res (name, re))) t)
-    | AT.Computational (v, info, t) -> AT.Computational (v, info, coerce_at t)
-    | AT.Define (v, info, t) -> AT.Define (v, info, coerce_at t)
-    | AT.Constraint (lc, info, t) -> AT.Constraint (lc, info, coerce_at t)
-    | AT.I _ -> t
+    | AT.Computational (v, info, t) -> 
+       AT.Computational (v, info, coerce_at t)
+    | AT.L t -> 
+       let computationals, t = coerce_lat t in
+       AT.mComputationals computationals (AT.L t)
   in
   try Some (coerce_at ftyp) with Cannot_Coerce -> None
 
@@ -132,12 +144,15 @@ let scan ftyp =
     | RT.Computational ((_, bt), _, t) -> {(scan_lrt t) with ret =
         not (BaseTypes.equal bt BaseTypes.Unit)}
   in
+  let rec scan_lat t = match t with
+    | LAT.Define ((_, it), _, t) -> add_funs (it_uninterp_funs it) (scan_lat t)
+    | LAT.Resource (_, _, t) -> {(scan_lat t) with res = true}
+    | LAT.Constraint (lc, _, t) -> add_funs (lc_funs lc) (scan_lat t)
+    | LAT.I t -> scan_rt t
+  in
   let rec scan_at t = match t with
     | AT.Computational (_, _, t) -> scan_at t
-    | AT.Define ((_, it), _, t) -> add_funs (it_uninterp_funs it) (scan_at t)
-    | AT.Resource (_, _, t) -> {(scan_at t) with res = true}
-    | AT.Constraint (lc, _, t) -> add_funs (lc_funs lc) (scan_at t)
-    | AT.I t -> scan_rt t
+    | AT.L t -> scan_lat t
   in
   let x = scan_at ftyp in
   if x.res then
@@ -297,13 +312,16 @@ let ftyp_to_coq fun_ret_tys ftyp =
         then lrt_doc t2
         else fail "ftyp_to_coq: unsupported return type" (RT.pp t)
   in
+  let rec lat_doc t = match t with
+    | LAT.Define ((sym, it), _, t) -> omap_split (mk_let sym (it_to_coq fun_ret_tys it)) (lat_doc t)
+    | LAT.Resource _ -> fail "ftyp_to_coq: unsupported" (LAT.pp RT.pp t)
+    | LAT.Constraint (lc, _, t) ->
+        omap_split (oapp mk_imp (lc_to_coq_check_triv fun_ret_tys lc)) (lat_doc t)
+    | LAT.I t -> rt_doc t
+  in
   let rec at_doc t = match t with
     | AT.Computational ((sym, bt), _, t) -> omap_split (mk_forall sym bt) (at_doc t)
-    | AT.Define ((sym, it), _, t) -> omap_split (mk_let sym (it_to_coq fun_ret_tys it)) (at_doc t)
-    | AT.Resource _ -> fail "ftyp_to_coq: unsupported" (AT.pp RT.pp t)
-    | AT.Constraint (lc, _, t) ->
-        omap_split (oapp mk_imp (lc_to_coq_check_triv fun_ret_tys lc)) (at_doc t)
-    | AT.I t -> rt_doc t
+    | AT.L t -> lat_doc t
   in
   match at_doc ftyp with
   | Some doc -> doc

@@ -9,6 +9,7 @@ module Loc=Locations
 module RT=ReturnTypes
 module LRT=LogicalReturnTypes
 module AT = ArgumentTypes
+module LAT = LogicalArgumentTypes
 module CA=CF.Core_anormalise
 module LC=LogicalConstraints
 module StringSet = Set.Make(String)
@@ -530,7 +531,7 @@ let retype_file pred_defs opts (file : 'TY Old.mu_file)
                ) argbts 
            in
            let ft = (AT.mComputationals args) 
-                      (AT.I (RT.Computational ((Sym.fresh (), rbt), (Loc.unknown, None), LRT.I)))
+                      (AT.L (LAT.I (RT.Computational ((Sym.fresh (), rbt), (Loc.unknown, None), LRT.I))))
            in
            return ft
          in
@@ -588,7 +589,7 @@ let retype_file pred_defs opts (file : 'TY Old.mu_file)
     in
     match def with
     | Old.M_Return (loc, _) ->
-       let lt = AT.of_rt (AT.get_return ftyp) (AT.I False.False) in
+       let lt = AT.of_rt (AT.get_return ftyp) (LAT.I False.False) in
        return (New.M_Return (loc, lt))
     | Old.M_Label (loc, argtyps, args, e, annots) -> 
        let@ args = mapM (retype_arg loc) args in

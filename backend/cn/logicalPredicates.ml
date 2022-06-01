@@ -2,6 +2,7 @@ module Loc = Locations
 module IT = IndexTerms
 module BT = BaseTypes
 module AT = ArgumentTypes
+module LAT = LogicalArgumentTypes
 
 open IndexTerms
 open Sctypes
@@ -20,7 +21,7 @@ type definition = {
        variable. For now at least. *)
     return_bt: BT.t;
     definition : def_or_uninterp;
-    infer_arguments : ArgumentTypes.packing_ft;
+    infer_arguments : ArgumentTypes.arginfer_ft;
   }
 
 
@@ -62,7 +63,7 @@ let make_uninterp (fname : Sym.t) arg_spec return_bt =
   in
   let infer_arguments = 
     AT.mComputationals (List.map (fun ((_name, bt), s) -> (s, bt, (loc, None))) args)
-    (AT.I output_def)
+    (AT.L (LAT.I output_def))
   in
   (id, {loc; args = arg_spec; return_bt; definition = Uninterp; infer_arguments})
 
@@ -204,13 +205,14 @@ module PageAlloc = struct
         AT.Computational ((ia_page_index_s, IT.bt ia_page_index), (loc, None),
         AT.Computational ((ia_vmemmap_pointer_s, IT.bt ia_vmemmap_pointer), (loc, None),  
         AT.Computational ((ia_pool_s, IT.bt ia_pool), (loc, None),
-        AT.Resource ((ia_vmemmap_resource_s, vmemmap_resource), (loc, None),
-        AT.I OutputDef.[
+        AT.L (
+        LAT.Resource ((ia_vmemmap_resource_s, vmemmap_resource), (loc, None),
+        LAT.I OutputDef.[
             {loc; name = page_index_s; value = ia_page_index};
             {loc; name = vmemmap_pointer_s; value = ia_vmemmap_pointer};
             {loc; name = vmemmap_s; value = ia_vmemmap_value};
             {loc; name = pool_s; value = ia_pool};
-          ]))))
+          ])))))
       in
 
       let body = 
@@ -325,14 +327,15 @@ module PageAlloc = struct
         AT.Computational ((ia_vmemmap_pointer_s, IT.bt ia_vmemmap_pointer), (loc, None), 
         AT.Computational ((ia_pool_pointer_s, IT.bt ia_pool_pointer), (loc, None),
         AT.Computational ((ia_pool_s, IT.bt ia_pool), (loc, None),
-        AT.Resource ((ia_vmemmap_resource_s, vmemmap_resource), (loc, None),
-        AT.I OutputDef.[
+        AT.L(
+        LAT.Resource ((ia_vmemmap_resource_s, vmemmap_resource), (loc, None),
+        LAT.I OutputDef.[
             {loc; name = page_index_s; value = ia_page_index};
             {loc; name = vmemmap_pointer_s; value = ia_vmemmap_pointer};
             {loc; name = vmemmap_s; value = ia_vmemmap_value};
             {loc; name = pool_pointer_s; value = ia_pool_pointer};
             {loc; name = pool_s; value = ia_pool};
-          ])))))
+          ]))))))
       in
 
       (id, {loc; args; definition = Def body; return_bt = Bool; infer_arguments} )
@@ -409,14 +412,15 @@ module PageAlloc = struct
         AT.Computational ((ia_vmemmap_pointer_s, IT.bt ia_vmemmap_pointer), (loc, None), 
         AT.Computational ((ia_pool_pointer_s, IT.bt ia_pool_pointer), (loc, None),
         AT.Computational ((ia_pool_s, IT.bt ia_pool), (loc, None),
-        AT.Resource ((ia_vmemmap_resource_s, vmemmap_resource), (loc, None),
-        AT.I OutputDef.[
+        AT.L (
+        LAT.Resource ((ia_vmemmap_resource_s, vmemmap_resource), (loc, None),
+        LAT.I OutputDef.[
             {loc; name = page_index_s; value = ia_page_index};
             {loc; name = vmemmap_pointer_s; value = ia_vmemmap_pointer};
             {loc; name = vmemmap_s; value = ia_vmemmap_value};
             {loc; name = pool_pointer_s; value = ia_pool_pointer};
             {loc; name = pool_s; value = ia_pool};
-          ])))))
+          ]))))))
       in
 
       (id, {loc; args; definition = Def body; return_bt = Bool; infer_arguments} )
@@ -538,14 +542,15 @@ module PageAlloc = struct
         AT.Computational ((ia_vmemmap_pointer_s, IT.bt ia_vmemmap_pointer), (loc, None), 
         AT.Computational ((ia_pool_pointer_s, IT.bt ia_pool_pointer), (loc, None),
         AT.Computational ((ia_pool_s, IT.bt ia_pool), (loc, None),
-        AT.Resource ((ia_vmemmap_resource_s, vmemmap_resource), (loc, None),
-        AT.I OutputDef.[
+        AT.L (
+        LAT.Resource ((ia_vmemmap_resource_s, vmemmap_resource), (loc, None),
+        LAT.I OutputDef.[
             {loc; name = page_index_s; value = ia_page_index};
             {loc; name = vmemmap_pointer_s; value = ia_vmemmap_pointer};
             {loc; name = vmemmap_s; value = ia_vmemmap_value};
             {loc; name = pool_pointer_s; value = ia_pool_pointer};
             {loc; name = pool_s; value = ia_pool};
-          ])))))
+          ]))))))
       in
 
       (id, {loc; args; definition = Def body; return_bt = Bool; infer_arguments} )
@@ -618,14 +623,15 @@ module PageAlloc = struct
         AT.Computational ((ia_vmemmap_pointer_s, IT.bt ia_vmemmap_pointer), (loc, None), 
         AT.Computational ((ia_pool_pointer_s, IT.bt ia_pool_pointer), (loc, None),
         AT.Computational ((ia_pool_s, IT.bt ia_pool), (loc, None),
-        AT.Resource ((ia_vmemmap_resource_s, vmemmap_resource), (loc, None),
-        AT.I OutputDef.[
+        AT.L (
+        LAT.Resource ((ia_vmemmap_resource_s, vmemmap_resource), (loc, None),
+        LAT.I OutputDef.[
             {loc; name = page_index_s; value = ia_page_index};
             {loc; name = vmemmap_pointer_s; value = ia_vmemmap_pointer};
             {loc; name = vmemmap_s; value = ia_vmemmap_value};
             {loc; name = pool_pointer_s; value = ia_pool_pointer};
             {loc; name = pool_s; value = ia_pool};
-          ])))))
+          ]))))))
       in
 
       (id, {loc; args; definition = Def body; return_bt = Bool; infer_arguments} )
@@ -726,14 +732,15 @@ module PageAlloc = struct
         AT.Computational ((ia_vmemmap_pointer_s, IT.bt ia_vmemmap_pointer), (loc, None), 
         AT.Computational ((ia_pool_pointer_s, IT.bt ia_pool_pointer), (loc, None),
         AT.Computational ((ia_pool_s, IT.bt ia_pool), (loc, None),
-        AT.Resource ((ia_vmemmap_resource_s, vmemmap_resource), (loc, None),
-        AT.I OutputDef.[
+        AT.L (
+        LAT.Resource ((ia_vmemmap_resource_s, vmemmap_resource), (loc, None),
+        LAT.I OutputDef.[
             {loc; name = cell_index_s; value = ia_cell_index};
             {loc; name = vmemmap_pointer_s; value = ia_vmemmap_pointer};
             {loc; name = vmemmap_s; value = ia_vmemmap_value};
             {loc; name = pool_pointer_s; value = ia_pool_pointer};
             {loc; name = pool_s; value = ia_pool};
-          ])))))
+          ]))))))
       in
 
 
@@ -825,12 +832,13 @@ module PageAlloc = struct
         AT.Computational ((ia_pool_s, IT.bt ia_pool), (loc, None),
         AT.Computational ((ia_vmemmap_pointer_s, IT.bt ia_vmemmap_pointer), (loc, None), 
         AT.Computational ((ia_hyp_physvirt_offset_s, IT.bt ia_hyp_physvirt_offset), (loc, None), 
-        AT.I OutputDef.[
+        AT.L (
+        LAT.I OutputDef.[
             {loc; name = pool_pointer_s; value = ia_pool_pointer};
             {loc; name = pool_s; value = ia_pool};
             {loc; name = vmemmap_pointer_s; value = ia_vmemmap_pointer};
             {loc; name = hyp_physvirt_offset_s; value = ia_hyp_physvirt_offset};
-          ]))))
+          ])))))
       in
 
       (id, { loc; args; return_bt = Bool; definition = Def body; infer_arguments})

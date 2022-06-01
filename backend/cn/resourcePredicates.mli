@@ -1,7 +1,7 @@
 type clause = {
     loc : Locations.t;
     guard : IndexTerms.t;
-    packing_ft : ArgumentTypes.packing_ft
+    packing_ft : LogicalArgumentTypes.packing_ft
   }
 
 val pp_clause : clause -> Pp.document
