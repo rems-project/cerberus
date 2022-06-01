@@ -117,16 +117,17 @@ let rec count_computational = function
 
 
 let normalise rt_subst ft : ('rt t) = 
-  let rec aux l r c = function
+  let rec aux names l r c = function
     | AT.Computational ((name, bt), oinfo, ft) -> 
-       Computational ((name,bt), oinfo, aux l r c ft)
+       Computational ((name,bt), oinfo, aux (name :: names) l r c ft)
     | AT.Define ((name, it), oinfo, ft) ->
-       aux l (r@[`Define ((name, it), oinfo)]) c ft
+       aux (name :: names) l (r@[`Define ((name, it), oinfo)]) c ft
     | AT.Resource ((name, re), oinfo, ft) -> 
-       aux l (r@[`Resource ((name, re), oinfo)]) c ft
+       aux (name :: names) l (r@[`Resource ((name, re), oinfo)]) c ft
     | AT.Constraint (lc, oinfo, ft) -> 
-       aux l r (c@[(lc, oinfo)]) ft
+       aux names l r (c@[(lc, oinfo)]) ft
     | AT.I i ->
+       assert (SymSet.cardinal (SymSet.of_list names) = List.length names);
        let c = List.fold_right mconstraint c (I i) in
        let r = 
          List.fold_right (fun resource_or_define r ->
@@ -136,7 +137,7 @@ let normalise rt_subst ft : ('rt t) =
            ) r (C c) in
        R r
   in
-  aux [] [] [] ft
+  aux [] [] [] [] ft
 
 
 
