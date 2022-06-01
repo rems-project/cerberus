@@ -24,14 +24,13 @@ let concat (t1: t) (t2: LRT.t) : t =
 let subst (substitution: IT.t Subst.t) rt = 
   match rt with
   | Computational ((name, bt), oinfo, t) -> 
-     let name, t = LRT.suitably_alpha_rename substitution (name, bt) t in
+     let name, t = LRT.suitably_alpha_rename substitution.relevant (name, bt) t in
      Computational ((name, bt), oinfo, LRT.subst substitution t)
 
 let alpha_unique ss = function
   | Computational ((name, bt), oinfo, t) ->
     let t = LRT.alpha_unique (SymSet.add name ss) t in
-    let (name, t) = LRT.suitably_alpha_rename
-        Subst.{replace = []; relevant = ss} (name, bt) t in
+    let (name, t) = LRT.suitably_alpha_rename ss (name, bt) t in
     Computational ((name, bt), oinfo, t)
 
 

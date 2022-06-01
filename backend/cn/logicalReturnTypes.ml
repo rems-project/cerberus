@@ -41,11 +41,11 @@ let rec subst (substitution: IT.t Subst.t) lrt =
   match lrt with
   | Define ((name, it), info, t) ->
      let it = IT.subst substitution it in
-     let name, t = suitably_alpha_rename substitution (name, IT.bt it) t in
+     let name, t = suitably_alpha_rename substitution.relevant (name, IT.bt it) t in
      Define ((name, it), info, subst substitution t)
   | Resource ((name, (re, bt)), info, t) -> 
      let re = RT.subst substitution re in
-     let name, t = suitably_alpha_rename substitution (name, bt) t in
+     let name, t = suitably_alpha_rename substitution.relevant (name, bt) t in
      let t = subst substitution t in
      Resource ((name, (re, bt)), info, t)
   | Constraint (lc, info, t) -> 
@@ -59,8 +59,8 @@ and alpha_rename (s, ls) t =
   let s' = Sym.fresh_same s in
   (s', subst (IT.make_subst [(s, IT.sym_ (s', ls))]) t)
 
-and suitably_alpha_rename su (s, ls) t = 
-  if SymSet.mem s su.Subst.relevant 
+and suitably_alpha_rename syms (s, ls) t = 
+  if SymSet.mem s syms
   then alpha_rename (s, ls) t
   else (s, t)
 

@@ -32,7 +32,7 @@ let subst su c =
   | T it -> 
      T (IT.subst su it)
   | Forall ((s, bt), body) ->
-     let s, body = IT.suitably_alpha_rename su (s, bt) body in
+     let s, body = IT.suitably_alpha_rename su.relevant (s, bt) body in
      Forall ((s, bt), IT.subst su body)
 
 let subst_ su c = 

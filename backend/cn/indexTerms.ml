@@ -376,7 +376,7 @@ let rec subst (su : typed subst) (IT (it, bt)) =
        | ITE (it,it',it'') -> ITE (subst su it, subst su it', subst su it'')
        | EQ (it, it') -> EQ (subst su it, subst su it')
        | EachI ((i1, s, i2), t) ->
-          let s, t = suitably_alpha_rename su (s, BT.Integer) t in
+          let s, t = suitably_alpha_rename su.relevant (s, BT.Integer) t in
           EachI ((i1, s, i2), subst su t)
      in
      IT (Bool_op bool_op, bt)
@@ -470,7 +470,7 @@ let rec subst (su : typed subst) (IT (it, bt)) =
        | Get (it, arg) -> 
           Get (subst su it, subst su arg)
        | Def ((s, abt), body) ->
-          let s, body = suitably_alpha_rename su (s, abt) body in
+          let s, body = suitably_alpha_rename su.relevant (s, abt) body in
           Def ((s, abt), subst su body)
      in
      IT (Map_op map_op, bt)
@@ -483,8 +483,8 @@ and alpha_rename (s, bt) body =
   let s' = Sym.fresh_same s in
   (s', subst (make_subst [(s, IT (Lit (Sym s'), bt))]) body)
 
-and suitably_alpha_rename su (s, bt) body = 
-  if SymSet.mem s su.relevant 
+and suitably_alpha_rename syms (s, bt) body = 
+  if SymSet.mem s syms 
   then alpha_rename (s, bt) body
   else (s, body)
   
