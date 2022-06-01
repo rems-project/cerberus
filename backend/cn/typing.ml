@@ -394,6 +394,11 @@ let get_member_type loc tag member layout : (Sctypes.t, TypeErrors.t) m =
   | Some membertyp -> return membertyp
   | None -> fail (fun _ -> {loc; msg = Unknown_member (tag, member)})
 
+let get_struct_member_type loc tag member =
+  let@ decl = get_struct_decl loc tag in
+  let@ ty = get_member_type loc tag member decl in
+  return ty
+
 let get_fun_decl loc fsym = 
   let open TypeErrors in
   let@ global = get_global () in
