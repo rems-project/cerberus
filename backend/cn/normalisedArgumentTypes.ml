@@ -6,6 +6,7 @@ module RET = ResourceTypes
 module LC = LogicalConstraints
 module AT = ArgumentTypes
 module SymSet = Set.Make(Sym)
+open Subst
 
 
 
@@ -40,11 +41,11 @@ let rec subst_c i_subst substitution = function
 let rec subst_r i_subst substitution = function
   | Resource ((name, (re, bt)), oinfo, t) ->
      let re = RET.subst substitution re in
-     let name, t = suitably_alpha_rename_r i_subst substitution (name, bt) t in
+     let name, t = suitably_alpha_rename_r i_subst substitution.relevant (name, bt) t in
      Resource ((name, (re, bt)), oinfo, subst_r i_subst substitution t)
   | Define ((name, it), info, t) ->
      let it = IT.subst substitution it in
-     let name, t = suitably_alpha_rename_r i_subst substitution (name, IT.bt it) t in
+     let name, t = suitably_alpha_rename_r i_subst substitution.relevant (name, IT.bt it) t in
      Define ((name, it), info, subst_r i_subst substitution t)
   | C c -> 
      C (subst_c i_subst substitution c)
@@ -53,15 +54,15 @@ and alpha_rename_r i_subst (s, ls) t =
   let s' = Sym.fresh_same s in
   (s', subst_r i_subst (IT.make_subst [(s, IT.sym_ (s', ls))]) t)
 
-and suitably_alpha_rename_r i_subst su (s, ls) t =
-  if SymSet.mem s su.Subst.relevant
+and suitably_alpha_rename_r i_subst syms (s, ls) t =
+  if SymSet.mem s syms
   then alpha_rename_r i_subst (s, ls) t
   else (s, t)
 
 
 let rec subst_a i_subst substitution = function
   | Computational ((name, bt), oinfo, t) -> 
-     let name, t = suitably_alpha_rename_a i_subst substitution (name, bt) t in
+     let name, t = suitably_alpha_rename_a i_subst substitution.relevant (name, bt) t in
      Computational ((name, bt), oinfo, subst_a i_subst substitution t)
   | R r -> 
      R (subst_r i_subst substitution r)
@@ -70,8 +71,8 @@ and alpha_rename_a i_subst (s, ls) t =
   let s' = Sym.fresh_same s in
   (s', subst_a i_subst (IT.make_subst [(s, IT.sym_ (s', ls))]) t)
 
-and suitably_alpha_rename_a i_subst su (s, ls) t =
-  if SymSet.mem s su.Subst.relevant
+and suitably_alpha_rename_a i_subst syms (s, ls) t =
+  if SymSet.mem s syms
   then alpha_rename_a i_subst (s, ls) t
   else (s, t)
 

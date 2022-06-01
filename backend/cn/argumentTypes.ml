@@ -38,15 +38,15 @@ let rec subst i_subst =
   let rec aux (substitution: IT.t Subst.t) at =
     match at with
     | Computational ((name, bt), info, t) -> 
-       let name, t = suitably_alpha_rename i_subst substitution (name, bt) t in
+       let name, t = suitably_alpha_rename i_subst substitution.relevant (name, bt) t in
        Computational ((name, bt), info, aux substitution t)
     | Define ((name, it), info, t) ->
        let it = IT.subst substitution it in
-       let name, t = suitably_alpha_rename i_subst substitution (name, IT.bt it) t in
+       let name, t = suitably_alpha_rename i_subst substitution.relevant (name, IT.bt it) t in
        Define ((name, it), info, aux substitution t)
     | Resource ((name, (re, bt)), info, t) -> 
        let re = RET.subst substitution re in
-       let name, t = suitably_alpha_rename i_subst substitution (name, bt) t in
+       let name, t = suitably_alpha_rename i_subst substitution.relevant (name, bt) t in
        let t = aux substitution t in
        Resource ((name, (re, bt)), info, t)
     | Constraint (lc, info, t) -> 
@@ -63,8 +63,8 @@ and alpha_rename i_subst (s, ls) t =
   let s' = Sym.fresh_same s in
   (s', subst i_subst (IT.make_subst [(s, IT.sym_ (s', ls))]) t)
 
-and suitably_alpha_rename i_subst su (s, ls) t = 
-  if SymSet.mem s su.Subst.relevant 
+and suitably_alpha_rename i_subst syms (s, ls) t = 
+  if SymSet.mem s syms 
   then alpha_rename i_subst (s, ls) t
   else (s, t)
 
@@ -114,8 +114,7 @@ module RT = ReturnTypes
 
 
 let alpha_unique =
-  let rename_if ss = suitably_alpha_rename RT.subst
-    Subst.{relevant = ss; replace = []} in
+  let rename_if ss = suitably_alpha_rename RT.subst ss in
   let rec f ss at =
     match at with
     | Computational ((name, bt), info, t) ->
