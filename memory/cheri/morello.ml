@@ -652,6 +652,11 @@ module Morello_capability: Capability
 
     and cap_invalidate c = {c with valid = false }
 
+
+    (* Utlity functoin to invalidate cap if it is sealed *)
+    and invalidate_if_sealded c =
+      if is_sealed c then cap_invalidate c else c
+
     (* Modifying the Capability Value (vaddress of object type)
 
        Related instructions:
@@ -660,10 +665,10 @@ module Morello_capability: Capability
      *)
     and cap_set_value c cv =
       if cap_vaddr_representable c cv then
-        {c with
-          value = cv;
-          flags = flags_from_value cv
-        }
+        invalidate_if_sealded {c with
+            value = cv;
+            flags = flags_from_value cv
+          }
       else
         cap_invalidate c
 
@@ -676,7 +681,7 @@ module Morello_capability: Capability
       assert(vaddr_in_range a0) ;
       assert(vaddr_in_range a1) ;
       (* TODO(CHERI) *)
-      c
+      invalidate_if_sealded c
 
     (* Reducing the Capability Bounds (exact)
 
@@ -687,7 +692,7 @@ module Morello_capability: Capability
       assert(vaddr_in_range a0) ;
       assert(vaddr_in_range a1) ;
       (* TODO(CHERI) *)
-      c
+      invalidate_if_sealded c
 
     (* Reducing the Capability Permissions
 
@@ -699,11 +704,7 @@ module Morello_capability: Capability
       let l1 = P.to_list p in
       let l = List.map2 (&&) l0 l1 in
       match P.of_list l with
-      | Some p ->
-         if is_sealed c then
-           {c with valid=false; perms=p }
-         else
-           {c with perms=p }
+      | Some p -> invalidate_if_sealded {c with perms=p }
       | None -> Debug_ocaml.error "cap_narrow_perms: P.of_list failed"
 
     (* Sealing operations *)
@@ -739,7 +740,7 @@ module Morello_capability: Capability
      *)
     and cap_set_flags c f =
       (* TODO(CHERI): also modify value *)
-      {c with flags = f }
+      invalidate_if_sealded {c with flags = f }
 
     (* --- Controlled non-monotonic manipulation --  *)
 
