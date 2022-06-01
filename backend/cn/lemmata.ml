@@ -84,7 +84,34 @@ let it_uninterp_funs it =
   in
   IT.fold_subterms f SymSet.empty it
 
-type scan_res = {res: bool; ret: bool; funs : SymSet.t}
+exception Cannot_Coerce
+
+(* attempt to coerce out the resources in this function type.
+   we can do this for some lemmas where resources are passed and
+   returned unchanged as a way of passing their return values. *)
+let try_coerce_res ftyp =
+  let rec erase_res r t = match t with
+    | LRT.Define (v, info, t) -> LRT.Define (v, info, erase_res r t)
+    | LRT.Constraint (lc, info, t) -> LRT.Constraint (lc, info, erase_res r t)
+    | LRT.Resource ((name, (re, bt)), info, t) ->
+        let (arg_name, arg_re) = r in
+        if true (* match_input re arg_re *)
+        then LRT.subst (IT.make_subst [(name, IT.sym_ (arg_name, bt))]) t
+        else LRT.Resource ((name, (re, bt)), info, erase_res r t)
+    | LRT.I -> raise Cannot_Coerce (* did not find a matching resource *)
+  in
+  let rec coerce_at t = match t with
+    | AT.Resource ((name, (re, bt)), info, t) ->
+        AT.Computational ((name, bt), info, AT.map (RT.map (erase_res (name, re))) t)
+    | AT.Computational (v, info, t) -> AT.Computational (v, info, coerce_at t)
+    | AT.Define (v, info, t) -> AT.Define (v, info, coerce_at t)
+    | AT.Constraint (lc, info, t) -> AT.Constraint (lc, info, coerce_at t)
+    | AT.I _ -> t
+  in
+  try Some (coerce_at ftyp) with Cannot_Coerce -> None
+
+type scan_res = {res: bool; ret: bool;
+    res_coerce: RT.t AT.t option; funs: SymSet.t}
 
 (* recurse over a function type and detect resources (impureness),
    non-unit return types (non-lemma trusted functions), and the set
@@ -99,7 +126,7 @@ let scan ftyp =
     | LRT.Define ((_, it), _, t) -> add_funs (it_uninterp_funs it) (scan_lrt t)
     | LRT.Resource (_, _, t) -> {(scan_lrt t) with res = true}
     | LRT.Constraint (lc, _, t) -> add_funs (lc_funs lc) (scan_lrt t)
-    | LRT.I -> {res = false; ret = false; funs = SymSet.empty}
+    | LRT.I -> {res = false; ret = false; res_coerce = None; funs = SymSet.empty}
   in
   let scan_rt = function
     | RT.Computational ((_, bt), _, t) -> {(scan_lrt t) with ret =
@@ -112,7 +139,10 @@ let scan ftyp =
     | AT.Constraint (lc, _, t) -> add_funs (lc_funs lc) (scan_at t)
     | AT.I t -> scan_rt t
   in
-  scan_at ftyp
+  let x = scan_at ftyp in
+  if x.res then
+  {x with res_coerce = try_coerce_res ftyp}
+  else x
 
 (*
 let nat_to_coq ftyp =
