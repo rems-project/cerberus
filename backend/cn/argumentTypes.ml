@@ -69,6 +69,7 @@ and suitably_alpha_rename i_subst su (s, ls) t =
   else (s, t)
 
 
+
 let pp i_pp ft = 
   let open Pp in
   let rec aux = function
@@ -110,6 +111,30 @@ let rec count_computational = function
 
 module LRT = LogicalReturnTypes
 module RT = ReturnTypes
+
+
+let alpha_unique =
+  let rename_if ss = suitably_alpha_rename RT.subst
+    Subst.{relevant = ss; replace = []} in
+  let rec f ss at =
+    match at with
+    | Computational ((name, bt), info, t) ->
+       let name, t = rename_if ss (name, bt) t in
+       let t = f (SymSet.add name ss) t in
+       Computational ((name, bt), info, t)
+    | Define ((name, it), info, t) ->
+       let name, t = rename_if ss (name, IT.bt it) t in
+       let t = f (SymSet.add name ss) t in
+       Define ((name, it), info, t)
+    | Resource ((name, (re, bt)), info, t) ->
+       let name, t = rename_if ss (name, bt) t in
+       let t = f (SymSet.add name ss) t in
+       Resource ((name, (re, bt)), info, f ss t)
+    | Constraint (lc, info, t) -> Constraint (lc, info, f ss t)
+    | I i -> I (RT.alpha_unique ss i)
+  in
+  f SymSet.empty
+
 
 let rec of_lrt (lrt : LRT.t) (rest : 'i t) : 'i t = 
   match lrt with

@@ -27,7 +27,16 @@ let subst (substitution: IT.t Subst.t) rt =
      let name, t = LRT.suitably_alpha_rename substitution (name, bt) t in
      Computational ((name, bt), oinfo, LRT.subst substitution t)
 
+let alpha_unique ss = function
+  | Computational ((name, bt), oinfo, t) ->
+    let t = LRT.alpha_unique (SymSet.add name ss) t in
+    let (name, t) = LRT.suitably_alpha_rename
+        Subst.{replace = []; relevant = ss} (name, bt) t in
+    Computational ((name, bt), oinfo, t)
 
+
+let map (f : LRT.t -> LRT.t) = function
+  | Computational (param, oinfo, t) -> Computational (param, oinfo, f t)
 
 
 
