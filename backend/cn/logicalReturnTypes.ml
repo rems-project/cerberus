@@ -66,7 +66,25 @@ and suitably_alpha_rename su (s, ls) t =
 
 
 
-
+let alpha_unique ss =
+  let rename_if ss (name, ls) t =
+    if SymSet.mem name ss
+    then alpha_rename (name, ls) t
+    else (name, t)
+  in
+  let rec f ss = function
+  | Resource ((name, (re, bt)), info, t) ->
+     let t = f (SymSet.add name ss) t in
+     let (name, t) = rename_if ss (name, bt) t in
+     Resource ((name, (re, bt)), info, t)
+  | Define ((name, it), info, t) ->
+     let t = f (SymSet.add name ss) t in
+     let name, t = rename_if ss (name, IT.bt it) t in
+     Define ((name, it), info, t)
+  | Constraint (lc, info, t) -> Constraint (lc, info, f ss t)
+  | I ->
+     I
+  in f ss
 
 
 let rec pp_aux lrt =
