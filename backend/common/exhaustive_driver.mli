@@ -18,7 +18,7 @@ type batch_exit =
 type batch_output =
   | Defined of { exit: batch_exit; stdout: string; stderr: string; blocked: bool }
   | Undefined of { ub: Undefined.undefined_behaviour; stderr: string; loc: Location_ocaml.t }
-  | Error of { msg: string }
+  | Error of { msg: string; stderr: string }
 
 val string_of_batch_exit: batch_exit -> string
 val print_batch_output: ?is_charon:bool -> int option -> (string list * batch_output) -> unit

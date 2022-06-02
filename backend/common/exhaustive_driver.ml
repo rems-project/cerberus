@@ -38,7 +38,7 @@ type batch_exit =
 type batch_output =
   | Defined of { exit: batch_exit; stdout: string; stderr: string; blocked: bool }
   | Undefined of { ub: Undefined.undefined_behaviour; stderr: string; loc: Location_ocaml.t }
-  | Error of { msg: string }
+  | Error of { msg: string; stderr: string; }
 
 let string_of_batch_exit exit =
   let cval =
@@ -111,7 +111,10 @@ let print_batch_output ?(is_charon=false) i_opt (z3_strs, exec) =
           (String.escaped stderr)
           (Location_ocaml.simple_location loc)
           (if is_charon then "\n" else "")
-    | Error { msg } ->
+    | Error { msg; stderr } ->
+      if is_charon then begin
+        prerr_string stderr;
+      end;
         begin if has_multiple then
           print_endline ":"
         end;
@@ -148,15 +151,18 @@ let batch_drive (file: 'a Core.file) args fs_state conf =
               | _ ->
                   OtherValue dres.Driver.dres_core_value in
           Defined { exit; stdout= dres.Driver.dres_stdout; stderr= dres.Driver.dres_stderr; blocked= dres.Driver.dres_blocked }
-      | ND.Killed (_, ND.Undef0 (loc, [])) ->
-          Error { msg= "[empty UB, probably a cerberus BUG]" }
+      | ND.Killed (dr_st, ND.Undef0 (loc, [])) ->
+          let stderr = String.concat "" (Dlist.toList dr_st.Driver.core_state.Core_run.io.Core_run.stderr) in
+          Error { msg= "[empty UB, probably a cerberus BUG]"; stderr }
       | ND.Killed (dr_st, ND.Undef0 (loc, ub::_)) ->
           let stderr = String.concat "" (Dlist.toList dr_st.Driver.core_state.Core_run.io.Core_run.stderr) in
           Undefined { ub; stderr; loc }
-      | ND.Killed (_, ND.Error0 (_, msg)) ->
-          Error { msg }
-      | ND.Killed (_, ND.Other dr_err) ->
-          Error { msg= string_of_driver_error dr_err }
+      | ND.Killed (dr_st, ND.Error0 (_, msg)) ->
+          let stderr = String.concat "" (Dlist.toList dr_st.Driver.core_state.Core_run.io.Core_run.stderr) in
+          Error { msg; stderr }
+      | ND.Killed (dr_st, ND.Other dr_err) ->
+          let stderr = String.concat "" (Dlist.toList dr_st.Driver.core_state.Core_run.io.Core_run.stderr) in
+          Error { msg= string_of_driver_error dr_err; stderr }
     end in
     let _constraints =
       if !Debug_ocaml.debug_level > 0 then begin
