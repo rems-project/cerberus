@@ -715,11 +715,21 @@ and translate_postfix loc self stdlib result_ty op e =
 match Ctype.unatomic_ ty with
   | Ctype.Basic (Ctype.Integer _) ->
       (* TODO: check again *)
+      let mk_cheri pe =
+        let is_signed = AilTypesAux.is_signed_integer_type result_ty in
+        if Global.is_CHERI () && Ctype.is_ptr_t result_ty then
+          mk_cheri_derive_and_assign_cap is_signed
+          (Mem_common.DCunary op)
+          (obj_sym_pe, Caux.mk_nullcap_pe is_signed)
+          pe
+        else
+          pe in
       let core_incr = Caux.mk_op_pe core_op obj_sym_pe (Caux.mk_integer_pe 1) in
-      if AilTypesAux.is_signed_integer_type result_ty then
+      mk_cheri begin if AilTypesAux.is_signed_integer_type result_ty then
                         stdlib.mkcall_catch_exceptional_condition result_ty core_incr
       else (* is unsigned *)
                         stdlib.mkcall_wrapI result_ty core_incr
+      end
   | Ctype.Basic (Ctype.Floating (Ctype.RealFloating _)) ->
                         (* TODO: not correct semantics for float *)
                         Caux.mk_op_pe core_op obj_sym_pe (Caux.mk_floating_value_pe Mem.one_fval)
