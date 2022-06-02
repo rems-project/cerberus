@@ -238,7 +238,7 @@ module ResourceInference = struct
 
     let exact_match () =
       let@ pmatch = exact_ptr_match () in
-      let match_f (request, (resource, _)) =
+      let match_f (request, resource) =
         match (request, resource) with
         | (P req_p, 
            P res_p) ->
@@ -252,7 +252,7 @@ module ResourceInference = struct
 
     let exact_match_point_ptrs ptrs =
       let@ pmatch = exact_ptr_match () in
-      let match_f (resource, _) = 
+      let match_f resource = 
         match resource with
         | P ({name = Owned _; _} as res_p) -> 
            List.exists (fun p -> pmatch (p, res_p.pointer)) ptrs
@@ -312,13 +312,13 @@ module ResourceInference = struct
          let start_timing = time_log_start "point-request" "" in
          let@ provable = provable loc in
          let@ is_ex = exact_match () in
-         let is_exact_re re = !reorder_points && (is_ex (RET.P requested, re)) in
+         let is_exact_re (re : RET.t) = !reorder_points && (is_ex (RET.P requested, re)) in
          let@ global = get_global () in
          let@ simp_lcs = simp_constraints () in
          let needed = requested.permission in 
          let sub_resource_if = fun cond re (needed, oargs) ->
                let continue = (Unchanged, (needed, oargs)) in
-               if is_false needed || not (cond re) then continue else
+               if is_false needed || not (cond (fst re)) then continue else
                match re with
                | (P p', p'_oargs) when equal_predicate_name (Owned requested_ct) p'.name ->
                   debug 15 (lazy (item "point/point sub at ptr" (IT.pp p'.pointer)));
@@ -503,7 +503,7 @@ module ResourceInference = struct
          let needed = requested.permission in
          let sub_resource_if = fun cond re (needed, oargs) ->
                let continue = (Unchanged, (needed, oargs)) in
-               if is_false needed || not (cond re) then continue else
+               if is_false needed || not (cond (fst re)) then continue else
                match re with
                | (P p', p'_oargs) when equal_predicate_name (Owned requested_ct) p'.name ->
                   let base = requested.pointer in
@@ -563,7 +563,7 @@ module ResourceInference = struct
          else debug 10 (lazy (item "key ptrs for additional matches:"
              (Pp.list IT.pp (List.map snd k_ptrs))));
          let@ k_ptr_match = exact_match_point_ptrs (List.map snd k_ptrs) in
-         let is_exact_k re = !reorder_points && k_ptr_match re in
+         let is_exact_k (re : RET.t) = !reorder_points && k_ptr_match re in
          let necessary_k_ptrs = List.filter (fun (i, p) ->
              let i_match = eq_ (sym_ (requested.q, Integer), i) in
              match provable (forall_ (requested.q, BT.Integer) (impl_ (i_match, needed)))
@@ -1261,7 +1261,7 @@ end = struct
   (*   let ftyp = del i ftyp in *)
   (*   Resource (resource, info, ftyp) *)
 
-  let has_exact loc r =
+  let has_exact loc (r : RET.t) =
     let@ is_ex = RI.General.exact_match () in
     map_and_fold_resources loc (fun re found -> (Unchanged, found || is_ex (RE.request re, r))) false
 
