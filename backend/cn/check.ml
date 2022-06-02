@@ -1243,48 +1243,44 @@ end = struct
     else fail (fun _ -> {loc; msg = Mismatch_lvar { has = IT.bt instantiation; expect; spec_info = info}})
 
 
-  (* let prefer_req i ftyp = *)
-  (*   let open NormalisedArgumentTypes in *)
-  (*   let rec grab i ftyp = match ftyp with *)
-  (*     | Resource (resource, info, ftyp) -> if i = 0 *)
-  (*         then (resource, info) *)
-  (*         else grab (i - 1) ftyp *)
-  (*     | _ -> assert false *)
-  (*   in *)
-  (*   let rec del i ftyp = match ftyp with *)
-  (*     | Resource (resource, info, ftyp) -> if i = 0 *)
-  (*         then ftyp *)
-  (*         else Resource (resource, info, del (i - 1) ftyp) *)
-  (*     | _ -> assert false *)
-  (*   in *)
-  (*   let (resource, info) = grab i ftyp in *)
-  (*   let ftyp = del i ftyp in *)
-  (*   Resource (resource, info, ftyp) *)
-
   let has_exact loc (r : RET.t) =
     let@ is_ex = RI.General.exact_match () in
     map_and_fold_resources loc (fun re found -> (Unchanged, found || is_ex (RE.request re, r))) false
 
-  (* let prefer_exact loc ftyp =  *)
-  (*   if ! RI.reorder_points then return ftyp *)
-  (*   else *)
-  (*   let reqs1 = NormalisedArgumentTypes.r_resource_requests ftyp in *)
-  (*   let unis = SymSet.of_list (List.map fst reqs1) in *)
-  (*   (\* capture avoiding *\) *)
-  (*   assert (SymSet.cardinal unis = List.length reqs1); *)
-  (*   let reqs = List.mapi (fun i res -> (i, res)) reqs1 in *)
-  (*   let res_free_vars (r, _) = match r with *)
-  (*     | P ({name = Owned _; _} as p) -> IT.free_vars p.pointer *)
-  (*     | Q ({name = Owned _; _} as p) -> IT.free_vars p.pointer *)
-  (*     | _ -> SymSet.empty *)
-  (*   in *)
-  (*   let no_unis r = SymSet.for_all (fun x -> not (SymSet.mem x unis)) (res_free_vars r) in *)
-  (*   let reqs = List.filter (fun (_, (_, r)) -> no_unis r) reqs in *)
-  (*   let@ reqs = ListM.filterM (fun (_, (_, r)) -> has_exact loc r) reqs in *)
-  (*   (\* just need an actual preference function *\) *)
-  (*   match List.rev reqs with *)
-  (*     | ((i, _) :: _) -> return (prefer_req i ftyp) *)
-  (*     | [] -> return ftyp *)
+  let prioritise_resource loc rt_subst pred ftyp = 
+    let open LAT in
+    let rec aux names ft_so_far ft = 
+      match ft with
+      | Define ((s, it), info, t) ->
+         let ft_so_far' ft = ft_so_far (Define ((s, it), info, ft)) in
+         aux (SymSet.add s names) ft_so_far' t
+      | Resource ((name, (re, bt)), info, t) ->
+         let continue () = 
+           let ft_so_far' ft = ft_so_far (Resource ((name, (re, bt)), info, ft)) in
+           aux (SymSet.add name names) ft_so_far' t 
+         in
+         if not (SymSet.is_empty (SymSet.inter (RET.free_vars re) names)) then 
+           continue ()
+         else
+           let@ pred_holds = pred loc re in
+           if pred_holds then 
+             let name, t = LAT.alpha_rename rt_subst (name, bt) t in
+             return (Resource ((name, (re, bt)), info, (ft_so_far t)))
+           else 
+             continue ()
+      | Constraint (lc, info, t) -> 
+         let ft_so_far' ft = ft_so_far (Constraint (lc, info, ft)) in
+         aux names ft_so_far' t
+      | I rt ->
+         return (ft_so_far (I rt))         
+    in
+    aux SymSet.empty (fun ft -> ft) ftyp
+
+  let prefer_exact loc rt_subst ftyp =
+    if !RI.reorder_points 
+    then prioritise_resource loc rt_subst has_exact ftyp
+    else return ftyp 
+
 
 
 
@@ -1310,7 +1306,7 @@ end = struct
             debug 6 (lazy (item "spec" (LAT.pp rt_pp ftyp)));
           )
         in
-        (* let@ ftyp = prefer_exact loc ftyp in *)
+        let@ ftyp = prefer_exact loc rt_subst ftyp in
         match ftyp with
         | LAT.Resource ((s, (resource, bt)), info, ftyp) -> 
            let uiinfo = (situation, (Some resource, Some info)) in

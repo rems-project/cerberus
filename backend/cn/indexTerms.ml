@@ -205,6 +205,8 @@ let pp =
 let add_subterms : 'bt. ('bt term) list -> 'bt term -> ('bt term) list =
   fun ts (IT (it, _)) ->
   match it with
+  | Lit _ ->
+     ts
   | Arith_op arith_op ->
      begin match arith_op with
      | Add (it, it') -> [it; it'] @ ts
@@ -239,9 +241,15 @@ let add_subterms : 'bt. ('bt term) list -> 'bt term -> ('bt term) list =
      end
   | Struct_op struct_op ->
      begin match struct_op with
-     | Struct (_tag, members) -> map snd members
-     | StructMember (it, m) -> [it;it] @ ts
+     | Struct (_tag, members) -> map snd members @ ts
+     | StructMember (it, m) -> it :: ts
      | StructUpdate ((it, m), v) -> [it; v] @ ts
+     end
+  | Record_op record_op ->
+     begin match record_op with
+     | Record members -> map snd members @ ts
+     | RecordMember (it, m) -> it :: ts
+     | RecordUpdate ((it, m), v) -> [it; v] @ ts
      end
   | Pointer_op pointer_op ->
      begin match pointer_op with
@@ -283,8 +291,10 @@ let add_subterms : 'bt. ('bt term) list -> 'bt term -> ('bt term) list =
      | Get (t, arg) -> [t; arg] @ ts
      | Def ((s, _), body) -> (* in binders *) [] @ ts
      end
-  (* | Let ((s, bound), body) -> [bound] @ ts (\* s/body in binders *\) *)
-  | _ -> [] @ ts
+  | Info (s, ts') -> 
+     ts' @ ts
+  | Pred (s, ts') ->
+     ts' @ ts
 
 let subterm_binder : 'bt. 'bt term -> (Sym.t * 'bt term) option =
   fun (IT (it, _)) ->
