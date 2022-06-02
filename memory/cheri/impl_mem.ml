@@ -1308,7 +1308,7 @@ module CHERI (C:Capability
        let (cb,ct) = C.encode true c in
        (funptrmap,
         IntMap.add addr ct captags,
-        List.mapi (fun i b -> AbsByte.v prov ~copy_offset:(Some i) (Some b)) @@ cb)
+        List.mapi (fun i b -> AbsByte.v prov ~copy_offset:None (Some b)) @@ cb)
     | MVfloating (fty, fval) ->
        let bs = List.map (fun x -> AbsByte.v Prov_none (Some x)) begin
                     bytes_of_int
