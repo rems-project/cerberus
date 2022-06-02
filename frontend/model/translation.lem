@@ -151,14 +151,9 @@ let oneAil_tau =
 (* ========================================================================== *)
 
 let mk_cheri_derive_and_assign_cap is_signed cap_op (obj1_sym_pe, obj2_sym_pe) core_pe =
-  E.wrapped_fresh_symbol (C.BTy_object C.OTy_integer) >>= fun (_, cap_sym_pat, cap_sym_pe) ->
-  E.return begin
-    Caux.mk_let_pe cap_sym_pat
-      (Caux.mk_memop_pe (Mem_common.DeriveCap cap_op is_signed)
-        [obj1_sym_pe; obj2_sym_pe])
-      (Caux.mk_memop_pe Mem_common.CapAssignValue
-        [cap_sym_pe; core_pe])
-  end
+  let cap_pe =
+    Caux.mk_memop_pe (Mem_common.DeriveCap cap_op is_signed) [obj1_sym_pe; obj2_sym_pe] in
+  Caux.mk_memop_pe Mem_common.CapAssignValue [cap_pe; core_pe]
 
 
 (*
@@ -651,10 +646,6 @@ and translate_bitwise_operator loc translate usual_arithmetic_conversion stdlib 
       (usual_arithmetic_conversion (ctype_of e1) (ctype_of e2) obj1_sym_pe obj2_sym_pe) in
   let core_bop = stdlib_call result_ty promoted1_pe promoted2_pe in
   let is_signed = AilTypesAux.is_signed_integer_type result_ty in
-  mk_cheri_derive_and_assign_cap is_signed
-    (Mem_common.DCbinary (A.Arithmetic aop))
-    (obj1_sym_pe, obj2_sym_pe)
-    core_bop >>= fun core_cheri_bop ->
   E.return begin
     C.Expr [Annot.Astd std_id] (
       C.Ewseq (Caux.mk_tuple_pat [ Caux.mk_sym_pat e1_sym (C.BTy_loaded oTy)
@@ -667,7 +658,10 @@ and translate_bitwise_operator loc translate usual_arithmetic_conversion stdlib 
                  (* Both operand are specified *)
                 Caux.mk_specified_pe (Caux.mk_std_pe (std_id ^ "#4") begin
                   if Global.is_CHERI () && Ctype.is_ptr_t result_ty then
-                    core_cheri_bop
+                    mk_cheri_derive_and_assign_cap is_signed
+                      (Mem_common.DCbinary (A.Arithmetic aop))
+                      (obj1_sym_pe, obj2_sym_pe)
+                      core_bop
                   else
                     core_bop
                 end) )
@@ -982,10 +976,6 @@ else
             else
               Caux.bitwise_complement_pe (Caux.mk_ail_ctype_pe result_ty) promoted_e in
           let is_signed = AilTypesAux.is_signed_integer_type result_ty in
-          mk_cheri_derive_and_assign_cap is_signed
-            (Mem_common.DCunary A.Bnot)
-            (Caux.mk_nullcap_pe is_signed, obj_sym_pe)
-            core_bnot >>= fun core_cheri_bnot ->
           E.return begin
             Caux.add_std "§6.5.3.3#4" begin
               Caux.mk_wseq_e e_sym_pat core_e begin
@@ -995,13 +985,10 @@ else
                       , (* NOTE: result_ty == promoted type of e *)
                         Caux.mk_specified_pe begin
                           if Global.is_CHERI () && Ctype.is_ptr_t result_ty then
-                            core_cheri_bnot
-                            (* let is_signed = AilTypesAux.is_signed_integer_type result_ty in
-                            Caux.mk_let_pe cap_sym_pat
-                              (Caux.mk_memop_pe (Mem_common.DeriveCap (Mem_common.DCunary A.Bnot) is_signed)
-                                [Caux.mk_nullcap_pe is_signed; obj_sym_pe])
-                              (Caux.mk_memop_pe Mem_common.CapAssignValue
-                                [cap_sym_pe; core_bnot]) *)
+                            mk_cheri_derive_and_assign_cap is_signed
+                              (Mem_common.DCunary A.Bnot)
+                              (Caux.mk_nullcap_pe is_signed, obj_sym_pe)
+                              core_bnot
                           else 
                             core_bnot
                         end )
