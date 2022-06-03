@@ -2294,16 +2294,25 @@ module CHERI (C:Capability
     | _, IC _ ->
         failwith "invalid integer value (capability for non- [u]intptr_t"
 
-  
   let derive_cap is_signed bop ival1 ival2 : integer_value =
-    match ival1, ival2 with
-    | IC (prov,_ ,cap), _
-    | _ , IC (prov,_,cap) -> IC (prov, is_signed, cap)
-    | IV _, IV _ -> IC (Prov_none, is_signed, C.cap_c0 ())
+    match bop with
+    | DCunary _ ->
+       begin
+         match ival1 with
+         | IC (prov,_ ,cap) -> IC (prov, is_signed, cap)
+         | IV _ -> IC (Prov_none, is_signed, C.cap_c0 ())
+       end
+    | DCbinary _ ->
+       begin
+         match ival1, ival2 with
+         | IC (prov,_ ,cap), _
+           | _ , IC (prov,_,cap) -> IC (prov, is_signed, cap)
+         | IV _, IV _ -> IC (Prov_none, is_signed, C.cap_c0 ())
+       end
 
   let cap_assign_value loc ival_cap ival_n :(Undefined.undefined_behaviour, integer_value) Either.either =
     match ival_cap, ival_n with
-    | IC (prov,is_signed,c), IV (_,n) ->
+    | IC (_,is_signed,c), IV (prov,n) ->
        if C.cap_vaddr_representable c n
        then Either.Right (IC (prov, is_signed, C.cap_set_value c n))
        else Either.Left
@@ -2313,6 +2322,7 @@ module CHERI (C:Capability
               )
     | _, _ -> failwith "Unexpected argument types for cap_assign_value"
 
+  (* Added for CHERI to cast to regular integers. TODO: document *)
   let ptr_t_int_value = function
     | IC (prov, _, _) as ival ->
         IV (prov, num_of_int ival)
@@ -2906,8 +2916,6 @@ module CHERI (C:Capability
     | (Prov_device, Prov_device) ->
        Prov_device
 
-    (* PNVI-ae-udi *)
-    (* TODO: this is improvised, need to check with P *)
     | (Prov_symbolic _, _)
       | (_, Prov_symbolic _) ->
        failwith "CHERI.combine_prov: found a Prov_symbolic"
