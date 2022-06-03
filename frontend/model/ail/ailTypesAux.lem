@@ -717,11 +717,6 @@ let usual_arithmetic_integer impl ity1 ity2 =
     "NON STD: usual_arithmetic_integer ==> if any operand is of type size_t, then the common type is size_t"
   ) in
   match (ity1, ity2) with
-    | (Size_t, _) ->
-        Size_t
-    | (_, Size_t) ->
-        Size_t
-    
     | (Signed Intptr_t, Unsigned Intptr_t) ->
         Unsigned Intptr_t
     | (Signed Intptr_t, _) ->
@@ -734,7 +729,11 @@ let usual_arithmetic_integer impl ity1 ity2 =
         Unsigned Intptr_t
     | (_, Unsigned Intptr_t) ->
         Unsigned Intptr_t
-
+    | (Size_t, _) ->
+        Size_t
+    | (_, Size_t) ->
+        Size_t
+    
     | _ ->
         let promoted_ity1 = integer_promotion impl ity1 in
         let promoted_ity2 = integer_promotion impl ity2 in
