@@ -723,6 +723,10 @@ let usual_arithmetic_integer impl ity1 ity2 =
         Signed Intptr_t
     | (Unsigned Intptr_t, Signed Intptr_t) ->
         Unsigned Intptr_t
+    | (Size_t, Signed Intptr_t) ->
+        Unsigned Intptr_t
+    | (Signed Intptr_t, Size_t) ->
+        Unsigned Intptr_t
     | (_, Signed Intptr_t) ->
         Signed Intptr_t
     | (Unsigned Intptr_t, _) ->
