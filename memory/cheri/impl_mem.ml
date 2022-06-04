@@ -2323,12 +2323,12 @@ module CHERI (C:Capability
               )
     | _, _ -> failwith "Unexpected argument types for cap_assign_value"
 
-  (* Added for CHERI to cast to regular integers. TODO: document *)
+  (* Added for CHERI to cast to regular integers. *)
   let ptr_t_int_value = function
     | IC (prov, _, _) as ival ->
         IV (prov, num_of_int ival)
-    | IV _ as ival ->
-        ival
+    | IV _ ->
+        failwith "Unexpected argument value in ptr_t_int_value"
 
   let null_cap is_signed : integer_value =
     IC (Prov_none, is_signed, (C.cap_c0 ()))
