@@ -364,8 +364,8 @@ else
 (* STD §6.5.8 Relational operators *)
 and translate_relational_operator self usual_arithmetic_conversion result_ty bop e1 e2 =
   (* STD "§6.5.8" *)
-  let oTy1    = force_core_object_type_of_ctype (ctype_of e1) in
-  let oTy2    = force_core_object_type_of_ctype (ctype_of e2) in
+  let oTy1 = force_core_object_type_of_ctype (ctype_of e1) in
+  let oTy2 = force_core_object_type_of_ctype (ctype_of e2) in
   self e1                                    >>= fun core_e1                                  ->
   self e2                                    >>= fun core_e2                                  ->
   E.wrapped_fresh_symbol (C.BTy_loaded oTy1) >>= fun (e1_sym   , e1_sym_pat   , e1_sym_pe   ) ->
@@ -390,7 +390,7 @@ and translate_relational_operator self usual_arithmetic_conversion result_ty bop
           C.Ecase (Caux.mk_tuple_pe [e1_sym_pe; e2_sym_pe])
               [ (Caux.mk_tuple_pat [ Caux.mk_specified_pat obj1_sym_pat
                                    ; Caux.mk_specified_pat obj2_sym_pat ],
-(if AilTypesAux.is_real (ctype_of e1) then
+begin if AilTypesAux.is_real (ctype_of e1) then
                  let (promoted1_pe, promoted2_pe) = Caux.mk_std_pair_pe "§6.5.8#3"
                      (usual_arithmetic_conversion (ctype_of e1) (ctype_of e2) obj1_sym_pe obj2_sym_pe) in
                  C.Expr [Annot.Astd "§6.5.8#6"] (
@@ -419,7 +419,7 @@ else
                      )
                    )
                  )
-               ))
+end             )
               ; (Caux.mk_empty_pat (C.BTy_tuple [C.BTy_loaded oTy1; C.BTy_loaded oTy2]),
                  (* TODO: check with Peter *)
                  Caux.mk_pure_e (Caux.mk_unspecified_pe result_ty)) ]
@@ -1541,15 +1541,17 @@ else
                     [ ( Caux.mk_tuple_pat [ Caux.mk_specified_pat (Caux.mk_sym_pat ptr_obj_sym (C.BTy_object C.OTy_pointer))
                                           ; Caux.mk_specified_pat (Caux.mk_sym_pat integer_obj_sym (C.BTy_object C.OTy_integer)) ]
                       , (* Both operand are specified *)
-if Global.has_strict_pointer_arith () || Global.is_PNVI () then
+begin if Global.has_strict_pointer_arith () || Global.is_PNVI () then
                         Caux.mk_wseq_e res_sym_pat
                           (C.Expr [] (C.Ememop Mem_common.PtrArrayShift [ptr_obj_sym_pe; Caux.mk_ail_ctype_pe ref_ty; integer_obj_sym_pe]))
                           (Caux.mk_pure_e (Caux.mk_specified_pe res_sym_pe))
 else
-                        Caux.mk_pure_e (Caux.mk_specified_pe (
-                          Caux.mk_std_pe "§6.5.6#8, sentences 2-3" (Caux.mk_array_shift ptr_obj_sym_pe ref_ty integer_obj_sym_pe)
-(* end if *)
-                        )) )
+                        Caux.mk_pure_e begin
+                          Caux.mk_specified_pe begin
+                            Caux.mk_std_pe "§6.5.6#8, sentences 2-3" (Caux.mk_array_shift ptr_obj_sym_pe ref_ty integer_obj_sym_pe)
+                          end
+                        end
+end                   )
                     ; ( Caux.mk_empty_pat (C.BTy_tuple [C.BTy_loaded C.OTy_pointer; C.BTy_loaded C.OTy_integer])
                       , Caux.mk_pure_e (Caux.mk_undef_pe loc (Undefined.DUMMY "unspecified array_shift (addr)")) ) ]
                 )
@@ -1667,15 +1669,17 @@ else
                         [ (Caux.mk_tuple_pat [ Caux.mk_specified_pat (Caux.mk_sym_pat ptr_obj_sym (C.BTy_object C.OTy_pointer))
                                            ; Caux.mk_specified_pat (Caux.mk_sym_pat integer_obj_sym (C.BTy_object C.OTy_integer)) ],
                          (* Both operand are specified *)
-if Global.has_strict_pointer_arith () || Global.is_PNVI () then
+begin if Global.has_strict_pointer_arith () || Global.is_PNVI () then
                         Caux.mk_wseq_e res_sym_pat
                           (C.Expr [] (C.Ememop Mem_common.PtrArrayShift [ptr_obj_sym_pe; Caux.mk_ail_ctype_pe ref_ty; (Caux.mk_neg_pe integer_obj_sym_pe)]))
                           (Caux.mk_pure_e (Caux.mk_specified_pe res_sym_pe))
 else
-                        Caux.mk_pure_e $ Caux.mk_specified_pe (
-                          Caux.mk_std_pe "§6.5.6#8, sentences 2-3" $ Caux.mk_array_shift ptr_obj_sym_pe ref_ty (Caux.mk_neg_pe integer_obj_sym_pe)
-                        ) )
-(* end if *)
+                        Caux.mk_pure_e begin
+                          Caux.mk_specified_pe begin
+                            Caux.mk_std_pe "§6.5.6#8, sentences 2-3" $ Caux.mk_array_shift ptr_obj_sym_pe ref_ty (Caux.mk_neg_pe integer_obj_sym_pe)
+                          end
+                        end
+end                       )
                         ; ( Caux.mk_empty_pat (C.BTy_tuple [C.BTy_loaded C.OTy_pointer; C.BTy_loaded C.OTy_integer])
                           , Caux.mk_pure_e (Caux.mk_undef_pe loc (Undefined.DUMMY "unspecified array_shift (sub)")) ) ]
                   )
