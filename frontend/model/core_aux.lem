@@ -2105,11 +2105,7 @@ let add_loc loc (Expr annot expr_) =
 
 val add_std: string -> expr unit -> expr unit
 let add_std str (Expr annot expr_) =
-  let pred = function
-    | Astd _ -> true
-    | _ -> false
-  end in
-  Expr (update_annot pred (Astd str) annot) expr_
+  Expr (Astd str :: annot) expr_
 
 val add_attrs: Annot.attributes -> expr unit -> expr unit
 let add_attrs attrs (Expr annot expr_ as expr) =
