@@ -962,7 +962,6 @@ and translate_expression ctx variadic_env stdlib (tagDefs : Core.core_tag_defini
                         [ (Caux.mk_specified_pat (Caux.mk_sym_pat obj_sym (C.BTy_object oTy)),
                            Caux.mk_specified_pe (mk_conversion (Caux.mk_sym_pe obj_sym)))
                         ; (Caux.mk_unspecified_pat (Caux.mk_empty_pat C.BTy_ctype),
-                           (* TODO: check that result_ty = promoted (ctype_of e) *)
                            Caux.mk_unspecified_pe result_ty) ]
                     )
                   )
@@ -1000,7 +999,6 @@ else if AilTypesAux.is_integer result_ty then
 else
                              expr))
                         ; (Caux.mk_unspecified_pat (Caux.mk_empty_pat C.BTy_ctype),
-                           (* TODO: check that result_ty = promoted (ctype_of e) *)
                            Caux.mk_unspecified_pe result_ty) ]
                     )
                   )
@@ -1032,7 +1030,6 @@ else
                            else
                              Caux.bitwise_complement_pe (Caux.mk_ail_ctype_pe result_ty) promoted_e))
                         ; (C.Pattern [] (C.CaseCtor C.Cunspecified [Caux.mk_empty_pat C.BTy_ctype]),
-                           (* TODO: check that result_ty = promoted (ctype_of e) *)
                            Caux.mk_unspecified_pe result_ty) ]
                     )
                   )
@@ -2571,7 +2568,8 @@ else (* is_pointer *)
           end
       
       | A.AilEsizeof_expr e ->
-          (* TODO: check qualifiers *)
+          (* NOTE: from (§6.2.5#26, sentence 3) we know that qualifers do no affect the size of a type,
+                   so we can use 'Ctype.no_qualifiers' *)
           self (A.AnnotatedExpression annot std_annots loc (A.AilEsizeof Ctype.no_qualifiers (ctype_of e)))
       
       | A.AilEalignof _ ty ->
