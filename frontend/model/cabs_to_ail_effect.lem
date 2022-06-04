@@ -1484,6 +1484,11 @@ let global_object_is_defined sym =
     Map.member sym st.global_object_definitions
   )
 
+val is_function_designator: A.ail_identifier -> desugM bool
+let is_function_designator sym =
+  State_exception.read (fun st->
+    Map.member sym st.function_declarations
+  )
 
 val function_is_defined: A.ail_identifier -> desugM bool
 let function_is_defined sym =
