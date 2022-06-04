@@ -941,7 +941,6 @@ and translate_expression ctx variadic_env stdlib (tagDefs : Core.core_tag_defini
   else
     let A.AnnotatedExpression annot std_annots loc expr = a_expr in
     Caux.add_loc loc <$> match expr with
-      (* CHECKED IN APR2016 *)
       | A.AilEunary A.Plus e ->
           (* STD §6.5.3.3#2 *)
           let (oTy, mk_conversion) =
@@ -970,7 +969,6 @@ and translate_expression ctx variadic_env stdlib (tagDefs : Core.core_tag_defini
             )
           end
       
-      (* CHECKED IN APR2016 *)
       | A.AilEunary A.Minus e ->
           (* STD §6.5.3.3#3 *)
           let (oTy, zero_pe, mk_conversion) =
@@ -1007,7 +1005,6 @@ else
             )
           end
       
-      (* CHECKED IN APR2016 *)
       | A.AilEunary A.Bnot e ->
           (* STD §6.5.3.3#4 *)
           let obj_sym = Symbol.fresh () in
@@ -1037,14 +1034,12 @@ else
               )
             )
       
-      (* CHECKED IN APR2016 *)
       | A.AilEunary A.Address (A.AnnotatedExpression _ _ _ (A.AilEunary A.Indirection e)) ->
           (* STD §6.5.3.2#3, sentence 3 *)
           (* NOTE: footnote 102 makes it clear that this is valid even if 'e' evaluates to a null pointer *)
           self e >>= fun (C.Expr annot core_expr_) ->
           E.return (C.Expr (Annot.Astd "§6.5.3.2#3, sentence 3" :: annot) core_expr_)
       
-      (* CHECKED IN APR2016 *)
       | A.AilEunary A.Address e ->
           (* STD §6.5.3.2#3, sentence 5 *)
           if AilTypesAux.is_object (ctype_of e) then
