@@ -1,0 +1,5 @@
+Entering directory '/Users/catzilla/rems-project/cerberus-contextsem'
+ci/0300-unseq_race_ko01.undef.c:5:3: error: undefined behaviour: an unsequenced race occurred during the evaluation of an expression
+  (xxx = 1, yyy = 0) + yyy; // RACE on y
+  ~~~~~~~~~~~~~~~~~~~^~~~~ 
+no C11 reference
