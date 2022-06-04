@@ -3453,8 +3453,10 @@ type translate_stmt_env = <|
 
 
 let wrapped_translate_expression ctx variadic_env stdlib tagDefs e =
-  translate_expression ctx variadic_env stdlib tagDefs e >>= fun core_e ->
-  E.return (C.Expr [] (C.Ebound core_e))
+  translate_expression ctx variadic_env stdlib tagDefs e >>= fun core_e ->  
+  E.return begin
+    C.Expr [Annot.Astd "§6.5#2"] (C.Ebound core_e)
+  end
 
 
 val translate_stmt:
@@ -3484,9 +3486,7 @@ let rec translate_stmt stdlib tagDefs f env (A.AnnotatedStatement loc stmt_attrs
            not always use the unit type in the bindings of the sseq operators. *)
         translate_expression e >>= fun core_e ->
         E.return (
-          (* ASK: this annotation looks wrong!! is this really implementing 6.5#2 ? *)
-          C.Expr [Annot.Astd "§6.5#2"] $
-          C.Esseq (Caux.mk_empty_pat (maybe C.BTy_unit C.BTy_loaded (Caux.core_object_type_of_ctype (ctype_of e))))
+          Caux.mk_sseq_e (Caux.mk_empty_pat (maybe C.BTy_unit C.BTy_loaded (Caux.core_object_type_of_ctype (ctype_of e))))
             core_e
             (Caux.mk_pure_e Caux.mk_unit_pe)
         )
