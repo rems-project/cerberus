@@ -119,16 +119,20 @@ let oneAil_tau =
 
 val translate_integerConstant: A.integerConstant -> C.pexpr
 let translate_integerConstant iCst =
-  C.Pexpr [] () (C.PEval (C.Vobject (C.OVinteger (
-    match iCst with
-      | A.IConstant n _ _ ->
-          Mem.integer_ival n
-      | A.IConstantMax ity ->
-          Mem.max_ival ity
-      | A.IConstantMin ity ->
-          Mem.min_ival ity
+  Caux.mk_value_pe begin
+    C.Vobject begin
+      C.OVinteger begin
+        match iCst with
+          | A.IConstant n _ _ ->
+              Mem.integer_ival n
+          | A.IConstantMax ity ->
+              Mem.max_ival ity
+          | A.IConstantMin ity ->
+              Mem.min_ival ity
+        end
+      end
     end
-  ))))
+  end
 
 val translate_memory_order: A.expression GenTypes.genTypeCategory -> Cmm.memory_order
 let translate_memory_order (A.AnnotatedExpression _ _ _ expr as a_expr) =
