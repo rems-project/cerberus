@@ -1045,16 +1045,15 @@ else
       | A.AilEunary A.Address e ->
           (* STD §6.5.3.2#3, sentence 5 *)
           if AilTypesAux.is_object (ctype_of e) then
-             let sym = Symbol.fresh () in
-             self e >>= fun core_e ->
-             E.return $
-               C.Expr [Annot.Astd "§6.5.3.2#3, sentence 5"] (
-                 C.Ewseq (Caux.mk_sym_pat sym (C.BTy_object C.OTy_pointer)) core_e (
-                   C.Expr [] (
-                     C.Epure (Caux.mk_specified_pe (Caux.mk_sym_pe sym))
-                   )
-                 )
-               )
+            E.wrapped_fresh_symbol (C.BTy_object C.OTy_pointer) >>= fun (_, ptr_sym_pat, ptr_sym_pe) ->
+            self e >>= fun core_e ->
+            E.return begin
+              Caux.add_std "§6.5.3.2#3, sentence 5" begin
+                Caux.mk_wseq_e ptr_sym_pat core_e begin
+                  Caux.mk_pure_e (Caux.mk_specified_pe ptr_sym_pe)
+                end
+              end
+            end
           else
             translate_function_designator ctx variadic_env stdlib tagDefs e
       
