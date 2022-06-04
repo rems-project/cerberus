@@ -415,3 +415,14 @@ let conv_loaded_arith stdlib ty_src ty_dst pe =
   else
     (* NOTE: this case will occurs in particular if ty_src is an atomic type *)
     error "Translation_aux.conv_loaded_arith, not (is_arithmetic ty_src)"
+
+
+(* *)
+val warn_atomic_elaboration: bool -> elabM unit
+let warn_atomic_elaboration guard =
+  let () =
+    if guard then
+      Debug.warn [Debug.DB_elaboration] (fun () -> "TODO: elaboration is wrong for atomic types")
+    else
+      () in
+  return ()

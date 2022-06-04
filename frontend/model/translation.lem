@@ -216,7 +216,6 @@ let translate_function_designator translate_expr stdlib (A.AnnotatedExpression _
   let (Ctype.Ctype _ cty as ty) = ctype_of a_expr in
   match (cty, expr) with
     | (Ctype.Function _ params is_variadic, A.AilEunary A.Indirection e) ->
-        let () = Debug.print_debug 1 [] (fun () -> "FUNTION POINTERS: UNARY INDIRECTION") in
         E.wrapped_fresh_symbol (C.BTy_loaded C.OTy_pointer) >>= fun (fun_sym, fun_sym_pat, fun_sym_pe) ->
         translate_expr e                                    >>= fun core_e                             ->
         E.return (Caux.mk_sseq_e fun_sym_pat core_e (Caux.mk_pure_e (Caux.mk_sym_pe fun_sym)))
@@ -920,18 +919,6 @@ let rec translate_expression ctx variadic_env stdlib (tagDefs : Core.core_tag_de
                   )
 
             | _ ->
-                let () = Debug.print_debug 1 [] (fun () ->
-                  "is_arithmetic ty1: " ^ (if AilTypesAux.is_arithmetic ty1 then "true" else "false")
-                ) in
-                let () = Debug.print_debug 1 [] (fun () ->
-                  "is_arithmetic ty2: " ^ (if AilTypesAux.is_arithmetic ty2 then "true" else "false")
-                ) in
-                let () = Debug.print_debug 1 [] (fun () ->
-                  "ty1: " ^ Pp.stringFromAil_ctype Ctype.no_qualifiers ty1 ^
-                  ", ty2: " ^ Pp.stringFromAil_ctype Ctype.no_qualifiers ty2 ^
-                  ", e1: " ^ Pp.stringFromCore_pexpr e1 ^
-                  ", e2: " ^ Pp.stringFromCore_pexpr e2
-                ) in
                 error "Translation.usual_arithmetic_conversion: not (integer vs integer)"
           end
       end in
@@ -1061,10 +1048,7 @@ else
          with compare_exchange_weak with seq_cst, seq_cst) *)
       | A.AilEunary A.PostfixIncr e ->
           (* STD §6.5.2.4 *)
-          let () = if AilTypesAux.is_atomic (ctype_of e) then
-            Debug.warn [Debug.DB_elaboration] (fun () -> "TODO: elaboration is wrong for atomic types")
-          else
-            () in
+          warn_atomic_elaboration (AilTypesAux.is_atomic (ctype_of e)) >>= fun () ->
           
           self e >>= fun core_e ->
           let () = Debug.print_debug 1 [Debug.DB_elaboration] (fun () -> "TODO: needs to fix this") in
@@ -1113,10 +1097,7 @@ end
       (* NOTE: if I read N2329 correctly, in C2X this will not be an RMW for the atomic case (but seq_cst) *)
       | A.AilEunary A.PostfixDecr e ->
           (* STD §6.5.2.4 *)
-          let () = if AilTypesAux.is_atomic (ctype_of e) then
-            Debug.warn [Debug.DB_elaboration] (fun () -> "TODO: elaboration is wrong for atomic types")
-          else
-            () in
+          warn_atomic_elaboration (AilTypesAux.is_atomic (ctype_of e)) >>= fun () ->
           
           self e >>= fun core_e ->
           let () = Debug.print_debug 1 [Debug.DB_elaboration] (fun () -> "TODO: needs to fix this") in
@@ -3123,7 +3104,7 @@ let rec translate_stmt stdlib tagDefs f env (A.AnnotatedStatement loc stmt_attrs
           E.mapM self ss >>= fun core_ss ->
         
         E.return (
-          let () = Debug.warn [Debug.DB_elaboration] (fun () -> "Translation, AilSblock: sequencing the creates and kills") in
+          (* NOTE: we sequence (left-to-right) the creates and kills of the block-scoped objects *)
           Caux.mk_sseqs (List.zip pats core_creates) begin
             Caux.mk_unit_sseq (core_ss ++ core_kills)
               Caux.mk_skip_e
