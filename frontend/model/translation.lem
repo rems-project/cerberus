@@ -206,12 +206,11 @@ let rec translate_constant cst =
   end
 
 
-
-type expr_ctx =
-  | ECTX_glob of Symbol.sym * Symbol.sym
-  | ECTX_other
-
-
+val translate_function_designator:
+  (A.expression GenTypes.genTypeCategory -> E.elabM (C.expr unit)) ->
+  translation_stdlib ->
+  A.expression GenTypes.genTypeCategory ->
+  E.elabM (C.expr unit)
 let translate_function_designator translate_expr stdlib (A.AnnotatedExpression _ _ _ expr as a_expr) =
   let (Ctype.Ctype _ cty as ty) = ctype_of a_expr in
   match (cty, expr) with
@@ -239,6 +238,15 @@ let translate_function_designator translate_expr stdlib (A.AnnotatedExpression _
 
 
 (* STD §6.5.5 Multiplicative operators *)
+val translate_mul_operator:
+  Loc.t ->
+  (A.expression GenTypes.genTypeCategory -> E.elabM (C.expr unit)) ->
+  (Ctype.ctype -> Ctype.ctype -> C.pexpr -> C.pexpr -> C.pexpr * C.pexpr) ->
+  translation_stdlib ->
+  Ctype.ctype ->
+  A.expression GenTypes.genTypeCategory ->
+  A.expression GenTypes.genTypeCategory ->
+  E.elabM (C.expr unit)
 let translate_mul_operator loc translate_expr usual_arithmetic_conversion stdlib result_ty e1 e2 =
   let oTy1 = force_core_object_type_of_ctype (ctype_of e1) in
   let oTy2 = force_core_object_type_of_ctype (ctype_of e2) in
@@ -282,6 +290,16 @@ else
   end
 
 
+val translate_div_mod_operator:
+  Loc.t ->
+  (A.expression GenTypes.genTypeCategory -> E.elabM (C.expr unit)) ->
+  (Ctype.ctype -> Ctype.ctype -> C.pexpr -> C.pexpr -> C.pexpr * C.pexpr) ->
+  translation_stdlib ->
+  Ctype.ctype ->
+  A.arithmeticOperator -> (* MUST BE A.Div or A.Mod *)
+  A.expression GenTypes.genTypeCategory ->
+  A.expression GenTypes.genTypeCategory ->
+  E.elabM (C.expr unit)
 let translate_div_mod_operator loc translate_expr usual_arithmetic_conversion stdlib result_ty aop e1 e2 =
   (* STD "§6.5.5" *)
   let oTy1    = force_core_object_type_of_ctype (ctype_of e1) in
@@ -364,7 +382,16 @@ else
       )
     end
 
+
 (* STD §6.5.8 Relational operators *)
+val translate_relational_operator:
+  (A.expression GenTypes.genTypeCategory -> E.elabM (C.expr unit)) ->
+  (Ctype.ctype -> Ctype.ctype -> C.pexpr -> C.pexpr -> C.pexpr * C.pexpr) ->
+  Ctype.ctype ->
+  A.binaryOperator -> (* MUST BE in { A.Lt, A.Gt. A.Le, A.Ge } *)
+  A.expression GenTypes.genTypeCategory ->
+  A.expression GenTypes.genTypeCategory ->
+  E.elabM (C.expr unit)
 let translate_relational_operator translate_expr usual_arithmetic_conversion result_ty bop e1 e2 =
   (* STD "§6.5.8" *)
   let oTy1 = force_core_object_type_of_ctype (ctype_of e1) in
@@ -433,6 +460,15 @@ end             )
 
 
 (* STD §6.5.9 Equality operators *)
+val translate_equality_operator:
+  Loc.t -> 
+  (A.expression GenTypes.genTypeCategory -> E.elabM (C.expr unit)) ->
+  (Ctype.ctype -> Ctype.ctype -> C.pexpr -> C.pexpr -> C.pexpr * C.pexpr) ->
+  Ctype.ctype ->
+  A.binaryOperator -> (* MUST BE in { A.Eq, A.Ne } *)
+  A.expression GenTypes.genTypeCategory ->
+  A.expression GenTypes.genTypeCategory ->
+  E.elabM (C.expr unit)
 let translate_equality_operator loc translate_expr usual_arithmetic_conversion result_ty bop e1 e2 =
     (* STD §6.5.9 *)
 if    Aaux.is_null_pointer_constant e1 && AilTypesAux.is_pointer (ctype_of e2)
@@ -534,6 +570,16 @@ else (* both operand have pointer type *)
 (* STD §6.5.10  Bitwise AND operator          *)
 (* STD §6.5.11  Bitwise exclusive OR operator *)
 (* STD §6.5.12  Bitwise inclusive OR operator *)
+val translate_bitwise_operator:
+  Loc.t -> 
+  (A.expression GenTypes.genTypeCategory -> E.elabM (C.expr unit)) ->
+  (Ctype.ctype -> Ctype.ctype -> C.pexpr -> C.pexpr -> C.pexpr * C.pexpr) ->
+  translation_stdlib ->
+  Ctype.ctype ->
+  A.arithmeticOperator -> (* MUST BE in { A.Band, A.Bxor, A.Bor } *)
+  A.expression GenTypes.genTypeCategory ->
+  A.expression GenTypes.genTypeCategory ->
+  E.elabM (C.expr unit)
 let translate_bitwise_operator loc translate_expr usual_arithmetic_conversion stdlib result_ty aop e1 e2 =
   let (std_id, stdlib_call) = match aop with
     | A.Band -> ("§6.5.10", (fun ty pe1 pe2 -> C.Pexpr [] () (C.PEctor C.CivAND [Caux.mk_ail_ctype_pe ty; pe1; pe2])))
@@ -575,8 +621,13 @@ let translate_bitwise_operator loc translate_expr usual_arithmetic_conversion st
   end
 
 
-
-
+val translate_function_call:
+  Loc.t -> 
+  (A.expression GenTypes.genTypeCategory -> E.elabM (C.expr unit)) ->
+  translation_stdlib ->
+  A.expression GenTypes.genTypeCategory ->
+  list (A.expression GenTypes.genTypeCategory) ->
+  E.elabM (C.expr unit)
 let translate_function_call loc translate_expr stdlib e es =
   let (expect_ret_ty, expect_params, expect_is_variadic) = match ctype_of e with
   | Ctype.Ctype _ (Ctype.Pointer _ (Ctype.Ctype _ (Ctype.Function (_, ret_ty) qs_tys is_variadic))) ->
@@ -809,10 +860,18 @@ end
       )
 
 
+type expr_ctx =
+  | ECTX_glob of Symbol.sym * Symbol.sym
+  | ECTX_other
 
-
-
-let rec translate_expression ctx variadic_env stdlib (tagDefs : Core.core_tag_definitions) a_expr : E.elabM (C.expr unit) =
+val translate_expression:
+  expr_ctx ->
+  (maybe Symbol.sym * maybe Symbol.sym) ->
+  translation_stdlib ->
+  Core.core_tag_definitions ->
+  A.expression GenTypes.genTypeCategory ->
+  E.elabM (C.expr unit)
+let rec translate_expression ctx variadic_env stdlib tagDefs a_expr =
   let self = translate_expression ctx variadic_env stdlib tagDefs in
   let is_lvalue = match GenTypes.genTypeCategoryOf a_expr with
     | GenTypes.GenLValueType _ _ _ ->
