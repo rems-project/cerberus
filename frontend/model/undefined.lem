@@ -2,6 +2,9 @@ open import Pervasives String_extra Loc
 open import Utils
 import Bimap
 
+type unspecified_ub_context =
+  | UB_unspec_equality_ptr_vs_NULL
+
 (* C undefined behaviours *)
 type undefined_behaviour =
   | DUMMY of string (* TODO: this is a hack (use by the Driver these days) *)
@@ -691,6 +694,9 @@ type undefined_behaviour =
   | UB_CERB002a_out_of_bound_load
   | UB_CERB002b_out_of_bound_store
 
+  (* undefined behaviour resulting from applying an operator to an unspecified value *)
+  | UB_CERB004_unspecified of unspecified_ub_context
+
 
 val std_of_undefined_behaviour: undefined_behaviour -> maybe string
 let std_of_undefined_behaviour = function
@@ -991,7 +997,9 @@ let ub_str_bimap =
     ; (UB207_atomic_compare_exchange_memorder, "UB207_atomic_compare_exchange_memorder")
     ; (UB_CERB001_integer_to_dead_pointer, "UB_CERB001_integer_to_dead_pointer")
     ; (UB_CERB002a_out_of_bound_load, "UB_CERB002a_out_of_bound_load")
-    ; (UB_CERB002b_out_of_bound_store, "UB_CERB002b_out_of_bound_store") ]
+    ; (UB_CERB002b_out_of_bound_store, "UB_CERB002b_out_of_bound_store")
+    ; (UB_CERB004_unspecified UB_unspec_equality_ptr_vs_NULL, "UB_CERB004_unspecified__equality_ptr_vs_NULL")
+    ]
 
 
 val stringFromUndefined_behaviour: undefined_behaviour -> string
@@ -1083,6 +1091,11 @@ let ub_short_string = function
       "out of bounds pointer at memory load"
   | UB_CERB002b_out_of_bound_store ->
       "out of bounds pointer at memory store"
+  | UB_CERB004_unspecified ctx ->
+      match ctx with
+        | UB_unspec_equality_ptr_vs_NULL ->
+            "an operand of an equality operator (ptr vs NULL) is an unspecified value"
+      end
   | ub ->
       "(UB missing short message): " ^ show ub
 end
