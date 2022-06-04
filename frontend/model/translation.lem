@@ -1905,136 +1905,7 @@ end
       
       | A.AilEcompoundAssign e1 aop e2 ->
           error "Translation ==> AilEcompoundAssign" (* currently the desugaring translates E1 op= E2 into E1 = E1 op E2 *)
-(*
-          (* TODO: in C11/C17 this is a seq_cst RMW for atomic types *)
-          (* NOTE: but if I read N2329 correctly, in C2X this will not be an RMW for the atomic case (but seq_cst) *)
-          let () = Debug.print_debug 0 [] (fun () ->
-            "HACK!!!! => AilEcompoundAssign is WIP and only doing E1 += E2 (without any conversion or UB check) (it is also wrong for atomics)"
-          ) in
-          (* TODO: check sequencing with respect to indet function calls *)
-          self e1 >>= fun core_e1 ->
-          self e2 >>= fun core_e2 ->
-          let lvalue_ty = AilTypesAux.rvalue_coercion (snd (from_lvalue_type e1)) in
-          let lvalue_oTy = force_core_object_type_of_ctype lvalue_ty in
-          
-          (*let oTy1 = force_core_object_type_of_ctype (Caux.proj_ctype (ctype_of e2)) in*)
-          let oTy2 = force_core_object_type_of_ctype (ctype_of e2) in
-          
-          E.wrapped_fresh_symbol (C.BTy_object C.OTy_pointer) >>= fun (_, lvalue_sym_pat   , lvalue_sym_pe  ) ->
-          E.wrapped_fresh_symbol (C.BTy_loaded lvalue_oTy)    >>= fun (load_sym, load_sym_pat   , load_sym_pe  ) ->
-          E.wrapped_fresh_symbol (C.BTy_loaded oTy2)          >>= fun (_, e2_sym_pat   , e2_sym_pe  ) ->
-(*
-          E.wrapped_fresh_symbol (C.BTy_object C.OTy_pointer) >>= fun (_, z1_sym_pat   , z1_sym_pe  ) ->
-          E.wrapped_fresh_symbol (C.BTy_loaded lvalue_oTy)    >>= fun (_, z2_sym_pat   , z2_sym_pe  ) ->
-*)
-
-          let lvalue_ty_pe = Caux.mk_ail_ctype_pe lvalue_ty in
-          
-          E.wrapped_fresh_symbol (C.BTy_object lvalue_oTy)    >>= fun (_, obj1_sym_pat   , obj1_sym_pe  ) ->
-          E.wrapped_fresh_symbol (C.BTy_object oTy2)          >>= fun (_, obj2_sym_pat   , obj2_sym_pe  ) ->
-          let stored_pe =
-            Caux.mk_case_pe (Caux.mk_tuple_pe [load_sym_pe; e2_sym_pe])
-              [ ( Caux.mk_tuple_pat [Caux.mk_specified_pat obj1_sym_pat; Caux.mk_specified_pat obj2_sym_pat]
-                , Caux.mk_specified_pe (Caux.mk_op_pe C.OpAdd obj1_sym_pe obj2_sym_pe) ) ] in
-          
-(*
-          E.return begin
-            Caux.mk_wseq_e (Caux.mk_tuple_pat [Caux.mk_tuple_pat [l1_sym_pat; v1_sym_pat]; v2_sym_pat]) begin
-              Caux.mk_unseq_e
-                [ Caux.mk_wseq_e z1_sym_pat core_e1 begin
-                    Caux.mk_wseq_e z2_sym_pat (Caux.pload loc lvalue_ty_pe z1_sym_pe Cmm.NA)
-                      (Caux.mk_pure_e (Caux.mk_tuple_pe [z1_sym_pe; z2_sym_pe]))
-                  end
-                ; core_e2 ]
-            end
-            begin
-              C.Expr []
-                (C.Eaction (C.Paction C.Neg (C.Action loc default (C.Store false(* not locking *) lvalue_ty_pe l1_sym_pe stored_pe Cmm.NA))))
-            end
-          end
-*)
-
-
-        E.return begin
-          Caux.mk_wseq_e (Caux.mk_tuple_pat [lvalue_sym_pat; e2_sym_pat])
-                         (Caux.mk_unseq_e [ Caux.pload loc lvalue_ty_pe lvalue_sym_pe Cmm.NA; core_e2 ])
-                         begin
-                           Caux.seq_rmw loc true(*with_forward*) lvalue_ty_pe lvalue_sym_pe load_sym stored_pe
-                         end
-        end
-*)
-
-(*
-          E.return begin
-            Caux.mk_wseq_e (Caux.mk_tuple_pat ) begin
-              Caux.mk_unseq_e
-                [ Caux.mk_wseq_e e1_sym_pat core_e1 begin
-                    Caux.mk_wseq_e load_sym_pat (Caux.pload loc lvalue_ty_pe e1_sym_pe Cmm.NA) begin
-                      Caux.mk_pure_e (Caux.mk_tuple_pe [e1_sym_pe; load_sym_pe])
-                    end
-                  end
-                ; core_e2 ]
-            end
-            match aop with
-              | A.Mul ->
-                  (* translate_mul_operator *)
-              | A.Div | A.Mod ->
-                  (* translate_div_mod_operator *)
-              | A.Add ->
-                  
-              | A.Sub ->
-                  
-              | Shl ->
-                  
-              | Shr ->
-                  
-              | Band | Bxor | Bor ->
-                  translate_bitwise_operator
-            end
-
-
-              C.Expr []
-                (C.Eaction (C.Paction C.Neg (C.Action loc default (C.Store lvalue_ty_pe object_pe stored_pe Cmm.NA))))
-            end
-          end
-          *)
-(*
-(*      
-      (*
-         (std: A compound assignment of the form E1 op = E2 is equivalent to the simple assignment
-         expression E1 = E1 op (E2), except that the lvalue E1 is evaluated only once, and with respect
-         to an indeterminately-sequenced function call, the operation of a compound) *)
-      | A.AilEcompoundAssign e1 aop e2 ->
-          (* TODO: this is a TEMPORARY HACK *)
-          let A.AnnotatedExpression annot2 loc' _ = e2 in
-          self $
-            A.AnnotatedExpression annot loc (A.AilEassign e1 (A.AnnotatedExpression annot2 loc' (A.AilEbinary e1 (A.Arithmetic aop) e2)))
-*)
       
-      (* TODO: conv_int on e2 and e2 !!!!!!! *)
-      
-*)
-
-
-
-
-
-
-
-
-      
-(*
-      (* TODO: a bit hackish *)
-      | A.AilEcall (A.AnnotatedExpression _ (A.AilEbuiltin str)) es ->
-          match (str, es) with
-            | ("atomic_load_explicit", [object_e; order_e]) ->
-                (* TODO: for now we don't allow complicated expressions for order_e *)
-                E.return $
-                  E.fresh_symbol >>= fun a_object ->
-                  self e
-                  C.
-          end
-*)
      | A.AilEcall (A.AnnotatedExpression _ _ _ (A.AilEbuiltin (A.AilBatomic A.AilBAstore))) [lobject_e; desired_e; order_e] ->
          (* TODO: be more permissive for the memory order *)
          let mo = translate_memory_order order_e in
@@ -2281,7 +2152,6 @@ end
              end
          end
 
-
       | A.AilEcall (A.AnnotatedExpression _ _ _ (A.AilEbuiltin A.AilBcopy_alloc_id)) [from_e; to_e] ->
           self from_e >>= fun from_e  ->
           self to_e   >>= fun to_e    ->
@@ -2303,73 +2173,6 @@ end
               end
           end
 
-
-
-(*
-     | A.AilEcall (A.AnnotatedExpression _ _ (A.AilEbuiltin "atomic_compare_exchange_strong_explicit")) [object_e; expected_e; desired_e; order_success_e; order_failure_e] ->
-         let mo_success = translate_memory_order order_success_e in
-         let mo_failure = translate_memory_order order_failure_e in
-         let ty = match ctype_of object_e with
-           | Ctype.Pointer _ ty ->
-               ty
-           | _ ->
-               error "Translation.translate_expression, AilEcall atomic_compare_exchange_strong_explicit: Ail type error"
-         end in
-         
-         error "WIP: atomic_compare_exchange_strong_explicit"
-(*
-         E.fresh_symbol              >>= fun sym_object       ->
-         E.fresh_symbol              >>= fun sym_expected_ptr ->
-         E.fresh_symbol              >>= fun sym_expected_val ->
-         E.fresh_symbol              >>= fun sym_desired      ->
-         self object_e   >>= fun core_object_e    ->
-         self expected_e >>= fun core_expected_e  ->
-         self desired_e  >>= fun core_desired_e   ->
-         E.return $
-           (* TODO: weak or strong seq? *)
-           C.Esseq [Just sym_object; Just sym_expected_ptr; Just sym_desired] (C.Eunseq [core_object_e; core_expected_e; core_desired_e])
-             (C.Esseq [Just sym_expected_val] (Caux.pload loc (Caux.mk_ail_ctype_pe (Ctype.unatomic_ ty)) (C.PEsym sym_expected_ptr) Cmm.NA)
-                (Caux.prmw loc (Caux.mk_ail_ctype_pe (Ctype.unatomic_ ty)) (C.PEsym sym_object) (C.PEsym sym_expected_val) (C.PEsym sym_desired)
-                   mo_success mo_failure)
-             )
-*)
-
-(*
-             (C.Eaction (C.Paction C.Pos (C.Action loc ()
-               (C.CompareExchangeStrong (Caux.mk_ail_ctype_pe ty) (C.PEsym sym_object) (C.PEsym sym_expected) (C.PEsym sym_desired) mo_success mo_failure))))
-*)
-
-
-      (* TODO:
-           * (§6.5.2.2#6) since we don't support prototype-less functions, we don't do
-                          "default argument promotions"
-       *)
-
-      | A.AilEcall (A.AnnotatedExpression _ _ (A.AilEident (Symbol.Symbol _ (Just "malloc")))) [e] ->
-          self e >>= fun core_e ->
-          E.fresh_typed_symbol true (ctype_of e) >>= fun sym_ty_e ->
-          E.return $
-            C.Esseq [Just sym_ty_e] core_e
-              (C.Eaction (C.Paction C.Pos (C.Action loc () (
-                C.Alloc (C.PEval (C.Vobject (C.OVinteger (Mem.alignof_ival Cty.unsigned_char)))) (C.PEsym sym_ty_e) (Symbol.PrefOther "malloc")
-              ))))
-
-*)
-
-(* TODO ==> FUNCTION CALLS
-
-  §6.5.2.2#6 is very stange, in particular this bit:
-    
-    "If the function is defined with a type that includes a prototype, and either the prototype ends with an ellipsis (, ...) or the types of the arguments after promotion are not compatible with the types of the parameters, the behavior is undefined."
-    
-    apparently this has to do with old-style function declaration which we don't
-    support (doesn't even parse). So the elab doesn't need to do anything here ? (CHECK !!!)
-
-
-TODO: check the prototype vs no prototype stufff (ARGGGGGG)
-
-TODO: #9
-*)
       (* LAST nov2016 *)
       | A.AilEcall e [] -> (* NOTE: if there are no arguments, we don't need all the temporary object creation stuff *)
           (* STD §6.5.2.2 *)
@@ -2740,22 +2543,6 @@ else (* is_pointer *)
           E.return (
             Caux.mk_pure_e lit_sym_pe
           )
-(*
-
-(*
-
-n := | str |
-
-let strong a  = create("char[n+1]", <alignof>("char[n+1]")) in
-store("char[n+1]", a, array(...)) ;
-a
-
-
-          E.return (C.Econst $ C.Cstring (String.toCharList str)) (* TODO: this is a hack, this should be a pointer to a global char pointer *)
-*)
-      
-      
-*)
       | A.AilEsizeof _ (Ctype.Ctype _ (Ctype.Basic (Ctype.Integer Ctype.Char))) ->
           E.return begin
             C.Expr [Annot.Astd "§6.5.3.4#4, sentence 1"] (
@@ -4004,11 +3791,6 @@ let translate (ailnames, stdlib_fun_map) impl prog =
   let ((core_tagDefs, cglobs, (*cdecls, *) cfuns, funinfo), st) =
     E.runStateM (translate_program translation_stdlib prog) (E.elab_init ())
   in
-  (* let _ =  *)
-  (*   Map.map (fun (_, _, _, args, _, _) -> *)
-  (*       Debug.output_string ("**************" ^ (show (List.map fst args))) *)
-  (*     ) funinfo *)
-  (* in *)
   <| C.main= fst prog;
      C.tagDefs= core_tagDefs;
      C.stdlib= stdlib_fun_map;
