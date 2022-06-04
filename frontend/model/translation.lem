@@ -1718,71 +1718,76 @@ end                       )
           end
       
       | A.AilEcond e1 e2 e3 ->
-          (* STD §6.5.15 *)
-          (* NOTE: Ail typechecker guarantees that e1 is scalar *)
-          let e1_oTy = force_core_object_type_of_ctype (ctype_of e1) in
-          E.wrapped_fresh_symbol (C.BTy_loaded e1_oTy) >>= fun (_, e1_sym_pat  , e1_sym_pe  ) ->
-          E.wrapped_fresh_symbol (C.BTy_object e1_oTy) >>= fun (_, obj1_sym_pat, obj1_sym_pe) ->
-          self (mkTestExpression TestEq e1) >>= fun core_e1 ->
-          
-          let apply_implicit_conversions e =
-            let e_ty = ctype_of e in
-            self e >>= fun core_e ->
-            if AilTypesAux.is_integer result_ty then begin
+          let apply_implicit_conversions expr =
+            let e_ty = ctype_of expr in
+            self expr >>= fun core_e ->
+            if AilTypesAux.is_integer result_ty then
               let e_oTy = force_core_object_type_of_ctype e_ty in
               E.wrapped_fresh_symbol (C.BTy_loaded e_oTy) >>= fun (_, e_sym_pat, e_sym_pe  ) ->
-              (* NOTE: e_ty must then be an integer *)
+              (* NOTE: if result_ty is an integer type, then e2 and e2 are both integers (so e_ty must be too) *)
               E.return begin
                 Caux.mk_sseq_e e_sym_pat core_e
                   (Caux.mk_pure_e (stdlib.mkcall_conv_loaded_int result_ty e_sym_pe))
               end
-            end else if AilTypesAux.is_floating result_ty then begin
-              if AilTypesAux.is_integer e_ty then
-                let e_oTy = force_core_object_type_of_ctype e_ty in
-                E.wrapped_fresh_symbol (C.BTy_loaded e_oTy) >>= fun (_, e_sym_pat, e_sym_pe  ) ->
-                E.return begin
-                  Caux.mk_sseq_e e_sym_pat core_e
-                    (Caux.mk_pure_e (stdlib.mkcall_loaded_fvfromint result_ty e_sym_pe))
-                end
-              else
-                E.return core_e (* TODO floating conversion *)
-            end else if AilTypesAux.is_pointer result_ty then begin
-              if AilTypesAux.is_integer e_ty then begin
-                if AilSyntaxAux.is_null_pointer_constant e then
+            else if AilTypesAux.is_floating result_ty then
+              begin
+                if AilTypesAux.is_integer e_ty then
+                  let e_oTy = force_core_object_type_of_ctype e_ty in
+                  E.wrapped_fresh_symbol (C.BTy_loaded e_oTy) >>= fun (_, e_sym_pat, e_sym_pe  ) ->
+                  E.return begin
+                    Caux.mk_sseq_e e_sym_pat core_e
+                      (Caux.mk_pure_e (stdlib.mkcall_loaded_fvfromint result_ty e_sym_pe))
+                  end
+                else
+                  E.return core_e (* TODO floating conversion *)
+              end
+            else if AilTypesAux.is_pointer result_ty then
+              begin
+                if AilTypesAux.is_integer e_ty && AilSyntaxAux.is_null_pointer_constant expr then
                   match AilTypesAux.referenced_type result_ty with
                     | Just ref_ty ->
-                        E.return $
+                        E.return begin
                           Caux.mk_pure_e (Caux.mk_specified_pe (Caux.mk_nullptr_pe ref_ty))
+                        end
                     | _ ->
                         error "AilEcond: a pointer must have a referenced type"
                   end
-                else
-                  error "AilEcond: invalid implicit conversion from integer to pointer"
-              end else if AilTypesAux.is_pointer e_ty then begin
+                else if AilTypesAux.is_pointer e_ty then
                   E.return core_e
-              end else begin
+                else
                   error "AilEcond: invalid implicit conversion to a pointer type"
               end
-            end else begin
-                (* NOTE: typechecker guarantees that e_ty = result_ty in this case *)
-                E.return core_e
-            end
+            else
+              (* NOTE: typechecker guarantees that e_ty = result_ty in this case *)
+              E.return core_e
           in
+          (* STD §6.5.15 *)
+          (* NOTE: Ail typechecker guarantees that e1 is scalar *)
+          self (mkTestExpression TestEq e1) >>= fun core_e1 ->
+          (* NOTE: the Core expression 'core_e1' has integer type because we elaborated an equality test *)
+          E.wrapped_fresh_symbol (C.BTy_loaded C.OTy_integer) >>= fun (_, e1_sym_pat  , e1_sym_pe  ) ->
+          E.wrapped_fresh_symbol (C.BTy_object C.OTy_integer) >>= fun (_, obj1_sym_pat, obj1_sym_pe) ->
+
           apply_implicit_conversions e2 >>= fun conv_e2 ->
           apply_implicit_conversions e3 >>= fun conv_e3 ->
           
-          E.return $ C.Expr [Annot.Astd "§6.5.15#4, sentence 1"]
+          E.return begin
+            Caux.add_std "§6.5.15#4, sentence 1" begin
             (* STD (§6.5.15#4, sentence 2) says there is a sequenced point between the
                evaluation of e1 and the e2/e3. Hence the strong sequencing *)
-            (C.Esseq e1_sym_pat core_e1
-              (Caux.mk_case_e e1_sym_pe
-                [ (Caux.mk_specified_pat obj1_sym_pat,
-                   C.Expr [Annot.Astd "§6.5.15#4, sentence 2"] (
-                     C.Eif (Caux.mk_op_pe C.OpEq obj1_sym_pe (Caux.mk_integer_pe 0)) conv_e2 conv_e3
-                   ) )
-                ; (Caux.mk_unspecified_pat (Caux.mk_empty_pat C.BTy_ctype),
-                   Caux.mk_pure_e (Caux.mk_undef_pe loc (Undefined.DUMMY "unspecified AilEcond"))) ]
-            ))
+              Caux.mk_sseq_e e1_sym_pat core_e1 begin
+                Caux.mk_case_e e1_sym_pe
+                  [ ( Caux.mk_specified_pat obj1_sym_pat
+                    , Caux.add_std "§6.5.15#4, sentence 2" begin
+                        Caux.mk_if_e (Caux.mk_op_pe C.OpEq obj1_sym_pe (Caux.mk_integer_pe 0))
+                          conv_e2
+                          conv_e3
+                      end )
+                  ; ( Caux.mk_unspecified_pat (Caux.mk_empty_pat C.BTy_ctype)
+                    , Caux.mk_pure_e (Caux.mk_undef_pe loc (Undefined.DUMMY "unspecified AilEcond")) ) ]
+              end
+            end
+          end
       
       | A.AilEassign e1 e2 ->
           (* STD §6.5.16 *)
