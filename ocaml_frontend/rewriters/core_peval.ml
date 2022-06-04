@@ -619,9 +619,12 @@ let core_peval file : 'bty RW.rewriter =
     rw_expr=
       RW.RW begin fun _ (Expr (annots, expr_) (*as expr*)) ->
         match expr_ with
-          | Ebound e ->
+          | Ebound (Expr (_, Epure _) as e) ->
               ChangeDoChildrenPost
-                ( Identity.return e, Identity.return )
+              ( Identity.return e, Identity.return )
+          (* | Ebound e ->
+              ChangeDoChildrenPost
+                ( Identity.return e, Identity.return ) *)
 (*
           | Ewseq (_, Expr (_, Eskip), e2)
           | Esseq (_, Expr (_, Eskip), e2) ->
