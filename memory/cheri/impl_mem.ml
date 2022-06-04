@@ -2300,14 +2300,15 @@ module CHERI (C:Capability
        begin
          match ival1 with
          | IC (prov,_ ,cap) -> IC (prov, is_signed, cap)
-         | IV _ -> IC (Prov_none, is_signed, C.cap_c0 ())
+         | IV _ -> failwith "derive_cap should not be used for unary operations on non capabilty-carrying types"
        end
     | DCbinary _ ->
        begin
          match ival1, ival2 with
          | IC (prov,_ ,cap), _
            | _ , IC (prov,_,cap) -> IC (prov, is_signed, cap)
-         | IV _, IV _ -> IC (Prov_none, is_signed, C.cap_c0 ())
+         | IV _, IV _ ->
+            failwith "derive_cap should not be used for binary operations on non capabilty-carrying types"
        end
 
   let cap_assign_value loc ival_cap ival_n :(Undefined.undefined_behaviour, integer_value) Either.either =
