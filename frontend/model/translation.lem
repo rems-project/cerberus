@@ -1011,32 +1011,30 @@ else
       
       | A.AilEunary A.Bnot e ->
           (* STD §6.5.3.3#4 *)
-          let obj_sym = Symbol.fresh () in
-          let e_sym   = Symbol.fresh () in
-          self e    >>= fun core_e  ->
           let oTy = force_core_object_type_of_ctype (ctype_of e) in
-          E.return $
-            C.Expr [Annot.Astd "§6.5.3.3#4"] (
-              C.Ewseq (Caux.mk_sym_pat e_sym (C.BTy_loaded oTy)) core_e (
-                C.Expr [] (
-                  C.Epure (
-                    C.Pexpr [] () (
-                      C.PEcase (Caux.mk_sym_pe e_sym)
-                        [ (C.Pattern [] (C.CaseCtor C.Cspecified [Caux.mk_sym_pat obj_sym (C.BTy_object oTy)]),
-                           let promoted_e = Caux.mk_std_pe "§6.5.3.3#4, sentence 2" $ integer_promotion (ctype_of e) (Caux.mk_sym_pe obj_sym) in
-                           (* NOTE: result_ty == promoted type of e *)
-                           Caux.mk_specified_pe (if AilTypesAux.is_unsigned_integer_type result_ty then
-                             (* STD §6.5.3.3#4, sentence 3 *)
-                             Caux.mk_std_pe "§6.5.3.3#4, sentence 3" $ Caux.mk_op_pe C.OpSub (Caux.mk_ivmax_pe (Caux.mk_ail_ctype_pe result_ty)) promoted_e
-                           else
-                             Caux.bitwise_complement_pe (Caux.mk_ail_ctype_pe result_ty) promoted_e))
-                        ; (C.Pattern [] (C.CaseCtor C.Cunspecified [Caux.mk_empty_pat C.BTy_ctype]),
-                           Caux.mk_unspecified_pe result_ty) ]
-                    )
-                  )
-                )
-              )
-            )
+          E.wrapped_fresh_symbol (C.BTy_loaded oTy) >>= fun (_, e_sym_pat  , e_sym_pe  ) ->
+          E.wrapped_fresh_symbol (C.BTy_object oTy) >>= fun (_, obj_sym_pat, obj_sym_pe) ->
+          self e    >>= fun core_e  ->
+          E.return begin
+            Caux.add_std "§6.5.3.3#4" begin
+              Caux.mk_wseq_e e_sym_pat core_e begin
+                Caux.mk_pure_e begin
+                  Caux.mk_case_pe e_sym_pe
+                    [ ( Caux.mk_specified_pat obj_sym_pat
+                      , let promoted_e = Caux.mk_std_pe "§6.5.3.3#4, sentence 2" (integer_promotion (ctype_of e) obj_sym_pe) in
+                        (* NOTE: result_ty == promoted type of e *)
+                        Caux.mk_specified_pe begin if AilTypesAux.is_unsigned_integer_type result_ty then
+                          (* STD §6.5.3.3#4, sentence 3 *)
+                          Caux.mk_std_pe "§6.5.3.3#4, sentence 3" (Caux.mk_op_pe C.OpSub (Caux.mk_ivmax_pe (Caux.mk_ail_ctype_pe result_ty)) promoted_e)
+                        else
+                          Caux.bitwise_complement_pe (Caux.mk_ail_ctype_pe result_ty) promoted_e
+                        end )
+                    ; ( Caux.mk_unspecified_pat (Caux.mk_empty_pat C.BTy_ctype)
+                      , Caux.mk_unspecified_pe result_ty ) ]
+                end
+              end
+            end
+          end
       
       | A.AilEunary A.Address (A.AnnotatedExpression _ _ _ (A.AilEunary A.Indirection e)) ->
           (* STD §6.5.3.2#3, sentence 3 *)
