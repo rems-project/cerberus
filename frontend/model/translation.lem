@@ -1925,12 +1925,17 @@ end
           (* STD §6.5.17 *)
           self e1 >>= fun core_e1 ->
           self e2 >>= fun core_e2 ->
-          let oTy = force_core_object_type_of_ctype (ctype_of e1) in
+          let bTy =
+            let ty_e1 = ctype_of e1 in
+            if AilTypesAux.is_void ty_e1 then
+              C.BTy_unit
+            else
+              C.BTy_loaded (force_core_object_type_of_ctype ty_e1) in
           (* STD (§6.5.17, sentence 2) says there is a sequence point between the
              evaluation of the two operand. Hence the strong sequencing *)
           E.return begin
             Caux.add_std "§6.5.17#2, sentence 2" begin
-              Caux.mk_sseq_e (Caux.mk_empty_pat (C.BTy_loaded oTy)) core_e1 core_e2
+              Caux.mk_sseq_e (Caux.mk_empty_pat bTy) core_e1 core_e2
             end
           end
       
