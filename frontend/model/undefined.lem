@@ -4,6 +4,14 @@ import Bimap
 
 type unspecified_ub_context =
   | UB_unspec_equality_ptr_vs_NULL
+  | UB_unspec_equality_both_arith_or_ptr
+  | UB_unspec_pointer_add
+  | UB_unspec_pointer_sub
+  | UB_unspec_conditional
+  | UB_unspec_copy_alloc_id
+  | UB_unspec_rvalue_memberof
+  | UB_unspec_memberofptr
+  | UB_unspec_do
 
 (* C undefined behaviours *)
 type undefined_behaviour =
@@ -999,6 +1007,14 @@ let ub_str_bimap =
     ; (UB_CERB002a_out_of_bound_load, "UB_CERB002a_out_of_bound_load")
     ; (UB_CERB002b_out_of_bound_store, "UB_CERB002b_out_of_bound_store")
     ; (UB_CERB004_unspecified UB_unspec_equality_ptr_vs_NULL, "UB_CERB004_unspecified__equality_ptr_vs_NULL")
+    ; (UB_CERB004_unspecified UB_unspec_equality_both_arith_or_ptr, "UB_CERB004_unspecified__equality_both_arith_or_ptr")
+    ; (UB_CERB004_unspecified UB_unspec_pointer_add, "UB_CERB004_unspecified__pointer_add")
+    ; (UB_CERB004_unspecified UB_unspec_pointer_sub, "UB_CERB004_unspecified__pointer_sub")
+    ; (UB_CERB004_unspecified UB_unspec_conditional, "UB_CERB004_unspecified__conditional")
+    ; (UB_CERB004_unspecified UB_unspec_copy_alloc_id, "UB_CERB004_unspecified__copy_alloc_id")
+    ; (UB_CERB004_unspecified UB_unspec_rvalue_memberof, "UB_CERB004_unspecified__rvalue_memberof")
+    ; (UB_CERB004_unspecified UB_unspec_memberofptr, "UB_CERB004_unspecified__memberofptr")
+    ; (UB_CERB004_unspecified UB_unspec_do, "UB_CERB004_unspecified__do")
     ]
 
 
@@ -1094,7 +1110,23 @@ let ub_short_string = function
   | UB_CERB004_unspecified ctx ->
       match ctx with
         | UB_unspec_equality_ptr_vs_NULL ->
-            "an operand of an equality operator (ptr vs NULL) is an unspecified value"
+            "an operand of an equality operator (ptr vs NULL) evaluated to an unspecified value"
+        | UB_unspec_equality_both_arith_or_ptr ->
+            "an operand of an equality operator (both arith or ptr) evaluated to an unspecified value"
+        | UB_unspec_pointer_add ->
+            "an operand of an + operator (with one pointer operand) evaluated to an unspecified value"
+        | UB_unspec_pointer_sub ->
+            "an operand of an - operator (with one pointer operand) evaluated to an unspecified value"
+        | UB_unspec_conditional ->
+            "the controlling expression of a ?: expression evaluated to an unspecified value"
+        | UB_unspec_copy_alloc_id ->
+            "an operand of a call to copy_alloc_id() evaluated to an unspecified value"
+        | UB_unspec_rvalue_memberof ->
+            "the operand of . operator (rvalue case) evaluated to an unspecified value"
+        | UB_unspec_memberofptr ->
+            "the operand of -> operator evaluated to an unspecified value"
+        | UB_unspec_do ->
+            "the controlling expression of a do statement evaluated to an unspecified value"
       end
   | ub ->
       "(UB missing short message): " ^ show ub

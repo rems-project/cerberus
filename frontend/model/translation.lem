@@ -562,7 +562,7 @@ else (* both operand have pointer type *)
             end )
         ; ( Caux.mk_empty_pat (C.BTy_tuple [C.BTy_loaded oTy1; C.BTy_loaded oTy2])
           , (* TODO: check with Peter *)
-            Caux.mk_pure_e (Caux.mk_undef_pe loc (Undefined.DUMMY "Elab. equality operator (both arith or ptr)")) ) ]
+            Caux.mk_pure_e (Caux.mk_undef_pe loc (Undefined.UB_CERB004_unspecified Undefined.UB_unspec_equality_both_arith_or_ptr)) ) ]
     end
   end
 
@@ -1578,7 +1578,7 @@ else
                         end
 end                   )
                     ; ( Caux.mk_empty_pat (C.BTy_tuple [C.BTy_loaded C.OTy_pointer; C.BTy_loaded C.OTy_integer])
-                      , Caux.mk_pure_e (Caux.mk_undef_pe loc (Undefined.DUMMY "unspecified array_shift (addr)")) ) ]
+                      , Caux.mk_pure_e (Caux.mk_undef_pe loc (Undefined.UB_CERB004_unspecified Undefined.UB_unspec_pointer_add)) ) ]
                 )
               )
             end
@@ -1708,7 +1708,7 @@ else
                         end
 end                       )
                         ; ( Caux.mk_empty_pat (C.BTy_tuple [C.BTy_loaded C.OTy_pointer; C.BTy_loaded C.OTy_integer])
-                          , Caux.mk_pure_e (Caux.mk_undef_pe loc (Undefined.DUMMY "unspecified array_shift (sub)")) ) ]
+                          , Caux.mk_pure_e (Caux.mk_undef_pe loc (Undefined.UB_CERB004_unspecified Undefined.UB_unspec_pointer_sub)) ) ]
                   )
               )
             end
@@ -1839,7 +1839,7 @@ end                       )
                           conv_e3
                       end )
                   ; ( Caux.mk_unspecified_pat (Caux.mk_empty_pat C.BTy_ctype)
-                    , Caux.mk_pure_e (Caux.mk_undef_pe loc (Undefined.DUMMY "unspecified AilEcond")) ) ]
+                    , Caux.mk_pure_e (Caux.mk_undef_pe loc (Undefined.UB_CERB004_unspecified Undefined.UB_unspec_conditional)) ) ]
               end
             end
           end
@@ -2210,7 +2210,7 @@ end
                   [ ( Caux.mk_tuple_pat [Caux.mk_specified_pat object_from_sym_pat; Caux.mk_specified_pat object_to_sym_pat]
                     , Caux.mk_memop_e Mem_common.Copy_alloc_id [object_from_sym_pe; object_to_sym_pe] )
                   ; ( Caux.mk_empty_pat (C.BTy_tuple [C.BTy_loaded C.OTy_integer; C.BTy_loaded C.OTy_pointer])
-                    , Caux.mk_pure_e (Caux.mk_undef_pe loc (Undefined.DUMMY "unspec, copy_alloc_id()"))) ]
+                    , Caux.mk_pure_e (Caux.mk_undef_pe loc (Undefined.UB_CERB004_unspecified Undefined.UB_unspec_copy_alloc_id))) ]
               end
           end
 
@@ -2481,7 +2481,7 @@ else (* is_pointer *)
                  Caux.mk_pure_e begin
                    Caux.mk_case_pe e_sym_pe
                      [ ( Caux.mk_unspecified_pat (Caux.mk_empty_pat C.BTy_ctype)
-                       , Caux.mk_undef_pe loc (Undefined.DUMMY "Elab, rvalue AilEmemberof (unspec)") ) (* TODO: better undef *) (* TODO: check with P *)
+                       , Caux.mk_undef_pe loc (Undefined.UB_CERB004_unspecified Undefined.UB_unspec_rvalue_memberof) ) (* TODO: check with P *)
                      ; ( Caux.mk_specified_pat obj_sym_pat
                        , Caux.mk_memberof_pe tag_sym ident obj_sym_pe ) ]
                  end
@@ -2518,7 +2518,7 @@ else (* is_pointer *)
               Caux.mk_sseq_e e_sym_pat core_e begin
                 Caux.mk_case_e e_sym_pe
                   [ ( Caux.mk_unspecified_pat (Caux.mk_empty_pat C.BTy_ctype)
-                    , Caux.mk_pure_e (Caux.mk_undef_pe loc (Undefined.DUMMY "Elab, AilEmemberofptr")) ) (* TODO: better undef *)
+                    , Caux.mk_pure_e (Caux.mk_undef_pe loc (Undefined.UB_CERB004_unspecified Undefined.UB_unspec_memberofptr)) )
                   ; ( Caux.mk_specified_pat obj_sym_pat
                     , if Global.has_strict_pointer_arith () then
                         Caux.mk_wseq_e test_sym_pat
