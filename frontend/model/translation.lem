@@ -585,40 +585,31 @@ let translate_bitwise_operator loc translate_expr usual_arithmetic_conversion st
   let (std_id, stdlib_call) = match aop with
     | A.Band -> ("§6.5.10", (fun ty pe1 pe2 -> C.Pexpr [] () (C.PEctor C.CivAND [Caux.mk_ail_ctype_pe ty; pe1; pe2])))
     | A.Bxor -> ("§6.5.11", (fun ty pe1 pe2 -> C.Pexpr [] () (C.PEctor C.CivXOR [Caux.mk_ail_ctype_pe ty; pe1; pe2])))
-    | A.Bor  -> ("§6.5.12", (fun ty pe1 pe2 -> C.Pexpr [] () (C.PEctor C.CivOR [Caux.mk_ail_ctype_pe ty; pe1; pe2])))
+    | A.Bor  -> ("§6.5.12", (fun ty pe1 pe2 -> C.Pexpr [] () (C.PEctor C.CivOR  [Caux.mk_ail_ctype_pe ty; pe1; pe2])))
     | (*BISECT-IGNORE*) _ -> error "[Translation.translate_bitwise_operator], 'bop' must be a bitwise operator"
   end in
-  let e1_sym    = Symbol.fresh () in
-  let e2_sym    = Symbol.fresh () in
-  let obj1_sym  = Symbol.fresh () in
-  let obj2_sym  = Symbol.fresh () in
-  translate_expr e1 >>= fun core_e1   ->
-  translate_expr e2 >>= fun core_e2   ->
-  let oTy = C.OTy_integer in
-  let e1_sym_pe   = Caux.mk_sym_pe e1_sym   in
-  let e2_sym_pe   = Caux.mk_sym_pe e2_sym   in
-  let obj1_sym_pe = Caux.mk_sym_pe obj1_sym in
-  let obj2_sym_pe = Caux.mk_sym_pe obj2_sym in
+  E.wrapped_fresh_symbol (C.BTy_loaded C.OTy_integer) >>= fun (_, e1_sym_pat  , e1_sym_pe  ) ->
+  E.wrapped_fresh_symbol (C.BTy_loaded C.OTy_integer) >>= fun (_, e2_sym_pat  , e2_sym_pe  ) ->
+  E.wrapped_fresh_symbol (C.BTy_object C.OTy_integer) >>= fun (_, obj1_sym_pat, obj1_sym_pe) ->
+  E.wrapped_fresh_symbol (C.BTy_object C.OTy_integer) >>= fun (_, obj2_sym_pat, obj2_sym_pe) ->
+  translate_expr e1                                   >>= fun core_e1                        ->
+  translate_expr e2                                   >>= fun core_e2                        ->
   let (promoted1_pe, promoted2_pe) =
     Caux.mk_std_pair_pe (std_id ^ "#3")
       (usual_arithmetic_conversion (ctype_of e1) (ctype_of e2) obj1_sym_pe obj2_sym_pe) in
   E.return begin
-    C.Expr [Annot.Astd std_id] (
-      C.Ewseq (Caux.mk_tuple_pat [ Caux.mk_sym_pat e1_sym (C.BTy_loaded oTy)
-                                 ; Caux.mk_sym_pat e2_sym (C.BTy_loaded oTy) ]) (Caux.mk_unseq_e [core_e1; core_e2]) (
-        Caux.mk_pure_e (
-          C.Pexpr [] () (
-            C.PEcase (Caux.mk_tuple_pe [e1_sym_pe; e2_sym_pe])
-              [ (Caux.mk_tuple_pat [ Caux.mk_specified_pat (Caux.mk_sym_pat obj1_sym (C.BTy_object oTy))
-                                   ; Caux.mk_specified_pat (Caux.mk_sym_pat obj2_sym (C.BTy_object oTy)) ],
-                 (* Both operand are specified *)
+    Caux.add_std std_id begin
+      Caux.mk_wseq_e (Caux.mk_tuple_pat [ e1_sym_pat; e2_sym_pat ]) (Caux.mk_unseq_e [core_e1; core_e2]) begin
+        Caux.mk_pure_e begin
+          Caux.mk_case_pe (Caux.mk_tuple_pe [e1_sym_pe; e2_sym_pe])
+            [ ( Caux.mk_tuple_pat [ Caux.mk_specified_pat obj1_sym_pat ; Caux.mk_specified_pat obj2_sym_pat ]
+              , (* Both operand are specified *)
                 Caux.mk_specified_pe (Caux.mk_std_pe (std_id ^ "#4") (stdlib_call result_ty promoted1_pe promoted2_pe)) )
-              ; (Caux.mk_empty_pat (C.BTy_tuple [C.BTy_loaded oTy; C.BTy_loaded oTy]),
-                 Caux.mk_unspecified_pe result_ty) ]
-          )
-        )
-      )
-    )
+            ; ( Caux.mk_empty_pat (C.BTy_tuple [C.BTy_loaded C.OTy_integer; C.BTy_loaded C.OTy_integer])
+              , Caux.mk_unspecified_pe result_ty ) ]
+        end
+      end
+    end
   end
 
 
