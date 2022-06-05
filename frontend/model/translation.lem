@@ -1103,7 +1103,7 @@ else
           E.return (
             C.Expr [Annot.Astd "§6.5.2.4"; Annot.Astd "§6.5.2.4#2, sentence 1"; Annot.Astd "§6.5.2.4#2, sentence 3"] (
               C.Ewseq lvalue_sym_pat core_e (
-                Caux.seq_rmw loc false(* return the value of the load *) core_ty_e lvalue_sym_pe load_sym begin
+                Caux.seq_rmw loc false(* return the value of the load *) core_ty_e oTy lvalue_sym_pe load_sym begin
                   Caux.mk_case_pe load_sym_pe
                     [ ( Caux.mk_specified_pat obj_sym_pat
                       , Caux.mk_specified_pe begin
@@ -1153,7 +1153,7 @@ end
           E.return begin
             C.Expr [Annot.Astd "§6.5.2.4#3"] (
               C.Ewseq (Caux.mk_sym_pat lvalue_sym (C.BTy_object C.OTy_pointer)) core_e (
-                Caux.seq_rmw loc false(* return the value of the load *) core_ty_e lvalue_sym_pe load_sym begin
+                Caux.seq_rmw loc false(* return the value of the load *) core_ty_e oTy lvalue_sym_pe load_sym begin
                   Caux.mk_case_pe load_sym_pe
                     [ ( Caux.mk_specified_pat obj_sym_pat
                       , Caux.mk_specified_pe begin

@@ -826,9 +826,9 @@ let rec n_expr (loc : Loc.t) (returns : symbol Pset.set)
      n_pexpr_in_expr_names pes (fun pes ->
      k (wrap (M_Elpredicate(Show, id, pes))))
   | Eannot _ ->
-      failwith "TODO: Eannot"
+      failwith "core_anormalisation: Eannot"
   | Eexcluded _ ->
-      failwith "TODO: Eexcluded"
+      failwith "core_anormalisation: Eexcluded"
 
 let normalise_expr (loc : Loc.t) (returns : symbol Pset.set) e : mu_texpr =
   let sym = Symbol.fresh () in

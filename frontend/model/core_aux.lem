@@ -488,8 +488,21 @@ let plinux_store loc ty x n mo =
 let plinux_rmw loc ty x n mo =
   Expr [] (Eaction (Paction Pos (Action loc default (LinuxRMW ty x n mo))))
 
-let seq_rmw loc with_forward ty x sym upd =
-  Expr [] (Eaction (Paction Pos (Action loc default (SeqRMW with_forward ty x sym upd))))
+import Global Cmm_csem
+let seq_rmw loc with_forward ty oTy x sym upd =
+  let backend = Global.backend_name () in
+  if backend = "Cn" || backend = "Bmc" then
+    (* TODO: compatibility mode for Cn, until SeqRMW is supported *)
+    if with_forward then
+      error "TODO: Core_aux.seq_rmw (comptability mode) with_forward"
+    else
+      Expr [] (Ewseq (mk_sym_pat sym (*TODO*)(BTy_loaded oTy))
+                    (pload loc ty x Cmm_csem.NA)
+                    (Expr [] (Ewseq (mk_empty_pat BTy_unit)
+                                    (pstore loc ty x upd Cmm_csem.NA)
+                                    (Expr [] (Epure (mk_sym_pe sym))))))
+  else
+    Expr [] (Eaction (Paction Pos (Action loc default (SeqRMW with_forward ty x sym upd))))
 
 
 
