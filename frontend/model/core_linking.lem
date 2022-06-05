@@ -90,7 +90,7 @@ let rec free_pexpr acc (Pexpr _ _ pe) =
   | PEarray_shift pe1 _ pe2 ->
       free_pexpr (free_pexpr acc pe1) pe2
   | PEmember_shift pe1 sym _ ->
-      free_pexpr (Set.insert sym acc) pe1
+      free_pexpr acc pe1
   | PEnot pe ->
       free_pexpr acc pe
   | PEop _ pe1 pe2 ->
