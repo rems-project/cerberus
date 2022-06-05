@@ -2364,31 +2364,28 @@ else (* is_pointer *)
                       (* the member is a null pointer constant *)
                       match memb_ty with
                         | Cty.Ctype _ (Cty.Pointer _ ref_ty) ->
-                            E.return (
-                              (ident, Caux.mk_specified_pe (Caux.mk_nullptr_pe ref_ty)) :: acc,
-                              mk_core
-                            )
+                            E.return
+                              ( (ident, Caux.mk_specified_pe (Caux.mk_nullptr_pe ref_ty)) :: acc
+                              , mk_core )
                         | (*BISECT-IGNORE*) _ ->
                             illTypedAil loc "AilEstruct, Just null_pointer_constant"
                       end
                     else
                       E.wrapped_fresh_symbol (C.BTy_loaded oTy) >>= fun (_, e_sym_pat, e_sym_pe) ->
                       self e                                    >>= fun core_e                   ->
-                      E.return (
-                        ( ident,
-                          if AilTypesAux.is_integer memb_ty then
-                            stdlib.mkcall_conv_loaded_int memb_ty e_sym_pe
-                          else
-                            e_sym_pe ) :: acc ,
-                        fun z -> Caux.mk_sseq_e e_sym_pat core_e (mk_core z)
-                      )
+                      E.return
+                        ( ( ident
+                          , if AilTypesAux.is_integer memb_ty then
+                              stdlib.mkcall_conv_loaded_int memb_ty e_sym_pe
+                            else
+                              e_sym_pe ) :: acc
+                        , fun z -> Caux.mk_sseq_e e_sym_pat core_e (mk_core z) )
                   end
               | Nothing ->
                   let (_, _, ty) = fromJust "Translation.translate_expression, AilEstruct 3" (List.lookup ident ident_tys) in
-                  E.return (
-                    (ident, Caux.mk_unspecified_pe ty) :: acc,
-                    mk_core
-                  )
+                  E.return
+                    ( (ident, Caux.mk_unspecified_pe ty) :: acc
+                    , mk_core )
             end
           ) ([], fun z -> z) ident_e_opts >>= fun (core_xs_rev, mk_core) ->
           E.return begin
