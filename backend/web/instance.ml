@@ -67,7 +67,8 @@ let add_bmc_macro ~bmc_model conf =
 let hack ~conf mode =
   let open Global_ocaml in
   let conf =
-   {  exec_mode_opt=    Some (mode);
+   {  backend_name= "Web_instance";
+      exec_mode_opt=    Some (mode);
       concurrency=      false;
       error_verbosity=  Global_ocaml.QuoteStd;
       defacto=          false;

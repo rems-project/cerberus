@@ -16,6 +16,7 @@ type execution_mode =
   | Random
 
 type cerberus_conf = {
+  backend_name:       string;
   exec_mode_opt:      execution_mode option;
   concurrency:        bool;
   error_verbosity:    error_verbosity;
@@ -30,15 +31,18 @@ let (!!) z = !z()
 let cerb_conf =
   ref (fun () -> failwith "cerb_conf is Undefined")
 
-let set_cerb_conf exec exec_mode concurrency error_verbosity defacto permissive agnostic _bmc =
+let set_cerb_conf backend_name exec exec_mode concurrency error_verbosity defacto permissive agnostic _bmc =
   let exec_mode_opt = if exec then Some exec_mode else None in
   let n1570 =
     if error_verbosity <> QuoteStd then None else Some (Lazy.force N1570.data)
   in
   let conf =
-    {defacto; concurrency; error_verbosity; agnostic; permissive; exec_mode_opt; n1570}
+    {backend_name; defacto; concurrency; error_verbosity; agnostic; permissive; exec_mode_opt; n1570}
   in
   cerb_conf := fun () -> conf
+
+let backend_name () =
+  !!cerb_conf.backend_name
 
 let concurrency_mode () =
   !!cerb_conf.concurrency

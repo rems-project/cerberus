@@ -10,6 +10,7 @@ type execution_mode =
   | Random
 
 type cerberus_conf = {
+  backend_name:    string;
   exec_mode_opt:   execution_mode option;
   concurrency:     bool;
   error_verbosity: error_verbosity;
@@ -24,6 +25,7 @@ val (!!): (unit -> 'a) ref -> 'a
 val cerb_conf: (unit -> cerberus_conf) ref
 
 val set_cerb_conf:
+    string -> 
     bool ->
     execution_mode ->
     bool ->
@@ -36,6 +38,8 @@ val set_cerb_conf:
 
 (* NOTE: used in driver.lem *)
 val current_execution_mode: unit -> execution_mode option
+
+val backend_name: unit -> string
 
 val concurrency_mode: unit -> bool
 val isDefacto: unit -> bool

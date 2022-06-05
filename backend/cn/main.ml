@@ -107,7 +107,7 @@ type named_rewrite = string * rewrite
 
 let frontend astprints cbv filename state_file =
 
-  Global_ocaml.(set_cerb_conf false Random false Basic false false false false);
+  Global_ocaml.(set_cerb_conf "Cn" false Random false Basic false false false false);
   CF.Ocaml_implementation.(set (HafniumImpl.impl));
   if cbv then CF.Switches.(set ["inner_arg_temps"]) else ();
   load_core_stdlib () >>= fun stdlib ->
