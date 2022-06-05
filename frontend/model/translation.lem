@@ -2585,27 +2585,14 @@ else (* is_pointer *)
           E.return (
             Caux.mk_pure_e lit_sym_pe
           )
-      | A.AilEsizeof _ (Ctype.Ctype _ (Ctype.Basic (Ctype.Integer Ctype.Char))) ->
-          E.return begin
-            C.Expr [Annot.Astd "§6.5.3.4#4, sentence 1"] (
-              C.Epure (Caux.mk_specified_pe (Caux.mk_integer_pe 1))
-            )
-          end
-      | A.AilEsizeof _ (Ctype.Ctype _ (Ctype.Basic (Ctype.Integer (Ctype.Signed Ctype.Ichar)))) ->
-          E.return begin
-            C.Expr [Annot.Astd "§6.5.3.4#4, sentence 1"] (
-              C.Epure (Caux.mk_specified_pe (Caux.mk_integer_pe 1))
-            )
-          end
-      | A.AilEsizeof _ (Ctype.Ctype _ (Ctype.Basic (Ctype.Integer (Ctype.Unsigned Ctype.Ichar)))) ->
-          E.return begin
-            C.Expr [Annot.Astd "§6.5.3.4#4, sentence 1"] (
-              C.Epure (Caux.mk_specified_pe (Caux.mk_integer_pe 1))
-            )
-          end
       | A.AilEsizeof _ ty ->
           E.return begin
-            Caux.mk_pure_e (Caux.mk_specified_pe (Caux.mk_sizeof_pe (Caux.mk_ail_ctype_pe ty)))
+            if AilTypesAux.is_character ty then
+              Caux.add_std "§6.5.3.4#4, sentence 1" begin
+                Caux.mk_pure_e (Caux.mk_specified_pe (Caux.mk_integer_pe 1))
+              end
+            else
+              Caux.mk_pure_e (Caux.mk_specified_pe (Caux.mk_sizeof_pe (Caux.mk_ail_ctype_pe ty)))
           end
       
       | A.AilEsizeof_expr e ->
