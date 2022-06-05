@@ -548,7 +548,8 @@ else (* both operand have pointer type *)
   | A.Ne -> Mem_common.PtrNe
   | (*BISECT-IGNORE*) _ -> error "[Translation.translate_equality_operator], 'bop' must be relational"
   end in
-  (* TODO: should have a case for 6.5.9#5 sentence 3 ? *)
+     (* NOTE: our modelling of ptr <-> ptr casting is the identity,
+              so nothing is done here for (§6.5.9#5 sentence 3) *)
       Caux.mk_case_e (Caux.mk_tuple_pe [e1_sym_pe; e2_sym_pe])
         [ ( Caux.mk_tuple_pat [ Caux.mk_specified_pat obj1_sym_pat; Caux.mk_specified_pat obj2_sym_pat ]
           , Caux.mk_wseq_e memop_sym_pat (C.Expr [] (C.Ememop memop [obj1_sym_pe; obj2_sym_pe])) begin
