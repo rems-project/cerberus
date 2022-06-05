@@ -2313,33 +2313,34 @@ else (* is_pointer *)
                 illTypedAil loc "AilEarray"
           end in
           E.foldlM (fun (acc, mk_expr) e_opt ->
-             match e_opt with
-               | Just e ->
-                   let e_sym = Symbol.fresh () in
-                   self e >>= fun core_e ->
-                   let bTy =
-                     C.BTy_loaded (force_core_object_type_of_ctype (ctype_of e)) in
-                   let elem_pe =
-                     if AilTypesAux.is_pointer elem_ty && Aaux.is_null_pointer_constant e then
-                       (* the member is a null pointer constant *)
-                       match elem_ty with
-                         | Cty.Ctype _ (Cty.Pointer _ ref_ty) ->
-                             Caux.mk_specified_pe (Caux.mk_nullptr_pe ref_ty)
-                         | (*BISECT-IGNORE*) _ ->
-                             illTypedAil loc "AilEarray, Just null_pointer_constant"
-                       end
-                     (* TODO: check + std quote *)
-                     else if AilTypesAux.is_arithmetic elem_ty && AilTypesAux.is_arithmetic (ctype_of e) then
-                       conv_loaded_arith stdlib (ctype_of e) elem_ty (Caux.mk_sym_pe e_sym)
-                     else
-                       (* TODO: other conversions? *)
-                       Caux.mk_sym_pe e_sym in 
-                   E.return
-                     (elem_pe :: acc, (Caux.mk_wseq_e (Caux.mk_sym_pat e_sym bTy) core_e) -| mk_expr)
-               | Nothing ->
-                   E.return
-                     (Caux.mk_unspecified_pe elem_ty :: acc, mk_expr)
-             end
+            match e_opt with
+              | Just e ->
+                  let oTy = force_core_object_type_of_ctype (ctype_of e) in
+                  E.wrapped_fresh_symbol (C.BTy_loaded oTy) >>= fun (_, e_sym_pat, e_sym_pe) ->
+                  self e                                    >>= fun core_e                   ->
+                  let elem_pe =
+                    if AilTypesAux.is_pointer elem_ty && Aaux.is_null_pointer_constant e then
+                      (* the member is a null pointer constant *)
+                      match elem_ty with
+                        | Cty.Ctype _ (Cty.Pointer _ ref_ty) ->
+                            Caux.mk_specified_pe (Caux.mk_nullptr_pe ref_ty)
+                        | (*BISECT-IGNORE*) _ ->
+                            illTypedAil loc "AilEarray, Just null_pointer_constant"
+                      end
+                    (* TODO: check + std quote *)
+                    else if AilTypesAux.is_arithmetic elem_ty && AilTypesAux.is_arithmetic (ctype_of e) then
+                      conv_loaded_arith stdlib (ctype_of e) elem_ty e_sym_pe
+                    else
+                      (* TODO: other conversions? *)
+                      e_sym_pe in 
+                  E.return
+                    ( elem_pe :: acc
+                    , (Caux.mk_wseq_e e_sym_pat core_e) -| mk_expr )
+              | Nothing ->
+                  E.return
+                   ( Caux.mk_unspecified_pe elem_ty :: acc
+                   , mk_expr )
+            end
           ) ([], id) e_opts >>= fun (rev_pes, mk_expr) ->
           E.return begin
              mk_expr (Caux.mk_pure_e (Caux.mk_specified_pe (Caux.mk_array_pe (List.reverse rev_pes))))
