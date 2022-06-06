@@ -230,7 +230,7 @@ module type Capability =
      *)
     val cap_unseal: t -> t -> t
 
-    (* encoding/decoding to list of bytes *)
+    (* --- Encoding/decoding to list of bytes --- *)
 
     (** Decoding sequence of bytes into capbility object. It will
         return None if list is wrong size. Validity tag is passed
@@ -246,6 +246,19 @@ module type Capability =
         Retuns memory-encoded capability and validy tag
      *)
     val encode: bool ->  t -> (char list * bool)
+
+    (* --- Compression-related --- *)
+
+    (** returns the length that a capability would have after using
+        [cheri_bounds_set] to set the length to [len] (assuming
+        appropriate alignment of the base). *)
+    val representable_length: Z.num -> Z.num
+
+    (** returns a bitmask that can be used to align an address downwards
+        such that it is sufficiently aligned to create a precisely
+        bounded capability. *)
+    val representable_alignment_mask: Z.num -> Z.num
+
 
     (* --- Utility methods --- *)
 

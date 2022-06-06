@@ -750,6 +750,18 @@ module Morello_capability: Capability
     and cap_unseal c k = (* TODO: check if allowed *)
       {c with obj_type = cap_SEAL_TYPE_UNSEALED}
 
+    and representable_alignment_mask len =
+      let len' = to_bits (len, zCAP_VALUE_NUM_BITS) in
+      let mask' = zCapGetRepresentableMask len' in
+      uint mask'
+
+    (* Implemented per Morello spec which defines RRLEN as:
+       X[d] = (request + NOT(mask)) AND mask; *)
+    and representable_length len =
+      let mask = representable_alignment_mask len in
+      let nmask = uint @@ not_vec @@ to_bits (len, zCAP_VALUE_NUM_BITS) in
+      Z.bitwise_and (Z.add len nmask) mask
+
     (* exact equality. compares capability metadata as well as value *)
     and eq a b  =
       encode_to_bits true a = encode_to_bits true b

@@ -2390,6 +2390,10 @@ module CHERI (C:Capability
                  TyIsPointer
                ]
         ])
+    else if name = "cheri_representable_length" then
+      Some ( ExactRet (Ctype.size_t), [ ExactArg (Ctype.size_t)])
+    else if name = "cheri_representable_alignment_mask" then
+      Some ( ExactRet (Ctype.size_t), [ ExactArg (Ctype.size_t)])
     else
       None
 
@@ -2493,9 +2497,22 @@ module CHERI (C:Capability
            let p = Prov_none in (* TODO: CHERI provenance? *)
            return (Some (MVinteger (Bool, (IV (p,v)))))
         end
+    else if name = "cheri_representable_length" then
+      (* this intrinsic is pure *)
+      match List.nth args 0 with
+      | MVinteger (Size_t, (IV (_,n))) ->
+         let l = C.representable_length n in
+         return (Some (MVinteger (Size_t, (IV (Prov_none,l)))))
+      | _ -> fail (MerrOther ("CHERI.call_intrinsic: 1st argument's type is not size_t in: '" ^ name ^ "'"))
+    else if name = "cheri_representable_alignment_mask" then
+      (* this intrinsic is pure *)
+      match List.nth args 0 with
+      | MVinteger (Size_t, (IV (_,n))) ->
+         let l = C.representable_alignment_mask n in
+         return (Some (MVinteger (Size_t, (IV (Prov_none,l)))))
+      | _ -> fail (MerrOther ("CHERI.call_intrinsic: 1st argument's type is not size_t in: '" ^ name ^ "'"))
     else
       fail (MerrOther ("CHERI.call_intrinsic: unknown intrinsic: '" ^ name ^ "'"))
-
 
   let internal_intcast loc (*ity1*) ity2 ival =
     let (min_ity2, max_ity2) =
