@@ -400,6 +400,18 @@ let tests = "morello_caps" >::: [
         ListZ.assert_equal
           emz
           m
+      );
+
+      "representable_length" >:: (fun _ ->
+        let l = ["0";"1";"0x3e8";"0xffffff";"0xffffffffffffffff"] in
+        let em = ["0";"1";"0x3e8";
+                  "0x1000000"; "0"] in
+        let emz = List.map Z.of_string em in
+        let lz = List.map Z.of_string l in
+        let m = List.map representable_length lz in
+        ListZ.assert_equal
+          emz
+          m
       )
 
     ]

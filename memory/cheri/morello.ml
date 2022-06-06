@@ -759,7 +759,7 @@ module Morello_capability: Capability
        X[d] = (request + NOT(mask)) AND mask; *)
     and representable_length len =
       let mask = representable_alignment_mask len in
-      let nmask = uint @@ not_vec @@ to_bits (len, zCAP_VALUE_NUM_BITS) in
+      let nmask = uint @@ not_vec @@ to_bits (zCAP_VALUE_NUM_BITS, mask) in
       Z.bitwise_and (Z.add len nmask) mask
 
     (* exact equality. compares capability metadata as well as value *)
