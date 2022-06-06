@@ -12,6 +12,17 @@ module Z = struct
   let format = Z.format
 end
 
+module EZ =
+struct
+  type t = Z.num
+  let compare = Z.compare
+  let pp_printer f z =
+    Format.pp_print_string f (Z.format "%#x" z)
+  let pp_print_sep = OUnitDiff.pp_comma_separator
+end
+
+module ListZ = OUnitDiff.ListSimpleMake(EZ)
+
 let string_of_char_list l =
   let open List in
   "[" ^
@@ -379,6 +390,17 @@ let tests = "morello_caps" >::: [
              "0xffff [rwRW,0xffff-0x20008] (invald)" s'
       );
 
+      "representable_alignment_mask" >:: (fun _ ->
+        let l = ["0";"1";"0x3e8";"0xffffff";"0xffffffffffffffff"] in
+        let em = ["0xffffffffffffffff";"0xffffffffffffffff";"0xffffffffffffffff";
+                  "0xffffffffffffe000"; "0xffe0000000000000"] in
+        let emz = List.map Z.of_string em in
+        let lz = List.map Z.of_string l in
+        let m = List.map representable_alignment_mask lz in
+        ListZ.assert_equal
+          emz
+          m
+      )
 
     ]
 

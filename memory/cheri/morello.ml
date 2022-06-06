@@ -751,7 +751,7 @@ module Morello_capability: Capability
       {c with obj_type = cap_SEAL_TYPE_UNSEALED}
 
     and representable_alignment_mask len =
-      let len' = to_bits (len, zCAP_VALUE_NUM_BITS) in
+      let len' = to_bits (zCAP_VALUE_NUM_BITS, len) in
       let mask' = zCapGetRepresentableMask len' in
       uint mask'
 
