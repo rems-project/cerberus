@@ -93,6 +93,8 @@ module type Capability =
     val max_vaddr : vaddr
     val sizeof_vaddr: int
 
+    val vaddr_bitwise_complement: vaddr -> vaddr
+
     (** the number of user-defined flags *)
     val cap_flags_len: int
 

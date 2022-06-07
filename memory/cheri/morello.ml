@@ -198,10 +198,13 @@ module Morello_capability: Capability
     type otype = Z.num
                    [@@deriving eq,show]
 
-    let min_vaddr  = Z.of_int 0
-    let max_vaddr  = let open Z in sub (pow_int (of_int 2) 64) (of_int 1)
     let sizeof_vaddr = 8 (* 64-bit *)
+    let vaddr_bits = sizeof_vaddr * 8
+    let min_vaddr  = Z.of_int 0
+    let max_vaddr  = let open Z in sub (pow_int (of_int 2) vaddr_bits) (of_int 1)
 
+    let vaddr_bitwise_complement a =
+      uint @@ not_vec @@ to_bits' (vaddr_bits, a)
 
     let vaddr_in_range a =
       (Z.greater_equal a min_vaddr) && (Z.less_equal a max_vaddr)
@@ -262,8 +265,8 @@ module Morello_capability: Capability
       List.map bool_of_bit flags'
 
     and flags_from_value (v:vaddr): bool list =
-      let bits = to_bits' (64, v) in
-      assert(List.length bits = 64);
+      let bits = to_bits' (vaddr_bits, v) in
+      assert(List.length bits = vaddr_bits);
       flags_from_value_bits bits
 
     (* Helper function to check if capability is sealed (with any kind of seal) *)
@@ -636,7 +639,7 @@ module Morello_capability: Capability
     and cap_vaddr_representable c a =
       vaddr_in_range a &&
         (let cap_bits = encode_to_bits true c in
-         zCapIsRepresentable (cap_bits, (to_bits' (64, a))))
+         zCapIsRepresentable (cap_bits, (to_bits' (vaddr_bits, a))))
 
     and cap_bounds_representable_exactly c (base',limit') =
       (* encode with tag set *)
@@ -751,7 +754,7 @@ module Morello_capability: Capability
       {c with obj_type = cap_SEAL_TYPE_UNSEALED}
 
     and representable_alignment_mask len =
-      let len' = to_bits (zCAP_VALUE_NUM_BITS, len) in
+      let len' = to_bits' (vaddr_bits, len) in
       let mask' = zCapGetRepresentableMask len' in
       uint mask'
 
@@ -759,7 +762,7 @@ module Morello_capability: Capability
        X[d] = (request + NOT(mask)) AND mask; *)
     and representable_length len =
       let mask = representable_alignment_mask len in
-      let nmask = uint @@ not_vec @@ to_bits (zCAP_VALUE_NUM_BITS, mask) in
+      let nmask = vaddr_bitwise_complement mask in
       Z.bitwise_and (Z.add len nmask) mask
 
     (* exact equality. compares capability metadata as well as value *)

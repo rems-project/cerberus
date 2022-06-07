@@ -1538,7 +1538,25 @@ module CHERI (C:Capability
   let allocate_region tid pref align_int size_int =
     let align_n = num_of_int align_int in
     let size_n = num_of_int size_int in
-    allocator size_n align_n >>= fun (alloc_id, addr) ->
+
+    let mask = C.representable_alignment_mask size_n in
+    let size_n' = C.representable_length size_n in
+    let align_n' = Z.max align_n (Z.add (Z.succ (Z.zero)) (C.vaddr_bitwise_complement mask)) in
+
+    assert (Z.less_equal size_n size_n');
+    assert (Z.less_equal align_n align_n');
+
+    if !Debug_ocaml.debug_level >= 3 &&
+         (not ((Z.equal_num size_n size_n') && (Z.equal_num align_n align_n')))
+    then
+      Debug_ocaml.print_debug 1 [] (fun () ->
+          "allocate_region CHERI size/alignment adusted. WAS: " ^
+            ", size= " ^ Z.to_string size_n ^
+              ", align= " ^ Z.to_string align_n ^
+                "BECOME: " ^
+                  ", size= " ^ Z.to_string size_n' ^
+                    ", align= " ^ Z.to_string align_n');
+    allocator size_n' align_n' >>= fun (alloc_id, addr) ->
     Debug_ocaml.print_debug 1 [] (fun () ->
         "DYNAMIC ALLOC - pref: " ^ String_symbol.string_of_prefix pref ^ (* pref will always be Core *)
           " --> alloc_id= " ^ Z.to_string alloc_id ^
@@ -1546,14 +1564,17 @@ module CHERI (C:Capability
               ", addr= " ^ Z.to_string addr
       );
     (* TODO: why aren't we using the argument pref? *)
-    let alloc = {prefix= Symbol.PrefMalloc; base= addr; size= size_n; ty= None; is_readonly= IsWritable; taint= `Unexposed} in
+    let alloc = {prefix= Symbol.PrefMalloc; base= addr; size= size_n'; ty= None; is_readonly= IsWritable; taint= `Unexposed} in
     update (fun st ->
         { st with
           allocations= IntMap.add alloc_id alloc st.allocations;
           dynamic_addrs= addr :: st.dynamic_addrs }
       ) >>
       (* malloc *)
-      return (PV (Prov_some alloc_id, PVconcrete (C.alloc_cap addr size_n)))
+      let c = C.alloc_cap addr size_n' in
+      if C.cap_bounds_representable_exactly c (addr, Z.add addr size_n')
+      then return (PV (Prov_some alloc_id, PVconcrete c))
+      else failwith "Error settting exeact bounds for allocated region"
 
   (* zap (make unspecified) any pointer in the memory with provenance matching a
      given allocation id *)
