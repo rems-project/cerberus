@@ -403,6 +403,10 @@ and n_pexpr : 'a. Loc.t -> 'a n_pexpr_domain ->
         let ct = (fensure_ctype__pexpr loc "PEcall(conv_int,_): not a ctype" arg1) in
         n_pexpr_name loc domain arg2 (fun arg2 ->
         k (annotate (M_PEconv_int(ct, arg2))))
+     | Sym (Symbol (_, _, SD_Id "conv_loaded_int")), [arg1;arg2] ->
+        let ct = (fensure_ctype__pexpr loc "PEcall(conv_loaded_int,_): not a ctype" arg1) in
+        n_pexpr_name loc domain arg2 (fun arg2 ->
+        k (annotate (M_PEconv_loaded_int(ct, arg2))))
      | Sym (Symbol (_, _, SD_Id "wrapI")), [arg1;arg2] ->
         let ct = (fensure_ctype__pexpr loc "PEcall(wrapI,_): not a ctype" arg1) in
         n_pexpr_name loc domain arg2 (fun arg2 ->

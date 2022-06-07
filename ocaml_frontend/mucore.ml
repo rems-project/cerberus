@@ -151,6 +151,7 @@ module Make(T : TYPES) = struct
    | M_PEassert_undef of 'TY asym * Location_ocaml.t * Undefined.undefined_behaviour
    | M_PEbool_to_integer of 'TY asym
    | M_PEconv_int of 'TY act * 'TY asym
+   | M_PEconv_loaded_int of 'TY act * 'TY asym
    | M_PEwrapI of 'TY act * 'TY asym
 
 

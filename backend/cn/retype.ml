@@ -227,6 +227,9 @@ let retype_pexpr (Old.M_Pexpr (loc, annots,bty,pexpr_)) =
     | M_PEconv_int (act, asym) ->
        let act = map_act (ct_of_ct loc) act in
        return (New.M_PEconv_int (act, asym))
+    | M_PEconv_loaded_int (act, asym) ->
+       let act = map_act (ct_of_ct loc) act in
+       return (New.M_PEconv_loaded_int (act, asym))
     | M_PEwrapI (act, asym) ->
        let act = map_act (ct_of_ct loc) act in
        return (New.M_PEwrapI (act, asym))
