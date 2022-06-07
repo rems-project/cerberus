@@ -1218,15 +1218,11 @@ let make_fun_spec loc (layouts : Memory.struct_decls) rpredicates lpredicates
         let item = aarg_item loc aarg in
         let (o', mapping') =
           make_owned_funarg loc counter item.it item.path aarg.typ in
-        let c =
-          (`Constraint (LC.t_ (good_ (pointer_ct aarg.typ, item.it))),
-           (loc, Some ("&ARG" ^ string_of_int counter ^ " constraint")))
-        in
         let mappings =
           mod_mapping "end" mappings
             (fun mapping -> (item :: mapping') @ mapping)
         in
-        return (o @ [c] @ o', mappings, counter+1)
+        return (o @ o', mappings, counter+1)
       )
       (o, mappings, 0) fspec.function_arguments
   in
