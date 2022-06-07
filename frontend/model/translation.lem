@@ -3653,6 +3653,10 @@ let translate_program stdlib (startup_sym_opt, sigm) =
           end
       
       | A.Decl_function has_proto (_, return_ty) params is_variadic is_inline is_Noreturn ->
+          let is_using_inner_arg_temps =
+            (* NOTE: we exclude main because the driver allocates the objects for argc and argvs *)
+            (* with this switch the argument temporary objects are allocated in the function *)
+            Global.has_switch SW_inner_arg_temps && startup_sym_opt <> Just sym in
           (* elaboration of a function *)
           let ret_bTy =
             if AilTypesAux.is_void return_ty then
@@ -3660,7 +3664,7 @@ let translate_program stdlib (startup_sym_opt, sigm) =
             else
               C.BTy_loaded (force_core_object_type_of_ctype return_ty) in
           let param_bTys =
-            if Global.has_switch SW_inner_arg_temps && startup_sym_opt <> Just sym then
+            if is_using_inner_arg_temps then
               List.map (fun (_, ty, _) -> C.BTy_loaded (force_core_object_type_of_ctype ty)) params
             else
               List.replicate (List.length params) (C.BTy_object C.OTy_pointer) in
@@ -3725,22 +3729,28 @@ let translate_program stdlib (startup_sym_opt, sigm) =
                   else
                     (Nothing, Nothing)
                 in
-                (translate_stmt stdlib core_tagDefs sym <|
-                   return_ty= return_ty;
-                   return_lab= ret_label;
-                   variadic_sym_opt= variadic_sym_opt;
-                   last_arg_sym_opt= last_arg_sym_opt;
-                   is_Noreturn= is_Noreturn;
-                   default_lab= Nothing;
-                   case_labs= [];
-                   loop= Nothing;
-                   break= Nothing;
-                   label_visibles= visibles.label_visibles_;
-                 |> stmt) >>= fun core_body ->
-                let add_prelude z =
-                  if Global.has_switch SW_inner_arg_temps && startup_sym_opt <> Just sym then
-                    (* NOTE: we exclude main because the driver allocates the objects for argc and argvs *)
-                    (* with this switch the argument temporary objects are allocated in the function *)
+                let (mk_body_wrapper, label_visibles) =
+                  if is_using_inner_arg_temps then
+                    let xs = List.map (fun (sym, (_, ty, _)) -> (sym, ty)) (List.zip param_syms params) in
+                    ( (fun z -> E.with_block_objects (List.map (fun (sym, ty) -> (sym, (Ctype.no_qualifiers, ty))) xs) z)
+                    , Map.map (fun z -> z ++ xs) visibles.label_visibles_ )
+                  else
+                    ((fun z -> z), visibles.label_visibles_) in
+                mk_body_wrapper
+                  (translate_stmt stdlib core_tagDefs sym <|
+                    return_ty= return_ty;
+                    return_lab= ret_label;
+                    variadic_sym_opt= variadic_sym_opt;
+                    last_arg_sym_opt= last_arg_sym_opt;
+                    is_Noreturn= is_Noreturn;
+                    default_lab= Nothing;
+                    case_labs= [];
+                    loop= Nothing;
+                    break= Nothing;
+                    label_visibles= label_visibles;
+                  |> stmt) >>= fun core_body ->
+                let add_prelude_and_epilogue z =
+                  if is_using_inner_arg_temps then
                     Caux.mk_sseqs
                       begin
                         List.concat begin
@@ -3753,7 +3763,16 @@ let translate_program stdlib (startup_sym_opt, sigm) =
                           ) (List.zip params (List.zip param_syms arg_value_decls))
                         end
                       end
-                      z
+                      begin
+                        Caux.mk_unit_sseq
+                          begin
+                            z ::
+                            List.map (fun (ptr_sym, (_, ty, _)) ->
+                              Caux.pkill loc (C.Static ty) (Caux.mk_sym_pe ptr_sym)
+                            ) (List.zip param_syms params)
+                          end
+                          (Caux.mk_pure_e Caux.mk_unit_pe)
+                      end
                   else
                     z in
                 let ret_sym = Symbol.fresh () in
@@ -3781,7 +3800,7 @@ let translate_program stdlib (startup_sym_opt, sigm) =
                   end
                 in
                 let param_syms =
-                  if Global.has_switch SW_inner_arg_temps && startup_sym_opt <> Just sym then
+                  if is_using_inner_arg_temps then
                     List.map fst arg_value_decls
                   else
                     param_syms in
@@ -3790,7 +3809,7 @@ let translate_program stdlib (startup_sym_opt, sigm) =
                   , Map.insert sym
                      (C.Proc loc ret_bTy
                              (List.zip param_syms param_bTys ++ variadic_arg_type)
-                             (Caux.mk_sseq_e (Caux.mk_empty_pat C.BTy_unit) (add_prelude core_body) core_return)
+                             (Caux.mk_sseq_e (Caux.mk_empty_pat C.BTy_unit) (add_prelude_and_epilogue core_body) core_return)
                      ) facc
                   , Map.insert sym finfo finfoacc )
           end
