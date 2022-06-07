@@ -56,15 +56,15 @@ let no_randomness_params = [
   ]
 
 let solver_params = [
-    ("smt.logic", "AUFLIA");
+    ("smt.logic", "QF_AUFLIA");
     ("smt.arith.solver", "2");
     ("smt.macro_finder", "true");
     ("smt.pull-nested-quantifiers", "true");
     ("smt.mbqi", "true");
-    ("smt.ematching", "true");
-    (* ("smt.arith.nl", "false"); *)
-    (* ("smt.arith.nl.branching", "false"); *)
-    (* ("smt.arith.nl.rounds", "0"); *)
+    ("smt.ematching", "false");
+    ("smt.arith.nl", "false");
+    ("smt.arith.nl.branching", "false");
+    ("smt.arith.nl.rounds", "0");
   ]
 
 let rewriter_params = [
@@ -590,11 +590,11 @@ let tactic context =
   tactics context [
       (* "blast-term-ite"; *)
       (* "cofactor-term-ite"; *)
-      "simplify";
+      (* "simplify"; *)
       (* "purify-arith"; *)
-      "solve-eqs";
+      (* "solve-eqs"; *)
       (* "elim-term-ite"; *)
-      "auflia";
+      "qfauflia";
     ]
 
 let make struct_decls : solver = 

@@ -1642,6 +1642,47 @@ let wrapI ity arg =
 
 
 
+let conv_int loc (act : _ act) asym = 
+  let@ () = WellTyped.WCT.is_ct act.loc act.ct in
+  let@ arg = arg_of_asym asym in
+  let@ () = WellTyped.ensure_base_type arg.loc ~expect:Integer arg.bt in
+  (* try to follow conv_int from runtime/libcore/std.core *)
+  let arg_it = it_of_arg arg in
+  let ity = match act.ct with
+    | Integer ity -> ity
+    | _ -> Debug_ocaml.error "conv_int applied to non-integer type"
+  in
+  let@ provable = provable loc in
+  let fail_unrepresentable () = 
+    let@ model = model () in
+    fail (fun ctxt ->
+        let msg = Int_unrepresentable 
+                    {value = arg_it; ict = act.ct; ctxt; model} in
+        {loc; msg}
+      )
+  in
+  begin match ity with
+  | Bool ->
+     let vt = (Integer, ite_ (eq_ (arg_it, int_ 0), int_ 0, int_ 1)) in
+     return (rt_of_vt loc vt, [])
+  | _
+       when Sctypes.is_unsigned_integer_type ity ->
+     let result = match provable (t_ (representable_ (act.ct, arg_it))) with
+       | `True -> arg_it
+       | `False ->
+          ite_ (representable_ (act.ct, arg_it),
+                arg_it,
+                wrapI ity arg_it)
+     in
+     return (rt_of_vt loc (Integer, result), [])
+  | _ ->
+     begin match provable (t_ (representable_ (act.ct, arg_it))) with
+     | `True -> return (rt_of_vt loc (Integer, arg_it), [])
+     | `False -> fail_unrepresentable ()
+     end
+  end
+
+
 (* could potentially return a vt instead of an RT.t *)
 let infer_pexpr (pe : 'bty mu_pexpr) : (RT.t * per_path, type_error) m =
   let (M_Pexpr (loc, _annots, _bty, pe_)) = pe in
@@ -1776,44 +1817,9 @@ let infer_pexpr (pe : 'bty mu_pexpr) : (RT.t * per_path, type_error) m =
        let vt = (Integer, (ite_ (it_of_arg arg, int_ 1, int_ 0))) in
        return (rt_of_vt loc vt, [])
     | M_PEconv_int (act, asym) ->
-       let@ () = WellTyped.WCT.is_ct act.loc act.ct in
-       let@ arg = arg_of_asym asym in
-       let@ () = WellTyped.ensure_base_type arg.loc ~expect:Integer arg.bt in
-       (* try to follow conv_int from runtime/libcore/std.core *)
-       let arg_it = it_of_arg arg in
-       let ity = match act.ct with
-         | Integer ity -> ity
-         | _ -> Debug_ocaml.error "conv_int applied to non-integer type"
-       in
-       let@ provable = provable loc in
-       let fail_unrepresentable () = 
-         let@ model = model () in
-         fail (fun ctxt ->
-             let msg = Int_unrepresentable 
-                         {value = arg_it; ict = act.ct; ctxt; model} in
-             {loc; msg}
-           )
-       in
-       begin match ity with
-       | Bool ->
-          let vt = (Integer, ite_ (eq_ (arg_it, int_ 0), int_ 0, int_ 1)) in
-          return (rt_of_vt loc vt, [])
-       | _
-            when Sctypes.is_unsigned_integer_type ity ->
-          let result = match provable (t_ (representable_ (act.ct, arg_it))) with
-            | `True -> arg_it
-            | `False ->
-               ite_ (representable_ (act.ct, arg_it),
-                     arg_it,
-                     wrapI ity arg_it)
-          in
-          return (rt_of_vt loc (Integer, result), [])
-       | _ ->
-          begin match provable (t_ (representable_ (act.ct, arg_it))) with
-          | `True -> return (rt_of_vt loc (Integer, arg_it), [])
-          | `False -> fail_unrepresentable ()
-          end
-       end
+       conv_int loc act asym
+    | M_PEconv_loaded_int (act, asym) ->
+       conv_int loc act asym
     | M_PEwrapI (act, asym) ->
        let@ arg = arg_of_asym asym in
        let@ () = WellTyped.ensure_base_type arg.loc ~expect:Integer arg.bt in

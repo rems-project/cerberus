@@ -46,7 +46,7 @@ end
 
 
 
-let pp_symbol  a = !^ ((* ansi_format [Blue] *) (Pp_symbol.to_string_pretty a))
+let pp_symbol  a = !^ ((* ansi_format [Blue] *) (Pp_symbol.to_string_pretty_cn a))
 (* NOTE: Used to distinguish struct/unions globally *)
 
 
@@ -116,6 +116,7 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
     | M_PEmemberof _
     | M_PEcall _
     | M_PEconv_int _
+    | M_PEconv_loaded_int _
     | M_PEwrapI _ ->
        None
     | _ ->
@@ -461,6 +462,8 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
               pp_keyword "bool_to_integer" ^^ P.parens (pp_asym asym)
           | M_PEconv_int (act, asym) ->
               !^"conv_int" ^^ P.parens (pp_ct act.ct ^^ P.comma ^^^ pp_asym asym)
+          | M_PEconv_loaded_int (act, asym) ->
+              !^"conv_loaded_int" ^^ P.parens (pp_ct act.ct ^^ P.comma ^^^ pp_asym asym)
           | M_PEwrapI (act, asym) ->
               !^"wrapI" ^^ P.parens (pp_ct act.ct ^^ P.comma ^^^ pp_asym asym)
       end
