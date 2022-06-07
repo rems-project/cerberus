@@ -1280,7 +1280,12 @@ let step_ctx mem_st file core_extern current_tid (parent_tid_opt, th_st) =
                           match Map.lookup psym file.funinfo with
                             | Just (_, _, _, param_tys, _, _) ->
                                 List.map (fun (ty, cval) ->
-                                  match Core_aux.memValueFromValue (Ctype.Ctype [] (Ctype.Pointer Ctype.no_qualifiers ty)) cval with
+                                  let arg_ty =
+                                    if Global.has_switch Global.SW_inner_arg_temps then
+                                      ty
+                                    else
+                                      Ctype.Ctype [] (Ctype.Pointer Ctype.no_qualifiers ty) in    
+                                  match Core_aux.memValueFromValue arg_ty cval with
                                     | Just mval -> mval
                                     | Nothing -> error "Eccall memvalue"
                                   end) $ List.zip (List.map snd param_tys) cvals
