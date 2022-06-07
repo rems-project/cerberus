@@ -46,7 +46,7 @@ end
 
 
 
-let pp_symbol  a = !^ ((* ansi_format [Blue] *) (Pp_symbol.to_string_pretty a))
+let pp_symbol  a = !^ ((* ansi_format [Blue] *) (Pp_symbol.to_string_pretty_cn a))
 (* NOTE: Used to distinguish struct/unions globally *)
 
 

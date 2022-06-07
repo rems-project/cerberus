@@ -81,7 +81,7 @@ module Log : sig
 end = struct
   let print_count = ref 0
   let print_log_file filename file =
-    if !Debug_ocaml.debug_level > 0 then 
+    (* if !Debug_ocaml.debug_level > 0 then  *)
       begin
         Colour.do_colour := false;
         let count = !print_count in
