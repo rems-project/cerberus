@@ -102,6 +102,8 @@ module type Capability =
 
     val cap_get_value : t -> vaddr
 
+    val cap_get_offset : t -> Z.num
+
     val cap_get_obj_type : t -> otype
 
     (** Returns bounds in form [base,limit) for covered  memory region. base is inclusive while limit is exclusive *)

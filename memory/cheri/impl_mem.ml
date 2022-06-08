@@ -2415,6 +2415,13 @@ module CHERI (C:Capability
       Some ( ExactRet (Ctype.size_t), [ ExactArg (Ctype.size_t)])
     else if name = "cheri_representable_alignment_mask" then
       Some ( ExactRet (Ctype.size_t), [ ExactArg (Ctype.size_t)])
+    else if name = "cheri_offset_get" then
+      Some ( ExactRet (Ctype.size_t),
+             [ PolymorphicArg [
+                   TyPred (Ctype.ctypeEqual Ctype.intptr_t);
+                   TyPred (Ctype.ctypeEqual Ctype.uintptr_t);
+                   TyIsPointer
+        ]])
     else
       None
 
@@ -2454,6 +2461,18 @@ module CHERI (C:Capability
                      return (Some (update_cap_in_mem_value cap_val c))
                 end
              | _ -> fail (MerrOther ("CHERI.call_intrinsic: 2nd argument's type is not size_t in: '" ^ name ^ "'"))
+        end
+    else if name = "cheri_offset_get" then
+      (* this intrinsic is pure *)
+      let cap_val = List.nth args 0 in
+      get >>=
+        begin fun st ->
+        match cap_of_mem_value st.funptrmap cap_val with
+        | None -> fail (MerrOther ("CHERI.call_intrinsic: non-cap 1st argument in: '" ^ name ^ "'"))
+        | Some (_,c) ->
+           let v = C.cap_get_offset c in
+           let p = Prov_none in (* TODO: CHERI provenance? *)
+           return (Some (MVinteger (Size_t, (IV (p,v)))))
         end
     else if name = "cheri_address_get" then
       (* this intrinsic is pure *)

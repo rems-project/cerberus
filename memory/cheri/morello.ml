@@ -247,6 +247,8 @@ module Morello_capability: Capability
 
     let cap_get_bounds c = c.bounds
 
+    let cap_get_offset c = Z.sub c.value (fst c.bounds)
+
     let rec cap_get_seal c =
       let x = c.obj_type in
       if Z.equal x cap_SEAL_TYPE_UNSEALED then Cap_Unsealed

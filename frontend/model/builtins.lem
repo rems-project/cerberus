@@ -478,6 +478,8 @@ let translate_builtin_varnames (Symbol.Identifier _ str) =
         Just (AilEbuiltin (AilBCHERI "cheri_address_get"))
     | "__cerbvar_cheri_base_get" ->
         Just (AilEbuiltin (AilBCHERI "cheri_base_get"))
+    | "__cerbvar_cheri_offset_get" ->
+        Just (AilEbuiltin (AilBCHERI "cheri_offset_get"))
     | "__cerbvar_cheri_length_get" ->
         Just (AilEbuiltin (AilBCHERI "cheri_length_get"))
     | "__cerbvar_cheri_tag_get" ->

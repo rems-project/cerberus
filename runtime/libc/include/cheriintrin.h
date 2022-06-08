@@ -7,6 +7,7 @@
 
 #define cheri_perms_and  __cerbvar_cheri_perms_and
 #define cheri_address_get __cerbvar_cheri_address_get
+#define cheri_offset_get __cerbvar_cheri_offset_get
 #define cheri_base_get __cerbvar_cheri_base_get
 #define cheri_length_get __cerbvar_cheri_length_get
 #define cheri_tag_get __cerbvar_cheri_tag_get
