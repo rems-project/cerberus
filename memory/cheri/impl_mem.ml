@@ -1421,31 +1421,49 @@ module CHERI (C:Capability
 
 
   let allocate_object tid pref int_val ty init_opt : pointer_value memM =
-    let align = num_of_int int_val in
-    (*    print_bytemap "ENTERING ALLOC_STATIC" >>= fun () -> *)
+    let align_n = num_of_int int_val in
     let sz = sizeof ty in
-    let size = Z.of_int sz in
-    allocator size align >>= fun (alloc_id, addr) ->
+    let size_n = Z.of_int sz in
+
+    let mask = C.representable_alignment_mask size_n in
+    let size_n' = C.representable_length size_n in
+    let align_n' = Z.max align_n (Z.add (Z.succ (Z.zero)) (C.vaddr_bitwise_complement mask)) in
+
+    assert (Z.less_equal size_n size_n');
+    assert (Z.less_equal align_n align_n');
+
+    if !Debug_ocaml.debug_level >= 3 &&
+         (not ((Z.equal_num size_n size_n') && (Z.equal_num align_n align_n')))
+    then
+      Debug_ocaml.print_debug 1 [] (fun () ->
+          "allocate_object CHERI size/alignment adusted. WAS: " ^
+            ", size= " ^ Z.to_string size_n ^
+              ", align= " ^ Z.to_string align_n ^
+                "BECOME: " ^
+                  ", size= " ^ Z.to_string size_n' ^
+                    ", align= " ^ Z.to_string align_n');
+
+    allocator size_n' align_n' >>= fun (alloc_id, addr) ->
     Debug_ocaml.print_debug 10(*KKK*) [] (fun () ->
         "STATIC ALLOC - pref: " ^ String_symbol.string_of_prefix pref ^
           " --> alloc_id= " ^ Z.to_string alloc_id ^
-            ", size= " ^ Z.to_string size ^
+            ", size= " ^ Z.to_string size_n' ^
               ", addr= 0x" ^ (Z.format "%x" addr)
       );
     begin match init_opt with
     | None ->
-       let alloc = {prefix= pref; base= addr; size= size; ty= Some ty; is_readonly= IsWritable; taint= `Unexposed} in
+       let alloc = {prefix= pref; base= addr; size= size_n'; ty= Some ty; is_readonly= IsWritable; taint= `Unexposed} in
        update (fun st ->
            { st with allocations= IntMap.add alloc_id alloc st.allocations; }
          )
     | Some mval ->
-      let readonly_status =
-        match pref with
-          | Symbol.PrefStringLiteral _ ->
-              IsReadOnly_string_literal
-          | _ ->
-              IsReadOnly_string_literal in
-       let alloc = {prefix= pref; base= addr; size= size; ty= Some ty; is_readonly= readonly_status; taint= `Unexposed} in
+       let readonly_status =
+         match pref with
+         | Symbol.PrefStringLiteral _ ->
+            IsReadOnly_string_literal
+         | _ ->
+            IsReadOnly_string_literal in
+       let alloc = {prefix= pref; base= addr; size= size_n'; ty= Some ty; is_readonly= readonly_status; taint= `Unexposed} in
        (* TODO: factorize this with do_store inside CHERI.store *)
        update (fun st ->
            let (funptrmap, captags, pre_bs) = repr st.funptrmap st.captags addr mval in
@@ -1462,8 +1480,11 @@ module CHERI (C:Capability
            }
          )
     end >>
-    (* memory allocation on stack *)
-    return (PV (Prov_some alloc_id, PVconcrete (C.alloc_cap addr size)))
+      (* memory allocation on stack *)
+      let c = C.alloc_cap addr size_n' in
+      if C.cap_bounds_representable_exactly c (addr, Z.add addr size_n')
+      then return (PV (Prov_some alloc_id, PVconcrete c))
+      else failwith "Error settting exeact bounds for allocated region"
 
   let update_prefix (pref, mval) =
     match mval with
