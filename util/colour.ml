@@ -45,16 +45,20 @@ let without_colour f x =
   do_colour := col;
   r
 
-let ansi_format f str =
-  if !do_colour then
+let do_colour_stderr =
+  ref (Unix.isatty Unix.stderr)
+
+let ansi_format ?(err=false) f str =
+  if !do_colour && (if err then !do_colour_stderr else true) then
     let g f = String.concat ";" (List.map (fun z -> string_of_int (int_fg z)) f) ^ "m" in
     "\x1b[" ^ g f ^ str ^ "\x1b[0m"
   else
     str
 
-let pp_ansi_format f mk_doc =
+
+let pp_ansi_format ?(err=false) f mk_doc =
   let doc = without_colour mk_doc () in
-  if !do_colour then
+  if !do_colour && (if err then !do_colour_stderr else true) then
     let g f = String.concat ";" (List.map (fun z -> string_of_int (int_fg z)) f) ^ "m" in
     !^ ("\x1b[" ^ g f) ^^ doc ^^ !^ "\x1b[0m"
   else

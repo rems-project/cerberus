@@ -85,12 +85,13 @@ let rec free_pexpr acc (Pexpr _ _ pe) =
       List.foldl free_pexpr acc pes
   | PEcase pe pat_pes ->
       List.foldl (fun acc (pat, pe) ->
-        (free_pexpr acc pe) \ (symbols_in_pattern {} pat)
+        Set.(union) acc ((free_pexpr {} pe) \ (symbols_in_pattern {} pat))
+        (* (free_pexpr acc pe) \ (symbols_in_pattern {} pat) *)
       ) (free_pexpr acc pe) pat_pes
   | PEarray_shift pe1 _ pe2 ->
       free_pexpr (free_pexpr acc pe1) pe2
   | PEmember_shift pe1 sym _ ->
-      free_pexpr (Set.insert sym acc) pe1
+      free_pexpr acc pe1
   | PEnot pe ->
       free_pexpr acc pe
   | PEop _ pe1 pe2 ->
@@ -101,12 +102,14 @@ let rec free_pexpr acc (Pexpr _ _ pe) =
       free_pexpr acc pe
   | PEcfunction pe ->
       free_pexpr acc pe
-  | PEmemberof _ _ _ ->
-      acc
+  | PEmemberof _ _ pe ->
+      free_pexpr acc pe
   | PEcall _ pes ->
       List.foldl free_pexpr acc pes
   | PElet pat pe1 pe2 ->
-      (free_pexpr (free_pexpr acc pe1) pe2) \ (symbols_in_pattern {} pat)
+      let ss = (free_pexpr {} pe2) \ (symbols_in_pattern {} pat) in
+      Set.(union) ss (free_pexpr acc pe1)
+      (* (free_pexpr (free_pexpr acc pe1) pe2) \ (symbols_in_pattern {} pat) *)
   | PEif pe1 pe2 pe3 ->
       free_pexpr (free_pexpr (free_pexpr acc pe1) pe2) pe3
   | PEis_scalar pe ->
@@ -123,8 +126,8 @@ let rec free_pexpr acc (Pexpr _ _ pe) =
       error "free_pexpr PEbmc_assume"
   end
 
-let free_paction acc (Paction _ (Action _ _ act)) =
-  match act with
+let free_action acc (Action _ _ act_) =
+  match act_ with
   | Create pe1 pe2 _ ->
       free_pexpr (free_pexpr acc pe1) pe2
   | CreateReadOnly pe1 pe2 pe3 _ ->
@@ -137,6 +140,10 @@ let free_paction acc (Paction _ (Action _ _ act)) =
       free_pexpr (free_pexpr (free_pexpr acc pe1) pe2) pe3
   | Load pe1 pe2 _ ->
       free_pexpr (free_pexpr acc pe1) pe2
+  | SeqRMW _ pe1 pe2 sym pe3 ->
+      let ss3 = (free_pexpr {} pe3) \ { sym } in
+      Set.(union) ss3 (free_pexpr (free_pexpr acc pe1) pe2)
+      (* (free_pexpr (free_pexpr (free_pexpr acc pe1) pe2) pe3) \ { sym } *)
   | RMW pe1 pe2 pe3 pe4 _ _ ->
       free_pexpr (free_pexpr (free_pexpr (free_pexpr acc pe1) pe2) pe3) pe4
   | Fence _ ->
@@ -155,6 +162,9 @@ let free_paction acc (Paction _ (Action _ _ act)) =
       error "free_paction: LinuxRMW"
   end
 
+let free_paction acc (Paction _ act) =
+  free_action acc act
+
 let rec free_expr acc (Expr _ e) =
   match e with
   | Epure pe ->
@@ -165,14 +175,14 @@ let rec free_expr acc (Expr _ e) =
       free_paction acc pact
   | Ecase pe pat_es ->
       List.foldl (fun acc (pat, e) ->
-        (free_expr acc e) \ (symbols_in_pattern {} pat)
+        Set.(union) acc ((free_expr {} e) \ (symbols_in_pattern {} pat))
+        (* (free_expr acc e) \ (symbols_in_pattern {} pat) *)
       ) (free_pexpr acc pe) pat_es
   | Elet pat pe e ->
-      (free_expr (free_pexpr acc pe) e) \ (symbols_in_pattern {} pat)
+      Set.(union) (free_pexpr acc pe) ((free_expr {} e) \ (symbols_in_pattern {} pat))
+      (* (free_expr (free_pexpr acc pe) e) \ (symbols_in_pattern {} pat) *)
   | Eif pe1 e2 e3 ->
       free_expr (free_expr (free_pexpr acc pe1) e2) e3
-  | Eskip ->
-      acc
   | Eccall _ pe1 pe2 pes ->
       List.foldl free_pexpr (free_pexpr (free_pexpr acc pe1) pe2) pes
   | Eproc _ _ pes ->
@@ -180,14 +190,12 @@ let rec free_expr acc (Expr _ e) =
   | Eunseq es ->
       List.foldl free_expr acc es
   | Ewseq pat e1 e2 ->
-      (free_expr (free_expr acc e1) e2) \ (symbols_in_pattern {} pat)
+      Set.(union) ((free_expr acc e1)) ((free_expr {} e2) \ (symbols_in_pattern {} pat))
+      (* (free_expr (free_expr acc e1) e2) \ (symbols_in_pattern {} pat) *)
   | Esseq pat e1 e2 ->
-      (free_expr (free_expr acc e1) e2) \ (symbols_in_pattern {} pat)
-  | Easeq _ _ _ ->
-      error ("TODO: free_expr Easeq")
-  | Eindet _ e ->
-      free_expr acc e
-  | Ebound _ e ->
+      Set.(union) ((free_expr acc e1)) ((free_expr {} e2) \ (symbols_in_pattern {} pat))
+      (* (free_expr (free_expr acc e1) e2) \ (symbols_in_pattern {} pat) *)
+  | Ebound e ->
       free_expr acc e
   | End es ->
       List.foldl free_expr acc es
@@ -200,7 +208,8 @@ let rec free_expr acc (Expr _ e) =
   | Epar es ->
       List.foldl free_expr acc es
   | Ewait _ ->
-      acc
+      (* globals should not depend on Ewait *)
+      error ("TODO: free_expr Ewait")
   | Epack _ pes ->
       List.foldl free_pexpr acc pes
   | Eunpack _ pes ->
@@ -209,7 +218,13 @@ let rec free_expr acc (Expr _ e) =
       List.foldl free_pexpr acc pes
   | Eshow _ pes ->
       List.foldl free_pexpr acc pes
+  | Einstantiate _ pe ->
+      free_pexpr acc pe
 
+  | Eannot _ e ->
+      free_expr acc e
+  | Eexcluded _ act ->
+      free_action acc act
   end
 
 let free acc = function

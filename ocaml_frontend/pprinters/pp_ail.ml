@@ -726,6 +726,10 @@ let rec pp_statement_aux pp_annot (AnnotatedStatement (_, _, stmt)) =
       !^ "__cerb_have" ^^^ Pp_symbol.pp_identifier ident ^^ P.parens (comma_list (pp_expression_aux pp_annot) es) ^^ P.semi
     | AilSshow (ident, es) ->
       !^ "__cerb_show" ^^^ Pp_symbol.pp_identifier ident ^^ P.parens (comma_list (pp_expression_aux pp_annot) es) ^^ P.semi
+    | AilSinstantiate (Some (Symbol.Identifier (_, str)), e) ->
+      !^ "__cerb_instantiate" ^^ P.parens (!^ str) ^^^ (pp_expression_aux pp_annot e) ^^ P.semi
+    | AilSinstantiate (None, e) ->
+      !^ "__cerb_instantiate" ^^^ (pp_expression_aux pp_annot e) ^^ P.semi
 
 
 let pp_static_assertion pp_annot (e, lit) =

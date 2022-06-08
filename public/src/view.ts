@@ -198,7 +198,7 @@ export default class View {
         alloc_model: 'concrete',
         core_options: {
           rewrite: false,
-          sequentialise: true
+          sequentialise: false
         },
         exec_options: {
           libc: false

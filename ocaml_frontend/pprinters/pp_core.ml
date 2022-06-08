@@ -36,7 +36,7 @@ sig
   val pp_extern_symmap: (Symbol.sym, Symbol.sym) Pmap.map -> PPrint.document
 
   val pp_action: ('a, Symbol.sym) generic_action_ -> PPrint.document
-  val pp_stack: 'a stack -> PPrint.document
+(*  val pp_stack: 'a stack -> PPrint.document *)
 end
 
 module Make (Config: CONFIG) =
@@ -120,11 +120,9 @@ let precedence_expr = function
   | Ememop _
   | Eaction _
   | Ecase _
-  | Eskip
   | Eproc _
   | Eccall _
   | Eunseq _
-  | Eindet _
   | Ebound _
   | End _
   | Erun _
@@ -133,15 +131,16 @@ let precedence_expr = function
   | Epack _
   | Eunpack _ 
   | Ehave _ 
-  | Eshow _ ->
+  | Eshow _
+  | Einstantiate _
+  | Eannot _
+  | Eexcluded _ ->
       None
 
   | Eif _ ->
       Some 1
   | Elet _ ->
       Some 2
-  | Easeq _ ->
-      Some 3
   | Esseq _ ->
       Some 3
   | Ewseq _ ->
@@ -359,7 +358,7 @@ let rec pp_value = function
   | Vtuple cvals ->
       P.parens (comma_list pp_value cvals)
   | Vctype ty ->
-      P.squotes (Pp_core_ctype.pp_ctype ty)
+      P.squotes (Colour.without_colour (Pp_ail.pp_ctype Ctype.no_qualifiers) ty)(* (Pp_core_ctype.pp_ctype ty) *)
   | Vobject oval ->
       pp_object_value oval
   | Vloaded lval ->
@@ -597,6 +596,8 @@ let rec pp_expr expr =
                acc
             | Alabel _ -> 
                acc
+            | Acerb _ ->
+                acc
         ) doc annot
     end
     begin
@@ -639,8 +640,6 @@ let rec pp_expr expr =
             pp_control "if" ^^^ pp_pexpr pe1 ^^^ pp_control "then" ^^
             P.nest 2 (P.break 1 ^^ pp e2) ^^ P.break 1 ^^
             pp_control "else" ^^ P.nest 2 (P.break 1 ^^ pp e3)
-        | Eskip ->
-            pp_keyword "skip"
         | Eproc (_, nm, pes) ->
             pp_keyword "pcall" ^^ P.parens (pp_name nm ^^ P.comma ^^^ comma_list pp_pexpr pes)
         | Eccall (_, pe_ty, pe, pes) ->
@@ -667,11 +666,6 @@ let rec pp_expr expr =
               P.ifflat doc_e1 (P.nest 2 (P.break 1 ^^ doc_e1)) ^^^ pp_control "in"
             ) ^^
             P.break 1 ^^ (pp e2)
-        | Easeq ((sym, bTy), act1, pact2) ->
-            pp_control "let atom" ^^^ pp_symbol sym ^^ P.colon ^^^ pp_core_base_type bTy ^^^ P.equals ^^^
-            pp (Expr ([], Eaction (Paction (Pos, act1)))) ^^^ pp_control "in" ^^^ pp (Expr ([], Eaction pact2))
-        | Eindet (i, e) ->
-            pp_control "indet" ^^ P.brackets (!^ (string_of_int i)) ^^ P.parens (pp e)
         | Esave ((sym, bTy), sym_bTy_pes, e) ->
             pp_keyword "save" ^^^ pp_symbol sym ^^ P.colon ^^^ pp_core_base_type bTy ^^^
             P.parens (comma_list (fun (sym, ((bTy,_), pe)) ->
@@ -701,11 +695,25 @@ let rec pp_expr expr =
             pp_keyword "have" ^^^ !^ident ^^ P.parens (comma_list pp_pexpr pes)
         | Eshow (Symbol.Identifier (_, ident), pes) ->
             pp_keyword "show" ^^^ !^ident ^^ P.parens (comma_list pp_pexpr pes)
+        | Einstantiate (Some (Symbol.Identifier (_, ident)), pe) ->
+            pp_keyword "instantiate" ^^^ !^ident ^^ (P.parens (pp_pexpr pe))
+        | Einstantiate (None, pe) ->
+            pp_keyword "instantiate" ^^^ P.parens (pp_pexpr pe)
+        | Eannot (xs, e) ->
+            let pp_dyn_annotations fps =
+              let pp_dyn_annotation = function
+                | DA_neg (n, excl, fp) ->
+                    "DA_neg(" ^ string_of_int n ^ ", " ^ "[" ^ String.concat ", " (List.map string_of_int excl) ^ "]" ^ ")"
+                | DA_pos (excl, fp) ->
+                    "DA_pos(" ^ "[" ^ String.concat ", " (List.map string_of_int excl) ^ "]" ^ ")"
+              in "[" ^ String.concat ", " (List.map pp_dyn_annotation fps) ^ "]" in
+            pp_keyword "annot" ^^ P.brackets (P.string (pp_dyn_annotations xs)) ^^ P.parens (pp e)
+        | Eexcluded (n, Action (_, _, act_)) ->
+            pp_keyword "excluded" ^^ P.brackets (!^ (string_of_int n)) ^^ P.parens (pp_action act_)
         | End es ->
             pp_keyword "nd" ^^ P.parens (comma_list pp es)
-        | Ebound (i, e) ->
-            pp_keyword "bound" ^^ P.brackets (!^ (string_of_int i)) ^/^
-            P.parens (pp e)
+        | Ebound e ->
+            pp_keyword "bound" ^^ P.parens (pp e)
       end
     end
     in pp false None expr
@@ -730,6 +738,14 @@ and pp_action act =
        pp_keyword (if is_locking then "store_lock" else "store") ^^ pp_args [ty; e1; e2] mo
     | Load0 (ty, e, mo) ->
        pp_keyword "load" ^^ pp_args [ty; e] mo
+    | SeqRMW (b, ty, e1, sym, e2) ->
+        let kw = if b then "seq_rmw_with_forward" else "seq_rmw" in
+        pp_keyword kw ^^ P.parens (
+          pp_pexpr ty ^^ P.comma ^^^
+          pp_pexpr e1 ^^ P.comma ^^^
+          pp_symbol sym ^^^ !^ "=>" ^^^
+          pp_pexpr e2
+        )
     | RMW0 (ty, e1, e2, e3, mo1, mo2) ->
         pp_keyword "rmw" ^^
         P.parens (pp_pexpr ty ^^ P.comma ^^^ pp_pexpr e1 ^^ P.comma ^^^
@@ -901,6 +917,7 @@ let pp_file file =
   end
 
 
+(*
 (* Runtime stuff *)
 let mk_pp_continuation_element cont_elem = fun z ->
   match cont_elem with
@@ -931,7 +948,7 @@ let rec pp_stack = function
         pp_continuation cont
       ) ^^ P.break 1 ^^ P.dot ^^ P.break 1 ^^
       pp_stack sk'
-
+*)
 end
 
 module Basic = Make (struct

@@ -403,6 +403,10 @@ and n_pexpr : 'a. Loc.t -> 'a n_pexpr_domain ->
         let ct = (fensure_ctype__pexpr loc "PEcall(conv_int,_): not a ctype" arg1) in
         n_pexpr_name loc domain arg2 (fun arg2 ->
         k (annotate (M_PEconv_int(ct, arg2))))
+     | Sym (Symbol (_, _, SD_Id "conv_loaded_int")), [arg1;arg2] ->
+        let ct = (fensure_ctype__pexpr loc "PEcall(conv_loaded_int,_): not a ctype" arg1) in
+        n_pexpr_name loc domain arg2 (fun arg2 ->
+        k (annotate (M_PEconv_loaded_int(ct, arg2))))
      | Sym (Symbol (_, _, SD_Id "wrapI")), [arg1;arg2] ->
         let ct = (fensure_ctype__pexpr loc "PEcall(wrapI,_): not a ctype" arg1) in
         n_pexpr_name loc domain arg2 (fun arg2 ->
@@ -434,8 +438,8 @@ and n_pexpr : 'a. Loc.t -> 'a n_pexpr_domain ->
              (n_pexpr loc domain e2 k)))
        | Pexpr (_, _, PEval (Vloaded (LVspecified (OVinteger iv1)))), 
          Pexpr (_, _, PEval (Vloaded (LVspecified (OVinteger iv2))))
-            when Option.equal Z.equal (Impl_mem.eval_integer_value iv1) (Some Z.one) &&
-                 Option.equal Z.equal (Impl_mem.eval_integer_value iv2) (Some Z.zero)
+            when Option.equal Z.equal (Mem.eval_integer_value iv1) (Some Z.one) &&
+                 Option.equal Z.equal (Mem.eval_integer_value iv2) (Some Z.zero)
          ->
           n_pexpr_name loc domain e1 (fun e1 ->
           k (annotate (M_PEbool_to_integer e1)))
@@ -537,6 +541,14 @@ let n_action loc (action : ('a, unit) action1)
      let ctype1 = (fensure_ctype__pexpr loc "Load: not a ctype" e1) in
      n_pexpr_in_expr_name e2 (fun e2 ->
      k (wrap (M_Load(ctype1, e2, mo1))))
+  | SeqRMW (b, e1, e2, sym, e3) ->
+      failwith "TODO: SeqRMW"
+(*
+     let ctype1 = (fensure_ctype__pexpr loc "SeqRMW: not a ctype" e1) in
+     n_pexpr_in_expr_name e2 (fun e2 ->
+     n_pexpr_in_expr_name e3 (fun e3 ->
+     k (wrap (M_SeqRMW(ctype1, e2, sym, e3)))))
+*)
   | RMW0(e1, e2, e3, e4, mo1, mo2) ->
      let ctype1 = (fensure_ctype__pexpr loc "RMW: not a ctype" e1) in
      n_pexpr_in_expr_name e2 (fun e2 ->
@@ -728,8 +740,8 @@ let rec n_expr (loc : Loc.t) (returns : symbol Pset.set)
            (n_expr e2 k)))
      | Expr (_, Epure (Pexpr (_, _, PEval (Vloaded (LVspecified (OVinteger iv1)))))), 
        Expr (_, Epure (Pexpr (_, _, PEval (Vloaded (LVspecified (OVinteger iv2))))))
-          when Option.equal Z.equal (Impl_mem.eval_integer_value iv1) (Some Z.one) &&
-                 Option.equal Z.equal (Impl_mem.eval_integer_value iv2) (Some Z.zero)
+          when Option.equal Z.equal (Mem.eval_integer_value iv1) (Some Z.one) &&
+                 Option.equal Z.equal (Mem.eval_integer_value iv2) (Some Z.zero)
        ->
         n_pexpr_name loc expr_n_pexpr_domain e1 (fun e1 ->
         k (wrap (M_Epure (M_Pexpr (loc, [], (), M_PEbool_to_integer e1)))))
@@ -743,8 +755,6 @@ let rec n_expr (loc : Loc.t) (returns : symbol Pset.set)
         let e3 = (n_expr e3 k) in
         twrap (M_Eif(e1, e2, e3)))
      end
-  | Eskip ->
-     k (wrap (M_Eskip))
   | Eccall(_a, ct1, e2, es) ->
      let ct1 = match ct1 with
        | Core.Pexpr(annots, bty, Core.PEval (Core.Vctype ct1)) -> 
@@ -784,12 +794,8 @@ let rec n_expr (loc : Loc.t) (returns : symbol Pset.set)
      n_expr e1 (fun e1 ->
      let pat = core_to_mu__pattern loc pat in
      twrap (M_Esseq(M_Pat pat, e1, n_expr e2 k)))
-  | Easeq(b, action3, paction2) ->
-     error "core_anormalisation: Easeq"
-  | Eindet(n, e) ->
-     error "core_anormalisation: Eindet"
-  | Ebound(n, e) ->
-     twrap (M_Ebound(n, n_expr e k))
+  | Ebound e ->
+     twrap (M_Ebound (n_expr e k))
   | End es ->
      let es = (List.map (fun e -> n_expr e k) es) in
      twrap (M_End es)
@@ -823,7 +829,13 @@ let rec n_expr (loc : Loc.t) (returns : symbol Pset.set)
   | Eshow(id, pes) ->
      n_pexpr_in_expr_names pes (fun pes ->
      k (wrap (M_Elpredicate(Show, id, pes))))
-
+  | Einstantiate (id, pe) ->
+     n_pexpr_in_expr_name pe (fun pe ->
+     k (wrap (M_Einstantiate (id, pe))))
+  | Eannot _ ->
+      failwith "core_anormalisation: Eannot"
+  | Eexcluded _ ->
+      failwith "core_anormalisation: Eexcluded"
 
 let normalise_expr (loc : Loc.t) (returns : symbol Pset.set) e : mu_texpr =
   let sym = Symbol.fresh () in

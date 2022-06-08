@@ -611,8 +611,6 @@ let rec symbolify_expr ((Expr (annot, expr_)) : parsed_expr) : (unit expr) Eff.t
        Eff.return (
          Eif (pe1, e2, e3)
        )
-   | Eskip ->
-       Eff.return Eskip
    | Eccall ((), _pe_ty, _pe, _pes) ->
        symbolify_pexpr _pe_ty        >>= fun pe_ty ->
        symbolify_pexpr _pe           >>= fun pe  ->
@@ -639,19 +637,9 @@ let rec symbolify_expr ((Expr (annot, expr_)) : parsed_expr) : (unit expr) Eff.t
          symbolify_expr _e2     >>= fun e2  ->
          Eff.return (Esseq (pat, e1, e2))
        )
-   | Easeq ((_sym, bTy), Action (loc, (), _act1_), _pact2) ->
-       symbolify_action_ _act1_ >>= fun act1_ ->
-       under_scope (
-         register_sym _sym        >>= fun sym   ->
-         symbolify_paction _pact2 >>= fun pact2 ->
-         Eff.return (Easeq ((sym, bTy), Action (loc, (), act1_), pact2))
-       )
-   | Eindet (n, _e) ->
+   | Ebound _e ->
        symbolify_expr _e >>= fun e ->
-       Eff.return (Eindet (n, e))
-   | Ebound (n, _e) ->
-       symbolify_expr _e >>= fun e ->
-       Eff.return (Ebound (n, e))
+       Eff.return (Ebound e)
    | End _es ->
        Eff.mapM symbolify_expr _es >>= fun es ->
        Eff.return (End es)
@@ -686,7 +674,9 @@ let rec symbolify_expr ((Expr (annot, expr_)) : parsed_expr) : (unit expr) Eff.t
    | Epar _es ->
        Eff.mapM symbolify_expr _es >>= fun es ->
        Eff.return (Epar es)
-   | Ewait _ ->
+   | Ewait _
+   | Eannot _
+   | Eexcluded _ ->
        assert false
    | Epack (id, pes) ->
        Eff.mapM symbolify_pexpr pes >>= fun pes ->
@@ -700,6 +690,9 @@ let rec symbolify_expr ((Expr (annot, expr_)) : parsed_expr) : (unit expr) Eff.t
    | Eshow (id, pes) ->
        Eff.mapM symbolify_pexpr pes >>= fun pes ->
        Eff.return (Eshow (id, pes))
+   | Einstantiate (id, pe) ->
+       symbolify_pexpr pe >>= fun pe ->
+       Eff.return (Einstantiate (id, pe))
 
 and symbolify_action_ = function
  | Create (_pe1, _pe2, pref) ->
@@ -723,6 +716,14 @@ and symbolify_action_ = function
      symbolify_pexpr _pe2 >>= fun pe2 ->
      symbolify_pexpr _pe3 >>= fun pe3 ->
      Eff.return (Store0 (b, pe1, pe2, pe3, mo))
+ | SeqRMW (b, _pe1, _pe2, _sym, _pe3) ->
+     symbolify_pexpr _pe1 >>= fun pe1 ->
+     symbolify_pexpr _pe2 >>= fun pe2 ->
+     under_scope (
+       register_sym _sym    >>= fun sym ->
+       symbolify_pexpr _pe3 >>= fun pe3 ->
+       Eff.return (SeqRMW (b, pe1, pe3, sym, pe3))
+     )
  | Load0 (_pe1, _pe2, mo) ->
      symbolify_pexpr _pe1 >>= fun pe1 ->
      symbolify_pexpr _pe2 >>= fun pe2 ->
@@ -787,16 +788,15 @@ let rec register_labels ((Expr (_, expr_)) : parsed_expr) : unit Eff.t  =
     | Epure _
     | Ememop _
     | Eaction _
-    | Eskip
     | Eccall _
     | Eproc _
-    | Easeq _
     | Erun _
     | Ewait _
     | Epack _ 
     | Eunpack _ 
     | Ehave _
-    | Eshow _ ->
+    | Eshow _ 
+    | Einstantiate _ ->
         Eff.return ()
     | Ecase (_, _pat_es) ->
         Eff.mapM_ (fun (_, _e) ->
@@ -816,12 +816,15 @@ let rec register_labels ((Expr (_, expr_)) : parsed_expr) : unit Eff.t  =
     | Esseq (_, _e1, _e2) ->
         register_labels _e1 >>= fun () ->
         register_labels _e2
-    | Eindet (_, _e)
-    | Ebound (_, _e) ->
+    | Ebound _e ->
         register_labels _e
     | End _es
     | Epar _es ->
         Eff.mapM_ register_labels _es
+    | Eannot _ 
+    | Eexcluded _ ->
+        assert false
+
 
 let with_labels _e m =
   register_labels _e >>= fun () ->
@@ -1041,7 +1044,8 @@ let mk_file decls =
 %token <Mem_common.memop> MEMOP_OP
 
 (* ctype tokens *)
-%token VOID ATOMIC (* DOTS *)
+%token CONST
+%token VOID ATOMIC DOTS
 %token FLOAT DOUBLE LONG_DOUBLE
 %token ICHAR SHORT INT LONG LONG_LONG
 %token CHAR BOOL SIGNED UNSIGNED
@@ -1064,7 +1068,7 @@ let mk_file decls =
 %token ARRAY_SHIFT MEMBER_SHIFT
 %token UNDEF ERROR
 %token<string> CSTRING STRING
-%token SKIP IF THEN ELSE
+%token IF THEN ELSE
 %nonassoc ELSE
 
 (* list expression symbols *)
@@ -1075,7 +1079,7 @@ let mk_file decls =
 (* %token RAISE REGISTER *)
 
 (* Core sequencing operators *)
-%token LET WEAK STRONG ATOM UNSEQ IN END INDET BOUND PURE MEMOP PCALL CCALL
+%token LET WEAK STRONG UNSEQ IN END BOUND PURE MEMOP PCALL CCALL
 %token SQUOTE LPAREN RPAREN LBRACKET RBRACKET LBRACE RBRACE COLON_EQ COLON SEMICOLON DOT COMMA NEG
 
 
@@ -1100,7 +1104,7 @@ let mk_file decls =
 %token SLASH_BACKSLASH BACKSLASH_SLASH
 
 (* memory actions *)
-%token CREATE CREATE_READONLY ALLOC STORE STORE_LOCK LOAD KILL FREE RMW FENCE (* COMPARE_EXCHANGE_STRONG *)
+%token CREATE CREATE_READONLY ALLOC STORE STORE_LOCK LOAD SEQ_RMW SEQ_RMW_WITH_FORWARD KILL FREE RMW FENCE (* COMPARE_EXCHANGE_STRONG *)
 
 (* continuation operators *)
 %token SAVE RUN
@@ -1262,18 +1266,19 @@ ctype:
 | VOID
     { Ctype.void }
 | bty= basic_type
-  { Ctype.Ctype ([], Ctype.Basic bty) }
+  { Ctype ([], Basic bty) }
 | ty= ctype LBRACKET n_opt= INT_CONST? RBRACKET
-    { Ctype.Ctype ([], Ctype.Array (ty, n_opt)) }
-| ty= ctype tys= delimited(LPAREN, separated_list(COMMA, ctype), RPAREN)
-    { Ctype.Ctype ([], Function ((Ctype.no_qualifiers, ty), List.map (fun ty -> (Ctype.no_qualifiers, ty, false)) tys, false)) }
-(* TODO *)
-(* | ty= ctype LPAREN tys= separated_list(COMMA, ctype) COMMA DOTS RPAREN *)
-(*     { Core_ctype.Function0 (ty, tys, true) } *)
+    { Ctype ([], Array (ty, n_opt)) }
+| ty= ctype params= delimited(LPAREN, params, RPAREN)
+    { let (tys, is_variadic) = params in
+      Ctype ([], Function ( (Ctype.no_qualifiers, ty)
+                          , List.map (fun ty -> (Ctype.no_qualifiers, ty, false)) tys, false)) }
+| CONST ty= ctype STAR
+    { Ctype ([], Pointer ({ no_qualifiers with const= true }, ty)) }
 | ty= ctype STAR
-    { Ctype.Ctype ([], Ctype.Pointer (Ctype.no_qualifiers, ty)) }
+    { Ctype ([], Pointer (no_qualifiers, ty)) }
 | ATOMIC ty= delimited(LPAREN, ctype, RPAREN)
-    { Ctype.Ctype ([], Ctype.Atomic ty) }
+    { Ctype ([], Atomic ty) }
 | (* TODO: check the lexing *) str= SYM
     { match Builtins.translate_builtin_typenames ("__cerbty_" ^ fst str) with
         | Some ty ->
@@ -1287,6 +1292,13 @@ ctype:
 | UNION tag= SYM
     (* NOTE: we only collect the string name here *)
     { Ctype.Ctype ([], Ctype.Union (Symbol.Symbol ("", -1, SD_Id (fst tag)))) }
+;
+
+params:
+| xs= separated_list(COMMA, ctype)
+    { (xs, false) }
+| xs= separated_list(COMMA, ctype) COMMA DOTS
+    { (xs, true) }
 ;
 (* END Ail types *)
 
@@ -1565,9 +1577,6 @@ expr:
     { Expr ([Aloc (Location_ocaml.(region ($startpos, $endpos) NoCursor))], Epure pe_) }
 | MEMOP LPAREN memop= MEMOP_OP COMMA pes= separated_list(COMMA, pexpr) RPAREN
     { Expr ([Aloc (Location_ocaml.(region ($startpos, $endpos) NoCursor))], Ememop (memop, pes)) }
-| SKIP
-    { Expr ( [Aloc (Location_ocaml.(region ($startpos, $endpos) NoCursor))]
-           , Eskip ) }
 | LET _pat= pattern EQ _pe1= pexpr IN _e2= expr
     { Expr ( [Aloc (Location_ocaml.(region ($startpos, $endpos) NoCursor))]
            , Elet (_pat, _pe1, _e2) ) }
@@ -1604,15 +1613,9 @@ expr:
 | LET STRONG _pat= pattern EQ _e1= expr IN _e2= expr
     { Expr ( [Aloc (Location_ocaml.(region ($startpos, $endpos) NoCursor))]
            , Esseq (_pat, _e1, _e2) ) }
-| LET ATOM _sym= SYM COLON _bTy= core_base_type EQ _act1= action IN _pact2= paction
+| BOUND _e= delimited(LPAREN, expr, RPAREN)
     { Expr ( [Aloc (Location_ocaml.(region ($startpos, $endpos) NoCursor))]
-           , Easeq ((_sym,_bTy), Action (Location_ocaml.unknown, (), _act1), _pact2) ) }
-| INDET n= delimited(LBRACKET, INT_CONST, RBRACKET) _e= delimited(LPAREN, expr, RPAREN)
-    { Expr ( [Aloc (Location_ocaml.(region ($startpos, $endpos) NoCursor))]
-           , Eindet (Nat_big_num.to_int n, _e) ) }
-| BOUND n= delimited(LBRACKET, INT_CONST, RBRACKET) _e= delimited(LPAREN, expr, RPAREN)
-    { Expr ( [Aloc (Location_ocaml.(region ($startpos, $endpos) NoCursor))]
-           , Ebound (Nat_big_num.to_int n, _e) ) }
+           , Ebound _e ) }
 | SAVE _sym= SYM COLON bTy= core_base_type
        _xs= delimited(LPAREN,
               separated_list(COMMA,
@@ -1654,6 +1657,11 @@ action:
     { Store0 (true, _pe1, _pe2, _pe3, mo) }
 | LOAD LPAREN _pe1= pexpr COMMA _pe2= pexpr COMMA mo= memory_order RPAREN
     { Load0 (_pe1, _pe2, mo) }
+| SEQ_RMW LPAREN _pe1= pexpr COMMA _pe2= pexpr COMMA _sym= SYM EQ_GT _pe3= pexpr (*COMMA mo= memory_order*) RPAREN
+    { SeqRMW (false, _pe1, _pe2, _sym, _pe3) }
+| SEQ_RMW_WITH_FORWARD LPAREN _pe1= pexpr COMMA _pe2= pexpr COMMA _sym= SYM EQ_GT _pe3= pexpr (*COMMA mo= memory_order*) RPAREN
+    { SeqRMW (true, _pe1, _pe2, _sym, _pe3) }
+
 | RMW LPAREN _pe1= pexpr COMMA _pe2= pexpr COMMA _pe3= pexpr COMMA _pe4= pexpr COMMA mo1= memory_order COMMA mo2= memory_order RPAREN
     { RMW0 (_pe1, _pe2, _pe3, _pe4, mo1, mo2) }
 | FENCE LPAREN mo= memory_order RPAREN

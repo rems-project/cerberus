@@ -71,9 +71,9 @@ do
   fi
 
   if [[ $file == *.syntax-only.c ]]; then
-    ../_build/default/backend/driver/main.exe --nolibc ci/$file > tmp/result 2> tmp/stderr
+    ../_build/default/backend/driver/main.exe --nolibc --typecheck-core ci/$file > tmp/result 2> tmp/stderr
   else
-    ../_build/default/backend/driver/main.exe --nolibc --exec --batch ci/$file 1> tmp/result 2> tmp/stderr
+    ../_build/default/backend/driver/main.exe --nolibc --typecheck-core --exec --batch ci/$file 1> tmp/result 2> tmp/stderr
   fi
   ret=$?;
   if [ -f ./ci/expected/$file.expected ]; then

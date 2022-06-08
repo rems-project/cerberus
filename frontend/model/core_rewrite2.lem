@@ -308,8 +308,6 @@ type expr_alg 'sym 'bty 'ov 'lv 'value 'pexpr 'a 'action_ 'action 'paction 'expr
    ; a_Eunseq : list 'expr -> exceptM 'expr_ msg
    ; a_Ewseq : (generic_pattern 'bty 'sym) -> 'expr -> 'expr -> exceptM 'expr_ msg
    ; a_Esseq : (generic_pattern 'bty 'sym) -> 'expr -> 'expr -> exceptM 'expr_ msg
-   ; a_Easeq : ('sym * core_base_type) -> (generic_action 'a 'bty 'sym) -> 'paction -> exceptM 'expr_ msg
-   ; a_Eindet : nat -> 'expr -> exceptM 'expr_ msg
    ; a_Ebound : nat -> 'expr -> exceptM 'expr_ msg
    ; a_End : list 'expr -> exceptM 'expr_ msg
    ; a_Esave : ('sym * core_base_type) -> list ('sym * (core_base_type * generic_pexpr 'bty 'sym)) -> 'expr -> exceptM 'expr_ msg
@@ -369,13 +367,6 @@ let rec fold_expr alg e =
      (fold_expr alg e1) >>= fun e1 ->
      (fold_expr alg e2) >>= fun e2 ->
      wrap (alg.a_Esseq pat e1 e2)
-  | Easeq s a pa ->
-     (fold_action alg.action_alg a) >>= fun a ->
-     (fold_paction alg.action_alg pa) >>= fun pa ->
-     wrap (alg.a_Easeq s a pa)
-  | Eindet n e ->
-     (fold_expr alg e) >>= fun e ->
-     wrap (alg.a_Eindet n e)
   | Ebound n e ->
      (fold_expr alg e) >>= fun e ->
      wrap (alg.a_Ebound n e)
@@ -504,8 +495,6 @@ let id_expr_alg action_alg pexpr_alg =
    ; a_Eunseq = fun a -> return (Eunseq a)
    ; a_Ewseq = fun a b c -> return (Ewseq a b c)
    ; a_Esseq = fun a b c -> return (Esseq a b c)
-   ; a_Easeq = fun a b c -> return (Easeq a b c)
-   ; a_Eindet = fun a b -> return (Eindet a b)
    ; a_Ebound = fun a b -> return (Ebound a b)
    ; a_End = fun a -> return (End a)
    ; a_Esave = fun a b c -> return (Esave a b c)
@@ -681,8 +670,6 @@ let pfp_expr_alg action_alg pexpr_alg =
    ; a_Eunseq = fun a -> return (Eunseq a)
    ; a_Ewseq = fun a b c -> return (Ewseq a b c)
    ; a_Esseq = fun a b c -> return (Esseq a b c)
-   ; a_Easeq = fun a b c -> return (Easeq a b c)
-   ; a_Eindet = fun a b -> return (Eindet a b)
    ; a_Ebound = fun a b -> return (Ebound a b)
    ; a_End = fun a -> return (End a)
    ; a_Esave = fun a b c -> return (Esave a b c)

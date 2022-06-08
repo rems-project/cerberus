@@ -627,3 +627,56 @@ end
 *)
 
 *)
+open Ctype
+let rec normalise_enum (Ctype annots ty_) =
+  Ctype annots match ty_ with
+    | Void ->
+        ty_
+    | Basic (Integer (Enum sym)) ->
+        (* replacing Enum with the implementtion-defined corresponding integer type *)
+        Basic (Integer (typeof_enum sym))
+    | Basic (Integer _) ->
+        ty_
+    | Basic (Floating _) ->
+        ty_
+    | Array elem_ty n_opt ->
+        Array (normalise_enum elem_ty) n_opt
+
+    | Function (qs, ret_ty) params is_variadic  ->
+        Function (qs, normalise_enum ret_ty)
+          (List.map (fun (qs, ty, b) -> (qs, normalise_enum ty, b)) params)
+          is_variadic
+    | FunctionNoParams (qs, ret_ty) ->
+        FunctionNoParams (qs, normalise_enum ret_ty)
+    | Pointer qs ref_ty ->
+        Pointer qs (normalise_enum ref_ty)
+    | Atomic atom_ty ->
+        Atomic (normalise_enum atom_ty)
+    | Struct _ ->
+        ty_
+    | Union _ ->
+        ty_
+  end
+
+
+let is_compatible_with_size_t ity =
+  match (sizeof_ity ity, sizeof_ity Size_t) with
+    | (Just sz1, Just sz2) ->
+        sz1 = sz2 && not (is_signed_ity ity)
+    | _ ->
+        (* the Implementation is not sufficiently specified *)
+        error "Implementation.is_compatible_with_size_t"
+  end
+
+let is_compatible_with_ptrdiff_t ity =
+  match (sizeof_ity ity, sizeof_ity Ptrdiff_t) with
+    | (Just sz1, Just sz2) ->
+        sz1 = sz2 && is_signed_ity ity
+    | _ ->
+        (* the Implementation is not sufficiently specified *)
+        error "Implementation.is_compatible_with_ptrdiff_t"
+  end
+
+  (* val is_signed_ity: Ctype.integerType -> bool
+val sizeof_ity: Ctype.integerType -> maybe nat *)
+

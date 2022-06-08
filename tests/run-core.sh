@@ -12,6 +12,10 @@ function report {
 
 mkdir -p tmp
 
+# Use the provided path to cerberus, otherwise default to the driver backend build
+CERB="${WITH_CERB:=../_build/default/backend/driver/main.exe}"
+# export CERB_RUNTIME=../runtime/
+
 # Running ci tests
 for file in ./ci/*.c
 do
@@ -20,8 +24,8 @@ do
   fi
   file_no_suffix=${file%.c}
   name=${file_no_suffix##*/}
-  ../cerberus $file --pp=core > tmp/$name.core
-  ../cerberus tmp/$name.core
+  $CERB $file --pp=core > tmp/$name.core
+  $CERB tmp/$name.core
   # TODO: ideally we should compare the files, but --rewrite yields different values
   #../cerberus tmp/original.core --rewrite --pp=core > tmp/pp.core
   #cmp --silent tmp/origina.core tmp/pp.core

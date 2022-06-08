@@ -189,12 +189,15 @@ let pick info = function
   | [] ->
       error ("ND2.pick(" ^ show info ^ "), empty list")
   | [x] ->
+      let () = Debug.print_debug 1 [] (fun () ->
+        "ND2.pick [" ^ show info ^ "] (|ms| = singleton)"
+      ) in
       ND (fun st ->
         (NDactive x, st)
       )
   | x::xs ->
       let () = Debug.print_debug 1 [] (fun () ->
-        "ND2.pick (|ms| = " ^ show (List.length (x::xs)) ^ ")"
+        "ND2.pick [" ^ show info ^ "] (|ms| = " ^ show (List.length (x::xs)) ^ ")"
       ) in
       ND (fun st ->
         (NDnd info ((info, return x) :: List.map (fun z -> (info, return z)) xs), st)
@@ -276,6 +279,9 @@ and liftND get put liftInfo liftErr (ND m) =
 
 
 let mk_step info xs =
+  let () = Debug.print_debug 1 [] (fun () ->
+    "ND2.mk_step [" ^ show info ^ "] (|ms| = " ^ show (List.length xs) ^ ")"
+  ) in
   ND (fun st -> (NDstep info xs, st))
 
 

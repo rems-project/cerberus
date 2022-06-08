@@ -5,6 +5,7 @@ module TE = TypeErrors
 module RE = Resources
 module RET = ResourceTypes
 module AT = ArgumentTypes
+module LAT = LogicalArgumentTypes
 
 open Global
 open TE
@@ -769,35 +770,27 @@ module type WI_Sig = sig
 end
 
 
+module WLAT (WI: WI_Sig) = struct
 
-
-module WAT (WI: WI_Sig) = struct
-
-
-  type t = WI.t AT.t
+  type t = WI.t LAT.t
 
   let welltyped kind loc (at : t) : (unit, type_error) m = 
     let rec aux = function
-      | AT.Computational ((name,bt), info, at) ->
-         let@ () = WBT.is_bt (fst info) bt in
-         let@ () = add_l name bt in
-         let@ () = add_a (Sym.fresh_same name) (bt, name) in
-         aux at
-      | AT.Define ((s, it), info, at) ->
+      | LAT.Define ((s, it), info, at) ->
          let@ it = WIT.infer loc it in
          let@ () = add_l s (IT.bt it) in
          let@ () = add_c (LC.t_ (IT.def_ s it)) in
          aux at
-      | AT.Resource ((s, (re, re_oa_spec)), info, at) -> 
+      | LAT.Resource ((s, (re, re_oa_spec)), info, at) -> 
          let@ () = WRS.welltyped (fst info) (re, re_oa_spec) in
          let@ () = add_l s re_oa_spec in
          let@ () = add_r None (re, O (IT.sym_ (s, re_oa_spec))) in
          aux at
-      | AT.Constraint (lc, info, at) ->
+      | LAT.Constraint (lc, info, at) ->
          let@ () = WLC.welltyped (fst info) lc in
          let@ () = add_c lc in
          aux at
-      | AT.I i -> 
+      | LAT.I i -> 
          let@ provable = provable loc in
          let@ () = 
            if !check_consistency then
@@ -816,9 +809,34 @@ module WAT (WI: WI_Sig) = struct
 end
 
 
+
+module WAT (WI: WI_Sig) = struct
+
+  module WLAT = WLAT(WI)
+
+  type t = WI.t AT.t
+
+  let welltyped kind loc (at : t) : (unit, type_error) m = 
+    let rec aux = function
+      | AT.Computational ((name,bt), info, at) ->
+         let@ () = WBT.is_bt (fst info) bt in
+         let@ () = add_l name bt in
+         let@ () = add_a (Sym.fresh_same name) (bt, name) in
+         aux at
+      | AT.L at ->
+         WLAT.welltyped kind loc at
+    in
+    pure (aux at)
+
+
+
+end
+
+
 module WFT = WAT(WRT)
 module WLT = WAT(WFalse)
-module WPackingFT(Spec : WOutputSpec) = WAT(WOutputDef(Spec))
+module WPackingFT(Spec : WOutputSpec) = WLAT(WOutputDef(Spec))
+module WIA(Spec : WOutputSpec) = WAT(WOutputDef(Spec))
 
 module WRPD = struct
 
@@ -858,8 +876,8 @@ module WLPD = struct
         end
     in
     pure begin 
-        let module WPackingFT = WPackingFT(struct let name_bts = pd.args end) in
-        WPackingFT.welltyped "argument inference" pd.loc pd.infer_arguments
+        let module WIA = WIA(struct let name_bts = pd.args end) in
+        WIA.welltyped "argument inference" pd.loc pd.infer_arguments
       end
 
 

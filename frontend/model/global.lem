@@ -24,6 +24,8 @@ val current_execution_mode: unit -> maybe execution_mode
 declare ocaml target_rep function current_execution_mode = `Global_ocaml.current_execution_mode`
 declare hol   target_rep function current_execution_mode = `util$current_execution_mode`
 
+val backend_name: unit -> string
+declare ocaml target_rep function backend_name = `Global_ocaml.backend_name`
 
 val using_concurrency: unit -> bool
 declare ocaml target_rep function using_concurrency = `Global_ocaml.concurrency_mode`

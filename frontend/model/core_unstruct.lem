@@ -198,9 +198,7 @@ let rec fetch_types (Expr annot expr_) =
         end
 
 (*
-    | Easeq of ('sym * core_base_type) * (generic_action 'a 'bty 'sym) * (generic_paction 'a 'bty 'sym) (* atomic sequencing *)
-    | Eindet of nat * (generic_expr 'a 'bty 'sym) (* indeterminately sequenced expr *)
-    | Ebound of nat * (generic_expr 'a 'bty 'sym) (* $\ldots$and boundary *)
+    | Ebound of (generic_expr 'a 'bty 'sym) (* $\ldots$and boundary *)
     | End of list (generic_expr 'a 'bty 'sym) (* nondeterministic sequencing *)
           (* the pexpr associated to the symbols are their value when the control flows throught the Esave (i.e. when
              doesn't come from a Erun) *)
@@ -239,7 +237,7 @@ let rec explode_expr env (Expr annot expr_ as expr) =
                   Expr [] (Esseq (Pattern [] (CaseBase (Nothing, BTy_unit)))
                                  (Expr [] (Eaction (Paction pol (Action loc a (Kill kind pe')))))
                                  acc)
-                ) (Expr [] Eskip) xs
+                ) (Expr [] (Epure (Pexpr [] BTy_unit (PEval Vunit)))) xs
               end
         end
     
@@ -306,8 +304,6 @@ let rec explode_expr env (Expr annot expr_ as expr) =
         wrap (Elet pat pe (self e))
     | Eif pe e1 e2 ->
         wrap (Eif pe (self e1) (self e2))
-    | Eskip ->
-        expr
     | Eccall _ _ _ _ ->
         expr
     | Eproc _ _ _ ->
@@ -318,12 +314,8 @@ let rec explode_expr env (Expr annot expr_ as expr) =
         wrap (Ewseq pat (self e1) (self e2))
     | Esseq pat e1 e2 ->
         wrap (Esseq pat (self e1) (self e2))
-    | Easeq _ _ _ ->
-        expr
-    | Eindet n e ->
-        wrap (Eindet n (self e))
-    | Ebound n e ->
-        wrap (Ebound n (self e))
+    | Ebound e ->
+        wrap (Ebound (self e))
     | End es ->
         wrap (End (List.map self es))
     | Esave _ _ _ ->
@@ -341,6 +333,12 @@ let rec explode_expr env (Expr annot expr_ as expr) =
     | Ehave _ _ ->
         expr
     | Eshow _ _ ->
+        expr
+    | Einstantiate _ _ ->
+        expr
+    | Eannot xs e ->
+        wrap (Eannot xs (self e))
+    | Eexcluded _ _ ->
         expr
   end
 

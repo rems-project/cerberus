@@ -12,6 +12,7 @@ let keywords =
     (Pmap.empty Stdlib.compare)
     [
       (* for Core ctypes *)
+      ("const",       T.CONST      );
       ("_Atomic",     T.ATOMIC     );
       ("_Bool",       T.BOOL       );
       ("char",        T.CHAR       );
@@ -86,7 +87,6 @@ let keywords =
       ("not",          T.NOT         );
       ("undef",        T.UNDEF       );
       ("error",        T.ERROR       );
-      ("skip",         T.SKIP        );
       ("let",          T.LET         );
       ("in",           T.IN          );
       ("if",           T.IF          );
@@ -96,10 +96,8 @@ let keywords =
       ("unseq",        T.UNSEQ       );
       ("weak",         T.WEAK        );
       ("strong",       T.STRONG      );
-      ("atom",         T.ATOM        );
       ("save",         T.SAVE        );
       ("run",          T.RUN         );
-      ("indet",        T.INDET       );
       ("bound",        T.BOUND       );
       ("raise",        T.RAISE       );
       ("register",     T.REGISTER    );
@@ -124,6 +122,8 @@ let keywords =
       ("store",  T.STORE );
       ("store_lock",  T.STORE_LOCK );
       ("load",   T.LOAD  );
+      ("seq_rmw",   T.SEQ_RMW  );
+      ("seq_rmw_with_forward",   T.SEQ_RMW_WITH_FORWARD  );
       ("rmw",    T.RMW   );
       ("fence",  T.FENCE );
 (*      ("compare_exchange_strong",  T.COMPARE_EXCHANGE_STRONG); *)

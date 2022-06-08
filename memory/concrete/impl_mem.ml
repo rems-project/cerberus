@@ -416,6 +416,8 @@ module Concrete : Memory = struct
     dead_allocations: storage_instance_id list;
     dynamic_addrs: address list;
     last_used: storage_instance_id option;
+
+    requested: (address * N.num) list; (* the addresses (and object sizes) that were allocated with cerb::with_address() *)
   }
   
   let initial_mem_state = {
@@ -432,19 +434,20 @@ module Concrete : Memory = struct
     dead_allocations= [];
     dynamic_addrs= [];
     last_used= None;
+    requested= [];
   }
   
+  (* TODO *)
   type footprint =
-    (* base address, size *)
-    | FP of address * N.num
+      (* base address, size *)
+    | FP of [`W | `R] * address * N.num
   
-  let check_overlap (FP (b1, sz1)) (FP (b2, sz2)) =
-    if N.equal b1 b2 && N.equal sz1 sz2 then
-      ExactOverlap
-    else if N.(less_equal (add b1 sz1) b2) || N.(less_equal (add b2 sz2) b1) then
-      Disjoint
-    else
-      PartialOverlap
+  let do_overlap (FP (k1, b1, sz1)) (FP (k2, b2, sz2)) =
+    match k1, k2 with
+      | `R, `R ->
+          false
+      | _ ->
+          not (N.(less_equal (add b1 sz1) b2) || N.(less_equal (add b2 sz2) b1))
   
   type 'a memM = ('a, mem_error, integer_value mem_constraint, mem_state) Eff.eff
   
@@ -1144,11 +1147,37 @@ module Concrete : Memory = struct
     } >>= fun () ->
     return (alloc_id, addr)
   
+  let allocator_with_address (addr: N.num) (size: N.num) (align: N.num) : (storage_instance_id * address) memM =
+    let open N in
+    if equal (N.modulus addr align ) zero then
+      (* TODO: need to check non overlapping +
+              need to update the normal allocator to avoid requested footprints. *)
+      (* for things to work, we need the cerb pipeline to collect all requested footprints 
+         by the translation unit, and tell the memory model about them BEFORE THE BEGINNING of execution.
+         Otherwise it will possible for the normal allocator to use a requested footprint before a create() with
+         the requested footprint is actually executed, which will make the create() fail and the user cry...
+         NOTE: ===> but then when linking multiple translation units we must make sure their set of requested footprints do not overlap...
+      *)
+      get >>= fun st ->
+      let alloc_id = st.next_alloc_id in    
+      put { st with
+        next_alloc_id= Nat_big_num.succ alloc_id;
+        last_used= Some alloc_id;
+      } >>= fun () ->
+      return (alloc_id, addr)
+    else
+      failwith "allocator_with_address ==> requested adddress has wrong alignment"
   
-  let allocate_object tid pref (IV (_, align)) ty init_opt : pointer_value memM =
+  let allocate_object tid pref (IV (_, align)) ty req_addr_opt init_opt : pointer_value memM =
 (*    print_bytemap "ENTERING ALLOC_STATIC" >>= fun () -> *)
     let size = N.of_int (sizeof ty) in
-    allocator size align >>= fun (alloc_id, addr) ->
+    begin match req_addr_opt with
+      | None ->
+          allocator size align
+      | Some addr ->
+            failwith "TODO: cerb::with_address() is yet implemented"
+           (* allocator_with_address addr size align *)
+    end >>= fun (alloc_id, addr) ->
     Debug_ocaml.print_debug 10(*KKK*) [] (fun () ->
       "STATIC ALLOC - pref: " ^ String_symbol.string_of_prefix pref ^
       " --> alloc_id= " ^ N.to_string alloc_id ^
@@ -1401,7 +1430,7 @@ module Concrete : Memory = struct
         return ()
       end >>= fun () ->
       update (fun st -> { st with last_used= alloc_id_opt }) >>= fun () ->
-      let fp = FP (addr, (N.of_int (sizeof ty))) in
+      let fp = FP (`R, addr, (N.of_int (sizeof ty))) in
       begin match bs' with
         | [] ->
             Debug_ocaml.print_debug 10(*KKK*) [] (fun () ->
@@ -1511,7 +1540,7 @@ module Concrete : Memory = struct
                     funptrmap= funptrmap; }
         end >>= fun () ->
         print_bytemap ("AFTER STORE => " ^ Location_ocaml.location_to_string loc) >>= fun () ->
-        return (FP (addr, (N.of_int (sizeof ty)))) in
+        return (FP (`W, addr, (N.of_int (sizeof ty)))) in
       match (prov, ptrval_) with
         | (_, PVnull _) ->
             fail (MerrAccess (loc, StoreAccess, NullPtr))
@@ -2368,16 +2397,13 @@ let combine_prov prov1 prov2 =
               N.sub r dlt in
           IV (Prov_none, (wrapI (N.of_int64 (Int64.of_float fval))))
   
-  let eq_ival _ (IV (_, n1)) (IV (_, n2)) =
+  let eq_ival (IV (_, n1)) (IV (_, n2)) =
     Some (Nat_big_num.equal n1 n2)
-  let lt_ival _ (IV (_, n1)) (IV (_, n2)) =
+  let lt_ival (IV (_, n1)) (IV (_, n2)) =
     Some (Nat_big_num.compare n1 n2 = -1)
-  let le_ival _ (IV (_, n1)) (IV (_, n2)) =
+  let le_ival (IV (_, n1)) (IV (_, n2)) =
     let cmp = Nat_big_num.compare n1 n2 in
     Some (cmp = -1 || cmp = 0)
-  
-  let eval_integer_value (IV (_, n)) =
-    Some n
   
   let unspecified_mval ty =
     MVunspecified ty

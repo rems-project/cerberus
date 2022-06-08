@@ -357,6 +357,8 @@ let untype_file (file: 'a Core.typed_file) : 'a Core.file =
                    Store0 (b, untype_pexpr pe1, untype_pexpr pe2, untype_pexpr pe3, mo)
                | Load0 (pe1, pe2, mo) ->
                    Load0 (untype_pexpr pe1, untype_pexpr pe2, mo)
+               | SeqRMW (b, pe1, pe2, sym, pe3) ->
+                   SeqRMW (b, untype_pexpr pe1, untype_pexpr pe2, sym, untype_pexpr pe3)
                | RMW0 (pe1, pe2, pe3, pe4, mo1, mo2) ->
                    RMW0 (untype_pexpr pe1, untype_pexpr pe2, untype_pexpr pe3, untype_pexpr pe4, mo1, mo2)
                | Fence0 mo ->
@@ -387,8 +389,6 @@ let untype_file (file: 'a Core.typed_file) : 'a Core.file =
           Elet (untype_pattern pat, untype_pexpr pe1, untype_expr e2)
       | Eif (pe, e1, e2) ->
           Eif (untype_pexpr pe, untype_expr e1, untype_expr e2)
-      | Eskip ->
-          Eskip
       | Eccall (a, pe1, pe2, pes) ->
           Eccall (a, untype_pexpr pe1, untype_pexpr pe2, List.map untype_pexpr pes)
       | Eproc (a, nm, pes) ->
@@ -399,12 +399,8 @@ let untype_file (file: 'a Core.typed_file) : 'a Core.file =
           Ewseq (untype_pattern pat, untype_expr e1, untype_expr e2)
       | Esseq (pat, e1, e2) ->
           Esseq (untype_pattern pat, untype_expr e1, untype_expr e2)
-      | Easeq (sym_bTy, act1, (Paction (p, act2))) ->
-          Easeq (sym_bTy, untype_action act1, Paction (p, untype_action act2))
-      | Eindet (j, e) ->
-          Eindet (j, untype_expr e)
-      | Ebound (j, e) ->
-          Ebound (j, untype_expr e)
+      | Ebound e ->
+          Ebound (untype_expr e)
       | End es ->
           End (List.map untype_expr es)
       | Esave (sym_bTy, xs, e) ->
@@ -423,6 +419,10 @@ let untype_file (file: 'a Core.typed_file) : 'a Core.file =
           Ehave (id, List.map untype_pexpr pes)
       | Eshow (id, pes) ->
           Eshow (id, List.map untype_pexpr pes)
+      | Einstantiate (id, pe) ->
+          Einstantiate (id, untype_pexpr pe)
+      | Eannot _ | Eexcluded _ ->
+          assert false (* only exists during Core runtime *)
     in Expr (annots, aux expr_) in
   let untype_generic_fun_map_decl = function
     | Fun (bty, xs, pe) ->
@@ -525,7 +525,7 @@ let interp_backend io core_file ~args ~batch ~fs ~driver_conf =
       | (Vloaded (LVspecified (OVinteger ival)) :: _) ->
           (* TODO: yuck *)
           return (Either.Right begin
-            match Impl_mem.eval_integer_value ival with
+            match Mem.eval_integer_value ival with
               | Some n ->
                   begin try
                     Z.to_int n

@@ -6,6 +6,7 @@ module LRT = LogicalReturnTypes
 module LC = LogicalConstraints
 module RE = Resources
 module AT = ArgumentTypes
+module LAT = LogicalArgumentTypes
 module StringMap = Map.Make(String)
 module Loc = Locations
 open Pp
@@ -20,17 +21,17 @@ module LP = LogicalPredicates
 type clause = {
     loc : Loc.t;
     guard : IT.t;
-    packing_ft : AT.packing_ft
+    packing_ft : LAT.packing_ft
   }
 
 let pp_clause {loc; guard; packing_ft} = 
   item "condition" (IT.pp guard) ^^ comma ^^^
-  item "return type" (AT.pp OutputDef.pp packing_ft)
+  item "return type" (LAT.pp OutputDef.pp packing_ft)
 
 let subst_clause subst {loc; guard; packing_ft} = 
   { loc = loc;
     guard = IT.subst subst guard; 
-    packing_ft = AT.subst OutputDef.subst subst packing_ft }
+    packing_ft = LAT.subst OutputDef.subst subst packing_ft }
 
 
 
@@ -79,7 +80,7 @@ let byte () =
   let clause = {
       loc = loc;
       guard = bool_ true;
-      packing_ft = AT.of_lrt lrt (AT.I []) 
+      packing_ft = LAT.of_lrt lrt (LAT.I []) 
     }
   in
   let predicate = {
@@ -118,7 +119,7 @@ let char () =
   let clause = {
       loc = loc;
       guard = bool_ true;
-      packing_ft = AT.of_lrt lrt (AT.I [OutputDef.{loc; name = value_s_o; value = recordMember_ ~member_bt:Integer (resource, value_sym)}]) 
+      packing_ft = LAT.of_lrt lrt (LAT.I [OutputDef.{loc; name = value_s_o; value = recordMember_ ~member_bt:Integer (resource, value_sym)}]) 
     }
   in
   let predicate = {
@@ -161,7 +162,7 @@ let zerobyte () =
   let clause = {
       loc = loc;
       guard = bool_ true;
-      packing_ft = AT.of_lrt lrt (AT.I []) 
+      packing_ft = LAT.of_lrt lrt (LAT.I []) 
     }
   in
   let predicate = {
@@ -212,7 +213,7 @@ let early_alloc () =
   let clause = {
       loc = loc;
       guard = bool_ true;
-      packing_ft = AT.of_lrt lrt (AT.I [])
+      packing_ft = LAT.of_lrt lrt (LAT.I [])
     }
   in
   let predicate = {
@@ -269,14 +270,14 @@ let page_alloc_predicates struct_decls =
         guard = ne_ (guardv, int_ 0);
           (* and_ [ne_ (vbase, null_); *)
           (*       int_ 0 %<= order; order %<= int_ (mMAX_ORDER - 1)]; *)
-        packing_ft = AT.of_lrt lrt (AT.I []) 
+        packing_ft = LAT.of_lrt lrt (LAT.I []) 
       }
     in
     let clause2 = 
       {
         loc = loc;
         guard = bool_ true;
-        packing_ft = AT.I []
+        packing_ft = LAT.I []
       }
     in
     let predicate = {
@@ -460,7 +461,7 @@ let page_alloc_predicates struct_decls =
     let clause = {
         loc = loc;
         guard = bool_ true;
-        packing_ft = AT.of_lrt lrt (AT.I assignment)
+        packing_ft = LAT.of_lrt lrt (LAT.I assignment)
       }
     in
   

@@ -241,7 +241,7 @@ let at_least_one_argument loc pname = function
 
 let translate_cn_clause env clause =
   let rec translate_cn_clause_aux env acc clause =
-    let module AT = ArgumentTypes in
+    let module LAT = LogicalArgumentTypes in
     match clause with
       | CN_letResource (res_loc, sym, res, cl) ->
           let open Resources in
@@ -260,7 +260,7 @@ let translate_cn_clause env clause =
                          ; iargs = []},
                       oargs_ty) 
                    in
-                   (AT.mResource ((sym, pt), (pred_loc, None)) z)
+                   (LAT.mResource ((sym, pt), (pred_loc, None)) z)
                  end in
                let env' = Env.(add_resource sym (RPred_owned scty) env) in
                translate_cn_clause_aux env' acc' cl
@@ -278,7 +278,7 @@ let translate_cn_clause env clause =
                          ; iargs = []},
                       owned_oargs scty) 
                    in
-                   (AT.mResource ((sym, pt), (pred_loc, None)) z)
+                   (LAT.mResource ((sym, pt), (pred_loc, None)) z)
                  end in
                translate_cn_clause_aux env acc' cl
             | CN_pred (pred_loc, CN_named pred_sym, es_) ->
@@ -298,7 +298,7 @@ let translate_cn_clause env clause =
                      },
                       BT.Record pred_sig.pred_oargs)
                    in
-                   (AT.mResource ((sym, pred), (pred_loc, None)) z)
+                   (LAT.mResource ((sym, pred), (pred_loc, None)) z)
                  end 
                in
                let env' = Env.(add_resource sym (RPred_named pred_sym) env) in
@@ -310,14 +310,14 @@ let translate_cn_clause env clause =
           let@ e = translate_cn_expr env e_ in
           let acc' =
             fun z -> acc begin
-              AT.mDefine (sym, e, (loc, None)) z
+              LAT.mDefine (sym, e, (loc, None)) z
             end in
             translate_cn_clause_aux (Env.add_logical sym (IT.basetype e) env) acc' cl
       | CN_assert (loc, e_, cl) ->
           let@ e = translate_cn_expr env e_ in
           let acc' =
             fun z -> acc begin
-              AT.mConstraint ( LogicalConstraints.T e
+              LAT.mConstraint ( LogicalConstraints.T e
                              , (loc, None) ) z
             end in
             translate_cn_clause_aux env acc' cl
@@ -327,7 +327,7 @@ let translate_cn_clause env clause =
               let@ e = translate_cn_expr env e_ in
               return (OutputDef.{loc= loc; name= sym; value= e})
             ) xs_ in
-          acc (AT.I xs) in
+          acc (LAT.I xs) in
   translate_cn_clause_aux env (fun z -> return z) clause
 
 

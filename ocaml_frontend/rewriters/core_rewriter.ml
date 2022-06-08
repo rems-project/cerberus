@@ -263,6 +263,11 @@ module Rewriter = functor (Eff: Monad) -> struct
           aux_pexpr pe1 >>= fun pe1' ->
           aux_pexpr pe2 >>= fun pe2' ->
           return_wrap (Load0 (pe1', pe2', mo))
+      | SeqRMW (b, pe1, pe2, sym, pe3) ->
+          aux_pexpr pe1 >>= fun pe1' ->
+          aux_pexpr pe2 >>= fun pe2' ->
+          aux_pexpr pe3 >>= fun pe3' ->
+          return_wrap (SeqRMW (b, pe1', pe2', sym, pe3'))
       | RMW0 (pe1, pe2, pe3, pe4, mo1, mo2) ->
           aux_pexpr pe1 >>= fun pe1' ->
           aux_pexpr pe2 >>= fun pe2' ->
@@ -341,8 +346,6 @@ module Rewriter = functor (Eff: Monad) -> struct
           aux e1 >>= fun e1' ->
           aux e2 >>= fun e2' ->
           return_wrap (Eif (pe', e1', e2'))
-      | Eskip ->
-          return_wrap Eskip
       | Eccall ((), pe1, pe2, pes) ->
           aux_pexpr pe1 >>= fun pe1' ->
           aux_pexpr pe2 >>= fun pe2' ->
@@ -362,16 +365,9 @@ module Rewriter = functor (Eff: Monad) -> struct
           aux e1 >>= fun e1' ->
           aux e2 >>= fun e2' ->
           return_wrap (Esseq (pat, e1', e2'))
-      | Easeq (sym_bTy, act1, Paction (p, act2)) ->
-          aux_action act1 >>= fun act1' ->
-          aux_action act2 >>= fun act2' ->
-          return_wrap (Easeq (sym_bTy, act1', Paction (p, act2')))
-      | Eindet (n, e) ->
+      | Ebound e ->
           aux e >>= fun e' ->
-          return_wrap (Eindet (n, e'))
-      | Ebound (n, e) ->
-          aux e >>= fun e' ->
-          return_wrap (Ebound (n, e'))
+          return_wrap (Ebound e')
       | End es ->
           mapM aux es >>= fun es' ->
           return_wrap (End es')
@@ -402,6 +398,15 @@ module Rewriter = functor (Eff: Monad) -> struct
       | Eshow (id, pes) ->
           mapM aux_pexpr pes >>= fun pes' ->
           return_wrap (Eshow (id, pes'))
+      | Einstantiate (id, pe) ->
+          aux_pexpr pe >>= fun pe' ->
+          return_wrap (Einstantiate (id, pe'))
+      | Eannot (fps, e) ->
+          aux e >>= fun e' ->
+          return_wrap (Eannot (fps, e'))
+      | Eexcluded (n, act) ->
+          aux_action act >>= fun act' ->
+          return_wrap (Eexcluded (n, act'))
 
   let rewritePexpr (rw: 'bty rewriter) (pe: ('bty, Symbol.sym) C.generic_pexpr) : (('bty, Symbol.sym) C.generic_pexpr) Eff.t =
     runM (rewritePexpr_ rw pe)

@@ -822,8 +822,6 @@ let rec add_e ~sequentialise (in_v, out_v) in_pat (Expr (_, e_)) =
     new_vertex () >>= fun false_v ->
     add (in_v, false_v) (Tcond (Cnot cond)) >>= fun _ ->
     self (false_v, out_v) in_pat e3
-  | Eskip ->
-    add (in_v, out_v) Tskip
   | Eccall (_, _, pe_f, pes) ->
     let te_f =
       match texpr_of_pexpr pe_f with
@@ -874,11 +872,7 @@ let rec add_e ~sequentialise (in_v, out_v) in_pat (Expr (_, e_)) =
       | `OK -> self (mid_v, out_v) in_pat e2
       | `NoOut -> return `NoOut
     end
-  | Easeq _ ->
-    (* TODO *)
-    assert false
-  | Eindet (_, e)
-  | Ebound (_, e) ->
+  | Ebound e ->
     (* NOTE: not sure about this *)
     self (in_v, out_v) in_pat e
   | Esave ((lab, _), params, e) ->
@@ -926,6 +920,10 @@ let rec add_e ~sequentialise (in_v, out_v) in_pat (Expr (_, e_)) =
      return `OK
   | Eshow _ ->
      return `OK
+  | Einstantiate _ ->
+     return `OK
+  | Eannot _ | Eexcluded _ ->
+     assert false (* only exists during runtime *)
 
 let rec collect_saves (Expr (_, e_)) =
   let open GraphM in
@@ -940,16 +938,14 @@ let rec collect_saves (Expr (_, e_)) =
     self e
   | Eif (_, e2, e3) ->
     self e2 >>= fun _ -> self e3
-  | Eskip | Eccall _ | Eproc (_, _, _) ->
+  | Eccall _ | Eproc (_, _, _) ->
     return ()
   | Eunseq es ->
     mapM self es >>= fun _ ->
     return ()
   | Ewseq (_, e1, e2) | Esseq (_, e1, e2) ->
     self e1 >>= fun _ -> self e2
-  | Easeq _ ->
-    return ()
-  | Eindet (_, e) | Ebound (_, e) ->
+  | Ebound e ->
     self e
   | Esave ((lab, _), params, e) ->
     self e >>= fun _ ->
@@ -970,6 +966,10 @@ let rec collect_saves (Expr (_, e_)) =
     return ()
   | Eshow _ ->
     return ()
+  | Einstantiate _ ->
+    return ()
+  | Eannot _ | Eexcluded _ ->
+    assert false (* only exists during Core runtime *)
 
 let mk_cfg_pe pe =
   let open GraphM in

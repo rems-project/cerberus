@@ -20,6 +20,7 @@ let string_of_params z =
   Pp_utils.to_plain_string (pp_params z)
 (* let pp_cabs0_definition def = to_plain_string (Pp_cabs0.pp_definition def) *)
 
+(*
 let mk_string_of_continuation_element = function
   | Kunseq (_, es1, es2) ->
       fun z ->
@@ -41,3 +42,4 @@ let string_of_continuation cont =
 
 let string_of_stack sk =
   Pp_utils.to_plain_string (pp_stack sk)
+*)

@@ -103,6 +103,7 @@ let parse_function
       (return_type : Sctypes.t)
       (Attrs attributes)
   = 
+  let arguments = List.map_fst (Sym.fresh_same) arguments in
   (* TODO: make it so reverse does not need to happen here *)
   let attributes = List.rev attributes in
   let globals = 
@@ -192,7 +193,7 @@ let parse_function
 let parse_label 
       (lname : string)
       arguments
-      (function_spec : Ast.function_spec)
+      global_arguments
       (Attrs attributes)
   = 
   (* TODO: make it so reverse does not need to happen here *)
@@ -200,11 +201,6 @@ let parse_label
   (* let attributes = List.rev attributes in *)
   let arguments = 
     List.map (fun (asym, typ) -> {asym; typ}) arguments 
-  in
-  let function_arguments = 
-    List.map (fun {esym; typ} ->
-        {asym = esym; typ}
-      ) function_spec.function_arguments
   in
   let@ inv = 
     ListM.fold_leftM (fun inv attr ->
@@ -254,8 +250,7 @@ let parse_label
       ) [] attributes
   in
   return { 
-      global_arguments = function_spec.global_arguments; 
-      function_arguments = function_arguments; 
+      global_arguments = global_arguments; 
       label_arguments = arguments; 
       invariant = inv
     }

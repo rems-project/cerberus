@@ -25,6 +25,7 @@ type result =
 exception Core_error of (Location_ocaml.t * Errors.core_parser_cause)
 
 type token =
+  | CONST
   | SHORT
   | INT
   | LONG
@@ -77,7 +78,6 @@ type token =
   | NOT
   | UNDEF
   | ERROR
-  | SKIP
   | LET
   | IN
   | IF
@@ -86,7 +86,6 @@ type token =
   | UNSEQ
   | WEAK
   | STRONG
-  | ATOM
   | SAVE (* TODO *)
   | RUN (* TODO *)
   | RAISE (* TODO *)
@@ -96,7 +95,6 @@ type token =
   | WITH
 *)
 
-  | INDET
   | BOUND
   | CREATE
   | CREATE_READONLY
@@ -106,6 +104,8 @@ type token =
   | STORE
   | STORE_LOCK
   | LOAD
+  | SEQ_RMW
+  | SEQ_RMW_WITH_FORWARD
   | RMW
   | FENCE
 (*  | COMPARE_EXCHANGE_STRONG *)

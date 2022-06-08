@@ -52,7 +52,7 @@ val stringFromCore_action: forall 'ty. Core.generic_action_ 'ty Symbol.sym -> st
 val stringFromCore_expr:   forall 'a 'ty. Core.generic_expr 'a 'ty Symbol.sym -> string
 val stringFromCore_params: forall 'a. list (Symbol.sym * Core.core_base_type) -> string
 val stringFromCore_file:   forall 'a. Core.file 'a -> string
-val stringFromCore_stack:  forall 'a. Core.stack 'a -> string
+(*val stringFromCore_stack:  forall 'a. Core.stack 'a -> string*)
 
 declare ocaml target_rep function stringFromCore_ctype  = `String_core_ctype.string_of_ctype`
 declare ocaml target_rep function stringFromCore_core_base_type  = `String_core.string_of_core_base_type`
@@ -62,7 +62,7 @@ declare ocaml target_rep function stringFromCore_action  = `String_core.string_o
 declare ocaml target_rep function stringFromCore_expr   = `String_core.string_of_expr`
 declare ocaml target_rep function stringFromCore_params = `String_core.string_of_params`
 declare ocaml target_rep function stringFromCore_file   = `String_core.string_of_file`
-declare ocaml target_rep function stringFromCore_stack  = `String_core.string_of_stack`
+(*declare ocaml target_rep function stringFromCore_stack  = `String_core.string_of_stack`*)
 
 declare hol target_rep function stringFromCore_ctype  = `pp_core$pp_core_ctype`
 declare hol target_rep function stringFromCore_core_base_type  = `pp_core.pp_core_base_type`
@@ -71,7 +71,7 @@ declare hol target_rep function stringFromCore_pexpr  = `pp_core$pp_core_pexpr`
 declare hol target_rep function stringFromCore_expr   = `pp_core$pp_core_expr`
 declare hol target_rep function stringFromCore_params = `pp_core$pp_core_params`
 declare hol target_rep function stringFromCore_file   = `pp_core$pp_core_file`
-declare hol target_rep function stringFromCore_stack  = `pp_core$pp_core_stack`
+(*declare hol target_rep function stringFromCore_stack  = `pp_core$pp_core_stack`*)
 
 
 val stringFromMem_mem_value: Mem.mem_value -> string

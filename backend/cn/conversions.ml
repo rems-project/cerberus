@@ -9,6 +9,7 @@ module BT = BaseTypes
 module LRT = LogicalReturnTypes
 module RT = ReturnTypes
 module AT = ArgumentTypes
+module LAT = LogicalArgumentTypes
 open TypeErrors
 open IndexTerms
 open ResourceTypes
@@ -1007,7 +1008,7 @@ let error_with_loc loc msg =
 let aarg_item loc (aarg : aarg) =
   let path = match Sym.description aarg.asym with
     | SD_ObjectAddress name -> Ast.addr name; 
-    | SD_None -> Ast.addr (Sym.pp_string aarg.asym)
+    (* | SD_None -> Ast.addr (Sym.pp_string aarg.asym) *)
     | sd ->
        error_with_loc loc
          ("address argument " ^ Sym.pp_string aarg.asym ^ 
@@ -1067,7 +1068,7 @@ let get_mappings_info (mappings : mapping StringMap.t) (mapping_name : string) =
     |> List.map (fun {path; it; _} -> (Pp.plain (Ast.Terms.pp true path), it)))
 
 let make_fun_spec loc (layouts : Memory.struct_decls) rpredicates lpredicates
-        calling_mode fsym (fspec : function_spec)
+      fsym (fspec : function_spec)
     : (AT.ft * CF.Mucore.trusted * mapping, type_error) m = 
   let open AT in
   let open RT in
@@ -1100,12 +1101,12 @@ let make_fun_spec loc (layouts : Memory.struct_decls) rpredicates lpredicates
   in
 
   (* fargs *)
-  let@ (i, mappings, _) = 
-    ListM.fold_leftM (fun (i, mappings, counter) (earg : earg) ->
-      match calling_mode with
-      | `CallByValue ->
+  let@ (iA, i, mappings, _) = 
+    ListM.fold_leftM (fun (iA, i, mappings, counter) (earg : earg) ->
+      (* match calling_mode with *)
+      (* | `CallByValue -> *)
         let descr = "ARG" ^ string_of_int counter in
-        let a = (`Computational (earg.esym, BT.of_sct earg.typ), (loc, Some descr)) in
+        let a = (earg.esym, BT.of_sct earg.typ, (loc, Some descr)) in
         let varg = {vsym = earg.esym; typ = earg.typ} in
         let item = varg_item loc varg in
         (* let (i', mapping') =  *)
@@ -1118,25 +1119,25 @@ let make_fun_spec loc (layouts : Memory.struct_decls) rpredicates lpredicates
           mod_mappings ["start";"end"] mappings
             (fun mapping -> item :: mapping)
         in
-        return (i @ a :: [c], mappings, counter+1)
-      | `CallByReference ->
-        let descr = "&ARG" ^ string_of_int counter in
-        let a = (`Computational (earg.esym, BT.Loc), (loc, Some descr)) in
-        let aarg = {asym = earg.esym; typ = earg.typ} in
-        let item = aarg_item loc aarg in
-        let (i', mapping') =
-          make_owned_funarg loc counter item.it item.path aarg.typ in
-        let c =
-          (`Constraint (LC.t_ (good_ (pointer_ct aarg.typ, item.it))),
-           (loc, Some (descr ^ " constraint")))
-        in
-        let mappings =
-          mod_mapping "start" mappings
-            (fun mapping -> (item :: mapping') @ mapping)
-        in
-        return (i @ a :: c :: i', mappings, counter+1)
+        return (iA @ [a], i @ [c], mappings, counter+1)
+      (* | `CallByReference -> *)
+      (*   let descr = "&ARG" ^ string_of_int counter in *)
+      (*   let a = (earg.esym, BT.Loc, (loc, Some descr)) in *)
+      (*   let aarg = {asym = earg.esym; typ = earg.typ} in *)
+      (*   let item = aarg_item loc aarg in *)
+      (*   let (i', mapping') = *)
+      (*     make_owned_funarg loc counter item.it item.path aarg.typ in *)
+      (*   let c = *)
+      (*     (`Constraint (LC.t_ (good_ (pointer_ct aarg.typ, item.it))), *)
+      (*      (loc, Some (descr ^ " constraint"))) *)
+      (*   in *)
+      (*   let mappings = *)
+      (*     mod_mapping "start" mappings *)
+      (*       (fun mapping -> (item :: mapping') @ mapping) *)
+      (*   in *)
+      (*   return (iA @ [a], i @ c :: i', mappings, counter+1) *)
     )
-    (i, mappings, 0) fspec.function_arguments
+    ([], i, mappings, 0) fspec.function_arguments
   in
 
   let@ (i, mappings) = 
@@ -1209,25 +1210,23 @@ let make_fun_spec loc (layouts : Memory.struct_decls) rpredicates lpredicates
   in
 
   (* fargs *)
-  let@ (o, mappings, _) = match calling_mode with
-    | `CallByValue -> return (o, mappings, 0)
-    | `CallByReference ->
-    ListM.fold_leftM (fun (o, mappings, counter) earg ->
-        let aarg = {asym = earg.esym; typ = earg.typ} in
-        let item = aarg_item loc aarg in
-        let (o', mapping') =
-          make_owned_funarg loc counter item.it item.path aarg.typ in
-        let c =
-          (`Constraint (LC.t_ (good_ (pointer_ct aarg.typ, item.it))),
-           (loc, Some ("&ARG" ^ string_of_int counter ^ " constraint")))
-        in
-        let mappings =
-          mod_mapping "end" mappings
-            (fun mapping -> (item :: mapping') @ mapping)
-        in
-        return (o @ [c] @ o', mappings, counter+1)
-      )
-      (o, mappings, 0) fspec.function_arguments
+  let@ (o, mappings, _) = 
+    (* match calling_mode with *)
+    (* | `CallByValue ->  *)
+       return (o, mappings, 0)
+    (* | `CallByReference -> *)
+    (* ListM.fold_leftM (fun (o, mappings, counter) earg -> *)
+    (*     let aarg = {asym = earg.esym; typ = earg.typ} in *)
+    (*     let item = aarg_item loc aarg in *)
+    (*     let (o', mapping') = *)
+    (*       make_owned_funarg loc counter item.it item.path aarg.typ in *)
+    (*     let mappings = *)
+    (*       mod_mapping "end" mappings *)
+    (*         (fun mapping -> (item :: mapping') @ mapping) *)
+    (*     in *)
+    (*     return (o @ o', mappings, counter+1) *)
+    (*   ) *)
+    (*   (o, mappings, 0) fspec.function_arguments *)
   in
 
   let@ (o, mappings) =
@@ -1272,21 +1271,22 @@ let make_fun_spec loc (layouts : Memory.struct_decls) rpredicates lpredicates
   in
   let rt = RT.mComputational oA lrt in
   
-  let ft =
+  let lft =
     List.fold_right (fun (iarg, info) lft ->
         match iarg with
-        | `Computational (s, bt) -> AT.Computational ((s,bt), info, lft)
-        | `Define (s, it) -> AT.Define ((s, it), info, lft)
-        | `Resource (s, re, oargs) -> AT.Resource ((s, (re, oargs)), info, lft)
-        | `Constraint lc -> AT.Constraint (lc, info, lft)
-      ) i (AT.I rt)
+        | `Define (s, it) -> LAT.Define ((s, it), info, lft)
+        | `Resource (s, re, oargs) -> LAT.Resource ((s, (re, oargs)), info, lft)
+        | `Constraint lc -> LAT.Constraint (lc, info, lft)
+      ) i (LAT.I rt)
   in
+  let ft = AT.mComputationals iA (AT.L lft) in
 
   return (ft, fspec.trusted, StringMap.find "start" mappings)
 
 
   
 let make_label_spec
+      (fsym: Sym.t)
       (loc : Loc.t)
       layouts
       rpredicates
@@ -1323,28 +1323,28 @@ let make_label_spec
       (i, mappings) lspec.global_arguments
   in
 
-  (* fargs *)
-  let@ (i, mappings, _) = 
-    ListM.fold_leftM (fun (i, mappings, counter) aarg ->
-        let item = aarg_item loc aarg in
-        let (i', mapping') = make_owned_funarg loc counter item.it item.path aarg.typ in
-        let mappings = 
-          mod_mapping lname mappings
-            (fun mapping -> mapping' @ mapping)
-        in
-        return (i @ i', mappings, counter + 1)
-      )
-      (i, mappings, 0) lspec.function_arguments
-  in
+  (* (\* fargs *\) *)
+  (* let@ (i, mappings, _) =  *)
+  (*   ListM.fold_leftM (fun (i, mappings, counter) aarg -> *)
+  (*       let item = aarg_item loc aarg in *)
+  (*       let (i', mapping') = make_owned_funarg loc counter item.it item.path aarg.typ in *)
+  (*       let mappings =  *)
+  (*         mod_mapping lname mappings *)
+  (*           (fun mapping -> mapping' @ mapping) *)
+  (*       in *)
+  (*       return (i @ i', mappings, counter + 1) *)
+  (*     ) *)
+  (*     (i, mappings, 0) lspec.function_arguments *)
+  (* in *)
 
   (* largs *)
-  let@ (i, mappings) = 
+  let@ (iA, i, mappings) = 
     (* In the label's argument list, the left-most arguments have the
        inner-most scope. In the mapping, we also want the arguments
        that are inner-most scoped-wise to be left-most. *)
-    let@ (i, mapping') = 
-      ListM.fold_leftM (fun (i, mapping) (aarg : aarg) ->
-          let a = (`Computational (aarg.asym, BT.Loc), (loc, None)) in
+    let@ (iA, i, mapping') = 
+      ListM.fold_leftM (fun (iA, i, mapping) (aarg : aarg) ->
+          let a = (aarg.asym, BT.Loc, (loc, None)) in
           let item = aarg_item loc aarg in
           let@ (i', mapping') = 
             make_owned ~loc ~oname:None ~pointer:item.it 
@@ -1354,15 +1354,15 @@ let make_label_spec
             (`Constraint (LC.t_ (good_ (pointer_ct aarg.typ, item.it))),
              (loc, None))
           in
-          return (i @ a :: c :: i', (item :: mapping') @ mapping)
+          return (iA @ [a], i @ c :: i', (item :: mapping') @ mapping)
         )
-        (i, []) lspec.label_arguments
+        ([], i, []) lspec.label_arguments
     in
     let mappings =
       mod_mapping lname mappings
         (fun mapping -> List.rev mapping' @ mapping)
     in
-    return (i, mappings)
+    return (iA, i, mappings)
   in
 
 
@@ -1400,15 +1400,16 @@ let make_label_spec
   let inv_naming = SuggestEqs.make_naming lname (get_mappings_info mappings lname) in
   let i = i @ [(`Constraint (LC.t_ inv_naming), (loc, None))] in
 
-  let lt =
+  let llt =
     List.fold_right (fun (iarg, info) lt ->
         match iarg with
-        | `Computational (s, bt) -> AT.Computational ((s,bt), info, lt)
-        | `Define (s, it) -> AT.Define ((s, it), info, lt)
-        | `Resource (s, re, oargs) -> AT.Resource ((s, (re, oargs)), info, lt)
-        | `Constraint lc -> AT.Constraint (lc, info, lt)
-      ) i (AT.I False.False)
+        | `Define (s, it) -> LAT.Define ((s, it), info, lt)
+        | `Resource (s, re, oargs) -> LAT.Resource ((s, (re, oargs)), info, lt)
+        | `Constraint lc -> LAT.Constraint (lc, info, lt)
+      ) i (LAT.I False.False)
   in
+  let lt = AT.mComputationals iA (AT.L llt) in
+
   return (lt, StringMap.find lname mappings)
 
 

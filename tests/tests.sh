@@ -69,6 +69,7 @@ citests=(
   0066-const2.error.c
   0067-band1.c
   0068-bor1.c
+  0069-const_expr.c
   0070-do-while1.c
   0071-do-while2.c
   0072-example03.c
@@ -84,6 +85,7 @@ citests=(
   0082-OK1.c
   0083-OK2.c
   0084-KO1.error.c
+  0085-KO2.c
   0086-literal_access.undef.c
   0087-array_with_delayed_size.c
 # 0101-sym_cfunction.c
@@ -142,14 +144,25 @@ citests=(
   0297-atomic_memberof.undef.c
   0298-atomic_memberofptr.undef.c
   0299-qualified_ptrdiff.c
+  0300-duplicate_member.error.c
+  0300-unseq_race_ko01.undef.c
   0301-declaration_struct_pointer.error.c
+  0301-unseq_race_ko02.undef.c
+  0302-unseq_race_ko03.undef.c
+  0303-unseq_race_ko04.undef.c
+  0304-unseq_race_ko05.undef.c
+  0305-unseq_race_ko06.undef.c
+  0306-unseq_race_ko07.undef.c
+  0307-incr_atomic.exhaust.c
+  0308-struct_global_with_dep.c
+  0309-comma_void_operand.c
 )
 
 # TESTS THAT ARE KNOW TO FAIL (for example .error test for which we need to improve the message)
 skip=(
   0113-cast_assign_parsing.error.c            # REAL BUG (!) -- C parser
-  0082-OK1.c                                  # REAL BUG (!) -- Ail typing ==> missing default argument promotions
-  0072-example03.c                            # REAL BUG (!) -- Ail typing ==> missing default argument promotions
+  # 0082-OK1.c                                  # REAL BUG (!) -- Ail typing ==> missing default argument promotions
+  # 0072-example03.c                            # REAL BUG (!) -- Ail typing ==> missing default argument promotions
   0074-fun_returns.c                          # IMPROVE: pprint the UB
   0129-function-pointer-wrong-args.c          # IMPROVE: pprint the UB
   0205-illegal-storage-class.error.c          # IMPROVE: the location and message should be more specific

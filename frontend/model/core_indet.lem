@@ -1,6 +1,7 @@
 open import Pervasives Utils
 import Core Core_aux (* Memory *) Exception Errors Pp (* Memory_order *)
 
+(*
 (* TODO: lem non termination bug *)
 (*
 
@@ -83,7 +84,7 @@ type expr =
   | Esseq of list (maybe Core.sym) * expr * expr
   | Easeq of maybe Core.sym * action * paction
   | Eindet of expr
-  | Ebound of nat * expr
+  | Ebound of expr
   | Esave of Core.ksym * list (Core.sym * Core_ctype.ctype) * expr
   | Erun of Core.ksym * list (Core.sym * expr)
   | Eshift of expr * expr
@@ -147,7 +148,7 @@ let rec import_expr e =
   | Core.Esseq _as e1 e2  -> Esseq _as (import_expr e1) (import_expr e2)
   | Core.Easeq a act pact -> Easeq a (import_action act) (import_paction pact)
   | Core.Eindet e         -> Eindet (import_expr e)
-  | Core.Ebound i e       -> Ebound i (import_expr e)
+  | Core.Ebound e       -> Ebound (import_expr e)
   | Core.Esave k a_tys e  -> Esave k a_tys (import_expr e)
   | Core.Erun _ k a_vs    -> Erun k (map (fun (a, v) -> (a, import_expr v)) a_vs)
   | Core.Eshift e1 e2     -> Eshift (import_expr e1) (import_expr e2)
@@ -207,7 +208,7 @@ let rec export_expr e =
   | Esseq _as e1 e2     -> Core.Esseq _as (export_expr e1) (export_expr e2)
   | Easeq a act pact    -> Core.Easeq a (export_action act) (export_paction pact)
   | Eindet e            -> Core.Eindet (export_expr e)
-  | Ebound i e          -> Core.Ebound i (export_expr e)
+  | Ebound e          -> Core.Ebound (export_expr e)
   | Esave k a_tys e     -> Core.Esave k a_tys (export_expr e)
   | Erun k a_vs         -> Core.Erun {} k (map (fun (a,v) -> (a, export_expr v)) a_vs)
   | Eshift e1 e2        -> Core.Eshift (export_expr e1) (export_expr e2)
@@ -288,7 +289,7 @@ let rec one e =
 
 
 (* [one] is only called a particular Ebound and on that run ignore the inner Ebounds *)
-  | Ebound i e -> one e >>= fun (d, e') -> L.return (d, Ebound i e')
+  | Ebound e -> one e >>= fun (d, e') -> L.return (d, Ebound e')
 
 (*
   (* [one] is called of core expression corresponding to C expression so
@@ -428,8 +429,8 @@ let rec indet_hack (Core.Expr annot expr_ as expr) =
                                                                                            | _ -> Boot.assert_false "[Core_indet.indet_hack Easeq] impossible case" end))*)
     | Core.Eindet _ e ->
         indet_hack e
-    | Core.Ebound i e ->
-        Core.Expr annot (Core.Ebound i (indet_hack e))
+    | Core.Ebound e ->
+        Core.Expr annot (Core.Ebound (indet_hack e))
     | Core.Esave sym sym_bTys e ->
         Core.Expr annot (Core.Esave sym sym_bTys (indet_hack e))
     | Core.Erun bs sym pes ->
@@ -448,6 +449,9 @@ let rec indet_hack (Core.Expr annot expr_ as expr) =
         Core.Expr annot (Core.Ehave id pes)
     | Core.Eshow id pes ->
         Core.Expr annot (Core.Eshow id pes)
+    | Core.Eannot xs e ->
+        Core.Expr annot (Core.Eannot xs (indet_hack e))
+
 (*
     | Core.Eloc loc e ->
         Core.Expr annot (Core.Eloc loc (indet_hack e))
@@ -493,3 +497,8 @@ let hackish_order file =
     | z ->
         z
   end) file.Core.funs |>
+*)
+
+val hackish_order: Core.file unit -> Core.file unit
+let hackish_order file =
+  file

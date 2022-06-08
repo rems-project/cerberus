@@ -1,0 +1,1 @@
+Undefined behaviour: an unsequenced race occurred during the evaluation of an expression at ci/0300-unseq_race_ko01.undef.c:5:3-27 (cursor: ci/0300-unseq_race_ko01.undef.c:5:22)

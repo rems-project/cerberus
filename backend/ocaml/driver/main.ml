@@ -125,7 +125,7 @@ let cerberus debug_level progress core_obj
     create_cpp_cmd cpp_cmd nostdinc macros macros_undef incl_dirs incl_files nolibc
   in
   (* set global configuration *)
-  set_cerb_conf false Random false QuoteStd false false false;
+  set_cerb_conf "Ocaml" false Random false QuoteStd false false false;
   let conf = { astprints; pprints; ppflags; debug_level; typecheck_core = false;
                rewrite_core; sequentialise_core = true; cpp_cmd; cpp_stderr = true } in
   let prelude =

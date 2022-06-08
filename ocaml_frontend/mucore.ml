@@ -151,6 +151,7 @@ module Make(T : TYPES) = struct
    | M_PEassert_undef of 'TY asym * Location_ocaml.t * Undefined.undefined_behaviour
    | M_PEbool_to_integer of 'TY asym
    | M_PEconv_int of 'TY act * 'TY asym
+   | M_PEconv_loaded_int of 'TY act * 'TY asym
    | M_PEwrapI of 'TY act * 'TY asym
 
 
@@ -241,6 +242,7 @@ type have_show =
    | M_Eproc of mu_name * ('TY asym) list (* Core procedure call *)
    | M_Erpredicate of pack_unpack * Annot.to_pack_unpack * ('TY asym) list
    | M_Elpredicate of have_show * Symbol.identifier * ('TY asym) list
+   | M_Einstantiate of Symbol.identifier option * 'TY asym
 
   and 'TY mu_expr = 
    | M_Expr of loc * annot list * ('TY mu_expr_)
@@ -254,7 +256,7 @@ type have_show =
    | M_Esseq of ('TY mu_sym_or_pattern) * ('TY mu_expr) * ('TY mu_texpr) (* strong sequencing *)
    | M_Ecase of 'TY asym * (mu_pattern * ('TY mu_texpr)) list (* pattern matching *)
    | M_Eif of 'TY asym * ('TY mu_texpr) * ('TY mu_texpr)
-   | M_Ebound of int * ('TY mu_texpr) (* $\ldots$and boundary *)
+   | M_Ebound of ('TY mu_texpr) (* $\ldots$and boundary *)
    | M_End of ('TY mu_texpr) list (* nondeterministic choice *)
    | M_Edone of 'TY asym
    | M_Eundef of Location_ocaml.t * Undefined.undefined_behaviour (* undefined behaviour *)

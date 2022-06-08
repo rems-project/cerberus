@@ -321,11 +321,10 @@ let app_symbol_it q = function
   | _ -> SymSet.empty
 
 let clause_has_resource req c =
-  let open ArgumentTypes in
+  let open LogicalArgumentTypes in
   let rec f = function
     | Resource ((_, (r, _)), _, c) -> RET.same_predicate_name req r || f c
     | Constraint (_, _, c) -> f c
-    | Computational (_, _, c) -> f c
     | Define (_, _, c) -> f c
     | I _ -> false
   in
@@ -559,7 +558,7 @@ let state ctxt {substitution; vclasses; relevant} (model_with_q : Solver.model_w
     let open ResourcePredicates in
     {
       cond = IT.pp c.guard;
-      clause = ArgumentTypes.pp OutputDef.pp c.packing_ft
+      clause = LogicalArgumentTypes.pp OutputDef.pp c.packing_ft
     }
   in
   let predicate_hints = List.map doc_clause predicate_clauses in

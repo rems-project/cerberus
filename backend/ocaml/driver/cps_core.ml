@@ -187,8 +187,6 @@ let cps_transform_expr globs bvs core_expr =
       tr_right bbs pat1 es pat2 ce e
     | Ewseq _  -> raise (Unexpected "Weak sequencing expression not allowed.")
     | Eunseq _ -> raise (Unsupported "Unsequencing operations not supported.")
-    | Easeq  _ -> raise (Unexpected "Atomic sequencing must be eliminated.")
-    | Eindet _ -> raise (Unsupported "elim indet")
     | Elet   _ -> raise (Unsupported "Let expressions must be eliminated.")
     | Epar   _ -> raise (Unsupported "Concurrent operation `par` not supported.")
     | Ewait  _ -> raise (Unsupported "Concurrent operation `wait` not supported.")

@@ -310,23 +310,23 @@ let pp_location =
     then
       let start_p_str = string_of_pos start_p in
       P.angles (
-        !^ (ansi_format [Yellow] (start_p_str ^ " - " ^ string_of_int (end_p.pos_cnum - end_p.pos_bol)))
-      ) ^^ !^ (ansi_format [Yellow] (mk_cursor_str ()))
+        !^ (ansi_format ~err:true [Yellow] (start_p_str ^ " - " ^ string_of_int (end_p.pos_cnum - end_p.pos_bol)))
+      ) ^^ !^ (ansi_format ~err:true [Yellow] (mk_cursor_str ()))
     else
       let start_p_str = string_of_pos start_p in
       let end_p_str   = string_of_pos end_p in
       P.angles (
-        !^ (ansi_format [Yellow] start_p_str) ^^ P.comma ^^^
-        !^ (ansi_format [Yellow] end_p_str)
-      ) ^^ !^ (ansi_format [Yellow] (mk_cursor_str ())) in
+        !^ (ansi_format ~err:true [Yellow] start_p_str) ^^ P.comma ^^^
+        !^ (ansi_format ~err:true [Yellow] end_p_str)
+      ) ^^ !^ (ansi_format ~err:true [Yellow] (mk_cursor_str ())) in
   match loc with
     | Loc_unknown ->
-        P.angles !^ (ansi_format [Yellow] "unknown location")
+        P.angles !^ (ansi_format ~err:true [Yellow] "unknown location")
     | Loc_other str ->
-        P.angles !^ (ansi_format [Yellow] ("other location (" ^ str ^ ")"))
+        P.angles !^ (ansi_format ~err:true [Yellow] ("other location (" ^ str ^ ")"))
     | Loc_point pos ->
         let pos_str = string_of_pos pos in
-        P.angles !^ (ansi_format [Yellow] pos_str)
+        P.angles !^ (ansi_format ~err:true [Yellow] pos_str)
     | Loc_region (start_p, end_p, cur) ->
         aux_region start_p end_p cur
     | Loc_regions (xs, cur) ->
@@ -335,7 +335,7 @@ let pp_location =
 
 
 let string_of_pos pos =
-  ansi_format [Bold] (
+  ansi_format ~err:true [Bold] (
     Printf.sprintf "%s:%d:%d:" pos.pos_fname pos.pos_lnum (1 + pos.pos_cnum - pos.pos_bol)
   )
 
@@ -407,7 +407,7 @@ let head_pos_of_location = function
                 | Some cpos' -> cpos'
                 | None       -> cpos in
               l ^ "\n" ^
-              ansi_format [Bold; Green] (String.init (cpos + 1) (fun n -> if n < cpos then ' ' else '^'))
+              ansi_format ~err:true [Bold; Green] (String.init (cpos + 1) (fun n -> if n < cpos then ' ' else '^'))
           | None ->
               "" )
   | Loc_region (start_p, end_p, cursor) ->
@@ -427,7 +427,7 @@ let head_pos_of_location = function
                 | NoCursor ->
                     cpos1 in
               l ^ "\n" ^
-              ansi_format [Bold; Green] (
+              ansi_format ~err:true [Bold; Green] (
                 String.init ((max cursor_n cpos2) + 1)
                   (fun n -> if n = cursor_n then '^' else if n >= cpos1 && n < cpos2 then '~' else if n < String.length l && l.[n] = '\t' then '\t' else ' ')
               )
@@ -444,7 +444,7 @@ let head_pos_of_location = function
         match string_at_line pos.pos_fname pos.pos_lnum cursor_p with
         | Some (_, l) ->
           let ps = List.map (fun (s, e) -> (s.pos_cnum - s.pos_bol, e.pos_cnum - e.pos_bol)) xs in
-          l ^ "\n" ^ ansi_format [Bold; Green]
+          l ^ "\n" ^ ansi_format ~err:true [Bold; Green]
             (String.init (String.length l)
                (fun n -> if n = cursor_p then '^'
                          else if List.exists (fun (p1, p2) -> n >= p1 && n < p2) ps then '~'

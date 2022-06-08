@@ -104,7 +104,7 @@ let cerberus debug_level progress core_obj
              incl_dirs incl_files cpp_only
              link_lib_path link_core_obj
              impl_name
-             exec exec_mode switches batch experimental_unseq concurrency
+             exec exec_mode switches batch concurrency
              astprints pprints ppflags
              sequentialise_core rewrite_core typecheck_core defacto
              absint cfg absdomain
@@ -127,7 +127,7 @@ let cerberus debug_level progress core_obj
   (* TODO: add bmc flags *)
   Bmc_globals.set bmc_max_depth bmc_seq bmc_conc bmc_fn bmc_debug
       bmc_all_execs bmc_output_model bmc_cat bmc_mode;
-  set_cerb_conf exec exec_mode concurrency QuoteStd defacto false false bmc;
+  set_cerb_conf "Bmc" exec exec_mode concurrency QuoteStd defacto false false bmc;
   let conf = { astprints; pprints; ppflags; debug_level; typecheck_core;
                rewrite_core; sequentialise_core; cpp_cmd; cpp_stderr = true } in
   let prelude =
@@ -237,7 +237,7 @@ let cerberus debug_level progress core_obj
         if exec then
           let open Exhaustive_driver in
           let () = Tags.set_tagDefs core_file.tagDefs in
-          let driver_conf = {concurrency; experimental_unseq; exec_mode; fs_dump; trace} in
+          let driver_conf = {concurrency; exec_mode; fs_dump; trace} in
           interp_backend io core_file ~args ~batch ~fs ~driver_conf
         else
           match output_name with
@@ -426,10 +426,6 @@ let batch =
                                   (`CharonBatch, info["charon-batch"]
                                      ~doc:(doc^" (for Charon)"))])
 
-let experimental_unseq =
-  let doc = "use a new (experimental) semantics for unseq() in Core_run" in
-  Arg.(value & flag & info["experimental-unseq"] ~doc)
-
 let typecheck_core =
   let doc = "typecheck the elaborated Core program" in
   Arg.(value & flag & info["typecheck-core"] ~doc)
@@ -532,7 +528,7 @@ let () =
                          link_lib_path $ link_core_obj $
                          impl $
                          exec $ exec_mode $ switches $ batch $
-                         experimental_unseq $ concurrency $
+                         concurrency $
                          astprints $ pprints $ ppflags $
                          sequentialise $ rewrite $ typecheck_core $ defacto $
                          absint $ cfg $ absdomain $

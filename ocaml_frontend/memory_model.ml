@@ -30,7 +30,7 @@ module type Memory = sig
   val cs_module : (module Constraints with type t = mem_iv_constraint)
   
   type footprint
-  val check_overlap: footprint -> footprint -> Mem_common.overlap_status
+  val do_overlap: footprint -> footprint -> bool
   
   type mem_state
   val initial_mem_state: mem_state
@@ -46,6 +46,7 @@ module type Memory = sig
     -> Symbol.prefix  (* symbols coming from the Core/C program, for debugging purpose *)
     -> integer_value  (* alignment constraint *)
     -> Ctype.ctype    (* type of the allocation *)
+    -> Z.t option     (* potential requested address (see Cerb_attributes: cerb::with_address()) *)
     -> mem_value option   (* optional initialisation value (if provided the allocation is made read-only) *)
     -> pointer_value memM
   
@@ -138,12 +139,10 @@ module type Memory = sig
   val is_specified_ival: integer_value -> bool
   
   (* Predicats on integer values *)
-  val eq_ival: mem_state option -> integer_value -> integer_value -> bool option
-  val lt_ival: mem_state option -> integer_value -> integer_value -> bool option
-  val le_ival: mem_state option -> integer_value -> integer_value -> bool option
-  
-  val eval_integer_value: integer_value -> Nat_big_num.num option
-  
+  val eq_ival: integer_value -> integer_value -> bool option
+  val lt_ival: integer_value -> integer_value -> bool option
+  val le_ival: integer_value -> integer_value -> bool option
+
   (* Floating value constructors *)
   val zero_fval: floating_value
   val one_fval: floating_value

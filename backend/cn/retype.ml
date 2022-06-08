@@ -9,6 +9,7 @@ module Loc=Locations
 module RT=ReturnTypes
 module LRT=LogicalReturnTypes
 module AT = ArgumentTypes
+module LAT = LogicalArgumentTypes
 module CA=CF.Core_anormalise
 module LC=LogicalConstraints
 module StringSet = Set.Make(String)
@@ -226,6 +227,9 @@ let retype_pexpr (Old.M_Pexpr (loc, annots,bty,pexpr_)) =
     | M_PEconv_int (act, asym) ->
        let act = map_act (ct_of_ct loc) act in
        return (New.M_PEconv_int (act, asym))
+    | M_PEconv_loaded_int (act, asym) ->
+       let act = map_act (ct_of_ct loc) act in
+       return (New.M_PEconv_loaded_int (act, asym))
     | M_PEwrapI (act, asym) ->
        let act = map_act (ct_of_ct loc) act in
        return (New.M_PEwrapI (act, asym))
@@ -389,6 +393,8 @@ let retype_expr (Old.M_Expr (loc, annots, expr_)) =
          | Show -> New.Show
        in
        return (New.M_Elpredicate (have_show, name, asyms))
+    | M_Einstantiate (id, asym) ->
+       return (New.M_Einstantiate (id, asym))
   in
 
   return (New.M_Expr (loc, annots,expr_))
@@ -423,9 +429,9 @@ let rec retype_texpr (Old.M_TExpr (loc, annots, expr_)) =
        let@ expr1 = retype_expr expr1 in
        let@ expr2 = retype_texpr expr2 in
        return (New.M_Esseq (pat,expr1,expr2))
-    | M_Ebound (n,expr) ->
+    | M_Ebound expr ->
        let@ expr = retype_texpr expr in
-       return (New.M_Ebound (n,expr))
+       return (New.M_Ebound expr)
     | M_End es ->
        let@ es = mapM retype_texpr es in
        return (New.M_End es)
@@ -448,7 +454,6 @@ let retype_arg (loc : Loc.t) (sym,acbt) =
 
 
 type retype_opts = {
-  calling_mode : [ `CallByReference | `CallByValue ];
   drop_labels : bool
 }
 
@@ -530,7 +535,7 @@ let retype_file pred_defs opts (file : 'TY Old.mu_file)
                ) argbts 
            in
            let ft = (AT.mComputationals args) 
-                      (AT.I (RT.Computational ((Sym.fresh (), rbt), (Loc.unknown, None), LRT.I)))
+                      (AT.L (LAT.I (RT.Computational ((Sym.fresh (), rbt), (Loc.unknown, None), LRT.I))))
            in
            return ft
          in
@@ -556,16 +561,11 @@ let retype_file pred_defs opts (file : 'TY Old.mu_file)
         unsupported loc err
       else
         let ret_ctype = ct_of_ct loc ret_ctype in
-        let@ args = 
-          ListM.mapM (fun (msym, ct) ->
-              let ct = ct_of_ct loc ct in
-              return (msym, ct)
-            ) args
-        in
+        let args = List.map_snd (ct_of_ct loc) args in
         let@ fspec = Parse.parse_function glob_typs trusted args ret_ctype attrs in
         let@ (ftyp, trusted, mappings) = 
           Conversions.make_fun_spec loc struct_decls resource_predicates 
-            logical_predicates opts.calling_mode fsym fspec
+            logical_predicates fsym fspec
         in
         let funinfo_entry = New.M_funinfo (floc,attrs,ftyp, trusted, has_proto) in
         let funinfo = Pmap.add fsym funinfo_entry funinfo in
@@ -578,17 +578,13 @@ let retype_file pred_defs opts (file : 'TY Old.mu_file)
 
 
   let retype_label ~fsym (lsym : Sym.t) def = 
-    let ftyp = match Pmap.lookup fsym funinfo with
-      | Some (New.M_funinfo (_,_,ftyp, _trusted, _)) -> ftyp 
-      | None -> error (Sym.pp_string fsym^" not found in funinfo")
-    in
-    let (fspec, start_mapping) = match Pmap.lookup fsym funinfo_extra with
-      | Some extra -> extra
-      | None -> error (Sym.pp_string fsym^" not found in funinfo")
-    in
     match def with
     | Old.M_Return (loc, _) ->
-       let lt = AT.of_rt (AT.get_return ftyp) (AT.I False.False) in
+       let return_type = match Pmap.lookup fsym funinfo with
+         | Some (New.M_funinfo (_,_,ftyp, _trusted, _)) -> (AT.get_return ftyp)
+         | None -> error (Sym.pp_string fsym^" not found in funinfo")
+       in
+       let lt = AT.of_rt return_type (LAT.I False.False) in
        return (New.M_Return (loc, lt))
     | Old.M_Label (loc, argtyps, args, e, annots) -> 
        let@ args = mapM (retype_arg loc) args in
@@ -611,9 +607,13 @@ let retype_file pred_defs opts (file : 'TY Old.mu_file)
             | Sym.SD_Id lname -> lname
             | _ -> failwith "label without name"
           in
-          let@ lspec = Parse.parse_label lname argtyps fspec this_attrs in
+          let (global_arguments, start_mapping) = match Pmap.lookup fsym funinfo_extra with
+            | Some (fspec, start_mapping) -> (fspec.global_arguments, start_mapping)
+            | None -> error (Sym.pp_string fsym^" not found in funinfo")
+          in
+          let@ lspec = Parse.parse_label lname argtyps global_arguments this_attrs in
           let@ (lt,mapping) = 
-            Conversions.make_label_spec loc struct_decls resource_predicates 
+            Conversions.make_label_spec fsym loc struct_decls resource_predicates 
               logical_predicates lname start_mapping lspec
           in
           let@ e = retype_texpr e in

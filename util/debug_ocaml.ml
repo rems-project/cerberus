@@ -20,7 +20,7 @@ type debug_state = {
 *)
 
 let error str =
-  prerr_string (Colour.ansi_format [Red] "internal error: ");
+  prerr_string (Colour.ansi_format ~err:true [Red] "internal error: ");
   prerr_endline str;
   failwith @@ "internal error: " ^ str
 

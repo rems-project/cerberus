@@ -7,6 +7,7 @@ module LS = LogicalSorts
 module LRT = LogicalReturnTypes
 module RT = ReturnTypes
 module AT = ArgumentTypes
+module LAT = LogicalArgumentTypes
 module TE = TypeErrors
 module SymSet = Set.Make(Sym)
 module SymMap = Map.Make(Sym)
@@ -237,7 +238,7 @@ module ResourceInference = struct
 
     let exact_match () =
       let@ pmatch = exact_ptr_match () in
-      let match_f (request, (resource, _)) =
+      let match_f (request, resource) =
         match (request, resource) with
         | (P req_p, 
            P res_p) ->
@@ -251,7 +252,7 @@ module ResourceInference = struct
 
     let exact_match_point_ptrs ptrs =
       let@ pmatch = exact_ptr_match () in
-      let match_f (resource, _) = 
+      let match_f resource = 
         match resource with
         | P ({name = Owned _; _} as res_p) -> 
            List.exists (fun p -> pmatch (p, res_p.pointer)) ptrs
@@ -311,13 +312,13 @@ module ResourceInference = struct
          let start_timing = time_log_start "point-request" "" in
          let@ provable = provable loc in
          let@ is_ex = exact_match () in
-         let is_exact_re re = !reorder_points && (is_ex (RET.P requested, re)) in
+         let is_exact_re (re : RET.t) = !reorder_points && (is_ex (RET.P requested, re)) in
          let@ global = get_global () in
          let@ simp_lcs = simp_constraints () in
          let needed = requested.permission in 
          let sub_resource_if = fun cond re (needed, oargs) ->
                let continue = (Unchanged, (needed, oargs)) in
-               if is_false needed || not (cond re) then continue else
+               if is_false needed || not (cond (fst re)) then continue else
                match re with
                | (P p', p'_oargs) when equal_predicate_name (Owned requested_ct) p'.name ->
                   debug 15 (lazy (item "point/point sub at ptr" (IT.pp p'.pointer)));
@@ -502,7 +503,7 @@ module ResourceInference = struct
          let needed = requested.permission in
          let sub_resource_if = fun cond re (needed, oargs) ->
                let continue = (Unchanged, (needed, oargs)) in
-               if is_false needed || not (cond re) then continue else
+               if is_false needed || not (cond (fst re)) then continue else
                match re with
                | (P p', p'_oargs) when equal_predicate_name (Owned requested_ct) p'.name ->
                   let base = requested.pointer in
@@ -562,7 +563,7 @@ module ResourceInference = struct
          else debug 10 (lazy (item "key ptrs for additional matches:"
              (Pp.list IT.pp (List.map snd k_ptrs))));
          let@ k_ptr_match = exact_match_point_ptrs (List.map snd k_ptrs) in
-         let is_exact_k re = !reorder_points && k_ptr_match re in
+         let is_exact_k (re : RET.t) = !reorder_points && k_ptr_match re in
          let necessary_k_ptrs = List.filter (fun (i, p) ->
              let i_match = eq_ (sym_ (requested.q, Integer), i) in
              match provable (forall_ (requested.q, BT.Integer) (impl_ (i_match, needed)))
@@ -1098,7 +1099,7 @@ let add_eqs_for_infer loc ftyp =
   begin
   let start_eqs = time_log_start "eqs" "" in
   debug 5 (lazy (format [] "pre-inference equality discovery"));
-  let reqs = NormalisedArgumentTypes.r_resource_requests ftyp in
+  let reqs = LAT.r_resource_requests ftyp in
   let@ ress = map_and_fold_resources loc (fun re xs -> (Unchanged, re :: xs)) [] in
   let res_ptr_k k r = Option.map (fun (ct, p) -> (ct, (p, k))) (res_pointer_kind r) in
   let ptrs = List.filter_map (fun (_, r) -> res_ptr_k true r) reqs @
@@ -1217,13 +1218,13 @@ module Spine : sig
   val calltype_ft : 
     Loc.t -> args -> AT.ft -> (RT.t * per_path, type_error) m
   val calltype_lft : 
-    Loc.t -> AT.lft -> (LRT.t * per_path, type_error) m
+    Loc.t -> LAT.lft -> (LRT.t * per_path, type_error) m
   val calltype_lt : 
     Loc.t -> args -> AT.lt * label_kind -> (per_path, type_error) m
   val calltype_packing : 
-    Loc.t -> Sym.t -> AT.packing_ft -> (OutputDef.t * per_path, type_error) m
+    Loc.t -> Sym.t -> LAT.packing_ft -> (OutputDef.t * per_path, type_error) m
   val calltype_lpred_argument_inference : 
-    Loc.t -> Sym.t -> args -> AT.packing_ft -> (IT.t list * per_path, type_error) m
+    Loc.t -> Sym.t -> args -> AT.arginfer_ft -> (IT.t list * per_path, type_error) m
   val subtype : 
     Loc.t -> arg -> RT.t -> (per_path, type_error) m
 end = struct
@@ -1242,119 +1243,72 @@ end = struct
     else fail (fun _ -> {loc; msg = Mismatch_lvar { has = IT.bt instantiation; expect; spec_info = info}})
 
 
-  let prefer_req i ftyp =
-    let open NormalisedArgumentTypes in
-    let rec grab i ftyp = match ftyp with
-      | Resource (resource, info, ftyp) -> if i = 0
-          then (resource, info)
-          else grab (i - 1) ftyp
-      | _ -> assert false
-    in
-    let rec del i ftyp = match ftyp with
-      | Resource (resource, info, ftyp) -> if i = 0
-          then ftyp
-          else Resource (resource, info, del (i - 1) ftyp)
-      | _ -> assert false
-    in
-    let (resource, info) = grab i ftyp in
-    let ftyp = del i ftyp in
-    Resource (resource, info, ftyp)
-
-  let has_exact loc r =
+  let has_exact loc (r : RET.t) =
     let@ is_ex = RI.General.exact_match () in
     map_and_fold_resources loc (fun re found -> (Unchanged, found || is_ex (RE.request re, r))) false
 
-  (* let prefer_exact loc ftyp = *)
-  (*   if ! RI.reorder_points then return ftyp *)
-  (*   else *)
-  (*   let reqs1 = NormalisedArgumentTypes.r_resource_requests ftyp in *)
-  (*   let unis = SymSet.of_list (List.map fst reqs1) in *)
-  (*   (\* capture avoiding *\) *)
-  (*   assert (SymSet.cardinal unis = List.length reqs1); *)
-  (*   let reqs = List.mapi (fun i res -> (i, res)) reqs1 in *)
-  (*   let res_free_vars ((_, r), _) = match r with *)
-  (*     | P ({name = Owned _; _} as p) -> IT.free_vars p.pointer *)
-  (*     | Q ({name = Owned _; _} as p) -> IT.free_vars p.pointer *)
-  (*     | _ -> SymSet.empty *)
-  (*   in *)
-  (*   let no_unis r = SymSet.for_all (fun x -> not (SymSet.mem x unis)) (res_free_vars r) in *)
-  (*   let reqs = List.filter (fun (_, (_, r)) -> no_unis r) reqs in *)
-  (*   let@ reqs = ListM.filterM (fun (_, (_, r)) -> has_exact loc r) reqs in *)
-  (*   (\* just need an actual preference function *\) *)
-  (*   match List.rev reqs with *)
-  (*     | ((i, _) :: _) -> return (prefer_req i ftyp) *)
-  (*     | [] -> return ftyp *)
+  let prioritise_resource loc rt_subst pred ftyp = 
+    let open LAT in
+    let rec aux names ft_so_far ft = 
+      match ft with
+      | Define ((s, it), info, t) ->
+         let ft_so_far' ft = ft_so_far (Define ((s, it), info, ft)) in
+         aux (SymSet.add s names) ft_so_far' t
+      | Resource ((name, (re, bt)), info, t) ->
+         let continue () = 
+           let ft_so_far' ft = ft_so_far (Resource ((name, (re, bt)), info, ft)) in
+           aux (SymSet.add name names) ft_so_far' t 
+         in
+         if not (SymSet.is_empty (SymSet.inter (RET.free_vars re) names)) then 
+           continue ()
+         else
+           let@ pred_holds = pred loc re in
+           if pred_holds then 
+             let name, t = LAT.alpha_rename rt_subst (name, bt) t in
+             return (Resource ((name, (re, bt)), info, (ft_so_far t)))
+           else 
+             continue ()
+      | Constraint (lc, info, t) -> 
+         let ft_so_far' ft = ft_so_far (Constraint (lc, info, ft)) in
+         aux names ft_so_far' t
+      | I rt ->
+         return (ft_so_far (I rt))         
+    in
+    aux SymSet.empty (fun ft -> ft) ftyp
+
+  let prefer_exact loc rt_subst ftyp =
+    if !RI.reorder_points 
+    then prioritise_resource loc rt_subst has_exact ftyp
+    else return ftyp 
 
 
 
 
+  let spine_l rt_subst rt_pp loc situation ftyp = 
 
-  let spine :
-        'rt. 
-        (IT.t Subst.t -> 'rt -> 'rt) ->
-        ('rt -> Pp.doc) ->
-        Loc.t ->
-        situation ->
-        arg list ->
-        'rt AT.t ->
-        ('rt * per_path, type_error) m
-    =
-    fun rt_subst rt_pp
-        loc situation arguments ftyp ->
-
-    let start_spine = time_log_start "spine" "" in
+    let start_spine = time_log_start "spine_l" "" in
 
     (* record the resources now, so we can later re-construct the
        memory state "before" running spine *)
     let@ original_resources = all_resources () in
 
-    let open NormalisedArgumentTypes in
-
-    let ftyp = normalise rt_subst ftyp in
-
-    let@ () = print_with_ctxt (fun ctxt ->
-        debug 6 (lazy (checking_situation situation));
-        debug 6 (lazy (item "ctxt" (Context.pp ctxt)));
-        debug 6 (lazy (item "spec" (pp rt_pp ftyp)))
-      )
-    in
-
-    let@ ftyp_r = 
-      let rec check_computational args ftyp = 
-        match args, ftyp with
-        | (arg :: args), (Computational ((s, bt), _info, ftyp))
-             when BT.equal arg.bt bt ->
-           check_computational args 
-             (subst rt_subst (make_subst [(s, sym_ (arg.lname, bt))]) ftyp)
-        | (arg :: _), (Computational ((_, bt), _info, _))  ->
-           fail (fun _ -> {loc = arg.loc; msg = Mismatch {has = arg.bt; expect = bt}})
-        | [], (R ftyp) -> 
-           return ftyp
-        | _ -> 
-           let expect = count_computational ftyp in
-           let has = List.length arguments in
-           fail (fun _ -> {loc; msg = Number_arguments {expect; has}})
-      in
-      check_computational arguments ftyp 
-    in
-
     let@ () = 
       let@ trace_length = get_trace_length () in
       time_f_logs loc 9 "pre_inf_eqs" trace_length
-        (InferenceEqs.add_eqs_for_infer loc) ftyp_r 
+        (InferenceEqs.add_eqs_for_infer loc) ftyp
     in
 
-    let start = time_log_start "inference" "" in
-    let@ ftyp_c = 
-      let rec infer_resources ftyp = 
+    let@ rt, cs = 
+      let@ provable = provable loc in
+      let rec check cs ftyp = 
         let@ () = print_with_ctxt (fun ctxt ->
             debug 6 (lazy (item "ctxt" (Context.pp ctxt)));
-            debug 6 (lazy (item "spec" (pp_r rt_pp ftyp)));
+            debug 6 (lazy (item "spec" (LAT.pp rt_pp ftyp)));
           )
         in
-        (* let@ ftyp = prefer_exact loc ftyp in *)
+        let@ ftyp = prefer_exact loc rt_subst ftyp in
         match ftyp with
-        | Resource ((s, (resource, bt)), info, ftyp) -> 
+        | LAT.Resource ((s, (resource, bt)), info, ftyp) -> 
            let uiinfo = (situation, (Some resource, Some info)) in
            let@ o_re_oarg = RI.General.resource_request ~recursive:true loc uiinfo resource in
            let@ oargs = match o_re_oarg with
@@ -1372,33 +1326,18 @@ end = struct
                 assert (ResourceTypes.equal re resource);
                 return oargs
            in
-           infer_resources (subst_r rt_subst (IT.make_subst [(s, oargs)]) ftyp)
+           check cs (LAT.subst rt_subst (IT.make_subst [(s, oargs)]) ftyp)
         | Define ((s, it), info, ftyp) ->
            let s' = Sym.fresh () in
            let bt = IT.bt it in
            let@ () = add_l s' bt in
            let@ () = add_c (LC.t_ (def_ s' it)) in
-           infer_resources (subst_r rt_subst (IT.make_subst [(s, sym_ (s', bt))]) ftyp)
-        | C ftyp ->
-           return ftyp
-      in
-      infer_resources ftyp_r
-    in
-    debug 9 (lazy (!^"finished inferring resource"));
-    time_log_end start;
-
-    let start = time_log_start "constraints" "" in
-    let@ (rt, cs) =
-      let@ provable = provable loc in
-      let@ () = return (debug 9 (lazy !^"checking constraints")) in
-      let rec check_logical_constraints cs = function
+           check cs (LAT.subst rt_subst (IT.make_subst [(s, sym_ (s', bt))]) ftyp)
         | Constraint (c, info, ftyp) -> 
            let@ () = return (debug 9 (lazy (item "checking constraint" (LC.pp c)))) in
-           let start = time_log_start "constraint" (Locations.to_string (fst info)) in
            let res = provable c in
-           time_log_end start;
            begin match res with
-           | `True -> check_logical_constraints (c :: cs) ftyp
+           | `True -> check (c :: cs) ftyp
            | `False ->
               let@ model = model () in
               fail (fun ctxt ->
@@ -1409,9 +1348,8 @@ end = struct
         | I rt ->
            return (rt, cs)
       in
-      check_logical_constraints [] ftyp_c
+      check [] ftyp
     in
-    time_log_end start;
 
     let@ constraints = all_constraints () in
     let per_path = SuggestEqs.eqs_from_constraints (LCSet.elements constraints) cs
@@ -1421,11 +1359,47 @@ end = struct
     time_log_end start_spine;
     return (rt, per_path)
 
+
+  let spine rt_subst rt_pp loc situation args ftyp =
+
+    let open ArgumentTypes in
+
+    let original_ftyp = ftyp in
+    let original_args = args in
+
+    let@ () = print_with_ctxt (fun ctxt ->
+        debug 6 (lazy (checking_situation situation));
+        debug 6 (lazy (item "ctxt" (Context.pp ctxt)));
+        debug 6 (lazy (item "spec" (pp rt_pp ftyp)))
+      )
+    in
+
+    let@ ftyp = 
+      let rec check args ftyp = 
+        match args, ftyp with
+        | (arg :: args), (Computational ((s, bt), _info, ftyp)) ->
+           if BT.equal arg.bt bt then
+             check args (subst rt_subst (make_subst [(s, sym_ (arg.lname, bt))]) ftyp)
+           else
+             fail (fun _ -> {loc = arg.loc; msg = Mismatch {has = arg.bt; expect = bt}})
+        | [], (L ftyp) -> 
+           return ftyp
+        | _ -> 
+           let expect = count_computational original_ftyp in
+           let has = List.length original_args in
+           fail (fun _ -> {loc; msg = Number_arguments {expect; has}})
+      in
+      check args ftyp 
+    in
+    
+    spine_l rt_subst rt_pp loc situation ftyp
+
+
   let calltype_ft loc args (ftyp : AT.ft) : (RT.t * per_path, type_error) m =
     spine RT.subst RT.pp loc FunctionCall args ftyp
 
-  let calltype_lft loc (ftyp : AT.lft) : (LRT.t * per_path, type_error) m =
-    spine LRT.subst LRT.pp loc FunctionCall [] ftyp
+  let calltype_lft loc (ftyp : LAT.lft) : (LRT.t * per_path, type_error) m =
+    spine_l LRT.subst LRT.pp loc FunctionCall ftyp
 
   let calltype_lt loc args ((ltyp : AT.lt), label_kind) : (per_path, type_error) m =
     let@ (False.False, per_path) =
@@ -1434,13 +1408,13 @@ end = struct
     in
     return per_path
 
-  let calltype_packing loc (name : Sym.t) (ft : AT.packing_ft)
+  let calltype_packing loc (name : Sym.t) (ft : LAT.packing_ft)
         : (OutputDef.t * per_path, type_error) m =
-    spine OutputDef.subst OutputDef.pp 
-      loc (PackPredicate name) [] ft
+    spine_l OutputDef.subst OutputDef.pp 
+      loc (PackPredicate name) ft
 
   let calltype_lpred_argument_inference loc (name : Sym.t) 
-        supplied_args (ft : AT.packing_ft) : (IT.t list * per_path, type_error) m =
+        supplied_args (ft : AT.arginfer_ft) : (IT.t list * per_path, type_error) m =
     let@ (output_assignment, per_path) =
       spine OutputDef.subst OutputDef.pp 
         loc (ArgumentInference name) supplied_args ft
@@ -1452,7 +1426,7 @@ end = struct
      inference as the spine judgment. So implement the subtyping
      judgment 'arg <: RT' by type checking 'f(arg)' for 'f: RT -> False'. *)
   let subtype (loc : loc) arg (rtyp : RT.t) : (per_path, type_error) m =
-    let ft = AT.of_rt rtyp (AT.I False.False) in
+    let ft = AT.of_rt rtyp (LAT.I False.False) in
     let@ (False.False, per_path) =
       spine False.subst False.pp loc Subtyping [arg] ft in
     return per_path
@@ -1668,6 +1642,47 @@ let wrapI ity arg =
 
 
 
+let conv_int loc (act : _ act) asym = 
+  let@ () = WellTyped.WCT.is_ct act.loc act.ct in
+  let@ arg = arg_of_asym asym in
+  let@ () = WellTyped.ensure_base_type arg.loc ~expect:Integer arg.bt in
+  (* try to follow conv_int from runtime/libcore/std.core *)
+  let arg_it = it_of_arg arg in
+  let ity = match act.ct with
+    | Integer ity -> ity
+    | _ -> Debug_ocaml.error "conv_int applied to non-integer type"
+  in
+  let@ provable = provable loc in
+  let fail_unrepresentable () = 
+    let@ model = model () in
+    fail (fun ctxt ->
+        let msg = Int_unrepresentable 
+                    {value = arg_it; ict = act.ct; ctxt; model} in
+        {loc; msg}
+      )
+  in
+  begin match ity with
+  | Bool ->
+     let vt = (Integer, ite_ (eq_ (arg_it, int_ 0), int_ 0, int_ 1)) in
+     return (rt_of_vt loc vt, [])
+  | _
+       when Sctypes.is_unsigned_integer_type ity ->
+     let result = match provable (t_ (representable_ (act.ct, arg_it))) with
+       | `True -> arg_it
+       | `False ->
+          ite_ (representable_ (act.ct, arg_it),
+                arg_it,
+                wrapI ity arg_it)
+     in
+     return (rt_of_vt loc (Integer, result), [])
+  | _ ->
+     begin match provable (t_ (representable_ (act.ct, arg_it))) with
+     | `True -> return (rt_of_vt loc (Integer, arg_it), [])
+     | `False -> fail_unrepresentable ()
+     end
+  end
+
+
 (* could potentially return a vt instead of an RT.t *)
 let infer_pexpr (pe : 'bty mu_pexpr) : (RT.t * per_path, type_error) m =
   let (M_Pexpr (loc, _annots, _bty, pe_)) = pe in
@@ -1802,44 +1817,9 @@ let infer_pexpr (pe : 'bty mu_pexpr) : (RT.t * per_path, type_error) m =
        let vt = (Integer, (ite_ (it_of_arg arg, int_ 1, int_ 0))) in
        return (rt_of_vt loc vt, [])
     | M_PEconv_int (act, asym) ->
-       let@ () = WellTyped.WCT.is_ct act.loc act.ct in
-       let@ arg = arg_of_asym asym in
-       let@ () = WellTyped.ensure_base_type arg.loc ~expect:Integer arg.bt in
-       (* try to follow conv_int from runtime/libcore/std.core *)
-       let arg_it = it_of_arg arg in
-       let ity = match act.ct with
-         | Integer ity -> ity
-         | _ -> Debug_ocaml.error "conv_int applied to non-integer type"
-       in
-       let@ provable = provable loc in
-       let fail_unrepresentable () = 
-         let@ model = model () in
-         fail (fun ctxt ->
-             let msg = Int_unrepresentable 
-                         {value = arg_it; ict = act.ct; ctxt; model} in
-             {loc; msg}
-           )
-       in
-       begin match ity with
-       | Bool ->
-          let vt = (Integer, ite_ (eq_ (arg_it, int_ 0), int_ 0, int_ 1)) in
-          return (rt_of_vt loc vt, [])
-       | _
-            when Sctypes.is_unsigned_integer_type ity ->
-          let result = match provable (t_ (representable_ (act.ct, arg_it))) with
-            | `True -> arg_it
-            | `False ->
-               ite_ (representable_ (act.ct, arg_it),
-                     arg_it,
-                     wrapI ity arg_it)
-          in
-          return (rt_of_vt loc (Integer, result), [])
-       | _ ->
-          begin match provable (t_ (representable_ (act.ct, arg_it))) with
-          | `True -> return (rt_of_vt loc (Integer, arg_it), [])
-          | `False -> fail_unrepresentable ()
-          end
-       end
+       conv_int loc act asym
+    | M_PEconv_loaded_int (act, asym) ->
+       conv_int loc act asym
     | M_PEwrapI (act, asym) ->
        let@ arg = arg_of_asym asym in
        let@ () = WellTyped.ensure_base_type arg.loc ~expect:Integer arg.bt in
@@ -2307,7 +2287,7 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t * per_path, type_error) m =
                 iargs = List.map it_of_arg iargs;
               }, None)
           in
-          let condition, outputs = AT.logical_arguments_and_return right_clause in
+          let condition, outputs = LAT.logical_arguments_and_return right_clause in
           let lc = 
             eq_ (pred_oargs, 
                  record_ (List.map (fun (o : OutputDef.entry) -> (o.name, o.value)) outputs))
@@ -2432,6 +2412,26 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t * per_path, type_error) m =
              fail (fun ctxt -> {loc; msg = Unsat_constraint {constr = lc; info = (loc, None); ctxt; model}})
           end
        end
+    | M_Einstantiate (oid, asym) ->
+       let@ arg = arg_of_asym asym in
+       let arg_it = it_of_arg arg in
+       let@ constraints = all_constraints () in
+       let omentions_pred it = match oid with
+         | Some id -> IT.mentions_pred id it
+         | None -> true
+       in
+       let extra_assumptions = 
+         List.filter_map (fun lc ->
+             match lc with
+             | Forall ((s, bt), t) 
+                  when BT.equal bt arg.bt && omentions_pred t ->
+                Some (LC.t_ (IT.subst (IT.make_subst [(s, arg_it)]) t), (loc, None))
+             | _ -> 
+                None
+           ) (LCSet.elements constraints)
+       in
+       let lrt = LRT.mConstraints extra_assumptions LRT.I in
+       return (RT.Computational ((Sym.fresh (), Unit), (loc, None), lrt), [])
   in
   debug 3 (lazy (RT.pp (fst result)));
   return result
@@ -2469,7 +2469,7 @@ let rec check_texpr labels (e : 'bty mu_texpr) (typ : RT.t orFalse)
              end
          ) [(it_of_arg carg, "true", e1); (not_ (it_of_arg carg), "false", e2)] in
        return (List.concat per_paths)
-    | M_Ebound (_, e) ->
+    | M_Ebound e ->
        check_texpr labels e typ 
     | M_End _ ->
        Debug_ocaml.error "todo: End"
@@ -2558,45 +2558,50 @@ and check_texpr_in locs labels e typ =
 
 
 let check_and_bind_arguments rt_subst loc arguments (function_typ : 'rt AT.t) = 
-  let rec check resources args (ftyp : 'rt AT.t) =
+  let rec check args (ftyp : 'rt AT.t) =
     match args, ftyp with
-    | ((aname,abt) :: args), (AT.Computational ((lname, sbt), _info, ftyp))
-         when BT.equal abt sbt ->
-       let new_lname = Sym.fresh () in
-       let subst = make_subst [(lname, sym_ (new_lname, sbt))] in
-       let ftyp' = AT.subst rt_subst subst ftyp in
-       let@ () = add_l new_lname abt in
-       let@ () = add_a aname (abt,new_lname) in
-       check resources args ftyp'
-    | ((aname, abt) :: args), (AT.Computational ((sname, sbt), _info, ftyp)) ->
-       fail (fun _ -> {loc; msg = Mismatch {has = abt; expect = sbt}})
+    | ((aname, abt) :: args), (AT.Computational ((lname, sbt), _info, ftyp)) ->
+       if BT.equal abt sbt then
+         let new_lname = Sym.fresh () in
+         let subst = make_subst [(lname, sym_ (new_lname, sbt))] in
+         let ftyp' = AT.subst rt_subst subst ftyp in
+         let@ () = add_l new_lname abt in
+         let@ () = add_a aname (abt,new_lname) in
+         check args ftyp'
+       else
+         fail (fun _ -> {loc; msg = Mismatch {has = abt; expect = sbt}})
     | [], (AT.Computational (_, _, _))
-    | (_ :: _), (AT.I _) ->
+    | (_ :: _), (AT.L _) ->
        let expect = AT.count_computational function_typ in
        let has = List.length arguments in
        fail (fun _ -> {loc; msg = Number_arguments {expect; has}})
-    | args, (AT.Define ((sname, it), _, ftyp)) ->
-       let@ () = add_l sname (IT.bt it) in
-       let@ () = add_c (t_ (def_ sname it)) in
-       check resources args ftyp
-    | args, (AT.Resource ((s, (re, bt)), _, ftyp)) ->
-       let@ () = add_l s bt in
-       check ((re, O (sym_ (s, bt))) :: resources) args ftyp
-    | args, (AT.Constraint (lc, _, ftyp)) ->
-       let@ () = add_c lc in
-       check resources args ftyp
-    | [], (AT.I rt) ->
-       return (rt, resources)
+    | [], AT.L ftyp ->
+       let open LAT in
+       let rec bind resources = function
+         | Define ((sname, it), _, ftyp) ->
+            let@ () = add_l sname (IT.bt it) in
+            let@ () = add_c (t_ (def_ sname it)) in
+            bind resources ftyp
+         | Resource ((s, (re, bt)), _, ftyp) ->
+            let@ () = add_l s bt in
+            bind ((re, O (sym_ (s, bt))) :: resources) ftyp
+         | Constraint (lc, _, ftyp) ->
+            let@ () = add_c lc in
+            bind resources ftyp
+         | I rt ->
+            return (rt, resources)
+       in
+       bind [] ftyp
   in
-  check [] arguments function_typ
+  check arguments function_typ
 
 
-let do_post_typing info =
-  let eqs_data = List.filter_map (function
-    | SuggestEqsData x -> Some x) info
-  in
-  SuggestEqs.warn_missing_spec_eqs eqs_data;
-  return ()
+(* let do_post_typing info = *)
+(*   let eqs_data = List.filter_map (function *)
+(*     | SuggestEqsData x -> Some x) info *)
+(*   in *)
+(*   SuggestEqs.warn_missing_spec_eqs eqs_data; *)
+(*   return () *)
 
 
 (* check_function: type check a (pure) function *)
@@ -2620,7 +2625,7 @@ let check_function
         WellTyped.ensure_base_type loc ~expect:sbt rbt
       in
       let@ per_path = check_tpexpr_in [loc] body rt in
-      let@ () = do_post_typing per_path in
+      (* let@ () = do_post_typing per_path in *)
       return ()
     end
 
@@ -2702,7 +2707,7 @@ let check_procedure
       in
       let@ per_path = check_body () in
       let@ per_path = PmapM.foldM check_label label_defs per_path in
-      let@ () = do_post_typing per_path in
+      (* let@ () = do_post_typing per_path in *)
       return ()
     end
 
@@ -2753,7 +2758,7 @@ let check mu_file =
         | M_Def (rt, rbt, pexpr) -> 
            let@ () = WellTyped.WRT.welltyped Loc.unknown rt in
            let@ () = WellTyped.WBT.is_bt Loc.unknown rbt in
-           let@ () = check_function Loc.unknown descr [] rbt pexpr (AT.I rt) in
+           let@ () = check_function Loc.unknown descr [] rbt pexpr (AT.L (LAT.I rt)) in
            add_impl_constant impl rt
         | M_IFun (ft, rbt, args, pexpr) ->
            let@ () = WellTyped.WFT.welltyped "implementation-defined function" Loc.unknown ft in

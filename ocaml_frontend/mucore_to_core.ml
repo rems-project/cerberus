@@ -446,7 +446,7 @@ let mu_to_core__expr env1 expr2 : (unit, 'bty, symbol) Core.generic_expr=
     | M_Eaction pa ->
        wrap (Core.Eaction (mu_to_core__paction env1 pa))
     | M_Eskip ->
-       wrap Core.Eskip
+       assert false (* TODO: K has removed Eskip from Core *)
     | M_Eccall( (act), pe2, pes) ->
        wrap (Core.Eccall( (),
                (Core.Pexpr( act.annot, act.type_annot, (Core.PEval (Core.Vctype act.ct)))),
@@ -462,6 +462,8 @@ let mu_to_core__expr env1 expr2 : (unit, 'bty, symbol) Core.generic_expr=
        wrap (Core.Ehave (id, map (get_pexpr "Ehave" env1) pes))
     | M_Elpredicate (Show, id, pes) ->
        wrap (Core.Eshow (id, map (get_pexpr "Eshow" env1) pes))
+    | M_Einstantiate (id, pe) ->
+       wrap (Core.Einstantiate (id, get_pexpr "Einstantiate" env1 pe))
     (* | M_Eunseq es ->
      *    Core.Eunseq (map (mu_to_core__expr env) es) *)
     (* | M_Easeq (s,bt) pa ->
@@ -515,8 +517,8 @@ let rec mu_to_core__texpr env1 expr2 : (unit, 'bty, symbol) Core.generic_expr=
                     (mu_to_core__expr env1 e1),
                     (mu_to_core__texpr env1 e2)))
        end
-    | M_Ebound( n, e) ->
-       wrap (Core.Ebound( n, (mu_to_core__texpr env1 e)))
+    | M_Ebound e ->
+       wrap (Core.Ebound( (mu_to_core__texpr env1 e)))
     | M_End es ->
        wrap (Core.End (map (mu_to_core__texpr env1) es))
     | M_Edone asym ->

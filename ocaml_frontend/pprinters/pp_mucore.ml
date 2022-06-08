@@ -46,7 +46,7 @@ end
 
 
 
-let pp_symbol  a = !^ ((* ansi_format [Blue] *) (Pp_symbol.to_string_pretty a))
+let pp_symbol  a = !^ ((* ansi_format [Blue] *) (Pp_symbol.to_string_pretty_cn a))
 (* NOTE: Used to distinguish struct/unions globally *)
 
 
@@ -116,6 +116,7 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
     | M_PEmemberof _
     | M_PEcall _
     | M_PEconv_int _
+    | M_PEconv_loaded_int _
     | M_PEwrapI _ ->
        None
     | _ ->
@@ -138,6 +139,7 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
     | M_Eccall _
     | M_Erpredicate _
     | M_Elpredicate _
+    | M_Einstantiate _
     (* | M_Eunseq _ *)
     (* | M_Eindet _ *)
     (* | M_Epar _ *)
@@ -461,6 +463,8 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
               pp_keyword "bool_to_integer" ^^ P.parens (pp_asym asym)
           | M_PEconv_int (act, asym) ->
               !^"conv_int" ^^ P.parens (pp_ct act.ct ^^ P.comma ^^^ pp_asym asym)
+          | M_PEconv_loaded_int (act, asym) ->
+              !^"conv_loaded_int" ^^ P.parens (pp_ct act.ct ^^ P.comma ^^^ pp_asym asym)
           | M_PEwrapI (act, asym) ->
               !^"wrapI" ^^ P.parens (pp_ct act.ct ^^ P.comma ^^^ pp_asym asym)
       end
@@ -588,6 +592,7 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
                  !^"{-not-explode-}" ^^ acc
               | Alabel _ -> acc
                  (* !^"{-return-}" ^^ acc *)
+              | Acerb _ -> acc
           ) doc annot
 
   let pp_expr (M_Expr (loc, annot, e) : 'ty mu_expr) =
@@ -685,6 +690,10 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
           | M_Elpredicate (have_show, id, pes) ->
               pp_keyword (match have_show with Have -> "have"  | Show -> "show") ^^^
                 P.parens (Pp_symbol.pp_identifier id ^^ P.comma ^^^ comma_list pp_asym pes)
+          | M_Einstantiate (Some (Symbol.Identifier (_, ident)), pe) ->
+              pp_keyword "instantiate" ^^^ !^ident ^^ P.parens (pp_asym pe)
+          | M_Einstantiate (None, pe) ->
+              pp_keyword "instantiate" ^^^ P.parens (pp_asym pe)
           (* | M_Eunseq [] ->
            *     !^ "BUG: UNSEQ must have at least two arguments (seen 0)" *)
           (* | M_Eunseq [e] ->
@@ -782,8 +791,8 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
            *     pp_keyword "wait" ^^ P.parens (pp_thread_id tid) *)
           | M_End es ->
               pp_keyword "nd" ^^ P.parens (comma_list pp es)
-          | M_Ebound (i, e) ->
-              pp_keyword "bound" ^^ P.brackets (!^ (string_of_int i)) ^/^
+          | M_Ebound e ->
+              pp_keyword "bound" ^/^
               P.parens (pp e)
           | M_Edone asym ->
               pp_control "done" ^^^ pp_asym asym
