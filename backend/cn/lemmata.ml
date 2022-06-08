@@ -25,13 +25,17 @@ module StringListMap = Map.Make(StringList)
 
 
 module PrevParams = struct
-  type t = (Pp.doc * BaseTypes.t list) StringListMap.t
+  type t = {present: (Sym.t list) StringListMap.t; defs: Pp.doc list;
+        params: Pp.doc list}
+  let init_t = {present = StringListMap.empty; defs = []; params = []}
   type ('a, 'e) m = t -> ('a * t)
-  let return (x : 'a) : ('a, 'e) m = (fun ps -> (x, ps))
-  let bind (x : ('a, 'e) m) (f : 'a -> ('b, 'e) m) : ('b, 'e) m = (fun ps ->
-    let (xv, ps) = x ps in
-    f xv ps
+  let return (x : 'a) : ('a, 'e) m = (fun st -> (x, st))
+  let bind (x : ('a, 'e) m) (f : 'a -> ('b, 'e) m) : ('b, 'e) m = (fun st ->
+    let (xv, st) = x st in
+    f xv st
   )
+  let get : (t, 'e) m = (fun st -> (st, st))
+  let set (st : t) : (unit, 'e) m = (fun _ -> ((), st))
 end
 module ParamMonad = Effectful.Make(PrevParams)
 open PrevParams
@@ -260,23 +264,6 @@ let scan ftyp =
     end
   end
 
-(*
-let nat_to_coq ftyp =
-  let rec aux_lrt = function
-    | LRT.Logical ((nm, ty), _, tm) -> "exists (" ^ nm ^ ": " ^ lsort_to_coq ty ^ ")"
-        ^ aux_lrt tm
-    | LRT.Constraint (c, _, tm) = aux_lc c ^ " /\ " ^ aux_lrt tm
-
-let process fsym ftyp =
-  let ftyp = NAT.normalise (fun rt -> rt) ftyp in
-  let aux_lrt (Logical
-  let rec aux_c (I rt) = 
-  let rec aux = function
-    | NAT.Computational 
-  print stdout (item (Sym.pp_string fsym) (AT.pp RT.pp ftyp));
-  ()
-*)
-
 let struct_layout_field_bts xs =
   let open Memory in
   let xs2 = List.filter (fun x -> Option.is_some x.member_or_padding) xs
@@ -380,7 +367,7 @@ let fun_prop_ret ci nm = match SymMap.find_opt nm ci.fun_info with
     let open LogicalPredicates in
     BaseTypes.equal BaseTypes.Bool def.return_bt
       && not (StringSet.mem (Sym.pp_string nm) bool_funs)
- 
+
 let mk_forall ci sym bt doc =
   let open Pp in
   let inf = !^"forall of" ^^^ Sym.pp sym in
@@ -439,17 +426,24 @@ let fun_upd_def =
         "(f : A -> B)"; "x"; "y"; "z"]) None
     (Pp.string "if eq x z then y else f z")
 
-let gen_ensure k check doc xs ps = match StringListMap.find_opt k ps with
+let gen_ensure k is_def doc xs =
+  let@ st = get in
+  match StringListMap.find_opt k st.present with
   | None ->
-    let (fin_doc, ps) = (Lazy.force doc) ps in
-    ((), StringListMap.add k (fin_doc, xs) ps)
-  | Some (_, ys) -> (check xs ys, ps)
-
-let safe_ensure k doc = gen_ensure k (fun _ _ -> ()) doc []
+    let@ fin_doc = Lazy.force doc in
+    (* n.b. finalising the rhs-s of definitions might change the state *)
+    let@ st = get in
+    let st = if is_def then {st with defs = fin_doc :: st.defs}
+        else {st with params = fin_doc :: st.params} in
+    set {st with present = StringListMap.add k xs st.present}
+  | Some ys ->
+    if List.equal Sym.equal xs ys
+    then return ()
+    else fail "gen_ensure: mismatch/redef" (Pp.list Pp.string k)
 
 let ensure_fun_upd () =
   let k = ["predefs"; "fun_upd"] in
-  safe_ensure k (lazy (return fun_upd_def))
+  gen_ensure k true (lazy (return fun_upd_def)) []
 
 let ensure_tuple_op is_upd nm (ix, l) =
   let ix_s = Int.to_string ix in
@@ -469,7 +463,7 @@ let ensure_tuple_op is_upd nm (ix, l) =
         else defn op_nm [infer; t] None (tuple_element t (ix, l)))
   )
   in
-  let@ () = safe_ensure k doc in
+  let@ () = gen_ensure k true doc [] in
   return op_nm
 
 let ensure_pred ci name aux =
@@ -477,20 +471,20 @@ let ensure_pred ci name aux =
   let def = SymMap.find name ci.fun_info in
   let inf = !^ "pred" ^^^ Sym.pp name in
   begin match def.definition with
-  | Uninterp -> safe_ensure ["params"; "pred"; Sym.pp_string name]
+  | Uninterp -> gen_ensure ["params"; "pred"; Sym.pp_string name] false
     (lazy (return (
       let arg_tys = List.map (fun (_, bt) -> bt_to_coq ci inf bt) def.args in
       let ret_ty = if fun_prop_ret ci name then !^ "Prop" else bt_to_coq ci inf def.return_bt in
       let ty = List.fold_right (fun at rt -> at ^^^ !^ "->" ^^^ rt) arg_tys ret_ty in
       !^ "  Parameter" ^^^ typ (Sym.pp name) ty ^^ !^ "." ^^ hardline
-    )))
-  | Def body -> safe_ensure ["predefs"; "pred"; Sym.pp_string name]
+    ))) []
+  | Def body -> gen_ensure ["predefs"; "pred"; Sym.pp_string name] true
     (lazy (
       let@ rhs = aux (it_adjust ci body) in
       let args = List.map (fun (sym, bt) -> parens (typ (Sym.pp sym) (bt_to_coq ci inf bt)))
           def.args in
       return (defn (Sym.pp_string name) args None rhs)
-  ))
+    )) []
   end
 
 let ensure_struct_mem is_good ci ct aux = match Sctypes.is_struct_ctype ct with
@@ -499,17 +493,15 @@ let ensure_struct_mem is_good ci ct aux = match Sctypes.is_struct_ctype ct with
   let bt = BaseTypes.Struct tag in
   let nm = if is_good then "good" else "representable" in
   let k = ["predefs"; "struct"; nm] in
-  let check xs ys = if List.equal BaseTypes.equal xs ys then ()
-    else fail "ensure_struct_mem: redef" (BaseTypes.pp bt) in
   let op_nm = "struct_" ^ Sym.pp_string tag ^ "_" ^ nm in
-  let@ () = gen_ensure k check
+  let@ () = gen_ensure k true
   (lazy (
       let ty = bt_to_coq ci (Pp.string op_nm) bt in
       let x = parens (typ (!^ "x") ty) in
       let x_it = IT.sym_ (Sym.fresh_named "x", bt) in
       let@ rhs = aux (it_adjust ci (IT.good_value ci.struct_decls ct x_it)) in
       return (defn op_nm [x] None rhs)
-  )) [bt] in
+  )) [tag] in
   return op_nm
 
 let it_to_coq ci it =
@@ -572,11 +564,17 @@ let it_to_coq ci it =
     | IT.Record_op op -> begin match op with
         | IT.RecordMember (t, m) ->
             let flds = BT.record_bt (IT.bt t) in
+            if List.length flds == 1
+            then aux t
+            else
             let ix = find_tuple_element Sym.equal m Sym.pp (List.map fst flds) in
             let@ op_nm = ensure_tuple_op false (Sym.pp_string m) ix in
             parensM (build [rets op_nm; aux t])
         | IT.RecordUpdate ((t, m), x) ->
             let flds = BT.record_bt (IT.bt t) in
+            if List.length flds == 1
+            then aux x
+            else
             let ix = find_tuple_element Sym.equal m Sym.pp (List.map fst flds) in
             let@ op_nm = ensure_tuple_op true (Sym.pp_string m) ix in
             parensM (build [rets op_nm; aux t; aux x])
@@ -585,14 +583,20 @@ let it_to_coq ci it =
     | IT.Struct_op op -> begin match op with
         | IT.StructMember (t, m) ->
             let tag = BaseTypes.struct_bt (IT.bt t) in
-            let (mems, bts) = get_struct_xs ci.struct_decls tag in 
+            let (mems, bts) = get_struct_xs ci.struct_decls tag in
             let ix = find_tuple_element Id.equal m Id.pp mems in
+            if List.length mems == 1
+            then aux t
+            else
             let@ op_nm = ensure_tuple_op false (Id.pp_string m) ix in
             parensM (build [rets op_nm; aux t])
         | IT.StructUpdate ((t, m), x) ->
             let tag = BaseTypes.struct_bt (IT.bt t) in
-            let (mems, bts) = get_struct_xs ci.struct_decls tag in 
+            let (mems, bts) = get_struct_xs ci.struct_decls tag in
             let ix = find_tuple_element Id.equal m Id.pp mems in
+            if List.length mems == 1
+            then aux x
+            else
             let@ op_nm = ensure_tuple_op true (Id.pp_string m) ix in
             parensM (build [rets op_nm; aux t; aux x])
         | _ -> fail "it_to_coq: unsupported struct op" (IT.pp it)
@@ -636,12 +640,8 @@ let lc_to_coq_check_triv ci = function
 
 let nth_str_eq n s ss = Option.equal String.equal (List.nth_opt ss n) (Some s)
 
-let param_spec saved =
+let param_spec params =
   let open Pp in
-  let params = StringListMap.bindings saved
-    |> List.filter (fun (ss, _) -> nth_str_eq 0 "params" ss)
-    |> List.map (fun (_, (d, _)) -> d)
-  in
   !^"Module Type Parameters."
   ^^ hardline ^^ hardline
   ^^ flow hardline params
@@ -707,46 +707,27 @@ let ftyp_to_coq ci ftyp =
   | Some doc -> return doc
   | None -> rets "Is_true true"
 
-(*
-let struct_defs ci tag mem =
-  let open Pp in
-  let ty = !^ ("struct_ " ^ tag ^ "_ty") in
-  let nm1 = !^ ("struct_" ^ tag ^ "_" ^ mem) in
-  let nm i = Pp.string ("x_t_" ^ Int.to_string i) in
-  let tag = BaseTypes.struct_bt (IT.bt t) in
-            let (mems, _) = get_struct_xs ci.struct_decls tag in 
-  let ix = find_tuple_element Sym.equal m Sym.pp
-                (List.map fst (BT.record_bt (IT.bt t))) in
-   let lhs = Pp.string "'" ^^ tuple_syn (List.init len nm) in
-  !^"  Definition" ^^^ nm1 ^^^ parens (!^"x : " ^^ ty) ^^^ !^":=" ^^ hardline
-  !^"    let " ^^ 
-*)
-
 let convert_lemma_defs ci lemma_typs =
   let lemma_ty (nm, typ, kind) =
     progress_simple ("converting " ^ kind ^ " lemma type") (Sym.pp_string nm);
     let@ rhs = ftyp_to_coq ci typ in
     return (defn (Sym.pp_string nm ^ "_type") [] (Some (!^ "Prop")) rhs)
   in
-  let (tys, saved) = ListM.mapM lemma_ty lemma_typs StringListMap.empty in
+  let (tys, st) = ListM.mapM lemma_ty lemma_typs init_t in
   Pp.debug 4 (lazy (Pp.item "saved conversion elements"
     (Pp.list (fun (ss, _) -> Pp.parens (Pp.list Pp.string ss))
-        (StringListMap.bindings saved))));
-  (tys, saved)
+        (StringListMap.bindings st.present))));
+  (tys, List.rev st.defs, List.rev st.params)
 
-let defs_module saved tys =
+let defs_module aux_defs lemma_tys =
   let open Pp in
-  let predefs = StringListMap.bindings saved
-    |> List.filter (fun (ss, d) -> nth_str_eq 0 "predefs" ss)
-    |> List.map (fun (_, (d, _)) -> d)
-  in
   !^"Module Defs (P : Parameters)."
   ^^ hardline ^^ hardline
   ^^ !^"  Import P." ^^ hardline
   ^^ !^"  Open Scope Z." ^^ hardline ^^ hardline
-  ^^ flow hardline predefs
+  ^^ flow hardline aux_defs
   ^^ hardline
-  ^^ flow hardline tys
+  ^^ flow hardline lemma_tys
   ^^ hardline
   ^^ !^"End Defs."
   ^^ hardline ^^ hardline
@@ -838,9 +819,9 @@ let generate directions mu_file =
   let ci = {struct_decls; fun_info} in
   let conv = List.map (fun x -> (x.sym, x.typ, "pure")) pure
     @ List.map (fun x -> (x.sym, Option.get x.scan_res.res_coerce, "coerced")) coerce in
-  let (conv_defs, saved_deps) = convert_lemma_defs ci conv in
-  print channel (param_spec saved_deps);
-  print channel (defs_module saved_deps conv_defs);
+  let (conv_defs, defs, params) = convert_lemma_defs ci conv in
+  print channel (param_spec params);
+  print channel (defs_module defs conv_defs);
   print channel (mod_spec (List.map (fun (nm, _, _) -> nm) conv));
   Ok ()
 
