@@ -176,12 +176,12 @@ let try_coerce_res ftyp =
   in
   let erase_res2 r t =
     Pp.debug 2 (lazy (Pp.item "seeking to erase counterpart" (Sym.pp (fst r))));
-    let res = AT.map (RT.map (erase_res r)) t in
+    let res = LAT.map (RT.map (erase_res r)) t in
     res
   in
   let rec coerce_lat t = match t with
     | LAT.Resource ((name, (re, bt)), info, t) ->
-       let computationals, t = coerce_lat (LAT.map (RT.map (erase_res (name, re))) t) in
+       let computationals, t = coerce_lat (erase_res2 (name, re) t) in
        ((name, bt, info) :: computationals), t
     | LAT.Define (v, info, t) -> 
        let computationals, t = coerce_lat t in
@@ -193,8 +193,7 @@ let try_coerce_res ftyp =
        [], t
   in
   let rec coerce_at t = match t with
-    | AT.Computational (v, info, t) -> 
-        coerce_at (AT.Computational ((name, bt), info, erase_res2 (name, re) t))
+    | AT.Computational (v, info, t) -> AT.Computational (v, info, coerce_at t)
     | AT.L t -> 
        let computationals, t = coerce_lat t in
        AT.mComputationals computationals (AT.L t)
@@ -205,36 +204,6 @@ type scan_res = {res: string option; ret: bool;
     res_coerce: RT.t AT.t option}
 
 let init_scan_res = {res = None; ret = false; res_coerce = None}
-
-let fold_at_its f at x =
-  let fold_lc it x = match it with
-    | LC.T it -> f it x
-    | LC.Forall (_, it) -> f it x
-  in
-  let rec fold_lrt t = match t with
-    | LRT.Define ((_, it), _, t) -> f it (fold_lrt t)
-    | LRT.Resource (_, _, t) -> fold_lrt t
-    | LRT.Constraint (lc, _, t) -> fold_lc lc (fold_lrt t)
-    | LRT.I -> x
-  in
-  let fold_rt = function
-    | RT.Computational (v, _, t) -> f (IT.sym_ v) (fold_lrt t)
-  in
-  let rec fold_at t = match t with
-    | AT.Computational (v, _, t) -> f (IT.sym_ v) (fold_at t)
-    | AT.Define ((_, it), _, t) -> f it (fold_at t)
-    | AT.Resource (_, _, t) -> fold_at t
-    | AT.Constraint (lc, _, t) -> fold_lc lc (fold_at t)
-    | AT.I t -> fold_rt t
-  in
-  fold_at at
-
-let ftyps_funs ftyps = List.fold_right (fold_at_its add_it_funs) ftyps SymSet.empty
-
-(*
-FIXME keep or not
-let ftyps_predef ftyps = List.fold_right (fold_at_its add_it_predef) ftyps StringListSet.empty
-*)
 
 (* recurse over a function type and detect resources (impureness),
    non-unit return types (non-lemma trusted functions), and the set
@@ -251,9 +220,9 @@ let scan ftyp =
         not (BaseTypes.equal bt BaseTypes.Unit)}
   in
   let rec scan_lat t = match t with
-    | LAT.Define ((_, it), _, t) -> add_funs (it_uninterp_funs it) (scan_lat t)
-    | LAT.Resource (_, _, t) -> {(scan_lat t) with res = true}
-    | LAT.Constraint (lc, _, t) -> add_funs (lc_funs lc) (scan_lat t)
+    | LAT.Define (_, _, t) -> scan_lat t
+    | LAT.Resource ((name, _), _, t) -> {(scan_lat t) with res = Some (Sym.pp_string name)}
+    | LAT.Constraint (_, _, t) -> scan_lat t
     | LAT.I t -> scan_rt t
   in
   let rec scan_at t = match t with
@@ -668,8 +637,7 @@ let ftyp_to_coq ci ftyp =
   let open Pp in
   let lc_to_coq_c = lc_to_coq_check_triv ci in
   let it_tc = it_to_coq ci in
-  let extra_foralls = fold_at_its (fun it fs -> StringSet.union fs (it_undef_foralls it))
-    ftyp StringSet.empty |> StringSet.elements in
+  (* FIXME: handle underdefinition in division *)
   let oapp f opt_x y = match opt_x with
     | Some x -> f x y
     | None -> y
@@ -699,31 +667,31 @@ let ftyp_to_coq ci ftyp =
         else fail "ftyp_to_coq: unsupported return type" (RT.pp t)
   in
   let rec lat_doc t = match t with
-    | LAT.Define ((sym, it), _, t) -> omap_split (mk_let sym (it_to_coq fun_ret_tys it)) (lat_doc t)
+    | LAT.Define ((sym, it), _, t) ->
+        let@ d = lat_doc t in
+        let@ l = it_tc it in
+        return (omap_split (mk_let sym l) d)
     | LAT.Resource _ -> fail "ftyp_to_coq: unsupported" (LAT.pp RT.pp t)
     | LAT.Constraint (lc, _, t) ->
-        omap_split (oapp mk_imp (lc_to_coq_check_triv fun_ret_tys lc)) (lat_doc t)
+        let@ c = lc_to_coq_c lc in
+        let@ d = lat_doc t in
+        return (omap_split (oapp mk_imp c) d)
     | LAT.I t -> rt_doc t
   in
   let rec at_doc t = match t with
     | AT.Computational ((sym, bt), _, t) ->
-    | AT.Define ((sym, it), _, t) -> omap_split (mk_let sym (it_to_coq fun_ret_tys it)) (at_doc t)
         let@ d = at_doc t in
         return (omap_split (mk_forall ci sym bt) d)
-    | AT.Define ((sym, it), _, t) ->
-        let@ d = at_doc t in
-        let@ l = it_tc it in
-        return (omap_split (mk_let sym l) d)
-        let@ c = lc_to_coq_c lc in
-        let@ d = at_doc t in
-        return (omap_split (oapp mk_imp c) d)
+    | AT.L t -> lat_doc t
   in
   let@ d = at_doc ftyp in
+  (*
   let d2 = d |> Option.map (List.fold_right (fun nm d ->
     let (sym, bt) = StringMap.find nm all_undef_foralls in
     mk_forall ci sym bt d) extra_foralls)
   in
-  match d2 with
+  *)
+  match d with
   | Some doc -> return doc
   | None -> rets "Is_true true"
 
