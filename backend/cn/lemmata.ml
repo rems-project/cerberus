@@ -500,6 +500,10 @@ let it_to_coq ci it =
     let with_is_true x = if bool_eq_prop && BaseTypes.equal (IT.bt t) BaseTypes.Bool
         then parensM (build [rets "Is_true"; x]) else x
     in
+    let check_pos t = match IT.is_z t with
+      | Some i when Z.gt i Z.zero -> ()
+      | _ -> fail "it_to_coq: divisor not positive const" (IT.pp t)
+    in
     match IT.term t with
     | IT.Lit l -> begin match l with
         | IT.Sym sym -> return (Sym.pp sym)
@@ -512,9 +516,9 @@ let it_to_coq ci it =
         | Add (x, y) -> abinop "+" x y
         | Sub (x, y) -> abinop "-" x y
         | Mul (x, y) -> abinop "*" x y
-        | Div (x, y) -> abinop "/" x y
-        | Mod (x, y) -> abinop "mod" x y
-        | Rem (x, y) -> abinop "mod" x y
+        | Div (x, y) -> check_pos y; abinop "/" x y
+        | Mod (x, y) -> check_pos y; abinop "mod" x y
+        | Rem (x, y) -> check_pos y; abinop "mod" x y
         | LT (x, y) -> abinop (if bool_eq_prop then "<" else "<?") x y
         | LE (x, y) -> abinop (if bool_eq_prop then "<=" else "<=?") x y
         | _ -> fail "it_to_coq: unsupported arith op" (IT.pp t)
