@@ -225,8 +225,7 @@ module PageAlloc = struct
         
         or_ [
             eachI_ (1, o_s, mMAX_ORDER - 1) (not_ in_page_group);
-            and_ [(page %. "refcount") %== int_ 0;
-                  (page %. "order") %== int_ hHYP_NO_ORDER];
+	    (page %. "order") %== int_ hHYP_NO_ORDER;
           ]
       in
       
