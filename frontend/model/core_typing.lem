@@ -1541,6 +1541,8 @@ let rec collect_labels env (Expr _ expr_) =
         E.return env
     | Eshow _ _ ->
         E.return env
+    | Einstantiate _ _ ->
+        E.return env
     | Eannot _ e ->
         collect_labels env e
     | Eexcluded _ _ ->
@@ -1745,6 +1747,10 @@ and typecheck_expr tagDefs (env: typing_env) expected_bTy (Expr annot expr_) =
        E.mapM (infer_pexpr tagDefs env) pes >>= fun pes' ->
        E.mapM export_pexpr pes' >>= fun pes' ->
        E.return (Eshow id pes')
+    | Einstantiate id pe ->
+       infer_pexpr tagDefs env pe >>= fun pe' ->
+       export_pexpr pe' >>= fun pe' ->
+       E.return (Einstantiate id pe')
 
     | Eannot _ _ ->
         error "typecheck_expr, Eannot"

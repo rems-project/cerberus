@@ -706,6 +706,10 @@ and dtree_of_cabs_statement (CabsStatement (loc, attrs, stmt_)) =
       Dnode ( pp_stmt_ctor "CabsShave" ^^ P.parens (!^ str), List.map dtree_of_cabs_expression es )
   | CabsSshow (Symbol.Identifier (_, str), es) ->
       Dnode ( pp_stmt_ctor "CabsSshow" ^^ P.parens (!^ str), List.map dtree_of_cabs_expression es )
+  | CabsSinstantiate (Some (Symbol.Identifier (_, str)), e) ->
+      Dnode ( pp_stmt_ctor "CabsSinstantiate"  ^^ P.parens (!^ str), [dtree_of_cabs_expression e] )
+  | CabsSinstantiate (None, e) ->
+      Dnode ( pp_stmt_ctor "CabsSinstantiate", [dtree_of_cabs_expression e] )
   end
 
 and dtree_of_for_clause = function

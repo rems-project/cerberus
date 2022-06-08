@@ -393,6 +393,8 @@ let retype_expr (Old.M_Expr (loc, annots, expr_)) =
          | Show -> New.Show
        in
        return (New.M_Elpredicate (have_show, name, asyms))
+    | M_Einstantiate (id, asym) ->
+       return (New.M_Einstantiate (id, asym))
   in
 
   return (New.M_Expr (loc, annots,expr_))

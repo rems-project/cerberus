@@ -218,6 +218,8 @@ let rec free_expr acc (Expr _ e) =
       List.foldl free_pexpr acc pes
   | Eshow _ pes ->
       List.foldl free_pexpr acc pes
+  | Einstantiate _ pe ->
+      free_pexpr acc pe
 
   | Eannot _ e ->
       free_expr acc e

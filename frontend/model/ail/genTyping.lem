@@ -1970,6 +1970,9 @@ let rec annotate_statement_ loc sigm gamm ty stmt =
     | AilSshow id es ->
         E.mapM annotate_expression es >>= fun es' ->
         E.return (AilSshow id es')
+    | AilSinstantiate id e ->
+        annotate_expression e >>= fun e' ->
+        E.return (AilSinstantiate id e')
   end
 
 and annotate_statement sigm gamm ty (AnnotatedStatement loc attrs stmt) =

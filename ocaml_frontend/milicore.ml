@@ -83,6 +83,7 @@ let rec remove_save expr =
   | Eunpack _ -> expr
   | Ehave _ -> expr
   | Eshow _ -> expr
+  | Einstantiate _ -> expr
   | Eannot (fps, e) -> wrap (Eannot (fps, remove_save e))
   | Eexcluded _ -> expr
   | End es ->

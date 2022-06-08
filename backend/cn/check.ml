@@ -2412,6 +2412,26 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t * per_path, type_error) m =
              fail (fun ctxt -> {loc; msg = Unsat_constraint {constr = lc; info = (loc, None); ctxt; model}})
           end
        end
+    | M_Einstantiate (oid, asym) ->
+       let@ arg = arg_of_asym asym in
+       let arg_it = it_of_arg arg in
+       let@ constraints = all_constraints () in
+       let omentions_pred it = match oid with
+         | Some id -> IT.mentions_pred id it
+         | None -> true
+       in
+       let extra_assumptions = 
+         List.filter_map (fun lc ->
+             match lc with
+             | Forall ((s, bt), t) 
+                  when BT.equal bt arg.bt && omentions_pred t ->
+                Some (LC.t_ (IT.subst (IT.make_subst [(s, arg_it)]) t), (loc, None))
+             | _ -> 
+                None
+           ) (LCSet.elements constraints)
+       in
+       let lrt = LRT.mConstraints extra_assumptions LRT.I in
+       return (RT.Computational ((Sym.fresh (), Unit), (loc, None), lrt), [])
   in
   debug 3 (lazy (RT.pp (fst result)));
   return result

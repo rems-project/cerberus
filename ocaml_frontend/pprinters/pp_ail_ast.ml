@@ -502,6 +502,10 @@ let rec dtree_of_statement pp_annot (AnnotatedStatement (loc, attrs, stmt_)) =
         Dnode ( pp_stmt_ctor "CabsShave" ^^ P.parens (!^ str), List.map dtree_of_expression es )
     | AilSshow (Symbol.Identifier (_, str), es) ->
         Dnode ( pp_stmt_ctor "CabsSshow" ^^ P.parens (!^ str), List.map dtree_of_expression es )
+    | AilSinstantiate (Some (Symbol.Identifier (_, str)), e) ->
+        Dnode ( pp_stmt_ctor "CabsSinstantiate"  ^^ P.parens (!^ str), [dtree_of_expression e] )
+    | AilSinstantiate (None, e) ->
+        Dnode ( pp_stmt_ctor "CabsSinstantiate", [dtree_of_expression e] )
   end
 
 let dtree_of_function_definition pp_annot (fun_sym, (loc, attrs, param_syms, stmt)) =

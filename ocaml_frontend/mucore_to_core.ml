@@ -462,6 +462,8 @@ let mu_to_core__expr env1 expr2 : (unit, 'bty, symbol) Core.generic_expr=
        wrap (Core.Ehave (id, map (get_pexpr "Ehave" env1) pes))
     | M_Elpredicate (Show, id, pes) ->
        wrap (Core.Eshow (id, map (get_pexpr "Eshow" env1) pes))
+    | M_Einstantiate (id, pe) ->
+       wrap (Core.Einstantiate (id, get_pexpr "Einstantiate" env1 pe))
     (* | M_Eunseq es ->
      *    Core.Eunseq (map (mu_to_core__expr env) es) *)
     (* | M_Easeq (s,bt) pa ->

@@ -4150,6 +4150,8 @@ let rec desugar_statement_aux ctx (CabsStatement loc attrs stmt_) =
           AilShave id <$> E.mapM desugar_expression es
       | CabsSshow id es ->
           AilSshow id <$> E.mapM desugar_expression es
+      | CabsSinstantiate id e ->
+          AilSinstantiate id <$> desugar_expression e
     end
 
 val desugar_statement: cabs_statement -> E.desugM (statement unit)
@@ -4208,6 +4210,8 @@ let rec register_labels (CabsStatement _ _ stmt_) =
     | CabsShave _ _ ->
        E.return ()
     | CabsSshow _ _ ->
+       E.return ()
+    | CabsSinstantiate _ _ ->
        E.return ()
 (* END CN *)
   end

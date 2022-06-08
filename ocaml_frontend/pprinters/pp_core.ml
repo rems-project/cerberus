@@ -132,6 +132,7 @@ let precedence_expr = function
   | Eunpack _ 
   | Ehave _ 
   | Eshow _
+  | Einstantiate _
   | Eannot _
   | Eexcluded _ ->
       None
@@ -694,6 +695,10 @@ let rec pp_expr expr =
             pp_keyword "have" ^^^ !^ident ^^ P.parens (comma_list pp_pexpr pes)
         | Eshow (Symbol.Identifier (_, ident), pes) ->
             pp_keyword "show" ^^^ !^ident ^^ P.parens (comma_list pp_pexpr pes)
+        | Einstantiate (Some (Symbol.Identifier (_, ident)), pe) ->
+            pp_keyword "instantiate" ^^^ !^ident ^^ (P.parens (pp_pexpr pe))
+        | Einstantiate (None, pe) ->
+            pp_keyword "instantiate" ^^^ P.parens (pp_pexpr pe)
         | Eannot (xs, e) ->
             let pp_dyn_annotations fps =
               let pp_dyn_annotation = function

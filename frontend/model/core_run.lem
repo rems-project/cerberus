@@ -1682,6 +1682,19 @@ BEFORE EVAL_PEXPR2
           |>
         )
 
+    (* Einstantiate _ = Eskip *)
+    | (Einstantiate _ _, Stack_empty) ->
+        error "reached empty stack with an Einstantiate"
+    | (Einstantiate _ _, Stack_cons current_proc_opt cont sk') ->
+(* -----------------------------------------
+   <instantiate, κ.κs, Λ> --τ--> <κ(unit), ɛ.κs, Λ> *)
+        one $ Step_tau "Einstantiate" TSK_Misc (
+          E.return <| th_st with
+            arena= apply_continuation cont (Expr arena_annots (Epure (Pexpr [] () (PEval Vunit))));
+            stack= Stack_cons current_proc_opt [] sk'
+          |>
+        )
+
 
 
 

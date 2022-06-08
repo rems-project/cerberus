@@ -104,6 +104,7 @@ let keywords: (string * Tokens.token) list = [
     "__cerb_unpack_struct" , CN_UNPACK_STRUCT;
     "__cerb_have"          , CN_HAVE;
     "__cerb_show"          , CN_SHOW;
+    "__cerb_instantiate"   , CN_INSTANTIATE;
     (* END CN *)
   ]
 

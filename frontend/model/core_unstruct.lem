@@ -334,6 +334,8 @@ let rec explode_expr env (Expr annot expr_ as expr) =
         expr
     | Eshow _ _ ->
         expr
+    | Einstantiate _ _ ->
+        expr
     | Eannot xs e ->
         wrap (Eannot xs (self e))
     | Eexcluded _ _ ->

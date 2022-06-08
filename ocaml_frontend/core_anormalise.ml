@@ -829,6 +829,9 @@ let rec n_expr (loc : Loc.t) (returns : symbol Pset.set)
   | Eshow(id, pes) ->
      n_pexpr_in_expr_names pes (fun pes ->
      k (wrap (M_Elpredicate(Show, id, pes))))
+  | Einstantiate (id, pe) ->
+     n_pexpr_in_expr_name pe (fun pe ->
+     k (wrap (M_Einstantiate (id, pe))))
   | Eannot _ ->
       failwith "core_anormalisation: Eannot"
   | Eexcluded _ ->

@@ -17,7 +17,10 @@ let with_cn_keywords str =
     ; "pack_struct"
     ; "unpack_struct"
     ; "have"
-    ; "show" ] in
+    ; "show" 
+    ; "instantiate" 
+    ] 
+  in
   List.fold_left (fun acc kw ->
     acc ^ " -D" ^ kw ^ "=__cerb_" ^ kw
   ) str cn_keywords
