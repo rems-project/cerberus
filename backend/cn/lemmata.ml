@@ -16,6 +16,27 @@ module StringMap = Map.Make(String)
 module SymSet = Set.Make(Sym)
 module SymMap = Map.Make(Sym)
 
+module StringList = struct
+  type t = string list
+  let compare = List.compare String.compare
+  let equal = List.equal String.equal
+end
+module StringListMap = Map.Make(StringList)
+
+
+module PrevParams = struct
+  type t = (Pp.doc * BaseTypes.t list) StringListMap.t
+  type ('a, 'e) m = t -> ('a * t)
+  let return (x : 'a) : ('a, 'e) m = (fun ps -> (x, ps))
+  let bind (x : ('a, 'e) m) (f : 'a -> ('b, 'e) m) : ('b, 'e) m = (fun ps ->
+    let (xv, ps) = x ps in
+    f xv ps
+  )
+end
+module ParamMonad = Effectful.Make(PrevParams)
+open PrevParams
+open ParamMonad
+
 
 module Mu = Retype.New
 module Muc = CF.Mucore
@@ -56,10 +77,6 @@ let header filename =
   ^^ hardline ^^ hardline
   ^^ !^"Require Import ZArith Bool."
   ^^ hardline ^^ hardline
-(*
-  ^^ !^"Module Type Lemmas_Required."
-  ^^ hardline ^^ hardline
-*)
 
 let fail msg details =
   let open Pp in
@@ -77,12 +94,61 @@ let check_trusted_fun_body fsym = function
   | _ ->
     fail "non-proc trusted function" (Sym.pp fsym)
 
-let it_uninterp_funs it =
+let add_it_funs it funs =
   let f _ funs it = match IT.term it with
-    | Pred (name, args) -> SymSet.add name funs
+    | IT.Pred (name, args) -> SymSet.add name funs
     | _ -> funs
   in
-  IT.fold_subterms f SymSet.empty it
+  IT.fold_subterms f funs it
+
+(*
+FIXME keep or not
+let add_it_predef it ss =
+  let f _ ss it = match IT.term it with
+    | IT.Map_op op -> begin match op with
+        | IT.Set _ -> StringListSet.add ["fun_upd"] ss
+        | _ -> ss
+    end
+    | IT.Struct_op op -> begin match op with
+        | IT.StructMember (t, m) ->
+            let tag = BaseTypes.struct_bt (IT.bt t) in
+            StringListSet.add ["struct"; Sym.pp_string tag; Id.pp_string m] ss
+        | IT.StructUpdate ((t, m), _) ->
+            let tag = BaseTypes.struct_bt (IT.bt t) in
+            StringListSet.add ["struct"; Sym.pp_string tag; Id.pp_string m] ss
+        | _ -> ss
+    end
+    | _ -> ss
+  in
+  IT.fold_subterms f ss it
+*)
+
+let all_undef_foralls =
+  let add (nm, t) nms = StringMap.add nm (Sym.fresh_named nm, t) nms in
+  let intf t = BaseTypes.Map (BaseTypes.Integer, t) in
+  let int3 = intf (intf BaseTypes.Integer) in
+  List.fold_right add [
+    ("div_undef", int3);
+    ("rem_undef", int3);
+    ("mod_undef", int3)
+  ] StringMap.empty
+
+let it_undef_foralls it =
+  let f _ nms it = match IT.term it with
+    | IT.Arith_op op -> begin match op with
+        | IT.Div _ -> StringSet.add "div_undef" nms
+        | IT.Rem _ -> StringSet.add "rem_undef" nms
+        | IT.Mod _ -> StringSet.add "mod_undef" nms
+        | _ -> nms
+    end
+    | _ -> nms
+  in
+  IT.fold_subterms f StringSet.empty it
+
+(* set of functions with boolean return type that are negated
+   etc and must return bool (be computational) in Coq. the rest
+   return Prop. FIXME: make this configurable. *)
+let bool_funs = StringSet.add "order_aligned" StringSet.empty
 
 exception Cannot_Coerce
 
@@ -95,14 +161,23 @@ let try_coerce_res ftyp =
     | LRT.Constraint (lc, info, t) -> LRT.Constraint (lc, info, erase_res r t)
     | LRT.Resource ((name, (re, bt)), info, t) ->
         let (arg_name, arg_re) = r in
-        if true (* match_input re arg_re *)
-        then LRT.subst (IT.make_subst [(name, IT.sym_ (arg_name, bt))]) t
-        else LRT.Resource ((name, (re, bt)), info, erase_res r t)
-    | LRT.I -> raise Cannot_Coerce (* did not find a matching resource *)
+        if ResourceTypes.alpha_equivalent arg_re re
+        then begin
+          Pp.debug 2 (lazy (Pp.item "erasing" (Sym.pp name)));
+          LRT.subst (IT.make_subst [(name, IT.sym_ (arg_name, bt))]) t
+        end else LRT.Resource ((name, (re, bt)), info, erase_res r t)
+    | LRT.I ->
+        Pp.debug 2 (lazy (Pp.string "no counterpart found"));
+        raise Cannot_Coerce (* did not find a matching resource *)
+  in
+  let erase_res2 r t =
+    Pp.debug 2 (lazy (Pp.item "seeking to erase counterpart" (Sym.pp (fst r))));
+    let res = AT.map (RT.map (erase_res r)) t in
+    res
   in
   let rec coerce_at t = match t with
     | AT.Resource ((name, (re, bt)), info, t) ->
-        AT.Computational ((name, bt), info, AT.map (RT.map (erase_res (name, re))) t)
+        coerce_at (AT.Computational ((name, bt), info, erase_res2 (name, re) t))
     | AT.Computational (v, info, t) -> AT.Computational (v, info, coerce_at t)
     | AT.Define (v, info, t) -> AT.Define (v, info, coerce_at t)
     | AT.Constraint (lc, info, t) -> AT.Constraint (lc, info, coerce_at t)
@@ -110,23 +185,50 @@ let try_coerce_res ftyp =
   in
   try Some (coerce_at ftyp) with Cannot_Coerce -> None
 
-type scan_res = {res: bool; ret: bool;
-    res_coerce: RT.t AT.t option; funs: SymSet.t}
+type scan_res = {res: string option; ret: bool;
+    res_coerce: RT.t AT.t option}
+
+let init_scan_res = {res = None; ret = false; res_coerce = None}
+
+let fold_at_its f at x =
+  let fold_lc it x = match it with
+    | LC.T it -> f it x
+    | LC.Forall (_, it) -> f it x
+  in
+  let rec fold_lrt t = match t with
+    | LRT.Define ((_, it), _, t) -> f it (fold_lrt t)
+    | LRT.Resource (_, _, t) -> fold_lrt t
+    | LRT.Constraint (lc, _, t) -> fold_lc lc (fold_lrt t)
+    | LRT.I -> x
+  in
+  let fold_rt = function
+    | RT.Computational (v, _, t) -> f (IT.sym_ v) (fold_lrt t)
+  in
+  let rec fold_at t = match t with
+    | AT.Computational (v, _, t) -> f (IT.sym_ v) (fold_at t)
+    | AT.Define ((_, it), _, t) -> f it (fold_at t)
+    | AT.Resource (_, _, t) -> fold_at t
+    | AT.Constraint (lc, _, t) -> fold_lc lc (fold_at t)
+    | AT.I t -> fold_rt t
+  in
+  fold_at at
+
+let ftyps_funs ftyps = List.fold_right (fold_at_its add_it_funs) ftyps SymSet.empty
+
+(*
+FIXME keep or not
+let ftyps_predef ftyps = List.fold_right (fold_at_its add_it_predef) ftyps StringListSet.empty
+*)
 
 (* recurse over a function type and detect resources (impureness),
    non-unit return types (non-lemma trusted functions), and the set
    of uninterpreted functions used. *)
 let scan ftyp =
-  let add_funs f r = {r with funs = SymSet.union f r.funs} in
-  let lc_funs = function
-    | LC.T it -> it_uninterp_funs it
-    | LC.Forall (_, it) -> it_uninterp_funs it
-  in
   let rec scan_lrt t = match t with
-    | LRT.Define ((_, it), _, t) -> add_funs (it_uninterp_funs it) (scan_lrt t)
-    | LRT.Resource (_, _, t) -> {(scan_lrt t) with res = true}
-    | LRT.Constraint (lc, _, t) -> add_funs (lc_funs lc) (scan_lrt t)
-    | LRT.I -> {res = false; ret = false; res_coerce = None; funs = SymSet.empty}
+    | LRT.Define ((_, it), _, t) -> scan_lrt t
+    | LRT.Resource ((name, _), _, t) -> {(scan_lrt t) with res = Some (Sym.pp_string name)}
+    | LRT.Constraint (_, _, t) -> scan_lrt t
+    | LRT.I -> init_scan_res
   in
   let scan_rt = function
     | RT.Computational ((_, bt), _, t) -> {(scan_lrt t) with ret =
@@ -134,15 +236,29 @@ let scan ftyp =
   in
   let rec scan_at t = match t with
     | AT.Computational (_, _, t) -> scan_at t
-    | AT.Define ((_, it), _, t) -> add_funs (it_uninterp_funs it) (scan_at t)
-    | AT.Resource (_, _, t) -> {(scan_at t) with res = true}
-    | AT.Constraint (lc, _, t) -> add_funs (lc_funs lc) (scan_at t)
+    | AT.Define ((_, it), _, t) -> scan_at t
+    | AT.Resource ((name, _), _, t) -> {(scan_at t) with res = Some (Sym.pp_string name)}
+    | AT.Constraint (_, _, t) -> scan_at t
     | AT.I t -> scan_rt t
   in
   let x = scan_at ftyp in
-  if x.res then
-  {x with res_coerce = try_coerce_res ftyp}
-  else x
+  if Option.is_none x.res then x
+  else
+  begin
+  Pp.debug 2 (lazy (Pp.item "attempting to coerce ftyp" (Pp.string "")));
+  match try_coerce_res ftyp with
+    | None -> x
+    | Some ftyp2 ->
+    let y = scan_at ftyp2 in
+    if Option.is_none y.res
+    then begin
+      Pp.debug 2 (lazy (Pp.item "coercion" (Pp.string "succeeded")));
+      {x with res_coerce = Some ftyp2}
+    end else begin
+      Pp.debug 2 (lazy (Pp.item "coercion" (Pp.string "failed")));
+      {x with res = y.res}
+    end
+  end
 
 (*
 let nat_to_coq ftyp =
@@ -161,62 +277,57 @@ let process fsym ftyp =
   ()
 *)
 
-let bt_to_coq bt =
+let struct_layout_field_bts xs =
+  let open Memory in
+  let xs2 = List.filter (fun x -> Option.is_some x.member_or_padding) xs
+    |> List.sort (fun (x : struct_piece) y -> Int.compare x.offset y.offset)
+    |> List.filter_map (fun x -> x.member_or_padding)
+  in
+  (List.map fst xs2, List.map (fun x -> BaseTypes.of_sct (snd x)) xs2)
+
+let get_struct_xs struct_decls tag = match SymMap.find_opt tag struct_decls with
+  | Some def -> struct_layout_field_bts def
+  | None -> fail "undefined struct" (Sym.pp tag)
+
+let binop s x y =
   let open Pp in
-  match bt with
+  parens (x ^^^ !^ s ^^^ y)
+
+let doc_fun_app sd xs =
+  let open Pp in
+  parens (List.fold_left (fun x y -> x ^^^ y) sd xs)
+
+let fun_app s xs =
+  let open Pp in
+  doc_fun_app (!^ s) xs
+
+let tuple_coq_ty doc fld_tys =
+  let open Pp in
+  match fld_tys with
+    | [] -> fail "tuple_coq_ty: empty" doc
+    | _ -> parens (flow (!^ " " ^^ !^ "*" ^^ !^ " ") fld_tys)
+
+type conv_info = {struct_decls : Memory.struct_layout SymMap.t;
+    fun_info : LogicalPredicates.definition SymMap.t}
+
+let bt_to_coq ci loc_info =
+  let open Pp in
+  let rec f bt = match bt with
   | BaseTypes.Bool -> !^ "bool"
   | BaseTypes.Integer -> !^ "Z"
-  | _ -> fail "bt_to_coq: unsupported" (BaseTypes.pp bt)
-
-let it_to_coq fun_ret_tys it =
-  let open Pp in
-  let rec f bool_eq_prop t =
-    let aux t = f bool_eq_prop t in
-    let binop s x y = parens (aux x ^^^ !^ s ^^^ aux y) in
-    let with_is_true d = if bool_eq_prop
-        then parens (!^ "Is_true" ^^^ d) else d
-    in
-    let pred_with_true nm d = if BaseTypes.equal (SymMap.find nm fun_ret_tys) BaseTypes.Bool
-        then with_is_true d else d
-    in
-    match IT.term t with
-    | IT.Lit l -> begin match l with
-        | IT.Sym sym -> Sym.pp sym
-        | IT.Bool b -> with_is_true (!^ (if b then "true" else "false"))
-        | IT.Z z -> !^ (Z.to_string z)
-        | _ -> fail "it_to_coq: unsupported lit" (IT.pp t)
-    end
-    | IT.Info _ -> aux (IT.bool_ true)
-    | IT.Arith_op op -> begin match op with
-        | Add (x, y) -> binop "+" x y
-        | Sub (x, y) -> binop "-" x y
-        | Mul (x, y) -> binop "*" x y
-        | LT (x, y) -> binop (if bool_eq_prop then "<" else "<?") x y
-        | LE (x, y) -> binop (if bool_eq_prop then "<=" else "<=?") x y
-        | _ -> fail "it_to_coq: unsupported arith op" (IT.pp t)
-    end
-    | IT.Bool_op op -> begin match op with
-        | IT.And [] -> aux (IT.bool_ true)
-        | IT.And [x] -> aux x
-        | IT.And (x :: xs) -> binop (if bool_eq_prop then "/\\" else "&&") x (IT.and_ xs)
-        | IT.Or [] -> aux (IT.bool_ false)
-        | IT.Or [x] -> aux x
-        | IT.Or (x :: xs) -> binop (if bool_eq_prop then "\\/" else "||") x (IT.or_ xs)
-        | IT.Impl (x, y) -> binop (if bool_eq_prop then "->" else "implb") x y
-        | IT.Not x -> with_is_true (parens (!^ "negb" ^^^ f false x))
-        | IT.ITE (sw, x, y) -> parens (!^ "if" ^^^ f false sw ^^^ !^ "then"
-                ^^^ aux x ^^^ !^ "else" ^^^ aux y)
-        | IT.EQ (x, y) -> binop (if bool_eq_prop then "=" else "=?") x y
-        | _ -> fail "it_to_coq: unsupported bool op" (IT.pp t)
-    end
-    | Pred (name, args) -> pred_with_true name
-        (parens (Sym.pp name ^^^ flow (break 1) (List.map (f false) args)))
-    | CT_pred (Good (ct, t)) -> aux (IT.good_value SymMap.empty ct t)
-    | _ -> fail "it_to_coq: unsupported" (IT.pp t)
+  | BaseTypes.Map (x, y) -> parens (f x ^^^ !^"->" ^^^ f y)
+  | BaseTypes.Struct tag ->
+    let (_, fld_bts) = get_struct_xs ci.struct_decls tag in
+    tuple_coq_ty (Sym.pp tag) (List.map f fld_bts)
+  | BaseTypes.Record mems ->
+    tuple_coq_ty (!^ "record") (List.map f (List.map snd mems))
+  | BaseTypes.Loc -> !^ "Z"
+  | _ -> fail "bt_to_coq: unsupported" (BaseTypes.pp bt
+        ^^^ !^ "in converting" ^^^ loc_info)
   in
-  f true it
+  f
 
-let it_adjust it =
+let it_adjust ci it =
   let rec f t =
     match IT.term t with
     | IT.Info _ -> IT.bool_ true
@@ -231,50 +342,319 @@ let it_adjust it =
             let x = f x in
             let y = f y in
             if IT.equal x y then IT.bool_ true else IT.eq__ x y
+        | IT.Impl (x, y) ->
+            let x = f x in
+            let y = f y in
+            if IT.is_false x || IT.is_true y then IT.bool_ true else IT.impl_ (x, y)
+        | IT.EachI ((i1, s, i2), x) ->
+            let x = f x in
+            let vs = IT.free_vars x in
+            if SymSet.mem s vs then IT.eachI_ (i1, s, i2) x
+            else (assert (i1 <= i2); x)
         | _ -> t
     end
-    | CT_pred (Good (ct, t)) -> f (IT.good_value SymMap.empty ct t)
+    | IT.Pred (name, args) ->
+        let open LogicalPredicates in
+        let def = SymMap.find name ci.fun_info in
+        begin match def.definition with
+          | Uninterp -> t
+          | Def body -> f (LogicalPredicates.open_pred def.args body args)
+        end
+    | IT.CT_pred (Good (ct, t2)) -> if Option.is_some (Sctypes.is_struct_ctype ct)
+        then t else f (IT.good_value ci.struct_decls ct t2)
+    | IT.CT_pred (Representable (ct, t2)) -> if Option.is_some (Sctypes.is_struct_ctype ct)
+        then t else f (IT.representable ci.struct_decls ct t2)
+    | IT.CT_pred (AlignedI t) ->
+        f (IT.divisible_ (IT.pointerToIntegerCast_ t.t, t.align))
+    | IT.CT_pred (Aligned (t, ct)) ->
+        f (IT.alignedI_ ~t ~align:(IT.int_ (Memory.align_of_ctype ct)))
     | _ -> t
   in
+  let res = f it in
+  Pp.debug 9 (lazy (Pp.item "it_adjust" (binop "->" (IT.pp it) (IT.pp res))));
   f it
 
-let mk_forall sym bt doc =
+let fun_prop_ret ci nm = match SymMap.find_opt nm ci.fun_info with
+  | None -> fail "fun_prop_ret: not found" (Sym.pp nm)
+  | Some def ->
+    let open LogicalPredicates in
+    BaseTypes.equal BaseTypes.Bool def.return_bt
+      && not (StringSet.mem (Sym.pp_string nm) bool_funs)
+ 
+let mk_forall ci sym bt doc =
   let open Pp in
-  !^ "forall" ^^^ parens (Sym.pp sym ^^^ !^ ":" ^^^ bt_to_coq bt)
+  let inf = !^"forall of" ^^^ Sym.pp sym in
+  !^ "forall" ^^^ parens (Sym.pp sym ^^^ !^ ":" ^^^ bt_to_coq ci inf bt)
   ^^ !^"," ^^^ doc
+
+let tuple_syn xs =
+  let open Pp in
+  parens (flow (comma ^^^ !^ "") xs)
+
+let find_tuple_element (eq : 'a -> 'a -> bool) (x : 'a) (pp : 'a -> Pp.doc) (ys : 'a list) =
+  let n_ys = List.mapi (fun i y -> (i, y)) ys in
+  match List.find_opt (fun (i, y) -> eq x y) n_ys with
+    | None -> fail "tuple element not found" (pp x)
+    | Some (i, _) -> (i, List.length ys)
+
+let tuple_element t (i, len) =
+  let nm i = Pp.string ("x_t_" ^ Int.to_string i) in
+  let lhs = Pp.string "'" ^^ tuple_syn (List.init len nm) in
+  let open Pp in
+  parens (!^ "let" ^^^ lhs ^^^ !^ ":=" ^^^ t ^^^ !^ "in" ^^^ nm i)
+
+let tuple_upd_element t (i, len) y =
+  let nm i = Pp.string ("x_t_" ^ Int.to_string i) in
+  let lhs = Pp.string "'" ^^ tuple_syn (List.init len nm) in
+  let rhs = tuple_syn (List.init len (fun j -> if j = i then y else nm j)) in
+  let open Pp in
+  parens (!^ "let" ^^^ lhs ^^^ !^ ":=" ^^^ t ^^^ !^ "in" ^^^ rhs)
+
+let rec space_sep = function
+  | [] -> Pp.string ""
+  | [x] -> x
+  | (x :: xs) -> let open Pp in x ^^^ space_sep xs
+
+let rets s = return (Pp.string s)
+let build = function
+  | [] -> fail "it_to_coq: build" (!^ "empty")
+  | xs ->
+    let@ docs = ListM.mapM (fun x -> x) xs in
+    return (space_sep docs)
+let parensM x =
+    let@ xd = x in
+    return (parens xd)
+
+let defn nm args opt_ty rhs =
+  let open Pp in
+  let tyeq = match opt_ty with
+    | None -> []
+    | Some ty -> [colon; ty]
+  in
+  space_sep ([!^"  Definition"; !^ nm] @ args @ tyeq @ [!^":="])
+  ^^ hardline ^^ !^"    " ^^ rhs ^^ !^ "." ^^ hardline
+
+let fun_upd_def =
+  defn "fun_upd" (List.map Pp.string ["{A B : Type}"; "(eq : A -> A -> bool)";
+        "(f : A -> B)"; "x"; "y"; "z"]) None
+    (Pp.string "if eq x z then y else f z")
+
+let gen_ensure k check doc xs ps = match StringListMap.find_opt k ps with
+  | None ->
+    let (fin_doc, ps) = (Lazy.force doc) ps in
+    ((), StringListMap.add k (fin_doc, xs) ps)
+  | Some (_, ys) -> (check xs ys, ps)
+
+let safe_ensure k doc = gen_ensure k (fun _ _ -> ()) doc []
+
+let ensure_fun_upd () =
+  let k = ["predefs"; "fun_upd"] in
+  safe_ensure k (lazy (return fun_upd_def))
+
+let ensure_tuple_op is_upd nm (ix, l) =
+  let ix_s = Int.to_string ix in
+  let len_s = Int.to_string l in
+  let dir_s = if is_upd then "upd" else "get" in
+  let k = ["predefs"; "tuple"; dir_s; nm; ix_s; len_s] in
+  let op_nm = dir_s ^ "_" ^ nm ^ "_" ^ ix_s ^ "_" ^ len_s in
+  let doc = lazy (
+    let open Pp in
+    let ty i = !^ ("T_" ^ Int.to_string i) in
+    let t_ty = tuple_coq_ty (!^ op_nm) (List.init l ty) in
+    let t = parens (typ (!^ "t") t_ty) in
+    let x = parens (typ (!^ "x") (ty ix)) in
+    let infer = space_sep ([!^"{"] @ List.init l ty @ [colon; !^"Type}"]) in
+    return (if is_upd then defn op_nm [infer; t; x]
+             None (tuple_upd_element t (ix, l) x)
+        else defn op_nm [infer; t] None (tuple_element t (ix, l)))
+  )
+  in
+  let@ () = safe_ensure k doc in
+  return op_nm
+
+let ensure_pred ci name aux =
+  let open LogicalPredicates in
+  let def = SymMap.find name ci.fun_info in
+  let inf = !^ "pred" ^^^ Sym.pp name in
+  begin match def.definition with
+  | Uninterp -> safe_ensure ["params"; "pred"; Sym.pp_string name]
+    (lazy (return (
+      let arg_tys = List.map (fun (_, bt) -> bt_to_coq ci inf bt) def.args in
+      let ret_ty = if fun_prop_ret ci name then !^ "Prop" else bt_to_coq ci inf def.return_bt in
+      let ty = List.fold_right (fun at rt -> at ^^^ !^ "->" ^^^ rt) arg_tys ret_ty in
+      !^ "  Parameter" ^^^ typ (Sym.pp name) ty ^^ !^ "." ^^ hardline
+    )))
+  | Def body -> safe_ensure ["predefs"; "pred"; Sym.pp_string name]
+    (lazy (
+      let@ rhs = aux (it_adjust ci body) in
+      let args = List.map (fun (sym, bt) -> parens (typ (Sym.pp sym) (bt_to_coq ci inf bt)))
+          def.args in
+      return (defn (Sym.pp_string name) args None rhs)
+  ))
+  end
+
+let ensure_struct_mem is_good ci ct aux = match Sctypes.is_struct_ctype ct with
+  | None -> fail "ensure_struct_mem: not struct" (Sctypes.pp ct)
+  | Some tag ->
+  let bt = BaseTypes.Struct tag in
+  let nm = if is_good then "good" else "representable" in
+  let k = ["predefs"; "struct"; nm] in
+  let check xs ys = if List.equal BaseTypes.equal xs ys then ()
+    else fail "ensure_struct_mem: redef" (BaseTypes.pp bt) in
+  let op_nm = "struct_" ^ Sym.pp_string tag ^ "_" ^ nm in
+  let@ () = gen_ensure k check
+  (lazy (
+      let ty = bt_to_coq ci (Pp.string op_nm) bt in
+      let x = parens (typ (!^ "x") ty) in
+      let x_it = IT.sym_ (Sym.fresh_named "x", bt) in
+      let@ rhs = aux (it_adjust ci (IT.good_value ci.struct_decls ct x_it)) in
+      return (defn op_nm [x] None rhs)
+  )) [bt] in
+  return op_nm
+
+let it_to_coq ci it =
+  let open Pp in
+  let eq_of = function
+    | BaseTypes.Integer -> "Z.eqb"
+    | bt -> fail "eq_of" (BaseTypes.pp bt)
+  in
+  let rec f bool_eq_prop t =
+    let aux t = f bool_eq_prop t in
+    let abinop s x y = parensM (build [aux x; rets s; aux y]) in
+    let with_is_true x = if bool_eq_prop && BaseTypes.equal (IT.bt t) BaseTypes.Bool
+        then parensM (build [rets "Is_true"; x]) else x
+    in
+    match IT.term t with
+    | IT.Lit l -> begin match l with
+        | IT.Sym sym -> return (Sym.pp sym)
+        | IT.Bool b -> with_is_true (rets (if b then "true" else "false"))
+        | IT.Z z -> rets (Z.to_string z)
+        | _ -> fail "it_to_coq: unsupported lit" (IT.pp t)
+    end
+    | IT.Info _ -> aux (IT.bool_ true)
+    | IT.Arith_op op -> begin match op with
+        | Add (x, y) -> abinop "+" x y
+        | Sub (x, y) -> abinop "-" x y
+        | Mul (x, y) -> abinop "*" x y
+        | Div (x, y) -> abinop "/" x y
+        | Mod (x, y) -> abinop "mod" x y
+        | Rem (x, y) -> abinop "mod" x y
+        | LT (x, y) -> abinop (if bool_eq_prop then "<" else "<?") x y
+        | LE (x, y) -> abinop (if bool_eq_prop then "<=" else "<=?") x y
+        | _ -> fail "it_to_coq: unsupported arith op" (IT.pp t)
+    end
+    | IT.Bool_op op -> begin match op with
+        | IT.And [] -> aux (IT.bool_ true)
+        | IT.And [x] -> aux x
+        | IT.And (x :: xs) -> abinop (if bool_eq_prop then "/\\" else "&&") x (IT.and_ xs)
+        | IT.Or [] -> aux (IT.bool_ false)
+        | IT.Or [x] -> aux x
+        | IT.Or (x :: xs) -> abinop (if bool_eq_prop then "\\/" else "||") x (IT.or_ xs)
+        | IT.Impl (x, y) -> abinop (if bool_eq_prop then "->" else "implb") x y
+        | IT.Not x -> with_is_true (parensM (build [rets "negb"; f false x]))
+        | IT.ITE (sw, x, y) -> parensM (build [rets "if"; f false sw; rets "then";
+                aux x; rets "else"; aux y])
+        | IT.EQ (x, y) -> abinop (if bool_eq_prop then "=" else "=?") x y
+        | IT.EachI ((i1, s, i2), x) -> assert bool_eq_prop;
+            let@ x = aux x in
+            return (parens (mk_forall ci s BaseTypes.Integer
+                (binop "->" (binop "/\\"
+                    (binop "<=" (Pp.int i1) (Sym.pp s)) (binop "<=" (Sym.pp s) (Pp.int i2)))
+                x)))
+    end
+    | IT.Map_op op -> begin match op with
+        | IT.Set (m, x, y) ->
+            let@ () = ensure_fun_upd () in
+            parensM (build [rets "fun_upd"; rets (eq_of (IT.bt x)); aux m; aux x; aux y])
+        | IT.Get (m, x) -> parensM (build [aux m; aux x])
+        | _ -> fail "it_to_coq: unsupported map op" (IT.pp t)
+    end
+    | IT.Record_op op -> begin match op with
+        | IT.RecordMember (t, m) ->
+            let flds = BT.record_bt (IT.bt t) in
+            let ix = find_tuple_element Sym.equal m Sym.pp (List.map fst flds) in
+            let@ op_nm = ensure_tuple_op false (Sym.pp_string m) ix in
+            parensM (build [rets op_nm; aux t])
+        | IT.RecordUpdate ((t, m), x) ->
+            let flds = BT.record_bt (IT.bt t) in
+            let ix = find_tuple_element Sym.equal m Sym.pp (List.map fst flds) in
+            let@ op_nm = ensure_tuple_op true (Sym.pp_string m) ix in
+            parensM (build [rets op_nm; aux t; aux x])
+        | _ -> fail "it_to_coq: unsupported record op" (IT.pp t)
+    end
+    | IT.Struct_op op -> begin match op with
+        | IT.StructMember (t, m) ->
+            let tag = BaseTypes.struct_bt (IT.bt t) in
+            let (mems, bts) = get_struct_xs ci.struct_decls tag in 
+            let ix = find_tuple_element Id.equal m Id.pp mems in
+            let@ op_nm = ensure_tuple_op false (Id.pp_string m) ix in
+            parensM (build [rets op_nm; aux t])
+        | IT.StructUpdate ((t, m), x) ->
+            let tag = BaseTypes.struct_bt (IT.bt t) in
+            let (mems, bts) = get_struct_xs ci.struct_decls tag in 
+            let ix = find_tuple_element Id.equal m Id.pp mems in
+            let@ op_nm = ensure_tuple_op true (Id.pp_string m) ix in
+            parensM (build [rets op_nm; aux t; aux x])
+        | _ -> fail "it_to_coq: unsupported struct op" (IT.pp it)
+    end
+    | IT.Pointer_op op -> begin match op with
+        | IntegerToPointerCast t -> aux t
+        | PointerToIntegerCast t -> aux t
+        | _ -> fail "it_to_coq: unsupported pointer op" (IT.pp it)
+    end
+    | IT.Pred (name, args) ->
+        let prop_ret = fun_prop_ret ci name in
+        let body_aux = f prop_ret in
+        let@ () = ensure_pred ci name body_aux in
+        let@ r = parensM (build ([return (Sym.pp name)] @ List.map (f false) args)) in
+        if prop_ret then return r else with_is_true (return r)
+    | IT.CT_pred p -> assert bool_eq_prop; begin match p with
+        | IT.Good (ct, t2) when (Option.is_some (Sctypes.is_struct_ctype ct)) ->
+        let@ op_nm = ensure_struct_mem true ci ct aux in
+        parensM (build [rets op_nm; aux t2])
+        | IT.Representable (ct, t2) when (Option.is_some (Sctypes.is_struct_ctype ct)) ->
+        let@ op_nm = ensure_struct_mem true ci ct aux in
+        parensM (build [rets op_nm; aux t2])
+        | _ -> fail "it_to_coq: unexpected ctype pred" (IT.pp t)
+    end
+    | _ -> fail "it_to_coq: unsupported" (IT.pp t)
+  in
+  f true it
 
 let mk_let sym rhs_doc doc =
   let open Pp in
   !^ "let" ^^^ Sym.pp sym ^^^ !^ ":=" ^^^ rhs_doc ^^^ !^ "in" ^^^ doc
 
-let lc_to_coq_check_triv fun_ret_tys = function
-  | LC.T it -> let it = it_adjust it in
-    if IT.is_true it then None else Some (it_to_coq fun_ret_tys it)
-  | LC.Forall ((sym, bt), it) -> let it = it_adjust it in
-    if IT.is_true it then None
-    else Some (parens (mk_forall sym bt (it_to_coq fun_ret_tys it)))
+let lc_to_coq_check_triv ci = function
+  | LC.T it -> let it = it_adjust ci it in
+    if IT.is_true it then return None
+    else let@ v = it_to_coq ci it in return (Some v)
+  | LC.Forall ((sym, bt), it) -> let it = it_adjust ci it in
+    if IT.is_true it then return None
+    else let@ v = it_to_coq ci it
+    in return (Some (parens (mk_forall ci sym bt v)))
 
-let param_spec fun_defs =
+let nth_str_eq n s ss = Option.equal String.equal (List.nth_opt ss n) (Some s)
+
+let param_spec saved =
   let open Pp in
-  let open LogicalPredicates in
-  let param (f, def) = match def.definition with
-    | Uninterp ->
-    let arg_tys = List.map (fun (_, bt) -> bt_to_coq bt) def.args in
-    let ret_ty = bt_to_coq def.return_bt in
-    let ty = List.fold_right (fun at rt -> at ^^^ !^ "->" ^^^ rt) arg_tys ret_ty in
-    !^ "  Parameter" ^^^ typ (Sym.pp f) ty ^^ !^ "."
-      ^^ hardline
-    | _ -> fail "param_spec: defined logical fun" (Sym.pp f)
+  let params = StringListMap.bindings saved
+    |> List.filter (fun (ss, _) -> nth_str_eq 0 "params" ss)
+    |> List.map (fun (_, (d, _)) -> d)
   in
-  !^"Module Type CN_Lemma_Parameters."
+  !^"Module Type Parameters."
   ^^ hardline ^^ hardline
-  ^^ flow hardline (List.map param fun_defs)
+  ^^ flow hardline params
   ^^ hardline
-  ^^ !^"End CN_Lemma_Parameters."
+  ^^ !^"End Parameters."
   ^^ hardline ^^ hardline
 
-let ftyp_to_coq fun_ret_tys ftyp =
+let ftyp_to_coq ci ftyp =
   let open Pp in
+  let lc_to_coq_c = lc_to_coq_check_triv ci in
+  let it_tc = it_to_coq ci in
+  let extra_foralls = fold_at_its (fun it fs -> StringSet.union fs (it_undef_foralls it))
+    ftyp StringSet.empty |> StringSet.elements in
   let oapp f opt_x y = match opt_x with
     | Some x -> f x y
     | None -> y
@@ -283,13 +663,19 @@ let ftyp_to_coq fun_ret_tys ftyp =
   let mk_imp doc doc2 = doc ^^^ !^ "->" ^^^ doc2 in
   let omap_split f = Option.map (fun doc -> f (break 1 ^^ doc)) in
   let rec lrt_doc t = match t with
-    | LRT.Constraint (lc, _, t) -> begin match lrt_doc t with
-        | None -> lc_to_coq_check_triv fun_ret_tys lc
-        | Some doc -> Some (oapp mk_and (lc_to_coq_check_triv fun_ret_tys lc) (break 1 ^^ doc))
+    | LRT.Constraint (lc, _, t) ->
+    let@ d = lrt_doc t in
+    let@ c = lc_to_coq_c lc in
+    begin match d, c with
+        | None, _ -> return c
+        | _, None -> return d
+        | Some dd, Some cd -> return (Some (mk_and cd dd))
     end
     | LRT.Define ((sym, it), _, t) ->
-        omap_split (mk_let sym (it_to_coq fun_ret_tys it)) (lrt_doc t)
-    | LRT.I -> None
+        let@ d = lrt_doc t in
+        let@ l = it_tc it in
+        return (omap_split (mk_let sym l) d)
+    | LRT.I -> return None
     | _ -> fail "ftyp_to_coq: unsupported" (LRT.pp t)
   in
   let rt_doc t = match t with
@@ -298,31 +684,71 @@ let ftyp_to_coq fun_ret_tys ftyp =
         else fail "ftyp_to_coq: unsupported return type" (RT.pp t)
   in
   let rec at_doc t = match t with
-    | AT.Computational ((sym, bt), _, t) -> omap_split (mk_forall sym bt) (at_doc t)
-    | AT.Define ((sym, it), _, t) -> omap_split (mk_let sym (it_to_coq fun_ret_tys it)) (at_doc t)
+    | AT.Computational ((sym, bt), _, t) ->
+        let@ d = at_doc t in
+        return (omap_split (mk_forall ci sym bt) d)
+    | AT.Define ((sym, it), _, t) ->
+        let@ d = at_doc t in
+        let@ l = it_tc it in
+        return (omap_split (mk_let sym l) d)
     | AT.Resource _ -> fail "ftyp_to_coq: unsupported" (AT.pp RT.pp t)
     | AT.Constraint (lc, _, t) ->
-        omap_split (oapp mk_imp (lc_to_coq_check_triv fun_ret_tys lc)) (at_doc t)
+        let@ c = lc_to_coq_c lc in
+        let@ d = at_doc t in
+        return (omap_split (oapp mk_imp c) d)
     | AT.I t -> rt_doc t
   in
-  match at_doc ftyp with
-  | Some doc -> doc
-  | None -> !^ "true = true"
-
-let lemma_type_specs fun_ret_tys lemma_typs =
-  let open Pp in
-  let lemma_ty (nm, typ) =
-    progress_simple "exporting pure lemma" (Sym.pp_string nm);
-    let rhs = ftyp_to_coq fun_ret_tys typ in
-    !^"  Definition" ^^^ Sym.pp nm ^^ !^ "_type :=" ^^^ rhs ^^ !^ "." ^^ hardline
+  let@ d = at_doc ftyp in
+  let d2 = d |> Option.map (List.fold_right (fun nm d ->
+    let (sym, bt) = StringMap.find nm all_undef_foralls in
+    mk_forall ci sym bt d) extra_foralls)
   in
-  !^"Module CN_Lemma_Types (P : CN_Lemma_Parameters)."
+  match d2 with
+  | Some doc -> return doc
+  | None -> rets "Is_true true"
+
+(*
+let struct_defs ci tag mem =
+  let open Pp in
+  let ty = !^ ("struct_ " ^ tag ^ "_ty") in
+  let nm1 = !^ ("struct_" ^ tag ^ "_" ^ mem) in
+  let nm i = Pp.string ("x_t_" ^ Int.to_string i) in
+  let tag = BaseTypes.struct_bt (IT.bt t) in
+            let (mems, _) = get_struct_xs ci.struct_decls tag in 
+  let ix = find_tuple_element Sym.equal m Sym.pp
+                (List.map fst (BT.record_bt (IT.bt t))) in
+   let lhs = Pp.string "'" ^^ tuple_syn (List.init len nm) in
+  !^"  Definition" ^^^ nm1 ^^^ parens (!^"x : " ^^ ty) ^^^ !^":=" ^^ hardline
+  !^"    let " ^^ 
+*)
+
+let convert_lemma_defs ci lemma_typs =
+  let lemma_ty (nm, typ, kind) =
+    progress_simple ("converting " ^ kind ^ " lemma type") (Sym.pp_string nm);
+    let@ rhs = ftyp_to_coq ci typ in
+    return (defn (Sym.pp_string nm ^ "_type") [] (Some (!^ "Prop")) rhs)
+  in
+  let (tys, saved) = ListM.mapM lemma_ty lemma_typs StringListMap.empty in
+  Pp.debug 4 (lazy (Pp.item "saved conversion elements"
+    (Pp.list (fun (ss, _) -> Pp.parens (Pp.list Pp.string ss))
+        (StringListMap.bindings saved))));
+  (tys, saved)
+
+let defs_module saved tys =
+  let open Pp in
+  let predefs = StringListMap.bindings saved
+    |> List.filter (fun (ss, d) -> nth_str_eq 0 "predefs" ss)
+    |> List.map (fun (_, (d, _)) -> d)
+  in
+  !^"Module Defs (P : Parameters)."
   ^^ hardline ^^ hardline
   ^^ !^"  Import P." ^^ hardline
   ^^ !^"  Open Scope Z." ^^ hardline ^^ hardline
-  ^^ flow hardline (List.map lemma_ty lemma_typs)
+  ^^ flow hardline predefs
   ^^ hardline
-  ^^ !^"End CN_Lemma_Types."
+  ^^ flow hardline tys
+  ^^ hardline
+  ^^ !^"End Defs."
   ^^ hardline ^^ hardline
 
 let mod_spec lemma_nms =
@@ -331,13 +757,13 @@ let mod_spec lemma_nms =
     !^"  Parameter" ^^^ typ (Sym.pp nm) (Sym.pp nm ^^ !^ "_type")
         ^^ !^ "." ^^ hardline
   in
-  !^"Module Type CN_Lemma_Spec (P : CN_Lemma_Parameters)."
+  !^"Module Type Lemma_Spec (P : Parameters)."
   ^^ hardline ^^ hardline
-  ^^ !^"  Module Tys := CN_Lemma_Types(P)." ^^ hardline
-  ^^ !^"  Import Tys." ^^ hardline ^^ hardline
+  ^^ !^"  Module D := Defs(P)." ^^ hardline
+  ^^ !^"  Import D." ^^ hardline ^^ hardline
   ^^ flow hardline (List.map lemma lemma_nms)
   ^^ hardline
-  ^^ !^"End CN_Lemma_Spec."
+  ^^ !^"End Lemma_Spec."
   ^^ hardline ^^ hardline
 
 let cmp_line_numbers = function
@@ -371,6 +797,15 @@ let do_re_retype mu_file trusted_funs prev_mode pred_defs pre_retype_mu_file =
 
 type scanned = {sym : Sym.t; loc: Loc.t; typ: RT.t AT.t; scan_res: scan_res}
 
+let get_struct_decls mu_file =
+  (* clagged from Retype *)
+  Pmap.fold (fun sym def decls ->
+        match def with
+        | Retype.New.M_StructDef def ->
+           SymMap.add sym def decls
+        | _ -> decls
+      ) mu_file.mu_tagDefs SymMap.empty
+
 let generate directions mu_file =
   let (filename, kinds) = parse_directions directions in
   let channel = open_out filename in
@@ -386,23 +821,27 @@ let generate directions mu_file =
         {sym; loc; typ; scan_res = scan typ})
     |> List.sort (fun x y -> cmp_loc_line_numbers x.loc y.loc)
   in
-  let (impure, pure) = List.partition (fun x -> x.scan_res.res || x.scan_res.ret)
-    scan_trusted in
+  let (returns, others) = List.partition (fun x -> x.scan_res.ret) scan_trusted in
+  let (impure, pure) = List.partition (fun x -> Option.is_some x.scan_res.res) others in
+  let (coerce, skip) = List.partition
+        (fun x -> Option.is_some x.scan_res.res_coerce) impure in
   List.iter (fun x ->
-    progress_simple "skipping resource lemma" (Sym.pp_string x.sym)
-  ) impure;
-  let funs = List.fold_right (fun x -> SymSet.union x.scan_res.funs) pure SymSet.empty in
-  let fun_defs = SymSet.elements funs
-    |> List.map (fun s -> match List.assoc_opt Sym.equal s mu_file.mu_logical_predicates with
-      | None -> fail "undefined logical function/predicate" (Sym.pp s)
-      | Some def -> (s, def))
-  in
-  print channel (param_spec fun_defs);
-  let fun_ret_tys = List.fold_right (fun (f, def) m ->
-            let open LogicalPredicates in SymMap.add f def.return_bt m)
-        fun_defs SymMap.empty in
-  print channel (lemma_type_specs fun_ret_tys (List.map (fun x -> (x.sym, x.typ)) pure));
-  print channel (mod_spec (List.map (fun x -> x.sym) pure));
+    progress_simple "skipping trusted fun with return val" (Sym.pp_string x.sym)
+  ) returns;
+  List.iter (fun x ->
+    progress_simple "skipping trusted fun with resource"
+        (Sym.pp_string x.sym ^ ": " ^ (Option.get x.scan_res.res))
+  ) skip;
+  let fun_info = List.fold_right (fun (s, def) m -> SymMap.add s def m)
+        mu_file.mu_logical_predicates SymMap.empty in
+  let struct_decls = get_struct_decls mu_file in
+  let ci = {struct_decls; fun_info} in
+  let conv = List.map (fun x -> (x.sym, x.typ, "pure")) pure
+    @ List.map (fun x -> (x.sym, Option.get x.scan_res.res_coerce, "coerced")) coerce in
+  let (conv_defs, saved_deps) = convert_lemma_defs ci conv in
+  print channel (param_spec saved_deps);
+  print channel (defs_module saved_deps conv_defs);
+  print channel (mod_spec (List.map (fun (nm, _, _) -> nm) conv));
   Ok ()
 
 

@@ -100,7 +100,10 @@ let is_unsigned_integer_ctype = function
      AilTypesAux.is_unsigned_integer_type 
        Ctype.(Ctype ([], Basic (Integer ty)))
   | _ -> false
-     
+
+let is_struct_ctype = function
+  | Struct tag -> Some tag
+  | _ -> None
 
 
 let void_ct = Void

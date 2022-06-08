@@ -188,6 +188,18 @@ let simp_or_empty structs values equalities lcs resource =
 
 
 (* resources of the same type as a request, such that the resource
-   can be used to fulfil the request *)
+   coult potentially be used to fulfil the request *)
 let same_predicate_name r1 r2 =
   equal_predicate_name (predicate_name r1) (predicate_name r2)
+
+
+
+let alpha_equivalent r1 r2 = match r1, r2 with
+  | P x, P y -> equal_resource_type r1 r2
+  | Q x, Q y ->
+    let y2 = alpha_rename_qpredicate_type x.q y in
+    equal_resource_type (Q x) (Q y2)
+  | _ -> false
+
+
+

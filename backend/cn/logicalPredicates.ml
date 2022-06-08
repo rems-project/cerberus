@@ -25,7 +25,7 @@ type definition = {
 
 
 
-let open_pred global def_args def_body args =
+let open_pred def_args def_body args =
   let su = make_subst (List.map2 (fun (s, _) arg -> (s, arg)) def_args args) in
   IT.subst su def_body
 
