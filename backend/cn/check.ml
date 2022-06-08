@@ -2576,12 +2576,12 @@ let check_and_bind_arguments rt_subst loc arguments (function_typ : 'rt AT.t) =
   check arguments function_typ
 
 
-let do_post_typing info =
-  let eqs_data = List.filter_map (function
-    | SuggestEqsData x -> Some x) info
-  in
-  SuggestEqs.warn_missing_spec_eqs eqs_data;
-  return ()
+(* let do_post_typing info = *)
+(*   let eqs_data = List.filter_map (function *)
+(*     | SuggestEqsData x -> Some x) info *)
+(*   in *)
+(*   SuggestEqs.warn_missing_spec_eqs eqs_data; *)
+(*   return () *)
 
 
 (* check_function: type check a (pure) function *)
@@ -2605,7 +2605,7 @@ let check_function
         WellTyped.ensure_base_type loc ~expect:sbt rbt
       in
       let@ per_path = check_tpexpr_in [loc] body rt in
-      let@ () = do_post_typing per_path in
+      (* let@ () = do_post_typing per_path in *)
       return ()
     end
 
@@ -2687,7 +2687,7 @@ let check_procedure
       in
       let@ per_path = check_body () in
       let@ per_path = PmapM.foldM check_label label_defs per_path in
-      let@ () = do_post_typing per_path in
+      (* let@ () = do_post_typing per_path in *)
       return ()
     end
 

@@ -38,6 +38,7 @@ type token =
   | RBRACKET
   | LBRACE
   | RBRACE
+
   | COMMA
   | SEMICOLON
 
@@ -67,8 +68,6 @@ type token =
 
 
   | WHERE
-  | WITH
-  | TYP
   | TYPEOF
   | IF
   | STRUCT

@@ -73,8 +73,6 @@ rule main = parse
   | "for" {T.FOR }
 
 
-  | "with" {T.WITH }
-  | "type" {T.TYP }
   | "if" {T.IF }
   | "typeof" {T.TYPEOF }
   | "struct" {T.STRUCT }
