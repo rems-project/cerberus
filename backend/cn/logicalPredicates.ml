@@ -183,9 +183,9 @@ module PageAlloc = struct
         let oa_i = pred_ order_align_sym [page_index; o] Integer in
         let in_page_group =
           and_ [oa_i %< page_index; 
-                (pool %. "range_start") %<= (oa_i %* (int_ pPAGE_SIZE));
+                ((pool %. "range_start") %/ int_ pPAGE_SIZE) %<= oa_i;
                 o %<= ((map_get_ vmemmap oa_i) %. "order");
-                ((map_get_ vmemmap oa_i) %. "order") %< int_ mMAX_ORDER]
+                not_ (((map_get_ vmemmap oa_i) %. "order") %== int_ hHYP_NO_ORDER)]
         in
         
         or_ [
