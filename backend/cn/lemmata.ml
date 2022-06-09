@@ -531,7 +531,7 @@ let it_to_coq ci it =
         | IT.Or [x] -> aux x
         | IT.Or (x :: xs) -> abinop (if bool_eq_prop then "\\/" else "||") x (IT.or_ xs)
         | IT.Impl (x, y) -> abinop (if bool_eq_prop then "->" else "implb") x y
-        | IT.Not x -> with_is_true (parensM (build [rets "negb"; f false x]))
+        | IT.Not x -> (parensM (build [rets (if bool_eq_prop then "~" else "negb"); aux x]))
         | IT.ITE (sw, x, y) -> parensM (build [rets "if"; f false sw; rets "then";
                 aux x; rets "else"; aux y])
         | IT.EQ (x, y) -> abinop (if bool_eq_prop then "=" else "=?") x y
@@ -590,8 +590,10 @@ let it_to_coq ci it =
         | _ -> fail "it_to_coq: unsupported struct op" (IT.pp it)
     end
     | IT.Pointer_op op -> begin match op with
-        | IntegerToPointerCast t -> aux t
-        | PointerToIntegerCast t -> aux t
+        | IT.IntegerToPointerCast t -> aux t
+        | IT.PointerToIntegerCast t -> aux t
+        | IT.LEPointer (x, y) -> abinop (if bool_eq_prop then "<=" else "<=?") x y
+        | IT.LTPointer (x, y) -> abinop (if bool_eq_prop then "<" else "<?") x y
         | _ -> fail "it_to_coq: unsupported pointer op" (IT.pp it)
     end
     | IT.Pred (name, args) ->
