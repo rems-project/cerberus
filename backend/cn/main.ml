@@ -147,7 +147,10 @@ let frontend astprints filename state_file =
         assert false
     | Some (_, sigm) ->
         let open Effectful.Make(Resultat) in
-        match CompilePredicates.translate mu_file.mu_tagDefs sigm.CF.AilSyntax.cn_predicates with
+        match CompilePredicates.translate mu_file.mu_tagDefs 
+                sigm.CF.AilSyntax.cn_functions
+                sigm.CF.AilSyntax.cn_predicates 
+        with
         | Result.Error err -> TypeErrors.report ?state_file err; exit 1
         | Result.Ok xs -> xs
     end in
