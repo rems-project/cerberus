@@ -52,6 +52,7 @@ val map_and_fold_resources :
 
 val get_struct_decl : Locations.t -> Sym.t -> (Memory.struct_decl, TypeErrors.t) m
 val get_member_type : Locations.t -> Sym.t -> Id.t -> Memory.struct_layout -> (Sctypes.t, TypeErrors.t) m
+val get_struct_member_type : Locations.t -> Sym.t -> Id.t -> (Sctypes.t, TypeErrors.t) m
 val get_fun_decl : Locations.t -> Sym.t -> (Locations.t * Global.AT.ft * Cerb_frontend.Mucore.trusted, TypeErrors.t) m
 
 val get_resource_predicate_def : Locations.t -> Sym.t ->
