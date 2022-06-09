@@ -2383,54 +2383,78 @@ module CHERI (C:Capability
     | _ -> false
 
   let get_intrinsic_type_spec name =
-    if name = "cheri_perms_and" then
+    if name = "strfcap" then
+      Some (ExactRet (Ctype.signed_long),
+            [
+              ExactArg (Ctype ([], Pointer (
+                                       {
+                                         const    = false;
+                                         restrict = true;
+                                         volatile = false;
+                                       }
+                                     , Ctype.signed_char)));
+              ExactArg (Ctype ([], Pointer (
+                                       {
+                                         const    = true;
+                                         restrict = true;
+                                         volatile = false;
+                                       }
+                                     , Ctype.signed_char)));
+              ExactArg Ctype.size_t;
+              PolymorphicArg [
+                  TyPred (Ctype.ctypeEqual Ctype.intptr_t);
+                  TyPred (Ctype.ctypeEqual Ctype.uintptr_t);
+                  TyIsPointer
+                ]
+        ])
+    else if name = "cheri_perms_and" then
       Some ( CopyRet 0,
-           [ PolymorphicArg [
-               TyPred (Ctype.ctypeEqual Ctype.intptr_t);
-               TyPred (Ctype.ctypeEqual Ctype.uintptr_t);
-               TyIsPointer
-           ];
-             ExactArg Ctype.size_t ] )
+             [ PolymorphicArg [
+                   TyPred (Ctype.ctypeEqual Ctype.intptr_t);
+                   TyPred (Ctype.ctypeEqual Ctype.uintptr_t);
+                   TyIsPointer
+                 ];
+               ExactArg Ctype.size_t ] )
     else if name = "cheri_address_get" then
       Some ( ExactRet (Ctype.vaddr_t ()),
-           [ PolymorphicArg [
-               TyPred (Ctype.ctypeEqual Ctype.intptr_t);
-               TyPred (Ctype.ctypeEqual Ctype.uintptr_t);
-               TyIsPointer
-           ]])
+             [ PolymorphicArg [
+                   TyPred (Ctype.ctypeEqual Ctype.intptr_t);
+                   TyPred (Ctype.ctypeEqual Ctype.uintptr_t);
+                   TyIsPointer
+        ]])
     else if name = "cheri_base_get" then
       Some ( ExactRet (Ctype.vaddr_t ()),
-           [ PolymorphicArg [
-               TyPred (Ctype.ctypeEqual Ctype.intptr_t);
-               TyPred (Ctype.ctypeEqual Ctype.uintptr_t);
-               TyIsPointer
-           ]])
+             [ PolymorphicArg [
+                   TyPred (Ctype.ctypeEqual Ctype.intptr_t);
+                   TyPred (Ctype.ctypeEqual Ctype.uintptr_t);
+                   TyIsPointer
+        ]])
     else if name = "cheri_length_get" then
       Some ( ExactRet (Ctype.size_t),
-           [ PolymorphicArg [
-               TyPred (Ctype.ctypeEqual Ctype.intptr_t);
-               TyPred (Ctype.ctypeEqual Ctype.uintptr_t);
-               TyIsPointer
-           ]])
+             [ PolymorphicArg [
+                   TyPred (Ctype.ctypeEqual Ctype.intptr_t);
+                   TyPred (Ctype.ctypeEqual Ctype.uintptr_t);
+                   TyIsPointer
+        ]])
     else if name = "cheri_tag_get" then
       Some ( ExactRet (Ctype( [], (Basic (Integer Bool)))),
-           [ PolymorphicArg [
-               TyPred (Ctype.ctypeEqual Ctype.intptr_t);
-               TyPred (Ctype.ctypeEqual Ctype.uintptr_t);
-               TyIsPointer
-           ]])
+             [ PolymorphicArg [
+                   TyPred (Ctype.ctypeEqual Ctype.intptr_t);
+                   TyPred (Ctype.ctypeEqual Ctype.uintptr_t);
+                   TyIsPointer
+        ]])
     else if name = "cheri_is_equal_exact" then
       Some ( ExactRet (Ctype( [], (Basic (Integer Bool)))),
-           [ PolymorphicArg [
-               TyPred (Ctype.ctypeEqual Ctype.intptr_t);
-               TyPred (Ctype.ctypeEqual Ctype.uintptr_t);
-               TyIsPointer
-               ];
-             PolymorphicArg [
-                 TyPred (Ctype.ctypeEqual Ctype.intptr_t);
-                 TyPred (Ctype.ctypeEqual Ctype.uintptr_t);
-                 TyIsPointer
-               ]
+             [ PolymorphicArg [
+                   TyPred (Ctype.ctypeEqual Ctype.intptr_t);
+                   TyPred (Ctype.ctypeEqual Ctype.uintptr_t);
+                   TyIsPointer
+                 ];
+               PolymorphicArg [
+                   TyPred (Ctype.ctypeEqual Ctype.intptr_t);
+                   TyPred (Ctype.ctypeEqual Ctype.uintptr_t);
+                   TyIsPointer
+                 ]
         ])
     else if name = "cheri_representable_length" then
       Some ( ExactRet (Ctype.size_t), [ ExactArg (Ctype.size_t)])
@@ -2457,9 +2481,56 @@ module CHERI (C:Capability
       get_slice_int' (8, (Z.of_int (int_of_char c)), 0) in
     List.concat (List.map bit_list_of_char bytes)
 
+  let load_string c = return "" (* TODO(CHERI): implement *)
+  let store_string s n c = return 0 (* TODO(CHERI): implement *)
+
   let call_intrinsic loc name args =
-    if name = "cheri_perms_and" then
-      (* this intrinsic modify memory state *)
+    if name = "strfcap" then
+      (* this intrinsic modifies memory state *)
+      let buf_val = List.nth args 0 in
+      let maxsize_val = List.nth args 1 in
+      let format_val = List.nth args 2 in
+      let cap_val = List.nth args 3 in
+      get >>=
+        begin fun st ->
+        match cap_of_mem_value st.funptrmap cap_val with
+        | None -> fail (MerrOther ("CHERI.call_intrinsic: non-cap 1st argument in: '" ^ name ^ "'"))
+        | Some (funptrmap,c) ->
+           update (fun st -> { st with funptrmap=funptrmap }) >>
+             match buf_val, maxsize_val, format_val with
+             | MVpointer (_, PV (_ ,PVconcrete buf_cap)),
+               MVinteger (_, IV (_, maxsize_n)),
+               MVpointer (_, PV (_ ,PVconcrete format_cap))
+               ->
+                begin
+                  load_string format_cap >>= (fun format ->
+                  match C.strfcap format format_cap with
+                  | None ->
+                     (* return -1 in case of format error *)
+                     return
+                       (Some
+                          (MVinteger (Signed Long, IV (Prov_none, Z.of_int (-1)))))
+                  | Some res ->
+                     let res_size = String.length res in
+                     let res_size_n = Z.of_int res_size in
+                     if Z.greater_equal res_size_n maxsize_n
+                     then (* buffer too small. Return -2. *)
+                       return
+                         (Some
+                            (MVinteger (Signed Long, IV (Prov_none, Z.of_int (-1)))))
+                     else
+                       begin
+                         store_string res maxsize_val buf_cap >>
+                           return
+                             (Some
+                                (MVinteger (Signed Long, IV (Prov_none, res_size_n))))
+                       end
+                )
+                end
+             | _,_,_ -> fail (MerrOther ("CHERI.call_intrinsic: wrong types in: '" ^ name ^ "'"))
+        end
+    else if name = "cheri_perms_and" then
+      (* this intrinsic modifies memory state *)
       let cap_val = List.nth args 0 in
       let mask_val = List.nth args 1 in
       get >>=
