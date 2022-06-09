@@ -179,6 +179,8 @@ atomic_term:
       { Ast.Env (a, l) }
   | LBRACE t=term RBRACE UNCHANGED
       { Ast.Unchanged t }
+  | t=name UNCHANGED
+      { Ast.Unchanged (Var t) }
   /* | LBRACE RBRACE t=term */
   /*     { Ast.PredEqRegulator ([], t) } */
   /* | LBRACE SLASH names=separated_list(COMMA, name) RBRACE t=term */
@@ -203,6 +205,10 @@ arith_term:
       { Ast.Remainder (a1, a2) }
   | MOD LPAREN a1=term COMMA a2=term RPAREN
       { Ast.Modulus (a1, a2) }
+  | t=atomic_term LBRACE member=MEMBER EQUAL v=atomic_term RBRACE
+      { Ast.StructUpdate ((t, Id.id member), v) }
+  | t=atomic_term LBRACKET i=atomic_term EQUAL v=atomic_term RBRACKET
+      { Ast.ArraySet ((t, i), v) }
 
 arith_or_atomic_term:
   | a=arith_term
@@ -241,10 +247,6 @@ term:
       { Ast.App (a1, a2) } 
   | predicate = LNAME arguments = args
       { Ast.Pred (predicate, arguments) }
-  | t=atomic_term LBRACE member=MEMBER EQUAL v=atomic_term RBRACE
-      { Ast.StructUpdate ((t, Id.id member), v) }
-  | t=atomic_term LBRACKET i=atomic_term EQUAL v=atomic_term RBRACKET
-      { Ast.ArraySet ((t, i), v) }
 
 
 

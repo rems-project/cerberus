@@ -851,7 +851,6 @@ end
 module WFT = WAT(WRT)
 module WLT = WAT(WFalse)
 module WPackingFT(Spec : WOutputSpec) = WLAT(WOutputDef(Spec))
-module WIA(Spec : WOutputSpec) = WAT(WOutputDef(Spec))
 
 module WRPD = struct
 
@@ -880,21 +879,14 @@ end
 module WLPD = struct
 
   let welltyped (pd : LogicalPredicates.definition) = 
-    let@ () = 
-      pure begin
-          let@ () = ListM.iterM (WLS.is_ls pd.loc) (List.map snd pd.args) in
-          let@ () = add_ls pd.args in
-          let@ () = WBT.is_bt pd.loc pd.return_bt in
-          match pd.definition with
-          | Def body -> let@ _ = WIT.check pd.loc pd.return_bt body in return ()
-          | Uninterp -> return ()
-        end
-    in
-    pure begin 
-        let module WIA = WIA(struct let name_bts = pd.args end) in
-        WIA.welltyped "argument inference" pd.loc pd.infer_arguments
+    pure begin
+        let@ () = ListM.iterM (WLS.is_ls pd.loc) (List.map snd pd.args) in
+        let@ () = add_ls pd.args in
+        let@ () = WBT.is_bt pd.loc pd.return_bt in
+        match pd.definition with
+        | Def body -> let@ _ = WIT.check pd.loc pd.return_bt body in return ()
+        | Uninterp -> return ()
       end
-
 
 end
 

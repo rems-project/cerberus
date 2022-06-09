@@ -393,7 +393,7 @@ let translate_and_register_cn_function env (def: cn_function) =
        return (Def body)
     | None -> return Uninterp in
   let return_bt = translate_cn_base_type def.cn_func_return_bty in
-  return {loc = def.cn_func_loc; args; return_bt; definition; infer_arguments = failwith "asd"}
+  return {loc = def.cn_func_loc; args; return_bt; definition}
 
 
 let translate_cn_predicate env (def: cn_predicate) =

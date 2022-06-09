@@ -1223,8 +1223,6 @@ module Spine : sig
     Loc.t -> args -> AT.lt * label_kind -> (per_path, type_error) m
   val calltype_packing : 
     Loc.t -> Sym.t -> LAT.packing_ft -> (OutputDef.t * per_path, type_error) m
-  val calltype_lpred_argument_inference : 
-    Loc.t -> Sym.t -> args -> AT.arginfer_ft -> (IT.t list * per_path, type_error) m
   val subtype : 
     Loc.t -> arg -> RT.t -> (per_path, type_error) m
 end = struct
@@ -1412,15 +1410,6 @@ end = struct
         : (OutputDef.t * per_path, type_error) m =
     spine_l OutputDef.subst OutputDef.pp 
       loc (PackPredicate name) ft
-
-  let calltype_lpred_argument_inference loc (name : Sym.t) 
-        supplied_args (ft : AT.arginfer_ft) : (IT.t list * per_path, type_error) m =
-    let@ (output_assignment, per_path) =
-      spine OutputDef.subst OutputDef.pp 
-        loc (ArgumentInference name) supplied_args ft
-    in
-    return (List.map (fun o -> o.OutputDef.value) output_assignment, per_path)
-
 
   (* The "subtyping" judgment needs the same resource/lvar/constraint
      inference as the spine judgment. So implement the subtyping
@@ -2357,61 +2346,7 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t * per_path, type_error) m =
           return (rt, [])
        end
     | M_Elpredicate (have_show, pname, asyms) ->
-       let@ global = get_global () in
-       let@ pname, def = Typing.todo_get_logical_predicate_def_s loc (Id.s pname) in
-       let@ (args, per_path) =
-         restore_resources begin 
-           let@ supplied_args = args_of_asyms asyms in
-           Spine.calltype_lpred_argument_inference loc pname 
-             supplied_args def.infer_arguments 
-           end
-       in
-       (* let@ () = 
-        *   let has, expect = List.length args, List.length def.args in
-        *   if has = expect then return ()
-        *   else fail (fun _ -> {loc; msg = Number_arguments {has; expect}})
-        * in
-        * let@ () = 
-        *   ListM.iterM (fun (arg, expected_sort) ->
-        *       WellTyped.ensure_base_type arg.loc ~expect:expected_sort arg.bt
-        *     ) (List.combine args (List.map snd def.args))
-        * in *)
-       let rt = 
-         RT.Computational ((Sym.fresh (), BT.Unit), (loc, None), 
-         LRT.Constraint (LC.t_ (pred_ pname args def.return_bt), (loc, None),
-         LRT.I))
-       in
-       let@ def_body = match def.definition with
-         | Def body -> return body
-         | Uninterp -> 
-            let err = Generic !^"cannot use 'have' or 'show' with uninterpreted predicates" in
-            fail (fun _ -> {loc; msg = err})
-       in
-       begin match have_show with
-       | Have
-       | Show ->
-          let@ constraints = all_constraints () in
-          let extra_assumptions = match args with
-            | [] -> []
-            | key_arg :: _ ->  
-               let key_arg_bt = IT.bt key_arg in
-               LCSet.fold (fun lc acc ->
-                   match lc with
-                   | Forall ((s, bt), t) when BT.equal bt key_arg_bt ->
-                      IT.subst (IT.make_subst [(s, key_arg)]) t :: acc
-                   | _ -> 
-                      acc
-                 ) constraints []
-          in
-          let@ provable = provable loc in
-          let lc = LC.t_ (impl_ (and_ extra_assumptions, pred_ pname args def.return_bt)) in
-          begin match provable lc with
-          | `True -> return (rt, per_path)
-          | `False ->
-             let@ model = model () in
-             fail (fun ctxt -> {loc; msg = Unsat_constraint {constr = lc; info = (loc, None); ctxt; model}})
-          end
-       end
+       unsupported loc !^"have/show"
     | M_Einstantiate (oid, asym) ->
        let@ arg = arg_of_asym asym in
        let arg_it = it_of_arg arg in

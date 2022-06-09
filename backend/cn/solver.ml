@@ -588,13 +588,9 @@ let tactics context ts =
 
 let tactic context = 
   tactics context [
-      (* "blast-term-ite"; *)
-      (* "cofactor-term-ite"; *)
-      (* "simplify"; *)
-      (* "purify-arith"; *)
-      (* "solve-eqs"; *)
-      (* "elim-term-ite"; *)
-      "qfauflia";
+      "propagate-values";
+      "solve-eqs";
+      "smt";
     ]
 
 let make struct_decls : solver = 
