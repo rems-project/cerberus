@@ -2393,6 +2393,7 @@ module CHERI (C:Capability
                                          volatile = false;
                                        }
                                      , Ctype.signed_char)));
+              ExactArg Ctype.size_t;
               ExactArg (Ctype ([], Pointer (
                                        {
                                          const    = true;
@@ -2400,7 +2401,6 @@ module CHERI (C:Capability
                                          volatile = false;
                                        }
                                      , Ctype.signed_char)));
-              ExactArg Ctype.size_t;
               PolymorphicArg [
                   TyPred (Ctype.ctypeEqual Ctype.intptr_t);
                   TyPred (Ctype.ctypeEqual Ctype.uintptr_t);
@@ -2489,7 +2489,8 @@ module CHERI (C:Capability
         let bs = fetch_bytes st.bytemap addr 1 in
         assert(List.length bs = 1) ;
         match (List.hd bs).value with
-        | None -> fail (MerrReadUninit loc)
+        | None ->
+           fail (MerrReadUninit loc)
         | Some c ->
            if c = '\000' then
              return acc
@@ -2499,15 +2500,48 @@ module CHERI (C:Capability
     in
     loop "" Z.zero
 
-  let store_string s n c = return 0 (* TODO(CHERI): implement *)
+  let store_string loc s n c =
+    let n' = Z.to_int n in
+    if n' = 0 then return 0
+    else
+      let cs = List.of_seq (String.to_seq s) in
+      let cs = L.take (n'-1) cs in
+      let pre_bs = List.map (fun c ->
+                       {
+                         AbsByte.prov= Prov_none;
+                         copy_offset= None;
+                         value = Some c
+                       }
+                     ) cs in
+      (* always add terminating zero *)
+      let pre_bs = List.append pre_bs [{
+                                          AbsByte.prov= Prov_none;
+                                          copy_offset= None;
+                                          value = Some '\000'
+                     }] in
+      assert (Z.less (Z.of_int (List.length pre_bs)) n) ;
+      let addr = C.cap_get_value c in
+      let bs = List.mapi (fun i b -> (Z.add addr (Z.of_int i), b)) pre_bs in
+      cap_check loc c Z.zero WriteIntent (List.length bs) >>
+        update
+          (fun st ->
+            { st with (* last_used= alloc_id_opt; TODO: Do we need this? *)
+              bytemap=
+                List.fold_left (fun acc (addr, b) ->
+                    IntMap.add addr b acc
+                  ) st.bytemap bs
+            }
+          ) >>
+        return (List.length bs)
 
   let call_intrinsic loc name args =
+    (* Printf.fprintf stderr "Intrinsic %s called!\n" name; *)
     if name = "strfcap" then
       (* this intrinsic modifies memory state *)
-      let buf_val = List.nth args 0 in
+      let buf_val     = List.nth args 0 in
       let maxsize_val = List.nth args 1 in
-      let format_val = List.nth args 2 in
-      let cap_val = List.nth args 3 in
+      let format_val  = List.nth args 2 in
+      let cap_val     = List.nth args 3 in
       get >>=
         begin fun st ->
         match cap_of_mem_value st.funptrmap cap_val with
@@ -2537,7 +2571,7 @@ module CHERI (C:Capability
                             (MVinteger (Signed Long, IV (Prov_none, Z.of_int (-1)))))
                      else
                        begin
-                         store_string res maxsize_val buf_cap >>
+                         store_string loc res maxsize_n buf_cap >>
                            return
                              (Some
                                 (MVinteger (Signed Long, IV (Prov_none, res_size_n))))
