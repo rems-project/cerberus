@@ -590,9 +590,9 @@ module CHERI (C:Capability
   let cap_bounds_check (base,limit) addr sz =
     Z.less_equal base addr && Z.less_equal (Z.add addr sz) limit
 
-  let cap_check loc c intent sz =
+  let cap_check loc c offset intent sz =
     if C.cap_is_valid c then
-      let addr = C.cap_get_value c in
+      let addr = Z.add (C.cap_get_value c) offset in
       let pcheck =
         match intent with
         | ReadIntent -> C.P.perm_is_load
@@ -1013,6 +1013,16 @@ module CHERI (C:Capability
       end >>
       return alloc_id
 
+  let extract_unspec xs =
+    List.fold_left (fun acc_opt c_opt ->
+        match acc_opt, c_opt with
+        | None, _ ->
+           None
+        | _, None ->
+           None
+        | (Some acc, Some c) ->
+           Some (c :: acc)
+      ) (Some []) (List.rev xs)
 
   (* INTERNAL abst: ctype -> AbsByte.t list -> [`NoTaint | `NewTaint of storage_instance_id list] * mem_value * AbsByte.t list *)
   (* ASSUMES: has_size ty /\ |bs| >= sizeof ty*)
@@ -1032,16 +1042,6 @@ module CHERI (C:Capability
             [`NoTaint | `NewTaint of storage_instance_id list] * mem_value_with_err * AbsByte.t list
     =
     let self = abst loc find_overlaping funptrmap tag_query_f in
-    let extract_unspec xs =
-      List.fold_left (fun acc_opt c_opt ->
-          match acc_opt, c_opt with
-          | None, _ ->
-             None
-          | _, None ->
-             None
-          | (Some acc, Some c) ->
-             Some (c :: acc)
-        ) (Some []) (List.rev xs) in
 
     if List.length bs < sizeof cty then
       failwith "abst, |bs| < sizeof(ty)";
@@ -1739,7 +1739,7 @@ module CHERI (C:Capability
          fail (MerrWIP "load, bs' <> []")
       end in
     let do_load_cap alloc_id_opt c sz =
-      cap_check loc c ReadIntent sz >> do_load alloc_id_opt (C.cap_get_value c) sz
+      cap_check loc c Z.zero ReadIntent sz >> do_load alloc_id_opt (C.cap_get_value c) sz
     in
     match (prov, ptrval_) with
     | (_, PVnull _) ->
@@ -1823,7 +1823,7 @@ module CHERI (C:Capability
       let do_store_cap alloc_id_opt c =
         let sz = sizeof ty in
         let nsz = Z.of_int sz in
-        cap_check loc c WriteIntent sz >>
+        cap_check loc c Z.zero WriteIntent sz >>
           let addr = C.cap_get_value c in
           begin
             update begin fun st ->
@@ -2481,7 +2481,24 @@ module CHERI (C:Capability
       get_slice_int' (8, (Z.of_int (int_of_char c)), 0) in
     List.concat (List.map bit_list_of_char bytes)
 
-  let load_string c = return "" (* TODO(CHERI): implement *)
+  let load_string loc c =
+    let rec loop acc offset =
+      cap_check loc c offset ReadIntent 1 >>
+        let addr = Z.add (C.cap_get_value c) offset in
+        get >>= fun st ->
+        let bs = fetch_bytes st.bytemap addr 1 in
+        assert(List.length bs = 1) ;
+        match (List.hd bs).value with
+        | None -> fail (MerrReadUninit loc)
+        | Some c ->
+           if c = '\000' then
+             return acc
+           else
+             let s = acc ^ (String.make 1 c) in
+             loop s (Z.succ offset)
+    in
+    loop "" Z.zero
+
   let store_string s n c = return 0 (* TODO(CHERI): implement *)
 
   let call_intrinsic loc name args =
@@ -2503,8 +2520,8 @@ module CHERI (C:Capability
                MVpointer (_, PV (_ ,PVconcrete format_cap))
                ->
                 begin
-                  load_string format_cap >>= (fun format ->
-                  match C.strfcap format format_cap with
+                  load_string loc format_cap >>= (fun format ->
+                  match C.strfcap format c with
                   | None ->
                      (* return -1 in case of format error *)
                      return
