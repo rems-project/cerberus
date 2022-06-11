@@ -764,7 +764,7 @@ let translate_function_call loc translate_expr stdlib e es =
       the actual call." *)
     E.return $
       Caux.add_std "§6.5.2.2#10, sentence 1"
-      (Caux.mk_wseq_e
+      (Caux.mk_sseq_e
         (Caux.mk_tuple_pat begin
           (Caux.mk_tuple_pat [ call_sym_pat
                              ; Caux.mk_tuple_pat [ret_sym_pat; params_sym_pat; is_variadic_sym_pat; has_proto_sym_pat]])
@@ -772,10 +772,11 @@ let translate_function_call loc translate_expr stdlib e es =
         end)
         begin
           Caux.add_std "§6.5.2.2#4, sentence 2" begin
-            Caux.mk_unseq_e
+            Caux.mk_unseq_e begin
               (Caux.mk_sseq_e fun_sym_pat core_e
-                (Caux.mk_pure_e (Caux.mk_tuple_pe [fun_sym_pe; Caux.mk_cfunction_pe fun_sym_pe]))
-                  :: (List.reverse rev_core_arg_es))
+                (Caux.mk_pure_e (Caux.mk_tuple_pe [fun_sym_pe; Caux.mk_cfunction_pe fun_sym_pe])))
+              :: (List.reverse rev_core_arg_es)
+            end
           end
         end
 begin if expect_is_variadic then

@@ -156,6 +156,7 @@ citests=(
   0307-incr_atomic.exhaust.c
   0308-struct_global_with_dep.c
   0309-comma_void_operand.c
+  0310-funcall_sequencing.c
 )
 
 # TESTS THAT ARE KNOW TO FAIL (for example .error test for which we need to improve the message)
