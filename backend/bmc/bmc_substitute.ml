@@ -171,7 +171,7 @@ let rec unsafe_substitute_expr (map: substitute_map)
     | Epar _
     | Eannot _ | Eexcluded _ | Ewait _ ->
         assert false
-    | Epack _ | Eunpack _ | Ehave _ | Eshow _ ->
+    | Epack _ | Eunpack _ | Ehave _ | Eshow _ | Einstantiate _ ->
         (* these two are CN specific contructors *)
         assert false
   in

@@ -620,7 +620,7 @@ module BmcInline = struct
         mapM inline_e es >>= fun inlined_es ->
         return (Epar inlined_es)
     | Ewait _       -> assert false
-    | Epack _ | Eunpack _ | Ehave _ | Eshow _ ->
+    | Epack _ | Eunpack _ | Ehave _ | Eshow _ | Einstantiate _ ->
         (* these two are CN specific contructors *)
         assert false
     | Eannot _ | Eexcluded _ -> assert false
@@ -1024,7 +1024,7 @@ module BmcSSA = struct
         return (Epar ssad_elist)
     | Eannot _ | Eexcluded _ | Ewait _ ->
         assert false
-    | Epack _ | Eunpack _ | Ehave _ | Eshow _ ->
+    | Epack _ | Eunpack _ | Ehave _ | Eshow _ | Einstantiate _ ->
         (* these two are CN specific contructors *)
         assert false
     ) >>= fun ssad_e ->
@@ -1867,7 +1867,7 @@ module BmcZ3 = struct
         mapM z3_e elist >>= fun z3d_elist ->
         return (ctor_to_z3 Ctuple z3d_elist None uid file)
     | Ewait _  -> assert false
-    | Epack _ | Eunpack _ | Ehave _ | Eshow _ ->
+    | Epack _ | Eunpack _ | Ehave _ | Eshow _ | Einstantiate _ ->
         (* these two are CN specific contructors *)
         assert false
     | Eannot _ | Eexcluded _ -> assert false
@@ -2026,7 +2026,7 @@ module BmcDropCont = struct
         (* TODO: Erun within Epar? *)
         return mk_false
     | Ewait _       -> assert false
-    | Epack _ | Eunpack _ | Ehave _ | Eshow _ ->
+    | Epack _ | Eunpack _ | Ehave _ | Eshow _ | Einstantiate _ ->
         (* these two are CN specific contructors *)
         assert false
     | Eannot _ | Eexcluded _ -> assert false
@@ -2506,7 +2506,7 @@ module BmcBind = struct
         mapM bind_e es >>= fun bound_es ->
         return (List.concat bound_es)
     | Ewait _       -> assert false
-    | Epack _ | Eunpack _ | Ehave _ | Eshow _ ->
+    | Epack _ | Eunpack _ | Ehave _ | Eshow _ | Einstantiate _ ->
         (* these two are CN specific contructors *)
         assert false
     | Eannot _ | Eexcluded _ -> assert false
@@ -2929,7 +2929,7 @@ module BmcVC = struct
         mapM vcs_e es >>= fun vcss_es ->
         return (List.concat vcss_es)
     | Ewait _       -> assert false
-    | Epack _ | Eunpack _ | Ehave _ | Eshow _ ->
+    | Epack _ | Eunpack _ | Ehave _ | Eshow _ | Einstantiate _ ->
         (* these two are CN specific contructors *)
         assert false
     | Eannot _ | Eexcluded _ -> assert false
@@ -3100,7 +3100,7 @@ module BmcRet = struct
         (* TODO: check this. Really want to assert can't jump out of par... *)
         return (List.concat ret_es)
     | Ewait _       -> assert false
-    | Epack _ | Eunpack _ | Ehave _ | Eshow _ ->
+    | Epack _ | Eunpack _ | Ehave _ | Eshow _ | Einstantiate _ ->
         (* these two are CN specific contructors *)
         assert false
     | Eannot _ | Eexcluded _ -> assert false
@@ -4230,7 +4230,7 @@ module BmcSeqMem = struct
     | Epar es ->
         failwith "Error: Epar in sequentialised; concurrent mode only"
     | Ewait _       -> assert false
-    | Epack _ | Eunpack _ | Ehave _ | Eshow _ ->
+    | Epack _ | Eunpack _ | Ehave _ | Eshow _ | Einstantiate _ ->
         (* these two are CN specific contructors *)
         assert false
     | Eannot _ | Eexcluded _ -> assert false
@@ -4909,7 +4909,7 @@ module BmcConcActions = struct
         return (List.concat elist_actions)
     | Eannot _ | Eexcluded _ | Ewait _ ->
         assert false
-    | Epack _ | Eunpack _ | Ehave _ | Eshow _ ->
+    | Epack _ | Eunpack _ | Ehave _ | Eshow _ | Einstantiate _ ->
         (* these two are CN specific contructors *)
         assert false
     ) >>= fun actions ->
@@ -5042,7 +5042,7 @@ module BmcConcActions = struct
         return (List.concat po_es)
     | Eannot _ | Eexcluded _ | Ewait _ ->
         assert false
-    | Epack _ | Eunpack _ | Ehave _ | Eshow _ ->
+    | Epack _ | Eunpack _ | Ehave _ | Eshow _ | Einstantiate _ ->
         (* these two are CN specific contructors *)
         assert false
     )
@@ -5376,7 +5376,7 @@ module BmcConcActions = struct
                 union_deps (List.map snd taint_es))
     | Eannot _ | Eexcluded _ | Ewait _ ->
         assert false
-    | Epack _ | Eunpack _ | Ehave _ | Eshow _ ->
+    | Epack _ | Eunpack _ | Ehave _ | Eshow _ | Einstantiate _ ->
         (* these two are CN specific contructors *)
         assert false
     )
