@@ -969,7 +969,6 @@ BEFORE EVAL_PEXPR2
                   | None ->
                       error (show addr ^ " does not point to a function (Eccall)")
                   end)
-                (fun _ -> error "function pointer has an unspecified value")
           | Just cval ->
               Step_error ((Loc.stringFromLocation th_st.current_loc) ^ "the first argument of pcall() must evaluate to a cfunction, found: " ^
                 Pp.stringFromCore_value cval ^ "")

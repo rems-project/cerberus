@@ -1496,8 +1496,6 @@ let infer_ptrval (loc : loc) (ptrval : pointer_value) : (vt, type_error) m =
     )
     ( fun _prov loc -> 
       return (Loc, pointer_ loc) )
-    ( fun () -> 
-      Debug_ocaml.error "unspecified pointer value" )
 
 let rec infer_mem_value (loc : loc) (mem : mem_value) : (vt, type_error) m =
   let open BT in

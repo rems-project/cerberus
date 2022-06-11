@@ -237,7 +237,6 @@ let rec absvalue_of_texpr ~with_sym core man = function
           (fun _ -> assert false (* null pointer *))
           (fun sym -> return @@ ATpointer (APfunction sym) (* function *))
           (fun prov addr -> assert false)
-          (fun () -> assert false (* unspecified *))
       | Vunit ->
         return @@ ATunit
       | Vtrue ->

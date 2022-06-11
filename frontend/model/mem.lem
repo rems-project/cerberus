@@ -85,8 +85,7 @@ val concrete_ptrval: integer -> integer -> pointer_value
 val case_ptrval: forall 'a. pointer_value ->
    (* null pointer *) (Ctype.ctype -> 'a) ->
    (* function pointer *) (Symbol.sym -> 'a) ->
-   (* concrete pointer *) (maybe integer -> integer -> 'a) ->
-   (* unspecified value *) (unit -> 'a) -> 'a
+   (* concrete pointer *) (maybe integer -> integer -> 'a) -> 'a
 val case_funsym_opt: mem_state -> pointer_value -> maybe Symbol.sym
 
 declare ocaml target_rep function concrete_ptrval = `Impl_mem.concrete_ptrval`

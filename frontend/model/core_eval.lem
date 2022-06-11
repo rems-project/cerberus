@@ -759,7 +759,6 @@ KKK:              EU.return (PEval (Vloaded (LVspecified (OVstruct tag_sym xs)))
                   | None ->
                       EU.fail $ Illformed_program (Loc.stringFromLocation loc ^ ": " ^ show addr ^ " does not point to a function")
                   end)
-                (fun _ -> EU.fail $ Illformed_program "function pointer has an unspecified value")
           | Just (Vloaded (LVunspecified _)) ->
               EU.fail $ Illformed_program "function pointer has an unspecified value"
           | _ ->

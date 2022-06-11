@@ -1316,7 +1316,6 @@ let step_ctx mem_st file core_extern current_tid (parent_tid_opt, th_st) =
                           | None ->
                               error (show addr ^ " does not point to a function (Eccall)")
                         end)
-                      (fun _ -> error "function pointer has an unspecified value")
                   | _ ->
                       error "TODO(use core_runM) Eccall illtyped first operand"
                 end
