@@ -442,7 +442,7 @@ module Concrete : Memory = struct
       (* base address, size *)
     | FP of [`W | `R] * address * N.num
   
-  let do_overlap (FP (k1, b1, sz1)) (FP (k2, b2, sz2)) =
+  let overlapping (FP (k1, b1, sz1)) (FP (k2, b2, sz2)) =
     match k1, k2 with
       | `R, `R ->
           false

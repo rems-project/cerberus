@@ -143,6 +143,6 @@ type impl_footprint =
   | FP_alloc of allocation_id * ctype
   | FP_device of integer_value_base * ctype
 
-val impl_do_overlap: impl_footprint -> impl_footprint -> bool
-let impl_do_overlap _ _ =
-  error "impl_do_overlap"
+val impl_overlapping: impl_footprint -> impl_footprint -> bool
+let impl_overlapping _ _ =
+  error "impl_overlapping"

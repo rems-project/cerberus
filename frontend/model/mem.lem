@@ -25,9 +25,9 @@ end
 (* This abstract in returns by memory actions and two footprints can be checked for overlapping.
    They are in particular useful to detect races. *)
 type footprint
-val do_overlap: footprint -> footprint -> bool
+val overlapping: footprint -> footprint -> bool
 declare ocaml target_rep type footprint = `Impl_mem.footprint`
-declare ocaml target_rep function do_overlap = `Impl_mem.do_overlap`
+declare ocaml target_rep function overlapping = `Impl_mem.overlapping`
 
 
 type mem_state

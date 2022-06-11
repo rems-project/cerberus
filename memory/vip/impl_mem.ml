@@ -123,7 +123,7 @@ end : Constraints with type t = mem_iv_constraint)
 type footprint =
   FOOTPRINT
 
-let do_overlap _ _ =
+let overlapping _ _ =
   (* No unsequenced races detection *)
   false
 

@@ -30,7 +30,7 @@ module type Memory = sig
   val cs_module : (module Constraints with type t = mem_iv_constraint)
   
   type footprint
-  val do_overlap: footprint -> footprint -> bool
+  val overlapping: footprint -> footprint -> bool
   
   type mem_state
   val initial_mem_state: mem_state

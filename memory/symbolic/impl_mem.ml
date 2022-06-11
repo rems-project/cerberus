@@ -558,7 +558,7 @@ end : Constraints with type t = mem_iv_constraint)
 let cs_module = (module Constraints : Constraints with type t = mem_iv_constraint)
 
 type footprint = Defacto_memory_types.impl_footprint
-let do_overlap _ _ = false
+let overlapping _ _ = false
 type mem_state = Defacto_memory.impl_mem_state
 let initial_mem_state = Defacto_memory.impl_initial_mem_state
 type 'a memM =

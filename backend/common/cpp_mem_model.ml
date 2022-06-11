@@ -266,7 +266,7 @@ module CppMemModel : Memory = struct
   end : Constraints with type t = mem_iv_constraint)
 
   type footprint = Footprint
-  let do_overlap fp1 fp2 = failwith "footprint:do_overlap"
+  let overlapping fp1 fp2 = failwith "footprint:overlapping"
 
   let fromImpl = function
     | Some x -> x

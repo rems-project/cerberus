@@ -196,12 +196,12 @@ let do_race xs1 xs2 =
               if List.elem id1 exclusion2 || List.elem id2 exclusion1 then
                 false
               else
-                Mem.do_overlap fp1 fp2
+                Mem.overlapping fp1 fp2
           | DA_pos exclusion2 fp2 ->
               if List.elem id1 exclusion2 then
                 false
               else
-                Mem.do_overlap fp1 fp2
+                Mem.overlapping fp1 fp2
         end) xs2
     | DA_pos exclusion1 fp1 ->
         List.any (function
@@ -209,9 +209,9 @@ let do_race xs1 xs2 =
               if List.elem id2 exclusion1 then
                 false
               else
-                Mem.do_overlap fp1 fp2
+                Mem.overlapping fp1 fp2
           | DA_pos _ fp2 ->
-                Mem.do_overlap fp1 fp2
+                Mem.overlapping fp1 fp2
         end) xs2
   end) xs1
 
