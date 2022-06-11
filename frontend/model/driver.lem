@@ -882,24 +882,28 @@ let can_advance = function
   | Core_reduction.Step_error2 _ ->
       error "can_advance: Step_error2"
   | Core_reduction.Step_thread_done2 _ _ ->
-      error "can_advance: Step_thread_done2"
+      true
   | Core_reduction.Step_done2 _ ->
       false
   | Core_reduction.Step_memop_request2 _ _ _ _ is_unseq_with_ccall _ ->
       (* TODO: only correct if there is only ONE thread *)
       not is_unseq_with_ccall (* false *)
   | Core_reduction.Step_spawn_threads2 _ _ ->
-      error "can_advance: Step_spawn_threads2"
+      true
   | Core_reduction.Step_fs2 _ _ _ ->
       false
   | Core_reduction.Step_nd2 _ ->
-      error "can_advance: Step_nd2"
+      true
 end
+
+type advance_info =
+  | NOWAKEUP
+  | WAKEUP of bool * list Mem.thread_id 
 
 let advance_step tid step =
   match step with
     | Core_reduction.Step_ccall2 _ _ ->
-        ND.return ()
+        ND.return NOWAKEUP
     | Core_reduction.Step_with_runstate2 rsk step_m ->
         match rsk with
           | Core_reduction.RSK_tau _ (Core_run.TSK_Return sym mval_opt) ->
@@ -913,7 +917,8 @@ let advance_step tid step =
         ND.update (fun dr_st -> <| dr_st with
           core_state= Core_run.update_thread_state tid th_st' dr_st.core_state;
           dr_step_counter= dr_st.dr_step_counter + 1
-        |>)
+        |>) >>= fun () ->
+        ND.return NOWAKEUP
 
     | Core_reduction.Step_tau2 debug_str tsk th_st' ->
         match tsk with
@@ -927,17 +932,20 @@ let advance_step tid step =
         ND.update (fun dr_st -> <| dr_st with
           core_state= Core_run.update_thread_state tid th_st' dr_st.core_state;
           dr_step_counter= dr_st.dr_step_counter + 1
-        |>)
+        |>) >>= fun () ->
+        ND.return NOWAKEUP
 
     | Core_reduction.Step_action_request2 _ loc tid is_unseq_with_ccall m_request ->
-        if is_unseq_with_ccall then
+        begin if is_unseq_with_ccall then
           ND.return ()
         else
           liftCore_run m_request >>= fun request ->
           perform_action_request2 false (*TODO!!! with_concurrency*) loc tid request
+        end >>= fun () ->
+        ND.return NOWAKEUP
 
     | Core_reduction.Step_blocked2 ->
-        ND.return ()
+        ND.return NOWAKEUP
 
     | Core_reduction.Step_error2 debug_str ->
         error ("Driver.advance_step => Step_error2: " ^ debug_str)
@@ -958,17 +966,18 @@ let advance_step tid step =
           core_state= Core_run.kill_thread tid parent_tid (Set.map Cmm.aid_of last_actions_of_current_thread) cval dr_st.core_state;
           dr_step_counter= dr_st.dr_step_counter + 1;
         |>) >>= fun () ->
-        (* try to wake up the parent thread *)
-        error "ND.return (WAKEUP [parent_tid])"
+        ND.return (WAKEUP true [parent_tid])
 
     | Core_reduction.Step_done2 cval ->
-        ND.return ()
+        ND.return NOWAKEUP
 
     | Core_reduction.Step_memop_request2 loc memop cvals tid is_unseq_with_ccall mk_th_st ->
-        if is_unseq_with_ccall then
+        begin if is_unseq_with_ccall then
           ND.return ()
         else
           perform_memop_request2 loc memop cvals tid mk_th_st
+        end >>= fun () ->
+        ND.return NOWAKEUP
 
     | Core_reduction.Step_spawn_threads2 mk_parent_th_st spawn_th_sts ->
         ND.read (fun dr_st ->
@@ -985,13 +994,18 @@ let advance_step tid step =
                         (mk_parent_th_st spawn_tids)
                         core_st';
         |>) >>= fun () ->
-        error "ND.return (WAKEUP spawn_tids)"
+        ND.return (WAKEUP false spawn_tids)
 
     | Core_reduction.Step_fs2 _ _ _ ->
         error "TODO: Step_fs2"
     
-    | Core_reduction.Step_nd2 _ ->
-        error "TODO: Step_nd2"
+    | Core_reduction.Step_nd2 th_sts ->
+        ND.pick (SK_misc ["nd"]) th_sts >>= fun th_st' ->
+        ND.update (fun dr_st -> <| dr_st with
+          core_state= Core_run.update_thread_state tid th_st' dr_st.core_state;
+          dr_step_counter= dr_st.dr_step_counter + 1
+        |>) >>= fun () ->
+        ND.return NOWAKEUP
   end
 
 
@@ -1017,7 +1031,7 @@ let rec drive_nonmemory_steps_aux2 (acc: map Mem.thread_id (list Core_reduction.
           match List.lookup tid dr_st.core_state.Core_run.thread_states with
             | Just z -> z
             | Nothing ->
-                error "Driver.drive_nonmemory_steps_aux2 => invalid tid"
+                error ("Driver.drive_nonmemory_steps_aux2 => invalid tid: " ^ show tid)
           end in
         Core_reduction.step_ctx dr_st.layout_state dr_st.core_file dr_st.core_extern tid th_info
       ) >>= fun steps ->
@@ -1025,8 +1039,17 @@ let rec drive_nonmemory_steps_aux2 (acc: map Mem.thread_id (list Core_reduction.
         | Nothing ->
             drive_nonmemory_steps_aux2 (Map.insert tid steps acc) xs'
         | Just step ->
-            advance_step tid step >>= fun () ->
-              drive_nonmemory_steps_aux2 acc (tid :: xs')
+            advance_step tid step >>= fun wakeups ->
+            let xs'' =
+              match wakeups with
+                | NOWAKEUP ->
+                    tid :: xs'
+                | WAKEUP false tids ->
+                    tid :: Utils.list_inserts tids xs'
+                | WAKEUP true tids ->
+                    Utils.list_inserts tids xs'
+              end in
+            drive_nonmemory_steps_aux2 acc xs''
       end
 end
 

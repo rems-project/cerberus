@@ -236,6 +236,12 @@ let list_insert x xs =
   else
     x :: xs
 
+val list_inserts: forall 'a. Eq 'a => list 'a -> list 'a -> list 'a
+let list_inserts xs ys =
+  List.foldl (fun acc x ->
+    list_insert x acc
+  ) ys (List.reverse xs)
+
 val first: forall 'a 'b 'c . ('a -> 'b) -> 'a * 'c -> 'b * 'c
 let first f (x, y) =
   (f x, y)
