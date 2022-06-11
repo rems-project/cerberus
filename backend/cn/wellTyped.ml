@@ -73,7 +73,6 @@ let ensure_same_argument_number loc input_output has ~expect =
     | `Output -> fail (fun _ -> {loc; msg = Number_output_arguments {has; expect}})
 
 
-
 module WBT = struct
 
   open BT
@@ -337,30 +336,16 @@ module WIT = struct
                 | Struct tag -> return tag
                 | has -> fail (illtyped_index_term loc context t has "struct")
               in
-              let@ layout = get_struct_decl loc tag in
-              let decl_members = Memory.member_types layout in
-              let@ bt = match List.assoc_opt Id.equal member decl_members with
-                | Some sct -> return (BT.of_sct sct)
-                | None -> 
-                   let expected = "struct with member " ^ Id.s member in
-                   fail (illtyped_index_term loc context t (Struct tag) expected)
-              in
-              return (bt, StructMember (t, member))
+              let@ field_ct = get_struct_member_type loc tag member in
+              return (BT.of_sct field_ct, StructMember (t, member))
            | StructUpdate ((t, member), v) ->
               let@ t = infer loc ~context t in
               let@ tag = match IT.bt t with
                 | Struct tag -> return tag
                 | has -> fail (illtyped_index_term loc context t has "struct")
               in
-              let@ layout = get_struct_decl loc tag in
-              let decl_members = Memory.member_types layout in
-              let@ bt = match List.assoc_opt Id.equal member decl_members with
-                | Some sct -> return (BT.of_sct sct)
-                | None -> 
-                   let expected = "struct with member " ^ Id.s member in
-                   fail (illtyped_index_term loc context t (Struct tag) expected)
-              in
-              let@ v = check loc ~context bt v in
+              let@ field_ct = get_struct_member_type loc tag member in
+              let@ v = check loc ~context (BT.of_sct field_ct) v in
               return (BT.Struct tag, StructUpdate ((t, member), v))
          in
          return (IT (Struct_op struct_op, bt))
@@ -851,7 +836,6 @@ end
 module WFT = WAT(WRT)
 module WLT = WAT(WFalse)
 module WPackingFT(Spec : WOutputSpec) = WLAT(WOutputDef(Spec))
-module WIA(Spec : WOutputSpec) = WAT(WOutputDef(Spec))
 
 module WRPD = struct
 
@@ -880,21 +864,14 @@ end
 module WLPD = struct
 
   let welltyped (pd : LogicalPredicates.definition) = 
-    let@ () = 
-      pure begin
-          let@ () = ListM.iterM (WLS.is_ls pd.loc) (List.map snd pd.args) in
-          let@ () = add_ls pd.args in
-          let@ () = WBT.is_bt pd.loc pd.return_bt in
-          match pd.definition with
-          | Def body -> let@ _ = WIT.check pd.loc pd.return_bt body in return ()
-          | Uninterp -> return ()
-        end
-    in
-    pure begin 
-        let module WIA = WIA(struct let name_bts = pd.args end) in
-        WIA.welltyped "argument inference" pd.loc pd.infer_arguments
+    pure begin
+        let@ () = ListM.iterM (WLS.is_ls pd.loc) (List.map snd pd.args) in
+        let@ () = add_ls pd.args in
+        let@ () = WBT.is_bt pd.loc pd.return_bt in
+        match pd.definition with
+        | Def body -> let@ _ = WIT.check pd.loc pd.return_bt body in return ()
+        | Uninterp -> return ()
       end
-
 
 end
 

@@ -419,6 +419,8 @@ let untype_file (file: 'a Core.typed_file) : 'a Core.file =
           Ehave (id, List.map untype_pexpr pes)
       | Eshow (id, pes) ->
           Eshow (id, List.map untype_pexpr pes)
+      | Einstantiate (id, pe) ->
+          Einstantiate (id, untype_pexpr pe)
       | Eannot _ | Eexcluded _ ->
           assert false (* only exists during Core runtime *)
     in Expr (annots, aux expr_) in

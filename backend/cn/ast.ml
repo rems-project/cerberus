@@ -314,7 +314,6 @@ type function_spec = {
 
 type label_spec = {
     global_arguments : garg list;
-    function_arguments: aarg list;
     label_arguments: aarg list;
     invariant : (Loc.t * condition) list
   }

@@ -226,6 +226,9 @@ let rec remove_skips (Expr annot expr_ as expr) =
     | Eshow _ _ ->
         (* unchanged *)
         expr
+    | Einstantiate _ _ ->
+        (* unchanged *)
+        expr
     | Eannot xs e ->
         (* just traversing *)
         Expr annot (Eannot xs (remove_skips e))
@@ -355,6 +358,9 @@ let rec remove_unseqs (Expr annot expr_ as expr) =
         (* unchanged *)
         expr
     | Eshow _ _ ->
+        (* unchanged *)
+        expr
+    | Einstantiate _ _ ->
         (* unchanged *)
         expr
     | Eannot xs e ->
@@ -576,6 +582,8 @@ let rec remove_dead_aux (Expr annot expr_ as expr) =
         Left expr
     | Eshow _ _ ->
         Left expr
+    | Einstantiate _ _ ->
+        Left expr
     | Eannot xs e ->
         match remove_dead_aux e with
           | Left e' ->
@@ -663,6 +671,8 @@ let rec flatten_seqs (Expr annot expr_ as expr) =
     | Ehave _ _ ->
         expr
     | Eshow _ _ ->
+        expr
+    | Einstantiate _ _ ->
         expr
     | Eannot xs e ->
         Expr annot (Eannot xs (flatten_seqs e))
@@ -848,6 +858,8 @@ let rec remove_conv_int (Expr annot expr_) =
         expr_
     | Eshow _ _ ->
         expr_
+    | Einstantiate _ _ ->
+        expr_
     | Eannot fps e ->
         Eannot fps (remove_conv_int e)
     | Eexcluded n act ->
@@ -978,6 +990,8 @@ let rec sequentialise_creates_kills (Expr annot expr_) =
     | Ehave _ _ ->
         expr_
     | Eshow _ _ ->
+        expr_
+    | Einstantiate _ _ ->
         expr_
     | Eannot xs e ->
         Eannot xs (sequentialise_creates_kills e)
@@ -1273,6 +1287,8 @@ let rec pure_propagation2 (Expr annot expr_ as expr) =
         expr
     | Eshow _ _ ->
         expr
+    | Einstantiate _ _ ->
+        expr
     | Eannot xs e ->
         Expr annot (Eannot xs (pure_propagation2 e))
     | Eexcluded _ _ ->
@@ -1468,6 +1484,8 @@ let rec simpl_case (Expr annot expr_ as expr) =
     | Ehave _ _ ->
         expr
     | Eshow _ _ ->
+        expr
+    | Einstantiate _ _ ->
         expr
     | Eannot xs e ->
         wrap $ Eannot xs (simpl_case e)

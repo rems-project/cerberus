@@ -920,6 +920,8 @@ let rec add_e ~sequentialise (in_v, out_v) in_pat (Expr (_, e_)) =
      return `OK
   | Eshow _ ->
      return `OK
+  | Einstantiate _ ->
+     return `OK
   | Eannot _ | Eexcluded _ ->
      assert false (* only exists during runtime *)
 
@@ -963,6 +965,8 @@ let rec collect_saves (Expr (_, e_)) =
   | Ehave _ ->
     return ()
   | Eshow _ ->
+    return ()
+  | Einstantiate _ ->
     return ()
   | Eannot _ | Eexcluded _ ->
     assert false (* only exists during Core runtime *)

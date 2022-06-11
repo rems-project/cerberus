@@ -321,6 +321,7 @@ type generic_expr_ 'a 'bty 'sym =  (* (effectful) expression *)
  | Eunpack of Annot.to_pack_unpack * list (generic_pexpr 'bty 'sym)
  | Ehave of Symbol.identifier * list (generic_pexpr 'bty 'sym)
  | Eshow of Symbol.identifier * list (generic_pexpr 'bty 'sym)
+ | Einstantiate of maybe Symbol.identifier * generic_pexpr 'bty 'sym
   
  | Eannot of list dyn_annotation * generic_expr 'a 'bty 'sym
  | Eexcluded of nat * generic_action 'a 'bty 'sym

@@ -369,6 +369,8 @@ let rec subst_sym_expr2 sym z (Expr (annot, expr_)) =
                 Ehave (id, List.map (subst_sym_pexpr2 sym z) pes)
             | Eshow (id, pes) ->
                 Eshow (id, List.map (subst_sym_pexpr2 sym z) pes)
+            | Einstantiate (id, pe) ->
+                Einstantiate (id, subst_sym_pexpr2 sym z pe)
             | Eannot (fps, e) ->
                 Eannot (fps, subst_sym_expr2 sym z e)
             | Eexcluded (n, act) ->

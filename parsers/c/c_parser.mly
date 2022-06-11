@@ -123,7 +123,7 @@ let magic_to_attrs = function
 
 (* CN syntax *)
 (* %token<string> CN_PREDNAME *)
-%token CN_PACK CN_UNPACK CN_PACK_STRUCT CN_UNPACK_STRUCT CN_HAVE CN_SHOW
+%token CN_PACK CN_UNPACK CN_PACK_STRUCT CN_UNPACK_STRUCT CN_HAVE CN_SHOW CN_INSTANTIATE
 %token CN_BOOL CN_INTEGER CN_REAL CN_POINTER CN_MAP CN_LIST CN_TUPLE CN_SET
 %token CN_LET CN_OWNED CN_BLOCK CN_EACH CN_FUNCTION CN_PREDICATE
 %token CN_NULL CN_TRUE CN_FALSE CN_NIL CN_CONS
@@ -264,7 +264,7 @@ let magic_to_attrs = function
 %type<Cabs.cabs_statement>
   statement labeled_statement compound_statement expression_statement
   selection_statement iteration_statement jump_statement 
-  pack_statement unpack_statement have_statement show_statement
+  pack_statement unpack_statement have_statement show_statement instantiate_statement
 
 %type<Cabs.cabs_statement list>
   block_item_list
@@ -1259,6 +1259,8 @@ statement:
     { stmt }
 | stmt= show_statement
     { stmt }
+| stmt= instantiate_statement
+    { stmt }
 ;
 
 (* §6.8.1 Labeled statements *)
@@ -1480,6 +1482,11 @@ have_statement:
 show_statement:
   | CN_SHOW name= general_identifier LPAREN args= argument_expression_list RPAREN SEMICOLON
     { CabsStatement (Location_ocaml.(region ($startpos, $endpos) NoCursor), Annot.no_attributes, CabsSshow (name, args)) }
+instantiate_statement:
+  | CN_INSTANTIATE id=general_identifier COMMA arg=assignment_expression SEMICOLON
+    { CabsStatement (Location_ocaml.(region ($startpos, $endpos) NoCursor), Annot.no_attributes, CabsSinstantiate (Some id, arg)) }
+  | CN_INSTANTIATE arg=assignment_expression SEMICOLON
+    { CabsStatement (Location_ocaml.(region ($startpos, $endpos) NoCursor), Annot.no_attributes, CabsSinstantiate (None, arg)) }
 
 (* §6.9 External definitions *)
 external_declaration_list: (* NOTE: the list is in reverse *)

@@ -21,12 +21,11 @@ type definition = {
        variable. For now at least. *)
     return_bt: BT.t;
     definition : def_or_uninterp;
-    infer_arguments : ArgumentTypes.arginfer_ft;
   }
 
 
 
-let open_pred global def_args def_body args =
+let open_pred def_args def_body args =
   let su = make_subst (List.map2 (fun (s, _) arg -> (s, arg)) def_args args) in
   IT.subst su def_body
 
@@ -55,17 +54,7 @@ let make_uninterp (fname : Sym.t) arg_spec return_bt =
 
   let id = fname in
   let loc = Loc.other ("internal ("^ Sym.pp_string fname^")") in
-  let args = List.map (fun a -> (a, Sym.fresh ())) arg_spec in
-  let output_def = 
-    List.map (fun ((name, bt), s) ->
-        OutputDef.{loc; name; value = sym_ (s, bt)}
-      ) args
-  in
-  let infer_arguments = 
-    AT.mComputationals (List.map (fun ((_name, bt), s) -> (s, bt, (loc, None))) args)
-    (AT.L (LAT.I output_def))
-  in
-  (id, {loc; args = arg_spec; return_bt; definition = Uninterp; infer_arguments})
+  (id, {loc; args = arg_spec; return_bt; definition = Uninterp})
 
 
 
@@ -189,50 +178,23 @@ module PageAlloc = struct
         ]
       in
 
-      let infer_arguments = 
-        let ia_page_index_s, ia_page_index = IT.fresh (IT.bt page_index) in
-        let ia_vmemmap_pointer_s, ia_vmemmap_pointer = IT.fresh (IT.bt vmemmap_pointer) in
-        let ia_pool_s, ia_pool = IT.fresh (IT.bt pool) in
-        let vmemmap_resource = 
-          (Aux.vmemmap_resource 
-             ~vmemmap_pointer:ia_vmemmap_pointer 
-             ~range_start:(ia_pool %. "range_start")
-             ~range_end:(ia_pool %. "range_end"))
-        in
-        let ia_vmemmap_resource_s, ia_vmemmap_resource = IT.fresh (snd vmemmap_resource) in
-
-        let ia_vmemmap_value = recordMember_ ~member_bt:(Map (Integer, Struct hyp_page_tag)) (ia_vmemmap_resource, Resources.value_sym) in
-        AT.Computational ((ia_page_index_s, IT.bt ia_page_index), (loc, None),
-        AT.Computational ((ia_vmemmap_pointer_s, IT.bt ia_vmemmap_pointer), (loc, None),  
-        AT.Computational ((ia_pool_s, IT.bt ia_pool), (loc, None),
-        AT.L (
-        LAT.Resource ((ia_vmemmap_resource_s, vmemmap_resource), (loc, None),
-        LAT.I OutputDef.[
-            {loc; name = page_index_s; value = ia_page_index};
-            {loc; name = vmemmap_pointer_s; value = ia_vmemmap_pointer};
-            {loc; name = vmemmap_s; value = ia_vmemmap_value};
-            {loc; name = pool_s; value = ia_pool};
-          ])))))
-      in
-
       let body = 
         let o_s, o = IT.fresh Integer in
         let oa_i = pred_ order_align_sym [page_index; o] Integer in
         let in_page_group =
           and_ [oa_i %< page_index; 
-                (pool %. "range_start") %<= (oa_i %* (int_ pPAGE_SIZE));
+                ((pool %. "range_start") %/ int_ pPAGE_SIZE) %<= oa_i;
                 o %<= ((map_get_ vmemmap oa_i) %. "order");
-                ((map_get_ vmemmap oa_i) %. "order") %< int_ mMAX_ORDER]
+                not_ (((map_get_ vmemmap oa_i) %. "order") %== int_ hHYP_NO_ORDER)]
         in
         
         or_ [
             eachI_ (1, o_s, mMAX_ORDER - 1) (not_ in_page_group);
-            and_ [(page %. "refcount") %== int_ 0;
-                  (page %. "order") %== int_ hHYP_NO_ORDER];
+	    (page %. "order") %== int_ hHYP_NO_ORDER;
           ]
       in
       
-      (id, {loc; args; definition = Def body; return_bt = Bool; infer_arguments})
+      (id, {loc; args; definition = Def body; return_bt = Bool})
     in
 
 
@@ -306,39 +268,7 @@ module PageAlloc = struct
           ]
       in
 
-
-      let infer_arguments = 
-
-        let ia_page_index_s, ia_page_index = IT.fresh (IT.bt page_index) in
-        let ia_vmemmap_pointer_s, ia_vmemmap_pointer = IT.fresh (IT.bt vmemmap_pointer) in
-        let ia_pool_pointer_s, ia_pool_pointer = IT.fresh (IT.bt pool_pointer) in
-        let ia_pool_s, ia_pool = IT.fresh (IT.bt pool) in
-        let vmemmap_resource = 
-          (Aux.vmemmap_resource 
-             ~vmemmap_pointer:ia_vmemmap_pointer 
-             ~range_start:(ia_pool %. "range_start")
-             ~range_end:(ia_pool %. "range_end"))
-        in
-        let ia_vmemmap_resource_s, ia_vmemmap_resource = IT.fresh (snd vmemmap_resource) in
-
-        let ia_vmemmap_value = recordMember_ ~member_bt:(Map (Integer, Struct hyp_page_tag)) (ia_vmemmap_resource, Resources.value_sym) in
-
-        AT.Computational ((ia_page_index_s, IT.bt ia_page_index), (loc, None),
-        AT.Computational ((ia_vmemmap_pointer_s, IT.bt ia_vmemmap_pointer), (loc, None), 
-        AT.Computational ((ia_pool_pointer_s, IT.bt ia_pool_pointer), (loc, None),
-        AT.Computational ((ia_pool_s, IT.bt ia_pool), (loc, None),
-        AT.L(
-        LAT.Resource ((ia_vmemmap_resource_s, vmemmap_resource), (loc, None),
-        LAT.I OutputDef.[
-            {loc; name = page_index_s; value = ia_page_index};
-            {loc; name = vmemmap_pointer_s; value = ia_vmemmap_pointer};
-            {loc; name = vmemmap_s; value = ia_vmemmap_value};
-            {loc; name = pool_pointer_s; value = ia_pool_pointer};
-            {loc; name = pool_s; value = ia_pool};
-          ]))))))
-      in
-
-      (id, {loc; args; definition = Def body; return_bt = Bool; infer_arguments} )
+      (id, {loc; args; definition = Def body; return_bt = Bool} )
     in
 
 
@@ -391,39 +321,8 @@ module PageAlloc = struct
       in
 
 
-      let infer_arguments = 
 
-        let ia_page_index_s, ia_page_index = IT.fresh (IT.bt page_index) in
-        let ia_vmemmap_pointer_s, ia_vmemmap_pointer = IT.fresh (IT.bt vmemmap_pointer) in
-        let ia_pool_pointer_s, ia_pool_pointer = IT.fresh (IT.bt pool_pointer) in
-        let ia_pool_s, ia_pool = IT.fresh (IT.bt pool) in
-
-        let vmemmap_resource = 
-          (Aux.vmemmap_resource 
-             ~vmemmap_pointer:ia_vmemmap_pointer 
-             ~range_start:(ia_pool %. "range_start")
-             ~range_end:(ia_pool %. "range_end"))
-        in
-        let ia_vmemmap_resource_s, ia_vmemmap_resource = IT.fresh (snd vmemmap_resource) in
-
-        let ia_vmemmap_value = recordMember_ ~member_bt:(Map (Integer, Struct hyp_page_tag)) (ia_vmemmap_resource, Resources.value_sym) in
-
-        AT.Computational ((ia_page_index_s, IT.bt ia_page_index), (loc, None),
-        AT.Computational ((ia_vmemmap_pointer_s, IT.bt ia_vmemmap_pointer), (loc, None), 
-        AT.Computational ((ia_pool_pointer_s, IT.bt ia_pool_pointer), (loc, None),
-        AT.Computational ((ia_pool_s, IT.bt ia_pool), (loc, None),
-        AT.L (
-        LAT.Resource ((ia_vmemmap_resource_s, vmemmap_resource), (loc, None),
-        LAT.I OutputDef.[
-            {loc; name = page_index_s; value = ia_page_index};
-            {loc; name = vmemmap_pointer_s; value = ia_vmemmap_pointer};
-            {loc; name = vmemmap_s; value = ia_vmemmap_value};
-            {loc; name = pool_pointer_s; value = ia_pool_pointer};
-            {loc; name = pool_s; value = ia_pool};
-          ]))))))
-      in
-
-      (id, {loc; args; definition = Def body; return_bt = Bool; infer_arguments} )
+      (id, {loc; args; definition = Def body; return_bt = Bool} )
     in
 
 
@@ -518,42 +417,7 @@ module PageAlloc = struct
           ]
       in
 
-
-      let infer_arguments = 
-
-        let ia_page_index_s, ia_page_index = IT.fresh (IT.bt page_index) in
-        let ia_vmemmap_pointer_s, ia_vmemmap_pointer = IT.fresh (IT.bt vmemmap_pointer) in
-        let ia_pool_pointer_s, ia_pool_pointer = IT.fresh (IT.bt pool_pointer) in
-        let ia_pool_s, ia_pool = IT.fresh (IT.bt pool) in
-
-        let vmemmap_resource = 
-          (Aux.vmemmap_resource 
-             ~vmemmap_pointer:ia_vmemmap_pointer 
-             ~range_start:(ia_pool %. "range_start")
-             ~range_end:(ia_pool %. "range_end"))
-        in
-
-        let ia_vmemmap_resource_s, ia_vmemmap_resource = IT.fresh (snd vmemmap_resource) in
-
-        let ia_vmemmap_value = recordMember_ ~member_bt:(Map (Integer, Struct hyp_page_tag)) (ia_vmemmap_resource, Resources.value_sym) in
-
-
-        AT.Computational ((ia_page_index_s, IT.bt ia_page_index), (loc, None),
-        AT.Computational ((ia_vmemmap_pointer_s, IT.bt ia_vmemmap_pointer), (loc, None), 
-        AT.Computational ((ia_pool_pointer_s, IT.bt ia_pool_pointer), (loc, None),
-        AT.Computational ((ia_pool_s, IT.bt ia_pool), (loc, None),
-        AT.L (
-        LAT.Resource ((ia_vmemmap_resource_s, vmemmap_resource), (loc, None),
-        LAT.I OutputDef.[
-            {loc; name = page_index_s; value = ia_page_index};
-            {loc; name = vmemmap_pointer_s; value = ia_vmemmap_pointer};
-            {loc; name = vmemmap_s; value = ia_vmemmap_value};
-            {loc; name = pool_pointer_s; value = ia_pool_pointer};
-            {loc; name = pool_s; value = ia_pool};
-          ]))))))
-      in
-
-      (id, {loc; args; definition = Def body; return_bt = Bool; infer_arguments} )
+      (id, {loc; args; definition = Def body; return_bt = Bool} )
     in
 
 
@@ -599,53 +463,8 @@ module PageAlloc = struct
           ]
       in
 
-
-      let infer_arguments = 
-
-        let ia_page_index_s, ia_page_index = IT.fresh (IT.bt page_index) in
-        let ia_vmemmap_pointer_s, ia_vmemmap_pointer = IT.fresh (IT.bt vmemmap_pointer) in
-        let ia_pool_pointer_s, ia_pool_pointer = IT.fresh (IT.bt pool_pointer) in
-        let ia_pool_s, ia_pool = IT.fresh (IT.bt pool) in
-
-        let vmemmap_resource = 
-          (Aux.vmemmap_resource 
-             ~vmemmap_pointer:ia_vmemmap_pointer 
-             ~range_start:(ia_pool %. "range_start")
-             ~range_end:(ia_pool %. "range_end"))
-        in
-
-        let ia_vmemmap_resource_s, ia_vmemmap_resource = IT.fresh (snd vmemmap_resource) in
-
-        let ia_vmemmap_value = recordMember_ ~member_bt:(Map (Integer, Struct hyp_page_tag)) (ia_vmemmap_resource, Resources.value_sym) in
-
-
-        AT.Computational ((ia_page_index_s, IT.bt ia_page_index), (loc, None),
-        AT.Computational ((ia_vmemmap_pointer_s, IT.bt ia_vmemmap_pointer), (loc, None), 
-        AT.Computational ((ia_pool_pointer_s, IT.bt ia_pool_pointer), (loc, None),
-        AT.Computational ((ia_pool_s, IT.bt ia_pool), (loc, None),
-        AT.L (
-        LAT.Resource ((ia_vmemmap_resource_s, vmemmap_resource), (loc, None),
-        LAT.I OutputDef.[
-            {loc; name = page_index_s; value = ia_page_index};
-            {loc; name = vmemmap_pointer_s; value = ia_vmemmap_pointer};
-            {loc; name = vmemmap_s; value = ia_vmemmap_value};
-            {loc; name = pool_pointer_s; value = ia_pool_pointer};
-            {loc; name = pool_s; value = ia_pool};
-          ]))))))
-      in
-
-      (id, {loc; args; definition = Def body; return_bt = Bool; infer_arguments} )
+      (id, {loc; args; definition = Def body; return_bt = Bool} )
     in
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -709,43 +528,7 @@ module PageAlloc = struct
           ]
       in
 
-      let infer_arguments =
-
-        let ia_cell_index_s, ia_cell_index = IT.fresh (IT.bt cell_index) in
-        let ia_vmemmap_pointer_s, ia_vmemmap_pointer = IT.fresh (IT.bt vmemmap_pointer) in
-        let ia_pool_pointer_s, ia_pool_pointer = IT.fresh (IT.bt pool_pointer) in
-        let ia_pool_s, ia_pool = IT.fresh (IT.bt pool) in
-
-        let vmemmap_resource = 
-          (Aux.vmemmap_resource 
-             ~vmemmap_pointer:ia_vmemmap_pointer
-             ~range_start:(ia_pool %. "range_start") 
-             ~range_end:(ia_pool %. "range_end"))
-        in
-
-        let ia_vmemmap_resource_s, ia_vmemmap_resource = IT.fresh (snd vmemmap_resource) in
-
-        let ia_vmemmap_value = recordMember_ ~member_bt:(Map (Integer, Struct hyp_page_tag)) (ia_vmemmap_resource, Resources.value_sym) in
-
-
-        AT.Computational ((ia_cell_index_s, IT.bt ia_cell_index), (loc, None),
-        AT.Computational ((ia_vmemmap_pointer_s, IT.bt ia_vmemmap_pointer), (loc, None), 
-        AT.Computational ((ia_pool_pointer_s, IT.bt ia_pool_pointer), (loc, None),
-        AT.Computational ((ia_pool_s, IT.bt ia_pool), (loc, None),
-        AT.L (
-        LAT.Resource ((ia_vmemmap_resource_s, vmemmap_resource), (loc, None),
-        LAT.I OutputDef.[
-            {loc; name = cell_index_s; value = ia_cell_index};
-            {loc; name = vmemmap_pointer_s; value = ia_vmemmap_pointer};
-            {loc; name = vmemmap_s; value = ia_vmemmap_value};
-            {loc; name = pool_pointer_s; value = ia_pool_pointer};
-            {loc; name = pool_s; value = ia_pool};
-          ]))))))
-      in
-
-
-
-      (id, {loc; args; definition = Def body; return_bt = Bool; infer_arguments} )
+      (id, {loc; args; definition = Def body; return_bt = Bool} )
     in
 
 
@@ -821,34 +604,9 @@ module PageAlloc = struct
           ] 
       in
 
-      let infer_arguments = 
-
-        let ia_pool_pointer_s, ia_pool_pointer = IT.fresh (IT.bt pool_pointer) in
-        let ia_pool_s, ia_pool = IT.fresh (IT.bt pool) in
-        let ia_vmemmap_pointer_s, ia_vmemmap_pointer = IT.fresh (IT.bt vmemmap_pointer) in
-        let ia_hyp_physvirt_offset_s, ia_hyp_physvirt_offset = IT.fresh (IT.bt hyp_physvirt_offset) in
-
-        AT.Computational ((ia_pool_pointer_s, IT.bt ia_pool_pointer), (loc, None),
-        AT.Computational ((ia_pool_s, IT.bt ia_pool), (loc, None),
-        AT.Computational ((ia_vmemmap_pointer_s, IT.bt ia_vmemmap_pointer), (loc, None), 
-        AT.Computational ((ia_hyp_physvirt_offset_s, IT.bt ia_hyp_physvirt_offset), (loc, None), 
-        AT.L (
-        LAT.I OutputDef.[
-            {loc; name = pool_pointer_s; value = ia_pool_pointer};
-            {loc; name = pool_s; value = ia_pool};
-            {loc; name = vmemmap_pointer_s; value = ia_vmemmap_pointer};
-            {loc; name = hyp_physvirt_offset_s; value = ia_hyp_physvirt_offset};
-          ])))))
-      in
-
-      (id, { loc; args; return_bt = Bool; definition = Def body; infer_arguments})
+      (id, { loc; args; return_bt = Bool; definition = Def body})
       
     in
-
-
-
-
-
 
 
 

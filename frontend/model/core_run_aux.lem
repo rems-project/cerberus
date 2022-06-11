@@ -365,6 +365,9 @@ let rec add_to_sb p_aids (Expr annot expr_ as expr) =
       | Eshow _ _ ->
           (* no change *)
           expr_
+      | Einstantiate _ _ ->
+          (* no change *)
+          expr_
       | Eannot _ _ ->
           error "Core_run_aux.add_to_sb, Eannot"
       | Eexcluded _ _ ->
@@ -462,6 +465,9 @@ let rec add_to_asw aids (Expr annot expr_ as expr) =
           (* no change *)
           expr_
       | Eshow _ _ ->
+          (* no change *)
+          expr_
+      | Einstantiate _ _ ->
           (* no change *)
           expr_
       | Eannot _ _ ->
@@ -672,6 +678,8 @@ let rec convert_expr (Expr annot expr_) =
         Ehave id (List.map convert_pexpr pes)
     | Eshow id pes ->
         Eshow id (List.map convert_pexpr pes)
+    | Einstantiate id pe ->
+        Einstantiate id (convert_pexpr pe)
     | Eannot fps e ->
         Eannot fps (convert_expr e)
     | Eexcluded n act ->

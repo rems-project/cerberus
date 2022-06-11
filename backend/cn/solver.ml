@@ -508,7 +508,7 @@ module Translate = struct
          let def = Option.get (get_logical_predicate_def global name) in
          begin match def.definition with
          | Def body ->
-            term (LogicalPredicates.open_pred global def.args body args)
+            term (LogicalPredicates.open_pred def.args body args)
          | Uninterp ->
             let decl = 
               Z3.FuncDecl.mk_func_decl context (symbol name)
@@ -588,13 +588,9 @@ let tactics context ts =
 
 let tactic context = 
   tactics context [
-      (* "blast-term-ite"; *)
-      (* "cofactor-term-ite"; *)
-      (* "simplify"; *)
-      (* "purify-arith"; *)
-      (* "solve-eqs"; *)
-      (* "elim-term-ite"; *)
-      "qfauflia";
+      "propagate-values";
+      "solve-eqs";
+      "smt";
     ]
 
 let make struct_decls : solver = 

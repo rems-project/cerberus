@@ -242,6 +242,7 @@ type have_show =
    | M_Eproc of mu_name * ('TY asym) list (* Core procedure call *)
    | M_Erpredicate of pack_unpack * Annot.to_pack_unpack * ('TY asym) list
    | M_Elpredicate of have_show * Symbol.identifier * ('TY asym) list
+   | M_Einstantiate of Symbol.identifier option * 'TY asym
 
   and 'TY mu_expr = 
    | M_Expr of loc * annot list * ('TY mu_expr_)

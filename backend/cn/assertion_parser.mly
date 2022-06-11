@@ -43,6 +43,7 @@ open Assertion_parser_util
 %token RBRACKET
 %token LBRACE
 %token RBRACE
+
 %token COMMA
 %token SEMICOLON
 
@@ -71,8 +72,6 @@ open Assertion_parser_util
 %token FOR
 
 
-%token WITH
-%token TYP
 %token TYPEOF
 %token IF
 %token STRUCT
@@ -93,7 +92,7 @@ open Assertion_parser_util
 %left PLUS MINUS
 %left STAR SLASH
 /* %nonassoc POWER */
-%nonassoc POINTERCAST
+/* %nonassoc POINTERCAST */
 %nonassoc MEMBER /* PREDARG */
 
 
@@ -114,7 +113,7 @@ start:
 
 
 
-name:
+%inline name:
   | n=LNAME
       { n }
   | n=UNAME
@@ -158,9 +157,11 @@ atomic_term:
       { Ast.Integer z }
   | a1=atomic_term m=member
       { Ast.Member (a1, m) }
+  | a1=UNAME m=member
+      { Ast.Member (Var a1, m) }
   | AMPERSAND id=name
       { Ast.Addr id }
-  | v=name
+  | v=LNAME
       { Ast.Var v }
   | STAR p=atomic_term
       { Ast.Pointee p }
@@ -168,9 +169,9 @@ atomic_term:
       { Ast.Null }
   | OFFSETOF LPAREN tag = name COMMA member= name RPAREN
       { Ast.OffsetOf {tag; member} }
-  | AMPERSAND LPAREN t=term ARROW member= name RPAREN
+  | AMPERSAND LPAREN t=atomic_term ARROW member= name RPAREN
       { Ast.MemberShift {pointer=t; member} }
-  | AMPERSAND LPAREN t=term LBRACKET index=  term RBRACKET RPAREN
+  | AMPERSAND LPAREN t=atomic_term LBRACKET index=  term RBRACKET RPAREN
       { Ast.ArrayShift {pointer=t; index} }
   | CELLPOINTER LPAREN t1=term COMMA t2=term COMMA t3=term COMMA t4=term COMMA t5=term RPAREN
       { Ast.CellPointer ((t1, t2), (t3, t4), t5) }
@@ -178,6 +179,8 @@ atomic_term:
       { Ast.Env (a, l) }
   | LBRACE t=term RBRACE UNCHANGED
       { Ast.Unchanged t }
+  | t=name UNCHANGED
+      { Ast.Unchanged (Var t) }
   /* | LBRACE RBRACE t=term */
   /*     { Ast.PredEqRegulator ([], t) } */
   /* | LBRACE SLASH names=separated_list(COMMA, name) RBRACE t=term */
@@ -202,6 +205,10 @@ arith_term:
       { Ast.Remainder (a1, a2) }
   | MOD LPAREN a1=term COMMA a2=term RPAREN
       { Ast.Modulus (a1, a2) }
+  | t=atomic_term LBRACE member=MEMBER EQUAL v=atomic_term RBRACE
+      { Ast.StructUpdate ((t, Id.id member), v) }
+  | t=atomic_term LBRACKET i=atomic_term EQUAL v=atomic_term RBRACKET
+      { Ast.ArraySet ((t, i), v) }
 
 arith_or_atomic_term:
   | a=arith_term
@@ -240,10 +247,6 @@ term:
       { Ast.App (a1, a2) } 
   | predicate = LNAME arguments = args
       { Ast.Pred (predicate, arguments) }
-  | t=atomic_term LBRACE member=MEMBER EQUAL v=atomic_term RBRACE
-      { Ast.StructUpdate ((t, Id.id member), v) }
-  | t=atomic_term LBRACKET i=atomic_term EQUAL v=atomic_term RBRACKET
-      { Ast.ArraySet ((t, i), v) }
 
 
 
@@ -265,8 +268,8 @@ ctype:
   | ct=ctype STAR
       { Ast.Pointer ct }
 
-%inline with_type_clause:
-  | WITH TYP EQUAL typ=ctype
+%inline ctype_annotation:
+  | LT typ=ctype GT
       { typ }
 
 %inline if_permission_clause:
@@ -287,11 +290,11 @@ logicalconstraint:
 
 
 resource:
-  | predicate=UNAME arguments=args maybe_permission=option(if_permission_clause) maybe_typ=option(with_type_clause)
+  | predicate=UNAME maybe_typ=option(ctype_annotation) arguments=args maybe_permission=option(if_permission_clause)
       { 
         Ast.{oq = None; predicate; arguments; o_permission = maybe_permission; typ = maybe_typ}
       }
-  | EACH LPAREN bt=basetype qname=name SEMICOLON t=term RPAREN LBRACE predicate=UNAME arguments=args maybe_permission=option(if_permission_clause) maybe_typ=option(with_type_clause) RBRACE
+  | EACH LPAREN bt=basetype qname=name SEMICOLON t=term RPAREN LBRACE predicate=UNAME maybe_typ=option(ctype_annotation) arguments=args maybe_permission=option(if_permission_clause) RBRACE
       { 
         Ast.{oq = Some (qname,bt,t); predicate; arguments; o_permission = maybe_permission; typ = maybe_typ}
       }

@@ -12,7 +12,8 @@ type t = item list
 let pp_item {path; it; o_sct} = 
   Pp.parens (
       Ast.Terms.pp true path ^^ comma ^^ 
-      IndexTerms.pp it
+      IndexTerms.pp it ^^^ colon ^^^ 
+      BaseTypes.pp (IndexTerms.bt it)
     )
 
 let pp = Pp.list pp_item

@@ -108,5 +108,3 @@ let rec map (f : 'i -> 'j) (at : 'i t) : 'j t =
 type ft = ReturnTypes.t t
 type lt = False.t t
 
-  
-type arginfer_ft = OutputDef.t t

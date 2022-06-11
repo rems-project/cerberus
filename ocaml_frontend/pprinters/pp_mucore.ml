@@ -139,6 +139,7 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
     | M_Eccall _
     | M_Erpredicate _
     | M_Elpredicate _
+    | M_Einstantiate _
     (* | M_Eunseq _ *)
     (* | M_Eindet _ *)
     (* | M_Epar _ *)
@@ -689,6 +690,10 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
           | M_Elpredicate (have_show, id, pes) ->
               pp_keyword (match have_show with Have -> "have"  | Show -> "show") ^^^
                 P.parens (Pp_symbol.pp_identifier id ^^ P.comma ^^^ comma_list pp_asym pes)
+          | M_Einstantiate (Some (Symbol.Identifier (_, ident)), pe) ->
+              pp_keyword "instantiate" ^^^ !^ident ^^ P.parens (pp_asym pe)
+          | M_Einstantiate (None, pe) ->
+              pp_keyword "instantiate" ^^^ P.parens (pp_asym pe)
           (* | M_Eunseq [] ->
            *     !^ "BUG: UNSEQ must have at least two arguments (seen 0)" *)
           (* | M_Eunseq [e] ->
