@@ -1,0 +1,1 @@
+Undefined behaviour: UB088_reached_end_of_function at ci/0074-fun_returns.undef.c:3:1-5:2 (cursor: 3:5 - 3:6)

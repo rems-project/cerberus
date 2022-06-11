@@ -63,7 +63,7 @@ let batch_drive mode (file: 'a Core.file) args fs_state conf : string list =
           end
       | ND.Killed (ND.Undef0 (loc, ub::_)) ->
           begin
-            ("", "Undefined behaviour: " ^ Undefined.ub_short_string ub ^ " at " ^
+            ("", "Undefined behaviour: " ^ Undefined.stringFromUndefined_behaviour ub ^ " at " ^
             Location_ocaml.location_to_string ~charon:is_charon loc ^ "\n")
           end
       | ND.Killed (ND.Error0 (_, str)) ->

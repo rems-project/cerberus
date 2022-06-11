@@ -170,8 +170,8 @@ let to_cartesian loc =
     | _ -> None
 
 let location_to_string ?(charon=false) loc =
-  let string_of_pos pos =
-    if charon && from_main_file loc then
+  let string_of_pos ?(shrink=false) pos =
+    if shrink || (charon && from_main_file loc) then
       Printf.sprintf "%d:%d" pos.pos_lnum (1+pos.pos_cnum-pos.pos_bol)
     else
       Printf.sprintf "%s:%d:%d" pos.pos_fname pos.pos_lnum (1+pos.pos_cnum-pos.pos_bol) in
@@ -202,8 +202,8 @@ let location_to_string ?(charon=false) loc =
         string_of_int (1+pos2.pos_cnum-pos2.pos_bol)
         ^ begin match pos_opt with
           | NoCursor -> ""
-          | PointCursor pos -> " (cursor: " ^ string_of_pos pos ^ ")"
-          | RegionCursor (b, e) -> " (cursor: " ^ string_of_pos b ^ " -" ^ string_of_pos e ^ ")"
+          | PointCursor pos -> " (cursor: " ^ string_of_pos ~shrink:true pos ^ ")"
+          | RegionCursor (b, e) -> " (cursor: " ^ string_of_pos ~shrink:true b ^ " - " ^ string_of_pos ~shrink:true e ^ ")"
         end
     | Loc_regions (xs, _) ->
         let (pos1, pos2) = outer_bbox xs in

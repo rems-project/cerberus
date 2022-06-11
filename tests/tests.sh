@@ -39,7 +39,7 @@ citests=(
   0036-auto_register_function.error.c
   0037-function_conflicting_types.error.c
   0038-function_redefinition.error.c
-  0039-struct_imcomplete.error.c
+  0039-struct_imcomplete.undef.c
   0040-struct_redefinition.error.c
   0041-struct_incompatible.error.c
   0042-struct_namespace.c
@@ -74,7 +74,7 @@ citests=(
   0071-do-while2.c
   0072-example03.c
   0073-example03.c
-  0074-fun_returns.c
+  0074-fun_returns.undef.c
   0075-funscoped_static.error.c
   0076-odd_even.c
   0077-register_arg.c
@@ -83,9 +83,9 @@ citests=(
   0080-struct3.c
   0081-struct4.c
   0082-OK1.c
-  0083-OK2.c
+  0083-array_initializers.c
   0084-KO1.error.c
-  0085-KO2.c
+  0085-excess_array_initializer.c
   0086-literal_access.undef.c
   0087-array_with_delayed_size.c
 # 0101-sym_cfunction.c
@@ -100,26 +100,39 @@ citests=(
   0114-const_return.error.c
   0115-hex_char_const.c
   0116-enum_constants.c
+  0117-global_array_init_incomplete.error.c
+  0118-block_array_init_incomplete.error.c
   0119-block_array_init_rec.c
+  0122-incr_overflow.undef.c
+  0123-decr_underflow.undef.c
+  0124-incr_wrap.c
+  0125-decr_wrap.c
   0126-duff_device.c
   0127-function-pointer.c
   0128-function-pointer-void-cast.c
-  0129-function-pointer-wrong-args.c
+  0129-function-pointer-wrong-args.undef.c
   0201-main-return-type.error.c
   0202-main-not-function.error.c
   0203-main-params1.error.c
   0204-main-params2.error.c
   0205-illegal-storage-class.error.c
+  0206-no-linkage-block-incomplete.undef.c
+  0207-incomplete-internal-linkage.undef.c
+  0208-static-assert-not-integral-constant.undef.c
   0209-static-assert-failed.error.c
   0210-illegal-storage-class-function.error.c
   0211-function-id-not-function-type.error.c
   0212-function-redefinition.error.c
+  0213-label-statement-outside-switch.error.c
   0214-illegal-storage-class-for-statement.error.c
   0215-continue-outside-loop.error.c
   0216-break-outside-loop.error.c
   0217-non-void-function-return.error.c
   0218-multiple-storage-class.error.c
   0219-thread-local-function-declaration.error.c
+  0220-thread-local-auto.error.c
+  0221-block-scoped-function-decl-illegal-storage-class.undef.c
+  0222-scalar-init-not-single-expr.undef.c
   0223-illegal-storage-class-static-init.error.c
   0224-enum-not-int.error.c
   0225-incomplete-field.error.c
@@ -132,21 +145,28 @@ citests=(
   0232-invalid-use-Atomic.error.c
   0233-undeclared-identifier.error.c
   0234-array-static-outside-fun-proto.error.c
+  0235-array-static-innermost.error.c
+  0236-array-size-zero.error.c
+  0237-array-star-illegal-scope.error.c
+  0238-storage-class-function-decl.error.c
+  0239-parameter-type-void.error.c
+  0240-incomplete-adust-parameter.undef.c
+  0254-undeclared-label.error.c
+  0285-assignment-not-lvalue.error.c
   0286-binary-operator.error.c
   0287-equality.error.c
   0288-sizeof-function-type.error.c
   0289-sizeof-incomplete-type.error.c
-  0289-Alignof-incomplete-type.error.c
   0290-Alignof-incomplete-type.error.c
   0291-cast-not-scalar-type.error.c
   0292-cast-pointer-to-float.error.c
   0293-compound-assignment.error.c
+  0295-global_const_int.undef.c
+  0296-global_const_array.undef.c
   0297-atomic_memberof.undef.c
   0298-atomic_memberofptr.undef.c
   0299-qualified_ptrdiff.c
-  0300-duplicate_member.error.c
   0300-unseq_race_ko01.undef.c
-  0301-declaration_struct_pointer.error.c
   0301-unseq_race_ko02.undef.c
   0302-unseq_race_ko03.undef.c
   0303-unseq_race_ko04.undef.c
@@ -157,15 +177,22 @@ citests=(
   0308-struct_global_with_dep.c
   0309-comma_void_operand.c
   0310-funcall_sequencing.c
+  0311-unseq_race_ok01.c
+  0312-unseq_race_ok02.c
+  0313-unseq_race_ok03.c
+  0314-nonarray-incomplete-lvalue-conversion.undef.c
+  0315-duplicate_member.error.c
+  0316-declaration_struct_pointer.error.c
 )
 
 # TESTS THAT ARE KNOW TO FAIL (for example .error test for which we need to improve the message)
 skip=(
+  0083-array_initializers.c  # REAL BUG(!) -- Desugaring of initializers
   0113-cast_assign_parsing.error.c            # REAL BUG (!) -- C parser
+  0117-global_array_init_incomplete.error.c
+  0118-block_array_init_incomplete.error.c
   # 0082-OK1.c                                  # REAL BUG (!) -- Ail typing ==> missing default argument promotions
   # 0072-example03.c                            # REAL BUG (!) -- Ail typing ==> missing default argument promotions
-  0074-fun_returns.c                          # IMPROVE: pprint the UB
-  0129-function-pointer-wrong-args.c          # IMPROVE: pprint the UB
   0205-illegal-storage-class.error.c          # IMPROVE: the location and message should be more specific
   0210-illegal-storage-class-function.error.c # IMPROVE: the location and message should be more specific
   0211-function-id-not-function-type.error.c  # IMPROVE: improve the message?

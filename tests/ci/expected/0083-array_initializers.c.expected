@@ -1,0 +1,1 @@
+Defined {value: "Specified(0)", stdout: "glob_b2[1]= {1}\nglob_b3[2]= {1, 2}\nglob_b4[3]= {1, 0, 3}\n", stderr: "", blocked: "false"}

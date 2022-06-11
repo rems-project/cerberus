@@ -1,0 +1,1 @@
+Undefined behaviour: UB081_scalar_initializer_not_single_expression at ci/0222-scalar-init-not-single-expr.undef.c:1:5-15

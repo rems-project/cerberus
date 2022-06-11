@@ -1,1 +1,1 @@
-Undefined behaviour: the operand of the unary '*' operator has an invalid value at ci/0020-end_of_lifetime.undef.c:6:3-5 (cursor: ci/0020-end_of_lifetime.undef.c:6:3)
+Undefined behaviour: UB043_indirection_invalid_value at ci/0020-end_of_lifetime.undef.c:6:3-5 (cursor: 6:3)

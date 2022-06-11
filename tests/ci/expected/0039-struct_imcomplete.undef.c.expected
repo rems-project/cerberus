@@ -1,0 +1,1 @@
+Undefined behaviour: UB059_incomplete_no_linkage_identifier at ci/0039-struct_imcomplete.undef.c:4:12-13

@@ -1,0 +1,1 @@
+Undefined behaviour: UB036_exceptional_condition at ci/0123-decr_underflow.undef.c:5:3-6 (cursor: 5:4)

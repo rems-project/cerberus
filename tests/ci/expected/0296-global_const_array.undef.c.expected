@@ -1,0 +1,1 @@
+Undefined behaviour: UB064_modifying_const at ci/0296-global_const_array.undef.c:7:3-12 (cursor: 7:9)

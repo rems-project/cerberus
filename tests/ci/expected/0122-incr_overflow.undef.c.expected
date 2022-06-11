@@ -1,0 +1,1 @@
+Undefined behaviour: UB036_exceptional_condition at ci/0122-incr_overflow.undef.c:5:3-6 (cursor: 5:4)

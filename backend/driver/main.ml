@@ -145,6 +145,10 @@ let cerberus debug_level progress core_obj
   in
   let success = Either.Right 0 in
   let runM = function
+    | Exception.Exception (loc, Errors.(DESUGAR (Desugar_UndefinedBehaviour ub))) when (batch = `Batch || batch = `CharonBatch) ->
+        print_endline ("Undefined behaviour: " ^ Undefined.stringFromUndefined_behaviour ub ^ " at " ^
+                       Location_ocaml.location_to_string ~charon:(batch = `CharonBatch) loc);
+        epilogue 0
     | Exception.Exception err ->
         prerr_endline (Pp_errors.to_string err);
         epilogue 1

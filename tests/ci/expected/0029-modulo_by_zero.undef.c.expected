@@ -1,1 +1,1 @@
-Undefined behaviour: (UB missing short message): UB045b_modulo_by_zero at ci/0029-modulo_by_zero.undef.c:3:7-10 (cursor: ci/0029-modulo_by_zero.undef.c:3:8)
+Undefined behaviour: UB045b_modulo_by_zero at ci/0029-modulo_by_zero.undef.c:3:7-10 (cursor: 3:8)

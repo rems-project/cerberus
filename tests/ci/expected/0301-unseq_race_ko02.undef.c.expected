@@ -1,0 +1,1 @@
+Undefined behaviour: UB035_unsequenced_race at ci/0301-unseq_race_ko02.undef.c:5:3-14 (cursor: 5:5)

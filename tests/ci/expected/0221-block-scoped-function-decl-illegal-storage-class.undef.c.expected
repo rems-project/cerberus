@@ -1,0 +1,1 @@
+Undefined behaviour: UB060_block_scope_function_with_storage_class at ci/0221-block-scoped-function-decl-illegal-storage-class.undef.c:3:15-24
