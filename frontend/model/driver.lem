@@ -877,8 +877,6 @@ let can_advance = function
   | Core_reduction.Step_action_request2 _ _ _ is_unseq_with_ccall _ ->
       (* TODO: only correct if there is only ONE thread *)
       not is_unseq_with_ccall (* false *)
-  | Core_reduction.Step_aseq _ _ _ _ ->
-      false
   | Core_reduction.Step_blocked2 ->
       false
   | Core_reduction.Step_error2 _ ->
@@ -937,9 +935,6 @@ let advance_step tid step =
         else
           liftCore_run m_request >>= fun request ->
           perform_action_request2 false (*TODO!!! with_concurrency*) loc tid request
-
-    | Core_reduction.Step_aseq _ _ _ _ ->
-        error "TODO: Driver.advance_step => Step_aseq"
 
     | Core_reduction.Step_blocked2 ->
         ND.return ()

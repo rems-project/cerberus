@@ -106,7 +106,6 @@ type core_step2 =
                             Mem_common.thread_id *
                             bool * (* is_unseq_with_ccall *)
                             core_runM (action_request2 thread_state)
-  | Step_aseq of Loc.t * Mem_common.thread_id * action_request2 unit * action_request2 thread_state
   
   | Step_blocked2
   | Step_error2 of string
@@ -146,8 +145,6 @@ instance (Show core_step2)
       | Step_action_request2 debug_str loc tid is_unseq_with_ccall _ ->
           "Step_action_request2[" ^ debug_str ^ "] -- tid: " ^ show tid ^
           (if is_unseq_with_ccall then " [unseq_with_call]" else "") ^ " -- at loc: " ^ Loc.stringFromLocation loc
-      | Step_aseq loc tid _(*action_request2 unit*) _ ->
-        "Step_aseq -- tid: " ^ show tid ^ " -- at loc: " ^ Loc.stringFromLocation loc
       | Step_blocked2 ->
           "Step_blocked2"
       | Step_error2 debug_str ->
