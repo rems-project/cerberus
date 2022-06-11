@@ -220,7 +220,7 @@ let execute ~conf ~filename (mode: Global_ocaml.execution_mode) =
       return core
     end >>= fun core ->
     Tags.set_tagDefs core.tagDefs;
-    let open Exhaustive_driver in
+    let open Driver_ocaml in
     let driver_conf = {concurrency=false; exec_mode=mode; fs_dump=false; trace=false; } in
     interp_backend dummy_io core ~args:[] ~batch:`Batch ~fs:None ~driver_conf
     >>= function
@@ -294,7 +294,7 @@ let set_uid file =
       | Erun (x, lab, pes) -> Erun (x, lab, List.map set_pe pes)
       | Epar es -> Epar (List.map set_e es)
       | Ewait thid -> Ewait thid
-      | Epack _ | Eunpack _ | Ehave _ | Eshow _ ->
+      | Epack _ | Eunpack _ | Ehave _ | Eshow _ | Einstantiate _ ->
           (* these two are CN specific contructors *)
           assert false  
       | Eannot (fps, e) -> Eannot (fps, set_e e)

@@ -9,7 +9,7 @@ import AilSyntaxAux AilTypesAux Builtins
 
 import Errors
 
-import WipFrontend
+import Mini_pipeline
 
 
 module E = Cabs_to_ail_effect
@@ -1075,7 +1075,7 @@ let evaluate_integer_constant_expression loc ty_opt expr =
   E.get_core_eval_stuff >>= fun core_env ->
   E.get_sigma_sofar >>= fun sigm ->
   E.liftException
-      (WipFrontend.evalIntegerConstantExpression loc core_env sigm ty_opt expr)
+      (Mini_pipeline.evalIntegerConstantExpression loc core_env sigm ty_opt expr)
 
 
 
@@ -1788,7 +1788,7 @@ STD_ "§6.7.6.2#1, sentence 5, not function parameter" $
           | true ->
              (* STD §6.7.6.2#1, sentence 2 *)
              (* NOTE: the preceding STD clause is performed by a typecheck done by
-                [WipFrontend.evalIntegerConstantExpression] *)
+                [Mini_pipeline.evalIntegerConstantExpression] *)
              evaluate_integer_constant_expression loc Nothing d_e >>= fun n ->
               if n <= 0 then
                 E.constraint_violation loc ArrayDeclarationNegativeSize
@@ -2882,7 +2882,7 @@ and foo_aux
                     desugar_expression e >>= fun d_e ->
                     E.get_sigma_sofar >>= fun sigm ->
                     E.get_gamma_sofar >>= fun gamm ->
-                    match WipFrontend.typecheckAil sigm gamm d_e with
+                    match Mini_pipeline.typecheckAil sigm gamm d_e with
                       | Left (loc, _) ->
                           error ("WIP: foo_aux, Init_expr Ail type error ==> " ^ Loc.stringFromLocation loc)
                       | Right ty ->

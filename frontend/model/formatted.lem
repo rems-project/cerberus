@@ -299,7 +299,7 @@ let charFromDigit useUpper = function
   | 14 -> if useUpper then #'E' else #'e'
   | 15 -> if useUpper then #'F' else #'f'
   | _ ->
-      error "Output.charFromDigit, the second argument should be in {0..15}"
+      error "Formatted.charFromDigit, the second argument should be in {0..15}"
 end
 
 
@@ -343,13 +343,13 @@ let rec load_character_array_aux elem_ty ptrval prec_n_opt acc =
         Mem.return (List.reverse acc)
     | _ ->
         let prec_n_opt' = Maybe.map (fun z -> z-1) prec_n_opt in
-        Mem.bind (Mem.load (Loc.other "Output.load_character_array_aux") elem_ty ptrval) (fun (_, mval) ->
+        Mem.bind (Mem.load (Loc.other "Formatted.load_character_array_aux") elem_ty ptrval) (fun (_, mval) ->
         let () = Debug.print_debug 5 [] (fun () ->
             "load_character_array_aux ==> " ^ Mem.stringFromMem_value mval
         ) in
         Mem.case_mem_value mval
-          (fun _ -> error "Output.load_character_array, unspecified")
-          (fun _ _ -> error "Output.load_character_array, concurrency read")
+          (fun _ -> error "Formatted.load_character_array, unspecified")
+          (fun _ _ -> error "Formatted.load_character_array, concurrency read")
           (fun ity ival ->
             Mem.case_integer_value ival
               (fun n -> if n = 0 then
@@ -357,13 +357,13 @@ let rec load_character_array_aux elem_ty ptrval prec_n_opt acc =
               else
                 let ptrval' = Mem.array_shift_ptrval ptrval elem_ty (Mem.integer_ival 1) in
                 load_character_array_aux elem_ty ptrval' prec_n_opt' ((Decode.encode_character_constant n) :: acc))
-              (fun () -> error "WIP: Output.load_character_array, non constant ival")
+              (fun () -> error "WIP: Formatted.load_character_array, non constant ival")
           )
-          (fun _ _ -> error "Output.load_character_array, found a float")
-          (fun _ ptrval -> error ("Output.load_character_array, found a pointer ==> " ^ stringFromPointerValue ptrval))
-          (fun _ -> error "Output.load_character_array, found an array")
-          (fun _ _ -> error "Output.load_character_array, found a struct")
-          (fun _ _ -> error "Output.load_character_array, found a union")
+          (fun _ _ -> error "Formatted.load_character_array, found a float")
+          (fun _ ptrval -> error ("Formatted.load_character_array, found a pointer ==> " ^ stringFromPointerValue ptrval))
+          (fun _ -> error "Formatted.load_character_array, found an array")
+          (fun _ _ -> error "Formatted.load_character_array, found a struct")
+          (fun _ _ -> error "Formatted.load_character_array, found a union")
       )
   end
 val load_character_array: Ctype.ctype -> Mem.pointer_value -> maybe nat -> Mem.memM (list char)
@@ -395,7 +395,7 @@ let convert loc eval_conv prec_opt lm_opt cspec args =
     | Just (P_num z) ->
         z
     | Just (P_asterisk) ->
-        error "TODO: Output.convert, * prec" (* TODO *)
+        error "TODO: Formatted.convert, * prec" (* TODO *)
     | Nothing ->
         1
   end in
@@ -477,7 +477,7 @@ let convert loc eval_conv prec_opt lm_opt cspec args =
                             (fun x -> String.toCharList (Float.string_of_float x))
                         , args'))
                     | _ ->
-                        error "Output.aux should only be called on a loaded(arimetic value)"
+                        error "Formatted.aux should only be called on a loaded(arimetic value)"
                   end
             end
     end in
@@ -500,7 +500,7 @@ let convert loc eval_conv prec_opt lm_opt cspec args =
           (if n < 0 then (fun z -> #'-' :: z) else id) $ replicate (prec - length str) #'0' ++ str
         )
     | CS_o ->
-        error "WIP: Output.convert, CS_o"
+        error "WIP: Formatted.convert, CS_o"
     | CS_u ->
         let (expected_ty_opt, conv_ty_opt) = match lm_opt with
           | Just LM_hh -> (Nothing                     , Just Ctype.unsigned_char )
@@ -573,7 +573,7 @@ let convert loc eval_conv prec_opt lm_opt cspec args =
         (* TODO: I don't like it ==> should rewrite it *)
         match lm_opt with
           | Just _ ->
-              error "WIP: Output.convert, CS_s with length modifier"
+              error "WIP: Formatted.convert, CS_s with length modifier"
           | Nothing ->
               match args with
                 | [] ->
@@ -593,7 +593,7 @@ let convert loc eval_conv prec_opt lm_opt cspec args =
                         | Just (P_num z) ->
                             Just z
                         | Just (P_asterisk) ->
-                            error "TODO(2): Output.convert, * prec" (* TODO *)
+                            error "TODO(2): Formatted.convert, * prec" (* TODO *)
                         | Nothing ->
                             Nothing
                       end in
@@ -605,10 +605,10 @@ let convert loc eval_conv prec_opt lm_opt cspec args =
                               load_character_array ref_ty ptrval prec >>= fun chars ->
                               Mem.return (Right (U.Defined (chars, args')))
                           | Nothing ->
-                              error "WIP[error message], Output => CS_s, didn't load a pointer"
+                              error "WIP[error message], Formatted => CS_s, didn't load a pointer"
                         end
                 | (ty, pe) :: _ ->
-                    error ("WIP, Output => CS_s, ty <> Pointer ==> " ^
+                    error ("WIP, Formatted => CS_s, ty <> Pointer ==> " ^
                            stringFromPair Pp.stringFromCore_ctype Pp.stringFromMem_mem_value (ty, Mem.pointer_mval ty pe) )
               end
         end
@@ -629,7 +629,7 @@ let convert loc eval_conv prec_opt lm_opt cspec args =
                         Right (U.Defined (String.toCharList (stringFromPointerValue ptrval), args'))
                       )
                   | Nothing ->
-                      error "WIP[error message], Output => CS_p, didn't load a pointer"
+                      error "WIP[error message], Formatted => CS_p, didn't load a pointer"
                 end
           | _ ->
               Mem.return (
@@ -637,7 +637,7 @@ let convert loc eval_conv prec_opt lm_opt cspec args =
               )
         end
     | CS_n ->
-        error "WIP: Output.convert, CS_n"
+        error "WIP: Formatted.convert, CS_n"
     | CS_percent ->
         (* TODO: it seems that if there is a length, modif, flags, precision, ... it is undefined behaviour .... *)
         Mem.return (
@@ -677,7 +677,7 @@ let rec printf_aux loc eval_conv acc fs ty_ptrvals =
                       else
                         expanded
                   | Just FW_asterisk ->
-                      error "TODO: output.lem 6"
+                      error "TODO: formatted.lem 6"
                 end in
                 printf_aux loc eval_conv (acc ++ justified) fs ty_ptrvals'
           | Right (U.Error loc str) ->

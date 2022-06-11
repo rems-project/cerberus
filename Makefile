@@ -117,7 +117,7 @@ LEM_AIL_TYPING    = range.lem integerImpl.lem ailTypesAux.lem \
                     ailSyntaxAux.lem ailWf.lem ailTyping.lem genTypesAux.lem \
                     genTyping.lem
 LEM_CABS_TO_AIL   = cabs_to_ail_aux.lem scope_table.lem \
-                    cabs_to_ail_effect.lem cabs_to_ail.lem wipFrontend.lem
+                    cabs_to_ail_effect.lem cabs_to_ail.lem mini_pipeline.lem
 LEM_CORE_TO_CORE  = core_sequentialise.lem core_indet.lem core_rewrite.lem \
                     core_unstruct.lem
 LEM_CORE_DYNAMICS = core_run_aux.lem core_eval.lem core_run.lem core_reduction.lem core_reduction_aux.lem driver.lem
@@ -135,7 +135,7 @@ LEM_SRC_AUX       = $(LEM_PRELUDE) \
                     $(LEM_CABS) \
                     $(addprefix ail/, $(LEM_AIL)) \
                     $(LEM_CORE_CTYPE) \
-                    builtins.lem output.lem pp.lem implementation.lem \
+                    builtins.lem formatted.lem pp.lem implementation.lem \
                     $(LEM_DEFACTO) \
                     $(LEM_UTILS) \
                     nondeterminism.lem \

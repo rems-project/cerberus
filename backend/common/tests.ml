@@ -8,7 +8,7 @@ let error str =
   exit 1
 
 (* The return type of Core_run.run *)
-type execution_result_full = Exhaustive_driver.execution_result
+type execution_result_full = Driver_ocaml.execution_result
 
 (* The type we use to compare results of executions *) 
 type execution_result = (string Pset.set, Errors.t9) Exception.t3

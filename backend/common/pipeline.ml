@@ -509,7 +509,7 @@ let core_passes (conf, io) ~filename core_file =
   end
 
 let interp_backend io core_file ~args ~batch ~fs ~driver_conf =
-  let module D = Exhaustive_driver in
+  let module D = Driver_ocaml in
   let fs_state = match fs with
     | None -> Sibylfs.fs_initial_state
     | Some fs -> Fs_ocaml.initialise fs

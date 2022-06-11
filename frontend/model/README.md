@@ -62,7 +62,7 @@ The modules part of the pipeline are (in order) :
 
 the actual implementation of the pipeline is written in OCaml (see src/main.ml)
 
-to see a condensed implentation of the pipeline in Lem, see the WipFrontend
+to see a condensed implementation of the pipeline in Lem, see the Mini_pipeline
 module
 
 The modules defining the source/intermediate languages are:
@@ -71,7 +71,7 @@ The modules defining the source/intermediate languages are:
 : the C abstract syntax
 * ail/AilSyntax
 * ail/AilTypes
-: a slighy more principled version of C (which symbols for names)
+: a slightly more principled version of C (which symbols for names)
 * Core
 : the target Core language
 
@@ -150,7 +150,7 @@ MORE DETAILS ABOUT THE INTERESTING MODULES:
   currently forwards Defacto_memory2. We do things this way because we
   don't have functors in Lem.
 
-* output.lem
+* formatted.lem
 : implementation of printf()
 
 * translation.lem
@@ -162,7 +162,7 @@ MORE DETAILS ABOUT THE INTERESTING MODULES:
 * undefined.lem
 : this module defines C's undefined behaviours.
 
-* wipFrontend.lem
+* mini_pipeline.lem
 : this module is a small condensed version of the whole pipeline (written
   in the Lem unlike the actual pipeline which is in src/main.ml). This
   is used during Desugaring (Cabs_to_ail.lem) when the value of some

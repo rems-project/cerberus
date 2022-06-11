@@ -112,7 +112,7 @@ let load_impl core_parse corelib_path =
           | Exception.Exception err -> error ("[Core parsing error: impl-file]" ^ Pp_errors.to_string err)
 
 
-let pipeline stdlib impl core_parse file_name : Exhaustive_driver.execution_result =
+let pipeline stdlib impl core_parse file_name : Driver_ocaml.execution_result =
   file_name
   |> Input.file
   |> core_parse
@@ -131,12 +131,12 @@ let pipeline stdlib impl core_parse file_name : Exhaustive_driver.execution_resu
   |> Exception.rbind
   (*    (Exception.mapM0
 	 (fun (n,file) -> *)
-           (fun (sym_supply, file) -> Exhaustive_driver.drive sym_supply file [] true)
+           (fun (sym_supply, file) -> Driver_ocaml.drive sym_supply file [] true)
 (*         )
       ) *)
 
 
-let run_test (run:string->Exhaustive_driver.execution_result) (test:Tests.test) = 
+let run_test (run:string->Driver_ocaml.execution_result) (test:Tests.test) = 
   let ex_result = run test.Tests.file_name in
   let test_result = Tests.compare_results test.Tests.expected_result ex_result in
   match test_result with

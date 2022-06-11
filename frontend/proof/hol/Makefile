@@ -69,7 +69,7 @@ UTILS =\
   uniqueId.lem \
   std.lem \
   monadic_parsing.lem \
-  output.lem \
+  formatted.lem \
  undefined.lem \
  implementation_.lem \
  symbolic.lem \

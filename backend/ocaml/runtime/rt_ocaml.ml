@@ -293,7 +293,7 @@ let printf (conv : C.ctype0 -> M.integer_value -> M.integer_value)
     in Nondeterminism.nd_return (Either.Right (Undefined.Defined
                        (Core.Vloaded (Core.LVspecified (Core.OVinteger n)))))
   in
-  Output.printf eval_conv (List.rev (List.map encode xs)) args
+  Formatted.printf eval_conv (List.rev (List.map encode xs)) args
   >>= begin function
     | Either.Right (Undefined.Defined xs) ->
       let n = List.length xs in

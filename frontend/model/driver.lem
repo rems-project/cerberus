@@ -1,6 +1,6 @@
 open import Pervasives
 
-import Core Boot Decode Output Set_extra Map
+import Core Boot Decode Formatted Set_extra Map
 import Core_aux Builtins Core_linking
 module Caux = Core_aux
 
@@ -225,7 +225,7 @@ let drive_fs_step tid th_st dr_st fs_oper =
       | Right buf ->
         let n = integerFromNat $ List.length buf in
         (* TODO: store chars is wrong here!! it adds a \0 in the end of the array *)
-        liftMem (Output.store_chars_in_array false ptr buf) >>
+        liftMem (Formatted.store_chars_in_array false ptr buf) >>
         update fs_st (th_st_from_int n)
     end
   in
@@ -237,7 +237,7 @@ let drive_fs_step tid th_st dr_st fs_oper =
       | Right buf ->
         let buf_trunc = List.take (natFromInteger max) buf in
         let n = integerFromNat $ List.length buf_trunc in
-        liftMem (Output.store_chars_in_array false ptr buf_trunc) >>
+        liftMem (Formatted.store_chars_in_array false ptr buf_trunc) >>
         update fs_st (th_st_from_int n)
     end
   in
@@ -288,7 +288,7 @@ let drive_fs_step tid th_st dr_st fs_oper =
     let update_mem dir_name =
       Mem.bind (Mem.allocate_object tid (Symbol.PrefOther "dirent") (Mem.alignof_ival dirent_cty) dirent_cty Nothing Nothing) (fun dirent_ptr ->
         let d_name_ptr = Mem.member_shift_ptrval dirent_ptr sym (Symbol.Identifier loc "d_name") in
-        Mem.bind (Output.store_chars_in_array true d_name_ptr dir_name) (fun _ ->
+        Mem.bind (Formatted.store_chars_in_array true d_name_ptr dir_name) (fun _ ->
           (Mem.return dirent_ptr)))
     in
     match res with
@@ -396,7 +396,7 @@ let drive_fs_step tid th_st dr_st fs_oper =
     | Core_run.FS_CLOSEDIR dir ->
       return $ Fs.fs_closedir dr_st.fs_state dir
     | Core_run.FS_PRINTF fmt args ->
-      liftMem (Output.printf th_st.Core_run.current_loc (printf_eval_conv dr_st th_st) fmt args) >>= function
+      liftMem (Formatted.printf th_st.Core_run.current_loc (printf_eval_conv dr_st th_st) fmt args) >>= function
         | Left err ->
           error "TODO: printf error"
         | Right (Undefined.Defined buf) ->
@@ -407,7 +407,7 @@ let drive_fs_step tid th_st dr_st fs_oper =
           ND.kill (ND.Undef loc ubs)
       end
     | Core_run.FS_VPRINTF fd fmt ap ->
-      liftMem (Output.vprintf th_st.Core_run.current_loc (printf_eval_conv dr_st th_st) fmt ap) >>= function
+      liftMem (Formatted.vprintf th_st.Core_run.current_loc (printf_eval_conv dr_st th_st) fmt ap) >>= function
         | Left err ->
           error "TODO: vprintf error"
         | Right (Undefined.Defined buf) ->
@@ -428,7 +428,7 @@ let drive_fs_step tid th_st dr_st fs_oper =
           ND.kill (ND.Undef loc ubs)
       end
     | Core_run.FS_VSNPRINTF ptr size fmt ap ->
-      liftMem (Output.vsnprintf th_st.Core_run.current_loc (printf_eval_conv dr_st th_st) ptr size fmt ap) >>= function
+      liftMem (Formatted.vsnprintf th_st.Core_run.current_loc (printf_eval_conv dr_st th_st) ptr size fmt ap) >>= function
         | Left err ->
           error "TODO: vprintf error"
         | Right (Undefined.Defined n) ->

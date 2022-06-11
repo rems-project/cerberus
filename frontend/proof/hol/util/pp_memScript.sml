@@ -5,7 +5,7 @@ open core_ctypeTheory coreTheory memTheory;
 val _ = new_theory "pp_mem"
 
 (**
-* Suporting definitions for output.lem
+* Suporting definitions for formatted.lem
 **)
 
 val _ = Define `

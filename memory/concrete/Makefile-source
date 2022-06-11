@@ -69,7 +69,7 @@ SOURCE_cabs_to_ail=\
   scope_table.lem \
   cabs_to_ail_effect.lem \
   cabs_to_ail.lem \
-  wipFrontend.lem
+  mini_pipeline.lem
 
 SOURCE_core_to_core=\
   core_sequentialise.lem \
@@ -128,7 +128,7 @@ CERBERUS_LEM_SOURCES=\
   $(addprefix ail/, $(SOURCE_ail)) \
   $(SOURCE_core_ctype) \
   builtins.lem \
-  output.lem \
+  formatted.lem \
   pp.lem \
   implementation.lem \
   $(SOURCE_defacto) \

@@ -138,7 +138,7 @@ let evalConstantExpressionAux loc (*TODO*)(ailnames, stdlib_fun_map, impl) sigm 
         let driver_action =
           ND.bind (Driver.driver2 false) (fun () ->
             ND.bind ND.get (fun dr_st' ->
-              ND.return (Driver.finalize "wipFrontend" dr_st')
+              ND.return (Driver.finalize "Mini_pipeline" dr_st')
             )
           ) in
         let () = Core_ctype_aux.set_tagDefs (Translation.translate_tag_definitions sigm.A.tag_definitions) in
@@ -189,7 +189,7 @@ let evalIntegerConstantExpression loc core_env sigm ty_opt expr =
           "cval: " ^ Pp.stringFromCore_value cval
         ) in
         (* given that typing guard has passed the evaluator must evaluate to an integer value *)
-        error (Loc.stringFromLocation loc ^ ", wipFrontend.evalIntegerConstantExpression")
+        error (Loc.stringFromLocation loc ^ ", Mini_pipeline.evalIntegerConstantExpression")
   end
 
 

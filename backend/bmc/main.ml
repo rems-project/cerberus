@@ -235,7 +235,7 @@ let cerberus debug_level progress core_obj
             Core_linking.link (f::fs)
         end >>= fun core_file ->
         if exec then
-          let open Exhaustive_driver in
+          let open Driver_ocaml in
           let () = Tags.set_tagDefs core_file.tagDefs in
           let driver_conf = {concurrency; exec_mode; fs_dump; trace} in
           interp_backend io core_file ~args ~batch ~fs ~driver_conf
