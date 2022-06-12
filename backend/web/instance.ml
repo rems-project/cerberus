@@ -64,10 +64,10 @@ let add_bmc_macro ~bmc_model conf =
   { conf with pipeline = { conf.pipeline with cpp_cmd } }
 
 (* TODO: this hack is due to cerb_conf be undefined when running Cerberus *)
-let hack ~conf mode =
+let hack ?(is_bmc=false) ~conf mode =
   let open Global_ocaml in
   let conf =
-   {  backend_name= "Web_instance";
+   {  backend_name= if is_bmc then "Bmc" else "Web_instance";
       exec_mode_opt=    Some (mode);
       concurrency=      false;
       error_verbosity=  Global_ocaml.QuoteStd;
@@ -86,10 +86,10 @@ let respond filename name f = function
 
 (* elaboration *)
 
-let elaborate ~conf ~filename =
+let elaborate ~is_bmc ~conf ~filename =
   let return = Exception.except_return in
   let (>>=)  = Exception.except_bind in
-  hack ~conf Random;
+  hack ~is_bmc ~conf Random;
   Switches.set conf.instance.switches;
   Debug.print 7 @@ List.fold_left (fun acc sw -> acc ^ " " ^ sw) "Switches: " conf.instance.switches;
   Debug.print 7 ("Elaborating: " ^ filename);
@@ -169,7 +169,7 @@ let bmc ~filename ~name ~conf ~bmc_model:bmc_model ~filename () =
   let (>>=)  = Exception.except_bind in
   Debug.print 7 ("Running BMC...");
   try
-    elaborate ~conf ~filename
+    elaborate ~is_bmc:true ~conf ~filename
     >>= fun (core_std, core_lib, cabs, ail, core) ->
     Tags.set_tagDefs core.tagDefs;
     let (cat_file_opt, mem_model) =
@@ -211,7 +211,7 @@ let execute ~conf ~filename (mode: Global_ocaml.execution_mode) =
   hack ~conf mode;
   Debug.print 7 ("Executing in "^string_of_exec_mode mode^" mode: " ^ filename);
   try
-    elaborate ~conf ~filename
+    elaborate ~is_bmc:false ~conf ~filename
     >>= fun (core_std, core_lib, cabs, ail, core) ->
     begin if conf.instance.link_libc then
       let libc = Pipeline.read_core_object (core_std, core_lib) @@ in_runtime "libc/libc.co" in
@@ -589,7 +589,7 @@ let step ~conf ~filename (active_node_opt: Instance_api.active_node option) =
   match active_node_opt with
   | None -> (* no active node *)
     hack ~conf Random;
-    elaborate ~conf ~filename >>= fun (core_std, core_lib, _, _, core) ->
+    elaborate ~is_bmc:false ~conf ~filename >>= fun (core_std, core_lib, _, _, core) ->
     let core     = set_uid core in
     let ranges   = create_expr_range_list core in
     begin if conf.instance.link_libc then
@@ -624,7 +624,7 @@ let instance debug_level =
   Debug.level := debug_level;
   let do_action  : Instance_api.request -> Instance_api.result = function
     | `Elaborate (conf, filename, name) ->
-      elaborate ~conf:(setup conf) ~filename
+      elaborate ~is_bmc:false ~conf:(setup conf) ~filename
       |> respond filename name result_of_elaboration
     | `Execute (conf, filename, name, mode) ->
       execute ~conf:(setup conf) ~filename mode
