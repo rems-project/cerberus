@@ -205,6 +205,10 @@ module WIT = struct
                let hint = "Only exponentiation of two constants is allowed" in
                fail (fun ctxt -> {loc; msg = NIA {context; it = exp_ (t, t'); ctxt; hint}})
             end
+           | ExpNoSMT (t,t') ->
+              let@ t = check loc ~context Integer t in
+              let@ t' = check loc ~context Integer t' in
+              return (exp_no_smt_ (t, t'))
            | Rem (t,t') ->
               let@ t = check loc ~context Integer t in
               let@ t' = check loc ~context Integer t' in

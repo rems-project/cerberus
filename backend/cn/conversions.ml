@@ -37,9 +37,10 @@ let xor_def = (Sym.fresh_named "xor", mk_arg2 xor_)
 let power_def = (Sym.fresh_named "power", mk_arg2 exp_)
 let rem_def = (Sym.fresh_named "rem", mk_arg2 rem_)
 let mod_def = (Sym.fresh_named "mod", mk_arg2 mod_)
+let exp_def = (Sym.fresh_named "exp", mk_arg2 exp_no_smt_)
 
 let builtin_funs = List.map (fun (s, mk) -> (Sym.pp_string s, mk))
-  [xor_def; power_def; rem_def; mod_def]
+  [xor_def; power_def; rem_def; mod_def; exp_def]
 
 
 

@@ -1746,7 +1746,7 @@ let infer_pexpr (pe : 'bty mu_pexpr) : (RT.t * per_path, type_error) m =
          | OpMul ->   return (((Integer, Integer), Integer), IT.mul_ (v1, v2))
          | OpDiv ->   return (((Integer, Integer), Integer), IT.div_ (v1, v2))
          | OpRem_f -> return (((Integer, Integer), Integer), IT.rem_f_ (v1, v2))
-         | OpExp ->   return (((Integer, Integer), Integer), LogicalPredicates.mk_exp (v1, v2))
+         | OpExp ->   return (((Integer, Integer), Integer), IT.exp_no_smt_ (v1, v2))
          | OpEq ->    return (((Integer, Integer), Bool), IT.eq_ (v1, v2))
          | OpGt ->    return (((Integer, Integer), Bool), IT.gt_ (v1, v2))
          | OpLt ->    return (((Integer, Integer), Bool), IT.lt_ (v1, v2))

@@ -31,6 +31,7 @@ type model_with_q = model * (Sym.t * BT.t) list
 
 
 let xor_solver_sym = Sym.fresh_named "xor"
+let exp_solver_sym = Sym.fresh_named "exp"
 
 
 
@@ -338,6 +339,11 @@ module Translate = struct
                warn (Pp.item "generating power" (Pp.list IT.pp [t1; t2]));
                Real.mk_real2int context (mk_power context (term t1) (term t2))
             end
+         | ExpNoSMT (t1, t2) ->
+            let decl = Z3.FuncDecl.mk_func_decl context (symbol exp_solver_sym)
+                [sort Integer; sort Integer] (sort Integer)
+            in
+            Z3.Expr.mk_app context decl (List.map term [t1; t2])
          | Rem (t1, t2) -> Integer.mk_rem context (term t1) (term t2)
          | Mod (t1, t2) -> Integer.mk_mod context (term t1) (term t2)
          | LT (t1, t2) -> mk_lt context (term t1) (term t2)

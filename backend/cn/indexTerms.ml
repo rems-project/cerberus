@@ -61,6 +61,8 @@ let pp =
           mparens (flow (break 1) [aux true it1; slash; aux true it2])
        | Exp (it1,it2) -> 
           c_app !^"power" [aux true it1; aux true it2]
+       | ExpNoSMT (it1,it2) ->
+          c_app !^"exp" [aux true it1; aux true it2]
        | Rem (it1,it2) -> 
           c_app !^"rem" [aux true it1; aux true it2]
        | Mod (it1,it2) -> 
@@ -218,6 +220,7 @@ let rec free_vars_arith_op = function
   | Mul (t1, t2) -> free_vars_list [t1; t2]
   | Div (t1, t2) -> free_vars_list [t1; t2]
   | Exp (t1, t2) -> free_vars_list [t1; t2]
+  | ExpNoSMT (t1, t2) -> free_vars_list [t1; t2]
   | Rem (t1, t2) -> free_vars_list [t1; t2]
   | Mod (t1, t2) -> free_vars_list [t1; t2]
   | LT (t1, t2) -> free_vars_list [t1; t2]
@@ -333,6 +336,7 @@ let rec fold_arith_op f binders acc = function
   | Mul (t1, t2) -> fold_list f binders acc [t1; t2]
   | Div (t1, t2) -> fold_list f binders acc [t1; t2]
   | Exp (t1, t2) -> fold_list f binders acc [t1; t2]
+  | ExpNoSMT (t1, t2) -> fold_list f binders acc [t1; t2]
   | Rem (t1, t2) -> fold_list f binders acc [t1; t2]
   | Mod (t1, t2) -> fold_list f binders acc [t1; t2]
   | LT (t1, t2) -> fold_list f binders acc [t1; t2]
@@ -476,6 +480,7 @@ let rec subst (su : typed subst) (IT (it, bt)) =
        | Mul (it, it') -> Mul (subst su it, subst su it')
        | Div (it, it') -> Div (subst su it, subst su it')
        | Exp (it, it') -> Exp (subst su it, subst su it')
+       | ExpNoSMT (it, it') -> ExpNoSMT (subst su it, subst su it')
        | Rem (it, it') -> Rem (subst su it, subst su it')
        | Mod (it, it') -> Mod (subst su it, subst su it')
        | LT (it, it') -> LT (subst su it, subst su it')
@@ -730,6 +735,7 @@ let sub_ (it, it') = IT (Arith_op (Sub (it, it')), bt it)
 let mul_ (it, it') = IT (Arith_op (Mul (it, it')), bt it)
 let div_ (it, it') = IT (Arith_op (Div (it, it')), bt it)
 let exp_ (it, it') = IT (Arith_op (Exp (it, it')), bt it)
+let exp_no_smt_ (it, it') = IT (Arith_op (ExpNoSMT (it, it')), bt it)
 let rem_ (it, it') = IT (Arith_op (Rem (it, it')), BT.Integer)
 let mod_ (it, it') = IT (Arith_op (Mod (it, it')), BT.Integer)
 let divisible_ (it, it') = eq_ (mod_ (it, it'), int_ 0)

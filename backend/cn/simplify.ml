@@ -205,6 +205,10 @@ let rec simp (struct_decls : Memory.struct_decls) values equalities lcs =
        | _ ->
           IT.exp_ (a, b)
        end
+    | ExpNoSMT (a, b) ->
+       let a = aux a in
+       let b = aux b in
+       IT.exp_no_smt_ (a, b)
     | Rem (a, b) ->
        let a = aux a in
        let b = aux b in 

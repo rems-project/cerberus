@@ -18,6 +18,7 @@ type 'bt arith_op =
   | Mul of 'bt term * 'bt term
   | Div of 'bt term * 'bt term
   | Exp of 'bt term * 'bt term
+  | ExpNoSMT of 'bt term * 'bt term
   | Rem of 'bt term * 'bt term
   | Mod of 'bt term * 'bt term
   | LT of 'bt term * 'bt term
