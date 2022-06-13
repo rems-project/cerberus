@@ -30,6 +30,8 @@ type model_with_q = model * (Sym.t * BT.t) list
 
 
 
+let xor_solver_sym = Sym.fresh_named "xor"
+
 
 
 let logging_params = 
@@ -333,7 +335,7 @@ module Translate = struct
             | Some z1, Some z2 when Z.fits_int z2 ->
                term (z_ (Z.pow z1 (Z.to_int z2)))
             | _, _ ->
-               warn (!^"generating power");
+               warn (Pp.item "generating power" (Pp.list IT.pp [t1; t2]));
                Real.mk_real2int context (mk_power context (term t1) (term t2))
             end
          | Rem (t1, t2) -> Integer.mk_rem context (term t1) (term t2)
@@ -344,29 +346,11 @@ module Translate = struct
          | Max (t1, t2) -> term (ite_ (ge_ (t1, t2), t1, t2))
          | IntToReal t -> Integer.mk_int2real context (term t)
          | RealToInt t -> Real.mk_real2int context (term t)
-         (* | XOR (ity, t1, t2) ->
-          *    let bit_width = Memory.bits_per_byte * Memory.size_of_integer_type ity in
-          *    let bt1 = Z3.Arithmetic.Integer.mk_int2bv context bit_width (term t1) in
-          *    let bt2 = Z3.Arithmetic.Integer.mk_int2bv context bit_width (term t2) in
-          *    let btv = Z3.BitVector.mk_xor context bt1 bt2 in
-          *    Z3.BitVector.mk_bv2int context btv (CF.AilTypesAux.is_signed_ity ity) *)
-         | XOR (ity, t1, t2) ->
-            (* looking at https://en.wikipedia.org/wiki/Bitwise_operation#XOR *)
-            assert (CF.AilTypesAux.is_unsigned_ity ity);
-            let bit_width = Memory.bits_per_byte * Memory.size_of_integer_type ity in
-            let shift_to_pos n pos = div_ (n, exp_ (int_ 2, int_ pos)) in
-            (* let zero_one_pos n pos = mod_ (shift_to_pos n pos, int_ 2) in *)
-            let zero_one_pos n pos = shift_to_pos n pos in
-            let xor_pos n1 n2 pos = 
-              mod_ (add_ (zero_one_pos n1 pos,
-                          zero_one_pos n2 pos),
-                    int_ 2)
+         | XOR (t1, t2) ->
+            let decl = Z3.FuncDecl.mk_func_decl context (symbol xor_solver_sym)
+                [sort Integer; sort Integer] (sort Integer)
             in
-            let rec sum pos = 
-              if pos < 0 then int_ 0 
-              else add_ (sum (pos - 1), mul_ (xor_pos t1 t2 pos, exp_ (int_ 2, int_ pos)))
-            in
-            term (sum (bit_width - 1))
+            Z3.Expr.mk_app context decl (List.map term [t1; t2])
          end
       | Bool_op bool_op -> 
          let open Z3.Boolean in

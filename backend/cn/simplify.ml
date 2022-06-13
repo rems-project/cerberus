@@ -286,10 +286,14 @@ let rec simp (struct_decls : Memory.struct_decls) values equalities lcs =
     | RealToInt a ->
        let a = aux a in
        IT (Arith_op (RealToInt a), bt)
-    | XOR (ity, a, b) -> 
+    | XOR (a, b) ->
        let a = aux a in
        let b = aux b in
-       IT (Arith_op (XOR (ity, a, b)), bt)
+       begin match is_z a, is_z b with
+       | Some z, _ when Z.equal Z.zero z -> b
+       | _, Some z when Z.equal Z.zero z -> a
+       | _ -> IT (Arith_op (XOR (a, b)), bt)
+       end
   in
   
   let bool_op it bt = 

@@ -25,9 +25,6 @@ rule main = parse
   | '-'   { T.MINUS }
   | '*'   { T.STAR }
   | '/'   { T.SLASH }
-  | "power"   { T.POWER }
-  | "mod"   { T.MOD }
-  | "rem"   { T.REM }
 
   | "=="  { T.EQ }
   | "!="  { T.NE }

@@ -58,6 +58,15 @@ let make_uninterp (fname : Sym.t) arg_spec return_bt =
 
 
 
+let exp_sym = Sym.fresh_named "exp"
+
+let exp_fun = make_uninterp exp_sym
+        [(Sym.fresh_named "n", Integer); (Sym.fresh_named "exponent", Integer);]
+        Integer
+
+let mk_exp (x, y) = pred_ exp_sym [x; y] Integer
+
+
 module PageAlloc = struct
 
   module Aux(SD : sig val struct_decls : Memory.struct_decls end) = struct
@@ -635,8 +644,11 @@ end
 
 
 let predicate_list struct_decls = 
+  (
   try PageAlloc.predicates struct_decls with
   | Struct_not_found -> []
+  ) @
+  [exp_fun]
 
 
     

@@ -26,7 +26,7 @@ type 'bt arith_op =
   | Max of 'bt term * 'bt term
   | IntToReal of 'bt term
   | RealToInt of 'bt term
-  | XOR of Sctypes.IntegerTypes.t * 'bt term * 'bt term
+  | XOR of 'bt term * 'bt term
 
 and 'bt bool_op = 
   | And of 'bt term list

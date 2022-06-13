@@ -77,8 +77,8 @@ let pp =
           c_app !^"intToReal" [aux false t]
        | RealToInt t ->
           c_app !^"realToInt" [aux false t]
-       | XOR (ity, t1, t2) -> 
-          c_app !^"xor" [Sctypes.IntegerTypes.pp ity ; aux false t1; aux false t2]
+       | XOR (t1, t2) ->
+          c_app !^"xor" [aux false t1; aux false t2]
        end
     | Bool_op bool_op -> 
        begin match bool_op with
@@ -226,7 +226,7 @@ let rec free_vars_arith_op = function
   | Max (t1, t2) -> free_vars_list [t1; t2]
   | IntToReal t1 -> free_vars t1
   | RealToInt t1 -> free_vars t1
-  | XOR (_it, t1, t2) -> free_vars_list [t1; t2]
+  | XOR (t1, t2) -> free_vars_list [t1; t2]
 
 and free_vars_bool_op = function
   | And ts -> free_vars_list ts
@@ -341,7 +341,7 @@ let rec fold_arith_op f binders acc = function
   | Max (t1, t2) -> fold_list f binders acc [t1; t2]
   | IntToReal t1 -> fold f binders acc t1
   | RealToInt t1 -> fold f binders acc t1
-  | XOR (_it, t1, t2) -> fold_list f binders acc [t1; t2]
+  | XOR (t1, t2) -> fold_list f binders acc [t1; t2]
 
 and fold_bool_op f binders acc = function
   | And ts -> fold_list f binders acc ts
@@ -484,7 +484,7 @@ let rec subst (su : typed subst) (IT (it, bt)) =
        | Max (it, it') -> Max (subst su it, subst su it')
        | IntToReal it -> IntToReal (subst su it)
        | RealToInt it -> RealToInt (subst su it)
-       | XOR (ity, it, it') -> XOR (ity, subst su it, subst su it')
+       | XOR (it, it') -> XOR (subst su it, subst su it')
      in
      IT (Arith_op arith_op, bt)
   | Bool_op bool_op -> 
@@ -738,7 +738,7 @@ let min_ (it, it') = IT (Arith_op (Min (it, it')), bt it)
 let max_ (it, it') = IT (Arith_op (Max (it, it')), bt it)
 let intToReal_ it = IT (Arith_op (IntToReal it), BT.Real)
 let realToInt_ it = IT (Arith_op (RealToInt it), BT.Integer)
-let xor_ ity (it, it') = IT (Arith_op (XOR (ity, it, it')), BT.Integer)
+let xor_ (it, it') = IT (Arith_op (XOR (it, it')), BT.Integer)
 
 let (%+) t t' = add_ (t, t')
 let (%-) t t' = sub_ (t, t')
