@@ -175,7 +175,6 @@ let main
       print_level 
       json 
       state_file 
-      cbv
       lemmata
       no_reorder_points
       no_additional_sat_check
@@ -268,10 +267,6 @@ let state_file =
   let doc = "file in which to output the state" in
   Arg.(value & opt (some string) None & info ["state-file"] ~docv:"FILE" ~doc)
 
-let cbv =
-  let doc = "switch elaboration to call-by-value style" in
-  Arg.(value & flag & info["cbv"] ~doc)
-
 let lemmata =
   let doc = "lemmata generation mode (target filename)" in
   Arg.(value & opt (some string) None & info ["lemmata"] ~docv:"FILE" ~doc)
@@ -322,7 +317,6 @@ let () =
       print_level $
       json $
       state_file $
-      cbv $
       lemmata $
       no_reorder_points $
       no_additional_sat_check $
