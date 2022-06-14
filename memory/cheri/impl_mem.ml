@@ -3050,7 +3050,15 @@ module CHERI (C:Capability
             return ival in
     match ptrval_ with
     | PVnull _ ->
-       return (mk_ival prov Z.zero)
+       begin
+         match ity with
+         | Signed Intptr_t ->
+            return (IC (prov, true, C.cap_c0 ()))
+         | Unsigned Intptr_t ->
+            return (IC (prov, false, C.cap_c0 ()))
+         | _ ->
+            return (mk_ival prov Z.zero)
+       end
     | PVfunction (FP_valid ((Symbol.Symbol (_, n, _)) as sym)) ->
        get >>= fun st ->
        begin
