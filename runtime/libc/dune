@@ -37,7 +37,7 @@
        include/tgmath.h
        include/stdbool.h
        include/cerberus/any.h
-       include/cheric.h
+       include/cheri/cheric.h
        include/cheriintrin.h
        include/posix/mqueue.h
        include/posix/unistd.h

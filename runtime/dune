@@ -30,7 +30,7 @@
   (libc/include/stdbool.h as runtime/libc/include/stdbool.h)
   (libc/include/cerberus/any.h as runtime/libc/include/cerberus/any.h)
   (libc/include/cheriintrin.h as runtime/libc/include/cheriintrin.h)
-  (libc/include/cheric.h as runtime/libc/include/cheric.h)
+  (libc/include/cheri/cheric.h as runtime/libc/include/cheri/cheric.h)
   (libc/include/posix/mqueue.h as runtime/libc/include/posix/mqueue.h)
   (libc/include/posix/unistd.h as runtime/libc/include/posix/unistd.h)
   (libc/include/posix/fnmatch.h as runtime/libc/include/posix/fnmatch.h)
