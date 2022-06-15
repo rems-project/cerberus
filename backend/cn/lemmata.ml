@@ -262,11 +262,11 @@ let get_struct_xs struct_decls tag = match SymMap.find_opt tag struct_decls with
 
 let binop s x y =
   let open Pp in
-  parens (x ^^^ !^ s ^^^ y)
+  parens (flow (break 1) [x; !^ s; y])
 
 let doc_fun_app sd xs =
   let open Pp in
-  parens (List.fold_left (fun x y -> x ^^^ y) sd xs)
+  parens (flow (break 1) (sd :: xs))
 
 let fun_app s xs =
   let open Pp in
@@ -274,9 +274,12 @@ let fun_app s xs =
 
 let tuple_coq_ty doc fld_tys =
   let open Pp in
-  match fld_tys with
+  let rec stars = function
     | [] -> fail "tuple_coq_ty: empty" doc
-    | _ -> parens (flow (!^ " " ^^ !^ "*" ^^ !^ " ") fld_tys)
+    | [x] -> [x]
+    | x :: xs -> x :: star :: stars xs
+  in
+  parens (flow (break 1) (stars fld_tys))
 
 type conv_info = {struct_decls : Memory.struct_layout SymMap.t;
     fun_info : LogicalPredicates.definition SymMap.t}
@@ -286,7 +289,7 @@ let bt_to_coq ci loc_info =
   let rec f bt = match bt with
   | BaseTypes.Bool -> !^ "bool"
   | BaseTypes.Integer -> !^ "Z"
-  | BaseTypes.Map (x, y) -> parens (f x ^^^ !^"->" ^^^ f y)
+  | BaseTypes.Map (x, y) -> parens (binop "->" (f x) (f y))
   | BaseTypes.Struct tag ->
     let (_, fld_bts) = get_struct_xs ci.struct_decls tag in
     tuple_coq_ty (Sym.pp tag) (List.map f fld_bts)
@@ -355,8 +358,8 @@ let fun_prop_ret ci nm = match SymMap.find_opt nm ci.fun_info with
 let mk_forall ci sym bt doc =
   let open Pp in
   let inf = !^"forall of" ^^^ Sym.pp sym in
-  !^ "forall" ^^^ parens (Sym.pp sym ^^^ !^ ":" ^^^ bt_to_coq ci inf bt)
-  ^^ !^"," ^^^ doc
+  !^ "forall" ^^^ parens (typ (Sym.pp sym) (bt_to_coq ci inf bt))
+  ^^ !^"," ^^ break 1 ^^ doc
 
 let tuple_syn xs =
   let open Pp in
@@ -372,26 +375,21 @@ let tuple_element t (i, len) =
   let nm i = Pp.string ("x_t_" ^ Int.to_string i) in
   let lhs = Pp.string "'" ^^ tuple_syn (List.init len nm) in
   let open Pp in
-  parens (!^ "let" ^^^ lhs ^^^ !^ ":=" ^^^ t ^^^ !^ "in" ^^^ nm i)
+  parens (!^ "let" ^^^ lhs ^^^ !^ ":=" ^^^ t ^^^ !^ "in" ^^ break 1 ^^ nm i)
 
 let tuple_upd_element t (i, len) y =
   let nm i = Pp.string ("x_t_" ^ Int.to_string i) in
   let lhs = Pp.string "'" ^^ tuple_syn (List.init len nm) in
   let rhs = tuple_syn (List.init len (fun j -> if j = i then y else nm j)) in
   let open Pp in
-  parens (!^ "let" ^^^ lhs ^^^ !^ ":=" ^^^ t ^^^ !^ "in" ^^^ rhs)
-
-let rec space_sep = function
-  | [] -> Pp.string ""
-  | [x] -> x
-  | (x :: xs) -> let open Pp in x ^^^ space_sep xs
+  parens (!^ "let" ^^^ lhs ^^^ !^ ":=" ^^^ t ^^^ !^ "in" ^^ break 1 ^^ rhs)
 
 let rets s = return (Pp.string s)
 let build = function
   | [] -> fail "it_to_coq: build" (!^ "empty")
   | xs ->
     let@ docs = ListM.mapM (fun x -> x) xs in
-    return (space_sep docs)
+    return (flow (break 1) docs)
 let parensM x =
     let@ xd = x in
     return (parens xd)
@@ -402,7 +400,7 @@ let defn nm args opt_ty rhs =
     | None -> []
     | Some ty -> [colon; ty]
   in
-  space_sep ([!^"  Definition"; !^ nm] @ args @ tyeq @ [!^":="])
+  flow (break 1) ([!^"  Definition"; !^ nm] @ args @ tyeq @ [!^":="])
   ^^ hardline ^^ !^"    " ^^ rhs ^^ !^ "." ^^ hardline
 
 let fun_upd_def =
@@ -441,7 +439,7 @@ let ensure_tuple_op is_upd nm (ix, l) =
     let t_ty = tuple_coq_ty (!^ op_nm) (List.init l ty) in
     let t = parens (typ (!^ "t") t_ty) in
     let x = parens (typ (!^ "x") (ty ix)) in
-    let infer = space_sep ([!^"{"] @ List.init l ty @ [colon; !^"Type}"]) in
+    let infer = !^"{" ^^ flow (!^ " ") (List.init l ty) ^^ colon ^^^ !^"Type}" in
     return (if is_upd then defn op_nm [infer; t; x]
              None (tuple_upd_element t (ix, l) x)
         else defn op_nm [infer; t] None (tuple_element t (ix, l)))
