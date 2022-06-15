@@ -1034,34 +1034,8 @@ let fvfromint ival =
   (* NOTE: if n is too big, the float will be truncated *)
   float_of_string (N.to_string (ival_to_int ival))
 
-  let ivfromfloat ity fval =
-  (* TODO: hack maybe the elaboration should do that?? *)
-  match ity with
-    | Bool ->
-        IVint (if fval = 0.0 then N.zero else N.(succ zero))
-    | _ ->
-        let nbytes = match (Ocaml_implementation.get ()).sizeof_ity ity with
-          | None ->
-              assert false
-          | Some z ->
-              z in
-        let nbits = 8 * nbytes in
-        let is_signed = AilTypesAux.is_signed_ity ity in
-        let (min, max) =
-          if is_signed then
-            ( N.negate (N.pow_int (N.of_int 2) (nbits-1))
-            , N.sub (N.pow_int (N.of_int 2) (nbits-1)) N.(succ zero) )
-          else
-            ( N.zero
-            , N.sub (N.pow_int (N.of_int 2) nbits) N.(succ zero) ) in
-        let wrapI n =
-          let dlt = N.succ (N.sub max min) in
-          let r = N.integerRem_f n dlt in
-          if N.less_equal r max then
-            r
-          else
-            N.sub r dlt in
-        IVint (wrapI (N.of_int64 (Int64.of_float fval)))
+  let ivfromfloat fval =
+    IVint (N.of_int64 (Int64.of_float fval))
 
 
 (* Memory value constructors *)

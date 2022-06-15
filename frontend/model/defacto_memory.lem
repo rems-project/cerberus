@@ -1138,7 +1138,7 @@ let impl_fvfromint (IV _ ival_) =
   end
 
 (* TODO: check type ranges after conversion *)
-let impl_ivfromfloat _ = function
+let impl_ivfromfloat = function
   | FVunspecified ->
       IV Prov_none IVunspecified
   | FVconcrete fval ->

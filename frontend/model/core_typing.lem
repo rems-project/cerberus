@@ -132,12 +132,11 @@ let rec infer_pattern (Pattern annots pat) =
             E.return (env, InferredType_object OTy_floating, Pattern annots (CaseCtor Cfvfromint [tpat]))
         | (Cfvfromint, _) ->
             error "infer_pattern: Cfvfromint: wrong number of arguments"
-        | (Civfromfloat, [pat1; pat2]) ->
-            typecheck_pattern BTy_ctype                 pat1 >>= fun (env1, tpat1) ->
-            typecheck_pattern (BTy_object OTy_floating) pat2 >>= fun (env2, tpat2) ->
-            E.return ( env_union env1 env2
+        | (Civfromfloat, [pat]) ->
+            typecheck_pattern (BTy_object OTy_floating) pat >>= fun (env, tpat) ->
+            E.return ( env
                      , InferredType_object OTy_integer
-                     , Pattern annots (CaseCtor Civfromfloat [tpat1; tpat2]))
+                     , Pattern annots (CaseCtor Civfromfloat [tpat]))
         | (Civfromfloat, _) ->
             error "infer_pattern: Cfvfromfloat: wrong number of arguments"
       end
@@ -280,12 +279,11 @@ and typecheck_pattern expected_bTy (Pattern annots pat) =
         | (Cfvfromint, _, _) ->
             error "typecheck_pattern: Civfromint: wrong number of arguments"
 
-        | (Civfromfloat, BTy_object OTy_integer, [pat1; pat2]) ->
-            typecheck_pattern BTy_ctype                pat1  >>= fun (env1, tpat1) ->
-            typecheck_pattern (BTy_object OTy_floating) pat2 >>= fun (env2, tpat2) ->
-            E.return ( env_union env1 env2
-                     , Pattern annots (CaseCtor Civfromfloat [tpat1; tpat2] ))
-        | (Civfromfloat, _, [_; _]) ->
+        | (Civfromfloat, BTy_object OTy_integer, [pat]) ->
+            typecheck_pattern (BTy_object OTy_floating) pat >>= fun (env, tpat) ->
+            E.return ( env
+                     , Pattern annots (CaseCtor Civfromfloat [tpat] ))
+        | (Civfromfloat, _, [_]) ->
             E.fail loc (Mismatch "Civfromfloat" expected_bTy (BTy_object OTy_integer))
         | (Civfromfloat, _, _) ->
             error "typecheck_pattern: Civfromfloat: wrong number of arguments"
@@ -887,10 +885,9 @@ and typecheck_pexpr tagDefs (env: typing_env) (bTy: core_base_type) (Pexpr annot
               ret_ctor Cfvfromint <$> typecheck_pexpr tagDefs env (BTy_object OTy_integer) pe
           | (Cfvfromint, _, _) ->
               E.fail loc (Mismatch "Cfvfromint" bTy (BTy_object OTy_floating))
-          | (Civfromfloat, BTy_object OTy_integer, [pe_ty; pe_fval]) ->
-              typecheck_pexpr tagDefs env BTy_ctype                 pe_ty   >>= fun pe_ty'   ->
+          | (Civfromfloat, BTy_object OTy_integer, [pe_fval]) ->
               typecheck_pexpr tagDefs env (BTy_object OTy_floating) pe_fval >>= fun pe_fval' ->
-              E.return (PEctor Civfromfloat [pe_ty'; pe_fval'])
+              E.return (PEctor Civfromfloat [pe_fval'])
           | (Civfromfloat, _, _) ->
               E.fail loc (Mismatch "Civfromfloat" bTy (BTy_object OTy_integer))
         end

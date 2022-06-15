@@ -577,8 +577,8 @@ let rec step_eval_pexpr n loc core_extern env mem_st_opt file hasConstrained pex
 
           | (Cfvfromint, Just [Vobject (OVinteger ival)]) ->
               EU.return $ PEval (Vobject (OVfloating (Mem.fvfromint ival)))
-          | (Civfromfloat, Just [Vctype (Ctype.Ctype _ (Ctype.Basic (Ctype.Integer ity))); Vobject (OVfloating fval)]) ->
-              EU.return $ PEval (Vobject (OVinteger (Mem.ivfromfloat ity fval)))
+          | (Civfromfloat, Just [Vobject (OVfloating fval)]) ->
+              EU.return $ PEval (Vobject (OVinteger (Mem.ivfromfloat fval)))
           
           | (_, Just cvals) ->
               if false (*List.any Caux.isConstrainedValue cvals*) then

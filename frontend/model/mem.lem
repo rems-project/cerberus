@@ -238,7 +238,7 @@ declare ocaml target_rep function le_fval = `Impl_mem.le_fval`
 
 (* Integer <-> Floating casting constructors *)
 val fvfromint: integer_value -> floating_value
-val ivfromfloat: Ctype.integerType -> floating_value -> integer_value
+val ivfromfloat: floating_value -> integer_value
 declare ocaml target_rep function fvfromint = `Impl_mem.fvfromint`
 declare ocaml target_rep function ivfromfloat = `Impl_mem.ivfromfloat`
 

@@ -69,15 +69,25 @@ fun conv_loaded_int (ty: ctype, _n: loaded integer): loaded integer :=
 fun loaded_fvfromint (ty: ctype, _n: loaded integer) : loaded floating :=
   case _n of
     | Specified(n:integer) =>
+        -- TODO: this is NOT modelling the undefined behaviour for out of range values
         Specified(Fvfromint(n))
     | Unspecified(_: ctype) =>
         Unspecified(ty)
   end
 
+-- TODO: we are not dealing with non-finite floating values
 fun loaded_ivfromfloat (ty: ctype, _f: loaded floating) : loaded integer :=
   case _f of
     | Specified(f:floating) =>
-        Specified(Ivfromfloat(ty, f))
+        let n: integer = Ivfromfloat(f) in
+        if ty = '_Bool' /\ not (n = 0) then
+          -- STD §6.3.1.2#1
+          Specified(1)
+        else if is_representable_integer(n, ty) then
+          Specified(n)
+        else
+          -- STD §6.3.1.4#1, sentence 1
+          undef(<<UB017_out_of_range_floating_integer_conversion>>)
     | Unspecified(_: ctype) =>
         Unspecified(ty)
   end

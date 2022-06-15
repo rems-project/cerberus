@@ -158,7 +158,7 @@ module type Memory = sig
   
   (* Integer <-> Floating casting constructors *)
   val fvfromint: integer_value -> floating_value
-  val ivfromfloat: Ctype.integerType -> floating_value -> integer_value
+  val ivfromfloat: floating_value -> integer_value
   
   
   
