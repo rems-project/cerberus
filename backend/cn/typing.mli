@@ -8,6 +8,7 @@ val pure : ('a, 'e) m -> ('a, 'e) m
 val restore_resources : ('a, 'e) m -> ('a, 'e) m
 val (let@) : ('a, 'e) m -> ('a -> ('b, 'e) m) -> ('b, 'e) m
 val fail : 'e failure -> ('a, 'e) m
+val fail_with_trace : (Trace.t -> 'e failure) -> ('a, 'e) m
 val run : Context.t -> ('a, 'e) m -> ('a, 'e) Result.t
 
 (* val get: unit -> Context.t m *)
@@ -38,6 +39,9 @@ val add_r : Context.where option -> Resources.t -> (unit, 'e) m
 val add_rs : Context.where option -> Resources.t list -> (unit, 'e) m
 val get_loc_trace : unit -> (Locations.loc list, 'e) m
 val in_loc_trace : Locations.loc list -> (unit -> ('a, 'e) m) -> ('a, 'e) m
+val get_step_trace : unit -> (Trace.t, 'e) m
+val with_trace_step : Trace.opt_pat -> Trace.expr -> (unit -> ('a, 'e) m) -> ('a, 'e) m
+val with_pure_trace_step : Trace.opt_pat -> Trace.pexpr -> (unit -> ('a, 'e) m) -> ('a, 'e) m
 
 type changed = 
   | Deleted

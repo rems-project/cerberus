@@ -1,6 +1,6 @@
 module CF = Cerb_frontend
 open CF.Mucore
-open Retype.New
+open NewMu.New
 
 module SymSet = Set.Make(Sym)
 

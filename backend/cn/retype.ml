@@ -22,26 +22,7 @@ open ListM
 open TypeErrors
 open Tools
 
-
-
-module SR_Types = struct
-  type ct = Sctypes.t
-  type bt = BT.t
-  type ift = AT.ft
-  type ict = RT.t
-  type ft = AT.ft
-  type lt = AT.lt
-  type st = Memory.struct_layout
-  type gt = ct
-  type ut = unit
-  type mapping = Mapping.t
-  type resource_predicates = (Sym.t * ResourcePredicates.definition) list
-  type logical_predicates = (Sym.t * LogicalPredicates.definition) list
-end
-
-module Old = CF.Mucore.Make(CF.Mucore.SimpleTypes)
-module New = CF.Mucore.Make(SR_Types)
-
+open NewMu
 
 type funinfos = New.mu_funinfos
 type funinfo_extras = (Sym.t, Ast.function_spec * Mapping.t) Pmap.map

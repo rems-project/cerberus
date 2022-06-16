@@ -42,15 +42,14 @@ open PrevParams
 open ParamMonad
 
 
-module Mu = Retype.New
+module Mu = NewMu.New
 module Muc = CF.Mucore
-open Mu
 open Pp
 
 
 (* FIXME: clagged from check.ml *)
 module PP_TYPS = struct
-  module T = Retype.SR_Types
+  module T = NewMu.SR_Types
   let pp_bt = BT.pp
   let pp_ct ct = Sctypes.pp ct
   let pp_ft = AT.pp RT.pp
@@ -93,7 +92,7 @@ let fail_check_noop = function
 let check_noop body = ()
 
 let check_trusted_fun_body fsym = function
-  | M_Proc (loc, ret_ty, arg_tys, body, labels) ->
+  | Mu.M_Proc (loc, ret_ty, arg_tys, body, labels) ->
     check_noop body
   | _ ->
     fail "non-proc trusted function" (Sym.pp fsym)
@@ -775,14 +774,16 @@ type scanned = {sym : Sym.t; loc: Loc.t; typ: RT.t AT.t; scan_res: scan_res}
 
 let get_struct_decls mu_file =
   (* clagged from Retype *)
+  let open Mu in
   Pmap.fold (fun sym def decls ->
         match def with
-        | Retype.New.M_StructDef def ->
+        | Mu.M_StructDef def ->
            SymMap.add sym def decls
         | _ -> decls
       ) mu_file.mu_tagDefs SymMap.empty
 
 let generate directions mu_file =
+  let open Mu in
   let (filename, kinds) = parse_directions directions in
   let channel = open_out filename in
   print channel (header filename);
@@ -795,7 +796,7 @@ let generate directions mu_file =
     |> List.map (fun sym ->
         let (M_funinfo (loc, _, typ, _, _)) = Pmap.find sym mu_file.mu_funinfo in
         {sym; loc; typ; scan_res = scan typ})
-    |> List.sort (fun x y -> cmp_loc_line_numbers x.loc y.loc)
+    |> List.sort (fun x (y : scanned) -> cmp_loc_line_numbers x.loc y.loc)
   in
   let (returns, others) = List.partition (fun x -> x.scan_res.ret) scan_trusted in
   let (impure, pure) = List.partition (fun x -> Option.is_some x.scan_res.res) others in

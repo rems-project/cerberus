@@ -95,7 +95,7 @@ type message =
   | First_iarg_not_pointer of { pname : ResourceTypes.predicate_name; found_bty: BaseTypes.t }
 
 
-  | Missing_resource_request of {orequest : RET.t option; situation : situation; oinfo : info option; ctxt : Context.t; model: Solver.model_with_q }
+  | Missing_resource_request of {orequest : RET.t option; situation : situation; oinfo : info option; ctxt : Context.t; model: Solver.model_with_q; trace: Trace.t }
   | Merging_multiple_arrays of {orequest : RET.t option; situation : situation; oinfo : info option; ctxt : Context.t; model: Solver.model_with_q }
   | Resource_mismatch of {has: RE.t; expect: RE.t; situation : situation; ctxt : Context.t; model : Solver.model_with_q }
   | Uninitialised_read of {ctxt : Context.t; model : Solver.model_with_q}
@@ -143,6 +143,7 @@ type report = {
     short : Pp.doc;
     descr : Pp.doc option;
     state : state_report option;
+    trace : Pp.doc option;
   }
 
 
@@ -166,25 +167,25 @@ let pp_message te =
   match te with
   | Unknown_variable s ->
      let short = !^"Unknown variable" ^^^ squotes (Sym.pp s) in
-     { short; descr = None; state = None }
+     { short; descr = None; state = None; trace = None }
   | Unknown_function sym ->
      let short = !^"Unknown function" ^^^ squotes (Sym.pp sym) in
-     { short; descr = None; state = None }
+     { short; descr = None; state = None; trace = None }
   | Unknown_struct tag ->
      let short = !^"Struct" ^^^ squotes (Sym.pp tag) ^^^ !^"not defined" in
-     { short; descr = None; state = None }
+     { short; descr = None; state = None; trace = None }
   | Unknown_resource_predicate {id; logical} ->
      let short = !^"Unknown resource predicate" ^^^ squotes (Sym.pp id) in
      let descr = if logical then Some (!^"Note " ^^^ squotes (Sym.pp id) ^^^
              !^" is a known logical predicate.")
          else None in
-     { short; descr; state = None }
+     { short; descr; state = None; trace = None }
   | Unknown_logical_predicate {id; resource} ->
      let short = !^"Unknown logical predicate" ^^^ squotes (Sym.pp id) in
      let descr = if resource then Some (!^"Note " ^^^ squotes (Sym.pp id) ^^^
              !^" is a known resource predicate.")
          else None in
-     { short; descr; state = None }
+     { short; descr; state = None; trace = None }
   | Unknown_member (tag, member) ->
      let short = !^"Unknown member" ^^^ Id.pp member in
      let descr =
@@ -192,7 +193,7 @@ let pp_message te =
          !^"does not have member" ^^^
            Id.pp member
      in
-     { short; descr = Some descr; state = None }
+     { short; descr = Some descr; state = None; trace = None }
   | Unknown_record_member (members, member) ->
      let short = !^"Unknown member" ^^^ Id.pp member in
      let descr =
@@ -200,14 +201,13 @@ let pp_message te =
          !^"does not have member" ^^^
            Id.pp member
      in
-     { short; descr = Some descr; state = None }
-
+     { short; descr = Some descr; state = None; trace = None }
   | First_iarg_missing { pname } ->
      let short = !^"Missing pointer input argument" in
      let descr = 
        !^ "a predicate definition must have at least one iarg (missing from: " ^^ ResourceTypes.pp_predicate_name pname ^^ !^ ")"
      in
-     { short; descr = Some descr; state = None }
+     { short; descr = Some descr; state = None; trace = None }
   | First_iarg_not_pointer { pname; found_bty } ->
      let short = !^"Non-pointer first input argument" in
      let descr = 
@@ -215,8 +215,8 @@ let pp_message te =
         !^ "must have type" ^^^ Pp.squotes (BaseTypes.(pp Loc)) ^^^ !^ "but was found with type" ^^^
         Pp.squotes (BaseTypes.(pp found_bty))
      in
-     { short; descr = Some descr; state = None }
-  | Missing_resource_request {orequest; situation; oinfo; ctxt; model} ->
+     { short; descr = Some descr; state = None; trace = None }
+  | Missing_resource_request {orequest; situation; oinfo; ctxt; model; trace} ->
      let short = !^"Missing resource" ^^^ for_situation situation in
      let relevant = match orequest with
        | None -> IT.SymSet.empty
@@ -225,7 +225,7 @@ let pp_message te =
      let explanation = Explain.explanation ctxt relevant in
      let descr = missing_or_bad_request_description oinfo orequest explanation in
      let state = Explain.state ctxt explanation model orequest in
-     { short; descr = descr; state = Some state }
+     { short; descr = descr; state = Some state; trace = None }
   | Merging_multiple_arrays {orequest; situation; oinfo; ctxt; model} ->
      let short = 
        !^"Cannot satisfy request for resource" ^^^ for_situation situation ^^ dot ^^^
@@ -238,7 +238,7 @@ let pp_message te =
      let explanation = Explain.explanation ctxt relevant in
      let descr = missing_or_bad_request_description oinfo orequest explanation in
      let state = Explain.state ctxt explanation model orequest in
-     { short; descr = descr; state = Some state }
+     { short; descr = descr; state = Some state; trace = None }
   | Resource_mismatch {has; expect; situation; ctxt; model} ->
      let short = !^"Resource mismatch" ^^^ for_situation situation in
      let relevant = IT.SymSet.union (RE.free_vars has) (RE.free_vars expect) in
@@ -250,53 +250,53 @@ let pp_message te =
        !^"Need a resource" ^^^ squotes expect ^^^
          !^"but have resource" ^^^ squotes has
      in
-     { short; descr = Some descr; state = Some state }
+     { short; descr = Some descr; state = Some state; trace = None }
   | Uninitialised_read {ctxt; model} ->
      let short = !^"Trying to read uninitialised data" in
      let explanation = Explain.explanation ctxt IT.SymSet.empty in
      let state = Explain.state ctxt explanation model None in
-     { short; descr = None; state = Some state }
+     { short; descr = None; state = Some state; trace = None }
   | Unused_resource {resource; ctxt; model} ->
      let explanation = Explain.explanation ctxt (RE.free_vars resource) in
      let resource = RE.pp (RE.subst explanation.substitution resource) in
      let short = !^"Left-over unused resource" ^^^ squotes resource in
      let state = Explain.state ctxt explanation model None in
-     { short; descr = None; state = Some state}
+     { short; descr = None; state = Some state; trace = None }
   | Number_members {has;expect} ->
      let short = !^"Wrong number of struct members" in
      let descr =
        !^"Expected" ^^^ !^(string_of_int expect) ^^ comma ^^^
          !^"has" ^^^ !^(string_of_int has)
      in
-     { short; descr = Some descr; state = None}
+     { short; descr = Some descr; state = None; trace = None}
   | Number_arguments {has;expect} ->
      let short = !^"Wrong number of arguments" in
      let descr =
        !^"Expected" ^^^ !^(string_of_int expect) ^^ comma ^^^
          !^"has" ^^^ !^(string_of_int has)
      in
-     { short; descr = Some descr; state = None }
+     { short; descr = Some descr; state = None; trace = None }
   | Number_input_arguments {has;expect} ->
      let short = !^"Wrong number of input arguments" in
      let descr =
        !^"Expected" ^^^ !^(string_of_int expect) ^^ comma ^^^
          !^"has" ^^^ !^(string_of_int has)
      in
-     { short; descr = Some descr; state = None }
+     { short; descr = Some descr; state = None; trace = None }
   | Number_output_arguments {has;expect} ->
      let short = !^"Wrong number of output arguments" in
      let descr =
        !^"Expected" ^^^ !^(string_of_int expect) ^^ comma ^^^
          !^"has" ^^^ !^(string_of_int has)
      in
-     { short; descr = Some descr; state = None }
+     { short; descr = Some descr; state = None; trace = None }
   | Mismatch {has; expect} ->
      let short = !^"Type error" in
      let descr =
        !^"Expected value of type" ^^^ squotes (LS.pp expect) ^^^
          !^"but found value of type" ^^^ squotes (LS.pp has)
      in
-     { short; descr = Some descr; state = None }
+     { short; descr = Some descr; state = None; trace = None }
   | Mismatch_lvar { has; expect; spec_info} ->
      let short = !^"Type error" in
      let descr =
@@ -310,7 +310,7 @@ let pp_message te =
            ) ^^
              !^"but found value of type" ^^^ squotes (LS.pp has)
      in
-     { short; descr = Some descr; state = None }
+     { short; descr = Some descr; state = None; trace = None }
   | Illtyped_it {context; it; has; expected; ctxt} ->
      let relevant = IT.free_vars_list [it; context] in
      let explanation = Explain.explanation ctxt relevant in
@@ -322,7 +322,7 @@ let pp_message te =
          !^"Expected" ^^^ it ^^^ !^"to be" ^^^ squotes !^expected ^^^
            !^"but is" ^^^ squotes (LS.pp has)
      in
-     { short; descr = Some descr; state = None }
+     { short; descr = Some descr; state = None; trace = None }
   | Illtyped_it' {it; has; expected} ->
      let it = IT.pp it in
      let short = !^"Type error" in
@@ -331,7 +331,7 @@ let pp_message te =
          !^"Expected" ^^^ it ^^^ !^"to be" ^^^ squotes !^expected ^^^
            !^"but is" ^^^ squotes (LS.pp has)
      in
-     { short; descr = Some descr; state = None }
+     { short; descr = Some descr; state = None; trace = None }
   | NIA {context; it; hint; ctxt} ->
      let relevant = IT.free_vars_list [it; context] in
      let explanation = Explain.explanation ctxt relevant in
@@ -343,7 +343,7 @@ let pp_message te =
          !^"Non-linear integer arithmetic in the specification term" ^^^ it ^^ dot ^^^
            !^hint
      in
-     { short; descr = Some descr; state = None }
+     { short; descr = Some descr; state = None; trace = None }
   | TooBigExponent {context; it; ctxt} ->
      let relevant = IT.free_vars_list [it; context] in
      let explanation = Explain.explanation ctxt relevant in
@@ -355,7 +355,7 @@ let pp_message te =
          !^"Too big exponent in the specification term" ^^^ it ^^ dot ^^^
            !^("Exponent must fit int32 type")
      in
-     { short; descr = Some descr; state = None }
+     { short; descr = Some descr; state = None; trace = None }
   | NegativeExponent {context; it; ctxt} ->
      let relevant = IT.free_vars_list [it; context] in
      let explanation = Explain.explanation ctxt relevant in
@@ -367,11 +367,11 @@ let pp_message te =
          !^"Negative exponent in the specification term" ^^^ it ^^ dot ^^^
            !^("Exponent must be non-negative")
      in
-     { short; descr = Some descr; state = None }
+     { short; descr = Some descr; state = None; trace = None }
   | Polymorphic_it it ->
      let short = !^"Type inference failed" in
      let descr = !^"Polymorphic index term" ^^^ squotes (IndexTerms.pp it) in
-     { short; descr = Some descr; state = None }
+     { short; descr = Some descr; state = None; trace = None }
   | Write_value_unrepresentable {ct; location; value; ctxt; model} ->
      let short =
        !^"Write value not representable at type" ^^^
@@ -388,7 +388,7 @@ let pp_message te =
        !^"Location" ^^ colon ^^^ location ^^ comma ^^^
        !^"value" ^^ colon ^^^ value ^^ dot
      in
-     { short; descr = Some descr; state = Some state }
+     { short; descr = Some descr; state = Some state; trace = None }
   | Write_value_bad {ct; location; value; ctxt; model} ->
      let short =
        !^"Bad write value: the value is not representable at type" ^^^
@@ -405,7 +405,7 @@ let pp_message te =
        !^"Location" ^^ colon ^^^ location ^^ comma ^^^
        !^"value" ^^ colon ^^^ value ^^ dot
      in
-     { short; descr = Some descr; state = Some state }
+     { short; descr = Some descr; state = Some state; trace = None }
   | Int_unrepresentable {value; ict; ctxt; model} ->
      let short =
        !^"integer value not representable at type" ^^^
@@ -415,7 +415,7 @@ let pp_message te =
      let value = IT.pp (IT.subst explanation.substitution value) in
      let descr = !^"Value" ^^ colon ^^^ value in
      let state = Explain.state ctxt explanation model None in
-     { short; descr = Some descr; state = Some state }
+     { short; descr = Some descr; state = Some state; trace = None }
   | Unsat_constraint {constr; info; ctxt; model} ->
      let short = !^"Unsatisfied constraint" in
      let explanation = Explain.explanation ctxt (LC.free_vars constr) in
@@ -428,7 +428,7 @@ let pp_message te =
        | None -> !^"Constraint from " ^^^ parens (!^head)
        | Some descr -> !^"Constraint from" ^^^ !^descr ^^^ parens (!^head)
      in
-     { short; descr = Some descr; state = Some state }
+     { short; descr = Some descr; state = Some state; trace = None }
   | Unconstrained_logical_variable (name, odescr) ->
      let short = !^"Problematic specification" in
      let descr = match odescr with
@@ -439,7 +439,7 @@ let pp_message te =
           !^"Unconstrained logical variable" ^^^
             squotes (Sym.pp name)
      in
-     { short; descr = Some descr; state = None }
+     { short; descr = Some descr; state = None; trace = None }
   | Array_as_value (name, odescr) ->
      let short = !^"Problematic specification" in
      let descr = match odescr with
@@ -450,7 +450,7 @@ let pp_message te =
           !^"Cannot use array" ^^^ squotes (Sym.pp name) ^^^
             !^"as value"
      in
-     { short; descr = Some descr; state = None }
+     { short; descr = Some descr; state = None; trace = None }
   | Logical_variable_not_good_for_unification (name, odescr) ->
      let short = !^"Problematic specification" in
      let descr = match odescr with
@@ -461,41 +461,41 @@ let pp_message te =
           !^"Logical variable not soluble by unification" ^^^
             squotes (Sym.pp name)
      in
-     { short; descr = Some descr; state = None }
+     { short; descr = Some descr; state = None; trace = None }
   | Undefined_behaviour {ub; ctxt; model} ->
      let short = !^"Undefined behaviour" in
      let explanation = Explain.explanation ctxt IT.SymSet.empty in
      let state = Explain.state ctxt explanation model None in
      let descr = !^(CF.Undefined.pretty_string_of_undefined_behaviour ub) in
-     { short; descr = Some descr; state = Some state }
+     { short; descr = Some descr; state = Some state; trace = None }
   | Implementation_defined_behaviour (impl, state) ->
      let short = !^"Implementation defined behaviour" in
      let descr = impl in
-     { short; descr = Some descr; state = Some state }
+     { short; descr = Some descr; state = Some state; trace = None }
   | Unspecified ctype ->
      let short = !^"Unspecified value of C-type" ^^^ CF.Pp_core_ctype.pp_ctype ctype in
-     { short; descr = None; state = None }
+     { short; descr = None; state = None; trace = None }
   | StaticError {err; ctxt; model} ->
      let short = !^"Static error" in
      let explanation = Explain.explanation ctxt IT.SymSet.empty in
      let state = Explain.state ctxt explanation model None in
      let descr = !^err in
-     { short; descr = Some descr; state = Some state }
+     { short; descr = Some descr; state = Some state; trace = None }
   | No_quantified_constraints {to_check; ctxt; model} ->
      let short = !^"Found no quantified constraints containing this fact" in
      let explanation = Explain.explanation ctxt (IT.free_vars to_check) in
      let state = Explain.state ctxt explanation model None in
      let descr = None in
        (* parens (!^"to check:" ^^^ IT.pp (IT.subst explanation.substitution to_check)) *)
-     { short; descr = descr; state = Some state }
+     { short; descr = descr; state = Some state; trace = None }
   | Generic err ->
      let short = err in
-     { short; descr = None; state = None }
+     { short; descr = None; state = None; trace = None }
   | Generic_with_model {err; model; ctxt} ->
      let short = err in
      let explanation = Explain.explanation ctxt IT.SymSet.empty in
      let state = Explain.state ctxt explanation model None in
-     { short; descr = None; state = Some state }
+     { short; descr = None; state = Some state; trace = None }
 
 
 type t = type_error

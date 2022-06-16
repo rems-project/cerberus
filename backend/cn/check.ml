@@ -22,7 +22,7 @@ open Global
 
 open IT
 open TypeErrors
-module Mu = Retype.New
+module Mu = NewMu.New
 open CF.Mucore
 open Mu
 
@@ -46,7 +46,7 @@ open List
 (*** mucore pp setup **********************************************************)
 
 module PP_TYPS = struct
-  module T = Retype.SR_Types
+  module T = NewMu.SR_Types
   let pp_bt = BT.pp 
   let pp_ct ct = Sctypes.pp ct
   let pp_ft = AT.pp RT.pp
@@ -1007,8 +1007,8 @@ module ResourceInference = struct
 
     let fail_missing_resource loc situation (orequest, oinfo) = 
       let@ model = model () in
-      fail (fun ctxt ->
-          let msg = Missing_resource_request {orequest; situation; oinfo; model; ctxt} in
+      fail_with_trace (fun trace -> fun ctxt ->
+          let msg = Missing_resource_request {orequest; situation; oinfo; model; trace; ctxt} in
           {loc; msg})
 
 
@@ -1312,11 +1312,11 @@ end = struct
            let@ oargs = match o_re_oarg with
              | None ->
                 let@ model = model () in
-                fail (fun ctxt ->
+                fail_with_trace (fun trace -> fun ctxt ->
                     let ctxt = { ctxt with resources = original_resources } in
                     let msg = Missing_resource_request 
                                 {orequest = Some resource; 
-                                 situation; oinfo = Some info; model; ctxt} in
+                                 situation; oinfo = Some info; model; trace; ctxt} in
                     {loc; msg}
                   )
 
@@ -1858,7 +1858,8 @@ let rec check_tpexpr (e : 'bty mu_tpexpr) (typ : RT.t) : (per_path, type_error) 
        ) pats_es in
      return (List.concat per_paths)
   | M_PElet (p, e1, e2) ->
-     let@ (rt, per_path1) = infer_pexpr e1 in
+     let@ (rt, per_path1) = with_pure_trace_step (Some p) e1
+        (fun () -> infer_pexpr e1) in
      let@ () = match p with
        | M_Symbol sym -> bind (Some (Loc (loc_of_pexpr e1))) sym rt
        | M_Pat pat -> pattern_match_rt (Loc (loc_of_pexpr e1)) pat rt
@@ -2420,7 +2421,8 @@ let rec check_texpr labels (e : 'bty mu_texpr) (typ : RT.t orFalse)
          ) pats_es in
        return (List.concat per_paths)
     | M_Elet (p, e1, e2) ->
-       let@ (rt, per_path1) = infer_pexpr e1 in
+       let@ (rt, per_path1) = with_pure_trace_step (Some p) e1
+           (fun () -> infer_pexpr e1) in
        let@ () = match p with 
          | M_Symbol sym -> bind (Some (Loc (loc_of_pexpr e1))) sym rt
          | M_Pat pat -> pattern_match_rt (Loc (loc_of_pexpr e1)) pat rt
@@ -2428,12 +2430,14 @@ let rec check_texpr labels (e : 'bty mu_texpr) (typ : RT.t orFalse)
        let@ per_path2 = check_texpr labels e2 typ in
        return (per_path1 @ per_path2)
     | M_Ewseq (pat, e1, e2) ->
-       let@ (rt, per_path1) = infer_expr labels e1 in
+       let@ (rt, per_path1) = with_trace_step (Some (Mu.M_Pat pat)) e1
+           (fun () -> infer_expr labels e1) in
        let@ () = pattern_match_rt (Loc (loc_of_expr e1)) pat rt in
        let@ per_path2 = check_texpr labels e2 typ in
        return (per_path1 @ per_path2)
     | M_Esseq (pat, e1, e2) ->
-       let@ (rt, per_path1) = infer_expr labels e1 in
+       let@ (rt, per_path1) = with_trace_step (Some pat) e1
+           (fun () -> infer_expr labels e1) in
        let@ () = match pat with
          | M_Symbol sym -> bind (Some (Loc (loc_of_expr e1))) sym rt
          | M_Pat pat -> pattern_match_rt (Loc (loc_of_expr e1)) pat rt

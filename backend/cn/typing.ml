@@ -12,6 +12,7 @@ type s = {
     equalities: bool ITPairMap.t;
     past_models : (Solver.model_with_q * Context.t) list;
     trace_length : int;             (* for performance debugging *)
+    step_trace : Trace.t;
   }
 
 type ('a, 'e) t = s -> ('a * s, 'e) Result.t
@@ -29,7 +30,8 @@ let run (c : Context.t) (m : ('a, 'e) t) : ('a, 'e) Resultat.t =
       sym_eqs; 
       equalities = ITPairMap.empty;
       past_models = []; 
-      trace_length = 0 
+      trace_length = 0;
+      step_trace = Trace.empty;
     } 
   in
   let outcome = m s in
@@ -102,6 +104,14 @@ let get_trace_length () =
 
 let increase_trace_length () = 
   fun s -> Ok ((), {s with trace_length = s.trace_length + 1})
+
+let get_step_trace () = fun s -> Ok (s.step_trace, s)
+
+let set_step_trace tr = fun s -> Ok ((), {s with step_trace = tr})
+
+let fail_with_trace m =
+  let@ tr = get_step_trace () in
+  fail (m tr)
 
 let print_with_ctxt printer = 
   let@ s = get () in
@@ -313,6 +323,20 @@ let in_loc_trace tr f =
   let@ x = f () in
   let@ _ = set_loc_trace prev_tr in
   return x
+
+let with_trace_step1 do_add m =
+  let@ ctxt1 = get () in
+  let@ x = m () in
+  let@ ctxt2 = get () in
+  let@ tr = get_step_trace () in
+  let@ () = set_step_trace (do_add (ctxt1, ctxt2) tr) in
+  return x
+
+let with_trace_step pat expr m =
+  with_trace_step1 (Trace.add_trace_step pat expr) m
+
+let with_pure_trace_step pat pexpr m =
+  with_trace_step1 (Trace.add_pure_trace_step pat pexpr) m
 
 let get_resource_predicate_def loc id =
   let@ global = get_global () in

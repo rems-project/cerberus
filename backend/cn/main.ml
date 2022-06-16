@@ -14,8 +14,8 @@ let (let@) = CF.Exception.except_bind
 
 
 type core_file = (unit,unit) CF.Core.generic_file
-type mu_file = unit Retype.Old.mu_file
-type retyped_mu_file = unit Retype.New.mu_file
+type mu_file = unit NewMu.Old.mu_file
+type retyped_mu_file = unit NewMu.New.mu_file
 
 type file = 
   | CORE of core_file
