@@ -75,13 +75,13 @@ module type Memory = sig
   val case_funsym_opt: mem_state -> pointer_value -> Symbol.sym option
 
   (* Operations on pointer values *)
-  val eq_ptrval: pointer_value -> pointer_value -> bool memM
-  val ne_ptrval: pointer_value -> pointer_value -> bool memM
-  val lt_ptrval: pointer_value -> pointer_value -> bool memM
-  val gt_ptrval: pointer_value -> pointer_value -> bool memM
-  val le_ptrval: pointer_value -> pointer_value -> bool memM
-  val ge_ptrval: pointer_value -> pointer_value -> bool memM
-  val diff_ptrval: Ctype.ctype -> pointer_value -> pointer_value -> integer_value memM
+  val eq_ptrval: Location_ocaml.t -> pointer_value -> pointer_value -> bool memM
+  val ne_ptrval: Location_ocaml.t -> pointer_value -> pointer_value -> bool memM
+  val lt_ptrval: Location_ocaml.t -> pointer_value -> pointer_value -> bool memM
+  val gt_ptrval: Location_ocaml.t -> pointer_value -> pointer_value -> bool memM
+  val le_ptrval: Location_ocaml.t -> pointer_value -> pointer_value -> bool memM
+  val ge_ptrval: Location_ocaml.t -> pointer_value -> pointer_value -> bool memM
+  val diff_ptrval: Location_ocaml.t -> Ctype.ctype -> pointer_value -> pointer_value -> integer_value memM
 
   val update_prefix: (Symbol.prefix * mem_value) -> unit memM
   val prefix_of_pointer: pointer_value -> string option memM
@@ -91,9 +91,9 @@ module type Memory = sig
   
   (* Casting operations *)
   (* the first ctype is the original integer type, the second is the target referenced type *)
-  val ptrfromint: Ctype.ctype -> Ctype.ctype -> integer_value -> pointer_value memM
+  val ptrfromint: Location_ocaml.t -> Ctype.integerType -> Ctype.ctype -> integer_value -> pointer_value memM
   (* the first ctype is the original referenced type, the integerType is the target integer type *)
-  val intfromptr: Ctype.ctype -> Ctype.integerType -> pointer_value -> integer_value memM
+  val intfromptr: Location_ocaml.t -> Ctype.ctype -> Ctype.integerType -> pointer_value -> integer_value memM
   
   (* Pointer shifting constructors *)
   val array_shift_ptrval:  pointer_value -> Ctype.ctype -> integer_value -> pointer_value

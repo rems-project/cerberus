@@ -93,13 +93,13 @@ declare ocaml target_rep function case_ptrval = `Impl_mem.case_ptrval`
 declare ocaml target_rep function case_funsym_opt = `Impl_mem.case_funsym_opt`
 
 (* Operations on pointer values *)
-val eq_ptrval: pointer_value -> pointer_value -> memM bool
-val ne_ptrval: pointer_value -> pointer_value -> memM bool
-val lt_ptrval: pointer_value -> pointer_value -> memM bool
-val gt_ptrval: pointer_value -> pointer_value -> memM bool
-val le_ptrval: pointer_value -> pointer_value -> memM bool
-val ge_ptrval: pointer_value -> pointer_value -> memM bool
-val diff_ptrval: Ctype.ctype -> pointer_value -> pointer_value -> memM integer_value
+val eq_ptrval: Loc.t -> pointer_value -> pointer_value -> memM bool
+val ne_ptrval: Loc.t -> pointer_value -> pointer_value -> memM bool
+val lt_ptrval: Loc.t -> pointer_value -> pointer_value -> memM bool
+val gt_ptrval: Loc.t -> pointer_value -> pointer_value -> memM bool
+val le_ptrval: Loc.t -> pointer_value -> pointer_value -> memM bool
+val ge_ptrval: Loc.t -> pointer_value -> pointer_value -> memM bool
+val diff_ptrval: Loc.t -> Ctype.ctype -> pointer_value -> pointer_value -> memM integer_value
 declare ocaml target_rep function eq_ptrval = `Impl_mem.eq_ptrval`
 declare ocaml target_rep function ne_ptrval = `Impl_mem.ne_ptrval`
 declare ocaml target_rep function lt_ptrval = `Impl_mem.lt_ptrval`
@@ -121,9 +121,9 @@ declare ocaml target_rep function isWellAligned_ptrval = `Impl_mem.isWellAligned
 
 (* Casting operations *)
 (* the first ctype is the original integer type, the second is the target referenced type *)
-val ptrfromint: Ctype.ctype -> Ctype.ctype -> integer_value -> memM pointer_value
+val ptrfromint: Loc.t -> Ctype.integerType -> Ctype.ctype -> integer_value -> memM pointer_value
 (* the first ctype is the original referenced type, the integerType is the target integer type *)
-val intfromptr: Ctype.ctype -> Ctype.integerType -> pointer_value -> memM integer_value
+val intfromptr: Loc.t -> Ctype.ctype -> Ctype.integerType -> pointer_value -> memM integer_value
 declare ocaml target_rep function ptrfromint = `Impl_mem.ptrfromint`
 declare ocaml target_rep function intfromptr = `Impl_mem.intfromptr`
 

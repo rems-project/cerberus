@@ -99,11 +99,11 @@ let wip str =
   kill (Other (MerrWIP str))
 
 
-val defacto_fail: forall 'a. mem_error -> impl_memM 'a
-let defacto_fail err =
+val defacto_fail: forall 'a. Loc.t -> mem_error -> impl_memM 'a
+let defacto_fail loc err =
   match undefinedFromMem_error err with
     | Just ubs ->
-        kill (Undef Loc.unknown ubs)
+        kill (Undef loc ubs)
     | Nothing ->
         kill (Other err)
   end
@@ -133,7 +133,7 @@ let register_allocation alloc_id stor =
 val resolve_allocation: allocation_id -> impl_memM storage
 let resolve_allocation alloc_id =
   get >>= fun mem_st ->
-  maybe (fail (MerrInternal ("failed to resolve allocation: " ^ show alloc_id))) return
+  maybe (fail Loc.unknown (MerrInternal ("failed to resolve allocation: " ^ show alloc_id))) return
     (Map.lookup alloc_id mem_st.allocations)
 
 
@@ -464,7 +464,7 @@ let addToLog alloc_id =
   print_debugM 1 (fun () -> "addToLog: " ^ show alloc_id) >>
   get >>= fun mem_st ->
   if List.elem alloc_id mem_st.access_log then
-    fail (MerrOther ("unsequenced race: " ^ show alloc_id))
+    fail Loc.unknown (MerrOther ("unsequenced race: " ^ show alloc_id))
   else
     put <| mem_st with access_log= alloc_id :: mem_st.access_log |>
 
@@ -608,9 +608,9 @@ let impl_kill loc is_dynamic (PV _ ptr_val_ sh as ptr_val) =
               get >>= fun mem_st ->
               put <| mem_st with dead_allocations= Set.insert alloc_id mem_st.dead_allocations |>
             end
-            (fail (MerrOther "trying to kill with an non-initial pointer"))
+            (fail loc (MerrOther "trying to kill with an non-initial pointer"))
     | Nothing ->
-        fail (MerrOther "trying to kill with an invalid pointer")
+        fail loc (MerrOther "trying to kill with an invalid pointer")
   end
 
 
@@ -759,7 +759,7 @@ let apply_shift_path_element lvalue_ty spe mval =
    
    | (SPE_member tag_sym memb_ident, MVstruct tag_sym_ xs) ->
        if tag_sym <> tag_sym_ then
-         fail (MerrOther ("tried to read member of type '" ^
+         fail Loc.unknown (MerrOther ("tried to read member of type '" ^
                stringFromCore_ctype (Ctype [] (Struct tag_sym)) ^
                "', but a value of type '" ^
                stringFromCore_ctype (Ctype [] (Struct tag_sym_)) ^
@@ -770,7 +770,7 @@ let apply_shift_path_element lvalue_ty spe mval =
    
    | (SPE_member tag_sym memb_ident, MVunion tag_sym_ memb_ident_ mval') ->
        if tag_sym <> tag_sym_ then
-         fail (MerrOther ("tried to read member of type '" ^
+         fail Loc.unknown (MerrOther ("tried to read member of type '" ^
                stringFromCore_ctype (Ctype [] (Union tag_sym)) ^
                "', but a value of type '" ^
                stringFromCore_ctype (Ctype [] (Union tag_sym_)) ^
@@ -1390,7 +1390,7 @@ let rec integerTypes_of_ival ival =
 
 
 (* WIP *)
-let impl_eq_ptrval ptr_val1 ptr_val2 =
+let impl_eq_ptrval loc ptr_val1 ptr_val2 =
   print_debugM 6 (fun () -> "Mem.eq_ptrval: " ^ stringFromPointer_value ptr_val1 ^ " vs " ^
                   stringFromPointer_value ptr_val2) >>
   match (ptr_val1, ptr_val2) with
@@ -1498,7 +1498,7 @@ let rec silly_sh_eq sh1 sh2 =
   end
 
 (* TODO: more .... *)
-let impl_ne_ptrval (PV prov1 ptr_val_1 sh1 as ptrval1) (PV prov2 ptr_val_2 sh2 as ptrval2) =
+let impl_ne_ptrval loc (PV prov1 ptr_val_1 sh1 as ptrval1) (PV prov2 ptr_val_2 sh2 as ptrval2) =
   match (ptr_val_1, ptr_val_2) with
   | (PVnull _, PVnull _)->
       return false
@@ -1525,22 +1525,22 @@ let impl_ne_ptrval (PV prov1 ptr_val_1 sh1 as ptrval1) (PV prov2 ptr_val_2 sh2 a
 
 
 
-let impl_lt_ptrval ptrval1 ptrval2 =
+let impl_lt_ptrval loc ptrval1 ptrval2 =
   let ival_1 = real_address_expression_of_pointer ptrval1 in
   let ival_2 = real_address_expression_of_pointer ptrval2 in
   condM "lt_ptrval" (mk_iv_constr MC_lt ival_1 ival_2)
 
-let impl_gt_ptrval ptrval1 ptrval2 =
+let impl_gt_ptrval loc ptrval1 ptrval2 =
   let ival_1 = real_address_expression_of_pointer ptrval1 in
   let ival_2 = real_address_expression_of_pointer ptrval2 in
   condM "gt_ptrval" (mk_iv_constr MC_lt ival_2 ival_1)
 
-let impl_le_ptrval ptrval1 ptrval2 =
+let impl_le_ptrval loc ptrval1 ptrval2 =
   let ival_1 = real_address_expression_of_pointer ptrval1 in
   let ival_2 = real_address_expression_of_pointer ptrval2 in
   condM "le_ptrval" (mk_iv_constr MC_le ival_1 ival_2)
 
-let impl_ge_ptrval ptrval1 ptrval2 = 
+let impl_ge_ptrval loc ptrval1 ptrval2 = 
   let ival_1 = real_address_expression_of_pointer ptrval1 in
   let ival_2 = real_address_expression_of_pointer ptrval2 in
   condM "ge_ptrval" (mk_iv_constr MC_le ival_2 ival_1)
@@ -1564,7 +1564,7 @@ expression P points one past the last element of the array object, even though
 the expression (Q)+1 does not point to an element of the array object.
 *)
 (* STD §6.5.6#9 *)
-let impl_diff_ptrval ty ptrval1 ptrval2 : impl_memM impl_integer_value =
+let impl_diff_ptrval loc ty ptrval1 ptrval2 : impl_memM impl_integer_value =
   match (ptrval1, ptrval2) with
     | (PV (Prov_some (alloc_id1, _)) ptr_val_1 sh1, PV (Prov_some (alloc_id2, _)) ptr_val_2 sh2) ->
         if alloc_id1 = alloc_id2 then
@@ -1581,22 +1581,22 @@ let impl_diff_ptrval ty ptrval1 ptrval2 : impl_memM impl_integer_value =
                     (* NOTE: the result of subtraction of two pointer values is an integer value with
                        empty provenance, irrespective of the operand provenances *)
                   (return (IV Prov_none (IVptrdiff ty (ptr_val_1, sh1) (ptr_val_2, sh2))))
-                  (print_debugM 1 (fun () -> "MerrPtrdiff 1") >> fail MerrPtrdiff)
+                  (print_debugM 1 (fun () -> "MerrPtrdiff 1") >> fail loc MerrPtrdiff)
             | Storage_dynamic _ _ _ ->
                 error "Mem.impl_diff_ptrval, Storage_dynamic"
           end
         else
           print_debugM 1 (fun () -> "MerrPtrdiff 2 ==> alloc_id1=" ^ show alloc_id1 ^ "; alloc_id2= " ^ show alloc_id2) >>
-          fail MerrPtrdiff
+          fail loc MerrPtrdiff
     | _ ->
-        print_debugM 1 (fun () -> "MerrPtrdiff 3") >> fail MerrPtrdiff
+        print_debugM 1 (fun () -> "MerrPtrdiff 3") >> fail loc MerrPtrdiff
   end
 
 
 
     
 (* TODO: looks too simple to be true *)
-let impl_intcast_ptrval ref_ty ity ((PV prov ptr_val_ sh) as ptrval) =
+let impl_intcast_ptrval loc ref_ty ity ((PV prov ptr_val_ sh) as ptrval) =
   let ival = IV prov (IVfromptr ref_ty ity ptr_val_ sh) in
   match ity with
     | Signed Intptr_t ->
@@ -1619,7 +1619,7 @@ let impl_intcast_ptrval ref_ty ity ((PV prov ptr_val_ sh) as ptrval) =
           (MC_conj [ mk_iv_constr MC_le (IVmin unsigned_long_ity) ptr_ival_
                    ; mk_iv_constr MC_le ptr_ival_ (IVmax unsigned_long_ity) ])
             (return ival)
-            (fail (MerrWIP "casting a pointer to unsigned long, but the type is too small"))
+            (fail loc (MerrWIP "casting a pointer to unsigned long, but the type is too small"))
 (*
         ifM "intcast_ptrval (unsigned long)"
           (mk_iv_constr MC_le (IVsizeof intptr_t) (IVsizeof unsigned_long))
@@ -1627,7 +1627,7 @@ let impl_intcast_ptrval ref_ty ity ((PV prov ptr_val_ sh) as ptrval) =
           (fail (MerrWIP "casting a pointer to unsigned long, but the type is too small"))
 *)
     | _ ->
-        fail (MerrWIP "casting a pointer to an invalid integer type")
+        fail loc (MerrWIP "casting a pointer to an invalid integer type")
   end
 
 let impl_validForDeref_ptrval ref_ty ptr_val =
@@ -2065,7 +2065,7 @@ let impl_ptrcast_ival int_ty ref_ty (IV prov ival_) =
           end
   end
 *)
-let impl_ptrcast_ival int_ty ref_ty ival =
+let impl_ptrcast_ival loc int_ty ref_ty ival =
   (* TODO: check the types *)
   match ival with
     | IV prov (IVfromptr ty ity ptrval_ sh) ->
@@ -2085,7 +2085,7 @@ let impl_ptrcast_ival int_ty ref_ty ival =
               (* if the integer value is within the device memory range *)
               (return (PV Prov_device (PVfromint ival_) []))
               (* otherwise we produce a runtime error (check with P) *)
-              (fail (MerrWIP "tried to cast to a pointer type an (non device) integer value non-equal to zero"))
+              (fail loc (MerrWIP "tried to cast to a pointer type an (non device) integer value non-equal to zero"))
           end
   end
 
@@ -2163,7 +2163,7 @@ let () = Debug.print_debug 1 [] (fun () ->
 
 let rec find_array_index size i ival_ =
   if i >= size then
-    (fail (MerrOther "find_array_index failed"))
+    (fail Loc.unknown (MerrOther "find_array_index failed"))
   else
     ifM "find_array_index"
       (mk_iv_constr MC_eq ival_ (IVconcrete (integerFromNat i)))
@@ -2200,7 +2200,7 @@ let rec easy_update_mem_value_aux loc is_strong write_ty sh write_mval current_m
                       return (MVarray (List.update mvals n at_n_mval'))
                   | Nothing ->
                       (* NOTE: this is impossible *)
-                      fail (MerrInternal "easy_update_mem_value_aux, out of array index")
+                      fail loc (MerrInternal "easy_update_mem_value_aux, out of array index")
                 end
               else
                 (* TODO: if this can actually happen, then the error needs to be in the monad? *)
@@ -2213,7 +2213,7 @@ let rec easy_update_mem_value_aux loc is_strong write_ty sh write_mval current_m
                     return (MVarray (List.update mvals n at_n_mval'))
                 | Nothing ->
                     (* NOTE: this is impossible *)
-                    fail (MerrInternal "easy_update_mem_value_aux, out of array index (symb)")
+                    fail loc (MerrInternal "easy_update_mem_value_aux, out of array index (symb)")
               end
         end
     | (MVstruct tag_sym xs, SPE_member tag_sym_ memb_ident :: sh') ->
@@ -2343,10 +2343,10 @@ val perform_access: forall 'a. access_kind -> Loc.t -> ctype -> impl_pointer_val
 let perform_access accessKind loc lvalue_ty ptrval do_normal do_device =
   match ptrval with
     (* null and function pointers obviously can't be used for accesses. *)
-    | PV _ (PVnull _) _     -> fail (MerrAccess loc accessKind NullPtr)
-    | PV _ (PVfunction _) _ -> fail (MerrAccess loc accessKind FunctionPtr)
+    | PV _ (PVnull _) _     -> fail loc (MerrAccess accessKind NullPtr)
+    | PV _ (PVfunction _) _ -> fail loc (MerrAccess accessKind FunctionPtr)
     
-    | PV Prov_none _ _ -> fail (MerrAccess loc accessKind NoProvPtr)
+    | PV Prov_none _ _ -> fail loc (MerrAccess accessKind NoProvPtr)
     
     (* by WF-invariants, we have a pointer to an object *)
     | (PV (Prov_some (alloc_id, pref)) _ _ as ptrval) ->
@@ -2356,7 +2356,7 @@ let perform_access accessKind loc lvalue_ty ptrval do_normal do_device =
                 "CAN'T ACCESS : is_dead ==> " ^ stringFromPointer_value ptrval
               ) in
               (* can't store with a pointer to an object whose lifetime ended. *)
-              fail (MerrAccess loc accessKind DeadPtr)
+              fail loc (MerrAccess accessKind DeadPtr)
           | false ->
               (* add the constraint that the ptr is inside the object *)
               get_allocation_size alloc_id         >>= fun size_ival_ ->
@@ -2368,7 +2368,7 @@ let perform_access accessKind loc lvalue_ty ptrval do_normal do_device =
                            ; mk_iv_constr MC_le (IVop IntAdd [ptr_ival_; IVsizeof lvalue_ty])
                                                 (IVop IntAdd [IVaddress alloc_id pref; size_ival_]) ])
                     (do_normal alloc_id)
-                    (fail (MerrAccess loc accessKind OutOfBoundPtr))
+                    (fail loc (MerrAccess accessKind OutOfBoundPtr))
         end
     
     (* device memory *)
@@ -2588,7 +2588,7 @@ let rec memcmp_compare (mval1, mval2) : impl_memM integer =
         ifM "memcmp_compare(byte offsets)"
             (mk_iv_constr MC_eq offset_ival1 offset_ival2)
             (memcmp_compare (mval1', mval2'))
-            (fail (MerrWIP "memcmp, two IVbyteof with different offsets"))
+            (fail Loc.unknown (MerrWIP "memcmp, two IVbyteof with different offsets"))
     | (MVpointer ref_ty1 ptrval1, MVpointer ref_ty2 ptrval2) ->
         address_expression_of_pointer ptrval1 >>= fun ival1 ->
         address_expression_of_pointer ptrval2 >>= fun ival2 ->

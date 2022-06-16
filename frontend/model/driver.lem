@@ -756,15 +756,15 @@ val perform_memop_request2: Loc.t -> Mem_common.memop -> list Core.value -> Mem.
 let perform_memop_request2 loc memop cvals tid mk_th_st =
   match (memop, cvals) with
     | (Mem_common.Ptrdiff, [Core.Vctype ty; Core.Vobject (Core.OVpointer ptr_val1); Core.Vobject (Core.OVpointer ptr_val2)]) ->
-        liftMem (Mem.diff_ptrval ty ptr_val1 ptr_val2) >>= fun ival ->
+        liftMem (Mem.diff_ptrval loc ty ptr_val1 ptr_val2) >>= fun ival ->
         ND.return (mk_th_st (Core.Vobject (Core.OVinteger ival)))
     
     | (Mem_common.IntFromPtr, [Core.Vctype ref_ty; Core.Vctype (Ctype.Ctype _ (Ctype.Basic (Ctype.Integer ity))); Core.Vobject (Core.OVpointer ptr_val)]) ->
-        liftMem (Mem.intfromptr ref_ty ity ptr_val) >>= fun ival ->
+        liftMem (Mem.intfromptr loc ref_ty ity ptr_val) >>= fun ival ->
         ND.return (mk_th_st (Core.Vobject (Core.OVinteger ival)))
     
-    | (Mem_common.PtrFromInt, [Core.Vctype ty; Core.Vctype ref_ty; Core.Vobject (Core.OVinteger ival)]) ->
-        liftMem (Mem.ptrfromint ty ref_ty ival) >>= fun ptrval ->
+    | (Mem_common.PtrFromInt, [Core.Vctype (Ctype.Ctype _ (Ctype.Basic (Ctype.Integer ity))); Core.Vctype ref_ty; Core.Vobject (Core.OVinteger ival)]) ->
+        liftMem (Mem.ptrfromint loc ity ref_ty ival) >>= fun ptrval ->
         ND.return (mk_th_st (Core.Vobject (Core.OVpointer ptrval)))
     
     | (Mem_common.PtrValidForDeref, [Core.Vctype ref_ty; Core.Vobject (Core.OVpointer ptr_val)]) ->
@@ -773,27 +773,27 @@ let perform_memop_request2 loc memop cvals tid mk_th_st =
     
     | (Mem_common.PtrEq, [Core.Vobject (Core.OVpointer ptr_val1); Core.Vobject (Core.OVpointer ptr_val2)]) ->
         ND.print_debug 2 [Debug.DB_driver] (fun () -> "PtrEq") >> (* DEBUG *)
-        liftMem (Mem.eq_ptrval ptr_val1 ptr_val2) >>= fun is_eq ->
+        liftMem (Mem.eq_ptrval loc ptr_val1 ptr_val2) >>= fun is_eq ->
         ND.return (mk_th_st (if is_eq then Core.Vtrue else Core.Vfalse))
     
     | (Mem_common.PtrNe, [Core.Vobject (Core.OVpointer ptr_val1); Core.Vobject (Core.OVpointer ptr_val2)]) ->
-        liftMem (Mem.ne_ptrval ptr_val1 ptr_val2) >>= fun is_ne ->
+        liftMem (Mem.ne_ptrval loc ptr_val1 ptr_val2) >>= fun is_ne ->
         ND.return (mk_th_st (if is_ne then Core.Vtrue else Core.Vfalse))
     
     | (Mem_common.PtrLt, [Core.Vobject (Core.OVpointer ptr_val1); Core.Vobject (Core.OVpointer ptr_val2)]) ->
-        liftMem (Mem.lt_ptrval ptr_val1 ptr_val2) >>= fun is_lt ->
+        liftMem (Mem.lt_ptrval loc ptr_val1 ptr_val2) >>= fun is_lt ->
         ND.return (mk_th_st (if is_lt then Core.Vtrue else Core.Vfalse))
     
     | (Mem_common.PtrGt, [Core.Vobject (Core.OVpointer ptr_val1); Core.Vobject (Core.OVpointer ptr_val2)]) ->
-        liftMem (Mem.gt_ptrval ptr_val1 ptr_val2) >>= fun is_gt ->
+        liftMem (Mem.gt_ptrval loc ptr_val1 ptr_val2) >>= fun is_gt ->
         ND.return (mk_th_st (if is_gt then Core.Vtrue else Core.Vfalse))
     
     | (Mem_common.PtrLe, [Core.Vobject (Core.OVpointer ptr_val1); Core.Vobject (Core.OVpointer ptr_val2)]) ->
-        liftMem (Mem.le_ptrval ptr_val1 ptr_val2) >>= fun is_le ->
+        liftMem (Mem.le_ptrval loc ptr_val1 ptr_val2) >>= fun is_le ->
         ND.return (mk_th_st (if is_le then Core.Vtrue else Core.Vfalse))
     
     | (Mem_common.PtrGe, [Core.Vobject (Core.OVpointer ptr_val1); Core.Vobject (Core.OVpointer ptr_val2)]) ->
-        liftMem (Mem.ge_ptrval ptr_val1 ptr_val2) >>= fun is_ge ->
+        liftMem (Mem.ge_ptrval loc ptr_val1 ptr_val2) >>= fun is_ge ->
         ND.return (mk_th_st (if is_ge then Core.Vtrue else Core.Vfalse))
     
     | (Mem_common.Memcpy, [Core.Vobject (Core.OVpointer ptr_val1); Core.Vobject (Core.OVpointer ptr_val2);

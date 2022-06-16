@@ -174,26 +174,7 @@ let get = Nondeterminism.nd_get
 let put = Nondeterminism.nd_put
 let update = Nondeterminism.nd_update
 
-let fail err =
-  let loc = match err with
-    | MC.MerrAccess (loc, _, _)
-    | MerrWriteOnReadOnly (_, loc)
-    | MerrReadUninit loc
-    | MerrUndefinedFree (loc, _)
-    | MerrFreeNullPtr loc
-    | MerrArrayShift loc ->
-      loc
-    | MerrOutsideLifetime _
-    | MerrInternal _
-    | MerrOther _
-    | MerrPtrdiff
-    | MerrUndefinedRealloc
-    | MerrIntFromPtr
-    | MerrPtrFromInt
-    | MerrPtrComparison
-    | MerrWIP _
-    | MerrVIP _ ->
-        Location_ocaml.other "VIP" in
+let fail ?(loc=Location_ocaml.other "VIP") err =
   let open Nondeterminism in
   match MC.undefinedFromMem_error err with
     | Some ubs ->
@@ -561,7 +542,7 @@ let kill loc is_dyn ptrval : unit memM =
         lookup_alloc alloc_id >>= fun alloc ->
         if alloc.killed then
           (* TODO: this should be a Cerberus internal error *)
-          fail (MerrUndefinedFree (loc, Free_dead_allocation))
+          fail ~loc (MerrUndefinedFree Free_dead_allocation)
         else
           update (fun st ->
             { st with allocations= IntMap.add alloc_id {alloc with killed= true} st.allocations}
@@ -573,36 +554,36 @@ let kill loc is_dyn ptrval : unit memM =
 let load loc ty ptrval : (footprint * mem_value) memM =
   match ptrval with
     | PVnull ->
-        fail (MerrAccess (loc, LoadAccess, NullPtr))
+        fail ~loc (MerrAccess (LoadAccess, NullPtr))
     | PVloc (Prov_empty, _) ->
-        fail (MerrAccess (loc, LoadAccess, NoProvPtr))
+        fail ~loc (MerrAccess (LoadAccess, NoProvPtr))
     | PVloc (Prov_some alloc_id, addr) ->
         lookup_alloc alloc_id >>= fun alloc ->
         if alloc.killed then
-          fail (MerrAccess (loc, LoadAccess, DeadPtr))
+          fail ~loc (MerrAccess (LoadAccess, DeadPtr))
         else if not (check_bounds addr ty alloc) then
-          fail (MerrAccess (loc, LoadAccess, OutOfBoundPtr))
+          fail ~loc (MerrAccess (LoadAccess, OutOfBoundPtr))
         else
           get >>= fun st ->
           put { st with last_used= Some alloc_id } >>= fun () ->
           let bs = fetch_bytes st.bytemap addr (Common.sizeof ty) in
           return (FOOTPRINT, fst (abst st.allocations ty bs))
     | PVfunptr _ ->
-      fail (MerrAccess (loc, LoadAccess, FunctionPtr))
+      fail ~loc (MerrAccess (LoadAccess, FunctionPtr))
 
 
 let store loc ty is_locking ptrval mval : footprint memM =
   match ptrval with
     | PVnull ->
-        fail (MerrAccess (loc, StoreAccess, NullPtr))
+        fail ~loc (MerrAccess (StoreAccess, NullPtr))
     | PVloc (Prov_empty, _) ->
-        fail (MerrAccess (loc, StoreAccess, NoProvPtr))
+        fail ~loc (MerrAccess (StoreAccess, NoProvPtr))
     | PVloc (Prov_some alloc_id, addr) ->
         lookup_alloc alloc_id >>= fun alloc ->
         if alloc.killed then
-          fail (MerrAccess (loc, StoreAccess, DeadPtr))
+          fail ~loc (MerrAccess (StoreAccess, DeadPtr))
         else if not (check_bounds addr ty alloc) then
-          fail (MerrAccess (loc, StoreAccess, OutOfBoundPtr))
+          fail ~loc (MerrAccess (StoreAccess, OutOfBoundPtr))
         else
           update begin fun st ->
             let (funptrmap, pre_bs) = repr st.funptrmap mval in
@@ -616,7 +597,7 @@ let store loc ty is_locking ptrval mval : footprint memM =
           end >>= fun () ->
           return FOOTPRINT
     | PVfunptr _ ->
-      fail (MerrAccess (loc, StoreAccess, FunctionPtr))
+      fail ~loc (MerrAccess (StoreAccess, FunctionPtr))
 
 
 let null_ptrval _ =
@@ -647,7 +628,7 @@ let case_funsym_opt _ ptrval : Symbol.sym option =
         None
 
 (* Operations on pointer values *)
-let eq_ptrval ptrval1 ptrval2 : bool memM =
+let eq_ptrval _ ptrval1 ptrval2 : bool memM =
   return begin match ptrval1, ptrval2 with
     | PVnull, PVnull ->
         true
@@ -659,43 +640,43 @@ let eq_ptrval ptrval1 ptrval2 : bool memM =
         false
   end
 
-let ne_ptrval ptrval1 ptrval2 : bool memM =
-  eq_ptrval ptrval1 ptrval2 >>= function
+let ne_ptrval loc ptrval1 ptrval2 : bool memM =
+  eq_ptrval loc ptrval1 ptrval2 >>= function
     | true  -> return false
     | false -> return true
 
-let rel_op_ptrval f_op ptrval1 ptrval2 : bool memM =
+let rel_op_ptrval loc f_op ptrval1 ptrval2 : bool memM =
   match ptrval1, ptrval2 with
     | PVloc (Prov_some alloc_id1, addr1)
     , PVloc (Prov_some alloc_id2, addr2) when N.equal alloc_id1 alloc_id2 ->
         lookup_alloc alloc_id1 >>= fun alloc ->
         if alloc.killed then
-          fail (MerrVIP VIP_relop_killed)
+          fail ~loc (MerrVIP VIP_relop_killed)
         else if not (in_bounds addr1 alloc && in_bounds addr2 alloc) then
-          fail (MerrVIP VIP_relop_out_of_bound)
+          fail ~loc (MerrVIP VIP_relop_out_of_bound)
         else
           (* VIP-rel-op-ptr *)
           return (f_op addr1 addr2)
     | _ ->
-        fail (MerrVIP VIP_relop_invalid)
+        fail ~loc (MerrVIP VIP_relop_invalid)
 
-let lt_ptrval ptrval1 ptrval2 : bool memM =
-  rel_op_ptrval N.less ptrval1 ptrval2
-let gt_ptrval ptrval1 ptrval2 : bool memM =
-  rel_op_ptrval N.greater ptrval1 ptrval2
-let le_ptrval ptrval1 ptrval2 : bool memM =
-  rel_op_ptrval N.less_equal ptrval1 ptrval2
-let ge_ptrval ptrval1 ptrval2 : bool memM =
-  rel_op_ptrval N.greater_equal ptrval1 ptrval2
+let lt_ptrval loc ptrval1 ptrval2 : bool memM =
+  rel_op_ptrval loc N.less ptrval1 ptrval2
+let gt_ptrval loc ptrval1 ptrval2 : bool memM =
+  rel_op_ptrval loc N.greater ptrval1 ptrval2
+let le_ptrval loc ptrval1 ptrval2 : bool memM =
+  rel_op_ptrval loc N.less_equal ptrval1 ptrval2
+let ge_ptrval loc ptrval1 ptrval2 : bool memM =
+  rel_op_ptrval loc N.greater_equal ptrval1 ptrval2
 
-let diff_ptrval diff_ty ptrval1 ptrval2 : integer_value memM =
+let diff_ptrval loc diff_ty ptrval1 ptrval2 : integer_value memM =
   match ptrval1, ptrval2 with
     | PVloc (Prov_some alloc_id1, addr1)
     , PVloc (Prov_some alloc_id2, addr2) when Z.equal alloc_id1 alloc_id2 ->
         lookup_alloc alloc_id1 >>= fun alloc ->
         if alloc.killed then
           (* TODO: more precise error message? *)
-          fail MerrPtrdiff
+          fail ~loc MerrPtrdiff
         else if in_bounds addr1 alloc && in_bounds addr2 alloc then
           let diff_ty' = match diff_ty with
             | Ctype (_, Array (elem_ty, _)) ->
@@ -704,9 +685,9 @@ let diff_ptrval diff_ty ptrval1 ptrval2 : integer_value memM =
                 diff_ty in
           return (IVint (N.div (N.sub addr1 addr2) (N.of_int (Common.sizeof diff_ty'))))
         else
-          fail (MerrVIP VIP_diffptr_out_of_bound)
+          fail ~loc (MerrVIP VIP_diffptr_out_of_bound)
     | _ ->
-      fail MerrPtrdiff
+      fail ~loc MerrPtrdiff
 
 let update_prefix: (Symbol.prefix * mem_value) -> unit memM =
   fun _ ->
@@ -751,7 +732,7 @@ let in_range n ity =
 (* Casting operations *)
 (* 'cast_ival_to_ptrval()' in the paper *)
 (* the first ctype is the original integer type, the second is the target referenced type *)
-let ptrfromint ity ref_ty ival : pointer_value memM =
+let ptrfromint _ ity ref_ty ival : pointer_value memM =
   match ival with
     | IVloc (Prov_empty, _) ->
         fail (MerrVIP VIP_ptrcast_empty)
@@ -783,7 +764,7 @@ let ptrfromint ity ref_ty ival : pointer_value memM =
 
 (* 'cast_ptrval_to_ival()' in the paper *)
 (* the first ctype is the original referenced type, the integerType is the target integer type *)
-let intfromptr ref_ty ity ptrval : integer_value memM =
+let intfromptr _ ref_ty ity ptrval : integer_value memM =
   match ptrval with
     | PVnull ->
         (* VIP-cast-ptr-to-int-null *)

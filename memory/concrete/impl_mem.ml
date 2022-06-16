@@ -455,26 +455,7 @@ module Concrete : Memory = struct
   let bind = Eff.(>>=)
   
   (* TODO: hackish *)
-  let fail err =
-    let loc = match err with
-      | MerrAccess (loc, _, _)
-      | MerrWriteOnReadOnly (_, loc)
-      | MerrReadUninit loc
-      | MerrUndefinedFree (loc, _)
-      | MerrFreeNullPtr loc
-      | MerrArrayShift loc ->
-        loc
-      | MerrOutsideLifetime _
-      | MerrInternal _
-      | MerrOther _
-      | MerrPtrdiff
-      | MerrUndefinedRealloc
-      | MerrIntFromPtr
-      | MerrPtrFromInt
-      | MerrPtrComparison
-      | MerrWIP _
-      | MerrVIP _ ->
-            Location_ocaml.other "Concrete" in
+  let fail ?(loc=Location_ocaml.other "Concrete") err =
     let open Nondeterminism in
     match undefinedFromMem_error err with
       | Some ubs ->
@@ -808,8 +789,8 @@ module Concrete : Memory = struct
           begin precond alloc_id >>= function
             | `OK ->
                 return alloc_id
-            | `FAIL err ->
-                fail err
+            | `FAIL (loc, err) ->
+                fail ~loc err
           end
       | `Double (alloc_id1, alloc_id2) ->
           begin precond alloc_id1 >>= function
@@ -819,8 +800,8 @@ module Concrete : Memory = struct
                 begin precond alloc_id2 >>= function
                   | `OK ->
                       return alloc_id2
-                  | `FAIL err ->
-                      fail err
+                  | `FAIL (loc, err) ->
+                      fail ~loc err
                 end
           end
     end >>= fun alloc_id ->
@@ -1330,13 +1311,13 @@ module Concrete : Memory = struct
   let kill loc is_dyn : pointer_value -> unit memM = function
     | PV (_, PVnull _) ->
         if Switches.(has_switch SW_forbid_nullptr_free) then
-          fail (MerrFreeNullPtr loc)
+          fail ~loc MerrFreeNullPtr
         else
           return ()
     | PV (_, PVfunction _) ->
-          fail (MerrOther "attempted to kill with a function pointer")
+          fail ~loc (MerrOther "attempted to kill with a function pointer")
     | PV (Prov_none, PVconcrete _) ->
-          fail (MerrOther "attempted to kill with a pointer lacking a provenance")
+          fail ~loc (MerrOther "attempted to kill with a pointer lacking a provenance")
     | PV (Prov_device, PVconcrete _) ->
         (* TODO: should that be an error ?? *)
         return ()
@@ -1346,18 +1327,18 @@ module Concrete : Memory = struct
         let precondition z =
           is_dead z >>= function
             | true ->
-                return (`FAIL (MerrUndefinedFree (loc, Free_static_allocation)))
+                return (`FAIL (loc, MerrUndefinedFree Free_static_allocation))
             | false ->
                 get_allocation z >>= fun alloc ->
                 if N.equal addr alloc.base then
                   return `OK
                 else
-                  return (`FAIL (MerrUndefinedFree (loc, Free_out_of_bound))) in
+                  return (`FAIL (loc, MerrUndefinedFree Free_out_of_bound)) in
         begin if is_dyn then
           (* this kill is dynamic one (i.e. free() or friends) *)
           is_dynamic addr >>= begin function
             | false ->
-                fail (MerrUndefinedFree (loc, Free_static_allocation))
+                fail ~loc (MerrUndefinedFree Free_static_allocation)
             | true ->
                 return ()
           end
@@ -1383,7 +1364,7 @@ module Concrete : Memory = struct
           (* this kill is dynamic one (i.e. free() or friends) *)
           is_dynamic addr >>= begin function
             | false ->
-                fail (MerrUndefinedFree (loc, Free_static_allocation))
+                fail ~loc (MerrUndefinedFree Free_static_allocation)
             | true ->
                 return ()
           end
@@ -1393,7 +1374,7 @@ module Concrete : Memory = struct
         is_dead alloc_id >>= begin function
           | true ->
               if is_dyn then
-                fail (MerrUndefinedFree (loc, Free_dead_allocation))
+                fail ~loc (MerrUndefinedFree Free_dead_allocation)
               else
                 failwith "Concrete: FREE was called on a dead allocation"
           | false ->
@@ -1412,7 +1393,7 @@ module Concrete : Memory = struct
                 else
                   return ()
               end else
-                fail (MerrUndefinedFree (loc, Free_out_of_bound))
+                fail ~loc (MerrUndefinedFree Free_out_of_bound)
         end
   
   let load loc ty (PV (prov, ptrval_)) =
@@ -1441,25 +1422,25 @@ module Concrete : Memory = struct
             if Switches.(has_switch SW_strict_reads) then
               match mval with
                 | MVunspecified _ ->
-                    fail (MerrReadUninit loc)
+                    fail ~loc MerrReadUninit
                 | _ ->
                     return (fp, mval)
             else
               return (fp, mval)
         | _ ->
-            fail (MerrWIP "load, bs' <> []")
+            fail ~loc (MerrWIP "load, bs' <> []")
       end in
     match (prov, ptrval_) with
       | (_, PVnull _) ->
-          fail (MerrAccess (loc, LoadAccess, NullPtr))
+          fail ~loc (MerrAccess (LoadAccess, NullPtr))
       | (_, PVfunction _) ->
-          fail (MerrAccess (loc, LoadAccess, FunctionPtr))
+          fail ~loc (MerrAccess (LoadAccess, FunctionPtr))
       | (Prov_none, _) ->
-          fail (MerrAccess (loc, LoadAccess, OutOfBoundPtr))
+          fail ~loc (MerrAccess (LoadAccess, OutOfBoundPtr))
       | (Prov_device, PVconcrete addr) ->
           begin is_within_device ty addr >>= function
             | false ->
-                fail (MerrAccess (loc, LoadAccess, OutOfBoundPtr))
+                fail ~loc (MerrAccess (LoadAccess, OutOfBoundPtr))
             | true ->
                 do_load None addr
           end
@@ -1472,15 +1453,15 @@ module Concrete : Memory = struct
           let precondition z =
             is_dead z >>= begin function
               | true ->
-                  return (`FAIL (MerrAccess (loc, LoadAccess, DeadPtr)))
+                  return (`FAIL (loc, MerrAccess (LoadAccess, DeadPtr)))
               | false ->
                   begin is_within_bound z ty addr >>= function
                     | false ->
-                        return (`FAIL (MerrAccess (loc, LoadAccess, OutOfBoundPtr)))
+                        return (`FAIL (loc, MerrAccess (LoadAccess, OutOfBoundPtr)))
                     | true ->
                         begin is_atomic_member_access z ty addr >>= function
                           | true ->
-                              return (`FAIL (MerrAccess (loc, LoadAccess, AtomicMemberof)))
+                              return (`FAIL (loc, MerrAccess (LoadAccess, AtomicMemberof)))
                           | false ->
                               return `OK
                         end
@@ -1492,7 +1473,7 @@ module Concrete : Memory = struct
       | (Prov_some alloc_id, PVconcrete addr) ->
           is_dead alloc_id >>= begin function
             | true ->
-                fail (MerrAccess (loc, LoadAccess, DeadPtr))
+                fail ~loc (MerrAccess (LoadAccess, DeadPtr))
             | false ->
                 return ()
           end >>= fun () ->
@@ -1501,11 +1482,11 @@ module Concrete : Memory = struct
                 Debug_ocaml.print_debug 1 [] (fun () ->
                   "LOAD out of bound, alloc_id=" ^ N.to_string alloc_id
                 );
-                fail (MerrAccess (loc, LoadAccess, OutOfBoundPtr))
+                fail ~loc (MerrAccess (LoadAccess, OutOfBoundPtr))
             | true ->
                 begin is_atomic_member_access alloc_id ty addr >>= function
                   | true ->
-                      fail (MerrAccess (loc, LoadAccess, AtomicMemberof))
+                      fail ~loc (MerrAccess (LoadAccess, AtomicMemberof))
                   | false ->
                       do_load (Some alloc_id) addr
                 end
@@ -1526,7 +1507,7 @@ module Concrete : Memory = struct
       Printf.printf "STORE ==> %s\n" (Location_ocaml.location_to_string loc);
       Printf.printf "STORE mval ==> %s\n"
         (Pp_utils.to_plain_string (pp_mem_value mval));
-      fail (MerrOther "store with an ill-typed memory value")
+      fail ~loc (MerrOther "store with an ill-typed memory value")
     end else
       let do_store alloc_id_opt addr =
         update begin fun st ->
@@ -1543,15 +1524,15 @@ module Concrete : Memory = struct
         return (FP (`W, addr, (N.of_int (sizeof ty)))) in
       match (prov, ptrval_) with
         | (_, PVnull _) ->
-            fail (MerrAccess (loc, StoreAccess, NullPtr))
+            fail ~loc (MerrAccess (StoreAccess, NullPtr))
         | (_, PVfunction _) ->
-            fail (MerrAccess (loc, StoreAccess, FunctionPtr))
+            fail ~loc (MerrAccess (StoreAccess, FunctionPtr))
         | (Prov_none, _) ->
-            fail (MerrAccess (loc, StoreAccess, OutOfBoundPtr))
+            fail ~loc (MerrAccess (StoreAccess, OutOfBoundPtr))
         | (Prov_device, PVconcrete addr) ->
             begin is_within_device ty addr >>= function
               | false ->
-                  fail (MerrAccess (loc, StoreAccess, OutOfBoundPtr))
+                  fail ~loc (MerrAccess (StoreAccess, OutOfBoundPtr))
               | true ->
                   do_store None addr
             end
@@ -1564,18 +1545,18 @@ module Concrete : Memory = struct
           let precondition z =
             is_within_bound z ty addr >>= function
               | false ->
-                  return (`FAIL (MerrAccess (loc, StoreAccess, OutOfBoundPtr)))
+                  return (`FAIL (loc, MerrAccess (StoreAccess, OutOfBoundPtr)))
               | true ->
                   get_allocation z >>= fun alloc ->
                   match alloc.is_readonly with
                     | IsReadOnly ->
-                        return (`FAIL (MerrWriteOnReadOnly (false, loc)))
+                        return (`FAIL (loc, MerrWriteOnReadOnly false))
                     | IsReadOnly_string_literal ->
-                      return (`FAIL (MerrWriteOnReadOnly (true, loc)))
+                      return (`FAIL (loc, MerrWriteOnReadOnly true))
                     | IsWritable ->
                       begin is_atomic_member_access z ty addr >>= function
                         | true ->
-                            return (`FAIL (MerrAccess (loc, LoadAccess, AtomicMemberof)))
+                            return (`FAIL (loc, MerrAccess (LoadAccess, AtomicMemberof)))
                         | false ->
                             return `OK
                       end in
@@ -1597,18 +1578,18 @@ module Concrete : Memory = struct
         | (Prov_some alloc_id, PVconcrete addr) ->
             begin is_within_bound alloc_id ty addr >>= function
               | false ->
-                  fail (MerrAccess (loc, StoreAccess, OutOfBoundPtr))
+                  fail ~loc (MerrAccess (StoreAccess, OutOfBoundPtr))
               | true ->
                   get_allocation alloc_id >>= fun alloc ->
                   match alloc.is_readonly with
                     | IsReadOnly ->
-                        fail (MerrWriteOnReadOnly (false, loc))
+                        fail ~loc (MerrWriteOnReadOnly false)
                     | IsReadOnly_string_literal ->
-                      fail (MerrWriteOnReadOnly (true, loc))
+                      fail ~loc (MerrWriteOnReadOnly true)
                     | IsWritable ->
                         begin is_atomic_member_access alloc_id ty addr >>= function
                           | true ->
-                              fail (MerrAccess (loc, LoadAccess, AtomicMemberof))
+                              fail ~loc (MerrAccess (LoadAccess, AtomicMemberof))
                           | false ->
                               do_store (Some alloc_id) addr >>= fun fp ->
                               if is_locking then
@@ -1664,7 +1645,7 @@ module Concrete : Memory = struct
     | _ -> None
     
   
-  let eq_ptrval (PV (prov1, ptrval_1)) (PV (prov2, ptrval_2)) =
+  let eq_ptrval loc (PV (prov1, ptrval_1)) (PV (prov2, ptrval_2)) =
     match (ptrval_1, ptrval_2) with
       | (PVnull _, PVnull _) ->
           return true
@@ -1707,11 +1688,11 @@ module Concrete : Memory = struct
                   ; ("ignoring provenance", return (Nat_big_num.equal addr1 addr2)) ]
           end
   
-  let ne_ptrval ptrval1 ptrval2 =
-    eq_ptrval ptrval1 ptrval2 >>= fun b ->
+  let ne_ptrval loc ptrval1 ptrval2 =
+    eq_ptrval loc ptrval1 ptrval2 >>= fun b ->
     return (not b)
   
-  let lt_ptrval (PV (prov1, ptrval_1)) (PV (prov2, ptrval_2)) =
+  let lt_ptrval loc (PV (prov1, ptrval_1)) (PV (prov2, ptrval_2)) =
     match (ptrval_1, ptrval_2) with
       | (PVconcrete addr1, PVconcrete addr2) ->
           if Switches.(has_switch SW_strict_pointer_relationals) then
@@ -1720,16 +1701,16 @@ module Concrete : Memory = struct
                   return (Nat_big_num.compare addr1 addr2 == -1)
               | _ ->
                   (* TODO: one past case *)
-                  fail MerrPtrComparison
+                  fail ~loc MerrPtrComparison
           else
             return (Nat_big_num.compare addr1 addr2 == -1)
       | (PVnull _, _)
       | (_, PVnull _) ->
-          fail (MerrWIP "lt_ptrval ==> one null pointer")
+          fail ~loc (MerrWIP "lt_ptrval ==> one null pointer")
       | _ ->
-          fail (MerrWIP "lt_ptrval")
+          fail ~loc (MerrWIP "lt_ptrval")
   
-  let gt_ptrval (PV (prov1, ptrval_1)) (PV (prov2, ptrval_2)) =
+  let gt_ptrval loc (PV (prov1, ptrval_1)) (PV (prov2, ptrval_2)) =
     match (ptrval_1, ptrval_2) with
       | (PVconcrete addr1, PVconcrete addr2) ->
           if Switches.(has_switch SW_strict_pointer_relationals) then
@@ -1738,13 +1719,13 @@ module Concrete : Memory = struct
                   return (Nat_big_num.compare addr1 addr2 == 1)
               | _ ->
                   (* TODO: one past case *)
-                  fail MerrPtrComparison
+                  fail ~loc MerrPtrComparison
           else
             return (Nat_big_num.compare addr1 addr2 == 1)
       | _ ->
-          fail (MerrWIP "gt_ptrval")
+          fail ~loc (MerrWIP "gt_ptrval")
   
-  let le_ptrval (PV (prov1, ptrval_1)) (PV (prov2, ptrval_2)) =
+  let le_ptrval loc (PV (prov1, ptrval_1)) (PV (prov2, ptrval_2)) =
     match (ptrval_1, ptrval_2) with
       | (PVconcrete addr1, PVconcrete addr2) ->
           if Switches.(has_switch SW_strict_pointer_relationals) then
@@ -1754,14 +1735,14 @@ module Concrete : Memory = struct
                   return (cmp = -1 || cmp = 0)
               | _ ->
                   (* TODO: one past case *)
-                  fail MerrPtrComparison
+                  fail ~loc MerrPtrComparison
           else
             let cmp = Nat_big_num.compare addr1 addr2 in
             return (cmp = -1 || cmp = 0)
       | _ ->
-          fail (MerrWIP "le_ptrval")
+          fail ~loc (MerrWIP "le_ptrval")
   
-  let ge_ptrval (PV (prov1, ptrval_1)) (PV (prov2, ptrval_2)) =
+  let ge_ptrval loc (PV (prov1, ptrval_1)) (PV (prov2, ptrval_2)) =
     match (ptrval_1, ptrval_2) with
       | (PVconcrete addr1, PVconcrete addr2) ->
           if Switches.(has_switch SW_strict_pointer_relationals) then
@@ -1771,15 +1752,15 @@ module Concrete : Memory = struct
                   return (cmp = 1 || cmp = 0)
               | _ ->
                   (* TODO: one past case *)
-                  fail MerrPtrComparison
+                  fail ~loc MerrPtrComparison
           else
             let cmp = Nat_big_num.compare addr1 addr2 in
             return (cmp = 1 || cmp = 0)
       | _ ->
-          fail (MerrWIP "ge_ptrval")
+          fail ~loc (MerrWIP "ge_ptrval")
   
   
-  let diff_ptrval diff_ty ptrval1 ptrval2 =
+  let diff_ptrval loc diff_ty ptrval1 ptrval2 =
     let precond alloc addr1 addr2 =
          N.less_equal alloc.base addr1
       && N.less_equal addr1 (N.add alloc.base alloc.size)
@@ -1794,7 +1775,7 @@ module Concrete : Memory = struct
             diff_ty in
       return (IV (Prov_none, N.div (N.sub addr1 addr2) (N.of_int (sizeof diff_ty')))) in
     let error_postcond =
-      fail MerrPtrdiff in
+      fail ~loc MerrPtrdiff in
     if Switches.(has_switch (SW_pointer_arith `PERMISSIVE)) then
       match ptrval1, ptrval2 with
         | PV (_, PVconcrete addr1), PV (_, PVconcrete addr2) ->
@@ -1885,7 +1866,7 @@ module Concrete : Memory = struct
                 if N.equal addr1 addr2 then
                   valid_postcond addr1 addr2 (* zero *)
                 else
-                  fail (MerrOther "in `diff_ptrval` invariant of PNVI-ae-udi failed: ambiguous iotas with addr1 <> addr2")
+                  fail ~loc (MerrOther "in `diff_ptrval` invariant of PNVI-ae-udi failed: ambiguous iotas with addr1 <> addr2")
           end
       | _ ->
           error_postcond
@@ -1951,7 +1932,7 @@ module Concrete : Memory = struct
           return false
 
   
-  let ptrfromint _ ref_ty (IV (prov, n)) =
+  let ptrfromint loc _ ref_ty (IV (prov, n)) =
     if not (N.equal n N.zero) then
       (* STD §6.3.2.3#5 *)
       Debug_ocaml.warn [] (fun () ->
@@ -2087,7 +2068,7 @@ module Concrete : Memory = struct
                                 Printf.printf "id1= %s, id2= %s ==> addr= %s\n"
                                   (N.to_string alloc_id1) (N.to_string alloc_id2)
                                   (N.to_string shifted_addr);
-                                fail (MerrOther "(PNVI-ae-uid) ambiguous non-zero array shift")
+                                fail ~loc (MerrOther "(PNVI-ae-uid) ambiguous non-zero array shift")
                               end
                           | false ->
                               return (`Collapse alloc_id1)
@@ -2097,7 +2078,7 @@ module Concrete : Memory = struct
                           | true ->
                               return (`Collapse alloc_id2)
                           | false ->
-                              fail (MerrArrayShift loc)
+                              fail ~loc MerrArrayShift
                         end
                   end >>= begin function
                     | `Collapse alloc_id ->
@@ -2118,7 +2099,7 @@ module Concrete : Memory = struct
                           | true ->
                               return ()
                           | false ->
-                              fail (MerrArrayShift loc)
+                              fail ~loc MerrArrayShift
                         end
                   end >>= fun () ->
                   return (PV (prov, PVconcrete shifted_addr))
@@ -2127,7 +2108,7 @@ module Concrete : Memory = struct
                   | true ->
                       return (PV (prov, PVconcrete shifted_addr))
                   | false ->
-                      fail (MerrArrayShift loc)
+                      fail ~loc MerrArrayShift
                 end
           end
       
@@ -2142,13 +2123,13 @@ module Concrete : Memory = struct
                                (N.add (N.add alloc.base alloc.size) (N.of_int (sizeof ty))) then
               return (PV (Prov_some alloc_id, PVconcrete shifted_addr))
             else
-              fail (MerrArrayShift loc)
+              fail ~loc MerrArrayShift
           else
             return (PV (Prov_some alloc_id, PVconcrete shifted_addr))
       | PV (Prov_none, PVconcrete addr) ->
           if    Switches.(has_switch (SW_pointer_arith `STRICT))
              || (is_PNVI () && not (Switches.(has_switch (SW_pointer_arith `PERMISSIVE)))) then
-            fail (MerrOther "out-of-bound pointer arithmetic (Prov_none)")
+            fail ~loc (MerrOther "out-of-bound pointer arithmetic (Prov_none)")
           else
             return (PV (Prov_none, PVconcrete (N.add addr offset)))
       | PV (Prov_device, PVconcrete addr) ->
@@ -2224,7 +2205,7 @@ module Concrete : Memory = struct
     end)
   
   (* TODO: conversion? *)
-  let intfromptr _ ity (PV (prov, ptrval_)) =
+  let intfromptr loc _ ity (PV (prov, ptrval_)) =
     match ptrval_ with
       | PVnull _ ->
           return (mk_ival prov Nat_big_num.zero)
@@ -2244,7 +2225,7 @@ module Concrete : Memory = struct
           let IV (_, ity_max) = max_ival ity in
           let IV (_, ity_min) = min_ival ity in
           if N.(less addr ity_min || less ity_max addr) then
-            fail MerrIntFromPtr
+            fail ~loc MerrIntFromPtr
           else
             return (mk_ival prov addr)
 
@@ -2553,8 +2534,8 @@ let combine_prov prov1 prov2 =
   let copy_alloc_id ival ptrval =
     (* cast_ptrval_to_ival(uintptr_t,𝑝1),cast_ival_to_ptrval(void,𝑥) *)
     (* the first ctype is the original referenced type, the integerType is the target integer type *)
-    intfromptr Ctype.void Ctype.(Unsigned Intptr_t) ptrval >>= fun _ ->
-    ptrfromint Ctype.(Unsigned Intptr_t) Ctype.void ival
+    intfromptr (Location_ocaml.other "copy_alloc_id") Ctype.void Ctype.(Unsigned Intptr_t) ptrval >>= fun _ ->
+    ptrfromint (Location_ocaml.other "copy_alloc_id") Ctype.(Unsigned Intptr_t) Ctype.void ival
 
   (* JSON serialisation: Memory layout for UI *)
 

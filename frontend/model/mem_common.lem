@@ -81,12 +81,12 @@ type mem_error =
   | MerrOther of string
   
   | MerrPtrdiff
-  | MerrAccess of Loc.t * access_kind * access_error
-  | MerrWriteOnReadOnly of bool (* is_string_literal *) * Loc.t
-  | MerrReadUninit of Loc.t
+  | MerrAccess of access_kind * access_error
+  | MerrWriteOnReadOnly of bool (* is_string_literal *)
+  | MerrReadUninit 
 
   
-  | MerrUndefinedFree of Loc.t * free_error
+  | MerrUndefinedFree of free_error
   | MerrUndefinedRealloc
   
   | MerrIntFromPtr
@@ -94,9 +94,9 @@ type mem_error =
   
   | MerrPtrComparison
   
-  | MerrArrayShift of Loc.t
+  | MerrArrayShift
   
-  | MerrFreeNullPtr of Loc.t (* NOTE: this is not ISO UB, but we support reporting it with the switch forbid_nullptr_free *)
+  | MerrFreeNullPtr (* NOTE: this is not ISO UB, but we support reporting it with the switch forbid_nullptr_free *)
   
   | MerrWIP of string
 
@@ -115,19 +115,19 @@ instance (Show mem_error)
         "Memory WIP: " ^ str
     | MerrPtrdiff ->
         "MerrPtrdiff"
-    | MerrAccess loc LoadAccess err ->
-        "MerrAccess Load [" ^ Loc.stringFromLocation loc ^ "] " ^
+    | MerrAccess LoadAccess err ->
+        "MerrAccess Load " ^
         stringFromAccess_error err
-    | MerrWriteOnReadOnly _ loc ->
-        "MerrWriteOnReadOnly [" ^ Loc.stringFromLocation loc ^ "]"
-    |   MerrReadUninit loc ->
-        "MerrReadUninit [" ^ Loc.stringFromLocation loc ^ "]"
-    | MerrAccess loc StoreAccess err ->
-        "MerrAccess Store [" ^ Loc.stringFromLocation loc ^ "] " ^
+    | MerrWriteOnReadOnly _ ->
+        "MerrWriteOnReadOnly"
+    |   MerrReadUninit ->
+        "MerrReadUninit"
+    | MerrAccess StoreAccess err ->
+        "MerrAccess Store " ^
         stringFromAccess_error err
     
-    | MerrUndefinedFree loc err ->
-        "MerrUndefinedFree [" ^ Loc.stringFromLocation loc ^ "] " ^ stringFromFree_error err
+    | MerrUndefinedFree err ->
+        "MerrUndefinedFree " ^ stringFromFree_error err
     | MerrUndefinedRealloc ->
         "MerrUndefinedRealloc"
     | MerrIntFromPtr ->
@@ -136,10 +136,10 @@ instance (Show mem_error)
         "MerrPtrFromInt"
     | MerrPtrComparison ->
         "MerrPtrComparison"
-    | MerrArrayShift loc ->
-        "MerrArrayShift [" ^ Loc.stringFromLocation loc ^ "]"
-    | MerrFreeNullPtr loc ->
-        "MerrFreeNullPtr [" ^ Loc.stringFromLocation loc ^ "]"
+    | MerrArrayShift ->
+        "MerrArrayShift"
+    | MerrFreeNullPtr ->
+        "MerrFreeNullPtr"
     
     | MerrVIP err ->
         let show_kind = function
@@ -187,9 +187,9 @@ let undefinedFromMem_error = function
       Just [Undefined.UB009_outside_lifetime]
   | MerrPtrdiff ->
       Just [Undefined.UB048_disjoint_array_pointers_subtraction]
-  | MerrAccess _ _ NullPtr ->
+  | MerrAccess _ NullPtr ->
       Just [Undefined.UB019_lvalue_not_an_object]
-  | MerrAccess _ _ DeadPtr ->
+  | MerrAccess _ DeadPtr ->
       Just [Undefined.UB010_pointer_to_dead_object]
   | MerrIntFromPtr ->
       Just [Undefined.UB024_out_of_range_pointer_to_integer_conversion]
@@ -198,37 +198,36 @@ let undefinedFromMem_error = function
   
   | MerrPtrComparison ->
       Just [Undefined.UB053_distinct_aggregate_union_pointer_comparison]
-  | MerrArrayShift _ ->
+  | MerrArrayShift ->
       Just [Undefined.UB046_array_pointer_outside]
-  | MerrFreeNullPtr _ ->
+  | MerrFreeNullPtr ->
       Nothing
 
   
   (* TODO do better *)
-  | MerrAccess _ LoadAccess OutOfBoundPtr ->
+  | MerrAccess LoadAccess OutOfBoundPtr ->
       Just [Undefined.UB_CERB002a_out_of_bound_load]
-  | MerrAccess _ StoreAccess OutOfBoundPtr ->
+  | MerrAccess StoreAccess OutOfBoundPtr ->
       Just [Undefined.UB_CERB002b_out_of_bound_store]
   
-  | MerrAccess _ _ AtomicMemberof ->
+  | MerrAccess _ AtomicMemberof ->
       Just [Undefined.UB042_access_atomic_structUnion_member]
   
-  | MerrUndefinedFree loc Free_static_allocation ->
+  | MerrUndefinedFree Free_static_allocation ->
       Just [Undefined.UB179a_static_allocation]
-  | MerrUndefinedFree loc Free_dead_allocation ->
+  | MerrUndefinedFree Free_dead_allocation ->
       Just [Undefined.UB179b_dead_allocation]
-  | MerrUndefinedFree loc Free_out_of_bound ->
+  | MerrUndefinedFree Free_out_of_bound ->
       Nothing (* TODO *)
   | MerrUndefinedRealloc ->
       (* TODO *)
       Just [Undefined.UB179a_static_allocation]
-  | MerrWriteOnReadOnly true _ ->
+  | MerrWriteOnReadOnly true ->
       Just [Undefined.UB033_modifying_string_literal]
-  | MerrWriteOnReadOnly false _ ->
+  | MerrWriteOnReadOnly false ->
       Just [Undefined.UB064_modifying_const]
-  | MerrReadUninit _ ->
-      (* TODO *)
-      Nothing
+  | MerrReadUninit ->
+      Just [Undefined.UB011_use_indeterminate_automatic_object]
   | _ ->
       Nothing
 end
