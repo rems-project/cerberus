@@ -724,6 +724,8 @@ let std_of_undefined_behaviour = function
       Just "§6.2.4#2, sentence 3"
   | UB010_pointer_to_dead_object ->
       Nothing (* TODO *)
+  | UB011_use_indeterminate_automatic_object ->
+      Just "§6.2.4"
   | UB012_lvalue_read_trap_representation ->
       Just "§6.2.6.1#5, sentence 2"
   | UB013_lvalue_side_effect_trap_representation ->
@@ -1084,7 +1086,7 @@ let ub_short_string = function
   | UB046_array_pointer_outside ->
       "the result of some pointer arithmetic operator was out of bound"
   | UB066_qualified_function_specification ->
-      "the specification of a function type should include any type qualifiers"
+      "the specification of a function type should not include any type qualifiers"
   | UB078_modified_void_parameter ->
       "a storage-class specifier or type qualifier modifies the keyword void as a function parameter type list"
   | UB086_incomplete_adjusted_parameter ->
@@ -1150,7 +1152,7 @@ let pretty_string_of_undefined_behaviour = function
   | UB010_pointer_to_dead_object ->
       "Pointer_to_dead_object (TODO: find the text, if there is an explicit one)"
   | UB011_use_indeterminate_automatic_object ->
-      "TODO[of course there is not explicit piece of text saying that (would be too easy otherwise)]"
+      "(§6.2.4) the value of an object with automatic storage duration is used while it is indeterminate"
   | UB012_lvalue_read_trap_representation ->
       "(§6.2.6.1#5) an lvalue expression that does not have character type tried to read from an \
                     object storing a trap representation."
