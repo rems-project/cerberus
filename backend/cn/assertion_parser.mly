@@ -23,9 +23,6 @@ open Assertion_parser_util
 %token MINUS
 %token STAR
 %token SLASH
-%token POWER
-%token MOD
-%token REM
 
 
 %token EQ
@@ -91,7 +88,6 @@ open Assertion_parser_util
 %left AND
 %left PLUS MINUS
 %left STAR SLASH
-/* %nonassoc POWER */
 /* %nonassoc POINTERCAST */
 %nonassoc MEMBER /* PREDARG */
 
@@ -199,12 +195,6 @@ arith_term:
       { Ast.Multiplication (a1, a2) }
   | a1=arith_or_atomic_term SLASH a2=arith_or_atomic_term
       { Ast.Division (a1, a2) }
-  | POWER LPAREN a1=term COMMA a2=term RPAREN
-      { Ast.Exponentiation (a1, a2) }
-  | REM LPAREN a1=term COMMA a2=term RPAREN
-      { Ast.Remainder (a1, a2) }
-  | MOD LPAREN a1=term COMMA a2=term RPAREN
-      { Ast.Modulus (a1, a2) }
   | t=atomic_term LBRACE member=MEMBER EQUAL v=atomic_term RBRACE
       { Ast.StructUpdate ((t, Id.id member), v) }
   | t=atomic_term LBRACKET i=atomic_term EQUAL v=atomic_term RBRACKET

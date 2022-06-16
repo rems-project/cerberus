@@ -61,6 +61,8 @@ let pp =
           mparens (flow (break 1) [aux true it1; slash; aux true it2])
        | Exp (it1,it2) -> 
           c_app !^"power" [aux true it1; aux true it2]
+       | ExpNoSMT (it1,it2) ->
+          c_app !^"exp" [aux true it1; aux true it2]
        | Rem (it1,it2) -> 
           c_app !^"rem" [aux true it1; aux true it2]
        | Mod (it1,it2) -> 
@@ -77,8 +79,8 @@ let pp =
           c_app !^"intToReal" [aux false t]
        | RealToInt t ->
           c_app !^"realToInt" [aux false t]
-       | XOR (ity, t1, t2) -> 
-          c_app !^"xor" [Sctypes.IntegerTypes.pp ity ; aux false t1; aux false t2]
+       | XOR (t1, t2) ->
+          c_app !^"xor" [aux false t1; aux false t2]
        end
     | Bool_op bool_op -> 
        begin match bool_op with
@@ -218,6 +220,7 @@ let rec free_vars_arith_op = function
   | Mul (t1, t2) -> free_vars_list [t1; t2]
   | Div (t1, t2) -> free_vars_list [t1; t2]
   | Exp (t1, t2) -> free_vars_list [t1; t2]
+  | ExpNoSMT (t1, t2) -> free_vars_list [t1; t2]
   | Rem (t1, t2) -> free_vars_list [t1; t2]
   | Mod (t1, t2) -> free_vars_list [t1; t2]
   | LT (t1, t2) -> free_vars_list [t1; t2]
@@ -226,7 +229,7 @@ let rec free_vars_arith_op = function
   | Max (t1, t2) -> free_vars_list [t1; t2]
   | IntToReal t1 -> free_vars t1
   | RealToInt t1 -> free_vars t1
-  | XOR (_it, t1, t2) -> free_vars_list [t1; t2]
+  | XOR (t1, t2) -> free_vars_list [t1; t2]
 
 and free_vars_bool_op = function
   | And ts -> free_vars_list ts
@@ -333,6 +336,7 @@ let rec fold_arith_op f binders acc = function
   | Mul (t1, t2) -> fold_list f binders acc [t1; t2]
   | Div (t1, t2) -> fold_list f binders acc [t1; t2]
   | Exp (t1, t2) -> fold_list f binders acc [t1; t2]
+  | ExpNoSMT (t1, t2) -> fold_list f binders acc [t1; t2]
   | Rem (t1, t2) -> fold_list f binders acc [t1; t2]
   | Mod (t1, t2) -> fold_list f binders acc [t1; t2]
   | LT (t1, t2) -> fold_list f binders acc [t1; t2]
@@ -341,7 +345,7 @@ let rec fold_arith_op f binders acc = function
   | Max (t1, t2) -> fold_list f binders acc [t1; t2]
   | IntToReal t1 -> fold f binders acc t1
   | RealToInt t1 -> fold f binders acc t1
-  | XOR (_it, t1, t2) -> fold_list f binders acc [t1; t2]
+  | XOR (t1, t2) -> fold_list f binders acc [t1; t2]
 
 and fold_bool_op f binders acc = function
   | And ts -> fold_list f binders acc ts
@@ -476,6 +480,7 @@ let rec subst (su : typed subst) (IT (it, bt)) =
        | Mul (it, it') -> Mul (subst su it, subst su it')
        | Div (it, it') -> Div (subst su it, subst su it')
        | Exp (it, it') -> Exp (subst su it, subst su it')
+       | ExpNoSMT (it, it') -> ExpNoSMT (subst su it, subst su it')
        | Rem (it, it') -> Rem (subst su it, subst su it')
        | Mod (it, it') -> Mod (subst su it, subst su it')
        | LT (it, it') -> LT (subst su it, subst su it')
@@ -484,7 +489,7 @@ let rec subst (su : typed subst) (IT (it, bt)) =
        | Max (it, it') -> Max (subst su it, subst su it')
        | IntToReal it -> IntToReal (subst su it)
        | RealToInt it -> RealToInt (subst su it)
-       | XOR (ity, it, it') -> XOR (ity, subst su it, subst su it')
+       | XOR (it, it') -> XOR (subst su it, subst su it')
      in
      IT (Arith_op arith_op, bt)
   | Bool_op bool_op -> 
@@ -730,6 +735,7 @@ let sub_ (it, it') = IT (Arith_op (Sub (it, it')), bt it)
 let mul_ (it, it') = IT (Arith_op (Mul (it, it')), bt it)
 let div_ (it, it') = IT (Arith_op (Div (it, it')), bt it)
 let exp_ (it, it') = IT (Arith_op (Exp (it, it')), bt it)
+let exp_no_smt_ (it, it') = IT (Arith_op (ExpNoSMT (it, it')), bt it)
 let rem_ (it, it') = IT (Arith_op (Rem (it, it')), BT.Integer)
 let mod_ (it, it') = IT (Arith_op (Mod (it, it')), BT.Integer)
 let divisible_ (it, it') = eq_ (mod_ (it, it'), int_ 0)
@@ -738,7 +744,7 @@ let min_ (it, it') = IT (Arith_op (Min (it, it')), bt it)
 let max_ (it, it') = IT (Arith_op (Max (it, it')), bt it)
 let intToReal_ it = IT (Arith_op (IntToReal it), BT.Real)
 let realToInt_ it = IT (Arith_op (RealToInt it), BT.Integer)
-let xor_ ity (it, it') = IT (Arith_op (XOR (ity, it, it')), BT.Integer)
+let xor_ (it, it') = IT (Arith_op (XOR (it, it')), BT.Integer)
 
 let (%+) t t' = add_ (t, t')
 let (%-) t t' = sub_ (t, t')

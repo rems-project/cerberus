@@ -521,6 +521,9 @@ let it_to_coq ci it =
         | Rem (x, y) -> check_pos y; abinop "mod" x y
         | LT (x, y) -> abinop (if bool_eq_prop then "<" else "<?") x y
         | LE (x, y) -> abinop (if bool_eq_prop then "<=" else "<=?") x y
+        | Exp (x, y) -> abinop "^" x y
+        | ExpNoSMT (x, y) -> abinop "^" x y
+        | XOR (x, y) -> parensM (build [rets "Z.lxor"; aux x; aux y])
         | _ -> fail "it_to_coq: unsupported arith op" (IT.pp t)
     end
     | IT.Bool_op op -> begin match op with
@@ -531,7 +534,7 @@ let it_to_coq ci it =
         | IT.Or [x] -> aux x
         | IT.Or (x :: xs) -> abinop (if bool_eq_prop then "\\/" else "||") x (IT.or_ xs)
         | IT.Impl (x, y) -> abinop (if bool_eq_prop then "->" else "implb") x y
-        | IT.Not x -> (parensM (build [rets (if bool_eq_prop then "~" else "negb"); aux x]))
+        | IT.Not x -> parensM (build [rets (if bool_eq_prop then "~" else "negb"); aux x])
         | IT.ITE (sw, x, y) -> parensM (build [rets "if"; f false sw; rets "then";
                 aux x; rets "else"; aux y])
         | IT.EQ (x, y) -> abinop (if bool_eq_prop then "=" else "=?") x y

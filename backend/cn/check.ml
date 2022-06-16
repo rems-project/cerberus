@@ -1711,8 +1711,9 @@ let infer_pexpr (pe : 'bty mu_pexpr) : (RT.t * per_path, type_error) m =
        let@ arg2 = arg_of_asym asym2 in
        let@ () = WellTyped.ensure_base_type arg1.loc ~expect:Integer arg1.bt in
        let@ () = WellTyped.ensure_base_type arg2.loc ~expect:Integer arg2.bt in
-       let vt = (Integer, xor_ ity (it_of_arg arg1, it_of_arg arg2)) in
-       return (rt_of_vt loc vt, [])
+       let xor_unbounded = xor_ (it_of_arg arg1, it_of_arg arg2) in
+       let result = wrapI ity xor_unbounded in
+       return (rt_of_vt loc (Integer, result), [])
     | M_Cfvfromint _ -> 
        unsupported loc !^"floats"
     | M_Civfromfloat (act, _) -> 
@@ -1745,7 +1746,7 @@ let infer_pexpr (pe : 'bty mu_pexpr) : (RT.t * per_path, type_error) m =
          | OpMul ->   return (((Integer, Integer), Integer), IT.mul_ (v1, v2))
          | OpDiv ->   return (((Integer, Integer), Integer), IT.div_ (v1, v2))
          | OpRem_f -> return (((Integer, Integer), Integer), IT.rem_f_ (v1, v2))
-         | OpExp ->   return (((Integer, Integer), Integer), IT.exp_ (v1, v2))
+         | OpExp ->   return (((Integer, Integer), Integer), IT.exp_no_smt_ (v1, v2))
          | OpEq ->    return (((Integer, Integer), Bool), IT.eq_ (v1, v2))
          | OpGt ->    return (((Integer, Integer), Bool), IT.gt_ (v1, v2))
          | OpLt ->    return (((Integer, Integer), Bool), IT.lt_ (v1, v2))
