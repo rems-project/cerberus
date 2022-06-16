@@ -141,21 +141,22 @@ let frontend astprints filename state_file =
   let mu_file = CF.Mucore_label_inline.ib_file mu_file in
   print_log_file "after_inlining_break" (MUCORE mu_file);
   
+  let ail_program = match ail_program_opt with
+    | None -> assert false
+    | Some (_, sigm) -> sigm
+  in
   let pred_defs =
-    begin match ail_program_opt with
-    | None ->
-        assert false
-    | Some (_, sigm) ->
         let open Effectful.Make(Resultat) in
         match CompilePredicates.translate mu_file.mu_tagDefs 
-                sigm.CF.AilSyntax.cn_functions
-                sigm.CF.AilSyntax.cn_predicates 
+                ail_program.CF.AilSyntax.cn_functions
+                ail_program.CF.AilSyntax.cn_predicates
         with
         | Result.Error err -> TypeErrors.report ?state_file err; exit 1
         | Result.Ok xs -> xs
-    end in
+  in
+  let statement_locs = CStatements.search ail_program in
   
-  return (pred_defs, mu_file)
+  return (pred_defs, statement_locs, mu_file)
 
 
 
@@ -204,7 +205,7 @@ let main
   begin match frontend astprints filename state_file with
   | CF.Exception.Exception err ->
      prerr_endline (CF.Pp_errors.to_string err); exit 2
-  | CF.Exception.Result (pred_defs, file) ->
+  | CF.Exception.Result (pred_defs, stmts, file) ->
      try
        let open Resultat in
        print_log_file "final" (MUCORE file);
@@ -213,13 +214,14 @@ let main
          | (Some times, _) -> Some (times, "csv")
          | (_, Some times) -> Some (times, "log")
          | _ -> None);
+       let ctxt = Context.add_stmt_locs stmts Context.empty in
        let result = 
          Pp.progress_simple "pre-processing" "translating specifications";
          let opts = Retype.{ drop_labels = Option.is_some lemmata } in
          let@ file = Retype.retype_file pred_defs opts file in
          begin match lemmata with
            | Some mode -> Lemmata.generate mode file
-           | None -> Typing.run Context.empty (Check.check file)
+           | None -> Typing.run ctxt (Check.check file)
          end
        in
        Pp.maybe_close_times_channel ();

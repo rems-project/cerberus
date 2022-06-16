@@ -28,6 +28,7 @@ type t = {
     constraints : LCSet.t;
     global : Global.t;
     location_trace : Locations.loc list;
+    statement_locs : Locations.loc list;
   }
 
 
@@ -38,6 +39,7 @@ let empty = {
     constraints = LCSet.empty;
     global = Global.empty;
     location_trace = [];
+    statement_locs  = [];
   }
 
 
@@ -93,6 +95,9 @@ let add_c c (ctxt : t) =
 let add_r owhere r (ctxt : t) = 
   {ctxt with resources = r :: ctxt.resources}
 
+
+let add_stmt_locs stmts (ctxt : t) =
+  {ctxt with statement_locs = stmts @ ctxt.statement_locs}
 
 let json (ctxt : t) : Yojson.Safe.t = 
 
