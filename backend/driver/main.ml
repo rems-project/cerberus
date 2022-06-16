@@ -146,17 +146,57 @@ let cerberus debug_level progress core_obj
   let success = Either.Right 0 in
   let runM = function
     | Exception.Exception (loc, Errors.(DESUGAR (Desugar_UndefinedBehaviour ub))) when (batch = `Batch || batch = `CharonBatch) ->
-        print_endline ("Undefined behaviour: " ^ Undefined.stringFromUndefined_behaviour ub ^ " at " ^
-                       Location_ocaml.location_to_string ~charon:(batch = `CharonBatch) loc);
-        epilogue 0
+        let open Driver_ocaml in
+        print_string begin
+          string_of_batch_output ~is_charon:(batch = `CharonBatch) None
+            ([], Undefined { ub; stderr= ""; loc })
+        end;
+        epilogue 1
+    | Exception.Exception (loc, Errors.(AIL_TYPING (TypingError.TError_UndefinedBehaviour ub))) when (batch = `Batch || batch = `CharonBatch) ->
+        let open Driver_ocaml in
+        print_string begin
+          string_of_batch_output ~is_charon:(batch = `CharonBatch) None
+            ([], Undefined { ub; stderr= ""; loc })
+        end;
+        epilogue 1
     | Exception.Exception err ->
         prerr_endline (Pp_errors.to_string err);
         epilogue 1
-    | Exception.Result (Either.Left execs) ->
-        List.iter print_string execs;
-        epilogue 0
+    | Exception.Result (Either.Left (batch_mode, execs)) ->
+        let is_charon =
+          match batch_mode with
+            | `CharonBatch -> true
+            | `Batch -> false in
+        let exit =
+          let open Driver_ocaml in
+          match execs with
+            | [(_, Defined {exit= Specified n; _})] ->
+                begin try
+                  if is_charon then
+                    Z.to_int n
+                  else
+                    0
+                with
+                  | Z.Overflow ->
+                      Debug_ocaml.warn [] (fun () -> "Return value overlows (wrapping it down to 255)");
+                      Z .(to_int (n mod (of_int 256)))
+                end
+            | [(_, (Undefined _ | Error _))] ->
+                1
+            | _ ->
+                0
+          in
+        let has_multiple = List.length execs > 1 in
+        List.iteri (fun i (z3_strs, exec) ->
+          let open Driver_ocaml in
+          print_string begin
+            string_of_batch_output ~is_charon
+              (if has_multiple then Some i else None) (z3_strs, exec)
+          end
+        ) execs;
+        epilogue exit
     | Exception.Result (Either.Right n) ->
-        epilogue n
+        epilogue n 
   in
   runM @@ match files with
     | [] ->

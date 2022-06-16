@@ -224,8 +224,17 @@ let execute ~conf ~filename (mode: Global_ocaml.execution_mode) =
     let driver_conf = {concurrency=false; exec_mode=mode; fs_dump=false; trace=false; } in
     interp_backend dummy_io core ~args:[] ~batch:`Batch ~fs:None ~driver_conf
     >>= function
-    | Either.Left res ->
-      return (String.concat "\n" res)
+    | Either.Left (_, execs) ->
+        let has_multiple = List.length execs > 1 in
+        return begin
+          String.concat "\b" begin
+            List.mapi (fun i (z3_strs, exec) ->
+              let open Driver_ocaml in
+              string_of_batch_output ~is_charon:false
+                (if has_multiple then Some i else None) (z3_strs, exec)
+            ) execs
+          end
+        end
     | Either.Right res ->
       return (string_of_int res)
   with
@@ -455,30 +464,30 @@ let multiple_steps step_state (m, st) =
                     None, "other memory error: " ^ str
                   | MerrPtrdiff ->
                     None, "invalid pointer diff"
-                  | MerrAccess (loc, LoadAccess, err) ->
-                    Some loc, "invalid memory load: " ^ string_of_access_error err
-                  | MerrAccess (loc, StoreAccess, err) ->
-                    Some loc, "invalid memory store: " ^ string_of_access_error err
+                  | MerrAccess (LoadAccess, err) ->
+                    None, "invalid memory load: " ^ string_of_access_error err
+                  | MerrAccess (StoreAccess, err) ->
+                    None, "invalid memory store: " ^ string_of_access_error err
                   | MerrInternal str ->
                     None, "internal error: " ^ str
                   | MerrPtrFromInt ->
                     None, "invalid cast pointer from integer"
                   | MerrWriteOnReadOnly _ ->
                     None, "writing read only memory"
-                  | MerrReadUninit loc ->
-                    Some loc, "reading from uninitialised memory"
-                  | MerrUndefinedFree (loc, err) ->
-                    Some loc, "freeing " ^ string_of_free_error err
+                  | MerrReadUninit ->
+                    None, "reading from uninitialised memory"
+                  | MerrUndefinedFree err ->
+                    None, "freeing " ^ string_of_free_error err
                   | MerrUndefinedRealloc ->
                     None, "undefined behaviour in realloc"
                   | MerrIntFromPtr ->
                     None, "invalid cast integer from pointer"
                   | MerrPtrComparison ->
                     None, "error pointer comparison"
-                  | MerrArrayShift loc ->
-                    Some loc, "error array shilft"
-                  | MerrFreeNullPtr loc ->
-                    Some loc, "free() called on a NULL pointer"
+                  | MerrArrayShift ->
+                    None, "error array shilft"
+                  | MerrFreeNullPtr ->
+                    None, "free() called on a NULL pointer"
                   | MerrWIP str ->
                     None, "wip: " ^ str
                   | MerrVIP err ->

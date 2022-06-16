@@ -69,9 +69,7 @@ val core_passes:
 val interp_backend:
   io_helpers -> 'a Core.file ->
   args:(string list) -> batch:[`Batch | `CharonBatch | `NotBatch] -> fs:string option -> driver_conf:Driver_ocaml.driver_conf ->
-(* TODO: we would be using poly variants if it weren't for Lem... *)
-(*  [`Interactive | `Exhaustive | `Random] -> *)
-  ((string list, int) Either.either, Location_ocaml.t * Errors.cause) Exception.exceptM
+  ((([`Batch | `CharonBatch] * (string list * Driver_ocaml.batch_output) list), int) Either.either, Location_ocaml.t * Errors.cause) Exception.exceptM
 
 (*
 val ocaml_backend:

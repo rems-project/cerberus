@@ -542,6 +542,6 @@ let liftND get put liftErr (ND m) =
 
 
 
-type nd_status 'a 'err =
+type nd_status 'a 'err 'st =
   | Active of 'a
-  | Killed of kill_reason 'err
+  | Killed of 'st * kill_reason 'err

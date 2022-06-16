@@ -1,1 +1,1 @@
-Undefined behaviour: UB064_modifying_const at ci/0295-global_const_int.undef.c:9:3-9 (cursor: 9:6)
+Undefined {ub: "UB064_modifying_const", stderr: "", loc: "<9:3--9:9>"}

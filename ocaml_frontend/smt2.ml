@@ -51,7 +51,7 @@ let runND exec_mode (type cs) cs_module (m: ('a, Driver.step_kind, 'err, cs, 'st
           prerr "NDkilled";
           flush_all ();
           CS.string_of_solver >>= fun str ->
-          return [(Killed r, str, st')]
+          return [(Killed (st', r), str, st')]
 
       | (NDnd (info, str_ms), st') ->
           (* let xx = Random.int 10000 in

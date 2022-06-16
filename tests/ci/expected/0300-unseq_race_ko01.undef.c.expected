@@ -1,1 +1,1 @@
-Undefined behaviour: UB035_unsequenced_race at ci/0300-unseq_race_ko01.undef.c:5:3-27 (cursor: 5:22)
+Undefined {ub: "UB035_unsequenced_race", stderr: "", loc: "<5:3--5:27>"}

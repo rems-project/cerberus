@@ -21,7 +21,7 @@ function doSkip {
 # 2: result (0 is success)
 function report {
   #If the test should fail
-  if [[ $1 == *.error.c ]]; then
+  if [[ $1 == *.error.c || $1 == *.undef.c ]]; then
     res="1 - $2";
   else
     res=$2;
@@ -56,6 +56,11 @@ if [[ $# == 1 ]]; then
   citests=($(basename $1))
 fi
 
+# Use the provided path to cerberus, otherwise default to the driver backend build
+# CERB="${WITH_CERB:=dune exec cerberus --no-build -- }"
+CERB="${WITH_CERB:=../_build/default/backend/driver/main.exe}"
+export CERB_RUNTIME=../runtime/
+
 # Running ci tests
 for file in "${citests[@]}"
 do
@@ -81,7 +86,7 @@ do
       # removing the last line from stderr (the time stats)
       if [ "$(uname)" == "Linux" ]; then
           sed -i '$ d' tmp/stderr
-      else # otherwise we assume this macOS or BSD
+      else # otherwise we assume this is macOS or BSD
           sed -i '' -e '$ d' tmp/stderr
       fi;
       if ! cmp --silent "tmp/stderr" "ci/expected/$file.expected"; then
@@ -89,7 +94,11 @@ do
       fi
     else
       if ! cmp --silent "tmp/result" "ci/expected/$file.expected"; then
-        ret=1;
+        if [[ $file == *.undef.c ]]; then
+          ret=0;
+        else
+          ret=1;
+        fi
       fi
     fi
   else

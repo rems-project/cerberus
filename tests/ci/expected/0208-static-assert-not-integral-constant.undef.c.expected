@@ -1,1 +1,1 @@
-Undefined behaviour: UB204_illtyped_Static_assert at ci/0208-static-assert-not-integral-constant.undef.c:2:18-28
+Undefined {ub: "UB204_illtyped_Static_assert", stderr: "", loc: "<2:18--2:28>"}

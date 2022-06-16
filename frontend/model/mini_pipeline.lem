@@ -27,7 +27,7 @@ module ND = Nondeterminism
 
 val runND_proxy:
   Driver.driverM Driver.driver_result -> Driver.driver_state ->
-  list (ND.nd_status Driver.driver_result Driver.driver_error * list string * Driver.driver_state)
+  list (ND.nd_status Driver.driver_result Driver.driver_error Driver.driver_state * list string * Driver.driver_state)
 
 
 declare ocaml target_rep function runND_proxy = `Smt2.runND Exhaustive Impl_mem.cs_module`
@@ -147,9 +147,9 @@ let evalConstantExpressionAux loc (*TODO*)(ailnames, stdlib_fun_map, impl) sigm 
         match execs with
           | [(ND.Active dres, _, _ )] ->
               Eff.return dres.Driver.dres_core_value
-          | [(ND.Killed (ND.Undef ub_loc [ub]), _, _)] ->
+          | [(ND.Killed _ (ND.Undef ub_loc [ub]), _, _)] ->
               Eff.fail (ub_loc, Errors.DESUGAR (Errors.Desugar_UndefinedBehaviour ub))
-          | [(ND.Killed (ND.Error loc "§6.6#4 failed"), _, _)] ->
+          | [(ND.Killed _ (ND.Error loc "§6.6#4 failed"), _, _)] ->
               Eff.fail (loc, Errors.DESUGAR (Errors.Desugar_ConstraintViolation Constraint.IntegerConstantOutRange))
           | _ ->
               error "TODO error: the driver found less/more than one active execution"

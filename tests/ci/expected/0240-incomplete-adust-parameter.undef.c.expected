@@ -1,1 +1,1 @@
-Undefined behaviour: UB086_incomplete_adjusted_parameter at ci/0240-incomplete-adust-parameter.undef.c:1:20-21
+Undefined {ub: "UB086_incomplete_adjusted_parameter", stderr: "", loc: "<1:20--1:21>"}

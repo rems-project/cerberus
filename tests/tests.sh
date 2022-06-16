@@ -111,10 +111,10 @@ citests=(
   0127-function-pointer.c
   0128-function-pointer-void-cast.c
   0129-function-pointer-wrong-args.undef.c
-  0201-main-return-type.error.c
-  0202-main-not-function.error.c
-  0203-main-params1.error.c
-  0204-main-params2.error.c
+  0201-main-return-type.undef.c
+  0202-main-not-function.undef.c
+  0203-main-params1.undef.c
+  0204-main-params2.undef.c
   0205-illegal-storage-class.error.c
   0206-no-linkage-block-incomplete.undef.c
   0207-incomplete-internal-linkage.undef.c

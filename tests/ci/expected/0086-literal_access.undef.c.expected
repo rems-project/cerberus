@@ -1,1 +1,1 @@
-Undefined behaviour: UB033_modifying_string_literal at ci/0086-literal_access.undef.c:7:3-13 (cursor: 7:8)
+Undefined {ub: "UB033_modifying_string_literal", stderr: "", loc: "<7:3--7:13>"}
