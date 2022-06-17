@@ -22,3 +22,7 @@ config.json
 webcerb.symbolic
 webcerb.concrete
 .vscode/settings.json
+
+a.out
+/tests/csmith/**/LOG
+/tests/csmith/**/LOG.old

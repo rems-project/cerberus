@@ -212,3 +212,10 @@ let escaped_char c =
 let encode_character_constant n =
   (* TODO: fixing the encoding to ASCII for now *)
   Char.chr (Nat_big_num.to_int n land 0xff)
+
+(* formats a float for a given precision (used by formatted.lem) *)
+let format_string_of_float prec f =
+  (* TODO: maybe best to reimplement this ourselves at some point
+     insted of using OCaml's printf *)
+  let fmt = Scanf.format_from_string ("%." ^ string_of_int prec ^ "f") "%f" in
+  Printf.sprintf fmt f

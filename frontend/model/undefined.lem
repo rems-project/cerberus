@@ -534,7 +534,7 @@ type undefined_behaviour =
   (* A conversion specification for one of the formatted input/output functions uses a length
      modifier with a conversion specifier other than those described (7.21.6.1, 7.21.6.2, 7.29.2.1,
      7.29.2.2). *)
-  | UB158
+  | UB158_invalid_length_modifier
   (* An s conversion specifier is encountered by one of the formatted output functions, and the
      argument is missing the null terminator (unless a precision is specified that does not require
      null termination) (7.21.6.1, 7.29.2.1). *)
@@ -954,7 +954,7 @@ let ub_str_bimap =
     ; (UB155, "UB155")
     ; (UB156, "UB156")
     ; (UB157, "UB157")
-    ; (UB158, "UB158")
+    ; (UB158_invalid_length_modifier, "UB158_invalid_length_modifier")
     ; (UB159, "UB159")
     ; (UB160, "UB160")
     ; (UB161, "UB161")

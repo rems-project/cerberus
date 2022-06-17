@@ -680,3 +680,32 @@ let is_compatible_with_ptrdiff_t ity =
   (* val is_signed_ity: Ctype.integerType -> bool
 val sizeof_ity: Ctype.integerType -> maybe nat *)
 
+let is_signed_or_unsigned_aux ibty =
+  fun (Ctype _ ty_) ->
+    match ty_ with
+      | Basic (Integer Char) ->
+          error "TODO: Implementation.is_signed_or_unsigned Char" (* ibty = Ichar *)
+      | Basic (Integer Bool) ->
+          error "TODO: Implementation.is_signed_or_unsigned Bool" 
+      | Basic (Integer (Signed ibty')) ->
+          ibty' = ibty
+      | Basic (Integer (Unsigned ibty')) ->
+          ibty' = ibty
+      | Basic (Integer (Enum tag_sym)) ->
+          (* this should not be possible*)
+          error "Implementation.is_signed_or_unsigned_aux: Enum"
+      | Basic (Integer Wchar_t) ->
+          error "TODO: Implementation.is_signed_or_unsigned Wchar_t" 
+      | Basic (Integer Wint_t) ->
+          error "TODO: Implementation.is_signed_or_unsigned Wint_t" 
+      | Basic (Integer Size_t) ->
+          is_compatible_with_size_t (Unsigned ibty)
+      | Basic (Integer Ptrdiff_t) ->
+          is_compatible_with_ptrdiff_t (Signed ibty)
+      | _ ->
+          false
+    end
+
+val is_signed_or_unsigned: integerBaseType -> ctype -> bool
+let is_signed_or_unsigned ibty =
+  fun ty -> is_signed_or_unsigned_aux ibty (normalise_enum ty)

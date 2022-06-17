@@ -218,6 +218,8 @@ let justify p_opt cspec fs fw str =
   (* see (§7.21.6.1#6 flag 0) *)
   let j = if elem cspec [CS_di; CS_o; CS_u; CS_x; CS_X] then
             if fs.flag_zero && not (fs.flag_minus) && isNothing p_opt then #'0' else #' '
+          else if elem cspec [CS_f] then
+            if fs.flag_zero && not (fs.flag_minus) then #'0' else #' '
           else
             #' ' in
   if fs.flag_minus then
@@ -371,6 +373,9 @@ let load_character_array elem_ty ptrval prec_n_opt =
   load_character_array_aux elem_ty (Mem.array_shift_ptrval ptrval elem_ty (Mem.integer_ival 0)) prec_n_opt []
 
 
+val format_string_of_float: nat -> Float.float -> string
+declare ocaml target_rep function format_string_of_float = `Decode_ocaml.format_string_of_float`
+
 let is_illtyped_conversion expected_ty arg_ty =
   let arg_ty' = Implementation.normalise_enum arg_ty in
   if expected_ty = arg_ty' then
@@ -399,20 +404,21 @@ let convert loc eval_conv prec_opt lm_opt cspec args =
     | Nothing ->
         1
   end in
-  let aux expected_ty_opt _conv_ty_opt cont =
+  let aux expected_pred_opt _conv_ty_opt cont_int cont_floating =
     (* TODO: wip *)
     match args with
       | [] ->
           Mem.return $
             Right (U.undef loc [U.UB153a_insufficient_arguments_for_format])
       | (arg_ty, arg_ptr) :: args' ->
-          let (is_illtyped, conv_ty_opt) = match expected_ty_opt with
-            | Just expected_ty ->
-                (* let () = Debug.print_debug 1 [] (fun () -> "expected_ty= " ^ Pp.stringFromCore_ctype expected_ty) in
-                let () = Debug.print_debug 1 [] (fun () -> "arg_ty= " ^ Pp.stringFromCore_ctype arg_ty) in
-                let () = Debug.print_debug 1 [] (fun () -> "arg_ty'= " ^ Pp.stringFromCore_ctype (Implementation.normalise_enum arg_ty)) in *)
+          let (is_illtyped, conv_ty_opt) = match expected_pred_opt with
+            | Just expected_pred ->
+                (* let () = Debug.print_debug 0 [] (fun () -> "expected_ty= " ^ Pp.stringFromCore_ctype expected_ty) in *)
+                (* let () = Debug.print_debug 0 [] (fun () -> "arg_ty= " ^ Pp.stringFromCore_ctype arg_ty) in
+                let () = Debug.print_debug 0 [] (fun () -> "arg_ty'= " ^ Pp.stringFromCore_ctype (Implementation.normalise_enum arg_ty)) in *)
                 (* (expected_ty <> Implementation.normalise_enum arg_ty, _conv_ty_opt) *)
-                (is_illtyped_conversion expected_ty arg_ty, _conv_ty_opt)
+                (* (is_illtyped_conversion expected_ty arg_ty, _conv_ty_opt) *)
+                (not (expected_pred (Implementation.normalise_enum arg_ty)), _conv_ty_opt)
             | Nothing ->
                 (false, _conv_ty_opt)
           end in
@@ -436,7 +442,7 @@ let convert loc eval_conv prec_opt lm_opt cspec args =
                                 if prec = 0 && n = 0 then
                                   ([], args')
                                 else
-                                  (cont n, args')
+                                  (cont_int n, args')
                               ))
                           | Nothing ->
                               Mem.return $ Right (U.return (
@@ -464,7 +470,7 @@ let convert loc eval_conv prec_opt lm_opt cspec args =
                                 if prec = 0 && n = 0 then
                                   ([], args')
                                 else
-                                  (cont n, args')
+                                  (cont_int n, args')
                               ))
                           | Nothing ->
                               let () = Debug.warn [Debug.DB_core_dynamics] (fun () -> "printf() found an abstract integer value") in
@@ -474,89 +480,107 @@ let convert loc eval_conv prec_opt lm_opt cspec args =
                         Mem.return $ Right (U.return (
                           Mem.case_fval fval
                             (fun () -> [#'U'; #'N'; #'S'; #'P'; #'E'; #'C'])
-                            (fun x -> String.toCharList (Float.string_of_float x))
+                            cont_floating
+                            (* (fun x -> cont_floating (String.toCharList (Float.string_of_float x))) *)
                         , args'))
                     | _ ->
                         error "Formatted.aux should only be called on a loaded(arimetic value)"
                   end
             end
     end in
-  
+  let wrap_is_compatible pred = function
+    | Ctype.Ctype _ (Ctype.Basic (Ctype.Integer ity)) ->
+        pred ity
+    | _ ->
+        false
+  end in
+  let mk_diouxX_expected_and_conv is_signed =
+    let (hh_ty, h_ty, default_ty) =
+      if is_signed then
+        (Ctype.signed_char, Ctype.signed_short, Ctype.signed_int)
+      else
+        (Ctype.unsigned_char, Ctype.unsigned_short, Ctype.unsigned_int) in
+    match lm_opt with
+      | Just LM_hh ->
+          (Nothing, Just hh_ty)
+      | Just LM_h ->
+          (Nothing, Just h_ty)
+      | Just LM_l ->
+          (Just (Implementation.is_signed_or_unsigned Ctype.Long), Nothing)
+      | Just LM_ll ->
+          (Just (Implementation.is_signed_or_unsigned Ctype.LongLong), Nothing)
+      | Just LM_j ->
+          (Just (Implementation.is_signed_or_unsigned Ctype.Intmax_t), Nothing)
+      | Just LM_z ->
+          (Just (wrap_is_compatible Implementation.is_compatible_with_size_t), Nothing)
+      | Just LM_t ->
+          (Just (wrap_is_compatible Implementation.is_compatible_with_ptrdiff_t), Nothing)
+      | Nothing ->
+          (Just (fun z -> z = default_ty), Nothing)
+    end in
   match cspec with
     | CS_di ->
-        let (expected_ty_opt, conv_ty_opt) = match lm_opt with
-          | Just LM_hh -> (Nothing                   , Just Ctype.signed_char )
-          | Just LM_h  -> (Nothing                   , Just Ctype.signed_short)
-          | Just LM_l  -> (Just Ctype.signed_long      , Nothing              )
-          | Just LM_ll -> (Just Ctype.signed_long_long , Nothing              )
-          | Just LM_j  -> (Just Ctype.intmax_t         , Nothing              )
-          | Just LM_z  -> (Just Ctype.size_t           , Nothing              ) (* TODO: should be "the corresponding signed integer type" *)
-          | Just LM_t  -> (Just Ctype.ptrdiff_t        , Nothing              )
-          | Nothing    -> (Just Ctype.signed_int       , Nothing              )
-        end in
+        let (expected_pred_opt, conv_ty_opt) = mk_diouxX_expected_and_conv true in
         (* see (§7.21.6.1#8 d,i) *)
-        aux expected_ty_opt conv_ty_opt (fun n ->
+        aux expected_pred_opt conv_ty_opt (fun n ->
           let str = showNonNegativeWithBasis false 10 (naturalFromInteger $ abs n) in
           (if n < 0 then (fun z -> #'-' :: z) else id) $ replicate (prec - length str) #'0' ++ str
-        )
+        ) (fun _ -> [])
     | CS_o ->
         error "WIP: Formatted.convert, CS_o"
     | CS_u ->
-        let (expected_ty_opt, conv_ty_opt) = match lm_opt with
-          | Just LM_hh -> (Nothing                     , Just Ctype.unsigned_char )
-          | Just LM_h  -> (Nothing                     , Just Ctype.unsigned_short)
-          | Just LM_l  -> (Just Ctype.unsigned_long      , Nothing                )
-          | Just LM_ll -> (Just Ctype.unsigned_long_long , Nothing                )
-          | Just LM_j  -> (Just Ctype.uintmax_t          , Nothing                )
-          | Just LM_z  -> (Just Ctype.size_t             , Nothing                )
-          | Just LM_t  -> (Just Ctype.ptrdiff_t          , Nothing                ) (* TODO: should be "the corresponding unsigned integer type" *)
-          | Nothing    -> (Just Ctype.unsigned_int       , Nothing                )
-        end in
+        let (expected_pred_opt, conv_ty_opt) = mk_diouxX_expected_and_conv false in
         (* see (§7.21.6.1#8 o,u,x,X) *)
-        aux expected_ty_opt conv_ty_opt (fun n ->
+        aux expected_pred_opt conv_ty_opt (fun n ->
           (* TODO: conversion (n is unsigned int here) *)
           let str = showNonNegativeWithBasis false 10 (naturalFromInteger n) in
           replicate (prec - length str) #'0' ++ str
-        )
+        ) (fun _ -> [])
     | CS_x ->
-        let (expected_ty_opt, conv_ty_opt) = match lm_opt with
-          | Just LM_hh -> (Nothing                     , Just Ctype.unsigned_char )
-          | Just LM_h  -> (Nothing                     , Just Ctype.unsigned_short)
-          | Just LM_l  -> (Just Ctype.unsigned_long      , Nothing                )
-          | Just LM_ll -> (Just Ctype.unsigned_long_long , Nothing                )
-          | Just LM_j  -> (Just Ctype.uintmax_t          , Nothing                )
-          | Just LM_z  -> (Just Ctype.size_t             , Nothing                )
-          | Just LM_t  -> (Just Ctype.ptrdiff_t          , Nothing                ) (* TODO: should be "the corresponding unsigned integer type" *)
-          | Nothing    -> (Just Ctype.unsigned_int       , Nothing                )
-        end in
+        let (expected_pred_opt, conv_ty_opt) = mk_diouxX_expected_and_conv false in
         (* see (§7.21.6.1#8 o,u,x,X) *)
-        aux expected_ty_opt conv_ty_opt (fun n ->
+        aux expected_pred_opt conv_ty_opt (fun n  ->
           (* TODO: conversion (n is unsigned int here) *)
           let str = showNonNegativeWithBasis false 16 (naturalFromInteger n) in
           replicate (prec - length str) #'0' ++ str
-        )
+        ) (fun _ -> [])
     | CS_X ->
-        let (expected_ty_opt, conv_ty_opt) = match lm_opt with
-          | Just LM_hh -> (Nothing                     , Just Ctype.unsigned_char )
-          | Just LM_h  -> (Nothing                     , Just Ctype.unsigned_short)
-          | Just LM_l  -> (Just Ctype.unsigned_long      , Nothing                )
-          | Just LM_ll -> (Just Ctype.unsigned_long_long , Nothing                )
-          | Just LM_j  -> (Just Ctype.uintmax_t          , Nothing                )
-          | Just LM_z  -> (Just Ctype.size_t             , Nothing                )
-          | Just LM_t  -> (Just Ctype.ptrdiff_t          , Nothing                ) (* TODO: should be "the corresponding unsigned integer type" *)
-          | Nothing    -> (Just Ctype.unsigned_int       , Nothing                )
-        end in
+        let (expected_pred_opt, conv_ty_opt) = mk_diouxX_expected_and_conv false in
         (* see (§7.21.6.1#8 o,u,x,X) *)
-        aux expected_ty_opt conv_ty_opt (fun n ->
+        aux expected_pred_opt conv_ty_opt (fun n ->
           (* TODO: conversion (n is unsigned int here) *)
           let str = showNonNegativeWithBasis true 16 (naturalFromInteger n) in
           replicate (prec - length str) #'0' ++ str
-        )
+        ) (fun _ -> [])
     | CS_f ->
-        (* TODO: check *)
-        let (expected_ty_opt, conv_ty_opt) =
-          (Just (Ctype.Ctype [] (Ctype.Basic (Ctype.Floating (Ctype.RealFloating Ctype.Double)))), Nothing) in
-        aux expected_ty_opt conv_ty_opt (fun _ -> []) (* TODO: ahem *)
+        let prec =
+          match prec_opt with
+            | Just (P_num z) ->
+              z
+            | Just (P_asterisk) ->
+                error "TODO: Formatted.convert, * prec" (* TODO *)
+            | Nothing ->
+                (* STD §7.21.6.1#8 *)
+                6
+          end in
+        let do_output =
+          (* TODO: check *)
+          let (expected_ty_opt, conv_ty_opt) =
+          ( Just (fun z -> z = Ctype.Ctype [] (Ctype.Basic (Ctype.Floating (Ctype.RealFloating Ctype.Double))))
+          , Nothing ) in
+          aux expected_ty_opt conv_ty_opt (fun _ -> []) (fun xs ->
+            String.toCharList (format_string_of_float prec xs)
+          ) in
+        match lm_opt with
+          | Just lm ->
+              (* NOTE: that LM_l is allowed (with no effect) *)
+              if List.elem lm [LM_hh; LM_h; LM_ll; LM_j; LM_z; LM_t] then
+                Mem.return (Right (U.Undef loc [U.UB158_invalid_length_modifier]))
+              else
+                do_output
+          | Nothing ->
+              do_output
+        end
     | CS_c ->
         (* see (§7.21.6.1#8 c) *)
         match lm_opt with
@@ -565,9 +589,9 @@ let convert loc eval_conv prec_opt lm_opt cspec args =
           | Just _ ->
               Mem.return (Right (U.undef (Loc.other "printf() CS_c") [U.DUMMY "TODO_find_quote_printf_CS_c"]))
           | Nothing ->
-              aux (Just Ctype.signed_int) (Just Ctype.unsigned_char) (fun n ->
+              aux (Just (fun z -> z = Ctype.signed_int)) (Just Ctype.unsigned_char) (fun n ->
                 [Decode.encode_character_constant n]
-              )
+              ) (fun _ -> [])
         end
     | CS_s ->
         (* TODO: I don't like it ==> should rewrite it *)
