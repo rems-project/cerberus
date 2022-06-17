@@ -116,7 +116,7 @@ type message =
   | Write_value_unrepresentable of {ct: Sctypes.t; location: IT.t; value: IT.t; ctxt : Context.t; model : Solver.model_with_q }
   | Write_value_bad of {ct: Sctypes.t; location: IT.t; value: IT.t; ctxt : Context.t; model : Solver.model_with_q }
   | Int_unrepresentable of {value : IT.t; ict : Sctypes.t; ctxt : Context.t; model : Solver.model_with_q}
-  | Unsat_constraint of {constr : LC.t; info : info; ctxt : Context.t; model : Solver.model_with_q}
+  | Unsat_constraint of {constr : LC.t; info : info; ctxt : Context.t; model : Solver.model_with_q; trace : Trace.t}
   | Unconstrained_logical_variable of Sym.t * string option
   | Array_as_value of Sym.t * string option
   | Logical_variable_not_good_for_unification of Sym.t * string option
@@ -225,7 +225,8 @@ let pp_message te =
      let explanation = Explain.explanation ctxt relevant in
      let descr = missing_or_bad_request_description oinfo orequest explanation in
      let state = Explain.state ctxt explanation model orequest in
-     { short; descr = descr; state = Some state; trace = None }
+     let trace_doc = Trace.format_trace (fst model) trace in
+     { short; descr = descr; state = Some state; trace = Some trace_doc }
   | Merging_multiple_arrays {orequest; situation; oinfo; ctxt; model} ->
      let short = 
        !^"Cannot satisfy request for resource" ^^^ for_situation situation ^^ dot ^^^
@@ -416,7 +417,7 @@ let pp_message te =
      let descr = !^"Value" ^^ colon ^^^ value in
      let state = Explain.state ctxt explanation model None in
      { short; descr = Some descr; state = Some state; trace = None }
-  | Unsat_constraint {constr; info; ctxt; model} ->
+  | Unsat_constraint {constr; info; ctxt; model; trace} ->
      let short = !^"Unsatisfied constraint" in
      let explanation = Explain.explanation ctxt (LC.free_vars constr) in
      let _constr = LC.pp (LC.subst explanation.substitution constr) in
@@ -428,7 +429,8 @@ let pp_message te =
        | None -> !^"Constraint from " ^^^ parens (!^head)
        | Some descr -> !^"Constraint from" ^^^ !^descr ^^^ parens (!^head)
      in
-     { short; descr = Some descr; state = Some state; trace = None }
+     let trace_doc = Trace.format_trace (fst model) trace in
+     { short; descr = Some descr; state = Some state; trace = Some trace_doc }
   | Unconstrained_logical_variable (name, odescr) ->
      let short = !^"Problematic specification" in
      let descr = match odescr with
@@ -506,6 +508,13 @@ let output_state state_error_file state =
   let () = Printf.fprintf channel "%s" (Report.print_report state) in
   close_out channel
 
+let output_trace trace =
+  let fname = Filename.temp_file "trace_" ".txt" in
+  let channel = open_out fname in
+  print channel trace;
+  close_out channel;
+  !^ "trace in" ^^^ !^ fname
+
 (* stealing some logic from pp_errors *)
 let report ?state_file:to_ {loc; msg} =
   let report = pp_message msg in
@@ -513,10 +522,15 @@ let report ?state_file:to_ {loc; msg} =
     | Some state ->
        let state_error_file = match to_ with
          | Some file -> file
-         | None -> Filename.temp_file "" ".html"
+         | None -> Filename.temp_file "state_" ".html"
        in
        output_state state_error_file state;
-       Some (!^"Consider the state in" ^^^ !^state_error_file)
+       let msg = !^"Consider the state in" ^^^ !^state_error_file in
+       let msg2 = match report.trace with
+         | None -> msg
+         | Some tr -> msg ^^^ ampersand ^^^ (output_trace tr)
+       in
+       Some msg2
     | None ->
        None
   in

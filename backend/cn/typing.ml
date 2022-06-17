@@ -23,7 +23,7 @@ type 'e failure = Context.t -> 'e
 let run (c : Context.t) (m : ('a, 'e) t) : ('a, 'e) Resultat.t = 
   let solver = Solver.make c.global.struct_decls in
   let sym_eqs = SymMap.empty in
-  LCSet.iter (Solver.add_assumption solver c.global) c.constraints;
+  LCSet.iter (Solver.add_assumption solver c.global) (fst c.constraints);
   let s = { 
       typing_context = c; 
       solver; 
@@ -129,25 +129,29 @@ let set_global global : (unit, 'e) m =
 
 let all_constraints () = 
   let@ s = get () in
-  return s.constraints
+  return (fst s.constraints)
 
 let simp_constraints () =
   fun s ->
   Ok ((s.sym_eqs, 
        s.equalities,
-       s.typing_context.constraints), s)
+       fst s.typing_context.constraints), s)
 
-let all_resources () = 
+let all_resources_tagged () =
   let@ s = get () in
   return s.resources
 
+let all_resources () =
+  let@ s = get () in
+  return (Context.get_rs s)
+
 let make_provable loc =
   fun {typing_context = s; solver; trace_length; _} -> 
-  let pointer_facts = Resources.pointer_facts s.resources in
+  let pointer_facts = Resources.pointer_facts (Context.get_rs s) in
   let f lc = 
     Solver.provable ~loc ~solver ~global:s.global 
       ~trace_length
-      ~assumptions:s.constraints
+      ~assumptions:(fst s.constraints)
       ~pointer_facts lc 
   in
   f
@@ -286,28 +290,30 @@ type changed =
 let map_and_fold_resources loc (f : RE.t -> 'acc -> changed * 'acc) (acc : 'acc) = 
   fun s ->
   let provable = make_provable loc s in
-  let resources, acc =
-    List.fold_right (fun re (resources, acc) ->
+  let (resources, ix) = s.typing_context.resources in
+  let resources, ix, acc =
+    List.fold_right (fun (re, i) (resources, ix, acc) ->
         let (changed, acc) = f re acc in
         match changed with
         | Deleted ->
-           (resources, acc)
+           (resources, ix, acc)
         | Unchanged -> 
-           (re :: resources, acc)
+           ((re, i) :: resources, ix, acc)
         | Unfolded res ->
-           (res @ resources, acc)
+           let tagged = List.mapi (fun j re -> (re, ix + j)) res in
+           (tagged @ resources, ix + List.length res, acc)
         | Changed re ->
            match re with
            | (Q {q; permission; _}, _) ->
               begin match provable (LC.forall_ (q, Integer) (IT.not_ permission)) with
-              | `True -> (resources, acc)
-              | `False -> (re :: resources, acc)
+              | `True -> (resources, ix, acc)
+              | `False -> ((re, ix) :: resources, ix + 1, acc)
               end
            | _ -> 
-              (re :: resources, acc)
-      ) s.typing_context.resources ([], acc)
+              ((re, ix) :: resources, ix + 1, acc)
+      ) resources ([], ix, acc)
   in
-  Ok (acc, {s with typing_context = {s.typing_context with resources}})
+  Ok (acc, {s with typing_context = {s.typing_context with resources = (resources, ix)}})
 
 let get_loc_trace () =
   let@ c = get () in
@@ -324,19 +330,19 @@ let in_loc_trace tr f =
   let@ _ = set_loc_trace prev_tr in
   return x
 
-let with_trace_step1 do_add m =
-  let@ ctxt1 = get () in
-  let@ x = m () in
+let finish_trace_step do_add ctxt1 () =
   let@ ctxt2 = get () in
   let@ tr = get_step_trace () in
   let@ () = set_step_trace (do_add (ctxt1, ctxt2) tr) in
-  return x
+  return ()
 
-let with_trace_step pat expr m =
-  with_trace_step1 (Trace.add_trace_step pat expr) m
+let begin_trace_of_step pat expr =
+  let@ ctxt1 = get () in
+  return (finish_trace_step (Trace.add_trace_step pat expr) ctxt1)
 
-let with_pure_trace_step pat pexpr m =
-  with_trace_step1 (Trace.add_pure_trace_step pat pexpr) m
+let begin_trace_of_pure_step pat pexpr =
+  let@ ctxt1 = get () in
+  return (finish_trace_step (Trace.add_pure_trace_step pat pexpr) ctxt1)
 
 let get_resource_predicate_def loc id =
   let@ global = get_global () in

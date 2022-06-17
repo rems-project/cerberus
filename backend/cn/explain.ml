@@ -205,7 +205,7 @@ let veclasses ctxt =
               (VClassSet.remove c g))
       | None -> 
          g
-    ) ctxt.constraints with_all
+    ) (fst ctxt.constraints) with_all
 
 
 let explanation ctxt relevant =
@@ -226,7 +226,7 @@ let explanation ctxt relevant =
   let relevant = 
     List.fold_right (fun re acc ->
         SymSet.union (RE.free_vars re) acc
-      ) ctxt.resources relevant
+      ) (get_rs ctxt) relevant
   in
 
   (* add 'Pointee' edges between nodes whenever the resources indicate that *)
@@ -254,7 +254,7 @@ let explanation ctxt relevant =
            end
         | _ -> 
            graph
-      ) ctxt.resources
+      ) (get_rs ctxt)
       graph
   in
 
@@ -455,7 +455,7 @@ let state ctxt {substitution; vclasses; relevant} (model_with_q : Solver.model_w
         let vars = [vars'] @ vars in
         let reported = SymSet.union reported' reported in
         (entry' :: memory, vars, reported)
-      ) ctxt.resources ([], [], SymSet.empty)
+      ) (get_rs ctxt) ([], [], SymSet.empty)
   in
   let report vclass = 
     let syms = SymSet.union vclass.logical_vars vclass.computational_vars in
@@ -516,7 +516,7 @@ let state ctxt {substitution; vclasses; relevant} (model_with_q : Solver.model_w
     Context.LCSet.fold (fun lc acc ->
         let lc = LC.subst substitution lc in
         if trivial lc then acc else LC.pp lc :: acc
-      ) ctxt.constraints []
+      ) (fst ctxt.constraints) []
   in
 
   let req_cmp = Option.bind orequest (Spans.spans_compare_for_pp model ctxt.global) in
@@ -527,7 +527,7 @@ let state ctxt {substitution; vclasses; relevant} (model_with_q : Solver.model_w
 
   begin match orequest with
     | None -> ()
-    | Some req -> Spans.diag_req ctxt.resources req model ctxt.global
+    | Some req -> Spans.diag_req (get_rs ctxt) req model ctxt.global
   end;
 
   let requested = match orequest with
@@ -536,8 +536,8 @@ let state ctxt {substitution; vclasses; relevant} (model_with_q : Solver.model_w
   in
 
   let (same_res, diff_res) = match orequest with
-    | None -> ([], ctxt.resources)
-    | Some req -> List.partition (fun r -> RET.same_predicate_name req (RE.request r)) ctxt.resources
+    | None -> ([], get_rs ctxt)
+    | Some req -> List.partition (fun r -> RET.same_predicate_name req (RE.request r)) (get_rs ctxt)
   in
   let same = match (same_res, orequest) with
     | ([], Some _) -> [{res = !^""; res_span = !^"(no same-type resources)"}]

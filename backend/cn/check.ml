@@ -43,28 +43,6 @@ open List
 
 
 
-(*** mucore pp setup **********************************************************)
-
-module PP_TYPS = struct
-  module T = NewMu.SR_Types
-  let pp_bt = BT.pp 
-  let pp_ct ct = Sctypes.pp ct
-  let pp_ft = AT.pp RT.pp
-  let pp_gt = pp_ct
-  let pp_lt = AT.pp False.pp
-  let pp_ut _ = Pp.string "todo: implement union type printer"
-  let pp_st _ = Pp.string "todo: implement struct type printer"
-end
-
-module PP_MUCORE = CF.Pp_mucore.Make(CF.Pp_mucore.Basic)(PP_TYPS)
-(* let pp_budget () = Some !debug_level *)
-let pp_budget () = Some (!print_level*5)
-let pp_pexpr e = PP_MUCORE.pp_pexpr e
-let pp_tpexpr e = PP_MUCORE.pp_tpexpr (pp_budget ()) e
-let pp_expr e = PP_MUCORE.pp_expr e
-let pp_texpr e = PP_MUCORE.pp_texpr (pp_budget ()) e
-
-
 open Typing
 open Effectful.Make(Typing)
 
@@ -1288,7 +1266,7 @@ end = struct
 
     (* record the resources now, so we can later re-construct the
        memory state "before" running spine *)
-    let@ original_resources = all_resources () in
+    let@ original_resources = all_resources_tagged () in
 
     let@ () = 
       let@ trace_length = get_trace_length () in
@@ -1338,9 +1316,9 @@ end = struct
            | `True -> check (c :: cs) ftyp
            | `False ->
               let@ model = model () in
-              fail (fun ctxt ->
+              fail_with_trace (fun trace -> fun ctxt ->
                   let ctxt = { ctxt with resources = original_resources } in
-                  {loc; msg = Unsat_constraint {constr = c; info; ctxt; model}}
+                  {loc; msg = Unsat_constraint {constr = c; info; ctxt; model; trace}}
                 )
            end
         | I rt ->
@@ -1675,7 +1653,7 @@ let infer_pexpr (pe : 'bty mu_pexpr) : (RT.t * per_path, type_error) m =
   let (M_Pexpr (loc, _annots, _bty, pe_)) = pe in
   let@ () = print_with_ctxt (fun ctxt ->
       debug 3 (lazy (action "inferring pure expression"));
-      debug 3 (lazy (item "expr" (pp_pexpr pe)));
+      debug 3 (lazy (item "expr" (NewMu.pp_pexpr pe)));
       debug 3 (lazy (item "ctxt" (Context.pp ctxt)))
     )
   in
@@ -1826,7 +1804,7 @@ let rec check_tpexpr (e : 'bty mu_tpexpr) (typ : RT.t) : (per_path, type_error) 
   let (M_TPexpr (loc, _annots, _, e_)) = e in
   let@ () = print_with_ctxt (fun ctxt ->
       debug 3 (lazy (action "checking pure expression"));
-      debug 3 (lazy (item "expr" (group (pp_tpexpr e))));
+      debug 3 (lazy (item "expr" (group (NewMu.pp_tpexpr e))));
       debug 3 (lazy (item "type" (RT.pp typ)));
       debug 3 (lazy (item "ctxt" (Context.pp ctxt)));
     )
@@ -1858,12 +1836,13 @@ let rec check_tpexpr (e : 'bty mu_tpexpr) (typ : RT.t) : (per_path, type_error) 
        ) pats_es in
      return (List.concat per_paths)
   | M_PElet (p, e1, e2) ->
-     let@ (rt, per_path1) = with_pure_trace_step (Some p) e1
-        (fun () -> infer_pexpr e1) in
+     let@ fin = begin_trace_of_pure_step (Some p) e1 in
+     let@ (rt, per_path1) = infer_pexpr e1 in
      let@ () = match p with
        | M_Symbol sym -> bind (Some (Loc (loc_of_pexpr e1))) sym rt
        | M_Pat pat -> pattern_match_rt (Loc (loc_of_pexpr e1)) pat rt
      in
+     let@ () = fin () in
      let@ per_path2 = check_tpexpr e2 typ in
      return (per_path1 @ per_path2)
   | M_PEdone asym ->
@@ -1935,7 +1914,7 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t * per_path, type_error) m =
   let (M_Expr (loc, _annots, e_)) = e in
   let@ () = print_with_ctxt (fun ctxt ->
        debug 3 (lazy (action "inferring expression"));
-       debug 3 (lazy (item "expr" (group (pp_expr e))));
+       debug 3 (lazy (item "expr" (group (NewMu.pp_expr e))));
        debug 3 (lazy (item "ctxt" (Context.pp ctxt)));
     )
   in
@@ -2381,7 +2360,7 @@ let rec check_texpr labels (e : 'bty mu_texpr) (typ : RT.t orFalse)
   let (M_TExpr (loc, _annots, e_)) = e in
   let@ () = print_with_ctxt (fun ctxt ->
       debug 3 (lazy (action "checking expression"));
-      debug 3 (lazy (item "expr" (group (pp_texpr e))));
+      debug 3 (lazy (item "expr" (group (NewMu.pp_texpr e))));
       debug 3 (lazy (item "type" (pp_or_false RT.pp typ)));
       debug 3 (lazy (item "ctxt" (Context.pp ctxt)));
     )
@@ -2421,27 +2400,30 @@ let rec check_texpr labels (e : 'bty mu_texpr) (typ : RT.t orFalse)
          ) pats_es in
        return (List.concat per_paths)
     | M_Elet (p, e1, e2) ->
-       let@ (rt, per_path1) = with_pure_trace_step (Some p) e1
-           (fun () -> infer_pexpr e1) in
+       let@ fin = begin_trace_of_pure_step (Some p) e1 in
+       let@ (rt, per_path1) =  infer_pexpr e1 in
        let@ () = match p with 
          | M_Symbol sym -> bind (Some (Loc (loc_of_pexpr e1))) sym rt
          | M_Pat pat -> pattern_match_rt (Loc (loc_of_pexpr e1)) pat rt
        in
+       let@ () = fin () in
        let@ per_path2 = check_texpr labels e2 typ in
        return (per_path1 @ per_path2)
     | M_Ewseq (pat, e1, e2) ->
-       let@ (rt, per_path1) = with_trace_step (Some (Mu.M_Pat pat)) e1
-           (fun () -> infer_expr labels e1) in
+       let@ fin = begin_trace_of_step (Some (Mu.M_Pat pat)) e1 in
+       let@ (rt, per_path1) = infer_expr labels e1 in
        let@ () = pattern_match_rt (Loc (loc_of_expr e1)) pat rt in
+       let@ () = fin () in
        let@ per_path2 = check_texpr labels e2 typ in
        return (per_path1 @ per_path2)
     | M_Esseq (pat, e1, e2) ->
-       let@ (rt, per_path1) = with_trace_step (Some pat) e1
-           (fun () -> infer_expr labels e1) in
+       let@ fin = begin_trace_of_step (Some pat) e1 in
+       let@ (rt, per_path1) = infer_expr labels e1 in
        let@ () = match pat with
          | M_Symbol sym -> bind (Some (Loc (loc_of_expr e1))) sym rt
          | M_Pat pat -> pattern_match_rt (Loc (loc_of_expr e1)) pat rt
        in
+       let@ () = fin () in
        let@ per_path2 = check_texpr labels e2 typ in
        return (per_path1 @ per_path2)
     | M_Edone asym ->

@@ -73,7 +73,7 @@ let print_file ?(remove_path = false) filename file =
      (* CB.Pipeline.run_pp ~remove_path (Some (filename,"mucore.ast")) 
       *   (CF.Pp_mucore_ast.pp_file file); *)
      Pp.print_file (filename ^ ".mucore")
-       (Check.PP_MUCORE.pp_file None file);
+       (NewMu.PP_MUCORE.pp_file None file);
 
 
 module Log : sig 

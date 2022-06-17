@@ -22,6 +22,7 @@ val simp_constraints : unit ->
       * bool Simplify.ITPairMap.t
       * Context.LCSet.t), 'e) m
 val all_resources : unit -> (Resources.t list, 'e) m
+val all_resources_tagged : unit -> ((Resources.t * int) list * int, 'e) m
 val provable : Locations.t -> (LogicalConstraints.t -> [> `True | `False], 'e) m
 val model : unit -> (Solver.model_with_q, 'e) m
 val model_with : Locations.t -> IndexTerms.t -> (Solver.model_with_q option, 'e) m
@@ -40,8 +41,9 @@ val add_rs : Context.where option -> Resources.t list -> (unit, 'e) m
 val get_loc_trace : unit -> (Locations.loc list, 'e) m
 val in_loc_trace : Locations.loc list -> (unit -> ('a, 'e) m) -> ('a, 'e) m
 val get_step_trace : unit -> (Trace.t, 'e) m
-val with_trace_step : Trace.opt_pat -> Trace.expr -> (unit -> ('a, 'e) m) -> ('a, 'e) m
-val with_pure_trace_step : Trace.opt_pat -> Trace.pexpr -> (unit -> ('a, 'e) m) -> ('a, 'e) m
+
+val begin_trace_of_step : Trace.opt_pat -> Trace.expr -> (unit -> (unit, 'e) m, 'e) m
+val begin_trace_of_pure_step : Trace.opt_pat -> Trace.pexpr -> (unit -> (unit, 'e) m, 'e) m
 
 type changed = 
   | Deleted

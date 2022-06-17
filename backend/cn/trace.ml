@@ -4,6 +4,10 @@ module Mucore = CF.Mucore
 module New = NewMu.New
 module SymSet = Set.Make(Sym)
 
+module IntSet = Set.Make(Int)
+
+module IT = IndexTerms
+
 type opt_pat = unit New.mu_sym_or_pattern option
 type expr = unit New.mu_expr
 type pexpr = unit New.mu_pexpr
@@ -30,6 +34,67 @@ let add_trace_step pat expr (ct1, ct2) (tr : t) =
 let add_pure_trace_step pat expr cts tr =
   add_trace_step pat (New.embed_pexpr_expr expr) cts tr
 
+let rec take i xs = match i <= 0, xs with
+  | true, _ -> []
+  | _, [] -> []
+  | _, (x :: xs) -> x :: take (i - 1) xs
 
+let list_new xs ys =
+  (* difference between xs and ys, assuming ys (pre-) extends xs *)
+  let len = List.length ys - List.length xs in
+  take len ys
+
+let ctxt_diff ct1 ct2 =
+  let open Context in
+  let log = list_new ct1.logical ct2.logical in
+  let com = list_new ct1.computational ct2.computational
+    |> List.map (fun (nm, (t, _)) -> (nm, t)) in
+  let con = list_new (snd ct1.constraints) (snd ct2.constraints) in
+  let rs1 = IntSet.of_list (List.map snd (fst ct1.resources)) in
+  let rs2 = IntSet.of_list (List.map snd (fst ct2.resources)) in
+  let rs_del = List.filter (fun (_, i) -> not (IntSet.mem i rs2)) (fst ct1.resources)
+    |> List.map fst in
+  let rs_add = List.filter (fun (_, i) -> not (IntSet.mem i rs1)) (fst ct2.resources)
+    |> List.map fst in
+  (log, com, con, (rs_del, rs_add))
+
+let format_mu (p : opt_pat) expr =
+  let open Pp in
+  let rhs = match expr with
+    | NewMu.New.M_Expr (_, _, NewMu.New.M_Epure e) -> NewMu.pp_pexpr e
+    | _ -> NewMu.pp_expr expr
+  in
+  match p with
+    | None -> rhs
+    | Some (M_Symbol sym) -> Sym.pp sym ^^^ string "<-" ^^^ rhs
+    | Some (M_Pat pat) -> NewMu.PP_MUCORE.pp_pattern pat ^^^ string "<-" ^^^ rhs
+
+let format_var model global (sym, bt) =
+  let open Pp in
+  match Solver.eval global model (IT.sym_ (sym, bt)) with
+  | None -> Sym.pp sym ^^^ !^"=??"
+  | Some v -> Sym.pp sym ^^^ equals ^^^ IT.pp v
+
+let format_mu_step model (s : mu_trace_step) =
+  let open Pp in
+  let (log, com, con, (rs_del, rs_add)) = ctxt_diff s.ct_before s.ct_after in
+  let doc_new nm f = function
+    | [] -> []
+    | syms -> [hang 8 (flow (break 1) ((string nm ^^ colon) :: List.map f syms))]
+  in
+  let global = s.ct_after.global in
+  let deleted (rt, _) = ResourceTypes.pp rt ^^^ !^"|-> X" in
+  let added (rt, oargs) = ResourceTypes.pp rt ^^^ !^"|->" ^^ break 1 ^^ Resources.pp_oargs oargs in
+  let docs = format_mu s.pat s.expr ::
+    doc_new "Logical vars" (format_var model global) log @
+    doc_new "Computational vars" (format_var model global) com @
+    doc_new "Constraints" LogicalConstraints.pp con @
+    List.map added rs_add @ List.map deleted rs_del
+  in
+  hang 4 (flow hardline docs)
+
+let format_trace model (tr : t) = match tr.mu_trace with
+  | [] -> Pp.string "empty trace"
+  | _ -> Pp.flow_map Pp.hardline (format_mu_step model) (List.rev tr.mu_trace)
 
 

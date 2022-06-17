@@ -24,8 +24,8 @@ let pp_where = function
 type t = {
     computational : (Sym.t * (BT.t * Sym.t)) list;
     logical : (Sym.t * LS.t) list;
-    resources : RE.t list;
-    constraints : LCSet.t;
+    resources : (RE.t * int) list * int;
+    constraints : LCSet.t * LC.t list;
     global : Global.t;
     location_trace : Locations.loc list;
     statement_locs : Locations.loc list;
@@ -35,8 +35,8 @@ type t = {
 let empty = {
     computational = [];
     logical = [];
-    resources = [];
-    constraints = LCSet.empty;
+    resources = ([], 0);
+    constraints = (LCSet.empty, []);
     global = Global.empty;
     location_trace = [];
     statement_locs  = [];
@@ -44,8 +44,7 @@ let empty = {
 
 
 
-
-
+let get_rs (ctxt : t) = List.map fst (fst ctxt.resources)
 
 let pp (ctxt : t) = 
   item "computational" 
@@ -57,13 +56,13 @@ let pp (ctxt : t) =
          typ (Sym.pp sym) (LS.pp ls)
        ) ctxt.logical) ^/^
   item "resources" 
-    (Pp.list RE.pp ctxt.resources) ^/^
+    (Pp.list RE.pp (get_rs ctxt)) ^/^
   item "constraints" 
     (Pp.list (fun lc -> 
          if (!print_level >= 11 || Option.is_none (LC.is_sym_lhs_equality lc))
          then LC.pp lc
          else parens !^"..."
-       ) (LCSet.elements ctxt.constraints))
+       ) (LCSet.elements (fst ctxt.constraints)))
 
 
 let bound_a sym ctxt = 
@@ -88,12 +87,16 @@ let add_l lname ls (ctxt : t) =
 let add_ls lvars ctxt = 
   List.fold_left (fun ctxt (s,ls) -> add_l s ls ctxt) ctxt lvars
 
-let add_c c (ctxt : t) = 
-  { ctxt with constraints = LCSet.add c ctxt.constraints }
+let add_c c (ctxt : t) =
+  let (s, cs) = ctxt.constraints in
+  if LCSet.mem c s then ctxt
+  else { ctxt with constraints = (LCSet.add c s, c :: cs) }
 
+let add_r owhere r (ctxt : t) =
+  let (rs, ix) = ctxt.resources in
+  {ctxt with resources = ((r, ix) :: rs, ix + 1)}
 
-let add_r owhere r (ctxt : t) = 
-  {ctxt with resources = r :: ctxt.resources}
+let add_rs owhere r rs ctxt = List.fold_right (add_r owhere) rs ctxt
 
 
 let add_stmt_locs stmts (ctxt : t) =
@@ -114,8 +117,8 @@ let json (ctxt : t) : Yojson.Safe.t =
                 ("sort", LS.json ls)]
       ) ctxt.logical
   in
-  let resources = List.map RE.json ctxt.resources in
-  let constraints = List.map LC.json (LCSet.elements ctxt.constraints) in
+  let resources = List.map RE.json (get_rs ctxt) in
+  let constraints = List.map LC.json (snd ctxt.constraints) in
   let json_record = 
     `Assoc [("computational", `List computational);
             ("logical", `List logical);
@@ -132,5 +135,5 @@ let json (ctxt : t) : Yojson.Safe.t =
 let constraints_not_extended ctxt1 ctxt2 =
     List.compare_lengths ctxt1.logical ctxt2.logical == 0 &&
     List.compare_lengths ctxt1.computational ctxt2.computational == 0 &&
-    LCSet.cardinal ctxt1.constraints == LCSet.cardinal ctxt2.constraints
+    LCSet.cardinal (fst ctxt1.constraints) == LCSet.cardinal (fst ctxt2.constraints)
 
