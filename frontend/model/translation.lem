@@ -2216,6 +2216,8 @@ end
       | A.AilEcall e [] -> (* NOTE: if there are no arguments, we don't need all the temporary object creation stuff *)
           (* STD §6.5.2.2 *)
           let ret_ty = match ctype_of e with
+            | Ctype.Ctype _ (Ctype.Pointer _ (Ctype.Ctype _ (Ctype.FunctionNoParams (_, ret_ty)))) ->
+                ret_ty
             | Ctype.Ctype _ (Ctype.Pointer _ (Ctype.Ctype _ (Ctype.Function (_, ret_ty) params isVariadic))) ->
                 if List.length params = 0 && (not isVariadic) then
                   ret_ty
