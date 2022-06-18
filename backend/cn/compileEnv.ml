@@ -32,7 +32,7 @@ type t = {
   functions: function_sig X.t;
   predicates: predicate_sig X.t;
   resources: resource_def X.t;
-  tagDefs: CF.Core_anormalise.Mu.mu_tag_definitions;
+  tagDefs: CF.Core_to_mucore.Mu.mu_tag_definitions;
 }
 
 let empty tagDefs =

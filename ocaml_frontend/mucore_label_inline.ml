@@ -6,7 +6,7 @@ open Core
 open Annot
 
 open Mucore
-module Mu = Core_anormalise.Mu
+module Mu = Core_to_mucore.Mu
 open Mu
 
 

@@ -10,7 +10,6 @@ module RT=ReturnTypes
 module LRT=LogicalReturnTypes
 module AT = ArgumentTypes
 module LAT = LogicalArgumentTypes
-module CA=CF.Core_anormalise
 module LC=LogicalConstraints
 module StringSet = Set.Make(String)
 module IT = IndexTerms

@@ -2,8 +2,7 @@ module CF=Cerb_frontend
 module CB=Cerb_backend
 open CB.Pipeline
 
-module CA=CF.Core_anormalise
-module CA_ = CA.Make(Locations)
+module CTM = CF.Core_to_mucore.Make(Locations)
 module Milicore = CF.Milicore
 
 let (>>=) = CF.Exception.except_bind
@@ -134,8 +133,8 @@ let frontend astprints filename state_file =
   let core_file = CB.Pipeline.untype_file core_file in
   let () = print_log_file "after_sequentialisation" (CORE core_file) in
 
-  let mi_file = Milicore.core_to_micore__file CA_.update_loc core_file in
-  let mu_file = CA_.normalise_file mi_file in
+  let mi_file = Milicore.core_to_micore__file CTM.update_loc core_file in
+  let mu_file = CTM.normalise_file mi_file in
   print_log_file "after_anf" (MUCORE mu_file);
 
   let mu_file = CF.Mucore_label_inline.ib_file mu_file in

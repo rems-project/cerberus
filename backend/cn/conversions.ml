@@ -105,8 +105,6 @@ let rec bt_of_core_base_type loc cbt =
 
 
 
-module CA = CF.Core_anormalise
-
 let struct_decl loc fields (tag : BT.tag) = 
 
   let member_offset tag member = 
