@@ -4531,7 +4531,7 @@ let desugar_and_register_external_declaration edecl =
               (* Case of a typedef *)
               E.return ()
           | Just (ident_loc, ident_attrs, link, sym, isTentative, (qs, ty), mk_desug_init) ->
-              let do_function return_qs_ty params_opt is_variadic =
+              let do_function fun_qs return_qs_ty params_opt is_variadic =
                 let () =
                   if Annot.no_attributes <> ident_attrs then
                     Debug.print_debug 0 [] (fun () ->
@@ -4539,6 +4539,9 @@ let desugar_and_register_external_declaration edecl =
                     )
                   else
                     () in
+                if qs <> Ctype.no_qualifiers then
+                  E.undef ident_loc Undefined.UB066_qualified_function_specification
+                else
                 E.register_function_declaration ident_loc attrs sym true (
                   return_qs_ty,
                   params_opt,
@@ -4549,9 +4552,9 @@ let desugar_and_register_external_declaration edecl =
               (* NOTE: `desugar_init_declarator' takes care of isAtomic *)
               match ty with
                 | Ctype.Ctype _ (Ctype.Function return_qs_ty params is_variadic) ->
-                    do_function return_qs_ty (Just params) is_variadic
+                    do_function qs return_qs_ty (Just params) is_variadic
                 | Ctype.Ctype _ (Ctype.FunctionNoParams return_qs_ty) ->
-                    do_function return_qs_ty Nothing false
+                    do_function qs return_qs_ty Nothing false
                 | ty ->
                     let dur = determinate_storage_duration link specifs.storage_classes in
                     E.register_external_object_declaration sym
