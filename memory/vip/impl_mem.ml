@@ -161,7 +161,7 @@ let initial_mem_state: mem_state =
   ; bytemap= IntMap.empty
   ; funptrmap= IntMap.empty
   ; next_alloc_id= Z.zero
-  ; last_address= Z.of_int 0xFFFFFFFF
+  ; last_address= Z.of_int 0xFFFFFFFFFFFF
   ; last_used= None }
 
 type 'a memM =
