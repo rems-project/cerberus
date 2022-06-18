@@ -1,4 +1,7 @@
-module N = Nat_big_num
+module N = struct
+  include Nat_big_num
+  let of_float = Z.of_float
+end
 
 open Ctype
 open Memory_model
@@ -1016,7 +1019,7 @@ let fvfromint ival =
   float_of_string (N.to_string (ival_to_int ival))
 
   let ivfromfloat fval =
-    IVint (N.of_int64 (Int64.of_float fval))
+    IVint (N.of_float fval)
 
 
 (* Memory value constructors *)
