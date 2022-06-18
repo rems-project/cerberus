@@ -153,65 +153,88 @@ and retype_value (loc : Loc.t) = function
     let@ vs = ListM.mapM (retype_value loc) vs in
     return (New.M_Vtuple vs)
 
-let retype_pexpr (Old.M_Pexpr (loc, annots,bty,pexpr_)) =
+let rec retype_pexpr (Old.M_Pexpr (loc, annots,bty,pexpr_)) =
   let@ pexpr_ = match pexpr_ with
     | M_PEsym sym -> 
        return (New.M_PEsym sym)
-    | M_PEimpl impl -> 
-       return (New.M_PEimpl impl)
+    (* | M_PEimpl impl ->  *)
+    (*    return (New.M_PEimpl impl) *)
     | M_PEval v -> 
        let@ v = retype_value loc v in
        return (New.M_PEval v)
     | M_PEconstrained cs -> 
+       let@ cs = mapsndM retype_pexpr cs in
        return (New.M_PEconstrained cs)
     | M_PEctor (ctor,asyms) -> 
        let@ ctor = retype_ctor loc ctor in
+       let@ asyms = mapM retype_pexpr asyms in
        return (New.M_PEctor (ctor,asyms))
     | M_CivCOMPL (act, asym) -> 
        let act = map_act (ct_of_ct loc) act in
+       let@ asym = retype_pexpr asym in
        return (New.M_CivCOMPL (act, asym))
     | M_CivAND (act, asym1, asym2) -> 
        let act = map_act (ct_of_ct loc) act in
+       let@ asym1 = retype_pexpr asym1 in
+       let@ asym2 = retype_pexpr asym2 in
        return (New.M_CivAND (act, asym1, asym2))
     | M_CivOR (act, asym1, asym2) -> 
        let act = map_act (ct_of_ct loc) act in
+       let@ asym1 = retype_pexpr asym1 in
+       let@ asym2 = retype_pexpr asym2 in
        return (New.M_CivOR (act, asym1, asym2))
     | M_CivXOR (act, asym1, asym2) -> 
        let act = map_act (ct_of_ct loc) act in
+       let@ asym1 = retype_pexpr asym1 in
+       let@ asym2 = retype_pexpr asym2 in
        return (New.M_CivXOR (act, asym1, asym2))
     | M_Cfvfromint asym -> 
+       let@ asym = retype_pexpr asym in
        return (New.M_Cfvfromint asym)
     | M_Civfromfloat (act, asym) -> 
        let act = map_act (ct_of_ct loc) act in
+       let@ asym = retype_pexpr asym in
        return (New.M_Civfromfloat (act, asym))
     | M_PEarray_shift (asym,ct,asym') ->
        let ict = ct_of_ct loc ct in
+       let@ asym = retype_pexpr asym in
+       let@ asym' = retype_pexpr asym' in
        return (New.M_PEarray_shift (asym,ict,asym'))
     | M_PEmember_shift (asym,sym,id) ->
+       let@ asym = retype_pexpr asym in
        return (New.M_PEmember_shift (asym,sym,id))
     | M_PEnot asym -> 
+       let@ asym = retype_pexpr asym in
        return (New.M_PEnot asym)
     | M_PEop (op,asym1,asym2) ->
+       let@ asym1 = retype_pexpr asym1 in
+       let@ asym2 = retype_pexpr asym2 in
        return (New.M_PEop (op,asym1,asym2))
     | M_PEstruct (sym,members) ->
+       let@ members = mapsndM retype_pexpr members in
        return (New.M_PEstruct (sym,members))
     | M_PEunion (sym,id,asym) ->
+       let@ asym = retype_pexpr asym in
        return (New.M_PEunion (sym,id,asym))
     | M_PEmemberof (sym,id,asym) ->
+       let@ asym = retype_pexpr asym in
        return (New.M_PEmemberof (sym,id,asym))
-    | M_PEcall (name,asyms) ->
-       return (New.M_PEcall (name,asyms))
     | M_PEassert_undef (asym, loc, undef) ->
+       let@ asym = retype_pexpr asym in
        return (New.M_PEassert_undef (asym, loc, undef))
     | M_PEbool_to_integer asym ->
+       let@ asym = retype_pexpr asym in
        return (New.M_PEbool_to_integer asym)
     | M_PEconv_int (act, asym) ->
+       let@ asym = retype_pexpr asym in
        let act = map_act (ct_of_ct loc) act in
        return (New.M_PEconv_int (act, asym))
     | M_PEconv_loaded_int (act, asym) ->
+       let@ asym = retype_pexpr asym in
        let act = map_act (ct_of_ct loc) act in
        return (New.M_PEconv_loaded_int (act, asym))
     | M_PEwrapI (act, asym) ->
+       let@ asym = retype_pexpr asym in
        let act = map_act (ct_of_ct loc) act in
        return (New.M_PEwrapI (act, asym))
   in
@@ -228,6 +251,7 @@ let rec retype_tpexpr (Old.M_TPexpr (loc, annots,bty,pexpr_)) =
              return (pat,pexpr)
            ) pats_pes
        in
+       let@ asym = retype_pexpr asym in
        return (New.M_PEcase (asym,pats_pes))
     | M_PElet (sym_or_pattern,pexpr,pexpr') ->
        let@ sym_or_pattern = retype_sym_or_pattern sym_or_pattern in
@@ -237,12 +261,15 @@ let rec retype_tpexpr (Old.M_TPexpr (loc, annots,bty,pexpr_)) =
     | M_PEif (asym,pexpr1,pexpr2) ->
        let@ pexpr1 = retype_tpexpr pexpr1 in
        let@ pexpr2 = retype_tpexpr pexpr2 in
+       let@ asym = retype_pexpr asym in
        return (New.M_PEif (asym,pexpr1,pexpr2))
     | M_PEdone asym ->
+       let@ asym = retype_pexpr asym in
        return (New.M_PEdone asym)
     | M_PEundef (loc,undef) -> 
        return (New.M_PEundef (loc,undef))
     | M_PEerror (err,asym) -> 
+       let@ asym = retype_pexpr asym in
        return (New.M_PEerror (err,asym))
        
   in
@@ -250,89 +277,155 @@ let rec retype_tpexpr (Old.M_TPexpr (loc, annots,bty,pexpr_)) =
 
 
 let retype_memop (loc : Loc.t) = function
-  | Old.M_PtrEq (asym1,asym2) -> return (New.M_PtrEq (asym1,asym2))
-  | Old.M_PtrNe (asym1,asym2) -> return (New.M_PtrNe (asym1,asym2))
-  | Old.M_PtrLt (asym1,asym2) -> return (New.M_PtrLt (asym1,asym2))
-  | Old.M_PtrGt (asym1,asym2) -> return (New.M_PtrGt (asym1,asym2))
-  | Old.M_PtrLe (asym1,asym2) -> return (New.M_PtrLe (asym1,asym2))
-  | Old.M_PtrGe (asym1,asym2) -> return (New.M_PtrGe (asym1,asym2))
+  | Old.M_PtrEq (asym1,asym2) -> 
+     let@ asym1 = retype_pexpr asym1 in
+     let@ asym2 = retype_pexpr asym2 in
+     return (New.M_PtrEq (asym1,asym2))
+  | Old.M_PtrNe (asym1,asym2) -> 
+     let@ asym1 = retype_pexpr asym1 in
+     let@ asym2 = retype_pexpr asym2 in
+     return (New.M_PtrNe (asym1,asym2))
+  | Old.M_PtrLt (asym1,asym2) -> 
+     let@ asym1 = retype_pexpr asym1 in
+     let@ asym2 = retype_pexpr asym2 in
+     return (New.M_PtrLt (asym1,asym2))
+  | Old.M_PtrGt (asym1,asym2) -> 
+     let@ asym1 = retype_pexpr asym1 in
+     let@ asym2 = retype_pexpr asym2 in
+     return (New.M_PtrGt (asym1,asym2))
+  | Old.M_PtrLe (asym1,asym2) -> 
+     let@ asym1 = retype_pexpr asym1 in
+     let@ asym2 = retype_pexpr asym2 in
+     return (New.M_PtrLe (asym1,asym2))
+  | Old.M_PtrGe (asym1,asym2) -> 
+     let@ asym1 = retype_pexpr asym1 in
+     let@ asym2 = retype_pexpr asym2 in
+     return (New.M_PtrGe (asym1,asym2))
   | Old.M_Ptrdiff (act, asym1, asym2) ->
      let act = map_act (ct_of_ct loc) act in
+     let@ asym1 = retype_pexpr asym1 in
+     let@ asym2 = retype_pexpr asym2 in
      return (New.M_Ptrdiff (act, asym1, asym2))
   | Old.M_IntFromPtr (act1, act2, asym) ->
      let act1 = map_act (ct_of_ct loc) act1 in
      let act2 = map_act (ct_of_ct loc) act2 in
+     let@ asym = retype_pexpr asym in
      return (New.M_IntFromPtr (act1, act2, asym))
   | Old.M_PtrFromInt (act1, act2, asym) ->
      let act1 = map_act (ct_of_ct loc) act1 in
      let act2 = map_act (ct_of_ct loc) act2 in
+     let@ asym = retype_pexpr asym in
      return (New.M_PtrFromInt (act1, act2, asym))
   | Old.M_PtrValidForDeref (act, asym) ->
      let act = map_act (ct_of_ct loc) act in
+     let@ asym = retype_pexpr asym in
      return (New.M_PtrValidForDeref (act, asym))
   | Old.M_PtrWellAligned (act, asym) ->
      let act = map_act (ct_of_ct loc) act in
+     let@ asym = retype_pexpr asym in
      return (New.M_PtrWellAligned (act, asym))
   | Old.M_PtrArrayShift (asym1, act, asym2) ->
      let act = map_act (ct_of_ct loc) act in
+     let@ asym1 = retype_pexpr asym1 in
+     let@ asym2 = retype_pexpr asym2 in
      return (New.M_PtrArrayShift (asym1, act, asym2))
-  | Old.M_Memcpy (asym1,asym2,asym3) -> 
+  | Old.M_Memcpy (asym1,asym2,asym3) ->
+     let@ asym1 = retype_pexpr asym1 in
+     let@ asym2 = retype_pexpr asym2 in
+     let@ asym3 = retype_pexpr asym3 in
      return (New.M_Memcpy (asym1,asym2,asym3))
-  | Old.M_Memcmp (asym1,asym2,asym3) -> 
+  | Old.M_Memcmp (asym1,asym2,asym3) ->
+     let@ asym1 = retype_pexpr asym1 in
+     let@ asym2 = retype_pexpr asym2 in
+     let@ asym3 = retype_pexpr asym3 in
      return (New.M_Memcmp (asym1,asym2,asym3))
   | Old.M_Realloc (asym1,asym2,asym3) -> 
+     let@ asym1 = retype_pexpr asym1 in
+     let@ asym2 = retype_pexpr asym2 in
+     let@ asym3 = retype_pexpr asym3 in
      return (New.M_Realloc (asym1,asym2,asym3))
   | Old.M_Va_start (asym1,asym2) -> 
+     let@ asym1 = retype_pexpr asym1 in
+     let@ asym2 = retype_pexpr asym2 in
      return (New.M_Va_start (asym1,asym2))
-  | Old.M_Va_copy asym -> return (New.M_Va_copy asym)
+  | Old.M_Va_copy asym -> 
+     let@ asym = retype_pexpr asym in
+     return (New.M_Va_copy asym)
   | Old.M_Va_arg (asym, act) ->
+     let@ asym = retype_pexpr asym in
      let act = map_act (ct_of_ct loc) act in
      return (New.M_Va_arg (asym, act))
-  | Old.M_Va_end asym -> return (New.M_Va_end asym)
+  | Old.M_Va_end asym -> 
+     let@ asym = retype_pexpr asym in
+     return (New.M_Va_end asym)
 
 
 let retype_action (Old.M_Action (loc,action_)) =
   let@ action_ = match action_ with
     | M_Create (asym, act, prefix) ->
+       let@ asym = retype_pexpr asym in
        let act = map_act (ct_of_ct loc) act in
        return (New.M_Create (asym, act, prefix))
     | M_CreateReadOnly (asym1, act, asym2, prefix) ->
+       let@ asym1 = retype_pexpr asym1 in
+       let@ asym2 = retype_pexpr asym2 in
        let act = map_act (ct_of_ct loc) act in
        return (New.M_CreateReadOnly (asym1, act, asym2, prefix))
     | M_Alloc (asym1, asym2, prefix) ->
+       let@ asym1 = retype_pexpr asym1 in
+       let@ asym2 = retype_pexpr asym2 in
        return (New.M_Alloc (asym1, asym2, prefix))
     | M_Kill (M_Dynamic, asym) -> 
+       let@ asym = retype_pexpr asym in
        return (New.M_Kill (M_Dynamic, asym))
     | M_Kill (M_Static ct, asym) -> 
        let ict = ct_of_ct loc ct in
+       let@ asym = retype_pexpr asym in
        return (New.M_Kill (M_Static ict, asym))
     | M_Store (m, act, asym1, asym2, mo) ->
        let act = map_act (ct_of_ct loc) act in
+       let@ asym1 = retype_pexpr asym1 in
+       let@ asym2 = retype_pexpr asym2 in
        return (New.M_Store (m, act, asym1, asym2, mo))
     | M_Load (act, asym, mo) ->
        let act = map_act (ct_of_ct loc) act in
+       let@ asym = retype_pexpr asym in
        return (New.M_Load (act, asym, mo))
     | M_RMW (act, asym1, asym2, asym3, mo1, mo2) ->
        let act = map_act (ct_of_ct loc) act in
+       let@ asym1 = retype_pexpr asym1 in
+       let@ asym2 = retype_pexpr asym2 in
+       let@ asym3 = retype_pexpr asym3 in
        return (New.M_RMW (act, asym1, asym2, asym3, mo1, mo2))
     | M_Fence mo ->
        return (New.M_Fence mo)
     | M_CompareExchangeStrong (act, asym1, asym2, asym3, mo1, mo2) -> 
        let act = map_act (ct_of_ct loc) act in
+       let@ asym1 = retype_pexpr asym1 in
+       let@ asym2 = retype_pexpr asym2 in
+       let@ asym3 = retype_pexpr asym3 in
        return (New.M_CompareExchangeStrong (act, asym1, asym2, asym3, mo1, mo2))
     | M_CompareExchangeWeak (act, asym1, asym2, asym3, mo1, mo2) ->
        let act = map_act (ct_of_ct loc) act in
+       let@ asym1 = retype_pexpr asym1 in
+       let@ asym2 = retype_pexpr asym2 in
+       let@ asym3 = retype_pexpr asym3 in
        return (New.M_CompareExchangeWeak (act, asym1, asym2, asym3, mo1, mo2))
     | M_LinuxFence mo ->
        return (New.M_LinuxFence mo)
     | M_LinuxLoad (act, asym, mo) ->
        let act = map_act (ct_of_ct loc) act in
+       let@ asym = retype_pexpr asym in
        return (New.M_LinuxLoad (act, asym, mo))
     | M_LinuxStore (act, asym1, asym2, mo) ->
        let act = map_act (ct_of_ct loc) act in
+       let@ asym1 = retype_pexpr asym1 in
+       let@ asym2 = retype_pexpr asym2 in
        return (New.M_LinuxStore (act, asym1, asym2, mo))
     | M_LinuxRMW (act, asym1, asym2, mo) ->
        let act = map_act (ct_of_ct loc) act in
+       let@ asym1 = retype_pexpr asym1 in
+       let@ asym2 = retype_pexpr asym2 in
        return (New.M_LinuxRMW (act, asym1, asym2, mo))
   in
   return (New.M_Action (loc,action_))
@@ -359,22 +452,28 @@ let retype_expr (Old.M_Expr (loc, annots, expr_)) =
        return (New.M_Eskip)
     | M_Eccall (act,asym,asyms) ->
        let act = map_act (ct_of_ct loc) act in
+       let@ asym = retype_pexpr asym in
+       let@ asyms = mapM retype_pexpr asyms in
        return (New.M_Eccall (act,asym,asyms))
-    | M_Eproc (name,asyms) ->
-       return (New.M_Eproc (name,asyms))
+    (* | M_Eproc (name,asyms) -> *)
+    (*    let@ asyms = mapM retype_pexpr asyms in *)
+    (*    return (New.M_Eproc (name,asyms)) *)
     | M_Erpredicate (pack_unpack, name, asyms) ->
        let pack_unpack = match pack_unpack with
          | Pack -> New.Pack
          | Unpack -> New.Unpack
        in
+       let@ asyms = mapM retype_pexpr asyms in
        return (New.M_Erpredicate (pack_unpack, name, asyms))
     | M_Elpredicate (have_show, name, asyms) ->
        let have_show = match have_show with
          | Have -> New.Have
          | Show -> New.Show
        in
+       let@ asyms = mapM retype_pexpr asyms in
        return (New.M_Elpredicate (have_show, name, asyms))
     | M_Einstantiate (id, asym) ->
+       let@ asym = retype_pexpr asym in
        return (New.M_Einstantiate (id, asym))
   in
 
@@ -390,6 +489,7 @@ let rec retype_texpr (Old.M_TExpr (loc, annots, expr_)) =
              return (pat,e)
            ) pats_es
        in
+       let@ asym = retype_pexpr asym in
        return (New.M_Ecase (asym,pats_es))
     | M_Elet (sym_or_pattern,pexpr,expr) ->
        let@ sym_or_pattern = retype_sym_or_pattern sym_or_pattern in
@@ -399,6 +499,7 @@ let rec retype_texpr (Old.M_TExpr (loc, annots, expr_)) =
     | M_Eif (asym,expr1,expr2) ->
        let@ expr1 = retype_texpr expr1 in
        let@ expr2 = retype_texpr expr2 in
+       let@ asym = retype_pexpr asym in
        return (New.M_Eif (asym,expr1,expr2))
     | M_Ewseq (pat,expr1,expr2) ->
        let@ pat = retype_pattern pat in
@@ -417,12 +518,15 @@ let rec retype_texpr (Old.M_TExpr (loc, annots, expr_)) =
        let@ es = mapM retype_texpr es in
        return (New.M_End es)
     | M_Edone asym ->
+       let@ asym = retype_pexpr asym in
        return (New.M_Edone asym)
     | M_Erun (sym,asyms) ->
+       let@ asyms = mapM retype_pexpr asyms in
        return (New.M_Erun (sym,asyms))
     | M_Eundef (loc,undef) -> 
        return (New.M_Eundef (loc,undef))
     | M_Eerror (err,asym) -> 
+       let@ asym = retype_pexpr asym in
        return (New.M_Eerror (err,asym))
   in
   return (New.M_TExpr (loc, annots,expr_))

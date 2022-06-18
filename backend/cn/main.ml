@@ -196,8 +196,8 @@ let main
   WellTyped.check_consistency := not skip_consistency;
   Pp.loc_pp := loc_pp;
   Pp.print_level := print_level;
-  Check.ResourceInference.reorder_points := not no_reorder_points;
-  Check.ResourceInference.additional_sat_check := not no_additional_sat_check;
+  ResourceInference.reorder_points := not no_reorder_points;
+  ResourceInference.additional_sat_check := not no_additional_sat_check;
   Check.InferenceEqs.use_model_eqs := not no_model_eqs;
   Check.only := only;
   check_input_file filename;

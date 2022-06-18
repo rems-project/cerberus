@@ -14,38 +14,31 @@ module SymMap = Map.Make(Sym)
 module S = Solver
 module Loc = Locations
 module LP = LogicalPredicates
+module Mu = NewMu.New
+module RI = ResourceInference
 
 open Tools
 open Sctypes
 open Context
 open Global
-
 open IT
 open TypeErrors
-module Mu = NewMu.New
 open CF.Mucore
 open Mu
-
 open Pp
 open BT
 open Resources
 open ResourceTypes
 open ResourcePredicates
 open LogicalConstraints
-
 open List
-
+open Typing
+open Effectful.Make(Typing)
 
 
 
 
 (* some of this is informed by impl_mem *)
-
-
-
-open Typing
-open Effectful.Make(Typing)
-
 
 
 type mem_value = CF.Impl_mem.mem_value
@@ -59,7 +52,6 @@ type pointer_value = CF.Impl_mem.pointer_value
 
 (* pattern-matches and binds *)
 let pattern_match = 
-
   let rec aux pat : (IT.t, type_error) m = 
     let (M_Pattern (loc, _, pattern) : mu_pattern) = pat in
     match pattern with
@@ -99,7 +91,6 @@ let pattern_match =
        | M_Carray, _ ->
           Debug_ocaml.error "todo: array types"
   in
-
   fun to_match ((M_Pattern (loc, _, _)) as pat : mu_pattern) ->
   let@ it = aux pat in
   let@ () = WellTyped.ensure_base_type loc ~expect:(IT.bt to_match) (IT.bt it) in
@@ -147,8 +138,23 @@ let bind_logically where (rt : RT.t) : ((BT.t * Sym.t), type_error) m =
   let@ () = bind_logical where rt' in
   return (bt, s')
 
+type lvt = {loc : Loc.t; value : IT.t}
+type lvts = lvt list
 
 
+let bind_lvt sym lvt = 
+  let s' = Sym.fresh () in
+  let@ () = add_l s' (IT.bt lvt.value) in
+  let@ () = add_a sym (IT.bt lvt.value, s') in
+  add_c (t_ (def_ s' lvt.value))
+
+
+
+let rt_of_lvt lvt = 
+  let sym = Sym.fresh () in
+  RT.Computational ((sym, IT.bt lvt.value), (Loc.unknown, None),
+  LRT.Constraint (t_ (def_ sym lvt.value), (Loc.unknown, None),
+  LRT.I))
 
 
 
@@ -159,873 +165,6 @@ let bind_logically where (rt : RT.t) : ((BT.t * Sym.t), type_error) m =
 let pattern_match_rt loc (pat : mu_pattern) (rt : RT.t) : (unit, type_error) m =
   let@ (bt, s') = bind_logically (Some loc) rt in
   pattern_match (sym_ (s', bt)) pat
-
-
-
-
-
-(* resource inference *)
-
-let oargs_list (O oargs) = 
-  let members = match IT.bt oargs with
-    | Record members -> members
-    | _ -> assert false
-  in
-  List.map (fun (s, member_bt) ->
-      (s, recordMember_ ~member_bt (oargs, s))
-    ) members
-
-
-module ResourceInference = struct 
-
-  let reorder_points = ref true
-  let additional_sat_check = ref true
-  let span_actions = ref true
-
-  module General = struct
-
-    type one = {one_index : IT.t; value : IT.t}
-    type many = {many_guard: IT.t; value : IT.t}
-
-    type case =
-      | One of one
-      | Many of many
-
-    let pp_case = function
-      | One {one_index;value} -> 
-         !^"one" ^^ parens (IT.pp one_index ^^ colon ^^^ IT.pp value)
-      | Many {many_guard;value} -> 
-         !^"many" ^^ parens (IT.pp many_guard ^^ colon ^^^ IT.pp value)
-
-    type cases = C of case list
-
-
-    let unfold_struct_request tag pointer_t permission_t = 
-      {
-        name = Owned (Struct tag);
-        pointer = pointer_t;
-        iargs = [];
-        permission = permission_t;
-      }
-
-    let exact_ptr_match () =
-      let@ global = get_global () in
-      let@ values, equalities, lcs = simp_constraints () in
-      let simp t = Simplify.simp global.struct_decls values equalities lcs t in
-      return (fun (p, p') -> is_true (simp (eq_ (p, p'))))
-
-    let exact_match () =
-      let@ pmatch = exact_ptr_match () in
-      let match_f (request, resource) =
-        match (request, resource) with
-        | (P req_p, 
-           P res_p) ->
-           pmatch (req_p.pointer, res_p.pointer)
-        | (Q ({name = Owned _; _} as req_qp), 
-           Q ({name = Owned _; _} as res_qp)) ->
-           pmatch (req_qp.pointer, res_qp.pointer)
-        | _ -> false
-      in
-      return match_f
-
-    let exact_match_point_ptrs ptrs =
-      let@ pmatch = exact_ptr_match () in
-      let match_f resource = 
-        match resource with
-        | P ({name = Owned _; _} as res_p) -> 
-           List.exists (fun p -> pmatch (p, res_p.pointer)) ptrs
-        | _ -> false
-      in
-      return match_f
-
-    let scan_key_indices v_nm t =
-      let is_i t = match t with
-        | IT (Lit (Sym nm2), _) -> Sym.equal nm2 v_nm
-        | _ -> false
-      in
-      let rec f pol t = match t with
-        | IT (Bool_op (And xs), _) -> List.concat (List.map (f pol) xs)
-        | IT (Bool_op (Or xs), _) -> List.concat (List.map (f pol) xs)
-        | IT (Bool_op (Impl (x, y)), _) -> f (not pol) x @ f pol y
-        | IT (Bool_op (EQ (x, y)), _) ->
-          if pol && is_i x then [y] else if pol && is_i y then [x] else []
-        | IT (Bool_op (Not x), _) -> f (not pol) x
-        | _ -> []
-      in
-      let xs = f true t in
-      List.sort_uniq IT.compare xs
-
-    
-    let cases_to_map loc (situation, (orequest, oinfo)) a_bt item_bt (C cases) = 
-      let update_with_ones base_array ones =
-        List.fold_left (fun m {one_index; value} ->
-            map_set_ m (one_index, value)
-          ) base_array ones
-      in
-      let ones, manys = 
-        List.partition_map (function One c -> Left c | Many c -> Right c) cases in
-      let@ base_value = match manys with
-        | [] -> return (default_ (BT.Map (a_bt, item_bt)))
-        | [{many_guard = _; value}] -> return value
-        | _ -> 
-           let@ model = model () in
-           fail (fun ctxt ->
-               let msg = Merging_multiple_arrays {orequest; situation; oinfo; model; ctxt} in
-               {loc; msg})
-      in
-      return (update_with_ones base_value ones)
-
-
-
-
-
-
-    (* TODO: check that oargs are in the same order? *)
-    let rec predicate_request ~recursive loc uiinfo (requested : RET.predicate_type) =
-      match requested.name with
-      | Owned requested_ct ->
-         assert (match requested.iargs with [] -> true | _ -> false);
-         debug 7 (lazy (item "point request" (RET.pp (P requested))));
-         let@ _ = span_fold_unfolds loc uiinfo (RET.P requested) false in
-         let start_timing = time_log_start "point-request" "" in
-         let@ provable = provable loc in
-         let@ is_ex = exact_match () in
-         let is_exact_re (re : RET.t) = !reorder_points && (is_ex (RET.P requested, re)) in
-         let@ global = get_global () in
-         let@ simp_lcs = simp_constraints () in
-         let needed = requested.permission in 
-         let sub_resource_if = fun cond re (needed, oargs) ->
-               let continue = (Unchanged, (needed, oargs)) in
-               if is_false needed || not (cond (fst re)) then continue else
-               match re with
-               | (P p', p'_oargs) when equal_predicate_name (Owned requested_ct) p'.name ->
-                  debug 15 (lazy (item "point/point sub at ptr" (IT.pp p'.pointer)));
-                  let pmatch = eq_ (requested.pointer, p'.pointer) in
-                  let took = and_ [pmatch; p'.permission; needed] in
-                  begin match provable (LC.T took) with
-                  | `True ->
-                     Deleted, 
-                     (bool_ false, p'_oargs)
-                  | `False -> 
-                     continue
-                  end
-               | (Q p', p'_oargs) when equal_predicate_name (Owned requested_ct) p'.name ->
-                  let base = p'.pointer in
-                  debug 15 (lazy (item "point/qpoint sub at base ptr" (IT.pp base)));
-                  let item_size = int_ (Memory.size_of_ctype requested_ct) in
-                  let offset = array_offset_of_pointer ~base ~pointer:requested.pointer in
-                  let index = array_pointer_to_index ~base ~item_size ~pointer:requested.pointer in
-                  let pre_match =
-                    (* adapting from RE.subarray_condition *)
-                    and_ [lePointer_ (base, requested.pointer);
-                          divisible_ (offset, item_size)]
-                  in
-                  let subst = IT.make_subst [(p'.q, index)] in
-                  let took = and_ [pre_match; IT.subst subst p'.permission; needed] in
-                  begin match provable (LC.T took) with
-                  | `True ->
-                     let permission' = and_ [p'.permission; ne_ (sym_ (p'.q, Integer), index)] in
-                     let oargs = 
-                       List.map_snd (fun oa' -> map_get_ oa' index) 
-                         (oargs_list p'_oargs)
-                     in
-                     Changed (Q {p' with permission = permission'}, p'_oargs), 
-                     (bool_ false, O (record_ oargs))
-                  | `False -> continue
-                  end
-               | _ ->
-                  continue
-         in
-         let@ (needed, oargs) =
-           map_and_fold_resources loc (sub_resource_if is_exact_re)
-             (needed, O (default_ (owned_oargs requested_ct)))
-         in
-         let@ (needed, oargs) =
-           map_and_fold_resources loc (sub_resource_if (fun re -> not (is_exact_re re)))
-             (needed, oargs) in
-         let@ res = begin match provable (t_ (not_ needed)) with
-         | `True ->
-            let r = ({ 
-                name = Owned requested_ct;
-                pointer = requested.pointer;
-                iargs = [];
-                permission = requested.permission 
-              }, oargs)
-            in
-            return (Some r)
-         | `False ->
-            return None
-         end in
-         time_log_end start_timing;
-         return res
-      | pname -> 
-         debug 7 (lazy (item "predicate request" (RET.pp (P requested))));
-         let start_timing = time_log_start "predicate-request" "" in
-         let@ def_oargs = match pname with
-           | Block _ -> return Resources.block_oargs
-           | Owned _ -> assert false
-           | PName pname -> 
-              let@ def = Typing.get_resource_predicate_def loc pname in
-              return (Record def.oargs)
-         in
-         let@ provable = provable loc in
-         let@ global = get_global () in
-         let@ simp_lcs = simp_constraints () in
-         let needed = requested.permission in 
-         let sub_predicate_if = fun cond re (needed, oargs) ->
-               let continue = (Unchanged, (needed, oargs)) in
-               if is_false needed then continue else
-               match re with
-               | (P p', p'_oargs) when equal_predicate_name requested.name p'.name ->
-                  let pmatch = 
-                    eq_ (requested.pointer, p'.pointer)
-                    :: List.map2 eq__ requested.iargs p'.iargs
-                  in
-                  let took = and_ (needed :: p'.permission :: pmatch) in
-                  begin match provable (LC.T took) with
-                  | `True ->
-                     Deleted, 
-                     (bool_ false, p'_oargs)
-                  | `False -> continue
-                  end
-               | (Q p', p'_oargs) when equal_predicate_name requested.name p'.name ->
-                  let base = p'.pointer in
-                  let item_size = int_ p'.step in
-                  let offset = array_offset_of_pointer ~base ~pointer:requested.pointer in
-                  let index = array_pointer_to_index ~base ~item_size ~pointer:requested.pointer in
-                  let subst = IT.make_subst [(p'.q, index)] in
-                  let pre_match = 
-                    (* adapting from RE.subarray_condition *)
-                    and_ (lePointer_ (base, requested.pointer)
-                          :: divisible_ (offset, item_size)
-                          :: List.map2 (fun ia ia' -> eq_ (ia, IT.subst subst ia')) requested.iargs p'.iargs)
-                  in
-                  let took = and_ [pre_match; needed; IT.subst subst p'.permission] in
-                  begin match provable (LC.T took) with
-                  | `True ->
-                     let oargs = List.map_snd (fun oa' -> map_get_ oa' index) (oargs_list p'_oargs) in
-                     let i_match = eq_ (sym_ (p'.q, Integer), index) in
-                     let permission' = and_ [p'.permission; not_ i_match] in
-                     Changed (Q {p' with permission = permission'}, p'_oargs), 
-                     (bool_ false, O (record_ oargs))
-                  | `False -> continue
-                  end
-               | re ->
-                  continue
-         in
-         let@ is_ex = exact_match () in
-         let is_exact_re re = !reorder_points && (is_ex (P requested, re)) in
-         let@ (needed, oargs) =
-           map_and_fold_resources loc (sub_predicate_if is_exact_re)
-               (needed, O (default_ def_oargs))
-         in
-         let@ (needed, oargs) =
-           map_and_fold_resources loc (sub_predicate_if (fun re -> not (is_exact_re re)))
-               (needed, oargs)
-         in
-         let@ res = begin match provable (t_ (not_ needed)) with
-         | `True ->
-            let r = ({ 
-                name = requested.name;
-                pointer = requested.pointer;
-                permission = requested.permission;
-                iargs = requested.iargs; 
-              }, oargs)
-            in
-            (* let r = RE.simp_predicate ~only_outputs:true global.struct_decls all_lcs r in *)
-            return (Some r)
-         | `False ->
-            begin match pname with
-            | Block ct -> 
-               let@ oresult = 
-                 predicate_request ~recursive loc uiinfo 
-                   ({name = Owned ct; 
-                     pointer = requested.pointer;
-                     iargs = [];
-                     permission = requested.permission;
-                    } : predicate_type)
-               in
-               begin match oresult with
-               | None -> return None
-               | Some _ -> 
-                  let r = ({
-                      name = requested.name;
-                      pointer = requested.pointer;
-                      permission = requested.permission;
-                      iargs = requested.iargs;
-                    }, O (record_ []))
-                  in
-                  return (Some r)
-               end
-            | _ -> 
-               return None
-            end
-         end in
-         time_log_end start_timing;
-         return res
-
-
-    and qpredicate_request_aux loc uiinfo (requested : RET.qpredicate_type) =
-      match requested.name with
-      | Owned requested_ct ->
-         assert (match requested.iargs with [] -> true | _ -> false);
-         debug 7 (lazy (item "qpoint request" (RET.pp (Q requested))));
-         let@ _ = span_fold_unfolds loc uiinfo (RET.Q requested) false in
-         let start_timing = time_log_start "qpoint-request" "" in
-         let@ provable = provable loc in
-         let@ is_ex = exact_match () in
-         let is_exact_re re = !reorder_points && (is_ex (Q requested, re)) in
-         let@ global = get_global () in
-         let@ values, equalities, lcs = simp_constraints () in
-         let simp t = Simplify.simp global.struct_decls values equalities lcs t in
-         let needed = requested.permission in
-         let sub_resource_if = fun cond re (needed, oargs) ->
-               let continue = (Unchanged, (needed, oargs)) in
-               if is_false needed || not (cond (fst re)) then continue else
-               match re with
-               | (P p', p'_oargs) when equal_predicate_name (Owned requested_ct) p'.name ->
-                  let base = requested.pointer in
-                  let item_size = int_ (Memory.size_of_ctype requested_ct) in
-                  let offset = array_offset_of_pointer ~base ~pointer:p'.pointer in
-                  let index = array_pointer_to_index ~base ~item_size ~pointer:p'.pointer in
-                  let pre_match = 
-                    and_ [lePointer_ (base, p'.pointer);
-                          divisible_ (offset, item_size)]
-                  in
-                  let subst = IT.make_subst [(requested.q, index)] in
-                  let took = and_ [pre_match; IT.subst subst needed; p'.permission] in
-                  begin match provable (LC.T took) with
-                  | `True -> 
-                     let i_match = eq_ (sym_ (requested.q, Integer), index) in
-                     let oargs = 
-                       List.map2 (fun (oarg_name, C oargs) (oarg_name', oa') ->
-                           assert (Sym.equal oarg_name oarg_name');
-                           (oarg_name, C (oargs @ [One {one_index = index; value = oa'}]))
-                         ) oargs (oargs_list p'_oargs)
-                     in
-                     let needed' = and_ [needed; not_ (i_match)] in
-                     Deleted, 
-                     (simp needed', oargs)
-                  | `False -> continue
-                  end
-               | (Q p', p'_oargs) when equal_predicate_name (Owned requested_ct) p'.name ->
-                  let p' = alpha_rename_qpredicate_type requested.q p' in
-                  let pmatch = eq_ (requested.pointer, p'.pointer) in
-                  (* todo: check for p' non-emptiness? *)
-                  begin match provable (LC.T pmatch) with
-                  | `True ->
-                     let took = and_ [requested.permission; p'.permission] in
-                     let oargs = 
-                       List.map2 (fun (oarg_name, C oargs) (oarg_name', oa') ->
-                           (oarg_name, C (oargs @ [Many {many_guard = took; value = oa'}]))
-                         ) oargs (oargs_list p'_oargs)
-                     in
-                     let needed' = and_ [needed; not_ p'.permission] in
-                     let permission' = and_ [p'.permission; not_ needed] in
-                     Changed (Q {p' with permission = permission'}, p'_oargs), 
-                     (simp needed', oargs)
-                  | `False -> continue
-                  end
-               | re ->
-                  continue
-         in
-         let@ (needed, oargs) =
-           map_and_fold_resources loc (sub_resource_if is_exact_re)
-             (needed, List.map_snd (fun _ -> C []) (q_owned_oargs_list requested_ct))
-         in
-         debug 10 (lazy (item "needed after exact matches:" (IT.pp needed)));
-         let k_is = scan_key_indices requested.q needed in
-         let k_ptrs = List.map (fun i -> (i, arrayShift_ (requested.pointer, requested_ct, i))) k_is in
-         let k_ptrs = List.map (fun (i, p) -> (simp i, simp p)) k_ptrs in
-         if List.length k_ptrs == 0 then ()
-         else debug 10 (lazy (item "key ptrs for additional matches:"
-             (Pp.list IT.pp (List.map snd k_ptrs))));
-         let@ k_ptr_match = exact_match_point_ptrs (List.map snd k_ptrs) in
-         let is_exact_k (re : RET.t) = !reorder_points && k_ptr_match re in
-         let necessary_k_ptrs = List.filter (fun (i, p) ->
-             let i_match = eq_ (sym_ (requested.q, Integer), i) in
-             match provable (forall_ (requested.q, BT.Integer) (impl_ (i_match, needed)))
-             with `True -> true | _ -> false) k_ptrs in
-         let@ () = 
-           ListM.iterM (fun (_, p) ->
-               let@ r = 
-                 predicate_request ~recursive:true loc uiinfo {
-                     name = Owned requested_ct;
-                     pointer = p;
-                     iargs = [];
-                     permission = bool_ true;
-                   }
-               in
-               match r with
-               | Some (res, res_oargs) -> add_r None (P res, res_oargs)
-               | None -> return ()
-             ) necessary_k_ptrs 
-         in
-         let@ (needed, oargs) =
-           map_and_fold_resources loc (sub_resource_if is_exact_k)
-             (needed, oargs) 
-         in
-         if List.length k_ptrs == 0 then ()
-         else debug 10 (lazy (item "needed after additional matches:" (IT.pp needed)));
-         let needed = if !additional_sat_check
-           then begin
-           match provable (forall_ (requested.q, BT.Integer) (not_ needed)) with
-             | `True -> (debug 10 (lazy (format [] "proved needed == false.")); bool_ false)
-             | _ -> (debug 10 (lazy (format [] "checked, needed is satisfiable.")); needed)
-           end
-           else needed in
-         let@ (needed, oargs) =
-           map_and_fold_resources loc (sub_resource_if
-             (fun re -> not (is_exact_re re) && not (is_exact_k re)))
-             (needed, oargs) 
-         in
-         let holds = provable (forall_ (requested.q, BT.Integer) (not_ needed)) in
-         time_log_end start_timing;
-         begin match holds with
-         | `True -> return (Some oargs)
-         | `False -> return None
-         end
-      | pname ->
-         debug 7 (lazy (item "qpredicate request" (RET.pp (Q requested))));
-         let@ def_oargs = match pname with
-           | Block _ -> return block_oargs_list 
-           | Owned _ -> assert false
-           | PName pname ->
-              let@ def = Typing.get_resource_predicate_def loc pname in
-              return def.oargs
-         in
-         let@ provable = provable loc in
-         let@ global = get_global () in
-         let@ values, equalities, lcs = simp_constraints () in
-         let simp it = Simplify.simp global.struct_decls values equalities lcs it in
-         let needed = requested.permission in
-         let@ (needed, oargs) =
-           map_and_fold_resources loc (fun re (needed, oargs) ->
-               let continue = (Unchanged, (needed, oargs)) in
-               if is_false needed then continue else
-               match re with
-               | (P p', p'_oargs) when equal_predicate_name requested.name p'.name ->
-                  let base = requested.pointer in
-                  let item_size = int_ requested.step in
-                  let offset = array_offset_of_pointer ~base ~pointer:p'.pointer in
-                  let index = array_pointer_to_index ~base ~item_size ~pointer:p'.pointer in
-                  let subst = IT.make_subst [(requested.q, index)] in
-                  let pre_match = 
-                    and_ (lePointer_ (base, p'.pointer)
-                          :: divisible_ (offset, item_size)
-                          :: List.map2 (fun ia ia' -> eq_ (IT.subst subst ia, ia')) requested.iargs p'.iargs
-                      )
-                  in
-                  let took = and_ [pre_match; IT.subst subst needed; p'.permission] in
-                  begin match provable (LC.T took) with
-                  | `True ->
-                     let i_match = eq_ (sym_ (requested.q, Integer), index) in
-                     let oargs = 
-                       List.map2 (fun (name, C oa) (name', oa') -> 
-                           assert (Sym.equal name name');
-                           (name, C (oa @ [One {one_index = index; value = oa'}]))
-                         ) oargs (oargs_list p'_oargs)
-                     in
-                     let needed' = and_ [needed; not_ i_match] in
-                     Deleted, 
-                     (simp needed', oargs)
-                  | `False -> continue
-                  end
-               | (Q p', p'_oargs) when equal_predicate_name requested.name p'.name 
-                           && requested.step = p'.step ->
-                  let p' = alpha_rename_qpredicate_type requested.q p' in
-                  let pmatch = eq_ (requested.pointer, p'.pointer) in
-                  begin match provable (LC.T pmatch) with
-                  | `True ->
-                     let iarg_match = and_ (List.map2 eq__ requested.iargs p'.iargs) in
-                     let took = and_ [iarg_match; requested.permission; p'.permission] in
-                     let needed' = and_ [needed; not_ (and_ [iarg_match; p'.permission])] in
-                     let permission' = and_ [p'.permission; not_ (and_ [iarg_match; needed])] in
-                     let oargs = 
-                       List.map2 (fun (name, C oa) (name', oa') -> 
-                           assert (Sym.equal name name');
-                           (name, C (oa @ [Many {many_guard = took; value = oa'}]))
-                         ) oargs (oargs_list p'_oargs)
-                     in
-                     Changed (Q {p' with permission = permission'}, p'_oargs), 
-                     (simp needed', oargs)
-                  | `False -> continue
-                  end
-               | re ->
-                  continue
-             ) (needed, List.map_snd (fun _ -> C []) def_oargs)
-         in
-         let holds = provable (forall_ (requested.q, BT.Integer) (not_ needed)) in
-         begin match holds with
-         | `True -> return (Some oargs)
-         | `False -> return None
-         end
-
-    and qpredicate_request loc uiinfo (requested : RET.qpredicate_type) = 
-      let@ o_oargs = qpredicate_request_aux loc uiinfo requested in
-      let@ oarg_item_bts = match requested.name with
-        | Block _ -> return block_oargs_list
-        | Owned ct -> return (owned_oargs_list ct)
-        | PName pn ->
-           let@ def = Typing.get_resource_predicate_def loc pn in
-           return def.oargs
-      in
-      match o_oargs with
-      | None -> return None
-      | Some oargs ->
-         let@ oas = 
-           ListM.map2M (fun (name, C oa) (name', oa_bt) ->
-               assert (Sym.equal name name');
-               let@ map = cases_to_map loc uiinfo Integer oa_bt (C oa) in
-               return (name, map)
-             ) oargs oarg_item_bts
-         in
-         let r = { 
-             name = requested.name;
-             pointer = requested.pointer;
-             q = requested.q;
-             step = requested.step;
-             permission = requested.permission;
-             iargs = requested.iargs; 
-           } 
-         in
-         return (Some (r, O (record_ oas)))
-
-
-    and fold_array loc uiinfo item_ct base length permission =
-      debug 7 (lazy (item "fold array" Pp.empty));
-      debug 7 (lazy (item "item_ct" (Sctypes.pp item_ct)));
-      debug 7 (lazy (item "base" (IT.pp base)));
-      debug 7 (lazy (item "length" (IT.pp (int_ length))));
-      debug 7 (lazy (item "permission" (IT.pp permission)));
-      let q_s, q = IT.fresh Integer in
-      let@ o_values = 
-        qpredicate_request_aux loc uiinfo {
-            name = Owned item_ct;
-            pointer = base;
-            q = q_s;
-            step = Memory.size_of_ctype item_ct;
-            iargs = [];
-            permission = and_ [permission; (int_ 0) %<= q; q %<= (int_ (length - 1))];
-          }
-      in
-      match o_values with 
-      | None -> return None
-      | Some oargs ->
-         let oarg_bts = owned_oargs_list item_ct in
-         let@ oargs = 
-           ListM.map2M (fun (name, oa) (name', oa_bt) ->
-               assert (Sym.equal name name');
-               cases_to_map loc uiinfo Integer oa_bt oa
-             ) oargs oarg_bts
-         in
-         let folded_value = List.hd oargs in
-         let value_s, value = IT.fresh (IT.bt folded_value) in
-         let@ () = add_ls [(value_s, IT.bt value)] in
-         let@ () = add_c (t_ (def_ value_s folded_value)) in
-         let@ provable = provable loc in
-         let folded_oargs = 
-           record_ [(Resources.value_sym, value)]
-         in
-         let folded_resource = ({
-             name = Owned (Array (item_ct, Some length));
-             pointer = base;
-             iargs = [];
-             permission = permission;
-           }, 
-           O folded_oargs)
-         in
-         return (Some folded_resource)
-
-
-    and fold_struct ~recursive loc uiinfo tag pointer_t permission_t =
-      debug 7 (lazy (item "fold struct" Pp.empty));
-      debug 7 (lazy (item "tag" (Sym.pp tag)));
-      debug 7 (lazy (item "pointer" (IT.pp pointer_t)));
-      debug 7 (lazy (item "permission" (IT.pp permission_t)));
-      let open Memory in
-      let@ global = get_global () in
-      let@ layout = get_struct_decl loc tag in
-      let@ values_err =
-        ListM.fold_leftM (fun o_values {offset; size; member_or_padding} ->
-            match o_values with
-            | Result.Error e -> return (Result.Error e)
-            | Result.Ok values ->
-               match member_or_padding with
-               | Some (member, sct) ->
-                  let request : RET.predicate_type = {
-                      name = Owned sct;
-                      pointer = memberShift_ (pointer_t, tag, member);
-                      iargs = [];
-                      permission = permission_t;
-                    }
-                  in
-                  let@ point = predicate_request ~recursive loc uiinfo request in
-                  begin match point with
-                  | None -> 
-                     return (Result.Error (RET.P request))
-                  | Some (point, point_oargs) -> 
-                     let value = snd (List.hd (oargs_list point_oargs)) in
-                     return (Result.Ok (values @ [(member, value)]))
-                  end
-               | None ->
-                  let request : RET.predicate_type = {
-                      name = Block (Array (Integer Char, Some size));
-                      pointer = integerToPointerCast_ (add_ (pointerToIntegerCast_ pointer_t, int_ offset));
-                      permission = permission_t;
-                      iargs = [];
-                    } 
-                  in
-                  let@ result = predicate_request ~recursive loc uiinfo request in
-                  begin match result with
-                  | None -> return (Result.Error (RET.P request))
-                  | Some _ -> return (Result.Ok values)
-                  end
-       ) (Result.Ok []) layout
-      in
-      match values_err with
-      | Result.Error e -> return (Result.Error e)
-      | Result.Ok values ->
-         let value_s, value = IT.fresh (Struct tag) in
-         let@ () = add_ls [(value_s, IT.bt value)] in
-         let@ () = add_c (t_ (def_ value_s (IT.struct_ (tag, values)))) in
-         let folded_oargs = record_ [(Resources.value_sym, value)] in
-         let folded_resource = ({
-             name = Owned (Struct tag);
-             pointer = pointer_t;
-             iargs = [];
-             permission = permission_t;
-           }, 
-           O folded_oargs)
-         in
-         return (Result.Ok folded_resource)
-
-
-    (* HEREHEREHERE *)
-
-
-    and unfolded_array item_ct base length permission value =
-      (let q_s, q = IT.fresh_named Integer "i" in
-       let unfolded_oargs = record_ [(Resources.value_sym, value)] in
-       {
-         name = Owned item_ct;
-         pointer = base;
-         step = Memory.size_of_ctype item_ct;
-         q = q_s;
-         iargs = [];
-         permission = and_ [permission; (int_ 0) %<= q; q %<= (int_ (length - 1))]
-      },
-       O unfolded_oargs)
-
-    and unfold_array ~recursive loc uiinfo item_ct length base permission =
-      debug 7 (lazy (item "unfold array" Pp.empty));
-      debug 7 (lazy (item "item_ct" (Sctypes.pp item_ct)));
-      debug 7 (lazy (item "base" (IT.pp base)));
-      debug 7 (lazy (item "permission" (IT.pp permission)));
-      let@ result = 
-        predicate_request ~recursive loc uiinfo ({
-              name = Owned (Array (item_ct, Some length));
-              pointer = base;
-              iargs = [];
-              permission = permission;
-          }
-        ) 
-      in
-      match result with
-      | None -> return None
-      | Some (point, point_oargs) ->
-         let length = match point.name with
-           | Owned (Array (_, Some length)) -> length
-           | _ -> assert false
-         in
-         let qpoint =
-           unfolded_array item_ct base length permission 
-             (snd (List.hd (oargs_list point_oargs))) 
-         in
-         return (Some qpoint)
-
-
-    and unfolded_struct layout tag pointer_t permission_t value =
-      let open Memory in
-      List.map (fun {offset; size; member_or_padding} ->
-          match member_or_padding with
-          | Some (member, sct) ->
-             let oargs = 
-               record_
-                 [(Resources.value_sym, member_ ~member_bt:(BT.of_sct sct) (tag, value, member))]
-             in
-             let resource = 
-               (P {
-                   name = Owned sct;
-                   pointer = memberShift_ (pointer_t, tag, member);
-                   permission = permission_t;
-                   iargs = [];
-                  },
-                O oargs)
-             in
-             resource
-          | None ->
-             (P {
-                 name = Block (Array (Integer Char, Some size));
-                 pointer = integerToPointerCast_ (add_ (pointerToIntegerCast_ pointer_t, int_ offset));
-                 permission = permission_t;
-                 iargs = [];
-               },
-             O (record_ []))
-        ) layout
-
-
-    and unfold_struct ~recursive loc uiinfo tag pointer_t permission_t =
-      debug 7 (lazy (item "unfold struct" Pp.empty));
-      debug 7 (lazy (item "tag" (Sym.pp tag)));
-      debug 7 (lazy (item "pointer" (IT.pp pointer_t)));
-      debug 7 (lazy (item "permission" (IT.pp permission_t)));
-      let@ global = get_global () in
-      let@ result = 
-        predicate_request ~recursive loc uiinfo
-          (unfold_struct_request tag pointer_t permission_t)
-      in
-      match result with
-      | None -> return None
-      | Some (point, point_oargs) -> 
-         let layout = SymMap.find tag global.struct_decls in
-         let resources = 
-           unfolded_struct layout tag pointer_t permission_t
-             (snd (List.hd (oargs_list point_oargs))) 
-         in
-         return (Some resources)
-
-
-    and span_fold_unfolds loc uiinfo req is_tail_rec =
-      if not (! span_actions)
-      then return ()
-      else
-      let start_timing = if is_tail_rec then 0.0
-          else time_log_start "span_check" "" in
-      let@ ress = all_resources () in
-      let@ global = get_global () in
-      let@ provable = provable loc in
-      let@ m = model_with loc (bool_ true) in
-      let@ _ = match m with
-        | None -> return ()
-        | Some (model, _) ->
-          let opts = Spans.guess_span_intersection_action ress req model global in
-          let confirmed = List.find_opt (fun (act, confirm) ->
-              match provable (t_ confirm) with
-                  | `False -> false
-                  | `True -> true
-          ) opts in
-          begin match confirmed with
-          | None -> return ()
-          | Some (Spans.Pack (pt, ct), _) ->
-              let@ success = do_pack loc uiinfo pt ct in
-              if success then span_fold_unfolds loc uiinfo req true else return ()
-          | Some (Spans.Unpack (pt, ct), _) ->
-              let@ success = do_unpack loc uiinfo pt ct in
-              if success then span_fold_unfolds loc uiinfo req true else return ()
-          end
-      in
-      if is_tail_rec then () else time_log_end start_timing;
-      return ()
-
-    and do_pack loc uiinfo pt ct =
-      let@ opt = match ct with
-        | Sctypes.Array (act, Some length) ->
-          fold_array loc uiinfo act pt length (bool_ true)
-        | Sctypes.Struct tag ->
-          let@ result = fold_struct ~recursive:true loc uiinfo tag pt (bool_ true) in
-          begin match result with
-            | Result.Ok res -> return (Some res)
-            | _ -> return None
-          end
-        | _ -> return None
-      in
-      match opt with
-      | None -> return false
-      | Some (resource, oargs) ->
-         let@ _ = add_r None (P resource, oargs) in
-         return true
-
-    and do_unpack loc uiinfo pt ct =
-      match ct with
-        | Sctypes.Array (act, Some length) ->
-          let@ oqp = unfold_array ~recursive:true loc uiinfo act
-                       length pt (bool_ true) in
-          begin match oqp with
-            | None -> return false
-            | Some (qp, oargs) ->
-                let@ _ = add_r None (Q qp, oargs) in
-                return true
-          end
-        | Sctypes.Struct tag ->
-          let@ ors = unfold_struct ~recursive:true loc uiinfo tag pt (bool_ true) in
-          begin match ors with
-            | None -> return false
-            | Some rs ->
-               let@ _ = add_rs None rs in
-               return true
-          end
-        | _ -> return false
-
-
-
-
-    let resource_request ~recursive loc uiinfo (request : RET.t) : (RE.t option, type_error) m = 
-      match request with
-      | P request ->
-         let@ result = predicate_request ~recursive loc uiinfo request in
-         return (Option.map_fst (fun p -> P p) result)
-      | Q request ->
-         let@ result = qpredicate_request loc uiinfo request in
-         return (Option.map_fst (fun q -> Q q) result)
-
-  end
-
-  module Special = struct
-
-    let fail_missing_resource loc situation (orequest, oinfo) = 
-      let@ model = model () in
-      fail_with_trace (fun trace -> fun ctxt ->
-          let msg = Missing_resource_request {orequest; situation; oinfo; model; trace; ctxt} in
-          {loc; msg})
-
-
-    let predicate_request ~recursive loc situation (request, oinfo) = 
-      let uiinfo = (situation, (Some (P request), oinfo)) in
-      let@ result = General.predicate_request ~recursive loc uiinfo request in
-      match result with
-      | Some r -> return r
-      | None -> fail_missing_resource loc situation (Some (P request), oinfo)
-
-    let qpredicate_request loc situation (request, oinfo) = 
-      let uiinfo = (situation, (Some (Q request), oinfo)) in
-      let@ result = General.qpredicate_request loc uiinfo request in
-      match result with
-      | Some r -> return r
-      | None -> fail_missing_resource loc situation (Some (Q request), oinfo)
-
-    let unfold_struct ~recursive loc situation tag pointer_t permission_t = 
-      let request = General.unfold_struct_request tag pointer_t permission_t in
-      let uiinfo = (situation, (Some (P request), None)) in
-      let@ result = General.unfold_struct ~recursive loc uiinfo tag pointer_t permission_t in
-      match result with
-      | Some resources -> return resources
-      | None -> 
-         fail_missing_resource loc situation (Some (P request), None)
-      
-
-    let fold_struct ~recursive loc situation tag pointer_t permission_t = 
-      let uiinfo = (situation, (None, None)) in
-      let@ result = General.fold_struct ~recursive loc uiinfo tag pointer_t permission_t in
-      match result with
-      | Result.Ok r -> return r
-      | Result.Error request -> fail_missing_resource loc situation (Some request, None)
-
-  end
-
-
-end
-
 
 
 
@@ -1136,20 +275,9 @@ let add_eqs_for_infer loc ftyp =
 *)
 
 
-
-
 end
 
 
-
-module RI = ResourceInference
-
-
-
-
-
-
-(* got until here *)
 
 
 
@@ -1160,28 +288,6 @@ module RI = ResourceInference
    label types (which don't have a return type) *)
 
 
-
-type arg = {lname : Sym.t; bt : BT.t; loc : loc}
-type args = arg list
-let it_of_arg arg = sym_ (arg.lname, arg.bt)
-
-
-let check_computational_bound loc s = 
-  let@ is_bound = bound_a s in
-  if is_bound then return () 
-  else fail (fun _ -> {loc; msg = Unknown_variable s})
-
-
-let arg_of_sym (loc : loc) (sym : Sym.t) : (arg, type_error) m = 
-  let@ () = check_computational_bound loc sym in
-  let@ (bt,lname) = get_a sym in
-  return {lname; bt; loc}
-
-let arg_of_asym (asym : 'bty asym) : (arg, type_error) m = 
-  arg_of_sym asym.loc asym.sym
-
-let args_of_asyms (asyms : 'bty asyms) : (args, type_error) m = 
-  ListM.mapM arg_of_asym asyms
 
 
 (* info gathered during spine judgements, per path through a
@@ -1194,29 +300,18 @@ type per_path = per_path_info_entry list
 
 module Spine : sig
   val calltype_ft : 
-    Loc.t -> args -> AT.ft -> (RT.t * per_path, type_error) m
+    Loc.t -> lvts -> AT.ft -> (RT.t * per_path, type_error) m
+  val calltype_ift : 
+    Loc.t -> lvts -> AT.ift -> (IT.t * per_path, type_error) m
   val calltype_lft : 
     Loc.t -> LAT.lft -> (LRT.t * per_path, type_error) m
   val calltype_lt : 
-    Loc.t -> args -> AT.lt * label_kind -> (per_path, type_error) m
+    Loc.t -> lvts -> AT.lt * label_kind -> (per_path, type_error) m
   val calltype_packing : 
     Loc.t -> Sym.t -> LAT.packing_ft -> (OutputDef.t * per_path, type_error) m
   val subtype : 
-    Loc.t -> arg -> RT.t -> (per_path, type_error) m
+    Loc.t -> lvt -> RT.t -> (per_path, type_error) m
 end = struct
-
-  let pp_unis (unis : (LS.t * Locations.info) SymMap.t) : Pp.document = 
-   Pp.list (fun (sym, (ls, _)) ->
-     Sym.pp sym ^^^ !^"unresolved" ^^^ parens (LS.pp ls)
-     ) (SymMap.bindings unis)
-
-
-
-  let ls_matches_spec loc unis uni_var instantiation = 
-    let (expect, info) = SymMap.find uni_var unis in
-    if LS.equal (IT.bt instantiation) expect 
-    then return ()
-    else fail (fun _ -> {loc; msg = Mismatch_lvar { has = IT.bt instantiation; expect; spec_info = info}})
 
 
   let has_exact loc (r : RET.t) =
@@ -1354,10 +449,10 @@ end = struct
       let rec check args ftyp = 
         match args, ftyp with
         | (arg :: args), (Computational ((s, bt), _info, ftyp)) ->
-           if BT.equal arg.bt bt then
-             check args (subst rt_subst (make_subst [(s, sym_ (arg.lname, bt))]) ftyp)
+           if BT.equal (IT.bt arg.value) bt then
+             check args (subst rt_subst (make_subst [(s, arg.value)]) ftyp)
            else
-             fail (fun _ -> {loc = arg.loc; msg = Mismatch {has = arg.bt; expect = bt}})
+             fail (fun _ -> {loc = arg.loc; msg = Mismatch {has = IT.bt arg.value; expect = bt}})
         | [], (L ftyp) -> 
            return ftyp
         | _ -> 
@@ -1373,6 +468,9 @@ end = struct
 
   let calltype_ft loc args (ftyp : AT.ft) : (RT.t * per_path, type_error) m =
     spine RT.subst RT.pp loc FunctionCall args ftyp
+
+  let calltype_ift loc args (ftyp : AT.ift) : (IT.t * per_path, type_error) m =
+    spine IT.subst IT.pp loc FunctionCall args ftyp
 
   let calltype_lft loc (ftyp : LAT.lft) : (LRT.t * per_path, type_error) m =
     spine_l LRT.subst LRT.pp loc FunctionCall ftyp
@@ -1404,79 +502,72 @@ end
 
 (*** pure value inference *****************************************************)
 
-type vt = BT.t * IT.t
-let vt_of_arg arg = (arg.bt, it_of_arg arg)
 
-let rt_of_vt loc (bt,it) = 
-  let s = Sym.fresh () in 
-  RT.Computational ((s, bt), (loc, None),
-  LRT.Constraint (t_ (def_ s it), (loc, None),
-  LRT.I))
+let check_computational_bound loc s = 
+  let@ is_bound = bound_a s in
+  if is_bound then return () 
+  else fail (fun _ -> {loc; msg = Unknown_variable s})
+
+(* let arg_of_sym (loc : loc) (sym : Sym.t) : (arg, type_error) m =  *)
+(*   let@ () = check_computational_bound loc sym in *)
+(*   let@ (bt,lname) = get_a sym in *)
+(*   return {value = sym_ (lname, bt); loc} *)
 
 
-let infer_tuple (loc : loc) (vts : vt list) : (vt, type_error) m = 
-  let bts, its = List.split vts in
-  return (Tuple bts, IT.tuple_ its)
-
-let infer_array (loc : loc) (vts : vt list) = 
-  let item_bt = match vts with
+let infer_array loc (args : lvts) : (lvt, type_error) m = 
+  let item_bt = match args with
     | [] -> Debug_ocaml.error "todo: empty arrays"
-    | (item_bt, _) :: _ -> item_bt
+    | arg :: _ -> IT.bt arg.value
   in
-  let@ (_, it) = 
-    ListM.fold_leftM (fun (index,it) (arg_bt, arg_it) -> 
-        let@ () = WellTyped.ensure_base_type loc ~expect:item_bt arg_bt in
-        return (index + 1, map_set_ it (int_ index, arg_it))
-         ) (0, const_map_ Integer (default_ item_bt)) vts
+  let@ (_, value) = 
+    ListM.fold_leftM (fun (index,it) arg -> 
+        let@ () = WellTyped.ensure_base_type arg.loc 
+                    ~expect:item_bt (IT.bt arg.value) in
+        return (index + 1, map_set_ it (int_ index, arg.value))
+         ) (0, const_map_ Integer (default_ item_bt)) args
   in
-  return (BT.Map (Integer, item_bt), it)
+  return {value;loc}
 
 
 let infer_constructor (loc : loc) (constructor : mu_ctor) 
-                      (args : arg list) : (vt, type_error) m = 
+                      (args : lvts) : (lvt, type_error) m = 
   match constructor, args with
   | M_Ctuple, _ -> 
-     infer_tuple loc (List.map vt_of_arg args)
+     return {loc; value = tuple_ (List.map (fun arg -> arg.value) args)}
   | M_Carray, args -> 
-     infer_array loc (List.map vt_of_arg args)
+     infer_array loc args
   | M_Cspecified, [arg] ->
-     return (vt_of_arg arg)
+     return {loc; value = arg.value}
   | M_Cspecified, _ ->
      fail (fun _ -> {loc; msg = Number_arguments {has = List.length args; expect = 1}})
   | M_Cnil item_bt, [] -> 
      let@ () = WellTyped.WBT.is_bt loc item_bt in
-     let bt = List item_bt in
-     return (bt, nil_ ~item_bt)
+     return {loc; value = nil_ ~item_bt}
   | M_Cnil item_bt, _ -> 
-     let@ () = WellTyped.WBT.is_bt loc item_bt in
      fail (fun _ -> {loc; msg = Number_arguments {has = List.length args; expect=0}})
   | M_Ccons, [arg1; arg2] -> 
-     let bt = List arg1.bt in
-     let@ () = WellTyped.ensure_base_type arg2.loc ~expect:bt arg2.bt in
-     let list_it = cons_ (it_of_arg arg1, it_of_arg arg2) in
-     return (arg2.bt, list_it)
+     let@ () = WellTyped.ensure_base_type arg2.loc 
+                 ~expect:(BT.List (IT.bt arg1.value)) (IT.bt arg2.value) in
+     return {loc; value = cons_ (arg1.value, arg2.value)}
   | M_Ccons, _ ->
      fail (fun _ -> {loc; msg = Number_arguments {has = List.length args; expect = 2}})
 
 
 
-
-
-let infer_ptrval (loc : loc) (ptrval : pointer_value) : (vt, type_error) m =
+let infer_ptrval (loc : loc) (ptrval : pointer_value) : (lvt, type_error) m =
   CF.Impl_mem.case_ptrval ptrval
     ( fun ct -> 
       let sct = Retype.ct_of_ct loc ct in
       let@ () = WellTyped.WCT.is_ct loc sct in
-      return (Loc, IT.null_) )
+      return {loc; value = IT.null_} )
     ( fun sym -> 
+      (* just to make sure it exists *)
       let@ _ = get_fun_decl loc sym in
-      return (Loc, sym_ (sym, BT.Loc)) 
-    )
-    ( fun _prov loc -> 
-      return (Loc, pointer_ loc) )
+      return {loc; value = sym_ (sym, BT.Loc)} ) 
+    ( fun _prov p -> 
+      return {loc; value = pointer_ p} )
 
-let rec infer_mem_value (loc : loc) (mem : mem_value) : (vt, type_error) m =
-  let open BT in
+let rec infer_mem_value (loc : loc) (mem : mem_value) : (lvt, type_error) m =
   CF.Impl_mem.case_mem_value mem
     ( fun ct -> 
       let@ () = WellTyped.WCT.is_ct loc (Retype.ct_of_ct loc ct) in
@@ -1485,7 +576,7 @@ let rec infer_mem_value (loc : loc) (mem : mem_value) : (vt, type_error) m =
       unsupported loc !^"infer_mem_value: concurrent read case" )
     ( fun ity iv -> 
       (* TODO: do anything with ity? *)
-      return (Integer, int_ (Memory.int_of_ival iv)) )
+      return {loc; value = int_ (Memory.int_of_ival iv)} )
     ( fun ft fv -> 
       unsupported loc !^"floats" )
     ( fun ct ptrval -> 
@@ -1502,7 +593,7 @@ let rec infer_mem_value (loc : loc) (mem : mem_value) : (vt, type_error) m =
       infer_union loc tag id mv )
 
 and infer_struct (loc : loc) (tag : tag) 
-                 (member_values : (member * mem_value) list) : (vt, type_error) m =
+                 (member_values : (member * mem_value) list) : (lvt, type_error) m =
   (* might have to make sure the fields are ordered in the same way as
      in the struct declaration *)
   let@ layout = get_struct_decl loc tag in
@@ -1510,10 +601,11 @@ and infer_struct (loc : loc) (tag : tag)
     match fields, spec with
     | ((member, mv) :: fields), ((smember, sct) :: spec) 
          when Id.equal member smember ->
-       let@ (member_bt, member_it) = infer_mem_value loc mv in
-       let@ () = WellTyped.ensure_base_type loc ~expect:(BT.of_sct sct) member_bt in
+       let@ member_lvt = infer_mem_value loc mv in
+       let@ () = WellTyped.ensure_base_type loc 
+                   ~expect:(BT.of_sct sct) (IT.bt member_lvt.value) in
        let@ member_its = check fields spec in
-       return ((member, member_it) :: member_its)
+       return ((member, member_lvt.value) :: member_its)
     | [], [] -> 
        return []
     | ((id, mv) :: fields), ((smember, sbt) :: spec) ->
@@ -1523,19 +615,18 @@ and infer_struct (loc : loc) (tag : tag)
     | ((member,_) :: _), [] ->
        fail (fun _ -> {loc; msg = Generic (!^"supplying unexpected field" ^^^ Id.pp member)})
   in
-  let@ it = check member_values (Memory.member_types layout) in
-  return (BT.Struct tag, IT.struct_ (tag, it))
+  let@ member_its = check member_values (Memory.member_types layout) in
+  return {loc; value = IT.struct_ (tag, member_its)}
 
 and infer_union (loc : loc) (tag : tag) (id : Id.t) 
-                (mv : mem_value) : (vt, type_error) m =
+                (mv : mem_value) : (lvt, type_error) m =
   Debug_ocaml.error "todo: union types"
 
 let rec infer_object_value (loc : loc)
-                       (ov : 'bty mu_object_value) : (vt, type_error) m =
+                       (ov : 'bty mu_object_value) : (lvt, type_error) m =
   match ov with
   | M_OVinteger iv ->
-     let i = Memory.z_of_ival iv in
-     return (Integer, z_ i)
+     return {loc; value = z_ (Memory.z_of_ival iv)}
   | M_OVpointer p -> 
      infer_ptrval loc p
   | M_OVarray items ->
@@ -1552,34 +643,33 @@ let rec infer_object_value (loc : loc)
 and infer_loaded_value loc (M_LVspecified ov) =
   infer_object_value loc ov
 
-let rec infer_value (loc : loc) (v : 'bty mu_value) : (vt, type_error) m = 
+let rec infer_value (loc : loc) (v : 'bty mu_value) : (lvt, type_error) m = 
   match v with
   | M_Vobject ov ->
      infer_object_value loc ov
   | M_Vloaded lv ->
      infer_loaded_value loc lv
   | M_Vunit ->
-     return (Unit, IT.unit_)
+     return {loc; value = IT.unit_}
   | M_Vtrue ->
-     return (Bool, IT.bool_ true)
+     return {loc; value = IT.bool_ true}
   | M_Vfalse -> 
-     return (Bool, IT.bool_ false)
+     return {loc; value = IT.bool_ false}
   | M_Vlist (bt, vals) ->
      let@ () = WellTyped.WBT.is_bt loc bt in
      let@ its = 
        ListM.mapM (fun v -> 
-           let@ (i_bt, i_it) = infer_value loc v in
-           let@ () = WellTyped.ensure_base_type loc ~expect:bt i_bt in
-           return i_it
+           let@ i_lvt = infer_value loc v in
+           let@ () = WellTyped.ensure_base_type i_lvt.loc 
+                       ~expect:bt (IT.bt i_lvt.value) in
+           return i_lvt.value
          ) vals
      in
-     return (BT.List bt, list_ ~item_bt:bt its)
+     return {loc; value = list_ ~item_bt:bt its}
   | M_Vtuple vals ->
-     let@ vts = ListM.mapM (infer_value loc) vals in
-     let bts, its = List.split vts in
-     return (Tuple bts, tuple_ its)
-
-
+     let@ lvts = ListM.mapM (infer_value loc) vals in
+     let value = tuple_ (List.map (fun lvt -> lvt.value) lvts) in
+     return {loc; value}
 
 
 
@@ -1587,32 +677,29 @@ let rec infer_value (loc : loc) (v : 'bty mu_value) : (vt, type_error) m =
 (*** pure expression inference ************************************************)
 
 
-let infer_array_shift loc asym1 loc_ct ct asym2 =
+let infer_array_shift loc arg1 (loc_ct, ct) arg2 =
   let@ () = WellTyped.WCT.is_ct loc_ct ct in
-  let@ arg1 = arg_of_asym asym1 in
-  let@ arg2 = arg_of_asym asym2 in
-  let@ () = WellTyped.ensure_base_type arg1.loc ~expect:Loc arg1.bt in
-  let@ () = WellTyped.ensure_base_type arg2.loc ~expect:Integer arg2.bt in
-  let v = arrayShift_ (it_of_arg arg1, ct, it_of_arg arg2) in
-  return (rt_of_vt loc (BT.Loc, v))
+  let@ () = WellTyped.ensure_base_type arg1.loc ~expect:Loc (IT.bt arg1.value) in
+  let@ () = WellTyped.ensure_base_type arg2.loc ~expect:Integer (IT.bt arg2.value) in
+  let value = arrayShift_ (arg1.value, ct, arg2.value) in
+  return {loc; value}
 
 
-let wrapI ity arg =
+let wrapI loc ity arg =
   (* try to follow wrapI from runtime/libcore/std.core *)
   let maxInt = Memory.max_integer_type ity in
   let minInt = Memory.min_integer_type ity in
   let dlt = Z.add (Z.sub maxInt minInt) (Z.of_int 1) in
   let r = rem_f_ (arg, z_ dlt) in
-  ite_ (le_ (r, z_ maxInt), r, sub_ (r, z_ dlt))
+  let value = ite_ (le_ (r, z_ maxInt), r, sub_ (r, z_ dlt)) in
+  {value; loc}
 
 
 
-let conv_int loc (act : _ act) asym = 
+let conv_int loc (act : _ act) arg = 
   let@ () = WellTyped.WCT.is_ct act.loc act.ct in
-  let@ arg = arg_of_asym asym in
-  let@ () = WellTyped.ensure_base_type arg.loc ~expect:Integer arg.bt in
+  let@ () = WellTyped.ensure_base_type arg.loc ~expect:Integer (IT.bt arg.value) in
   (* try to follow conv_int from runtime/libcore/std.core *)
-  let arg_it = it_of_arg arg in
   let ity = match act.ct with
     | Integer ity -> ity
     | _ -> Debug_ocaml.error "conv_int applied to non-integer type"
@@ -1622,34 +709,33 @@ let conv_int loc (act : _ act) asym =
     let@ model = model () in
     fail (fun ctxt ->
         let msg = Int_unrepresentable 
-                    {value = arg_it; ict = act.ct; ctxt; model} in
+                    {value = arg.value; ict = act.ct; ctxt; model} in
         {loc; msg}
       )
   in
-  begin match ity with
-  | Bool ->
-     let vt = (Integer, ite_ (eq_ (arg_it, int_ 0), int_ 0, int_ 1)) in
-     return (rt_of_vt loc vt, [])
-  | _
-       when Sctypes.is_unsigned_integer_type ity ->
-     let result = match provable (t_ (representable_ (act.ct, arg_it))) with
-       | `True -> arg_it
+  let@ value = match ity with
+    | Bool ->
+       return (ite_ (eq_ (arg.value, int_ 0), int_ 0, int_ 1))
+    | _ when Sctypes.is_unsigned_integer_type ity ->
+       begin match provable (t_ (representable_ (act.ct, arg.value))) with
+       | `True -> return arg.value
        | `False ->
-          ite_ (representable_ (act.ct, arg_it),
-                arg_it,
-                wrapI ity arg_it)
-     in
-     return (rt_of_vt loc (Integer, result), [])
-  | _ ->
-     begin match provable (t_ (representable_ (act.ct, arg_it))) with
-     | `True -> return (rt_of_vt loc (Integer, arg_it), [])
-     | `False -> fail_unrepresentable ()
-     end
-  end
+          return
+            (ite_ (representable_ (act.ct, arg.value),
+                   arg.value, 
+                   (wrapI loc ity arg.value).value))
+       end
+    | _ ->
+       begin match provable (t_ (representable_ (act.ct, arg.value))) with
+       | `True -> return arg.value
+       | `False -> fail_unrepresentable ()
+       end
+  in
+  return {loc; value}
 
 
 (* could potentially return a vt instead of an RT.t *)
-let infer_pexpr (pe : 'bty mu_pexpr) : (RT.t * per_path, type_error) m =
+let rec infer_pexpr (pe : 'bty mu_pexpr) : (lvt, type_error) m =
   let (M_Pexpr (loc, _annots, _bty, pe_)) = pe in
   let@ () = print_with_ctxt (fun ctxt ->
       debug 3 (lazy (action "inferring pure expression"));
@@ -1657,87 +743,86 @@ let infer_pexpr (pe : 'bty mu_pexpr) : (RT.t * per_path, type_error) m =
       debug 3 (lazy (item "ctxt" (Context.pp ctxt)))
     )
   in
-  let@ (rt, per_path) = match pe_ with
+  let@ lvt = match pe_ with
     | M_PEsym sym ->
-       let@ arg = arg_of_sym loc sym in
-       return (rt_of_vt loc (vt_of_arg arg), [])
-    | M_PEimpl i ->
-       let@ global = get_global () in
-       let rt = Global.get_impl_constant global i in
-       return (rt, [])
+       let@ () = check_computational_bound loc sym in
+       let@ (bt,lname) = get_a sym in
+       return {loc; value = sym_ (lname, bt)}
+    (* | M_PEimpl i -> *)
+    (*    let@ global = get_global () in *)
+    (*    let value = Global.get_impl_constant global i in *)
+    (*    return {loc; value} *)
     | M_PEval v ->
-       let@ vt = infer_value loc v in
-       return (rt_of_vt loc vt, [])
+       infer_value loc v
     | M_PEconstrained _ ->
        Debug_ocaml.error "todo: PEconstrained"
-    | M_PEctor (ctor, asyms) ->
-       let@ args = args_of_asyms asyms in
-       let@ vt = infer_constructor loc ctor args in
-       return (rt_of_vt loc vt, [])
+    | M_PEctor (ctor, pes) ->
+       let@ args = ListM.mapM infer_pexpr pes in
+       infer_constructor loc ctor args
     | M_CivCOMPL _ ->
        Debug_ocaml.error "todo: CivCOMPL"
     | M_CivAND _ ->
        Debug_ocaml.error "todo: CivAND"
     | M_CivOR _ ->
        Debug_ocaml.error "todo: CivOR"
-    | M_CivXOR (act, asym1, asym2) -> 
-       let ity = match act.ct with
-         | Integer ity -> ity
-         | _ -> Debug_ocaml.error "M_CivXOR with non-integer c-type"
-       in
-       let@ arg1 = arg_of_asym asym1 in
-       let@ arg2 = arg_of_asym asym2 in
-       let@ () = WellTyped.ensure_base_type arg1.loc ~expect:Integer arg1.bt in
-       let@ () = WellTyped.ensure_base_type arg2.loc ~expect:Integer arg2.bt in
-       let xor_unbounded = xor_ (it_of_arg arg1, it_of_arg arg2) in
-       let result = wrapI ity xor_unbounded in
-       return (rt_of_vt loc (Integer, result), [])
+    | M_CivXOR (act, pe1, pe2) -> 
+       (* let ity = match act.ct with *)
+       (*   | Integer ity -> ity *)
+       (*   | _ -> Debug_ocaml.error "M_CivXOR with non-integer c-type" *)
+       (* in *)
+       let@ arg1 = infer_pexpr pe1 in
+       let@ arg2 = infer_pexpr pe2 in
+       let@ () = WellTyped.ensure_base_type arg1.loc ~expect:Integer (IT.bt arg1.value) in
+       let@ () = WellTyped.ensure_base_type arg2.loc ~expect:Integer (IT.bt arg2.value) in
+       let value = xor_ (arg1.value, arg2.value) in
+       (* let result = wrapI ity xor_unbounded in *)
+       return {loc; value}
     | M_Cfvfromint _ -> 
        unsupported loc !^"floats"
     | M_Civfromfloat (act, _) -> 
        let@ () = WellTyped.WCT.is_ct act.loc act.ct in
        unsupported loc !^"floats"
-    | M_PEarray_shift (asym1, ct, asym2) ->
-       let@ rt = infer_array_shift loc asym1 loc ct asym2 in
-       return (rt, [])
-    | M_PEmember_shift (asym, tag, member) ->
-       let@ arg = arg_of_asym asym in
-       let@ () = WellTyped.ensure_base_type arg.loc ~expect:Loc arg.bt in
+    | M_PEarray_shift (pe1, ct, pe2) ->
+       let@ arg1 = infer_pexpr pe1 in
+       let@ arg2 = infer_pexpr pe2 in
+       infer_array_shift loc arg1 (loc, ct) arg2
+    | M_PEmember_shift (pe, tag, member) ->
+       let@ arg = infer_pexpr pe in
+       let@ () = WellTyped.ensure_base_type arg.loc ~expect:Loc (IT.bt arg.value) in
        let@ layout = get_struct_decl loc tag in
        let@ _member_bt = get_member_type loc tag member layout in
-       let it = it_of_arg arg in
-       let vt = (Loc, memberShift_ (it, tag, member)) in
-       return (rt_of_vt loc vt, [])
-    | M_PEnot asym ->
-       let@ arg = arg_of_asym asym in
-       let@ () = WellTyped.ensure_base_type arg.loc ~expect:Bool arg.bt in
-       let vt = (Bool, not_ (it_of_arg arg)) in
-       return (rt_of_vt loc vt, [])
-    | M_PEop (op, asym1, asym2) ->
-       let@ arg1 = arg_of_asym asym1 in
-       let@ arg2 = arg_of_asym asym2 in
-       let v1 = it_of_arg arg1 in
-       let v2 = it_of_arg arg2 in
-       let@ (((ebt1, ebt2), rbt), result_it) = match op with
-         | OpAdd ->   return (((Integer, Integer), Integer), IT.add_ (v1, v2))
-         | OpSub ->   return (((Integer, Integer), Integer), IT.sub_ (v1, v2))
-         | OpMul ->   return (((Integer, Integer), Integer), IT.mul_ (v1, v2))
-         | OpDiv ->   return (((Integer, Integer), Integer), IT.div_ (v1, v2))
-         | OpRem_f -> return (((Integer, Integer), Integer), IT.rem_f_ (v1, v2))
-         | OpExp ->   return (((Integer, Integer), Integer), IT.exp_no_smt_ (v1, v2))
-         | OpEq ->    return (((Integer, Integer), Bool), IT.eq_ (v1, v2))
-         | OpGt ->    return (((Integer, Integer), Bool), IT.gt_ (v1, v2))
-         | OpLt ->    return (((Integer, Integer), Bool), IT.lt_ (v1, v2))
-         | OpGe ->    return (((Integer, Integer), Bool), IT.ge_ (v1, v2))
-         | OpLe ->    return (((Integer, Integer), Bool), IT.le_ (v1, v2))
-         | OpAnd ->   return (((Bool, Bool), Bool), IT.and_ [v1; v2])
-         | OpOr ->    return (((Bool, Bool), Bool), IT.or_ [v1; v2])
+       let value = memberShift_ (arg.value, tag, member) in
+       return {loc; value}
+    | M_PEnot pe ->
+       let@ arg = infer_pexpr pe in
+       let@ () = WellTyped.ensure_base_type arg.loc ~expect:Bool (IT.bt arg.value) in
+       let value = not_ arg.value in
+       return {loc; value}
+    | M_PEop (op, pe1, pe2) ->
+       let@ arg1 = infer_pexpr pe1 in
+       let@ arg2 = infer_pexpr pe2 in
+       let v1 = arg1.value in
+       let v2 = arg2.value in
+       let@ ((ebt1, ebt2), value) = match op with
+         | OpAdd ->   return ((Integer, Integer), IT.add_ (v1, v2))
+         | OpSub ->   return ((Integer, Integer), IT.sub_ (v1, v2))
+         | OpMul ->   return ((Integer, Integer), IT.mul_ (v1, v2))
+         | OpDiv ->   return ((Integer, Integer), IT.div_ (v1, v2))
+         | OpRem_f -> return ((Integer, Integer), IT.rem_f_ (v1, v2))
+         | OpExp ->   return ((Integer, Integer), IT.exp_no_smt_ (v1, v2))
+         | OpEq ->    return ((Integer, Integer), IT.eq_ (v1, v2))
+         | OpGt ->    return ((Integer, Integer), IT.gt_ (v1, v2))
+         | OpLt ->    return ((Integer, Integer), IT.lt_ (v1, v2))
+         | OpGe ->    return ((Integer, Integer), IT.ge_ (v1, v2))
+         | OpLe ->    return ((Integer, Integer), IT.le_ (v1, v2))
+         | OpAnd ->   return ((Bool, Bool), IT.and_ [v1; v2])
+         | OpOr ->    return ((Bool, Bool), IT.or_ [v1; v2])
          | OpRem_t -> 
             let@ provable = provable loc in
             begin match provable (LC.T (and_ [le_ (int_ 0, v1); le_ (int_ 0, v2)])) with
             | `True ->
                (* if the arguments are non-negative, then rem or mod should be sound to use for rem_t *)
-               return (((Integer, Integer), Integer), IT.mod_ (v1, v2))
+               return ((Integer, Integer), IT.mod_ (v1, v2))
             | `False ->
                let@ model = model () in
                let err = !^"Unsupported: rem_t applied to negative arguments" in
@@ -1747,57 +832,49 @@ let infer_pexpr (pe : 'bty mu_pexpr) : (RT.t * per_path, type_error) m =
                  )
             end
        in
-       let@ () = WellTyped.ensure_base_type arg1.loc ~expect:ebt1 arg1.bt in
-       let@ () = WellTyped.ensure_base_type arg2.loc ~expect:ebt2 arg2.bt in
-       return (rt_of_vt loc (rbt, result_it), [])
+       let@ () = WellTyped.ensure_base_type arg1.loc ~expect:ebt1 (IT.bt arg1.value) in
+       let@ () = WellTyped.ensure_base_type arg2.loc ~expect:ebt2 (IT.bt arg2.value) in
+       return {loc; value}
     | M_PEstruct _ ->
        Debug_ocaml.error "todo: PEstruct"
     | M_PEunion _ ->
        Debug_ocaml.error "todo: PEunion"
     | M_PEmemberof _ ->
        Debug_ocaml.error "todo: M_PEmemberof"
-    | M_PEcall (called, asyms) ->
-       let@ global = get_global () in
-       let@ decl_typ = match called with
-         | CF.Core.Impl impl -> 
-            return (Global.get_impl_fun_decl global impl )
-         | CF.Core.Sym sym -> 
-            let@ (_, t, _) = get_fun_decl loc sym in
-            return t
-       in
-       let@ args = args_of_asyms asyms in
-       Spine.calltype_ft loc args decl_typ
-    | M_PEassert_undef (asym, _uloc, ub) ->
-       let@ arg = arg_of_asym asym in
-       let@ () = WellTyped.ensure_base_type arg.loc ~expect:Bool arg.bt in
+    | M_PEassert_undef (pe, _uloc, ub) ->
+       let@ arg = infer_pexpr pe in
+       let@ () = WellTyped.ensure_base_type arg.loc ~expect:Bool (IT.bt arg.value) in
        let@ provable = provable loc in
-       begin match provable (t_ (it_of_arg arg)) with
-       | `True -> return (rt_of_vt loc (Unit, unit_), [])
+       begin match provable (t_ arg.value) with
+       | `True -> 
+          return {loc; value = unit_}
        | `False ->
           let@ model = model () in
           fail (fun ctxt -> {loc; msg = Undefined_behaviour {ub; ctxt; model}})
        end
-    | M_PEbool_to_integer asym ->
-       let@ arg = arg_of_asym asym in
-       let@ () = WellTyped.ensure_base_type arg.loc ~expect:Bool arg.bt in
-       let vt = (Integer, (ite_ (it_of_arg arg, int_ 1, int_ 0))) in
-       return (rt_of_vt loc vt, [])
-    | M_PEconv_int (act, asym) ->
-       conv_int loc act asym
-    | M_PEconv_loaded_int (act, asym) ->
-       conv_int loc act asym
-    | M_PEwrapI (act, asym) ->
-       let@ arg = arg_of_asym asym in
-       let@ () = WellTyped.ensure_base_type arg.loc ~expect:Integer arg.bt in
+    | M_PEbool_to_integer pe ->
+       let@ arg = infer_pexpr pe in
+       let@ () = WellTyped.ensure_base_type arg.loc ~expect:Bool (IT.bt arg.value) in
+       let value = ite_ (arg.value, int_ 1, int_ 0) in
+       return {loc; value}
+    | M_PEconv_int (act, pe) ->
+       let@ arg = infer_pexpr pe in
+       conv_int loc act arg
+    | M_PEconv_loaded_int (act, pe) ->
+       let@ arg = infer_pexpr pe in
+       conv_int loc act arg
+    | M_PEwrapI (act, pe) ->
+       let@ arg = infer_pexpr pe in
+       let@ () = WellTyped.ensure_base_type arg.loc ~expect:Integer (IT.bt arg.value) in
        let ity = match act.ct with
          | Integer ity -> ity
          | _ -> Debug_ocaml.error "wrapI applied to non-integer type"
        in
-       let result = wrapI ity (it_of_arg arg) in
-       return (rt_of_vt loc (Integer, result), [])
+       let value = wrapI loc ity arg.value in
+       return value
   in
-  debug 3 (lazy (item "type" (RT.pp rt)));
-  return (rt, per_path)
+  debug 3 (lazy (item "type" (IT.pp lvt.value)));
+  return lvt
 
 
 let rec check_tpexpr (e : 'bty mu_tpexpr) (typ : RT.t) : (per_path, type_error) m =
@@ -1810,9 +887,9 @@ let rec check_tpexpr (e : 'bty mu_tpexpr) (typ : RT.t) : (per_path, type_error) 
     )
   in
   match e_ with
-  | M_PEif (casym, e1, e2) ->
-     let@ carg = arg_of_asym casym in
-     let@ () = WellTyped.ensure_base_type carg.loc ~expect:Bool carg.bt in
+  | M_PEif (pe, e1, e2) ->
+     let@ carg = infer_pexpr pe in
+     let@ () = WellTyped.ensure_base_type carg.loc ~expect:Bool (IT.bt carg.value) in
      let@ per_paths = ListM.mapM (fun (lc, e) ->
          pure begin
              let@ () = add_c (t_ lc) in
@@ -1821,13 +898,13 @@ let rec check_tpexpr (e : 'bty mu_tpexpr) (typ : RT.t) : (per_path, type_error) 
              | `True -> return []
              | `False -> check_tpexpr_in [loc_of_tpexpr e; loc] e typ
            end
-       ) [(it_of_arg carg, e1); (not_ (it_of_arg carg), e2)] in
+       ) [(carg.value, e1); (not_ carg.value, e2)] in
      return (List.concat per_paths)
-  | M_PEcase (asym, pats_es) ->
-     let@ arg = arg_of_asym asym in
+  | M_PEcase (pe, pats_es) ->
+     let@ arg = infer_pexpr pe in
      let@ per_paths = ListM.mapM (fun (pat, pe) ->
          pure begin
-             let@ () = pattern_match (it_of_arg arg) pat in
+             let@ () = pattern_match arg.value pat in
              let@ provable = provable loc in
              match provable (t_ (bool_ false)) with
              | `True -> return []
@@ -1837,18 +914,16 @@ let rec check_tpexpr (e : 'bty mu_tpexpr) (typ : RT.t) : (per_path, type_error) 
      return (List.concat per_paths)
   | M_PElet (p, e1, e2) ->
      let@ fin = begin_trace_of_pure_step (Some p) e1 in
-     let@ (rt, per_path1) = infer_pexpr e1 in
+     let@ arg1 = infer_pexpr e1 in
      let@ () = match p with
-       | M_Symbol sym -> bind (Some (Loc (loc_of_pexpr e1))) sym rt
-       | M_Pat pat -> pattern_match_rt (Loc (loc_of_pexpr e1)) pat rt
+       | M_Symbol sym -> bind_lvt sym arg1
+       | M_Pat pat -> pattern_match arg1.value pat
      in
      let@ () = fin () in
-     let@ per_path2 = check_tpexpr e2 typ in
-     return (per_path1 @ per_path2)
-  | M_PEdone asym ->
-     let@ arg = arg_of_asym asym in
-     let@ per_path = Spine.subtype loc arg typ in
-     return per_path
+     check_tpexpr e2 typ
+  | M_PEdone pe ->
+     let@ arg = infer_pexpr pe in
+     Spine.subtype loc arg typ
   | M_PEundef (_loc, ub) ->
      let@ provable = provable loc in
      begin match provable (t_ (bool_ false)) with
@@ -1857,8 +932,8 @@ let rec check_tpexpr (e : 'bty mu_tpexpr) (typ : RT.t) : (per_path, type_error) 
         let@ model = model () in
         fail (fun ctxt -> {loc; msg = Undefined_behaviour {ub; ctxt; model}})
      end
-  | M_PEerror (err, asym) ->
-     let@ arg = arg_of_asym asym in
+  | M_PEerror (err, pe) ->
+     let@ arg = infer_pexpr pe in
      let@ provable = provable loc in
      begin match provable (t_ (bool_ false)) with
      | `True -> return []
@@ -1920,15 +995,16 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t * per_path, type_error) m =
   in
   let@ result = match e_ with
     | M_Epure pe -> 
-       infer_pexpr pe
+       let@ lvt = infer_pexpr pe in
+       return (rt_of_lvt lvt, [])
     | M_Ememop memop ->
-       let pointer_op op asym1 asym2 = 
-         let@ arg1 = arg_of_asym asym1 in
-         let@ arg2 = arg_of_asym asym2 in
-         let@ () = WellTyped.ensure_base_type arg1.loc ~expect:Loc arg1.bt in
-         let@ () = WellTyped.ensure_base_type arg2.loc ~expect:Loc arg2.bt in
-         let vt = (Bool, op (it_of_arg arg1, it_of_arg arg2)) in
-         return (rt_of_vt loc vt, [])
+       let pointer_op op pe1 pe2 = 
+         let@ arg1 = infer_pexpr pe1 in
+         let@ arg2 = infer_pexpr pe2 in
+         let@ () = WellTyped.ensure_base_type arg1.loc ~expect:Loc (IT.bt arg1.value) in
+         let@ () = WellTyped.ensure_base_type arg2.loc ~expect:Loc (IT.bt arg2.value) in
+         let lvt = {loc; value = op (arg1.value, arg2.value)} in
+         return (rt_of_lvt lvt, [])
        in
        begin match memop with
        | M_PtrEq (asym1, asym2) -> 
@@ -1943,71 +1019,71 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t * per_path, type_error) m =
           pointer_op lePointer_ asym1 asym2
        | M_PtrGe (asym1, asym2) -> 
           pointer_op gePointer_ asym1 asym2
-       | M_Ptrdiff (act, asym1, asym2) -> 
+       | M_Ptrdiff (act, pe1, pe2) -> 
           let@ () = WellTyped.WCT.is_ct act.loc act.ct in
-          let@ arg1 = arg_of_asym asym1 in
-          let@ arg2 = arg_of_asym asym2 in
-          let@ () = WellTyped.ensure_base_type arg1.loc ~expect:Loc arg1.bt in
-          let@ () = WellTyped.ensure_base_type arg2.loc ~expect:Loc arg2.bt in
+          let@ arg1 = infer_pexpr pe1 in
+          let@ arg2 = infer_pexpr pe2 in
+          let@ () = WellTyped.ensure_base_type arg1.loc ~expect:Loc (IT.bt arg1.value) in
+          let@ () = WellTyped.ensure_base_type arg2.loc ~expect:Loc (IT.bt arg2.value) in
           (* copying and adapting from memory/concrete/impl_mem.ml *)
           let divisor = match act.ct with
             | Array (item_ty, _) -> Memory.size_of_ctype item_ty
             | ct -> Memory.size_of_ctype ct
           in
-          let v =
+          let value =
             div_
-              (sub_ (pointerToIntegerCast_ (it_of_arg arg1),
-                     pointerToIntegerCast_ (it_of_arg arg2)),
+              (sub_ (pointerToIntegerCast_ arg1.value,
+                     pointerToIntegerCast_ arg2.value),
                int_ divisor)
           in
-          let vt = (Integer, v) in
-          return (rt_of_vt loc vt, [])
-       | M_IntFromPtr (act_from, act_to, asym) ->
+          return (rt_of_lvt {loc; value}, [])
+       | M_IntFromPtr (act_from, act_to, pe) ->
           let@ () = WellTyped.WCT.is_ct act_from.loc act_from.ct in
           let@ () = WellTyped.WCT.is_ct act_to.loc act_to.ct in
-          let@ arg = arg_of_asym asym in
-          let@ () = WellTyped.ensure_base_type arg.loc ~expect:Loc arg.bt in
-          let v = pointerToIntegerCast_ (it_of_arg arg) in
+          let@ arg = infer_pexpr pe in
+          let@ () = WellTyped.ensure_base_type arg.loc ~expect:Loc (IT.bt arg.value) in
+          let value = pointerToIntegerCast_ arg.value in
           let@ () = 
             (* after discussing with Kavyan *)
             let@ provable = provable loc in
-            let lc = t_ (representable_ (act_to.ct, v)) in
+            let lc = t_ (representable_ (act_to.ct, value)) in
             begin match provable lc with
             | `True -> return () 
             | `False ->
                let@ model = model () in
                fail (fun ctxt ->
                    let ict = act_to.ct in
-                   let value = it_of_arg arg in
-                   {loc; msg = Int_unrepresentable {value; ict; ctxt; model}}
+                   {loc; msg = Int_unrepresentable 
+                                 {value = arg.value; ict; ctxt; model}}
                  )
             end
           in
-          let vt = (Integer, v) in
-          return (rt_of_vt loc vt, [])
-       | M_PtrFromInt (act_from, act2_to, asym) ->
+          return (rt_of_lvt {loc; value}, [])
+       | M_PtrFromInt (act_from, act2_to, pe) ->
           let@ () = WellTyped.WCT.is_ct act_from.loc act_from.ct in
           let@ () = WellTyped.WCT.is_ct act2_to.loc act2_to.ct in
-          let@ arg = arg_of_asym asym in
-          let@ () = WellTyped.ensure_base_type arg.loc ~expect:Integer arg.bt in
-          let vt = (Loc, integerToPointerCast_ (it_of_arg arg)) in
-          return (rt_of_vt loc vt, [])
-       | M_PtrValidForDeref (act, asym) ->
+          let@ arg = infer_pexpr pe in
+          let@ () = WellTyped.ensure_base_type arg.loc ~expect:Integer (IT.bt arg.value) in
+          let value = integerToPointerCast_ arg.value in
+          return (rt_of_lvt {loc; value}, [])
+       | M_PtrValidForDeref (act, pe) ->
           (* check *)
           let@ () = WellTyped.WCT.is_ct act.loc act.ct in
-          let@ arg = arg_of_asym asym in
-          let@ () = WellTyped.ensure_base_type arg.loc ~expect:Loc arg.bt in
-          let vt = (Bool, aligned_ (it_of_arg arg, act.ct)) in
-          return (rt_of_vt loc vt, [])
-       | M_PtrWellAligned (act, asym) ->
+          let@ arg = infer_pexpr pe in
+          let@ () = WellTyped.ensure_base_type arg.loc ~expect:Loc (IT.bt arg.value) in
+          let value = aligned_ (arg.value, act.ct) in
+          return (rt_of_lvt {loc; value}, [])
+       | M_PtrWellAligned (act, pe) ->
           let@ () = WellTyped.WCT.is_ct act.loc act.ct in
-          let@ arg = arg_of_asym asym in
-          let@ () = WellTyped.ensure_base_type arg.loc ~expect:Loc arg.bt in
-          let vt = (Bool, aligned_ (it_of_arg arg, act.ct)) in
-          return (rt_of_vt loc vt, [])
-       | M_PtrArrayShift (asym1, act, asym2) ->
-          let@ rt = infer_array_shift loc asym1 act.loc act.ct asym2 in
-          return (rt, [])
+          let@ arg = infer_pexpr pe in
+          let@ () = WellTyped.ensure_base_type arg.loc ~expect:Loc (IT.bt arg.value) in
+          let value = aligned_ (arg.value, act.ct) in
+          return (rt_of_lvt {loc; value}, [])
+       | M_PtrArrayShift (pe1, act, pe2) ->
+          let@ arg1 = infer_pexpr pe1 in
+          let@ arg2 = infer_pexpr pe2 in
+          let@ lvt = infer_array_shift loc arg1 (act.loc, act.ct) arg2 in
+          return (rt_of_lvt lvt, [])
        | M_Memcpy _ (* (asym 'bty * asym 'bty * asym 'bty) *) ->
           Debug_ocaml.error "todo: M_Memcpy"
        | M_Memcmp _ (* (asym 'bty * asym 'bty * asym 'bty) *) ->
@@ -2025,10 +1101,10 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t * per_path, type_error) m =
        end
     | M_Eaction (M_Paction (_pol, M_Action (aloc, action_))) ->
        begin match action_ with
-       | M_Create (asym, act, _prefix) -> 
+       | M_Create (pe, act, _prefix) -> 
           let@ () = WellTyped.WCT.is_ct act.loc act.ct in
-          let@ arg = arg_of_asym asym in
-          let@ () = WellTyped.ensure_base_type arg.loc ~expect:Integer arg.bt in
+          let@ arg = infer_pexpr pe in
+          let@ () = WellTyped.ensure_base_type arg.loc ~expect:Integer (IT.bt arg.value) in
           let ret = Sym.fresh () in
           let oarg_s, oarg = IT.fresh (Resources.block_oargs) in
           let resource = 
@@ -2043,7 +1119,7 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t * per_path, type_error) m =
           let rt = 
             RT.Computational ((ret, Loc), (loc, None),
             LRT.Constraint (t_ (representable_ (pointer_ct act.ct, sym_ (ret, Loc))), (loc, None),
-            LRT.Constraint (t_ (alignedI_ ~align:(it_of_arg arg) ~t:(sym_ (ret, Loc))), (loc, None),
+            LRT.Constraint (t_ (alignedI_ ~align:arg.value ~t:(sym_ (ret, Loc))), (loc, None),
             LRT.Resource (resource, (loc, None), 
             LRT.I))))
           in
@@ -2054,32 +1130,31 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t * per_path, type_error) m =
           Debug_ocaml.error "todo: Alloc"
        | M_Kill (M_Dynamic, asym) -> 
           Debug_ocaml.error "todo: Free"
-       | M_Kill (M_Static ct, asym) -> 
+       | M_Kill (M_Static ct, pe) -> 
           let@ () = WellTyped.WCT.is_ct loc ct in
-          let@ arg = arg_of_asym asym in
-          let@ () = WellTyped.ensure_base_type arg.loc ~expect:Loc arg.bt in
+          let@ arg = infer_pexpr pe in
+          let@ () = WellTyped.ensure_base_type arg.loc ~expect:Loc (IT.bt arg.value) in
           let@ _ = 
             RI.Special.predicate_request ~recursive:true loc (Access Kill) ({
               name = Owned ct;
-              pointer = it_of_arg arg;
+              pointer = arg.value;
               permission = bool_ true;
               iargs = [];
             }, None)
           in
-          let rt = RT.Computational ((Sym.fresh (), Unit), (loc, None), I) in
-          return (rt, [])
-       | M_Store (_is_locking, act, pasym, vasym, mo) -> 
+          return (rt_of_lvt {loc; value = unit_}, [])
+       | M_Store (_is_locking, act, p_pe, v_pe, mo) -> 
           let@ () = WellTyped.WCT.is_ct act.loc act.ct in
-          let@ parg = arg_of_asym pasym in
-          let@ varg = arg_of_asym vasym in
-          let@ () = WellTyped.ensure_base_type loc ~expect:(BT.of_sct act.ct) varg.bt in
-          let@ () = WellTyped.ensure_base_type loc ~expect:Loc parg.bt in
+          let@ parg = infer_pexpr p_pe in
+          let@ varg = infer_pexpr v_pe in
+          let@ () = WellTyped.ensure_base_type loc ~expect:(BT.of_sct act.ct) (IT.bt varg.value) in
+          let@ () = WellTyped.ensure_base_type loc ~expect:Loc (IT.bt parg.value) in
           (* The generated Core program will in most cases before this
              already have checked whether the store value is
              representable and done the right thing. Pointers, as I
              understand, are an exception. *)
           let@ () = 
-            let in_range_lc = good_ (act.ct, it_of_arg varg) in
+            let in_range_lc = good_ (act.ct, varg.value) in
             let@ provable = provable loc in
             let holds = provable (t_ in_range_lc) in
             match holds with
@@ -2090,8 +1165,8 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t * per_path, type_error) m =
                    let msg = 
                      Write_value_bad {
                          ct = act.ct; 
-                         location = it_of_arg parg; 
-                         value = it_of_arg varg; 
+                         location = parg.value; 
+                         value = varg.value; 
                          ctxt;
                          model}
                    in
@@ -2101,7 +1176,7 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t * per_path, type_error) m =
           let@ _ = 
             RI.Special.predicate_request ~recursive:true loc (Access (Store None)) ({
                 name = Block act.ct; 
-                pointer = it_of_arg parg;
+                pointer = parg.value;
                 permission = bool_ true;
                 iargs = [];
               }, None)
@@ -2110,7 +1185,7 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t * per_path, type_error) m =
           let resource = 
             (oarg_s, (P {
                 name = Owned act.ct;
-                pointer = it_of_arg parg;
+                pointer = parg.value;
                 permission = bool_ true;
                 iargs = [];
                },
@@ -2118,7 +1193,7 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t * per_path, type_error) m =
           in
           let value_constr = 
             t_ (eq_ (recordMember_ ~member_bt:(BT.of_sct act.ct) (oarg, value_sym),
-                     it_of_arg varg))
+                     varg.value))
           in
           let rt = 
             RT.Computational ((Sym.fresh (), Unit), (loc, None),
@@ -2127,20 +1202,20 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t * per_path, type_error) m =
             LRT.I)))
           in
           return (rt, [])
-       | M_Load (act, pasym, _mo) -> 
+       | M_Load (act, p_pe, _mo) -> 
           let@ () = WellTyped.WCT.is_ct act.loc act.ct in
-          let@ parg = arg_of_asym pasym in
-          let@ () = WellTyped.ensure_base_type parg.loc ~expect:Loc parg.bt in
+          let@ parg = infer_pexpr p_pe in
+          let@ () = WellTyped.ensure_base_type parg.loc ~expect:Loc (IT.bt parg.value) in
           let@ (point, point_oargs) = 
             restore_resources 
               (RI.Special.predicate_request ~recursive:true loc (Access (Load None)) ({ 
                      name = Owned act.ct;
-                     pointer = it_of_arg parg;
+                     pointer = parg.value;
                      permission = bool_ true;
                      iargs = [];
                    }, None))
           in
-          let value = snd (List.hd (oargs_list point_oargs)) in
+          let value = snd (List.hd (RI.oargs_list point_oargs)) in
           (* let@ () =  *)
           (*   let@ provable = provable loc in *)
           (*   match provable (t_ init) with *)
@@ -2178,49 +1253,55 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t * per_path, type_error) m =
     | M_Eskip -> 
        let rt = RT.Computational ((Sym.fresh (), Unit), (loc, None), I) in
        return (rt, [])
-    | M_Eccall (act, afsym, asyms) ->
+    | M_Eccall (act, f_pe, pes) ->
        (* todo: do anything with act? *)
        let@ () = WellTyped.WCT.is_ct act.loc act.ct in
-       let@ args = args_of_asyms asyms in
-       let@ (_loc, ft, _) = get_fun_decl loc afsym.sym in
-       Spine.calltype_ft loc args ft
-    | M_Eproc (fname, asyms) ->
-       let@ (_, decl_typ) = match fname with
-         | CF.Core.Impl impl -> 
-            let@ global = get_global () in
-            return (loc, Global.get_impl_fun_decl global impl)
-         | CF.Core.Sym sym -> 
-            let@ (loc, fun_decl, _) = get_fun_decl loc sym in
-            return (loc, fun_decl)
+       let@ args = ListM.mapM infer_pexpr pes in
+       let fsym = match f_pe with
+         | M_Pexpr (_, _, _, M_PEsym fsym) -> fsym
+         | _ -> unsupported loc !^"function application of function pointers"
        in
-       let@ args = args_of_asyms asyms in
-       Spine.calltype_ft loc args decl_typ
-    | M_Erpredicate (pack_unpack, TPU_Predicate pname, asyms) ->
+       let@ (_loc, ft, _) = get_fun_decl loc fsym in
+       Spine.calltype_ft loc args ft
+    (* | M_Eproc (fname, pes) -> *)
+    (*    let@ (_, decl_typ) = match fname with *)
+    (*      | CF.Core.Impl impl ->  *)
+    (*         let@ global = get_global () in *)
+    (*         let ift = Global.get_impl_fun_decl global impl in *)
+    (*         let ft = AT.map (fun value -> rt_of_lvt {loc = Loc.unknown; value}) ift in *)
+    (*         return (loc, ft) *)
+    (*      | CF.Core.Sym sym ->  *)
+    (*         let@ (loc, fun_decl, _) = get_fun_decl loc sym in *)
+    (*         return (loc, fun_decl) *)
+    (*    in *)
+    (*    let@ args = ListM.mapM infer_pexpr pes in *)
+    (*    Spine.calltype_ft loc args decl_typ *)
+    | M_Erpredicate (pack_unpack, TPU_Predicate pname, pes) ->
        let@ global = get_global () in
        let@ pname, def = Typing.todo_get_resource_predicate_def_s loc (Id.s pname) in
-       let@ pointer_asym, iarg_asyms = match asyms with
+       let@ pointer_pe, iarg_pes = match pes with
          | pointer_asym :: iarg_asyms -> return (pointer_asym, iarg_asyms)
          | _ -> fail (fun _ -> {loc; msg = Generic !^"pointer argument to predicate missing"})
        in
-       let@ pointer_arg = arg_of_asym pointer_asym in
-       let@ iargs = args_of_asyms iarg_asyms in
+       let@ pointer_arg = infer_pexpr pointer_pe in
+       let@ iargs = ListM.mapM infer_pexpr iarg_pes in
        let@ () = 
          (* "+1" because of pointer argument *)
          let has, expect = List.length iargs + 1, List.length def.iargs + 1 in
          if has = expect then return ()
          else fail (fun _ -> {loc; msg = Number_arguments {has; expect}})
        in
-       let@ () = WellTyped.ensure_base_type pointer_arg.loc ~expect:Loc pointer_arg.bt in
+       let@ () = WellTyped.ensure_base_type pointer_arg.loc ~expect:Loc (IT.bt pointer_arg.value) in
        let@ () = 
          ListM.iterM (fun (arg, expected_sort) ->
-             WellTyped.ensure_base_type arg.loc ~expect:expected_sort arg.bt
+             WellTyped.ensure_base_type arg.loc ~expect:expected_sort (IT.bt arg.value)
            ) (List.combine iargs (List.map snd def.iargs))
        in
        let instantiated_clauses = 
          let subst = 
            make_subst (
-               (def.pointer, it_of_arg pointer_arg) ::
-               List.map2 (fun (def_ia, _) ia -> (def_ia, it_of_arg ia)) def.iargs iargs
+               (def.pointer, pointer_arg.value) ::
+               List.map2 (fun (def_ia, _) ia -> (def_ia, ia.value)) def.iargs iargs
              )
          in
          List.map (ResourcePredicates.subst_clause subst) def.clauses
@@ -2250,9 +1331,9 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t * per_path, type_error) m =
             RI.Special.predicate_request ~recursive:false
               loc (UnpackPredicate pname) ({
                 name = PName pname;
-                pointer = it_of_arg pointer_arg;
+                pointer = pointer_arg.value;
                 permission = bool_ true;
-                iargs = List.map it_of_arg iargs;
+                iargs = List.map (fun arg -> arg.value) iargs;
               }, None)
           in
           let condition, outputs = LAT.logical_arguments_and_return right_clause in
@@ -2269,9 +1350,9 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t * per_path, type_error) m =
           let resource = 
             (oarg_s, (P {
               name = PName pname;
-              pointer = it_of_arg pointer_arg;
+              pointer = pointer_arg.value;
               permission = bool_ true;
-              iargs = List.map it_of_arg iargs;
+              iargs = List.map (fun arg -> arg.value) iargs;
             }, IT.bt oarg))
           in
           let rt =
@@ -2282,9 +1363,9 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t * per_path, type_error) m =
           in
           return (rt, per_path)
        end
-    | M_Erpredicate (pack_unpack, TPU_Struct tag, asyms) ->
+    | M_Erpredicate (pack_unpack, TPU_Struct tag, pes) ->
        let@ _layout = get_struct_decl loc tag in
-       let@ args = args_of_asyms asyms in
+       let@ args = ListM.mapM infer_pexpr pes in
        let@ () = 
          (* "+1" because of pointer argument *)
          let has = List.length args in
@@ -2292,13 +1373,13 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t * per_path, type_error) m =
          else fail (fun _ -> {loc; msg = Number_arguments {has; expect = 1}})
        in
        let pointer_arg = List.hd args in
-       let@ () = WellTyped.ensure_base_type pointer_arg.loc ~expect:Loc pointer_arg.bt in
+       let@ () = WellTyped.ensure_base_type pointer_arg.loc ~expect:Loc (IT.bt pointer_arg.value) in
        begin match pack_unpack with
        | Pack ->
           let situation = TypeErrors.PackStruct tag in
           let@ (resource, O resource_oargs) = 
             RI.Special.fold_struct ~recursive:true loc situation tag 
-              (it_of_arg pointer_arg) (bool_ true) 
+              pointer_arg.value (bool_ true) 
           in
           let oargs_s, oargs = IT.fresh (IT.bt resource_oargs) in
           let rt = 
@@ -2312,7 +1393,7 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t * per_path, type_error) m =
           let situation = TypeErrors.UnpackStruct tag in
           let@ resources = 
             RI.Special.unfold_struct ~recursive:true loc situation tag 
-              (it_of_arg pointer_arg) (bool_ true) 
+              pointer_arg.value (bool_ true) 
           in
           let constraints, resources = 
             List.fold_left_map (fun acc (r, O o) -> 
@@ -2326,9 +1407,8 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t * per_path, type_error) m =
        end
     | M_Elpredicate (have_show, pname, asyms) ->
        unsupported loc !^"have/show"
-    | M_Einstantiate (oid, asym) ->
-       let@ arg = arg_of_asym asym in
-       let arg_it = it_of_arg arg in
+    | M_Einstantiate (oid, pe) ->
+       let@ arg = infer_pexpr pe in
        let@ constraints = all_constraints () in
        let omentions_pred it = match oid with
          | Some id -> IT.mentions_pred id it
@@ -2338,8 +1418,8 @@ let infer_expr labels (e : 'bty mu_expr) : (RT.t * per_path, type_error) m =
          List.filter_map (fun lc ->
              match lc with
              | Forall ((s, bt), t) 
-                  when BT.equal bt arg.bt && omentions_pred t ->
-                Some (LC.t_ (IT.subst (IT.make_subst [(s, arg_it)]) t), (loc, None))
+                  when BT.equal bt (IT.bt arg.value) && omentions_pred t ->
+                Some (LC.t_ (IT.subst (IT.make_subst [(s, arg.value)]) t), (loc, None))
              | _ -> 
                 None
            ) (LCSet.elements constraints)
@@ -2366,9 +1446,9 @@ let rec check_texpr labels (e : 'bty mu_texpr) (typ : RT.t orFalse)
     )
   in
   let@ result = match e_ with
-    | M_Eif (casym, e1, e2) ->
-       let@ carg = arg_of_asym casym in
-       let@ () = WellTyped.ensure_base_type carg.loc ~expect:Bool carg.bt in
+    | M_Eif (c_pe, e1, e2) ->
+       let@ carg = infer_pexpr c_pe in
+       let@ () = WellTyped.ensure_base_type carg.loc ~expect:Bool (IT.bt carg.value) in
        let@ per_paths = ListM.mapM (fun (lc, nm, e) ->
            pure begin
                let@ () = add_c (t_ lc) in
@@ -2381,17 +1461,17 @@ let rec check_texpr labels (e : 'bty mu_texpr) (typ : RT.t orFalse)
                  time_log_end start;
                  return per_path
              end
-         ) [(it_of_arg carg, "true", e1); (not_ (it_of_arg carg), "false", e2)] in
+         ) [(carg.value, "true", e1); (not_ carg.value, "false", e2)] in
        return (List.concat per_paths)
     | M_Ebound e ->
        check_texpr labels e typ 
     | M_End _ ->
        Debug_ocaml.error "todo: End"
-    | M_Ecase (asym, pats_es) ->
-       let@ arg = arg_of_asym asym in
+    | M_Ecase (c_pe, pats_es) ->
+       let@ arg = infer_pexpr c_pe in
        let@ per_paths = ListM.mapM (fun (pat, pe) ->
            pure begin
-               let@ () = pattern_match (it_of_arg arg) pat in
+               let@ () = pattern_match arg.value pat in
                let@ provable = provable loc in
                match provable (t_ (bool_ false)) with
                | `True -> return []
@@ -2401,14 +1481,13 @@ let rec check_texpr labels (e : 'bty mu_texpr) (typ : RT.t orFalse)
        return (List.concat per_paths)
     | M_Elet (p, e1, e2) ->
        let@ fin = begin_trace_of_pure_step (Some p) e1 in
-       let@ (rt, per_path1) =  infer_pexpr e1 in
+       let@ lvt = infer_pexpr e1 in
        let@ () = match p with 
-         | M_Symbol sym -> bind (Some (Loc (loc_of_pexpr e1))) sym rt
-         | M_Pat pat -> pattern_match_rt (Loc (loc_of_pexpr e1)) pat rt
+         | M_Symbol sym -> bind_lvt sym lvt
+         | M_Pat pat -> pattern_match lvt.value pat
        in
        let@ () = fin () in
-       let@ per_path2 = check_texpr labels e2 typ in
-       return (per_path1 @ per_path2)
+       check_texpr labels e2 typ
     | M_Ewseq (pat, e1, e2) ->
        let@ fin = begin_trace_of_step (Some (Mu.M_Pat pat)) e1 in
        let@ (rt, per_path1) = infer_expr labels e1 in
@@ -2426,10 +1505,10 @@ let rec check_texpr labels (e : 'bty mu_texpr) (typ : RT.t orFalse)
        let@ () = fin () in
        let@ per_path2 = check_texpr labels e2 typ in
        return (per_path1 @ per_path2)
-    | M_Edone asym ->
+    | M_Edone pe ->
        begin match typ with
        | Normal typ ->
-          let@ arg = arg_of_asym asym in
+          let@ arg = infer_pexpr pe in
           let@ per_path = Spine.subtype loc arg typ in
           let@ () = all_empty loc in
           return per_path
@@ -2448,8 +1527,8 @@ let rec check_texpr labels (e : 'bty mu_texpr) (typ : RT.t orFalse)
           let@ model = model () in
           fail (fun ctxt -> {loc; msg = Undefined_behaviour {ub; ctxt; model}})
        end
-  | M_Eerror (err, asym) ->
-     let@ arg = arg_of_asym asym in
+  | M_Eerror (err, pe) ->
+     let@ arg = infer_pexpr pe in
      let@ provable = provable loc in
      begin match provable (t_ (bool_ false)) with
      | `True -> return []
@@ -2457,12 +1536,12 @@ let rec check_texpr labels (e : 'bty mu_texpr) (typ : RT.t orFalse)
         let@ model = model () in
         fail (fun ctxt -> {loc; msg = StaticError {err; ctxt; model}})
      end
-    | M_Erun (label_sym, asyms) ->
+    | M_Erun (label_sym, pes) ->
        let@ (lt,lkind) = match SymMap.find_opt label_sym labels with
          | None -> fail (fun _ -> {loc; msg = Generic (!^"undefined code label" ^/^ Sym.pp label_sym)})
          | Some (lt,lkind) -> return (lt,lkind)
        in
-       let@ args = args_of_asyms asyms in
+       let@ args = ListM.mapM infer_pexpr pes in
        let@ per_path = Spine.calltype_lt loc args (lt,lkind) in
        let@ () = all_empty loc in
        return per_path
@@ -2669,25 +1748,25 @@ let check mu_file =
 
 
   let () = Debug_ocaml.begin_csv_timing "impls" in
-  let@ () = 
-    (* check and record impls *)
-    let open Global in
-    PmapM.iterM (fun impl impl_decl ->
-        let descr = CF.Implementation.string_of_implementation_constant impl in
-        match impl_decl with
-        | M_Def (rt, rbt, pexpr) -> 
-           let@ () = WellTyped.WRT.welltyped Loc.unknown rt in
-           let@ () = WellTyped.WBT.is_bt Loc.unknown rbt in
-           let@ () = check_function Loc.unknown descr [] rbt pexpr (AT.L (LAT.I rt)) in
-           add_impl_constant impl rt
-        | M_IFun (ft, rbt, args, pexpr) ->
-           let@ () = WellTyped.WFT.welltyped "implementation-defined function" Loc.unknown ft in
-           let@ () = WellTyped.WBT.is_bt Loc.unknown rbt in
-           let@ () = check_function Loc.unknown descr args rbt pexpr ft in
-           add_impl_fun_decl impl ft
-      ) mu_file.mu_impl
-  in
-  let () = Debug_ocaml.end_csv_timing "impls" in
+  (* let@ () =  *)
+  (*   (\* check and record impls *\) *)
+  (*   let open Global in *)
+  (*   PmapM.iterM (fun impl impl_decl -> *)
+  (*       let descr = CF.Implementation.string_of_implementation_constant impl in *)
+  (*       match impl_decl with *)
+  (*       | M_Def (rt, rbt, pexpr) ->  *)
+  (*          let@ () = WellTyped.WRT.welltyped Loc.unknown rt in *)
+  (*          let@ () = WellTyped.WBT.is_bt Loc.unknown rbt in *)
+  (*          let@ () = check_function Loc.unknown descr [] rbt pexpr (AT.L (LAT.I rt)) in *)
+  (*          add_impl_constant impl rt *)
+  (*       | M_IFun (ft, rbt, args, pexpr) -> *)
+  (*          let@ () = WellTyped.WFT.welltyped "implementation-defined function" Loc.unknown ft in *)
+  (*          let@ () = WellTyped.WBT.is_bt Loc.unknown rbt in *)
+  (*          let@ () = check_function Loc.unknown descr args rbt pexpr ft in *)
+  (*          add_impl_fun_decl impl ft *)
+  (*     ) mu_file.mu_impl *)
+  (* in *)
+  (* let () = Debug_ocaml.end_csv_timing "impls" in *)
   
 
   let () = Debug_ocaml.begin_csv_timing "logical predicates" in

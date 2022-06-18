@@ -17,8 +17,8 @@ module ImplMap =
 type t = 
   { struct_decls : Memory.struct_decls; 
     fun_decls : (Locations.t * AT.ft * CF.Mucore.trusted) SymMap.t;
-    impl_fun_decls : AT.ft ImplMap.t;
-    impl_constants : RT.t ImplMap.t;
+    (* impl_fun_decls : AT.ift ImplMap.t; *)
+    (* impl_constants : IndexTerms.t ImplMap.t; *)
     resource_predicates : ResourcePredicates.definition SymMap.t;
     logical_predicates : LogicalPredicates.definition SymMap.t;
   } 
@@ -26,8 +26,8 @@ type t =
 let empty = 
   { struct_decls = SymMap.empty; 
     fun_decls = SymMap.empty;
-    impl_fun_decls = ImplMap.empty;
-    impl_constants = ImplMap.empty;
+    (* impl_fun_decls = ImplMap.empty; *)
+    (* impl_constants = ImplMap.empty; *)
     resource_predicates = SymMap.empty;
     logical_predicates = SymMap.empty;
   }
@@ -36,8 +36,8 @@ let empty =
 let get_resource_predicate_def global id = SymMap.find_opt id global.resource_predicates
 let get_logical_predicate_def global id = SymMap.find_opt id global.logical_predicates
 let get_fun_decl global sym = SymMap.find_opt sym global.fun_decls
-let get_impl_fun_decl global i = ImplMap.find i global.impl_fun_decls
-let get_impl_constant global i = ImplMap.find i global.impl_constants
+(* let get_impl_fun_decl global i = ImplMap.find i global.impl_fun_decls *)
+(* let get_impl_constant global i = ImplMap.find i global.impl_constants *)
 
 
 

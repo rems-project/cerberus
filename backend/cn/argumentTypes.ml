@@ -104,7 +104,7 @@ let rec map (f : 'i -> 'j) (at : 'i t) : 'j t =
 
 
 
-
+type ift = IndexTerms.t t
 type ft = ReturnTypes.t t
 type lt = False.t t
 

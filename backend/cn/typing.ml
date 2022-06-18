@@ -446,14 +446,14 @@ let add_fun_decl fname entry =
   let@ global = get_global () in
   set_global { global with fun_decls = SymMap.add fname entry global.fun_decls }
 
-let add_impl_fun_decl name entry = 
-  let@ global = get_global () in
-  set_global { global with impl_fun_decls = Global.ImplMap.add name entry global.impl_fun_decls }
+(* let add_impl_fun_decl name entry =  *)
+(*   let@ global = get_global () in *)
+(*   set_global { global with impl_fun_decls = Global.ImplMap.add name entry global.impl_fun_decls } *)
 
 
-let add_impl_constant name entry = 
-  let@ global = get_global () in
-  set_global { global with impl_constants = Global.ImplMap.add name entry global.impl_constants }
+(* let add_impl_constant name entry =  *)
+(*   let@ global = get_global () in *)
+(*   set_global { global with impl_constants = Global.ImplMap.add name entry global.impl_constants } *)
 
 
 let add_resource_predicate name entry = 

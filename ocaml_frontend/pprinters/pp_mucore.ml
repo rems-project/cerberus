@@ -106,7 +106,7 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
     | M_PEval _
     | M_PEconstrained _
     | M_PEsym _
-    | M_PEimpl _
+    (* | M_PEimpl _ *)
     | M_PEctor _
     | M_PEarray_shift _
     | M_PEmember_shift _
@@ -114,7 +114,6 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
     | M_PEstruct _
     | M_PEunion _
     | M_PEmemberof _
-    | M_PEcall _
     | M_PEconv_int _
     | M_PEconv_loaded_int _
     | M_PEwrapI _ ->
@@ -135,7 +134,7 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
     | M_Ememop _
     | M_Eaction _
     | M_Eskip
-    | M_Eproc _
+    (* | M_Eproc _ *)
     | M_Eccall _
     | M_Erpredicate _
     | M_Elpredicate _
@@ -259,13 +258,7 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
 
 
 
-  let pp_asym asym = pp_symbol asym.sym
-
   let pp_actype actype = pp_ct actype.ct
-
-  let pp_actype_or_asym = function 
-    | Left ct -> pp_actype ct 
-    | Right sym -> pp_asym sym
 
 
   let pp_thread_id n =
@@ -389,7 +382,7 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
   let abbreviated = P.dot ^^ P.dot ^^ P.dot
 
 
-  let pp_pexpr (M_Pexpr (loc, annot, _, pe)) =
+  let rec pp_pexpr (M_Pexpr (loc, annot, _, pe)) =
     let open PPrint in
     (maybe_print_location loc) ^^
       begin
@@ -400,74 +393,81 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
               pp_keyword "constrained" ^^ P.parens (
                 comma_list (fun (cs, pe) ->
                   P.brackets (Pp_mem.pp_mem_constraint Impl_mem.pp_integer_value cs) ^^^
-                  P.equals ^^ P.rangle ^^ pp_asym pe
+                  P.equals ^^ P.rangle ^^ pp_pexpr pe
                 ) xs
               )
           | M_PEsym sym ->
               pp_symbol sym
-          | M_PEimpl iCst ->
-              pp_impl iCst
+          (* | M_PEimpl iCst -> *)
+          (*     pp_impl iCst *)
           | M_PEctor (M_Cnil _, pes) ->
              P.brackets P.empty
           | M_PEctor (M_Ctuple, pes) ->
-              P.parens (comma_list pp_asym pes)
+              P.parens (comma_list pp_pexpr pes)
           | M_PEctor (ctor, pes) ->
-              pp_ctor ctor ^^ P.parens (comma_list pp_asym pes)
+              pp_ctor ctor ^^ P.parens (comma_list pp_pexpr pes)
           | M_CivCOMPL (ct, p1) ->
-              !^"IvCOMPL" ^^ P.parens (separate comma [pp_actype ct; pp_asym p1])
+              !^"IvCOMPL" ^^ P.parens (separate comma [pp_actype ct; pp_pexpr p1])
           | M_CivAND (ct, p1, p2) ->
-              !^"IvAND" ^^ P.parens (separate comma [pp_actype ct; pp_asym p1; pp_asym p2])
+              !^"IvAND" ^^ P.parens (separate comma [pp_actype ct; pp_pexpr p1; pp_pexpr p2])
           | M_CivOR (ct, p1, p2) ->
-              !^"IvOR" ^^ P.parens (separate comma [pp_actype ct; pp_asym p1; pp_asym p2])
+              !^"IvOR" ^^ P.parens (separate comma [pp_actype ct; pp_pexpr p1; pp_pexpr p2])
           | M_CivXOR (ct, p1, p2) ->
-              !^"IvXOR" ^^ P.parens (separate comma [pp_actype ct; pp_asym p1; pp_asym p2])
+              !^"IvXOR" ^^ P.parens (separate comma [pp_actype ct; pp_pexpr p1; pp_pexpr p2])
           | M_Cfvfromint p1 ->
-              !^"Cfvfromint" ^^ P.parens (pp_asym p1)
+              !^"Cfvfromint" ^^ P.parens (pp_pexpr p1)
           | M_Civfromfloat (ct, p1) ->
-              !^"Civfromfloat" ^^ P.parens (separate comma [pp_actype ct; pp_asym p1])
+              !^"Civfromfloat" ^^ P.parens (separate comma [pp_actype ct; pp_pexpr p1])
           | M_PEarray_shift (pe1, ty, pe2) ->
               pp_keyword "array_shift" ^^ P.parens (
-                pp_asym pe1 ^^ P.comma ^^^ pp_ct ty ^^ P.comma ^^^ pp_asym pe2
+                pp_pexpr pe1 ^^ P.comma ^^^ pp_ct ty ^^ P.comma ^^^ pp_pexpr pe2
               )
           | M_PEmember_shift (pe, tag_sym, (Symbol.Identifier (_, memb_ident))) ->
               pp_keyword "member_shift" ^^ P.parens (
-                pp_asym pe ^^ P.comma ^^^ pp_raw_symbol tag_sym ^^ P.comma ^^^ P.dot ^^ !^ memb_ident
+                pp_pexpr pe ^^ P.comma ^^^ pp_raw_symbol tag_sym ^^ P.comma ^^^ P.dot ^^ !^ memb_ident
               )
           | M_PEnot pe ->
-              pp_keyword "not" ^^ P.parens (pp_asym pe)
+              pp_keyword "not" ^^ P.parens (pp_pexpr pe)
           | M_PEop (bop, pe1, pe2) ->
-              pp_asym pe1 ^^^ pp_binop bop ^^^ pp_asym pe2
+              pp_pexpr pe1 ^^^ pp_binop bop ^^^ pp_pexpr pe2
           | M_PEstruct (tag_sym, xs) ->
               P.parens (pp_const "struct" ^^^ pp_raw_symbol tag_sym) ^^
               P.braces (
                 comma_list (fun (Symbol.Identifier (_, ident), pe) ->
-                  P.dot ^^ !^ ident ^^ P.equals ^^^ pp_asym pe
+                  P.dot ^^ !^ ident ^^ P.equals ^^^ pp_pexpr pe
                 ) xs
               )
           | M_PEunion (tag_sym, Symbol.Identifier (_, ident), pe) ->
               P.parens (pp_const "union" ^^^ pp_raw_symbol tag_sym) ^^
               P.braces (
-                P.dot ^^ !^ ident ^^ P.equals ^^^ pp_asym pe
+                P.dot ^^ !^ ident ^^ P.equals ^^^ pp_pexpr pe
               )
           | M_PEmemberof (tag_sym, memb_ident, pe) ->
               pp_keyword "memberof" ^^ P.parens (
                 pp_symbol tag_sym ^^ P.comma ^^^
                 Pp_symbol.pp_identifier memb_ident ^^ P.comma ^^^
-                pp_asym pe
+                pp_pexpr pe
               )
-          | M_PEcall (nm, pes) ->
-              pp_name nm ^^ P.parens (comma_list pp_asym pes)
           | M_PEassert_undef (asym, _uloc, ub) ->
-              pp_keyword "assert_undef" ^^ P.parens (pp_asym asym ^^ P.comma ^^^pp_undef ub)
+              pp_keyword "assert_undef" ^^ P.parens (pp_pexpr asym ^^ P.comma ^^^pp_undef ub)
           | M_PEbool_to_integer asym ->
-              pp_keyword "bool_to_integer" ^^ P.parens (pp_asym asym)
+              pp_keyword "bool_to_integer" ^^ P.parens (pp_pexpr asym)
           | M_PEconv_int (act, asym) ->
-              !^"conv_int" ^^ P.parens (pp_ct act.ct ^^ P.comma ^^^ pp_asym asym)
+              !^"conv_int" ^^ P.parens (pp_ct act.ct ^^ P.comma ^^^ pp_pexpr asym)
           | M_PEconv_loaded_int (act, asym) ->
-              !^"conv_loaded_int" ^^ P.parens (pp_ct act.ct ^^ P.comma ^^^ pp_asym asym)
+              !^"conv_loaded_int" ^^ P.parens (pp_ct act.ct ^^ P.comma ^^^ pp_pexpr asym)
           | M_PEwrapI (act, asym) ->
-              !^"wrapI" ^^ P.parens (pp_ct act.ct ^^ P.comma ^^^ pp_asym asym)
+              !^"wrapI" ^^ P.parens (pp_ct act.ct ^^ P.comma ^^^ pp_pexpr asym)
       end
+
+
+
+  and pp_actype_or_pexpr = function 
+    | Left ct -> pp_actype ct 
+    | Right sym -> pp_pexpr sym
+
+
+
 
   let pp_tpexpr budget pe =
 
@@ -487,7 +487,7 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
       begin
         match pe with
           | M_PEcase (pe, pat_pes) ->
-            pp_keyword "case" ^^^ pp_asym pe ^^^ pp_keyword "of" ^^
+            pp_keyword "case" ^^^ pp_pexpr pe ^^^ pp_keyword "of" ^^
             P.nest 2 (
               P.break 1 ^^ P.separate_map (P.break 1) (fun (cpat, pe) ->
                 P.prefix 4 1
@@ -501,16 +501,16 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
               pp_pexpr pe1 ^^^ pp_control "in" ^^ P.break 1 ^^ pp pe2
           | M_PEif (pe1, pe2, pe3) ->
               P.group (
-                pp_control "if" ^^^ pp_asym pe1 ^^^ pp_control "then" ^^
+                pp_control "if" ^^^ pp_pexpr pe1 ^^^ pp_control "then" ^^
                 P.nest 2 (P.break 1 ^^ pp pe2) ^^ P.break 1 ^^
                 pp_control "else" ^^ P.nest 2 (P.break 1 ^^ pp pe3)
               )
           | M_PEdone asym ->
-              pp_control "done" ^^^ pp_asym asym
+              pp_control "done" ^^^ pp_pexpr asym
           | M_PEundef (_, ub) ->
               pp_keyword "undef" ^^ P.parens (pp_undef ub)
           | M_PEerror (str, pe) ->
-              pp_keyword "error" ^^ P.parens (P.dquotes (!^ str) ^^ P.comma ^^^ pp_asym pe)
+              pp_keyword "error" ^^ P.parens (P.dquotes (!^ str) ^^ P.comma ^^^ pp_pexpr pe)
       end
     in pp budget None pe
 
@@ -518,52 +518,52 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
 
   let pp_action act =
     let pp_args args mo =
-      P.parens (comma_list pp_actype_or_asym args ^^ if mo = Cmm_csem.NA then P.empty else P.comma ^^^ pp_memory_order mo) in
+      P.parens (comma_list pp_actype_or_pexpr args ^^ if mo = Cmm_csem.NA then P.empty else P.comma ^^^ pp_memory_order mo) in
     match act with
       | M_Create (al, ty, _) ->
-          pp_keyword "create" ^^ P.parens (pp_asym al ^^ P.comma ^^^ pp_actype ty)
+          pp_keyword "create" ^^ P.parens (pp_pexpr al ^^ P.comma ^^^ pp_actype ty)
       | M_CreateReadOnly (al, ty, init, _) ->
-          pp_keyword "create_readonly" ^^ P.parens (pp_asym al ^^ P.comma ^^^ pp_actype ty ^^ P.comma ^^^ pp_asym init)
+          pp_keyword "create_readonly" ^^ P.parens (pp_pexpr al ^^ P.comma ^^^ pp_actype ty ^^ P.comma ^^^ pp_pexpr init)
       | M_Alloc (al, n, _) ->
-          pp_keyword "alloc" ^^ P.parens (pp_asym al ^^ P.comma ^^^ pp_asym n)
+          pp_keyword "alloc" ^^ P.parens (pp_pexpr al ^^ P.comma ^^^ pp_pexpr n)
       | M_Kill (M_Dynamic, e) ->
-          pp_keyword "free" ^^ P.parens (pp_asym e)
+          pp_keyword "free" ^^ P.parens (pp_pexpr e)
       | M_Kill (M_Static ct, e) ->
-          pp_keyword "kill" ^^ P.parens (pp_ct ct ^^ P.comma ^^^ pp_asym e)
+          pp_keyword "kill" ^^ P.parens (pp_ct ct ^^ P.comma ^^^ pp_pexpr e)
       | M_Store (is_locking, ty, e1, e2, mo) ->
          pp_keyword (if is_locking then "store_lock" else "store") ^^ pp_args [Left ty; Right e1; Right e2] mo
       | M_Load (ty, e, mo) ->
          pp_keyword "load" ^^ pp_args [Left ty; Right e] mo
       | M_RMW (ty, e1, e2, e3, mo1, mo2) ->
           pp_keyword "rmw" ^^
-          P.parens (pp_actype ty ^^ P.comma ^^^ pp_asym e1 ^^ P.comma ^^^
-                    pp_asym e2 ^^ P.comma ^^^ pp_asym e3 ^^ P.comma ^^^
+          P.parens (pp_actype ty ^^ P.comma ^^^ pp_pexpr e1 ^^ P.comma ^^^
+                    pp_pexpr e2 ^^ P.comma ^^^ pp_pexpr e3 ^^ P.comma ^^^
                     pp_memory_order mo1 ^^ P.comma ^^^ pp_memory_order mo2)
       | M_Fence mo ->
           pp_keyword "fence" ^^ P.parens (pp_memory_order mo)
       | M_CompareExchangeStrong (ty, e1, e2, e3, mo1, mo2) ->
           pp_keyword "compare_exchange_strong" ^^
-          P.parens (pp_actype ty ^^ P.comma ^^^ pp_asym e1 ^^ P.comma ^^^
-                    pp_asym e2 ^^ P.comma ^^^ pp_asym e3 ^^ P.comma ^^^
+          P.parens (pp_actype ty ^^ P.comma ^^^ pp_pexpr e1 ^^ P.comma ^^^
+                    pp_pexpr e2 ^^ P.comma ^^^ pp_pexpr e3 ^^ P.comma ^^^
                     pp_memory_order mo1 ^^ P.comma ^^^ pp_memory_order mo2)
       | M_CompareExchangeWeak (ty, e1, e2, e3, mo1, mo2) ->
           pp_keyword "compare_exchange_weak" ^^
-          P.parens (pp_actype ty ^^ P.comma ^^^ pp_asym e1 ^^ P.comma ^^^
-                    pp_asym e2 ^^ P.comma ^^^ pp_asym e3 ^^ P.comma ^^^
+          P.parens (pp_actype ty ^^ P.comma ^^^ pp_pexpr e1 ^^ P.comma ^^^
+                    pp_pexpr e2 ^^ P.comma ^^^ pp_pexpr e3 ^^ P.comma ^^^
                     pp_memory_order mo1 ^^ P.comma ^^^ pp_memory_order mo2)
       | M_LinuxFence mo ->
           pp_keyword "linux_fence" ^^ P.parens (pp_linux_memory_order mo)
       | M_LinuxStore (ty, e1, e2, mo) ->
           pp_keyword "linux_store" ^^
-          P.parens (comma_list pp_actype_or_asym [Left ty;Right e1;Right e2] ^^ P.comma ^^^
+          P.parens (comma_list pp_actype_or_pexpr [Left ty;Right e1;Right e2] ^^ P.comma ^^^
                     pp_linux_memory_order mo)
       | M_LinuxLoad (ty, e, mo) ->
           pp_keyword "linux_load" ^^
-          P.parens (comma_list pp_actype_or_asym [Left ty;Right e] ^^ P.comma ^^^
+          P.parens (comma_list pp_actype_or_pexpr [Left ty;Right e] ^^ P.comma ^^^
                     pp_linux_memory_order mo)
       | M_LinuxRMW (ty, e1, e2, mo) ->
           pp_keyword "linux_rmw" ^^
-          P.parens (comma_list pp_actype_or_asym [Left ty;Right e1;Right e2] ^^ P.comma ^^^
+          P.parens (comma_list pp_actype_or_pexpr [Left ty;Right e1;Right e2] ^^ P.comma ^^^
                     pp_linux_memory_order mo)
 
   let do_annots annot = 
@@ -670,30 +670,30 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
              in
             
              let (memop, pes) = aux memop in
-             pp_keyword "memop" ^^ P.parens (Pp_mem.pp_memop memop ^^ P.comma ^^^ comma_list pp_actype_or_asym pes)
+             pp_keyword "memop" ^^ P.parens (Pp_mem.pp_memop memop ^^ P.comma ^^^ comma_list pp_actype_or_pexpr pes)
           | M_Eaction (M_Paction (p, (M_Action (_, act)))) ->
               pp_polarity p (pp_action act)
           | M_Eskip ->
               pp_keyword "skip"
-          | M_Eproc (nm, pes) ->
-              pp_keyword "pcall" ^^ P.parens (pp_name nm ^^ P.comma ^^^ comma_list pp_asym pes)
+          (* | M_Eproc (nm, pes) -> *)
+          (*     pp_keyword "pcall" ^^ P.parens (pp_name nm ^^ P.comma ^^^ comma_list pp_pexpr pes) *)
           | M_Eccall (pe_ty, pe, pes) ->
               pp_keyword "ccall" ^^ P.parens (pp_ct pe_ty.ct) ^^
-                P.parens (comma_list pp_actype_or_asym ((* Left pe_ty ::  *) Right pe :: (map (fun pe -> Right pe)) pes))
+                P.parens (comma_list pp_actype_or_pexpr ((* Left pe_ty ::  *) Right pe :: (map (fun pe -> Right pe)) pes))
           | M_Erpredicate (pack_unpack, tpu, pes) ->
               pp_keyword (match pack_unpack with Pack -> "pack"  | Unpack -> "unpack") ^^^
                 let tpu = match tpu with
                   | TPU_Struct sym -> !^"struct" ^^^ pp_symbol sym
                   | TPU_Predicate (Symbol.Identifier (_, ident)) -> !^ident
                 in
-                P.parens (tpu ^^ P.comma ^^^ comma_list pp_asym pes)
+                P.parens (tpu ^^ P.comma ^^^ comma_list pp_pexpr pes)
           | M_Elpredicate (have_show, id, pes) ->
               pp_keyword (match have_show with Have -> "have"  | Show -> "show") ^^^
-                P.parens (Pp_symbol.pp_identifier id ^^ P.comma ^^^ comma_list pp_asym pes)
+                P.parens (Pp_symbol.pp_identifier id ^^ P.comma ^^^ comma_list pp_pexpr pes)
           | M_Einstantiate (Some (Symbol.Identifier (_, ident)), pe) ->
-              pp_keyword "instantiate" ^^^ !^ident ^^ P.parens (pp_asym pe)
+              pp_keyword "instantiate" ^^^ !^ident ^^ P.parens (pp_pexpr pe)
           | M_Einstantiate (None, pe) ->
-              pp_keyword "instantiate" ^^^ P.parens (pp_asym pe)
+              pp_keyword "instantiate" ^^^ P.parens (pp_pexpr pe)
           (* | M_Eunseq [] ->
            *     !^ "BUG: UNSEQ must have at least two arguments (seen 0)" *)
           (* | M_Eunseq [e] ->
@@ -738,7 +738,7 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
         end
         begin match (e : 'ty mu_texpr_) with
           | M_Ecase (pe, pat_es) ->
-              pp_keyword "case" ^^^ pp_asym pe ^^^ pp_keyword "of" ^^
+              pp_keyword "case" ^^^ pp_pexpr pe ^^^ pp_keyword "of" ^^
               P.nest 2 (
                 P.break 1 ^^ P.separate_map (P.break 1) (fun (cpat, e) ->
                   P.prefix 4 1
@@ -754,7 +754,7 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
                   (pp e2)
              )
           | M_Eif (pe1, e2, e3) ->
-              pp_control "if" ^^^ pp_asym pe1 ^^^ pp_control "then" ^^
+              pp_control "if" ^^^ pp_pexpr pe1 ^^^ pp_control "then" ^^
               P.nest 2 (P.break 1 ^^ pp e2) ^^ P.break 1 ^^
               pp_control "else" ^^ P.nest 2 (P.break 1 ^^ pp e3)
           | M_Ewseq (pat, e1, e2) ->
@@ -781,7 +781,7 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
           (* | M_Esave (_, (sym, (bTy,_)), sym_bTy_pes, e) ->
            *     pp_keyword "save" ^^^ pp_symbol sym ^^ P.colon ^^^ pp_bt bTy ^^^
            *     P.parens (comma_list (fun (sym, ((bTy,_), pe)) ->
-           *       pp_symbol sym ^^ P.colon ^^^ pp_bt bTy ^^ P.colon ^^ P.equals ^^^ pp_asym pe
+           *       pp_symbol sym ^^ P.colon ^^^ pp_bt bTy ^^ P.colon ^^ P.equals ^^^ pp_pexpr pe
            *     ) sym_bTy_pes) ^^^
            *     pp_control "in" ^^^
            *     P.nest 2 (P.break 1 ^^ pp e) *)
@@ -795,13 +795,13 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
               pp_keyword "bound" ^/^
               P.parens (pp e)
           | M_Edone asym ->
-              pp_control "done" ^^^ pp_asym asym
+              pp_control "done" ^^^ pp_pexpr asym
           | M_Erun (sym, pes) ->
-              pp_keyword "run" ^^^ pp_symbol sym ^^ P.parens (comma_list pp_asym pes)
+              pp_keyword "run" ^^^ pp_symbol sym ^^ P.parens (comma_list pp_pexpr pes)
           | M_Eundef (_, ub) ->
               pp_keyword "undef" ^^ P.parens (pp_undef ub)        
           | M_Eerror (str, pe) ->
-              pp_keyword "error" ^^ P.parens (P.dquotes (!^ str) ^^ P.comma ^^^ pp_asym pe)
+              pp_keyword "error" ^^ P.parens (P.dquotes (!^ str) ^^ P.comma ^^^ pp_pexpr pe)
         end
       end
       in pp budget None expr

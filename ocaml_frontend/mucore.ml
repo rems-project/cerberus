@@ -13,13 +13,6 @@ module Loc = Location_ocaml
 type loc = Loc.t
 
 
-type 'TY asym = { 
-    loc: loc;
-    annot: Annot.annot list;
-    type_annot : 'TY;
-    sym: Symbol.sym 
-  }
-
 
 
 type trusted = 
@@ -64,17 +57,12 @@ module Make(T : TYPES) = struct
       ct: T.ct
     }
 
-  let asym_unpack (a : 'TY asym) = 
-    (a.loc, a.annot, a.type_annot, a.sym)
-  let asym_pack loc annot type_annot sym = 
-    {loc; annot; type_annot; sym}
 
   let act_unpack (a : 'TY act) = 
     (a.loc, a.annot, a.type_annot, a.ct)
   let act_pack loc annot type_annot ct = 
     {loc; annot; type_annot; ct}
 
-  type 'TY asyms = ('TY asym) list
   type 'TY acts = ('TY act) list
 
 
@@ -129,30 +117,29 @@ module Make(T : TYPES) = struct
 
   type 'TY mu_pexpr_ =  (* Core pure expressions *)
    | M_PEsym of symbol
-   | M_PEimpl of Implementation.implementation_constant (* implementation-defined constant *)
+   (* | M_PEimpl of Implementation.implementation_constant (\* implementation-defined constant *\) *)
    | M_PEval of 'TY mu_value
-   | M_PEconstrained of (Mem.mem_iv_constraint * 'TY asym) list (* constrained value *)
-   | M_PEctor of mu_ctor * ('TY asym) list (* data constructor application *)
-   | M_CivCOMPL of 'TY act * 'TY asym (* bitwise complement *)
-   | M_CivAND of 'TY act * 'TY asym * 'TY asym (* bitwise AND *)
-   | M_CivOR of 'TY act * 'TY asym * 'TY asym (* bitwise OR *)
-   | M_CivXOR of 'TY act * 'TY asym * 'TY asym (* bitwise XOR *)
-   | M_Cfvfromint of 'TY asym (* cast integer to floating value *)
-   | M_Civfromfloat of 'TY act * 'TY asym (* cast floating to integer value *)
-   | M_PEarray_shift of ('TY asym) * T.ct * ('TY asym) (* pointer array shift *)
-   | M_PEmember_shift of ('TY asym) * symbol * Symbol.identifier (* pointer struct/union member shift *)
-   | M_PEnot of 'TY asym (* boolean not *)
-   | M_PEop of Core.binop * ('TY asym) * ('TY asym)
-   | M_PEstruct of symbol * (Symbol.identifier * 'TY asym) list (* C struct expression *)
-   | M_PEunion of symbol * Symbol.identifier * 'TY asym (* C union expression *)
-   | M_PEmemberof of symbol * Symbol.identifier * 'TY asym (* C struct/union member access *)
-   | M_PEcall of mu_name * ('TY asym) list (* pure function call *)
+   | M_PEconstrained of (Mem.mem_iv_constraint * 'TY mu_pexpr) list (* constrained value *)
+   | M_PEctor of mu_ctor * ('TY mu_pexpr) list (* data constructor application *)
+   | M_CivCOMPL of 'TY act * 'TY mu_pexpr (* bitwise complement *)
+   | M_CivAND of 'TY act * 'TY mu_pexpr * 'TY mu_pexpr (* bitwise AND *)
+   | M_CivOR of 'TY act * 'TY mu_pexpr * 'TY mu_pexpr (* bitwise OR *)
+   | M_CivXOR of 'TY act * 'TY mu_pexpr * 'TY mu_pexpr (* bitwise XOR *)
+   | M_Cfvfromint of 'TY mu_pexpr (* cast integer to floating value *)
+   | M_Civfromfloat of 'TY act * 'TY mu_pexpr (* cast floating to integer value *)
+   | M_PEarray_shift of ('TY mu_pexpr) * T.ct * ('TY mu_pexpr) (* pointer array shift *)
+   | M_PEmember_shift of ('TY mu_pexpr) * symbol * Symbol.identifier (* pointer struct/union member shift *)
+   | M_PEnot of 'TY mu_pexpr (* boolean not *)
+   | M_PEop of Core.binop * ('TY mu_pexpr) * ('TY mu_pexpr)
+   | M_PEstruct of symbol * (Symbol.identifier * 'TY mu_pexpr) list (* C struct expression *)
+   | M_PEunion of symbol * Symbol.identifier * 'TY mu_pexpr (* C union expression *)
+   | M_PEmemberof of symbol * Symbol.identifier * 'TY mu_pexpr (* C struct/union member access *)
 
-   | M_PEassert_undef of 'TY asym * Location_ocaml.t * Undefined.undefined_behaviour
-   | M_PEbool_to_integer of 'TY asym
-   | M_PEconv_int of 'TY act * 'TY asym
-   | M_PEconv_loaded_int of 'TY act * 'TY asym
-   | M_PEwrapI of 'TY act * 'TY asym
+   | M_PEassert_undef of 'TY mu_pexpr * Location_ocaml.t * Undefined.undefined_behaviour
+   | M_PEbool_to_integer of 'TY mu_pexpr
+   | M_PEconv_int of 'TY act * 'TY mu_pexpr
+   | M_PEconv_loaded_int of 'TY act * 'TY mu_pexpr
+   | M_PEwrapI of 'TY act * 'TY mu_pexpr
 
 
   and 'TY mu_pexpr = 
@@ -163,11 +150,11 @@ module Make(T : TYPES) = struct
 
   type 'TY mu_tpexpr_ = 
    | M_PEundef of Location_ocaml.t * Undefined.undefined_behaviour (* undefined behaviour *)
-   | M_PEerror of string * 'TY asym (* impl-defined static error *)
-   | M_PEcase of ('TY asym) * (mu_pattern * 'TY mu_tpexpr) list (* pattern matching *)
+   | M_PEerror of string * 'TY mu_pexpr (* impl-defined static error *)
+   | M_PEcase of ('TY mu_pexpr) * (mu_pattern * 'TY mu_tpexpr) list (* pattern matching *)
    | M_PElet of ('TY mu_sym_or_pattern) * ('TY mu_pexpr) * ('TY mu_tpexpr) (* pure let *)
-   | M_PEif of 'TY asym * ('TY mu_tpexpr) * ('TY mu_tpexpr) (* pure if *)
-   | M_PEdone of 'TY asym
+   | M_PEif of 'TY mu_pexpr * ('TY mu_tpexpr) * ('TY mu_tpexpr) (* pure if *)
+   | M_PEdone of 'TY mu_pexpr
 
   and 'TY mu_tpexpr = 
    | M_TPexpr of loc * annot list * 'TY * ('TY mu_tpexpr_)
@@ -180,20 +167,20 @@ module Make(T : TYPES) = struct
     | M_Static of T.ct
 
   type 'TY mu_action_ =  (* memory actions *)
-   | M_Create of 'TY asym * ('TY act) * Symbol.prefix
-   | M_CreateReadOnly of 'TY asym * 'TY act * 'TY asym * Symbol.prefix
-   | M_Alloc of 'TY asym * 'TY asym * Symbol.prefix
-   | M_Kill of m_kill_kind * 'TY asym (* the boolean indicates whether the action is dynamic (i.e. free()) *)
-   | M_Store of bool * 'TY act * 'TY asym * 'TY asym * Cmm_csem.memory_order (* the boolean indicates whether the store is locking *)
-   | M_Load of 'TY act * 'TY asym * Cmm_csem.memory_order
-   | M_RMW of 'TY act * 'TY asym * 'TY asym * 'TY asym * Cmm_csem.memory_order * Cmm_csem.memory_order
+   | M_Create of 'TY mu_pexpr * ('TY act) * Symbol.prefix
+   | M_CreateReadOnly of 'TY mu_pexpr * 'TY act * 'TY mu_pexpr * Symbol.prefix
+   | M_Alloc of 'TY mu_pexpr * 'TY mu_pexpr * Symbol.prefix
+   | M_Kill of m_kill_kind * 'TY mu_pexpr (* the boolean indicates whether the action is dynamic (i.e. free()) *)
+   | M_Store of bool * 'TY act * 'TY mu_pexpr * 'TY mu_pexpr * Cmm_csem.memory_order (* the boolean indicates whether the store is locking *)
+   | M_Load of 'TY act * 'TY mu_pexpr * Cmm_csem.memory_order
+   | M_RMW of 'TY act * 'TY mu_pexpr * 'TY mu_pexpr * 'TY mu_pexpr * Cmm_csem.memory_order * Cmm_csem.memory_order
    | M_Fence of Cmm_csem.memory_order
-   | M_CompareExchangeStrong of 'TY act * 'TY asym * 'TY asym * 'TY asym * Cmm_csem.memory_order * Cmm_csem.memory_order
-   | M_CompareExchangeWeak of 'TY act * 'TY asym * 'TY asym * 'TY asym * Cmm_csem.memory_order * Cmm_csem.memory_order
+   | M_CompareExchangeStrong of 'TY act * 'TY mu_pexpr * 'TY mu_pexpr * 'TY mu_pexpr * Cmm_csem.memory_order * Cmm_csem.memory_order
+   | M_CompareExchangeWeak of 'TY act * 'TY mu_pexpr * 'TY mu_pexpr * 'TY mu_pexpr * Cmm_csem.memory_order * Cmm_csem.memory_order
    | M_LinuxFence of Linux.linux_memory_order
-   | M_LinuxLoad of 'TY act * 'TY asym * Linux.linux_memory_order
-   | M_LinuxStore of 'TY act * 'TY asym * 'TY asym * Linux.linux_memory_order
-   | M_LinuxRMW of 'TY act * 'TY asym * 'TY asym * Linux.linux_memory_order
+   | M_LinuxLoad of 'TY act * 'TY mu_pexpr * Linux.linux_memory_order
+   | M_LinuxStore of 'TY act * 'TY mu_pexpr * 'TY mu_pexpr * Linux.linux_memory_order
+   | M_LinuxRMW of 'TY act * 'TY mu_pexpr * 'TY mu_pexpr * Linux.linux_memory_order
 
 
   type 'TY mu_action = 
@@ -204,25 +191,25 @@ module Make(T : TYPES) = struct
    | M_Paction of Core.polarity * ('TY mu_action)
 
   type 'TY mu_memop =
-    | M_PtrEq of ('TY asym * 'TY asym)
-    | M_PtrNe of ('TY asym * 'TY asym)
-    | M_PtrLt of ('TY asym * 'TY asym)
-    | M_PtrGt of ('TY asym * 'TY asym)
-    | M_PtrLe of ('TY asym * 'TY asym)
-    | M_PtrGe of ('TY asym * 'TY asym)
-    | M_Ptrdiff of ('TY act * 'TY asym * 'TY asym)
-    | M_IntFromPtr of ('TY act * 'TY act * 'TY asym)
-    | M_PtrFromInt of ('TY act * 'TY act * 'TY asym)
-    | M_PtrValidForDeref of ('TY act * 'TY asym)
-    | M_PtrWellAligned of ('TY act * 'TY asym)
-    | M_PtrArrayShift of ('TY asym * 'TY act * 'TY asym)
-    | M_Memcpy of ('TY asym * 'TY asym * 'TY asym)
-    | M_Memcmp of ('TY asym * 'TY asym * 'TY asym)
-    | M_Realloc of ('TY asym * 'TY asym * 'TY asym)
-    | M_Va_start  of ('TY asym * 'TY asym)
-    | M_Va_copy of ('TY asym)
-    | M_Va_arg of ('TY asym * 'TY act)
-    | M_Va_end of ('TY asym)
+    | M_PtrEq of ('TY mu_pexpr * 'TY mu_pexpr)
+    | M_PtrNe of ('TY mu_pexpr * 'TY mu_pexpr)
+    | M_PtrLt of ('TY mu_pexpr * 'TY mu_pexpr)
+    | M_PtrGt of ('TY mu_pexpr * 'TY mu_pexpr)
+    | M_PtrLe of ('TY mu_pexpr * 'TY mu_pexpr)
+    | M_PtrGe of ('TY mu_pexpr * 'TY mu_pexpr)
+    | M_Ptrdiff of ('TY act * 'TY mu_pexpr * 'TY mu_pexpr)
+    | M_IntFromPtr of ('TY act * 'TY act * 'TY mu_pexpr)
+    | M_PtrFromInt of ('TY act * 'TY act * 'TY mu_pexpr)
+    | M_PtrValidForDeref of ('TY act * 'TY mu_pexpr)
+    | M_PtrWellAligned of ('TY act * 'TY mu_pexpr)
+    | M_PtrArrayShift of ('TY mu_pexpr * 'TY act * 'TY mu_pexpr)
+    | M_Memcpy of ('TY mu_pexpr * 'TY mu_pexpr * 'TY mu_pexpr)
+    | M_Memcmp of ('TY mu_pexpr * 'TY mu_pexpr * 'TY mu_pexpr)
+    | M_Realloc of ('TY mu_pexpr * 'TY mu_pexpr * 'TY mu_pexpr)
+    | M_Va_start  of ('TY mu_pexpr * 'TY mu_pexpr)
+    | M_Va_copy of ('TY mu_pexpr)
+    | M_Va_arg of ('TY mu_pexpr * 'TY act)
+    | M_Va_end of ('TY mu_pexpr)
 
 
   type pack_unpack =
@@ -238,11 +225,11 @@ type have_show =
    | M_Ememop of 'TY mu_memop
    | M_Eaction of ('TY mu_paction) (* memory action *)
    | M_Eskip
-   | M_Eccall of 'TY act * 'TY asym * ('TY asym) list (* C function call *)
-   | M_Eproc of mu_name * ('TY asym) list (* Core procedure call *)
-   | M_Erpredicate of pack_unpack * Annot.to_pack_unpack * ('TY asym) list
-   | M_Elpredicate of have_show * Symbol.identifier * ('TY asym) list
-   | M_Einstantiate of Symbol.identifier option * 'TY asym
+   | M_Eccall of 'TY act * 'TY mu_pexpr * ('TY mu_pexpr) list (* C function call *)
+   (* | M_Eproc of mu_name * ('TY mu_pexpr) list (\* Core procedure call *\) *)
+   | M_Erpredicate of pack_unpack * Annot.to_pack_unpack * ('TY mu_pexpr) list
+   | M_Elpredicate of have_show * Symbol.identifier * ('TY mu_pexpr) list
+   | M_Einstantiate of Symbol.identifier option * 'TY mu_pexpr
 
   and 'TY mu_expr = 
    | M_Expr of loc * annot list * ('TY mu_expr_)
@@ -254,14 +241,14 @@ type have_show =
    | M_Elet of ('TY mu_sym_or_pattern) * ('TY mu_pexpr) * ('TY mu_texpr)
    | M_Ewseq of mu_pattern * ('TY mu_expr) * ('TY mu_texpr) (* weak sequencing *)
    | M_Esseq of ('TY mu_sym_or_pattern) * ('TY mu_expr) * ('TY mu_texpr) (* strong sequencing *)
-   | M_Ecase of 'TY asym * (mu_pattern * ('TY mu_texpr)) list (* pattern matching *)
-   | M_Eif of 'TY asym * ('TY mu_texpr) * ('TY mu_texpr)
+   | M_Ecase of 'TY mu_pexpr * (mu_pattern * ('TY mu_texpr)) list (* pattern matching *)
+   | M_Eif of 'TY mu_pexpr * ('TY mu_texpr) * ('TY mu_texpr)
    | M_Ebound of ('TY mu_texpr) (* $\ldots$and boundary *)
    | M_End of ('TY mu_texpr) list (* nondeterministic choice *)
-   | M_Edone of 'TY asym
+   | M_Edone of 'TY mu_pexpr
    | M_Eundef of Location_ocaml.t * Undefined.undefined_behaviour (* undefined behaviour *)
-   | M_Eerror of string * 'TY asym (* impl-defined static error *)
-   | M_Erun of symbol * ('TY asym) list (* run from label *)
+   | M_Eerror of string * 'TY mu_pexpr (* impl-defined static error *)
+   | M_Erun of symbol * ('TY mu_pexpr) list (* run from label *)
 
   and 'TY mu_texpr = 
    | M_TExpr of loc * annot list * ('TY mu_texpr_)

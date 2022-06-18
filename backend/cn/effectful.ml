@@ -25,6 +25,13 @@ module Make(T : S) = struct
          let@ ys = mapM f xs in
          return (y :: ys)
 
+    let mapfstM (f : 'a -> ('c, 'e) m) (l : ('a * 'b) list) : (('c * 'b) list, 'e) m =
+      mapM (fun (a, b) -> let@ c = f a in return (c, b)) l
+
+    let mapsndM (f : 'b -> ('c, 'e) m) (l : ('a * 'b) list) : (('a * 'c) list, 'e) m = 
+      mapM (fun (a, b) -> let@ c = f b in return (a, c)) l
+
+
 
     let mapiM (f : int -> 'a -> ('b, 'e) m) 
               (l : 'a list) : ('b list, 'e) m = 

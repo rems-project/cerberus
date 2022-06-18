@@ -42,12 +42,12 @@ module Make(PP_Typ : Pp_mucore.PP_Typ) = struct
 
     *)
 
-  let pp_asym asym = 
-    let open Mucore in
-    pp_symbol asym.sym ^^^ Location_ocaml.pp_location ~clever:false asym.loc
+  (* let pp_asym asym =  *)
+  (*   let open Mucore in *)
+  (*   pp_symbol asym.sym ^^^ Location_ocaml.pp_location ~clever:false asym.loc *)
 
-  let dtree_of_asym asym = 
-    Pp_ast.Dleaf (pp_asym asym)
+  (* let dtree_of_asym asym =  *)
+  (*   Pp_ast.Dleaf (pp_asym asym) *)
 
 
   let pp_act act = 
@@ -109,7 +109,7 @@ module Make(PP_Typ : Pp_mucore.PP_Typ) = struct
 
   let string_of_bop = Pp_core_ast.string_of_bop
 
-  let dtree_of_pexpr (M_Pexpr (loc, annot, _, pexpr_)) =
+  let rec dtree_of_pexpr (M_Pexpr (loc, annot, _, pexpr_)) =
 
     let pp_ctor str =
       pp_pure_ctor str ^^^ 
@@ -119,8 +119,8 @@ module Make(PP_Typ : Pp_mucore.PP_Typ) = struct
     match pexpr_ with
         | M_PEsym sym ->
             Dleaf (pp_ctor "PEsym" ^^^ pp_symbol sym)
-        | M_PEimpl iCst ->
-            Dleaf (pp_ctor "PEimpl" ^^^ !^ (ansi_format [Red] "TODO"))
+        (* | M_PEimpl iCst -> *)
+        (*     Dleaf (pp_ctor "PEimpl" ^^^ !^ (ansi_format [Red] "TODO")) *)
         | M_PEval cval ->
             Dnode (pp_ctor "PEval", [dtree_of_value cval])
         | M_PEconstrained xs ->
@@ -132,17 +132,15 @@ module Make(PP_Typ : Pp_mucore.PP_Typ) = struct
         | M_PEmember_shift (pe, sym, ident) ->
             Dleaf (pp_ctor "PEmember_shift" ^^^ !^ (ansi_format [Red] "TODO"))
         | M_PEnot pe ->
-            Dnode (pp_ctor "PEnot", [dtree_of_asym pe])
+            Dnode (pp_ctor "PEnot", [dtree_of_pexpr pe])
         | M_PEop (bop, pe1, pe2) ->
             Dnode ( pp_ctor "PEop" ^^^ P.squotes (!^ (string_of_bop bop))
-                  , [dtree_of_asym pe1; dtree_of_asym pe2] )
+                  , [dtree_of_pexpr pe1; dtree_of_pexpr pe2] )
         | M_PEstruct (tag_sym, xs) ->
             assert false
         | M_PEunion (tag_sym, memb_ident, pe) ->
             assert false
         | M_PEmemberof (tag_sym, memb_ident, pe) ->
-            assert false
-        | M_PEcall (nm, pes) ->
             assert false
         | _ ->
             failwith "FIXME"
@@ -160,12 +158,12 @@ module Make(PP_Typ : Pp_mucore.PP_Typ) = struct
                   , [ dtree_of_pexpr pe1; self pe2] )
         | M_PEif (pe1, pe2, pe3) ->
             Dnode ( pp_ctor "PEif"
-                  , [ dtree_of_asym pe1; self pe2; self pe3 ] )
+                  , [ dtree_of_pexpr pe1; self pe2; self pe3 ] )
         | M_PEundef (loc, ub) ->
             Dleaf (pp_ctor "PEundef" ^^^ !^ (ansi_format [Red] "TODO"))
         | M_PEerror (str, pe) ->
             Dnode ( pp_ctor "PEerror" ^^^ P.dquotes (!^ (ansi_format [Red] str))
-                  , [dtree_of_asym pe] )
+                  , [dtree_of_pexpr pe] )
         | _ ->
             failwith "FIXME"
     (* | _ ->
@@ -226,7 +224,7 @@ module Make(PP_Typ : Pp_mucore.PP_Typ) = struct
         | M_Load (pe1, pe2, mo) ->
             ( "load"
             , [ dtree_of_act pe1
-              ; dtree_of_asym pe2 ] )
+              ; dtree_of_pexpr pe2 ] )
         | M_RMW _ ->
             ( "rmw"
             , [] )
@@ -313,10 +311,10 @@ module Make(PP_Typ : Pp_mucore.PP_Typ) = struct
 
       | M_Eerror (str, pe) ->
           Dnode ( pp_ctor "Eerror" ^^^ P.dquotes (!^ (ansi_format [Red] str))
-                , [dtree_of_asym pe] )
+                , [dtree_of_pexpr pe] )
       | M_Erun (l, asyms) ->
          Dnode ( pp_pure_ctor "Erun"
-               , List.map dtree_of_asym asyms)
+               , List.map dtree_of_pexpr asyms)
 
   (*
       | Easeq of ('sym * core_base_type) * ('a, 'bty, 'sym) generic_action *
