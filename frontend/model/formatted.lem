@@ -429,11 +429,8 @@ let convert loc eval_conv prec_opt lm_opt cspec args =
             Mem.load loc arg_ty arg_ptr >>= fun (_, mval) ->
             match conv_ty_opt with
               | Just conv_ty ->
-                  (* let () = Debug.print_debug 2 [] (fun () -> "conv_ty= " ^ Pp.stringFromCore_ctype conv_ty) in
-                  let () = Debug.print_debug 2 [] (fun () -> "mval= " ^ Pp.stringFromMem_mem_value mval) in *)
                   eval_conv conv_ty mval >>= function
                     | Left err ->
-                        (* let () = Debug.print_debug 1 [] (fun () -> "PRINTF ERR 1") in *)
                         Mem.return (Left err)
                     | Right (U.Defined (Core.Vloaded (Core.LVspecified (Core.OVinteger ival)))) ->
                         match Mem_aux.integerFromIntegerValue ival with
@@ -481,7 +478,6 @@ let convert loc eval_conv prec_opt lm_opt cspec args =
                           Mem.case_fval fval
                             (fun () -> [#'U'; #'N'; #'S'; #'P'; #'E'; #'C'])
                             cont_floating
-                            (* (fun x -> cont_floating (String.toCharList (Float.string_of_float x))) *)
                         , args'))
                     | _ ->
                         error "Formatted.aux should only be called on a loaded(arimetic value)"
