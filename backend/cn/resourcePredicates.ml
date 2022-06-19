@@ -54,9 +54,10 @@ let pp_definition def =
 
 let byte_sym = Sym.fresh_named "Byte"
 let char_sym = Sym.fresh_named "Char"
-let zerobyte_sym = Sym.fresh_named "ZeroByte"
+let bytev_sym = Sym.fresh_named "ByteV"
 let early_alloc_sym = Sym.fresh_named "EarlyAlloc"
 let page_sym = Sym.fresh_named "Page"
+let zeropage_sym = Sym.fresh_named "ZeroPage"
 let hyp_pool_sym = Sym.fresh_named "Hyp_pool"
 
 
@@ -136,10 +137,11 @@ let char () =
 
 
 
-let zerobyte () = 
-  let id = zerobyte_sym in
-  let loc = Loc.other "internal (ZeroByte)" in
+let bytev () = 
+  let id = bytev_sym in
+  let loc = Loc.other "internal (ByteV)" in
   let pointer_s, pointer = IT.fresh Loc in
+  let the_value_s, the_value = IT.fresh Integer in
   let point = (P {
       name = Owned (Integer Char); 
       pointer = pointer;
@@ -150,13 +152,14 @@ let zerobyte () =
   in
   let resource_s, resource = IT.fresh (snd point) in
 
-  let zero = 
-    eq_ (recordMember_ ~member_bt:BT.Integer (resource, value_sym), int_ 0)
+  let has_value = 
+    eq_ (recordMember_ ~member_bt:BT.Integer (resource, value_sym), 
+         the_value)
   in
 
   let lrt =
     LRT.Resource ((resource_s, point), (loc, None),
-    LRT.Constraint (t_ zero, (loc, None), 
+    LRT.Constraint (t_ has_value, (loc, None), 
     LRT.I))
   in
   let clause = {
@@ -168,7 +171,7 @@ let zerobyte () =
   let predicate = {
       loc = loc;
       pointer = pointer_s;
-      iargs = []; 
+      iargs = [(the_value_s, IT.bt the_value)]; 
       oargs = []; 
       clauses = [clause]; 
     } 
@@ -257,6 +260,63 @@ let page_alloc_predicates struct_decls =
           permission = 
             and_ [pbaseI %<= q; q %<= (sub_ (pbaseI %+ length, int_ 1))];
           iargs = [];
+        }, BT.Record [])
+      in
+      let lrt =
+        LRT.Resource ((resource_s, qp), (loc, None),
+        LRT.Constraint (t_ (ne_ (order, int_ hHYP_NO_ORDER)), (loc, None),
+        LRT.Constraint (t_ (IT.good_pointer ~pointee_ct:char_ct pbase), (loc, None),
+        LRT.I)))
+      in
+      {
+        loc = loc;
+        guard = ne_ (guardv, int_ 0);
+          (* and_ [ne_ (vbase, null_); *)
+          (*       int_ 0 %<= order; order %<= int_ (mMAX_ORDER - 1)]; *)
+        packing_ft = LAT.of_lrt lrt (LAT.I []) 
+      }
+    in
+    let clause2 = 
+      {
+        loc = loc;
+        guard = bool_ true;
+        packing_ft = LAT.I []
+      }
+    in
+    let predicate = {
+        loc = loc;
+        pointer = pbase_s;
+        iargs = [(guardv_s, IT.bt guardv);
+                 (order_s, IT.bt order);
+                ]; 
+        oargs = []; 
+        clauses = [clause1; clause2]; 
+      } 
+    in
+    (id, predicate)
+  in
+
+  
+  let zeropage = 
+    let id = zeropage_sym in
+    let loc = Loc.other "internal (ZeroPage)" in
+    let guardv_s, guardv = IT.fresh BT.Integer in
+    let pbase_s, pbase = IT.fresh Loc in
+    let pbaseI = pointerToIntegerCast_ pbase in
+    let order_s, order = IT.fresh Integer in
+    let resource_s = Sym.fresh () in
+    let clause1 = 
+      let qp = 
+        let length = pred_ LP.page_size_of_order_sym [order] Integer in
+        let q_s, q = IT.fresh Integer in 
+        (ResourceTypes.Q {
+          name = PName bytev_sym; 
+          pointer = pointer_ Z.zero;
+          q = q_s;
+          step = Memory.size_of_ctype char_ct;
+          permission = 
+            and_ [pbaseI %<= q; q %<= (sub_ (pbaseI %+ length, int_ 1))];
+          iargs = [int_ 0];
         }, BT.Record [])
       in
       let lrt =
@@ -425,7 +485,7 @@ let page_alloc_predicates struct_decls =
       in
       let qp = 
         (ResourceTypes.Q {
-            name = PName page_sym;
+            name = PName zeropage_sym;
             pointer = pointer_ Z.zero;
             q = q_s;
             step = pPAGE_SIZE;
@@ -483,7 +543,7 @@ let page_alloc_predicates struct_decls =
     (id, predicate)
   in
 
-  [page; hyp_pool;]
+  [page; zeropage; hyp_pool;]
 
 
 
@@ -498,7 +558,7 @@ let page_alloc_predicates struct_decls =
 let predicate_list struct_decls = 
   char () ::
   byte () ::
-  zerobyte () ::
+  bytev () ::
   (* region () ::
    * zero_region () :: *)
   (* part_zero_region () :: *)
