@@ -219,6 +219,26 @@ let string_of_constraint_violation = function
       "returning '" ^ string_of_gentype gty2 ^ "' from a function with an arithmetic result type '" ^ string_of_ctype ty1 ^ "'"
   | ReturnAsSimpleAssignment (BoolExpectsArithmeticOrPointer, ty1, gty2) ->
       "returning non scalar type '" ^ string_of_gentype gty2 ^ "' from a function with result type '" ^ string_of_ctype ty1 ^ "'"
+  | IllegalAlignas kind (* §6.7.5#2 *) ->
+      let kind_str =
+        match kind with
+          | IllegalAlignas_typedef ->
+              "a typedef"
+          | IllegalAlignas_bitfield ->
+              "a bitfield"
+          | IllegalAlignas_function ->
+              "a function"
+          | IllegalAlignas_parameter ->
+              "a parameter"
+          | IllegalAlignas_register ->
+              "an object declared with the register storage-class specifier" in
+      "alignment specifier is in a declaration of " ^ kind_str
+  | AlignasNotIntegerConstant (* §6.7.5#3, sentence 1 *) ->
+      "expression in an alignment specifier is not an integer constant expression"
+  | AlignasInvalidIntegerConstant (* §6.7.5#3, sentence 2 *) ->
+      "alignment specifier with that does not evaluate to a valid fundamental alignment"
+  | AlignasLessThanRequired decl_ty (* §6.7.5#4 *) ->
+      "alignment specifier less strict than the declaration type '" ^ string_of_ctype decl_ty ^ "'"
   | ArrayDeclarationNegativeSize ->
       "array declared with a negative or zero size"
   | ArrayDeclarationIncompleteType ->
@@ -311,6 +331,8 @@ let string_of_desugar_cause = function
       "feature that will never supported: " ^ str
   | Desugar_NotYetSupported str ->
       "feature not yet supported: " ^ str
+  | Desugar_agnosticFailure str ->
+      "agnostic mode could not carry on: `" ^ str ^ "' (consider removing --agnotic)"
   | Desugar_CN e ->
       Cn_ocaml.string_of_error e
   | Desugar_TODO msg ->

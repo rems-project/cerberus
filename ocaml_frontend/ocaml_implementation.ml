@@ -413,3 +413,74 @@ let (set, get) : (implementation -> unit) * (unit -> implementation) =
   , begin fun () ->
       snd !selected
     end )
+
+
+(* this is to make it possible to use `alignof' from Cabs_to_ail
+   (where tagDefs is a bit different from the Ctype version) *)
+let alignof_tagDefs_aux () =
+  Pmap.map (function
+    | Ctype.StructDef (xs, flex_opt) ->
+      List.map (fun (_, (_, _, ty)) -> ty) xs @
+      begin match flex_opt with
+        | None ->
+            []
+        | Some (FlexibleArrayMember (_, _, _, ty)) ->
+            [Ctype ([], Array (ty, None))]
+      end
+    | Ctype.UnionDef xs ->
+        List.map (fun (_, (_, _, ty)) -> ty) xs
+  ) (Tags.tagDefs ())
+
+let rec alignof ?(tagDefs= alignof_tagDefs_aux ()) (Ctype (_, ty)) =
+  match ty with
+    | Void ->
+        assert false
+    | Basic (Integer ity) ->
+        begin match (get ()).alignof_ity ity with
+          | Some n ->
+              Some n
+          | None ->
+              None
+        end
+    | Basic (Floating fty) ->
+        begin match (get ()).alignof_fty fty with
+          | Some n ->
+              Some n
+          | None ->
+              None
+        end
+    | Array (elem_ty, _) ->
+        alignof ~tagDefs elem_ty
+    | Function _
+    | FunctionNoParams _ ->
+        assert false
+    | Pointer _ ->
+        begin match (get ()).alignof_pointer with
+          | Some n ->
+              Some n
+          | None ->
+              None
+        end
+    | Atomic atom_ty ->
+        alignof ~tagDefs atom_ty
+    | Struct tag_sym ->
+        List.fold_left (fun acc_opt ty ->
+          match acc_opt, alignof ~tagDefs ty with
+            | Some acc, Some al ->
+                Some (max al acc)
+            | _ ->
+                None
+        ) (Some 1) (Pmap.find tag_sym tagDefs)
+    | Union tag_sym ->
+        (* NOTE: Structs (and unions) alignment is that of the maximum alignment
+            of any of their components. *)
+        List.fold_left (fun acc_opt ty ->
+          match acc_opt, alignof ~tagDefs ty with
+            | Some acc, Some al ->
+                Some (max al acc)
+            | _ ->
+                None
+        ) (Some 1) (Pmap.find tag_sym tagDefs)
+
+let alignof_proxy tagDefs =
+  alignof ~tagDefs

@@ -1,4 +1,7 @@
-module N = Nat_big_num
+module N = struct
+  include Nat_big_num
+  let of_float = Z.of_float
+end
 
 open Ctype
 open Memory_model
@@ -158,7 +161,7 @@ let initial_mem_state: mem_state =
   ; bytemap= IntMap.empty
   ; funptrmap= IntMap.empty
   ; next_alloc_id= Z.zero
-  ; last_address= Z.of_int 0xFFFFFFFF
+  ; last_address= Z.of_int 0xFFFFFFFFFFFF
   ; last_used= None }
 
 type 'a memM =
@@ -1016,7 +1019,7 @@ let fvfromint ival =
   float_of_string (N.to_string (ival_to_int ival))
 
   let ivfromfloat fval =
-    IVint (N.of_int64 (Int64.of_float fval))
+    IVint (N.of_float fval)
 
 
 (* Memory value constructors *)

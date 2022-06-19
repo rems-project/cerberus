@@ -2216,6 +2216,8 @@ end
       | A.AilEcall e [] -> (* NOTE: if there are no arguments, we don't need all the temporary object creation stuff *)
           (* STD §6.5.2.2 *)
           let ret_ty = match ctype_of e with
+            | Ctype.Ctype _ (Ctype.Pointer _ (Ctype.Ctype _ (Ctype.FunctionNoParams (_, ret_ty)))) ->
+                ret_ty
             | Ctype.Ctype _ (Ctype.Pointer _ (Ctype.Ctype _ (Ctype.Function (_, ret_ty) params isVariadic))) ->
                 if List.length params = 0 && (not isVariadic) then
                   ret_ty
@@ -3614,16 +3616,25 @@ let translate_program stdlib (startup_sym_opt, sigm) =
   E.foldlM (fun (gacc, facc, finfoacc) (sym, (loc, decl_attrs, decl)) ->
     (* for each Ail declaration *)
     match decl with
-      | A.Decl_object _ qs ty ->
+      | A.Decl_object _ align qs ty ->
           (* elaboration of a global variables *)
           let core_ty     = Caux.mk_ail_ctype_pe ty in
+          let align_ival  =
+            match align with
+              | Just (A.AlignInteger n) ->
+                  Caux.mk_integer_pe n
+              | Just (A.AlignType al_ty) ->
+                  Caux.mk_alignof_pe (Caux.mk_ail_ctype_pe al_ty)
+              | Nothing ->
+                  Caux.mk_alignof_pe (Caux.mk_ail_ctype_pe ty)
+            end in
           let core_create =
             match Cerb_attributes.decode_with_address decl_attrs with
               | Right (Just addr) ->
                   Caux.add_annot (Annot.Acerb (Annot.ACerb_with_address addr))
               | _ ->
                   (fun z -> z)
-            end (Caux.pcreate loc (Caux.mk_alignof_pe core_ty) core_ty (Symbol.PrefSource loc [sym])) in
+            end (Caux.pcreate loc align_ival core_ty (Symbol.PrefSource loc [sym])) in
           let sym_global  = Symbol.fresh () in
 
           match List.lookup sym sigm.A.object_definitions with

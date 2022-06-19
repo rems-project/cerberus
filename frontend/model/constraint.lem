@@ -28,6 +28,13 @@ type atomic_operations_synopsys =
   | AtomicExchange
   | AtomicCompareExchange
 
+type illegal_alignas =
+  | IllegalAlignas_typedef
+  | IllegalAlignas_bitfield
+  | IllegalAlignas_function
+  | IllegalAlignas_parameter
+  | IllegalAlignas_register
+
 type violation =
   (* 6.5 Expressions *)
   (* 6.5.2.2 Function calls *)
@@ -119,6 +126,11 @@ type violation =
   (* Type qualifier *)
   | RestrictQualifiedTypeConstraint (* §6.7.3#2 *)
   | RestrictQualifiedPointedTypeConstraint of ctype (* §6.7.3#2 *)
+  (* 6.7.5 Alignment specifier *)
+  | IllegalAlignas of illegal_alignas (* §6.7.5#2 *)
+  | AlignasNotIntegerConstant (* §6.7.5#3, sentence 1 *)
+  | AlignasInvalidIntegerConstant (* §6.7.5#3, sentence 2 *)
+  | AlignasLessThanRequired of ctype (* §6.7.5#4 *)
   (* 6.7.6 Declarators *)
   | ArrayDeclarationNegativeSize (* §6.7.6.2#1, sentence 3 *)
   | ArrayDeclarationIncompleteType (* §6.7.6.2#1, sentence 4 *)
@@ -345,6 +357,14 @@ let std_of_violation = function
       ["§6.7.3#2"]
   | RestrictQualifiedPointedTypeConstraint _ ->
       ["§6.7.3#2"]
+  | IllegalAlignas _ ->
+      ["§6.7.5#2"]
+  | AlignasNotIntegerConstant ->
+      ["§6.7.5#3, sentence 1"]
+  | AlignasInvalidIntegerConstant ->
+      ["§6.7.5#3, sentence 2"]
+  | AlignasLessThanRequired _ ->
+      ["§6.7.5#4"]
   | ArrayDeclarationNegativeSize ->
       ["§6.7.6.2#1, sentence 3"]
   | ArrayDeclarationIncompleteType ->

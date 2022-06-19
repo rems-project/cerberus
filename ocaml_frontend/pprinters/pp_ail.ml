@@ -777,7 +777,7 @@ let pp_program_aux pp_annot (startup, sigm) =
   
   P.separate_map (P.break 1 ^^ P.hardline) (fun (sym, (_, _, decl)) ->
     match decl with
-      | Decl_object (sd, qs, ty) ->
+      | Decl_object (sd, _align, qs, ty) ->
           (* first pprinting in comments, some human-readably declarations *)
           (* TODO: colour hack *)
           pp_ansi_format [Red] (fun () -> !^ "// declare" ^^^ pp_id sym ^^^ !^ "as" ^^^ (pp_ctype_human qs ty)) ^^

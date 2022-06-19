@@ -4,7 +4,10 @@ open Ctype
 open Memory_model
 open Mem_common
 
-module N = Nat_big_num
+module N = struct
+  include Nat_big_num
+  let of_float = Z.of_float
+end
 
 module L = struct
   include List
@@ -425,7 +428,7 @@ module Concrete : Memory = struct
     next_iota= N.zero;
     allocations= IntMap.empty;
     iota_map= IntMap.empty;
-    last_address= N.of_int 0xFFFFFFFF; (* TODO: this is a random impl-def choice *)
+    last_address= N.of_int 0xFFFFFFFFFFFF; (* TODO: this is a random impl-def choice *)
     funptrmap = IntMap.empty;
     varargs = IntMap.empty;
     next_varargs_id = N.zero;
@@ -2350,7 +2353,7 @@ let combine_prov prov1 prov2 =
     float_of_string (N.to_string n)
   
   let ivfromfloat fval =
-    IV (Prov_none, N.of_int64 (Int64.of_float fval))
+    IV (Prov_none, N.of_float fval)
   
   let eq_ival (IV (_, n1)) (IV (_, n2)) =
     Some (Nat_big_num.equal n1 n2)
