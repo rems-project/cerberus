@@ -217,8 +217,12 @@ instance forall 'a. (Located (statement 'a))
     loc
 end
 
+type alignment =
+  | AlignInteger of integer
+  | AlignType of Ctype.ctype
+
 type declaration =
-  | Decl_object   of (storageDuration * bool) * qualifiers * ctype
+  | Decl_object   of (storageDuration * bool) * maybe alignment * qualifiers * ctype
   | Decl_function of bool (* has_prototype *)
                    * (qualifiers * ctype) (* return qualifiers *)
                    * (list (qualifiers * ctype * (* isRegister *)bool))

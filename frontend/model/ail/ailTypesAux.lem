@@ -1229,23 +1229,63 @@ end
 (* TODO: this is such a bad name ... *)
 val     has_pointer_at_leafs: ctype -> bool
 let rec has_pointer_at_leafs (Ctype _ ty) =
-  match ty with
-    | Void ->
-        false
-    | Basic _ ->
-        false
-    | Array elem_ty _ ->
-        has_pointer_at_leafs elem_ty
-    | Function _ _ _ ->
-        false
-    | FunctionNoParams _ ->
-        false
-    | Pointer _ _ ->
-        true
-    | Atomic ty ->
-        has_pointer_at_leafs ty
-    | Struct _ ->
-        false
-    | Union _ ->
-        false
+match ty with
+  | Void ->
+      false
+  | Basic _ ->
+      false
+  | Array elem_ty _ ->
+      has_pointer_at_leafs elem_ty
+  | Function _ _ _ ->
+      false
+  | FunctionNoParams _ ->
+      false
+  | Pointer _ _ ->
+      true
+  | Atomic ty ->
+      has_pointer_at_leafs ty
+  | Struct _ ->
+      false
+  | Union _ ->
+      false
+end
+
+
+(* returns the order between the alignment constraint of two types.
+   if this cannot be decided in an implementation agnostic way, return Nothing *)
+let rec agnostic_alignment_requirement_ord ((Ctype.Ctype _ ty1_) as ty1) ((Ctype.Ctype _ ty2_) as ty2) =
+  if ty1 = ty2 then
+    Just EQ
+  else if is_character ty1 then
+    Just (if is_character ty2 then EQ else LT)
+  else if is_character ty2 then
+    Just (if is_character ty1 then EQ else GT)
+  else match (ty1_, ty2_) with
+    | (Basic (Integer ity1), Basic (Integer ity2)) ->
+        if is_corresponding_unsigned ity1 ity2 || is_corresponding_unsigned ity2 ity1 then
+          (* (STD §6.2.5#6, first sentence) *)
+          Just EQ
+        else
+          Nothing
+    | (Pointer _ ref_ty1, Pointer _ ref_ty2) ->
+        if (is_void ref_ty1 && is_character ref_ty2) || (is_character ref_ty1 && is_void ref_ty2) then
+          (* (STD §6.2.5#28, first sentence) *)
+          Just EQ
+        else if are_compatible (no_qualifiers, ref_ty1) (no_qualifiers, ref_ty2) then
+          (* (STD §6.2.5#28, second sentence) *)
+          Just EQ
+        else if is_struct ref_ty1 && is_struct ref_ty2 then
+          (* (STD §6.2.5#28, third sentence) *)
+          Just EQ
+        else if is_union ref_ty1 && is_union ref_ty2 then
+          (* (STD §6.2.5#28, fourth sentence) *)
+          Just EQ
+        else
+          Nothing
+    | (Array elem_ty1 _, _) ->
+        agnostic_alignment_requirement_ord elem_ty1 ty2
+    | (_, Array elem_ty2 _) ->
+        agnostic_alignment_requirement_ord ty1 elem_ty2
+    | _ ->
+        Nothing
   end

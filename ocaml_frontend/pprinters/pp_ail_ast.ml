@@ -533,7 +533,7 @@ let dtree_of_declaration (i, (_, decl_attrs, decl)) =
   in
   with_attributes decl_attrs begin
     match decl with
-    | Decl_object (msd, qs, cty) ->
+    | Decl_object (msd, _align, qs, cty) ->
         Dleaf (pp_decl_ctor "Decl_object" ^^^
                Pp_ail.pp_id_obj i  ^^^
                P.squotes (pp_storage msd ^^^ pp_ctype qs cty))

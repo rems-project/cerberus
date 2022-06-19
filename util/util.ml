@@ -74,4 +74,9 @@ let contains s1 s2 =
     Debug.error_exception "contains" e;
     false
 
-
+let is_power_of_two (n: Nat_big_num.num) : bool =
+  let open Z in
+  if equal n zero then
+    false
+  else
+    n land (pred n) = zero

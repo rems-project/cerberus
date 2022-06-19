@@ -687,7 +687,7 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
                 "[AilEident (gamma)] " ^ show sym ^ " -- " ^ Pp.stringFromAil_ctype qs ty
               ) in
               E.return (AilEident sym, GenLValueType qs ty isRegister)
-          | (Nothing, Just (_, _, Decl_object (_, isRegister) qs ty)) ->
+          | (Nothing, Just (_, _, Decl_object (_, isRegister) _ qs ty)) ->
               let () = Debug.print_debug 1 [Debug.DB_ail_typing] (fun () ->
                 "[AilEident (sigma)] " ^ show sym ^ " -- " ^ Pp.stringFromAil_ctype qs ty
               ) in
@@ -2011,7 +2011,7 @@ let annotate_sigma sigm =
   (* Checking that declarations are well-formed *)
   E.mapM (fun (ident, decl) ->
     match decl with
-    | (_, _, (Decl_object dur_opt qs ty as decl)) ->
+    | (_, _, (Decl_object dur_opt _ qs ty as decl)) ->
         wf_lvalue sigm qs ty >>
         E.return (ident, decl)
     | (_, _, (Decl_function hasProto ret_ty params isVariadic _ (* isInline *) _ (* isNoreturn *) as decl)) ->
@@ -2024,7 +2024,7 @@ let annotate_sigma sigm =
   (* Typechecking of external objects that have a definition *)
   E.mapM (fun (ident, e) ->
     match List.lookup ident sigm.declarations with
-      | Just (loc, _, Decl_object _ _ (* qs *) ty) ->
+      | Just (loc, _, Decl_object _ _ _ (* qs *) ty) ->
           (* TODO: qualifiers?; storage duration? *)
           annotate_definition_aux sigm [] (ty, e) >>= fun def ->
           E.return (ident, def)

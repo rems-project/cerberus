@@ -317,3 +317,5 @@ val product_list: forall 'a 'b. list 'a -> list 'b -> list ('a * 'b)
 let product_list xs ys =
   List.concatMap (fun x -> List.map (fun y -> (x,y)) ys) xs
 
+val is_power_of_two: integer -> bool
+declare ocaml target_rep function is_power_of_two = `Util.is_power_of_two`
