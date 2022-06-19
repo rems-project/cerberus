@@ -2595,23 +2595,7 @@ and desugar_alignment_specifier loc align_spec =
 
 
 and desugar_alignment_specifiers loc decl_ty xs =
-  E.get_tag_definitions >>= fun tagDefs ->
-  let pseudo_tagDefs =
-    Map.map function
-      | Struct_definition _ _ membrs flex_opt ->
-          List.map (fun (_, (_, _, ty)) -> ty) membrs ++
-          match flex_opt with
-            | Nothing ->
-                []
-            | Just (Ctype.FlexibleArrayMember _ _ _ ty) ->
-                [Ctype.Ctype [] (Ctype.Array ty Nothing)]
-          end
-      | Union_definition _ _ membrs ->
-          List.map (fun (_, (_, _, ty)) -> ty) membrs
-      | Enum_definition _ ->
-          [(* dummy, this won't be called *)]
-    end tagDefs in
-  let alignof_ty z = Implementation.alignof_ty pseudo_tagDefs z in
+  E.get_alignof >>= fun alignof_ty ->
   E.foldlM (fun acc_opt aspec ->
     desugar_alignment_specifier loc aspec >>= function
       | Nothing ->
@@ -3771,7 +3755,7 @@ let desugar_declaration_base attrs specifs idecltors =
                     match link with
                       | Linkage_external ->
                           E.register_external_object_declaration sym
-                            (false(*TODO:check*), ident_loc, attrs, dur, List.elem SC_register specifs.storage_classes, qs, cty)
+                            (false(*TODO:check*), ident_loc, attrs, dur, List.elem SC_register specifs.storage_classes, Nothing, qs, cty)
                       | _ ->
                           E.register_internal_object_declaration sym
                             (ident_loc, dur, List.elem SC_register specifs.storage_classes, qs, cty)
@@ -4655,7 +4639,7 @@ let desugar_and_register_external_declaration edecl =
               (* Case of a typedef *)
               E.return ()
           | Just (ident_loc, ident_attrs, link, sym, isTentative, (qs, ty), mk_desug_init) ->
-              desugar_alignment_specifiers ident_loc ty specifs.alignment_specifiers >>= fun al_requirement ->
+              desugar_alignment_specifiers ident_loc ty specifs.alignment_specifiers >>= fun align_opt ->
               let do_function fun_qs return_qs_ty params_opt is_variadic =
                 let () =
                   if Annot.no_attributes <> ident_attrs then
@@ -4683,7 +4667,7 @@ let desugar_and_register_external_declaration edecl =
                 | ty ->
                     let dur = determinate_storage_duration link specifs.storage_classes in
                     E.register_external_object_declaration sym
-                      (isTentative, ident_loc, Annot.combine_attributes attrs ident_attrs, dur, List.elem SC_register specifs.storage_classes, qs, ty) >>
+                      (isTentative, ident_loc, Annot.combine_attributes attrs ident_attrs, dur, List.elem SC_register specifs.storage_classes, align_opt, qs, ty) >>
                     
                     mk_desug_init () >>= function
                       | Just (ty', d_e) ->

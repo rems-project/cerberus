@@ -1,5 +1,5 @@
 open import Pervasives Utils Cabs Std Show Show_extra Set
-import Debug Pp Loc Errors Scope_table State_exception Symbol
+import Global Debug Pp Loc Errors Scope_table State_exception Symbol
 
 open import Cabs_to_ail_aux
 
@@ -7,7 +7,7 @@ import AilSyntax AilTypesAux
 
 import Map_extra Ctype
 
-import Mem
+import Mem Implementation
 
 import Cn_desugaring
 
@@ -233,7 +233,7 @@ type state = <|
                                                                 the boolean is the isRegister flag *)
     * bool * bool * bool )                                   (* isVariadic, isInline, isNoReturn flags *)
    );
-  external_object_declarations: map A.ail_identifier  ((* isTentative *)bool * Loc.t * Annot.attributes * A.storageDuration * (* isRegister *) bool * Ctype.qualifiers * Ctype.ctype);
+  external_object_declarations: map A.ail_identifier  ((* isTentative *)bool * Loc.t * Annot.attributes * A.storageDuration * (* isRegister *) bool * maybe A.alignment * Ctype.qualifiers * Ctype.ctype);
   internal_object_declarations: map A.ail_identifier  (Loc.t * A.storageDuration * (* isRegister *) bool * Ctype.qualifiers * Ctype.ctype);
   
   function_definitions: map A.ail_identifier (Loc.t * Annot.attributes * list A.ail_identifier * A.statement unit);
@@ -391,7 +391,7 @@ let collect_with_scope scope m =
             match kind with
               | Kind_ordinary (OK_object false) ->
                   match Map.lookup sym st.external_object_declarations with
-                    | Just (isTentative, loc, _, dur, isRegister, qs, ty) ->
+                    | Just (isTentative, loc, _, dur, isRegister, align_opt, qs, ty) ->
                         (sym, ((loc, dur, isRegister), qs, ty)) :: acc
                     | Nothing ->
                         match Map.lookup sym st.internal_object_declarations with
@@ -452,7 +452,7 @@ let bindings_of_idents_map idents_map =
               match kind with
                 | Kind_ordinary (OK_object _) ->
                     match Map.lookup sym st.external_object_declarations with
-                      | Just (isTentative, _, _, dur, isRegister, qs, ty) ->
+                      | Just (isTentative, _, _, dur, isRegister, align_opt, qs, ty) ->
                           (sym, ((dur, isRegister), qs, ty)) :: acc
                       | Nothing ->
                           match Map.lookup sym st.internal_object_declarations with
@@ -1356,7 +1356,7 @@ let is_static_object_identifier sym =
     (* ... *)
     let map_union = Map.(union) in
     map_union
-      (Map.map (fun (isTentative, loc, _, dur, isRegister, qs, ty) -> (isTentative, loc, dur, isRegister, qs, ty)) st.external_object_declarations)
+      (Map.map (fun (isTentative, loc, _, dur, isRegister, _, qs, ty) -> (isTentative, loc, dur, isRegister, qs, ty)) st.external_object_declarations)
       (Map.map (fun (loc, dur, isRegister, qs, ty) -> (false, loc, dur, isRegister, qs, ty)) st.internal_object_declarations)
   ) >>= fun decls ->
   return match Map.lookup sym decls with
@@ -1373,7 +1373,7 @@ let fetch_object_declaration sym =
     (* ... *)
     let map_union = Map.(union) in
     map_union
-      (Map.map (fun (isTentative, loc, _, dur, isRegister, qs, ty) -> (isTentative, loc, dur, isRegister, qs, ty)) st.external_object_declarations)
+      (Map.map (fun (isTentative, loc, _, dur, isRegister, _, qs, ty) -> (isTentative, loc, dur, isRegister, qs, ty)) st.external_object_declarations)
       (Map.map (fun (loc, dur, isRegister, qs, ty) -> (false, loc, dur, isRegister, qs, ty)) st.internal_object_declarations)
   ) >>= fun decls ->
   match Map.lookup sym decls with
@@ -1567,10 +1567,78 @@ let register_function_declaration loc attrs sym is_proto decl =
         )
   end
 
+let get_alignof =
+  get_tag_definitions >>= fun tagDefs ->
+  let pseudo_tagDefs =
+    Map.map function
+      | Struct_definition _ _ membrs flex_opt ->
+          List.map (fun (_, (_, _, ty)) -> ty) membrs ++
+          match flex_opt with
+            | Nothing ->
+                []
+            | Just (Ctype.FlexibleArrayMember _ _ _ ty) ->
+                [Ctype.Ctype [] (Ctype.Array ty Nothing)]
+          end
+      | Union_definition _ _ membrs ->
+          List.map (fun (_, (_, _, ty)) -> ty) membrs
+      | Enum_definition _ ->
+          [(* dummy, this won't be called *)]
+    end tagDefs in
+  return (fun z -> Implementation.alignof_ty pseudo_tagDefs z)
+
+(* STD §6.7.5#7 *)
+let get_compatible_alignment_requirements loc new_align_opt prev_align_opt =
+  get_alignof >>= fun alignof_ty ->
+  let common new_n prev_n =
+    if new_n = prev_n then
+      return prev_align_opt
+    else
+      undef loc Undefined.UB072_incompatible_alignment_specifiers in
+  match (new_align_opt, prev_align_opt) with
+    | (Nothing, Nothing) ->
+        return Nothing
+    | (Just _, Nothing) ->
+        (* STD §6.7.5#7, sentence 2 *)
+        undef loc Undefined.UB072_incompatible_alignment_specifiers
+    | (Nothing, Just _) ->
+        return prev_align_opt
+    | (Just (A.AlignInteger new_n), Just (A.AlignInteger prev_n)) ->
+        common new_n prev_n
+    | (Just (A.AlignType new_ty), Just (A.AlignType prev_ty)) ->
+        if Global.isAgnostic () then
+          fail loc (Errors.Desugar_agnosticFailure "redeclaration with alignment specifiers is too complicated")
+        else
+          match (alignof_ty new_ty, alignof_ty prev_ty) with
+            | (Just new_n, Just prev_n) ->
+                common (integerFromNat new_n) (integerFromNat prev_n)
+            | _ ->
+                fail loc (Errors.Desugar_TODO "error msg: need a better implementation")
+          end
+    | (Just (A.AlignType new_ty), Just (A.AlignInteger prev_n)) ->
+        if Global.isAgnostic () then
+          fail loc (Errors.Desugar_agnosticFailure "redeclaration with alignment specifiers is too complicated")
+        else
+          match alignof_ty new_ty with
+            | Just new_n ->
+                common (integerFromNat new_n) prev_n
+            | Nothing ->
+                fail loc (Errors.Desugar_TODO "error msg: need a better implementation")
+          end
+    | (Just (A.AlignInteger new_n), Just (A.AlignType prev_ty)) ->
+        if Global.isAgnostic () then
+          fail loc (Errors.Desugar_agnosticFailure "redeclaration with alignment specifiers is too complicated")
+        else
+          match alignof_ty prev_ty with
+            | Just prev_n ->
+                common new_n (integerFromNat prev_n)
+            | Nothing ->
+                fail loc (Errors.Desugar_TODO "error msg: need a better implementation")
+          end
+  end
 
 (* TODO: the redeclaration check don't mix external/internal declarations *)
-val register_external_object_declaration: A.ail_identifier -> (bool * Loc.t * Annot.attributes * A.storageDuration * bool * Ctype.qualifiers * Ctype.ctype) -> desugM unit
-let register_external_object_declaration sym ((_, loc, _, new_dur, _, new_qs, new_ty) as new_decl) =
+val register_external_object_declaration: A.ail_identifier -> (bool * Loc.t * Annot.attributes * A.storageDuration * bool * maybe A.alignment * Ctype.qualifiers * Ctype.ctype) -> desugM unit
+let register_external_object_declaration sym ((isTentative, loc, attrs, new_dur, isRegister, new_align_opt, new_qs, new_ty) as new_decl) =
   return (
     Debug.print_debug 2 [Debug.DB_desugaring] (fun () ->
       "attempting to register external object declaration of `" ^ show sym ^
@@ -1580,7 +1648,7 @@ let register_external_object_declaration sym ((_, loc, _, new_dur, _, new_qs, ne
   State_exception.read (fun st ->
     Map.lookup sym st.external_object_declarations
   ) >>= function
-    | Just (_, _, _, prev_dur, _, prev_qs, prev_ty) ->
+    | Just (_, _, _, prev_dur, _, prev_align_opt, prev_qs, prev_ty) ->
         let () = Debug.print_debug 2 [Debug.DB_desugaring] (fun () ->
           "has previous decl ==> with dur: " ^ string_of_storageDuration prev_dur ^
           " qs, ty: " ^ Pp.stringFromAil_ctype prev_qs prev_ty ^
@@ -1605,15 +1673,18 @@ let register_external_object_declaration sym ((_, loc, _, new_dur, _, new_qs, ne
              constraint violation, not UB. Which own should we report ???? *)
           (* STD §6.2.7#2 *)
           undef loc Undefined.UB015_incompatible_redeclaration
-        else
+        else 
+          get_compatible_alignment_requirements loc new_align_opt prev_align_opt >>= fun align_opt ->
           let () = Debug.print_debug 3 [Debug.DB_desugaring] (fun () -> "found a valid redeclaration of `" ^ show sym ^ "'") in
           (* TODO: check that is ok to use AilTypesAux.make_composite for object types (see comment in AilTypesAux) *)
           (* TODO: what about qualifiers? *)
           if true (* AilTypesAux.is_array prev_ty && AilTypesAux.is_array new_ty *) then
             match AilTypesAux.make_composite prev_ty new_ty with
               | Just ty' ->
+                  (* TODO: what about ty' ?? *)
+                  let decl = (isTentative, loc, attrs, new_dur, isRegister, align_opt, new_qs, new_ty) in
                   State_exception.update (fun st ->
-                    <| st with external_object_declarations= Map.insert sym new_decl st.external_object_declarations |>
+                    <| st with external_object_declarations= Map.insert sym decl st.external_object_declarations |>
                   )
               | Nothing ->
                   let () = Debug.print_debug 1 [] (fun () ->
@@ -1641,9 +1712,9 @@ let update_external_object_type sym ty =
     match Map.lookup sym st.external_object_declarations with
       | Nothing ->
           error "[Cabs_to_ail_effect.update_external_object_type] called on an unregistered symbol"
-      | Just (isTentative, loc, attrs, dur, is_register, qs, _) ->
+      | Just (isTentative, loc, attrs, dur, is_register, align_opt, qs, _) ->
           <| st with external_object_declarations=
-            Map.insert sym (isTentative, loc, attrs, dur, is_register, qs, ty) st.external_object_declarations
+            Map.insert sym (isTentative, loc, attrs, dur, is_register, align_opt, qs, ty) st.external_object_declarations
           |>
     end
   )
@@ -1876,7 +1947,7 @@ let extract_program startup_str =
           ) st.function_declarations
         end
         begin
-          Map.map (fun (isTentative, loc, attrs, dur, isRegister, qs, ty) ->
+          Map.map (fun (isTentative, loc, attrs, dur, isRegister, align_opt, qs, ty) ->
             let ty' =
               if isTentative then
                 match ty with
@@ -1889,7 +1960,7 @@ let extract_program startup_str =
                 end
               else
                 ty in
-            (loc, attrs, A.Decl_object (dur, isRegister) Nothing qs ty')
+            (loc, attrs, A.Decl_object (dur, isRegister) align_opt qs ty')
           ) st.external_object_declarations
         end
       end
@@ -2049,7 +2120,7 @@ let get_sigma_sofar =
           ) st.function_declarations
         end
         begin
-          Map.map (fun (_, loc, attrs, dur, isRegister, qs, ty) ->
+          Map.map (fun (_, loc, attrs, dur, isRegister, _, qs, ty) ->
             (loc, attrs, A.Decl_object ((dur, isRegister)) Nothing qs ty)
           ) st.external_object_declarations
         end

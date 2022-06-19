@@ -250,7 +250,7 @@ type undefined_behaviour =
   | UB071_noreturn
   (* The definition of an object has an alignment specifier and another declaration of that object
      has a different alignment specifier (6.7.5). *)
-  | UB072
+  | UB072_incompatible_alignment_specifiers
   (* Declarations of an object in different translation units have different alignment specifiers
      (6.7.5). *)
   | UB073
@@ -866,7 +866,7 @@ let ub_str_bimap =
     ; (UB069, "UB069")
     ; (UB070, "UB070")
     ; (UB071_noreturn, "UB071_noreturn")
-    ; (UB072, "UB072")
+    ; (UB072_incompatible_alignment_specifiers, "UB072_incompatible_alignment_specifiers")
     ; (UB073, "UB073")
     ; (UB074, "UB074")
     ; (UB075, "UB075")
