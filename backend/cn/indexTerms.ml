@@ -709,7 +709,9 @@ let ge_ (it, it') = le_ (it', it)
 
 (* bool_op *)
 let and_ its = IT (Bool_op (And its), BT.Bool)
+let and2_ (it, it') = and_ [it; it']
 let or_ its = IT (Bool_op (Or its), BT.Bool)
+let or2_ (it, it') = or_ [it; it']
 let impl_ (it, it') = IT (Bool_op (Impl (it, it')), BT.Bool)
 let not_ it = 
   match it with
@@ -910,6 +912,15 @@ let map_get_ v arg =
   | _ -> Debug_ocaml.error "illtyped index term"
 let map_def_ (s, abt) body = 
   IT (Map_op (Def ((s, abt), body)), BT.Map (abt, bt body))
+
+let make_array_ ~item_bt items (* assumed all of item_bt *) =
+  let (_, value) = 
+    List.fold_left (fun (index, value) item -> 
+        (index + 1, map_set_ value (int_ index, item))
+      ) (0, const_map_ Integer (default_ item_bt)) items
+  in
+  value
+  
 
 
 let info_ name args =

@@ -66,7 +66,7 @@ let format_mu (p : opt_pat) expr =
   in
   match p with
     | None -> rhs
-    | Some (M_Symbol sym) -> Sym.pp sym ^^^ string "<-" ^^^ rhs
+    (* | Some (M_Symbol sym) -> Sym.pp sym ^^^ string "<-" ^^^ rhs *)
     | Some (M_Pat pat) -> NewMu.PP_MUCORE.pp_pattern pat ^^^ string "<-" ^^^ rhs
 
 let format_var model global (sym, bt) =

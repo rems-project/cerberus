@@ -32,7 +32,10 @@ val bound_l : Sym.t -> (bool, 'e) m
 val get_a : Sym.t -> (BaseTypes.t * Sym.t, 'e) m
 val get_l : Sym.t -> (LogicalSorts.t, 'e) m
 val add_a : Sym.t -> (BaseTypes.t * Sym.t) -> (unit, 'e) m
+val remove_a : Sym.t -> (unit, 'e) m
 val add_l : Sym.t -> LogicalSorts.t -> (unit, 'e) m
+val add_as : (Sym.t * (BaseTypes.t * Sym.t)) list -> (unit, 'e) m
+val remove_as : Sym.t list -> (unit, 'e) m
 val add_ls : (Sym.t * LogicalSorts.t) list -> (unit, 'e) m
 val add_c : LogicalConstraints.t -> (unit, 'e) m
 val add_cs : LogicalConstraints.t list -> (unit, 'e) m

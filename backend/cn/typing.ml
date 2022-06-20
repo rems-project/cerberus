@@ -219,6 +219,19 @@ let add_a sym (bt, sym') =
   let@ s = get () in
   set (Context.add_a sym (bt, sym') s)
 
+let remove_a sym = 
+  let@ s = get () in
+  set (Context.remove_a sym s)
+
+let add_as a = 
+  let@ s = get () in
+  set (Context.add_as a s)
+
+let remove_as a = 
+  let@ s = get () in
+  set (Context.remove_as a s)
+
+
 let add_l sym ls =
   let@ s = get () in
   set (Context.add_l sym ls s)

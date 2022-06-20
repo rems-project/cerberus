@@ -81,6 +81,16 @@ let get_l (name: Sym.t) (ctxt:t) =
 let add_a aname (bt, lname) ctxt = 
   {ctxt with computational = (aname, (bt, lname)) :: ctxt.computational}
 
+let remove_a aname ctxt = 
+  {ctxt with computational = List.remove_assoc aname ctxt.computational}
+
+let add_as avars ctxt = 
+  List.fold_left (fun ctxt (s,(bt,l)) -> add_a s (bt,l) ctxt) ctxt avars
+
+let remove_as avars ctxt = 
+  List.fold_left (fun ctxt s -> remove_a s ctxt) ctxt avars
+
+
 let add_l lname ls (ctxt : t) = 
   {ctxt with logical = (lname, ls) :: ctxt.logical}
 

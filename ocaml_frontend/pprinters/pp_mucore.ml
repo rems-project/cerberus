@@ -118,16 +118,18 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
     | M_PEconv_loaded_int _
     | M_PEwrapI _ ->
        None
-    | _ ->
-        failwith "FIXME"
 
-  let tprecedence = function
-    | M_PEcase _ -> None
+
     | M_PElet _ -> None
     | M_PEif _ -> None
     | M_PEundef _ -> None
     | M_PEerror _ -> None
-    | M_PEdone _ -> None
+
+    | _ ->
+        None
+
+
+
 
   let precedence_expr = function
     | M_Epure _
@@ -149,7 +151,7 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
 
 
   let precedence_texpr = function
-    | M_Ecase _ -> None
+    (* | M_Ecase _ -> None *)
     | M_Ebound _ -> None
     | M_End _ -> None
     | M_Eif _ ->
@@ -164,10 +166,10 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
         Some 4
     | M_Edone _ -> 
        None
-    | M_Eundef _ ->
-       None
-    | M_Eerror _ ->
-       None
+    (* | M_Eundef _ -> *)
+    (*    None *)
+    (* | M_Eerror _ -> *)
+    (*    None *)
     | M_Erun _ ->
        None
     (* | M_Esave _ ->
@@ -375,16 +377,37 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
         pp_ctor ctor  ^^ P.parens (comma_list pp_pattern pats)
 
   let pp_sym_or_pattern = function
-    | M_Symbol symbol -> pp_symbol symbol
+    (* | M_Symbol symbol -> pp_symbol symbol *)
     | M_Pat pat -> pp_pattern pat
 
 
   let abbreviated = P.dot ^^ P.dot ^^ P.dot
 
 
-  let rec pp_pexpr (M_Pexpr (loc, annot, _, pe)) =
+
+
+  let rec pp_actype_or_pexpr budget = function 
+    | Left ct -> pp_actype ct 
+    | Right sym -> pp_pexpr budget sym
+
+
+  and pp_pexpr budget pe =
+
     let open PPrint in
-    (maybe_print_location loc) ^^
+
+    let rec pp budget prec (M_Pexpr (loc, annot, _, pe)) =
+      match budget with
+      | Some 0 -> abbreviated
+      | _ -> 
+      let budget' = match budget with
+        | Some n -> Some (n-1)
+        | None -> None
+      in
+      let prec' = precedence pe in
+      let pp z = P.group (pp budget' prec' z) in
+      let pp_pexpr pe = P.group (pp_pexpr budget' pe) in
+      (maybe_print_location loc) ^^
+      (if compare_precedence prec' prec then fun z -> z else P.parens)
       begin
         match pe with
           | M_PEval cval ->
@@ -458,43 +481,16 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
               !^"conv_loaded_int" ^^ P.parens (pp_ct act.ct ^^ P.comma ^^^ pp_pexpr asym)
           | M_PEwrapI (act, asym) ->
               !^"wrapI" ^^ P.parens (pp_ct act.ct ^^ P.comma ^^^ pp_pexpr asym)
-      end
 
-
-
-  and pp_actype_or_pexpr = function 
-    | Left ct -> pp_actype ct 
-    | Right sym -> pp_pexpr sym
-
-
-
-
-  let pp_tpexpr budget pe =
-
-    let rec pp budget prec (M_TPexpr (loc, annot, _, pe)) =
-      match budget with
-      | Some 0 -> abbreviated
-      | _ -> 
-      let budget' = match budget with
-        | Some n -> Some (n-1)
-        | None -> None
-      in
-      let prec' = tprecedence pe in
-      let pp z = P.group (pp budget' prec' z) in
-      let pp_pexpr pe = P.group (pp_pexpr pe) in
-      (maybe_print_location loc) ^^
-      (if compare_precedence prec' prec then fun z -> z else P.parens)
-      begin
-        match pe with
-          | M_PEcase (pe, pat_pes) ->
-            pp_keyword "case" ^^^ pp_pexpr pe ^^^ pp_keyword "of" ^^
-            P.nest 2 (
-              P.break 1 ^^ P.separate_map (P.break 1) (fun (cpat, pe) ->
-                P.prefix 4 1
-                  (P.bar ^^^ pp_pattern cpat ^^^ P.equals ^^ P.rangle)
-                  (pp pe)
-              ) pat_pes
-            ) ^^ P.break 1 ^^ pp_keyword "end"
+          (* | M_PEcase (pe, pat_pes) -> *)
+          (*   pp_keyword "case" ^^^ pp_pexpr pe ^^^ pp_keyword "of" ^^ *)
+          (*   P.nest 2 ( *)
+          (*     P.break 1 ^^ P.separate_map (P.break 1) (fun (cpat, pe) -> *)
+          (*       P.prefix 4 1 *)
+          (*         (P.bar ^^^ pp_pattern cpat ^^^ P.equals ^^ P.rangle) *)
+          (*         (pp pe) *)
+          (*     ) pat_pes *)
+          (*   ) ^^ P.break 1 ^^ pp_keyword "end" *)
           | M_PElet (pat, pe1, pe2) ->
               (* DEBUG  !^ "{-pe-}" ^^^ *)
               pp_control "let" ^^^ pp_sym_or_pattern pat ^^^ P.equals ^^^
@@ -505,8 +501,8 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
                 P.nest 2 (P.break 1 ^^ pp pe2) ^^ P.break 1 ^^
                 pp_control "else" ^^ P.nest 2 (P.break 1 ^^ pp pe3)
               )
-          | M_PEdone asym ->
-              pp_control "done" ^^^ pp_pexpr asym
+          (* | M_PEdone asym -> *)
+          (*     pp_control "done" ^^^ pp_pexpr asym *)
           | M_PEundef (_, ub) ->
               pp_keyword "undef" ^^ P.parens (pp_undef ub)
           | M_PEerror (str, pe) ->
@@ -516,7 +512,9 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
 
 
 
-  let pp_action act =
+  let pp_action budget act =
+    let pp_actype_or_pexpr = pp_actype_or_pexpr budget in
+    let pp_pexpr = pp_pexpr budget in
     let pp_args args mo =
       P.parens (comma_list pp_actype_or_pexpr args ^^ if mo = Cmm_csem.NA then P.empty else P.comma ^^^ pp_memory_order mo) in
     match act with
@@ -595,7 +593,11 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
               | Acerb _ -> acc
           ) doc annot
 
-  let pp_expr (M_Expr (loc, annot, e) : 'ty mu_expr) =
+  let pp_expr budget (M_Expr (loc, annot, e) : 'ty mu_expr) =
+
+    let pp_pexpr = pp_pexpr budget in
+    let pp_actype_or_pexpr = pp_actype_or_pexpr budget in
+    let pp_action = pp_action budget in
 
     do_annots annot
       begin
@@ -706,6 +708,9 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
 
   let pp_texpr budget (expr : 'ty mu_texpr) =
 
+    let pp_expr = pp_expr budget in
+    let pp_pexpr = pp_pexpr budget in
+
     let rec pp budget prec (M_TExpr (loc, annot, e) : 'ty mu_texpr) =
 
       match budget with
@@ -737,15 +742,15 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
             P.parens
         end
         begin match (e : 'ty mu_texpr_) with
-          | M_Ecase (pe, pat_es) ->
-              pp_keyword "case" ^^^ pp_pexpr pe ^^^ pp_keyword "of" ^^
-              P.nest 2 (
-                P.break 1 ^^ P.separate_map (P.break 1) (fun (cpat, e) ->
-                  P.prefix 4 1
-                    (P.bar ^^^ pp_pattern cpat ^^^ P.equals ^^ P.rangle)
-                    (pp e)
-                ) pat_es
-              ) ^^ P.break 1 ^^ pp_keyword "end"
+          (* | M_Ecase (pe, pat_es) -> *)
+          (*     pp_keyword "case" ^^^ pp_pexpr pe ^^^ pp_keyword "of" ^^ *)
+          (*     P.nest 2 ( *)
+          (*       P.break 1 ^^ P.separate_map (P.break 1) (fun (cpat, e) -> *)
+          (*         P.prefix 4 1 *)
+          (*           (P.bar ^^^ pp_pattern cpat ^^^ P.equals ^^ P.rangle) *)
+          (*           (pp e) *)
+          (*       ) pat_es *)
+          (*     ) ^^ P.break 1 ^^ pp_keyword "end" *)
           | M_Elet (pat, pe1, e2) ->
               P.group (
                 P.prefix 0 1
@@ -768,7 +773,7 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
            *     (pp_ e1 ^^^ P.semi) ^/^ (pp e2) *)
           | M_Esseq (pat, e1, e2) ->
               P.group (
-                pp_control "let strong" ^^^ pp_sym_or_pattern pat ^^^ P.equals ^^^
+                pp_control "let strong" ^^^ pp_pattern pat ^^^ P.equals ^^^
                 let doc_e1 = pp_expr e1 in
                 P.ifflat doc_e1 (P.nest 2 (P.break 1 ^^ doc_e1)) ^^^ pp_control "in"
               ) ^^
@@ -794,14 +799,14 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
           | M_Ebound e ->
               pp_keyword "bound" ^/^
               P.parens (pp e)
-          | M_Edone asym ->
-              pp_control "done" ^^^ pp_pexpr asym
+          | M_Edone e ->
+              pp_control "done" ^^^ pp_expr e
           | M_Erun (sym, pes) ->
               pp_keyword "run" ^^^ pp_symbol sym ^^ P.parens (comma_list pp_pexpr pes)
-          | M_Eundef (_, ub) ->
-              pp_keyword "undef" ^^ P.parens (pp_undef ub)        
-          | M_Eerror (str, pe) ->
-              pp_keyword "error" ^^ P.parens (P.dquotes (!^ str) ^^ P.comma ^^^ pp_pexpr pe)
+          (* | M_Eundef (_, ub) -> *)
+          (*     pp_keyword "undef" ^^ P.parens (pp_undef ub)         *)
+          (* | M_Eerror (str, pe) -> *)
+          (*     pp_keyword "error" ^^ P.parens (P.dquotes (!^ str) ^^ P.comma ^^^ pp_pexpr pe) *)
         end
       end
       in pp budget None expr
@@ -886,7 +891,7 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
         | M_Fun (bTy, params, pe) ->
             pp_keyword "fun" ^^^ pp_symbol sym ^^^ pp_params params ^^ P.colon ^^^ pp_bt bTy ^^^
             P.colon ^^ P.equals ^^
-            P.nest 2 (P.break 1 ^^ pp_tpexpr budget pe)
+            P.nest 2 (P.break 1 ^^ pp_pexpr budget pe)
         | M_ProcDecl (loc, bTy, bTys) ->
             pp_cond loc @@
             pp_keyword "proc" ^^^ pp_symbol sym ^^^ P.parens (comma_list pp_bt bTys)
@@ -929,12 +934,12 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
       match iDecl with
         | M_Def (_, bty, pe) ->
             pp_keyword "def" ^^^ pp_impl iCst ^^^ P.equals ^^
-            P.nest 2 (P.break 1 ^^ pp_tpexpr budget pe) ^^ P.break 1 ^^ P.break 1
+            P.nest 2 (P.break 1 ^^ pp_pexpr budget pe) ^^ P.break 1 ^^ P.break 1
 
         | M_IFun (_, bTy, params, pe) ->
             pp_keyword "fun" ^^^ pp_impl iCst ^^^ pp_params params ^^ P.colon ^^^ pp_bt bTy ^^^
             P.colon ^^ P.equals ^^
-            P.nest 2 (P.break 1 ^^ pp_tpexpr budget pe) ^^ P.break 1 ^^ P.break 1
+            P.nest 2 (P.break 1 ^^ pp_pexpr budget pe) ^^ P.break 1 ^^ P.break 1
     ) impl P.empty
 
   let pp_extern_symmap symmap =
@@ -1015,20 +1020,18 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
     end
 
 
-  (* let string_of_mucore_object_type oTy =
-   *   Pp_utils.to_plain_string (pp_object_type oTy) *)
+  (* let string_of_mucore_object_type oTy = *)
+  (*   Pp_utils.to_plain_string (pp_object_type oTy) *)
   let string_of_core_base_type bTy =
     Pp_utils.to_plain_string (pp_bt bTy)
   let string_of_value cval =
     Pp_utils.to_plain_string (pp_value cval)
   let string_of_action act =
-    Pp_utils.to_plain_string (pp_action act)
+    Pp_utils.to_plain_string (pp_action None act)
   let string_of_pexpr pe =
-    Pp_utils.to_plain_string (pp_pexpr pe)
-  let string_of_tpexpr pe =
-    Pp_utils.to_plain_string (pp_tpexpr None pe)
+    Pp_utils.to_plain_string (pp_pexpr None pe)
   let string_of_expr e =
-    Pp_utils.to_plain_string (pp_expr e)
+    Pp_utils.to_plain_string (pp_expr None e)
   let string_of_texpr e =
     Pp_utils.to_plain_string (pp_texpr None e)
   let string_of_file f =

@@ -23,7 +23,7 @@ let check_consistency = ref true
 let ensure_logical_sort (loc : loc) ~(expect : LS.t) (has : LS.t) : (unit, type_error) m =
   if LS.equal has expect 
   then return () 
-  else fail (fun _ -> {loc; msg = Mismatch {has; expect}})
+  else fail (fun _ -> {loc; msg = Mismatch {has = BT.pp has; expect = BT.pp expect}})
 
 let ensure_base_type (loc : loc) ~(expect : BT.t) (has : BT.t) : (unit, type_error) m =
   ensure_logical_sort loc ~expect has

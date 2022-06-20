@@ -125,9 +125,6 @@ let frontend astprints filename state_file =
   let core_file = CF.Core_remove_unused_functions.remove_unused_functions true core_file in
   let () = print_log_file "after_removing_unused_functions" (CORE core_file) in
 
-  let core_file = CF.Core_indet.hackish_order core_file in
-  let () = print_log_file "after_hackish_order" (CORE core_file) in
-
   let@ core_file = CF.Core_typing.typecheck_program core_file in
   let core_file = CF.Core_sequentialise.sequentialise_file core_file in
   let core_file = CB.Pipeline.untype_file core_file in

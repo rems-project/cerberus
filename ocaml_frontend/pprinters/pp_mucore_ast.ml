@@ -109,14 +109,18 @@ module Make(PP_Typ : Pp_mucore.PP_Typ) = struct
 
   let string_of_bop = Pp_core_ast.string_of_bop
 
-  let rec dtree_of_pexpr (M_Pexpr (loc, annot, _, pexpr_)) =
 
-    let pp_ctor str =
-      pp_pure_ctor str ^^^ 
-        Location_ocaml.pp_location ~clever:false loc
-    in
+  let dtree_of_pexpr (pexpr : 'ty mu_pexpr) =
 
-    match pexpr_ with
+    let rec self (M_Pexpr (loc, annot, _, pexpr_)) =
+
+      let pp_ctor str =
+        pp_pure_ctor str ^^^ 
+          Location_ocaml.pp_location ~clever:false loc
+      in
+
+      match pexpr_ with
+
         | M_PEsym sym ->
             Dleaf (pp_ctor "PEsym" ^^^ pp_symbol sym)
         (* | M_PEimpl iCst -> *)
@@ -132,42 +136,33 @@ module Make(PP_Typ : Pp_mucore.PP_Typ) = struct
         | M_PEmember_shift (pe, sym, ident) ->
             Dleaf (pp_ctor "PEmember_shift" ^^^ !^ (ansi_format [Red] "TODO"))
         | M_PEnot pe ->
-            Dnode (pp_ctor "PEnot", [dtree_of_pexpr pe])
+            Dnode (pp_ctor "PEnot", [self pe])
         | M_PEop (bop, pe1, pe2) ->
             Dnode ( pp_ctor "PEop" ^^^ P.squotes (!^ (string_of_bop bop))
-                  , [dtree_of_pexpr pe1; dtree_of_pexpr pe2] )
+                  , [self pe1; self pe2] )
         | M_PEstruct (tag_sym, xs) ->
             assert false
         | M_PEunion (tag_sym, memb_ident, pe) ->
             assert false
         | M_PEmemberof (tag_sym, memb_ident, pe) ->
             assert false
-        | _ ->
-            failwith "FIXME"
 
 
-
-  let dtree_of_tpexpr pexpr =
-    let rec self (M_TPexpr (loc, annot, _, pexpr_)) =
-
-      match pexpr_ with
-        | M_PEcase (pe, xs) ->
-            Dleaf (pp_ctor "PEcase" ^^^ !^ (ansi_format [Red] "TODO"))
+        (* | M_PEcase (pe, xs) -> *)
+        (*     Dleaf (pp_ctor "PEcase" ^^^ !^ (ansi_format [Red] "TODO")) *)
         | M_PElet (pat, pe1, pe2) ->
             Dnode ( pp_ctor "PElet" (* ^^^ Pp_core.Basic.pp_pattern pat *)
-                  , [ dtree_of_pexpr pe1; self pe2] )
+                  , [ self pe1; self pe2] )
         | M_PEif (pe1, pe2, pe3) ->
             Dnode ( pp_ctor "PEif"
-                  , [ dtree_of_pexpr pe1; self pe2; self pe3 ] )
+                  , [ self pe1; self pe2; self pe3 ] )
         | M_PEundef (loc, ub) ->
             Dleaf (pp_ctor "PEundef" ^^^ !^ (ansi_format [Red] "TODO"))
         | M_PEerror (str, pe) ->
             Dnode ( pp_ctor "PEerror" ^^^ P.dquotes (!^ (ansi_format [Red] str))
-                  , [dtree_of_pexpr pe] )
+                  , [self pe] )
         | _ ->
-            failwith "FIXME"
-    (* | _ ->
-            Dleaf (pp_ctor ("Pexpr(TODO): " ^ Pp_utils.to_plain_pretty_string (Pp_core.WithLocations.pp_pexpr pexpr))) *)
+           Dleaf (pp_ctor ("Pexpr(TODO): " ^ MuPP.string_of_pexpr pexpr))
     in
     self pexpr
 
@@ -253,7 +248,7 @@ module Make(PP_Typ : Pp_mucore.PP_Typ) = struct
           , dtrees )
 
 
-  let dtree_of_expr (M_Expr (loc, annot, expr_) as expr) =
+  let dtree_of_expr ((M_Expr (loc, annot, expr_)) as expr) =
 
       let pp_ctor str =
         pp_eff_ctor str ^^^ 
@@ -278,12 +273,12 @@ module Make(PP_Typ : Pp_mucore.PP_Typ) = struct
       | Eproc of 'a * 'sym generic_name * ('bty, 'sym) generic_pexpr list
   *)
         | _ ->
-            Dleaf (pp_ctor ("TODO_expr ==> " ^ MuPP.string_of_expr expr))
+           Dleaf (pp_ctor ("Expr(TODO): " ^ MuPP.string_of_expr expr))
 
 
 
   let dtree_of_texpr expr =
-    let rec self (M_TExpr (loc, annot, expr_) as expr) =
+    let rec self (M_TExpr (loc, annot, expr_)) =
 
       match expr_ with
   (*
@@ -306,12 +301,12 @@ module Make(PP_Typ : Pp_mucore.PP_Typ) = struct
                 , (*add_std_annot*) [ (* Dleaf (pp_ctor "TODO_pattern")
                                     ; *) dtree_of_expr e1
                                     ; self e2 ] )
-      | M_Eundef (loc, ub) ->
-         Dleaf (pp_ctor "PEundef" ^^^ !^ (ansi_format [Red] "TODO"))
+      (* | M_Eundef (loc, ub) -> *)
+      (*    Dleaf (pp_ctor "PEundef" ^^^ !^ (ansi_format [Red] "TODO")) *)
 
-      | M_Eerror (str, pe) ->
-          Dnode ( pp_ctor "Eerror" ^^^ P.dquotes (!^ (ansi_format [Red] str))
-                , [dtree_of_pexpr pe] )
+      (* | M_Eerror (str, pe) -> *)
+      (*     Dnode ( pp_ctor "Eerror" ^^^ P.dquotes (!^ (ansi_format [Red] str)) *)
+      (*           , [dtree_of_pexpr pe] ) *)
       | M_Erun (l, asyms) ->
          Dnode ( pp_pure_ctor "Erun"
                , List.map dtree_of_pexpr asyms)
@@ -332,7 +327,8 @@ module Make(PP_Typ : Pp_mucore.PP_Typ) = struct
       | Ewait of Mem_common.thread_id
   *)
         | _ ->
-            Dleaf (pp_ctor ("TODO_expr ==> " ^ MuPP.string_of_texpr expr))
+           Dleaf (pp_ctor ("TExpr(TODO): " ^ MuPP.string_of_texpr expr))
+            (* Dleaf (pp_ctor ("TODO_expr ==> " ^ MuPP.string_of_texpr expr)) *)
     in
     self expr
 
@@ -431,7 +427,7 @@ module Make(PP_Typ : Pp_mucore.PP_Typ) = struct
         | M_Fun (bTy, params, pe) ->
             Dnode ( pp_field "Fun" ^^^ pp_symbol sym ^^ P.colon ^^^ MuPP.pp_bt bTy
                   , [ Dnode (pp_field ".params", List.map dtree_of_param params)
-                    ; Dnode (pp_field ".body", [dtree_of_tpexpr pe]) ] )
+                    ; Dnode (pp_field ".body", [dtree_of_pexpr pe]) ] )
         | M_Proc (loc, bTy, params, e, labels) ->
             Dnode ( pp_field "PRoc" ^^^ pp_symbol sym ^^ P.colon ^^^ MuPP.pp_bt bTy
                   , [ Dnode (pp_field ".params", List.map dtree_of_param params)

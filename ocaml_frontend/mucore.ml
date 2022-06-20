@@ -112,7 +112,7 @@ module Make(T : TYPES) = struct
    | M_Pattern of loc * annot list * mu_pattern_
 
   type 'TY mu_sym_or_pattern = 
-    | M_Symbol of symbol
+    (* | M_Symbol of symbol *)
     | M_Pat of mu_pattern
 
   type 'TY mu_pexpr_ =  (* Core pure expressions *)
@@ -141,25 +141,19 @@ module Make(T : TYPES) = struct
    | M_PEconv_loaded_int of 'TY act * 'TY mu_pexpr
    | M_PEwrapI of 'TY act * 'TY mu_pexpr
 
+   | M_PEundef of Location_ocaml.t * Undefined.undefined_behaviour (* undefined behaviour *)
+   | M_PEerror of string * 'TY mu_pexpr (* impl-defined static error *)
+   (* | M_PEcase of ('TY mu_pexpr) * (mu_pattern * 'TY mu_tpexpr) list (\* pattern matching *\) *)
+   | M_PElet of ('TY mu_sym_or_pattern) * ('TY mu_pexpr) * ('TY mu_pexpr) (* pure let *)
+   | M_PEif of 'TY mu_pexpr * ('TY mu_pexpr) * ('TY mu_pexpr) (* pure if *)
+
+
 
   and 'TY mu_pexpr = 
    | M_Pexpr of loc * annot list * 'TY * ('TY mu_pexpr_)
 
   let loc_of_pexpr (M_Pexpr (loc, _, _, _)) = loc
 
-
-  type 'TY mu_tpexpr_ = 
-   | M_PEundef of Location_ocaml.t * Undefined.undefined_behaviour (* undefined behaviour *)
-   | M_PEerror of string * 'TY mu_pexpr (* impl-defined static error *)
-   | M_PEcase of ('TY mu_pexpr) * (mu_pattern * 'TY mu_tpexpr) list (* pattern matching *)
-   | M_PElet of ('TY mu_sym_or_pattern) * ('TY mu_pexpr) * ('TY mu_tpexpr) (* pure let *)
-   | M_PEif of 'TY mu_pexpr * ('TY mu_tpexpr) * ('TY mu_tpexpr) (* pure if *)
-   | M_PEdone of 'TY mu_pexpr
-
-  and 'TY mu_tpexpr = 
-   | M_TPexpr of loc * annot list * 'TY * ('TY mu_tpexpr_)
-
-  let loc_of_tpexpr (M_TPexpr (loc, _, _, _)) = loc
 
 
   type m_kill_kind = 
@@ -240,14 +234,12 @@ type have_show =
   type 'TY mu_texpr_ =
    | M_Elet of ('TY mu_sym_or_pattern) * ('TY mu_pexpr) * ('TY mu_texpr)
    | M_Ewseq of mu_pattern * ('TY mu_expr) * ('TY mu_texpr) (* weak sequencing *)
-   | M_Esseq of ('TY mu_sym_or_pattern) * ('TY mu_expr) * ('TY mu_texpr) (* strong sequencing *)
-   | M_Ecase of 'TY mu_pexpr * (mu_pattern * ('TY mu_texpr)) list (* pattern matching *)
+   | M_Esseq of mu_pattern * ('TY mu_expr) * ('TY mu_texpr) (* strong sequencing *)
+   (* | M_Ecase of 'TY mu_pexpr * (mu_pattern * ('TY mu_texpr)) list (\* pattern matching *\) *)
    | M_Eif of 'TY mu_pexpr * ('TY mu_texpr) * ('TY mu_texpr)
    | M_Ebound of ('TY mu_texpr) (* $\ldots$and boundary *)
    | M_End of ('TY mu_texpr) list (* nondeterministic choice *)
-   | M_Edone of 'TY mu_pexpr
-   | M_Eundef of Location_ocaml.t * Undefined.undefined_behaviour (* undefined behaviour *)
-   | M_Eerror of string * 'TY mu_pexpr (* impl-defined static error *)
+   | M_Edone of 'TY mu_expr
    | M_Erun of symbol * ('TY mu_pexpr) list (* run from label *)
 
   and 'TY mu_texpr = 
@@ -262,8 +254,8 @@ type have_show =
 
 
   type 'TY mu_impl_decl =
-    | M_Def of T.ict * T.bt * 'TY mu_tpexpr
-    | M_IFun of T.ift * T.bt * (symbol * T.bt) list * 'TY mu_tpexpr
+    | M_Def of T.ict * T.bt * 'TY mu_pexpr
+    | M_IFun of T.ift * T.bt * (symbol * T.bt) list * 'TY mu_pexpr
 
   type 'TY mu_impl = (Implementation.implementation_constant, ('TY mu_impl_decl)) 
     Pmap.map
@@ -290,7 +282,7 @@ type have_show =
 
 
   type 'TY mu_fun_map_decl =
-    | M_Fun of T.bt * (symbol * T.bt) list * 'TY mu_tpexpr
+    | M_Fun of T.bt * (symbol * T.bt) list * 'TY mu_pexpr
     | M_Proc of Location_ocaml.t * T.bt * (symbol * T.bt) list * 'TY mu_texpr * 'TY mu_label_defs
     | M_ProcDecl of Location_ocaml.t * T.bt * T.bt list
     | M_BuiltinDecl of Location_ocaml.t * T.bt * T.bt list

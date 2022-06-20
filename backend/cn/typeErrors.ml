@@ -105,7 +105,7 @@ type message =
   | Number_arguments of {has: int; expect: int}
   | Number_input_arguments of {has: int; expect: int}
   | Number_output_arguments of {has: int; expect: int}
-  | Mismatch of { has: LS.t; expect: LS.t; }
+  | Mismatch of { has: doc; expect: doc; }
   | Mismatch_lvar of { has: LS.t; expect: LS.t; spec_info: info}
   | Illtyped_it : {context: IT.t; it: IT.t; has: LS.t; expected: string; ctxt : Context.t} -> message (* 'expected' as in Kayvan's Core type checker *)
   | Illtyped_it' : {it: IT.t; has: LS.t; expected: string} -> message (* 'expected' as in Kayvan's Core type checker *)
@@ -294,8 +294,8 @@ let pp_message te =
   | Mismatch {has; expect} ->
      let short = !^"Type error" in
      let descr =
-       !^"Expected value of type" ^^^ squotes (LS.pp expect) ^^^
-         !^"but found value of type" ^^^ squotes (LS.pp has)
+       !^"Expected value of type" ^^^ squotes expect ^^^
+         !^"but found value of type" ^^^ squotes has
      in
      { short; descr = Some descr; state = None; trace = None }
   | Mismatch_lvar { has; expect; spec_info} ->

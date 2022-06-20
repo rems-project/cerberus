@@ -33,11 +33,9 @@ end
 
 
 module PP_MUCORE = CF.Pp_mucore.Make(CF.Pp_mucore.Basic)(PP_TYPS)
-(* let pp_budget () = Some !debug_level *)
-let pp_budget () = Some 10
-let pp_pexpr e = PP_MUCORE.pp_pexpr e
-let pp_tpexpr e = PP_MUCORE.pp_tpexpr (pp_budget ()) e
-let pp_expr e = PP_MUCORE.pp_expr e
+let pp_budget () = Some !Pp.print_level
+let pp_pexpr e = PP_MUCORE.pp_pexpr (pp_budget ()) e
+let pp_expr e = PP_MUCORE.pp_expr (pp_budget ()) e
 let pp_texpr e = PP_MUCORE.pp_texpr (pp_budget ()) e
 
 

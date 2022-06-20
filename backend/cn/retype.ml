@@ -103,8 +103,8 @@ let rec retype_pattern (pattern : Old.mu_pattern) : (New.mu_pattern, type_error)
 
 
 let retype_sym_or_pattern = function
-  | Old.M_Symbol s -> 
-     return (New.M_Symbol s)
+  (* | Old.M_Symbol s ->  *)
+  (*    return (New.M_Symbol s) *)
   | Old.M_Pat pat -> 
      let@ pat = retype_pattern pat in
      return (New.M_Pat pat)
@@ -236,43 +236,38 @@ let rec retype_pexpr (Old.M_Pexpr (loc, annots,bty,pexpr_)) =
        let@ asym = retype_pexpr asym in
        let act = map_act (ct_of_ct loc) act in
        return (New.M_PEwrapI (act, asym))
-  in
-  return (New.M_Pexpr (loc, annots,bty,pexpr_))
-
-
-let rec retype_tpexpr (Old.M_TPexpr (loc, annots,bty,pexpr_)) = 
-  let@ pexpr_ = match pexpr_ with
-    | M_PEcase (asym,pats_pes) ->
-       let@ pats_pes = 
-         mapM (fun (pat,pexpr) ->
-             let@ pat = retype_pattern pat in
-             let@ pexpr = retype_tpexpr pexpr in
-             return (pat,pexpr)
-           ) pats_pes
-       in
-       let@ asym = retype_pexpr asym in
-       return (New.M_PEcase (asym,pats_pes))
+    (* | M_PEcase (asym,pats_pes) -> *)
+    (*    let@ pats_pes =  *)
+    (*      mapM (fun (pat,pexpr) -> *)
+    (*          let@ pat = retype_pattern pat in *)
+    (*          let@ pexpr = retype_tpexpr pexpr in *)
+    (*          return (pat,pexpr) *)
+    (*        ) pats_pes *)
+    (*    in *)
+    (*    let@ asym = retype_pexpr asym in *)
+    (*    return (New.M_PEcase (asym,pats_pes)) *)
     | M_PElet (sym_or_pattern,pexpr,pexpr') ->
        let@ sym_or_pattern = retype_sym_or_pattern sym_or_pattern in
        let@ pexpr = retype_pexpr pexpr in
-       let@ pexpr' = retype_tpexpr pexpr' in
+       let@ pexpr' = retype_pexpr pexpr' in
        return (New.M_PElet (sym_or_pattern,pexpr,pexpr'))
     | M_PEif (asym,pexpr1,pexpr2) ->
-       let@ pexpr1 = retype_tpexpr pexpr1 in
-       let@ pexpr2 = retype_tpexpr pexpr2 in
+       let@ pexpr1 = retype_pexpr pexpr1 in
+       let@ pexpr2 = retype_pexpr pexpr2 in
        let@ asym = retype_pexpr asym in
        return (New.M_PEif (asym,pexpr1,pexpr2))
-    | M_PEdone asym ->
-       let@ asym = retype_pexpr asym in
-       return (New.M_PEdone asym)
+    (* | M_PEdone asym -> *)
+    (*    let@ asym = retype_pexpr asym in *)
+    (*    return (New.M_PEdone asym) *)
     | M_PEundef (loc,undef) -> 
        return (New.M_PEundef (loc,undef))
     | M_PEerror (err,asym) -> 
        let@ asym = retype_pexpr asym in
        return (New.M_PEerror (err,asym))
-       
   in
-  return (New.M_TPexpr (loc, annots,bty,pexpr_))
+  return (New.M_Pexpr (loc, annots,bty,pexpr_))
+
+
 
 
 let retype_memop (loc : Loc.t) = function
@@ -480,16 +475,16 @@ let retype_expr (Old.M_Expr (loc, annots, expr_)) =
 
 let rec retype_texpr (Old.M_TExpr (loc, annots, expr_)) = 
   let@ expr_ = match expr_ with
-    | M_Ecase (asym,pats_es) ->
-       let@ pats_es = 
-         mapM (fun (pat,e) ->
-             let@ pat = retype_pattern pat in
-             let@ e = retype_texpr e in
-             return (pat,e)
-           ) pats_es
-       in
-       let@ asym = retype_pexpr asym in
-       return (New.M_Ecase (asym,pats_es))
+    (* | M_Ecase (asym,pats_es) -> *)
+    (*    let@ pats_es =  *)
+    (*      mapM (fun (pat,e) -> *)
+    (*          let@ pat = retype_pattern pat in *)
+    (*          let@ e = retype_texpr e in *)
+    (*          return (pat,e) *)
+    (*        ) pats_es *)
+    (*    in *)
+    (*    let@ asym = retype_pexpr asym in *)
+    (*    return (New.M_Ecase (asym,pats_es)) *)
     | M_Elet (sym_or_pattern,pexpr,expr) ->
        let@ sym_or_pattern = retype_sym_or_pattern sym_or_pattern in
        let@ pexpr = retype_pexpr pexpr in
@@ -506,7 +501,7 @@ let rec retype_texpr (Old.M_TExpr (loc, annots, expr_)) =
        let@ expr2 = retype_texpr expr2 in
        return (New.M_Ewseq (pat,expr1,expr2))
     | M_Esseq (pat,expr1,expr2) ->
-       let@ pat = retype_sym_or_pattern pat in
+       let@ pat = retype_pattern pat in
        let@ expr1 = retype_expr expr1 in
        let@ expr2 = retype_texpr expr2 in
        return (New.M_Esseq (pat,expr1,expr2))
@@ -516,17 +511,17 @@ let rec retype_texpr (Old.M_TExpr (loc, annots, expr_)) =
     | M_End es ->
        let@ es = mapM retype_texpr es in
        return (New.M_End es)
-    | M_Edone asym ->
-       let@ asym = retype_pexpr asym in
-       return (New.M_Edone asym)
+    | M_Edone e ->
+       let@ e = retype_expr e in
+       return (New.M_Edone e)
     | M_Erun (sym,asyms) ->
        let@ asyms = mapM retype_pexpr asyms in
        return (New.M_Erun (sym,asyms))
-    | M_Eundef (loc,undef) -> 
-       return (New.M_Eundef (loc,undef))
-    | M_Eerror (err,asym) -> 
-       let@ asym = retype_pexpr asym in
-       return (New.M_Eerror (err,asym))
+    (* | M_Eundef (loc,undef) ->  *)
+    (*    return (New.M_Eundef (loc,undef)) *)
+    (* | M_Eerror (err,asym) ->  *)
+    (*    let@ asym = retype_pexpr asym in *)
+    (*    return (New.M_Eerror (err,asym)) *)
   in
   return (New.M_TExpr (loc, annots,expr_))
 
@@ -606,7 +601,7 @@ let retype_file pred_defs opts (file : 'TY Old.mu_file)
            return (RT.Computational ((Sym.fresh (), bt), (Loc.unknown, None), LRT.I))
          in
          let@ bt = Conversions.bt_of_core_base_type Loc.unknown cbt in
-         let@ pexpr = retype_tpexpr pexpr in
+         let@ pexpr = retype_pexpr pexpr in
          return (New.M_Def (ict,bt,pexpr))
       | Old.M_IFun (ift,cbt,args,pexpr) ->
          let@ ift = 
@@ -625,7 +620,7 @@ let retype_file pred_defs opts (file : 'TY Old.mu_file)
          in
          let@ bt = Conversions.bt_of_core_base_type Loc.unknown cbt in
          let@ args = mapM (retype_arg Loc.unknown) args in
-         let@ pexpr = retype_tpexpr pexpr in
+         let@ pexpr = retype_pexpr pexpr in
          return (New.M_IFun (ift,bt,args,pexpr))
     in
     PmapM.mapM retype_impl_decl file.mu_impl 
@@ -723,7 +718,7 @@ let retype_file pred_defs opts (file : 'TY Old.mu_file)
    | Old.M_Fun (cbt,args,pexpr) ->
       let@ bt = Conversions.bt_of_core_base_type Loc.unknown cbt in
       let@ args = mapM (retype_arg Loc.unknown) args in
-      let@ pexpr = retype_tpexpr pexpr in
+      let@ pexpr = retype_pexpr pexpr in
       return (New.M_Fun (bt,args,pexpr))
    | Old.M_Proc (loc,cbt,args,expr,labels) ->
       let@ bt = Conversions.bt_of_core_base_type loc cbt in

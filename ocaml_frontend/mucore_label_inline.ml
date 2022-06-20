@@ -18,13 +18,13 @@ let rec ib_texpr label e =
   let wrap e_= M_TExpr(loc, oannots, e_) in
   let taux = ib_texpr label in
   match e_ with
-  | M_Ecase( asym2, pats_es) ->
-     let pats_es = 
-       (Lem_list.map (fun (pat,e) -> 
-            (pat, taux e)
-          ) pats_es)
-     in
-     wrap (M_Ecase( asym2, pats_es))
+  (* | M_Ecase( asym2, pats_es) -> *)
+  (*    let pats_es =  *)
+  (*      (Lem_list.map (fun (pat,e) ->  *)
+  (*           (pat, taux e) *)
+  (*         ) pats_es) *)
+  (*    in *)
+  (*    wrap (M_Ecase( asym2, pats_es)) *)
   | M_Elet( sym_or_pat, pe, e) ->
      wrap (M_Elet( sym_or_pat, pe, (taux e)))
   | M_Eif( asym2, e1, e2) ->
@@ -39,29 +39,30 @@ let rec ib_texpr label e =
      wrap (M_End (map taux es))
   | M_Edone asym ->
      wrap (M_Edone asym)
-  | M_Eundef (uloc, undef) ->
-     wrap (M_Eundef (uloc, undef))
-  | M_Eerror (str, asym) ->
-     wrap (M_Eerror (str, asym))
+  (* | M_Eundef (uloc, undef) -> *)
+  (*    wrap (M_Eundef (uloc, undef)) *)
+  (* | M_Eerror (str, asym) -> *)
+  (*    wrap (M_Eerror (str, asym)) *)
   | M_Erun(l, args) -> 
-     let (label_sym, label_arg_syms, label_body) = label in
+     let (label_sym, label_arg_syms_bts, label_body) = label in
      if not (Symbol.symbolEquality l label_sym) then 
        e
-     else if not ((List.length label_arg_syms) = (List.length args)) then
+     else if not ((List.length label_arg_syms_bts) = (List.length args)) then
        failwith "M_Erun supplied wrong number of arguments"
      else
        let () = 
          Debug_ocaml.print_debug 1 [] 
            (fun () -> ("REPLACING LABEL " ^ Symbol.show_symbol l))
        in
-       let arguments = (Lem_list.list_combine label_arg_syms args) in
+       let arguments = (Lem_list.list_combine label_arg_syms_bts args) in
        let (M_TExpr(_, annots2, e_)) = 
-         (List.fold_right (fun (spec_arg, expr_arg) body ->
+         (List.fold_right (fun ((spec_arg, spec_bt), expr_arg) body ->
               match expr_arg with
               | M_Pexpr (_, _, _, M_PEsym s) when Symbol.symbolEquality s spec_arg ->
                  body
               | _ ->
-                 M_TExpr(loc, [], (M_Elet (M_Symbol spec_arg, expr_arg, body)))
+                 let pat = (M_Pattern (loc, [], M_CaseBase (Some spec_arg, spec_bt))) in
+                 M_TExpr(loc, [], (M_Elet (M_Pat pat, expr_arg, body)))
             ) arguments label_body)
        in
        (* this combines annotations *)
@@ -108,7 +109,7 @@ let ib_fun_map_decl
                | Some (LAloop_continue _) 
                | Some (LAloop_body _) 
                  -> 
-                  (to_keep, ((label, map fst args, lbody) :: to_inline))
+                  (to_keep, ((label, args, lbody) :: to_inline))
                | _ -> 
                   (Pmap.add label def to_keep, to_inline)
             )) 
