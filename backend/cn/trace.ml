@@ -80,7 +80,8 @@ let format_mu_step model (s : mu_trace_step) =
   let (log, com, con, (rs_del, rs_add)) = ctxt_diff s.ct_before s.ct_after in
   let doc_new nm f = function
     | [] -> []
-    | syms -> [hang 8 (flow (break 1) ((string nm ^^ colon) :: List.map f syms))]
+    | syms -> [hang 8 (string nm ^^ colon ^^ break 1 ^^
+        (flow (comma ^^ break 1) (List.map f syms)))]
   in
   let global = s.ct_after.global in
   let deleted (rt, _) = ResourceTypes.pp rt ^^^ !^"|-> X" in
@@ -93,8 +94,29 @@ let format_mu_step model (s : mu_trace_step) =
   in
   hang 4 (flow hardline docs)
 
+let group_to_statements statement_locs trace =
+  let step_reg step = Locations.is_region (New.loc_of_expr step.expr) in
+  let m step opt_reg = Option.equal Locations.region_inter (step_reg step) opt_reg in
+  let regs = statement_locs |> List.filter_map Locations.is_region in
+  let rec f cur_reg cur_group groups = function
+    | [] -> List.rev ((cur_reg, List.rev cur_group) :: groups)
+    | step :: steps -> if m step cur_reg
+      then f cur_reg (step :: cur_group) groups
+      else
+        let opt_reg = List.find_opt (m step) regs in
+        f opt_reg [step] ((cur_reg, List.rev cur_group) :: groups)
+  in
+  match trace with
+    | [] -> []
+    | step :: steps -> f (List.find_opt (m step) regs) [step] [] steps
+
+
 let format_trace model (tr : t) = match tr.mu_trace with
   | [] -> Pp.string "empty trace"
-  | _ -> Pp.flow_map Pp.hardline (format_mu_step model) (List.rev tr.mu_trace)
+  | fin_step :: _ ->
+    let fin_ctxt = fst_step.ct_after in
+    let locs = fin_ctxt.statement_locs in
+    let groups = List.rev tr.mu_trace |> group_to_statements locs in
+    Pp.flow_map Pp.hardline (format_mu_step model) (List.rev tr.mu_trace)
 
 

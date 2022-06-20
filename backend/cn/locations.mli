@@ -35,13 +35,19 @@ val unpack : t -> Location_ocaml.t
 val json_loc : t -> Yojson.Safe.t
 val json_path : path -> Yojson.Safe.t
 
+type region = Lexing.position * Lexing.position
 
 val point: Lexing.position -> t
-val region: Lexing.position * Lexing.position -> Location_ocaml.cursor -> t
-val regions: (Lexing.position * Lexing.position) list -> Location_ocaml.cursor -> t
+val region: region -> Location_ocaml.cursor -> t
+val regions: region list -> Location_ocaml.cursor -> t
 
 
 
 val simple_location : t -> string
 
 val line_numbers : t -> (int * int) option
+
+val is_region : t -> region option
+val region_inter : region -> region -> bool
+
+
