@@ -723,11 +723,13 @@ and check_pexpr (pe : 'bty mu_pexpr) ~(expect:BT.t) : (lvt, type_error) m =
     (*      ) pats_es in *)
     (*    return (List.concat per_paths) *)
     | M_PElet (M_Pat p, e1, e2) ->
+       let@ fin = begin_trace_of_pure_step (Some (Mu.M_Pat p)) e1 in
        let@ patv, (l, a) = pattern_match p in
        let@ v1 = check_pexpr ~expect:(IT.bt patv) e1 in
        let@ () = add_ls l in
        let@ () = add_as a in
        let@ () = add_c (t_ (eq__ patv v1)) in
+       let@ () = fin () in
        let@ lvt = check_pexpr ~expect e2 in
        let@ () = remove_as (List.map fst a) in
        return lvt
@@ -1487,22 +1489,24 @@ let rec check_texpr labels (e : 'bty mu_texpr) (typ : RT.t orFalse)
     (*      ) pats_es in *)
     (*    return (List.concat per_paths) *)
     | M_Elet (M_Pat p, e1, e2) ->
+(*       let@ fin = begin_trace_of_step (Some (Mu.M_Pat p)) e1 in *)
        let@ patv, (l, a) = pattern_match p in
        let@ v1 = check_pexpr ~expect:(IT.bt patv) e1 in
        let@ () = add_ls l in
        let@ () = add_as a in
        let@ () = add_c (t_ (eq__ patv v1)) in
+(*       let@ () = fin () in *)
        check_texpr labels e2 typ
     | M_Ewseq (p, e1, e2)
     | M_Esseq (p, e1, e2) ->
        let@ patv, (l, a) = pattern_match p in
        let@ fin = begin_trace_of_step (Some (Mu.M_Pat p)) e1 in
        let@ (rt1, per_path1) = check_expr labels ~expect:(IT.bt patv) e1 in
-       let@ () = fin () in
        let@ (bt, s') = bind_logically (Some (Loc loc)) rt1 in
        let@ () = add_ls l in
        let@ () = add_as a in
        let@ () = add_c (t_ (def_ s' patv)) in
+       let@ () = fin () in
        let@ per_path2 = check_texpr labels e2 typ in
        return (per_path1 @ per_path2)
     | M_Edone e ->

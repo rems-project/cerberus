@@ -28,7 +28,7 @@ type t = {
     constraints : LCSet.t * LC.t list;
     global : Global.t;
     location_trace : Locations.loc list;
-    statement_locs : Locations.loc list;
+    statement_locs : Locations.loc CStatements.LocMap.t;
   }
 
 
@@ -39,7 +39,7 @@ let empty = {
     constraints = (LCSet.empty, []);
     global = Global.empty;
     location_trace = [];
-    statement_locs  = [];
+    statement_locs  = CStatements.LocMap.empty;
   }
 
 
@@ -110,7 +110,7 @@ let add_rs owhere r rs ctxt = List.fold_right (add_r owhere) rs ctxt
 
 
 let add_stmt_locs stmts (ctxt : t) =
-  {ctxt with statement_locs = stmts @ ctxt.statement_locs}
+  {ctxt with statement_locs = stmts}
 
 let json (ctxt : t) : Yojson.Safe.t = 
 

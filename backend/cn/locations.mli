@@ -48,6 +48,5 @@ val simple_location : t -> string
 val line_numbers : t -> (int * int) option
 
 val is_region : t -> region option
-val region_inter : region -> region -> bool
 
 

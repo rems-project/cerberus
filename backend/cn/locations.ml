@@ -136,6 +136,7 @@ let json_path locs : Yojson.Safe.t =
 
 
 
+type region = Lexing.position * Lexing.position
 
 
 let point = Location_ocaml.point
@@ -151,11 +152,5 @@ let line_numbers = Location_ocaml.line_numbers
 let is_region x = match Location_ocaml.to_raw x with
     | Location_ocaml.Loc_region (l, r, _) -> Some (l, r)
     | _ -> None
-
-let region_inter (x_l, x_r) (y_l, y_r) =
-  let open Lexing in
-  String.equal x_l.pos_fname y_l.pos_fname
-    && x_r.pos_cnum > y_l.pos_cnum
-    && y_r.pos_cnum > x_l.pos_cnum
 
 

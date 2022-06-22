@@ -45,8 +45,8 @@ val get_loc_trace : unit -> (Locations.loc list, 'e) m
 val in_loc_trace : Locations.loc list -> (unit -> ('a, 'e) m) -> ('a, 'e) m
 val get_step_trace : unit -> (Trace.t, 'e) m
 
-val begin_trace_of_step : Trace.opt_pat -> Trace.expr -> (unit -> (unit, 'e) m, 'e) m
-val begin_trace_of_pure_step : Trace.opt_pat -> Trace.pexpr -> (unit -> (unit, 'e) m, 'e) m
+val begin_trace_of_step : Trace.opt_pat -> 'a NewMu.New.mu_expr -> (unit -> (unit, 'e) m, 'e) m
+val begin_trace_of_pure_step : Trace.opt_pat -> 'a NewMu.New.mu_pexpr -> (unit -> (unit, 'e) m, 'e) m
 
 type changed = 
   | Deleted
