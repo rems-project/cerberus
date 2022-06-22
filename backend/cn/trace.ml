@@ -76,11 +76,31 @@ let format_mu (p : opt_pat) expr_doc =
     (* | Some (M_Symbol sym) -> Sym.pp sym ^^^ string "<-" ^^^ rhs *)
     | Some (M_Pat pat) -> !^ "mu_step:" ^^^ NewMu.PP_MUCORE.pp_pattern pat ^^^ !^ "<-" ^^^ rhs
 
-let format_var model global (sym, bt) =
+let format_eval model global it =
   let open Pp in
-  match Solver.eval global model (IT.sym_ (sym, bt)) with
-  | None -> Sym.pp sym ^^^ !^"=??"
-  | Some v -> Sym.pp sym ^^^ equals ^^^ IT.pp v
+  match Solver.eval global model it with
+  | None -> parens (!^ "cannot eval:" ^^^ IT.pp it)
+  | Some v -> IT.pp it ^^^ equals ^^^ IT.pp v
+
+let format_var model global (sym, bt) = format_eval model global (IT.sym_ (sym, bt))
+
+let pp_oargs model global = function
+  | Resources.O it -> format_eval model global it
+
+let try_eval model global it =
+  match Solver.eval global model it with
+  | None -> it
+  | Some v -> v
+
+let eval_in_pred model global res =
+  let open ResourceTypes in
+  match res with
+  | P p -> P {p with
+    pointer = try_eval model global p.pointer;
+    permission = try_eval model global p.permission;
+    iargs = List.map (try_eval model global) p.iargs
+  }
+  | _ -> res
 
 let format_delta model ct1 ct2 =
   let open Pp in
@@ -91,13 +111,13 @@ let format_delta model ct1 ct2 =
         (flow (comma ^^ break 1) (List.map f syms)))]
   in
   let global = ct2.global in
-  let deleted (rt, _) = ResourceTypes.pp rt ^^^ !^"|-> X" in
-  let added (rt, oargs) = ResourceTypes.pp rt ^^^ !^"|->" ^^ break 1 ^^
-    Resources.pp_oargs oargs in
-  doc_new "Logical vars" (format_var model global) log @
+  let pp_res_ty res = ResourceTypes.pp (eval_in_pred model global res) in
+  let deleted (rt, _) = pp_res_ty rt ^^^ !^"|-> X" in
+  let added (rt, oargs) = pp_res_ty rt ^^^ !^"|->" ^^^ pp_oargs model global oargs in
+  List.map added rs_add @ List.map deleted rs_del @
+    doc_new "Logical vars" (format_var model global) log @
     doc_new "Computational vars" (format_var model global) com @
-    doc_new "Constraints" LogicalConstraints.pp con @
-    List.map added rs_add @ List.map deleted rs_del
+    doc_new "Constraints" LogicalConstraints.pp con
 
 let format_mu_step model (s : mu_trace_step) =
   Pp.hang 4 (Pp.flow Pp.hardline
