@@ -538,10 +538,8 @@ type retype_opts = {
 
 
 
-let retype_file pred_defs opts (file : 'TY Old.mu_file)
+let retype_file (log_defs, pred_defs) opts (file : 'TY Old.mu_file)
     : ('TY New.mu_file, type_error) m =
-
-  let pred_defs = List.map (fun (s, def) -> (Sym.fresh_named s, def)) pred_defs in
 
 
   let@ tagDefs =
@@ -567,7 +565,7 @@ let retype_file pred_defs opts (file : 'TY Old.mu_file)
 
 
   let resource_predicates = pred_defs @ ResourcePredicates.predicate_list struct_decls in
-  let logical_predicates = LogicalPredicates.predicate_list struct_decls in
+  let logical_predicates = log_defs @ LogicalPredicates.predicate_list struct_decls in
 
 
   let@ (globs, glob_typs) = 

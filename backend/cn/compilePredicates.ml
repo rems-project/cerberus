@@ -393,8 +393,8 @@ let translate_and_register_cn_function env (def: cn_function) =
        return (Def body)
     | None -> return Uninterp in
   let return_bt = translate_cn_base_type def.cn_func_return_bty in
-  let def = {loc = def.cn_func_loc; args; return_bt; definition} in
-  return (env, def)
+  let def2 = {loc = def.cn_func_loc; args; return_bt; definition} in
+  return (env', (def.cn_func_name, def2))
 
 let translate_and_register_cn_functions (env : Env.t) (to_translate: cn_function list) = 
   let@ (env, defs) = 
@@ -404,7 +404,6 @@ let translate_and_register_cn_functions (env : Env.t) (to_translate: cn_function
       ) (env,[]) to_translate
   in
   return (env, List.rev defs)
-      
 
 
 let translate_cn_predicate env (def: cn_predicate) =
@@ -423,7 +422,7 @@ let translate_cn_predicate env (def: cn_predicate) =
   match iargs with
     | (iarg0, BaseTypes.Loc) :: iargs' ->
         return 
-          ( todo_string_of_sym (* TODO *)def.cn_pred_name
+          ( def.cn_pred_name
           , { loc= def.cn_pred_loc
             ; pointer= iarg0
             ; iargs= iargs'
@@ -437,7 +436,8 @@ let translate_cn_predicate env (def: cn_predicate) =
 
 let translate tagDefs (f_defs: cn_function list) (pred_defs: cn_predicate list) =
   let env = Env.empty tagDefs in
-  let@ (env, defs) = translate_and_register_cn_functions env f_defs in
+  let@ (env, log_defs) = translate_and_register_cn_functions env f_defs in
   let env = register_cn_predicates env tagDefs pred_defs in
-  ListM.mapM (translate_cn_predicate env) pred_defs
+  let@ pred_defs = ListM.mapM (translate_cn_predicate env) pred_defs in
+  return (log_defs, pred_defs)
 

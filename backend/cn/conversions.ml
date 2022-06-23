@@ -349,7 +349,12 @@ let make_qpred loc (pred, def) ~oname ~pointer ~q:(qs,qbt) ~step ~condition iarg
 
 let get_predicate_def_opt id predicates = 
   let predicates' = List.map (fun (s, def) -> (todo_string_of_sym s, (s, def))) predicates in
-  List.assoc_opt String.equal id predicates'
+  let res = List.assoc_opt String.equal id predicates' in
+  if Option.is_none res
+  then Pp.debug 2 (lazy (Pp.item "Known predicates"
+        (Pp.list Pp.string (List.map fst predicates'))))
+  else ();
+  res
 
 
 
