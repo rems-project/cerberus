@@ -36,8 +36,6 @@ exception Struct_not_found
 
 let order_aligned_sym = Sym.fresh_named "order_aligned"
 let order_align_sym = Sym.fresh_named "order_align"
-let pfn_buddy_sym = Sym.fresh_named "pfn_buddy"
-let buddy_sym = Sym.fresh_named "buddy"
 let page_size_of_order_sym = Sym.fresh_named "page_size_of_order"
 let page_group_ok_sym = Sym.fresh_named "page_group_ok"
 let vmemmap_wf_sym = Sym.fresh_named "vmemmap_wf"
@@ -137,20 +135,6 @@ module PageAlloc = struct
         [(Sym.fresh_named "page_index", Integer);
          (Sym.fresh_named "order", Integer);]
         Integer
-    in
-
-    let pfn_buddy =
-      make_uninterp pfn_buddy_sym
-        [(Sym.fresh_named "p", Integer);
-         (Sym.fresh_named "order", Integer);]
-        Integer
-    in
-
-    let buddy = 
-      make_uninterp buddy_sym
-        [(Sym.fresh_named "p", Loc);
-         (Sym.fresh_named "order", Integer);]
-        Loc
     in
 
     let page_size_of_order = 
@@ -621,8 +605,6 @@ module PageAlloc = struct
      vmemmap_b_wf;
      free_area_cell_wf;
      hyp_pool_wf;
-     pfn_buddy;
-     buddy;
     ]
 
 
