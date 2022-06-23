@@ -4373,7 +4373,7 @@ let rec desugar_cn_expr (CNExpr loc expr_) =
     | CNExpr_list es ->
         CNExpr_list <$> E.mapM desugar_cn_expr es
     | CNExpr_memberof ident ident_membr ->
-        E.resolve_cn_ident CN_resource ident >>= fun sym ->
+        E.resolve_cn_ident CN_logical ident >>= fun sym ->
         E.return (CNExpr_memberof sym ident_membr)
     | CNExpr_binop bop e1 e2 ->
         CNExpr_binop bop <$> desugar_cn_expr e1
@@ -4433,9 +4433,9 @@ let desugar_o_cn_func_body = function
 let rec desugar_cn_clause clause =
   match clause with
     | CN_letResource loc ident res c ->
-        desugar_cn_resource res               >>= fun res' ->
-        E.register_cn_ident CN_resource ident >>= fun sym  ->
-        desugar_cn_clause c                   >>= fun c'   ->
+        desugar_cn_resource res              >>= fun res' ->
+        E.register_cn_ident CN_logical ident >>= fun sym  ->
+        desugar_cn_clause c                  >>= fun c'   ->
         E.return (CN_letResource loc sym res' c')
     | CN_letExpr loc ident e c ->
         desugar_cn_expr e                    >>= fun e'  ->

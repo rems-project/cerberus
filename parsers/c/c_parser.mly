@@ -1874,7 +1874,7 @@ base_type:
     { Cerb_frontend.Cn.CN_real }
 | CN_POINTER
     { Cerb_frontend.Cn.CN_loc }
-| STRUCT str= NAME TYPE
+| STRUCT str= NAME VARIABLE
     { Cerb_frontend.Cn.CN_struct (Symbol.Identifier (Location_ocaml.point $startpos(str), str)) }
 | CN_MAP LT bTy1= base_type COMMA bTy2= base_type GT
     { Cerb_frontend.Cn.CN_map (bTy1, bTy2) }

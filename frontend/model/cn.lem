@@ -99,7 +99,6 @@ type cn_predicate 'a 'ty = <|
 type cn_namespace =
   | CN_predicate
   | CN_function
-  | CN_resource
   | CN_logical
   | CN_oarg
 
@@ -108,7 +107,6 @@ instance (Show cn_namespace)
     match ns with
       | CN_predicate -> "predicate"
       | CN_function -> "function"
-      | CN_resource  -> "resource"
       | CN_logical   -> "logical"
       | CN_oarg      -> "oarg"
     end

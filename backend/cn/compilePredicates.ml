@@ -186,8 +186,10 @@ let translate_cn_expr (env: Env.t) expr =
       | CNExpr_memberof (sym, xs) ->
          let@ bt = match Env.lookup_resource sym env with
            | None ->
-              (* TODO: (could the case where sym is a C struct) is this allowed? *)
-              fail {loc; msg= Unknown_variable sym}
+              begin match Env.lookup_logical sym env with
+              | None -> fail {loc; msg= Unknown_variable sym}
+              | Some bt -> return bt
+              end
            | Some RPred_owned ct ->
               return (Resources.owned_oargs ct)
            | Some RPred_block ct ->

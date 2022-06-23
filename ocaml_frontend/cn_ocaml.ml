@@ -31,8 +31,6 @@ let string_of_error = function
         "the predicate `" ^ str ^ "' is not declared"
   | CNErr_unknown_identifier (CN_function, Symbol.Identifier (_, str)) ->
         "the specification function `" ^ str ^ "' is not declared"
-  | CNErr_unknown_identifier (CN_resource, Symbol.Identifier (_, str)) ->
-        "the resource variable `" ^ str ^ "' is not declared"
   | CNErr_missing_oarg sym ->
       "missing an assignment for the oarg `" ^ Pp_symbol.to_string_pretty sym ^ "'" 
     
