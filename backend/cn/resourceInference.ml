@@ -757,9 +757,11 @@ module General = struct
         begin match confirmed with
         | None -> return ()
         | Some (Spans.Pack (pt, ct), _) ->
+            debug 7 (lazy (item "confirmed, doing span fold" (IT.pp pt)));
             let@ success = do_pack loc uiinfo pt ct in
             if success then span_fold_unfolds loc uiinfo req true else return ()
         | Some (Spans.Unpack (pt, ct), _) ->
+            debug 7 (lazy (item "confirmed, doing span unfold" (IT.pp pt)));
             let@ success = do_unpack loc uiinfo pt ct in
             if success then span_fold_unfolds loc uiinfo req true else return ()
         end

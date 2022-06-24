@@ -59,13 +59,10 @@ let ctxt_diff ct1 ct2 =
   let con = list_new (snd ct1.constraints) (snd ct2.constraints) in
   let rs1 = IntSet.of_list (List.map snd (fst ct1.resources)) in
   let rs2 = IntSet.of_list (List.map snd (fst ct2.resources)) in
-  Pp.debug 1 (lazy (Pp.item "rs ixs before" (Pp.list Pp.int (List.map snd (fst ct1.resources)))));
-  Pp.debug 1 (lazy (Pp.item "rs ixs after" (Pp.list Pp.int (List.map snd (fst ct2.resources)))));
   let rs_del = List.filter (fun (_, i) -> not (IntSet.mem i rs2)) (fst ct1.resources)
     |> List.map fst in
   let rs_add = List.filter (fun (_, i) -> not (IntSet.mem i rs1)) (fst ct2.resources)
     |> List.map fst in
-  Pp.debug 1 (lazy (Pp.item "added len" (Pp.int (List.length rs_add))));
   (log, com, con, (rs_del, rs_add))
 
 let format_mu (p : opt_pat) expr_doc =

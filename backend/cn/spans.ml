@@ -210,7 +210,7 @@ let get_witnesses = function
        |> List.filter (fun (lhs, rhs) -> IT.equal i rhs)
        |> List.map fst in
      if List.length lbs <> 0
-     then Pp.debug 3 (lazy (Pp.item "unexpected number of lower bounds"
+     then Pp.debug 8 (lazy (Pp.item "unexpected number of lower bounds"
        (Pp.list IT.pp lbs)))
      else ();
      let eqs = scan_subterms is_eq qpt.permission
@@ -246,7 +246,7 @@ let outer_object m g inner_ptr = function
     Some (ptr, ct, ok)
   with
     Failure pp -> begin
-      Pp.debug 3 (lazy (Pp.item "failed to compute object offsets" pp));
+      Pp.debug 5 (lazy (Pp.item "failed to compute object offsets" pp));
       None
     end
   end
@@ -257,7 +257,7 @@ let intersection_action m g (req, req_span) (res, res_span) =
   let (res_pt, res_ct, res_qpt) = req_pt_ct (RE.request res) in
   let cmp = compare_enclosing g req_ct res_ct in
   if cmp = 0 then begin
-      Pp.debug 3 (lazy (Pp.item "unexpected overlap of diff same-rank types"
+      Pp.debug 5 (lazy (Pp.item "unexpected overlap of diff same-rank types"
         (Pp.list RET.pp [req; RE.request res])));
       None
   end
@@ -268,7 +268,7 @@ let intersection_action m g (req, req_span) (res, res_span) =
     then get_witnesses req
     else get_witnesses (RE.request res)
   in
-  Pp.debug 3 (lazy (Pp.item "witnesses"
+  Pp.debug 8 (lazy (Pp.item "witnesses"
     (Pp.list IT.pp (List.map fst witnesses))));
   let obj = outer_object m g (if cmp < 0 then req_pt else res_pt)
             (if cmp < 0 then RE.request res else req) in
@@ -289,7 +289,7 @@ let model_res_spans_or_empty m g req =
     model_res_spans (m, g) req
   with
     Failure pp ->
-      Pp.debug 3 (lazy (Pp.item "failed to extract resource span" pp));
+      Pp.debug 5 (lazy (Pp.item "failed to extract resource span" pp));
       []
 
 let rec gather_same_actions opts = match opts with
@@ -322,10 +322,10 @@ let guess_span_intersection_action ress req m g =
     |> List.sort (fun (_, (lb, _)) (_, (lb2, _)) -> Z.compare lb lb2) in
   if List.compare_length_with interesting 0 == 0
   then
-  Pp.debug 3 (lazy (Pp.bold "spans as expected for inference"))
+  Pp.debug 7 (lazy (Pp.bold "spans as expected for inference"))
   else ();
   let opts = List.filter_map (fun (r, s) ->
-    Pp.debug 3 (lazy (Pp.item "resource partial overlap"
+    Pp.debug 7 (lazy (Pp.item "resource partial overlap"
       (Pp.list RET.pp [req; RE.request r])));
     let req_s = List.find (inter s) req_ss in
     intersection_action m g (req, req_s) (r, s)
