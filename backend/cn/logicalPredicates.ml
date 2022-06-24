@@ -558,24 +558,30 @@ module PageAlloc = struct
           (end_i %- start_i) %* 
             (int_ (Memory.size_of_struct hyp_page_tag)) in
         and_ [
-            (* metadata well formedness *)
-            good_ (pointer_ct void_ct, integerToPointerCast_ range_start);
-            good_ (pointer_ct void_ct, integerToPointerCast_ range_end);
-            (* TODO: the following three have to go *)
-            good_ (pointer_ct void_ct, integerToPointerCast_ (range_start %- hyp_physvirt_offset));
-            good_ (pointer_ct void_ct, integerToPointerCast_ (range_end %- hyp_physvirt_offset));
-            good_ (pointer_ct void_ct, integerToPointerCast_ (pointerToIntegerCast_ (null_) %+ hyp_physvirt_offset));
+            (* obviously these params are 64-bit int *)
+            int_ 0 %<= range_start;
+            range_start %< z_ (Z.of_string "18446744073709551616");
+            int_ 0 %<= range_end;
+            range_end %< z_ (Z.of_string "18446744073709551616");
+            int_ 0 %<= hyp_physvirt_offset;
+            hyp_physvirt_offset %< z_ (Z.of_string "18446744073709551616");
+            (* the range is above the offset and can be vaddr/paddr converted *)
+            hyp_physvirt_offset %<= range_start;
+            hyp_physvirt_offset %<= range_end;
             range_start %< range_end;
             divisible_ (range_start, int_ pPAGE_SIZE);
             divisible_ (range_end, int_ pPAGE_SIZE);
-            (* for hyp_page_to_phys conversion *)
-            representable_ (integer_ct Ptrdiff_t, range_end);
-            good_ (pointer_ct void_ct, beyond_range_end_cell_pointer);
+            (* range_end is < 2 ^ (64 - PAGE_SHIFT) *)
+            range_end %< z_ (Z.of_string "4503599627370496");
+            (* final cell fits in memory too *)
+            int_ 0 %<= pointerToIntegerCast_ beyond_range_end_cell_pointer;
+            pointerToIntegerCast_ beyond_range_end_cell_pointer %<
+                z_ (Z.of_string "18446744073709551616");
             max_order %>= int_ 0;
             max_order %<= int_ mMAX_ORDER;
             (* vmemmap pointer aligned *)
-            aligned_ (vmemmap_pointer,
-                      array_ct (struct_ct hyp_page_tag) None);
+            divisible_ (pointerToIntegerCast_ vmemmap_pointer,
+                int_ (Memory.size_of_struct  hyp_page_tag));
             (* hyp pool vmemmap disjoint *)
             IT.disjoint_ 
               (pool_pointer, int_ (Memory.size_of_struct hyp_pool_tag))
