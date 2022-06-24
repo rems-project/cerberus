@@ -565,8 +565,9 @@ module PageAlloc = struct
             range_end %< z_ (Z.of_string "18446744073709551616");
             int_ 0 %<= hyp_physvirt_offset;
             hyp_physvirt_offset %< z_ (Z.of_string "18446744073709551616");
-            (* the range is above the offset and can be vaddr/paddr converted *)
-            hyp_physvirt_offset %<= range_start;
+            (* the range is above the offset and can be vaddr/paddr converted,
+               and stricly above, so NULL does not appear in either form *)
+            hyp_physvirt_offset %< range_start;
             hyp_physvirt_offset %<= range_end;
             range_start %< range_end;
             divisible_ (range_start, int_ pPAGE_SIZE);
@@ -586,12 +587,6 @@ module PageAlloc = struct
             IT.disjoint_ 
               (pool_pointer, int_ (Memory.size_of_struct hyp_pool_tag))
               (vmemmap_start_pointer, vmemmap_length);
-            IT.disjoint_int_ 
-              (hyp_physvirt_offset, int_ 1)
-              (range_start, range_end);
-            IT.disjoint_int_ 
-              (hyp_physvirt_offset %+ z_ (Z.of_string "18446744073709551616"), int_ 1)
-              (range_start, range_end);
           ] 
       in
 
