@@ -1712,7 +1712,7 @@ module CHERI (C:Capability
       let tag_query a =
         if is_pointer_algined a
         then IntMap.find_opt a st.captags
-        else failwith "alignof_pointer must be specified in Ocaml_implementation"
+        else failwith "An attempt to load capability from not properly aligned addres"
       in
       let (taint, mval, bs') = abst loc (find_overlaping st) st.funptrmap tag_query addr ty bs in
       mem_value_strip_err mval >>= fun mval ->
