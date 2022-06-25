@@ -102,6 +102,10 @@ module MakePp (Conf: PP_CN) = struct
                 P.flow P.dot (List.map (fun z -> P.squotes (pp_identifier z)) xs))
       | CNExpr_binop (bop, e1, e2) ->
           Dnode (pp_ctor "CNExpr_add" ^^^ pp_cn_binop bop, [dtree_of_cn_expr e1; dtree_of_cn_expr e2])
+      | CNExpr_sizeof ty ->
+          Dleaf (pp_ctor "CNExpr_sizeof" ^^^ Conf.pp_ty ty)
+      | CNExpr_cast (ty, expr) ->
+          Dnode (pp_ctor "CNExpr_cast" ^^^ pp_base_type ty, [dtree_of_cn_expr expr])
 
   let dtree_of_cn_pred = function
     | CN_owned ty ->

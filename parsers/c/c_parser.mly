@@ -1795,6 +1795,10 @@ prim_expr:
                                , CNExpr_memberof (ident, xs))) }
 | e= delimited(LPAREN, expr, RPAREN)
     { e }
+| SIZEOF LT ty= ctype GT
+    { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($1)))
+                               , CNExpr_sizeof ty)) }
+
 
 mul_expr:
 (* TODO *)
@@ -1860,6 +1864,9 @@ expr:
 | e1= expr BANG_EQ e2= list_expr
     { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                                , CNExpr_binop (CN_inequal, e1, e2))) }
+| LPAREN ty= base_type RPAREN expr= list_expr
+    { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($1)))
+                               , CNExpr_cast (ty, expr))) }
 ;
 
 (* CN predicate definitions **************************************************)

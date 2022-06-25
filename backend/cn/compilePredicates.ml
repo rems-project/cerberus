@@ -226,6 +226,16 @@ let translate_cn_expr (env: Env.t) expr =
           | _ ->
              return (mk_translate_binop bop (basetype e1) (e1, e2))
           end
+      | CNExpr_sizeof ct ->
+          let scty = Retype.ct_of_ct loc ct in
+          return (arrayOffset_ (scty, int_ 1))
+      | CNExpr_cast (bt, expr) ->
+          let@ expr = self expr in
+          begin match bt with
+          | CN_loc -> return (integerToPointerCast_ expr)
+          | CN_integer -> return (pointerToIntegerCast_ expr)
+          | _ -> fail {loc; msg = Generic (Pp.string "can only cast to pointer or integer")}
+          end
   in self expr
 
 

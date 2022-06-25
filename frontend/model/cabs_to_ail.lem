@@ -4378,6 +4378,12 @@ let rec desugar_cn_expr (CNExpr loc expr_) =
     | CNExpr_binop bop e1 e2 ->
         CNExpr_binop bop <$> desugar_cn_expr e1
                          <*> desugar_cn_expr e2
+    | CNExpr_sizeof ct ->
+      desugar_type_name ct >>= fun (_, ct) ->
+      E.return (CNExpr_sizeof ct)
+    | CNExpr_cast ty e ->
+        CNExpr_cast <$> desugar_cn_base_type loc ty
+                    <*> desugar_cn_expr e
   end >>= fun ret ->
   E.return (CNExpr loc ret)
 
