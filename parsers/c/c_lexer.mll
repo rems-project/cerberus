@@ -117,7 +117,10 @@ let lexicon: (string, token) Hashtbl.t =
 (* BEGIN CN *)
 let cn_keywords: (string * Tokens.token) list = [
     "bool"          , CN_BOOL;
+    "boolean"       , CN_BOOL;
+    "CN_bool"       , CN_BOOL;
     "integer"       , CN_INTEGER;
+    "CN_integer"    , CN_INTEGER;
     "real"          , CN_REAL;
     "pointer"       , CN_POINTER;
     "map"           , CN_MAP;
