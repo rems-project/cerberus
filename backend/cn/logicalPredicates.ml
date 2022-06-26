@@ -568,7 +568,6 @@ module PageAlloc = struct
             (* the range is above the offset and can be vaddr/paddr converted,
                and stricly above, so NULL does not appear in either form *)
             hyp_physvirt_offset %< range_start;
-            hyp_physvirt_offset %<= range_end;
             range_start %< range_end;
             divisible_ (range_start, int_ pPAGE_SIZE);
             divisible_ (range_end, int_ pPAGE_SIZE);
