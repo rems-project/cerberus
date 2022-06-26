@@ -75,9 +75,9 @@ let mk_translate_binop bop bTy =
     | CN_ge, BT.Loc ->
         gePointer_
     | CN_or, BT.Bool ->
-        fun (x, y) -> or_ [x; y]
+        or2_
     | CN_and, BT.Bool ->
-        fun (x, y) -> and_ [x; y]
+        and2_
     | _ ->
         failwith "CompilePredicates.mk_translate_binop"
 

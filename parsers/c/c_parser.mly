@@ -1836,6 +1836,12 @@ rel_expr:
 | e1= rel_expr GT_EQ e2= add_expr
     { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                                , CNExpr_binop (CN_ge, e1, e2))) }
+| e1= rel_expr AMPERSAND_AMPERSAND e2= add_expr
+    { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
+                               , CNExpr_binop (CN_and, e1, e2))) }
+| e1= rel_expr PIPE_PIPE e2= add_expr
+    { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
+                               , CNExpr_binop (CN_or, e1, e2))) }
 
 list_expr:
 | e= rel_expr

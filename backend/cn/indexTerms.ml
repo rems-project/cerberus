@@ -709,9 +709,13 @@ let ge_ (it, it') = le_ (it', it)
 
 (* bool_op *)
 let and_ its = IT (Bool_op (And its), BT.Bool)
-let and2_ (it, it') = and_ [it; it']
+let and2_ (it, it') = match is_and it' with
+  | None -> and_ [it; it']
+  | Some its -> and_ (it :: its)
 let or_ its = IT (Bool_op (Or its), BT.Bool)
-let or2_ (it, it') = or_ [it; it']
+let or2_ (it, it') = match is_or it' with
+  | None -> or_ [it; it']
+  | Some its -> or_ (it :: its)
 let impl_ (it, it') = IT (Bool_op (Impl (it, it')), BT.Bool)
 let not_ it = 
   match it with
