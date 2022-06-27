@@ -43,46 +43,52 @@ let rec translate_cn_base_type (bTy: CF.Symbol.sym cn_base_type) =
         Set (translate_cn_base_type bTy')
 
 
-let mk_translate_binop bop bTy =
-  let open IndexTerms in
-  match bop, bTy with
-    | CN_add, (BT.Integer | BT.Real) ->
-        add_
-    | CN_sub, (BT.Integer | BT.Real) ->
-        sub_
-    | CN_mul, (BT.Integer | BT.Real) ->
-        mul_
-    | CN_div, (BT.Integer | BT.Real) ->
-        div_
-    | CN_equal, _ ->
-        eq_
-    | CN_inequal, _ ->
-        ne_
-    | CN_lt, (BT.Integer | BT.Real) ->
-        lt_
-    | CN_lt, BT.Loc ->
-        ltPointer_
-    | CN_le, (BT.Integer | BT.Real) ->
-        le_
-    | CN_le, BT.Loc ->
-        lePointer_
-    | CN_gt, (BT.Integer | BT.Real) ->
-        gt_
-    | CN_gt, BT.Loc ->
-        gtPointer_
-    | CN_ge, (BT.Integer | BT.Real) ->
-        ge_
-    | CN_ge, BT.Loc ->
-        gePointer_
-    | CN_or, BT.Bool ->
-        or2_
-    | CN_and, BT.Bool ->
-        and2_
-    | _ ->
-        failwith "CompilePredicates.mk_translate_binop"
-
 open Resultat
 open Effectful.Make(Resultat)
+
+let mk_translate_binop loc bop bTy (e1, e2) =
+  let open IndexTerms in
+  let@ mk = match bop, bTy with
+    | CN_add, (BT.Integer | BT.Real) ->
+        return add_
+    | CN_sub, (BT.Integer | BT.Real) ->
+        return sub_
+    | CN_mul, (BT.Integer | BT.Real) ->
+        return mul_
+    | CN_div, (BT.Integer | BT.Real) ->
+        return div_
+    | CN_equal, _ ->
+        return eq_
+    | CN_inequal, _ ->
+        return ne_
+    | CN_lt, (BT.Integer | BT.Real) ->
+        return lt_
+    | CN_lt, BT.Loc ->
+        return ltPointer_
+    | CN_le, (BT.Integer | BT.Real) ->
+        return le_
+    | CN_le, BT.Loc ->
+        return lePointer_
+    | CN_gt, (BT.Integer | BT.Real) ->
+        return gt_
+    | CN_gt, BT.Loc ->
+        return gtPointer_
+    | CN_ge, (BT.Integer | BT.Real) ->
+        return ge_
+    | CN_ge, BT.Loc ->
+        return gePointer_
+    | CN_or, BT.Bool ->
+        return or2_
+    | CN_and, BT.Bool ->
+        return and2_
+    | _ ->
+        let open Pp in
+        fail {loc; msg = Generic (!^ "mk_translate_binop: types:" ^^^
+                CF.Cn_ocaml.PpAil.pp_cn_binop bop ^^ colon ^^^
+                Pp.list BT.pp [IT.bt e1; IT.bt e2] ^^ colon ^^^
+                Pp.list IT.pp [e1; e2])}
+  in
+  return (mk (e1, e2))
 
 (* type message = *)
 (*   | Invalid_oarg_owned of { invalid_ident: Id.t } *)
@@ -224,17 +230,30 @@ let translate_cn_expr (env: Env.t) expr =
              in
              fail {loc; msg = Generic (Pp.string err)}
           | _ ->
-             return (mk_translate_binop bop (basetype e1) (e1, e2))
+             mk_translate_binop loc bop (basetype e1) (e1, e2)
           end
       | CNExpr_sizeof ct ->
           let scty = Retype.ct_of_ct loc ct in
-          return (arrayOffset_ (scty, int_ 1))
+          return (int_ (Memory.size_of_ctype scty))
       | CNExpr_cast (bt, expr) ->
           let@ expr = self expr in
           begin match bt with
           | CN_loc -> return (integerToPointerCast_ expr)
           | CN_integer -> return (pointerToIntegerCast_ expr)
           | _ -> fail {loc; msg = Generic (Pp.string "can only cast to pointer or integer")}
+          end
+      | CNExpr_call (nm, exprs) ->
+          let@ args = ListM.mapM self exprs in
+          let nm_s = Id.pp_string nm in
+          let@ b = Conversions.apply_builtin_funs loc nm_s args in
+          begin match b with
+            | Some t -> return t
+            | None ->
+              let@ (sym, bt) = match Env.lookup_function_by_name nm_s env with
+                | Some (sym, fsig) -> return (sym, fsig.return_bty)
+                | None -> fail {loc; msg = Unknown_logical_predicate {id = Sym.fresh_named nm_s; resource = false}}
+              in
+              return (pred_ sym args bt)
           end
   in self expr
 

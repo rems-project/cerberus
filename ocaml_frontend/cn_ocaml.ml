@@ -106,6 +106,9 @@ module MakePp (Conf: PP_CN) = struct
           Dleaf (pp_ctor "CNExpr_sizeof" ^^^ Conf.pp_ty ty)
       | CNExpr_cast (ty, expr) ->
           Dnode (pp_ctor "CNExpr_cast" ^^^ pp_base_type ty, [dtree_of_cn_expr expr])
+      | CNExpr_call (nm, exprs) ->
+          Dnode (pp_ctor "CNExpr_call" ^^^ P.squotes (pp_identifier nm)
+                 , List.map dtree_of_cn_expr exprs)
 
   let dtree_of_cn_pred = function
     | CN_owned ty ->

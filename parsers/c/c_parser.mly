@@ -1798,6 +1798,10 @@ prim_expr:
 | SIZEOF LT ty= ctype GT
     { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($1)))
                                , CNExpr_sizeof ty)) }
+| ident= cn_variable LPAREN args=separated_list(COMMA, expr) RPAREN
+    { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
+                               , CNExpr_call (ident, args))) }
+
 
 
 mul_expr:

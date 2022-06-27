@@ -24,6 +24,16 @@ type definition = {
   }
 
 
+let pp_def nm def =
+  let open Pp in
+  nm ^^ colon ^^^ flow (break 1)
+    (List.map (fun (sym, t) -> parens (typ (Sym.pp sym) (LogicalSorts.pp t))) def.args) ^^
+    colon ^^^
+    begin match def.definition with
+    | Uninterp -> !^ "uninterpreted"
+    | Def t -> IT.pp t
+    end
+
 
 let open_pred def_args def_body args =
   let su = make_subst (List.map2 (fun (s, _) arg -> (s, arg)) def_args args) in

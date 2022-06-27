@@ -1768,7 +1768,8 @@ let check mu_file =
     Pp.progress_simple "checking specifications" "logical predicate welltypedness";
     ListM.iterM (fun (name,(def : LP.definition)) -> 
         let@ () = WellTyped.WLPD.welltyped def in
-        add_logical_predicate name def
+        (* Pp.debug 1 (lazy (Pp.item "logical predicate" (LP.pp_def (Sym.pp name) def))); *)
+        add_logical_predicate name def;
       ) mu_file.mu_logical_predicates
   in
   let () = Debug_ocaml.end_csv_timing "logical predicates" in

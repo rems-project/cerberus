@@ -29,9 +29,9 @@ module SymSet = Set.Make(Sym)
 
 (* builtin function symbols *)
 
-let mk_arg2 mk = function
-  | [x; y] -> Some (mk (x, y))
-  | _ -> None
+let mk_arg2 mk loc = function
+  | [x; y] -> return (mk (x, y))
+  | xs -> fail {loc; msg = Number_arguments {has = List.length xs; expect = 2}}
 
 let xor_def = (Sym.fresh_named "xor", mk_arg2 xor_)
 let power_def = (Sym.fresh_named "power", mk_arg2 exp_)
@@ -42,8 +42,12 @@ let exp_def = (Sym.fresh_named "exp", mk_arg2 exp_no_smt_)
 let builtin_funs = List.map (fun (s, mk) -> (Sym.pp_string s, mk))
   [xor_def; power_def; rem_def; mod_def; exp_def]
 
-
-
+let apply_builtin_funs loc nm args =
+  match List.assoc_opt String.equal nm builtin_funs with
+  | None -> return None
+  | Some mk ->
+    let@ t = mk loc args in
+    return (Some t)
 
 
 
@@ -750,14 +754,12 @@ let resolve_index_term loc
     | Pred (name, args) ->
        let open LogicalPredicates in
        let@ args_oscts = ListM.mapM (fun t -> resolve t mapping quantifiers) args in
-       begin match List.assoc_opt String.equal name builtin_funs with
+       let@ b = apply_builtin_funs loc name (List.map fst args_oscts) in
+       begin match b with
          | None ->
            let@ (name, def) = get_logical_predicate_def loc name predicates log_predicates in
            return (pred_ name (List.map fst args_oscts) def.return_bt, None)
-         | Some mk -> begin match mk (List.map fst args_oscts) with
-             | Some it -> return (it, None)
-             | _ -> fail {loc; msg = Generic !^("Invalid arguments for " ^ name)}
-         end
+         | Some t -> return (t, None)
        end
   in
   resolve term (StringMap.find default_mapping_name mappings) quantifiers

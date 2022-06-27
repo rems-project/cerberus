@@ -29,14 +29,16 @@ type resource_def =
 type t = {
   logicals: BaseTypes.t X.t;
   pred_names: Sym.t Y.t;
-  functions: function_sig X.t;
   predicates: predicate_sig X.t;
+  func_names: Sym.t Y.t;
+  functions: function_sig X.t;
   resources: resource_def X.t;
   tagDefs: CF.Core_to_mucore.Mu.mu_tag_definitions;
 }
 
 let empty tagDefs =
-  { logicals= X.empty; pred_names= Y.empty; functions = X.empty; predicates= X.empty; resources= X.empty; tagDefs }
+  { logicals= X.empty; pred_names= Y.empty; predicates= X.empty;
+    func_names = Y.empty; functions = X.empty; resources= X.empty; tagDefs }
 
 let add_logical sym bTy env =
   {env with logicals= X.add sym bTy env.logicals }
@@ -45,7 +47,8 @@ let add_pred_name str sym env =
   {env with pred_names= Y.add str sym env.pred_names }
 
 let add_function sym func_sig env =
-  {env with functions= X.add sym func_sig env.functions }
+  {env with functions= X.add sym func_sig env.functions;
+    func_names = Y.add (Sym.pp_string sym) sym env.func_names }
 
 let add_predicate sym pred_sig env =
   {env with predicates= X.add sym pred_sig env.predicates }
@@ -61,6 +64,14 @@ let lookup_pred_name str env =
 
 let lookup_predicate sym env =
   X.find_opt sym env.predicates
+
+let lookup_function sym env =
+  X.find_opt sym env.functions
+
+let lookup_function_by_name nm env =
+  Option.bind (Y.find_opt nm env.func_names)
+    (fun sym -> X.find_opt sym env.functions
+        |> Option.map (fun fs -> (sym, fs)))
 
 let lookup_resource sym env =
   X.find_opt sym env.resources

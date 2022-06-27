@@ -4384,6 +4384,8 @@ let rec desugar_cn_expr (CNExpr loc expr_) =
     | CNExpr_cast ty e ->
         CNExpr_cast <$> desugar_cn_base_type loc ty
                     <*> desugar_cn_expr e
+    | CNExpr_call nm es ->
+        CNExpr_call nm <$> E.mapM desugar_cn_expr es
   end >>= fun ret ->
   E.return (CNExpr loc ret)
 
