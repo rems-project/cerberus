@@ -79,6 +79,7 @@ module MakePp (Conf: PP_CN) = struct
     | CN_ge -> P.rangle ^^ P.equals
     | CN_or -> P.bar ^^ P.bar
     | CN_and -> P.ampersand ^^ P.ampersand
+    | CN_map_get -> P.string "CN_map_get"
   
   let rec dtree_of_cn_expr (CNExpr (_, expr_)) =
     match expr_ with
@@ -101,9 +102,12 @@ module MakePp (Conf: PP_CN) = struct
                 P.squotes (Conf.pp_ident ident) ^^
                 P.flow P.dot (List.map (fun z -> P.squotes (pp_identifier z)) xs))
       | CNExpr_binop (bop, e1, e2) ->
-          Dnode (pp_ctor "CNExpr_add" ^^^ pp_cn_binop bop, [dtree_of_cn_expr e1; dtree_of_cn_expr e2])
+          Dnode (pp_ctor "CNExpr_binop" ^^^ pp_cn_binop bop, [dtree_of_cn_expr e1; dtree_of_cn_expr e2])
       | CNExpr_sizeof ty ->
           Dleaf (pp_ctor "CNExpr_sizeof" ^^^ Conf.pp_ty ty)
+      | CNExpr_offsetof (ty_tag, member) ->
+          Dleaf (pp_ctor "CNExpr_offsetof" ^^^ P.squotes (Conf.pp_ident ty_tag) ^^^
+                P.squotes (pp_identifier member))
       | CNExpr_cast (ty, expr) ->
           Dnode (pp_ctor "CNExpr_cast" ^^^ pp_base_type ty, [dtree_of_cn_expr expr])
       | CNExpr_call (nm, exprs) ->

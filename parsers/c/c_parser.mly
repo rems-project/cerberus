@@ -1801,6 +1801,12 @@ prim_expr:
 | ident= cn_variable LPAREN args=separated_list(COMMA, expr) RPAREN
     { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                                , CNExpr_call (ident, args))) }
+| OFFSETOF LPAREN tag = cn_variable COMMA member= cn_variable RPAREN
+    { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($1)))
+                               , CNExpr_offsetof (tag, member))) }
+| arr= prim_expr LBRACK idx= expr RBRACK
+    { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
+                               , CNExpr_binop (CN_map_get, arr, idx))) }
 
 
 
@@ -1891,8 +1897,8 @@ base_type:
     { Cerb_frontend.Cn.CN_real }
 | CN_POINTER
     { Cerb_frontend.Cn.CN_loc }
-| STRUCT str= NAME VARIABLE
-    { Cerb_frontend.Cn.CN_struct (Symbol.Identifier (Location_ocaml.point $startpos(str), str)) }
+| STRUCT id= cn_variable
+    { Cerb_frontend.Cn.CN_struct id }
 | CN_MAP LT bTy1= base_type COMMA bTy2= base_type GT
     { Cerb_frontend.Cn.CN_map (bTy1, bTy2) }
 | CN_LIST LT bTy= base_type GT
