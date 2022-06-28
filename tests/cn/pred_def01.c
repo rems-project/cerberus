@@ -4,11 +4,11 @@ struct T {
   int something;
 };
 
-predicate {integer out1} OtherPred (pointer p) = {
+predicate {integer out1} OtherPred (pointer p) {
   return { out1 = 42 } ;
 }
 
-predicate {integer z, integer out2} MyPred (pointer p, integer n) = {
+predicate {integer z, integer out2} MyPred (pointer p, integer n) {
   if ( n == 10 ) {
     let foo = Owned<struct T>(p) ;
     return { z = 42, out2 = 55 } ;
@@ -26,7 +26,7 @@ struct int_list_items {
 };
 
 
-predicate {list<integer> v} IntList(pointer l) = {
+predicate {list<integer> v} IntList(pointer l) {
   if ( l == NULL ) {
     return { v = nil(integer) } ;
   } else {

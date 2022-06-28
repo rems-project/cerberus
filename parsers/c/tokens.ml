@@ -52,7 +52,8 @@ type token =
   | THREAD_LOCAL
 
   (* §6.4.2 Identifiers *)
-  | NAME of string
+  | UNAME of string
+  | LNAME of string
   | VARIABLE
   | TYPE
 
@@ -204,7 +205,8 @@ let string_of_token = function
   | NORETURN -> "NORETURN"
   | STATIC_ASSERT -> "STATIC_ASSERT"
   | THREAD_LOCAL -> "THREAD_LOCAL"
-  | NAME s -> "NAME(" ^ s ^ ")"
+  | UNAME s -> "UNAME(" ^ s ^ ")"
+  | LNAME s -> "LNAME(" ^ s ^ ")"
   | VARIABLE -> "VARIABLE"
   | TYPE -> "TYPE"
   | CONSTANT _ -> "CONSTANT"

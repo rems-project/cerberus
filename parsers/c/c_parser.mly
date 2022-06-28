@@ -92,7 +92,8 @@ let magic_to_attrs = function
   THREAD_LOCAL
 
 (* §6.4.2 Identifiers *)
-%token<string> NAME (* NAME is either an variable identifier or a type name *)
+%token<string> UNAME (* Uppercase. UNAME is either a variable identifier or a type name *)
+%token<string> LNAME (* Lowercase. LNAME is either a variable identifier or a type name *)
 %token VARIABLE TYPE
 
 (* §6.4.4 Constants *)
@@ -385,6 +386,14 @@ list_tuple3_ge1(A, B, C):
 ;
 
 (* Identifiers and lexer feedback contexts *)
+
+NAME:
+| u= UNAME
+    { u }
+| l= LNAME
+    { l }
+
+
 typedef_name:
 | n= NAME TYPE
     { n }
@@ -1798,7 +1807,7 @@ prim_expr:
 | SIZEOF LT ty= ctype GT
     { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($1)))
                                , CNExpr_sizeof ty)) }
-| ident= cn_variable LPAREN args=separated_list(COMMA, expr) RPAREN
+| ident= cn_l_variable LPAREN args=separated_list(COMMA, expr) RPAREN
     { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                                , CNExpr_call (ident, args))) }
 | OFFSETOF LPAREN tag = cn_variable COMMA member= cn_variable RPAREN
@@ -1920,7 +1929,7 @@ exit_cn:
 
 
 cn_function:
-| CN_FUNCTION enter_cn cn_func_return_bty=delimited(LPAREN, base_type, RPAREN) str= NAME VARIABLE
+| CN_FUNCTION enter_cn cn_func_return_bty=delimited(LPAREN, base_type, RPAREN) str= LNAME VARIABLE
   cn_func_args= delimited(LPAREN, args, RPAREN)
   cn_func_body= cn_option_func_body exit_cn
     { (* TODO: check the name starts with lower case *)
@@ -1931,7 +1940,7 @@ cn_function:
       ; cn_func_args
       ; cn_func_body} }
 predicate:
-| CN_PREDICATE enter_cn cn_pred_oargs= delimited(LBRACE, args, RBRACE) str= NAME VARIABLE
+| CN_PREDICATE enter_cn cn_pred_oargs= delimited(LBRACE, args, RBRACE) str= UNAME VARIABLE
   cn_pred_iargs= delimited(LPAREN, args, RPAREN)
   cn_pred_clauses= delimited(LBRACE, clauses, RBRACE) exit_cn
     { (* TODO: check the name starts with upper case *)
@@ -1946,6 +1955,13 @@ predicate:
 cn_variable:
 | str= NAME VARIABLE
     { Symbol.Identifier (Location_ocaml.point $startpos(str), str) }
+cn_u_variable:
+| str= UNAME VARIABLE
+    { Symbol.Identifier (Location_ocaml.point $startpos(str), str) }
+cn_l_variable:
+| str= LNAME VARIABLE
+    { Symbol.Identifier (Location_ocaml.point $startpos(str), str) }
+
 
 args:
 | xs= separated_list(COMMA, pair(base_type, cn_variable))
@@ -2011,7 +2027,7 @@ pred:
     { Cerb_frontend.Cn.CN_owned ty }
 | CN_BLOCK ty= delimited(LT, ctype, GT)
     { Cerb_frontend.Cn.CN_block ty }
-| str= NAME VARIABLE
+| str= UNAME VARIABLE
     { Cerb_frontend.Cn.CN_named (Symbol.Identifier (Location_ocaml.point $startpos(str), str)) }
 ;
 

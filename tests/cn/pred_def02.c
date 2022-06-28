@@ -4,7 +4,7 @@ struct int_list_items {
   struct int_list_items* next;
 };
 
-predicate {integer len} IntList(pointer l) = {
+predicate {integer len} IntList(pointer l) {
   if ( l == NULL ) {
     return { len = 0 } ;
   } else {

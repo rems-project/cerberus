@@ -494,6 +494,10 @@ and initial = parse
   | "|||" { PIPES   }
   | "}-}" { RBRACES }
 
+    (* copied over from backend/cn/assertion_lexer.mll *)
+  | ['A'-'Z']['0'-'9' 'A'-'Z' 'a'-'z' '_']* as name
+      { UNAME name }
+
   | identifier as id
     { try
         let tok = Hashtbl.find lexicon id in
@@ -518,9 +522,9 @@ and initial = parse
         if internal_state.inside_cn then
           try Hashtbl.find cn_lexicon id
           with Not_found ->
-            NAME id
+            LNAME id
         else
-          NAME id
+          LNAME id
     }
   | eof
       { EOF }
@@ -540,7 +544,8 @@ let lexer : lexbuf -> token = fun lexbuf ->
   match !lexer_state with
   | LSRegular ->
       begin match initial lexbuf with
-      | NAME i as tok -> lexer_state := LSIdentifier i; tok
+      | LNAME i as tok -> lexer_state := LSIdentifier i; tok
+      | UNAME i as tok -> lexer_state := LSIdentifier i; tok
       | _      as tok -> lexer_state := LSRegular; tok
       end
   | LSIdentifier i ->
