@@ -283,4 +283,10 @@ module type Capability =
         is greater than [cap_get_value y].  *)
     val value_compare: t -> t -> int
 
+    (**
+       Exact comparison including metadata
+       - CMP/SUBS in Morello
+     *)
+    val exact_compare: t -> t -> int
+
   end

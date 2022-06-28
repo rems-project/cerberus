@@ -774,5 +774,23 @@ module Morello_capability: Capability
     (* compare value only ignoring metadata *)
     and value_compare x y = compare x.value y.value
 
+    (* CMP: Compare capabilities if the Capability Tag of the first
+       source Capability register is not the same as the Capability
+       Tag of the second source Capability register subtracts the
+       Capability Tag of the first source Capability register from the
+       Capability Tag of the second source Capability register and
+       discards the result otherwise subtracts the Value field of the
+       first source Capability register from the Value field of the
+       second source Capability register and discards the result.
+
+       TODO(CHERI): add unit test
+     *)
+    and exact_compare x y =
+      let tag1 = if x.valid then 1 else 0 in
+      let tag2 = if y.valid then 1 else 0 in
+      if tag1 <> tag2 then
+        tag2-tag1
+      else
+        value_compare x y
 
   end
