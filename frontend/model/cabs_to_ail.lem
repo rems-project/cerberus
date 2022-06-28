@@ -4381,6 +4381,13 @@ let rec desugar_cn_expr (CNExpr loc expr_) =
     | CNExpr_sizeof ct ->
       desugar_type_name ct >>= fun (_, ct) ->
       E.return (CNExpr_sizeof ct)
+    | CNExpr_offsetof struct_tag memb ->
+      E.resolve_extraordinary_identifier struct_tag E.Namespace_tag >>= function
+          | Just (_, (tag_sym, _)) ->
+              E.return (CNExpr_offsetof tag_sym memb)
+          | None ->
+              E.fail loc (Errors.Desugar_CN CNErr_invalid_tag)
+      end
     | CNExpr_cast ty e ->
         CNExpr_cast <$> desugar_cn_base_type loc ty
                     <*> desugar_cn_expr e

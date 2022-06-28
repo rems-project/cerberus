@@ -46,13 +46,20 @@ let rec translate_cn_base_type (bTy: CF.Symbol.sym cn_base_type) =
 open Resultat
 open Effectful.Make(Resultat)
 
-let mk_translate_binop loc bop bTy (e1, e2) =
+let mk_translate_binop loc bop (e1, e2) =
   let open IndexTerms in
-  let@ mk = match bop, bTy with
+  let ptr_err = "pointer arithmetic not allowed in specifications: "^
+                         "please instead use pointer/integer casts"
+  in
+  let@ mk = match bop, IT.bt e1 with
     | CN_add, (BT.Integer | BT.Real) ->
         return add_
+    | CN_add, BT.Loc ->
+        fail {loc; msg = Generic (Pp.string ptr_err)}
     | CN_sub, (BT.Integer | BT.Real) ->
         return sub_
+    | CN_sub, BT.Loc ->
+        fail {loc; msg = Generic (Pp.string ptr_err)}
     | CN_mul, (BT.Integer | BT.Real) ->
         return mul_
     | CN_div, (BT.Integer | BT.Real) ->
@@ -81,6 +88,8 @@ let mk_translate_binop loc bop bTy (e1, e2) =
         return or2_
     | CN_and, BT.Bool ->
         return and2_
+    | CN_map_get, _ ->
+        return (fun (x, y) -> map_get_ x y)
     | _ ->
         let open Pp in
         fail {loc; msg = Generic (!^ "mk_translate_binop: types:" ^^^
@@ -202,7 +211,9 @@ let translate_cn_expr (env: Env.t) expr =
               return (Resources.owned_oargs ct)
            | Some RPred_named s ->
               let@ pred_sig = match Env.lookup_predicate s env with
-                | None -> fail {loc; msg = Unknown_resource_predicate {id = s; logical = false}}
+                | None ->
+                    Env.debug_known_preds env;
+                    fail {loc; msg = Unknown_resource_predicate {id = s; logical = false}}
                 | Some pred_sig -> return pred_sig 
               in
               return (BT.Record pred_sig.pred_oargs)
@@ -212,7 +223,9 @@ let translate_cn_expr (env: Env.t) expr =
               return (Resources.q_owned_oargs ct)
            | Some RPred_I_named s ->
               let@ pred_sig = match Env.lookup_predicate s env with
-                | None -> fail {loc; msg = Unknown_resource_predicate {id = s; logical = false}}
+                | None ->
+                    Env.debug_known_preds env;
+		    fail {loc; msg = Unknown_resource_predicate {id = s; logical = false}}
                 | Some pred_sig -> return pred_sig 
               in
               return (BT.Record (List.map_snd (BT.make_map_bt Integer) pred_sig.pred_oargs))
@@ -222,20 +235,17 @@ let translate_cn_expr (env: Env.t) expr =
       | CNExpr_binop (bop, e1_, e2_) ->
           let@ e1 = self e1_ in
           let@ e2 = self e2_ in
-          let bt1 = basetype e1 in
-          begin match bt1 with
-          | Loc -> 
-             let err = "pointer addition not allowed in specifications: "^
-                         "please instead use pointer/integer casts"
-             in
-             fail {loc; msg = Generic (Pp.string err)}
-          | _ ->
-             mk_translate_binop loc bop (basetype e1) (e1, e2)
-          end
+          mk_translate_binop loc bop (e1, e2)
       | CNExpr_sizeof ct ->
           let scty = Retype.ct_of_ct loc ct in
           return (int_ (Memory.size_of_ctype scty))
-      | CNExpr_cast (bt, expr) ->
+      | CNExpr_offsetof (tag, member) ->
+          let@ () = match lookup_struct tag env with
+            | None -> fail {loc; msg= Unknown_struct tag}
+            | Some _ -> return ()
+          in
+          return (memberOffset_ (tag, member))
+       | CNExpr_cast (bt, expr) ->
           let@ expr = self expr in
           begin match bt with
           | CN_loc -> return (integerToPointerCast_ expr)
@@ -251,7 +261,10 @@ let translate_cn_expr (env: Env.t) expr =
             | None ->
               let@ (sym, bt) = match Env.lookup_function_by_name nm_s env with
                 | Some (sym, fsig) -> return (sym, fsig.return_bty)
-                | None -> fail {loc; msg = Unknown_logical_predicate {id = Sym.fresh_named nm_s; resource = false}}
+                | None ->
+                    Env.debug_known_preds env;
+		    fail {loc; msg = Unknown_logical_predicate
+                        {id = Sym.fresh_named nm_s; resource = false}}
               in
               return (pred_ sym args bt)
           end
@@ -425,7 +438,9 @@ let translate_and_register_cn_function env (def: cn_function) =
     | None -> return Uninterp in
   let return_bt = translate_cn_base_type def.cn_func_return_bty in
   let def2 = {loc = def.cn_func_loc; args; return_bt; definition} in
-  return (env', (def.cn_func_name, def2))
+  let fsig = Env.{args; return_bty = return_bt} in
+  let env = Env.add_function def.cn_func_name fsig env in
+  return (env, (def.cn_func_name, def2))
 
 let translate_and_register_cn_functions (env : Env.t) (to_translate: cn_function list) = 
   let@ (env, defs) = 

@@ -68,10 +68,10 @@ let lookup_predicate sym env =
 let lookup_function sym env =
   X.find_opt sym env.functions
 
-let lookup_function_by_name nm env =
-  Option.bind (Y.find_opt nm env.func_names)
-    (fun sym -> X.find_opt sym env.functions
-        |> Option.map (fun fs -> (sym, fs)))
+let lookup_function_by_name nm env = match Y.find_opt nm env.func_names with
+  | Some sym ->
+    X.find_opt sym env.functions |> Option.map (fun fs -> (sym, fs))
+  | None -> None
 
 let lookup_resource sym env =
   X.find_opt sym env.resources
@@ -83,8 +83,11 @@ let lookup_struct sym env =
     | Some (M_UnionDef _)| None ->
         None
 
-
-
+let debug_known_preds env =
+  Pp.debug 2 (lazy (Pp.item "known logical predicates"
+      (Pp.list (fun (nm, _) -> Pp.string nm) (Y.bindings env.func_names))));
+  Pp.debug 2 (lazy (Pp.item "known resource predicate names"
+      (Pp.list (fun (nm, _) -> Pp.string nm) (Y.bindings env.pred_names))))
 
 
 

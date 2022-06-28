@@ -468,6 +468,7 @@ module PageAlloc = struct
 
 
     (* check: possibly inconsistent *)
+    (* not actually in use *)
     let free_area_cell_wf =
 
       let id = freeArea_cell_wf_sym in
