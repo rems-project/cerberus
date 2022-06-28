@@ -11,6 +11,7 @@
 #define cheri_base_get __cerbvar_cheri_base_get
 #define cheri_length_get __cerbvar_cheri_length_get
 #define cheri_tag_get __cerbvar_cheri_tag_get
+#define cheri_tag_clear __cerbvar_cheri_tag_clear
 #define cheri_is_equal_exact __cerbvar_cheri_is_equal_exact
 #define cheri_representable_length __cerbvar_cheri_representable_length
 #define cheri_representable_alignment_mask __cerbvar_cheri_representable_alignment_mask

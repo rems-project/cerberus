@@ -2443,6 +2443,13 @@ module CHERI (C:Capability
                    TyPred (Ctype.ctypeEqual Ctype.uintptr_t);
                    TyIsPointer
         ]])
+    else if name = "cheri_tag_clear" then
+      Some ( CopyRet 0,
+             [ PolymorphicArg [
+                   TyPred (Ctype.ctypeEqual Ctype.intptr_t);
+                   TyPred (Ctype.ctypeEqual Ctype.uintptr_t);
+                   TyIsPointer
+        ]])
     else if name = "cheri_is_equal_exact" then
       Some ( ExactRet (Ctype( [], (Basic (Integer Bool)))),
              [ PolymorphicArg [
@@ -2665,6 +2672,17 @@ module CHERI (C:Capability
            let v = if C.cap_is_valid c then Z.succ (Z.zero) else Z.zero  in
            let p = Prov_none in (* TODO: CHERI provenance? *)
            return (Some (MVinteger (Bool, (IV (p,v)))))
+        end
+    else if name = "cheri_tag_clear" then
+      let cap_val = List.nth args 0 in
+      get >>=
+        begin fun st ->
+        match cap_of_mem_value st.funptrmap cap_val with
+        | None -> fail (MerrOther ("CHERI.call_intrinsic: non-cap 1st argument in: '" ^ name ^ "'"))
+        | Some (funptrmap,c) ->
+           update (fun st -> { st with funptrmap=funptrmap }) >>
+             let c = C.cap_invalidate c in
+             return (Some (update_cap_in_mem_value cap_val c))
         end
     else if name = "cheri_is_equal_exact" then
       (* this intrinsic is pure *)

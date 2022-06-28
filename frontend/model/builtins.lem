@@ -486,6 +486,8 @@ let translate_builtin_varnames (Symbol.Identifier _ str) =
         Just (AilEbuiltin (AilBCHERI "cheri_length_get"))
     | "__cerbvar_cheri_tag_get" ->
         Just (AilEbuiltin (AilBCHERI "cheri_tag_get"))
+    | "__cerbvar_cheri_tag_clear" ->
+        Just (AilEbuiltin (AilBCHERI "cheri_tag_clear"))
     | "__cerbvar_cheri_is_equal_exact" ->
         Just (AilEbuiltin (AilBCHERI "cheri_is_equal_exact"))
     | "__cerbvar_cheri_representable_length" ->
