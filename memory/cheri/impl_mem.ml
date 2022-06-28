@@ -2040,12 +2040,12 @@ module CHERI (C:Capability
        if Switches.(has_switch SW_strict_pointer_relationals) then
          match prov1, prov2 with
          | Prov_some alloc1, Prov_some alloc2 when Z.equal alloc1 alloc2 ->
-            return (C.exact_compare addr1 addr2 < 0)
+            return (C.value_compare addr1 addr2 < 0)
          | _ ->
             (* TODO: one past case *)
             fail MerrPtrComparison
        else
-         return (C.exact_compare addr1 addr2 < 0)
+         return (C.value_compare addr1 addr2 < 0)
     | (PVnull _, _)
       | (_, PVnull _) ->
        fail (MerrWIP "lt_ptrval ==> one null pointer")
@@ -2058,12 +2058,12 @@ module CHERI (C:Capability
        if Switches.(has_switch SW_strict_pointer_relationals) then
          match prov1, prov2 with
          | Prov_some alloc1, Prov_some alloc2 when alloc1 = alloc2 ->
-            return (C.exact_compare addr1 addr2 > 0)
+            return (C.value_compare addr1 addr2 > 0)
          | _ ->
             (* TODO: one past case *)
             fail MerrPtrComparison
        else
-         return (C.exact_compare addr1 addr2 > 0)
+         return (C.value_compare addr1 addr2 > 0)
     | _ ->
        fail (MerrWIP "gt_ptrval")
 
@@ -2073,12 +2073,12 @@ module CHERI (C:Capability
        if Switches.(has_switch SW_strict_pointer_relationals) then
          match prov1, prov2 with
          | Prov_some alloc1, Prov_some alloc2 when alloc1 = alloc2 ->
-            return (C.exact_compare addr1 addr2 <= 0)
+            return (C.value_compare addr1 addr2 <= 0)
          | _ ->
             (* TODO: one past case *)
             fail MerrPtrComparison
        else
-         return (C.exact_compare addr1 addr2 <= 0)
+         return (C.value_compare addr1 addr2 <= 0)
     | _ ->
        fail (MerrWIP "le_ptrval")
 
@@ -2088,15 +2088,14 @@ module CHERI (C:Capability
        if Switches.(has_switch SW_strict_pointer_relationals) then
          match prov1, prov2 with
          | Prov_some alloc1, Prov_some alloc2 when alloc1 = alloc2 ->
-            return (C.exact_compare addr1 addr2 >= 0)
+            return (C.value_compare addr1 addr2 >= 0)
          | _ ->
             (* TODO: one past case *)
             fail MerrPtrComparison
        else
-         return (C.exact_compare addr1 addr2 >= 0)
+         return (C.value_compare addr1 addr2 >= 0)
     | _ ->
        fail (MerrWIP "ge_ptrval")
-
 
   let diff_ptrval diff_ty ptrval1 ptrval2 =
     let precond alloc addr1 addr2 =
