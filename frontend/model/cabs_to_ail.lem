@@ -4365,6 +4365,9 @@ let rec desugar_cn_expr (CNExpr loc expr_) =
     | CNExpr_var ident ->
         E.resolve_cn_ident CN_logical ident >>= fun sym ->
         E.return (CNExpr_var sym)
+    | CNExpr_rvar ident ->
+        E.resolve_cn_ident CN_logical ident >>= fun sym ->
+        E.return (CNExpr_rvar sym)
     | CNExpr_nil bTy ->
         CNExpr_nil <$> desugar_cn_base_type Loc.unknown bTy
     | CNExpr_cons e1 e2 ->
@@ -4372,9 +4375,9 @@ let rec desugar_cn_expr (CNExpr loc expr_) =
                     <*> desugar_cn_expr e2
     | CNExpr_list es ->
         CNExpr_list <$> E.mapM desugar_cn_expr es
-    | CNExpr_memberof ident ident_membr ->
-        E.resolve_cn_ident CN_logical ident >>= fun sym ->
-        E.return (CNExpr_memberof sym ident_membr)
+    | CNExpr_memberof e ident_membr ->
+        CNExpr_memberof <$> desugar_cn_expr e
+                        <*> (E.return ident_membr)
     | CNExpr_binop bop e1 e2 ->
         CNExpr_binop bop <$> desugar_cn_expr e1
                          <*> desugar_cn_expr e2

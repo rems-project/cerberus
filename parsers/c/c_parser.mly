@@ -1796,12 +1796,14 @@ prim_expr:
         | _ ->
             raise (C_lexer.Error (Cparser_unexpected_token "TODO cn integer const"))
     }
-| ident= cn_variable
+| ident= cn_l_variable
     { Cerb_frontend.Cn.(CNExpr (Location_ocaml.point $startpos, CNExpr_var ident)) }
+| ident= cn_u_variable
+    { Cerb_frontend.Cn.(CNExpr (Location_ocaml.point $startpos, CNExpr_rvar ident)) }
 (* | ident= cn_variable DOT ident_membr= cn_variable *)
-| ident= cn_variable DOT xs= separated_nonempty_list(DOT, cn_variable)
+| e= prim_expr DOT member=cn_variable
     { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
-                               , CNExpr_memberof (ident, xs))) }
+                               , CNExpr_memberof (e, member))) }
 | e= delimited(LPAREN, expr, RPAREN)
     { e }
 | SIZEOF LT ty= ctype GT
@@ -1955,10 +1957,10 @@ predicate:
 cn_variable:
 | str= NAME VARIABLE
     { Symbol.Identifier (Location_ocaml.point $startpos(str), str) }
-cn_u_variable:
+%inline cn_u_variable:
 | str= UNAME VARIABLE
     { Symbol.Identifier (Location_ocaml.point $startpos(str), str) }
-cn_l_variable:
+%inline cn_l_variable:
 | str= LNAME VARIABLE
     { Symbol.Identifier (Location_ocaml.point $startpos(str), str) }
 
@@ -1988,7 +1990,7 @@ cn_option_func_body:
     { None }
 
 cn_func_body:
-| CN_LET str= NAME VARIABLE EQ e= expr SEMICOLON c= cn_func_body
+| CN_LET str= LNAME VARIABLE EQ e= expr SEMICOLON c= cn_func_body
     { let loc = Location_ocaml.point $startpos(str) in
       Cerb_frontend.Cn.CN_fb_letExpr (loc, Symbol.Identifier (loc, str), e, c) }
 | RETURN e= expr SEMICOLON
@@ -1997,10 +1999,10 @@ cn_func_body:
 
 
 clause:
-| CN_LET str= NAME VARIABLE EQ res= resource SEMICOLON c= clause
+| CN_LET str= UNAME VARIABLE EQ res= resource SEMICOLON c= clause
     { let loc = Location_ocaml.point $startpos(str) in
       Cerb_frontend.Cn.CN_letResource (loc, Symbol.Identifier (loc, str), res, c) }
-| CN_LET str= NAME VARIABLE EQ e= expr SEMICOLON c= clause
+| CN_LET str= LNAME VARIABLE EQ e= expr SEMICOLON c= clause
     { let loc = Location_ocaml.point $startpos(str) in
       Cerb_frontend.Cn.CN_letExpr (loc, Symbol.Identifier (loc, str), e, c) }
 | ASSERT e= delimited(LPAREN, expr, RPAREN) SEMICOLON c= clause
@@ -2012,7 +2014,7 @@ clause:
 resource:
 | p= pred es= delimited(LPAREN, separated_list(COMMA, expr), RPAREN)
     { Cerb_frontend.Cn.CN_pred (Location_ocaml.region $loc(p) NoCursor, p, es) }
-| CN_EACH LPAREN bTy= base_type str= NAME VARIABLE SEMICOLON e1= expr RPAREN
+| CN_EACH LPAREN bTy= base_type str= LNAME VARIABLE SEMICOLON e1= expr RPAREN
        LBRACE p= pred LPAREN es= separated_list(COMMA, expr) RPAREN RBRACE
     { Cerb_frontend.Cn.CN_each ( Symbol.Identifier (Location_ocaml.point $startpos(str), str)
                                , bTy

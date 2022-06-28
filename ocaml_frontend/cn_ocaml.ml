@@ -91,16 +91,18 @@ module MakePp (Conf: PP_CN) = struct
           Dleaf (pp_ctor "CNExpr_const" ^^^ !^ (if b then "true" else "false"))
       | CNExpr_var ident ->
           Dleaf (pp_ctor "CNExpr_var" ^^^ P.squotes (Conf.pp_ident ident))
+      | CNExpr_rvar ident ->
+          Dleaf (pp_ctor "CNExpr_rvar" ^^^ P.squotes (Conf.pp_ident ident))
       | CNExpr_nil bty ->
           Dleaf (pp_ctor "CNExpr_nil" ^^^ P.squotes (pp_base_type bty))
       | CNExpr_cons (e1, e2) ->
           Dnode (pp_ctor "CNExpr_cons", [dtree_of_cn_expr e1; dtree_of_cn_expr e2])
       | CNExpr_list es ->
           Dnode (pp_ctor "CNExpr_list", List.map dtree_of_cn_expr es)
-      | CNExpr_memberof (ident, xs) ->
-          Dleaf (pp_ctor "CNExpr_member" ^^^
-                P.squotes (Conf.pp_ident ident) ^^
-                P.flow P.dot (List.map (fun z -> P.squotes (pp_identifier z)) xs))
+      | CNExpr_memberof (e, z) ->
+          Dnode (pp_ctor "CNExpr_member",
+                [dtree_of_cn_expr e;
+                 Dleaf (pp_identifier z)])
       | CNExpr_binop (bop, e1, e2) ->
           Dnode (pp_ctor "CNExpr_binop" ^^^ pp_cn_binop bop, [dtree_of_cn_expr e1; dtree_of_cn_expr e2])
       | CNExpr_sizeof ty ->

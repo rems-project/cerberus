@@ -167,8 +167,6 @@ let translate_member_access loc env t member =
   | has -> 
      fail {loc; msg = Illtyped_it' {it = t; has; expected = "struct"}}
 
-let translate_member_accesses loc env t xs = 
-  ListM.fold_leftM (translate_member_access loc env) t xs
 
 
 
@@ -188,6 +186,33 @@ let translate_cn_expr (env: Env.t) expr =
             | None -> fail {loc; msg= Unknown_variable sym}
             | Some bTy -> return (IT (Lit (Sym sym), bTy))
           end
+      | CNExpr_rvar sym ->
+         let get_pred_sig s = 
+           match Env.lookup_predicate s env with
+           | None ->
+              Env.debug_known_preds env;
+	      fail {loc; msg = Unknown_resource_predicate {id = s; logical = false}}
+           | Some pred_sig -> return pred_sig 
+         in
+         let@ bt =match Env.lookup_resource sym env with
+           | None -> 
+              fail {loc; msg= Unknown_variable sym}
+           | Some RPred_owned sct ->
+              return (Resources.owned_oargs sct)
+           | Some RPred_block sct ->
+              return (Resources.block_oargs)
+           | Some RPred_named pnm ->
+              let@ pred_sig = get_pred_sig pnm in
+              return (BT.Record pred_sig.pred_oargs)
+           | Some RPred_I_owned sct ->
+              return (Resources.q_owned_oargs sct)
+           | Some RPred_I_block sct ->
+              return (Resources.q_block_oargs)
+           | Some RPred_I_named pnm ->
+              let@ pred_sig = get_pred_sig pnm in
+              return (BT.Record (List.map_snd (BT.make_map_bt Integer) pred_sig.pred_oargs))
+         in
+         return (sym_ (sym, bt))
       | CNExpr_nil bTy_ ->
           return (nil_ ~item_bt:(translate_cn_base_type bTy_))
       | CNExpr_cons (e1_, e2_) ->
@@ -198,40 +223,9 @@ let translate_cn_expr (env: Env.t) expr =
           let@ es = ListM.mapM self es_ in
           let item_bt = basetype (List.hd es) in
           return (list_ ~item_bt es)
-      | CNExpr_memberof (sym, xs) ->
-         let@ bt = match Env.lookup_resource sym env with
-           | None ->
-              begin match Env.lookup_logical sym env with
-              | None -> fail {loc; msg= Unknown_variable sym}
-              | Some bt -> return bt
-              end
-           | Some RPred_owned ct ->
-              return (Resources.owned_oargs ct)
-           | Some RPred_block ct ->
-              return (Resources.owned_oargs ct)
-           | Some RPred_named s ->
-              let@ pred_sig = match Env.lookup_predicate s env with
-                | None ->
-                    Env.debug_known_preds env;
-                    fail {loc; msg = Unknown_resource_predicate {id = s; logical = false}}
-                | Some pred_sig -> return pred_sig 
-              in
-              return (BT.Record pred_sig.pred_oargs)
-           | Some RPred_I_owned ct ->
-              return (Resources.q_owned_oargs ct)
-           | Some RPred_I_block ct ->
-              return (Resources.q_owned_oargs ct)
-           | Some RPred_I_named s ->
-              let@ pred_sig = match Env.lookup_predicate s env with
-                | None ->
-                    Env.debug_known_preds env;
-		    fail {loc; msg = Unknown_resource_predicate {id = s; logical = false}}
-                | Some pred_sig -> return pred_sig 
-              in
-              return (BT.Record (List.map_snd (BT.make_map_bt Integer) pred_sig.pred_oargs))
-         in
-         let t = sym_ (sym, bt) in
-         translate_member_accesses loc env t xs
+      | CNExpr_memberof (e, xs) ->
+         let@ e = self e in
+         translate_member_access loc env e xs
       | CNExpr_binop (bop, e1_, e2_) ->
           let@ e1 = self e1_ in
           let@ e2 = self e2_ in

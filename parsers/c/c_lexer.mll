@@ -495,8 +495,15 @@ and initial = parse
   | "}-}" { RBRACES }
 
     (* copied over from backend/cn/assertion_lexer.mll *)
-  | ['A'-'Z']['0'-'9' 'A'-'Z' 'a'-'z' '_']* as name
-      { UNAME name }
+  | ['A'-'Z']['0'-'9' 'A'-'Z' 'a'-'z' '_']* as id
+      { 
+        if internal_state.inside_cn then
+          try Hashtbl.find cn_lexicon id
+          with Not_found ->
+            UNAME id
+        else
+          UNAME id
+      }
 
   | identifier as id
     { try

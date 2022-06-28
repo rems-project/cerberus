@@ -48,11 +48,12 @@ type cn_const =
 type cn_expr_ 'a 'ty =
   | CNExpr_const of cn_const
   | CNExpr_var of 'a
+  | CNExpr_rvar of 'a
   (* List ops *)
   | CNExpr_nil of cn_base_type 'a
   | CNExpr_cons of cn_expr 'a 'ty * cn_expr 'a 'ty
   | CNExpr_list of list (cn_expr 'a 'ty)
-  | CNExpr_memberof of 'a * list Symbol.identifier (* INVARIANT: non-empty *)
+  | CNExpr_memberof of cn_expr 'a 'ty * Symbol.identifier
   | CNExpr_binop of cn_binop * cn_expr 'a 'ty * cn_expr 'a 'ty
   | CNExpr_sizeof of 'ty
   | CNExpr_offsetof of 'a * Symbol.identifier
