@@ -191,7 +191,7 @@ let debug l pp =
     let dpp = format [Green] ("[" ^ Float.to_string time ^ "] ") in
     print stderr (dpp ^^ Lazy.force pp)
 
-let warn pp = 
+let warn_noloc pp = 
   print stderr (format [Bold; Yellow] "Warning:" ^^^ pp)
 
 let time_f_elapsed f x =
@@ -249,6 +249,15 @@ let error (loc : Locations.t) msg extras =
                 format [Bold] head ^^^ msg);
   if Locations.is_unknown_location loc then () else print stderr !^pos;
   List.iter (fun pp -> print stderr pp) extras
+
+
+(* stealing some logic from pp_errors *)
+let warn (loc : Locations.t) msg = 
+  let (head, pos) = Locations.head_pos_of_location loc in
+  print stderr (format [Bold; Yellow] "warning:" ^^^ 
+                format [Bold] head ^^^ msg);
+  if Locations.is_unknown_location loc then () else print stderr !^pos
+
 
 
 

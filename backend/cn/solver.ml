@@ -30,8 +30,13 @@ type model_with_q = model * (Sym.t * BT.t) list
 
 
 
-let xor_solver_sym = Sym.fresh_named "xor"
-let exp_solver_sym = Sym.fresh_named "exp"
+let mul_no_smt_solver_sym = Sym.fresh_named "mul_uf"
+let div_no_smt_solver_sym = Sym.fresh_named "div_uf"
+let exp_no_smt_solver_sym = Sym.fresh_named "power_uf"
+let mod_no_smt_solver_sym = Sym.fresh_named "mod_uf"
+let rem_no_smt_solver_sym = Sym.fresh_named "rem_uf"
+let xor_no_smt_solver_sym = Sym.fresh_named "xor_uf"
+
 
 
 
@@ -326,37 +331,45 @@ module Translate = struct
          end
       | Arith_op arith_op -> 
          let open Z3.Arithmetic in
+         let make_uf sym ret_sort args =
+           let decl = Z3.FuncDecl.mk_func_decl context (symbol sym)
+                        (List.map (fun it -> sort (IT.bt it)) args) (sort ret_sort)
+           in
+           Z3.Expr.mk_app context decl (List.map term args)
+         in
+
          begin match arith_op with
          | Add (t1, t2) -> mk_add context [term t1; term t2]
          | Sub (t1, t2) -> mk_sub context [term t1; term t2]
          | Mul (t1, t2) -> mk_mul context [term t1; term t2]
+         | MulNoSMT (t1, t2) -> 
+            make_uf mul_no_smt_solver_sym (IT.bt t1) [t1; t2]
          | Div (t1, t2) -> mk_div context (term t1) (term t2)
+         | DivNoSMT (t1, t2) ->
+            make_uf div_no_smt_solver_sym (IT.bt t1) [t1; t2]
          | Exp (t1, t2) -> 
             begin match is_z t1, is_z t2 with
             | Some z1, Some z2 when Z.fits_int z2 ->
                term (z_ (Z.pow z1 (Z.to_int z2)))
             | _, _ ->
-               warn (Pp.item "generating power" (Pp.list IT.pp [t1; t2]));
-               Real.mk_real2int context (mk_power context (term t1) (term t2))
+               assert false
             end
          | ExpNoSMT (t1, t2) ->
-            let decl = Z3.FuncDecl.mk_func_decl context (symbol exp_solver_sym)
-                [sort Integer; sort Integer] (sort Integer)
-            in
-            Z3.Expr.mk_app context decl (List.map term [t1; t2])
+            make_uf exp_no_smt_solver_sym (Integer) [t1; t2]
          | Rem (t1, t2) -> Integer.mk_rem context (term t1) (term t2)
+         | RemNoSMT (t1, t2) ->
+            make_uf rem_no_smt_solver_sym (Integer) [t1; t2]
          | Mod (t1, t2) -> Integer.mk_mod context (term t1) (term t2)
+         | ModNoSMT (t1, t2) ->
+            make_uf mod_no_smt_solver_sym (Integer) [t1; t2]
          | LT (t1, t2) -> mk_lt context (term t1) (term t2)
          | LE (t1, t2) -> mk_le context (term t1) (term t2)
          | Min (t1, t2) -> term (ite_ (le_ (t1, t2), t1, t2))
          | Max (t1, t2) -> term (ite_ (ge_ (t1, t2), t1, t2))
          | IntToReal t -> Integer.mk_int2real context (term t)
          | RealToInt t -> Real.mk_real2int context (term t)
-         | XOR (t1, t2) ->
-            let decl = Z3.FuncDecl.mk_func_decl context (symbol xor_solver_sym)
-                [sort Integer; sort Integer] (sort Integer)
-            in
-            Z3.Expr.mk_app context decl (List.map term [t1; t2])
+         | XORNoSMT (t1, t2) ->
+            make_uf xor_no_smt_solver_sym (Integer) [t1; t2]
          end
       | Bool_op bool_op -> 
          let open Z3.Boolean in
@@ -487,7 +500,7 @@ module Translate = struct
             mk_select context (term f) (term arg)
          | Def ((q_s, q_bt), body) ->
             if warn_lambda then
-              warn (!^"generating lambda");
+              warn_noloc (!^"generating lambda");
               (* warn (!^"generating lambda" ^^ colon ^^^ IT.pp (IT (it_, bt))); *)
             Z3.Quantifier.expr_of_quantifier
               (Z3.Quantifier.mk_lambda_const context

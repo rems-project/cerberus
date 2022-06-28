@@ -492,14 +492,19 @@ let it_to_coq ci it =
         | Add (x, y) -> abinop "+" x y
         | Sub (x, y) -> abinop "-" x y
         | Mul (x, y) -> abinop "*" x y
+        | MulNoSMT (x, y) -> abinop "*" x y
         | Div (x, y) -> check_pos y; abinop "/" x y
+        | DivNoSMT (x, y) -> check_pos y; abinop "/" x y
         | Mod (x, y) -> check_pos y; abinop "mod" x y
+        | ModNoSMT (x, y) -> check_pos y; abinop "mod" x y
+        (* TODO: this can't be right: mod and rem aren't the same *)
         | Rem (x, y) -> check_pos y; abinop "mod" x y
+        | RemNoSMT (x, y) -> check_pos y; abinop "mod" x y
         | LT (x, y) -> abinop (if bool_eq_prop then "<" else "<?") x y
         | LE (x, y) -> abinop (if bool_eq_prop then "<=" else "<=?") x y
         | Exp (x, y) -> abinop "^" x y
         | ExpNoSMT (x, y) -> abinop "^" x y
-        | XOR (x, y) -> parensM (build [rets "Z.lxor"; aux x; aux y])
+        | XORNoSMT (x, y) -> parensM (build [rets "Z.lxor"; aux x; aux y])
         | _ -> fail "it_to_coq: unsupported arith op" (IT.pp t)
     end
     | IT.Bool_op op -> begin match op with

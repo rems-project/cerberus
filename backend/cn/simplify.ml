@@ -181,6 +181,8 @@ let rec simp (struct_decls : Memory.struct_decls) values equalities lcs =
        | _ ->
           IT (Arith_op (Mul (a, b)), bt)
        end
+    | MulNoSMT (a, b) ->
+       IT (Arith_op (MulNoSMT (aux a, aux b)), bt)
     | Div (a, b) ->
        let a = aux a in
        let b = aux b in 
@@ -196,6 +198,8 @@ let rec simp (struct_decls : Memory.struct_decls) values equalities lcs =
        | _ ->
           IT (Arith_op (Div (a, b)), bt) 
        end
+    | DivNoSMT (a, b) ->
+       IT (Arith_op (DivNoSMT (aux a, aux b)), bt)
     | Exp (a, b) ->
        let a = aux a in
        let b = aux b in
@@ -225,6 +229,8 @@ let rec simp (struct_decls : Memory.struct_decls) values equalities lcs =
        | _ ->
           IT (Arith_op (Rem (a, b)), bt) 
        end
+    | RemNoSMT (a, b) ->
+       IT (Arith_op (RemNoSMT (aux a, aux b)), bt)
     | Mod (a, b) ->
        let a = aux a in
        let b = aux b in
@@ -239,6 +245,8 @@ let rec simp (struct_decls : Memory.struct_decls) values equalities lcs =
        | _ ->
           IT (Arith_op (Mod (a, b)), bt) 
        end
+    | ModNoSMT (a, b) ->
+       IT (Arith_op (ModNoSMT (aux a, aux b)), bt)
     | LT (a, b) -> 
       let a = aux a in
       let b = aux b in
@@ -290,14 +298,9 @@ let rec simp (struct_decls : Memory.struct_decls) values equalities lcs =
     | RealToInt a ->
        let a = aux a in
        IT (Arith_op (RealToInt a), bt)
-    | XOR (a, b) ->
-       let a = aux a in
-       let b = aux b in
-       begin match is_z a, is_z b with
-       | Some z, _ when Z.equal Z.zero z -> b
-       | _, Some z when Z.equal Z.zero z -> a
-       | _ -> IT (Arith_op (XOR (a, b)), bt)
-       end
+    | XORNoSMT (a, b) ->
+       IT (Arith_op (XORNoSMT (aux a, aux b)), bt)
+
   in
   
   let bool_op it bt = 

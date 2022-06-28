@@ -16,18 +16,22 @@ type 'bt arith_op =
   | Add of 'bt term * 'bt term
   | Sub of 'bt term * 'bt term
   | Mul of 'bt term * 'bt term
+  | MulNoSMT of 'bt term * 'bt term
   | Div of 'bt term * 'bt term
+  | DivNoSMT of 'bt term * 'bt term
   | Exp of 'bt term * 'bt term
   | ExpNoSMT of 'bt term * 'bt term
   | Rem of 'bt term * 'bt term
+  | RemNoSMT of 'bt term * 'bt term
   | Mod of 'bt term * 'bt term
+  | ModNoSMT of 'bt term * 'bt term
   | LT of 'bt term * 'bt term
   | LE of 'bt term * 'bt term
   | Min of 'bt term * 'bt term
   | Max of 'bt term * 'bt term
   | IntToReal of 'bt term
   | RealToInt of 'bt term
-  | XOR of 'bt term * 'bt term
+  | XORNoSMT of 'bt term * 'bt term
 
 and 'bt bool_op = 
   | And of 'bt term list

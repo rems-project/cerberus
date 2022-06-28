@@ -455,6 +455,13 @@ let rec check_value (loc : loc) ~(expect:BT.t) (v : 'bty mu_value) : (lvt, type_
 (*** pure expression inference ************************************************)
 
 
+let warn_uf loc operation = 
+  let msg = 
+    !^"This expression includes non-linear integer arithmetic." ^^^
+    !^"Generating uninterpreted-function constraint:" ^^^
+    squotes (!^operation)
+  in
+  Pp.warn loc msg
 
 
 
@@ -492,11 +499,11 @@ let rec check_conv_int loc ~expect (act : _ act) pe =
        return (ite_ (eq_ (arg, int_ 0), int_ 0, int_ 1))
     | _ when Sctypes.is_unsigned_integer_type ity ->
        (* TODO: revisit this *)
-       begin match provable (t_ (representable_ (act.ct, arg))) with
-       | `True -> return arg
-       | `False ->
+       (* begin match provable (t_ (representable_ (act.ct, arg))) with *)
+       (* | `True -> return arg *)
+       (* | `False -> *)
           return (ite_ (representable_ (act.ct, arg), arg, wrapI loc ity arg))
-       end
+       (* end *)
     | _ ->
        begin match provable (t_ (representable_ (act.ct, arg))) with
        | `True -> return arg
@@ -601,8 +608,7 @@ and check_pexpr (pe : 'bty mu_pexpr) ~(expect:BT.t) : (lvt, type_error) m =
        in
        let@ vt1 = check_pexpr ~expect:Integer pe1 in
        let@ vt2 = check_pexpr ~expect:Integer pe2 in
-       let value = xor_ (vt1, vt2) in
-       (* let result = wrapI ity xor_unbounded in *)
+       let value = warn_uf loc "xor_uf"; xor_no_smt_ (vt1, vt2) in
        return value
     | M_Cfvfromint _ -> 
        unsupported loc !^"floats"
@@ -623,46 +629,90 @@ and check_pexpr (pe : 'bty mu_pexpr) ~(expect:BT.t) : (lvt, type_error) m =
        let@ vt = check_pexpr ~expect:Bool pe in
        return (not_ vt)
     | M_PEop (op, pe1, pe2) ->
-       let abt = match op with
-         | OpAdd | OpSub | OpMul | OpDiv | OpRem_f | OpRem_t | OpExp 
-         | OpEq | OpGt | OpLt | OpGe | OpLe -> 
-            Integer
-         | OpAnd | OpOr -> 
-            Bool
+       let check_args_and_ret abt1 abt2 rbt = 
+         let@ v1 = check_pexpr ~expect:abt1 pe1 in
+         let@ v2 = check_pexpr ~expect:abt2 pe2 in
+         let@ () = WellTyped.ensure_base_type loc ~expect rbt in
+         return (v1, v2)
        in
-       let@ v1 = check_pexpr ~expect:abt pe1 in
-       let@ v2 = check_pexpr ~expect:abt pe2 in
-       let@ value = match op with
-         | OpAdd ->   return (IT.add_ (v1,v2))
-         | OpSub ->   return (IT.sub_ (v1,v2))
-         | OpMul ->   return (IT.mul_ (v1,v2))
-         | OpDiv ->   return (IT.div_ (v1,v2))
-         | OpRem_f -> return (IT.rem_f_ (v1,v2))
-         | OpExp ->   return (IT.exp_no_smt_ (v1,v2))
-         | OpEq ->    return (IT.eq_ (v1,v2))
-         | OpGt ->    return (IT.gt_ (v1,v2))
-         | OpLt ->    return (IT.lt_ (v1,v2))
-         | OpGe ->    return (IT.ge_ (v1,v2))
-         | OpLe ->    return (IT.le_ (v1,v2))
-         | OpAnd ->   return (IT.and2_ (v1,v2))
-         | OpOr ->    return (IT.or2_ (v1,v2))
-         | OpRem_t -> 
-            let@ provable = provable loc in
-            begin match provable (LC.T (and_ [le_ (int_ 0, v1); le_ (int_ 0, v2)])) with
-            | `True ->
-               (* if the arguments are non-negative, then rem or mod should be sound to use for rem_t *)
-               return (IT.mod_ (v1, v2))
-            | `False ->
-               let@ model = model () in
-               let err = !^"Unsupported: rem_t applied to negative arguments" in
-               fail (fun ctxt ->
-                   let msg = Generic_with_model {err; model; ctxt} in
-                   {loc; msg}
-                 )
-            end
-       in
-       let@ () = WellTyped.ensure_base_type loc ~expect (IT.bt value) in
-       return value
+       begin match op with
+       | OpAdd -> 
+          let@ v1, v2 = check_args_and_ret Integer Integer Integer in
+          return (add_ (v1, v2))
+       | OpSub ->
+          let@ v1, v2 = check_args_and_ret Integer Integer Integer in
+          return (sub_ (v1, v2))
+       | OpMul ->
+          let@ v1, v2 = check_args_and_ret Integer Integer Integer in
+          return (if (is_z_ v1 || is_z_ v2) then mul_ (v1, v2) 
+                  else (warn_uf loc "mul_uf"; mul_no_smt_ (v1, v2)))
+       | OpDiv ->
+          let@ v1, v2 = check_args_and_ret Integer Integer Integer in
+          return (if is_z_ v2 then div_ (v1, v2) 
+                  else (warn_uf loc "div_uf"; div_no_smt_ (v1, v2)))
+       | OpRem_f ->
+          let@ v1, v2 = check_args_and_ret Integer Integer Integer in
+          return (if is_z_ v2 then rem_ (v1, v2) 
+                  else (warn_uf loc "rem_uf"; rem_no_smt_ (v1, v2)))
+       | OpRem_t ->
+          let@ v1, v2 = check_args_and_ret Integer Integer Integer in
+          let@ provable = provable loc in
+          begin match provable (LC.T (and_ [le_ (int_ 0, v1); le_ (int_ 0, v2)])) with
+          | `True ->
+             (* If the arguments are non-negative, then rem or mod should be sound to use for rem_t *)
+             (* If not it throws a type error, but we should instead
+                map that to an uninterpreted function eventually. *)
+             return (if (is_z_ v2) then IT.mod_ (v1, v2) 
+                     else (warn_uf loc "mod_uf"; IT.mod_no_smt_ (v1, v2)))
+          | `False ->
+             let@ model = model () in
+             let err = !^"Unsupported: rem_t applied to negative arguments" in
+             fail (fun ctxt ->
+                 let msg = Generic_with_model {err; model; ctxt} in
+                 {loc; msg}
+               )
+          end
+       | OpExp ->
+          let@ v1, v2 = check_args_and_ret Integer Integer Integer in
+          begin match is_z v1, is_z v2 with
+          | Some z, Some z' ->
+             let it = exp_ (v1, v2) in
+             if Z.lt z' Z.zero then
+               (* we should relax this and map to exp_no_smt_ if we
+                  can handle negative exponents there *)
+               fail (fun ctxt -> {loc; msg = NegativeExponent {context = it; it; ctxt}})
+             else if Z.fits_int32 z' then
+               return it
+             else 
+               (* we can probably just relax this and map to exp_no_smt_ *)
+               fail (fun ctxt -> {loc; msg = TooBigExponent {context =it; it; ctxt}})
+          | _ ->
+             return (warn_uf loc "power_uf"; exp_no_smt_ (v1, v2))
+          end 
+       | OpEq ->
+          (* eventually we have to also support floats here *)
+          let@ v1, v2 = check_args_and_ret Integer Integer Bool in
+          return (eq_ (v1, v2))
+       | OpGt ->
+          (* eventually we have to also support floats here *)
+          let@ v1, v2 = check_args_and_ret Integer Integer Bool in
+          return (gt_ (v1, v2))
+       | OpLt ->
+          let@ v1, v2 = check_args_and_ret Integer Integer Bool in
+          return (lt_ (v1, v2))
+       | OpGe ->
+          let@ v1, v2 = check_args_and_ret Integer Integer Bool in
+          return (ge_ (v1, v2))
+       | OpLe -> 
+          let@ v1, v2 = check_args_and_ret Integer Integer Bool in
+          return (le_ (v1, v2))
+       | OpAnd ->
+          let@ v1, v2 = check_args_and_ret Bool Bool Bool in
+          return (and_ [v1; v2])
+       | OpOr -> 
+          let@ v1, v2 = check_args_and_ret Bool Bool Bool in
+          return (or_ [v1; v2])
+       end
     | M_PEstruct _ ->
        Debug_ocaml.error "todo: PEstruct"
     | M_PEunion _ ->
