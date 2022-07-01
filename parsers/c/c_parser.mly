@@ -1868,7 +1868,7 @@ list_expr:
 | e= rel_expr
     { e }
 (* | LBRACK COLON bty= base_type RBRACK *)
-| CN_NIL bty= delimited(LPAREN, base_type, RPAREN)
+| CN_NIL bty= delimited(LT, base_type, GT)
     { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) NoCursor)
                                , CNExpr_nil bty)) }
 (* | e1= rel_expr COLON_COLON e2= list_expr *)
