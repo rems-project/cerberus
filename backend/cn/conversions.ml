@@ -278,7 +278,7 @@ let make_qowned ~loc ~oname ~pointer ~q:(qs,qbt) ~step ~condition ~path ~sct =
     | _ -> fail {loc; msg = Generic (!^"Quantifier for iterated resource must be of type 'integer'")}
   in
   let@ () = 
-    if Memory.size_of_ctype sct = step then return ()
+    if Z.equal (Z.of_int (Memory.size_of_ctype sct)) step then return ()
     else fail {loc; msg = Generic !^"pointer increment must match size of array-cell type"}
   in
   match sct with
@@ -907,16 +907,25 @@ let apply_ownership_spec layouts predicates log_predicates default_mapping_name 
           | Some _ ->
              fail {loc; msg = Generic (!^"cannot use 'if' expression with iterated resources")}
         in
-        let@ (pointer_resolved, step) =
+        let@ (pointer_resolved, p_osct, step) =
           match pointer with
           | Addition (pointer, Multiplication (Var name', Integer step))
                  when String.equal name name' ->
-             let@ (pointer,_) =
+             let@ (pointer, p_osct) =
                resolve_index_term loc layouts predicates log_predicates
-                 default_mapping_name mappings
-                 [] pointer
+                 default_mapping_name mappings [] pointer
              in
-             return (pointer, Z.to_int step)
+             return (pointer, p_osct, step)
+          | ArrayShift {pointer; index} ->
+             let@ (pointer, p_osct) =
+               resolve_index_term loc layouts predicates log_predicates
+                 default_mapping_name mappings [] pointer
+             in
+             begin match p_osct with
+               | Some (Pointer ct) -> return (pointer, Some ct, Z.of_int (Memory.size_of_ctype ct))
+               | None -> fail {loc; msg = Generic (!^ "array pointer type not known" ^^^ IT.pp pointer)}
+               | Some ct -> fail {loc; msg = Generic (!^ "not a pointer:" ^^^ IT.pp pointer ^^ colon ^^^ Sctypes.pp ct)}
+             end
           | _ ->
              let msg =
                "Iterated predicate pointer argument must be of the shape "^
@@ -928,11 +937,12 @@ let apply_ownership_spec layouts predicates log_predicates default_mapping_name 
           resolve_index_term loc layouts predicates log_predicates default_mapping_name mappings
             [(name, (qs, qbt))] condition
         in
-        let@ pointee_sct = match typ with
-          | Some typ ->
+        let@ pointee_sct = match typ, p_osct with
+          | Some typ, _ ->
              resolve_typ loc layouts predicates log_predicates default_mapping_name mappings
                (Option.map fst oq) typ
-          | None ->
+          | _, Some ct -> return ct
+          | _ ->
              fail {loc; msg = Generic (!^"need 'with type' annotation" ^^^ (Ast.Terms.pp false pointer))}
         in
         begin match block_or_owned with

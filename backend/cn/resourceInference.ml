@@ -109,11 +109,14 @@ module General = struct
     let@ base_value = match manys with
       | [] -> return (default_ (BT.Map (a_bt, item_bt)))
       | [{many_guard = _; value}] -> return value
-      | _ -> 
+      | many -> fail (fun ctxt -> {loc; msg = Generic (!^ "Merging multiple arrays with values:" ^^^ Pp.list IT.pp
+             (List.map (fun m -> m.value) many))})
+(*
          let@ model = model () in
          fail (fun ctxt ->
-             let msg = Merging_multiple_arrays {orequest; situation; oinfo; model; ctxt} in
+             let msg = Merging_multiple_arrays {orequest; situation; oinfo; model =None; ctxt} in
              {loc; msg})
+*)
     in
     return (update_with_ones base_value ones)
 
