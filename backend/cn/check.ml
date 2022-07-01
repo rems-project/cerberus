@@ -882,7 +882,6 @@ end = struct
     in
 
     let@ rt, cs = 
-      let@ provable = provable loc in
       let rec check cs ftyp = 
         let@ () = print_with_ctxt (fun ctxt ->
             debug 6 (lazy (item "ctxt" (Context.pp ctxt)));
@@ -918,6 +917,7 @@ end = struct
            check cs (LAT.subst rt_subst (IT.make_subst [(s, sym_ (s', bt))]) ftyp)
         | Constraint (c, info, ftyp) -> 
            let@ () = return (debug 9 (lazy (item "checking constraint" (LC.pp c)))) in
+           let@ provable = provable loc in
            let res = provable c in
            begin match res with
            | `True -> check (c :: cs) ftyp
