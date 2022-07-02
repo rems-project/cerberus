@@ -384,6 +384,13 @@ let translate_cn_clauses env clauses =
   let@ xs = self [] clauses in
   return (List.rev xs)
 
+let translate_option_cn_clauses env = function
+  | Some clauses -> 
+     let@ clauses = translate_cn_clauses env clauses in
+     return (Some clauses)
+  | None -> 
+     return None
+
 
 let translate_cn_func_body env body =
   let rec translate_cn_func_body_aux env acc body =
@@ -458,7 +465,7 @@ let translate_cn_predicate env (def: cn_predicate) =
     List.fold_left (fun acc (sym, bTy) ->
       Env.add_logical sym bTy acc
     ) env iargs in
-  let@ clauses = translate_cn_clauses env' def.cn_pred_clauses in
+  let@ clauses = translate_option_cn_clauses env' def.cn_pred_clauses in
   match iargs with
     | (iarg0, BaseTypes.Loc) :: iargs' ->
         return 

@@ -1929,6 +1929,12 @@ exit_cn:
     { C_lexer.internal_state.inside_cn <- false; }
 
 
+cn_option_pred_clauses:
+| clauses=delimited(LBRACE, clauses, RBRACE)
+    { Some clauses }
+|
+    { None }
+
 
 cn_function:
 | CN_FUNCTION enter_cn cn_func_return_bty=delimited(LPAREN, base_type, RPAREN) str= LNAME VARIABLE
@@ -1944,7 +1950,7 @@ cn_function:
 predicate:
 | CN_PREDICATE enter_cn cn_pred_oargs= delimited(LBRACE, args, RBRACE) str= UNAME VARIABLE
   cn_pred_iargs= delimited(LPAREN, args, RPAREN)
-  cn_pred_clauses= delimited(LBRACE, clauses, RBRACE) exit_cn
+  cn_pred_clauses= cn_option_pred_clauses exit_cn
     { (* TODO: check the name starts with upper case *)
       let loc = Location_ocaml.point $startpos(str) in
       { cn_pred_loc= loc

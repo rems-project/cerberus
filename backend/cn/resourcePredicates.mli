@@ -13,7 +13,7 @@ type definition = {
     pointer: Sym.t;
     iargs : (Sym.t * LogicalSorts.t) list;
     oargs : (Sym.t * LogicalSorts.t) list;
-    clauses : clause list;
+    clauses : (clause list) option;
   }
 
 val pp_definition : definition -> Pp.document

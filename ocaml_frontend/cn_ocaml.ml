@@ -166,6 +166,12 @@ module MakePp (Conf: PP_CN) = struct
     | CN_if (_, e, c1, c2) ->
         Dnode (pp_stmt_ctor "CN_if", [dtree_of_cn_expr e; dtree_of_cn_clause c1; dtree_of_cn_clauses c2])
 
+  let dtree_of_option_cn_clauses = function
+    | Some clauses -> 
+       Dnode (pp_stmt_ctor "Some", [dtree_of_cn_clauses clauses])
+    | None -> 
+       Dnode (pp_stmt_ctor "None", [])
+
 
 
   let dtrees_of_args xs =
@@ -183,7 +189,7 @@ module MakePp (Conf: PP_CN) = struct
     Dnode ( pp_ctor "[CN]predicate" ^^^ P.squotes (Conf.pp_ident pred.cn_pred_name)
           , [ Dnode (pp_ctor "[CN]iargs", dtrees_of_args pred.cn_pred_iargs)
             ; Dnode (pp_ctor "[CN]oargs", dtrees_of_args pred.cn_pred_oargs)
-            ; Dnode (pp_ctor "[CN]clauses", [dtree_of_cn_clauses pred.cn_pred_clauses]) ] ) 
+            ; Dnode (pp_ctor "[CN]clauses", [dtree_of_option_cn_clauses pred.cn_pred_clauses]) ] ) 
 end
 
 module PpCabs = MakePp (struct

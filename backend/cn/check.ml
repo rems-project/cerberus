@@ -1355,14 +1355,22 @@ let check_expr labels ~(expect:BT.t) (e : 'bty mu_expr) : (RT.t * per_path, type
              check_pexpr ~expect arg
            ) iarg_pes (List.map snd def.iargs)
        in
-       let instantiated_clauses = 
-         let subst = 
-           make_subst (
-               (def.pointer, pointer_arg) ::
-               List.map2 (fun (def_ia, _) ia -> (def_ia, ia)) def.iargs iargs
-             )
-         in
-         List.map (ResourcePredicates.subst_clause subst) def.clauses
+       let@ instantiated_clauses = match def.clauses with
+         | Some clauses ->
+             let subst = 
+               make_subst (
+                   (def.pointer, pointer_arg) ::
+                   List.map2 (fun (def_ia, _) ia -> (def_ia, ia)) def.iargs iargs
+                 )
+             in
+             return (List.map (ResourcePredicates.subst_clause subst) clauses)
+         | None ->
+            let action = match pack_unpack with 
+              | Pack -> "pack" 
+              | Unpack -> "unpack"
+            in
+            let msg = "Cannot "^action^" uninterpreted predicate" in
+            fail (fun _ -> {loc; msg = Generic !^msg})
        in
        let@ provable = provable loc in
        let@ right_clause = 

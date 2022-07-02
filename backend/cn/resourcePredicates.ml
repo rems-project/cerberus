@@ -42,14 +42,16 @@ type definition = {
     pointer: Sym.t;
     iargs : (Sym.t * LS.t) list;
     oargs : (Sym.t * LS.t) list;
-    clauses : clause list;
+    clauses : (clause list) option;
   }
 
 let pp_definition def = 
   item "pointer" (Sym.pp def.pointer) ^/^
   item "iargs" (Pp.list (fun (s,_) -> Sym.pp s) def.iargs) ^/^
   item "oargs" (Pp.list (fun (s,_) -> Sym.pp s) def.oargs) ^/^
-  item "clauses" (Pp.list pp_clause def.clauses)
+  item "clauses" (match def.clauses with
+                  | Some clauses -> Pp.list pp_clause clauses
+                  | None -> !^"(uninterpreted)")
   
 
 let byte_sym = Sym.fresh_named "Byte"
@@ -89,7 +91,7 @@ let byte () =
       pointer = pointer_s;
       iargs = []; 
       oargs = []; 
-      clauses = [clause]; 
+      clauses = Some [clause]; 
     } 
   in
   (byte_sym, predicate)
@@ -128,7 +130,7 @@ let char () =
       pointer = pointer_s;
       iargs = []; 
       oargs = [(value_s_o, Integer)]; 
-      clauses = [clause]; 
+      clauses = Some [clause]; 
     } 
   in
   (id, predicate)
@@ -173,7 +175,7 @@ let bytev () =
       pointer = pointer_s;
       iargs = [(the_value_s, IT.bt the_value)]; 
       oargs = []; 
-      clauses = [clause]; 
+      clauses = Some [clause]; 
     } 
   in
   (id, predicate)
@@ -226,7 +228,7 @@ let early_alloc () =
           (end_s, IT.bt end_t);
         ]; 
       oargs = []; 
-      clauses = [clause]; 
+      clauses = Some [clause]; 
     } 
   in
   (id, predicate)
@@ -290,7 +292,7 @@ let page_alloc_predicates struct_decls =
                  (order_s, IT.bt order);
                 ]; 
         oargs = []; 
-        clauses = [clause1; clause2]; 
+        clauses = Some [clause1; clause2]; 
       } 
     in
     (id, predicate)
@@ -347,7 +349,7 @@ let page_alloc_predicates struct_decls =
                  (order_s, IT.bt order);
                 ]; 
         oargs = []; 
-        clauses = [clause1; clause2]; 
+        clauses = Some [clause1; clause2]; 
       } 
     in
     (id, predicate)
@@ -356,7 +358,7 @@ let page_alloc_predicates struct_decls =
 
   let hyp_pool =  
     let id = hyp_pool_sym in
-    let loc = Loc.other "internal (Hyp_pool)" in
+    let loc = Loc.other ("internal (Hyp_pool)") in
     let pool_pointer_s, pool_pointer = IT.fresh Loc in
     (* iargs *)
     let vmemmap_pointer_s, vmemmap_pointer = IT.fresh Loc in
@@ -524,7 +526,16 @@ let page_alloc_predicates struct_decls =
         packing_ft = LAT.of_lrt lrt (LAT.I assignment)
       }
     in
+
+    let oargs = [
+        (pool_s_o, IT.bt pool_value); 
+        (vmemmap_s_o, IT.bt vmemmap_value);
+      ]
+    in
+
   
+    let clauses = Some [clause] in
+
     let predicate = {
         loc = loc;
         pointer = pool_pointer_s;
@@ -533,15 +544,17 @@ let page_alloc_predicates struct_decls =
             (hyp_physvirt_offset_s, IT.bt hyp_physvirt_offset);
           ]
         ;
-        oargs = [
-            (pool_s_o, IT.bt pool_value); 
-            (vmemmap_s_o, IT.bt vmemmap_value);
-          ];
-        clauses = [clause;]; 
+        oargs = oargs;
+        clauses = clauses; 
       } 
     in
     (id, predicate)
   in
+
+
+  
+
+
 
   [page; zeropage; hyp_pool;]
 

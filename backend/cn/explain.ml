@@ -334,9 +334,14 @@ let clause_has_resource req c =
 let relevant_predicate_clauses global oname req =
   let open Global in
   let open ResourcePredicates in
-  let clauses = SymMap.bindings global.resource_predicates
-    |> List.map (fun (nm, def) -> List.map (fun c -> (nm, c)) def.clauses)
-    |> List.concat in
+  let clauses = 
+    let defs = SymMap.bindings global.resource_predicates in
+    List.concat_map (fun (nm, def) -> 
+        match def.clauses with
+        | Some clauses -> List.map (fun c -> (nm, c)) clauses
+        | None -> []
+      ) defs
+  in
   List.filter (fun (nm, c) -> Option.equal Sym.equal (Some nm) oname
     || clause_has_resource req c) clauses
 

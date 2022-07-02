@@ -872,10 +872,13 @@ module WRPD = struct
         in
         let@ () = ListM.iterM (WLS.is_ls pd.loc) (List.map snd pd.oargs) in
         let module WPackingFT = WPackingFT(struct let name_bts = pd.oargs end)  in
-        ListM.iterM (fun {loc; guard; packing_ft} ->
-            let@ _ = WIT.check loc BT.Bool guard in
-            WPackingFT.welltyped "clause" pd.loc packing_ft
-          ) pd.clauses
+        match pd.clauses with
+        | None -> return ()
+        | Some clauses ->
+           ListM.iterM (fun {loc; guard; packing_ft} ->
+               let@ _ = WIT.check loc BT.Bool guard in
+               WPackingFT.welltyped "clause" pd.loc packing_ft
+             ) clauses
       end
 
 end
