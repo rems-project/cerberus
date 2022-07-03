@@ -203,9 +203,6 @@ let pp =
        | Def ((s, abt), body) ->
           braces (BT.pp abt ^^^ Sym.pp s ^^^ !^"->" ^^^ aux false body)
        end
-    | Info (name, []) -> Pp.string (Pp.wrap name)
-    | Info (name, args) ->
-       c_app !^name (List.map (aux false) args)
     | Pred (name, args) ->
        c_app (Sym.pp name) (List.map (aux false) args)
   in
@@ -319,7 +316,6 @@ and free_vars_term_ = function
   | Set_op set_op -> free_vars_set_op set_op
   | CT_pred ct_pred -> free_vars_ct_pred ct_pred
   | Map_op map_op -> free_vars_map_op map_op
-  | Info (str, ts) -> free_vars_info (str, ts)
   | Pred (pred, ts) -> free_vars_pred (pred, ts)
 
 and free_vars (IT (term_, _bt)) =
@@ -440,7 +436,6 @@ and fold_term_ f binders acc = function
   | Set_op set_op -> fold_set_op f binders acc set_op
   | CT_pred ct_pred -> fold_ct_pred f binders acc ct_pred
   | Map_op map_op -> fold_map_op f binders acc map_op
-  | Info (str, ts) -> fold_info f binders acc (str, ts)
   | Pred (pred, ts) -> fold_pred f binders acc (pred, ts)
 
 and fold f binders acc (IT (term_, _bt)) =
@@ -619,8 +614,6 @@ let rec subst (su : typed subst) (IT (it, bt)) =
           Def ((s, abt), subst su body)
      in
      IT (Map_op map_op, bt)
-  | Info (name, args) ->
-     IT (Info (name, List.map (subst su) args), bt)
   | Pred (name, args) ->
      IT (Pred (name, List.map (subst su) args), bt)
 
@@ -953,8 +946,6 @@ let make_array_ ~item_bt items (* assumed all of item_bt *) =
   
 
 
-let info_ name args =
-  IT (Info (name, args), BT.Bool)
 
 let pred_ name args rbt =
   IT (Pred (name, args), rbt)

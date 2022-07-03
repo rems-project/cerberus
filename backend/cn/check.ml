@@ -290,12 +290,6 @@ end
 
 
 
-(* info gathered during spine judgements, per path through a
-   function/procedure, which are only useful once this has completed
-   for all paths *)
-type per_path_info_entry =
-  SuggestEqsData of SuggestEqs.constraint_analysis
-type per_path = per_path_info_entry list
 
 
 
@@ -760,18 +754,6 @@ and check_pexpr (pe : 'bty mu_pexpr) ~(expect:BT.t) : (lvt, type_error) m =
        let@ v1 = aux e1 c in
        let@ v2 = aux e2 (not_ c) in
        return (ite_ (c, v1, v2))
-    (* | M_PEcase (pe, pats_es) -> *)
-    (*    let@ arg = infer_pexpr pe in *)
-    (*    let@ per_paths = ListM.mapM (fun (pat, pe) -> *)
-    (*        pure begin *)
-    (*            let@ () = pattern_match arg.value pat in *)
-    (*            let@ provable = provable loc in *)
-    (*            match provable (t_ (bool_ false)) with *)
-    (*            | `True -> return [] *)
-    (*            | `False -> check_tpexpr_in [loc_of_tpexpr pe; loc] pe typ *)
-    (*          end *)
-    (*      ) pats_es in *)
-    (*    return (List.concat per_paths) *)
     | M_PElet (M_Pat p, e1, e2) ->
        let@ fin = begin_trace_of_pure_step (Some (Mu.M_Pat p)) e1 in
        let@ patv, (l, a) = pattern_match p in
@@ -812,17 +794,17 @@ and check_pexpr (pe : 'bty mu_pexpr) ~(expect:BT.t) : (lvt, type_error) m =
 module Spine : sig
 
   val calltype_ft : 
-    Loc.t -> (_ mu_pexpr) list -> AT.ft -> (RT.t * per_path, type_error) m
+    Loc.t -> (_ mu_pexpr) list -> AT.ft -> (RT.t, type_error) m
   val calltype_ift : 
-    Loc.t -> (_ mu_pexpr) list -> AT.ift -> (IT.t * per_path, type_error) m
+    Loc.t -> (_ mu_pexpr) list -> AT.ift -> (IT.t, type_error) m
   val calltype_lft : 
-    Loc.t -> LAT.lft -> (LRT.t * per_path, type_error) m
+    Loc.t -> LAT.lft -> (LRT.t, type_error) m
   val calltype_lt : 
-    Loc.t -> (_ mu_pexpr) list -> AT.lt * label_kind -> (per_path, type_error) m
+    Loc.t -> (_ mu_pexpr) list -> AT.lt * label_kind -> (unit, type_error) m
   val calltype_packing : 
-    Loc.t -> Sym.t -> LAT.packing_ft -> (OutputDef.t * per_path, type_error) m
+    Loc.t -> Sym.t -> LAT.packing_ft -> (OutputDef.t, type_error) m
   val subtype : 
-    Loc.t -> LRT.t -> (per_path, type_error) m
+    Loc.t -> LRT.t -> (unit, type_error) m
 end = struct
 
 
@@ -934,13 +916,9 @@ end = struct
       check [] ftyp
     in
 
-    let@ constraints = all_constraints () in
-    let per_path = SuggestEqs.eqs_from_constraints (LCSet.elements constraints) cs
-      |> Option.map (fun x -> SuggestEqsData x) |> Option.to_list in
-
     let@ () = return (debug 9 (lazy !^"done")) in
     time_log_end start_spine;
-    return (rt, per_path)
+    return rt
 
 
   let spine rt_subst rt_pp loc situation args ftyp =
@@ -976,35 +954,35 @@ end = struct
     spine_l rt_subst rt_pp loc situation ftyp
 
 
-  let calltype_ft loc args (ftyp : AT.ft) : (RT.t * per_path, type_error) m =
+  let calltype_ft loc args (ftyp : AT.ft) : (RT.t, type_error) m =
     spine RT.subst RT.pp loc FunctionCall args ftyp
 
-  let calltype_ift loc args (ftyp : AT.ift) : (IT.t * per_path, type_error) m =
+  let calltype_ift loc args (ftyp : AT.ift) : (IT.t, type_error) m =
     spine IT.subst IT.pp loc FunctionCall args ftyp
 
-  let calltype_lft loc (ftyp : LAT.lft) : (LRT.t * per_path, type_error) m =
+  let calltype_lft loc (ftyp : LAT.lft) : (LRT.t, type_error) m =
     spine_l LRT.subst LRT.pp loc FunctionCall ftyp
 
-  let calltype_lt loc args ((ltyp : AT.lt), label_kind) : (per_path, type_error) m =
-    let@ (False.False, per_path) =
+  let calltype_lt loc args ((ltyp : AT.lt), label_kind) : (unit, type_error) m =
+    let@ (False.False) =
       spine False.subst False.pp 
         loc (LabelCall label_kind) args ltyp
     in
-    return per_path
+    return ()
 
   let calltype_packing loc (name : Sym.t) (ft : LAT.packing_ft)
-        : (OutputDef.t * per_path, type_error) m =
+        : (OutputDef.t, type_error) m =
     spine_l OutputDef.subst OutputDef.pp 
       loc (PackPredicate name) ft
 
   (* The "subtyping" judgment needs the same resource/lvar/constraint
      inference as the spine judgment. So implement the subtyping
      judgment 'arg <: LRT' by type checking 'f()' for 'f: LRT -> False'. *)
-  let subtype (loc : loc) (rtyp : LRT.t) : (per_path, type_error) m =
+  let subtype (loc : loc) (rtyp : LRT.t) : (unit, type_error) m =
     let lft = LAT.of_lrt rtyp (LAT.I False.False) in
-    let@ (False.False, per_path) =
+    let@ (False.False) =
       spine_l False.subst False.pp loc Subtyping lft in
-    return per_path
+    return ()
 
 
 end
@@ -1050,7 +1028,7 @@ let all_empty loc =
 type labels = (AT.lt * label_kind) SymMap.t
 
 
-let check_expr labels ~(expect:BT.t) (e : 'bty mu_expr) : (RT.t * per_path, type_error) m =
+let check_expr labels ~(expect:BT.t) (e : 'bty mu_expr) : (RT.t, type_error) m =
   let (M_Expr (loc, _annots, e_)) = e in
   let@ () = print_with_ctxt (fun ctxt ->
        debug 3 (lazy (action "inferring expression"));
@@ -1061,14 +1039,14 @@ let check_expr labels ~(expect:BT.t) (e : 'bty mu_expr) : (RT.t * per_path, type
   let@ result = match e_ with
     | M_Epure pe -> 
        let@ lvt = check_pexpr ~expect pe in
-       return (rt_of_lvt lvt, [])
+       return (rt_of_lvt lvt)
     | M_Ememop memop ->
        let pointer_op op pe1 pe2 = 
          let@ arg1 = check_pexpr ~expect:Loc pe1 in
          let@ arg2 = check_pexpr ~expect:Loc pe2 in
          let lvt = op (arg1, arg2) in
          let@ () = WellTyped.ensure_base_type loc ~expect (IT.bt lvt) in
-         return (rt_of_lvt lvt, [])
+         return (rt_of_lvt lvt)
        in
        begin match memop with
        | M_PtrEq (asym1, asym2) -> 
@@ -1098,7 +1076,7 @@ let check_expr labels ~(expect:BT.t) (e : 'bty mu_expr) : (RT.t * per_path, type
                      pointerToIntegerCast_ arg2),
                int_ divisor)
           in
-          return (rt_of_lvt value, [])
+          return (rt_of_lvt value)
 
 
        | M_IntFromPtr (act_from, act_to, pe) ->
@@ -1121,30 +1099,30 @@ let check_expr labels ~(expect:BT.t) (e : 'bty mu_expr) : (RT.t * per_path, type
                  )
             end
           in
-          return (rt_of_lvt value, [])
+          return (rt_of_lvt value)
        | M_PtrFromInt (act_from, act2_to, pe) ->
           let@ () = WellTyped.ensure_base_type loc ~expect Loc in
           let@ () = WellTyped.WCT.is_ct act_from.loc act_from.ct in
           let@ () = WellTyped.WCT.is_ct act2_to.loc act2_to.ct in
           let@ arg = check_pexpr ~expect:Integer pe in
           let value = integerToPointerCast_ arg in
-          return (rt_of_lvt value, [])
+          return (rt_of_lvt value)
        | M_PtrValidForDeref (act, pe) ->
           let@ () = WellTyped.ensure_base_type loc ~expect Bool in
           (* check *)
           let@ () = WellTyped.WCT.is_ct act.loc act.ct in
           let@ arg = check_pexpr ~expect:Loc pe in
           let value = aligned_ (arg, act.ct) in
-          return (rt_of_lvt value, [])
+          return (rt_of_lvt value)
        | M_PtrWellAligned (act, pe) ->
           let@ () = WellTyped.ensure_base_type loc ~expect Bool in
           let@ () = WellTyped.WCT.is_ct act.loc act.ct in
           let@ arg = check_pexpr ~expect:Loc pe in
           let value = aligned_ (arg, act.ct) in
-          return (rt_of_lvt value, [])
+          return (rt_of_lvt value)
        | M_PtrArrayShift (pe1, act, pe2) ->
           let@ lvt = check_array_shift loc ~expect pe1 (act.loc, act.ct) pe2 in
-          return (rt_of_lvt lvt, [])
+          return (rt_of_lvt lvt)
        | M_Memcpy _ (* (asym 'bty * asym 'bty * asym 'bty) *) ->
           Debug_ocaml.error "todo: M_Memcpy"
        | M_Memcmp _ (* (asym 'bty * asym 'bty * asym 'bty) *) ->
@@ -1184,7 +1162,7 @@ let check_expr labels ~(expect:BT.t) (e : 'bty mu_expr) : (RT.t * per_path, type
             LRT.Resource (resource, (loc, None), 
             LRT.I))))
           in
-          return (rt, [])
+          return (rt)
        | M_CreateReadOnly (sym1, ct, sym2, _prefix) -> 
           Debug_ocaml.error "todo: CreateReadOnly"
        | M_Alloc (ct, sym, _prefix) -> 
@@ -1203,7 +1181,7 @@ let check_expr labels ~(expect:BT.t) (e : 'bty mu_expr) : (RT.t * per_path, type
               iargs = [];
             }, None)
           in
-          return (rt_of_lvt unit_, [])
+          return (rt_of_lvt unit_)
        | M_Store (_is_locking, act, p_pe, v_pe, mo) -> 
           let@ () = WellTyped.ensure_base_type loc ~expect Unit in
           let@ () = WellTyped.WCT.is_ct act.loc act.ct in
@@ -1261,7 +1239,7 @@ let check_expr labels ~(expect:BT.t) (e : 'bty mu_expr) : (RT.t * per_path, type
             Constraint (value_constr, (loc, None),
             LRT.I)))
           in
-          return (rt, [])
+          return (rt)
        | M_Load (act, p_pe, _mo) -> 
           let@ () = WellTyped.WCT.is_ct act.loc act.ct in
           let@ () = WellTyped.ensure_base_type loc ~expect (BT.of_sct act.ct) in
@@ -1292,7 +1270,7 @@ let check_expr labels ~(expect:BT.t) (e : 'bty mu_expr) : (RT.t * per_path, type
             Constraint (t_ (good_ (act.ct, value)), (loc, None),
             LRT.I)))
           in
-          return (rt, [])
+          return (rt)
        | M_RMW (ct, sym1, sym2, sym3, mo1, mo2) -> 
           Debug_ocaml.error "todo: RMW"
        | M_Fence mo -> 
@@ -1312,7 +1290,7 @@ let check_expr labels ~(expect:BT.t) (e : 'bty mu_expr) : (RT.t * per_path, type
        end
     | M_Eskip -> 
        let@ () = WellTyped.ensure_base_type loc ~expect Unit in
-       return (rt_of_lvt unit_, [])
+       return (rt_of_lvt unit_)
     | M_Eccall (act, f_pe, pes) ->
        (* todo: do anything with act? *)
        let@ () = WellTyped.WCT.is_ct act.loc act.ct in
@@ -1408,9 +1386,9 @@ let check_expr labels ~(expect:BT.t) (e : 'bty mu_expr) : (RT.t * per_path, type
                  record_ (List.map (fun (o : OutputDef.entry) -> (o.name, o.value)) outputs))
           in
           let lrt = LRT.concat condition (Constraint (t_ lc, (loc, None), I)) in
-          return (RT.Computational ((Sym.fresh (), BT.Unit), (loc, None), lrt), [])
+          return (RT.Computational ((Sym.fresh (), BT.Unit), (loc, None), lrt))
        | Pack ->
-          let@ (output_assignment, per_path) = Spine.calltype_packing loc pname right_clause in
+          let@ (output_assignment) = Spine.calltype_packing loc pname right_clause in
           let output = record_ (List.map (fun (o : OutputDef.entry) -> (o.name, o.value)) output_assignment) in
           let oarg_s, oarg = IT.fresh (IT.bt output) in
           let resource = 
@@ -1427,7 +1405,7 @@ let check_expr labels ~(expect:BT.t) (e : 'bty mu_expr) : (RT.t * per_path, type
              Constraint (t_ (eq_ (oarg, output)), (loc, None), 
              LRT.I))))
           in
-          return (rt, per_path)
+          return (rt)
        end
     | M_Erpredicate (pack_unpack, TPU_Struct tag, pes) ->
        let@ () = WellTyped.ensure_base_type loc ~expect Unit in
@@ -1453,7 +1431,7 @@ let check_expr labels ~(expect:BT.t) (e : 'bty mu_expr) : (RT.t * per_path, type
             LRT.Constraint (t_ (eq_ (oargs, resource_oargs)), (loc, None),
             LRT.I)))
           in
-          return (rt, [])
+          return (rt)
        | Unpack ->
           let situation = TypeErrors.UnpackStruct tag in
           let@ resources = 
@@ -1468,7 +1446,7 @@ let check_expr labels ~(expect:BT.t) (e : 'bty mu_expr) : (RT.t * per_path, type
               ) [] resources in
           let lrt = LRT.mResources resources (LRT.mConstraints constraints LRT.I) in
           let rt = RT.Computational ((Sym.fresh (), BT.Unit), (loc, None), lrt) in
-          return (rt, [])
+          return (rt)
        end
     | M_Elpredicate (have_show, pname, asyms) ->
        unsupported loc !^"have/show"
@@ -1491,16 +1469,16 @@ let check_expr labels ~(expect:BT.t) (e : 'bty mu_expr) : (RT.t * per_path, type
            ) (LCSet.elements constraints)
        in
        let lrt = LRT.mConstraints extra_assumptions LRT.I in
-       return (RT.Computational ((Sym.fresh (), Unit), (loc, None), lrt), [])
+       return (RT.Computational ((Sym.fresh (), Unit), (loc, None), lrt))
   in
-  debug 3 (lazy (RT.pp (fst result)));
+  debug 3 (lazy (RT.pp result));
   return result
 
 (* check_expr: type checking for impure epressions; type checks `e`
    against `typ`, which is either a return type or `False`; returns
    either an updated environment, or `False` in case of Goto *)
 let rec check_texpr labels (e : 'bty mu_texpr) (typ : RT.t orFalse) 
-        : (per_path, type_error) m =
+        : (unit, type_error) m =
 
   let@ () = increase_trace_length () in
   let (M_TExpr (loc, _annots, e_)) = e in
@@ -1519,33 +1497,21 @@ let rec check_texpr labels (e : 'bty mu_texpr) (typ : RT.t orFalse)
                let@ () = add_c (t_ lc) in
                let@ provable = provable loc in
                match provable (t_ (bool_ false)) with
-               | `True -> return []
+               | `True -> return ()
                | `False ->
                   let start = time_log_start (nm ^ " branch") (Locations.to_string loc) in
-                  let@ per_path = check_texpr_in [loc_of_texpr e; loc] labels e typ in
+                  let@ () = check_texpr_in [loc_of_texpr e; loc] labels e typ in
                   time_log_end start;
-                  return per_path
+                  return ()
              end
        in
-       let@ per_path1 = aux carg "true" e1 in
-       let@ per_path2 = aux (not_ carg) "false" e2 in
-       return (per_path1 @ per_path2)
+       let@ () = aux carg "true" e1 in
+       let@ () = aux (not_ carg) "false" e2 in
+       return ()
     | M_Ebound e ->
        check_texpr labels e typ 
     | M_End _ ->
        Debug_ocaml.error "todo: End"
-    (* | M_Ecase (c_pe, pats_es) -> *)
-    (*    let@ arg = infer_pexpr c_pe in *)
-    (*    let@ per_paths = ListM.mapM (fun (pat, pe) -> *)
-    (*        pure begin *)
-    (*            let@ () = pattern_match arg.value pat in *)
-    (*            let@ provable = provable loc in *)
-    (*            match provable (t_ (bool_ false)) with *)
-    (*            | `True -> return [] *)
-    (*            | `False -> check_texpr_in [loc_of_texpr pe; loc] labels pe typ *)
-    (*          end *)
-    (*      ) pats_es in *)
-    (*    return (List.concat per_paths) *)
     | M_Elet (M_Pat p, e1, e2) ->
 (*       let@ fin = begin_trace_of_step (Some (Mu.M_Pat p)) e1 in *)
        let@ patv, (l, a) = pattern_match p in
@@ -1559,23 +1525,23 @@ let rec check_texpr labels (e : 'bty mu_texpr) (typ : RT.t orFalse)
     | M_Esseq (p, e1, e2) ->
        let@ patv, (l, a) = pattern_match p in
        let@ fin = begin_trace_of_step (Some (Mu.M_Pat p)) e1 in
-       let@ (rt1, per_path1) = check_expr labels ~expect:(IT.bt patv) e1 in
+       let@ rt1 = check_expr labels ~expect:(IT.bt patv) e1 in
        let@ (bt, s') = bind_logically (Some (Loc loc)) rt1 in
        let@ () = add_ls l in
        let@ () = add_as a in
        let@ () = add_c (t_ (def_ s' patv)) in
        let@ () = fin () in
-       let@ per_path2 = check_texpr labels e2 typ in
-       return (per_path1 @ per_path2)
+       let@ () = check_texpr labels e2 typ in
+       return ()
     | M_Edone e ->
        begin match typ with
        | Normal (Computational ((return_s, return_bt), info, lrt)) ->
-          let@ (returned_rt, per_path1) = check_expr labels ~expect:return_bt e in
+          let@ (returned_rt) = check_expr labels ~expect:return_bt e in
           let@ (arg_bt, arg_s) = bind_logically (Some (Loc loc)) returned_rt in
           let lrt = LRT.subst (IT.make_subst [(return_s, sym_ (arg_s, arg_bt))]) lrt in
-          let@ per_path2 = Spine.subtype loc lrt in
+          let@ () = Spine.subtype loc lrt in
           let@ () = all_empty loc in
-          return (per_path1 @ per_path2)
+          return ()
        | False ->
           let err = 
             "This expression returns but is expected "^
@@ -1588,9 +1554,9 @@ let rec check_texpr labels (e : 'bty mu_texpr) (typ : RT.t orFalse)
          | None -> fail (fun _ -> {loc; msg = Generic (!^"undefined code label" ^/^ Sym.pp label_sym)})
          | Some (lt,lkind) -> return (lt,lkind)
        in
-       let@ per_path = Spine.calltype_lt loc pes (lt,lkind) in
+       let@ () = Spine.calltype_lt loc pes (lt,lkind) in
        let@ () = all_empty loc in
-       return per_path
+       return ()
 
   in
   return result
@@ -1604,7 +1570,7 @@ and check_texpr_in locs labels e typ =
 let check_pexpr_rt loc pexpr (RT.Computational ((return_s, return_bt), info, lrt)) =
   let@ lvt = check_pexpr pexpr ~expect:return_bt in
   let lrt = LRT.subst (IT.make_subst [(return_s, lvt)]) lrt in
-  let@ _per_path = Spine.subtype loc lrt in
+  let@ () = Spine.subtype loc lrt in
   let@ () = all_empty loc in
   return ()
 
@@ -1728,11 +1694,11 @@ let check_procedure
           ) label_defs SymMap.empty 
       in
       (* check each label *)
-      let check_label lsym def per_path1 =
+      let check_label lsym def =
         pure begin 
           match def with
           | M_Return (loc, lt) ->
-             return per_path1
+             return ()
           | M_Label (loc, lt, args, body, annots) ->
              debug 2 (lazy (headline ("checking label " ^ Sym.pp_string lsym)));
              debug 2 (lazy (item "type" (AT.pp False.pp lt)));
@@ -1744,8 +1710,8 @@ let check_procedure
                check_and_bind_arguments False.subst loc args lt 
              in
              let@ () = ListM.iterM (add_r (Some (Label label_name))) resources in
-             let@ per_path2 = check_texpr_in [loc] labels body False in
-             return (per_path1 @ per_path2)
+             let@ () = check_texpr_in [loc] labels body False in
+             return ()
           end
       in
       let check_body () = 
@@ -1755,9 +1721,8 @@ let check_procedure
             check_texpr labels body (Normal rt)
           end
       in
-      let@ per_path = check_body () in
-      let@ per_path = PmapM.foldM check_label label_defs per_path in
-      (* let@ () = do_post_typing per_path in *)
+      let@ () = check_body () in
+      let@ () = PmapM.iterM check_label label_defs in
       return ()
     end
 

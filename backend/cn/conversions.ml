@@ -1118,9 +1118,9 @@ let mod_mappings mapping_names mappings f =
         mapping
     ) mappings
 
-let get_mappings_info (mappings : mapping StringMap.t) (mapping_name : string) =
-  SuggestEqs.make_mappings_info (StringMap.find mapping_name mappings
-    |> List.map (fun {path; it; _} -> (Pp.plain (Ast.Terms.pp true path), it)))
+(* let get_mappings_info (mappings : mapping StringMap.t) (mapping_name : string) = *)
+(*   SuggestEqs.make_mappings_info (StringMap.find mapping_name mappings *)
+(*     |> List.map (fun {path; it; _} -> (Pp.plain (Ast.Terms.pp true path), it))) *)
 
 let make_fun_spec loc (layouts : Memory.struct_decls) rpredicates lpredicates
       fsym (fspec : function_spec)
@@ -1228,8 +1228,6 @@ let make_fun_spec loc (layouts : Memory.struct_decls) rpredicates lpredicates
       (i, mappings) fspec.pre_condition
   in
 
-  let start_naming = SuggestEqs.make_naming "start" (get_mappings_info mappings "start") in
-  let i = i @ [(`Constraint (LC.t_ start_naming), (loc, None))] in
 
   (* ret *)
   let (oA, o, mappings) = 
@@ -1313,8 +1311,6 @@ let make_fun_spec loc (layouts : Memory.struct_decls) rpredicates lpredicates
       (o, mappings) fspec.post_condition
   in
 
-  let end_naming = SuggestEqs.make_naming "end" (get_mappings_info mappings "end") in
-  let o = o @ [(`Constraint (LC.t_ end_naming), (loc, None))] in
 
   let lrt = 
     List.fold_right (fun (oarg, info) lrt ->
@@ -1452,8 +1448,6 @@ let make_label_spec
       (i, mappings) lspec.invariant
   in
 
-  let inv_naming = SuggestEqs.make_naming lname (get_mappings_info mappings lname) in
-  let i = i @ [(`Constraint (LC.t_ inv_naming), (loc, None))] in
 
   let llt =
     List.fold_right (fun (iarg, info) lt ->

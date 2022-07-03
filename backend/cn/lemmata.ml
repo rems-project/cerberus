@@ -282,7 +282,6 @@ let bt_to_coq ci loc_info =
 let it_adjust ci it =
   let rec f t =
     match IT.term t with
-    | IT.Info _ -> IT.bool_ true
     | IT.Bool_op op -> begin match op with
         | IT.And xs ->
             let xs = List.map f xs |> List.partition IT.is_true |> snd in
@@ -487,7 +486,6 @@ let it_to_coq ci it =
         | IT.Z z -> rets (Z.to_string z)
         | _ -> fail "it_to_coq: unsupported lit" (IT.pp t)
     end
-    | IT.Info _ -> aux (IT.bool_ true)
     | IT.Arith_op op -> begin match op with
         | Add (x, y) -> abinop "+" x y
         | Sub (x, y) -> abinop "-" x y

@@ -506,7 +506,6 @@ module Translate = struct
               (Z3.Quantifier.mk_lambda_const context
                  [term (sym_ (q_s, q_bt))] (term body))
          end
-      | Info (_, _) -> Z3.Boolean.mk_true context
       | Pred (name, args) ->
          let def = Option.get (get_logical_predicate_def global name) in
          begin match def.definition with
