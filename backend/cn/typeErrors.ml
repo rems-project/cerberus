@@ -23,19 +23,33 @@ type access =
   | Kill
   | Free
 
-type situation =
-  | Access of access
-  | FunctionCall
+type call_situation =
+  | FunctionCall 
   | LabelCall of label_kind
   | Subtyping
   | PackPredicate of Sym.t
   | PackStruct of Sym.t
   | UnpackPredicate of Sym.t
   | UnpackStruct of Sym.t
-  | ArgumentInference of Sym.t
 
-let checking_situation = function
-  | Access access -> !^"checking access"
+let call_prefix = function
+  | FunctionCall -> "call"
+  | LabelCall Return -> "return"
+  | LabelCall Loop -> "loop"
+  | LabelCall Other -> "goto"
+  | Subtyping -> "return"
+  | PackPredicate _ -> "pack"
+  | PackStruct _ -> "pack_struct"
+  | UnpackPredicate _ -> "unpack"
+  | UnpackStruct _ -> "unpack_struct"
+
+
+type situation =
+  | Access of access
+  | Call of call_situation
+
+
+let call_situation = function
   | FunctionCall -> !^"checking function call"
   | LabelCall Return -> !^"checking return"
   | LabelCall Loop -> !^"checking loop entry"
@@ -45,7 +59,11 @@ let checking_situation = function
   | PackStruct tag -> !^"packing struct" ^^^ Sym.pp tag
   | UnpackPredicate name -> !^"unpacking predicate" ^^^ Sym.pp name
   | UnpackStruct tag -> !^"unpacking struct" ^^^ Sym.pp tag
-  | ArgumentInference id -> !^"argument inference for" ^^^ Sym.pp id
+
+let checking_situation = function
+  | Access access -> !^"checking access"
+  | Call s -> call_situation s
+
 
 let for_access = function
   | Kill -> !^"for de-allocating"
@@ -58,16 +76,16 @@ let for_access = function
 
 let for_situation = function
   | Access access -> for_access access
-  | FunctionCall -> !^"for calling function"
-  | LabelCall Return -> !^"for returning"
-  | LabelCall Loop -> !^"for loop"
-  | LabelCall Other -> !^"for calling label"
-  | Subtyping -> !^"for subtyping"
-  | PackPredicate name -> !^"for packing predicate" ^^^ Sym.pp name
-  | PackStruct tag -> !^"for packing struct" ^^^ Sym.pp tag
-  | UnpackPredicate name -> !^"for unpacking predicate" ^^^ Sym.pp name
-  | UnpackStruct tag -> !^"for unpacking struct" ^^^ Sym.pp tag
-  | ArgumentInference id -> !^"for argument inference for" ^^^ Sym.pp id
+  | Call FunctionCall -> !^"for calling function"
+  | Call LabelCall Return -> !^"for returning"
+  | Call LabelCall Loop -> !^"for loop"
+  | Call LabelCall Other -> !^"for calling label"
+  | Call Subtyping -> !^"for subtyping"
+  | Call PackPredicate name -> !^"for packing predicate" ^^^ Sym.pp name
+  | Call PackStruct tag -> !^"for packing struct" ^^^ Sym.pp tag
+  | Call UnpackPredicate name -> !^"for unpacking predicate" ^^^ Sym.pp name
+  | Call UnpackStruct tag -> !^"for unpacking struct" ^^^ Sym.pp tag
+
 
 
 

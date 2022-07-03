@@ -19,6 +19,8 @@ module Sym = struct
          "a" ^ string_of_int n
       | SD_Id s -> 
          s
+      | SD_CN_Id s -> 
+         s
       | SD_ObjectAddress name -> 
          "&" ^ name
       | SD_Return -> 

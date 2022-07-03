@@ -55,9 +55,12 @@ let rec subst (substitution: IT.t Subst.t) lrt =
   | I -> 
      I
 
+and alpha_rename_ s' (s, ls) t =
+  (s', subst (IT.make_subst [(s, IT.sym_ (s', ls))]) t)
+
 and alpha_rename (s, ls) t = 
   let s' = Sym.fresh_same s in
-  (s', subst (IT.make_subst [(s, IT.sym_ (s', ls))]) t)
+  alpha_rename_ s' (s, ls) t
 
 and suitably_alpha_rename syms (s, ls) t = 
   if SymSet.mem s syms

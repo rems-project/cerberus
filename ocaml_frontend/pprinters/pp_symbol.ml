@@ -33,6 +33,8 @@ let to_string_cn (Symbol (dig, n, sd)) =
         "a" 
     | SD_Id str -> 
         str 
+    | SD_CN_Id str -> 
+        str 
     | SD_ObjectAddress name -> 
         "&" ^ name
     | SD_Return -> 
@@ -60,6 +62,8 @@ let to_string_pretty_cn (Symbol (_, n, sd) as s) =
     | SD_None -> 
         to_string s
     | SD_Id name -> 
+        name
+    | SD_CN_Id name -> 
         name
     | SD_ObjectAddress name -> 
         "&" ^ name

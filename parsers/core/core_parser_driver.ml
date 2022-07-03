@@ -47,6 +47,7 @@ let parse stdlib =
         | SD_Id str ->
           let std_pos = {Lexing.dummy_pos with Lexing.pos_fname= "core_stdlib"} in
           Pmap.add (str, (std_pos, std_pos)) fsym acc
+        | SD_CN_Id _
         | SD_ObjectAddress _
         | SD_Return
         | SD_FunArg _

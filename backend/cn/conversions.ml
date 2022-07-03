@@ -74,7 +74,7 @@ let sct_of_ct loc ct =
 
 let todo_string_of_sym (CF.Symbol.Symbol (_, _, sd)) =
   match sd with
-    | SD_Id str | SD_ObjectAddress str ->
+    | SD_Id str | SD_CN_Id str | SD_ObjectAddress str ->
         str
     | _ ->
         assert false
@@ -169,7 +169,7 @@ let oarg_name = function
   | None ->
      let i = !resource_counter in
      resource_counter := i + 1;
-     "r" ^ string_of_int i
+     "R" ^ string_of_int i
   | Some name ->
      name
 
@@ -756,7 +756,7 @@ let resolve_index_term loc
        let@ (t_new, _) = resolve t mapping quantifiers in
        return (eq_ (t_new, t_original), None)
     | For ((i, s, j), t) ->
-       let sym = Sym.fresh_pretty s in
+       let sym = Sym.fresh_cn s in
        let@ (t, _) = resolve t mapping ((s, (sym, Integer)) :: quantifiers) in
        let make_int z = 
          try return (Z.to_int z) with
@@ -816,7 +816,7 @@ let rec resolve_typ loc
      begin match ofound with
      | Some (tag, _) -> return (Sctypes.Struct tag)
      | None -> 
-        fail {loc; msg = Unknown_struct (Sym.fresh_pretty str)}
+        fail {loc; msg = Unknown_struct (Sym.fresh_cn str)}
      end
   | Pointer ct ->
      let@ typ = resolve_typ loc layouts predicates log_predicates default_mapping_name mappings oquantifier ct in
@@ -853,7 +853,7 @@ let apply_ownership_spec layouts predicates log_predicates default_mapping_name 
   let oq = match oq with
     | None -> None
     | Some (name, bt, condition) ->
-       let s = Sym.fresh_pretty name in
+       let s = Sym.fresh_cn name in
        Some ((name, (s, bt)), condition)
   in
   let@ (pointer, arguments) = match arguments with

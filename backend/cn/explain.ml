@@ -78,6 +78,7 @@ let find_class p classes =
 let good_description s = 
   match Sym.description s with
   | Sym.SD_Id _ -> None
+  | Sym.SD_CN_Id str -> Some (Ast.Var str)
   | Sym.SD_None -> None
   | Sym.SD_ObjectAddress name -> Some (Ast.Addr name)
   | Sym.SD_Return -> Some (Ast.Var "return")

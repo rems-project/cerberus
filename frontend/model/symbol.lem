@@ -77,6 +77,7 @@ end
 type symbol_description =
   | SD_None
   | SD_Id of string
+  | SD_CN_Id of string
   | SD_ObjectAddress of string
   | SD_Return
   | SD_FunArgValue of string
@@ -100,6 +101,8 @@ let show_symbol_description sd =
      "SD_None"
   | SD_Id str -> 
      "SD_Id("^show str^")"
+  | SD_CN_Id str -> 
+     "SD_CN_Id("^show str^")"
   | SD_ObjectAddress name -> 
      "SD_ObjectAddress" ^ show name
   | SD_Return ->
@@ -227,6 +230,10 @@ let fresh () =
 val fresh_pretty : string -> sym
 let fresh_pretty str =
   Symbol (digest()) (fresh_int ()) (SD_Id str)
+
+val fresh_cn : string -> sym
+let fresh_cn str =
+  Symbol (digest()) (fresh_int ()) (SD_CN_Id str)
 
 val fresh_pretty_with_id : (nat -> string) -> sym
 let fresh_pretty_with_id mkStr =

@@ -30,13 +30,19 @@ let num = S.symbol_num
 
 let fresh () = S.fresh ()
 
-let fresh_named = S.fresh_pretty
+let fresh_pretty = fresh_cn
+let fresh_named = fresh_cn
+
 let fresh_description = S.fresh_description
 
 let fresh_same (s : t) : t =
   fresh_description (S.symbol_description s)
 
-
+let has_id = function
+  | CF.Symbol.Symbol (digest, nat, SD_Id str) ->
+     Some str
+  | _ -> 
+     None
 
 
 
