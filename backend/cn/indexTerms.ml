@@ -454,11 +454,14 @@ let fold_subterms : 'a 'bt. ((Sym.t * BT.t) list -> 'a -> 'bt term -> 'a) -> 'a 
   fun f acc t -> fold f [] acc t
 
 
-let is_pred (pred: Id.t) = function
-  | IT (Pred (name, _), _) when String.equal (Sym.pp_string name) (Id.s pred) -> true
+let is_pred (pred: string) (IT (it_, bt)) = 
+  match pred, it_ with
+  | _, Pred (name, _) when String.equal (Sym.pp_string name) pred -> true
+  | "good", CT_pred (Good _) -> true
   | _ -> false
 
 let mentions_pred (pred: Id.t) =
+  let pred = Id.s pred in
   fold_subterms (fun _binders acc it ->
       acc || is_pred pred it
     ) false

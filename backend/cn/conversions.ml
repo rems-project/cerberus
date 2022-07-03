@@ -186,9 +186,10 @@ let make_owned_funarg floc i (pointer : IndexTerms.t) path sct =
      let oarg_s = Sym.fresh_named oarg_name in
      let oarg_members = Resources.owned_oargs sct in
      let oarg = sym_ (oarg_s, oarg_members) in
+     let value = recordMember_ ~member_bt:(BT.of_sct sct) (oarg, Resources.value_sym) in
      let mapping = [{
          path = Ast.pointee path; 
-         it = recordMember_ ~member_bt:(BT.of_sct sct) (oarg, Resources.value_sym);
+         it = value;
          o_sct = Some sct;
        }]
      in
@@ -203,7 +204,12 @@ let make_owned_funarg floc i (pointer : IndexTerms.t) path sct =
            oarg_members),
         (floc, Some (descr ^ " ownership")))
      in
-     ([r], mapping)
+     let c = 
+       (`Constraint
+          (LC.t_ (good_ (sct, value))),
+          (floc, Some (descr ^ " good")))
+     in
+     ([r;c], mapping)
 
 
 let make_owned ~loc ~oname ~pointer ~path ~sct ~o_permission =
@@ -228,17 +234,23 @@ let make_owned ~loc ~oname ~pointer ~path ~sct ~o_permission =
            it = oarg; 
            o_sct = None } :: mapping
      in
+     let permission = Option.value o_permission ~default:(bool_ true) in
      let r = 
        (`Resource (oarg_s, P {
            name = Owned sct; 
            pointer; 
-           permission = Option.value o_permission ~default:(bool_ true); 
+           permission = permission; 
            iargs = [];
           },
           oarg_members),
         (loc, None))
      in
-     return ([r], mapping)
+     let c = 
+       (`Constraint 
+          (LC.t_ (impl_ (permission, good_ (sct, pointee_t)))),
+        (loc, None))
+     in
+     return ([r;c], mapping)
 
 
 let make_block ~loc ~oname ~pointer ~path ~sct ~o_permission =
@@ -306,7 +318,20 @@ let make_qowned ~loc ~oname ~pointer ~q:(qs,qbt) ~step ~condition ~path ~sct =
           oarg_members),
         (loc, Some "ownership"))
      in
-     return ([r], mapping)
+     let c = 
+       let value_t = 
+         recordMember_ ~member_bt:(BT.Map (Integer, BT.of_sct sct))
+           (oarg, Resources.value_sym)
+       in
+       let q = sym_ (qs, qbt) in
+       (`Constraint 
+          (LC.forall_ (qs, qbt) (
+               impl_ (and_ [le_ (int_ 0, q); condition],
+                      good_ (sct, map_get_ value_t q))
+          )),
+        (loc, Some "good"))
+     in
+     return ([r;c], mapping)
 
 
 

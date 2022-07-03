@@ -381,15 +381,20 @@ let page_alloc_predicates struct_decls =
 
     let pool_oarg_s, pool_oarg = IT.fresh (snd pool_resource) in
 
-    let metadata_owned = 
-      LRT.Resource ((pool_oarg_s, pool_resource), (loc, None), 
-      LRT.I)
-    in
-
 
     let pool_value = (recordMember_ ~member_bt:(BT.Struct hyp_pool_tag) (pool_oarg, value_sym)) in
 
-    let vmemmap_resource = 
+    let good_pool = t_ (good_ (Struct hyp_pool_tag, pool_value)) in
+
+    let metadata_owned = 
+      LRT.Resource ((pool_oarg_s, pool_resource), (loc, None), 
+      LRT.Constraint (good_pool, (loc, None),
+      LRT.I))
+    in
+
+
+
+    let vmemmap_resource, ((vmemmap_qs, vmemmap_q), vmemmap_permission) = 
       Aux.vmemmap_resource ~vmemmap_pointer
         ~range_start:(pool_value %. "range_start")
         ~range_end:(pool_value %. "range_end")
@@ -398,9 +403,24 @@ let page_alloc_predicates struct_decls =
     let vmemmap_oarg_s, vmemmap_oarg = 
       IT.fresh (snd vmemmap_resource) in
 
+    let good_vmemmap = 
+      let value_it = 
+        recordMember_
+          ~member_bt:(Map (Integer, Struct hyp_page_tag))
+          (vmemmap_oarg, Resources.value_sym)
+      in
+      let q_s = vmemmap_qs in
+      let q = vmemmap_q in
+      forall_ (q_s, IT.bt q) (
+          impl_ (and_ [le_ (int_ 0, q); vmemmap_permission],
+                 good_ (Struct hyp_page_tag, map_get_ value_it q))
+        )
+    in
+
     let vmemmap_metadata_owned =
       LRT.Resource ((vmemmap_oarg_s, vmemmap_resource), (loc, None), 
-      LRT.I)
+      LRT.Constraint (good_vmemmap, (loc, None),
+      LRT.I))
     in
 
     let vmemmap_value = (recordMember_ ~member_bt:(Map (Integer, BT.Struct hyp_page_tag)) (vmemmap_oarg, value_sym)) in
