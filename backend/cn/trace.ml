@@ -212,7 +212,7 @@ let reg_snippet2 opt_loc file_lines = match Option.bind opt_loc Locations.is_reg
           end
     in
     r ^^ colon ^^^ snip
- 
+
 let format_group model file_lines (opt_region, steps) =
   let open Pp in
   let l1 = !^ "Executing" ^^^ reg_snippet2 opt_region file_lines in
@@ -222,17 +222,22 @@ let format_group model file_lines (opt_region, steps) =
   let step_docs = List.map (format_mu_step model) steps in
   hang 4 (Pp.flow Pp.hardline (l1 :: bit1 @ (!^ "") :: step_docs)) ^^ hardline
 
+let format_init_step model step =
+  let open Pp in
+  let l1 = !^ "Initial state:" in
+  let ct = step.ct_before in
+  hang 4 (Pp.flow Pp.hardline (l1 :: format_delta model Context.empty ct))
+
+
 let format_trace model (tr : t) = match tr.mu_trace with
   | [] -> Pp.string "empty trace"
   | fin_step :: _ ->
     let fin_ctxt = fin_step.ct_after in
     let locs = fin_ctxt.statement_locs in
-    let groups = List.rev tr.mu_trace |> group_to_statements locs in
+    let tr_ord = List.rev tr.mu_trace in
+    let init_step = format_init_step model (List.hd tr_ord) in
+    let groups = tr_ord |> group_to_statements locs in
     let file_lines = get_file_lines groups in
-    let len1 = List.length tr.mu_trace in
-    let len2 = List.map snd groups |> List.concat |> List.length in
-    let open Pp in
-    Pp.int len1 ^^ Pp.comma ^^ Pp.int len2 ^^ hardline ^^
-        Pp.flow_map Pp.hardline (format_group model file_lines) groups
+    Pp.flow Pp.hardline (init_step :: List.map (format_group model file_lines) groups)
 
 
