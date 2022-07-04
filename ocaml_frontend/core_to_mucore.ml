@@ -91,10 +91,12 @@ let ensure_ctype__pexpr loc = function
   | _ -> None
 
 
+let loc_error loc msg = error (msg ^ " (" ^ Loc.location_to_string loc ^ ")")
+
 let fensure_ctype__pexpr loc err pe : 'TY act = 
   match ensure_ctype__pexpr loc pe with
   | Some ctype -> ctype
-  | None -> error (err ^ " (" ^ Loc.location_to_string loc ^ ")")
+  | None -> loc_error loc err
 
 
 
@@ -107,17 +109,17 @@ let core_to_mu__ctor loc ctor : mu_ctor =
   | Core.Ctuple -> M_Ctuple
   | Core.Carray -> M_Carray
   | Core.Cspecified -> M_Cspecified
-  | Core.CivCOMPL -> error ("core_anormalisation: CivCOMPL")
-  | Core.CivAND-> error ("core_anormalisation: CivAND")
-  | Core.CivOR -> error ("core_anormalisation: CivOR")
-  | Core.CivXOR -> error ("core_anormalisation: CivXOR")
-  | Core.Cfvfromint-> error ("core_anormalisation: Cfvfromint")
-  | Core.Civfromfloat -> error ("core_anormalisation: Civfromfloat")
-  | Core.Civmax -> error ("core_anormalisation: Civmax")
-  | Core.Civmin -> error ("core_anormalisation: Civmin")
-  | Core.Civsizeof -> error ("core_anormalisation: Civsizeof")
-  | Core.Civalignof -> error ("core_anormalisation: Civalignof")
-  | Core.Cunspecified -> error ("core_anormalisation: Cunspecified")
+  | Core.CivCOMPL -> loc_error loc ("core_anormalisation: CivCOMPL")
+  | Core.CivAND-> loc_error loc ("core_anormalisation: CivAND")
+  | Core.CivOR -> loc_error loc ("core_anormalisation: CivOR")
+  | Core.CivXOR -> loc_error loc ("core_anormalisation: CivXOR")
+  | Core.Cfvfromint-> loc_error loc ("core_anormalisation: Cfvfromint")
+  | Core.Civfromfloat -> loc_error loc ("core_anormalisation: Civfromfloat")
+  | Core.Civmax -> loc_error loc ("core_anormalisation: Civmax")
+  | Core.Civmin -> loc_error loc ("core_anormalisation: Civmin")
+  | Core.Civsizeof -> loc_error loc ("core_anormalisation: Civsizeof")
+  | Core.Civalignof -> loc_error loc ("core_anormalisation: Civalignof")
+  | Core.Cunspecified -> loc_error loc ("core_anormalisation: Cunspecified")
 
 
 let rec core_to_mu__pattern loc (Core.Pattern (annots, pat_)) : mu_pattern = 
@@ -253,7 +255,7 @@ let rec n_pexpr loc (Pexpr (annots, bty, pe)) : mu_pexpr =
   | PEsym sym1 -> 
      annotate (M_PEsym sym1)
   | PEimpl i -> 
-     failwith "PEimpl not inlined"
+     loc_error loc "PEimpl not inlined"
   | PEval v -> 
      annotate (M_PEval (n_val loc v))
   | PEconstrained l -> 
@@ -270,45 +272,45 @@ let rec n_pexpr loc (Pexpr (annots, bty, pe)) : mu_pexpr =
         let arg1 = n_pexpr loc arg1 in
         annotate (M_CivCOMPL (ct, arg1))
      | Core.CivCOMPL, _ -> 
-        error "CivCOMPL applied to wrong number of arguments"
+        loc_error loc "CivCOMPL applied to wrong number of arguments"
      | Core.CivAND, [ct; arg1; arg2] -> 
         let ct = fensure_ctype__pexpr loc "CivAND: first argument not a ctype" ct in
         let arg1 = n_pexpr loc arg1 in
         let arg2 = n_pexpr loc arg2 in
         annotate (M_CivAND (ct, arg1, arg2))
      | Core.CivAND, _ ->
-        error "CivAND applied to wrong number of arguments"
+        loc_error loc "CivAND applied to wrong number of arguments"
      | Core.CivOR, [ct; arg1; arg2] -> 
         let ct = fensure_ctype__pexpr loc "CivOR: first argument not a ctype" ct in
         let arg1 = n_pexpr loc arg1 in
         let arg2 = n_pexpr loc arg2 in
         annotate (M_CivOR (ct, arg1, arg2))
      | Core.CivOR, _ ->
-        error "CivOR applied to wrong number of arguments"
+        loc_error loc "CivOR applied to wrong number of arguments"
      | Core.CivXOR, [ct; arg1; arg2] -> 
         let ct = fensure_ctype__pexpr loc "CivXOR: first argument not a ctype" ct in
         let arg1 = n_pexpr loc arg1 in
         let arg2 = n_pexpr loc arg2 in
         annotate (M_CivXOR (ct, arg1, arg2))
      | Core.CivXOR, _ ->
-        error "CivXOR applied to wrong number of arguments"
+        loc_error loc "CivXOR applied to wrong number of arguments"
      | Core.Cfvfromint, [arg1] -> 
         let arg1 = n_pexpr loc arg1 in
         annotate (M_Cfvfromint arg1)
      | Core.Cfvfromint, _ ->
-        error "Cfvfromint applied to wrong number of arguments"
+        loc_error loc "Cfvfromint applied to wrong number of arguments"
      | Core.Civfromfloat, [ct; arg1] -> 
         let ct = fensure_ctype__pexpr loc "Civfromfloat: first argument not a ctype" ct in
         let arg1 = n_pexpr loc arg1 in
         annotate (M_Civfromfloat(ct, arg1))
      | Core.Civfromfloat, _ ->
-        error "Civfromfloat applied to wrong number of arguments"
+        loc_error loc "Civfromfloat applied to wrong number of arguments"
      | _ ->
         let args = List.map (n_pexpr loc) args in
         annotate (M_PEctor((core_to_mu__ctor loc ctor), args))
      end
   | PEcase(e', pats_pes) ->
-     failwith "PEcase"
+     loc_error loc "PEcase"
   | PEarray_shift(e', ctype1, e'') ->
      let e' = n_pexpr loc e' in
      let e'' = n_pexpr loc e'' in
@@ -330,7 +332,7 @@ let rec n_pexpr loc (Pexpr (annots, bty, pe)) : mu_pexpr =
      let e' = n_pexpr loc e' in
      annotate (M_PEunion(sym1, id1, e'))
   | PEcfunction e' ->
-     error "core_anormalisation: PEcfunction"
+     loc_error loc "core_anormalisation: PEcfunction"
   | PEmemberof(sym1, id1, e') ->
      let e' = n_pexpr loc e' in
      annotate (M_PEmemberof(sym1, id1, e'))
@@ -349,7 +351,7 @@ let rec n_pexpr loc (Pexpr (annots, bty, pe)) : mu_pexpr =
         let arg2 = n_pexpr loc arg2 in
         annotate (M_PEwrapI(ct, arg2))
      | _ ->
-        failwith "PEcall not inlined"
+        loc_error loc "PEcall not inlined"
      end
   | PElet(pat, e', e'') ->
      let pat = core_to_mu__pattern loc pat in
@@ -385,17 +387,17 @@ let rec n_pexpr loc (Pexpr (annots, bty, pe)) : mu_pexpr =
         annotate (M_PEif (e1, e2, e3))
      end
   | PEis_scalar e' ->
-     error "core_anormalisation: PEis_scalar"
+     loc_error loc "core_anormalisation: PEis_scalar"
   | PEis_integer e' ->
-     error "core_anormalisation: PEis_integer"
+     loc_error loc "core_anormalisation: PEis_integer"
   | PEis_signed e' ->
-     error "core_anormalisation: PEis_signed"
+     loc_error loc "core_anormalisation: PEis_signed"
   | PEis_unsigned e' ->
-     error "core_anormalisation: PEis_unsigned"
+     loc_error loc "core_anormalisation: PEis_unsigned"
   | PEbmc_assume e' ->
-     error "core_anormalisation: PEbmc_assume"
+     loc_error loc "core_anormalisation: PEbmc_assume"
   | PEare_compatible(e', e'') ->
-     error "core_anormalisation: PEare_compatible"
+     loc_error loc "core_anormalisation: PEare_compatible"
 
 
 (* and n_pexpr_t =
@@ -666,7 +668,7 @@ let rec n_expr (loc : Loc.t) (returns : symbol Pset.set)
        | Core.Pexpr(annots, bty, Core.PEval (Core.Vctype ct1)) -> 
           let loc = update_loc loc (get_loc_ annots) in
           act_pack loc annots bty ct1
-       | _ -> error "core_anormalisation: Eccall with non-ctype first argument"
+       | _ -> loc_error loc "core_anormalisation: Eccall with non-ctype first argument"
      in
      let e2 = 
        let err () = 
