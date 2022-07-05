@@ -585,7 +585,7 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
               | Atypedef sym ->
                 !^"{-" ^^ pp_symbol sym ^^ !^"-}" ^^ acc
               | Aattrs _ ->
-                  !^ "TODO(Aattrs)"
+                  !^ "TODO(Aattrs)" ^^ acc
               | Anot_explode ->
                  !^"{-not-explode-}" ^^ acc
               | Alabel _ -> acc

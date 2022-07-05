@@ -463,7 +463,7 @@ let page_alloc_predicates struct_decls =
 
   let free_area_wf = 
       let i_s, i = IT.fresh Integer in
-      let condition = and_ [int_ 0 %<= i; i %<= int_ (mMAX_ORDER - 1)] in
+      let condition = and_ [int_ 0 %<= i; i %< (pool_value %. "max_order")] in
       let args = [
           i;
           vmemmap_pointer;
