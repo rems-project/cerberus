@@ -117,8 +117,7 @@ type message =
   | Merging_multiple_arrays of {orequest : RET.t option; situation : situation; oinfo : info option; ctxt : Context.t; model: Solver.model_with_q }
   | Resource_mismatch of {has: RE.t; expect: RE.t; situation : situation; ctxt : Context.t; model : Solver.model_with_q }
   | Uninitialised_read of {ctxt : Context.t; model : Solver.model_with_q}
-  | Unused_resource of {resource: RE.t; ctxt : Context.t; model : Solver.model_with_q}
-
+  | Unused_resource of {resource: RE.t; ctxt : Context.t; model : Solver.model_with_q; trace : Trace.t}
   | Number_members of {has: int; expect: int}
   | Number_arguments of {has: int; expect: int}
   | Number_input_arguments of {has: int; expect: int}
@@ -275,12 +274,13 @@ let pp_message te =
      let explanation = Explain.explanation ctxt IT.SymSet.empty in
      let state = Explain.state ctxt explanation model None in
      { short; descr = None; state = Some state; trace = None }
-  | Unused_resource {resource; ctxt; model} ->
+  | Unused_resource {resource; ctxt; model; trace} ->
      let explanation = Explain.explanation ctxt (RE.free_vars resource) in
      let resource = RE.pp (RE.subst explanation.substitution resource) in
      let short = !^"Left-over unused resource" ^^^ squotes resource in
      let state = Explain.state ctxt explanation model None in
-     { short; descr = None; state = Some state; trace = None }
+     let trace_doc = Trace.format_trace (fst model) trace in
+     { short; descr = None; state = Some state; trace = Some trace_doc }
   | Number_members {has;expect} ->
      let short = !^"Wrong number of struct members" in
      let descr =

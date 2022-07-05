@@ -1046,7 +1046,8 @@ let all_empty loc =
       | `True -> return () 
       | `False -> 
          let@ model = model () in 
-         fail (fun ctxt -> {loc; msg = Unused_resource {resource; ctxt; model}})
+         fail_with_trace (fun trace -> fun ctxt ->
+             {loc; msg = Unused_resource {resource; ctxt; model; trace}})
     ) all_resources
 
 
