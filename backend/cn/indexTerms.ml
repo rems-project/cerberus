@@ -920,8 +920,8 @@ let maxInteger_ t =
   z_ (Memory.max_integer_type t)
 let representable_ (t, it) = 
   IT (CT_pred (Representable (t, it)), BT.Bool)
-let good_ (t, it) = 
-  IT (CT_pred (Good (t, it)), BT.Bool)
+let good_ (sct, it) =
+  IT (CT_pred (Good (sct, it)), BT.Bool)
 let aligned_ (t, it) = 
   IT (CT_pred (Aligned (t, it)), BT.Bool)
 let alignedI_ ~t ~align = 

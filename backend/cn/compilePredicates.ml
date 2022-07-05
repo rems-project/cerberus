@@ -298,7 +298,11 @@ let translate_cn_clause env clause =
                          ; iargs = []},
                       oargs_ty) 
                    in
-                   (LAT.mResource ((sym, pt), (pred_loc, None)) z)
+                   let ov = IT.sym_ (sym, oargs_ty) in
+                   let v = IT.recordMember_ ~member_bt:(BT.of_sct scty) (ov, Resources.value_sym) in
+                   let good_lc = LogicalConstraints.T (IT.good_ (scty, v)) in
+                   (LAT.mResource ((sym, pt), (pred_loc, None))
+                       (LAT.mConstraint (good_lc, (pred_loc, None)) z))
                  end in
                let env' = Env.(add_resource sym (RPred_owned scty) env) in
                translate_cn_clause_aux env' acc' cl
