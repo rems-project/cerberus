@@ -44,7 +44,6 @@ exception Struct_not_found
 
 
 
-let order_align_sym = Sym.fresh_named "order_align"
 let page_group_ok_sym = Sym.fresh_named "page_group_ok"
 let vmemmap_wf_sym = Sym.fresh_named "vmemmap_wf"
 let init_vmemmap_page_sym = Sym.fresh_named "init_vmemmap_page"
@@ -138,12 +137,7 @@ module PageAlloc = struct
 
     let order_aligned_sym = find_user_pred "order_aligned" in
 
-    let order_align = 
-      make_uninterp order_align_sym
-        [(Sym.fresh_named "page_index", Integer);
-         (Sym.fresh_named "order", Integer);]
-        Integer
-    in
+    let order_align_sym = find_user_pred "order_align" in
 
     let page_size_of_order_sym = find_user_pred "page_size_of_order" in
 
@@ -599,8 +593,7 @@ module PageAlloc = struct
 
 
 
-    [order_align;
-     page_group_ok;
+    [page_group_ok;
      vmemmap_wf;
      init_vmemmap_page;
      vmemmap_l_wf;
