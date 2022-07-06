@@ -379,7 +379,7 @@ let make_qpred loc (pred, def) ~oname ~pointer ~q:(qs,qbt) ~step ~condition iarg
          name = PName pred; 
          pointer;
          q = qs;
-         step;
+         step = Z.to_int step;
          iargs; 
          permission = condition;
        },
@@ -867,6 +867,30 @@ let resolve_constraint loc layouts predicates log_predicates default_mapping_nam
 
 
 
+let iterated_pointer_base_offset resolve loc q_name pointer =
+  match pointer with
+  | Addition (pointer, Multiplication (Var name', offs))
+         when String.equal q_name name' ->
+     let@ (pointer_r, p_osct) = resolve pointer in
+     let@ (offs_r, _) = resolve offs in
+     begin match IT.is_z offs_r with
+     | Some step -> return (pointer_r, p_osct, step)
+     | _ -> fail {loc; msg = Generic (!^ "Iterated predicate offset must be constant:" ^^^
+            IT.pp offs_r)}
+     end
+  | ArrayShift {pointer; index = Var name'} when String.equal q_name name'->
+     let@ (pointer, p_osct) = resolve pointer in
+     begin match p_osct with
+     | Some (Sctypes.Pointer ct) -> return (pointer, Some ct, Z.of_int (Memory.size_of_ctype ct))
+     | None -> fail {loc; msg = Generic (!^ "array pointer type not known" ^^^ IT.pp pointer)}
+     | Some ct -> fail {loc; msg = Generic (!^ "array pointer not of pointer type:" ^^^
+            IT.pp pointer ^^ colon ^^^ Sctypes.pp ct)}
+     end
+  | _ ->
+     let msg =
+       "Iterated predicate pointer must be (ptr + (q_var * offs)) or (&(ptr[q_var]))"
+     in
+     fail {loc; msg = Generic (!^msg ^^ colon ^^ Ast.pp false pointer)}
 
 
 let apply_ownership_spec layouts predicates log_predicates default_mapping_name mappings (loc, oname, {oq; predicate; arguments; o_permission; typ}) =
@@ -932,31 +956,10 @@ let apply_ownership_spec layouts predicates log_predicates default_mapping_name 
           | Some _ ->
              fail {loc; msg = Generic (!^"cannot use 'if' expression with iterated resources")}
         in
-        let@ (pointer_resolved, p_osct, step) =
-          match pointer with
-          | Addition (pointer, Multiplication (Var name', Integer step))
-                 when String.equal name name' ->
-             let@ (pointer, p_osct) =
-               resolve_index_term loc layouts predicates log_predicates
-                 default_mapping_name mappings [] pointer
-             in
-             return (pointer, p_osct, step)
-          | ArrayShift {pointer; index} ->
-             let@ (pointer, p_osct) =
-               resolve_index_term loc layouts predicates log_predicates
-                 default_mapping_name mappings [] pointer
-             in
-             begin match p_osct with
-               | Some (Pointer ct) -> return (pointer, Some ct, Z.of_int (Memory.size_of_ctype ct))
-               | None -> fail {loc; msg = Generic (!^ "array pointer type not known" ^^^ IT.pp pointer)}
-               | Some ct -> fail {loc; msg = Generic (!^ "not a pointer:" ^^^ IT.pp pointer ^^ colon ^^^ Sctypes.pp ct)}
-             end
-          | _ ->
-             let msg =
-               "Iterated predicate pointer argument must be of the shape "^
-                 "(pointer expression + (quantifier variable * integer constant))"
-             in
-             fail {loc; msg = Generic (!^msg)}
+        let@ (pointer_resolved, p_osct, step) = iterated_pointer_base_offset
+               (resolve_index_term loc layouts predicates log_predicates
+               default_mapping_name mappings [])
+               loc name pointer
         in
         let@ (condition, _) =
           resolve_index_term loc layouts predicates log_predicates default_mapping_name mappings
@@ -1006,21 +1009,10 @@ let apply_ownership_spec layouts predicates log_predicates default_mapping_name 
             | Some _ -> 
                fail {loc; msg = Generic (!^"cannot use 'if' expression with iterated resources")}
           in
-          let@ (pointer_resolved, step) = 
-            match pointer with
-            | Addition (pointer, Multiplication (Var name', Integer step)) 
-                 when String.equal name name' ->
-               let@ (pointer,_) = 
-                 resolve_index_term loc layouts predicates log_predicates default_mapping_name mappings 
-                   [] pointer 
-               in
-               return (pointer, Z.to_int step)
-            | _ -> 
-               let msg = 
-                 "Iterated predicate pointer argument must be of the shape "^
-                   "(pointer expression + (quantifier variable * integer constant))"
-               in
-               fail {loc; msg = Generic (!^msg)}
+          let@ (pointer_resolved, p_osct, step) = iterated_pointer_base_offset
+               (resolve_index_term loc layouts predicates log_predicates
+                       default_mapping_name mappings [])
+               loc name pointer
           in
           let@ (condition, _) = 
              resolve_index_term loc layouts predicates log_predicates default_mapping_name mappings 
