@@ -1859,13 +1859,17 @@ let check mu_file =
   
 
   let () = Debug_ocaml.begin_csv_timing "logical predicates" in
-  let@ () = 
-    (* check and record logical predicate defs *)
-    Pp.progress_simple "checking specifications" "logical predicate welltypedness";
+  (* check and record logical predicate defs *)
+  Pp.progress_simple "checking specifications" "logical predicate welltypedness";
+  let@ () =
+    ListM.iterM (fun (name, def) -> add_logical_predicate name def)
+        mu_file.mu_logical_predicates
+  in
+  let@ () =
     ListM.iterM (fun (name,(def : LP.definition)) -> 
         let@ () = WellTyped.WLPD.welltyped def in
         Pp.debug 1 (lazy (Pp.item "logical predicate" (LP.pp_def (Sym.pp name) def)));
-        add_logical_predicate name def;
+        return ()
       ) mu_file.mu_logical_predicates
   in
   let () = Debug_ocaml.end_csv_timing "logical predicates" in

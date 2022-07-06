@@ -419,7 +419,7 @@ let translate_cn_func_body env body =
 
 
 
-let register_cn_predicates env tagDefs (defs: cn_predicate list) =
+let register_cn_predicates env (defs: cn_predicate list) =
   let aux env def =
     let translate_args xs =
       List.map (fun (bTy, sym) ->
@@ -430,11 +430,19 @@ let register_cn_predicates env tagDefs (defs: cn_predicate list) =
     Env.add_predicate def.cn_pred_name { pred_iargs= iargs; pred_oargs= oargs } env in
   List.fold_left aux env defs
 
+let register_cn_functions env (defs: cn_function list) =
+  let aux env def =
+    let args = List.map (fun (bTy, sym) -> (sym, translate_cn_base_type bTy)
+      ) def.cn_func_args in
+    let return_bt = translate_cn_base_type def.cn_func_return_bty in
+    let fsig = Env.{args; return_bty = return_bt} in
+    Env.add_function def.cn_func_name fsig env
+  in
+  List.fold_left aux env defs
 
-
-
-let translate_and_register_cn_function env (def: cn_function) =
+let translate_cn_function env (def: cn_function) =
   let open LogicalPredicates in
+  Pp.debug 2 (lazy (Pp.item "translating function defn" (Sym.pp def.cn_func_name)));
   let args = 
     List.map (fun (bTy, sym) -> (sym, translate_cn_base_type bTy)
       ) def.cn_func_args in
@@ -448,14 +456,13 @@ let translate_and_register_cn_function env (def: cn_function) =
     | None -> return Uninterp in
   let return_bt = translate_cn_base_type def.cn_func_return_bty in
   let def2 = {loc = def.cn_func_loc; args; return_bt; definition} in
-  let fsig = Env.{args; return_bty = return_bt} in
-  let env = Env.add_function def.cn_func_name fsig env in
   return (env, (def.cn_func_name, def2))
 
 let translate_and_register_cn_functions (env : Env.t) (to_translate: cn_function list) = 
+  let env = register_cn_functions env to_translate in
   let@ (env, defs) = 
     ListM.fold_leftM (fun (env, defs) def ->
-        let@ (env, def) = translate_and_register_cn_function env def in
+        let@ (env, def) = translate_cn_function env def in
         return (env, def :: defs)
       ) (env,[]) to_translate
   in
@@ -493,7 +500,7 @@ let translate_cn_predicate env (def: cn_predicate) =
 let translate tagDefs (f_defs: cn_function list) (pred_defs: cn_predicate list) =
   let env = Env.empty tagDefs in
   let@ (env, log_defs) = translate_and_register_cn_functions env f_defs in
-  let env = register_cn_predicates env tagDefs pred_defs in
+  let env = register_cn_predicates env pred_defs in
   let@ pred_defs = ListM.mapM (translate_cn_predicate env) pred_defs in
   return (log_defs, pred_defs)
 
