@@ -248,7 +248,10 @@ let page_alloc_predicates struct_decls logical_pred_syms =
    in
 
   let page_size_of_order_sym = find_logical_pred "page_size_of_order" in
-
+  let vmemmap_wf_sym = find_logical_pred "vmemmap_wf" in
+  let vmemmap_l_wf_sym = find_logical_pred "vmemmap_l_wf" in
+  let freeArea_cell_wf_sym = find_logical_pred "freeArea_cell_wf" in
+  let hyp_pool_wf_sym = find_logical_pred "hyp_pool_wf" in
 
   let page = 
     let id = page_sym in
@@ -448,7 +451,7 @@ let page_alloc_predicates struct_decls logical_pred_syms =
         ]
       in
       forall_ (i_s, IT.bt i) (
-          impl_ (condition, pred_ LP.vmemmap_wf_sym args BT.Bool);
+          impl_ (condition, pred_ vmemmap_wf_sym args BT.Bool);
         )
     in
   
@@ -465,7 +468,7 @@ let page_alloc_predicates struct_decls logical_pred_syms =
       in
       forall_ (i_s, IT.bt i) (
           impl_ (condition,
-                 pred_ LP.vmemmap_l_wf_sym args BT.Bool )
+                 pred_ vmemmap_l_wf_sym args BT.Bool )
         )
     in
 
@@ -482,7 +485,7 @@ let page_alloc_predicates struct_decls logical_pred_syms =
       in
       forall_ (i_s, IT.bt i) (
           impl_ (condition,
-                 pred_ LP.freeArea_cell_wf_sym args BT.Bool)
+                 pred_ freeArea_cell_wf_sym args BT.Bool)
         )
     in
 
@@ -494,7 +497,7 @@ let page_alloc_predicates struct_decls logical_pred_syms =
           hyp_physvirt_offset;
         ]        
       in
-      LC.t_ (pred_ LP.hyp_pool_wf_sym args BT.Bool)
+      LC.t_ (pred_ hyp_pool_wf_sym args BT.Bool)
     in
 
     let wellformedness = 
