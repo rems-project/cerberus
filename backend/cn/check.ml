@@ -822,7 +822,42 @@ and check_pexpr (pe : 'bty mu_pexpr) ~(expect:BT.t) : (lvt, type_error) m =
   return lvt
 
 
+let unpack_def global name args =
+    Option.bind (Global.get_logical_predicate_def global name)
+    (fun def ->
+    match def.definition with
+    | Def body ->
+       Some (LogicalPredicates.open_pred def.args body args)
+    | Uninterp -> None
+    )
 
+let debug_constraint_failure_diagnostics model global c =
+  if ! Pp.print_level == 0 then () else
+  let split tm = match IT.term tm with
+    | IT.Bool_op (IT.And xs) -> Some ("and", xs)
+    | IT.Bool_op (IT.Or xs) -> Some ("or", xs)
+    | IT.Bool_op (IT.Not x) -> Some ("not", [x])
+    | IT.Bool_op (IT.EQ (x, y)) -> Some ("eq", [x; y])
+    | IT.Pred (name, args) when Option.is_some (unpack_def global name args) ->
+        Some (Sym.pp_string name, [Option.get (unpack_def global name args)])
+    | _ -> None
+  in
+  let rec diag_rec i tm =
+    let pt = !^ "-" ^^^ Pp.int i ^^ Pp.colon in
+    begin match Solver.eval global (fst model) tm with
+      | None -> Pp.debug 6 (lazy (pt ^^^ !^ "cannot eval:" ^^^ IT.pp tm))
+      | Some v -> Pp.debug 6 (lazy (pt ^^^ IT.pp v ^^^ !^"<-" ^^^ IT.pp tm))
+    end;
+    match split tm with
+      | None -> ()
+      | Some (nm, ts) -> List.iter (diag_rec (i + 1)) ts
+  in
+  begin match c with
+  | LC.T tm ->
+    Pp.debug 6 (lazy (Pp.item "counterexample, expanding" (IT.pp tm)));
+    diag_rec 0 tm
+  | _ -> ()
+  end
 
 module Spine : sig
 
@@ -935,6 +970,8 @@ end = struct
            | `True -> check (c :: cs) ftyp
            | `False ->
               let@ model = model () in
+              let@ global = get_global () in
+              debug_constraint_failure_diagnostics model global c;
               fail_with_trace (fun trace -> fun ctxt ->
                   let ctxt = { ctxt with resources = original_resources } in
                   {loc; msg = Unsat_constraint {constr = c; info; ctxt; model; trace}}
