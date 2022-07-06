@@ -1882,6 +1882,16 @@ list_expr:
   // | NthList of int * 'bt term
 ;
 
+int_range:
+| l= CONSTANT COMMA r= CONSTANT
+    {
+      match (l, r) with
+        | (Cabs.CabsInteger_const (l_str, None), Cabs.CabsInteger_const (r_str, None)) ->
+            (Z.of_string l_str, Z.of_string r_str)
+        | _ ->
+            raise (C_lexer.Error (Cparser_unexpected_token "TODO cn integer const"))
+    }
+
 expr:
 | e= list_expr
     { e }
@@ -1894,6 +1904,11 @@ expr:
 | LPAREN ty= base_type RPAREN expr= list_expr
     { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($1)))
                                , CNExpr_cast (ty, expr))) }
+| CN_EACH LPAREN str= LNAME VARIABLE COLON r=int_range SEMICOLON e1= expr RPAREN
+    { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) NoCursor)
+                               ,
+                               let sym = Symbol.Identifier (Location_ocaml.point $startpos(str), str) in
+                               CNExpr_each (sym, r, e1))) }
 ;
 
 (* CN predicate definitions **************************************************)

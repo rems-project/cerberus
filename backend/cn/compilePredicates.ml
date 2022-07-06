@@ -173,7 +173,8 @@ let translate_member_access loc env t member =
 let translate_cn_expr (env: Env.t) expr =
   let open IndexTerms in
   let module BT = BaseTypes in
-  let rec self (CNExpr (loc, expr_)) =
+  let rec trans env (CNExpr (loc, expr_)) =
+    let self = trans env in
     match expr_ with
       | CNExpr_const CNConst_NULL ->
           return null_
@@ -262,7 +263,11 @@ let translate_cn_expr (env: Env.t) expr =
               in
               return (pred_ sym args bt)
           end
-  in self expr
+      | CNExpr_each (sym, r, e) ->
+          let env' = Env.add_logical sym BT.Integer env in
+          let@ expr = trans env' e in
+          return (eachI_ (Z.to_int (fst r), sym, Z.to_int (snd r)) expr)
+  in trans env expr
 
 
 let at_least_one_argument loc pname = function
