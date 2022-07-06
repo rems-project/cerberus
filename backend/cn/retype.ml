@@ -564,8 +564,9 @@ let retype_file (log_defs, pred_defs) opts (file : 'TY Old.mu_file)
   in
 
 
-  let resource_predicates = pred_defs @ ResourcePredicates.predicate_list struct_decls in
-  let logical_predicates = log_defs @ LogicalPredicates.predicate_list struct_decls in
+  let logical_predicates = log_defs @ LogicalPredicates.predicate_list struct_decls log_defs in
+  let resource_predicates = pred_defs @ ResourcePredicates.predicate_list struct_decls
+    (List.map fst logical_predicates) in
 
 
   let@ (globs, glob_typs) = 

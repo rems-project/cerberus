@@ -236,10 +236,18 @@ let early_alloc () =
 
 
 
-let page_alloc_predicates struct_decls = 
+let page_alloc_predicates struct_decls logical_pred_syms =
 
   let module Aux = LogicalPredicates.PageAlloc.Aux(struct let struct_decls = struct_decls end) in
   let open Aux in
+
+  let same_str str sym = String.equal str (Sym.pp_string sym) in
+  let find_logical_pred str = match List.find_opt (same_str str) logical_pred_syms with
+    | Some sym -> sym
+    | None -> raise LogicalPredicates.Struct_not_found
+   in
+
+  let page_size_of_order_sym = find_logical_pred "page_size_of_order" in
 
 
   let page = 
@@ -252,7 +260,7 @@ let page_alloc_predicates struct_decls =
     let resource_s = Sym.fresh () in
     let clause1 = 
       let qp = 
-        let length = pred_ LP.page_size_of_order_sym [order] Integer in
+        let length = pred_ page_size_of_order_sym [order] Integer in
         let q_s, q = IT.fresh Integer in 
         (ResourceTypes.Q {
           name = PName byte_sym; 
@@ -309,7 +317,7 @@ let page_alloc_predicates struct_decls =
     let resource_s = Sym.fresh () in
     let clause1 = 
       let qp = 
-        let length = pred_ LP.page_size_of_order_sym [order] Integer in
+        let length = pred_ page_size_of_order_sym [order] Integer in
         let q_s, q = IT.fresh Integer in 
         (ResourceTypes.Q {
           name = PName bytev_sym; 
@@ -588,7 +596,7 @@ let page_alloc_predicates struct_decls =
     
 
 
-let predicate_list struct_decls = 
+let predicate_list struct_decls logical_pred_syms =
   char () ::
   byte () ::
   bytev () ::
@@ -597,7 +605,7 @@ let predicate_list struct_decls =
   (* part_zero_region () :: *)
   early_alloc () ::
   (* for now: *)
-  try page_alloc_predicates struct_decls with
+  try page_alloc_predicates struct_decls logical_pred_syms with
   | LogicalPredicates.Struct_not_found -> []
 
 

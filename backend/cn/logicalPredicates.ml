@@ -44,9 +44,7 @@ exception Struct_not_found
 
 
 
-let order_aligned_sym = Sym.fresh_named "order_aligned"
 let order_align_sym = Sym.fresh_named "order_align"
-let page_size_of_order_sym = Sym.fresh_named "page_size_of_order"
 let page_group_ok_sym = Sym.fresh_named "page_group_ok"
 let vmemmap_wf_sym = Sym.fresh_named "vmemmap_wf"
 let init_vmemmap_page_sym = Sym.fresh_named "init_vmemmap_page"
@@ -127,19 +125,18 @@ module PageAlloc = struct
   end
 
 
-  let predicates struct_decls = 
+  let predicates struct_decls user_preds =
 
     let module Aux = Aux(struct let struct_decls = struct_decls end) in
     let open Aux in
 
-
-    let order_aligned = 
-      (* let _body = divisible_ (page_index, exp_ (int_ 2, sym_ (order, Integer))) in *)
-      make_uninterp order_aligned_sym
-        [(Sym.fresh_named "page_index", Integer);
-         (Sym.fresh_named "order", Integer);]
-        Bool
+    let same_str str sym = String.equal str (Sym.pp_string sym) in
+    let find_user_pred str = match List.find_opt (same_str str) (List.map fst user_preds) with
+    | Some sym -> sym
+    | None -> raise Struct_not_found
     in
+
+    let order_aligned_sym = find_user_pred "order_aligned" in
 
     let order_align = 
       make_uninterp order_align_sym
@@ -148,12 +145,7 @@ module PageAlloc = struct
         Integer
     in
 
-    let page_size_of_order = 
-      make_uninterp page_size_of_order_sym
-        [(Sym.fresh_named "order", Integer)]
-        Integer
-    in
-
+    let page_size_of_order_sym = find_user_pred "page_size_of_order" in
 
     let page_group_ok =
       let id = page_group_ok_sym in
@@ -607,9 +599,7 @@ module PageAlloc = struct
 
 
 
-    [order_aligned;
-     order_align;
-     page_size_of_order;
+    [order_align;
      page_group_ok;
      vmemmap_wf;
      init_vmemmap_page;
@@ -629,8 +619,8 @@ module PageAlloc = struct
 end
 
 
-let predicate_list struct_decls = 
-  try PageAlloc.predicates struct_decls with
+let predicate_list struct_decls user_preds =
+  try PageAlloc.predicates struct_decls user_preds with
   | Struct_not_found -> []
 
 
