@@ -280,6 +280,12 @@ let bt_to_coq ci loc_info =
   f
 
 let it_adjust ci it =
+  let rec new_nm s nms i =
+    let s2 = s ^ "_" ^ Int.to_string i in
+    if List.exists (String.equal s2) nms
+    then new_nm s nms (i + 1)
+    else s2
+  in
   let rec f t =
     match IT.term t with
     | IT.Bool_op op -> begin match op with
@@ -300,8 +306,16 @@ let it_adjust ci it =
         | IT.EachI ((i1, s, i2), x) ->
             let x = f x in
             let vs = IT.free_vars x in
-            if SymSet.mem s vs then IT.eachI_ (i1, s, i2) x
-            else (assert (i1 <= i2); x)
+            let other_nms = List.filter (fun sym -> not (Sym.equal sym s)) (SymSet.elements vs)
+              |> List.map Sym.pp_string in
+            if not (SymSet.mem s vs)
+            then (assert (i1 <= i2); x)
+            else if List.exists (String.equal (Sym.pp_string s)) other_nms
+            then
+                let s2 = Sym.fresh_named (new_nm (Sym.pp_string s) other_nms 0) in
+                let x = IT.subst (IT.make_subst [(s, IT.sym_ (s2, BT.Integer))]) x in
+                IT.eachI_ (i1, s2, i2) x
+            else IT.eachI_ (i1, s, i2) x
         | _ -> t
     end
     | IT.Pred (name, args) ->
@@ -451,7 +465,7 @@ let ensure_struct_mem is_good ci ct aux = match Sctypes.is_struct_ctype ct with
   | Some tag ->
   let bt = BaseTypes.Struct tag in
   let nm = if is_good then "good" else "representable" in
-  let k = ["predefs"; "struct"; nm] in
+  let k = ["predefs"; "struct"; Sym.pp_string tag; nm] in
   let op_nm = "struct_" ^ Sym.pp_string tag ^ "_" ^ nm in
   let@ () = gen_ensure k true
   (lazy (

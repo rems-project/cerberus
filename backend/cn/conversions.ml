@@ -29,9 +29,14 @@ module SymSet = Set.Make(Sym)
 
 (* builtin function symbols *)
 
+let mk_arg1 mk loc = function
+  | [x] -> return (mk x)
+  | xs -> fail {loc; msg = Number_arguments {has = List.length xs; expect = 1}}
+
 let mk_arg2 mk loc = function
   | [x; y] -> return (mk (x, y))
   | xs -> fail {loc; msg = Number_arguments {has = List.length xs; expect = 2}}
+
 
 let mul_uf_def = (Sym.fresh_named "mul_uf", mk_arg2 mul_no_smt_)
 let div_uf_def = (Sym.fresh_named "div_uf", mk_arg2 div_no_smt_)
@@ -43,6 +48,8 @@ let xor_uf_def = (Sym.fresh_named "xor_uf", mk_arg2 xor_no_smt_)
 let power_def = (Sym.fresh_named "power", mk_arg2 exp_)
 let rem_def = (Sym.fresh_named "rem", mk_arg2 rem_)
 let mod_def = (Sym.fresh_named "mod", mk_arg2 mod_)
+
+let not_def = (Sym.fresh_named "not", mk_arg1 not_)
 
 let builtin_funs = 
   List.map (fun (s, mk) -> (Sym.pp_string s, mk)) [
@@ -56,6 +63,8 @@ let builtin_funs =
       power_def;
       rem_def;
       mod_def;
+
+      not_def;
     ]
 
 let apply_builtin_funs loc nm args =
