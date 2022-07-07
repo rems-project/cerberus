@@ -270,88 +270,129 @@ let translate_cn_expr (env: Env.t) expr =
   in trans env expr
 
 
-let at_least_one_argument loc pname = function
-  | [] -> 
-     (* owned vs block mismatch *)
-     fail {loc; msg= First_iarg_missing {pname}}
-  | expr :: iargs -> 
-     return (expr, iargs)
+let translate_cn_res_info res_loc loc env res args =
+  let@ args = ListM.mapM (translate_cn_expr env) args in
+  let open Resources in
+  let open ResourceTypes in
+  let@ (pname, oargs_ty, env_info) = match res with
+    | CN_owned ty ->
+      let scty = Retype.ct_of_ct res_loc ty in
+      return (Owned scty, owned_oargs scty, RPred_owned scty)
+    | CN_block ty ->
+      let scty = Retype.ct_of_ct res_loc ty in
+      return (Block scty, owned_oargs scty, RPred_block scty)
+    | CN_named pred ->
+      let@ pred_sig = match Env.lookup_predicate pred env with
+        | None -> fail {loc; msg = Unknown_resource_predicate {id = pred; logical = false}}
+        | Some pred_sig -> return pred_sig
+      in
+      return (PName pred, BT.Record pred_sig.pred_oargs, RPred_named pred)
+  in
+  let@ (ptr_expr, iargs) = match args with
+    | [] -> fail {loc; msg = First_iarg_missing {pname}}
+    | (x :: xs) -> return (x, xs)
+  in
+  return (pname, ptr_expr, iargs, oargs_ty, env_info)
 
+let split_pointer_linear_step loc q ptr_expr =
+  let open IndexTerms in
+  let open Pp in
+  let qs = sym_ (q, BT.Integer) in
+  let msg_s = "Iterated predicate pointer must be (ptr + (q_var * offs)):" in
+  begin match term ptr_expr with
+    | Pointer_op (IntegerToPointerCast (IT (Arith_op (Add (b, offs)), _))) ->
+      begin match term b, term offs with
+        | Pointer_op (PointerToIntegerCast p), Arith_op (Mul (x, y)) when IT.equal x qs ->
+          begin match is_z y with
+            | Some i -> return (p, Z.to_int i)
+            | _ -> fail {loc; msg = Generic
+                        (!^"Iterated predicate offset must be constant: " ^^^ IT.pp y)}
+          end
+        | _ -> fail { loc; msg= Generic (!^msg_s ^^^ IT.pp ptr_expr)}
+      end
+    | _ ->
+    fail { loc; msg= Generic (!^msg_s ^^^ IT.pp ptr_expr)}
+  end
 
+let mk_int_map bt = BT.Map (BT.Integer, bt)
 
+let map_over_record loc ty =
+  let lift (s, ty) = (s, mk_int_map ty) in
+  match ty with
+  | BT.Record xs ->
+    return (BT.Record (List.map lift xs))
+  | _ -> let open Pp in
+    fail {loc; msg = Generic (!^ "map_over_record: not a record type:" ^^^ BT.pp ty)}
 
+let get_single_member loc v =
+  match IT.basetype v with
+  | BT.Record [(sym, bt)] -> IT.recordMember_ ~member_bt:bt (v, sym)
+  | ty -> let open Pp in
+    Pp.warn loc (!^ "get_single_member:" ^^^ typ (IT.pp v) (BT.pp ty));
+    assert false
 
+let iterate_resource_env_info = function
+  | RPred_owned ct -> RPred_I_owned ct
+  | RPred_block ct -> RPred_I_block ct
+  | RPred_named nm -> RPred_I_named nm
+  | _ -> assert false
+
+let add_owned_good loc sym res_t lat = match res_t with
+  | (ResourceTypes.P { name = Owned scty ; permission; _}, oargs_ty) ->
+    let v = get_single_member loc (IT.sym_ (sym, oargs_ty)) in
+    let good_lc = LogicalConstraints.T (IT.impl_ (permission, IT.good_ (scty, v))) in
+    LAT.mConstraint (good_lc, (loc, None)) lat
+  | (ResourceTypes.Q { name = Owned scty ; q; permission; _}, oargs_ty) ->
+    let v = get_single_member loc (IT.sym_ (sym, oargs_ty)) in
+    let v_el = IT.map_get_ v (IT.sym_ (q, BT.Integer)) in
+    let good_lc = LogicalConstraints.Forall ((q, BT.Integer),
+        (IT.impl_ (permission, IT.good_ (scty, v_el)))) in
+    LAT.mConstraint (good_lc, (loc, None)) lat
+   | _ -> lat
 
 let translate_cn_clause env clause =
   let rec translate_cn_clause_aux env acc clause =
     let module LAT = LogicalArgumentTypes in
     match clause with
       | CN_letResource (res_loc, sym, res, cl) ->
-          let open Resources in
           begin match res with
-            | CN_pred (pred_loc, CN_owned ty, args) ->
-               let scty = Retype.ct_of_ct res_loc ty in
-               let@ args = ListM.mapM (translate_cn_expr env) args in
-               let@ expr, iargs = at_least_one_argument pred_loc (Owned scty) args in
-               let oargs_ty = owned_oargs scty in
-               let acc' =
-                 fun z -> acc begin
-                   let pt =
-                     (ResourceTypes.P { name = Owned scty
-                         ; pointer= expr
+            | CN_pred (pred_loc, res, args) ->
+               let@ (pname, ptr_expr, iargs, oargs_ty, env_info) =
+                      translate_cn_res_info res_loc pred_loc env res args in
+               let pt = (ResourceTypes.P { name = pname
+                         ; pointer= ptr_expr
                          ; permission= IT.bool_ true
-                         ; iargs = []},
-                      oargs_ty) 
-                   in
-                   let ov = IT.sym_ (sym, oargs_ty) in
-                   let v = IT.recordMember_ ~member_bt:(BT.of_sct scty) (ov, Resources.value_sym) in
-                   let good_lc = LogicalConstraints.T (IT.good_ (scty, v)) in
-                   (LAT.mResource ((sym, pt), (pred_loc, None))
-                       (LAT.mConstraint (good_lc, (pred_loc, None)) z))
-                 end in
-               let env' = Env.(add_resource sym (RPred_owned scty) env) in
-               translate_cn_clause_aux env' acc' cl
-            | CN_pred (pred_loc, CN_block ty, args) ->
-               let scty = Retype.ct_of_ct pred_loc ty in
-               let@ args = ListM.mapM (translate_cn_expr env) args in
-               (* owned vs block mismatch *)
-               let@ expr, iargs = at_least_one_argument pred_loc (Owned scty) args in
-               let acc' =
-                 fun z -> acc begin
-                   let pt =
-                     (ResourceTypes.P { name = Block scty
-                         ; pointer= expr
-                         ; permission= IT.bool_ true
-                         ; iargs = []},
-                      owned_oargs scty) 
-                   in
-                   (LAT.mResource ((sym, pt), (pred_loc, None)) z)
-                 end in
-               translate_cn_clause_aux env acc' cl
-            | CN_pred (pred_loc, CN_named pred_sym, es_) ->
-               let@ args = ListM.mapM (translate_cn_expr env) es_ in
-               let@ expr, iargs = at_least_one_argument pred_loc (PName pred_sym) args in
-               let@ pred_sig = match Env.lookup_predicate pred_sym env with
-                 | None -> fail {loc = pred_loc; msg = Unknown_resource_predicate {id = pred_sym; logical = false}}
-                 | Some pred_sig -> return pred_sig 
+                         ; iargs = iargs},
+                      oargs_ty)
                in
-               let acc' =
-                 fun z -> acc begin
-                   let pred =
-                     (ResourceTypes.P { name= PName pred_sym
-                         ; pointer= expr
-                         ; permission= IT.bool_ true
-                         ; iargs= iargs
-                     },
-                      BT.Record pred_sig.pred_oargs)
-                   in
-                   (LAT.mResource ((sym, pred), (pred_loc, None)) z)
-                 end 
-               in
-               let env' = Env.(add_resource sym (RPred_named pred_sym) env) in
+               let acc' = fun z -> acc (LAT.mResource ((sym, pt), (pred_loc, None))
+                       (add_owned_good pred_loc sym pt z)) in
+               let env' = Env.(add_resource sym env_info env) in
                translate_cn_clause_aux env' acc' cl
-            | CN_each _ ->
-                failwith "TODO: CN_each"
+            | CN_each (q, bt, guard, pred_loc, res, args) ->
+               let bt' = translate_cn_base_type bt in
+               let@ () = if BT.equal bt' BT.Integer then return ()
+                 else fail {loc = pred_loc; msg = let open Pp in
+                     Generic (!^ "quantified v must be integer:" ^^^ BT.pp bt')}
+               in
+               let env' = Env.add_logical q BT.Integer env in
+               let@ guard_expr = translate_cn_expr env' guard in
+               let@ (pname, ptr_expr, iargs, oargs_ty, env_info) =
+                      translate_cn_res_info res_loc pred_loc env' res args in
+               let@ (ptr_base, step) = split_pointer_linear_step pred_loc q ptr_expr in
+               let@ m_oargs_ty = map_over_record pred_loc oargs_ty in
+               let qpt = (ResourceTypes.Q { name = pname
+                         ; q
+                         ; pointer= ptr_base
+                         ; step
+                         ; permission= guard_expr
+                         ; iargs = iargs},
+                      m_oargs_ty)
+               in
+               let acc' = fun z -> acc (LAT.mResource ((sym, qpt), (pred_loc, None))
+                       (add_owned_good pred_loc sym qpt z)) in
+               let env'' = Env.(add_resource sym (iterate_resource_env_info env_info)) env in
+               translate_cn_clause_aux env'' acc' cl
           end
       | CN_letExpr (loc, sym, e_, cl) ->
           let@ e = translate_cn_expr env e_ in
@@ -359,15 +400,26 @@ let translate_cn_clause env clause =
             fun z -> acc begin
               LAT.mDefine (sym, e, (loc, None)) z
             end in
-            translate_cn_clause_aux (Env.add_logical sym (IT.basetype e) env) acc' cl
-      | CN_assert (loc, e_, cl) ->
+          translate_cn_clause_aux (Env.add_logical sym (IT.basetype e) env) acc' cl
+      | CN_assert (loc, CN_assert_exp e_, cl) ->
           let@ e = translate_cn_expr env e_ in
           let acc' =
             fun z -> acc begin
               LAT.mConstraint ( LogicalConstraints.T e
                              , (loc, None) ) z
             end in
-            translate_cn_clause_aux env acc' cl
+          translate_cn_clause_aux env acc' cl
+      | CN_assert (loc, CN_assert_qexp (sym, bTy, e1_, e2_), cl) ->
+          let bt = translate_cn_base_type bTy in
+	  let env' = Env.add_logical sym bt env in
+          let@ e1 = translate_cn_expr env' e1_ in
+          let@ e2 = translate_cn_expr env' e2_ in
+          let acc' =
+            fun z -> acc begin
+              LAT.mConstraint ( LogicalConstraints.Forall ((sym, bt), IT.impl_ (e1, e2))
+                             , (loc, None) ) z
+            end in
+          translate_cn_clause_aux env acc' cl
       | CN_return (loc, xs_) ->
           let@ xs =
             ListM.mapM (fun (sym, e_) ->

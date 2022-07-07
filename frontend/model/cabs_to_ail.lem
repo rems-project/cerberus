@@ -4451,6 +4451,16 @@ let desugar_o_cn_func_body = function
        E.return (Just body')
   end
   
+let desugar_cn_assertion ass =
+  match ass with
+    | CN_assert_exp e -> CN_assert_exp <$> desugar_cn_expr e
+    | CN_assert_qexp ident bTy e1 e2 ->
+      E.register_cn_ident CN_logical ident >>= fun sym ->
+      CN_assert_qexp sym <$> desugar_cn_base_type (Loc.locOf ident) bTy
+                         <*> desugar_cn_expr e1
+                         <*> desugar_cn_expr e2
+  end
+
 let rec desugar_cn_clause clause =
   match clause with
     | CN_letResource loc ident res c ->
@@ -4463,8 +4473,8 @@ let rec desugar_cn_clause clause =
         E.register_cn_ident CN_logical ident >>= fun sym ->
         desugar_cn_clause c                  >>= fun c'  ->
         E.return (CN_letExpr loc sym e' c')
-    | CN_assert loc e c ->
-        CN_assert loc <$> desugar_cn_expr e
+    | CN_assert loc ass c ->
+        CN_assert loc <$> desugar_cn_assertion ass
                       <*> desugar_cn_clause c
     | CN_return loc xs -> 
         E.mapM (fun (x, e) ->

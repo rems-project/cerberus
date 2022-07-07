@@ -2026,11 +2026,20 @@ clause:
 | CN_LET str= LNAME VARIABLE EQ e= expr SEMICOLON c= clause
     { let loc = Location_ocaml.point $startpos(str) in
       Cerb_frontend.Cn.CN_letExpr (loc, Symbol.Identifier (loc, str), e, c) }
-| ASSERT e= delimited(LPAREN, expr, RPAREN) SEMICOLON c= clause
+| ASSERT e= delimited(LPAREN, assert_expr, RPAREN) SEMICOLON c= clause
     { Cerb_frontend.Cn.CN_assert (Location_ocaml.region $loc NoCursor, e, c) }
 | RETURN xs= delimited(LBRACE, oargs_def, RBRACE)
     { Cerb_frontend.Cn.CN_return (Location_ocaml.region $loc(xs) NoCursor, xs) }
 ;
+
+
+assert_expr:
+| CN_EACH LPAREN bTy= base_type str= LNAME VARIABLE SEMICOLON e1= expr RPAREN
+      LBRACE e2= expr RBRACE
+    { Cerb_frontend.Cn.CN_assert_qexp ( Symbol.Identifier (Location_ocaml.point $startpos(str), str)
+                                      , bTy, e1, e2) }
+| e= expr
+    { Cerb_frontend.Cn.CN_assert_exp e }
 
 resource:
 | p= pred es= delimited(LPAREN, separated_list(COMMA, expr), RPAREN)

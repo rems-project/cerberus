@@ -147,6 +147,12 @@ module MakePp (Conf: PP_CN) = struct
     | None -> Dleaf !^"uninterpreted"
     | Some body -> Dnode (!^"interpreted", [dtree_of_cn_func_body body])
 
+  let dtree_of_cn_assertion = function
+    | CN_assert_exp e -> Dnode (pp_stmt_ctor "CN_assert_exp", [dtree_of_cn_expr e])
+    | CN_assert_qexp (ident, bTy, e1, e2) ->
+        Dnode (pp_stmt_ctor "CN_assert_qexp" ^^^
+                  P.squotes (Conf.pp_ident ident)^^ P.colon ^^^ pp_base_type bTy
+              , [dtree_of_cn_expr e1; dtree_of_cn_expr e2])
 
   let rec dtree_of_cn_clause = function
     | CN_letResource (_, ident, res, c) ->
@@ -155,8 +161,8 @@ module MakePp (Conf: PP_CN) = struct
     | CN_letExpr (_, ident, e, c) ->
         Dnode ( pp_stmt_ctor "CN_letExpr" ^^^ P.squotes (Conf.pp_ident ident)
               , [dtree_of_cn_expr e; dtree_of_cn_clause c])
-    | CN_assert (_, e, c) ->
-        Dnode (pp_stmt_ctor "CN_assert", [dtree_of_cn_expr e; dtree_of_cn_clause c])
+    | CN_assert (_, a, c) ->
+        Dnode (pp_stmt_ctor "CN_assert", [dtree_of_cn_assertion a; dtree_of_cn_clause c])
     | CN_return (_, xs) ->
         let docs =
             List.map (fun (ident, e) ->

@@ -278,8 +278,7 @@ let page_alloc_predicates struct_decls logical_pred_syms =
       let lrt =
         LRT.Resource ((resource_s, qp), (loc, None),
         LRT.Constraint (t_ (ne_ (order, int_ hHYP_NO_ORDER)), (loc, None),
-        LRT.Constraint (t_ (IT.good_pointer ~pointee_ct:char_ct pbase), (loc, None),
-        LRT.I)))
+        LRT.I))
       in
       {
         loc = loc;
@@ -607,10 +606,7 @@ let predicate_list struct_decls logical_pred_syms =
    * zero_region () :: *)
   (* part_zero_region () :: *)
   early_alloc () ::
-  (* for now: *)
-  try page_alloc_predicates struct_decls logical_pred_syms with
-  | LogicalPredicates.Struct_not_found -> []
-
+  []
 
     
 

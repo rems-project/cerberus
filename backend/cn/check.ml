@@ -1530,6 +1530,8 @@ let check_expr labels ~(expect:BT.t) (e : 'bty mu_expr) : (RT.t, type_error) m =
                 None
            ) (LCSet.elements constraints)
        in
+       if List.length extra_assumptions == 0 then Pp.warn loc (Pp.string "nothing instantiated")
+       else ();
        let lrt = LRT.mConstraints extra_assumptions LRT.I in
        return (RT.Computational ((Sym.fresh (), Unit), (loc, None), lrt))
   in
