@@ -52,7 +52,6 @@ type mu_values = mu_value list
 type mu_pexpr = unit Mu.mu_pexpr
 type mu_pexprs = mu_pexpr list
 type mu_expr = unit Mu.mu_expr
-type mu_texpr = unit Mu.mu_texpr
 type mu_pattern = Mu.mu_pattern
 type mu_action = unit Mu.mu_action
 type mu_paction = unit Mu.mu_paction
@@ -173,8 +172,8 @@ let letbinder_pexpr_in_pexpr loc annots pat pexpr body : mu_pexpr =
 (*   M_TPexpr (loc, annots, (), M_PEerror (str, asym)) *)
 
 
-let letbinder_pexpr_in_expr loc annots pat pexpr body : mu_texpr = 
-  M_TExpr (loc, annots, M_Elet (pat, pexpr, body))
+let letbinder_pexpr_in_expr loc annots pat pexpr body : mu_expr = 
+  M_Expr (loc, annots, M_Elet (pat, pexpr, body))
 
 (* let case_switch_pexpr_in_expr loc annots asym cases : mu_texpr =  *)
 (*   M_TExpr (loc, annots, M_Ecase (asym, cases)) *)
@@ -360,16 +359,6 @@ let rec n_pexpr loc (Pexpr (annots, bty, pe)) : mu_pexpr =
      annotate (M_PElet (M_Pat pat, e', e''))
   | PEif(e1, e2, e3) ->
      begin match e2, e3 with
-     | Pexpr (_uannots, _, PEundef (uloc, undef)), _ ->
-        let e1_neg = n_pexpr loc (Pexpr ([], (), PEnot e1)) in
-        let pat = M_Pat (unit_pat loc []) in
-        let assert_undef = M_Pexpr (loc, [], (), M_PEassert_undef (e1_neg, uloc, undef)) in
-        annotate (M_PElet (pat, assert_undef, (n_pexpr loc e3)))
-     | _, Pexpr (_uannots, _, PEundef (uloc, undef)) ->
-        let e1 = n_pexpr loc e1 in
-        let pat = (M_Pat (unit_pat loc [])) in
-        let assert_undef = M_Pexpr (loc, [], (), M_PEassert_undef (e1, uloc, undef)) in
-        annotate (M_PElet (pat, assert_undef, n_pexpr loc e2))
      | Pexpr (_, _, PEval (Vloaded (LVspecified (OVinteger iv1)))), 
        Pexpr (_, _, PEval (Vloaded (LVspecified (OVinteger iv2))))
           when Option.equal Z.equal (Mem.eval_integer_value iv1) (Some Z.one) &&
@@ -597,7 +586,7 @@ let n_memop loc memop pexprs =
 
 
 let rec n_expr (loc : Loc.t) (returns : symbol Pset.set)
-          (e : ('a, unit) expr) (k : mu_expr -> mu_texpr) : mu_texpr = 
+          (e : ('a, unit) expr) : mu_expr = 
   (* print_endline ("\n\n\n*******************************************************\nnormalising ");
    * PPrint.ToChannel.compact stdout (Pp_core_ast.pp_expr e);
    * print_endline "\n";
@@ -605,18 +594,17 @@ let rec n_expr (loc : Loc.t) (returns : symbol Pset.set)
   let (Expr (annots, pe)) = e in
   let loc = update_loc loc (get_loc_ annots) in
   let wrap pe = M_Expr (loc, annots, pe) in
-  let twrap pe = M_TExpr (loc, annots, pe) in
   let n_pexpr = n_pexpr loc in
   let n_paction = (n_paction loc) in
   let n_memop = (n_memop loc) in
   let n_expr = (n_expr loc returns) in
   match pe with
   | Epure pexpr2 -> 
-     k (wrap (M_Epure (n_pexpr pexpr2)))
+     wrap (M_Epure (n_pexpr pexpr2))
   | Ememop(memop1, pexprs1) -> 
-     k (wrap (M_Ememop (n_memop memop1 pexprs1)))
+     wrap (M_Ememop (n_memop memop1 pexprs1))
   | Eaction paction2 ->
-     k (wrap (M_Eaction (n_paction paction2)))
+     wrap (M_Eaction (n_paction paction2))
   | Ecase(pexpr, pats_es) ->
      failwith "Ecase"
      (* let pexpr = n_pexpr pexpr in *)
@@ -632,36 +620,26 @@ let rec n_expr (loc : Loc.t) (returns : symbol Pset.set)
   | Elet(pat, e1, e2) ->
      let e1 = n_pexpr e1 in
      let pat = core_to_mu__pattern loc pat in
-     let e2 = n_expr e2 k in
-     twrap (M_Elet(M_Pat pat, e1, e2))
+     let e2 = n_expr e2 in
+     wrap (M_Elet(M_Pat pat, e1, e2))
   | Eif(e1, e2, e3) ->
      begin match e2, e3 with
-     | Expr (_uannots1, Epure (Pexpr (_uannots2, _, PEundef (uloc, undef)))), _ ->
-        let e1_neg = n_pexpr (Pexpr ([], (), PEnot e1)) in
-        let pat = (M_Pat (unit_pat loc [])) in
-        let assert_undef = (M_Pexpr (loc, [], (), M_PEassert_undef (e1_neg, uloc, undef))) in
-        (expr_n_pexpr_domain.d_let loc annots pat assert_undef (n_expr e3 k))
-     | _, Expr (_uannots1, Epure (Pexpr (_uannots2, _, PEundef (uloc, undef)))) ->
-        let e1 = n_pexpr e1 in
-        let pat = (M_Pat (unit_pat loc [])) in
-        let assert_undef = (M_Pexpr (loc, [], (), M_PEassert_undef (e1, uloc, undef))) in
-        (expr_n_pexpr_domain.d_let loc annots pat assert_undef (n_expr e2 k))
      | Expr (_, Epure (Pexpr (_, _, PEval (Vloaded (LVspecified (OVinteger iv1)))))), 
        Expr (_, Epure (Pexpr (_, _, PEval (Vloaded (LVspecified (OVinteger iv2))))))
           when Option.equal Z.equal (Mem.eval_integer_value iv1) (Some Z.one) &&
                  Option.equal Z.equal (Mem.eval_integer_value iv2) (Some Z.zero)
        ->
         let e1 = n_pexpr e1 in
-        k (wrap (M_Epure (M_Pexpr (loc, [], (), M_PEbool_to_integer e1))))
+        wrap (M_Epure (M_Pexpr (loc, [], (), M_PEbool_to_integer e1)))
      | Expr (_, Epure (Pexpr (_, _, PEval Vtrue))), 
        Expr (_, Epure (Pexpr (_, _, PEval Vfalse))) ->
         let e1 = n_pexpr e1 in
-        k (wrap (M_Epure e1))
+        wrap (M_Epure e1)
      | _ ->
         let e1 = n_pexpr e1 in
-        let e2 = (n_expr e2 k) in
-        let e3 = (n_expr e3 k) in
-        twrap (M_Eif(e1, e2, e3))
+        let e2 = n_expr e2 in
+        let e3 = n_expr e3 in
+        wrap (M_Eif(e1, e2, e3))
      end
   | Eccall(_a, ct1, e2, es) ->
      let ct1 = match ct1 with
@@ -687,7 +665,7 @@ let rec n_expr (loc : Loc.t) (returns : symbol Pset.set)
        | _ -> err ()
      in
      let es = List.map n_pexpr es in
-     k (wrap (M_Eccall(ct1, e2, es)))
+     wrap (M_Eccall(ct1, e2, es))
   | Eproc(_a, name1, es) ->
      failwith "Eproc"
      (* n_pexpr_in_expr_names es (fun es -> *)
@@ -695,58 +673,59 @@ let rec n_expr (loc : Loc.t) (returns : symbol Pset.set)
   | Eunseq es ->
      error "core_anormalisation: Eunseq"
   | Ewseq(pat, e1, e2) ->
-     n_expr e1 (fun e1 ->
+     let e1 = n_expr e1 in
      let pat = core_to_mu__pattern loc pat in
-     twrap (M_Ewseq(pat, e1, n_expr e2 k)))
+     let e2 = n_expr e2 in
+     wrap (M_Ewseq(pat, e1, e2))
   | Esseq(pat, e1, e2) ->
-     n_expr e1 (fun e1 ->
+     let e1 = n_expr e1 in
      let pat = core_to_mu__pattern loc pat in
-     twrap (M_Esseq(pat, e1, n_expr e2 k)))
+     let e2 = n_expr e2 in
+     wrap (M_Esseq(pat, e1, e2))
   | Ebound e ->
-     twrap (M_Ebound (n_expr e k))
+     wrap (M_Ebound (n_expr e))
   | End es ->
-     let es = (List.map (fun e -> n_expr e k) es) in
-     twrap (M_End es)
+     let es = List.map n_expr es in
+     wrap (M_End es)
   | Esave((sym1,bt1), syms_typs_pes, e) ->  
      error "core_anormalisation: Esave"
   (* DISCARDS CONTINUATION *)
   | Erun(_a, sym1, pes) ->
      let pes = List.map n_pexpr pes in
-     begin match pes, Pset.mem sym1 returns with
+     (* begin match pes, Pset.mem sym1 returns with *)
      (* | [e], true -> *)
      (*    letbind_pexpr_ (Symbol.fresh_description Symbol.SD_Return)  *)
      (*      expr_n_pexpr_domain e (fun e -> *)
      (*        twrap (M_Erun(sym1, [e]))) *)
-     | _ ->
-        twrap (M_Erun(sym1, pes))
-     end
+     (* | _ -> *)
+        wrap (M_Erun(sym1, pes))
+     (* end *)
   | Epar es -> 
      error "core_anormalisation: Epar"
   | Ewait tid1 ->
      error "core_anormalisation: Ewait"
   | Epack(id, pes) ->
      let pes = List.map n_pexpr pes in
-     k (wrap (M_Erpredicate(Pack, id, pes)))
+     wrap (M_Erpredicate(Pack, id, pes))
   | Eunpack(id, pes) ->
      let pes = List.map n_pexpr pes in
-     k (wrap (M_Erpredicate(Unpack, id, pes)))
+     wrap (M_Erpredicate(Unpack, id, pes))
   | Ehave(id, pes) ->
      let pes = List.map n_pexpr pes in
-     k (wrap (M_Elpredicate(Have, id, pes)))
+     wrap (M_Elpredicate(Have, id, pes))
   | Eshow(id, pes) ->
      let pes = List.map n_pexpr pes in
-     k (wrap (M_Elpredicate(Show, id, pes)))
+     wrap (M_Elpredicate(Show, id, pes))
   | Einstantiate (id, pe) ->
      let pe = n_pexpr pe in
-     k (wrap (M_Einstantiate (id, pe)))
+     wrap (M_Einstantiate (id, pe))
   | Eannot _ ->
       failwith "core_anormalisation: Eannot"
   | Eexcluded _ ->
       failwith "core_anormalisation: Eexcluded"
 
-let normalise_expr (loc : Loc.t) (returns : symbol Pset.set) e : mu_texpr =
-  n_expr loc returns e (fun e ->
-  M_TExpr (loc, [], M_Edone e))
+let normalise_expr (loc : Loc.t) (returns : symbol Pset.set) e =
+  n_expr loc returns e
 
 
 let normalise_impl_decl (i : unit generic_impl_decl) : unit mu_impl_decl =

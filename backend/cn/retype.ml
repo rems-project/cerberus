@@ -218,9 +218,6 @@ let rec retype_pexpr (Old.M_Pexpr (loc, annots,bty,pexpr_)) =
     | M_PEmemberof (sym,id,asym) ->
        let@ asym = retype_pexpr asym in
        return (New.M_PEmemberof (sym,id,asym))
-    | M_PEassert_undef (asym, loc, undef) ->
-       let@ asym = retype_pexpr asym in
-       return (New.M_PEassert_undef (asym, loc, undef))
     | M_PEbool_to_integer asym ->
        let@ asym = retype_pexpr asym in
        return (New.M_PEbool_to_integer asym)
@@ -431,7 +428,7 @@ let retype_paction = function
     return (New.M_Paction (pol,action))
 
 
-let retype_expr (Old.M_Expr (loc, annots, expr_)) =
+let rec retype_expr (Old.M_Expr (loc, annots, expr_)) =
   let@ expr_ = match expr_ with
     | M_Epure pexpr -> 
        let@ pexpr = retype_pexpr pexpr in
@@ -469,61 +466,39 @@ let retype_expr (Old.M_Expr (loc, annots, expr_)) =
     | M_Einstantiate (id, asym) ->
        let@ asym = retype_pexpr asym in
        return (New.M_Einstantiate (id, asym))
-  in
-
-  return (New.M_Expr (loc, annots,expr_))
-
-let rec retype_texpr (Old.M_TExpr (loc, annots, expr_)) = 
-  let@ expr_ = match expr_ with
-    (* | M_Ecase (asym,pats_es) -> *)
-    (*    let@ pats_es =  *)
-    (*      mapM (fun (pat,e) -> *)
-    (*          let@ pat = retype_pattern pat in *)
-    (*          let@ e = retype_texpr e in *)
-    (*          return (pat,e) *)
-    (*        ) pats_es *)
-    (*    in *)
-    (*    let@ asym = retype_pexpr asym in *)
-    (*    return (New.M_Ecase (asym,pats_es)) *)
     | M_Elet (sym_or_pattern,pexpr,expr) ->
        let@ sym_or_pattern = retype_sym_or_pattern sym_or_pattern in
        let@ pexpr = retype_pexpr pexpr in
-       let@ expr = retype_texpr expr in
+       let@ expr = retype_expr expr in
        return (New.M_Elet (sym_or_pattern,pexpr,expr))
     | M_Eif (asym,expr1,expr2) ->
-       let@ expr1 = retype_texpr expr1 in
-       let@ expr2 = retype_texpr expr2 in
+       let@ expr1 = retype_expr expr1 in
+       let@ expr2 = retype_expr expr2 in
        let@ asym = retype_pexpr asym in
        return (New.M_Eif (asym,expr1,expr2))
     | M_Ewseq (pat,expr1,expr2) ->
        let@ pat = retype_pattern pat in
        let@ expr1 = retype_expr expr1 in
-       let@ expr2 = retype_texpr expr2 in
+       let@ expr2 = retype_expr expr2 in
        return (New.M_Ewseq (pat,expr1,expr2))
     | M_Esseq (pat,expr1,expr2) ->
        let@ pat = retype_pattern pat in
        let@ expr1 = retype_expr expr1 in
-       let@ expr2 = retype_texpr expr2 in
+       let@ expr2 = retype_expr expr2 in
        return (New.M_Esseq (pat,expr1,expr2))
     | M_Ebound expr ->
-       let@ expr = retype_texpr expr in
+       let@ expr = retype_expr expr in
        return (New.M_Ebound expr)
     | M_End es ->
-       let@ es = mapM retype_texpr es in
+       let@ es = mapM retype_expr es in
        return (New.M_End es)
-    | M_Edone e ->
-       let@ e = retype_expr e in
-       return (New.M_Edone e)
     | M_Erun (sym,asyms) ->
        let@ asyms = mapM retype_pexpr asyms in
        return (New.M_Erun (sym,asyms))
-    (* | M_Eundef (loc,undef) ->  *)
-    (*    return (New.M_Eundef (loc,undef)) *)
-    (* | M_Eerror (err,asym) ->  *)
-    (*    let@ asym = retype_pexpr asym in *)
-    (*    return (New.M_Eerror (err,asym)) *)
   in
-  return (New.M_TExpr (loc, annots,expr_))
+
+  return (New.M_Expr (loc, annots,expr_))
+
 
 
 let retype_arg (loc : Loc.t) (sym,acbt) = 
@@ -576,7 +551,7 @@ let retype_file (log_defs, pred_defs) opts (file : 'TY Old.mu_file)
       | Old.M_GlobalDef (lsym, (bt,ct),expr) ->
          let ct = ct_of_ct loc ct in
          let bt = BT.of_sct ct in
-         let@ expr = retype_texpr expr in
+         let@ expr = retype_expr expr in
          let globs = (sym, New.M_GlobalDef (lsym, (bt,ct),expr)) :: globs in
          let glob_typs = (sym, lsym, ct) :: glob_typs in
          return (globs, glob_typs)
@@ -694,7 +669,7 @@ let retype_file (log_defs, pred_defs) opts (file : 'TY Old.mu_file)
             Conversions.make_label_spec fsym loc struct_decls resource_predicates 
               logical_predicates lname start_mapping lspec
           in
-          let@ e = retype_texpr e in
+          let@ e = retype_expr e in
           return (New.M_Label (loc, lt,args,e,annots))
        | Some (LAloop_body loop_id) ->
           error "body label has not been inlined"
@@ -722,7 +697,7 @@ let retype_file (log_defs, pred_defs) opts (file : 'TY Old.mu_file)
    | Old.M_Proc (loc,cbt,args,expr,labels) ->
       let@ bt = Conversions.bt_of_core_base_type loc cbt in
       let@ args = mapM (retype_arg loc) args in
-      let@ expr = retype_texpr expr in
+      let@ expr = retype_expr expr in
       let@ labels = if opts.drop_labels
           then return (Pmap.empty Sym.compare)
           else PmapM.mapM (retype_label ~fsym) labels Sym.compare in

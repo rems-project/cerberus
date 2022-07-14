@@ -14,8 +14,8 @@ open Mu
 
 let rec ib_texpr label e = 
 
-  let (M_TExpr(loc, oannots, e_)) = e in
-  let wrap e_= M_TExpr(loc, oannots, e_) in
+  let (M_Expr(loc, oannots, e_)) = e in
+  let wrap e_= M_Expr(loc, oannots, e_) in
   let taux = ib_texpr label in
   match e_ with
   (* | M_Ecase( asym2, pats_es) -> *)
@@ -25,20 +25,35 @@ let rec ib_texpr label e =
   (*         ) pats_es) *)
   (*    in *)
   (*    wrap (M_Ecase( asym2, pats_es)) *)
+  | M_Epure _ ->
+     wrap e_
+  | M_Ememop _ ->
+     wrap e_
+  | M_Eaction _ ->
+     wrap e_
+  | M_Eskip ->
+     wrap e_
+  | M_Eccall _ ->
+     wrap e_
+  | M_Erpredicate _ ->
+     wrap e_
+  | M_Elpredicate _ ->
+     wrap e_
+  | M_Einstantiate _ ->
+     wrap e_
+
   | M_Elet( sym_or_pat, pe, e) ->
      wrap (M_Elet( sym_or_pat, pe, (taux e)))
   | M_Eif( asym2, e1, e2) ->
      wrap (M_Eif( asym2, taux e1, taux e2))
   | M_Ewseq( pat, e1, e2) -> 
-     wrap (M_Ewseq( pat, e1, taux e2))
+     wrap (M_Ewseq( pat, taux e1, taux e2))
   | M_Esseq( pat, e1, e2) ->
-     wrap (M_Esseq( pat, e1, taux e2))
+     wrap (M_Esseq( pat, taux e1, taux e2))
   | M_Ebound e ->
      wrap (M_Ebound( taux e))
   | M_End es ->
      wrap (M_End (map taux es))
-  | M_Edone asym ->
-     wrap (M_Edone asym)
   (* | M_Eundef (uloc, undef) -> *)
   (*    wrap (M_Eundef (uloc, undef)) *)
   (* | M_Eerror (str, asym) -> *)
@@ -55,18 +70,18 @@ let rec ib_texpr label e =
            (fun () -> ("REPLACING LABEL " ^ Symbol.show_symbol l))
        in
        let arguments = (Lem_list.list_combine label_arg_syms_bts args) in
-       let (M_TExpr(_, annots2, e_)) = 
+       let (M_Expr(_, annots2, e_)) = 
          (List.fold_right (fun ((spec_arg, spec_bt), expr_arg) body ->
               match expr_arg with
               | M_Pexpr (_, _, _, M_PEsym s) when Symbol.symbolEquality s spec_arg ->
                  body
               | _ ->
                  let pat = (M_Pattern (loc, [], M_CaseBase (Some spec_arg, spec_bt))) in
-                 M_TExpr(loc, [], (M_Elet (M_Pat pat, expr_arg, body)))
+                 M_Expr(loc, [], (M_Elet (M_Pat pat, expr_arg, body)))
             ) arguments label_body)
        in
        (* this combines annotations *)
-       M_TExpr (loc, annots2 @ oannots, e_)
+       M_Expr (loc, annots2 @ oannots, e_)
 
 
     

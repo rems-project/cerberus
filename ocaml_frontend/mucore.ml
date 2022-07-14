@@ -135,7 +135,7 @@ module Make(T : TYPES) = struct
    | M_PEunion of symbol * Symbol.identifier * 'TY mu_pexpr (* C union expression *)
    | M_PEmemberof of symbol * Symbol.identifier * 'TY mu_pexpr (* C struct/union member access *)
 
-   | M_PEassert_undef of 'TY mu_pexpr * Location_ocaml.t * Undefined.undefined_behaviour
+   (* | M_PEassert_undef of 'TY mu_pexpr * Location_ocaml.t * Undefined.undefined_behaviour *)
    | M_PEbool_to_integer of 'TY mu_pexpr
    | M_PEconv_int of 'TY act * 'TY mu_pexpr
    | M_PEconv_loaded_int of 'TY act * 'TY mu_pexpr
@@ -225,27 +225,21 @@ type have_show =
    | M_Elpredicate of have_show * Symbol.identifier * ('TY mu_pexpr) list
    | M_Einstantiate of Symbol.identifier option * 'TY mu_pexpr
 
+   | M_Elet of ('TY mu_sym_or_pattern) * ('TY mu_pexpr) * ('TY mu_expr)
+   | M_Ewseq of mu_pattern * ('TY mu_expr) * ('TY mu_expr) (* weak sequencing *)
+   | M_Esseq of mu_pattern * ('TY mu_expr) * ('TY mu_expr) (* strong sequencing *)
+   (* | M_Ecase of 'TY mu_pexpr * (mu_pattern * ('TY mu_texpr)) list (\* pattern matching *\) *)
+   | M_Eif of 'TY mu_pexpr * ('TY mu_expr) * ('TY mu_expr)
+   | M_Ebound of ('TY mu_expr) (* $\ldots$and boundary *)
+   | M_End of ('TY mu_expr) list (* nondeterministic choice *)
+   (* | M_Edone of 'TY mu_expr *)
+   | M_Erun of symbol * ('TY mu_pexpr) list (* run from label *)
+
   and 'TY mu_expr = 
    | M_Expr of loc * annot list * ('TY mu_expr_)
 
   let loc_of_expr (M_Expr (loc, _, _)) = loc
 
-
-  type 'TY mu_texpr_ =
-   | M_Elet of ('TY mu_sym_or_pattern) * ('TY mu_pexpr) * ('TY mu_texpr)
-   | M_Ewseq of mu_pattern * ('TY mu_expr) * ('TY mu_texpr) (* weak sequencing *)
-   | M_Esseq of mu_pattern * ('TY mu_expr) * ('TY mu_texpr) (* strong sequencing *)
-   (* | M_Ecase of 'TY mu_pexpr * (mu_pattern * ('TY mu_texpr)) list (\* pattern matching *\) *)
-   | M_Eif of 'TY mu_pexpr * ('TY mu_texpr) * ('TY mu_texpr)
-   | M_Ebound of ('TY mu_texpr) (* $\ldots$and boundary *)
-   | M_End of ('TY mu_texpr) list (* nondeterministic choice *)
-   | M_Edone of 'TY mu_expr
-   | M_Erun of symbol * ('TY mu_pexpr) list (* run from label *)
-
-  and 'TY mu_texpr = 
-   | M_TExpr of loc * annot list * ('TY mu_texpr_)
-
-  let loc_of_texpr (M_TExpr (loc, _, _)) = loc
 
 
   let embed_pexpr_expr pe : 'TY mu_expr= 
@@ -262,7 +256,7 @@ type have_show =
 
   type 'TY mu_label_def = 
     | M_Return of loc * T.lt
-    | M_Label of loc * T.lt * ((symbol * T.bt) list) * 'TY mu_texpr * annot list
+    | M_Label of loc * T.lt * ((symbol * T.bt) list) * 'TY mu_expr * annot list
 
   type 'TY mu_label_defs = (symbol, ('TY mu_label_def)) Pmap.map
 
@@ -283,7 +277,7 @@ type have_show =
 
   type 'TY mu_fun_map_decl =
     | M_Fun of T.bt * (symbol * T.bt) list * 'TY mu_pexpr
-    | M_Proc of Location_ocaml.t * T.bt * (symbol * T.bt) list * 'TY mu_texpr * 'TY mu_label_defs
+    | M_Proc of Location_ocaml.t * T.bt * (symbol * T.bt) list * 'TY mu_expr * 'TY mu_label_defs
     | M_ProcDecl of Location_ocaml.t * T.bt * T.bt list
     | M_BuiltinDecl of Location_ocaml.t * T.bt * T.bt list
 
@@ -297,7 +291,7 @@ type have_show =
   type mu_extern_map = Core.extern_map
 
   type 'TY mu_globs =
-    | M_GlobalDef of symbol * (T.bt * T.gt) * 'TY mu_texpr
+    | M_GlobalDef of symbol * (T.bt * T.gt) * 'TY mu_expr
     | M_GlobalDecl of symbol * (T.bt * T.gt)
 
   type 'TY mu_globs_map = (symbol, 'TY mu_globs)

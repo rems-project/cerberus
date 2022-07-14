@@ -66,7 +66,7 @@ let fail msg details =
   failwith msg
 
 let fail_check_noop = function
-  | body -> fail "non-noop lemma body element" (NewMu.pp_texpr body)
+  | body -> fail "non-noop lemma body element" (NewMu.pp_expr body)
 
 let check_noop body = ()
 
