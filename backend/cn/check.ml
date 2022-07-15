@@ -769,7 +769,6 @@ let rec check_pexpr (pe : 'bty mu_pexpr) ~(expect:BT.t)
      check_pexpr ~expect:Bool pe (fun c ->
      let aux e cond = 
        let@ () = add_c (t_ cond) in
-       (* TODO: maybe not worth checking reachability? *)
        let@ provable = provable loc in
        match provable (t_ (bool_ false)) with
        | `True -> return ()
@@ -1304,31 +1303,23 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
         let@ () = WellTyped.WCT.is_ct act.loc act.ct in
         let@ () = WellTyped.ensure_base_type loc ~expect (BT.of_sct act.ct) in
         check_pexpr ~expect:Loc p_pe (fun parg ->
-        let@ (point, point_oargs) = 
-          (* TODO: remove this *)
-          restore_resources 
-            (RI.Special.predicate_request ~recursive:true loc (Access (Load None)) ({ 
-                   name = Owned act.ct;
-                   pointer = parg;
-                   permission = bool_ true;
-                   iargs = [];
-                 }, None))
+        let@ (point, O point_oargs) = 
+          (RI.Special.predicate_request ~recursive:true loc (Access (Load None)) ({ 
+                 name = Owned act.ct;
+                 pointer = parg;
+                 permission = bool_ true;
+                 iargs = [];
+               }, None))
         in
-        let value = snd (List.hd (RI.oargs_list point_oargs)) in
-        (* let@ () =  *)
-        (*   let@ provable = provable loc in *)
-        (*   match provable (t_ init) with *)
-        (*   | `True -> return ()  *)
-        (*   | `False -> *)
-        (*      let@ model = model () in *)
-        (*      fail (fun ctxt -> {loc; msg = Uninitialised_read {ctxt; model}}) *)
-        (* in *)
+        let value = snd (List.hd (RI.oargs_list (O point_oargs))) in
         let ret = Sym.fresh () in
+        let oargs_s, oargs = IT.fresh (IT.bt point_oargs) in
         let rt = 
           RT.Computational ((ret, IT.bt value), (loc, None),
           Constraint (t_ (def_ ret value), (loc, None),
-                      (* TODO: check *)
-          LRT.I))
+          Resource ((oargs_s, (P point, IT.bt oargs)), (loc, None),
+          Constraint (t_ (def_ oargs_s point_oargs), (loc, None),
+          LRT.I))))
         in
         k rt)
      | M_RMW (ct, sym1, sym2, sym3, mo1, mo2) -> 
