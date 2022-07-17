@@ -296,9 +296,7 @@ cond:
   | c=logicalconstraint
       { Ast.Constraint (fst c, snd c) } 
   | LET name=UNAME EQUAL r=resource
-      { Ast.Resource (Some name, r) }
-  | r=resource
-      { Ast.Resource (None, r) }
+      { Ast.Resource (name, r) }
   | LET id=LNAME EQUAL t=term
       { Ast.Define (id, t) }
 

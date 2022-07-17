@@ -1227,7 +1227,7 @@ let make_fun_spec loc (layouts : Memory.struct_decls) rpredicates lpredicates
         | Ast.Resource (oroname, cond) ->
               let@ (i', mapping') = 
                 apply_ownership_spec layouts rpredicates lpredicates
-                  "start" mappings (loc, oroname, cond) 
+                  "start" mappings (loc, Some oroname, cond) 
               in
               let mappings = 
                 mod_mapping "start" mappings
@@ -1314,7 +1314,7 @@ let make_fun_spec loc (layouts : Memory.struct_decls) rpredicates lpredicates
         | Ast.Resource (oroname, cond) ->
               let@ (o', mapping') = 
                 apply_ownership_spec layouts rpredicates lpredicates
-                  "end" mappings (loc, oroname, cond) 
+                  "end" mappings (loc, Some oroname, cond) 
               in
               let mappings = 
                 mod_mapping "end" mappings 
@@ -1449,7 +1449,7 @@ let make_label_spec
         | Ast.Resource (oroname, cond) ->
               let@ (i', mapping') = 
                 apply_ownership_spec layouts rpredicates lpredicates
-                  lname mappings (loc, oroname, cond) in
+                  lname mappings (loc, Some oroname, cond) in
               let mappings = 
                 mod_mapping lname mappings 
                   (fun mapping -> mapping' @ mapping)

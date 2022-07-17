@@ -277,7 +277,7 @@ type predicate = {
 
 type condition = 
   | Constraint of (string * BT.t * term) option * term
-  | Resource of (string option) * predicate
+  | Resource of string * predicate
   | Define of string * term
 
 
