@@ -19,40 +19,29 @@ end
 module RW = Rewriter(Identity)
 
 
+
+
+let rec contains_unspec (Pattern (annots, pattern_)) = 
+  match pattern_ with
+  | CaseBase _ -> false
+  | CaseCtor (Cunspecified, pats) -> true
+  | CaseCtor (_, pats) -> List.exists contains_unspec pats
+
 let rec always_matches (Pattern (_, pat_)) =
   match pat_ with
-    | CaseBase _ ->
-        `ALWAYS
-    | CaseCtor (Cspecified, [pat']) ->
-        always_matches pat'
-    | CaseCtor(Cunspecified, _) ->
-        `NEVER
-    | CaseCtor (Ctuple, pats) ->
-        List.fold_left (fun acc pat' ->
-          match acc, always_matches pat' with
-            | `ALWAYS, `ALWAYS ->
-                `ALWAYS
-            | `NEVER, _
-            | _, `NEVER ->
-                `NEVER
-            | _ ->
-                `UNKNOWN
-        ) `ALWAYS pats
-    | _ ->
-        `UNKNOWN
+  | CaseBase _ -> true
+  | CaseCtor (Cspecified, [pat']) -> always_matches pat'
+  | CaseCtor (Ctuple, pats) -> List.for_all always_matches pats
+  | _ -> false
 
-let rec select_case = function
-  | [] ->
-      None
-  | (pat, z) :: xs ->
-      begin match always_matches pat with
-        | `ALWAYS ->
-            Some (pat, z)
-        | `NEVER ->
-            select_case xs
-        | `UNKNOWN ->
-            None
-      end
+let rec cleanup_cases = function
+  | [] -> []
+  | (pat, e) :: cases when always_matches pat -> [(pat, e)]
+  | (pat, e) :: cases when contains_unspec pat -> cleanup_cases cases
+  | (pat, e) :: cases -> (pat, e) :: cleanup_cases cases
+
+
+
 
 let rewriter : 'bty RW.rewriter =
   let open RW in {
@@ -61,12 +50,14 @@ let rewriter : 'bty RW.rewriter =
         DoChildrenPost begin fun (Pexpr (annots, bTy, pexpr_) as pexpr) ->
           match pexpr_ with
             | PEcase (pe, xs) ->
-                begin match select_case xs with
-                  | None ->
-                      pexpr
-                  | Some (pat, pe2) ->
-                      Pexpr (annots, bTy, PElet (pat, pe, pe2))
+                begin match cleanup_cases xs with
+                | [] -> assert false
+                | [(pat,pe2)] -> Pexpr (annots, bTy, PElet (pat, pe, pe2))
+                | xs' -> Pexpr (annots, bTy, PEcase (pe, xs'))
                 end
+            | PElet (pat, pe1, pe2) ->
+               assert (not (contains_unspec pat));
+               pexpr
             | _ ->
                 pexpr
         end
@@ -81,12 +72,16 @@ let rewriter : 'bty RW.rewriter =
         DoChildrenPost begin fun (Expr (annots, expr_) as expr) ->
           match expr_ with
             | Ecase (pe, xs) ->
-                begin match select_case xs with
-                  | None ->
-                      expr
-                  | Some (pat, e2) ->
-                      Expr (annots, Elet (pat, pe, e2))
+                begin match cleanup_cases xs with
+                | [] -> assert false
+                | [(pat, e2)] -> Expr (annots, Elet (pat, pe, e2))
+                | xs' -> Expr (annots, Ecase (pe, xs'))
                 end
+            | Elet (pat, _, _)
+            | Ewseq (pat, _, _)
+            | Esseq (pat, _, _) ->
+               assert (not (contains_unspec pat));
+               expr
             | _ ->
                 expr
         end
