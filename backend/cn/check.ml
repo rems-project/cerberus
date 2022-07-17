@@ -441,6 +441,11 @@ let rec check_object_value (loc : loc) ~(expect: BT.t)
 and check_loaded_value loc ~expect (M_LVspecified ov) =
   check_object_value loc ~expect ov
 
+
+
+
+
+
 let rec check_value (loc : loc) ~(expect:BT.t) (v : 'bty mu_value) : (lvt, type_error) m = 
   match v with
   | M_Vobject ov ->
@@ -1548,6 +1553,40 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
          let@ () = remove_as (List.map fst a) in
          k rt
      ))
+  | Normal expect, M_Eunseq es ->
+     let@ item_bts = match expect with
+       | Tuple bts ->
+          let expect_nr = List.length bts in
+          let has_nr = List.length es in
+          let@ () = WellTyped.ensure_same_argument_number loc `General has_nr ~expect:expect_nr in
+          return bts
+       | _ -> 
+          let msg = Mismatch {has = !^"tuple"; expect = BT.pp expect} in
+          fail (fun _ -> {loc; msg})
+     in
+     let rec aux es_bts k = match es_bts with
+       | [] -> k []
+       | (e, bt) :: es_bts -> 
+          check_expr labels ~typ:(Normal bt) e (fun rt ->
+          aux es_bts (fun rts ->
+          k (rt :: rts)))
+     in
+     aux (List.combine es item_bts) (fun rts ->
+     let ret_s, ret = IT.fresh (Tuple item_bts) in
+     let lrts = 
+       List.mapi (fun i (RT.Computational ((s, item_bt), _, lrt)) -> 
+           LRT.subst (IT.make_subst [(s, nthTuple_ ~item_bt (i, ret))]) lrt
+         ) rts
+     in
+     let _, lrt = 
+       List.fold_right (fun lrt (bound, acc_lrt) ->
+           let lrt = LRT.alpha_unique bound lrt in
+           (SymSet.union bound (LRT.bound lrt), LRT.concat lrt acc_lrt)
+         ) lrts (SymSet.empty, LRT.I)
+     in
+     let rt = RT.Computational ((ret_s, IT.bt ret), (loc, None), lrt)in
+     k rt
+     )
   | _, M_Ewseq (p, e1, e2)
   | _, M_Esseq (p, e1, e2) ->
      let@ patv, (l, a) = pattern_match p in

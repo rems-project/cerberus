@@ -476,6 +476,9 @@ let rec retype_expr (Old.M_Expr (loc, annots, expr_)) =
        let@ expr2 = retype_expr expr2 in
        let@ asym = retype_pexpr asym in
        return (New.M_Eif (asym,expr1,expr2))
+    | M_Eunseq es ->
+       let@ es = ListM.mapM retype_expr es in
+       return (New.M_Eunseq es)
     | M_Ewseq (pat,expr1,expr2) ->
        let@ pat = retype_pattern pat in
        let@ expr1 = retype_expr expr1 in

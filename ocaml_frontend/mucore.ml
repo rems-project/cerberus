@@ -226,6 +226,7 @@ type have_show =
    | M_Einstantiate of Symbol.identifier option * 'TY mu_pexpr
 
    | M_Elet of ('TY mu_sym_or_pattern) * ('TY mu_pexpr) * ('TY mu_expr)
+   | M_Eunseq of ('TY mu_expr) list (* unsequenced expressions *)
    | M_Ewseq of mu_pattern * ('TY mu_expr) * ('TY mu_expr) (* weak sequencing *)
    | M_Esseq of mu_pattern * ('TY mu_expr) * ('TY mu_expr) (* strong sequencing *)
    (* | M_Ecase of 'TY mu_pexpr * (mu_pattern * ('TY mu_texpr)) list (\* pattern matching *\) *)

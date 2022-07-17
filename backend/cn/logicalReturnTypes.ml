@@ -69,6 +69,13 @@ and suitably_alpha_rename syms (s, ls) t =
 
 
 
+let rec bound = function
+  | Define ((s, _), _, lrt) -> SymSet.add s (bound lrt)
+  | Resource ((s, _), _, lrt) -> SymSet.add s (bound lrt)
+  | Constraint (_, _, lrt) -> bound lrt
+  | I -> SymSet.empty
+
+
 let alpha_unique ss =
   let rec f ss = function
   | Resource ((name, (re, bt)), info, t) ->

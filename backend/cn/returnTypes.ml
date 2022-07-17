@@ -38,6 +38,10 @@ let map (f : LRT.t -> LRT.t) = function
   | Computational (param, oinfo, t) -> Computational (param, oinfo, f t)
 
 
+let bound = function
+  | Computational ((s, _), _, lrt) ->
+     SymSet.add s (LRT.bound lrt)
+
 
 
 let pp_aux rt = 

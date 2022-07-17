@@ -141,7 +141,7 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
     | M_Erpredicate _
     | M_Elpredicate _
     | M_Einstantiate _
-    (* | M_Eunseq _ *)
+    | M_Eunseq _
     (* | M_Eindet _ *)
     (* | M_Epar _ *)
     (* | M_Ewait _ -> *)
@@ -739,12 +739,12 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
               pp_keyword "instantiate" ^^^ !^ident ^^ P.parens (pp_pexpr pe)
           | M_Einstantiate (None, pe) ->
               pp_keyword "instantiate" ^^^ P.parens (pp_pexpr pe)
-          (* | M_Eunseq [] ->
-           *     !^ "BUG: UNSEQ must have at least two arguments (seen 0)" *)
-          (* | M_Eunseq [e] ->
-           *     !^ "BUG: UNSEQ must have at least two arguments (seen 1)" ^^ (pp_control "[-[-[") ^^ pp e ^^ (pp_control "]-]-]") *)
-          (* | M_Eunseq es ->
-           *     pp_control "unseq" ^^ P.parens (comma_list pp es) *)
+          (* | M_Eunseq [] -> *)
+          (*     !^ "BUG: UNSEQ must have at least two arguments (seen 0)" *)
+          (* | M_Eunseq [e] -> *)
+          (*     !^ "BUG: UNSEQ must have at least two arguments (seen 1)" ^^ (pp_control "[-[-[") ^^ pp e ^^ (pp_control "]-]-]") *)
+          | M_Eunseq es ->
+              pp_control "unseq" ^^ P.parens (comma_list pp es)
 
 
           | M_Elet (pat, pe1, e2) ->

@@ -46,6 +46,8 @@ let rec ib_texpr label e =
      wrap (M_Elet( sym_or_pat, pe, (taux e)))
   | M_Eif( asym2, e1, e2) ->
      wrap (M_Eif( asym2, taux e1, taux e2))
+  | M_Eunseq es ->
+     wrap (M_Eunseq (List.map taux es))
   | M_Ewseq( pat, e1, e2) -> 
      wrap (M_Ewseq( pat, taux e1, taux e2))
   | M_Esseq( pat, e1, e2) ->

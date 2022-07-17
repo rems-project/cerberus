@@ -671,7 +671,8 @@ let rec n_expr (loc : Loc.t) (returns : symbol Pset.set)
      (* n_pexpr_in_expr_names es (fun es -> *)
      (* k (wrap (M_Eproc(name1, es)))) *)
   | Eunseq es ->
-     error "core_anormalisation: Eunseq"
+     let es = List.map n_expr es in
+     wrap (M_Eunseq es)
   | Ewseq(pat, e1, e2) ->
      let e1 = n_expr e1 in
      let pat = core_to_mu__pattern loc pat in
