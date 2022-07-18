@@ -298,7 +298,7 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
     | M_OVpointer ptr_val ->
         Impl_mem.pp_pointer_value ptr_val
     | M_OVarray lvals ->
-        pp_const "Array" ^^ P.parens (P.nest 1 (comma_list pp_loaded_value lvals))
+        pp_const "Array" ^^ P.parens (P.nest 1 (comma_list pp_object_value lvals))
     | M_OVstruct (tag_sym, xs) ->
         P.parens (pp_const "struct" ^^^ pp_raw_symbol tag_sym) ^^
         P.braces (
@@ -314,9 +314,9 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
     (*| M_OVcfunction nm ->
         !^ "Cfunction" ^^ P.parens (pp_name nm) *)
 
-  and pp_loaded_value = function
-    | M_LVspecified oval ->
-        pp_const "Specified" ^^ P.parens (pp_object_value oval)
+  (* and pp_loaded_value = function *)
+  (*   | M_LVspecified oval -> *)
+  (*       pp_const "Specified" ^^ P.parens (pp_object_value oval) *)
 
 
   and pp_value = function
@@ -341,8 +341,8 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
         P.parens (comma_list pp_value cvals)
     | M_Vobject oval ->
         pp_object_value oval
-    | M_Vloaded lval ->
-        pp_loaded_value lval
+    (* | M_Vloaded lval -> *)
+    (*     pp_loaded_value lval *)
 
   let pp_ctor = function
     | M_Cnil _ ->
@@ -353,8 +353,6 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
         !^ "Tuple"
     | M_Carray ->
         !^ "Array"
-    | M_Cspecified ->
-        !^ "Specified"
 
 
 

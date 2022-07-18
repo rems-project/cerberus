@@ -71,17 +71,17 @@ module Make(T : TYPES) = struct
    | M_OVinteger of Impl_mem.integer_value (* integer value *)
    | M_OVfloating of Impl_mem.floating_value (* floating-point value *)
    | M_OVpointer of Impl_mem.pointer_value (* pointer value *)
-   | M_OVarray of ('TY mu_loaded_value) list (* C array value *)
+   | M_OVarray of ('TY mu_object_value) list (* C array value *)
    | M_OVstruct of symbol * (Symbol.identifier * T.ct * Impl_mem.mem_value) list (* C struct value *)
    | M_OVunion of symbol * Symbol.identifier * Impl_mem.mem_value (* C union value *)
 
 
-  and 'TY mu_loaded_value =  (* potentially unspecified C object values *)
-   | M_LVspecified of 'TY mu_object_value (* non-unspecified loaded value *)
+  (* and 'TY mu_loaded_value =  (\* potentially unspecified C object values *\) *)
+  (*  | M_LVspecified of 'TY mu_object_value (\* non-unspecified loaded value *\) *)
 
   and 'TY mu_value =  (* Core values *)
    | M_Vobject of 'TY mu_object_value (* C object value *)
-   | M_Vloaded of 'TY mu_loaded_value (* loaded C object value *)
+   (* | M_Vloaded of 'TY mu_loaded_value (\* loaded C object value *\) *)
    | M_Vunit
    | M_Vtrue
    | M_Vfalse
@@ -96,7 +96,7 @@ module Make(T : TYPES) = struct
    | M_Ccons (* list cons *)
    | M_Ctuple (* tuple *)
    | M_Carray (* C array *)
-   | M_Cspecified (* non-unspecified loaded value *)
+   (* | M_Cspecified (\* non-unspecified loaded value *\) *)
    (* | M_CivCOMPL (\* bitwise complement *\)
     * | M_CivAND (\* bitwise AND *\)
     * | M_CivOR (\* bitwise OR *\)

@@ -84,10 +84,6 @@ let pattern_match =
           let its, l_a = List.split its_l_a in
           let l, a = List.split l_a in
           return (tuple_ its, (List.concat l, List.concat a))
-       | M_Cspecified, [pat] ->
-          aux pat
-       | M_Cspecified, _ ->
-          fail (fun _ -> {loc; msg = Number_arguments {expect = 1; has = List.length pats}})
        | M_Carray, _ ->
           Debug_ocaml.error "todo: array types"
   in
@@ -428,7 +424,7 @@ let rec check_object_value (loc : loc) ~(expect: BT.t)
           fail (fun _ -> {loc; msg})
      in
      assert (BT.equal index_bt Integer);
-     let@ values = ListM.mapM (check_loaded_value loc ~expect:item_bt) items in
+     let@ values = ListM.mapM (check_object_value loc ~expect:item_bt) items in
      return (make_array_ ~item_bt values)
   | M_OVstruct (tag, fields) -> 
      let mvals = List.map (fun (member,_,mv) -> (member, mv)) fields in
@@ -438,8 +434,8 @@ let rec check_object_value (loc : loc) ~(expect: BT.t)
   | M_OVfloating iv ->
      unsupported loc !^"floats"
 
-and check_loaded_value loc ~expect (M_LVspecified ov) =
-  check_object_value loc ~expect ov
+(* and check_loaded_value loc ~expect (M_LVspecified ov) = *)
+(*   check_object_value loc ~expect ov *)
 
 
 
@@ -450,8 +446,8 @@ let rec check_value (loc : loc) ~(expect:BT.t) (v : 'bty mu_value) : (lvt, type_
   match v with
   | M_Vobject ov ->
      check_object_value loc ~expect ov
-  | M_Vloaded lv ->
-     check_loaded_value loc ~expect lv
+  (* | M_Vloaded lv -> *)
+  (*    check_loaded_value loc ~expect lv *)
   | M_Vunit ->
      let@ () = WellTyped.ensure_base_type loc ~expect Unit in
      return IT.unit_
@@ -602,10 +598,6 @@ let rec check_pexpr (pe : 'bty mu_pexpr) ~(expect:BT.t)
         assert (BT.equal item_bt Integer);
         check_pexprs (List.map (fun pe -> (pe, item_bt)) pes) (fun values ->
         k (make_array_ ~item_bt values))
-     | M_Cspecified, [pe] ->
-        check_pexpr ~expect pe k
-     | M_Cspecified, _ ->
-        fail (fun _ -> {loc; msg = Number_arguments {has = List.length pes; expect = 1}})
      | M_Cnil item_bt, [] -> 
         let@ () = WellTyped.WBT.is_bt loc item_bt in
         let@ () = WellTyped.ensure_base_type loc ~expect (List item_bt) in

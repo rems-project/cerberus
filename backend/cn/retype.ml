@@ -87,7 +87,6 @@ let retype_ctor (loc : Loc.t) (ctor : Old.mu_ctor) : (New.mu_ctor, type_error) m
   | Old.M_Ccons -> return New.M_Ccons
   | Old.M_Ctuple -> return New.M_Ctuple
   | Old.M_Carray -> return New.M_Carray
-  | Old.M_Cspecified -> return New.M_Cspecified
 
 
 let rec retype_pattern (pattern : Old.mu_pattern) : (New.mu_pattern, type_error) m =
@@ -115,7 +114,7 @@ let rec retype_object_value (loc : Loc.t) = function
   | Old.M_OVfloating fv -> return (New.M_OVfloating fv)
   | Old.M_OVpointer pv -> return (New.M_OVpointer pv)
   | Old.M_OVarray lvs -> 
-     let@ lvs = ListM.mapM (retype_loaded_value loc) lvs in
+     let@ lvs = ListM.mapM (retype_object_value loc) lvs in
      return (New.M_OVarray lvs)
   | Old.M_OVstruct (s, members) ->
      let@ members = 
@@ -129,18 +128,18 @@ let rec retype_object_value (loc : Loc.t) = function
      return (New.M_OVunion (s,id,mv))
 
 
-and retype_loaded_value (loc : Loc.t) = function
-  | Old.M_LVspecified ov ->
-     let@ ov = retype_object_value loc ov in
-     return (New.M_LVspecified ov)
+(* and retype_loaded_value (loc : Loc.t) = function *)
+(*   | Old.M_LVspecified ov -> *)
+(*      let@ ov = retype_object_value loc ov in *)
+(*      return (New.M_LVspecified ov) *)
 
 and retype_value (loc : Loc.t) = function 
  | Old.M_Vobject ov -> 
     let@ ov = retype_object_value loc ov in
     return (New.M_Vobject ov)
- | Old.M_Vloaded lv -> 
-    let@ lv = retype_loaded_value loc lv in
-    return (New.M_Vloaded lv)
+ (* | Old.M_Vloaded lv ->  *)
+ (*    let@ lv = retype_loaded_value loc lv in *)
+ (*    return (New.M_Vloaded lv) *)
  | Old.M_Vunit -> return (New.M_Vunit)
  | Old.M_Vtrue -> return (New.M_Vtrue)
  | Old.M_Vfalse -> return (New.M_Vfalse)

@@ -16,6 +16,14 @@ module Option = struct
     | Some v1, Some v2 -> eq v1 v2
 end
 
+
+module SymSet = 
+  Set.Make(struct
+      let compare = Symbol.symbol_compare
+      type t = Symbol.sym
+    end)
+
+
 open Core
 open Annot
 
@@ -101,24 +109,8 @@ let fensure_ctype__pexpr loc err pe : 'TY act =
 
 
 
-let core_to_mu__ctor loc ctor : mu_ctor = 
-  match ctor with 
-  | Core.Cnil bt1 -> M_Cnil bt1
-  | Core.Ccons -> M_Ccons
-  | Core.Ctuple -> M_Ctuple
-  | Core.Carray -> M_Carray
-  | Core.Cspecified -> M_Cspecified
-  | Core.CivCOMPL -> loc_error loc ("core_anormalisation: CivCOMPL")
-  | Core.CivAND-> loc_error loc ("core_anormalisation: CivAND")
-  | Core.CivOR -> loc_error loc ("core_anormalisation: CivOR")
-  | Core.CivXOR -> loc_error loc ("core_anormalisation: CivXOR")
-  | Core.Cfvfromint-> loc_error loc ("core_anormalisation: Cfvfromint")
-  | Core.Civfromfloat -> loc_error loc ("core_anormalisation: Civfromfloat")
-  | Core.Civmax -> loc_error loc ("core_anormalisation: Civmax")
-  | Core.Civmin -> loc_error loc ("core_anormalisation: Civmin")
-  | Core.Civsizeof -> loc_error loc ("core_anormalisation: Civsizeof")
-  | Core.Civalignof -> loc_error loc ("core_anormalisation: Civalignof")
-  | Core.Cunspecified -> loc_error loc ("core_anormalisation: Cunspecified")
+
+
 
 
 let rec core_to_mu__pattern loc (Core.Pattern (annots, pat_)) : mu_pattern = 
@@ -128,9 +120,15 @@ let rec core_to_mu__pattern loc (Core.Pattern (annots, pat_)) : mu_pattern =
   | Core.CaseBase (msym, bt1) -> 
      wrap (M_CaseBase (msym, bt1))
   | Core.CaseCtor(ctor, pats) -> 
-     let ctor = core_to_mu__ctor loc ctor in
      let pats = map (core_to_mu__pattern loc) pats in
-     wrap (M_CaseCtor(ctor, pats))
+     match ctor with
+     | Core.Cnil bt1 -> wrap (M_CaseCtor (M_Cnil bt1, pats))
+     | Core.Ccons -> wrap (M_CaseCtor (M_Ccons, pats))
+     | Core.Ctuple -> wrap (M_CaseCtor (M_Ctuple, pats))
+     | Core.Carray -> wrap (M_CaseCtor (M_Carray, pats))
+     | Core.Cspecified -> List.hd pats
+     | _ -> loc_error loc ("core_to_mucore: unsupported pattern")
+
 
 
 
@@ -220,7 +218,7 @@ let rec n_ov loc v =
 
 and n_lv loc v =
   match v with
-  | LVspecified ov -> M_LVspecified (n_ov loc ov)
+  | LVspecified ov -> (* M_LVspecified *) (n_ov loc ov)
   | LVunspecified ct1 -> error "core_anormalisation: LVunspecified"
 
 
@@ -231,7 +229,7 @@ and n_val loc v =
    * flush stdout; *)
   match v with
   | Vobject ov -> M_Vobject (n_ov loc ov)
-  | Vloaded lv -> M_Vloaded (n_lv loc lv)
+  | Vloaded lv -> M_Vobject (n_lv loc lv)
   | Vunit -> M_Vunit
   | Vtrue -> M_Vtrue
   | Vfalse -> M_Vfalse
@@ -304,9 +302,18 @@ let rec n_pexpr loc (Pexpr (annots, bty, pe)) : mu_pexpr =
         annotate (M_Civfromfloat(ct, arg1))
      | Core.Civfromfloat, _ ->
         loc_error loc "Civfromfloat applied to wrong number of arguments"
-     | _ ->
-        let args = List.map (n_pexpr loc) args in
-        annotate (M_PEctor((core_to_mu__ctor loc ctor), args))
+     | Core.Cnil bt1, _ -> 
+        annotate (M_PEctor (M_Cnil bt1, List.map (n_pexpr loc) args))
+     | Core.Ccons, _ ->
+        annotate (M_PEctor (M_Ccons, List.map (n_pexpr loc) args))
+     | Core.Ctuple, _ -> 
+        annotate (M_PEctor (M_Ctuple, List.map (n_pexpr loc) args))
+     | Core.Carray, _ -> 
+        annotate (M_PEctor (M_Carray, List.map (n_pexpr loc) args))
+     | Core.Cspecified, _ -> 
+        n_pexpr loc (List.hd args)
+     | _ -> 
+        loc_error loc ("core_to_mucore: unsupported ctor application")
      end
   | PEcase(e', pats_pes) ->
      loc_error loc "PEcase"
@@ -353,10 +360,41 @@ let rec n_pexpr loc (Pexpr (annots, bty, pe)) : mu_pexpr =
         loc_error loc "PEcall not inlined"
      end
   | PElet(pat, e', e'') ->
-     let pat = core_to_mu__pattern loc pat in
-     let e' = n_pexpr loc e' in
-     let e'' = n_pexpr loc e'' in
-     annotate (M_PElet (M_Pat pat, e', e''))
+     begin match pat, e' with
+     | Pattern (annots, CaseBase (Some sym, _)), 
+       Pexpr (annots2, _, PEsym sym2) 
+     | Pattern (annots, CaseCtor (Cspecified, [Pattern (_, CaseBase (Some sym, _))])), 
+       Pexpr (annots2, _, PEsym sym2) 
+       ->
+        let e'' = Core_peval.subst_sym_pexpr2 sym 
+                    (get_loc annots2, `SYM sym2) e'' in
+        n_pexpr loc e''
+
+
+     | Pattern (annots, CaseCtor (Ctuple, [Pattern (_, CaseBase (Some sym, _));
+                                           Pattern (_, CaseBase (Some sym', _))])), 
+       Pexpr (annots2, _, PEctor (Ctuple, [Pexpr (_, _, PEsym sym2);
+                                           Pexpr (_, _, PEsym sym2')]))
+     | Pattern (annots, CaseCtor (Ctuple, [Pattern (_, CaseCtor (Cspecified, [Pattern (_, CaseBase (Some sym, _))]));
+                                           Pattern (_, CaseCtor (Cspecified, [Pattern (_, CaseBase (Some sym', _))]))])), 
+       Pexpr (annots2, _, PEctor (Ctuple, [Pexpr (_, _, PEsym sym2);
+                                           Pexpr (_, _, PEsym sym2')]))
+       (* pairwise disjoint *)
+       when (SymSet.cardinal (SymSet.of_list [sym; sym'; sym2; sym2']) = 4) ->
+        let e'' = Core_peval.subst_sym_pexpr2 sym 
+                   (get_loc annots2, `SYM sym2) e'' in
+        let e'' = Core_peval.subst_sym_pexpr2 sym' 
+                   (get_loc annots2, `SYM sym2') e'' in
+        n_pexpr loc e''
+
+
+
+     | _ ->
+        let pat = core_to_mu__pattern loc pat in
+        let e' = n_pexpr loc e' in
+        let e'' = n_pexpr loc e'' in
+        annotate (M_PElet (M_Pat pat, e', e''))
+     end
   | PEif(e1, e2, e3) ->
      begin match e2, e3 with
      | Pexpr (_, _, PEval (Vloaded (LVspecified (OVinteger iv1)))), 
@@ -618,10 +656,37 @@ let rec n_expr (loc : Loc.t) (returns : symbol Pset.set)
      (* in *)
      (* twrap (M_Ecase(pexpr, pats_es)) *)
   | Elet(pat, e1, e2) ->
-     let e1 = n_pexpr e1 in
-     let pat = core_to_mu__pattern loc pat in
-     let e2 = n_expr e2 in
-     wrap (M_Elet(M_Pat pat, e1, e2))
+     begin match pat, e1 with
+     | Pattern (annots, CaseBase (Some sym, _)),
+       Pexpr (annots2, _, PEsym sym2) 
+     | Pattern (annots, CaseCtor (Cspecified, [Pattern (_, CaseBase (Some sym, _))])), 
+       Pexpr (annots2, _, PEsym sym2) 
+       ->
+        let e2 = Core_peval.subst_sym_expr2 sym 
+                   (get_loc annots2, `SYM sym2) e2 in
+        n_expr e2
+     | Pattern (annots, CaseCtor (Ctuple, [Pattern (_, CaseBase (Some sym, _));
+                                           Pattern (_, CaseBase (Some sym', _))])), 
+       Pexpr (annots2, _, PEctor (Ctuple, [Pexpr (_, _, PEsym sym2);
+                                           Pexpr (_, _, PEsym sym2')]))
+     | Pattern (annots, CaseCtor (Ctuple, [Pattern (_, CaseCtor (Cspecified, [Pattern (_, CaseBase (Some sym, _))]));
+                                           Pattern (_, CaseCtor (Cspecified, [Pattern (_, CaseBase (Some sym', _))]))])), 
+       Pexpr (annots2, _, PEctor (Ctuple, [Pexpr (_, _, PEsym sym2);
+                                           Pexpr (_, _, PEsym sym2')]))
+       (* pairwise disjoint *)
+       when (SymSet.cardinal (SymSet.of_list [sym; sym'; sym2; sym2']) = 4) ->
+        let e2 = Core_peval.subst_sym_expr2 sym 
+                   (get_loc annots2, `SYM sym2) e2 in
+        let e2 = Core_peval.subst_sym_expr2 sym' 
+                   (get_loc annots2, `SYM sym2') e2 in
+        n_expr e2
+
+     | _ ->
+        let e1 = n_pexpr e1 in
+        let pat = core_to_mu__pattern loc pat in
+        let e2 = n_expr e2 in
+        wrap (M_Elet(M_Pat pat, e1, e2))
+     end
   | Eif(e1, e2, e3) ->
      begin match e2, e3 with
      | Expr (_, Epure (Pexpr (_, _, PEval (Vloaded (LVspecified (OVinteger iv1)))))), 

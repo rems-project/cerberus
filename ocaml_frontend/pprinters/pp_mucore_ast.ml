@@ -70,21 +70,21 @@ module Make(PP_Typ : Pp_mucore.PP_Typ) = struct
         Dleaf (pp_pure_ctor "OVpointer" ^^^ Impl_mem.pp_pointer_value ptrval)
     | M_OVarray lvals ->
         Dnode ( pp_pure_ctor "OVarray"
-              , List.map dtree_of_loaded_value lvals)
+              , List.map dtree_of_object_value lvals)
     | M_OVstruct (tag_sym, xs) ->
         (* (Symbol.identifier * Ctype.ctype * Impl_mem.mem_value) list *)
         Dleaf (pp_pure_ctor "OVstruct" ^^^ !^ (ansi_format [Red] "TODO"))
     | M_OVunion (tag_sym, membr_ident, mval) ->
         Dleaf (pp_pure_ctor "OVunion" ^^^ !^ (ansi_format [Red] "TODO"))
-  and dtree_of_loaded_value = function
-    | M_LVspecified oval ->
-        Dnode (pp_pure_ctor "LVspecified", [dtree_of_object_value oval])
+  (* and dtree_of_loaded_value = function *)
+  (*   | M_LVspecified oval -> *)
+  (*       Dnode (pp_pure_ctor "LVspecified", [dtree_of_object_value oval]) *)
 
   and dtree_of_value = function
     | M_Vobject oval ->
         Dnode (pp_pure_ctor "Vobject", [dtree_of_object_value oval])
-    | M_Vloaded lval ->
-        Dnode (pp_pure_ctor "Vloaded", [dtree_of_loaded_value lval])
+    (* | M_Vloaded lval -> *)
+    (*     Dnode (pp_pure_ctor "Vloaded", [dtree_of_loaded_value lval]) *)
     | M_Vunit ->
         Dleaf (pp_pure_ctor "Vunit")
     | M_Vtrue ->
