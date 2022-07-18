@@ -356,8 +356,10 @@ let rec n_pexpr loc (Pexpr (annots, bty, pe)) : mu_pexpr =
         let ct = (fensure_ctype__pexpr loc "PEcall(wrapI,_): not a ctype" arg1) in
         let arg2 = n_pexpr loc arg2 in
         annotate (M_PEwrapI(ct, arg2))
-     | _ ->
-        loc_error loc "PEcall not inlined"
+     | Sym sym, _ ->
+        loc_error loc ("PEcall not inlined: " ^ Pp_symbol.to_string sym)
+     | Impl impl, _ ->
+        loc_error loc ("PEcall not inlined: " ^ Implementation.string_of_implementation_constant impl)
      end
   | PElet(pat, e', e'') ->
      begin match pat, e' with
@@ -833,14 +835,7 @@ let normalise_fun_map_decl (name1: symbol) d
   | Mi_BuiltinDecl(loc, bt, bts) -> M_BuiltinDecl(loc, bt, bts)
 
 let normalise_fun_map fmap : unit mu_fun_map= 
-  let fmap = 
-    Pmap.filter (fun sym _ ->
-        match Symbol.symbol_description sym with
-        | SD_Id name when List.mem name Not_unfold.not_unfold -> false
-        | _ -> true
-      ) fmap 
-  in
-   (Pmap.mapi normalise_fun_map_decl fmap)
+  (Pmap.mapi normalise_fun_map_decl fmap)
   
 
 
