@@ -117,25 +117,30 @@ let frontend astprints filename state_file =
   print_log_file "original" (CORE core_file);
 
   let core_file = CF.Remove_unspecs.rewrite_file core_file in
-  let () = print_log_file "after_remove_unspecified" (CORE core_file) in
+  (* let () = print_log_file "after_remove_unspecified" (CORE core_file) in *)
 
   let core_file = CF.Core_peval.rewrite_file core_file in
-  let () = print_log_file "after_partial_evaluation" (CORE core_file) in
-
-  let core_file = CF.Core_remove_unused_functions.remove_unused_functions true core_file in
-  let () = print_log_file "after_removing_unused_functions" (CORE core_file) in
+  (* let () = print_log_file "after_partial_evaluation" (CORE core_file) in *)
 
   let@ core_file = CF.Core_typing.typecheck_program core_file in
   let core_file = CF.Core_sequentialise.sequentialise_file core_file in
   let core_file = CB.Pipeline.untype_file core_file in
-  let () = print_log_file "after_sequentialisation" (CORE core_file) in
+  (* let () = print_log_file "after_sequentialisation" (CORE core_file) in *)
+
+  (* let core_file = CF.Core_remove_unused_functions.remove_unused_functions true core_file in *)
+  let core_file = { 
+      core_file with impl = Pmap.empty CF.Implementation.implementation_constant_compare;
+                     stdlib = Pmap.empty CF.Symbol.symbol_compare
+    }
+  in
+  (* let () = print_log_file "after_removing_unused_functions" (CORE core_file) in *)
 
   let mi_file = Milicore.core_to_micore__file CTM.update_loc core_file in
   let mu_file = CTM.normalise_file mi_file in
-  print_log_file "after_anf" (MUCORE mu_file);
+  (* print_log_file "after_anf" (MUCORE mu_file); *)
 
   let mu_file = CF.Mucore_label_inline.ib_file mu_file in
-  print_log_file "after_inlining_break" (MUCORE mu_file);
+  (* print_log_file "after_inlining_break" (MUCORE mu_file); *)
   
   let ail_program = match ail_program_opt with
     | None -> assert false
