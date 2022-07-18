@@ -628,10 +628,7 @@ module General = struct
     match values_err with
     | Result.Error e -> return (Result.Error e)
     | Result.Ok values ->
-       let value_s, value = IT.fresh (Struct tag) in
-       let@ () = add_ls [(value_s, IT.bt value)] in
-       let@ () = add_c (t_ (def_ value_s (IT.struct_ (tag, values)))) in
-       let folded_oargs = record_ [(Resources.value_sym, value)] in
+       let folded_oargs = record_ [(Resources.value_sym, (IT.struct_ (tag, values)))] in
        let folded_resource = ({
            name = Owned (Struct tag);
            pointer = pointer_t;
