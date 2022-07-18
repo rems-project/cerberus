@@ -565,12 +565,9 @@ module General = struct
            ) oargs oarg_bts
        in
        let folded_value = List.hd oargs in
-       let value_s, value = IT.fresh (IT.bt folded_value) in
-       let@ () = add_ls [(value_s, IT.bt value)] in
-       let@ () = add_c (t_ (def_ value_s folded_value)) in
        let@ provable = provable loc in
        let folded_oargs = 
-         record_ [(Resources.value_sym, value)]
+         record_ [(Resources.value_sym, folded_value)]
        in
        let folded_resource = ({
            name = Owned (Array (item_ct, Some length));
