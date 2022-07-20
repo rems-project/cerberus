@@ -189,13 +189,7 @@ let rt_of_lvt lvt =
 
 
 
-(* (\* The pattern-matching might de-struct 'bt'. For easily making *)
-(*    constraints carry over to those values, record (lname,bound) as a *)
-(*    logical variable and record constraints about how the variables *)
-(*    introduced in the pattern-matching relate to (lname,bound). *\) *)
-(* let pattern_match_rt loc (pat : mu_pattern) (rt : RT.t) : (unit, type_error) m = *)
-(*   let@ (bt, s') = bind_logically (Some loc) rt in *)
-(*   pattern_match (sym_ (s', bt)) pat *)
+
 
 
 
@@ -1630,8 +1624,14 @@ let check_expr_rt loc labels ~typ e =
   match typ with
   | Normal (RT.Computational ((return_s, return_bt), info, lrt)) ->
      check_expr_in [loc] labels ~typ:(Normal return_bt) e (fun returned_rt ->
-         let@ (arg_bt, arg_s) = bind_logically (None, Some (Loc loc)) returned_rt in
-         let lrt = LRT.subst (IT.make_subst [(return_s, sym_ (arg_s, arg_bt))]) lrt in
+         let Computational ((returned_s, returned_bt), _info, returned_lrt) = returned_rt in
+         let (returned_s, returned_lrt) = 
+           LRT.alpha_rename_ (Sym.fresh_named "return") 
+             (returned_s, returned_bt) returned_lrt 
+         in
+         let@ () = add_l returned_s returned_bt in
+         let@ () = bind_logical (None, Some (Loc loc)) returned_lrt in
+         let lrt = LRT.subst (IT.make_subst [(return_s, sym_ (returned_s, returned_bt))]) lrt in
          Spine.subtype loc lrt (fun () ->
          let@ () = all_empty loc in
          return ())
