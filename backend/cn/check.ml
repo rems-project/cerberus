@@ -1587,15 +1587,16 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
           Sym.has_id fsym
        | _ -> None
      in
-     check_expr labels ~typ:(Normal (IT.bt patv)) e1 (fun rt1 ->
-         let@ (bt, s') = bind_logically (oprefix, Some (Loc loc)) rt1 in
-         let@ () = add_ls l in
-         let@ () = add_as a in
-         let@ () = add_c (t_ (eq__ patv (sym_ (s', bt)))) in
-         check_expr labels ~typ e2 (fun rt2 ->
-             let@ () = remove_as (List.map fst a) in
-             k rt2
-           )
+     check_expr labels ~typ:(Normal (IT.bt patv)) e1 (function
+         | Computational ((s', _bt), _info, lrt) ->
+            let lrt = LRT.subst (IT.make_subst [(s', patv)]) lrt in
+            let@ () = add_ls l in
+            let@ () = add_as a in
+            let@ () = bind_logical (oprefix, Some (Loc loc)) lrt in
+            check_expr labels ~typ e2 (fun rt2 ->
+                let@ () = remove_as (List.map fst a) in
+                k rt2
+              )
        )
   | _, M_Erun (label_sym, pes) ->
      let@ (lt,lkind) = match SymMap.find_opt label_sym labels with
