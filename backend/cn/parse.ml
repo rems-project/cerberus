@@ -111,9 +111,9 @@ let parse_function
         {asym; lsym; typ; accessed = None}
       ) globals 
   in
-  let@ (trusted, globals, pre, post) = 
-    ListM.fold_leftM (fun (trusted, globals, pre, post) attr ->
-        let pre_before_post loc post = 
+  let@ (trusted, globals, pre, post, defines_log_funs) =
+    ListM.fold_leftM (fun (trusted, globals, pre, post, def_log) attr ->
+        let pre_before_post loc post =
           match post with
           | [] -> return ()
           | _ -> 
@@ -135,17 +135,17 @@ let parse_function
                 | _ -> fail {loc = keyword_loc; 
                              msg = Generic !^"'trusted' takes no arguments"}
               in
-              return (CF.Mucore.Trusted keyword_loc, globals, pre, post)
+              return (CF.Mucore.Trusted keyword_loc, globals, pre, post, def_log)
            | "accesses" -> 
               let@ globals = ListM.fold_leftM make_accessed globals arguments in
-              return (trusted, globals, pre, post)
+              return (trusted, globals, pre, post, def_log)
            | "requires" -> 
               let@ () = pre_before_post keyword_loc post in
               let@ new_pre = ListM.mapM (parse Assertion_parser.start) arguments in
-              return (trusted, globals, pre @ new_pre, post)
+              return (trusted, globals, pre @ new_pre, post, def_log)
            | "ensures" -> 
               let@ new_post = ListM.mapM (parse Assertion_parser.start) arguments in
-              return (trusted, globals, pre, post @ new_post)
+              return (trusted, globals, pre, post @ new_post, def_log)
            | "inv" -> no_inv keyword_loc
            | other -> fail {loc = keyword_loc; msg = Generic !^("unknown keyword '"^other^"'")}
            end
@@ -156,24 +156,27 @@ let parse_function
                  parse Assertion_parser.keyword_condition (loc, arg)
                ) attr.attr_args
            in
-           ListM.fold_leftM (fun (trusted, globals, pre, post) (loc, keyword_condition) ->
+           ListM.fold_leftM (fun (trusted, globals, pre, post, def_log)
+               (loc, keyword_condition) ->
                match keyword_condition with
                | Trusted ->
-                  return (CF.Mucore.Trusted loc, globals, pre, post)
+                  return (CF.Mucore.Trusted loc, globals, pre, post, def_log)
                | Accesses a ->
                   let@ globals = ListM.fold_leftM make_accessed_id globals a in
-                  return (trusted, globals, pre, post)
+                  return (trusted, globals, pre, post, def_log)
                | Requires condition ->
                   let@ () = pre_before_post loc post in
-                  return (trusted, globals, pre @ condition, post)
+                  return (trusted, globals, pre @ condition, post, def_log)
                | Ensures condition ->
-                  return (trusted, globals, pre, post @ condition)
+                  return (trusted, globals, pre, post @ condition, def_log)
                | Inv _ ->
                   no_inv loc
-             ) (trusted, globals, pre, post) keyword_conditions
+               | Make_Function id ->
+                  return (trusted, globals, pre, post, id :: def_log)
+             ) (trusted, globals, pre, post, def_log) keyword_conditions
         | _ ->
-           return (trusted, globals, pre, post)
-      ) (trusted, globals, [], []) attributes
+           return (trusted, globals, pre, post, def_log)
+      ) (trusted, globals, [], [], []) attributes
   in
   let global_arguments = globals in
   let function_arguments = 
@@ -187,7 +190,8 @@ let parse_function
       function_arguments; 
       function_return; 
       pre_condition; 
-      post_condition 
+      post_condition;
+      defines_log_funs;
     }
 
 let parse_label 
@@ -204,27 +208,18 @@ let parse_label
   in
   let@ inv = 
     ListM.fold_leftM (fun inv attr ->
-        let no_trusted loc = 
-          fail {loc; msg = Generic !^("currently 'trusted' only works for functions, not labels")}
-        in
-        let no_accesses loc =
-          fail {loc; msg = Generic !^"'accesses' is for function specifications"}
-        in
-        let no_requires loc = 
-          fail {loc; msg = Generic !^"'requires' is for function specifications"}
-        in
-        let no_ensures loc =
-          fail {loc; msg = Generic !^"'ensures' is for function specifications"}
+        let not_inv loc =
+          fail {loc; msg = Generic !^("only 'inv' assertions can be used at label scope")}
         in
         match Option.map Id.s (attr.attr_ns), Id.s attr.attr_id with
         | Some "cn", id ->
            let Identifier (keyword_loc, keyword) = attr.attr_id in
            let arguments = List.map (fun (loc, arg, _) -> (loc, arg)) attr.attr_args in
            begin match id with
-           | "trusted" -> no_trusted keyword_loc
-           | "accesses" -> no_accesses keyword_loc
-           | "requires" -> no_requires keyword_loc
-           | "ensures" -> no_ensures keyword_loc
+           | "trusted" -> not_inv keyword_loc
+           | "accesses" -> not_inv keyword_loc
+           | "requires" -> not_inv keyword_loc
+           | "ensures" -> not_inv keyword_loc
            | "inv" ->
               let@ new_inv = ListM.mapM (parse Assertion_parser.start) arguments in
               return (inv @ new_inv)
@@ -239,11 +234,8 @@ let parse_label
            in
            ListM.fold_leftM (fun inv (loc, keyword_condition) ->
                match keyword_condition with
-               | Trusted -> no_trusted loc
-               | Accesses _ -> no_accesses loc
-               | Requires _ -> no_requires loc
-               | Ensures _ -> no_ensures loc
                | Inv condition -> return (inv @ condition)
+               | _ -> not_inv loc
              ) inv keyword_conditions
         | _, _ ->
            return inv

@@ -74,6 +74,7 @@ type token =
   | REQUIRES
   | ENSURES
   | INV
+  | CN_FUNCTION
 
   | EOF
 
