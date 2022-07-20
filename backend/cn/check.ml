@@ -58,10 +58,12 @@ let pattern_match =
     | M_CaseBase (o_s, has_bt) ->
        let@ () = WellTyped.WBT.is_bt loc has_bt in
        let lsym = Sym.fresh () in 
-       begin match o_s with
-       | Some s -> 
+       begin match o_s, has_bt with
+       | Some s, _ -> 
           return (sym_ (lsym, has_bt), ([(lsym, has_bt)], [(s, (has_bt, lsym))]))
-       | None -> 
+       | None, Unit -> 
+          return (unit_, ([], []))
+       | None, _ -> 
           return (sym_ (lsym, has_bt), ([(lsym, has_bt)], []))
        end
     | M_CaseCtor (constructor, pats) ->
