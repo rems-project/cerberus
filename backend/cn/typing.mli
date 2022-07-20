@@ -72,6 +72,7 @@ val todo_get_resource_predicate_def_s : Locations.t -> string ->
     (Sym.t * ResourcePredicates.definition, TypeErrors.type_error) m
 val todo_get_logical_predicate_def_s : Locations.t -> string ->
     (Sym.t * LogicalPredicates.definition, TypeErrors.type_error) m
+val is_fully_defined_pred : Locations.t -> Sym.t -> (bool, TypeErrors.type_error) m
 
 
 val add_struct_decl : Sym.t -> Memory.struct_layout -> (unit, 'e) m

@@ -466,7 +466,12 @@ let mentions_pred (pred: Id.t) =
       acc || is_pred pred it
     ) false
 
-
+let preds_of t =
+  let add_p s = function
+    | IT (Pred (id, _), _) -> SymSet.add id s
+    | _ -> s
+  in
+  fold_subterms (fun _ -> add_p) SymSet.empty t
 
 
 

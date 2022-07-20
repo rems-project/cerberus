@@ -394,7 +394,6 @@ let todo_get_resource_predicate_def_s loc id =
      fail (fun _ -> {loc; msg = Unknown_resource_predicate {id = Sym.fresh_named id;
                                   logical = Option.is_some odef}})
 
-
 let todo_get_logical_predicate_def_s loc id =
   let open TypeErrors in
   let@ odef = todo_opt_get_logical_predicate_def_s id in
@@ -423,6 +422,15 @@ let get_logical_predicate_def loc id =
   | None -> fail (fun _ -> {loc; msg = Unknown_logical_predicate {id;
       resource = Option.is_some (Global.get_resource_predicate_def global id)}})
 
+let is_fully_defined_pred loc id =
+  let@ global = get_global () in
+  let defs = (let open Global in global.logical_predicates) in
+  let@ x = try return (LogicalPredicates.is_fully_defined defs id)
+    with LogicalPredicates.Unknown id2 ->
+      (* will raise the correct error *)
+      begin let@ _ = get_logical_predicate_def loc id2 in return true end
+  in
+  return x
 
 let get_struct_decl loc tag = 
   let open TypeErrors in

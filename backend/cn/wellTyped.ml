@@ -130,6 +130,20 @@ module WIT = struct
 
   type t = IndexTerms.t
 
+  (* We expect a (sub) term to be constant unless it contains a free variable
+     or it makes use of an uninterpreted logical predicate. *)
+  let is_const loc t =
+    let fs = IndexTerms.free_vars t in
+    Pp.debug 2 (lazy (Pp.item "is_const: vars" (Pp.flow (Pp.string " ")
+        (IT.pp t :: Pp.colon :: List.map Sym.pp (SymSet.elements fs)))));
+    if not (SymSet.is_empty fs) then return false
+    else
+    let ps = IndexTerms.preds_of t in
+    Pp.debug 2 (lazy (Pp.item "is_const: preds" (Pp.flow (Pp.string " ")
+        (IT.pp t :: Pp.colon :: List.map Sym.pp (SymSet.elements ps)))));
+    let@ defns = ListM.mapM (Typing.is_fully_defined_pred loc) (SymSet.elements ps) in
+    return (List.for_all (fun x -> x) defns)
+
 
   let rec infer : 'bt. Loc.t -> context:(BT.t IT.term) -> 'bt IT.term -> (IT.t, type_error) m =
       fun loc ~context (IT (it, _)) ->
@@ -173,8 +187,10 @@ module WIT = struct
             let@ t = infer loc ~context t in
             let@ () = ensure_integer_or_real_type loc context t in
             let@ t' = check loc ~context (IT.bt t) t' in
+            let@ c = is_const loc t in
+            let@ c' = is_const loc t' in
             let@ () = 
-              if (is_z_ t) || (is_z_ t') then return () else
+              if c || c' then return () else
                 let hint = "Only multiplication by constants is allowed" in
                 fail (fun ctxt -> {loc; msg = NIA {context; it = IT.mul_ (t, t'); ctxt; hint}})
             in
@@ -188,8 +204,9 @@ module WIT = struct
             let@ t = infer loc ~context t in
             let@ () = ensure_integer_or_real_type loc context t in
             let@ t' = check loc ~context (IT.bt t) t' in
+            let@ c' = is_const loc t' in
             let@ () = 
-              if (is_z_ t') then return () else 
+              if c' then return () else
                 let hint = "Only division by constants is allowed" in
                 fail (fun ctxt -> {loc; msg = NIA {context; it = div_ (t, t'); ctxt; hint}})
             in
@@ -221,8 +238,9 @@ module WIT = struct
            | Rem (t,t') ->
               let@ t = check loc ~context Integer t in
               let@ t' = check loc ~context Integer t' in
+	      let@ c' = is_const loc t' in
               let@ () = 
-                if (is_z_ t') then return () else 
+                if c' then return () else
                   let hint = "Only division by constants is allowed" in
                   fail (fun ctxt -> {loc; msg = NIA {context; it = rem_ (t, t'); ctxt; hint}})
               in
@@ -234,8 +252,9 @@ module WIT = struct
            | Mod (t,t') ->
               let@ t = check loc ~context Integer t in
               let@ t' = check loc ~context Integer t' in
+	      let@ c' = is_const loc t' in
               let@ () = 
-                if Option.is_some (is_z t') then return () else 
+                if c' then return () else
                   let hint = "Only division by constants is allowed" in
                   fail (fun ctxt -> {loc; msg = NIA {context; it = mod_ (t, t'); ctxt; hint}})
               in

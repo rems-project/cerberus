@@ -8,6 +8,9 @@ open IndexTerms
 open Sctypes
 open BaseTypes
 
+module SymSet = Set.Make(Sym)
+module SymMap = Map.Make(Sym)
+
 
 type def_or_uninterp = 
   | Def of IndexTerms.t
@@ -40,8 +43,27 @@ let open_pred def_args def_body args =
   IT.subst su def_body
 
 
-exception Struct_not_found
+exception Unknown of Sym.t
 
+(* Compute if a predicate is sufficiently defined, i.e. not uninterpreted
+   nor can it call a predicate that is uninterpreted. *)
+let is_fully_defined (defs : definition SymMap.t) nm =
+  let rec scan seen = function
+    | [] -> true
+    | nm :: nms -> if SymSet.mem nm seen
+      then scan seen nms
+      else begin match SymMap.find_opt nm defs with
+        | None -> raise (Unknown nm)
+        | Some def -> begin match def.definition with
+            | Uninterp -> false
+            | Def t -> scan (SymSet.add nm seen) (SymSet.elements (IT.preds_of t) @ nms)
+        end
+    end
+  in
+  scan SymSet.empty [nm]
+
+
+exception Struct_not_found
 
 
 
