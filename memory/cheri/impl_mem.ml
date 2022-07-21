@@ -2406,6 +2406,14 @@ module CHERI (C:Capability
                   TyIsPointer
                 ]
         ])
+    else if name = "cheri_bounds_set" then
+      Some ( CopyRet 0,
+             [ PolymorphicArg [
+                   TyPred (Ctype.ctypeEqual Ctype.intptr_t);
+                   TyPred (Ctype.ctypeEqual Ctype.uintptr_t);
+                   TyIsPointer
+                 ];
+               ExactArg Ctype.size_t ] )
     else if name = "cheri_perms_and" then
       Some ( CopyRet 0,
              [ PolymorphicArg [
@@ -2585,6 +2593,25 @@ module CHERI (C:Capability
                 )
                 end
              | _,_,_ -> fail (MerrOther ("CHERI.call_intrinsic: wrong types in: '" ^ name ^ "'"))
+        end
+    else if name = "cheri_bounds_set" then
+      (* this intrinsic modifies memory state *)
+      let cap_val = List.nth args 0 in
+      let upper_val = List.nth args 1 in
+      get >>=
+        begin fun st ->
+        match cap_of_mem_value st.funptrmap cap_val with
+        | None -> fail (MerrOther ("CHERI.call_intrinsic: non-cap 1st argument in: '" ^ name ^ "'"))
+        | Some (funptrmap,c) ->
+           update (fun st -> { st with funptrmap=funptrmap }) >>
+             match upper_val with
+             | MVinteger (Size_t, (IV (_,n))) ->
+                begin
+                  let x' = C.cap_get_value c in
+                  let c = C.cap_narrow_bounds c (x', Z.add x' n) in
+                  return (Some (update_cap_in_mem_value cap_val c))
+                end
+             | _ -> fail (MerrOther ("CHERI.call_intrinsic: 2nd argument's type is not size_t in: '" ^ name ^ "'"))
         end
     else if name = "cheri_perms_and" then
       (* this intrinsic modifies memory state *)

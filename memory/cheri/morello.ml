@@ -685,8 +685,10 @@ module Morello_capability: Capability
     and cap_narrow_bounds c (a0,a1) =
       assert(vaddr_in_range a0) ;
       assert(vaddr_in_range a1) ;
-      (* TODO(CHERI) *)
-      invalidate_if_sealded c
+      (* TODO(CHERI): this is placeholder representation. Due to representability constraints bounds may not end up exact as passed *)
+      invalidate_if_sealded {c with
+          bounds = (a0,a1)
+        }
 
     (* Reducing the Capability Bounds (exact)
 
