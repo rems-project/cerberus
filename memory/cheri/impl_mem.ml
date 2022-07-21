@@ -1978,9 +1978,21 @@ module CHERI (C:Capability
     match (ptrval_1, ptrval_2) with
     | (PVnull _, PVnull _) ->
        return true
-    | (PVnull _, _)
-      | (_, PVnull _) ->
+
+    | (PVnull _, PVfunction (FP_invalid c2)) ->
+       return (Z.equal (C.cap_get_value c2) Z.zero)
+    | (PVnull _, PVconcrete c2) ->
+       return (Z.equal (C.cap_get_value c2) Z.zero)
+    | (PVnull _, _) ->
        return false
+
+    | (PVfunction (FP_invalid c1), PVnull _) ->
+       return (Z.equal (C.cap_get_value c1) Z.zero)
+    | (PVconcrete c1, PVnull _) ->
+       return (Z.equal (C.cap_get_value c1) Z.zero)
+    | (_, PVnull _) ->
+       return false
+
     | (PVfunction (FP_valid sym1), PVfunction (FP_valid sym2)) ->
        return (Symbol.instance_Basic_classes_Eq_Symbol_sym_dict.Lem_pervasives.isEqual_method sym1 sym2)
     | (PVfunction (FP_invalid c1), PVfunction (FP_invalid c2)) ->
@@ -1999,36 +2011,9 @@ module CHERI (C:Capability
     | (PVfunction _, _)
       | (_, PVfunction _) ->
        return false
-    | (PVconcrete addr1, PVconcrete addr2) ->
-       if Switches.(has_switch SW_strict_pointer_equality) then
-         return (C.value_compare addr1 addr2 == 0)
-       else begin match (prov1, prov2) with
-            | (Prov_none, Prov_none) ->
-               return true
-            | (Prov_some alloc_id1, Prov_some alloc_id2) ->
-               return (Z.equal alloc_id1 alloc_id2)
-            | (Prov_device, Prov_device) ->
-               return true
-            | (Prov_symbolic iota1, Prov_symbolic iota2) ->
-               (* PNVI-ae-udi *)
-               lookup_iota iota1 >>= fun ids1 ->
-               lookup_iota iota2 >>= fun ids2 ->
-               begin match (ids1, ids2) with
-               | (`Single alloc_id1, `Single alloc_id2) ->
-                  return (Z.equal alloc_id1 alloc_id2)
-               | _ ->
-                  return false
-               end
-            | _ ->
-               return false
-            end >>= begin function
-                      | true ->
-                         return (C.value_compare addr1 addr2 == 0)
-                      | false ->
-                         Eff.msum "pointer equality"
-                           [ ("using provenance", return false)
-                           ; ("ignoring provenance", return (C.value_compare addr1 addr2 == 0)) ]
-                    end
+
+    | (PVconcrete c1, PVconcrete c2) ->
+       return (C.value_compare c1 c2 == 0)
 
   let ne_ptrval ptrval1 ptrval2 =
     eq_ptrval ptrval1 ptrval2 >>= fun b ->
