@@ -629,8 +629,6 @@ let retype_file (log_defs, pred_defs) opts (file : 'TY Old.mu_file)
     in
     PmapM.foldM retype_funinfo file.mu_funinfo (Pmap.empty Sym.compare, Pmap.empty Sym.compare)
   in
-  
-
 
   let retype_label ~fsym (lsym : Sym.t) def = 
     match def with
@@ -720,6 +718,17 @@ let retype_file (log_defs, pred_defs) opts (file : 'TY Old.mu_file)
   in
 
   let@ funs = PmapM.mapM (retype_fun_map_decl) file.mu_funs Sym.compare in
+
+  let new_body sym = match Pmap.lookup sym funs with
+        | Some body -> body
+        | None -> error (Sym.pp_string sym ^ " not in funs")
+  in
+  let log_c_defs = Pmap.fold (fun fsym (fspec, _) defs ->
+        let open Ast in
+        List.map (fun id -> (id, fsym, new_body fsym)) fspec.defines_log_funs @ defs)
+    funinfo_extra []
+  in
+  let@ logical_predicates = CLogicalFuns.add_c_fun_defs logical_predicates log_c_defs in
 
   let file = 
     New.{ mu_main = file.mu_main;
