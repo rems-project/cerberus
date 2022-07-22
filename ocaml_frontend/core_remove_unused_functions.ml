@@ -172,7 +172,7 @@ let deps_of fn_or_impl : ('a,'bty,'sym) name_collector =
 
   let rec names_in_pointer_value pv : unit m = 
     Impl_mem.case_ptrval pv
-      (fun ct -> names_in_ctype ct)
+      (fun _ -> return ())
       (function Some sym -> record_dep (Sym sym) | None -> return ())
       (fun () -> return ())
       (fun _ -> return ())

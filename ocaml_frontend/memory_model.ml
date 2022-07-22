@@ -68,7 +68,7 @@ module type Memory = sig
   (*TODO: revise that, just a hack for codegen*)
   val concrete_ptrval: Nat_big_num.num -> Nat_big_num.num -> pointer_value
   val case_ptrval: pointer_value ->
-   (* null pointer *) (Ctype.ctype -> 'a) ->
+   (* null pointer *) (unit -> 'a) ->
    (* function pointer *) (Symbol.sym option -> 'a) ->
    (* concrete pointer *) (unit -> 'a) ->
    (* unspecified value *) (unit -> 'a) -> 'a

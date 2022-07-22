@@ -1615,7 +1615,7 @@ module Concrete : Memory = struct
 
   let case_ptrval pv fnull ffun fconc _ =
     match pv with
-    | PV (_, PVnull ty) -> fnull ty
+    | PV (_, PVnull ty) -> fnull ()
     | PV (_, PVfunction f) -> ffun (Some f)
     | PV (Prov_none, PVconcrete addr) -> fconc ()
     | PV (Prov_some i, PVconcrete addr) -> fconc ()

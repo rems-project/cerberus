@@ -255,7 +255,6 @@ module CHERI (C:Capability
     | FP_invalid of C.t
 
   type pointer_value_base =
-    | PVnull of ctype
     | PVfunction of function_pointer
     | PVconcrete of C.t
 
@@ -278,6 +277,10 @@ module CHERI (C:Capability
     if Z.(less_equal n C.min_vaddr && less_equal n C.max_vaddr)
     then n
     else wrapI C.min_vaddr C.max_vaddr n
+
+  (** INTERNAL: Cheks if given capability correponds to a null pointer *)
+  let cap_is_null c =
+    Z.equal (C.cap_get_value c) Z.zero
 
   (** Convert an unsinged capability value to signed integer
    *)
@@ -348,7 +351,6 @@ module CHERI (C:Capability
   let cap_of_mem_value funptrmap = function
     | MVinteger (_, IC (_,_,c)) -> Some (funptrmap,c)
     | MVpointer (_, PV (_, PVconcrete c)) -> Some (funptrmap,c)
-    | MVpointer (_, PV (_, PVnull _)) -> Some (funptrmap, C.cap_c0 ())
     | MVpointer (_, PV (_, PVfunction fp)) ->
        Some (resolve_function_pointer funptrmap fp)
     | _ -> None
@@ -357,7 +359,6 @@ module CHERI (C:Capability
     match cap_val with
     | MVinteger (ty, IC (prov,is_signed,_)) ->  MVinteger (ty, IC (prov,is_signed,c))
     | MVpointer (ty, PV (prov, PVconcrete _)) -> MVpointer (ty, PV (prov, PVconcrete c))
-    | MVpointer (ty, PV (prov, PVnull _)) -> MVpointer (ty, PV (prov, PVconcrete c))
     | MVpointer (ty, PV (prov, PVfunction fp)) ->
        MVpointer (ty, PV (prov, PVfunction (FP_invalid c)))
     | other -> other
@@ -617,16 +618,17 @@ module CHERI (C:Capability
   open Pp_prelude
   let pp_pointer_value ?(is_verbose=false) (PV (prov, ptrval_))=
     match ptrval_ with
-    | PVnull ty ->
-       !^ "NULL" ^^ P.parens (Pp_core_ctype.pp_ctype ty)
     | PVfunction (FP_valid sym) ->
        !^ "Cfunction" ^^ P.parens (!^ (Pp_symbol.to_string_pretty sym))
     | PVfunction (FP_invalid c) ->
        !^ "Cfunction" ^^ P.parens (!^ "invalid" ^^ P.colon ^^^ !^ (C.to_string c))
     (* !^ ("<funptr:" ^ Symbol.instance_Show_Show_Symbol_sym_dict.show_method sym ^ ">") *)
-    | PVconcrete n ->
-       (* TODO: remove this idiotic hack when Lem's nat_big_num library expose "format" *)
-       P.parens (!^ (string_of_provenance prov) ^^ P.comma ^^^ !^ (C.to_string n))
+    | PVconcrete c ->
+       if C.eq c (C.cap_c0 ()) then
+         !^ "NULL"
+       else
+         (* TODO: remove this idiotic hack when Lem's nat_big_num library expose "format" *)
+         P.parens (!^ (string_of_provenance prov) ^^ P.comma ^^^ !^ (C.to_string c))
 
   let pp_integer_value = function
     | (IV (prov, n)) ->
@@ -1151,77 +1153,71 @@ module CHERI (C:Capability
                | Some n ->
                   begin match ref_ty with
                   | Ctype (_, Function _) ->
-                     if C.eq n (C.cap_c0 ()) then
-                       MVEpointer (ref_ty, PV (Prov_none, PVnull ref_ty))
-                     else
-                       begin match tag_query_f addr with
-                       | None ->
-                          Debug_ocaml.warn  [] (fun () -> "Unspecified tag value for address 0x" ^ (Z.format "%x" addr));
-                          MVEunspecified cty
-                       | Some tag ->
-                          begin match C.decode cs tag with
-                          | None ->
-                             (* could not decode capability *)
-                             Debug_ocaml.warn [] (fun () -> "Error decoding function pointer cap");
-                             MVErr (MerrCHERI (loc, CheriErrDecodingCap))
-                          | Some c ->
-                             let n = (Z.sub (C.cap_get_value c) (Z.of_int initial_address)) in
-                             begin match IntMap.find_opt n funptrmap with
-                             | Some (file_dig, name, c') ->
-                                (* check if decoded capability matches
-                                   the one we have in `funptrmap` *)
-                                if C.eq c c' then
-                                  (* If matches, keep symbolic rperesentation *)
-                                  MVEpointer (ref_ty, PV(prov, PVfunction (FP_valid (Symbol.Symbol (file_dig, Z.to_int n, SD_Id name)))))
-                                else
-                                  (* Conflicting capability values for
-                                     given address in funptrmap and in
-                                     memory. The memory takes
-                                     precendence.*)
-                                  MVEpointer (ref_ty, PV(prov, PVfunction (FP_invalid c)))
-                             | None ->
+                     begin match tag_query_f addr with
+                     | None ->
+                        Debug_ocaml.warn  [] (fun () -> "Unspecified tag value for address 0x" ^ (Z.format "%x" addr));
+                        MVEunspecified cty
+                     | Some tag ->
+                        begin match C.decode cs tag with
+                        | None ->
+                           (* could not decode capability *)
+                           Debug_ocaml.warn [] (fun () -> "Error decoding function pointer cap");
+                           MVErr (MerrCHERI (loc, CheriErrDecodingCap))
+                        | Some c ->
+                           let n = (Z.sub (C.cap_get_value c) (Z.of_int initial_address)) in
+                           begin match IntMap.find_opt n funptrmap with
+                           | Some (file_dig, name, c') ->
+                              (* check if decoded capability matches
+                                 the one we have in `funptrmap` *)
+                              if C.eq c c' then
+                                (* If matches, keep symbolic rperesentation *)
+                                MVEpointer (ref_ty, PV(prov, PVfunction (FP_valid (Symbol.Symbol (file_dig, Z.to_int n, SD_Id name)))))
+                              else
+                                (* Conflicting capability values for
+                                   given address in funptrmap and in
+                                   memory. The memory takes
+                                   precendence.*)
                                 MVEpointer (ref_ty, PV(prov, PVfunction (FP_invalid c)))
-                             end
-                          end
-                       end
+                           | None ->
+                              MVEpointer (ref_ty, PV(prov, PVfunction (FP_invalid c)))
+                           end
+                        end
+                     end
                   | _ ->
-                     if C.eq n (C.cap_c0 ()) then
-                       MVEpointer (ref_ty, PV (Prov_none, PVnull ref_ty))
-                     else
-                       let prov =
-                         if is_PNVI () then
-                           (*
-                             let () =
-                             print_endline "HELLO ==> PNVI abst (ptr)";
-                             print_endline "BEGIN";
-                             List.iter (fun bt ->
-                             let open AbsByte in
-                             Printf.printf "%s: [%s] - %s\n"
-                             (string_of_provenance bt.prov)
-                             (match bt.copy_offset with Some n -> string_of_int n | None -> "_")
-                             (match bt.value with Some c ->  Char.escaped c | None -> "unspec")
-                             ) bs1;
-                             print_endline "END" in
-                            *)
-                           match prov_status with
-                           | `NotValidPtrProv ->
-                              (* KKK print_endline "NotValidPtrProv"; *)
-                              begin match find_overlaping (C.cap_get_value n) with
-                              | `NoAlloc ->
-                                 Prov_none
-                              | `SingleAlloc alloc_id ->
-                                 Prov_some alloc_id
-                              | `DoubleAlloc (alloc_id1, alloc_id2) ->
-                                 (* FIXME/HACK(VICTOR): This is wrong, but when serialising the memory in the UI, I get this failwith. *)
-                                 Prov_some alloc_id1
-                                           (* failwith "TODO(iota): abst => make a iota?" *)
-                              end
-                           | `ValidPtrProv ->
-                              (* KKK print_endline ("ValidPtrProv ==> " ^ string_of_provenance prov); *)
-                              prov
-                         else
-                           prov in
-                       MVEpointer (ref_ty, PV (prov, PVconcrete n))
+                     let prov =
+                       if is_PNVI () then
+                         (*
+                           let () =
+                           print_endline "HELLO ==> PNVI abst (ptr)";
+                           print_endline "BEGIN";
+                           List.iter (fun bt ->
+                           let open AbsByte in
+                           Printf.printf "%s: [%s] - %s\n"
+                           (string_of_provenance bt.prov)
+                           (match bt.copy_offset with Some n -> string_of_int n | None -> "_")
+                           (match bt.value with Some c ->  Char.escaped c | None -> "unspec")
+                           ) bs1;
+                           print_endline "END" in
+                          *)
+                         match prov_status with
+                         | `NotValidPtrProv ->
+                            (* KKK print_endline "NotValidPtrProv"; *)
+                            begin match find_overlaping (C.cap_get_value n) with
+                            | `NoAlloc ->
+                               Prov_none
+                            | `SingleAlloc alloc_id ->
+                               Prov_some alloc_id
+                            | `DoubleAlloc (alloc_id1, alloc_id2) ->
+                               (* FIXME/HACK(VICTOR): This is wrong, but when serialising the memory in the UI, I get this failwith. *)
+                               Prov_some alloc_id1
+                                         (* failwith "TODO(iota): abst => make a iota?" *)
+                            end
+                         | `ValidPtrProv ->
+                            (* KKK print_endline ("ValidPtrProv ==> " ^ string_of_provenance prov); *)
+                            prov
+                       else
+                         prov in
+                     MVEpointer (ref_ty, PV (prov, PVconcrete n))
                   end
                end
             end
@@ -1320,14 +1316,6 @@ module CHERI (C:Capability
         bs)
     | MVpointer (ref_ty, PV (prov, ptrval_)) ->
        begin match ptrval_ with
-       | PVnull _ ->
-          Debug_ocaml.print_debug 1 [] (fun () -> "NOTE: we fix the representation of all NULL pointers to be C0");
-          let (cb,ct) = C.encode true (C.cap_c0 ()) in
-          (funptrmap,
-           (* Do we really need to maintain tag for C0? Anyway, we do
-              it here for consistency even if it is never read. *)
-           IntMap.add addr ct captags,
-           List.map (fun b -> AbsByte.v Prov_none (Some b)) cb)
        | PVfunction ((FP_valid (Symbol.Symbol (file_dig, n, opt_name))) as fp) ->
           (* TODO(CHERI): what if is already in the map? *)
           let (funptrmap,c) = resolve_function_pointer funptrmap fp in
@@ -1545,11 +1533,6 @@ module CHERI (C:Capability
             return @@ Some (string_of_prefix alloc.prefix)
           else
             return @@ aux C.(cap_get_value addr) alloc alloc.ty
-       | PVnull ty ->
-          if Some ty = alloc.ty then
-            return @@ Some (string_of_prefix alloc.prefix)
-          else
-            return None
        | _ ->
           return None
        end
@@ -1602,11 +1585,6 @@ module CHERI (C:Capability
   let zap_pointers alloc_id = failwith "zap_pointers is not supported"
 
   let kill loc is_dyn : pointer_value -> unit memM = function
-    | PV (_, PVnull _) ->
-       if Switches.(has_switch SW_forbid_nullptr_free) then
-         fail (MerrFreeNullPtr loc)
-       else
-         return ()
     | PV (_, PVfunction _) ->
        fail (MerrOther "attempted to kill with a function pointer")
     | PV (Prov_none, PVconcrete _) ->
@@ -1617,77 +1595,83 @@ module CHERI (C:Capability
 
     (* PNVI-ae-udi *)
     | PV (Prov_symbolic iota, PVconcrete addr) ->
-       let precondition z =
-         is_dead z >>= function
-         | true ->
-            return (`FAIL (MerrUndefinedFree (loc, Free_static_allocation)))
-         | false ->
-            get_allocation z >>= fun alloc ->
-            if Z.equal (C.cap_get_value addr) alloc.base then
-              return `OK
-            else
-              return (`FAIL (MerrUndefinedFree (loc, Free_out_of_bound))) in
-       begin if is_dyn then
-               (* this kill is dynamic one (i.e. free() or friends) *)
-               is_dynamic (C.cap_get_value addr) >>= begin function
-                                                       | false ->
-                                                          fail (MerrUndefinedFree (loc, Free_static_allocation))
-                                                       | true ->
-                                                          return ()
-                                                     end
-             else
-               return ()
-       end >>
-       resolve_iota precondition iota >>= fun alloc_id ->
-       (* TODO: this is duplicated code from the Prov_some case (I'm keeping
-          PNVI-ae-udi stuff separated to avoid polluting the
-          vanilla PNVI code) *)
-       update begin fun st ->
-         {st with dead_allocations= alloc_id :: st.dead_allocations;
-                  last_used= Some alloc_id;
-                  allocations= IntMap.remove alloc_id st.allocations}
-         end >>
-       if Switches.(has_switch SW_zap_dead_pointers) then
-         zap_pointers alloc_id
+       if (cap_is_null addr) &&  Switches.(has_switch SW_forbid_nullptr_free) then
+         fail (MerrFreeNullPtr loc)
        else
-         return ()
+         let precondition z =
+           is_dead z >>= function
+           | true ->
+              return (`FAIL (MerrUndefinedFree (loc, Free_static_allocation)))
+           | false ->
+              get_allocation z >>= fun alloc ->
+              if Z.equal (C.cap_get_value addr) alloc.base then
+                return `OK
+              else
+                return (`FAIL (MerrUndefinedFree (loc, Free_out_of_bound))) in
+         begin if is_dyn then
+                 (* this kill is dynamic one (i.e. free() or friends) *)
+                 is_dynamic (C.cap_get_value addr) >>= begin function
+                                                         | false ->
+                                                            fail (MerrUndefinedFree (loc, Free_static_allocation))
+                                                         | true ->
+                                                            return ()
+                                                       end
+               else
+                 return ()
+         end >>
+           resolve_iota precondition iota >>= fun alloc_id ->
+         (* TODO: this is duplicated code from the Prov_some case (I'm keeping
+            PNVI-ae-udi stuff separated to avoid polluting the
+            vanilla PNVI code) *)
+         update begin fun st ->
+           {st with dead_allocations= alloc_id :: st.dead_allocations;
+                    last_used= Some alloc_id;
+                    allocations= IntMap.remove alloc_id st.allocations}
+           end >>
+           if Switches.(has_switch SW_zap_dead_pointers) then
+             zap_pointers alloc_id
+           else
+             return ()
 
     | PV (Prov_some alloc_id, PVconcrete addr) ->
-       begin if is_dyn then
-               (* this kill is dynamic one (i.e. free() or friends) *)
-               is_dynamic (C.cap_get_value addr) >>= begin function
-                                                       | false ->
-                                                          fail (MerrUndefinedFree (loc, Free_static_allocation))
-                                                       | true ->
-                                                          return ()
-                                                     end
-             else
-               return ()
-       end >>
-       is_dead alloc_id >>= begin function
-                              | true ->
-                                 if is_dyn then
-                                   fail (MerrUndefinedFree (loc, Free_dead_allocation))
-                                 else
-                                   failwith "Concrete: FREE was called on a dead allocation"
-                              | false ->
-                                 get_allocation alloc_id >>= fun alloc ->
-                                 if Z.equal (C.cap_get_value addr) alloc.base then begin
-                                     Debug_ocaml.print_debug 1 [] (fun () ->
-                                         "KILLING alloc_id= " ^ Z.to_string alloc_id
-                                       );
-                                     update begin fun st ->
-                                       {st with dead_allocations= alloc_id :: st.dead_allocations;
-                                                last_used= Some alloc_id;
-                                                allocations= IntMap.remove alloc_id st.allocations}
-                                       end >>
-                                     if Switches.(has_switch SW_zap_dead_pointers) then
-                                       zap_pointers alloc_id
+       if (cap_is_null addr) &&  Switches.(has_switch SW_forbid_nullptr_free) then
+         fail (MerrFreeNullPtr loc)
+       else
+         begin if is_dyn then
+                 (* this kill is dynamic one (i.e. free() or friends) *)
+                 is_dynamic (C.cap_get_value addr) >>= begin function
+                                                         | false ->
+                                                            fail (MerrUndefinedFree (loc, Free_static_allocation))
+                                                         | true ->
+                                                            return ()
+                                                       end
+               else
+                 return ()
+         end >>
+           is_dead alloc_id >>= begin function
+                                  | true ->
+                                     if is_dyn then
+                                       fail (MerrUndefinedFree (loc, Free_dead_allocation))
                                      else
-                                       return ()
-                                   end else
-                                   fail (MerrUndefinedFree (loc, Free_out_of_bound))
-                            end
+                                       failwith "Concrete: FREE was called on a dead allocation"
+                                  | false ->
+                                     get_allocation alloc_id >>= fun alloc ->
+                                     if Z.equal (C.cap_get_value addr) alloc.base then begin
+                                         Debug_ocaml.print_debug 1 [] (fun () ->
+                                             "KILLING alloc_id= " ^ Z.to_string alloc_id
+                                           );
+                                         update begin fun st ->
+                                           {st with dead_allocations= alloc_id :: st.dead_allocations;
+                                                    last_used= Some alloc_id;
+                                                    allocations= IntMap.remove alloc_id st.allocations}
+                                           end >>
+                                           if Switches.(has_switch SW_zap_dead_pointers) then
+                                             zap_pointers alloc_id
+                                           else
+                                             return ()
+                                       end else
+                                       fail (MerrUndefinedFree (loc, Free_out_of_bound))
+                                end
 
   (* Check if address is pointer aligned *)
   let is_pointer_algined a =
@@ -1706,102 +1690,109 @@ module CHERI (C:Capability
       print_captags ("BEFORE LOAD => " ^ Location_ocaml.location_to_string loc)
     >>
 
-    let do_load alloc_id_opt addr sz =
-      get >>= fun st ->
-      let bs = fetch_bytes st.bytemap addr sz in
-      let tag_query a =
-        if is_pointer_algined a
-        then IntMap.find_opt a st.captags
-        else failwith "An attempt to load capability from not properly aligned addres"
+      let do_load alloc_id_opt addr sz =
+        get >>= fun st ->
+        let bs = fetch_bytes st.bytemap addr sz in
+        let tag_query a =
+          if is_pointer_algined a
+          then IntMap.find_opt a st.captags
+          else failwith "An attempt to load capability from not properly aligned addres"
+        in
+        let (taint, mval, bs') = abst loc (find_overlaping st) st.funptrmap tag_query addr ty bs in
+        mem_value_strip_err mval >>= fun mval ->
+        (* PNVI-ae-udi *)
+        begin if Switches.(has_switch (SW_PNVI `AE) || has_switch (SW_PNVI `AE_UDI)) then
+                expose_allocations taint
+              else
+                return ()
+        end >>
+          update (fun st -> { st with last_used= alloc_id_opt }) >>
+          let fp = FP (addr, (Z.of_int (sizeof ty))) in
+          begin match bs' with
+          | [] ->
+             (* controls reads from uninitialized memory *)
+             if Switches.(has_switch SW_strict_reads) then
+               match mval with
+               | MVunspecified _ ->
+                  fail (MerrReadUninit loc)
+               | _ ->
+                  return (fp, mval)
+             else
+               return (fp, mval)
+          | _ ->
+             fail (MerrWIP "load, bs' <> []")
+          end in
+      let do_load_cap alloc_id_opt c sz =
+        cap_check loc c Z.zero ReadIntent sz >> do_load alloc_id_opt (C.cap_get_value c) sz
       in
-      let (taint, mval, bs') = abst loc (find_overlaping st) st.funptrmap tag_query addr ty bs in
-      mem_value_strip_err mval >>= fun mval ->
-      (* PNVI-ae-udi *)
-      begin if Switches.(has_switch (SW_PNVI `AE) || has_switch (SW_PNVI `AE_UDI)) then
-              expose_allocations taint
-            else
-              return ()
-      end >>
-      update (fun st -> { st with last_used= alloc_id_opt }) >>
-      let fp = FP (addr, (Z.of_int (sizeof ty))) in
-      begin match bs' with
-      | [] ->
-         (* controls reads from uninitialized memory *)
-         if Switches.(has_switch SW_strict_reads) then
-           match mval with
-           | MVunspecified _ ->
-              fail (MerrReadUninit loc)
-           | _ ->
-              return (fp, mval)
+      match (prov, ptrval_) with
+      | (_, PVfunction _) ->
+         fail (MerrAccess (loc, LoadAccess, FunctionPtr))
+      | (Prov_none, _) ->
+         fail (MerrAccess (loc, LoadAccess, OutOfBoundPtr))
+      | (Prov_device, PVconcrete c) ->
+         if cap_is_null c then
+           fail (MerrAccess (loc, LoadAccess, NullPtr))
          else
-           return (fp, mval)
-      | _ ->
-         fail (MerrWIP "load, bs' <> []")
-      end in
-    let do_load_cap alloc_id_opt c sz =
-      cap_check loc c Z.zero ReadIntent sz >> do_load alloc_id_opt (C.cap_get_value c) sz
-    in
-    match (prov, ptrval_) with
-    | (_, PVnull _) ->
-       fail (MerrAccess (loc, LoadAccess, NullPtr))
-    | (_, PVfunction _) ->
-       fail (MerrAccess (loc, LoadAccess, FunctionPtr))
-    | (Prov_none, _) ->
-       fail (MerrAccess (loc, LoadAccess, OutOfBoundPtr))
-    | (Prov_device, PVconcrete c) ->
-       begin is_within_device ty (C.cap_get_value c) >>= function
-             | false ->
-                fail (MerrAccess (loc, LoadAccess, OutOfBoundPtr))
-             | true ->
-                do_load_cap None c (sizeof ty)
-       end
+           begin is_within_device ty (C.cap_get_value c) >>= function
+                 | false ->
+                    fail (MerrAccess (loc, LoadAccess, OutOfBoundPtr))
+                 | true ->
+                    do_load_cap None c (sizeof ty)
+           end
 
-    (* PNVI-ae-udi *)
-    | (Prov_symbolic iota, PVconcrete addr) ->
-       (* TODO: this is duplicated code from the Prov_some case (I'm keeping
-          PNVI-ae-udi stuff separated to avoid polluting the
-          vanilla PNVI code) *)
-       let precondition z =
-         is_dead z >>= begin function
-                         | true ->
-                            return (`FAIL (MerrAccess (loc, LoadAccess, DeadPtr)))
-                         | false ->
-                            begin is_within_bound z ty (C.cap_get_value addr) >>= function
-                                  | false ->
-                                     return (`FAIL (MerrAccess (loc, LoadAccess, OutOfBoundPtr)))
+      (* PNVI-ae-udi *)
+      | (Prov_symbolic iota, PVconcrete addr) ->
+         if cap_is_null addr then
+           fail (MerrAccess (loc, LoadAccess, NullPtr))
+         else
+           (* TODO: this is duplicated code from the Prov_some case (I'm keeping
+              PNVI-ae-udi stuff separated to avoid polluting the
+              vanilla PNVI code) *)
+           let precondition z =
+             is_dead z >>= begin function
+                             | true ->
+                                return (`FAIL (MerrAccess (loc, LoadAccess, DeadPtr)))
+                             | false ->
+                                begin is_within_bound z ty (C.cap_get_value addr) >>= function
+                                      | false ->
+                                         return (`FAIL (MerrAccess (loc, LoadAccess, OutOfBoundPtr)))
+                                      | true ->
+                                         begin is_atomic_member_access z ty (C.cap_get_value addr) >>= function
+                                               | true ->
+                                                  return (`FAIL (MerrAccess (loc, LoadAccess, AtomicMemberof)))
+                                               | false ->
+                                                  return `OK
+                                         end
+                                end
+                           end in
+           resolve_iota precondition iota >>= fun alloc_id ->
+           do_load_cap (Some alloc_id) addr (sizeof ty)
+
+      | (Prov_some alloc_id, PVconcrete addr) ->
+         if cap_is_null addr then
+           fail (MerrAccess (loc, LoadAccess, NullPtr))
+         else
+           is_dead alloc_id >>= begin function
                                   | true ->
-                                     begin is_atomic_member_access z ty (C.cap_get_value addr) >>= function
-                                           | true ->
-                                              return (`FAIL (MerrAccess (loc, LoadAccess, AtomicMemberof)))
-                                           | false ->
-                                              return `OK
-                                     end
-                            end
-                       end in
-       resolve_iota precondition iota >>= fun alloc_id ->
-       do_load_cap (Some alloc_id) addr (sizeof ty)
-
-    | (Prov_some alloc_id, PVconcrete addr) ->
-       is_dead alloc_id >>= begin function
-                              | true ->
-                                 fail (MerrAccess (loc, LoadAccess, DeadPtr))
-                              | false ->
-                                 return ()
-                            end >>
-       begin is_within_bound alloc_id ty (C.cap_get_value addr) >>= function
-             | false ->
-                Debug_ocaml.print_debug 1 [] (fun () ->
-                    "LOAD out of bound, alloc_id=" ^ Z.to_string alloc_id
-                  );
-                fail (MerrAccess (loc, LoadAccess, OutOfBoundPtr))
-             | true ->
-                begin is_atomic_member_access alloc_id ty (C.cap_get_value addr) >>= function
-                      | true ->
-                         fail (MerrAccess (loc, LoadAccess, AtomicMemberof))
-                      | false ->
-                         do_load_cap (Some alloc_id) addr (sizeof ty)
-                end
-       end
+                                     fail (MerrAccess (loc, LoadAccess, DeadPtr))
+                                  | false ->
+                                     return ()
+                                end >>
+             begin is_within_bound alloc_id ty (C.cap_get_value addr) >>= function
+                   | false ->
+                      Debug_ocaml.print_debug 1 [] (fun () ->
+                          "LOAD out of bound, alloc_id=" ^ Z.to_string alloc_id
+                        );
+                      fail (MerrAccess (loc, LoadAccess, OutOfBoundPtr))
+                   | true ->
+                      begin is_atomic_member_access alloc_id ty (C.cap_get_value addr) >>= function
+                            | true ->
+                               fail (MerrAccess (loc, LoadAccess, AtomicMemberof))
+                            | false ->
+                               do_load_cap (Some alloc_id) addr (sizeof ty)
+                      end
+             end
 
 
   let store loc ty is_locking (PV (prov, ptrval_)) mval =
@@ -1842,95 +1833,102 @@ module CHERI (C:Capability
                         captags= captags;
               }
               end >>
-            print_bytemap ("AFTER STORE => " ^ Location_ocaml.location_to_string loc) >>
+              print_bytemap ("AFTER STORE => " ^ Location_ocaml.location_to_string loc) >>
               print_captags ("AFTER STORE => " ^ Location_ocaml.location_to_string loc)
             >>
-            return (FP (addr, nsz))
+              return (FP (addr, nsz))
           end
       in
       match (prov, ptrval_) with
-      | (_, PVnull _) ->
-         fail (MerrAccess (loc, StoreAccess, NullPtr))
       | (_, PVfunction _) ->
          fail (MerrAccess (loc, StoreAccess, FunctionPtr))
       | (Prov_none, _) ->
          fail (MerrAccess (loc, StoreAccess, OutOfBoundPtr))
       | (Prov_device, PVconcrete addr) ->
-         begin is_within_device ty (C.cap_get_value addr) >>= function
-               | false ->
-                  fail (MerrAccess (loc, StoreAccess, OutOfBoundPtr))
-               | true ->
-                  do_store_cap None addr
-         end
+         if cap_is_null addr then
+           fail (MerrAccess (loc, StoreAccess, NullPtr))
+         else
+           begin is_within_device ty (C.cap_get_value addr) >>= function
+                 | false ->
+                    fail (MerrAccess (loc, StoreAccess, OutOfBoundPtr))
+                 | true ->
+                    do_store_cap None addr
+           end
 
       (* PNVI-ae-udi *)
       | (Prov_symbolic iota, PVconcrete addr) ->
-         (* TODO: this is duplicated code from the Prov_some case (I'm keeping
-            PNVI-ae-udi stuff separated to avoid polluting the
-            vanilla PNVI code) *)
-         let precondition z =
-           is_within_bound z ty (C.cap_get_value addr) >>= function
-           | false ->
-              return (`FAIL (MerrAccess (loc, StoreAccess, OutOfBoundPtr)))
-           | true ->
-              get_allocation z >>= fun alloc ->
-              match alloc.is_readonly with
+         if cap_is_null addr then
+           fail (MerrAccess (loc, StoreAccess, NullPtr))
+         else
+           (* TODO: this is duplicated code from the Prov_some case (I'm keeping
+              PNVI-ae-udi stuff separated to avoid polluting the
+              vanilla PNVI code) *)
+           let precondition z =
+             is_within_bound z ty (C.cap_get_value addr) >>= function
+             | false ->
+                return (`FAIL (MerrAccess (loc, StoreAccess, OutOfBoundPtr)))
+             | true ->
+                get_allocation z >>= fun alloc ->
+                match alloc.is_readonly with
                 | IsReadOnly ->
-                    return (`FAIL (MerrWriteOnReadOnly (false, loc)))
+                   return (`FAIL (MerrWriteOnReadOnly (false, loc)))
                 | IsReadOnly_string_literal ->
-                  return (`FAIL (MerrWriteOnReadOnly (true, loc)))
+                   return (`FAIL (MerrWriteOnReadOnly (true, loc)))
                 | IsWritable ->
-                    begin is_atomic_member_access z ty (C.cap_get_value addr) >>= function
-                      | true ->
-                          return (`FAIL (MerrAccess (loc, LoadAccess, AtomicMemberof)))
-                      | false ->
-                         return `OK
-                    end in
-         resolve_iota precondition iota >>= fun alloc_id ->
-         do_store_cap (Some alloc_id) addr >>= fun fp ->
-         begin if is_locking then
-                 Eff.update (fun st ->
-                     { st with allocations=
-                                 IntMap.update alloc_id (function
-                                     | Some alloc -> Some { alloc with is_readonly= IsReadOnly }
-                                     | None       -> None
-                                   ) st.allocations }
-                   )
-               else
-                 return ()
-         end >>
-         return fp
+                   begin is_atomic_member_access z ty (C.cap_get_value addr) >>= function
+                         | true ->
+                            return (`FAIL (MerrAccess (loc, LoadAccess, AtomicMemberof)))
+                         | false ->
+                            return `OK
+                   end in
+           resolve_iota precondition iota >>= fun alloc_id ->
+           do_store_cap (Some alloc_id) addr >>= fun fp ->
+           begin if is_locking then
+                   Eff.update (fun st ->
+                       { st with allocations=
+                                   IntMap.update alloc_id (function
+                                       | Some alloc -> Some { alloc with is_readonly= IsReadOnly }
+                                       | None       -> None
+                                     ) st.allocations }
+                     )
+                 else
+                   return ()
+           end >>
+             return fp
 
       | (Prov_some alloc_id, PVconcrete addr) ->
-         begin is_within_bound alloc_id ty (C.cap_get_value addr) >>= function
-               | false ->
-                  fail (MerrAccess (loc, StoreAccess, OutOfBoundPtr))
-               | true ->
-                  get_allocation alloc_id >>= fun alloc ->
-                  match alloc.is_readonly with
+         if cap_is_null addr then
+           fail (MerrAccess (loc, StoreAccess, NullPtr))
+         else
+           begin is_within_bound alloc_id ty (C.cap_get_value addr) >>= function
+                 | false ->
+                    fail (MerrAccess (loc, StoreAccess, OutOfBoundPtr))
+                 | true ->
+                    get_allocation alloc_id >>= fun alloc ->
+                    match alloc.is_readonly with
                     | IsReadOnly ->
-                        fail (MerrWriteOnReadOnly (false, loc))
+                       fail (MerrWriteOnReadOnly (false, loc))
                     | IsReadOnly_string_literal ->
-                      fail (MerrWriteOnReadOnly (true, loc))
+                       fail (MerrWriteOnReadOnly (true, loc))
                     | IsWritable ->
-                        begin is_atomic_member_access alloc_id ty (C.cap_get_value addr) >>= function
-                          | true ->
-                              fail (MerrAccess (loc, LoadAccess, AtomicMemberof))
-                          | false ->
-                              do_store_cap (Some alloc_id) addr >>= fun fp ->
-                              if is_locking then
-                                Eff.update (fun st ->
-                                  { st with allocations=
-                                      IntMap.update alloc_id (function
-                                        | Some alloc -> Some { alloc with is_readonly= IsReadOnly }
-                                        | None       -> None
-                                      ) st.allocations }
-                                ) >>= fun () ->
-                                return fp
-                              else
-                                return fp
-                        end
-         end
+                       begin is_atomic_member_access alloc_id ty (C.cap_get_value addr) >>= function
+                             | true ->
+                                fail (MerrAccess (loc, LoadAccess, AtomicMemberof))
+                             | false ->
+                                do_store_cap (Some alloc_id) addr >>= fun fp ->
+                                if is_locking then
+                                  Eff.update (fun st ->
+                                      { st with allocations=
+                                                  IntMap.update alloc_id (function
+                                                      | Some alloc -> Some { alloc with is_readonly= IsReadOnly }
+                                                      | None       -> None
+                                                    ) st.allocations }
+                                    ) >>= fun () ->
+                                  return fp
+                                else
+                                  return fp
+                       end
+           end
 
   (*
     (* TODO: DEBUG: *)
@@ -1940,8 +1938,8 @@ module CHERI (C:Capability
     return ret
    *)
 
-  let null_ptrval ty =
-    PV (Prov_none, PVnull ty)
+  let null_ptrval _ =
+    PV (Prov_none, PVconcrete (C.cap_c0 ()))
 
   let fun_ptrval sym =
     PV (Prov_none, PVfunction (FP_valid sym))
@@ -1950,11 +1948,19 @@ module CHERI (C:Capability
 
   let case_ptrval pv fnull ffun fconc _ =
     match pv with
-    | PV (_, PVnull ty) -> fnull ty
     | PV (_, PVfunction (FP_valid sym)) -> ffun (Some sym)
-    | PV (_, PVfunction (FP_invalid _)) -> ffun None
-    | PV (Prov_none, PVconcrete addr) -> fconc ()
-    | PV (Prov_some i, PVconcrete addr) -> fconc ()
+    | PV (_, PVfunction (FP_invalid c)) ->
+       if cap_is_null c
+       then fnull ()
+       else ffun None
+    | PV (Prov_none, PVconcrete c) ->
+       if cap_is_null c
+       then fconc ()
+       else ffun None
+    | PV (Prov_some i, PVconcrete c) ->
+       if cap_is_null c
+       then fconc ()
+       else ffun None
     | _ -> failwith "case_ptrval"
 
   (* FIXME: This is wrong. A function pointer with the same id in different files might exist. *)
@@ -1971,28 +1977,9 @@ module CHERI (C:Capability
        | None ->
           None
        end
-    | _ -> None
-
 
   let eq_ptrval (PV (prov1, ptrval_1)) (PV (prov2, ptrval_2)) =
     match (ptrval_1, ptrval_2) with
-    | (PVnull _, PVnull _) ->
-       return true
-
-    | (PVnull _, PVfunction (FP_invalid c2)) ->
-       return (Z.equal (C.cap_get_value c2) Z.zero)
-    | (PVnull _, PVconcrete c2) ->
-       return (Z.equal (C.cap_get_value c2) Z.zero)
-    | (PVnull _, _) ->
-       return false
-
-    | (PVfunction (FP_invalid c1), PVnull _) ->
-       return (Z.equal (C.cap_get_value c1) Z.zero)
-    | (PVconcrete c1, PVnull _) ->
-       return (Z.equal (C.cap_get_value c1) Z.zero)
-    | (_, PVnull _) ->
-       return false
-
     | (PVfunction (FP_valid sym1), PVfunction (FP_valid sym2)) ->
        return (Symbol.instance_Basic_classes_Eq_Symbol_sym_dict.Lem_pervasives.isEqual_method sym1 sym2)
     | (PVfunction (FP_invalid c1), PVfunction (FP_invalid c2)) ->
@@ -2011,9 +1998,8 @@ module CHERI (C:Capability
     | (PVfunction _, _)
       | (_, PVfunction _) ->
        return false
-
     | (PVconcrete c1, PVconcrete c2) ->
-       return (C.value_compare c1 c2 == 0)
+       return (Z.equal (C.cap_get_value c1) (C.cap_get_value c2))
 
   let ne_ptrval ptrval1 ptrval2 =
     eq_ptrval ptrval1 ptrval2 >>= fun b ->
@@ -2022,18 +2008,18 @@ module CHERI (C:Capability
   let lt_ptrval (PV (prov1, ptrval_1)) (PV (prov2, ptrval_2)) =
     match (ptrval_1, ptrval_2) with
     | (PVconcrete addr1, PVconcrete addr2) ->
-       if Switches.(has_switch SW_strict_pointer_relationals) then
-         match prov1, prov2 with
-         | Prov_some alloc1, Prov_some alloc2 when Z.equal alloc1 alloc2 ->
-            return (C.value_compare addr1 addr2 < 0)
-         | _ ->
-            (* TODO: one past case *)
-            fail MerrPtrComparison
+       if cap_is_null addr1 || cap_is_null addr2 then
+         fail (MerrWIP "lt_ptrval ==> one null pointer")
        else
-         return (C.value_compare addr1 addr2 < 0)
-    | (PVnull _, _)
-      | (_, PVnull _) ->
-       fail (MerrWIP "lt_ptrval ==> one null pointer")
+         if Switches.(has_switch SW_strict_pointer_relationals) then
+           match prov1, prov2 with
+           | Prov_some alloc1, Prov_some alloc2 when Z.equal alloc1 alloc2 ->
+              return (C.value_compare addr1 addr2 < 0)
+           | _ ->
+              (* TODO: one past case *)
+              fail MerrPtrComparison
+         else
+           return (C.value_compare addr1 addr2 < 0)
     | _ ->
        fail (MerrWIP "lt_ptrval")
 
@@ -2201,8 +2187,6 @@ module CHERI (C:Capability
        fail (MerrOther "called isWellAligned_ptrval on void or a function type")
     | _ ->
        begin match ptrval with
-       | PV (_, PVnull _) ->
-          return true
        | PV (_, PVfunction _) ->
           fail (MerrOther "called isWellAligned_ptrval on function pointer")
        | PV (_, PVconcrete addr) ->
@@ -2210,6 +2194,7 @@ module CHERI (C:Capability
             Printf.printf "addr: %s\n" (Z.to_string addr);
             Printf.printf "align: %d\n" (alignof ref_ty);
            *)
+          (* NULL pointer will be always well aligned as it's address is 0 *)
           return (Z.(equal (modulus (C.cap_get_value addr) (of_int (alignof ref_ty))) zero))
        end
 
@@ -2230,26 +2215,29 @@ module CHERI (C:Capability
       | false ->
          isWellAligned_ptrval ref_ty ptrval in
     match ptrval with
-    | PV (_, PVnull _)
-      | PV (_, PVfunction _) ->
+    | PV (_, PVfunction _) ->
        return false
     | PV (Prov_device, PVconcrete c) as ptrval ->
-       isWellAligned_ptrval ref_ty ptrval
+       if cap_is_null c then return false
+       else isWellAligned_ptrval ref_ty ptrval
     (* PNVI-ae-udi *)
     | PV (Prov_symbolic iota, PVconcrete c) ->
-       lookup_iota iota >>= begin function
-                              | `Single alloc_id ->
-                                 do_test alloc_id
-                              | `Double (alloc_id1, alloc_id2) ->
-                                 do_test alloc_id1 >>= begin function
-                                                         | false ->
-                                                            do_test alloc_id2
-                                                         | true ->
-                                                            return true
-                                                       end
-                            end
+       if cap_is_null c then return false
+       else
+         lookup_iota iota >>= begin function
+                                | `Single alloc_id ->
+                                   do_test alloc_id
+                                | `Double (alloc_id1, alloc_id2) ->
+                                   do_test alloc_id1 >>= begin function
+                                                           | false ->
+                                                              do_test alloc_id2
+                                                           | true ->
+                                                              return true
+                                                         end
+                              end
     | PV (Prov_some alloc_id, PVconcrete c) ->
-       do_test alloc_id
+       if cap_is_null c then return false
+       else do_test alloc_id
     | PV (Prov_none, _) ->
        return false
 
@@ -2261,64 +2249,56 @@ module CHERI (C:Capability
           if is_PNVI () then
             (* TODO(CHERI): We may need to carry provenance for [u]intptr_t *)
             (* TODO: device memory? *)
-            if Z.equal addr Z.zero then
-              return (PV (Prov_none, PVnull ref_ty))
-            else
-              get >>= fun st ->
-              begin match find_overlaping st addr with
-              | `NoAlloc ->
-                return Prov_none
-              | `SingleAlloc alloc_id ->
-                return (Prov_some alloc_id)
-              | `DoubleAlloc alloc_ids ->
-                add_iota alloc_ids >>= fun iota ->
-                return (Prov_symbolic iota)
-              end >>= fun prov ->
-              (* cast int to pointer *)
-              return (PV (prov, PVconcrete c))
+            get >>= fun st ->
+            (* find_overlaping shoud return None for 0 *)
+            begin match find_overlaping st addr with
+            | `NoAlloc ->
+               return Prov_none
+            | `SingleAlloc alloc_id ->
+               return (Prov_some alloc_id)
+            | `DoubleAlloc alloc_ids ->
+               add_iota alloc_ids >>= fun iota ->
+               return (Prov_symbolic iota)
+            end >>= fun prov ->
+            (* cast int to pointer *)
+            return (PV (prov, PVconcrete c))
           else
             match prov with
             | Prov_none ->
-              (* TODO: check (in particular is that ok to only allow device pointers when there is no provenance? *)
-              if List.exists (fun (min, max) -> Z.less_equal min addr && Z.less_equal addr max) device_ranges then
-                return (PV (Prov_device, PVconcrete c))
-              else if Z.equal addr Z.zero then
-                (* All 0-address capabilities regardless of their
-                    validity decoded as NULL. This is defacto behaviour
-                    of morello Clang. See intptr3.c example.  *)
-                return (PV (Prov_none, PVnull ref_ty))
-              else
-                (* C could be an invalid cap. Consider raising error instead *)
-                return (PV (Prov_none, PVconcrete c))
+               (* TODO: check (in particular is that ok to only allow device pointers when there is no provenance? *)
+               if List.exists (fun (min, max) -> Z.less_equal min addr && Z.less_equal addr max) device_ranges then
+                 return (PV (Prov_device, PVconcrete c))
+               else
+                 return (PV (Prov_none, PVconcrete c))
             | _ ->
-              (* C could be an invalid cap. Consider raising error instead *)
-              return (PV (prov, PVconcrete c))
+               return (PV (prov, PVconcrete c))
         end
     | (Ctype.(Unsigned Intptr_t),(IV (_, _)) | Ctype.(Signed Intptr_t),(IV (_, _))) ->
-        failwith "ptrfromint: invalid encoding for [u]intptr_t"
+       failwith "ptrfromint: invalid encoding for [u]intptr_t"
     | _, (IV (prov, n)) ->
-        if Z.equal n Z.zero then
-          if is_PNVI () then
-            (* TODO: device memory? *)
-            return (PV (Prov_none, PVnull ref_ty))
-          else
-            (* All 0-address capabilities regardless of their
+       if Z.equal n Z.zero then
+         if is_PNVI () then
+           (* TODO: device memory? *)
+           (* TODO(CHERI): should prov be preserved here? *)
+           return (PV (Prov_none, PVconcrete (C.cap_c0 ())))
+         else
+           (* All 0-address capabilities regardless of their
               validity decoded as NULL. This is defacto behaviour
               of morello Clang. See intptr3.c example.  *)
-            return (PV (Prov_none, PVnull ref_ty))
-        else
-          let n =
-            (* wrapI *)
-            let dlt = Z.succ (Z.sub C.max_vaddr C.min_vaddr) in
-            let r = Z.integerRem_f n dlt in
-            if Z.less_equal r C.max_vaddr then
-              r
-            else
-              Z.sub r dlt in
-          cap_set_value loc (C.cap_c0 ()) n >>=
-            (fun c -> return (PV (prov, PVconcrete c)))
+           return (PV (Prov_none, PVconcrete (C.cap_c0 ())))
+       else
+         let n =
+           (* wrapI *)
+           let dlt = Z.succ (Z.sub C.max_vaddr C.min_vaddr) in
+           let r = Z.integerRem_f n dlt in
+           if Z.less_equal r C.max_vaddr then
+             r
+           else
+             Z.sub r dlt in
+         cap_set_value loc (C.cap_c0 ()) n >>=
+           (fun c -> return (PV (prov, PVconcrete c)))
     | _, IC _ ->
-        failwith "invalid integer value (capability for non- [u]intptr_t"
+       failwith "invalid integer value (capability for non- [u]intptr_t"
 
   let derive_cap is_signed bop ival1 ival2 : integer_value =
     match bop with
@@ -2837,10 +2817,6 @@ module CHERI (C:Capability
     (* KKK print_endline ("HELLO eff_array_shift_ptrval ==> " ^ Pp_utils.to_plain_string (pp_pointer_value ptrval)); *)
     let offset = (Z.(mul (of_int (sizeof ty)) ival)) in
     match ptrval with
-    | PV (_, PVnull _) ->
-       (* TODO: this seems to be undefined in ISO C *)
-       (* NOTE: in C++, if offset = 0, this is defined and returns a PVnull *)
-       failwith "TODO(shift a null pointer should be undefined behaviour)"
     | PV (_, PVfunction _) ->
        failwith "CHERI.eff_array_shift_ptrval, PVfunction"
 
@@ -2850,88 +2826,90 @@ module CHERI (C:Capability
        (* TODO: this is duplicated code from the Prov_some case (I'm keeping
           PNVI-ae-udi stuff separated to avoid polluting the
           vanilla PNVI code) *)
-       let shifted_addr = Z.add (C.cap_get_value c) offset in
-       let precond z =
-         (* TODO: is it correct to use the "ty" as the lvalue_ty? *)
-         if    Switches.(has_switch (SW_pointer_arith `STRICT))
-               || (is_PNVI () && not (Switches.(has_switch (SW_pointer_arith `PERMISSIVE)))) then
-           get_allocation z >>= fun alloc ->
-           if    Z.less_equal alloc.base shifted_addr
-                 && Z.less_equal (Z.add shifted_addr (Z.of_int (sizeof ty)))
-                      (Z.add (Z.add alloc.base alloc.size) (Z.of_int (sizeof ty))) then
-             return true
+       if cap_is_null c then failwith "TODO(shift a null pointer should be undefined behaviour)"
+       else
+         let shifted_addr = Z.add (C.cap_get_value c) offset in
+         let precond z =
+           (* TODO: is it correct to use the "ty" as the lvalue_ty? *)
+           if    Switches.(has_switch (SW_pointer_arith `STRICT))
+                 || (is_PNVI () && not (Switches.(has_switch (SW_pointer_arith `PERMISSIVE)))) then
+             get_allocation z >>= fun alloc ->
+             if    Z.less_equal alloc.base shifted_addr
+                   && Z.less_equal (Z.add shifted_addr (Z.of_int (sizeof ty)))
+                       (Z.add (Z.add alloc.base alloc.size) (Z.of_int (sizeof ty))) then
+               return true
+             else
+               return false
            else
-             return false
-         else
-           return true in
-       lookup_iota iota >>=
-         begin function
-           | `Double (alloc_id1, alloc_id2) ->
-              if not (Z.equal ival Z.zero) then
-                (* TODO: this is yucky *)
-                precond alloc_id1 >>=
+             return true in
+         lookup_iota iota >>=
+           begin function
+             | `Double (alloc_id1, alloc_id2) ->
+                if not (Z.equal ival Z.zero) then
+                  (* TODO: this is yucky *)
+                  precond alloc_id1 >>=
+                    begin function
+                      | true ->
+                         precond alloc_id2 >>=
+                           begin function
+                             | true ->
+                                if Switches.(has_switch (SW_pointer_arith `PERMISSIVE)) then
+                                  return `NoCollapse
+                                else begin
+                                    Printf.printf "id1= %s, id2= %s ==> addr= %s\n"
+                                      (Z.to_string alloc_id1) (Z.to_string alloc_id2)
+                                      (Z.to_string shifted_addr);
+                                    fail (MerrOther "(PNVI-ae-uid) ambiguous non-zero array shift")
+                                  end
+                             | false ->
+                                return (`Collapse alloc_id1)
+                           end
+                      | false ->
+                         precond alloc_id2 >>=
+                           begin function
+                             | true ->
+                                return (`Collapse alloc_id2)
+                             | false ->
+                                fail (MerrArrayShift loc)
+                           end
+                    end >>=
+                    begin function
+                      | `Collapse alloc_id ->
+                         update begin fun st ->
+                           {st with iota_map= IntMap.add iota (`Single alloc_id) st.iota_map }
+                           end
+                      | `NoCollapse ->
+                         return ()
+                    end >>
+                    cap_set_value loc c shifted_addr >>=
+                    fun c -> return (PV (prov, PVconcrete c))
+                else
+                  (* TODO: this is yucky *)
+                  precond alloc_id1 >>=
+                    begin function
+                      | true ->
+                         return ()
+                      | false ->
+                         precond alloc_id2 >>=
+                           begin function
+                             | true ->
+                                return ()
+                             | false ->
+                                fail (MerrArrayShift loc)
+                           end
+                    end >>
+                    cap_set_value loc c shifted_addr >>=
+                    fun c -> return (PV (prov, PVconcrete c))
+             | `Single alloc_id ->
+                precond alloc_id >>=
                   begin function
                     | true ->
-                       precond alloc_id2 >>=
-                         begin function
-                           | true ->
-                              if Switches.(has_switch (SW_pointer_arith `PERMISSIVE)) then
-                                return `NoCollapse
-                              else begin
-                                  Printf.printf "id1= %s, id2= %s ==> addr= %s\n"
-                                    (Z.to_string alloc_id1) (Z.to_string alloc_id2)
-                                    (Z.to_string shifted_addr);
-                                  fail (MerrOther "(PNVI-ae-uid) ambiguous non-zero array shift")
-                                end
-                           | false ->
-                              return (`Collapse alloc_id1)
-                         end
+                       cap_set_value loc c shifted_addr >>=
+                         fun c -> return (PV (prov, PVconcrete c))
                     | false ->
-                       precond alloc_id2 >>=
-                         begin function
-                           | true ->
-                              return (`Collapse alloc_id2)
-                           | false ->
-                              fail (MerrArrayShift loc)
-                         end
-                  end >>=
-                  begin function
-                    | `Collapse alloc_id ->
-                       update begin fun st ->
-                         {st with iota_map= IntMap.add iota (`Single alloc_id) st.iota_map }
-                         end
-                    | `NoCollapse ->
-                       return ()
-                  end >>
-                  cap_set_value loc c shifted_addr >>=
-                  fun c -> return (PV (prov, PVconcrete c))
-              else
-                (* TODO: this is yucky *)
-                precond alloc_id1 >>=
-                  begin function
-                    | true ->
-                       return ()
-                    | false ->
-                       precond alloc_id2 >>=
-                         begin function
-                           | true ->
-                              return ()
-                           | false ->
-                              fail (MerrArrayShift loc)
-                         end
-                  end >>
-                  cap_set_value loc c shifted_addr >>=
-                  fun c -> return (PV (prov, PVconcrete c))
-           | `Single alloc_id ->
-              precond alloc_id >>=
-                begin function
-                  | true ->
-                     cap_set_value loc c shifted_addr >>=
-                       fun c -> return (PV (prov, PVconcrete c))
-                  | false ->
-                     fail (MerrArrayShift loc)
-                end
-         end
+                       fail (MerrArrayShift loc)
+                  end
+           end
 
     | PV (Prov_some alloc_id, PVconcrete c) ->
        (* TODO: is it correct to use the "ty" as the lvalue_ty? *)
@@ -2972,23 +2950,24 @@ module CHERI (C:Capability
          failwith "CHERI.member_shift_ptrval invalid offset value type"
     in
     match ptrval_ with
-    | PVnull ty ->
-       (* TODO: unsure, this might just be undefined (gcc-torture assumes the
-          following behaviour though) *)
-       if Z.equal Z.zero offset then
-         return @@ PV (prov, PVnull ty)
-       else
-         (* we will never reach this branch as this condition is checked
-            earlier. *)
-         failwith "CHERI.member_shift_ptrval, shifting NULL"
     | PVfunction _ ->
        (* we will never reach this branch as this condition is checked
           earlier. *)
        failwith "CHERI.member_shift_ptrval, PVfunction"
     | PVconcrete c ->
-       let addr = C.cap_get_value c in
-       cap_set_value loc c (Z.add addr offset)  >>=
-         fun c -> return @@ PV (prov, PVconcrete c)
+       if cap_is_null c then
+         (* TODO: unsure, this might just be undefined (gcc-torture assumes the
+            following behaviour though) *)
+         if Z.equal Z.zero offset then
+           return @@ PV (prov, PVconcrete (C.cap_c0 ()))
+         else
+           (* we will never reach this branch as this condition is checked
+              earlier. *)
+           failwith "CHERI.member_shift_ptrval, shifting NULL"
+       else
+         let addr = C.cap_get_value c in
+         cap_set_value loc c (Z.add addr offset)  >>=
+           fun c -> return @@ PV (prov, PVconcrete c)
 
   let concurRead_ival ity sym =
     failwith "TODO: concurRead_ival"
@@ -3078,16 +3057,6 @@ module CHERI (C:Capability
         | Right ival ->
             return ival in
     match ptrval_ with
-    | PVnull _ ->
-       begin
-         match ity with
-         | Signed Intptr_t ->
-            return (IC (prov, true, C.cap_c0 ()))
-         | Unsigned Intptr_t ->
-            return (IC (prov, false, C.cap_c0 ()))
-         | _ ->
-            return (mk_ival prov Z.zero)
-       end
     | PVfunction (FP_valid ((Symbol.Symbol (_, n, _)) as sym)) ->
        get >>= fun st ->
        begin
@@ -3106,29 +3075,41 @@ module CHERI (C:Capability
        end
     | PVfunction (FP_invalid c)
       | PVconcrete c ->
-       begin if Switches.(has_switch (SW_PNVI `AE) || has_switch (SW_PNVI `AE_UDI)) then
-               (* PNVI-ae, PNVI-ae-udi *)
-               match prov with
-               | Prov_some alloc_id ->
-                  expose_allocation alloc_id
-               | _ ->
+
+       if cap_is_null c then
+         begin
+           match ity with
+           | Signed Intptr_t ->
+              return (IC (prov, true, C.cap_c0 ()))
+           | Unsigned Intptr_t ->
+              return (IC (prov, false, C.cap_c0 ()))
+           | _ ->
+              return (mk_ival prov Z.zero)
+         end
+       else
+         begin if Switches.(has_switch (SW_PNVI `AE) || has_switch (SW_PNVI `AE_UDI)) then
+                 (* PNVI-ae, PNVI-ae-udi *)
+                 match prov with
+                 | Prov_some alloc_id ->
+                    expose_allocation alloc_id
+                 | _ ->
+                    return ()
+               else
                  return ()
-             else
-               return ()
-       end >>
-       match ity with
-       | Signed Intptr_t
-         | Unsigned Intptr_t ->
-          (* we are using [intcast] to for signed/unsigned handling *)
-          wrap_intcast (*Unsigned Intptr_t*) ity (IC (prov, false, c))
-       | _ ->
-          let ity_max = num_of_int (max_ival ity) in
-          let ity_min = num_of_int (min_ival ity) in
-          let addr = C.cap_get_value c in
-          if Z.(less addr ity_min || less ity_max addr) then
-            fail MerrIntFromPtr
-          else
-            return (mk_ival prov addr)
+         end >>
+           match ity with
+           | Signed Intptr_t
+             | Unsigned Intptr_t ->
+              (* we are using [intcast] to for signed/unsigned handling *)
+              wrap_intcast (*Unsigned Intptr_t*) ity (IC (prov, false, c))
+           | _ ->
+              let ity_max = num_of_int (max_ival ity) in
+              let ity_min = num_of_int (min_ival ity) in
+              let addr = C.cap_get_value c in
+              if Z.(less addr ity_min || less ity_max addr) then
+                fail MerrIntFromPtr
+              else
+                return (mk_ival prov addr)
 
   let combine_prov prov1 prov2 =
     match (prov1, prov2) with
@@ -3419,10 +3400,11 @@ module CHERI (C:Capability
 
   let realloc tid align ptr size : pointer_value memM =
     match ptr with
-    | PV (Prov_none, PVnull _) ->
-       allocate_region tid (Symbol.PrefOther "realloc") align size
-    | PV (Prov_none, _) ->
-       fail (MerrWIP "realloc no provenance")
+    | PV (Prov_none, PVconcrete c) ->
+       if cap_is_null c then
+         allocate_region tid (Symbol.PrefOther "realloc") align size
+       else
+         fail (MerrWIP "realloc no provenance")
     | PV (Prov_some alloc_id, PVconcrete c) ->
        let addr = C.cap_get_value c in
        is_dynamic addr >>= begin function
@@ -3586,15 +3568,16 @@ module CHERI (C:Capability
        mk_scalar `Basic (string_of_float f) Prov_none None
     | MVEpointer (_, PV(prov, pv)) ->
        begin match pv with
-       | PVnull _ ->
-          mk_scalar `Pointer "NULL" Prov_none None
        | PVconcrete c ->
           (* TODO(CHERI): better JSON representation of caps.
              For that additional type consturctor to be added
              to [ui_value] but this change must be syncrhonized
              with UI changes not to break things.
            *)
-          mk_scalar `Pointer (Z.to_string (C.cap_get_value c)) prov (Some bs)
+          if C.eq c (C.cap_c0 ()) then
+            mk_scalar `Pointer "NULL" Prov_none None
+          else
+            mk_scalar `Pointer (Z.to_string (C.cap_get_value c)) prov (Some bs)
        | PVfunction (FP_valid sym) ->
           mk_scalar `Funptr (Pp_symbol.to_string_pretty sym) Prov_none None
        | PVfunction (FP_invalid c) ->

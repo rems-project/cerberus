@@ -632,7 +632,7 @@ let concrete_ptrval alloc_id addr =
 let case_ptrval ptrval f_null f_funptr f_concrete _ =
   match ptrval with
     | PVnull ->
-        f_null Ctype.void (*TODO: hack*)
+        f_null ()
     | PVloc (Prov_empty, addr) ->
         f_concrete ()
     | PVloc (Prov_some alloc_id, addr) ->
