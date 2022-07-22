@@ -327,6 +327,8 @@ and free_vars_list xs =
     ) SymSet.empty xs
 
 
+let no_free_vars t = SymSet.is_empty (free_vars t)
+
 
 let fold_lit f binders acc = function
   | Sym s -> acc

@@ -42,6 +42,18 @@ let open_pred def_args def_body args =
   let su = make_subst (List.map2 (fun (s, _) arg -> (s, arg)) def_args args) in
   IT.subst su def_body
 
+let try_open_pred def name args =
+  match def.definition with
+  | Uninterp -> IT.pred_ name args def.return_bt
+  | Def body -> open_pred def.args body args
+
+let open_if_pred defs t = match IT.term t with
+  | IT.Pred (name, args) -> begin match SymMap.find_opt name defs with
+    | Some def -> try_open_pred def name args
+    | None -> t
+  end
+  | _ -> t
+
 
 exception Unknown of Sym.t
 
@@ -117,7 +129,7 @@ module PageAlloc = struct
             q = q_s;
             pointer = vmemmap_pointer;
             iargs = [];
-            step = Memory.size_of_ctype (Struct hyp_page_tag);
+            step = IT.int_ (Memory.size_of_ctype (Struct hyp_page_tag));
             permission = permission;
            }
       in

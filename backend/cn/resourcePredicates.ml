@@ -198,7 +198,7 @@ let early_alloc () =
         name = PName byte_sym;
         pointer = pointer_ Z.zero;
         q = q_s;
-        step = Memory.size_of_ctype char_ct;
+        step = IT.int_ (Memory.size_of_ctype char_ct);
         permission = and_ [pointerToIntegerCast_ cur %<= q; q %<= (sub_ (end_t, int_ 1))];
         iargs = [];
       },

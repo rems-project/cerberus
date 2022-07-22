@@ -299,7 +299,7 @@ let make_qowned ~loc ~oname ~pointer ~q:(qs,qbt) ~step ~condition ~path ~sct =
     | _ -> fail {loc; msg = Generic (!^"Quantifier for iterated resource must be of type 'integer'")}
   in
   let@ () = 
-    if Z.equal (Z.of_int (Memory.size_of_ctype sct)) step then return ()
+    if IT.equal (IT.int_ (Memory.size_of_ctype sct)) step then return ()
     else fail {loc; msg = Generic !^"pointer increment must match size of array-cell type"}
   in
   match sct with
@@ -321,7 +321,7 @@ let make_qowned ~loc ~oname ~pointer ~q:(qs,qbt) ~step ~condition ~path ~sct =
            pointer; 
            q = qs;
            permission = condition; 
-           step = Memory.size_of_ctype sct;
+           step = IT.int_ (Memory.size_of_ctype sct);
            iargs = [];
           },
           oarg_members),
@@ -388,7 +388,7 @@ let make_qpred loc (pred, def) ~oname ~pointer ~q:(qs,qbt) ~step ~condition iarg
          name = PName pred; 
          pointer;
          q = qs;
-         step = Z.to_int step;
+         step = step;
          iargs; 
          permission = condition;
        },
@@ -882,15 +882,11 @@ let iterated_pointer_base_offset resolve loc q_name pointer =
          when String.equal q_name name' ->
      let@ (pointer_r, p_osct) = resolve pointer in
      let@ (offs_r, _) = resolve offs in
-     begin match IT.is_z offs_r with
-     | Some step -> return (pointer_r, p_osct, step)
-     | _ -> fail {loc; msg = Generic (!^ "Iterated predicate offset must be constant:" ^^^
-            IT.pp offs_r)}
-     end
+     return (pointer_r, p_osct, offs_r)
   | ArrayShift {pointer; index = Var name'} when String.equal q_name name'->
      let@ (pointer, p_osct) = resolve pointer in
      begin match p_osct with
-     | Some (Sctypes.Pointer ct) -> return (pointer, Some ct, Z.of_int (Memory.size_of_ctype ct))
+     | Some (Sctypes.Pointer ct) -> return (pointer, Some ct, IT.int_ (Memory.size_of_ctype ct))
      | None -> fail {loc; msg = Generic (!^ "array pointer type not known" ^^^ IT.pp pointer)}
      | Some ct -> fail {loc; msg = Generic (!^ "array pointer not of pointer type:" ^^^
             IT.pp pointer ^^ colon ^^^ Sctypes.pp ct)}

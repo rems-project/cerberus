@@ -303,11 +303,7 @@ let split_pointer_linear_step loc q ptr_expr =
     | Pointer_op (IntegerToPointerCast (IT (Arith_op (Add (b, offs)), _))) ->
       begin match term b, term offs with
         | Pointer_op (PointerToIntegerCast p), Arith_op (Mul (x, y)) when IT.equal x qs ->
-          begin match is_z y with
-            | Some i -> return (p, Z.to_int i)
-            | _ -> fail {loc; msg = Generic
-                        (!^"Iterated predicate offset must be constant: " ^^^ IT.pp y)}
-          end
+          return (p, y)
         | _ -> fail { loc; msg= Generic (!^msg_s ^^^ IT.pp ptr_expr)}
       end
     | _ ->

@@ -260,8 +260,7 @@ let add_eqs_for_infer loc ftyp =
       return ()
     end
     else
-    let@ values, equalities, lcs = simp_constraints () in
-    let simp t = Simplify.simp global.struct_decls values equalities lcs t in
+    let@ simp = ResourceInference.get_simp () in
     let poss_eqs = List.filter_map (unknown_eq_in_group simp) ptr_gps in
     debug 7 (lazy (format [] ("investigating " ^
         Int.to_string (List.length poss_eqs) ^ " possible eqs")));

@@ -129,7 +129,7 @@ let model_res_spans m_g (res : ResourceTypes.t) =
           [(ptr, Z.add ptr (Z.of_int sz))]
       end
   | (RET.Q ({name = Owned ct; _} as qpt)) ->
-      assert (qpt.step = Memory.size_of_ctype ct);
+      assert (IT.equal qpt.step (IT.int_ (Memory.size_of_ctype ct)));
       let ispans = perm_spans m_g qpt.q qpt.permission in
       if List.compare_length_with ispans 0 == 0
       then []
@@ -204,7 +204,7 @@ let scan_subterms f t = fold_subterms (fun _ xs t -> match f t with
 let get_witnesses = function
   | RET.P ({name = Owned _; _} as pt) -> [(pt.pointer, pt.permission)]
   | RET.Q ({name = Owned ct; _} as qpt) ->
-     assert (qpt.step = Memory.size_of_ctype ct);
+     assert (IT.equal qpt.step (IT.int_ (Memory.size_of_ctype ct)));
      let i = sym_ (qpt.q, BT.Integer) in
      let lbs = scan_subterms is_le qpt.permission
        |> List.filter (fun (lhs, rhs) -> IT.equal i rhs)

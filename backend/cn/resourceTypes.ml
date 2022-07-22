@@ -36,7 +36,7 @@ type qpredicate_type = {
     name : predicate_name; 
     pointer: IT.t;            (* I *)
     q: Sym.t;
-    step: int;
+    step: IT.t;
     permission: IT.t;         (* I, function of q *)
     iargs: IT.t list;         (* I, function of q *)
   }
@@ -71,7 +71,7 @@ let pp_predicate_type (p : predicate_type) =
 
 let pp_qpredicate_type (p : qpredicate_type) =
   let args = 
-    [IT.pp p.pointer ^^^ plus ^^^ parens (Sym.pp p.q ^^^ star ^^^ !^(string_of_int p.step));
+    [IT.pp p.pointer ^^^ plus ^^^ parens (Sym.pp p.q ^^^ star ^^^ IT.pp p.step);
      IT.pp p.permission] @
     List.map IT.pp (p.iargs)
   in
@@ -150,37 +150,37 @@ let free_vars = function
 open Simplify
 
 
-let simp_predicate_type structs values equalities lcs (p : predicate_type) = {
+let simp_predicate_type structs values equalities log_unfold lcs (p : predicate_type) = {
     name = p.name; 
-    pointer = simp structs values equalities lcs p.pointer; 
-    permission = simp structs values equalities lcs p.permission;
-    iargs = List.map (simp structs values equalities lcs) p.iargs; 
+    pointer = simp structs values equalities log_unfold lcs p.pointer;
+    permission = simp structs values equalities log_unfold lcs p.permission;
+    iargs = List.map (simp structs values equalities log_unfold lcs) p.iargs;
   }
 
-let simp_qpredicate_type structs values equalities lcs (qp : qpredicate_type) = 
+let simp_qpredicate_type structs values equalities log_unfold lcs (qp : qpredicate_type) =
   let qp = alpha_rename_qpredicate_type (Sym.fresh_same qp.q) qp in
-  let permission = Simplify.simp_flatten structs values equalities lcs qp.permission in
+  let permission = Simplify.simp_flatten structs values equalities log_unfold lcs qp.permission in
   let permission_lcs = LCSet.of_list (List.map LC.t_ permission) in
   let simp_lcs = LCSet.union permission_lcs lcs in
   {
     name = qp.name;
-    pointer = simp structs values equalities lcs qp.pointer;
+    pointer = simp structs values equalities log_unfold lcs qp.pointer;
     q = qp.q;
-    step = qp.step;
+    step = simp structs values equalities log_unfold lcs qp.step;
     permission = and_ permission;
-    iargs = List.map (simp structs values equalities simp_lcs) qp.iargs;
+    iargs = List.map (simp structs values equalities log_unfold simp_lcs) qp.iargs;
   }
 
 
 
-let simp structs values equalities lcs = function
-  | P p -> P (simp_predicate_type structs values equalities lcs p)
-  | Q qp -> Q (simp_qpredicate_type structs values equalities lcs qp)
+let simp structs values equalities log_unfold lcs = function
+  | P p -> P (simp_predicate_type structs values equalities log_unfold lcs p)
+  | Q qp -> Q (simp_qpredicate_type structs values equalities log_unfold lcs qp)
 
 
 
-let simp_or_empty structs values equalities lcs resource = 
-  match simp structs values equalities lcs resource with
+let simp_or_empty structs values equalities log_unfold lcs resource =
+  match simp structs values equalities log_unfold lcs resource with
   | P p when IT.is_false p.permission -> None
   | Q p when IT.is_false p.permission -> None
   | re -> Some re

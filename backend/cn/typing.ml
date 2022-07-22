@@ -131,11 +131,16 @@ let all_constraints () =
   let@ s = get () in
   return (fst s.constraints)
 
-let simp_constraints () =
+let simp_constraints1 () =
   fun s ->
   Ok ((s.sym_eqs, 
        s.equalities,
        fst s.typing_context.constraints), s)
+
+let simp_constraints () =
+  let@ (vals, eqs, cons) = simp_constraints1 () in
+  let@ g = get_global () in
+  return (vals, eqs, LogicalPredicates.open_if_pred g.logical_predicates, cons)
 
 let all_resources_tagged () =
   let@ s = get () in
@@ -264,8 +269,9 @@ let add_c lc =
   let@ _ = drop_models () in
   let@ s = get () in
   let@ solver = solver () in
-  let@ values, equalities, simp_lcs = simp_constraints () in
-  let lcs = Simplify.simp_lc_flatten s.global.struct_decls values equalities simp_lcs lc in
+  let@ values, equalities, log_unfold, simp_lcs = simp_constraints () in
+  let lcs = Simplify.simp_lc_flatten s.global.struct_decls values equalities
+        log_unfold simp_lcs lc in
   let s = List.fold_right Context.add_c lcs s in
   let () = List.iter (Solver.add_assumption solver s.global) lcs in
   let@ _ = add_sym_eqs (List.filter_map (LC.is_sym_lhs_equality) lcs) in
@@ -278,14 +284,24 @@ let rec add_cs = function
      let@ () = add_c lc in 
      add_cs lcs
 
+let check_res_const_step loc r =
+  match r with
+  | RET.Q qp ->
+    let open TypeErrors in
+    if Option.is_some (IT.is_z qp.step)
+    then return ()
+    else fail (fun _ -> {loc; msg = Generic
+          (Pp.item "could not simplify iter-step to constant" (IT.pp qp.step))})
+  | _ -> return ()
 
 let add_r oloc (r, oargs) = 
   let@ s = get () in
-  let@ values, equalities, lcs = simp_constraints () in
-  match RET.simp_or_empty s.global.struct_decls values equalities lcs r with
+  let@ values, equalities, log_unfold, lcs = simp_constraints () in
+  match RET.simp_or_empty s.global.struct_decls values equalities log_unfold lcs r with
   | None -> return ()
-  | Some r -> set (Context.add_r oloc (r, oargs) s)
-
+  | Some r ->
+    let@ () = check_res_const_step Loc.unknown r in
+    set (Context.add_r oloc (r, oargs) s)
 
 let rec add_rs oloc = function
   | [] -> return ()
@@ -300,10 +316,10 @@ type changed =
   | Unfolded of RE.t list
   | Changed of RE.t
 
-let map_and_fold_resources loc (f : RE.t -> 'acc -> changed * 'acc) (acc : 'acc) = 
+let map_and_fold_resources_adj loc (f : RE.t -> 'acc -> changed * 'acc) (acc : 'acc) =
   fun s ->
   let provable = make_provable loc s in
-  let (resources, ix) = s.typing_context.resources in
+  let (resources, orig_ix) = s.typing_context.resources in
   let resources, ix, acc =
     List.fold_right (fun (re, i) (resources, ix, acc) ->
         let (changed, acc) = f re acc in
@@ -324,9 +340,25 @@ let map_and_fold_resources loc (f : RE.t -> 'acc -> changed * 'acc) (acc : 'acc)
               end
            | _ -> 
               ((re, ix) :: resources, ix + 1, acc)
-      ) resources ([], ix, acc)
+      ) resources ([], orig_ix, acc)
   in
-  Ok (acc, {s with typing_context = {s.typing_context with resources = (resources, ix)}})
+  Ok ((acc, orig_ix),
+    {s with typing_context = {s.typing_context with resources = (resources, ix)}})
+
+(* not clear whether Effectful.Make should be used here instead *)
+let rec iterM f xs = match xs with
+  | [] -> return ()
+  | x :: xs ->
+    let@ () = f x in
+    iterM f xs
+
+let map_and_fold_resources loc f acc =
+  let@ (acc, orig_ix) = map_and_fold_resources_adj loc f acc in
+  let@ ctxt = get () in
+  let new_res = List.filter (fun (re, ix) -> ix > orig_ix) (fst ctxt.resources)
+    |> List.map fst |> List.map fst in
+  let@ _ = iterM (check_res_const_step loc) new_res in
+  return acc
 
 let get_loc_trace () =
   let@ c = get () in
@@ -421,16 +453,6 @@ let get_logical_predicate_def loc id =
   | Some def -> return def
   | None -> fail (fun _ -> {loc; msg = Unknown_logical_predicate {id;
       resource = Option.is_some (Global.get_resource_predicate_def global id)}})
-
-let is_fully_defined_pred loc id =
-  let@ global = get_global () in
-  let defs = (let open Global in global.logical_predicates) in
-  let@ x = try return (LogicalPredicates.is_fully_defined defs id)
-    with LogicalPredicates.Unknown id2 ->
-      (* will raise the correct error *)
-      begin let@ _ = get_logical_predicate_def loc id2 in return true end
-  in
-  return x
 
 let get_struct_decl loc tag = 
   let open TypeErrors in

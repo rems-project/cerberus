@@ -132,18 +132,21 @@ module WIT = struct
 
   (* We expect a (sub) term to be constant unless it contains a free variable
      or it makes use of an uninterpreted logical predicate. *)
-  let is_const loc t =
-    let fs = IndexTerms.free_vars t in
-    Pp.debug 2 (lazy (Pp.item "is_const: vars" (Pp.flow (Pp.string " ")
-        (IT.pp t :: Pp.colon :: List.map Sym.pp (SymSet.elements fs)))));
-    if not (SymSet.is_empty fs) then return false
+  let is_const_inner global loc t =
+    if not (no_free_vars t) then false
     else
     let ps = IndexTerms.preds_of t in
-    Pp.debug 2 (lazy (Pp.item "is_const: preds" (Pp.flow (Pp.string " ")
-        (IT.pp t :: Pp.colon :: List.map Sym.pp (SymSet.elements ps)))));
-    let@ defns = ListM.mapM (Typing.is_fully_defined_pred loc) (SymSet.elements ps) in
-    return (List.for_all (fun x -> x) defns)
+    let open Global in
+    List.for_all (fun p -> LogicalPredicates.is_fully_defined global.logical_predicates p)
+        (SymSet.elements ps)
 
+  let is_const loc t =
+    let@ global = get_global () in
+    let@ r = try return (is_const_inner global loc t)
+      with LogicalPredicates.Unknown id2 ->
+      (let@ _ = get_logical_predicate_def loc id2 in return false)
+    in
+    return r
 
   let rec infer : 'bt. Loc.t -> context:(BT.t IT.term) -> 'bt IT.term -> (IT.t, type_error) m =
       fun loc ~context (IT (it, _)) ->
@@ -638,6 +641,12 @@ module WRET = struct
        return ()
     | Q p ->
        let@ _ = WIT.check loc BT.Loc p.pointer in
+       let@ _ = WIT.check loc BT.Integer p.step in
+       let@ c' = WIT.is_const loc p.step in
+       let@ () = if c' then return () else
+           let hint = "Only constant iteration steps are allowed" in
+           fail (fun ctxt -> {loc; msg = NIA {context = p.step; it = p.step; ctxt; hint}})
+       in
        let@ _ = 
          pure begin 
              let@ () = add_l p.q Integer in
