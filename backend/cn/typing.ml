@@ -285,14 +285,11 @@ let rec add_cs = function
      add_cs lcs
 
 let check_res_const_step loc r =
-  match r with
-  | RET.Q qp ->
-    let open TypeErrors in
-    if Option.is_some (IT.is_z qp.step)
-    then return ()
-    else fail (fun _ -> {loc; msg = Generic
-          (Pp.item "could not simplify iter-step to constant" (IT.pp qp.step))})
-  | _ -> return ()
+  let open TypeErrors in
+  if RET.steps_constant r
+  then return ()
+  else fail (fun _ -> {loc; msg = Generic
+          (Pp.item "could not simplify iter-step to constant" (RET.pp r))})
 
 let add_r oloc (r, oargs) = 
   let@ s = get () in

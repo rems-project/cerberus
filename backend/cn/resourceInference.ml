@@ -449,6 +449,7 @@ module General = struct
        let@ (needed, oargs) =
          map_and_fold_resources loc (fun re (needed, oargs) ->
              let continue = (Unchanged, (needed, oargs)) in
+             assert (RET.steps_constant (fst re));
              if is_false needed then continue else
              match re with
              | (P p', p'_oargs) when equal_predicate_name requested.name p'.name ->

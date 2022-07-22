@@ -202,4 +202,8 @@ let alpha_equivalent r1 r2 = match r1, r2 with
   | _ -> false
 
 
+let steps_constant = function
+  | Q qp -> Option.is_some (IT.is_z qp.step)
+  | _ -> true
+
 
