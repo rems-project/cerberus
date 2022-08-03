@@ -2754,10 +2754,29 @@ module CHERI (C:Capability
        if Z.equal n Z.zero then
          Either.Right (IC (Prov_none, false, C.cap_c0 ()))
        else
-         let n = wrap_cap_value n in
+         let addr = wrap_cap_value n in
+         (*
+         (if Switches.is_PNVI () then
+           (* TODO: device memory? *)
+           get >>= fun st ->
+           (* find_overlaping shoud return None for 0 *)
+           begin match find_overlaping st addr with
+           | `NoAlloc ->
+              return Prov_none
+           | `SingleAlloc alloc_id ->
+              return (Prov_some alloc_id)
+           | `DoubleAlloc alloc_ids ->
+              add_iota alloc_ids >>= fun iota ->
+              return (Prov_symbolic iota)
+           end
+         else
+           return prov)
+           >>= fun prov ->
+          *)
          let c = C.cap_c0 () in
+         (* TODO(CHERI): representability check? *)
          begin
-           match cap_maybe_set_value loc c n with
+           match cap_maybe_set_value loc c addr with
            | Either.Right c -> Either.Right (IC (prov, false, c))
            | Either.Left me -> Either.Left me
          end
