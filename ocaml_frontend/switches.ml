@@ -19,7 +19,7 @@ type cerb_switch =
   
   | SW_PNVI of [ `PLAIN | `AE | `AE_UDI ]
   | SW_CHERI
-
+  | SW_intptr_t_provenance
 
 
 (* let are_incompatible = function
@@ -74,7 +74,9 @@ let set strs =
     | "PNVI_ae_udi" ->
         Some (SW_PNVI `AE_UDI)
     | "CHERI" ->
-        Some SW_CHERI
+       Some SW_CHERI
+    | "intptr_t_provenance" ->
+       Some SW_intptr_t_provenance
     | _ ->
         None in
   List.iter (fun str ->
@@ -92,6 +94,9 @@ let is_CHERI () =
 
 let is_PNVI () =
   List.exists (function SW_PNVI _ -> true | _ -> false) !internal_ref
+
+let is_intptr_t_provenance () =
+  List.exists (function SW_intptr_t_provenance -> true | _ -> false) !internal_ref
 
 let has_strict_pointer_arith () =
   has_switch (SW_pointer_arith `STRICT)
