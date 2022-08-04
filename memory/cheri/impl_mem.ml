@@ -697,10 +697,19 @@ module CHERI (C:Capability
     [ (Z.of_int64 0x40000000L, Z.of_int64 0x40000004L)
     ; (Z.of_int64 0xABCL, Z.of_int64 0XAC0L) ]
 
+
+  let is_PNVI () =
+    (*    match Switches.(has_switch_pred (function SW_no_integer_provenance _ -> true | _ -> false)) with *)
+    match Switches.(has_switch_pred (function SW_PNVI _ -> true | _ -> false)) with
+    | None ->
+       false
+    | Some _ ->
+       true
+
   (* NOTE: since we are fusing PVI and PVNI together any creation of an integer_value should
      be done through this function to unsure we always use Prov_none in PVNI *)
   let mk_ival prov n =
-    if Switches.is_PNVI () then
+    if is_PNVI () then
       IV (Prov_none, n)
     else
       (* We are in the mode where integer values have a provenance *)
@@ -1176,7 +1185,7 @@ module CHERI (C:Capability
                      end
                   | _ ->
                      let prov =
-                       if Switches.is_PNVI () then
+                       if is_PNVI () then
                          (*
                            let () =
                            print_endline "HELLO ==> PNVI abst (ptr)";
@@ -2237,24 +2246,22 @@ module CHERI (C:Capability
     | ((Unsigned Intptr_t),(IC (prov, _, c)) | (Signed Intptr_t),(IC (prov, _, c))) ->
         begin
           let addr = C.cap_get_value c in
-          if Switches.is_PNVI () then
-            if Switches.is_intptr_t_provenance () then
-              return (PV (prov, PVconcrete c))
-            else
-              (* TODO: device memory? *)
-              get >>= fun st ->
-              (* find_overlaping shoud return None for 0 *)
-              begin match find_overlaping st addr with
-              | `NoAlloc ->
-                 return Prov_none
-              | `SingleAlloc alloc_id ->
-                 return (Prov_some alloc_id)
-              | `DoubleAlloc alloc_ids ->
-                 add_iota alloc_ids >>= fun iota ->
-                 return (Prov_symbolic iota)
-              end >>= fun prov ->
-              (* cast int to pointer *)
-              return (PV (prov, PVconcrete c))
+          if is_PNVI () then
+            (* TODO(CHERI): We may need to carry provenance for [u]intptr_t *)
+            (* TODO: device memory? *)
+            get >>= fun st ->
+            (* find_overlaping shoud return None for 0 *)
+            begin match find_overlaping st addr with
+            | `NoAlloc ->
+               return Prov_none
+            | `SingleAlloc alloc_id ->
+               return (Prov_some alloc_id)
+            | `DoubleAlloc alloc_ids ->
+               add_iota alloc_ids >>= fun iota ->
+               return (Prov_symbolic iota)
+            end >>= fun prov ->
+            (* cast int to pointer *)
+            return (PV (prov, PVconcrete c))
           else
             match prov with
             | Prov_none ->
@@ -2270,8 +2277,9 @@ module CHERI (C:Capability
        failwith "ptrfromint: invalid encoding for [u]intptr_t"
     | _, (IV (prov, n)) ->
        if Z.equal n Z.zero then
-         if Switches.is_PNVI () then
+         if is_PNVI () then
            (* TODO: device memory? *)
+           (* TODO(CHERI): should prov be preserved here? *)
            return (PV (Prov_none, PVconcrete (C.cap_c0 ())))
          else
            (* All 0-address capabilities regardless of their
@@ -2290,7 +2298,7 @@ module CHERI (C:Capability
          cap_set_value loc (C.cap_c0 ()) n >>=
            (fun c -> return (PV (prov, PVconcrete c)))
     | _, IC _ ->
-       failwith "invalid integer value (capability for non-[u]intptr_t"
+       failwith "invalid integer value (capability for non- [u]intptr_t"
 
   let derive_cap is_signed bop ival1 ival2 : integer_value =
     match bop with
@@ -2604,7 +2612,8 @@ module CHERI (C:Capability
         | None -> fail (MerrOther ("CHERI.call_intrinsic: non-cap 1st argument in: '" ^ name ^ "'"))
         | Some (_,c) ->
            let v = C.cap_get_offset c in
-           return (Some (MVinteger (Size_t, (IV (Prov_none, v)))))
+           let p = Prov_none in (* TODO: CHERI provenance? *)
+           return (Some (MVinteger (Size_t, (IV (p,v)))))
         end
     else if name = "cheri_address_get" then
       (* this intrinsic is pure *)
@@ -2615,7 +2624,8 @@ module CHERI (C:Capability
         | None -> fail (MerrOther ("CHERI.call_intrinsic: non-cap 1st argument in: '" ^ name ^ "'"))
         | Some (_,c) ->
            let v = C.cap_get_value c in
-           return (Some (MVinteger (Vaddr_t, (IV (Prov_none, v)))))
+           let p = Prov_none in (* TODO: CHERI provenance? *)
+           return (Some (MVinteger (Vaddr_t, (IV (p,v)))))
         end
     else if name = "cheri_base_get" then
       (* this intrinsic is pure *)
@@ -2626,7 +2636,8 @@ module CHERI (C:Capability
         | None -> fail (MerrOther ("CHERI.call_intrinsic: non-cap 1st argument in: '" ^ name ^ "'"))
         | Some (_,c) ->
            let v = fst (C.cap_get_bounds c) in
-           return (Some (MVinteger (Vaddr_t, (IV (Prov_none, v)))))
+           let p = Prov_none in (* TODO: CHERI provenance? *)
+           return (Some (MVinteger (Vaddr_t, (IV (p,v)))))
         end
     else if name = "cheri_length_get" then
       (* this intrinsic is pure *)
@@ -2638,7 +2649,8 @@ module CHERI (C:Capability
         | Some (_,c) ->
            let (base,limit) = C.cap_get_bounds c in
            let v = Z.sub limit base in
-           return (Some (MVinteger (Size_t, (IV (Prov_none, v)))))
+           let p = Prov_none in (* TODO: CHERI provenance? *)
+           return (Some (MVinteger (Size_t, (IV (p,v)))))
         end
     else if name = "cheri_tag_get" then
       (* this intrinsic is pure *)
@@ -2649,7 +2661,8 @@ module CHERI (C:Capability
         | None -> fail (MerrOther ("CHERI.call_intrinsic: non-cap 1st argument in: '" ^ name ^ "'"))
         | Some (_,c) ->
            let v = if C.cap_is_valid c then Z.succ (Z.zero) else Z.zero  in
-           return (Some (MVinteger (Bool, (IV (Prov_none, v)))))
+           let p = Prov_none in (* TODO: CHERI provenance? *)
+           return (Some (MVinteger (Bool, (IV (p,v)))))
         end
     else if name = "cheri_tag_clear" then
       let cap_val = List.nth args 0 in
@@ -2673,7 +2686,8 @@ module CHERI (C:Capability
         | _,None -> fail (MerrOther ("CHERI.call_intrinsic: non-cap 2nd argument in: '" ^ name ^ "'"))
         | Some (_,c0), Some (_,c1) ->
            let v = if C.eq c0 c1 then Z.succ (Z.zero) else Z.zero in
-           return (Some (MVinteger (Bool, (IV (Prov_none, v)))))
+           let p = Prov_none in (* TODO: CHERI provenance? *)
+           return (Some (MVinteger (Bool, (IV (p,v)))))
         end
     else if name = "cheri_representable_length" then
       (* this intrinsic is pure *)
@@ -2756,6 +2770,7 @@ module CHERI (C:Capability
        else
          let n = wrap_cap_value n in
          let c = C.cap_c0 () in
+         (* TODO(CHERI): representability check? *)
          begin
            match cap_maybe_set_value loc c n with
            | Either.Right c -> Either.Right (IC (prov, false, c))
@@ -2817,7 +2832,7 @@ module CHERI (C:Capability
          let precond z =
            (* TODO: is it correct to use the "ty" as the lvalue_ty? *)
            if    Switches.(has_switch (SW_pointer_arith `STRICT))
-                 || (Switches.is_PNVI () && not (Switches.(has_switch (SW_pointer_arith `PERMISSIVE)))) then
+                 || (is_PNVI () && not (Switches.(has_switch (SW_pointer_arith `PERMISSIVE)))) then
              get_allocation z >>= fun alloc ->
              if    Z.less_equal alloc.base shifted_addr
                    && Z.less_equal (Z.add shifted_addr (Z.of_int (sizeof ty)))
@@ -2900,7 +2915,7 @@ module CHERI (C:Capability
        (* TODO: is it correct to use the "ty" as the lvalue_ty? *)
        let shifted_addr = Z.add (C.cap_get_value c) offset in
        if    Switches.(has_switch (SW_pointer_arith `STRICT))
-             || (Switches.is_PNVI () && not (Switches.(has_switch (SW_pointer_arith `PERMISSIVE)))) then
+             || (is_PNVI () && not (Switches.(has_switch (SW_pointer_arith `PERMISSIVE)))) then
          get_allocation alloc_id >>= fun alloc ->
          if    Z.less_equal alloc.base shifted_addr
                && Z.less_equal (Z.add shifted_addr (Z.of_int (sizeof ty)))
@@ -2915,7 +2930,7 @@ module CHERI (C:Capability
     | PV (Prov_none, PVconcrete c) ->
        let shifted_addr = Z.add (C.cap_get_value c) offset in
        if    Switches.(has_switch (SW_pointer_arith `STRICT))
-             || (Switches.is_PNVI () && not (Switches.(has_switch (SW_pointer_arith `PERMISSIVE)))) then
+             || (is_PNVI () && not (Switches.(has_switch (SW_pointer_arith `PERMISSIVE)))) then
          fail (MerrOther "out-of-bound pointer arithmetic (Prov_none)")
        else
          cap_set_value loc c shifted_addr >>=
