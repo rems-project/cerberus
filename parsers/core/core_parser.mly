@@ -622,8 +622,6 @@ let rec symbolify_expr ((Expr (annot, expr_)) : parsed_expr) : (unit expr) Eff.t
               Eff.return PtrFromInt
           | PtrValidForDeref ->
               Eff.return PtrValidForDeref
-          | Intcast ->
-              Eff.return Intcast
           | PtrWellAligned ->
               Eff.return PtrWellAligned
           | PtrArrayShift ->

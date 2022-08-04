@@ -217,7 +217,6 @@ let show_memop =
   | IntFromPtr -> "IntFromPtr"
   | PtrFromInt -> "PtrFromInt"
   | PtrValidForDeref -> "PtrValidForDeref"
-  | Intcast -> "Intcast"
   | PtrWellAligned -> "PtrWellAligned"
   | Memcmp -> "Memcmp"
   | Memcpy -> "Memcpy"

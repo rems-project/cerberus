@@ -1095,7 +1095,7 @@ let rec isAlwaysDefined (Pexpr _ _ pexpr_) =
     | PEmember_shift pe _ _ ->
         isAlwaysDefined pe
     | PEmemop _ _ ->
-        false (* Intcast can be undefined *)
+        false (* TODO: Review. The original comment was "Intcast can be undefined". But we no longer have intcast. *)
     | PEnot pe ->
         isAlwaysDefined pe
     | PEop _ pe1 pe2 ->
