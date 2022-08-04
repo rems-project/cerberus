@@ -264,7 +264,7 @@ module CHERI (C:Capability
   type integer_value =
     | IV of provenance * Z.num
     (* for [u]intptr_t: *)
-    | IC of provenance * bool (* is_signed *) * C.t
+    | IC of bool (* is_signed *) * C.t
 
   let wrapI min_v max_v n =
     let dlt = Z.succ (Z.sub max_v min_v) in
@@ -294,13 +294,13 @@ module CHERI (C:Capability
 
   let num_of_int = function
     | IV (_,n) -> n
-    | IC (_,is_signed,c) ->
+    | IC (is_signed,c) ->
        let n = C.cap_get_value c in
        if is_signed then unwrap_cap_value n else n
 
   let prov_of_int = function
     | IV (p,_) -> p
-    | IC (p,_,_) ->p
+    | IC (_,_) -> Prov_none
 
   type floating_value =
     (* TODO: hack hack hack ==> OCaml's float are 64bits *)
@@ -349,7 +349,7 @@ module CHERI (C:Capability
     | FP_invalid c -> (funptrmap, c)
 
   let cap_of_mem_value funptrmap = function
-    | MVinteger (_, IC (_,_,c)) -> Some (funptrmap,c)
+    | MVinteger (_, IC (_,c)) -> Some (funptrmap,c)
     | MVpointer (_, PV (_, PVconcrete c)) -> Some (funptrmap,c)
     | MVpointer (_, PV (_, PVfunction fp)) ->
        Some (resolve_function_pointer funptrmap fp)
@@ -357,7 +357,7 @@ module CHERI (C:Capability
 
   let update_cap_in_mem_value cap_val c =
     match cap_val with
-    | MVinteger (ty, IC (prov,is_signed,_)) ->  MVinteger (ty, IC (prov,is_signed,c))
+    | MVinteger (ty, IC (is_signed,_)) ->  MVinteger (ty, IC (is_signed,c))
     | MVpointer (ty, PV (prov, PVconcrete _)) -> MVpointer (ty, PV (prov, PVconcrete c))
     | MVpointer (ty, PV (prov, PVfunction fp)) ->
        MVpointer (ty, PV (prov, PVfunction (FP_invalid c)))
@@ -636,13 +636,10 @@ module CHERI (C:Capability
          !^ ("<" ^ string_of_provenance prov ^ ">:" ^ Z.to_string n)
        else
          !^ (Z.to_string n)
-    | (IC (prov, is_signed, c)) ->
+    | (IC (is_signed, c)) ->
        let cs = (C.to_string c)
                 ^ (if is_signed then " (signed)" else " (unsigned)")
        in
-       if !Debug_ocaml.debug_level >= 3 then
-         !^ ("<" ^ string_of_provenance prov ^ ">:" ^ cs)
-       else
          !^ cs
 
   let pp_integer_value_for_core = pp_integer_value
@@ -1090,10 +1087,10 @@ module CHERI (C:Capability
                     match cap_maybe_set_value loc c (wrap_cap_value n) with
                     | Either.Right c ->
                        Debug_ocaml.warn [] (fun () -> "Error decoding intptr_t cap value");
-                       MVEinteger (ity, IC (prov, true, c))
+                       MVEinteger (ity, IC (true, c))
                     | Either.Left e -> MVErr e
                   else
-                    MVEinteger (ity, IC (prov, false, c))
+                    MVEinteger (ity, IC (false, c))
                end
             end
          | None ->
@@ -1300,11 +1297,11 @@ module CHERI (C:Capability
        (funptrmap,
         clear_caps addr (Z.of_int (List.length bs)) captags,
         bs)
-    | MVinteger (ity, IC (prov, _, c)) ->
+    | MVinteger (ity, IC (_, c)) ->
        let (cb,ct) = C.encode true c in
        (funptrmap,
         IntMap.add addr ct captags,
-        List.mapi (fun i b -> AbsByte.v prov ~copy_offset:None (Some b)) @@ cb)
+        List.mapi (fun i b -> AbsByte.v Prov_none ~copy_offset:None (Some b)) @@ cb)
     | MVfloating (fty, fval) ->
        let bs = List.map (fun x -> AbsByte.v Prov_none (Some x)) begin
                     bytes_of_int
@@ -2243,7 +2240,7 @@ module CHERI (C:Capability
 
   let ptrfromint loc (int_ty:integerType) ref_ty int_v =
     match int_ty, int_v with
-    | ((Unsigned Intptr_t),(IC (prov, _, c)) | (Signed Intptr_t),(IC (prov, _, c))) ->
+    | ((Unsigned Intptr_t),(IC (_, c)) | (Signed Intptr_t),(IC (_, c))) ->
         begin
           let addr = C.cap_get_value c in
           if is_PNVI () then
@@ -2263,15 +2260,11 @@ module CHERI (C:Capability
             (* cast int to pointer *)
             return (PV (prov, PVconcrete c))
           else
-            match prov with
-            | Prov_none ->
-               (* TODO: check (in particular is that ok to only allow device pointers when there is no provenance? *)
-               if List.exists (fun (min, max) -> Z.less_equal min addr && Z.less_equal addr max) device_ranges then
-                 return (PV (Prov_device, PVconcrete c))
-               else
-                 return (PV (Prov_none, PVconcrete c))
-            | _ ->
-               return (PV (prov, PVconcrete c))
+            (* TODO: check in particular is that ok to only allow device pointers when there is no provenance? *)
+            if List.exists (fun (min, max) -> Z.less_equal min addr && Z.less_equal addr max) device_ranges then
+              return (PV (Prov_device, PVconcrete c))
+            else
+              return (PV (Prov_none, PVconcrete c))
         end
     | (Ctype.(Unsigned Intptr_t),(IV (_, _)) | Ctype.(Signed Intptr_t),(IV (_, _))) ->
        failwith "ptrfromint: invalid encoding for [u]intptr_t"
@@ -2305,23 +2298,23 @@ module CHERI (C:Capability
     | DCunary _ ->
        begin
          match ival1 with
-         | IC (prov,_ ,cap) -> IC (prov, is_signed, cap)
+         | IC (_ ,cap) -> IC (is_signed, cap)
          | IV _ -> failwith "derive_cap should not be used for unary operations on non capabilty-carrying types"
        end
     | DCbinary _ ->
        begin
          match ival1, ival2 with
-         | IC (prov,_ ,cap), _
-           | _ , IC (prov,_,cap) -> IC (prov, is_signed, cap)
+         | IC (_ ,cap), _
+           | _ , IC (_,cap) -> IC ( is_signed, cap)
          | IV _, IV _ ->
             failwith "derive_cap should not be used for binary operations on non capabilty-carrying types"
        end
 
   let cap_assign_value loc ival_cap ival_n :(Undefined.undefined_behaviour, integer_value) Either.either =
     match ival_cap, ival_n with
-    | IC (_,is_signed,c), IV (prov,n) ->
+    | IC (is_signed,c), IV (prov,n) ->
        if C.cap_vaddr_representable c n
-       then Either.Right (IC (prov, is_signed, C.cap_set_value c n))
+       then Either.Right (IC (is_signed, C.cap_set_value c n))
        else Either.Left
               (match undefinedFromMem_error (MerrCHERI (loc, CheriNonRepresentable n)) with
                | Some u -> u
@@ -2331,13 +2324,13 @@ module CHERI (C:Capability
 
   (* Added for CHERI to cast to regular integers. *)
   let ptr_t_int_value = function
-    | IC (prov, _, _) as ival ->
-        IV (prov, num_of_int ival)
+    | IC (_, _) as ival ->
+        IV (Prov_none, num_of_int ival)
     | IV _ ->
         failwith "Unexpected argument value in ptr_t_int_value"
 
   let null_cap is_signed : integer_value =
-    IC (Prov_none, is_signed, (C.cap_c0 ()))
+    IC (is_signed, (C.cap_c0 ()))
 
   (* Check if this is either a capability pointer or
      [u]intptr_t *)
@@ -2742,38 +2735,38 @@ module CHERI (C:Capability
        failwith "intcast: Sign mismatch in IC" *)
 
     (* [u]intptr_t identity *)
-    | (*Ctype.Unsigned Intptr_t,*) IC (_, false, _), Ctype.Unsigned Intptr_t
-      | (*Ctype.Signed Intptr_t,*) IC (_, true, _), Ctype.Signed Intptr_t ->
+    | (*Ctype.Unsigned Intptr_t,*) IC (false, _), Ctype.Unsigned Intptr_t
+      | (*Ctype.Signed Intptr_t,*) IC (true, _), Ctype.Signed Intptr_t ->
        Either.Right ival
 
     (* [u]intptr_t signedness change. just changing sign in IC. Value stays the same (unsigned) *)
-    | (*Ctype.Unsigned Intptr_t,*) IC (prov, (false as is_signed), cap), Ctype.Signed Intptr_t
-      | (*Ctype.Signed Intptr_t,*) IC (prov, (true as is_signed), cap), Ctype.Unsigned Intptr_t  ->
-        Either.Right (IC (prov, not is_signed, cap))
+    | (*Ctype.Unsigned Intptr_t,*) IC ((false as is_signed), cap), Ctype.Signed Intptr_t
+      | (*Ctype.Signed Intptr_t,*) IC ((true as is_signed), cap), Ctype.Unsigned Intptr_t  ->
+        Either.Right (IC (not is_signed, cap))
 
     (* from uintptr_t to int - regular conversion*)
-    | (*Ctype.Unsigned Intptr_t,*) IC (prov, false, cap), _ ->
+    | (*Ctype.Unsigned Intptr_t,*) IC (false, cap), _ ->
        let n = C.cap_get_value cap in
-       Either.Right (IV (prov, (conv_int_to_ity2 n)))
+       Either.Right (IV (Prov_none, (conv_int_to_ity2 n)))
 
     (* from intptr_t to int. First we recover original signed value
        via [unwrap] and then perform regular promoion *)
-    | (*Ctype.Signed Intptr_t,*) IC (prov, true, cap), _ ->
+    | (*Ctype.Signed Intptr_t,*) IC (true, cap), _ ->
        let n = C.cap_get_value cap in
-       Either.Right (IV (prov, (conv_int_to_ity2 (unwrap_cap_value n))))
+       Either.Right (IV (Prov_none, (conv_int_to_ity2 (unwrap_cap_value n))))
 
     (* from int to [u]intptr_t *)
     | (*_,*) IV (prov, n), Ctype.Unsigned Intptr_t
       | (*_,*) IV (prov, n), Ctype.Signed Intptr_t ->
        if Z.equal n Z.zero then
-         Either.Right (IC (Prov_none, false, C.cap_c0 ()))
+         Either.Right (IC (false, C.cap_c0 ()))
        else
          let n = wrap_cap_value n in
          let c = C.cap_c0 () in
          (* TODO(CHERI): representability check? *)
          begin
            match cap_maybe_set_value loc c n with
-           | Either.Right c -> Either.Right (IC (prov, false, c))
+           | Either.Right c -> Either.Right (IC (false, c))
            | Either.Left me -> Either.Left me
          end
     (* error *)
@@ -2932,7 +2925,7 @@ module CHERI (C:Capability
     let offset =
       match offsetof_ival (Tags.tagDefs ()) tag_sym memb_ident with
       | IV (_, offset) -> offset
-      | IC (_, _, c) ->
+      | IC (_, c) ->
          (* we will never reach this branch as this condition is checked
             earlier. *)
          failwith "CHERI.member_shift_ptrval invalid offset value type"
@@ -3054,7 +3047,7 @@ module CHERI (C:Capability
             begin match IntMap.find_opt (Z.of_int n) st.funptrmap with
             | Some (file_dig, name, c) ->
                 (* we are using [intcast] to for signed/unsigned handling *)
-                wrap_intcast (*Unsigned Intptr_t*) ity (IC (prov, false, c))
+                wrap_intcast (*Unsigned Intptr_t*) ity (IC (false, c))
             | None ->
                Debug_ocaml.error ("intfromptr: Unknown function: " ^ (Pp_symbol.to_string_pretty sym))
             end
@@ -3068,9 +3061,9 @@ module CHERI (C:Capability
          begin
            match ity with
            | Signed Intptr_t ->
-              return (IC (prov, true, C.cap_c0 ()))
+              return (IC (true, C.cap_c0 ()))
            | Unsigned Intptr_t ->
-              return (IC (prov, false, C.cap_c0 ()))
+              return (IC (false, C.cap_c0 ()))
            | _ ->
               return (mk_ival prov Z.zero)
          end
@@ -3089,7 +3082,7 @@ module CHERI (C:Capability
            | Signed Intptr_t
              | Unsigned Intptr_t ->
               (* we are using [intcast] to for signed/unsigned handling *)
-              wrap_intcast (*Unsigned Intptr_t*) ity (IC (prov, false, c))
+              wrap_intcast (*Unsigned Intptr_t*) ity (IC (false, c))
            | _ ->
               let ity_max = num_of_int (max_ival ity) in
               let ity_min = num_of_int (min_ival ity) in
@@ -3539,7 +3532,7 @@ module CHERI (C:Capability
        | _ ->
           mk_scalar `Basic (Z.to_string n) prov None
        end
-    | MVEinteger (cty, IC(prov, is_signed, c)) ->
+    | MVEinteger (cty, IC(is_signed, c)) ->
        begin match cty with
        | Signed Intptr_t | Unsigned Intptr_t ->
           (* TODO(CHERI): better JSON representation of caps.
@@ -3548,7 +3541,7 @@ module CHERI (C:Capability
              with UI changes not to break things.
            *)
           let ss = if is_signed then "signed " else "unsigned " in
-          mk_scalar `Intptr (ss^ Z.to_string (C.cap_get_value c)) prov None
+          mk_scalar `Intptr (ss^ Z.to_string (C.cap_get_value c)) Prov_none None
        | _ ->
           failwith "mk_ui_values invalid encoding of [u]intptr_t"
        end
