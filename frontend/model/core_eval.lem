@@ -676,15 +676,6 @@ let rec step_eval_pexpr n loc core_extern env mem_st_opt file hasConstrained pex
                   | Right ival ->
                       EU.return (PEval (Vobject (OVinteger ival)))
                 end
-          | ( Mem_common.IntcastPure
-            , Just [ Core.Vctype (Ctype.Ctype _ (Ctype.Basic (Ctype.Integer ity2)))
-                   ; Core.Vobject (Core.OVinteger ival) ] ) ->
-              match Mem.intcast loc ity2 ival with
-                | Left ub ->
-                    Exception.return (Undefined.undef loc [ub])
-                | Right ival ->
-                    EU.return (PEval (Vobject (OVinteger ival)))
-              end
           | ( Mem_common.Ptr_tIntValue
             , Just [ Core.Vobject (Core.OVinteger ival) ] ) ->
                 EU.return (PEval (Vobject (OVinteger (Mem.ptr_t_int_value ival))))

@@ -599,7 +599,6 @@ let ptr_t_int_value _ = assert false (* CHERI only *)
 let get_intrinsic_type_spec _ =  assert false (* CHERI only *)
 let call_intrinsic _ _ _ = assert false (* CHERI only *)
 let null_cap _ = assert false (* CHERI only *)
-let intcast _ _ ival = Either.Right ival
 let array_shift_ptrval = Defacto_memory.impl_array_shift_ptrval
 let member_shift_ptrval = Defacto_memory.impl_member_shift_ptrval
 let eff_array_shift_ptrval _ _ = failwith "Defacto_memory.impl_array_shift_ptrval"

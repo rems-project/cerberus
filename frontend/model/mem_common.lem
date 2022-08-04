@@ -295,9 +295,6 @@ type pure_memop =
   | CapAssignValue
     (* CHERI *) (* integer -> integer *)
   | Ptr_tIntValue
-    (* CHERI *) (* (ctype, ctype, integer) -> integer (may result in UB) *)
-    (* first type is that of the input, second is that of the output *)
-  | IntcastPure
 
 type generic_memop 'sym =
   | PtrEq

@@ -2783,18 +2783,6 @@ module CHERI (C:Capability
     | (*_,*) IV (prov, n), _ ->
       Either.Right (IV (prov, conv_int_to_ity2 n))
   
-  let intcast loc ity2 ival =
-    let open Either in
-    match internal_intcast loc ity2 ival with
-    | Left err ->
-       begin
-         match undefinedFromMem_error err with
-         | Some u -> Left u
-         | None -> failwith "TODO(CHERI): memory error not mapped to any UB"
-       end
-    | Right ival ->
-       Right ival
-
   let offsetof_ival tagDefs tag_sym memb_ident =
     let (xs, _) = offsetsof tagDefs tag_sym in
     let pred (ident, _, _) =

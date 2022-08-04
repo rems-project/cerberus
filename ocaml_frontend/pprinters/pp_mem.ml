@@ -8,8 +8,6 @@ let pp_pure_memop = function
       !^ "DeriveCap[TODO:bop]"
   | CapAssignValue ->
       !^ "CapAssignValue"
-  | IntcastPure ->
-      !^ "Intcast"
   | Ptr_tIntValue ->
       !^ "Ptr_tIntValue"
 

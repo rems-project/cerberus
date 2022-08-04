@@ -1983,15 +1983,11 @@ module Concrete : Memory = struct
   let null_cap _ : integer_value =
     assert false (* CHERI only *)
 
-  let intcast _ _ ival =
-    Either.Right ival
-
   let get_intrinsic_type_spec _ =
     assert false (* CHERI only *)
 
   let call_intrinsic _ _ _ =
     assert false (* CHERI only *)
-
 
   let offsetof_ival tagDefs tag_sym memb_ident =
     let (xs, _) = offsetsof tagDefs tag_sym in

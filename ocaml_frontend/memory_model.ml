@@ -100,7 +100,6 @@ module type Memory = sig
   val cap_assign_value: Location_ocaml.t -> integer_value -> integer_value -> (Undefined.undefined_behaviour, integer_value) Either.either
   val ptr_t_int_value: integer_value -> integer_value
   val null_cap : bool(* is_signed *) -> integer_value
-  val intcast: Location_ocaml.t -> Ctype.integerType -> integer_value -> (Undefined.undefined_behaviour, integer_value) Either.either
 
   (* Pointer shifting constructors *)
   val array_shift_ptrval:  pointer_value -> Ctype.ctype -> integer_value -> pointer_value

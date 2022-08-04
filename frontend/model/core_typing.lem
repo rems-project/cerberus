@@ -599,11 +599,6 @@ let rec infer_pexpr tagDefs env ((Pexpr annot _ pexpr_ as pexpr) : generic_pexpr
         typecheck_pexpr tagDefs env (BTy_object OTy_integer) pe1 >>= fun pe1' ->
         typecheck_pexpr tagDefs env (BTy_object OTy_integer) pe2 >>= fun pe2' ->
         E.return (Pexpr annot (InferredType_object OTy_integer) (PEmemop Mem_common.CapAssignValue [pe1'; pe2']))
-    | PEmemop Mem_common.IntcastPure [(*pe1;*) pe2; pe3] ->
-        (* typecheck_pexpr tagDefs env BTy_ctype                pe1 >>= fun pe1' -> *)
-        typecheck_pexpr tagDefs env BTy_ctype                pe2 >>= fun pe2' ->
-        typecheck_pexpr tagDefs env (BTy_object OTy_integer) pe3 >>= fun pe3' ->
-        E.return (Pexpr annot (InferredType_object OTy_integer) (PEmemop Mem_common.IntcastPure [(*pe1';*) pe2'; pe3']))
     | PEmemop Mem_common.Ptr_tIntValue [pe] ->
         typecheck_pexpr tagDefs env (BTy_object OTy_integer) pe >>= fun pe' ->
         E.return (Pexpr annot (InferredType_object OTy_integer) (PEmemop Mem_common.Ptr_tIntValue [pe']))
@@ -973,12 +968,6 @@ and typecheck_pexpr tagDefs (env: typing_env) (bTy: core_base_type) (Pexpr annot
         typecheck_pexpr tagDefs env (BTy_object OTy_integer) pe1 >>= fun pe1' ->
         typecheck_pexpr tagDefs env (BTy_object OTy_integer) pe2 >>= fun pe2' ->
         E.return (PEmemop Mem_common.CapAssignValue [pe1'; pe2'])
-    | PEmemop Mem_common.IntcastPure [(*pe1;*) pe2; pe3] ->
-        guard_match loc "memop(intcast)" bTy (BTy_object OTy_integer) >>
-        (* typecheck_pexpr tagDefs env BTy_ctype                pe1 >>= fun pe1' -> *)
-        typecheck_pexpr tagDefs env BTy_ctype                pe2 >>= fun pe2' ->
-        typecheck_pexpr tagDefs env (BTy_object OTy_integer) pe3 >>= fun pe3' ->
-        E.return (PEmemop Mem_common.IntcastPure [(*pe1';*) pe2'; pe3'])
     | PEmemop Mem_common.Ptr_tIntValue [pe] ->
         guard_match loc "memop(ptr_t_int_value)" bTy (BTy_object OTy_integer) >>
         typecheck_pexpr tagDefs env (BTy_object OTy_integer) pe >>= fun pe' ->

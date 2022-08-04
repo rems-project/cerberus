@@ -150,9 +150,6 @@ let keywords =
       ("is_unsigned", T.IS_UNSIGNED);
       ("are_compatible", T.ARE_COMPATIBLE);
       
-      (* for pure Memory operations *)
-      ("Intcast",          T.PURE_MEMOP_OP Mem_common.IntcastPure);
-
       (* for Memory operations *)
       ("PtrEq",            T.MEMOP_OP Mem_common.PtrEq           );
       ("PtrNe",            T.MEMOP_OP Mem_common.PtrNe           );
