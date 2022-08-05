@@ -262,7 +262,7 @@ module CHERI (C:Capability
     | PV of provenance * pointer_value_base
 
   type integer_value =
-    | IV of provenance * Z.num
+    | IV of Z.num
     (* for [u]intptr_t: *)
     | IC of bool (* is_signed *) * C.t
 
@@ -293,14 +293,10 @@ module CHERI (C:Capability
     else wrapI min_v max_v n
 
   let num_of_int = function
-    | IV (_,n) -> n
+    | IV n -> n
     | IC (is_signed,c) ->
        let n = C.cap_get_value c in
        if is_signed then unwrap_cap_value n else n
-
-  let prov_of_int = function
-    | IV (p,_) -> p
-    | IC (_,_) -> Prov_none
 
   type floating_value =
     (* TODO: hack hack hack ==> OCaml's float are 64bits *)
@@ -631,10 +627,7 @@ module CHERI (C:Capability
          P.parens (!^ (string_of_provenance prov) ^^ P.comma ^^^ !^ (C.to_string c))
 
   let pp_integer_value = function
-    | (IV (prov, n)) ->
-       if !Debug_ocaml.debug_level >= 3 then
-         !^ ("<" ^ string_of_provenance prov ^ ">:" ^ Z.to_string n)
-       else
+    | (IV n) ->
          !^ (Z.to_string n)
     | (IC (is_signed, c)) ->
        let cs = (C.to_string c)
@@ -694,23 +687,6 @@ module CHERI (C:Capability
     [ (Z.of_int64 0x40000000L, Z.of_int64 0x40000004L)
     ; (Z.of_int64 0xABCL, Z.of_int64 0XAC0L) ]
 
-
-  let is_PNVI () =
-    (*    match Switches.(has_switch_pred (function SW_no_integer_provenance _ -> true | _ -> false)) with *)
-    match Switches.(has_switch_pred (function SW_PNVI _ -> true | _ -> false)) with
-    | None ->
-       false
-    | Some _ ->
-       true
-
-  (* NOTE: since we are fusing PVI and PVNI together any creation of an integer_value should
-     be done through this function to unsure we always use Prov_none in PVNI *)
-  let mk_ival prov n =
-    if is_PNVI () then
-      IV (Prov_none, n)
-    else
-      (* We are in the mode where integer values have a provenance *)
-      IV (prov, n)
 
   (* TODO: DEBUG *)
   let print_bytemap str =
@@ -1104,7 +1080,7 @@ module CHERI (C:Capability
        , begin match extract_unspec bs1' with
          | Some cs ->
             MVEinteger ( ity
-                       , mk_ival prov (int_of_bytes (AilTypesAux.is_signed_ity ity) cs))
+                       , IV (int_of_bytes (AilTypesAux.is_signed_ity ity) cs))
          | None ->
             MVEunspecified cty
          end , bs2)
@@ -1182,38 +1158,23 @@ module CHERI (C:Capability
                      end
                   | _ ->
                      let prov =
-                       if is_PNVI () then
-                         (*
-                           let () =
-                           print_endline "HELLO ==> PNVI abst (ptr)";
-                           print_endline "BEGIN";
-                           List.iter (fun bt ->
-                           let open AbsByte in
-                           Printf.printf "%s: [%s] - %s\n"
-                           (string_of_provenance bt.prov)
-                           (match bt.copy_offset with Some n -> string_of_int n | None -> "_")
-                           (match bt.value with Some c ->  Char.escaped c | None -> "unspec")
-                           ) bs1;
-                           print_endline "END" in
-                          *)
-                         match prov_status with
-                         | `NotValidPtrProv ->
-                            (* KKK print_endline "NotValidPtrProv"; *)
-                            begin match find_overlaping (C.cap_get_value n) with
-                            | `NoAlloc ->
-                               Prov_none
-                            | `SingleAlloc alloc_id ->
-                               Prov_some alloc_id
-                            | `DoubleAlloc (alloc_id1, alloc_id2) ->
-                               (* FIXME/HACK(VICTOR): This is wrong, but when serialising the memory in the UI, I get this failwith. *)
-                               Prov_some alloc_id1
-                                         (* failwith "TODO(iota): abst => make a iota?" *)
-                            end
-                         | `ValidPtrProv ->
-                            (* KKK print_endline ("ValidPtrProv ==> " ^ string_of_provenance prov); *)
-                            prov
-                       else
-                         prov in
+                       match prov_status with
+                       | `NotValidPtrProv ->
+                          (* KKK print_endline "NotValidPtrProv"; *)
+                          begin match find_overlaping (C.cap_get_value n) with
+                          | `NoAlloc ->
+                             Prov_none
+                          | `SingleAlloc alloc_id ->
+                             Prov_some alloc_id
+                          | `DoubleAlloc (alloc_id1, alloc_id2) ->
+                             (* FIXME/HACK(VICTOR): This is wrong, but when serialising the memory in the UI, I get this failwith. *)
+                             Prov_some alloc_id1
+                                       (* failwith "TODO(iota): abst => make a iota?" *)
+                          end
+                       | `ValidPtrProv ->
+                          (* KKK print_endline ("ValidPtrProv ==> " ^ string_of_provenance prov); *)
+                          prov
+                     in
                      MVEpointer (ref_ty, PV (prov, PVconcrete n))
                   end
                end
@@ -1288,8 +1249,8 @@ module CHERI (C:Capability
        (funptrmap,
         clear_caps addr (Z.of_int sz) captags,
         List.init sz (fun _ -> AbsByte.v Prov_none None))
-    | MVinteger (ity, IV (prov, n)) ->
-       let bs = List.map (fun x -> AbsByte.v prov (Some x)) begin
+    | MVinteger (ity, IV n) ->
+       let bs = List.map (fun x -> AbsByte.v Prov_none (Some x)) begin
                     bytes_of_int
                       (AilTypesAux.is_signed_ity ity)
                       (sizeof (Ctype ([], Basic (Integer ity)))) n
@@ -2078,7 +2039,7 @@ module CHERI (C:Capability
            elem_ty
         | _ ->
            diff_ty in
-      return (IV (Prov_none, Z.div (Z.sub addr1 addr2) (Z.of_int (sizeof diff_ty')))) in
+      return (IV (Z.div (Z.sub addr1 addr2) (Z.of_int (sizeof diff_ty')))) in
     let error_postcond =
       fail MerrPtrdiff in
     if Switches.(has_switch (SW_pointer_arith `PERMISSIVE)) then
@@ -2243,42 +2204,28 @@ module CHERI (C:Capability
     | ((Unsigned Intptr_t),(IC (_, c)) | (Signed Intptr_t),(IC (_, c))) ->
         begin
           let addr = C.cap_get_value c in
-          if is_PNVI () then
-            (* TODO(CHERI): We may need to carry provenance for [u]intptr_t *)
-            (* TODO: device memory? *)
-            get >>= fun st ->
-            (* find_overlaping shoud return None for 0 *)
-            begin match find_overlaping st addr with
-            | `NoAlloc ->
-               return Prov_none
-            | `SingleAlloc alloc_id ->
-               return (Prov_some alloc_id)
-            | `DoubleAlloc alloc_ids ->
-               add_iota alloc_ids >>= fun iota ->
-               return (Prov_symbolic iota)
-            end >>= fun prov ->
-            (* cast int to pointer *)
-            return (PV (prov, PVconcrete c))
-          else
-            (* TODO: check in particular is that ok to only allow device pointers when there is no provenance? *)
-            if List.exists (fun (min, max) -> Z.less_equal min addr && Z.less_equal addr max) device_ranges then
-              return (PV (Prov_device, PVconcrete c))
-            else
-              return (PV (Prov_none, PVconcrete c))
+          (* TODO: device memory? *)
+          get >>= fun st ->
+          (* find_overlaping shoud return None for 0 *)
+          begin match find_overlaping st addr with
+          | `NoAlloc ->
+             return Prov_none
+          | `SingleAlloc alloc_id ->
+             return (Prov_some alloc_id)
+          | `DoubleAlloc alloc_ids ->
+             add_iota alloc_ids >>= fun iota ->
+             return (Prov_symbolic iota)
+          end >>= fun prov ->
+          (* cast int to pointer *)
+          return (PV (prov, PVconcrete c))
         end
-    | (Ctype.(Unsigned Intptr_t),(IV (_, _)) | Ctype.(Signed Intptr_t),(IV (_, _))) ->
+    | (Ctype.(Unsigned Intptr_t),(IV _) | Ctype.(Signed Intptr_t),(IV _)) ->
        failwith "ptrfromint: invalid encoding for [u]intptr_t"
-    | _, (IV (prov, n)) ->
+    | _, (IV n) ->
        if Z.equal n Z.zero then
-         if is_PNVI () then
-           (* TODO: device memory? *)
-           (* TODO(CHERI): should prov be preserved here? *)
-           return (PV (Prov_none, PVconcrete (C.cap_c0 ())))
-         else
-           (* All 0-address capabilities regardless of their
-              validity decoded as NULL. This is defacto behaviour
-              of morello Clang. See intptr3.c example.  *)
-           return (PV (Prov_none, PVconcrete (C.cap_c0 ())))
+         (* TODO: device memory? *)
+         (* TODO(CHERI): should prov be preserved here? *)
+         return (PV (Prov_none, PVconcrete (C.cap_c0 ())))
        else
          let n =
            (* wrapI *)
@@ -2289,7 +2236,7 @@ module CHERI (C:Capability
            else
              Z.sub r dlt in
          cap_set_value loc (C.cap_c0 ()) n >>=
-           (fun c -> return (PV (prov, PVconcrete c)))
+           (fun c -> return (PV (Prov_none, PVconcrete c)))
     | _, IC _ ->
        failwith "invalid integer value (capability for non- [u]intptr_t"
 
@@ -2305,14 +2252,14 @@ module CHERI (C:Capability
        begin
          match ival1, ival2 with
          | IC (_ ,cap), _
-           | _ , IC (_,cap) -> IC ( is_signed, cap)
+           | _ , IC (_,cap) -> IC (is_signed, cap)
          | IV _, IV _ ->
             failwith "derive_cap should not be used for binary operations on non capabilty-carrying types"
        end
 
   let cap_assign_value loc ival_cap ival_n :(Undefined.undefined_behaviour, integer_value) Either.either =
     match ival_cap, ival_n with
-    | IC (is_signed,c), IV (prov,n) ->
+    | IC (is_signed,c), IV n ->
        if C.cap_vaddr_representable c n
        then Either.Right (IC (is_signed, C.cap_set_value c n))
        else Either.Left
@@ -2325,7 +2272,7 @@ module CHERI (C:Capability
   (* Added for CHERI to cast to regular integers. *)
   let ptr_t_int_value = function
     | IC (_, _) as ival ->
-        IV (Prov_none, num_of_int ival)
+        IV (num_of_int ival)
     | IV _ ->
         failwith "Unexpected argument value in ptr_t_int_value"
 
@@ -2522,7 +2469,7 @@ module CHERI (C:Capability
            update (fun st -> { st with funptrmap=funptrmap }) >>
              match buf_val, maxsize_val, format_val with
              | MVpointer (_, PV (_ ,PVconcrete buf_cap)),
-               MVinteger (_, IV (_, maxsize_n)),
+               MVinteger (_, IV maxsize_n),
                MVpointer (_, PV (_ ,PVconcrete format_cap))
                ->
                 begin
@@ -2532,7 +2479,7 @@ module CHERI (C:Capability
                      (* return -1 in case of format error *)
                      return
                        (Some
-                          (MVinteger (Signed Long, IV (Prov_none, Z.of_int (-1)))))
+                          (MVinteger (Signed Long, IV (Z.of_int (-1)))))
                   | Some res ->
                      let res_size = String.length res in
                      let res_size_n = Z.of_int res_size in
@@ -2540,13 +2487,13 @@ module CHERI (C:Capability
                      then (* buffer too small. Return -2. *)
                        return
                          (Some
-                            (MVinteger (Signed Long, IV (Prov_none, Z.of_int (-1)))))
+                            (MVinteger (Signed Long, IV (Z.of_int (-1)))))
                      else
                        begin
                          store_string loc res maxsize_n buf_cap >>
                            return
                              (Some
-                                (MVinteger (Signed Long, IV (Prov_none, res_size_n))))
+                                (MVinteger (Signed Long, IV res_size_n)))
                        end
                 )
                 end
@@ -2563,7 +2510,7 @@ module CHERI (C:Capability
         | Some (funptrmap,c) ->
            update (fun st -> { st with funptrmap=funptrmap }) >>
              match upper_val with
-             | MVinteger (Size_t, (IV (_,n))) ->
+             | MVinteger (Size_t, IV n) ->
                 begin
                   let x' = C.cap_get_value c in
                   let c = C.cap_narrow_bounds c (x', Z.add x' n) in
@@ -2582,7 +2529,7 @@ module CHERI (C:Capability
         | Some (funptrmap,c) ->
            update (fun st -> { st with funptrmap=funptrmap }) >>
              match mask_val with
-             | MVinteger (Size_t as ity, (IV (_,n))) ->
+             | MVinteger (Size_t as ity, IV n) ->
                 begin
                   let bytes = bytes_of_int
                                 (AilTypesAux.is_signed_ity ity)
@@ -2605,8 +2552,7 @@ module CHERI (C:Capability
         | None -> fail (MerrOther ("CHERI.call_intrinsic: non-cap 1st argument in: '" ^ name ^ "'"))
         | Some (_,c) ->
            let v = C.cap_get_offset c in
-           let p = Prov_none in (* TODO: CHERI provenance? *)
-           return (Some (MVinteger (Size_t, (IV (p,v)))))
+           return (Some (MVinteger (Size_t, IV v)))
         end
     else if name = "cheri_address_get" then
       (* this intrinsic is pure *)
@@ -2617,8 +2563,7 @@ module CHERI (C:Capability
         | None -> fail (MerrOther ("CHERI.call_intrinsic: non-cap 1st argument in: '" ^ name ^ "'"))
         | Some (_,c) ->
            let v = C.cap_get_value c in
-           let p = Prov_none in (* TODO: CHERI provenance? *)
-           return (Some (MVinteger (Vaddr_t, (IV (p,v)))))
+           return (Some (MVinteger (Vaddr_t, (IV v))))
         end
     else if name = "cheri_base_get" then
       (* this intrinsic is pure *)
@@ -2629,8 +2574,7 @@ module CHERI (C:Capability
         | None -> fail (MerrOther ("CHERI.call_intrinsic: non-cap 1st argument in: '" ^ name ^ "'"))
         | Some (_,c) ->
            let v = fst (C.cap_get_bounds c) in
-           let p = Prov_none in (* TODO: CHERI provenance? *)
-           return (Some (MVinteger (Vaddr_t, (IV (p,v)))))
+           return (Some (MVinteger (Vaddr_t, IV v)))
         end
     else if name = "cheri_length_get" then
       (* this intrinsic is pure *)
@@ -2642,8 +2586,7 @@ module CHERI (C:Capability
         | Some (_,c) ->
            let (base,limit) = C.cap_get_bounds c in
            let v = Z.sub limit base in
-           let p = Prov_none in (* TODO: CHERI provenance? *)
-           return (Some (MVinteger (Size_t, (IV (p,v)))))
+           return (Some (MVinteger (Size_t, IV v)))
         end
     else if name = "cheri_tag_get" then
       (* this intrinsic is pure *)
@@ -2654,8 +2597,7 @@ module CHERI (C:Capability
         | None -> fail (MerrOther ("CHERI.call_intrinsic: non-cap 1st argument in: '" ^ name ^ "'"))
         | Some (_,c) ->
            let v = if C.cap_is_valid c then Z.succ (Z.zero) else Z.zero  in
-           let p = Prov_none in (* TODO: CHERI provenance? *)
-           return (Some (MVinteger (Bool, (IV (p,v)))))
+           return (Some (MVinteger (Bool, IV v)))
         end
     else if name = "cheri_tag_clear" then
       let cap_val = List.nth args 0 in
@@ -2679,22 +2621,21 @@ module CHERI (C:Capability
         | _,None -> fail (MerrOther ("CHERI.call_intrinsic: non-cap 2nd argument in: '" ^ name ^ "'"))
         | Some (_,c0), Some (_,c1) ->
            let v = if C.eq c0 c1 then Z.succ (Z.zero) else Z.zero in
-           let p = Prov_none in (* TODO: CHERI provenance? *)
-           return (Some (MVinteger (Bool, (IV (p,v)))))
+           return (Some (MVinteger (Bool, IV v)))
         end
     else if name = "cheri_representable_length" then
       (* this intrinsic is pure *)
       match List.nth args 0 with
-      | MVinteger (Size_t, (IV (_,n))) ->
+      | MVinteger (Size_t, IV n) ->
          let l = C.representable_length n in
-         return (Some (MVinteger (Size_t, (IV (Prov_none,l)))))
+         return (Some (MVinteger (Size_t, (IV l))))
       | _ -> fail (MerrOther ("CHERI.call_intrinsic: 1st argument's type is not size_t in: '" ^ name ^ "'"))
     else if name = "cheri_representable_alignment_mask" then
       (* this intrinsic is pure *)
       match List.nth args 0 with
-      | MVinteger (Size_t, (IV (_,n))) ->
+      | MVinteger (Size_t, IV n) ->
          let l = C.representable_alignment_mask n in
-         return (Some (MVinteger (Size_t, (IV (Prov_none,l)))))
+         return (Some (MVinteger (Size_t, IV l)))
       | _ -> fail (MerrOther ("CHERI.call_intrinsic: 1st argument's type is not size_t in: '" ^ name ^ "'"))
     else
       fail (MerrOther ("CHERI.call_intrinsic: unknown intrinsic: '" ^ name ^ "'"))
@@ -2747,17 +2688,17 @@ module CHERI (C:Capability
     (* from uintptr_t to int - regular conversion*)
     | (*Ctype.Unsigned Intptr_t,*) IC (false, cap), _ ->
        let n = C.cap_get_value cap in
-       Either.Right (IV (Prov_none, (conv_int_to_ity2 n)))
+       Either.Right (IV (conv_int_to_ity2 n))
 
     (* from intptr_t to int. First we recover original signed value
        via [unwrap] and then perform regular promoion *)
     | (*Ctype.Signed Intptr_t,*) IC (true, cap), _ ->
        let n = C.cap_get_value cap in
-       Either.Right (IV (Prov_none, (conv_int_to_ity2 (unwrap_cap_value n))))
+       Either.Right (IV (conv_int_to_ity2 (unwrap_cap_value n)))
 
     (* from int to [u]intptr_t *)
-    | (*_,*) IV (prov, n), Ctype.Unsigned Intptr_t
-      | (*_,*) IV (prov, n), Ctype.Signed Intptr_t ->
+    | (*_,*) IV n, Ctype.Unsigned Intptr_t
+      | (*_,*) IV n, Ctype.Signed Intptr_t ->
        if Z.equal n Z.zero then
          Either.Right (IC (false, C.cap_c0 ()))
        else
@@ -2773,8 +2714,8 @@ module CHERI (C:Capability
     (* | _, IC _, _ ->
        failwith "intcast: Invalid integer value. IC for non-intptr_t" *)
     (* cast between two "normal" integer types *)
-    | (*_,*) IV (prov, n), _ ->
-      Either.Right (IV (prov, conv_int_to_ity2 n))
+    | (*_,*) IV n, _ ->
+      Either.Right (IV (conv_int_to_ity2 n))
   
   let offsetof_ival tagDefs tag_sym memb_ident =
     let (xs, _) = offsetsof tagDefs tag_sym in
@@ -2782,7 +2723,7 @@ module CHERI (C:Capability
       ident_equal ident memb_ident in
     match List.find_opt pred xs with
     | Some (_, _, offset) ->
-       IV (Prov_none, Z.of_int offset)
+       IV (Z.of_int offset)
     | None ->
        failwith "CHERI.offsetof_ival: invalid memb_ident"
 
@@ -2813,7 +2754,7 @@ module CHERI (C:Capability
          let precond z =
            (* TODO: is it correct to use the "ty" as the lvalue_ty? *)
            if    Switches.(has_switch (SW_pointer_arith `STRICT))
-                 || (is_PNVI () && not (Switches.(has_switch (SW_pointer_arith `PERMISSIVE)))) then
+                 || (not (Switches.(has_switch (SW_pointer_arith `PERMISSIVE)))) then
              get_allocation z >>= fun alloc ->
              if    Z.less_equal alloc.base shifted_addr
                    && Z.less_equal (Z.add shifted_addr (Z.of_int (sizeof ty)))
@@ -2896,7 +2837,7 @@ module CHERI (C:Capability
        (* TODO: is it correct to use the "ty" as the lvalue_ty? *)
        let shifted_addr = Z.add (C.cap_get_value c) offset in
        if    Switches.(has_switch (SW_pointer_arith `STRICT))
-             || (is_PNVI () && not (Switches.(has_switch (SW_pointer_arith `PERMISSIVE)))) then
+             || (not (Switches.(has_switch (SW_pointer_arith `PERMISSIVE)))) then
          get_allocation alloc_id >>= fun alloc ->
          if    Z.less_equal alloc.base shifted_addr
                && Z.less_equal (Z.add shifted_addr (Z.of_int (sizeof ty)))
@@ -2911,7 +2852,7 @@ module CHERI (C:Capability
     | PV (Prov_none, PVconcrete c) ->
        let shifted_addr = Z.add (C.cap_get_value c) offset in
        if    Switches.(has_switch (SW_pointer_arith `STRICT))
-             || (is_PNVI () && not (Switches.(has_switch (SW_pointer_arith `PERMISSIVE)))) then
+             || (not (Switches.(has_switch (SW_pointer_arith `PERMISSIVE)))) then
          fail (MerrOther "out-of-bound pointer arithmetic (Prov_none)")
        else
          cap_set_value loc c shifted_addr >>=
@@ -2924,7 +2865,7 @@ module CHERI (C:Capability
   let eff_member_shift_ptrval loc (PV (prov, ptrval_)) tag_sym memb_ident =
     let offset =
       match offsetof_ival (Tags.tagDefs ()) tag_sym memb_ident with
-      | IV (_, offset) -> offset
+      | IV offset -> offset
       | IC (_, c) ->
          (* we will never reach this branch as this condition is checked
             earlier. *)
@@ -2954,7 +2895,7 @@ module CHERI (C:Capability
     failwith "TODO: concurRead_ival"
 
   let integer_ival n =
-    IV (Prov_none, n)
+    IV n
 
   let max_ival ity =
     let open Z in
@@ -2962,8 +2903,7 @@ module CHERI (C:Capability
       sub (pow_int (of_int 2) (8*n-1)) (of_int 1) in
     let unsigned_max n =
       sub (pow_int (of_int 2) (8*n)) (of_int 1) in
-    IV (Prov_none,
-        match ity with
+    IV (match ity with
         | Signed Intptr_t -> signed_max (C.sizeof_vaddr)
         | Unsigned Intptr_t -> unsigned_max (C.sizeof_vaddr)
         | _ ->
@@ -2999,8 +2939,7 @@ module CHERI (C:Capability
   let min_ival ity =
     let open Z in
     let signed_min n = negate (pow_int (of_int 2) (8*n-1)) in
-    IV (Prov_none,
-        begin match ity with
+    IV (begin match ity with
         | Char ->
            if (Ocaml_implementation.get ()).is_signed_ity Char then
              signed_min 8
@@ -3052,7 +2991,7 @@ module CHERI (C:Capability
                Debug_ocaml.error ("intfromptr: Unknown function: " ^ (Pp_symbol.to_string_pretty sym))
             end
          | _ ->
-            return (mk_ival prov (Z.of_int n))
+            return (IV (Z.of_int n))
        end
     | PVfunction (FP_invalid c)
       | PVconcrete c ->
@@ -3065,7 +3004,7 @@ module CHERI (C:Capability
            | Unsigned Intptr_t ->
               return (IC (false, C.cap_c0 ()))
            | _ ->
-              return (mk_ival prov Z.zero)
+              return (IV Z.zero)
          end
        else
          begin if Switches.(has_switch (SW_PNVI `AE) || has_switch (SW_PNVI `AE_UDI)) then
@@ -3090,7 +3029,7 @@ module CHERI (C:Capability
               if Z.(less addr ity_min || less ity_max addr) then
                 fail MerrIntFromPtr
               else
-                return (mk_ival prov addr)
+                return (IV addr)
 
   let combine_prov prov1 prov2 =
     match (prov1, prov2) with
@@ -3120,57 +3059,45 @@ module CHERI (C:Capability
       | (_, Prov_symbolic _) ->
        failwith "CHERI.combine_prov: found a Prov_symbolic"
 
-  let int_bin pf vf v1 v2 =
+  let int_bin vf v1 v2 =
     let n1 = num_of_int v1 in
     let n2 = num_of_int v2 in
-    let p1 = prov_of_int v1 in
-    let p2 = prov_of_int v2 in
-    IV (pf p1 p2, vf n1 n2)
+    IV (vf n1 n2)
 
   let op_ival iop v1 v2 =
-    (* NOTE: for PNVI we assume that prov1 = prov2 = Prov_none *)
     match iop with
-    | IntAdd -> int_bin combine_prov Z.add v1 v2
-    | IntSub -> int_bin
-                  (fun prov1 prov2 ->
-                    match prov1, prov2 with
-                    | Prov_some _, Prov_some _
-                      | Prov_none, _ ->
-                       Prov_none
-                    | _ ->
-                       prov1)
-                  Z.sub v1 v2
-    | IntMul -> int_bin combine_prov Z.mul v1 v2
-    | IntDiv -> int_bin combine_prov
+    | IntAdd -> int_bin Z.add v1 v2
+    | IntSub -> int_bin Z.sub v1 v2
+    | IntMul -> int_bin Z.mul v1 v2
+    | IntDiv -> int_bin
                   (fun n1 n2 -> Z.(if equal n2 zero then zero else integerDiv_t n1 n2))
                   v1 v2
-    | IntRem_t -> int_bin combine_prov Z.integerRem_t v1 v2
-    | IntRem_f -> int_bin combine_prov Z.integerRem_f v1 v2
+    | IntRem_t -> int_bin Z.integerRem_t v1 v2
+    | IntRem_f -> int_bin Z.integerRem_f v1 v2
     | IntExp ->
        (* NOTE: this operation doesn't exists in C, but is used in the elaboration of the
           shift operators. And for these we want the provenance of the left operand to be
           the one that is forwarded *)
        (* TODO: fail properly when y is too big? *)
-       int_bin combine_prov (fun n1 n2 ->
+       int_bin (fun n1 n2 ->
            Z.pow_int n1 (Z.to_int n2))
          v1 v2
 
   let sizeof_ival ty =
-    IV (Prov_none, Z.of_int (sizeof ty))
+    IV (Z.of_int (sizeof ty))
   let alignof_ival ty =
-    IV (Prov_none, Z.of_int (alignof ty))
+    IV (Z.of_int (alignof ty))
 
   let bitwise_complement_ival _ v =
     let n = num_of_int v in
-    let p = prov_of_int v in
     let cn = Z.(sub (negate n) (of_int 1)) in
-    IV (p, cn)
+    IV cn
 
-  let bitwise_and_ival _  = int_bin combine_prov Z.bitwise_and
+  let bitwise_and_ival _  = int_bin Z.bitwise_and
 
-  let bitwise_or_ival _ = int_bin combine_prov Z.bitwise_or
+  let bitwise_or_ival _ = int_bin Z.bitwise_or
 
-  let bitwise_xor_ival _ = int_bin combine_prov Z.bitwise_xor
+  let bitwise_xor_ival _ = int_bin Z.bitwise_xor
 
   let case_integer_value v f_concrete _ =
     f_concrete (num_of_int v)
@@ -3217,7 +3144,7 @@ module CHERI (C:Capability
     (* TODO: hack maybe the elaboration should do that?? *)
     match ity with
     | Bool ->
-       IV (Prov_none, if fval = 0.0 then Z.zero else Z.(succ zero))
+       IV (if fval = 0.0 then Z.zero else Z.(succ zero))
     | _ ->
        let nbytes = match (Ocaml_implementation.get ()).sizeof_ity ity with
          | None ->
@@ -3240,7 +3167,7 @@ module CHERI (C:Capability
            r
          else
            Z.sub r dlt in
-       IV (Prov_none, (wrapI (Z.of_int64 (Int64.of_float fval))))
+       IV (wrapI (Z.of_int64 (Int64.of_float fval)))
 
   let eq_ival _ n1 n2 =
     Some (Z.equal (num_of_int n1) (num_of_int n2))
@@ -3304,8 +3231,8 @@ module CHERI (C:Capability
     (* TODO: if ptrval1 and ptrval2 overlap ==> UB *)
     let rec copy_data i =
       if Z.less i size_n then
-        eff_array_shift_ptrval loc ptrval1 Ctype.unsigned_char (IV (Prov_none, i)) >>= fun ptrval1' ->
-        eff_array_shift_ptrval loc ptrval2 Ctype.unsigned_char (IV (Prov_none, i)) >>= fun ptrval2' ->
+        eff_array_shift_ptrval loc ptrval1 Ctype.unsigned_char (IV i) >>= fun ptrval1' ->
+        eff_array_shift_ptrval loc ptrval2 Ctype.unsigned_char (IV i) >>= fun ptrval2' ->
         load loc Ctype.unsigned_char ptrval2' >>=
           fun (_, mval) ->
           begin
@@ -3337,8 +3264,8 @@ module CHERI (C:Capability
          failwith ("memcpy: sizeof_pointer must be defined")
       | Some pointer_sizeof ->
          if Z.less (Z.add i (Z.of_int pointer_sizeof)) (Z.succ size_n) then
-           eff_array_shift_ptrval loc ptrval1 Ctype.unsigned_char (IV (Prov_none, i)) >>= fun ptrval1' ->
-           eff_array_shift_ptrval loc ptrval2 Ctype.unsigned_char (IV (Prov_none, i)) >>= fun ptrval2' ->
+           eff_array_shift_ptrval loc ptrval1 Ctype.unsigned_char (IV i) >>= fun ptrval1' ->
+           eff_array_shift_ptrval loc ptrval2 Ctype.unsigned_char (IV i) >>= fun ptrval2' ->
            copy_tag ptrval1' ptrval2'
            >> copy_tags (Z.succ i)
          else
@@ -3366,8 +3293,8 @@ module CHERI (C:Capability
       | size ->
         let loc = Location_ocaml.other "memcmp" in
          load loc Ctype.unsigned_char ptrval >>= function
-         | (_, MVinteger (_, (IV (byte_prov, byte_n)))) ->
-            eff_array_shift_ptrval loc ptrval Ctype.unsigned_char (IV (Prov_none, Z.(succ zero))) >>= fun ptr' ->
+         | (_, MVinteger (_, IV byte_n)) ->
+            eff_array_shift_ptrval loc ptrval Ctype.unsigned_char (IV (Z.(succ zero))) >>= fun ptr' ->
             get_bytes ptr' (byte_n :: acc) (size-1)
          | _ ->
             assert false in
@@ -3375,9 +3302,9 @@ module CHERI (C:Capability
     get_bytes ptrval2 [] (Z.to_int size_n) >>= fun bytes2 ->
 
     let open Z in
-    return (IV (Prov_none, List.fold_left (fun acc (n1, n2) ->
-                               if equal acc zero then of_int (Z.compare n1 n2) else acc
-                             ) zero (List.combine bytes1 bytes2)))
+    return (IV (List.fold_left (fun acc (n1, n2) ->
+                    if equal acc zero then of_int (Z.compare n1 n2) else acc
+                  ) zero (List.combine bytes1 bytes2)))
 
   let realloc tid align ptr size : pointer_value memM =
     match ptr with
@@ -3397,7 +3324,7 @@ module CHERI (C:Capability
                                   allocate_region tid (Symbol.PrefOther "realloc") align size >>= fun new_ptr ->
                                   let size_to_copy =
                                     let size_n = num_of_int size in
-                                    IV (Prov_none, Z.min alloc.size size_n) in
+                                    IV (Z.min alloc.size size_n) in
                                   memcpy new_ptr ptr size_to_copy >>= fun _ ->
                                   kill (Location_ocaml.other "realloc") true ptr >>
                                   return new_ptr
@@ -3413,11 +3340,11 @@ module CHERI (C:Capability
     update (fun st -> { st with varargs = IntMap.add id (0, args) st.varargs;
                                 next_varargs_id = Z.succ st.next_varargs_id;
       } ) >>= fun _ ->
-    return (IV (Prov_none, id))
+    return (IV id)
 
   let va_copy va =
     match va with
-    | IV (Prov_none, id) ->
+    | IV id ->
        get >>= fun st ->
        begin match IntMap.find_opt id st.varargs with
        | Some args ->
@@ -3425,7 +3352,7 @@ module CHERI (C:Capability
           update (fun st -> { st with varargs = IntMap.add id args st.varargs;
                                       next_varargs_id = Z.succ st.next_varargs_id;
             } ) >>= fun _ ->
-          return (IV (Prov_none, id))
+          return (IV id)
        | None ->
           fail (MerrWIP "va_copy: not initiliased")
        end
@@ -3434,7 +3361,7 @@ module CHERI (C:Capability
 
   let va_arg va ty =
     match va with
-    | IV (Prov_none, id) ->
+    | IV id ->
        get >>= fun st ->
        begin match IntMap.find_opt id st.varargs with
        | Some (i, args) ->
@@ -3454,7 +3381,7 @@ module CHERI (C:Capability
 
   let va_end va =
     match va with
-    | IV (Prov_none, id) ->
+    | IV id ->
        get >>= fun st ->
        begin match IntMap.find_opt id st.varargs with
        | Some _ ->
@@ -3523,14 +3450,14 @@ module CHERI (C:Capability
        mk_scalar `Unspecptr "unspecified" Prov_none (Some bs)
     | MVEunspecified _ ->
        mk_scalar `Unspec "unspecified" Prov_none (Some bs)
-    | MVEinteger (cty, IV(prov, n)) ->
+    | MVEinteger (cty, IV n) ->
        begin match cty with
        | Char | Signed Ichar | Unsigned Ichar ->
-          mk_scalar `Char (Z.to_string n) prov None
+          mk_scalar `Char (Z.to_string n) Prov_none None
        | Ptrdiff_t | Signed Intptr_t | Unsigned Intptr_t ->
-          mk_scalar `Intptr (Z.to_string n) prov None
+          mk_scalar `Intptr (Z.to_string n) Prov_none None
        | _ ->
-          mk_scalar `Basic (Z.to_string n) prov None
+          mk_scalar `Basic (Z.to_string n) Prov_none None
        end
     | MVEinteger (cty, IC(is_signed, c)) ->
        begin match cty with
