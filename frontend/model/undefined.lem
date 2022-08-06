@@ -696,6 +696,7 @@ type undefined_behaviour =
   (* CHERI-specific UBs below  *)
   | UB_CHERI_NonRepresentable
   | UB_CHERI_InvalidCap
+  | UB_CHERI_UnsufficientPermissions
 
 
 val std_of_undefined_behaviour: undefined_behaviour -> maybe string
@@ -1001,6 +1002,7 @@ let ub_str_bimap =
     ; (UB_CERB003_invalid_function_pointer, "UB_CERB003_invalid_function_pointer")
     ; (UB_CHERI_NonRepresentable, "UB_CHERI_NonRepresentable")
     ; (UB_CHERI_InvalidCap,"UB_CHERI_InvalidCap")
+    ; (UB_CHERI_UnsufficientPermissions,"UB_CHERI_UnsufficientPermissions")
     ]
 
 
