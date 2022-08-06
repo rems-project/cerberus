@@ -262,6 +262,8 @@ let undefinedFromMem_error = function
         Just Undefined.UB_CHERI_InvalidCap
      | CheriNonRepresentable _ ->
         Just Undefined.UB_CHERI_NonRepresentable
+     | CheriErrDecodingCap ->
+        Just Undefined.UB012_lvalue_read_trap_representation
      | _ ->
         Nothing
      end
