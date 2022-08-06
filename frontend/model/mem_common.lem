@@ -256,10 +256,17 @@ let undefinedFromMem_error = function
   | MerrReadUninit _ ->
       (* TODO *)
      Nothing
-  | MerrCHERI _ (CheriNonRepresentable _) ->
-     Just Undefined.UB_CHERI_NonRepresentable
+  | MerrCHERI _ err ->
+     match err with
+     | CheriMerrInvalidCap ->
+        Just Undefined.UB_CHERI_InvalidCap
+     | CheriNonRepresentable _ ->
+        Just Undefined.UB_CHERI_NonRepresentable
+     | _ ->
+        Nothing
+     end
   | _ ->
-      Nothing
+     Nothing
 end
 
 
