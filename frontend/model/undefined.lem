@@ -1161,7 +1161,7 @@ let pretty_string_of_undefined_behaviour = function
       "(§6.5.5#6) the quotient a/b is not representable."
   | UB046_array_pointer_outside ->
       "(§6.5.6#8) found the addition/subtraction of a pointer into, or just beyond, and array \
-                  object and an integer type procuding a result that does not point into, or \
+                  object and an integer type producing a result that does not point into, or \
                   just beyond, the same array object."
   | UB047a_array_pointer_addition_beyond_indirection ->
       "(§6.5.6#8) found the addition of a pointer into, or just beyond, an array object and an \
