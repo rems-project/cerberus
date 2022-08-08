@@ -205,11 +205,12 @@ let early_alloc () =
      BT.Record [])
   in
   let lrt =
+    LRT.Constraint (t_ (IT.gt_ ((pointerToIntegerCast_ cur, int_ 0))), (loc, None),
     LRT.Resource ((resource_s, region), (loc, None),
     LRT.Constraint (t_ (IT.good_ (pointer_ct char_ct, cur)), (loc, None),
     LRT.Constraint (t_ (IT.good_ (pointer_ct char_ct, integerToPointerCast_ end_t)), (loc, None),
     LRT.Constraint (t_ ((pointerToIntegerCast_ cur) %<= end_t), (loc, None),
-    LRT.I))))
+    LRT.I)))))
   in
   let clause = {
       loc = loc;

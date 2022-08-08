@@ -651,6 +651,19 @@ module WRET = struct
          pure begin 
              let@ () = add_l p.q Integer in
              let@ _ = WIT.check loc BT.Bool p.permission in
+             let@ provable = provable loc in
+             let open IT in
+             let only_nonnegative_indices =
+               LC.forall_ (p.q, Integer) 
+                 (impl_ (p.permission, ge_ (sym_ (p.q, BT.Integer), int_ 0)))
+             in
+             let@ () = match provable only_nonnegative_indices with
+               | `True ->
+                  return ()
+               | `False ->
+                  let msg = "Iterated resource gives ownership to negative indices." in
+                  fail (fun _ -> {loc; msg = Generic !^msg})
+             in
              let has_iargs, expect_iargs = List.length p.iargs, List.length iargs in
              (* +1 because of pointer argument *)
              let@ () = ensure_same_argument_number loc `Input (1 + has_iargs) ~expect:(1 + expect_iargs) in
@@ -900,10 +913,21 @@ module WRPD = struct
         match pd.clauses with
         | None -> return ()
         | Some clauses ->
-           ListM.iterM (fun {loc; guard; packing_ft} ->
-               let@ _ = WIT.check loc BT.Bool guard in
-               WPackingFT.welltyped "clause" pd.loc packing_ft
-             ) clauses
+           let rec aux negated_guards = function
+             | [] -> 
+                return ()
+             | {loc; guard; packing_ft} :: clauses ->
+                let@ _ = WIT.check loc BT.Bool guard in
+                let@ () = 
+                  pure begin 
+                      let@ _ = add_c (LC.t_ guard) in
+                      let@ _ = add_c (LC.t_ (IT.and_ negated_guards)) in
+                      WPackingFT.welltyped "clause" pd.loc packing_ft
+                    end
+                in
+                aux (IT.not_ guard :: negated_guards) clauses
+           in
+           aux [] clauses
       end
 
 end

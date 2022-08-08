@@ -335,8 +335,7 @@ let make_qowned ~loc ~oname ~pointer ~q:(qs,qbt) ~step ~condition ~path ~sct =
        let q = sym_ (qs, qbt) in
        (`Constraint 
           (LC.forall_ (qs, qbt) (
-               impl_ (and_ [le_ (int_ 0, q); condition],
-                      good_ (sct, map_get_ value_t q))
+               impl_ (condition, good_ (sct, map_get_ value_t q))
           )),
         (loc, Some "good"))
      in
