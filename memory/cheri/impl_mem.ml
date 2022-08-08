@@ -2227,7 +2227,7 @@ module CHERI (C:Capability
          (* TODO(CHERI): should prov be preserved here? *)
          return (PV (Prov_none, PVconcrete (C.cap_c0 ())))
        else
-         let n =
+         let addr =
            (* wrapI *)
            let dlt = Z.succ (Z.sub C.max_vaddr C.min_vaddr) in
            let r = Z.integerRem_f n dlt in
@@ -2235,8 +2235,21 @@ module CHERI (C:Capability
              r
            else
              Z.sub r dlt in
-         cap_set_value loc (C.cap_c0 ()) n >>=
-           (fun c -> return (PV (Prov_none, PVconcrete c)))
+        begin
+          get >>= fun st ->
+          (* find_overlaping shoud return None for 0 *)
+          begin match find_overlaping st addr with
+          | `NoAlloc ->
+             return Prov_none
+          | `SingleAlloc alloc_id ->
+             return (Prov_some alloc_id)
+          | `DoubleAlloc alloc_ids ->
+             add_iota alloc_ids >>= fun iota ->
+             return (Prov_symbolic iota)
+          end >>= fun prov ->
+         cap_set_value loc (C.cap_c0 ()) addr >>=
+            (fun c -> return (PV (prov, PVconcrete c)))
+        end
     | _, IC _ ->
        failwith "invalid integer value (capability for non- [u]intptr_t"
 
