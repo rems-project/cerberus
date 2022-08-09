@@ -2156,7 +2156,9 @@ module CHERI (C:Capability
           return (Z.(equal (modulus (C.cap_get_value addr) (of_int (alignof ref_ty))) zero))
        end
 
-  (* Following §6.5.3.3, footnote 102) *)
+  (* Following §6.5.3.3, footnote 102 in C11
+     footnote 106 in C17
+   *)
   (* TODO(CHERI): This check is not suffficient for CHERI. See notes *)
   let validForDeref_ptrval ref_ty ptrval =
     (*
