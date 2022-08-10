@@ -266,8 +266,8 @@ let undefinedFromMem_error = function
         Just Undefined.UB012_lvalue_read_trap_representation
      | CheriMerrUnsufficientPermissions ->
         Just Undefined.UB_CHERI_UnsufficientPermissions
-     | _ ->
-        Nothing
+     | CheriBoundsErr _ ->
+       Just Undefined.UB_CHERI_BoundsViolation
      end
   | _ ->
      Nothing
