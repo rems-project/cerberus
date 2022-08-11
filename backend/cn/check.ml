@@ -37,6 +37,9 @@ open Effectful.Make(Typing)
 
 
 
+let unsound_unseq = true
+
+
 
 (* some of this is informed by impl_mem *)
 
@@ -1551,29 +1554,43 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
           let msg = Mismatch {has = !^"tuple"; expect = BT.pp expect} in
           fail (fun _ -> {loc; msg})
      in
-     let rec aux es_bts k = match es_bts with
-       | [] -> k []
-       | (e, bt) :: es_bts -> 
-          check_expr labels ~typ:(Normal bt) e (fun rt ->
-          aux es_bts (fun rts ->
-          k (rt :: rts)))
-     in
-     aux (List.combine es item_bts) (fun rts ->
-     let ret_s, ret = IT.fresh (Tuple item_bts) in
-     let lrts = 
-       List.mapi (fun i (RT.Computational ((s, item_bt), _, lrt)) -> 
-           LRT.subst (IT.make_subst [(s, nthTuple_ ~item_bt (i, ret))]) lrt
-         ) rts
-     in
-     let _, lrt = 
-       List.fold_right (fun lrt (bound, acc_lrt) ->
-           let lrt = LRT.alpha_unique bound lrt in
-           (SymSet.union bound (LRT.bound lrt), LRT.concat lrt acc_lrt)
-         ) lrts (SymSet.empty, LRT.I)
-     in
-     let rt = RT.Computational ((ret_s, IT.bt ret), (loc, None), lrt)in
-     k rt
-     )
+     if unsound_unseq then 
+       let rec aux es_bts k = match es_bts with
+         | [] -> k []
+         | (e, bt) :: es_bts ->
+            check_expr labels ~typ:(Normal bt) e (fun rt ->
+            let@ (bt, s') = bind_logically (None, Some (Loc loc)) rt in
+            aux es_bts (fun vts ->
+            k (sym_ (s', bt) :: vts)
+            ))
+       in
+       aux (List.combine es item_bts) (fun vts ->
+       k (rt_of_lvt (tuple_ vts))
+       )
+     else
+       let rec aux es_bts k = match es_bts with
+         | [] -> k []
+         | (e, bt) :: es_bts -> 
+            check_expr labels ~typ:(Normal bt) e (fun rt ->
+            aux es_bts (fun rts ->
+            k (rt :: rts)))
+       in
+       aux (List.combine es item_bts) (fun rts ->
+       let ret_s, ret = IT.fresh (Tuple item_bts) in
+       let lrts = 
+         List.mapi (fun i (RT.Computational ((s, item_bt), _, lrt)) -> 
+             LRT.subst (IT.make_subst [(s, nthTuple_ ~item_bt (i, ret))]) lrt
+           ) rts
+       in
+       let _, lrt = 
+         List.fold_right (fun lrt (bound, acc_lrt) ->
+             let lrt = LRT.alpha_unique bound lrt in
+             (SymSet.union bound (LRT.bound lrt), LRT.concat lrt acc_lrt)
+           ) lrts (SymSet.empty, LRT.I)
+       in
+       let rt = RT.Computational ((ret_s, IT.bt ret), (loc, None), lrt) in
+       k rt
+       )
   | _, M_Ewseq (p, e1, e2)
   | _, M_Esseq (p, e1, e2) ->
      let@ patv, (l, a) = pattern_match p in
