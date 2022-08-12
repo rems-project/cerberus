@@ -5,7 +5,7 @@ struct node {
   int v;
 };
 
-predicate {integer len} List (pointer p) = {
+predicate {integer len} List (pointer p) {
   if ( p == NULL ) {
     return { len = 0 };
   }

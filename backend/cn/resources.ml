@@ -47,7 +47,7 @@ let request (r, _oargs) = r
 let oargs_bt (_re, O oargs) = IT.bt oargs
 
 
-let pp (r, oargs) = ResourceTypes.pp r ^^^ !^"where" ^^^ pp_oargs oargs
+let pp (r, oargs) = ResourceTypes.pp r ^^ parens(pp_oargs oargs)
 
 
 let json re : Yojson.Safe.t = `String (Pp.plain (pp re))

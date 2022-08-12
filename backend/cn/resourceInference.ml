@@ -23,6 +23,12 @@ let oargs_list (O oargs) =
       (s, recordMember_ ~member_bt (oargs, s))
     ) members
 
+let get_simp () =
+  let@ global = get_global () in
+  let@ values, equalities, log_unfold, lcs = simp_constraints () in
+  let simp t = Simplify.simp global.struct_decls values equalities log_unfold lcs t in
+  return simp
+
 
 module General = struct
 
@@ -51,9 +57,7 @@ module General = struct
     }
 
   let exact_ptr_match () =
-    let@ global = get_global () in
-    let@ values, equalities, lcs = simp_constraints () in
-    let simp t = Simplify.simp global.struct_decls values equalities lcs t in
+    let@ simp = get_simp () in
     return (fun (p, p') -> is_true (simp (eq_ (p, p'))))
 
   let exact_match () =
@@ -109,11 +113,14 @@ module General = struct
     let@ base_value = match manys with
       | [] -> return (default_ (BT.Map (a_bt, item_bt)))
       | [{many_guard = _; value}] -> return value
-      | _ -> 
+      | many -> fail (fun ctxt -> {loc; msg = Generic (!^ "Merging multiple arrays with values:" ^^^ Pp.list IT.pp
+             (List.map (fun m -> m.value) many))})
+(*
          let@ model = model () in
          fail (fun ctxt ->
-             let msg = Merging_multiple_arrays {orequest; situation; oinfo; model; ctxt} in
+             let msg = Merging_multiple_arrays {orequest; situation; oinfo; model =None; ctxt} in
              {loc; msg})
+*)
     in
     return (update_with_ones base_value ones)
 
@@ -134,7 +141,6 @@ module General = struct
        let@ is_ex = exact_match () in
        let is_exact_re (re : RET.t) = !reorder_points && (is_ex (RET.P requested, re)) in
        let@ global = get_global () in
-       let@ simp_lcs = simp_constraints () in
        let needed = requested.permission in 
        let sub_resource_if = fun cond re (needed, oargs) ->
              let continue = (Unchanged, (needed, oargs)) in
@@ -212,7 +218,6 @@ module General = struct
        in
        let@ provable = provable loc in
        let@ global = get_global () in
-       let@ simp_lcs = simp_constraints () in
        let needed = requested.permission in 
        let sub_predicate_if = fun cond re (needed, oargs) ->
              let continue = (Unchanged, (needed, oargs)) in
@@ -232,7 +237,7 @@ module General = struct
                 end
              | (Q p', p'_oargs) when equal_predicate_name requested.name p'.name ->
                 let base = p'.pointer in
-                let item_size = int_ p'.step in
+                let item_size = p'.step in
                 let offset = array_offset_of_pointer ~base ~pointer:requested.pointer in
                 let index = array_pointer_to_index ~base ~item_size ~pointer:requested.pointer in
                 let subst = IT.make_subst [(p'.q, index)] in
@@ -317,9 +322,7 @@ module General = struct
        let@ provable = provable loc in
        let@ is_ex = exact_match () in
        let is_exact_re re = !reorder_points && (is_ex (Q requested, re)) in
-       let@ global = get_global () in
-       let@ values, equalities, lcs = simp_constraints () in
-       let simp t = Simplify.simp global.struct_decls values equalities lcs t in
+       let@ simp = get_simp () in
        let needed = requested.permission in
        let sub_resource_if = fun cond re (needed, oargs) ->
              let continue = (Unchanged, (needed, oargs)) in
@@ -437,18 +440,21 @@ module General = struct
             return def.oargs
        in
        let@ provable = provable loc in
-       let@ global = get_global () in
-       let@ values, equalities, lcs = simp_constraints () in
-       let simp it = Simplify.simp global.struct_decls values equalities lcs it in
+       let@ simp = get_simp () in
        let needed = requested.permission in
+       let step = simp requested.step in
+       let@ () = if Option.is_some (IT.is_z step) then return ()
+           else fail (fun _ -> {loc; msg = Generic (!^ "cannot simplify iter-step to constant:"
+               ^^^ IT.pp requested.step ^^ colon ^^^ IT.pp step)}) in
        let@ (needed, oargs) =
          map_and_fold_resources loc (fun re (needed, oargs) ->
              let continue = (Unchanged, (needed, oargs)) in
+             assert (RET.steps_constant (fst re));
              if is_false needed then continue else
              match re with
              | (P p', p'_oargs) when equal_predicate_name requested.name p'.name ->
                 let base = requested.pointer in
-                let item_size = int_ requested.step in
+                let item_size = step in
                 let offset = array_offset_of_pointer ~base ~pointer:p'.pointer in
                 let index = array_pointer_to_index ~base ~item_size ~pointer:p'.pointer in
                 let subst = IT.make_subst [(requested.q, index)] in
@@ -474,7 +480,7 @@ module General = struct
                 | `False -> continue
                 end
              | (Q p', p'_oargs) when equal_predicate_name requested.name p'.name 
-                         && requested.step = p'.step ->
+                         && IT.equal step p'.step ->
                 let p' = alpha_rename_qpredicate_type requested.q p' in
                 let pmatch = eq_ (requested.pointer, p'.pointer) in
                 begin match provable (LC.T pmatch) with
@@ -546,7 +552,7 @@ module General = struct
           name = Owned item_ct;
           pointer = base;
           q = q_s;
-          step = Memory.size_of_ctype item_ct;
+          step = IT.int_ (Memory.size_of_ctype item_ct);
           iargs = [];
           permission = and_ [permission; (int_ 0) %<= q; q %<= (int_ (length - 1))];
         }
@@ -562,12 +568,9 @@ module General = struct
            ) oargs oarg_bts
        in
        let folded_value = List.hd oargs in
-       let value_s, value = IT.fresh (IT.bt folded_value) in
-       let@ () = add_ls [(value_s, IT.bt value)] in
-       let@ () = add_c (t_ (def_ value_s folded_value)) in
        let@ provable = provable loc in
        let folded_oargs = 
-         record_ [(Resources.value_sym, value)]
+         record_ [(Resources.value_sym, folded_value)]
        in
        let folded_resource = ({
            name = Owned (Array (item_ct, Some length));
@@ -628,10 +631,7 @@ module General = struct
     match values_err with
     | Result.Error e -> return (Result.Error e)
     | Result.Ok values ->
-       let value_s, value = IT.fresh (Struct tag) in
-       let@ () = add_ls [(value_s, IT.bt value)] in
-       let@ () = add_c (t_ (def_ value_s (IT.struct_ (tag, values)))) in
-       let folded_oargs = record_ [(Resources.value_sym, value)] in
+       let folded_oargs = record_ [(Resources.value_sym, (IT.struct_ (tag, values)))] in
        let folded_resource = ({
            name = Owned (Struct tag);
            pointer = pointer_t;
@@ -649,7 +649,7 @@ module General = struct
      {
        name = Owned item_ct;
        pointer = base;
-       step = Memory.size_of_ctype item_ct;
+       step = int_ (Memory.size_of_ctype item_ct);
        q = q_s;
        iargs = [];
        permission = and_ [permission; (int_ 0) %<= q; q %<= (int_ (length - 1))]

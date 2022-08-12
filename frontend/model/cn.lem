@@ -48,16 +48,18 @@ type cn_const =
 type cn_expr_ 'a 'ty =
   | CNExpr_const of cn_const
   | CNExpr_var of 'a
+  | CNExpr_rvar of 'a
   (* List ops *)
   | CNExpr_nil of cn_base_type 'a
   | CNExpr_cons of cn_expr 'a 'ty * cn_expr 'a 'ty
   | CNExpr_list of list (cn_expr 'a 'ty)
-  | CNExpr_memberof of 'a * list Symbol.identifier (* INVARIANT: non-empty *)
+  | CNExpr_memberof of cn_expr 'a 'ty * Symbol.identifier
   | CNExpr_binop of cn_binop * cn_expr 'a 'ty * cn_expr 'a 'ty
   | CNExpr_sizeof of 'ty
   | CNExpr_offsetof of 'a * Symbol.identifier
   | CNExpr_cast of cn_base_type 'a * cn_expr 'a 'ty
   | CNExpr_call of Symbol.identifier * list (cn_expr 'a 'ty)
+  | CNExpr_each of 'a * (integer * integer) * cn_expr 'a 'ty
 
 and cn_expr 'a 'ty =
   | CNExpr of Loc.t * cn_expr_ 'a 'ty
@@ -75,10 +77,14 @@ type cn_resource 'a 'ty =
   | CN_pred of Loc.t * cn_pred 'a 'ty * list (cn_expr 'a 'ty)
   | CN_each of 'a * cn_base_type 'a * cn_expr 'a 'ty * Loc.t * cn_pred 'a 'ty * list (cn_expr 'a 'ty)
 
+type cn_assertion 'a 'ty =
+  | CN_assert_exp of cn_expr 'a 'ty
+  | CN_assert_qexp of 'a * cn_base_type 'a * cn_expr 'a 'ty * cn_expr 'a 'ty
+
 type cn_clause 'a 'ty =
   | CN_letResource of Loc.t * 'a * cn_resource 'a 'ty * cn_clause 'a 'ty
   | CN_letExpr of Loc.t * 'a * cn_expr 'a 'ty * cn_clause 'a 'ty
-  | CN_assert of Loc.t * cn_expr 'a 'ty * cn_clause 'a 'ty
+  | CN_assert of Loc.t * cn_assertion 'a 'ty * cn_clause 'a 'ty
   | CN_return of Loc.t * list ('a * cn_expr 'a 'ty)
 
 type cn_clauses 'a 'ty =
@@ -98,7 +104,7 @@ type cn_predicate 'a 'ty = <|
   cn_pred_name: 'a;
   cn_pred_oargs: list (cn_base_type 'a * 'a);
   cn_pred_iargs: list (cn_base_type 'a * 'a);
-  cn_pred_clauses: cn_clauses 'a 'ty;
+  cn_pred_clauses: maybe (cn_clauses 'a 'ty);
 |>
 
 type cn_namespace =

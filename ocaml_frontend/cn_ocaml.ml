@@ -91,16 +91,18 @@ module MakePp (Conf: PP_CN) = struct
           Dleaf (pp_ctor "CNExpr_const" ^^^ !^ (if b then "true" else "false"))
       | CNExpr_var ident ->
           Dleaf (pp_ctor "CNExpr_var" ^^^ P.squotes (Conf.pp_ident ident))
+      | CNExpr_rvar ident ->
+          Dleaf (pp_ctor "CNExpr_rvar" ^^^ P.squotes (Conf.pp_ident ident))
       | CNExpr_nil bty ->
           Dleaf (pp_ctor "CNExpr_nil" ^^^ P.squotes (pp_base_type bty))
       | CNExpr_cons (e1, e2) ->
           Dnode (pp_ctor "CNExpr_cons", [dtree_of_cn_expr e1; dtree_of_cn_expr e2])
       | CNExpr_list es ->
           Dnode (pp_ctor "CNExpr_list", List.map dtree_of_cn_expr es)
-      | CNExpr_memberof (ident, xs) ->
-          Dleaf (pp_ctor "CNExpr_member" ^^^
-                P.squotes (Conf.pp_ident ident) ^^
-                P.flow P.dot (List.map (fun z -> P.squotes (pp_identifier z)) xs))
+      | CNExpr_memberof (e, z) ->
+          Dnode (pp_ctor "CNExpr_member",
+                [dtree_of_cn_expr e;
+                 Dleaf (pp_identifier z)])
       | CNExpr_binop (bop, e1, e2) ->
           Dnode (pp_ctor "CNExpr_binop" ^^^ pp_cn_binop bop, [dtree_of_cn_expr e1; dtree_of_cn_expr e2])
       | CNExpr_sizeof ty ->
@@ -113,6 +115,10 @@ module MakePp (Conf: PP_CN) = struct
       | CNExpr_call (nm, exprs) ->
           Dnode (pp_ctor "CNExpr_call" ^^^ P.squotes (pp_identifier nm)
                  , List.map dtree_of_cn_expr exprs)
+      | CNExpr_each (ident, r, expr) ->
+          Dnode (pp_ctor "CNExpr_each" ^^^ P.squotes (Conf.pp_ident ident) ^^^
+                     !^ (Z.to_string (fst r)) ^^^ P.string "-" ^^^ !^ (Z.to_string (snd r))
+                 , [dtree_of_cn_expr expr])
 
   let dtree_of_cn_pred = function
     | CN_owned ty ->
@@ -141,6 +147,12 @@ module MakePp (Conf: PP_CN) = struct
     | None -> Dleaf !^"uninterpreted"
     | Some body -> Dnode (!^"interpreted", [dtree_of_cn_func_body body])
 
+  let dtree_of_cn_assertion = function
+    | CN_assert_exp e -> Dnode (pp_stmt_ctor "CN_assert_exp", [dtree_of_cn_expr e])
+    | CN_assert_qexp (ident, bTy, e1, e2) ->
+        Dnode (pp_stmt_ctor "CN_assert_qexp" ^^^
+                  P.squotes (Conf.pp_ident ident)^^ P.colon ^^^ pp_base_type bTy
+              , [dtree_of_cn_expr e1; dtree_of_cn_expr e2])
 
   let rec dtree_of_cn_clause = function
     | CN_letResource (_, ident, res, c) ->
@@ -149,8 +161,8 @@ module MakePp (Conf: PP_CN) = struct
     | CN_letExpr (_, ident, e, c) ->
         Dnode ( pp_stmt_ctor "CN_letExpr" ^^^ P.squotes (Conf.pp_ident ident)
               , [dtree_of_cn_expr e; dtree_of_cn_clause c])
-    | CN_assert (_, e, c) ->
-        Dnode (pp_stmt_ctor "CN_assert", [dtree_of_cn_expr e; dtree_of_cn_clause c])
+    | CN_assert (_, a, c) ->
+        Dnode (pp_stmt_ctor "CN_assert", [dtree_of_cn_assertion a; dtree_of_cn_clause c])
     | CN_return (_, xs) ->
         let docs =
             List.map (fun (ident, e) ->
@@ -163,6 +175,12 @@ module MakePp (Conf: PP_CN) = struct
         dtree_of_cn_clause c
     | CN_if (_, e, c1, c2) ->
         Dnode (pp_stmt_ctor "CN_if", [dtree_of_cn_expr e; dtree_of_cn_clause c1; dtree_of_cn_clauses c2])
+
+  let dtree_of_option_cn_clauses = function
+    | Some clauses -> 
+       Dnode (pp_stmt_ctor "Some", [dtree_of_cn_clauses clauses])
+    | None -> 
+       Dnode (pp_stmt_ctor "None", [])
 
 
 
@@ -181,7 +199,7 @@ module MakePp (Conf: PP_CN) = struct
     Dnode ( pp_ctor "[CN]predicate" ^^^ P.squotes (Conf.pp_ident pred.cn_pred_name)
           , [ Dnode (pp_ctor "[CN]iargs", dtrees_of_args pred.cn_pred_iargs)
             ; Dnode (pp_ctor "[CN]oargs", dtrees_of_args pred.cn_pred_oargs)
-            ; Dnode (pp_ctor "[CN]clauses", [dtree_of_cn_clauses pred.cn_pred_clauses]) ] ) 
+            ; Dnode (pp_ctor "[CN]clauses", [dtree_of_option_cn_clauses pred.cn_pred_clauses]) ] ) 
 end
 
 module PpCabs = MakePp (struct

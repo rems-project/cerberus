@@ -92,7 +92,8 @@ let magic_to_attrs = function
   THREAD_LOCAL
 
 (* §6.4.2 Identifiers *)
-%token<string> NAME (* NAME is either an variable identifier or a type name *)
+%token<string> UNAME (* Uppercase. UNAME is either a variable identifier or a type name *)
+%token<string> LNAME (* Lowercase. LNAME is either a variable identifier or a type name *)
 %token VARIABLE TYPE
 
 (* §6.4.4 Constants *)
@@ -385,6 +386,14 @@ list_tuple3_ge1(A, B, C):
 ;
 
 (* Identifiers and lexer feedback contexts *)
+
+NAME:
+| u= UNAME
+    { u }
+| l= LNAME
+    { l }
+
+
 typedef_name:
 | n= NAME TYPE
     { n }
@@ -1787,18 +1796,20 @@ prim_expr:
         | _ ->
             raise (C_lexer.Error (Cparser_unexpected_token "TODO cn integer const"))
     }
-| ident= cn_variable
+| ident= cn_l_variable
     { Cerb_frontend.Cn.(CNExpr (Location_ocaml.point $startpos, CNExpr_var ident)) }
+| ident= cn_u_variable
+    { Cerb_frontend.Cn.(CNExpr (Location_ocaml.point $startpos, CNExpr_rvar ident)) }
 (* | ident= cn_variable DOT ident_membr= cn_variable *)
-| ident= cn_variable DOT xs= separated_nonempty_list(DOT, cn_variable)
+| e= prim_expr DOT member=cn_variable
     { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
-                               , CNExpr_memberof (ident, xs))) }
+                               , CNExpr_memberof (e, member))) }
 | e= delimited(LPAREN, expr, RPAREN)
     { e }
 | SIZEOF LT ty= ctype GT
     { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($1)))
                                , CNExpr_sizeof ty)) }
-| ident= cn_variable LPAREN args=separated_list(COMMA, expr) RPAREN
+| ident= cn_l_variable LPAREN args=separated_list(COMMA, expr) RPAREN
     { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                                , CNExpr_call (ident, args))) }
 | OFFSETOF LPAREN tag = cn_variable COMMA member= cn_variable RPAREN
@@ -1857,7 +1868,7 @@ list_expr:
 | e= rel_expr
     { e }
 (* | LBRACK COLON bty= base_type RBRACK *)
-| CN_NIL bty= delimited(LPAREN, base_type, RPAREN)
+| CN_NIL bty= delimited(LT, base_type, GT)
     { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) NoCursor)
                                , CNExpr_nil bty)) }
 (* | e1= rel_expr COLON_COLON e2= list_expr *)
@@ -1871,6 +1882,16 @@ list_expr:
   // | NthList of int * 'bt term
 ;
 
+int_range:
+| l= CONSTANT COMMA r= CONSTANT
+    {
+      match (l, r) with
+        | (Cabs.CabsInteger_const (l_str, None), Cabs.CabsInteger_const (r_str, None)) ->
+            (Z.of_string l_str, Z.of_string r_str)
+        | _ ->
+            raise (C_lexer.Error (Cparser_unexpected_token "TODO cn integer const"))
+    }
+
 expr:
 | e= list_expr
     { e }
@@ -1883,6 +1904,11 @@ expr:
 | LPAREN ty= base_type RPAREN expr= list_expr
     { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($1)))
                                , CNExpr_cast (ty, expr))) }
+| CN_EACH LPAREN str= LNAME VARIABLE COLON r=int_range SEMICOLON e1= expr RPAREN
+    { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) NoCursor)
+                               ,
+                               let sym = Symbol.Identifier (Location_ocaml.point $startpos(str), str) in
+                               CNExpr_each (sym, r, e1))) }
 ;
 
 (* CN predicate definitions **************************************************)
@@ -1918,9 +1944,15 @@ exit_cn:
     { C_lexer.internal_state.inside_cn <- false; }
 
 
+cn_option_pred_clauses:
+| clauses=delimited(LBRACE, clauses, RBRACE)
+    { Some clauses }
+|
+    { None }
+
 
 cn_function:
-| CN_FUNCTION enter_cn cn_func_return_bty=delimited(LPAREN, base_type, RPAREN) str= NAME VARIABLE
+| CN_FUNCTION enter_cn cn_func_return_bty=delimited(LPAREN, base_type, RPAREN) str= LNAME VARIABLE
   cn_func_args= delimited(LPAREN, args, RPAREN)
   cn_func_body= cn_option_func_body exit_cn
     { (* TODO: check the name starts with lower case *)
@@ -1931,9 +1963,9 @@ cn_function:
       ; cn_func_args
       ; cn_func_body} }
 predicate:
-| CN_PREDICATE enter_cn cn_pred_oargs= delimited(LBRACE, args, RBRACE) str= NAME VARIABLE
+| CN_PREDICATE enter_cn cn_pred_oargs= delimited(LBRACE, args, RBRACE) str= UNAME VARIABLE
   cn_pred_iargs= delimited(LPAREN, args, RPAREN)
-  cn_pred_clauses= delimited(LBRACE, clauses, RBRACE) exit_cn
+  cn_pred_clauses= cn_option_pred_clauses exit_cn
     { (* TODO: check the name starts with upper case *)
       let loc = Location_ocaml.point $startpos(str) in
       { cn_pred_loc= loc
@@ -1946,6 +1978,13 @@ predicate:
 cn_variable:
 | str= NAME VARIABLE
     { Symbol.Identifier (Location_ocaml.point $startpos(str), str) }
+%inline cn_u_variable:
+| str= UNAME VARIABLE
+    { Symbol.Identifier (Location_ocaml.point $startpos(str), str) }
+%inline cn_l_variable:
+| str= LNAME VARIABLE
+    { Symbol.Identifier (Location_ocaml.point $startpos(str), str) }
+
 
 args:
 | xs= separated_list(COMMA, pair(base_type, cn_variable))
@@ -1972,7 +2011,7 @@ cn_option_func_body:
     { None }
 
 cn_func_body:
-| CN_LET str= NAME VARIABLE EQ e= expr SEMICOLON c= cn_func_body
+| CN_LET str= LNAME VARIABLE EQ e= expr SEMICOLON c= cn_func_body
     { let loc = Location_ocaml.point $startpos(str) in
       Cerb_frontend.Cn.CN_fb_letExpr (loc, Symbol.Identifier (loc, str), e, c) }
 | RETURN e= expr SEMICOLON
@@ -1981,22 +2020,31 @@ cn_func_body:
 
 
 clause:
-| CN_LET str= NAME VARIABLE EQ res= resource SEMICOLON c= clause
+| CN_LET str= UNAME VARIABLE EQ res= resource SEMICOLON c= clause
     { let loc = Location_ocaml.point $startpos(str) in
       Cerb_frontend.Cn.CN_letResource (loc, Symbol.Identifier (loc, str), res, c) }
-| CN_LET str= NAME VARIABLE EQ e= expr SEMICOLON c= clause
+| CN_LET str= LNAME VARIABLE EQ e= expr SEMICOLON c= clause
     { let loc = Location_ocaml.point $startpos(str) in
       Cerb_frontend.Cn.CN_letExpr (loc, Symbol.Identifier (loc, str), e, c) }
-| ASSERT e= delimited(LPAREN, expr, RPAREN) SEMICOLON c= clause
+| ASSERT e= delimited(LPAREN, assert_expr, RPAREN) SEMICOLON c= clause
     { Cerb_frontend.Cn.CN_assert (Location_ocaml.region $loc NoCursor, e, c) }
 | RETURN xs= delimited(LBRACE, oargs_def, RBRACE)
     { Cerb_frontend.Cn.CN_return (Location_ocaml.region $loc(xs) NoCursor, xs) }
 ;
 
+
+assert_expr:
+| CN_EACH LPAREN bTy= base_type str= LNAME VARIABLE SEMICOLON e1= expr RPAREN
+      LBRACE e2= expr RBRACE
+    { Cerb_frontend.Cn.CN_assert_qexp ( Symbol.Identifier (Location_ocaml.point $startpos(str), str)
+                                      , bTy, e1, e2) }
+| e= expr
+    { Cerb_frontend.Cn.CN_assert_exp e }
+
 resource:
 | p= pred es= delimited(LPAREN, separated_list(COMMA, expr), RPAREN)
     { Cerb_frontend.Cn.CN_pred (Location_ocaml.region $loc(p) NoCursor, p, es) }
-| CN_EACH LPAREN bTy= base_type str= NAME VARIABLE SEMICOLON e1= expr RPAREN
+| CN_EACH LPAREN bTy= base_type str= LNAME VARIABLE SEMICOLON e1= expr RPAREN
        LBRACE p= pred LPAREN es= separated_list(COMMA, expr) RPAREN RBRACE
     { Cerb_frontend.Cn.CN_each ( Symbol.Identifier (Location_ocaml.point $startpos(str), str)
                                , bTy
@@ -2011,7 +2059,7 @@ pred:
     { Cerb_frontend.Cn.CN_owned ty }
 | CN_BLOCK ty= delimited(LT, ctype, GT)
     { Cerb_frontend.Cn.CN_block ty }
-| str= NAME VARIABLE
+| str= UNAME VARIABLE
     { Cerb_frontend.Cn.CN_named (Symbol.Identifier (Location_ocaml.point $startpos(str), str)) }
 ;
 

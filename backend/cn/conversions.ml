@@ -29,9 +29,14 @@ module SymSet = Set.Make(Sym)
 
 (* builtin function symbols *)
 
+let mk_arg1 mk loc = function
+  | [x] -> return (mk x)
+  | xs -> fail {loc; msg = Number_arguments {has = List.length xs; expect = 1}}
+
 let mk_arg2 mk loc = function
   | [x; y] -> return (mk (x, y))
   | xs -> fail {loc; msg = Number_arguments {has = List.length xs; expect = 2}}
+
 
 let mul_uf_def = (Sym.fresh_named "mul_uf", mk_arg2 mul_no_smt_)
 let div_uf_def = (Sym.fresh_named "div_uf", mk_arg2 div_no_smt_)
@@ -43,6 +48,8 @@ let xor_uf_def = (Sym.fresh_named "xor_uf", mk_arg2 xor_no_smt_)
 let power_def = (Sym.fresh_named "power", mk_arg2 exp_)
 let rem_def = (Sym.fresh_named "rem", mk_arg2 rem_)
 let mod_def = (Sym.fresh_named "mod", mk_arg2 mod_)
+
+let not_def = (Sym.fresh_named "not", mk_arg1 not_)
 
 let builtin_funs = 
   List.map (fun (s, mk) -> (Sym.pp_string s, mk)) [
@@ -56,6 +63,8 @@ let builtin_funs =
       power_def;
       rem_def;
       mod_def;
+
+      not_def;
     ]
 
 let apply_builtin_funs loc nm args =
@@ -74,7 +83,7 @@ let sct_of_ct loc ct =
 
 let todo_string_of_sym (CF.Symbol.Symbol (_, _, sd)) =
   match sd with
-    | SD_Id str | SD_ObjectAddress str ->
+    | SD_Id str | SD_CN_Id str | SD_ObjectAddress str ->
         str
     | _ ->
         assert false
@@ -169,7 +178,7 @@ let oarg_name = function
   | None ->
      let i = !resource_counter in
      resource_counter := i + 1;
-     "r" ^ string_of_int i
+     "R" ^ string_of_int i
   | Some name ->
      name
 
@@ -186,9 +195,10 @@ let make_owned_funarg floc i (pointer : IndexTerms.t) path sct =
      let oarg_s = Sym.fresh_named oarg_name in
      let oarg_members = Resources.owned_oargs sct in
      let oarg = sym_ (oarg_s, oarg_members) in
+     let value = recordMember_ ~member_bt:(BT.of_sct sct) (oarg, Resources.value_sym) in
      let mapping = [{
          path = Ast.pointee path; 
-         it = recordMember_ ~member_bt:(BT.of_sct sct) (oarg, Resources.value_sym);
+         it = value;
          o_sct = Some sct;
        }]
      in
@@ -203,7 +213,12 @@ let make_owned_funarg floc i (pointer : IndexTerms.t) path sct =
            oarg_members),
         (floc, Some (descr ^ " ownership")))
      in
-     ([r], mapping)
+     let c = 
+       (`Constraint
+          (LC.t_ (good_ (sct, value))),
+          (floc, Some (descr ^ " good")))
+     in
+     ([r;c], mapping)
 
 
 let make_owned ~loc ~oname ~pointer ~path ~sct ~o_permission =
@@ -228,17 +243,23 @@ let make_owned ~loc ~oname ~pointer ~path ~sct ~o_permission =
            it = oarg; 
            o_sct = None } :: mapping
      in
+     let permission = Option.value o_permission ~default:(bool_ true) in
      let r = 
        (`Resource (oarg_s, P {
            name = Owned sct; 
            pointer; 
-           permission = Option.value o_permission ~default:(bool_ true); 
+           permission = permission; 
            iargs = [];
           },
           oarg_members),
         (loc, None))
      in
-     return ([r], mapping)
+     let c = 
+       (`Constraint 
+          (LC.t_ (impl_ (permission, good_ (sct, pointee_t)))),
+        (loc, None))
+     in
+     return ([r;c], mapping)
 
 
 let make_block ~loc ~oname ~pointer ~path ~sct ~o_permission =
@@ -278,7 +299,7 @@ let make_qowned ~loc ~oname ~pointer ~q:(qs,qbt) ~step ~condition ~path ~sct =
     | _ -> fail {loc; msg = Generic (!^"Quantifier for iterated resource must be of type 'integer'")}
   in
   let@ () = 
-    if Memory.size_of_ctype sct = step then return ()
+    if IT.equal (IT.int_ (Memory.size_of_ctype sct)) step then return ()
     else fail {loc; msg = Generic !^"pointer increment must match size of array-cell type"}
   in
   match sct with
@@ -300,13 +321,25 @@ let make_qowned ~loc ~oname ~pointer ~q:(qs,qbt) ~step ~condition ~path ~sct =
            pointer; 
            q = qs;
            permission = condition; 
-           step = Memory.size_of_ctype sct;
+           step = IT.int_ (Memory.size_of_ctype sct);
            iargs = [];
           },
           oarg_members),
         (loc, Some "ownership"))
      in
-     return ([r], mapping)
+     let c = 
+       let value_t = 
+         recordMember_ ~member_bt:(BT.Map (Integer, BT.of_sct sct))
+           (oarg, Resources.value_sym)
+       in
+       let q = sym_ (qs, qbt) in
+       (`Constraint 
+          (LC.forall_ (qs, qbt) (
+               impl_ (condition, good_ (sct, map_get_ value_t q))
+          )),
+        (loc, Some "good"))
+     in
+     return ([r;c], mapping)
 
 
 
@@ -354,7 +387,7 @@ let make_qpred loc (pred, def) ~oname ~pointer ~q:(qs,qbt) ~step ~condition iarg
          name = PName pred; 
          pointer;
          q = qs;
-         step;
+         step = step;
          iargs; 
          permission = condition;
        },
@@ -756,7 +789,7 @@ let resolve_index_term loc
        let@ (t_new, _) = resolve t mapping quantifiers in
        return (eq_ (t_new, t_original), None)
     | For ((i, s, j), t) ->
-       let sym = Sym.fresh_pretty s in
+       let sym = Sym.fresh_cn s in
        let@ (t, _) = resolve t mapping ((s, (sym, Integer)) :: quantifiers) in
        let make_int z = 
          try return (Z.to_int z) with
@@ -816,7 +849,7 @@ let rec resolve_typ loc
      begin match ofound with
      | Some (tag, _) -> return (Sctypes.Struct tag)
      | None -> 
-        fail {loc; msg = Unknown_struct (Sym.fresh_pretty str)}
+        fail {loc; msg = Unknown_struct (Sym.fresh_cn str)}
      end
   | Pointer ct ->
      let@ typ = resolve_typ loc layouts predicates log_predicates default_mapping_name mappings oquantifier ct in
@@ -842,6 +875,26 @@ let resolve_constraint loc layouts predicates log_predicates default_mapping_nam
 
 
 
+let iterated_pointer_base_offset resolve loc q_name pointer =
+  match pointer with
+  | Addition (pointer, Multiplication (Var name', offs))
+         when String.equal q_name name' ->
+     let@ (pointer_r, p_osct) = resolve pointer in
+     let@ (offs_r, _) = resolve offs in
+     return (pointer_r, p_osct, offs_r)
+  | ArrayShift {pointer; index = Var name'} when String.equal q_name name'->
+     let@ (pointer, p_osct) = resolve pointer in
+     begin match p_osct with
+     | Some (Sctypes.Pointer ct) -> return (pointer, Some ct, IT.int_ (Memory.size_of_ctype ct))
+     | None -> fail {loc; msg = Generic (!^ "array pointer type not known" ^^^ IT.pp pointer)}
+     | Some ct -> fail {loc; msg = Generic (!^ "array pointer not of pointer type:" ^^^
+            IT.pp pointer ^^ colon ^^^ Sctypes.pp ct)}
+     end
+  | _ ->
+     let msg =
+       "Iterated predicate pointer must be (ptr + (q_var * offs)) or (&(ptr[q_var]))"
+     in
+     fail {loc; msg = Generic (!^msg ^^ colon ^^ Ast.pp false pointer)}
 
 
 let apply_ownership_spec layouts predicates log_predicates default_mapping_name mappings (loc, oname, {oq; predicate; arguments; o_permission; typ}) =
@@ -853,7 +906,7 @@ let apply_ownership_spec layouts predicates log_predicates default_mapping_name 
   let oq = match oq with
     | None -> None
     | Some (name, bt, condition) ->
-       let s = Sym.fresh_pretty name in
+       let s = Sym.fresh_cn name in
        Some ((name, (s, bt)), condition)
   in
   let@ (pointer, arguments) = match arguments with
@@ -907,32 +960,21 @@ let apply_ownership_spec layouts predicates log_predicates default_mapping_name 
           | Some _ ->
              fail {loc; msg = Generic (!^"cannot use 'if' expression with iterated resources")}
         in
-        let@ (pointer_resolved, step) =
-          match pointer with
-          | Addition (pointer, Multiplication (Var name', Integer step))
-                 when String.equal name name' ->
-             let@ (pointer,_) =
-               resolve_index_term loc layouts predicates log_predicates
-                 default_mapping_name mappings
-                 [] pointer
-             in
-             return (pointer, Z.to_int step)
-          | _ ->
-             let msg =
-               "Iterated predicate pointer argument must be of the shape "^
-                 "(pointer expression + (quantifier variable * integer constant))"
-             in
-             fail {loc; msg = Generic (!^msg)}
+        let@ (pointer_resolved, p_osct, step) = iterated_pointer_base_offset
+               (resolve_index_term loc layouts predicates log_predicates
+               default_mapping_name mappings [])
+               loc name pointer
         in
         let@ (condition, _) =
           resolve_index_term loc layouts predicates log_predicates default_mapping_name mappings
             [(name, (qs, qbt))] condition
         in
-        let@ pointee_sct = match typ with
-          | Some typ ->
+        let@ pointee_sct = match typ, p_osct with
+          | Some typ, _ ->
              resolve_typ loc layouts predicates log_predicates default_mapping_name mappings
                (Option.map fst oq) typ
-          | None ->
+          | _, Some ct -> return ct
+          | _ ->
              fail {loc; msg = Generic (!^"need 'with type' annotation" ^^^ (Ast.Terms.pp false pointer))}
         in
         begin match block_or_owned with
@@ -971,21 +1013,10 @@ let apply_ownership_spec layouts predicates log_predicates default_mapping_name 
             | Some _ -> 
                fail {loc; msg = Generic (!^"cannot use 'if' expression with iterated resources")}
           in
-          let@ (pointer_resolved, step) = 
-            match pointer with
-            | Addition (pointer, Multiplication (Var name', Integer step)) 
-                 when String.equal name name' ->
-               let@ (pointer,_) = 
-                 resolve_index_term loc layouts predicates log_predicates default_mapping_name mappings 
-                   [] pointer 
-               in
-               return (pointer, Z.to_int step)
-            | _ -> 
-               let msg = 
-                 "Iterated predicate pointer argument must be of the shape "^
-                   "(pointer expression + (quantifier variable * integer constant))"
-               in
-               fail {loc; msg = Generic (!^msg)}
+          let@ (pointer_resolved, p_osct, step) = iterated_pointer_base_offset
+               (resolve_index_term loc layouts predicates log_predicates
+                       default_mapping_name mappings [])
+               loc name pointer
           in
           let@ (condition, _) = 
              resolve_index_term loc layouts predicates log_predicates default_mapping_name mappings 
@@ -1108,9 +1139,9 @@ let mod_mappings mapping_names mappings f =
         mapping
     ) mappings
 
-let get_mappings_info (mappings : mapping StringMap.t) (mapping_name : string) =
-  SuggestEqs.make_mappings_info (StringMap.find mapping_name mappings
-    |> List.map (fun {path; it; _} -> (Pp.plain (Ast.Terms.pp true path), it)))
+(* let get_mappings_info (mappings : mapping StringMap.t) (mapping_name : string) = *)
+(*   SuggestEqs.make_mappings_info (StringMap.find mapping_name mappings *)
+(*     |> List.map (fun {path; it; _} -> (Pp.plain (Ast.Terms.pp true path), it))) *)
 
 let make_fun_spec loc (layouts : Memory.struct_decls) rpredicates lpredicates
       fsym (fspec : function_spec)
@@ -1191,7 +1222,7 @@ let make_fun_spec loc (layouts : Memory.struct_decls) rpredicates lpredicates
         | Ast.Resource (oroname, cond) ->
               let@ (i', mapping') = 
                 apply_ownership_spec layouts rpredicates lpredicates
-                  "start" mappings (loc, oroname, cond) 
+                  "start" mappings (loc, Some oroname, cond) 
               in
               let mappings = 
                 mod_mapping "start" mappings
@@ -1218,8 +1249,6 @@ let make_fun_spec loc (layouts : Memory.struct_decls) rpredicates lpredicates
       (i, mappings) fspec.pre_condition
   in
 
-  let start_naming = SuggestEqs.make_naming "start" (get_mappings_info mappings "start") in
-  let i = i @ [(`Constraint (LC.t_ start_naming), (loc, None))] in
 
   (* ret *)
   let (oA, o, mappings) = 
@@ -1280,7 +1309,7 @@ let make_fun_spec loc (layouts : Memory.struct_decls) rpredicates lpredicates
         | Ast.Resource (oroname, cond) ->
               let@ (o', mapping') = 
                 apply_ownership_spec layouts rpredicates lpredicates
-                  "end" mappings (loc, oroname, cond) 
+                  "end" mappings (loc, Some oroname, cond) 
               in
               let mappings = 
                 mod_mapping "end" mappings 
@@ -1303,8 +1332,6 @@ let make_fun_spec loc (layouts : Memory.struct_decls) rpredicates lpredicates
       (o, mappings) fspec.post_condition
   in
 
-  let end_naming = SuggestEqs.make_naming "end" (get_mappings_info mappings "end") in
-  let o = o @ [(`Constraint (LC.t_ end_naming), (loc, None))] in
 
   let lrt = 
     List.fold_right (fun (oarg, info) lrt ->
@@ -1417,7 +1444,7 @@ let make_label_spec
         | Ast.Resource (oroname, cond) ->
               let@ (i', mapping') = 
                 apply_ownership_spec layouts rpredicates lpredicates
-                  lname mappings (loc, oroname, cond) in
+                  lname mappings (loc, Some oroname, cond) in
               let mappings = 
                 mod_mapping lname mappings 
                   (fun mapping -> mapping' @ mapping)
@@ -1442,8 +1469,6 @@ let make_label_spec
       (i, mappings) lspec.invariant
   in
 
-  let inv_naming = SuggestEqs.make_naming lname (get_mappings_info mappings lname) in
-  let i = i @ [(`Constraint (LC.t_ inv_naming), (loc, None))] in
 
   let llt =
     List.fold_right (fun (iarg, info) lt ->

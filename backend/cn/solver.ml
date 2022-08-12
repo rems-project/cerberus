@@ -506,7 +506,6 @@ module Translate = struct
               (Z3.Quantifier.mk_lambda_const context
                  [term (sym_ (q_s, q_bt))] (term body))
          end
-      | Info (_, _) -> Z3.Boolean.mk_true context
       | Pred (name, args) ->
          let def = Option.get (get_logical_predicate_def global name) in
          begin match def.definition with
@@ -639,7 +638,8 @@ let add_assumption solver global lc =
 
 (* as similarly suggested by Robbert *)
 let shortcut struct_decls lc = 
-  let lc = Simplify.simp_lc struct_decls SymMap.empty Simplify.ITPairMap.empty LCSet.empty lc in
+  let lc = Simplify.simp_lc struct_decls SymMap.empty Simplify.ITPairMap.empty
+        (fun t -> t) LCSet.empty lc in
   match lc with
   | LC.T (IT (Lit (Bool true), _)) -> `True
   | _ -> `No_shortcut lc
@@ -684,6 +684,7 @@ let maybe_save_slow_problem solv_inst lc lc_t time solver = match ! save_slow_pr
     close_out channel
 
 let provable ~loc ~solver ~global ~trace_length ~assumptions ~pointer_facts lc = 
+  debug 12 (lazy (item "provable: checking constraint" (LC.pp lc)));
   let context = solver.context in
   let structs = global.struct_decls in
   let rtrue () = model_state := No_model; `True in

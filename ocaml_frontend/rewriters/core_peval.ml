@@ -444,21 +444,20 @@ let core_peval file : 'bty RW.rewriter =
 
   let module StringSet = Set.Make(String) in
 
-  let not_unfold = Not_unfold.not_unfold in
-
   let stdlib_unfold_pred fsym fdecl =
     match Symbol.symbol_description fsym, fdecl with
-    | SD_Id name, Fun (_, sym_bTys, _) ->
-       not (List.mem name not_unfold) &&
-       List.exists (function (_, BTy_ctype) -> true | _ -> false) sym_bTys
+    | SD_Id "is_representable_integer", _
+    | SD_Id "catch_exceptional_condition", _ 
+      ->
+    (* | SD_Id name, Fun (_, sym_bTys, _) -> *)
+       true
     | _ ->
        false
   in
 
   let impl_unfold_pred _ fdecl =
     match fdecl with
-    | IFun (_, sym_bTys, _) ->
-       List.exists (function (_, BTy_ctype) -> true | _ -> false) sym_bTys
+    (* | IFun (_, sym_bTys, _) -> *)
     | _ ->
        false
   in

@@ -89,15 +89,15 @@ let flatten = function
 
 
 
-let rec simp (struct_decls : Memory.struct_decls) values equalities lcs =
+let rec simp (struct_decls : Memory.struct_decls) values equalities log_unfold lcs =
 
   let add_known_facts new_facts lcs = 
     List.fold_right LCSet.add (List.concat_map flatten new_facts) lcs
   in
 
 
-  let aux it = simp struct_decls values equalities lcs it in
-  let aux2 lcs it = simp struct_decls values equalities lcs it in
+  let aux2 lcs it = simp struct_decls values equalities log_unfold lcs it in
+  let aux it = aux2 lcs it in
   
   let lit it bt = 
     match it with
@@ -660,7 +660,12 @@ let rec simp (struct_decls : Memory.struct_decls) values equalities lcs =
 
   let pred name args bt =
     let args = List.map aux args in
-    IT (Pred (name, args), bt)
+    let t = IT (Pred (name, args), bt) in
+    let t' = if List.for_all no_free_vars args
+      then log_unfold t else t in
+    match t' with
+    | IT (Pred _, _) -> t'
+    | _ -> aux t'
   in
 
   fun it ->
@@ -679,27 +684,26 @@ let rec simp (struct_decls : Memory.struct_decls) values equalities lcs =
     | Set_op s -> IT (Set_op s, bt)
     | CT_pred c -> ct_pred c bt
     | Map_op a -> map_op a bt
-    | Info (name, args) -> info_ name (List.map aux args)
     | Pred (name, args) -> pred name args bt
     (* | Option_op o -> option_op o bt *)
     (* | Let ((s, bound), body) -> letb (s, bound) body bt *)
 
 
 
-let simp_flatten struct_decls values equalities lcs term =
-  match simp struct_decls values equalities lcs term with
+let simp_flatten struct_decls values equalities log_unfold lcs term =
+  match simp struct_decls values equalities log_unfold lcs term with
   | IT (Lit (Bool true), _) -> []
   | IT (Bool_op (And lcs), _) -> lcs
   | lc -> [lc]
 
 
 
-let simp_lc struct_decls values equalities lcs lc = 
+let simp_lc struct_decls values equalities log_unfold lcs lc =
   match lc with
-  | LC.T it -> LC.T (simp struct_decls values equalities lcs it)
+  | LC.T it -> LC.T (simp struct_decls values equalities log_unfold lcs it)
   | LC.Forall ((q, qbt), body) ->
      let q, body = IT.alpha_rename (q, qbt) body in
-     let body = simp struct_decls values equalities lcs body in
+     let body = simp struct_decls values equalities log_unfold lcs body in
      begin match body with
      | IT (Lit (Bool true), _) -> LC.T (bool_ true)
      | _ -> LC.Forall ((q, qbt), body)
@@ -707,7 +711,7 @@ let simp_lc struct_decls values equalities lcs lc =
 
 
 
-let simp_lc_flatten struct_decls values equalities lcs lc = 
+let simp_lc_flatten struct_decls values equalities log_unfold lcs lc =
   match lc with
-  | LC.T it -> List.map LC.t_ (simp_flatten struct_decls values equalities lcs it)
-  | _ -> [simp_lc struct_decls values equalities lcs lc]
+  | LC.T it -> List.map LC.t_ (simp_flatten struct_decls values equalities log_unfold lcs it)
+  | _ -> [simp_lc struct_decls values equalities log_unfold lcs lc]

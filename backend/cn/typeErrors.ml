@@ -23,19 +23,33 @@ type access =
   | Kill
   | Free
 
-type situation =
-  | Access of access
-  | FunctionCall
+type call_situation =
+  | FunctionCall 
   | LabelCall of label_kind
   | Subtyping
   | PackPredicate of Sym.t
   | PackStruct of Sym.t
   | UnpackPredicate of Sym.t
   | UnpackStruct of Sym.t
-  | ArgumentInference of Sym.t
 
-let checking_situation = function
-  | Access access -> !^"checking access"
+let call_prefix = function
+  | FunctionCall -> "call"
+  | LabelCall Return -> "return"
+  | LabelCall Loop -> "loop"
+  | LabelCall Other -> "goto"
+  | Subtyping -> "return"
+  | PackPredicate _ -> "pack"
+  | PackStruct _ -> "pack_struct"
+  | UnpackPredicate _ -> "unpack"
+  | UnpackStruct _ -> "unpack_struct"
+
+
+type situation =
+  | Access of access
+  | Call of call_situation
+
+
+let call_situation = function
   | FunctionCall -> !^"checking function call"
   | LabelCall Return -> !^"checking return"
   | LabelCall Loop -> !^"checking loop entry"
@@ -45,7 +59,11 @@ let checking_situation = function
   | PackStruct tag -> !^"packing struct" ^^^ Sym.pp tag
   | UnpackPredicate name -> !^"unpacking predicate" ^^^ Sym.pp name
   | UnpackStruct tag -> !^"unpacking struct" ^^^ Sym.pp tag
-  | ArgumentInference id -> !^"argument inference for" ^^^ Sym.pp id
+
+let checking_situation = function
+  | Access access -> !^"checking access"
+  | Call s -> call_situation s
+
 
 let for_access = function
   | Kill -> !^"for de-allocating"
@@ -58,16 +76,16 @@ let for_access = function
 
 let for_situation = function
   | Access access -> for_access access
-  | FunctionCall -> !^"for calling function"
-  | LabelCall Return -> !^"for returning"
-  | LabelCall Loop -> !^"for loop"
-  | LabelCall Other -> !^"for calling label"
-  | Subtyping -> !^"for subtyping"
-  | PackPredicate name -> !^"for packing predicate" ^^^ Sym.pp name
-  | PackStruct tag -> !^"for packing struct" ^^^ Sym.pp tag
-  | UnpackPredicate name -> !^"for unpacking predicate" ^^^ Sym.pp name
-  | UnpackStruct tag -> !^"for unpacking struct" ^^^ Sym.pp tag
-  | ArgumentInference id -> !^"for argument inference for" ^^^ Sym.pp id
+  | Call FunctionCall -> !^"for calling function"
+  | Call LabelCall Return -> !^"for returning"
+  | Call LabelCall Loop -> !^"for loop"
+  | Call LabelCall Other -> !^"for calling label"
+  | Call Subtyping -> !^"for subtyping"
+  | Call PackPredicate name -> !^"for packing predicate" ^^^ Sym.pp name
+  | Call PackStruct tag -> !^"for packing struct" ^^^ Sym.pp tag
+  | Call UnpackPredicate name -> !^"for unpacking predicate" ^^^ Sym.pp name
+  | Call UnpackStruct tag -> !^"for unpacking struct" ^^^ Sym.pp tag
+
 
 
 
@@ -99,8 +117,7 @@ type message =
   | Merging_multiple_arrays of {orequest : RET.t option; situation : situation; oinfo : info option; ctxt : Context.t; model: Solver.model_with_q }
   | Resource_mismatch of {has: RE.t; expect: RE.t; situation : situation; ctxt : Context.t; model : Solver.model_with_q }
   | Uninitialised_read of {ctxt : Context.t; model : Solver.model_with_q}
-  | Unused_resource of {resource: RE.t; ctxt : Context.t; model : Solver.model_with_q}
-
+  | Unused_resource of {resource: RE.t; ctxt : Context.t; model : Solver.model_with_q; trace : Trace.t}
   | Number_members of {has: int; expect: int}
   | Number_arguments of {has: int; expect: int}
   | Number_input_arguments of {has: int; expect: int}
@@ -257,12 +274,13 @@ let pp_message te =
      let explanation = Explain.explanation ctxt IT.SymSet.empty in
      let state = Explain.state ctxt explanation model None in
      { short; descr = None; state = Some state; trace = None }
-  | Unused_resource {resource; ctxt; model} ->
+  | Unused_resource {resource; ctxt; model; trace} ->
      let explanation = Explain.explanation ctxt (RE.free_vars resource) in
      let resource = RE.pp (RE.subst explanation.substitution resource) in
      let short = !^"Left-over unused resource" ^^^ squotes resource in
      let state = Explain.state ctxt explanation model None in
-     { short; descr = None; state = Some state; trace = None }
+     let trace_doc = Trace.format_trace (fst model) trace in
+     { short; descr = None; state = Some state; trace = Some trace_doc }
   | Number_members {has;expect} ->
      let short = !^"Wrong number of struct members" in
      let descr =

@@ -130,6 +130,23 @@ module WIT = struct
 
   type t = IndexTerms.t
 
+  (* We expect a (sub) term to be constant unless it contains a free variable
+     or it makes use of an uninterpreted logical predicate. *)
+  let is_const_inner global loc t =
+    if not (no_free_vars t) then false
+    else
+    let ps = IndexTerms.preds_of t in
+    let open Global in
+    List.for_all (fun p -> LogicalPredicates.is_fully_defined global.logical_predicates p)
+        (SymSet.elements ps)
+
+  let is_const loc t =
+    let@ global = get_global () in
+    let@ r = try return (is_const_inner global loc t)
+      with LogicalPredicates.Unknown id2 ->
+      (let@ _ = get_logical_predicate_def loc id2 in return false)
+    in
+    return r
 
   let rec infer : 'bt. Loc.t -> context:(BT.t IT.term) -> 'bt IT.term -> (IT.t, type_error) m =
       fun loc ~context (IT (it, _)) ->
@@ -173,8 +190,10 @@ module WIT = struct
             let@ t = infer loc ~context t in
             let@ () = ensure_integer_or_real_type loc context t in
             let@ t' = check loc ~context (IT.bt t) t' in
+            let@ c = is_const loc t in
+            let@ c' = is_const loc t' in
             let@ () = 
-              if (is_z_ t) || (is_z_ t') then return () else
+              if c || c' then return () else
                 let hint = "Only multiplication by constants is allowed" in
                 fail (fun ctxt -> {loc; msg = NIA {context; it = IT.mul_ (t, t'); ctxt; hint}})
             in
@@ -188,8 +207,9 @@ module WIT = struct
             let@ t = infer loc ~context t in
             let@ () = ensure_integer_or_real_type loc context t in
             let@ t' = check loc ~context (IT.bt t) t' in
+            let@ c' = is_const loc t' in
             let@ () = 
-              if (is_z_ t') then return () else 
+              if c' then return () else
                 let hint = "Only division by constants is allowed" in
                 fail (fun ctxt -> {loc; msg = NIA {context; it = div_ (t, t'); ctxt; hint}})
             in
@@ -221,8 +241,9 @@ module WIT = struct
            | Rem (t,t') ->
               let@ t = check loc ~context Integer t in
               let@ t' = check loc ~context Integer t' in
+	      let@ c' = is_const loc t' in
               let@ () = 
-                if (is_z_ t') then return () else 
+                if c' then return () else
                   let hint = "Only division by constants is allowed" in
                   fail (fun ctxt -> {loc; msg = NIA {context; it = rem_ (t, t'); ctxt; hint}})
               in
@@ -234,8 +255,9 @@ module WIT = struct
            | Mod (t,t') ->
               let@ t = check loc ~context Integer t in
               let@ t' = check loc ~context Integer t' in
+	      let@ c' = is_const loc t' in
               let@ () = 
-                if Option.is_some (is_z t') then return () else 
+                if c' then return () else
                   let hint = "Only division by constants is allowed" in
                   fail (fun ctxt -> {loc; msg = NIA {context; it = mod_ (t, t'); ctxt; hint}})
               in
@@ -553,9 +575,6 @@ module WIT = struct
                 end
          in
          return (IT (Map_op map_op, bt))
-      | Info (name, args) ->
-         let@ args = ListM.mapM (infer loc ~context) args in
-         return (info_ name args)
       | Pred (name, args) ->
          let@ def = Typing.get_logical_predicate_def loc name in
          let has_args, expect_args = List.length args, List.length def.args in
@@ -622,10 +641,29 @@ module WRET = struct
        return ()
     | Q p ->
        let@ _ = WIT.check loc BT.Loc p.pointer in
+       let@ _ = WIT.check loc BT.Integer p.step in
+       let@ c' = WIT.is_const loc p.step in
+       let@ () = if c' then return () else
+           let hint = "Only constant iteration steps are allowed" in
+           fail (fun ctxt -> {loc; msg = NIA {context = p.step; it = p.step; ctxt; hint}})
+       in
        let@ _ = 
          pure begin 
              let@ () = add_l p.q Integer in
              let@ _ = WIT.check loc BT.Bool p.permission in
+             let@ provable = provable loc in
+             let open IT in
+             let only_nonnegative_indices =
+               LC.forall_ (p.q, Integer) 
+                 (impl_ (p.permission, ge_ (sym_ (p.q, BT.Integer), int_ 0)))
+             in
+             let@ () = match provable only_nonnegative_indices with
+               | `True ->
+                  return ()
+               | `False ->
+                  let msg = "Iterated resource gives ownership to negative indices." in
+                  fail (fun _ -> {loc; msg = Generic !^msg})
+             in
              let has_iargs, expect_iargs = List.length p.iargs, List.length iargs in
              (* +1 because of pointer argument *)
              let@ () = ensure_same_argument_number loc `Input (1 + has_iargs) ~expect:(1 + expect_iargs) in
@@ -872,10 +910,24 @@ module WRPD = struct
         in
         let@ () = ListM.iterM (WLS.is_ls pd.loc) (List.map snd pd.oargs) in
         let module WPackingFT = WPackingFT(struct let name_bts = pd.oargs end)  in
-        ListM.iterM (fun {loc; guard; packing_ft} ->
-            let@ _ = WIT.check loc BT.Bool guard in
-            WPackingFT.welltyped "clause" pd.loc packing_ft
-          ) pd.clauses
+        match pd.clauses with
+        | None -> return ()
+        | Some clauses ->
+           let rec aux negated_guards = function
+             | [] -> 
+                return ()
+             | {loc; guard; packing_ft} :: clauses ->
+                let@ _ = WIT.check loc BT.Bool guard in
+                let@ () = 
+                  pure begin 
+                      let@ _ = add_c (LC.t_ guard) in
+                      let@ _ = add_c (LC.t_ (IT.and_ negated_guards)) in
+                      WPackingFT.welltyped "clause" pd.loc packing_ft
+                    end
+                in
+                aux (IT.not_ guard :: negated_guards) clauses
+           in
+           aux [] clauses
       end
 
 end

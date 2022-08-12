@@ -13,10 +13,10 @@ type definition = {
     pointer: Sym.t;
     iargs : (Sym.t * LogicalSorts.t) list;
     oargs : (Sym.t * LogicalSorts.t) list;
-    clauses : clause list;
+    clauses : (clause list) option;
   }
 
 val pp_definition : definition -> Pp.document
 
 
-val predicate_list : Memory.struct_decls -> (Sym.t * definition) list
+val predicate_list : Memory.struct_decls -> Sym.t list -> (Sym.t * definition) list

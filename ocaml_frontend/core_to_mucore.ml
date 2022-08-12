@@ -16,6 +16,14 @@ module Option = struct
     | Some v1, Some v2 -> eq v1 v2
 end
 
+
+module SymSet = 
+  Set.Make(struct
+      let compare = Symbol.symbol_compare
+      type t = Symbol.sym
+    end)
+
+
 open Core
 open Annot
 
@@ -52,7 +60,6 @@ type mu_values = mu_value list
 type mu_pexpr = unit Mu.mu_pexpr
 type mu_pexprs = mu_pexpr list
 type mu_expr = unit Mu.mu_expr
-type mu_texpr = unit Mu.mu_texpr
 type mu_pattern = Mu.mu_pattern
 type mu_action = unit Mu.mu_action
 type mu_paction = unit Mu.mu_paction
@@ -91,33 +98,19 @@ let ensure_ctype__pexpr loc = function
   | _ -> None
 
 
+let loc_error loc msg = error (msg ^ " (" ^ Loc.location_to_string loc ^ ")")
+
 let fensure_ctype__pexpr loc err pe : 'TY act = 
   match ensure_ctype__pexpr loc pe with
   | Some ctype -> ctype
-  | None -> error (err ^ " (" ^ Loc.location_to_string loc ^ ")")
+  | None -> loc_error loc err
 
 
 
 
 
-let core_to_mu__ctor loc ctor : mu_ctor = 
-  match ctor with 
-  | Core.Cnil bt1 -> M_Cnil bt1
-  | Core.Ccons -> M_Ccons
-  | Core.Ctuple -> M_Ctuple
-  | Core.Carray -> M_Carray
-  | Core.Cspecified -> M_Cspecified
-  | Core.CivCOMPL -> error ("core_anormalisation: CivCOMPL")
-  | Core.CivAND-> error ("core_anormalisation: CivAND")
-  | Core.CivOR -> error ("core_anormalisation: CivOR")
-  | Core.CivXOR -> error ("core_anormalisation: CivXOR")
-  | Core.Cfvfromint-> error ("core_anormalisation: Cfvfromint")
-  | Core.Civfromfloat -> error ("core_anormalisation: Civfromfloat")
-  | Core.Civmax -> error ("core_anormalisation: Civmax")
-  | Core.Civmin -> error ("core_anormalisation: Civmin")
-  | Core.Civsizeof -> error ("core_anormalisation: Civsizeof")
-  | Core.Civalignof -> error ("core_anormalisation: Civalignof")
-  | Core.Cunspecified -> error ("core_anormalisation: Cunspecified")
+
+
 
 
 let rec core_to_mu__pattern loc (Core.Pattern (annots, pat_)) : mu_pattern = 
@@ -127,9 +120,15 @@ let rec core_to_mu__pattern loc (Core.Pattern (annots, pat_)) : mu_pattern =
   | Core.CaseBase (msym, bt1) -> 
      wrap (M_CaseBase (msym, bt1))
   | Core.CaseCtor(ctor, pats) -> 
-     let ctor = core_to_mu__ctor loc ctor in
      let pats = map (core_to_mu__pattern loc) pats in
-     wrap (M_CaseCtor(ctor, pats))
+     match ctor with
+     | Core.Cnil bt1 -> wrap (M_CaseCtor (M_Cnil bt1, pats))
+     | Core.Ccons -> wrap (M_CaseCtor (M_Ccons, pats))
+     | Core.Ctuple -> wrap (M_CaseCtor (M_Ctuple, pats))
+     | Core.Carray -> wrap (M_CaseCtor (M_Carray, pats))
+     | Core.Cspecified -> List.hd pats
+     | _ -> loc_error loc ("core_to_mucore: unsupported pattern")
+
 
 
 
@@ -171,8 +170,8 @@ let letbinder_pexpr_in_pexpr loc annots pat pexpr body : mu_pexpr =
 (*   M_TPexpr (loc, annots, (), M_PEerror (str, asym)) *)
 
 
-let letbinder_pexpr_in_expr loc annots pat pexpr body : mu_texpr = 
-  M_TExpr (loc, annots, M_Elet (pat, pexpr, body))
+let letbinder_pexpr_in_expr loc annots pat pexpr body : mu_expr = 
+  M_Expr (loc, annots, M_Elet (pat, pexpr, body))
 
 (* let case_switch_pexpr_in_expr loc annots asym cases : mu_texpr =  *)
 (*   M_TExpr (loc, annots, M_Ecase (asym, cases)) *)
@@ -219,7 +218,7 @@ let rec n_ov loc v =
 
 and n_lv loc v =
   match v with
-  | LVspecified ov -> M_LVspecified (n_ov loc ov)
+  | LVspecified ov -> (* M_LVspecified *) (n_ov loc ov)
   | LVunspecified ct1 -> error "core_anormalisation: LVunspecified"
 
 
@@ -230,7 +229,7 @@ and n_val loc v =
    * flush stdout; *)
   match v with
   | Vobject ov -> M_Vobject (n_ov loc ov)
-  | Vloaded lv -> M_Vloaded (n_lv loc lv)
+  | Vloaded lv -> M_Vobject (n_lv loc lv)
   | Vunit -> M_Vunit
   | Vtrue -> M_Vtrue
   | Vfalse -> M_Vfalse
@@ -253,7 +252,7 @@ let rec n_pexpr loc (Pexpr (annots, bty, pe)) : mu_pexpr =
   | PEsym sym1 -> 
      annotate (M_PEsym sym1)
   | PEimpl i -> 
-     failwith "PEimpl not inlined"
+     loc_error loc "PEimpl not inlined"
   | PEval v -> 
      annotate (M_PEval (n_val loc v))
   | PEconstrained l -> 
@@ -270,45 +269,54 @@ let rec n_pexpr loc (Pexpr (annots, bty, pe)) : mu_pexpr =
         let arg1 = n_pexpr loc arg1 in
         annotate (M_CivCOMPL (ct, arg1))
      | Core.CivCOMPL, _ -> 
-        error "CivCOMPL applied to wrong number of arguments"
+        loc_error loc "CivCOMPL applied to wrong number of arguments"
      | Core.CivAND, [ct; arg1; arg2] -> 
         let ct = fensure_ctype__pexpr loc "CivAND: first argument not a ctype" ct in
         let arg1 = n_pexpr loc arg1 in
         let arg2 = n_pexpr loc arg2 in
         annotate (M_CivAND (ct, arg1, arg2))
      | Core.CivAND, _ ->
-        error "CivAND applied to wrong number of arguments"
+        loc_error loc "CivAND applied to wrong number of arguments"
      | Core.CivOR, [ct; arg1; arg2] -> 
         let ct = fensure_ctype__pexpr loc "CivOR: first argument not a ctype" ct in
         let arg1 = n_pexpr loc arg1 in
         let arg2 = n_pexpr loc arg2 in
         annotate (M_CivOR (ct, arg1, arg2))
      | Core.CivOR, _ ->
-        error "CivOR applied to wrong number of arguments"
+        loc_error loc "CivOR applied to wrong number of arguments"
      | Core.CivXOR, [ct; arg1; arg2] -> 
         let ct = fensure_ctype__pexpr loc "CivXOR: first argument not a ctype" ct in
         let arg1 = n_pexpr loc arg1 in
         let arg2 = n_pexpr loc arg2 in
         annotate (M_CivXOR (ct, arg1, arg2))
      | Core.CivXOR, _ ->
-        error "CivXOR applied to wrong number of arguments"
+        loc_error loc "CivXOR applied to wrong number of arguments"
      | Core.Cfvfromint, [arg1] -> 
         let arg1 = n_pexpr loc arg1 in
         annotate (M_Cfvfromint arg1)
      | Core.Cfvfromint, _ ->
-        error "Cfvfromint applied to wrong number of arguments"
+        loc_error loc "Cfvfromint applied to wrong number of arguments"
      | Core.Civfromfloat, [ct; arg1] -> 
         let ct = fensure_ctype__pexpr loc "Civfromfloat: first argument not a ctype" ct in
         let arg1 = n_pexpr loc arg1 in
         annotate (M_Civfromfloat(ct, arg1))
      | Core.Civfromfloat, _ ->
-        error "Civfromfloat applied to wrong number of arguments"
-     | _ ->
-        let args = List.map (n_pexpr loc) args in
-        annotate (M_PEctor((core_to_mu__ctor loc ctor), args))
+        loc_error loc "Civfromfloat applied to wrong number of arguments"
+     | Core.Cnil bt1, _ -> 
+        annotate (M_PEctor (M_Cnil bt1, List.map (n_pexpr loc) args))
+     | Core.Ccons, _ ->
+        annotate (M_PEctor (M_Ccons, List.map (n_pexpr loc) args))
+     | Core.Ctuple, _ -> 
+        annotate (M_PEctor (M_Ctuple, List.map (n_pexpr loc) args))
+     | Core.Carray, _ -> 
+        annotate (M_PEctor (M_Carray, List.map (n_pexpr loc) args))
+     | Core.Cspecified, _ -> 
+        n_pexpr loc (List.hd args)
+     | _ -> 
+        loc_error loc ("core_to_mucore: unsupported ctor application")
      end
   | PEcase(e', pats_pes) ->
-     failwith "PEcase"
+     loc_error loc "PEcase"
   | PEarray_shift(e', ctype1, e'') ->
      let e' = n_pexpr loc e' in
      let e'' = n_pexpr loc e'' in
@@ -330,7 +338,7 @@ let rec n_pexpr loc (Pexpr (annots, bty, pe)) : mu_pexpr =
      let e' = n_pexpr loc e' in
      annotate (M_PEunion(sym1, id1, e'))
   | PEcfunction e' ->
-     error "core_anormalisation: PEcfunction"
+     loc_error loc "core_anormalisation: PEcfunction"
   | PEmemberof(sym1, id1, e') ->
      let e' = n_pexpr loc e' in
      annotate (M_PEmemberof(sym1, id1, e'))
@@ -348,26 +356,49 @@ let rec n_pexpr loc (Pexpr (annots, bty, pe)) : mu_pexpr =
         let ct = (fensure_ctype__pexpr loc "PEcall(wrapI,_): not a ctype" arg1) in
         let arg2 = n_pexpr loc arg2 in
         annotate (M_PEwrapI(ct, arg2))
-     | _ ->
-        failwith "PEcall not inlined"
+     | Sym sym, _ ->
+        loc_error loc ("PEcall not inlined: " ^ Pp_symbol.to_string sym)
+     | Impl impl, _ ->
+        loc_error loc ("PEcall not inlined: " ^ Implementation.string_of_implementation_constant impl)
      end
   | PElet(pat, e', e'') ->
-     let pat = core_to_mu__pattern loc pat in
-     let e' = n_pexpr loc e' in
-     let e'' = n_pexpr loc e'' in
-     annotate (M_PElet (M_Pat pat, e', e''))
+     begin match pat, e' with
+     | Pattern (annots, CaseBase (Some sym, _)), 
+       Pexpr (annots2, _, PEsym sym2) 
+     | Pattern (annots, CaseCtor (Cspecified, [Pattern (_, CaseBase (Some sym, _))])), 
+       Pexpr (annots2, _, PEsym sym2) 
+       ->
+        let e'' = Core_peval.subst_sym_pexpr2 sym 
+                    (get_loc annots2, `SYM sym2) e'' in
+        n_pexpr loc e''
+
+
+     | Pattern (annots, CaseCtor (Ctuple, [Pattern (_, CaseBase (Some sym, _));
+                                           Pattern (_, CaseBase (Some sym', _))])), 
+       Pexpr (annots2, _, PEctor (Ctuple, [Pexpr (_, _, PEsym sym2);
+                                           Pexpr (_, _, PEsym sym2')]))
+     | Pattern (annots, CaseCtor (Ctuple, [Pattern (_, CaseCtor (Cspecified, [Pattern (_, CaseBase (Some sym, _))]));
+                                           Pattern (_, CaseCtor (Cspecified, [Pattern (_, CaseBase (Some sym', _))]))])), 
+       Pexpr (annots2, _, PEctor (Ctuple, [Pexpr (_, _, PEsym sym2);
+                                           Pexpr (_, _, PEsym sym2')]))
+       (* pairwise disjoint *)
+       when (SymSet.cardinal (SymSet.of_list [sym; sym'; sym2; sym2']) = 4) ->
+        let e'' = Core_peval.subst_sym_pexpr2 sym 
+                   (get_loc annots2, `SYM sym2) e'' in
+        let e'' = Core_peval.subst_sym_pexpr2 sym' 
+                   (get_loc annots2, `SYM sym2') e'' in
+        n_pexpr loc e''
+
+
+
+     | _ ->
+        let pat = core_to_mu__pattern loc pat in
+        let e' = n_pexpr loc e' in
+        let e'' = n_pexpr loc e'' in
+        annotate (M_PElet (M_Pat pat, e', e''))
+     end
   | PEif(e1, e2, e3) ->
      begin match e2, e3 with
-     | Pexpr (_uannots, _, PEundef (uloc, undef)), _ ->
-        let e1_neg = n_pexpr loc (Pexpr ([], (), PEnot e1)) in
-        let pat = M_Pat (unit_pat loc []) in
-        let assert_undef = M_Pexpr (loc, [], (), M_PEassert_undef (e1_neg, uloc, undef)) in
-        annotate (M_PElet (pat, assert_undef, (n_pexpr loc e3)))
-     | _, Pexpr (_uannots, _, PEundef (uloc, undef)) ->
-        let e1 = n_pexpr loc e1 in
-        let pat = (M_Pat (unit_pat loc [])) in
-        let assert_undef = M_Pexpr (loc, [], (), M_PEassert_undef (e1, uloc, undef)) in
-        annotate (M_PElet (pat, assert_undef, n_pexpr loc e2))
      | Pexpr (_, _, PEval (Vloaded (LVspecified (OVinteger iv1)))), 
        Pexpr (_, _, PEval (Vloaded (LVspecified (OVinteger iv2))))
           when Option.equal Z.equal (Mem.eval_integer_value iv1) (Some Z.one) &&
@@ -385,17 +416,17 @@ let rec n_pexpr loc (Pexpr (annots, bty, pe)) : mu_pexpr =
         annotate (M_PEif (e1, e2, e3))
      end
   | PEis_scalar e' ->
-     error "core_anormalisation: PEis_scalar"
+     loc_error loc "core_anormalisation: PEis_scalar"
   | PEis_integer e' ->
-     error "core_anormalisation: PEis_integer"
+     loc_error loc "core_anormalisation: PEis_integer"
   | PEis_signed e' ->
-     error "core_anormalisation: PEis_signed"
+     loc_error loc "core_anormalisation: PEis_signed"
   | PEis_unsigned e' ->
-     error "core_anormalisation: PEis_unsigned"
+     loc_error loc "core_anormalisation: PEis_unsigned"
   | PEbmc_assume e' ->
-     error "core_anormalisation: PEbmc_assume"
+     loc_error loc "core_anormalisation: PEbmc_assume"
   | PEare_compatible(e', e'') ->
-     error "core_anormalisation: PEare_compatible"
+     loc_error loc "core_anormalisation: PEare_compatible"
 
 
 (* and n_pexpr_t =
@@ -595,7 +626,7 @@ let n_memop loc memop pexprs =
 
 
 let rec n_expr (loc : Loc.t) (returns : symbol Pset.set)
-          (e : ('a, unit) expr) (k : mu_expr -> mu_texpr) : mu_texpr = 
+          (e : ('a, unit) expr) : mu_expr = 
   (* print_endline ("\n\n\n*******************************************************\nnormalising ");
    * PPrint.ToChannel.compact stdout (Pp_core_ast.pp_expr e);
    * print_endline "\n";
@@ -603,18 +634,17 @@ let rec n_expr (loc : Loc.t) (returns : symbol Pset.set)
   let (Expr (annots, pe)) = e in
   let loc = update_loc loc (get_loc_ annots) in
   let wrap pe = M_Expr (loc, annots, pe) in
-  let twrap pe = M_TExpr (loc, annots, pe) in
   let n_pexpr = n_pexpr loc in
   let n_paction = (n_paction loc) in
   let n_memop = (n_memop loc) in
   let n_expr = (n_expr loc returns) in
   match pe with
   | Epure pexpr2 -> 
-     k (wrap (M_Epure (n_pexpr pexpr2)))
+     wrap (M_Epure (n_pexpr pexpr2))
   | Ememop(memop1, pexprs1) -> 
-     k (wrap (M_Ememop (n_memop memop1 pexprs1)))
+     wrap (M_Ememop (n_memop memop1 pexprs1))
   | Eaction paction2 ->
-     k (wrap (M_Eaction (n_paction paction2)))
+     wrap (M_Eaction (n_paction paction2))
   | Ecase(pexpr, pats_es) ->
      failwith "Ecase"
      (* let pexpr = n_pexpr pexpr in *)
@@ -628,45 +658,62 @@ let rec n_expr (loc : Loc.t) (returns : symbol Pset.set)
      (* in *)
      (* twrap (M_Ecase(pexpr, pats_es)) *)
   | Elet(pat, e1, e2) ->
-     let e1 = n_pexpr e1 in
-     let pat = core_to_mu__pattern loc pat in
-     let e2 = n_expr e2 k in
-     twrap (M_Elet(M_Pat pat, e1, e2))
+     begin match pat, e1 with
+     | Pattern (annots, CaseBase (Some sym, _)),
+       Pexpr (annots2, _, PEsym sym2) 
+     | Pattern (annots, CaseCtor (Cspecified, [Pattern (_, CaseBase (Some sym, _))])), 
+       Pexpr (annots2, _, PEsym sym2) 
+       ->
+        let e2 = Core_peval.subst_sym_expr2 sym 
+                   (get_loc annots2, `SYM sym2) e2 in
+        n_expr e2
+     | Pattern (annots, CaseCtor (Ctuple, [Pattern (_, CaseBase (Some sym, _));
+                                           Pattern (_, CaseBase (Some sym', _))])), 
+       Pexpr (annots2, _, PEctor (Ctuple, [Pexpr (_, _, PEsym sym2);
+                                           Pexpr (_, _, PEsym sym2')]))
+     | Pattern (annots, CaseCtor (Ctuple, [Pattern (_, CaseCtor (Cspecified, [Pattern (_, CaseBase (Some sym, _))]));
+                                           Pattern (_, CaseCtor (Cspecified, [Pattern (_, CaseBase (Some sym', _))]))])), 
+       Pexpr (annots2, _, PEctor (Ctuple, [Pexpr (_, _, PEsym sym2);
+                                           Pexpr (_, _, PEsym sym2')]))
+       (* pairwise disjoint *)
+       when (SymSet.cardinal (SymSet.of_list [sym; sym'; sym2; sym2']) = 4) ->
+        let e2 = Core_peval.subst_sym_expr2 sym 
+                   (get_loc annots2, `SYM sym2) e2 in
+        let e2 = Core_peval.subst_sym_expr2 sym' 
+                   (get_loc annots2, `SYM sym2') e2 in
+        n_expr e2
+
+     | _ ->
+        let e1 = n_pexpr e1 in
+        let pat = core_to_mu__pattern loc pat in
+        let e2 = n_expr e2 in
+        wrap (M_Elet(M_Pat pat, e1, e2))
+     end
   | Eif(e1, e2, e3) ->
      begin match e2, e3 with
-     | Expr (_uannots1, Epure (Pexpr (_uannots2, _, PEundef (uloc, undef)))), _ ->
-        let e1_neg = n_pexpr (Pexpr ([], (), PEnot e1)) in
-        let pat = (M_Pat (unit_pat loc [])) in
-        let assert_undef = (M_Pexpr (loc, [], (), M_PEassert_undef (e1_neg, uloc, undef))) in
-        (expr_n_pexpr_domain.d_let loc annots pat assert_undef (n_expr e3 k))
-     | _, Expr (_uannots1, Epure (Pexpr (_uannots2, _, PEundef (uloc, undef)))) ->
-        let e1 = n_pexpr e1 in
-        let pat = (M_Pat (unit_pat loc [])) in
-        let assert_undef = (M_Pexpr (loc, [], (), M_PEassert_undef (e1, uloc, undef))) in
-        (expr_n_pexpr_domain.d_let loc annots pat assert_undef (n_expr e2 k))
      | Expr (_, Epure (Pexpr (_, _, PEval (Vloaded (LVspecified (OVinteger iv1)))))), 
        Expr (_, Epure (Pexpr (_, _, PEval (Vloaded (LVspecified (OVinteger iv2))))))
           when Option.equal Z.equal (Mem.eval_integer_value iv1) (Some Z.one) &&
                  Option.equal Z.equal (Mem.eval_integer_value iv2) (Some Z.zero)
        ->
         let e1 = n_pexpr e1 in
-        k (wrap (M_Epure (M_Pexpr (loc, [], (), M_PEbool_to_integer e1))))
+        wrap (M_Epure (M_Pexpr (loc, [], (), M_PEbool_to_integer e1)))
      | Expr (_, Epure (Pexpr (_, _, PEval Vtrue))), 
        Expr (_, Epure (Pexpr (_, _, PEval Vfalse))) ->
         let e1 = n_pexpr e1 in
-        k (wrap (M_Epure e1))
+        wrap (M_Epure e1)
      | _ ->
         let e1 = n_pexpr e1 in
-        let e2 = (n_expr e2 k) in
-        let e3 = (n_expr e3 k) in
-        twrap (M_Eif(e1, e2, e3))
+        let e2 = n_expr e2 in
+        let e3 = n_expr e3 in
+        wrap (M_Eif(e1, e2, e3))
      end
   | Eccall(_a, ct1, e2, es) ->
      let ct1 = match ct1 with
        | Core.Pexpr(annots, bty, Core.PEval (Core.Vctype ct1)) -> 
           let loc = update_loc loc (get_loc_ annots) in
           act_pack loc annots bty ct1
-       | _ -> error "core_anormalisation: Eccall with non-ctype first argument"
+       | _ -> loc_error loc "core_anormalisation: Eccall with non-ctype first argument"
      in
      let e2 = 
        let err () = 
@@ -685,66 +732,68 @@ let rec n_expr (loc : Loc.t) (returns : symbol Pset.set)
        | _ -> err ()
      in
      let es = List.map n_pexpr es in
-     k (wrap (M_Eccall(ct1, e2, es)))
+     wrap (M_Eccall(ct1, e2, es))
   | Eproc(_a, name1, es) ->
      failwith "Eproc"
      (* n_pexpr_in_expr_names es (fun es -> *)
      (* k (wrap (M_Eproc(name1, es)))) *)
   | Eunseq es ->
-     error "core_anormalisation: Eunseq"
+     let es = List.map n_expr es in
+     wrap (M_Eunseq es)
   | Ewseq(pat, e1, e2) ->
-     n_expr e1 (fun e1 ->
+     let e1 = n_expr e1 in
      let pat = core_to_mu__pattern loc pat in
-     twrap (M_Ewseq(pat, e1, n_expr e2 k)))
+     let e2 = n_expr e2 in
+     wrap (M_Ewseq(pat, e1, e2))
   | Esseq(pat, e1, e2) ->
-     n_expr e1 (fun e1 ->
+     let e1 = n_expr e1 in
      let pat = core_to_mu__pattern loc pat in
-     twrap (M_Esseq(pat, e1, n_expr e2 k)))
+     let e2 = n_expr e2 in
+     wrap (M_Esseq(pat, e1, e2))
   | Ebound e ->
-     twrap (M_Ebound (n_expr e k))
+     wrap (M_Ebound (n_expr e))
   | End es ->
-     let es = (List.map (fun e -> n_expr e k) es) in
-     twrap (M_End es)
+     let es = List.map n_expr es in
+     wrap (M_End es)
   | Esave((sym1,bt1), syms_typs_pes, e) ->  
      error "core_anormalisation: Esave"
   (* DISCARDS CONTINUATION *)
   | Erun(_a, sym1, pes) ->
      let pes = List.map n_pexpr pes in
-     begin match pes, Pset.mem sym1 returns with
+     (* begin match pes, Pset.mem sym1 returns with *)
      (* | [e], true -> *)
      (*    letbind_pexpr_ (Symbol.fresh_description Symbol.SD_Return)  *)
      (*      expr_n_pexpr_domain e (fun e -> *)
      (*        twrap (M_Erun(sym1, [e]))) *)
-     | _ ->
-        twrap (M_Erun(sym1, pes))
-     end
+     (* | _ -> *)
+        wrap (M_Erun(sym1, pes))
+     (* end *)
   | Epar es -> 
      error "core_anormalisation: Epar"
   | Ewait tid1 ->
      error "core_anormalisation: Ewait"
   | Epack(id, pes) ->
      let pes = List.map n_pexpr pes in
-     k (wrap (M_Erpredicate(Pack, id, pes)))
+     wrap (M_Erpredicate(Pack, id, pes))
   | Eunpack(id, pes) ->
      let pes = List.map n_pexpr pes in
-     k (wrap (M_Erpredicate(Unpack, id, pes)))
+     wrap (M_Erpredicate(Unpack, id, pes))
   | Ehave(id, pes) ->
      let pes = List.map n_pexpr pes in
-     k (wrap (M_Elpredicate(Have, id, pes)))
+     wrap (M_Elpredicate(Have, id, pes))
   | Eshow(id, pes) ->
      let pes = List.map n_pexpr pes in
-     k (wrap (M_Elpredicate(Show, id, pes)))
+     wrap (M_Elpredicate(Show, id, pes))
   | Einstantiate (id, pe) ->
      let pe = n_pexpr pe in
-     k (wrap (M_Einstantiate (id, pe)))
+     wrap (M_Einstantiate (id, pe))
   | Eannot _ ->
       failwith "core_anormalisation: Eannot"
   | Eexcluded _ ->
       failwith "core_anormalisation: Eexcluded"
 
-let normalise_expr (loc : Loc.t) (returns : symbol Pset.set) e : mu_texpr =
-  n_expr loc returns e (fun e ->
-  M_TExpr (loc, [], M_Edone e))
+let normalise_expr (loc : Loc.t) (returns : symbol Pset.set) e =
+  n_expr loc returns e
 
 
 let normalise_impl_decl (i : unit generic_impl_decl) : unit mu_impl_decl =
@@ -786,14 +835,7 @@ let normalise_fun_map_decl (name1: symbol) d
   | Mi_BuiltinDecl(loc, bt, bts) -> M_BuiltinDecl(loc, bt, bts)
 
 let normalise_fun_map fmap : unit mu_fun_map= 
-  let fmap = 
-    Pmap.filter (fun sym _ ->
-        match Symbol.symbol_description sym with
-        | SD_Id name when List.mem name Not_unfold.not_unfold -> false
-        | _ -> true
-      ) fmap 
-  in
-   (Pmap.mapi normalise_fun_map_decl fmap)
+  (Pmap.mapi normalise_fun_map_decl fmap)
   
 
 

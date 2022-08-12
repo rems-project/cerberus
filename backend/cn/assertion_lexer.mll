@@ -79,6 +79,7 @@ rule main = parse
   | "accesses" {T.ACCESSES}
   | "trusted" {T.TRUSTED}
   | "inv" {T.INV}
+  | "cn_function" {T.CN_FUNCTION}
   
   | '\n' {Lexing.new_line lexbuf; main lexbuf}
 

@@ -80,7 +80,7 @@ module Log : sig
 end = struct
   let print_count = ref 0
   let print_log_file filename file =
-    (* if !Debug_ocaml.debug_level > 0 then  *)
+    if !Debug_ocaml.debug_level > 0 then
       begin
         Colour.do_colour := false;
         let count = !print_count in
@@ -122,13 +122,18 @@ let frontend astprints filename state_file =
   let core_file = CF.Core_peval.rewrite_file core_file in
   let () = print_log_file "after_partial_evaluation" (CORE core_file) in
 
-  let core_file = CF.Core_remove_unused_functions.remove_unused_functions true core_file in
-  let () = print_log_file "after_removing_unused_functions" (CORE core_file) in
+  (* let@ core_file = CF.Core_typing.typecheck_program core_file in *)
+  (* let core_file = CF.Core_sequentialise.sequentialise_file core_file in *)
+  (* let core_file = CB.Pipeline.untype_file core_file in *)
+  (* let () = print_log_file "after_sequentialisation" (CORE core_file) in *)
 
-  let@ core_file = CF.Core_typing.typecheck_program core_file in
-  let core_file = CF.Core_sequentialise.sequentialise_file core_file in
-  let core_file = CB.Pipeline.untype_file core_file in
-  let () = print_log_file "after_sequentialisation" (CORE core_file) in
+  (* let core_file = CF.Core_remove_unused_functions.remove_unused_functions true core_file in *)
+  let core_file = { 
+      core_file with impl = Pmap.empty CF.Implementation.implementation_constant_compare;
+                     stdlib = Pmap.empty CF.Symbol.symbol_compare
+    }
+  in
+  (* let () = print_log_file "after_removing_unused_functions" (CORE core_file) in *)
 
   let mi_file = Milicore.core_to_micore__file CTM.update_loc core_file in
   let mu_file = CTM.normalise_file mi_file in

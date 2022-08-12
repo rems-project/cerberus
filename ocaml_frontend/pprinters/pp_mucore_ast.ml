@@ -70,21 +70,21 @@ module Make(PP_Typ : Pp_mucore.PP_Typ) = struct
         Dleaf (pp_pure_ctor "OVpointer" ^^^ Impl_mem.pp_pointer_value ptrval)
     | M_OVarray lvals ->
         Dnode ( pp_pure_ctor "OVarray"
-              , List.map dtree_of_loaded_value lvals)
+              , List.map dtree_of_object_value lvals)
     | M_OVstruct (tag_sym, xs) ->
         (* (Symbol.identifier * Ctype.ctype * Impl_mem.mem_value) list *)
         Dleaf (pp_pure_ctor "OVstruct" ^^^ !^ (ansi_format [Red] "TODO"))
     | M_OVunion (tag_sym, membr_ident, mval) ->
         Dleaf (pp_pure_ctor "OVunion" ^^^ !^ (ansi_format [Red] "TODO"))
-  and dtree_of_loaded_value = function
-    | M_LVspecified oval ->
-        Dnode (pp_pure_ctor "LVspecified", [dtree_of_object_value oval])
+  (* and dtree_of_loaded_value = function *)
+  (*   | M_LVspecified oval -> *)
+  (*       Dnode (pp_pure_ctor "LVspecified", [dtree_of_object_value oval]) *)
 
   and dtree_of_value = function
     | M_Vobject oval ->
         Dnode (pp_pure_ctor "Vobject", [dtree_of_object_value oval])
-    | M_Vloaded lval ->
-        Dnode (pp_pure_ctor "Vloaded", [dtree_of_loaded_value lval])
+    (* | M_Vloaded lval -> *)
+    (*     Dnode (pp_pure_ctor "Vloaded", [dtree_of_loaded_value lval]) *)
     | M_Vunit ->
         Dleaf (pp_pure_ctor "Vunit")
     | M_Vtrue ->
@@ -248,7 +248,7 @@ module Make(PP_Typ : Pp_mucore.PP_Typ) = struct
           , dtrees )
 
 
-  let dtree_of_expr ((M_Expr (loc, annot, expr_)) as expr) =
+  let rec dtree_of_expr ((M_Expr (loc, annot, expr_)) as expr) =
 
       let pp_ctor str =
         pp_eff_ctor str ^^^ 
@@ -272,15 +272,9 @@ module Make(PP_Typ : Pp_mucore.PP_Typ) = struct
           ('bty, 'sym) generic_pexpr * ('bty, 'sym) generic_pexpr list
       | Eproc of 'a * 'sym generic_name * ('bty, 'sym) generic_pexpr list
   *)
-        | _ ->
-           Dleaf (pp_ctor ("Expr(TODO): " ^ MuPP.string_of_expr expr))
+        (* | _ -> *)
+        (*    Dleaf (pp_ctor ("Expr(TODO): " ^ MuPP.string_of_expr expr)) *)
 
-
-
-  let dtree_of_texpr expr =
-    let rec self (M_TExpr (loc, annot, expr_)) =
-
-      match expr_ with
   (*
         | Ecase of ('bty, 'sym) generic_pexpr * ('sym generic_pattern * ('a, 'bty, 'sym) generic_expr) list
         | Eif of ('bty, 'sym) generic_pexpr * ('a, 'bty, 'sym) generic_expr * ('a, 'bty, 'sym) generic_expr
@@ -290,17 +284,17 @@ module Make(PP_Typ : Pp_mucore.PP_Typ) = struct
           Dnode ( pp_ctor "Elet" (* ^^^ P.group (Pp_core.Basic.pp_pattern pat) *)
                 , (*add_std_annot*) [ (* Dleaf (pp_ctor "TODO_pattern")
                                     ; *) dtree_of_pexpr e1
-                                    ; self e2 ] )
+                                    ; dtree_of_expr e2 ] )
       | M_Ewseq (pat, e1, e2) ->
           Dnode ( pp_ctor "Ewseq" (* ^^^ P.group (Pp_core.Basic.pp_pattern pat) *)
                 , (*add_std_annot*) [ (* Dleaf (pp_ctor "TODO_pattern")
                                     ; *) dtree_of_expr e1
-                                    ; self e2 ] )
+                                    ; dtree_of_expr e2 ] )
       | M_Esseq (pat, e1, e2) ->
           Dnode ( pp_ctor "Esseq" (* ^^^ P.group (Pp_core.Basic.pp_pattern pat) *)
                 , (*add_std_annot*) [ (* Dleaf (pp_ctor "TODO_pattern")
                                     ; *) dtree_of_expr e1
-                                    ; self e2 ] )
+                                    ; dtree_of_expr e2 ] )
       (* | M_Eundef (loc, ub) -> *)
       (*    Dleaf (pp_ctor "PEundef" ^^^ !^ (ansi_format [Red] "TODO")) *)
 
@@ -316,7 +310,7 @@ module Make(PP_Typ : Pp_mucore.PP_Typ) = struct
           ('a, 'bty, 'sym) generic_paction
   *)
       | M_Ebound e ->
-          Dnode (pp_ctor "Ebound", [self e])
+          Dnode (pp_ctor "Ebound", [dtree_of_expr e])
   (*
       | End of ('a, 'bty, 'sym) generic_expr list
   *)
@@ -329,8 +323,6 @@ module Make(PP_Typ : Pp_mucore.PP_Typ) = struct
         | _ ->
            Dleaf (pp_ctor ("TExpr(TODO): " ^ MuPP.string_of_texpr expr))
             (* Dleaf (pp_ctor ("TODO_expr ==> " ^ MuPP.string_of_texpr expr)) *)
-    in
-    self expr
 
 
   (*
@@ -400,7 +392,7 @@ module Make(PP_Typ : Pp_mucore.PP_Typ) = struct
       match glob with
       | M_GlobalDef (_, (bTy,_), e) ->
           Dnode ( pp_field "GlobalDef" ^^^ pp_symbol sym ^^ P.colon ^^^ MuPP.pp_bt bTy
-                , [dtree_of_texpr e] )
+                , [dtree_of_expr e] )
       | M_GlobalDecl (_, (bTy,_)) ->
           Dleaf (pp_field "GlobalDecl" ^^^ pp_symbol sym ^^ P.colon ^^^ MuPP.pp_bt bTy)
     in
@@ -412,7 +404,7 @@ module Make(PP_Typ : Pp_mucore.PP_Typ) = struct
     | M_Return (loc,_) -> 
        (Dleaf (!^"return" ^^^ Location_ocaml.pp_location ~clever:false loc))
     | M_Label (loc, _, _, body, _) -> 
-       Dnode (pp_symbol l ^^^ Location_ocaml.pp_location ~clever:false loc, [dtree_of_texpr body])
+       Dnode (pp_symbol l ^^^ Location_ocaml.pp_location ~clever:false loc, [dtree_of_expr body])
 
   let dtrees_of_labels labels = 
     Pmap.fold (fun l def acc ->
@@ -431,7 +423,7 @@ module Make(PP_Typ : Pp_mucore.PP_Typ) = struct
         | M_Proc (loc, bTy, params, e, labels) ->
             Dnode ( pp_field "PRoc" ^^^ pp_symbol sym ^^ P.colon ^^^ MuPP.pp_bt bTy
                   , [ Dnode (pp_field ".params", List.map dtree_of_param params)
-                    ; Dnode (pp_field ".body", [dtree_of_texpr e])
+                    ; Dnode (pp_field ".body", [dtree_of_expr e])
                     ; Dnode (pp_field ".labels", dtrees_of_labels labels) ] )
         | M_ProcDecl (loc, ret_bTy, params_bTys) ->
             (* TODO: loc*)

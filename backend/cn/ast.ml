@@ -277,7 +277,7 @@ type predicate = {
 
 type condition = 
   | Constraint of (string * BT.t * term) option * term
-  | Resource of (string option) * predicate
+  | Resource of string * predicate
   | Define of string * term
 
 
@@ -289,6 +289,7 @@ type keyword_condition =
   | Requires of (Loc.t * condition) list
   | Ensures of (Loc.t * condition) list
   | Inv of (Loc.t * condition) list
+  | Make_Function of Id.t
 
 
 
@@ -309,6 +310,7 @@ type function_spec = {
     function_return : varg;
     pre_condition : (Loc.t * condition) list;
     post_condition : (Loc.t * condition) list;
+    defines_log_funs : Id.t list;
   }
 
 

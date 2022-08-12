@@ -20,6 +20,7 @@ val all_constraints : unit -> (Context.LCSet.t, 'e) m
 val simp_constraints : unit ->
     ((IndexTerms.t IndexTerms.SymMap.t 
       * bool Simplify.ITPairMap.t
+      * (IndexTerms.t -> IndexTerms.t)
       * Context.LCSet.t), 'e) m
 val all_resources : unit -> (Resources.t list, 'e) m
 val all_resources_tagged : unit -> ((Resources.t * int) list * int, 'e) m
@@ -39,8 +40,8 @@ val remove_as : Sym.t list -> (unit, 'e) m
 val add_ls : (Sym.t * LogicalSorts.t) list -> (unit, 'e) m
 val add_c : LogicalConstraints.t -> (unit, 'e) m
 val add_cs : LogicalConstraints.t list -> (unit, 'e) m
-val add_r : Context.where option -> Resources.t -> (unit, 'e) m
-val add_rs : Context.where option -> Resources.t list -> (unit, 'e) m
+val add_r : Context.where option -> Resources.t -> (unit, TypeErrors.type_error) m
+val add_rs : Context.where option -> Resources.t list -> (unit, TypeErrors.type_error) m
 val get_loc_trace : unit -> (Locations.loc list, 'e) m
 val in_loc_trace : Locations.loc list -> (unit -> ('a, 'e) m) -> ('a, 'e) m
 val get_step_trace : unit -> (Trace.t, 'e) m
@@ -57,7 +58,7 @@ type changed =
 val map_and_fold_resources : 
   Locations.t ->
   (Resources.t -> 'acc -> changed * 'acc) -> 
-  'acc -> ('acc, 'e) m
+  'acc -> ('acc, TypeErrors.type_error) m
 
 val get_struct_decl : Locations.t -> Sym.t -> (Memory.struct_decl, TypeErrors.t) m
 val get_member_type : Locations.t -> Sym.t -> Id.t -> Memory.struct_layout -> (Sctypes.t, TypeErrors.t) m

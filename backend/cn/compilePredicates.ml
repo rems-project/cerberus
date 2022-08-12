@@ -167,15 +167,14 @@ let translate_member_access loc env t member =
   | has -> 
      fail {loc; msg = Illtyped_it' {it = t; has; expected = "struct"}}
 
-let translate_member_accesses loc env t xs = 
-  ListM.fold_leftM (translate_member_access loc env) t xs
 
 
 
 let translate_cn_expr (env: Env.t) expr =
   let open IndexTerms in
   let module BT = BaseTypes in
-  let rec self (CNExpr (loc, expr_)) =
+  let rec trans env (CNExpr (loc, expr_)) =
+    let self = trans env in
     match expr_ with
       | CNExpr_const CNConst_NULL ->
           return null_
@@ -188,6 +187,33 @@ let translate_cn_expr (env: Env.t) expr =
             | None -> fail {loc; msg= Unknown_variable sym}
             | Some bTy -> return (IT (Lit (Sym sym), bTy))
           end
+      | CNExpr_rvar sym ->
+         let get_pred_sig s = 
+           match Env.lookup_predicate s env with
+           | None ->
+              Env.debug_known_preds env;
+	      fail {loc; msg = Unknown_resource_predicate {id = s; logical = false}}
+           | Some pred_sig -> return pred_sig 
+         in
+         let@ bt =match Env.lookup_resource sym env with
+           | None -> 
+              fail {loc; msg= Unknown_variable sym}
+           | Some RPred_owned sct ->
+              return (Resources.owned_oargs sct)
+           | Some RPred_block sct ->
+              return (Resources.block_oargs)
+           | Some RPred_named pnm ->
+              let@ pred_sig = get_pred_sig pnm in
+              return (BT.Record pred_sig.pred_oargs)
+           | Some RPred_I_owned sct ->
+              return (Resources.q_owned_oargs sct)
+           | Some RPred_I_block sct ->
+              return (Resources.q_block_oargs)
+           | Some RPred_I_named pnm ->
+              let@ pred_sig = get_pred_sig pnm in
+              return (BT.Record (List.map_snd (BT.make_map_bt Integer) pred_sig.pred_oargs))
+         in
+         return (sym_ (sym, bt))
       | CNExpr_nil bTy_ ->
           return (nil_ ~item_bt:(translate_cn_base_type bTy_))
       | CNExpr_cons (e1_, e2_) ->
@@ -198,40 +224,9 @@ let translate_cn_expr (env: Env.t) expr =
           let@ es = ListM.mapM self es_ in
           let item_bt = basetype (List.hd es) in
           return (list_ ~item_bt es)
-      | CNExpr_memberof (sym, xs) ->
-         let@ bt = match Env.lookup_resource sym env with
-           | None ->
-              begin match Env.lookup_logical sym env with
-              | None -> fail {loc; msg= Unknown_variable sym}
-              | Some bt -> return bt
-              end
-           | Some RPred_owned ct ->
-              return (Resources.owned_oargs ct)
-           | Some RPred_block ct ->
-              return (Resources.owned_oargs ct)
-           | Some RPred_named s ->
-              let@ pred_sig = match Env.lookup_predicate s env with
-                | None ->
-                    Env.debug_known_preds env;
-                    fail {loc; msg = Unknown_resource_predicate {id = s; logical = false}}
-                | Some pred_sig -> return pred_sig 
-              in
-              return (BT.Record pred_sig.pred_oargs)
-           | Some RPred_I_owned ct ->
-              return (Resources.q_owned_oargs ct)
-           | Some RPred_I_block ct ->
-              return (Resources.q_owned_oargs ct)
-           | Some RPred_I_named s ->
-              let@ pred_sig = match Env.lookup_predicate s env with
-                | None ->
-                    Env.debug_known_preds env;
-		    fail {loc; msg = Unknown_resource_predicate {id = s; logical = false}}
-                | Some pred_sig -> return pred_sig 
-              in
-              return (BT.Record (List.map_snd (BT.make_map_bt Integer) pred_sig.pred_oargs))
-         in
-         let t = sym_ (sym, bt) in
-         translate_member_accesses loc env t xs
+      | CNExpr_memberof (e, xs) ->
+         let@ e = self e in
+         translate_member_access loc env e xs
       | CNExpr_binop (bop, e1_, e2_) ->
           let@ e1 = self e1_ in
           let@ e2 = self e2_ in
@@ -268,87 +263,132 @@ let translate_cn_expr (env: Env.t) expr =
               in
               return (pred_ sym args bt)
           end
-  in self expr
+      | CNExpr_each (sym, r, e) ->
+          let env' = Env.add_logical sym BT.Integer env in
+          let@ expr = trans env' e in
+          return (eachI_ (Z.to_int (fst r), sym, Z.to_int (snd r)) expr)
+  in trans env expr
 
 
-let at_least_one_argument loc pname = function
-  | [] -> 
-     (* owned vs block mismatch *)
-     fail {loc; msg= First_iarg_missing {pname}}
-  | expr :: iargs -> 
-     return (expr, iargs)
+let translate_cn_res_info res_loc loc env res args =
+  let@ args = ListM.mapM (translate_cn_expr env) args in
+  let open Resources in
+  let open ResourceTypes in
+  let@ (pname, oargs_ty, env_info) = match res with
+    | CN_owned ty ->
+      let scty = Retype.ct_of_ct res_loc ty in
+      return (Owned scty, owned_oargs scty, RPred_owned scty)
+    | CN_block ty ->
+      let scty = Retype.ct_of_ct res_loc ty in
+      return (Block scty, owned_oargs scty, RPred_block scty)
+    | CN_named pred ->
+      let@ pred_sig = match Env.lookup_predicate pred env with
+        | None -> fail {loc; msg = Unknown_resource_predicate {id = pred; logical = false}}
+        | Some pred_sig -> return pred_sig
+      in
+      return (PName pred, BT.Record pred_sig.pred_oargs, RPred_named pred)
+  in
+  let@ (ptr_expr, iargs) = match args with
+    | [] -> fail {loc; msg = First_iarg_missing {pname}}
+    | (x :: xs) -> return (x, xs)
+  in
+  return (pname, ptr_expr, iargs, oargs_ty, env_info)
 
+let split_pointer_linear_step loc q ptr_expr =
+  let open IndexTerms in
+  let open Pp in
+  let qs = sym_ (q, BT.Integer) in
+  let msg_s = "Iterated predicate pointer must be (ptr + (q_var * offs)):" in
+  begin match term ptr_expr with
+    | Pointer_op (IntegerToPointerCast (IT (Arith_op (Add (b, offs)), _))) ->
+      begin match term b, term offs with
+        | Pointer_op (PointerToIntegerCast p), Arith_op (Mul (x, y)) when IT.equal x qs ->
+          return (p, y)
+        | _ -> fail { loc; msg= Generic (!^msg_s ^^^ IT.pp ptr_expr)}
+      end
+    | _ ->
+    fail { loc; msg= Generic (!^msg_s ^^^ IT.pp ptr_expr)}
+  end
 
+let mk_int_map bt = BT.Map (BT.Integer, bt)
 
+let map_over_record loc ty =
+  let lift (s, ty) = (s, mk_int_map ty) in
+  match ty with
+  | BT.Record xs ->
+    return (BT.Record (List.map lift xs))
+  | _ -> let open Pp in
+    fail {loc; msg = Generic (!^ "map_over_record: not a record type:" ^^^ BT.pp ty)}
 
+let get_single_member loc v =
+  match IT.basetype v with
+  | BT.Record [(sym, bt)] -> IT.recordMember_ ~member_bt:bt (v, sym)
+  | ty -> let open Pp in
+    Pp.warn loc (!^ "get_single_member:" ^^^ typ (IT.pp v) (BT.pp ty));
+    assert false
 
+let iterate_resource_env_info = function
+  | RPred_owned ct -> RPred_I_owned ct
+  | RPred_block ct -> RPred_I_block ct
+  | RPred_named nm -> RPred_I_named nm
+  | _ -> assert false
+
+let add_owned_good loc sym res_t lat = match res_t with
+  | (ResourceTypes.P { name = Owned scty ; permission; _}, oargs_ty) ->
+    let v = get_single_member loc (IT.sym_ (sym, oargs_ty)) in
+    let good_lc = LogicalConstraints.T (IT.impl_ (permission, IT.good_ (scty, v))) in
+    LAT.mConstraint (good_lc, (loc, None)) lat
+  | (ResourceTypes.Q { name = Owned scty ; q; permission; _}, oargs_ty) ->
+    let v = get_single_member loc (IT.sym_ (sym, oargs_ty)) in
+    let v_el = IT.map_get_ v (IT.sym_ (q, BT.Integer)) in
+    let good_lc = LogicalConstraints.Forall ((q, BT.Integer),
+        (IT.impl_ (permission, IT.good_ (scty, v_el)))) in
+    LAT.mConstraint (good_lc, (loc, None)) lat
+   | _ -> lat
 
 let translate_cn_clause env clause =
   let rec translate_cn_clause_aux env acc clause =
     let module LAT = LogicalArgumentTypes in
     match clause with
       | CN_letResource (res_loc, sym, res, cl) ->
-          let open Resources in
           begin match res with
-            | CN_pred (pred_loc, CN_owned ty, args) ->
-               let scty = Retype.ct_of_ct res_loc ty in
-               let@ args = ListM.mapM (translate_cn_expr env) args in
-               let@ expr, iargs = at_least_one_argument pred_loc (Owned scty) args in
-               let oargs_ty = owned_oargs scty in
-               let acc' =
-                 fun z -> acc begin
-                   let pt =
-                     (ResourceTypes.P { name = Owned scty
-                         ; pointer= expr
+            | CN_pred (pred_loc, res, args) ->
+               let@ (pname, ptr_expr, iargs, oargs_ty, env_info) =
+                      translate_cn_res_info res_loc pred_loc env res args in
+               let pt = (ResourceTypes.P { name = pname
+                         ; pointer= ptr_expr
                          ; permission= IT.bool_ true
-                         ; iargs = []},
-                      oargs_ty) 
-                   in
-                   (LAT.mResource ((sym, pt), (pred_loc, None)) z)
-                 end in
-               let env' = Env.(add_resource sym (RPred_owned scty) env) in
-               translate_cn_clause_aux env' acc' cl
-            | CN_pred (pred_loc, CN_block ty, args) ->
-               let scty = Retype.ct_of_ct pred_loc ty in
-               let@ args = ListM.mapM (translate_cn_expr env) args in
-               (* owned vs block mismatch *)
-               let@ expr, iargs = at_least_one_argument pred_loc (Owned scty) args in
-               let acc' =
-                 fun z -> acc begin
-                   let pt =
-                     (ResourceTypes.P { name = Block scty
-                         ; pointer= expr
-                         ; permission= IT.bool_ true
-                         ; iargs = []},
-                      owned_oargs scty) 
-                   in
-                   (LAT.mResource ((sym, pt), (pred_loc, None)) z)
-                 end in
-               translate_cn_clause_aux env acc' cl
-            | CN_pred (pred_loc, CN_named pred_sym, es_) ->
-               let@ args = ListM.mapM (translate_cn_expr env) es_ in
-               let@ expr, iargs = at_least_one_argument pred_loc (PName pred_sym) args in
-               let@ pred_sig = match Env.lookup_predicate pred_sym env with
-                 | None -> fail {loc = pred_loc; msg = Unknown_resource_predicate {id = pred_sym; logical = false}}
-                 | Some pred_sig -> return pred_sig 
+                         ; iargs = iargs},
+                      oargs_ty)
                in
-               let acc' =
-                 fun z -> acc begin
-                   let pred =
-                     (ResourceTypes.P { name= PName pred_sym
-                         ; pointer= expr
-                         ; permission= IT.bool_ true
-                         ; iargs= iargs
-                     },
-                      BT.Record pred_sig.pred_oargs)
-                   in
-                   (LAT.mResource ((sym, pred), (pred_loc, None)) z)
-                 end 
-               in
-               let env' = Env.(add_resource sym (RPred_named pred_sym) env) in
+               let acc' = fun z -> acc (LAT.mResource ((sym, pt), (pred_loc, None))
+                       (add_owned_good pred_loc sym pt z)) in
+               let env' = Env.(add_resource sym env_info env) in
                translate_cn_clause_aux env' acc' cl
-            | CN_each _ ->
-                failwith "TODO: CN_each"
+            | CN_each (q, bt, guard, pred_loc, res, args) ->
+               let bt' = translate_cn_base_type bt in
+               let@ () = if BT.equal bt' BT.Integer then return ()
+                 else fail {loc = pred_loc; msg = let open Pp in
+                     Generic (!^ "quantified v must be integer:" ^^^ BT.pp bt')}
+               in
+               let env' = Env.add_logical q BT.Integer env in
+               let@ guard_expr = translate_cn_expr env' guard in
+               let@ (pname, ptr_expr, iargs, oargs_ty, env_info) =
+                      translate_cn_res_info res_loc pred_loc env' res args in
+               let@ (ptr_base, step) = split_pointer_linear_step pred_loc q ptr_expr in
+               let@ m_oargs_ty = map_over_record pred_loc oargs_ty in
+               let qpt = (ResourceTypes.Q { name = pname
+                         ; q
+                         ; pointer= ptr_base
+                         ; step
+                         ; permission= guard_expr
+                         ; iargs = iargs},
+                      m_oargs_ty)
+               in
+               let acc' = fun z -> acc (LAT.mResource ((sym, qpt), (pred_loc, None))
+                       (add_owned_good pred_loc sym qpt z)) in
+               let env'' = Env.(add_resource sym (iterate_resource_env_info env_info)) env in
+               translate_cn_clause_aux env'' acc' cl
           end
       | CN_letExpr (loc, sym, e_, cl) ->
           let@ e = translate_cn_expr env e_ in
@@ -356,15 +396,26 @@ let translate_cn_clause env clause =
             fun z -> acc begin
               LAT.mDefine (sym, e, (loc, None)) z
             end in
-            translate_cn_clause_aux (Env.add_logical sym (IT.basetype e) env) acc' cl
-      | CN_assert (loc, e_, cl) ->
+          translate_cn_clause_aux (Env.add_logical sym (IT.basetype e) env) acc' cl
+      | CN_assert (loc, CN_assert_exp e_, cl) ->
           let@ e = translate_cn_expr env e_ in
           let acc' =
             fun z -> acc begin
               LAT.mConstraint ( LogicalConstraints.T e
                              , (loc, None) ) z
             end in
-            translate_cn_clause_aux env acc' cl
+          translate_cn_clause_aux env acc' cl
+      | CN_assert (loc, CN_assert_qexp (sym, bTy, e1_, e2_), cl) ->
+          let bt = translate_cn_base_type bTy in
+	  let env' = Env.add_logical sym bt env in
+          let@ e1 = translate_cn_expr env' e1_ in
+          let@ e2 = translate_cn_expr env' e2_ in
+          let acc' =
+            fun z -> acc begin
+              LAT.mConstraint ( LogicalConstraints.Forall ((sym, bt), IT.impl_ (e1, e2))
+                             , (loc, None) ) z
+            end in
+          translate_cn_clause_aux env acc' cl
       | CN_return (loc, xs_) ->
           let@ xs =
             ListM.mapM (fun (sym, e_) ->
@@ -390,6 +441,13 @@ let translate_cn_clauses env clauses =
   let@ xs = self [] clauses in
   return (List.rev xs)
 
+let translate_option_cn_clauses env = function
+  | Some clauses -> 
+     let@ clauses = translate_cn_clauses env clauses in
+     return (Some clauses)
+  | None -> 
+     return None
+
 
 let translate_cn_func_body env body =
   let rec translate_cn_func_body_aux env acc body =
@@ -409,7 +467,7 @@ let translate_cn_func_body env body =
 
 
 
-let register_cn_predicates env tagDefs (defs: cn_predicate list) =
+let register_cn_predicates env (defs: cn_predicate list) =
   let aux env def =
     let translate_args xs =
       List.map (fun (bTy, sym) ->
@@ -420,11 +478,19 @@ let register_cn_predicates env tagDefs (defs: cn_predicate list) =
     Env.add_predicate def.cn_pred_name { pred_iargs= iargs; pred_oargs= oargs } env in
   List.fold_left aux env defs
 
+let register_cn_functions env (defs: cn_function list) =
+  let aux env def =
+    let args = List.map (fun (bTy, sym) -> (sym, translate_cn_base_type bTy)
+      ) def.cn_func_args in
+    let return_bt = translate_cn_base_type def.cn_func_return_bty in
+    let fsig = Env.{args; return_bty = return_bt} in
+    Env.add_function def.cn_func_name fsig env
+  in
+  List.fold_left aux env defs
 
-
-
-let translate_and_register_cn_function env (def: cn_function) =
+let translate_cn_function env (def: cn_function) =
   let open LogicalPredicates in
+  Pp.debug 2 (lazy (Pp.item "translating function defn" (Sym.pp def.cn_func_name)));
   let args = 
     List.map (fun (bTy, sym) -> (sym, translate_cn_base_type bTy)
       ) def.cn_func_args in
@@ -438,14 +504,13 @@ let translate_and_register_cn_function env (def: cn_function) =
     | None -> return Uninterp in
   let return_bt = translate_cn_base_type def.cn_func_return_bty in
   let def2 = {loc = def.cn_func_loc; args; return_bt; definition} in
-  let fsig = Env.{args; return_bty = return_bt} in
-  let env = Env.add_function def.cn_func_name fsig env in
   return (env, (def.cn_func_name, def2))
 
 let translate_and_register_cn_functions (env : Env.t) (to_translate: cn_function list) = 
+  let env = register_cn_functions env to_translate in
   let@ (env, defs) = 
     ListM.fold_leftM (fun (env, defs) def ->
-        let@ (env, def) = translate_and_register_cn_function env def in
+        let@ (env, def) = translate_cn_function env def in
         return (env, def :: defs)
       ) (env,[]) to_translate
   in
@@ -464,7 +529,7 @@ let translate_cn_predicate env (def: cn_predicate) =
     List.fold_left (fun acc (sym, bTy) ->
       Env.add_logical sym bTy acc
     ) env iargs in
-  let@ clauses = translate_cn_clauses env' def.cn_pred_clauses in
+  let@ clauses = translate_option_cn_clauses env' def.cn_pred_clauses in
   match iargs with
     | (iarg0, BaseTypes.Loc) :: iargs' ->
         return 
@@ -483,7 +548,7 @@ let translate_cn_predicate env (def: cn_predicate) =
 let translate tagDefs (f_defs: cn_function list) (pred_defs: cn_predicate list) =
   let env = Env.empty tagDefs in
   let@ (env, log_defs) = translate_and_register_cn_functions env f_defs in
-  let env = register_cn_predicates env tagDefs pred_defs in
+  let env = register_cn_predicates env pred_defs in
   let@ pred_defs = ListM.mapM (translate_cn_predicate env) pred_defs in
   return (log_defs, pred_defs)
 

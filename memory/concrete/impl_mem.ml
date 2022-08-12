@@ -1046,6 +1046,7 @@ module Concrete : Memory = struct
                 (* TODO: *)
                 (begin match opt_name with
                   | SD_Id name -> IntMap.add (N.of_int n) (file_dig, name) funptrmap
+                  | SD_CN_Id _ -> funptrmap
                   | SD_ObjectAddress _ -> funptrmap
                   | SD_Return -> funptrmap
                   | SD_FunArg _ -> funptrmap
