@@ -92,6 +92,7 @@ end)
 (* TODO: memoise this, it's stupid to recompute this every time... *)
 (* NOTE: returns ([(memb_ident, type, offset)], last_offset) *)
 let rec offsetsof tagDefs tag_sym =
+  let open N in
   match Pmap.find tag_sym tagDefs with
     | StructDef (membrs_, flexible_opt) ->
         (* NOTE: the offset of a flexible array member is just like
@@ -104,40 +105,41 @@ let rec offsetsof tagDefs tag_sym =
         let (xs, maxoffset) =
           List.fold_left (fun (xs, last_offset) (membr, (_, _, ty)) ->
             let size = sizeof ~tagDefs ty in
-            let align = alignof ~tagDefs ty in
-            let x = last_offset mod align in
-            let pad = if x = 0 then 0 else align - x in
-            ((membr, ty, last_offset + pad) :: xs, last_offset + pad + size)
-          ) ([], 0) membrs in
+            let align = of_int (alignof ~tagDefs ty) in
+            let x = modulus last_offset align in
+            let pad = if equal x zero then zero else sub align x in
+            ((membr, ty, add last_offset pad) :: xs, add (add last_offset pad) size)
+          ) ([], zero) membrs in
         (List.rev xs, maxoffset)
     | UnionDef membrs ->
-        (List.map (fun (ident, (_, _, ty)) -> (ident, ty, 0)) membrs, 0)
+        (List.map (fun (ident, (_, _, ty)) -> (ident, ty, zero)) membrs, zero)
 
-and sizeof ?(tagDefs= Tags.tagDefs ()) (Ctype (_, ty) as cty) =
+and sizeof ?(tagDefs= Tags.tagDefs ()) (Ctype (_, ty) as cty) : N.num =
+  let open N in
   match ty with
     | Void | Array (_, None) | Function _ | FunctionNoParams _ ->
         assert false
     | Basic (Integer ity) ->
         begin match (Ocaml_implementation.get ()).sizeof_ity ity with
           | Some n ->
-              n
+              of_int n
           | None ->
               failwith ("the concrete memory model requires a complete implementation sizeof INTEGER => " ^ String_core_ctype.string_of_ctype cty)
         end
     | Basic (Floating fty) ->
         begin match (Ocaml_implementation.get ()).sizeof_fty fty with
           | Some n ->
-              n
+              of_int n
           | None ->
               failwith "the concrete memory model requires a complete implementation sizeof FLOAT"
         end
     | Array (elem_ty, Some n) ->
         (* TODO: what if too big? *)
-        Nat_big_num.to_int n * sizeof ~tagDefs elem_ty
+        mul n (sizeof ~tagDefs elem_ty)
     | Pointer _ ->
         begin match (Ocaml_implementation.get ()).sizeof_pointer with
           | Some n ->
-              n
+              of_int n
           | None ->
               failwith "the concrete memory model requires a complete implementation sizeof POINTER"
         end
@@ -147,9 +149,9 @@ and sizeof ?(tagDefs= Tags.tagDefs ()) (Ctype (_, ty) as cty) =
         (* TODO: need to add trailing padding for structs with a flexible array member *)
         Debug_ocaml.warn [] (fun () -> "TODO: Concrete.sizeof doesn't add trailing padding for structs with a flexible array member");
         let (_, max_offset) = offsetsof tagDefs tag_sym in
-        let align = alignof ~tagDefs cty in
-        let x = max_offset mod align in
-        if x = 0 then max_offset else max_offset + (align - x)
+        let align = of_int (alignof ~tagDefs cty) in
+        let x = modulus max_offset align in
+        if equal x zero then max_offset else N.add max_offset (N.sub align x)
     | Union tag_sym ->
         begin match Pmap.find tag_sym (Tags.tagDefs ()) with
           | StructDef _ ->
@@ -157,11 +159,11 @@ and sizeof ?(tagDefs= Tags.tagDefs ()) (Ctype (_, ty) as cty) =
           | UnionDef membrs ->
               let (max_size, max_align) =
                 List.fold_left (fun (acc_size, acc_align) (_, (_, _, ty)) ->
-                  (max acc_size (sizeof ~tagDefs ty), max acc_align (alignof ~tagDefs ty))
-                ) (0, 0) membrs in
+                  (max acc_size (sizeof ~tagDefs ty), max acc_align (of_int (alignof ~tagDefs ty)))
+                ) (zero, zero) membrs in
               (* NOTE: adding padding at the end to satisfy the alignment constraints *)
-              let x = max_size mod max_align in
-              if x = 0 then max_size else max_size + (max_align - x)
+              let x = modulus max_size max_align in
+              if equal x zero then max_size else add max_size (sub max_align x)
         end
 
 and alignof ?(tagDefs= Tags.tagDefs ()) (Ctype (_, ty) as cty) =
@@ -587,12 +589,12 @@ module Concrete : Memory = struct
   
   let is_within_bound alloc_id lvalue_ty addr =
     get_allocation alloc_id >>= fun alloc ->
-    return (N.less_equal alloc.base addr && N.less_equal (N.add addr (N.of_int (sizeof lvalue_ty))) (N.add alloc.base alloc.size))
+    return (N.less_equal alloc.base addr && N.less_equal (N.add addr (sizeof lvalue_ty)) (N.add alloc.base alloc.size))
   
   let is_within_device ty addr =
     return begin
       List.exists (fun (min, max) ->
-        N.less_equal min addr && N.less_equal (N.add addr (N.of_int (sizeof ty))) max
+        N.less_equal min addr && N.less_equal (N.add addr (sizeof ty)) max
       ) device_ranges
     end
   
@@ -601,7 +603,7 @@ module Concrete : Memory = struct
     get_allocation alloc_id >>= fun alloc ->
     match alloc.ty with
       | Some ty when AilTypesAux.is_atomic ty ->
-          if    addr = alloc.base && N.equal (N.of_int (sizeof lvalue_ty)) alloc.size
+          if    addr = alloc.base && N.equal (sizeof lvalue_ty) alloc.size
              && Ctype.ctypeEqual lvalue_ty ty then
             (* the types equality check is to deal with the case where the
                first member is accessed and their are no padding bytes ... *)
@@ -833,7 +835,7 @@ module Concrete : Memory = struct
               Some (c :: acc)
       ) (Some []) (List.rev xs) in
     
-    if List.length bs < sizeof cty then
+    if N.less (N.of_int (List.length bs)) (sizeof cty) then
       failwith "abst, |bs| < sizeof(ty)";
     
     let merge_taint x y =
@@ -854,7 +856,7 @@ module Concrete : Memory = struct
           (* ty must have a known size *)
           assert false
       | Basic (Integer ity) ->
-          let (bs1, bs2) = L.split_at (sizeof cty) bs in
+          let (bs1, bs2) = L.split_at (N.to_int (sizeof cty)) bs in
           let (prov, _, bs1') = AbsByte.split_bytes bs1 in
             (* PNVI-ae-udi *)
           ( AbsByte.provs_of_bytes bs1
@@ -866,7 +868,7 @@ module Concrete : Memory = struct
                   MVunspecified cty
             end , bs2)
       | Basic (Floating fty) ->
-          let (bs1, bs2) = L.split_at (sizeof cty) bs in
+          let (bs1, bs2) = L.split_at (N.to_int (sizeof cty)) bs in
           (* we don't care about provenances for floats *)
           let (_, _, bs1') = AbsByte.split_bytes bs1 in
           ( `NoTaint
@@ -887,7 +889,7 @@ module Concrete : Memory = struct
           in
           aux (Nat_big_num.to_int n) (`NoTaint, []) bs
       | Pointer (_, ref_ty) ->
-          let (bs1, bs2) = L.split_at (sizeof cty) bs in
+          let (bs1, bs2) = L.split_at (N.to_int (sizeof cty)) bs in
           Debug_ocaml.print_debug 1 [] (fun () -> "TODO: Concrete, assuming pointer repr is unsigned??");
           let (prov, prov_status, bs1') = AbsByte.split_bytes bs1 in
           ( `NoTaint (* PNVI-ae-udi *)
@@ -954,12 +956,14 @@ module Concrete : Memory = struct
           Debug_ocaml.print_debug 1 [] (fun () -> "TODO: Concrete, is it ok to have the repr of atomic types be the same as their non-atomic version??");
           self atom_ty bs
       | Struct tag_sym ->
-          let (bs1, bs2) = L.split_at (sizeof cty) bs in
+          (* TODO: the N.to_int on the sizeof() will raise Overflow on huge structs *)
+          let (bs1, bs2) = L.split_at (N.to_int (sizeof cty)) bs in
           let (taint, rev_xs, _, bs') = List.fold_left (fun (taint_acc, acc_xs, previous_offset, acc_bs) (memb_ident, memb_ty, memb_offset) ->
-            let pad = memb_offset - previous_offset in
+            (* TODO: the N.to_int will raise Overflow if the member is huge *)
+            let pad = N.to_int (N.sub memb_offset previous_offset) in
             let (taint, mval, acc_bs') = self memb_ty (L.drop pad acc_bs) in
-            (merge_taint taint taint_acc, (memb_ident, memb_ty, mval)::acc_xs, memb_offset + sizeof memb_ty, acc_bs')
-          ) (`NoTaint, [], 0, bs1) (fst (offsetsof (Tags.tagDefs ()) tag_sym)) in
+            (merge_taint taint taint_acc, (memb_ident, memb_ty, mval)::acc_xs, N.add memb_offset (sizeof memb_ty), acc_bs')
+          ) (`NoTaint, [], N.zero, bs1) (fst (offsetsof (Tags.tagDefs ()) tag_sym)) in
           (* TODO: check that bs' = last padding of the struct *)
           (taint, MVstruct (tag_sym, List.rev rev_xs), bs2)
       | Union tag_sym ->
@@ -1013,18 +1017,19 @@ module Concrete : Memory = struct
     let ret bs = (funptrmap, bs) in
     match mval with
       | MVunspecified ty ->
-          ret @@ List.init (sizeof ty) (fun _ -> AbsByte.v Prov_none None)
+          (* TODO: the N.to_int on the sizeof() will raise Overflow on huge structs/unions *)
+          ret @@ List.init (N.to_int (sizeof ty)) (fun _ -> AbsByte.v Prov_none None)
       | MVinteger (ity, IV (prov, n)) ->
           ret @@List.map (AbsByte.v prov) begin
             bytes_of_int
               (AilTypesAux.is_signed_ity ity)
-              (sizeof (Ctype ([], Basic (Integer ity)))) n
+              (N.to_int (sizeof (Ctype ([], Basic (Integer ity))))) n
           end
       | MVfloating (fty, fval) ->
           ret @@ List.map (AbsByte.v Prov_none) begin
             bytes_of_int
               true (* TODO: check that *)
-              (sizeof (Ctype ([], Basic (Floating fty)))) (N.of_int64 (Int64.bits_of_float fval))
+              (N.to_int (sizeof (Ctype ([], Basic (Floating fty))))) (N.of_int64 (Int64.bits_of_float fval))
           end
       | MVpointer (_, PV (prov, ptrval_)) ->
           Debug_ocaml.print_debug 1 [] (fun () -> "NOTE: we fix the sizeof pointers to 8 bytes");
@@ -1071,17 +1076,20 @@ module Concrete : Memory = struct
       | MVstruct (tag_sym, xs) ->
           let padding_byte _ = AbsByte.v Prov_none None in
           let (offs, last_off) = offsetsof (Tags.tagDefs ()) tag_sym in
-          let final_pad = sizeof (Ctype ([], Struct tag_sym)) - last_off in
+          (* NOTE: this N.to_int is fine because we can't have huge paddings *)
+          let final_pad = N.(to_int (sub (sizeof (Ctype ([], Struct tag_sym))) last_off)) in
           (* TODO: rewrite now that offsetsof returns the paddings *)
           let (funptrmap, _, bs) = List.fold_left2 begin fun (funptrmap, last_off, acc) (ident, ty, off) (_, _, mval) ->
-              let pad = off - last_off in
+              (* NOTE: this N.to_int is fine because we can't have huge paddings *)
+              let pad = N.to_int (N.sub off last_off) in
               let (funptrmap, bs) = repr funptrmap mval in
-              (funptrmap, off + sizeof ty, acc @ List.init pad padding_byte @ bs)
-            end (funptrmap, 0, []) offs xs
+              (funptrmap, N.add off (sizeof ty), acc @ List.init pad padding_byte @ bs)
+            end (funptrmap, N.zero, []) offs xs
           in
           (funptrmap, bs @ List.init final_pad padding_byte)
       | MVunion (tag_sym, memb_ident, mval) ->
-          let size = sizeof (Ctype ([], Union tag_sym)) in
+          (* TODO: the N.to_int on the sizeof() will raise Overflow on huge structs/unions *)
+          let size = N.to_int (sizeof (Ctype ([], Union tag_sym))) in
           let (funptrmap', bs) = repr funptrmap mval in
           (funptrmap', bs @ List.init (size - List.length bs) (fun _ -> AbsByte.v Prov_none None))
   
@@ -1154,7 +1162,7 @@ module Concrete : Memory = struct
   
   let allocate_object tid pref (IV (_, align)) ty req_addr_opt init_opt : pointer_value memM =
 (*    print_bytemap "ENTERING ALLOC_STATIC" >>= fun () -> *)
-    let size = N.of_int (sizeof ty) in
+    let size = sizeof ty in
     begin match req_addr_opt with
       | None ->
           allocator size align
@@ -1226,13 +1234,13 @@ module Concrete : Memory = struct
           let offset = N.sub addr alloc.base in
           Some (string_of_prefix alloc.prefix ^ " + " ^ N.to_string offset)
       | Some (Ctype (_, Struct tag_sym)) -> (* TODO: nested structs *)
-          let offset = N.to_int @@ N.sub addr alloc.base in
+          let offset = N.sub addr alloc.base in
           let (offs, _) = offsetsof (Tags.tagDefs ()) tag_sym in
           let rec find = function
             | [] ->
               None
             | (Symbol.Identifier (_, memb), _, off) :: offs ->
-              if offset = off then
+              if N.equal offset off then
                 Some (string_of_prefix alloc.prefix ^ "." ^ memb)
               else
                 find offs
@@ -1240,8 +1248,8 @@ module Concrete : Memory = struct
       | Some (Ctype (_, Array (ty, _))) ->
           let offset = N.sub addr alloc.base in
           if N.less offset alloc.size then
-            let n = (N.to_int offset) / sizeof ty in
-            Some (string_of_prefix alloc.prefix ^ "[" ^ string_of_int n ^ "]")
+            let n = N.div offset (sizeof ty) in
+            Some (string_of_prefix alloc.prefix ^ "[" ^ N.to_string n ^ "]")
           else
             None
       | Some (Ctype (_, Atomic ty)) ->
@@ -1405,7 +1413,8 @@ module Concrete : Memory = struct
     );
     let do_load alloc_id_opt addr =
       get >>= fun st ->
-      let bs = fetch_bytes st.bytemap addr (sizeof ty) in
+      (* TODO: the N.to_int will fail on huge objects *)
+      let bs = fetch_bytes st.bytemap addr (N.to_int (sizeof ty)) in
       let (taint, mval, bs') = abst (find_overlaping st) st.funptrmap ty bs in
       (* PNVI-ae-udi *)
       begin if Switches.(has_switch (SW_PNVI `AE) || has_switch (SW_PNVI `AE_UDI)) then
@@ -1414,7 +1423,7 @@ module Concrete : Memory = struct
         return ()
       end >>= fun () ->
       update (fun st -> { st with last_used= alloc_id_opt }) >>= fun () ->
-      let fp = FP (`R, addr, (N.of_int (sizeof ty))) in
+      let fp = FP (`R, addr, (sizeof ty)) in
       begin match bs' with
         | [] ->
             Debug_ocaml.print_debug 10(*KKK*) [] (fun () ->
@@ -1524,7 +1533,7 @@ module Concrete : Memory = struct
                     funptrmap= funptrmap; }
         end >>= fun () ->
         print_bytemap ("AFTER STORE => " ^ Location_ocaml.location_to_string loc) >>= fun () ->
-        return (FP (`W, addr, (N.of_int (sizeof ty)))) in
+        return (FP (`W, addr, (sizeof ty))) in
       match (prov, ptrval_) with
         | (_, PVnull _) ->
             fail ~loc (MerrAccess (StoreAccess, NullPtr))
@@ -1776,7 +1785,7 @@ module Concrete : Memory = struct
             elem_ty
         | _ ->
             diff_ty in
-      return (IV (Prov_none, N.div (N.sub addr1 addr2) (N.of_int (sizeof diff_ty')))) in
+      return (IV (Prov_none, N.div (N.sub addr1 addr2) (sizeof diff_ty'))) in
     let error_postcond =
       fail ~loc MerrPtrdiff in
     if Switches.(has_switch (SW_pointer_arith `PERMISSIVE)) then
@@ -1990,12 +1999,12 @@ module Concrete : Memory = struct
       ident_equal ident memb_ident in
     match List.find_opt pred xs with
       | Some (_, _, offset) ->
-          IV (Prov_none, N.of_int offset)
+          IV (Prov_none, offset)
       | None ->
           failwith "Concrete.offsetof_ival: invalid memb_ident"
   
   let array_shift_ptrval (PV (prov, ptrval_)) ty (IV (_, ival)) =
-    let offset = (Nat_big_num.(mul (of_int (sizeof ty)) ival)) in
+    let offset = (Nat_big_num.(mul (sizeof ty) ival)) in
     match prov with
       (* PNVI-ae-udi *)
       | Prov_symbolic iota ->
@@ -2028,7 +2037,7 @@ module Concrete : Memory = struct
   
   let eff_array_shift_ptrval loc ptrval ty (IV (_, ival)) =
     (* KKK print_endline ("HELLO eff_array_shift_ptrval ==> " ^ Pp_utils.to_plain_string (pp_pointer_value ptrval)); *)
-    let offset = (Nat_big_num.(mul (of_int (sizeof ty)) ival)) in
+    let offset = (Nat_big_num.(mul (sizeof ty) ival)) in
     match ptrval with
       | PV (_, PVnull _) ->
           (* TODO: this seems to be undefined in ISO C *)
@@ -2050,8 +2059,8 @@ module Concrete : Memory = struct
                || (is_PNVI () && not (Switches.(has_switch (SW_pointer_arith `PERMISSIVE)))) then
               get_allocation z >>= fun alloc ->
               if    N.less_equal alloc.base shifted_addr
-                 && N.less_equal (N.add shifted_addr (N.of_int (sizeof ty)))
-                                 (N.add (N.add alloc.base alloc.size) (N.of_int (sizeof ty))) then
+                 && N.less_equal (N.add shifted_addr (sizeof ty))
+                                 (N.add (N.add alloc.base alloc.size) (sizeof ty)) then
                 return true
               else
                 return false
@@ -2122,8 +2131,8 @@ module Concrete : Memory = struct
              || (is_PNVI () && not (Switches.(has_switch (SW_pointer_arith `PERMISSIVE)))) then
             get_allocation alloc_id >>= fun alloc ->
             if    N.less_equal alloc.base shifted_addr
-               && N.less_equal (N.add shifted_addr (N.of_int (sizeof ty)))
-                               (N.add (N.add alloc.base alloc.size) (N.of_int (sizeof ty))) then
+               && N.less_equal (N.add shifted_addr (sizeof ty))
+                               (N.add (N.add alloc.base alloc.size) (sizeof ty)) then
               return (PV (Prov_some alloc_id, PVconcrete shifted_addr))
             else
               fail ~loc MerrArrayShift
@@ -2292,7 +2301,7 @@ let combine_prov prov1 prov2 =
           IV (Prov_none, Nat_big_num.pow_int n1 (Nat_big_num.to_int n2))
   
   let sizeof_ival ty =
-    IV (Prov_none, Nat_big_num.of_int (sizeof ty))
+    IV (Prov_none, sizeof ty)
   let alignof_ival ty =
     IV (Prov_none, Nat_big_num.of_int (alignof ty))
   
@@ -2567,7 +2576,8 @@ let combine_prov prov1 prov2 =
   let rec mk_ui_values st bs ty mval : ui_value list =
     let mk_ui_values = mk_ui_values st in
     let mk_scalar kind v p bs_opt =
-      [{ kind; size = sizeof ty; path = []; value = v;
+      (* TODO: the N.to_int on the sizeof() will raise Overflow on huge objects *)
+      [{ kind; size = N.to_int (sizeof ty); path = []; value = v;
          prov = p; typ = Some ty; bytes = bs_opt }] in
     let mk_pad n v =
       { kind = `Padding; size = n; typ = None; path = []; value = v;
@@ -2601,7 +2611,8 @@ let combine_prov prov1 prov2 =
     | MVarray mvals ->
       begin match ty with
         | Ctype (_, Array (elem_ty, _)) ->
-          let size = sizeof elem_ty in
+          (* TODO: the N.to_int on the sizeof() will raise Overflow on huge structs/unions *)
+          let size = N.to_int (sizeof elem_ty) in
           let (rev_rows, _, _) = List.fold_left begin fun (acc, i, acc_bs) mval ->
               let row = List.map (add_path (string_of_int i)) @@ mk_ui_values acc_bs elem_ty mval in
               (row::acc, i+1, L.drop size acc_bs)
@@ -2611,19 +2622,21 @@ let combine_prov prov1 prov2 =
           failwith "mk_ui_values: array type is wrong"
       end
     | MVstruct (tag_sym, _) ->
+      let open N in
       (* NOTE: we recombine the bytes to get paddings *)
-      let (bs1, bs2) = L.split_at (sizeof ty) bs in
+      (* TODO: the N.to_int on the sizeof() will raise Overflow on huge structs *)
+      let (bs1, bs2) = L.split_at (N.to_int (sizeof ty)) bs in
           let (rev_rowss, _, bs') = List.fold_left begin
           fun (acc_rowss, previous_offset, acc_bs) (Symbol.Identifier (_, memb), memb_ty, memb_offset) ->
-            let pad = memb_offset - previous_offset in
+            let pad = to_int (sub memb_offset previous_offset) in
             let acc_bs' = L.drop pad acc_bs in
             let (_, mval, acc_bs'') = abst (find_overlaping st) st.funptrmap memb_ty acc_bs' in
             let rows = mk_ui_values acc_bs' memb_ty mval in
             let rows' = List.map (add_path memb) rows in
             (* TODO: set padding value here *)
             let rows'' = if pad = 0 then rows' else mk_pad pad "" :: rows' in
-            (rows''::acc_rowss, memb_offset + sizeof memb_ty, acc_bs'')
-        end ([], 0, bs1) (fst (offsetsof (Tags.tagDefs ()) tag_sym))
+            (rows''::acc_rowss, N.add memb_offset (sizeof memb_ty), acc_bs'')
+        end ([], N.zero, bs1) (fst (offsetsof (Tags.tagDefs ()) tag_sym))
       in List.concat (List.rev rev_rowss)
     | MVunion (tag_sym, Symbol.Identifier (_, memb), mval) ->
       List.map (add_path memb) (mk_ui_values bs ty mval) (* FIXME: THE TYPE IS WRONG *)
