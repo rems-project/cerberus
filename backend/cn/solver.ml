@@ -684,6 +684,7 @@ let maybe_save_slow_problem solv_inst lc lc_t time solver = match ! save_slow_pr
     close_out channel
 
 let provable ~loc ~solver ~global ~trace_length ~assumptions ~pointer_facts lc = 
+  debug 12 (lazy (item "provable: checking constraint" (LC.pp lc)));
   let context = solver.context in
   let structs = global.struct_decls in
   let rtrue () = model_state := No_model; `True in
