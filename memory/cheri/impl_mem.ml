@@ -272,6 +272,10 @@ module CHERI (C:Capability
     if Z.less_equal r max_v then r
     else Z.sub r dlt
 
+  let show_function_pointer = function
+    | FP_valid sym -> Symbol.show_symbol sym
+    | FP_invalid c -> C.to_string c
+
   (** Convert an arbitrary integer value to unsinged cap value *)
   let wrap_cap_value n =
     if Z.(less_equal n C.min_vaddr && less_equal n C.max_vaddr)
@@ -1275,7 +1279,6 @@ module CHERI (C:Capability
     | MVpointer (ref_ty, PV (prov, ptrval_)) ->
        begin match ptrval_ with
        | PVfunction ((FP_valid (Symbol.Symbol (file_dig, n, opt_name))) as fp) ->
-          (* TODO(CHERI): what if is already in the map? *)
           let (funptrmap,c) = resolve_function_pointer funptrmap fp in
           let (cb,ct) = C.encode true c in
           (funptrmap,
@@ -2992,7 +2995,7 @@ module CHERI (C:Capability
         | Right ival ->
             return ival in
     match ptrval_ with
-    | PVfunction (FP_valid ((Symbol.Symbol (_, n, _)) as sym)) ->
+    | PVfunction (FP_valid ((Symbol.Symbol (_, n, _)) as fp)) ->
        get >>= fun st ->
        begin
          match ity with
@@ -3003,10 +3006,10 @@ module CHERI (C:Capability
                 (* we are using [intcast] to for signed/unsigned handling *)
                 wrap_intcast (*Unsigned Intptr_t*) ity (IC (false, c))
             | None ->
-               Debug_ocaml.error ("intfromptr: Unknown function: " ^ (Pp_symbol.to_string_pretty sym))
+               Debug_ocaml.error ("intfromptr: Unknown function: " ^ (Pp_symbol.to_string_pretty fp))
             end
          | _ ->
-            return (IV (Z.of_int n))
+            return (IV (Z.of_int (initial_address + n)))
        end
     | PVfunction (FP_invalid c)
       | PVconcrete c ->
