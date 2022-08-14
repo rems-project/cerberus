@@ -1404,14 +1404,14 @@ module CHERI (C:Capability
        let alloc = {prefix= pref; base= addr; size= size_n'; ty= Some ty; is_readonly= IsWritable; taint= `Unexposed} in
        update (fun st ->
            { st with allocations= IntMap.add alloc_id alloc st.allocations; }
-         )
+         ) >> return false
     | Some mval ->
-       let readonly_status =
+       let (ro,readonly_status) =
          match pref with
          | Symbol.PrefStringLiteral _ ->
-            IsReadOnly_string_literal
+            (true,IsReadOnly_string_literal)
          | _ ->
-            IsReadOnly_string_literal in
+            (false,IsWritable) in
        let alloc = {prefix= pref; base= addr; size= size_n'; ty= Some ty; is_readonly= readonly_status; taint= `Unexposed} in
        (* TODO: factorize this with do_store inside CHERI.store *)
        update (fun st ->
@@ -1427,13 +1427,22 @@ module CHERI (C:Capability
              funptrmap= funptrmap;
              captags= captags
            }
-         )
-    end >>
-      (* memory allocation on stack *)
+         ) >> return ro
+    end >>= (fun ro ->
       let c = C.alloc_cap addr size_n' in
       if C.cap_bounds_representable_exactly c (addr, Z.add addr size_n')
-      then return (PV (Prov_some alloc_id, PVconcrete c))
-      else failwith "Error settting exeact bounds for allocated region"
+      then
+        let c =
+          if ro then
+            let p = C.cap_get_perms c in
+            let p = C.P.perm_clear_store p in
+            let p = C.P.perm_clear_store_cap p in
+            let p = C.P.perm_clear_store_local_cap p in
+            C.cap_narrow_perms c p
+          else c
+        in
+        return (PV (Prov_some alloc_id, PVconcrete c))
+      else failwith "Error settting exeact bounds for allocated region")
 
   let update_prefix (pref, mval) =
     match mval with

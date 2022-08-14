@@ -51,7 +51,7 @@ module type Cap_permission = sig
   (** permissions for newly allocated region *)
   val perm_alloc: t
 
-  (** permissions for newly allocated functin *)
+  (** permissions for newly allocated function *)
   val perm_alloc_fun: t
 
   (* --- Utility methods --- *)
