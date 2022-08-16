@@ -565,16 +565,6 @@ module CHERI (C:Capability
     | None ->
        kill (Other err)
 
-  let cap_maybe_set_value loc c n =
-    if C.cap_vaddr_representable c n
-    then Either.Right (C.cap_set_value c n)
-    else Either.Left (MerrCHERI (loc, CheriNonRepresentable n))
-
-  let cap_set_value loc c n =
-    match cap_maybe_set_value loc c n with
-    | Either.Right c -> return c
-    | Either.Left err -> fail err
-
   let string_of_provenance = function
     | Prov_none ->
        "@empty"
@@ -584,7 +574,6 @@ module CHERI (C:Capability
        "@iota(" ^ Z.to_string iota ^ ")"
     | Prov_device ->
        "@device"
-
 
   (** Checks if memory region starting from [addr] and
       of size [sz] fits withing interval \[b1,b2) *)
@@ -1064,11 +1053,8 @@ module CHERI (C:Capability
                | Some c ->
                   if AilTypesAux.is_signed_ity ity then
                     let n = C.cap_get_value c in
-                    match cap_maybe_set_value loc c (wrap_cap_value n) with
-                    | Either.Right c ->
-                       Debug_ocaml.warn [] (fun () -> "Error decoding intptr_t cap value");
+                    let c = C.cap_set_value c (wrap_cap_value n) in
                        MVEinteger (ity, IC (true, c))
-                    | Either.Left e -> MVErr e
                   else
                     MVEinteger (ity, IC (false, c))
                end
@@ -2261,8 +2247,8 @@ module CHERI (C:Capability
              add_iota alloc_ids >>= fun iota ->
              return (Prov_symbolic iota)
           end >>= fun prov ->
-         cap_set_value loc (C.cap_c0 ()) addr >>=
-            (fun c -> return (PV (prov, PVconcrete c)))
+         let c = C.cap_set_value (C.cap_c0 ()) addr in
+         return (PV (prov, PVconcrete c))
         end
     | _, IC _ ->
        failwith "invalid integer value (capability for non- [u]intptr_t"
@@ -2284,16 +2270,10 @@ module CHERI (C:Capability
             failwith "derive_cap should not be used for binary operations on non capabilty-carrying types"
        end
 
-  let cap_assign_value loc ival_cap ival_n :(Undefined.undefined_behaviour, integer_value) Either.either =
+  let cap_assign_value _ ival_cap ival_n: integer_value =
     match ival_cap, ival_n with
     | IC (is_signed,c), IV n ->
-       if C.cap_vaddr_representable c n
-       then Either.Right (IC (is_signed, C.cap_set_value c n))
-       else Either.Left
-              (match undefinedFromMem_error (MerrCHERI (loc, CheriNonRepresentable n)) with
-               | Some u -> u
-               | None -> failwith "CheriNonRepresentable must map to UB"
-              )
+       IC (is_signed, C.cap_set_value c n)
     | _, _ -> failwith "Unexpected argument types for cap_assign_value"
 
   (* Added for CHERI to cast to regular integers. *)
@@ -2731,12 +2711,7 @@ module CHERI (C:Capability
        else
          let n = wrap_cap_value n in
          let c = C.cap_c0 () in
-         (* TODO(CHERI): representability check? *)
-         begin
-           match cap_maybe_set_value loc c n with
-           | Either.Right c -> Either.Right (IC (false, c))
-           | Either.Left me -> Either.Left me
-         end
+         Either.Right (IC (false, (C.cap_set_value c n)))
     (* error *)
     (* | _, IC _, _ ->
        failwith "intcast: Invalid integer value. IC for non-intptr_t" *)
@@ -2830,8 +2805,8 @@ module CHERI (C:Capability
                       | `NoCollapse ->
                          return ()
                     end >>
-                    cap_set_value loc c shifted_addr >>=
-                    fun c -> return (PV (prov, PVconcrete c))
+                    let c = C.cap_set_value c shifted_addr in
+                    return (PV (prov, PVconcrete c))
                 else
                   (* TODO: this is yucky *)
                   precond alloc_id1 >>=
@@ -2847,14 +2822,14 @@ module CHERI (C:Capability
                                 fail (MerrArrayShift loc)
                            end
                     end >>
-                    cap_set_value loc c shifted_addr >>=
-                    fun c -> return (PV (prov, PVconcrete c))
+                    let c = C.cap_set_value c shifted_addr in
+                    return (PV (prov, PVconcrete c))
              | `Single alloc_id ->
                 precond alloc_id >>=
                   begin function
                     | true ->
-                       cap_set_value loc c shifted_addr >>=
-                         fun c -> return (PV (prov, PVconcrete c))
+                       let c = C.cap_set_value c shifted_addr in
+                       return (PV (prov, PVconcrete c))
                     | false ->
                        fail (MerrArrayShift loc)
                   end
@@ -2869,25 +2844,25 @@ module CHERI (C:Capability
          if    Z.less_equal alloc.base shifted_addr
                && Z.less_equal (Z.add shifted_addr (Z.of_int (sizeof ty)))
                     (Z.add (Z.add alloc.base alloc.size) (Z.of_int (sizeof ty))) then
-           cap_set_value loc c shifted_addr >>=
-             fun c -> return (PV (Prov_some alloc_id, PVconcrete c))
+           let c = C.cap_set_value c shifted_addr in
+           return (PV (Prov_some alloc_id, PVconcrete c))
          else
            fail (MerrArrayShift loc)
        else
-         cap_set_value loc c shifted_addr >>=
-           fun c -> return (PV (Prov_some alloc_id, PVconcrete c))
+         let c = C.cap_set_value c shifted_addr in
+         return (PV (Prov_some alloc_id, PVconcrete c))
     | PV (Prov_none, PVconcrete c) ->
        let shifted_addr = Z.add (C.cap_get_value c) offset in
        if    Switches.(has_switch (SW_pointer_arith `STRICT))
              || (not (Switches.(has_switch (SW_pointer_arith `PERMISSIVE)))) then
          fail (MerrOther "out-of-bound pointer arithmetic (Prov_none)")
        else
-         cap_set_value loc c shifted_addr >>=
-           fun c -> return (PV (Prov_none, PVconcrete c))
+         let c = C.cap_set_value c shifted_addr in
+         return (PV (Prov_none, PVconcrete c))
     | PV (Prov_device, PVconcrete c) ->
        let shifted_addr = Z.add (C.cap_get_value c) offset in
-       cap_set_value loc c shifted_addr >>=
-         fun c -> return (PV (Prov_device, PVconcrete c))
+       let c = C.cap_set_value c shifted_addr in
+       return (PV (Prov_device, PVconcrete c))
 
   let eff_member_shift_ptrval loc (PV (prov, ptrval_)) tag_sym memb_ident =
     let offset =
@@ -2915,8 +2890,8 @@ module CHERI (C:Capability
            failwith "CHERI.member_shift_ptrval, shifting NULL"
        else
          let addr = C.cap_get_value c in
-         cap_set_value loc c (Z.add addr offset)  >>=
-           fun c -> return @@ PV (prov, PVconcrete c)
+         let c = C.cap_set_value c (Z.add addr offset) in
+         return @@ PV (prov, PVconcrete c)
 
   let concurRead_ival ity sym =
     failwith "TODO: concurRead_ival"

@@ -694,7 +694,6 @@ type undefined_behaviour =
   | UB_CERB003_invalid_function_pointer
 
   (* CHERI-specific UBs below  *)
-  | UB_CHERI_NonRepresentable
   | UB_CHERI_InvalidCap
   | UB_CHERI_UnsufficientPermissions
   | UB_CHERI_BoundsViolation
@@ -1001,7 +1000,6 @@ let ub_str_bimap =
     ; (UB_CERB002a_out_of_bound_load, "UB_CERB002a_out_of_bound_load")
     ; (UB_CERB002b_out_of_bound_store, "UB_CERB002b_out_of_bound_store")
     ; (UB_CERB003_invalid_function_pointer, "UB_CERB003_invalid_function_pointer")
-    ; (UB_CHERI_NonRepresentable, "UB_CHERI_NonRepresentable")
     ; (UB_CHERI_InvalidCap,"UB_CHERI_InvalidCap")
     ; (UB_CHERI_UnsufficientPermissions,"UB_CHERI_UnsufficientPermissions")
     ; (UB_CHERI_BoundsViolation,"UB_CHERI_BoundsViolation")

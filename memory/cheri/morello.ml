@@ -675,7 +675,7 @@ module Morello_capability: Capability
             flags = flags_from_value cv
           }
       else
-        cap_invalidate c
+        cap_invalidate {c with value = cv}
 
     (* Reducing the Capability Bounds (with rounding)
 

@@ -81,7 +81,6 @@ type mem_cheri_error =
   | CheriErrDecodingCap
   | CheriMerrInvalidCap
   | CheriMerrUnsufficientPermissions
-  | CheriNonRepresentable of integer
   | CheriBoundsErr of ((integer*integer)*integer*integer) (* bounds,address,length *)
 
 instance (Show mem_cheri_error)
@@ -92,8 +91,6 @@ let show = function
      "CheriMerrInvalidCap"
   | CheriMerrUnsufficientPermissions ->
      "CheriMerrUnsufficientPermissions"
-  | CheriNonRepresentable v ->
-     "CheriNonRepresentable value=" ^ (show v)
   | CheriBoundsErr _ ->
      "CheriBoundsErr" (* TODO(CHERI): print more *)
   end
@@ -260,8 +257,6 @@ let undefinedFromMem_error = function
      match err with
      | CheriMerrInvalidCap ->
         Just Undefined.UB_CHERI_InvalidCap
-     | CheriNonRepresentable _ ->
-        Just Undefined.UB_CHERI_NonRepresentable
      | CheriErrDecodingCap ->
         Just Undefined.UB012_lvalue_read_trap_representation
      | CheriMerrUnsufficientPermissions ->

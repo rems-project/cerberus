@@ -670,12 +670,7 @@ let rec step_eval_pexpr n loc core_extern env mem_st_opt file hasConstrained pex
           | ( Mem_common.CapAssignValue
             , Just [ Core.Vobject (Core.OVinteger ival1)
                    ; Core.Vobject (Core.OVinteger ival2) ] ) ->
-                match Mem.cap_assign_value loc ival1 ival2 with
-                  | Left ub ->
-                      Exception.return (Undefined.undef loc [ub])
-                  | Right ival ->
-                      EU.return (PEval (Vobject (OVinteger ival)))
-                end
+             EU.return (PEval (Vobject (OVinteger (Mem.cap_assign_value loc ival1 ival2))))
           | ( Mem_common.Ptr_tIntValue
             , Just [ Core.Vobject (Core.OVinteger ival) ] ) ->
                 EU.return (PEval (Vobject (OVinteger (Mem.ptr_t_int_value ival))))

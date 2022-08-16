@@ -806,7 +806,7 @@ let intfromptr _ ref_ty ity ptrval : integer_value memM =
 let derive_cap _ _ _ _ : integer_value =
   assert false (* CHERI only *)
 
-let cap_assign_value _ _ _ :(Undefined.undefined_behaviour, integer_value) Either.either =
+let cap_assign_value _ _ _ : integer_value =
   assert false (* CHERI only *)
 
 let ptr_t_int_value ival =
