@@ -1534,11 +1534,13 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
   | _, M_End _ ->
      Debug_ocaml.error "todo: End"
   | _, M_Elet (M_Pat p, e1, e2) ->
+     let@ fin = begin_trace_of_pure_step (Some (Mu.M_Pat p)) e1 in
      let@ patv, (l, a) = pattern_match p in
      check_pexpr ~expect:(IT.bt patv) e1 (fun v1 ->
      let@ () = add_ls l in
      let@ () = add_as a in
      let@ () = add_c (t_ (eq__ patv v1)) in
+     let@ () = fin () in
      check_expr labels ~typ e2 (fun rt ->
          let@ () = remove_as (List.map fst a) in
          k rt
@@ -1593,6 +1595,7 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
        )
   | _, M_Ewseq (p, e1, e2)
   | _, M_Esseq (p, e1, e2) ->
+     let@ fin = begin_trace_of_step (Some (Mu.M_Pat p)) e1 in
      let@ patv, (l, a) = pattern_match p in
      let oprefix = match e1 with
        | M_Expr (_, _, M_Eccall (_, M_Pexpr (_, _, _, M_PEsym fsym), _)) -> 
@@ -1605,6 +1608,7 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
             let@ () = add_ls l in
             let@ () = add_as a in
             let@ () = bind_logical (oprefix, Some (Loc loc)) lrt in
+            let@ () = fin () in
             check_expr labels ~typ e2 (fun rt2 ->
                 let@ () = remove_as (List.map fst a) in
                 k rt2
