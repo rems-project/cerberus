@@ -579,16 +579,16 @@ module Concrete : Memory = struct
     get >>= fun st ->
     return (List.mem alloc_id st.dead_allocations)
   
-  let get_allocation alloc_id : allocation memM =
+  let get_allocation ~loc alloc_id : allocation memM =
     get >>= fun st ->
     match IntMap.find_opt alloc_id st.allocations with
       | Some ret ->
           return ret
       | None ->
-          fail (MerrOutsideLifetime ("Concrete.get_allocation, alloc_id=" ^ N.to_string alloc_id))
+          fail ~loc (MerrOutsideLifetime ("Concrete.get_allocation, alloc_id=" ^ N.to_string alloc_id))
   
-  let is_within_bound alloc_id lvalue_ty addr =
-    get_allocation alloc_id >>= fun alloc ->
+  let is_within_bound ~loc alloc_id lvalue_ty addr =
+    get_allocation ~loc alloc_id >>= fun alloc ->
     return (N.less_equal alloc.base addr && N.less_equal (N.add addr (sizeof lvalue_ty)) (N.add alloc.base alloc.size))
   
   let is_within_device ty addr =
@@ -599,8 +599,8 @@ module Concrete : Memory = struct
     end
   
   (* NOTE: this will have to change when moving to a subobject semantics *)
-  let is_atomic_member_access alloc_id lvalue_ty addr =
-    get_allocation alloc_id >>= fun alloc ->
+  let is_atomic_member_access ~loc alloc_id lvalue_ty addr =
+    get_allocation ~loc alloc_id >>= fun alloc ->
     match alloc.ty with
       | Some ty when AilTypesAux.is_atomic ty ->
           if    addr = alloc.base && N.equal (sizeof lvalue_ty) alloc.size
@@ -1258,7 +1258,7 @@ module Concrete : Memory = struct
     in
     match prov with
     | Prov_some alloc_id ->
-      get_allocation alloc_id >>= fun alloc ->
+      get_allocation ~loc:(Location_ocaml.other "concrete") alloc_id >>= fun alloc ->
       begin match pv with
         | PVconcrete addr ->
           if addr = alloc.base then
@@ -1341,7 +1341,7 @@ module Concrete : Memory = struct
             | true ->
                 return (`FAIL (loc, MerrUndefinedFree Free_static_allocation))
             | false ->
-                get_allocation z >>= fun alloc ->
+                get_allocation ~loc z >>= fun alloc ->
                 if N.equal addr alloc.base then
                   return `OK
                 else
@@ -1390,7 +1390,7 @@ module Concrete : Memory = struct
               else
                 failwith "Concrete: FREE was called on a dead allocation"
           | false ->
-              get_allocation alloc_id >>= fun alloc ->
+              get_allocation ~loc alloc_id >>= fun alloc ->
               if N.equal addr alloc.base then begin
                 Debug_ocaml.print_debug 1 [] (fun () ->
                   "KILLING alloc_id= " ^ N.to_string alloc_id
@@ -1468,11 +1468,11 @@ module Concrete : Memory = struct
               | true ->
                   return (`FAIL (loc, MerrAccess (LoadAccess, DeadPtr)))
               | false ->
-                  begin is_within_bound z ty addr >>= function
+                  begin is_within_bound ~loc z ty addr >>= function
                     | false ->
                         return (`FAIL (loc, MerrAccess (LoadAccess, OutOfBoundPtr)))
                     | true ->
-                        begin is_atomic_member_access z ty addr >>= function
+                        begin is_atomic_member_access ~loc z ty addr >>= function
                           | true ->
                               return (`FAIL (loc, MerrAccess (LoadAccess, AtomicMemberof)))
                           | false ->
@@ -1490,14 +1490,14 @@ module Concrete : Memory = struct
             | false ->
                 return ()
           end >>= fun () ->
-          begin is_within_bound alloc_id ty addr >>= function
+          begin is_within_bound ~loc alloc_id ty addr >>= function
             | false ->
                 Debug_ocaml.print_debug 1 [] (fun () ->
                   "LOAD out of bound, alloc_id=" ^ N.to_string alloc_id
                 );
                 fail ~loc (MerrAccess (LoadAccess, OutOfBoundPtr))
             | true ->
-                begin is_atomic_member_access alloc_id ty addr >>= function
+                begin is_atomic_member_access ~loc alloc_id ty addr >>= function
                   | true ->
                       fail ~loc (MerrAccess (LoadAccess, AtomicMemberof))
                   | false ->
@@ -1556,18 +1556,18 @@ module Concrete : Memory = struct
            PNVI-ae-udi stuff separated to avoid polluting the
            vanilla PNVI code) *)
           let precondition z =
-            is_within_bound z ty addr >>= function
+            is_within_bound ~loc z ty addr >>= function
               | false ->
                   return (`FAIL (loc, MerrAccess (StoreAccess, OutOfBoundPtr)))
               | true ->
-                  get_allocation z >>= fun alloc ->
+                  get_allocation ~loc z >>= fun alloc ->
                   match alloc.is_readonly with
                     | IsReadOnly ->
                         return (`FAIL (loc, MerrWriteOnReadOnly false))
                     | IsReadOnly_string_literal ->
                       return (`FAIL (loc, MerrWriteOnReadOnly true))
                     | IsWritable ->
-                      begin is_atomic_member_access z ty addr >>= function
+                      begin is_atomic_member_access ~loc z ty addr >>= function
                         | true ->
                             return (`FAIL (loc, MerrAccess (LoadAccess, AtomicMemberof)))
                         | false ->
@@ -1589,18 +1589,18 @@ module Concrete : Memory = struct
           return fp
         
         | (Prov_some alloc_id, PVconcrete addr) ->
-            begin is_within_bound alloc_id ty addr >>= function
+            begin is_within_bound alloc_id ~loc ty addr >>= function
               | false ->
                   fail ~loc (MerrAccess (StoreAccess, OutOfBoundPtr))
               | true ->
-                  get_allocation alloc_id >>= fun alloc ->
+                  get_allocation ~loc alloc_id >>= fun alloc ->
                   match alloc.is_readonly with
                     | IsReadOnly ->
                         fail ~loc (MerrWriteOnReadOnly false)
                     | IsReadOnly_string_literal ->
                       fail ~loc (MerrWriteOnReadOnly true)
                     | IsWritable ->
-                        begin is_atomic_member_access alloc_id ty addr >>= function
+                        begin is_atomic_member_access ~loc alloc_id ty addr >>= function
                           | true ->
                               fail ~loc (MerrAccess (LoadAccess, AtomicMemberof))
                           | false ->
@@ -1798,7 +1798,7 @@ module Concrete : Memory = struct
     else match ptrval1, ptrval2 with
       | PV (Prov_some alloc_id1, (PVconcrete addr1)), PV (Prov_some alloc_id2, (PVconcrete addr2)) ->
           if N.equal alloc_id1 alloc_id2 then
-            get_allocation alloc_id1 >>= fun alloc ->
+            get_allocation ~loc alloc_id1 >>= fun alloc ->
             if precond alloc addr1 addr2 then
               valid_postcond addr1 addr2
             else
@@ -1816,7 +1816,7 @@ module Concrete : Memory = struct
           lookup_iota iota >>= begin function
             | `Single alloc_id ->
                 if N.equal alloc_id alloc_id' then
-                  get_allocation alloc_id >>= fun alloc ->
+                  get_allocation ~loc alloc_id >>= fun alloc ->
                   if precond alloc addr1 addr2 then
                     valid_postcond addr1 addr2
                   else
@@ -1825,7 +1825,7 @@ module Concrete : Memory = struct
                   error_postcond
             | `Double (alloc_id1, alloc_id2) ->
                 if N.equal alloc_id1 alloc_id' || N.equal alloc_id2 alloc_id' then
-                  get_allocation alloc_id' >>= fun alloc ->
+                  get_allocation ~loc alloc_id' >>= fun alloc ->
                   if precond alloc addr1 addr2 then
                     update begin fun st ->
                       {st with iota_map= IntMap.add iota (`Single alloc_id') st.iota_map }
@@ -2015,7 +2015,7 @@ module Concrete : Memory = struct
           | PVnull _ ->
               (* TODO: this seems to be undefined in ISO C *)
               (* NOTE: in C++, if offset = 0, this is defined and returns a PVnull *)
-              failwith "TODO(shift a null pointer should be undefined behaviour)"
+              failwith ("TODO(pure shift a null pointer should be undefined behaviour), offset:" ^ Nat_big_num.to_string offset)
           | PVfunction _ ->
               failwith "Concrete.array_shift_ptrval, PVfunction"
           | PVconcrete addr ->
@@ -2043,7 +2043,7 @@ module Concrete : Memory = struct
       | PV (_, PVnull _) ->
           (* TODO: this seems to be undefined in ISO C *)
           (* NOTE: in C++, if offset = 0, this is defined and returns a PVnull *)
-          failwith "TODO(shift a null pointer should be undefined behaviour)"
+          failwith ("TODO(eff shift a null pointer should be undefined behaviour), offset:" ^ Nat_big_num.to_string offset)
       | PV (_, PVfunction _) ->
           failwith "Concrete.eff_array_shift_ptrval, PVfunction"
       
@@ -2058,7 +2058,7 @@ module Concrete : Memory = struct
             (* TODO: is it correct to use the "ty" as the lvalue_ty? *)
             if    Switches.(has_switch (SW_pointer_arith `STRICT))
                || (is_PNVI () && not (Switches.(has_switch (SW_pointer_arith `PERMISSIVE)))) then
-              get_allocation z >>= fun alloc ->
+              get_allocation ~loc z >>= fun alloc ->
               if    N.less_equal alloc.base shifted_addr
                  && N.less_equal (N.add shifted_addr (sizeof ty))
                                  (N.add (N.add alloc.base alloc.size) (sizeof ty)) then
@@ -2130,7 +2130,7 @@ module Concrete : Memory = struct
           let shifted_addr = N.add addr offset in
           if    Switches.(has_switch (SW_pointer_arith `STRICT))
              || (is_PNVI () && not (Switches.(has_switch (SW_pointer_arith `PERMISSIVE)))) then
-            get_allocation alloc_id >>= fun alloc ->
+            get_allocation ~loc alloc_id >>= fun alloc ->
             if    N.less_equal alloc.base shifted_addr
                && N.less_equal (N.add shifted_addr (sizeof ty))
                                (N.add (N.add alloc.base alloc.size) (sizeof ty)) then
@@ -2461,7 +2461,7 @@ let combine_prov prov1 prov2 =
         | false ->
             fail (MerrUndefinedRealloc)
         | true ->
-            get_allocation alloc_id >>= fun alloc ->
+            get_allocation ~loc:(Location_ocaml.other "Concrete.realloc") alloc_id >>= fun alloc ->
             if alloc.base = addr then
               allocate_region tid (Symbol.PrefOther "realloc") align size >>= fun new_ptr ->
               let size_to_copy =
