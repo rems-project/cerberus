@@ -598,9 +598,9 @@ let rec pp_expression_aux mk_pp_annot a_expr =
         | AilEalignof (qs, ty) ->
             if !Debug_ocaml.debug_level > 5 then
               (* printing the types in a human readable format *)
-              pp_keyword "Alignof_" ^^ P.parens (pp_ctype_human qs ty)
+              pp_keyword "_Alignof" ^^ P.parens (pp_ctype_human qs ty)
             else
-              pp_keyword "Alignof_" ^^ P.parens (pp_ctype qs ty)
+              pp_keyword "_Alignof" ^^ P.parens (pp_ctype qs ty)
         | AilEmemberof (e, ident) ->
             pp e ^^ P.dot ^^ Pp_symbol.pp_identifier ident
         | AilEmemberofptr (e, ident) ->
@@ -659,7 +659,7 @@ let rec pp_statement_aux pp_annot (AnnotatedStatement (_, _, stmt)) =
         let block =
           P.separate_map
             (P.semi ^^ P.break 1)
-            (fun (id, (dur_reg_opt, qs, ty)) ->
+            (fun (id, (dur_reg_opt,  _align, qs, ty)) ->
               if !Debug_ocaml.debug_level > 5 then
                 (* printing the types in a human readable format *)
                 P.parens ( P.empty
@@ -757,6 +757,12 @@ let pp_tag_definition (tag, (_, def)) =
           ) ^^ P.break 1
         ) ^^ P.semi
 
+let pp_alignment = function
+  | AlignInteger n ->
+      pp_keyword "_Alignas" ^^ P.parens (!^ (String_nat_big_num.string_of_decimal n))
+  | AlignType ty ->
+      pp_keyword "_Alignas" ^^ P.parens (pp_ctype no_qualifiers ty)
+
 let pp_program_aux pp_annot (startup, sigm) =
 (*  isatty := false; (*TODO: Unix.isatty Unix.stdout;*) *)
   (* Static assersions *)
@@ -777,10 +783,14 @@ let pp_program_aux pp_annot (startup, sigm) =
   
   P.separate_map (P.break 1 ^^ P.hardline) (fun (sym, (_, _, decl)) ->
     match decl with
-      | Decl_object (sd, _align, qs, ty) ->
+      | Decl_object (sd, align_opt, qs, ty) ->
           (* first pprinting in comments, some human-readably declarations *)
           (* TODO: colour hack *)
-          pp_ansi_format [Red] (fun () -> !^ "// declare" ^^^ pp_id sym ^^^ !^ "as" ^^^ (pp_ctype_human qs ty)) ^^
+          pp_ansi_format [Red] (
+            fun () ->
+              !^ "// declare" ^^^ pp_id sym ^^^ !^ "as" ^^^ (pp_ctype_human qs ty) ^^
+              P.optional (fun align -> P.space ^^ P.brackets (pp_alignment align)) align_opt
+          ) ^^
           P.hardline ^^
           
           (if !Debug_ocaml.debug_level > 5 then

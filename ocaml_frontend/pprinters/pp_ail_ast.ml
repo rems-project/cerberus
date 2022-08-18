@@ -235,6 +235,11 @@ let empty_qs =
   ; volatile = false
   }
 
+let pp_alignment = function
+  | AlignInteger n ->
+      !^ "align as" ^^ P.colon ^^^ !^ (String_nat_big_num.string_of_decimal n)
+  | AlignType ty ->
+      !^ "align as" ^^ P.colon ^^^ P.squotes (pp_ctype no_qualifiers ty)
 
 let dtree_of_expression pp_annot expr =
   let rec self (AnnotatedExpression (annot, std_annots, loc, expr_)) =
@@ -421,11 +426,11 @@ let dtree_of_expression pp_annot expr =
     end in
   self expr
 
-let dtree_of_binding (i, ((_, sd, is_reg), qs, ty)) =
+let dtree_of_binding (i, ((_, sd, is_reg), align_opt, qs, ty)) =
   Dleaf (Pp_ail.pp_id i
          ^^^ Pp_ail.pp_storageDuration sd
-         ^^^ pp_cond is_reg (pp_type_keyword "register")
-           (P.squotes (pp_ctype qs ty)))
+         ^^^ pp_cond is_reg (pp_type_keyword "register") (P.squotes (pp_ctype qs ty))
+         ^^  P.optional (fun z -> P.space ^^ P.brackets (pp_alignment z)) align_opt)
 
 let pp_to_pack_unpack = function
   | Annot.TPU_Struct sym ->
@@ -533,10 +538,11 @@ let dtree_of_declaration (i, (_, decl_attrs, decl)) =
   in
   with_attributes decl_attrs begin
     match decl with
-    | Decl_object (msd, _align, qs, cty) ->
+    | Decl_object (msd, align_opt, qs, cty) ->
         Dleaf (pp_decl_ctor "Decl_object" ^^^
                Pp_ail.pp_id_obj i  ^^^
-               P.squotes (pp_storage msd ^^^ pp_ctype qs cty))
+               P.squotes (pp_storage msd ^^^ pp_ctype qs cty) ^^
+               P.optional (fun z -> P.space ^^ P.brackets (pp_alignment z)) align_opt)
     | Decl_function (_, (qs, cty), params, is_var, is_inline, is_noreturn) ->
         Dleaf (pp_decl_ctor "Decl_function" ^^^
                Pp_ail.pp_id_func i ^^^

@@ -847,7 +847,7 @@ let is_address_constant a_expr =
           | true ->
               E.return true
           | false ->
-              E.fetch_object_declaration sym >>= fun (_, _, dur, _, _, ty) ->
+              E.fetch_object_declaration sym >>= fun (_, _, dur, _, _, _, ty) ->
               match dur with
                 | Static ->
                     E.return (AilTypesAux.is_array ty)
@@ -2002,8 +2002,11 @@ and desugar_parameter_type_list fundef (Params param_decls isVariadic) =
 and desugar_parameter_declaration is_first fundef param_decl =
   match param_decl with
     | PDeclaration_decl specifs decltor ->
+        let decltor_loc = Loc.locOf decltor in
         if List.any (fun sc -> sc <> SC_register) specifs.storage_classes then
-          E.constraint_violation (Loc.locOf decltor) IllegalStorageClassFunctionDeclarator
+          E.constraint_violation decltor_loc IllegalStorageClassFunctionDeclarator
+        else if specifs.alignment_specifiers <> [] then
+          E.constraint_violation decltor_loc (IllegalAlignas IllegalAlignas_parameter)
         else
           (* NOTE: specs_qs <> no_qualifiers when the specifiers had a type-name or _Atomic *)
           desugar_type_specifiers specifs.type_specifiers >>= fun (specs_qs, base_ty)       ->
@@ -2016,12 +2019,12 @@ and desugar_parameter_declaration is_first fundef param_decl =
           if AilTypesAux.is_void _ty then
             match fundef with
               | IsFunDef ->
-                  E.constraint_violation (Loc.locOf decltor) IllegalIdentifierTypeVoidInFunctionDefinition
+                  E.constraint_violation decltor_loc IllegalIdentifierTypeVoidInFunctionDefinition
               | NotFunDef ->
                   (* STD §6.7#7 *)
                   (* NOTE: this paragraph applies here because identifiers declared to
                      be a function parameter have no linkage *)
-                  E.undef (Loc.locOf decltor) Undefined.UB059_incomplete_no_linkage_identifier
+                  E.undef decltor_loc Undefined.UB059_incomplete_no_linkage_identifier
             end
           else
             let (qs, ty) = AilTypesAux.adjust _qs _ty in
@@ -2034,7 +2037,7 @@ and desugar_parameter_declaration is_first fundef param_decl =
                            make this a constraint violation, but then there is
                            also §6.7#7 that should apply here (making it UB
                            afterall) ... *)
-                        E.undef (Loc.locOf decltor) Undefined.UB086_incomplete_adjusted_parameter
+                        E.undef decltor_loc Undefined.UB086_incomplete_adjusted_parameter
                     | NotFunDef ->
                         (* NOTE: §6.7.6.3#12, explicitly says non-fundef can have
                            incomplete (adjusted) parameter types, but I assume they
@@ -2042,7 +2045,7 @@ and desugar_parameter_declaration is_first fundef param_decl =
                         (* STD §6.7#7 *)
                         (* NOTE: this paragraph applies here because identifiers declared to
                            be a function parameter have no linkage *)
-                        E.undef (Loc.locOf decltor) Undefined.UB059_incomplete_no_linkage_identifier
+                        E.undef decltor_loc Undefined.UB059_incomplete_no_linkage_identifier
                   end
               | false ->
                   let isRegister = List.elem SC_register specifs.storage_classes in
@@ -2050,16 +2053,18 @@ and desugar_parameter_declaration is_first fundef param_decl =
                   E.register_ordinary_identifier ident (E.OK_object true) scs >>= fun (link, sym) ->
                   (* TODO: check this registration *)
                   let dur = determinate_storage_duration link scs in
-                  E.register_internal_object_declaration sym (Loc.locOf ident, dur, isRegister, qs, ty) >>
+                  E.register_internal_object_declaration sym (Loc.locOf ident, dur, isRegister, Nothing, qs, ty) >>
                   E.return (Just ident, ( qs
                                       , if isAtomic then Ctype.mk_ctype_atomic ty else ty
                                       , isRegister ))
             end
     | PDeclaration_abs_decl specifs abs_decltor_opt ->
+        (* TODO: Should position of storage classes be tracked? *)
+        let loc = Loc.bbox_location (List.map Loc.locOf specifs.type_specifiers) in
         if List.any (fun sc -> sc <> SC_register) specifs.storage_classes then
-          (* TODO: Should position of storage classes be tracked? *)
-          let loc = Loc.bbox_location (List.map Loc.locOf specifs.type_specifiers) in
           E.constraint_violation loc IllegalStorageClassFunctionDeclarator
+        else if specifs.alignment_specifiers <> [] then
+          E.constraint_violation loc (IllegalAlignas IllegalAlignas_parameter)
         else
           (* NOTE: specs_qs <> no_qualifiers when the specifiers had a type-name or _Atomic *)
           desugar_type_specifiers specifs.type_specifiers >>= fun (specs_qs, base_ty)  ->
@@ -2156,7 +2161,7 @@ STD_ "§6.5.1#2" $
                 match kind with
                   | E.OK_object _ ->
                       E.print_debugM 2 (fun () -> "before fetch_object_declaration ==> " ^ show (Loc.stringFromLocation (Loc.locOf ident))) >>= fun () ->
-                      E.fetch_object_declaration sym >>= fun (_(*isTentative*), _, _, _, _(*sym_qs*), _(*sym_ty*)) ->
+                      E.fetch_object_declaration sym >>= fun (_(*isTentative*), _, _, _, _, _(*sym_qs*), _(*sym_ty*)) ->
                       E.return begin
 (*                  AilEannot sym_ty (AnnotatedExpression () [] loc (AilEident sym)) *)
                         AilEident sym
@@ -3716,6 +3721,7 @@ let desugar_declaration_base attrs specifs idecltors =
             let (isAtomic, tquals_qs) = translate_type_qualifiers specifs.type_qualifiers in
             let base_qs = Ctype.combine_qualifiers specs_qs tquals_qs in
             desugar_init_declarator_BROKEN base_qs base_ty specifs.storage_classes init >>= fun (ident, is_tentative, (qs, _ty), mk_desug_init) ->
+            let ident_loc = Loc.locOf ident in
             let (Ctype.Ctype _ ty as cty) = if isAtomic then Ctype.mk_ctype_atomic _ty else _ty in
             
             if is_tentative then
@@ -3730,35 +3736,41 @@ let desugar_declaration_base attrs specifs idecltors =
             else
               let do_function return_qs_ty params_opt is_variadic =
                 check_storage_class_specifiers loc Function_decl_context specifs.storage_classes >>= fun () ->
-                E.register_ordinary_identifier ident
-                  E.OK_function specifs.storage_classes >>= fun (_, sym) ->
-                E.register_function_declaration (Loc.locOf ident) attrs sym true (
-                  return_qs_ty,
-                  params_opt,
-                  is_variadic,
-                  List.elem FS_inline   specifs.function_specifiers,
-                  List.elem FS_Noreturn specifs.function_specifiers
-                ) >>
-                E.return acc in
+                if specifs.alignment_specifiers <> [] then
+                  E.constraint_violation ident_loc (IllegalAlignas IllegalAlignas_function)
+                else
+                  E.register_ordinary_identifier ident
+                    E.OK_function specifs.storage_classes >>= fun (_, sym) ->
+                  E.register_function_declaration ident_loc attrs sym true (
+                    return_qs_ty,
+                    params_opt,
+                    is_variadic,
+                    List.elem FS_inline   specifs.function_specifiers,
+                    List.elem FS_Noreturn specifs.function_specifiers
+                  ) >>
+                  E.return acc in
               match ty with
                 | Ctype.Function return_qs_ty params is_variadic ->
                     do_function return_qs_ty (Just params) is_variadic
                 | Ctype.FunctionNoParams return_qs_ty ->
                     do_function return_qs_ty Nothing false
                 | _ ->
+                    if List.elem SC_register specifs.storage_classes && specifs.alignment_specifiers <> [] then
+                      E.constraint_violation ident_loc (IllegalAlignas IllegalAlignas_register)
+                    else
+                    desugar_alignment_specifiers ident_loc cty specifs.alignment_specifiers >>= fun align_opt ->
                     check_storage_class_specifiers loc Object_decl_context specifs.storage_classes >>= fun () ->
                     E.register_ordinary_identifier ident
                       (E.OK_object false) specifs.storage_classes >>= fun (link, sym) ->
-                    let ident_loc = Loc.locOf ident in
                     
                     let dur = determinate_storage_duration link specifs.storage_classes in
                     match link with
                       | Linkage_external ->
                           E.register_external_object_declaration sym
-                            (false(*TODO:check*), ident_loc, attrs, dur, List.elem SC_register specifs.storage_classes, Nothing, qs, cty)
+                            (false(*TODO:check*), ident_loc, attrs, dur, List.elem SC_register specifs.storage_classes, align_opt, qs, cty)
                       | _ ->
                           E.register_internal_object_declaration sym
-                            (ident_loc, dur, List.elem SC_register specifs.storage_classes, qs, cty)
+                            (ident_loc, dur, List.elem SC_register specifs.storage_classes, align_opt, qs, cty)
                     end >>
                     mk_desug_init () >>= function
                       | Just (ty', d_e) ->
@@ -3844,7 +3856,7 @@ let rec desugar_statement_aux ctx (CabsStatement loc attrs stmt_) =
             E.mapM self ss
           ) >>= fun (bs_, d_ss) ->
           
-          let bs = List.filter (fun (_, ((_, dur, _), _, _)) ->
+          let bs = List.filter (fun (_, ((_, dur, _), _, _, _)) ->
             match dur with
               | Static ->
                   false
@@ -4042,19 +4054,19 @@ let rec desugar_statement_aux ctx (CabsStatement loc attrs stmt_) =
                                   ) in
                                   (* TODO: tentative *)
                                   E.register_internal_object_declaration sym
-                                    (ident_loc, dur, List.elem SC_register specifs.storage_classes, qs, ty')
+                                    (ident_loc, dur, List.elem SC_register specifs.storage_classes, Nothing, qs, ty')
                                 else
                                   E.register_internal_object_declaration sym
-                                    (ident_loc, dur, List.elem SC_register specifs.storage_classes, qs, ty)
+                                    (ident_loc, dur, List.elem SC_register specifs.storage_classes, Nothing, qs, ty)
                                 end >>= fun () ->
                                 E.return ( (sym, d_e) :: acc1
-                                         , (sym, ((ident_loc, dur, List.elem SC_register specifs.storage_classes), qs, ty)) :: acc2 )
+                                         , (sym, ((ident_loc, dur, List.elem SC_register specifs.storage_classes), Nothing, qs, ty)) :: acc2 )
                             | Nothing ->
                                 let dur = determinate_storage_duration link specifs.storage_classes in
                                 E.register_internal_object_declaration sym
-                                  (ident_loc, dur, List.elem SC_register specifs.storage_classes, qs, ty) >>= fun () ->
+                                  (ident_loc, dur, List.elem SC_register specifs.storage_classes, Nothing, qs, ty) >>= fun () ->
                                 E.return ( acc1
-                                         , (sym, ((ident_loc, dur, List.elem SC_register specifs.storage_classes), qs, ty)) :: acc2 )
+                                         , (sym, ((ident_loc, dur, List.elem SC_register specifs.storage_classes), Nothing, qs, ty)) :: acc2 )
                           end
                     end
               end) ([], []) (List.reverse xs) >>= fun (sym_d_es, bindings) ->
@@ -4529,6 +4541,8 @@ val desugar_and_register_function_definition: function_definition -> E.desugM un
 let desugar_and_register_function_definition (FunDef fundef_loc fundef_attrs specifs (Declarator ptr_decltor_opt ddecltor as decltor) stmt) =
   if List.any (fun sc -> SC_extern <> sc && SC_static <> sc) specifs.storage_classes then
     E.constraint_violation fundef_loc IllegalStorageClassFunctionDefinition
+  else if specifs.alignment_specifiers <> [] then
+    E.constraint_violation fundef_loc (IllegalAlignas IllegalAlignas_function)
   else
     (* NOTE: §6.9.1#5 is enforces inside the following call to
        'desugar_declarator' (see 'desugar_direct_declarator') *)
@@ -4675,7 +4689,6 @@ let desugar_and_register_external_declaration edecl =
               (* Case of a typedef *)
               E.return ()
           | Just (ident_loc, ident_attrs, link, sym, isTentative, (qs, ty), mk_desug_init) ->
-              desugar_alignment_specifiers ident_loc ty specifs.alignment_specifiers >>= fun align_opt ->
               let do_function fun_qs return_qs_ty params_opt is_variadic =
                 let () =
                   if Annot.no_attributes <> ident_attrs then
@@ -4686,6 +4699,8 @@ let desugar_and_register_external_declaration edecl =
                     () in
                 if qs <> Ctype.no_qualifiers then
                   E.undef ident_loc Undefined.UB066_qualified_function_specification
+                else if specifs.alignment_specifiers <> [] then
+                  E.constraint_violation ident_loc (IllegalAlignas IllegalAlignas_function)
                 else
                 E.register_function_declaration ident_loc attrs sym true (
                   return_qs_ty,
@@ -4701,6 +4716,10 @@ let desugar_and_register_external_declaration edecl =
                 | Ctype.Ctype _ (Ctype.FunctionNoParams return_qs_ty) ->
                     do_function qs return_qs_ty Nothing false
                 | ty ->
+                    if List.elem SC_register specifs.storage_classes && specifs.alignment_specifiers <> [] then
+                      E.constraint_violation ident_loc (IllegalAlignas IllegalAlignas_register)
+                    else
+                    desugar_alignment_specifiers ident_loc ty specifs.alignment_specifiers >>= fun align_opt ->
                     let dur = determinate_storage_duration link specifs.storage_classes in
                     E.register_external_object_declaration sym
                       (isTentative, ident_loc, Annot.combine_attributes attrs ident_attrs, dur, List.elem SC_register specifs.storage_classes, align_opt, qs, ty) >>

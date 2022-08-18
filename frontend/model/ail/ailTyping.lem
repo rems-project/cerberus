@@ -101,7 +101,7 @@ let rec disjoint_bindings bs =
 
 val well_formed_bindings: forall 'a. Loc.t -> sigma 'a -> bindings -> errorM unit
 let well_formed_bindings loc sigm bindings =
-  mapM_ (fun (_, (_, qs, ty)) -> wf_lvalue sigm qs ty) bindings >>
+  mapM_ (fun (_, (_, _, qs, ty)) -> wf_lvalue sigm qs ty) bindings >>
   if not (disjoint_bindings bindings) then
     error "AilTyping.well_formed_bindings: found non disjoint bindings"
   else

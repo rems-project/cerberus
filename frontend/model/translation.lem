@@ -2977,7 +2977,7 @@ let rec collect_visibles_ (A.AnnotatedStatement loc _ stmt) =
         St.get >>= fun st ->
         let saved_syms = st.visible_syms in
         St.update (fun st ->
-          <| st with visible_syms= List.map (fun (sym, (_, _, ty)) -> (sym ,ty)) binds ++ st.visible_syms |>
+          <| st with visible_syms= List.map (fun (sym, (_, _, _, ty)) -> (sym ,ty)) binds ++ st.visible_syms |>
         ) >>
         St.mapM_ collect_visibles_ ss >>
         St.update (fun st ->
@@ -3142,15 +3142,24 @@ let rec translate_stmt stdlib tagDefs f env (A.AnnotatedStatement loc stmt_attrs
         E.mapM self ss >>= fun core_ss ->
         E.return (Caux.mk_unit_sseq core_ss Caux.mk_skip_e)
     
-    | A.AilSblock [(sym, ((ident_loc, _, _), qs, ty))] ss ->
+    | A.AilSblock [(sym, ((ident_loc, _, _), align_opt, qs, ty))] ss ->
         let c_ty = Caux.mk_ail_ctype_pe ty in
+        let align_ival  =
+        match align_opt with
+          | Just (A.AlignInteger n) ->
+              Caux.mk_integer_pe n
+          | Just (A.AlignType al_ty) ->
+              Caux.mk_alignof_pe (Caux.mk_ail_ctype_pe al_ty)
+          | Nothing ->
+              Caux.mk_alignof_pe c_ty
+        end in
         E.with_block_objects [(sym, (qs, ty))] begin
           E.mapM self ss
         end >>= fun core_ss ->
         let new_loc = Loc.with_cursor_from loc ident_loc in
         E.return begin
           Caux.mk_sseq_e (Caux.mk_sym_pat sym (C.BTy_object C.OTy_pointer))
-             (Caux.pcreate new_loc (Caux.mk_alignof_pe c_ty) c_ty (Symbol.PrefSource ident_loc [f; sym])) (
+             (Caux.pcreate new_loc align_ival c_ty (Symbol.PrefSource ident_loc [f; sym])) (
             List.foldr (fun core_s acc ->
               Caux.mk_sseq_e (Caux.mk_empty_pat C.BTy_unit) core_s acc
             ) (Caux.pkill new_loc (C.Static ty) (Caux.mk_sym_pe sym)) core_ss
@@ -3158,14 +3167,23 @@ let rec translate_stmt stdlib tagDefs f env (A.AnnotatedStatement loc stmt_attrs
         end
     
     | A.AilSblock binds ss ->
-        let decls_with_loc = [ (sym, ident_loc, (qs, ty)) | forall ((sym, ((ident_loc, _, _), qs, ty)) MEM binds ) | true ] in
-        let decls = List.map (fun (sym, _, qs_ty) -> (sym, qs_ty)) decls_with_loc in
+        let decls_with_loc = [ (sym, ident_loc, (align_opt, qs, ty)) | forall ((sym, ((ident_loc, _, _), align_opt, qs, ty)) MEM binds ) | true ] in
+        let decls = List.map (fun (sym, _, (_, qs, ty)) -> (sym, (qs, ty))) decls_with_loc in
         (* the symbolic names and create actions for the local variables *)
         let (pats, core_creates) : list C.pattern * list (C.expr unit) =
-          mapUnzip (fun (sym, ident_loc, (qs, ty)) ->
+          mapUnzip (fun (sym, ident_loc, (align_opt, qs, ty)) ->
             let c_ty = Caux.mk_ail_ctype_pe ty in
+            let align_ival  =
+            match align_opt with
+              | Just (A.AlignInteger n) ->
+                  Caux.mk_integer_pe n
+              | Just (A.AlignType al_ty) ->
+                  Caux.mk_alignof_pe (Caux.mk_ail_ctype_pe al_ty)
+              | Nothing ->
+                  Caux.mk_alignof_pe c_ty
+            end in    
             ( Caux.mk_sym_pat sym (C.BTy_object C.OTy_pointer)
-            , Caux.pcreate (Loc.with_cursor_from loc ident_loc) (Caux.mk_alignof_pe c_ty) c_ty (Symbol.PrefSource ident_loc [f; sym]) )
+            , Caux.pcreate (Loc.with_cursor_from loc ident_loc) align_ival c_ty (Symbol.PrefSource ident_loc [f; sym]) )
           ) decls_with_loc in
         E.with_block_objects decls $
           (* TODO: doing the kills here is now redundant if there is are returns before all exit point.
@@ -3173,8 +3191,8 @@ let rec translate_stmt stdlib tagDefs f env (A.AnnotatedStatement loc stmt_attrs
              For non-void function however we know (?) that their must be these returns ?? so we could drop the kills here *)
           (* the kill actions for the local variables *)
           let core_kills : list (C.expr unit) =
-            List.map (fun (sym, ident_loc, ty) ->
-              Caux.pkill (Loc.with_cursor_from loc ident_loc) (C.Static (snd ty)) (Caux.mk_sym_pe sym)
+            List.map (fun (sym, ident_loc, (_, _, ty)) ->
+              Caux.pkill (Loc.with_cursor_from loc ident_loc) (C.Static ty) (Caux.mk_sym_pe sym)
             ) decls_with_loc in
           E.mapM self ss >>= fun core_ss ->
         

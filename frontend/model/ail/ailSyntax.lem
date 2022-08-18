@@ -177,10 +177,14 @@ type storageDuration [name = "^\\([a-z A-Z]*_\\)?dur[0-9]*'?$"] =
  | Automatic
  | Allocated
 
+type alignment =
+  | AlignInteger of integer
+  | AlignType of Ctype.ctype
+
 (* the boolean tells whether the object was declared with the register
  * storage-class *)
 type bindings =
-  list (ail_identifier * ((Loc.t * storageDuration * bool) * qualifiers * ctype))
+  list (ail_identifier * ((Loc.t * storageDuration * bool) * maybe alignment * qualifiers * ctype))
 
 
 type statement_ 'a [name="s*"] =
@@ -217,10 +221,6 @@ instance forall 'a. (Located (statement 'a))
     loc
 end
 
-type alignment =
-  | AlignInteger of integer
-  | AlignType of Ctype.ctype
-
 type declaration =
   | Decl_object   of (storageDuration * bool) * maybe alignment * qualifiers * ctype
   | Decl_function of bool (* has_prototype *)
@@ -251,7 +251,7 @@ type sigma 'a = <|
 |>
 
 
-type gamma = list (ail_identifier * ((Loc.t * storageDuration * bool) * qualifiers * ctype))
+type gamma = list (ail_identifier * ((Loc.t * storageDuration * bool) * maybe alignment * qualifiers * ctype))
 
 type ail_program 'a = maybe ail_identifier * sigma 'a
 
