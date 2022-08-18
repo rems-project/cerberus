@@ -51,7 +51,7 @@ let string_of_batch_exit exit =
           cval in
   String_core.string_of_value cval
 
-let string_of_batch_output ?(is_charon=false) i_opt (z3_strs, exec) =
+let string_of_batch_output ?(json=false) ?(is_charon=false) i_opt (z3_strs, exec) =
   let buf = Buffer.create 16 in
   let constrs_str =
     if !Debug_ocaml.debug_level > 0 then begin
@@ -84,6 +84,13 @@ let string_of_batch_output ?(is_charon=false) i_opt (z3_strs, exec) =
           end;
           Buffer.add_string buf stdout;
           prerr_string stderr
+        end else if json then begin
+          Yojson.to_buffer buf begin
+            `Assoc [ "status", `String "Defined"
+                   ; "details", `Assoc [ "value", `String exit_str
+                                       ; "stdout", `String (String.escaped stdout)
+                                       ; "stderr", `String (String.escaped stderr) ] ]
+          end
         end else begin
           begin if has_multiple then
             Buffer.add_string buf  ":\n"
@@ -105,6 +112,13 @@ let string_of_batch_output ?(is_charon=false) i_opt (z3_strs, exec) =
           (Undefined.stringFromUndefined_behaviour ub)
           (Location_ocaml.simple_location loc)
           (if is_charon then "\n" else "")
+        end else if json then begin
+          Yojson.to_buffer buf begin
+            `Assoc [ "status", `String "Undefined"
+                   ; "details", `Assoc [ "ub", `String (Undefined.stringFromUndefined_behaviour ub)
+                                       ; "stderr", `String (String.escaped stderr)
+                                       ; "loc", Location_ocaml.to_json loc ] ]
+          end
         end else
           Printf.bprintf buf "Undefined {ub: \"%s\", stderr: \"%s\", loc: \"%s\"}%s"
           (Undefined.stringFromUndefined_behaviour ub)
@@ -112,9 +126,15 @@ let string_of_batch_output ?(is_charon=false) i_opt (z3_strs, exec) =
           (Location_ocaml.simple_location loc)
           (if is_charon then "\n" else "")
     | Error { msg; stderr } ->
-        if is_charon then begin
-          prerr_string stderr;
-        end;
+        if is_charon then
+          prerr_string stderr
+        else if json then begin
+          Yojson.to_buffer buf begin
+            `Assoc [ "status", `String "Error"
+                   ; "details", `Assoc [ "msg", `String msg
+                                       ; "stderr", `String (String.escaped stderr) ] ]
+          end
+        end else begin
           begin if has_multiple then
             Buffer.add_string buf  ":\n"
           end;
@@ -122,6 +142,7 @@ let string_of_batch_output ?(is_charon=false) i_opt (z3_strs, exec) =
           Printf.bprintf buf "Error {msg: \"%s\"}%s"
             msg
             (if is_charon then "\n" else "")
+        end
   end;
   (if not is_charon then Buffer.add_string buf "\n" else ());
   flush_all ();

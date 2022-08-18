@@ -516,7 +516,7 @@ let interp_backend io core_file ~args ~batch ~fs ~driver_conf =
   in
   (* TODO: temporary hack for the command name *)
   match batch with
-  | (`Batch | `CharonBatch) as mode ->
+  | (`Batch | `CharonBatch | `JsonBatch) as mode ->
     let executions = D.batch_drive core_file ("cmdname" :: args) fs_state driver_conf in
     return (Either.Left (mode, executions))
   | `NotBatch ->

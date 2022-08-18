@@ -68,8 +68,8 @@ val core_passes:
 
 val interp_backend:
   io_helpers -> 'a Core.file ->
-  args:(string list) -> batch:[`Batch | `CharonBatch | `NotBatch] -> fs:string option -> driver_conf:Driver_ocaml.driver_conf ->
-  ((([`Batch | `CharonBatch] * (string list * Driver_ocaml.batch_output) list), int) Either.either, Location_ocaml.t * Errors.cause) Exception.exceptM
+  args:(string list) -> batch:[`Batch | `CharonBatch | `JsonBatch | `NotBatch] -> fs:string option -> driver_conf:Driver_ocaml.driver_conf ->
+  ((([`Batch | `CharonBatch | `JsonBatch] * (string list * Driver_ocaml.batch_output) list), int) Either.either, Location_ocaml.t * Errors.cause) Exception.exceptM
 
 (*
 val ocaml_backend:

@@ -145,17 +145,17 @@ let cerberus debug_level progress core_obj
   in
   let success = Either.Right 0 in
   let runM = function
-    | Exception.Exception (loc, Errors.(DESUGAR (Desugar_UndefinedBehaviour ub))) when (batch = `Batch || batch = `CharonBatch) ->
+    | Exception.Exception (loc, Errors.(DESUGAR (Desugar_UndefinedBehaviour ub))) when (batch = `Batch || batch = `CharonBatch || batch = `JsonBatch) ->
         let open Driver_ocaml in
         print_string begin
-          string_of_batch_output ~is_charon:(batch = `CharonBatch) None
+          string_of_batch_output ~json:(batch = `JsonBatch) ~is_charon:(batch = `CharonBatch) None
             ([], Undefined { ub; stderr= ""; loc })
         end;
         epilogue 1
-    | Exception.Exception (loc, Errors.(AIL_TYPING (TypingError.TError_UndefinedBehaviour ub))) when (batch = `Batch || batch = `CharonBatch) ->
+    | Exception.Exception (loc, Errors.(AIL_TYPING (TypingError.TError_UndefinedBehaviour ub))) when (batch = `Batch || batch = `CharonBatch || batch = `JsonBatch) ->
         let open Driver_ocaml in
         print_string begin
-          string_of_batch_output ~is_charon:(batch = `CharonBatch) None
+          string_of_batch_output ~json:(batch = `JsonBatch) ~is_charon:(batch = `CharonBatch) None
             ([], Undefined { ub; stderr= ""; loc })
         end;
         epilogue 1
@@ -166,6 +166,7 @@ let cerberus debug_level progress core_obj
         let is_charon =
           match batch_mode with
             | `CharonBatch -> true
+            | `JsonBatch -> false
             | `Batch -> false in
         let exit =
           let open Driver_ocaml in
@@ -190,7 +191,7 @@ let cerberus debug_level progress core_obj
         List.iteri (fun i (z3_strs, exec) ->
           let open Driver_ocaml in
           print_string begin
-            string_of_batch_output ~is_charon
+            string_of_batch_output ~json:(batch = `JsonBatch) ~is_charon
               (if has_multiple then Some i else None) (z3_strs, exec)
           end
         ) execs;
@@ -409,8 +410,8 @@ let concurrency =
 let batch =
   let doc = "makes the execution driver produce batch friendly output" in
   Arg.(value & vflag `NotBatch & [(`Batch, info["batch"] ~doc);
-                                  (`CharonBatch, info["charon-batch"]
-                                     ~doc:(doc^" (for Charon)"))])
+                                  (`CharonBatch, info["charon-batch"] ~doc:(doc^" (for Charon)"));
+                                  (`JsonBatch, info["json-batch"] ~doc:"outputs the executions in json") ])
 
 let typecheck_core =
   let doc = "typecheck the elaborated Core program" in

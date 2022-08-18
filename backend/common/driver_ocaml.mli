@@ -21,7 +21,7 @@ type batch_output =
   | Error of { msg: string; stderr: string }
 
 val string_of_batch_exit: batch_exit -> string
-val string_of_batch_output: ?is_charon:bool -> int option -> (string list * batch_output) -> string
+val string_of_batch_output: ?json:bool -> ?is_charon:bool -> int option -> (string list * batch_output) -> string
 
 val batch_drive:
   'a Core.file -> string list -> Sibylfs.fs_state -> driver_conf -> (string list * batch_output) list
