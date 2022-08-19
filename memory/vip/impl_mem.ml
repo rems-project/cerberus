@@ -181,14 +181,14 @@ let fail err =
     | MerrReadUninit loc
     | MerrUndefinedFree (loc, _)
     | MerrFreeNullPtr loc
-    | MerrArrayShift loc ->
+    | MerrArrayShift loc
+    | MerrIntFromPtr loc ->
       loc
     | MerrOutsideLifetime _
     | MerrInternal _
     | MerrOther _
     | MerrPtrdiff
     | MerrUndefinedRealloc
-    | MerrIntFromPtr
     | MerrPtrFromInt
     | MerrPtrComparison
     | MerrWIP _

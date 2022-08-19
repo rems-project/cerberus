@@ -110,7 +110,7 @@ type mem_error =
   | MerrUndefinedFree of Loc.t * free_error
   | MerrUndefinedRealloc
   
-  | MerrIntFromPtr
+  | MerrIntFromPtr of Loc.t
   | MerrPtrFromInt
   
   | MerrPtrComparison
@@ -152,8 +152,8 @@ instance (Show mem_error)
         "MerrUndefinedFree [" ^ Loc.stringFromLocation loc ^ "] " ^ stringFromFree_error err
     | MerrUndefinedRealloc ->
         "MerrUndefinedRealloc"
-    | MerrIntFromPtr ->
-        "MerrIntFromPtr"
+    | MerrIntFromPtr loc ->
+        "MerrIntFromPtr [" ^ Loc.stringFromLocation loc ^ "]"
     | MerrPtrFromInt ->
         "MerrPtrFromInt"
     | MerrPtrComparison ->
@@ -215,7 +215,7 @@ let undefinedFromMem_error = function
       Just Undefined.UB019_lvalue_not_an_object
   | MerrAccess _ _ DeadPtr ->
       Just Undefined.UB010_pointer_to_dead_object
-  | MerrIntFromPtr ->
+  | MerrIntFromPtr _ ->
       Just Undefined.UB024_out_of_range_pointer_to_integer_conversion
   | MerrPtrFromInt ->
       Just Undefined.UB_CERB001_integer_to_dead_pointer

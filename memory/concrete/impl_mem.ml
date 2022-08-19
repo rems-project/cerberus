@@ -459,14 +459,14 @@ module Concrete : Memory = struct
       | MerrReadUninit loc
       | MerrUndefinedFree (loc, _)
       | MerrFreeNullPtr loc
-      | MerrArrayShift loc ->
+      | MerrArrayShift loc
+      | MerrIntFromPtr loc ->
         loc
       | MerrOutsideLifetime _
       | MerrInternal _
       | MerrOther _
       | MerrPtrdiff
       | MerrUndefinedRealloc
-      | MerrIntFromPtr
       | MerrPtrFromInt
       | MerrPtrComparison
       | MerrWIP _
@@ -2219,7 +2219,7 @@ let eff_member_shift_ptrval _ tag_sym membr_ident ptrval =
     end)
   
   (* TODO: conversion? *)
-  let intfromptr _ _ ity (PV (prov, ptrval_)) =
+  let intfromptr loc _ ity (PV (prov, ptrval_)) =
     match ptrval_ with
       | PVnull _ ->
           return (mk_ival prov Nat_big_num.zero)
@@ -2239,7 +2239,7 @@ let eff_member_shift_ptrval _ tag_sym membr_ident ptrval =
           let IV (_, ity_max) = max_ival ity in
           let IV (_, ity_min) = min_ival ity in
           if N.(less addr ity_min || less ity_max addr) then
-            fail MerrIntFromPtr
+            fail (MerrIntFromPtr loc)
           else
             return (mk_ival prov addr)
 

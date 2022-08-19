@@ -542,14 +542,14 @@ module CHERI (C:Capability
         | MerrReadUninit loc
         | MerrUndefinedFree (loc, _)
         | MerrFreeNullPtr loc
-        | MerrArrayShift loc ->
+        | MerrArrayShift loc
+        | MerrIntFromPtr loc ->
          loc
       | MerrOutsideLifetime _
         | MerrInternal _
         | MerrOther _
         | MerrPtrdiff
         | MerrUndefinedRealloc
-        | MerrIntFromPtr
         | MerrPtrFromInt
         | MerrPtrComparison
         | MerrWIP _
@@ -3029,7 +3029,7 @@ module CHERI (C:Capability
               let ity_min = num_of_int (min_ival ity) in
               let addr = C.cap_get_value c in
               if Z.(less addr ity_min || less ity_max addr) then
-                fail MerrIntFromPtr
+                fail (MerrIntFromPtr loc)
               else
                 return (IV addr)
 
