@@ -121,23 +121,31 @@ let outer_bbox xs =
   ) (b0, e0) xs
 
 
-let bbox_location xs =
-  let (b, e) = outer_bbox begin
-    List.fold_left (fun acc loc ->
-      match loc with
-        | Loc_unknown
-        | Loc_other _ ->
-            acc
-        | Loc_point pos ->
-            (pos, pos) :: acc
-        | Loc_region (pos1, pos2, _) ->
-            (* invariant from Loc_region is that pos1 <= pos2 *)
-            (pos1, pos2) :: acc
-        | Loc_regions (xs, _) ->
-            xs @ acc
-    ) [] xs
-  end in
-  Loc_region (b, e, NoCursor)
+let bbox_location = function
+  | [] ->
+      Loc_unknown
+  | xs ->
+      match begin
+        List.fold_left (fun (def_loc, acc) loc ->
+          match loc with
+            | Loc_unknown ->
+                (def_loc, acc)
+            | Loc_other _ ->
+                (loc, acc)
+            | Loc_point pos ->
+                (def_loc, (pos, pos) :: acc)
+            | Loc_region (pos1, pos2, _) ->
+                (* invariant from Loc_region is that pos1 <= pos2 *)
+                (def_loc, (pos1, pos2) :: acc)
+            | Loc_regions (xs, _) ->
+                (def_loc, xs @ acc)
+        ) (Loc_unknown, []) xs
+      end with
+        | (loc, []) ->
+            loc
+        | (_, xs') ->
+            let (b, e) = outer_bbox xs' in
+            Loc_region (b, e, NoCursor)
 
 
 let with_regions_and_cursor locs loc_opt =
