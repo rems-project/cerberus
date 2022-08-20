@@ -76,7 +76,7 @@ let string_of_batch_output ?(json=false) ?(is_charon=false) i_opt (z3_strs, exec
           false in
   begin match exec with
     | Defined { exit; stdout; stderr; blocked } ->
-        let exit_str = string_of_batch_exit exit in
+        let exit_str = Colour.without_colour string_of_batch_exit exit in
         if is_charon then begin
           if has_multiple then begin
             Printf.bprintf buf " (exit = %s):\n" exit_str;
