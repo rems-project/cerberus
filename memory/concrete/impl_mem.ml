@@ -1667,6 +1667,15 @@ module Concrete : Memory = struct
           return false
       | (PVfunction sym1, PVfunction sym2) ->
           return (Symbol.instance_Basic_classes_Eq_Symbol_sym_dict.Lem_pervasives.isEqual_method sym1 sym2)
+      | (PVfunction (Symbol.Symbol (_, _, SD_Id funname)), PVconcrete addr)
+      | (PVconcrete addr, PVfunction (Symbol.Symbol (_, _, SD_Id funname))) ->
+          get >>= fun st ->
+          begin match IntMap.find_opt addr st.funptrmap with
+            | Some (_, funname') ->
+                return (funname = funname')
+            | None ->
+                return false
+          end
       | (PVfunction _, _)
       | (_, PVfunction _) ->
           return false
