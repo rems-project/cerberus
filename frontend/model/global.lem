@@ -44,11 +44,13 @@ type cerb_switch =
   | SW_forbid_nullptr_free
   | SW_zap_dead_pointers
   | SW_inner_arg_temps
+  | SW_permissive_printf
 
 declare ocaml target_rep function SW_strict_reads = `Switches.SW_strict_reads`
 declare ocaml target_rep function SW_forbid_nullptr_free = `Switches.SW_forbid_nullptr_free`
 declare ocaml target_rep function SW_zap_dead_pointers = `Switches.SW_zap_dead_pointers`
 declare ocaml target_rep function SW_inner_arg_temps = `Switches.SW_inner_arg_temps`
+declare ocaml target_rep function SW_permissive_printf = `Switches.SW_permissive_printf`
 
 
 val is_PNVI: unit -> bool

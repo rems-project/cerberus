@@ -24,6 +24,8 @@ type cerb_switch =
        (instead of at that caller side) *)
   | SW_inner_arg_temps
 
+    (* allow (with %p) formatted printing of non-void pointers (relaxing ISO) *)
+  | SW_permissive_printf
 
 let internal_ref =
   ref []
@@ -63,7 +65,9 @@ let set strs =
     | "PNVI_ae_udi" ->
         Some (SW_PNVI `AE_UDI)
     | "inner_arg_temps" ->
-        Some (SW_inner_arg_temps)
+        Some SW_inner_arg_temps
+    | "permissive_printf" ->
+       Some SW_permissive_printf
     | _ ->
         None in
   List.iter (fun str ->

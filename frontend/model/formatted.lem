@@ -177,18 +177,26 @@ let format =
 (* if the given flags require it, prefix the given result of the conversion with
    a sign or space or convert it to an "alternative form".
    This correspond to the flags: + space # *)
-val expand: flags -> conversion_specifier -> list char -> list char
-let expand fs cspec str =
+val expand: bool -> flags -> conversion_specifier -> list char -> list char
+let expand is_zero fs cspec str =
   (* first doing the # flag *)
   let str =
     if fs.flag_hash then
       match cspec with
         | CS_o ->
-            (* TODO *)
-            str
+            if isPrefixOf [#'0'] str then
+              str
+            else
+              #'0' :: str
         | CS_x ->
-            #'0' :: #'x' :: str
+            if is_zero then
+              str
+            else
+              #'0' :: #'x' :: str
         | CS_X ->
+          if is_zero then
+            str
+          else
             #'0' :: #'X' :: str
         | _ ->
             (* NOTE: must be a, A, e, E, f, F, g, or G *)
@@ -394,7 +402,7 @@ let is_illtyped_conversion expected_ty arg_ty =
 val convert: Loc.t ->
              (Ctype.ctype -> (*Ctype.ctype -> *)Mem.mem_value -> Mem.memM (either Errors.error (Undefined.t Core.value))) ->
              maybe precision -> maybe length_modifier -> conversion_specifier -> list (Ctype.ctype * Mem.pointer_value) ->
-             Mem.memM (either Errors.error (U.t (list char * list (Ctype.ctype * Mem.pointer_value))))
+             Mem.memM (either Errors.error (U.t (bool * list char * list (Ctype.ctype * Mem.pointer_value))))
 let convert loc eval_conv prec_opt lm_opt cspec args =
   let prec = match prec_opt with
     | Just (P_num z) ->
@@ -437,17 +445,17 @@ let convert loc eval_conv prec_opt lm_opt cspec args =
                           | Just n ->
                               Mem.return $ Right (U.return (
                                 if prec = 0 && n = 0 then
-                                  ([], args')
+                                  (true, [], args')
                                 else
-                                  (cont_int n, args')
+                                  (n=0, cont_int n, args')
                               ))
                           | Nothing ->
                               Mem.return $ Right (U.return (
-                                (String.toCharList (Mem.stringFromInteger_value ival), args')
+                                (false, String.toCharList (Mem.stringFromInteger_value ival), args')
                               ))
                         end
                     | Right (U.Defined (Core.Vloaded (Core.LVunspecified _))) ->
-                        Mem.return $ Right (U.return ([#'U'; #'N'; #'S'; #'P'; #'E'; #'C'], args'))
+                        Mem.return $ Right (U.return (false, [#'U'; #'N'; #'S'; #'P'; #'E'; #'C'], args'))
                     | Right (U.Defined cval) ->
                         error ("WIP: convert --> not an integer ==> " ^ Pp.stringFromCore_value cval)
                     | Right (U.Error loc str) ->
@@ -459,23 +467,24 @@ let convert loc eval_conv prec_opt lm_opt cspec args =
                   (* TODO: this is wrong if "not (is_integer ty)" *)
                   match snd (Core_aux.valueFromMemValue mval) with
                     | Core.Vloaded (Core.LVunspecified _) ->
-                        Mem.return $ Right (U.return ([#'U'; #'N'; #'S'; #'P'; #'E'; #'C'], args'))
+                        Mem.return $ Right (U.return (false, [#'U'; #'N'; #'S'; #'P'; #'E'; #'C'], args'))
                     | Core.Vloaded (Core.LVspecified (Core.OVinteger ival)) ->
                         match Mem_aux.integerFromIntegerValue ival with
                           | Just n ->
                               Mem.return $ Right (U.return (
                                 if prec = 0 && n = 0 then
-                                  ([], args')
+                                  (true, [], args')
                                 else
-                                  (cont_int n, args')
+                                  (n=0, cont_int n, args')
                               ))
                           | Nothing ->
                               let () = Debug.warn [Debug.DB_core_dynamics] (fun () -> "printf() found an abstract integer value") in
-                              Mem.return $ Right (U.return ([#'A'; #'B'; #'S'; #'_'; #'I'; #'N'; #'T'; #'E'; #'G'; #'E'; #'R'], args'))
+                              Mem.return $ Right (U.return (false, [#'A'; #'B'; #'S'; #'_'; #'I'; #'N'; #'T'; #'E'; #'G'; #'E'; #'R'], args'))
                         end
                     | Core.Vloaded (Core.LVspecified (Core.OVfloating fval)) ->
                         Mem.return $ Right (U.return (
-                          Mem.case_fval fval
+                          false
+                        , Mem.case_fval fval
                             (fun () -> [#'U'; #'N'; #'S'; #'P'; #'E'; #'C'])
                             cont_floating
                         , args'))
@@ -523,7 +532,13 @@ let convert loc eval_conv prec_opt lm_opt cspec args =
           (if n < 0 then (fun z -> #'-' :: z) else id) $ replicate (prec - length str) #'0' ++ str
         ) (fun _ -> [])
     | CS_o ->
-        error "WIP: Formatted.convert, CS_o"
+        let (expected_pred_opt, conv_ty_opt) = mk_diouxX_expected_and_conv false in
+        (* see (§7.21.6.1#8 o,u,x,X) *)
+        aux expected_pred_opt conv_ty_opt (fun n ->
+          (* TODO: conversion (n is unsigned int here) *)
+          let str = showNonNegativeWithBasis false 8 (naturalFromInteger n) in
+          replicate (prec - length str) #'0' ++ str
+        ) (fun _ -> [])
     | CS_u ->
         let (expected_pred_opt, conv_ty_opt) = mk_diouxX_expected_and_conv false in
         (* see (§7.21.6.1#8 o,u,x,X) *)
@@ -623,7 +638,7 @@ let convert loc eval_conv prec_opt lm_opt cspec args =
                           match Mem_aux.pointerValueFromMemValue mval with
                           | Just (_, ptrval) ->
                               load_character_array ref_ty ptrval prec >>= fun chars ->
-                              Mem.return (Right (U.Defined (chars, args')))
+                              Mem.return (Right (U.Defined (false, chars, args')))
                           | Nothing ->
                               error "WIP[error message], Formatted => CS_s, didn't load a pointer"
                         end
@@ -633,35 +648,44 @@ let convert loc eval_conv prec_opt lm_opt cspec args =
               end
         end
     | CS_p ->
+        let do_common arg_ty arg_ptr args' =
+          Mem.load (Loc.other "printf() %p") arg_ty arg_ptr >>= fun (_, mval) ->
+          if Mem_aux.isUnspecifiedMemValue mval then
+            Mem.return (Right (U.undef (Loc.other "printf() %s") [U.UB_unspecified_lvalue]))
+          else
+            match Mem_aux.pointerValueFromMemValue mval with
+              | Just (_, ptrval) ->
+                  Mem.return (
+                    Right (U.Defined (false, String.toCharList (stringFromPointerValue ptrval), args'))
+                  )
+              | Nothing ->
+                  error "WIP[error message], Formatted => CS_p, didn't load a pointer"
+            end in
+        let do_illtyped =
+          Mem.return begin
+            Right (U.undef (Loc.other "printf() %p") [U.UB153b_illtyped_argument_for_format])
+          end in
         match args with
           | [] ->
               Mem.return (
                 Right (U.undef (Loc.other "printf() %p") [U.UB153a_insufficient_arguments_for_format])
               )
           | ((Ctype.Ctype _ (Ctype.Pointer _ (Ctype.Ctype _ Ctype.Void)) as arg_ty), arg_ptr) :: args' ->
-              Mem.load (Loc.other "printf() %p") arg_ty arg_ptr >>= fun (_, mval) ->
-              if Mem_aux.isUnspecifiedMemValue mval then
-                Mem.return (Right (U.undef (Loc.other "printf() %s") [U.UB_unspecified_lvalue]))
-              else
-                match Mem_aux.pointerValueFromMemValue mval with
-                  | Just (_, ptrval) ->
-                      Mem.return (
-                        Right (U.Defined (String.toCharList (stringFromPointerValue ptrval), args'))
-                      )
-                  | Nothing ->
-                      error "WIP[error message], Formatted => CS_p, didn't load a pointer"
-                end
+              do_common arg_ty arg_ptr args'
+          | ((Ctype.Ctype _ (Ctype.Pointer _ _) as arg_ty), arg_ptr) :: args' ->
+            if Global.has_switch Global.SW_permissive_printf then
+              do_common arg_ty arg_ptr args'
+            else
+              do_illtyped
           | _ ->
-              Mem.return (
-                Right (U.undef (Loc.other "printf() %p") [U.UB153b_illtyped_argument_for_format])
-              )
+              do_illtyped
         end
     | CS_n ->
         error "WIP: Formatted.convert, CS_n"
     | CS_percent ->
         (* TODO: it seems that if there is a length, modif, flags, precision, ... it is undefined behaviour .... *)
         Mem.return (
-          Right (U.Defined ([#'%'], args))
+          Right (U.Defined (false, [#'%'], args))
         )
   end
 
@@ -675,7 +699,7 @@ let rec printf_aux loc eval_conv acc fs ty_ptrvals =
         printf_aux loc eval_conv (acc ++ str) fs ty_ptrvals
     | (F_conv cp :: fs, ty_ptrvals) ->
         convert loc eval_conv cp.cp_precision cp.cp_length_modifier cp.cp_conversion_specifier ty_ptrvals >>= function
-          | Right (U.Defined (str, ty_ptrvals')) ->
+          | Right (U.Defined (is_zero, str, ty_ptrvals')) ->
               if cp.cp_flags.flag_plus && not (isSignedConversion cp.cp_conversion_specifier) then
                 (* TODO: add a proper UB variant *)
                 Mem.return (Right (U.undef loc [U.DUMMY "+ flag with unsigned conversion"]))
@@ -687,7 +711,7 @@ let rec printf_aux loc eval_conv acc fs ty_ptrvals =
                       && not (List.elem cp.cp_conversion_specifier [CS_di; CS_o; CS_u; CS_x; CS_X; CS_f]) then
                 Mem.return (Right (U.undef loc [U.UB157]))
               else
-                let expanded  = expand cp.cp_flags cp.cp_conversion_specifier str in
+                let expanded  = expand is_zero cp.cp_flags cp.cp_conversion_specifier str in
                 let justified = match cp.cp_field_width with
                   | Nothing ->
                       expanded

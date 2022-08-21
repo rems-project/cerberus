@@ -24,6 +24,9 @@ type cerb_switch =
        (instead of at that caller side) *)
   | SW_inner_arg_temps
 
+    (* allow (with %p) formatted printing of non-void pointers (relaxing ISO) *)
+  | SW_permissive_printf
+
 val get_switches: unit -> cerb_switch list
 val has_switch: cerb_switch -> bool
 val has_switch_pred: (cerb_switch -> bool) -> cerb_switch option
