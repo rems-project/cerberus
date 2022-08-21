@@ -1085,7 +1085,7 @@ else
           else
             translate_function_designator (translate_expression ctx variadic_env stdlib tagDefs) stdlib e
       
-      (* TODO: promotion? + atomicity *)
+      (* TODO: atomicity *)
       (* NOTE: if I read N2329 correctly, in C2X this will not be an RMW for the atomic case (but a do while
          with compare_exchange_weak with seq_cst, seq_cst) *)
       | A.AilEunary A.PostfixIncr e ->
@@ -1113,10 +1113,14 @@ match Ctype.unatomic_ ty with
   | Ctype.Basic (Ctype.Integer _) ->
       (* TODO: check again *)
       let core_incr = Caux.mk_op_pe C.OpAdd obj_sym_pe (Caux.mk_integer_pe 1) in
-      if AilTypesAux.is_signed_integer_type result_ty then
-                                  stdlib.mkcall_catch_exceptional_condition result_ty core_incr
+      let promoted_ty =
+        fromJust "Translation.translate_expression: PostfixIncr promotion" (AilTypesAux.promotion integerImpl (ctype_of e)) in
+                                  stdlib.mkcall_conv_int result_ty
+      begin if AilTypesAux.is_signed_integer_type promoted_ty then
+                                    stdlib.mkcall_catch_exceptional_condition promoted_ty core_incr
       else (* is unsigned *)
-                                  stdlib.mkcall_wrapI result_ty core_incr
+                                    stdlib.mkcall_wrapI promoted_ty core_incr
+      end
   | Ctype.Basic (Ctype.Floating (Ctype.RealFloating _)) ->
                                 (* TODO: not correct semantics for float *)
                                 Caux.mk_op_pe C.OpAdd obj_sym_pe (Caux.mk_floating_value_pe Mem.one_fval)
@@ -1135,7 +1139,7 @@ end
             )
           )
       
-      (* TODO: promotion? + atomicity *)
+      (* TODO: atomicity *)
       (* TODO: factorise with PostfixIncr !!! *)
       (* NOTE: if I read N2329 correctly, in C2X this will not be an RMW for the atomic case (but seq_cst) *)
       | A.AilEunary A.PostfixDecr e ->
@@ -1163,10 +1167,14 @@ match Ctype.unatomic_ ty with
   | Ctype.Basic (Ctype.Integer _) ->
       (* TODO: check again *)
       let core_decr = Caux.mk_op_pe C.OpSub obj_sym_pe (Caux.mk_integer_pe 1) in
-      if AilTypesAux.is_signed_integer_type result_ty then
-                                  stdlib.mkcall_catch_exceptional_condition result_ty core_decr
+      let promoted_ty =
+        fromJust "Translation.translate_expression: PostfixDecr promotion" (AilTypesAux.promotion integerImpl (ctype_of e)) in
+                                  stdlib.mkcall_conv_int result_ty
+      begin if AilTypesAux.is_signed_integer_type result_ty then
+                                    stdlib.mkcall_catch_exceptional_condition promoted_ty core_decr
       else (* is unsigned *)
-                                  stdlib.mkcall_wrapI result_ty core_decr
+                                    stdlib.mkcall_wrapI promoted_ty core_decr
+      end
   | Ctype.Basic (Ctype.Floating (Ctype.RealFloating _)) ->
                                 (* TODO: not correct semantics for float *)
                                 Caux.mk_op_pe C.OpSub obj_sym_pe (Caux.mk_floating_value_pe Mem.one_fval)
