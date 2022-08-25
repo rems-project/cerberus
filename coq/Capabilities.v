@@ -12,6 +12,11 @@ Generalizable All Variables.
 Open Scope N_scope.
 Open Scope list_scope.
 
+Variant comparison : Set :=
+| Eq : comparison
+| Lt : comparison
+| Gt : comparison.
+
 Module Type Permission.
   Parameter t:Set.
   Parameter user_perms_len: nat.

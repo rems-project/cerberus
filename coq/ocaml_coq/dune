@@ -1,6 +1,6 @@
 (coq.extraction
  (prelude Extract)
- (extracted_modules Capabilities BinNums Datatypes)
+ (extracted_modules Capabilities BinNums)
  (theories Cerberus)
 )
 

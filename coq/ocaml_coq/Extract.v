@@ -3,6 +3,7 @@ Require Cerberus.Capabilities.
 Require ExtrOcamlBasic.
 Require ExtrOcamlString.
 Require ExtrOcamlIntConv.
+Require ExtrOcamlNatInt.
 
 Extraction Language OCaml.
 
