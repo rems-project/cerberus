@@ -3,17 +3,84 @@
 Require Import Coq.Arith.PeanoNat.
 Require Import Coq.Relations.Relation_Definitions.
 Require Import Coq.Sets.Constructive_sets.
-Require Import Coq.Vectors.VectorDef.
+Require Import Coq.Lists.List.
 Require Import Coq.Sets.Ensembles.
+Require Import Coq.Strings.String.
+Require Import Coq.Numbers.BinNums.
 
 Set Implicit Arguments.
 Set Strict Implicit.
 Generalizable All Variables.
 
-Notation vector := VectorDef.t.
-
-Open Scope nat_scope.
+Open Scope N_scope.
 Open Scope list_scope.
+
+Class CPermission (P:Type) :=
+  {
+    user_perms_len: nat;
+
+    (* Convenience functions to examine some permission bits *)
+    perm_is_global: P -> bool; (* it permssion in RISV but in Morello spec while it is
+                    encoded and treated as one, it is sigled out as separate
+                    field of logical Capability structure (see R_HRVBQ paragraph
+                    in Morello spec. *)
+    perm_is_execute: P -> bool;
+    perm_is_ccall: P -> bool;
+    perm_is_load: P -> bool;
+    perm_is_load_cap: P -> bool;
+    perm_is_seal: P -> bool;
+    perm_is_store: P -> bool;
+    perm_is_store_cap: P -> bool;
+    perm_is_store_local_cap: P -> bool;
+    perm_is_system_access: P -> bool;
+    perm_is_unseal: P -> bool;
+
+    (* User-defined permissions *)
+    get_user_perms: P -> list bool;
+
+    (* Clearing permissions *)
+    perm_clear_global: P -> P;
+    perm_clear_execute: P -> P;
+    perm_clear_ccall: P -> P;
+    perm_clear_load: P -> P;
+    perm_clear_load_cap: P -> P;
+    perm_clear_seal: P -> P;
+    perm_clear_store: P -> P;
+    perm_clear_store_cap: P -> P;
+    perm_clear_store_local_cap: P -> P;
+    perm_clear_system_access: P -> P;
+    perm_clear_unseal: P -> P;
+
+
+    (** perform bitwise AND of user permissions *)
+    perm_and_user_perms: P -> list bool -> P;
+
+    (** null permission *)
+    perm_p0: P;
+
+    (** permissions for newly allocated region *)
+    perm_alloc: P;
+
+    (** permissions for newly allocated function *)
+    perm_alloc_fun: P;
+
+    (* --- Utility methods --- *)
+
+    to_string: P -> string;
+
+    (* raw permissoins in numeric format *)
+    to_raw: P -> N;
+
+    (* Initialize from list of boolean. The size and
+       contents of the list is implementation-specific.
+       Returns None in case of error *)
+    of_list: list bool -> option P;
+
+    (* inverse of [of_list] *)
+    to_list: P -> list bool;
+  }.
+
+
 
 Section Interval.
   Variable V:Type.
