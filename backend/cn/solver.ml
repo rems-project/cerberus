@@ -13,11 +13,17 @@ module LCSet = Set.Make(LC)
 
 
 
-(* this was a ref in the past, but never updated anywhere *)
+(* not yet written this run, > 3.0s counts as slow, append to this fname *)
+let slow_problem_ref = ref (false, 3.0, Some "slow_smt.txt")
+
 let save_slow_problems () =
   if !Debug_ocaml.debug_level > 0
-       then (3.0, (Some "slow_smt.txt" : string option))
-       else (99999999999.0, None)
+       then ! slow_problem_ref
+       else (false, 0.0, None)
+
+let saved_slow_problem () = match ! slow_problem_ref with
+  | (false, t, fn) -> slow_problem_ref := (true, t, fn)
+  | _ -> ()
 
 type solver = { 
     context : Z3.context;
@@ -668,11 +674,12 @@ let model () =
      ((context, model), qs)
 
 let maybe_save_slow_problem solv_inst lc lc_t time solver = match save_slow_problems () with
-  | (_, None) -> ()
-  | (cutoff, _) when (Stdlib.Float.compare time cutoff) = -1 -> ()
-  | (_, Some fname) ->
+  | (_, _, None) -> ()
+  | (_, cutoff, _) when (Stdlib.Float.compare time cutoff) = -1 -> ()
+  | (prev_msg, _, Some fname) ->
     let channel = open_out_gen [Open_append; Open_creat] 0o666 fname in
     output_string channel "\n\n";
+    if prev_msg then output_string channel "## New CN run ##\n\n" else ();
     Colour.without_colour (fun () -> print channel (item "Slow problem"
       (Pp.list (fun pp -> pp) [
           item "time taken" (format [] (Float.to_string time));
@@ -682,6 +689,7 @@ let maybe_save_slow_problem solv_inst lc lc_t time solver = match save_slow_prob
           if !Pp.print_level >= 11 then item "SMT assertions" (Pp.list (fun e -> format [] (Z3.Expr.to_string e)) (Z3.Solver.get_assertions solv_inst)) else Pp.empty;
       ]))) ();
     output_string channel "\n";
+    saved_slow_problem ();
     close_out channel
 
 let provable ~loc ~solver ~global ~trace_length ~assumptions ~pointer_facts lc = 
