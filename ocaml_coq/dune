@@ -1,0 +1,10 @@
+(coq.extraction
+ (prelude Extract)
+ (extracted_modules Capabilities)
+ (theories Cerberus)
+)
+
+(library
+  (name ocaml_coq)
+  (wrapped false)
+  ) 

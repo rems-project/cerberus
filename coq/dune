@@ -1,8 +1,5 @@
 (coq.theory
  (name Cerberus)
- (package cerberus))
-
-(coq.extraction
- (prelude Extract)
- (extracted_modules Capabilities)
+ (modules Capabilities)
 )
+
