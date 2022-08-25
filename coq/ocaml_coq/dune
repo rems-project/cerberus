@@ -1,10 +1,9 @@
 (coq.extraction
  (prelude Extract)
- (extracted_modules Capabilities)
+ (extracted_modules Capabilities BinNums Datatypes)
  (theories Cerberus)
 )
 
 (library
   (name ocaml_coq)
-  (wrapped false)
-  ) 
+  (wrapped false))
