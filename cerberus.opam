@@ -32,6 +32,8 @@ depends: [
   "result" {>= "1.4"}
   "ounit2"
   "ppx_deriving"
+  "coq"
+  "coq-ext-lib"
 ]
 build: [
   ["dune" "subst"] {pinned}
