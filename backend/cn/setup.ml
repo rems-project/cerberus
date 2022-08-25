@@ -6,7 +6,7 @@ let cpp_str =
     "cc -E -CC -Werror -nostdinc -undef -D__cerb__"
     ^ " -I " ^ Cerb_runtime.in_runtime "libc/include"
     ^ " -I " ^ Cerb_runtime.in_runtime "libcore"
-    ^ " -DDEBUG"
+    ^ " -DDEBUG -DCN"
 
 let with_cn_keywords str =
   let cn_keywords =
