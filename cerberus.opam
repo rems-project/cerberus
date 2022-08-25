@@ -32,6 +32,7 @@ depends: [
   "result" {>= "1.4"}
   "ounit2"
   "ppx_deriving"
+  "zarith"
   "coq"
   "coq-ext-lib"
 ]

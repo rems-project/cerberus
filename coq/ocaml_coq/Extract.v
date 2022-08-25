@@ -4,11 +4,11 @@ Require ExtrOcamlBasic.
 Require ExtrOcamlString.
 Require ExtrOcamlIntConv.
 Require ExtrOcamlNatInt.
+Require ExtrOcamlZBigInt.
 
 Extraction Language OCaml.
 
-(* Z *)
-Extraction Blacklist String List Char Core Monad Bool Format.
+Extraction Blacklist N Z Big_int_Z String List Char Core Monad Bool Format.
 
 Set Extraction AccessOpaque.
 
