@@ -13,10 +13,11 @@ module LCSet = Set.Make(LC)
 
 
 
-let save_slow_problems = 
-  ref (if !Debug_ocaml.debug_level > 0
-       then (5.0, (Some "slow_smt.txt" : string option))
-       else (99999999999.0, None))
+(* this was a ref in the past, but never updated anywhere *)
+let save_slow_problems () =
+  if !Debug_ocaml.debug_level > 0
+       then (3.0, (Some "slow_smt.txt" : string option))
+       else (99999999999.0, None)
 
 type solver = { 
     context : Z3.context;
@@ -666,7 +667,7 @@ let model () =
      let model = Option.value_err "SMT solver did not produce a counter model" omodel in
      ((context, model), qs)
 
-let maybe_save_slow_problem solv_inst lc lc_t time solver = match ! save_slow_problems with
+let maybe_save_slow_problem solv_inst lc lc_t time solver = match save_slow_problems () with
   | (_, None) -> ()
   | (cutoff, _) when (Stdlib.Float.compare time cutoff) = -1 -> ()
   | (_, Some fname) ->
