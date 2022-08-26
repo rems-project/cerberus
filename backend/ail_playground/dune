@@ -2,6 +2,6 @@
  (name main)
  (public_name ail_playground)
  (package cerberus)
- (flags (:standard -w -27))
+ (flags (:standard -w -27-32))
  (libraries cmdliner str unix
   cerb_frontend cerb_backend mem_concrete util))
