@@ -1,5 +1,5 @@
 (coq.theory
  (name Cerberus)
- (modules Capabilities)
+ (modules Capabilities Memory_model Mem_common)
 )
 
