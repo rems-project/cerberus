@@ -3,6 +3,8 @@ Require Import Coq.Lists.List.
 Require Import Coq.Strings.String.
 Require Import Coq.Numbers.BinNums.
 
+Require Import ExtLib.Structures.Monad.
+
 Set Implicit Arguments.
 Set Strict Implicit.
 Generalizable All Variables.
@@ -64,17 +66,12 @@ Module Type Memory (A:MADDR).
   Parameter check_overlap : footprint -> footprint -> overlap_status.
   Parameter mem_state : Set.
   Parameter initial_mem_state : mem_state.
+
   Parameter memM: Type -> Type.
-  (* TODO
-    memM :=
-      forall {a : Set},
-      Cerb_frontend.Nondeterminism.ndM a string
-        Cerb_frontend.Mem_common.mem_error
-        (Cerb_frontend.Mem_common.mem_constraint integer_value) mem_state;
-   *)
+  Parameter memM_monad: `{Monad memM}.
+
   Parameter _return : forall {a : Set}, a -> memM a.
   Parameter bind : forall {a b : Set}, memM a -> (a -> memM b) -> memM b.
-
 
   Parameter allocate_object :
     thread_id -> Symbol_prefix ->
