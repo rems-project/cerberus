@@ -1,6 +1,6 @@
 (coq.extraction
  (prelude Extract)
- (extracted_modules Capabilities)
+ (extracted_modules Addr Capabilities)
  (theories Cerberus)
 )
 

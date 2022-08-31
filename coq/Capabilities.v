@@ -5,6 +5,8 @@ Require Import Coq.Lists.List.
 Require Import Coq.Strings.String.
 Require Import Coq.Numbers.BinNums.
 
+Require Import Addr.
+
 Set Implicit Arguments.
 Set Strict Implicit.
 Generalizable All Variables.
