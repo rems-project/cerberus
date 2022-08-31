@@ -1,24 +1,95 @@
+Require Import Coq.Strings.String.
 
-Definition thread_id : Set := nat.
+Require Import Addr.
 
-Inductive overlap_status : Set :=
-| Disjoint : overlap_status
-| ExactOverlap : overlap_status
-| PartialOverlap : overlap_status.
+Module Mem_common (A:VADDR).
 
-(*
+  Parameter Inline thread_id: Set. (* Mem_common.thread_id *)
+  Parameter Inline Location_ocaml_t: Set. (* Location_ocaml.t *)
 
-Inductive access_kind : Set :=
-| LoadAccess : access_kind
-| StoreAccess : access_kind.
+  Inductive overlap_status : Set :=
+  | Disjoint : overlap_status
+  | ExactOverlap : overlap_status
+  | PartialOverlap : overlap_status.
 
-Inductive access_error : Set :=
-| NullPtr : access_error
-| FunctionPtr : access_error
-| DeadPtr : access_error
-| OutOfBoundPtr : access_error
-| NoProvPtr : access_error
-| AtomicMemberof : access_error.
+    Inductive access_kind : Set :=
+  | LoadAccess : access_kind
+  | StoreAccess : access_kind.
+
+  Inductive access_error : Set :=
+  | NullPtr : access_error
+  | FunctionPtr : access_error
+  | DeadPtr : access_error
+  | OutOfBoundPtr : access_error
+  | NoProvPtr : access_error
+  | AtomicMemberof : access_error.
+
+  Inductive free_error : Set :=
+  | Free_static_allocation : free_error
+  | Free_dead_allocation : free_error
+  | Free_out_of_bound : free_error.
+
+  Inductive vip_kind : Set :=
+  | VIP_null : vip_kind
+  | VIP_empty : vip_kind
+  | VIP_killed : vip_kind
+  | VIP_out_of_bound : vip_kind
+  | VIP_funptr : vip_kind.
+
+  Inductive vip_error : Set :=
+  | VIP_free_invalid_pointer : Location_ocaml_t -> vip_error
+  | VIP_relop_killed : vip_error
+  | VIP_relop_out_of_bound : vip_error
+  | VIP_relop_invalid : vip_error
+  | VIP_diffptr_out_of_bound : vip_error
+  | VIP_ptrcast_empty : vip_error
+  | VIP_intcast : vip_kind -> vip_error
+  | VIP_intcast_not_in_range : vip_error
+  | VIP_array_shift : vip_kind -> vip_error
+  | VIP_copy_alloc_id : vip_kind -> vip_error
+  | VIP_copy_alloc_id_invalid : vip_error.
+
+  Inductive mem_cheri_error : Set :=
+  | CheriErrDecodingCap : mem_cheri_error
+  | CheriMerrInvalidCap : mem_cheri_error
+  | CheriMerrUnsufficientPermissions : mem_cheri_error
+  | CheriBoundsErr : (* bounds,address,length *)
+    (A.t * A.t) * A.t * nat ->
+    mem_cheri_error.
+
+  Inductive mem_error : Set :=
+  | MerrOutsideLifetime : string -> mem_error
+  | MerrInternal : string -> mem_error
+  | MerrOther : string -> mem_error
+  | MerrPtrdiff : mem_error
+  | MerrAccess : Location_ocaml_t -> access_kind -> access_error -> mem_error
+  | MerrWriteOnReadOnly : bool -> Location_ocaml_t -> mem_error
+  | MerrReadUninit : Location_ocaml_t -> mem_error
+  | MerrUndefinedFree : Location_ocaml_t -> free_error -> mem_error
+  | MerrUndefinedRealloc : mem_error
+  | MerrIntFromPtr : Location_ocaml_t -> mem_error
+  | MerrPtrFromInt : mem_error
+  | MerrPtrComparison : mem_error
+  | MerrArrayShift : Location_ocaml_t -> mem_error
+  | MerrFreeNullPtr : Location_ocaml_t -> mem_error
+  | MerrWIP : string -> mem_error
+  | MerrVIP : vip_error -> mem_error
+  | MerrCHERI : Location_ocaml_t -> mem_cheri_error -> mem_error.
+
+  Inductive mem_constraint (a : Set) : Set :=
+  | MC_empty : mem_constraint a
+  | MC_eq : a -> a -> mem_constraint a
+  | MC_le : a -> a -> mem_constraint a
+  | MC_lt : a -> a -> mem_constraint a
+  | MC_in_device : a -> mem_constraint a
+  | MC_or : mem_constraint a -> mem_constraint a -> mem_constraint a
+  | MC_conj : list (mem_constraint a) -> mem_constraint a
+  | MC_not : mem_constraint a -> mem_constraint a.
+
+End Mem_common.
+
+  (*
+
 
 Definition stringFromAccess_error (function_parameter : access_error)
   : string :=
@@ -30,47 +101,20 @@ Definition stringFromAccess_error (function_parameter : access_error)
   | NoProvPtr => "NoProvPtr"
   | AtomicMemberof => "AtomicMemberof"
   end.
+   *)
 
-Inductive free_error : Set :=
-| Free_static_allocation : free_error
-| Free_dead_allocation : free_error
-| Free_out_of_bound : free_error.
 
+  (*
 Definition stringFromFree_error (function_parameter : free_error) : string :=
   match function_parameter with
   | Free_static_allocation => "Free_static_allocation"
   | Free_dead_allocation => "Free_dead_allocation"
   | Free_out_of_bound => "Free_out_of_bound"
   end.
+   *)
 
-Inductive vip_kind : Set :=
-| VIP_null : vip_kind
-| VIP_empty : vip_kind
-| VIP_killed : vip_kind
-| VIP_out_of_bound : vip_kind
-| VIP_funptr : vip_kind.
 
-Inductive vip_error : Set :=
-| VIP_free_invalid_pointer : Location_ocaml.t -> vip_error
-| VIP_relop_killed : vip_error
-| VIP_relop_out_of_bound : vip_error
-| VIP_relop_invalid : vip_error
-| VIP_diffptr_out_of_bound : vip_error
-| VIP_ptrcast_empty : vip_error
-| VIP_intcast : vip_kind -> vip_error
-| VIP_intcast_not_in_range : vip_error
-| VIP_array_shift : vip_kind -> vip_error
-| VIP_copy_alloc_id : vip_kind -> vip_error
-| VIP_copy_alloc_id_invalid : vip_error.
-
-Inductive mem_cheri_error : Set :=
-| CheriErrDecodingCap : mem_cheri_error
-| CheriMerrInvalidCap : mem_cheri_error
-| CheriMerrUnsufficientPermissions : mem_cheri_error
-| CheriBoundsErr :
-  (Nat_big_num.num * Nat_big_num.num) * Nat_big_num.num * Nat_big_num.num ->
-  mem_cheri_error.
-
+  (*
 Definition instance_Show_Show_Mem_common_mem_cheri_error_dict
   : Lem_pervasives.show_class mem_cheri_error :=
   {|
@@ -82,26 +126,9 @@ Definition instance_Show_Show_Mem_common_mem_cheri_error_dict
         | CheriMerrUnsufficientPermissions => "CheriMerrUnsufficientPermissions"
         | CheriBoundsErr _ => "CheriBoundsErr"
         end |}.
+   *)
 
-Inductive mem_error : Set :=
-| MerrOutsideLifetime : string -> mem_error
-| MerrInternal : string -> mem_error
-| MerrOther : string -> mem_error
-| MerrPtrdiff : mem_error
-| MerrAccess : Location_ocaml.t -> access_kind -> access_error -> mem_error
-| MerrWriteOnReadOnly : bool -> Location_ocaml.t -> mem_error
-| MerrReadUninit : Location_ocaml.t -> mem_error
-| MerrUndefinedFree : Location_ocaml.t -> free_error -> mem_error
-| MerrUndefinedRealloc : mem_error
-| MerrIntFromPtr : Location_ocaml.t -> mem_error
-| MerrPtrFromInt : mem_error
-| MerrPtrComparison : mem_error
-| MerrArrayShift : Location_ocaml.t -> mem_error
-| MerrFreeNullPtr : Location_ocaml.t -> mem_error
-| MerrWIP : string -> mem_error
-| MerrVIP : vip_error -> mem_error
-| MerrCHERI : Location_ocaml.t -> mem_cheri_error -> mem_error.
-
+  (*
 Definition instance_Show_Show_Mem_common_mem_error_dict
   : Lem_pervasives.show_class mem_error :=
   {|
@@ -371,17 +398,8 @@ Definition stringFromFloating_operator (function_parameter : floating_operator)
   | FloatMul => "FloatMul"
   | FloatDiv => "FloatDiv"
   end.
-*)
+   *)
 
-Inductive mem_constraint (a : Set) : Set :=
-| MC_empty : mem_constraint a
-| MC_eq : a -> a -> mem_constraint a
-| MC_le : a -> a -> mem_constraint a
-| MC_lt : a -> a -> mem_constraint a
-| MC_in_device : a -> mem_constraint a
-| MC_or : mem_constraint a -> mem_constraint a -> mem_constraint a
-| MC_conj : list (mem_constraint a) -> mem_constraint a
-| MC_not : mem_constraint a -> mem_constraint a.
 
 (*
 Arguments MC_empty {_}.
@@ -574,5 +592,4 @@ Definition derive_intrinsic_signature
           end, tys)
         end
     end.
-*)
-
+ *)

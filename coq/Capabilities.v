@@ -84,16 +84,6 @@ Module Type Permission.
   Parameter to_list: t -> list bool.
 End Permission.
 
-Module Type VADDR.
-  Parameter t:Set.
-
-  Parameter bitwise_complement: t -> t.
-
-  Parameter ltb: t -> t -> bool.
-  Parameter leb: t -> t -> bool.
-  Parameter ltb_irref: forall a:t, ltb a a = false.
-End VADDR.
-
 Module Type OTYPE.
   Parameter t:Set.
 End OTYPE.

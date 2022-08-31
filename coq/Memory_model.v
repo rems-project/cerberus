@@ -5,42 +5,22 @@ Require Import Coq.Numbers.BinNums.
 
 Require Import ExtLib.Structures.Monad.
 
+Require Import Addr.
+Require Import Mem_common.
+
 Set Implicit Arguments.
 Set Strict Implicit.
 Generalizable All Variables.
 
-Module Type MADDR.
-  Parameter t:Set.
+Module Type Memory (A:VADDR).
 
-  Parameter bitwise_complement: t -> t.
+  Import A.
+  Include Mem_common(A).
 
-  Parameter ltb: t -> t -> bool.
-  Parameter leb: t -> t -> bool.
-  Parameter ltb_irref: forall a:t, ltb a a = false.
-End MADDR.
-
-(* TODO: monad *)
-Module Type Constraints.
-  Parameter t : Set.
-  Parameter negate : t -> t.
-  Parameter eff : Set -> Set.
-  Parameter _return : forall {a : Set}, a -> eff a.
-  Parameter bind : forall {a b : Set}, eff a -> (a -> eff b) -> eff b.
-  Parameter foldlM : forall {a b : Set}, (a -> b -> eff a) -> a -> list b -> eff a.
-  Parameter runEff : forall {a : Set}, eff a -> a.
-  Parameter string_of_solver : eff (list string).
-  Parameter check_sat : eff ((* `UNSAT *) unit + (* `SAT *) unit).
-  Parameter with_constraints : forall {a b : Set}, b -> t -> eff a -> eff a.
-End Constraints.
-
-Module Type Memory (A:MADDR).
-
-  (* External dependencies (types) *)
   Parameter Symbol_prefix: Set. (* Symbol.prefix *)
   Parameter Symbol_identifier: Set. (* Symbol.identifier *)
   Parameter Symbol_sym: Set. (* Symbol.sym *)
   Parameter Ctype_ctype: Set. (* Ctype.ctype *)
-  Parameter Location_ocaml_t: Set. (* Location_ocaml.t *)
   Parameter Ctype_integerType: Set. (* Ctype.integerType *)
   Parameter derivecap_op: Set. (* Mem_common.derivecap_op *)
   Parameter integer_operator: Set. (* Mem_common.integer_operator *)
@@ -49,9 +29,7 @@ Module Type Memory (A:MADDR).
   Parameter floating_operator: Set. (* Mem_common.floating_operator *)
   Parameter Ctype_floatingType: Set. (* Ctype.floatingType *)
   Parameter intrinsics_signature: Set. (* intrinsics_signature *)
-  Parameter mem_constraint: Type -> Type. (* Mem_common.mem_constraint *)
-  Parameter overlap_status: Set. (* Mem_common.overlap_status *)
-  Parameter thread_id: Set. (* Mem_common.thread_id *)
+  (* Parameter mem_constraint: Type -> Type. (* Mem_common.mem_constraint *) *)
 
   (* Module interface below *)
 
@@ -60,15 +38,19 @@ Module Type Memory (A:MADDR).
   Parameter integer_value : Set.
   Parameter floating_value : Set.
   Parameter mem_value : Set.
-  Parameter mem_iv_constraint : mem_constraint integer_value.
-  (* TODO Parameter cs_module : Constraints (t := mem_iv_constraint). *)
+
+  (*
+    Parameter mem_iv_constraint : mem_constraint integer_value.
+    Parameter cs_module : Constraints (t := mem_iv_constraint).
+   *)
+
   Parameter footprint : Set.
   Parameter check_overlap : footprint -> footprint -> overlap_status.
   Parameter mem_state : Set.
   Parameter initial_mem_state : mem_state.
 
   Parameter memM: Type -> Type.
-  Parameter memM_monad: `{Monad memM}.
+  #[local] Declare Instance memM_monad: Monad memM.
 
   Parameter _return : forall {a : Set}, a -> memM a.
   Parameter bind : forall {a b : Set}, memM a -> (a -> memM b) -> memM b.
@@ -166,6 +148,8 @@ Module Type Memory (A:MADDR).
   Parameter realloc :
     thread_id -> integer_value -> pointer_value ->
     integer_value -> memM pointer_value.
+
+(* Following could be implemented in OCaml wrapper
   Parameter va_start :
     list (Ctype_ctype * pointer_value) -> memM integer_value.
   Parameter va_copy : integer_value -> memM integer_value.
@@ -173,6 +157,7 @@ Module Type Memory (A:MADDR).
   Parameter va_end : integer_value -> memM unit.
   Parameter va_list :
     Z -> memM (list (Ctype_ctype * pointer_value)).
+ *)
 
   Parameter copy_alloc_id : integer_value -> pointer_value -> memM pointer_value.
 
