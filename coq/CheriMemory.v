@@ -9,6 +9,8 @@ Require Import Coq.FSets.FMapAVL.
 Require Import Coq.Structures.OrderedTypeEx.
 Require Import Coq.Strings.HexString.
 
+Require Import ExtLib.Structures.Monad.
+
 Require Import Capabilities.
 Require Import Addr.
 Require Import Memory_model.
@@ -16,6 +18,7 @@ Require Import Mem_common.
 Require Import ErrorWithState.
 Require Import Undefined.
 Require Import Morello.
+Require Import ErrorWithState.
 
 Local Open Scope string_scope.
 Local Open Scope type_scope.
@@ -122,10 +125,6 @@ Module CheriMemory
 
   Definition mem_value := mem_value_ind.
 
-  Inductive MemMonadError :=
-  | MemMonadErr: mem_error -> MemMonadError
-  | MemMonadUB: (Location_ocaml_t * (list undefined_behaviour)) -> MemMonadError.
-
   Inductive access_intention : Set :=
   | ReadIntent : access_intention
   | WriteIntent : access_intention
@@ -139,7 +138,7 @@ Module CheriMemory
   Record allocation :=
     {
       prefix : Symbol_prefix;
-      base : Z;
+      base : MorelloAddr.t;
       size : Z;
       ty : option Ctype_ctype;
       is_readonly : readonly_status;
@@ -153,11 +152,11 @@ Module CheriMemory
       value : option byte
     }.
 
-  Record mem_state :=
+  Record mem_state_r :=
     {
       next_alloc_id : storage_instance_id;
       next_iota : symbolic_storage_instance_id;
-      last_address : Z;
+      last_address : MorelloAddr.t;
       allocations : ZMap.t allocation;
       iota_map : ZMap.t
                    ((* `Single *) storage_instance_id +
@@ -170,11 +169,13 @@ Module CheriMemory
       bytemap : ZMap.t AbsByte;
       captags : ZMap.t bool;
       dead_allocations : list storage_instance_id;
-      dynamic_addrs : list Z;
+      dynamic_addrs : list MorelloAddr.t;
       last_used : option storage_instance_id
     }.
 
-  Definition initial_address := HexString.to_Z "0xFFFFFFFF".
+  Definition mem_state := mem_state_r.
+
+  Definition initial_address := MorelloAddr.of_Z (HexString.to_Z "0xFFFFFFFF").
 
   Definition initial_mem_state : mem_state :=
     {|
@@ -193,5 +194,36 @@ Module CheriMemory
       last_used := None
     |}.
 
+  Inductive MemMonadError :=
+  | MemMonadErr: mem_error -> MemMonadError
+  | MemMonadUB: (Location_ocaml_t * (list undefined_behaviour)) -> MemMonadError.
+
+  Definition memM := errS mem_state MemMonadError.
+  #[local] Instance memM_monad: Monad memM.
+  Proof.
+    typeclasses eauto.
+  Qed.
+
+  Inductive footprint_ind :=
+    (* base address, size *)
+    | FP: MorelloAddr.t * Z -> footprint_ind.
+
+  Definition footprint := footprint_ind.
+
+  Definition check_overlap a b :=
+    match a,b with
+    |  (FP (b1, sz1)), (FP (b2, sz2)) =>
+         let b1 := MorelloAddr.to_Z b1 in
+         let b2 := MorelloAddr.to_Z b2 in
+         if andb (Z.eqb b1 b2) (Z.eqb sz1 sz2) then
+           ExactOverlap
+         else if orb
+                   (Z.leb (Z.add b1 sz1) b2)
+                   (Z.leb (Z.add b2 sz2) b1)
+              then
+                Disjoint
+              else
+                PartialOverlap
+    end.
 
 End CheriMemory.

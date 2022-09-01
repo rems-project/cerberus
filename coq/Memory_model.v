@@ -44,14 +44,11 @@ Module Type Memory (A:VADDR).
 
   Parameter footprint : Set.
   Parameter check_overlap : footprint -> footprint -> overlap_status.
-  Parameter mem_state : Set.
+  Parameter mem_state : Type.
   Parameter initial_mem_state : mem_state.
 
   Parameter memM: Type -> Type.
   #[local] Declare Instance memM_monad: Monad memM.
-
-  Parameter _return : forall {a : Set}, a -> memM a.
-  Parameter bind : forall {a b : Set}, memM a -> (a -> memM b) -> memM b.
 
   Parameter allocate_object :
     thread_id -> Symbol_prefix ->

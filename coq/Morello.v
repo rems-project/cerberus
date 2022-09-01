@@ -16,6 +16,10 @@ Module MorelloAddr: VADDR.
   Definition ltb := Z.ltb.
   Definition leb := Z.leb.
   Definition ltb_irref := Z.ltb_irrefl.
+
+  Definition of_Z (x:Z) :t := x.
+  Definition to_Z (x:t): Z := x.
+
 End MorelloAddr.
 
 Module MoreloOTYPE : OTYPE.
