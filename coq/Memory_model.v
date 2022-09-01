@@ -25,11 +25,9 @@ Module Type Memory (A:VADDR).
   Parameter derivecap_op: Set. (* Mem_common.derivecap_op *)
   Parameter integer_operator: Set. (* Mem_common.integer_operator *)
   Parameter Ctype_tag_definition: Set. (* Cerb_frontend.Ctype.tag_definition *)
-  Parameter Pmap_map: Set -> Set -> Set.
   Parameter floating_operator: Set. (* Mem_common.floating_operator *)
   Parameter Ctype_floatingType: Set. (* Ctype.floatingType *)
   Parameter intrinsics_signature: Set. (* intrinsics_signature *)
-  (* Parameter mem_constraint: Type -> Type. (* Mem_common.mem_constraint *) *)
 
   (* Module interface below *)
 
@@ -173,7 +171,7 @@ Module Type Memory (A:VADDR).
     integer_value -> integer_value.
 
   Parameter offsetof_ival :
-    Pmap_map Symbol_sym Ctype_tag_definition ->
+    (Symbol_sym -> option Ctype_tag_definition) (* Pmap_map *) ->
     Symbol_sym -> Symbol_identifier ->
     integer_value.
 
