@@ -1,11 +1,13 @@
+Require Import Coq.Numbers.BinNums.
 Require Import Coq.Strings.String.
 
 Require Import Addr.
+Require Import Undefined.
+Require Import Location.
 
 Module Mem_common (A:VADDR).
 
-  Parameter Inline thread_id: Set. (* Mem_common.thread_id *)
-  Parameter Inline Location_ocaml_t: Set. (* Location_ocaml.t *)
+  Definition thread_id := Z. (* Mem_common.thread_id *)
 
   Inductive overlap_status : Set :=
   | Disjoint : overlap_status
@@ -37,7 +39,7 @@ Module Mem_common (A:VADDR).
   | VIP_funptr : vip_kind.
 
   Inductive vip_error : Set :=
-  | VIP_free_invalid_pointer : Location_ocaml_t -> vip_error
+  | VIP_free_invalid_pointer : location_ocaml -> vip_error
   | VIP_relop_killed : vip_error
   | VIP_relop_out_of_bound : vip_error
   | VIP_relop_invalid : vip_error
@@ -62,19 +64,19 @@ Module Mem_common (A:VADDR).
   | MerrInternal : string -> mem_error
   | MerrOther : string -> mem_error
   | MerrPtrdiff : mem_error
-  | MerrAccess : Location_ocaml_t -> access_kind -> access_error -> mem_error
-  | MerrWriteOnReadOnly : bool -> Location_ocaml_t -> mem_error
-  | MerrReadUninit : Location_ocaml_t -> mem_error
-  | MerrUndefinedFree : Location_ocaml_t -> free_error -> mem_error
+  | MerrAccess : location_ocaml -> access_kind -> access_error -> mem_error
+  | MerrWriteOnReadOnly : bool -> location_ocaml -> mem_error
+  | MerrReadUninit : location_ocaml -> mem_error
+  | MerrUndefinedFree : location_ocaml -> free_error -> mem_error
   | MerrUndefinedRealloc : mem_error
-  | MerrIntFromPtr : Location_ocaml_t -> mem_error
+  | MerrIntFromPtr : location_ocaml -> mem_error
   | MerrPtrFromInt : mem_error
   | MerrPtrComparison : mem_error
-  | MerrArrayShift : Location_ocaml_t -> mem_error
-  | MerrFreeNullPtr : Location_ocaml_t -> mem_error
+  | MerrArrayShift : location_ocaml -> mem_error
+  | MerrFreeNullPtr : location_ocaml -> mem_error
   | MerrWIP : string -> mem_error
   | MerrVIP : vip_error -> mem_error
-  | MerrCHERI : Location_ocaml_t -> mem_cheri_error -> mem_error.
+  | MerrCHERI : location_ocaml -> mem_cheri_error -> mem_error.
 
   Inductive mem_constraint (a : Set) : Set :=
   | MC_empty : mem_constraint a
@@ -85,8 +87,6 @@ Module Mem_common (A:VADDR).
   | MC_or : mem_constraint a -> mem_constraint a -> mem_constraint a
   | MC_conj : list (mem_constraint a) -> mem_constraint a
   | MC_not : mem_constraint a -> mem_constraint a.
-
-End Mem_common.
 
   (*
 
@@ -214,57 +214,59 @@ Definition instance_Show_Show_Mem_common_mem_error_dict
               (String.append " ["
                 (String.append (Location_ocaml.location_to_string None loc) "]")))
         end |}.
+   *)
 
-Definition undefinedFromMem_error (function_parameter : mem_error)
-  : option Cerb_frontend.Undefined.undefined_behaviour :=
-  match function_parameter with
-  | MerrOutsideLifetime _ => Some Cerb_frontend.Undefined.UB009_outside_lifetime
-  | MerrPtrdiff =>
-    Some Cerb_frontend.Undefined.UB048_disjoint_array_pointers_subtraction
-  | MerrAccess _ _ NullPtr =>
-    Some Cerb_frontend.Undefined.UB019_lvalue_not_an_object
-  | MerrAccess _ _ DeadPtr =>
-    Some Cerb_frontend.Undefined.UB010_pointer_to_dead_object
-  | MerrIntFromPtr _ =>
-    Some
-      Cerb_frontend.Undefined.UB024_out_of_range_pointer_to_integer_conversion
-  | MerrPtrFromInt =>
-    Some Cerb_frontend.Undefined.UB_CERB001_integer_to_dead_pointer
-  | MerrPtrComparison =>
-    Some
-      Cerb_frontend.Undefined.UB053_distinct_aggregate_union_pointer_comparison
-  | MerrArrayShift _ => Some Cerb_frontend.Undefined.UB046_array_pointer_outside
-  | MerrFreeNullPtr _ => None
-  | MerrAccess _ LoadAccess OutOfBoundPtr =>
-    Some Cerb_frontend.Undefined.UB_CERB002a_out_of_bound_load
-  | MerrAccess _ StoreAccess OutOfBoundPtr =>
-    Some Cerb_frontend.Undefined.UB_CERB002b_out_of_bound_store
-  | MerrAccess _ _ AtomicMemberof =>
-    Some Cerb_frontend.Undefined.UB042_access_atomic_structUnion_member
-  | MerrUndefinedFree loc Free_static_allocation =>
-    Some Cerb_frontend.Undefined.UB179a_static_allocation
-  | MerrUndefinedFree loc Free_dead_allocation =>
-    Some Cerb_frontend.Undefined.UB179b_dead_allocation
-  | MerrUndefinedFree loc Free_out_of_bound => None
-  | MerrUndefinedRealloc =>
-    Some Cerb_frontend.Undefined.UB179a_static_allocation
-  | MerrWriteOnReadOnly true _ =>
-    Some Cerb_frontend.Undefined.UB033_modifying_string_literal
-  | MerrWriteOnReadOnly false _ =>
-    Some Cerb_frontend.Undefined.UB064_modifying_const
-  | MerrReadUninit _ => None
-  | MerrCHERI _ err =>
-    match err with
-    | CheriMerrInvalidCap => Some Cerb_frontend.Undefined.UB_CHERI_InvalidCap
-    | CheriErrDecodingCap =>
-      Some Cerb_frontend.Undefined.UB012_lvalue_read_trap_representation
-    | CheriMerrUnsufficientPermissions =>
-      Some Cerb_frontend.Undefined.UB_CHERI_UnsufficientPermissions
-    | CheriBoundsErr _ => Some Cerb_frontend.Undefined.UB_CHERI_BoundsViolation
-    end
+  Definition undefinedFromMem_error (function_parameter : mem_error)
+    : option undefined_behaviour :=
+    match function_parameter with
+    | MerrOutsideLifetime _ => Some UB009_outside_lifetime
+    | MerrPtrdiff =>
+        Some UB048_disjoint_array_pointers_subtraction
+    | MerrAccess _ _ NullPtr =>
+        Some UB019_lvalue_not_an_object
+    | MerrAccess _ _ DeadPtr =>
+        Some UB010_pointer_to_dead_object
+    | MerrIntFromPtr _ =>
+        Some
+          UB024_out_of_range_pointer_to_integer_conversion
+    | MerrPtrFromInt =>
+        Some UB_CERB001_integer_to_dead_pointer
+    | MerrPtrComparison =>
+        Some
+          UB053_distinct_aggregate_union_pointer_comparison
+    | MerrArrayShift _ => Some UB046_array_pointer_outside
+    | MerrFreeNullPtr _ => None
+    | MerrAccess _ LoadAccess OutOfBoundPtr =>
+        Some UB_CERB002a_out_of_bound_load
+    | MerrAccess _ StoreAccess OutOfBoundPtr =>
+        Some UB_CERB002b_out_of_bound_store
+    | MerrAccess _ _ AtomicMemberof =>
+        Some UB042_access_atomic_structUnion_member
+    | MerrUndefinedFree loc Free_static_allocation =>
+        Some UB179a_static_allocation
+    | MerrUndefinedFree loc Free_dead_allocation =>
+        Some UB179b_dead_allocation
+    | MerrUndefinedFree loc Free_out_of_bound => None
+    | MerrUndefinedRealloc =>
+        Some UB179a_static_allocation
+    | MerrWriteOnReadOnly true _ =>
+        Some UB033_modifying_string_literal
+    | MerrWriteOnReadOnly false _ =>
+        Some UB064_modifying_const
+    | MerrReadUninit _ => None
+    | MerrCHERI _ err =>
+        match err with
+        | CheriMerrInvalidCap => Some UB_CHERI_InvalidCap
+        | CheriErrDecodingCap =>
+            Some UB012_lvalue_read_trap_representation
+        | CheriMerrUnsufficientPermissions =>
+            Some UB_CHERI_UnsufficientPermissions
+        | CheriBoundsErr _ => Some UB_CHERI_BoundsViolation
+        end
   | _ => None
   end.
 
+(*
 Inductive integer_operator : Set :=
 | IntAdd : integer_operator
 | IntSub : integer_operator
@@ -593,3 +595,5 @@ Definition derive_intrinsic_signature
         end
     end.
  *)
+
+End Mem_common.

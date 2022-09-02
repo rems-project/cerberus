@@ -1,5 +1,5 @@
 (coq.theory
  (name Cerberus)
- (modules Addr Capabilities Morello CheriMemory Ctype ErrorWithState Mem_common Memory_model Symbol Undefined)
+ (modules Addr Location Capabilities Morello CheriMemory Ctype ErrorWithState Mem_common Memory_model Symbol Undefined)
 )
 

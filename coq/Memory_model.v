@@ -6,6 +6,7 @@ Require Import Coq.Numbers.BinNums.
 Require Import ExtLib.Structures.Monad.
 
 Require Import Addr.
+Require Import Location.
 Require Import Mem_common.
 
 Set Implicit Arguments.
@@ -59,14 +60,14 @@ Module Type Memory (A:VADDR).
     thread_id -> Symbol_prefix ->
     integer_value -> integer_value -> memM pointer_value.
 
-  Parameter kill : Location_ocaml_t -> bool -> pointer_value -> memM unit.
+  Parameter kill : location_ocaml -> bool -> pointer_value -> memM unit.
 
   Parameter load :
-    Location_ocaml_t -> Ctype_ctype -> pointer_value ->
+    location_ocaml -> Ctype_ctype -> pointer_value ->
     memM (footprint * mem_value).
 
   Parameter store :
-    Location_ocaml_t -> Ctype_ctype -> bool -> pointer_value ->
+    location_ocaml -> Ctype_ctype -> bool -> pointer_value ->
     mem_value -> memM footprint.
 
   Parameter null_ptrval : Ctype_ctype -> pointer_value.
@@ -101,18 +102,18 @@ Module Type Memory (A:VADDR).
   Parameter isWellAligned_ptrval : Ctype_ctype -> pointer_value -> memM bool.
 
   Parameter ptrfromint :
-    Location_ocaml_t -> Ctype_integerType ->
+    location_ocaml -> Ctype_integerType ->
     Ctype_ctype -> integer_value -> memM pointer_value.
 
   Parameter intfromptr :
-    Location_ocaml_t -> Ctype_ctype ->
+    location_ocaml -> Ctype_ctype ->
     Ctype_integerType -> pointer_value -> memM integer_value.
 
   Parameter derive_cap :
     bool -> derivecap_op -> integer_value ->  integer_value -> integer_value.
 
   Parameter cap_assign_value :
-    Location_ocaml_t -> integer_value -> integer_value -> integer_value.
+    location_ocaml -> integer_value -> integer_value -> integer_value.
 
   Parameter ptr_t_int_value : integer_value -> integer_value.
 
@@ -127,11 +128,11 @@ Module Type Memory (A:VADDR).
     Symbol_identifier -> pointer_value.
 
   Parameter eff_array_shift_ptrval :
-    Location_ocaml_t -> pointer_value -> Ctype_ctype ->
+    location_ocaml -> pointer_value -> Ctype_ctype ->
     integer_value -> memM pointer_value.
 
   Parameter eff_member_shift_ptrval :
-    Location_ocaml_t -> pointer_value -> Symbol_sym ->
+    location_ocaml -> pointer_value -> Symbol_sym ->
     Symbol_identifier -> memM pointer_value.
 
   Parameter memcpy :
@@ -245,7 +246,7 @@ Module Type Memory (A:VADDR).
        mem_value -> a) -> a.
   Parameter sequencePoint : memM unit.
   Parameter call_intrinsic :
-    Location_ocaml_t -> string -> list mem_value -> memM (option mem_value).
+    location_ocaml -> string -> list mem_value -> memM (option mem_value).
   Parameter get_intrinsic_type_spec :
     string -> option intrinsics_signature.
 
