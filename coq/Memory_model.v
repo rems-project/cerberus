@@ -164,7 +164,7 @@ Module Type Memory (A:VADDR).
     integer_value -> integer_value.
 
   Parameter offsetof_ival :
-    (Symbol.sym -> option Ctype.tag_definition) (* Pmap_map *) ->
+    (SymMap.t Ctype.tag_definition) ->
     Symbol.sym -> Symbol.identifier ->
     integer_value.
 
