@@ -19,6 +19,7 @@ Require Import Undefined.
 Require Import Morello.
 Require Import ErrorWithState.
 Require Import Location.
+Require Import Symbol.
 
 Local Open Scope string_scope.
 Local Open Scope type_scope.
@@ -46,16 +47,9 @@ Module CheriMemory
   Definition storage_instance_id : Set := Z.
 
   (* Following types need to be defined *)
-  Definition Symbol_prefix: Set := unit. (* Symbol.prefix *)
-  Definition Symbol_identifier: Set := unit. (* Symbol.identifier *)
-  Definition Symbol_sym: Set := unit. (* Symbol.sym *)
-  Definition Ctype_ctype: Set := unit. (* Ctype.ctype *)
-  Definition Ctype_integerType: Set := unit. (* Ctype.integerType *)
   Definition derivecap_op: Set := unit. (* Mem_common.derivecap_op *)
   Definition integer_operator: Set := unit. (* Mem_common.integer_operator *)
-  Definition Ctype_tag_definition: Set := unit. (* Cerb_frontend.Ctype.tag_definition *)
   Definition floating_operator: Set := unit. (* Mem_common.floating_operator *)
-  Definition Ctype_floatingType: Set := unit. (* Ctype.floatingType *)
   Definition intrinsics_signature: Set := unit. (* intrinsics_signature *)
   Definition Digest_t: Set := unit. (* OCaml Stdlib.Digest_t *)
 
@@ -66,7 +60,7 @@ Module CheriMemory
   | Prov_device : provenance.
 
   Inductive function_pointer : Set :=
-  | FP_valid : Symbol_sym -> function_pointer
+  | FP_valid : Symbol.sym -> function_pointer
   | FP_invalid : C.t -> function_pointer.
 
   Inductive pointer_value_base : Set :=
@@ -86,44 +80,44 @@ Module CheriMemory
 
   Definition floating_value : Set := float. (* 64 bit *)
 
-  Inductive mem_value_with_err : Set :=
-  | MVEunspecified : Ctype_ctype -> mem_value_with_err
+  Inductive mem_value_with_err :=
+  | MVEunspecified : Ctype.ctype -> mem_value_with_err
   | MVEinteger :
-    Ctype_integerType -> integer_value ->
+    Ctype.integerType -> integer_value ->
     mem_value_with_err
   | MVEfloating :
-    Ctype_floatingType -> floating_value ->
+    Ctype.floatingType -> floating_value ->
     mem_value_with_err
   | MVEpointer :
-    Ctype_ctype -> pointer_value -> mem_value_with_err
+    Ctype.ctype -> pointer_value -> mem_value_with_err
   | MVEarray : list mem_value_with_err -> mem_value_with_err
   | MVEstruct :
-    Symbol_sym ->
-    list  (Symbol_identifier *  Ctype_ctype * mem_value_with_err) ->
+    Symbol.sym ->
+    list  (Symbol.identifier *  Ctype.ctype * mem_value_with_err) ->
     mem_value_with_err
   | MVEunion :
-    Symbol_sym ->
-    Symbol_identifier -> mem_value_with_err ->
+    Symbol.sym ->
+    Symbol.identifier -> mem_value_with_err ->
     mem_value_with_err
   | MVErr : mem_error -> mem_value_with_err.
 
-  Inductive mem_value_ind : Set :=
-  | MVunspecified : Ctype_ctype -> mem_value_ind
+  Inductive mem_value_ind :=
+  | MVunspecified : Ctype.ctype -> mem_value_ind
   | MVinteger :
-    Ctype_integerType -> integer_value -> mem_value_ind
+    Ctype.integerType -> integer_value -> mem_value_ind
   | MVfloating :
-    Ctype_floatingType -> floating_value -> mem_value_ind
+    Ctype.floatingType -> floating_value -> mem_value_ind
   | MVpointer :
-    Ctype_ctype -> pointer_value -> mem_value_ind
+    Ctype.ctype -> pointer_value -> mem_value_ind
   | MVarray : list mem_value_ind -> mem_value_ind
   | MVstruct :
-    Symbol_sym ->
+    Symbol.sym ->
     list
-      (Symbol_identifier *
-         Ctype_ctype * mem_value_ind) -> mem_value_ind
+      (Symbol.identifier *
+         Ctype.ctype * mem_value_ind) -> mem_value_ind
   | MVunion :
-    Symbol_sym ->
-    Symbol_identifier -> mem_value_ind -> mem_value_ind.
+    Symbol.sym ->
+    Symbol.identifier -> mem_value_ind -> mem_value_ind.
 
   Definition mem_value := mem_value_ind.
 
@@ -143,10 +137,10 @@ Module CheriMemory
 
   Record allocation :=
     {
-      prefix : Symbol_prefix;
+      prefix : Symbol.prefix;
       base : MorelloAddr.t;
       size : Z;
-      ty : option Ctype_ctype;
+      ty : option Ctype.ctype;
       is_readonly : readonly_status;
       taint : allocation_taint
     }.
@@ -170,7 +164,7 @@ Module CheriMemory
       funptrmap : ZMap.t
                     (Digest_t * string * C.t);
       varargs : ZMap.t
-                  (Z * list (Ctype_ctype * pointer_value));
+                  (Z * list (Ctype.ctype * pointer_value));
       next_varargs_id : Z;
       bytemap : ZMap.t AbsByte;
       captags : ZMap.t bool;
@@ -211,7 +205,7 @@ Module CheriMemory
       allocations := ZMap.empty allocation;
       iota_map := ZMap.empty (storage_instance_id + storage_instance_id * storage_instance_id);
       funptrmap := ZMap.empty (Digest_t * string * C.t);
-      varargs := ZMap.empty (Z * list (Ctype_ctype * pointer_value));
+      varargs := ZMap.empty (Z * list (Ctype.ctype * pointer_value));
       next_varargs_id := Z0;
       bytemap := ZMap.empty AbsByte;
       captags := ZMap.empty bool;
@@ -357,7 +351,7 @@ Module CheriMemory
             ;;
             ret (alloc_id, addr).
 
-  Definition allocate_object (tid:thread_id) (pref:Symbol_prefix) (int_val:integer_value) (ty:Ctype_ctype) (init_opt:option mem_value) : memM pointer_value  :=
+  Definition allocate_object (tid:thread_id) (pref:Symbol.prefix) (int_val:integer_value) (ty:Ctype.ctype) (init_opt:option mem_value) : memM pointer_value  :=
     let align_n := num_of_int int_val in
     let sz := sizeof ty in
     let size_n := Z.of_int sz in
