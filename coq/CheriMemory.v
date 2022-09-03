@@ -1,11 +1,15 @@
 Require Import Coq.Arith.PeanoNat.
 Require Import Coq.Lists.List.
 Require Import Coq.Numbers.BinNums.
+Require Import Coq.ZArith.Zwf.
 Require Import Coq.ZArith.Zcompare.
 Require Import Coq.Floats.PrimFloat.
 From Coq.Strings Require Import String Byte HexString.
 Require Import Coq.FSets.FMapAVL.
 Require Import Coq.Structures.OrderedTypeEx.
+Require Coq.Program.Wf.
+Require Recdef.
+Require Import Lia.
 
 From ExtLib.Structures Require Import Monad Monads MonadExc MonadState.
 Require Import ExtLib.Data.Monads.EitherMonad.
@@ -20,12 +24,14 @@ Require Import Morello.
 Require Import ErrorWithState.
 Require Import Location.
 Require Import Symbol.
+Require Import Implementation.
 
 Local Open Scope string_scope.
 Local Open Scope type_scope.
 Local Open Scope list_scope.
 Local Open Scope Z_scope.
 
+Require Import AltBinNotations.
 Import ListNotations.
 Import MonadNotation.
 
@@ -37,7 +43,9 @@ Module CheriMemory
        (MorelloCAP_SEAL_T)
        (MorelloVADDR_INTERVAL)
        (MorelloPermission)
-  ) : Memory(MorelloAddr).
+  )
+  (IMP: Implementation)
+  : Memory(MorelloAddr).
 
   Include Mem_common(MorelloAddr).
 
@@ -309,13 +317,48 @@ Module CheriMemory
 
       All tags which were [true] will be flipped to [false].  For
       addresses which did not have tags set, they will remain
-      unspecified.  *)
+      unspecified.
+
+      Implementation is split into 2 functions: one implementing recursion
+      and the other is top level entry point.
+   *)
+  Function clear_tags_loop (a0:Z) (align:{x:Z|0 < x}) (a : Z) (captags : ZMap.t bool) {wf (Zwf a0) a} : ZMap.t bool
+    :=
+    let upd (a : Z.t) (ct : ZMap.t bool): ZMap.t bool :=
+      match ZMap.find a ct with
+      | Some true => ZMap.add a false ct
+      | _ => ct
+      end in
+    if Z.geb a a0 then
+      clear_tags_loop a0 align (Z.sub a (proj1_sig align)) (upd a captags)
+    else
+      captags.
+  Proof.
+    -
+      intros a0 align a captags0 teq.
+      destruct align as [align AC].
+      unfold Zwf.
+      split.
+      + lia.
+      + apply Z.geb_le in teq.
+        apply Z.lt_sub_pos.
+        simpl.
+        lia.
+    -
+      apply Zwf_well_founded.
+  Qed.
   Definition clear_caps
     (addr:MorelloAddr.t)
     (size:Z)
     (captags:ZMap.t bool): ZMap.t bool
     :=
-    captags.  (* TODO *)
+    let align := IMP.get.(alignof_pointer) in
+    let align_pos := IMP.get.(alignof_pointer_positive) in
+    let lower_a (x_value : Z) : Z := Z.mul (Z.quot x_value align) align in
+    let addr := MorelloAddr.to_Z addr in
+    let a0 := lower_a addr in
+    let a1 := lower_a (Z.pred (Z.add addr size)) in
+    clear_tags_loop a0 (exist _ align align_pos) a1 captags.
 
   Definition allocator (size:Z) (align:Z) : memM (storage_instance_id * MorelloAddr.t) :=
     get >>= fun st =>
