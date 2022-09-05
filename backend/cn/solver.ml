@@ -150,6 +150,9 @@ module Translate = struct
     | RecordFunc of { mbts : BT.member_types }
     | RecordMemberFunc of { mbts : BT.member_types; member : Sym.t }
     | DefaultFunc of { bt : BT.t }
+    | DatatypeConsFunc of { nm: Sym.t }
+    | DatatypeConsRecogFunc of { nm: Sym.t }
+    | DatatypeAccFunc of { nm: Sym.t; dt: Sym.t; bt: BT.t }
     (* | SomethingFunc of { bt : BT.t } *)
     (* | NothingFunc of { bt : BT.t } *)
     (* | IsSomethingFunc of { bt : BT.t } *)
@@ -163,7 +166,6 @@ module Translate = struct
   let sort_table = Sort_Table.create 1000
 
 
-
   let z3sym_table : z3sym_table_entry Z3Symbol_Table.t = 
     Z3Symbol_Table.create 10000
 
@@ -171,10 +173,11 @@ module Translate = struct
 
 
 
-  let string context str = 
+  let string context str =
     Z3.Symbol.mk_string context str
-  let symbol context sym = 
-    Z3.Symbol.mk_string context ("a"^string_of_int (Sym.num sym))
+  let prefix_symbol context pfx sym =
+    Z3.Symbol.mk_string context (pfx ^ Sym.pp_string sym ^ "_a" ^ string_of_int (Sym.num sym))
+  let symbol context sym = prefix_symbol context "" sym
 
   
 
@@ -198,12 +201,47 @@ module Translate = struct
   (* let member_symbol tag id = 
    *   Z3.Symbol.mk_string context (member_name tag id) *)
 
+  let translate_datatypes other_sort context global =
+    let to_translate = global.datatypes |> SymMap.bindings
+      |> List.filter (fun (nm, _) -> not (BT_Table.mem bt_table (BT.Datatype nm)))
+      |> List.mapi (fun i (nm, _) -> (nm, i))
+    in
+    let arg_sort bt = match bt with
+      | BT.Datatype nm -> begin match BT_Table.find_opt bt_table bt with
+          | Some sort -> (Some sort, 0)
+          | None -> (None, List.assoc Sym.equal nm to_translate)
+        end
+      | _ -> (Some (other_sort bt), 0)
+    in
+    let conv_cons dt_nm nm =
+      let info = SymMap.find nm global.datatype_constrs in
+      let r = List.map (fun (_, bt) -> arg_sort bt) info.c_params in
+      let sym = symbol context nm in
+      let is_sym = prefix_symbol context "is_" nm in
+      Z3Symbol_Table.add z3sym_table sym (DatatypeConsFunc {nm});
+      Z3Symbol_Table.add z3sym_table is_sym (DatatypeConsRecogFunc {nm});
+      List.iter (fun (nm, bt) -> Z3Symbol_Table.add z3sym_table
+          (symbol context nm) (DatatypeAccFunc {nm; dt = dt_nm; bt})) info.c_params;
+      Z3.Datatype.mk_constructor context (symbol context nm)
+          (prefix_symbol context "is_" nm)
+          (List.map (fun (nm, _) -> symbol context nm) info.c_params)
+          (List.map fst r) (List.map snd r)
+    in
+    let conv_dt nm =
+      let info = SymMap.find nm global.datatypes in
+      List.map (conv_cons nm) info.dt_constrs
+    in
+    let sorts = Z3.Datatype.mk_sorts context
+        (List.map (fun (nm, _) -> symbol context nm) to_translate)
+        (List.map (fun (nm, _) -> conv_dt nm) to_translate)
+    in
+    List.iter2 (fun (nm, _) sort -> BT_Table.add bt_table (BT.Datatype nm) sort)
+        to_translate sorts
 
 
+  let sort : Z3.context -> Global.t -> BT.t -> sort =
 
-  let sort : Z3.context -> Memory.struct_decls -> BT.t -> sort =
-
-    fun context struct_decls ->
+    fun context global ->
 
     let string str = string context str in
 
@@ -235,7 +273,7 @@ module Translate = struct
       | Struct tag ->
          let struct_symbol = string (bt_name (Struct tag)) in
          Z3Symbol_Table.add z3sym_table struct_symbol (StructFunc {tag});
-         let layout = SymMap.find tag struct_decls in
+         let layout = SymMap.find tag global.struct_decls in
          let member_symbols, member_sorts = 
            map_split (fun (id,sct) -> 
                let s = string (member_name tag id) in
@@ -245,6 +283,9 @@ module Translate = struct
          in
          Z3.Tuple.mk_sort context struct_symbol
            member_symbols member_sorts
+      | Datatype tag ->
+         translate_datatypes sort context global;
+         BT_Table.find bt_table (Datatype tag)
       | Record members ->
          let bt_symbol = string (bt_name (Record members)) in
          Z3Symbol_Table.add z3sym_table bt_symbol (RecordFunc {mbts=members});
@@ -273,25 +314,25 @@ module Translate = struct
 
 
 
-  let init structs context = 
+  let init global context = 
     BT_Table.clear bt_table;
     Sort_Table.clear sort_table;
-    let _ = sort context structs BT.Integer in
-    let _ = sort context structs BT.Bool in
+    let _ = sort context global BT.Integer in
+    let _ = sort context global BT.Bool in
     ()
 
 
-  let loc_to_integer_fundecl context struct_decls = 
-    nth (Z3.Tuple.get_field_decls (sort context struct_decls Loc)) 0
+  let loc_to_integer_fundecl context global = 
+    nth (Z3.Tuple.get_field_decls (sort context global Loc)) 0
 
-  let integer_to_loc_fundecl context struct_decls = 
-    Z3.Tuple.get_mk_decl (sort context struct_decls Loc)
+  let integer_to_loc_fundecl context global = 
+    Z3.Tuple.get_mk_decl (sort context global Loc)
   
 
   let term ?(warn_lambda=true) context global : IT.t -> expr =
 
     let struct_decls = global.struct_decls in
-    let sort bt = sort context struct_decls bt in
+    let sort bt = sort context global bt in
     let symbol sym = symbol context sym in
     let string str = string context str in
 
@@ -299,11 +340,11 @@ module Translate = struct
   
     let loc_to_integer l = 
       Z3.Expr.mk_app context 
-        (loc_to_integer_fundecl context struct_decls) [l] 
+        (loc_to_integer_fundecl context global) [l] 
     in
     let integer_to_loc i = 
       Z3.Expr.mk_app context 
-        (integer_to_loc_fundecl context struct_decls) [i] 
+        (integer_to_loc_fundecl context global) [i] 
     in
 
 
@@ -452,6 +493,29 @@ module Translate = struct
                 ) members
             in
             term (IT (Record_op (Record str), IT.bt t))
+         end
+      | Datatype_op datatype_op ->
+         begin match datatype_op with
+         | DatatypeCons (c_nm, elts_rec) ->
+           let this_sym fd = match Z3Symbol_Table.find z3sym_table
+                   (Z3.FuncDecl.get_name fd) with
+             | DatatypeConsFunc {nm} -> Sym.equal c_nm nm
+             | _ -> false
+           in
+           let fd = List.find this_sym (Z3.Datatype.get_constructors (sort bt)) in
+           let info = SymMap.find c_nm global.datatype_constrs in
+           let args = List.map (fun (nm, _) -> term (Simplify.record_member_reduce elts_rec nm))
+               info.c_params in
+           Z3.FuncDecl.apply fd args
+         | DatatypeMember (it, member) ->
+           let this_sym fd = match Z3Symbol_Table.find z3sym_table
+                   (Z3.FuncDecl.get_name fd) with
+             | DatatypeAccFunc f -> Sym.equal member f.nm
+             | _ -> false
+           in
+           let fd = List.find this_sym (List.concat
+                   (Z3.Datatype.get_accessors (sort (IT.bt it)))) in
+           Z3.FuncDecl.apply fd [term it]
          end
       | Pointer_op pointer_op -> 
          let open Z3.Arithmetic in
@@ -602,14 +666,14 @@ let tactic context =
       "smt";
     ]
 
-let make struct_decls : solver = 
+let make global : solver = 
   Z3.Memory.reset ();
 
   List.iter (fun (c,v) -> Z3.set_global_param c v) params;
 
   let context = Z3.mk_context [] in
 
-  Translate.init struct_decls context;
+  Translate.init global context;
 
   let params = Z3.Params.mk_params context in
   Z3.Params.add_int params (Z3.Symbol.mk_string context "timeout") 500;
@@ -940,7 +1004,7 @@ let eval global (context, model) to_be_evaluated =
 
         | () when 
                Z3.FuncDecl.equal func_decl
-                 (loc_to_integer_fundecl context struct_decls) ->
+                 (loc_to_integer_fundecl context global) ->
            let p = nth args 0 in
            begin match IT.is_pointer p with
            | Some z -> z_ z
@@ -949,7 +1013,7 @@ let eval global (context, model) to_be_evaluated =
 
         | () when 
                Z3.FuncDecl.equal func_decl 
-                 (integer_to_loc_fundecl context struct_decls) ->
+                 (integer_to_loc_fundecl context global) ->
            let i = nth args 0 in
            begin match IT.is_z i with
            | Some z -> pointer_ z
@@ -978,6 +1042,15 @@ let eval global (context, model) to_be_evaluated =
            | RecordMemberFunc {mbts; member} ->
               let member_bt = List.assoc Sym.equal member mbts in
               IT (Record_op (RecordMember (nth args 0, member)), member_bt)
+           | DatatypeConsFunc {nm} ->
+              let info = SymMap.find nm global.datatype_constrs in
+              datatype_cons_ nm info.c_datatype_tag
+                  (List.combine (List.map fst info.c_params) args)
+           | DatatypeConsRecogFunc {nm} ->
+              (* not supported inside CN, hopefully we shouldn't need it *)
+              failwith ("Reconstructing Z3 term with datatype recogniser unsupported")
+           | DatatypeAccFunc xs ->
+              Simplify.datatype_member_reduce (nth args 0) xs.nm xs.bt
            (* | SomethingFunc { bt } -> *)
            (*    something_ (List.hd args) *)
            (* | NothingFunc { bt }-> *)

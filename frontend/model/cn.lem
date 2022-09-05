@@ -8,6 +8,7 @@ type cn_base_type 'a =
   | CN_real
   | CN_loc
   | CN_struct of 'a
+  | CN_datatype of 'a
   | CN_map of cn_base_type 'a * cn_base_type 'a
   | CN_list of cn_base_type 'a
   | CN_tuple of list (cn_base_type 'a)
@@ -49,9 +50,6 @@ type cn_expr_ 'a 'ty =
   | CNExpr_const of cn_const
   | CNExpr_var of 'a
   | CNExpr_rvar of 'a
-  (* List ops *)
-  | CNExpr_nil of cn_base_type 'a
-  | CNExpr_cons of cn_expr 'a 'ty * cn_expr 'a 'ty
   | CNExpr_list of list (cn_expr 'a 'ty)
   | CNExpr_memberof of cn_expr 'a 'ty * Symbol.identifier
   | CNExpr_binop of cn_binop * cn_expr 'a 'ty * cn_expr 'a 'ty
@@ -59,6 +57,7 @@ type cn_expr_ 'a 'ty =
   | CNExpr_offsetof of 'a * Symbol.identifier
   | CNExpr_cast of cn_base_type 'a * cn_expr 'a 'ty
   | CNExpr_call of Symbol.identifier * list (cn_expr 'a 'ty)
+  | CNExpr_cons of Symbol.identifier * list (Symbol.identifier * cn_expr 'a 'ty)
   | CNExpr_each of 'a * (integer * integer) * cn_expr 'a 'ty
 
 and cn_expr 'a 'ty =
@@ -107,9 +106,18 @@ type cn_predicate 'a 'ty = <|
   cn_pred_clauses: maybe (cn_clauses 'a 'ty);
 |>
 
+type cn_datatype 'a 'ty = <|
+  cn_dt_loc: Loc.t;
+  cn_dt_name: Symbol.identifier;
+  cn_dt_cases: list (Symbol.identifier * list (cn_base_type 'a * Symbol.identifier));
+|>
+
+
 type cn_namespace =
   | CN_predicate
   | CN_function
+  | CN_datatype_nm
+  | CN_constructor
   | CN_logical
   | CN_oarg
 
@@ -118,6 +126,8 @@ instance (Show cn_namespace)
     match ns with
       | CN_predicate -> "predicate"
       | CN_function -> "function"
+      | CN_datatype_nm -> "datatype"
+      | CN_constructor -> "constructor"
       | CN_logical   -> "logical"
       | CN_oarg      -> "oarg"
     end
@@ -126,8 +136,7 @@ end
 type cn_error =
   | CNErr_uppercase_function of Symbol.identifier
   | CNErr_lowercase_predicate of Symbol.identifier
-  | CNErr_function_redeclaration
-  | CNErr_predicate_redeclaration
+  | CNErr_redeclaration of cn_namespace
   | CNErr_unknown_predicate
   | CNErr_invalid_tag
   | CNErr_unknown_identifier of cn_namespace * Symbol.identifier

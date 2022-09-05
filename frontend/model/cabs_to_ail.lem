@@ -4359,6 +4359,8 @@ let rec desugar_cn_base_type loc bTy =
           | Nothing ->
               E.fail loc (Errors.Desugar_CN CNErr_invalid_tag)
         end
+    | CN_datatype ident ->
+        CN_datatype <$> E.resolve_cn_ident CN_datatype_nm ident
     | CN_map bTy1 bTy2 ->
         CN_map <$> desugar_cn_base_type loc bTy1
               <*> desugar_cn_base_type loc bTy2
@@ -4370,6 +4372,8 @@ let rec desugar_cn_base_type loc bTy =
         CN_set <$> desugar_cn_base_type loc bTy
 end
 
+let pair x y = (x, y)
+
 let rec desugar_cn_expr (CNExpr loc expr_) =
   match expr_ with
     | CNExpr_const cst ->
@@ -4380,11 +4384,6 @@ let rec desugar_cn_expr (CNExpr loc expr_) =
     | CNExpr_rvar ident ->
         E.resolve_cn_ident CN_logical ident >>= fun sym ->
         E.return (CNExpr_rvar sym)
-    | CNExpr_nil bTy ->
-        CNExpr_nil <$> desugar_cn_base_type Loc.unknown bTy
-    | CNExpr_cons e1 e2 ->
-        CNExpr_cons <$> desugar_cn_expr e1
-                    <*> desugar_cn_expr e2
     | CNExpr_list es ->
         CNExpr_list <$> E.mapM desugar_cn_expr es
     | CNExpr_memberof e ident_membr ->
@@ -4408,6 +4407,8 @@ let rec desugar_cn_expr (CNExpr loc expr_) =
                     <*> desugar_cn_expr e
     | CNExpr_call nm es ->
         CNExpr_call nm <$> E.mapM desugar_cn_expr es
+    | CNExpr_cons nm es ->
+        CNExpr_cons nm <$> E.mapM (fun (nm2, exp) -> pair nm2 <$> desugar_cn_expr exp) es
     | CNExpr_each ident r e ->
         E.register_cn_ident CN_logical ident >>= fun sym ->
         CNExpr_each sym r <$> desugar_cn_expr e
@@ -4523,8 +4524,17 @@ let desugar_and_register_cn_predicate pred =
     desugar_maybe_cn_clauses pred.cn_pred_clauses               >>= fun clauses ->
     E.return (oargs, iargs, clauses)
   end
-(* END CN *)
 
+let desugar_cn_dt_arg (bTy, ident) =
+  desugar_cn_base_type (Loc.locOf ident) bTy >>= fun bTy' ->
+  E.return (bTy', ident) 
+
+let desugar_and_register_cn_datatype dt =
+  E.register_cn_datatype dt.cn_dt_name begin
+    E.mapM (fun (id, args) ->
+      E.mapM desugar_cn_dt_arg args >>= fun args -> E.return (id, args)
+    ) dt.cn_dt_cases
+  end
 
 let desugar_and_register_cn_function func =
   E.register_cn_function func.cn_func_name begin
@@ -4787,6 +4797,8 @@ let desugar_and_register_external_declaration edecl =
       desugar_and_register_cn_predicate pred
     | EDecl_funcCN pred ->
       desugar_and_register_cn_function pred
+    | EDecl_datatypeCN dt ->
+      desugar_and_register_cn_datatype dt
   end
 
 val register_cn_predicate_names: list external_declaration -> E.desugM unit
@@ -4808,6 +4820,19 @@ let register_cn_function_names xs =
     | _ ->
         E.return ()
   end) xs
+
+val register_cn_datatype_names: list external_declaration -> E.desugM unit
+let register_cn_datatype_names xs =
+  E.mapM_ (function
+    | EDecl_datatypeCN dt ->
+         let () = Debug.warn [Debug.DB_desugaring] (fun () ->
+           "adding a datatype name") in
+         E.register_cn_ident Cn.CN_datatype_nm dt.cn_dt_name >>= fun _ ->
+        E.return ()
+    | _ ->
+        E.return ()
+  end) xs
+
 
 
 import Core
@@ -4892,6 +4917,7 @@ let desugar core_eval_stuff startup_str (TUnit edecls) =
     E.under_scope E.Scope_file (
       register_cn_predicate_names edecls                       >>= fun () ->
       register_cn_function_names edecls                        >>= fun () ->
+      register_cn_datatype_names edecls                        >>= fun () ->
       E.mapM_ desugar_and_register_external_declaration edecls >>= fun () ->
       E.extract_program startup_str
     )

@@ -61,6 +61,8 @@ val map_and_fold_resources :
   'acc -> ('acc, TypeErrors.type_error) m
 
 val get_struct_decl : Locations.t -> Sym.t -> (Memory.struct_decl, TypeErrors.t) m
+val get_datatype : Locations.t -> Sym.t -> (BaseTypes.datatype_info, TypeErrors.t) m
+val get_datatype_constr : Locations.t -> Sym.t -> (BaseTypes.constr_info, TypeErrors.t) m
 val get_member_type : Locations.t -> Sym.t -> Id.t -> Memory.struct_layout -> (Sctypes.t, TypeErrors.t) m
 val get_struct_member_type : Locations.t -> Sym.t -> Id.t -> (Sctypes.t, TypeErrors.t) m
 val get_fun_decl : Locations.t -> Sym.t -> (Locations.t * Global.AT.ft * Cerb_frontend.Mucore.trusted, TypeErrors.t) m

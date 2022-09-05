@@ -4,6 +4,7 @@ module BT = BaseTypes
 module RP = ResourcePredicates
 
 module IT = IndexTerms
+module SymMap = Map.Make(Sym)
 
 open CF.Cn
 open TypeErrors
@@ -15,6 +16,10 @@ type cn_predicate =
 
 type cn_function =
   (CF.Symbol.sym, CF.Ctype.ctype) CF.Cn.cn_function
+
+type cn_datatype =
+  (CF.Symbol.sym, CF.Ctype.ctype) CF.Cn.cn_datatype
+
 
 
 let rec translate_cn_base_type (bTy: CF.Symbol.sym cn_base_type) =
@@ -32,6 +37,8 @@ let rec translate_cn_base_type (bTy: CF.Symbol.sym cn_base_type) =
         Loc
     | CN_struct tag_sym ->
         Struct tag_sym
+    | CN_datatype dt_sym ->
+        Datatype dt_sym
     | CN_map (bTy1, bTy2) ->
         Map ( translate_cn_base_type bTy1
             , translate_cn_base_type bTy2 )
@@ -164,6 +171,19 @@ let translate_member_access loc env t member =
      let ty' = Retype.ct_of_ct loc ty in
      let member_bt = BaseTypes.of_sct ty' in
      return ( IT.member_ ~member_bt (tag, t, member) )
+  | Datatype tag ->
+     let@ members = match lookup_struct tag env with
+       | None -> fail {loc; msg= Unknown_struct tag}
+       | Some (defs_, _) (* TODO flexible *) -> return defs_
+     in
+     let@ ty = match List.assoc_opt Id.equal member members with
+       | None -> fail {loc; msg = Unknown_member (tag, member)}
+       | Some (_, _, ty) -> return ty
+     in
+     let ty' = Retype.ct_of_ct loc ty in
+     let member_bt = BaseTypes.of_sct ty' in
+     return ( IT.member_ ~member_bt (tag, t, member) )
+      
   | has -> 
      fail {loc; msg = Illtyped_it' {it = t; has; expected = "struct"}}
 
@@ -214,12 +234,6 @@ let translate_cn_expr (env: Env.t) expr =
               return (BT.Record (List.map_snd (BT.make_map_bt Integer) pred_sig.pred_oargs))
          in
          return (sym_ (sym, bt))
-      | CNExpr_nil bTy_ ->
-          return (nil_ ~item_bt:(translate_cn_base_type bTy_))
-      | CNExpr_cons (e1_, e2_) ->
-          let@ e1 = self e1_ in
-          let@ e2 = self e2_ in
-          return (cons_ (e1, e2))
       | CNExpr_list es_ ->
           let@ es = ListM.mapM self es_ in
           let item_bt = basetype (List.hd es) in
@@ -240,7 +254,7 @@ let translate_cn_expr (env: Env.t) expr =
             | Some _ -> return ()
           in
           return (memberOffset_ (tag, member))
-       | CNExpr_cast (bt, expr) ->
+      | CNExpr_cast (bt, expr) ->
           let@ expr = self expr in
           begin match bt with
           | CN_loc -> return (integerToPointerCast_ expr)
@@ -263,6 +277,18 @@ let translate_cn_expr (env: Env.t) expr =
               in
               return (pred_ sym args bt)
           end
+      | CNExpr_cons (c_nm, exprs) ->
+          let@ (sym, mem_syms, cons_info) = Env.lookup_constr c_nm env in
+          let@ exprs = ListM.mapM (fun (nm, expr) ->
+              let@ expr = self expr in
+              let@ sym = match Env.Y.find_opt (Id.s nm) mem_syms with
+                | Some sym -> return sym
+                | None -> fail {loc; msg = Generic
+                    (Pp.string ("Unknown field of " ^ Id.s c_nm ^ ": " ^ Id.s nm))}
+              in
+              return (sym, expr)) exprs
+          in
+          return (datatype_cons_ sym cons_info.c_datatype_tag exprs)
       | CNExpr_each (sym, r, e) ->
           let env' = Env.add_logical sym BT.Integer env in
           let@ expr = trans env' e in
@@ -484,9 +510,9 @@ let register_cn_functions env (defs: cn_function list) =
       ) def.cn_func_args in
     let return_bt = translate_cn_base_type def.cn_func_return_bty in
     let fsig = Env.{args; return_bty = return_bt} in
-    Env.add_function def.cn_func_name fsig env
+    Env.add_function def.cn_func_loc def.cn_func_name fsig env
   in
-  List.fold_left aux env defs
+  ListM.fold_leftM aux env defs
 
 let translate_cn_function env (def: cn_function) =
   let open LogicalPredicates in
@@ -507,7 +533,7 @@ let translate_cn_function env (def: cn_function) =
   return (env, (def.cn_func_name, def2))
 
 let translate_and_register_cn_functions (env : Env.t) (to_translate: cn_function list) = 
-  let env = register_cn_functions env to_translate in
+  let@ env = register_cn_functions env to_translate in
   let@ (env, defs) = 
     ListM.fold_leftM (fun (env, defs) def ->
         let@ (env, def) = translate_cn_function env def in
@@ -545,10 +571,40 @@ let translate_cn_predicate env (def: cn_predicate) =
     | [] ->
         fail { loc= def.cn_pred_loc; msg= First_iarg_missing { pname= PName def.cn_pred_name} }
 
-let translate tagDefs (f_defs: cn_function list) (pred_defs: cn_predicate list) =
+let add_datatype_info env (dt : cn_datatype) =
+  let@ (dt_sym, env) = Env.add_datatype_name dt.cn_dt_name env in
+  let add_param_sym m (ty, nm) =
+    let bt = translate_cn_base_type ty in
+    let nm_s = Id.s nm in
+    match Env.Y.find_opt nm_s m with
+    | None ->
+      let sym = Sym.fresh_named nm_s in
+      return (Env.Y.add nm_s (sym, bt) m)
+    | Some (sym, bt2) -> if BT.equal bt bt2 then return m
+      else fail {loc = Id.loc nm;
+              msg = Generic (Pp.item "different type for datatype member" (Id.pp nm))}
+  in
+  let@ param_sym_tys = ListM.fold_leftM add_param_sym Env.Y.empty
+    (List.concat (List.map snd dt.cn_dt_cases)) in
+  let param_syms = Env.Y.map fst param_sym_tys in
+  let add_constr env (cname, params) =
+    let c_params = List.map (fun (_, nm) -> Env.Y.find (Id.s nm) param_sym_tys) params in
+    let info = BaseTypes.{c_params; c_datatype_tag = dt_sym} in
+    let@ (sym, env) = Env.add_datatype_constr cname param_syms info env in
+    return env
+  in
+  let@ env = ListM.fold_leftM add_constr env dt.cn_dt_cases in
+  let dt_all_params = Env.Y.bindings param_sym_tys |> List.map snd in
+  let@ dt_constrs_info = ListM.mapM (fun (nm, _) -> Env.lookup_constr nm env) dt.cn_dt_cases in
+  let dt_constrs = List.map (fun (sym, _, _) -> sym) dt_constrs_info in
+  return (Env.add_datatype dt_sym (BaseTypes.{dt_constrs; dt_all_params}) env)
+
+let translate tagDefs (f_defs: cn_function list) (pred_defs: cn_predicate list)
+        (d_defs: cn_datatype list) =
   let env = Env.empty tagDefs in
+  let@ env = ListM.fold_leftM add_datatype_info env d_defs in
   let@ (env, log_defs) = translate_and_register_cn_functions env f_defs in
   let env = register_cn_predicates env pred_defs in
   let@ pred_defs = ListM.mapM (translate_cn_predicate env) pred_defs in
-  return (log_defs, pred_defs)
+  return ((log_defs, pred_defs), Env.get_datatype_maps env)
 

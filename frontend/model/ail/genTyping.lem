@@ -2102,6 +2102,7 @@ let annotate_sigma sigm =
     loop_attributes= sigm.loop_attributes;
     cn_predicates=  sigm.cn_predicates;
     cn_functions=  sigm.cn_functions;
+    cn_datatypes=  sigm.cn_datatypes;
   |>
 
 

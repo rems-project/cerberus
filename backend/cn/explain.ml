@@ -128,6 +128,7 @@ let make_name =
     | List _ -> "list"
     | Tuple _ -> "tuple"
     | Struct _ -> "s"
+    | Datatype _ -> "dt"
     | Record _ -> "s"
     | Set _ -> "set"
     (* | Option _ -> "o" *)
@@ -144,6 +145,7 @@ let make_name =
     | List _ -> list_c
     | Tuple _ -> tuple_c
     | Struct _ -> struct_c
+    | Datatype _ -> struct_c
     | Record _ -> struct_c
     | Set _ -> set_c
     (* | Option _ -> option_c *)

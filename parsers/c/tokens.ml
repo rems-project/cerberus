@@ -132,6 +132,7 @@ type token =
   (* CN syntax *)
   | CN_FUNCTION
   | CN_PREDICATE
+  | CN_DATATYPE
   | CN_PACK
   | CN_UNPACK
   | CN_PACK_STRUCT
@@ -155,8 +156,6 @@ type token =
   | CN_NULL
   | CN_TRUE
   | CN_FALSE
-  | CN_NIL
-  | CN_CONS
 
 
 let string_of_token = function
@@ -297,8 +296,7 @@ let string_of_token = function
   | CN_NULL -> "CN_NULL"
   | CN_TRUE -> "CN_TRUE"
   | CN_FALSE -> "CN_FALSE"
-  | CN_NIL -> "CN_NIL"
-  | CN_CONS -> "CN_CONS"
   | CN_FUNCTION -> "CN_FUNCTION"
   | CN_PREDICATE -> "CN_PREDICATE"
+  | CN_DATATYPE -> "CN_DATATYPE"
 

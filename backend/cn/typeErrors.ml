@@ -103,6 +103,8 @@ type message =
   | Unknown_variable of Sym.t
   | Unknown_function of Sym.t
   | Unknown_struct of BT.tag
+  | Unknown_datatype of BT.tag
+  | Unknown_datatype_constr of BT.tag
   | Unknown_resource_predicate of {id: Sym.t; logical: bool}
   | Unknown_logical_predicate of {id: Sym.t; resource: bool}
   | Unknown_member of BT.tag * BT.member
@@ -190,6 +192,12 @@ let pp_message te =
      { short; descr = None; state = None; trace = None }
   | Unknown_struct tag ->
      let short = !^"Struct" ^^^ squotes (Sym.pp tag) ^^^ !^"not defined" in
+     { short; descr = None; state = None; trace = None }
+  | Unknown_datatype tag ->
+     let short = !^"Datatype" ^^^ squotes (Sym.pp tag) ^^^ !^"not defined" in
+     { short; descr = None; state = None; trace = None }
+  | Unknown_datatype_constr tag ->
+     let short = !^"Datatype constructor" ^^^ squotes (Sym.pp tag) ^^^ !^"not defined" in
      { short; descr = None; state = None; trace = None }
   | Unknown_resource_predicate {id; logical} ->
      let short = !^"Unknown resource predicate" ^^^ squotes (Sym.pp id) in

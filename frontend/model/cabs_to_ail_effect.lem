@@ -764,7 +764,7 @@ let register_cn_function ident mk =
           )
         end
     | Just _ ->
-        fail (Loc.locOf ident) (Errors.Desugar_CN Cn.CNErr_function_redeclaration)
+        fail (Loc.locOf ident) (Errors.Desugar_CN (Cn.CNErr_redeclaration Cn.CN_function))
   end
 
 
@@ -788,8 +788,29 @@ let register_cn_predicate ident mk =
           )
         end
     | Just _ ->
-        fail (Loc.locOf ident) (Errors.Desugar_CN Cn.CNErr_predicate_redeclaration)
+        fail (Loc.locOf ident) (Errors.Desugar_CN (Cn.CNErr_redeclaration Cn.CN_predicate))
   end
+
+let register_cn_datatype ident mk_cases =
+  State_exception.get >>= fun st ->
+  match Map.lookup ident st.cn_state.Cn_desugaring.cn_datatypes with
+    | Nothing ->
+        mk_cases >>= fun cases ->
+        let dt = <|
+          Cn.cn_dt_loc= Loc.locOf ident;
+          Cn.cn_dt_name= ident;
+          Cn.cn_dt_cases= cases;
+        |> in
+        liftCnDesug begin
+          State_exception.update (fun cn_st' ->
+            <| cn_st' with Cn_desugaring.cn_datatypes = Map.insert ident dt cn_st'.Cn_desugaring.cn_datatypes;
+                           Cn_desugaring.cn_current_scope= Map.empty; |>
+          )
+        end
+    | Just _ ->
+        fail (Loc.locOf ident) (Errors.Desugar_CN (Cn.CNErr_redeclaration Cn.CN_datatype_nm))
+  end
+
 (* END CN *)
 
 
@@ -1899,7 +1920,8 @@ let mk_current_ail_sigma =
         A.typedef_attributes= Map.empty;
         A.loop_attributes= Map.empty;
         A.cn_functions= [];
-        A.cn_predicates= []; |>
+        A.cn_predicates= [];
+        A.cn_datatypes= []; |>
 
 val is_complete_object: Ctype.ctype -> desugM bool
 let cabs_to_ail_is_complete_object ty =
@@ -2072,6 +2094,7 @@ let extract_program startup_str =
     A.loop_attributes = st.loop_attributes;
     A.cn_predicates=  List.map (fun (_, (_, z)) -> z) (Map_extra.toList st.cn_state.Cn_desugaring.cn_predicates);
     A.cn_functions=  List.map (fun (_, (_, z)) -> z) (Map_extra.toList st.cn_state.Cn_desugaring.cn_functions);
+    A.cn_datatypes=  List.map (fun (_, z) -> z) (Map_extra.toList st.cn_state.Cn_desugaring.cn_datatypes);
    |>)
 
 
@@ -2149,5 +2172,6 @@ let get_sigma_sofar =
        A.loop_attributes= st.loop_attributes;
        A.cn_predicates=  List.map (fun (_, (_, z)) -> z) (Map_extra.toList st.cn_state.Cn_desugaring.cn_predicates);
        A.cn_functions=  List.map (fun (_, (_, z)) -> z) (Map_extra.toList st.cn_state.Cn_desugaring.cn_functions);
+       A.cn_datatypes=  List.map (fun (_, z) -> z) (Map_extra.toList st.cn_state.Cn_desugaring.cn_datatypes);
       |>
   )

@@ -88,6 +88,31 @@ let flatten = function
   | f -> [LC.t_ f]
 
 
+let rec record_member_reduce it member =
+  match IT.term it with
+    | Record_op (Record members) -> List.assoc Sym.equal member members
+    | Record_op (RecordUpdate ((t, m), v)) ->
+      if Sym.equal m member then v
+      else record_member_reduce t member
+    | Bool_op (ITE (cond, it1, it2)) ->
+      ite_ (cond, record_member_reduce it1 member, record_member_reduce it2 member)
+    | _ ->
+      let member_tys = BT.record_bt (IT.bt it) in
+      let member_bt = List.assoc Sym.equal member member_tys in
+      IT.recordMember_ ~member_bt (it, member)
+
+let rec datatype_member_reduce it member member_bt =
+  match IT.term it with
+    | Datatype_op (DatatypeCons (nm, members_rec)) ->
+      let members = BT.record_bt (IT.bt members_rec) in
+      if List.exists (Sym.equal member) (List.map fst members)
+      then record_member_reduce members_rec member
+      else IT.IT (Datatype_op (DatatypeMember (it, member)), member_bt)
+    | Bool_op (ITE (cond, it1, it2)) ->
+      ite_ (cond, datatype_member_reduce it1 member member_bt,
+          datatype_member_reduce it2 member member_bt)
+    | _ -> IT.IT (Datatype_op (DatatypeMember (it, member)), member_bt)
+
 
 let rec simp (struct_decls : Memory.struct_decls) values equalities log_unfold lcs =
 
@@ -506,25 +531,25 @@ let rec simp (struct_decls : Memory.struct_decls) values equalities log_unfold l
        IT (Record_op (IT.Record members), bt)
     | IT.RecordMember (it, member) ->
        let it = aux it in
-       let rec make it = 
-         match it with
-         | IT (Record_op (Record members), _) ->
-            List.assoc Sym.equal member members
-         | IT (Bool_op (ITE (cond, it1, it2)), _) ->
-            (* (if cond then it1 else it2) . member -->
-             (if cond then it1.member else it2.member) *)
-            ite_ (cond, make it1, make it2)
-         | _ ->
-            IT (Record_op (IT.RecordMember (it, member)), bt)
-       in
-       make it
+       record_member_reduce it member
     | IT.RecordUpdate ((t, m), v) ->
        let t = aux t in
        let v = aux v in
        IT (Record_op (RecordUpdate ((t, m), v)), bt)
   in
 
-  
+
+  let datatype_op it bt =
+    match it with
+    | IT.DatatypeCons (nm, members_rec) ->
+       IT (Datatype_op (IT.DatatypeCons (nm, aux members_rec)), bt)
+    | IT.DatatypeMember (it, member) ->
+       let it = aux it in
+       datatype_member_reduce it member bt
+  in
+
+
+
   (* revisit when memory model changes *)
   let pointer_op it bt = 
     match it with
@@ -573,7 +598,7 @@ let rec simp (struct_decls : Memory.struct_decls) values equalities log_unfold l
           (* IT (Pointer_op (ArrayOffset (ct, t)), bt) *)
        end
   in
-  
+
   let ct_pred it bt = 
     match it with
     | Representable (ct, t) ->
@@ -679,6 +704,7 @@ let rec simp (struct_decls : Memory.struct_decls) values equalities log_unfold l
     | Tuple_op t -> tuple_op t bt
     | Struct_op s -> struct_op s bt
     | Record_op r -> record_op r bt
+    | Datatype_op r -> datatype_op r bt
     | Pointer_op p -> pointer_op p bt
     | List_op l -> IT (List_op l, bt)
     | Set_op s -> IT (Set_op s, bt)

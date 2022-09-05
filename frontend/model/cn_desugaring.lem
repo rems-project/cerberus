@@ -10,6 +10,7 @@ type cn_desugaring_state = <|
   cn_idents: map (cn_namespace * Symbol.identifier) Symbol.sym;
   cn_current_scope: map (cn_namespace * Symbol.identifier) Symbol.sym;
   cn_predicates: map Symbol.identifier (Symbol.sym * cn_predicate Symbol.sym Ctype.ctype);
+  cn_datatypes: map Symbol.identifier (cn_datatype Symbol.sym Ctype.ctype);
   cn_functions: map Symbol.identifier (Symbol.sym * cn_function Symbol.sym Ctype.ctype);
   cn_OTHER: unit;
 |>
@@ -18,6 +19,7 @@ let initial_cn_desugaring_state = <|
   cn_idents= Map.empty;
   cn_current_scope= Map.empty;
   cn_predicates= Map.empty;
+  cn_datatypes= Map.empty;
   cn_functions= Map.empty;
   cn_OTHER= ();
 |>
@@ -33,10 +35,8 @@ let inline fail loc dcause = State_exception.fail (loc, Errors.DESUGAR dcause)
 let inline foldlM = State_exception.foldlM
 
 
-
-val register_cn_ident: cn_namespace -> Symbol.identifier -> cn_desugM Symbol.sym
-let register_cn_ident ns ((Symbol.Identifier loc str) as ident) =
-  let sym = Symbol.fresh_pretty str in
+val check_cn_ident: cn_namespace -> Symbol.identifier -> cn_desugM bool
+let check_cn_ident ns ((Symbol.Identifier loc str) as ident) =
   match ns with
   | CN_predicate ->
     match str with
@@ -50,10 +50,7 @@ let register_cn_ident ns ((Symbol.Identifier loc str) as ident) =
           (* can't happen because of the parser *)
           return ()
     end >>= fun () ->
-    Eff.update (fun st ->
-      <| st with cn_idents= Map.insert (ns, ident) sym st.cn_idents |>
-    ) >>= fun () ->
-    return sym
+    return true (* global *)
   | CN_function ->
     match str with
       | cons_string c _ ->
@@ -66,11 +63,24 @@ let register_cn_ident ns ((Symbol.Identifier loc str) as ident) =
           (* can't happen because of the parser *)
           return ()
     end >>= fun () ->
+    return true (* global *)
+  | CN_datatype_nm ->
+    return true (* global *)
+  | _ ->
+    return false
+  end
+
+
+val register_cn_ident: cn_namespace -> Symbol.identifier -> cn_desugM Symbol.sym
+let register_cn_ident ns ((Symbol.Identifier loc str) as ident) =
+  let sym = Symbol.fresh_pretty str in
+  check_cn_ident ns ident >>= function
+  | true ->
     Eff.update (fun st ->
       <| st with cn_idents= Map.insert (ns, ident) sym st.cn_idents |>
     ) >>= fun () ->
     return sym
-  | _ ->
+  | false ->
     Eff.update (fun st ->
       <| st with cn_current_scope= Map.insert (ns, ident) sym st.cn_current_scope |>
     ) >>= fun () ->

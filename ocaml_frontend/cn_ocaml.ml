@@ -10,27 +10,27 @@ open Location_ocaml
 module P = PPrint
 
 
+let string_of_ns = function
+  | CN_oarg -> "output argument"
+  | CN_logical -> "logical variable"
+  | CN_predicate -> "predicate"
+  | CN_function -> "specification function"
+  | CN_datatype_nm -> "datatype"
+  | CN_constructor -> "constructor"
+
 let string_of_error = function
   | CNErr_uppercase_function (Symbol.Identifier (_, str)) ->
       "function name `" ^ str ^ "' does not start with a lowercase letter"
   | CNErr_lowercase_predicate (Symbol.Identifier (_, str)) ->
       "predicate name `" ^ str ^ "' does not start with an uppercase letter"
-  | CNErr_function_redeclaration ->
-      "redeclaration of function name"
-  | CNErr_predicate_redeclaration ->
-      "redeclaration of predicate name"
+  | CNErr_redeclaration ns ->
+      "redeclaration of " ^ string_of_ns ns
   | CNErr_unknown_predicate ->
       "undeclared predicate name"
   | CNErr_invalid_tag ->
       "tag name is no declared or a union tag"
-  | CNErr_unknown_identifier (CN_oarg, Symbol.Identifier (_, str)) ->
-      "the oarg `" ^ str ^ "' is not declared"
-  | CNErr_unknown_identifier (CN_logical, Symbol.Identifier (_, str)) ->
-        "the logical variable `" ^ str ^ "' is not declared"
-  | CNErr_unknown_identifier (CN_predicate, Symbol.Identifier (_, str)) ->
-        "the predicate `" ^ str ^ "' is not declared"
-  | CNErr_unknown_identifier (CN_function, Symbol.Identifier (_, str)) ->
-        "the specification function `" ^ str ^ "' is not declared"
+  | CNErr_unknown_identifier (ns, Symbol.Identifier (_, str)) ->
+      "the " ^ string_of_ns ns ^ " `" ^ str ^ "' is not declared"
   | CNErr_missing_oarg sym ->
       "missing an assignment for the oarg `" ^ Pp_symbol.to_string_pretty sym ^ "'" 
     
@@ -57,6 +57,8 @@ module MakePp (Conf: PP_CN) = struct
         pp_type_keyword "loc"
     | CN_struct ident ->
         pp_type_keyword "struct" ^^^ P.squotes (Conf.pp_ident ident)
+    | CN_datatype ident ->
+        pp_type_keyword "datatype" ^^^ P.squotes (Conf.pp_ident ident)
     | CN_map (bTy1, bTy2) ->
         pp_type_keyword "map" ^^ P.angles (pp_base_type bTy1 ^^ P.comma ^^^ pp_base_type bTy2)
     | CN_list bTy ->
@@ -93,10 +95,6 @@ module MakePp (Conf: PP_CN) = struct
           Dleaf (pp_ctor "CNExpr_var" ^^^ P.squotes (Conf.pp_ident ident))
       | CNExpr_rvar ident ->
           Dleaf (pp_ctor "CNExpr_rvar" ^^^ P.squotes (Conf.pp_ident ident))
-      | CNExpr_nil bty ->
-          Dleaf (pp_ctor "CNExpr_nil" ^^^ P.squotes (pp_base_type bty))
-      | CNExpr_cons (e1, e2) ->
-          Dnode (pp_ctor "CNExpr_cons", [dtree_of_cn_expr e1; dtree_of_cn_expr e2])
       | CNExpr_list es ->
           Dnode (pp_ctor "CNExpr_list", List.map dtree_of_cn_expr es)
       | CNExpr_memberof (e, z) ->
@@ -115,6 +113,12 @@ module MakePp (Conf: PP_CN) = struct
       | CNExpr_call (nm, exprs) ->
           Dnode (pp_ctor "CNExpr_call" ^^^ P.squotes (pp_identifier nm)
                  , List.map dtree_of_cn_expr exprs)
+      | CNExpr_cons (nm, xs) ->
+          let docs =
+            List.map (fun (ident, e) ->
+              Dnode (pp_identifier ident, [dtree_of_cn_expr e])
+            ) xs in
+          Dnode (pp_ctor "CNExpr_cons" ^^^ P.squotes (pp_identifier nm), docs)
       | CNExpr_each (ident, r, expr) ->
           Dnode (pp_ctor "CNExpr_each" ^^^ P.squotes (Conf.pp_ident ident) ^^^
                      !^ (Z.to_string (fst r)) ^^^ P.string "-" ^^^ !^ (Z.to_string (snd r))
@@ -200,6 +204,20 @@ module MakePp (Conf: PP_CN) = struct
           , [ Dnode (pp_ctor "[CN]iargs", dtrees_of_args pred.cn_pred_iargs)
             ; Dnode (pp_ctor "[CN]oargs", dtrees_of_args pred.cn_pred_oargs)
             ; Dnode (pp_ctor "[CN]clauses", [dtree_of_option_cn_clauses pred.cn_pred_clauses]) ] ) 
+
+  let dtrees_of_dt_args xs =
+    List.map (fun (bTy, ident) ->
+        Dleaf (pp_identifier ident ^^ P.colon ^^^ pp_base_type bTy)
+      ) xs
+
+  let dtree_of_cn_case (nm, args) =
+    Dnode ( pp_ctor "[CN]constructor" ^^^ P.squotes (pp_identifier nm)
+          , [ Dnode (pp_ctor "[CN]args", dtrees_of_dt_args args) ] )
+
+  let dtree_of_cn_datatype dt =
+    Dnode ( pp_ctor "[CN]datatype" ^^^ P.squotes (pp_identifier dt.cn_dt_name)
+          , [ Dnode (pp_ctor "[CN]cases", List.map dtree_of_cn_case dt.cn_dt_cases) ])
+
 end
 
 module PpCabs = MakePp (struct

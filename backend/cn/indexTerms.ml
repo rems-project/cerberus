@@ -27,8 +27,6 @@ let term (IT (t, _)) = t
 
 
 
-
-
 let pp = 
   let rec aux atomic (IT (it, bt)) = 
     let mparens pped = if atomic then parens pped else pped in    
@@ -137,6 +135,11 @@ let pp =
           aux true t ^^ dot ^^ Sym.pp member
        | RecordUpdate ((t, member), v) ->
           mparens (aux true t ^^ braces (dot ^^ Sym.pp member ^^^ equals ^^^ aux true v))
+       end
+    | Datatype_op datatype_op ->
+       begin match datatype_op with
+       | DatatypeCons (nm, members_rec) -> mparens (Sym.pp nm ^^^ aux false members_rec)
+       | DatatypeMember (x, nm) -> aux true x ^^ dot ^^ Sym.pp nm
        end
     | Pointer_op pointer_op -> 
        begin match pointer_op with
@@ -263,6 +266,10 @@ and free_vars_record_op = function
   | RecordMember (t, _member) -> free_vars t
   | RecordUpdate ((t1, _member), t2) -> free_vars_list [t1; t2]
 
+and free_vars_datatype_op = function
+  | DatatypeCons (tag, members_xs) -> free_vars members_xs
+  | DatatypeMember (t, member) -> free_vars t
+
 and free_vars_pointer_op = function
   | LTPointer (t1, t2) -> free_vars_list [t1; t2]
   | LEPointer (t1, t2) -> free_vars_list [t1; t2]
@@ -311,6 +318,7 @@ and free_vars_term_ = function
   | Tuple_op tuple_op -> free_vars_tuple_op tuple_op
   | Struct_op struct_op -> free_vars_struct_op struct_op
   | Record_op record_op -> free_vars_record_op record_op
+  | Datatype_op datatype_op -> free_vars_datatype_op datatype_op
   | Pointer_op pointer_op -> free_vars_pointer_op pointer_op
   | List_op list_op -> free_vars_list_op list_op
   | Set_op set_op -> free_vars_set_op set_op
@@ -385,6 +393,10 @@ and fold_record_op f binders acc = function
   | RecordMember (t, _member) -> fold f binders acc t
   | RecordUpdate ((t1, _member), t2) -> fold_list f binders acc [t1; t2]
 
+and fold_datatype_op f binders acc = function
+  | DatatypeCons (tag, members_rec) -> fold f binders acc members_rec
+  | DatatypeMember (t, _member) -> fold f binders acc t
+
 and fold_pointer_op f binders acc = function
   | LTPointer (t1, t2) -> fold_list f binders acc [t1; t2]
   | LEPointer (t1, t2) -> fold_list f binders acc [t1; t2]
@@ -433,6 +445,7 @@ and fold_term_ f binders acc = function
   | Tuple_op tuple_op -> fold_tuple_op f binders acc tuple_op
   | Struct_op struct_op -> fold_struct_op f binders acc struct_op
   | Record_op record_op -> fold_record_op f binders acc record_op
+  | Datatype_op datatype_op -> fold_datatype_op f binders acc datatype_op
   | Pointer_op pointer_op -> fold_pointer_op f binders acc pointer_op
   | List_op list_op -> fold_list_op f binders acc list_op
   | Set_op set_op -> fold_set_op f binders acc set_op
@@ -568,6 +581,14 @@ let rec subst (su : typed subst) (IT (it, bt)) =
           RecordUpdate ((subst su t, m), subst su v)
      in
      IT (Record_op record_op, bt)
+  | Datatype_op datatype_op -> 
+     let datatype_op = match datatype_op with
+       | DatatypeCons (tag, members_rec) ->
+          DatatypeCons (tag, subst su members_rec)
+       | DatatypeMember (t, m) ->
+          DatatypeMember (subst su t, m)
+     in
+     IT (Datatype_op datatype_op, bt)
   | Pointer_op pointer_op -> 
      let pointer_op = match pointer_op with
        | LTPointer (it, it') -> 
@@ -838,6 +859,9 @@ let record_ members =
       BT.Record (List.map (fun (s,t) -> (s, basetype t)) members))
 let recordMember_ ~member_bt (t, member) = 
   IT (Record_op (RecordMember (t, member)), member_bt)
+
+let datatype_cons_ nm dt_tag members =
+  IT (Datatype_op (DatatypeCons (nm, record_ members)), BT.Datatype dt_tag)
 
 
 

@@ -146,18 +146,19 @@ let frontend astprints filename state_file =
     | None -> assert false
     | Some (_, sigm) -> sigm
   in
-  let pred_defs =
+  let (pred_defs, dt_defs) =
         let open Effectful.Make(Resultat) in
         match CompilePredicates.translate mu_file.mu_tagDefs 
                 ail_program.CF.AilSyntax.cn_functions
                 ail_program.CF.AilSyntax.cn_predicates
+                ail_program.CF.AilSyntax.cn_datatypes
         with
         | Result.Error err -> TypeErrors.report ?state_file err; exit 1
         | Result.Ok xs -> xs
   in
   let statement_locs = CStatements.search ail_program in
   
-  return (pred_defs, statement_locs, mu_file)
+  return (pred_defs, dt_defs, statement_locs, mu_file)
 
 
 
@@ -206,7 +207,7 @@ let main
   begin match frontend astprints filename state_file with
   | CF.Exception.Exception err ->
      prerr_endline (CF.Pp_errors.to_string err); exit 2
-  | CF.Exception.Result (pred_defs, stmts, file) ->
+  | CF.Exception.Result (pred_defs, dt_defs, stmts, file) ->
      try
        let open Resultat in
        print_log_file "final" (MUCORE file);
@@ -215,7 +216,8 @@ let main
          | (Some times, _) -> Some (times, "csv")
          | (_, Some times) -> Some (times, "log")
          | _ -> None);
-       let ctxt = Context.add_stmt_locs stmts Context.empty in
+       let ctxt = Context.add_stmt_locs stmts Context.empty
+         |> Context.add_datatypes dt_defs in
        let result = 
          Pp.progress_simple "pre-processing" "translating specifications";
          let opts = Retype.{ drop_labels = Option.is_some lemmata } in

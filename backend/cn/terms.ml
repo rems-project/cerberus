@@ -57,6 +57,10 @@ and 'bt record_op =
   | RecordMember of 'bt term * Sym.t
   | RecordUpdate of ('bt term * Sym.t) * 'bt term
 
+and 'bt datatype_op =
+  | DatatypeCons of Sym.t * 'bt term
+  | DatatypeMember of 'bt term * Sym.t
+
 and 'bt pointer_op = 
   | LTPointer of 'bt term * 'bt term
   | LEPointer of 'bt term * 'bt term
@@ -100,6 +104,7 @@ and 'bt term_ =
   | Tuple_op of 'bt tuple_op
   | Struct_op of 'bt struct_op
   | Record_op of 'bt record_op
+  | Datatype_op of 'bt datatype_op
   | Pointer_op of 'bt pointer_op
   | List_op of 'bt list_op
   | Set_op of 'bt set_op
