@@ -37,7 +37,7 @@ Module MorelloImpl : Implementation.
     | Bool => false
     | Signed _ => true
     | Unsigned _ => false
-    | Enum tag_sym => false (* TODO: we do not handle registered enums *)
+    | Enum tag_sym => true (* TODO: we do not handle registered enums *)
     | Size_t =>  false
     | Wchar_t => true
     | Wint_t =>  true
@@ -63,7 +63,7 @@ Module MorelloImpl : Implementation.
             | Intmax_t
             | Intptr_t => 16
             end)
-        | Enum ident =>  (* TODO *) Some 4
+        | Enum ident => Some 4 (* TODO: we do not handle registered enums *)
         | Wchar_t
         | Wint_t => Some 4
         | Size_t
@@ -120,9 +120,7 @@ Module MorelloImpl : Implementation.
          | Intmax_t
          | Intptr_t => 8
          end)
-    | Enum ident =>
-        (* TODO *)
-        4
+    | Enum ident => 4 (* TODO: we do not handle registered enums *)
     | Wchar_t
     | Wint_t => 4
     | Size_t
