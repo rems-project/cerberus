@@ -795,10 +795,11 @@ let register_cn_datatype ident mk_cases =
   State_exception.get >>= fun st ->
   match Map.lookup ident st.cn_state.Cn_desugaring.cn_datatypes with
     | Nothing ->
+        register_cn_ident Cn.CN_datatype_nm ident >>= fun sym ->
         mk_cases >>= fun cases ->
         let dt = <|
           Cn.cn_dt_loc= Loc.locOf ident;
-          Cn.cn_dt_name= ident;
+          Cn.cn_dt_name= sym;
           Cn.cn_dt_cases= cases;
         |> in
         liftCnDesug begin

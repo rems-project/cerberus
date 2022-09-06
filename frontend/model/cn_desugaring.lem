@@ -64,16 +64,20 @@ let check_cn_ident ns ((Symbol.Identifier loc str) as ident) =
           return ()
     end >>= fun () ->
     return true (* global *)
-  | CN_datatype_nm ->
-    return true (* global *)
+  | CN_logical ->
+    return false (* local *)
+  | CN_oarg ->
+    return false (* local *)
   | _ ->
-    return false
+    return true
   end
 
 
 val register_cn_ident: cn_namespace -> Symbol.identifier -> cn_desugM Symbol.sym
 let register_cn_ident ns ((Symbol.Identifier loc str) as ident) =
   let sym = Symbol.fresh_pretty str in
+  let () = Debug.print_debug 4 [] (fun () ->
+      "adding a CN identifier: " ^ str ^ "(" ^ show ns ^ ")") in
   check_cn_ident ns ident >>= function
   | true ->
     Eff.update (fun st ->

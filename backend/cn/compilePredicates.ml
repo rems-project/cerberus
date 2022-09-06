@@ -278,17 +278,19 @@ let translate_cn_expr (env: Env.t) expr =
               return (pred_ sym args bt)
           end
       | CNExpr_cons (c_nm, exprs) ->
-          let@ (sym, mem_syms, cons_info) = Env.lookup_constr c_nm env in
+          let@ cons_info = Env.lookup_constr loc c_nm env in
+          let@ (_, mem_syms) = Env.lookup_datatype loc cons_info.c_datatype_tag env in
           let@ exprs = ListM.mapM (fun (nm, expr) ->
               let@ expr = self expr in
               let@ sym = match Env.Y.find_opt (Id.s nm) mem_syms with
                 | Some sym -> return sym
                 | None -> fail {loc; msg = Generic
-                    (Pp.string ("Unknown field of " ^ Id.s c_nm ^ ": " ^ Id.s nm))}
+                    (Pp.string ("Unknown field of " ^ Sym.pp_string cons_info.c_datatype_tag
+                        ^ ": " ^ Id.s nm))}
               in
               return (sym, expr)) exprs
           in
-          return (datatype_cons_ sym cons_info.c_datatype_tag exprs)
+          return (datatype_cons_ c_nm cons_info.c_datatype_tag exprs)
       | CNExpr_each (sym, r, e) ->
           let env' = Env.add_logical sym BT.Integer env in
           let@ expr = trans env' e in
@@ -572,7 +574,7 @@ let translate_cn_predicate env (def: cn_predicate) =
         fail { loc= def.cn_pred_loc; msg= First_iarg_missing { pname= PName def.cn_pred_name} }
 
 let add_datatype_info env (dt : cn_datatype) =
-  let@ (dt_sym, env) = Env.add_datatype_name dt.cn_dt_name env in
+  Pp.debug 2 (lazy (Pp.item "translating datatype declaration" (Sym.pp dt.cn_dt_name)));
   let add_param_sym m (ty, nm) =
     let bt = translate_cn_base_type ty in
     let nm_s = Id.s nm in
@@ -589,15 +591,14 @@ let add_datatype_info env (dt : cn_datatype) =
   let param_syms = Env.Y.map fst param_sym_tys in
   let add_constr env (cname, params) =
     let c_params = List.map (fun (_, nm) -> Env.Y.find (Id.s nm) param_sym_tys) params in
-    let info = BaseTypes.{c_params; c_datatype_tag = dt_sym} in
-    let@ (sym, env) = Env.add_datatype_constr cname param_syms info env in
-    return env
+    let info = BaseTypes.{c_params; c_datatype_tag = dt.cn_dt_name} in
+    Env.add_datatype_constr cname info env
   in
-  let@ env = ListM.fold_leftM add_constr env dt.cn_dt_cases in
+  let env = List.fold_left add_constr env dt.cn_dt_cases in
   let dt_all_params = Env.Y.bindings param_sym_tys |> List.map snd in
-  let@ dt_constrs_info = ListM.mapM (fun (nm, _) -> Env.lookup_constr nm env) dt.cn_dt_cases in
-  let dt_constrs = List.map (fun (sym, _, _) -> sym) dt_constrs_info in
-  return (Env.add_datatype dt_sym (BaseTypes.{dt_constrs; dt_all_params}) env)
+  let dt_constrs = List.map fst dt.cn_dt_cases in
+  return (Env.add_datatype dt.cn_dt_name
+    (BaseTypes.{dt_constrs; dt_all_params}, param_syms) env)
 
 let translate tagDefs (f_defs: cn_function list) (pred_defs: cn_predicate list)
         (d_defs: cn_datatype list) =

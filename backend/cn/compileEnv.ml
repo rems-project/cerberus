@@ -36,18 +36,15 @@ type t = {
   func_names: Sym.t Y.t;
   functions: function_sig SymMap.t;
   resources: resource_def SymMap.t;
-  datatypes : BaseTypes.datatype_info SymMap.t;
-  datatype_names : Sym.t Y.t;
+  datatypes : (BaseTypes.datatype_info * Sym.t Y.t) SymMap.t;
   datatype_constrs : BaseTypes.constr_info SymMap.t;
-  datatype_constr_names : (Sym.t * Sym.t Y.t) Y.t;
   tagDefs: CF.Core_to_mucore.Mu.mu_tag_definitions;
 }
 
 let empty tagDefs =
   { logicals= SymMap.empty; pred_names= Y.empty; predicates= SymMap.empty;
     func_names = Y.empty; functions = SymMap.empty; resources= SymMap.empty;
-    datatypes = SymMap.empty; datatype_names = Y.empty;
-    datatype_constrs = SymMap.empty; datatype_constr_names = Y.empty;
+    datatypes = SymMap.empty; datatype_constrs = SymMap.empty;
     tagDefs; }
 
 let name_to_sym loc nm m = match Y.find_opt nm m with
@@ -101,30 +98,24 @@ let lookup_struct sym env =
     | Some (M_UnionDef _)| None ->
         None
 
-let lookup_datatype_info sym env = SymMap.find_opt sym env.datatypes
-
-let add_datatype_name id env =
-  let@ sym = name_to_sym (Id.loc id) (Id.s id) env.datatype_names in
-  let datatype_names = Y.add (Id.s id) sym env.datatype_names in
-  return (sym, {env with datatype_names})
+let lookup_datatype loc sym env = match SymMap.find_opt sym env.datatypes with
+  | Some info -> return info
+  | None -> fail (TypeErrors.{loc; msg = TypeErrors.Unknown_datatype sym})
 
 let add_datatype sym info env =
   let datatypes = SymMap.add sym info env.datatypes in
   {env with datatypes}
 
-let lookup_constr id env = match Y.find_opt (Id.s id) env.datatype_constr_names with
-  | Some (sym, mem_syms) -> return (sym, mem_syms, SymMap.find sym env.datatype_constrs)
-  | None -> fail (TypeErrors.{loc = Id.loc id; msg =
-        TypeErrors.Unknown_datatype_constr (Sym.fresh_named (Id.s id))})
+let lookup_constr loc sym env = match SymMap.find_opt sym env.datatype_constrs with
+  | Some info -> return info
+  | None -> fail (TypeErrors.{loc; msg = TypeErrors.Unknown_datatype_constr sym})
 
-let add_datatype_constr id mem_syms info env =
-  let@ sym = name_to_sym (Id.loc id) (Id.s id) env.datatype_constr_names in
-  let datatype_constr_names = Y.add (Id.s id) (sym, mem_syms) env.datatype_constr_names in
+let add_datatype_constr sym info env =
   let datatype_constrs = SymMap.add sym info env.datatype_constrs in
-  return (sym, {env with datatype_constrs; datatype_constr_names})
+  {env with datatype_constrs}
 
 let get_datatype_maps env =
-  (SymMap.bindings env.datatypes, SymMap.bindings env.datatype_constrs)
+  (SymMap.bindings (SymMap.map fst env.datatypes), SymMap.bindings env.datatype_constrs)
 
 
 let debug_known_preds env =

@@ -4408,7 +4408,8 @@ let rec desugar_cn_expr (CNExpr loc expr_) =
     | CNExpr_call nm es ->
         CNExpr_call nm <$> E.mapM desugar_cn_expr es
     | CNExpr_cons nm es ->
-        CNExpr_cons nm <$> E.mapM (fun (nm2, exp) -> pair nm2 <$> desugar_cn_expr exp) es
+        CNExpr_cons <$> E.resolve_cn_ident CN_constructor nm
+                    <*> E.mapM (fun (nm2, exp) -> pair nm2 <$> desugar_cn_expr exp) es
     | CNExpr_each ident r e ->
         E.register_cn_ident CN_logical ident >>= fun sym ->
         CNExpr_each sym r <$> desugar_cn_expr e
@@ -4532,7 +4533,8 @@ let desugar_cn_dt_arg (bTy, ident) =
 let desugar_and_register_cn_datatype dt =
   E.register_cn_datatype dt.cn_dt_name begin
     E.mapM (fun (id, args) ->
-      E.mapM desugar_cn_dt_arg args >>= fun args -> E.return (id, args)
+      E.register_cn_ident CN_constructor id >>= fun sym ->
+      E.mapM desugar_cn_dt_arg args >>= fun args -> E.return (sym, args)
     ) dt.cn_dt_cases
   end
 
@@ -4825,7 +4827,7 @@ val register_cn_datatype_names: list external_declaration -> E.desugM unit
 let register_cn_datatype_names xs =
   E.mapM_ (function
     | EDecl_datatypeCN dt ->
-         let () = Debug.warn [Debug.DB_desugaring] (fun () ->
+         let () = Debug.print_debug 2 [] (fun () ->
            "adding a datatype name") in
          E.register_cn_ident Cn.CN_datatype_nm dt.cn_dt_name >>= fun _ ->
         E.return ()

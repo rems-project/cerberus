@@ -118,7 +118,7 @@ module MakePp (Conf: PP_CN) = struct
             List.map (fun (ident, e) ->
               Dnode (pp_identifier ident, [dtree_of_cn_expr e])
             ) xs in
-          Dnode (pp_ctor "CNExpr_cons" ^^^ P.squotes (pp_identifier nm), docs)
+          Dnode (pp_ctor "CNExpr_cons" ^^^ P.squotes (Conf.pp_ident nm), docs)
       | CNExpr_each (ident, r, expr) ->
           Dnode (pp_ctor "CNExpr_each" ^^^ P.squotes (Conf.pp_ident ident) ^^^
                      !^ (Z.to_string (fst r)) ^^^ P.string "-" ^^^ !^ (Z.to_string (snd r))
@@ -211,11 +211,11 @@ module MakePp (Conf: PP_CN) = struct
       ) xs
 
   let dtree_of_cn_case (nm, args) =
-    Dnode ( pp_ctor "[CN]constructor" ^^^ P.squotes (pp_identifier nm)
+    Dnode ( pp_ctor "[CN]constructor" ^^^ P.squotes (Conf.pp_ident nm)
           , [ Dnode (pp_ctor "[CN]args", dtrees_of_dt_args args) ] )
 
   let dtree_of_cn_datatype dt =
-    Dnode ( pp_ctor "[CN]datatype" ^^^ P.squotes (pp_identifier dt.cn_dt_name)
+    Dnode ( pp_ctor "[CN]datatype" ^^^ P.squotes (Conf.pp_ident dt.cn_dt_name)
           , [ Dnode (pp_ctor "[CN]cases", List.map dtree_of_cn_case dt.cn_dt_cases) ])
 
 end
