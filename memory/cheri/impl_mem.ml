@@ -153,7 +153,7 @@ and sizeof ?(tagDefs= Tags.tagDefs ()) (Ctype (_, ty) as cty) =
      let x = max_offset mod align in
      if x = 0 then max_offset else max_offset + (align - x)
   | Union tag_sym ->
-     begin match Pmap.find tag_sym (Tags.tagDefs ()) with
+     begin match Pmap.find tag_sym tagDefs with
      | StructDef _ ->
         assert false
      | UnionDef membrs ->
@@ -217,7 +217,7 @@ and alignof ?(tagDefs= Tags.tagDefs ()) (Ctype (_, ty) as cty) =
           ) init membrs
      end
   | Union tag_sym ->
-     begin match Pmap.find tag_sym (Tags.tagDefs ()) with
+     begin match Pmap.find tag_sym tagDefs with
      | StructDef _ ->
         assert false
      | UnionDef membrs ->

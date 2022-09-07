@@ -464,7 +464,7 @@ Module CheriMemory
               | None => None
               end
           | Ctype.Ctype _ (Ctype.Union tag_sym) =>
-              match SymMap.find tag_sym (Tags.tagDefs tt) with
+              match SymMap.find tag_sym tagDefs with
               | Some (Ctype.StructDef _ _) =>
                   None
               | Some (Ctype.UnionDef membrs) =>
