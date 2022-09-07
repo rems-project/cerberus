@@ -5,6 +5,7 @@ From Coq Require Import Arith Bool List String.
 Require Import Coq.Numbers.BinNums.
 Require Import Coq.FSets.FMapAVL.
 Require Import Coq.Structures.OrderedType.
+Require Import Coq.Structures.OrderedTypeEx.
 
 Inductive identifier : Type :=
   | Identifier:  unit  ->  string  -> identifier .
@@ -19,7 +20,7 @@ Inductive symbol_description : Type :=
   | SD_FunArg: unit  ->   nat  -> symbol_description .
 
 (* Symbolic identifiers *)
-Inductive sym : Type :=
+Inductive sym : Set :=
   Symbol:  digest  ->  nat  ->  symbol_description  -> sym .
 
 
@@ -42,16 +43,15 @@ Definition compare_sym   : sym  -> sym  -> ordering :=  symbol_compare.
 *)
 
 (* TODO: implement all methods! *)
-Module Symbol_sym_as_OT : OrderedType.
+Module Symbol_sym_as_OT <: UsualOrderedType.
   Definition t := Symbol.sym.
 
-
-  Definition eq : t -> t -> Prop := fun _ _ => False. (* TODO *)
+  Definition eq : t -> t -> Prop := @eq t. (* TODO *)
   Definition lt : t -> t -> Prop := fun _ _ => False. (* TODO *)
 
-  Axiom eq_refl : forall x : t, eq x x. (* TODO *)
-  Axiom eq_sym : forall x y : t, eq x y -> eq y x. (* TODO *)
-  Axiom eq_trans : forall x y z : t, eq x y -> eq y z -> eq x z. (* TODO *)
+  Definition eq_refl := @eq_refl t. (* TODO *)
+  Definition eq_sym := @eq_sym t. (* TODO *)
+  Definition eq_trans := @eq_trans t. (* TODO *)
 
   Axiom lt_trans : forall x y z : t, lt x y -> lt y z -> lt x z. (* TODO *)
   Axiom lt_not_eq : forall x y : t, lt x y -> ~ eq x y. (* TODO *)

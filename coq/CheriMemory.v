@@ -12,7 +12,7 @@ Require Recdef.
 Require Import Lia.
 
 From ExtLib.Structures Require Import Monad Monads MonadExc MonadState.
-Require Import ExtLib.Data.Monads.EitherMonad.
+From ExtLib.Data.Monads Require Import EitherMonad OptionMonad.
 
 Require Import Capabilities.
 Require Import Addr.
@@ -25,6 +25,7 @@ Require Import ErrorWithState.
 Require Import Location.
 Require Import Symbol.
 Require Import Implementation.
+Require Import Tags.
 
 Local Open Scope string_scope.
 Local Open Scope type_scope.
@@ -394,61 +395,135 @@ Module CheriMemory
             ;;
             ret (alloc_id, addr).
 
+
+  (* c.f.
+   List.fold_left
+     : forall A B : Type, (A -> B -> A) -> list B -> A -> A
+   *)
+  Fixpoint monadic_fold_left
+    {A B : Type}
+    {m : Type -> Type}
+    {M : Monad m}
+    (f : A -> B -> m A) (l : list B) (a : A)
+    : m A
+    := match l with
+       | List.nil => ret a
+       | List.cons b l =>
+           a' <- f a b ;;
+           monadic_fold_left f l a'
+       end.
+
+  Fixpoint alignof (maybe_tagDefs : option (SymMap.t Ctype.tag_definition))
+    : Ctype.ctype -> option Z
+    :=
+    let tagDefs :=
+      match maybe_tagDefs with
+      | Some x => x
+      | None => Tags.tagDefs tt
+      end in
+    fun (function_parameter : Ctype.ctype) =>
+      let '(Ctype.Ctype _ ty) as cty := function_parameter in
+      match ty with
+      | Ctype.Void => None
+      | Ctype.Basic (Ctype.Integer ity) =>
+          Some (IMP.get.(alignof_ity) ity)
+      | Ctype.Basic (Ctype.Floating fty) =>
+          Some (IMP.get.(alignof_fty) fty)
+      | Ctype.Array elem_ty _ =>
+          alignof (Some tagDefs) elem_ty
+      |
+        (Ctype.Function _ _ _ |
+          Ctype.FunctionNoParams _) =>
+          None
+      | Ctype.Pointer _ _ =>
+          Some (IMP.get.(alignof_pointer))
+      | Ctype.Atomic atom_ty =>
+          alignof (Some tagDefs) atom_ty
+      | Ctype.Struct tag_sym =>
+          match SymMap.find tag_sym tagDefs with
+          | Some (Ctype.UnionDef _) =>
+              None
+          | Some (Ctype.StructDef membrs flexible_opt) =>
+              init <-
+                match flexible_opt with
+                | None => Some 0
+                | Some (Ctype.FlexibleArrayMember _ _ _ elem_ty) =>
+                    alignof (Some tagDefs)
+                      (Ctype.Ctype nil (Ctype.Array elem_ty None))
+                end ;;
+              monadic_fold_left
+                (fun acc '(_, (_, _, ty)) =>
+                   al <- alignof (Some tagDefs) ty ;;
+                   Some (Z.max al acc)
+                )
+                membrs
+                init
+          | None => None
+          end
+      | Ctype.Union tag_sym =>
+          match SymMap.find tag_sym (Tags.tagDefs tt) with
+          | Some (Ctype.StructDef _ _) =>
+              None
+          | Some (Ctype.UnionDef membrs) =>
+              monadic_fold_left
+                (fun acc '(_, (_, _, ty)) =>
+                   al <- alignof (Some tagDefs) ty ;;
+                   Some (Z.max al acc)
+                )
+                membrs
+                0
+          | None => None
+          end
+      end.
+
   Fixpoint offsetsof
     (tagDefs : SymMap.t Ctype.tag_definition)
     (tag_sym : Symbol.sym)
-    : list (Symbol.identifier * Ctype.ctype * Z) * Z
+    : option (list (Symbol.identifier * Ctype.ctype * Z) * Z)
     :=
-    match Pmap.find tag_sym tagDefs with
-    | Ctype.StructDef membrs_ flexible_opt =>
+    match SymMap.find tag_sym tagDefs with
+    | Some (Ctype.StructDef membrs_ flexible_opt) =>
         let membrs :=
           match flexible_opt with
           | None => membrs_
           | Some (Ctype.FlexibleArrayMember attrs ident qs ty) =>
-              CoqOfOCaml.Stdlib.app membrs_ [ (ident, (attrs, qs, ty)) ]
+              List.app membrs_ [ (ident, (attrs, qs, ty)) ]
           end in
-        let '(xs, maxoffset) :=
-          Stdlib.List.fold_left
-            (fun (function_parameter :
-                 list
-                   (Symbol.identifier *
-                      Ctype.ctype * Z) * Z) =>
-               let '(xs, last_offset) := function_parameter in
-               fun (function_parameter :
-                   Symbol.identifier *
-                     (Annot.attributes *
-                        Ctype.qualifiers *
-                        Ctype.ctype)) =>
-                 let '(membr, (_, _, ty)) := function_parameter in
-                 let size := sizeof (Some tagDefs) ty in
-                 let align := alignof (Some tagDefs) ty in
-                 let x_value := Z.modulo last_offset align in
-                 let pad :=
-                   if equiv_decb x_value 0 then
-                     0
-                   else
-                     Z.sub align x_value in
-                 ((cons (membr, ty, (Z.add last_offset pad)) xs),
-                   (Z.add (Z.add last_offset pad) size))) (nil, 0) membrs in
-        ((List.rev xs), maxoffset)
-    | Ctype.UnionDef membrs =>
-        ((List.map
-            (fun (function_parameter :
-                 Symbol.identifier *
-                   (Annot.attributes *
-                      Ctype.qualifiers *
-                      Ctype.ctype)) =>
-               let '(ident, (_, _, ty)) := function_parameter in
-               (ident, ty, 0)) membrs), 0)
+        '(xs, maxoffset) <-
+          monadic_fold_left
+            (fun '(xs, last_offset) '(membr, (_, _, ty))  =>
+               size <- sizeof (Some tagDefs) ty ;;
+               align <- alignof (Some tagDefs) ty ;;
+               let x_value := Z.modulo last_offset align in
+               let pad :=
+                 if Z.eqb x_value 0 then
+                   0
+                 else
+                   Z.sub align x_value in
+               Some ((cons (membr, ty, (Z.add last_offset pad)) xs),
+                   (Z.add (Z.add last_offset pad) size))
+            )
+            membrs
+            (nil, 0) ;;
+        Some ((List.rev xs), maxoffset)
+    | Some (Ctype.UnionDef membrs) =>
+        Some ((List.map
+                 (fun (function_parameter :
+                      Symbol.identifier *
+                        (Annot.attributes *
+                           Ctype.qualifiers *
+                           Ctype.ctype)) =>
+                    let '(ident, (_, _, ty)) := function_parameter in
+                    (ident, ty, 0)) membrs), 0)
+    | None => None
     end
 
-  with sizeof
-         (op_staroptstar :
-           option (SymMap.t Ctype.tag_definition))
-    : Ctype.ctype -> Z :=
+  with sizeof (maybe_tagDefs : option (SymMap.t Ctype.tag_definition))
+    : Ctype.ctype -> option Z
+       :=
          let tagDefs :=
-           match op_staroptstar with
-           | Some op_starsthstar => op_starsthstar
+           match maybe_tagDefs with
+           | Some x => x
            | None => Tags.tagDefs tt
            end in
          fun (function_parameter : Ctype.ctype) =>
@@ -457,174 +532,47 @@ Module CheriMemory
            |
              (Ctype.Void | Ctype.Array _ None |
                Ctype.Function _ _ _ |
-               Ctype.FunctionNoParams _) =>
-               (* ❌ Assert instruction is not handled. *)
-               assert Z false
+               Ctype.FunctionNoParams _) => None
            | Ctype.Basic (Ctype.Integer ity) =>
-               match
-                 (Ocaml_implementation.get tt).(Ocaml_implementation.implementation.sizeof_ity)
-                                                 ity with
-               | Some n_value => n_value
-               | None =>
-                   CoqOfOCaml.Stdlib.failwith
-                     (String.append
-                        "the concrete CHERI memory model requires a complete implementation sizeof INTEGER => "
-                        (String_core_ctype.string_of_ctype cty))
-               end
+               IMP.get.(sizeof_ity) ity
            | Ctype.Basic (Ctype.Floating fty) =>
-               match
-                 (Ocaml_implementation.get tt).(Ocaml_implementation.implementation.sizeof_fty)
-                                                 fty with
-               | Some n_value => n_value
-               | None =>
-                   CoqOfOCaml.Stdlib.failwith
-                     "the concrete CHERI memory model requires a complete implementation sizeof FLOAT"
-               end
+               IMP.get.(sizeof_fty) fty
            | Ctype.Array elem_ty (Some n_value) =>
-               Z.mul (Z.to_int n_value) (sizeof (Some tagDefs) elem_ty)
+               sz <- (sizeof (Some tagDefs) elem_ty) ;;
+               Some (Z.mul n_value sz)
            | Ctype.Pointer _ _ =>
-               match
-                 (Ocaml_implementation.get tt).(Ocaml_implementation.implementation.sizeof_pointer)
-               with
-               | Some n_value => n_value
-               | None =>
-                   CoqOfOCaml.Stdlib.failwith
-                     "the concrete CHERI memory model requires a complete implementation sizeof POINTER"
-               end
-           | Ctype.Atomic atom_ty => sizeof (Some tagDefs) atom_ty
+               Some (IMP.get.(sizeof_pointer))
+           | Ctype.Atomic atom_ty =>
+               sizeof (Some tagDefs) atom_ty
            | Ctype.Struct tag_sym =>
-               let '_ :=
-                 Debug_ocaml.warn nil
-                   (fun (function_parameter : unit) =>
-                      let '_ := function_parameter in
-                      "TODO: CHERI.sizeof doesn't add trailing padding for structs with a flexible array member")
-               in
-               let '(_, max_offset) := offsetsof tagDefs tag_sym in
-               let align := alignof (Some tagDefs) cty in
+               '(_, max_offset) <- offsetsof tagDefs tag_sym ;;
+               align <- alignof (Some tagDefs) cty ;;
                let x_value := Z.modulo max_offset align in
-               if equiv_decb x_value 0 then
-                 max_offset
-               else
-                 Z.add max_offset (Z.sub align x_value)
+               Some (if Z.eqb x_value 0 then
+                       max_offset
+                     else
+                       Z.add max_offset (Z.sub align x_value))
            | Ctype.Union tag_sym =>
-               match Pmap.find tag_sym (Tags.tagDefs tt) with
-               | Ctype.StructDef _ _ =>
-                   (* ❌ Assert instruction is not handled. *)
-                   assert Z false
-               | Ctype.UnionDef membrs =>
-                   let '(max_size, max_align) :=
-                     Stdlib.List.fold_left
-                       (fun (function_parameter : Z * Z) =>
-                          let '(acc_size, acc_align) := function_parameter in
-                          fun (function_parameter :
-                              Symbol.identifier *
-                                (Annot.attributes *
-                                   Ctype.qualifiers *
-                                   Ctype.ctype)) =>
-                            let '(_, (_, _, ty)) := function_parameter in
-                            ((CoqOfOCaml.Stdlib.max acc_size (sizeof (Some tagDefs) ty)),
-                              (CoqOfOCaml.Stdlib.max acc_align (alignof (Some tagDefs) ty))))
-                       (0, 0) membrs in
+               match SymMap.find tag_sym (Tags.tagDefs tt) with
+               | Some (Ctype.StructDef _ _) => None
+               | Some (Ctype.UnionDef membrs) =>
+                   '(max_size, max_align) <-
+                     monadic_fold_left
+                       (fun '(acc_size, acc_align) '(_, (_, _, ty)) =>
+                          sz <- sizeof (Some tagDefs) ty ;;
+                          al <- alignof (Some tagDefs) ty ;;
+                          Some ((Z.max acc_size sz),(Z.max acc_align al))
+                       )
+                       membrs (0, 0) ;;
                    let x_value := Z.modulo max_size max_align in
-                   if equiv_decb x_value 0 then
-                     max_size
-                   else
-                     Z.add max_size (Z.sub max_align x_value)
+                   Some (if Z.eqb x_value 0 then
+                           max_size
+                         else
+                           Z.add max_size (Z.sub max_align x_value))
+               | None => None
                end
            end
 
-  with alignof
-         (op_staroptstar :
-           option (SymMap.t Ctype.tag_definition))
-    : Ctype.ctype -> Z :=
-         let tagDefs :=
-           match op_staroptstar with
-           | Some op_starsthstar => op_starsthstar
-           | None => Tags.tagDefs tt
-           end in
-         fun (function_parameter : Ctype.ctype) =>
-           let '(Ctype.Ctype _ ty) as cty := function_parameter in
-           match ty with
-           | Ctype.Void =>
-               (* ❌ Assert instruction is not handled. *)
-               assert Z false
-           | Ctype.Basic (Ctype.Integer ity) =>
-               match
-                 (Ocaml_implementation.get tt).(Ocaml_implementation.implementation.alignof_ity)
-                                                 ity with
-               | Some n_value => n_value
-               | None =>
-                   CoqOfOCaml.Stdlib.failwith
-                     (String.append
-                        "the concrete CHERI memory model requires a complete implementation alignof INTEGER => "
-                        (String_core_ctype.string_of_ctype cty))
-               end
-           | Ctype.Basic (Ctype.Floating fty) =>
-               match
-                 (Ocaml_implementation.get tt).(Ocaml_implementation.implementation.alignof_fty)
-                                                 fty with
-               | Some n_value => n_value
-               | None =>
-                   CoqOfOCaml.Stdlib.failwith
-                     "the concrete CHERI memory model requires a complete implementation alignof FLOATING"
-               end
-           | Ctype.Array elem_ty _ => alignof (Some tagDefs) elem_ty
-           |
-             (Ctype.Function _ _ _ |
-               Ctype.FunctionNoParams _) =>
-               (* ❌ Assert instruction is not handled. *)
-               assert Z false
-           | Ctype.Pointer _ _ =>
-               match
-                 (Ocaml_implementation.get tt).(Ocaml_implementation.implementation.alignof_pointer)
-               with
-               | Some n_value => n_value
-               | None =>
-                   CoqOfOCaml.Stdlib.failwith
-                     "the concrete CHERI memory model requires a complete implementation alignof POINTER"
-               end
-           | Ctype.Atomic atom_ty => alignof (Some tagDefs) atom_ty
-           | Ctype.Struct tag_sym =>
-               match Pmap.find tag_sym tagDefs with
-               | Ctype.UnionDef _ =>
-                   (* ❌ Assert instruction is not handled. *)
-                   assert Z false
-               | Ctype.StructDef membrs flexible_opt =>
-                   let init :=
-                     match flexible_opt with
-                     | None => 0
-                     | Some (Ctype.FlexibleArrayMember _ _ _ elem_ty) =>
-                         alignof (Some tagDefs)
-                           (Ctype.Ctype nil
-                              (Ctype.Array elem_ty None))
-                     end in
-                   Stdlib.List.fold_left
-                     (fun (acc : Z) =>
-                      fun (function_parameter :
-                          Symbol.identifier *
-                            (Annot.attributes *
-                               Ctype.qualifiers *
-                               Ctype.ctype)) =>
-                        let '(_, (_, _, ty)) := function_parameter in
-                        CoqOfOCaml.Stdlib.max (alignof (Some tagDefs) ty) acc) init membrs
-               end
-           | Ctype.Union tag_sym =>
-               match Pmap.find tag_sym (Tags.tagDefs tt) with
-               | Ctype.StructDef _ _ =>
-                   (* ❌ Assert instruction is not handled. *)
-                   assert Z false
-               | Ctype.UnionDef membrs =>
-                   Stdlib.List.fold_left
-                     (fun (acc : Z) =>
-                      fun (function_parameter :
-                          Symbol.identifier *
-                            (Annot.attributes *
-                               Ctype.qualifiers *
-                               Ctype.ctype)) =>
-                        let '(_, (_, _, ty)) := function_parameter in
-                        CoqOfOCaml.Stdlib.max (alignof (Some tagDefs) ty) acc) 0 membrs
-               end
-           end.
 
   Definition allocate_object (tid:thread_id) (pref:Symbol.prefix) (int_val:integer_value) (ty:Ctype.ctype) (init_opt:option mem_value) : memM pointer_value  :=
     let align_n := num_of_int int_val in
