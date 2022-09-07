@@ -399,6 +399,8 @@ Module CheriMemory
   (* c.f.
    List.fold_left
      : forall A B : Type, (A -> B -> A) -> list B -> A -> A
+
+   TODO: move somewhere else. Perhaps Util.v
    *)
   Fixpoint monadic_fold_left
     {A B : Type}
@@ -413,7 +415,7 @@ Module CheriMemory
            monadic_fold_left f l a'
        end.
 
-  Fixpoint alignof (maybe_tagDefs : option (SymMap.t Ctype.tag_definition))
+  Definition alignof (maybe_tagDefs : option (SymMap.t Ctype.tag_definition))
     : Ctype.ctype -> option Z
     :=
     let tagDefs :=
@@ -421,25 +423,24 @@ Module CheriMemory
       | Some x => x
       | None => Tags.tagDefs tt
       end in
-    fun (function_parameter : Ctype.ctype) =>
-      let '(Ctype.Ctype _ ty) as cty := function_parameter in
-      match ty with
-      | Ctype.Void => None
-      | Ctype.Basic (Ctype.Integer ity) =>
+    fix alignof_ function_parameter  :=
+      match function_parameter with
+      | Ctype.Ctype _ Ctype.Void => None
+      | Ctype.Ctype _ (Ctype.Basic (Ctype.Integer ity)) =>
           Some (IMP.get.(alignof_ity) ity)
-      | Ctype.Basic (Ctype.Floating fty) =>
+      | Ctype.Ctype _ (Ctype.Basic (Ctype.Floating fty)) =>
           Some (IMP.get.(alignof_fty) fty)
-      | Ctype.Array elem_ty _ =>
-          alignof (Some tagDefs) elem_ty
+      | Ctype.Ctype _ (Ctype.Array elem_ty _) =>
+          alignof_  elem_ty
       |
-        (Ctype.Function _ _ _ |
-          Ctype.FunctionNoParams _) =>
+        (Ctype.Ctype _ (Ctype.Function _ _ _) |
+          Ctype.Ctype _ (Ctype.FunctionNoParams _)) =>
           None
-      | Ctype.Pointer _ _ =>
+      | Ctype.Ctype _ (Ctype.Pointer _ _) =>
           Some (IMP.get.(alignof_pointer))
-      | Ctype.Atomic atom_ty =>
-          alignof (Some tagDefs) atom_ty
-      | Ctype.Struct tag_sym =>
+      | Ctype.Ctype _ (Ctype.Atomic atom_ty) =>
+          alignof_  atom_ty
+      | Ctype.Ctype _ (Ctype.Struct tag_sym) =>
           match SymMap.find tag_sym tagDefs with
           | Some (Ctype.UnionDef _) =>
               None
@@ -448,26 +449,26 @@ Module CheriMemory
                 match flexible_opt with
                 | None => Some 0
                 | Some (Ctype.FlexibleArrayMember _ _ _ elem_ty) =>
-                    alignof (Some tagDefs)
+                    alignof_
                       (Ctype.Ctype nil (Ctype.Array elem_ty None))
                 end ;;
               monadic_fold_left
                 (fun acc '(_, (_, _, ty)) =>
-                   al <- alignof (Some tagDefs) ty ;;
+                   al <- alignof_  ty ;;
                    Some (Z.max al acc)
                 )
                 membrs
                 init
           | None => None
           end
-      | Ctype.Union tag_sym =>
+      | Ctype.Ctype _ (Ctype.Union tag_sym) =>
           match SymMap.find tag_sym (Tags.tagDefs tt) with
           | Some (Ctype.StructDef _ _) =>
               None
           | Some (Ctype.UnionDef membrs) =>
               monadic_fold_left
                 (fun acc '(_, (_, _, ty)) =>
-                   al <- alignof (Some tagDefs) ty ;;
+                   al <- alignof_  ty ;;
                    Some (Z.max al acc)
                 )
                 membrs
