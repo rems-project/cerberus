@@ -415,7 +415,9 @@ Module CheriMemory
            monadic_fold_left f l a'
        end.
 
-  Definition alignof (fuel: nat) (maybe_tagDefs : option (SymMap.t Ctype.tag_definition))
+  Definition alignof
+    (fuel: nat)
+    (maybe_tagDefs : option (SymMap.t Ctype.tag_definition))
     : Ctype.ctype -> option Z
     :=
     let tagDefs :=
@@ -482,101 +484,111 @@ Module CheriMemory
     in alignof_ fuel.
 
   Fixpoint offsetsof
+    (fuel: nat)
     (tagDefs : SymMap.t Ctype.tag_definition)
     (tag_sym : Symbol.sym)
     : option (list (Symbol.identifier * Ctype.ctype * Z) * Z)
     :=
-    match SymMap.find tag_sym tagDefs with
-    | Some (Ctype.StructDef membrs_ flexible_opt) =>
-        let membrs :=
-          match flexible_opt with
-          | None => membrs_
-          | Some (Ctype.FlexibleArrayMember attrs ident qs ty) =>
-              List.app membrs_ [ (ident, (attrs, qs, ty)) ]
-          end in
-        '(xs, maxoffset) <-
-          monadic_fold_left
-            (fun '(xs, last_offset) '(membr, (_, _, ty))  =>
-               size <- sizeof (Some tagDefs) ty ;;
-               align <- alignof (Some tagDefs) ty ;;
-               let x_value := Z.modulo last_offset align in
-               let pad :=
-                 if Z.eqb x_value 0 then
-                   0
-                 else
-                   Z.sub align x_value in
-               Some ((cons (membr, ty, (Z.add last_offset pad)) xs),
-                   (Z.add (Z.add last_offset pad) size))
-            )
-            membrs
-            (nil, 0) ;;
-        Some ((List.rev xs), maxoffset)
-    | Some (Ctype.UnionDef membrs) =>
-        Some ((List.map
-                 (fun (function_parameter :
-                      Symbol.identifier *
-                        (Annot.attributes *
-                           Ctype.qualifiers *
-                           Ctype.ctype)) =>
-                    let '(ident, (_, _, ty)) := function_parameter in
-                    (ident, ty, 0)) membrs), 0)
-    | None => None
+    match fuel with
+    | O => None
+    | S fuel =>
+        match SymMap.find tag_sym tagDefs with
+        | Some (Ctype.StructDef membrs_ flexible_opt) =>
+            let membrs :=
+              match flexible_opt with
+              | None => membrs_
+              | Some (Ctype.FlexibleArrayMember attrs ident qs ty) =>
+                  List.app membrs_ [ (ident, (attrs, qs, ty)) ]
+              end in
+            '(xs, maxoffset) <-
+              monadic_fold_left
+                (fun '(xs, last_offset) '(membr, (_, _, ty))  =>
+                   size <- sizeof fuel (Some tagDefs) ty ;;
+                   align <- alignof fuel (Some tagDefs) ty ;;
+                   let x_value := Z.modulo last_offset align in
+                   let pad :=
+                     if Z.eqb x_value 0 then
+                       0
+                     else
+                       Z.sub align x_value in
+                   Some ((cons (membr, ty, (Z.add last_offset pad)) xs),
+                       (Z.add (Z.add last_offset pad) size))
+                )
+                membrs
+                (nil, 0) ;;
+            Some ((List.rev xs), maxoffset)
+        | Some (Ctype.UnionDef membrs) =>
+            Some ((List.map
+                     (fun (function_parameter :
+                          Symbol.identifier *
+                            (Annot.attributes *
+                               Ctype.qualifiers *
+                               Ctype.ctype)) =>
+                        let '(ident, (_, _, ty)) := function_parameter in
+                        (ident, ty, 0)) membrs), 0)
+        | None => None
+        end
     end
-
-  with sizeof (maybe_tagDefs : option (SymMap.t Ctype.tag_definition))
+  with sizeof
+         (fuel: nat)
+         (maybe_tagDefs : option (SymMap.t Ctype.tag_definition))
     : Ctype.ctype -> option Z
        :=
-         let tagDefs :=
-           match maybe_tagDefs with
-           | Some x => x
-           | None => Tags.tagDefs tt
-           end in
-         fun (function_parameter : Ctype.ctype) =>
-           let '(Ctype.Ctype _ ty) as cty := function_parameter in
-           match ty with
-           |
-             (Ctype.Void | Ctype.Array _ None |
-               Ctype.Function _ _ _ |
-               Ctype.FunctionNoParams _) => None
-           | Ctype.Basic (Ctype.Integer ity) =>
-               IMP.get.(sizeof_ity) ity
-           | Ctype.Basic (Ctype.Floating fty) =>
-               IMP.get.(sizeof_fty) fty
-           | Ctype.Array elem_ty (Some n_value) =>
-               sz <- (sizeof (Some tagDefs) elem_ty) ;;
-               Some (Z.mul n_value sz)
-           | Ctype.Pointer _ _ =>
-               Some (IMP.get.(sizeof_pointer))
-           | Ctype.Atomic atom_ty =>
-               sizeof (Some tagDefs) atom_ty
-           | Ctype.Struct tag_sym =>
-               '(_, max_offset) <- offsetsof tagDefs tag_sym ;;
-               align <- alignof (Some tagDefs) cty ;;
-               let x_value := Z.modulo max_offset align in
-               Some (if Z.eqb x_value 0 then
-                       max_offset
-                     else
-                       Z.add max_offset (Z.sub align x_value))
-           | Ctype.Union tag_sym =>
-               match SymMap.find tag_sym (Tags.tagDefs tt) with
-               | Some (Ctype.StructDef _ _) => None
-               | Some (Ctype.UnionDef membrs) =>
-                   '(max_size, max_align) <-
-                     monadic_fold_left
-                       (fun '(acc_size, acc_align) '(_, (_, _, ty)) =>
-                          sz <- sizeof (Some tagDefs) ty ;;
-                          al <- alignof (Some tagDefs) ty ;;
-                          Some ((Z.max acc_size sz),(Z.max acc_align al))
-                       )
-                       membrs (0, 0) ;;
-                   let x_value := Z.modulo max_size max_align in
+         match fuel with
+         | O => fun _ => None
+         | S fuel =>
+             let tagDefs :=
+               match maybe_tagDefs with
+               | Some x => x
+               | None => Tags.tagDefs tt
+               end in
+             fun (function_parameter : Ctype.ctype) =>
+               let '(Ctype.Ctype _ ty) as cty := function_parameter in
+               match ty with
+               |
+                 (Ctype.Void | Ctype.Array _ None |
+                   Ctype.Function _ _ _ |
+                   Ctype.FunctionNoParams _) => None
+               | Ctype.Basic (Ctype.Integer ity) =>
+                   IMP.get.(sizeof_ity) ity
+               | Ctype.Basic (Ctype.Floating fty) =>
+                   IMP.get.(sizeof_fty) fty
+               | Ctype.Array elem_ty (Some n_value) =>
+                   sz <- (sizeof fuel (Some tagDefs) elem_ty) ;;
+                   Some (Z.mul n_value sz)
+               | Ctype.Pointer _ _ =>
+                   Some (IMP.get.(sizeof_pointer))
+               | Ctype.Atomic atom_ty =>
+                   sizeof fuel (Some tagDefs) atom_ty
+               | Ctype.Struct tag_sym =>
+                   '(_, max_offset) <- offsetsof fuel tagDefs tag_sym ;;
+                   align <- alignof fuel (Some tagDefs) cty ;;
+                   let x_value := Z.modulo max_offset align in
                    Some (if Z.eqb x_value 0 then
-                           max_size
+                           max_offset
                          else
-                           Z.add max_size (Z.sub max_align x_value))
-               | None => None
+                           Z.add max_offset (Z.sub align x_value))
+               | Ctype.Union tag_sym =>
+                   match SymMap.find tag_sym (Tags.tagDefs tt) with
+                   | Some (Ctype.StructDef _ _) => None
+                   | Some (Ctype.UnionDef membrs) =>
+                       '(max_size, max_align) <-
+                         monadic_fold_left
+                           (fun '(acc_size, acc_align) '(_, (_, _, ty)) =>
+                              sz <- sizeof fuel (Some tagDefs) ty ;;
+                              al <- alignof fuel (Some tagDefs) ty ;;
+                              Some ((Z.max acc_size sz),(Z.max acc_align al))
+                           )
+                           membrs (0, 0) ;;
+                       let x_value := Z.modulo max_size max_align in
+                       Some (if Z.eqb x_value 0 then
+                               max_size
+                             else
+                               Z.add max_size (Z.sub max_align x_value))
+                   | None => None
+                   end
                end
-           end
+         end.
 
 
   Definition allocate_object (tid:thread_id) (pref:Symbol.prefix) (int_val:integer_value) (ty:Ctype.ctype) (init_opt:option mem_value) : memM pointer_value  :=
