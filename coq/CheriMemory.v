@@ -415,7 +415,7 @@ Module CheriMemory
            monadic_fold_left f l a'
        end.
 
-  Definition alignof (maybe_tagDefs : option (SymMap.t Ctype.tag_definition))
+  Definition alignof (fuel: nat) (maybe_tagDefs : option (SymMap.t Ctype.tag_definition))
     : Ctype.ctype -> option Z
     :=
     let tagDefs :=
@@ -423,59 +423,63 @@ Module CheriMemory
       | Some x => x
       | None => Tags.tagDefs tt
       end in
-    fix alignof_ function_parameter  :=
-      match function_parameter with
-      | Ctype.Ctype _ Ctype.Void => None
-      | Ctype.Ctype _ (Ctype.Basic (Ctype.Integer ity)) =>
-          Some (IMP.get.(alignof_ity) ity)
-      | Ctype.Ctype _ (Ctype.Basic (Ctype.Floating fty)) =>
-          Some (IMP.get.(alignof_fty) fty)
-      | Ctype.Ctype _ (Ctype.Array elem_ty _) =>
-          alignof_  elem_ty
-      |
-        (Ctype.Ctype _ (Ctype.Function _ _ _) |
-          Ctype.Ctype _ (Ctype.FunctionNoParams _)) =>
-          None
-      | Ctype.Ctype _ (Ctype.Pointer _ _) =>
-          Some (IMP.get.(alignof_pointer))
-      | Ctype.Ctype _ (Ctype.Atomic atom_ty) =>
-          alignof_  atom_ty
-      | Ctype.Ctype _ (Ctype.Struct tag_sym) =>
-          match SymMap.find tag_sym tagDefs with
-          | Some (Ctype.UnionDef _) =>
+    let fix alignof_ (fuel: nat) ty  :=
+      match fuel with
+      | O => None
+      | S fuel =>
+          match ty with
+          | Ctype.Ctype _ Ctype.Void => None
+          | Ctype.Ctype _ (Ctype.Basic (Ctype.Integer ity)) =>
+              Some (IMP.get.(alignof_ity) ity)
+          | Ctype.Ctype _ (Ctype.Basic (Ctype.Floating fty)) =>
+              Some (IMP.get.(alignof_fty) fty)
+          | Ctype.Ctype _ (Ctype.Array elem_ty _) =>
+              alignof_ fuel elem_ty
+          |
+            (Ctype.Ctype _ (Ctype.Function _ _ _) |
+              Ctype.Ctype _ (Ctype.FunctionNoParams _)) =>
               None
-          | Some (Ctype.StructDef membrs flexible_opt) =>
-              init <-
-                match flexible_opt with
-                | None => Some 0
-                | Some (Ctype.FlexibleArrayMember _ _ _ elem_ty) =>
-                    alignof_
-                      (Ctype.Ctype nil (Ctype.Array elem_ty None))
-                end ;;
-              monadic_fold_left
-                (fun acc '(_, (_, _, ty)) =>
-                   al <- alignof_  ty ;;
-                   Some (Z.max al acc)
-                )
-                membrs
-                init
-          | None => None
+          | Ctype.Ctype _ (Ctype.Pointer _ _) =>
+              Some (IMP.get.(alignof_pointer))
+          | Ctype.Ctype _ (Ctype.Atomic atom_ty) =>
+              alignof_ fuel  atom_ty
+          | Ctype.Ctype _ (Ctype.Struct tag_sym) =>
+              match SymMap.find tag_sym tagDefs with
+              | Some (Ctype.UnionDef _) =>
+                  None
+              | Some (Ctype.StructDef membrs flexible_opt) =>
+                  init <-
+                    match flexible_opt with
+                    | None => Some 0
+                    | Some (Ctype.FlexibleArrayMember _ _ _ elem_ty) =>
+                        alignof_ fuel (Ctype.Ctype nil (Ctype.Array elem_ty None))
+                    end ;;
+                  monadic_fold_left
+                    (fun acc '(_, (_, _, ty)) =>
+                       al <- alignof_ fuel ty ;;
+                       Some (Z.max al acc)
+                    )
+                    membrs
+                    init
+              | None => None
+              end
+          | Ctype.Ctype _ (Ctype.Union tag_sym) =>
+              match SymMap.find tag_sym (Tags.tagDefs tt) with
+              | Some (Ctype.StructDef _ _) =>
+                  None
+              | Some (Ctype.UnionDef membrs) =>
+                  monadic_fold_left
+                    (fun acc '(_, (_, _, ty)) =>
+                       al <- alignof_ fuel ty ;;
+                       Some (Z.max al acc)
+                    )
+                    membrs
+                    0
+              | None => None
+              end
           end
-      | Ctype.Ctype _ (Ctype.Union tag_sym) =>
-          match SymMap.find tag_sym (Tags.tagDefs tt) with
-          | Some (Ctype.StructDef _ _) =>
-              None
-          | Some (Ctype.UnionDef membrs) =>
-              monadic_fold_left
-                (fun acc '(_, (_, _, ty)) =>
-                   al <- alignof_  ty ;;
-                   Some (Z.max al acc)
-                )
-                membrs
-                0
-          | None => None
-          end
-      end.
+      end
+    in alignof_ fuel.
 
   Fixpoint offsetsof
     (tagDefs : SymMap.t Ctype.tag_definition)
