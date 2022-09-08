@@ -201,7 +201,7 @@ Module CheriMemory
                 dynamic_addrs    := st.(dynamic_addrs);
                 last_used        := st.(last_used);
               |}
-  *)
+   *)
 
   Definition mem_state := mem_state_r.
 
@@ -234,11 +234,35 @@ Module CheriMemory
   | Undef0: location_ocaml -> (list undefined_behaviour) -> MemMonadError
   | InternalErr: string -> MemMonadError.
 
+
   Definition memM := errS mem_state MemMonadError.
   #[local] Instance memM_monad: Monad memM.
   Proof.
     typeclasses eauto.
   Qed.
+
+  (* simple string error *)
+  Notation serr := (sum string).
+
+  Definition serr2memM {A: Type} (msg:string) (e:serr A): (memM A)
+    := match e with
+       | inr v => ret v
+       | inl msg => raise (InternalErr msg)
+       end.
+
+  Local Instance Exception_serr : MonadExc string (serr) :=
+    { raise := fun _ v => inl v
+    ; catch := fun _ c h => match c with
+                         | inl v => h v
+                         | inr x => inr x
+                         end
+    }.
+
+  Definition option2serr {A: Type} (msg:string) (o:option A): (serr A)
+    := match o with
+       | Some v => ret v
+       | None => raise msg
+       end.
 
   Definition fail {A:Type} err : memM A :=
     let loc :=
@@ -273,8 +297,8 @@ Module CheriMemory
     end.
 
   Inductive footprint_ind :=
-    (* base address, size *)
-    | FP: MorelloAddr.t * Z -> footprint_ind.
+  (* base address, size *)
+  | FP: MorelloAddr.t * Z -> footprint_ind.
 
   Definition footprint := footprint_ind.
 
@@ -380,7 +404,7 @@ Module CheriMemory
   Definition alignof
     (fuel: nat)
     (maybe_tagDefs : option (SymMap.t Ctype.tag_definition))
-    : Ctype.ctype -> option Z
+    : Ctype.ctype -> serr Z
     :=
     let tagDefs :=
       match maybe_tagDefs with
@@ -389,57 +413,57 @@ Module CheriMemory
       end in
     let fix alignof_ (fuel: nat) ty  :=
       match fuel with
-      | O => None
+      | O => raise "alignof out of fuel"
       | S fuel =>
           match ty with
-          | Ctype.Ctype _ Ctype.Void => None
+          | Ctype.Ctype _ Ctype.Void => raise "no alignment for void"
           | Ctype.Ctype _ (Ctype.Basic (Ctype.Integer ity)) =>
-              Some (IMP.get.(alignof_ity) ity)
+              ret (IMP.get.(alignof_ity) ity)
           | Ctype.Ctype _ (Ctype.Basic (Ctype.Floating fty)) =>
-              Some (IMP.get.(alignof_fty) fty)
+              ret (IMP.get.(alignof_fty) fty)
           | Ctype.Ctype _ (Ctype.Array elem_ty _) =>
               alignof_ fuel elem_ty
           |
             (Ctype.Ctype _ (Ctype.Function _ _ _) |
               Ctype.Ctype _ (Ctype.FunctionNoParams _)) =>
-              None
+              raise "no alighment for function types"
           | Ctype.Ctype _ (Ctype.Pointer _ _) =>
-              Some (IMP.get.(alignof_pointer))
+              ret (IMP.get.(alignof_pointer))
           | Ctype.Ctype _ (Ctype.Atomic atom_ty) =>
               alignof_ fuel  atom_ty
           | Ctype.Ctype _ (Ctype.Struct tag_sym) =>
               match SymMap.find tag_sym tagDefs with
               | Some (Ctype.UnionDef _) =>
-                  None
+                  raise "no alignment for struct with union tag"
               | Some (Ctype.StructDef membrs flexible_opt) =>
                   init <-
                     match flexible_opt with
-                    | None => Some 0
+                    | None => ret 0
                     | Some (Ctype.FlexibleArrayMember _ _ _ elem_ty) =>
                         alignof_ fuel (Ctype.Ctype nil (Ctype.Array elem_ty None))
                     end ;;
                   monadic_fold_left
                     (fun acc '(_, (_, _, ty)) =>
                        al <- alignof_ fuel ty ;;
-                       Some (Z.max al acc)
+                       ret (Z.max al acc)
                     )
                     membrs
                     init
-              | None => None
+              | None => raise "could not find struct tag to compute alignment"
               end
           | Ctype.Ctype _ (Ctype.Union tag_sym) =>
               match SymMap.find tag_sym tagDefs with
               | Some (Ctype.StructDef _ _) =>
-                  None
+                  raise "no alignment for union with struct tag"
               | Some (Ctype.UnionDef membrs) =>
                   monadic_fold_left
                     (fun acc '(_, (_, _, ty)) =>
                        al <- alignof_ fuel ty ;;
-                       Some (Z.max al acc)
+                       ret (Z.max al acc)
                     )
                     membrs
                     0
-              | None => None
+              | None => raise "could not find union tag to compute alignment"
               end
           end
       end
@@ -449,10 +473,10 @@ Module CheriMemory
     (fuel: nat)
     (tagDefs : SymMap.t Ctype.tag_definition)
     (tag_sym : Symbol.sym)
-    : option (list (Symbol.identifier * Ctype.ctype * Z) * Z)
+    : serr (list (Symbol.identifier * Ctype.ctype * Z) * Z)
     :=
     match fuel with
-    | O => None
+    | O => raise "offsetof out of fuel"
     | S fuel =>
         match SymMap.find tag_sym tagDefs with
         | Some (Ctype.StructDef membrs_ flexible_opt) =>
@@ -473,31 +497,31 @@ Module CheriMemory
                        0
                      else
                        Z.sub align x_value in
-                   Some ((cons (membr, ty, (Z.add last_offset pad)) xs),
+                   ret ((cons (membr, ty, (Z.add last_offset pad)) xs),
                        (Z.add (Z.add last_offset pad) size))
                 )
                 membrs
                 (nil, 0) ;;
-            Some ((List.rev xs), maxoffset)
+            ret ((List.rev xs), maxoffset)
         | Some (Ctype.UnionDef membrs) =>
-            Some ((List.map
-                     (fun (function_parameter :
-                          Symbol.identifier *
-                            (Annot.attributes *
-                               Ctype.qualifiers *
-                               Ctype.ctype)) =>
-                        let '(ident, (_, _, ty)) := function_parameter in
-                        (ident, ty, 0)) membrs), 0)
-        | None => None
+            ret ((List.map
+                    (fun (function_parameter :
+                         Symbol.identifier *
+                           (Annot.attributes *
+                              Ctype.qualifiers *
+                              Ctype.ctype)) =>
+                       let '(ident, (_, _, ty)) := function_parameter in
+                       (ident, ty, 0)) membrs), 0)
+        | None => raise "could not find tag"
         end
     end
   with sizeof
          (fuel: nat)
          (maybe_tagDefs : option (SymMap.t Ctype.tag_definition))
-    : Ctype.ctype -> option Z
+    : Ctype.ctype -> serr Z
        :=
          match fuel with
-         | O => fun _ => None
+         | O => fun _ => raise "sizeof out of fuel"
          | S fuel =>
              let tagDefs :=
                match maybe_tagDefs with
@@ -510,44 +534,46 @@ Module CheriMemory
                |
                  (Ctype.Void | Ctype.Array _ None |
                    Ctype.Function _ _ _ |
-                   Ctype.FunctionNoParams _) => None
+                   Ctype.FunctionNoParams _) =>
+                   raise "no sizeof for function types"
                | Ctype.Basic (Ctype.Integer ity) =>
-                   IMP.get.(sizeof_ity) ity
+                   option2serr "sizeof_ity not defined in Implementation" (IMP.get.(sizeof_ity) ity)
                | Ctype.Basic (Ctype.Floating fty) =>
-                   IMP.get.(sizeof_fty) fty
+                   option2serr "sizeof_fty not defined in Implementation" (IMP.get.(sizeof_fty) fty)
                | Ctype.Array elem_ty (Some n_value) =>
                    sz <- (sizeof fuel (Some tagDefs) elem_ty) ;;
-                   Some (Z.mul n_value sz)
+                   ret (Z.mul n_value sz)
                | Ctype.Pointer _ _ =>
-                   Some (IMP.get.(sizeof_pointer))
+                   ret (IMP.get.(sizeof_pointer))
                | Ctype.Atomic atom_ty =>
                    sizeof fuel (Some tagDefs) atom_ty
                | Ctype.Struct tag_sym =>
                    '(_, max_offset) <- offsetsof fuel tagDefs tag_sym ;;
                    align <- alignof fuel (Some tagDefs) cty ;;
                    let x_value := Z.modulo max_offset align in
-                   Some (if Z.eqb x_value 0 then
-                           max_offset
-                         else
-                           Z.add max_offset (Z.sub align x_value))
+                   ret (if Z.eqb x_value 0 then
+                          max_offset
+                        else
+                          Z.add max_offset (Z.sub align x_value))
                | Ctype.Union tag_sym =>
-                   match SymMap.find tag_sym (Tags.tagDefs tt) with
-                   | Some (Ctype.StructDef _ _) => None
+                   match SymMap.find tag_sym tagDefs with
+                   | Some (Ctype.StructDef _ _) =>
+                       raise "no alignment for struct with union tag"
                    | Some (Ctype.UnionDef membrs) =>
                        '(max_size, max_align) <-
                          monadic_fold_left
                            (fun '(acc_size, acc_align) '(_, (_, _, ty)) =>
                               sz <- sizeof fuel (Some tagDefs) ty ;;
                               al <- alignof fuel (Some tagDefs) ty ;;
-                              Some ((Z.max acc_size sz),(Z.max acc_align al))
+                              ret ((Z.max acc_size sz),(Z.max acc_align al))
                            )
                            membrs (0, 0) ;;
                        let x_value := Z.modulo max_size max_align in
-                       Some (if Z.eqb x_value 0 then
-                               max_size
-                             else
-                               Z.add max_size (Z.sub max_align x_value))
-                   | None => None
+                       ret (if Z.eqb x_value 0 then
+                              max_size
+                            else
+                              Z.add max_size (Z.sub max_align x_value))
+                   | None => raise "could not find union tag to compute sizeof"
                    end
                end
          end.
@@ -571,7 +597,7 @@ Module CheriMemory
     : memM pointer_value
     :=
     let align_n := num_of_int int_val in
-    size_n <- option2errS (InternalErr "sizeof failed") (sizeof DEFAULT_FUEL None ty) ;;
+    size_n <- serr2memM "sizeof failed" (sizeof DEFAULT_FUEL None ty) ;;
 
     let mask := C.representable_alignment_mask size_n in
     let size_n' := C.representable_length size_n in
