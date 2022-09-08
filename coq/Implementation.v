@@ -15,7 +15,6 @@ Record implementation := {
     details: string;
     sizeof_pointer: Z;
     alignof_pointer: Z;
-    alignof_pointer_positive: 0<alignof_pointer;  (* obligation *)
     is_signed_ity: integerType -> bool;
     sizeof_ity: integerType -> option Z;
     precision_ity: integerType -> option Z;
@@ -134,7 +133,6 @@ Module MorelloImpl : Implementation.
       details         := "clang version 11.0.0\nTarget: Morello";
       sizeof_pointer  := 16;
       alignof_pointer := 16 ;
-      alignof_pointer_positive := _;
       is_signed_ity   := is_signed_ity_impl;
       sizeof_ity      := sizeof_ity_impl;
       precision_ity   := precision_ity_impl;
@@ -142,8 +140,5 @@ Module MorelloImpl : Implementation.
       alignof_ity     := alignof_ity_impl;
       alignof_fty     := alignof_fty_impl;
     |}.
-  Next Obligation.
-    lia.
-  Defined.
 
 End MorelloImpl.

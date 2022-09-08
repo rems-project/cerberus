@@ -319,52 +319,28 @@ Module CheriMemory
         if is_signed then unwrap_cap_value n else n
     end.
 
+
   (** Invalidate capability tags for memory region starting from
       [addr] with [size].
 
       All tags which were [true] will be flipped to [false].  For
       addresses which did not have tags set, they will remain
       unspecified.
-
-      Implementation is split into 2 functions: one implementing recursion
-      and the other is top level entry point.
    *)
-  Function clear_tags_loop (a0:Z) (align:{x:Z|0 < x}) (a : Z) (captags : ZMap.t bool) {wf (Zwf a0) a} : ZMap.t bool
-    :=
-    let upd (a : Z.t) (ct : ZMap.t bool): ZMap.t bool :=
-      match ZMap.find a ct with
-      | Some true => ZMap.add a false ct
-      | _ => ct
-      end in
-    if Z.geb a a0 then
-      clear_tags_loop a0 align (Z.sub a (proj1_sig align)) (upd a captags)
-    else
-      captags.
-  Proof.
-    -
-      intros a0 align a captags0 teq.
-      destruct align as [align AC].
-      unfold Zwf.
-      split.
-      + lia.
-      + apply Z.geb_le in teq.
-        apply Z.lt_sub_pos.
-        simpl.
-        lia.
-    -
-      apply Zwf_well_founded.
-  Qed.
   Definition clear_caps
     (addr:MorelloAddr.t)
     (size:Z)
     (captags:ZMap.t bool): ZMap.t bool
     :=
     let align := IMP.get.(alignof_pointer) in
-    let align_pos := IMP.get.(alignof_pointer_positive) in
-    let lower_a (x_value : Z) : Z := Z.mul (Z.quot x_value align) align in
+    let lower_a x := Z.mul (Z.quot x align) align in
     let a0 := lower_a addr in
     let a1 := lower_a (Z.pred (Z.add addr size)) in
-    clear_tags_loop a0 (exist _ align align_pos) a1 captags.
+    ZMap.mapi
+      (fun (a:Z) (v:bool) =>
+         if (v && Z.geb a a0 && Z.leb a a1)%bool then false
+         else v
+      ) captags.
 
   Definition allocator (size:Z) (align:Z) : memM (storage_instance_id * MorelloAddr.t) :=
     get >>= fun st =>
