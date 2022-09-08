@@ -26,6 +26,7 @@ Require Import Location.
 Require Import Symbol.
 Require Import Implementation.
 Require Import Tags.
+Require Import Utils.
 
 Local Open Scope string_scope.
 Local Open Scope type_scope.
@@ -400,25 +401,6 @@ Module CheriMemory
             ret (alloc_id, addr).
 
 
-  (* c.f.
-   List.fold_left
-     : forall A B : Type, (A -> B -> A) -> list B -> A -> A
-
-   TODO: move somewhere else. Perhaps Util.v
-   *)
-  Fixpoint monadic_fold_left
-    {A B : Type}
-    {m : Type -> Type}
-    {M : Monad m}
-    (f : A -> B -> m A) (l : list B) (a : A)
-    : m A
-    := match l with
-       | List.nil => ret a
-       | List.cons b l =>
-           a' <- f a b ;;
-           monadic_fold_left f l a'
-       end.
-
   Definition alignof
     (fuel: nat)
     (maybe_tagDefs : option (SymMap.t Ctype.tag_definition))
@@ -594,11 +576,6 @@ Module CheriMemory
                end
          end.
 
-
-  (* TODO: move somewhere, e.g. ErrorWithstate.v *)
-  Definition update f := st <- get ;; put (f st).
-
-
   Definition repr
     (funptrmap: ZMap.t(Digest_t * string * C.t))
     (captags : ZMap.t bool)
@@ -608,16 +585,6 @@ Module CheriMemory
         (ZMap.t bool) *
         (list AbsByte).
   Proof. Admitted. (* TODO: *)
-
-  (* TODO: move somewhere. E.g. to Util.v *)
-  Definition mapi {A B: Type} (f: nat -> A -> B) (l:list A) : list B :=
-    let fix map_ n (l:list A) :=
-      match l with
-      | [] => []
-      | a :: t => (f n a) :: (map_ (S n) t)
-      end
-    in map_ O l.
-
 
   Definition allocate_object
     (tid:thread_id)

@@ -72,10 +72,15 @@ Section withState.
        | Some v => ret v
        | None => raise msg
        end.
-  
+
+  (* -- state update -- *)
+  Definition update f := st <- get ;; put (f st).
+
 End withState.
+
 
 Arguments option2errS {St} {ErrT} {A} (_) (_).
 Arguments err2errS {St} {ErrT} {A} (_).
 Arguments evalErrS {St} {ErrT} {A} (_) (_).
 Arguments execErrS {St} {ErrT} {A} (_) (_).
+Arguments update {St} {ErrT} (_).
