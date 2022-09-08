@@ -675,4 +675,57 @@ Module CheriMemory
               else
                 raise (InternalErr "Error settting exeact bounds for allocated region"))).
 
+  Definition allocate_region
+    (tid : thread_id)
+    (pref : Symbol.prefix)
+    (align_int : integer_value)
+    (size_int : integer_value)
+    : memM pointer_value
+    :=
+    let align_n := num_of_int align_int in
+    let size_n := num_of_int size_int in
+    let mask := C.representable_alignment_mask size_n in
+    let size_n' := C.representable_length size_n in
+    let align_n' :=
+      Z.max align_n (Z.succ (MorelloAddr.bitwise_complement mask)) in
+
+    allocator size_n' align_n' >>=
+      (fun '(alloc_id, addr) =>
+         let alloc :=
+           {| prefix := Symbol.PrefMalloc;
+             base := addr;
+             size := size_n';
+             ty := None;
+             is_readonly := IsWritable;
+             taint := Unexposed |}
+         in
+         update
+           (fun (st : mem_state) =>
+              {|
+                next_alloc_id    := st.(next_alloc_id);
+                next_iota        := st.(next_iota);
+                last_address     := st.(last_address) ;
+                allocations      := (ZMap.add alloc_id alloc st.(allocations));
+                iota_map         := st.(iota_map);
+                funptrmap        := st.(funptrmap);
+                varargs          := st.(varargs);
+                next_varargs_id  := st.(next_varargs_id);
+                bytemap          := st.(bytemap);
+                captags          := st.(captags);
+                dead_allocations := st.(dead_allocations);
+                dynamic_addrs    := addr::st.(dynamic_addrs);
+                last_used        := st.(last_used);
+              |})
+         ;;
+         (let c_value := C.alloc_cap addr size_n' in
+          if
+            C.cap_bounds_representable_exactly c_value
+              (addr, (Z.add addr size_n'))
+          then
+            ret (PV (Prov_some alloc_id) (PVconcrete c_value))
+          else
+            raise (InternalErr "Error settting exeact bounds for allocated region"))).
+
+
+
 End CheriMemory.
