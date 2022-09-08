@@ -1,5 +1,5 @@
 Require Import Coq.Arith.PeanoNat.
-Require Import Coq.Lists.List.
+From Coq.Lists Require Import List ListSet.
 Require Import Coq.Numbers.BinNums.
 Require Import Coq.ZArith.Zwf.
 Require Import Coq.ZArith.Zcompare.
@@ -14,19 +14,7 @@ Require Import Lia.
 From ExtLib.Structures Require Import Monad Monads MonadExc MonadState.
 From ExtLib.Data.Monads Require Import EitherMonad OptionMonad.
 
-Require Import Capabilities.
-Require Import Addr.
-Require Import Memory_model.
-Require Import Mem_common.
-Require Import ErrorWithState.
-Require Import Undefined.
-Require Import Morello.
-Require Import ErrorWithState.
-Require Import Location.
-Require Import Symbol.
-Require Import Implementation.
-Require Import Tags.
-Require Import Utils.
+Require Import Capabilities Addr Memory_model Mem_common ErrorWithState Undefined Morello ErrorWithState Location Symbol Implementation Tags Utils Switches.
 
 Local Open Scope string_scope.
 Local Open Scope type_scope.
@@ -726,6 +714,160 @@ Module CheriMemory
           else
             raise (InternalErr "Error settting exeact bounds for allocated region"))).
 
+  Definition cap_is_null  (c : C.t) : bool :=
+    Z.eqb (C.cap_get_value c) 0.
+
+  Definition is_dead (alloc_id : storage_instance_id) : memM bool :=
+    get >>= (fun (st : mem_state) =>
+               ret (set_mem Z_as_OT.eq_dec alloc_id st.(dead_allocations))).
+
+  Definition kill
+    (loc : location_ocaml)
+    (is_dyn : bool)
+    (function_parameter : pointer_value)
+    : memM unit
+    :=
+    match function_parameter with
+    | PV _ (PVfunction _) =>
+        raise (Other (MerrOther
+                        "attempted to kill with a function pointer"))
+    | PV Prov_none (PVconcrete _) =>
+        raise (Other (MerrOther
+                        "attempted to kill with a pointer lacking a provenance"))
+    | PV Prov_device (PVconcrete _) => ret tt
+    | PV (Prov_symbolic iota) (PVconcrete addr) =>
+      if andb
+           (cap_is_null addr)
+           (Switches.has_switch Switches.SW_forbid_nullptr_free)
+      then
+        raise (Other (MerrFreeNullPtr loc))
+      else
+        let precondition (z : storage_instance_id) :=
+          is_dead z >>=
+            (fun x => match x with
+              | true =>
+                return
+                  (FAIL
+                    (Cerb_frontend.Mem_common.MerrUndefinedFree loc
+                      Cerb_frontend.Mem_common.Free_static_allocation))
+              | false =>
+                Eff.op_gtgteq (get_allocation z_value)
+                  (fun (alloc : allocation) =>
+                    if
+                      Capability.Z.equal
+                        (C.(Capability.Capability.cap_get_value)
+                          addr)
+                        alloc.(allocation.base)
+                    then
+                      _return OK
+                    else
+                      _return
+                        (FAIL
+                          (Cerb_frontend.Mem_common.MerrUndefinedFree loc
+                            Cerb_frontend.Mem_common.Free_out_of_bound)))
+              end) in
+        Eff.op_gtgteq
+          (Eff.op_gtgt
+            (if is_dyn then
+              Eff.op_gtgteq
+                (is_dynamic (C.(Capability.Capability.cap_get_value) addr))
+                (fun (function_parameter : bool) =>
+                  match function_parameter with
+                  | false =>
+                    fail
+                      (Cerb_frontend.Mem_common.MerrUndefinedFree loc
+                        Cerb_frontend.Mem_common.Free_static_allocation)
+                  | true => _return tt
+                  end)
+            else
+              _return tt) (resolve_iota precondition iota))
+          (fun (alloc_id : storage_instance_id) =>
+            Eff.op_gtgt
+              (Eff.update
+                (fun (st : mem_state) =>
+                  mem_state.with_last_used (Some alloc_id)
+                    (mem_state.with_dead_allocations
+                      (cons alloc_id st.(mem_state.dead_allocations))
+                      (mem_state.with_allocations
+                        (IntMap.(Stdlib.Map.S.remove) alloc_id
+                          st.(mem_state.allocations)) st))))
+              (if
+                Switches.has_switch
+                  Switches.SW_zap_dead_pointers
+              then
+                zap_pointers alloc_id
+              else
+                _return tt))
+    | PV (Prov_some alloc_id) (PVconcrete addr) =>
+      if
+        andb (cap_is_null addr)
+          (Switches.has_switch
+            Switches.SW_forbid_nullptr_free)
+      then
+        fail (Cerb_frontend.Mem_common.MerrFreeNullPtr loc)
+      else
+        Eff.op_gtgteq
+          (Eff.op_gtgt
+            (if is_dyn then
+              Eff.op_gtgteq
+                (is_dynamic (C.(Capability.Capability.cap_get_value) addr))
+                (fun (function_parameter : bool) =>
+                  match function_parameter with
+                  | false =>
+                    fail
+                      (Cerb_frontend.Mem_common.MerrUndefinedFree loc
+                        Cerb_frontend.Mem_common.Free_static_allocation)
+                  | true => _return tt
+                  end)
+            else
+              _return tt) (is_dead alloc_id))
+          (fun (function_parameter : bool) =>
+            match function_parameter with
+            | true =>
+              if is_dyn then
+                fail
+                  (Cerb_frontend.Mem_common.MerrUndefinedFree loc
+                    Cerb_frontend.Mem_common.Free_dead_allocation)
+              else
+                CoqOfOCaml.Stdlib.failwith
+                  "Concrete: FREE was called on a dead allocation"
+            | false =>
+              Eff.op_gtgteq (get_allocation alloc_id)
+                (fun (alloc : allocation) =>
+                  if
+                    Capability.Z.equal
+                      (C.(Capability.Capability.cap_get_value)
+                        addr)
+                      alloc.(allocation.base)
+                  then
+                    let '_ :=
+                      Debug_ocaml.print_debug 1 nil
+                        (fun (function_parameter : unit) =>
+                          let '_ := function_parameter in
+                          String.append "KILLING alloc_id= "
+                            (Capability.Z.to_string alloc_id)) in
+                    Eff.op_gtgt
+                      (Eff.update
+                        (fun (st : mem_state) =>
+                          mem_state.with_last_used (Some alloc_id)
+                            (mem_state.with_dead_allocations
+                              (cons alloc_id st.(mem_state.dead_allocations))
+                              (mem_state.with_allocations
+                                (IntMap.(Stdlib.Map.S.remove) alloc_id
+                                  st.(mem_state.allocations)) st))))
+                      (if
+                        Switches.has_switch
+                          Switches.SW_zap_dead_pointers
+                      then
+                        zap_pointers alloc_id
+                      else
+                        _return tt)
+                  else
+                    fail
+                      (Cerb_frontend.Mem_common.MerrUndefinedFree loc
+                        Cerb_frontend.Mem_common.Free_out_of_bound))
+            end)
+    end.
 
 
 End CheriMemory.
