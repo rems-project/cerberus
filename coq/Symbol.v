@@ -33,7 +33,7 @@ Definition symbol_compare  (s : sym ) (s0 : sym )  : ordering :=
   match ( (s,s0)) with (( Symbol d1 n1 _), ( Symbol d2 n2 _)) =>
     if Z.eqb (FAKE_COQ.digest_compare d1 d2)
          ((Z.pred (Z.pos (P_of_succ_nat 0%nat)))) then
-      (genericCompare nat_ltb beq_nat n1 n2) else
+      (genericCompare nat_ltb Nat.eqb n1 n2) else
       let cmp := FAKE_COQ.digest_compare d1 d2 in
       if int_ltb cmp ((Z.pred (Z.pos (P_of_succ_nat 0%nat)))) then LT else
         if Z.eqb cmp ((Z.pred (Z.pos (P_of_succ_nat 0%nat)))) then EQ else GT
@@ -71,7 +71,7 @@ Module SymMap := FMapAVL.Make(Symbol_sym_as_OT).
 Instance x8_Eq : Eq sym := {
    isEqual             :=  (fun  sym1  sym2=>match ( (sym1, sym2)) with
     | (Symbol d1 n1 sd1,  Symbol d2 n2 sd2) =>
-        if Z.eqb (FAKE_COQ.digest_compare d1 d2)((Z.pred (Z.pos (P_of_succ_nat 0%nat)))) && beq_nat n1 n2 then
+        if Z.eqb (FAKE_COQ.digest_compare d1 d2)((Z.pred (Z.pos (P_of_succ_nat 0%nat)))) && Nat.eqb n1 n2 then
           if nat_gteb (FAKE_COQ.get_level tt)( 5%nat) && unsafe_structural_inequality sd1 sd2 then
   match ( FAKE_COQ.print_debug ( 5%nat) []
             (fun u =>
@@ -88,7 +88,7 @@ Instance x8_Eq : Eq sym := {
   end);
    isInequal   sym1  sym2 :=  negb (match ( (sym1, sym2)) with
     | (Symbol d1 n1 sd1,  Symbol d2 n2 sd2) =>
-        if Z.eqb (FAKE_COQ.digest_compare d1 d2)((Z.pred (Z.pos (P_of_succ_nat 0%nat)))) && beq_nat n1 n2 then
+        if Z.eqb (FAKE_COQ.digest_compare d1 d2)((Z.pred (Z.pos (P_of_succ_nat 0%nat)))) && Nat.eqb n1 n2 then
           if nat_gteb (FAKE_COQ.get_level tt)( 5%nat) && unsafe_structural_inequality sd1 sd2 then
   match ( FAKE_COQ.print_debug ( 5%nat) []
             (fun u =>
@@ -112,7 +112,7 @@ Instance x7_Ord : Ord sym := {
     match ( sym2) with ( Symbol d2 n2 _) =>
       if Z.eqb (FAKE_COQ.digest_compare d1 d2)
            ((Z.pred (Z.pos (P_of_succ_nat 0%nat)))) then
-        (genericCompare nat_ltb beq_nat n1 n2) else
+        (genericCompare nat_ltb Nat.eqb n1 n2) else
         let cmp := FAKE_COQ.digest_compare d1 d2 in
         if int_ltb cmp ((Z.pred (Z.pos (P_of_succ_nat 0%nat)))) then
         LT else

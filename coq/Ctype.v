@@ -119,13 +119,13 @@ Definition integerBaseTypeEqual  (ibty1 : integerBaseType ) (ibty2 : integerBase
      | Int_leastN_t _ =>  6%nat | Int_fastN_t _ =>  7%nat | Intmax_t =>
       8%nat | Intptr_t =>  9%nat end in
   match ( (ibty1, ibty2)) with
-    | (IntN_t n1,  IntN_t n2) => beq_nat
+    | (IntN_t n1,  IntN_t n2) => Nat.eqb
         n1 n2
-    | (Int_leastN_t n1,  Int_leastN_t n2) => beq_nat
+    | (Int_leastN_t n1,  Int_leastN_t n2) => Nat.eqb
         n1 n2
-    | (Int_fastN_t n1,  Int_fastN_t n2) => beq_nat
+    | (Int_fastN_t n1,  Int_fastN_t n2) => Nat.eqb
         n1 n2
-    | _ => beq_nat
+    | _ => Nat.eqb
         (ord ibty1) (ord ibty2)
   end.
 
@@ -143,12 +143,12 @@ Definition integerTypeEqual  (ity1: integerType ) (ity2: integerType )  : bool
   | (Enum sym1,  Enum sym2) =>
       match ( (sym1, sym2)) with
       | (Symbol d1 n1 sd1,  Symbol d2 n2 sd2) =>
-          if Z.eqb (FAKE_COQ.digest_compare d1 d2)((Z.pred (Z.pos (P_of_succ_nat 0%nat)))) && beq_nat n1 n2 then
+          if Z.eqb (FAKE_COQ.digest_compare d1 d2)((Z.pred (Z.pos (P_of_succ_nat 0%nat)))) && Nat.eqb n1 n2 then
             true
           else
             false
       end
-  | _ => beq_nat (ord ity1) (ord ity2)
+  | _ => Nat.eqb (ord ity1) (ord ity2)
   end.
 
 Instance x37_Eq : Eq integerType := {
@@ -179,7 +179,7 @@ Definition basicTypeEqual  (bty1 : basicType ) (bty2 : basicType )  : bool :=
         ity1 ity2
     | (Floating fty1,  Floating fty2) => classical_boolean_equivalence
         fty1 fty2
-    | _ => beq_nat
+    | _ => Nat.eqb
         (ord bty1) (ord bty2)
   end.
 
@@ -229,7 +229,7 @@ Program Fixpoint ctypeEqual  (c : ctype ) (c0 : ctype )  : bool :=
     | (Struct id1,  Struct id2) =>
     match ( (id1, id2)) with | (Symbol d1 n1 sd1,  Symbol d2 n2 sd2) =>
       if Z.eqb (FAKE_COQ.digest_compare d1 d2)
-           ((Z.pred (Z.pos (P_of_succ_nat 0%nat)))) && beq_nat n1 n2 then
+           ((Z.pred (Z.pos (P_of_succ_nat 0%nat)))) && Nat.eqb n1 n2 then
         if nat_gteb (FAKE_COQ.get_level tt) ( 5%nat) &&
            unsafe_structural_inequality sd1 sd2 then
           match ( FAKE_COQ.print_debug ( 5%nat) []
@@ -244,7 +244,7 @@ Program Fixpoint ctypeEqual  (c : ctype ) (c0 : ctype )  : bool :=
     | (Union id1,  Union id2) =>
     match ( (id1, id2)) with | (Symbol d1 n1 sd1,  Symbol d2 n2 sd2) =>
       if Z.eqb (FAKE_COQ.digest_compare d1 d2)
-           ((Z.pred (Z.pos (P_of_succ_nat 0%nat)))) && beq_nat n1 n2 then
+           ((Z.pred (Z.pos (P_of_succ_nat 0%nat)))) && Nat.eqb n1 n2 then
         if nat_gteb (FAKE_COQ.get_level tt) ( 5%nat) &&
            unsafe_structural_inequality sd1 sd2 then
           match ( FAKE_COQ.print_debug ( 5%nat) []
@@ -256,7 +256,7 @@ Program Fixpoint ctypeEqual  (c : ctype ) (c0 : ctype )  : bool :=
                               (String.append " <-> "
                                  (show_symbol_description sd2))) end)) with
               tt => true end else true else false end | _ =>
-    beq_nat (ord ty1) (ord ty2) end end.
+    Nat.eqb (ord ty1) (ord ty2) end end.
 
 Instance x32_Eq : Eq ctype := {
    isEqual   :=  ctypeEqual;
@@ -272,13 +272,13 @@ Definition setElemCompare_integerBaseType  (ibty1 : integerBaseType ) (ibty2 : i
       8%nat | Intptr_t =>  9%nat end in
   match ( (ibty1, ibty2)) with
     | (IntN_t n1,  IntN_t n2) =>
-        (genericCompare nat_ltb beq_nat n1 n2)
+        (genericCompare nat_ltb Nat.eqb n1 n2)
     | (Int_leastN_t n1,  Int_leastN_t n2) =>
-        (genericCompare nat_ltb beq_nat n1 n2)
+        (genericCompare nat_ltb Nat.eqb n1 n2)
     | (Int_fastN_t n1,  Int_fastN_t n2) =>
-        (genericCompare nat_ltb beq_nat n1 n2)
+        (genericCompare nat_ltb Nat.eqb n1 n2)
     | _ =>
-        (genericCompare nat_ltb beq_nat (ord ibty1) (ord ibty2))
+        (genericCompare nat_ltb Nat.eqb (ord ibty1) (ord ibty2))
   end.
 
 Instance x31_SetType : SetType integerBaseType := {
@@ -300,7 +300,7 @@ Definition setElemCompare_integerType  (ity1 : integerType ) (ity2 : integerType
     | (Enum sym1,  Enum sym2) =>
         ordCompare sym1 sym2
     | _ =>
-        (genericCompare nat_ltb beq_nat (ord ity1) (ord ity2))
+        (genericCompare nat_ltb Nat.eqb (ord ity1) (ord ity2))
   end.
 
 Instance x30_SetType : SetType integerType := {
@@ -318,7 +318,7 @@ Definition setElemCompare_basicType  (bty1 : basicType ) (bty2 : basicType )  : 
     | (Floating str1,  Floating str2) =>
         EQ
     | _ =>
-        (genericCompare nat_ltb beq_nat (ord bty1) (ord bty2))
+        (genericCompare nat_ltb Nat.eqb (ord bty1) (ord bty2))
   end.
 
 Instance x29_SetType : SetType basicType := {

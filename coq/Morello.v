@@ -8,7 +8,7 @@ Require Import Coq.Bool.Bool.
 Require Import Addr.
 Require Import Capabilities.
 
-Module MorelloAddr: VADDR.
+Module MorelloAddr <: VADDR.
   Definition t := Z.
 
   Definition bitwise_complement (n:Z) := n. (* TODO *)
@@ -16,9 +16,6 @@ Module MorelloAddr: VADDR.
   Definition ltb := Z.ltb.
   Definition leb := Z.leb.
   Definition ltb_irref := Z.ltb_irrefl.
-
-  Definition of_Z (x:Z) :t := x.
-  Definition to_Z (x:t): Z := x.
 
 End MorelloAddr.
 
@@ -30,7 +27,7 @@ Module MorelloCAP_SEAL_T : CAP_SEAL_T.
   Definition t := Z.
 End MorelloCAP_SEAL_T.
 
-Module MorelloVADDR_INTERVAL : VADDR_INTERVAL(MorelloAddr).
+Module MorelloVADDR_INTERVAL <: VADDR_INTERVAL(MorelloAddr).
   Definition t := (MorelloAddr.t * MorelloAddr.t)%type.
 
   Definition addresses_in_interval intr addr :=

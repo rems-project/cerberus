@@ -95,7 +95,7 @@ Module Type CAP_SEAL_T.
 End CAP_SEAL_T.
 
 Module Type VADDR_INTERVAL (V:VADDR).
-  Parameter t: Set.
+  Parameter Inline t: Set.
 
   Parameter addresses_in_interval: t -> V.t -> bool.
   Parameter ltb: t -> t -> bool.
@@ -276,13 +276,24 @@ Module Type Capability
 
   (** returns the length that a capability would have after using
         [cheri_bounds_set] to set the length to [len] (assuming
-        appropriate alignment of the base). *)
-  Parameter representable_length: nat -> nat.
+        appropriate alignment of the base).
+
+        NOTE: I would rather use [N] type here, but it will cause
+        lot of headache when using from Memory interface where historically
+        [Z] is used for everything. (vz)
+
+   *)
+  Parameter representable_length: Z -> Z.
 
   (** returns a bitmask that can be used to align an address downwards
         such that it is sufficiently aligned to create a precisely
-        bounded capability. *)
-  Parameter representable_alignment_mask: nat -> nat.
+        bounded capability.
+
+        NOTE: I would rather use [N] type here, but it will cause
+        lot of headache when using from Memory interface where historically
+        [Z] is used for everything. (vz)
+   *)
+  Parameter representable_alignment_mask:  Z -> Z.
 
   (* --- Utility methods --- *)
 

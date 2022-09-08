@@ -204,7 +204,9 @@ Module CheriMemory
 
   Definition mem_state := mem_state_r.
 
-  Definition initial_address := MorelloAddr.of_Z (HexString.to_Z "0xFFFFFFFF").
+  Definition initial_address := (HexString.to_Z "0xFFFFFFFF").
+
+  Definition DEFAULT_FUEL:nat := 1000%nat. (* TODO maybe needs to be abstracted *)
 
   Definition initial_mem_state : mem_state :=
     {|
@@ -223,10 +225,13 @@ Module CheriMemory
       last_used := None
     |}.
 
-  (* unfortunate consturctor names mirroring ones from OCaml Nondeterminism monad *)
+  (* Unfortunate names of two consturctors are mirroring ones from
+  OCaml `Nondeterminism` monad. Third one is used where `failwith` was
+   or `assert false` was used in OCaml. *)
   Inductive MemMonadError :=
   | Other: mem_error -> MemMonadError
-  | Undef0: location_ocaml -> (list undefined_behaviour) -> MemMonadError.
+  | Undef0: location_ocaml -> (list undefined_behaviour) -> MemMonadError
+  | InternalErr: string -> MemMonadError.
 
   Definition memM := errS mem_state MemMonadError.
   #[local] Instance memM_monad: Monad memM.
@@ -275,8 +280,8 @@ Module CheriMemory
   Definition check_overlap a b :=
     match a,b with
     |  (FP (b1, sz1)), (FP (b2, sz2)) =>
-         let b1 := MorelloAddr.to_Z b1 in
-         let b2 := MorelloAddr.to_Z b2 in
+         let b1 := b1 in
+         let b2 := b2 in
          if andb (Z.eqb b1 b2) (Z.eqb sz1 sz2) then
            ExactOverlap
          else if orb
@@ -309,7 +314,7 @@ Module CheriMemory
     match x with
     | IV n => n
     | IC is_signed c =>
-        let n := MorelloAddr.to_Z (C.cap_get_value c) in
+        let n := C.cap_get_value c in
         if is_signed then unwrap_cap_value n else n
     end.
 
@@ -356,7 +361,6 @@ Module CheriMemory
     let align := IMP.get.(alignof_pointer) in
     let align_pos := IMP.get.(alignof_pointer_positive) in
     let lower_a (x_value : Z) : Z := Z.mul (Z.quot x_value align) align in
-    let addr := MorelloAddr.to_Z addr in
     let a0 := lower_a addr in
     let a1 := lower_a (Z.pred (Z.add addr size)) in
     clear_tags_loop a0 (exist _ align align_pos) a1 captags.
@@ -365,7 +369,7 @@ Module CheriMemory
     get >>= fun st =>
         let alloc_id := st.(next_alloc_id) in
         (
-          let z := Z.sub (MorelloAddr.to_Z st.(last_address)) size in
+          let z := Z.sub st.(last_address) size in
           let (q,m) := Z.quotrem z align in
           let z' := Z.sub z (Z.abs m) in
           if Z.leb z' 0 then
@@ -374,7 +378,7 @@ Module CheriMemory
             ret z'
         )
           >>= fun addr =>
-            let addr := MorelloAddr.of_Z addr in
+            let addr := addr in
             put
               {|
                 next_alloc_id    := Z.succ alloc_id;
@@ -591,39 +595,70 @@ Module CheriMemory
          end.
 
 
-  Definition allocate_object (tid:thread_id) (pref:Symbol.prefix) (int_val:integer_value) (ty:Ctype.ctype) (init_opt:option mem_value) : memM pointer_value  :=
+  (* TODO: move somewhere, e.g. ErrorWithstate.v *)
+  Definition update f := st <- get ;; put (f st).
+
+
+  Definition repr
+    (funptrmap: ZMap.t(Digest_t * string * C.t))
+    (captags : ZMap.t bool)
+    (addr : Z)
+    (mval : mem_value)
+    : (ZMap.t (Digest_t * string * C.t)) *
+        (ZMap.t bool) *
+        (list AbsByte).
+  Proof. Admitted. (* TODO: *)
+
+  (* TODO: move somewhere. E.g. to Util.v *)
+  Definition mapi {A B: Type} (f: nat -> A -> B) (l:list A) : list B :=
+    let fix map_ n (l:list A) :=
+      match l with
+      | [] => []
+      | a :: t => (f n a) :: (map_ (S n) t)
+      end
+    in map_ O l.
+
+
+  Definition allocate_object
+    (tid:thread_id)
+    (pref:Symbol.prefix)
+    (int_val:integer_value)
+    (ty:Ctype.ctype)
+    (init_opt:option mem_value)
+    : memM pointer_value
+    :=
     let align_n := num_of_int int_val in
-    let sz := sizeof ty in
-    let size_n := Z.of_int sz in
+    size_n <- option2errS (InternalErr "sizeof failed") (sizeof DEFAULT_FUEL None ty) ;;
 
     let mask := C.representable_alignment_mask size_n in
     let size_n' := C.representable_length size_n in
-    let align_n' := Z.max align_n (Z.add (Z.succ (Z.zero)) (C.vaddr_bitwise_complement mask)) in
+    let align_n' := Z.max align_n (Z.add (Z.succ (Z.zero)) (MorelloAddr.bitwise_complement mask)) in
 
-    allocator size_n' align_n' >>= fun `(alloc_id, addr) =>
-        begin match init_opt with
+    allocator size_n' align_n' >>=
+      (fun '(alloc_id, addr) =>
+         (match init_opt with
           | None =>
               let alloc := {| prefix := pref; base:= addr; size:= size_n'; ty:= Some ty; is_readonly:= IsWritable; taint:= Unexposed|} in
               update (fun st =>
-              {|
-                next_alloc_id    := st.(next_alloc_id);
-                next_iota        := st.(next_iota);
-                last_address     := st.(last_address) ;
-                allocations      := ZMap.add alloc_id alloc st.allocations;
-                iota_map         := st.(iota_map);
-                funptrmap        := st.(funptrmap);
-                varargs          := st.(varargs);
-                next_varargs_id  := st.(next_varargs_id);
-                bytemap          := st.(bytemap);
-                captags          := st.(captags);
-                dead_allocations := st.(dead_allocations);
-                dynamic_addrs    := st.(dynamic_addrs);
-                last_used        := st.(last_used);
-              |}) ;; ret false
+                        {|
+                          next_alloc_id    := st.(next_alloc_id);
+                          next_iota        := st.(next_iota);
+                          last_address     := st.(last_address) ;
+                          allocations      := ZMap.add alloc_id alloc st.(allocations);
+                          iota_map         := st.(iota_map);
+                          funptrmap        := st.(funptrmap);
+                          varargs          := st.(varargs);
+                          next_varargs_id  := st.(next_varargs_id);
+                          bytemap          := st.(bytemap);
+                          captags          := st.(captags);
+                          dead_allocations := st.(dead_allocations);
+                          dynamic_addrs    := st.(dynamic_addrs);
+                          last_used        := st.(last_used);
+                        |}) ;; ret false
           | Some mval =>
               let (ro,readonly_status) :=
                 match pref with
-                | Symbol.PrefStringLiteral _ =>
+                | Symbol.PrefStringLiteral _ _ =>
                     (true,IsReadOnly_string_literal)
                 | _ =>
                     (false,IsWritable)
@@ -632,40 +667,43 @@ Module CheriMemory
               let alloc := {| prefix:= pref; base:= addr; size:= size_n'; ty:= Some ty; is_readonly:= readonly_status; taint:= Unexposed |} in
               (* TODO: factorize this with do_store inside CHERI.store *)
               update (fun st =>
-                        let (funptrmap, captags, pre_bs) := repr st.funptrmap st.captags addr mval in
-                        let bs := List.mapi (fun i b => (Z.add addr (Z.of_int i), b)) pre_bs in
+                        let '(funptrmap, captags, pre_bs) := repr st.(funptrmap) st.(captags) addr mval in
+                        let bs := mapi (fun i b => (Z.add addr (Z.of_nat i), b)) pre_bs in
                         {|
                           next_alloc_id    := st.(next_alloc_id);
                           next_iota        := st.(next_iota);
                           last_address     := st.(last_address) ;
-                          allocations      := ZMap.add alloc_id alloc st.allocations;
+                          allocations      := ZMap.add alloc_id alloc st.(allocations);
                           iota_map         := st.(iota_map);
                           funptrmap        := funptrmap;
                           varargs          := st.(varargs);
                           next_varargs_id  := st.(next_varargs_id);
-                          bytemap          := List.fold_left (fun acc `(addr, b) =>
+                          bytemap          := List.fold_left (fun acc '(addr, b) =>
                                                                 ZMap.add addr b acc
-                                                ) st.bytemap bs;
+                                                ) bs st.(bytemap);
                           captags          := captags;
                           dead_allocations := st.(dead_allocations);
                           dynamic_addrs    := st.(dynamic_addrs);
                           last_used        := st.(last_used);
                         |})
               ;; ret ro
-          end >>= (fun ro =>
-                     let c := C.alloc_cap addr size_n' in
-                     if C.cap_bounds_representable_exactly c (addr, Z.add addr size_n')
-                     then
-                       let c :=
-                         if ro then
-                           let p := C.cap_get_perms c in
-                           let p := C.P.perm_clear_store p in
-                           let p := C.P.perm_clear_store_cap p in
-                           let p := C.P.perm_clear_store_local_cap p in
-                           C.cap_narrow_perms c p
-                         else c
-                       in
-                       ret (PV (Prov_some alloc_id, PVconcrete c))
-                     else failwith "Error settting exeact bounds for allocated region")
+          end)
+           >>=
+           (fun ro =>
+              let c := C.alloc_cap addr size_n' in
+              if C.cap_bounds_representable_exactly c (addr, Z.add addr size_n')
+              then
+                let c :=
+                  if ro then
+                    let p := C.cap_get_perms c in
+                    let p := MorelloPermission.perm_clear_store p in
+                    let p := MorelloPermission.perm_clear_store_cap p in
+                    let p := MorelloPermission.perm_clear_store_local_cap p in
+                    C.cap_narrow_perms c p
+                  else c
+                in
+                ret (PV (Prov_some alloc_id) (PVconcrete c))
+              else
+                raise (InternalErr "Error settting exeact bounds for allocated region"))).
 
 End CheriMemory.

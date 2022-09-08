@@ -30,7 +30,7 @@ Definition combine_attributes  (a: attributes ) (a0: attributes ) : attributes :
   | (( Attrs xs1), ( Attrs xs2)) => Attrs ( (@ List.app _) xs1 xs2)
   end.
 
-Definition loop_id : Type :=  nat .
+Definition loop_id : Set :=  nat .
 
 (* records where a label comes from *)
 Inductive label_annot : Type :=  
