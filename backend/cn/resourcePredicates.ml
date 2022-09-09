@@ -54,9 +54,9 @@ let pp_definition def =
                   | None -> !^"(uninterpreted)")
   
 
-let byte_sym = Sym.fresh_named "Byte"
-let char_sym = Sym.fresh_named "Char"
-let bytev_sym = Sym.fresh_named "ByteV"
+let byte_sym = Sym.fresh_named "Legacy_Internal_Byte"
+let char_sym = Sym.fresh_named "Legacy_Internal_Char"
+let bytev_sym = Sym.fresh_named "Legacy_Internal_ByteV"
 let early_alloc_sym = Sym.fresh_named "EarlyAlloc"
 
 
