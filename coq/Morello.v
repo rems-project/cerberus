@@ -13,6 +13,7 @@ Module MorelloAddr <: VADDR.
 
   Definition bitwise_complement (n:Z) := n. (* TODO *)
 
+  Definition eqb := Z.eqb.
   Definition ltb := Z.ltb.
   Definition leb := Z.leb.
   Definition ltb_irref := Z.ltb_irrefl.

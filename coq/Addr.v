@@ -6,6 +6,7 @@ Require Import Coq.Numbers.BinNums.
 
     Parameter bitwise_complement: t -> t.
 
+    Parameter eqb: t -> t -> bool.
     Parameter ltb: t -> t -> bool.
     Parameter leb: t -> t -> bool.
     Parameter ltb_irref: forall a:t, ltb a a = false.
