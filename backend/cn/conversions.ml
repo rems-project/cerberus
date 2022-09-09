@@ -397,16 +397,16 @@ let make_qpred loc (pred, def) ~oname ~pointer ~q:(qs,qbt) ~step ~condition iarg
   return ([r], mapping)
 
 
-
+ 
 
 
 let lookup_sym_map_by_string kind id m =
-  let res = SymMap.find_first_opt
-    (fun sym -> String.equal id (todo_string_of_sym sym)) m in
+  let m' = List.map (fun (s, def) -> (todo_string_of_sym s, (s, def)))
+    (SymMap.bindings m) in
+  let res = List.assoc_opt String.equal id m' in
   if Option.is_none res
   then Pp.debug 2 (lazy (Pp.item ("Known " ^ kind)
-        (Pp.list Pp.string (List.map
-            (fun (sym, _) -> todo_string_of_sym sym) (SymMap.bindings m)))))
+        (Pp.list Pp.string (List.map fst m'))))
   else ();
   res
 
