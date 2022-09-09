@@ -217,11 +217,12 @@ let main
          | (_, Some times) -> Some (times, "log")
          | _ -> None);
        let ctxt = Context.add_stmt_locs stmts Context.empty
-         |> Context.add_datatypes dt_defs in
+         |> Context.add_datatypes dt_defs
+         |> Context.add_predicates pred_defs in
        let result = 
          Pp.progress_simple "pre-processing" "translating specifications";
          let opts = Retype.{ drop_labels = Option.is_some lemmata } in
-         let@ file = Retype.retype_file pred_defs opts file in
+         let@ file = Retype.retype_file ctxt opts file in
          begin match lemmata with
            | Some mode -> Lemmata.generate mode file
            | None -> Typing.run ctxt (Check.check file)

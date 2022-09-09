@@ -43,14 +43,18 @@ let get_fun_decl global sym = SymMap.find_opt sym global.fun_decls
 (* let get_impl_fun_decl global i = ImplMap.find i global.impl_fun_decls *)
 (* let get_impl_constant global i = ImplMap.find i global.impl_constants *)
 
+let sym_map_from_bindings xs = List.fold_left (fun m (nm, x) -> SymMap.add nm x m)
+    SymMap.empty xs
 
 let add_datatypes (dt_info, c_info) global =
-  let datatypes = List.fold_right (fun (nm, info) m -> SymMap.add nm info m)
-    dt_info global.datatypes in
-  let datatype_constrs = List.fold_right (fun (nm, info) m -> SymMap.add nm info m)
-    c_info global.datatype_constrs in
+  let datatypes = sym_map_from_bindings dt_info in
+  let datatype_constrs = sym_map_from_bindings c_info in
   {global with datatypes; datatype_constrs}
 
+let add_predicates (l_pred_list, r_pred_list) global =
+  let resource_predicates = sym_map_from_bindings r_pred_list in
+  let logical_predicates = sym_map_from_bindings l_pred_list in
+  {global with resource_predicates; logical_predicates}
 
 let pp_struct_layout (tag,layout) = 
   item ("struct " ^ plain (Sym.pp tag) ^ " (raw)") 

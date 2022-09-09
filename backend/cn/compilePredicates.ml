@@ -183,7 +183,6 @@ let translate_member_access loc env t member =
      let ty' = Retype.ct_of_ct loc ty in
      let member_bt = BaseTypes.of_sct ty' in
      return ( IT.member_ ~member_bt (tag, t, member) )
-      
   | has -> 
      fail {loc; msg = Illtyped_it' {it = t; has; expected = "struct"}}
 

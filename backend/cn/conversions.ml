@@ -400,36 +400,40 @@ let make_qpred loc (pred, def) ~oname ~pointer ~q:(qs,qbt) ~step ~condition iarg
 
 
 
-let get_predicate_def_opt id predicates = 
-  let predicates' = List.map (fun (s, def) -> (todo_string_of_sym s, (s, def))) predicates in
-  let res = List.assoc_opt String.equal id predicates' in
+let lookup_sym_map_by_string kind id m =
+  let res = SymMap.find_first_opt
+    (fun sym -> String.equal id (todo_string_of_sym sym)) m in
   if Option.is_none res
-  then Pp.debug 2 (lazy (Pp.item "Known predicates"
-        (Pp.list Pp.string (List.map fst predicates'))))
+  then Pp.debug 2 (lazy (Pp.item ("Known " ^ kind)
+        (Pp.list Pp.string (List.map
+            (fun (sym, _) -> todo_string_of_sym sym) (SymMap.bindings m)))))
   else ();
   res
 
 
 
 (* copying from typing.ml *)
-let get_resource_predicate_def loc id rpredicates lpredicates =
+let get_resource_predicate_def loc id global =
   let open TypeErrors in
-  match get_predicate_def_opt id rpredicates with
-  | Some def -> return def
-  | None -> 
-     let logical = Option.is_some (get_predicate_def_opt id lpredicates) in
+  let open Global in
+  match lookup_sym_map_by_string "resource predicates" id global.resource_predicates with
+  | Some (sym, def) -> return (sym, def)
+  | None ->
+     let logical = Option.is_some (lookup_sym_map_by_string "logical predicates"
+             id global.logical_predicates) in
      fail {loc; msg = Unknown_resource_predicate {id = Sym.fresh_named id; logical}}
 
 
 (* copying from typing.ml *)
-let get_logical_predicate_def loc id rpredicates lpredicates =
+let get_logical_predicate_def loc id global =
   let open TypeErrors in
-  match get_predicate_def_opt id lpredicates with
-  | Some def -> return def
-  | None -> 
-     let resource = Option.is_some (get_predicate_def_opt id lpredicates) in
+  let open Global in
+  match lookup_sym_map_by_string "logical predicates" id global.logical_predicates with
+  | Some (sym, def) -> return (sym, def)
+  | None ->
+     let resource = Option.is_some (lookup_sym_map_by_string "resource predicates"
+             id global.resource_predicates) in
      fail {loc; msg = Unknown_logical_predicate {id = Sym.fresh_named id; resource}}
-        
 
 
 
@@ -438,9 +442,7 @@ let get_logical_predicate_def loc id rpredicates lpredicates =
 (* change this to return unit IT.term, then apply index term type
    checker *)
 let resolve_index_term loc 
-      (layouts : Memory.struct_decls)
-      predicates
-      log_predicates
+      (global : Global.t)
       (default_mapping_name : string)
       (mappings : mapping StringMap.t)
       (quantifiers : (string * (Sym.t * BT.t)) list)
@@ -627,7 +629,7 @@ let resolve_index_term loc
        let ppf () = Ast.Terms.pp false term in
        begin match IT.bt st with
        | Struct tag -> 
-          let@ layout = match SymMap.find_opt tag layouts with
+          let@ layout = match SymMap.find_opt tag global.Global.struct_decls with
             | Some layout -> return layout
             | None -> fail {loc; msg = Unknown_struct tag}
           in
@@ -656,6 +658,7 @@ let resolve_index_term loc
                fail {loc; msg = Generic err}
           in
           return (IT (Record_op (RecordMember (st, member)), bt), None)
+(* FIXME: add datatype case here *)
        | _ -> fail {loc; msg = Generic (ppf () ^^^ !^"is not a struct")}
        end
     | StructUpdate ((t, m), v) ->
@@ -682,7 +685,7 @@ let resolve_index_term loc
              match Sym.description sym with
              | SD_Id tag' -> String.equal tag tag'
              | _ -> false
-           ) layouts)
+           ) global.Global.struct_decls)
        in
        let decl_members = Memory.member_types layout in
        let member = Id.id member in
@@ -712,7 +715,7 @@ let resolve_index_term loc
          | Some _ -> 
             fail {loc; msg = Generic (ppf () ^^^ !^"is not a pointer")}
        in
-       let@ layout = match SymMap.find_opt tag layouts with
+       let@ layout = match SymMap.find_opt tag global.Global.struct_decls with
          | Some layout -> return layout
          | None -> fail {loc; msg = Unknown_struct tag}
        in
@@ -757,6 +760,24 @@ let resolve_index_term loc
        let@ (p2, _) = resolve p2 mapping quantifiers in
        let@ (sz2, _) = resolve sz2 mapping quantifiers in
        return (disjoint_ (p1, sz1) (p2, sz2), None)
+    | DatatypeCons (nm, mems) ->
+       let@ (sym, info) = match lookup_sym_map_by_string "datatype constructors"
+           nm global.Global.datatype_constrs
+       with
+       | None -> fail {loc; msg = Unknown_datatype_constr (Sym.fresh_named nm)}
+       | Some r -> return r
+       in
+       let p_map = List.fold_left (fun m (nm, bt) -> StringMap.add (todo_string_of_sym nm) nm m)
+           StringMap.empty info.c_params in
+       let@ mems = ListM.mapM (fun (nm, t) ->
+           let@ (t, _) = resolve t mapping quantifiers in
+           let@ nm = match StringMap.find_opt nm p_map with
+             | Some sym -> return sym
+             | None -> fail {loc; msg = Generic (Pp.string ("unexpected datatype field: " ^ nm))}
+           in
+           return (nm, t)) mems
+       in
+       return (datatype_cons_ sym info.c_datatype_tag mems, None)
     | App (t1, t2) ->
        let@ (it1, _) = resolve t1 mapping quantifiers in
        let@ (it2, _) = resolve t2 mapping quantifiers in
@@ -806,7 +827,7 @@ let resolve_index_term loc
        let@ b = apply_builtin_funs loc name (List.map fst args_oscts) in
        begin match b with
          | None ->
-           let@ (name, def) = get_logical_predicate_def loc name predicates log_predicates in
+           let@ (name, def) = get_logical_predicate_def loc name global in
            return (pred_ name (List.map fst args_oscts) def.return_bt, None)
          | Some t -> return (t, None)
        end
@@ -816,9 +837,7 @@ let resolve_index_term loc
 
 
 let rec resolve_typ loc 
-      (layouts : Memory.struct_decls)
-      predicates
-      log_predicates
+      (global : Global.t)
       (default_mapping_name : string)
       (mappings : mapping StringMap.t)
       (oquantifier : (string * (Sym.t * BT.t)) option)
@@ -826,8 +845,7 @@ let rec resolve_typ loc
   match typ with
   | Typeof term ->
      let@ (_, osct) = 
-       resolve_index_term loc layouts 
-         predicates log_predicates
+       resolve_index_term loc global
          default_mapping_name
          mappings (Option.to_list oquantifier) term
      in
@@ -844,7 +862,7 @@ let rec resolve_typ loc
            | SD_Id str' ->
               String.equal str str'
            | _ -> false
-         ) layouts
+         ) global.Global.struct_decls
      in
      begin match ofound with
      | Some (tag, _) -> return (Sctypes.Struct tag)
@@ -852,7 +870,7 @@ let rec resolve_typ loc
         fail {loc; msg = Unknown_struct (Sym.fresh_cn str)}
      end
   | Pointer ct ->
-     let@ typ = resolve_typ loc layouts predicates log_predicates default_mapping_name mappings oquantifier ct in
+     let@ typ = resolve_typ loc global default_mapping_name mappings oquantifier ct in
      return (Sctypes.Pointer typ)
 
 
@@ -860,18 +878,18 @@ let rec resolve_typ loc
 
 
 
-let resolve_constraint loc layouts predicates log_predicates default_mapping_name mappings (oq, lc) = 
+let resolve_constraint loc global default_mapping_name mappings (oq, lc) =
   match oq with
     | None -> 
-       let@ (lc, _) = resolve_index_term loc layouts predicates log_predicates default_mapping_name mappings [] lc in
+       let@ (lc, _) = resolve_index_term loc global default_mapping_name mappings [] lc in
        return (LC.t_ lc)
     | Some (name, bt, guard) ->
        let q_s, q = IT.fresh_named bt name in
        let qs = [(name, (q_s, bt))] in
-       let@ (guard, _) = resolve_index_term loc layouts predicates log_predicates default_mapping_name mappings qs guard in
-       let@ (lc, _) = resolve_index_term loc layouts predicates log_predicates default_mapping_name mappings qs lc in
+       let@ (guard, _) = resolve_index_term loc global default_mapping_name mappings qs guard in
+       let@ (lc, _) = resolve_index_term loc global default_mapping_name mappings qs lc in
        return (LC.forall_ (q_s, IT.bt q) (impl_ (guard, lc)))
-  
+
 
 
 
@@ -897,7 +915,7 @@ let iterated_pointer_base_offset resolve loc q_name pointer =
      fail {loc; msg = Generic (!^msg ^^ colon ^^ Ast.pp false pointer)}
 
 
-let apply_ownership_spec layouts predicates log_predicates default_mapping_name mappings (loc, oname, {oq; predicate; arguments; o_permission; typ}) =
+let apply_ownership_spec global default_mapping_name mappings (loc, oname, {oq; predicate; arguments; o_permission; typ}) =
   let ownership_kind = match predicate with
     | "Owned" -> `Builtin `Owned
     | "Block" -> `Builtin `Block
@@ -917,8 +935,7 @@ let apply_ownership_spec layouts predicates log_predicates default_mapping_name 
     | None -> return None
     | Some permission ->
        let@ (t, _) = 
-         resolve_index_term loc layouts predicates log_predicates 
-           default_mapping_name mappings 
+         resolve_index_term loc global default_mapping_name mappings
            (Option.to_list (Option.map fst oq)) permission
        in
        return (Some t)
@@ -932,14 +949,12 @@ let apply_ownership_spec layouts predicates log_predicates default_mapping_name 
      begin match oq with
      | None ->
         let@ (pointer_resolved, pointer_sct) =
-          resolve_index_term loc layouts predicates log_predicates
-            default_mapping_name mappings
+          resolve_index_term loc global default_mapping_name mappings
             (Option.to_list (Option.map fst oq)) pointer
         in
         let@ pointee_sct = match typ, pointer_sct with
           | Some typ, _ ->
-             resolve_typ loc layouts predicates log_predicates default_mapping_name mappings
-               (Option.map fst oq) typ
+             resolve_typ loc global default_mapping_name mappings (Option.map fst oq) typ
           | _, Some (Pointer pointee_sct) ->
              return pointee_sct
           | _, Some _ ->
@@ -961,18 +976,16 @@ let apply_ownership_spec layouts predicates log_predicates default_mapping_name 
              fail {loc; msg = Generic (!^"cannot use 'if' expression with iterated resources")}
         in
         let@ (pointer_resolved, p_osct, step) = iterated_pointer_base_offset
-               (resolve_index_term loc layouts predicates log_predicates
-               default_mapping_name mappings [])
+               (resolve_index_term loc global default_mapping_name mappings [])
                loc name pointer
         in
         let@ (condition, _) =
-          resolve_index_term loc layouts predicates log_predicates default_mapping_name mappings
+          resolve_index_term loc global default_mapping_name mappings
             [(name, (qs, qbt))] condition
         in
         let@ pointee_sct = match typ, p_osct with
           | Some typ, _ ->
-             resolve_typ loc layouts predicates log_predicates default_mapping_name mappings
-               (Option.map fst oq) typ
+             resolve_typ loc global default_mapping_name mappings (Option.map fst oq) typ
           | _, Some ct -> return ct
           | _ ->
              fail {loc; msg = Generic (!^"need 'with type' annotation" ^^^ (Ast.Terms.pp false pointer))}
@@ -990,11 +1003,11 @@ let apply_ownership_spec layouts predicates log_predicates default_mapping_name 
        | None -> return ()
        | Some _ -> fail {loc; msg = Generic !^"cannot use 'type' syntax with predicates"}
      in
-     let@ (predicate, def) = get_resource_predicate_def loc predicate predicates log_predicates in
+     let@ (predicate, def) = get_resource_predicate_def loc predicate global in
      let@ iargs_resolved = 
        ListM.mapM (fun arg ->
            let@ (t, _) = 
-             resolve_index_term loc layouts predicates log_predicates default_mapping_name mappings 
+             resolve_index_term loc global default_mapping_name mappings
                (Option.to_list (Option.map fst oq)) arg in
            return t
          ) arguments
@@ -1002,7 +1015,7 @@ let apply_ownership_spec layouts predicates log_predicates default_mapping_name 
      let@ result = match oq with
        | None ->
           let@ (pointer_resolved, pointer_sct) = 
-            resolve_index_term loc layouts predicates log_predicates default_mapping_name mappings 
+            resolve_index_term loc global default_mapping_name mappings
               (Option.to_list (Option.map fst oq)) pointer 
           in
           make_pred loc (predicate, def) 
@@ -1014,12 +1027,11 @@ let apply_ownership_spec layouts predicates log_predicates default_mapping_name 
                fail {loc; msg = Generic (!^"cannot use 'if' expression with iterated resources")}
           in
           let@ (pointer_resolved, p_osct, step) = iterated_pointer_base_offset
-               (resolve_index_term loc layouts predicates log_predicates
-                       default_mapping_name mappings [])
+               (resolve_index_term loc global default_mapping_name mappings [])
                loc name pointer
           in
           let@ (condition, _) = 
-             resolve_index_term loc layouts predicates log_predicates default_mapping_name mappings 
+             resolve_index_term loc global default_mapping_name mappings
                [(name, (s, bt))] condition 
           in
           make_qpred 
@@ -1035,17 +1047,15 @@ let apply_ownership_spec layouts predicates log_predicates default_mapping_name 
      return result
 
 
-let apply_logical_predicate layouts predicates log_predicates default_mapping_name mappings (loc, cond) =
+let apply_logical_predicate global default_mapping_name mappings (loc, cond) =
   let open LogicalPredicates in
-  let@ (predicate, def) = get_logical_predicate_def loc cond.predicate predicates log_predicates in
+  let@ (predicate, def) = get_logical_predicate_def loc cond.predicate global in
   let@ lc = match cond.oq with
     | None ->
        let@ args_resolved = 
          ListM.mapM (fun arg ->
              let@ (t, _) = 
-               resolve_index_term loc layouts predicates log_predicates 
-                 default_mapping_name mappings 
-                 [] arg in
+               resolve_index_term loc global default_mapping_name mappings [] arg in
              return t
            ) cond.arguments
        in
@@ -1055,15 +1065,13 @@ let apply_logical_predicate layouts predicates log_predicates default_mapping_na
        let@ args_resolved = 
          ListM.mapM (fun arg ->
              let@ (t, _) = 
-               resolve_index_term loc layouts 
-                 predicates log_predicates default_mapping_name mappings 
+               resolve_index_term loc global default_mapping_name mappings
                  [(name, (q, bt))] arg in
              return t
            ) cond.arguments
        in
        let@ (condition, _) = 
-         resolve_index_term loc layouts
-           predicates log_predicates default_mapping_name mappings 
+         resolve_index_term loc global default_mapping_name mappings
            [(name, (q, bt))] condition
        in
        let t = pred_ predicate args_resolved def.return_bt in
@@ -1143,8 +1151,7 @@ let mod_mappings mapping_names mappings f =
 (*   SuggestEqs.make_mappings_info (StringMap.find mapping_name mappings *)
 (*     |> List.map (fun {path; it; _} -> (Pp.plain (Ast.Terms.pp true path), it))) *)
 
-let make_fun_spec loc (layouts : Memory.struct_decls) rpredicates lpredicates
-      fsym (fspec : function_spec)
+let make_fun_spec loc (global : Global.t) fsym (fspec : function_spec)
     : (AT.ft * CF.Mucore.trusted * mapping, type_error) m = 
   let open AT in
   let open RT in
@@ -1221,7 +1228,7 @@ let make_fun_spec loc (layouts : Memory.struct_decls) rpredicates lpredicates
         match spec with
         | Ast.Resource (oroname, cond) ->
               let@ (i', mapping') = 
-                apply_ownership_spec layouts rpredicates lpredicates
+                apply_ownership_spec global
                   "start" mappings (loc, Some oroname, cond) 
               in
               let mappings = 
@@ -1230,13 +1237,13 @@ let make_fun_spec loc (layouts : Memory.struct_decls) rpredicates lpredicates
               in
               return (i @ i', mappings)
         | Ast.Constraint (oq,lc) ->
-           let@ c = resolve_constraint loc layouts rpredicates lpredicates
+           let@ c = resolve_constraint loc global
                       "start" mappings (oq,lc) in
            return (i @ [(`Constraint c, (loc, None))], mappings)
         | Ast.Define (name, it) -> 
            let s = Sym.fresh_named name in
            let@ (it, o_sct) = 
-             resolve_index_term loc layouts rpredicates lpredicates
+             resolve_index_term loc global
                "start" mappings [] it
            in
            let mapping' = [{path = Ast.var name; it = sym_ (s, IT.bt it); o_sct}] in
@@ -1308,7 +1315,7 @@ let make_fun_spec loc (layouts : Memory.struct_decls) rpredicates lpredicates
         match spec with
         | Ast.Resource (oroname, cond) ->
               let@ (o', mapping') = 
-                apply_ownership_spec layouts rpredicates lpredicates
+                apply_ownership_spec global
                   "end" mappings (loc, Some oroname, cond) 
               in
               let mappings = 
@@ -1317,11 +1324,11 @@ let make_fun_spec loc (layouts : Memory.struct_decls) rpredicates lpredicates
               in
               return (o @ o', mappings)
         | Ast.Constraint (oq, cond) ->
-           let@ c = resolve_constraint loc layouts rpredicates lpredicates "end" mappings (oq, cond) in
+           let@ c = resolve_constraint loc global "end" mappings (oq, cond) in
            return (o @ [(`Constraint c, (loc, None))], mappings)
         | Ast.Define (name, it) -> 
            let s = Sym.fresh_named name in
-           let@ (it, o_sct) = resolve_index_term loc layouts rpredicates lpredicates "end" mappings [] it in
+           let@ (it, o_sct) = resolve_index_term loc global "end" mappings [] it in
            let mapping' = [{path = Ast.var name; it = sym_ (s, IT.bt it); o_sct}] in
            let mappings = 
              mod_mapping "end" mappings
@@ -1360,9 +1367,7 @@ let make_fun_spec loc (layouts : Memory.struct_decls) rpredicates lpredicates
 let make_label_spec
       (fsym: Sym.t)
       (loc : Loc.t)
-      layouts
-      rpredicates
-      lpredicates
+      (global : Global.t)
       (lname : string)
       start_mapping
       (lspec: Ast.label_spec)
@@ -1443,7 +1448,7 @@ let make_label_spec
         match spec with
         | Ast.Resource (oroname, cond) ->
               let@ (i', mapping') = 
-                apply_ownership_spec layouts rpredicates lpredicates
+                apply_ownership_spec global
                   lname mappings (loc, Some oroname, cond) in
               let mappings = 
                 mod_mapping lname mappings 
@@ -1451,13 +1456,12 @@ let make_label_spec
               in
               return (i @ i', mappings)
         | Ast.Constraint (oq, cond) ->
-           let@ c = resolve_constraint loc layouts rpredicates lpredicates lname mappings (oq, cond) in
+           let@ c = resolve_constraint loc global lname mappings (oq, cond) in
            return (i @ [(`Constraint c, (loc, None))], mappings)
         | Ast.Define (name, it) -> 
            let s = Sym.fresh_named name in
            let@ (it, o_sct) = 
-             resolve_index_term loc layouts rpredicates lpredicates
-               lname mappings [] it
+             resolve_index_term loc global lname mappings [] it
            in
            let mapping' = [{path = Ast.var name; it = sym_ (s, IT.bt it); o_sct}] in
            let mappings = 

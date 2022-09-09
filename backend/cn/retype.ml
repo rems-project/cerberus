@@ -515,7 +515,7 @@ type retype_opts = {
 
 
 
-let retype_file (log_defs, pred_defs) opts (file : 'TY Old.mu_file)
+let retype_file (context : Context.t) opts (file : 'TY Old.mu_file)
     : ('TY New.mu_file, type_error) m =
 
 
@@ -541,9 +541,12 @@ let retype_file (log_defs, pred_defs) opts (file : 'TY Old.mu_file)
   in
 
 
-  let logical_predicates = log_defs @ LogicalPredicates.predicate_list struct_decls log_defs in
-  let resource_predicates = pred_defs @ ResourcePredicates.predicate_list struct_decls
-    (List.map fst logical_predicates) in
+  let global = context.Context.global in
+  let global = Global.{global with struct_decls} in
+  let l_preds = SymMap.bindings global.Global.logical_predicates in
+  let r_preds = SymMap.bindings global.Global.resource_predicates @
+    ResourcePredicates.predicate_list struct_decls (List.map fst l_preds) in
+  let global = global |> Global.add_predicates (l_preds, r_preds) in
 
 
   let@ (globs, glob_typs) = 
@@ -604,7 +607,8 @@ let retype_file (log_defs, pred_defs) opts (file : 'TY Old.mu_file)
   in
 
 
-  
+
+
   let@ ((funinfo : funinfos), 
         (funinfo_extra : funinfo_extras)) =
     let retype_funinfo fsym funinfo_entry (funinfo, funinfo_extra) =
@@ -619,8 +623,7 @@ let retype_file (log_defs, pred_defs) opts (file : 'TY Old.mu_file)
         let args = List.map_snd (ct_of_ct loc) args in
         let@ fspec = Parse.parse_function glob_typs trusted args ret_ctype attrs in
         let@ (ftyp, trusted, mappings) = 
-          Conversions.make_fun_spec loc struct_decls resource_predicates 
-            logical_predicates fsym fspec
+          Conversions.make_fun_spec loc global fsym fspec
         in
         let funinfo_entry = New.M_funinfo (floc,attrs,ftyp, trusted, has_proto) in
         let funinfo = Pmap.add fsym funinfo_entry funinfo in
@@ -666,8 +669,7 @@ let retype_file (log_defs, pred_defs) opts (file : 'TY Old.mu_file)
           in
           let@ lspec = Parse.parse_label lname argtyps global_arguments this_attrs in
           let@ (lt,mapping) = 
-            Conversions.make_label_spec fsym loc struct_decls resource_predicates 
-              logical_predicates lname start_mapping lspec
+            Conversions.make_label_spec fsym loc global lname start_mapping lspec
           in
           let@ e = retype_expr e in
           return (New.M_Label (loc, lt,args,e,annots))
@@ -728,7 +730,7 @@ let retype_file (log_defs, pred_defs) opts (file : 'TY Old.mu_file)
         List.map (fun id -> (id, fsym, new_body fsym)) fspec.defines_log_funs @ defs)
     funinfo_extra []
   in
-  let@ logical_predicates = CLogicalFuns.add_c_fun_defs logical_predicates log_c_defs in
+  let@ logical_predicates = CLogicalFuns.add_c_fun_defs l_preds log_c_defs in
 
   let file = 
     New.{ mu_main = file.mu_main;
@@ -740,7 +742,7 @@ let retype_file (log_defs, pred_defs) opts (file : 'TY Old.mu_file)
           mu_extern = file.mu_extern;
           mu_funinfo = funinfo; 
           mu_loop_attributes = file.mu_loop_attributes;
-          mu_resource_predicates = resource_predicates;
+          mu_resource_predicates = r_preds;
           mu_logical_predicates = logical_predicates;
     }
   in
