@@ -84,6 +84,7 @@ module WBT = struct
       | Real -> return ()
       | Loc -> return ()
       | Struct tag -> let@ _ = get_struct_decl loc tag in return ()
+      | Datatype tag -> let@ _ = get_datatype loc tag in return ()
       | Record members -> ListM.iterM (fun (_, bt) -> aux bt) members
       | Map (abt, rbt) -> ListM.iterM aux [abt; rbt]
       | List bt -> aux bt
@@ -435,7 +436,29 @@ module WIT = struct
               return (IT.bt t, RecordUpdate ((t, member), v))
          in
          return (IT (Record_op record_op, bt))
-      | Pointer_op pointer_op ->
+      | Datatype_op datatype_op ->
+         let@ (bt, datatype_op) = match datatype_op with
+           | DatatypeCons (nm, member_rec) ->
+             let@ info = get_datatype_constr loc nm in
+             let (arg_ty, res_ty) = BT.cons_dom_rng info in
+             let@ member_rec = check loc ~context arg_ty member_rec in
+             return (res_ty, DatatypeCons (nm, member_rec))
+           | DatatypeMember (t, member) ->
+             let@ t = infer loc ~context t in
+             let@ info = match IT.bt t with
+               | Datatype tag -> get_datatype loc tag
+               | has -> fail (illtyped_index_term loc context t has "record")
+             in
+             let@ bt = match List.assoc_opt Sym.equal member info.dt_all_params with
+               | Some bt -> return bt
+               | None ->
+                   let expected = "datatype with member " ^ Sym.pp_string member in
+                   fail (illtyped_index_term loc context t (IT.bt t) expected)
+             in
+             return (bt, DatatypeMember (t, member))
+         in
+         return (IT (Datatype_op datatype_op, bt))
+       | Pointer_op pointer_op ->
          let@ (bt, pointer_op) = match pointer_op with 
            | LTPointer (t, t') ->
               let@ t = check loc ~context Loc t in

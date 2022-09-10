@@ -3,7 +3,7 @@ type model
 type model_with_q = model * (Sym.t * LogicalSorts.t) list
 
 
-val make : Memory.struct_decls -> solver
+val make : Global.t -> solver
 
 val push : solver -> unit
 val pop : solver -> unit

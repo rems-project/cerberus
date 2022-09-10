@@ -143,7 +143,5 @@ module PageAlloc = struct
 end
 
 
-let predicate_list struct_decls user_preds = []
-
 
     

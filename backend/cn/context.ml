@@ -112,6 +112,14 @@ let add_rs owhere r rs ctxt = List.fold_right (add_r owhere) rs ctxt
 let add_stmt_locs stmts (ctxt : t) =
   {ctxt with statement_locs = stmts}
 
+let add_datatypes dts (ctxt : t) =
+  let global = Global.add_datatypes dts ctxt.global in
+  {ctxt with global}
+
+let add_predicates preds (ctxt : t) =
+  let global = Global.add_predicates preds ctxt.global in
+  {ctxt with global}
+
 let json (ctxt : t) : Yojson.Safe.t = 
 
   let computational  = 

@@ -6,12 +6,13 @@ let cpp_str =
     "cc -E -CC -Werror -nostdinc -undef -D__cerb__"
     ^ " -I " ^ Cerb_runtime.in_runtime "libc/include"
     ^ " -I " ^ Cerb_runtime.in_runtime "libcore"
-    ^ " -DDEBUG"
+    ^ " -DDEBUG -DCN_MODE"
 
 let with_cn_keywords str =
   let cn_keywords =
     [ "predicate"
     ; "function"
+    ; "datatype"
     ; "pack"
     ; "unpack"
     ; "pack_struct"

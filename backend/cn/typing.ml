@@ -21,7 +21,7 @@ type 'e failure = Context.t -> 'e
 
 
 let run (c : Context.t) (m : ('a, 'e) t) : ('a, 'e) Resultat.t = 
-  let solver = Solver.make c.global.struct_decls in
+  let solver = Solver.make c.global in
   let sym_eqs = SymMap.empty in
   LCSet.iter (Solver.add_assumption solver c.global) (fst c.constraints);
   let s = { 
@@ -457,6 +457,22 @@ let get_struct_decl loc tag =
   match SymMap.find_opt tag global.struct_decls with
   | Some decl -> return decl
   | None -> fail (fun _ -> {loc; msg = Unknown_struct tag})
+
+let get_datatype loc tag = 
+  let open TypeErrors in
+  let@ global = get_global () in
+  match SymMap.find_opt tag global.datatypes with
+  | Some dt -> return dt
+  | None -> fail (fun _ -> {loc; msg = Unknown_datatype tag})
+
+let get_datatype_constr loc tag = 
+  let open TypeErrors in
+  let@ global = get_global () in
+  match SymMap.find_opt tag global.datatype_constrs with
+  | Some info -> return info
+  | None -> fail (fun _ -> {loc; msg = Unknown_datatype_constr tag})
+
+
 
 let get_member_type loc tag member layout : (Sctypes.t, TypeErrors.t) m = 
   let open TypeErrors in

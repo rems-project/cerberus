@@ -98,6 +98,7 @@ let keywords: (string * Tokens.token) list = [
     (* BEGIN CN *)
     "__cerb_predicate"     , CN_PREDICATE;
     "__cerb_function"      , CN_FUNCTION;
+    "__cerb_datatype"      , CN_DATATYPE;
     "__cerb_pack"          , CN_PACK;
     "__cerb_unpack"        , CN_UNPACK;
     "__cerb_pack_struct"   , CN_PACK_STRUCT;
@@ -134,8 +135,6 @@ let cn_keywords: (string * Tokens.token) list = [
     "NULL"          , CN_NULL;
     "true"          , CN_TRUE;
     "false"         , CN_FALSE;
-    "nil"           , CN_NIL;
-    "cons"          , CN_CONS;
   ]
 
 let cn_lexicon: (string, token) Hashtbl.t =

@@ -126,8 +126,8 @@ let magic_to_attrs = function
 (* %token<string> CN_PREDNAME *)
 %token CN_PACK CN_UNPACK CN_PACK_STRUCT CN_UNPACK_STRUCT CN_HAVE CN_SHOW CN_INSTANTIATE
 %token CN_BOOL CN_INTEGER CN_REAL CN_POINTER CN_MAP CN_LIST CN_TUPLE CN_SET
-%token CN_LET CN_OWNED CN_BLOCK CN_EACH CN_FUNCTION CN_PREDICATE
-%token CN_NULL CN_TRUE CN_FALSE CN_NIL CN_CONS
+%token CN_LET CN_OWNED CN_BLOCK CN_EACH CN_FUNCTION CN_PREDICATE CN_DATATYPE
+%token CN_NULL CN_TRUE CN_FALSE
 
 %token EOF
 
@@ -296,7 +296,8 @@ let magic_to_attrs = function
 
 %type<Symbol.identifier Cerb_frontend.Cn.cn_base_type> base_type
 %type<(Symbol.identifier, Cabs.type_name) Cerb_frontend.Cn.cn_function> cn_function
-%type<(Symbol.identifier, Cabs.type_name) Cerb_frontend.Cn.cn_predicate> predicate
+%type<(Symbol.identifier, Cabs.type_name) Cerb_frontend.Cn.cn_predicate> cn_predicate
+%type<(Symbol.identifier, Cabs.type_name) Cerb_frontend.Cn.cn_datatype> cn_datatype
 %type<(Symbol.identifier, Cabs.type_name) Cerb_frontend.Cn.cn_clauses> clauses
 %type<(Symbol.identifier, Cabs.type_name) Cerb_frontend.Cn.cn_clause> clause
 %type<(Symbol.identifier, Cabs.type_name) Cerb_frontend.Cn.cn_resource> resource
@@ -387,7 +388,7 @@ list_tuple3_ge1(A, B, C):
 
 (* Identifiers and lexer feedback contexts *)
 
-NAME:
+%inline NAME:
 | u= UNAME
     { u }
 | l= LNAME
@@ -1506,10 +1507,12 @@ external_declaration_list: (* NOTE: the list is in reverse *)
 ;
 
 external_declaration:
-| pred= predicate
+| pred= cn_predicate
     { EDecl_predCN pred }
 | func= cn_function
     { EDecl_funcCN func }
+| dt= cn_datatype
+    { EDecl_datatypeCN dt }
 | fdef= function_definition
     { EDecl_func fdef }
 | decl= declaration
@@ -1812,6 +1815,9 @@ prim_expr:
 | ident= cn_l_variable LPAREN args=separated_list(COMMA, expr) RPAREN
     { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                                , CNExpr_call (ident, args))) }
+| ident= cn_variable args= cons_args
+    { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos(args)))
+                               , CNExpr_cons (ident, args))) }
 | OFFSETOF LPAREN tag = cn_variable COMMA member= cn_variable RPAREN
     { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($1)))
                                , CNExpr_offsetof (tag, member))) }
@@ -1868,13 +1874,7 @@ list_expr:
 | e= rel_expr
     { e }
 (* | LBRACK COLON bty= base_type RBRACK *)
-| CN_NIL bty= delimited(LT, base_type, GT)
-    { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) NoCursor)
-                               , CNExpr_nil bty)) }
 (* | e1= rel_expr COLON_COLON e2= list_expr *)
-| CN_CONS LPAREN e1= list_expr COMMA e2= list_expr RPAREN
-    { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) NoCursor)
-                               , CNExpr_cons (e1, e2))) }
 (* | es= delimited(LBRACK, separated_nonempty_list(COMMA, rel_expr), RBRACK)
     { Cerb_frontend.Cn.CNExpr_list es } *)
   // | Head of 'bt term
@@ -1925,6 +1925,8 @@ base_type:
     { Cerb_frontend.Cn.CN_loc }
 | STRUCT id= cn_variable
     { Cerb_frontend.Cn.CN_struct id }
+| CN_DATATYPE id= cn_variable
+    { Cerb_frontend.Cn.CN_datatype id }
 | CN_MAP LT bTy1= base_type COMMA bTy2= base_type GT
     { Cerb_frontend.Cn.CN_map (bTy1, bTy2) }
 | CN_LIST LT bTy= base_type GT
@@ -1951,6 +1953,17 @@ cn_option_pred_clauses:
     { None }
 
 
+cn_cons_case:
+| nm= cn_variable args= delimited(LBRACE, args, RBRACE)
+    {
+      (nm, args)
+    }
+
+cn_cons_cases:
+| xs= separated_list (COMMA, cn_cons_case)
+    { xs }
+
+
 cn_function:
 | CN_FUNCTION enter_cn cn_func_return_bty=delimited(LPAREN, base_type, RPAREN) str= LNAME VARIABLE
   cn_func_args= delimited(LPAREN, args, RPAREN)
@@ -1962,7 +1975,7 @@ cn_function:
       ; cn_func_return_bty
       ; cn_func_args
       ; cn_func_body} }
-predicate:
+cn_predicate:
 | CN_PREDICATE enter_cn cn_pred_oargs= delimited(LBRACE, args, RBRACE) str= UNAME VARIABLE
   cn_pred_iargs= delimited(LPAREN, args, RPAREN)
   cn_pred_clauses= cn_option_pred_clauses exit_cn
@@ -1973,10 +1986,20 @@ predicate:
       ; cn_pred_oargs
       ; cn_pred_iargs
       ; cn_pred_clauses} }
-;
+cn_datatype:
+| CN_DATATYPE enter_cn nm= cn_variable
+  cases= delimited(LBRACE, cn_cons_cases, RBRACE) exit_cn
+    { 
+      { cn_dt_loc= Location_ocaml.point $startpos($1)
+      ; cn_dt_name= nm
+      ; cn_dt_cases= cases} }
 
-cn_variable:
+(* all cases where cn_variable is used don't mind if they're shadowing
+   a situation where the name has been assigned as a typedef *)
+%inline cn_variable:
 | str= NAME VARIABLE
+    { Symbol.Identifier (Location_ocaml.point $startpos(str), str) }
+| str= NAME TYPE
     { Symbol.Identifier (Location_ocaml.point $startpos(str), str) }
 %inline cn_u_variable:
 | str= UNAME VARIABLE
@@ -1995,6 +2018,10 @@ oargs_def:
 | xs= separated_list(COMMA, separated_pair(cn_variable, EQ, expr))
     { xs }
 ;
+
+cons_args:
+| xs= delimited(LBRACE, oargs_def, RBRACE)
+    { xs }
 
 
 clauses:

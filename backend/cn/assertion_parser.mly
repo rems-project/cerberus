@@ -141,6 +141,9 @@ id:
      { Id.parse (Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos(i)))) i }
 
 
+param_eq:
+  | nm= name EQUAL t= term
+    { (nm, t) }
 
 
 atomic_term:
@@ -200,6 +203,8 @@ arith_term:
       { Ast.StructUpdate ((t, Id.id member), v) }
   | t=atomic_term LBRACKET i=atomic_term EQUAL v=atomic_term RBRACKET
       { Ast.ArraySet ((t, i), v) }
+  | nm=name args=delimited (LBRACE, separated_list(COMMA, param_eq), RBRACE)
+      { Ast.DatatypeCons (nm, args) }
 
 arith_or_atomic_term:
   | a=arith_term

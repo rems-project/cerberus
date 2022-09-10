@@ -17,6 +17,7 @@ type basetype =
   | Real
   | Loc
   | Struct of tag
+  | Datatype of tag
   | Record of member_types
   | Map of basetype * basetype
   | List of basetype
@@ -29,12 +30,24 @@ and member_types =
   (Sym.t * basetype) list
 
 
-
 type t = basetype
 
 
 let equal = equal_basetype
 let compare = compare_basetype
+
+
+type datatype_info = {
+  dt_constrs: tag list;
+  dt_all_params: member_types;
+}
+type constr_info = {
+  c_params: member_types;
+  c_datatype_tag: tag
+}
+
+let cons_dom_rng info =
+  (Record info.c_params, Datatype info.c_datatype_tag)
 
 
 let rec pp = function
@@ -44,6 +57,7 @@ let rec pp = function
   | Real -> !^"real"
   | Loc -> !^"pointer"
   | Struct sym -> !^"struct" ^^^ Sym.pp sym
+  | Datatype sym -> !^"datatype" ^^^ Sym.pp sym
   | Record members -> braces (flow_map comma (fun (s, bt) -> pp bt ^^^ Sym.pp s) members)
   | Map (abt, rbt) -> !^"map" ^^ angles (pp abt ^^ comma ^^^ pp rbt)
   | List bt -> !^"list" ^^ angles (pp bt)
@@ -109,5 +123,6 @@ let rec hash = function
   | Set _ -> 7
   (* | Option _ -> 8 *)
   | Struct tag -> 1000 + Sym.num tag
+  | Datatype tag -> 4000 + Sym.num tag
   | Record _ -> 3000
   | Map (abt,rbt) -> 2000 + hash abt + hash rbt
