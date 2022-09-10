@@ -201,3 +201,17 @@ let typecheckAil sigm gamm expr =
     | Right a_expr ->
         Right (Translation_aux.ctype_of a_expr)
   end
+
+val in_range_of_signed_int: integer -> maybe bool
+let in_range_of_signed_int n =
+  match ( Mem.eval_integer_value (Mem.min_ival (Ctype.Signed Ctype.Int_))
+        , Mem.eval_integer_value (Mem.max_ival (Ctype.Signed Ctype.Int_)) ) with
+    | (Just min, Just max) ->
+        Just (min <= n && n <= max)
+    | (Just min, Nothing) ->
+        if n < min then Just false else Nothing
+    | (Nothing, Just max) ->
+        if max < n then Just false else Nothing
+    | (Nothing, Nothing) ->
+        Nothing
+  end
