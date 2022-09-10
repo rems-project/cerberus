@@ -3792,7 +3792,7 @@ let translate_program stdlib (startup_sym_opt, sigm) =
                 let (mk_body_wrapper, label_visibles) =
                   if is_using_inner_arg_temps then
                     let xs = List.map (fun (sym, (_, ty, _)) -> (sym, ty)) (List.zip param_syms params) in
-                    ( (fun z -> E.with_block_objects (List.map (fun (sym, ty) -> (sym, (Ctype.no_qualifiers, ty))) xs) z)
+                    ( (fun z -> E.with_block_objects (List.map (fun (sym, ty) -> (sym, (Ctype.no_qualifiers, ty))) xs) z >>= fun (_, ret) -> E.return ret)
                     , Map.map (fun z -> z ++ xs) visibles.label_visibles_ )
                   else
                     ((fun z -> z), visibles.label_visibles_) in
