@@ -2413,23 +2413,18 @@ else (* is_pointer *)
           (* TODO: what if the type is atomic? *)
           let core_ty = Caux.mk_ail_ctype_pe ty in
           let oTy = force_core_object_type_of_ctype (ctype_of e) in
-          E.wrapped_fresh_symbol (C.BTy_object C.OTy_pointer) >>= fun (_    , obj_sym_pat, obj_sym_pe) ->
-          E.wrapped_fresh_symbol (C.BTy_loaded oTy)           >>= fun (e_sym, e_sym_pat  , e_sym_pe  ) ->
+          E.wrapped_fresh_symbol (C.BTy_object C.OTy_pointer) >>= fun (obj_sym, _        , obj_sym_pe) ->
+          E.wrapped_fresh_symbol (C.BTy_loaded oTy)           >>= fun (e_sym  , e_sym_pat, e_sym_pe  ) ->
           self e                                              >>= fun core_e                           ->
-          let () = Debug.print_debug 1 [] (fun () ->
-             "TODO!!!! the lifetime of block scoped AilEcompound ends with the block (right now there is no kill)"
-          ) in
           (* STD §6.5.2.5#3 *)
+          E.register_compound_literal loc (Symbol.PrefCompoundLiteral (locOf e) (Symbol.digest_of_sym e_sym)) obj_sym qs.Ctype.const ty >>= fun () ->
           E.return begin
-            Caux.mk_wseq_e obj_sym_pat
-              (* TODO: if qs has const, we must probably use a create_readonly *)
-              (Caux.pcreate loc (Caux.mk_alignof_pe core_ty) core_ty (Symbol.PrefCompoundLiteral (locOf e) (Symbol.digest_of_sym e_sym))) begin
             (* TODO: probably needs a conversion *)
             Caux.mk_wseq_e e_sym_pat core_e begin
             Caux.mk_wseq_e (Caux.mk_empty_pat C.BTy_unit) (Caux.pstore loc core_ty obj_sym_pe e_sym_pe Cmm.NA) begin
               (* STD §6.5.2.5#5, sentence 1 *)
               Caux.mk_pure_e obj_sym_pe
-            end end end
+            end end
           end
       
       | A.AilEunion tag_sym memb_ident e_opt ->
@@ -3146,8 +3141,8 @@ let rec translate_stmt stdlib tagDefs f env (A.AnnotatedStatement loc stmt_attrs
             (Caux.mk_pure_e Caux.mk_unit_pe)
         )
     
-    | A.AilSblock [] ss ->
-        E.mapM self ss >>= fun core_ss ->
+    (* | A.AilSblock [] ss ->
+        E.with_block_objects [] (E.mapM self ss) >>= fun (_, core_ss) ->
         E.return (Caux.mk_unit_sseq core_ss Caux.mk_skip_e)
     
     | A.AilSblock [(sym, ((ident_loc, _, _), align_opt, qs, ty))] ss ->
@@ -3163,7 +3158,7 @@ let rec translate_stmt stdlib tagDefs f env (A.AnnotatedStatement loc stmt_attrs
         end in
         E.with_block_objects [(sym, (qs, ty))] begin
           E.mapM self ss
-        end >>= fun core_ss ->
+        end >>= fun (_, core_ss) ->
         let new_loc = Loc.with_cursor_from loc ident_loc in
         E.return begin
           Caux.mk_sseq_e (Caux.mk_sym_pat sym (C.BTy_object C.OTy_pointer))
@@ -3172,14 +3167,24 @@ let rec translate_stmt stdlib tagDefs f env (A.AnnotatedStatement loc stmt_attrs
               Caux.mk_sseq_e (Caux.mk_empty_pat C.BTy_unit) core_s acc
             ) (Caux.pkill new_loc (C.Static ty) (Caux.mk_sym_pe sym)) core_ss
           )
-        end
+        end *)
     
     | A.AilSblock binds ss ->
         let decls_with_loc = [ (sym, ident_loc, (align_opt, qs, ty)) | forall ((sym, ((ident_loc, _, _), align_opt, qs, ty)) MEM binds ) | true ] in
         let decls = List.map (fun (sym, _, (_, qs, ty)) -> (sym, (qs, ty))) decls_with_loc in
+        E.with_block_objects decls begin
+          E.mapM self ss
+        end >>= fun (compound_lits, core_ss) ->
+        let lit_pats_core_creates : list (C.pattern * C.expr unit) =
+          List.map (fun (loc, prefix, sym, is_const, ty) ->
+            let core_ty = Caux.mk_ail_ctype_pe ty in
+            ( Caux.mk_sym_pat sym (C.BTy_object C.OTy_pointer)
+            , Caux.pcreate loc (Caux.mk_alignof_pe core_ty) core_ty prefix )
+          ) compound_lits
+        in
         (* the symbolic names and create actions for the local variables *)
-        let (pats, core_creates) : list C.pattern * list (C.expr unit) =
-          mapUnzip (fun (sym, ident_loc, (align_opt, qs, ty)) ->
+        let pats_core_creates : list (C.pattern * C.expr unit) =
+          List.map (fun (sym, ident_loc, (align_opt, qs, ty)) ->
             let c_ty = Caux.mk_ail_ctype_pe ty in
             let align_ival  =
             match align_opt with
@@ -3193,21 +3198,22 @@ let rec translate_stmt stdlib tagDefs f env (A.AnnotatedStatement loc stmt_attrs
             ( Caux.mk_sym_pat sym (C.BTy_object C.OTy_pointer)
             , Caux.pcreate (Loc.with_cursor_from loc ident_loc) align_ival c_ty (Symbol.PrefSource ident_loc [f; sym]) )
           ) decls_with_loc in
-        E.with_block_objects decls $
-          (* TODO: doing the kills here is now redundant if there is are returns before all exit point.
-             but it may be nasty to do the check.
-             For non-void function however we know (?) that their must be these returns ?? so we could drop the kills here *)
-          (* the kill actions for the local variables *)
-          let core_kills : list (C.expr unit) =
-            List.map (fun (sym, ident_loc, (_, _, ty)) ->
-              Caux.pkill (Loc.with_cursor_from loc ident_loc) (C.Static ty) (Caux.mk_sym_pe sym)
-            ) decls_with_loc in
-          E.mapM self ss >>= fun core_ss ->
-        
+        let pat_core_kills : list (C.expr unit) =
+          List.map (fun (loc, _, sym, _, ty) ->
+            Caux.pkill (Loc.with_cursor_from loc loc) (C.Static ty) (Caux.mk_sym_pe sym)
+          ) compound_lits in
+        (* TODO: doing the kills here is now redundant if there is are returns before all exit point.
+            but it may be nasty to do the check.
+            For non-void function however we know (?) that their must be these returns ?? so we could drop the kills here *)
+        (* the kill actions for the local variables *)
+        let core_kills : list (C.expr unit) =
+          List.map (fun (sym, ident_loc, (_, _, ty)) ->
+            Caux.pkill (Loc.with_cursor_from loc ident_loc) (C.Static ty) (Caux.mk_sym_pe sym)
+          ) decls_with_loc in
         E.return (
           (* NOTE: we sequence (left-to-right) the creates and kills of the block-scoped objects *)
-          Caux.mk_sseqs (List.zip pats core_creates) begin
-            Caux.mk_unit_sseq (core_ss ++ core_kills)
+          Caux.mk_sseqs (lit_pats_core_creates ++ pats_core_creates) begin
+            Caux.mk_unit_sseq (core_ss ++ core_kills ++ pat_core_kills)
               Caux.mk_skip_e
           end
         )

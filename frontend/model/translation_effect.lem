@@ -8,11 +8,19 @@ module Caux = Core_aux
 
 include State
 
+type compound_literal_info =
+  ( Loc.t
+  * Symbol.prefix
+  * Symbol.sym
+  * bool (* is const *)
+  * Ctype.ctype )
+
 type elab_state = <|
   visible_objects_types: map Symbol.sym (Ctype.qualifiers * Ctype.ctype);
   visible_objects: list (list Symbol.sym); (* visible C objects with scoping (used to properly
                                               annotate Esave/Erun ctors) *)
   string_literals: list (Loc.t * Symbol.sym * Ctype.ctype * C.pexpr);
+  compound_literals: list compound_literal_info;
 |>
 
 type elabM 'a = stateM 'a elab_state
@@ -22,6 +30,7 @@ let elab_init () = <|
   visible_objects_types= Map.empty;
   visible_objects= [[]];
   string_literals= [];
+  compound_literals= [];
 |>
 
 (* TODO: this does not need to be in the monad *)
@@ -59,18 +68,21 @@ let pop_block_objects = fun st ->
         | _       -> error "[Translation.E.pop_block_objects] found an ill-formed scope stack."
       end |>)
 
-val with_block_objects: forall 'a. list (Symbol.sym * (Ctype.qualifiers * Ctype.ctype)) -> elabM 'a -> elabM 'a
+val with_block_objects: forall 'a. list (Symbol.sym * (Ctype.qualifiers * Ctype.ctype)) -> elabM 'a -> elabM (list compound_literal_info * 'a)
 let with_block_objects binds ma = fun st ->
   let st' = <| st with
     visible_objects_types= List.foldl (fun acc (sym, qs_ty) -> Map.insert sym qs_ty acc) st.visible_objects_types binds;
-    visible_objects= (List.map fst binds) :: st.visible_objects
+    visible_objects= (List.map fst binds) :: st.visible_objects;
+    compound_literals= [];
   |> in
   let (a, st'') = ma st' in
-  (a, <| st'' with visible_objects=
+  ((st''.compound_literals, a), <| st'' with
+    visible_objects=
       match st''.visible_objects with
         | _ :: xs -> xs
         | _       -> error "[Translation.E.with_block_objects] found an ill-formed scope stack."
-      end |>)
+      end;
+    compound_literals= st.compound_literals |>)
 
 (* returns the list of all the C objects in scope. *)
 val get_visible_objects: elabM (list Symbol.sym)
@@ -84,6 +96,10 @@ let register_string_literal loc sym ty pe = fun st ->
 val get_string_literals: elabM (list (Loc.t * Symbol.sym * Ctype.ctype * C.pexpr))
 let get_string_literals = fun st ->
   (st.string_literals, st)
+
+val register_compound_literal: Loc.t -> Symbol.prefix -> Symbol.sym -> bool -> Ctype.ctype -> elabM unit
+let register_compound_literal loc prefix sym is_const ty = fun st ->
+  ((), <| st with compound_literals= (loc, prefix, sym, is_const, ty) :: st.compound_literals |>)
 
 val resolve_object_type: Symbol.sym -> elabM (Ctype.qualifiers * Ctype.ctype)
 let resolve_object_type sym = fun st ->
