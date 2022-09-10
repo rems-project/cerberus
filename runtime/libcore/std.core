@@ -771,6 +771,9 @@ proc [ailname = "lseek"] lseek_proxy (fd_ptr: pointer, off_ptr: pointer, whence_
 -- Some GCC builtins
 
 builtin ctz (): eff loaded integer
+builtin bswap16 (): eff loaded integer
+builtin bswap32 (): eff loaded integer
+builtin bswap64 (): eff loaded integer
 
 proc [ailname = "__builtin_ctz"] ctz_proxy (n_ptr: pointer): eff loaded integer :=
   let strong n_loaded: loaded integer = load('unsigned int', n_ptr) in
@@ -784,3 +787,41 @@ proc [ailname = "__builtin_ctz"] ctz_proxy (n_ptr: pointer): eff loaded integer 
         pure (undef(<<DUMMY(ctz_proxy)>>))
   end
 
+proc [ailname = "__builtin_bswap16"] bswap16_proxy (x_ptr: pointer): eff loaded integer :=
+  let strong x_loaded: loaded integer = load('uint16_t', x_ptr) in
+  case x_loaded of
+    | Specified (x: integer) =>
+        pcall(<builtin_bswap16>, x)
+    | _: loaded integer =>
+        pure (undef(<<DUMMY(bswap16_proxy)>>))
+  end
+
+proc [ailname = "__builtin_bswap32"] bswap32_proxy (x_ptr: pointer): eff loaded integer :=
+  let strong x_loaded: loaded integer = load('uint32_t', x_ptr) in
+  case x_loaded of
+    | Specified (x: integer) =>
+        pcall(<builtin_bswap32>, x)
+    | _: loaded integer =>
+        pure (undef(<<DUMMY(bswap32_proxy)>>))
+  end
+
+proc [ailname = "__builtin_bswap64"] bswap64_proxy (x_ptr: pointer): eff loaded integer :=
+  let strong x_loaded: loaded integer = load('uint64_t', x_ptr) in
+  case x_loaded of
+    | Specified (x: integer) =>
+        pcall(<builtin_bswap64>, x)
+    | _: loaded integer =>
+        pure (undef(<<DUMMY(bswap64_proxy)>>))
+  end
+
+proc [ailname = "__builtin_unreachable"] unreachable_proxy (): eff unit :=
+  pure(undef(<<DUMMY(__builtin_unreachable)>>))
+
+proc [ailname = "__builtin_unspec_byte_to_zero"] unspec_to_zero_proxy (ptr: pointer): eff loaded integer :=
+  let strong x: loaded integer = load('unsigned ichar', ptr) in
+  case x of
+    | Specified (_: integer) =>
+        pure(x)
+    | _: loaded integer =>
+        pure(Specified(0))
+  end

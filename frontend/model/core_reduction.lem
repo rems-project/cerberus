@@ -999,7 +999,7 @@ let process_impl_proc full_eval_pexpr wrap_proc wrap_expr th_st iCst pes =
           | _ ->
               error ("Core_reduction, exit given more than one argument ==> " ^ stringFromList Pp.stringFromCore_pexpr pes)
         end
-    (* NOTE: some GCC builtins needed by Hafnium *)
+    (* NOTE: some GCC builtins *)
     | Implementation.BuiltinFunction "ctz" ->
         Step_with_runstate2 (RSK_tau "Eproc __builtin_ctz" Core_run.TSK_Misc) begin
           match pes with
@@ -1013,6 +1013,52 @@ let process_impl_proc full_eval_pexpr wrap_proc wrap_expr th_st iCst pes =
                 end
             | _ ->
                 error "TODO: ctz wrong number of args"
+          end
+        end
+    (* TODO: factorise ... *)
+    | Implementation.BuiltinFunction "bswap16" ->
+        Step_with_runstate2 (RSK_tau "Eproc __builtin_bswap16" Core_run.TSK_Misc) begin
+          match pes with
+            | [pe] ->
+                full_eval_pexpr pe >>= function
+                  | Vobject (OVinteger n_ival) ->
+                      let n' = Builtins.gcc_builtin_bswap16 (forceIntegerFromIntegerValue "bswap16" n_ival) in
+                      E.return (wrap_expr (Caux.mk_pure_e (Caux.mk_specified_pe (Caux.mk_integer_pe n'))))
+                  | _ ->
+                      error "TODO: bswap16 illtyped"
+                end
+            | _ ->
+                error "TODO: bswap16 wrong number of args"
+          end
+        end
+    | Implementation.BuiltinFunction "bswap32" ->
+        Step_with_runstate2 (RSK_tau "Eproc __builtin_bswap32" Core_run.TSK_Misc) begin
+          match pes with
+            | [pe] ->
+                full_eval_pexpr pe >>= function
+                  | Vobject (OVinteger n_ival) ->
+                      let n' = Builtins.gcc_builtin_bswap32 (forceIntegerFromIntegerValue "bswap32" n_ival) in
+                      E.return (wrap_expr (Caux.mk_pure_e (Caux.mk_specified_pe (Caux.mk_integer_pe n'))))
+                  | _ ->
+                      error "TODO: bswap32 illtyped"
+                end
+            | _ ->
+                error "TODO: bswap32 wrong number of args"
+          end
+        end
+    | Implementation.BuiltinFunction "bswap64" ->
+        Step_with_runstate2 (RSK_tau "Eproc __builtin_bswap64" Core_run.TSK_Misc) begin
+          match pes with
+            | [pe] ->
+                full_eval_pexpr pe >>= function
+                  | Vobject (OVinteger n_ival) ->
+                      let n' = Builtins.gcc_builtin_bswap64 (forceIntegerFromIntegerValue "bswap64" n_ival) in
+                      E.return (wrap_expr (Caux.mk_pure_e (Caux.mk_specified_pe (Caux.mk_integer_pe n'))))
+                  | _ ->
+                      error "TODO: bswap64 illtyped"
+                end
+            | _ ->
+                error "TODO: bswap64 wrong number of args"
           end
         end
     | _ ->

@@ -279,6 +279,7 @@ static int __towrite(FILE *f)
   return 0;
 }
 
+unsigned char __builtin_unspec_byte_to_zero(unsigned char);
 static size_t __fwritex(const unsigned char *restrict s, size_t l, FILE *restrict f)
 {
   size_t i=0;
@@ -289,7 +290,7 @@ static size_t __fwritex(const unsigned char *restrict s, size_t l, FILE *restric
 
   if (f->lbf >= 0) {
     /* Match /^(.*\n|)/ */
-    for (i=l; i && s[i-1] != '\n'; i--);
+    for (i=l; i && __builtin_unspec_byte_to_zero(s[i-1]) != '\n'; i--);
     if (i) {
       size_t n = f->write(f, s, i);
       if (n < i) return n;
