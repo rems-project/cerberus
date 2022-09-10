@@ -174,7 +174,7 @@ let cerberus debug_level progress core_obj
         let is_charon =
           match batch_mode with
             | `CharonBatch -> true
-            | `Batch -> false in
+            | `Batch | `JsonBatch -> false in
         let exit =
           let open Driver_ocaml in
           match execs with
