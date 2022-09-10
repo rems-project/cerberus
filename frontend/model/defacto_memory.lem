@@ -2569,7 +2569,7 @@ let impl_store loc lvalue_ty is_locking ptrval mval =
 
 
 
-let impl_memcpy ptr_val1 ptr_val2 size_ival =
+let impl_memcpy _ ptr_val1 ptr_val2 size_ival =
   error "WIP: Symbolic memcpy"
 
 (* BEGIN MEMCMP ================================================================================= *)
