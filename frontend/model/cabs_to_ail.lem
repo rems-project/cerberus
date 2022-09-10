@@ -3806,7 +3806,7 @@ let desugar_declaration_base attrs specifs idecltors =
                                 E.return (ty', (sym, d_e) :: acc)
                           end
                       | Nothing ->
-                          if dur = Static then
+                          if dur = Static && not (List.elem SC_extern specifs.storage_classes) then
                             E.get_tag_definitions >>= fun tagDefs ->
                             E.register_global_object_definition sym (E.Definition (mk_zeroInit tagDefs cty)) >>= fun () ->
                             E.return (cty, acc)
