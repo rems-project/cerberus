@@ -1206,15 +1206,19 @@ module Concrete : Memory = struct
           update (fun st ->
             { st with allocations= IntMap.add alloc_id alloc st.allocations;
                       bytemap=
-                        (* if is_zero_init then
+                        if Switches.(has_switch SW_zero_initialised) then
                           let bs = List.init (Z.to_int size) (fun i ->
                             (Nat_big_num.add addr (Nat_big_num.of_int i), AbsByte.v Prov_none (Some '\000'))
                           ) in
                           List.fold_left (fun acc (addr, b) ->
                             IntMap.add addr b acc
                           ) st.bytemap bs
-                        else *)
-                          st.bytemap }
+                        else
+                          let (_, pre_bs) = repr st.funptrmap (MVunspecified ty) in
+                          let bs = List.mapi (fun i b -> (Nat_big_num.add addr (Nat_big_num.of_int i), b)) pre_bs in              
+                          List.fold_left (fun acc (addr, b) ->
+                            IntMap.add addr b acc
+                          ) st.bytemap bs; }
           )
       | Some mval ->
           let readonly_status =

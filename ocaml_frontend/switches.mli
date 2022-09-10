@@ -27,6 +27,9 @@ type cerb_switch =
     (* allow (with %p) formatted printing of non-void pointers (relaxing ISO) *)
   | SW_permissive_printf
 
+    (* make it so every object allocation is zero initialised *)
+  | SW_zero_initialised
+
 val get_switches: unit -> cerb_switch list
 val has_switch: cerb_switch -> bool
 val has_switch_pred: (cerb_switch -> bool) -> cerb_switch option

@@ -27,6 +27,9 @@ type cerb_switch =
     (* allow (with %p) formatted printing of non-void pointers (relaxing ISO) *)
   | SW_permissive_printf
 
+  (* make it so every object allocation is zero initialised *)
+  | SW_zero_initialised
+
 let internal_ref =
   ref []
 
@@ -67,7 +70,9 @@ let set strs =
     | "inner_arg_temps" ->
         Some SW_inner_arg_temps
     | "permissive_printf" ->
-       Some SW_permissive_printf
+        Some SW_permissive_printf
+    | "zero_initialised" ->
+        Some SW_zero_initialised
     | _ ->
         None in
   List.iter (fun str ->
