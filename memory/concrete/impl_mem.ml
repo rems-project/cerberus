@@ -2425,8 +2425,7 @@ let combine_prov prov1 prov2 =
   let pp_pretty_mem_value _ = pp_mem_value
   
   (* TODO check *)
-  let memcpy ptrval1 ptrval2 (IV (_, size_n)) =
-    let loc = Location_ocaml.other "memcpy" in
+  let memcpy loc ptrval1 ptrval2 (IV (_, size_n)) =
     (* TODO: if ptrval1 and ptrval2 overlap ==> UB *)
     (* TODO: copy ptrval2 into ptrval1 *)
     let rec aux i =
@@ -2459,7 +2458,7 @@ let combine_prov prov1 prov2 =
                    if equal acc zero then of_int (Nat_big_num.compare n1 n2) else acc
                  ) zero (List.combine bytes1 bytes2)))
 
-  let realloc tid align ptr size : pointer_value memM =
+  let realloc loc tid align ptr size : pointer_value memM =
     match ptr with
     | PV (Prov_none, PVnull _) ->
       allocate_region tid (Symbol.PrefOther "realloc") align size
@@ -2476,7 +2475,7 @@ let combine_prov prov1 prov2 =
               let size_to_copy =
                 let IV (_, size_n) = size in
                 IV (Prov_none, Nat_big_num.min alloc.size size_n) in
-              memcpy new_ptr ptr size_to_copy >>= fun _ ->
+              memcpy loc new_ptr ptr size_to_copy >>= fun _ ->
               kill (Location_ocaml.other "realloc") true ptr >>= fun () ->
               return new_ptr
             else

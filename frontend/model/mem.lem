@@ -139,9 +139,9 @@ val eff_array_shift_ptrval: Loc.t -> pointer_value -> Ctype.ctype -> integer_val
 declare ocaml target_rep function eff_array_shift_ptrval = `Impl_mem.eff_array_shift_ptrval`
 
 
-val memcpy: pointer_value -> pointer_value -> integer_value -> memM pointer_value
+val memcpy: Loc.t -> pointer_value -> pointer_value -> integer_value -> memM pointer_value
 val memcmp: pointer_value -> pointer_value -> integer_value -> memM integer_value
-val realloc: Mem_common.thread_id -> integer_value -> pointer_value -> integer_value -> memM pointer_value
+val realloc: Loc.t -> Mem_common.thread_id -> integer_value -> pointer_value -> integer_value -> memM pointer_value
 
 declare ocaml target_rep function memcpy = `Impl_mem.memcpy`
 declare ocaml target_rep function memcmp = `Impl_mem.memcmp`

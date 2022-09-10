@@ -798,7 +798,7 @@ let perform_memop_request2 loc memop cvals tid mk_th_st =
     
     | (Mem_common.Memcpy, [Core.Vobject (Core.OVpointer ptr_val1); Core.Vobject (Core.OVpointer ptr_val2);
                           Core.Vobject (Core.OVinteger size_ival)]) ->
-        liftMem (Mem.memcpy ptr_val1 ptr_val2 size_ival) >>= fun res ->
+        liftMem (Mem.memcpy loc ptr_val1 ptr_val2 size_ival) >>= fun res ->
         ND.return (mk_th_st (Core.Vobject (Core.OVpointer res)))
     
     | (Mem_common.Memcmp, [Core.Vobject (Core.OVpointer ptr_val1); Core.Vobject (Core.OVpointer ptr_val2);
@@ -812,7 +812,7 @@ let perform_memop_request2 loc memop cvals tid mk_th_st =
     
     | (Mem_common.Realloc, [Core.Vobject (Core.OVinteger align_ival); Core.Vobject (Core.OVpointer old_ptr);
                           Core.Vobject (Core.OVinteger size_ival)]) ->
-        liftMem (Mem.realloc tid align_ival old_ptr size_ival) >>= fun res ->
+        liftMem (Mem.realloc loc tid align_ival old_ptr size_ival) >>= fun res ->
         ND.return (mk_th_st (Core.Vobject (Core.OVpointer res)))
 
     | (Mem_common.PtrArrayShift, [Core.Vobject (Core.OVpointer ptrval); Core.Vctype ty; Core.Vobject (Core.OVinteger n_ival)]) ->

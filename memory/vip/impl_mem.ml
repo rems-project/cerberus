@@ -859,9 +859,8 @@ let eff_array_shift_ptrval loc ptrval ty ival : pointer_value memM =
         fail (MerrVIP (VIP_array_shift VIP_funptr))
       
 
-let memcpy ptrval1 ptrval2 sz_ival : pointer_value memM =
+let memcpy loc ptrval1 ptrval2 sz_ival : pointer_value memM =
   let sz = ival_to_int sz_ival in
-  let loc = Location_ocaml.other "memcpy" in
   (* TODO: if ptrval1 and ptrval2 overlap ==> UB *)
   (* TODO: copy ptrval2 into ptrval1 *)
   (* NOTE: we are using the pure array_shift because if we go out of bound there is a UB right away *)
@@ -896,7 +895,7 @@ let memcmp ptrval1 ptrval2 sz_ival : integer_value memM =
         if equal acc zero then of_int (N.compare n1 n2) else acc
       ) zero (List.combine bytes1 bytes2)))
 
-let realloc tid al_ival ptrval size_ival : pointer_value memM =
+let realloc _ tid al_ival ptrval size_ival : pointer_value memM =
   not_implemented "VIP.realloc"
 
 
