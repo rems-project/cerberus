@@ -1147,7 +1147,12 @@ let step_ctx mem_st file core_extern current_tid (parent_tid_opt, th_st) =
         let process_action is_excluded wrap_act z =
           match step_action e_annots full_eval_pexpr' is_excluded z with
             | ACTION_REQUEST debug_str loc _request ->
-                Step_action_request2 debug_str loc current_tid (is_unseq_with_ccall ctx) begin
+                let loc' =
+                  if Loc.is_library_location loc then
+                    th_st.current_loc
+                  else
+                    loc in
+                Step_action_request2 debug_str loc' current_tid (is_unseq_with_ccall ctx) begin
                   E.return match _request with
                     | CreateRequest2 pref ival ty req_addr_opt mval_opt mk_expr' ->
                         CreateRequest2 pref ival ty req_addr_opt mval_opt (fun aid ptrval ->
