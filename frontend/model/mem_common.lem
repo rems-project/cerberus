@@ -201,7 +201,7 @@ let undefinedFromMem_error = function
   | MerrArrayShift ->
       Just [Undefined.UB046_array_pointer_outside]
   | MerrFreeNullPtr ->
-      Nothing
+      Just [Undefined.UB_CERB005_free_nullptr]
 
   
   (* TODO do better *)

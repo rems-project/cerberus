@@ -705,6 +705,8 @@ type undefined_behaviour =
   (* undefined behaviour resulting from applying an operator to an unspecified value *)
   | UB_CERB004_unspecified of unspecified_ub_context
 
+  (* free() is called on a NULL pointer (used in switch stricter than ISO) *)
+  | UB_CERB005_free_nullptr
 
 val std_of_undefined_behaviour: undefined_behaviour -> maybe string
 let std_of_undefined_behaviour = function
@@ -1017,6 +1019,7 @@ let ub_str_bimap =
     ; (UB_CERB004_unspecified UB_unspec_rvalue_memberof, "UB_CERB004_unspecified__rvalue_memberof")
     ; (UB_CERB004_unspecified UB_unspec_memberofptr, "UB_CERB004_unspecified__memberofptr")
     ; (UB_CERB004_unspecified UB_unspec_do, "UB_CERB004_unspecified__do")
+    ; (UB_CERB005_free_nullptr, "UB_CERB005_free_nullptr")
     ]
 
 
@@ -1130,6 +1133,8 @@ let ub_short_string = function
         | UB_unspec_do ->
             "the controlling expression of a do statement evaluated to an unspecified value"
       end
+  | UB_CERB005_free_nullptr ->
+      "calling free() on a NULL pointer"
   | ub ->
       "(UB missing short message): " ^ show ub
 end
