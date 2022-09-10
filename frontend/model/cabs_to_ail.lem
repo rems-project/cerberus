@@ -694,9 +694,15 @@ except when they are contained within a subexpression that is not evaluated.115)
           E.return false
     
     
-    | AilEcond _ _ _ ->
-        (* TODO: location *)
-        E.fail loc (Errors.Desugar_NotYetSupported "conditional operator in `integer constant expressions'")
+    | AilEcond e1 e2 e3 ->
+        is_integer_constant_expression e1 >>= fun b1 ->
+        if b1 then
+          is_integer_constant_expression e2 >>= fun b2 ->
+          is_integer_constant_expression e3 >>= fun b3 ->
+          (* TODO: this is too strict, it is allowed for the dead branch to not be a constant *)
+          E.return (b2 && b3)
+        else
+          E.return false
     
     
     | AilEmemberof _ _ ->
