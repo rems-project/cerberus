@@ -132,7 +132,7 @@ let get_thread_states =
 
 val     print_eval_conv_aux: driver_state -> Core_run.thread_state -> Core.pexpr -> Mem.memM (either Errors.error (Undefined.t Core.value))
 let rec print_eval_conv_aux dr_st th_st pe =
-  match Core_eval.eval_pexpr_aux2 (Loc.other "Driver.print_eval_conv_aux") dr_st.core_extern th_st.Core_run.env (Just dr_st.layout_state) dr_st.core_file pe with
+  match Core_eval.eval_pexpr_aux2 (Loc.other "Driver.print_eval_conv_aux") Nothing dr_st.core_extern th_st.Core_run.env (Just dr_st.layout_state) dr_st.core_file pe with
   | Exception.Result (Undefined.Defined (Right cval)) ->
       ND.return (Right (Undefined.Defined cval))
   | Exception.Result (Undefined.Defined (Left (Core.Pexpr _ () (Core.PEconstrained xs)))) ->
@@ -1408,7 +1408,7 @@ let rec driver2 with_concurrency =
 val     hack: map Symbol.sym Symbol.sym -> list (map Symbol.sym Core.value) -> Mem.mem_state -> Core.file Core_run.core_run_annotation -> map Symbol.sym Core.object_value -> Core.pexpr -> Core.value
 let rec hack core_extern env mem_st core_file concur_sym_map pexpr =
   let () = Debug.print_debug 1 [] (fun () -> "ENTERING Driver.hack") in
-  match Core_eval.step_eval_pexpr 0 (Loc.other "Driver.hack") core_extern env (Just mem_st) core_file false pexpr with
+  match Core_eval.step_eval_pexpr 0 (Loc.other "Driver.hack") Nothing core_extern env (Just mem_st) core_file false pexpr with
     | Exception.Result (Undefined.Defined pexpr') ->
         match Core_aux.valueFromPexpr pexpr' with
           | Just cval ->
@@ -1740,7 +1740,7 @@ let drive (with_concurrency: bool) file (arg_strs: list string) =
                 Core_run.stack= Core_run.Stack_empty (*Core_run.push_empty_continuation (Just main_sym) Core_run.empty_stack*);
                 Core_run.errno= errno_ptr_val;
                 Core_run.current_loc= Loc.other "Driver.drive";
-                Core_run.exec_loc= Core_run.ELoc_normal [main_sym];
+                Core_run.exec_loc= Core_run.ELoc_normal [(main_sym, Loc.other "Driver.drive")];
                 Core_run.env = th_st.Core_run.env;
                 Core_run.current_proc_opt= Just main_sym;
               |>

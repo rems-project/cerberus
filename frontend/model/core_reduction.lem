@@ -33,7 +33,17 @@ module E = struct
   )
   
   let eval_pexpr2 th_st core_extern mem_st file pe =
-    SEU.runEU (Core_eval.eval_pexpr_aux2 th_st.current_loc core_extern th_st.env (Just mem_st) file pe)
+    let current_call_loc_opt =
+      match th_st.exec_loc with
+        | ELoc_globals ->
+            Nothing
+        | ELoc_normal [] ->
+            Nothing
+        | ELoc_normal ((_, loc) :: _) ->
+            Just loc
+      end
+    in
+    SEU.runEU (Core_eval.eval_pexpr_aux2 th_st.current_loc current_call_loc_opt core_extern th_st.env (Just mem_st) file pe)
 end
 
 let inline (>>=) = SEU.bind
@@ -1335,7 +1345,7 @@ let step_ctx mem_st file core_extern current_tid (parent_tid_opt, th_st) =
                         E.return <| th_st with
                           arena= expr;
                           stack= Stack_cons2 th_st.current_proc_opt ctx th_st.stack;
-                          exec_loc= push_exec_loc psym th_st.exec_loc;
+                          exec_loc= push_exec_loc psym th_st.current_loc th_st.exec_loc;
                           env= proc_env :: th_st.env;
                           current_proc_opt= Just psym;
                         |>
@@ -1366,7 +1376,7 @@ let step_ctx mem_st file core_extern current_tid (parent_tid_opt, th_st) =
                  E.return <| th_st with
                    arena= expr;
                    stack= Stack_cons2 th_st.current_proc_opt ctx th_st.stack;
-                   exec_loc= push_exec_loc psym th_st.exec_loc;
+                   exec_loc= push_exec_loc psym th_st.current_loc th_st.exec_loc;
                    env= proc_env :: th_st.env;
                    current_proc_opt= Just psym;
                  |>

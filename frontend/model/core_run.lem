@@ -134,35 +134,46 @@ module E = struct
   let core_run_return =
     SEU.return
   let inline return = core_run_return
+  (* NOTE: the inline is important because Lem is buggy *)
+  let inline mk_current_call_loc_opt th_st =
+    match th_st.exec_loc with
+      | ELoc_globals ->
+          Nothing
+      | ELoc_normal [] ->
+          Nothing
+      | ELoc_normal ((_, loc) :: _) ->
+          Just loc
+    end
+
   let step_eval_pexprs th_st core_extern mem_st file pes =
     let () = Debug.print_debug 4 [] (fun () ->
       "CALLING Core_run.step_eval_pexprs (Core_eval.step_eval_pexpr, hasConstrained= false)"
     ) in
-    SEU.runEU (EU.mapM (Core_eval.step_eval_pexpr 0 th_st.current_loc core_extern th_st.env (Just mem_st) file false) pes)
+    SEU.runEU (EU.mapM (Core_eval.step_eval_pexpr 0 th_st.current_loc (mk_current_call_loc_opt th_st) core_extern th_st.env (Just mem_st) file false) pes)
 
   let core_run_step_eval_pexpr th_st core_extern mem_st file pe =
     let () = Debug.print_debug 4 [] (fun () ->
       "CALLING Core_run.step_eval_pexpr (Core_eval.step_eval_pexpr, hasConstrained= false)"
     ) in
-    SEU.runEU (Core_eval.step_eval_pexpr 0 th_st.current_loc core_extern th_st.env (Just mem_st) file false pe)
+    SEU.runEU (Core_eval.step_eval_pexpr 0 th_st.current_loc (mk_current_call_loc_opt th_st) core_extern th_st.env (Just mem_st) file false pe)
   let inline step_eval_pexpr = core_run_step_eval_pexpr
   
   let core_run_eval_pexpr th_st core_extern mem_st file pe =
     let () = Debug.print_debug 4 [] (fun () ->
       "CALLING Core_run.eval_pexpr (Core_eval.eval_pexpr_aux_broken)"
     ) in
-    SEU.runEU (Core_eval.eval_pexpr_aux_broken th_st.current_loc core_extern th_st.env (Just mem_st) file pe)
+    SEU.runEU (Core_eval.eval_pexpr_aux_broken th_st.current_loc (mk_current_call_loc_opt th_st) core_extern th_st.env (Just mem_st) file pe)
   let inline eval_pexpr = core_run_eval_pexpr
   
   let eval_pexpr2 th_st core_extern mem_st file pe =
     let () = Debug.print_debug 4 [] (fun () -> "CALLING Core_run.eval_pexpr2" ) in
-    SEU.runEU (Core_eval.eval_pexpr_aux2 th_st.current_loc core_extern th_st.env (Just mem_st) file pe)
+    SEU.runEU (Core_eval.eval_pexpr_aux2 th_st.current_loc (mk_current_call_loc_opt th_st) core_extern th_st.env (Just mem_st) file pe)
   
   let wrapped_eval_pexpr2 th_st core_extern mem_st file pe =
     let () = Debug.print_debug 4 [] (fun () -> "CALLING Core_run.wrapped_eval_pexpr2" ) in
     (* TODO: it would be better to just call eval_pexpr2, but
        Lem generates buggy OCaml ... *)
-    SEU.bind (SEU.runEU (Core_eval.eval_pexpr_aux2 th_st.current_loc core_extern th_st.env (Just mem_st) file pe)) function
+    SEU.bind (SEU.runEU (Core_eval.eval_pexpr_aux2 th_st.current_loc (mk_current_call_loc_opt th_st) core_extern th_st.env (Just mem_st) file pe)) function
       | Left pe' ->
           SEU.return pe'
       | Right cval ->
@@ -947,7 +958,7 @@ BEFORE EVAL_PEXPR2
                         E.return <| th_st with
                           arena= a_expr;
                           stack= push_empty_continuation (Just psym) sk;
-                          exec_loc= push_exec_loc psym th_st.exec_loc;
+                          exec_loc= push_exec_loc psym th_st.current_loc th_st.exec_loc;
                           env= proc_env :: th_st.env
                         |>
                       )
@@ -1017,7 +1028,7 @@ BEFORE EVAL_PEXPR2
                       E.return <| th_st with
                         arena= a_expr;
                         stack= push_empty_continuation (Just psym) sk;
-                        exec_loc= push_exec_loc psym th_st.exec_loc;
+                        exec_loc= push_exec_loc psym th_st.current_loc th_st.exec_loc;
                         env= proc_env :: th_st.env
                       |>
                     )

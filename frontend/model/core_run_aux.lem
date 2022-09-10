@@ -10,7 +10,7 @@ import Cmm_csem Mem_common Core_aux
    being executed *)
 type exec_location =
   | ELoc_globals
-  | ELoc_normal of list Symbol.sym
+  | ELoc_normal of list (Symbol.sym * Loc.t)
 
 
 (* C11 concurrency partial version of the pre-execution relations. These are
@@ -247,11 +247,11 @@ type core_runM 'a =
   State_exception_undefined.stExceptUndefM 'a core_run_state core_run_cause
 
 
-let push_exec_loc sym = function
+let push_exec_loc sym loc = function
   | ELoc_globals ->
-      ELoc_normal [sym]
-  | ELoc_normal syms ->
-      ELoc_normal (sym :: syms)
+      ELoc_normal [(sym, loc)]
+  | ELoc_normal xs ->
+      ELoc_normal ((sym, loc) :: xs)
 end
 
 val initial_io_state: io_state
