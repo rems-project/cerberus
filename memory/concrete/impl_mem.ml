@@ -1204,7 +1204,17 @@ module Concrete : Memory = struct
       | None ->
           let alloc = {prefix= pref; base= addr; size= size; ty= Some ty; is_readonly= IsWritable; taint= `Unexposed} in
           update (fun st ->
-            { st with allocations= IntMap.add alloc_id alloc st.allocations; }
+            { st with allocations= IntMap.add alloc_id alloc st.allocations;
+                      bytemap=
+                        (* if is_zero_init then
+                          let bs = List.init (Z.to_int size) (fun i ->
+                            (Nat_big_num.add addr (Nat_big_num.of_int i), AbsByte.v Prov_none (Some '\000'))
+                          ) in
+                          List.fold_left (fun acc (addr, b) ->
+                            IntMap.add addr b acc
+                          ) st.bytemap bs
+                        else *)
+                          st.bytemap }
           )
       | Some mval ->
           let readonly_status =

@@ -44,6 +44,7 @@ module type Memory = sig
   val allocate_object:
        Mem_common.thread_id      (* the allocating thread *)
     -> Symbol.prefix  (* symbols coming from the Core/C program, for debugging purpose *)
+(*    -> bool           (* whether to zero init the allocated bytes *) *)
     -> integer_value  (* alignment constraint *)
     -> Ctype.ctype    (* type of the allocation *)
     -> Z.t option     (* potential requested address (see Cerb_attributes: cerb::with_address()) *)
