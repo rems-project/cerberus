@@ -184,6 +184,7 @@ citests=(
   0315-duplicate_member.error.c
   0316-declaration_struct_pointer.error.c
   0317-compound-literal-lifetime.c
+  0318-compound-interal-in_global.c
 )
 
 # TESTS THAT ARE KNOW TO FAIL (for example .error test for which we need to improve the message)

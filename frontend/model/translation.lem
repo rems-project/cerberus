@@ -3682,10 +3682,19 @@ let translate_program stdlib (startup_sym_opt, sigm) =
                       Caux.mk_pure_e (Caux.mk_specified_pe (Caux.mk_nullptr_pe ty))
                     )
                   else
-                    wrapped_translate_expression (ECTX_glob sym sym_global) ((Nothing: maybe Symbol.sym), (Nothing: maybe Symbol.sym)) stdlib core_tagDefs expr >>= fun core ->
+                    (* NOTE: we use `with_block_objects`, for the compound_literal tracking *)
+                    E.with_block_objects [] begin
+                      wrapped_translate_expression (ECTX_glob sym sym_global) ((Nothing: maybe Symbol.sym), (Nothing: maybe Symbol.sym)) stdlib core_tagDefs expr
+                    end >>= fun (compound_lits, core) ->
+                    let lit_pats_core_creates : list (C.pattern * C.expr unit) =
+                      List.map (fun (loc, prefix, sym, is_const, ty) ->
+                        let core_ty = Caux.mk_ail_ctype_pe ty in
+                        ( Caux.mk_sym_pat sym (C.BTy_object C.OTy_pointer)
+                        , Caux.pcreate loc (Caux.mk_alignof_pe core_ty) core_ty prefix )
+                      ) compound_lits in
                     E.return (
                       C.BTy_loaded (force_core_object_type_of_ctype (ctype_of expr)),
-                      core
+                      Caux.mk_sseqs lit_pats_core_creates core
                     )
                 end >>= fun (e_bTy, core_e) ->
                 let e_sym = Symbol.fresh () in
