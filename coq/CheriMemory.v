@@ -919,5 +919,24 @@ Module CheriMemory
                 end
     end.
 
+  Definition is_pointer_algined (p : Z) : bool :=
+    let a := IMP.get.(alignof_pointer) in
+    let m := Z.rem p a in
+    Z.eqb m 0.
+
+  (* Convinience function to be used in breaking let to avoid match *)
+  Definition break_PV (p:pointer_value) :=
+    match p with
+    | PV prov ptrval => (prov,ptrval)
+    end.
+
+  (*
+  Definition load
+    (loc: location_ocaml) (ty: Ctype.ctype) (p:pointer_value): memM (footprint * mem_value) :=
+    let '(prov, ptrval_) := break_PV p in
+    _
+  .
+   *)
+
 
 End CheriMemory.
