@@ -290,7 +290,7 @@ Module CheriMemory
   Definition merr2memM {A: Type} (v:A) (e:merr): (memM A)
     := match e with
        | OK => ret v
-       | FAIL me => raise (Other me)
+       | FAIL me => fail me
        end.
 
   Inductive footprint_ind :=
@@ -740,10 +740,9 @@ Module CheriMemory
          match ZMap.find alloc_id st.(allocations) with
          | Some v => ret v
          | None =>
-             raise (Other
-                      (MerrOutsideLifetime
+             fail (MerrOutsideLifetime
                          (String.append "CHERI.get_allocation, alloc_id="
-                            (of_Z alloc_id))))
+                            (of_Z alloc_id)))
          end
       ).
 
@@ -802,18 +801,16 @@ Module CheriMemory
     :=
     match function_parameter with
     | PV _ (PVfunction _) =>
-        raise (Other (MerrOther
-                        "attempted to kill with a function pointer"))
+        fail (MerrOther "attempted to kill with a function pointer")
     | PV Prov_none (PVconcrete _) =>
-        raise (Other (MerrOther
-                        "attempted to kill with a pointer lacking a provenance"))
+        fail (MerrOther "attempted to kill with a pointer lacking a provenance")
     | PV Prov_device (PVconcrete _) => ret tt
     | PV (Prov_symbolic iota) (PVconcrete addr) =>
         if andb
              (cap_is_null addr)
              (Switches.has_switch Switches.SW_forbid_nullptr_free)
         then
-          raise (Other (MerrFreeNullPtr loc))
+          fail (MerrFreeNullPtr loc)
         else
           let precondition (z : storage_instance_id) :=
             is_dead z >>=
@@ -839,7 +836,7 @@ Module CheriMemory
              (is_dynamic (C.cap_get_value addr)) >>=
                (fun (b : bool) =>
                   if b then ret tt
-                  else raise (Other (MerrUndefinedFree loc  Free_static_allocation)))
+                  else fail (MerrUndefinedFree loc Free_static_allocation))
            else
              ret tt) ;;
           resolve_iota precondition iota >>=
@@ -870,14 +867,14 @@ Module CheriMemory
               (cap_is_null addr)
               (Switches.has_switch Switches.SW_forbid_nullptr_free)
          then
-           raise (Other (MerrFreeNullPtr loc))
+           fail (MerrFreeNullPtr loc)
          else
            if is_dyn then
              (* this kill is dynamic one (i.e. free() or friends) *)
              is_dynamic (C.cap_get_value addr) >>=
                fun x => match x with
                      | false =>
-                         raise (Other (MerrUndefinedFree loc (Free_static_allocation)))
+                         fail (MerrUndefinedFree loc (Free_static_allocation))
                      | true => ret tt
                      end
            else
@@ -887,7 +884,7 @@ Module CheriMemory
           fun x => match x with
                 | true =>
                     if is_dyn then
-                      raise (Other (MerrUndefinedFree loc Free_dead_allocation))
+                      fail (MerrUndefinedFree loc Free_dead_allocation)
                     else
                       raise (InternalErr "Concrete: FREE was called on a dead allocation")
                 | false =>
@@ -915,7 +912,7 @@ Module CheriMemory
                           else
                             ret tt
                         else
-                          raise (Other (MerrUndefinedFree loc Free_out_of_bound))
+                          fail (MerrUndefinedFree loc Free_out_of_bound)
                 end
     end.
 
