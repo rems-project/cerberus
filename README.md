@@ -12,7 +12,7 @@ See <https://www.cl.cam.ac.uk/~pes20/cerberus/>.
 Build instructions for the CLI
 ---
 
-To build Cerberus, you need opam (>= 2.0.0, see [here](https://opam.ocaml.org/doc/Install.html) to install) and OCaml (>= 4.07).
+To build Cerberus, you need opam (>= 2.0.0, see [here](https://opam.ocaml.org/doc/Install.html) to install) and OCaml (>= 4.12.0).
 
 First install the dependencies (including `lem` and `menhir`) using opam:
 
@@ -78,11 +78,10 @@ Building Cerberus-BMC
 
 Install the common dependencies and the following extra ones:
 
-* z3        (4.8.6)
-* angstrom  (4.06.0)
+* angstrom  (0.15.0)
 
 ```bash
-$ opam install z3 angstrom
+$ opam install angstrom
 ```
 
 Then run:
@@ -104,19 +103,14 @@ Building the web server
 
 Install the common dependencies and the following extra ones:
 
-* z3        (4.8.6)
-* angstrom  (4.06.0)
-* lwt       (3.3.0)
-* cohttp    (2.5.5)
-* base64    (2.2.0)
-* cohttp-lwt-unix (1.0.3)
-* ezgzip    (0.2.0)
+* lwt
+* fpath           (0.7.3)
+* ezgzip          (0.2.3)
+* cohttp-lwt-unix (5.0.0)
 
-
-presuming z3 and angstrom are already installed:
 
 ```bash
-$ opam install lwt cohttp base64 cohttp-lwt-unix ezgzip
+$ opam install lwt fpath ezgzip cohttp-lwt-unix
 ```
 
 Then:
@@ -145,7 +139,7 @@ $ cerberus-server --help
 Building the abstract interpreter
 ---
 
-Install the common dependencies and the APRON library (tested with 20160125).
+Install the common dependencies and the APRON library (tested with v0.9.12).
 
 ```bash
 $ opam install apron

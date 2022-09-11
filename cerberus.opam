@@ -18,18 +18,18 @@ license: "BSD-2-Clause"
 homepage: "https://www.cl.cam.ac.uk/~pes20/cerberus/"
 bug-reports: "https://github.com/rems-project/cerberus/issues"
 depends: [
-  "dune" {>= "2.0.0"}
+  "dune" {>= "3.0.2"}
   "sha" {>= "1.12"}
   "pprint" {>= "20180528"}
   "ppx_sexp_conv" {= "v0.14.3" }
-  "sexplib" {>= "v0.13.0"}
-  "z3" {>= "4.8.9"}
+  "sexplib" {>= "v0.14.0"}
+  "z3" {>= "4.8.9-1"}
   "cmdliner" {= "1.0.4"}
-  "yojson" {>= "1.7.0"}
+  "yojson" {>= "2.0.0"}
   "apron" {>= "v0.9.12"}
   "lem" {= "2020-06-03"}
   "menhir" {<= "20211125"}
-  "result" {>= "1.4"}
+  "result" {>= "1.5"}
 ]
 build: [
   ["dune" "subst"] {pinned}
