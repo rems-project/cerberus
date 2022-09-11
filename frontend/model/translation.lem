@@ -614,13 +614,14 @@ let translate_bitwise_operator loc translate_expr usual_arithmetic_conversion st
 
 
 val translate_function_call:
-  Loc.t -> 
+  Loc.t ->
+  bool -> (* is_used *)
   (A.expression GenTypes.genTypeCategory -> E.elabM (C.expr unit)) ->
   translation_stdlib ->
   A.expression GenTypes.genTypeCategory ->
   list (A.expression GenTypes.genTypeCategory) ->
   E.elabM (C.expr unit)
-let translate_function_call loc translate_expr stdlib e es =
+let translate_function_call loc is_used translate_expr stdlib e es =
   let (expect_ret_ty, expect_params, expect_is_variadic) = match ctype_of e with
   | Ctype.Ctype _ (Ctype.Pointer _ (Ctype.Ctype _ (Ctype.Function (_, ret_ty) qs_tys is_variadic))) ->
       (ret_ty, qs_tys, is_variadic)
@@ -858,14 +859,15 @@ type expr_ctx =
   | ECTX_other
 
 val translate_expression:
+  bool -> (* whether the value of the expression is used (i.e. the expression is not directly applied to AilSexpr) *)
   expr_ctx ->
   (maybe Symbol.sym * maybe Symbol.sym) ->
   translation_stdlib ->
   Core.core_tag_definitions ->
   A.expression GenTypes.genTypeCategory ->
   E.elabM (C.expr unit)
-let rec translate_expression ctx variadic_env stdlib tagDefs a_expr =
-  let self = translate_expression ctx variadic_env stdlib tagDefs in
+let rec translate_expression is_used ctx variadic_env stdlib tagDefs a_expr =
+  let self = translate_expression true ctx variadic_env stdlib tagDefs in
   let is_lvalue = match GenTypes.genTypeCategoryOf a_expr with
     | GenTypes.GenLValueType _ _ _ ->
         true
@@ -1083,7 +1085,7 @@ else
               end
             end
           else
-            translate_function_designator (translate_expression ctx variadic_env stdlib tagDefs) stdlib e
+            translate_function_designator (translate_expression true ctx variadic_env stdlib tagDefs) stdlib e
       
       (* TODO: atomicity *)
       (* NOTE: if I read N2329 correctly, in C2X this will not be an RMW for the atomic case (but a do while
@@ -1197,7 +1199,7 @@ end
 if AilTypesAux.is_pointer_to_function (ctype_of e) then
           (* STD 6.5.3.2#4 *)
           (* maybe need the ailrvalue stuff *)
-          translate_function_designator (translate_expression ctx variadic_env stdlib tagDefs) stdlib e
+          translate_function_designator (translate_expression true ctx variadic_env stdlib tagDefs) stdlib e
           (* error "WIP: Elaboration, A.Indirection, function designator" *)
 else match AilTypesAux.referenced_type (ctype_of e) with
   | (*BISECT-IGNORE*) Nothing ->
@@ -2257,7 +2259,7 @@ end
           end
       
       | A.AilEcall e es ->
-          translate_function_call loc self stdlib e es
+          translate_function_call loc is_used self stdlib e es
       
       | A.AilEassert e ->
           (* TODO: this is temporary *)
@@ -2767,7 +2769,7 @@ else (* is_pointer *)
                 error "TODO: AilEarray_decay, rvalue"
           end
       | A.AilEfunction_decay e ->
-          translate_function_designator (translate_expression ctx variadic_env stdlib tagDefs) stdlib e
+          translate_function_designator (translate_expression true ctx variadic_env stdlib tagDefs) stdlib e
       | A.AilEgcc_statement ->
           error ((Loc.stringFromLocation loc) ^ ": GCC statements as expressions not yet supported")
     end
@@ -3102,8 +3104,8 @@ type translate_stmt_env = <|
 |>
 
 
-let wrapped_translate_expression ctx variadic_env stdlib tagDefs e =
-  translate_expression ctx variadic_env stdlib tagDefs e >>= fun core_e ->  
+let wrapped_translate_expression is_used ctx variadic_env stdlib tagDefs e =
+  translate_expression is_used ctx variadic_env stdlib tagDefs e >>= fun core_e ->  
   E.return begin
     C.Expr [Annot.Astd "§6.5#2"] (C.Ebound core_e)
   end
@@ -3118,7 +3120,7 @@ val translate_stmt:
   E.elabM (C.expr unit)
 
 let rec translate_stmt stdlib tagDefs f env (A.AnnotatedStatement loc stmt_attrs stmt) : E.elabM (C.expr unit) =
-  let translate_expression = wrapped_translate_expression ECTX_other (env.variadic_sym_opt, env.last_arg_sym_opt) stdlib tagDefs in
+  let translate_expression is_used = wrapped_translate_expression is_used ECTX_other (env.variadic_sym_opt, env.last_arg_sym_opt) stdlib tagDefs in
   let translate_cases_block case_labs default_lab =
     translate_stmt stdlib tagDefs f <| env with case_labs=   case_labs;
                                                 default_lab= default_lab |>
@@ -3134,7 +3136,7 @@ let rec translate_stmt stdlib tagDefs f env (A.AnnotatedStatement loc stmt_attrs
         (* TODO: the indirection is a temporary hack in order to
            generate well typed core. The better solution would be to have the elab of AilSblock
            not always use the unit type in the bindings of the sseq operators. *)
-        translate_expression e >>= fun core_e ->
+        translate_expression false e >>= fun core_e ->
         E.return (
           Caux.mk_sseq_e (Caux.mk_empty_pat (maybe C.BTy_unit C.BTy_loaded (Caux.core_object_type_of_ctype (ctype_of e))))
             core_e
@@ -3219,12 +3221,12 @@ let rec translate_stmt stdlib tagDefs f env (A.AnnotatedStatement loc stmt_attrs
         )
     
     | A.AilSif e s1 s2 ->
-        E.wrapped_fresh_symbol C.BTy_boolean                >>= fun (_, do_then_sym_pat, do_then_sym_pe) ->
-        E.wrapped_fresh_symbol (C.BTy_loaded C.OTy_integer) >>= fun (_, test_sym_pat, test_sym_pe)       ->
-        E.wrapped_fresh_symbol (C.BTy_object C.OTy_integer) >>= fun (_, case_sym_pat, case_sym_pe)       ->
-        translate_expression (mkTestExpression TestEq e)    >>= fun core_test                            ->
-        self s1                                             >>= fun core_s1                              ->
-        self s2                                             >>= fun core_s2                              ->
+        E.wrapped_fresh_symbol C.BTy_boolean                  >>= fun (_, do_then_sym_pat, do_then_sym_pe) ->
+        E.wrapped_fresh_symbol (C.BTy_loaded C.OTy_integer)   >>= fun (_, test_sym_pat, test_sym_pe)       ->
+        E.wrapped_fresh_symbol (C.BTy_object C.OTy_integer)   >>= fun (_, case_sym_pat, case_sym_pe)       ->
+        translate_expression true (mkTestExpression TestEq e) >>= fun core_test                            ->
+        self s1                                               >>= fun core_s1                              ->
+        self s2                                               >>= fun core_s2                              ->
         (* NOTE: here we fix the strictness of unspecified values *)
         E.return begin
           (* NOTE: the case-of producing a boolean (instead of directly doing the control
@@ -3249,12 +3251,12 @@ let rec translate_stmt stdlib tagDefs f env (A.AnnotatedStatement loc stmt_attrs
         (* NOTE: the object type is OTy_integer since we are using mkTestExpression which turns [e] into [e == 0] *)
         let sym_loop = Symbol.fresh_pretty_with_id (fun x ->  "while_" ^ show x) in
         let sym_loop_body = Symbol.fresh_pretty_with_id (fun x ->  "while_body_" ^ show x) in
-        E.wrapped_fresh_symbol C.BTy_boolean                >>= fun (_, do_loop_sym_pat, do_loop_sym_pe) ->
-        E.wrapped_fresh_symbol (C.BTy_loaded C.OTy_integer) >>= fun (_, test_sym_pat, test_sym_pe)       ->
-        E.wrapped_fresh_symbol (C.BTy_object C.OTy_integer) >>= fun (_, case_sym_pat, case_sym_pe)       ->
-        translate_expression (mkTestExpression TestEq e)    >>= fun core_test                            ->
-        self s                                              >>= fun core_s                               ->
-        E.get_visible_objects                               >>= fun visible_syms                         ->
+        E.wrapped_fresh_symbol C.BTy_boolean                  >>= fun (_, do_loop_sym_pat, do_loop_sym_pe) ->
+        E.wrapped_fresh_symbol (C.BTy_loaded C.OTy_integer)   >>= fun (_, test_sym_pat, test_sym_pe)       ->
+        E.wrapped_fresh_symbol (C.BTy_object C.OTy_integer)   >>= fun (_, case_sym_pat, case_sym_pe)       ->
+        translate_expression true (mkTestExpression TestEq e) >>= fun core_test                            ->
+        self s                                                >>= fun core_s                               ->
+        E.get_visible_objects                                 >>= fun visible_syms                         ->
         (* TODO: the types of the annotations in Esave are dummy, but this is not observable for now *)
         let core_s_loop =
           Caux.mk_sseq_e (Caux.mk_empty_pat C.BTy_unit) core_s
@@ -3292,9 +3294,9 @@ let rec translate_stmt stdlib tagDefs f env (A.AnnotatedStatement loc stmt_attrs
         let sym_loop = Symbol.fresh_pretty_with_id (fun x ->  "do_" ^ show x) in
         let sym_case = Symbol.fresh () in
         let sym_e    = Symbol.fresh () in
-        translate_expression e    >>= fun core_e       ->
-        self s                    >>= fun core_s       ->
-        E.get_visible_objects     >>= fun visible_syms ->
+        translate_expression true e >>= fun core_e       ->
+        self s                      >>= fun core_s       ->
+        E.get_visible_objects       >>= fun visible_syms ->
         
         let core_loop =
           Caux.mk_run_e sym_loop [ Caux.mk_sym_pe sym | forall (sym MEM visible_syms) | true ] in
@@ -3354,7 +3356,7 @@ let rec translate_stmt stdlib tagDefs f env (A.AnnotatedStatement loc stmt_attrs
     
     | A.AilSreturn e ->
         let oTy = force_core_object_type_of_ctype (ctype_of e) in
-        translate_expression e                    >>= fun core_e                       ->
+        translate_expression true e               >>= fun core_e                       ->
         E.wrapped_fresh_symbol (C.BTy_loaded oTy) >>= fun (e_sym, e_sym_pat, e_sym_pe) ->
         E.get_visible_objects                     >>= fun visible_syms                 ->
         E.mapM (fun sym ->
@@ -3383,7 +3385,7 @@ let rec translate_stmt stdlib tagDefs f env (A.AnnotatedStatement loc stmt_attrs
 
     | A.AilSswitch e s ->
         (* Translate the controlling expression *)
-        translate_expression e >>= fun core_e ->
+        translate_expression true e >>= fun core_e ->
         let oTy = force_core_object_type_of_ctype (ctype_of e) in
         E.wrapped_fresh_symbol (C.BTy_loaded oTy) >>= fun (e_sym, e_pat, e_sym_pe) ->
         (* Case in specified values *)
@@ -3498,7 +3500,7 @@ let rec translate_stmt stdlib tagDefs f env (A.AnnotatedStatement loc stmt_attrs
                       (Caux.mk_specified_pe (Caux.mk_nullptr_pe ref_ty)) Cmm.NA
                   )
                   else
-                    translate_expression e >>= fun core_e ->
+                    translate_expression true e >>= fun core_e ->
                     E.return (
                       Caux.mk_sseq_e e_sym_pat core_e
                         (mk_store loc (Caux.mk_ail_ctype_pe ty) (Caux.mk_sym_pe ptr_sym) e_sym_pe Cmm.NA)
@@ -3507,7 +3509,7 @@ let rec translate_stmt stdlib tagDefs f env (A.AnnotatedStatement loc stmt_attrs
                 let mk_store =
                   if qs.Ctype.const then Caux.pstore_lock else Caux.pstore in
                 let cty = Ctype.Ctype [] ty in
-                translate_expression e >>= fun core_e ->
+                translate_expression true e >>= fun core_e ->
                 if AilTypesAux.is_pointer (ctype_of e) then
                   (* we are dealing with the case {_Bool} = {pointer} *)
                   E.wrapped_fresh_symbol (C.BTy_loaded C.OTy_integer) >>= fun (_, conv_sym_pat, conv_sym_pe) ->
@@ -3550,7 +3552,7 @@ let rec translate_stmt stdlib tagDefs f env (A.AnnotatedStatement loc stmt_attrs
         E.foldlM (fun (arg_sym_pats_and_arg_core_es, arg_sym_pes) arg_e ->
           let arg_bTy = C.BTy_loaded (force_core_object_type_of_ctype (ctype_of arg_e)) in
           E.wrapped_fresh_symbol arg_bTy >>= fun (_, arg_sym_pat, arg_sym_pe) ->
-          translate_expression arg_e >>= fun arg_core_e ->
+          translate_expression true arg_e >>= fun arg_core_e ->
           E.return ((arg_sym_pat, arg_core_e) :: arg_sym_pats_and_arg_core_es, 
                     arg_sym_pe :: arg_sym_pes)
           ) ([],[]) es >>= fun (arg_sym_pats_and_arg_core_es, arg_sym_pes) ->
@@ -3567,7 +3569,7 @@ let rec translate_stmt stdlib tagDefs f env (A.AnnotatedStatement loc stmt_attrs
         E.foldlM (fun (arg_sym_pats_and_arg_core_es, arg_sym_pes) arg_e ->
           let arg_bTy = C.BTy_loaded (force_core_object_type_of_ctype (ctype_of arg_e)) in
           E.wrapped_fresh_symbol arg_bTy >>= fun (_, arg_sym_pat, arg_sym_pe) ->
-          translate_expression arg_e >>= fun arg_core_e ->
+          translate_expression true arg_e >>= fun arg_core_e ->
           E.return ((arg_sym_pat, arg_core_e) :: arg_sym_pats_and_arg_core_es, 
                     arg_sym_pe :: arg_sym_pes)
           ) ([],[]) es >>= fun (arg_sym_pats_and_arg_core_es, arg_sym_pes) ->
@@ -3584,7 +3586,7 @@ let rec translate_stmt stdlib tagDefs f env (A.AnnotatedStatement loc stmt_attrs
         E.foldlM (fun (arg_sym_pats_and_arg_core_es, arg_sym_pes) arg_e ->
           let arg_bTy = C.BTy_loaded (force_core_object_type_of_ctype (ctype_of arg_e)) in
           E.wrapped_fresh_symbol arg_bTy >>= fun (_, arg_sym_pat, arg_sym_pe) ->
-          translate_expression arg_e >>= fun arg_core_e ->
+          translate_expression true arg_e >>= fun arg_core_e ->
           E.return ((arg_sym_pat, arg_core_e) :: arg_sym_pats_and_arg_core_es, 
                     arg_sym_pe :: arg_sym_pes)
           ) ([],[]) es >>= fun (arg_sym_pats_and_arg_core_es, arg_sym_pes) ->
@@ -3601,7 +3603,7 @@ let rec translate_stmt stdlib tagDefs f env (A.AnnotatedStatement loc stmt_attrs
         E.foldlM (fun (arg_sym_pats_and_arg_core_es, arg_sym_pes) arg_e ->
           let arg_bTy = C.BTy_loaded (force_core_object_type_of_ctype (ctype_of arg_e)) in
           E.wrapped_fresh_symbol arg_bTy >>= fun (_, arg_sym_pat, arg_sym_pe) ->
-          translate_expression arg_e >>= fun arg_core_e ->
+          translate_expression true arg_e >>= fun arg_core_e ->
           E.return ((arg_sym_pat, arg_core_e) :: arg_sym_pats_and_arg_core_es, 
                     arg_sym_pe :: arg_sym_pes)
           ) ([],[]) es >>= fun (arg_sym_pats_and_arg_core_es, arg_sym_pes) ->
@@ -3617,7 +3619,7 @@ let rec translate_stmt stdlib tagDefs f env (A.AnnotatedStatement loc stmt_attrs
        (* copying and adapting code from that for AilEcall *)
        let arg_bTy = C.BTy_loaded (force_core_object_type_of_ctype (ctype_of arg_e)) in
        E.wrapped_fresh_symbol arg_bTy >>= fun (_, arg_sym_pat, arg_sym_pe) ->
-       translate_expression arg_e >>= fun arg_core_e ->
+       translate_expression true arg_e >>= fun arg_core_e ->
        let e = 
          Caux.mk_sseq_e arg_sym_pat arg_core_e 
            (C.Expr [Annot.Aloc loc] (C.Einstantiate id arg_sym_pe))
@@ -3684,7 +3686,7 @@ let translate_program stdlib (startup_sym_opt, sigm) =
                   else
                     (* NOTE: we use `with_block_objects`, for the compound_literal tracking *)
                     E.with_block_objects [] begin
-                      wrapped_translate_expression (ECTX_glob sym sym_global) ((Nothing: maybe Symbol.sym), (Nothing: maybe Symbol.sym)) stdlib core_tagDefs expr
+                      wrapped_translate_expression true (ECTX_glob sym sym_global) ((Nothing: maybe Symbol.sym), (Nothing: maybe Symbol.sym)) stdlib core_tagDefs expr
                     end >>= fun (compound_lits, core) ->
                     let lit_pats_core_creates : list (C.pattern * C.expr unit) =
                       List.map (fun (loc, prefix, sym, is_const, ty) ->
