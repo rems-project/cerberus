@@ -110,4 +110,8 @@ let pp_prefix = function
 
 
 let pp_identifier ?(clever=false) (Symbol.Identifier (loc, str)) =
-  pp_location ~clever loc ^^^ pp_colour_identifier str
+  begin if Debug_ocaml.get_debug_level () >= 5 then
+    pp_location ~clever loc ^^ P.space
+  else
+    P.empty
+  end ^^ pp_colour_identifier str

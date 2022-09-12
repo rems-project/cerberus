@@ -79,6 +79,7 @@ let lt_precedence p1 p2 =
 
 
 let pp_keyword w      = !^ (ansi_format [Bold; Cyan] w)
+let pp_ail_keyword w  = !^ (ansi_format [Bold; Red] w)
 let pp_type_keyword w = !^ (ansi_format [Green] w)
 let pp_const c        = !^ (ansi_format [Magenta] c)
 let pp_comment str    = !^ (ansi_format [Red] str)
@@ -242,37 +243,39 @@ let pp_ctype_aux pp_ident_opt qs (Ctype (_, ty) as cty) =
   let rec aux p qs (Ctype (_, ty)) : P.document -> P.document =
     let p' = precOf ty in
     let aux = aux p' in
-    let wrap z = if p' > 0 && p' > p then z else P.parens z in
+    let wrap z = if p' > 0 && p' >= p then z else P.parens z in
     begin match ty with
       | Void ->
           fun k -> pp_qualifiers qs ^^ pp_type_keyword "void" ^^ k
       | Basic bty ->
           fun k -> pp_qualifiers qs ^^ pp_basicType bty ^^ k
       | Array (elem_ty, n_opt) ->
-          fun k -> aux qs elem_ty k ^^ P.brackets (P.optional pp_integer n_opt)
+          fun k -> aux qs elem_ty (k ^^ (P.brackets (P.optional pp_integer n_opt)))
       | Function ((ret_qs, ret_ty), params, isVariadic) ->
           fun k -> aux ret_qs ret_ty P.empty ^^^
+                   P.parens k ^^
                    P.parens (
                      (if List.length params = 0 then !^"void" else comma_list (fun (qs, ty, _) -> aux qs ty P.empty) params) ^^
                      (if isVariadic then P.comma ^^^ P.dot ^^ P.dot ^^ P.dot else P.empty)
-                   ) ^^ k
+                   )
       | FunctionNoParams ((ret_qs, ret_ty)) ->
-          fun k -> aux ret_qs ret_ty P.empty ^^^ P.parens (P.empty) ^^ k
+          fun k -> aux ret_qs ret_ty P.empty ^^^
+          P.parens k ^^ P.parens (P.empty)
       | Pointer (ref_qs, ref_ty) ->
           fun k ->
             begin match ref_ty with
               | Ctype (_, Function ((ret_qs, ret_ty), params, isVariadic)) ->
-                aux ret_qs ret_ty P.empty ^^^ P.parens (!^"*") ^^^
-                P.parens (
-                  (if List.length params = 0 then !^"void" else comma_list (fun (qs, ty, _) -> aux qs ty P.empty) params) ^^
-                  (if isVariadic then P.comma ^^^ P.dot ^^ P.dot ^^ P.dot else P.empty)
-                ) ^^ k
-              | _ -> aux ref_qs ref_ty (wrap (P.star ^^ pp_qualifiers qs ^^ k))
+                  aux ret_qs ret_ty P.empty ^^^ P.parens (P.star ^^ k) ^^^
+                  P.parens (
+                    (if List.length params = 0 then !^ "void" else comma_list (fun (qs, ty, _) -> aux qs ty P.empty) params) ^^
+                    (if isVariadic then P.comma ^^^ P.dot ^^ P.dot ^^ P.dot else P.empty)
+                  )
+              | _ ->
+                  aux ref_qs ref_ty (wrap (P.star ^^ pp_qualifiers qs ^^ k))
             end
       | Atomic ty ->
           fun k ->
             pp_qualifiers qs ^^ pp_keyword "_Atomic" ^^
-(*        P.parens (pp_ctype_aux None no_qualifiers ty) ^^ pp_spaced_ident *)
             P.parens (aux no_qualifiers ty P.empty) ^^ k
       | Struct sym ->
           fun k ->
@@ -281,66 +284,9 @@ let pp_ctype_aux pp_ident_opt qs (Ctype (_, ty) as cty) =
           fun k ->
             pp_qualifiers qs ^^ pp_keyword "union" ^^^ pp_id_type sym ^^ k
     end in
-  (*let pp_ident =
-    match pp_ident_opt with Some pp_ident -> pp_ident | None -> P.empty in*)
   let pp_spaced_ident =
     match pp_ident_opt with Some pp_ident -> P.space ^^ pp_ident | None -> P.empty in
   (aux 1 qs cty) pp_spaced_ident
-(*
-let rec pp_ctype_aux pp_ident_opt qs ty =
-  let pp_ident =
-    match pp_ident_opt with Some pp_ident -> pp_ident | None -> P.empty in
-  let pp_spaced_ident =
-    match pp_ident_opt with Some pp_ident -> P.space ^^ pp_ident | None -> P.empty in
-  match ty with
-    | Void ->
-        pp_qualifiers qs ^^ pp_type_keyword "void" ^^ pp_spaced_ident
-    | Basic bty ->
-        pp_qualifiers qs ^^ pp_basicType bty ^^ pp_spaced_ident
-    | Array (elem_ty, n_opt) ->
-        pp_ctype_aux None qs elem_ty ^^ pp_spaced_ident ^^ P.brackets (P.optional pp_integer n_opt)
-    | Function (has_proto, (ret_qs, ret_ty), params, isVariadic) ->
-        (* TODO: warn if [qs] is not empty, this is an invariant violation *)
-        pp_ctype_aux (
-          Some (
-            pp_spaced_ident ^^ P.parens (
-            let params_doc = comma_list (fun (qs, ty, isRegister) ->
-              (fun z -> if isRegister then pp_keyword "register" ^^^ z else z)
-                (pp_ctype_aux None qs ty)
-            ) params in
-            if isVariadic then
-              params_doc ^^ P.comma ^^^ P.dot ^^ P.dot ^^ P.dot
-            else
-              params_doc
-            )
-          )
-        ) ret_qs ret_ty
-        
-(*
-        ^^ P.hardline ^^ P.hardline ^^
-        
-        pp_ctype_aux None ret_qs ret_ty ^^ pp_spaced_ident ^^ P.parens (
-          let params_doc = comma_list (fun (qs, ty, isRegister) ->
-            (fun z -> if isRegister then pp_keyword "register" ^^^ z else z)
-              (pp_ctype_aux None qs ty)
-          ) params in
-          if isVariadic then
-            params_doc ^^ P.comma ^^^ P.dot ^^ P.dot ^^ P.dot
-          else
-            params_doc
-        )
-*)
-
-    | Pointer (ref_qs, ref_ty) ->
-        pp_ctype_aux None ref_qs ref_ty ^^^ P.star ^^^ pp_qualifiers qs ^^ pp_ident
-    | Atomic ty ->
-        pp_qualifiers qs ^^ pp_keyword "_Atomic" ^^
-        P.parens (pp_ctype_aux None no_qualifiers ty) ^^ pp_spaced_ident
-    | Struct sym ->
-        pp_qualifiers qs ^^ pp_keyword "struct" ^^^ pp_id_type sym ^^ pp_spaced_ident
-    | Union sym ->
-        pp_qualifiers qs ^^ pp_keyword "union" ^^^ pp_id_type sym ^^ pp_spaced_ident
-*)
 
 let pp_ctype qs ty =
   pp_ctype_aux None qs ty
@@ -616,16 +562,16 @@ let rec pp_expression_aux mk_pp_annot a_expr =
         | AilEva_end e ->
             pp_keyword "va_end" ^^ P.parens (pp e)
         | AilErvalue e ->
-            pp_keyword "rvalue" ^^ P.parens (pp e)
+            pp_ail_keyword "rvalue" ^^ P.parens (pp e)
         | AilEarray_decay e ->
-            pp_keyword "array_decay" ^^ P.parens (pp e)
+            pp_ail_keyword "array_decay" ^^ P.parens (pp e)
         | AilEfunction_decay e ->
-            pp_keyword "function_decay" ^^ P.parens (pp e)
+            pp_ail_keyword "function_decay" ^^ P.parens (pp e)
         
         | AilEprint_type e ->
 (*            if !Debug_ocaml.debug_level > 5 then
 *)
-              pp_keyword "__cerb_printtype" ^^ P.parens (pp e)
+              pp_ail_keyword "__cerb_printtype" ^^ P.parens (pp e)
 (*
             else
               pp e
@@ -642,9 +588,19 @@ and pp_generic_association_aux pp_annot = function
       pp_keyword "default" ^^ P.colon ^^^ pp_expression_aux pp_annot e
 
 
-let rec pp_statement_aux pp_annot (AnnotatedStatement (_, _, stmt)) =
-  let pp_statement = pp_statement_aux pp_annot in
-  match stmt with
+let rec pp_statement_aux pp_annot (AnnotatedStatement (_, _, stmt_)) =
+  let pp_statement ?(is_control=false) (AnnotatedStatement (_, _, stmt_) as stmt) =
+    begin match stmt_ with
+      | AilSblock _ ->
+          P.empty
+      | _ ->
+          if is_control then
+            P.break 1 ^^ P.blank 2
+          else
+            P.empty
+    end ^^
+    pp_statement_aux pp_annot stmt in
+  match stmt_ with
     | AilSskip ->
         P.semi
     | AilSexpr e ->
@@ -654,7 +610,8 @@ let rec pp_statement_aux pp_annot (AnnotatedStatement (_, _, stmt)) =
     | AilSblock ([], ss) ->
         P.lbrace ^^ P.nest 2 (
           P.break 1 ^^ (P.separate_map (P.break 1) pp_statement ss)
-        ) ^^ P.rbrace
+        ) ^^ (if List.length ss > 0 then P.break 1 else P.empty) ^^
+        P.rbrace
     | AilSblock (bindings, ss) ->
         let block =
           P.separate_map
@@ -673,16 +630,17 @@ let rec pp_statement_aux pp_annot (AnnotatedStatement (_, _, stmt)) =
                 pp_ctype qs ty ^^^ pp_id_obj id
                ) bindings ^^ P.semi ^^ P.break 1 ^^
           P.separate_map (P.break 1) pp_statement ss in
-        P.lbrace ^^ P.nest 2 (P.break 1 ^^ block) ^/^ P.rbrace
+        P.lbrace ^^ P.nest 2 (P.break 1 ^^ block) ^^
+        (if List.length ss > 0 then P.break 1 else P.empty) ^^ P.rbrace
     | AilSif (e, s1, s2) ->
-        pp_keyword "if" ^^^ P.parens (pp_expression_aux pp_annot e) ^/^
-          P.nest 2 (pp_statement s1) ^^^
-        pp_keyword "else" ^/^
-          pp_statement s2
+        pp_keyword "if" ^^^ P.parens (pp_expression_aux pp_annot e) ^^^
+          pp_statement ~is_control:true s1 ^/^
+        pp_keyword "else" ^^^
+          pp_statement ~is_control:true s2
     | AilSwhile (e, s, _) ->
-        pp_keyword "while" ^^^ P.parens (pp_expression_aux pp_annot e) ^^^ pp_statement s
+        pp_keyword "while" ^^^ P.parens (pp_expression_aux pp_annot e) ^^^ pp_statement ~is_control:true s
     | AilSdo (s, e, _) ->
-        pp_keyword "do" ^^^ pp_statement s ^^^ pp_keyword "while" ^^^ P.parens (pp_expression_aux pp_annot e)
+        pp_keyword "do" ^^^ pp_statement ~is_control:true s ^^^ pp_keyword "while" ^^^ P.parens (pp_expression_aux pp_annot e)
     | AilSbreak ->
         pp_keyword "break" ^^ P.semi
     | AilScontinue ->
@@ -692,7 +650,7 @@ let rec pp_statement_aux pp_annot (AnnotatedStatement (_, _, stmt)) =
     | AilSreturn e ->
         pp_keyword "return" ^^^ pp_expression_aux pp_annot e ^^ P.semi
     | AilSswitch (e, s) ->
-        pp_keyword "switch" ^^^ P.parens (pp_expression_aux pp_annot e) ^/^ pp_statement s
+        pp_keyword "switch" ^^^ P.parens (pp_expression_aux pp_annot e) ^/^ pp_statement ~is_control:true s
     | AilScase (ic, s) ->
         pp_keyword "case" ^^^ pp_integerConstant ic ^^ P.colon ^/^ pp_statement s
     | AilSdefault s ->
@@ -723,13 +681,13 @@ let rec pp_statement_aux pp_annot (AnnotatedStatement (_, _, stmt)) =
     | AilSunpack (Annot.TPU_Struct tag, es) ->
         !^ "__cerb_unpack" ^^^ pp_id_type tag ^^ P.parens (comma_list (pp_expression_aux pp_annot) es) ^^ P.semi
     | AilShave (ident, es) ->
-      !^ "__cerb_have" ^^^ Pp_symbol.pp_identifier ident ^^ P.parens (comma_list (pp_expression_aux pp_annot) es) ^^ P.semi
+        !^ "__cerb_have" ^^^ Pp_symbol.pp_identifier ident ^^ P.parens (comma_list (pp_expression_aux pp_annot) es) ^^ P.semi
     | AilSshow (ident, es) ->
-      !^ "__cerb_show" ^^^ Pp_symbol.pp_identifier ident ^^ P.parens (comma_list (pp_expression_aux pp_annot) es) ^^ P.semi
+        !^ "__cerb_show" ^^^ Pp_symbol.pp_identifier ident ^^ P.parens (comma_list (pp_expression_aux pp_annot) es) ^^ P.semi
     | AilSinstantiate (Some (Symbol.Identifier (_, str)), e) ->
-      !^ "__cerb_instantiate" ^^ P.parens (!^ str) ^^^ (pp_expression_aux pp_annot e) ^^ P.semi
+        !^ "__cerb_instantiate" ^^ P.parens (!^ str) ^^^ (pp_expression_aux pp_annot e) ^^ P.semi
     | AilSinstantiate (None, e) ->
-      !^ "__cerb_instantiate" ^^^ (pp_expression_aux pp_annot e) ^^ P.semi
+        !^ "__cerb_instantiate" ^^^ (pp_expression_aux pp_annot e) ^^ P.semi
 
 
 let pp_static_assertion pp_annot (e, lit) =
@@ -739,20 +697,23 @@ let pp_static_assertion pp_annot (e, lit) =
 let pp_tag_definition (tag, (_, def)) =
   match def with
     | StructDef (ident_qs_tys, flexible_opt) ->
-        pp_keyword "struct" ^^^ pp_id_type tag ^^^ P.braces (P.break 1 ^^
+        pp_keyword "struct" ^^^ pp_id_type tag ^^^ P.braces (
           P.nest 2 (
+            P.break 1 ^^
             P.separate_map (P.semi ^^ P.break 1) (fun (ident, (_, qs, ty)) ->
-              pp_ctype qs ty ^^^ Pp_symbol.pp_identifier ident
+              pp_ctype_declaration (Pp_symbol.pp_identifier ident) qs ty
             ) ident_qs_tys
-          ) ^^ P.break 1 ^^
+          ) ^^ P.semi ^^ P.break 1 ^^
           P.optional (fun (FlexibleArrayMember (_, ident, qs, elem_ty)) ->
-            pp_ctype qs (Ctype ([], Array (elem_ty, None))) ^^^ Pp_symbol.pp_identifier ident ^^ P.semi ^^ P.break 1
-          ) flexible_opt        ) ^^ P.semi
+            P.blank 2 ^^ pp_ctype_declaration (Pp_symbol.pp_identifier ident) qs (Ctype ([], Array (elem_ty, None))) ^^ P.semi ^^ P.break 1
+          ) flexible_opt
+          ) ^^ P.semi
     | UnionDef ident_qs_tys ->
-        pp_keyword "union" ^^^ pp_id_type tag ^^^ P.braces (P.break 1 ^^
+        pp_keyword "union" ^^^ pp_id_type tag ^^^ P.braces (
           P.nest 2 (
+            P.break 1 ^^
             P.separate_map (P.semi ^^ P.break 1) (fun (ident, (_, qs, ty)) ->
-              pp_ctype qs ty ^^^ Pp_symbol.pp_identifier ident
+              pp_ctype_declaration (Pp_symbol.pp_identifier ident) qs ty
             ) ident_qs_tys
           ) ^^ P.break 1
         ) ^^ P.semi
@@ -839,7 +800,7 @@ let pp_program_aux pp_annot (startup, sigm) =
                         P.comma ^^^ P.dot ^^ P.dot ^^ P.dot
                       else
                         P.empty
-                    ) ^^^
+                    ) ^^^ P.break 1 ^^
                     pp_statement_aux pp_annot stmt
                 | None ->
                     P.parens (
