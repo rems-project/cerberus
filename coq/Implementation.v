@@ -21,6 +21,7 @@ Record implementation := {
     sizeof_fty: floatingType -> option Z;
     alignof_ity: integerType -> Z;
     alignof_fty: floatingType -> Z;
+    typeof_enum: Symbol.sym -> integerType;
   }.
 
 
@@ -127,6 +128,10 @@ Module MorelloImpl : Implementation.
     | Vaddr_t => 8
     end.
 
+  (* fixing enum type for simplicity. *)
+  Definition typeof_enum_impl (_:Symbol.sym)
+             := Signed Int_.
+
   Program Definition get :=
     {|
       name            := "clang11_aarch64-unknown-freebsd13";
@@ -139,6 +144,9 @@ Module MorelloImpl : Implementation.
       sizeof_fty      := sizeof_fty_impl;
       alignof_ity     := alignof_ity_impl;
       alignof_fty     := alignof_fty_impl;
+      typeof_enum     := typeof_enum_impl;
     |}.
+
+
 
 End MorelloImpl.

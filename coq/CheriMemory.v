@@ -133,6 +133,10 @@ Module CheriMemory
   | Exposed
   | Unexposed.
 
+  Inductive taint_ind :=
+  | NoTaint: taint_ind
+  | NewTaint: list storage_instance_id -> taint_ind.
+
   Record allocation :=
     {
       prefix : Symbol.prefix;
