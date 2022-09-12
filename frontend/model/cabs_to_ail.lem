@@ -3985,16 +3985,19 @@ let rec desugar_statement_aux ctx (CabsStatement loc attrs stmt_) =
           end >>= fun (d_e, d_s) ->
           let loop_id = Symbol.fresh_int () in
           E.record_loop_attribute loop_id attrs >>= fun () ->
-          (* while (E) S  ==>  while (E) { S; cont: ;} *)
-          E.return begin
-              AilSwhile d_e begin
-                AnnotatedStatement loc Annot.no_attributes begin
-                  AilSblock [] [ d_s
-                               ; AnnotatedStatement loc Annot.no_attributes
-                                   (AilSlabel cont_sym (AnnotatedStatement loc Annot.no_attributes AilSskip) (Just (Annot.LAloop_continue loop_id))) ]
-                end
-              end loop_id 
-          end 
+          if has_continue s then
+            (* while (E) S  ==>  while (E) { S; cont: ;} *)
+            E.return begin
+                AilSwhile d_e begin
+                  AnnotatedStatement loc Annot.no_attributes begin
+                    AilSblock [] [ d_s
+                                ; AnnotatedStatement loc Annot.no_attributes
+                                    (AilSlabel cont_sym (AnnotatedStatement loc Annot.no_attributes AilSskip) (Just (Annot.LAloop_continue loop_id))) ]
+                  end
+                end loop_id 
+            end
+          else
+            E.return (AilSwhile d_e d_s loop_id)
       
       | CabsSdo e s ->
           E.freshify (Symbol.Identifier loc "continue") >>= fun cont_ident ->

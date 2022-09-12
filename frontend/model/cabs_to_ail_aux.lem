@@ -238,3 +238,56 @@ let rec export_ctype (Ctype.Ctype annot ty_ as ty) =
     | Ctype.Union _ ->
         ty
   end
+
+val     has_continue: cabs_statement -> bool
+let rec has_continue (CabsStatement _ _ stmt_) =
+  match stmt_ with
+    | CabsSlabel _ s ->
+        has_continue s
+    | CabsScase _ s ->
+        has_continue s
+    | CabsSdefault s ->
+        has_continue s
+    | CabsSblock ss ->
+        List.any has_continue ss
+    | CabsSdecl _ ->
+        false
+    | CabsSnull ->
+        false
+    | CabsSexpr _ ->
+        false
+    | CabsSif _ s1 Nothing ->
+        has_continue s1
+    | CabsSif _ s1 (Just s2) ->
+        has_continue s1 || has_continue s2
+    | CabsSswitch _ s ->
+        has_continue s
+    | CabsSwhile _ s ->
+        has_continue s
+    | CabsSdo _ s ->
+        has_continue s
+    | CabsSfor _ _ _ s ->
+        has_continue s
+    | CabsSgoto _ ->
+        false
+    | CabsScontinue ->
+        true
+    | CabsSbreak ->
+        false
+    | CabsSreturn _ ->
+        false
+    | CabsSpar ss ->
+        List.any has_continue ss
+    | CabsSasm _ _ _ ->
+        false
+    | CabsSpack _ _ ->
+        false
+    | CabsSunpack _ _ ->
+        false
+    | CabsShave _ _ ->
+        false
+    | CabsSshow _ _ ->
+        false
+    | CabsSinstantiate _ _ ->
+        false
+  end
