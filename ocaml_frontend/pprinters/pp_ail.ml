@@ -715,7 +715,7 @@ let pp_tag_definition (tag, (_, def)) =
             P.separate_map (P.semi ^^ P.break 1) (fun (ident, (_, qs, ty)) ->
               pp_ctype_declaration (Pp_symbol.pp_identifier ident) qs ty
             ) ident_qs_tys
-          ) ^^ P.break 1
+          ) ^^ P.semi ^^ P.break 1
         ) ^^ P.semi
 
 let pp_alignment = function
