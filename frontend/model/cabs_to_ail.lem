@@ -3968,7 +3968,7 @@ let rec desugar_statement_aux ctx (CabsStatement loc attrs stmt_) =
       
       | CabsSwhile e s ->
           (* TODO: when supporting VLAs ==> §6.8.4.2#2 *)
-          E.freshify (Symbol.Identifier loc "continue") >>= fun cont_ident ->
+          E.freshify (Symbol.Identifier loc "__cerb_continue") >>= fun cont_ident ->
           E.register_label cont_ident >>
           E.resolve_label cont_ident >>= fun cont_sym ->
           let ctx' =
@@ -4000,7 +4000,7 @@ let rec desugar_statement_aux ctx (CabsStatement loc attrs stmt_) =
             E.return (AilSwhile d_e d_s loop_id)
       
       | CabsSdo e s ->
-          E.freshify (Symbol.Identifier loc "continue") >>= fun cont_ident ->
+          E.freshify (Symbol.Identifier loc "__cerb_continue") >>= fun cont_ident ->
           E.register_label cont_ident >>
           E.resolve_label cont_ident >>= fun cont_sym ->
           let ctx' =
@@ -4032,7 +4032,7 @@ let rec desugar_statement_aux ctx (CabsStatement loc attrs stmt_) =
             E.return (AilSdo d_s d_e loop_id)
       
       | CabsSfor (Just (FC_decl ((Declaration_base attrs specifs idecltors)))) e2_opt e3_opt s ->
-          E.freshify (Symbol.Identifier loc "continue") >>= fun cont_ident ->
+          E.freshify (Symbol.Identifier loc "__cerb_continue") >>= fun cont_ident ->
           E.register_label cont_ident >>
           E.resolve_label cont_ident >>= fun cont_sym ->
           let ctx' =
@@ -4140,7 +4140,7 @@ let rec desugar_statement_aux ctx (CabsStatement loc attrs stmt_) =
       
       | CabsSfor fc_opt e2_opt e3_opt s ->
           (* fc_opt is either Nothing, a static assertion, or a FC_expr *)
-          E.freshify (Symbol.Identifier loc "continue") >>= fun cont_ident ->
+          E.freshify (Symbol.Identifier loc "__cerb_continue") >>= fun cont_ident ->
           E.register_label cont_ident >>
           E.resolve_label cont_ident >>= fun cont_sym ->
           let loop_id = Symbol.fresh_int () in
