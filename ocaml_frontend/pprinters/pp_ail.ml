@@ -185,7 +185,7 @@ let macro_string_of_integerType = function
  | Char ->
      "CHAR"
  | Bool ->
-     (* NOTE: this doesn't exists in STD, since the min/max values are know *)
+     (* NOTE: this doesn't exists in STD, since the min/max values are known *)
      "BOOL"
  | Signed ibty ->
      (macro_string_of_integerBaseType ibty)
@@ -640,7 +640,7 @@ let rec pp_statement_aux pp_annot (AnnotatedStatement (_, _, stmt_)) =
     | AilSwhile (e, s, _) ->
         pp_keyword "while" ^^^ P.parens (pp_expression_aux pp_annot e) ^^^ pp_statement ~is_control:true s
     | AilSdo (s, e, _) ->
-        pp_keyword "do" ^^^ pp_statement ~is_control:true s ^^^ pp_keyword "while" ^^^ P.parens (pp_expression_aux pp_annot e)
+        pp_keyword "do" ^^^ pp_statement ~is_control:true s ^^^ pp_keyword "while" ^^^ P.parens (pp_expression_aux pp_annot e) ^^ P.semi
     | AilSbreak ->
         pp_keyword "break" ^^ P.semi
     | AilScontinue ->

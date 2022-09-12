@@ -3991,8 +3991,8 @@ let rec desugar_statement_aux ctx (CabsStatement loc attrs stmt_) =
                 AilSwhile d_e begin
                   AnnotatedStatement loc Annot.no_attributes begin
                     AilSblock [] [ d_s
-                                ; AnnotatedStatement loc Annot.no_attributes
-                                    (AilSlabel cont_sym (AnnotatedStatement loc Annot.no_attributes AilSskip) (Just (Annot.LAloop_continue loop_id))) ]
+                                 ; AnnotatedStatement loc Annot.no_attributes
+                                     (AilSlabel cont_sym (AnnotatedStatement loc Annot.no_attributes AilSskip) (Just (Annot.LAloop_continue loop_id))) ]
                   end
                 end loop_id 
             end
@@ -4017,16 +4017,19 @@ let rec desugar_statement_aux ctx (CabsStatement loc attrs stmt_) =
           end >>= fun (d_e, d_s) ->
           let loop_id = Symbol.fresh_int () in
           E.record_loop_attribute loop_id attrs >>= fun () ->
-          (* do S (E)  ==>  do { S; cont: ;} (E) *)
-          E.return begin
-              AilSdo begin
-                AnnotatedStatement loc Annot.no_attributes begin
-                  AilSblock [] [ d_s
-                               ; AnnotatedStatement loc Annot.no_attributes
-                                   (AilSlabel cont_sym (AnnotatedStatement loc Annot.no_attributes AilSskip) (Just (Annot.LAloop_continue loop_id)))]
-                end
-              end d_e loop_id
-          end
+          if has_continue s then
+            (* do S (E)  ==>  do { S; cont: ;} (E) *)
+            E.return begin
+                AilSdo begin
+                  AnnotatedStatement loc Annot.no_attributes begin
+                    AilSblock [] [ d_s
+                                 ; AnnotatedStatement loc Annot.no_attributes
+                                     (AilSlabel cont_sym (AnnotatedStatement loc Annot.no_attributes AilSskip) (Just (Annot.LAloop_continue loop_id)))]
+                  end
+                end d_e loop_id
+            end
+          else
+            E.return (AilSdo d_s d_e loop_id)
       
       | CabsSfor (Just (FC_decl ((Declaration_base attrs specifs idecltors)))) e2_opt e3_opt s ->
           E.freshify (Symbol.Identifier loc "continue") >>= fun cont_ident ->
