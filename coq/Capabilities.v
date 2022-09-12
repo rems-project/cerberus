@@ -123,7 +123,7 @@ Module Type Capability
 
   Parameter cap_get_value : t -> V.t.
 
-  Parameter cap_get_offset : t -> N.
+  Parameter cap_get_offset : t -> Z.
 
   Parameter cap_get_obj_type : t -> OT.t.
 
