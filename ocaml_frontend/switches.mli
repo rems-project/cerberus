@@ -35,6 +35,7 @@ val has_switch: cerb_switch -> bool
 val has_switch_pred: (cerb_switch -> bool) -> cerb_switch option
 val set: string list -> unit
 
+val set_iso_switches: unit -> unit
 
 val is_PNVI: unit -> bool
 val has_strict_pointer_arith: unit -> bool

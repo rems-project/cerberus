@@ -84,6 +84,14 @@ let set strs =
           prerr_endline ("failed to parse switch `" ^ String.escaped str ^ "' --> ignoring.")
   ) strs
 
+let set_iso_switches () =
+  internal_ref := [
+      SW_pointer_arith `STRICT
+    ; SW_strict_reads
+    ; SW_zap_dead_pointers
+    ; SW_strict_pointer_equality
+    ; SW_strict_pointer_relationals
+    ; SW_PNVI `AE_UDI ]
 
 let is_PNVI () =
   List.exists (function SW_PNVI _ -> true | _ -> false) !internal_ref

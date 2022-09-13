@@ -104,7 +104,7 @@ let cerberus debug_level progress core_obj
              incl_dirs incl_files cpp_only
              link_lib_path link_core_obj
              impl_name
-             exec exec_mode switches batch concurrency
+             exec exec_mode iso_switches switches batch concurrency
              astprints pprints ppflags
              sequentialise_core rewrite_core typecheck_core defacto permissive
              fs_dump fs trace
@@ -124,7 +124,12 @@ let cerberus debug_level progress core_obj
                rewrite_core; sequentialise_core; cpp_cmd; cpp_stderr = true } in
   let prelude =
     (* Looking for and parsing the core standard library *)
-    Switches.set switches;
+    if iso_switches then begin
+      if switches <> [] then
+        Debug_ocaml.warn [] (fun () -> "The --iso argument overrides --switches");
+      Switches.set_iso_switches ()
+    end else
+      Switches.set switches;
     load_core_stdlib () >>= fun core_stdlib ->
     io.pass_message "Core standard library loaded." >>
     (* Looking for and parsing the implementation file *)
@@ -437,9 +442,13 @@ let switches =
   let doc = "list of semantics switches to turn on (see documentation for the list)" in
   Arg.(value & opt (list string) [] & info ["switches"] ~docv:"SWITCH1,..." ~doc)
 
+let iso =
+  let doc = "sets the switches corresponding to the ISO semantics (this overrides --switches if it is also present)" in
+  Arg.(value & flag & info["iso"] ~doc)
+
 let args =
   let doc = "List of arguments for the C program" in
-  Arg.(value & opt (some string) None & info ["args"] ~docv:"ARG1,..." ~doc)
+  Arg.(value & opt (some string) None & info ["args"] ~docv:"\"ARG1 ARG2 ...\"" ~doc)
 
 (* entry point *)
 let () =
@@ -448,7 +457,7 @@ let () =
                          incl_dir $ incl_file $ cpp_only $
                          link_lib_path $ link_core_obj $
                          impl $
-                         exec $ exec_mode $ switches $ batch $
+                         exec $ exec_mode $ iso $ switches $ batch $
                          concurrency $
                          astprints $ pprints $ ppflags $
                          sequentialise $ rewrite $ typecheck_core $ defacto $ permissive $
