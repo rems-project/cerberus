@@ -2069,6 +2069,16 @@ let extract_program startup_str =
           else
             return ()
       *)
+      | Just Linkage_external ->
+          if kind = Kind_ordinary OK_function && not (Map.member sym st.function_definitions) then
+            match List.lookup sym decls with
+              | Just (loc, _, A.Decl_function _ _ _ _ true(* is_inline *) _) ->
+                  undef loc Undefined.UB070_inline_not_defined
+              | _ ->
+                  return ()
+            end
+          else
+            return ()
       | _ ->
           return ()
     end
