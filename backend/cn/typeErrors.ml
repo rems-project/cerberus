@@ -494,7 +494,7 @@ let pp_message te =
      let short = !^"Undefined behaviour" in
      let explanation = Explain.explanation ctxt IT.SymSet.empty in
      let state = Explain.state ctxt explanation model None in
-     let descr = !^(CF.Undefined.pretty_string_of_undefined_behaviour ub) in
+     let descr = !^(CF.Undefined.ub_short_string ub) in
      { short; descr = Some descr; state = Some state; trace = None }
   | Implementation_defined_behaviour (impl, state) ->
      let short = !^"Implementation defined behaviour" in

@@ -162,8 +162,7 @@ type undefined_behaviour =
   (* Addition or subtraction of a pointer into, or just beyond, an array object and an integer type
      produces a result that points just beyond the array object and is used as the operand of a
      unary * operator that is evaluated (6.5.6). *)
-  | UB047a_array_pointer_addition_beyond_indirection
-  | UB047b_array_pointer_subtraction_beyond_indirection
+  | UB047_array_pointer_one_past_indirection
   (* Pointers that do not point into, or just beyond, the same array object are subtracted
      (6.5.6). *)
   | UB048_disjoint_array_pointers_subtraction
@@ -245,7 +244,7 @@ type undefined_behaviour =
   | UB069
   (* A function with external linkage is declared with an inline function specifier, but is not also
      defined in the same translation unit (6.7.4). *)
-  | UB070
+  | UB070_inline_not_defined
   (* A function declared with a _Noreturn function specifier returns to its caller (6.7.4). *)
   | UB071_noreturn
   (* The definition of an object has an alignment specifier and another declaration of that object
@@ -734,10 +733,22 @@ let std_of_undefined_behaviour = function
       Just "§6.2.6.1#5, sentence 3"
   | UB015_incompatible_redeclaration ->
       Just "§6.2.7#2"
+  | UB019_lvalue_not_an_object ->
+      Just "§6.3.2.1#1, sentence 1"
   | UB020_nonarray_incomplete_lvalue_conversion ->
       Just "§6.3.2.1#2, sentence 3"
+  | UB022_register_array_decay ->
+      Just "§6.3.2.1#3, sentence 2" 
+  | UB024_out_of_range_pointer_to_integer_conversion ->
+      Just "§6.3.2.3#6, sentence 3"
+  | UB025_misaligned_pointer_conversion ->
+      Just "§6.3.2.3#7, sentence 2"
   | UB033_modifying_string_literal ->
       Just "§6.4.5#7, sentence 2"
+  | UB035_unsequenced_race ->
+      Just "§6.5#2"
+  | UB036_exceptional_condition ->
+      Just "§6.5#5"
   | UB038_number_of_args ->
       Just "§6.5.2.2#6, sentence 3"
   | UB041_function_not_compatible ->
@@ -746,8 +757,20 @@ let std_of_undefined_behaviour = function
       Just "§6.5.2.3#5"
   | UB043_indirection_invalid_value ->
       Just "§6.5.3.2#4, sentence 4"
+  | UB045a_division_by_zero ->
+      Just "§6.5.5#5, sentence 2"
+  | UB045b_modulo_by_zero ->
+      Just "§6.5.5#5, sentence 2"
+  | UB045c_quotient_not_representable ->
+      Just "§6.5.5#6, sentence 2"
+  | UB046_array_pointer_outside ->
+      Just "§6.5.6#8, sentence 5"
+  | UB048_disjoint_array_pointers_subtraction ->
+      Just "§6.5.6#9, sentence 1"
   | UB050_pointers_subtraction_not_representable ->
       Just "§6.5.6#9, sentence 3"
+  | UB053_distinct_aggregate_union_pointer_comparison ->
+      Just "§6.5.8#5"
   | UB055_invalid_integer_constant_expression ->
       Just "§6.6#6"
   | UB059_incomplete_no_linkage_identifier ->
@@ -760,6 +783,10 @@ let std_of_undefined_behaviour = function
       Just "§6.7.3#6, sentence 1"
   | UB066_qualified_function_specification ->
       Just "§6.7.3#9, sentence 2"
+  | UB070_inline_not_defined ->
+      Just "§6.7.4#7, sentence 2"
+  | UB072_incompatible_alignment_specifiers ->
+      Just "§6.7.5#7, sentence 1"
   | UB078_modified_void_parameter ->
       Just "§6.7.6.3#10"
   | UB081_scalar_initializer_not_single_expression ->
@@ -839,8 +866,7 @@ let ub_str_bimap =
     ; (UB045b_modulo_by_zero, "UB045b_modulo_by_zero")
     ; (UB045c_quotient_not_representable, "UB045c_quotient_not_representable")
     ; (UB046_array_pointer_outside, "UB046_array_pointer_outside")
-    ; (UB047a_array_pointer_addition_beyond_indirection, "UB047a_array_pointer_addition_beyond_indirection")
-    ; (UB047b_array_pointer_subtraction_beyond_indirection, "UB047b_array_pointer_subtraction_beyond_indirection")
+    ; (UB047_array_pointer_one_past_indirection, "UB047_array_pointer_one_past_indirection")
     ; (UB048_disjoint_array_pointers_subtraction, "UB048_disjoint_array_pointers_subtraction")
     ; (UB049, "UB049")
     ; (UB050_pointers_subtraction_not_representable, "UB050_pointers_subtraction_not_representable")
@@ -866,7 +892,7 @@ let ub_str_bimap =
     ; (UB067, "UB067")
     ; (UB068, "UB068")
     ; (UB069, "UB069")
-    ; (UB070, "UB070")
+    ; (UB070_inline_not_defined, "UB070_inline_not_defined")
     ; (UB071_noreturn, "UB071_noreturn")
     ; (UB072_incompatible_alignment_specifiers, "UB072_incompatible_alignment_specifiers")
     ; (UB073, "UB073")
@@ -1048,34 +1074,88 @@ end
 
 val ub_short_string: undefined_behaviour -> string
 let ub_short_string = function
+  | DUMMY str ->
+      "DUMMY undefined behaviour (" ^ str ^ ")"
+  | UB_unspecified_lvalue ->
+      "(defacto) unspecified lvalue"  
   | UB004a_incorrect_main_return_type ->
-      "return type of 'main' should be 'int'"
+      "the return type of 'main' is not compatible with 'int'"
   | UB004b_incorrect_main_argument1 ->
       "invalid parameter type for 'main': first parameter must be of type 'int'"
   | UB004c_incorrect_main_argument2 ->
       "invalid parameter type for 'main': second parameter must be of type 'char **'"
   | UB004d_main_not_function ->
-      "variable named 'main' with external linkage has undefined behaviour"
+      "a variable named 'main' is declared with external linkage"
+  | UB005_data_race ->
+      "the execution of the program contains a data race"
   | UB008_multiple_linkage ->
-      "identifier has both internal and external linkage in the same translation unit"
-  | UB020_nonarray_incomplete_lvalue_conversion ->
-      "a non-array lvalue with an incomplete type is used in a context that requires the value of the designated object"
+      "an identifier appears with both internal and external linkage in the same translation unit"
+  | UB009_outside_lifetime ->
+      "an object is referred to outside of its lifetime"  
+  | UB010_pointer_to_dead_object ->
+      "the value of a pointer to an object whose lifetime has ended is used"
+  | UB011_use_indeterminate_automatic_object ->
+      "the value of an object with automatic storage duration is used while it is indeterminate"
+  | UB012_lvalue_read_trap_representation ->
+      "reading a trap representation with a non-character lvalue expression"
+  | UB013_lvalue_side_effect_trap_representation ->
+      "performing a side effect that produces a trap representation with a non-character lvalue expression"
+  | UB014_unsupported_negative_zero ->
+      "the evaluation of one of these operators: &, |, ^, ~, <<, and >> produces a negative zero, but the implementation being used does not support them"
   | UB015_incompatible_redeclaration ->
       "two declarations of the same object or function specify types that are not compatible"
+  | UB019_lvalue_not_an_object ->
+      "evaluation of an lvalue that does not designate an object"
+  | UB020_nonarray_incomplete_lvalue_conversion ->
+      "a non-array lvalue with an incomplete type is used in a context that requires the value of the designated object"
+  | UB022_register_array_decay ->
+      "an array lvalue with the register storage class decays to a pointer"
+  | UB024_out_of_range_pointer_to_integer_conversion ->
+      "a conversion of a pointer to an integer type produces a value outside the range that can be represented"
   | UB033_modifying_string_literal ->
-      "the program attempting to modify a string literal"
+      "the program attempts to modify a string literal"
   | UB035_unsequenced_race ->
-      "an unsequenced race occurred during the evaluation of an expression"
+      "an unsequenced race occurs during the evaluation of an expression"
+  | UB036_exceptional_condition ->
+      "an exceptional condition occurs during the evaluation of an expression"
+  | UB037_illtyped_load ->
+      "an object has its stored value accessed other than by an lvalue of an allowable type"
   | UB038_number_of_args ->
-      "the number of arguments does not equal the number of parameters"
+      "the number of arguments of a function call does not equal the number of parameters"
+  (* | UB039 ->
+      "For call to a function without a function prototype in scope where the function is defined with \
+        a function prototype, either the prototype ends with an ellipsis or the types of the arguments \
+        after promotion are not compatible with the types of the parameters"   *)
   | UB041_function_not_compatible ->
       "incompatible function type"
   | UB042_access_atomic_structUnion_member ->
       "a member of an atomic structure or union object is accessed"
   | UB043_indirection_invalid_value ->
       "the operand of the unary '*' operator has an invalid value"
+  | UB045a_division_by_zero ->
+      "the value of the second operand of a '/' operator is zero"
+  | UB045b_modulo_by_zero ->
+      "the value of the second operand of a '%' operator is zero"
+  | UB045c_quotient_not_representable ->
+      "the quotient of a '/' operator is not representable"
+  | UB046_array_pointer_outside ->
+      "out-of-bounds pointer arithmetic"
+  | UB047_array_pointer_one_past_indirection ->
+      "dereferencing a one-past pointer"
   | UB048_disjoint_array_pointers_subtraction ->
       "the subtraction of two pointers must be between pointers that points into, or just beyond, the same array object"
+  | UB050_pointers_subtraction_not_representable ->
+      "the result of the subtraction of two pointers is not representable in the type ptrdiff_t"
+  | UB051a_negative_shift ->
+      "the right operand of a bitwise shift operator (<< >>) has a negative value"
+  | UB51b_shift_too_large ->
+      "the right operand of a bitwise shift operator (<< >>) has a value larger than or equal to the width of the promoted left operand"
+  | UB052a_negative_left_shift ->
+      "the left operand of a '<<' operator has a negative value"
+  | UB052b_non_representable_left_shift ->
+      "the value of a '<<' operator is not representable in the promoted type"
+  | UB053_distinct_aggregate_union_pointer_comparison ->
+      "the operands of a pointer comparison do not point to the same aggregate or union (nor just beyond the same array object)"
   | UB055_invalid_integer_constant_expression ->
       "invalid integer constant expression"
   | UB059_incomplete_no_linkage_identifier ->
@@ -1086,187 +1166,67 @@ let ub_short_string = function
       "a structure or union is defined without any named members"
   | UB064_modifying_const ->
       "attempting to modify an object defined with a const-qualified type"
-  | UB046_array_pointer_outside ->
-      "the result of some pointer arithmetic operator was out of bound"
   | UB066_qualified_function_specification ->
       "the specification of a function type should not include any type qualifiers"
+  | UB070_inline_not_defined ->
+      "a function with external linkage declared with the inline specifier is not defined in the same translation unit"
   | UB078_modified_void_parameter ->
       "a storage-class specifier or type qualifier modifies the keyword void as a function parameter type list"
   | UB086_incomplete_adjusted_parameter ->
       "an adjusted parameter type in a function definition is not a complete object type"
+  | UB088_reached_end_of_function ->
+      "the value of a non-void function that ended without a return statement is used"  
   | UB089_tentative_definition_internal_linkage ->
       "tentative definition with internal linkage and incomplete type"
   | UB081_scalar_initializer_not_single_expression ->
       "the initializer for a scalar shall be a single expression"
+  | UB111_illtyped_assert ->
+      "a call to 'assert()' has an argument that does not have a scalar type"
+  | UB153a_insufficient_arguments_for_format ->
+      "a call to a formatting function is not given enough arguments for its format"
+  | UB153b_illtyped_argument_for_format ->
+      "a call to a formatting function has an illtyped argument"
   | UB204_illtyped_Static_assert ->
-      "static assert expression is not an integral constant expression"
+      "a static assert expression is not an integral constant expression"
   | UB205_atomic_store_memorder ->
-      "memory order argument to atomic operation is invalid"
+      "a memory order argument to an atomic store operation is invalid"
   | UB206_atomic_load_memorder ->
-      "memory order argument to atomic operation is invalid"
+      "a memory order argument to an atomic load operation is invalid"
   | UB207_atomic_compare_exchange_memorder ->
-      "memory order argument to atomic operation is invalid"
+      "a memory order argument to atomic compare_exchange operation is invalid"
   | UB_CERB001_integer_to_dead_pointer ->
-      "integer to pointer conversion with no live object (CERB)"
+      "an integer to pointer conversion results in a pointer that does not point to any live object (CERB)"
   | UB_CERB002a_out_of_bound_load ->
-      "out of bounds pointer at memory load"
+      "out-of-bounds pointer at a memory load"
   | UB_CERB002b_out_of_bound_store ->
-      "out of bounds pointer at memory store"
+      "out-of-bounds pointer at a memory store"
   | UB_CERB004_unspecified ctx ->
       match ctx with
         | UB_unspec_equality_ptr_vs_NULL ->
-            "an operand of an equality operator (ptr vs NULL) evaluated to an unspecified value"
+            "an operand of an equality operator (ptr vs NULL) evaluates to an unspecified value"
         | UB_unspec_equality_both_arith_or_ptr ->
-            "an operand of an equality operator (both arith or ptr) evaluated to an unspecified value"
+            "an operand of an equality operator (both arith or ptr) evaluates to an unspecified value"
         | UB_unspec_pointer_add ->
-            "an operand of an + operator (with one pointer operand) evaluated to an unspecified value"
+            "an operand of an '+' operator (with one pointer operand) evaluates to an unspecified value"
         | UB_unspec_pointer_sub ->
-            "an operand of an - operator (with one pointer operand) evaluated to an unspecified value"
+            "an operand of an '-' operator (with one pointer operand) evaluates to an unspecified value"
         | UB_unspec_conditional ->
-            "the controlling expression of a ?: expression evaluated to an unspecified value"
+            "the controlling expression of a '?:' expression evaluates to an unspecified value"
         | UB_unspec_copy_alloc_id ->
-            "an operand of a call to copy_alloc_id() evaluated to an unspecified value"
+            "an operand of a call to 'copy_alloc_id()' evaluates to an unspecified value"
         | UB_unspec_rvalue_memberof ->
-            "the operand of . operator (rvalue case) evaluated to an unspecified value"
+            "the operand of '.' operator (rvalue case) evaluates to an unspecified value"
         | UB_unspec_memberofptr ->
-            "the operand of -> operator evaluated to an unspecified value"
+            "the operand of '->' operator evaluates to an unspecified value"
         | UB_unspec_do ->
-            "the controlling expression of a do statement evaluated to an unspecified value"
+            "the controlling expression of a 'do' statement evaluated to an unspecified value"
       end
   | UB_CERB005_free_nullptr ->
-      "calling free() on a NULL pointer"
-  | ub ->
-      "(UB missing short message): " ^ show ub
-end
-
-
-
-(* TODO(V): I don't think we should use this function anymore! The N1507 json automatically gives us all that! *)
-val pretty_string_of_undefined_behaviour: undefined_behaviour -> string
-let pretty_string_of_undefined_behaviour = function
-  | DUMMY str ->
-      "DUMMY undefined behaviour (" ^ str ^ ")"
-  | UB_unspecified_lvalue ->
-      "(defacto) unspecified lvalue"
-  | UB005_data_race ->
-      "(§5.1.2.4#25) the execution of the program contains a data race."
-  | UB008_multiple_linkage ->
-      "(§6.2.2#7) an identifier appeared with both internal and external linkage"
-  | UB009_outside_lifetime ->
-      "(§6.2.4#2) an object is referred to outside of its lifetime."
-  | UB010_pointer_to_dead_object ->
-      "Pointer_to_dead_object (TODO: find the text, if there is an explicit one)"
-  | UB011_use_indeterminate_automatic_object ->
-      "(§6.2.4) the value of an object with automatic storage duration is used while it is indeterminate"
-  | UB012_lvalue_read_trap_representation ->
-      "(§6.2.6.1#5) an lvalue expression that does not have character type tried to read from an \
-                    object storing a trap representation."
-  | UB013_lvalue_side_effect_trap_representation ->
-      "(§6.2.6.1#5) an lvalue expression that does not have character type performed a side effect \
-                    that produced a trap representation in (part of) an object."
-  | UB014_unsupported_negative_zero ->
-      "(§6.2.6.2#3) the evaluation of one of these operators: &, |, ^, ~, <<, and >> produced a \
-                    negative zero, but this implementation being used does not support them."
-  | UB015_incompatible_redeclaration ->
-      "(§6.2.7#2) multiple declarations of a same object or function had incompatible types"
-  | UB019_lvalue_not_an_object ->
-      "(§6.3.2.1#1) found an lvalue that does not designate an object when evaluted."
-  | UB020_nonarray_incomplete_lvalue_conversion ->
-      "TODO(msg) UB020_nonarray_incomplete_lvalue_conversion"
-  | UB022_register_array_decay ->
-      "TODO(msg) UB022_register_array_decay"
-  | UB024_out_of_range_pointer_to_integer_conversion ->
-      "TODO(msg) UB024_out_of_range_pointer_to_integer_conversion"
-  | UB035_unsequenced_race ->
-      "(§6.5#2) a side effect on a scalar object is unsequenced relative to either a different \
-                side effect on the same scalar object or a value computation using the value of \
-                the same scalar object."
-  | UB036_exceptional_condition ->
-      "(§6.5#2) an exceptional condition occurred during the evaluation of an expression."
-  | UB037_illtyped_load ->
-      "[Illtyped_load]TODO: where is the actual std text? (suppose to be in 6.5)"
-  | UB039 ->
-      "For call to a function without a function prototype in scope where the function is defined with \
-       a function prototype, either the prototype ends with an ellipsis or the types of the arguments \
-       after promotion are not compatible with the types of the parameters (6.5.2.2)."
-  | UB042_access_atomic_structUnion_member ->
-      "(§6.5.2.3#5) a member of an atomic structure or union object is accessed."
-  | UB043_indirection_invalid_value ->
-      "(§6.5.3.2#4) the operand of the unary * operator has an invalid value."
-  | UB045a_division_by_zero ->
-      "(§6.5.5#5) the value of the second operand of a / operator is zero."
-  | UB045b_modulo_by_zero ->
-      "(§6.5.5#5) the value of the second operand of a % operator is zero."
-  | UB045c_quotient_not_representable ->
-      "(§6.5.5#6) the quotient a/b is not representable."
-  | UB046_array_pointer_outside ->
-      "(§6.5.6#8) found the addition/subtraction of a pointer into, or just beyond, and array \
-                  object and an integer type procuding a result that does not point into, or \
-                  just beyond, the same array object."
-  | UB047a_array_pointer_addition_beyond_indirection ->
-      "(§6.5.6#8) found the addition of a pointer into, or just beyond, an array object and an \
-                  integer type procuding a result that points just beyond the array object and is \
-                  used as the operand of a unary * operator that is evaluated."
-  | UB047b_array_pointer_subtraction_beyond_indirection ->
-      "(§6.5.6#8) found the addition of a pointer into, or just beyond, an array object and an \
-                  integer type procuding a result that points just beyond the array object and is \
-                  used as the operand of a unary * operator that is evaluated."
-  | UB048_disjoint_array_pointers_subtraction ->
-      "(§6.5.6#9) found the subtraction of two pointers that do not point into, or just beyond, \
-                  the same array object."
-  | UB050_pointers_subtraction_not_representable ->
-      "(§6.5.6#9) found the subtraction of two pointers whose result is not representable in an \
-                  object of type ptrdiff_t"
-  | UB051a_negative_shift ->
-      "(§6.5.7#3) found a bitwise shift operator (<< >>) whose right operand has negative value."
-  | UB51b_shift_too_large ->
-      "(§6.5.7#3) found a bitwise shift operator (<< >>) whose right operand has a value larger \
-                  than or equal to the width of the promoted left operand."
-  | UB052a_negative_left_shift ->
-      "(§6.5.7#4) found << operator whose operand has a negative value."
-  | UB052b_non_representable_left_shift ->
-      "(§6.5.7#4) found << operator whose operand has a value that is not representable in the \
-                  promoted type."
-  | UB053_distinct_aggregate_union_pointer_comparison ->
-      "(§6.5.8#5) found the comparison of two pointers that do not point to the same aggregate or \
-                  union (nor just beyond the same array object)."
-  | UB059_incomplete_no_linkage_identifier ->
-      "(§6.7#7) If an identifier for an object is declared with no linkage, \
-                the type for the object shall be complete by the end of its \
-                declarator, or by the end of its init-declarator if it has an \
-                initializer; in the case of function parameters (including in \
-                prototypes), it is the adjusted type (see 6.7.6.3) that is \
-                required to be complete."
-  | UB061_no_named_members ->
-      "TODO(msg) UB061_no_named_members"
-  | UB081_scalar_initializer_not_single_expression ->
-      "(§6.7.9#11) The initializer for a scalar shall be a single expression, optionally enclosed in braces."
-  | UB088_reached_end_of_function ->
-      "(§6.9.1#12) If the } that terminates a function is reached, and the value of\n \
-                   the function call is used by the caller, the behavior is undefined."
-  | UB111_illtyped_assert ->
-      "(§7.2.1.1#1) found an assert whose argument does not have a scalar type"
-  | UB153a_insufficient_arguments_for_format ->
-      "Insufficient_arguments_for_format"
-  | UB153b_illtyped_argument_for_format ->
-      "Illtyped_argument_for_format"
-  | UB204_illtyped_Static_assert ->
-      "(§6.7.10#3) The constant expression shall be an integer constant expression."
-  | UB_CERB001_integer_to_dead_pointer ->
-      "(CERB notes0117 3.3.1) static assert expression is not an integral constant expression"
-  | UB_CERB002a_out_of_bound_load ->
-      "(CERB) provenance check failed during a load"
-  | UB_CERB002b_out_of_bound_store ->
-      "(CERB) provenance check failed during a store"
+      "a call to 'free()' is given a 'NULL' pointer"
   | Invalid_format str ->
       "Invalid_format \"" ^ str ^ "\""
   | ub ->
-      match Bimap.lookupL ub ub_str_bimap with
-        | Just str ->
-            "TODO(pretty ub) ==> " ^ str
-        | Nothing ->
-            "TODO(pretty ub) ==> unknown"
-      end
+      "(UB missing short message): " ^ show ub
 end
 
 
