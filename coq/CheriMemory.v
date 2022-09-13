@@ -938,6 +938,353 @@ Module CheriMemory
   Definition split_at {A:Type} (n:nat) (l:list A)
     := (List.firstn n l, List.skipn n l).
 
+  Inductive overlap_ind :=
+    | NoAlloc: overlap_ind
+    | SingleAlloc: storage_instance_id -> overlap_ind
+    | DoubleAlloc: storage_instance_id -> storage_instance_id -> overlap_ind.
+
+  Inductive prov_ptr_valid_ind :=
+  | NotValidPtrProv
+  | ValidPtrProv.
+
+  Inductive prov_valid_ind :=
+  | VALID: provenance -> prov_valid_ind
+  | INVALID: prov_valid_ind.
+
+  Inductive bytes_ind :=
+  | PtrBytes: Z -> bytes_ind
+  | OtherBytes: bytes_ind.
+
+  Definition split_bytes (function_parameter : list AbsByte)
+    : serr (provenance * prov_ptr_valid_ind * list (option byte))
+    :=
+    match function_parameter with
+    | [] => raise "CHERI.AbsByte.split_bytes: called on an empty list"
+    | bs =>
+        '(_prov, rev_values, offset_status) <-
+          monadic_fold_left
+            (fun '(prov_acc, val_acc, offset_acc) b_value =>
+               prov_acc' <-
+                 match
+                   ((prov_acc, b_value.(prov)),
+                     match (prov_acc, b_value.(prov)) with
+                     | (VALID (Prov_some alloc_id1), Prov_some alloc_id2) =>
+                         Z.eqb alloc_id1 alloc_id2
+                     | _ => false
+                     end,
+                     match (prov_acc, b_value.(prov)) with
+                     | (VALID (Prov_symbolic iota1), Prov_symbolic iota2) =>
+                         Z.eqb iota1 iota2
+                     | _ => false
+                     end) with
+                 |
+                   ((VALID (Prov_some alloc_id1), Prov_some alloc_id2), true, _)
+                   => ret INVALID
+                 |
+                   ((VALID (Prov_symbolic iota1), Prov_symbolic iota2), _, true)
+                   => ret INVALID
+                 | ((VALID (Prov_symbolic iota1), Prov_some alloc_id'), _, _)
+                   => raise "TODO(iota) split_bytes 1"
+                 | ((VALID (Prov_some alloc_id), Prov_symbolic iota), _, _) =>
+                     raise "TODO(iota) split_bytes 2"
+                 | ((VALID Prov_none, (Prov_some _) as new_prov), _, _) =>
+                     ret (VALID new_prov)
+                 | ((VALID Prov_none, (Prov_symbolic _) as new_prov), _, _) =>
+                     ret (VALID new_prov)
+                 | ((prev_acc, _), _, _) => ret prev_acc
+                 end ;;
+               let offset_acc' :=
+                 match
+                   ((offset_acc, b_value.(copy_offset)),
+                     match (offset_acc, b_value.(copy_offset)) with
+                     | (PtrBytes n1, Some n2) => Z.eqb n1 (Z.of_nat n2)
+                     | _ => false
+                     end) with
+                 | ((PtrBytes n1, Some n2), true) => PtrBytes (Z.add n1 1)
+                 | (_, _) => OtherBytes
+                 end in
+               ret (prov_acc', (cons b_value.(value) val_acc), offset_acc'))
+            bs ((VALID Prov_none), nil, (PtrBytes 0)) ;;
+        ret (match _prov with
+             | INVALID => Prov_none
+             | VALID z_value => z_value
+             end,
+            match offset_status with
+            | OtherBytes => NotValidPtrProv
+            | _ => ValidPtrProv
+            end, (List.rev rev_values))
+    end.
+
+  Fixpoint abst 
+    (loc : location_ocaml)
+    (find_overlaping : Z.t -> overlap_ind)
+    (funptrmap : ZMap.t (Digest_t * string * C.t))
+    (tag_query_f : Z.t -> option bool)
+    (addr : Z)
+    (function_parameter : Ctype.ctype)
+    : list AbsByte -> taint_ind * mem_value_with_err * list AbsByte
+    :=
+    let '(Ctype.Ctype _ ty) as cty := function_parameter in
+    fun (bs : list AbsByte) =>
+      let self := abst loc find_overlaping funptrmap tag_query_f in
+      let '_ :=
+        if
+          lt (List.length bs) (sizeof None cty)
+        then
+          raise (InternalErr "abst, |bs| < sizeof(ty)")
+        else
+          tt in
+      let merge_taint
+            (x_value : (* `NoTaint *) unit) (y_value : (* `NoTaint *) unit)
+        : (* `NoTaint *) unit :=
+        match (x_value, y_value) with
+        | (NoTaint, NoTaint) => NoTaint
+        | ((NoTaint, NewTaint xs) | (NewTaint xs, NoTaint)) => NewTaint xs
+        | (NewTaint xs, NewTaint ys) => NewTaint (List.app xs ys)
+        end in
+      match ty with
+      |
+        (Ctype.Void | Ctype.Array _ None |
+          Ctype.Function _ _ _ |
+          Ctype.FunctionNoParams _) =>
+          raise (InternalErr "abst on function!")
+      |
+        (Ctype.Basic
+           (Ctype.Integer
+              ((Ctype.Signed Ctype.Intptr_t) as ity))
+        |
+          Ctype.Basic
+            (Ctype.Integer
+               ((Ctype.Unsigned Ctype.Intptr_t) as ity)))
+        =>
+          let '(bs1, bs2) := split_at (sizeof None cty) bs in
+          let '(prov, _, bs1') := AbsByte.split_bytes bs1 in
+          ((AbsByte.provs_of_bytes bs1),
+            match extract_unspec bs1' with
+            | Some cs =>
+                match tag_query_f addr with
+                | None =>
+                    let '_ :=
+                      Debug_ocaml.warn nil
+                        (fun (function_parameter : unit) =>
+                           let '_ := function_parameter in
+                           String.append "Unspecified tag value for address 0x"
+                             (Z.format "%x" addr)) in
+                    MVEunspecified cty
+                | Some tag =>
+                    match C.decode cs tag with
+                    | None =>
+                        let '_ :=
+                          Debug_ocaml.warn nil
+                            (fun (function_parameter : unit) =>
+                               let '_ := function_parameter in
+                               "Error decoding [u]intptr_t cap") in
+                        MVErr
+                          (MerrCHERI loc
+                             CheriErrDecodingCap)
+                    | Some c_value =>
+                        if AilTypesAux.is_signed_ity ity then
+                          let n_value := C.cap_get_value c_value
+                          in
+                          let c_value :=
+                            C.cap_set_value c_value
+                              (wrap_cap_value n_value) in
+                          MVEinteger ity (IC true c_value)
+                        else
+                          MVEinteger ity (IC false c_value)
+                    end
+                end
+            | None => MVEunspecified cty
+            end, bs2)
+      | Ctype.Basic (Ctype.Integer ity) =>
+          let '(bs1, bs2) := split_at (sizeof None cty) bs in
+          let '(prov, _, bs1') := AbsByte.split_bytes bs1 in
+          ((AbsByte.provs_of_bytes bs1),
+            match extract_unspec bs1' with
+            | Some cs =>
+                MVEinteger ity
+                  (IV
+                     (int_of_bytes
+                        (AilTypesAux.is_signed_ity ity) cs))
+            | None => MVEunspecified cty
+            end, bs2)
+      | Ctype.Basic (Ctype.Floating fty) =>
+          let '(bs1, bs2) := split_at (sizeof None cty) bs in
+          let '(_, _, bs1') := AbsByte.split_bytes bs1 in
+          (NoTaint,
+            match extract_unspec bs1' with
+            | Some cs =>
+                MVEfloating fty
+                  (Stdlib.Int64.float_of_bits
+                     (Z.to_int64 (int_of_bytes true cs)))
+            | None => MVEunspecified cty
+            end, bs2)
+      | Ctype.Array elem_ty (Some n_value) =>
+          let fix aux
+                (n_value : int)
+                (function_parameter :
+                  ((* `NoTaint *) unit + (* `NewTaint *) list storage_instance_id) *
+                    list mem_value_with_err)
+            : list AbsByte ->
+              ((* `NoTaint *) unit + (* `NewTaint *) list storage_instance_id) *
+                mem_value_with_err * list AbsByte :=
+            let '(taint_acc, mval_acc) := function_parameter in
+            fun (cs : list AbsByte) =>
+              if le n_value 0 then
+                (taint_acc, (MVEarray (List.rev mval_acc)), cs)
+              else
+                let el_addr :=
+                  Z.add addr
+                    (Z.of_int
+                       (Z.mul (Z.sub n_value 1) (sizeof None elem_ty))) in
+                let '(taint, mval, cs') := self el_addr elem_ty cs in
+                aux (Z.sub n_value 1)
+                  ((merge_taint taint taint_acc), (cons mval mval_acc)) cs' in
+          aux (Z.to_int n_value) (NoTaint, nil) bs
+      | Ctype.Pointer _ ref_ty =>
+          let '(bs1, bs2) := split_at (sizeof None cty) bs in
+          let '_ :=
+            Debug_ocaml.print_debug 1 nil
+              (fun (function_parameter : unit) =>
+                 let '_ := function_parameter in
+                 "TODO: Concrete, assuming pointer repr is unsigned??") in
+          let '(prov, prov_status, bs1') := AbsByte.split_bytes bs1 in
+          (NoTaint,
+            match extract_unspec bs1' with
+            | Some cs =>
+                match tag_query_f addr with
+                | None =>
+                    let '_ :=
+                      Debug_ocaml.warn nil
+                        (fun (function_parameter : unit) =>
+                           let '_ := function_parameter in
+                           String.append "Unspecified tag value for address 0x"
+                             (Z.format "%x" addr)) in
+                    MVEunspecified cty
+                | Some tag =>
+                    match C.decode cs tag with
+                    | None =>
+                        let '_ :=
+                          Debug_ocaml.warn nil
+                            (fun (function_parameter : unit) =>
+                               let '_ := function_parameter in
+                               "Error decoding pointer cap") in
+                        MVErr
+                          (MerrCHERI loc
+                             CheriErrDecodingCap)
+                    | Some n_value =>
+                        match ref_ty with
+                        |
+                          Ctype.Ctype _
+                            (Ctype.Function _ _ _) =>
+                            match tag_query_f addr with
+                            | None =>
+                                let '_ :=
+                                  Debug_ocaml.warn nil
+                                    (fun (function_parameter : unit) =>
+                                       let '_ := function_parameter in
+                                       String.append "Unspecified tag value for address 0x"
+                                         (Z.format "%x" addr)) in
+                                MVEunspecified cty
+                            | Some tag =>
+                                match C.decode cs tag with
+                                | None =>
+                                    let '_ :=
+                                      Debug_ocaml.warn nil
+                                        (fun (function_parameter : unit) =>
+                                           let '_ := function_parameter in
+                                           "Error decoding function pointer cap") in
+                                    MVErr
+                                      (MerrCHERI loc
+                                         CheriErrDecodingCap)
+                                | Some c_value =>
+                                    let n_value :=
+                                      Z.sub
+                                        (C.cap_get_value c_value)
+                                        (Z.of_int initial_address) in
+                                    match Zmap.find_opt n_value funptrmap
+                                    with
+                                    | Some (file_dig, name, c') =>
+                                        if C.eq c_value c' then
+                                          MVEpointer ref_ty
+                                            (PV prov
+                                               (PVfunction
+                                                  (FP_valid
+                                                     (Symbol.Symbol file_dig
+                                                        (Z.to_int n_value)
+                                                        (Symbol.SD_Id name)))))
+                                        else
+                                          MVEpointer ref_ty
+                                            (PV prov (PVfunction (FP_invalid c_value)))
+                                    | None =>
+                                        MVEpointer ref_ty
+                                          (PV prov (PVfunction (FP_invalid c_value)))
+                                    end
+                                end
+                            end
+                        | _ =>
+                            let prov :=
+                              match prov_status with
+                              | NotValidPtrProv =>
+                                  match
+                                    find_overlaping
+                                      (C.cap_get_value n_value) with
+                                  | NoAlloc => Prov_none
+                                  | SingleAlloc alloc_id => Prov_some alloc_id
+                                  | DoubleAlloc (alloc_id1, alloc_id2) =>
+                                      Prov_some alloc_id1
+                                  end
+                              | ValidPtrProv => prov
+                              end in
+                            MVEpointer ref_ty (PV prov (PVconcrete n_value))
+                        end
+                    end
+                end
+            | None =>
+                MVEunspecified
+                  (Ctype.Ctype nil
+                     (Ctype.Pointer
+                        Ctype.no_qualifiers ref_ty))
+            end, bs2)
+      | Ctype.Atomic atom_ty =>
+          let '_ :=
+            Debug_ocaml.print_debug 1 nil
+              (fun (function_parameter : unit) =>
+                 let '_ := function_parameter in
+                 "TODO: Concrete, is it ok to have the repr of atomic types be the same as their non-atomic version??")
+          in
+          self addr atom_ty bs
+      | Ctype.Struct tag_sym =>
+          let '(bs1, bs2) := split_at (sizeof None cty) bs in
+          let '(taint, rev_xs, _, bs') :=
+            List.fold_left
+              (fun (function_parameter :
+                   ((* `NoTaint *) unit + (* `NewTaint *) list storage_instance_id) *
+                     list
+                       (Symbol.identifier *
+                          Ctype.ctype * mem_value_with_err) *
+                     int * list AbsByte) =>
+                 let '(taint_acc, acc_xs, previous_offset, acc_bs) :=
+                   function_parameter in
+                 fun (function_parameter :
+                     Symbol.identifier *
+                       Ctype.ctype * int) =>
+                   let '(memb_ident, memb_ty, memb_offset) := function_parameter in
+                   let pad := Z.sub memb_offset previous_offset in
+                   let memb_addr :=
+                     Z.add addr (Z.of_int memb_offset) in
+                   let '(taint, mval, acc_bs') :=
+                     self memb_addr memb_ty (L.drop pad acc_bs) in
+                   ((merge_taint taint taint_acc),
+                     (cons (memb_ident, memb_ty, mval) acc_xs),
+                     (Z.add memb_offset (sizeof None memb_ty)), acc_bs'))
+              (NoTaint, nil, 0, bs1)
+              (fst (offsetsof (Mem_cheri.Tags.tagDefs tt) tag_sym))
+          in
+          (taint, (MVEstruct tag_sym (List.rev rev_xs)), bs2)
+      | Ctype.Union tag_sym =>
+          raise (InternalErr "TODO: abst, Union (as value)")
+      end.
 
   (*
   Definition load
