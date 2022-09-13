@@ -627,7 +627,7 @@ let rec pp_statement_aux pp_annot (AnnotatedStatement (_, _, stmt_)) =
                   ) dur_reg_opt ^^^ pp_ctype_human qs ty
                 ) ^^^ pp_id_obj id *) )
               else
-                pp_ctype qs ty ^^^ pp_id_obj id
+                pp_ctype_declaration (pp_id_obj id) qs ty
                ) bindings ^^ P.semi ^^ P.break 1 ^^
           P.separate_map (P.break 1) pp_statement ss in
         P.lbrace ^^ P.nest 2 (P.break 1 ^^ block) ^^
@@ -794,7 +794,7 @@ let pp_program_aux pp_annot (startup, sigm) =
                               (pp_ctype_human qs ty)
                           )
                         else
-                          pp_ctype qs ty ^^^ pp_id_obj sym
+                          pp_ctype_declaration (pp_id_obj sym) qs ty
                       ) (List.combine param_syms params) ^^
                       if is_variadic then
                         P.comma ^^^ P.dot ^^ P.dot ^^ P.dot
