@@ -501,7 +501,6 @@ let rec step_eval_pexpr n loc parent_call_loc_opt core_extern env mem_st_opt fil
           end in
         Exception.return (Undefined.undef loc' [ub])
     | PEerror str debug_pe ->
-        let () = Debug.print_debug 2 [] (fun () -> "PEerror ==> " ^ Pp.stringFromCore_pexpr debug_pe) in
         Exception.return (Undefined.error loc str)
     | PEctor ctor pes ->
         EU.mapM self pes >>= fun pes' ->
@@ -805,9 +804,9 @@ KKK:              EU.return (PEval (Vloaded (LVspecified (OVstruct tag_sym xs)))
                 EU.return pe_) >>= fun pe_' ->
               (* TODO: check KKK *)
               let (Pexpr _ _ pe_'') = pull_constrained 0 (Pexpr [] () pe_') in
-              let () = Debug.print_debug 5 [] (fun () ->
+              (* let () = Debug.print_debug 5 [] (fun () ->
                 "PEcall ===> " ^ Pp.stringFromCore_pexpr (Pexpr [] () pe_'')
-              ) in
+              ) in *)
               EU.return pe_''
 (* TODO OLD CONCUR
               if List.all Core_aux.is_concrete cvals then
@@ -838,9 +837,9 @@ KKK:              EU.return (PEval (Vloaded (LVspecified (OVstruct tag_sym xs)))
               EU.return $ PElet pat pe1' pe2
         end
     | PEif pe1 pe2 pe3 ->
-        let () = Debug.print_debug 5 [] (fun () ->
+        (* let () = Debug.print_debug 5 [] (fun () ->
           "Core_eval ==> PEif (_) ==> " ^ Pp.stringFromCore_pexpr pexpr
-        ) in
+        ) in *)
         self pe1 >>= fun pe1' ->
         match Caux.valueFromPexpr pe1' with
           | Just Vtrue ->
@@ -1011,7 +1010,7 @@ val eval_pexpr_aux_broken:
   Core.pexpr ->
   EU.t Core.value core_run_cause
 let rec eval_pexpr_aux_broken loc current_call_loc_opt core_extern env mem_st_opt file pe =
-  step_eval_pexpr 0 loc current_call_loc_opt core_extern env mem_st_opt file false (let ()=Debug.print_debug 5 [] (fun () -> "BOOM") in pe) >>= fun pe' ->
+  step_eval_pexpr 0 loc current_call_loc_opt core_extern env mem_st_opt file false ((* let ()=Debug.print_debug 5 [] (fun () -> "BOOM") in*) pe) >>= fun pe' ->
   match Caux.valueFromPexpr pe' with
     | Just cval ->
         EU.return cval
