@@ -14,6 +14,7 @@ module SymMap = Map.Make(Sym)
 
 type def_or_uninterp = 
   | Def of IndexTerms.t
+  | Rec_Def of IndexTerms.t
   | Uninterp
 
 type definition = {
@@ -35,6 +36,7 @@ let pp_def nm def =
     begin match def.definition with
     | Uninterp -> !^ "uninterpreted"
     | Def t -> IT.pp t
+    | Rec_Def t -> !^ "rec:" ^^^ IT.pp t
     end
 
 
@@ -44,8 +46,8 @@ let open_pred def_args def_body args =
 
 let try_open_pred def name args =
   match def.definition with
-  | Uninterp -> IT.pred_ name args def.return_bt
   | Def body -> open_pred def.args body args
+  | _ -> IT.pred_ name args def.return_bt
 
 let open_if_pred defs t = match IT.term t with
   | IT.Pred (name, args) -> begin match SymMap.find_opt name defs with
@@ -58,7 +60,9 @@ let open_if_pred defs t = match IT.term t with
 exception Unknown of Sym.t
 
 (* Compute if a predicate is sufficiently defined, i.e. not uninterpreted
-   nor can it call a predicate that is uninterpreted. *)
+   nor can it call a predicate that is uninterpreted. recursive functions
+   count as uninterpreted as the SMT solver will not necessarily be given
+   full definitions of them. *)
 let is_fully_defined (defs : definition SymMap.t) nm =
   let rec scan seen = function
     | [] -> true
@@ -67,12 +71,37 @@ let is_fully_defined (defs : definition SymMap.t) nm =
       else begin match SymMap.find_opt nm defs with
         | None -> raise (Unknown nm)
         | Some def -> begin match def.definition with
-            | Uninterp -> false
             | Def t -> scan (SymSet.add nm seen) (SymSet.elements (IT.preds_of t) @ nms)
+            | _ -> false
         end
     end
   in
   scan SymSet.empty [nm]
+
+
+(* Check for cycles in the logical predicate graph, which would cause
+   the system to loop trying to unfold them. Predicates whose definition
+   are marked with Rec_Def aren't checked, as cycles there are expected. *)
+let cycle_check (defs : definition SymMap.t) =
+  let def_preds nm = match SymMap.find_opt nm defs with
+    | None -> raise (Unknown nm)
+    | Some def -> begin match def.definition with
+        | Def t -> SymSet.elements (IT.preds_of t)
+        | _ -> []
+    end
+  in
+  let rec search known_ok = function
+    | [] -> None
+    | (nm, Some path) :: q -> if SymSet.mem nm known_ok
+      then search known_ok q
+      else if List.exists (Sym.equal nm) path
+      then Some (List.rev path @ [nm])
+      else
+        let deps = List.map (fun p -> (p, Some (nm :: path))) (def_preds nm) in
+        search known_ok (deps @ [(nm, None)] @ q)
+    | (nm, None) :: q -> search (SymSet.add nm known_ok) q
+  in search SymSet.empty (List.map (fun (p, _) -> (p, Some [])) (SymMap.bindings defs))
+
 
 
 exception Struct_not_found
@@ -144,4 +173,3 @@ end
 
 
 
-    

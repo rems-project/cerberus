@@ -322,8 +322,8 @@ let it_adjust ci it =
         let open LogicalPredicates in
         let def = SymMap.find name ci.fun_info in
         begin match def.definition with
-          | Uninterp -> t
           | Def body -> f (LogicalPredicates.open_pred def.args body args)
+          | _ -> t
         end
     | IT.CT_pred (Good (ct, t2)) -> if Option.is_some (Sctypes.is_struct_ctype ct)
         then t else f (IT.good_value ci.struct_decls ct t2)
@@ -458,6 +458,8 @@ let ensure_pred ci name aux =
           def.args in
       return (defn (Sym.pp_string name) args None rhs)
     )) []
+  | Rec_Def body ->
+    fail "rec-def not yet handled" (Sym.pp name)
   end
 
 let ensure_struct_mem is_good ci ct aux = match Sctypes.is_struct_ctype ct with

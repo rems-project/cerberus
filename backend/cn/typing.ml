@@ -520,3 +520,18 @@ let add_resource_predicate name entry =
 let add_logical_predicate name entry = 
   let@ global = get_global () in
   set_global { global with logical_predicates = Global.SymMap.add name entry global.logical_predicates }
+
+
+let logical_predicate_cycle_check () =
+  let@ global = get_global () in
+  match LogicalPredicates.cycle_check global.logical_predicates with
+  | None -> return ()
+  | Some (nm :: nms) ->
+    let@ def = get_logical_predicate_def Loc.unknown nm in
+    let open TypeErrors in
+    fail (fun _ -> {loc = def.loc; msg = Generic
+          (Pp.item "logical predicate cycle" (Pp.list Sym.pp (nm :: nms)))})
+  | Some [] -> assert false
+
+
+

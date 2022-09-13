@@ -94,6 +94,7 @@ type cn_clauses 'a 'ty =
 type cn_function 'a 'ty = <|
   cn_func_loc: Loc.t;
   cn_func_name: 'a;
+  cn_func_attrs: list Symbol.identifier;
   cn_func_args: list (cn_base_type 'a * 'a);
   cn_func_body: maybe (cn_fun_body 'a 'ty);
   cn_func_return_bty: cn_base_type 'a;

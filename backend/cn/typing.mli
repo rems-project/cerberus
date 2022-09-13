@@ -83,3 +83,5 @@ val add_fun_decl : Sym.t -> (Locations.t * ArgumentTypes.ft * Cerb_frontend.Muco
 (* val add_impl_constant : Cerb_frontend.Implementation.implementation_constant -> IndexTerms.t -> (unit, 'e) m *)
 val add_resource_predicate : Sym.t -> ResourcePredicates.definition -> (unit, 'e) m
 val add_logical_predicate : Sym.t -> LogicalPredicates.definition -> (unit, 'e) m
+
+val logical_predicate_cycle_check : unit -> (unit, TypeErrors.t) m

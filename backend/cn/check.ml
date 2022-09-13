@@ -824,7 +824,7 @@ let unpack_def global name args =
     match def.definition with
     | Def body ->
        Some (LogicalPredicates.open_pred def.args body args)
-    | Uninterp -> None
+    | _ -> None
     )
 
 let debug_constraint_failure_diagnostics model global c =
@@ -1888,6 +1888,7 @@ let check mu_file =
     ListM.iterM (fun (name, def) -> add_logical_predicate name def)
         mu_file.mu_logical_predicates
   in
+  let@ () = logical_predicate_cycle_check () in
   let@ () =
     ListM.iterM (fun (name,(def : LP.definition)) -> 
         let@ () = WellTyped.WLPD.welltyped def in

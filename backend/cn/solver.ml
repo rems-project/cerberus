@@ -581,7 +581,7 @@ module Translate = struct
          begin match def.definition with
          | Def body ->
             term (LogicalPredicates.open_pred def.args body args)
-         | Uninterp ->
+         | _ ->
             let decl = 
               Z3.FuncDecl.mk_func_decl context (symbol name)
                 (List.map (fun it -> sort (IT.bt it)) args)

@@ -971,6 +971,7 @@ module WLPD = struct
         let@ () = WBT.is_bt pd.loc pd.return_bt in
         match pd.definition with
         | Def body -> let@ _ = WIT.check pd.loc pd.return_bt body in return ()
+        | Rec_Def body -> let@ _ = WIT.check pd.loc pd.return_bt body in return ()
         | Uninterp -> return ()
       end
 

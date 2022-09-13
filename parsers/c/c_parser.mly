@@ -1963,9 +1963,16 @@ cn_cons_cases:
 | xs= separated_list (COMMA, cn_cons_case)
     { xs }
 
+cn_function_attrs:
+| nms= delimited (LBRACK, separated_list (COMMA, cn_variable), RBRACK)
+    { nms }
+|
+    { [] }
 
 cn_function:
-| CN_FUNCTION enter_cn cn_func_return_bty=delimited(LPAREN, base_type, RPAREN) str= LNAME VARIABLE
+| CN_FUNCTION enter_cn
+  cn_func_attrs= cn_function_attrs
+  cn_func_return_bty=delimited(LPAREN, base_type, RPAREN) str= LNAME VARIABLE
   cn_func_args= delimited(LPAREN, args, RPAREN)
   cn_func_body= cn_option_func_body exit_cn
     { (* TODO: check the name starts with lower case *)
@@ -1973,6 +1980,7 @@ cn_function:
       { cn_func_loc= loc
       ; cn_func_name= Symbol.Identifier (loc, str)
       ; cn_func_return_bty
+      ; cn_func_attrs
       ; cn_func_args
       ; cn_func_body} }
 cn_predicate:

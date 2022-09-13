@@ -535,6 +535,8 @@ let register_cn_functions env (defs: cn_function list) =
   in
   ListM.fold_leftM aux env defs
 
+let known_attrs = ["rec"]
+
 let translate_cn_function env (def: cn_function) =
   let open LogicalPredicates in
   Pp.debug 2 (lazy (Pp.item "translating function defn" (Sym.pp def.cn_func_name)));
@@ -544,10 +546,15 @@ let translate_cn_function env (def: cn_function) =
   let env' =
     List.fold_left (fun acc (sym, bt) -> Env.add_logical sym bt acc
       ) env args in
+  let is_rec = List.exists (fun id -> String.equal (Id.s id) "rec") def.cn_func_attrs in
+  let@ () = ListM.iterM (fun id -> if List.exists (String.equal (Id.s id)) known_attrs
+    then return ()
+    else fail {loc = def.cn_func_loc; msg = Generic (Pp.item "Unknown attribute" (Id.pp id))}
+  ) def.cn_func_attrs in
   let@ definition = match def.cn_func_body with
     | Some body -> 
        let@ body = translate_cn_func_body env' body in
-       return (Def body)
+       return (if is_rec then Rec_Def body else Def body)
     | None -> return Uninterp in
   let return_bt = translate_cn_base_type def.cn_func_return_bty in
   let def2 = {loc = def.cn_func_loc; args; return_bt; definition} in

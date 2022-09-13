@@ -749,10 +749,11 @@ let register_cn_function ident mk =
   match Map.lookup ident st.cn_state.Cn_desugaring.cn_functions with
     | Nothing ->
         resolve_cn_ident Cn.CN_function ident >>= fun sym ->
-        mk >>= fun (return_bty, args, body) ->
+        mk >>= fun (attrs, return_bty, args, body) ->
         let func = <|
           Cn.cn_func_loc= Loc.locOf ident;
           Cn.cn_func_name= sym;
+          Cn.cn_func_attrs= attrs;
           Cn.cn_func_args= args;
           Cn.cn_func_return_bty= return_bty;
           Cn.cn_func_body= body;

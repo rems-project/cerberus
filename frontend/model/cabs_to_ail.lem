@@ -4581,7 +4581,7 @@ let desugar_and_register_cn_function func =
     desugar_cn_base_type func.cn_func_loc func.cn_func_return_bty >>= fun return_bty' ->
     E.mapM (desugar_cn_arg CN_logical) func.cn_func_args >>= fun args ->
     desugar_o_cn_func_body func.cn_func_body               >>= fun body ->
-    E.return (return_bty', args, body)
+    E.return (func.cn_func_attrs, return_bty', args, body)
   end
 (* END CN *)
 
