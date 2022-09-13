@@ -1049,6 +1049,9 @@ Module CheriMemory
     then n_value
     else  wrapI C.min_vaddr C.max_vaddr n_value.
 
+  Definition Z_of_bytes: list byte -> Z. Proof. Admitted. (* TODO *)
+  Definition float_of_bits: Z -> float. Proof. Admitted. (* TODO *)
+
   Fixpoint abst 
     (loc : location_ocaml)
     (find_overlaping : Z.t -> overlap_ind)
@@ -1062,15 +1065,12 @@ Module CheriMemory
     fun (bs : list AbsByte) =>
       let self := abst loc find_overlaping funptrmap tag_query_f in
       let '_ :=
-        if
-          lt (List.length bs) (sizeof None cty)
+        if Nat.ltb (List.length bs) (sizeof DEFAULT_FUEL None cty)
         then
           raise (InternalErr "abst, |bs| < sizeof(ty)")
         else
           tt in
-      let merge_taint
-            (x_value : (* `NoTaint *) unit) (y_value : (* `NoTaint *) unit)
-        : (* `NoTaint *) unit :=
+      let merge_taint (x_value : taint_ind) (y_value : taint_ind) : taint_ind :=
         match (x_value, y_value) with
         | (NoTaint, NoTaint) => NoTaint
         | ((NoTaint, NewTaint xs) | (NewTaint xs, NoTaint)) => NewTaint xs
@@ -1127,7 +1127,7 @@ Module CheriMemory
             | Some cs =>
                 MVEinteger ity
                   (IV
-                     (int_of_bytes
+                     (Z_of_bytes
                         (is_signed_ity ity) cs))
             | None => MVEunspecified cty
             end, bs2)
@@ -1138,19 +1138,14 @@ Module CheriMemory
             match extract_unspec bs1' with
             | Some cs =>
                 MVEfloating fty
-                  (Stdlib.Int64.float_of_bits
-                     (Z.to_int64 (int_of_bytes true cs)))
+                  (float_of_bits (Z_of_bytes true cs))
             | None => MVEunspecified cty
             end, bs2)
       | Ctype.Array elem_ty (Some n_value) =>
           let fix aux
-                (n_value : int)
-                (function_parameter :
-                  ((* `NoTaint *) unit + (* `NewTaint *) list storage_instance_id) *
-                    list mem_value_with_err)
-            : list AbsByte ->
-              ((* `NoTaint *) unit + (* `NewTaint *) list storage_instance_id) *
-                mem_value_with_err * list AbsByte :=
+                (n_value : Z)
+                (function_parameter : taint_ind * list mem_value_with_err)
+            : list AbsByte -> taint_ind *  mem_value_with_err * list AbsByte :=
             let '(taint_acc, mval_acc) := function_parameter in
             fun (cs : list AbsByte) =>
               if le n_value 0 then
@@ -1166,32 +1161,16 @@ Module CheriMemory
           aux (Z.to_int n_value) (NoTaint, nil) bs
       | Ctype.Pointer _ ref_ty =>
           let '(bs1, bs2) := split_at (sizeof None cty) bs in
-          let '_ :=
-            Debug_ocaml.print_debug 1 nil
-              (fun (function_parameter : unit) =>
-                 let '_ := function_parameter in
-                 "TODO: Concrete, assuming pointer repr is unsigned??") in
           let '(prov, prov_status, bs1') := split_bytes bs1 in
           (NoTaint,
             match extract_unspec bs1' with
             | Some cs =>
                 match tag_query_f addr with
                 | None =>
-                    let '_ :=
-                      Debug_ocaml.warn nil
-                        (fun (function_parameter : unit) =>
-                           let '_ := function_parameter in
-                           String.append "Unspecified tag value for address 0x"
-                             (Z.format "%x" addr)) in
                     MVEunspecified cty
                 | Some tag =>
                     match C.decode cs tag with
                     | None =>
-                        let '_ :=
-                          Debug_ocaml.warn nil
-                            (fun (function_parameter : unit) =>
-                               let '_ := function_parameter in
-                               "Error decoding pointer cap") in
                         MVErr
                           (MerrCHERI loc
                              CheriErrDecodingCap)
@@ -1202,21 +1181,10 @@ Module CheriMemory
                             (Ctype.Function _ _ _) =>
                             match tag_query_f addr with
                             | None =>
-                                let '_ :=
-                                  Debug_ocaml.warn nil
-                                    (fun (function_parameter : unit) =>
-                                       let '_ := function_parameter in
-                                       String.append "Unspecified tag value for address 0x"
-                                         (Z.format "%x" addr)) in
                                 MVEunspecified cty
                             | Some tag =>
                                 match C.decode cs tag with
                                 | None =>
-                                    let '_ :=
-                                      Debug_ocaml.warn nil
-                                        (fun (function_parameter : unit) =>
-                                           let '_ := function_parameter in
-                                           "Error decoding function pointer cap") in
                                     MVErr
                                       (MerrCHERI loc
                                          CheriErrDecodingCap)
@@ -1225,10 +1193,9 @@ Module CheriMemory
                                       Z.sub
                                         (C.cap_get_value c_value)
                                         (Z.of_int initial_address) in
-                                    match Zmap.find_opt n_value funptrmap
-                                    with
+                                    match ZMap.find n_value funptrmap with
                                     | Some (file_dig, name, c') =>
-                                        if C.eq c_value c' then
+                                        if C.eqb c_value c' then
                                           MVEpointer ref_ty
                                             (PV prov
                                                (PVfunction
@@ -1254,7 +1221,7 @@ Module CheriMemory
                                       (C.cap_get_value n_value) with
                                   | NoAlloc => Prov_none
                                   | SingleAlloc alloc_id => Prov_some alloc_id
-                                  | DoubleAlloc (alloc_id1, alloc_id2) =>
+                                  | DoubleAlloc alloc_id1 alloc_id2 =>
                                       Prov_some alloc_id1
                                   end
                               | ValidPtrProv => prov
@@ -1267,42 +1234,36 @@ Module CheriMemory
                 MVEunspecified
                   (Ctype.Ctype nil
                      (Ctype.Pointer
-                        Ctype.no_qualifiers ref_ty))
+                        (* Ctype.no_qualifiers ref_ty *) ))
             end, bs2)
       | Ctype.Atomic atom_ty =>
-          let '_ :=
-            Debug_ocaml.print_debug 1 nil
-              (fun (function_parameter : unit) =>
-                 let '_ := function_parameter in
-                 "TODO: Concrete, is it ok to have the repr of atomic types be the same as their non-atomic version??")
-          in
           self addr atom_ty bs
       | Ctype.Struct tag_sym =>
           let '(bs1, bs2) := split_at (sizeof None cty) bs in
           let '(taint, rev_xs, _, bs') :=
             List.fold_left
               (fun (function_parameter :
-                   ((* `NoTaint *) unit + (* `NewTaint *) list storage_instance_id) *
+                   taint_ind *
                      list
                        (Symbol.identifier *
                           Ctype.ctype * mem_value_with_err) *
-                     int * list AbsByte) =>
+                     Z * list AbsByte) =>
                  let '(taint_acc, acc_xs, previous_offset, acc_bs) :=
                    function_parameter in
                  fun (function_parameter :
                      Symbol.identifier *
-                       Ctype.ctype * int) =>
+                       Ctype.ctype * Z) =>
                    let '(memb_ident, memb_ty, memb_offset) := function_parameter in
                    let pad := Z.sub memb_offset previous_offset in
                    let memb_addr :=
                      Z.add addr (Z.of_int memb_offset) in
                    let '(taint, mval, acc_bs') :=
-                     self memb_addr memb_ty (L.drop pad acc_bs) in
+                     self memb_addr memb_ty (List.skipn pad acc_bs) in
                    ((merge_taint taint taint_acc),
                      (cons (memb_ident, memb_ty, mval) acc_xs),
                      (Z.add memb_offset (sizeof None memb_ty)), acc_bs'))
               (NoTaint, nil, 0, bs1)
-              (fst (offsetsof (Mem_cheri.Tags.tagDefs tt) tag_sym))
+              (fst (offsetsof (Tags.tagDefs tt) tag_sym))
           in
           (taint, (MVEstruct tag_sym (List.rev rev_xs)), bs2)
       | Ctype.Union tag_sym =>
