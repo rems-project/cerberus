@@ -1480,7 +1480,7 @@ let rec desugar_type_specifiers specs =
           (* TODO: check that is indeed the UB I'm thinking of... *)
           List.concat <$> E.mapM desugar_struct_declaration sdecls >>= fun all_membDefs ->
           
-          (* Checks a member identifier is duplicated *)
+          (* Checks whether a member identifier is duplicated *)
           E.foldlM (fun acc (ident, _) ->
             if List.elem ident acc then
               E.fail (Loc.locOf ident) (Errors.Desugar_TODO ("duplicate member: " ^ show ident))
@@ -1489,7 +1489,10 @@ let rec desugar_type_specifiers specs =
           ) [] all_membDefs >>= fun _ ->
           
           begin
-            if List.length all_membDefs = 1 || struct_or_union = UNION then
+            if List.length all_membDefs = 0 && struct_or_union = UNION then
+              (* STD §6.7.2.1#8, sentence 3 *)
+              E.undef Loc.unknown Undefined.UB061_no_named_members
+            else if List.length all_membDefs = 1 || struct_or_union = UNION then
               check_members all_membDefs >>= fun _ ->
               E.return Nothing
             else match Utils.last all_membDefs with
