@@ -172,17 +172,18 @@ let translate_member_access loc env t member =
      let member_bt = BaseTypes.of_sct ty' in
      return ( IT.member_ ~member_bt (tag, t, member) )
   | Datatype tag ->
-     let@ members = match lookup_struct tag env with
-       | None -> fail {loc; msg= Unknown_struct tag}
-       | Some (defs_, _) (* TODO flexible *) -> return defs_
+     let@ (dt_info, mem_syms) = Env.lookup_datatype loc tag env in
+     let@ sym = match StringMap.find_opt (Id.s member) mem_syms with
+       | None -> fail {loc; msg= Generic (Pp.string ("Unknown member " ^ Id.s member ^
+           " of datatype " ^ Sym.pp_string tag))}
+       | Some sym -> return sym
      in
-     let@ ty = match List.assoc_opt Id.equal member members with
-       | None -> fail {loc; msg = Unknown_member (tag, member)}
-       | Some (_, _, ty) -> return ty
+     let@ bt = match List.assoc_opt Sym.equal sym dt_info.dt_all_params with
+       | None -> fail {loc; msg = Generic (Pp.string ("Unknown member " ^ Id.s member ^
+           " of datatype " ^ Sym.pp_string tag ^ " at type lookup"))}
+       | Some bt -> return bt
      in
-     let ty' = Retype.ct_of_ct loc ty in
-     let member_bt = BaseTypes.of_sct ty' in
-     return ( IT.member_ ~member_bt (tag, t, member) )
+     return (IT.IT (IT.Datatype_op (IT.DatatypeMember (t, sym)), bt))
   | has -> 
      fail {loc; msg = Illtyped_it' {it = t; has; expected = "struct"}}
 
@@ -477,20 +478,39 @@ let translate_option_cn_clauses env = function
 
 
 let translate_cn_func_body env body =
-  let rec translate_cn_func_body_aux env acc body =
+  let rec aux env body =
     match body with
       | CN_fb_letExpr (loc, sym, e_, cl) ->
           let@ e = translate_cn_expr env e_ in
-          let acc' =
-            fun z -> acc begin
-              IT.let_ sym e z
-            end in
-            translate_cn_func_body_aux (Env.add_logical sym (IT.basetype e) env) acc' cl
+          let env2 = Env.add_logical sym (IT.basetype e) env in
+          let@ b = aux env2 cl in
+          return (IT.let_ sym e b)
       | CN_fb_return (loc, x) ->
+         translate_cn_expr env x
+      | CN_fb_cases (loc, x, cs) ->
          let@ x = translate_cn_expr env x in
-         acc x
+         let@ dt_tag = match IT.basetype x with
+           | BT.Datatype tag -> return tag
+           | has -> fail {loc; msg = Illtyped_it' {it = x; has; expected = "datatype"}}
+         in
+         let@ (dt_info, _) = Env.lookup_datatype loc dt_tag env in
+         let@ cs = ListM.mapM (fun (nm, case_body) ->
+             let@ () = if List.exists (Sym.equal nm) dt_info.dt_constrs
+                 then return ()
+                 else fail {loc; msg = Unknown_datatype_constr nm}
+             in
+             let@ case_body = aux env case_body in
+             return (nm, case_body)) cs in
+         (* FIXME: add a default mechanism, and check that either the default is present
+            or every case is present *)
+         let@ (prev_cs, last) = match List.rev cs with
+           | (x :: xs) -> return (List.rev xs, x)
+           | [] -> fail {loc; msg = Generic (Pp.string "no cases")}
+         in
+         return (List.fold_right (fun (nm, y) z -> IT.ite_ (IT.datatype_is_cons_ nm x, y, z))
+             prev_cs (snd last))
   in
-  translate_cn_func_body_aux env (fun z -> return z) body
+  aux env body
 
 
 

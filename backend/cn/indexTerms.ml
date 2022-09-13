@@ -140,6 +140,7 @@ let pp =
        begin match datatype_op with
        | DatatypeCons (nm, members_rec) -> mparens (Sym.pp nm ^^^ aux false members_rec)
        | DatatypeMember (x, nm) -> aux true x ^^ dot ^^ Sym.pp nm
+       | DatatypeIsCons (nm, x) -> mparens (aux false x ^^^ !^ "is" ^^^ Sym.pp nm)
        end
     | Pointer_op pointer_op -> 
        begin match pointer_op with
@@ -269,6 +270,7 @@ and free_vars_record_op = function
 and free_vars_datatype_op = function
   | DatatypeCons (tag, members_xs) -> free_vars members_xs
   | DatatypeMember (t, member) -> free_vars t
+  | DatatypeIsCons (tag, t) -> free_vars t
 
 and free_vars_pointer_op = function
   | LTPointer (t1, t2) -> free_vars_list [t1; t2]
@@ -396,6 +398,7 @@ and fold_record_op f binders acc = function
 and fold_datatype_op f binders acc = function
   | DatatypeCons (tag, members_rec) -> fold f binders acc members_rec
   | DatatypeMember (t, _member) -> fold f binders acc t
+  | DatatypeIsCons (tag, t) -> fold f binders acc t
 
 and fold_pointer_op f binders acc = function
   | LTPointer (t1, t2) -> fold_list f binders acc [t1; t2]
@@ -587,6 +590,8 @@ let rec subst (su : typed subst) (IT (it, bt)) =
           DatatypeCons (tag, subst su members_rec)
        | DatatypeMember (t, m) ->
           DatatypeMember (subst su t, m)
+       | DatatypeIsCons (tag, t) ->
+          DatatypeIsCons (tag, subst su t)
      in
      IT (Datatype_op datatype_op, bt)
   | Pointer_op pointer_op -> 
@@ -863,7 +868,8 @@ let recordMember_ ~member_bt (t, member) =
 let datatype_cons_ nm dt_tag members =
   IT (Datatype_op (DatatypeCons (nm, record_ members)), BT.Datatype dt_tag)
 
-
+let datatype_is_cons_ nm t =
+  IT (Datatype_op (DatatypeIsCons (nm, t)), BT.Bool)
 
 
 (* pointer_op *)

@@ -66,6 +66,7 @@ and cn_expr 'a 'ty =
 type cn_fun_body 'a 'ty =
   | CN_fb_letExpr of Loc.t * 'a * cn_expr 'a 'ty * cn_fun_body 'a 'ty
   | CN_fb_return of Loc.t * cn_expr 'a 'ty
+  | CN_fb_cases of Loc.t * cn_expr 'a 'ty * list ('a * cn_fun_body 'a 'ty)
 
 type cn_pred 'a 'ty =
   | CN_owned of 'ty

@@ -546,6 +546,9 @@ let rec simp (struct_decls : Memory.struct_decls) values equalities log_unfold l
     | IT.DatatypeMember (it, member) ->
        let it = aux it in
        datatype_member_reduce it member bt
+    | IT.DatatypeIsCons (nm, it) ->
+       let it = aux it in
+       datatype_is_cons_ nm it
   in
 
 

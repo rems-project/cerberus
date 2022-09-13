@@ -2043,7 +2043,14 @@ cn_func_body:
       Cerb_frontend.Cn.CN_fb_letExpr (loc, Symbol.Identifier (loc, str), e, c) }
 | RETURN e= expr SEMICOLON
     { Cerb_frontend.Cn.CN_fb_return (Location_ocaml.region $loc(e) NoCursor, e) }
+| SWITCH e= delimited(LPAREN, expr, RPAREN) cs= nonempty_list(cn_func_body_case)
+    { let loc = Location_ocaml.point $startpos($1) in
+      Cerb_frontend.Cn.CN_fb_cases (loc, e, cs) }
 ;
+
+cn_func_body_case:
+| CASE nm= cn_variable LBRACE body=cn_func_body RBRACE
+    { (nm, body) }
 
 
 clause:

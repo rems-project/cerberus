@@ -456,6 +456,11 @@ module WIT = struct
                    fail (illtyped_index_term loc context t (IT.bt t) expected)
              in
              return (bt, DatatypeMember (t, member))
+           | DatatypeIsCons (nm, t) ->
+             let@ info = get_datatype_constr loc nm in
+             let (_, res_ty) = BT.cons_dom_rng info in
+             let@ t = check loc ~context res_ty t in
+             return (BT.Bool, DatatypeIsCons (nm, t))
          in
          return (IT (Datatype_op datatype_op, bt))
        | Pointer_op pointer_op ->
