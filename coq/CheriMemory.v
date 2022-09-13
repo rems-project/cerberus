@@ -931,6 +931,14 @@ Module CheriMemory
     | PV prov ptrval => (prov,ptrval)
     end.
 
+
+  (** Helper function to split a list at given position.
+      List.split_at in Lem.
+   *)
+  Definition split_at {A:Type} (n:nat) (l:list A)
+    := (List.firstn n l, List.skipn n l).
+
+
   (*
   Definition load
     (loc: location_ocaml) (ty: Ctype.ctype) (p:pointer_value): memM (footprint * mem_value) :=
@@ -938,6 +946,7 @@ Module CheriMemory
     _
   .
    *)
+
 
 
 End CheriMemory.
