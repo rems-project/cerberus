@@ -60,6 +60,7 @@ and 'bt record_op =
 and 'bt datatype_op =
   | DatatypeCons of Sym.t * 'bt term
   | DatatypeMember of 'bt term * Sym.t
+  | DatatypeIsCons of Sym.t * 'bt term
 
 and 'bt pointer_op = 
   | LTPointer of 'bt term * 'bt term

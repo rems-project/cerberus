@@ -4476,6 +4476,13 @@ let rec desugar_cn_func_body body =
         (*   E.return (x, e') *)
         (* ) xs >>= fun xs' -> *)
         E.return (CN_fb_return loc e')
+    | CN_fb_cases loc e xs ->
+        desugar_cn_expr e                    >>= fun e'  ->
+        E.mapM (fun (nm, x) ->
+          E.resolve_cn_ident CN_constructor nm  >>= fun nm'  ->
+          desugar_cn_func_body x                >>= fun x'   ->
+          E.return (nm', x')) xs             >>= fun xs' ->
+        E.return (CN_fb_cases loc e' xs')
   end
 
 

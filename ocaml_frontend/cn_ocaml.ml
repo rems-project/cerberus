@@ -138,14 +138,19 @@ module MakePp (Conf: PP_CN) = struct
     | CN_each (ident, bTy, e, _, pred, es) ->
         Dnode ( pp_stmt_ctor "CN_each" ^^^ P.squotes (Conf.pp_ident ident) ^^^ P.colon ^^^ pp_base_type bTy
               , List.map dtree_of_cn_expr es )
-  
+
   let rec dtree_of_cn_func_body = function
     | CN_fb_letExpr (_, ident, e, c) ->
-        Dnode ( pp_stmt_ctor "CN_letExpr" ^^^ P.squotes (Conf.pp_ident ident)
+        Dnode ( pp_stmt_ctor "CN_fb_letExpr" ^^^ P.squotes (Conf.pp_ident ident)
               , [dtree_of_cn_expr e; dtree_of_cn_func_body c])
     | CN_fb_return (_, x) ->
        dtree_of_cn_expr x
-
+    | CN_fb_cases (_, x, xs) ->
+       Dnode (pp_stmt_ctor "CN_fb_cases"
+             , dtree_of_cn_expr x :: List.map dtree_of_cn_fb_case xs)
+  and dtree_of_cn_fb_case (nm, x) = 
+       Dnode (pp_stmt_ctor "case" ^^^ P.squotes (Conf.pp_ident nm)
+             , [dtree_of_cn_func_body x])
 
   let dtree_of_o_cn_func_body = function
     | None -> Dleaf !^"uninterpreted"

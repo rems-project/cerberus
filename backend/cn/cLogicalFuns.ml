@@ -3,6 +3,7 @@ open Resultat
 open Effectful.Make(Resultat)
 open TypeErrors
 module SymMap = Map.Make(Sym)
+module StringMap = Map.Make(String)
 
 open NewMu
 open New
@@ -104,24 +105,19 @@ let c_function_to_it2 fsym rbt args body label_defs : (IT.t, type_error) m  =
   | _ -> fail {loc; msg = Generic (Pp.item "c_function_to_it2" (NewMu.pp_expr body))}
 
 
-let c_fun_to_it id fsym (fn : 'bty New.mu_fun_map_decl) =
+let c_fun_to_it id fsym def
+        (fn : 'bty New.mu_fun_map_decl) =
   let open New in
+  let def_args = def.LogicalPredicates.args
+    |> List.map IndexTerms.sym_ in
   match fn with
   | M_Fun (rbt, args, body) ->
-    let@ () = if List.length args == 0
-      then return ()
-      else fail {loc = Id.loc id;
-        msg = Generic (Pp.string "c_fun_to_it: arguments not yet supported")}
-    in
-    let@ r = symb_exec_mu_pexpr SymMap.empty body in
+    let arg_map = mk_var_map (List.map fst args) def_args in
+    let@ r = symb_exec_mu_pexpr arg_map body in
     return r
   | M_Proc (loc, rbt, args, body, labels) ->
-    let@ () = if List.length args == 0
-      then return ()
-      else fail {loc = Id.loc id;
-        msg = Generic (Pp.string "c_fun_to_it: arguments not yet supported")}
-    in
-    let@ r = symb_exec_mu_expr labels SymMap.empty body in
+    let arg_map = mk_var_map (List.map fst args) def_args in
+    let@ r = symb_exec_mu_expr labels arg_map body in
     begin match r with
     | CallRet it -> return it
     | _ -> fail {loc = Id.loc id;
@@ -133,14 +129,15 @@ let c_fun_to_it id fsym (fn : 'bty New.mu_fun_map_decl) =
 
 let upd_def id def_tm logical_predicates =
   let open LogicalPredicates in
-  let s = Id.pp_string id in
+  let s = Id.s id in
   let@ (sym, def, rem) = match List.partition
-    (fun (sym, _) -> String.equal s (Sym.pp_string sym)) logical_predicates
+    (fun (sym, _) -> String.equal s (Conversions.todo_string_of_sym sym)) logical_predicates
   with
   | ([], _) -> fail {loc = Id.loc id;
         msg = Unknown_logical_predicate {id = Sym.fresh_named s; resource = false}}
   | ([(sym, def)], rem) -> return (sym, def, rem)
-  | _ -> assert false
+  | _ -> fail {loc = Id.loc id;
+        msg = Generic (Pp.string ("logical predicate multiply defined: " ^ s))}
   in
   match def.definition with
   | Uninterp -> return ((sym, { def with definition = Def def_tm }) :: rem)
@@ -148,8 +145,16 @@ let upd_def id def_tm logical_predicates =
         msg = Generic (Pp.string ("logical predicate already defined: " ^ s))}
 
 let add_c_fun_defs logical_predicates log_c_defs =
+  let pred_def_map = List.fold_left (fun m (sym, def) ->
+    StringMap.add (Conversions.todo_string_of_sym sym) def m) StringMap.empty
+    logical_predicates in
   let@ conv_defs = ListM.mapM (fun (id, fsym, fn) ->
-        let@ it = c_fun_to_it id fsym fn in
+        let@ def = match StringMap.find_opt (Id.s id) pred_def_map with
+          | Some def -> return def
+          | None -> fail {loc = Id.loc id;
+                msg = Unknown_logical_predicate {id = Sym.fresh_named (Id.s id); resource = false}}
+        in
+        let@ it = c_fun_to_it id fsym def fn in
         return (id, it)) log_c_defs in
   ListM.fold_leftM (fun lps (id, it) -> upd_def id it lps) logical_predicates conv_defs
 

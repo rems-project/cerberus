@@ -176,7 +176,8 @@ module Translate = struct
   let string context str =
     Z3.Symbol.mk_string context str
   let prefix_symbol context pfx sym =
-    Z3.Symbol.mk_string context (pfx ^ Sym.pp_string sym ^ "_a" ^ string_of_int (Sym.num sym))
+    let str = pfx ^ Sym.pp_string sym ^ "_a" ^ string_of_int (Sym.num sym) in
+    Z3.Symbol.mk_string context str
   let symbol context sym = prefix_symbol context "" sym
 
   
@@ -201,6 +202,9 @@ module Translate = struct
   (* let member_symbol tag id = 
    *   Z3.Symbol.mk_string context (member_name tag id) *)
 
+  let dt_recog_name context nm = prefix_symbol context "is_" nm
+
+
   let translate_datatypes other_sort context global =
     let to_translate = global.datatypes |> SymMap.bindings
       |> List.filter (fun (nm, _) -> not (BT_Table.mem bt_table (BT.Datatype nm)))
@@ -217,13 +221,12 @@ module Translate = struct
       let info = SymMap.find nm global.datatype_constrs in
       let r = List.map (fun (_, bt) -> arg_sort bt) info.c_params in
       let sym = symbol context nm in
-      let is_sym = prefix_symbol context "is_" nm in
+      let is_sym = dt_recog_name context nm in
       Z3Symbol_Table.add z3sym_table sym (DatatypeConsFunc {nm});
       Z3Symbol_Table.add z3sym_table is_sym (DatatypeConsRecogFunc {nm});
       List.iter (fun (nm, bt) -> Z3Symbol_Table.add z3sym_table
           (symbol context nm) (DatatypeAccFunc {nm; dt = dt_nm; bt})) info.c_params;
-      Z3.Datatype.mk_constructor context (symbol context nm)
-          (prefix_symbol context "is_" nm)
+      Z3.Datatype.mk_constructor context sym is_sym
           (List.map (fun (nm, _) -> symbol context nm) info.c_params)
           (List.map fst r) (List.map snd r)
     in
@@ -497,25 +500,21 @@ module Translate = struct
       | Datatype_op datatype_op ->
          begin match datatype_op with
          | DatatypeCons (c_nm, elts_rec) ->
-           let this_sym fd = match Z3Symbol_Table.find z3sym_table
-                   (Z3.FuncDecl.get_name fd) with
-             | DatatypeConsFunc {nm} -> Sym.equal c_nm nm
-             | _ -> false
-           in
-           let fd = List.find this_sym (Z3.Datatype.get_constructors (sort bt)) in
            let info = SymMap.find c_nm global.datatype_constrs in
+           let z3sym = symbol c_nm in
+           let fd = Z3.FuncDecl.mk_func_decl context z3sym
+               (List.map (fun (_, bt) -> sort bt) info.c_params) (sort bt) in
            let args = List.map (fun (nm, _) -> term (Simplify.record_member_reduce elts_rec nm))
                info.c_params in
            Z3.FuncDecl.apply fd args
          | DatatypeMember (it, member) ->
-           let this_sym fd = match Z3Symbol_Table.find z3sym_table
-                   (Z3.FuncDecl.get_name fd) with
-             | DatatypeAccFunc f -> Sym.equal member f.nm
-             | _ -> false
-           in
-           let fd = List.find this_sym (List.concat
-                   (Z3.Datatype.get_accessors (sort (IT.bt it)))) in
+           let z3sym = symbol member in
+           let fd = Z3.FuncDecl.mk_func_decl context z3sym [sort (IT.bt it)] (sort bt) in
            Z3.FuncDecl.apply fd [term it]
+         | DatatypeIsCons (c_nm, t) ->
+           let z3sym = dt_recog_name context c_nm in
+           let fd = Z3.FuncDecl.mk_func_decl context z3sym [sort (IT.bt t)] (sort bt) in
+           Z3.FuncDecl.apply fd [term t]
          end
       | Pointer_op pointer_op -> 
          let open Z3.Arithmetic in
