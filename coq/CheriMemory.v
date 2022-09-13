@@ -1015,6 +1015,22 @@ Module CheriMemory
             end, (List.rev rev_values))
     end.
 
+  Definition provs_of_bytes (bs : list AbsByte) : taint_ind :=
+    let xs :=
+      List.fold_left
+        (fun (acc : list storage_instance_id) =>
+         fun (b_value : AbsByte) =>
+           match b_value.(prov) with
+           | Prov_none => acc
+           | Prov_some alloc_id => cons alloc_id acc
+           | Prov_symbolic iota => acc
+           | Prov_device => acc
+           end) bs nil in
+    match xs with
+    | [] => NoTaint
+    | _ => NewTaint xs
+    end.
+
   Fixpoint abst 
     (loc : location_ocaml)
     (find_overlaping : Z.t -> overlap_ind)
@@ -1058,8 +1074,8 @@ Module CheriMemory
                ((Ctype.Unsigned Ctype.Intptr_t) as ity)))
         =>
           let '(bs1, bs2) := split_at (sizeof None cty) bs in
-          let '(prov, _, bs1') := AbsByte.split_bytes bs1 in
-          ((AbsByte.provs_of_bytes bs1),
+          let '(prov, _, bs1') := split_bytes bs1 in
+          ((provs_of_bytes bs1),
             match extract_unspec bs1' with
             | Some cs =>
                 match tag_query_f addr with
@@ -1098,8 +1114,8 @@ Module CheriMemory
             end, bs2)
       | Ctype.Basic (Ctype.Integer ity) =>
           let '(bs1, bs2) := split_at (sizeof None cty) bs in
-          let '(prov, _, bs1') := AbsByte.split_bytes bs1 in
-          ((AbsByte.provs_of_bytes bs1),
+          let '(prov, _, bs1') := split_bytes bs1 in
+          ((provs_of_bytes bs1),
             match extract_unspec bs1' with
             | Some cs =>
                 MVEinteger ity
@@ -1110,7 +1126,7 @@ Module CheriMemory
             end, bs2)
       | Ctype.Basic (Ctype.Floating fty) =>
           let '(bs1, bs2) := split_at (sizeof None cty) bs in
-          let '(_, _, bs1') := AbsByte.split_bytes bs1 in
+          let '(_, _, bs1') := split_bytes bs1 in
           (NoTaint,
             match extract_unspec bs1' with
             | Some cs =>
@@ -1148,7 +1164,7 @@ Module CheriMemory
               (fun (function_parameter : unit) =>
                  let '_ := function_parameter in
                  "TODO: Concrete, assuming pointer repr is unsigned??") in
-          let '(prov, prov_status, bs1') := AbsByte.split_bytes bs1 in
+          let '(prov, prov_status, bs1') := split_bytes bs1 in
           (NoTaint,
             match extract_unspec bs1' with
             | Some cs =>
