@@ -14,7 +14,7 @@ Require Import Lia.
 From ExtLib.Structures Require Import Monad Monads MonadExc MonadState.
 From ExtLib.Data.Monads Require Import EitherMonad OptionMonad.
 
-Require Import Capabilities Addr Memory_model Mem_common ErrorWithState Undefined Morello ErrorWithState Location Symbol Implementation Tags Utils Switches.
+Require Import Capabilities Addr Memory_model Mem_common ErrorWithState Undefined Morello ErrorWithState Location Symbol Implementation Tags Utils Switches AilTypesAux.
 
 Local Open Scope string_scope.
 Local Open Scope type_scope.
@@ -38,6 +38,7 @@ Module CheriMemory
   : Memory(MorelloAddr).
 
   Include Mem_common(MorelloAddr).
+  Include AilTypesAux(IMP).
 
   Definition name := "CHERI memory model".
 
@@ -1031,6 +1032,23 @@ Module CheriMemory
     | _ => NewTaint xs
     end.
 
+  Definition extract_unspec {A : Set} (xs : list (option A))
+    : option (list A) :=
+    List.fold_left
+      (fun (acc_opt : option (list A)) =>
+       fun (c_opt : option A) =>
+         match (acc_opt, c_opt) with
+         | (None, _) => None
+         | (_, None) => None
+         | (Some acc, Some c_value) => Some (cons c_value acc)
+         end) (List.rev xs) (Some nil) .
+
+  (** Convert an arbitrary integer value to unsinged cap value *)
+  Definition wrap_cap_value (n_value : Z) : Z :=
+    if andb (Z.leb n_value C.min_vaddr) (Z.leb n_value C.max_vaddr)
+    then n_value
+    else  wrapI C.min_vaddr C.max_vaddr n_value.
+
   Fixpoint abst 
     (loc : location_ocaml)
     (find_overlaping : Z.t -> overlap_ind)
@@ -1080,26 +1098,15 @@ Module CheriMemory
             | Some cs =>
                 match tag_query_f addr with
                 | None =>
-                    let '_ :=
-                      Debug_ocaml.warn nil
-                        (fun (function_parameter : unit) =>
-                           let '_ := function_parameter in
-                           String.append "Unspecified tag value for address 0x"
-                             (Z.format "%x" addr)) in
                     MVEunspecified cty
                 | Some tag =>
                     match C.decode cs tag with
                     | None =>
-                        let '_ :=
-                          Debug_ocaml.warn nil
-                            (fun (function_parameter : unit) =>
-                               let '_ := function_parameter in
-                               "Error decoding [u]intptr_t cap") in
                         MVErr
                           (MerrCHERI loc
                              CheriErrDecodingCap)
                     | Some c_value =>
-                        if AilTypesAux.is_signed_ity ity then
+                        if is_signed_ity ity then
                           let n_value := C.cap_get_value c_value
                           in
                           let c_value :=
@@ -1121,7 +1128,7 @@ Module CheriMemory
                 MVEinteger ity
                   (IV
                      (int_of_bytes
-                        (AilTypesAux.is_signed_ity ity) cs))
+                        (is_signed_ity ity) cs))
             | None => MVEunspecified cty
             end, bs2)
       | Ctype.Basic (Ctype.Floating fty) =>
