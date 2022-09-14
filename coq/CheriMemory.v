@@ -50,7 +50,6 @@ Module CheriMemory
   Definition integer_operator: Set := unit. (* Mem_common.integer_operator *)
   Definition floating_operator: Set := unit. (* Mem_common.floating_operator *)
   Definition intrinsics_signature: Set := unit. (* intrinsics_signature *)
-  Definition Digest_t: Set := unit. (* OCaml Stdlib.Digest_t *)
 
   Inductive provenance : Set :=
   | Prov_none : provenance
@@ -165,7 +164,7 @@ Module CheriMemory
                    ((* `Single *) storage_instance_id +
                       (* `Double *) storage_instance_id * storage_instance_id);
       funptrmap : ZMap.t
-                    (Digest_t * string * C.t);
+                    (digest * string * C.t);
       varargs : ZMap.t
                   (Z * list (Ctype.ctype * pointer_value));
       next_varargs_id : Z;
@@ -209,7 +208,7 @@ Module CheriMemory
       last_address := initial_address;
       allocations := ZMap.empty allocation;
       iota_map := ZMap.empty (storage_instance_id + storage_instance_id * storage_instance_id);
-      funptrmap := ZMap.empty (Digest_t * string * C.t);
+      funptrmap := ZMap.empty (digest * string * C.t);
       varargs := ZMap.empty (Z * list (Ctype.ctype * pointer_value));
       next_varargs_id := Z0;
       bytemap := ZMap.empty AbsByte;
@@ -255,6 +254,9 @@ Module CheriMemory
        | Some v => ret v
        | None => raise msg
        end.
+
+  Definition sassert (b:bool) (msg:string) : serr unit
+    := if b then ret tt else raise msg.
 
   Definition fail {A:Type} err : memM A :=
     let loc :=
@@ -506,14 +508,7 @@ Module CheriMemory
                 (nil, 0) ;;
             ret ((List.rev xs), maxoffset)
         | Some (Ctype.UnionDef membrs) =>
-            ret ((List.map
-                    (fun (function_parameter :
-                           Symbol.identifier *
-                             (Annot.attributes *
-                                Ctype.qualifiers *
-                                Ctype.ctype)) =>
-                       let '(ident, (_, _, ty)) := function_parameter in
-                       (ident, ty, 0)) membrs), 0)
+            ret ((List.map (fun '(ident, (_, _, ty)) => (ident, ty, 0)) membrs), 0)
         | None => raise "could not find tag"
         end
     end
@@ -581,11 +576,11 @@ Module CheriMemory
          end.
 
   Definition repr
-    (funptrmap: ZMap.t(Digest_t * string * C.t))
+    (funptrmap: ZMap.t(digest * string * C.t))
     (captags : ZMap.t bool)
     (addr : Z)
     (mval : mem_value)
-    : (ZMap.t (Digest_t * string * C.t)) *
+    : (ZMap.t (digest * string * C.t)) *
         (ZMap.t bool) *
         (list AbsByte).
   Proof. Admitted. (* TODO: *)
@@ -932,7 +927,6 @@ Module CheriMemory
     | PV prov ptrval => (prov,ptrval)
     end.
 
-
   (** Helper function to split a list at given position.
       List.split_at in Lem.
    *)
@@ -1049,226 +1043,194 @@ Module CheriMemory
     then n_value
     else  wrapI C.min_vaddr C.max_vaddr n_value.
 
-  Definition Z_of_bytes: list byte -> Z. Proof. Admitted. (* TODO *)
+  Definition Z_of_bytes: bool (* is signed *) -> list byte -> Z. Proof. Admitted. (* TODO *)
+  Definition N_of_bytes: bool (* is signed *) -> list byte -> N. Proof. Admitted. (* TODO *)
   Definition float_of_bits: Z -> float. Proof. Admitted. (* TODO *)
 
-  Fixpoint abst 
+  Typeclasses eauto := 1.
+  Fixpoint abst
+    (fuel: nat)
     (loc : location_ocaml)
-    (find_overlaping : Z.t -> overlap_ind)
-    (funptrmap : ZMap.t (Digest_t * string * C.t))
-    (tag_query_f : Z.t -> option bool)
+    (find_overlaping : Z -> overlap_ind)
+    (funptrmap : ZMap.t (digest * string * C.t))
+    (tag_query_f : Z -> option bool)
     (addr : Z)
-    (function_parameter : Ctype.ctype)
-    : list AbsByte -> taint_ind * mem_value_with_err * list AbsByte
+    (cty : Ctype.ctype)
+    (bs : list AbsByte)
+    : serr (taint_ind * mem_value_with_err * list AbsByte)
     :=
-    let '(Ctype.Ctype _ ty) as cty := function_parameter in
-    fun (bs : list AbsByte) =>
-      let self := abst loc find_overlaping funptrmap tag_query_f in
-      let '_ :=
-        if Nat.ltb (List.length bs) (sizeof DEFAULT_FUEL None cty)
-        then
-          raise (InternalErr "abst, |bs| < sizeof(ty)")
-        else
-          tt in
-      let merge_taint (x_value : taint_ind) (y_value : taint_ind) : taint_ind :=
-        match (x_value, y_value) with
-        | (NoTaint, NoTaint) => NoTaint
-        | ((NoTaint, NewTaint xs) | (NewTaint xs, NoTaint)) => NewTaint xs
-        | (NewTaint xs, NewTaint ys) => NewTaint (List.app xs ys)
-        end in
-      match ty with
-      |
-        (Ctype.Void | Ctype.Array _ None |
-          Ctype.Function _ _ _ |
-          Ctype.FunctionNoParams _) =>
-          raise (InternalErr "abst on function!")
-      |
-        (Ctype.Basic
-           (Ctype.Integer
-              ((Ctype.Signed Ctype.Intptr_t) as ity))
-        |
-          Ctype.Basic
-            (Ctype.Integer
-               ((Ctype.Unsigned Ctype.Intptr_t) as ity)))
-        =>
-          let '(bs1, bs2) := split_at (sizeof None cty) bs in
-          let '(prov, _, bs1') := split_bytes bs1 in
-          ((provs_of_bytes bs1),
-            match extract_unspec bs1' with
-            | Some cs =>
-                match tag_query_f addr with
-                | None =>
-                    MVEunspecified cty
-                | Some tag =>
-                    match C.decode cs tag with
-                    | None =>
-                        MVErr
-                          (MerrCHERI loc
-                             CheriErrDecodingCap)
-                    | Some c_value =>
-                        if is_signed_ity ity then
-                          let n_value := C.cap_get_value c_value
-                          in
-                          let c_value :=
-                            C.cap_set_value c_value
-                              (wrap_cap_value n_value) in
-                          MVEinteger ity (IC true c_value)
-                        else
-                          MVEinteger ity (IC false c_value)
-                    end
-                end
-            | None => MVEunspecified cty
-            end, bs2)
-      | Ctype.Basic (Ctype.Integer ity) =>
-          let '(bs1, bs2) := split_at (sizeof None cty) bs in
-          let '(prov, _, bs1') := split_bytes bs1 in
-          ((provs_of_bytes bs1),
-            match extract_unspec bs1' with
-            | Some cs =>
-                MVEinteger ity
-                  (IV
-                     (Z_of_bytes
-                        (is_signed_ity ity) cs))
-            | None => MVEunspecified cty
-            end, bs2)
-      | Ctype.Basic (Ctype.Floating fty) =>
-          let '(bs1, bs2) := split_at (sizeof None cty) bs in
-          let '(_, _, bs1') := split_bytes bs1 in
-          (NoTaint,
-            match extract_unspec bs1' with
-            | Some cs =>
-                MVEfloating fty
-                  (float_of_bits (Z_of_bytes true cs))
-            | None => MVEunspecified cty
-            end, bs2)
-      | Ctype.Array elem_ty (Some n_value) =>
-          let fix aux
-                (n_value : Z)
-                (function_parameter : taint_ind * list mem_value_with_err)
-            : list AbsByte -> taint_ind *  mem_value_with_err * list AbsByte :=
-            let '(taint_acc, mval_acc) := function_parameter in
-            fun (cs : list AbsByte) =>
-              if le n_value 0 then
-                (taint_acc, (MVEarray (List.rev mval_acc)), cs)
-              else
-                let el_addr :=
-                  Z.add addr
-                    (Z.of_int
-                       (Z.mul (Z.sub n_value 1) (sizeof None elem_ty))) in
-                let '(taint, mval, cs') := self el_addr elem_ty cs in
-                aux (Z.sub n_value 1)
-                  ((merge_taint taint taint_acc), (cons mval mval_acc)) cs' in
-          aux (Z.to_int n_value) (NoTaint, nil) bs
-      | Ctype.Pointer _ ref_ty =>
-          let '(bs1, bs2) := split_at (sizeof None cty) bs in
-          let '(prov, prov_status, bs1') := split_bytes bs1 in
-          (NoTaint,
-            match extract_unspec bs1' with
-            | Some cs =>
-                match tag_query_f addr with
-                | None =>
-                    MVEunspecified cty
-                | Some tag =>
-                    match C.decode cs tag with
-                    | None =>
-                        MVErr
-                          (MerrCHERI loc
-                             CheriErrDecodingCap)
-                    | Some n_value =>
-                        match ref_ty with
-                        |
-                          Ctype.Ctype _
-                            (Ctype.Function _ _ _) =>
-                            match tag_query_f addr with
-                            | None =>
-                                MVEunspecified cty
-                            | Some tag =>
-                                match C.decode cs tag with
-                                | None =>
-                                    MVErr
-                                      (MerrCHERI loc
-                                         CheriErrDecodingCap)
-                                | Some c_value =>
-                                    let n_value :=
-                                      Z.sub
-                                        (C.cap_get_value c_value)
-                                        (Z.of_int initial_address) in
-                                    match ZMap.find n_value funptrmap with
-                                    | Some (file_dig, name, c') =>
-                                        if C.eqb c_value c' then
-                                          MVEpointer ref_ty
-                                            (PV prov
-                                               (PVfunction
-                                                  (FP_valid
-                                                     (Symbol.Symbol file_dig
-                                                        (Z.to_int n_value)
-                                                        (Symbol.SD_Id name)))))
-                                        else
-                                          MVEpointer ref_ty
-                                            (PV prov (PVfunction (FP_invalid c_value)))
-                                    | None =>
-                                        MVEpointer ref_ty
-                                          (PV prov (PVfunction (FP_invalid c_value)))
-                                    end
-                                end
-                            end
-                        | _ =>
-                            let prov :=
-                              match prov_status with
-                              | NotValidPtrProv =>
-                                  match
-                                    find_overlaping
-                                      (C.cap_get_value n_value) with
-                                  | NoAlloc => Prov_none
-                                  | SingleAlloc alloc_id => Prov_some alloc_id
-                                  | DoubleAlloc alloc_id1 alloc_id2 =>
-                                      Prov_some alloc_id1
-                                  end
-                              | ValidPtrProv => prov
-                              end in
-                            MVEpointer ref_ty (PV prov (PVconcrete n_value))
+    match fuel with
+    | O => raise "abst out of fuel"
+    | S fuel =>
+        let '(Ctype.Ctype _ ty) := cty in
+        let self f := abst f loc find_overlaping funptrmap tag_query_f in
+        sz <- sizeof DEFAULT_FUEL None cty ;;
+        sassert (negb (Nat.ltb (List.length bs) sz)) "abst, |bs| < sizeof(ty)" ;;
+        let merge_taint (x_value : taint_ind) (y_value : taint_ind) : taint_ind :=
+          match (x_value, y_value) with
+          | (NoTaint, NoTaint) => NoTaint
+          | ((NoTaint, NewTaint xs) | (NewTaint xs, NoTaint)) => NewTaint xs
+          | (NewTaint xs, NewTaint ys) => NewTaint (List.app xs ys)
+          end in
+        match ty with
+        | (Ctype.Void | Ctype.Array _ None |
+            Ctype.Function _ _ _ |
+            Ctype.FunctionNoParams _) =>
+            raise "abst on function!"
+        | (Ctype.Basic (Ctype.Integer ((Ctype.Signed Ctype.Intptr_t) as ity))
+          | Ctype.Basic (Ctype.Integer ((Ctype.Unsigned Ctype.Intptr_t) as ity)))
+          =>
+            sz <- sizeof DEFAULT_FUEL None cty ;;
+            let '(bs1, bs2) := split_at sz bs in
+            '(prov, _, bs1') <- split_bytes bs1 ;;
+            iss <- option2serr "Could not get signedness of a type"  (is_signed_ity ity) ;;
+            let iss1:bool := iss in (* hack to hint type checker *)
+            ret ((provs_of_bytes bs1),
+                match extract_unspec bs1' with
+                | Some cs =>
+                    match tag_query_f addr with
+                    | None => MVEunspecified cty
+                    | Some tag =>
+                        match C.decode (N_of_bytes false cs) tag with
+                        | None => MVErr (MerrCHERI loc CheriErrDecodingCap)
+                        | Some c_value =>
+                            if iss then
+                              let n_value := C.cap_get_value c_value in
+                              let c_value := C.cap_set_value c_value (wrap_cap_value n_value) in
+                              MVEinteger ity (IC true c_value)
+                            else
+                              MVEinteger ity (IC false c_value)
                         end
                     end
-                end
-            | None =>
-                MVEunspecified
-                  (Ctype.Ctype nil
-                     (Ctype.Pointer
-                        (* Ctype.no_qualifiers ref_ty *) ))
-            end, bs2)
-      | Ctype.Atomic atom_ty =>
-          self addr atom_ty bs
-      | Ctype.Struct tag_sym =>
-          let '(bs1, bs2) := split_at (sizeof None cty) bs in
-          let '(taint, rev_xs, _, bs') :=
-            List.fold_left
-              (fun (function_parameter :
-                   taint_ind *
-                     list
-                       (Symbol.identifier *
-                          Ctype.ctype * mem_value_with_err) *
-                     Z * list AbsByte) =>
-                 let '(taint_acc, acc_xs, previous_offset, acc_bs) :=
-                   function_parameter in
-                 fun (function_parameter :
-                     Symbol.identifier *
-                       Ctype.ctype * Z) =>
-                   let '(memb_ident, memb_ty, memb_offset) := function_parameter in
+                | None => MVEunspecified cty
+                end, bs2)
+        | Ctype.Basic (Ctype.Floating fty) =>
+            sz <- sizeof DEFAULT_FUEL None cty ;;
+            let '(bs1, bs2) := split_at sz bs in
+            '(_, _, bs1') <- split_bytes bs1 ;;
+            ret (NoTaint,
+                match extract_unspec bs1' with
+                | Some cs => MVEfloating fty (float_of_bits (Z_of_bytes true cs))
+                | None => MVEunspecified cty
+                end, bs2)
+        | Ctype.Basic (Ctype.Integer ity) =>
+            sz <- sizeof DEFAULT_FUEL None cty ;;
+            let '(bs1, bs2) := split_at sz bs in
+            '(prov, _, bs1') <- split_bytes bs1 ;;
+            iss <- option2serr "Could not get signedness of a type"  (is_signed_ity ity) ;;
+            ret (provs_of_bytes bs1,
+                match extract_unspec bs1' with
+                | Some cs => MVEinteger ity (IV (Z_of_bytes iss cs))
+                | None => MVEunspecified cty
+                end, bs2)
+        | Ctype.Array elem_ty (Some n_value) =>
+            let fix aux (fuel:nat) (n_value : Z) par (cs : list AbsByte)
+              : serr (taint_ind *  mem_value_with_err * list AbsByte)
+              :=
+              match fuel with
+              | O => raise "abst.aux out of fuel"
+              | S fuel =>
+                  let '(taint_acc, mval_acc) := par in
+                  if Z.leb n_value 0 then
+                    ret (taint_acc, (MVEarray (List.rev mval_acc)), cs)
+                  else
+                    sz <- sizeof DEFAULT_FUEL None elem_ty ;;
+                    let el_addr := Z.add addr (Z.mul (Z.sub n_value 1) sz) in
+                    '(taint, mval, cs') <- self fuel el_addr elem_ty cs ;;
+                    aux fuel (Z.sub n_value 1)
+                      ((merge_taint taint taint_acc), (cons mval mval_acc)) cs'
+              end
+            in
+            aux fuel n_value (NoTaint, nil) bs
+        | Ctype.Pointer _ ref_ty =>
+            sz <- sizeof DEFAULT_FUEL None cty ;;
+            let '(bs1, bs2) := split_at sz bs in
+            '(prov, prov_status, bs1') <- split_bytes bs1 ;;
+            ret (NoTaint,
+                match extract_unspec bs1' with
+                | Some cs =>
+                    match tag_query_f addr with
+                    | None => MVEunspecified cty
+                    | Some tag =>
+                        match C.decode (N_of_bytes false cs) tag with
+                        | None => MVErr (MerrCHERI loc CheriErrDecodingCap)
+                        | Some n_value =>
+                            match ref_ty with
+                            | Ctype.Ctype _ (Ctype.Function _ _ _) =>
+                                match tag_query_f addr with
+                                | None => MVEunspecified cty
+                                | Some tag =>
+                                    match C.decode (N_of_bytes false cs) tag with
+                                    | None => MVErr (MerrCHERI loc CheriErrDecodingCap)
+                                    | Some c_value =>
+                                        let n_value :=
+                                          Z.sub
+                                            (C.cap_get_value c_value)
+                                            initial_address in
+                                        match ZMap.find n_value funptrmap with
+                                        | Some (file_dig, name, c') =>
+                                            if C.eqb c_value c' then
+                                              MVEpointer ref_ty
+                                                (PV prov
+                                                   (PVfunction
+                                                      (FP_valid
+                                                         (Symbol.Symbol file_dig
+                                                            n_value
+                                                            (Symbol.SD_Id name)))))
+                                            else
+                                              MVEpointer ref_ty
+                                                (PV prov (PVfunction (FP_invalid c_value)))
+                                        | None =>
+                                            MVEpointer ref_ty
+                                              (PV prov (PVfunction (FP_invalid c_value)))
+                                        end
+                                    end
+                                end
+                            | _ =>
+                                let prov :=
+                                  match prov_status with
+                                  | NotValidPtrProv =>
+                                      match
+                                        find_overlaping
+                                          (C.cap_get_value n_value) with
+                                      | NoAlloc => Prov_none
+                                      | SingleAlloc alloc_id => Prov_some alloc_id
+                                      | DoubleAlloc alloc_id1 alloc_id2 =>
+                                          Prov_some alloc_id1
+                                      end
+                                  | ValidPtrProv => prov
+                                  end in
+                                MVEpointer ref_ty (PV prov (PVconcrete n_value))
+                            end
+                        end
+                    end
+                | None => MVEunspecified (Ctype.Ctype nil (Ctype.Pointer (* Ctype.no_qualifiers ref_ty *) ))
+                end, bs2)
+        | Ctype.Atomic atom_ty =>
+            self fuel addr atom_ty bs
+        | Ctype.Struct tag_sym =>
+            sz <- sizeof DEFAULT_FUEL None cty ;;
+            '(offsets,_) <- offsetsof (Tags.tagDefs tt) tag_sym ;;
+            let '(bs1, bs2) := split_at sz bs in
+            '(taint, rev_xs, _, bs') <-
+              monadic_fold_left
+                (fun '(taint_acc, acc_xs, previous_offset, acc_bs) '(memb_ident, memb_ty, memb_offset) =>
                    let pad := Z.sub memb_offset previous_offset in
                    let memb_addr :=
-                     Z.add addr (Z.of_int memb_offset) in
-                   let '(taint, mval, acc_bs') :=
-                     self memb_addr memb_ty (List.skipn pad acc_bs) in
-                   ((merge_taint taint taint_acc),
-                     (cons (memb_ident, memb_ty, mval) acc_xs),
-                     (Z.add memb_offset (sizeof None memb_ty)), acc_bs'))
-              (NoTaint, nil, 0, bs1)
-              (fst (offsetsof (Tags.tagDefs tt) tag_sym))
-          in
-          (taint, (MVEstruct tag_sym (List.rev rev_xs)), bs2)
-      | Ctype.Union tag_sym =>
-          raise (InternalErr "TODO: abst, Union (as value)")
-      end.
+                     Z.add addr memb_offset in
+                   '(taint, mval, acc_bs') <-
+                     self fuel memb_addr memb_ty (List.skipn pad acc_bs) ;;
+                   ret ((merge_taint taint taint_acc),
+                       (cons (memb_ident, memb_ty, mval) acc_xs),
+                       (Z.add memb_offset (sizeof DEFAULT_FUEL None memb_ty)), acc_bs'))
+                offsets
+                (NoTaint, nil, 0, bs1)
+            ;;
+            ret (taint, (MVEstruct tag_sym (List.rev rev_xs)), bs2)
+        | Ctype.Union tag_sym =>
+            raise "TODO: abst, Union (as value)"
+        end
+    end.
 
   (*
   Definition load
