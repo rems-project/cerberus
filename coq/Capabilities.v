@@ -11,7 +11,7 @@ Set Implicit Arguments.
 Set Strict Implicit.
 Generalizable All Variables.
 
-Open Scope N_scope.
+Open Scope Z_scope.
 Open Scope list_scope.
 
 Variant comparison : Set :=
@@ -75,7 +75,7 @@ Module Type Permission.
   Parameter to_string: t -> string.
 
   (* raw permissoins in numeric format *)
-  Parameter to_raw: t -> N.
+  Parameter to_raw: t -> Z.
 
   (* Initialize from list of boolean. The size and
        contents of the list is implementation-specific.
@@ -260,7 +260,7 @@ Module Type Capability
   (** Decoding sequence of bits into a capbility object. It will
         return None if list is wrong size. validity tag is passed
         separately, as it is not part of encoding.  *)
-  Parameter decode: N -> bool -> option t.
+  Parameter decode: Z -> bool -> option t.
 
   (** Encode capability as list of bits.
 
@@ -270,28 +270,19 @@ Module Type Capability
 
         Retuns memory-encoded capability and validity tag
    *)
-  Parameter encode: bool ->  t -> (N * bool).
+  Parameter encode: bool ->  t -> (Z * bool).
 
   (* --- Compression-related --- *)
 
   (** returns the length that a capability would have after using
         [cheri_bounds_set] to set the length to [len] (assuming
         appropriate alignment of the base).
-
-        NOTE: I would rather use [N] type here, but it will cause
-        lot of headache when using from Memory interface where historically
-        [Z] is used for everything. (vz)
-
    *)
   Parameter representable_length: Z -> Z.
 
   (** returns a bitmask that can be used to align an address downwards
         such that it is sufficiently aligned to create a precisely
         bounded capability.
-
-        NOTE: I would rather use [N] type here, but it will cause
-        lot of headache when using from Memory interface where historically
-        [Z] is used for everything. (vz)
    *)
   Parameter representable_alignment_mask:  Z -> Z.
 

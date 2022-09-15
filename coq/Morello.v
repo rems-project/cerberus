@@ -66,7 +66,7 @@ Module MorelloPermission : Permission.
 
   Definition t := morello_perm_record.
 
-  Definition user_perms_len := 4.
+  Definition user_perms_len := 4%nat.
 
   Definition perm_is_global := global.
   Definition perm_is_execute := executive.
@@ -158,7 +158,7 @@ Module MorelloPermission : Permission.
   Definition to_string (p:t) := "TODO"%string.
 
   (* raw permissoins in numeric format *)
-  Definition to_raw (p:t) := N0. (*  TODO *)
+  Definition to_raw (p:t) := Z0. (*  TODO *)
 
   Definition of_list (l: list bool): option t := None. (* TODO *)
 

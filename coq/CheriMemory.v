@@ -1044,7 +1044,6 @@ Module CheriMemory
     else  wrapI C.min_vaddr C.max_vaddr n_value.
 
   Definition Z_of_bytes: bool (* is signed *) -> list byte -> Z. Proof. Admitted. (* TODO *)
-  Definition N_of_bytes: bool (* is signed *) -> list byte -> N. Proof. Admitted. (* TODO *)
   Definition float_of_bits: Z -> float. Proof. Admitted. (* TODO *)
 
   Fixpoint abst
@@ -1090,7 +1089,7 @@ Module CheriMemory
                     match tag_query_f addr with
                     | None => MVEunspecified cty
                     | Some tag =>
-                        match C.decode (N_of_bytes false cs) tag with
+                        match C.decode (Z_of_bytes false cs) tag with
                         | None => MVErr (MerrCHERI loc CheriErrDecodingCap)
                         | Some c_value =>
                             if iss then
@@ -1151,7 +1150,7 @@ Module CheriMemory
                     match tag_query_f addr with
                     | None => MVEunspecified cty
                     | Some tag =>
-                        match C.decode (N_of_bytes false cs) tag with
+                        match C.decode (Z_of_bytes false cs) tag with
                         | None => MVErr (MerrCHERI loc CheriErrDecodingCap)
                         | Some n_value =>
                             match ref_ty with
@@ -1159,7 +1158,7 @@ Module CheriMemory
                                 match tag_query_f addr with
                                 | None => MVEunspecified cty
                                 | Some tag =>
-                                    match C.decode (N_of_bytes false cs) tag with
+                                    match C.decode (Z_of_bytes false cs) tag with
                                     | None => MVErr (MerrCHERI loc CheriErrDecodingCap)
                                     | Some c_value =>
                                         let n_value :=
