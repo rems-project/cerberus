@@ -154,6 +154,11 @@ Module CheriMemory
       value : option byte
     }.
 
+  Definition absbyte_v prov copy_offset value : AbsByte
+    :=
+    {| prov := prov; copy_offset := copy_offset; value := value |}.
+
+
   Record mem_state_r :=
     {
       next_alloc_id : storage_instance_id;
@@ -235,7 +240,7 @@ Module CheriMemory
   (* simple string error *)
   Notation serr := (sum string).
 
-  Definition serr2memM {A: Type} (msg:string) (e:serr A): (memM A)
+  Definition serr2memM {A: Type} (e:serr A): (memM A)
     := match e with
        | inr v => ret v
        | inl msg => raise (InternalErr msg)
@@ -575,15 +580,163 @@ Module CheriMemory
                end
          end.
 
-  Definition repr
-    (funptrmap: ZMap.t(digest * string * C.t))
+  Definition bits_of_float: float -> Z. Proof. Admitted. (* TODO *)
+
+  (* size is in bytes *)
+  Definition bytes_of_Z (is_signed : bool) (size : nat) (i_value : Z) : serr (list byte). Proof. Admitted. (* TODO *)
+  (* :=
+    let nbits := Z.mul 8 size in
+    let '(min, max) :=
+      if is_signed then
+        ((Z.negate
+          (Z.pow_int (Z.of_int 2) (Z.sub nbits 1))),
+          (Z.sub
+            (Z.pow_int (Z.of_int 2) (Z.sub nbits 1))
+            (Z.succ Z.zero)))
+      else
+        (Z.zero,
+          (Z.sub (Z.pow_int (Z.of_int 2) nbits)
+            (Z.succ Z.zero))) in
+    if
+      orb
+        (negb
+          (andb (le min i_value)
+            (le i_value max)))
+        (gt nbits 128)
+    then
+      fail "bytes_of_int failure"
+    else
+      list_init size
+        (fun (n_value : int) =>
+          CoqOfOCaml.Stdlib.char_of_int
+            (Z.to_int (Z.extract_num i_value (Z.mul 8 n_value) 8))).
+   *)
+
+  Definition resolve_function_pointer
+    (funptrmap : ZMap.t (digest * string * C.t))
+    (fp : function_pointer)
+    : ZMap.t (digest * string * C.t) * C.t
+    :=
+    match fp with
+    | FP_valid (Symbol.Symbol file_dig n opt_name) =>
+        match ZMap.find n funptrmap with
+        | Some (_, _, c) => (funptrmap, c)
+        | None =>
+            let c := C.alloc_fun (Z.add initial_address n) in
+            (match opt_name with
+             | Symbol.SD_Id name =>
+                 ZMap.add n (file_dig, name, c) funptrmap
+             | _ => funptrmap
+             end, c)
+        end
+    | FP_invalid c => (funptrmap, c)
+    end.
+
+  Fixpoint repr
+    (fuel: nat)
+    (funptrmap: ZMap.t (digest * string * C.t))
     (captags : ZMap.t bool)
     (addr : Z)
     (mval : mem_value)
-    : (ZMap.t (digest * string * C.t)) *
-        (ZMap.t bool) *
-        (list AbsByte).
-  Proof. Admitted. (* TODO: *)
+    : serr ((ZMap.t (digest * string * C.t)) * (ZMap.t bool) * (list AbsByte))
+    :=
+    match fuel with
+    | O => raise "out of fuel in repr"
+    | S fuel =>
+        match mval with
+        | MVunspecified ty =>
+            sz <- sizeof DEFAULT_FUEL None ty ;;
+            ret (funptrmap, (clear_caps addr sz captags),
+                (list_init (Z.to_nat sz) (fun _ => absbyte_v Prov_none None None)))
+        | MVinteger ity (IV n_value) =>
+            iss <- option2serr "Could not get int signedness of a type in repr" (is_signed_ity DEFAULT_FUEL ity) ;;
+            sz <- sizeof DEFAULT_FUEL None (Ctype.Ctype nil (Ctype.Basic (Ctype.Integer ity))) ;;
+            bs' <- bytes_of_Z iss (Z.to_nat sz) n_value ;;
+            let bs := List.map (fun (x : byte) => absbyte_v Prov_none None (Some x)) bs' in
+            ret (funptrmap, (clear_caps addr (Z.of_nat (List.length bs)) captags), bs)
+        | MVinteger ity (IC _ c_value) =>
+            let '(cb, ct) := C.encode true c_value in
+            cb'  <- bytes_of_Z false (*TODO: not sure about sign *)
+                      (Z.to_nat (IMP.get.(sizeof_pointer)))
+                      cb ;;
+            ret (funptrmap, (ZMap.add addr ct captags),
+                (mapi
+                   (fun (i_value : nat) (b_value : byte) =>
+                      absbyte_v Prov_none None (Some b_value)) cb'))
+        | MVfloating fty fval =>
+            sz <- sizeof DEFAULT_FUEL None (Ctype.Ctype nil (Ctype.Basic (Ctype.Floating fty))) ;;
+            bs' <- bytes_of_Z true (Z.to_nat sz) (bits_of_float fval) ;;
+            let bs := List.map (fun (x : byte) => absbyte_v Prov_none None (Some x)) bs'
+            in
+            ret (funptrmap, (clear_caps addr (Z.of_nat (List.length bs)) captags), bs)
+        | MVpointer ref_ty (PV prov ptrval_) =>
+            match ptrval_ with
+            | PVfunction
+                ((FP_valid (Symbol.Symbol file_dig n_value opt_name)) as
+                  fp) =>
+                let '(funptrmap, c_value) := resolve_function_pointer funptrmap fp in
+                let '(cb, ct) := C.encode true c_value in
+                cb'  <- bytes_of_Z false (*TODO: not sure about sign *)
+                          (Z.to_nat (IMP.get.(sizeof_pointer)))
+                          cb ;;
+                ret (funptrmap, (ZMap.add addr ct captags),
+                    (mapi
+                       (fun (i_value : nat) (b_value : byte) =>
+                          absbyte_v prov (Some i_value) (Some b_value)) cb'))
+            | (PVfunction (FP_invalid c_value) | PVconcrete c_value) =>
+                let '(cb, ct) := C.encode true c_value in
+                cb'  <- bytes_of_Z false (*TODO: not sure about sign *)
+                          (Z.to_nat (IMP.get.(sizeof_pointer)))
+                          cb ;;
+                ret (funptrmap, (ZMap.add addr ct captags),
+                    (mapi
+                       (fun (i_value : nat) (b_value : byte) =>
+                          absbyte_v prov (Some i_value) (Some b_value)) cb'))
+            end
+        | MVarray mvals =>
+            '(funptrmap, captags, _, bs_s) <-
+              monadic_fold_left
+                (fun '(funptrmap, captags, addr, bs) (mval : mem_value) =>
+                   '(funptrmap, captags, bs') <- repr fuel funptrmap captags addr mval ;;
+                   let addr := Z.add addr (Z.of_nat (List.length bs')) in
+                   ret (funptrmap, captags, addr, (cons bs' bs)))
+                mvals (funptrmap, captags, addr, nil) ;;
+            ret (funptrmap, captags, (List.concat (List.rev bs_s)))
+        | MVstruct tag_sym xs =>
+            let padding_byte _ : AbsByte := absbyte_v Prov_none None None in
+            '(offs, last_off) <- offsetsof DEFAULT_FUEL (Tags.tagDefs tt) tag_sym ;;
+            sz <- sizeof DEFAULT_FUEL None (Ctype.Ctype nil (Ctype.Struct tag_sym)) ;;
+            let final_pad := Z.sub sz last_off in
+            '(funptrmap, captags, _, bs) <-
+              monadic_fold_left2
+                (fun (f: ZMap.t (digest * string * C.t) * ZMap.t bool * Z * list AbsByte) =>
+                   let '(funptrmap, captags, last_off, acc) := f in
+                   fun (f : Symbol.identifier *  Ctype.ctype * Z) =>
+                     let '(ident, ty, off) := f in
+                     fun (function_parameter :
+                           Symbol.identifier *
+                             Ctype.ctype * mem_value) =>
+                       let '(_, _, mval) := function_parameter in
+                       let pad := Z.sub off last_off in
+                       '(funptrmap, captags, bs) <-
+                         repr fuel funptrmap captags (Z.add addr off) mval ;;
+                       sz <- sizeof DEFAULT_FUEL None ty ;;
+                       ret (funptrmap, captags, (Z.add off sz),
+                           (List.app acc
+                              (List.app (list_init (Z.to_nat pad) padding_byte) bs))))
+                (funptrmap, captags, 0, nil) offs xs ;;
+            ret (funptrmap, captags,
+                (List.app bs (list_init (Z.to_nat final_pad) padding_byte)))
+        | MVunion tag_sym memb_ident mval =>
+            size <- sizeof DEFAULT_FUEL None (Ctype.Ctype nil (Ctype.Union tag_sym)) ;;
+            '(funptrmap', captags', bs) <- repr fuel funptrmap captags addr mval ;;
+            ret (funptrmap', captags',
+                (List.app bs
+                   (list_init (Nat.sub (Z.to_nat size) (List.length bs))
+                      (fun _ => absbyte_v Prov_none None None))))
+        end
+    end.
+
 
   Definition allocate_object
     (tid:thread_id)
@@ -594,7 +747,7 @@ Module CheriMemory
     : memM pointer_value
     :=
     let align_n := num_of_int int_val in
-    size_n <- serr2memM "sizeof failed" (sizeof DEFAULT_FUEL None ty) ;;
+    size_n <- serr2memM (sizeof DEFAULT_FUEL None ty) ;;
 
     let mask := C.representable_alignment_mask size_n in
     let size_n' := C.representable_length size_n in
@@ -624,35 +777,34 @@ Module CheriMemory
           | Some mval =>
               let (ro,readonly_status) :=
                 match pref with
-                | Symbol.PrefStringLiteral _ _ =>
-                    (true,IsReadOnly_string_literal)
-                | _ =>
-                    (false,IsWritable)
+                | Symbol.PrefStringLiteral _ _ => (true,IsReadOnly_string_literal)
+                | _ => (false,IsWritable)
                 end
               in
               let alloc := {| prefix:= pref; base:= addr; size:= size_n'; ty:= Some ty; is_readonly:= readonly_status; taint:= Unexposed |} in
-              (* TODO: factorize this with do_store inside CHERI.store *)
-              update (fun st =>
-                        let '(funptrmap, captags, pre_bs) := repr st.(funptrmap) st.(captags) addr mval in
-                        let bs := mapi (fun i b => (Z.add addr (Z.of_nat i), b)) pre_bs in
-                        {|
-                          next_alloc_id    := st.(next_alloc_id);
-                          next_iota        := st.(next_iota);
-                          last_address     := st.(last_address) ;
-                          allocations      := ZMap.add alloc_id alloc st.(allocations);
-                          iota_map         := st.(iota_map);
-                          funptrmap        := funptrmap;
-                          varargs          := st.(varargs);
-                          next_varargs_id  := st.(next_varargs_id);
-                          bytemap          := List.fold_left (fun acc '(addr, b) =>
-                                                                ZMap.add addr b acc
-                                                ) bs st.(bytemap);
-                          captags          := captags;
-                          dead_allocations := st.(dead_allocations);
-                          dynamic_addrs    := st.(dynamic_addrs);
-                          last_used        := st.(last_used);
-                        |})
-              ;; ret ro
+
+              st <- get ;;
+              '(funptrmap, captags, pre_bs) <- serr2memM (repr DEFAULT_FUEL st.(funptrmap) st.(captags) addr mval) ;;
+              let bs := mapi (fun i b => (Z.add addr (Z.of_nat i), b)) pre_bs in
+              put {|
+                  next_alloc_id    := st.(next_alloc_id);
+                  next_iota        := st.(next_iota);
+                  last_address     := st.(last_address) ;
+                  allocations      := ZMap.add alloc_id alloc st.(allocations);
+                  iota_map         := st.(iota_map);
+                  funptrmap        := funptrmap;
+                  varargs          := st.(varargs);
+                  next_varargs_id  := st.(next_varargs_id);
+                  bytemap          := List.fold_left (fun acc '(addr, b) =>
+                                                        ZMap.add addr b acc
+                                        ) bs st.(bytemap);
+                  captags          := captags;
+                  dead_allocations := st.(dead_allocations);
+                  dynamic_addrs    := st.(dynamic_addrs);
+                  last_used        := st.(last_used);
+                |}
+              ;;
+              ret ro
           end)
            >>=
            (fun ro =>
@@ -741,8 +893,8 @@ Module CheriMemory
          | Some v => ret v
          | None =>
              fail (MerrOutsideLifetime
-                         (String.append "CHERI.get_allocation, alloc_id="
-                            (of_Z alloc_id)))
+                     (String.append "CHERI.get_allocation, alloc_id="
+                        (of_Z alloc_id)))
          end
       ).
 
@@ -758,17 +910,17 @@ Module CheriMemory
   Definition resolve_iota precond iota :=
     lookup_iota iota >>=
       (fun x => match x with
-             | inl alloc_id =>
-                 (precond alloc_id >>= merr2memM alloc_id)
-             | inr (alloc_id1, alloc_id2) =>
-                 precond alloc_id1 >>=
-                   fun x => match x with
-                         | OK =>
-                             ret alloc_id1
-                         | FAIL _ =>
-                             precond alloc_id2 >>= merr2memM alloc_id2
-                         end
-             end)
+                | inl alloc_id =>
+                    (precond alloc_id >>= merr2memM alloc_id)
+                | inr (alloc_id1, alloc_id2) =>
+                    precond alloc_id1 >>=
+                      fun x => match x with
+                               | OK =>
+                                   ret alloc_id1
+                               | FAIL _ =>
+                                   precond alloc_id2 >>= merr2memM alloc_id2
+                               end
+                end)
       >>=
       fun alloc_id =>
         update (fun st =>
@@ -815,22 +967,22 @@ Module CheriMemory
           let precondition (z : storage_instance_id) :=
             is_dead z >>=
               (fun x => match x with
-                     | true =>
-                         ret
-                           (FAIL (MerrUndefinedFree loc Free_static_allocation))
-                     | false =>
-                         get_allocation z >>=
-                           (fun alloc =>
-                              if
-                                MorelloAddr.eqb
-                                  (C.cap_get_value addr)
-                                  alloc.(base)
-                              then
-                                ret OK
-                              else
-                                ret
-                                  (FAIL(MerrUndefinedFree loc Free_out_of_bound)))
-                     end)
+                        | true =>
+                            ret
+                              (FAIL (MerrUndefinedFree loc Free_static_allocation))
+                        | false =>
+                            get_allocation z >>=
+                              (fun alloc =>
+                                 if
+                                   MorelloAddr.eqb
+                                     (C.cap_get_value addr)
+                                     alloc.(base)
+                                 then
+                                   ret OK
+                                 else
+                                   ret
+                                     (FAIL(MerrUndefinedFree loc Free_out_of_bound)))
+                        end)
           in
           (if is_dyn then
              (is_dynamic (C.cap_get_value addr)) >>=
@@ -873,47 +1025,47 @@ Module CheriMemory
              (* this kill is dynamic one (i.e. free() or friends) *)
              is_dynamic (C.cap_get_value addr) >>=
                fun x => match x with
-                     | false =>
-                         fail (MerrUndefinedFree loc (Free_static_allocation))
-                     | true => ret tt
-                     end
+                        | false =>
+                            fail (MerrUndefinedFree loc (Free_static_allocation))
+                        | true => ret tt
+                        end
            else
              ret tt)
         ;;
         is_dead alloc_id >>=
           fun x => match x with
-                | true =>
-                    if is_dyn then
-                      fail (MerrUndefinedFree loc Free_dead_allocation)
-                    else
-                      raise (InternalErr "Concrete: FREE was called on a dead allocation")
-                | false =>
-                    get_allocation alloc_id >>= fun alloc =>
-                        if MorelloAddr.eqb (C.cap_get_value addr) alloc.(base) then
-                          update
-                            (fun st =>
-                               {|
-                                 next_alloc_id    := st.(next_alloc_id);
-                                 next_iota        := st.(next_iota);
-                                 last_address     := st.(last_address) ;
-                                 allocations      := ZMap.remove alloc_id st.(allocations);
-                                 iota_map         := st.(iota_map);
-                                 funptrmap        := st.(funptrmap);
-                                 varargs          := st.(varargs);
-                                 next_varargs_id  := st.(next_varargs_id);
-                                 bytemap          := st.(bytemap);
-                                 captags          := st.(captags);
-                                 dead_allocations := alloc_id :: st.(dead_allocations);
-                                 dynamic_addrs    := st.(dynamic_addrs);
-                                 last_used        := Some alloc_id;
-                               |}) ;;
-                          if Switches.has_switch SW_zap_dead_pointers then
-                            zap_pointers alloc_id
-                          else
-                            ret tt
-                        else
-                          fail (MerrUndefinedFree loc Free_out_of_bound)
-                end
+                   | true =>
+                       if is_dyn then
+                         fail (MerrUndefinedFree loc Free_dead_allocation)
+                       else
+                         raise (InternalErr "Concrete: FREE was called on a dead allocation")
+                   | false =>
+                       get_allocation alloc_id >>= fun alloc =>
+                           if MorelloAddr.eqb (C.cap_get_value addr) alloc.(base) then
+                             update
+                               (fun st =>
+                                  {|
+                                    next_alloc_id    := st.(next_alloc_id);
+                                    next_iota        := st.(next_iota);
+                                    last_address     := st.(last_address) ;
+                                    allocations      := ZMap.remove alloc_id st.(allocations);
+                                    iota_map         := st.(iota_map);
+                                    funptrmap        := st.(funptrmap);
+                                    varargs          := st.(varargs);
+                                    next_varargs_id  := st.(next_varargs_id);
+                                    bytemap          := st.(bytemap);
+                                    captags          := st.(captags);
+                                    dead_allocations := alloc_id :: st.(dead_allocations);
+                                    dynamic_addrs    := st.(dynamic_addrs);
+                                    last_used        := Some alloc_id;
+                                  |}) ;;
+                             if Switches.has_switch SW_zap_dead_pointers then
+                               zap_pointers alloc_id
+                             else
+                               ret tt
+                           else
+                             fail (MerrUndefinedFree loc Free_out_of_bound)
+                   end
     end.
 
   Definition is_pointer_algined (p : Z) : bool :=
@@ -934,9 +1086,9 @@ Module CheriMemory
     := (List.firstn n l, List.skipn n l).
 
   Inductive overlap_ind :=
-    | NoAlloc: overlap_ind
-    | SingleAlloc: storage_instance_id -> overlap_ind
-    | DoubleAlloc: storage_instance_id -> storage_instance_id -> overlap_ind.
+  | NoAlloc: overlap_ind
+  | SingleAlloc: storage_instance_id -> overlap_ind
+  | DoubleAlloc: storage_instance_id -> storage_instance_id -> overlap_ind.
 
   Inductive prov_ptr_valid_ind :=
   | NotValidPtrProv
@@ -1231,13 +1383,13 @@ Module CheriMemory
         end
     end.
 
-  (*
+(*
   Definition load
     (loc: location_ocaml) (ty: Ctype.ctype) (p:pointer_value): memM (footprint * mem_value) :=
     let '(prov, ptrval_) := break_PV p in
     _
   .
-   *)
+ *)
 
 
 
