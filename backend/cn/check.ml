@@ -827,7 +827,8 @@ let unpack_def global name args =
     | _ -> None
     )
 
-let debug_constraint_failure_diagnostics model global c =
+let debug_constraint_failure_diagnostics (model_with_q : Solver.model_with_q) global c =
+  let model = fst model_with_q in
   if ! Pp.print_level == 0 then () else
   let split tm = match IT.term tm with
     | IT.Bool_op (IT.And xs) -> Some ("and", xs)
@@ -840,7 +841,7 @@ let debug_constraint_failure_diagnostics model global c =
   in
   let rec diag_rec i tm =
     let pt = !^ "-" ^^^ Pp.int i ^^ Pp.colon in
-    begin match Solver.eval global (fst model) tm with
+    begin match Solver.eval global model tm with
       | None -> Pp.debug 6 (lazy (pt ^^^ !^ "cannot eval:" ^^^ IT.pp tm))
       | Some v -> Pp.debug 6 (lazy (pt ^^^ IT.pp v ^^^ !^"<-" ^^^ IT.pp tm))
     end;
@@ -848,11 +849,16 @@ let debug_constraint_failure_diagnostics model global c =
       | None -> ()
       | Some (nm, ts) -> List.iter (diag_rec (i + 1)) ts
   in
-  begin match c with
-  | LC.T tm ->
+  begin match (c, model_with_q) with
+  | (LC.T tm, _) ->
     Pp.debug 6 (lazy (Pp.item "counterexample, expanding" (IT.pp tm)));
     diag_rec 0 tm
-  | _ -> ()
+  | (LC.Forall ((sym, bt), tm), (_, [q])) ->
+    let tm' = IT.subst (IT.make_subst [(sym, IT.sym_ q)]) tm in
+    Pp.debug 6 (lazy (Pp.item "quantified counterexample, expanding" (IT.pp tm)));
+    diag_rec 0 tm'
+  | _ ->
+    Pp.warn Loc.unknown (Pp.bold "unexpected quantifier count with model")
   end
 
 module Spine : sig
