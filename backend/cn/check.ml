@@ -835,6 +835,7 @@ let debug_constraint_failure_diagnostics (model_with_q : Solver.model_with_q) gl
     | IT.Bool_op (IT.Or xs) -> Some ("or", xs)
     | IT.Bool_op (IT.Not x) -> Some ("not", [x])
     | IT.Bool_op (IT.EQ (x, y)) -> Some ("eq", [x; y])
+    | IT.Bool_op (IT.Impl (x, y)) -> Some ("implies", [x; y])
     | IT.Pred (name, args) when Option.is_some (unpack_def global name args) ->
         Some (Sym.pp_string name, [Option.get (unpack_def global name args)])
     | _ -> None
