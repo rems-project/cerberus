@@ -1047,7 +1047,6 @@ Module CheriMemory
   Definition N_of_bytes: bool (* is signed *) -> list byte -> N. Proof. Admitted. (* TODO *)
   Definition float_of_bits: Z -> float. Proof. Admitted. (* TODO *)
 
-  Typeclasses eauto := 1.
   Fixpoint abst
     (fuel: nat)
     (loc : location_ocaml)
@@ -1065,7 +1064,7 @@ Module CheriMemory
         let '(Ctype.Ctype _ ty) := cty in
         let self f := abst f loc find_overlaping funptrmap tag_query_f in
         sz <- sizeof DEFAULT_FUEL None cty ;;
-        sassert (negb (Nat.ltb (List.length bs) sz)) "abst, |bs| < sizeof(ty)" ;;
+        sassert (negb (Nat.ltb (List.length bs) (Z.to_nat sz))) "abst, |bs| < sizeof(ty)" ;;
         let merge_taint (x_value : taint_ind) (y_value : taint_ind) : taint_ind :=
           match (x_value, y_value) with
           | (NoTaint, NoTaint) => NoTaint
@@ -1081,9 +1080,9 @@ Module CheriMemory
           | Ctype.Basic (Ctype.Integer ((Ctype.Unsigned Ctype.Intptr_t) as ity)))
           =>
             sz <- sizeof DEFAULT_FUEL None cty ;;
-            let '(bs1, bs2) := split_at sz bs in
+            let '(bs1, bs2) := split_at (Z.to_nat sz) bs in
             '(prov, _, bs1') <- split_bytes bs1 ;;
-            iss <- option2serr "Could not get signedness of a type"  (is_signed_ity ity) ;;
+            iss <- option2serr "Could not get signedness of a type"  (is_signed_ity DEFAULT_FUEL ity) ;;
             let iss1:bool := iss in (* hack to hint type checker *)
             ret ((provs_of_bytes bs1),
                 match extract_unspec bs1' with
@@ -1106,7 +1105,7 @@ Module CheriMemory
                 end, bs2)
         | Ctype.Basic (Ctype.Floating fty) =>
             sz <- sizeof DEFAULT_FUEL None cty ;;
-            let '(bs1, bs2) := split_at sz bs in
+            let '(bs1, bs2) := split_at (Z.to_nat sz) bs in
             '(_, _, bs1') <- split_bytes bs1 ;;
             ret (NoTaint,
                 match extract_unspec bs1' with
@@ -1115,9 +1114,9 @@ Module CheriMemory
                 end, bs2)
         | Ctype.Basic (Ctype.Integer ity) =>
             sz <- sizeof DEFAULT_FUEL None cty ;;
-            let '(bs1, bs2) := split_at sz bs in
+            let '(bs1, bs2) := split_at (Z.to_nat sz) bs in
             '(prov, _, bs1') <- split_bytes bs1 ;;
-            iss <- option2serr "Could not get signedness of a type"  (is_signed_ity ity) ;;
+            iss <- option2serr "Could not get signedness of a type"  (is_signed_ity DEFAULT_FUEL ity) ;;
             ret (provs_of_bytes bs1,
                 match extract_unspec bs1' with
                 | Some cs => MVEinteger ity (IV (Z_of_bytes iss cs))
@@ -1144,7 +1143,7 @@ Module CheriMemory
             aux fuel n_value (NoTaint, nil) bs
         | Ctype.Pointer _ ref_ty =>
             sz <- sizeof DEFAULT_FUEL None cty ;;
-            let '(bs1, bs2) := split_at sz bs in
+            let '(bs1, bs2) := split_at (Z.to_nat sz) bs in
             '(prov, prov_status, bs1') <- split_bytes bs1 ;;
             ret (NoTaint,
                 match extract_unspec bs1' with
@@ -1204,14 +1203,14 @@ Module CheriMemory
                             end
                         end
                     end
-                | None => MVEunspecified (Ctype.Ctype nil (Ctype.Pointer (* Ctype.no_qualifiers ref_ty *) ))
+                | None => MVEunspecified (Ctype.Ctype nil (Ctype.Pointer Ctype.no_qualifiers ref_ty))
                 end, bs2)
         | Ctype.Atomic atom_ty =>
             self fuel addr atom_ty bs
         | Ctype.Struct tag_sym =>
             sz <- sizeof DEFAULT_FUEL None cty ;;
-            '(offsets,_) <- offsetsof (Tags.tagDefs tt) tag_sym ;;
-            let '(bs1, bs2) := split_at sz bs in
+            '(offsets,_) <- offsetsof DEFAULT_FUEL (Tags.tagDefs tt) tag_sym ;;
+            let '(bs1, bs2) := split_at (Z.to_nat sz) bs in
             '(taint, rev_xs, _, bs') <-
               monadic_fold_left
                 (fun '(taint_acc, acc_xs, previous_offset, acc_bs) '(memb_ident, memb_ty, memb_offset) =>
@@ -1219,10 +1218,11 @@ Module CheriMemory
                    let memb_addr :=
                      Z.add addr memb_offset in
                    '(taint, mval, acc_bs') <-
-                     self fuel memb_addr memb_ty (List.skipn pad acc_bs) ;;
+                     self fuel memb_addr memb_ty (List.skipn (Z.to_nat pad) acc_bs) ;;
+                   sz <- sizeof DEFAULT_FUEL None memb_ty ;;
                    ret ((merge_taint taint taint_acc),
                        (cons (memb_ident, memb_ty, mval) acc_xs),
-                       (Z.add memb_offset (sizeof DEFAULT_FUEL None memb_ty)), acc_bs'))
+                       (Z.add memb_offset sz), acc_bs'))
                 offsets
                 (NoTaint, nil, 0, bs1)
             ;;

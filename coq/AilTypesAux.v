@@ -3,7 +3,7 @@ Require Import Ctype.
 
 Module AilTypesAux(IMP: Implementation).
 
-  Fixpoint is_signed_ity {fuel:nat} (ity:integerType) : option bool
+  Fixpoint is_signed_ity (fuel:nat) (ity:integerType) : option bool
     :=
     match fuel with
     | O => None

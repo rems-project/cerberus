@@ -21,7 +21,7 @@ Inductive symbol_description : Type :=
 
 (* Symbolic identifiers *)
 Inductive sym : Set :=
-  Symbol:  digest  ->  nat  ->  symbol_description  -> sym .
+  Symbol:  digest  ->  Z  ->  symbol_description  -> sym .
 
 
 (*

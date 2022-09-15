@@ -374,9 +374,11 @@ Definition unatomic_  (ty : ctype )  : ctype_ :=
 Definition make_qualifiers  (c : bool ) (r : bool ) (v : bool )  : qualifiers :=  {|const    := c;restrict := r;volatile := v
 |}.
 (* [?]: removed value specification. *)
+*)
 
 Definition no_qualifiers   : qualifiers :=  {|const    := false;restrict := false;volatile := false
-|}.
+                                            |}.
+(*
 (* [?]: removed value specification. *)
 
 Definition combine_qualifiers  (qs1 : qualifiers ) (qs2 : qualifiers )  : qualifiers :=  {|const    := ((const qs1)    ||(const  qs2))   ;restrict := ((restrict qs1) ||(restrict  qs2));volatile := ((volatile qs1) ||(volatile  qs2))
