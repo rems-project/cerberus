@@ -23,11 +23,11 @@ end
 
 module ListZ = OUnitDiff.ListSimpleMake(EZ)
 
-let string_of_char_list l =
+(* let string_of_char_list l =
   let open List in
   "[" ^
     (String.concat ";" @@ map string_of_int @@ map int_of_char l)
-    ^ "]"
+    ^ "]" *)
 
 let string_of_bit_list l =
   let open List in
