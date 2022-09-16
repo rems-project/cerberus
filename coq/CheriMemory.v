@@ -1523,35 +1523,63 @@ Module CheriMemory
                  end
       ) st.(allocations) NoAlloc.
 
+
+  (* TODO: see if could be generalized and moved to Utils.v.  *)
+  (** [update key f m] returns a map containing the same bindings as
+  [m], except for the binding of [key]. Depending on the value of [y]
+  where [y] is [f (find_opt key m)], the binding of [key] is added,
+  removed or updated. If [y] is [None], the binding is removed if it
+  exists; otherwise, if [y] is [Some z] then key is associated to [z]
+  in the resulting map. If [key] was already bound in [m] to a value
+  that is physically equal to [z], [m] is returned unchanged (the
+  result of the function is then physically equal to [m]). *)
+  Definition zmap_update {A:Type}: Z -> (option A -> option A) -> (ZMap.t A) -> (ZMap.t A). Proof. admit. Admitted. (* TODO: implement *)
+
   Definition expose_allocation (alloc_id : Z)
     : memM unit :=
-    update (fun (st : mem_state) =>
+    update (fun (st: mem_state) =>
               mem_state_with_allocations
-                (ZMap.update alloc_id
+                (zmap_update alloc_id
                    (fun (function_parameter : option allocation) =>
                       match function_parameter with
-                      | Some alloc => Some (allocation.with_taint Exposed alloc)
+                      | Some alloc => Some
+                                       {|
+                                         prefix := alloc.(prefix);
+                                         base := alloc.(base);
+                                         size := alloc.(size);
+                                         ty := alloc.(ty);
+                                         is_readonly := alloc.(is_readonly);
+                                         taint := Exposed
+                                       |}
                       | None => None
-                      end) st.(mem_state.allocations)) st).
+                      end) st.(allocations)) st).
 
-  Definition expose_allocations `{FArgs} {A B : Set}
-    (function_parameter : (* `NoTaint *) unit) : Eff.eff unit A B mem_state :=
-    match function_parameter with
-    | NoTaint => ret tt
-    | NewTaint xs =>
-      Eff.update
-        (fun (st : mem_state) =>
-          mem_state.with_allocations
-            (List.fold_left
-              (fun (acc : ZMap.t allocation) =>
-                fun (alloc_id : Z.t) =>
-                  ZMap.update alloc_id
-                    (fun (function_parameter : option allocation) =>
-                      match function_parameter with
-                      | Some alloc => Some (allocation.with_taint Exposed alloc)
-                      | None => None
-                      end) acc) st.(mem_state.allocations) xs) st)
-    end.
+  Definition expose_allocations (t: taint_ind): memM unit
+    := match t with
+       | NoTaint => ret tt
+       | NewTaint xs =>
+           update
+             (fun st =>
+                mem_state_with_allocations
+                  (List.fold_left
+                     (fun acc alloc_id =>
+                        zmap_update alloc_id
+                          (fun x =>
+                             match x with
+                             | Some alloc => Some
+                                              {|
+                                                prefix := alloc.(prefix);
+                                                base := alloc.(base);
+                                                size := alloc.(size);
+                                                ty := alloc.(ty);
+                                                is_readonly := alloc.(is_readonly);
+                                                taint := Exposed
+                                              |}
+                             | None => None
+                             end) acc)
+                     xs st.(allocations))
+                  st)
+       end.
 
   Definition load
     (loc: location_ocaml)
