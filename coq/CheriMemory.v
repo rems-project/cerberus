@@ -11,7 +11,8 @@ Require Coq.Program.Wf.
 Require Recdef.
 Require Import Lia.
 
-From ExtLib.Structures Require Import Monad Monads MonadExc MonadState.
+From ExtLib.Data Require Import List.
+From ExtLib.Structures Require Import Monad Monads MonadExc MonadState Traversable.
 From ExtLib.Data.Monads Require Import EitherMonad OptionMonad.
 
 Require Import Capabilities Addr Memory_model Mem_common ErrorWithState Undefined Morello ErrorWithState Location Symbol Implementation Tags Utils Switches AilTypesAux.
@@ -20,6 +21,7 @@ Local Open Scope string_scope.
 Local Open Scope type_scope.
 Local Open Scope list_scope.
 Local Open Scope Z_scope.
+Local Open Scope bool_scope.
 
 Require Import AltBinNotations.
 Import ListNotations.
@@ -133,6 +135,13 @@ Module CheriMemory
   | Exposed
   | Unexposed.
 
+  Definition allocation_taint_eqb (a b: allocation_taint) :=
+    match a, b with
+    | Exposed, Exposed => true
+    | Unexposed, Unexposed => true
+    | _, _ => false
+    end.
+
   Inductive taint_ind :=
   | NoTaint: taint_ind
   | NewTaint: list storage_instance_id -> taint_ind.
@@ -200,6 +209,10 @@ Module CheriMemory
               |}
    *)
 
+  Definition mem_state_with_allocations allocations (r : mem_state_r)
+    :=
+    Build_mem_state_r r.(next_alloc_id) r.(next_iota) r.(last_address) allocations r.(iota_map) r.(funptrmap) r.(varargs) r.(next_varargs_id) r.(bytemap) r.(captags) r.(dead_allocations) r.(dynamic_addrs) r.(last_used).
+
   Definition mem_state := mem_state_r.
 
   Definition initial_address := (HexString.to_Z "0xFFFFFFFF").
@@ -224,8 +237,8 @@ Module CheriMemory
     |}.
 
   (* Unfortunate names of two consturctors are mirroring ones from
-  OCaml `Nondeterminism` monad. Third one is used where `failwith` was
-   or `assert false` was used in OCaml. *)
+     OCaml `Nondeterminism` monad. Third one is used where `failwith` was
+     or `assert false` was used in OCaml. *)
   Inductive memMError :=
   | Other: mem_error -> memMError
   | Undef0: location_ocaml -> (list undefined_behaviour) -> memMError
@@ -326,6 +339,7 @@ Module CheriMemory
               else
                 PartialOverlap
     end.
+
 
   (* TODO: check if this is correct *)
   Definition Z_integerRem_f := Z.modulo.
@@ -1383,13 +1397,354 @@ Module CheriMemory
         end
     end.
 
-(*
+  (** Checks if memory region starting from [addr] and
+      of size [sz] fits withing interval \[b1,b2) *)
+  Definition cap_bounds_check (bounds : Z * Z)
+    : Z -> Z -> bool
+    :=
+    let '(base, limit) := bounds in
+    fun (addr : Z) (sz : Z) =>
+        andb (Z.leb base addr) (Z.leb (Z.add addr sz) limit).
+
+  Definition cap_check
+    (loc : location_ocaml)
+    (c : C.t)
+    (offset : Z)
+    (intent : access_intention)
+    (sz : Z)
+    : memM unit :=
+    if C.cap_is_valid c then
+      let addr :=
+        Z.add (C.cap_get_value c)
+          offset in
+      let pcheck :=
+        match intent with
+        | ReadIntent =>
+            MorelloPermission.perm_is_load
+        | WriteIntent =>
+            MorelloPermission.perm_is_store
+        | CallIntent =>
+            MorelloPermission.perm_is_execute
+        end in
+      if pcheck (C.cap_get_perms c) then
+        let bounds := C.cap_get_bounds c in
+        if cap_bounds_check bounds addr sz then
+          ret tt
+        else
+          fail
+            (MerrCHERI loc
+               (CheriBoundsErr (bounds, addr, (Z.to_nat sz))))
+      else
+        fail
+          (MerrCHERI loc
+             CheriMerrUnsufficientPermissions)
+    else
+      fail
+        (MerrCHERI loc
+           CheriMerrInvalidCap).
+
+  Fixpoint mem_value_strip_err
+    (x_value : mem_value_with_err)
+    : memM mem_value
+    :=
+    match x_value with
+    | MVEunspecified x_value => ret (MVunspecified x_value)
+    | MVEinteger x_value y_value => ret (MVinteger x_value y_value)
+    | MVEfloating x_value y_value => ret (MVfloating x_value y_value)
+    | MVEpointer x_value y_value => ret (MVpointer x_value y_value)
+    | MVEarray l_value =>
+        mapT mem_value_strip_err l_value >>=
+          (fun (x_value : list mem_value) => ret (MVarray x_value))
+    | MVEstruct x_value y_value =>
+        mapT
+          (fun '(x_value, y_value, z_value) =>
+             (mem_value_strip_err z_value) >>=
+               (fun (z' : mem_value) => ret (x_value, y_value, z')))
+          y_value
+          >>=
+          (fun y' =>ret (MVstruct x_value y'))
+    | MVEunion x_value y_value z_value =>
+        mem_value_strip_err z_value >>=
+          (fun (z' : mem_value) => ret (MVunion x_value y_value z'))
+    | MVErr err => fail err
+    end.
+
+  Definition fetch_bytes
+    (bytemap : ZMap.t AbsByte)
+    (base_addr : Z)
+    (n_bytes : Z) : list AbsByte
+    :=
+    List.map
+      (fun (addr : Z.t) =>
+         match ZMap.find addr bytemap with
+         | Some b_value => b_value
+         | None => absbyte_v Prov_none None None
+         end)
+      (list_init (Z.to_nat n_bytes)
+         (fun (i : nat) =>
+            let offset := Z.of_nat i in
+            Z.add base_addr offset)).
+
+  Definition find_overlaping st addr : overlap_ind
+    :=
+    let (require_exposed, allow_one_past) :=
+      match Switches.has_switch_pred (fun x => match x with SW_PNVI _ => true | _ => false end) with
+      | Some (Switches.SW_PNVI variant) =>
+          match variant with
+          | PLAIN => (false, false)
+          | AE => (true, false)
+          | AE_UDI => (true, true)
+          end
+      | Some _ => (false, false) (* impossible case *)
+      | None => (false, false)
+      end
+    in
+    ZMap.fold (fun alloc_id alloc acc =>
+                 let new_opt :=
+                   if negb (mem alloc_id st.(dead_allocations))
+                      && Z.leb alloc.(base) addr && Z.ltb addr (Z.add alloc.(base) alloc.(size)) then
+                     (* PNVI-ae, PNVI-ae-udi *)
+                     if require_exposed && (negb (allocation_taint_eqb alloc.(taint) Exposed))
+                     then None
+                     else Some alloc_id
+                   else if allow_one_past then
+                          (* PNVI-ae-udi *)
+                          if Z.eqb addr (Z.add alloc.(base) alloc.(size))
+                             && negb require_exposed && (negb (allocation_taint_eqb alloc.(taint) Exposed))
+                          then Some alloc_id
+                          else None
+                        else None
+                 in
+                 match acc, new_opt with
+                 | _, None => acc
+                 | NoAlloc, Some alloc_id => SingleAlloc alloc_id
+                 | SingleAlloc alloc_id1, Some alloc_id2 => DoubleAlloc alloc_id1 alloc_id2
+                 | DoubleAlloc _ _, Some _ => acc
+                 end
+      ) st.(allocations) NoAlloc.
+
+  Definition expose_allocation (alloc_id : Z)
+    : memM unit :=
+    update (fun (st : mem_state) =>
+              mem_state_with_allocations
+                (ZMap.update alloc_id
+                   (fun (function_parameter : option allocation) =>
+                      match function_parameter with
+                      | Some alloc => Some (allocation.with_taint Exposed alloc)
+                      | None => None
+                      end) st.(mem_state.allocations)) st).
+
+  Definition expose_allocations `{FArgs} {A B : Set}
+    (function_parameter : (* `NoTaint *) unit) : Eff.eff unit A B mem_state :=
+    match function_parameter with
+    | NoTaint => ret tt
+    | NewTaint xs =>
+      Eff.update
+        (fun (st : mem_state) =>
+          mem_state.with_allocations
+            (List.fold_left
+              (fun (acc : ZMap.t allocation) =>
+                fun (alloc_id : Z.t) =>
+                  ZMap.update alloc_id
+                    (fun (function_parameter : option allocation) =>
+                      match function_parameter with
+                      | Some alloc => Some (allocation.with_taint Exposed alloc)
+                      | None => None
+                      end) acc) st.(mem_state.allocations) xs) st)
+    end.
+
   Definition load
-    (loc: location_ocaml) (ty: Ctype.ctype) (p:pointer_value): memM (footprint * mem_value) :=
+    (loc: location_ocaml)
+    (ty: Ctype.ctype)
+    (p:pointer_value): memM (footprint * mem_value)
+    :=
     let '(prov, ptrval_) := break_PV p in
-    _
-  .
- *)
+    let do_load
+          (alloc_id_opt : option storage_instance_id)
+          (addr : Z)
+          (sz : Z)
+      : memM (footprint * mem_value)
+      :=
+      get >>=
+        (fun (st : mem_state) =>
+           let bs := fetch_bytes st.(bytemap) addr sz in
+           let tag_query (a_value : Z) : option bool :=
+             if is_pointer_algined a_value then
+               ZMap.find a_value st.(captags)
+             else
+               raise (InternalErr
+                        "An attempt to load capability from not properly aligned addres")
+           in
+           '(taint, mval, bs') <-
+             serr2memM (abst loc (find_overlaping st) st.(funptrmap) tag_query addr ty bs)
+           ;;
+           mem_value_strip_err mval >>=
+             (fun (mval : mem_value) =>
+                (if orb
+                      (Switches.has_switch (Switches.SW_PNVI AE))
+                      (Switches.has_switch (Switches.SW_PNVI AE_UDI))
+                 then expose_allocations taint
+                 else ret tt) ;;
+                (update (fun (st : mem_state) =>
+                           mem_state.with_last_used alloc_id_opt st))
+                ;;
+                (let fp := FP addr (Z.of_int (sizeof None ty)) in
+                 match bs' with
+                 | [] =>
+                     if Mem_cheri.Switches.has_switch Switches.SW_strict_reads
+                     then
+                       match mval with
+                       | MVunspecified _ =>
+                           fail (MerrReadUninit loc)
+                       | _ => _return (fp, mval)
+                       end
+                     else
+                       ret (fp, mval)
+                 | _ =>
+                     fail (MerrWIP "load, bs' <> []")
+                 end)))
+    in
+    let do_load_cap
+          (alloc_id_opt : option storage_instance_id)
+          (c : C.t)
+          (sz : Z)
+      : memM (footprint * mem_value)
+      :=
+      cap_check loc c Z.zero ReadIntent sz ;;
+      do_load alloc_id_opt  (C.cap_get_value c) sz
+    in
+    match (prov, ptrval_) with
+    | (_, PVfunction _) =>
+        fail
+          (MerrAccess loc
+             LoadAccess
+             FunctionPtr)
+    | (Prov_none, _) =>
+        fail
+          (MerrAccess loc
+             LoadAccess
+             OutOfBoundPtr)
+    | (Prov_device, PVconcrete c) =>
+        if cap_is_null c then
+          fail
+            (MerrAccess loc
+               LoadAccess
+               NullPtr)
+        else
+          Eff.op_gtgteq
+            (is_within_device ty
+               (C.cap_get_value c))
+            (fun (function_parameter : bool) =>
+               match function_parameter with
+               | false =>
+                   fail
+                     (MerrAccess loc
+                        LoadAccess
+                        OutOfBoundPtr)
+               | true => do_load_cap None c (sizeof None ty)
+               end)
+    | (Prov_symbolic iota, PVconcrete addr) =>
+        if cap_is_null addr then
+          fail
+            (MerrAccess loc
+               LoadAccess
+               NullPtr)
+        else
+          let precondition (z_value : storage_instance_id)
+            : Eff.eff (* `FAIL *) Mem_cheri.mem_error
+                Mem_cheri.mem_error
+                (Mem_cheri.mem_constraint integer_value)
+                mem_state :=
+            Eff.op_gtgteq (is_dead z_value)
+              (fun (function_parameter : bool) =>
+                 match function_parameter with
+                 | true =>
+                     _return
+                       (FAIL
+                          (MerrAccess loc
+                             LoadAccess
+                             DeadPtr))
+                 | false =>
+                     Eff.op_gtgteq
+                       (is_within_bound z_value ty
+                          (C.cap_get_value addr))
+                       (fun (function_parameter : bool) =>
+                          match function_parameter with
+                          | false =>
+                              _return
+                                (FAIL
+                                   (MerrAccess loc
+                                      LoadAccess
+                                      OutOfBoundPtr))
+                          | true =>
+                              Eff.op_gtgteq
+                                (is_atomic_member_access z_value ty
+                                   (C.cap_get_value addr))
+                                (fun (function_parameter : bool) =>
+                                   match function_parameter with
+                                   | true =>
+                                       _return
+                                         (FAIL
+                                            (MerrAccess loc
+                                               LoadAccess
+                                               AtomicMemberof))
+                                   | false => _return OK
+                                   end)
+                          end)
+                 end) in
+          Eff.op_gtgteq (resolve_iota precondition iota)
+            (fun (alloc_id : storage_instance_id) =>
+               do_load_cap (Some alloc_id) addr (sizeof None ty))
+    | (Prov_some alloc_id, PVconcrete addr) =>
+        if cap_is_null addr then
+          fail
+            (MerrAccess loc
+               LoadAccess
+               NullPtr)
+        else
+          Eff.op_gtgt
+            (Eff.op_gtgteq (is_dead alloc_id)
+               (fun (function_parameter : bool) =>
+                  match function_parameter with
+                  | true =>
+                      fail
+                        (MerrAccess loc
+                           LoadAccess
+                           DeadPtr)
+                  | false => _return tt
+                  end))
+            (Eff.op_gtgteq
+               (is_within_bound alloc_id ty
+                  (C.cap_get_value addr))
+               (fun (function_parameter : bool) =>
+                  match function_parameter with
+                  | false =>
+                      let '_ :=
+                        Debug_ocaml.print_debug 1 nil
+                          (fun (function_parameter : unit) =>
+                             let '_ := function_parameter in
+                             String.append "LOAD out of bound, alloc_id="
+                               (Z.to_string alloc_id)) in
+                      fail
+                        (MerrAccess loc
+                           LoadAccess
+                           OutOfBoundPtr)
+                  | true =>
+                      Eff.op_gtgteq
+                        (is_atomic_member_access alloc_id ty
+                           (C.cap_get_value addr))
+                        (fun (function_parameter : bool) =>
+                           match function_parameter with
+                           | true =>
+                               fail
+                                 (MerrAccess loc
+                                    LoadAccess
+                                    AtomicMemberof)
+                           | false =>
+                               do_load_cap (Some alloc_id) addr (sizeof None ty)
+                           end)
+                  end))
+    end.
 
 
 

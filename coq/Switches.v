@@ -61,3 +61,6 @@ Definition is_CHERI (_ : unit) : bool :=
 
 Definition has_strict_pointer_arith (_ : unit) : bool :=
   has_switch (SW_pointer_arith STRICT).
+
+Definition has_switch_pred pred :=
+  List.find pred default_switches.

@@ -1,4 +1,5 @@
 Require Import Coq.Lists.List.
+Require Import Coq.Classes.DecidableClass.
 From ExtLib.Structures Require Import Monad Monads.
 
 Import ListNotations.
@@ -12,6 +13,9 @@ Proof. Admitted. (* TODO *)
 
 Definition fold_left2 {A B C:Type} : (A -> B -> C -> A) -> A -> list B -> list C -> A.
 Proof. Admitted. (* TODO *)
+
+Definition mem {A:Type} `{forall (x y:A), Decidable (x = y)} (a:A): (list A) -> bool
+  := List.existsb (fun e => decide (e = a)).
 
 Definition mapi {A B: Type} (f: nat -> A -> B) (l:list A) : list B :=
   let fix map_ n (l:list A) :=
