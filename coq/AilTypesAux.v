@@ -22,4 +22,11 @@ Module AilTypesAux(IMP: Implementation).
         end
     end.
 
+
+  Definition is_atomic (x : ctype ): bool :=
+    match (x) with
+    | Ctype _( Atomic _) => true
+    | _ => false
+    end.
+
 End AilTypesAux.

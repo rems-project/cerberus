@@ -209,11 +209,15 @@ Module CheriMemory
               |}
    *)
 
-  Definition mem_state_with_allocations allocations (r : mem_state_r)
+  Definition mem_state := mem_state_r.
+
+  Definition mem_state_with_allocations allocations (r : mem_state)
     :=
     Build_mem_state_r r.(next_alloc_id) r.(next_iota) r.(last_address) allocations r.(iota_map) r.(funptrmap) r.(varargs) r.(next_varargs_id) r.(bytemap) r.(captags) r.(dead_allocations) r.(dynamic_addrs) r.(last_used).
 
-  Definition mem_state := mem_state_r.
+  Definition mem_state_with_last_used last_used (r : mem_state) :=
+    Build_mem_state_r r.(next_alloc_id) r.(next_iota) r.(last_address) r.(allocations) r.(iota_map) r.(funptrmap) r.(varargs) r.(next_varargs_id) r.(bytemap) r.(captags) r.(dead_allocations) r.(dynamic_addrs) last_used.
+
 
   Definition initial_address := (HexString.to_Z "0xFFFFFFFF").
 
@@ -1581,6 +1585,65 @@ Module CheriMemory
                   st)
        end.
 
+  Definition is_within_bound
+    (alloc_id : Z.t)
+    (lvalue_ty : Ctype.ctype)
+    (addr : Z) : memM bool
+    :=
+    sz <- serr2memM (sizeof DEFAULT_FUEL None lvalue_ty) ;;
+    get_allocation alloc_id >>=
+      (fun (alloc : allocation) =>
+         ret
+           (andb
+              (Z.leb alloc.(base) addr)
+              (Z.leb
+                 (Z.add addr sz)
+                 (Z.add alloc.(base) alloc.(size))))).
+
+  Definition device_ranges : list (MorelloAddr.t * MorelloAddr.t) :=
+    [ (0x40000000, 0x40000004)
+      ; (0xABC, 0XAC0) ].
+
+  Definition is_within_device (ty : Ctype.ctype) (addr : Z) : memM bool
+    :=
+    sz <- serr2memM (sizeof DEFAULT_FUEL None ty) ;;
+    ret
+      (List.existsb
+         (fun '(min, max) =>
+            andb
+              (Z.leb min addr)
+              (Z.leb (Z.add addr sz) max))
+         device_ranges).
+
+
+  Definition is_atomic_member_access
+    (alloc_id : Z.t)
+    (lvalue_ty : Ctype.ctype)
+    (addr : Z.t)
+    : memM bool
+    :=
+    sz <- sizeof DEFAULT_FUEL None lvalue_ty ;;
+    get_allocation alloc_id >>=
+      (fun (alloc : allocation) =>
+        match
+          (alloc.(ty),
+            match alloc.(ty) with
+            | Some ty => is_atomic ty
+            | _ => false
+            end) with
+        | (Some ty, true) =>
+          if
+            andb (equiv_decb addr alloc.(base))
+              (andb
+                (Z.equal sz  alloc.(size))
+                (Ctype.ctypeEqual lvalue_ty ty))
+          then
+            ret false
+          else
+            ret true
+        | (_, _) => ret false
+        end).
+
   Definition load
     (loc: location_ocaml)
     (ty: Ctype.ctype)
@@ -1614,17 +1677,17 @@ Module CheriMemory
                  then expose_allocations taint
                  else ret tt) ;;
                 (update (fun (st : mem_state) =>
-                           mem_state.with_last_used alloc_id_opt st))
+                           mem_state_with_last_used alloc_id_opt st))
                 ;;
                 (let fp := FP addr (Z.of_int (sizeof None ty)) in
                  match bs' with
                  | [] =>
-                     if Mem_cheri.Switches.has_switch Switches.SW_strict_reads
+                     if Switches.has_switch Switches.SW_strict_reads
                      then
                        match mval with
                        | MVunspecified _ =>
                            fail (MerrReadUninit loc)
-                       | _ => _return (fp, mval)
+                       | _ => ret (fp, mval)
                        end
                      else
                        ret (fp, mval)
@@ -1643,25 +1706,14 @@ Module CheriMemory
     in
     match (prov, ptrval_) with
     | (_, PVfunction _) =>
-        fail
-          (MerrAccess loc
-             LoadAccess
-             FunctionPtr)
+        fail (MerrAccess loc LoadAccess FunctionPtr)
     | (Prov_none, _) =>
-        fail
-          (MerrAccess loc
-             LoadAccess
-             OutOfBoundPtr)
+        fail (MerrAccess loc LoadAccess OutOfBoundPtr)
     | (Prov_device, PVconcrete c) =>
         if cap_is_null c then
-          fail
-            (MerrAccess loc
-               LoadAccess
-               NullPtr)
+          fail (MerrAccess loc LoadAccess NullPtr)
         else
-          Eff.op_gtgteq
-            (is_within_device ty
-               (C.cap_get_value c))
+          is_within_device ty (C.cap_get_value c) >>=
             (fun (function_parameter : bool) =>
                match function_parameter with
                | false =>
@@ -1683,40 +1735,37 @@ Module CheriMemory
                 Mem_cheri.mem_error
                 (Mem_cheri.mem_constraint integer_value)
                 mem_state :=
-            Eff.op_gtgteq (is_dead z_value)
+            is_dead z_value >>=
               (fun (function_parameter : bool) =>
                  match function_parameter with
                  | true =>
-                     _return
+                     ret
                        (FAIL
                           (MerrAccess loc
                              LoadAccess
                              DeadPtr))
                  | false =>
-                     Eff.op_gtgteq
-                       (is_within_bound z_value ty
-                          (C.cap_get_value addr))
+                       is_within_bound z_value ty (C.cap_get_value addr) >>=
                        (fun (function_parameter : bool) =>
                           match function_parameter with
                           | false =>
-                              _return
+                              ret
                                 (FAIL
                                    (MerrAccess loc
                                       LoadAccess
                                       OutOfBoundPtr))
                           | true =>
-                              Eff.op_gtgteq
-                                (is_atomic_member_access z_value ty
-                                   (C.cap_get_value addr))
+                              is_atomic_member_access z_value ty
+                                   (C.cap_get_value addr) >>=
                                 (fun (function_parameter : bool) =>
                                    match function_parameter with
                                    | true =>
-                                       _return
+                                       ret
                                          (FAIL
                                             (MerrAccess loc
                                                LoadAccess
                                                AtomicMemberof))
-                                   | false => _return OK
+                                   | false => ret OK
                                    end)
                           end)
                  end) in
@@ -1739,7 +1788,7 @@ Module CheriMemory
                         (MerrAccess loc
                            LoadAccess
                            DeadPtr)
-                  | false => _return tt
+                  | false => ret tt
                   end))
             (Eff.op_gtgteq
                (is_within_bound alloc_id ty
