@@ -353,7 +353,7 @@ let output_file =
 
 let cpp_cmd =
   let doc = "Command to call for the C preprocessing." in
-  Arg.(value & opt string ("cc -E -C -Werror -nostdinc -undef -D__cerb__")
+  Arg.(value & opt string ("cc -std=c11 -E -C -Werror -nostdinc -undef -D__cerb__")
              & info ["cpp"] ~docv:"CMD" ~doc)
 
 let cpp_only =
