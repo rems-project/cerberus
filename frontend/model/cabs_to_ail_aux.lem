@@ -114,14 +114,9 @@ let rec mk_zeroInit_aux tagDefs (Ctype.Ctype _ ty) =
     | Ctype.Struct tag_sym ->
         A.ConstantStruct tag_sym
           match Map.lookup tag_sym tagDefs with
-            | Just (Struct_definition _ _ xs Nothing) ->
-                List.map (fun (memb_ident, (_, _, memb_ty)) ->
-                  (memb_ident, mk_zeroInit_aux tagDefs memb_ty)
-                ) xs
-            | Just (Struct_definition _ _ xs (Just _)) ->
-                let () = Debug.print_debug 0 [] (fun () ->
-                  "TODO: check zeroInit for flexible array member"
-                ) in
+            | Just (Struct_definition _ _ xs _) ->
+                (* NOTE: the potential flexible array member is NOT initialised
+                         (there won't even be space allocated for it) *)
                 List.map (fun (memb_ident, (_, _, memb_ty)) ->
                   (memb_ident, mk_zeroInit_aux tagDefs memb_ty)
                 ) xs
