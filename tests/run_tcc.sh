@@ -70,6 +70,10 @@ CERB="${WITH_CERB:=../_build/default/backend/driver/main.exe}"
 # Running TinyCC tests
 for file in tcc/*.c
 do
+  if [ $file == "tcc/24_math_library.c" ]; then
+    echo -e "Test $file: \x1b[33mSKIPPED (Cerberus' libc does not currently implement most floating functions)\x1b[0m"
+    continue
+  fi
   $CERB $file --cpp="cc -E -C -nostdinc -undef -D__cerb__ -D__LP64__ -I../include/c/libc -I..include/c/posix" --exec > tmp/result 2> tmp/stderr
   cmp --silent tmp/result ${file%.c}.expect
   report $file $?

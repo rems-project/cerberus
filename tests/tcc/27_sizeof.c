@@ -6,11 +6,11 @@ int main()
    int b;
    double c;
 
-   printf("%d\n", sizeof(a));
-   printf("%d\n", sizeof(b));
-   printf("%d\n", sizeof(c));
+   printf("%lu\n", sizeof(a));
+   printf("%lu\n", sizeof(b));
+   printf("%lu\n", sizeof(c));
 
-   printf("%d\n", sizeof(!a));
+   printf("%lu\n", sizeof(!a));
 
    return 0;
 }

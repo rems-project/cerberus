@@ -4,7 +4,13 @@
 int main()
 {
    // variables
+#ifdef __cerb__
+   // TODO: Cerberus' current treatment of floating types is
+   // not numerically accurate for float
+   double a = 12.34 + 56.78;
+#else
    float a = 12.34 + 56.78;
+#endif
    printf("%f\n", a);
 
    // infix operators
@@ -42,7 +48,10 @@ int main()
    // type coercion
    a = 2;
    printf("%f\n", a);
+// Cerberus' libc does not currently implement sin()
+#ifndef __cerb__
    printf("%f\n", sin(2));
+#endif
 
    return 0;
 }

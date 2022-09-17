@@ -15,7 +15,7 @@ int main()
    printf("%d\n", strcmp(a, "goere") > 0);
    printf("%d\n", strcmp(a, "zebra") < 0);
 
-   printf("%d\n", strlen(a));
+   printf("%lu\n", strlen(a));
 
    strcat(a, "!");
    printf("%s\n", a);
