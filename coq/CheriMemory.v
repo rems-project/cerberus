@@ -112,9 +112,7 @@ Module CheriMemory
   | MVarray : list mem_value_ind -> mem_value_ind
   | MVstruct :
     Symbol.sym ->
-    list
-      (Symbol.identifier *
-         Ctype.ctype * mem_value_ind) -> mem_value_ind
+    list (Symbol.identifier * Ctype.ctype * mem_value_ind) -> mem_value_ind
   | MVunion :
     Symbol.sym ->
     Symbol.identifier -> mem_value_ind -> mem_value_ind.
@@ -304,13 +302,13 @@ Module CheriMemory
 
   Inductive footprint_ind :=
   (* base address, size *)
-  | FP: MorelloAddr.t * Z -> footprint_ind.
+  | FP: MorelloAddr.t -> Z -> footprint_ind.
 
   Definition footprint := footprint_ind.
 
   Definition check_overlap a b :=
     match a,b with
-    |  (FP (b1, sz1)), (FP (b2, sz2)) =>
+    |  FP b1 sz1, FP b2 sz2 =>
          let b1 := b1 in
          let b2 := b2 in
          if andb (Z.eqb b1 b2) (Z.eqb sz1 sz2) then
@@ -922,7 +920,6 @@ Module CheriMemory
       >>=
       fun alloc_id =>
         update (fun st =>
-
                   {|
                     next_alloc_id    := st.(next_alloc_id);
                     next_iota        := st.(next_iota);
@@ -1663,7 +1660,7 @@ Module CheriMemory
                            mem_state_with_last_used alloc_id_opt st))
                 ;;
                 sz <- serr2memM (sizeof DEFAULT_FUEL None ty) ;;
-                let fp := FP (addr, sz) in
+                let fp := FP addr sz in
                 match bs' with
                 | [] =>
                     if Switches.has_switch Switches.SW_strict_reads
