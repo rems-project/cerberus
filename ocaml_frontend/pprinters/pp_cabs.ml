@@ -745,14 +745,34 @@ let filter_external_decl =
     | EDecl_func (FunDef (loc, _, _, _, _))
     | EDecl_decl (Declaration_static_assert (Static_assert (CabsExpression (loc, _), _)))
     | EDecl_decl (Declaration_base (_, _, InitDecl(loc, _, _)::_)) ->
-      Location_ocaml.from_main_file loc
+        Location_ocaml.from_main_file loc
     | EDecl_decl (Declaration_base (_, _, [])) -> true
     | EDecl_predCN _ -> true
     | EDecl_funcCN _ -> true
     | EDecl_datatypeCN _ -> true
   in List.filter pred
 
+let filter_hidden =
+  (* hidden declarations marked with the attribute [[cerb::hidden]] *)
+  let is_hidden attrs =
+    if Debug_ocaml.get_debug_level () < 4 then
+      let open Cerb_attributes in
+      match decode_hidden attrs with
+        | CAttr_valid (_, cerb_attrs) ->
+            List.mem Annot.ACerb_hidden cerb_attrs
+        | _ ->
+            false
+    else
+      false in
+  let pred = function
+    | EDecl_func (FunDef (_, attrs, _, _, _))
+    | EDecl_decl (Declaration_base (attrs, _, _)) when is_hidden attrs ->
+        false
+    | _ ->
+        true
+  in List.filter pred
+
 let pp_translation_unit show_include do_colour (TUnit edecls) =
   Colour.do_colour := do_colour && Unix.isatty Unix.stdout;
-  let filtered_edecls = if show_include then edecls else filter_external_decl edecls in
+  let filtered_edecls = filter_hidden (if show_include then edecls else filter_external_decl edecls) in
   pp_doc_tree (Dnode (pp_decl_ctor "TUnit", List.map dtree_of_external_declaration filtered_edecls)) ^^ P.hardline

@@ -52,6 +52,7 @@ end
 
 type cerb_attribute =
   | ACerb_with_address of integer
+  | ACerb_hidden
 
 type annot =
   | Astd of string (* ISO C11 Standard Annotation *)

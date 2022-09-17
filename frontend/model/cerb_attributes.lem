@@ -2,6 +2,66 @@ open import Pervasives
 open import Annot
 import Decode
 
+type cerb_attributes_error =
+  | CAttr_error of string
+
+type cerb_attributes_decoding 'a =
+  | CAttr_valid of 'a * list cerb_attribute
+  | CAttr_invalid of cerb_attributes_error
+
+
+val extract_common:
+  attribute ->
+  string ->
+  maybe (list (Loc.t * string * list (Loc.t * string)))
+let extract_common attr cerb_str =
+  match attr.Annot.attr_ns with
+    | Just (Symbol.Identifier _ str_ns) ->
+        let Symbol.Identifier _ str_id = attr.Annot.attr_id in
+        if str_ns = "cerb" && str_id = cerb_str then
+          Just attr.Annot.attr_args
+        else
+          Nothing
+    | _ ->
+      Nothing
+  end
+
+
+(* This implements the 'cerb::with_address("HEXA")' attributes *)
+val decode_with_address_NEW: attributes -> cerb_attributes_decoding attributes
+let decode_with_address_NEW (Attrs xs) =
+  let extract attr =
+    match extract_common attr "with_address" with
+      | Nothing ->
+          Right Nothing
+      | Just [(_, str, _)] ->
+          Right (Just (snd (Decode.decode_integer_constant str)))
+      | Just _ ->
+          Left (CAttr_error "cerb::with_address() expects 1 argument")
+    end in
+  match
+    List.foldl (fun (acc, already_found) attr ->
+      match (acc, extract attr) with
+        | (CAttr_invalid _, _) ->
+              (acc, already_found)
+        | (CAttr_valid _ _, Left err) ->
+            (CAttr_invalid err, already_found)
+        | (CAttr_valid rev_c11_attrs' cerb_attrs, Right Nothing) ->
+            (CAttr_valid (attr :: rev_c11_attrs') cerb_attrs, already_found)
+        | (CAttr_valid rev_c11_attrs' cerb_attrs, Right (Just addr)) ->
+            if already_found then
+              (CAttr_invalid (CAttr_error "multiple instances of cerb::with_address() are not allowed"), true)
+            else
+              (CAttr_valid rev_c11_attrs' (ACerb_with_address addr :: cerb_attrs), true)
+      end
+    ) (CAttr_valid [] [], false) xs
+  with
+    | (CAttr_valid rev_c11_attrs' cerb_attrs, _) ->
+        CAttr_valid (Attrs (List.reverse rev_c11_attrs')) cerb_attrs
+    | (CAttr_invalid err, _) ->
+        CAttr_invalid err
+  end
+
 (* This implements the 'cerb::with_address("HEXA")' attributes *)
 let decode_with_address (Attrs xs) =
   let extract attr =
@@ -47,3 +107,65 @@ let decode_with_address (Attrs xs) =
       | (_ :: annots') ->
           get_with_address annots'
     end
+
+
+(* This implements the 'cerb::hidden' attributes which tells the pprint
+   functions to hide declarations/definitions (for debug level < 4) *)
+val decode_hidden: attributes -> cerb_attributes_decoding attributes
+let decode_hidden (Attrs xs) =
+  let extract attr =
+    match extract_common attr "hidden" with
+      | Nothing ->
+          Right Nothing
+      | Just [] ->
+          Right (Just ())
+      | Just _ ->
+          Left (CAttr_error "cerb::hidden() expects 0 argument")
+    end in
+  match
+    List.foldl (fun (acc, already_found) attr ->
+      match (acc, extract attr) with
+      | (CAttr_invalid _, _) ->
+            (acc, already_found)
+        | (CAttr_valid _ _, Left err) ->
+            (CAttr_invalid err, already_found)
+        | (CAttr_valid rev_c11_attrs' cerb_attrs, Right Nothing) ->
+            (CAttr_valid (attr :: rev_c11_attrs') cerb_attrs, already_found)
+        | (CAttr_valid rev_c11_attrs' cerb_attrs, Right (Just ())) ->
+            if already_found then
+              (* we already found an instance, but we allow (and ignore) duplicates *)
+              (CAttr_valid rev_c11_attrs' cerb_attrs, true)
+            else
+              (* this is the first instance of cerb::hidden we find *)
+              (CAttr_valid rev_c11_attrs' (ACerb_hidden :: cerb_attrs), true)
+      end
+    ) (CAttr_valid [] [], false) xs
+  with
+    | (CAttr_valid rev_c11_attrs' cerb_attrs, _) ->
+        CAttr_valid (Attrs (List.reverse rev_c11_attrs')) cerb_attrs
+    | (CAttr_invalid err, _) ->
+        CAttr_invalid err
+  end
+
+
+(* NOTE: when adding a decoder, think whether the ordering matters *)
+val registered_decoders: list (attributes -> cerb_attributes_decoding attributes)
+let registered_decoders =
+  [ decode_hidden ]
+
+(* ************************************************************************* *)
+val decode_cerb_attributes: attributes -> cerb_attributes_decoding attributes
+let decode_cerb_attributes attrs =
+  List.foldl (fun acc decode ->
+    match acc with
+      | CAttr_valid c11_attrs cerb_attrs ->
+          match decode c11_attrs with
+            | CAttr_valid c11_attrs' new_cerb_attrs ->
+                CAttr_valid c11_attrs' (new_cerb_attrs ++ cerb_attrs)
+            | CAttr_invalid err ->
+                CAttr_invalid err
+          end
+      | CAttr_invalid _ ->
+          acc
+    end
+  ) (CAttr_valid attrs []) registered_decoders
