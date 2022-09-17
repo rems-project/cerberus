@@ -151,6 +151,8 @@ citests=(
   0238-storage-class-function-decl.error.c
   0239-parameter-type-void.error.c
   0240-incomplete-adust-parameter.undef.c
+  0245-storage-class-void-param.undef.c
+  0246-block-scoped-function.undef.c
   0254-undeclared-label.error.c
   0285-assignment-not-lvalue.error.c
   0286-binary-operator.error.c
