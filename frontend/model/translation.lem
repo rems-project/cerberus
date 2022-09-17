@@ -2442,20 +2442,38 @@ else (* is_pointer *)
                   | Just (_, _, memb_ty) ->
                       let oTy = force_core_object_type_of_ctype memb_ty in
                       match e_opt with
-                        | Nothing ->
-                            E.return (
-                              Caux.mk_pure_e (Caux.mk_specified_pe (Caux.mk_union_pe tag_sym memb_ident (Caux.mk_unspecified_pe memb_ty)))
-                            )
                         | Just e ->
-                            E.wrapped_fresh_symbol (C.BTy_loaded oTy) >>= fun (_, e_sym_pat, e_sym_pe) ->
-                            self e                                    >>= fun core_e                   ->
+                            if AilTypesAux.is_pointer memb_ty && Aaux.is_null_pointer_constant e then
+                              (* the member is a null pointer constant *)
+                              match memb_ty with
+                                | Cty.Ctype _ (Cty.Pointer _ ref_ty) ->
+                                    E.return begin
+                                      Caux.mk_pure_e (Caux.mk_specified_pe (
+                                        Caux.mk_union_pe tag_sym memb_ident (Caux.mk_specified_pe (Caux.mk_nullptr_pe ref_ty))
+                                      ))
+                                    end
+                                | (*BISECT-IGNORE*) _ ->
+                                    illTypedAil loc "AilEunion, Just null_pointer_constant"
+                              end
+                            else
+                              E.wrapped_fresh_symbol (C.BTy_loaded oTy) >>= fun (_, e_sym_pat, e_sym_pe) ->
+                              self e                                    >>= fun core_e                   ->
+                              let conv_pe =
+                                if AilTypesAux.is_integer memb_ty then
+                                  stdlib.mkcall_conv_loaded_int memb_ty e_sym_pe
+                                else
+                                  e_sym_pe in
+                              E.return begin
+                                Caux.mk_wseq_e e_sym_pat core_e (
+                                  Caux.mk_pure_e (Caux.mk_specified_pe (Caux.mk_union_pe tag_sym memb_ident conv_pe))
+                                )
+                              end
+                        | Nothing ->
                             E.return begin
-                              Caux.mk_wseq_e e_sym_pat core_e (
-                                Caux.mk_pure_e (Caux.mk_specified_pe (Caux.mk_union_pe tag_sym memb_ident e_sym_pe))
-                              )
+                              Caux.mk_pure_e (Caux.mk_specified_pe (Caux.mk_union_pe tag_sym memb_ident (Caux.mk_unspecified_pe memb_ty)))
                             end
                       end
-                 end
+                end
           end
       
 (* TODO: atomic undef *)
