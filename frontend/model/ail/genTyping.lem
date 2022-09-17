@@ -608,13 +608,29 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
                  , GenRValueType (GenArray elem_ty (Just (integerFromNat $ List.length xs))) )
     
     | AilEstruct tag_sym xs ->
-        E.mapM (fun (ident, e_opt) ->
-          maybe (E.return Nothing) (fun e -> Just <$> annotate_rvalue e) e_opt >>= fun a_e_opt ->
-          E.return (ident, Maybe.map fst a_e_opt)
-        ) xs >>= fun xs' ->
-        (* TODO: the actual type checking of the members ... *)
-        let () = Debug.warn [Debug.DB_ail_typing] (fun () -> "typing of struct constant doesn't check the members are valid for the tag") in
-        E.return (AilEstruct tag_sym xs', GenRValueType (GenStruct tag_sym))
+        let struct_gty = GenStruct tag_sym in
+        match lookup_tag_definition sigm tag_sym with
+          | Just (StructDef membersDefs _) ->
+              (* NOTE: the potential flexible array member is never prevent in the list of expressions
+                       (as it cannot be initialised with an initializer) *)
+              if List.length xs <> List.length membersDefs then
+                error "TODO: AilEstruct not the right number of members"
+              else
+                E.mapM (fun (memb_ident, e_opt) ->
+                  match List.lookup memb_ident membersDefs with
+                    | Just (_, memb_qs, memb_ty) ->
+                        maybe (E.return (memb_ident, Nothing)) (fun e ->
+                          annotate_assignee InitializationAsSimpleAssignment loc memb_ty e >>= fun a_e ->
+                          E.return (memb_ident, Just a_e)
+                        ) e_opt
+                    | Nothing ->
+                        E.constraint_violation loc (MemberofNoMemberRvalue memb_ident struct_gty)
+                  end
+                ) xs >>= fun a_xs ->
+                E.return (AilEstruct tag_sym a_xs, GenRValueType struct_gty)
+          | _ ->
+              error "annotate_expression(AilEstruct): failed to find a valid tag definition"
+        end
     
     | AilEunion tag_sym memb_ident Nothing ->
         E.return (AilEunion tag_sym memb_ident Nothing, GenRValueType (GenUnion tag_sym))
