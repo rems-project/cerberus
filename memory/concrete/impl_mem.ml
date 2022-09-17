@@ -91,7 +91,7 @@ end)
 
 (* TODO: memoise this, it's stupid to recompute this every time... *)
 (* NOTE: returns ([(memb_ident, type, offset)], last_offset) *)
-let rec offsetsof tagDefs tag_sym =
+let rec offsetsof ?(ignore_flexible=false) tagDefs tag_sym =
   let open N in
   match Pmap.find tag_sym tagDefs with
     | StructDef (membrs_, flexible_opt) ->
@@ -101,7 +101,10 @@ let rec offsetsof tagDefs tag_sym =
           | None ->
               membrs_
           | Some (FlexibleArrayMember (attrs, ident, qs, ty)) ->
-              membrs_ @ [(ident, (attrs, qs, ty))] in
+              if ignore_flexible then
+                membrs_
+              else
+                membrs_ @ [(ident, (attrs, qs, ty))] in
         let (xs, maxoffset) =
           List.fold_left (fun (xs, last_offset) (membr, (_, _, ty)) ->
             let size = sizeof ~tagDefs ty in
@@ -146,9 +149,12 @@ and sizeof ?(tagDefs= Tags.tagDefs ()) (Ctype (_, ty) as cty) : N.num =
     | Atomic atom_ty ->
         sizeof ~tagDefs atom_ty
     | Struct tag_sym ->
-        (* TODO: need to add trailing padding for structs with a flexible array member *)
-        Debug_ocaml.warn [] (fun () -> "TODO: Concrete.sizeof doesn't add trailing padding for structs with a flexible array member");
-        let (_, max_offset) = offsetsof tagDefs tag_sym in
+        (* NOTE: the potential flexible array member indirectly take part in the size
+           by potentially introducing trailling padding bytes if its presence increases
+           the alignment requirement. This is done by the call the to alignof here.
+           But other than for these padding bytes, it is not counted in the size
+           (hence the `ignore_flexible` in the call to offsetof) *)
+        let (_, max_offset) = offsetsof ~ignore_flexible:true tagDefs tag_sym in
         let align = of_int (alignof ~tagDefs cty) in
         let x = modulus max_offset align in
         if equal x zero then max_offset else N.add max_offset (N.sub align x)
@@ -967,7 +973,7 @@ module Concrete : Memory = struct
             let pad = N.to_int (N.sub memb_offset previous_offset) in
             let (taint, mval, acc_bs') = self ~offset:pad memb_ty (L.drop pad acc_bs) in
             (merge_taint taint taint_acc, (memb_ident, memb_ty, mval)::acc_xs, N.add memb_offset (sizeof memb_ty), acc_bs')
-          ) (`NoTaint, [], N.zero, bs1) (fst (offsetsof (Tags.tagDefs ()) tag_sym)) in
+          ) (`NoTaint, [], N.zero, bs1) (fst (offsetsof ~ignore_flexible:true (Tags.tagDefs ()) tag_sym)) in
           (* TODO: check that bs' = last padding of the struct *)
           (taint, MVstruct (tag_sym, List.rev rev_xs), bs2)
       | Union tag_sym ->
@@ -1099,7 +1105,7 @@ module Concrete : Memory = struct
           (funptrmap, L.concat @@ List.rev bs_s)
       | MVstruct (tag_sym, xs) ->
           let padding_byte _ = AbsByte.v Prov_none None in
-          let (offs, last_off) = offsetsof (Tags.tagDefs ()) tag_sym in
+          let (offs, last_off) = offsetsof ~ignore_flexible:true (Tags.tagDefs ()) tag_sym in
           (* NOTE: this N.to_int is fine because we can't have huge paddings *)
           let final_pad = N.(to_int (sub (sizeof (Ctype ([], Struct tag_sym))) last_off)) in
           (* TODO: rewrite now that offsetsof returns the paddings *)
