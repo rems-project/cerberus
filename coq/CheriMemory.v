@@ -1622,7 +1622,9 @@ Module CheriMemory
   Definition load
     (loc: location_ocaml)
     (ty: Ctype.ctype)
-    (p:pointer_value): memM (footprint * mem_value)
+    (p:pointer_value)
+    :
+    memM (footprint * mem_value)
     :=
     let '(prov, ptrval_) := break_PV p in
     let do_load
@@ -1638,11 +1640,17 @@ Module CheriMemory
              if is_pointer_algined a_value then
                ZMap.find a_value st.(captags)
              else
-               raise (InternalErr
-                        "An attempt to load capability from not properly aligned addres")
+               (* An attempt to load a capability from not properly
+                  aligned address. OCaml handles this with [failwith]
+                  but here we just return [None], and [abst] using
+                  this function will fail with [MVEunspecified]. But
+                  the question what error to raise is moot since this
+                  is an internal error which should never happen, and
+                  hopefully we will prove so. *)
+               None
            in
            '(taint, mval, bs') <-
-             serr2memM (abst loc (find_overlaping st) st.(funptrmap) tag_query addr ty bs)
+             serr2memM (abst DEFAULT_FUEL loc (find_overlaping st) st.(funptrmap) tag_query addr ty bs)
            ;;
            mem_value_strip_err mval >>=
              (fun (mval : mem_value) =>
@@ -1654,21 +1662,22 @@ Module CheriMemory
                 (update (fun (st : mem_state) =>
                            mem_state_with_last_used alloc_id_opt st))
                 ;;
-                (let fp := FP addr (Z.of_int (sizeof None ty)) in
-                 match bs' with
-                 | [] =>
-                     if Switches.has_switch Switches.SW_strict_reads
-                     then
-                       match mval with
-                       | MVunspecified _ =>
-                           fail (MerrReadUninit loc)
-                       | _ => ret (fp, mval)
-                       end
-                     else
-                       ret (fp, mval)
-                 | _ =>
-                     fail (MerrWIP "load, bs' <> []")
-                 end)))
+                sz <- serr2memM (sizeof DEFAULT_FUEL None ty) ;;
+                let fp := FP (addr, sz) in
+                match bs' with
+                | [] =>
+                    if Switches.has_switch Switches.SW_strict_reads
+                    then
+                      match mval with
+                      | MVunspecified _ =>
+                          fail (MerrReadUninit loc)
+                      | _ => ret (fp, mval)
+                      end
+                    else
+                      ret (fp, mval)
+                | _ =>
+                    fail (MerrWIP "load, bs' <> []")
+                end))
     in
     let do_load_cap
           (alloc_id_opt : option storage_instance_id)
@@ -1688,15 +1697,14 @@ Module CheriMemory
         if cap_is_null c then
           fail (MerrAccess loc LoadAccess NullPtr)
         else
+          sz <- serr2memM (sizeof DEFAULT_FUEL None ty) ;;
           is_within_device ty (C.cap_get_value c) >>=
             (fun (function_parameter : bool) =>
                match function_parameter with
                | false =>
-                   fail
-                     (MerrAccess loc
-                        LoadAccess
-                        OutOfBoundPtr)
-               | true => do_load_cap None c (sizeof None ty)
+                   fail (MerrAccess loc LoadAccess OutOfBoundPtr)
+               | true =>
+                   do_load_cap None c sz
                end)
     | (Prov_symbolic iota, PVconcrete addr) =>
         if cap_is_null addr then
@@ -1705,97 +1713,63 @@ Module CheriMemory
                LoadAccess
                NullPtr)
         else
-          let precondition (z_value : storage_instance_id)
-            : Eff.eff (* `FAIL *) Mem_cheri.mem_error
-                Mem_cheri.mem_error
-                (Mem_cheri.mem_constraint integer_value)
-                mem_state :=
+          let precondition (z_value : storage_instance_id) : memM merr
+            :=
             is_dead z_value >>=
               (fun (function_parameter : bool) =>
-                 match function_parameter with
-                 | true =>
-                     ret
-                       (FAIL
-                          (MerrAccess loc
-                             LoadAccess
-                             DeadPtr))
-                 | false =>
-                       is_within_bound z_value ty (C.cap_get_value addr) >>=
-                       (fun (function_parameter : bool) =>
-                          match function_parameter with
-                          | false =>
-                              ret
-                                (FAIL
-                                   (MerrAccess loc
-                                      LoadAccess
-                                      OutOfBoundPtr))
-                          | true =>
-                              is_atomic_member_access z_value ty
-                                   (C.cap_get_value addr) >>=
-                                (fun (function_parameter : bool) =>
-                                   match function_parameter with
-                                   | true =>
-                                       ret
-                                         (FAIL
-                                            (MerrAccess loc
-                                               LoadAccess
-                                               AtomicMemberof))
-                                   | false => ret OK
-                                   end)
-                          end)
-                 end) in
-          Eff.op_gtgteq (resolve_iota precondition iota)
+                 if function_parameter
+                 then ret (FAIL (MerrAccess loc LoadAccess DeadPtr))
+                 else
+                   is_within_bound z_value ty (C.cap_get_value addr) >>=
+                     (fun (function_parameter : bool) =>
+                        match function_parameter with
+                        | false =>
+                            ret (FAIL (MerrAccess loc LoadAccess OutOfBoundPtr))
+                        | true =>
+                            is_atomic_member_access z_value ty
+                              (C.cap_get_value addr) >>=
+                              (fun (function_parameter : bool) =>
+                                 match function_parameter with
+                                 | true =>
+                                     ret (FAIL (MerrAccess loc LoadAccess AtomicMemberof))
+                                 | false => ret OK
+                                 end)
+                        end))
+          in
+          sz <- serr2memM (sizeof DEFAULT_FUEL None ty) ;;
+          resolve_iota precondition iota >>=
             (fun (alloc_id : storage_instance_id) =>
-               do_load_cap (Some alloc_id) addr (sizeof None ty))
+               do_load_cap (Some alloc_id) addr sz)
     | (Prov_some alloc_id, PVconcrete addr) =>
         if cap_is_null addr then
-          fail
-            (MerrAccess loc
-               LoadAccess
-               NullPtr)
+          fail (MerrAccess loc LoadAccess NullPtr)
         else
-          Eff.op_gtgt
-            (Eff.op_gtgteq (is_dead alloc_id)
-               (fun (function_parameter : bool) =>
-                  match function_parameter with
-                  | true =>
-                      fail
-                        (MerrAccess loc
-                           LoadAccess
-                           DeadPtr)
-                  | false => ret tt
-                  end))
-            (Eff.op_gtgteq
-               (is_within_bound alloc_id ty
-                  (C.cap_get_value addr))
-               (fun (function_parameter : bool) =>
-                  match function_parameter with
-                  | false =>
-                      let '_ :=
-                        Debug_ocaml.print_debug 1 nil
-                          (fun (function_parameter : unit) =>
-                             let '_ := function_parameter in
-                             String.append "LOAD out of bound, alloc_id="
-                               (Z.to_string alloc_id)) in
-                      fail
-                        (MerrAccess loc
-                           LoadAccess
-                           OutOfBoundPtr)
-                  | true =>
-                      Eff.op_gtgteq
-                        (is_atomic_member_access alloc_id ty
-                           (C.cap_get_value addr))
-                        (fun (function_parameter : bool) =>
-                           match function_parameter with
-                           | true =>
-                               fail
-                                 (MerrAccess loc
-                                    LoadAccess
-                                    AtomicMemberof)
-                           | false =>
-                               do_load_cap (Some alloc_id) addr (sizeof None ty)
-                           end)
-                  end))
+          (is_dead alloc_id) >>=
+            (fun (function_parameter : bool) =>
+               match function_parameter with
+               | true =>
+                   fail (MerrAccess loc LoadAccess DeadPtr)
+               | false => ret tt
+               end)
+          ;;
+          is_within_bound alloc_id ty
+            (C.cap_get_value addr) >>=
+            (fun (function_parameter : bool) =>
+               match function_parameter with
+               | false =>
+                   fail (MerrAccess loc LoadAccess OutOfBoundPtr)
+               | true =>
+                   is_atomic_member_access alloc_id ty
+                     (C.cap_get_value addr) >>=
+                     (fun (function_parameter : bool) =>
+                        match function_parameter with
+                        | true =>
+                            fail (MerrAccess loc LoadAccess AtomicMemberof)
+                        | false =>
+                            sz <- serr2memM (sizeof DEFAULT_FUEL None ty) ;;
+                            do_load_cap (Some alloc_id) addr sz
+                        end)
+               end)
     end.
 
 
