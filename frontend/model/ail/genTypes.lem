@@ -26,6 +26,9 @@ type genType =
  | GenUnion of ail_identifier
  | GenAtomic of ctype (* TODO: check *)
 
+val signedInt_gty: genType
+let signedInt_gty =
+  GenBasic (GenInteger (Concrete (Signed Int_)))
 
 val genChar16_t: genType
 let genChar16_t =
