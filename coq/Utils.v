@@ -48,3 +48,16 @@ Definition monadic_fold_left2
   {M : Monad m}
   : (A -> B -> C -> m A) -> A -> list B -> list C -> m A.
 Proof. Admitted. (* TODO *)
+
+Definition maybeEqualBy
+  {A: Type}
+  (f: A -> A -> bool)
+  (a: option A)
+  (b: option A)
+  : bool
+  :=
+  match a,b with
+  | None, None => true
+  | Some a, Some b => f a b
+  | _, _ => false
+  end.

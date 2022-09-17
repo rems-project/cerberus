@@ -2,11 +2,20 @@
 
 From Coq Require Import Arith Bool List String.
 Require Import Coq.Numbers.BinNums.
+Require Import Coq.ZArith.Zcompare.
+
+Require Import ExtLib.Structures.Monad.
+Require Import ExtLib.Structures.MonadExc.
 
 Require Import Location.
 Require Import Symbol.
 Require Import Annot.
+Require Import Utils.
+Require Import SimpleError.
 
+Import MonadNotation.
+
+Open Scope monad_scope.
 Open Scope nat_scope.
 Open Scope string_scope.
 
@@ -39,9 +48,18 @@ Inductive integerType : Type := (* [name = "^\\(\\|\\([a-z A-Z]+_\\)\\)ity[0-9]*
 
 (* STD Â§6.2.5#10, sentence 1 *)
 Inductive realFloatingType : Type :=
-  | Float: realFloatingType
-  | Double: realFloatingType
-  | LongDouble: realFloatingType .
+| Float: realFloatingType
+| Double: realFloatingType
+| LongDouble: realFloatingType .
+
+Definition realFloatingType_eqb (a b:realFloatingType): bool
+  := match (a,b) with
+     | (Float,Float) => true
+     | (Double,Double) => true
+     | (LongDouble,LongDouble) => true
+     | (_,_) => false
+     end.
+
 Definition realFloatingType_default: realFloatingType  := Float.
 
 (* STD Â§6.2.5#11, sentence 2 *)
@@ -49,6 +67,15 @@ Inductive floatingType : Type :=
   | RealFloating:  realFloatingType  -> floatingType .
 Definition floatingType_default: floatingType  := RealFloating realFloatingType_default.
 (*  | Complex of floatingType (* STD Â§6.2.5#11, sentence 1 *) *)
+
+Definition floatingType_eqb (a b:floatingType): bool
+  := match a, b with
+     | RealFloating Float, RealFloating Float => true
+     | RealFloating Double, RealFloating Double => true
+     | RealFloating LongDouble, RealFloating LongDouble => true
+     | _, _ => false
+     end.
+
 
 (* STD Â§6.2.5#14, sentence 1 *)
 Inductive basicType : Type :=
@@ -129,27 +156,36 @@ Definition integerBaseTypeEqual  (ibty1 : integerBaseType ) (ibty2 : integerBase
         (ord ibty1) (ord ibty2)
   end.
 
-(*
 Definition integerTypeEqual  (ity1: integerType ) (ity2: integerType )  : bool
   :=
-  let ord := fun (x : integerType ) =>
-               match (x) with | Char => ( 0%nat : nat ) | Bool =>  1%nat | Signed _ =>
-                                                                     2%nat | Unsigned _ =>  3%nat | Enum _ =>  4%nat | Size_t =>  5%nat
-                         | Wchar_t =>  6%nat | Wint_t =>  7%nat | Ptrdiff_t =>  8%nat
-                         | Vaddr_t =>  9%nat end in
-  match ( (ity1, ity2)) with
+  let ord (x : integerType ) :=
+    match (x) with
+    | Char => ( 0%nat : nat )
+    | Bool =>  1%nat
+    | Signed _ => 2%nat
+    | Unsigned _ =>  3%nat
+    | Enum _ =>  4%nat
+    | Size_t =>  5%nat
+    | Wchar_t =>  6%nat
+    | Wint_t =>  7%nat
+    | Ptrdiff_t =>  8%nat
+    | Vaddr_t =>  9%nat
+    end
+  in
+  match ((ity1, ity2)) with
   | (Signed ibty1,  Signed ibty2) => integerBaseTypeEqual ibty1 ibty2
   | (Unsigned ibty1,  Unsigned ibty2) => integerBaseTypeEqual  ibty1 ibty2
   | (Enum sym1,  Enum sym2) =>
-      match ( (sym1, sym2)) with
+      match ((sym1, sym2)) with
       | (Symbol d1 n1 sd1,  Symbol d2 n2 sd2) =>
-          if Z.eqb (FAKE_COQ.digest_compare d1 d2)((Z.pred (Z.pos (P_of_succ_nat 0%nat)))) && Nat.eqb n1 n2 then
-            true
-          else
-            false
+          Z.eqb
+            (digest_compare d1 d2)
+            ((Z.pred (Z.pos (P_of_succ_nat 0%nat)))) && Z.eqb n1 n2
       end
   | _ => Nat.eqb (ord ity1) (ord ity2)
   end.
+
+(*
 
 Instance x37_Eq : Eq integerType := {
    isEqual   :=  integerTypeEqual;
@@ -168,100 +204,107 @@ Instance x35_Eq : Eq floatingType := {
    isInequal  :=  unsafe_structural_inequality
 }.
 
-
+*)
 
 (* STD Â§6.2.5#14, sentence 3 *)
 Definition basicTypeEqual  (bty1 : basicType ) (bty2 : basicType )  : bool :=
   let ord := fun (x : basicType ) =>
-   match (x) with | Integer _ => ( 0%nat : nat ) | Floating _ =>  1%nat end in
+               match (x) with | Integer _ => ( 0%nat : nat ) | Floating _ =>  1%nat end in
   match ( (bty1, bty2)) with
-    | (Integer ity1,  Integer ity2) => integerTypeEqual
-        ity1 ity2
-    | (Floating fty1,  Floating fty2) => classical_boolean_equivalence
-        fty1 fty2
-    | _ => Nat.eqb
-        (ord bty1) (ord bty2)
+  | (Integer ity1, Integer ity2) =>
+      integerTypeEqual ity1 ity2
+  | (Floating fty1,  Floating fty2) =>
+      floatingType_eqb fty1 fty2
+  | _ => Nat.eqb
+          (ord bty1) (ord bty2)
   end.
 
+(*
 Instance x34_Eq : Eq basicType := {
    isEqual   :=  basicTypeEqual;
    isInequal  :=  fun  bty1  bty2 => negb (basicTypeEqual bty1 bty2)
 }.
 
 
+*)
 
-Definition qualifiersEqual  (qs1 : qualifiers ) (qs2 : qualifiers )  : bool :=     Bool.eqb(const
-     qs1)(const  qs2)
-  && (Bool.eqb(restrict  qs1)(restrict  qs2)
-  && Bool.eqb(volatile  qs1)(volatile  qs2)).
+Definition qualifiersEqual  (qs1 : qualifiers ) (qs2 : qualifiers ) : bool
+  :=
+  Bool.eqb (const qs1) (const  qs2)
+  && (Bool.eqb (restrict  qs1) (restrict  qs2)
+      && Bool.eqb (volatile  qs1) (volatile  qs2)).
 
+(*
 Instance x33_Eq : Eq qualifiers := {
    isEqual   :=  qualifiersEqual;
    isInequal  :=  fun  qs1  qs2 => negb (qualifiersEqual qs1 qs2)
 }.
+*)
 
+Fixpoint ctypeEqual (fuel:nat) (cty0 cty1: ctype) : serr bool
+  :=
+  match fuel with
+  | O => raise "out of fuel"
+  | S fuel =>
+      match cty0, cty1 with
+      | (Ctype _ ty1), (Ctype _ ty2) =>
+          let ord (x : ctype_ ) :=
+            match (x) with
+            | Void => ( 0%nat : nat )
+            | Basic _ => 1%nat
+            | Array _ _ =>  2%nat
+            | Function _ _ _ =>  3%nat
+            | FunctionNoParams _ =>  4%nat
+            | Pointer _ _ =>  5%nat
+            | Atomic _ =>  6%nat
+            | Struct _ =>  7%nat
+            | Union _ =>  8%nat
+            end
+          in
+          let paramsEqual fuel '(qs1,  ty1,  b1) '(qs2,  ty2,  b2) :=
+            e <- ctypeEqual fuel ty1 ty2 ;;
+            ret (qualifiersEqual qs1 qs2 && e && Bool.eqb b1 b2)
+          in
+          match ty1, ty2 with
+          | Basic bty1, Basic bty2 =>
+              ret (basicTypeEqual bty1 bty2)
+          | Array ty1 n1_opt,  Array ty2 n2_opt =>
+              e <- ctypeEqual fuel ty1 ty2 ;;
+              ret (e && (maybeEqualBy Z.eqb n1_opt n2_opt))
+          | Function (qs1,  ty1) params1 b1, Function (qs2,  ty2) params2 b2 =>
+              e0 <- ctypeEqual fuel ty1 ty2 ;;
+              e1 <- monadic_fold_left2
+                     (fun acc b c => r <- paramsEqual fuel b c ;; ret (r && acc))
+                     true
+                     params1 params2
+              ;;
+              ret (qualifiersEqual qs1 qs2 && e0 && e1 && Bool.eqb b1 b2)
+          | FunctionNoParams (qs1,  ty1), FunctionNoParams (qs2,  ty2) =>
+              e <- ctypeEqual fuel ty1 ty2 ;;
+              ret (qualifiersEqual qs1 qs2 && e)
+          | Atomic ty1, Atomic ty2 => ctypeEqual fuel ty1 ty2
+          | Struct id1, Struct id2 =>
+              match id1, id2 with
+              | Symbol d1 n1 sd1, Symbol d2 n2 sd2 =>
+                  ret (Z.eqb (digest_compare d1 d2) 0 && Z.eqb n1 n2)
+              end
+          | Union id1, Union id2 =>
+              match id1, id2 with
+              | Symbol d1 n1 sd1,  Symbol d2 n2 sd2 =>
+                  ret (Z.eqb (digest_compare d1 d2) 0 && Z.eqb n1 n2)
+              end
+          | _, _ =>
+              ret (Nat.eqb (ord ty1) (ord ty2))
+          end
+      end
+  end.
 
-
-Program Fixpoint ctypeEqual  (c : ctype ) (c0 : ctype )  : bool :=
-  match ( (c,c0)) with (( Ctype _ ty1), ( Ctype _ ty2)) =>
-    let ord := fun (x : ctype_ ) =>
-                 match (x) with | Void => ( 0%nat : nat ) | Basic _ =>
-                  1%nat | Array _ _ =>  2%nat | Function _ _ _ =>  3%nat
-                   | FunctionNoParams _ =>  4%nat | Pointer _ _ =>  5%nat
-                   | Atomic _ =>  6%nat | Struct _ =>  7%nat | Union _ =>
-                    8%nat end in
-  let paramsEqual := (fun (p : (qualifiers *ctype *bool ) % type) (p0 : (qualifiers *ctype *bool ) % type) =>
-                        match ( (p ,p0) ) with
-                            ( (qs1,  ty1,  b1) ,  (qs2,  ty2,  b2)) =>
-                          qualifiersEqual qs1 qs2 &&
-                          (ctypeEqual ty1 ty2 && Bool.eqb b1 b2) end) in
-  match ( (ty1, ty2)) with | (Basic bty1,  Basic bty2) =>
-    basicTypeEqual bty1 bty2 | (Array ty1 n1_opt,  Array ty2 n2_opt) =>
-    ctypeEqual ty1 ty2 && (maybeEqualBy Z.eqb n1_opt n2_opt)
-    | (Function (qs1,  ty1) params1 b1,  Function (qs2,  ty2) params2 b2) =>
-    qualifiersEqual qs1 qs2 &&
-    (ctypeEqual ty1 ty2 &&
-     (List.forallb (uncurry paramsEqual) (lem_list.zip params1 params2) &&
-      Bool.eqb b1 b2)) | (FunctionNoParams (qs1,  ty1),
-  FunctionNoParams (qs2,  ty2)) =>
-    qualifiersEqual qs1 qs2 && ctypeEqual ty1 ty2
-    | (Atomic ty1,  Atomic ty2) => ctypeEqual ty1 ty2
-    | (Struct id1,  Struct id2) =>
-    match ( (id1, id2)) with | (Symbol d1 n1 sd1,  Symbol d2 n2 sd2) =>
-      if Z.eqb (FAKE_COQ.digest_compare d1 d2)
-           ((Z.pred (Z.pos (P_of_succ_nat 0%nat)))) && Nat.eqb n1 n2 then
-        if nat_gteb (FAKE_COQ.get_level tt) ( 5%nat) &&
-           unsafe_structural_inequality sd1 sd2 then
-          match ( FAKE_COQ.print_debug ( 5%nat) []
-                    (fun (u : unit ) =>
-                       match ( (u) ) with ( tt) =>
-                         String.append
-                           "[Symbol.symbolEqual] suspicious equality ==> "
-                           (String.append (show_symbol_description sd1)
-                              (String.append " <-> "
-                                 (show_symbol_description sd2))) end)) with
-              tt => true end else true else false end
-    | (Union id1,  Union id2) =>
-    match ( (id1, id2)) with | (Symbol d1 n1 sd1,  Symbol d2 n2 sd2) =>
-      if Z.eqb (FAKE_COQ.digest_compare d1 d2)
-           ((Z.pred (Z.pos (P_of_succ_nat 0%nat)))) && Nat.eqb n1 n2 then
-        if nat_gteb (FAKE_COQ.get_level tt) ( 5%nat) &&
-           unsafe_structural_inequality sd1 sd2 then
-          match ( FAKE_COQ.print_debug ( 5%nat) []
-                    (fun (u : unit ) =>
-                       match ( (u) ) with ( tt) =>
-                         String.append
-                           "[Symbol.symbolEqual] suspicious equality ==> "
-                           (String.append (show_symbol_description sd1)
-                              (String.append " <-> "
-                                 (show_symbol_description sd2))) end)) with
-              tt => true end else true else false end | _ =>
-    Nat.eqb (ord ty1) (ord ty2) end end.
-
+(*
 Instance x32_Eq : Eq ctype := {
    isEqual   :=  ctypeEqual;
    isInequal  :=  fun  ty1  ty2 => negb (ctypeEqual ty1 ty2)
 }.
+
 
 
 Definition setElemCompare_integerBaseType  (ibty1 : integerBaseType ) (ibty2 : integerBaseType )  : ordering :=

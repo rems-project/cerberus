@@ -254,31 +254,11 @@ Module CheriMemory
     typeclasses eauto.
   Qed.
 
-  (* simple string error *)
-  Notation serr := (sum string).
-
   Definition serr2memM {A: Type} (e:serr A): (memM A)
     := match e with
        | inr v => ret v
        | inl msg => raise (InternalErr msg)
        end.
-
-  Local Instance Exception_serr : MonadExc string (serr) :=
-    { raise := fun _ v => inl v
-    ; catch := fun _ c h => match c with
-                         | inl v => h v
-                         | inr x => inr x
-                         end
-    }.
-
-  Definition option2serr {A: Type} (msg:string) (o:option A): (serr A)
-    := match o with
-       | Some v => ret v
-       | None => raise msg
-       end.
-
-  Definition sassert (b:bool) (msg:string) : serr unit
-    := if b then ret tt else raise msg.
 
   Definition fail {A:Type} err : memM A :=
     let loc :=

@@ -24,6 +24,10 @@ Inductive sym : Set :=
   Symbol:  digest  ->  Z  ->  symbol_description  -> sym .
 
 
+Definition digest_compare: digest -> digest -> Z.
+Proof. admit. Admitted. (* TODO *)
+
+
 (*
 (* for [@@deriving eq] *)
 Definition equal_sym   : sym  -> sym  -> bool :=  symbolEquality.
