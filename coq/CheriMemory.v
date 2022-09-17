@@ -15,7 +15,7 @@ From ExtLib.Data Require Import List.
 From ExtLib.Structures Require Import Monad Monads MonadExc MonadState Traversable.
 From ExtLib.Data.Monads Require Import EitherMonad OptionMonad.
 
-Require Import Capabilities Addr Memory_model Mem_common ErrorWithState Undefined Morello ErrorWithState Location Symbol Implementation Tags Utils Switches AilTypesAux.
+Require Import SimpleError Capabilities Addr Memory_model Mem_common ErrorWithState Undefined Morello ErrorWithState Location Symbol Implementation Tags Utils Switches AilTypesAux.
 
 Local Open Scope string_scope.
 Local Open Scope type_scope.
@@ -1602,27 +1602,22 @@ Module CheriMemory
     (addr : Z.t)
     : memM bool
     :=
-    sz <- sizeof DEFAULT_FUEL None lvalue_ty ;;
+    sz <- serr2memM (sizeof DEFAULT_FUEL None lvalue_ty) ;;
     get_allocation alloc_id >>=
       (fun (alloc : allocation) =>
-        match
-          (alloc.(ty),
-            match alloc.(ty) with
-            | Some ty => is_atomic ty
-            | _ => false
-            end) with
-        | (Some ty, true) =>
-          if
-            andb (equiv_decb addr alloc.(base))
-              (andb
-                (Z.equal sz  alloc.(size))
-                (Ctype.ctypeEqual lvalue_ty ty))
-          then
-            ret false
-          else
-            ret true
-        | (_, _) => ret false
-        end).
+         match
+           (alloc.(ty),
+             match alloc.(ty) with
+             | Some ty => is_atomic ty
+             | _ => false
+             end) with
+         | (Some ty, true) =>
+             e <- serr2memM (Ctype.ctypeEqual DEFAULT_FUEL lvalue_ty ty) ;;
+             ret
+               (negb
+                  (Z.eqb addr alloc.(base) && (Z.eqb sz alloc.(size) && e)))
+         | (_, _) => ret false
+         end).
 
   Definition load
     (loc: location_ocaml)
