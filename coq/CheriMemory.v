@@ -1491,18 +1491,28 @@ Module CheriMemory
   where [y] is [f (find_opt key m)], the binding of [key] is added,
   removed or updated. If [y] is [None], the binding is removed if it
   exists; otherwise, if [y] is [Some z] then key is associated to [z]
-  in the resulting map. If [key] was already bound in [m] to a value
-  that is physically equal to [z], [m] is returned unchanged (the
-  result of the function is then physically equal to [m]). *)
-  Definition zmap_update {A:Type}: Z -> (option A -> option A) -> (ZMap.t A) -> (ZMap.t A). Proof. admit. Admitted. (* TODO: implement *)
+  in the resulting map. *)
+  Definition zmap_update
+    {A:Type}
+    (key: Z)
+    (f: option A -> option A)
+    (m: ZMap.t A)
+    : (ZMap.t A)
+    :=
+    let y := f (ZMap.find key m) in
+    let m' := ZMap.remove key m in (* could be optimized, as removal may be unecessary in some cases *)
+    match y with
+    | None => m'
+    | Some z => ZMap.add key z m'
+    end.
 
   Definition expose_allocation (alloc_id : Z)
     : memM unit :=
     update (fun (st: mem_state) =>
               mem_state_with_allocations
                 (zmap_update alloc_id
-                   (fun (function_parameter : option allocation) =>
-                      match function_parameter with
+                   (fun (x : option allocation) =>
+                      match x with
                       | Some alloc => Some
                                        {|
                                          prefix := alloc.(prefix);
