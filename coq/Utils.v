@@ -4,7 +4,7 @@ Require Import Coq.Floats.PrimFloat.
 Require Import Coq.Numbers.BinNums.
 Require Import Coq.ZArith.ZArith.
 
-From Coq.Strings Require Import Byte.
+From Coq.Strings Require Import Ascii.
 
 From ExtLib.Structures Require Import Monad Monads.
 
@@ -87,15 +87,27 @@ Definition maybeEqualBy
   | _, _ => false
   end.
 
-(* TODO *)
-Definition byte_of_Z: Z -> byte.
-Proof. admit. Admitted.
+
+(* Using two's complement encoding. We do not perform range checks
+   here assuming Z is in the proper range.
+   (TODO: review)
+ *)
+Definition byte_of_Z (z:Z): ascii :=
+  match z with
+  | Z0 => Ascii.zero
+  | Zpos x => ascii_of_pos x
+  | Zneg _ =>
+      let n := Z.abs_nat (Z.opp (Z.add z 1%Z)) in
+      match ascii_of_nat n with
+      | Ascii a1 a2 a3 a4 a5 a6 a7 a8 => Ascii (negb a1) (negb a2) (negb a3) (negb a4) (negb a5) (negb a6) (negb a7) true
+      end
+  end.
 
 (* TODO: Z.extract_num *)
 Definition extract_num: Z -> Z -> Z -> Z.
 Proof. admit. Admitted.
 
-Definition Z_of_bytes: bool (* is signed *) -> list byte -> Z.
+Definition Z_of_bytes: bool (* is signed *) -> list ascii -> Z.
 Proof. Admitted. (* TODO *)
 
 Definition float_of_bits: Z -> float.

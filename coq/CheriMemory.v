@@ -3,7 +3,7 @@ From Coq.Lists Require Import List ListSet.
 Require Import Coq.Numbers.BinNums.
 Require Import Coq.ZArith.Zcompare.
 Require Import Coq.Floats.PrimFloat.
-From Coq.Strings Require Import String Byte HexString.
+From Coq.Strings Require Import String Ascii HexString.
 Require Import Coq.FSets.FMapAVL.
 Require Import Coq.Structures.OrderedTypeEx.
 Require Coq.Program.Wf.
@@ -157,7 +157,7 @@ Module CheriMemory
     {
       prov : provenance;
       copy_offset : option nat;
-      value : option byte
+      value : option ascii
     }.
 
   Definition absbyte_v prov copy_offset value : AbsByte
@@ -572,7 +572,7 @@ Module CheriMemory
          end.
 
   (* size is in bytes *)
-  Definition bytes_of_Z (is_signed: bool) (size: nat) (i: Z): serr (list byte)
+  Definition bytes_of_Z (is_signed: bool) (size: nat) (i: Z): serr (list ascii)
     :=
     let nbits := Z.mul 8 (Z.of_nat size) in
     let '(min, max) :=
@@ -586,7 +586,7 @@ Module CheriMemory
     if
       (negb (Z.leb min i && Z.leb i max)) || (Z.gtb nbits 128)
     then
-      raise "bytes_of_int failure"
+      raise "bytes_of_Z failure"
     else
       ret (list_init size
              (fun n => byte_of_Z (extract_num i (Z.mul 8 (Z.of_nat n)) 8))).
@@ -631,7 +631,7 @@ Module CheriMemory
             iss <- option2serr "Could not get int signedness of a type in repr" (is_signed_ity DEFAULT_FUEL ity) ;;
             sz <- sizeof DEFAULT_FUEL None (Ctype.Ctype nil (Ctype.Basic (Ctype.Integer ity))) ;;
             bs' <- bytes_of_Z iss (Z.to_nat sz) n_value ;;
-            let bs := List.map (fun (x : byte) => absbyte_v Prov_none None (Some x)) bs' in
+            let bs := List.map (fun (x : ascii) => absbyte_v Prov_none None (Some x)) bs' in
             ret (funptrmap, (clear_caps addr (Z.of_nat (List.length bs)) captags), bs)
         | MVinteger ity (IC _ c_value) =>
             let '(cb, ct) := C.encode true c_value in
@@ -640,12 +640,12 @@ Module CheriMemory
                       cb ;;
             ret (funptrmap, (ZMap.add addr ct captags),
                 (mapi
-                   (fun (i_value : nat) (b_value : byte) =>
+                   (fun (i_value : nat) (b_value : ascii) =>
                       absbyte_v Prov_none None (Some b_value)) cb'))
         | MVfloating fty fval =>
             sz <- sizeof DEFAULT_FUEL None (Ctype.Ctype nil (Ctype.Basic (Ctype.Floating fty))) ;;
             bs' <- bytes_of_Z true (Z.to_nat sz) (bits_of_float fval) ;;
-            let bs := List.map (fun (x : byte) => absbyte_v Prov_none None (Some x)) bs'
+            let bs := List.map (fun (x : ascii) => absbyte_v Prov_none None (Some x)) bs'
             in
             ret (funptrmap, (clear_caps addr (Z.of_nat (List.length bs)) captags), bs)
         | MVpointer ref_ty (PV prov ptrval_) =>
@@ -660,7 +660,7 @@ Module CheriMemory
                           cb ;;
                 ret (funptrmap, (ZMap.add addr ct captags),
                     (mapi
-                       (fun (i_value : nat) (b_value : byte) =>
+                       (fun (i_value : nat) (b_value : ascii) =>
                           absbyte_v prov (Some i_value) (Some b_value)) cb'))
             | (PVfunction (FP_invalid c_value) | PVconcrete c_value) =>
                 let '(cb, ct) := C.encode true c_value in
@@ -669,7 +669,7 @@ Module CheriMemory
                           cb ;;
                 ret (funptrmap, (ZMap.add addr ct captags),
                     (mapi
-                       (fun (i_value : nat) (b_value : byte) =>
+                       (fun (i_value : nat) (b_value : ascii) =>
                           absbyte_v prov (Some i_value) (Some b_value)) cb'))
             end
         | MVarray mvals =>
@@ -1081,7 +1081,7 @@ Module CheriMemory
   | OtherBytes: bytes_ind.
 
   Definition split_bytes (function_parameter : list AbsByte)
-    : serr (provenance * prov_ptr_valid_ind * list (option byte))
+    : serr (provenance * prov_ptr_valid_ind * list (option ascii))
     :=
     match function_parameter with
     | [] => raise "CHERI.AbsByte.split_bytes: called on an empty list"
