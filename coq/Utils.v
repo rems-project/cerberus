@@ -1,6 +1,9 @@
 Require Import Coq.Lists.List.
 Require Import Coq.Classes.DecidableClass.
+Require Import Coq.Floats.PrimFloat.
 Require Import Coq.Numbers.BinNums.
+Require Import Coq.ZArith.ZArith.
+
 From Coq.Strings Require Import Byte.
 
 From ExtLib.Structures Require Import Monad Monads.
@@ -91,3 +94,15 @@ Proof. admit. Admitted.
 (* TODO: Z.extract_num *)
 Definition extract_num: Z -> Z -> Z -> Z.
 Proof. admit. Admitted.
+
+Definition Z_of_bytes: bool (* is signed *) -> list byte -> Z.
+Proof. Admitted. (* TODO *)
+
+Definition float_of_bits: Z -> float.
+Proof. Admitted. (* TODO *)
+
+(* TODO: check if this is correct *)
+Definition Z_integerRem_f := Z.modulo.
+
+Definition bits_of_float: float -> Z.
+Proof. Admitted. (* TODO *)

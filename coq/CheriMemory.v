@@ -1,7 +1,6 @@
 Require Import Coq.Arith.PeanoNat.
 From Coq.Lists Require Import List ListSet.
 Require Import Coq.Numbers.BinNums.
-Require Import Coq.ZArith.Zwf.
 Require Import Coq.ZArith.Zcompare.
 Require Import Coq.Floats.PrimFloat.
 From Coq.Strings Require Import String Byte HexString.
@@ -322,10 +321,6 @@ Module CheriMemory
                 PartialOverlap
     end.
 
-
-  (* TODO: check if this is correct *)
-  Definition Z_integerRem_f := Z.modulo.
-
   Definition wrapI min_v max_v n :=
     let dlt := Z.succ (Z.sub max_v min_v) in
     let r := Z_integerRem_f n dlt in
@@ -575,8 +570,6 @@ Module CheriMemory
                    end
                end
          end.
-
-  Definition bits_of_float: float -> Z. Proof. Admitted. (* TODO *)
 
   (* size is in bytes *)
   Definition bytes_of_Z (is_signed: bool) (size: nat) (i: Z): serr (list byte)
@@ -1179,9 +1172,6 @@ Module CheriMemory
     if andb (Z.leb n_value C.min_vaddr) (Z.leb n_value C.max_vaddr)
     then n_value
     else  wrapI C.min_vaddr C.max_vaddr n_value.
-
-  Definition Z_of_bytes: bool (* is signed *) -> list byte -> Z. Proof. Admitted. (* TODO *)
-  Definition float_of_bits: Z -> float. Proof. Admitted. (* TODO *)
 
   Fixpoint abst
     (fuel: nat)
