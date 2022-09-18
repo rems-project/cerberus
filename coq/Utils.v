@@ -8,11 +8,20 @@ Import MonadNotation.
 Local Open Scope list_scope.
 Local Open Scope monad_scope.
 
-Definition list_init {A:Type}: nat -> (nat -> A) -> list A.
-Proof. Admitted. (* TODO *)
+Fixpoint list_init {A:Type} (n:nat) (f:nat -> A): list A
+  :=
+  match n with
+  | O => []
+  | S n => (f n) :: list_init n f
+  end.
 
-Definition fold_left2 {A B C:Type} : (A -> B -> C -> A) -> A -> list B -> list C -> A.
-Proof. Admitted. (* TODO *)
+(** Inlike OCaml version if lists have different sizes, we just terminate
+    after consuming the shortest one, without signaling error *)
+Fixpoint fold_left2 {A B C:Type} (f: A -> B -> C -> A) (accu:A) (l1:list B) (l2:list C): A :=
+  match l1, l2 with
+  | a1::l1, a2::l2 => fold_left2 f (f accu a1 a2) l1 l2
+  | _, _ => accu
+  end.
 
 Definition mem {A:Type} `{forall (x y:A), Decidable (x = y)} (a:A): (list A) -> bool
   := List.existsb (fun e => decide (e = a)).
@@ -42,12 +51,22 @@ Fixpoint monadic_fold_left
          monadic_fold_left f l a'
      end.
 
-Definition monadic_fold_left2
+Fixpoint monadic_fold_left2
   {A B C:Type}
   {m : Type -> Type}
   {M : Monad m}
-  : (A -> B -> C -> m A) -> A -> list B -> list C -> m A.
-Proof. Admitted. (* TODO *)
+  (f: A -> B -> C -> m A)
+  (accu:A)
+  (l1:list B)
+  (l2:list C)
+  : m A
+  :=
+  match l1, l2 with
+  | a1::l1, a2::l2 =>
+      accu' <- f accu a1 a2 ;;
+      monadic_fold_left2 f accu' l1 l2
+  | _, _ => ret accu
+  end.
 
 Definition maybeEqualBy
   {A: Type}
