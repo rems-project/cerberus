@@ -334,7 +334,7 @@ Module CheriMemory
 
   Definition unwrap_cap_value n :=
     let vaddr_bits := (Z.of_nat C.sizeof_vaddr) * 8 in
-    let min_v := Z.neg (Z.to_pos (Z.pow 2 (vaddr_bits - 1))) in
+    let min_v := Z.opp (Z.pow 2 (vaddr_bits - 1)) in
     let max_v := Z.sub (Z.pow 2 (vaddr_bits - 1)) 1 in
     if andb (Z.leb n min_v) (Z.leb n max_v)
     then n
@@ -579,34 +579,24 @@ Module CheriMemory
   Definition bits_of_float: float -> Z. Proof. Admitted. (* TODO *)
 
   (* size is in bytes *)
-  Definition bytes_of_Z (is_signed : bool) (size : nat) (i_value : Z) : serr (list byte). Proof. Admitted. (* TODO *)
-  (* :=
-    let nbits := Z.mul 8 size in
+  Definition bytes_of_Z (is_signed: bool) (size: nat) (i: Z): serr (list byte)
+    :=
+    let nbits := Z.mul 8 (Z.of_nat size) in
     let '(min, max) :=
       if is_signed then
-        ((Z.negate
-          (Z.pow_int (Z.of_int 2) (Z.sub nbits 1))),
-          (Z.sub
-            (Z.pow_int (Z.of_int 2) (Z.sub nbits 1))
-            (Z.succ Z.zero)))
+        ((Z.opp (Z.pow 2 (Z.sub nbits 1))),
+          (Z.sub (Z.pow 2 (Z.sub nbits 1)) 1))
       else
         (Z.zero,
-          (Z.sub (Z.pow_int (Z.of_int 2) nbits)
-            (Z.succ Z.zero))) in
+          (Z.sub (Z.pow 2 nbits)
+             (Z.succ Z.zero))) in
     if
-      orb
-        (negb
-          (andb (le min i_value)
-            (le i_value max)))
-        (gt nbits 128)
+      (negb (Z.leb min i && Z.leb i max)) || (Z.gtb nbits 128)
     then
-      fail "bytes_of_int failure"
+      raise "bytes_of_int failure"
     else
-      list_init size
-        (fun (n_value : int) =>
-          CoqOfOCaml.Stdlib.char_of_int
-            (Z.to_int (Z.extract_num i_value (Z.mul 8 n_value) 8))).
-   *)
+      ret (list_init size
+             (fun n => byte_of_Z (extract_num i (Z.mul 8 (Z.of_nat n)) 8))).
 
   Definition resolve_function_pointer
     (funptrmap : ZMap.t (digest * string * C.t))

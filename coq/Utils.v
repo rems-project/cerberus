@@ -1,5 +1,8 @@
 Require Import Coq.Lists.List.
 Require Import Coq.Classes.DecidableClass.
+Require Import Coq.Numbers.BinNums.
+From Coq.Strings Require Import Byte.
+
 From ExtLib.Structures Require Import Monad Monads.
 
 Import ListNotations.
@@ -80,3 +83,11 @@ Definition maybeEqualBy
   | Some a, Some b => f a b
   | _, _ => false
   end.
+
+(* TODO *)
+Definition byte_of_Z: Z -> byte.
+Proof. admit. Admitted.
+
+(* TODO: Z.extract_num *)
+Definition extract_num: Z -> Z -> Z -> Z.
+Proof. admit. Admitted.
