@@ -2014,8 +2014,61 @@ Module CheriMemory
     PV Prov_none (PVconcrete (C.cap_c0 tt)).
 
   Definition fun_ptrval (sym : Symbol.sym)
-    : pointer_value :=
-    PV Prov_none (PVfunction (FP_valid sym)).
+    : serr pointer_value :=
+    ret (PV Prov_none (PVfunction (FP_valid sym))).
+
+  Definition concrete_ptrval : Z -> Z -> serr pointer_value :=
+    fun _ _ =>
+      raise
+      "concrete_ptrval: integer to pointer cast is not supported".
+
+  Definition case_ptrval
+    {A: Set}
+    (pv : pointer_value)
+    (fnull : unit -> A)
+    (ffun : option Symbol.sym -> A)
+    (fconc : unit -> A)
+    (funspecified : unit -> A) : serr A
+    :=
+    match pv with
+    | PV _ (PVfunction (FP_valid sym)) => ret (ffun (Some sym))
+    | PV _ (PVfunction (FP_invalid c_value)) =>
+        if cap_is_null c_value then
+          ret (fnull tt)
+        else
+          ret (ffun None)
+    | PV Prov_none (PVconcrete c_value) =>
+        if cap_is_null c_value then
+          ret (fconc tt)
+        else
+          ret (ffun None)
+    | PV (Prov_some i_value) (PVconcrete c_value) =>
+        if cap_is_null c_value then
+          ret (fconc tt)
+        else
+          ret (ffun None)
+    | _ => raise "case_ptrval"
+    end.
+
+  Definition case_funsym_opt
+    (st : mem_state)
+    (ptr : pointer_value)
+    : option Symbol.sym
+    :=
+    let '(_, ptrval) := break_PV ptr in
+    match ptrval with
+    | PVfunction (FP_valid sym) => Some sym
+    | (PVfunction (FP_invalid c_value) | PVconcrete c_value) =>
+        let n_value :=
+          Z.sub (C.cap_get_value c_value) initial_address in
+        match ZMap.find n_value st.(funptrmap) with
+        | Some (file_dig, name, _) =>
+            Some
+              (Symbol.Symbol file_dig n_value
+                 (Symbol.SD_Id name))
+        | None => None
+        end
+    end.
 
 
 End CheriMemory.

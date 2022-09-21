@@ -10,6 +10,7 @@ Require Import Location.
 Require Import Symbol.
 Require Import Mem_common.
 Require Import Ctype.
+Require Import SimpleError.
 
 Set Implicit Arguments.
 Set Strict Implicit.
@@ -66,13 +67,13 @@ Module Type Memory (A:VADDR).
     mem_value -> memM footprint.
 
   Parameter null_ptrval : Ctype.ctype -> pointer_value.
-  Parameter fun_ptrval : Symbol.sym -> pointer_value.
-  Parameter concrete_ptrval : Z -> A.t -> pointer_value.
+  Parameter fun_ptrval : Symbol.sym -> serr pointer_value.
+  Parameter concrete_ptrval : Z -> A.t -> serr pointer_value.
 
   Parameter case_ptrval :
-    forall {a : Set},
-      pointer_value -> (unit -> a) -> (option Symbol.sym -> a) ->
-      (unit -> a) -> (unit -> a) -> a.
+    forall {A : Set},
+      pointer_value -> (unit -> A) -> (option Symbol.sym -> A) ->
+      (unit -> A) -> (unit -> A) -> serr A.
 
   Parameter case_funsym_opt :
     mem_state -> pointer_value -> option Symbol.sym.
