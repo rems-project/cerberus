@@ -2009,4 +2009,8 @@ Module CheriMemory
       end.
 
 
+  Definition null_ptrval (_:Ctype.ctype) : pointer_value
+    :=
+    PV Prov_none (PVconcrete (C.cap_c0 tt)).
+
 End CheriMemory.
