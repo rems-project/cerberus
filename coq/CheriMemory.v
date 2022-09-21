@@ -2070,5 +2070,173 @@ Module CheriMemory
         end
     end.
 
+  Definition eq_ptrval
+    (ptr1 ptr2 : pointer_value) : memM bool
+    :=
+    let '(prov1, ptrval_1) := break_PV ptr1 in
+    let '(prov2, ptrval_2) := break_PV ptr2 in
+    match ptrval_1, ptrval_2 with
+    | PVfunction (FP_valid sym1), PVfunction (FP_valid sym2) =>
+        ret (Symbol.symbolEquality sym1 sym2)
+    | PVfunction (FP_invalid c1), PVfunction (FP_invalid c2) =>
+        ret (Z.eqb (C.cap_get_value c1) (C.cap_get_value c2))
+    | PVfunction (FP_valid sym), PVfunction (FP_invalid c_value)
+    |PVfunction (FP_invalid c_value), PVfunction (FP_valid sym) =>
+       get >>=
+         (fun (st : mem_state) =>
+            let n_value :=
+              Z.sub (C.cap_get_value c_value) initial_address
+            in
+            match ZMap.find n_value st.(funptrmap) with
+            | Some (file_dig, name, _) =>
+                let sym2 := Symbol.Symbol file_dig n_value (Symbol.SD_Id name) in
+                ret (Symbol.symbolEquality sym sym2)
+            | None =>
+                raise (InternalErr
+                         "CHERI.eq_ptrval ==> FP_valid failed to resolve function symbol")
+            end)
+    | PVfunction _, _
+    | _, PVfunction _ =>
+        ret false
+    | PVconcrete c1, PVconcrete c2 =>
+        ret (Z.eqb (C.cap_get_value c1) (C.cap_get_value c2))
+    end.
+
+  Definition ne_ptrval
+    (ptr1 ptr2 : pointer_value) : memM bool
+    :=
+    eq_ptrval ptr1 ptr2 >>= (fun (x : bool) => ret (negb x)).
+
+  Definition lt_ptrval
+    (ptr1 ptr2 : pointer_value) : memM bool
+    :=
+    let '(prov1, ptrval_1) := break_PV ptr1 in
+    let '(prov2, ptrval_2) := break_PV ptr2 in
+    match ptrval_1, ptrval_2 with
+    | PVconcrete addr1, PVconcrete addr2 =>
+        if orb (cap_is_null addr1) (cap_is_null addr2) then
+          fail (MerrWIP "lt_ptrval ==> one null pointer")
+        else if Switches.has_switch Switches.SW_strict_pointer_relationals then
+               match
+                 prov1, prov2,
+                 (match prov1, prov2 with
+                  | Prov_some alloc1, Prov_some alloc2 =>
+                      Z.eqb alloc1 alloc2
+                  | _, _ => false
+                  end) with
+               | Prov_some alloc1, Prov_some alloc2, true =>
+                   ret (match C.value_compare addr1 addr2 with
+                        | Lt => true
+                        | _ => false
+                        end)
+               | _, _, _ => fail MerrPtrComparison
+               end
+             else
+               ret (match C.value_compare addr1 addr2 with
+                    | Lt => true
+                    | _ => false
+                    end)
+    | _, _ => fail (MerrWIP "lt_ptrval")
+    end.
+
+  Definition gt_ptrval
+    (ptr1 ptr2 : pointer_value) : memM bool
+    :=
+    let '(prov1, ptrval_1) := break_PV ptr1 in
+    let '(prov2, ptrval_2) := break_PV ptr2 in
+    match ptrval_1, ptrval_2 with
+    | PVconcrete addr1, PVconcrete addr2 =>
+        if orb (cap_is_null addr1) (cap_is_null addr2) then
+          fail (MerrWIP "gt_ptrval ==> one null pointer")
+        else if Switches.has_switch Switches.SW_strict_pointer_relationals then
+               match
+                 prov1, prov2,
+                 (match prov1, prov2 with
+                  | Prov_some alloc1, Prov_some alloc2 =>
+                      Z.eqb alloc1 alloc2
+                  | _, _ => false
+                  end) with
+               | Prov_some alloc1, Prov_some alloc2, true =>
+                   ret (match C.value_compare addr1 addr2 with
+                        | Gt => true
+                        | _ => false
+                        end)
+               | _, _, _ => fail MerrPtrComparison
+               end
+             else
+               ret (match C.value_compare addr1 addr2 with
+                    | Gt => true
+                    | _ => false
+                    end)
+    | _, _ => fail (MerrWIP "gt_ptrval")
+    end.
+
+  Definition le_ptrval
+    (ptr1 ptr2 : pointer_value) : memM bool
+    :=
+    let '(prov1, ptrval_1) := break_PV ptr1 in
+    let '(prov2, ptrval_2) := break_PV ptr2 in
+    match ptrval_1, ptrval_2 with
+    | PVconcrete addr1, PVconcrete addr2 =>
+        if orb (cap_is_null addr1) (cap_is_null addr2) then
+          fail (MerrWIP "le_ptrval ==> one null pointer")
+        else if Switches.has_switch Switches.SW_strict_pointer_relationals then
+               match
+                 prov1, prov2,
+                 (match prov1, prov2 with
+                  | Prov_some alloc1, Prov_some alloc2 =>
+                      Z.eqb alloc1 alloc2
+                  | _, _ => false
+                  end) with
+               | Prov_some alloc1, Prov_some alloc2, true =>
+                   ret (match C.value_compare addr1 addr2 with
+                        | Lt => true
+                        | Eq => true
+                        | _ => false
+                        end)
+               | _, _, _ => fail MerrPtrComparison
+               end
+             else
+               ret (match C.value_compare addr1 addr2 with
+                    | Lt => true
+                    | Eq => true
+                    | _ => false
+                    end)
+    | _, _ => fail (MerrWIP "le_ptrval")
+    end.
+
+  Definition ge_ptrval
+    (ptr1 ptr2 : pointer_value) : memM bool
+    :=
+    let '(prov1, ptrval_1) := break_PV ptr1 in
+    let '(prov2, ptrval_2) := break_PV ptr2 in
+    match ptrval_1, ptrval_2 with
+    | PVconcrete addr1, PVconcrete addr2 =>
+        if orb (cap_is_null addr1) (cap_is_null addr2) then
+          fail (MerrWIP "ge_ptrval ==> one null pointer")
+        else if Switches.has_switch Switches.SW_strict_pointer_relationals then
+               match
+                 prov1, prov2,
+                 (match prov1, prov2 with
+                  | Prov_some alloc1, Prov_some alloc2 =>
+                      Z.eqb alloc1 alloc2
+                  | _, _ => false
+                  end) with
+               | Prov_some alloc1, Prov_some alloc2, true =>
+                   ret (match C.value_compare addr1 addr2 with
+                        | Gt => true
+                        | Eq => true
+                        | _ => false
+                        end)
+               | _, _, _ => fail MerrPtrComparison
+               end
+             else
+               ret (match C.value_compare addr1 addr2 with
+                    | Gt => true
+                    | Eq => true
+                    | _ => false
+                    end)
+    | _, _ => fail (MerrWIP "ge_ptrval")
+    end.
 
 End CheriMemory.
