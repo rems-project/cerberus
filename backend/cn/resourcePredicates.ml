@@ -52,6 +52,17 @@ let pp_definition def =
   item "clauses" (match def.clauses with
                   | Some clauses -> Pp.list pp_clause clauses
                   | None -> !^"(uninterpreted)")
+
+
+let instantiate_clauses def ptr_arg iargs = match def.clauses with
+  | Some clauses ->
+    let subst = IT.make_subst (
+        (def.pointer, ptr_arg) ::
+        List.map2 (fun (def_ia, _) ia -> (def_ia, ia)) def.iargs iargs
+      )
+    in
+    Some (List.map (subst_clause subst) clauses)
+  | None -> None
   
 
 let byte_sym = Sym.fresh_named "Legacy_Internal_Byte"

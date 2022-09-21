@@ -100,40 +100,26 @@ let pattern_match =
 
 
 
-module PrefixHash = 
-  Hashtbl.Make(struct
-      type t = String.t
-      let equal = String.equal
-      let hash = String.length
-    end)
-
-let prefixes = PrefixHash.create 20
-
-let prefixed str =
-  let next = match PrefixHash.find_opt prefixes str with
-    | None -> 0
-    | Some i -> i + 1
-  in
-  PrefixHash.add prefixes str next;
-  str ^ string_of_int next
-
-
-let fresh_same_id_with_prefix oprefix s = 
+let fresh_same_id_with_prefix oprefix s =
   match oprefix, Sym.description s with
   | Some prefix, SD_CN_Id name -> 
-     Sym.fresh_named (name ^ "__" ^ prefixed prefix)
+     Sym.fresh_make_uniq_kind name prefix
+  | Some prefix, _ ->
+     Sym.fresh_make_uniq prefix
   | _ -> Sym.fresh ()
 
-let fresh_return_with_prefix oprefix = 
+let fresh_return_with_prefix oprefix =
   match oprefix with
-  | Some prefix -> Sym.fresh_named (prefixed prefix)
+  | Some prefix -> Sym.fresh_make_uniq prefix
   | None -> Sym.fresh ()
 
 let fresh_call_with_prefix call_situation s = 
   match Sym.description s with
   | SD_CN_Id name -> 
-     Sym.fresh_named (name ^ "__" ^ prefixed (call_prefix call_situation))
-  | _ -> Sym.fresh ()
+     Sym.fresh_make_uniq_kind name (TypeErrors.call_prefix call_situation)
+  | _ ->
+     Sym.fresh_make_uniq (TypeErrors.call_prefix call_situation)
+
 
 
 let rec bind_logical (oprefix,where) (lrt : LRT.t) = 
@@ -1384,15 +1370,8 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
      in
      check_pexpr ~expect:Loc pointer_pe (fun pointer_arg ->
      check_pexprs (List.combine iarg_pes (List.map snd def.iargs)) (fun iargs ->
-     let@ instantiated_clauses = match def.clauses with
-       | Some clauses ->
-           let subst = 
-             make_subst (
-                 (def.pointer, pointer_arg) ::
-                 List.map2 (fun (def_ia, _) ia -> (def_ia, ia)) def.iargs iargs
-               )
-           in
-           return (List.map (ResourcePredicates.subst_clause subst) clauses)
+     let@ clauses = match ResourcePredicates.instantiate_clauses def pointer_arg iargs with
+       | Some clauses -> return clauses
        | None ->
           let action = match pack_unpack with 
             | Pack -> "pack" 
@@ -1418,7 +1397,7 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
             in
             fail (fun _ -> {loc; msg = Generic err})
        in
-       try_clauses [] instantiated_clauses
+       try_clauses [] clauses
      in
      begin match pack_unpack with
      | Unpack ->

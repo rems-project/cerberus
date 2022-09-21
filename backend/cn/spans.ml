@@ -5,17 +5,25 @@ module RE = Resources
 open IT
 
 exception Failure of Pp.doc
+exception NoResult
 
-type action = Pack of IT.t * Sctypes.t | Unpack of IT.t * Sctypes.t
+let note_failure f x =
+  begin try Some (f x)
+  with
+  | Failure pp ->
+    Pp.debug 5 (lazy (Pp.item "failed in span computations" pp));
+    None
+  | NoResult -> None
+  end
+
+type action = Pack of RET.predicate_type | Unpack of RET.predicate_type
 [@@deriving eq, ord]
 
-let pp_pt_ct nm pt ct =
+let pp_action act =
   let open Pp in
-  !^ nm ^^ !^" (" ^^ IT.pp pt ^^ !^": " ^^ Sctypes.pp ct ^^ !^") ptr)"
-
-let pp_action = function
-  | Pack (pt, ct)  -> pp_pt_ct "Pack" pt ct
-  | Unpack (pt, ct) -> pp_pt_ct "Unpack" pt ct
+  match act with
+  | Pack pt -> !^ "Pack:" ^^^ (RET.pp_predicate_type pt)
+  | Unpack pt -> !^ "Unpack:" ^^^ (RET.pp_predicate_type pt)
 
 let lb_str = function
   | None -> "-inf"
@@ -262,7 +270,6 @@ let intersection_action m g (req, req_span) (res, res_span) =
       None
   end
   else
-  let mk_action ptr ct = if cmp < 0 then Unpack (ptr, ct) else Pack (ptr, ct) in
   (* the "inner witnesses" are concrete objects of interior type *)
   let witnesses = if cmp < 0
     then get_witnesses req
@@ -282,7 +289,10 @@ let intersection_action m g (req, req_span) (res, res_span) =
   let ok = and_ [permission;
     or_ (List.map (fun (w_ptr, perm) -> and_ [perm; lePointer_ (ptr, w_ptr);
         lePointer_ (w_ptr, upper)]) witnesses)] in
-  Some (mk_action ptr ct, ok)
+  let pred_t = RET.{name = RET.Owned ct; pointer = ptr;
+        permission = bool_ true; iargs = []} in
+  let action = if cmp < 0 then Unpack pred_t else Pack pred_t in
+  Some (action, ok)
 
 let model_res_spans_or_empty m g req =
   try
@@ -308,34 +318,114 @@ let is_unknown_array_size = function
   end
   | _ -> false
 
-let guess_span_intersection_action ress req m g =
+let get_active_clause m g clauses =
+  let rec seek not_prev = function
+    | [] -> raise NoResult
+    | (c :: clauses) ->
+      let gd = c.ResourcePredicates.guard in
+      let this = eval_extract "resource predicate clause guard" (m, g) is_bool gd in
+      Pp.debug 11 (lazy (Pp.item "this clause guard" (Pp.list IT.pp [gd; IT.bool_ this])));
+      if this then (IT.and_ (List.rev (gd :: not_prev)), c)
+      else seek (IT.not_ gd :: not_prev) clauses
+  in
+  seek [] clauses
+
+let do_null_resource_check m g req =
+  Pp.debug 11 (lazy (Pp.item "doing null resource check" (RET.pp req)));
+  let (nm, pt) = match req with
+    | RET.P ({name = PName nm; _} as pt) -> (nm, pt)
+    | _ -> raise NoResult
+  in
+  let def = match SymMap.find_opt nm g.Global.resource_predicates with
+    | None -> raise NoResult
+    | Some def -> def
+  in
+  let clauses = match ResourcePredicates.instantiate_clauses def pt.pointer pt.iargs with
+    | None -> raise NoResult
+    | Some clauses -> clauses
+  in
+  let (cond, active_clause) = get_active_clause m g clauses in
+  if LogicalArgumentTypes.has_resource (fun _ -> false) active_clause.packing_ft
+  then raise NoResult else ();
+  (pt, cond)
+
+let null_resource_check m g req = note_failure (do_null_resource_check m g) req
+
+let res_pointer m g = function
+  | RET.P pt -> eval_extract "resource pointer" (m, g) is_pointer pt.pointer
+  | RET.Q qpt -> eval_extract "resource pointer" (m, g) is_pointer qpt.pointer
+
+let pp_res_span (r, span) =
+  let open Pp in
+  RET.pp r ^^ colon ^^^ pp_pair span
+
+(* The standard span logic for a model, request and resource context is:
+   (1) If there is a matching resource in the context (pointer + type agree
+       with request) then do nothing.
+   (2) If the request otherwise has a span that intersects with a resource,
+       something needs to be decomposed. If the context resource is larger,
+       unpack it. If the request is larger, attempt to pack the requested
+       thing. That pack operation recurses into requests for the components
+       (i.e. splitting up the request) and, if successful, brings us back to
+       the request in situation (1).
+       - structs/arrays with one element, and resource predicates, count as
+         larger than their contents, even if they're the same size.
+       - if neither object is larger, but they're different, we need to split
+         at both ends. start with the resource. this happens e.g. if a
+         resource needs to be unpacked out of one predicate type and packed
+         again in another.
+       - for an outer array, operate on the element that intersects with the
+         inner object.
+       - for an inner array, only proceed if the outer object covers the whole
+         array, and require a witness that proves that the array is populated.
+   (3) If the request, in this model, is a resource predicate where the
+       relevant clause claims no resources, then pack it. Again, this will
+       take us into situation (1).
+*)
+
+let do_guess_span_actions ress req m g =
+  (* the inference logic supports requests for arrays of non-specific
+     size as a special case which the span logic can ignore *)
   if is_unknown_array_size req
-  then []
-  else
-  let diff res = not (RET.same_predicate_name req (RE.request res)) in
-  let res_ss = List.filter diff ress
+  then raise NoResult else ();
+  let same_name res = RET.same_predicate_name req (RE.request res) in
+  let req_ptr = res_pointer m g req in
+  if List.exists (fun res -> same_name res &&
+    (res_pointer m g (RE.request res) == req_ptr)) ress
+  then raise NoResult else ();
+  match null_resource_check m g req with
+  | Some (pt, ok) ->
+    (* null resources will also have no span, so skip the rest *)
+    [(Pack pt, ok)]
+  | None ->
+  let res_spans = List.filter (fun res -> not (same_name res)) ress
     |> List.map (fun r -> List.map (fun s -> (r, s))
         (model_res_spans_or_empty m g (RE.request r)))
     |> List.concat in
   let req_ss = model_res_spans_or_empty m g req in
-  let interesting = List.filter (fun (_, s) -> List.exists (inter s) req_ss) res_ss
-    |> List.sort (fun (_, (lb, _)) (_, (lb2, _)) -> Z.compare lb lb2) in
-  if List.compare_length_with interesting 0 == 0
+  let interesting = List.filter_map (fun (r, s) -> List.find_opt (inter s) req_ss
+        |> Option.map (fun s2 -> (r, s, s2)))
+    res_spans
+    |> List.sort (fun (_, (lb, _), _) (_, (lb2, _), _) -> Z.compare lb lb2) in
+  if List.length interesting == 0
   then
-  Pp.debug 7 (lazy (Pp.bold "spans as expected for inference"))
+  Pp.debug 7 (lazy (Pp.bold "no span intersections"))
   else ();
-  let opts = List.filter_map (fun (r, s) ->
-    Pp.debug 7 (lazy (Pp.item "resource partial overlap"
-      (Pp.list RET.pp [req; RE.request r])));
-    let req_s = List.find (inter s) req_ss in
-    intersection_action m g (req, req_s) (r, s)
+  let opts = List.filter_map (fun (r, s, s2) ->
+    Pp.debug 7 (lazy (Pp.item "resource (partial?) overlap"
+      (Pp.list pp_res_span [(req, s2); (RE.request r, s)])));
+    intersection_action m g (req, s2) (r, s)
   ) interesting in
   gather_same_actions opts
 
+let guess_span_actions ress req m g =
+  note_failure (do_guess_span_actions ress req m) g
+  |> Option.to_list |> List.concat
+
 let diag_req ress req m g =
-  let act = guess_span_intersection_action ress req m g in
+  let act = guess_span_actions ress req m g in
   Pp.debug 5 (lazy (match act with
-    | [] -> Pp.item "guess intersection action: none" (Pp.string "")
+    | [] -> Pp.item "guess span action: none" (Pp.string "")
     | (action, ok) :: oth -> Pp.item "guessed span action" (pp_action action)
   ))
 

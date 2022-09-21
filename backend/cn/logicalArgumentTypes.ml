@@ -157,3 +157,12 @@ let rec logical_arguments_and_return (at : 'i t) : LRT.t * 'i =
 
 type packing_ft = OutputDef.t t
 type lft = LogicalReturnTypes.t t
+
+
+let rec has_resource (f : 'a -> bool) (at : 'a t) =
+  match at with
+  | I x -> f x
+  | Resource _ -> true
+  | Define (_, _, at) -> has_resource f at
+  | Constraint (_, _, at) -> has_resource f at
+

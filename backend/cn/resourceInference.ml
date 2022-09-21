@@ -8,6 +8,7 @@ open Effectful.Make(Typing)
 open TypeErrors
 open BaseTypes
 open LogicalConstraints
+module LAT = LogicalArgumentTypes
 
 
 let reorder_points = ref true
@@ -126,6 +127,21 @@ module General = struct
 
 
 
+  let span_confirmed loc f =
+    let@ provable = provable loc in
+    let@ m = model_with loc (bool_ true) in
+    begin match m with
+      | None -> return None
+      | Some (model, _) ->
+        let opts = f model in
+        let confirmed = List.find_opt (fun (act, confirm) ->
+            Pp.debug 8 (lazy (Pp.item "span action condition" (IT.pp confirm)));
+            match provable (t_ confirm) with
+                | `False -> false
+                | `True -> true
+        ) opts in
+        return confirmed
+    end
 
 
 
@@ -208,6 +224,7 @@ module General = struct
        return res
     | pname -> 
        debug 7 (lazy (item "predicate request" (RET.pp (P requested))));
+       let@ _ = span_fold_unfolds loc uiinfo (RET.P requested) false in
        let start_timing = time_log_start "predicate-request" "" in
        let@ def_oargs = match pname with
          | Block _ -> return Resources.block_oargs
@@ -304,7 +321,7 @@ module General = struct
                 in
                 return (Some r)
              end
-          | _ -> 
+          | _ ->
              return None
           end
        end in
@@ -735,83 +752,126 @@ module General = struct
        return (Some resources)
 
 
+  and span_fold_unfold_step loc uiinfo req =
+    let@ ress = all_resources () in
+    let@ global = get_global () in
+    let@ provable = provable loc in
+    let@ m = model_with loc (bool_ true) in
+    let@ action = span_confirmed loc
+        (fun model -> Spans.guess_span_actions ress req model global)
+    in
+    begin match action with
+      | None -> return false
+      | Some (Spans.Pack r_pt, _) ->
+            debug 7 (lazy (item "confirmed, doing span fold"
+                (ResourceTypes.pp_predicate_type r_pt)));
+            let@ success = do_pack loc uiinfo r_pt in
+            return success
+      | Some (Spans.Unpack r_pt, _) ->
+            debug 7 (lazy (item "confirmed, doing span unfold"
+                (ResourceTypes.pp_predicate_type r_pt)));
+            let@ success = do_unpack loc uiinfo r_pt in
+            return success
+    end
+
   and span_fold_unfolds loc uiinfo req is_tail_rec =
     if not (! span_actions)
     then return ()
     else
     let start_timing = if is_tail_rec then 0.0
         else time_log_start "span_check" "" in
-    let@ ress = all_resources () in
-    let@ global = get_global () in
-    let@ provable = provable loc in
-    let@ m = model_with loc (bool_ true) in
-    let@ _ = match m with
-      | None -> return ()
-      | Some (model, _) ->
-        let opts = Spans.guess_span_intersection_action ress req model global in
-        let confirmed = List.find_opt (fun (act, confirm) ->
-            match provable (t_ confirm) with
-                | `False -> false
-                | `True -> true
-        ) opts in
-        begin match confirmed with
-        | None -> return ()
-        | Some (Spans.Pack (pt, ct), _) ->
-            debug 7 (lazy (item "confirmed, doing span fold" (IT.pp pt)));
-            let@ success = do_pack loc uiinfo pt ct in
-            if success then span_fold_unfolds loc uiinfo req true else return ()
-        | Some (Spans.Unpack (pt, ct), _) ->
-            debug 7 (lazy (item "confirmed, doing span unfold" (IT.pp pt)));
-            let@ success = do_unpack loc uiinfo pt ct in
-            if success then span_fold_unfolds loc uiinfo req true else return ()
-        end
-    in
-    if is_tail_rec then () else time_log_end start_timing;
-    return ()
+    let@ r = span_fold_unfold_step loc uiinfo req in
+    begin match r with
+      | true -> span_fold_unfolds loc uiinfo req true
+      | false ->
+        time_log_end start_timing;
+        return ()
+    end
 
-  and do_pack loc uiinfo pt ct =
-    let@ opt = match ct with
-      | Sctypes.Array (act, Some length) ->
-        fold_array loc uiinfo act pt length (bool_ true)
-      | Sctypes.Struct tag ->
-        let@ result = fold_struct ~recursive:true loc uiinfo tag pt (bool_ true) in
-        begin match result with
-          | Result.Ok res -> return (Some res)
-          | _ -> return None
-        end
-      | _ -> return None
-    in
-    match opt with
-    | None -> return false
-    | Some (resource, oargs) ->
-       let@ _ = add_r None (P resource, oargs) in
-       return true
+  and do_pack loc uiinfo r_pt =
+    match r_pt with
+    | {name = Owned (Sctypes.Array (a_ct, Some length)); _} ->
+      let@ opt_r = fold_array loc uiinfo a_ct r_pt.pointer length (bool_ true) in
+      begin match opt_r with
+        | None -> return false
+        | Some (resource, oargs) ->
+          let@ _ = add_r None (P resource, oargs) in
+	    return true
+      end
+    | {name = Owned (Sctypes.Struct tag); _} ->
+      let@ result = fold_struct ~recursive:true loc uiinfo tag r_pt.pointer (bool_ true) in
+      begin match result with
+        | Result.Ok (resource, oargs) ->
+          let@ _ = add_r None (P resource, oargs) in
+          return true
+        | _ -> return false
+      end
+    | _ ->
+      Pp.warn loc (Pp.item "unexpected arg to do_pack" (ResourceTypes.pp_predicate_type r_pt));
+      return false
 
-  and do_unpack loc uiinfo pt ct =
-    match ct with
-      | Sctypes.Array (act, Some length) ->
-        let@ oqp = unfold_array ~recursive:true loc uiinfo act
-                     length pt (bool_ true) in
-        begin match oqp with
-          | None -> return false
-          | Some (qp, oargs) ->
-              let@ _ = add_r None (Q qp, oargs) in
-              return true
-        end
-      | Sctypes.Struct tag ->
-        let@ ors = unfold_struct ~recursive:true loc uiinfo tag pt (bool_ true) in
-        begin match ors with
-          | None -> return false
-          | Some rs ->
-             let@ _ = add_rs None rs in
-             return true
-        end
-      | _ -> return false
+  and do_unpack loc uiinfo r_pt =
+  match r_pt with
+    | {name = Owned (Sctypes.Array (a_ct, Some length)); _} ->
+      let@ oqp = unfold_array ~recursive:true loc uiinfo a_ct
+                   length r_pt.pointer (bool_ true) in
+      begin match oqp with
+        | None -> return false
+        | Some (qp, oargs) ->
+            let@ _ = add_r None (Q qp, oargs) in
+            return true
+      end
+    | {name = Owned (Sctypes.Struct tag); _} ->
+      let@ ors = unfold_struct ~recursive:true loc uiinfo tag r_pt.pointer (bool_ true) in
+      begin match ors with
+        | None -> return false
+        | Some rs ->
+           let@ _ = add_rs None rs in
+           return true
+      end
+    | _ ->
+      Pp.warn loc (Pp.item "unexpected arg to do_unpack" (ResourceTypes.pp_predicate_type r_pt));
+      return false
 
 
 
+  and ftyp_args_request_step rt_subst loc naming_scheme uiinfo ftyp =
+    (* take one step of the "spine" judgement, reducing a function-type
+       by claiming an argument resource or otherwise reducing towards
+       an instantiated return-type *)
+    begin match ftyp with
+    | LAT.Resource ((s, (resource, bt)), info, ftyp) ->
+       let@ o_re_oarg = resource_request ~recursive:true loc uiinfo resource in
+       begin match o_re_oarg with
+         | None ->
+            return None
+         | Some (re, O oargs) ->
+            assert (ResourceTypes.equal re resource);
+            return (Some (LAT.subst rt_subst (IT.make_subst [(s, oargs)]) ftyp))
+       end
+    | Define ((s, it), info, ftyp) ->
+       let bt = IT.bt it in
+       let@ tm = match naming_scheme s with
+         | Some s' ->
+           let@ () = add_l s' bt in
+           let@ () = add_c (LC.t_ (def_ s' it)) in
+           return (sym_ (s', bt))
+         | None -> return it
+       in
+       return (Some (LAT.subst rt_subst (IT.make_subst [(s, tm)]) ftyp))
+    | Constraint (c, info, ftyp) ->
+       let@ () = return (debug 9 (lazy (item "checking constraint" (LC.pp c)))) in
+       let@ provable = provable loc in
+       let res = provable c in
+       begin match res with
+       | `True -> return (Some ftyp)
+       | `False -> return None
+       end
+    | I rt -> return None
+    end
 
-  let resource_request ~recursive loc uiinfo (request : RET.t) : (RE.t option, type_error) m = 
+
+  and resource_request ~recursive loc uiinfo (request : RET.t) : (RE.t option, type_error) m =
     match request with
     | P request ->
        let@ result = predicate_request ~recursive loc uiinfo request in

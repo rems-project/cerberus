@@ -45,6 +45,28 @@ let has_id = function
      None
 
 
+module StringHash =
+  Hashtbl.Make(struct
+      type t = String.t
+      let equal = String.equal
+      let hash = Hashtbl.hash
+    end)
+
+let name_uses = StringHash.create 20
+
+let name_make_uniq str =
+  let next = match StringHash.find_opt name_uses str with
+    | None -> 0
+    | Some i -> i + 1
+  in
+  StringHash.add name_uses str next;
+  str ^ "__" ^ string_of_int next
+
+let fresh_make_uniq name = fresh_named (name_make_uniq name)
+
+let fresh_make_uniq_kind pfx name = fresh_named (pfx ^ name_make_uniq name)
+
+
 
 let json sym = `String (pp_string sym)
 

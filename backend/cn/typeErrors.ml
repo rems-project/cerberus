@@ -43,7 +43,6 @@ let call_prefix = function
   | UnpackPredicate _ -> "unpack"
   | UnpackStruct _ -> "unpack_struct"
 
-
 type situation =
   | Access of access
   | Call of call_situation
