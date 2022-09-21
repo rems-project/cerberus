@@ -2013,4 +2013,9 @@ Module CheriMemory
     :=
     PV Prov_none (PVconcrete (C.cap_c0 tt)).
 
+  Definition fun_ptrval (sym : Symbol.sym)
+    : pointer_value :=
+    PV Prov_none (PVfunction (FP_valid sym)).
+
+
 End CheriMemory.
