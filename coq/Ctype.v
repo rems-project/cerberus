@@ -404,12 +404,20 @@ Instance x27_Show : Show tag_definition := {
 
 Definition proj_ctype_  (c : ctype )  : ctype_ :=
   match ( (c)) with (( Ctype _ ty_)) => ty_ end.
+*)
 
 (* NOTE: a well-formed ctype cannot have an Atomic inside another one *)
-Definition unatomic  (c : ctype )  : ctype :=
-  match ( (c)) with ( Ctype annots1 ty_ as ty) =>
-    match ( ty_) with | Atomic ty => ty | _ => ty end end.
+Definition unatomic (c: ctype)  : ctype
+  :=
+  match c with
+    | Ctype annots1 ty_ as ty =>
+        match ty_ with
+        | Atomic ty => ty
+        | _ => ty
+        end
+  end.
 
+(*
 Definition unatomic_  (ty : ctype )  : ctype_ :=
   proj_ctype_ (unatomic ty).
 (* [?]: removed value specification. *)
