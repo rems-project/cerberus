@@ -231,6 +231,9 @@ Module CheriMemory
   Definition mem_state_with_last_used last_used (r : mem_state) :=
     Build_mem_state_r r.(next_alloc_id) r.(next_iota) r.(last_address) r.(allocations) r.(iota_map) r.(funptrmap) r.(varargs) r.(next_varargs_id) r.(bytemap) r.(captags) r.(dead_allocations) r.(dynamic_addrs) last_used.
 
+  Definition mem_state_with_iota_map iota_map (r : mem_state) :=
+    Build_mem_state_r r.(next_alloc_id) r.(next_iota) r.(last_address) r.(allocations) iota_map r.(funptrmap) r.(varargs) r.(next_varargs_id) r.(bytemap) r.(captags) r.(dead_allocations) r.(dynamic_addrs) r.(last_used).
+
 
   Definition initial_address := (HexString.to_Z "0xFFFFFFFF").
 
@@ -2238,5 +2241,153 @@ Module CheriMemory
                     end)
     | _, _ => fail (MerrWIP "ge_ptrval")
     end.
+
+  Definition diff_ptrval
+    (diff_ty : Ctype.ctype) (ptrval1 ptrval2 : pointer_value)
+    : memM integer_value
+    :=
+    let precond (alloc: allocation) (addr1 addr2: Z): bool
+      :=
+      Z.leb alloc.(base) addr1 &&
+        Z.leb addr1 (Z.add alloc.(base) alloc.(size)) &&
+        Z.leb alloc.(base) addr2 &&
+        Z.leb addr2 (Z.add alloc.(base) alloc.(size))
+    in
+    let valid_postcond  (addr1 addr2: Z) : memM integer_value :=
+      let diff_ty' :=
+        match diff_ty with
+        | Ctype.Ctype _ (Ctype.Array elem_ty _) => elem_ty
+        | _ => diff_ty
+        end in
+      sz <- serr2memM (sizeof DEFAULT_FUEL None diff_ty') ;;
+      ret (IV (Z.div (Z.sub addr1 addr2) sz))
+    in
+    let error_postcond := fail MerrPtrdiff
+    in
+
+    if Switches.has_switch (Switches.SW_pointer_arith PERMISSIVE)
+    then
+      match (ptrval1, ptrval2) with
+      | (PV _ (PVconcrete addr1), PV _ (PVconcrete addr2)) =>
+          valid_postcond (C.cap_get_value addr1)(C.cap_get_value addr2)
+      | _ => error_postcond
+      end
+    else
+      match (ptrval1, ptrval2) with
+      |
+        (PV (Prov_some alloc_id1) (PVconcrete addr1),
+          PV (Prov_some alloc_id2) (PVconcrete addr2)) =>
+          if Z.eqb alloc_id1 alloc_id2 then
+            get_allocation alloc_id1 >>=
+              (fun (alloc : allocation) =>
+                 if precond alloc (C.cap_get_value addr1) (C.cap_get_value addr2)
+                 then
+                   valid_postcond (C.cap_get_value addr1) (C.cap_get_value addr2)
+                 else
+                   error_postcond)
+          else
+            error_postcond
+      |
+        ((PV (Prov_symbolic iota) (PVconcrete addr1),
+           PV (Prov_some alloc_id') (PVconcrete addr2)) |
+          (PV (Prov_some alloc_id') (PVconcrete addr1),
+            PV (Prov_symbolic iota) (PVconcrete addr2))) =>
+          lookup_iota iota >>=
+            (fun x =>
+               match x with
+               | inl alloc_id =>
+                   if Z.eqb alloc_id alloc_id' then
+                     get_allocation alloc_id >>=
+                       (fun (alloc : allocation) =>
+                          if
+                            precond alloc
+                              (C.cap_get_value addr1)
+                              (C.cap_get_value addr2)
+                          then
+                            valid_postcond
+                              (C.cap_get_value addr1)
+                              (C.cap_get_value addr2)
+                          else
+                            error_postcond)
+                   else
+                     error_postcond
+               | inr (alloc_id1, alloc_id2) =>
+                   if orb (Z.eqb alloc_id1 alloc_id') (Z.eqb alloc_id2 alloc_id')
+                   then
+                     get_allocation alloc_id' >>=
+                       (fun (alloc : allocation) =>
+                          if precond alloc
+                               (C.cap_get_value addr1)
+                               (C.cap_get_value addr2)
+                          then
+                            (update
+                               (fun (st : mem_state) =>
+                                  mem_state_with_iota_map
+                                    (ZMap.add iota (inl alloc_id')
+                                       st.(iota_map)) st))
+                            ;;
+                            (valid_postcond
+                               (C.cap_get_value addr1)
+                               (C.cap_get_value addr2))
+                          else
+                            error_postcond)
+                   else
+                     error_postcond
+               end)
+      |
+        (PV (Prov_symbolic iota1) (PVconcrete addr1),
+          PV (Prov_symbolic iota2) (PVconcrete addr2)) =>
+          lookup_iota iota1 >>=
+            (fun ids1 =>
+               lookup_iota iota2 >>=
+                 (fun ids2 =>
+                    let inter_ids :=
+                      match ids1, ids2 with
+                      | inl x_value, inl y_value =>
+                          if Z.eqb x_value y_value
+                          then SingleAlloc x_value
+                          else NoAlloc
+                      | inl x_value, inr (y_value, z_value)
+                      | inr (y_value, z_value), inl x_value =>
+                          if Z.eqb x_value y_value || Z.eqb x_value z_value
+                          then SingleAlloc x_value
+                          else NoAlloc
+                      | inr (x1, x2), inr (y1, y2) =>
+                          if Z.eqb x1 y1 then
+                            if Z.eqb x2 y2
+                            then DoubleAlloc x1 x2
+                            else SingleAlloc x1
+                          else
+                            if Z.eqb x2 y2
+                            then SingleAlloc x2
+                            else NoAlloc
+                      end in
+                    match inter_ids with
+                    | NoAlloc => error_postcond
+                    | SingleAlloc alloc_id' =>
+                        update
+                          (fun (st : mem_state) =>
+                             mem_state_with_iota_map
+                               (ZMap.add iota1 (inl alloc_id')
+                                  (ZMap.add iota2 (inl alloc_id')
+                                     st.(iota_map))) st)
+                        ;;
+                        valid_postcond
+                          (C.cap_get_value addr1)
+                          (C.cap_get_value addr2)
+                    | DoubleAlloc alloc_id1 alloc_id2 =>
+                        match C.value_compare addr1 addr2 with
+                        | Eq =>
+                            valid_postcond
+                              (C.cap_get_value addr1)
+                              (C.cap_get_value addr2)
+                        | _ =>
+                            fail
+                              (MerrOther
+                                 "in `diff_ptrval` invariant of PNVI-ae-udi failed: ambiguous iotas with addr1 <> addr2")
+                        end
+                    end))
+      | _ => error_postcond
+      end.
 
 End CheriMemory.
