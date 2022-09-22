@@ -91,7 +91,7 @@ Module Type Memory (A:VADDR).
 
   Parameter update_prefix : Symbol.prefix * mem_value -> memM unit.
 
-  Parameter prefix_of_pointer : pointer_value -> memM (option string).
+  (* Parameter prefix_of_pointer : pointer_value -> memM (option string). *)
 
   Parameter validForDeref_ptrval : Ctype.ctype -> pointer_value -> memM bool.
 
