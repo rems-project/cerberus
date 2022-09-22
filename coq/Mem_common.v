@@ -4,6 +4,7 @@ Require Import Coq.Strings.String.
 Require Import Addr.
 Require Import Undefined.
 Require Import Location.
+Require AilSyntax.
 
 Module Mem_common (A:VADDR).
 
@@ -266,7 +267,7 @@ Definition instance_Show_Show_Mem_common_mem_error_dict
   | _ => None
   end.
 
-(*
+  (*
 Inductive integer_operator : Set :=
 | IntAdd : integer_operator
 | IntSub : integer_operator
@@ -281,11 +282,13 @@ Inductive floating_operator : Set :=
 | FloatSub : floating_operator
 | FloatMul : floating_operator
 | FloatDiv : floating_operator.
+*)
 
 Inductive derivecap_op : Set :=
-| DCunary : Cerb_frontend.AilSyntax.unaryOperator -> derivecap_op
-| DCbinary : Cerb_frontend.AilSyntax.binaryOperator -> derivecap_op.
+| DCunary : AilSyntax.unaryOperator -> derivecap_op
+| DCbinary : AilSyntax.binaryOperator -> derivecap_op.
 
+(*
 Inductive pure_memop : Set :=
 | DeriveCap : derivecap_op -> bool -> pure_memop
 | CapAssignValue : pure_memop

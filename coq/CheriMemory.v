@@ -47,7 +47,6 @@ Module CheriMemory
   Definition storage_instance_id : Set := Z.
 
   (* Following types need to be defined *)
-  Definition derivecap_op: Set := unit. (* Mem_common.derivecap_op *)
   Definition integer_operator: Set := unit. (* Mem_common.integer_operator *)
   Definition floating_operator: Set := unit. (* Mem_common.floating_operator *)
   Definition intrinsics_signature: Set := unit. (* intrinsics_signature *)
@@ -2737,6 +2736,29 @@ Module CheriMemory
               then fail (MerrIntFromPtr loc)
               else ret (IV addr)
           end
+    end.
+
+  Definition derive_cap
+    (is_signed : bool)
+    (bop : derivecap_op)
+    (ival1 ival2 : integer_value) : serr integer_value
+    :=
+    match bop with
+    | DCunary _ =>
+        match ival1 with
+        | IC _ cap => ret (IC is_signed cap)
+        | IV _ =>
+            raise
+              "derive_cap should not be used for unary operations on non capabilty-carrying types"
+        end
+    | DCbinary _ =>
+        match ival1, ival2 with
+        | IC _ cap, _
+        | _, IC _ cap => ret (IC is_signed cap)
+        | IV _, IV _ =>
+            raise
+              "derive_cap should not be used for binary operations on non capabilty-carrying types"
+        end
     end.
 
 

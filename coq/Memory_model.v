@@ -21,7 +21,6 @@ Module Type Memory (A:VADDR).
   Import A.
   Include Mem_common(A).
 
-  Parameter derivecap_op: Set. (* Mem_common.derivecap_op *)
   Parameter integer_operator: Set. (* Mem_common.integer_operator *)
   Parameter floating_operator: Set. (* Mem_common.floating_operator *)
   Parameter intrinsics_signature: Set. (* intrinsics_signature *)
@@ -106,7 +105,7 @@ Module Type Memory (A:VADDR).
     Ctype.integerType -> pointer_value -> memM integer_value.
 
   Parameter derive_cap :
-    bool -> derivecap_op -> integer_value ->  integer_value -> integer_value.
+    bool -> derivecap_op -> integer_value ->  integer_value -> serr integer_value.
 
   Parameter cap_assign_value :
     location_ocaml -> integer_value -> integer_value -> integer_value.
