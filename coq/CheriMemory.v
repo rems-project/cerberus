@@ -2547,5 +2547,197 @@ Module CheriMemory
                  "invalid integer value (capability for non- [u]intptr_t")
     end.
 
+  Definition internal_intcast
+    (loc : location_ocaml)
+    (ity2 : Ctype.integerType)
+    (ival : integer_value)
+    : serr (sum mem_error integer_value)
+    :=
+    nbytes <- option2serr "no sizeof_ity!" (IMP.get.(sizeof_ity) ity2) ;;
+    let '(min_ity2, max_ity2) :=
+      let nbits := Z.mul 8 nbytes in
+      let is_signed := is_signed_ity DEFAULT_FUEL ity2 in
+      if is_signed then
+        ((Z.opp
+            (Z.pow 2 (Z.sub nbits 1))),
+          (Z.sub
+             (Z.pow 2 (Z.sub nbits 1))
+             (Z.succ Z.zero)))
+      else
+        (Z.zero, (Z.sub (Z.pow 2 nbits)(Z.succ Z.zero))) in
+    let conv_int_to_ity2 (n_value : Z) : Z :=
+      match ity2 with
+      | Ctype.Bool =>
+          if Z.eqb n_value Z.zero then
+            Z.zero
+          else
+            Z.succ Z.zero
+      | _ =>
+          if
+            andb (Z.leb n_value min_ity2)
+              (Z.leb n_value max_ity2)
+          then
+            n_value
+          else
+            wrapI min_ity2 max_ity2 n_value
+      end in
+    match (ival, ity2) with
+    |
+      ((IC false _, Ctype.Unsigned Ctype.Intptr_t) |
+        (IC true _, Ctype.Signed Ctype.Intptr_t)) =>
+        ret (inr ival)
+    |
+      ((IC (false as is_signed) cap,
+         Ctype.Signed Ctype.Intptr_t) |
+        (IC (true as is_signed) cap,
+          Ctype.Unsigned Ctype.Intptr_t)) =>
+        ret (inr  (IC (negb is_signed) cap))
+    | (IC false cap, _) =>
+        let n_value := C.cap_get_value cap in
+        ret (inr (IV (conv_int_to_ity2 n_value)))
+    | (IC true cap, _) =>
+        let n_value := C.cap_get_value cap in
+        ret (inr (IV (conv_int_to_ity2 (unwrap_cap_value n_value))))
+    |
+      ((IV n_value, Ctype.Unsigned Ctype.Intptr_t) |
+        (IV n_value, Ctype.Signed Ctype.Intptr_t)) =>
+        if Z.eqb n_value Z.zero then
+          ret (inr (IC false (C.cap_c0 tt)))
+        else
+          let n_value := wrap_cap_value n_value in
+          let c_value := C.cap_c0 tt in
+          ret (inr (IC false (C.cap_set_value c_value n_value)))
+    | (IV n_value, _) =>
+        ret (inr (IV (conv_int_to_ity2 n_value)))
+    end.
+
+  Definition max_ival (ity: Ctype.integerType)
+    : serr integer_value
+    :=
+    let signed_max (n_value : Z) : Z :=
+      Z.sub (Z.pow 2 (Z.sub (Z.mul 8 n_value) 1)) 1 in
+    let unsigned_max (n_value : Z) : Z :=
+      Z.sub (Z.pow 2 (Z.mul 8 n_value)) 1 in
+    match ity with
+    | Ctype.Signed Ctype.Intptr_t =>
+        ret (IV (signed_max (Z.of_nat C.sizeof_vaddr)))
+    | Ctype.Unsigned Ctype.Intptr_t =>
+        ret (IV (unsigned_max (Z.of_nat C.sizeof_vaddr)))
+    | _ =>
+        n_value <- option2serr "no sizeof_ity!" (IMP.get.(sizeof_ity) ity) ;;
+        match ity with
+        | Ctype.Char =>
+            if IMP.get.(Implementation.is_signed_ity) Ctype.Char
+            then ret (IV (signed_max n_value))
+            else ret (IV (unsigned_max n_value))
+        | Ctype.Bool => ret (IV (unsigned_max n_value))
+        | Ctype.Size_t
+        | Ctype.Wchar_t
+        | Ctype.Unsigned _ => ret (IV (unsigned_max n_value))
+        | Ctype.Ptrdiff_t
+        | Ctype.Wint_t
+        | Ctype.Signed _ => ret (IV (signed_max n_value))
+        | Ctype.Vaddr_t => ret (IV (unsigned_max n_value))
+        | Ctype.Enum _ => ret (IV (signed_max 4))
+        end
+    end.
+
+  Definition min_ival (ity: Ctype.integerType)
+    : serr integer_value
+    :=
+    let signed_min (n_value: Z) : Z :=
+      Z.opp (Z.pow 2 (Z.sub (Z.mul 8 n_value) 1)) in
+    match ity with
+    | Ctype.Char =>
+        if IMP.get.(Implementation.is_signed_ity) Ctype.Char
+        then ret (IV (signed_min 8))
+        else ret (IV Z.zero)
+    | Ctype.Bool
+    | Ctype.Size_t
+    | Ctype.Wchar_t
+    | Ctype.Wint_t
+    | Ctype.Unsigned _ => ret (IV Z.zero)
+    | Ctype.Signed Ctype.Intptr_t =>
+        ret (IV (signed_min (Z.of_nat C.sizeof_vaddr)))
+    | Ctype.Ptrdiff_t
+    | Ctype.Signed _ =>
+        n_value <- option2serr "no sizeof_ity!" (IMP.get.(sizeof_ity) ity) ;;
+        ret (IV (signed_min n_value))
+    | Ctype.Vaddr_t => ret (IV Z.zero)
+    | Ctype.Enum _ => ret (IV (signed_min 4))
+    end.
+
+  Definition intfromptr
+    (loc : location_ocaml)
+    (_ : Ctype.ctype)
+    (ity: Ctype.integerType)
+    (ptr: pointer_value)
+    : memM integer_value
+    :=
+    let '(prov,ptrval_) := break_PV ptr in
+    let wrap_intcast (ity2 : Ctype.integerType) (ival : integer_value)
+      : memM integer_value
+      :=
+      icr <- serr2memM (internal_intcast loc ity2 ival) ;;
+      match icr with
+      | inl err => fail err
+      | inr ival => ret ival
+      end in
+    match ptrval_ with
+    |
+      PVfunction
+        (FP_valid ((Symbol.Symbol _ n_value _) as fp)) =>
+        get >>=
+          (fun (st : mem_state) =>
+             match ity with
+             |
+               (Ctype.Signed Ctype.Intptr_t |
+                 Ctype.Unsigned Ctype.Intptr_t) =>
+                 match ZMap.find n_value st.(funptrmap) with
+                 | Some (file_dig, name, c_value) =>
+                     wrap_intcast ity (IC false c_value)
+                 | None =>
+                     raise (InternalErr "intfromptr: Unknown function")
+                 end
+             | _ =>
+                 ret (IV (Z.add initial_address n_value))
+             end)
+    | (PVfunction (FP_invalid c_value) | PVconcrete c_value) =>
+        if cap_is_null c_value then
+          match ity with
+          | Ctype.Signed Ctype.Intptr_t =>
+              ret (IC true (C.cap_c0 tt))
+          | Ctype.Unsigned Ctype.Intptr_t =>
+              ret (IC false (C.cap_c0 tt))
+          | _ => ret (IV Z.zero)
+          end
+        else
+          (if Switches.has_switch (Switches.SW_PNVI AE) ||
+                Switches.has_switch (Switches.SW_PNVI AE_UDI)
+           then
+             match prov with
+             | Prov_some alloc_id => expose_allocation alloc_id
+             | _ => ret tt
+             end
+           else
+             ret tt)
+          ;;
+          match ity with
+          |
+            (Ctype.Signed Ctype.Intptr_t |
+              Ctype.Unsigned Ctype.Intptr_t) =>
+              wrap_intcast ity (IC false c_value)
+          | _ =>
+              maxival <- serr2memM (max_ival ity) ;;
+              minival <- serr2memM (min_ival ity) ;;
+              let ity_max := num_of_int maxival in
+              let ity_min := num_of_int minival in
+              let addr := C.cap_get_value c_value in
+              if Z.ltb addr ity_min || Z.ltb ity_max addr
+              then fail (MerrIntFromPtr loc)
+              else ret (IV addr)
+          end
+    end.
+
 
 End CheriMemory.
