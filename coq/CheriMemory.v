@@ -2411,5 +2411,68 @@ Module CheriMemory
         ret tt
     end.
 
+  Definition isWellAligned_ptrval
+    (ref_ty:  Ctype.ctype) (ptrval : pointer_value)
+    : memM bool
+    :=
+    match Ctype.unatomic_ ref_ty with
+    | (Ctype.Void | Ctype.Function _ _ _) =>
+        fail
+          (MerrOther
+             "called isWellAligned_ptrval on void or a function type")
+    | _ =>
+        match ptrval with
+        | PV _ (PVfunction _) =>
+            fail
+              (MerrOther
+                 "called isWellAligned_ptrval on function pointer")
+        | PV _ (PVconcrete addr) =>
+            sz <- serr2memM (alignof DEFAULT_FUEL None ref_ty) ;;
+            ret (Z.eqb (Z.modulo (C.cap_get_value addr) sz) Z.zero)
+        end
+    end.
+
+  Definition validForDeref_ptrval
+    (ref_ty: Ctype.ctype) (ptrval: pointer_value)
+    : memM bool
+    :=
+    let do_test (alloc_id : storage_instance_id): memM bool
+      :=
+      is_dead alloc_id >>=
+        (fun (x : bool) =>
+           match x with
+           | true => ret false
+           | false => isWellAligned_ptrval ref_ty ptrval
+           end)
+    in
+    match ptrval with
+    | PV _ (PVfunction _) => ret false
+    | (PV Prov_device (PVconcrete c_value)) as ptrval =>
+        if cap_is_null c_value then
+          ret false
+        else
+          isWellAligned_ptrval ref_ty ptrval
+    | PV (Prov_symbolic iota) (PVconcrete c_value) =>
+        if cap_is_null c_value then
+          ret false
+        else
+          lookup_iota iota >>=
+            (fun x =>
+               match x with
+               | inl alloc_id => do_test alloc_id
+               | inr (alloc_id1, alloc_id2) =>
+                   do_test alloc_id1 >>=
+                     (fun (x : bool) =>
+                        if x
+                        then ret true
+                        else do_test alloc_id2)
+               end)
+    | PV (Prov_some alloc_id) (PVconcrete c_value) =>
+        if cap_is_null c_value
+        then ret false
+        else do_test alloc_id
+    | PV Prov_none _ => ret false
+    end.
+
 
 End CheriMemory.

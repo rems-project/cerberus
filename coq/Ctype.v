@@ -400,11 +400,13 @@ Instance x27_Show : Show tag_definition := {
     end
 }.
 
+*)
+
 (* [?]: removed value specification. *)
 
-Definition proj_ctype_  (c : ctype )  : ctype_ :=
-  match ( (c)) with (( Ctype _ ty_)) => ty_ end.
-*)
+Definition proj_ctype_  (c: ctype): ctype_
+  :=
+  match c with Ctype _ ty_ => ty_ end.
 
 (* NOTE: a well-formed ctype cannot have an Atomic inside another one *)
 Definition unatomic (c: ctype)  : ctype
@@ -417,9 +419,10 @@ Definition unatomic (c: ctype)  : ctype
         end
   end.
 
-(*
-Definition unatomic_  (ty : ctype )  : ctype_ :=
+Definition unatomic_  (ty: ctype): ctype_ :=
   proj_ctype_ (unatomic ty).
+
+(*
 (* [?]: removed value specification. *)
 
 Definition make_qualifiers  (c : bool ) (r : bool ) (v : bool )  : qualifiers :=  {|const    := c;restrict := r;volatile := v
