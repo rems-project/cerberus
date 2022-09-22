@@ -44,6 +44,10 @@ let pp_open ss =
   let open Pp in
   !^"[" ^^ list pp_ipair ss ^^ !^"]"
 
+let pp_res_span (r, span) =
+  let open Pp in
+  RET.pp r ^^ colon ^^^ pp_pair span
+
 let eval_extract msg m_g f x =
   let (m, global) = m_g in
   match Solver.eval global m x with
@@ -87,6 +91,16 @@ let not_flip_spans ss =
     | [] -> [(None, None)]
     | (None, ub) :: xs -> f (ub, xs)
     | (lb, ub) :: xs -> (None, dec_b lb) :: f (ub, xs)
+
+let subtract_closed_spans ss1 ss2 =
+  let mk_open (lb, ub) = (Some lb, Some ub) in
+  let mk_closed = function
+    | (Some lb, Some ub) -> (lb, ub)
+    | _ -> assert false
+  in
+  let inv_opts = not_flip_spans (List.map mk_open ss1) @ List.map mk_open ss2 in
+  let ss = norm_spans (not_flip_spans inv_opts) in
+  List.map mk_closed ss
 
 let rec perm_spans m_g q perm =
   let is_q = IT.equal (sym_ (q, BT.Integer)) in
@@ -355,32 +369,34 @@ let res_pointer m g = function
   | RET.P pt -> eval_extract "resource pointer" (m, g) is_pointer pt.pointer
   | RET.Q qpt -> eval_extract "resource pointer" (m, g) is_pointer qpt.pointer
 
-let pp_res_span (r, span) =
-  let open Pp in
-  RET.pp r ^^ colon ^^^ pp_pair span
 
 (* The standard span logic for a model, request and resource context is:
-   (1) If there is a matching resource in the context (pointer + type agree
-       with request) then do nothing.
-   (2) If the request otherwise has a span that intersects with a resource,
+   (1) Compute spans for all existing and requested resources.
+   (2) Subtract from the request spans the spans of existing resources of
+       the same type. Such resources can already be handled by the resource
+       inference and are preferred. This avoids a silly case where overlapping
+       resources in the context create a problem.
+   (3) If the remaining request spans intersect with a different-typed resource,
        something needs to be decomposed. If the context resource is larger,
        unpack it. If the request is larger, attempt to pack the requested
        thing. That pack operation recurses into requests for the components
-       (i.e. splitting up the request) and, if successful, brings us back to
-       the request in situation (1).
+       (i.e. splitting up the request). The request will be reattempted with
+       the packed/unpacked resource in the context. In the packing case, this
+       will be a same-typed resource shrinking the request span according to (2).
        - structs/arrays with one element, and resource predicates, count as
          larger than their contents, even if they're the same size.
        - if neither object is larger, but they're different, we need to split
-         at both ends. start with the resource. this happens e.g. if a
+         at both ends. start with the context resource. this happens e.g. if a
          resource needs to be unpacked out of one predicate type and packed
          again in another.
-       - for an outer array, operate on the element that intersects with the
-         inner object.
-       - for an inner array, only proceed if the outer object covers the whole
-         array, and require a witness that proves that the array is populated.
-   (3) If the request, in this model, is a resource predicate where the
-       relevant clause claims no resources, then pack it. Again, this will
-       take us into situation (1).
+       - for an outer iterated array, operate on the element that intersects
+         with the relevant inner object.
+       - for an inner iterated array, require a witness that the array is nonempty
+         and proceed based on it. multiple potential witnesses may be needed to deal
+         with a tricky case involving missing elements of variable index.
+   (4) If the request, in this model, is a resource predicate where the
+       relevant clause claims no resources, then pack it. Only do this if
+       there is no pointer-matching resource in the context.
 *)
 
 let do_guess_span_actions ress req m g =
@@ -389,23 +405,24 @@ let do_guess_span_actions ress req m g =
   if is_unknown_array_size req
   then raise NoResult else ();
   let same_name res = RET.same_predicate_name req (RE.request res) in
-  let req_ptr = res_pointer m g req in
-  if List.exists (fun res -> same_name res &&
-    (res_pointer m g (RE.request res) == req_ptr)) ress
-  then raise NoResult else ();
   match null_resource_check m g req with
   | Some (pt, ok) ->
     (* null resources will also have no span, so skip the rest *)
-    [(Pack pt, ok)]
+    let req_ptr = res_pointer m g req in
+    if List.exists (fun res -> same_name res &&
+      (res_pointer m g (RE.request res) == req_ptr)) ress
+    then [] else [(Pack pt, ok)]
   | None ->
-  let res_spans = List.filter (fun res -> not (same_name res)) ress
+  let res_spans = ress
     |> List.map (fun r -> List.map (fun s -> (r, s))
         (model_res_spans_or_empty m g (RE.request r)))
     |> List.concat in
-  let req_ss = model_res_spans_or_empty m g req in
-  let interesting = List.filter_map (fun (r, s) -> List.find_opt (inter s) req_ss
+  let (same, diff) = List.partition (fun (r, _) -> same_name r) res_spans in
+  let req_spans1 = model_res_spans_or_empty m g req in
+  let req_spans = subtract_closed_spans req_spans1 (List.map snd same) in
+  let interesting = List.filter_map (fun (r, s) -> List.find_opt (inter s) req_spans
         |> Option.map (fun s2 -> (r, s, s2)))
-    res_spans
+    diff
     |> List.sort (fun (_, (lb, _), _) (_, (lb2, _), _) -> Z.compare lb lb2) in
   if List.length interesting == 0
   then
