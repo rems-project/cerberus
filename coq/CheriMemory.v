@@ -167,7 +167,8 @@ Module CheriMemory
 
    *)
 
-
+  Definition allocation_with_prefix prefix (r : allocation) :=
+    Build_allocation prefix r.(base) r.(size) r.(ty) r.(is_readonly) r.(taint).
 
   Record AbsByte :=
     {
@@ -2389,5 +2390,26 @@ Module CheriMemory
                     end))
       | _ => error_postcond
       end.
+
+  Definition update_prefix
+    (x : Symbol.prefix * mem_value)
+    : memM unit
+    :=
+    let '(pref, mval) := x in
+    match mval with
+    | MVpointer _ (PV (Prov_some alloc_id) _) =>
+        let upd_alloc (x : option allocation) : option allocation :=
+          match x with
+          | Some alloc => Some (allocation_with_prefix pref alloc)
+          | None => None
+          end
+        in
+        update
+          (fun (st : mem_state) =>
+             mem_state_with_allocations (zmap_update alloc_id upd_alloc st.(allocations)) st)
+    | _ =>
+        ret tt
+    end.
+
 
 End CheriMemory.
