@@ -235,6 +235,8 @@ Module CheriMemory
   Definition mem_state_with_iota_map iota_map (r : mem_state) :=
     Build_mem_state_r r.(next_alloc_id) r.(next_iota) r.(last_address) r.(allocations) iota_map r.(funptrmap) r.(varargs) r.(next_varargs_id) r.(bytemap) r.(captags) r.(dead_allocations) r.(dynamic_addrs) r.(last_used).
 
+  Definition mem_state_with_next_iota next_iota (r : mem_state) :=
+    Build_mem_state_r r.(next_alloc_id) next_iota r.(last_address) r.(allocations) r.(iota_map) r.(funptrmap) r.(varargs) r.(next_varargs_id) r.(bytemap) r.(captags) r.(dead_allocations) r.(dynamic_addrs) r.(last_used).
 
   Definition initial_address := (HexString.to_Z "0xFFFFFFFF").
 
@@ -2472,6 +2474,77 @@ Module CheriMemory
         then ret false
         else do_test alloc_id
     | PV Prov_none _ => ret false
+    end.
+
+  Definition add_iota
+    (alloc_ids: storage_instance_id * storage_instance_id)
+    : memM symbolic_storage_instance_id
+    :=
+    get >>=
+      (fun (st : mem_state) =>
+         let iota := st.(next_iota) in
+         put
+           (mem_state_with_iota_map
+              (ZMap.add iota (inr alloc_ids) st.(iota_map))
+              (mem_state_with_next_iota
+                 (Z.succ st.(next_iota)) st)) ;;
+
+        ret iota).
+
+  Definition ptrfromint
+    (loc : location_ocaml)
+    (int_ty : Ctype.integerType)
+    (ref_ty : Ctype.ctype)
+    (int_v : integer_value) : memM pointer_value
+    :=
+    match int_ty, int_v with
+    | Ctype.Unsigned Ctype.Intptr_t, IC _ c_value
+    | Ctype.Signed Ctype.Intptr_t, IC _ c_value
+      =>
+        let addr := C.cap_get_value c_value in
+        get >>=
+          (fun (st : mem_state) =>
+             match find_overlaping st addr with
+             | NoAlloc => ret Prov_none
+             | SingleAlloc alloc_id => ret (Prov_some alloc_id)
+             | DoubleAlloc alloc_id1 alloc_id2 =>
+                 add_iota (alloc_id1,alloc_id2) >>=
+                   (fun (iota : symbolic_storage_instance_id) =>
+                      ret (Prov_symbolic iota))
+             end >>=
+               (fun (prov : provenance) => ret (PV prov (PVconcrete c_value))))
+    | Ctype.Unsigned Ctype.Intptr_t, IV _
+    | Ctype.Signed Ctype.Intptr_t, IV _ =>
+        raise (InternalErr "ptrfromint: invalid encoding for [u]intptr_t")
+    | _, IV n_value =>
+        if Z.eqb n_value Z.zero
+        then ret (PV Prov_none (PVconcrete (C.cap_c0 tt)))
+        else
+          let addr :=
+            let dlt := Z.succ (Z.sub C.max_vaddr  C.min_vaddr) in
+            let r_value := Z_integerRem_f n_value dlt in
+            if  Z.leb r_value C.max_vaddr
+            then r_value
+            else Z.sub r_value dlt
+          in
+          get >>=
+            (fun (st : mem_state) =>
+               match find_overlaping st addr with
+               | NoAlloc => ret Prov_none
+               | SingleAlloc alloc_id => ret (Prov_some alloc_id)
+               | DoubleAlloc alloc_id1 alloc_id2 =>
+                   add_iota (alloc_id1, alloc_id2) >>=
+                     (fun (iota : symbolic_storage_instance_id) =>
+                        ret (Prov_symbolic iota))
+               end >>=
+                 (fun (prov : provenance) =>
+                    let c_value :=
+                      C.cap_set_value
+                        (C.cap_c0 tt) addr in
+                    ret (PV prov (PVconcrete c_value))))
+    | _, IC _ _ =>
+        raise (InternalErr
+                 "invalid integer value (capability for non- [u]intptr_t")
     end.
 
 
