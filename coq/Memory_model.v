@@ -154,11 +154,11 @@ Module Type Memory (A:VADDR).
 
   Parameter concurRead_ival :
     Ctype.integerType -> Symbol.sym ->
-    integer_value.
+    serr integer_value.
 
   Parameter integer_ival : Z -> integer_value.
-  Parameter max_ival : Ctype.integerType -> integer_value.
-  Parameter min_ival : Ctype.integerType -> integer_value.
+  Parameter max_ival : Ctype.integerType -> serr integer_value.
+  Parameter min_ival : Ctype.integerType -> serr integer_value.
   Parameter op_ival :
     integer_operator -> integer_value ->
     integer_value -> integer_value.

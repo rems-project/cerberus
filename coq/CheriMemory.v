@@ -3118,4 +3118,10 @@ Module CheriMemory
     intfromptr Loc_unknown Ctype.void (Ctype.Unsigned Ctype.Intptr_t) ptrval ;;
     ptrfromint Loc_unknown (Ctype.Unsigned Ctype.Intptr_t) Ctype.void ival.
 
+  Definition concurRead_ival: Ctype.integerType -> Symbol.sym -> serr (integer_value)
+    := fun _ _ => raise "TODO: concurRead_ival".
+
+  Definition integer_ival (z:Z): integer_value := IV z.
+
+
 End CheriMemory.
