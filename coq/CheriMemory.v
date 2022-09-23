@@ -47,8 +47,6 @@ Module CheriMemory
   Definition storage_instance_id : Set := Z.
 
   (* Following types need to be defined *)
-  Definition integer_operator: Set := unit. (* Mem_common.integer_operator *)
-  Definition floating_operator: Set := unit. (* Mem_common.floating_operator *)
   Definition intrinsics_signature: Set := unit. (* intrinsics_signature *)
 
   Inductive provenance : Set :=
@@ -365,7 +363,6 @@ Module CheriMemory
         let n := C.cap_get_value c in
         if is_signed then unwrap_cap_value n else n
     end.
-
 
   (** Invalidate capability tags for memory region starting from
       [addr] with [size].
@@ -3123,5 +3120,28 @@ Module CheriMemory
 
   Definition integer_ival (z:Z): integer_value := IV z.
 
+  Definition int_bin
+    (vf : Z -> Z -> Z)
+    (v1 v2 : integer_value) : integer_value :=
+    let n1 := num_of_int v1 in
+    let n2 := num_of_int v2 in
+    IV (vf n1 n2).
+
+  Definition op_ival
+    (iop : integer_operator)
+    (v1 v2 : integer_value) : integer_value
+    :=
+    match iop with
+    | IntAdd => int_bin Z.add v1 v2
+    | IntSub => int_bin Z.sub v1 v2
+    | IntMul => int_bin Z.mul v1 v2
+    | IntDiv => int_bin (fun n1 n2 =>
+                          if Z.eqb n2 0
+                          then 0
+                          else Z_integerDiv_t n1 n2) v1 v2
+    | IntRem_t => int_bin Z_integerRem_t v1 v2
+    | IntRem_f => int_bin Z_integerRem_f v1 v2
+    | IntExp => int_bin Z.pow v1 v2
+    end.
 
 End CheriMemory.

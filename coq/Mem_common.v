@@ -267,7 +267,6 @@ Definition instance_Show_Show_Mem_common_mem_error_dict
   | _ => None
   end.
 
-  (*
 Inductive integer_operator : Set :=
 | IntAdd : integer_operator
 | IntSub : integer_operator
@@ -282,7 +281,6 @@ Inductive floating_operator : Set :=
 | FloatSub : floating_operator
 | FloatMul : floating_operator
 | FloatDiv : floating_operator.
-*)
 
 Inductive derivecap_op : Set :=
 | DCunary : AilSyntax.unaryOperator -> derivecap_op

@@ -21,8 +21,6 @@ Module Type Memory (A:VADDR).
   Import A.
   Include Mem_common(A).
 
-  Parameter integer_operator: Set. (* Mem_common.integer_operator *)
-  Parameter floating_operator: Set. (* Mem_common.floating_operator *)
   Parameter intrinsics_signature: Set. (* intrinsics_signature *)
 
   (* Module interface below *)
@@ -166,7 +164,7 @@ Module Type Memory (A:VADDR).
   Parameter offsetof_ival :
     (SymMap.t Ctype.tag_definition) ->
     Symbol.sym -> Symbol.identifier ->
-    integer_value.
+    serr integer_value.
 
   Parameter sizeof_ival : Ctype.ctype -> integer_value.
   Parameter alignof_ival : Ctype.ctype -> integer_value.
