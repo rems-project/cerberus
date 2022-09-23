@@ -166,8 +166,8 @@ Module Type Memory (A:VADDR).
     Symbol.sym -> Symbol.identifier ->
     serr integer_value.
 
-  Parameter sizeof_ival : Ctype.ctype -> integer_value.
-  Parameter alignof_ival : Ctype.ctype -> integer_value.
+  Parameter sizeof_ival : Ctype.ctype -> serr integer_value.
+  Parameter alignof_ival : Ctype.ctype -> serr integer_value.
   Parameter bitwise_complement_ival :
     Ctype.integerType -> integer_value -> integer_value.
   Parameter bitwise_and_ival :

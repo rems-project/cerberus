@@ -3144,4 +3144,32 @@ Module CheriMemory
     | IntExp => int_bin Z.pow v1 v2
     end.
 
+  Definition sizeof_ival (ty : Ctype.ctype): serr integer_value
+    :=
+    sz <- sizeof DEFAULT_FUEL None ty ;;
+    ret (IV sz).
+
+  Definition alignof_ival (ty: Ctype.ctype): serr integer_value
+    :=
+    a <- alignof DEFAULT_FUEL None ty ;;
+    ret (IV a).
+
+  Definition bitwise_complement_ival
+    (ty : Ctype.integerType)
+    (v : integer_value) : integer_value
+    :=
+    IV (Z.sub (Z.opp (num_of_int v)) 1).
+
+  Definition bitwise_and_ival (ty : Ctype.integerType)
+    : integer_value -> integer_value -> integer_value :=
+    int_bin Z.land.
+
+  Definition bitwise_or_ival (ty : Ctype.integerType)
+    : integer_value -> integer_value -> integer_value :=
+    int_bin Z.lor.
+
+  Definition bitwise_xor_ival (ty : Ctype.integerType)
+    : integer_value -> integer_value -> integer_value :=
+    int_bin Z.lxor.
+
 End CheriMemory.
