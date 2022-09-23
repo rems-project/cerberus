@@ -3100,10 +3100,9 @@ Module CheriMemory
                              let size_to_copy :=
                                let size_n := num_of_int size in
                                IV (Z.min (CheriMemory.size alloc) size_n) in
-                             memcpy new_ptr ptr size_to_copy >>=
-                               (fun _ =>
-                                  kill (Loc_other "realloc") true ptr ;;
-                                  ret new_ptr))
+                             memcpy new_ptr ptr size_to_copy ;;
+                           kill (Loc_other "realloc") true ptr ;;
+                           ret new_ptr)
                       else
                         fail
                           (MerrWIP "realloc: invalid pointer"))
@@ -3111,5 +3110,12 @@ Module CheriMemory
     | PV _ _ =>
         fail (MerrWIP "realloc: invalid pointer")
     end.
+
+  Definition copy_alloc_id
+    (ival : integer_value) (ptrval : pointer_value)
+    : memM pointer_value
+    :=
+    intfromptr Loc_unknown Ctype.void (Ctype.Unsigned Ctype.Intptr_t) ptrval ;;
+    ptrfromint Loc_unknown (Ctype.Unsigned Ctype.Intptr_t) Ctype.void ival.
 
 End CheriMemory.

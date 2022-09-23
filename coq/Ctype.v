@@ -455,100 +455,76 @@ Definition mk_ctype_atomic  (c : ctype )  : ctype :=
     FAKE_COQ.error "Ctyp.mk_ctype_atomic: called on an invalid inner type"
   else Ctype [] (Atomic cty) end.
 (* [?]: removed value specification. *)
-
-Definition void   : ctype :=
-  Ctype [] Void.
-(* [?]: removed value specification. *)
+*)
+Definition void   : ctype := Ctype nil Void.
 
 Definition char   : ctype :=
-  Ctype [] (Basic (Integer Char)).
-(* [?]: removed value specification. *)
+  Ctype nil (Basic (Integer Char)).
 
 Definition signed_char   : ctype :=
-  Ctype [] (Basic (Integer (Signed Ichar))).
-(* [?]: removed value specification. *)
+  Ctype nil (Basic (Integer (Signed Ichar))).
 
 Definition signed_short   : ctype :=
-  Ctype [] (Basic (Integer (Signed Short))).
-(* [?]: removed value specification. *)
+  Ctype nil (Basic (Integer (Signed Short))).
 
 Definition signed_int   : ctype :=
-  Ctype [] (Basic (Integer (Signed Int_))).
-(* [?]: removed value specification. *)
+  Ctype nil (Basic (Integer (Signed Int_))).
 
 Definition signed_long   : ctype :=
-  Ctype [] (Basic (Integer (Signed Long))).
-(* [?]: removed value specification. *)
+  Ctype nil (Basic (Integer (Signed Long))).
 
 Definition signed_long_long   : ctype :=
-  Ctype [] (Basic (Integer (Signed LongLong))).
-(* [?]: removed value specification. *)
+  Ctype nil (Basic (Integer (Signed LongLong))).
 
 Definition intptr_t   : ctype :=
-  Ctype [] (Basic (Integer (Signed Intptr_t))).
-(* [?]: removed value specification. *)
+  Ctype nil (Basic (Integer (Signed Intptr_t))).
 
 Definition intmax_t   : ctype :=
-  Ctype [] (Basic (Integer (Signed Intmax_t))).
-(* [?]: removed value specification. *)
-*)
+  Ctype nil (Basic (Integer (Signed Intmax_t))).
 Definition unsigned_char: ctype :=
   Ctype nil (Basic (Integer (Unsigned (Ichar)))).
 
-(*
-
 Definition unsigned_short   : ctype :=
-  Ctype [] (Basic (Integer (Unsigned Short))).
-(* [?]: removed value specification. *)
+  Ctype nil (Basic (Integer (Unsigned Short))).
 
 Definition unsigned_int   : ctype :=
-  Ctype [] (Basic (Integer (Unsigned Int_))).
-(* [?]: removed value specification. *)
+  Ctype nil (Basic (Integer (Unsigned Int_))).
 
 Definition unsigned_long   : ctype :=
-  Ctype [] (Basic (Integer (Unsigned Long))).
-(* [?]: removed value specification. *)
+  Ctype nil (Basic (Integer (Unsigned Long))).
 
 Definition unsigned_long_long   : ctype :=
-  Ctype [] (Basic (Integer (Unsigned LongLong))).
-(* [?]: removed value specification. *)
+  Ctype nil (Basic (Integer (Unsigned LongLong))).
 
 Definition uintptr_t   : ctype :=
-  Ctype [] (Basic (Integer (Unsigned Intptr_t))).
-(* [?]: removed value specification. *)
+  Ctype nil (Basic (Integer (Unsigned Intptr_t))).
 
 Definition uintmax_t   : ctype :=
-  Ctype [] (Basic (Integer (Unsigned Intmax_t))).
-(* [?]: removed value specification. *)
+  Ctype nil (Basic (Integer (Unsigned Intmax_t))).
 
 Definition char16_t   : ctype :=
   (* STD Â§7.28#2 *)
-  Ctype [] (Basic (Integer (Unsigned (Int_leastN_t( 16%nat))))).
-(* [?]: removed value specification. *)
+  Ctype nil (Basic (Integer (Unsigned (Int_leastN_t( 16%nat))))).
 
 Definition char32_t   : ctype :=
   (* STD Â§7.28#2 *)
-  Ctype [] (Basic (Integer (Unsigned (Int_leastN_t( 32%nat))))).
-(* [?]: removed value specification. *)
+  Ctype nil (Basic (Integer (Unsigned (Int_leastN_t( 32%nat))))).
 
 Definition wchar_t   : ctype :=
-  Ctype [] (Basic (Integer Wchar_t)).
-(* [?]: removed value specification. *)
+  Ctype nil (Basic (Integer Wchar_t)).
 
 Definition size_t   : ctype :=
-  Ctype [] (Basic (Integer Size_t)).
-(* [?]: removed value specification. *)
+  Ctype nil (Basic (Integer Size_t)).
 
 Definition ptrdiff_t   : ctype :=
-  Ctype [] (Basic (Integer Ptrdiff_t)).
-(* [?]: removed value specification. *)
+  Ctype nil (Basic (Integer Ptrdiff_t)).
 
+(*
 Definition vaddr_t  ( _ : unit )  : ctype :=
   if FAKE_COQ.is_CHERItt then
-    Ctype [] (Basic (Integer Vaddr_t))
+    Ctype nil (Basic (Integer Vaddr_t))
   else
     FAKE_COQ.error "vaddr_t is CHERI-specific".
-(* [?]: removed value specification. *)
 
 Definition is_ptr_t  (c : ctype )  : bool :=
   match ( (c)) with (( Ctype _ ty_)) =>
