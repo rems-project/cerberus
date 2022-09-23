@@ -2772,4 +2772,7 @@ Module CheriMemory
         raise "Unexpected argument value in ptr_t_int_value"
     end.
 
+  Definition null_cap (is_signed : bool) : integer_value :=
+    IC is_signed (C.cap_c0 tt).
+
 End CheriMemory.
