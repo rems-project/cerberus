@@ -982,7 +982,7 @@ module General = struct
       begin match res with
       | None -> return false
       | Some (res2, res_oargs) ->
-        assert (ResourceTypes.equal res2 res);
+        assert (ResourceTypes.equal (P res2) (P r_pt));
         assert false (* needs implementing, sigh *)
       end
     | _ ->
