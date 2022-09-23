@@ -2764,4 +2764,12 @@ Module CheriMemory
         raise "Unexpected argument types for cap_assign_value"
     end.
 
+  Definition ptr_t_int_value (ptr : integer_value)
+    : serr integer_value :=
+    match ptr with
+    | IC _ _ as ival => ret (IV (num_of_int ival))
+    | IV _ =>
+        raise "Unexpected argument value in ptr_t_int_value"
+    end.
+
 End CheriMemory.
