@@ -603,9 +603,9 @@ Module CheriMemory
         ((Z.opp (Z.pow 2 (Z.sub nbits 1))),
           (Z.sub (Z.pow 2 (Z.sub nbits 1)) 1))
       else
-        (Z.zero,
+        (0,
           (Z.sub (Z.pow 2 nbits)
-             (Z.succ Z.zero))) in
+             (1))) in
     if
       (negb (Z.leb min i && Z.leb i max)) || (Z.gtb nbits 128)
     then
@@ -753,7 +753,7 @@ Module CheriMemory
 
     let mask := C.representable_alignment_mask size_n in
     let size_n' := C.representable_length size_n in
-    let align_n' := Z.max align_n (Z.add (Z.succ (Z.zero)) (MorelloAddr.bitwise_complement mask)) in
+    let align_n' := Z.max align_n (Z.add (Z.succ (0)) (MorelloAddr.bitwise_complement mask)) in
 
     allocator size_n' align_n' >>=
       (fun '(alloc_id, addr) =>
@@ -1694,7 +1694,7 @@ Module CheriMemory
           (sz : Z)
       : memM (footprint * mem_value)
       :=
-      cap_check loc c Z.zero ReadIntent sz ;;
+      cap_check loc c 0 ReadIntent sz ;;
       do_load alloc_id_opt  (C.cap_get_value c) sz
     in
     match prov, ptrval_ with
@@ -1826,7 +1826,7 @@ Module CheriMemory
         : memM footprint
         :=
         nsz <- serr2memM (sizeof DEFAULT_FUEL None cty) ;;
-        cap_check loc c_value Z.zero WriteIntent nsz ;;
+        cap_check loc c_value 0 WriteIntent nsz ;;
         let addr := C.cap_get_value c_value in
         st <- get ;;
         '(funptrmap, captags, pre_bs) <-
@@ -2427,7 +2427,7 @@ Module CheriMemory
                  "called isWellAligned_ptrval on function pointer")
         | PV _ (PVconcrete addr) =>
             sz <- serr2memM (alignof DEFAULT_FUEL None ref_ty) ;;
-            ret (Z.eqb (Z.modulo (C.cap_get_value addr) sz) Z.zero)
+            ret (Z.eqb (Z.modulo (C.cap_get_value addr) sz) 0)
         end
     end.
 
@@ -2514,7 +2514,7 @@ Module CheriMemory
     | Ctype.Signed Ctype.Intptr_t, IV _ =>
         raise (InternalErr "ptrfromint: invalid encoding for [u]intptr_t")
     | _, IV n_value =>
-        if Z.eqb n_value Z.zero
+        if Z.eqb n_value 0
         then ret (PV Prov_none (PVconcrete (C.cap_c0 tt)))
         else
           let addr :=
@@ -2559,16 +2559,16 @@ Module CheriMemory
             (Z.pow 2 (Z.sub nbits 1))),
           (Z.sub
              (Z.pow 2 (Z.sub nbits 1))
-             (Z.succ Z.zero)))
+             (1)))
       else
-        (Z.zero, (Z.sub (Z.pow 2 nbits)(Z.succ Z.zero))) in
+        (0, (Z.sub (Z.pow 2 nbits)(1))) in
     let conv_int_to_ity2 (n_value : Z) : Z :=
       match ity2 with
       | Ctype.Bool =>
-          if Z.eqb n_value Z.zero then
-            Z.zero
+          if Z.eqb n_value 0 then
+            0
           else
-            Z.succ Z.zero
+            1
       | _ =>
           if
             andb (Z.leb n_value min_ity2)
@@ -2593,7 +2593,7 @@ Module CheriMemory
         ret (inr (IV (conv_int_to_ity2 (unwrap_cap_value n_value))))
     | IV n_value, Ctype.Unsigned Ctype.Intptr_t
     | IV n_value, Ctype.Signed Ctype.Intptr_t =>
-        if Z.eqb n_value Z.zero then
+        if Z.eqb n_value 0 then
           ret (inr (IC false (C.cap_c0 tt)))
         else
           let n_value := wrap_cap_value n_value in
@@ -2643,19 +2643,19 @@ Module CheriMemory
     | Ctype.Char =>
         if IMP.get.(Implementation.is_signed_ity) Ctype.Char
         then ret (IV (signed_min 8))
-        else ret (IV Z.zero)
+        else ret (IV 0)
     | Ctype.Bool
     | Ctype.Size_t
     | Ctype.Wchar_t
     | Ctype.Wint_t
-    | Ctype.Unsigned _ => ret (IV Z.zero)
+    | Ctype.Unsigned _ => ret (IV 0)
     | Ctype.Signed Ctype.Intptr_t =>
         ret (IV (signed_min (Z.of_nat C.sizeof_vaddr)))
     | Ctype.Ptrdiff_t
     | Ctype.Signed _ =>
         n_value <- option2serr "no sizeof_ity!" (IMP.get.(sizeof_ity) ity) ;;
         ret (IV (signed_min n_value))
-    | Ctype.Vaddr_t => ret (IV Z.zero)
+    | Ctype.Vaddr_t => ret (IV 0)
     | Ctype.Enum _ => ret (IV (signed_min 4))
     end.
 
@@ -2701,7 +2701,7 @@ Module CheriMemory
               ret (IC true (C.cap_c0 tt))
           | Ctype.Unsigned Ctype.Intptr_t =>
               ret (IC false (C.cap_c0 tt))
-          | _ => ret (IV Z.zero)
+          | _ => ret (IV 0)
           end
         else
           (if Switches.has_switch (Switches.SW_PNVI AE) ||
@@ -2828,7 +2828,7 @@ Module CheriMemory
             (fun x =>
                match x with
                | inr (alloc_id1, alloc_id2) =>
-                   if negb (Z.eqb ival Z.zero) then
+                   if negb (Z.eqb ival 0) then
                      (precond alloc_id1 >>=
                         (fun (x : bool) =>
                            match x with
@@ -2960,7 +2960,7 @@ Module CheriMemory
         raise (InternalErr "CHERI.member_shift_ptrval, PVfunction")
     | PVconcrete c_value =>
         if cap_is_null c_value then
-          if Z.eqb Z.zero offset
+          if Z.eqb 0 offset
           then ret (PV prov (PVconcrete (C.cap_c0 tt)))
           else raise (InternalErr "CHERI.member_shift_ptrval, shifting NULL")
         else
@@ -3030,5 +3030,49 @@ Module CheriMemory
     in
     copy_data (Z.to_nat size_n) ;;
     copy_tags (Z.to_nat (Z.mul (Z.quot size_n pointer_sizeof) pointer_sizeof)).
+
+  Definition memcmp
+    (ptrval1 ptrval2 : pointer_value)
+    (size_int : integer_value)
+    : memM integer_value
+    :=
+    let size_n := num_of_int size_int in
+    let fix get_bytes
+          (ptrval : pointer_value)
+          (acc : list Z)
+          (size : nat)
+      : memM (list Z) :=
+      match size with
+      | O => ret (List.rev acc)
+      | S size =>
+          let loc := Loc_other "memcmp" in
+          load loc Ctype.unsigned_char ptrval >>=
+            (fun (x : footprint * mem_value) =>
+               match x with
+               | (_, MVinteger _ (IV byte_n)) =>
+                   eff_array_shift_ptrval loc ptrval
+                     Ctype.unsigned_char (IV 1) >>=
+                     (fun (ptr' : pointer_value) =>
+                        get_bytes ptr' (cons byte_n acc) size)
+               | _ =>
+                   raise (InternalErr "memcmp load unexpected result")
+               end)
+      end in
+    get_bytes ptrval1 nil (Z.to_nat size_n) >>=
+      (fun (bytes1: list Z) =>
+         get_bytes ptrval2 nil (Z.to_nat size_n) >>=
+           (fun (bytes2: list Z) =>
+              ret (IV
+                   (List.fold_left
+                      (fun (acc : Z) '(n1, n2) =>
+                         if Z.eqb acc 0 then
+                           match Z.compare n1 n2 with
+                           | Eq => 0
+                           | Gt => 1
+                           | Lt => -1
+                           end
+                         else
+                           acc)
+                      (List.combine bytes1 bytes2) 0)))).
 
 End CheriMemory.
