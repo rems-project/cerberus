@@ -3172,4 +3172,11 @@ Module CheriMemory
     : integer_value -> integer_value -> integer_value :=
     int_bin Z.lxor.
 
+  Definition case_integer_value
+    {A : Set}
+    (v : integer_value)
+    (f : Z -> A)
+    (_ : unit -> A) : A :=
+    f (num_of_int v).
+
 End CheriMemory.
