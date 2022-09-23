@@ -491,10 +491,11 @@ Definition intptr_t   : ctype :=
 Definition intmax_t   : ctype :=
   Ctype [] (Basic (Integer (Signed Intmax_t))).
 (* [?]: removed value specification. *)
+*)
+Definition unsigned_char: ctype :=
+  Ctype nil (Basic (Integer (Unsigned (Ichar)))).
 
-Definition unsigned_char   : ctype :=
-  Ctype [] (Basic (Integer (Unsigned (Ichar)))).
-(* [?]: removed value specification. *)
+(*
 
 Definition unsigned_short   : ctype :=
   Ctype [] (Basic (Integer (Unsigned Short))).
