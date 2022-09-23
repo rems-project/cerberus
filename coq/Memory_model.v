@@ -116,11 +116,11 @@ Module Type Memory (A:VADDR).
 
   Parameter array_shift_ptrval :
     pointer_value -> Ctype.ctype -> integer_value ->
-    pointer_value.
+    serr pointer_value.
 
   Parameter member_shift_ptrval :
     pointer_value -> Symbol.sym ->
-    Symbol.identifier -> pointer_value.
+    Symbol.identifier -> serr pointer_value.
 
   Parameter eff_array_shift_ptrval :
     location_ocaml -> pointer_value -> Ctype.ctype ->

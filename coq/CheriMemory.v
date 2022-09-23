@@ -2775,4 +2775,13 @@ Module CheriMemory
   Definition null_cap (is_signed : bool) : integer_value :=
     IC is_signed (C.cap_c0 tt).
 
+  Definition array_shift_ptrval: pointer_value -> Ctype.ctype -> integer_value ->
+                                 serr pointer_value
+    := fun _ _ _ => raise "pure array_shift_ptrval not used in CHERI".
+
+  Definition member_shift_ptrval: pointer_value -> Symbol.sym ->
+                                  Symbol.identifier -> serr pointer_value
+    := fun _ _ _ => raise "members_shift_ptrval (pure) is not supported in CHERI".
+
+
 End CheriMemory.
