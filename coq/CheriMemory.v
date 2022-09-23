@@ -2923,5 +2923,49 @@ Module CheriMemory
         ret (PV Prov_device (PVconcrete c_value))
     end.
 
+  Definition offsetof_ival
+    (tagDefs: SymMap.t Ctype.tag_definition)
+    (tag_sym : Symbol.sym)
+    (memb_ident : Symbol.identifier) : serr integer_value
+    :=
+    '(xs, _) <- offsetsof DEFAULT_FUEL tagDefs tag_sym ;;
+    let pred x : bool :=
+      let '(ident, _, _) := x in
+      ident_equal ident memb_ident in
+    match List.find pred xs with
+    | Some (_, _, offset) => ret (IV offset)
+    | None =>
+        raise "CHERI.offsetof_ival: invalid memb_ident"
+    end.
+
+  Definition eff_member_shift_ptrval
+    (loc : location_ocaml)
+    (ptr : pointer_value)
+    (tag_sym: Symbol.sym)
+    (memb_ident: Symbol.identifier):  memM pointer_value
+    :=
+    let '(prov,ptrval_) := break_PV ptr in
+    ioff <- serr2memM (offsetof_ival (Tags.tagDefs tt) tag_sym memb_ident) ;;
+    offset <-
+      match ioff with
+      | IV offset => ret (offset)
+      | IC _ c_value =>
+          raise (InternalErr
+                   "CHERI.member_shift_ptrval invalid offset value type")
+      end ;;
+    match ptrval_ with
+    | PVfunction _ =>
+        raise (InternalErr "CHERI.member_shift_ptrval, PVfunction")
+    | PVconcrete c_value =>
+        if cap_is_null c_value then
+          if Z.eqb Z.zero offset
+          then ret (PV prov (PVconcrete (C.cap_c0 tt)))
+          else raise (InternalErr "CHERI.member_shift_ptrval, shifting NULL")
+        else
+          let addr := C.cap_get_value c_value in
+          let c_value := C.cap_set_value c_value (Z.add addr offset) in
+          ret (PV prov (PVconcrete c_value))
+    end.
+
 
 End CheriMemory.

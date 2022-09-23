@@ -11,6 +11,11 @@ Require Import Coq.Structures.OrderedTypeEx.
 Inductive identifier : Type :=
   | Identifier:  unit  ->  string  -> identifier .
 
+Definition ident_equal (a b: identifier) : bool :=
+  match a, b with
+  | Identifier _ s1, Identifier _ s2 => String.eqb s1 s1
+  end.
+
 Inductive digest : Type := .
 
 Inductive symbol_description : Type :=
