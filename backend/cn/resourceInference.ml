@@ -963,6 +963,28 @@ module General = struct
            let@ _ = add_rs None rs in
            return true
       end
+    | {name = PName pname; _} ->
+      let@ def = Typing.get_resource_predicate_def loc pname in
+      let@ res = select_resource_predicate_clause def loc r_pt.pointer r_pt.iargs in
+      let@ clause = match res with
+        | Result.Ok clause -> return clause
+        | Result.Error e -> fail (fun _ -> {loc; msg = Generic
+          (!^ "Cannot fold predicate: " ^^^ Sym.pp pname ^^ colon ^^^ e)})
+      in
+      let@ res = predicate_request ~recursive:true
+          loc uiinfo {
+            name = PName pname;
+            pointer = r_pt.pointer;
+            permission = bool_ true;
+            iargs = r_pt.iargs;
+          }
+      in
+      begin match res with
+      | None -> return false
+      | Some (res2, res_oargs) ->
+        assert (ResourceTypes.equal res2 res);
+        assert false (* needs implementing, sigh *)
+      end
     | _ ->
       Pp.warn loc (Pp.item "unexpected arg to do_unpack" (ResourceTypes.pp_predicate_type r_pt));
       return false
