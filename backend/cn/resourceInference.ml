@@ -9,6 +9,7 @@ open TypeErrors
 open BaseTypes
 open LogicalConstraints
 module LAT = LogicalArgumentTypes
+module RET = ResourceTypes
 
 
 let reorder_points = ref true
@@ -29,6 +30,68 @@ let get_simp () =
   let@ values, equalities, log_unfold, lcs = simp_constraints () in
   let simp t = Simplify.simp global.struct_decls values equalities log_unfold lcs t in
   return simp
+
+let unpack_def global name args =
+    Option.bind (Global.get_logical_predicate_def global name)
+    (fun def ->
+    match def.definition with
+    | Def body ->
+       Some (LogicalPredicates.open_pred def.args body args)
+    | _ -> None
+    )
+
+let debug_constraint_failure_diagnostics (model_with_q : Solver.model_with_q) global c =
+  let model = fst model_with_q in
+  if ! Pp.print_level == 0 then () else
+  let split tm = match IT.term tm with
+    | IT.Bool_op (IT.And xs) -> Some ("and", xs)
+    | IT.Bool_op (IT.Or xs) -> Some ("or", xs)
+    | IT.Bool_op (IT.Not x) -> Some ("not", [x])
+    | IT.Bool_op (IT.EQ (x, y)) -> Some ("eq", [x; y])
+    | IT.Bool_op (IT.Impl (x, y)) -> Some ("implies", [x; y])
+    | IT.Pred (name, args) when Option.is_some (unpack_def global name args) ->
+        Some (Sym.pp_string name, [Option.get (unpack_def global name args)])
+    | _ -> None
+  in
+  let rec diag_rec i tm =
+    let pt = !^ "-" ^^^ Pp.int i ^^ Pp.colon in
+    begin match Solver.eval global model tm with
+      | None -> Pp.debug 6 (lazy (pt ^^^ !^ "cannot eval:" ^^^ IT.pp tm))
+      | Some v -> Pp.debug 6 (lazy (pt ^^^ IT.pp v ^^^ !^"<-" ^^^ IT.pp tm))
+    end;
+    match split tm with
+      | None -> ()
+      | Some (nm, ts) -> List.iter (diag_rec (i + 1)) ts
+  in
+  begin match (c, model_with_q) with
+  | (LC.T tm, _) ->
+    Pp.debug 6 (lazy (Pp.item "counterexample, expanding" (IT.pp tm)));
+    diag_rec 0 tm
+  | (LC.Forall ((sym, bt), tm), (_, [q])) ->
+    let tm' = IT.subst (IT.make_subst [(sym, IT.sym_ q)]) tm in
+    Pp.debug 6 (lazy (Pp.item "quantified counterexample, expanding" (IT.pp tm)));
+    diag_rec 0 tm'
+  | _ ->
+    Pp.warn Loc.unknown (Pp.bold "unexpected quantifier count with model")
+  end
+
+let select_resource_predicate_clause def loc pointer_arg iargs =
+  match ResourcePredicates.instantiate_clauses def pointer_arg iargs with
+    | None -> return (Result.Error (!^ "uninterpreted predicate"))
+    | Some clauses ->
+  let@ provable = provable loc in
+  let open ResourcePredicates in
+  let rec try_clauses negated_guards clauses =
+    match clauses with
+    | clause :: clauses ->
+       begin match provable (t_ (and_ (clause.guard :: negated_guards))) with
+       | `True -> return (Result.Ok clause)
+       | `False -> try_clauses (not_ clause.guard :: negated_guards) clauses
+       end
+    | [] -> return (Result.Error (!^ "no clause required by context"))
+  in
+  try_clauses [] clauses
+
 
 
 module General = struct
@@ -141,6 +204,59 @@ module General = struct
                 | `True -> true
         ) opts in
         return confirmed
+    end
+
+  (* this version is parametric in resource_request (defined below) to ensure
+     the return-type (also parametric) is as general as possible *)
+  let parametric_ftyp_args_request_step resource_request rt_subst loc
+        naming_scheme situation original_resources ftyp =
+    (* take one step of the "spine" judgement, reducing a function-type
+       by claiming an argument resource or otherwise reducing towards
+       an instantiated return-type *)
+    begin match ftyp with
+    | LAT.Resource ((s, (resource, bt)), info, ftyp) ->
+       let uiinfo = (situation, (Some resource, Some info)) in
+       let@ o_re_oarg = resource_request uiinfo resource in
+       begin match o_re_oarg with
+         | None ->
+            let@ model = model () in
+            fail_with_trace (fun trace -> fun ctxt ->
+                let ctxt = { ctxt with resources = original_resources } in
+                let msg = Missing_resource_request
+                           {orequest = Some resource;
+                            situation; oinfo = Some info; model; trace; ctxt} in
+                {loc; msg}
+           )
+         | Some (re, O oargs) ->
+            assert (ResourceTypes.equal re resource);
+            return (LAT.subst rt_subst (IT.make_subst [(s, oargs)]) ftyp)
+       end
+    | Define ((s, it), info, ftyp) ->
+       let bt = IT.bt it in
+       let@ tm = match naming_scheme s with
+         | Some s' ->
+           let@ () = add_l s' bt in
+           let@ () = add_c (LC.t_ (def_ s' it)) in
+           return (sym_ (s', bt))
+         | None -> return it
+       in
+       return (LAT.subst rt_subst (IT.make_subst [(s, tm)]) ftyp)
+    | Constraint (c, info, ftyp) ->
+       let@ () = return (debug 9 (lazy (item "checking constraint" (LC.pp c)))) in
+       let@ provable = provable loc in
+       let res = provable c in
+       begin match res with
+       | `True -> return ftyp
+       | `False ->
+           let@ model = model () in
+           let@ global = get_global () in
+           debug_constraint_failure_diagnostics model global c;
+           fail_with_trace (fun trace -> fun ctxt ->
+                  let ctxt = { ctxt with resources = original_resources } in
+                  {loc; msg = Unsat_constraint {constr = c; info; ctxt; model; trace}}
+                )
+       end
+    | I rt -> return ftyp
     end
 
 
@@ -806,6 +922,24 @@ module General = struct
           return true
         | _ -> return false
       end
+    | {name = PName pname; _} ->
+      let@ def = Typing.get_resource_predicate_def loc pname in
+      let@ res = select_resource_predicate_clause def loc r_pt.pointer r_pt.iargs in
+      let@ clause = match res with
+        | Result.Ok clause -> return clause
+        | Result.Error e -> fail (fun _ -> {loc; msg = Generic
+          (!^ "Cannot fold predicate: " ^^^ Sym.pp pname ^^ colon ^^^ e)})
+      in
+      let@ output_assignment = ftyp_args_request_for_unpack loc (fst uiinfo)
+          clause.ResourcePredicates.packing_ft in
+      let output = record_ (List.map (fun (o : OutputDef.entry) -> (o.name, o.value)) output_assignment) in
+      let@ () = add_r None (RET.P {
+          name = PName pname;
+          pointer = r_pt.pointer;
+          permission = bool_ true;
+          iargs = r_pt.iargs;
+        }, O output) in
+      return true
     | _ ->
       Pp.warn loc (Pp.item "unexpected arg to do_pack" (ResourceTypes.pp_predicate_type r_pt));
       return false
@@ -834,42 +968,20 @@ module General = struct
       return false
 
 
-
-  and ftyp_args_request_step rt_subst loc naming_scheme uiinfo ftyp =
-    (* take one step of the "spine" judgement, reducing a function-type
-       by claiming an argument resource or otherwise reducing towards
-       an instantiated return-type *)
-    begin match ftyp with
-    | LAT.Resource ((s, (resource, bt)), info, ftyp) ->
-       let@ o_re_oarg = resource_request ~recursive:true loc uiinfo resource in
-       begin match o_re_oarg with
-         | None ->
-            return None
-         | Some (re, O oargs) ->
-            assert (ResourceTypes.equal re resource);
-            return (Some (LAT.subst rt_subst (IT.make_subst [(s, oargs)]) ftyp))
-       end
-    | Define ((s, it), info, ftyp) ->
-       let bt = IT.bt it in
-       let@ tm = match naming_scheme s with
-         | Some s' ->
-           let@ () = add_l s' bt in
-           let@ () = add_c (LC.t_ (def_ s' it)) in
-           return (sym_ (s', bt))
-         | None -> return it
-       in
-       return (Some (LAT.subst rt_subst (IT.make_subst [(s, tm)]) ftyp))
-    | Constraint (c, info, ftyp) ->
-       let@ () = return (debug 9 (lazy (item "checking constraint" (LC.pp c)))) in
-       let@ provable = provable loc in
-       let res = provable c in
-       begin match res with
-       | `True -> return (Some ftyp)
-       | `False -> return None
-       end
-    | I rt -> return None
-    end
-
+  and ftyp_args_request_for_unpack loc situation ftyp =
+    (* record the resources now, so errors are raised with all
+       the resources present, rather than those that remain after some
+       arguments are claimed *)
+    let@ original_resources = all_resources_tagged () in
+    let rec loop ftyp = match ftyp with
+      | LAT.I rt -> return rt
+      | _ ->
+        let@ ftyp = parametric_ftyp_args_request_step
+                      (resource_request ~recursive:true loc) OutputDef.subst loc (fun _ -> None)
+                      situation original_resources ftyp in
+        loop ftyp
+    in
+    loop ftyp
 
   and resource_request ~recursive loc uiinfo (request : RET.t) : (RE.t option, type_error) m =
     match request with
@@ -879,6 +991,9 @@ module General = struct
     | Q request ->
        let@ result = qpredicate_request loc uiinfo request in
        return (Option.map_fst (fun q -> Q q) result)
+
+  let ftyp_args_request_step rt_subst loc = parametric_ftyp_args_request_step
+    (resource_request ~recursive:true loc) rt_subst loc
 
 end
 

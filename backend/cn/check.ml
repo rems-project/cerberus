@@ -804,50 +804,6 @@ and check_pexprs (pes_expects : (_ mu_pexpr * BT.t) list)
 
 
 
-let unpack_def global name args =
-    Option.bind (Global.get_logical_predicate_def global name)
-    (fun def ->
-    match def.definition with
-    | Def body ->
-       Some (LogicalPredicates.open_pred def.args body args)
-    | _ -> None
-    )
-
-let debug_constraint_failure_diagnostics (model_with_q : Solver.model_with_q) global c =
-  let model = fst model_with_q in
-  if ! Pp.print_level == 0 then () else
-  let split tm = match IT.term tm with
-    | IT.Bool_op (IT.And xs) -> Some ("and", xs)
-    | IT.Bool_op (IT.Or xs) -> Some ("or", xs)
-    | IT.Bool_op (IT.Not x) -> Some ("not", [x])
-    | IT.Bool_op (IT.EQ (x, y)) -> Some ("eq", [x; y])
-    | IT.Bool_op (IT.Impl (x, y)) -> Some ("implies", [x; y])
-    | IT.Pred (name, args) when Option.is_some (unpack_def global name args) ->
-        Some (Sym.pp_string name, [Option.get (unpack_def global name args)])
-    | _ -> None
-  in
-  let rec diag_rec i tm =
-    let pt = !^ "-" ^^^ Pp.int i ^^ Pp.colon in
-    begin match Solver.eval global model tm with
-      | None -> Pp.debug 6 (lazy (pt ^^^ !^ "cannot eval:" ^^^ IT.pp tm))
-      | Some v -> Pp.debug 6 (lazy (pt ^^^ IT.pp v ^^^ !^"<-" ^^^ IT.pp tm))
-    end;
-    match split tm with
-      | None -> ()
-      | Some (nm, ts) -> List.iter (diag_rec (i + 1)) ts
-  in
-  begin match (c, model_with_q) with
-  | (LC.T tm, _) ->
-    Pp.debug 6 (lazy (Pp.item "counterexample, expanding" (IT.pp tm)));
-    diag_rec 0 tm
-  | (LC.Forall ((sym, bt), tm), (_, [q])) ->
-    let tm' = IT.subst (IT.make_subst [(sym, IT.sym_ q)]) tm in
-    Pp.debug 6 (lazy (Pp.item "quantified counterexample, expanding" (IT.pp tm)));
-    diag_rec 0 tm'
-  | _ ->
-    Pp.warn Loc.unknown (Pp.bold "unexpected quantifier count with model")
-  end
-
 module Spine : sig
 
   val calltype_ft : 
@@ -906,70 +862,33 @@ end = struct
 
     let start_spine = time_log_start "spine_l" "" in
 
-    (* record the resources now, so we can later re-construct the
-       memory state "before" running spine *)
+    (* record the resources now, so errors are raised with all
+       the resources present, rather than those that remain after some
+       arguments are claimed *)
     let@ original_resources = all_resources_tagged () in
 
-    let@ () = 
+    let@ () =
       let@ trace_length = get_trace_length () in
       time_f_logs loc 9 "pre_inf_eqs" trace_length
         (InferenceEqs.add_eqs_for_infer loc) ftyp
     in
 
-    let@ rt, cs = 
-      let rec check cs ftyp = 
+    let@ rt = 
+      let rec check ftyp = 
         let@ () = print_with_ctxt (fun ctxt ->
             debug 6 (lazy (item "ctxt" (Context.pp ctxt)));
             debug 6 (lazy (item "spec" (LAT.pp rt_pp ftyp)));
           )
         in
         let@ ftyp = prefer_exact loc rt_subst ftyp in
+        let@ ftyp = RI.General.ftyp_args_request_step rt_subst loc
+            (fun s -> Some (fresh_call_with_prefix situation s)) (Call situation)
+            original_resources ftyp in
         match ftyp with
-        | LAT.Resource ((s, (resource, bt)), info, ftyp) -> 
-           let uiinfo = (situation, (Some resource, Some info)) in
-           let@ o_re_oarg = RI.General.resource_request ~recursive:true loc uiinfo resource in
-           let@ oargs = match o_re_oarg with
-             | None ->
-                let@ model = model () in
-                fail_with_trace (fun trace -> fun ctxt ->
-                    let ctxt = { ctxt with resources = original_resources } in
-                    let msg = Missing_resource_request 
-                                {orequest = Some resource; 
-                                 situation = Call situation; 
-                                 oinfo = Some info; model; trace; ctxt} in
-                    {loc; msg}
-                  )
-
-             | Some (re, O oargs) ->
-                assert (ResourceTypes.equal re resource);
-                return oargs
-           in
-           check cs (LAT.subst rt_subst (IT.make_subst [(s, oargs)]) ftyp)
-        | Define ((s, it), info, ftyp) ->
-           let s' = fresh_call_with_prefix situation s in
-           let bt = IT.bt it in
-           let@ () = add_l s' bt in
-           let@ () = add_c (LC.t_ (def_ s' it)) in
-           check cs (LAT.subst rt_subst (IT.make_subst [(s, sym_ (s', bt))]) ftyp)
-        | Constraint (c, info, ftyp) -> 
-           let@ () = return (debug 9 (lazy (item "checking constraint" (LC.pp c)))) in
-           let@ provable = provable loc in
-           let res = provable c in
-           begin match res with
-           | `True -> check (c :: cs) ftyp
-           | `False ->
-              let@ model = model () in
-              let@ global = get_global () in
-              debug_constraint_failure_diagnostics model global c;
-              fail_with_trace (fun trace -> fun ctxt ->
-                  let ctxt = { ctxt with resources = original_resources } in
-                  {loc; msg = Unsat_constraint {constr = c; info; ctxt; model; trace}}
-                )
-           end
-        | I rt ->
-           return (rt, cs)
+        | I rt -> return rt
+        | _ -> check ftyp
       in
-      check [] ftyp
+      check ftyp
     in
 
     let@ () = return (debug 9 (lazy !^"done")) in
@@ -1370,34 +1289,16 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
      in
      check_pexpr ~expect:Loc pointer_pe (fun pointer_arg ->
      check_pexprs (List.combine iarg_pes (List.map snd def.iargs)) (fun iargs ->
-     let@ clauses = match ResourcePredicates.instantiate_clauses def pointer_arg iargs with
-       | Some clauses -> return clauses
-       | None ->
-          let action = match pack_unpack with 
-            | Pack -> "pack" 
-            | Unpack -> "unpack"
-          in
-          let msg = "Cannot "^action^" uninterpreted predicate" in
-          fail (fun _ -> {loc; msg = Generic !^msg})
-     in
-     let@ provable = provable loc in
-     let@ right_clause = 
-       let rec try_clauses negated_guards clauses = 
-         match clauses with
-         | clause :: clauses -> 
-            begin match provable (t_ (and_ (clause.guard :: negated_guards))) with
-            | `True -> return clause.packing_ft
-            | `False -> try_clauses (not_ clause.guard :: negated_guards) clauses
-            end
-         | [] -> 
-            let err = 
-              !^"do not have enough information for" ^^^
-              (match pack_unpack with Pack -> !^"packing" | Unpack -> !^"unpacking") ^^^
-              Sym.pp pname
+     let@ res = ResourceInference.select_resource_predicate_clause def
+         loc pointer_arg iargs in
+     let@ right_clause = match res with
+       | Result.Ok clause -> return clause
+       | Result.Error msg ->
+            let err = match pack_unpack with
+              | Pack -> !^ "cannot pack:" ^^^ Sym.pp pname ^^ colon ^^^ msg
+              | Unpack -> !^ "cannot unpack:" ^^^ Sym.pp pname ^^ colon ^^^ msg
             in
-            fail (fun _ -> {loc; msg = Generic err})
-       in
-       try_clauses [] clauses
+	    fail (fun _ -> {loc; msg = Generic err})
      in
      begin match pack_unpack with
      | Unpack ->
@@ -1410,7 +1311,7 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
               iargs = iargs;
             }, None)
         in
-        let condition, outputs = LAT.logical_arguments_and_return right_clause in
+        let condition, outputs = LAT.logical_arguments_and_return right_clause.packing_ft in
         let lc = 
           eq_ (pred_oargs, 
                record_ (List.map (fun (o : OutputDef.entry) -> (o.name, o.value)) outputs))
@@ -1418,7 +1319,7 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
         let lrt = LRT.concat condition (Constraint (t_ lc, (loc, None), I)) in
         k (RT.Computational ((Sym.fresh (), BT.Unit), (loc, None), lrt))
      | Pack ->
-        Spine.calltype_packing loc pname right_clause (fun output_assignment -> 
+        Spine.calltype_packing loc pname right_clause.packing_ft (fun output_assignment -> 
         let output = record_ (List.map (fun (o : OutputDef.entry) -> (o.name, o.value)) output_assignment) in
         let oarg_s, oarg = IT.fresh_named (IT.bt output) "Packed" in
         let resource = 
