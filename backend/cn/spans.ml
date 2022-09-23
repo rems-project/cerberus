@@ -369,6 +369,10 @@ let res_pointer m g = function
   | RET.P pt -> eval_extract "resource pointer" (m, g) is_pointer pt.pointer
   | RET.Q qpt -> eval_extract "resource pointer" (m, g) is_pointer qpt.pointer
 
+let res_pt_present m g = function
+  | RET.P pt -> eval_extract "resource permission" (m, g) is_bool pt.permission
+  | RET.Q _ -> assert false
+
 
 (* The standard span logic for a model, request and resource context is:
    (1) Compute spans for all existing and requested resources.
@@ -410,7 +414,8 @@ let do_guess_span_actions ress req m g =
     (* null resources will also have no span, so skip the rest *)
     let req_ptr = res_pointer m g req in
     if List.exists (fun res -> same_name res &&
-      (res_pointer m g (RE.request res) == req_ptr)) ress
+      (res_pointer m g (RE.request res) == req_ptr) &&
+      res_pt_present m g (RE.request res)) ress
     then [] else [(Pack pt, ok)]
   | None ->
   let res_spans = ress
