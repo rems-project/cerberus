@@ -3075,4 +3075,41 @@ Module CheriMemory
                            acc)
                       (List.combine bytes1 bytes2) 0)))).
 
+  Definition realloc
+    (tid : thread_id) (align : integer_value) (ptr : pointer_value)
+    (size : integer_value) : memM pointer_value
+    :=
+    match ptr with
+    | PV Prov_none (PVconcrete c_value) =>
+        if cap_is_null c_value then
+          allocate_region tid (Symbol.PrefOther "realloc") align size
+        else
+          fail (MerrWIP "realloc no provenance")
+    | PV (Prov_some alloc_id) (PVconcrete c_value) =>
+        let addr := C.cap_get_value c_value in
+        is_dynamic addr >>=
+          (fun (function_parameter : bool) =>
+             match function_parameter with
+             | false => fail MerrUndefinedRealloc
+             | true =>
+                 get_allocation alloc_id >>=
+                   (fun (alloc : allocation) =>
+                      if MorelloAddr.eqb alloc.(base) addr then
+                        allocate_region tid (Symbol.PrefOther "realloc") align size >>=
+                          (fun (new_ptr : pointer_value) =>
+                             let size_to_copy :=
+                               let size_n := num_of_int size in
+                               IV (Z.min (CheriMemory.size alloc) size_n) in
+                             memcpy new_ptr ptr size_to_copy >>=
+                               (fun _ =>
+                                  kill (Loc_other "realloc") true ptr ;;
+                                  ret new_ptr))
+                      else
+                        fail
+                          (MerrWIP "realloc: invalid pointer"))
+             end)
+    | PV _ _ =>
+        fail (MerrWIP "realloc: invalid pointer")
+    end.
+
 End CheriMemory.
