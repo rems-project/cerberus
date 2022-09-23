@@ -2752,5 +2752,16 @@ Module CheriMemory
         end
     end.
 
+  Definition cap_assign_value
+    (loc:location_ocaml)
+    (ival_cap: integer_value)
+    (ival_n: integer_value): serr integer_value
+    :=
+    match ival_cap, ival_n with
+    | IC is_signed c_value, IV n_value =>
+        ret (IC is_signed (C.cap_set_value c_value n_value))
+    | _, _ =>
+        raise "Unexpected argument types for cap_assign_value"
+    end.
 
 End CheriMemory.

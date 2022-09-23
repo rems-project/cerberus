@@ -108,7 +108,7 @@ Module Type Memory (A:VADDR).
     bool -> derivecap_op -> integer_value ->  integer_value -> serr integer_value.
 
   Parameter cap_assign_value :
-    location_ocaml -> integer_value -> integer_value -> integer_value.
+    location_ocaml -> integer_value -> integer_value -> serr integer_value.
 
   Parameter ptr_t_int_value : integer_value -> integer_value.
 
