@@ -2783,5 +2783,145 @@ Module CheriMemory
                                   Symbol.identifier -> serr pointer_value
     := fun _ _ _ => raise "members_shift_ptrval (pure) is not supported in CHERI".
 
+  Inductive collapse_ind :=
+  | NoCollapse: collapse_ind
+  | Collapse: Z -> collapse_ind.
+
+  Definition eff_array_shift_ptrval
+    (loc : location_ocaml)
+    (ptrval : pointer_value)
+    (ty : Ctype.ctype)
+    (ival_int : integer_value)
+    : memM pointer_value
+    :=
+    let ival := num_of_int ival_int in
+    sz <- serr2memM (sizeof DEFAULT_FUEL None ty) ;;
+    let offset := Z.mul sz ival
+    in
+    match ptrval with
+    | PV _ (PVfunction _) =>
+        raise (InternalErr "CHERI.eff_array_shift_ptrval, PVfunction")
+    | PV ((Prov_symbolic iota) as prov) (PVconcrete c_value) =>
+        if cap_is_null c_value then
+          raise (InternalErr
+                   "TODO(shift a null pointer should be undefined behaviour)")
+        else
+          let shifted_addr :=
+            Z.add (C.cap_get_value c_value)
+              offset in
+          let precond (z_value : Z.t) : memM bool :=
+            if Switches.has_switch (Switches.SW_pointer_arith STRICT)
+               || negb (Switches.has_switch (Switches.SW_pointer_arith PERMISSIVE))
+            then
+              get_allocation z_value >>=
+                (fun (alloc : allocation) =>
+                   ret (Z.leb alloc.(base) shifted_addr
+                        && Z.leb
+                             (Z.add shifted_addr sz)
+                             (Z.add (Z.add alloc.(base) alloc.(size)) sz)))
+            else
+              ret true
+          in
+          lookup_iota iota >>=
+            (fun x =>
+               match x with
+               | inr (alloc_id1, alloc_id2) =>
+                   if negb (Z.eqb ival Z.zero) then
+                     (precond alloc_id1 >>=
+                        (fun (x : bool) =>
+                           match x with
+                           | true =>
+                               precond alloc_id2 >>=
+                                 (fun (x : bool) =>
+                                    match x with
+                                    | true =>
+                                        if Switches.has_switch (SW_pointer_arith PERMISSIVE)
+                                        then ret NoCollapse
+                                        else
+                                          fail
+                                            (MerrOther
+                                               "(PNVI-ae-uid) ambiguous non-zero array shift")
+                                    | false => ret (Collapse alloc_id1)
+                                    end)
+                           | false =>
+                               precond alloc_id2 >>=
+                                 (fun (function_parameter : bool) =>
+                                    match function_parameter with
+                                    | true => ret (Collapse alloc_id2)
+                                    | false => fail (MerrArrayShift loc)
+                                    end)
+                           end) >>=
+                        (fun x =>
+                           match x with
+                           | Collapse alloc_id =>
+                               update
+                                 (fun (st : mem_state) =>
+                                    mem_state_with_iota_map
+                                      (ZMap.add iota (inl alloc_id)
+                                         st.(iota_map)) st)
+                           | NoCollapse => ret tt
+                           end))
+                     ;;
+                     let c_value := C.cap_set_value c_value shifted_addr in
+                     ret (PV prov (PVconcrete c_value))
+                   else
+                     precond alloc_id1 >>=
+                       (fun (function_parameter : bool) =>
+                          match function_parameter with
+                          | true => ret tt
+                          | false =>
+                              precond alloc_id2 >>=
+                                (fun (x : bool) =>
+                                   match x with
+                                   | true => ret tt
+                                   | false => fail (MerrArrayShift loc)
+                                   end)
+                          end)
+                     ;;
+                     let c_value := C.cap_set_value c_value shifted_addr in
+                     ret (PV prov (PVconcrete c_value))
+               | inl alloc_id =>
+                   precond alloc_id >>=
+                     (fun (function_parameter : bool) =>
+                        match function_parameter with
+                        | true =>
+                            let c_value := C.cap_set_value c_value shifted_addr in
+                            ret (PV prov (PVconcrete c_value))
+                        | false => fail (MerrArrayShift loc)
+                        end)
+               end)
+    | PV (Prov_some alloc_id) (PVconcrete c_value) =>
+        let shifted_addr := Z.add (C.cap_get_value c_value) offset in
+        if Switches.has_switch (Switches.SW_pointer_arith STRICT)
+           || negb (Switches.has_switch (SW_pointer_arith PERMISSIVE))
+        then
+          get_allocation alloc_id >>=
+            (fun (alloc : allocation) =>
+               if Z.leb alloc.(base) shifted_addr
+                  && Z.leb (Z.add shifted_addr sz)
+                       (Z.add (Z.add alloc.(base) alloc.(size)) sz)
+               then
+                 let c_value := C.cap_set_value c_value shifted_addr in
+                 ret (PV (Prov_some alloc_id) (PVconcrete c_value))
+               else
+                 fail (MerrArrayShift loc))
+        else
+          let c_value := C.cap_set_value c_value shifted_addr in
+          ret (PV (Prov_some alloc_id) (PVconcrete c_value))
+    | PV Prov_none (PVconcrete c_value) =>
+        let shifted_addr := Z.add (C.cap_get_value c_value) offset in
+        if Switches.has_switch (Switches.SW_pointer_arith STRICT)
+           || negb (Switches.has_switch (Switches.SW_pointer_arith PERMISSIVE))
+        then
+          fail (MerrOther "out-of-bound pointer arithmetic (Prov_none)")
+        else
+          let c_value := C.cap_set_value c_value shifted_addr in
+          ret (PV Prov_none (PVconcrete c_value))
+    | PV Prov_device (PVconcrete c_value) =>
+        let shifted_addr := Z.add (C.cap_get_value c_value) offset in
+        let c_value := C.cap_set_value c_value shifted_addr in
+        ret (PV Prov_device (PVconcrete c_value))
+    end.
+
 
 End CheriMemory.
