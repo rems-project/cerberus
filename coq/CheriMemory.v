@@ -947,10 +947,10 @@ Module CheriMemory
   Definition kill
     (loc : location_ocaml)
     (is_dyn : bool)
-    (function_parameter : pointer_value)
+    (ptr : pointer_value)
     : memM unit
     :=
-    match function_parameter with
+    match ptr with
     | PV _ (PVfunction _) =>
         fail (MerrOther "attempted to kill with a function pointer")
     | PV Prov_none (PVconcrete _) =>
@@ -1112,7 +1112,7 @@ Module CheriMemory
             (fun '(prov_acc, val_acc, offset_acc) b_value =>
                prov_acc' <-
                  match
-                   ((prov_acc, b_value.(prov)),
+                   (prov_acc, b_value.(prov)),
                      match (prov_acc, b_value.(prov)) with
                      | (VALID (Prov_some alloc_id1), Prov_some alloc_id2) =>
                          Z.eqb alloc_id1 alloc_id2
@@ -1122,32 +1122,30 @@ Module CheriMemory
                      | (VALID (Prov_symbolic iota1), Prov_symbolic iota2) =>
                          Z.eqb iota1 iota2
                      | _ => false
-                     end) with
-                 |
-                   ((VALID (Prov_some alloc_id1), Prov_some alloc_id2), true, _)
+                     end with
+                 | (VALID (Prov_some alloc_id1), Prov_some alloc_id2), true, _
                    => ret INVALID
-                 |
-                   ((VALID (Prov_symbolic iota1), Prov_symbolic iota2), _, true)
+                 | (VALID (Prov_symbolic iota1), Prov_symbolic iota2), _, true
                    => ret INVALID
-                 | ((VALID (Prov_symbolic iota1), Prov_some alloc_id'), _, _)
+                 | (VALID (Prov_symbolic iota1), Prov_some alloc_id'), _, _
                    => raise "TODO(iota) split_bytes 1"
-                 | ((VALID (Prov_some alloc_id), Prov_symbolic iota), _, _) =>
+                 | (VALID (Prov_some alloc_id), Prov_symbolic iota), _, _ =>
                      raise "TODO(iota) split_bytes 2"
-                 | ((VALID Prov_none, (Prov_some _) as new_prov), _, _) =>
+                 | (VALID Prov_none, (Prov_some _) as new_prov), _, _ =>
                      ret (VALID new_prov)
-                 | ((VALID Prov_none, (Prov_symbolic _) as new_prov), _, _) =>
+                 | (VALID Prov_none, (Prov_symbolic _) as new_prov), _, _ =>
                      ret (VALID new_prov)
-                 | ((prev_acc, _), _, _) => ret prev_acc
+                 | (prev_acc, _), _, _ => ret prev_acc
                  end ;;
                let offset_acc' :=
                  match
-                   ((offset_acc, b_value.(copy_offset)),
+                   (offset_acc, b_value.(copy_offset)),
                      match (offset_acc, b_value.(copy_offset)) with
                      | (PtrBytes n1, Some n2) => Z.eqb n1 (Z.of_nat n2)
                      | _ => false
-                     end) with
-                 | ((PtrBytes n1, Some n2), true) => PtrBytes (Z.add n1 1)
-                 | (_, _) => OtherBytes
+                     end with
+                 | (PtrBytes n1, Some n2), true => PtrBytes (Z.add n1 1)
+                 | _, _ => OtherBytes
                  end in
                ret (prov_acc', (cons b_value.(value) val_acc), offset_acc'))
             bs ((VALID Prov_none), nil, (PtrBytes 0)) ;;
@@ -1614,17 +1612,18 @@ Module CheriMemory
     get_allocation alloc_id >>=
       (fun (alloc : allocation) =>
          match
-           (alloc.(ty),
-             match alloc.(ty) with
-             | Some ty => is_atomic ty
-             | _ => false
-             end) with
-         | (Some ty, true) =>
+           alloc.(ty),
+           match alloc.(ty) with
+           | Some ty => is_atomic ty
+           | _ => false
+           end
+         with
+         | Some ty, true =>
              e <- serr2memM (Ctype.ctypeEqual DEFAULT_FUEL lvalue_ty ty) ;;
              ret
                (negb
                   (Z.eqb addr alloc.(base) && (Z.eqb sz alloc.(size) && e)))
-         | (_, _) => ret false
+         | _, _ => ret false
          end).
 
   Definition load
@@ -1696,12 +1695,12 @@ Module CheriMemory
       cap_check loc c Z.zero ReadIntent sz ;;
       do_load alloc_id_opt  (C.cap_get_value c) sz
     in
-    match (prov, ptrval_) with
-    | (_, PVfunction _) =>
+    match prov, ptrval_ with
+    | _, PVfunction _ =>
         fail (MerrAccess loc LoadAccess FunctionPtr)
-    | (Prov_none, _) =>
+    | Prov_none, _ =>
         fail (MerrAccess loc LoadAccess OutOfBoundPtr)
-    | (Prov_device, PVconcrete c) =>
+    | Prov_device, PVconcrete c =>
         if cap_is_null c then
           fail (MerrAccess loc LoadAccess NullPtr)
         else
@@ -1714,7 +1713,7 @@ Module CheriMemory
                | true =>
                    do_load_cap None c sz
                end)
-    | (Prov_symbolic iota, PVconcrete addr) =>
+    | Prov_symbolic iota, PVconcrete addr =>
         if cap_is_null addr then
           fail
             (MerrAccess loc
@@ -1748,7 +1747,7 @@ Module CheriMemory
           resolve_iota precondition iota >>=
             (fun (alloc_id : storage_instance_id) =>
                do_load_cap (Some alloc_id) addr sz)
-    | (Prov_some alloc_id, PVconcrete addr) =>
+    | Prov_some alloc_id, PVconcrete addr =>
         if cap_is_null addr then
           fail (MerrAccess loc LoadAccess NullPtr)
         else
@@ -1860,18 +1859,18 @@ Module CheriMemory
         ;;
         ret (FP addr nsz)
       in
-      match (prov, ptrval_) with
-      | (_, PVfunction _) =>
+      match prov, ptrval_ with
+      | _, PVfunction _ =>
           fail
             (MerrAccess loc
                StoreAccess
                FunctionPtr)
-      | (Prov_none, _) =>
+      | Prov_none, _ =>
           fail
             (MerrAccess loc
                StoreAccess
                OutOfBoundPtr)
-      | (Prov_device, PVconcrete addr) =>
+      | Prov_device, PVconcrete addr =>
           if cap_is_null addr then
             fail
               (MerrAccess loc
@@ -1883,7 +1882,7 @@ Module CheriMemory
                  if x
                  then do_store_cap None addr
                  else fail (MerrAccess loc StoreAccess OutOfBoundPtr))
-      | (Prov_symbolic iota, PVconcrete addr) =>
+      | Prov_symbolic iota, PVconcrete addr =>
           if cap_is_null addr then
             fail
               (MerrAccess loc
@@ -1953,7 +1952,7 @@ Module CheriMemory
                          ret tt)
                       ;;
                       ret fp))
-      | (Prov_some alloc_id, PVconcrete addr)
+      | Prov_some alloc_id, PVconcrete addr
         =>
           if cap_is_null addr then
             fail (MerrAccess loc StoreAccess NullPtr)
@@ -2013,7 +2012,6 @@ Module CheriMemory
                  end)
       end.
 
-
   Definition null_ptrval (_:Ctype.ctype) : pointer_value
     :=
     PV Prov_none (PVconcrete (C.cap_c0 tt)).
@@ -2063,7 +2061,8 @@ Module CheriMemory
     let '(_, ptrval) := break_PV ptr in
     match ptrval with
     | PVfunction (FP_valid sym) => Some sym
-    | (PVfunction (FP_invalid c_value) | PVconcrete c_value) =>
+    | PVfunction (FP_invalid c_value)
+    | PVconcrete c_value =>
         let n_value :=
           Z.sub (C.cap_get_value c_value) initial_address in
         match ZMap.find n_value st.(funptrmap) with
@@ -2086,7 +2085,7 @@ Module CheriMemory
     | PVfunction (FP_invalid c1), PVfunction (FP_invalid c2) =>
         ret (Z.eqb (C.cap_get_value c1) (C.cap_get_value c2))
     | PVfunction (FP_valid sym), PVfunction (FP_invalid c_value)
-    |PVfunction (FP_invalid c_value), PVfunction (FP_valid sym) =>
+    | PVfunction (FP_invalid c_value), PVfunction (FP_valid sym) =>
        get >>=
          (fun (st : mem_state) =>
             let n_value :=
@@ -2269,16 +2268,15 @@ Module CheriMemory
 
     if Switches.has_switch (Switches.SW_pointer_arith PERMISSIVE)
     then
-      match (ptrval1, ptrval2) with
-      | (PV _ (PVconcrete addr1), PV _ (PVconcrete addr2)) =>
+      match ptrval1, ptrval2 with
+      | PV _ (PVconcrete addr1), PV _ (PVconcrete addr2) =>
           valid_postcond (C.cap_get_value addr1)(C.cap_get_value addr2)
-      | _ => error_postcond
+      | _, _=> error_postcond
       end
     else
-      match (ptrval1, ptrval2) with
-      |
-        (PV (Prov_some alloc_id1) (PVconcrete addr1),
-          PV (Prov_some alloc_id2) (PVconcrete addr2)) =>
+      match ptrval1, ptrval2 with
+      | PV (Prov_some alloc_id1) (PVconcrete addr1),
+        PV (Prov_some alloc_id2) (PVconcrete addr2) =>
           if Z.eqb alloc_id1 alloc_id2 then
             get_allocation alloc_id1 >>=
               (fun (alloc : allocation) =>
@@ -2289,11 +2287,10 @@ Module CheriMemory
                    error_postcond)
           else
             error_postcond
-      |
-        ((PV (Prov_symbolic iota) (PVconcrete addr1),
-           PV (Prov_some alloc_id') (PVconcrete addr2)) |
-          (PV (Prov_some alloc_id') (PVconcrete addr1),
-            PV (Prov_symbolic iota) (PVconcrete addr2))) =>
+      | PV (Prov_symbolic iota) (PVconcrete addr1),
+        PV (Prov_some alloc_id') (PVconcrete addr2)
+      | PV (Prov_some alloc_id') (PVconcrete addr1),
+        PV (Prov_symbolic iota) (PVconcrete addr2) =>
           lookup_iota iota >>=
             (fun x =>
                match x with
@@ -2336,9 +2333,8 @@ Module CheriMemory
                    else
                      error_postcond
                end)
-      |
-        (PV (Prov_symbolic iota1) (PVconcrete addr1),
-          PV (Prov_symbolic iota2) (PVconcrete addr2)) =>
+      | PV (Prov_symbolic iota1) (PVconcrete addr1),
+        PV (Prov_symbolic iota2) (PVconcrete addr2) =>
           lookup_iota iota1 >>=
             (fun ids1 =>
                lookup_iota iota2 >>=
@@ -2389,7 +2385,7 @@ Module CheriMemory
                                  "in `diff_ptrval` invariant of PNVI-ae-udi failed: ambiguous iotas with addr1 <> addr2")
                         end
                     end))
-      | _ => error_postcond
+      | _,_ => error_postcond
       end.
 
   Definition update_prefix
@@ -2580,33 +2576,28 @@ Module CheriMemory
           else
             wrapI min_ity2 max_ity2 n_value
       end in
-    match (ival, ity2) with
-    |
-      ((IC false _, Ctype.Unsigned Ctype.Intptr_t) |
-        (IC true _, Ctype.Signed Ctype.Intptr_t)) =>
+    match ival, ity2 with
+    | IC false _, Ctype.Unsigned Ctype.Intptr_t
+    | IC true _, Ctype.Signed Ctype.Intptr_t =>
         ret (inr ival)
-    |
-      ((IC (false as is_signed) cap,
-         Ctype.Signed Ctype.Intptr_t) |
-        (IC (true as is_signed) cap,
-          Ctype.Unsigned Ctype.Intptr_t)) =>
+    | IC (false as is_signed) cap, Ctype.Signed Ctype.Intptr_t
+    | IC (true as is_signed) cap,  Ctype.Unsigned Ctype.Intptr_t =>
         ret (inr  (IC (negb is_signed) cap))
-    | (IC false cap, _) =>
+    | IC false cap, _ =>
         let n_value := C.cap_get_value cap in
         ret (inr (IV (conv_int_to_ity2 n_value)))
-    | (IC true cap, _) =>
+    | IC true cap, _ =>
         let n_value := C.cap_get_value cap in
         ret (inr (IV (conv_int_to_ity2 (unwrap_cap_value n_value))))
-    |
-      ((IV n_value, Ctype.Unsigned Ctype.Intptr_t) |
-        (IV n_value, Ctype.Signed Ctype.Intptr_t)) =>
+    | IV n_value, Ctype.Unsigned Ctype.Intptr_t
+    | IV n_value, Ctype.Signed Ctype.Intptr_t =>
         if Z.eqb n_value Z.zero then
           ret (inr (IC false (C.cap_c0 tt)))
         else
           let n_value := wrap_cap_value n_value in
           let c_value := C.cap_c0 tt in
           ret (inr (IC false (C.cap_set_value c_value n_value)))
-    | (IV n_value, _) =>
+    | IV n_value, _ =>
         ret (inr (IV (conv_int_to_ity2 n_value)))
     end.
 
