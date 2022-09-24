@@ -1227,7 +1227,7 @@ Module CheriMemory
             let '(bs1, bs2) := split_at (Z.to_nat sz) bs in
             '(prov, _, bs1') <- split_bytes bs1 ;;
             iss <- option2serr "Could not get signedness of a type"  (is_signed_ity DEFAULT_FUEL ity) ;;
-            let iss1:bool := iss in (* hack to hint type checker *)
+            let _:bool := iss in (* hack to hint type checker *)
             ret ((provs_of_bytes bs1),
                 match extract_unspec bs1' with
                 | Some cs =>
@@ -3178,5 +3178,73 @@ Module CheriMemory
     (f : Z -> A)
     (_ : unit -> A) : A :=
     f (num_of_int v).
+
+  Definition is_specified_ival (ival : integer_value) : bool := true.
+
+  Definition eq_ival (_: option mem_state) (n1 n2: integer_value) :=
+    Some (Z.eqb (num_of_int n1) (num_of_int n2)).
+
+  Definition lt_ival (_: option mem_state) (n1 n2: integer_value) :=
+    Some (Z.ltb (num_of_int n1) (num_of_int n2)).
+
+  Definition le_ival (_: option mem_state) (n1 n2: integer_value) :=
+    Some (Z.leb (num_of_int n1) (num_of_int n2)).
+
+  Definition eval_integer_value (n_value : integer_value)
+    : option Z := Some (num_of_int n_value).
+
+  Definition zero_fval : float := PrimFloat.zero.
+
+  Definition one_fval : float := PrimFloat.one.
+
+  Definition str_fval (str : string) : serr floating_value :=
+    raise "str_fval not implmented".
+
+  Definition op_fval
+    (fop : floating_operator)
+    (fval1 fval2 : float) : float
+    :=
+    match fop with
+    | FloatAdd => PrimFloat.add fval1 fval2
+    | FloatSub => PrimFloat.sub fval1 fval2
+    | FloatMul => PrimFloat.mul fval1 fval2
+    | FloatDiv => PrimFloat.div fval1 fval2
+    end.
+
+  Definition eq_fval := PrimFloat.eqb.
+  Definition lt_fval := PrimFloat.ltb.
+  Definition le_fval := PrimFloat.leb.
+
+  Definition fvfromint (iv:integer_value): serr (floating_value)
+    := raise "fvfromint not implemented".
+
+  Definition ivfromfloat
+    (ity: Ctype.integerType)
+    (fval: floating_value): serr integer_value
+    :=
+    match ity with
+    | Ctype.Bool =>
+        ret (IV (if eq_fval fval zero_fval then 0 else 1))
+    | _ =>
+        nbytes <- option2serr "no sizeof_ity!" (IMP.get.(sizeof_ity) ity) ;;
+        let nbits := Z.mul 8 nbytes in
+        is_signed <- option2serr "no is_signed_ity" (is_signed_ity DEFAULT_FUEL ity) ;;
+        let _:bool := is_signed in (* hack to hint type checker *)
+        let '(min, max) :=
+          if is_signed then
+            (Z.opp (Z.pow 2 (Z.sub nbits 1)), Z.sub (Z.pow 2 (Z.sub nbits 1)) 1)
+          else
+            (0, (Z.sub (Z.pow 2 nbits) 1)) in
+        let wrapI (n_value : Z) : Z :=
+          let dlt := Z.succ (Z.sub max min) in
+          let r_value := Z_integerRem_f n_value dlt in
+          if Z.leb r_value max then
+            r_value
+          else
+            Z.sub r_value dlt in
+        (* TODO ret (IV (wrapI (Z.of_int64 (Stdlib.Int64.of_float fval)))) *)
+        raise "ivfromfloat no implemented"
+    end.
+
 
 End CheriMemory.

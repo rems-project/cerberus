@@ -190,7 +190,7 @@ Module Type Memory (A:VADDR).
   Parameter eval_integer_value : integer_value -> option Z.
   Parameter zero_fval : floating_value.
   Parameter one_fval : floating_value.
-  Parameter str_fval : string -> floating_value.
+  Parameter str_fval : string -> serr floating_value.
 
   (* TODO: see if we can avoid float.
     Parameter case_fval :
@@ -204,9 +204,15 @@ Module Type Memory (A:VADDR).
   Parameter eq_fval : floating_value -> floating_value -> bool.
   Parameter lt_fval : floating_value -> floating_value -> bool.
   Parameter le_fval : floating_value -> floating_value -> bool.
-  Parameter fvfromint : integer_value -> floating_value.
+
+
+  (** Not every integer value could be converted to float.
+   Hence the error return type *)
+  Parameter fvfromint : integer_value -> serr floating_value.
+
   Parameter ivfromfloat :
-    Ctype.integerType -> floating_value -> integer_value.
+    Ctype.integerType -> floating_value -> serr integer_value.
+
   Parameter unspecified_mval : Ctype.ctype -> mem_value.
   Parameter integer_value_mval :
     Ctype.integerType -> integer_value -> mem_value.
