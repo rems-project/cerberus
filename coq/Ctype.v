@@ -519,12 +519,10 @@ Definition size_t   : ctype :=
 Definition ptrdiff_t   : ctype :=
   Ctype nil (Basic (Integer Ptrdiff_t)).
 
-(*
 Definition vaddr_t  ( _ : unit )  : ctype :=
-  if FAKE_COQ.is_CHERItt then
-    Ctype nil (Basic (Integer Vaddr_t))
-  else
-    FAKE_COQ.error "vaddr_t is CHERI-specific".
+  Ctype nil (Basic (Integer Vaddr_t)).
+
+(*
 
 Definition is_ptr_t  (c : ctype )  : bool :=
   match ( (c)) with (( Ctype _ ty_)) =>

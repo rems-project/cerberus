@@ -21,8 +21,6 @@ Module Type Memory (A:VADDR).
   Import A.
   Include Mem_common(A).
 
-  Parameter intrinsics_signature: Set. (* intrinsics_signature *)
-
   (* Module interface below *)
 
   Parameter name : string.

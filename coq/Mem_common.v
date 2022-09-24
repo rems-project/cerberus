@@ -5,6 +5,7 @@ Require Import Addr.
 Require Import Undefined.
 Require Import Location.
 Require AilSyntax.
+Require Import Ctype.
 
 Module Mem_common (A:VADDR).
 
@@ -423,23 +424,25 @@ Definition instance_Nondeterminism_Constraints_Mem_common_mem_constraint_dict
     Cerb_frontend.Nondeterminism.constraints_class.concat_method :=
       fun (cs1 : mem_constraint a) =>
         fun (cs2 : mem_constraint a) => MC_conj [ cs1; cs2 ] |}.
+*)
 
 Inductive type_predicate : Set :=
-| TyPred : (Cerb_frontend.Ctype.ctype -> bool) -> type_predicate
+| TyPred : (Ctype.ctype -> bool) -> type_predicate
 | TyIsPointer : type_predicate.
 
 Inductive instrinsics_ret_spec : Set :=
-| ExactRet : Cerb_frontend.Ctype.ctype -> instrinsics_ret_spec
-| CopyRet : int -> instrinsics_ret_spec.
+| ExactRet : Ctype.ctype -> instrinsics_ret_spec
+| CopyRet : nat -> instrinsics_ret_spec.
 
 Inductive intrinsics_arg_spec : Set :=
-| ExactArg : Cerb_frontend.Ctype.ctype -> intrinsics_arg_spec
+| ExactArg : Ctype.ctype -> intrinsics_arg_spec
 | PolymorphicArg : list type_predicate -> intrinsics_arg_spec
-| CopyArg : int -> intrinsics_arg_spec.
+| CopyArg : nat -> intrinsics_arg_spec.
 
 Definition intrinsics_signature : Set :=
   instrinsics_ret_spec * list intrinsics_arg_spec.
 
+(*
 Definition instance_Show_Show_Mem_common_intrinsics_arg_spec_dict
   : Lem_pervasives.show_class intrinsics_arg_spec :=
   {|

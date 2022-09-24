@@ -46,9 +46,6 @@ Module CheriMemory
   Definition symbolic_storage_instance_id : Set := Z.
   Definition storage_instance_id : Set := Z.
 
-  (* Following types need to be defined *)
-  Definition intrinsics_signature: Set := unit. (* intrinsics_signature *)
-
   Inductive provenance : Set :=
   | Prov_none : provenance
   | Prov_some : storage_instance_id -> provenance
@@ -3742,5 +3739,204 @@ Module CheriMemory
                                  (String.append
                                     "CHERI.call_intrinsic: unknown intrinsic: '"
                                     (String.append name "'"))).
+
+  Definition get_intrinsic_type_spec (name : string)
+    : option intrinsics_signature := None.
+  (* TODO: *)
+  (*
+    :=
+    if String.eqb name "strfcap" then
+      Some
+        ((ExactRet
+          Ctype.signed_long),
+          [
+            ExactArg
+              (Ctype.Ctype nil
+                (Ctype.Pointer
+                  {|
+                    Ctype.const := false;
+                    Ctype.restrict := true;
+                    Ctype.volatile := false
+                  |}
+                  Ctype.signed_char));
+            ExactArg
+              Ctype.size_t;
+            ExactArg
+              (Ctype.Ctype nil
+                (Ctype.Pointer
+                   {| Ctype.const := true;
+                     Ctype.restrict := true;
+                     Ctype.volatile := false
+                   |}
+                   Ctype.signed_char));
+            PolymorphicArg
+              [
+                TyPred
+                  (Ctype.ctypeEqual DEFAULT_FUEL Ctype.intptr_t);
+                TyPred
+                  (Ctype.ctypeEqual DEFAULT_FUEL Ctype.uintptr_t);
+                TyIsPointer
+              ]
+          ])
+    else
+      if String.eqb name "cheri_bounds_set" then
+        Some
+          ((CopyRet 0),
+            [
+              PolymorphicArg
+                [
+                  TyPred
+                    (Ctype.ctypeEqual DEFAULT_FUEL Ctype.intptr_t);
+                  TyPred
+                    (Ctype.ctypeEqual DEFAULT_FUEL Ctype.uintptr_t);
+                  TyIsPointer
+                ];
+              ExactArg
+                Ctype.size_t
+            ])
+      else
+        if String.eqb name "cheri_perms_and" then
+          Some
+            ((CopyRet 0),
+              [
+                PolymorphicArg
+                  [
+                    TyPred
+                      (Ctype.ctypeEqual DEFAULT_FUEL Ctype.intptr_t);
+                    TyPred
+                      (Ctype.ctypeEqual DEFAULT_FUEL Ctype.uintptr_t);
+                    TyIsPointer
+                  ];
+                ExactArg
+                  Ctype.size_t
+              ])
+        else
+          if String.eqb name "cheri_address_get" then
+            Some
+              ((ExactRet
+                (Ctype.vaddr_t tt)),
+                [
+                  PolymorphicArg
+                    [
+                      TyPred
+                        (Ctype.ctypeEqual DEFAULT_FUEL Ctype.intptr_t);
+                      TyPred
+                        (Ctype.ctypeEqual DEFAULT_FUEL Ctype.uintptr_t);
+                      TyIsPointer
+                    ]
+                ])
+          else
+            if String.eqb name "cheri_base_get" then
+              Some
+                ((ExactRet
+                  (Ctype.vaddr_t tt)),
+                  [
+                    PolymorphicArg
+                      [
+                        TyPred
+                          (Ctype.ctypeEqual DEFAULT_FUEL Ctype.intptr_t);
+                        TyPred
+                          (Ctype.ctypeEqual DEFAULT_FUEL Ctype.uintptr_t);
+                        TyIsPointer
+                      ]
+                  ])
+            else
+              if String.eqb name "cheri_length_get" then
+                Some
+                  ((ExactRet
+                    Ctype.size_t),
+                    [
+                      PolymorphicArg
+                        [
+                          TyPred
+                            (Ctype.ctypeEqual DEFAULT_FUEL Ctype.intptr_t);
+                          TyPred
+                            (Ctype.ctypeEqual DEFAULT_FUEL Ctype.uintptr_t);
+                          TyIsPointer
+                        ]
+                    ])
+              else
+                if String.eqb name "cheri_tag_get" then
+                  Some
+                    ((ExactRet
+                      (Ctype.Ctype nil
+                        (Ctype.Basic
+                          (Ctype.Integer Ctype.Bool)))),
+                      [
+                        PolymorphicArg
+                          [
+                            TyPred
+                              (Ctype.ctypeEqual DEFAULT_FUEL Ctype.intptr_t);
+                            TyPred
+                              (Ctype.ctypeEqual DEFAULT_FUEL Ctype.uintptr_t);
+                            TyIsPointer
+                          ]
+                      ])
+                else
+                  if String.eqb name "cheri_tag_clear" then
+                    Some
+                      ((CopyRet 0),
+                        [
+                          PolymorphicArg
+                            [
+                              TyPred
+                                (Ctype.ctypeEqual DEFAULT_FUEL Ctype.intptr_t);
+                              TyPred
+                                (Ctype.ctypeEqual DEFAULT_FUEL Ctype.uintptr_t);
+                              TyIsPointer
+                            ]
+                        ])
+                  else
+                    if String.eqb name "cheri_is_equal_exact" then
+                      Some
+                        ((ExactRet
+                          (Ctype.Ctype nil
+                            (Ctype.Basic
+                              (Ctype.Integer
+                                Ctype.Bool)))),
+                          [
+                            PolymorphicArg
+                              [
+                                TyPred
+                                  (Ctype.ctypeEqual DEFAULT_FUEL Ctype.intptr_t);
+                                TyPred
+                                  (Ctype.ctypeEqual DEFAULT_FUEL Ctype.uintptr_t);
+                                TyIsPointer
+                              ];
+                            PolymorphicArg
+                              [
+                                TyPred
+                                  (Ctype.ctypeEqual DEFAULT_FUEL Ctype.intptr_t);
+                                TyPred
+                                  (Ctype.ctypeEqual DEFAULT_FUEL Ctype.uintptr_t);
+                                TyIsPointer
+                              ]
+                          ])
+                    else
+                      if String.eqb name "cheri_representable_length" then
+                        Some ((ExactRet Ctype.size_t), [ExactArg Ctype.size_t])
+                      else
+                        if
+                          String.eqb name "cheri_representable_alignment_mask"
+                        then
+                          Some ((ExactRet Ctype.size_t), [ExactArg Ctype.size_t])
+                        else
+                          if String.eqb name "cheri_offset_get" then
+                            Some
+                              ((ExactRet
+                                Ctype.size_t),
+                                [
+                                  PolymorphicArg
+                                    [
+                                      TyPred
+                                        (Ctype.ctypeEqual DEFAULT_FUEL Ctype.intptr_t);
+                                      TyPred
+                                        (Ctype.ctypeEqual DEFAULT_FUEL Ctype.uintptr_t);
+                                      TyIsPointer
+                                    ]
+                                ])
+                          else
+                            None.
+   *)
 
 End CheriMemory.
