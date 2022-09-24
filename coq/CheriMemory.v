@@ -237,6 +237,9 @@ Module CheriMemory
   Definition mem_state_with_captags captags (r : mem_state) :=
     Build_mem_state_r r.(next_alloc_id) r.(next_iota) r.(last_address) r.(allocations) r.(iota_map) r.(funptrmap) r.(varargs) r.(next_varargs_id) r.(bytemap) captags r.(dead_allocations) r.(dynamic_addrs) r.(last_used).
 
+  Definition mem_state_with_funptrmap funptrmap (r : mem_state) :=
+    Build_mem_state_r r.(next_alloc_id) r.(next_iota) r.(last_address) r.(allocations) r.(iota_map) funptrmap r.(varargs) r.(next_varargs_id) r.(bytemap) r.(captags) r.(dead_allocations) r.(dynamic_addrs) r.(last_used).
+
   Definition initial_address := (HexString.to_Z "0xFFFFFFFF").
 
   Definition DEFAULT_FUEL:nat := 1000%nat. (* TODO maybe needs to be abstracted *)
@@ -276,6 +279,12 @@ Module CheriMemory
     := match e with
        | inr v => ret v
        | inl msg => raise (InternalErr msg)
+       end.
+
+  Definition option2memM {A: Type} (msg:string) (o:option A): (memM A)
+    := match o with
+       | Some v => ret v
+       | None => raise (InternalErr msg)
        end.
 
   Definition fail {A:Type} err : memM A :=
@@ -3297,5 +3306,441 @@ Module CheriMemory
 
   Definition sequencePoint: memM unit :=
     ret tt.
+
+  Definition cap_of_mem_value
+    (funptrmap : ZMap.t (digest * string * C.t))
+    (mv : mem_value)
+    : option  (ZMap.t (digest * string * C.t) * C.t)
+    :=
+    match mv with
+    | MVinteger _ (IC _ c_value) => Some (funptrmap, c_value)
+    | MVpointer _ (PV _ (PVconcrete c_value)) => Some (funptrmap, c_value)
+    | MVpointer _ (PV _ (PVfunction fp)) =>
+        Some (resolve_function_pointer funptrmap fp)
+    | _ => None
+    end.
+
+  Definition update_cap_in_mem_value
+    (cap_val : mem_value) (c_value : C.t) : mem_value :=
+    match cap_val with
+    | MVinteger ty (IC is_signed _) => MVinteger ty (IC is_signed c_value)
+    | MVpointer ty (PV prov (PVconcrete _)) =>
+      MVpointer ty (PV prov (PVconcrete c_value))
+    | MVpointer ty (PV prov (PVfunction fp)) =>
+      MVpointer ty (PV prov (PVfunction (FP_invalid c_value)))
+    | other => other
+    end.
+
+  Definition bool_bits_of_bytes (bytes_value : list ascii): list bool
+      := []. (* TODO *)
+                                                                 (*
+    :=
+    let fix get_slice_int' (function_parameter : Z * Z * Z)
+      : list bool :=
+      let '(n_value, m_value, o_value) := function_parameter in
+      if Z.leb n_value 0 then
+        nil
+      else
+        let bit :=
+          negb
+            (Z.eqb
+               (extract_num m_value
+                  (Z.sub (Z.add n_value o_value) 1) 1) 0) in
+        cons bit (get_slice_int' ((Z.sub n_value 1), m_value, o_value)) in
+    let bit_list_of_char (c_value : ascii) : list bool :=
+      get_slice_int'
+        (8, (Z.of_nat (nat_of_ascii c_value)), 0) in
+    List.concat (List.map bit_list_of_char bytes_value).
+                                                                  *)
+
+  Definition load_string (loc : location_ocaml) (c_value : C.t): memM string
+    := raise (InternalErr "TODO").
+    (*
+    let fix loop {B : Set} (acc : string) (offset : Z)
+      : Eff.eff string Mem_cheri.mem_error B mem_state :=
+      Eff.op_gtgt (cap_check loc c_value offset ReadIntent 1)
+        (let addr :=
+           Z.add (C.cap_get_value c_value)
+             offset in
+         Eff.op_gtgteq Eff.get
+           (fun (st : mem_state) =>
+              let bs := fetch_bytes st.(mem_state.bytemap) addr 1 in
+              let '_ :=
+                (* ❌ Assert instruction is not handled. *)
+                assert unit (equiv_decb (List.length bs) 1) in
+              match (List.hd bs).(AbsByte.t.value) with
+              | None => fail (MerrReadUninit loc)
+              | Some c_value =>
+                  if equiv_decb c_value "000" % char then
+                    ret acc
+                  else
+                    let s_value := String.append acc (Stdlib.String.make 1 c_value)
+                    in
+                    loop s_value (Z.succ offset)
+              end)) in
+    loop "" 0.
+    *)
+
+  Definition store_string (loc : location_ocaml) (s_value : string) (n_value : Z) (c_value : C.t) : memM Z
+    := raise (InternalErr "TODO").
+(*    let n' := Z.to_int n_value in
+    if equiv_decb n' 0 then
+      ret 0
+    else
+      let cs := List.of_seq (Stdlib.String.to_seq s_value) in
+      let cs := L.take (Z.sub n' 1) cs in
+      let pre_bs :=
+        List.map
+          (fun (c_value : ascii) =>
+            {| AbsByte.t.prov := Prov_none; AbsByte.t.copy_offset := None;
+              AbsByte.t.value := Some c_value |}) cs in
+      let pre_bs :=
+        List.append pre_bs
+          [
+            {| AbsByte.t.prov := Prov_none; AbsByte.t.copy_offset := None;
+              AbsByte.t.value := Some "000" % char |}
+          ] in
+      let '_ :=
+        (* ❌ Assert instruction is not handled. *)
+        assert unit
+          (Z.ltb
+            (Z.of_int (List.length pre_bs)) n_value) in
+      let addr := C.cap_get_value c_value in
+      let bs :=
+        mapi
+          (fun (i_value : int) =>
+            fun (b_value : AbsByte.t) =>
+              ((Z.add addr (Z.of_int i_value)), b_value))
+          pre_bs in
+      Eff.op_gtgt
+        (Eff.op_gtgt
+          (cap_check loc c_value 0 WriteIntent
+            (List.length bs))
+          (Eff.update
+            (fun (st : mem_state) =>
+              mem_state.with_bytemap
+                (List.fold_left
+                  (fun (acc : ZMap.t AbsByte.t) =>
+                    fun (function_parameter : Z * AbsByte.t) =>
+                      let '(addr, b_value) := function_parameter in
+                      ZMap.add addr b_value acc)
+                  st.(mem_state.bytemap) bs) st)))
+        (ret (List.length bs)).
+ *)
+
+  Definition call_intrinsic
+    (loc : location_ocaml) (name : string) (args : list mem_value)
+    : memM (option mem_value)
+    :=
+    if String.eqb name "strfcap" then
+      buf_val <- option2memM "missing argument"  (List.nth_error args 0%nat) ;;
+      maxsize_val <- option2memM "missing argument"  (List.nth_error args 1%nat) ;;
+      format_val <- option2memM "missing argument"  (List.nth_error args 2%nat) ;;
+      cap_val <- option2memM "missing argument"  (List.nth_error args 3%nat) ;;
+      get >>=
+        (fun (st : mem_state) =>
+           match cap_of_mem_value st.(funptrmap) cap_val with
+           | None =>
+               fail
+                 (MerrOther
+                    (String.append
+                       "CHERI.call_intrinsic: non-cap 1st argument in: '"
+                       (String.append name "'")))
+           | Some (funptrmap, c_value) =>
+               (update
+                  (fun (st : mem_state) => mem_state_with_funptrmap funptrmap st))
+               ;;
+               match (buf_val, maxsize_val, format_val) with
+               |
+                 (MVpointer _ (PV _ (PVconcrete buf_cap)),
+                   MVinteger _ (IV maxsize_n),
+                   MVpointer _ (PV _ (PVconcrete format_cap))) =>
+                   load_string loc format_cap >>=
+                     (fun (format : string) =>
+                        match C.strfcap format c_value with
+                        | None =>
+                            ret
+                              (Some
+                                 (MVinteger
+                                    (Ctype.Signed Ctype.Long)
+                                    (IV (-1))))
+                        | Some res =>
+                            let res_size := String.length res in
+                            let res_size_n := Z.of_nat res_size in
+                            if Z.geb res_size_n maxsize_n then
+                              ret
+                                (Some
+                                   (MVinteger
+                                      (Ctype.Signed
+                                         Ctype.Long)
+                                      (IV (-1))))
+                            else
+                              store_string loc res maxsize_n buf_cap ;;
+                              (ret
+                                 (Some
+                                    (MVinteger
+                                       (Ctype.Signed
+                                          Ctype.Long) (IV res_size_n))))
+                        end)
+               | (_, _, _) =>
+                   fail
+                     (MerrOther
+                        (String.append "CHERI.call_intrinsic: wrong types in: '"
+                           (String.append name "'")))
+               end
+           end)
+    else
+      if String.eqb name "cheri_bounds_set" then
+        cap_val <- option2memM "missing argument"  (List.nth_error args 0%nat) ;;
+        upper_val <- option2memM "missing argument"  (List.nth_error args 1%nat) ;;
+        get >>=
+          (fun (st : mem_state) =>
+             match cap_of_mem_value st.(funptrmap) cap_val with
+             | None =>
+                 fail
+                   (MerrOther
+                      (String.append
+                         "CHERI.call_intrinsic: non-cap 1st argument in: '"
+                         (String.append name "'")))
+             | Some (funptrmap, c_value) =>
+                 update (fun (st : mem_state) => mem_state_with_funptrmap funptrmap st)
+                 ;;
+                 match upper_val with
+                 | MVinteger Ctype.Size_t (IV n_value) =>
+                     let x' := C.cap_get_value c_value in
+                     let c_value := C.cap_narrow_bounds c_value (x', (Z.add x' n_value))
+                     in ret (Some (update_cap_in_mem_value cap_val c_value))
+                 | _ =>
+                     fail
+                       (MerrOther
+                          (String.append
+                             "CHERI.call_intrinsic: 2nd argument's type is not size_t in: '"
+                             (String.append name "'")))
+                 end
+             end)
+      else
+        if String.eqb name "cheri_perms_and" then
+          cap_val <- option2memM "missing argument"  (List.nth_error args 0%nat) ;;
+          mask_val <- option2memM "missing argument"  (List.nth_error args 1%nat) ;;
+          get >>=
+            (fun (st : mem_state) =>
+               match cap_of_mem_value st.(funptrmap) cap_val with
+               | None =>
+                   fail
+                     (MerrOther
+                        (String.append
+                           "CHERI.call_intrinsic: non-cap 1st argument in: '"
+                           (String.append name "'")))
+               | Some (funptrmap, c_value) =>
+                   (update
+                      (fun (st : mem_state) =>
+                         mem_state_with_funptrmap funptrmap st))
+                   ;;
+                   match mask_val with
+                   | MVinteger (Ctype.Size_t as ity) (IV n_value)
+                     =>
+                       iss <- option2memM "is_signed_ity failed" (is_signed_ity DEFAULT_FUEL ity) ;;
+                       sz <- serr2memM (sizeof DEFAULT_FUEL None (Ctype.Ctype nil(Ctype.Basic (Ctype.Integer ity)))) ;;
+                       bytes_value <- serr2memM (bytes_of_Z iss (Z.to_nat sz) n_value) ;;
+                       let bits := bool_bits_of_bytes bytes_value in
+                       match MorelloPermission.of_list bits with
+                       | None =>
+                           fail
+                             (MerrOther
+                                (String.append
+                                   "CHERI.call_intrinsic: error decoding permission bits: '"
+                                   (String.append name "'")))
+                       | Some pmask =>
+                           let c_value := C.cap_narrow_perms c_value pmask
+                           in ret (Some (update_cap_in_mem_value cap_val c_value))
+                       end
+                   | _ =>
+                       fail
+                         (MerrOther
+                            (String.append
+                               "CHERI.call_intrinsic: 2nd argument's type is not size_t in: '"
+                               (String.append name "'")))
+                   end
+               end)
+        else
+          if String.eqb name "cheri_offset_get" then
+            cap_val <- option2memM "missing argument"  (List.nth_error args 0%nat) ;;
+            get >>=
+              (fun (st : mem_state) =>
+                 match cap_of_mem_value st.(funptrmap) cap_val with
+                 | None =>
+                     fail
+                       (MerrOther
+                          (String.append
+                             "CHERI.call_intrinsic: non-cap 1st argument in: '"
+                             (String.append name "'")))
+                 | Some (_, c_value) =>
+                     let v_value := C.cap_get_offset c_value in
+                     ret (Some (MVinteger Ctype.Size_t (IV v_value)))
+                 end)
+          else
+            if String.eqb name "cheri_address_get" then
+              cap_val <- option2memM "missing argument"  (List.nth_error args 0%nat) ;;
+              get >>=
+                (fun (st : mem_state) =>
+                   match cap_of_mem_value st.(funptrmap) cap_val with
+                   | None =>
+                       fail
+                         (MerrOther
+                            (String.append
+                               "CHERI.call_intrinsic: non-cap 1st argument in: '"
+                               (String.append name "'")))
+                   | Some (_, c_value) =>
+                       let v_value := C.cap_get_value c_value in
+                       ret (Some (MVinteger Ctype.Vaddr_t (IV v_value)))
+                   end)
+            else
+              if String.eqb name "cheri_base_get" then
+                cap_val <- option2memM "missing argument"  (List.nth_error args 0%nat) ;;
+                get >>=
+                  (fun (st : mem_state) =>
+                     match cap_of_mem_value st.(funptrmap) cap_val with
+                     | None =>
+                         fail
+                           (MerrOther
+                              (String.append
+                                 "CHERI.call_intrinsic: non-cap 1st argument in: '"
+                                 (String.append name "'")))
+                     | Some (_, c_value) =>
+                         let v_value := fst (C.cap_get_bounds c_value)
+                         in ret (Some (MVinteger Ctype.Vaddr_t (IV v_value)))
+                     end)
+              else
+                if String.eqb name "cheri_length_get" then
+                  cap_val <- option2memM "missing argument"  (List.nth_error args 0%nat) ;;
+                  get >>=
+                    (fun (st : mem_state) =>
+                       match cap_of_mem_value st.(funptrmap) cap_val
+                       with
+                       | None =>
+                           fail
+                             (MerrOther
+                                (String.append
+                                   "CHERI.call_intrinsic: non-cap 1st argument in: '"
+                                   (String.append name "'")))
+                       | Some (_, c_value) =>
+                           let '(base, limit) := C.cap_get_bounds c_value in
+                           let v_value := Z.sub limit base in
+                           ret (Some (MVinteger Ctype.Size_t (IV v_value)))
+                       end)
+                else
+                  if String.eqb name "cheri_tag_get" then
+                    cap_val <- option2memM "missing argument"  (List.nth_error args 0%nat) ;;
+                    get >>=
+                      (fun (st : mem_state) =>
+                         match cap_of_mem_value st.(funptrmap) cap_val
+                         with
+                         | None =>
+                             fail
+                               (MerrOther
+                                  (String.append
+                                     "CHERI.call_intrinsic: non-cap 1st argument in: '"
+                                     (String.append name "'")))
+                         | Some (_, c_value) =>
+                             let v_value := if C.cap_is_valid c_value then 1 else 0
+                             in  ret (Some (MVinteger Ctype.Bool (IV v_value)))
+                         end)
+                  else
+                    if String.eqb name "cheri_tag_clear" then
+                      cap_val <- option2memM "missing argument"  (List.nth_error args 0) ;;
+                      get >>=
+                        (fun (st : mem_state) =>
+                           match
+                             cap_of_mem_value st.(funptrmap) cap_val
+                           with
+                           | None =>
+                               fail
+                                 (MerrOther
+                                    (String.append
+                                       "CHERI.call_intrinsic: non-cap 1st argument in: '"
+                                       (String.append name "'")))
+                           | Some (funptrmap, c_value) =>
+                               update (fun st => mem_state_with_funptrmap funptrmap st)
+                               ;;
+                               let c_value := C.cap_invalidate c_value in
+                               ret (Some (update_cap_in_mem_value cap_val c_value))
+                           end)
+                    else
+                      if String.eqb name "cheri_is_equal_exact" then
+                        cap_val0 <- option2memM "missing argument"  (List.nth_error args 0%nat) ;;
+                        cap_val1 <- option2memM "missing argument"  (List.nth_error args 1%nat) ;;
+                        get >>=
+                          (fun (st : mem_state) =>
+                             match
+                               (cap_of_mem_value st.(funptrmap) cap_val0),
+                               (cap_of_mem_value st.(funptrmap) cap_val1) with
+                             | None, _ =>
+                                 fail
+                                   (MerrOther
+                                      (String.append
+                                         "CHERI.call_intrinsic: non-cap 1st argument in: '"
+                                         (String.append name "'")))
+                             | _, None =>
+                                 fail
+                                   (MerrOther
+                                      (String.append
+                                         "CHERI.call_intrinsic: non-cap 2nd argument in: '"
+                                         (String.append name "'")))
+                             | Some (_, c0), Some (_, c1) =>
+                                 let v_value :=
+                                   if C.eqb c0 c1 then
+                                     1
+                                   else
+                                     0 in
+                                 ret
+                                   (Some
+                                      (MVinteger Ctype.Bool
+                                         (IV v_value)))
+                             end)
+                      else
+                        if String.eqb name "cheri_representable_length" then
+                          match List.nth_error args 0%nat with
+                          | None =>
+                              raise (InternalErr "missing argument")
+                          | Some (MVinteger Ctype.Size_t (IV n_value)) =>
+                              let l_value := C.representable_length n_value in
+                              ret
+                                (Some
+                                   (MVinteger Ctype.Size_t
+                                      (IV l_value)))
+                          | Some _ =>
+                              fail
+                                (MerrOther
+                                   (String.append
+                                      "CHERI.call_intrinsic: 1st argument's type is not size_t in: '"
+                                      (String.append name "'")))
+                          end
+                        else
+                          if
+                            String.eqb name "cheri_representable_alignment_mask"
+                          then
+                            match List.nth_error args 0%nat with
+                            | None =>
+                                raise (InternalErr "missing argument")
+                            | Some (MVinteger Ctype.Size_t (IV n_value))
+                              =>
+                                let l_value := C.representable_alignment_mask n_value in
+                                ret
+                                  (Some
+                                     (MVinteger Ctype.Size_t
+                                        (IV l_value)))
+                            | Some _ =>
+                                fail
+                                  (MerrOther
+                                     (String.append
+                                        "CHERI.call_intrinsic: 1st argument's type is not size_t in: '"
+                                        (String.append name "'")))
+                            end
+                          else
+                            fail
+                              (MerrOther
+                                 (String.append
+                                    "CHERI.call_intrinsic: unknown intrinsic: '"
+                                    (String.append name "'"))).
 
 End CheriMemory.
