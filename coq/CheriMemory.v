@@ -3246,5 +3246,56 @@ Module CheriMemory
         raise "ivfromfloat no implemented"
     end.
 
+  Definition unspecified_mval (ty: Ctype.ctype): mem_value := MVunspecified ty.
+
+  Definition integer_value_mval
+    (ity: Ctype.integerType) (ival: integer_value)
+    : mem_value := MVinteger ity ival.
+
+  Definition floating_value_mval
+    (fty: Ctype.floatingType) (fval: floating_value)
+    : mem_value := MVfloating fty fval.
+
+  Definition pointer_mval
+    (ref_ty: Ctype.ctype) (ptrval: pointer_value)
+    : mem_value := MVpointer ref_ty ptrval.
+
+  Definition array_mval (mvals : list mem_value) : mem_value :=
+    MVarray mvals.
+
+  Definition struct_mval
+    (tag_sym: Symbol.sym)
+    (xs: list(Symbol.identifier * Ctype.ctype * mem_value)): mem_value :=
+    MVstruct tag_sym xs.
+
+  Definition union_mval
+    (tag_sym : Symbol.sym)
+    (memb_ident : Symbol.identifier) (mval : mem_value)
+    : mem_value := MVunion tag_sym memb_ident mval.
+
+  Definition case_mem_value
+    {A: Set}
+    (mval : mem_value)
+    (f_unspec : Ctype.ctype -> A)
+    (f_concur : Ctype.integerType -> Symbol.sym -> A)
+    (f_ival : Ctype.integerType -> integer_value -> A)
+    (f_fval : Ctype.floatingType -> floating_value -> A)
+    (f_ptr : Ctype.ctype -> pointer_value -> A)
+    (f_array : list mem_value -> A)
+    (f_struct : Symbol.sym -> list (Symbol.identifier * Ctype.ctype * mem_value) -> A)
+    (f_union : Symbol.sym -> Symbol.identifier -> mem_value -> A) : A
+    :=
+    match mval with
+    | MVunspecified ty => f_unspec ty
+    | MVinteger ity ival => f_ival ity ival
+    | MVfloating fty fval => f_fval fty fval
+    | MVpointer ref_ty ptrval => f_ptr ref_ty ptrval
+    | MVarray mvals => f_array mvals
+    | MVstruct tag_sym xs => f_struct tag_sym xs
+    | MVunion tag_sym memb_ident mval' => f_union tag_sym memb_ident mval'
+    end.
+
+  Definition sequencePoint: memM unit :=
+    ret tt.
 
 End CheriMemory.
