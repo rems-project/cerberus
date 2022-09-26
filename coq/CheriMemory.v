@@ -243,6 +243,7 @@ Module CheriMemory
   Definition initial_address := (HexString.to_Z "0xFFFFFFFF").
 
   Definition DEFAULT_FUEL:nat := 1000%nat. (* TODO maybe needs to be abstracted *)
+  Definition MAX_STRFCAP_FORMAT_LEN := 4096%nat.
 
   Definition initial_mem_state : mem_state :=
     {|
@@ -918,17 +919,17 @@ Module CheriMemory
   Definition resolve_iota precond iota :=
     lookup_iota iota >>=
       (fun x => match x with
-             | inl alloc_id =>
-                 (precond alloc_id >>= merr2memM alloc_id)
-             | inr (alloc_id1, alloc_id2) =>
-                 precond alloc_id1 >>=
-                   fun x => match x with
-                         | OK =>
-                             ret alloc_id1
-                         | FAIL _ =>
-                             precond alloc_id2 >>= merr2memM alloc_id2
-                         end
-             end)
+                | inl alloc_id =>
+                    (precond alloc_id >>= merr2memM alloc_id)
+                | inr (alloc_id1, alloc_id2) =>
+                    precond alloc_id1 >>=
+                      fun x => match x with
+                               | OK =>
+                                   ret alloc_id1
+                               | FAIL _ =>
+                                   precond alloc_id2 >>= merr2memM alloc_id2
+                               end
+                end)
       >>=
       fun alloc_id =>
         update (fun st =>
@@ -974,22 +975,22 @@ Module CheriMemory
           let precondition (z : storage_instance_id) :=
             is_dead z >>=
               (fun x => match x with
-                     | true =>
-                         ret
-                           (FAIL (MerrUndefinedFree loc Free_static_allocation))
-                     | false =>
-                         get_allocation z >>=
-                           (fun alloc =>
-                              if
-                                MorelloAddr.eqb
-                                  (C.cap_get_value addr)
-                                  alloc.(base)
-                              then
-                                ret OK
-                              else
-                                ret
-                                  (FAIL(MerrUndefinedFree loc Free_out_of_bound)))
-                     end)
+                        | true =>
+                            ret
+                              (FAIL (MerrUndefinedFree loc Free_static_allocation))
+                        | false =>
+                            get_allocation z >>=
+                              (fun alloc =>
+                                 if
+                                   MorelloAddr.eqb
+                                     (C.cap_get_value addr)
+                                     alloc.(base)
+                                 then
+                                   ret OK
+                                 else
+                                   ret
+                                     (FAIL(MerrUndefinedFree loc Free_out_of_bound)))
+                        end)
           in
           (if is_dyn then
              (is_dynamic (C.cap_get_value addr)) >>=
@@ -1121,16 +1122,16 @@ Module CheriMemory
                prov_acc' <-
                  match
                    (prov_acc, b_value.(prov)),
-                     match (prov_acc, b_value.(prov)) with
-                     | (VALID (Prov_some alloc_id1), Prov_some alloc_id2) =>
-                         Z.eqb alloc_id1 alloc_id2
-                     | _ => false
-                     end,
-                     match (prov_acc, b_value.(prov)) with
-                     | (VALID (Prov_symbolic iota1), Prov_symbolic iota2) =>
-                         Z.eqb iota1 iota2
-                     | _ => false
-                     end with
+                   match (prov_acc, b_value.(prov)) with
+                   | (VALID (Prov_some alloc_id1), Prov_some alloc_id2) =>
+                       Z.eqb alloc_id1 alloc_id2
+                   | _ => false
+                   end,
+                   match (prov_acc, b_value.(prov)) with
+                   | (VALID (Prov_symbolic iota1), Prov_symbolic iota2) =>
+                       Z.eqb iota1 iota2
+                   | _ => false
+                   end with
                  | (VALID (Prov_some alloc_id1), Prov_some alloc_id2), true, _
                    => ret INVALID
                  | (VALID (Prov_symbolic iota1), Prov_symbolic iota2), _, true
@@ -1148,10 +1149,10 @@ Module CheriMemory
                let offset_acc' :=
                  match
                    (offset_acc, b_value.(copy_offset)),
-                     match (offset_acc, b_value.(copy_offset)) with
-                     | (PtrBytes n1, Some n2) => Z.eqb n1 (Z.of_nat n2)
-                     | _ => false
-                     end with
+                   match (offset_acc, b_value.(copy_offset)) with
+                   | (PtrBytes n1, Some n2) => Z.eqb n1 (Z.of_nat n2)
+                   | _ => false
+                   end with
                  | (PtrBytes n1, Some n2), true => PtrBytes (Z.add n1 1)
                  | _, _ => OtherBytes
                  end in
@@ -1819,9 +1820,9 @@ Module CheriMemory
     let '(prov,ptrval_) := break_PV ptr in
 
     cond <- serr2memM (
-               mt <- typeof mval ;;
-               Ctype.ctypeEqual DEFAULT_FUEL (Ctype.unatomic cty)
-                 (Ctype.unatomic mt))
+                mt <- typeof mval ;;
+                Ctype.ctypeEqual DEFAULT_FUEL (Ctype.unatomic cty)
+                  (Ctype.unatomic mt))
     ;;
     if negb cond
     then fail (MerrOther "store with an ill-typed memory value")
@@ -2031,7 +2032,7 @@ Module CheriMemory
   Definition concrete_ptrval : Z -> Z -> serr pointer_value :=
     fun _ _ =>
       raise
-      "concrete_ptrval: integer to pointer cast is not supported".
+        "concrete_ptrval: integer to pointer cast is not supported".
 
   Definition case_ptrval
     {A: Set}
@@ -2094,19 +2095,19 @@ Module CheriMemory
         ret (Z.eqb (C.cap_get_value c1) (C.cap_get_value c2))
     | PVfunction (FP_valid sym), PVfunction (FP_invalid c_value)
     | PVfunction (FP_invalid c_value), PVfunction (FP_valid sym) =>
-       get >>=
-         (fun (st : mem_state) =>
-            let n_value :=
-              Z.sub (C.cap_get_value c_value) initial_address
-            in
-            match ZMap.find n_value st.(funptrmap) with
-            | Some (file_dig, name, _) =>
-                let sym2 := Symbol.Symbol file_dig n_value (Symbol.SD_Id name) in
-                ret (Symbol.symbolEquality sym sym2)
-            | None =>
-                raise (InternalErr
-                         "CHERI.eq_ptrval ==> FP_valid failed to resolve function symbol")
-            end)
+        get >>=
+          (fun (st : mem_state) =>
+             let n_value :=
+               Z.sub (C.cap_get_value c_value) initial_address
+             in
+             match ZMap.find n_value st.(funptrmap) with
+             | Some (file_dig, name, _) =>
+                 let sym2 := Symbol.Symbol file_dig n_value (Symbol.SD_Id name) in
+                 ret (Symbol.symbolEquality sym sym2)
+             | None =>
+                 raise (InternalErr
+                          "CHERI.eq_ptrval ==> FP_valid failed to resolve function symbol")
+             end)
     | PVfunction _, _
     | _, PVfunction _ =>
         ret false
@@ -2492,7 +2493,7 @@ Module CheriMemory
               (mem_state_with_next_iota
                  (Z.succ st.(next_iota)) st)) ;;
 
-        ret iota).
+         ret iota).
 
   Definition ptrfromint
     (loc : location_ocaml)
@@ -3069,17 +3070,17 @@ Module CheriMemory
          get_bytes ptrval2 nil (Z.to_nat size_n) >>=
            (fun (bytes2: list Z) =>
               ret (IV
-                   (List.fold_left
-                      (fun (acc : Z) '(n1, n2) =>
-                         if Z.eqb acc 0 then
-                           match Z.compare n1 n2 with
-                           | Eq => 0
-                           | Gt => 1
-                           | Lt => -1
-                           end
-                         else
-                           acc)
-                      (List.combine bytes1 bytes2) 0)))).
+                     (List.fold_left
+                        (fun (acc : Z) '(n1, n2) =>
+                           if Z.eqb acc 0 then
+                             match Z.compare n1 n2 with
+                             | Eq => 0
+                             | Gt => 1
+                             | Lt => -1
+                             end
+                           else
+                             acc)
+                        (List.combine bytes1 bytes2) 0)))).
 
   Definition realloc
     (tid : thread_id) (align : integer_value) (ptr : pointer_value)
@@ -3107,8 +3108,8 @@ Module CheriMemory
                                let size_n := num_of_int size in
                                IV (Z.min (CheriMemory.size alloc) size_n) in
                              memcpy new_ptr ptr size_to_copy ;;
-                           kill (Loc_other "realloc") true ptr ;;
-                           ret new_ptr)
+                             kill (Loc_other "realloc") true ptr ;;
+                             ret new_ptr)
                       else
                         fail
                           (MerrWIP "realloc: invalid pointer"))
@@ -3145,9 +3146,9 @@ Module CheriMemory
     | IntSub => int_bin Z.sub v1 v2
     | IntMul => int_bin Z.mul v1 v2
     | IntDiv => int_bin (fun n1 n2 =>
-                          if Z.eqb n2 0
-                          then 0
-                          else Z_integerDiv_t n1 n2) v1 v2
+                           if Z.eqb n2 0
+                           then 0
+                           else Z_integerDiv_t n1 n2) v1 v2
     | IntRem_t => int_bin Z_integerRem_t v1 v2
     | IntRem_f => int_bin Z_integerRem_f v1 v2
     | IntExp => int_bin Z.pow v1 v2
@@ -3325,9 +3326,9 @@ Module CheriMemory
     match cap_val with
     | MVinteger ty (IC is_signed _) => MVinteger ty (IC is_signed c_value)
     | MVpointer ty (PV prov (PVconcrete _)) =>
-      MVpointer ty (PV prov (PVconcrete c_value))
+        MVpointer ty (PV prov (PVconcrete c_value))
     | MVpointer ty (PV prov (PVfunction fp)) =>
-      MVpointer ty (PV prov (PVfunction (FP_invalid c_value)))
+        MVpointer ty (PV prov (PVfunction (FP_invalid c_value)))
     | other => other
     end.
 
@@ -3393,11 +3394,11 @@ Module CheriMemory
             pre_bs in
         cap_check loc c_value 0 WriteIntent (Z.of_nat (List.length bs)) ;;
         update
-           (fun (st : mem_state) =>
-              mem_state_with_bytemap
-                (List.fold_left
-                   (fun acc '(addr, b_value) => ZMap.add addr b_value acc)
-                   bs st.(bytemap)) st)
+          (fun (st : mem_state) =>
+             mem_state_with_bytemap
+               (List.fold_left
+                  (fun acc '(addr, b_value) => ZMap.add addr b_value acc)
+                  bs st.(bytemap)) st)
         ;;
         ret (List.length bs)
     end.
@@ -3429,7 +3430,7 @@ Module CheriMemory
                  (MVpointer _ (PV _ (PVconcrete buf_cap)),
                    MVinteger _ (IV maxsize_n),
                    MVpointer _ (PV _ (PVconcrete format_cap))) =>
-                   load_string loc format_cap >>=
+                   load_string loc format_cap MAX_STRFCAP_FORMAT_LEN >>=
                      (fun (format : string) =>
                         match C.strfcap format c_value with
                         | None =>
