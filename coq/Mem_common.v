@@ -6,6 +6,7 @@ Require Import Undefined.
 Require Import Location.
 Require AilSyntax.
 Require Import Ctype.
+Require Import SimpleError.
 
 Module Mem_common (A:VADDR).
 
@@ -427,7 +428,7 @@ Definition instance_Nondeterminism_Constraints_Mem_common_mem_constraint_dict
 *)
 
 Inductive type_predicate : Set :=
-| TyPred : (Ctype.ctype -> bool) -> type_predicate
+| TyPred : (Ctype.ctype -> serr bool) -> type_predicate
 | TyIsPointer : type_predicate.
 
 Inductive instrinsics_ret_spec : Set :=

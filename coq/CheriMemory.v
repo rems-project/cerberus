@@ -3741,34 +3741,32 @@ Module CheriMemory
                                     (String.append name "'"))).
 
   Definition get_intrinsic_type_spec (name : string)
-    : option intrinsics_signature := None.
-  (* TODO: *)
-  (*
+    : option intrinsics_signature
     :=
     if String.eqb name "strfcap" then
       Some
         ((ExactRet
-          Ctype.signed_long),
+            Ctype.signed_long),
           [
             ExactArg
               (Ctype.Ctype nil
-                (Ctype.Pointer
-                  {|
-                    Ctype.const := false;
-                    Ctype.restrict := true;
-                    Ctype.volatile := false
-                  |}
-                  Ctype.signed_char));
+                 (Ctype.Pointer
+                    {|
+                      Ctype.const := false;
+                      Ctype.restrict := true;
+                      Ctype.volatile := false
+                    |}
+                    Ctype.signed_char));
             ExactArg
               Ctype.size_t;
             ExactArg
               (Ctype.Ctype nil
-                (Ctype.Pointer
-                   {| Ctype.const := true;
-                     Ctype.restrict := true;
-                     Ctype.volatile := false
-                   |}
-                   Ctype.signed_char));
+                 (Ctype.Pointer
+                    {| Ctype.const := true;
+                      Ctype.restrict := true;
+                      Ctype.volatile := false
+                    |}
+                    Ctype.signed_char));
             PolymorphicArg
               [
                 TyPred
@@ -3777,7 +3775,7 @@ Module CheriMemory
                   (Ctype.ctypeEqual DEFAULT_FUEL Ctype.uintptr_t);
                 TyIsPointer
               ]
-          ])
+        ])
     else
       if String.eqb name "cheri_bounds_set" then
         Some
@@ -3793,7 +3791,7 @@ Module CheriMemory
                 ];
               ExactArg
                 Ctype.size_t
-            ])
+          ])
       else
         if String.eqb name "cheri_perms_and" then
           Some
@@ -3809,12 +3807,12 @@ Module CheriMemory
                   ];
                 ExactArg
                   Ctype.size_t
-              ])
+            ])
         else
           if String.eqb name "cheri_address_get" then
             Some
               ((ExactRet
-                (Ctype.vaddr_t tt)),
+                  (Ctype.vaddr_t tt)),
                 [
                   PolymorphicArg
                     [
@@ -3824,12 +3822,12 @@ Module CheriMemory
                         (Ctype.ctypeEqual DEFAULT_FUEL Ctype.uintptr_t);
                       TyIsPointer
                     ]
-                ])
+              ])
           else
             if String.eqb name "cheri_base_get" then
               Some
                 ((ExactRet
-                  (Ctype.vaddr_t tt)),
+                    (Ctype.vaddr_t tt)),
                   [
                     PolymorphicArg
                       [
@@ -3839,12 +3837,12 @@ Module CheriMemory
                           (Ctype.ctypeEqual DEFAULT_FUEL Ctype.uintptr_t);
                         TyIsPointer
                       ]
-                  ])
+                ])
             else
               if String.eqb name "cheri_length_get" then
                 Some
                   ((ExactRet
-                    Ctype.size_t),
+                      Ctype.size_t),
                     [
                       PolymorphicArg
                         [
@@ -3854,14 +3852,14 @@ Module CheriMemory
                             (Ctype.ctypeEqual DEFAULT_FUEL Ctype.uintptr_t);
                           TyIsPointer
                         ]
-                    ])
+                  ])
               else
                 if String.eqb name "cheri_tag_get" then
                   Some
                     ((ExactRet
-                      (Ctype.Ctype nil
-                        (Ctype.Basic
-                          (Ctype.Integer Ctype.Bool)))),
+                        (Ctype.Ctype nil
+                           (Ctype.Basic
+                              (Ctype.Integer Ctype.Bool)))),
                       [
                         PolymorphicArg
                           [
@@ -3871,7 +3869,7 @@ Module CheriMemory
                               (Ctype.ctypeEqual DEFAULT_FUEL Ctype.uintptr_t);
                             TyIsPointer
                           ]
-                      ])
+                    ])
                 else
                   if String.eqb name "cheri_tag_clear" then
                     Some
@@ -3885,15 +3883,15 @@ Module CheriMemory
                                 (Ctype.ctypeEqual DEFAULT_FUEL Ctype.uintptr_t);
                               TyIsPointer
                             ]
-                        ])
+                      ])
                   else
                     if String.eqb name "cheri_is_equal_exact" then
                       Some
                         ((ExactRet
-                          (Ctype.Ctype nil
-                            (Ctype.Basic
-                              (Ctype.Integer
-                                Ctype.Bool)))),
+                            (Ctype.Ctype nil
+                               (Ctype.Basic
+                                  (Ctype.Integer
+                                     Ctype.Bool)))),
                           [
                             PolymorphicArg
                               [
@@ -3911,7 +3909,7 @@ Module CheriMemory
                                   (Ctype.ctypeEqual DEFAULT_FUEL Ctype.uintptr_t);
                                 TyIsPointer
                               ]
-                          ])
+                        ])
                     else
                       if String.eqb name "cheri_representable_length" then
                         Some ((ExactRet Ctype.size_t), [ExactArg Ctype.size_t])
@@ -3924,7 +3922,7 @@ Module CheriMemory
                           if String.eqb name "cheri_offset_get" then
                             Some
                               ((ExactRet
-                                Ctype.size_t),
+                                  Ctype.size_t),
                                 [
                                   PolymorphicArg
                                     [
@@ -3934,9 +3932,9 @@ Module CheriMemory
                                         (Ctype.ctypeEqual DEFAULT_FUEL Ctype.uintptr_t);
                                       TyIsPointer
                                     ]
-                                ])
+                              ])
                           else
                             None.
-   *)
+
 
 End CheriMemory.
