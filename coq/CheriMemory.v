@@ -219,6 +219,9 @@ Module CheriMemory
 
   Definition mem_state := mem_state_r.
 
+  Definition mem_state_with_bytemap bytemap (r : mem_state) :=
+    Build_mem_state_r r.(next_alloc_id) r.(next_iota) r.(last_address) r.(allocations) r.(iota_map) r.(funptrmap) r.(varargs) r.(next_varargs_id) bytemap r.(captags) r.(dead_allocations) r.(dynamic_addrs) r.(last_used).
+
   Definition mem_state_with_allocations allocations (r : mem_state) :=
     Build_mem_state_r r.(next_alloc_id) r.(next_iota) r.(last_address) allocations r.(iota_map) r.(funptrmap) r.(varargs) r.(next_varargs_id) r.(bytemap) r.(captags) r.(dead_allocations) r.(dynamic_addrs) r.(last_used).
 
@@ -3337,7 +3340,7 @@ Module CheriMemory
       end
     in
     List.fold_left (fun l a => List.app l (ascii_to_bits a)) bytes [].
-                                                                  *)
+
 
   Definition load_string (loc : location_ocaml) (c_value : C.t): memM string
     := raise (InternalErr "TODO").
@@ -3367,52 +3370,40 @@ Module CheriMemory
     loop "" 0.
     *)
 
-  Definition store_string (loc : location_ocaml) (s_value : string) (n_value : Z) (c_value : C.t) : memM Z
-    := raise (InternalErr "TODO").
-(*    let n' := Z.to_int n_value in
-    if equiv_decb n' 0 then
-      ret 0
-    else
-      let cs := List.of_seq (Stdlib.String.to_seq s_value) in
-      let cs := L.take (Z.sub n' 1) cs in
-      let pre_bs :=
-        List.map
-          (fun (c_value : ascii) =>
-            {| AbsByte.t.prov := Prov_none; AbsByte.t.copy_offset := None;
-              AbsByte.t.value := Some c_value |}) cs in
-      let pre_bs :=
-        List.append pre_bs
-          [
-            {| AbsByte.t.prov := Prov_none; AbsByte.t.copy_offset := None;
-              AbsByte.t.value := Some "000" % char |}
-          ] in
-      let '_ :=
-        (* ❌ Assert instruction is not handled. *)
-        assert unit
-          (Z.ltb
-            (Z.of_int (List.length pre_bs)) n_value) in
-      let addr := C.cap_get_value c_value in
-      let bs :=
-        mapi
-          (fun (i_value : int) =>
-            fun (b_value : AbsByte.t) =>
-              ((Z.add addr (Z.of_int i_value)), b_value))
-          pre_bs in
-      Eff.op_gtgt
-        (Eff.op_gtgt
-          (cap_check loc c_value 0 WriteIntent
-            (List.length bs))
-          (Eff.update
-            (fun (st : mem_state) =>
-              mem_state.with_bytemap
+  Definition store_string (loc : location_ocaml) (s_value : string) (n : nat) (c_value : C.t) : memM nat
+    :=
+    match n with
+    | O => ret O
+    | S n =>
+        let cs := list_ascii_of_string s_value in
+        let cs := List.firstn n cs in
+        let pre_bs :=
+          List.map
+            (fun (c_value : ascii) =>
+               {| prov := Prov_none; copy_offset := None;
+                                     value := Some c_value |}) cs in
+        let pre_bs :=
+          List.app pre_bs
+            [
+              {| prov := Prov_none; copy_offset := None;
+                                    value := Some "000" % char |}
+            ] in
+        let addr := C.cap_get_value c_value in
+        let bs :=
+          mapi
+            (fun (i_value : nat) (b_value : AbsByte) =>
+               ((Z.add addr (Z.of_nat i_value)), b_value))
+            pre_bs in
+        cap_check loc c_value 0 WriteIntent (Z.of_nat (List.length bs)) ;;
+        update
+           (fun (st : mem_state) =>
+              mem_state_with_bytemap
                 (List.fold_left
-                  (fun (acc : ZMap.t AbsByte.t) =>
-                    fun (function_parameter : Z * AbsByte.t) =>
-                      let '(addr, b_value) := function_parameter in
-                      ZMap.add addr b_value acc)
-                  st.(mem_state.bytemap) bs) st)))
-        (ret (List.length bs)).
- *)
+                   (fun acc '(addr, b_value) => ZMap.add addr b_value acc)
+                   bs st.(bytemap)) st)
+        ;;
+        ret (List.length bs)
+    end.
 
   Definition call_intrinsic
     (loc : location_ocaml) (name : string) (args : list mem_value)
@@ -3461,7 +3452,7 @@ Module CheriMemory
                                          Ctype.Long)
                                       (IV (-1))))
                             else
-                              store_string loc res maxsize_n buf_cap ;;
+                              store_string loc res (Z.to_nat maxsize_n) buf_cap ;;
                               (ret
                                  (Some
                                     (MVinteger
