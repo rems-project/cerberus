@@ -73,8 +73,8 @@ Module Type Permission.
   Parameter to_raw: t -> Z.
 
   (* Initialize from list of boolean. The size and
-       contents of the list is implementation-specific.
-       Returns None in case of error *)
+     contents of the list is implementation-specific.
+     Returns None in case of error *)
   Parameter of_list: list bool -> option t.
 
   (* inverse of [of_list] *)

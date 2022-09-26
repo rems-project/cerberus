@@ -3328,26 +3328,15 @@ Module CheriMemory
     | other => other
     end.
 
-  Definition bool_bits_of_bytes (bytes_value : list ascii): list bool
-      := []. (* TODO *)
-                                                                 (*
+  (* TODO: make sure bit and byte order is correct. My need some `rev`'s *)
+  Definition bool_bits_of_bytes (bytes : list ascii): list bool
     :=
-    let fix get_slice_int' (function_parameter : Z * Z * Z)
-      : list bool :=
-      let '(n_value, m_value, o_value) := function_parameter in
-      if Z.leb n_value 0 then
-        nil
-      else
-        let bit :=
-          negb
-            (Z.eqb
-               (extract_num m_value
-                  (Z.sub (Z.add n_value o_value) 1) 1) 0) in
-        cons bit (get_slice_int' ((Z.sub n_value 1), m_value, o_value)) in
-    let bit_list_of_char (c_value : ascii) : list bool :=
-      get_slice_int'
-        (8, (Z.of_nat (nat_of_ascii c_value)), 0) in
-    List.concat (List.map bit_list_of_char bytes_value).
+    let ascii_to_bits (x:ascii) :=
+      match x with
+      | Ascii a0 a1 a2 a3 a4 a5 a6 a7 => [a0; a1; a2; a3; a4; a5; a6; a7]
+      end
+    in
+    List.fold_left (fun l a => List.app l (ascii_to_bits a)) bytes [].
                                                                   *)
 
   Definition load_string (loc : location_ocaml) (c_value : C.t): memM string
