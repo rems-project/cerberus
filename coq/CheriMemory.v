@@ -3341,34 +3341,31 @@ Module CheriMemory
     in
     List.fold_left (fun l a => List.app l (ascii_to_bits a)) bytes [].
 
-
-  Definition load_string (loc : location_ocaml) (c_value : C.t): memM string
-    := raise (InternalErr "TODO").
-    (*
-    let fix loop {B : Set} (acc : string) (offset : Z)
-      : Eff.eff string Mem_cheri.mem_error B mem_state :=
-      Eff.op_gtgt (cap_check loc c_value offset ReadIntent 1)
-        (let addr :=
-           Z.add (C.cap_get_value c_value)
-             offset in
-         Eff.op_gtgteq Eff.get
-           (fun (st : mem_state) =>
-              let bs := fetch_bytes st.(mem_state.bytemap) addr 1 in
-              let '_ :=
-                (* ❌ Assert instruction is not handled. *)
-                assert unit (equiv_decb (List.length bs) 1) in
-              match (List.hd bs).(AbsByte.t.value) with
-              | None => fail (MerrReadUninit loc)
-              | Some c_value =>
-                  if equiv_decb c_value "000" % char then
-                    ret acc
-                  else
-                    let s_value := String.append acc (Stdlib.String.make 1 c_value)
-                    in
-                    loop s_value (Z.succ offset)
-              end)) in
-    loop "" 0.
-    *)
+  Definition load_string (loc: location_ocaml) (c_value: C.t) (max_len: nat) : memM string
+    :=
+    let fix loop max_len (acc: string) (offset: Z) : memM string :=
+      match max_len with
+      | O => raise (InternalErr "string too long")
+      | S max_len =>
+          cap_check loc c_value offset ReadIntent 1 ;;
+          let addr :=  Z.add (C.cap_get_value c_value) offset
+          in
+          get >>=
+            (fun st =>
+               let bs := fetch_bytes st.(bytemap) addr 1 in
+               ohd <- option2memM "fetch of 1 byte failed" (List.hd_error bs) ;;
+               match ohd.(value) with
+               | None => fail (MerrReadUninit loc)
+               | Some c_value =>
+                   if Ascii.eqb c_value zero
+                   then ret acc
+                   else
+                     let s_value := String.append acc (String c_value "")
+                     in loop max_len s_value (Z.succ offset)
+               end)
+      end
+    in
+    loop max_len "" 0.
 
   Definition store_string (loc : location_ocaml) (s_value : string) (n : nat) (c_value : C.t) : memM nat
     :=
