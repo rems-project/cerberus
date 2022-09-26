@@ -3328,7 +3328,7 @@ Module CheriMemory
     | other => other
     end.
 
-  (* TODO: make sure bit and byte order is correct. My need some `rev`'s *)
+  (* TODO: make sure bit order is correct. *)
   Definition bool_bits_of_bytes (bytes : list ascii): list bool
     :=
     let ascii_to_bits (x:ascii) :=
