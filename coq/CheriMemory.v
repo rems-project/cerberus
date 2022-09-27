@@ -601,26 +601,6 @@ Module CheriMemory
                end
          end.
 
-  (* size is in bytes *)
-  Definition bytes_of_Z (is_signed: bool) (size: nat) (i: Z): serr (list ascii)
-    :=
-    let nbits := Z.mul 8 (Z.of_nat size) in
-    let '(min, max) :=
-      if is_signed then
-        ((Z.opp (Z.pow 2 (Z.sub nbits 1))),
-          (Z.sub (Z.pow 2 (Z.sub nbits 1)) 1))
-      else
-        (0,
-          (Z.sub (Z.pow 2 nbits)
-             (1))) in
-    if
-      (negb (Z.leb min i && Z.leb i max)) || (Z.gtb nbits 128)
-    then
-      raise "bytes_of_Z failure"
-    else
-      ret (list_init size
-             (fun n => byte_of_Z (extract_num i (Z.mul 8 (Z.of_nat n)) 8))).
-
   Definition resolve_function_pointer
     (funptrmap : ZMap.t (digest * string * C.t))
     (fp : function_pointer)
@@ -1238,13 +1218,14 @@ Module CheriMemory
             '(prov, _, bs1') <- split_bytes bs1 ;;
             iss <- option2serr "Could not get signedness of a type"  (is_signed_ity DEFAULT_FUEL ity) ;;
             let _:bool := iss in (* hack to hint type checker *)
-            ret ((provs_of_bytes bs1),
-                match extract_unspec bs1' with
-                | Some cs =>
+            match extract_unspec bs1' with
+            | Some cs =>
+                zb <- Z_of_bytes false cs ;;
+                ret (provs_of_bytes bs1,
                     match tag_query_f addr with
                     | None => MVEunspecified cty
                     | Some tag =>
-                        match C.decode (Z_of_bytes false cs) tag with
+                        match C.decode zb tag with
                         | None => MVErr (MerrCHERI loc CheriErrDecodingCap)
                         | Some c_value =>
                             if iss then
@@ -1254,28 +1235,31 @@ Module CheriMemory
                             else
                               MVEinteger ity (IC false c_value)
                         end
-                    end
-                | None => MVEunspecified cty
-                end, bs2)
+                    end, bs2)
+            | None => ret (provs_of_bytes bs1, MVEunspecified cty, bs)
+            end
         | Ctype.Basic (Ctype.Floating fty) =>
             sz <- sizeof DEFAULT_FUEL None cty ;;
             let '(bs1, bs2) := split_at (Z.to_nat sz) bs in
             '(_, _, bs1') <- split_bytes bs1 ;;
-            ret (NoTaint,
-                match extract_unspec bs1' with
-                | Some cs => MVEfloating fty (float_of_bits (Z_of_bytes true cs))
-                | None => MVEunspecified cty
-                end, bs2)
+            match extract_unspec bs1' with
+            | Some cs =>
+                zb <- Z_of_bytes true cs ;;
+                ret (NoTaint,MVEfloating fty (float_of_bits zb),bs2)
+            | None => ret (NoTaint, MVEunspecified cty, bs2)
+            end
         | Ctype.Basic (Ctype.Integer ity) =>
             sz <- sizeof DEFAULT_FUEL None cty ;;
             let '(bs1, bs2) := split_at (Z.to_nat sz) bs in
             '(prov, _, bs1') <- split_bytes bs1 ;;
             iss <- option2serr "Could not get signedness of a type"  (is_signed_ity DEFAULT_FUEL ity) ;;
-            ret (provs_of_bytes bs1,
-                match extract_unspec bs1' with
-                | Some cs => MVEinteger ity (IV (Z_of_bytes iss cs))
-                | None => MVEunspecified cty
-                end, bs2)
+            match extract_unspec bs1' with
+            | Some cs =>
+                zb <- Z_of_bytes iss cs ;;
+                ret (provs_of_bytes bs1, MVEinteger ity (IV zb), bs2)
+            | None =>
+                ret (provs_of_bytes bs1, MVEunspecified cty, bs2)
+            end
         | Ctype.Array elem_ty (Some n_value) =>
             let fix aux (fuel:nat) (n_value : Z) par (cs : list AbsByte)
               : serr (taint_ind *  mem_value_with_err * list AbsByte)
@@ -1299,13 +1283,14 @@ Module CheriMemory
             sz <- sizeof DEFAULT_FUEL None cty ;;
             let '(bs1, bs2) := split_at (Z.to_nat sz) bs in
             '(prov, prov_status, bs1') <- split_bytes bs1 ;;
-            ret (NoTaint,
-                match extract_unspec bs1' with
-                | Some cs =>
+            match extract_unspec bs1' with
+            | Some cs =>
+                zb <- Z_of_bytes false cs ;;
+                ret (NoTaint,
                     match tag_query_f addr with
                     | None => MVEunspecified cty
                     | Some tag =>
-                        match C.decode (Z_of_bytes false cs) tag with
+                        match C.decode zb tag with
                         | None => MVErr (MerrCHERI loc CheriErrDecodingCap)
                         | Some n_value =>
                             match ref_ty with
@@ -1313,7 +1298,7 @@ Module CheriMemory
                                 match tag_query_f addr with
                                 | None => MVEunspecified cty
                                 | Some tag =>
-                                    match C.decode (Z_of_bytes false cs) tag with
+                                    match C.decode zb tag with
                                     | None => MVErr (MerrCHERI loc CheriErrDecodingCap)
                                     | Some c_value =>
                                         let n_value :=
@@ -1356,9 +1341,11 @@ Module CheriMemory
                                 MVEpointer ref_ty (PV prov (PVconcrete n_value))
                             end
                         end
-                    end
-                | None => MVEunspecified (Ctype.Ctype nil (Ctype.Pointer Ctype.no_qualifiers ref_ty))
-                end, bs2)
+                    end, bs2)
+            | None =>
+                ret (NoTaint,
+                    MVEunspecified (Ctype.Ctype nil (Ctype.Pointer Ctype.no_qualifiers ref_ty)), bs2)
+            end
         | Ctype.Atomic atom_ty =>
             self fuel addr atom_ty bs
         | Ctype.Struct tag_sym =>
@@ -3331,16 +3318,6 @@ Module CheriMemory
         MVpointer ty (PV prov (PVfunction (FP_invalid c_value)))
     | other => other
     end.
-
-  (* TODO: make sure bit order is correct. *)
-  Definition bool_bits_of_bytes (bytes : list ascii): list bool
-    :=
-    let ascii_to_bits (x:ascii) :=
-      match x with
-      | Ascii a0 a1 a2 a3 a4 a5 a6 a7 => [a0; a1; a2; a3; a4; a5; a6; a7]
-      end
-    in
-    List.fold_left (fun l a => List.app l (ascii_to_bits a)) bytes [].
 
   Definition load_string (loc: location_ocaml) (c_value: C.t) (max_len: nat) : memM string
     :=

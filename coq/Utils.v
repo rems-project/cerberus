@@ -1,4 +1,5 @@
 Require Import Coq.Lists.List.
+Require Import Coq.Strings.String.
 Require Import Coq.Classes.DecidableClass.
 Require Import Coq.Floats.PrimFloat.
 Require Import Coq.Numbers.BinNums.
@@ -11,8 +12,13 @@ From ExtLib.Structures Require Import Monad Monads.
 Import ListNotations.
 Import MonadNotation.
 
+Require Import SimpleError.
+
 Local Open Scope list_scope.
 Local Open Scope monad_scope.
+Local Open Scope string_scope.
+Local Open Scope Z_scope.
+Local Open Scope bool_scope.
 
 Fixpoint list_init {A:Type} (n:nat) (f:nat -> A): list A
   :=
@@ -87,6 +93,9 @@ Definition maybeEqualBy
   | _, _ => false
   end.
 
+(* TODO: Z.extract_num *)
+Definition extract_num: Z -> Z -> Z -> Z.
+Proof. admit. Admitted.
 
 (* Using two's complement encoding. We do not perform range checks
    here assuming Z is in the proper range.
@@ -103,20 +112,65 @@ Definition byte_of_Z (z:Z): ascii :=
       end
   end.
 
-(* TODO: Z.extract_num *)
-Definition extract_num: Z -> Z -> Z -> Z.
-Proof. admit. Admitted.
+(* TODO: make sure bit order is correct. *)
+Definition bool_bits_of_bytes (bytes : list ascii): list bool
+  :=
+  let ascii_to_bits (x:ascii) :=
+    match x with
+    | Ascii a0 a1 a2 a3 a4 a5 a6 a7 => [a0; a1; a2; a3; a4; a5; a6; a7]
+    end
+  in
+  List.fold_left (fun l a => List.app l (ascii_to_bits a)) bytes [].
 
-Definition Z_of_bytes: bool (* is signed *) -> list ascii -> Z.
-Proof. Admitted. (* TODO *)
 
-Definition float_of_bits: Z -> float.
-Proof. Admitted. (* TODO *)
+(* size is in bytes *)
+Definition bytes_of_Z (is_signed: bool) (size: nat) (i: Z): serr (list ascii)
+  :=
+  let nbits := Z.mul 8 (Z.of_nat size) in
+  let '(min, max) :=
+    if is_signed then
+      ((Z.opp (Z.pow 2 (Z.sub nbits 1))),
+        (Z.sub (Z.pow 2 (Z.sub nbits 1)) 1))
+    else
+      (0,
+        (Z.sub (Z.pow 2 nbits)
+           (1))) in
+  if
+    (negb (Z.leb min i && Z.leb i max)) || (Z.gtb nbits 128)
+  then
+    raise "bytes_of_Z failure"%string
+  else
+    ret (list_init size
+           (fun n => byte_of_Z (extract_num i (Z.mul 8 (Z.of_nat n)) 8))).
+
+Definition Z_of_bytes (is_signed: bool) (bs:list ascii): serr Z
+  :=
+  match (List.rev bs), Nat.leb (List.length bs) 16 with
+  | [], _ => raise "empty list"
+  | _, false =>  raise "byte list too long"
+  | (first::_) as cs, _ =>
+      let init :=
+        if is_signed && (Z.eqb 1 (extract_num (Z.of_nat (nat_of_ascii first)) 7 1))
+        then -1
+        else 0
+      in
+      let fix aux (acc : Z) (cs : list ascii): serr Z :=
+        match cs with
+        | [] => ret acc
+        | c_value::cs' =>
+            aux (Z.lxor (Z.of_nat (nat_of_ascii c_value)) (Z.shiftl acc 8)) cs'
+        end in
+      aux init cs
+  end.
 
 (* TODO: check if these are correct *)
 Definition Z_integerRem_t := Z.rem.
 Definition Z_integerRem_f := Z.rem.
 Definition Z_integerDiv_t := Z.div.
+
+
+Definition float_of_bits: Z -> float.
+Proof. Admitted. (* TODO *)
 
 Definition bits_of_float: float -> Z.
 Proof. Admitted. (* TODO *)
