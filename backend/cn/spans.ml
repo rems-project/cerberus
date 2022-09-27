@@ -326,7 +326,12 @@ let intersection_action m g ((orig_req, req), req_span) ((orig_res, res), res_sp
     | (RET.P pt, _) -> pt
     | _ -> assert false
   in
-  let (target_lb, target_ub_inclusive, target_perm) = match target_pt with
+  let target_owned_pt = match target_pt, target_res with
+    | {name = Owned _; _}, _ -> target_pt
+    | _, (_, RET.P ({name = Owned _; _} as pt)) -> pt
+    | _ -> assert false
+  in
+  let (target_lb, target_ub_inclusive, target_perm) = match target_owned_pt with
     | {name = Owned ctype; _} ->
       let sz = Memory.size_of_ctype ctype in
       let ptr = target_pt.pointer in
