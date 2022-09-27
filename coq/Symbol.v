@@ -8,6 +8,9 @@ Require Import Coq.FSets.FMapAVL.
 Require Import Coq.Structures.OrderedType.
 Require Import Coq.Structures.OrderedTypeEx.
 
+Require Import StructTact.StructTactics.
+Require Import Lia.
+
 Inductive identifier : Type :=
   | Identifier:  unit  ->  string  -> identifier .
 
@@ -16,7 +19,7 @@ Definition ident_equal (a b: identifier) : bool :=
   | Identifier _ s1, Identifier _ s2 => String.eqb s1 s1
   end.
 
-Inductive digest : Type := .
+Definition digest := string.
 
 Inductive symbol_description : Type :=
   | SD_None: symbol_description
@@ -29,9 +32,12 @@ Inductive symbol_description : Type :=
 Inductive sym : Set :=
   Symbol:  digest  ->  Z  ->  symbol_description  -> sym .
 
-
-Definition digest_compare: digest -> digest -> Z.
-Proof. admit. Admitted. (* TODO *)
+Definition digest_compare (a b: digest): Z
+  := match String.compare a b with
+     | Eq => 0
+     | Lt => -1
+     | Gt => 1
+     end.
 
 Definition symbolEquality (sym1 sym2: sym): bool :=
   match sym1, sym2 with
@@ -43,33 +49,103 @@ Definition symbolEquality (sym1 sym2: sym): bool :=
 (* for [@@deriving eq] *)
 Definition equal_sym   : sym  -> sym  -> bool :=  symbolEquality.
 (* [?]: removed value specification. *)
+*)
 
-Definition symbol_compare  (s : sym ) (s0 : sym )  : ordering :=
-  match ( (s,s0)) with (( Symbol d1 n1 _), ( Symbol d2 n2 _)) =>
-    if Z.eqb (FAKE_COQ.digest_compare d1 d2)
-         ((Z.pred (Z.pos (P_of_succ_nat 0%nat)))) then
-      (genericCompare nat_ltb Nat.eqb n1 n2) else
-      let cmp := FAKE_COQ.digest_compare d1 d2 in
-      if int_ltb cmp ((Z.pred (Z.pos (P_of_succ_nat 0%nat)))) then LT else
-        if Z.eqb cmp ((Z.pred (Z.pos (P_of_succ_nat 0%nat)))) then EQ else GT
+Definition symbol_compare (s1 s2 : sym ): comparison :=
+  match s1,s2 with
+    Symbol d1 n1 _, Symbol d2 n2 _ =>
+      let dcmp := digest_compare d1 d2 in
+      if Z.eqb dcmp 0 then
+        Z.compare n1 n2
+      else
+        if Z.ltb dcmp 0 then Lt else
+          if Z.eqb dcmp 0 then Eq else Gt
   end.
+
+(*
 (* for [@@ deriving ord] *)
 Definition compare_sym   : sym  -> sym  -> ordering :=  symbol_compare.
 *)
 
 (* TODO: implement all methods! *)
-Module Symbol_sym_as_OT <: UsualOrderedType.
+Module Symbol_sym_as_OT <: OrderedType.
   Definition t := Symbol.sym.
 
-  Definition eq : t -> t -> Prop := @eq t. (* TODO *)
-  Definition lt : t -> t -> Prop := fun _ _ => False. (* TODO *)
+  Definition eq: t -> t -> Prop := fun a b => is_true (symbolEquality a b).
+  Definition lt (a b: t): Prop := match symbol_compare a b with
+                               | Lt => True
+                               | _ => False
+                               end.
 
-  Definition eq_refl := @eq_refl t. (* TODO *)
-  Definition eq_sym := @eq_sym t. (* TODO *)
-  Definition eq_trans := @eq_trans t. (* TODO *)
+  Lemma eq_refl: forall x : t, eq x x.
+  Proof.
+    intros.
+    unfold eq, is_true, symbolEquality.
+    destruct x as [d1 n1 z1].
+    apply andb_true_intro.
+    split.
+    -
+      unfold digest_compare.
+      break_match.
+      + apply Z.eqb_refl.
+      + exfalso.
+        clear z1 n1.
+        induction d1.
+        * inversion Heqc.
+        * cbn in Heqc.
+          break_match.
+          -- auto.
+          -- unfold Ascii.compare in *.
+             rewrite N.compare_lt_iff in Heqc0.
+             lia.
+          -- inversion Heqc.
+      + exfalso.
+        clear z1 n1.
+        induction d1.
+        * inversion Heqc.
+        * cbn in Heqc.
+          break_match.
+          -- auto.
+          -- inversion Heqc.
+          -- unfold Ascii.compare in *.
+             rewrite N.compare_gt_iff in Heqc0.
+             lia.
+    -
+      lia.
+  Qed.
 
-  Axiom lt_trans : forall x y z : t, lt x y -> lt y z -> lt x z. (* TODO *)
-  Axiom lt_not_eq : forall x y : t, lt x y -> ~ eq x y. (* TODO *)
+  Definition eq_sym: forall x y : t, eq x y -> eq y x.
+  Proof.
+  Admitted.
+
+  Definition eq_trans: forall x y z : t, eq x y -> eq y z -> eq x z.
+  Proof.
+  Admitted.
+
+  Lemma lt_trans : forall x y z : t, lt x y -> lt y z -> lt x z.
+  Proof.
+    admit. (* TODO *)
+  Admitted.
+
+  Lemma lt_not_eq : forall x y : t, lt x y -> ~ eq x y.
+  Proof.
+    intros x y H.
+    unfold lt in H.
+    destruct (symbol_compare x y) eqn:D; auto. clear H.
+    unfold not, eq, is_true, symbolEquality.
+    destruct x as [d1 n1 z1].
+    destruct y as [d2 n2 z2].
+    unfold symbol_compare in D.
+    intros E.
+    apply andb_prop in E.
+    destruct E as [E1 E2].
+    break_if.
+    + clear E1.
+      rewrite Z.compare_lt_iff in D.
+      rewrite Z.eqb_eq in E2.
+      lia.
+    + lia.
+  Qed.
 
   Definition compare : forall x y : t, Compare lt eq x y.
   Proof. admit. Admitted.
@@ -78,6 +154,7 @@ Module Symbol_sym_as_OT <: UsualOrderedType.
   Proof. admit. Admitted.
 
 End Symbol_sym_as_OT.
+
 
 Module SymMap := FMapAVL.Make(Symbol_sym_as_OT).
 
