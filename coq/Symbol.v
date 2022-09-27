@@ -67,7 +67,6 @@ Definition symbol_compare (s1 s2 : sym ): comparison :=
 Definition compare_sym   : sym  -> sym  -> ordering :=  symbol_compare.
 *)
 
-(* TODO: implement all methods! *)
 Module Symbol_sym_as_OT <: OrderedType.
   Definition t := Symbol.sym.
 
@@ -114,11 +113,11 @@ Module Symbol_sym_as_OT <: OrderedType.
       lia.
   Qed.
 
-  Definition eq_sym: forall x y : t, eq x y -> eq y x.
+  Lemma eq_sym: forall x y : t, eq x y -> eq y x.
   Proof.
   Admitted.
 
-  Definition eq_trans: forall x y z : t, eq x y -> eq y z -> eq x z.
+  Lemma eq_trans: forall x y z : t, eq x y -> eq y z -> eq x z.
   Proof.
   Admitted.
 
@@ -147,11 +146,126 @@ Module Symbol_sym_as_OT <: OrderedType.
     + lia.
   Qed.
 
+  Lemma digest_compare_eq_sym:
+    forall d1 d2,
+      (Z.eqb (digest_compare d1 d2) 0) = true ->
+      (Z.eqb (digest_compare d2 d1) 0) = true.
+  Proof.
+    unfold digest_compare.
+    intros d1 d2.
+    rewrite compare_antisym.
+    destruct (d2 ?= d1)%string; auto.
+  Qed.
+
+  Lemma digest_compare_antisym:
+    forall d1 d2,
+      (Z.eqb (digest_compare d1 d2) 0) = false ->
+      ((Z.ltb (digest_compare d1 d2) 0) = negb (Z.ltb (digest_compare d2 d1) 0)).
+  Proof.
+    unfold digest_compare.
+    intros d1 d2.
+    rewrite compare_antisym.
+    destruct (d2 ?= d1)%string; auto.
+  Qed.
+
   Definition compare : forall x y : t, Compare lt eq x y.
-  Proof. admit. Admitted.
+  Proof.
+    intros x y.
+    case_eq (symbol_compare x y); intro.
+    - apply EQ.
+      unfold symbol_compare in H.
+      destruct x as [d1 n1].
+      destruct y as [d2 n2].
+      break_if.
+      + unfold eq, is_true, symbolEquality.
+        apply andb_true_intro.
+        split.
+        * assumption.
+        * apply Z.compare_eq in H.
+          apply Z.eqb_eq.
+          assumption.
+      + break_if; inversion H.
+    - apply LT.
+      unfold symbol_compare in H.
+      destruct x as [d1 n1].
+      destruct y as [d2 n2].
+      break_if.
+      + unfold lt, is_true.
+        break_match.
+        * cbn in Heqc.
+          break_if.
+          -- rewrite H in Heqc. inversion Heqc.
+          -- break_if; inversion Heqc.
+        * trivial.
+        * cbn in Heqc.
+          break_if.
+          -- rewrite H in Heqc. inversion Heqc.
+          -- inversion Heqb.
+      + break_if.
+        * unfold lt.
+          break_match.
+          -- cbn in Heqc.
+             break_if.
+             ++ inversion Heqb.
+             ++ break_if;inversion Heqc.
+          -- trivial.
+          -- cbn in Heqc.
+             break_if.
+             ++ inversion Heqb.
+             ++ break_if.
+                inversion Heqc.
+                inversion Heqb0.
+        * inversion H.
+    - apply GT.
+      unfold symbol_compare in H.
+      destruct x as [d1 n1].
+      destruct y as [d2 n2].
+      break_if.
+      + unfold lt, is_true.
+        apply Zcompare_Gt_Lt_antisym in H.
+        break_match.
+        * cbn in Heqc.
+          break_if.
+          -- rewrite H in Heqc. inversion Heqc.
+          -- break_if; inversion Heqc.
+        * trivial.
+        * cbn in Heqc.
+          break_if.
+          -- rewrite H in Heqc. inversion Heqc.
+          -- break_if.
+             inversion Heqc.
+             apply digest_compare_eq_sym in Heqb.
+             rewrite Heqb in Heqb0.
+             inversion Heqb0.
+      + break_if.
+        * inversion H.
+        * unfold lt.
+          break_match.
+          -- cbn in Heqc.
+             break_if.
+             ++ apply digest_compare_eq_sym in Heqb1.
+                rewrite Heqb in Heqb1.
+                inversion Heqb1.
+             ++ break_if;inversion Heqc.
+          -- trivial.
+          -- cbn in Heqc.
+             break_if.
+             ++ apply digest_compare_eq_sym in Heqb1.
+                rewrite Heqb in Heqb1.
+                inversion Heqb1.
+             ++ break_if.
+                inversion Heqc.
+                rewrite digest_compare_antisym in Heqb0.
+                rewrite Heqb2 in Heqb0.
+                cbv in Heqb0.
+                inversion Heqb0.
+                assumption.
+  Defined.
 
   Lemma eq_dec : forall x y : t, {eq x y} + {~ eq x y}.
-  Proof. admit. Admitted.
+  Proof.
+    (* TODO *)
+  Admitted.
 
 End Symbol_sym_as_OT.
 
