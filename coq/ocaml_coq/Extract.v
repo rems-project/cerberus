@@ -1,4 +1,4 @@
-Require Cerberus.Capabilities.
+Require Cerberus.CheriMemory.
 
 Require ExtrOcamlBasic.
 Require ExtrOcamlString.
@@ -13,5 +13,5 @@ Extraction Blacklist N Z Big_int_Z String List Char Core Monad Bool Format.
 Set Extraction AccessOpaque.
 
 Extraction Library ExtrOcamlIntConv.
-Recursive Extraction Library Addr.
-Recursive Extraction Library Capabilities.
+
+Recursive Extraction Library CheriMemory.

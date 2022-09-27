@@ -4,6 +4,7 @@ Require Import Coq.Arith.PeanoNat.
 Require Import Coq.Lists.List.
 Require Import Coq.Strings.String.
 Require Import Coq.Numbers.BinNums.
+Require Import Coq.Init.Datatypes.
 
 Require Import Addr.
 
