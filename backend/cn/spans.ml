@@ -326,11 +326,11 @@ let intersection_action m g ((orig_req, req), req_span) ((orig_res, res), res_sp
     | (RET.P pt, _) -> pt
     | _ -> assert false
   in
-  let (target_lb, target_ub_inclusive, target_perm) = match snd target_res with
-    | RET.P ({name = Owned ctype; _} as pt) ->
+  let (target_lb, target_ub_inclusive, target_perm) = match target_pt with
+    | {name = Owned ctype; _} ->
       let sz = Memory.size_of_ctype ctype in
-      (pt.pointer, IT.pointer_offset_ (pt.pointer, IT.z_ (Z.of_int (sz - 1))),
-          pt.permission)
+      let ptr = target_pt.pointer in
+      (ptr, IT.pointer_offset_ (ptr, IT.z_ (Z.of_int (sz - 1))), target_pt.permission)
     | _ -> assert false
   in
   let ok = and_ [target_perm;
