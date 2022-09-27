@@ -123,7 +123,6 @@ Module Symbol_sym_as_OT <: OrderedType.
 
   Lemma lt_trans : forall x y z : t, lt x y -> lt y z -> lt x z.
   Proof.
-    admit. (* TODO *)
   Admitted.
 
   Lemma lt_not_eq : forall x y : t, lt x y -> ~ eq x y.
@@ -264,7 +263,6 @@ Module Symbol_sym_as_OT <: OrderedType.
 
   Lemma eq_dec : forall x y : t, {eq x y} + {~ eq x y}.
   Proof.
-    (* TODO *)
   Admitted.
 
 End Symbol_sym_as_OT.
