@@ -1312,10 +1312,7 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
             }, None)
         in
         let condition, outputs = LAT.logical_arguments_and_return right_clause.packing_ft in
-        let lc = 
-          eq_ (pred_oargs, 
-               record_ (List.map (fun (o : OutputDef.entry) -> (o.name, o.value)) outputs))
-        in
+        let lc = eq_ (pred_oargs, OutputDef.to_record outputs) in
         let lrt = LRT.concat condition (Constraint (t_ lc, (loc, None), I)) in
         k (RT.Computational ((Sym.fresh (), BT.Unit), (loc, None), lrt))
      | Pack ->

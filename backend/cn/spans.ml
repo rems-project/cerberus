@@ -1,6 +1,7 @@
 module IT = IndexTerms
 module RET = ResourceTypes
 module RE = Resources
+module LAT = LogicalArgumentTypes
 
 open IT
 
@@ -15,6 +16,11 @@ let note_failure f x =
     None
   | NoResult -> None
   end
+
+let some_result x =
+  match x with
+  | Some y -> y
+  | None -> raise NoResult
 
 type action = Pack of RET.predicate_type | Unpack of RET.predicate_type
 [@@deriving eq, ord]
@@ -38,7 +44,7 @@ let pp_ipair (i, j) = Pp.string (lb_str i ^ " - " ^ ub_str j)
 
 let pp ss =
   let open Pp in
-  !^"[" ^^ list pp_pair ss ^^ !^"]"
+  !^"[" ^^ list pp_pair (List.map fst ss) ^^ !^"]"
 
 let pp_open ss =
   let open Pp in
@@ -102,6 +108,11 @@ let subtract_closed_spans ss1 ss2 =
   let ss = norm_spans (not_flip_spans inv_opts) in
   List.map mk_closed ss
 
+let subtract_closed_spans_from_tagged closed_ss tagged_ss =
+  List.map (fun (span, tag) -> subtract_closed_spans [span] closed_ss
+    |> List.map (fun span -> (span, tag))) tagged_ss
+  |> List.concat
+
 let rec perm_spans m_g q perm =
   let is_q = IT.equal (sym_ (q, BT.Integer)) in
   match term perm with
@@ -139,42 +150,67 @@ let rec perm_spans m_g q perm =
         else let x = eval_extract "idx non-ineq guard term" m_g is_bool perm in
         if x then [(None, None)] else []
 
-let model_res_spans m_g (res : ResourceTypes.t) =
+let get_active_clause m_g clauses =
+  let rec seek not_prev = function
+    | [] -> raise NoResult
+    | (c :: clauses) ->
+      let gd = c.ResourcePredicates.guard in
+      let this = eval_extract "resource predicate clause guard" m_g is_bool gd in
+      if this then (IT.and_ (List.rev (gd :: not_prev)), c)
+      else seek (IT.not_ gd :: not_prev) clauses
+  in
+  seek [] clauses
+
+let rec get_packing_ft_owned_resources = function
+  | LAT.I _ -> []
+  | LAT.Constraint (_, _, ftyp) -> get_packing_ft_owned_resources ftyp
+  | LAT.Define ((s, it), _, ftyp) ->
+    let ftyp = LAT.subst OutputDef.subst (IT.make_subst [(s, it)]) ftyp in
+    get_packing_ft_owned_resources ftyp
+  | LAT.Resource ((s, (resource, bt)), _, ftyp) ->
+    resource :: get_packing_ft_owned_resources ftyp
+
+let rec model_res_spans m_g (res : ResourceTypes.t) =
   match res with
   | (RET.P ({name = Owned ct; _} as pt)) ->
       let perm = eval_extract "resource permission" m_g is_bool pt.permission in
-      begin match perm with
-      | false -> []
-      | true ->
-          let ptr = eval_extract "resource pointer" m_g is_pointer pt.pointer in
-          let sz = Memory.size_of_ctype ct in
-          [(ptr, Z.add ptr (Z.of_int sz))]
-      end
+      let _ = perm || raise NoResult in
+      let ptr = eval_extract "resource pointer" m_g is_pointer pt.pointer in
+      let sz = Memory.size_of_ctype ct in
+      [((ptr, Z.add ptr (Z.of_int sz)), (res, res))]
+  | (RET.P ({name = PName pname; _} as r_pt)) ->
+      let perm = eval_extract "resource permission" m_g is_bool r_pt.permission in
+      let _ = perm || raise NoResult in
+      let rpreds = (snd m_g).Global.resource_predicates in
+      let def = SymMap.find_opt pname rpreds |> some_result in
+      let clauses = ResourcePredicates.instantiate_clauses def r_pt.pointer r_pt.iargs
+        |> some_result in
+      let (cond, active_clause) = get_active_clause m_g clauses in
+      let ress = get_packing_ft_owned_resources active_clause.ResourcePredicates.packing_ft in
+      ress |> List.map (note_failure (model_res_spans m_g))
+        |> List.map Option.to_list
+        |> List.concat |> List.concat
+        |> List.map (fun (span, (orig, res2)) -> (span, (res, res2)))
   | (RET.Q ({name = Owned ct; _} as qpt)) ->
       assert (IT.equal qpt.step (IT.int_ (Memory.size_of_ctype ct)));
       let ispans = perm_spans m_g qpt.q qpt.permission in
-      if List.compare_length_with ispans 0 == 0
-      then []
-      else
+      let _ = List.length ispans > 0 || raise NoResult in
       if List.exists (fun (lb, rb) -> Option.is_none lb || Option.is_none rb) ispans
       then raise (Failure (Pp.item "unbounded resource interval" (IT.pp qpt.permission)))
-      else
+      else ();
       let spans = List.map (fun (i, j) -> (Option.get i, Option.get j)) ispans in
       let ptr = eval_extract "q-resource pointer" m_g is_pointer qpt.pointer in
       let sz = Z.of_int (Memory.size_of_ctype ct) in
       let offs i = Z.add ptr (Z.mul i sz) in
-      (List.map (fun (i, j) -> (offs i, offs (Z.add j (Z.of_int 1)))) spans)
+      List.map (fun (i, j) -> ((offs i, offs (Z.add j (Z.of_int 1))), (res, res))) spans
   | _ -> []
 
-let inter (i_lb, i_ub) (j_lb, j_ub) =
+let inter ((i_lb, i_ub), _) ((j_lb, j_ub), _) =
   Z.lt j_lb i_ub && Z.lt i_lb j_ub
 
 let spans_compare_for_pp m g res =
-  try
-    let ss = model_res_spans (m, g) res in
-    Some (fun ss2 -> List.exists (fun s -> List.exists (inter s) ss2) ss)
-  with
-    Failure _ -> None
+  note_failure (model_res_spans (m, g)) res
+  |> Option.map (fun ss ss2 -> List.exists (fun s -> List.exists (inter s) ss2) ss)
 
 let pp_model_spans m g cmp res =
   try
@@ -185,7 +221,8 @@ let pp_model_spans m g cmp res =
     | None -> doc
     | Some f -> if f s then doc ^^ !^" - (spans overlap)" else doc
   with
-    Failure s -> s
+    | Failure s -> s
+    | NoResult -> Pp.string "[]"
 
 let pp_pt_ct pt ct =
   let open Pp in
@@ -207,15 +244,15 @@ let rec enclosing_count g = function
     enclosing_count g ct + 1
   | _ -> 0
 
-let compare_enclosing g ct1 ct2 =
+let compare_enclosing_ct g ct1 ct2 =
   let sz_compare = Int.compare (Memory.size_of_ctype ct1) (Memory.size_of_ctype ct2) in
   if sz_compare != 0
   then sz_compare
   else Int.compare (enclosing_count g ct1) (enclosing_count g ct2)
 
-let req_pt_ct = function
-  | RET.P ({name = Owned ct; _} as pt) -> (pt.pointer, ct, false)
-  | RET.Q ({name = Owned ct; _} as qpt) -> (qpt.pointer, ct, true)
+let req_ctype = function
+  | RET.P ({name = Owned ct; _}) -> ct
+  | RET.Q ({name = Owned ct; _}) -> ct
   | _ -> assert false
 
 let scan_subterms f t = fold_subterms (fun _ xs t -> match f t with
@@ -231,90 +268,80 @@ let get_witnesses = function
      let lbs = scan_subterms is_le qpt.permission
        |> List.filter (fun (lhs, rhs) -> IT.equal i rhs)
        |> List.map fst in
-     if List.length lbs <> 0
+     if List.length lbs <> 1
      then Pp.debug 8 (lazy (Pp.item "unexpected number of lower bounds"
        (Pp.list IT.pp lbs)))
      else ();
      let eqs = scan_subterms is_eq qpt.permission
        |> List.filter (fun (lhs, rhs) -> IT.equal i lhs || IT.equal i rhs)
      in
-     begin match lbs with
-         | [] -> []
-         | (lb :: _) ->
+     let lb = match lbs with
+         | [] -> IT.int_ 0
+         | (lb :: _) -> lb
+     in
      List.init (List.length eqs + 1)
        (fun i -> (arrayShift_ (qpt.pointer, ct, add_ (lb, z_ (Z.of_int i))),
            subst (make_subst [(qpt.q, z_ (Z.of_int i))]) qpt.permission))
-     end
   | _ -> []
 
-let outer_object m g inner_ptr = function
-  | RET.P ({name = Owned ct; _} as pt) -> Some (pt.pointer, ct, pt.permission)
-  | RET.Q ({name = Owned ct; _} as qpt) ->
-  (* need to invent an index at which to fold/unfold *)
-  begin try
-    let qptr = eval_extract "q-resource pointer" (m, g) is_pointer qpt.pointer in
-    let iptr = eval_extract "inner object pointer" (m, g) is_pointer inner_ptr in
-    let sz = Z.of_int (Memory.size_of_ctype ct) in
-    let m_diff = Z.sub iptr qptr in
-    let m_ix = Z.div m_diff sz in
-    let m_offs = Z.sub m_diff (Z.mul m_ix sz) in
-    let ptr = integerToPointerCast_
-        (sub_ (pointerToIntegerCast_ inner_ptr, z_ m_offs)) in
-    let offset = array_offset_of_pointer ~base:qpt.pointer ~pointer:ptr in
-    let index = array_pointer_to_index ~base:qpt.pointer ~item_size:(z_ sz)
-        ~pointer:ptr in
-    let ok = and_ [divisible_ (offset, z_ sz);
-        subst (make_subst [(qpt.q, index)]) qpt.permission] in
-    Some (ptr, ct, ok)
-  with
-    Failure pp -> begin
-      Pp.debug 5 (lazy (Pp.item "failed to compute object offsets" pp));
-      None
-    end
-  end
-  | _ -> None
+let narrow_quantified_to_witness ptr (q_pt : RET.qpredicate_type) =
+  let ct = match q_pt.name with
+    | Owned ct -> ct
+    | _ -> assert false
+  in
+  assert (IT.equal q_pt.step (IT.int_ (Memory.size_of_ctype ct)));
+  let index = IT.array_pointer_to_index ~base:q_pt.pointer ~item_size:q_pt.step ~pointer:ptr in
+  let item_ptr = IT.array_index_to_pointer ~base:q_pt.pointer ~item_ct:ct ~index in
+  let sub = make_subst [(q_pt.q, index)] in
+  RET.{
+    name = q_pt.name;
+    pointer = item_ptr;
+    permission = IT.subst sub q_pt.permission;
+    iargs = List.map (IT.subst sub) q_pt.iargs;
+  }
 
-let intersection_action m g (req, req_span) (res, res_span) =
-  let (req_pt, req_ct, req_qpt) = req_pt_ct req in
-  let (res_pt, res_ct, res_qpt) = req_pt_ct (RE.request res) in
-  let cmp = compare_enclosing g req_ct res_ct in
-  if cmp = 0 then begin
-      Pp.debug 5 (lazy (Pp.item "unexpected overlap of diff same-rank types"
-        (Pp.list RET.pp [req; RE.request res])));
-      None
-  end
-  else
-  (* the "inner witnesses" are concrete objects of interior type *)
-  let witnesses = if cmp < 0
-    then get_witnesses req
-    else get_witnesses (RE.request res)
+let intersection_action m g ((orig_req, req), req_span) ((orig_res, res), res_span) =
+  let res_outer = match orig_res, orig_req with
+    | RET.P ({name = PName _; _}), _ -> true
+    | _, RET.P ({name = PName _; _}) -> false
+    | _, _ ->
+      let cmp = compare_enclosing_ct g (req_ctype req) (req_ctype res) in
+      if cmp = 0 then begin
+        Pp.debug 5 (lazy (Pp.item "unexpected overlap of diff same-rank types"
+          (Pp.list RET.pp [req; res])));
+        raise NoResult
+      end else cmp < 0
+  in
+  let witnesses = get_witnesses (if res_outer then req else res) in
+  let first_witness_ptr = match witnesses with
+    | (ptr, _) :: _ -> ptr
+    | _ -> assert false
   in
   Pp.debug 8 (lazy (Pp.item "witnesses"
     (Pp.list IT.pp (List.map fst witnesses))));
-  let obj = outer_object m g (if cmp < 0 then req_pt else res_pt)
-            (if cmp < 0 then RE.request res else req) in
-  match (witnesses, obj) with
-  | ([], _) -> None
-  | (_, None) -> None
-  | (_, Some (ptr, ct, permission)) ->
-  let sz = Memory.size_of_ctype ct in
-  let upper = integerToPointerCast_ (add_ (pointerToIntegerCast_ ptr,
-      z_ (Z.of_int (sz - 1)))) in
-  let ok = and_ [permission;
-    or_ (List.map (fun (w_ptr, perm) -> and_ [perm; lePointer_ (ptr, w_ptr);
-        lePointer_ (w_ptr, upper)]) witnesses)] in
-  let pred_t = RET.{name = RET.Owned ct; pointer = ptr;
-        permission = bool_ true; iargs = []} in
-  let action = if cmp < 0 then Unpack pred_t else Pack pred_t in
+  let target_res = if res_outer then (orig_res, res) else (orig_req, req) in
+  let target_pt = match target_res with
+    | (RET.Q ({name = Owned _; _} as q_pt), _) ->
+      narrow_quantified_to_witness first_witness_ptr q_pt
+    | (RET.P pt, _) -> pt
+    | _ -> assert false
+  in
+  let (target_lb, target_ub_inclusive, target_perm) = match snd target_res with
+    | RET.P ({name = Owned ctype; _} as pt) ->
+      let sz = Memory.size_of_ctype ctype in
+      (pt.pointer, IT.pointer_offset_ (pt.pointer, IT.z_ (Z.of_int (sz - 1))),
+          pt.permission)
+    | _ -> assert false
+  in
+  let ok = and_ [target_perm;
+    or_ (List.map (fun (w_ptr, perm) -> and_ [perm; lePointer_ (target_lb, w_ptr);
+        lePointer_ (w_ptr, target_ub_inclusive)]) witnesses)] in
+  let action = if res_outer then Unpack target_pt else Pack target_pt in
   Some (action, ok)
 
 let model_res_spans_or_empty m g req =
-  try
-    model_res_spans (m, g) req
-  with
-    Failure pp ->
-      Pp.debug 5 (lazy (Pp.item "failed to extract resource span" pp));
-      []
+  note_failure (model_res_spans (m, g)) req
+  |> Option.to_list |> List.concat
 
 let rec gather_same_actions opts = match opts with
   | [] -> []
@@ -332,18 +359,6 @@ let is_unknown_array_size = function
   end
   | _ -> false
 
-let get_active_clause m g clauses =
-  let rec seek not_prev = function
-    | [] -> raise NoResult
-    | (c :: clauses) ->
-      let gd = c.ResourcePredicates.guard in
-      let this = eval_extract "resource predicate clause guard" (m, g) is_bool gd in
-      Pp.debug 11 (lazy (Pp.item "this clause guard" (Pp.list IT.pp [gd; IT.bool_ this])));
-      if this then (IT.and_ (List.rev (gd :: not_prev)), c)
-      else seek (IT.not_ gd :: not_prev) clauses
-  in
-  seek [] clauses
-
 let do_null_resource_check m g req =
   Pp.debug 11 (lazy (Pp.item "doing null resource check" (RET.pp req)));
   let (nm, pt) = match req with
@@ -358,7 +373,7 @@ let do_null_resource_check m g req =
     | None -> raise NoResult
     | Some clauses -> clauses
   in
-  let (cond, active_clause) = get_active_clause m g clauses in
+  let (cond, active_clause) = get_active_clause (m, g) clauses in
   if LogicalArgumentTypes.has_resource (fun _ -> false) active_clause.packing_ft
   then raise NoResult else ();
   (pt, cond)
@@ -408,35 +423,35 @@ let do_guess_span_actions ress req m g =
      size as a special case which the span logic can ignore *)
   if is_unknown_array_size req
   then raise NoResult else ();
-  let same_name res = RET.same_predicate_name req (RE.request res) in
+  let same_name res = RET.same_predicate_name req res in
   match null_resource_check m g req with
   | Some (pt, ok) ->
     (* null resources will also have no span, so skip the rest *)
     let req_ptr = res_pointer m g req in
-    if List.exists (fun res -> same_name res &&
+    if List.exists (fun res -> same_name (RE.request res) &&
       (res_pointer m g (RE.request res) == req_ptr) &&
       res_pt_present m g (RE.request res)) ress
     then [] else [(Pack pt, ok)]
   | None ->
   let res_spans = ress
-    |> List.map (fun r -> List.map (fun s -> (r, s))
-        (model_res_spans_or_empty m g (RE.request r)))
+    |> List.map (fun r -> model_res_spans_or_empty m g (RE.request r))
     |> List.concat in
-  let (same, diff) = List.partition (fun (r, _) -> same_name r) res_spans in
-  let req_spans1 = model_res_spans_or_empty m g req in
-  let req_spans = subtract_closed_spans req_spans1 (List.map snd same) in
-  let interesting = List.filter_map (fun (r, s) -> List.find_opt (inter s) req_spans
-        |> Option.map (fun s2 -> (r, s, s2)))
+  let (same, diff) = List.partition (fun (_, (r, _)) -> same_name r) res_spans in
+  let req_spans = model_res_spans_or_empty m g req
+    |> subtract_closed_spans_from_tagged (List.map fst same)
+  in
+  let interesting = List.filter_map (fun res_span -> List.find_opt (inter res_span) req_spans
+        |> Option.map (fun req_span -> (res_span, req_span)))
     diff
-    |> List.sort (fun (_, (lb, _), _) (_, (lb2, _), _) -> Z.compare lb lb2) in
+  in
   if List.length interesting == 0
   then
   Pp.debug 7 (lazy (Pp.bold "no span intersections"))
   else ();
-  let opts = List.filter_map (fun (r, s, s2) ->
+  let opts = List.filter_map (fun ((s, res), (s2, req)) ->
     Pp.debug 7 (lazy (Pp.item "resource (partial?) overlap"
-      (Pp.list pp_res_span [(req, s2); (RE.request r, s)])));
-    intersection_action m g (req, s2) (r, s)
+      (Pp.list pp_res_span [(fst req, s2); (fst res, s)])));
+    intersection_action m g (req, s2) (res, s)
   ) interesting in
   gather_same_actions opts
 

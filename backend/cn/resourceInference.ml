@@ -259,6 +259,29 @@ module General = struct
     | I rt -> return ftyp
     end
 
+  let fresh_unpack_variant s =
+    match Sym.description s with
+    | SD_CN_Id name ->
+       Sym.fresh_make_uniq_kind name "unpack"
+    | _ ->
+       Sym.fresh_make_uniq "unpack"
+
+  (* similar to bind_logical in check.ml *)
+  let rec unpack_packing_ft ftyp = begin match ftyp with
+    | LAT.Resource ((s, (resource, bt)), _, ftyp) ->
+      let s, ftyp = LAT.alpha_rename OutputDef.subst (s, bt) ftyp in
+      let@ () = add_l s bt in
+      let@ () = add_r None (resource, O (sym_ (s, bt))) in
+      unpack_packing_ft ftyp
+    | Define ((s, it), _, ftyp) ->
+      let ftyp = LAT.subst OutputDef.subst (IT.make_subst [(s, it)]) ftyp in
+      unpack_packing_ft ftyp
+    | Constraint (c, _, ftyp) ->
+      let@ () = add_c c in
+      unpack_packing_ft ftyp
+    | I output_def ->
+      return output_def
+    end
 
 
   (* TODO: check that oargs are in the same order? *)
@@ -930,7 +953,7 @@ module General = struct
         | Result.Error e -> fail (fun _ -> {loc; msg = Generic
           (!^ "Cannot fold predicate: " ^^^ Sym.pp pname ^^ colon ^^^ e)})
       in
-      let@ output_assignment = ftyp_args_request_for_unpack loc (fst uiinfo)
+      let@ output_assignment = ftyp_args_request_for_pack loc (fst uiinfo)
           clause.ResourcePredicates.packing_ft in
       let output = record_ (List.map (fun (o : OutputDef.entry) -> (o.name, o.value)) output_assignment) in
       let@ () = add_r None (RET.P {
@@ -971,7 +994,7 @@ module General = struct
         | Result.Error e -> fail (fun _ -> {loc; msg = Generic
           (!^ "Cannot fold predicate: " ^^^ Sym.pp pname ^^ colon ^^^ e)})
       in
-      let@ res = predicate_request ~recursive:true
+      let@ x = predicate_request ~recursive:true
           loc uiinfo {
             name = PName pname;
             pointer = r_pt.pointer;
@@ -979,18 +1002,20 @@ module General = struct
             iargs = r_pt.iargs;
           }
       in
-      begin match res with
+      begin match x with
       | None -> return false
-      | Some (res2, res_oargs) ->
+      | Some (res2, O res_oargs) ->
         assert (ResourceTypes.equal (P res2) (P r_pt));
-        assert false (* needs implementing, sigh *)
+        let@ unpack_oargs = unpack_packing_ft clause.ResourcePredicates.packing_ft in
+        let eq = IT.eq_ (res_oargs, OutputDef.to_record unpack_oargs) in
+        let@ () = add_c (LC.t_ eq) in
+        return true
       end
     | _ ->
       Pp.warn loc (Pp.item "unexpected arg to do_unpack" (ResourceTypes.pp_predicate_type r_pt));
       return false
 
-
-  and ftyp_args_request_for_unpack loc situation ftyp =
+  and ftyp_args_request_for_pack loc situation ftyp =
     (* record the resources now, so errors are raised with all
        the resources present, rather than those that remain after some
        arguments are claimed *)

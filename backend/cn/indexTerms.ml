@@ -891,13 +891,13 @@ let isIntegerToPointerCast = function
   | IT (Pointer_op (IntegerToPointerCast _), _) -> true
   | _ -> false
 
-let memberShift_ (t, tag, member) = 
-  integerToPointerCast_ 
-    (add_ (pointerToIntegerCast_ t, memberOffset_ (tag, member)))
-let arrayShift_ (t1, ct, t2) = 
-  integerToPointerCast_
-    (add_ (pointerToIntegerCast_ t1, arrayOffset_ (ct, t2)))
+let pointer_offset_ (p, n) =
+  integerToPointerCast_ (add_ (pointerToIntegerCast_ p, n))
 
+let memberShift_ (t, tag, member) =
+  pointer_offset_ (t, memberOffset_ (tag, member))
+let arrayShift_ (t1, ct, t2) =
+  pointer_offset_ (t1, arrayOffset_ (ct, t2))
 
 
 
