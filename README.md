@@ -14,7 +14,14 @@ Build instructions for the CLI
 
 To build Cerberus, you need opam (>= 2.0.0, see [here](https://opam.ocaml.org/doc/Install.html) to install) and OCaml (>= 4.07).
 
-First install the dependencies (including `lem` and `menhir`) using opam:
+First set up additional repositories for Coq packages:
+
+```bash
+opam repo add --this-switch coq-released https://coq.inria.fr/opam/released
+opam pin -n coq-struct-tact https://github.com/vzaliva/StructTact.git
+```
+
+Then, install the dependencies (including `lem` and `menhir`) using opam:
 
 ```bash
 $ opam install --deps-only .
@@ -33,6 +40,7 @@ $ dune exec cerberus -- ARG1 .. ARGN
 ```
 
 or, after doing `$ make install`, using the `cerberus` executable.
+
 
 Basic usage
 ---

@@ -3,4 +3,4 @@
 *.vok
 *.vo
 *.glob
-
+.lia.cache

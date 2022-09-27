@@ -35,6 +35,7 @@ depends: [
   "zarith"
   "coq"
   "coq-ext-lib"
+  "coq-struct-tact"
 ]
 build: [
   ["dune" "subst"] {pinned}
