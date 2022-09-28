@@ -27,6 +27,22 @@ Fixpoint list_init {A:Type} (n:nat) (f:nat -> A): list A
   | S n => (f n) :: list_init n f
   end.
 
+Fixpoint monadic_list_init
+  {A:Type}
+  {m : Type -> Type}
+  {M : Monad m}
+  (n:nat)
+  (f: nat -> m A): m (list A)
+  :=
+  match n with
+  | O => ret []
+  | S n =>
+      h <- f n ;;
+      t <- monadic_list_init n f ;;
+      ret (h :: t)
+  end.
+
+
 (** Inlike OCaml version if lists have different sizes, we just terminate
     after consuming the shortest one, without signaling error *)
 Fixpoint fold_left2 {A B C:Type} (f: A -> B -> C -> A) (accu:A) (l1:list B) (l2:list C): A :=
@@ -93,9 +109,18 @@ Definition maybeEqualBy
   | _, _ => false
   end.
 
-(* TODO: Z.extract_num *)
-Definition extract_num: Z -> Z -> Z -> Z.
-Proof. admit. Admitted.
+(** [extract a off len] returns a nonnegative number corresponding to bits
+    [off] to [off]+[len]-1 of [a].
+    Negative [a] are considered in infinite-length 2's complement
+    representation.
+    [len] must not be 0.
+ *)
+Definition extract_num (a:Z) (off:nat) (len:nat): serr Z :=
+  match len with
+  | O => raise "0 lenght not allowed"
+  | S len =>
+      ret 0  (* TODO *)
+  end.
 
 (* Using two's complement encoding. We do not perform range checks
    here assuming Z is in the proper range.
@@ -140,8 +165,8 @@ Definition bytes_of_Z (is_signed: bool) (size: nat) (i: Z): serr (list ascii)
   then
     raise "bytes_of_Z failure"%string
   else
-    ret (list_init size
-           (fun n => byte_of_Z (extract_num i (Z.mul 8 (Z.of_nat n)) 8))).
+    monadic_list_init size
+      (fun n => extract_num i (Nat.mul 8%nat n) 8%nat >>= (fun x => ret (byte_of_Z x))).
 
 Definition Z_of_bytes (is_signed: bool) (bs:list ascii): serr Z
   :=
@@ -149,10 +174,8 @@ Definition Z_of_bytes (is_signed: bool) (bs:list ascii): serr Z
   | [], _ => raise "empty list"
   | _, false =>  raise "byte list too long"
   | (first::_) as cs, _ =>
-      let init :=
-        if is_signed && (Z.eqb 1 (extract_num (Z.of_nat (nat_of_ascii first)) 7 1))
-        then -1
-        else 0
+      x <- extract_num (Z.of_nat (nat_of_ascii first)) 7%nat 1%nat ;;
+      let init := if is_signed && (Z.eqb 1 x) then -1 else 0
       in
       let fix aux (acc : Z) (cs : list ascii): serr Z :=
         match cs with
@@ -167,7 +190,6 @@ Definition Z_of_bytes (is_signed: bool) (bs:list ascii): serr Z
 Definition Z_integerRem_t := Z.rem.
 Definition Z_integerRem_f := Z.rem.
 Definition Z_integerDiv_t := Z.div.
-
 
 Definition float_of_bits: Z -> float.
 Proof. Admitted. (* TODO *)
