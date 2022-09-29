@@ -307,6 +307,7 @@ module General = struct
                 let took = and_ [pmatch; p'.permission; needed] in
                 begin match provable (LC.T took) with
                 | `True ->
+                   Pp.debug 9 (lazy (Pp.item "used resource" (RET.pp (fst re))));
                    Deleted, 
                    (bool_ false, p'_oargs)
                 | `False ->
@@ -329,6 +330,7 @@ module General = struct
                 let took = and_ [pre_match; IT.subst subst p'.permission; needed] in
                 begin match provable (LC.T took) with
                 | `True ->
+                   Pp.debug 9 (lazy (Pp.item "used resource" (RET.pp (fst re))));
                    let permission' = and_ [p'.permission; ne_ (sym_ (p'.q, Integer), index)] in
                    let oargs = 
                      List.map_snd (fun oa' -> map_get_ oa' index) 
@@ -392,6 +394,7 @@ module General = struct
                 let took = and_ (needed :: p'.permission :: pmatch) in
                 begin match provable (LC.T took) with
                 | `True ->
+                   Pp.debug 9 (lazy (Pp.item "used resource" (RET.pp (fst re))));
                    Deleted, 
                    (bool_ false, p'_oargs)
                 | `False ->
@@ -414,6 +417,7 @@ module General = struct
                 let took = and_ [pre_match; needed; IT.subst subst p'.permission] in
                 begin match provable (LC.T took) with
                 | `True ->
+                   Pp.debug 9 (lazy (Pp.item "used resource" (RET.pp (fst re))));
                    let oargs = List.map_snd (fun oa' -> map_get_ oa' index) (oargs_list p'_oargs) in
                    let i_match = eq_ (sym_ (p'.q, Integer), index) in
                    let permission' = and_ [p'.permission; not_ i_match] in
@@ -490,6 +494,7 @@ module General = struct
        let@ is_ex = exact_match () in
        let is_exact_re re = !reorder_points && (is_ex (Q requested, re)) in
        let@ simp = get_simp () in
+       let@ global = get_global () in
        let needed = requested.permission in
        let sub_resource_if = fun cond re (needed, oargs) ->
              let continue = (Unchanged, (needed, oargs)) in
@@ -508,6 +513,7 @@ module General = struct
                 let took = and_ [pre_match; IT.subst subst needed; p'.permission] in
                 begin match provable (LC.T took) with
                 | `True -> 
+                   Pp.debug 9 (lazy (Pp.item "used resource" (RET.pp (fst re))));
                    let i_match = eq_ (sym_ (requested.q, Integer), index) in
                    let oargs = 
                      List.map2 (fun (oarg_name, C oargs) (oarg_name', oa') ->
@@ -518,7 +524,10 @@ module General = struct
                    let needed' = and_ [needed; not_ (i_match)] in
                    Deleted, 
                    (simp needed', oargs)
-                | `False -> continue
+                | `False ->
+                   let model = Solver.model () in
+                   debug_constraint_failure_diagnostics 9 model global (LC.T took);
+                   continue
                 end
              | (Q p', p'_oargs) when equal_predicate_name (Owned requested_ct) p'.name ->
                 let p' = alpha_rename_qpredicate_type requested.q p' in
@@ -526,6 +535,7 @@ module General = struct
                 (* todo: check for p' non-emptiness? *)
                 begin match provable (LC.T pmatch) with
                 | `True ->
+                   Pp.debug 9 (lazy (Pp.item "used resource" (RET.pp (fst re))));
                    let took = and_ [requested.permission; p'.permission] in
                    let oargs = 
                      List.map2 (fun (oarg_name, C oargs) (oarg_name', oa') ->
@@ -536,7 +546,10 @@ module General = struct
                    let permission' = and_ [p'.permission; not_ needed] in
                    Changed (Q {p' with permission = permission'}, p'_oargs), 
                    (simp needed', oargs)
-                | `False -> continue
+                | `False ->
+                   let model = Solver.model () in
+                   debug_constraint_failure_diagnostics 9 model global (LC.T pmatch);
+                   continue
                 end
              | re ->
                 continue
@@ -591,11 +604,15 @@ module General = struct
            (fun re -> not (is_exact_re re) && not (is_exact_k re)))
            (needed, oargs) 
        in
-       let holds = provable (forall_ (requested.q, BT.Integer) (not_ needed)) in
+       let nothing_more_needed = forall_ (requested.q, BT.Integer) (not_ needed) in
+       let holds = provable nothing_more_needed in
        time_log_end start_timing;
        begin match holds with
        | `True -> return (Some oargs)
-       | `False -> return None
+       | `False ->
+	 let@ model = model () in
+         debug_constraint_failure_diagnostics 9 model global nothing_more_needed;
+         return None
        end
     | pname ->
        debug 7 (lazy (item "qpredicate request" (RET.pp (Q requested))));
@@ -608,6 +625,7 @@ module General = struct
        in
        let@ provable = provable loc in
        let@ simp = get_simp () in
+       let@ global = get_global () in
        let needed = requested.permission in
        let step = simp requested.step in
        let@ () = if Option.is_some (IT.is_z step) then return ()
@@ -634,6 +652,7 @@ module General = struct
                 let took = and_ [pre_match; IT.subst subst needed; p'.permission] in
                 begin match provable (LC.T took) with
                 | `True ->
+                   Pp.debug 9 (lazy (Pp.item "used resource" (RET.pp (fst re))));
                    let i_match = eq_ (sym_ (requested.q, Integer), index) in
                    let oargs = 
                      List.map2 (fun (name, C oa) (name', oa') -> 
@@ -644,7 +663,10 @@ module General = struct
                    let needed' = and_ [needed; not_ i_match] in
                    Deleted, 
                    (simp needed', oargs)
-                | `False -> continue
+                | `False ->
+                   let model = Solver.model () in
+                   debug_constraint_failure_diagnostics 9 model global (LC.T took);
+                   continue
                 end
              | (Q p', p'_oargs) when equal_predicate_name requested.name p'.name 
                          && IT.equal step p'.step ->
@@ -652,6 +674,7 @@ module General = struct
                 let pmatch = eq_ (requested.pointer, p'.pointer) in
                 begin match provable (LC.T pmatch) with
                 | `True ->
+                   Pp.debug 9 (lazy (Pp.item "used resource" (RET.pp (fst re))));
                    let iarg_match = and_ (List.map2 eq__ requested.iargs p'.iargs) in
                    let took = and_ [iarg_match; requested.permission; p'.permission] in
                    let needed' = and_ [needed; not_ (and_ [iarg_match; p'.permission])] in
@@ -664,16 +687,23 @@ module General = struct
                    in
                    Changed (Q {p' with permission = permission'}, p'_oargs), 
                    (simp needed', oargs)
-                | `False -> continue
+                | `False ->
+                   let model = Solver.model () in
+                   debug_constraint_failure_diagnostics 9 model global (LC.T pmatch);
+                   continue
                 end
              | re ->
                 continue
            ) (needed, List.map_snd (fun _ -> C []) def_oargs)
        in
-       let holds = provable (forall_ (requested.q, BT.Integer) (not_ needed)) in
+       let nothing_more_needed = forall_ (requested.q, BT.Integer) (not_ needed) in
+       let holds = provable nothing_more_needed in
        begin match holds with
        | `True -> return (Some oargs)
-       | `False -> return None
+       | `False ->
+         let@ model = model () in
+         debug_constraint_failure_diagnostics 9 model global nothing_more_needed;
+         return None
        end
 
   and qpredicate_request loc uiinfo (requested : RET.qpredicate_type) = 
@@ -735,7 +765,6 @@ module General = struct
            ) oargs oarg_bts
        in
        let folded_value = List.hd oargs in
-       let@ provable = provable loc in
        let folded_oargs = 
          record_ [(Resources.value_sym, folded_value)]
        in
