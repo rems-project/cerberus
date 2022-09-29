@@ -51,12 +51,18 @@ let list_new xs ys =
   let len = List.length ys - List.length xs in
   take len ys
 
+let set_new xs ys = 
+  let open Context in
+  (* difference between xs and ys, assuming ys (pre-) extends xs *)
+  assert (LCSet.subset xs ys);
+  LCSet.elements (LCSet.diff ys xs)
+
 let ctxt_diff ct1 ct2 =
   let open Context in
   let log = list_new ct1.logical ct2.logical in
   let com = list_new ct1.computational ct2.computational
     |> List.map (fun (nm, (t, _)) -> (nm, t)) in
-  let con = list_new (snd ct1.constraints) (snd ct2.constraints) in
+  let con = set_new ct1.constraints ct2.constraints in
   let rs1 = IntSet.of_list (List.map snd (fst ct1.resources)) in
   let rs2 = IntSet.of_list (List.map snd (fst ct2.resources)) in
   let rs_del = List.filter (fun (_, i) -> not (IntSet.mem i rs2)) (fst ct1.resources)

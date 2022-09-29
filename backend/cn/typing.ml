@@ -23,7 +23,7 @@ type 'e failure = Context.t -> 'e
 let run (c : Context.t) (m : ('a, 'e) t) : ('a, 'e) Resultat.t = 
   let solver = Solver.make c.global in
   let sym_eqs = SymMap.empty in
-  LCSet.iter (Solver.add_assumption solver c.global) (fst c.constraints);
+  LCSet.iter (Solver.add_assumption solver c.global) c.constraints;
   let s = { 
       typing_context = c; 
       solver; 
@@ -129,13 +129,13 @@ let set_global global : (unit, 'e) m =
 
 let all_constraints () = 
   let@ s = get () in
-  return (fst s.constraints)
+  return s.constraints
 
 let simp_constraints1 () =
   fun s ->
   Ok ((s.sym_eqs, 
        s.equalities,
-       fst s.typing_context.constraints), s)
+       s.typing_context.constraints), s)
 
 let simp_constraints () =
   let@ (vals, eqs, cons) = simp_constraints1 () in
@@ -156,7 +156,7 @@ let make_provable loc =
   let f lc = 
     Solver.provable ~loc ~solver ~global:s.global 
       ~trace_length
-      ~assumptions:(fst s.constraints)
+      ~assumptions:s.constraints
       ~pointer_facts lc 
   in
   f
@@ -229,8 +229,13 @@ let remove_a sym =
   let (bt, l) = Context.get_a sym s in
   let s = Context.remove_a sym s in
   let ovalue = 
-    List.find_map (LC.equates_to (IT.sym_ (l, bt)))
-      (snd s.constraints) 
+    LCSet.fold (fun lc acc ->
+        match acc with
+        | Some _ -> acc
+        | None -> LC.equates_to (IT.sym_ (l, bt)) lc
+      )
+      s.constraints
+      None
   in
   let s = match ovalue with
     | None -> s
@@ -238,12 +243,10 @@ let remove_a sym =
        let subst = IT.make_subst [(l, value)] in
        let (resources, n) = s.resources in
        let resources = List.map (fun (r,i) -> (RE.subst subst r, i)) resources in
-       let (lcs1,lcs2) = s.constraints in
-       let lcs1 = LCSet.map (LC.subst subst) lcs1 in
-       let lcs2 = List.map (LC.subst subst) lcs2 in
+       let constraints = LCSet.map (LC.subst subst) s.constraints in
        let s =
          { s with resources = (resources, n);
-                  constraints = (lcs1, lcs2); }
+                  constraints = constraints; }
        in
        remove_l l s
   in

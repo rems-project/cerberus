@@ -208,7 +208,7 @@ let veclasses ctxt =
               (VClassSet.remove c g))
       | None -> 
          g
-    ) (fst ctxt.constraints) with_all
+    ) ctxt.constraints with_all
 
 
 let explanation ctxt relevant =
@@ -524,7 +524,7 @@ let state ctxt {substitution; vclasses; relevant} (model_with_q : Solver.model_w
     Context.LCSet.fold (fun lc acc ->
         let lc = LC.subst substitution lc in
         if trivial lc then acc else LC.pp lc :: acc
-      ) (fst ctxt.constraints) []
+      ) ctxt.constraints []
   in
 
   let req_cmp = Option.bind orequest (Spans.spans_compare_for_pp model ctxt.global) in
