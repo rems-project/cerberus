@@ -94,13 +94,13 @@ Notation "{[ r 'with' 'const' := e ]}" := ({| const := e; restrict := restrict r
 Notation "{[ r 'with' 'restrict' := e ]}" := ({| restrict := e; const := const r; volatile := volatile r |}).
 Notation "{[ r 'with' 'volatile' := e ]}" := ({| volatile := e; const := const r; restrict := restrict r |}).
 
-Inductive ctype_ : Type := (*[name = "^\\([a-z A-Z]*_\\)?ty[0-9]*'?$"]*)
-  | Void: ctype_
-  | Basic:  basicType  -> ctype_
+Inductive ctype' : Type := (*[name = "^\\([a-z A-Z]*_\\)?ty[0-9]*'?$"]*)
+  | Void: ctype'
+  | Basic:  basicType  -> ctype'
     (* INVARIANT if the element ctype is an array, the qualifiers must be empty *)
     (* the qualifiers are that of the element type (Â§6.7.3#9) *)
     (* STD Â§6.2.5#20, bullet 1 *)
-  | Array:  ctype  ->  (option  Z  ) -> ctype_
+  | Array:  ctype  ->  (option  Z  ) -> ctype'
     (* NOTE: the qualifiers associated to a ctype in the
               list of parameters is that of the parameter lvalue. For example if
               we have a parameter with type "restrict pointer to a const char",
@@ -109,20 +109,20 @@ Inductive ctype_ : Type := (*[name = "^\\([a-z A-Z]*_\\)?ty[0-9]*'?$"]*)
     (* STD Â§6.2.5#20, bullet 4 *)
   | Function:  ((qualifiers  * ctype ) % type)
               ->  list  ((qualifiers  * ctype  * (* is_register *)bool ) % type)
-              ->  (* is_variadic *)bool  -> ctype_
+              ->  (* is_variadic *)bool  -> ctype'
     (* this version only exists during desugaring (for function declarations) *)
     (* TODO: the previous comment is wrong *)
-  | FunctionNoParams:  ((qualifiers  * ctype ) % type) -> ctype_  (* function type with no `prototype' *)
+  | FunctionNoParams:  ((qualifiers  * ctype ) % type) -> ctype'  (* function type with no `prototype' *)
 
     (* STD Â§6.2.5#20, bullet 5 *)
     (* NOTE: the qualifiers are that of the referenced type *)
-  | Pointer:  qualifiers  ->  ctype  -> ctype_
+  | Pointer:  qualifiers  ->  ctype  -> ctype'
     (* STD Â§6.2.5#20, bullet 6 *)
-  | Atomic:  ctype  -> ctype_
-  | Struct:  Symbol.sym  -> ctype_
-  | Union:  Symbol.sym  -> ctype_
+  | Atomic:  ctype  -> ctype'
+  | Struct:  Symbol.sym  -> ctype'
+  | Union:  Symbol.sym  -> ctype'
 with ctype : Type :=
-  Ctype:  list  Annot.annot  ->  ctype_  -> ctype .
+  Ctype:  list  Annot.annot  ->  ctype'  -> ctype .
 
 
 Definition struct_tag : Type :=  Symbol.sym.
@@ -248,7 +248,7 @@ Fixpoint ctypeEqual (fuel:nat) (cty0 cty1: ctype) : serr bool
   | S fuel =>
       match cty0, cty1 with
       | (Ctype _ ty1), (Ctype _ ty2) =>
-          let ord (x : ctype_ ) :=
+          let ord (x : ctype' ) :=
             match (x) with
             | Void => ( 0%nat : nat )
             | Basic _ => 1%nat
@@ -404,7 +404,7 @@ Instance x27_Show : Show tag_definition := {
 
 (* [?]: removed value specification. *)
 
-Definition proj_ctype_  (c: ctype): ctype_
+Definition proj_ctype'  (c: ctype): ctype'
   :=
   match c with Ctype _ ty_ => ty_ end.
 
@@ -419,8 +419,8 @@ Definition unatomic (c: ctype)  : ctype
         end
   end.
 
-Definition unatomic_  (ty: ctype): ctype_ :=
-  proj_ctype_ (unatomic ty).
+Definition unatomic_  (ty: ctype): ctype' :=
+  proj_ctype' (unatomic ty).
 
 (*
 (* [?]: removed value specification. *)
