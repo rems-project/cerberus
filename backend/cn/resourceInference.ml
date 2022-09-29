@@ -40,7 +40,7 @@ let unpack_def global name args =
     | _ -> None
     )
 
-let debug_constraint_failure_diagnostics (model_with_q : Solver.model_with_q) global c =
+let debug_constraint_failure_diagnostics lvl (model_with_q : Solver.model_with_q) global c =
   let model = fst model_with_q in
   if ! Pp.print_level == 0 then () else
   let split tm = match IT.term tm with
@@ -56,8 +56,8 @@ let debug_constraint_failure_diagnostics (model_with_q : Solver.model_with_q) gl
   let rec diag_rec i tm =
     let pt = !^ "-" ^^^ Pp.int i ^^ Pp.colon in
     begin match Solver.eval global model tm with
-      | None -> Pp.debug 6 (lazy (pt ^^^ !^ "cannot eval:" ^^^ IT.pp tm))
-      | Some v -> Pp.debug 6 (lazy (pt ^^^ IT.pp v ^^^ !^"<-" ^^^ IT.pp tm))
+      | None -> Pp.debug lvl (lazy (pt ^^^ !^ "cannot eval:" ^^^ IT.pp tm))
+      | Some v -> Pp.debug lvl (lazy (pt ^^^ IT.pp v ^^^ !^"<-" ^^^ IT.pp tm))
     end;
     match split tm with
       | None -> ()
@@ -65,11 +65,11 @@ let debug_constraint_failure_diagnostics (model_with_q : Solver.model_with_q) gl
   in
   begin match (c, model_with_q) with
   | (LC.T tm, _) ->
-    Pp.debug 6 (lazy (Pp.item "counterexample, expanding" (IT.pp tm)));
+    Pp.debug lvl (lazy (Pp.item "counterexample, expanding" (IT.pp tm)));
     diag_rec 0 tm
   | (LC.Forall ((sym, bt), tm), (_, [q])) ->
     let tm' = IT.subst (IT.make_subst [(sym, IT.sym_ q)]) tm in
-    Pp.debug 6 (lazy (Pp.item "quantified counterexample, expanding" (IT.pp tm)));
+    Pp.debug lvl (lazy (Pp.item "quantified counterexample, expanding" (IT.pp tm)));
     diag_rec 0 tm'
   | _ ->
     Pp.warn Loc.unknown (Pp.bold "unexpected quantifier count with model")
@@ -250,7 +250,7 @@ module General = struct
        | `False ->
            let@ model = model () in
            let@ global = get_global () in
-           debug_constraint_failure_diagnostics model global c;
+           debug_constraint_failure_diagnostics 6 model global c;
            fail_with_trace (fun trace -> fun ctxt ->
                   let ctxt = { ctxt with resources = original_resources } in
                   {loc; msg = Unsat_constraint {constr = c; info; ctxt; model; trace}}
@@ -309,7 +309,9 @@ module General = struct
                 | `True ->
                    Deleted, 
                    (bool_ false, p'_oargs)
-                | `False -> 
+                | `False ->
+                   let model = Solver.model () in
+		   debug_constraint_failure_diagnostics 9 model global (LC.T took);
                    continue
                 end
              | (Q p', p'_oargs) when equal_predicate_name (Owned requested_ct) p'.name ->
@@ -334,7 +336,10 @@ module General = struct
                    in
                    Changed (Q {p' with permission = permission'}, p'_oargs), 
                    (bool_ false, O (record_ oargs))
-                | `False -> continue
+                | `False ->
+                   let model = Solver.model () in
+		   debug_constraint_failure_diagnostics 9 model global (LC.T took);
+		   continue
                 end
              | _ ->
                 continue
