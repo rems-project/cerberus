@@ -74,9 +74,9 @@ let pp =
        | ModNoSMT (it1,it2) -> 
           mparens (c_app !^"mod_uf" [aux true it1; aux true it2])
        | LT (o1,o2) -> 
-          mparens (flow (break 1) [aux true o1; langle; aux true o2])
+          mparens (flow (break 1) [aux true o1; langle (); aux true o2])
        | LE (o1,o2) -> 
-          mparens (flow (break 1) [aux true o1; (langle ^^ equals); aux true o2])
+          mparens (flow (break 1) [aux true o1; langle () ^^ equals; aux true o2])
        | Min (o1,o2) -> 
           c_app !^"min" [aux false o1; aux false o2]
        | Max (o1,o2) -> 
@@ -95,7 +95,7 @@ let pp =
        | Or o -> 
           Pp.group (mparens (flow_map (break 1 ^^ !^"||" ^^ break 1) (aux true) o))
        | Impl (o1,o2) -> 
-          mparens (flow (break 1) [aux true o1; (equals ^^ rangle); aux true o2])
+          mparens (flow (break 1) [aux true o1; equals ^^ rangle (); aux true o2])
        | Not (o1) -> 
           mparens (!^"!" ^^ parens (aux false o1))
        | ITE (o1,o2,o3) -> 
@@ -145,9 +145,9 @@ let pp =
     | Pointer_op pointer_op -> 
        begin match pointer_op with
        | LTPointer (o1,o2) -> 
-          mparens (flow (break 1) [aux true o1; langle; aux true o2])
+          mparens (flow (break 1) [aux true o1; langle (); aux true o2])
        | LEPointer (o1,o2) -> 
-          mparens (flow (break 1) [aux true o1; langle ^^ equals; aux true o2])
+          mparens (flow (break 1) [aux true o1; langle () ^^ equals; aux true o2])
        | IntegerToPointerCast t ->
           mparens (parens(!^"pointer") ^^ aux true t)
        | PointerToIntegerCast t ->

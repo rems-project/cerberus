@@ -24,8 +24,16 @@ let loc_pp = ref Dec
 let int i = string (string_of_int i)
 
 
+let html_escapes = ref false
 let unicode = ref true
 let print_level = ref 0
+
+let html_langle = !^ "&lt;"
+let html_rangle = !^ "&gt;"
+let langle () = if ! html_escapes then html_langle else PPrint.langle
+let rangle () = if ! html_escapes then html_rangle else PPrint.rangle
+
+let angles doc = langle () ^^ doc ^^ rangle ()
 
 
 let times = ref (None : (out_channel * string * int) option)
