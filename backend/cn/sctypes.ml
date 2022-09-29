@@ -35,6 +35,7 @@ module IntegerTypes = struct
     | Wint_t
     | Size_t
     | Ptrdiff_t
+    | Vaddr_t
   [@@deriving eq, ord]
   type t = integerType
   let equal = equal_integerType
