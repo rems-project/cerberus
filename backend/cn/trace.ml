@@ -54,7 +54,6 @@ let list_new xs ys =
 let set_new xs ys = 
   let open Context in
   (* difference between xs and ys, assuming ys (pre-) extends xs *)
-  assert (LCSet.subset xs ys);
   LCSet.elements (LCSet.diff ys xs)
 
 let ctxt_diff ct1 ct2 =
