@@ -1,17 +1,24 @@
-Require Cerberus.CheriMemory.
+From Cerberus Require CheriMemory.
 
-Require ExtrOcamlBasic.
-Require ExtrOcamlString.
-Require ExtrOcamlIntConv.
-Require ExtrOcamlNatInt.
-Require ExtrOcamlZBigInt.
+From Coq Require Extraction.
+
+Require Import ExtrOcamlBasic.
+Require Import ExtrOcamlChar.
+Require Import ExtrOcamlString.
+(* Require ExtrOcamlIntConv. *)
+(* Require ExtrOcamlNatInt. *)
+
+Require Import ExtrOcamlNatBigInt.
+Require Import ExtrOcamlZBigInt.
 
 Extraction Language OCaml.
 
-Extraction Blacklist N Z Big_int_Z String List Char Core Monad Bool Format.
+Extraction Blacklist String List Char Core Monad Bool Format.
 
-Set Extraction AccessOpaque.
+(* Set Extraction AccessOpaque. *)
 
-Extraction Library ExtrOcamlIntConv.
+Extraction Library ExtrOcamlBasic.
+Extraction Library ExtrOcamlNatBigInt.
+Extraction Library ExtrOcamlZBigInt.
 
 Recursive Extraction Library CheriMemory.

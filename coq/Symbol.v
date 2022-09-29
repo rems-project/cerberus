@@ -3,7 +3,6 @@
 From Coq Require Import Arith Bool List String.
 Require Import Coq.ZArith.ZArith.
 
-Require Import Coq.Numbers.BinNums.
 Require Import Coq.FSets.FMapAVL.
 Require Import Coq.Structures.OrderedType.
 Require Import Coq.Structures.OrderedTypeEx.

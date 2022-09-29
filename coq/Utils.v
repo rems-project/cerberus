@@ -5,7 +5,7 @@ Require Import Coq.Floats.PrimFloat.
 Require Import Coq.Numbers.BinNums.
 Require Import Coq.ZArith.ZArith.
 
-From Coq.Strings Require Import Ascii.
+Require Import Coq.Strings.Ascii.
 
 From ExtLib.Structures Require Import Monad Monads.
 

@@ -434,7 +434,7 @@ Module CheriMemory
   Definition alignof
     (fuel: nat)
     (maybe_tagDefs : option (SymMap.t Ctype.tag_definition))
-    : Ctype.ctype -> serr Z
+    (ty: Ctype.ctype): serr Z
     :=
     let tagDefs :=
       match maybe_tagDefs with
@@ -497,7 +497,7 @@ Module CheriMemory
               end
           end
       end
-    in alignof_ fuel.
+    in alignof_ fuel ty.
 
   Fixpoint offsetsof
     (fuel: nat)

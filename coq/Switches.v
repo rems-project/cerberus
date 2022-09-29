@@ -1,5 +1,4 @@
-Require Import Coq.Lists.List.
-Require Import Coq.Lists.ListSet.
+From Coq.Lists Require Import List ListSet.
 
 Import ListNotations.
 

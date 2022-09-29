@@ -1,10 +1,14 @@
 (coq.extraction
  (prelude Extract)
- (extracted_modules SimpleError Utils Addr Location Capabilities Morello Annot Ctype Switches Implementation AilSyntax ErrorWithState Symbol Undefined Tags CheriMemory)
+ (extracted_modules Addr AilSyntax Annot Applicative Ascii BinInt BinNat BinNatDef BinNums BinPos BinPosDef Bool0 Byte Capabilities CarryType CheriMemory Ctype Datatypes DecidableClass Decimal EitherMonad Equalities EquivDec ErrorWithState FloatClass FMapAVL FMapList Functor Hexadecimal HexString Implementation Injection Int List0 List1 ListSet Location Logic Monad0 MonadExc MonadFix MonadPlus MonadReader MonadState MonadTrans MonadWriter MonadZero Monoid Morello Nat Number OrderedType OrderedTypeEx Orders OrdersTac PeanoNat PrimFloat PrimInt63 RelDec SimpleError Specif String0 Switches Symbol Tags Traversable Undefined Utils)
  (theories Cerberus)
 )
 
 (library
  (name ocaml_coq)
  (libraries zarith)
- (wrapped false))
+ (wrapped false)
+ (flags (:standard -w -27-32-33-39-67-37))
+)
+
+
