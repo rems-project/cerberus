@@ -311,7 +311,7 @@ module General = struct
                    (bool_ false, p'_oargs)
                 | `False ->
                    let model = Solver.model () in
-		   debug_constraint_failure_diagnostics 9 model global (LC.T took);
+                   debug_constraint_failure_diagnostics 9 model global (LC.T took);
                    continue
                 end
              | (Q p', p'_oargs) when equal_predicate_name (Owned requested_ct) p'.name ->
@@ -338,8 +338,8 @@ module General = struct
                    (bool_ false, O (record_ oargs))
                 | `False ->
                    let model = Solver.model () in
-		   debug_constraint_failure_diagnostics 9 model global (LC.T took);
-		   continue
+                   debug_constraint_failure_diagnostics 9 model global (LC.T took);
+                   continue
                 end
              | _ ->
                 continue
@@ -394,7 +394,10 @@ module General = struct
                 | `True ->
                    Deleted, 
                    (bool_ false, p'_oargs)
-                | `False -> continue
+                | `False ->
+                   let model = Solver.model () in
+                   debug_constraint_failure_diagnostics 9 model global (LC.T took);
+                   continue
                 end
              | (Q p', p'_oargs) when equal_predicate_name requested.name p'.name ->
                 let base = p'.pointer in
@@ -416,7 +419,10 @@ module General = struct
                    let permission' = and_ [p'.permission; not_ i_match] in
                    Changed (Q {p' with permission = permission'}, p'_oargs), 
                    (bool_ false, O (record_ oargs))
-                | `False -> continue
+                | `False ->
+                   let model = Solver.model () in
+                   debug_constraint_failure_diagnostics 9 model global (LC.T took);
+                   continue
                 end
              | re ->
                 continue
@@ -940,7 +946,7 @@ module General = struct
         | None -> return false
         | Some (resource, oargs) ->
           let@ _ = add_r None (P resource, oargs) in
-	    return true
+            return true
       end
     | {name = Owned (Sctypes.Struct tag); _} ->
       let@ result = fold_struct ~recursive:true loc uiinfo tag r_pt.pointer (bool_ true) in
