@@ -49,6 +49,9 @@ let debug_constraint_failure_diagnostics lvl (model_with_q : Solver.model_with_q
     | IT.Bool_op (IT.Not x) -> Some ("not", [x])
     | IT.Bool_op (IT.EQ (x, y)) -> Some ("eq", [x; y])
     | IT.Bool_op (IT.Impl (x, y)) -> Some ("implies", [x; y])
+    | IT.Arith_op (IT.LT (x, y)) -> Some ("lt", [x; y])
+    | IT.Arith_op (IT.LE (x, y)) -> Some ("le", [x; y])
+    | IT.Struct_op (IT.StructMember (x, _)) -> Some ("member", [x])
     | IT.Pred (name, args) when Option.is_some (unpack_def global name args) ->
         Some (Sym.pp_string name, [Option.get (unpack_def global name args)])
     | _ -> None
