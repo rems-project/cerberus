@@ -84,6 +84,10 @@ let add_a aname (bt, lname) ctxt =
 let remove_a aname ctxt = 
   {ctxt with computational = List.remove_assoc aname ctxt.computational}
 
+let remove_l lname ctxt = 
+  {ctxt with logical = List.remove_assoc lname ctxt.logical}
+
+
 let add_as avars ctxt = 
   List.fold_left (fun ctxt (s,(bt,l)) -> add_a s (bt,l) ctxt) ctxt avars
 

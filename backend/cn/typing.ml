@@ -226,15 +226,38 @@ let add_a sym (bt, sym') =
 
 let remove_a sym = 
   let@ s = get () in
-  set (Context.remove_a sym s)
+  let (bt, l) = Context.get_a sym s in
+  let s = Context.remove_a sym s in
+  let ovalue = 
+    List.find_map (LC.equates_to (IT.sym_ (l, bt)))
+      (snd s.constraints) 
+  in
+  let s = match ovalue with
+    | None -> s
+    | Some value ->
+       let subst = IT.make_subst [(l, value)] in
+       let (resources, n) = s.resources in
+       let resources = List.map (fun (r,i) -> (RE.subst subst r, i)) resources in
+       let (lcs1,lcs2) = s.constraints in
+       let lcs1 = LCSet.map (LC.subst subst) lcs1 in
+       let lcs2 = List.map (LC.subst subst) lcs2 in
+       let s =
+         { s with resources = (resources, n);
+                  constraints = (lcs1, lcs2); }
+       in
+       remove_l l s
+  in
+  set s
 
 let add_as a = 
   let@ s = get () in
   set (Context.add_as a s)
 
-let remove_as a = 
-  let@ s = get () in
-  set (Context.remove_as a s)
+let rec remove_as = function
+  | [] -> return ()
+  | x :: xs -> 
+     let@ () = remove_a x in
+     remove_as xs
 
 
 let add_l sym ls =
