@@ -542,6 +542,8 @@ let output_trace trace =
 
 (* stealing some logic from pp_errors *)
 let report ?state_file:to_ {loc; msg} =
+  let prev = ! Pp.html_escapes in
+  Pp.html_escapes := true;
   let report = pp_message msg in
   let consider = match report.state with
     | Some state ->
@@ -559,6 +561,7 @@ let report ?state_file:to_ {loc; msg} =
     | None ->
        None
   in
+  Pp.html_escapes := prev;
   Pp.error loc report.short
     ((Option.to_list report.descr) @
        (Option.to_list consider))

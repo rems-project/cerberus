@@ -64,7 +64,7 @@ let rec pp_aux i_pp = function
   | Resource ((name, (re, _bt)), _info, t) ->
      group (!^"let" ^^^ (Sym.pp name) ^^^ equals ^^^ RET.pp re ^^ semi) :: pp_aux i_pp t
   | Constraint (lc, _info, t) ->
-     let op = equals ^^ rangle in
+     let op = equals ^^ rangle () in
      group (LC.pp lc ^^^ op) :: pp_aux i_pp t
   | I i -> 
      [i_pp i]
