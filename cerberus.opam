@@ -34,6 +34,7 @@ depends: [
   "ppx_deriving"
   "zarith"
   "coq"
+  "coq-sail"
   "coq-ext-lib"
   "coq-struct-tact"
 ]

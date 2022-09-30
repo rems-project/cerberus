@@ -21,11 +21,19 @@ opam repo add --this-switch coq-released https://coq.inria.fr/opam/released
 opam pin -n coq-struct-tact https://github.com/vzaliva/StructTact.git
 ```
 
+Sail coq libraries needs to be pinned manually. To do so:
+
+```git clone git@github.com:rems-project/sail.git
+cd lib/coq
+opam install .
+```
+
 Then, install the dependencies (including `lem` and `menhir`) using opam:
 
 ```bash
 $ opam install --deps-only .
 ```
+
 
 Then build the CLI using:
 
