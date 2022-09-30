@@ -6,9 +6,9 @@
 
 (library
  (name ocaml_coq)
- (libraries zarith)
+ (libraries zarith coq-core.kernel)
  (wrapped false)
- (flags (:standard -w -27-32-33-39-67-37))
+ (flags (:standard -rectypes -w -27-32-33-39-67-37))
 )
 
 
