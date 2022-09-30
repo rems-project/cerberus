@@ -2,10 +2,12 @@
 Require Import Sail.Base.
 Require Import Sail.Real.
 Require Import CapFnsTypes.
+
 Import ListNotations.
-Open Scope string.
-Open Scope bool.
-Open Scope Z.
+
+Local Open Scope string.
+Local Open Scope bool.
+Local Open Scope Z.
 
 
 Definition eq_unit (_ : unit) (_ : unit) : {_bool : bool & ArithFact (_bool)} := build_ex (true).
@@ -66,29 +68,29 @@ Definition Slice_int (i : Z) (l : Z) (n : Z) `{ArithFact (n >=? 0)} : mword n :=
    get_slice_int n i l.
 
 Definition CAP_FLAGS_LO_BIT : Z := 56.
-Hint Unfold CAP_FLAGS_LO_BIT : sail.
+#[export] Hint Unfold CAP_FLAGS_LO_BIT : sail.
 Definition CAP_VALUE_HI_BIT : Z := 63.
-Hint Unfold CAP_VALUE_HI_BIT : sail.
+#[export] Hint Unfold CAP_VALUE_HI_BIT : sail.
 Definition CAP_VALUE_LO_BIT : Z := 0.
-Hint Unfold CAP_VALUE_LO_BIT : sail.
+#[export] Hint Unfold CAP_VALUE_LO_BIT : sail.
 Definition CAP_VALUE_NUM_BITS : Z := Z.add (Z.sub CAP_VALUE_HI_BIT CAP_VALUE_LO_BIT) 1.
-Hint Unfold CAP_VALUE_NUM_BITS : sail.
+#[export] Hint Unfold CAP_VALUE_NUM_BITS : sail.
 Definition CAP_BASE_HI_BIT : Z := 79.
-Hint Unfold CAP_BASE_HI_BIT : sail.
+#[export] Hint Unfold CAP_BASE_HI_BIT : sail.
 Definition CAP_BASE_LO_BIT : Z := 64.
-Hint Unfold CAP_BASE_LO_BIT : sail.
+#[export] Hint Unfold CAP_BASE_LO_BIT : sail.
 Definition CAP_MW : Z := Z.add (Z.sub CAP_BASE_HI_BIT CAP_BASE_LO_BIT) 1.
-Hint Unfold CAP_MW : sail.
+#[export] Hint Unfold CAP_MW : sail.
 Definition CapBoundsUsesValue (exp : Z) : bool := Z.ltb (Z.add exp CAP_MW) CAP_VALUE_NUM_BITS.
 
 Definition CAP_BASE_EXP_HI_BIT : Z := 66.
-Hint Unfold CAP_BASE_EXP_HI_BIT : sail.
+#[export] Hint Unfold CAP_BASE_EXP_HI_BIT : sail.
 Definition CAP_LIMIT_EXP_HI_BIT : Z := 82.
-Hint Unfold CAP_LIMIT_EXP_HI_BIT : sail.
+#[export] Hint Unfold CAP_LIMIT_EXP_HI_BIT : sail.
 Definition CAP_LIMIT_LO_BIT : Z := 80.
-Hint Unfold CAP_LIMIT_LO_BIT : sail.
+#[export] Hint Unfold CAP_LIMIT_LO_BIT : sail.
 Definition CAP_IE_BIT : Z := 94.
-Hint Unfold CAP_IE_BIT : sail.
+#[export] Hint Unfold CAP_IE_BIT : sail.
 Definition CapIsInternalExponent (c : mword 129) : bool :=
    eq_vec (vec_of_bits [access_vec_dec c CAP_IE_BIT]  : mword 1) ('b"0"  : mword 1).
 
@@ -108,31 +110,31 @@ Definition CapGetValue (c : mword 129) : mword (63 - 0 + 1) :=
    subrange_vec_dec c CAP_VALUE_HI_BIT CAP_VALUE_LO_BIT.
 
 Definition CAP_BOUND_NUM_BITS : Z := Z.add CAP_VALUE_NUM_BITS 1.
-Hint Unfold CAP_BOUND_NUM_BITS : sail.
+#[export] Hint Unfold CAP_BOUND_NUM_BITS : sail.
 Definition CAP_BOUND_MAX : bits CAP_BOUND_NUM_BITS :=
 Slice_int (shl_int 1 CAP_VALUE_NUM_BITS) 0 CAP_BOUND_NUM_BITS.
-Hint Unfold CAP_BOUND_MAX : sail.
+#[export] Hint Unfold CAP_BOUND_MAX : sail.
 Definition CAP_BOUND_MIN : bits CAP_BOUND_NUM_BITS :=
 Slice_int (projT1 (uint (Ox"0"  : mword 4))) 0 CAP_BOUND_NUM_BITS.
-Hint Unfold CAP_BOUND_MIN : sail.
+#[export] Hint Unfold CAP_BOUND_MIN : sail.
 Definition CAP_MAX_ENCODEABLE_EXPONENT : Z := 63.
-Hint Unfold CAP_MAX_ENCODEABLE_EXPONENT : sail.
+#[export] Hint Unfold CAP_MAX_ENCODEABLE_EXPONENT : sail.
 Definition CAP_MAX_EXPONENT : Z := Z.add (Z.sub CAP_VALUE_NUM_BITS CAP_MW) 2.
-Hint Unfold CAP_MAX_EXPONENT : sail.
+#[export] Hint Unfold CAP_MAX_EXPONENT : sail.
 Definition CapBoundsAddress (address : mword (63 - 0 + 1)) : mword (63 - 0 + 1) :=
    sign_extend (subrange_vec_dec address (Z.sub CAP_FLAGS_LO_BIT 1) 0) CAP_VALUE_NUM_BITS.
 
 Definition CAP_BASE_MANTISSA_LO_BIT : Z := 67.
-Hint Unfold CAP_BASE_MANTISSA_LO_BIT : sail.
+#[export] Hint Unfold CAP_BASE_MANTISSA_LO_BIT : sail.
 Definition CapGetBottom (c : mword 129) : mword (79 - 64 + 1) :=
    if CapIsInternalExponent c then
      concat_vec (subrange_vec_dec c CAP_BASE_HI_BIT CAP_BASE_MANTISSA_LO_BIT) ('b"000"  : mword 3)
    else subrange_vec_dec c CAP_BASE_HI_BIT CAP_BASE_LO_BIT.
 
 Definition CAP_LIMIT_HI_BIT : Z := 93.
-Hint Unfold CAP_LIMIT_HI_BIT : sail.
+#[export] Hint Unfold CAP_LIMIT_HI_BIT : sail.
 Definition CAP_LIMIT_MANTISSA_LO_BIT : Z := 83.
-Hint Unfold CAP_LIMIT_MANTISSA_LO_BIT : sail.
+#[export] Hint Unfold CAP_LIMIT_MANTISSA_LO_BIT : sail.
 Definition CapUnsignedLessThan {N : Z} (a : mword N) (b : mword N) : bool :=
    Z.ltb (projT1 (uint a)) (projT1 (uint b)).
 
@@ -260,7 +262,7 @@ Definition CapIsRepresentable (c : mword 129) (address : mword (63 - 0 + 1)) : M
     : M (bool).
 
 Definition CAP_TAG_BIT : Z := 128.
-Hint Unfold CAP_TAG_BIT : sail.
+#[export] Hint Unfold CAP_TAG_BIT : sail.
 Definition CapSetTag (c : mword 129) (t : mword 64) : mword 129 :=
    let r : bits 129 := c in
    update_vec_dec r CAP_TAG_BIT (Bit (vec_of_bits [access_vec_dec t 0]  : mword 1)).
@@ -283,9 +285,9 @@ Definition CapSetValue (c__arg : mword 129) (v : mword (63 - 0 + 1)) : M (mword 
    returnM c.
 
 Definition CAP_OTYPE_HI_BIT : Z := 109.
-Hint Unfold CAP_OTYPE_HI_BIT : sail.
+#[export] Hint Unfold CAP_OTYPE_HI_BIT : sail.
 Definition CAP_OTYPE_LO_BIT : Z := 95.
-Hint Unfold CAP_OTYPE_LO_BIT : sail.
+#[export] Hint Unfold CAP_OTYPE_LO_BIT : sail.
 Definition CapGetObjectType (c : mword 129) : mword (63 - 0 + 1) :=
    zero_extend (subrange_vec_dec c CAP_OTYPE_HI_BIT CAP_OTYPE_LO_BIT) CAP_VALUE_NUM_BITS.
 
@@ -293,20 +295,20 @@ Definition CapIsSealed (c : mword 129) : bool :=
    neq_vec (CapGetObjectType c) (Zeros CAP_VALUE_NUM_BITS).
 
 Definition CAP_FLAGS_HI_BIT : Z := 63.
-Hint Unfold CAP_FLAGS_HI_BIT : sail.
+#[export] Hint Unfold CAP_FLAGS_HI_BIT : sail.
 Definition CapSetFlags (c__arg : mword 129) (f : mword (63 - 0 + 1)) : mword 129 :=
    let c : bits 129 := c__arg in
    update_subrange_vec_dec c CAP_FLAGS_HI_BIT CAP_FLAGS_LO_BIT
      (subrange_vec_dec f CAP_FLAGS_HI_BIT CAP_FLAGS_LO_BIT).
 
 Definition CAP_PERM_EXECUTIVE : bits 64 := integer_subrange (projT1 (shl_int_1 1 1)) 63 0.
-Hint Unfold CAP_PERM_EXECUTIVE : sail.
+#[export] Hint Unfold CAP_PERM_EXECUTIVE : sail.
 Definition CAP_PERMS_HI_BIT : Z := 127.
-Hint Unfold CAP_PERMS_HI_BIT : sail.
+#[export] Hint Unfold CAP_PERMS_HI_BIT : sail.
 Definition CAP_PERMS_LO_BIT : Z := 110.
-Hint Unfold CAP_PERMS_LO_BIT : sail.
+#[export] Hint Unfold CAP_PERMS_LO_BIT : sail.
 Definition CAP_PERMS_NUM_BITS : Z := Z.add (Z.sub CAP_PERMS_HI_BIT CAP_PERMS_LO_BIT) 1.
-Hint Unfold CAP_PERMS_NUM_BITS : sail.
+#[export] Hint Unfold CAP_PERMS_NUM_BITS : sail.
 Definition CapGetPermissions (c : mword 129) : mword (127 - 110 + 1) :=
    subrange_vec_dec c CAP_PERMS_HI_BIT CAP_PERMS_LO_BIT.
 
@@ -318,38 +320,38 @@ Definition CapCheckPermissions (c : mword 129) (mask : mword 64) : bool :=
 Definition CapIsExecutive (c : mword 129) : bool := CapCheckPermissions c CAP_PERM_EXECUTIVE.
 
 Definition CAP_PERM_EXECUTE : bits 64 := integer_subrange (shl_int 1 15) 63 0.
-Hint Unfold CAP_PERM_EXECUTE : sail.
+#[export] Hint Unfold CAP_PERM_EXECUTE : sail.
 Definition CAP_PERM_SYSTEM : bits 64 := integer_subrange (shl_int 1 9) 63 0.
-Hint Unfold CAP_PERM_SYSTEM : sail.
+#[export] Hint Unfold CAP_PERM_SYSTEM : sail.
 Definition CapIsSystemAccessPermitted (c : mword 129) : bool :=
    CapCheckPermissions c (or_vec CAP_PERM_EXECUTE CAP_PERM_SYSTEM).
 
 Definition CAP_PERM_LOAD : bits 64 := integer_subrange (shl_int 1 17) 63 0.
-Hint Unfold CAP_PERM_LOAD : sail.
+#[export] Hint Unfold CAP_PERM_LOAD : sail.
 Definition CAP_PERM_STORE : bits 64 := integer_subrange (shl_int 1 16) 63 0.
-Hint Unfold CAP_PERM_STORE : sail.
+#[export] Hint Unfold CAP_PERM_STORE : sail.
 Definition CAP_PERM_LOAD_CAP : bits 64 := integer_subrange (shl_int 1 14) 63 0.
-Hint Unfold CAP_PERM_LOAD_CAP : sail.
+#[export] Hint Unfold CAP_PERM_LOAD_CAP : sail.
 Definition CAP_PERM_STORE_CAP : bits 64 := integer_subrange (shl_int 1 13) 63 0.
-Hint Unfold CAP_PERM_STORE_CAP : sail.
+#[export] Hint Unfold CAP_PERM_STORE_CAP : sail.
 Definition CAP_PERM_STORE_LOCAL : bits 64 := integer_subrange (shl_int 1 12) 63 0.
-Hint Unfold CAP_PERM_STORE_LOCAL : sail.
+#[export] Hint Unfold CAP_PERM_STORE_LOCAL : sail.
 Definition CAP_PERM_SEAL : bits 64 := integer_subrange (shl_int 1 11) 63 0.
-Hint Unfold CAP_PERM_SEAL : sail.
+#[export] Hint Unfold CAP_PERM_SEAL : sail.
 Definition CAP_PERM_UNSEAL : bits 64 := integer_subrange (shl_int 1 10) 63 0.
-Hint Unfold CAP_PERM_UNSEAL : sail.
+#[export] Hint Unfold CAP_PERM_UNSEAL : sail.
 Definition CAP_PERM_BRANCH_SEALED_PAIR : bits 64 := integer_subrange (shl_int 1 8) 63 0.
-Hint Unfold CAP_PERM_BRANCH_SEALED_PAIR : sail.
+#[export] Hint Unfold CAP_PERM_BRANCH_SEALED_PAIR : sail.
 Definition CAP_PERM_MUTABLE_LOAD : bits 64 := integer_subrange (shl_int 1 6) 63 0.
-Hint Unfold CAP_PERM_MUTABLE_LOAD : sail.
+#[export] Hint Unfold CAP_PERM_MUTABLE_LOAD : sail.
 Definition CAP_PERM_GLOBAL : bits 64 := integer_subrange 1 63 0.
-Hint Unfold CAP_PERM_GLOBAL : sail.
+#[export] Hint Unfold CAP_PERM_GLOBAL : sail.
 Definition CAP_PERM_NONE : bits 64 := integer_subrange 0 63 0.
-Hint Unfold CAP_PERM_NONE : sail.
+#[export] Hint Unfold CAP_PERM_NONE : sail.
 Definition CAP_OTYPE_NUM_BITS : Z := Z.add (Z.sub CAP_OTYPE_HI_BIT CAP_OTYPE_LO_BIT) 1.
-Hint Unfold CAP_OTYPE_NUM_BITS : sail.
+#[export] Hint Unfold CAP_OTYPE_NUM_BITS : sail.
 Definition CAP_LENGTH_NUM_BITS : Z := Z.add CAP_VALUE_NUM_BITS 1.
-Hint Unfold CAP_LENGTH_NUM_BITS : sail.
+#[export] Hint Unfold CAP_LENGTH_NUM_BITS : sail.
 Definition CapUnsignedGreaterThanOrEqual {N : Z} (a : mword N) (b : mword N) : bool :=
    Z.geb (projT1 (uint a)) (projT1 (uint b)).
 

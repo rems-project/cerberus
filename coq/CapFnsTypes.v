@@ -9,43 +9,43 @@ Open Scope Z.
 Definition bits (n : Z) : Type := mword n.
 
 Definition CAP_VALUE_HI_BIT  : Z := 63.
-Hint Unfold CAP_VALUE_HI_BIT : sail.
+#[export] Hint Unfold CAP_VALUE_HI_BIT : sail.
 
 Definition CAP_VALUE_LO_BIT  : Z := 0.
-Hint Unfold CAP_VALUE_LO_BIT : sail.
+#[export] Hint Unfold CAP_VALUE_LO_BIT : sail.
 
 Definition CAP_VALUE_NUM_BITS  : Z := (63 - 0 + 1).
-Hint Unfold CAP_VALUE_NUM_BITS : sail.
+#[export] Hint Unfold CAP_VALUE_NUM_BITS : sail.
 
 Definition CAP_BASE_HI_BIT  : Z := 79.
-Hint Unfold CAP_BASE_HI_BIT : sail.
+#[export] Hint Unfold CAP_BASE_HI_BIT : sail.
 
 Definition CAP_BASE_LO_BIT  : Z := 64.
-Hint Unfold CAP_BASE_LO_BIT : sail.
+#[export] Hint Unfold CAP_BASE_LO_BIT : sail.
 
 Definition CAP_MW  : Z := (79 - 64 + 1).
-Hint Unfold CAP_MW : sail.
+#[export] Hint Unfold CAP_MW : sail.
 
 Definition CAP_BOUND_NUM_BITS  : Z := (63 - 0 + 1 + 1).
-Hint Unfold CAP_BOUND_NUM_BITS : sail.
+#[export] Hint Unfold CAP_BOUND_NUM_BITS : sail.
 
 Definition CAP_OTYPE_HI_BIT  : Z := 109.
-Hint Unfold CAP_OTYPE_HI_BIT : sail.
+#[export] Hint Unfold CAP_OTYPE_HI_BIT : sail.
 
 Definition CAP_OTYPE_LO_BIT  : Z := 95.
-Hint Unfold CAP_OTYPE_LO_BIT : sail.
+#[export] Hint Unfold CAP_OTYPE_LO_BIT : sail.
 
 Definition CAP_PERMS_HI_BIT  : Z := 127.
-Hint Unfold CAP_PERMS_HI_BIT : sail.
+#[export] Hint Unfold CAP_PERMS_HI_BIT : sail.
 
 Definition CAP_PERMS_LO_BIT  : Z := 110.
-Hint Unfold CAP_PERMS_LO_BIT : sail.
+#[export] Hint Unfold CAP_PERMS_LO_BIT : sail.
 
 Definition CAP_PERMS_NUM_BITS  : Z := (127 - 110 + 1).
-Hint Unfold CAP_PERMS_NUM_BITS : sail.
+#[export] Hint Unfold CAP_PERMS_NUM_BITS : sail.
 
 Definition CAP_LENGTH_NUM_BITS  : Z := (63 - 0 + 1 + 1).
-Hint Unfold CAP_LENGTH_NUM_BITS : sail.
+#[export] Hint Unfold CAP_LENGTH_NUM_BITS : sail.
 
 Inductive register_value  :=
   | Regval_vector : list register_value -> register_value
