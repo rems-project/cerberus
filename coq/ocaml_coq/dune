@@ -6,6 +6,7 @@
 
 (library
  (name ocaml_coq)
+ (public_name cerberus.coq)
  (libraries zarith coq-core.kernel)
  (wrapped false)
  (flags (:standard -rectypes -w -27-32-33-39-67-37))

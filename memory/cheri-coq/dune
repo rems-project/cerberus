@@ -1,0 +1,8 @@
+
+(library
+ (name mem_cheri_ciq)
+ (public_name cerberus.mem.cheri.coq)
+ (modules impl_mem)
+ (libraries cerberus.coq)
+ (flags (:standard -rectypes -w -27-32))
+ (implements cerb_frontend))
