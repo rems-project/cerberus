@@ -2,11 +2,11 @@ From Cerberus Require CheriMemory.
 
 From Coq Require Extraction.
 
-Require Import ExtrOcamlBasic.
-Require Import ExtrOcamlChar.
-Require Import ExtrOcamlString.
-Require Import ExtrOCamlFloats.
-Require Import ExtrOCamlInt63.
+Require ExtrOcamlBasic.
+Require ExtrOcamlChar.
+Require ExtrOcamlString.
+Require ExtrOCamlFloats.
+Require ExtrOCamlInt63.
 (* Require ExtrOcamlIntConv. *)
 (* Require ExtrOcamlNatInt. *)
 
