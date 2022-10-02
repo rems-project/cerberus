@@ -1,12 +1,16 @@
 Require Import Coq.Arith.PeanoNat.
 Require Import Coq.Lists.List.
 Require Import Coq.Strings.String.
+Require Import Coq.Strings.Ascii.
 Require Import Coq.Numbers.BinNums.
 Require Import Coq.ZArith.Zcompare.
 Require Import Coq.Bool.Bool.
 
-Require Import Addr.
-Require Import Capabilities.
+Require Import bbv.Word.
+
+From Sail Require  Import Base Impl_base Values Operators_mwords.
+
+Require Import Addr Capabilities Utils CapFns.
 
 Module MorelloAddr <: VADDR.
   Definition t := Z.
@@ -20,12 +24,19 @@ Module MorelloAddr <: VADDR.
 
 End MorelloAddr.
 
-Module MoreloOTYPE : OTYPE.
+Module MoreloOTYPE <: OTYPE.
   Definition t := Z.
 End MoreloOTYPE.
 
-Module MorelloCAP_SEAL_T : CAP_SEAL_T.
-  Definition t := Z.
+Module MorelloCAP_SEAL_T <: CAP_SEAL_T.
+  Inductive cap_seal_t :=
+  | Cap_Unsealed
+  | Cap_SEntry (* "RB" in Morello *)
+  | Cap_Indirect_SEntry (* "LB" in Morello *)
+  (* | Cap_Indirect_SEntry_Pair *) (* "LBP" in Morello. TODO see why unused *)
+  | Cap_Sealed (seal:MoreloOTYPE.t).
+
+  Definition t := cap_seal_t.
 End MorelloCAP_SEAL_T.
 
 Module MorelloVADDR_INTERVAL <: VADDR_INTERVAL(MorelloAddr).
@@ -38,7 +49,7 @@ Module MorelloVADDR_INTERVAL <: VADDR_INTERVAL(MorelloAddr).
   Definition ltb (a b:t):= false. (* TODO *)
 End MorelloVADDR_INTERVAL.
 
-Module MorelloPermission : Permission.
+Module MorelloPermission <: Permission.
 
   Record morello_perm_record  :=
     {
@@ -167,3 +178,134 @@ Module MorelloPermission : Permission.
 
 End MorelloPermission.
 
+
+Module MorelloCapability <:
+  Capability
+    (MorelloAddr)
+  (MoreloOTYPE)
+  (MorelloCAP_SEAL_T)
+  (MorelloVADDR_INTERVAL)
+  (MorelloPermission).
+
+  Inductive morello_cap_t :=
+    {
+      valid : bool;
+      value : MorelloAddr.t;
+      obj_type : MoreloOTYPE.t;
+      bounds : MorelloVADDR_INTERVAL.t;
+      flags : list bool;
+      perms : MorelloPermission.t
+    }.
+
+  Definition with_valid valid (r : morello_cap_t) :=
+    Build_morello_cap_t valid r.(value) r.(obj_type) r.(bounds) r.(flags) r.(perms).
+  Definition with_value value (r : morello_cap_t) :=
+    Build_morello_cap_t r.(valid) value r.(obj_type) r.(bounds) r.(flags) r.(perms).
+  Definition with_obj_type obj_type (r : morello_cap_t) :=
+    Build_morello_cap_t r.(valid) r.(value) obj_type r.(bounds) r.(flags) r.(perms).
+  Definition with_bounds bounds (r : morello_cap_t) :=
+    Build_morello_cap_t r.(valid) r.(value) r.(obj_type) bounds r.(flags) r.(perms).
+  Definition with_flags flags (r : morello_cap_t) :=
+    Build_morello_cap_t r.(valid) r.(value) r.(obj_type) r.(bounds) flags r.(perms).
+  Definition with_perms perms (r : morello_cap_t) :=
+    Build_morello_cap_t r.(valid) r.(value) r.(obj_type) r.(bounds) r.(flags) perms.
+
+  Definition t := morello_cap_t.
+
+  Definition sizeof_vaddr : nat := 8.
+
+  Definition vaddr_bits : nat := Nat.mul sizeof_vaddr 8%nat.
+
+  Definition min_vaddr : Z := 0.
+
+  Definition max_vaddr : Z := Z.sub (Z.pow 2 (Z.of_nat vaddr_bits)) 1.
+
+  Definition cap_flags_len : nat := 8%nat.
+
+  Definition cap_is_valid (c_value : t) : bool := c_value.(valid).
+
+  Definition cap_get_obj_type (c_value : t)  := c_value.(obj_type).
+
+  Definition cap_get_value (c_value : t)  := c_value.(value).
+
+  Definition cap_get_bounds (c_value : t) := c_value.(bounds).
+
+  Definition cap_get_offset (c_value : t) : Z :=
+    Z.sub c_value.(value) (fst c_value.(bounds)).
+
+  Definition cap_SEAL_TYPE_UNSEALED := 0.
+  Definition cap_SEAL_TYPE_RB  := 1.
+  Definition cap_SEAL_TYPE_LPB := 2.
+  Definition cap_SEAL_TYPE_LB  := 3.
+
+  Definition cap_get_seal (c_value : t) : MorelloCAP_SEAL_T.t :=
+    let x_value := c_value.(obj_type) in
+    if Z.eqb x_value cap_SEAL_TYPE_UNSEALED then
+      MorelloCAP_SEAL_T.Cap_Unsealed
+    else
+      if Z.eqb x_value cap_SEAL_TYPE_RB then
+        MorelloCAP_SEAL_T.Cap_SEntry
+      else
+        if Z.eqb x_value cap_SEAL_TYPE_LPB then
+          MorelloCAP_SEAL_T.Cap_Indirect_SEntry
+        else
+          if Z.eqb x_value cap_SEAL_TYPE_LB then
+            MorelloCAP_SEAL_T.Cap_Indirect_SEntry
+          else
+            MorelloCAP_SEAL_T.Cap_Sealed x_value.
+
+  Definition cap_get_flags (c_value : t) : list bool := c_value.(flags).
+
+  Definition cap_get_perms c_value := c_value.(perms).
+
+  (* helper function to convert [mword] to list of booleans *)
+  Definition mword_to_bools {n:Z} (w: mword n) :=
+    List.map bool_of_bit (bits_of w).
+
+  Definition flags_from_value_bits (x : mword 64) : list bool :=
+    let x := zero_extend x 64 in
+    let xl := mword_to_bools x in
+    List.skipn (Nat.sub 64 8)%nat xl.
+
+  Definition decode_word (bits : mword 129) : option t :=
+    let value' := CapGetValue bits in
+    let value := projT1 (uint value') in
+    match CapGetBounds bits with
+    | Done (base', limit', isExponentValid) =>
+        if negb isExponentValid
+        then None
+        else
+          let flags := flags_from_value_bits value' in
+          let perms' := CapGetPermissions bits in
+          let perms_data := mword_to_bools perms' in
+          match MorelloPermission.of_list perms_data with
+          | None =>
+              None
+          | Some perms =>
+              let otype := projT1 (uint (CapGetObjectType bits)) in
+              Some
+                {| valid := CapIsTagSet bits;
+                  value := value;
+                  obj_type := otype;
+                  bounds := (projT1 (uint base'), projT1 (uint limit'));
+                  flags := flags;
+                  perms := perms |}
+          end
+    | _ => None
+    end.
+
+  Program Definition decode (bytes : list ascii) (tag : bool) : option t :=
+    if Nat.eqb (List.length bytes) 16%nat then
+      let bytes := List.rev bytes in
+      let bits := tag::(bool_bits_of_bytes bytes) in
+      let bitsu := List.map bitU_of_bool bits in
+      let w := vec_of_bits bitsu in
+      decode_word w
+    else
+      None.
+  Next Obligation.
+    admit. (* TODO: prove that (lenght (bool_bits_of_bytes)==128)
+              and ehence [w] is 129-bit long *)
+  Admitted.
+
+End MorelloCapability.
