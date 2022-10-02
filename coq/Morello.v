@@ -267,6 +267,10 @@ Module MorelloCapability <:
     let xl := mword_to_bools x in
     List.skipn (Nat.sub 64 8)%nat xl.
 
+  Definition flags_from_value (v : MorelloAddr.t) : list bool :=
+    let w := mword_of_int v (len:= Z.of_nat vaddr_bits) in
+    flags_from_value_bits w.
+
   Definition decode_word (bits : mword 129) : option t :=
     let value' := CapGetValue bits in
     let value := projT1 (uint value') in
@@ -310,5 +314,15 @@ Module MorelloCapability <:
 
   Definition cap_c0 (_: unit) : option t :=
     decode_word (CapNull tt).
+
+  Definition alloc_cap (a_value : MorelloAddr.t) (size : Z) : t :=
+    {|
+      valid := true;
+      value := a_value;
+      obj_type := cap_SEAL_TYPE_UNSEALED;
+      bounds := (a_value, (Z.add a_value size));
+      flags := flags_from_value a_value;
+      perms := MorelloPermission.perm_alloc
+    |}.
 
 End MorelloCapability.
