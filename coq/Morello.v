@@ -75,9 +75,13 @@ Module MorelloPermission <: Permission.
       user_perms: list bool;
     }.
 
+
   Definition t := morello_perm_record.
 
   Definition user_perms_len := 4%nat.
+
+  (* convenience constant to be used as size in `mword` *)
+  Definition perms_zlen := Z.add (Z.of_nat user_perms_len) 14.
 
   Definition perm_is_global := global.
   Definition perm_is_execute := executive.
@@ -335,5 +339,14 @@ Module MorelloCapability <:
       perms := MorelloPermission.perm_alloc_fun
     |}.
 
+  Definition vaddr_in_range (a_value : Z) : bool :=
+    Z.geb a_value min_vaddr && Z.leb a_value max_vaddr.
+
+  Definition CapSetPermissins
+    (zc: mword 129)
+    (zp: mword MorelloPermission.perms_zlen)
+    : mword 129
+    :=
+    update_subrange_vec_dec zc CAP_PERMS_HI_BIT CAP_PERMS_LO_BIT zp.
 
 End MorelloCapability.
