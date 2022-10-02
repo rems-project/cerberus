@@ -12,6 +12,9 @@ From Sail Require  Import Base Impl_base Values Operators_mwords.
 
 Require Import Addr Capabilities Utils CapFns.
 
+Import ListNotations.
+Open Scope list_scope.
+
 Module MorelloAddr <: VADDR.
   Definition t := Z.
 
@@ -177,8 +180,23 @@ Module MorelloPermission <: Permission.
 
   Definition of_list (l: list bool): option t := None. (* TODO *)
 
-  Definition to_list (p:t): list bool := List.nil. (* TODO *)
-
+  Definition to_list (p_value : t) : list bool :=
+    List.app [ p_value.(global); p_value.(executive) ]
+      (List.app p_value.(user_perms)
+        [
+          p_value.(permit_mutable_load);
+          p_value.(permit_compartment_id);
+          p_value.(permits_ccall);
+          p_value.(permits_system_access);
+          p_value.(permits_unseal);
+          p_value.(permits_seal);
+          p_value.(permits_store_local_cap);
+          p_value.(permits_store_cap);
+          p_value.(permits_load_cap);
+          p_value.(permits_execute);
+          p_value.(permits_store);
+          p_value.(permits_load)
+        ]).
 
 End MorelloPermission.
 
@@ -348,5 +366,53 @@ Module MorelloCapability <:
     : mword 129
     :=
     update_subrange_vec_dec zc CAP_PERMS_HI_BIT CAP_PERMS_LO_BIT zp.
+
+  Program Definition encode_to_word (isexact : bool) (c : t) : option (mword 129) :=
+    let bits := CapNull tt in
+    let bits :=
+      CapSetTag bits
+        (mword_of_int (len:=64) (if cap_is_valid c then 1 else 0))
+    in
+    let bits :=
+      CapSetObjectType
+        bits (mword_of_int (len:=64) (cap_get_obj_type c)) in
+    let '(base, limit) := cap_get_bounds c in
+    let len := Z.sub limit base in
+    match (
+        CapSetValue bits (mword_of_int (len:=64) base)
+          >>= (fun bits =>
+                 CapSetBounds bits (mword_of_int (len:=65) len) isexact
+                   >>= (fun bits =>
+                          CapSetValue bits (mword_of_int (len:=64) (cap_get_value c))
+                            >>= (fun bits =>
+                                   let flags := List.map bitU_of_bool (cap_get_flags c) in
+                                   let flags := vec_of_bits flags in
+                                   let flags := zero_extend flags 64 in
+                                   let bits := CapSetFlags bits flags in
+                                   let perms :=
+                                     List.map bitU_of_bool (MorelloPermission.to_list (cap_get_perms c)) in
+                                   let perms := vec_of_bits perms in
+                                   let bits := CapSetPermissins bits perms in
+                                   returnm bits)))) with
+    | Done bits => Some bits
+    | _ => None
+    end.
+  Next Obligation.
+    (* TODO: prove that [(MorelloPermission.to_list (cap_get_perms c)) = perms_len] *)
+  Admitted.
+
+  Definition cap_vaddr_representable (c : t) (a : Z) : bool
+    :=
+    vaddr_in_range a &&
+      (match encode_to_word true c with
+       | Some cap_bits =>
+           match CapIsRepresentable cap_bits (mword_of_int (len:=64) a) with
+           | Done b => b
+           | _ => false
+           end
+       | None => false
+       end
+      ).
+
 
 End MorelloCapability.
