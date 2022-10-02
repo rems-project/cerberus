@@ -325,4 +325,15 @@ Module MorelloCapability <:
       perms := MorelloPermission.perm_alloc
     |}.
 
+  Definition alloc_fun (a_value : MorelloAddr.t) : t :=
+    {|
+      valid := true;
+      value := a_value;
+      obj_type := cap_SEAL_TYPE_RB;
+      bounds := (a_value, (Z.succ (Z.succ a_value)));
+      flags := flags_from_value a_value;
+      perms := MorelloPermission.perm_alloc_fun
+    |}.
+
+
 End MorelloCapability.
