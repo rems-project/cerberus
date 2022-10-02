@@ -308,4 +308,7 @@ Module MorelloCapability <:
               and ehence [w] is 129-bit long *)
   Admitted.
 
+  Definition cap_c0 (_: unit) : option t :=
+    decode_word (CapNull tt).
+
 End MorelloCapability.

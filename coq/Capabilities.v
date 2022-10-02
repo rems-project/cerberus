@@ -135,7 +135,7 @@ Module Type Capability
   Parameter cap_get_perms: t -> P.t.
 
   (** Null capability *)
-  Parameter cap_c0: unit -> t.
+  Parameter cap_c0: unit -> option t.
 
   (** Capability for newly allocated region *)
   Parameter alloc_cap: V.t -> V.t -> t.
