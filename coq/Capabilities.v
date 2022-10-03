@@ -206,7 +206,7 @@ Module Type Capability
         - CAndPerm in RISC V
         - CLRPERM in Morello
    *)
-  Parameter cap_narrow_perms: t -> P.t -> option t.
+  Parameter cap_narrow_perms: t -> P.t -> t.
 
   (* Sealing operations *)
 

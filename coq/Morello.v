@@ -466,13 +466,13 @@ Module MorelloCapability <:
     (* assert vaddr_in_range a0 && vaddr_in_range a1 *)
     invalidate_if_sealded c.
 
-  Definition cap_narrow_perms (c : t) (p : MorelloPermission.t) : option t :=
+  Definition cap_narrow_perms (c : t) (p : MorelloPermission.t) : t :=
     let l0 := MorelloPermission.to_list c.(perms) in
     let l1 := MorelloPermission.to_list p in
     let l := List.map (fun '(a,b) =>  andb a b) (List.combine l0 l1) in
     match MorelloPermission.of_list l with
-    | Some p => Some (invalidate_if_sealded (with_perms p c))
-    | None => None
+    | Some p => invalidate_if_sealded (with_perms p c)
+    | None => c (* impossible case *)
     end.
 
   Definition cap_seal (c : t) (k : t) : t := cap_set_value c (cap_get_value k).
