@@ -475,5 +475,19 @@ Module MorelloCapability <:
     | None => None
     end.
 
+  Definition cap_seal (c : t) (k : t) : t := cap_set_value c (cap_get_value k).
+
+  Definition cap_seal_entry (c : t) : t := c. (* TODO: looks like it is not implemented yet *)
+
+  Definition cap_seal_indirect_entry (c : t) : t := c. (* TODO: looks like it is not implemented yet *)
+
+  Definition cap_seal_indirect_entry_pair (c : t) : t := c. (* TODO: looks like it is not implemented yet *)
+
+  Definition cap_set_flags (c : t) (f : list bool) : t :=
+    invalidate_if_sealded (with_flags f c).
+
+  Definition cap_unseal (c : t) (k : t) : t :=
+    with_obj_type cap_SEAL_TYPE_UNSEALED c. (* TODO: looks like it is not implemented yet *)
+
 
 End MorelloCapability.

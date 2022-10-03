@@ -3,6 +3,7 @@
 Require Import Coq.Arith.PeanoNat.
 Require Import Coq.Lists.List.
 Require Import Coq.Strings.String.
+Require Import Coq.Strings.Ascii.
 Require Import Coq.Numbers.BinNums.
 Require Import Coq.Init.Datatypes.
 
@@ -256,7 +257,7 @@ Module Type Capability
   (** Decoding sequence of bits into a capbility object. It will
         return None if list is wrong size. validity tag is passed
         separately, as it is not part of encoding.  *)
-  Parameter decode: Z -> bool -> option t.
+  Parameter decode: list ascii -> bool -> option t.
 
   (** Encode capability as list of bits.
 
