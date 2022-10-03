@@ -471,6 +471,10 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
               !^"conv_loaded_int" ^^ P.parens (pp_ct act.ct ^^ P.comma ^^^ pp_pexpr asym)
           | M_PEwrapI (act, asym) ->
               !^"wrapI" ^^ P.parens (pp_ct act.ct ^^ P.comma ^^^ pp_pexpr asym)
+          | M_PEcatch_exceptional_condition (act, asym) ->
+              !^"catch_exceptional_condition" ^^ P.parens (pp_ct act.ct ^^ P.comma ^^^ pp_pexpr asym)
+          | M_PEis_representable_integer (asym, act) ->
+              !^"is_representable_integer" ^^ P.parens (pp_pexpr asym ^^ P.comma ^^^ pp_ct act.ct)
 
           (* | M_PEcase (pe, pat_pes) -> *)
           (*   pp_keyword "case" ^^^ pp_pexpr pe ^^^ pp_keyword "of" ^^ *)

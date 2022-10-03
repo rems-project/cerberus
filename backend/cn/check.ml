@@ -486,6 +486,14 @@ let wrapI loc ity arg =
   ite_ (le_ (r, z_ maxInt), r, sub_ (r, z_ dlt))
 
 
+(* try to follow is_representable_integer from runtime/libcore/std.core *)
+let is_representable_integer arg ity = 
+  let maxInt = Memory.max_integer_type ity in
+  let minInt = Memory.min_integer_type ity in
+  and_ [le_ (z_ minInt, arg); le_ (arg, z_ maxInt)]
+  
+
+
 
 
 let check_conv_int loc ~expect (act : _ act) arg = 
@@ -741,11 +749,26 @@ let rec check_pexpr (pe : 'bty mu_pexpr) ~(expect:BT.t)
   | M_PEwrapI (act, pe) ->
      let@ () = WellTyped.ensure_base_type loc ~expect Integer in
      check_pexpr ~expect:Integer pe (fun arg ->
-     let ity = match act.ct with
-       | Integer ity -> ity
-       | _ -> Debug_ocaml.error "wrapI applied to non-integer type"
-     in
+     let ity = Option.get (Sctypes.is_integer_type act.ct) in
      k (wrapI loc ity arg))
+  | M_PEcatch_exceptional_condition (act, pe) ->
+     let@ () = WellTyped.ensure_base_type loc ~expect Integer in
+     let ity = Option.get (Sctypes.is_integer_type act.ct) in
+     check_pexpr ~expect:Integer pe (fun arg ->
+         let@ provable = provable loc in
+         match provable (t_ (is_representable_integer arg ity)) with
+         | `True -> (k arg)
+         | `False -> 
+            let@ model = model () in
+            let ub = CF.Undefined.UB036_exceptional_condition in
+            fail (fun ctxt -> {loc; msg = Undefined_behaviour {ub; ctxt; model}})
+     )
+  | M_PEis_representable_integer (pe, act) ->
+     let@ () = WellTyped.ensure_base_type loc ~expect Bool in
+     let ity = Option.get (Sctypes.is_integer_type act.ct) in
+     check_pexpr ~expect:Integer pe (fun arg ->
+         k (is_representable_integer arg ity)
+       )
   | M_PEif (pe, e1, e2) ->
      check_pexpr ~expect:Bool pe (fun c ->
      let aux e cond = 

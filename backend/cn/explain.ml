@@ -197,18 +197,21 @@ let veclasses ctxt =
       ) ctxt.computational with_logical
   in
   (* merge classes based on variable equalities *)
-  Context.LCSet.fold (fun lc g ->
-      match is_sym_equality lc with
-      | Some (s, s') ->
-         let c = find_class (in_class s) g in
-         let c' = find_class (in_class s') g in
-         let merged = VClass.merge c c' in
-         VClassSet.add merged 
-           (VClassSet.remove c' 
-              (VClassSet.remove c g))
-      | None -> 
-         g
-    ) ctxt.constraints with_all
+  (* Context.LCSet.fold (fun lc g -> *)
+  (*     match is_sym_equality lc with *)
+  (*     | Some (s, s') -> *)
+  (*        print stdout (Sym.pp s); *)
+  (*        print stdout (Sym.pp s'); *)
+  (*        print stdout (LC.pp lc); *)
+  (*        let c = find_class (in_class s) g in *)
+  (*        let c' = find_class (in_class s') g in *)
+  (*        let merged = VClass.merge c c' in *)
+  (*        VClassSet.add merged  *)
+  (*          (VClassSet.remove c'  *)
+  (*             (VClassSet.remove c g)) *)
+  (*     | None ->  *)
+  (*        g *)
+  (*   ) ctxt.constraints *) with_all
 
 
 let explanation ctxt relevant =

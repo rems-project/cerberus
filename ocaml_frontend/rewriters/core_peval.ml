@@ -446,11 +446,10 @@ let core_peval file : 'bty RW.rewriter =
 
   let stdlib_unfold_pred fsym fdecl =
     match Symbol.symbol_description fsym, fdecl with
-    | SD_Id "is_representable_integer", _
-    | SD_Id "catch_exceptional_condition", _ 
-      ->
-    (* | SD_Id name, Fun (_, sym_bTys, _) -> *)
-       true
+    (* | SD_Id "is_representable_integer", _ *)
+    (* | SD_Id "catch_exceptional_condition", _  *)
+    (*   -> *)
+    (*    true *)
     | _ ->
        false
   in

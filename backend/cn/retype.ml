@@ -232,6 +232,14 @@ let rec retype_pexpr (Old.M_Pexpr (loc, annots,bty,pexpr_)) =
        let@ asym = retype_pexpr asym in
        let act = map_act (ct_of_ct loc) act in
        return (New.M_PEwrapI (act, asym))
+    | M_PEcatch_exceptional_condition (act, asym) ->
+       let@ asym = retype_pexpr asym in
+       let act = map_act (ct_of_ct loc) act in
+       return (New.M_PEcatch_exceptional_condition (act, asym))
+    | M_PEis_representable_integer (asym, act) ->
+       let@ asym = retype_pexpr asym in
+       let act = map_act (ct_of_ct loc) act in
+       return (New.M_PEis_representable_integer (asym, act))
     (* | M_PEcase (asym,pats_pes) -> *)
     (*    let@ pats_pes =  *)
     (*      mapM (fun (pat,pexpr) -> *)

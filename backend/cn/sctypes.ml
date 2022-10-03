@@ -175,3 +175,6 @@ let rec of_ctype (Ctype.Ctype (_,ct_)) =
 let pp t = Pp_core_ctype.pp_ctype (to_ctype t)
 
 
+let is_integer_type = function
+  | Integer it -> Some it 
+  | _ -> None
