@@ -434,4 +434,38 @@ Module MorelloCapability <:
     | None => false
     end.
 
+  Definition cap_invalidate (c : t) : t := with_valid false c.
+
+  Definition is_sealed (c : t) : bool :=
+    match cap_get_seal c with
+    | MorelloCAP_SEAL_T.Cap_Unsealed => false
+    | _ => true
+    end.
+
+  Definition invalidate_if_sealded (c_value : t) : t :=
+    if is_sealed c_value then
+      cap_invalidate c_value
+    else
+      c_value.
+
+  Definition cap_set_value (c_value : t) (cv : MorelloAddr.t) : t :=
+    if cap_vaddr_representable c_value cv then
+      invalidate_if_sealded
+        (with_flags (flags_from_value cv) (with_value cv c_value))
+    else
+      cap_invalidate (with_value cv c_value).
+
+  Definition cap_narrow_bounds (c : t) (bounds : Z * Z) : t :=
+    let '(a0, a1) := bounds in
+    (* TODO(CHERI): this is placeholder representation. Due to representability constraints bounds may not end up exact as passed *)
+    (* assert vaddr_in_range a0 && vaddr_in_range a1 *)
+    invalidate_if_sealded (with_bounds (a0, a1) c).
+
+  Definition cap_narrow_bounds_exact (c : t) (bounds : Z * Z)  : t :=
+    let '(a0, a1) := bounds in
+    (* assert vaddr_in_range a0 && vaddr_in_range a1 *)
+    invalidate_if_sealded c.
+
+
+
 End MorelloCapability.
