@@ -254,7 +254,7 @@ Module Type Capability
 
   (* --- Encoding/decoding to list of bytes --- *)
 
-  (** Decoding sequence of bits into a capbility object. It will
+  (** Decoding sequence of bytes into a capbility object. It will
         return None if list is wrong size. validity tag is passed
         separately, as it is not part of encoding.  *)
   Parameter decode: list ascii -> bool -> option t.
@@ -262,12 +262,12 @@ Module Type Capability
   (** Encode capability as list of bits.
 
         boolean agrument specify if bounds needs to be encoded
-        exactly.  if exact encoding requested but no possible, inParameterid
-        capability will be returned.
+        exactly. if exact encoding requested but no possible,
+        capability will be returned unchanged.
 
         Retuns memory-encoded capability and validity tag
    *)
-  Parameter encode: bool ->  t -> (Z * bool).
+  Parameter encode: bool ->  t -> option ((list ascii) * bool).
 
   (* --- Compression-related --- *)
 

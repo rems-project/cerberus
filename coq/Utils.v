@@ -186,6 +186,23 @@ Definition Z_of_bytes (is_signed: bool) (bs:list ascii): serr Z
       aux init cs
   end.
 
+(* could be generalized as monadic map, or implemente as compistion
+   of [map] and [sequence]. *)
+Fixpoint try_map {A B:Type} (f : A -> option B) (l:list A) : option (list B)
+  :=
+  match l with
+  | [] => Some []
+  | a :: t =>
+      match f a with
+      | Some b =>
+          match try_map f t with
+          | Some bs =>  Some (b :: bs)
+          | None => None
+          end
+      | None => None
+      end
+  end.
+
 (* TODO: check if these are correct *)
 Definition Z_integerRem_t := Z.rem.
 Definition Z_integerRem_f := Z.rem.

@@ -490,4 +490,32 @@ Module MorelloCapability <:
     with_obj_type cap_SEAL_TYPE_UNSEALED c. (* TODO: looks like it is not implemented yet *)
 
 
+  (* Internal helper function to conver between Sail bytes ([memory_byte])
+     and Cerberus bytes ([ascii]). *)
+  Definition memory_byte_to_ascii (b:memory_byte) : option ascii :=
+    match List.map bool_of_bit b with
+    | [a1;a2;a3;a4;a5;a6;a7;a8] => Some (Ascii a1 a2 a3 a4 a5 a6 a7 a8)
+    | _ => None
+    end.
+
+  Program Definition encode (isexact : bool) (c : t) : option ((list ascii) * bool) :=
+    match encode_to_word isexact c with
+    | Some w =>
+        let tag := CapIsTagSet w in
+        (* strip tag bit *)
+        let bits := bits_of w in
+        let w1 := vec_of_bits (List.tail bits) in
+        match mem_bytes_of_bits w1 with
+        | Some bytes =>
+            match try_map memory_byte_to_ascii bytes with
+            | Some chars => Some ((List.rev chars), tag)
+            | None => None
+            end
+        | None => None
+        end
+    | None => None
+    end.
+
+
+
 End MorelloCapability.
