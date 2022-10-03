@@ -644,14 +644,11 @@ Module CheriMemory
             let bs := List.map (fun (x : ascii) => absbyte_v Prov_none None (Some x)) bs' in
             ret (funptrmap, (clear_caps addr (Z.of_nat (List.length bs)) captags), bs)
         | MVinteger ity (IC _ c_value) =>
-            let '(cb, ct) := C.encode true c_value in
-            cb'  <- bytes_of_Z false (*TODO: not sure about sign *)
-                      (Z.to_nat (IMP.get.(sizeof_pointer)))
-                      cb ;;
+            '(cb, ct) <- option2serr "int encoding error" (C.encode true c_value) ;;
             ret (funptrmap, (ZMap.add addr ct captags),
                 (mapi
                    (fun (i_value : nat) (b_value : ascii) =>
-                      absbyte_v Prov_none None (Some b_value)) cb'))
+                      absbyte_v Prov_none None (Some b_value)) cb))
         | MVfloating fty fval =>
             sz <- sizeof DEFAULT_FUEL None (Ctype.Ctype nil (Ctype.Basic (Ctype.Floating fty))) ;;
             bs' <- bytes_of_Z true (Z.to_nat sz) (bits_of_float fval) ;;
@@ -664,23 +661,17 @@ Module CheriMemory
                 ((FP_valid (Symbol.Symbol file_dig n_value opt_name)) as
                   fp) =>
                 let '(funptrmap, c_value) := resolve_function_pointer funptrmap fp in
-                let '(cb, ct) := C.encode true c_value in
-                cb'  <- bytes_of_Z false (*TODO: not sure about sign *)
-                          (Z.to_nat (IMP.get.(sizeof_pointer)))
-                          cb ;;
+                '(cb, ct) <- option2serr "pointer encoding error" (C.encode true c_value) ;;
                 ret (funptrmap, (ZMap.add addr ct captags),
                     (mapi
                        (fun (i_value : nat) (b_value : ascii) =>
-                          absbyte_v prov (Some i_value) (Some b_value)) cb'))
+                          absbyte_v prov (Some i_value) (Some b_value)) cb))
             | (PVfunction (FP_invalid c_value) | PVconcrete c_value) =>
-                let '(cb, ct) := C.encode true c_value in
-                cb'  <- bytes_of_Z false (*TODO: not sure about sign *)
-                          (Z.to_nat (IMP.get.(sizeof_pointer)))
-                          cb ;;
+                '(cb, ct) <- option2serr "function encoding error" (C.encode true c_value) ;;
                 ret (funptrmap, (ZMap.add addr ct captags),
                     (mapi
                        (fun (i_value : nat) (b_value : ascii) =>
-                          absbyte_v prov (Some i_value) (Some b_value)) cb'))
+                          absbyte_v prov (Some i_value) (Some b_value)) cb))
             end
         | MVarray mvals =>
             '(funptrmap, captags, _, bs_s) <-
@@ -1220,12 +1211,11 @@ Module CheriMemory
             let _:bool := iss in (* hack to hint type checker *)
             match extract_unspec bs1' with
             | Some cs =>
-                zb <- Z_of_bytes false cs ;;
                 ret (provs_of_bytes bs1,
                     match tag_query_f addr with
                     | None => MVEunspecified cty
                     | Some tag =>
-                        match C.decode zb tag with
+                        match C.decode cs tag with
                         | None => MVErr (MerrCHERI loc CheriErrDecodingCap)
                         | Some c_value =>
                             if iss then
@@ -1285,12 +1275,11 @@ Module CheriMemory
             '(prov, prov_status, bs1') <- split_bytes bs1 ;;
             match extract_unspec bs1' with
             | Some cs =>
-                zb <- Z_of_bytes false cs ;;
                 ret (NoTaint,
                     match tag_query_f addr with
                     | None => MVEunspecified cty
                     | Some tag =>
-                        match C.decode zb tag with
+                        match C.decode cs tag with
                         | None => MVErr (MerrCHERI loc CheriErrDecodingCap)
                         | Some n_value =>
                             match ref_ty with
@@ -1298,7 +1287,7 @@ Module CheriMemory
                                 match tag_query_f addr with
                                 | None => MVEunspecified cty
                                 | Some tag =>
-                                    match C.decode zb tag with
+                                    match C.decode cs tag with
                                     | None => MVErr (MerrCHERI loc CheriErrDecodingCap)
                                     | Some c_value =>
                                         let n_value :=
