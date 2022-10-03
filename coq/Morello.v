@@ -336,8 +336,32 @@ Module MorelloCapability <:
               and ehence [w] is 129-bit long *)
   Admitted.
 
-  Definition cap_c0 (_: unit) : option t :=
-    decode_word (CapNull tt).
+  Definition cap_c0 (_: unit) : t :=
+    {| valid := false;
+      value := 0;
+      obj_type := 0;
+      bounds := (0, 18446744073709551616);
+      flags := [false; false; false; false; false; false; false; false];
+      perms :=
+        {|
+          MorelloPermission.global := false;
+          MorelloPermission.executive := false ;
+          MorelloPermission.permits_load := false;
+          MorelloPermission.permits_store := false;
+          MorelloPermission.permits_execute := false ;
+          MorelloPermission.permits_load_cap := false;
+          MorelloPermission.permits_store_cap := false;
+          MorelloPermission.permits_store_local_cap := false;
+          MorelloPermission.permits_seal := false;
+          MorelloPermission.permits_unseal := false;
+          MorelloPermission.permits_system_access := false;
+          MorelloPermission.permits_ccall := false;
+          MorelloPermission.permit_compartment_id := false;
+          MorelloPermission.permit_mutable_load := false;
+
+          MorelloPermission.user_perms := [false; false; false; false]
+        |}
+    |}.
 
   Definition alloc_cap (a_value : MorelloAddr.t) (size : Z) : t :=
     {|
@@ -545,13 +569,9 @@ Module MorelloCapability <:
 
   Definition cap_is_null_derived (c : t) : bool :=
     let a := cap_get_value c in
-    match cap_c0 tt with
-    | Some c0 =>
-        let c' := cap_set_value c0 a in
-        eqb c c'
-    | _ => false
-    end.
-
+    let c0 := cap_c0 tt in
+    let c' := cap_set_value c0 a in
+    eqb c c'.
 
   Lemma eqb_exact_compare: forall a b, eqb a b = true <-> exact_compare a b = Eq.
   Proof.
