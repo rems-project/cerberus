@@ -2,12 +2,10 @@
 Require Import Sail.Base.
 Require Import Sail.Real.
 Require Import CapFnsTypes.
-
 Import ListNotations.
-
-Local Open Scope string.
-Local Open Scope bool.
-Local Open Scope Z.
+Open Scope string.
+Open Scope bool.
+Open Scope Z.
 
 
 Definition eq_unit (_ : unit) (_ : unit) : {_bool : bool & ArithFact (_bool)} := build_ex (true).
@@ -30,7 +28,7 @@ Definition sail_ones (n : Z) `{ArithFact (n >=? 0)} : mword n := not_vec (zeros 
 Definition slice_mask (n : Z) (i : Z) (l : Z) `{ArithFact (n >=? 0)} : mword n :=
    if sumbool_of_bool (Z.geb l n) then shiftl (sail_ones n) i
    else
-     let one : bits n := sail_mask n ('b"1"  : bits 1) in
+     let one : bits n := sail_mask n (('b"1")  : bits 1) in
      shiftl (sub_vec (shiftl one l) one) i.
 
 Definition _shl_int_general (m : Z) (n : Z) : Z :=
@@ -46,11 +44,22 @@ Definition fdiv_int (n : Z) (m : Z) : Z :=
 
 Definition fmod_int (n : Z) (m : Z) : Z := Z.sub n (Z.mul m (fdiv_int n m)).
 
+Definition undefined_option {a : Type} (typ_a : a) : M (option a) :=
+   (undefined_unit tt) >>= fun u_0 : unit =>
+   let u_1 : a := typ_a in
+   (internal_pick [Some u_1; None])
+    : M (option a).
+
 Definition is_none {a : Type} (opt : option a) : bool :=
    match opt with | Some _ => false | None => true end.
 
 Definition is_some {a : Type} (opt : option a) : bool :=
    match opt with | Some _ => true | None => false end.
+
+Definition concat_str_bits {n : Z} (str : string) (x : mword n) : string :=
+   String.append str (string_of_bits x).
+
+Definition concat_str_dec (str : string) (x : Z) : string := String.append str (dec_str x).
 
 Definition eq_bits_int {n : Z} (x : mword n) (y : Z) `{ArithFact ((n >=? 0) && (y >=? 0))} : bool :=
    Z.eqb (projT1 (uint x)) y.
@@ -92,7 +101,7 @@ Definition CAP_LIMIT_LO_BIT : Z := 80.
 Definition CAP_IE_BIT : Z := 94.
 #[export] Hint Unfold CAP_IE_BIT : sail.
 Definition CapIsInternalExponent (c : mword 129) : bool :=
-   eq_vec (vec_of_bits [access_vec_dec c CAP_IE_BIT]  : mword 1) ('b"0"  : mword 1).
+   eq_vec (vec_of_bits [access_vec_dec c CAP_IE_BIT]  : mword 1) (('b"0")  : mword 1).
 
 Definition CapGetExponent (c : mword 129)
 : {rangevar : Z & ArithFact ((0 <=? rangevar) && (rangevar <=? 63))} :=
@@ -115,7 +124,7 @@ Definition CAP_BOUND_MAX : bits CAP_BOUND_NUM_BITS :=
 Slice_int (shl_int 1 CAP_VALUE_NUM_BITS) 0 CAP_BOUND_NUM_BITS.
 #[export] Hint Unfold CAP_BOUND_MAX : sail.
 Definition CAP_BOUND_MIN : bits CAP_BOUND_NUM_BITS :=
-Slice_int (projT1 (uint (Ox"0"  : mword 4))) 0 CAP_BOUND_NUM_BITS.
+Slice_int (projT1 (uint ((Ox"0")  : mword 4))) 0 CAP_BOUND_NUM_BITS.
 #[export] Hint Unfold CAP_BOUND_MIN : sail.
 Definition CAP_MAX_ENCODEABLE_EXPONENT : Z := 63.
 #[export] Hint Unfold CAP_MAX_ENCODEABLE_EXPONENT : sail.
@@ -128,7 +137,7 @@ Definition CAP_BASE_MANTISSA_LO_BIT : Z := 67.
 #[export] Hint Unfold CAP_BASE_MANTISSA_LO_BIT : sail.
 Definition CapGetBottom (c : mword 129) : mword (79 - 64 + 1) :=
    if CapIsInternalExponent c then
-     concat_vec (subrange_vec_dec c CAP_BASE_HI_BIT CAP_BASE_MANTISSA_LO_BIT) ('b"000"  : mword 3)
+     concat_vec (subrange_vec_dec c CAP_BASE_HI_BIT CAP_BASE_MANTISSA_LO_BIT) (('b"000")  : mword 3)
    else subrange_vec_dec c CAP_BASE_HI_BIT CAP_BASE_LO_BIT.
 
 Definition CAP_LIMIT_HI_BIT : Z := 93.
@@ -139,27 +148,29 @@ Definition CapUnsignedLessThan {N : Z} (a : mword N) (b : mword N) : bool :=
    Z.ltb (projT1 (uint a)) (projT1 (uint b)).
 
 Definition CapGetTop (c : mword 129) : M (mword (79 - 64 + 1)) :=
-   let lmsb : bits 2 := 'b"00"  : mword 2 in
-   let lcarry : bits 2 := 'b"00"  : mword 2 in
+   let lmsb : bits 2 := ('b"00")  : mword 2 in
+   let lcarry : bits 2 := ('b"00")  : mword 2 in
    let b : bits CAP_MW := CapGetBottom c in
-   (Fail "undefined value of unsupported type") >>= fun t : bits CAP_MW =>
+   (undefined_bitvector (Z.add (Z.sub 79 64) 1)) >>= fun t : bits CAP_MW =>
    let '(lmsb, t) :=
      (if CapIsInternalExponent c then
-        let lmsb : bits 2 := 'b"01"  : mword 2 in
+        let lmsb : bits 2 := ('b"01")  : mword 2 in
         let t : bits CAP_MW :=
           concat_vec
-            (concat_vec ('b"00"  : mword 2)
-               (subrange_vec_dec c CAP_LIMIT_HI_BIT CAP_LIMIT_MANTISSA_LO_BIT)) ('b"000"  : mword 3) in
+            (concat_vec (('b"00")  : mword 2)
+               (subrange_vec_dec c CAP_LIMIT_HI_BIT CAP_LIMIT_MANTISSA_LO_BIT))
+            (('b"000")
+             : mword 3) in
         (lmsb, t)
       else
         let t : bits CAP_MW :=
-          concat_vec ('b"00"  : mword 2) (subrange_vec_dec c CAP_LIMIT_HI_BIT CAP_LIMIT_LO_BIT) in
+          concat_vec (('b"00")  : mword 2) (subrange_vec_dec c CAP_LIMIT_HI_BIT CAP_LIMIT_LO_BIT) in
         (lmsb, t))
       : (mword 2 * mword (79 - 64 + 1)) in
    let lcarry : mword 2 :=
      if CapUnsignedLessThan (subrange_vec_dec t (Z.sub CAP_MW 3) 0)
           (subrange_vec_dec b (Z.sub CAP_MW 3) 0) then
-       'b"01"
+       ('b"01")
         : mword 2
      else lcarry in
    let t : bits CAP_MW :=
@@ -174,8 +185,6 @@ Definition CapIsExponentOutOfRange (c : mword 129) : bool :=
 Definition CapUnsignedGreaterThan {N : Z} (a : mword N) (b : mword N) : bool :=
    Z.gtb (projT1 (uint a)) (projT1 (uint b)).
 
-Ltac run_solver ::= clear_irrelevant_defns; solve_arithfact.
-
 Definition CapGetBounds (c : mword 129)
 : M ((mword (63 - 0 + 1 + 1) * mword (63 - 0 + 1 + 1) * bool)) :=
    let exp := projT1 (CapGetExponent c) in
@@ -183,23 +192,23 @@ Definition CapGetBounds (c : mword 129)
       returnM (CAP_BOUND_MIN, CAP_BOUND_MAX, true)
     else if CapIsExponentOutOfRange c then returnM (CAP_BOUND_MIN, CAP_BOUND_MAX, false)
     else
-      (Fail "undefined value of unsupported type") >>= fun base : bits 66 =>
-      (Fail "undefined value of unsupported type") >>= fun limit : bits 66 =>
+      (undefined_bitvector 66) >>= fun base : bits 66 =>
+      (undefined_bitvector 66) >>= fun limit : bits 66 =>
       let bottom : bits CAP_MW := CapGetBottom c in
       (CapGetTop c) >>= fun top : bits CAP_MW =>
-      let base := (set_slice 66 exp base 0 (Zeros exp))  : mword 66 in
-      let limit := (set_slice 66 exp limit 0 (Zeros exp))  : mword 66 in
+      let base : bits 66 := set_slice 66 exp base 0 (Zeros exp) in
+      let limit : bits 66 := set_slice 66 exp limit 0 (Zeros exp) in
       assert_exp' (Z.ltb (Z.sub (Z.add (projT1 (__id exp)) 16) 1) 66) "v8_base.sail 1391:41 - 1391:42" >>= fun _ =>
       let base : bits 66 :=
         update_subrange_vec_dec base (Z.sub (Z.add exp CAP_MW) 1) exp (autocast (autocast bottom)) in
       let limit : bits 66 :=
         update_subrange_vec_dec limit (Z.sub (Z.add exp CAP_MW) 1) exp (autocast (autocast top)) in
-      let a : bits 66 := concat_vec ('b"00"  : mword 2) (CapBoundsAddress (CapGetValue c)) in
+      let a : bits 66 := concat_vec (('b"00")  : mword 2) (CapBoundsAddress (CapGetValue c)) in
       let A3 : bits 3 :=
         autocast (subrange_vec_dec a (Z.sub (Z.add exp CAP_MW) 1) (Z.sub (Z.add exp CAP_MW) 3)) in
       let B3 : bits 3 := subrange_vec_dec bottom (Z.sub CAP_MW 1) (Z.sub CAP_MW 3) in
       let T3 : bits 3 := subrange_vec_dec top (Z.sub CAP_MW 1) (Z.sub CAP_MW 3) in
-      let R3 : bits 3 := sub_vec B3 ('b"001"  : mword 3) in
+      let R3 : bits 3 := sub_vec B3 (('b"001")  : mword 3) in
       let aHi := 0 in
       let aHi := if CapUnsignedLessThan A3 R3 then 1 else 0 in
       let aHi := aHi in
@@ -225,29 +234,29 @@ Definition CapGetBounds (c : mword 129)
          : (mword 66 * mword 66) in
       let l2 : bits 2 := subrange_vec_dec limit 64 63 in
       let b2 : bits 2 :=
-        concat_vec ('b"0"  : mword 1) (vec_of_bits [access_vec_dec base 63]  : mword 1) in
+        concat_vec (('b"0")  : mword 1) (vec_of_bits [access_vec_dec base 63]  : mword 1) in
       let limit : mword 66 :=
         if sumbool_of_bool
           (andb (Z.ltb exp (Z.sub CAP_MAX_EXPONENT 1))
-             (CapUnsignedGreaterThan (sub_vec l2 b2) ('b"01"  : mword 2))) then
+             (CapUnsignedGreaterThan (sub_vec l2 b2) (('b"01")  : mword 2))) then
           update_vec_dec limit 64 (Bit (not_vec (vec_of_bits [access_vec_dec limit 64]  : mword 1)))
         else limit in
-      returnM (concat_vec ('b"0"  : mword 1) (subrange_vec_dec base 63 0), subrange_vec_dec limit 64
-                                                                             0, true))
+      returnM (concat_vec (('b"0")  : mword 1) (subrange_vec_dec base 63 0), subrange_vec_dec limit
+                                                                               64 0, true))
     : M ((mword (63 - 0 + 1 + 1) * mword (63 - 0 + 1 + 1) * bool)).
 
 Definition CapBoundsEqual (a : mword 129) (b : mword 129) : M (bool) :=
-   (Fail "undefined value of unsupported type") >>= fun abase : bits CAP_BOUND_NUM_BITS =>
-   (Fail "undefined value of unsupported type") >>= fun alimit : bits CAP_BOUND_NUM_BITS =>
-   (Fail "undefined value of unsupported type") >>= fun avalid : bool =>
-   (Fail "undefined value of unsupported type") >>= fun bbase : bits CAP_BOUND_NUM_BITS =>
-   (Fail "undefined value of unsupported type") >>= fun blimit : bits CAP_BOUND_NUM_BITS =>
-   (Fail "undefined value of unsupported type") >>= fun bvalid : bool =>
+   (undefined_bitvector (Z.add (Z.add (Z.sub 63 0) 1) 1)) >>= fun abase : bits CAP_BOUND_NUM_BITS =>
+   (undefined_bitvector (Z.add (Z.add (Z.sub 63 0) 1) 1)) >>= fun alimit : bits CAP_BOUND_NUM_BITS =>
+   (undefined_bool tt) >>= fun avalid : bool =>
+   (undefined_bitvector (Z.add (Z.add (Z.sub 63 0) 1) 1)) >>= fun bbase : bits CAP_BOUND_NUM_BITS =>
+   (undefined_bitvector (Z.add (Z.add (Z.sub 63 0) 1) 1)) >>= fun blimit : bits CAP_BOUND_NUM_BITS =>
+   (undefined_bool tt) >>= fun bvalid : bool =>
    (CapGetBounds a) >>= fun w__0 : (mword (63 - 0 + 1 + 1) * mword (63 - 0 + 1 + 1) * bool) =>
    let '(tup__0, tup__1, tup__2) := w__0  : (mword (63 - 0 + 1 + 1) * mword (63 - 0 + 1 + 1) * bool) in
-   let abase := tup__0  : mword (63 - 0 + 1 + 1) in
-   let alimit := tup__1  : mword (63 - 0 + 1 + 1) in
-   let avalid := tup__2  : bool in
+   let abase : bits CAP_BOUND_NUM_BITS := tup__0 in
+   let alimit : bits CAP_BOUND_NUM_BITS := tup__1 in
+   let avalid : bool := tup__2 in
    (CapGetBounds b) >>= fun w__1 : (mword (63 - 0 + 1 + 1) * mword (63 - 0 + 1 + 1) * bool) =>
    let '(tup__0, tup__1, tup__2) := w__1  : (mword (63 - 0 + 1 + 1) * mword (63 - 0 + 1 + 1) * bool) in
    let bbase : bits CAP_BOUND_NUM_BITS := tup__0 in
@@ -257,7 +266,7 @@ Definition CapBoundsEqual (a : mword 129) (b : mword 129) : M (bool) :=
 
 Definition CapIsRepresentable (c : mword 129) (address : mword (63 - 0 + 1)) : M (bool) :=
    let newc : bits 129 := c in
-   let newc := (update_subrange_vec_dec newc CAP_VALUE_HI_BIT CAP_VALUE_LO_BIT address)  : mword 129 in
+   let newc : bits 129 := update_subrange_vec_dec newc CAP_VALUE_HI_BIT CAP_VALUE_LO_BIT address in
    (CapBoundsEqual c newc)
     : M (bool).
 
@@ -268,7 +277,7 @@ Definition CapSetTag (c : mword 129) (t : mword 64) : mword 129 :=
    update_vec_dec r CAP_TAG_BIT (Bit (vec_of_bits [access_vec_dec t 0]  : mword 1)).
 
 Definition CapWithTagClear (c : mword 129) : mword 129 :=
-   CapSetTag c (zero_extend ('b"0"  : mword 1) 64).
+   CapSetTag c (zero_extend (('b"0")  : mword 1) 64).
 
 Definition CapSetValue (c__arg : mword 129) (v : mword (63 - 0 + 1)) : M (mword 129) :=
    let c : bits 129 := c__arg in
@@ -358,14 +367,15 @@ Definition CapUnsignedGreaterThanOrEqual {N : Z} (a : mword N) (b : mword N) : b
 Definition CapIsRepresentableFast (c : mword 129) (increment_name__arg : mword (63 - 0 + 1))
 : M (bool) :=
    let increment_name : bits CAP_VALUE_NUM_BITS := increment_name__arg in
-   (Fail "undefined value of unsupported type") >>= fun B3 : bits (0 + (CAP_MW - 1 - (CAP_MW - 3) + 1)) =>
-   (Fail "undefined value of unsupported type") >>= fun R' : bits 16 =>
-   (Fail "undefined value of unsupported type") >>= fun R3 : bits 3 =>
-   (Fail "undefined value of unsupported type") >>= fun a_mid : bits (0 + (CAP_MW - 1 - 0 + 1)) =>
-   (Fail "undefined value of unsupported type") >>= fun diff : bits 16 =>
-   (Fail "undefined value of unsupported type") >>= fun diff1 : bits 16 =>
-   (Fail "undefined value of unsupported type") >>= fun i_mid : bits (0 + (CAP_MW - 1 - 0 + 1)) =>
-   (Fail "undefined value of unsupported type") >>= fun i_top : bits 64 =>
+   (undefined_bitvector
+      (Z.add 0 (Z.add (Z.sub (Z.sub (Z.add (Z.sub 79 64) 1) 1) (Z.sub (Z.add (Z.sub 79 64) 1) 3)) 1))) >>= fun B3 : bits (0 + (CAP_MW - 1 - (CAP_MW - 3) + 1)) =>
+   (undefined_bitvector 16) >>= fun R' : bits 16 =>
+   (undefined_bitvector 3) >>= fun R3 : bits 3 =>
+   (undefined_bitvector (Z.add 0 (Z.add (Z.sub (Z.sub (Z.add (Z.sub 79 64) 1) 1) 0) 1))) >>= fun a_mid : bits (0 + (CAP_MW - 1 - 0 + 1)) =>
+   (undefined_bitvector 16) >>= fun diff : bits 16 =>
+   (undefined_bitvector 16) >>= fun diff1 : bits 16 =>
+   (undefined_bitvector (Z.add 0 (Z.add (Z.sub (Z.sub (Z.add (Z.sub 79 64) 1) 1) 0) 1))) >>= fun i_mid : bits (0 + (CAP_MW - 1 - 0 + 1)) =>
+   (undefined_bitvector 64) >>= fun i_top : bits 64 =>
    let exp := projT1 (CapGetExponent c) in
    returnM (if sumbool_of_bool (Z.geb exp (Z.sub CAP_MAX_EXPONENT 2)) then true
             else
@@ -379,7 +389,7 @@ Definition CapIsRepresentableFast (c : mword 129) (increment_name__arg : mword (
                 subrange_vec_dec (shiftr a exp) (Z.sub CAP_MW 1) 0 in
               let B3 : bits (0 + (CAP_MW - 1 - (CAP_MW - 3) + 1)) :=
                 subrange_vec_dec (CapGetBottom c) (Z.sub CAP_MW 1) (Z.sub CAP_MW 3) in
-              let R3 : bits 3 := sub_vec B3 ('b"001"  : mword 3) in
+              let R3 : bits 3 := sub_vec B3 (('b"001")  : mword 3) in
               let R' : bits 16 := concat_vec R3 (Zeros (Z.sub CAP_MW 3)) in
               let diff : bits 16 := sub_vec R' a_mid in
               let diff1 : bits 16 := sub_vec_int diff 1 in
@@ -390,16 +400,15 @@ Definition CapIsRepresentableFast (c : mword 129) (increment_name__arg : mword (
 
 Definition CapAdd (c : mword 129) (increment_name : mword (63 - 0 + 1)) : M (mword 129) :=
    let newc : bits 129 := c in
-   let newc :=
-     (update_subrange_vec_dec newc CAP_VALUE_HI_BIT CAP_VALUE_LO_BIT
-        (add_vec (CapGetValue c) increment_name))
-      : mword 129 in
+   let newc : bits 129 :=
+     update_subrange_vec_dec newc CAP_VALUE_HI_BIT CAP_VALUE_LO_BIT
+       (add_vec (CapGetValue c) increment_name) in
    (CapIsRepresentableFast c increment_name) >>= fun w__0 : bool =>
    let newc : mword 129 :=
-     if sumbool_of_bool (negb w__0) then update_vec_dec newc CAP_TAG_BIT (Bit ('b"0"  : mword 1))
+     if sumbool_of_bool (negb w__0) then update_vec_dec newc CAP_TAG_BIT (Bit (('b"0")  : mword 1))
      else newc in
    let newc : mword 129 :=
-     if CapIsExponentOutOfRange c then update_vec_dec newc CAP_TAG_BIT (Bit ('b"0"  : mword 1))
+     if CapIsExponentOutOfRange c then update_vec_dec newc CAP_TAG_BIT (Bit (('b"0")  : mword 1))
      else newc in
    let newc : mword 129 :=
      if andb (CapBoundsUsesValue (projT1 (CapGetExponent c)))
@@ -407,7 +416,7 @@ Definition CapAdd (c : mword 129) (increment_name : mword (63 - 0 + 1)) : M (mwo
              (vec_of_bits [access_vec_dec (CapGetValue c) (Z.sub CAP_FLAGS_LO_BIT 1)]  : mword 1)
              (vec_of_bits [access_vec_dec (CapGetValue newc) (Z.sub CAP_FLAGS_LO_BIT 1)]  : mword 1))
      then
-       update_vec_dec newc CAP_TAG_BIT (Bit ('b"0"  : mword 1))
+       update_vec_dec newc CAP_TAG_BIT (Bit (('b"0")  : mword 1))
      else newc in
    returnM newc.
 
@@ -421,15 +430,15 @@ Definition CapUnsignedLessThanOrEqual {N : Z} (a : mword N) (b : mword N) : bool
 Definition CapIsRangeInBounds
 (c : mword 129) (start_address : mword (63 - 0 + 1)) (length : mword (63 - 0 + 1 + 1))
 : M (bool) :=
-   (Fail "undefined value of unsupported type") >>= fun base : bits CAP_BOUND_NUM_BITS =>
-   (Fail "undefined value of unsupported type") >>= fun limit : bits CAP_BOUND_NUM_BITS =>
-   (Fail "undefined value of unsupported type") >>= fun valid_name : bool =>
+   (undefined_bitvector (Z.add (Z.add (Z.sub 63 0) 1) 1)) >>= fun base : bits CAP_BOUND_NUM_BITS =>
+   (undefined_bitvector (Z.add (Z.add (Z.sub 63 0) 1) 1)) >>= fun limit : bits CAP_BOUND_NUM_BITS =>
+   (undefined_bool tt) >>= fun valid_name : bool =>
    (CapGetBounds c) >>= fun w__0 : (mword (63 - 0 + 1 + 1) * mword (63 - 0 + 1 + 1) * bool) =>
    let '(tup__0, tup__1, tup__2) := w__0  : (mword (63 - 0 + 1 + 1) * mword (63 - 0 + 1 + 1) * bool) in
    let base : bits CAP_BOUND_NUM_BITS := tup__0 in
    let limit : bits CAP_BOUND_NUM_BITS := tup__1 in
    let valid_name : bool := tup__2 in
-   let start_ext : bits 65 := concat_vec ('b"0"  : mword 1) start_address in
+   let start_ext : bits 65 := concat_vec (('b"0")  : mword 1) start_address in
    let limit_ext : bits 65 := add_vec start_ext length in
    returnM (andb
               (andb (CapUnsignedGreaterThanOrEqual start_ext base)
@@ -439,7 +448,7 @@ Definition CapGetTag (c : mword 129) : mword 64 :=
    zero_extend (vec_of_bits [access_vec_dec c CAP_TAG_BIT]  : mword 1) 64.
 
 Definition CapIsTagClear (c : mword 129) : bool :=
-   eq_vec (vec_of_bits [access_vec_dec (CapGetTag c) 0]  : mword 1) ('b"0"  : mword 1).
+   eq_vec (vec_of_bits [access_vec_dec (CapGetTag c) 0]  : mword 1) (('b"0")  : mword 1).
 
 Definition CapPermsInclude (perms : mword 64) (mask : mword 64) : bool :=
    eq_vec
@@ -448,12 +457,9 @@ Definition CapPermsInclude (perms : mword 64) (mask : mword 64) : bool :=
      (subrange_vec_dec mask (Z.sub CAP_PERMS_NUM_BITS 1) 0).
 
 Definition CapGetBase (c : mword 129) : M (mword (63 - 0 + 1)) :=
-   (Fail "undefined value of unsupported type") >>= fun base : bits CAP_BOUND_NUM_BITS =>
-   (CapGetBounds c) >>= fun w__0 : (mword (63 - 0 + 1 + 1) * mword (63 - 0 + 1 + 1) * bool) =>
-   let '(tup__0, tup__1, tup__2) := w__0  : (mword (63 - 0 + 1 + 1) * mword (63 - 0 + 1 + 1) * bool) in
-   let base : bits CAP_BOUND_NUM_BITS := tup__0 in
-   let __ignore_14 := tup__1 in
-   let __ignore_15 := tup__2 in
+   (undefined_bitvector (Z.add (Z.add (Z.sub 63 0) 1) 1)) >>= fun base : bits CAP_BOUND_NUM_BITS =>
+   (CapGetBounds c) >>= fun '((__tup_0, _, _)) =>
+   let base : bits CAP_BOUND_NUM_BITS := __tup_0 in
    returnM (slice base 0 CAP_VALUE_NUM_BITS).
 
 Definition CapClearPerms (c__arg : mword 129) (mask : mword 64) : mword 129 :=
@@ -468,7 +474,7 @@ Definition CapIsMutableLoadPermitted (c : mword 129) : bool :=
    CapCheckPermissions c CAP_PERM_MUTABLE_LOAD.
 
 Definition CapIsTagSet (c : mword 129) : bool :=
-   eq_vec (vec_of_bits [access_vec_dec (CapGetTag c) 0]  : mword 1) ('b"1"  : mword 1).
+   eq_vec (vec_of_bits [access_vec_dec (CapGetTag c) 0]  : mword 1) (('b"1")  : mword 1).
 
 Definition CapSetObjectType (c__arg : mword 129) (o : mword 64) : mword 129 :=
    let c : bits 129 := c__arg in
@@ -477,10 +483,10 @@ Definition CapSetObjectType (c__arg : mword 129) (o : mword 64) : mword 129 :=
 
 Definition CapSetBounds (c : mword 129) (req_len : mword (63 - 0 + 1 + 1)) (exact : bool)
 : M (mword 129) :=
-   (Fail "undefined value of unsupported type") >>= fun L_ie : bits 13 =>
-   (Fail "undefined value of unsupported type") >>= fun obase : bits CAP_BOUND_NUM_BITS =>
-   (Fail "undefined value of unsupported type") >>= fun olimit : bits CAP_BOUND_NUM_BITS =>
-   (Fail "undefined value of unsupported type") >>= fun ovalid : bool =>
+   (undefined_bitvector 13) >>= fun L_ie : bits 13 =>
+   (undefined_bitvector (Z.add (Z.add (Z.sub 63 0) 1) 1)) >>= fun obase : bits CAP_BOUND_NUM_BITS =>
+   (undefined_bitvector (Z.add (Z.add (Z.sub 63 0) 1) 1)) >>= fun olimit : bits CAP_BOUND_NUM_BITS =>
+   (undefined_bool tt) >>= fun ovalid : bool =>
    assert_exp (CapUnsignedLessThanOrEqual req_len CAP_BOUND_MAX) "v8_base.sail 45066:61 - 45066:62" >>
    let exp : Z :=
      Z.sub CAP_MAX_EXPONENT
@@ -488,14 +494,16 @@ Definition CapSetBounds (c : mword 129) (req_len : mword (63 - 0 + 1 + 1)) (exac
         (count_leading_zeros (subrange_vec_dec req_len CAP_VALUE_NUM_BITS (Z.sub CAP_MW 1)))) in
    let ie : bool :=
      orb (projT1 (neq_int exp 0))
-       (eq_vec (vec_of_bits [access_vec_dec req_len (Z.sub CAP_MW 2)]  : mword 1) ('b"1"  : mword 1)) in
+       (eq_vec (vec_of_bits [access_vec_dec req_len (Z.sub CAP_MW 2)]  : mword 1)
+          (('b"1")
+           : mword 1)) in
    let base : bits CAP_VALUE_NUM_BITS := CapGetValue c in
    let abase : bits CAP_VALUE_NUM_BITS :=
      if CapBoundsUsesValue (projT1 (CapGetExponent c)) then CapBoundsAddress base
      else base in
-   let req_base : bits (CAP_VALUE_NUM_BITS + 2) := concat_vec ('b"00"  : mword 2) abase in
+   let req_base : bits (CAP_VALUE_NUM_BITS + 2) := concat_vec (('b"00")  : mword 2) abase in
    let req_top : bits (CAP_VALUE_NUM_BITS + 2) :=
-     add_vec req_base (concat_vec ('b"0"  : mword 1) req_len) in
+     add_vec req_base (concat_vec (('b"0")  : mword 1) req_len) in
    let Bbits : bits CAP_MW := subrange_vec_dec req_base (Z.sub CAP_MW 1) 0 in
    let TBits : bits CAP_MW := subrange_vec_dec req_top (Z.sub CAP_MW 1) 0 in
    let lostTop : bool := false in
@@ -520,26 +528,26 @@ Definition CapSetBounds (c : mword 129) (req_len : mword (63 - 0 + 1 + 1)) (exac
       assert_exp' (Z.geb 66 (Z.add (projT1 (__id exp)) 3)) "v8_base.sail 45092:47 - 45092:48" >>= fun _ =>
       let maskLo : bits (CAP_VALUE_NUM_BITS + 2) :=
         zero_extend (Ones (Z.add exp 3)) (Z.add CAP_VALUE_NUM_BITS 2) in
-      let lostBottom :=
-        (neq_vec (and_vec req_base maskLo) (Zeros (Z.add CAP_VALUE_NUM_BITS 2)))
-         : bool in
-      let lostTop := (neq_vec (and_vec req_top maskLo) (Zeros (Z.add CAP_VALUE_NUM_BITS 2)))  : bool in
+      let lostBottom : bool :=
+        neq_vec (and_vec req_base maskLo) (Zeros (Z.add CAP_VALUE_NUM_BITS 2)) in
+      let lostTop : bool := neq_vec (and_vec req_top maskLo) (Zeros (Z.add CAP_VALUE_NUM_BITS 2)) in
       let T_ie : mword (79 - 64 + 1 - 3) :=
         if sumbool_of_bool lostTop then add_vec_int T_ie 1
         else T_ie in
       let L_ie : bits 13 := sub_vec T_ie B_ie in
       let exp := exp in
-      (if eq_vec (vec_of_bits [access_vec_dec L_ie (Z.sub CAP_MW 4)]  : mword 1) ('b"1"  : mword 1)
+      (if eq_vec (vec_of_bits [access_vec_dec L_ie (Z.sub CAP_MW 4)]  : mword 1)
+            (('b"1")
+             : mword 1)
          return
          M ((mword (79 - 64 + 1 - 3) * mword (79 - 64 + 1 - 3) * bool * bool * bool)) then
-         let incrementE_name := true  : bool in
-         let lostBottom :=
-           (orb lostBottom
-              (eq_vec (vec_of_bits [access_vec_dec B_ie 0]  : mword 1) ('b"1"  : mword 1)))
-            : bool in
-         let lostTop :=
-           (orb lostTop (eq_vec (vec_of_bits [access_vec_dec T_ie 0]  : mword 1) ('b"1"  : mword 1)))
-            : bool in
+         let incrementE_name : bool := true in
+         let lostBottom : bool :=
+           orb lostBottom
+             (eq_vec (vec_of_bits [access_vec_dec B_ie 0]  : mword 1) (('b"1")  : mword 1)) in
+         let lostTop : bool :=
+           orb lostTop
+             (eq_vec (vec_of_bits [access_vec_dec T_ie 0]  : mword 1) (('b"1")  : mword 1)) in
          assert_exp' (Z.ltb exp CAP_MAX_EXPONENT) "v8_base.sail 45107:47 - 45107:48" >>= fun _ =>
          assert_exp' (Z.leb 0 (Z.add (projT1 (__id exp)) 4)) "v8_base.sail 45108:50 - 45108:51" >>= fun _ =>
          let B_ie : bits (CAP_MW - 3) :=
@@ -553,8 +561,8 @@ Definition CapSetBounds (c : mword 129) (req_len : mword (63 - 0 + 1 + 1)) (exac
        else returnM (B_ie, T_ie, incrementE_name, lostBottom, lostTop)) >>= fun '((B_ie, T_ie, incrementE_name, lostBottom, lostTop)
       : (mword (79 - 64 + 1 - 3) * mword (79 - 64 + 1 - 3) * bool * bool * bool)) =>
       let exp : Z := if Bool.eqb incrementE_name true then Z.add exp 1 else exp in
-      let Bbits : bits CAP_MW := concat_vec B_ie ('b"000"  : mword 3) in
-      let TBits : bits CAP_MW := concat_vec T_ie ('b"000"  : mword 3) in
+      let Bbits : bits CAP_MW := concat_vec B_ie (('b"000")  : mword 3) in
+      let TBits : bits CAP_MW := concat_vec T_ie (('b"000")  : mword 3) in
       returnM (Bbits, TBits, exp, lostBottom, lostTop)
     else returnM (Bbits, TBits, exp, lostBottom, lostTop)) >>= fun '((Bbits, TBits, exp, lostBottom, lostTop)
    : (mword (79 - 64 + 1) * mword (79 - 64 + 1) * Z * bool * bool)) =>
@@ -571,18 +579,18 @@ Definition CapSetBounds (c : mword 129) (req_len : mword (63 - 0 + 1 + 1)) (exac
           (orb (negb (CapUnsignedGreaterThanOrEqual (slice req_base 0 CAP_BOUND_NUM_BITS) obase))
              (negb (CapUnsignedLessThanOrEqual (slice req_top 0 CAP_BOUND_NUM_BITS) olimit)))
           (negb ovalid)) then
-       update_vec_dec newc CAP_TAG_BIT (Bit ('b"0"  : mword 1))
+       update_vec_dec newc CAP_TAG_BIT (Bit (('b"0")  : mword 1))
      else newc in
    let newc : mword 129 :=
      if sumbool_of_bool ie then
-       let newc : bits 129 := update_vec_dec newc CAP_IE_BIT (Bit ('b"0"  : mword 1)) in
+       let newc : bits 129 := update_vec_dec newc CAP_IE_BIT (Bit (('b"0")  : mword 1)) in
        let newc : bits 129 :=
          update_subrange_vec_dec newc CAP_BASE_EXP_HI_BIT CAP_BASE_LO_BIT
            (not_vec (integer_subrange exp 2 0)) in
        update_subrange_vec_dec newc CAP_LIMIT_EXP_HI_BIT CAP_LIMIT_LO_BIT
          (not_vec (integer_subrange exp 5 3))
      else
-       let newc : bits 129 := update_vec_dec newc CAP_IE_BIT (Bit ('b"1"  : mword 1)) in
+       let newc : bits 129 := update_vec_dec newc CAP_IE_BIT (Bit (('b"1")  : mword 1)) in
        let newc : bits 129 :=
          update_subrange_vec_dec newc CAP_BASE_EXP_HI_BIT CAP_BASE_LO_BIT
            (subrange_vec_dec Bbits 2 0) in
@@ -600,11 +608,11 @@ Definition CapSetBounds (c : mword 129) (req_len : mword (63 - 0 + 1 + 1)) (exac
      if sumbool_of_bool
        (andb (andb from_large to_small)
           (neq_vec (sign_extend (subrange_vec_dec base (Z.sub CAP_FLAGS_LO_BIT 1) 0) 64) base)) then
-       update_vec_dec newc CAP_TAG_BIT (Bit ('b"0"  : mword 1))
+       update_vec_dec newc CAP_TAG_BIT (Bit (('b"0")  : mword 1))
      else newc in
    let newc : mword 129 :=
      if sumbool_of_bool (andb exact (orb lostBottom lostTop)) then
-       update_vec_dec newc CAP_TAG_BIT (Bit ('b"0"  : mword 1))
+       update_vec_dec newc CAP_TAG_BIT (Bit (('b"0")  : mword 1))
      else newc in
    returnM newc.
 
@@ -612,7 +620,7 @@ Definition CapGetRepresentableMask (len : mword (63 - 0 + 1)) : M (mword (63 - 0
    let c : bits 129 := CapNull tt in
    let test_base : bits CAP_VALUE_NUM_BITS := sub_vec (Ones CAP_VALUE_NUM_BITS) len in
    let test_length : bits CAP_LENGTH_NUM_BITS := zero_extend len CAP_LENGTH_NUM_BITS in
-   let c := (update_subrange_vec_dec c CAP_VALUE_HI_BIT CAP_VALUE_LO_BIT test_base)  : mword 129 in
+   let c : bits 129 := update_subrange_vec_dec c CAP_VALUE_HI_BIT CAP_VALUE_LO_BIT test_base in
    (CapSetBounds c test_length false) >>= fun c : bits 129 =>
    let exp1 : Z := 0 in
    let exp1 : Z := if CapIsInternalExponent c then Z.add (projT1 (CapGetExponent c)) 3 else exp1 in
@@ -622,30 +630,28 @@ Definition CapGetRepresentableMask (len : mword (63 - 0 + 1)) : M (mword (63 - 0
    returnM (autocast (autocast (concat_vec (Ones (Z.sub CAP_VALUE_NUM_BITS exp1)) (Zeros exp1)))).
 
 Definition CapWithTagSet (c : mword 129) : mword 129 :=
-   CapSetTag c (zero_extend ('b"1"  : mword 1) 64).
+   CapSetTag c (zero_extend (('b"1")  : mword 1) 64).
 
 Definition CapIsBaseAboveLimit (c : mword 129) : M (bool) :=
-   (Fail "undefined value of unsupported type") >>= fun base : bits CAP_BOUND_NUM_BITS =>
-   (Fail "undefined value of unsupported type") >>= fun limit : bits CAP_BOUND_NUM_BITS =>
-   (CapGetBounds c) >>= fun w__0 : (mword (63 - 0 + 1 + 1) * mword (63 - 0 + 1 + 1) * bool) =>
-   let '(tup__0, tup__1, tup__2) := w__0  : (mword (63 - 0 + 1 + 1) * mword (63 - 0 + 1 + 1) * bool) in
-   let base : bits CAP_BOUND_NUM_BITS := tup__0 in
-   let limit : bits CAP_BOUND_NUM_BITS := tup__1 in
-   let __ignore_16 := tup__2 in
+   (undefined_bitvector (Z.add (Z.add (Z.sub 63 0) 1) 1)) >>= fun base : bits CAP_BOUND_NUM_BITS =>
+   (undefined_bitvector (Z.add (Z.add (Z.sub 63 0) 1) 1)) >>= fun limit : bits CAP_BOUND_NUM_BITS =>
+   (CapGetBounds c) >>= fun '((__tup_0, __tup_1, _)) =>
+   let base : bits CAP_BOUND_NUM_BITS := __tup_0 in
+   let limit : bits CAP_BOUND_NUM_BITS := __tup_1 in
    returnM (CapUnsignedGreaterThan base limit).
 
 Definition CapIsSubSetOf (a : mword 129) (b : mword 129) : M (bool) :=
-   (Fail "undefined value of unsupported type") >>= fun abase : bits CAP_BOUND_NUM_BITS =>
-   (Fail "undefined value of unsupported type") >>= fun alimit : bits CAP_BOUND_NUM_BITS =>
-   (Fail "undefined value of unsupported type") >>= fun avalid : bool =>
-   (Fail "undefined value of unsupported type") >>= fun bbase : bits CAP_BOUND_NUM_BITS =>
-   (Fail "undefined value of unsupported type") >>= fun blimit : bits CAP_BOUND_NUM_BITS =>
-   (Fail "undefined value of unsupported type") >>= fun bvalid : bool =>
+   (undefined_bitvector (Z.add (Z.add (Z.sub 63 0) 1) 1)) >>= fun abase : bits CAP_BOUND_NUM_BITS =>
+   (undefined_bitvector (Z.add (Z.add (Z.sub 63 0) 1) 1)) >>= fun alimit : bits CAP_BOUND_NUM_BITS =>
+   (undefined_bool tt) >>= fun avalid : bool =>
+   (undefined_bitvector (Z.add (Z.add (Z.sub 63 0) 1) 1)) >>= fun bbase : bits CAP_BOUND_NUM_BITS =>
+   (undefined_bitvector (Z.add (Z.add (Z.sub 63 0) 1) 1)) >>= fun blimit : bits CAP_BOUND_NUM_BITS =>
+   (undefined_bool tt) >>= fun bvalid : bool =>
    (CapGetBounds a) >>= fun w__0 : (mword (63 - 0 + 1 + 1) * mword (63 - 0 + 1 + 1) * bool) =>
    let '(tup__0, tup__1, tup__2) := w__0  : (mword (63 - 0 + 1 + 1) * mword (63 - 0 + 1 + 1) * bool) in
-   let abase := tup__0  : mword (63 - 0 + 1 + 1) in
-   let alimit := tup__1  : mword (63 - 0 + 1 + 1) in
-   let avalid := tup__2  : bool in
+   let abase : bits CAP_BOUND_NUM_BITS := tup__0 in
+   let alimit : bits CAP_BOUND_NUM_BITS := tup__1 in
+   let avalid : bool := tup__2 in
    (CapGetBounds b) >>= fun w__1 : (mword (63 - 0 + 1 + 1) * mword (63 - 0 + 1 + 1) * bool) =>
    let '(tup__0, tup__1, tup__2) := w__1  : (mword (63 - 0 + 1 + 1) * mword (63 - 0 + 1 + 1) * bool) in
    let bbase : bits CAP_BOUND_NUM_BITS := tup__0 in
@@ -661,46 +667,38 @@ Definition CapIsSubSetOf (a : mword 129) (b : mword 129) : M (bool) :=
 Definition CapUnseal (c : mword 129) : mword 129 := CapSetObjectType c (Zeros 64).
 
 Definition CapGetOffset (c : mword 129) : M (mword (63 - 0 + 1)) :=
-   (Fail "undefined value of unsupported type") >>= fun base : bits CAP_BOUND_NUM_BITS =>
-   (CapGetBounds c) >>= fun w__0 : (mword (63 - 0 + 1 + 1) * mword (63 - 0 + 1 + 1) * bool) =>
-   let '(tup__0, tup__1, tup__2) := w__0  : (mword (63 - 0 + 1 + 1) * mword (63 - 0 + 1 + 1) * bool) in
-   let base : bits CAP_BOUND_NUM_BITS := tup__0 in
-   let __ignore_17 := tup__1 in
-   let __ignore_18 := tup__2 in
-   let offset : bits 65 := sub_vec (concat_vec ('b"0"  : mword 1) (CapGetValue c)) base in
+   (undefined_bitvector (Z.add (Z.add (Z.sub 63 0) 1) 1)) >>= fun base : bits CAP_BOUND_NUM_BITS =>
+   (CapGetBounds c) >>= fun '((__tup_0, _, _)) =>
+   let base : bits CAP_BOUND_NUM_BITS := __tup_0 in
+   let offset : bits 65 := sub_vec (concat_vec (('b"0")  : mword 1) (CapGetValue c)) base in
    returnM (slice offset 0 CAP_VALUE_NUM_BITS).
 
 Definition CapGetLength (c : mword 129) : M (mword (63 - 0 + 1 + 1)) :=
-   (Fail "undefined value of unsupported type") >>= fun base : bits CAP_BOUND_NUM_BITS =>
-   (Fail "undefined value of unsupported type") >>= fun limit : bits CAP_BOUND_NUM_BITS =>
-   (CapGetBounds c) >>= fun w__0 : (mword (63 - 0 + 1 + 1) * mword (63 - 0 + 1 + 1) * bool) =>
-   let '(tup__0, tup__1, tup__2) := w__0  : (mword (63 - 0 + 1 + 1) * mword (63 - 0 + 1 + 1) * bool) in
-   let base : bits CAP_BOUND_NUM_BITS := tup__0 in
-   let limit : bits CAP_BOUND_NUM_BITS := tup__1 in
-   let __ignore_19 := tup__2 in
+   (undefined_bitvector (Z.add (Z.add (Z.sub 63 0) 1) 1)) >>= fun base : bits CAP_BOUND_NUM_BITS =>
+   (undefined_bitvector (Z.add (Z.add (Z.sub 63 0) 1) 1)) >>= fun limit : bits CAP_BOUND_NUM_BITS =>
+   (CapGetBounds c) >>= fun '((__tup_0, __tup_1, _)) =>
+   let base : bits CAP_BOUND_NUM_BITS := __tup_0 in
+   let limit : bits CAP_BOUND_NUM_BITS := __tup_1 in
    returnM (sub_vec limit base).
 
 Definition CapIsInBounds (c : mword 129) : M (bool) :=
-   (Fail "undefined value of unsupported type") >>= fun base : bits CAP_BOUND_NUM_BITS =>
-   (Fail "undefined value of unsupported type") >>= fun limit : bits CAP_BOUND_NUM_BITS =>
-   (Fail "undefined value of unsupported type") >>= fun valid_name : bool =>
+   (undefined_bitvector (Z.add (Z.add (Z.sub 63 0) 1) 1)) >>= fun base : bits CAP_BOUND_NUM_BITS =>
+   (undefined_bitvector (Z.add (Z.add (Z.sub 63 0) 1) 1)) >>= fun limit : bits CAP_BOUND_NUM_BITS =>
+   (undefined_bool tt) >>= fun valid_name : bool =>
    (CapGetBounds c) >>= fun w__0 : (mword (63 - 0 + 1 + 1) * mword (63 - 0 + 1 + 1) * bool) =>
    let '(tup__0, tup__1, tup__2) := w__0  : (mword (63 - 0 + 1 + 1) * mword (63 - 0 + 1 + 1) * bool) in
    let base : bits CAP_BOUND_NUM_BITS := tup__0 in
    let limit : bits CAP_BOUND_NUM_BITS := tup__1 in
    let valid_name : bool := tup__2 in
-   let value65_name : bits 65 := concat_vec ('b"0"  : mword 1) (CapGetValue c) in
+   let value65_name : bits 65 := concat_vec (('b"0")  : mword 1) (CapGetValue c) in
    returnM (andb
               (andb (CapUnsignedGreaterThanOrEqual value65_name base)
                  (CapUnsignedLessThan value65_name limit)) valid_name).
 
 Definition CapSetOffset (c : mword 129) (offset : mword (63 - 0 + 1)) : M (mword 129) :=
-   (Fail "undefined value of unsupported type") >>= fun base : bits CAP_BOUND_NUM_BITS =>
-   (CapGetBounds c) >>= fun w__0 : (mword (63 - 0 + 1 + 1) * mword (63 - 0 + 1 + 1) * bool) =>
-   let '(tup__0, tup__1, tup__2) := w__0  : (mword (63 - 0 + 1 + 1) * mword (63 - 0 + 1 + 1) * bool) in
-   let base := tup__0  : mword (63 - 0 + 1 + 1) in
-   let __ignore_20 := tup__1 in
-   let __ignore_21 := tup__2 in
+   (undefined_bitvector (Z.add (Z.add (Z.sub 63 0) 1) 1)) >>= fun base : bits CAP_BOUND_NUM_BITS =>
+   (CapGetBounds c) >>= fun '((__tup_0, _, _)) =>
+   let base : bits CAP_BOUND_NUM_BITS := __tup_0 in
    let newvalue : bits CAP_VALUE_NUM_BITS :=
      add_vec (subrange_vec_dec base (Z.sub CAP_VALUE_NUM_BITS 1) 0) offset in
    let increment_name : bits CAP_VALUE_NUM_BITS := sub_vec newvalue (CapGetValue c) in
@@ -708,6 +706,8 @@ Definition CapSetOffset (c : mword 129) (offset : mword (63 - 0 + 1)) : M (mword
     : M (mword 129).
 
 Definition CapIsLocal (c : mword 129) : bool := negb (CapCheckPermissions c CAP_PERM_GLOBAL).
+
+Definition initialize_registers '(tt : unit) : unit := tt.
 
 
 
