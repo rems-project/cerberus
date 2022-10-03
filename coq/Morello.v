@@ -6,6 +6,8 @@ Require Import Coq.Numbers.BinNums.
 Require Import Coq.ZArith.Zcompare.
 Require Import Coq.Bool.Bool.
 
+Require Import StructTact.StructTactics.
+
 Require Import bbv.Word.
 
 From Sail Require  Import Base Impl_base Values Operators_mwords.
@@ -516,6 +518,54 @@ Module MorelloCapability <:
     | None => None
     end.
 
+  Definition representable_alignment_mask (len: Z) : Z :=
+    let len' := mword_of_int (len:=Z.of_nat vaddr_bits) len in
+    match CapGetRepresentableMask len' with
+    | Done mask => uwordToZ len'
+    | _ => 0 (* TODO: Impossible value? *)
+    end.
 
+  Definition representable_length (len : Z) : Z :=
+    let mask := representable_alignment_mask len in
+    let nmask := MorelloAddr.bitwise_complement mask in
+    Z.land (Z.add len nmask) mask.
+
+  Definition eqb (a b : t) : bool :=
+    maybeEqualBy eq_vec (encode_to_word true a) (encode_to_word true b).
+
+  Definition value_compare (x y : t) : comparison :=
+    Z.compare x.(value) y.(value).
+
+  Definition exact_compare (x y : t) : comparison :=
+    match Bool.compare x.(valid) y.(valid) with
+    | Eq => value_compare x y
+    | Lt => Lt
+    | Gt => Gt
+    end.
+
+  Definition cap_is_null_derived (c : t) : bool :=
+    let a := cap_get_value c in
+    match cap_c0 tt with
+    | Some c0 =>
+        let c' := cap_set_value c0 a in
+        eqb c c'
+    | _ => false
+    end.
+
+
+  Lemma eqb_exact_compare: forall a b, eqb a b = true <-> exact_compare a b = Eq.
+  Proof.
+    (* could not be proven under current definition of eqb! *)
+  Admitted.
+
+  Lemma eqb_value_compare: forall a b, eqb a b = true -> value_compare a b = Eq.
+  Proof.
+    (* could not be proven under current definition of eqb! *)
+  Admitted.
+
+  Definition to_string (c: t) : string := "TODO".
+
+  Definition strfcap (formats : string) (capability : t) : option string :=
+    None. (* TODO *)
 
 End MorelloCapability.
