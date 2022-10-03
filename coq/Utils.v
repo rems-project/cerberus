@@ -4,6 +4,7 @@ Require Import Coq.Classes.DecidableClass.
 Require Import Coq.Floats.PrimFloat.
 Require Import Coq.Numbers.BinNums.
 Require Import Coq.ZArith.ZArith.
+Require Import Coq.ZArith.Zdigits.
 
 Require Import Coq.Strings.Ascii.
 
@@ -109,17 +110,28 @@ Definition maybeEqualBy
   | _, _ => false
   end.
 
+Definition vector_drop {A:Type} {t:nat} (h:nat) (v:Vector.t A (h+t)) : Vector.t A t
+  :=  snd (Vector.splitat h v).
+
 (** [extract a off len] returns a nonnegative number corresponding to bits
     [off] to [off]+[len]-1 of [a].
     Negative [a] are considered in infinite-length 2's complement
     representation.
     [len] must not be 0.
  *)
-Definition extract_num (a:Z) (off:nat) (len:nat): serr Z :=
+Program Definition extract_num (a:Z) (off:nat) (len:nat): serr Z :=
   match len with
   | O => raise "0 lenght not allowed"
-  | S len =>
-      ret 0  (* TODO *)
+  | S len' =>
+      match a with
+      | Z0 => ret 0
+      | _ =>
+          let v := Z_to_two_compl (off + len')%nat a in
+          let v := vector_drop (t:=len) off v in
+          let v := Vector.take len _ v in
+          (* ret (two_compl_value len v) *)
+          ret 0
+      end
   end.
 
 (* Using two's complement encoding. We do not perform range checks
