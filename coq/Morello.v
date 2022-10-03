@@ -4,6 +4,8 @@ Require Import Coq.Strings.String.
 Require Import Coq.Strings.Ascii.
 Require Import Coq.Numbers.BinNums.
 Require Import Coq.ZArith.Zcompare.
+Require Import Coq.Vectors.Vector.
+Require Import Coq.ZArith.Zdigits.
 Require Import Coq.Bool.Bool.
 
 Require Import StructTact.StructTactics.
@@ -18,9 +20,15 @@ Import ListNotations.
 Open Scope list_scope.
 
 Module MorelloAddr <: VADDR.
-  Definition t := Z.
+  Definition t := Z. (* but it is always non-negiative *)
 
-  Definition bitwise_complement (n:Z) := n. (* TODO *)
+  Definition sizeof_vaddr : nat := 8.
+  Definition vaddr_bits : nat := Nat.mul sizeof_vaddr 8%nat.
+
+  Definition bitwise_complement (a:Z) :=
+    let bits := Z_to_binary vaddr_bits a in
+    let bits := Vector.map negb bits in
+    binary_value _ bits.
 
   Definition eqb := Z.eqb.
   Definition ltb := Z.ltb.
@@ -236,9 +244,9 @@ Module MorelloCapability <:
 
   Definition t := morello_cap_t.
 
-  Definition sizeof_vaddr : nat := 8.
+  Definition sizeof_vaddr : nat := MorelloAddr.sizeof_vaddr.
 
-  Definition vaddr_bits : nat := Nat.mul sizeof_vaddr 8%nat.
+  Definition vaddr_bits : nat := MorelloAddr.vaddr_bits.
 
   Definition min_vaddr : Z := 0.
 
