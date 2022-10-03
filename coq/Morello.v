@@ -414,5 +414,24 @@ Module MorelloCapability <:
        end
       ).
 
+  Definition cap_bounds_representable_exactly
+    (c : t) (intr : MorelloVADDR_INTERVAL.t) : bool
+    :=
+    let '(base, limit) := intr in
+    match encode_to_word true c with
+    | Some bits =>
+        let len := Z.sub limit base in
+        let base' := mword_of_int (len:=64) base in
+        let len' := mword_of_int (len:=65) len in
+        let mb := CapSetValue bits base' >>=
+                    (fun bits => CapSetBounds bits len' true >>=
+                                (fun bits => returnm (CapIsTagSet bits)))
+        in
+        match mb with
+        | Done b => b
+        | _ => false
+        end
+    | None => false
+    end.
 
 End MorelloCapability.
