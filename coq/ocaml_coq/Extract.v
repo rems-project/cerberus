@@ -19,4 +19,5 @@ Extraction Blacklist String List Char Core Monad Bool Format.
 
 (* Set Extraction AccessOpaque. *)
 
+Extraction Library Vector.
 Recursive Extraction Library CheriMemory.

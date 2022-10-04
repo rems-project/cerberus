@@ -5,6 +5,7 @@ Require Import Coq.Floats.PrimFloat.
 Require Import Coq.Numbers.BinNums.
 Require Import Coq.ZArith.ZArith.
 Require Import Coq.ZArith.Zdigits.
+Require Import Coq.Vectors.Vector.
 
 Require Import Coq.Strings.Ascii.
 

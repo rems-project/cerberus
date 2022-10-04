@@ -4,7 +4,6 @@ Require Import Coq.Strings.String.
 Require Import Coq.Strings.Ascii.
 Require Import Coq.Numbers.BinNums.
 Require Import Coq.ZArith.Zcompare.
-Require Import Coq.Vectors.Vector.
 Require Import Coq.ZArith.Zdigits.
 Require Import Coq.Bool.Bool.
 
