@@ -6,6 +6,10 @@
  
 (library
  (name ocaml_coq)
+ (preprocessor_deps CRelationClasses.mli.patch patch.sh)
+ (preprocess (per_module
+             ((action (run coq/ocaml_coq/patch.sh %{input-file})) CRelationClasses)
+             ))
  (public_name cerberus.coq)
  (libraries zarith coq-core.kernel)
  (wrapped false)
