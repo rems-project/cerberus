@@ -5,6 +5,6 @@
 )
 
 (library
-  (name ocaml_coq)
+  (name extracted)
   (wrapped false)
   ) 

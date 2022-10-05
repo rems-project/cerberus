@@ -1,0 +1,19 @@
+(coq.extraction
+ (prelude Extract)
+ (extracted_modules AilSyntax Annot Applicative Ascii BinInt BinList BinNat BinNatDef BinNotation BinNums BinPos BinPosDef Bool0 Bvector Byte CapFns CapFnsTypes CarryType CheriMemory ClassicalDedekindReals CMorphisms ConstructiveCauchyAbs ConstructiveCauchyReals ConstructiveCauchyRealsMult ConstructiveEpsilon ConstructiveExtra ConstructiveRcomplete ConstructiveReals CRelationClasses Ctype Datatypes DecidableClass Decimal DepEqNat EitherMonad Eqdep_dec Equalities EquivDec ErrorWithState Fin FloatClass FMapAVL FMapList Functor Hexadecimal HexNotation HexString CoqImplementation Init Injection Instr_kinds Int List0 List1 ListSet Location Logic Monad0 MonadExc MonadFix MonadPlus MonadReader MonadState MonadTrans MonadWriter MonadZero Monoid Morello Nat NatLib Number Operators_mwords OrderedType OrderedTypeEx Orders OrdersTac PeanoNat PrimFloat PrimInt63 Prompt Prompt_monad Qabs QArith_base QExtra Qreduction Qround Rdefinitions RelDec Ring_polynom Ring_theory SimpleError Specif String0 String1 Sumbool Switches Symbol Tags Traversable Undefined Undefined0 Utils Values Vector VectorDef Wf Word ZArith_dec Zbool Zdigits Zeuclid Zeven)
+ (theories Cerberus)
+)
+ 
+(library
+ (name extracted)
+ (preprocessor_deps CRelationClasses.mli.patch patch.sh)
+ (preprocess (per_module
+             ((action (run coq/extracted/patch.sh %{input-file})) CRelationClasses)
+             ))
+ (public_name cerberus.coq)
+ (libraries zarith coq-core.kernel)
+ (wrapped false)
+ (flags (:standard -rectypes -w -27-32-33-39-67-37-20-34))
+)
+
+

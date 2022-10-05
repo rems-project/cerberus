@@ -5,6 +5,11 @@ open Ctype
 open Memory_model
 open Mem_common
 open CheriMemory
+open CoqImplementation
+open Morello
+
+module MM = CheriMemory(MorelloCapability)(MorelloImpl)
+module C = MorelloCapability
 
 module Z = struct
   include Nat_big_num
@@ -229,10 +234,7 @@ and alignof ?(tagDefs= Tags.tagDefs ()) (Ctype (_, ty) as cty) =
           ) 0 membrs
      end
 
-module CHERI (C:Capability
-              with type vaddr = Z.num
-              with type vaddr_interval = Z.num*Z.num
-         ) : Memory = struct
+module CHERIMorello : Memory = struct
   (* CAUTION: if this string is changed, 'backend/driver/main.ml' needs to be updated *)
   let name = "CHERI memory model"
 

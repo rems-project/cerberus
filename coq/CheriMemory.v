@@ -14,7 +14,7 @@ From ExtLib.Data Require Import List.
 From ExtLib.Structures Require Import Monad Monads MonadExc MonadState Traversable.
 From ExtLib.Data.Monads Require Import EitherMonad OptionMonad.
 
-Require Import SimpleError Capabilities Addr Memory_model Mem_common ErrorWithState Undefined Morello ErrorWithState Location Symbol Implementation Tags Utils Switches AilTypesAux.
+Require Import SimpleError Capabilities Addr Memory_model Mem_common ErrorWithState Undefined Morello ErrorWithState Location Symbol CoqImplementation Tags Utils Switches AilTypesAux.
 
 Local Open Scope string_scope.
 Local Open Scope type_scope.
@@ -2602,7 +2602,7 @@ Module CheriMemory
         n_value <- option2serr "no sizeof_ity!" (IMP.get.(sizeof_ity) ity) ;;
         match ity with
         | Ctype.Char =>
-            if IMP.get.(Implementation.is_signed_ity) Ctype.Char
+            if IMP.get.(CoqImplementation.is_signed_ity) Ctype.Char
             then ret (IV (signed_max n_value))
             else ret (IV (unsigned_max n_value))
         | Ctype.Bool => ret (IV (unsigned_max n_value))
@@ -2624,7 +2624,7 @@ Module CheriMemory
       Z.opp (Z.pow 2 (Z.sub (Z.mul 8 n_value) 1)) in
     match ity with
     | Ctype.Char =>
-        if IMP.get.(Implementation.is_signed_ity) Ctype.Char
+        if IMP.get.(CoqImplementation.is_signed_ity) Ctype.Char
         then ret (IV (signed_min 8))
         else ret (IV 0)
     | Ctype.Bool
@@ -3882,3 +3882,6 @@ Module CheriMemory
 
 
 End CheriMemory.
+
+
+(* Module MorelloMemory := CheriMemory(MorelloCapability)(MorelloImpl). *)

@@ -24,7 +24,6 @@ Record implementation := {
     typeof_enum: Symbol.sym -> integerType;
   }.
 
-
 Module Type Implementation.
   Parameter get: implementation.
 End Implementation.
