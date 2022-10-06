@@ -52,6 +52,22 @@ type pointer_value = CF.Impl_mem.pointer_value
 
 (*** pattern matching *********************************************************)
 
+let rec bt_of_pattern pat =
+  let (M_Pattern (loc, _, pattern) : mu_pattern) = pat in
+  match pattern with
+  | M_CaseBase (_, has_bt) -> return has_bt
+  | M_CaseCtor (constructor, pats) ->
+    begin match constructor, pats with
+    | M_Cnil item_bt, _ -> return (BT.List item_bt)
+    | M_Ccons, [_; p2] -> bt_of_pattern p2
+    | M_Ccons, _ ->
+        fail (fun _ -> {loc; msg = Number_arguments {has = List.length pats; expect = 2}})
+    | M_Ctuple, pats ->
+        let@ bts = ListM.mapM bt_of_pattern pats in
+        return (BT.Tuple bts)
+    | M_Carray, _ ->
+        Debug_ocaml.error "todo: array types"
+    end
 
 (* pattern-matches and binds *)
 let pattern_match = 
@@ -98,6 +114,12 @@ let pattern_match =
   (* let@ () = WellTyped.ensure_base_type loc ~expect:(IT.bt to_match) (IT.bt it) in *)
   (* add_c (t_ (eq_ (it, to_match))) *)
 
+let pp_pattern_match p (patv, (l_vs, a_vs)) =
+  let open Pp in
+  NewMu.PP_MUCORE.pp_pattern p ^^ colon ^^^ IT.pp patv ^^ colon ^^^
+  parens (list (fun (nm, bt) -> Sym.pp nm ^^ colon ^^^ BT.pp bt) l_vs) ^^^
+  parens (list (fun (nm, (bt, lsym)) -> Sym.pp nm ^^ colon ^^^ BT.pp bt ^^ colon ^^^ Sym.pp lsym) a_vs)
+
 
 
 let fresh_same_id_with_prefix oprefix s =
@@ -121,16 +143,22 @@ let fresh_call_with_prefix call_situation s =
      Sym.fresh_make_uniq (TypeErrors.call_prefix call_situation)
 
 
+(* add a logical symbol to abbreviate this term, unless it already is
+   a symbol, in which case return the existing symbol *)
+let add_l_abbrev sym it = match IT.is_sym it with
+  | Some (sym', _) -> return sym'
+  | None ->
+    let@ () = add_l sym (IT.bt it) in
+    let@ () = add_c (LC.t_ (IT.def_ sym it)) in
+    return sym
+
 
 let rec bind_logical (oprefix,where) (lrt : LRT.t) = 
   match lrt with
   | Define ((s, it), oinfo, rt) ->
-     let s, rt = 
-       let s' = fresh_same_id_with_prefix oprefix s in
-       LRT.alpha_rename_ s' (s, IT.bt it) rt 
-     in
-     let@ () = add_l s (IT.bt it) in
-     let@ () = add_c (LC.t_ (IT.def_ s it)) in
+     let s' = fresh_same_id_with_prefix oprefix s in
+     let@ s'' = add_l_abbrev s' it in
+     let (_, rt) = LRT.alpha_rename_ s'' (s, IT.bt it) rt in
      bind_logical (oprefix, where) rt
   | Resource ((s, (re, oarg_spec)), _oinfo, rt) -> 
      let s, rt = 
@@ -146,6 +174,9 @@ let rec bind_logical (oprefix,where) (lrt : LRT.t) =
   | I -> 
      return ()
 
+(*
+not actually used?
+
 let bind_computational (oprefix, where) (name : Sym.t) (rt : RT.t) =
   let Computational ((s, bt), _oinfo, rt) = rt in
   let s' = fresh_return_with_prefix oprefix in
@@ -154,20 +185,12 @@ let bind_computational (oprefix, where) (name : Sym.t) (rt : RT.t) =
   let@ () = add_a name (bt, s') in
   bind_logical (oprefix, where) rt'
 
-
 let bind (oprefix, where) (name : Sym.t) (rt : RT.t) =
   bind_computational (oprefix, where) name rt
+*)
 
-let bind_logically (oprefix, where) (rt : RT.t) : ((BT.t * Sym.t), type_error) m =
-  let Computational ((s, bt), _oinfo, rt) = rt in
-  let s' = fresh_return_with_prefix oprefix in
-  let rt' = LRT.subst (IT.make_subst [(s, IT.sym_ (s', bt))]) rt in
-  let@ () = add_l s' bt in
-  let@ () = bind_logical (oprefix, where) rt' in
-  return (bt, s')
 
 type lvt = IT.t
-
 
 
 let rt_of_lvt lvt = 
@@ -177,10 +200,28 @@ let rt_of_lvt lvt =
   LRT.I))
 
 
+let is_rt_of_lvt rt = match rt with
+  | RT.Computational ((sym, _), _, LRT.Constraint (lc, _, LRT.I)) ->
+    begin match is_sym_lhs_equality lc with
+    | Some (sym2, rhs) -> if Sym.equal sym sym2 then Some rhs else None
+    | _ -> None
+    end
+  | _ -> None
 
 
 
-
+let bind_logically (oprefix, where) (rt : RT.t) : (IT.t, type_error) m =
+  let s' = fresh_return_with_prefix oprefix in
+  match is_rt_of_lvt rt with
+  | None ->
+    let Computational ((s, bt), _oinfo, rt) = rt in
+    let rt' = LRT.subst (IT.make_subst [(s, IT.sym_ (s', bt))]) rt in
+    let@ () = add_l s' bt in
+    let@ () = bind_logical (oprefix, where) rt' in
+    return (sym_ (s', bt))
+  | Some tm ->
+    let@ s'' = add_l_abbrev s' tm in
+    return (sym_ (s'', IT.bt tm))
 
 
 
@@ -783,8 +824,9 @@ let rec check_pexpr (pe : 'bty mu_pexpr) ~(expect:BT.t)
      return ())
   | M_PElet (M_Pat p, e1, e2) ->
      let@ fin = begin_trace_of_pure_step (Some (Mu.M_Pat p)) e1 in
+     let@ p_bt = bt_of_pattern p in
+     check_pexpr ~expect:p_bt e1 (fun v1 ->
      let@ patv, (l, a) = pattern_match p in
-     check_pexpr ~expect:(IT.bt patv) e1 (fun v1 ->
      let@ () = add_ls l in
      let@ () = add_as a in
      let@ () = add_c (t_ (eq__ patv v1)) in
@@ -1444,8 +1486,9 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
      Debug_ocaml.error "todo: End"
   | _, M_Elet (M_Pat p, e1, e2) ->
      let@ fin = begin_trace_of_pure_step (Some (Mu.M_Pat p)) e1 in
+     let@ p_bt = bt_of_pattern p in
+     check_pexpr ~expect:p_bt e1 (fun v1 ->
      let@ patv, (l, a) = pattern_match p in
-     check_pexpr ~expect:(IT.bt patv) e1 (fun v1 ->
      let@ () = add_ls l in
      let@ () = add_as a in
      let@ () = add_c (t_ (eq__ patv v1)) in
@@ -1470,9 +1513,9 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
          | [] -> k []
          | (e, bt) :: es_bts ->
             check_expr labels ~typ:(Normal bt) e (fun rt ->
-            let@ (bt, s') = bind_logically (None, Some (Loc loc)) rt in
+            let@ it = bind_logically (None, Some (Loc loc)) rt in
             aux es_bts (fun vts ->
-            k (sym_ (s', bt) :: vts)
+            k (it :: vts)
             ))
        in
        aux (List.combine es item_bts) (fun vts ->
@@ -1505,18 +1548,18 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
   | _, M_Ewseq (p, e1, e2)
   | _, M_Esseq (p, e1, e2) ->
      let@ fin = begin_trace_of_step (Some (Mu.M_Pat p)) e1 in
-     let@ patv, (l, a) = pattern_match p in
      let oprefix = match e1 with
        | M_Expr (_, _, M_Eccall (_, M_Pexpr (_, _, _, M_PEsym fsym), _)) -> 
           Sym.has_id fsym
        | _ -> None
      in
-     check_expr labels ~typ:(Normal (IT.bt patv)) e1 (function
-         | Computational ((s', _bt), _info, lrt) ->
-            let lrt = LRT.subst (IT.make_subst [(s', patv)]) lrt in
+     let@ p_bt = bt_of_pattern p in
+     check_expr labels ~typ:(Normal p_bt) e1 (fun rt ->
+            let@ it = bind_logically (oprefix, Some (Loc loc)) rt in
+            let@ patv, (l, a) = pattern_match p in
             let@ () = add_ls l in
             let@ () = add_as a in
-            let@ () = bind_logical (oprefix, Some (Loc loc)) lrt in
+            let@ () = add_c (t_ (eq__ patv it)) in
             let@ () = fin () in
             check_expr labels ~typ e2 (fun rt2 ->
                 let@ () = remove_as (List.map fst a) in
