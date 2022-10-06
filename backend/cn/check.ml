@@ -69,15 +69,6 @@ let rec bt_of_pattern pat =
         Debug_ocaml.error "todo: array types"
     end
 
-(* add a logical symbol to abbreviate this term, unless it already is
-   a symbol, in which case return the existing symbol *)
-let add_l_abbrev sym it = match IT.is_sym it with
-  | Some (sym', _) -> return sym'
-  | None ->
-    let@ () = add_l sym (IT.bt it) in
-    let@ () = add_c (LC.t_ (IT.def_ sym it)) in
-    return sym
-
 let fresh_same_id_with_prefix oprefix s =
   match oprefix, Sym.description s with
   | Some prefix, SD_CN_Id name ->
@@ -96,7 +87,9 @@ let pattern_match =
        begin match o_s with
        | Some s ->
           let s' = fresh_same_id_with_prefix (Some "bind_") s in
-          let@ s'' = add_l_abbrev s' it in
+          let info = (loc, lazy (let open Pp in
+            item "binding" (Sym.pp s ^^^ !^ "in" ^^^ NewMu.PP_MUCORE.pp_pattern pat))) in
+          let@ s'' = add_l_abbrev s' it info in
           let@ () = add_a s (has_bt, s'') in
           return [(s, (has_bt, s''))]
        | None -> return []
@@ -153,24 +146,27 @@ let fresh_call_with_prefix call_situation s =
 
 
 
-let rec bind_logical (oprefix,where) (lrt : LRT.t) = 
+let rec bind_logical loc oprefix (lrt : LRT.t) =
   match lrt with
   | Define ((s, it), oinfo, rt) ->
      let s' = fresh_same_id_with_prefix oprefix s in
-     let@ s'' = add_l_abbrev s' it in
+     let l_info = (loc, lazy (Pp.item "return let-bind" (Sym.pp s))) in
+     let@ s'' = add_l_abbrev s' it l_info in
      let (_, rt) = LRT.alpha_rename_ s'' (s, IT.bt it) rt in
-     bind_logical (oprefix, where) rt
+     bind_logical loc oprefix rt
   | Resource ((s, (re, oarg_spec)), _oinfo, rt) -> 
      let s, rt = 
        let s' = fresh_same_id_with_prefix oprefix s in
        LRT.alpha_rename_ s' (s, oarg_spec) rt 
      in
-     let@ () = add_l s oarg_spec in
+     let l_info = (loc, lazy (Pp.item "return let-bind" (Sym.pp s))) in
+     let@ () = add_l s oarg_spec l_info in
+     let where = Some (Context.Loc loc) in
      let@ () = add_r where (re, O (sym_ (s, oarg_spec))) in
-     bind_logical (oprefix, where) rt
+     bind_logical loc oprefix rt
   | Constraint (lc, _oinfo, rt) -> 
      let@ () = add_c lc in
-     bind_logical (oprefix, where) rt
+     bind_logical loc oprefix rt
   | I -> 
      return ()
 
@@ -210,17 +206,18 @@ let is_rt_of_lvt rt = match rt with
 
 
 
-let bind_logically (oprefix, where) (rt : RT.t) : (IT.t, type_error) m =
+let bind_logically loc oprefix (rt : RT.t) : (IT.t, type_error) m =
   let s' = fresh_return_with_prefix oprefix in
+  let info = (loc, lazy (Pp.string "return-var")) in
   match is_rt_of_lvt rt with
   | None ->
     let Computational ((s, bt), _oinfo, rt) = rt in
     let rt' = LRT.subst (IT.make_subst [(s, IT.sym_ (s', bt))]) rt in
-    let@ () = add_l s' bt in
-    let@ () = bind_logical (oprefix, where) rt' in
+    let@ () = add_l s' bt info in
+    let@ () = bind_logical loc oprefix rt' in
     return (sym_ (s', bt))
   | Some tm ->
-    let@ s'' = add_l_abbrev s' tm in
+    let@ s'' = add_l_abbrev s' tm info in
     return (sym_ (s'', IT.bt tm))
 
 
@@ -1507,7 +1504,7 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
          | [] -> k []
          | (e, bt) :: es_bts ->
             check_expr labels ~typ:(Normal bt) e (fun rt ->
-            let@ it = bind_logically (None, Some (Loc loc)) rt in
+            let@ it = bind_logically loc None rt in
             aux es_bts (fun vts ->
             k (it :: vts)
             ))
@@ -1549,7 +1546,7 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
      in
      let@ p_bt = bt_of_pattern p in
      check_expr labels ~typ:(Normal p_bt) e1 (fun rt ->
-            let@ it = bind_logically (oprefix, Some (Loc loc)) rt in
+            let@ it = bind_logically loc oprefix rt in
             let@ pat_a = pattern_match p it in
             let@ () = fin () in
             check_expr labels ~typ e2 (fun rt2 ->
@@ -1592,8 +1589,9 @@ let check_expr_rt loc labels ~typ e =
            LRT.alpha_rename_ (Sym.fresh_named "return") 
              (returned_s, returned_bt) returned_lrt 
          in
-         let@ () = add_l returned_s returned_bt in
-         let@ () = bind_logical (None, Some (Loc loc)) returned_lrt in
+         let info = (loc, lazy (Pp.string "return-var")) in
+         let@ () = add_l returned_s returned_bt info in
+         let@ () = bind_logical loc None returned_lrt in
          let lrt = LRT.subst (IT.make_subst [(return_s, sym_ (returned_s, returned_bt))]) lrt in
          Spine.subtype loc lrt (fun () ->
          let@ () = all_empty loc in
@@ -1622,7 +1620,8 @@ let check_and_bind_arguments rt_subst loc arguments (function_typ : 'rt AT.t) =
          let new_lname = Sym.fresh_same aname in
          let subst = make_subst [(lname, sym_ (new_lname, sbt))] in
          let ftyp' = AT.subst rt_subst subst ftyp in
-         let@ () = add_l new_lname abt in
+         let info = (loc, lazy (Pp.item "argument" (Sym.pp aname))) in
+         let@ () = add_l new_lname abt info in
          let@ () = add_a aname (abt,new_lname) in
          check args ftyp'
        else
@@ -1636,11 +1635,13 @@ let check_and_bind_arguments rt_subst loc arguments (function_typ : 'rt AT.t) =
        let open LAT in
        let rec bind resources = function
          | Define ((sname, it), _, ftyp) ->
-            let@ () = add_l sname (IT.bt it) in
+            let info = (loc, lazy (Pp.item "argument let-bind" (Sym.pp sname))) in
+            let@ () = add_l sname (IT.bt it) info in
             let@ () = add_c (t_ (def_ sname it)) in
             bind resources ftyp
          | Resource ((s, (re, bt)), _, ftyp) ->
-            let@ () = add_l s bt in
+            let info = (loc, lazy (Pp.item "argument let-res-bind" (Sym.pp s))) in
+            let@ () = add_l s bt info in
             bind ((re, O (sym_ (s, bt))) :: resources) ftyp
          | Constraint (lc, _, ftyp) ->
             let@ () = add_c lc in
@@ -1869,7 +1870,8 @@ let check mu_file =
            let@ () = WellTyped.WBT.is_bt Loc.unknown gbt in
            let@ () = WellTyped.WCT.is_ct Loc.unknown ct in
            let bt = Loc in
-           let@ () = add_l lsym bt in
+           let info = (Loc.unknown, lazy (Pp.item "global" (Sym.pp lsym))) in
+           let@ () = add_l lsym bt info in
            let@ () = add_a sym (bt, lsym) in
            let@ () = add_c (t_ (IT.good_pointer ~pointee_ct:ct (sym_ (lsym, bt)))) in
            return ()
@@ -1882,7 +1884,7 @@ let check mu_file =
       (fun fsym (M_funinfo (loc, _attrs, ftyp, trusted, _has_proto)) ->
         let lc1 = t_ (ne_ (null_, sym_ (fsym, Loc))) in
         let lc2 = t_ (representable_ (Pointer Void, sym_ (fsym, Loc))) in
-        let@ () = add_l fsym Loc in
+        let@ () = add_l fsym Loc (loc, lazy (Pp.item "global fun-ptr" (Sym.pp fsym))) in
         let@ () = add_cs [lc1; lc2] in
         add_fun_decl fsym (loc, ftyp, trusted)
       ) mu_file.mu_funinfo

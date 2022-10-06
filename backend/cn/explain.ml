@@ -184,7 +184,7 @@ module VClassGraph = Graph.Make(VClass)
 
 let veclasses ctxt = 
   let with_logical = 
-    List.fold_right (fun (l, sort) g ->
+    List.fold_right (fun ((l, sort), _) g ->
         VClassSet.add (make (l, sort)) g
       ) ctxt.logical VClassSet.empty
   in
@@ -219,17 +219,17 @@ let explanation ctxt relevant =
   print stdout !^"producing error report";
 
   (* only report the state of the relevant variables *)
-  let relevant = 
-    List.fold_right (fun (s, _) acc -> 
+  let relevant =
+    List.fold_right (fun (s, _) acc ->
         if has_good_description s then SymSet.add s acc else acc
       ) ctxt.computational relevant
   in
-  let relevant = 
-    List.fold_right (fun (s, _) acc -> 
+  let relevant =
+    List.fold_right (fun ((s, _), _) acc ->
         if has_good_description s then SymSet.add s acc else acc
       ) ctxt.logical relevant
   in
-  let relevant = 
+  let relevant =
     List.fold_right (fun re acc ->
         SymSet.union (RE.free_vars re) acc
       ) (get_rs ctxt) relevant

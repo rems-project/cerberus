@@ -117,7 +117,7 @@ let format_delta model ct1 ct2 =
   let deleted (rt, _) = pp_res_ty rt ^^^ !^"|-> X" in
   let added (rt, oargs) = pp_res_ty rt ^^^ !^"|->" ^^^ pp_oargs model global oargs in
   List.map added rs_add @ List.map deleted rs_del @
-    doc_new "Logical vars" (format_var model global) log @
+    doc_new "Logical vars" (format_var model global) (List.map fst log) @
     doc_new "Computational vars" (format_var model global) com @
     doc_new "Constraints" LogicalConstraints.pp con
 
