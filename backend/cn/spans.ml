@@ -442,9 +442,7 @@ let do_guess_span_actions ress req m g =
     |> List.map (fun r -> model_res_spans_or_empty m g (RE.request r))
     |> List.concat in
   let (same, diff) = List.partition (fun (_, (r, _)) -> same_name r) res_spans in
-  let req_spans = model_res_spans_or_empty m g req
-    |> subtract_closed_spans_from_tagged (List.map fst same)
-  in
+  let req_spans = model_res_spans_or_empty m g req in
   let interesting = List.filter_map (fun res_span -> List.find_opt (inter res_span) req_spans
         |> Option.map (fun req_span -> (res_span, req_span)))
     diff
