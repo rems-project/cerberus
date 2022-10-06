@@ -69,42 +69,59 @@ let rec bt_of_pattern pat =
         Debug_ocaml.error "todo: array types"
     end
 
+(* add a logical symbol to abbreviate this term, unless it already is
+   a symbol, in which case return the existing symbol *)
+let add_l_abbrev sym it = match IT.is_sym it with
+  | Some (sym', _) -> return sym'
+  | None ->
+    let@ () = add_l sym (IT.bt it) in
+    let@ () = add_c (LC.t_ (IT.def_ sym it)) in
+    return sym
+
+let fresh_same_id_with_prefix oprefix s =
+  match oprefix, Sym.description s with
+  | Some prefix, SD_CN_Id name ->
+     Sym.fresh_make_uniq_kind name prefix
+  | Some prefix, _ ->
+     Sym.fresh_make_uniq prefix
+  | _ -> Sym.fresh ()
+
 (* pattern-matches and binds *)
-let pattern_match = 
-  let rec aux pat : (IT.t * ((Sym.t * BT.t) list * (Sym.t * (BT.t * Sym.t)) list), type_error) m = 
+let pattern_match =
+  let rec aux pat it : ((Sym.t * (BT.t * Sym.t)) list, type_error) m =
     let (M_Pattern (loc, _, pattern) : mu_pattern) = pat in
     match pattern with
     | M_CaseBase (o_s, has_bt) ->
        let@ () = WellTyped.WBT.is_bt loc has_bt in
-       let lsym = Sym.fresh () in 
-       begin match o_s, has_bt with
-       | Some s, _ -> 
-          return (sym_ (lsym, has_bt), ([(lsym, has_bt)], [(s, (has_bt, lsym))]))
-       | None, Unit -> 
-          return (unit_, ([], []))
-       | None, _ -> 
-          return (sym_ (lsym, has_bt), ([(lsym, has_bt)], []))
+       begin match o_s with
+       | Some s ->
+          let s' = fresh_same_id_with_prefix (Some "bind_") s in
+          let@ s'' = add_l_abbrev s' it in
+          let@ () = add_a s (has_bt, s'') in
+          return [(s, (has_bt, s''))]
+       | None -> return []
        end
     | M_CaseCtor (constructor, pats) ->
        match constructor, pats with
        | M_Cnil item_bt, [] ->
           let@ () = WellTyped.WBT.is_bt loc item_bt in
-          return (IT.nil_ ~item_bt, ([], []))
+          return []
        | M_Cnil item_bt, _ ->
           let@ () = WellTyped.WBT.is_bt loc item_bt in
           fail (fun _ -> {loc; msg = Number_arguments {has = List.length pats; expect = 0}})
        | M_Ccons, [p1; p2] ->
-          let@ it1, (l1, a1) = aux p1 in
-          let@ it2, (l2, a2) = aux p2 in
-          let@ () = WellTyped.ensure_base_type loc ~expect:(List (IT.bt it1)) (IT.bt it2) in
-          return (cons_ (it1, it2), (l1@l2, a1@a2))
-       | M_Ccons, _ -> 
+          let@ item_bt = bt_of_pattern p1 in
+          let@ a1 = aux p1 (head_ ~item_bt it) in
+          let@ a2 = aux p2 (tail_ it) in
+          return (a1 @ a2)
+       | M_Ccons, _ ->
           fail (fun _ -> {loc; msg = Number_arguments {has = List.length pats; expect = 2}})
        | M_Ctuple, pats ->
-          let@ its_l_a = ListM.mapM aux pats in
-          let its, l_a = List.split its_l_a in
-          let l, a = List.split l_a in
-          return (tuple_ its, (List.concat l, List.concat a))
+          let@ all_as = ListM.mapiM (fun i p ->
+            let@ item_bt = bt_of_pattern p in
+            aux p (nthTuple_ ~item_bt (i, it))
+          ) pats in
+          return (List.concat all_as)
        | M_Carray, _ ->
           Debug_ocaml.error "todo: array types"
   in
@@ -122,14 +139,6 @@ let pp_pattern_match p (patv, (l_vs, a_vs)) =
 
 
 
-let fresh_same_id_with_prefix oprefix s =
-  match oprefix, Sym.description s with
-  | Some prefix, SD_CN_Id name -> 
-     Sym.fresh_make_uniq_kind name prefix
-  | Some prefix, _ ->
-     Sym.fresh_make_uniq prefix
-  | _ -> Sym.fresh ()
-
 let fresh_return_with_prefix oprefix =
   match oprefix with
   | Some prefix -> Sym.fresh_make_uniq prefix
@@ -142,15 +151,6 @@ let fresh_call_with_prefix call_situation s =
   | _ ->
      Sym.fresh_make_uniq (TypeErrors.call_prefix call_situation)
 
-
-(* add a logical symbol to abbreviate this term, unless it already is
-   a symbol, in which case return the existing symbol *)
-let add_l_abbrev sym it = match IT.is_sym it with
-  | Some (sym', _) -> return sym'
-  | None ->
-    let@ () = add_l sym (IT.bt it) in
-    let@ () = add_c (LC.t_ (IT.def_ sym it)) in
-    return sym
 
 
 let rec bind_logical (oprefix,where) (lrt : LRT.t) = 
@@ -826,13 +826,10 @@ let rec check_pexpr (pe : 'bty mu_pexpr) ~(expect:BT.t)
      let@ fin = begin_trace_of_pure_step (Some (Mu.M_Pat p)) e1 in
      let@ p_bt = bt_of_pattern p in
      check_pexpr ~expect:p_bt e1 (fun v1 ->
-     let@ patv, (l, a) = pattern_match p in
-     let@ () = add_ls l in
-     let@ () = add_as a in
-     let@ () = add_c (t_ (eq__ patv v1)) in
+     let@ pat_a = pattern_match p v1 in
      let@ () = fin () in
      check_pexpr ~expect e2 (fun lvt ->
-     let@ () = remove_as (List.map fst a) in
+     let@ () = remove_as (List.map fst pat_a) in
      k lvt))
   (* | M_PEdone pe -> *)
   (*    let@ arg = infer_pexpr pe in *)
@@ -1488,13 +1485,10 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
      let@ fin = begin_trace_of_pure_step (Some (Mu.M_Pat p)) e1 in
      let@ p_bt = bt_of_pattern p in
      check_pexpr ~expect:p_bt e1 (fun v1 ->
-     let@ patv, (l, a) = pattern_match p in
-     let@ () = add_ls l in
-     let@ () = add_as a in
-     let@ () = add_c (t_ (eq__ patv v1)) in
+     let@ pat_a = pattern_match p v1 in
      let@ () = fin () in
      check_expr labels ~typ e2 (fun rt ->
-         let@ () = remove_as (List.map fst a) in
+         let@ () = remove_as (List.map fst pat_a) in
          k rt
      ))
   | Normal expect, M_Eunseq es ->
@@ -1556,13 +1550,10 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
      let@ p_bt = bt_of_pattern p in
      check_expr labels ~typ:(Normal p_bt) e1 (fun rt ->
             let@ it = bind_logically (oprefix, Some (Loc loc)) rt in
-            let@ patv, (l, a) = pattern_match p in
-            let@ () = add_ls l in
-            let@ () = add_as a in
-            let@ () = add_c (t_ (eq__ patv it)) in
+            let@ pat_a = pattern_match p it in
             let@ () = fin () in
             check_expr labels ~typ e2 (fun rt2 ->
-                let@ () = remove_as (List.map fst a) in
+                let@ () = remove_as (List.map fst pat_a) in
                 k rt2
               )
        )
