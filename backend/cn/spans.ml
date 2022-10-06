@@ -421,6 +421,14 @@ let res_pt_present m g = function
    (4) If the request, in this model, is a resource predicate where the
        relevant clause claims no resources, then pack it. Only do this if
        there is no pointer-matching resource in the context.
+
+
+FIXME: the above appeals (repeatedly) to the idea that overlapping same-resouce
+spans can be subtracted in (2). This broadly makes sense, but specifically might
+happen because of some coincidence in the current model. Perhaps an additional
+check could be done. It's clear what this should be for "concrete" Owned/Owned
+overlaps, but for overlaps involving arrays at partly-dynamic offsets, it's all
+a bit complicated. To be revisited.
 *)
 
 let do_guess_span_actions ress req m g =
