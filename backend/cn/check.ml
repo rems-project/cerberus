@@ -1063,6 +1063,11 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
        debug 3 (lazy (item "ctxt" (Context.pp ctxt)));
     )
   in
+  let name_retv it =
+    let info = (loc, lazy (Pp.item "result of" (NewMu.pp_expr e))) in
+    let@ nm = add_l_abbrev (Sym.fresh_named "x") it info in
+    return (sym_ (nm, IT.bt it))
+  in
   match typ, e_ with
   | Normal expect, M_Epure pe -> 
      check_pexpr ~expect pe (fun lvt ->
@@ -1073,6 +1078,7 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
        check_pexpr ~expect:Loc pe2 (fun arg2 ->
        let lvt = op (arg1, arg2) in
        let@ () = WellTyped.ensure_base_type loc ~expect (IT.bt lvt) in
+       let@ lvt = name_retv lvt in
        k (rt_of_lvt lvt)))
      in
      begin match memop with
@@ -1103,6 +1109,7 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
                    pointerToIntegerCast_ arg2),
              int_ divisor)
         in
+        let@ value = name_retv value in
         k (rt_of_lvt value)))
      | M_IntFromPtr (act_from, act_to, pe) ->
         let@ () = WellTyped.ensure_base_type loc ~expect Integer in
@@ -1124,6 +1131,7 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
                )
           end
         in
+        let@ value = name_retv value in
         k (rt_of_lvt value))
      | M_PtrFromInt (act_from, act2_to, pe) ->
         let@ () = WellTyped.ensure_base_type loc ~expect Loc in
@@ -1131,6 +1139,7 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
         let@ () = WellTyped.WCT.is_ct act2_to.loc act2_to.ct in
         check_pexpr ~expect:Integer pe (fun arg ->
         let value = integerToPointerCast_ arg in
+        let@ value = name_retv value in
         k (rt_of_lvt value))
      | M_PtrValidForDeref (act, pe) ->
         let@ () = WellTyped.ensure_base_type loc ~expect Bool in
@@ -1138,17 +1147,20 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
         let@ () = WellTyped.WCT.is_ct act.loc act.ct in
         check_pexpr ~expect:Loc pe (fun arg ->
         let value = aligned_ (arg, act.ct) in
+        let@ value = name_retv value in
         k (rt_of_lvt value))
      | M_PtrWellAligned (act, pe) ->
         let@ () = WellTyped.ensure_base_type loc ~expect Bool in
         let@ () = WellTyped.WCT.is_ct act.loc act.ct in
         check_pexpr ~expect:Loc pe (fun arg ->
         let value = aligned_ (arg, act.ct) in
+        let@ value = name_retv value in
         k (rt_of_lvt value))
      | M_PtrArrayShift (pe1, act, pe2) ->
         check_pexpr ~expect:BT.Loc pe1 (fun vt1 ->
         check_pexpr ~expect:Integer pe2 (fun vt2 ->
         let@ lvt = check_array_shift loc ~expect vt1 (act.loc, act.ct) vt2 in
+        let@ lvt = name_retv lvt in
         k (rt_of_lvt lvt)))
      | M_Memcpy _ (* (asym 'bty * asym 'bty * asym 'bty) *) ->
         Debug_ocaml.error "todo: M_Memcpy"
@@ -1510,7 +1522,8 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
             ))
        in
        aux (List.combine es item_bts) (fun vts ->
-       k (rt_of_lvt (tuple_ vts))
+       let@ lvt = name_retv (tuple_ vts) in
+       k (rt_of_lvt lvt)
        )
      else
        let rec aux es_bts k = match es_bts with
