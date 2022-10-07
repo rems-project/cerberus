@@ -226,30 +226,7 @@ let add_a sym (bt, sym') =
 
 let remove_a sym = 
   let@ s = get () in
-  let (bt, l) = Context.get_a sym s in
   let s = Context.remove_a sym s in
-  let ovalue = 
-    LCSet.fold (fun lc acc ->
-        match acc with
-        | Some _ -> acc
-        | None -> LC.equates_to (IT.sym_ (l, bt)) lc
-      )
-      s.constraints
-      None
-  in
-  let s = match ovalue with
-    | None -> s
-    | Some value ->
-       let subst = IT.make_subst [(l, value)] in
-       let (resources, n) = s.resources in
-       let resources = List.map (fun (r,i) -> (RE.subst subst r, i)) resources in
-       let constraints = LCSet.map (LC.subst subst) s.constraints in
-       let s =
-         { s with resources = (resources, n);
-                  constraints = constraints; }
-       in
-       remove_l l s
-  in
   set s
 
 let add_as a = 
