@@ -1006,7 +1006,9 @@ let all_empty loc =
       match provable constr with
       | `True -> return () 
       | `False -> 
-         let@ model = model () in 
+         let@ model = model () in
+         let@ global = get_global () in
+         RI.debug_constraint_failure_diagnostics 6 model global constr;
          fail_with_trace (fun trace -> fun ctxt ->
              {loc; msg = Unused_resource {resource; ctxt; model; trace}})
     ) all_resources
