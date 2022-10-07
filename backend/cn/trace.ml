@@ -8,6 +8,7 @@ module StringMap = Map.Make(String)
 module IntSet = Set.Make(Int)
 
 module IT = IndexTerms
+module BT = BaseTypes
 
 type opt_pat = unit New.mu_sym_or_pattern option
 type expr = unit New.mu_expr
@@ -244,5 +245,29 @@ let format_trace model (tr : t) = match tr.mu_trace with
     let groups = tr_ord |> group_to_statements locs in
     let file_lines = get_file_lines groups in
     Pp.flow Pp.hardline (init_step :: List.map (format_group model file_lines) groups)
+
+
+let format_eval_sym model global sym bt =
+  let typ_pp = Pp.typ (Sym.pp sym) (BT.pp bt) in
+  let open Pp in
+  match Solver.eval global model (IT.sym_ (sym, bt)) with
+  | None -> typ_pp ^^^ parens (format [Red] "cannot eval")
+  | Some v -> typ_pp ^^^ equals ^^^ IT.pp v
+
+
+let log_block ctxt model ((sym, bt), (loc, info)) =
+  let (head, pos) = Locations.head_pos_of_location loc in
+  let open Pp in
+  format_eval_sym model ctxt.Context.global sym bt ^^ hardline ^^
+  Lazy.force info ^^ hardline ^^
+  string ("at:") ^^^ string head ^^ colon ^^ hardline ^^
+  string pos ^^ hardline
+
+let format_ctxt_logical_trace model (ctxt : Context.t) =
+  let preamble = [Pp.string "Logical variables created in type-checking:"] in
+  let non_unit = List.filter (fun ((_, bt), _) -> not (BT.equal bt BT.Unit))
+    (List.rev ctxt.Context.logical) in
+  Pp.flow Pp.hardline (preamble @ List.map (log_block ctxt model) non_unit)
+
 
 
