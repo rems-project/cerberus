@@ -249,7 +249,7 @@ let pp_message te =
      let explanation = Explain.explanation ctxt relevant in
      let descr = missing_or_bad_request_description oinfo orequest explanation in
      let state = Explain.state ctxt explanation model orequest in
-     let trace_doc = Trace.format_trace (fst model) trace in
+     let trace_doc = Trace.format_ctxt_logical_trace (fst model) ctxt in
      { short; descr = descr; state = Some state; trace = Some trace_doc }
   | Merging_multiple_arrays {orequest; situation; oinfo; ctxt; model} ->
      let short = 
@@ -286,7 +286,7 @@ let pp_message te =
      let resource = RE.pp (RE.subst explanation.substitution resource) in
      let short = !^"Left-over unused resource" ^^^ squotes resource in
      let state = Explain.state ctxt explanation model None in
-     let trace_doc = Trace.format_trace (fst model) trace in
+     let trace_doc = Trace.format_ctxt_logical_trace (fst model) ctxt in
      { short; descr = None; state = Some state; trace = Some trace_doc }
   | Number_members {has;expect} ->
      let short = !^"Wrong number of struct members" in
@@ -454,7 +454,7 @@ let pp_message te =
        | None -> !^"Constraint from " ^^^ parens (!^head)
        | Some descr -> !^"Constraint from" ^^^ !^descr ^^^ parens (!^head)
      in
-     let trace_doc = Trace.format_trace (fst model) trace in
+     let trace_doc = Trace.format_ctxt_logical_trace (fst model) ctxt in
      { short; descr = Some descr; state = Some state; trace = Some trace_doc }
   | Unconstrained_logical_variable (name, odescr) ->
      let short = !^"Problematic specification" in
