@@ -113,6 +113,30 @@ let rec datatype_member_reduce it member member_bt =
           datatype_member_reduce it2 member member_bt)
     | _ -> IT.IT (Datatype_op (DatatypeMember (it, member)), member_bt)
 
+let rec tuple_nth_reduce it n item_bt =
+  match IT.term it with
+    | Tuple_op (Tuple items) -> List.nth items n
+    | Bool_op (ITE (cond, it1, it2)) ->
+      ite_ (cond, tuple_nth_reduce it1 n item_bt, tuple_nth_reduce it2 n item_bt)
+    | _ -> IT.nthTuple_ ~item_bt (n, it)
+
+let rec accessor_reduce (f : IT.t -> IT.t option) it =
+  let bt = IT.bt it in
+  let (step, it2) = match IT.term it with
+    | Record_op (RecordMember (t, m)) ->
+        (true, record_member_reduce (accessor_reduce f t) m)
+    | Datatype_op (DatatypeMember (t, m)) ->
+        (true, datatype_member_reduce (accessor_reduce f t) m bt)
+    | Tuple_op (NthTuple (n, t)) ->
+        (true, tuple_nth_reduce (accessor_reduce f t) n bt)
+    | _ -> (false, it)
+  in
+  if step && not (IT.equal it it2)
+  then accessor_reduce f it2
+  else begin match f it with
+    | None -> it
+    | Some it3 -> accessor_reduce f it3
+  end
 
 let rec simp (struct_decls : Memory.struct_decls) values equalities log_unfold lcs =
 
