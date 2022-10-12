@@ -145,6 +145,35 @@ let fresh_call_with_prefix call_situation s =
      Sym.fresh_make_uniq (TypeErrors.call_prefix call_situation)
 
 
+(* check if the symbol 'sym' appears in a logical return type exactly one,
+   in an equality constraint that equates it to some rhs, where the rhs is
+   global (no vars defined in the return type). if so, return the rhs and
+   the remainder of the return type. *)
+let is_eq_in_rt sym rt =
+  let rec extract = function
+  | LRT.Define ((s, it), oinfo, rt) ->
+    Option.map (fun (rhs, rt) -> (rhs, LRT.Define ((s, it), oinfo, rt)))
+        (extract rt)
+  | LRT.Resource ((s, (re, oarg_spec)), oinfo, rt) ->
+    Option.map (fun (rhs, rt) -> (rhs, LRT.Resource ((s, (re, oarg_spec)), oinfo, rt)))
+        (extract rt)
+  | LRT.Constraint (lc, oinfo, rt) ->
+    begin match LC.is_sym_lhs_equality lc with
+    | Some (s, rhs) when Sym.equal s sym -> Some (rhs, rt)
+    | _ ->
+      Option.map (fun (rhs, rt) -> (rhs, LRT.Constraint (lc, oinfo, rt)))
+          (extract rt)
+    end
+  | LRT.I -> None
+  in
+  match extract rt with
+  | None -> None
+  | Some (rhs, rt) ->
+    if SymSet.mem sym (IT.free_vars rhs)
+      || SymSet.mem sym (LRT.free_vars rt)
+      || SymSet.mem sym (LRT.bound rt)
+    then None else Some (rhs, rt)
+
 
 let rec bind_logical loc oprefix (lrt : LRT.t) =
   match lrt with
@@ -159,10 +188,17 @@ let rec bind_logical loc oprefix (lrt : LRT.t) =
        let s' = fresh_same_id_with_prefix oprefix s in
        LRT.alpha_rename_ s' (s, oarg_spec) rt 
      in
-     let l_info = (loc, lazy (Pp.item "return let-bind" (Sym.pp s))) in
-     let@ () = add_l s oarg_spec l_info in
+     let l_info = (loc, lazy (Pp.item "return res let-bind" (Sym.pp s))) in
+     let@ (it, rt) = match is_eq_in_rt s rt with
+       | None ->
+         let@ () = add_l s oarg_spec l_info in
+         return (sym_ (s, oarg_spec), rt)
+       | Some (rhs, rt) ->
+         let@ s'' = add_l_abbrev s rhs l_info in
+         return (sym_ (s'', oarg_spec), rt)
+     in
      let where = Some (Context.Loc loc) in
-     let@ () = add_r where (re, O (sym_ (s, oarg_spec))) in
+     let@ () = add_r where (re, O it) in
      bind_logical loc oprefix rt
   | Constraint (lc, _oinfo, rt) -> 
      let@ () = add_c lc in
@@ -196,28 +232,21 @@ let rt_of_lvt lvt =
   LRT.I))
 
 
-let is_rt_of_lvt rt = match rt with
-  | RT.Computational ((sym, _), _, LRT.Constraint (lc, _, LRT.I)) ->
-    begin match is_sym_lhs_equality lc with
-    | Some (sym2, rhs) -> if Sym.equal sym sym2 then Some rhs else None
-    | _ -> None
-    end
-  | _ -> None
-
-
 
 let bind_logically loc oprefix (rt : RT.t) : (IT.t, type_error) m =
   let s' = fresh_return_with_prefix oprefix in
-  let info = (loc, lazy (Pp.string "return-var")) in
-  match is_rt_of_lvt rt with
+  let Computational ((s, bt), _oinfo, rt) = rt in
+  match is_eq_in_rt s rt with
   | None ->
-    let Computational ((s, bt), _oinfo, rt) = rt in
     let rt' = LRT.subst (IT.make_subst [(s, IT.sym_ (s', bt))]) rt in
+    let info = (loc, lazy (Pp.string "return-var")) in
     let@ () = add_l s' bt info in
     let@ () = bind_logical loc oprefix rt' in
     return (sym_ (s', bt))
-  | Some tm ->
+  | Some (tm, rt') ->
+    let info = (loc, lazy (Pp.item "return-var" (IT.pp tm))) in
     let@ s'' = add_l_abbrev s' tm info in
+    let@ () = bind_logical loc oprefix rt' in
     return (sym_ (s'', IT.bt tm))
 
 
@@ -1269,8 +1298,7 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
            IT.bt oarg))
         in
         let value_constr = 
-          t_ (eq_ (recordMember_ ~member_bt:(BT.of_sct act.ct) (oarg, value_sym),
-                   varg))
+          t_ (eq_ (oarg, record_ [(Resources.value_sym, varg)]))
         in
         let rt = 
           RT.Computational ((Sym.fresh (), Unit), (loc, None),
