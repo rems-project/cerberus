@@ -239,12 +239,11 @@ let rec remove_as = function
      let@ () = remove_a x in
      remove_as xs
 
-
-let add_l sym ls =
+let add_l sym ls info =
   let@ s = get () in
-  set (Context.add_l sym ls s)
+  set (Context.add_l sym ls info s)
 
-let add_ls lvars = 
+let add_ls lvars =
   let@ s = get () in
   set (Context.add_ls lvars s)
 
@@ -286,6 +285,15 @@ let rec add_cs = function
   | lc :: lcs -> 
      let@ () = add_c lc in 
      add_cs lcs
+
+(* add a logical symbol to abbreviate this term, unless it already is
+   a symbol, in which case return the existing symbol *)
+let add_l_abbrev sym it info = match IT.is_sym it with
+  | Some (sym', _) -> return sym'
+  | None ->
+    let@ () = add_l sym (IT.bt it) info in
+    let@ () = add_c (LC.t_ (IT.def_ sym it)) in
+    return sym
 
 let check_res_const_step loc r =
   let open TypeErrors in

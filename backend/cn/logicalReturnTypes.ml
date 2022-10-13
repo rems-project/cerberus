@@ -92,6 +92,19 @@ let alpha_unique ss =
   in f ss
 
 
+let free_vars lrt =
+  let rec f = function
+  | Define ((nm, it), _, t) ->
+     SymSet.union (IT.free_vars it) (SymSet.remove nm (f t))
+  | Resource ((nm, (re, _)), _, t) ->
+     SymSet.union (RT.free_vars re) (SymSet.remove nm (f t))
+  | Constraint (lc, _, t) ->
+     SymSet.union (LogicalConstraints.free_vars lc) (f t)
+  | I -> SymSet.empty
+  in
+  f lrt
+
+
 let rec pp_aux lrt =
   let open Pp in
   match lrt with

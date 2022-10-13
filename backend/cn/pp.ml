@@ -27,6 +27,7 @@ let int i = string (string_of_int i)
 let html_escapes = ref false
 let unicode = ref true
 let print_level = ref 0
+let print_timestamps = ref true
 
 let html_langle = !^ "&lt;"
 let html_rangle = !^ "&gt;"
@@ -195,9 +196,12 @@ let action a = format [Cyan] ("## " ^ a ^ " ")
 let debug l pp = 
   if !print_level >= l 
   then
-    let time = Sys.time () in
-    let dpp = format [Green] ("[" ^ Float.to_string time ^ "] ") in
-    print stderr (dpp ^^ Lazy.force pp)
+    let pp1 = Lazy.force pp in
+    let pp2 = if ! print_timestamps then begin
+      let time = Sys.time () in
+      format [Green] ("[" ^ Float.to_string time ^ "] ") ^^ pp1
+    end else pp1 in
+    print stderr pp2
 
 let warn_noloc pp = 
   print stderr (format [Bold; Yellow] "Warning:" ^^^ pp)

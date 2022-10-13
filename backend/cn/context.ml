@@ -21,9 +21,12 @@ let pp_where = function
   | Loc loc -> !^(Loc.simple_location loc)
 
 
+type l_info = (Locations.t * Pp.doc Lazy.t)
+
+
 type t = {
     computational : (Sym.t * (BT.t * Sym.t)) list;
-    logical : (Sym.t * LS.t) list;
+    logical : ((Sym.t * LS.t) * l_info) list;
     resources : (RE.t * int) list * int;
     constraints : LCSet.t;
     global : Global.t;
@@ -51,8 +54,8 @@ let pp (ctxt : t) =
     (Pp.list (fun (sym, (bt,lsym)) -> 
          typ (Sym.pp sym) (BT.pp bt ^^ tilde ^^ Sym.pp lsym)
        ) ctxt.computational) ^/^
-  item "logical" 
-    (Pp.list (fun (sym, ls) -> 
+  item "logical"
+    (Pp.list (fun ((sym, ls), _) ->
          typ (Sym.pp sym) (LS.pp ls)
        ) ctxt.logical) ^/^
   item "resources" 
@@ -67,8 +70,8 @@ let pp (ctxt : t) =
 
 let bound_a sym ctxt = 
   Option.is_some (List.assoc_opt Sym.equal sym ctxt.computational)
-let bound_l sym ctxt = 
-  Option.is_some (List.assoc_opt Sym.equal sym ctxt.logical)
+let bound_l sym ctxt =
+  List.exists (fun ((sym2, _), _) -> Sym.equal sym sym2) ctxt.logical
 
 
 
@@ -76,7 +79,7 @@ let get_a (name: Sym.t) (ctxt: t)  =
   List.assoc Sym.equal name ctxt.computational
 
 let get_l (name: Sym.t) (ctxt:t) = 
-  List.assoc Sym.equal name ctxt.logical
+  List.assoc Sym.equal name (List.map fst ctxt.logical)
 
 let add_a aname (bt, lname) ctxt = 
   {ctxt with computational = (aname, (bt, lname)) :: ctxt.computational}
@@ -85,7 +88,7 @@ let remove_a aname ctxt =
   {ctxt with computational = List.remove_assoc aname ctxt.computational}
 
 let remove_l lname ctxt = 
-  {ctxt with logical = List.remove_assoc lname ctxt.logical}
+  {ctxt with logical = List.filter (fun ((sym2, _), _) -> not (Sym.equal lname sym2)) ctxt.logical}
 
 
 let add_as avars ctxt = 
@@ -95,11 +98,11 @@ let remove_as avars ctxt =
   List.fold_left (fun ctxt s -> remove_a s ctxt) ctxt avars
 
 
-let add_l lname ls (ctxt : t) = 
-  {ctxt with logical = (lname, ls) :: ctxt.logical}
+let add_l lname ls info (ctxt : t) =
+  {ctxt with logical = ((lname, ls), info) :: ctxt.logical}
 
 let add_ls lvars ctxt = 
-  List.fold_left (fun ctxt (s,ls) -> add_l s ls ctxt) ctxt lvars
+  List.fold_left (fun ctxt ((s, ls), info) -> add_l s ls info ctxt) ctxt lvars
 
 let add_c c (ctxt : t) =
   let s = ctxt.constraints in
@@ -134,7 +137,7 @@ let json (ctxt : t) : Yojson.Safe.t =
       ) ctxt.computational
   in
   let logical = 
-    List.map (fun (sym, ls) ->
+    List.map (fun ((sym, ls), _) ->
         `Assoc [("name", Sym.json sym);
                 ("sort", LS.json ls)]
       ) ctxt.logical

@@ -235,12 +235,10 @@ module General = struct
             return (LAT.subst rt_subst (IT.make_subst [(s, oargs)]) ftyp)
        end
     | Define ((s, it), info, ftyp) ->
-       let bt = IT.bt it in
        let@ tm = match naming_scheme s with
          | Some s' ->
-           let@ () = add_l s' bt in
-           let@ () = add_c (LC.t_ (def_ s' it)) in
-           return (sym_ (s', bt))
+           let@ s'' = add_l_abbrev s' it (loc, lazy (Pp.item "input let-bind" (Sym.pp s))) in
+           return (sym_ (s'', IT.bt it))
          | None -> return it
        in
        return (LAT.subst rt_subst (IT.make_subst [(s, tm)]) ftyp)
@@ -270,18 +268,18 @@ module General = struct
        Sym.fresh_make_uniq "unpack"
 
   (* similar to bind_logical in check.ml *)
-  let rec unpack_packing_ft ftyp = begin match ftyp with
+  let rec unpack_packing_ft loc ftyp = begin match ftyp with
     | LAT.Resource ((s, (resource, bt)), _, ftyp) ->
       let s, ftyp = LAT.alpha_rename OutputDef.subst (s, bt) ftyp in
-      let@ () = add_l s bt in
+      let@ () = add_l s bt (loc, lazy (Pp.item "output bound resource" (Sym.pp s))) in
       let@ () = add_r None (resource, O (sym_ (s, bt))) in
-      unpack_packing_ft ftyp
+      unpack_packing_ft loc ftyp
     | Define ((s, it), _, ftyp) ->
       let ftyp = LAT.subst OutputDef.subst (IT.make_subst [(s, it)]) ftyp in
-      unpack_packing_ft ftyp
+      unpack_packing_ft loc ftyp
     | Constraint (c, _, ftyp) ->
       let@ () = add_c c in
-      unpack_packing_ft ftyp
+      unpack_packing_ft loc ftyp
     | I output_def ->
       return output_def
     end
@@ -1049,7 +1047,7 @@ module General = struct
       | None -> return false
       | Some (res2, O res_oargs) ->
         assert (ResourceTypes.equal (P res2) (P r_pt));
-        let@ unpack_oargs = unpack_packing_ft clause.ResourcePredicates.packing_ft in
+        let@ unpack_oargs = unpack_packing_ft loc clause.ResourcePredicates.packing_ft in
         let eq = IT.eq_ (res_oargs, OutputDef.to_record unpack_oargs) in
         let@ () = add_c (LC.t_ eq) in
         return true

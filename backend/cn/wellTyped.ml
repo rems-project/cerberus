@@ -324,7 +324,7 @@ module WIT = struct
               return (BT.Bool, EQ (t,t')) 
            | EachI ((i1, s, i2), t) ->
               pure begin 
-                  let@ () = add_l s Integer in
+                  let@ () = add_l s Integer (loc, lazy (Pp.string "forall-var")) in
                   let@ t = check loc ~context Bool t in
                   return (BT.Bool, EachI ((i1, s, i2), t))
                 end
@@ -597,7 +597,7 @@ module WIT = struct
            | Def ((s, abt), body) ->
               let@ () = WBT.is_bt loc abt in
               pure begin
-                  let@ () = add_l s abt in
+                  let@ () = add_l s abt (loc, lazy (Pp.string "map-def-var")) in
                   let@ body = infer loc ~context body in
                   return (Map (abt, IT.bt body), Def ((s, abt), body))
                 end
@@ -677,7 +677,7 @@ module WRET = struct
        in
        let@ _ = 
          pure begin 
-             let@ () = add_l p.q Integer in
+             let@ () = add_l p.q Integer (loc, lazy (Pp.string "forall-var")) in
              let@ _ = WIT.check loc BT.Bool p.permission in
              let@ provable = provable loc in
              let open IT in
@@ -755,7 +755,7 @@ module WLC = struct
     | LC.Forall ((s,bt), it) ->
        let@ () = WBT.is_bt loc bt in
        pure begin
-           let@ () = add_l s bt in
+           let@ () = add_l s bt (loc, lazy (Pp.string "forall-var")) in
            let@ _ = WIT.check loc BT.Bool it in
            return ()
        end
@@ -772,12 +772,12 @@ module WLRT = struct
     let rec aux = function
       | Define ((s, it), info, lrt) ->
          let@ it = WIT.infer loc it in
-         let@ () = add_l s (IT.bt it) in
+         let@ () = add_l s (IT.bt it) (loc, lazy (Pp.string "let-var")) in
          let@ () = add_c (LC.t_ (IT.def_ s it)) in
          aux lrt
       | Resource ((s, (re, re_oa_spec)), info, lrt) -> 
          let@ () = WRS.welltyped (fst info) (re, re_oa_spec) in
-         let@ () = add_l s re_oa_spec in
+         let@ () = add_l s re_oa_spec (loc, lazy (Pp.string "let-var")) in
          let@ () = add_r None (re, O (IT.sym_ (s, re_oa_spec))) in
          aux lrt
       | Constraint (lc, info, lrt) ->
@@ -802,7 +802,7 @@ module WRT = struct
     pure begin match rt with 
       | Computational ((name,bt), info, lrt) ->
          let@ () = WBT.is_bt (fst info) bt in
-         let@ () = add_l name bt in
+         let@ () = add_l name bt (loc, lazy (Pp.string "ret-var")) in
          let@ () = add_a (Sym.fresh_same name) (bt, name) in
          WLRT.welltyped loc lrt
       end
@@ -865,12 +865,12 @@ module WLAT (WI: WI_Sig) = struct
     let rec aux = function
       | LAT.Define ((s, it), info, at) ->
          let@ it = WIT.infer loc it in
-         let@ () = add_l s (IT.bt it) in
+         let@ () = add_l s (IT.bt it) (loc, lazy (Pp.string "let-var")) in
          let@ () = add_c (LC.t_ (IT.def_ s it)) in
          aux at
       | LAT.Resource ((s, (re, re_oa_spec)), info, at) -> 
          let@ () = WRS.welltyped (fst info) (re, re_oa_spec) in
-         let@ () = add_l s re_oa_spec in
+         let@ () = add_l s re_oa_spec (loc, lazy (Pp.string "let-var")) in
          let@ () = add_r None (re, O (IT.sym_ (s, re_oa_spec))) in
          aux at
       | LAT.Constraint (lc, info, at) ->
@@ -907,7 +907,7 @@ module WAT (WI: WI_Sig) = struct
     let rec aux = function
       | AT.Computational ((name,bt), info, at) ->
          let@ () = WBT.is_bt (fst info) bt in
-         let@ () = add_l name bt in
+         let@ () = add_l name bt (loc, lazy (Pp.string "ret-var")) in
          let@ () = add_a (Sym.fresh_same name) (bt, name) in
          aux at
       | AT.L at ->
@@ -929,11 +929,11 @@ module WRPD = struct
   let welltyped pd = 
     pure begin
         let open ResourcePredicates in
-        let@ () = add_l pd.pointer BT.Loc in
+        let@ () = add_l pd.pointer BT.Loc (pd.loc, lazy (Pp.string "ptr-var")) in
         let@ () = 
           ListM.iterM (fun (s, ls) -> 
               let@ () = WLS.is_ls pd.loc ls in
-              add_l s ls
+              add_l s ls (pd.loc, lazy (Pp.string "input-var"))
             ) pd.iargs 
         in
         let@ () = ListM.iterM (WLS.is_ls pd.loc) (List.map snd pd.oargs) in
@@ -967,7 +967,8 @@ module WLPD = struct
   let welltyped (pd : LogicalPredicates.definition) = 
     pure begin
         let@ () = ListM.iterM (WLS.is_ls pd.loc) (List.map snd pd.args) in
-        let@ () = add_ls pd.args in
+        let info = (pd.loc, lazy (Pp.string "arg-var")) in
+        let@ () = add_ls (List.map (fun arg -> (arg, info)) pd.args) in
         let@ () = WBT.is_bt pd.loc pd.return_bt in
         match pd.definition with
         | Def body -> let@ _ = WIT.check pd.loc pd.return_bt body in return ()
