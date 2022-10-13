@@ -731,20 +731,20 @@ let resolve_index_term loc
             fail {loc; msg = Generic err}
        in
        return (memberShift_ (pointer, tag, member), Some (Sctypes.Pointer sct))
-    | ArrayShift {pointer =t; index} ->
-       let@ (pointer, osct) = resolve t mapping quantifiers in
-       let@ (index, _) = resolve t mapping quantifiers in
-       let ppf () = Ast.Terms.pp false t in
-       let@ sct = match osct with
-         | None -> 
-            fail {loc; msg = Generic (!^"Cannot resolve C type of term" ^^^ 
-                                        Ast.pp false t)}
+    (* | ArrayShift {pointer =t; index} -> *)
+    (*    let@ (pointer, osct) = resolve t mapping quantifiers in *)
+    (*    let@ (index, _) = resolve index mapping quantifiers in *)
+    (*    let ppf () = Ast.Terms.pp false t in *)
+    (*    let@ sct = match osct with *)
+    (*      | None ->  *)
+    (*         fail {loc; msg = Generic (!^"Cannot resolve C type of term" ^^^  *)
+    (*                                     Ast.pp false t)} *)
 
-         | Some (Pointer sct) -> return sct
-         | Some _ -> 
-            fail {loc; msg = Generic (ppf () ^^^ !^"is not a pointer")}
-       in
-       return (arrayShift_ (pointer, sct, index), Some (Sctypes.Pointer sct))
+    (*      | Some (Pointer sct) -> return sct *)
+    (*      | Some _ ->  *)
+    (*         fail {loc; msg = Generic (ppf () ^^^ !^"is not a pointer")} *)
+    (*    in *)
+    (*    return (arrayShift_ (pointer, sct, index), Some (Sctypes.Pointer sct)) *)
     | CellPointer ((base, step), (from_index, to_index), pointer) ->
        let@ (base, _) = resolve base mapping quantifiers in
        let@ (step, _) = resolve step mapping quantifiers in
@@ -900,14 +900,14 @@ let iterated_pointer_base_offset resolve loc q_name pointer =
      let@ (pointer_r, p_osct) = resolve pointer in
      let@ (offs_r, _) = resolve offs in
      return (pointer_r, p_osct, offs_r)
-  | ArrayShift {pointer; index = Var name'} when String.equal q_name name'->
-     let@ (pointer, p_osct) = resolve pointer in
-     begin match p_osct with
-     | Some (Sctypes.Pointer ct) -> return (pointer, Some ct, IT.int_ (Memory.size_of_ctype ct))
-     | None -> fail {loc; msg = Generic (!^ "array pointer type not known" ^^^ IT.pp pointer)}
-     | Some ct -> fail {loc; msg = Generic (!^ "array pointer not of pointer type:" ^^^
-            IT.pp pointer ^^ colon ^^^ Sctypes.pp ct)}
-     end
+  (* | ArrayShift {pointer; index = Var name'} when String.equal q_name name'-> *)
+  (*    let@ (pointer, p_osct) = resolve pointer in *)
+  (*    begin match p_osct with *)
+  (*    | Some (Sctypes.Pointer ct) -> return (pointer, Some ct, IT.int_ (Memory.size_of_ctype ct)) *)
+  (*    | None -> fail {loc; msg = Generic (!^ "array pointer type not known" ^^^ IT.pp pointer)} *)
+  (*    | Some ct -> fail {loc; msg = Generic (!^ "array pointer not of pointer type:" ^^^ *)
+  (*           IT.pp pointer ^^ colon ^^^ Sctypes.pp ct)} *)
+  (*    end *)
   | _ ->
      let msg =
        "Iterated predicate pointer must be (ptr + (q_var * offs)) or (&(ptr[q_var]))"

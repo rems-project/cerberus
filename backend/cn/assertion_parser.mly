@@ -171,8 +171,8 @@ atomic_term:
       { Ast.OffsetOf {tag; member} }
   | AMPERSAND LPAREN t=atomic_term ARROW member= name RPAREN
       { Ast.MemberShift {pointer=t; member} }
-  | AMPERSAND LPAREN t=atomic_term LBRACKET index=  term RBRACKET RPAREN
-      { Ast.ArrayShift {pointer=t; index} }
+  /* | AMPERSAND LPAREN t=atomic_term LBRACKET index=  term RBRACKET RPAREN */
+  /*     { Ast.ArrayShift {pointer=t; index} } */
   | CELLPOINTER LPAREN t1=term COMMA t2=term COMMA t3=term COMMA t4=term COMMA t5=term RPAREN
       { Ast.CellPointer ((t1, t2), (t3, t4), t5) }
   | LBRACE a=term RBRACE AT l=name
