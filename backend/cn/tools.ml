@@ -42,3 +42,12 @@ let unsupported (loc : Locations.t) (err : Pp.document) : 'a =
 
 
 let skip swith lrt = if true then swith else lrt
+
+
+
+let todo_string_of_sym (Cerb_frontend.Symbol.Symbol (_, _, sd)) =
+  match sd with
+    | SD_Id str | SD_CN_Id str | SD_ObjectAddress str ->
+        str
+    | _ ->
+        assert false

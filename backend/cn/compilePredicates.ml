@@ -5,10 +5,13 @@ module RP = ResourcePredicates
 
 module IT = IndexTerms
 module SymMap = Map.Make(Sym)
+module StringMap = Map.Make(String)
+
+module LAT = LogicalArgumentTypes
 
 open CF.Cn
 open TypeErrors
-open Conversions
+
 
 
 type cn_predicate =
@@ -153,7 +156,7 @@ let translate_member_access loc env t member =
   match IT.bt t with
   | Record members ->
      let member' = Id.s member in
-     let members' = List.map (fun (s, bt) -> (todo_string_of_sym s, (s, bt))) members in
+     let members' = List.map (fun (s, bt) -> (Tools.todo_string_of_sym s, (s, bt))) members in
      let@ (member, member_bt) = match List.assoc_opt String.equal member' members' with
        | Some (member, member_bt) -> return (member, member_bt)
        | None -> fail {loc; msg = Unknown_record_member (members, member)}
@@ -264,7 +267,7 @@ let translate_cn_expr (env: Env.t) expr =
       | CNExpr_call (nm, exprs) ->
           let@ args = ListM.mapM self exprs in
           let nm_s = Id.pp_string nm in
-          let@ b = Conversions.apply_builtin_funs loc nm_s args in
+          let@ b = Builtins.apply_builtin_funs loc nm_s args in
           begin match b with
             | Some t -> return t
             | None ->
