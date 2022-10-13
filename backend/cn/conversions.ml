@@ -76,10 +76,6 @@ let apply_builtin_funs loc nm args =
 
 
 
-let sct_of_ct loc ct = 
-  match Sctypes.of_ctype ct with
-  | Some ct -> ct
-  | None -> unsupported loc (!^"C-type" ^^^ CF.Pp_core_ctype.pp_ctype ct)
 
 let todo_string_of_sym (CF.Symbol.Symbol (_, _, sd)) =
   match sd with
@@ -150,7 +146,7 @@ let struct_decl loc fields (tag : BT.tag) =
          then return [{offset = position; size = final_position - position; member_or_padding = None}]
          else return []
       | (member, (attrs, qualifiers, ct)) :: members ->
-         let sct = sct_of_ct loc ct in
+         let sct = Sctypes.of_ctype_unsafe loc ct in
          let offset = member_offset tag member in
          let size = Memory.size_of_ctype sct in
          let to_pad = offset - position in

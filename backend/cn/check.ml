@@ -387,7 +387,7 @@ let check_ptrval (loc : loc) ~(expect:BT.t) (ptrval : pointer_value) : (lvt, typ
   let@ () = WellTyped.ensure_base_type loc ~expect BT.Loc in
   CF.Impl_mem.case_ptrval ptrval
     ( fun ct -> 
-      let sct = Retype.ct_of_ct loc ct in
+      let sct = Sctypes.of_ctype_unsafe loc ct in
       let@ () = WellTyped.WCT.is_ct loc sct in
       return IT.null_ )
     ( fun sym -> 
@@ -400,7 +400,7 @@ let check_ptrval (loc : loc) ~(expect:BT.t) (ptrval : pointer_value) : (lvt, typ
 let rec check_mem_value (loc : loc) ~(expect:BT.t) (mem : mem_value) : (lvt, type_error) m =
   CF.Impl_mem.case_mem_value mem
     ( fun ct -> 
-      let@ () = WellTyped.WCT.is_ct loc (Retype.ct_of_ct loc ct) in
+      let@ () = WellTyped.WCT.is_ct loc (Sctypes.of_ctype_unsafe loc ct) in
       fail (fun _ -> {loc; msg = Unspecified ct}) )
     ( fun _ _ -> 
       unsupported loc !^"infer_mem_value: concurrent read case" )
@@ -412,7 +412,7 @@ let rec check_mem_value (loc : loc) ~(expect:BT.t) (mem : mem_value) : (lvt, typ
       unsupported loc !^"floats" )
     ( fun ct ptrval -> 
       (* TODO: do anything else with ct? *)
-      let@ () = WellTyped.WCT.is_ct loc (Retype.ct_of_ct loc ct) in
+      let@ () = WellTyped.WCT.is_ct loc (Sctypes.of_ctype_unsafe loc ct) in
       check_ptrval loc ~expect ptrval )
     ( fun mem_values -> 
       let@ index_bt, item_bt = match expect with

@@ -59,15 +59,12 @@ type ctype_information = {
   }
 
 
-let ct_of_ct loc ct = 
-  match Sctypes.of_ctype ct with
-  | Some ct -> ct
-  | None -> unsupported loc (!^"ctype" ^^^ CF.Pp_core_ctype.pp_ctype ct)
+
 
 
 (* for convenience *)
 let ctype_information (loc : Loc.t) ct = 
-  let ct = ct_of_ct loc ct in
+  let ct = Sctypes.of_ctype_unsafe loc ct in
   let bt = BT.of_sct ct in
   {bt; ct}
 
@@ -119,7 +116,7 @@ let rec retype_object_value (loc : Loc.t) = function
   | Old.M_OVstruct (s, members) ->
      let@ members = 
        mapM (fun (id, ct, mv) ->
-           let ct = ct_of_ct loc ct in
+           let ct = Sctypes.of_ctype_unsafe loc ct in
            return (id, ct, mv)
          ) members
      in
@@ -168,21 +165,21 @@ let rec retype_pexpr (Old.M_Pexpr (loc, annots,bty,pexpr_)) =
        let@ asyms = mapM retype_pexpr asyms in
        return (New.M_PEctor (ctor,asyms))
     | M_CivCOMPL (act, asym) -> 
-       let act = map_act (ct_of_ct loc) act in
+       let act = map_act (Sctypes.of_ctype_unsafe loc) act in
        let@ asym = retype_pexpr asym in
        return (New.M_CivCOMPL (act, asym))
     | M_CivAND (act, asym1, asym2) -> 
-       let act = map_act (ct_of_ct loc) act in
+       let act = map_act (Sctypes.of_ctype_unsafe loc) act in
        let@ asym1 = retype_pexpr asym1 in
        let@ asym2 = retype_pexpr asym2 in
        return (New.M_CivAND (act, asym1, asym2))
     | M_CivOR (act, asym1, asym2) -> 
-       let act = map_act (ct_of_ct loc) act in
+       let act = map_act (Sctypes.of_ctype_unsafe loc) act in
        let@ asym1 = retype_pexpr asym1 in
        let@ asym2 = retype_pexpr asym2 in
        return (New.M_CivOR (act, asym1, asym2))
     | M_CivXOR (act, asym1, asym2) -> 
-       let act = map_act (ct_of_ct loc) act in
+       let act = map_act (Sctypes.of_ctype_unsafe loc) act in
        let@ asym1 = retype_pexpr asym1 in
        let@ asym2 = retype_pexpr asym2 in
        return (New.M_CivXOR (act, asym1, asym2))
@@ -190,11 +187,11 @@ let rec retype_pexpr (Old.M_Pexpr (loc, annots,bty,pexpr_)) =
        let@ asym = retype_pexpr asym in
        return (New.M_Cfvfromint asym)
     | M_Civfromfloat (act, asym) -> 
-       let act = map_act (ct_of_ct loc) act in
+       let act = map_act (Sctypes.of_ctype_unsafe loc) act in
        let@ asym = retype_pexpr asym in
        return (New.M_Civfromfloat (act, asym))
     | M_PEarray_shift (asym,ct,asym') ->
-       let ict = ct_of_ct loc ct in
+       let ict = Sctypes.of_ctype_unsafe loc ct in
        let@ asym = retype_pexpr asym in
        let@ asym' = retype_pexpr asym' in
        return (New.M_PEarray_shift (asym,ict,asym'))
@@ -222,23 +219,23 @@ let rec retype_pexpr (Old.M_Pexpr (loc, annots,bty,pexpr_)) =
        return (New.M_PEbool_to_integer asym)
     | M_PEconv_int (act, asym) ->
        let@ asym = retype_pexpr asym in
-       let act = map_act (ct_of_ct loc) act in
+       let act = map_act (Sctypes.of_ctype_unsafe loc) act in
        return (New.M_PEconv_int (act, asym))
     | M_PEconv_loaded_int (act, asym) ->
        let@ asym = retype_pexpr asym in
-       let act = map_act (ct_of_ct loc) act in
+       let act = map_act (Sctypes.of_ctype_unsafe loc) act in
        return (New.M_PEconv_loaded_int (act, asym))
     | M_PEwrapI (act, asym) ->
        let@ asym = retype_pexpr asym in
-       let act = map_act (ct_of_ct loc) act in
+       let act = map_act (Sctypes.of_ctype_unsafe loc) act in
        return (New.M_PEwrapI (act, asym))
     | M_PEcatch_exceptional_condition (act, asym) ->
        let@ asym = retype_pexpr asym in
-       let act = map_act (ct_of_ct loc) act in
+       let act = map_act (Sctypes.of_ctype_unsafe loc) act in
        return (New.M_PEcatch_exceptional_condition (act, asym))
     | M_PEis_representable_integer (asym, act) ->
        let@ asym = retype_pexpr asym in
-       let act = map_act (ct_of_ct loc) act in
+       let act = map_act (Sctypes.of_ctype_unsafe loc) act in
        return (New.M_PEis_representable_integer (asym, act))
     (* | M_PEcase (asym,pats_pes) -> *)
     (*    let@ pats_pes =  *)
@@ -300,30 +297,30 @@ let retype_memop (loc : Loc.t) = function
      let@ asym2 = retype_pexpr asym2 in
      return (New.M_PtrGe (asym1,asym2))
   | Old.M_Ptrdiff (act, asym1, asym2) ->
-     let act = map_act (ct_of_ct loc) act in
+     let act = map_act (Sctypes.of_ctype_unsafe loc) act in
      let@ asym1 = retype_pexpr asym1 in
      let@ asym2 = retype_pexpr asym2 in
      return (New.M_Ptrdiff (act, asym1, asym2))
   | Old.M_IntFromPtr (act1, act2, asym) ->
-     let act1 = map_act (ct_of_ct loc) act1 in
-     let act2 = map_act (ct_of_ct loc) act2 in
+     let act1 = map_act (Sctypes.of_ctype_unsafe loc) act1 in
+     let act2 = map_act (Sctypes.of_ctype_unsafe loc) act2 in
      let@ asym = retype_pexpr asym in
      return (New.M_IntFromPtr (act1, act2, asym))
   | Old.M_PtrFromInt (act1, act2, asym) ->
-     let act1 = map_act (ct_of_ct loc) act1 in
-     let act2 = map_act (ct_of_ct loc) act2 in
+     let act1 = map_act (Sctypes.of_ctype_unsafe loc) act1 in
+     let act2 = map_act (Sctypes.of_ctype_unsafe loc) act2 in
      let@ asym = retype_pexpr asym in
      return (New.M_PtrFromInt (act1, act2, asym))
   | Old.M_PtrValidForDeref (act, asym) ->
-     let act = map_act (ct_of_ct loc) act in
+     let act = map_act (Sctypes.of_ctype_unsafe loc) act in
      let@ asym = retype_pexpr asym in
      return (New.M_PtrValidForDeref (act, asym))
   | Old.M_PtrWellAligned (act, asym) ->
-     let act = map_act (ct_of_ct loc) act in
+     let act = map_act (Sctypes.of_ctype_unsafe loc) act in
      let@ asym = retype_pexpr asym in
      return (New.M_PtrWellAligned (act, asym))
   | Old.M_PtrArrayShift (asym1, act, asym2) ->
-     let act = map_act (ct_of_ct loc) act in
+     let act = map_act (Sctypes.of_ctype_unsafe loc) act in
      let@ asym1 = retype_pexpr asym1 in
      let@ asym2 = retype_pexpr asym2 in
      return (New.M_PtrArrayShift (asym1, act, asym2))
@@ -351,7 +348,7 @@ let retype_memop (loc : Loc.t) = function
      return (New.M_Va_copy asym)
   | Old.M_Va_arg (asym, act) ->
      let@ asym = retype_pexpr asym in
-     let act = map_act (ct_of_ct loc) act in
+     let act = map_act (Sctypes.of_ctype_unsafe loc) act in
      return (New.M_Va_arg (asym, act))
   | Old.M_Va_end asym -> 
      let@ asym = retype_pexpr asym in
@@ -362,12 +359,12 @@ let retype_action (Old.M_Action (loc,action_)) =
   let@ action_ = match action_ with
     | M_Create (asym, act, prefix) ->
        let@ asym = retype_pexpr asym in
-       let act = map_act (ct_of_ct loc) act in
+       let act = map_act (Sctypes.of_ctype_unsafe loc) act in
        return (New.M_Create (asym, act, prefix))
     | M_CreateReadOnly (asym1, act, asym2, prefix) ->
        let@ asym1 = retype_pexpr asym1 in
        let@ asym2 = retype_pexpr asym2 in
-       let act = map_act (ct_of_ct loc) act in
+       let act = map_act (Sctypes.of_ctype_unsafe loc) act in
        return (New.M_CreateReadOnly (asym1, act, asym2, prefix))
     | M_Alloc (asym1, asym2, prefix) ->
        let@ asym1 = retype_pexpr asym1 in
@@ -377,20 +374,20 @@ let retype_action (Old.M_Action (loc,action_)) =
        let@ asym = retype_pexpr asym in
        return (New.M_Kill (M_Dynamic, asym))
     | M_Kill (M_Static ct, asym) -> 
-       let ict = ct_of_ct loc ct in
+       let ict = Sctypes.of_ctype_unsafe loc ct in
        let@ asym = retype_pexpr asym in
        return (New.M_Kill (M_Static ict, asym))
     | M_Store (m, act, asym1, asym2, mo) ->
-       let act = map_act (ct_of_ct loc) act in
+       let act = map_act (Sctypes.of_ctype_unsafe loc) act in
        let@ asym1 = retype_pexpr asym1 in
        let@ asym2 = retype_pexpr asym2 in
        return (New.M_Store (m, act, asym1, asym2, mo))
     | M_Load (act, asym, mo) ->
-       let act = map_act (ct_of_ct loc) act in
+       let act = map_act (Sctypes.of_ctype_unsafe loc) act in
        let@ asym = retype_pexpr asym in
        return (New.M_Load (act, asym, mo))
     | M_RMW (act, asym1, asym2, asym3, mo1, mo2) ->
-       let act = map_act (ct_of_ct loc) act in
+       let act = map_act (Sctypes.of_ctype_unsafe loc) act in
        let@ asym1 = retype_pexpr asym1 in
        let@ asym2 = retype_pexpr asym2 in
        let@ asym3 = retype_pexpr asym3 in
@@ -398,13 +395,13 @@ let retype_action (Old.M_Action (loc,action_)) =
     | M_Fence mo ->
        return (New.M_Fence mo)
     | M_CompareExchangeStrong (act, asym1, asym2, asym3, mo1, mo2) -> 
-       let act = map_act (ct_of_ct loc) act in
+       let act = map_act (Sctypes.of_ctype_unsafe loc) act in
        let@ asym1 = retype_pexpr asym1 in
        let@ asym2 = retype_pexpr asym2 in
        let@ asym3 = retype_pexpr asym3 in
        return (New.M_CompareExchangeStrong (act, asym1, asym2, asym3, mo1, mo2))
     | M_CompareExchangeWeak (act, asym1, asym2, asym3, mo1, mo2) ->
-       let act = map_act (ct_of_ct loc) act in
+       let act = map_act (Sctypes.of_ctype_unsafe loc) act in
        let@ asym1 = retype_pexpr asym1 in
        let@ asym2 = retype_pexpr asym2 in
        let@ asym3 = retype_pexpr asym3 in
@@ -412,16 +409,16 @@ let retype_action (Old.M_Action (loc,action_)) =
     | M_LinuxFence mo ->
        return (New.M_LinuxFence mo)
     | M_LinuxLoad (act, asym, mo) ->
-       let act = map_act (ct_of_ct loc) act in
+       let act = map_act (Sctypes.of_ctype_unsafe loc) act in
        let@ asym = retype_pexpr asym in
        return (New.M_LinuxLoad (act, asym, mo))
     | M_LinuxStore (act, asym1, asym2, mo) ->
-       let act = map_act (ct_of_ct loc) act in
+       let act = map_act (Sctypes.of_ctype_unsafe loc) act in
        let@ asym1 = retype_pexpr asym1 in
        let@ asym2 = retype_pexpr asym2 in
        return (New.M_LinuxStore (act, asym1, asym2, mo))
     | M_LinuxRMW (act, asym1, asym2, mo) ->
-       let act = map_act (ct_of_ct loc) act in
+       let act = map_act (Sctypes.of_ctype_unsafe loc) act in
        let@ asym1 = retype_pexpr asym1 in
        let@ asym2 = retype_pexpr asym2 in
        return (New.M_LinuxRMW (act, asym1, asym2, mo))
@@ -449,7 +446,7 @@ let rec retype_expr (Old.M_Expr (loc, annots, expr_)) =
     | M_Eskip ->
        return (New.M_Eskip)
     | M_Eccall (act,asym,asyms) ->
-       let act = map_act (ct_of_ct loc) act in
+       let act = map_act (Sctypes.of_ctype_unsafe loc) act in
        let@ asym = retype_pexpr asym in
        let@ asyms = mapM retype_pexpr asyms in
        return (New.M_Eccall (act,asym,asyms))
@@ -562,14 +559,14 @@ let retype_file (context : Context.t) opts (file : 'TY Old.mu_file)
       let loc = Loc.unknown in
       match glob with
       | Old.M_GlobalDef (lsym, (bt,ct),expr) ->
-         let ct = ct_of_ct loc ct in
+         let ct = Sctypes.of_ctype_unsafe loc ct in
          let bt = BT.of_sct ct in
          let@ expr = retype_expr expr in
          let globs = (sym, New.M_GlobalDef (lsym, (bt,ct),expr)) :: globs in
          let glob_typs = (sym, lsym, ct) :: glob_typs in
          return (globs, glob_typs)
       | M_GlobalDecl (lsym, (bt,ct)) ->
-         let ct = ct_of_ct loc ct in
+         let ct = Sctypes.of_ctype_unsafe loc ct in
          let bt = BT.of_sct ct in
          let globs = (sym, New.M_GlobalDecl (lsym, (bt,ct))) :: globs in
          let glob_typs = (sym, lsym, ct) :: glob_typs in
@@ -627,8 +624,8 @@ let retype_file (context : Context.t) opts (file : 'TY Old.mu_file)
         let err = !^"Variadic function" ^^^ Sym.pp fsym ^^^ !^"unsupported" in
         unsupported loc err
       else
-        let ret_ctype = ct_of_ct loc ret_ctype in
-        let args = List.map_snd (ct_of_ct loc) args in
+        let ret_ctype = Sctypes.of_ctype_unsafe loc ret_ctype in
+        let args = List.map_snd (Sctypes.of_ctype_unsafe loc) args in
         let@ fspec = Parse.parse_function glob_typs trusted args ret_ctype attrs in
         let@ (ftyp, trusted, mappings) = 
           Conversions.make_fun_spec loc global fsym fspec
@@ -656,7 +653,7 @@ let retype_file (context : Context.t) opts (file : 'TY Old.mu_file)
          ListM.mapM (fun (msym, (ct,by_pointer)) ->
              let sym = Option.value ~default:(Sym.fresh ()) msym in
              let () = if not by_pointer then error "label argument passed as value" in
-             let ct = ct_of_ct loc ct in
+             let ct = Sctypes.of_ctype_unsafe loc ct in
              return (sym,ct) 
            ) argtyps
        in

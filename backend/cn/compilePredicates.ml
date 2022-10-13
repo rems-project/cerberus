@@ -168,7 +168,7 @@ let translate_member_access loc env t member =
        | None -> fail {loc; msg = Unknown_member (tag, member)}
        | Some (_, _, ty) -> return ty
      in
-     let ty' = Retype.ct_of_ct loc ty in
+     let ty' = Sctypes.of_ctype_unsafe loc ty in
      let member_bt = BaseTypes.of_sct ty' in
      return ( IT.member_ ~member_bt (tag, t, member) )
   | Datatype tag ->
@@ -246,7 +246,7 @@ let translate_cn_expr (env: Env.t) expr =
           let@ e2 = self e2_ in
           mk_translate_binop loc bop (e1, e2)
       | CNExpr_sizeof ct ->
-          let scty = Retype.ct_of_ct loc ct in
+          let scty = Sctypes.of_ctype_unsafe loc ct in
           return (int_ (Memory.size_of_ctype scty))
       | CNExpr_offsetof (tag, member) ->
           let@ () = match lookup_struct tag env with
@@ -304,10 +304,10 @@ let translate_cn_res_info res_loc loc env res args =
   let open ResourceTypes in
   let@ (pname, oargs_ty, env_info) = match res with
     | CN_owned ty ->
-      let scty = Retype.ct_of_ct res_loc ty in
+      let scty = Sctypes.of_ctype_unsafe res_loc ty in
       return (Owned scty, owned_oargs scty, RPred_owned scty)
     | CN_block ty ->
-      let scty = Retype.ct_of_ct res_loc ty in
+      let scty = Sctypes.of_ctype_unsafe res_loc ty in
       return (Block scty, owned_oargs scty, RPred_block scty)
     | CN_named pred ->
       let@ pred_sig = match Env.lookup_predicate pred env with
