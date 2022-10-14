@@ -18,7 +18,7 @@ First set up additional repositories for Coq packages:
 
 ```bash
 opam repo add --this-switch coq-released https://coq.inria.fr/opam/released
-opam pin -n coq-struct-tact https://github.com/vzaliva/StructTact.git
+opam pin -n coq-struct-tact https://github.com/uwplse/StructTact.git
 ```
 
 Sail coq libraries needs to be pinned manually. To do so:
