@@ -4,11 +4,9 @@ From Coq Require Extraction.
 
 Require ExtrOcamlBasic.
 Require ExtrOcamlChar.
-Require ExtrOcamlString.
+Require ExtrOcamlNativeString.
 Require ExtrOCamlFloats.
 Require ExtrOCamlInt63.
-(* Require ExtrOcamlIntConv. *)
-(* Require ExtrOcamlNatInt. *)
 
 Require Import ExtrOcamlNatBigInt.
 Require Import ExtrOcamlZBigInt.
