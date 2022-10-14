@@ -305,29 +305,25 @@ Module MorelloCapability <:
   Definition decode_word (bits : mword 129) : option t :=
     let value' := CapGetValue bits in
     let value := projT1 (uint value') in
-    match CapGetBounds bits with
-    | Done (base', limit', isExponentValid) =>
-        if negb isExponentValid
-        then None
-        else
-          let flags := flags_from_value_bits value' in
-          let perms' := CapGetPermissions bits in
-          let perms_data := mword_to_bools perms' in
-          match MorelloPermission.of_list perms_data with
-          | None =>
-              None
-          | Some perms =>
-              let otype := projT1 (uint (CapGetObjectType bits)) in
-              Some
-                {| valid := CapIsTagSet bits;
-                  value := value;
-                  obj_type := otype;
-                  bounds := (projT1 (uint base'), projT1 (uint limit'));
-                  flags := flags;
-                  perms := perms |}
-          end
-    | _ => None
-    end.
+    let '(base', limit', isExponentValid) := CapGetBounds bits in
+    if negb isExponentValid
+    then None
+    else
+      let flags := flags_from_value_bits value' in
+      let perms' := CapGetPermissions bits in
+      let perms_data := mword_to_bools perms' in
+      match MorelloPermission.of_list perms_data with
+      | None => None
+      | Some perms =>
+          let otype := projT1 (uint (CapGetObjectType bits)) in
+          Some
+            {| valid := CapIsTagSet bits;
+              value := value;
+              obj_type := otype;
+              bounds := (projT1 (uint base'), projT1 (uint limit'));
+              flags := flags;
+              perms := perms |}
+      end.
 
   Program Definition decode (bytes : list ascii) (tag : bool) : option t :=
     if Nat.eqb (List.length bytes) 16%nat then
@@ -400,7 +396,7 @@ Module MorelloCapability <:
     :=
     update_subrange_vec_dec zc CAP_PERMS_HI_BIT CAP_PERMS_LO_BIT zp.
 
-  Program Definition encode_to_word (isexact : bool) (c : t) : option (mword 129) :=
+  Program Definition encode_to_word (isexact : bool) (c : t) : mword 129 :=
     let bits := CapNull tt in
     let bits :=
       CapSetTag bits
@@ -411,25 +407,18 @@ Module MorelloCapability <:
         bits (mword_of_int (len:=64) (cap_get_obj_type c)) in
     let '(base, limit) := cap_get_bounds c in
     let len := Z.sub limit base in
-    match (
-        CapSetValue bits (mword_of_int (len:=64) base)
-          >>= (fun bits =>
-                 CapSetBounds bits (mword_of_int (len:=65) len) isexact
-                   >>= (fun bits =>
-                          CapSetValue bits (mword_of_int (len:=64) (cap_get_value c))
-                            >>= (fun bits =>
-                                   let flags := List.map bitU_of_bool (cap_get_flags c) in
-                                   let flags := vec_of_bits flags in
-                                   let flags := zero_extend flags 64 in
-                                   let bits := CapSetFlags bits flags in
-                                   let perms :=
-                                     List.map bitU_of_bool (MorelloPermission.to_list (cap_get_perms c)) in
-                                   let perms := vec_of_bits perms in
-                                   let bits := CapSetPermissins bits perms in
-                                   returnm bits)))) with
-    | Done bits => Some bits
-    | _ => None
-    end.
+    let bits := CapSetValue bits (mword_of_int (len:=64) base) in
+    let bits := CapSetBounds bits (mword_of_int (len:=65) len) isexact in
+    let bits := CapSetValue bits (mword_of_int (len:=64) (cap_get_value c)) in
+    let flags := List.map bitU_of_bool (cap_get_flags c) in
+    let flags := vec_of_bits flags in
+    let flags := zero_extend flags 64 in
+    let bits := CapSetFlags bits flags in
+    let perms :=
+      List.map bitU_of_bool (MorelloPermission.to_list (cap_get_perms c)) in
+    let perms := vec_of_bits perms in
+    let bits := CapSetPermissins bits perms in
+    bits.
   Next Obligation.
     (* TODO: prove that [(MorelloPermission.to_list (cap_get_perms c)) = perms_len] *)
   Admitted.
@@ -437,35 +426,19 @@ Module MorelloCapability <:
   Definition cap_vaddr_representable (c : t) (a : Z) : bool
     :=
     vaddr_in_range a &&
-      (match encode_to_word true c with
-       | Some cap_bits =>
-           match CapIsRepresentable cap_bits (mword_of_int (len:=64) a) with
-           | Done b => b
-           | _ => false
-           end
-       | None => false
-       end
-      ).
+      CapIsRepresentable (encode_to_word true c) (mword_of_int (len:=64) a).
 
   Definition cap_bounds_representable_exactly
     (c : t) (intr : MorelloVADDR_INTERVAL.t) : bool
     :=
     let '(base, limit) := intr in
-    match encode_to_word true c with
-    | Some bits =>
-        let len := Z.sub limit base in
-        let base' := mword_of_int (len:=64) base in
-        let len' := mword_of_int (len:=65) len in
-        let mb := CapSetValue bits base' >>=
-                    (fun bits => CapSetBounds bits len' true >>=
-                                (fun bits => returnm (CapIsTagSet bits)))
-        in
-        match mb with
-        | Done b => b
-        | _ => false
-        end
-    | None => false
-    end.
+    let bits := encode_to_word true c in
+    let len := Z.sub limit base in
+    let base' := mword_of_int (len:=64) base in
+    let len' := mword_of_int (len:=65) len in
+    let bits := CapSetValue bits base' in
+    let bits := CapSetBounds bits len' true in
+    CapIsTagSet bits.
 
   Definition cap_invalidate (c : t) : t := with_valid false c.
 
@@ -532,18 +505,15 @@ Module MorelloCapability <:
     end.
 
   Program Definition encode (isexact : bool) (c : t) : option ((list ascii) * bool) :=
-    match encode_to_word isexact c with
-    | Some w =>
-        let tag := CapIsTagSet w in
-        (* strip tag bit *)
-        let bits := bits_of w in
-        let w1 := vec_of_bits (List.tail bits) in
-        match mem_bytes_of_bits w1 with
-        | Some bytes =>
-            match try_map memory_byte_to_ascii bytes with
-            | Some chars => Some ((List.rev chars), tag)
-            | None => None
-            end
+    let w := encode_to_word isexact c in
+    let tag := CapIsTagSet w in
+    (* strip tag bit *)
+    let bits := bits_of w in
+    let w1 := vec_of_bits (List.tail bits) in
+    match mem_bytes_of_bits w1 with
+    | Some bytes =>
+        match try_map memory_byte_to_ascii bytes with
+        | Some chars => Some ((List.rev chars), tag)
         | None => None
         end
     | None => None
@@ -551,10 +521,8 @@ Module MorelloCapability <:
 
   Definition representable_alignment_mask (len: Z) : Z :=
     let len' := mword_of_int (len:=Z.of_nat vaddr_bits) len in
-    match CapGetRepresentableMask len' with
-    | Done mask => uwordToZ len'
-    | _ => 0 (* TODO: Impossible value? *)
-    end.
+    let mask := CapGetRepresentableMask len' in
+    uwordToZ len'.
 
   Definition representable_length (len : Z) : Z :=
     let mask := representable_alignment_mask len in
@@ -562,7 +530,7 @@ Module MorelloCapability <:
     Z.land (Z.add len nmask) mask.
 
   Definition eqb (a b : t) : bool :=
-    maybeEqualBy eq_vec (encode_to_word true a) (encode_to_word true b).
+    eq_vec (encode_to_word true a) (encode_to_word true b).
 
   Definition value_compare (x y : t) : comparison :=
     Z.compare x.(value) y.(value).
