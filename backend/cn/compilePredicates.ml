@@ -58,21 +58,14 @@ open Effectful.Make(Resultat)
 
 let mk_translate_binop loc bop (e1, e2) =
   let open IndexTerms in
-  let ptr_err = "pointer arithmetic not allowed in specifications: "^
-                         "please instead use pointer/integer casts"
-  in
   let@ mk = match bop, IT.bt e1 with
-    | CN_add, (BT.Integer | BT.Real) ->
+    | CN_add, _ ->
         return add_
-    | CN_add, BT.Loc ->
-        fail {loc; msg = Generic (Pp.string ptr_err)}
-    | CN_sub, (BT.Integer | BT.Real) ->
+    | CN_sub, _ ->
         return sub_
-    | CN_sub, BT.Loc ->
-        fail {loc; msg = Generic (Pp.string ptr_err)}
-    | CN_mul, (BT.Integer | BT.Real) ->
+    | CN_mul, _ ->
         return mul_
-    | CN_div, (BT.Integer | BT.Real) ->
+    | CN_div, _ ->
         return div_
     | CN_equal, _ ->
         return eq_
@@ -337,6 +330,10 @@ let split_pointer_linear_step loc q ptr_expr =
           return (p, y)
         | _ -> fail { loc; msg= Generic (!^msg_s ^^^ IT.pp ptr_expr)}
       end
+    (* temporarily allow this more confusing but more concise syntax,
+       until we have enriched Core's pointer base types *)
+    | Arith_op (Add (p, IT (Arith_op (Mul (x, y)), _))) when IT.equal x qs ->
+       return (p, y)       
     | _ ->
     fail { loc; msg= Generic (!^msg_s ^^^ IT.pp ptr_expr)}
   end

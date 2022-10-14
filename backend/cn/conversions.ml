@@ -445,26 +445,12 @@ let resolve_index_term loc
     | Addition (it, it') -> 
        let@ (it, oct) = resolve it mapping quantifiers in
        let@ (it', _) = resolve it' mapping quantifiers in
-       let@ t = match IT.bt it with
-         | Loc -> 
-            let err = "pointer addition not allowed in specifications: "^
-                        "please instead use pointer/integer casts"
-            in
-            fail {loc; msg = Generic (!^err)}
-         | _ -> return (IT (Arith_op (Add (it, it')), IT.bt it))
-       in
+       let@ t = return (IT (Arith_op (Add (it, it')), IT.bt it)) in
        return (t, None)
     | Subtraction (it, it') -> 
        let@ (it, _) = resolve it mapping quantifiers in
        let@ (it', _) = resolve it' mapping quantifiers in
-       let@ t = match IT.bt it with
-         | Loc -> 
-            let err = "pointer subtraction not allowed in specifications: "^
-                        "please instead use pointer/integer casts"
-            in
-            fail {loc; msg = Generic (!^err)}
-         | _ -> return (IT (Arith_op (Sub (it, it')), IT.bt it))
-       in
+       let@ t = return (IT (Arith_op (Sub (it, it')), IT.bt it)) in
        return (t, None)
     | Multiplication (it, it') -> 
        let@ (it, _) = resolve it mapping quantifiers in
