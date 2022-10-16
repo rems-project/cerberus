@@ -64,7 +64,7 @@ let rec pp_aux i_pp = function
   | Resource ((name, (re, _bt)), _info, t) ->
      group (!^"let" ^^^ (Sym.pp name) ^^^ equals ^^^ RET.pp re ^^ semi) :: pp_aux i_pp t
   | Constraint (lc, _info, t) ->
-     let op = equals ^^ rangle in
+     let op = equals ^^ rangle () in
      group (LC.pp lc ^^^ op) :: pp_aux i_pp t
   | I i -> 
      [i_pp i]
@@ -157,3 +157,12 @@ let rec logical_arguments_and_return (at : 'i t) : LRT.t * 'i =
 
 type packing_ft = OutputDef.t t
 type lft = LogicalReturnTypes.t t
+
+
+let rec has_resource (f : 'a -> bool) (at : 'a t) =
+  match at with
+  | I x -> f x
+  | Resource _ -> true
+  | Define (_, _, at) -> has_resource f at
+  | Constraint (_, _, at) -> has_resource f at
+

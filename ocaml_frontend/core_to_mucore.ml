@@ -344,18 +344,31 @@ let rec n_pexpr loc (Pexpr (annots, bty, pe)) : mu_pexpr =
      annotate (M_PEmemberof(sym1, id1, e'))
   | PEcall(sym1, args) ->
      begin match sym1, args with
-     | Sym (Symbol (_, _, SD_Id "conv_int")), [arg1;arg2] ->
+     | Sym (Symbol (_, _, SD_Id "conv_int")), 
+       [arg1;arg2] ->
         let ct = (fensure_ctype__pexpr loc "PEcall(conv_int,_): not a ctype" arg1) in
         let arg2 = n_pexpr loc arg2 in
         annotate (M_PEconv_int(ct, arg2))
-     | Sym (Symbol (_, _, SD_Id "conv_loaded_int")), [arg1;arg2] ->
+     | Sym (Symbol (_, _, SD_Id "conv_loaded_int")), 
+       [arg1;arg2] ->
         let ct = (fensure_ctype__pexpr loc "PEcall(conv_loaded_int,_): not a ctype" arg1) in
         let arg2 = n_pexpr loc arg2 in
         annotate (M_PEconv_loaded_int(ct, arg2))
-     | Sym (Symbol (_, _, SD_Id "wrapI")), [arg1;arg2] ->
+     | Sym (Symbol (_, _, SD_Id "wrapI")), 
+       [arg1;arg2] ->
         let ct = (fensure_ctype__pexpr loc "PEcall(wrapI,_): not a ctype" arg1) in
         let arg2 = n_pexpr loc arg2 in
         annotate (M_PEwrapI(ct, arg2))
+     | Sym (Symbol (_, _, SD_Id "catch_exceptional_condition")),
+       [arg1; arg2] ->
+        let ct = fensure_ctype__pexpr loc "PEcall(catch_exceptional_condition,_): not a ctype" arg1 in
+        let arg2 = n_pexpr loc arg2 in
+        annotate (M_PEcatch_exceptional_condition(ct, arg2))
+     | Sym (Symbol (_, _, SD_Id "is_representable_integer")),
+       [arg1; arg2] ->
+        let arg1 = n_pexpr loc arg1 in
+        let ct = fensure_ctype__pexpr loc "PEcall(is_representable_integer,_): not a ctype" arg2 in
+        annotate (M_PEis_representable_integer(arg1, ct))
      | Sym sym, _ ->
         loc_error loc ("PEcall not inlined: " ^ Pp_symbol.to_string sym)
      | Impl impl, _ ->

@@ -222,4 +222,9 @@ let to_html report =
     body = {elements = [Table table]} }
   
 
-let print_report report = html (to_html report)
+let print_report report = 
+  let prev = ! Pp.html_escapes in
+  Pp.html_escapes := true;
+  let report_string = html (to_html report) in
+  Pp.html_escapes := prev;
+  report_string

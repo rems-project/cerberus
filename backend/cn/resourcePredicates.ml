@@ -1,6 +1,4 @@
-open Sctypes
 module IT = IndexTerms
-module BT = BaseTypes
 module LS = LogicalSorts
 module LRT = LogicalReturnTypes
 module LC = LogicalConstraints
@@ -10,11 +8,6 @@ module LAT = LogicalArgumentTypes
 module StringMap = Map.Make(String)
 module Loc = Locations
 open Pp
-open ResourceTypes
-open Resources
-open BT
-open IT
-open LC
 
 module LP = LogicalPredicates
 
@@ -52,195 +45,151 @@ let pp_definition def =
   item "clauses" (match def.clauses with
                   | Some clauses -> Pp.list pp_clause clauses
                   | None -> !^"(uninterpreted)")
+
+
+let instantiate_clauses def ptr_arg iargs = match def.clauses with
+  | Some clauses ->
+    let subst = IT.make_subst (
+        (def.pointer, ptr_arg) ::
+        List.map2 (fun (def_ia, _) ia -> (def_ia, ia)) def.iargs iargs
+      )
+    in
+    Some (List.map (subst_clause subst) clauses)
+  | None -> None
   
 
-let byte_sym = Sym.fresh_named "Legacy_Internal_Byte"
-let char_sym = Sym.fresh_named "Legacy_Internal_Char"
-let bytev_sym = Sym.fresh_named "Legacy_Internal_ByteV"
-let early_alloc_sym = Sym.fresh_named "EarlyAlloc"
+(* let byte_sym = Sym.fresh_named "Legacy_Internal_Byte" *)
+(* let char_sym = Sym.fresh_named "Legacy_Internal_Char" *)
+(* let bytev_sym = Sym.fresh_named "Legacy_Internal_ByteV" *)
+(* let early_alloc_sym = Sym.fresh_named "EarlyAlloc" *)
 
 
-let byte () = 
-  let loc = Loc.other "internal (Byte)" in
-  let pointer_s, pointer = IT.fresh Loc in
-  let resource_s, resource = IT.fresh (owned_oargs (Integer Char)) in
-  let point = (P {
-      name = Owned (Integer Char); 
-      pointer = pointer;
-      iargs = [];
-      permission = bool_ true;
-    },
-    owned_oargs (Integer Char))
-  in
-  let lrt =
-    LRT.Resource ((resource_s, point), (loc, None),
-    LRT.I)
-  in
-  let clause = {
-      loc = loc;
-      guard = bool_ true;
-      packing_ft = LAT.of_lrt lrt (LAT.I []) 
-    }
-  in
-  let predicate = {
-      loc = loc;
-      pointer = pointer_s;
-      iargs = []; 
-      oargs = []; 
-      clauses = Some [clause]; 
-    } 
-  in
-  (byte_sym, predicate)
+(* let byte () =  *)
+(*   let loc = Loc.other "internal (Byte)" in *)
+(*   let pointer_s, pointer = IT.fresh Loc in *)
+(*   let resource_s, resource = IT.fresh (owned_oargs (Integer Char)) in *)
+(*   let point = (P { *)
+(*       name = Owned (Integer Char);  *)
+(*       pointer = pointer; *)
+(*       iargs = []; *)
+(*       permission = bool_ true; *)
+(*     }, *)
+(*     owned_oargs (Integer Char)) *)
+(*   in *)
+(*   let lrt = *)
+(*     LRT.Resource ((resource_s, point), (loc, None), *)
+(*     LRT.I) *)
+(*   in *)
+(*   let clause = { *)
+(*       loc = loc; *)
+(*       guard = bool_ true; *)
+(*       packing_ft = LAT.of_lrt lrt (LAT.I [])  *)
+(*     } *)
+(*   in *)
+(*   let predicate = { *)
+(*       loc = loc; *)
+(*       pointer = pointer_s; *)
+(*       iargs = [];  *)
+(*       oargs = [];  *)
+(*       clauses = Some [clause];  *)
+(*     }  *)
+(*   in *)
+(*   (byte_sym, predicate) *)
 
 
-let char () = 
-  let id = char_sym in
-  let loc = Loc.other "internal (Char)" in
-  let pointer_s, pointer = IT.fresh Loc in
+(* let char () =  *)
+(*   let id = char_sym in *)
+(*   let loc = Loc.other "internal (Char)" in *)
+(*   let pointer_s, pointer = IT.fresh Loc in *)
 
 
-  let point = (P {
-      name = Owned (Integer Char); 
-      pointer = pointer;
-      iargs = [];
-      permission = bool_ true;
-    },
-    owned_oargs (Integer Char))
-  in
+(*   let point = (P { *)
+(*       name = Owned (Integer Char);  *)
+(*       pointer = pointer; *)
+(*       iargs = []; *)
+(*       permission = bool_ true; *)
+(*     }, *)
+(*     owned_oargs (Integer Char)) *)
+(*   in *)
 
-  let resource_s, resource = IT.fresh (snd point) in
+(*   let resource_s, resource = IT.fresh (snd point) in *)
 
-  let lrt =
-    LRT.Resource ((resource_s, point), (loc, None),
-    LRT.I)
-  in
-  let value_s_o = Sym.fresh_named "value" in  
-  let clause = {
-      loc = loc;
-      guard = bool_ true;
-      packing_ft = LAT.of_lrt lrt (LAT.I [OutputDef.{loc; name = value_s_o; value = recordMember_ ~member_bt:Integer (resource, value_sym)}]) 
-    }
-  in
-  let predicate = {
-      loc = loc;
-      pointer = pointer_s;
-      iargs = []; 
-      oargs = [(value_s_o, Integer)]; 
-      clauses = Some [clause]; 
-    } 
-  in
-  (id, predicate)
-
-
-
-
-
-let bytev () = 
-  let id = bytev_sym in
-  let loc = Loc.other "internal (ByteV)" in
-  let pointer_s, pointer = IT.fresh Loc in
-  let the_value_s, the_value = IT.fresh Integer in
-  let point = (P {
-      name = Owned (Integer Char); 
-      pointer = pointer;
-      iargs = [];
-      permission = bool_ true;
-    }, 
-    owned_oargs (Integer Char))
-  in
-  let resource_s, resource = IT.fresh (snd point) in
-
-  let has_value = 
-    eq_ (recordMember_ ~member_bt:BT.Integer (resource, value_sym), 
-         the_value)
-  in
-
-  let lrt =
-    LRT.Resource ((resource_s, point), (loc, None),
-    LRT.Constraint (t_ has_value, (loc, None), 
-    LRT.I))
-  in
-  let clause = {
-      loc = loc;
-      guard = bool_ true;
-      packing_ft = LAT.of_lrt lrt (LAT.I []) 
-    }
-  in
-  let predicate = {
-      loc = loc;
-      pointer = pointer_s;
-      iargs = [(the_value_s, IT.bt the_value)]; 
-      oargs = []; 
-      clauses = Some [clause]; 
-    } 
-  in
-  (id, predicate)
+(*   let lrt = *)
+(*     LRT.Resource ((resource_s, point), (loc, None), *)
+(*     LRT.I) *)
+(*   in *)
+(*   let value_s_o = Sym.fresh_named "value" in   *)
+(*   let clause = { *)
+(*       loc = loc; *)
+(*       guard = bool_ true; *)
+(*       packing_ft = LAT.of_lrt lrt (LAT.I [OutputDef.{loc; name = value_s_o; value = recordMember_ ~member_bt:Integer (resource, value_sym)}])  *)
+(*     } *)
+(*   in *)
+(*   let predicate = { *)
+(*       loc = loc; *)
+(*       pointer = pointer_s; *)
+(*       iargs = [];  *)
+(*       oargs = [(value_s_o, Integer)];  *)
+(*       clauses = Some [clause];  *)
+(*     }  *)
+(*   in *)
+(*   (id, predicate) *)
 
 
 
 
 
+(* let bytev () =  *)
+(*   let id = bytev_sym in *)
+(*   let loc = Loc.other "internal (ByteV)" in *)
+(*   let pointer_s, pointer = IT.fresh Loc in *)
+(*   let the_value_s, the_value = IT.fresh Integer in *)
+(*   let point = (P { *)
+(*       name = Owned (Integer Char);  *)
+(*       pointer = pointer; *)
+(*       iargs = []; *)
+(*       permission = bool_ true; *)
+(*     },  *)
+(*     owned_oargs (Integer Char)) *)
+(*   in *)
+(*   let resource_s, resource = IT.fresh (snd point) in *)
+
+(*   let has_value =  *)
+(*     eq_ (recordMember_ ~member_bt:BT.Integer (resource, value_sym),  *)
+(*          the_value) *)
+(*   in *)
+
+(*   let lrt = *)
+(*     LRT.Resource ((resource_s, point), (loc, None), *)
+(*     LRT.Constraint (t_ has_value, (loc, None),  *)
+(*     LRT.I)) *)
+(*   in *)
+(*   let clause = { *)
+(*       loc = loc; *)
+(*       guard = bool_ true; *)
+(*       packing_ft = LAT.of_lrt lrt (LAT.I [])  *)
+(*     } *)
+(*   in *)
+(*   let predicate = { *)
+(*       loc = loc; *)
+(*       pointer = pointer_s; *)
+(*       iargs = [(the_value_s, IT.bt the_value)];  *)
+(*       oargs = [];  *)
+(*       clauses = Some [clause];  *)
+(*     }  *)
+(*   in *)
+(*   (id, predicate) *)
 
 
-
-
-
-
-let early_alloc () = 
-  let id = early_alloc_sym in
-  let loc = Loc.other "internal (EarlyAlloc)" in
-  let cur_s, cur = IT.fresh Loc in
-  let end_s, end_t = IT.fresh Integer in
-  let resource_s = Sym.fresh () in
-  let region = 
-    let q_s, q = IT.fresh Integer in 
-    (ResourceTypes.Q {
-        name = PName byte_sym;
-        pointer = pointer_ Z.zero;
-        q = q_s;
-        step = IT.int_ (Memory.size_of_ctype char_ct);
-        permission = and_ [pointerToIntegerCast_ cur %<= q; q %<= (sub_ (end_t, int_ 1))];
-        iargs = [];
-      },
-     BT.Record [])
-  in
-  let lrt =
-    LRT.Constraint (t_ (IT.gt_ ((pointerToIntegerCast_ cur, int_ 0))), (loc, None),
-    LRT.Resource ((resource_s, region), (loc, None),
-    LRT.Constraint (t_ (IT.good_ (pointer_ct char_ct, cur)), (loc, None),
-    LRT.Constraint (t_ (IT.good_ (pointer_ct char_ct, integerToPointerCast_ end_t)), (loc, None),
-    LRT.Constraint (t_ ((pointerToIntegerCast_ cur) %<= end_t), (loc, None),
-    LRT.I)))))
-  in
-  let clause = {
-      loc = loc;
-      guard = bool_ true;
-      packing_ft = LAT.of_lrt lrt (LAT.I [])
-    }
-  in
-  let predicate = {
-      loc = loc;
-      pointer = cur_s;
-      iargs = [
-          (end_s, IT.bt end_t);
-        ]; 
-      oargs = []; 
-      clauses = Some [clause]; 
-    } 
-  in
-  (id, predicate)
 
 
 
 
 let predicate_list struct_decls logical_pred_syms =
-  char () ::
-  byte () ::
-  bytev () ::
-  (* region () ::
-   * zero_region () :: *)
-  (* part_zero_region () :: *)
-  early_alloc () ::
+  (* char () :: *)
+  (* byte () :: *)
+  (* bytev () :: *)
+  (* early_alloc () :: *)
   []
 
     

@@ -176,6 +176,7 @@ let main
       loc_pp 
       debug_level 
       print_level 
+      no_timestamps
       json 
       state_file 
       lemmata
@@ -198,6 +199,7 @@ let main
   WellTyped.check_consistency := not skip_consistency;
   Pp.loc_pp := loc_pp;
   Pp.print_level := print_level;
+  Pp.print_timestamps := not no_timestamps;
   ResourceInference.reorder_points := not no_reorder_points;
   ResourceInference.additional_sat_check := not no_additional_sat_check;
   Check.InferenceEqs.use_model_eqs := not no_model_eqs;
@@ -260,8 +262,13 @@ let debug_level =
   Arg.(value & opt int 0 & info ["d"; "debug"] ~docv:"N" ~doc)
 
 let print_level =
-  let doc = "Set the debug message level for the type system to $(docv) (should range over [0-3])." in
+  let doc = "Set the debug message level for the type system to $(docv) (should range over [0-15])." in
   Arg.(value & opt int 0 & info ["p"; "print-level"] ~docv:"N" ~doc)
+
+let no_timestamps =
+  let doc = "Disable timestamps in print-level debug messages"
+ in
+  Arg.(value & flag & info ["no_timestamps"] ~doc)
 
 
 let json =
@@ -321,6 +328,7 @@ let () =
       loc_pp $ 
       debug_level $ 
       print_level $
+      no_timestamps $
       json $
       state_file $
       lemmata $

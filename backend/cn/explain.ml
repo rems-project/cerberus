@@ -184,7 +184,7 @@ module VClassGraph = Graph.Make(VClass)
 
 let veclasses ctxt = 
   let with_logical = 
-    List.fold_right (fun (l, sort) g ->
+    List.fold_right (fun ((l, sort), _) g ->
         VClassSet.add (make (l, sort)) g
       ) ctxt.logical VClassSet.empty
   in
@@ -197,18 +197,21 @@ let veclasses ctxt =
       ) ctxt.computational with_logical
   in
   (* merge classes based on variable equalities *)
-  Context.LCSet.fold (fun lc g ->
-      match is_sym_equality lc with
-      | Some (s, s') ->
-         let c = find_class (in_class s) g in
-         let c' = find_class (in_class s') g in
-         let merged = VClass.merge c c' in
-         VClassSet.add merged 
-           (VClassSet.remove c' 
-              (VClassSet.remove c g))
-      | None -> 
-         g
-    ) (fst ctxt.constraints) with_all
+  (* Context.LCSet.fold (fun lc g -> *)
+  (*     match is_sym_equality lc with *)
+  (*     | Some (s, s') -> *)
+  (*        print stdout (Sym.pp s); *)
+  (*        print stdout (Sym.pp s'); *)
+  (*        print stdout (LC.pp lc); *)
+  (*        let c = find_class (in_class s) g in *)
+  (*        let c' = find_class (in_class s') g in *)
+  (*        let merged = VClass.merge c c' in *)
+  (*        VClassSet.add merged  *)
+  (*          (VClassSet.remove c'  *)
+  (*             (VClassSet.remove c g)) *)
+  (*     | None ->  *)
+  (*        g *)
+  (*   ) ctxt.constraints *) with_all
 
 
 let explanation ctxt relevant =
@@ -216,17 +219,17 @@ let explanation ctxt relevant =
   print stdout !^"producing error report";
 
   (* only report the state of the relevant variables *)
-  let relevant = 
-    List.fold_right (fun (s, _) acc -> 
+  let relevant =
+    List.fold_right (fun (s, _) acc ->
         if has_good_description s then SymSet.add s acc else acc
       ) ctxt.computational relevant
   in
-  let relevant = 
-    List.fold_right (fun (s, _) acc -> 
+  let relevant =
+    List.fold_right (fun ((s, _), _) acc ->
         if has_good_description s then SymSet.add s acc else acc
       ) ctxt.logical relevant
   in
-  let relevant = 
+  let relevant =
     List.fold_right (fun re acc ->
         SymSet.union (RE.free_vars re) acc
       ) (get_rs ctxt) relevant
@@ -524,7 +527,7 @@ let state ctxt {substitution; vclasses; relevant} (model_with_q : Solver.model_w
     Context.LCSet.fold (fun lc acc ->
         let lc = LC.subst substitution lc in
         if trivial lc then acc else LC.pp lc :: acc
-      ) (fst ctxt.constraints) []
+      ) ctxt.constraints []
   in
 
   let req_cmp = Option.bind orequest (Spans.spans_compare_for_pp model ctxt.global) in

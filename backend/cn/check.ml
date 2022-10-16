@@ -52,43 +52,69 @@ type pointer_value = CF.Impl_mem.pointer_value
 
 (*** pattern matching *********************************************************)
 
+let rec bt_of_pattern pat =
+  let (M_Pattern (loc, _, pattern) : mu_pattern) = pat in
+  match pattern with
+  | M_CaseBase (_, has_bt) -> return has_bt
+  | M_CaseCtor (constructor, pats) ->
+    begin match constructor, pats with
+    | M_Cnil item_bt, _ -> return (BT.List item_bt)
+    | M_Ccons, [_; p2] -> bt_of_pattern p2
+    | M_Ccons, _ ->
+        fail (fun _ -> {loc; msg = Number_arguments {has = List.length pats; expect = 2}})
+    | M_Ctuple, pats ->
+        let@ bts = ListM.mapM bt_of_pattern pats in
+        return (BT.Tuple bts)
+    | M_Carray, _ ->
+        Debug_ocaml.error "todo: array types"
+    end
+
+let fresh_same_id_with_prefix oprefix s =
+  match oprefix, Sym.description s with
+  | Some prefix, SD_CN_Id name ->
+     Sym.fresh_make_uniq_kind name prefix
+  | Some prefix, _ ->
+     Sym.fresh_make_uniq prefix
+  | _ -> Sym.fresh ()
 
 (* pattern-matches and binds *)
-let pattern_match = 
-  let rec aux pat : (IT.t * ((Sym.t * BT.t) list * (Sym.t * (BT.t * Sym.t)) list), type_error) m = 
+let pattern_match =
+  let rec aux pat it : ((Sym.t * (BT.t * Sym.t)) list, type_error) m =
     let (M_Pattern (loc, _, pattern) : mu_pattern) = pat in
     match pattern with
     | M_CaseBase (o_s, has_bt) ->
        let@ () = WellTyped.WBT.is_bt loc has_bt in
-       let lsym = Sym.fresh () in 
-       begin match o_s, has_bt with
-       | Some s, _ -> 
-          return (sym_ (lsym, has_bt), ([(lsym, has_bt)], [(s, (has_bt, lsym))]))
-       | None, Unit -> 
-          return (unit_, ([], []))
-       | None, _ -> 
-          return (sym_ (lsym, has_bt), ([(lsym, has_bt)], []))
+       begin match o_s with
+       | Some s ->
+          let s' = fresh_same_id_with_prefix (Some "bind_") s in
+          let info = (loc, lazy (let open Pp in
+            item "binding" (Sym.pp s ^^^ !^ "in" ^^^ NewMu.PP_MUCORE.pp_pattern pat))) in
+          let@ s'' = add_l_abbrev s' it info in
+          let@ () = add_a s (has_bt, s'') in
+          return [(s, (has_bt, s''))]
+       | None -> return []
        end
     | M_CaseCtor (constructor, pats) ->
        match constructor, pats with
        | M_Cnil item_bt, [] ->
           let@ () = WellTyped.WBT.is_bt loc item_bt in
-          return (IT.nil_ ~item_bt, ([], []))
+          return []
        | M_Cnil item_bt, _ ->
           let@ () = WellTyped.WBT.is_bt loc item_bt in
           fail (fun _ -> {loc; msg = Number_arguments {has = List.length pats; expect = 0}})
        | M_Ccons, [p1; p2] ->
-          let@ it1, (l1, a1) = aux p1 in
-          let@ it2, (l2, a2) = aux p2 in
-          let@ () = WellTyped.ensure_base_type loc ~expect:(List (IT.bt it1)) (IT.bt it2) in
-          return (cons_ (it1, it2), (l1@l2, a1@a2))
-       | M_Ccons, _ -> 
+          let@ item_bt = bt_of_pattern p1 in
+          let@ a1 = aux p1 (head_ ~item_bt it) in
+          let@ a2 = aux p2 (tail_ it) in
+          return (a1 @ a2)
+       | M_Ccons, _ ->
           fail (fun _ -> {loc; msg = Number_arguments {has = List.length pats; expect = 2}})
        | M_Ctuple, pats ->
-          let@ its_l_a = ListM.mapM aux pats in
-          let its, l_a = List.split its_l_a in
-          let l, a = List.split l_a in
-          return (tuple_ its, (List.concat l, List.concat a))
+          let@ all_as = ListM.mapiM (fun i p ->
+            let@ item_bt = bt_of_pattern p in
+            aux p (nthTuple_ ~item_bt (i, it))
+          ) pats in
+          return (List.concat all_as)
        | M_Carray, _ ->
           Debug_ocaml.error "todo: array types"
   in
@@ -98,67 +124,90 @@ let pattern_match =
   (* let@ () = WellTyped.ensure_base_type loc ~expect:(IT.bt to_match) (IT.bt it) in *)
   (* add_c (t_ (eq_ (it, to_match))) *)
 
+let pp_pattern_match p (patv, (l_vs, a_vs)) =
+  let open Pp in
+  NewMu.PP_MUCORE.pp_pattern p ^^ colon ^^^ IT.pp patv ^^ colon ^^^
+  parens (list (fun (nm, bt) -> Sym.pp nm ^^ colon ^^^ BT.pp bt) l_vs) ^^^
+  parens (list (fun (nm, (bt, lsym)) -> Sym.pp nm ^^ colon ^^^ BT.pp bt ^^ colon ^^^ Sym.pp lsym) a_vs)
 
 
-module PrefixHash = 
-  Hashtbl.Make(struct
-      type t = String.t
-      let equal = String.equal
-      let hash = String.length
-    end)
 
-let prefixes = PrefixHash.create 20
-
-let prefixed str =
-  let next = match PrefixHash.find_opt prefixes str with
-    | None -> 0
-    | Some i -> i + 1
-  in
-  PrefixHash.add prefixes str next;
-  str ^ string_of_int next
-
-
-let fresh_same_id_with_prefix oprefix s = 
-  match oprefix, Sym.description s with
-  | Some prefix, SD_CN_Id name -> 
-     Sym.fresh_named (name ^ "__" ^ prefixed prefix)
-  | _ -> Sym.fresh ()
-
-let fresh_return_with_prefix oprefix = 
+let fresh_return_with_prefix oprefix =
   match oprefix with
-  | Some prefix -> Sym.fresh_named (prefixed prefix)
+  | Some prefix -> Sym.fresh_make_uniq prefix
   | None -> Sym.fresh ()
 
 let fresh_call_with_prefix call_situation s = 
   match Sym.description s with
   | SD_CN_Id name -> 
-     Sym.fresh_named (name ^ "__" ^ prefixed (call_prefix call_situation))
-  | _ -> Sym.fresh ()
+     Sym.fresh_make_uniq_kind name (TypeErrors.call_prefix call_situation)
+  | _ ->
+     Sym.fresh_make_uniq (TypeErrors.call_prefix call_situation)
 
 
-let rec bind_logical (oprefix,where) (lrt : LRT.t) = 
+(* check if the symbol 'sym' appears in a logical return type exactly one,
+   in an equality constraint that equates it to some rhs, where the rhs is
+   global (no vars defined in the return type). if so, return the rhs and
+   the remainder of the return type. *)
+let is_eq_in_rt sym rt =
+  let rec extract = function
+  | LRT.Define ((s, it), oinfo, rt) ->
+    Option.map (fun (rhs, rt) -> (rhs, LRT.Define ((s, it), oinfo, rt)))
+        (extract rt)
+  | LRT.Resource ((s, (re, oarg_spec)), oinfo, rt) ->
+    Option.map (fun (rhs, rt) -> (rhs, LRT.Resource ((s, (re, oarg_spec)), oinfo, rt)))
+        (extract rt)
+  | LRT.Constraint (lc, oinfo, rt) ->
+    begin match LC.is_sym_lhs_equality lc with
+    | Some (s, rhs) when Sym.equal s sym -> Some (rhs, rt)
+    | _ ->
+      Option.map (fun (rhs, rt) -> (rhs, LRT.Constraint (lc, oinfo, rt)))
+          (extract rt)
+    end
+  | LRT.I -> None
+  in
+  match extract rt with
+  | None -> None
+  | Some (rhs, rt) ->
+    if SymSet.mem sym (IT.free_vars rhs)
+      || SymSet.mem sym (LRT.free_vars rt)
+      || SymSet.mem sym (LRT.bound rt)
+    then None else Some (rhs, rt)
+
+
+let rec bind_logical loc oprefix (lrt : LRT.t) =
   match lrt with
   | Define ((s, it), oinfo, rt) ->
-     let s, rt = 
-       let s' = fresh_same_id_with_prefix oprefix s in
-       LRT.alpha_rename_ s' (s, IT.bt it) rt 
-     in
-     let@ () = add_l s (IT.bt it) in
-     let@ () = add_c (LC.t_ (IT.def_ s it)) in
-     bind_logical (oprefix, where) rt
+     let s' = fresh_same_id_with_prefix oprefix s in
+     let l_info = (loc, lazy (Pp.item "return let-bind" (Sym.pp s))) in
+     let@ s'' = add_l_abbrev s' it l_info in
+     let (_, rt) = LRT.alpha_rename_ s'' (s, IT.bt it) rt in
+     bind_logical loc oprefix rt
   | Resource ((s, (re, oarg_spec)), _oinfo, rt) -> 
      let s, rt = 
        let s' = fresh_same_id_with_prefix oprefix s in
        LRT.alpha_rename_ s' (s, oarg_spec) rt 
      in
-     let@ () = add_l s oarg_spec in
-     let@ () = add_r where (re, O (sym_ (s, oarg_spec))) in
-     bind_logical (oprefix, where) rt
+     let l_info = (loc, lazy (Pp.item "return res let-bind" (Sym.pp s))) in
+     let@ (it, rt) = match is_eq_in_rt s rt with
+       | None ->
+         let@ () = add_l s oarg_spec l_info in
+         return (sym_ (s, oarg_spec), rt)
+       | Some (rhs, rt) ->
+         let@ s'' = add_l_abbrev s rhs l_info in
+         return (sym_ (s'', oarg_spec), rt)
+     in
+     let where = Some (Context.Loc loc) in
+     let@ () = add_r where (re, O it) in
+     bind_logical loc oprefix rt
   | Constraint (lc, _oinfo, rt) -> 
      let@ () = add_c lc in
-     bind_logical (oprefix, where) rt
+     bind_logical loc oprefix rt
   | I -> 
      return ()
+
+(*
+not actually used?
 
 let bind_computational (oprefix, where) (name : Sym.t) (rt : RT.t) =
   let Computational ((s, bt), _oinfo, rt) = rt in
@@ -168,20 +217,12 @@ let bind_computational (oprefix, where) (name : Sym.t) (rt : RT.t) =
   let@ () = add_a name (bt, s') in
   bind_logical (oprefix, where) rt'
 
-
 let bind (oprefix, where) (name : Sym.t) (rt : RT.t) =
   bind_computational (oprefix, where) name rt
+*)
 
-let bind_logically (oprefix, where) (rt : RT.t) : ((BT.t * Sym.t), type_error) m =
-  let Computational ((s, bt), _oinfo, rt) = rt in
-  let s' = fresh_return_with_prefix oprefix in
-  let rt' = LRT.subst (IT.make_subst [(s, IT.sym_ (s', bt))]) rt in
-  let@ () = add_l s' bt in
-  let@ () = bind_logical (oprefix, where) rt' in
-  return (bt, s')
 
 type lvt = IT.t
-
 
 
 let rt_of_lvt lvt = 
@@ -192,9 +233,21 @@ let rt_of_lvt lvt =
 
 
 
-
-
-
+let bind_logically loc oprefix (rt : RT.t) : (IT.t, type_error) m =
+  let s' = fresh_return_with_prefix oprefix in
+  let Computational ((s, bt), _oinfo, rt) = rt in
+  match is_eq_in_rt s rt with
+  | None ->
+    let rt' = LRT.subst (IT.make_subst [(s, IT.sym_ (s', bt))]) rt in
+    let info = (loc, lazy (Pp.string "return-var")) in
+    let@ () = add_l s' bt info in
+    let@ () = bind_logical loc oprefix rt' in
+    return (sym_ (s', bt))
+  | Some (tm, rt') ->
+    let info = (loc, lazy (Pp.item "return-var" (IT.pp tm))) in
+    let@ s'' = add_l_abbrev s' tm info in
+    let@ () = bind_logical loc oprefix rt' in
+    return (sym_ (s'', IT.bt tm))
 
 
 
@@ -334,7 +387,7 @@ let check_ptrval (loc : loc) ~(expect:BT.t) (ptrval : pointer_value) : (lvt, typ
   let@ () = WellTyped.ensure_base_type loc ~expect BT.Loc in
   CF.Impl_mem.case_ptrval ptrval
     ( fun ct -> 
-      let sct = Retype.ct_of_ct loc ct in
+      let sct = Sctypes.of_ctype_unsafe loc ct in
       let@ () = WellTyped.WCT.is_ct loc sct in
       return IT.null_ )
     ( fun sym -> 
@@ -347,7 +400,7 @@ let check_ptrval (loc : loc) ~(expect:BT.t) (ptrval : pointer_value) : (lvt, typ
 let rec check_mem_value (loc : loc) ~(expect:BT.t) (mem : mem_value) : (lvt, type_error) m =
   CF.Impl_mem.case_mem_value mem
     ( fun ct -> 
-      let@ () = WellTyped.WCT.is_ct loc (Retype.ct_of_ct loc ct) in
+      let@ () = WellTyped.WCT.is_ct loc (Sctypes.of_ctype_unsafe loc ct) in
       fail (fun _ -> {loc; msg = Unspecified ct}) )
     ( fun _ _ -> 
       unsupported loc !^"infer_mem_value: concurrent read case" )
@@ -359,7 +412,7 @@ let rec check_mem_value (loc : loc) ~(expect:BT.t) (mem : mem_value) : (lvt, typ
       unsupported loc !^"floats" )
     ( fun ct ptrval -> 
       (* TODO: do anything else with ct? *)
-      let@ () = WellTyped.WCT.is_ct loc (Retype.ct_of_ct loc ct) in
+      let@ () = WellTyped.WCT.is_ct loc (Sctypes.of_ctype_unsafe loc ct) in
       check_ptrval loc ~expect ptrval )
     ( fun mem_values -> 
       let@ index_bt, item_bt = match expect with
@@ -498,6 +551,14 @@ let wrapI loc ity arg =
   let dlt = Z.add (Z.sub maxInt minInt) (Z.of_int 1) in
   let r = rem_f_ (arg, z_ dlt) in
   ite_ (le_ (r, z_ maxInt), r, sub_ (r, z_ dlt))
+
+
+(* try to follow is_representable_integer from runtime/libcore/std.core *)
+let is_representable_integer arg ity = 
+  let maxInt = Memory.max_integer_type ity in
+  let minInt = Memory.min_integer_type ity in
+  and_ [le_ (z_ minInt, arg); le_ (arg, z_ maxInt)]
+  
 
 
 
@@ -755,11 +816,26 @@ let rec check_pexpr (pe : 'bty mu_pexpr) ~(expect:BT.t)
   | M_PEwrapI (act, pe) ->
      let@ () = WellTyped.ensure_base_type loc ~expect Integer in
      check_pexpr ~expect:Integer pe (fun arg ->
-     let ity = match act.ct with
-       | Integer ity -> ity
-       | _ -> Debug_ocaml.error "wrapI applied to non-integer type"
-     in
+     let ity = Option.get (Sctypes.is_integer_type act.ct) in
      k (wrapI loc ity arg))
+  | M_PEcatch_exceptional_condition (act, pe) ->
+     let@ () = WellTyped.ensure_base_type loc ~expect Integer in
+     let ity = Option.get (Sctypes.is_integer_type act.ct) in
+     check_pexpr ~expect:Integer pe (fun arg ->
+         let@ provable = provable loc in
+         match provable (t_ (is_representable_integer arg ity)) with
+         | `True -> (k arg)
+         | `False -> 
+            let@ model = model () in
+            let ub = CF.Undefined.UB036_exceptional_condition in
+            fail (fun ctxt -> {loc; msg = Undefined_behaviour {ub; ctxt; model}})
+     )
+  | M_PEis_representable_integer (pe, act) ->
+     let@ () = WellTyped.ensure_base_type loc ~expect Bool in
+     let ity = Option.get (Sctypes.is_integer_type act.ct) in
+     check_pexpr ~expect:Integer pe (fun arg ->
+         k (is_representable_integer arg ity)
+       )
   | M_PEif (pe, e1, e2) ->
      check_pexpr ~expect:Bool pe (fun c ->
      let aux e cond = 
@@ -774,14 +850,12 @@ let rec check_pexpr (pe : 'bty mu_pexpr) ~(expect:BT.t)
      return ())
   | M_PElet (M_Pat p, e1, e2) ->
      let@ fin = begin_trace_of_pure_step (Some (Mu.M_Pat p)) e1 in
-     let@ patv, (l, a) = pattern_match p in
-     check_pexpr ~expect:(IT.bt patv) e1 (fun v1 ->
-     let@ () = add_ls l in
-     let@ () = add_as a in
-     let@ () = add_c (t_ (eq__ patv v1)) in
+     let@ p_bt = bt_of_pattern p in
+     check_pexpr ~expect:p_bt e1 (fun v1 ->
+     let@ pat_a = pattern_match p v1 in
      let@ () = fin () in
      check_pexpr ~expect e2 (fun lvt ->
-     let@ () = remove_as (List.map fst a) in
+     let@ () = remove_as (List.map fst pat_a) in
      k lvt))
   (* | M_PEdone pe -> *)
   (*    let@ arg = infer_pexpr pe in *)
@@ -817,50 +891,6 @@ and check_pexprs (pes_expects : (_ mu_pexpr * BT.t) list)
 
 
 
-
-let unpack_def global name args =
-    Option.bind (Global.get_logical_predicate_def global name)
-    (fun def ->
-    match def.definition with
-    | Def body ->
-       Some (LogicalPredicates.open_pred def.args body args)
-    | _ -> None
-    )
-
-let debug_constraint_failure_diagnostics (model_with_q : Solver.model_with_q) global c =
-  let model = fst model_with_q in
-  if ! Pp.print_level == 0 then () else
-  let split tm = match IT.term tm with
-    | IT.Bool_op (IT.And xs) -> Some ("and", xs)
-    | IT.Bool_op (IT.Or xs) -> Some ("or", xs)
-    | IT.Bool_op (IT.Not x) -> Some ("not", [x])
-    | IT.Bool_op (IT.EQ (x, y)) -> Some ("eq", [x; y])
-    | IT.Bool_op (IT.Impl (x, y)) -> Some ("implies", [x; y])
-    | IT.Pred (name, args) when Option.is_some (unpack_def global name args) ->
-        Some (Sym.pp_string name, [Option.get (unpack_def global name args)])
-    | _ -> None
-  in
-  let rec diag_rec i tm =
-    let pt = !^ "-" ^^^ Pp.int i ^^ Pp.colon in
-    begin match Solver.eval global model tm with
-      | None -> Pp.debug 6 (lazy (pt ^^^ !^ "cannot eval:" ^^^ IT.pp tm))
-      | Some v -> Pp.debug 6 (lazy (pt ^^^ IT.pp v ^^^ !^"<-" ^^^ IT.pp tm))
-    end;
-    match split tm with
-      | None -> ()
-      | Some (nm, ts) -> List.iter (diag_rec (i + 1)) ts
-  in
-  begin match (c, model_with_q) with
-  | (LC.T tm, _) ->
-    Pp.debug 6 (lazy (Pp.item "counterexample, expanding" (IT.pp tm)));
-    diag_rec 0 tm
-  | (LC.Forall ((sym, bt), tm), (_, [q])) ->
-    let tm' = IT.subst (IT.make_subst [(sym, IT.sym_ q)]) tm in
-    Pp.debug 6 (lazy (Pp.item "quantified counterexample, expanding" (IT.pp tm)));
-    diag_rec 0 tm'
-  | _ ->
-    Pp.warn Loc.unknown (Pp.bold "unexpected quantifier count with model")
-  end
 
 module Spine : sig
 
@@ -920,70 +950,33 @@ end = struct
 
     let start_spine = time_log_start "spine_l" "" in
 
-    (* record the resources now, so we can later re-construct the
-       memory state "before" running spine *)
+    (* record the resources now, so errors are raised with all
+       the resources present, rather than those that remain after some
+       arguments are claimed *)
     let@ original_resources = all_resources_tagged () in
 
-    let@ () = 
+    let@ () =
       let@ trace_length = get_trace_length () in
       time_f_logs loc 9 "pre_inf_eqs" trace_length
         (InferenceEqs.add_eqs_for_infer loc) ftyp
     in
 
-    let@ rt, cs = 
-      let rec check cs ftyp = 
+    let@ rt = 
+      let rec check ftyp = 
         let@ () = print_with_ctxt (fun ctxt ->
             debug 6 (lazy (item "ctxt" (Context.pp ctxt)));
             debug 6 (lazy (item "spec" (LAT.pp rt_pp ftyp)));
           )
         in
         let@ ftyp = prefer_exact loc rt_subst ftyp in
+        let@ ftyp = RI.General.ftyp_args_request_step rt_subst loc
+            (fun s -> Some (fresh_call_with_prefix situation s)) (Call situation)
+            original_resources ftyp in
         match ftyp with
-        | LAT.Resource ((s, (resource, bt)), info, ftyp) -> 
-           let uiinfo = (situation, (Some resource, Some info)) in
-           let@ o_re_oarg = RI.General.resource_request ~recursive:true loc uiinfo resource in
-           let@ oargs = match o_re_oarg with
-             | None ->
-                let@ model = model () in
-                fail_with_trace (fun trace -> fun ctxt ->
-                    let ctxt = { ctxt with resources = original_resources } in
-                    let msg = Missing_resource_request 
-                                {orequest = Some resource; 
-                                 situation = Call situation; 
-                                 oinfo = Some info; model; trace; ctxt} in
-                    {loc; msg}
-                  )
-
-             | Some (re, O oargs) ->
-                assert (ResourceTypes.equal re resource);
-                return oargs
-           in
-           check cs (LAT.subst rt_subst (IT.make_subst [(s, oargs)]) ftyp)
-        | Define ((s, it), info, ftyp) ->
-           let s' = fresh_call_with_prefix situation s in
-           let bt = IT.bt it in
-           let@ () = add_l s' bt in
-           let@ () = add_c (LC.t_ (def_ s' it)) in
-           check cs (LAT.subst rt_subst (IT.make_subst [(s, sym_ (s', bt))]) ftyp)
-        | Constraint (c, info, ftyp) -> 
-           let@ () = return (debug 9 (lazy (item "checking constraint" (LC.pp c)))) in
-           let@ provable = provable loc in
-           let res = provable c in
-           begin match res with
-           | `True -> check (c :: cs) ftyp
-           | `False ->
-              let@ model = model () in
-              let@ global = get_global () in
-              debug_constraint_failure_diagnostics model global c;
-              fail_with_trace (fun trace -> fun ctxt ->
-                  let ctxt = { ctxt with resources = original_resources } in
-                  {loc; msg = Unsat_constraint {constr = c; info; ctxt; model; trace}}
-                )
-           end
-        | I rt ->
-           return (rt, cs)
+        | I rt -> return rt
+        | _ -> check ftyp
       in
-      check [] ftyp
+      check ftyp
     in
 
     let@ () = return (debug 9 (lazy !^"done")) in
@@ -1078,7 +1071,9 @@ let all_empty loc =
       match provable constr with
       | `True -> return () 
       | `False -> 
-         let@ model = model () in 
+         let@ model = model () in
+         let@ global = get_global () in
+         RI.debug_constraint_failure_diagnostics 6 model global constr;
          fail_with_trace (fun trace -> fun ctxt ->
              {loc; msg = Unused_resource {resource; ctxt; model; trace}})
     ) all_resources
@@ -1097,6 +1092,11 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
        debug 3 (lazy (item "ctxt" (Context.pp ctxt)));
     )
   in
+  let name_retv it =
+    let info = (loc, lazy (Pp.item "result of" (NewMu.pp_expr e))) in
+    let@ nm = add_l_abbrev (Sym.fresh_named "x") it info in
+    return (sym_ (nm, IT.bt it))
+  in
   match typ, e_ with
   | Normal expect, M_Epure pe -> 
      check_pexpr ~expect pe (fun lvt ->
@@ -1107,6 +1107,7 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
        check_pexpr ~expect:Loc pe2 (fun arg2 ->
        let lvt = op (arg1, arg2) in
        let@ () = WellTyped.ensure_base_type loc ~expect (IT.bt lvt) in
+       let@ lvt = name_retv lvt in
        k (rt_of_lvt lvt)))
      in
      begin match memop with
@@ -1137,6 +1138,7 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
                    pointerToIntegerCast_ arg2),
              int_ divisor)
         in
+        let@ value = name_retv value in
         k (rt_of_lvt value)))
      | M_IntFromPtr (act_from, act_to, pe) ->
         let@ () = WellTyped.ensure_base_type loc ~expect Integer in
@@ -1158,6 +1160,7 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
                )
           end
         in
+        let@ value = name_retv value in
         k (rt_of_lvt value))
      | M_PtrFromInt (act_from, act2_to, pe) ->
         let@ () = WellTyped.ensure_base_type loc ~expect Loc in
@@ -1165,6 +1168,7 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
         let@ () = WellTyped.WCT.is_ct act2_to.loc act2_to.ct in
         check_pexpr ~expect:Integer pe (fun arg ->
         let value = integerToPointerCast_ arg in
+        let@ value = name_retv value in
         k (rt_of_lvt value))
      | M_PtrValidForDeref (act, pe) ->
         let@ () = WellTyped.ensure_base_type loc ~expect Bool in
@@ -1172,17 +1176,20 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
         let@ () = WellTyped.WCT.is_ct act.loc act.ct in
         check_pexpr ~expect:Loc pe (fun arg ->
         let value = aligned_ (arg, act.ct) in
+        let@ value = name_retv value in
         k (rt_of_lvt value))
      | M_PtrWellAligned (act, pe) ->
         let@ () = WellTyped.ensure_base_type loc ~expect Bool in
         let@ () = WellTyped.WCT.is_ct act.loc act.ct in
         check_pexpr ~expect:Loc pe (fun arg ->
         let value = aligned_ (arg, act.ct) in
+        let@ value = name_retv value in
         k (rt_of_lvt value))
      | M_PtrArrayShift (pe1, act, pe2) ->
         check_pexpr ~expect:BT.Loc pe1 (fun vt1 ->
         check_pexpr ~expect:Integer pe2 (fun vt2 ->
         let@ lvt = check_array_shift loc ~expect vt1 (act.loc, act.ct) vt2 in
+        let@ lvt = name_retv lvt in
         k (rt_of_lvt lvt)))
      | M_Memcpy _ (* (asym 'bty * asym 'bty * asym 'bty) *) ->
         Debug_ocaml.error "todo: M_Memcpy"
@@ -1291,8 +1298,7 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
            IT.bt oarg))
         in
         let value_constr = 
-          t_ (eq_ (recordMember_ ~member_bt:(BT.of_sct act.ct) (oarg, value_sym),
-                   varg))
+          t_ (eq_ (oarg, record_ [(Resources.value_sym, varg)]))
         in
         let rt = 
           RT.Computational ((Sym.fresh (), Unit), (loc, None),
@@ -1384,41 +1390,16 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
      in
      check_pexpr ~expect:Loc pointer_pe (fun pointer_arg ->
      check_pexprs (List.combine iarg_pes (List.map snd def.iargs)) (fun iargs ->
-     let@ instantiated_clauses = match def.clauses with
-       | Some clauses ->
-           let subst = 
-             make_subst (
-                 (def.pointer, pointer_arg) ::
-                 List.map2 (fun (def_ia, _) ia -> (def_ia, ia)) def.iargs iargs
-               )
-           in
-           return (List.map (ResourcePredicates.subst_clause subst) clauses)
-       | None ->
-          let action = match pack_unpack with 
-            | Pack -> "pack" 
-            | Unpack -> "unpack"
-          in
-          let msg = "Cannot "^action^" uninterpreted predicate" in
-          fail (fun _ -> {loc; msg = Generic !^msg})
-     in
-     let@ provable = provable loc in
-     let@ right_clause = 
-       let rec try_clauses negated_guards clauses = 
-         match clauses with
-         | clause :: clauses -> 
-            begin match provable (t_ (and_ (clause.guard :: negated_guards))) with
-            | `True -> return clause.packing_ft
-            | `False -> try_clauses (not_ clause.guard :: negated_guards) clauses
-            end
-         | [] -> 
-            let err = 
-              !^"do not have enough information for" ^^^
-              (match pack_unpack with Pack -> !^"packing" | Unpack -> !^"unpacking") ^^^
-              Sym.pp pname
+     let@ res = ResourceInference.select_resource_predicate_clause def
+         loc pointer_arg iargs in
+     let@ right_clause = match res with
+       | Result.Ok clause -> return clause
+       | Result.Error msg ->
+            let err = match pack_unpack with
+              | Pack -> !^ "cannot pack:" ^^^ Sym.pp pname ^^ colon ^^^ msg
+              | Unpack -> !^ "cannot unpack:" ^^^ Sym.pp pname ^^ colon ^^^ msg
             in
-            fail (fun _ -> {loc; msg = Generic err})
-       in
-       try_clauses [] instantiated_clauses
+	    fail (fun _ -> {loc; msg = Generic err})
      in
      begin match pack_unpack with
      | Unpack ->
@@ -1431,15 +1412,12 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
               iargs = iargs;
             }, None)
         in
-        let condition, outputs = LAT.logical_arguments_and_return right_clause in
-        let lc = 
-          eq_ (pred_oargs, 
-               record_ (List.map (fun (o : OutputDef.entry) -> (o.name, o.value)) outputs))
-        in
+        let condition, outputs = LAT.logical_arguments_and_return right_clause.packing_ft in
+        let lc = eq_ (pred_oargs, OutputDef.to_record outputs) in
         let lrt = LRT.concat condition (Constraint (t_ lc, (loc, None), I)) in
         k (RT.Computational ((Sym.fresh (), BT.Unit), (loc, None), lrt))
      | Pack ->
-        Spine.calltype_packing loc pname right_clause (fun output_assignment -> 
+        Spine.calltype_packing loc pname right_clause.packing_ft (fun output_assignment -> 
         let output = record_ (List.map (fun (o : OutputDef.entry) -> (o.name, o.value)) output_assignment) in
         let oarg_s, oarg = IT.fresh_named (IT.bt output) "Packed" in
         let resource = 
@@ -1542,14 +1520,12 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
      Debug_ocaml.error "todo: End"
   | _, M_Elet (M_Pat p, e1, e2) ->
      let@ fin = begin_trace_of_pure_step (Some (Mu.M_Pat p)) e1 in
-     let@ patv, (l, a) = pattern_match p in
-     check_pexpr ~expect:(IT.bt patv) e1 (fun v1 ->
-     let@ () = add_ls l in
-     let@ () = add_as a in
-     let@ () = add_c (t_ (eq__ patv v1)) in
+     let@ p_bt = bt_of_pattern p in
+     check_pexpr ~expect:p_bt e1 (fun v1 ->
+     let@ pat_a = pattern_match p v1 in
      let@ () = fin () in
      check_expr labels ~typ e2 (fun rt ->
-         let@ () = remove_as (List.map fst a) in
+         let@ () = remove_as (List.map fst pat_a) in
          k rt
      ))
   | Normal expect, M_Eunseq es ->
@@ -1568,13 +1544,14 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
          | [] -> k []
          | (e, bt) :: es_bts ->
             check_expr labels ~typ:(Normal bt) e (fun rt ->
-            let@ (bt, s') = bind_logically (None, Some (Loc loc)) rt in
+            let@ it = bind_logically loc None rt in
             aux es_bts (fun vts ->
-            k (sym_ (s', bt) :: vts)
+            k (it :: vts)
             ))
        in
        aux (List.combine es item_bts) (fun vts ->
-       k (rt_of_lvt (tuple_ vts))
+       let@ lvt = name_retv (tuple_ vts) in
+       k (rt_of_lvt lvt)
        )
      else
        let rec aux es_bts k = match es_bts with
@@ -1603,21 +1580,18 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
   | _, M_Ewseq (p, e1, e2)
   | _, M_Esseq (p, e1, e2) ->
      let@ fin = begin_trace_of_step (Some (Mu.M_Pat p)) e1 in
-     let@ patv, (l, a) = pattern_match p in
      let oprefix = match e1 with
        | M_Expr (_, _, M_Eccall (_, M_Pexpr (_, _, _, M_PEsym fsym), _)) -> 
           Sym.has_id fsym
        | _ -> None
      in
-     check_expr labels ~typ:(Normal (IT.bt patv)) e1 (function
-         | Computational ((s', _bt), _info, lrt) ->
-            let lrt = LRT.subst (IT.make_subst [(s', patv)]) lrt in
-            let@ () = add_ls l in
-            let@ () = add_as a in
-            let@ () = bind_logical (oprefix, Some (Loc loc)) lrt in
+     let@ p_bt = bt_of_pattern p in
+     check_expr labels ~typ:(Normal p_bt) e1 (fun rt ->
+            let@ it = bind_logically loc oprefix rt in
+            let@ pat_a = pattern_match p it in
             let@ () = fin () in
             check_expr labels ~typ e2 (fun rt2 ->
-                let@ () = remove_as (List.map fst a) in
+                let@ () = remove_as (List.map fst pat_a) in
                 k rt2
               )
        )
@@ -1656,8 +1630,9 @@ let check_expr_rt loc labels ~typ e =
            LRT.alpha_rename_ (Sym.fresh_named "return") 
              (returned_s, returned_bt) returned_lrt 
          in
-         let@ () = add_l returned_s returned_bt in
-         let@ () = bind_logical (None, Some (Loc loc)) returned_lrt in
+         let info = (loc, lazy (Pp.string "return-var")) in
+         let@ () = add_l returned_s returned_bt info in
+         let@ () = bind_logical loc None returned_lrt in
          let lrt = LRT.subst (IT.make_subst [(return_s, sym_ (returned_s, returned_bt))]) lrt in
          Spine.subtype loc lrt (fun () ->
          let@ () = all_empty loc in
@@ -1686,7 +1661,8 @@ let check_and_bind_arguments rt_subst loc arguments (function_typ : 'rt AT.t) =
          let new_lname = Sym.fresh_same aname in
          let subst = make_subst [(lname, sym_ (new_lname, sbt))] in
          let ftyp' = AT.subst rt_subst subst ftyp in
-         let@ () = add_l new_lname abt in
+         let info = (loc, lazy (Pp.item "argument" (Sym.pp aname))) in
+         let@ () = add_l new_lname abt info in
          let@ () = add_a aname (abt,new_lname) in
          check args ftyp'
        else
@@ -1700,11 +1676,13 @@ let check_and_bind_arguments rt_subst loc arguments (function_typ : 'rt AT.t) =
        let open LAT in
        let rec bind resources = function
          | Define ((sname, it), _, ftyp) ->
-            let@ () = add_l sname (IT.bt it) in
+            let info = (loc, lazy (Pp.item "argument let-bind" (Sym.pp sname))) in
+            let@ () = add_l sname (IT.bt it) info in
             let@ () = add_c (t_ (def_ sname it)) in
             bind resources ftyp
          | Resource ((s, (re, bt)), _, ftyp) ->
-            let@ () = add_l s bt in
+            let info = (loc, lazy (Pp.item "argument let-res-bind" (Sym.pp s))) in
+            let@ () = add_l s bt info in
             bind ((re, O (sym_ (s, bt))) :: resources) ftyp
          | Constraint (lc, _, ftyp) ->
             let@ () = add_c lc in
@@ -1933,7 +1911,8 @@ let check mu_file =
            let@ () = WellTyped.WBT.is_bt Loc.unknown gbt in
            let@ () = WellTyped.WCT.is_ct Loc.unknown ct in
            let bt = Loc in
-           let@ () = add_l lsym bt in
+           let info = (Loc.unknown, lazy (Pp.item "global" (Sym.pp lsym))) in
+           let@ () = add_l lsym bt info in
            let@ () = add_a sym (bt, lsym) in
            let@ () = add_c (t_ (IT.good_pointer ~pointee_ct:ct (sym_ (lsym, bt)))) in
            return ()
@@ -1944,10 +1923,10 @@ let check mu_file =
   let@ () =
     PmapM.iterM
       (fun fsym (M_funinfo (loc, _attrs, ftyp, trusted, _has_proto)) ->
-        (* let lc1 = t_ (ne_ (null_, sym_ (fsym, Loc))) in *)
-        (* let lc2 = t_ (representable_ (Pointer Void, sym_ (fsym, Loc))) in *)
-        (* let@ () = add_l fsym Loc in *)
-        (* let@ () = add_cs [lc1; lc2] in *)
+        let lc1 = t_ (ne_ (null_, sym_ (fsym, Loc))) in
+        let lc2 = t_ (representable_ (Pointer Void, sym_ (fsym, Loc))) in
+        let@ () = add_l fsym Loc (loc, lazy (Pp.item "global fun-ptr" (Sym.pp fsym))) in
+        let@ () = add_cs [lc1; lc2] in
         add_fun_decl fsym (loc, ftyp, trusted)
       ) mu_file.mu_funinfo
   in

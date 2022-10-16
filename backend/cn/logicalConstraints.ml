@@ -85,3 +85,13 @@ let is_equality = function
   | _ -> 
      None
 
+let equates_to it2 = function
+  | T it ->
+     begin match it with
+     | IT (Bool_op (EQ (a, b)), _) when IT.equal a it2 -> Some b
+     | IT (Bool_op (EQ (a, b)), _) when IT.equal b it2 -> Some a
+     | _ -> None
+     end
+  | _ -> 
+     None
+

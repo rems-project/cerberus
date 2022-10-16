@@ -27,66 +27,10 @@ module SymSet = Set.Make(Sym)
 
 
 
-(* builtin function symbols *)
-
-let mk_arg1 mk loc = function
-  | [x] -> return (mk x)
-  | xs -> fail {loc; msg = Number_arguments {has = List.length xs; expect = 1}}
-
-let mk_arg2 mk loc = function
-  | [x; y] -> return (mk (x, y))
-  | xs -> fail {loc; msg = Number_arguments {has = List.length xs; expect = 2}}
-
-
-let mul_uf_def = (Sym.fresh_named "mul_uf", mk_arg2 mul_no_smt_)
-let div_uf_def = (Sym.fresh_named "div_uf", mk_arg2 div_no_smt_)
-let power_uf_def = (Sym.fresh_named "power_uf", mk_arg2 exp_no_smt_)
-let rem_uf_def = (Sym.fresh_named "rem_uf", mk_arg2 rem_no_smt_)
-let mod_uf_def = (Sym.fresh_named "mod_uf", mk_arg2 mod_no_smt_)
-let xor_uf_def = (Sym.fresh_named "xor_uf", mk_arg2 xor_no_smt_)
-
-let power_def = (Sym.fresh_named "power", mk_arg2 exp_)
-let rem_def = (Sym.fresh_named "rem", mk_arg2 rem_)
-let mod_def = (Sym.fresh_named "mod", mk_arg2 mod_)
-
-let not_def = (Sym.fresh_named "not", mk_arg1 not_)
-
-let builtin_funs = 
-  List.map (fun (s, mk) -> (Sym.pp_string s, mk)) [
-      mul_uf_def;
-      div_uf_def;
-      power_uf_def;
-      rem_uf_def;  
-      mod_uf_def;
-      xor_uf_def;
-
-      power_def;
-      rem_def;
-      mod_def;
-
-      not_def;
-    ]
-
-let apply_builtin_funs loc nm args =
-  match List.assoc_opt String.equal nm builtin_funs with
-  | None -> return None
-  | Some mk ->
-    let@ t = mk loc args in
-    return (Some t)
+open Builtins
 
 
 
-let sct_of_ct loc ct = 
-  match Sctypes.of_ctype ct with
-  | Some ct -> ct
-  | None -> unsupported loc (!^"C-type" ^^^ CF.Pp_core_ctype.pp_ctype ct)
-
-let todo_string_of_sym (CF.Symbol.Symbol (_, _, sd)) =
-  match sd with
-    | SD_Id str | SD_CN_Id str | SD_ObjectAddress str ->
-        str
-    | _ ->
-        assert false
 
 
 
@@ -150,7 +94,7 @@ let struct_decl loc fields (tag : BT.tag) =
          then return [{offset = position; size = final_position - position; member_or_padding = None}]
          else return []
       | (member, (attrs, qualifiers, ct)) :: members ->
-         let sct = sct_of_ct loc ct in
+         let sct = Sctypes.of_ctype_unsafe loc ct in
          let offset = member_offset tag member in
          let size = Memory.size_of_ctype sct in
          let to_pad = offset - position in
@@ -501,26 +445,12 @@ let resolve_index_term loc
     | Addition (it, it') -> 
        let@ (it, oct) = resolve it mapping quantifiers in
        let@ (it', _) = resolve it' mapping quantifiers in
-       let@ t = match IT.bt it with
-         | Loc -> 
-            let err = "pointer addition not allowed in specifications: "^
-                        "please instead use pointer/integer casts"
-            in
-            fail {loc; msg = Generic (!^err)}
-         | _ -> return (IT (Arith_op (Add (it, it')), IT.bt it))
-       in
+       let@ t = return (IT (Arith_op (Add (it, it')), IT.bt it)) in
        return (t, None)
     | Subtraction (it, it') -> 
        let@ (it, _) = resolve it mapping quantifiers in
        let@ (it', _) = resolve it' mapping quantifiers in
-       let@ t = match IT.bt it with
-         | Loc -> 
-            let err = "pointer subtraction not allowed in specifications: "^
-                        "please instead use pointer/integer casts"
-            in
-            fail {loc; msg = Generic (!^err)}
-         | _ -> return (IT (Arith_op (Sub (it, it')), IT.bt it))
-       in
+       let@ t = return (IT (Arith_op (Sub (it, it')), IT.bt it)) in
        return (t, None)
     | Multiplication (it, it') -> 
        let@ (it, _) = resolve it mapping quantifiers in
@@ -731,20 +661,20 @@ let resolve_index_term loc
             fail {loc; msg = Generic err}
        in
        return (memberShift_ (pointer, tag, member), Some (Sctypes.Pointer sct))
-    | ArrayShift {pointer =t; index} ->
-       let@ (pointer, osct) = resolve t mapping quantifiers in
-       let@ (index, _) = resolve t mapping quantifiers in
-       let ppf () = Ast.Terms.pp false t in
-       let@ sct = match osct with
-         | None -> 
-            fail {loc; msg = Generic (!^"Cannot resolve C type of term" ^^^ 
-                                        Ast.pp false t)}
+    (* | ArrayShift {pointer =t; index} -> *)
+    (*    let@ (pointer, osct) = resolve t mapping quantifiers in *)
+    (*    let@ (index, _) = resolve index mapping quantifiers in *)
+    (*    let ppf () = Ast.Terms.pp false t in *)
+    (*    let@ sct = match osct with *)
+    (*      | None ->  *)
+    (*         fail {loc; msg = Generic (!^"Cannot resolve C type of term" ^^^  *)
+    (*                                     Ast.pp false t)} *)
 
-         | Some (Pointer sct) -> return sct
-         | Some _ -> 
-            fail {loc; msg = Generic (ppf () ^^^ !^"is not a pointer")}
-       in
-       return (arrayShift_ (pointer, sct, index), Some (Sctypes.Pointer sct))
+    (*      | Some (Pointer sct) -> return sct *)
+    (*      | Some _ ->  *)
+    (*         fail {loc; msg = Generic (ppf () ^^^ !^"is not a pointer")} *)
+    (*    in *)
+    (*    return (arrayShift_ (pointer, sct, index), Some (Sctypes.Pointer sct)) *)
     | CellPointer ((base, step), (from_index, to_index), pointer) ->
        let@ (base, _) = resolve base mapping quantifiers in
        let@ (step, _) = resolve step mapping quantifiers in
@@ -900,14 +830,14 @@ let iterated_pointer_base_offset resolve loc q_name pointer =
      let@ (pointer_r, p_osct) = resolve pointer in
      let@ (offs_r, _) = resolve offs in
      return (pointer_r, p_osct, offs_r)
-  | ArrayShift {pointer; index = Var name'} when String.equal q_name name'->
-     let@ (pointer, p_osct) = resolve pointer in
-     begin match p_osct with
-     | Some (Sctypes.Pointer ct) -> return (pointer, Some ct, IT.int_ (Memory.size_of_ctype ct))
-     | None -> fail {loc; msg = Generic (!^ "array pointer type not known" ^^^ IT.pp pointer)}
-     | Some ct -> fail {loc; msg = Generic (!^ "array pointer not of pointer type:" ^^^
-            IT.pp pointer ^^ colon ^^^ Sctypes.pp ct)}
-     end
+  (* | ArrayShift {pointer; index = Var name'} when String.equal q_name name'-> *)
+  (*    let@ (pointer, p_osct) = resolve pointer in *)
+  (*    begin match p_osct with *)
+  (*    | Some (Sctypes.Pointer ct) -> return (pointer, Some ct, IT.int_ (Memory.size_of_ctype ct)) *)
+  (*    | None -> fail {loc; msg = Generic (!^ "array pointer type not known" ^^^ IT.pp pointer)} *)
+  (*    | Some ct -> fail {loc; msg = Generic (!^ "array pointer not of pointer type:" ^^^ *)
+  (*           IT.pp pointer ^^ colon ^^^ Sctypes.pp ct)} *)
+  (*    end *)
   | _ ->
      let msg =
        "Iterated predicate pointer must be (ptr + (q_var * offs)) or (&(ptr[q_var]))"

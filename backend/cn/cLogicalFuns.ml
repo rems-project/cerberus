@@ -131,7 +131,7 @@ let upd_def id def_tm logical_predicates =
   let open LogicalPredicates in
   let s = Id.s id in
   let@ (sym, def, rem) = match List.partition
-    (fun (sym, _) -> String.equal s (Conversions.todo_string_of_sym sym)) logical_predicates
+    (fun (sym, _) -> String.equal s (Tools.todo_string_of_sym sym)) logical_predicates
   with
   | ([], _) -> fail {loc = Id.loc id;
         msg = Unknown_logical_predicate {id = Sym.fresh_named s; resource = false}}
@@ -146,7 +146,7 @@ let upd_def id def_tm logical_predicates =
 
 let add_c_fun_defs logical_predicates log_c_defs =
   let pred_def_map = List.fold_left (fun m (sym, def) ->
-    StringMap.add (Conversions.todo_string_of_sym sym) def m) StringMap.empty
+    StringMap.add (Tools.todo_string_of_sym sym) def m) StringMap.empty
     logical_predicates in
   let@ conv_defs = ListM.mapM (fun (id, fsym, fn) ->
         let@ def = match StringMap.find_opt (Id.s id) pred_def_map with

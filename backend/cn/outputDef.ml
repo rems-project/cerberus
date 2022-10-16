@@ -21,6 +21,10 @@ let subst substitution assignment =
   List.map (subst_entry substitution) assignment
 
 
+let to_record (entries : t) =
+  IT.record_ (List.map (fun o -> (o.name, o.value)) entries)
+
+
 
 let pp assignment =
   Pp.list pp_entry assignment

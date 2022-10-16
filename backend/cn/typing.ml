@@ -23,7 +23,7 @@ type 'e failure = Context.t -> 'e
 let run (c : Context.t) (m : ('a, 'e) t) : ('a, 'e) Resultat.t = 
   let solver = Solver.make c.global in
   let sym_eqs = SymMap.empty in
-  LCSet.iter (Solver.add_assumption solver c.global) (fst c.constraints);
+  LCSet.iter (Solver.add_assumption solver c.global) c.constraints;
   let s = { 
       typing_context = c; 
       solver; 
@@ -129,13 +129,13 @@ let set_global global : (unit, 'e) m =
 
 let all_constraints () = 
   let@ s = get () in
-  return (fst s.constraints)
+  return s.constraints
 
 let simp_constraints1 () =
   fun s ->
   Ok ((s.sym_eqs, 
        s.equalities,
-       fst s.typing_context.constraints), s)
+       s.typing_context.constraints), s)
 
 let simp_constraints () =
   let@ (vals, eqs, cons) = simp_constraints1 () in
@@ -156,7 +156,7 @@ let make_provable loc =
   let f lc = 
     Solver.provable ~loc ~solver ~global:s.global 
       ~trace_length
-      ~assumptions:(fst s.constraints)
+      ~assumptions:s.constraints
       ~pointer_facts lc 
   in
   f
@@ -226,22 +226,24 @@ let add_a sym (bt, sym') =
 
 let remove_a sym = 
   let@ s = get () in
-  set (Context.remove_a sym s)
+  let s = Context.remove_a sym s in
+  set s
 
 let add_as a = 
   let@ s = get () in
   set (Context.add_as a s)
 
-let remove_as a = 
+let rec remove_as = function
+  | [] -> return ()
+  | x :: xs -> 
+     let@ () = remove_a x in
+     remove_as xs
+
+let add_l sym ls info =
   let@ s = get () in
-  set (Context.remove_as a s)
+  set (Context.add_l sym ls info s)
 
-
-let add_l sym ls =
-  let@ s = get () in
-  set (Context.add_l sym ls s)
-
-let add_ls lvars = 
+let add_ls lvars =
   let@ s = get () in
   set (Context.add_ls lvars s)
 
@@ -283,6 +285,15 @@ let rec add_cs = function
   | lc :: lcs -> 
      let@ () = add_c lc in 
      add_cs lcs
+
+(* add a logical symbol to abbreviate this term, unless it already is
+   a symbol, in which case return the existing symbol *)
+let add_l_abbrev sym it info = match IT.is_sym it with
+  | Some (sym', _) -> return sym'
+  | None ->
+    let@ () = add_l sym (IT.bt it) info in
+    let@ () = add_c (LC.t_ (IT.def_ sym it)) in
+    return sym
 
 let check_res_const_step loc r =
   let open TypeErrors in

@@ -5,10 +5,13 @@ module RP = ResourcePredicates
 
 module IT = IndexTerms
 module SymMap = Map.Make(Sym)
+module StringMap = Map.Make(String)
+
+module LAT = LogicalArgumentTypes
 
 open CF.Cn
 open TypeErrors
-open Conversions
+
 
 
 type cn_predicate =
@@ -55,21 +58,14 @@ open Effectful.Make(Resultat)
 
 let mk_translate_binop loc bop (e1, e2) =
   let open IndexTerms in
-  let ptr_err = "pointer arithmetic not allowed in specifications: "^
-                         "please instead use pointer/integer casts"
-  in
   let@ mk = match bop, IT.bt e1 with
-    | CN_add, (BT.Integer | BT.Real) ->
+    | CN_add, _ ->
         return add_
-    | CN_add, BT.Loc ->
-        fail {loc; msg = Generic (Pp.string ptr_err)}
-    | CN_sub, (BT.Integer | BT.Real) ->
+    | CN_sub, _ ->
         return sub_
-    | CN_sub, BT.Loc ->
-        fail {loc; msg = Generic (Pp.string ptr_err)}
-    | CN_mul, (BT.Integer | BT.Real) ->
+    | CN_mul, _ ->
         return mul_
-    | CN_div, (BT.Integer | BT.Real) ->
+    | CN_div, _ ->
         return div_
     | CN_equal, _ ->
         return eq_
@@ -153,7 +149,7 @@ let translate_member_access loc env t member =
   match IT.bt t with
   | Record members ->
      let member' = Id.s member in
-     let members' = List.map (fun (s, bt) -> (todo_string_of_sym s, (s, bt))) members in
+     let members' = List.map (fun (s, bt) -> (Tools.todo_string_of_sym s, (s, bt))) members in
      let@ (member, member_bt) = match List.assoc_opt String.equal member' members' with
        | Some (member, member_bt) -> return (member, member_bt)
        | None -> fail {loc; msg = Unknown_record_member (members, member)}
@@ -168,7 +164,7 @@ let translate_member_access loc env t member =
        | None -> fail {loc; msg = Unknown_member (tag, member)}
        | Some (_, _, ty) -> return ty
      in
-     let ty' = Retype.ct_of_ct loc ty in
+     let ty' = Sctypes.of_ctype_unsafe loc ty in
      let member_bt = BaseTypes.of_sct ty' in
      return ( IT.member_ ~member_bt (tag, t, member) )
   | Datatype tag ->
@@ -246,7 +242,7 @@ let translate_cn_expr (env: Env.t) expr =
           let@ e2 = self e2_ in
           mk_translate_binop loc bop (e1, e2)
       | CNExpr_sizeof ct ->
-          let scty = Retype.ct_of_ct loc ct in
+          let scty = Sctypes.of_ctype_unsafe loc ct in
           return (int_ (Memory.size_of_ctype scty))
       | CNExpr_offsetof (tag, member) ->
           let@ () = match lookup_struct tag env with
@@ -264,7 +260,7 @@ let translate_cn_expr (env: Env.t) expr =
       | CNExpr_call (nm, exprs) ->
           let@ args = ListM.mapM self exprs in
           let nm_s = Id.pp_string nm in
-          let@ b = Conversions.apply_builtin_funs loc nm_s args in
+          let@ b = Builtins.apply_builtin_funs loc nm_s args in
           begin match b with
             | Some t -> return t
             | None ->
@@ -304,10 +300,10 @@ let translate_cn_res_info res_loc loc env res args =
   let open ResourceTypes in
   let@ (pname, oargs_ty, env_info) = match res with
     | CN_owned ty ->
-      let scty = Retype.ct_of_ct res_loc ty in
+      let scty = Sctypes.of_ctype_unsafe res_loc ty in
       return (Owned scty, owned_oargs scty, RPred_owned scty)
     | CN_block ty ->
-      let scty = Retype.ct_of_ct res_loc ty in
+      let scty = Sctypes.of_ctype_unsafe res_loc ty in
       return (Block scty, owned_oargs scty, RPred_block scty)
     | CN_named pred ->
       let@ pred_sig = match Env.lookup_predicate pred env with
@@ -334,6 +330,10 @@ let split_pointer_linear_step loc q ptr_expr =
           return (p, y)
         | _ -> fail { loc; msg= Generic (!^msg_s ^^^ IT.pp ptr_expr)}
       end
+    (* temporarily allow this more confusing but more concise syntax,
+       until we have enriched Core's pointer base types *)
+    | Arith_op (Add (p, IT (Arith_op (Mul (x, y)), _))) when IT.equal x qs ->
+       return (p, y)       
     | _ ->
     fail { loc; msg= Generic (!^msg_s ^^^ IT.pp ptr_expr)}
   end

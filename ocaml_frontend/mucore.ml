@@ -140,6 +140,8 @@ module Make(T : TYPES) = struct
    | M_PEconv_int of 'TY act * 'TY mu_pexpr
    | M_PEconv_loaded_int of 'TY act * 'TY mu_pexpr
    | M_PEwrapI of 'TY act * 'TY mu_pexpr
+   | M_PEcatch_exceptional_condition of 'TY act * 'TY mu_pexpr
+   | M_PEis_representable_integer of 'TY mu_pexpr * 'TY act
 
    | M_PEundef of Location_ocaml.t * Undefined.undefined_behaviour (* undefined behaviour *)
    | M_PEerror of string * 'TY mu_pexpr (* impl-defined static error *)

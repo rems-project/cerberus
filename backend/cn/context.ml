@@ -21,11 +21,14 @@ let pp_where = function
   | Loc loc -> !^(Loc.simple_location loc)
 
 
+type l_info = (Locations.t * Pp.doc Lazy.t)
+
+
 type t = {
     computational : (Sym.t * (BT.t * Sym.t)) list;
-    logical : (Sym.t * LS.t) list;
+    logical : ((Sym.t * LS.t) * l_info) list;
     resources : (RE.t * int) list * int;
-    constraints : LCSet.t * LC.t list;
+    constraints : LCSet.t;
     global : Global.t;
     location_trace : Locations.loc list;
     statement_locs : Locations.loc CStatements.LocMap.t;
@@ -36,7 +39,7 @@ let empty = {
     computational = [];
     logical = [];
     resources = ([], 0);
-    constraints = (LCSet.empty, []);
+    constraints = LCSet.empty;
     global = Global.empty;
     location_trace = [];
     statement_locs  = CStatements.LocMap.empty;
@@ -51,8 +54,8 @@ let pp (ctxt : t) =
     (Pp.list (fun (sym, (bt,lsym)) -> 
          typ (Sym.pp sym) (BT.pp bt ^^ tilde ^^ Sym.pp lsym)
        ) ctxt.computational) ^/^
-  item "logical" 
-    (Pp.list (fun (sym, ls) -> 
+  item "logical"
+    (Pp.list (fun ((sym, ls), _) ->
          typ (Sym.pp sym) (LS.pp ls)
        ) ctxt.logical) ^/^
   item "resources" 
@@ -62,13 +65,13 @@ let pp (ctxt : t) =
          if (!print_level >= 11 || Option.is_none (LC.is_sym_lhs_equality lc))
          then LC.pp lc
          else parens !^"..."
-       ) (LCSet.elements (fst ctxt.constraints)))
+       ) (LCSet.elements ctxt.constraints))
 
 
 let bound_a sym ctxt = 
   Option.is_some (List.assoc_opt Sym.equal sym ctxt.computational)
-let bound_l sym ctxt = 
-  Option.is_some (List.assoc_opt Sym.equal sym ctxt.logical)
+let bound_l sym ctxt =
+  List.exists (fun ((sym2, _), _) -> Sym.equal sym sym2) ctxt.logical
 
 
 
@@ -76,13 +79,17 @@ let get_a (name: Sym.t) (ctxt: t)  =
   List.assoc Sym.equal name ctxt.computational
 
 let get_l (name: Sym.t) (ctxt:t) = 
-  List.assoc Sym.equal name ctxt.logical
+  List.assoc Sym.equal name (List.map fst ctxt.logical)
 
 let add_a aname (bt, lname) ctxt = 
   {ctxt with computational = (aname, (bt, lname)) :: ctxt.computational}
 
 let remove_a aname ctxt = 
   {ctxt with computational = List.remove_assoc aname ctxt.computational}
+
+let remove_l lname ctxt = 
+  {ctxt with logical = List.filter (fun ((sym2, _), _) -> not (Sym.equal lname sym2)) ctxt.logical}
+
 
 let add_as avars ctxt = 
   List.fold_left (fun ctxt (s,(bt,l)) -> add_a s (bt,l) ctxt) ctxt avars
@@ -91,16 +98,16 @@ let remove_as avars ctxt =
   List.fold_left (fun ctxt s -> remove_a s ctxt) ctxt avars
 
 
-let add_l lname ls (ctxt : t) = 
-  {ctxt with logical = (lname, ls) :: ctxt.logical}
+let add_l lname ls info (ctxt : t) =
+  {ctxt with logical = ((lname, ls), info) :: ctxt.logical}
 
 let add_ls lvars ctxt = 
-  List.fold_left (fun ctxt (s,ls) -> add_l s ls ctxt) ctxt lvars
+  List.fold_left (fun ctxt ((s, ls), info) -> add_l s ls info ctxt) ctxt lvars
 
 let add_c c (ctxt : t) =
-  let (s, cs) = ctxt.constraints in
+  let s = ctxt.constraints in
   if LCSet.mem c s then ctxt
-  else { ctxt with constraints = (LCSet.add c s, c :: cs) }
+  else { ctxt with constraints = LCSet.add c s }
 
 let add_r owhere r (ctxt : t) =
   let (rs, ix) = ctxt.resources in
@@ -130,13 +137,13 @@ let json (ctxt : t) : Yojson.Safe.t =
       ) ctxt.computational
   in
   let logical = 
-    List.map (fun (sym, ls) ->
+    List.map (fun ((sym, ls), _) ->
         `Assoc [("name", Sym.json sym);
                 ("sort", LS.json ls)]
       ) ctxt.logical
   in
   let resources = List.map RE.json (get_rs ctxt) in
-  let constraints = List.map LC.json (snd ctxt.constraints) in
+  let constraints = List.map LC.json (LCSet.elements ctxt.constraints) in
   let json_record = 
     `Assoc [("computational", `List computational);
             ("logical", `List logical);
@@ -153,5 +160,5 @@ let json (ctxt : t) : Yojson.Safe.t =
 let constraints_not_extended ctxt1 ctxt2 =
     List.compare_lengths ctxt1.logical ctxt2.logical == 0 &&
     List.compare_lengths ctxt1.computational ctxt2.computational == 0 &&
-    LCSet.cardinal (fst ctxt1.constraints) == LCSet.cardinal (fst ctxt2.constraints)
+    LCSet.cardinal ctxt1.constraints == LCSet.cardinal ctxt2.constraints
 

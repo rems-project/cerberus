@@ -16,6 +16,9 @@ type definition = {
     clauses : (clause list) option;
   }
 
+val instantiate_clauses : definition -> IndexTerms.t -> IndexTerms.t list ->
+    (clause list) option
+
 val pp_definition : definition -> Pp.document
 
 
