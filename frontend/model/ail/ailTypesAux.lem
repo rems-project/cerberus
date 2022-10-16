@@ -180,8 +180,8 @@ val is_struct_or_union: ctype -> bool
 let is_struct_or_union ty =
   is_struct ty || is_union ty
 
-val has_flexible_array_member: forall 'a. sigma 'a -> ctype -> bool
-let has_flexible_array_member sigm = function
+val     has_flexible_array_member: forall 'a. sigma 'a -> ctype -> bool
+let rec has_flexible_array_member sigm = function
   | Ctype _ (Struct tag_sym) ->
       match List.lookup tag_sym sigm.tag_definitions with
         | Just (_, StructDef _ Nothing) ->
@@ -190,6 +190,15 @@ let has_flexible_array_member sigm = function
             true
         | _ ->
             error "AilTypesAux.has_flexible_array_member: Struct, UnionDef or Nothing"
+      end
+  | Ctype _ (Union tag_sym) ->
+      match List.lookup tag_sym sigm.tag_definitions with
+        | Just (_, UnionDef xs) ->
+            List.any (fun (_, (_, _, _, memb_ty)) ->
+              has_flexible_array_member sigm memb_ty
+            ) xs
+        | _ ->
+            error "AilTypesAux.has_flexible_array_member: Union, StructDef or Nothing"
       end
   | _ ->
       false

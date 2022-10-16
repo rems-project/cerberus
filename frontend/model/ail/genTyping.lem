@@ -2102,9 +2102,9 @@ let annotate_sigma sigm =
     end
   ) sigm.function_definitions >>= fun function_defs' ->
   
-  let check_member (ident, (_, _, qs, ty)) =
+  let check_member is_struct (ident, (_, _, qs, ty)) =
     E.add "§6.7.2.1#3" >>
-    if AilTypesAux.has_flexible_array_member sigm ty then
+    if is_struct && AilTypesAux.has_flexible_array_member sigm ty then
       E.constraint_violation (Loc.locOf ident) StructMemberFlexibleArray
     else if AilTypesAux.is_function ty then
       E.constraint_violation (Loc.locOf ident) (StructMemberFunctionType ident)
@@ -2114,7 +2114,7 @@ let annotate_sigma sigm =
       E.return () in
   E.mapM (function
     | (_, (_, StructDef xs flexible_opt)) ->
-        E.mapM_ check_member xs >>= fun () ->
+        E.mapM_ (check_member true) xs >>= fun () ->
         E.mapM_ (fun (_, (_, _, qs, ty)) ->
           (* TODO: check that it is ok to use wf_lvalue (instead of just wf_type) *)
           wf_lvalue sigm qs ty
@@ -2126,7 +2126,7 @@ let annotate_sigma sigm =
               wf_lvalue sigm flex_qs (Ctype [] (Array flex_elem_ty Nothing))
         end
     | (_, (_, UnionDef xs)) ->
-        E.mapM check_member xs >>
+        E.mapM (check_member false) xs >>
         E.mapM_ (fun (_, (_, _, qs, ty)) ->
           (* TODO: check that it is ok to use wf_lvalue (instead of just wf_type) *)
           wf_lvalue sigm qs ty
