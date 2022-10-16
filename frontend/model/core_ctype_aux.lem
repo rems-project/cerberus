@@ -30,7 +30,7 @@ let get_structDef tag_sym =
                "): couldn't find a struct/union definition")
   end
 
-val get_unionDef: Symbol.sym -> (Symbol.identifier * (Annot.attributes * qualifiers * ctype)) * list (Symbol.identifier * (Annot.attributes * qualifiers * ctype))
+val get_unionDef: Symbol.sym -> (Symbol.identifier * (Annot.attributes * maybe alignment * qualifiers * ctype)) * list (Symbol.identifier * (Annot.attributes * maybe alignment * qualifiers * ctype))
 let get_unionDef tag_sym =
   match Map.lookup tag_sym (tagDefs ()) with
     | Just (UnionDef []) ->
@@ -93,8 +93,8 @@ let rec are_compatible (qs1, Ctype _ ty1) (qs2, Ctype _ ty2) =
                   if List.length xs1 <> List.length xs2 then
                     false
                   else
-                    List.all (fun ((ident1, (_, qs1, ty1)), (ident2, (_, qs2, ty2))) ->
-                      ident1 = ident2 && are_compatible (qs1, ty1) (qs2, ty2)
+                    List.all (fun ((ident1, (_, _(*TODO alignment*), qs1, ty1)), (ident2, (_, _(*TODO alignment*), qs2, ty2))) ->
+                      ident1 = ident2 && are_compatible_aux (qs1, ty1) (qs2, ty2)
                     ) (List.zip xs1 xs2) &&
                     match (flexible_opt1, flexible_opt2) with
                       | (Nothing, Nothing) ->

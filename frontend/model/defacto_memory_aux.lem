@@ -334,7 +334,7 @@ let rec simplify_integer_value_base ival_ =
                   error "TODO: Defacto_memmory_aux.simplify_integer_value_base => found flexible array member"
                 else
                   simplify_integer_value_base begin
-                    List.foldl (fun acc (ident, (_, _, ty)) ->
+                    List.foldl (fun acc (ident, (_, _(* TODO: alignment*), _, ty)) ->
                       IVop IntAdd [ lifted_self (IVsizeof ty);
                                     IVop IntAdd [IVpadding tag_sym ident; acc] ]
                     ) (IVconcrete 0) tagDef

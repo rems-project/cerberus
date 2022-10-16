@@ -452,7 +452,7 @@ let do_tagDefs tagDefs =
     let name_collector = deps_of (Sym sym) in
     match tagDef with
     | Ctype.StructDef (fields, flexible_opt) ->
-       iterate fields (fun (Identifier (_,id), (_,_,ct)) -> 
+       iterate fields (fun (Identifier (_,id), (_,_,_,ct)) -> 
            record_dep (Sym sym) (Id id) >>
            name_collector.names_in_ctype ct) >>
        begin match flexible_opt with
@@ -462,7 +462,7 @@ let do_tagDefs tagDefs =
              name_collector.names_in_ctype (Ctype ([], Array (elem_ty, None)))
        end
     | Ctype.UnionDef d ->
-       iterate d (fun (Identifier (_,id), (_,_,ct)) -> 
+       iterate d (fun (Identifier (_,id), (_,_,_,ct)) -> 
            record_dep (Sym sym) (Id id) >>
            name_collector.names_in_ctype ct)
     ) tagDefs

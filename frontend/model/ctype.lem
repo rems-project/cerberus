@@ -100,9 +100,13 @@ type flexible_array_member =
     (* NOTE: the last parameter is the element type of the array *)
   | FlexibleArrayMember of Annot.attributes * Symbol.identifier * qualifiers * ctype
 
+type alignment =
+  | AlignInteger of integer
+  | AlignType of ctype
+
 type tag_definition =
-  | StructDef of list (Symbol.identifier * (Annot.attributes * qualifiers * ctype)) * maybe flexible_array_member
-  | UnionDef of list (Symbol.identifier * (Annot.attributes * qualifiers * ctype))
+  | StructDef of list (Symbol.identifier * (Annot.attributes * maybe alignment * qualifiers * ctype)) * maybe flexible_array_member
+  | UnionDef of list (Symbol.identifier * (Annot.attributes * maybe alignment * qualifiers * ctype))
 
 (** Type class instances *)
 
@@ -392,7 +396,7 @@ instance (Show tag_definition)
           string_of_identifiers tag_defs
       | StructDef tag_defs (Just (FlexibleArrayMember attrs ident qs elem_ty)) ->
           let ty = Ctype [] (Array elem_ty Nothing) in
-          string_of_identifiers (tag_defs ++ [(ident, (attrs, qs, ty))])
+          string_of_identifiers (tag_defs ++ [(ident, (attrs, Nothing, qs, ty))])
       | UnionDef tag_defs ->
           string_of_identifiers tag_defs
     end

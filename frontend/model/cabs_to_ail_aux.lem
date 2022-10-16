@@ -7,8 +7,8 @@ module A = AilSyntax
 
 
 type tag_definition =
-  | Struct_definition of Annot.attributes * bool(* isAnonymous*) * list (Symbol.identifier * (Annot.attributes * Ctype.qualifiers * Ctype.ctype)) * maybe Ctype.flexible_array_member
-  | Union_definition of Annot.attributes * bool(* isAnonymous*) * list (Symbol.identifier * (Annot.attributes * Ctype.qualifiers * Ctype.ctype))
+  | Struct_definition of Annot.attributes * bool(* isAnonymous*) * list (Symbol.identifier * (Annot.attributes * maybe Ctype.alignment * Ctype.qualifiers * Ctype.ctype)) * maybe Ctype.flexible_array_member
+  | Union_definition of Annot.attributes * bool(* isAnonymous*) * list (Symbol.identifier * (Annot.attributes * maybe Ctype.alignment * Ctype.qualifiers * Ctype.ctype))
   | Enum_definition of list integer
 
 
@@ -117,7 +117,7 @@ let rec mk_zeroInit_aux tagDefs (Ctype.Ctype _ ty) =
             | Just (Struct_definition _ _ xs _) ->
                 (* NOTE: the potential flexible array member is NOT initialised
                          (there won't even be space allocated for it) *)
-                List.map (fun (memb_ident, (_, _, memb_ty)) ->
+                List.map (fun (memb_ident, (_, _, _, memb_ty)) ->
                   (memb_ident, mk_zeroInit_aux tagDefs memb_ty)
                 ) xs
             | _ ->
@@ -125,7 +125,7 @@ let rec mk_zeroInit_aux tagDefs (Ctype.Ctype _ ty) =
           end
     | Ctype.Union tag_sym ->
         match Map.lookup tag_sym tagDefs with
-          | Just (Union_definition _ _ ((memb_ident, (_, _, memb_ty)) :: _)) ->
+          | Just (Union_definition _ _ ((memb_ident, (_, _, _, memb_ty)) :: _)) ->
               A.ConstantUnion tag_sym memb_ident (mk_zeroInit_aux tagDefs memb_ty)
           | _ ->
               error "[Cabs_to_ail.mk_zeroInit_aux] - internal ERROR: Union"

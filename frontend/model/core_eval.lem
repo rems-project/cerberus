@@ -701,7 +701,7 @@ let rec step_eval_pexpr n loc parent_call_loc_opt core_extern env mem_st_opt fil
                             (* TODO(check): PEstruct are only created at static init and struct a value loads, which should be ignoring any flexible array member *)
                             error "Core_eval, PEstruct => found a flexible array member"
                       end in *)
-                      let (_, _, memb_ty) = fromJust "Core_eval, PEstruct 1" (List.lookup memb_ident membrs) in
+                      let (_, _, _, memb_ty) = fromJust "Core_eval, PEstruct 1" (List.lookup memb_ident membrs) in
                       let mval = fromJust ("Core_Eval, PEstruct 2, memb_ty: " ^ Pp.stringFromCore_ctype memb_ty ^
                                            ", cval: " ^ Pp.stringFromCore_value cval)
                           (Caux.memValueFromValue memb_ty cval) in
@@ -723,7 +723,7 @@ KKK:              EU.return (PEval (Vloaded (LVspecified (OVstruct tag_sym xs)))
           | Just cval ->
               match fromJust "Core_eval, PEunion 1,1" $ Map.lookup tag_sym file.tagDefs with
                 | Ctype.UnionDef membrs ->
-                    let (_, _, memb_ty) = fromJust "Core_eval, PEunion 1" (List.lookup memb_ident membrs) in
+                    let (_, _, _, memb_ty) = fromJust "Core_eval, PEunion 1" (List.lookup memb_ident membrs) in
                     let mval = fromJust "Core_Eval, PEunion 2" (Caux.memValueFromValue memb_ty cval) in
                     EU.return (PEval (Vobject (OVunion tag_sym memb_ident mval)))
                 | Ctype.StructDef _ _ ->

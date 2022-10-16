@@ -233,8 +233,8 @@ type state = <|
                                                                 the boolean is the isRegister flag *)
     * bool * bool * bool )                                   (* isVariadic, isInline, isNoReturn flags *)
    );
-  external_object_declarations: map A.ail_identifier  ((* isTentative *)bool * Loc.t * Annot.attributes * A.storageDuration * (* isRegister *) bool * maybe A.alignment * Ctype.qualifiers * Ctype.ctype);
-  internal_object_declarations: map A.ail_identifier  (Loc.t * A.storageDuration * (* isRegister *) bool * maybe A.alignment * Ctype.qualifiers * Ctype.ctype);
+  external_object_declarations: map A.ail_identifier  ((* isTentative *)bool * Loc.t * Annot.attributes * A.storageDuration * (* isRegister *) bool * maybe Ctype.alignment * Ctype.qualifiers * Ctype.ctype);
+  internal_object_declarations: map A.ail_identifier  (Loc.t * A.storageDuration * (* isRegister *) bool * maybe Ctype.alignment * Ctype.qualifiers * Ctype.ctype);
   
   function_definitions: map A.ail_identifier (Loc.t * Annot.attributes * list A.ail_identifier * A.statement unit);
   global_object_definitions: map A.ail_identifier global_definition;
@@ -1223,7 +1223,7 @@ let get_tag_definitions =
 
 
 val get_anonymous_struct_or_union:
-  Ctype.ctype -> desugM (maybe (list (Symbol.identifier * (Annot.attributes * Ctype.qualifiers * Ctype.ctype))))
+  Ctype.ctype -> desugM (maybe (list (Symbol.identifier * (Annot.attributes * maybe Ctype.alignment * Ctype.qualifiers * Ctype.ctype))))
 let get_anonymous_struct_or_union ty =
   (* TODO: the unatomic is commented because clang doesn't consider an atomic
      struct/union an anonymous (regardless of the absence of tag). So we do
@@ -1390,7 +1390,7 @@ let is_static_object_identifier sym =
   end
 
 
-val fetch_object_declaration: A.ail_identifier -> desugM (bool * Loc.t * A.storageDuration * bool * maybe A.alignment * Ctype.qualifiers * Ctype.ctype)
+val fetch_object_declaration: A.ail_identifier -> desugM (bool * Loc.t * A.storageDuration * bool * maybe Ctype.alignment * Ctype.qualifiers * Ctype.ctype)
 let fetch_object_declaration sym =
   State_exception.read (fun st ->
     (* ... *)
@@ -1595,15 +1595,15 @@ let get_alignof =
   let pseudo_tagDefs =
     Map.map function
       | Struct_definition _ _ membrs flex_opt ->
-          List.map (fun (_, (_, _, ty)) -> ty) membrs ++
+          List.map (fun (_, (_, align_opt, _, ty)) -> (align_opt, ty)) membrs ++
           match flex_opt with
             | Nothing ->
                 []
             | Just (Ctype.FlexibleArrayMember _ _ _ ty) ->
-                [Ctype.Ctype [] (Ctype.Array ty Nothing)]
+                [(Nothing, Ctype.Ctype [] (Ctype.Array ty Nothing))]
           end
       | Union_definition _ _ membrs ->
-          List.map (fun (_, (_, _, ty)) -> ty) membrs
+          List.map (fun (_, (_, align_opt, _, ty)) -> (Nothing, ty)) membrs
       | Enum_definition _ ->
           [(* dummy, this won't be called *)]
     end tagDefs in
@@ -1625,9 +1625,9 @@ let get_compatible_alignment_requirements loc new_align_opt prev_align_opt =
         undef loc Undefined.UB072_incompatible_alignment_specifiers
     | (Nothing, Just _) ->
         return prev_align_opt
-    | (Just (A.AlignInteger new_n), Just (A.AlignInteger prev_n)) ->
+    | (Just (Ctype.AlignInteger new_n), Just (Ctype.AlignInteger prev_n)) ->
         common new_n prev_n
-    | (Just (A.AlignType new_ty), Just (A.AlignType prev_ty)) ->
+    | (Just (Ctype.AlignType new_ty), Just (Ctype.AlignType prev_ty)) ->
         if Global.isAgnostic () then
           fail loc (Errors.Desugar_agnosticFailure "redeclaration with alignment specifiers is too complicated")
         else
@@ -1637,7 +1637,7 @@ let get_compatible_alignment_requirements loc new_align_opt prev_align_opt =
             | _ ->
                 fail loc (Errors.Desugar_TODO "error msg: need a better implementation")
           end
-    | (Just (A.AlignType new_ty), Just (A.AlignInteger prev_n)) ->
+    | (Just (Ctype.AlignType new_ty), Just (Ctype.AlignInteger prev_n)) ->
         if Global.isAgnostic () then
           fail loc (Errors.Desugar_agnosticFailure "redeclaration with alignment specifiers is too complicated")
         else
@@ -1647,7 +1647,7 @@ let get_compatible_alignment_requirements loc new_align_opt prev_align_opt =
             | Nothing ->
                 fail loc (Errors.Desugar_TODO "error msg: need a better implementation")
           end
-    | (Just (A.AlignInteger new_n), Just (A.AlignType prev_ty)) ->
+    | (Just (Ctype.AlignInteger new_n), Just (Ctype.AlignType prev_ty)) ->
         if Global.isAgnostic () then
           fail loc (Errors.Desugar_agnosticFailure "redeclaration with alignment specifiers is too complicated")
         else
@@ -1660,7 +1660,7 @@ let get_compatible_alignment_requirements loc new_align_opt prev_align_opt =
   end
 
 (* TODO: the redeclaration check don't mix external/internal declarations *)
-val register_external_object_declaration: A.ail_identifier -> (bool * Loc.t * Annot.attributes * A.storageDuration * bool * maybe A.alignment * Ctype.qualifiers * Ctype.ctype) -> desugM unit
+val register_external_object_declaration: A.ail_identifier -> (bool * Loc.t * Annot.attributes * A.storageDuration * bool * maybe Ctype.alignment * Ctype.qualifiers * Ctype.ctype) -> desugM unit
 let register_external_object_declaration sym ((isTentative, loc, attrs, new_dur, isRegister, new_align_opt, new_qs, new_ty) as new_decl) =
   return (
     Debug.print_debug 2 [Debug.DB_desugaring] (fun () ->
@@ -1744,7 +1744,7 @@ let update_external_object_type sym ty =
 
 (* TODO: factorize *)
 val register_internal_object_declaration:
-  A.ail_identifier -> (Loc.t * A.storageDuration * bool * maybe A.alignment * Ctype.qualifiers * Ctype.ctype) -> desugM unit
+  A.ail_identifier -> (Loc.t * A.storageDuration * bool * maybe Ctype.alignment * Ctype.qualifiers * Ctype.ctype) -> desugM unit
 let register_internal_object_declaration sym ((loc, _, _, _, _, _) as decl) =
   return (
     Debug.print_debug 2 [Debug.DB_desugaring] (fun () ->

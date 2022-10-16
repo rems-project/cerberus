@@ -618,7 +618,7 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
               else
                 E.mapM (fun (memb_ident, e_opt) ->
                   match List.lookup memb_ident membersDefs with
-                    | Just (_, memb_qs, memb_ty) ->
+                    | Just (_, align_opt, memb_qs, memb_ty) ->
                         maybe (E.return (memb_ident, Nothing)) (fun e ->
                           annotate_assignee InitializationAsSimpleAssignment loc memb_ty e >>= fun a_e ->
                           E.return (memb_ident, Just a_e)
@@ -639,8 +639,8 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
         match lookup_tag_definition sigm tag_sym with
           | Just (UnionDef membersDefs) ->
               match List.lookup memb_ident membersDefs with
-                | Just (_, _, memb_ty) ->
                     annotate_assignee InitializationAsSimpleAssignment loc memb_ty e >>= fun a_e ->
+                | Just (_, align_opt, _, memb_ty) ->
                     E.return (AilEunion tag_sym memb_ident (Just a_e), GenRValueType union_gty)
                 | Nothing ->
                     E.constraint_violation loc (MemberofNoMemberRvalue memb_ident union_gty)
@@ -974,7 +974,7 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
                     match lookup_tag_definition sigm tag_sym with
                       | Just (StructDef membersDefs flexible_opt) ->
                           match (List.lookup memb_ident membersDefs, flexible_opt) with
-                            | (Just (_, memb_qs, memb_ty), _) ->
+                            | (Just (_, align_opt, memb_qs, memb_ty), _) ->
                                 E.return ( AilEmemberof a_e memb_ident
                                          , GenLValueType (combine_qualifiers qs memb_qs) memb_ty false )
                             | (Nothing, Just (FlexibleArrayMember attrs flex_ident flex_qs flex_elem_ty)) ->
@@ -993,7 +993,7 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
                     match lookup_tag_definition sigm tag_sym with
                       | Just (UnionDef membersDefs) ->
                           match List.lookup memb_ident membersDefs with
-                            | Just (_, memb_qs, memb_ty) ->
+                            | Just (_, align_opt, memb_qs, memb_ty) ->
                                 E.return ( AilEmemberof a_e memb_ident
                                          , GenLValueType (combine_qualifiers qs memb_qs) memb_ty false )
                             | Nothing ->
@@ -1017,7 +1017,7 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
                 match lookup_tag_definition sigm tag_sym with
                   | Just (StructDef membersDefs flexible_opt) ->
                       match (List.lookup memb_ident membersDefs, flexible_opt) with
-                        | (Just (_, _, memb_ty), _) ->
+                        | (Just (_, align_opt, _, memb_ty), _) ->
                             E.return (AilEmemberof a_e memb_ident, GenRValueType (GenTypes.inject_type memb_ty))
                         | (Nothing, Just (FlexibleArrayMember attrs flex_ident flex_qs flex_elem_ty)) ->
                             if memb_ident = flex_ident then
@@ -1035,7 +1035,7 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
                 match lookup_tag_definition sigm tag_sym with
                   | Just (UnionDef membersDefs) ->
                       match List.lookup memb_ident membersDefs with
-                        | Just (_, _, memb_ty) ->
+                        | Just (_, align_opt, _, memb_ty) ->
                             E.return (AilEmemberof a_e memb_ident, GenRValueType (GenTypes.inject_type memb_ty))
                         | Nothing ->
                             E.constraint_violation (with_cursor_from (locOf e) (locOf memb_ident))
@@ -1089,7 +1089,7 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
                     else match lookup_tag_definition sigm tag_sym with
                       | Just (StructDef membersDefs flexible_opt) ->
                           match (List.lookup memb_ident membersDefs, flexible_opt) with
-                            | (Just (_, memb_qs, memb_ty), _) ->
+                            | (Just (_, align_opt, memb_qs, memb_ty), _) ->
                                 E.return ( AilEmemberofptr e' memb_ident
                                          , GenLValueType (combine_qualifiers ref_qs memb_qs) memb_ty false )
                             | (Nothing, Just (FlexibleArrayMember attrs flex_ident flex_qs flex_elem_ty)) ->
@@ -1110,7 +1110,7 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
                     else match lookup_tag_definition sigm tag_sym with
                       | Just (UnionDef membersDefs) ->
                           match List.lookup memb_ident membersDefs with
-                            | Just (_, memb_qs, memb_ty) ->
+                            | Just (_, align_opt, memb_qs, memb_ty) ->
                                 E.return ( AilEmemberofptr e' memb_ident
                                          , GenLValueType (combine_qualifiers ref_qs memb_qs) memb_ty false )
                             | Nothing ->
@@ -2097,7 +2097,7 @@ let annotate_sigma sigm =
   E.mapM (function
     | (_, (_, StructDef xs flexible_opt)) ->
         E.mapM_ check_member xs >>= fun () ->
-        E.mapM_ (fun (_, (_, qs, ty)) ->
+        E.mapM_ (fun (_, (_, _, qs, ty)) ->
           (* TODO: check that it is ok to use wf_lvalue (instead of just wf_type) *)
           wf_lvalue sigm qs ty
         ) xs >>= fun () ->
@@ -2109,7 +2109,7 @@ let annotate_sigma sigm =
         end
     | (_, (_, UnionDef xs)) ->
         E.mapM check_member xs >>
-        E.mapM_ (fun (_, (_, qs, ty)) ->
+        E.mapM_ (fun (_, (_, _, qs, ty)) ->
           (* TODO: check that it is ok to use wf_lvalue (instead of just wf_type) *)
           wf_lvalue sigm qs ty
         ) xs

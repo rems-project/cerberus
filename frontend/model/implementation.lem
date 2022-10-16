@@ -20,7 +20,7 @@ declare ocaml target_rep function alignof_fty = `(Ocaml_implementation.get()).al
 declare ocaml target_rep function register_enum = `(Ocaml_implementation.get()).register_enum`
 declare ocaml target_rep function typeof_enum = `(Ocaml_implementation.get()).typeof_enum`
 
-val alignof_ty: map AilSyntax.ail_identifier (list Ctype.ctype) ->  Ctype.ctype -> maybe nat
+val alignof_ty: map AilSyntax.ail_identifier (list (maybe Ctype.alignment * Ctype.ctype)) ->  Ctype.ctype -> maybe nat
 declare ocaml target_rep function alignof_ty = `Ocaml_implementation.alignof_proxy`
 
 type implementation_constant =

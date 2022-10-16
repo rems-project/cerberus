@@ -120,13 +120,13 @@ let rec wip tagDefs acc path_prefix (outer_path, outer_ty) (Ctype.Ctype _ cty) =
         wip tagDefs acc path_prefix (outer_path, outer_ty) atom_ty
     | Ctype.Struct tag_sym ->
         match Map.lookup tag_sym tagDefs with
-          | Just (Struct_definition _ isAnonymous ((first_memb_ident, (_, _, first_memb_ty)) :: xs) _) ->
+          | Just (Struct_definition _ isAnonymous ((first_memb_ident, (_, _, _, first_memb_ty)) :: xs) _) ->
               let () = if isAnonymous then
                 Debug.print_debug 1 [] (fun () ->
                   "elemPathFromCtype_aux3: this may be WRONG ==> anonymous Struct"
                 )
               else () in
-              List.foldl (fun acc (memb_ident, (_, _, memb_ty)) ->
+              List.foldl (fun acc (memb_ident, (_, _, _, memb_ty)) ->
                 wip tagDefs acc
                   (Elem_member memb_ident :: path_prefix)
                   (Elem_member memb_ident :: path_prefix, memb_ty)
@@ -142,7 +142,7 @@ let rec wip tagDefs acc path_prefix (outer_path, outer_ty) (Ctype.Ctype _ cty) =
     | Ctype.Union tag_sym ->
         (* TODO: check *)
         match Map.lookup tag_sym tagDefs with
-          | Just (Union_definition _ isAnonymous ((first_memb_ident, (_, _, first_memb_ty)) :: _)) ->
+          | Just (Union_definition _ isAnonymous ((first_memb_ident, (_, _, _, first_memb_ty)) :: _)) ->
               let () = if isAnonymous then
                 Debug.print_debug 1 [] (fun () ->
                   "elemPathFromCtype_aux3: this may be WRONG ==> anonymous Union"
@@ -168,7 +168,7 @@ let elemPathFromCtype3 is_unknown_size tagDefs (Ctype.Ctype _ entity_ty as entit
               ([Elem_array 0], if is_unknown_size then entity_cty else elem_ty)
           | Ctype.Struct tag_sym ->
               match Map.lookup tag_sym tagDefs with
-                | Just (Struct_definition _ isAnonymous ((first_memb_ident, (_, _, first_memb_ty)) :: _) _) ->
+                | Just (Struct_definition _ isAnonymous ((first_memb_ident, (_, _, _, first_memb_ty)) :: _) _) ->
                     let () = if isAnonymous then
                       Debug.print_debug 1 [] (fun () ->
                         "elemPathFromCtype3_aux: this may be WRONG ==> anonymous Struct"
@@ -181,7 +181,7 @@ let elemPathFromCtype3 is_unknown_size tagDefs (Ctype.Ctype _ entity_ty as entit
           | Ctype.Union tag_sym ->
               (* TODO: check *)
               match Map.lookup tag_sym tagDefs with
-                | Just (Union_definition _ isAnonymous ((first_memb_ident, (_, _, first_memb_ty)) :: _)) ->
+                | Just (Union_definition _ isAnonymous ((first_memb_ident, (_, _, _, first_memb_ty)) :: _)) ->
                     let () = if isAnonymous then
                       Debug.print_debug 1 [] (fun () ->
                         "elemPathFromCtype3: this may be WRONG ==> anonymous Union"
@@ -315,7 +315,7 @@ let rec cardinalityOfCtype tagDefs (Ctype.Ctype _ ty) =
                   "cardinalityOfCtype: this may be WRONG ==> anonymous Struct"
                 )
               else () in
-              List.foldl (fun acc (_, (_, _, memb_ty)) ->
+              List.foldl (fun acc (_, (_, _, _, memb_ty)) ->
                 cardinalityOfCtype tagDefs memb_ty + acc
               ) 0 xs
           |  _ ->
@@ -357,7 +357,7 @@ let rec ctypeAtPath tagDefs (Ctype.Ctype _ ty as cty) path =
               match List.lookup memb_ident xs with
                 | Nothing ->
                     error "ctypeAtPath: Struct, invalid member"
-                | Just (_, _, memb_ty) ->
+                | Just (_, _, _, memb_ty) ->
                     ctypeAtPath tagDefs memb_ty path'
               end
           | _ ->
@@ -390,7 +390,7 @@ let rec innerCtype tagDefs (Ctype.Ctype _ ty as cty) =
         innerCtype tagDefs atom_ty
     | Ctype.Struct tag_sym ->
         match Map.lookup tag_sym tagDefs with
-          | Just (Struct_definition _ _ ((_, (_, _, memb_ty)) :: _) _) ->
+          | Just (Struct_definition _ _ ((_, (_, _, _, memb_ty)) :: _) _) ->
               innerCtype tagDefs memb_ty
           | _ ->
               error "innerCtype: Struct"
@@ -398,7 +398,7 @@ let rec innerCtype tagDefs (Ctype.Ctype _ ty as cty) =
     | Ctype.Union tag_sym ->
         (* TODO: this may be wrong when called in a Desig context ... *)
         match Map.lookup tag_sym tagDefs with
-          | Just (Union_definition _ _ ((_, (_, _, memb_ty)) :: _)) ->
+          | Just (Union_definition _ _ ((_, (_, _, _, memb_ty)) :: _)) ->
               innerCtype tagDefs memb_ty
           | _ ->
               error "innerCtype: Union"
@@ -428,7 +428,7 @@ let rec outerValidPath_aux tagDefs (Ctype.Ctype _ ty) path acc =
           List.reverse acc
     | (Ctype.Struct tag_sym, Elem_member memb_ident :: path') ->
         match Map.lookup tag_sym tagDefs with
-          | Just (Struct_definition _ _ ((first_memb_ident, (_, _, memb_ty)) :: _) _) ->
+          | Just (Struct_definition _ _ ((first_memb_ident, (_, _, _, memb_ty)) :: _) _) ->
               if first_memb_ident = memb_ident then
                 match path' with
                   | [] ->
@@ -486,7 +486,7 @@ let rec constructValue_aux tagDefs path elems (Ctype.Ctype _ ty as cty) =
                   "constructValue_aux: this may be WRONG ==> anonymous Struct"
                 )
               else () in
-              let membrs = List.map (fun (memb_ident, (_, _, memb_ty)) ->
+              let membrs = List.map (fun (memb_ident, (_, _, _, memb_ty)) ->
                 (memb_ident, Just (constructValue_aux tagDefs (path ++ [Elem_member memb_ident]) elems memb_ty))
               ) xs in
               AnnotatedExpression () [] (Loc.other "Cabs_to_ail.constructValue") begin
@@ -497,7 +497,7 @@ let rec constructValue_aux tagDefs path elems (Ctype.Ctype _ ty as cty) =
         end
     | Ctype.Union tag_sym ->
         match Map.lookup tag_sym tagDefs with
-          | Just (Union_definition _ isAnonymous ((first_memb_ident, (_, _, first_memb_ty)) :: _)) ->
+          | Just (Union_definition _ isAnonymous ((first_memb_ident, (_, _, _, first_memb_ty)) :: _)) ->
               let () = if isAnonymous then
                 Debug.print_debug 1 [] (fun () ->
                   "constructValue_aux: this may be WRONG ==> anonymous Union"
@@ -940,10 +940,10 @@ type qs_ctype_builder =
 
 
 val desugar_struct_declaration:
-  struct_declaration -> E.desugM (list (Symbol.identifier * (Annot.attributes * Ctype.qualifiers * Ctype.ctype)))
+  struct_declaration -> E.desugM (list (Symbol.identifier * (Annot.attributes * maybe Ctype.alignment * Ctype.qualifiers * Ctype.ctype)))
 
 val desugar_struct_declarator:
-  struct_declarator -> E.desugM ((Annot.attributes * Symbol.identifier) * qs_ctype_builder)
+  bool(* has_alignment *) -> struct_declarator -> E.desugM ((Annot.attributes * Symbol.identifier) * qs_ctype_builder)
 
 val desugar_init_declarator_BROKEN:
   Ctype.qualifiers -> Ctype.ctype -> list storage_class_specifier -> init_declarator ->
@@ -952,7 +952,8 @@ val desugar_init_declarator_BROKEN:
 
 val desugar_init_declarator:
   Annot.attributes ->
-  bool(* isAtomic *) -> Ctype.qualifiers -> Ctype.ctype ->
+  bool(* isAtomic *) -> bool(* has_alignment *) ->
+  Ctype.qualifiers -> Ctype.ctype ->
   list storage_class_specifier -> init_declarator ->
   E.desugM (maybe (Loc.t * Annot.attributes * linkage * ail_identifier * bool * (Ctype.qualifiers * Ctype.ctype) *
             (unit -> E.desugM (maybe (Ctype.ctype * expression unit)))))
@@ -967,7 +968,7 @@ val desugar_enumerator:
   enumerator -> E.desugM (Symbol.identifier * maybe (Loc.t * integer))
 
 val desugar_alignment_specifier:
-  Loc.t -> alignment_specifier -> E.desugM (maybe A.alignment)
+  Loc.t -> alignment_specifier -> E.desugM (maybe Ctype.alignment)
 
 val desugar_parameter_type_list:
   fundef -> parameter_type_list -> E.desugM (maybe (list (maybe Symbol.identifier * (Ctype.qualifiers * Ctype.ctype * bool))) * bool)
@@ -1435,7 +1436,7 @@ let arrayFromStringLiteral size_opt (pref_opt, strs) =
 
 (* STD §6.7.2.1#3, except for the flexible array part *)
 let check_members membrDefs =
-  E.mapM_ (fun (ident, (_, qs, ty)) ->
+  E.mapM_ (fun (ident, (_, _, qs, ty)) ->
     if AilTypesAux.is_function ty then
       E.constraint_violation (Loc.locOf ident) (StructMemberFunctionType ident)
     else
@@ -1500,7 +1501,7 @@ let rec desugar_type_specifiers specs =
                   (* xs was an empty list *)
                   (* STD §6.7.2.1#8, sentence 3 *)
                   E.undef Loc.unknown Undefined.UB061_no_named_members
-              | Just ((last_ident, (lastMemb_attrs, lastMemb_qs, lastMemb_ty)), membDefs) ->
+              | Just ((last_ident, (lastMemb_attrs, _, lastMemb_qs, lastMemb_ty)), membDefs) ->
                   (* STD §6.7.2.1#3 *)
                   check_members membDefs >>
                   if AilTypesAux.is_function lastMemb_ty then
@@ -1515,7 +1516,6 @@ let rec desugar_type_specifiers specs =
                                   if List.length all_membDefs = 1 then
                                     E.constraint_violation (Loc.locOf last_ident) (IllegalFlexibleArrayMember last_ident)
                                   else
-                                    (*E.fail (Loc.locOf last_ident) (Errors.Desugar_NotYetSupported "flexible array members")*)
                                     E.return (Just (membDefs, Ctype.FlexibleArrayMember lastMemb_attrs last_ident lastMemb_qs elem_ty))
                               | _ ->
                                   E.constraint_violation (Loc.locOf last_ident) (StructMemberIncompleteType lastMemb_qs lastMemb_ty)
@@ -2469,7 +2469,7 @@ and desugar_init_declarator_BROKEN base_qs base_ty (scs: list storage_class_spec
 
 
 
-and desugar_init_declarator attrs isAtomic base_qs base_ty (scs: list storage_class_specifier) idecltor =
+and desugar_init_declarator attrs isAtomic has_alignment base_qs base_ty (scs: list storage_class_specifier) idecltor =
   (* NOTE: this function does NOT check the wf of the storage classes *)
   E.get_scope >>= fun scope ->
   match idecltor with
@@ -2487,8 +2487,11 @@ and desugar_init_declarator attrs isAtomic base_qs base_ty (scs: list storage_cl
               false
         end in
         if scs = [SC_typedef] then
-          E.register_typedef ident (attrs, qs, ty) >>= fun () ->
-          E.return Nothing
+          if has_alignment then
+            E.constraint_violation loc (IllegalAlignas IllegalAlignas_typedef)
+          else
+            E.register_typedef ident (attrs, qs, ty) >>= fun () ->
+            E.return Nothing
         else
           let (ctx, ok) =
             if AilTypesAux.is_function ty then
@@ -2540,7 +2543,6 @@ and desugar_init_declarator attrs isAtomic base_qs base_ty (scs: list storage_cl
 and desugar_struct_declaration struct_decl =
   match struct_decl with
     | Struct_declaration outer_attrs specs tquals align_specs sdecltors ->
-        (* TODO: align_specs is ignored here *)
         desugar_type_specifiers specs >>= fun (specs_qs, base_ty) ->
         let (isAtomic, tquals_qs) = translate_type_qualifiers tquals in
         if List.null sdecltors then
@@ -2555,13 +2557,13 @@ and desugar_struct_declaration struct_decl =
           end
         else
           E.mapM (fun sdecltor ->
-            desugar_struct_declarator sdecltor >>= fun ((attrs, ident), mk_qs_ctype) ->
-            (* NOTE: the checks for §6.7.2.1#3 are done by
-               desugar_type_specifiers because we need to special case the last
-               member. *)
+            desugar_struct_declarator (align_specs <> []) sdecltor >>= fun ((attrs, ident), mk_qs_ctype) ->
+            (* NOTE: the checks for §6.7.2.1#3 are done by desugar_type_specifiers because
+               we need to special case the last member. *)
             let (qs, ty) =
               mk_qs_ctype (Ctype.combine_qualifiers tquals_qs specs_qs) base_ty in
-            E.return (ident, (Annot.combine_attributes outer_attrs attrs, qs, if isAtomic then wrap_atomic ty else ty))
+            desugar_alignment_specifiers (Loc.locOf ident) ty align_specs >>= fun align_opt ->
+            E.return (ident, (Annot.combine_attributes outer_attrs attrs, align_opt, qs, if isAtomic then wrap_atomic ty else ty))
           ) sdecltors
     
     | Struct_assert sa_decl ->
@@ -2569,12 +2571,15 @@ and desugar_struct_declaration struct_decl =
         E.return []
   end
 
-and desugar_struct_declarator struct_decltor =
+and desugar_struct_declarator has_alignment struct_decltor =
   match struct_decltor with
     | SDecl_simple decltor ->
         desugar_declarator NotFunDef decltor
     | SDecl_bitfield _ (CabsExpression loc _) ->
-        E.fail loc (Errors.Desugar_NotYetSupported "SDecl_bitfield")
+        if has_alignment then
+          E.constraint_violation loc (IllegalAlignas IllegalAlignas_bitfield)
+        else
+          E.fail loc (Errors.Desugar_NotYetSupported "SDecl_bitfield")
   end
 
 and desugar_enumerator (ident, e_opt) =
@@ -2601,7 +2606,7 @@ and desugar_alignment_specifier loc align_spec =
   match align_spec with
     | AS_type tyname ->
       desugar_type_name tyname >>= fun (_, ty) ->
-      E.return (Just (A.AlignType ty))
+      E.return (Just (Ctype.AlignType ty))
     | AS_expr e ->
         let loc = Loc.locOf e in
         desugar_expression e >>= fun d_e ->
@@ -2619,7 +2624,7 @@ and desugar_alignment_specifier loc align_spec =
                 (* STD (§6.7.5#6, second sentence) *)
                 E.return Nothing
               else
-                E.return (Just (A.AlignInteger n))
+                E.return (Just (Ctype.AlignInteger n))
         end
   end
 
@@ -2639,7 +2644,7 @@ and desugar_alignment_specifiers loc decl_ty xs =
           match (acc_opt, al) with
             | (Nothing, _) ->
                 E.return (Just al)
-            | (Just (A.AlignType prev_ty), A.AlignType new_ty) ->
+            | (Just (Ctype.AlignType prev_ty), Ctype.AlignType new_ty) ->
                 match AilTypesAux.agnostic_alignment_requirement_ord prev_ty new_ty with
                   | Nothing ->
                       if Global.isAgnostic () then
@@ -2657,16 +2662,16 @@ and desugar_alignment_specifiers loc decl_ty xs =
                   | Just LT ->
                       E.return (Just al)
                 end
-            | (Just (A.AlignInteger prev_n), A.AlignInteger new_n) ->
+            | (Just (Ctype.AlignInteger prev_n), Ctype.AlignInteger new_n) ->
                 common prev_n new_n
-            | (Just (A.AlignType prev_ty), A.AlignInteger new_n) ->
+            | (Just (Ctype.AlignType prev_ty), Ctype.AlignInteger new_n) ->
                 match alignof_ty prev_ty with
                   | Just prev_n ->
                       common (integerFromNat prev_n) new_n
                   | Nothing ->
                       E.fail loc (Errors.Desugar_TODO "error msg: need a better implementation (3a)")
                 end
-            | (Just (A.AlignInteger prev_n), A.AlignType new_ty) ->
+            | (Just (Ctype.AlignInteger prev_n), Ctype.AlignType new_ty) ->
                 match alignof_ty new_ty with
                   | Just new_n ->
                       common prev_n (integerFromNat new_n)
@@ -2678,7 +2683,7 @@ and desugar_alignment_specifiers loc decl_ty xs =
   ) Nothing xs >>= function
     | Nothing ->
         E.return Nothing
-    | Just ((A.AlignInteger al_n) as al) ->
+    | Just ((Ctype.AlignInteger al_n) as al) ->
         if AilTypesAux.is_character decl_ty then
           (* by construction we know that n >= 1 (and _Alignas(char) = 1)*)
           E.return (Just al)
@@ -2693,7 +2698,7 @@ and desugar_alignment_specifiers loc decl_ty xs =
           | _ ->
             E.fail loc (Errors.Desugar_TODO "error msg: need a better implementation (5)")
         end
-    | Just ((A.AlignType al_ty) as al) ->
+    | Just ((Ctype.AlignType al_ty) as al) ->
         match AilTypesAux.agnostic_alignment_requirement_ord decl_ty al_ty with
           | Nothing ->
               if Global.isAgnostic () then
@@ -2820,7 +2825,7 @@ and static_thread_implicit_initializer tagDefs (Ctype.Ctype _ ty as cty) =
         match Map.lookup tag_sym tagDefs with
           | Just (Struct_definition _ _ xs Nothing) ->
               ConstantStruct tag_sym $
-                List.map (fun (ident, (_, _, ty)) ->
+                List.map (fun (ident, (_, _, _, ty)) ->
                   (* we ignore the qualifiers, initialisers don't care about them *)
                   (ident, static_thread_implicit_initializer tagDefs ty)
                 ) xs
@@ -2833,7 +2838,7 @@ and static_thread_implicit_initializer tagDefs (Ctype.Ctype _ ty as cty) =
     | Ctype.Union tag_sym ->
         match Map.lookup tag_sym tagDefs with
           | Just (Union_definition _ _ xs) ->
-              let (ident, (_, _, ty)) = match xs with
+              let (ident, (_, _, _, ty)) = match xs with
                 | [] ->
                     (* NOTE: I don't the parser can produce an empty Union_definition *)
                     error "Cabs_to_ail.static_thread_implicit, Union, empty definition"
@@ -3079,7 +3084,7 @@ and foo_aux
                                 elem_ty
                             | Ctype.Ctype _ (Ctype.Struct tag_sym) ->
                                 match Map.lookup tag_sym tagDefs with
-                                  | Just (Struct_definition _ isAnonymous ((_, (_, _, first_memb_ty)) :: _) _) ->
+                                  | Just (Struct_definition _ isAnonymous ((_, (_, _, _, first_memb_ty)) :: _) _) ->
                                       let () = if isAnonymous then
                                         Debug.print_debug 1 [] (fun () ->
                                           "foo_aux: this may be WRONG ==> anonymous Struct"
@@ -4047,7 +4052,7 @@ let rec desugar_statement_aux ctx (CabsStatement loc attrs stmt_) =
             let base_qs = Ctype.combine_qualifiers specs_qs tquals_qs in
             E.mapM (fun (InitDecl loc _ _ as init) ->
               check_storage_class_specifiers loc Object_decl_context specifs.storage_classes >>= fun () ->
-              desugar_init_declarator attrs isAtomic base_qs base_ty specifs.storage_classes init
+              desugar_init_declarator attrs isAtomic (specifs.alignment_specifiers <> []) base_qs base_ty specifs.storage_classes init
             ) idecltors  >>= fun xs ->
             let loop_id = Symbol.fresh_int () in
             E.record_loop_attribute loop_id attrs_outer >> 
@@ -4730,7 +4735,7 @@ let desugar_and_register_external_declaration edecl =
            (see suite/parsing/declarator_visibility.c) *)
         (* NOTE: `desugar_init_declarator' does register the identifier it finds *)
         E.mapM (fun init ->
-          desugar_init_declarator attrs isAtomic base_qs base_ty specifs.storage_classes init
+          desugar_init_declarator attrs isAtomic (specifs.alignment_specifiers <> []) base_qs base_ty specifs.storage_classes init
         ) idecltors >>= fun xs ->
         
         (* for each [init_declarator] *)

@@ -1685,7 +1685,7 @@ def_declaration:
 
 def_field:
 | cid=cabs_id COLON ty=core_ctype
-  { (cid, (Annot.no_attributes, no_qualifiers, ty)) }
+  { (cid, (Annot.no_attributes, None(*TODO: add support for alignment specs *), no_qualifiers, ty)) }
 ;
 
 def_fields:
@@ -1701,7 +1701,7 @@ def_aggregate_declaration:
         | None ->
             (fds_, None) (* TODO: technically this should be an error (we can't have empty structs), but
                             this shouldn't be dealt with by the parser *)
-        | Some (xs, (ident, (attrs, qs, elem_ty))) ->
+        | Some (xs, (ident, (attrs, _, qs, elem_ty))) ->
             (xs, Some (FlexibleArrayMember (attrs, ident, qs, elem_ty)))
     in
     Aggregate_decl (name, StructDef (fds, flexible_opt)) }

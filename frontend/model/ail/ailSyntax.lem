@@ -177,10 +177,6 @@ type storageDuration [name = "^\\([a-z A-Z]*_\\)?dur[0-9]*'?$"] =
  | Automatic
  | Allocated
 
-type alignment =
-  | AlignInteger of integer
-  | AlignType of Ctype.ctype
-
 (* the boolean tells whether the object was declared with the register
  * storage-class *)
 type bindings =

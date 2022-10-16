@@ -181,7 +181,7 @@ module Constraints = struct
           | Ctype.StructDef (z, None) ->
               z
           | Ctype.StructDef (z, Some (FlexibleArrayMember (attrs, ident, qs, elem_ty))) ->
-              z @ [(ident, (attrs, qs, Ctype ([], Array (elem_ty, None))))]
+              z @ [(ident, (attrs, None, qs, Ctype ([], Array (elem_ty, None))))]
           | Ctype.UnionDef z ->
               z in
         List.iter (fun (Sym.Identifier (_, membr_str), _) ->

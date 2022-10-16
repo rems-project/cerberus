@@ -530,18 +530,18 @@ let rec zeros_aux tagDefs (Ctype _ ty) =
     | Struct tag ->
         match Map.lookup tag tagDefs with
           | Just (StructDef ident_tys Nothing) ->
-              Mem.struct_mval tag (List.map (fun (ident, (_, _, ty)) -> (ident, ty, zeros_aux tagDefs ty)) ident_tys)
+              Mem.struct_mval tag (List.map (fun (ident, (_, _, _, ty)) -> (ident, ty, zeros_aux tagDefs ty)) ident_tys)
           | Just (StructDef ident_tys (Just (FlexibleArrayMember _ flex_ident flex_qs flex_elem_ty))) ->
               let () = Debug.print_debug 0 [] (fun () ->
                 "TODO: check Core_aux.zeros_aux for flexible array member"
               ) in
-              Mem.struct_mval tag (List.map (fun (ident, (_, _, ty)) -> (ident, ty, zeros_aux tagDefs ty)) ident_tys)
+              Mem.struct_mval tag (List.map (fun (ident, (_, _, _, ty)) -> (ident, ty, zeros_aux tagDefs ty)) ident_tys)
           | _ ->
               error "Core_aux.zeros_aux, not StructDef"
         end
     | Union tag ->
         match Map.lookup tag tagDefs with
-          | Just (UnionDef ((ident, (_, _, ty'))::_)) ->
+          | Just (UnionDef ((ident, (_, _, _, ty'))::_)) ->
               Mem.union_mval tag ident (zeros_aux tagDefs ty')
           | _ ->
               error "Core_aux.zeros_aux, not UnionDef"

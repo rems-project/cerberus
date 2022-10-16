@@ -787,11 +787,11 @@ let pp_tagDefinitions tagDefs =
             | None ->
                 membrs_
             | Some (FlexibleArrayMember (attrs, ident, qs, elem_ty)) ->
-                membrs_ @ [(ident, (attrs, qs, Ctype ([], Array (elem_ty, None))))] in
+                membrs_ @ [(ident, (attrs, None, qs, Ctype ([], Array (elem_ty, None))))] in
           ("struct", membrs)
       | Ctype.UnionDef membrs -> ("union", membrs)
     in
-    let pp_tag (Symbol.Identifier (_, name), (_, _, ty)) =
+    let pp_tag (Symbol.Identifier (_, name), (_, align_opt(*TODO*), _, ty)) =
       !^name ^^ P.colon ^^^ pp_ctype ty
     in
     pp_keyword "def" ^^^ pp_keyword ty ^^^ pp_raw_symbol sym ^^^ P.colon ^^ P.equals

@@ -14,18 +14,25 @@ let rec offsetsof tagDefs tag_sym =
           | None ->
               membrs_
           | Some (FlexibleArrayMember (attrs, ident, qs, ty)) ->
-              membrs_ @ [(ident, (attrs, qs, ty))] in
+              membrs_ @ [(ident, (attrs, None, qs, ty))] in
         let (xs, maxoffset) =
-          List.fold_left (fun (xs, last_offset) (membr, (_, _, ty)) ->
+          List.fold_left (fun (xs, last_offset) (membr, (_, align_opt, _, ty)) ->
             let size = sizeof ~tagDefs ty in
-            let align = alignof ~tagDefs ty in
+            let align =
+              match align_opt with
+                | None ->
+                    alignof ~tagDefs ty
+                | Some (AlignInteger al_n) ->
+                    Z.to_int al_n
+                | Some (AlignType al_ty) ->
+                  alignof ~tagDefs al_ty in
             let x = last_offset mod align in
             let pad = if x = 0 then 0 else align - x in
             ((membr, ty, last_offset + pad) :: xs, last_offset + pad + size)
           ) ([], 0) membrs in
         (List.rev xs, maxoffset)
     | UnionDef membrs ->
-        (List.map (fun (ident, (_, _, ty)) -> (ident, ty, 0)) membrs, 0)
+        (List.map (fun (ident, (_, _, _, ty)) -> (ident, ty, 0)) membrs, 0)
 
 and sizeof ?(tagDefs= Tags.tagDefs ()) (Ctype (_, ty) as cty) =
   match ty with
@@ -72,8 +79,16 @@ and sizeof ?(tagDefs= Tags.tagDefs ()) (Ctype (_, ty) as cty) =
               assert false
           | UnionDef membrs ->
               let (max_size, max_align) =
-                List.fold_left (fun (acc_size, acc_align) (_, (_, _, ty)) ->
-                  (max acc_size (sizeof ~tagDefs ty), max acc_align (alignof ~tagDefs ty))
+                List.fold_left (fun (acc_size, acc_align) (_, (_, align_opt, _, ty)) ->
+                  let align =
+                    match align_opt with
+                      | None ->
+                          alignof ~tagDefs ty
+                      | Some (AlignInteger al_n) ->
+                          Z.to_int al_n
+                      | Some (AlignType al_ty) ->
+                        alignof ~tagDefs al_ty in
+                  (max acc_size (sizeof ~tagDefs ty), max acc_align align)
                 ) (0, 0) membrs in
               (* NOTE: adding padding at the end to satisfy the alignment constraints *)
               let x = max_size mod max_align in
@@ -126,8 +141,16 @@ and alignof ?(tagDefs= Tags.tagDefs ()) (Ctype (_, ty) as cty) =
                     alignof ~tagDefs (Ctype ([], Array (elem_ty, None))) in
               (* NOTE: Structs (and unions) alignment is that of the maximum alignment
                  of any of their components. *)
-              List.fold_left (fun acc (_, (_, _, ty)) ->
-                max (alignof ~tagDefs ty) acc
+              List.fold_left (fun acc (_, (_, align_opt, _, ty)) ->
+                let memb_align =
+                  match align_opt with
+                    | None ->
+                        alignof ~tagDefs ty
+                    | Some (AlignInteger al_n) ->
+                        Z.to_int al_n
+                    | Some (AlignType al_ty) ->
+                      alignof ~tagDefs al_ty in
+                max memb_align acc
               ) init membrs
         end
     | Union tag_sym ->
@@ -137,8 +160,16 @@ and alignof ?(tagDefs= Tags.tagDefs ()) (Ctype (_, ty) as cty) =
           | UnionDef membrs ->
               (* NOTE: Structs (and unions) alignment is that of the maximum alignment
                  of any of their components. *)
-              List.fold_left (fun acc (_, (_, _, ty)) ->
-                max (alignof ~tagDefs ty) acc
+              List.fold_left (fun acc (_, (_, align_opt, _, ty)) ->
+                let memb_align =
+                  match align_opt with
+                    | None ->
+                        alignof ~tagDefs ty
+                    | Some (AlignInteger al_n) ->
+                        Z.to_int al_n
+                    | Some (AlignType al_ty) ->
+                      alignof ~tagDefs al_ty in
+                max memb_align acc
               ) 0 membrs
         end
 

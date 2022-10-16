@@ -1090,6 +1090,7 @@ module Pp_standard_typ = (struct
   let pp_ut (membrs) = 
     let (ty, tags) = ("union", membrs) in
     let pp_tag (Symbol.Identifier (_, name), (_,_,ct)) =
+    let pp_tag (Symbol.Identifier (_, name), (_,_,_,ct)) =
       !^name ^^ P.colon ^^^ pp_ct ct
     in
     P.nest 2 (P.break 1 ^^ P.separate_map (P.break 1) pp_tag tags)
@@ -1106,7 +1107,7 @@ module Pp_standard_typ = (struct
      *     membrs_ @ [(ident, (attrs, qs, Ctype ([], Array (elem_ty, None))))] in *)
     in
     let (ty, tags) = ("struct", membrs) in
-    let pp_tag (Symbol.Identifier (_, name), (_,_,ct)) =
+    let pp_tag (Symbol.Identifier (_, name), (_,_,_,ct)) =
       !^name ^^ P.colon ^^^ pp_ct ct
     in
     P.nest 2 (P.break 1 ^^ P.separate_map (P.break 1) pp_tag tags)

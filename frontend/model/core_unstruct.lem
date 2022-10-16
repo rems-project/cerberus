@@ -15,7 +15,7 @@ let insupported str =
   error ("Core_unstruct: unsupported ==> " ^ str)
 
 
-val extract_ctype_pe: typed_pexpr -> maybe (either ctype (Symbol.sym * list (Symbol.identifier * (Annot.attributes * qualifiers * ctype))))
+val extract_ctype_pe: typed_pexpr -> maybe (either ctype (Symbol.sym * list (Symbol.identifier * (Annot.attributes * maybe alignment * qualifiers * ctype))))
 let extract_ctype_pe (Pexpr _ _ pexpr_) =
   match pexpr_ with
     | PEval (Vctype (Ctype _ ty as cty)) ->
@@ -117,9 +117,18 @@ let explode_paction env (Paction pol (Action loc a act_)) =
                 insupported "create with non-trivial alignement constraint"
               else
                 Just begin
-                  List.map (fun (ident, (_, _, ty)) ->
+                  List.map (fun (ident, (_, align_opt, _, ty)) ->
                     let ty_pe = Caux.mk_ctype_pe ty in
-                    (ident, wrap (Create (type_pexpr (Caux.mk_alignof_pe ty_pe)) (type_pexpr ty_pe) pref))
+                    let align_pe =
+                      match align_opt with
+                        | Just (AlignInteger n) ->
+                            Caux.mk_integer_pe n
+                        | Just (AlignType align_ty) ->
+                            Caux.mk_alignof_pe (Caux.mk_ctype_pe align_ty)
+                        | Nothing ->
+                            Caux.mk_alignof_pe ty_pe
+                      end in
+                    (ident, wrap (Create (type_pexpr align_pe) (type_pexpr ty_pe) pref))
                   ) xs
                 end
           | (_, _) ->

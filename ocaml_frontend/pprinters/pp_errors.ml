@@ -160,9 +160,9 @@ let string_of_constraint_violation = function
   | StructMemberFunctionType f ->
       "member '" ^ string_of_cid f ^ "' declared as a function"
   | StructMemberFlexibleArray ->
-      "struct has a flexible array member"
+      "struct member has a type with a flexible array member"
   | StructMemberFlexibleArrayInArray ->
-      "struct with a flexible array member found as element of an array"
+      "struct member with a flexible array member found as element of an array"
   | IllegalFlexibleArrayMember tag_ident ->
       "found a flexible array member in a structure with less than one named member: " ^
       string_of_cid tag_ident
@@ -232,7 +232,7 @@ let string_of_constraint_violation = function
               "a parameter"
           | IllegalAlignas_register ->
               "an object declared with the register storage-class specifier" in
-      "alignment specifier is in a declaration of " ^ kind_str
+      "alignment specifier is in the declaration of " ^ kind_str
   | AlignasNotIntegerConstant (* §6.7.5#3, sentence 1 *) ->
       "expression in an alignment specifier is not an integer constant expression"
   | AlignasInvalidIntegerConstant (* §6.7.5#3, sentence 2 *) ->

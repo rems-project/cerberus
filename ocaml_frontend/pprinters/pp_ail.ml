@@ -693,6 +693,11 @@ let rec pp_statement_aux pp_annot (AnnotatedStatement (_, _, stmt_)) =
 let pp_static_assertion pp_annot (e, lit) =
   pp_keyword "_Static_assert" ^^ P.parens (pp_expression_aux pp_annot e ^^ P.comma ^^^ pp_stringLiteral lit)
 
+let pp_alignment = function
+  | AlignInteger n ->
+      pp_keyword "_Alignas" ^^ P.parens (!^ (String_nat_big_num.string_of_decimal n))
+  | AlignType ty ->
+      pp_keyword "_Alignas" ^^ P.parens (pp_ctype no_qualifiers ty)
 
 let pp_tag_definition (tag, (_, def)) =
   match def with
@@ -700,8 +705,9 @@ let pp_tag_definition (tag, (_, def)) =
         pp_keyword "struct" ^^^ pp_id_type tag ^^^ P.braces (
           P.nest 2 (
             P.break 1 ^^
-            P.separate_map (P.semi ^^ P.break 1) (fun (ident, (_, qs, ty)) ->
-              pp_ctype_declaration (Pp_symbol.pp_identifier ident) qs ty
+            P.separate_map (P.semi ^^ P.break 1) (fun (ident, (_, align_opt, qs, ty)) ->
+              pp_ctype_declaration (Pp_symbol.pp_identifier ident) qs ty ^^
+              P.optional (fun align -> P.space ^^ P.brackets (pp_alignment align)) align_opt
             ) ident_qs_tys
           ) ^^ P.semi ^^ P.break 1 ^^
           P.optional (fun (FlexibleArrayMember (_, ident, qs, elem_ty)) ->
@@ -712,17 +718,12 @@ let pp_tag_definition (tag, (_, def)) =
         pp_keyword "union" ^^^ pp_id_type tag ^^^ P.braces (
           P.nest 2 (
             P.break 1 ^^
-            P.separate_map (P.semi ^^ P.break 1) (fun (ident, (_, qs, ty)) ->
-              pp_ctype_declaration (Pp_symbol.pp_identifier ident) qs ty
+            P.separate_map (P.semi ^^ P.break 1) (fun (ident, (_, align_opt, qs, ty)) ->
+              pp_ctype_declaration (Pp_symbol.pp_identifier ident) qs ty ^^
+              P.optional (fun align -> P.space ^^ P.brackets (pp_alignment align)) align_opt
             ) ident_qs_tys
           ) ^^ P.semi ^^ P.break 1
         ) ^^ P.semi
-
-let pp_alignment = function
-  | AlignInteger n ->
-      pp_keyword "_Alignas" ^^ P.parens (!^ (String_nat_big_num.string_of_decimal n))
-  | AlignType ty ->
-      pp_keyword "_Alignas" ^^ P.parens (pp_ctype no_qualifiers ty)
 
 let pp_program_aux pp_annot (startup, sigm) =
 (*  isatty := false; (*TODO: Unix.isatty Unix.stdout;*) *)

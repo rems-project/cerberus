@@ -420,15 +420,15 @@ let (set, get) : (implementation -> unit) * (unit -> implementation) =
 let alignof_tagDefs_aux () =
   Pmap.map (function
     | Ctype.StructDef (xs, flex_opt) ->
-      List.map (fun (_, (_, _, ty)) -> ty) xs @
+      List.map (fun (_, (_, align_opt, _, ty)) -> (align_opt, ty)) xs @
       begin match flex_opt with
         | None ->
             []
         | Some (FlexibleArrayMember (_, _, _, ty)) ->
-            [Ctype ([], Array (ty, None))]
+            [(None, Ctype ([], Array (ty, None)))]
       end
     | Ctype.UnionDef xs ->
-        List.map (fun (_, (_, _, ty)) -> ty) xs
+        List.map (fun (_, (_, align_opt, _, ty)) -> (align_opt, ty)) xs
   ) (Tags.tagDefs ())
 
 let rec alignof ?(tagDefs= alignof_tagDefs_aux ()) (Ctype (_, ty)) =
@@ -464,8 +464,16 @@ let rec alignof ?(tagDefs= alignof_tagDefs_aux ()) (Ctype (_, ty)) =
     | Atomic atom_ty ->
         alignof ~tagDefs atom_ty
     | Struct tag_sym ->
-        List.fold_left (fun acc_opt ty ->
-          match acc_opt, alignof ~tagDefs ty with
+        List.fold_left (fun acc_opt (align_opt, ty) ->
+          let al_opt =
+            match align_opt with
+              | None ->
+                  alignof ~tagDefs ty
+              | Some (AlignInteger al_n) ->
+                  Some (Z.to_int al_n)
+              | Some (AlignType al_ty) ->
+                  alignof ~tagDefs al_ty in
+          match acc_opt, al_opt with
             | Some acc, Some al ->
                 Some (max al acc)
             | _ ->
@@ -474,8 +482,16 @@ let rec alignof ?(tagDefs= alignof_tagDefs_aux ()) (Ctype (_, ty)) =
     | Union tag_sym ->
         (* NOTE: Structs (and unions) alignment is that of the maximum alignment
             of any of their components. *)
-        List.fold_left (fun acc_opt ty ->
-          match acc_opt, alignof ~tagDefs ty with
+        List.fold_left (fun acc_opt (align_opt, ty) ->
+          let al_opt =
+            match align_opt with
+              | None ->
+                  alignof ~tagDefs ty
+              | Some (AlignInteger al_n) ->
+                  Some (Z.to_int al_n)
+              | Some (AlignType al_ty) ->
+                  alignof ~tagDefs al_ty in
+          match acc_opt, al_opt with
             | Some acc, Some al ->
                 Some (max al acc)
             | _ ->

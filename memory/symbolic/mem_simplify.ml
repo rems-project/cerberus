@@ -174,11 +174,11 @@ let rec simplify_integer_value_base ival_ =
                 | StructDef (membrs, None) ->
                     membrs
                 | StructDef (membrs, Some (FlexibleArrayMember (attrs, ident, qs, elem_ty))) ->
-                    membrs @ [(ident, (attrs, qs, Ctype ([], Array (elem_ty, None))))]
+                    membrs @ [(ident, (attrs, None, qs, Ctype ([], Array (elem_ty, None))))]
                 | _ -> assert false
               in
               simplify_integer_value_base begin
-                List.fold_left (fun acc (ident, (_, _, ty)) ->
+                List.fold_left (fun acc (ident, (_, _, _, ty)) ->
                   IVop (IntAdd, [lifted_self (IVsizeof ty); IVop (IntAdd, [IVpadding (tag_sym, ident);  acc])])
                 ) (IVconcrete (of_int 0)) membrs
               end
@@ -199,7 +199,7 @@ let rec simplify_integer_value_base ival_ =
                   | Right _ ->
                       assert false
               in
-              begin match List.map (fun (memb_ident, (_, _, ty)) ->
+              begin match List.map (fun (memb_ident, (_, _, _, ty)) ->
                   match simplify_integer_value_base (IVsizeof ty) with
                     | Left n ->
                         n
@@ -253,8 +253,16 @@ let rec simplify_integer_value_base ival_ =
                 | UnionDef membrs -> membrs
                 | _ -> assert false
               in
-              begin match List.map (fun (memb_ident, (_, _, ty)) ->
-                  match simplify_integer_value_base (IValignof ty) with
+              begin match List.map (fun (memb_ident, (_, align_opt, _, ty)) ->
+                  let align_iv =
+                    match align_opt with
+                      | None ->
+                        IValignof ty
+                      | Some (AlignInteger al_n) ->
+                          IVconcrete al_n
+                      | Some (AlignType al_ty) ->
+                        IValignof al_ty in
+                  match simplify_integer_value_base align_iv with
                     | Left n ->
                         n
                     | Right _ ->

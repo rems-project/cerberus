@@ -104,18 +104,25 @@ let rec offsetsof ?(ignore_flexible=false) tagDefs tag_sym =
               if ignore_flexible then
                 membrs_
               else
-                membrs_ @ [(ident, (attrs, qs, ty))] in
+                membrs_ @ [(ident, (attrs, None, qs, ty))] in
         let (xs, maxoffset) =
-          List.fold_left (fun (xs, last_offset) (membr, (_, _, ty)) ->
+          List.fold_left (fun (xs, last_offset) (membr, (_, align_opt, _, ty)) ->
             let size = sizeof ~tagDefs ty in
-            let align = of_int (alignof ~tagDefs ty) in
+            let align =
+              match align_opt with
+                | None ->
+                    of_int (alignof ~tagDefs ty)
+                | Some (AlignInteger al_n) ->
+                    al_n
+                | Some (AlignType al_ty) ->
+                  of_int (alignof ~tagDefs al_ty) in
             let x = modulus last_offset align in
             let pad = if equal x zero then zero else sub align x in
             ((membr, ty, add last_offset pad) :: xs, add (add last_offset pad) size)
           ) ([], zero) membrs in
         (List.rev xs, maxoffset)
     | UnionDef membrs ->
-        (List.map (fun (ident, (_, _, ty)) -> (ident, ty, zero)) membrs, zero)
+        (List.map (fun (ident, (_, _, _, ty)) -> (ident, ty, zero)) membrs, zero)
 
 and sizeof ?(tagDefs= Tags.tagDefs ()) (Ctype (_, ty) as cty) : N.num =
   let open N in
@@ -164,8 +171,16 @@ and sizeof ?(tagDefs= Tags.tagDefs ()) (Ctype (_, ty) as cty) : N.num =
               assert false
           | UnionDef membrs ->
               let (max_size, max_align) =
-                List.fold_left (fun (acc_size, acc_align) (_, (_, _, ty)) ->
-                  (max acc_size (sizeof ~tagDefs ty), max acc_align (of_int (alignof ~tagDefs ty)))
+                List.fold_left (fun (acc_size, acc_align) (_, (_, align_opt, _, ty)) ->
+                  let align =
+                    match align_opt with
+                      | None ->
+                          of_int (alignof ~tagDefs ty)
+                      | Some (AlignInteger al_n) ->
+                          al_n
+                      | Some (AlignType al_ty) ->
+                        of_int (alignof ~tagDefs al_ty) in
+                  (max acc_size (sizeof ~tagDefs ty), max acc_align align)
                 ) (zero, zero) membrs in
               (* NOTE: adding padding at the end to satisfy the alignment constraints *)
               let x = modulus max_size max_align in
@@ -218,8 +233,16 @@ and alignof ?(tagDefs= Tags.tagDefs ()) (Ctype (_, ty) as cty) =
                     alignof ~tagDefs (Ctype ([], Array (elem_ty, None))) in
               (* NOTE: Structs (and unions) alignment is that of the maximum alignment
                  of any of their components. *)
-              List.fold_left (fun acc (_, (_, _, ty)) ->
-                max (alignof ~tagDefs ty) acc
+              List.fold_left (fun acc (_, (_, align_opt, _, ty)) ->
+                let memb_align =
+                  match align_opt with
+                    | None ->
+                        alignof ~tagDefs ty
+                    | Some (AlignInteger al_n) ->
+                        N.to_int al_n
+                    | Some (AlignType al_ty) ->
+                      alignof ~tagDefs al_ty in
+                max memb_align acc
               ) init membrs
         end
     | Union tag_sym ->
@@ -229,8 +252,16 @@ and alignof ?(tagDefs= Tags.tagDefs ()) (Ctype (_, ty) as cty) =
           | UnionDef membrs ->
               (* NOTE: Structs (and unions) alignment is that of the maximum alignment
                  of any of their components. *)
-              List.fold_left (fun acc (_, (_, _, ty)) ->
-                max (alignof ~tagDefs ty) acc
+              List.fold_left (fun acc (_, (_, align_opt, _, ty)) ->
+                let memb_align =
+                  match align_opt with
+                    | None ->
+                        alignof ~tagDefs ty
+                    | Some (AlignInteger al_n) ->
+                        N.to_int al_n
+                    | Some (AlignType al_ty) ->
+                      alignof ~tagDefs al_ty in
+                max memb_align acc
               ) 0 membrs
         end
 
@@ -983,7 +1014,7 @@ module Concrete : Memory = struct
             ( `NoTaint, MVunspecified cty, bs2)
           else match Pmap.find tag_sym (Tags.tagDefs ()) with
             | UnionDef ((first_membr_def :: _) as membrs) ->
-                let (membr_ident, (_, _, membr_ty)) =
+                let (membr_ident, (_, _, _, membr_ty)) =
                   match IntMap.find_opt addr unionmap with
                     | None ->
                         first_membr_def

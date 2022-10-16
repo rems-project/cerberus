@@ -346,8 +346,8 @@ module SimpleTypes : TYPES
        with type bt = Core.core_base_type
        with type ift = Core.core_base_type * (Core.core_base_type) list
        with type ict = Core.core_base_type
-       with type ut = (Symbol.identifier * (Annot.attributes * qualifiers * Ctype.ctype)) list
-       with type st = (Symbol.identifier * (Annot.attributes * qualifiers * Ctype.ctype)) list *  flexible_array_member option
+       with type ut = (Symbol.identifier * (Annot.attributes * alignment option * qualifiers * Ctype.ctype)) list
+       with type st = (Symbol.identifier * (Annot.attributes * alignment option * qualifiers * Ctype.ctype)) list *  flexible_array_member option
        with type ft = Ctype.ctype * (Symbol.sym * Ctype.ctype) list * bool
        with type lt = (Symbol.sym option * (Ctype.ctype * bool)) list
        with type gt = Ctype.ctype
@@ -361,8 +361,8 @@ struct
   type ift = bt * bt list
   type ict = bt
 
-  type ut = (Symbol.identifier * (Annot.attributes * qualifiers * ct)) list
-  type st = (Symbol.identifier * (Annot.attributes * qualifiers * ct)) list *  flexible_array_member option
+  type ut = (Symbol.identifier * (Annot.attributes * alignment option * qualifiers * ct)) list
+  type st = (Symbol.identifier * (Annot.attributes * alignment option * qualifiers * ct)) list *  flexible_array_member option
   type ft = ct * (Symbol.sym * ct) list * bool
   type lt = (Symbol.sym option * (Ctype.ctype * bool)) list
   type gt = ct

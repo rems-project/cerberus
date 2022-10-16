@@ -558,9 +558,10 @@ let dtree_of_declaration (i, (_, decl_attrs, decl)) =
 
 
 let dtree_of_tag_definition (i, (def_attrs, tag)) =
-  let dleaf_of_field (i, (attrs, qs, ty)) =
+  let dleaf_of_field (i, (attrs, align_opt, qs, ty)) =
     with_attributes attrs begin
-      Dleaf (Pp_symbol.pp_identifier i ^^^ P.squotes (pp_ctype qs ty))
+      Dleaf (Pp_symbol.pp_identifier i ^^^ P.squotes (pp_ctype qs ty) ^^
+             P.optional (fun z -> P.space ^^ P.brackets (pp_alignment z)) align_opt)
     end
   in with_attributes def_attrs begin match tag with
     | StructDef (fs_, flexible_opt) ->
@@ -568,7 +569,7 @@ let dtree_of_tag_definition (i, (def_attrs, tag)) =
           | None ->
               fs_
           | Some (FlexibleArrayMember (attrs, ident, qs, elem_ty)) ->
-              fs_ @ [(ident, (attrs, qs, Ctype ([], Array (elem_ty, None))))] in
+              fs_ @ [(ident, (attrs, None, qs, Ctype ([], Array (elem_ty, None))))] in
         Dnode (pp_ctor "StructDef" ^^^ Pp_ail.pp_id i
               , List.map dleaf_of_field fs)
 
