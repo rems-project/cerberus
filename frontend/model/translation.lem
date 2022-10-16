@@ -2228,7 +2228,7 @@ end
           E.foldlM (fun (acc, mk_core) (ident, e_opt) ->
             match e_opt with
               | Just e ->
-                  let (_, _, memb_ty) = fromJust "Translation.translate_expression, AilEstruct 2" (List.lookup ident ident_tys) in
+                  let (_, _, _, memb_ty) = fromJust "Translation.translate_expression, AilEstruct 2" (List.lookup ident ident_tys) in
                   let oTy = force_core_object_type_of_ctype memb_ty in
                   begin
                     if AilTypesAux.is_pointer memb_ty && Aaux.is_null_pointer_constant e then
@@ -2253,7 +2253,7 @@ end
                         , fun z -> Caux.mk_sseq_e e_sym_pat core_e (mk_core z) )
                   end
               | Nothing ->
-                  let (_, _, ty) = fromJust "Translation.translate_expression, AilEstruct 3" (List.lookup ident ident_tys) in
+                  let (_, _, _, ty) = fromJust "Translation.translate_expression, AilEstruct 3" (List.lookup ident ident_tys) in
                   E.return
                     ( (ident, Caux.mk_unspecified_pe ty) :: acc
                     , mk_core )
@@ -2292,7 +2292,7 @@ end
                 match List.lookup memb_ident ident_tys with
                   | (*BISECT-IGNORE*) Nothing ->
                       illTypedAil loc "AilEunion: couldn't find a union definition"
-                  | Just (_, _, memb_ty) ->
+                  | Just (_, _, _, memb_ty) ->
                       let oTy = force_core_object_type_of_ctype memb_ty in
                       match e_opt with
                         | Just e ->
@@ -3022,9 +3022,9 @@ let rec translate_stmt stdlib tagDefs f env (A.AnnotatedStatement loc stmt_attrs
         let c_ty = Caux.mk_ail_ctype_pe ty in
         let align_ival  =
         match align_opt with
-          | Just (A.AlignInteger n) ->
+          | Just (Ctype.AlignInteger n) ->
               Caux.mk_integer_pe n
-          | Just (A.AlignType al_ty) ->
+          | Just (Ctype.AlignType al_ty) ->
               Caux.mk_alignof_pe (Caux.mk_ail_ctype_pe al_ty)
           | Nothing ->
               Caux.mk_alignof_pe c_ty
@@ -3061,9 +3061,9 @@ let rec translate_stmt stdlib tagDefs f env (A.AnnotatedStatement loc stmt_attrs
             let c_ty = Caux.mk_ail_ctype_pe ty in
             let align_ival  =
             match align_opt with
-              | Just (A.AlignInteger n) ->
+              | Just (Ctype.AlignInteger n) ->
                   Caux.mk_integer_pe n
-              | Just (A.AlignType al_ty) ->
+              | Just (Ctype.AlignType al_ty) ->
                   Caux.mk_alignof_pe (Caux.mk_ail_ctype_pe al_ty)
               | Nothing ->
                   Caux.mk_alignof_pe c_ty
@@ -3526,9 +3526,9 @@ let translate_program stdlib (startup_sym_opt, sigm) =
           let core_ty     = Caux.mk_ail_ctype_pe ty in
           let align_ival  =
             match align with
-              | Just (A.AlignInteger n) ->
+              | Just (Ctype.AlignInteger n) ->
                   Caux.mk_integer_pe n
-              | Just (A.AlignType al_ty) ->
+              | Just (Ctype.AlignType al_ty) ->
                   Caux.mk_alignof_pe (Caux.mk_ail_ctype_pe al_ty)
               | Nothing ->
                   Caux.mk_alignof_pe (Caux.mk_ail_ctype_pe ty)

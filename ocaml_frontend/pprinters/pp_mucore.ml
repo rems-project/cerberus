@@ -1089,7 +1089,6 @@ module Pp_standard_typ = (struct
 
   let pp_ut (membrs) = 
     let (ty, tags) = ("union", membrs) in
-    let pp_tag (Symbol.Identifier (_, name), (_,_,ct)) =
     let pp_tag (Symbol.Identifier (_, name), (_,_,_,ct)) =
       !^name ^^ P.colon ^^^ pp_ct ct
     in

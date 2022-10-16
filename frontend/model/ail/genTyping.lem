@@ -639,8 +639,8 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
         match lookup_tag_definition sigm tag_sym with
           | Just (UnionDef membersDefs) ->
               match List.lookup memb_ident membersDefs with
-                    annotate_assignee InitializationAsSimpleAssignment loc memb_ty e >>= fun a_e ->
                 | Just (_, align_opt, _, memb_ty) ->
+                    annotate_assignee InitializationAsSimpleAssignment loc memb_ty e >>= fun a_e ->
                     E.return (AilEunion tag_sym memb_ident (Just a_e), GenRValueType union_gty)
                 | Nothing ->
                     E.constraint_violation loc (MemberofNoMemberRvalue memb_ident union_gty)
@@ -2084,7 +2084,7 @@ let annotate_sigma sigm =
     end
   ) sigm.function_definitions >>= fun function_defs' ->
   
-  let check_member (ident, (_, qs, ty)) =
+  let check_member (ident, (_, _, qs, ty)) =
     E.add "§6.7.2.1#3" >>
     if AilTypesAux.has_flexible_array_member sigm ty then
       E.constraint_violation (Loc.locOf ident) StructMemberFlexibleArray

@@ -93,7 +93,8 @@ let struct_decl loc fields (tag : BT.tag) =
          if position < final_position 
          then return [{offset = position; size = final_position - position; member_or_padding = None}]
          else return []
-      | (member, (attrs, qualifiers, ct)) :: members ->
+      | (member, (attrs, _(*align_opt*), qualifiers, ct)) :: members ->
+         (* TODO: support for any alignment specifier *)
          let sct = Sctypes.of_ctype_unsafe loc ct in
          let offset = member_offset tag member in
          let size = Memory.size_of_ctype sct in

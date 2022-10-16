@@ -225,7 +225,7 @@ let rec alignof_type (Ctype (_, ctype): ctype) (file: unit typed_file) : int =
       | Some (StructDef (members, _)) ->
           (* Let alignment be max alignment of a member? *)
           let alignments =
-            List.map (fun (_, (_, _, mem_ctype)) -> alignof_type mem_ctype file)
+            List.map (fun (_, (_, _, _, mem_ctype)) -> alignof_type mem_ctype file)
                      members in
           assert (List.length alignments > 0);
           List.fold_left max (List.hd alignments) (List.tl alignments)
@@ -337,7 +337,7 @@ module AddressSortPNVI = struct
         let rec helper rest total_size acc : int * ((int list) * int list) =
           begin match rest with
           | [] -> (total_size, acc)
-          | (_, (_, _, ty)) :: tl ->
+          | (_, (_, _, _, ty)) :: tl ->
             let (ty_size, flat_indices) =
               match ty with
               | Ctype.Ctype (_, Ctype.Struct tag_inner) ->
@@ -367,7 +367,7 @@ module AddressSortPNVI = struct
         let (total_size, (rev_indices, rev_flat_indices)) =
           helper members 0 ([],[]) in
         (* TODO: Padding at the end to the largest member (alignment?) *)
-        let largest_align = List.fold_left (fun acc (_, (_, _, ty)) ->
+        let largest_align = List.fold_left (fun acc (_, (_, _, _, ty)) ->
           max acc (alignof_type ty file)
         ) 0 members in
         let last_padding =
@@ -1156,7 +1156,7 @@ module CtypeToZ3 = struct
     match Pmap.lookup struct_sym file.tagDefs with
     | Some (StructDef (memlist, _)) ->
         let sortlist =
-            List.map (fun (_,(_, _, ctype)) -> ctype_to_z3_sort ctype file)
+            List.map (fun (_,(_, _, _, ctype)) -> ctype_to_z3_sort ctype file)
                      memlist in
         sorts_to_tuple sortlist
     | _ ->

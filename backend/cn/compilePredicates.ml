@@ -162,7 +162,7 @@ let translate_member_access loc env t member =
      in
      let@ ty = match List.assoc_opt Id.equal member members with
        | None -> fail {loc; msg = Unknown_member (tag, member)}
-       | Some (_, _, ty) -> return ty
+       | Some (_, _, _, ty) -> return ty
      in
      let ty' = Sctypes.of_ctype_unsafe loc ty in
      let member_bt = BaseTypes.of_sct ty' in
