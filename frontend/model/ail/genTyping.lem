@@ -147,8 +147,8 @@ let gen_typing_type_of_constant loc iCst =
   end
 
 (* STD §6.5.16.1#1 *)
-val well_typed_assignment: sigma unit -> assignment_violation -> Loc.t -> ctype -> genType -> expression genTypeCategory -> E.errorM unit
-let well_typed_assignment s f loc ty1 gty2 e2 =
+val well_typed_assignment: sigma unit -> bool -> assignment_violation -> Loc.t -> ctype -> genType -> expression genTypeCategory -> E.errorM unit
+let well_typed_assignment s is_init f loc ty1 gty2 e2 =
   let throw err =
     E.constraint_violation (with_cursor_from (locOf e2) loc) (f err ty1 gty2)
   in
@@ -241,6 +241,25 @@ let well_typed_assignment s f loc ty1 gty2 e2 =
     end
   
   (* NOTE: bullet 6 is dealt with earlier (look for the code dealing with bullet 1) *)
+  else if is_init then
+    (* TODO: check *)
+    match (proj_ctype_ ty1, gty2) with
+      | (Array elem_ty1 n1_opt, GenArray elem_ty2 n2_opt) ->
+          if AAux.are_compatible (no_qualifiers, elem_ty1) (no_qualifiers, elem_ty2) then
+            match (n1_opt, n2_opt) with
+              | (Just n1, Just n2) ->
+                  if n1 <> n2 then
+                    throw IncompatibleType
+                  else
+                    E.return ()
+              | _ ->
+                  E.return ()
+            end
+          else
+            throw IncompatibleType
+      | _ ->
+          throw IncompatibleType
+    end
   else
     let _ = Debug.print_debug 2 [Debug.DB_ail_typing] (fun () -> "[well_typed_assignment] KO: the end") in (* DEBUG *)
     throw IncompatibleType
@@ -434,7 +453,7 @@ let rec typecheck_constant loc cst =
   end
 
 val annotate_rvalue: sigma unit -> gamma -> expression unit -> E.errorM (expression genTypeCategory * genType)
-val annotate_assignee: sigma unit -> gamma -> assignment_violation -> Loc.t -> ctype -> expression unit -> E.errorM (expression genTypeCategory)
+val annotate_assignee: sigma unit -> gamma -> bool -> assignment_violation -> Loc.t -> ctype -> expression unit -> E.errorM (expression genTypeCategory)
 val annotate_arguments:
   sigma unit -> gamma -> Loc.t -> bool -> list (expression unit) -> maybe (list (qualifiers * ctype * bool)) ->
   E.errorM (list (expression genTypeCategory))
@@ -583,7 +602,7 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
           else
             E.add "§6.7.9#11" >>
             (* TODO: unqualify elem_ty? *)
-            (Just <$> annotate_assignee InitializationAsSimpleAssignment loc elem_ty e)
+            (Just <$> annotate_assignee true InitializationAsSimpleAssignment loc elem_ty e)
 (*
           annotate_rvalue e >>= fun (e', gty) ->
           (* TODO: maybe this is too strict and we want to relax to only having
@@ -620,7 +639,7 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
                   match List.lookup memb_ident membersDefs with
                     | Just (_, align_opt, memb_qs, memb_ty) ->
                         maybe (E.return (memb_ident, Nothing)) (fun e ->
-                          annotate_assignee InitializationAsSimpleAssignment loc memb_ty e >>= fun a_e ->
+                          annotate_assignee true InitializationAsSimpleAssignment loc memb_ty e >>= fun a_e ->
                           E.return (memb_ident, Just a_e)
                         ) e_opt
                     | Nothing ->
@@ -640,7 +659,7 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
           | Just (UnionDef membersDefs) ->
               match List.lookup memb_ident membersDefs with
                 | Just (_, align_opt, _, memb_ty) ->
-                    annotate_assignee InitializationAsSimpleAssignment loc memb_ty e >>= fun a_e ->
+                    annotate_assignee true InitializationAsSimpleAssignment loc memb_ty e >>= fun a_e ->
                     E.return (AilEunion tag_sym memb_ident (Just a_e), GenRValueType union_gty)
                 | Nothing ->
                     E.constraint_violation loc (MemberofNoMemberRvalue memb_ident union_gty)
@@ -919,9 +938,8 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
                   | [] ->
                       E.return (AilEcall e' [], GenRValueType (inject_type ret_ty))
                   | _ ->
-                      (* TODO: default argument promotions *)
-                      error "annotate_default_arguments (locOf e) es" >>= fun es' ->
-                      E.return (AilEcall e' es', GenRValueType (inject_type ret_ty))
+                      (* TODO: proper error message *)
+                      error "passing arguments to a function without a prototype is not supported (not supported by ISO starting from C2X"
                 end
               else
                 error "annotate_expression(AilEcall): function decay pointer should not be qualified"
@@ -1130,7 +1148,7 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
               if AAux.modifiable sigm qs1 ty1 then
                 let assign_ty = AAux.rvalue_coercion ty1 in
                 E.add "§6.5.16#3, sentence 3" >>
-                annotate_assignee SimpleAssignmentViolation loc assign_ty e2 >>= fun e2' -> 
+                annotate_assignee false SimpleAssignmentViolation loc assign_ty e2 >>= fun e2' -> 
                 E.return (AilEassign e1' e2', GenRValueType (inject_type assign_ty))
               else
                 E.constraint_violation (with_cursor_from (locOf e1) loc) AssignmentModifiableLvalue (* lvalue was not modifiable *)
@@ -1658,15 +1676,15 @@ and annotate_rvalue sigm gamm expr =
    end
 
 
-and annotate_assignee sigm gamm a_ctxt loc ty1 e2 =
+and annotate_assignee sigm gamm is_init a_ctxt loc ty1 e2 =
   annotate_rvalue sigm gamm e2 >>= fun (e2, gty2) ->
-  well_typed_assignment sigm a_ctxt loc ty1 gty2 e2 >>
+  well_typed_assignment sigm is_init a_ctxt loc ty1 gty2 e2 >>
   E.return e2
 
 
 and annotate_arguments_aux sigm gamm n_args n_params loc is_variadic args params =
   let annotate_expression = annotate_expression sigm gamm CTXother in
-  let annotate_assignee   = annotate_assignee sigm gamm FunctionParameterAsSimpleAssignment in
+  let annotate_assignee   = annotate_assignee sigm gamm false FunctionParameterAsSimpleAssignment in
   let annotate_arguments_aux = annotate_arguments_aux sigm gamm n_args n_params loc is_variadic in
   match (args, params) with
     | ([], []) ->
@@ -1810,13 +1828,13 @@ and annotate_definition_aux sigm gamm (ty, e) =
       (* NOTE: since we are not passing a `qs' with `ty' to annotate_assignee,
          we are indeed unqualifying the scalar type *)
       (* TODO: add location *)
-      annotate_assignee sigm gamm InitializationAsSimpleAssignment Loc.unknown ty e
+      annotate_assignee sigm gamm true InitializationAsSimpleAssignment Loc.unknown ty e
       
     (* TODO: "(...) that has automatic storage duration" *)
     else if AAux.atomic_qualified_unqualified AAux.is_struct_or_union ty then
       (* TODO: check *)
       E.add "§6.7.9#13" >>
-      annotate_assignee sigm gamm InitializationAsSimpleAssignment Loc.unknown ty e
+      annotate_assignee sigm gamm true InitializationAsSimpleAssignment Loc.unknown ty e
       (* annotate_rvalue sigm gamm e >>= fun (a_e, gty) ->
       AilEassign
       (* TODO: need to make sure that gty is compatible with ty *)
@@ -1976,7 +1994,7 @@ let rec annotate_statement_ loc sigm gamm ty stmt =
         else
           E.constraint_violation loc NonVoidReturnVoidFunction
     | AilSreturn e ->
-        annotate_assignee sigm gamm ReturnAsSimpleAssignment (with_cursor_from (locOf e) loc) ty e >>= fun e' ->
+        annotate_assignee sigm gamm false ReturnAsSimpleAssignment (with_cursor_from (locOf e) loc) ty e >>= fun e' ->
         E.return (AilSreturn e')
     | AilSswitch e s ->
         annotate_rvalue e >>= fun (e', gty) ->
