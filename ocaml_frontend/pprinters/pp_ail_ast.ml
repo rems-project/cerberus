@@ -630,9 +630,19 @@ let filter_external_decl (id, sigma) =
   let pred (_, (loc, _, _)) = Location_ocaml.from_main_file loc in
   (id, { sigma with declarations = List.filter pred sigma.declarations} )
 
+(* let pp_loop_attributes xs =
+  let pp_env env =
+    Pmap.fold (fun ident sym_opt acc ->
+      Pp_symbol.pp_identifier ident ^^^ P.equals ^^ P.rangle ^^^ P.optional pp_symbol sym_opt ^^ P.comma ^^^ acc
+    ) env P.empty in
+  Pmap.fold (fun key (env, _) acc ->
+    !^ (string_of_int key) ^^^ P.equals ^^ P.rangle ^^^ pp_env env ^^ P.comma ^^ acc
+  ) xs P.empty *)
+
 let pp_program do_colour show_include ail_prog =
   Colour.do_colour := do_colour && Unix.isatty Unix.stdout;
   let filtered_ail_prog = if show_include then ail_prog else filter_external_decl ail_prog in
+  (* pp_loop_attributes (snd ail_prog).loop_attributes ^^ P.break 1 ^^ *)
   pp_doc_tree (dtree_of_program (fun _ -> P.empty) filtered_ail_prog)
 
 (* For debugging: prints all the type annotations *)

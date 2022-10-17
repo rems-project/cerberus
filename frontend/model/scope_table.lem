@@ -1,6 +1,6 @@
 (* Symbols table with stacked scopes *)
 open import Pervasives Utils Symbol
-import Set_extra
+import Map_extra
 
 type t 'a_scope 'b_ident 'c_a = list ('a_scope * map 'b_ident 'c_a)
 
@@ -49,6 +49,19 @@ let symbols = function
   | _ -> error "[Scope_table.symbols] the table is empty."
 end
 *)
+val     to_map: forall 'scope 'ident 'a 'b 'nm. MapKeyType 'ident, SetType 'ident, SetType 'b, Eq 'nm, SetType 'nm => 'nm -> ('ident -> 'a -> 'b) -> t 'scope ('ident * 'nm) 'a -> map 'ident 'b
+let rec to_map nm f t =
+  match t with
+    | (_, m) :: ms ->
+        Map_extra.fold (fun (ident, nm') v acc ->
+          if nm = nm' then
+            Map.insert ident v acc
+          else
+            acc
+        ) (Map.mapi (fun (x, _) y -> f x y) m) (to_map nm f ms)
+    | [] ->
+        Map.empty
+  end
 
 
 val create_scope: forall 'scope 'ident 'a. MapKeyType 'ident => 'scope -> t 'scope 'ident 'a -> t 'scope 'ident 'a

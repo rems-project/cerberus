@@ -819,7 +819,18 @@ let register_cn_datatype ident mk_cases =
 val record_loop_attribute: Annot.loop_id -> Annot.attributes -> desugM unit
 let record_loop_attribute id attr = 
   State_exception.get >>= fun st ->
-  State_exception.put <|st with loop_attributes = Map.insert id attr st.loop_attributes |>
+  let env: map Symbol.identifier (maybe Symbol.sym) = Scope_table.to_map Namespace_ordinary (fun ident -> function
+    | Internal sym _ _ ->
+        Just sym
+    | External ->
+        match Map.lookup (ident, Namespace_ordinary) st.registered_external_identifiers with
+          | Just (_, (sym, _, _)) ->
+              Just sym
+          | Nothing ->
+              Nothing
+        end
+  end) st.registered_identifiers in
+  State_exception.put <|st with loop_attributes = (Map.insert id (env, attr) st.loop_attributes) |>
 
 val get_loop_attributes: unit -> desugM Annot.loop_attributes
 let get_loop_attributes () = 

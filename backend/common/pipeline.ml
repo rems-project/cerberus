@@ -585,7 +585,7 @@ let read_core_object (core_stdlib, core_impl) fname =
     funs=    map_from_assoc sym_compare dump.dump_funs;
     extern=  map_from_assoc cabsid_compare dump.dump_extern;
     funinfo= map_from_assoc sym_compare dump.dump_funinfo;
-    loop_attributes0= map_from_assoc compare dump.dump_loop_attributes;
+    loop_attributes0= Pmap.empty compare(* map_from_assoc compare dump.dump_loop_attributes *);
   }
 
 let write_core_object core_file fname =
@@ -597,7 +597,7 @@ let write_core_object core_file fname =
       dump_funs = Pmap.bindings_list core_file.funs;
       dump_extern = Pmap.bindings_list core_file.extern;
       dump_funinfo = Pmap.bindings_list core_file.funinfo;
-      dump_loop_attributes = Pmap.bindings_list core_file.loop_attributes0;
+      dump_loop_attributes = [] (*Pmap.bindings_list core_file.loop_attributes0*);
     }
   in
   let oc = open_out_bin fname in

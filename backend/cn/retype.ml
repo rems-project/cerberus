@@ -661,7 +661,7 @@ let retype_file (context : Context.t) opts (file : 'TY Old.mu_file)
        | Some (LAloop_prebody loop_id)
          ->
           let this_attrs = match Pmap.lookup loop_id file.mu_loop_attributes with
-            | Some attrs -> attrs 
+            | Some (_, attrs) -> attrs 
             | None -> CF.Annot.no_attributes
           in
           let lname = match Sym.description lsym with

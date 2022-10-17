@@ -67,7 +67,7 @@ type annot =
   | Acerb of cerb_attribute
 
 
-type loop_attributes = map loop_id attributes
+type loop_attributes = map loop_id (map Symbol.identifier (maybe Symbol.sym) * attributes)
 
 val     get_loc: list annot -> maybe Loc.t
 let rec get_loc annots =
