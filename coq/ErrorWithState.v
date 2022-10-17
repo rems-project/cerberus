@@ -17,28 +17,28 @@ Section withState.
 
   Notation err := (sum ErrT).
   
-  Definition errS A := St -> ErrT+(St*A).
+  Definition errS A := St -> (St*(ErrT+A)).
 
   Global Instance Monad_errS: Monad errS :=
-    { ret  := fun _ x => fun s => inr (s,x)
+    { ret  := fun _ x => fun s => (s, inr x)
       ; bind := fun _ _ m f => fun s => match m s with
-                                  | inl v => inl v
-                                  | inr (s',x) => f x s'
+                                  | (s', inl v) => (s', inl v)
+                                  | (s', inr x) => f x s'
                                   end
     }.
 
   Global Instance Exception_errS : MonadExc ErrT errS :=
-    { raise := fun _ v => fun s => inl v
+    { raise := fun _ v => fun s => (s, inl v)
       ; catch := fun _ c h => fun s => match c s with
-                                 | inl v => h v s
-                                 | inr x => inr x
+                                 | (s', inl v) => h v s'
+                                 | (s', inr x) => (s', inr x)
                                  end
     }.
 
   Global Instance State_errS: MonadState St errS :=
     {
-      get := fun s => inr (s,s)
-      ; put := fun t s => inr (t, tt)
+      get := fun s => (s, inr s)
+    ; put := fun _ s => (s, inr tt)
     }.
 
   (* Unwrapping/running monad *)
@@ -46,15 +46,15 @@ Section withState.
   (* Returns value *)
   Definition evalErrS {A:Type} (c : errS A) (initial : St) : err A :=
   match c initial with
-  | inl msg => raise msg
-  | inr (s,v) => ret v
+  | (_, inl msg) => raise msg
+  | (s, inr v) => ret v
   end.
 
   (* Returns state *)
   Definition execErrS {A:Type} (c : errS A) (initial : St) : err St :=
   match c initial with
-  | inl msg => raise msg
-  | inr (s,v) => ret s
+  | (_, inl msg) => raise msg
+  | (s, inr v) => ret s
   end.
 
   (* -- lifting [err] -- *)
