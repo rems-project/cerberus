@@ -90,12 +90,26 @@ module CHERIMorello : Memory = struct
   let lift_coq_memM (m:'a MM.memM): 'a memM =
     ND (fun st ->
         match m st with
-        | (st',inl e) ->
+        | (st', Coq_inl e) ->
            let e' = translateMemError e in
            (ND.NDkilled e', st')
-        | (st',inr a) -> (ND.NDactive a, st')
+        | (st',Coq_inr a) -> (ND.NDactive a, st')
       )
 
+
+(* Types from Coq-extracted code:
+
+     type 'a memM = (mem_state, memMError, 'a) errS
+
+     type ('st, 'errT, 'a) errS = 'st -> 'st * ('errT, 'a) sum
+
+     type ('a, 'b) sum =
+     | Coq_inl of 'a
+     | Coq_inr of 'b
+
+   *)
+
+(*
   val allocate_object:
        Mem_common.thread_id      (* the allocating thread *)
     -> Symbol.prefix  (* symbols coming from the Core/C program, for debugging purpose *)
@@ -104,7 +118,7 @@ module CHERIMorello : Memory = struct
     -> mem_value option   (* optional initialisation value (if provided the allocation is made read-only) *)
     -> pointer_value memM =
     lift_coq_memM (MM.allocate_object _ _ _)
-
+ *)
   
   (*
 
