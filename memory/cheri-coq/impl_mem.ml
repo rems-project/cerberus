@@ -21,46 +21,6 @@ module L = struct
   include Lem_list
 end
 
-module Eff : sig
-  type ('a, 'err, 'cs, 'st) eff =
-    ('a, string, 'err, 'cs, 'st) Nondeterminism.ndM
-  val return: 'a -> ('a, 'err, 'cs, 'st) eff
-  val (>>=): ('a, 'err, 'cs, 'st) eff -> ('a -> ('b, 'err, 'cs, 'st) eff) -> ('b, 'err, 'cs, 'st) eff
-  val (>>): ('a, 'err, 'cs, 'st) eff -> ('b, 'err, 'cs, 'st) eff -> ('b, 'err, 'cs, 'st) eff
-  val read: ('st -> 'a) -> ('a, 'err, 'cs, 'st) eff
-  val update: ('st -> 'st) -> (unit, 'err, 'cs, 'st) eff
-  val modify: ('st -> 'a * 'st) -> ('a, 'err, 'cs, 'st) eff
-  val get: ('st, 'err, 'cs, 'st) eff
-  val put: 'st -> (unit, 'err, 'cs, 'st) eff
-  (*  val fail: 'err -> ('a, 'err, 'cs, 'st) eff *)
-  val mapM: ('a -> ('b, 'err, 'cs, 'st) eff) -> 'a list -> ('b list, 'err, 'cs, 'st) eff
-  val msum: string -> (string * ('a, 'err, 'cs, 'st) eff) list -> ('a, 'err, 'cs, 'st) eff
-end = struct
-  type ('a, 'err, 'cs, 'st) eff =
-    ('a, string, 'err, 'cs, 'st) Nondeterminism.ndM
-
-  let return = Nondeterminism.nd_return
-  let (>>=) = Nondeterminism.nd_bind
-  let (>>) k f = k >>= fun _ -> f
-
-  let read = Nondeterminism.nd_read
-  let update = Nondeterminism.nd_update
-  let modify f =
-    Nondeterminism.nd_get >>= fun st ->
-    let (ret, st') = f st in
-    Nondeterminism.nd_put st' >>= fun () ->
-    return ret
-
-  let get = Nondeterminism.nd_get
-  let put = Nondeterminism.nd_put
-  (*  let fail err = Nondeterminism.kill (Other err) *)
-  let mapM _ _ = failwith "TODO: CHERI.Eff.mapM"
-
-  let msum str xs =
-    Nondeterminism.(
-      msum Mem_common.instance_Nondeterminism_Constraints_Mem_common_mem_constraint_dict () str xs
-    )
-end
 
 module CHERIMorello : Memory = struct
   let name = MM.name
@@ -78,6 +38,74 @@ module CHERIMorello : Memory = struct
 
   let initial_mem_state = MM.initial_mem_state
 
+  let cs_module = (module struct
+                     type t = mem_iv_constraint
+                     let negate x = MC_not x
+
+                     type 'a eff = Eff of (bool -> ('a * bool))
+                     let return a = Eff (fun b -> (a, b))
+                     let bind (Eff ma) f =
+                       Eff (fun b -> let (a, b') = ma b in let Eff mb = f a in mb b')
+                     let rec foldlM f a = function
+                       | [] ->
+                          return a
+                       | x::xs ->
+                          bind (f a x) (fun fax -> foldlM f fax xs)
+
+                     let runEff (Eff ma) = fst (ma true)
+
+                     let string_of_solver = return []
+                     let check_sat =
+                       Eff (fun b -> ((if b then `SAT else `UNSAT), b))
+
+                     let with_constraints _ cs (Eff ma) =
+                       Debug_ocaml.print_debug 1 [] (fun () -> "HELLO: Concrete.with_constraints");
+                       let rec eval_cs = function
+                         | MC_empty ->
+                            true
+                         | MC_eq (ival1, ival2) ->
+                            Stdlib.Option.value (MM.eq_ival None ival1 ival2) ~default:false
+                         | MC_le (ival1, ival2) ->
+                            Stdlib.Option.value (MM.le_ival None ival1 ival2) ~default:false
+                         | MC_lt (ival1, ival2) ->
+                            Stdlib.Option.value (MM.lt_ival None ival1 ival2) ~default:false
+                         | MC_in_device _ ->
+                            failwith "TODO: Concrete, with_constraints: MC_in_device"
+                         | MC_or (cs1, cs2) ->
+                            eval_cs cs1 || eval_cs cs2
+                         | MC_conj css ->
+                            List.for_all (fun z -> eval_cs z) css
+                         | MC_not cs ->
+                            not (eval_cs cs)
+                       in
+                       Eff (fun b -> ma (b && eval_cs cs))
+                   end : Constraints with type t = mem_iv_constraint)
+
+  type 'a memM =
+    ('a, string, Mem_common.mem_error, integer_value Mem_common.mem_constraint, mem_state) Nondeterminism.ndM
+
+  let return = Nondeterminism.nd_return
+  let bind = Nondeterminism.nd_bind
+
+  let lift_coq_memM (m:'a MM.memM): 'a memM =
+    ND (fun st ->
+        match m st with
+        | (st',inl e) ->
+           let e' = translateMemError e in
+           (ND.NDkilled e', st')
+        | (st',inr a) -> (ND.NDactive a, st')
+      )
+
+  val allocate_object:
+       Mem_common.thread_id      (* the allocating thread *)
+    -> Symbol.prefix  (* symbols coming from the Core/C program, for debugging purpose *)
+    -> integer_value  (* alignment constraint *)
+    -> Ctype.ctype    (* type of the allocation *)
+    -> mem_value option   (* optional initialisation value (if provided the allocation is made read-only) *)
+    -> pointer_value memM =
+    lift_coq_memM (MM.allocate_object _ _ _)
+
+  
   (*
 
   let cs_module : (module Constraints with type t = mem_iv_constraint)
