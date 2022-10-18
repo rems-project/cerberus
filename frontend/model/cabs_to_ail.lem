@@ -4449,6 +4449,10 @@ let rec desugar_cn_expr (CNExpr loc expr_) =
     | CNExpr_each ident r e ->
         E.register_cn_ident CN_logical ident >>= fun sym ->
         CNExpr_each sym r <$> desugar_cn_expr e
+    | CNExpr_ite e1 e2 e3 ->
+        CNExpr_ite <$> desugar_cn_expr e1
+                    <*> desugar_cn_expr e2
+                    <*> desugar_cn_expr e3
   end >>= fun ret ->
   E.return (CNExpr loc ret)
 

@@ -1901,6 +1901,9 @@ expr:
 | e1= expr BANG_EQ e2= list_expr
     { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                                , CNExpr_binop (CN_inequal, e1, e2))) }
+| e1= list_expr QUESTION e2= list_expr COLON e3= list_expr
+    { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
+                               , CNExpr_ite (e1, e2, e3))) }
 | LPAREN ty= base_type RPAREN expr= list_expr
     { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($1)))
                                , CNExpr_cast (ty, expr))) }

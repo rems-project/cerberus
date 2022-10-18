@@ -291,6 +291,11 @@ let translate_cn_expr (env: Env.t) expr =
           let env' = Env.add_logical sym BT.Integer env in
           let@ expr = trans env' e in
           return (eachI_ (Z.to_int (fst r), sym, Z.to_int (snd r)) expr)
+      | CNExpr_ite (e1, e2, e3) ->
+          let@ e1 = trans env e1 in
+          let@ e2 = trans env e2 in
+          let@ e3 = trans env e3 in
+          return (ite_ (e1, e2, e3))
   in trans env expr
 
 

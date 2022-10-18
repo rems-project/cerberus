@@ -123,6 +123,9 @@ module MakePp (Conf: PP_CN) = struct
           Dnode (pp_ctor "CNExpr_each" ^^^ P.squotes (Conf.pp_ident ident) ^^^
                      !^ (Z.to_string (fst r)) ^^^ P.string "-" ^^^ !^ (Z.to_string (snd r))
                  , [dtree_of_cn_expr expr])
+      | CNExpr_ite (e1, e2, e3) ->
+          Dnode (pp_ctor "CNExpr_ite"
+               , List.map dtree_of_cn_expr [e1;e2;e3])
 
   let dtree_of_cn_pred = function
     | CN_owned ty ->
