@@ -2,8 +2,8 @@ Require Import Coq.Numbers.BinNums.
 Require Import Coq.Strings.String.
 
 Require Import Addr.
-Require Import Undefined.
-Require Import Location.
+Require Import CoqUndefined.
+Require Import CoqLocation.
 Require AilSyntax.
 Require Import Ctype.
 Require Import SimpleError.

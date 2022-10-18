@@ -6,7 +6,7 @@ Require Import Coq.Numbers.BinNums.
 Require Import ExtLib.Structures.Monad.
 
 Require Import Addr.
-Require Import Location.
+Require Import CoqLocation.
 Require Import Symbol.
 Require Import Mem_common.
 Require Import Ctype.

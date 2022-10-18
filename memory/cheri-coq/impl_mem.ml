@@ -87,27 +87,28 @@ module CHERIMorello : Memory = struct
   let return = Nondeterminism.nd_return
   let bind = Nondeterminism.nd_bind
 
+  let translate_mem_error (e:MM.mem_error) : mem_error = assert false (* TODO *)
+  let translate_location (l:CoqLocation.location_ocaml): Location_ocaml.t = assert false (* TODO *)
+  let translate_undefined_behaviour (u:CoqUndefined.undefined_behaviour) : Undefined.undefined_behaviour = assert false (* TODO *)
+
+  let translate_memMError (e:MM.memMError) : mem_error Nondeterminism.kill_reason =
+    match e with
+    | Other me -> Other (translate_mem_error me)
+    | Undef0 (loc, ubs) ->
+       Undef0 (translate_location loc, List.map translate_undefined_behaviour ubs)
+    | InternalErr msg -> failwith msg
+
   let lift_coq_memM (m:'a MM.memM): 'a memM =
     ND (fun st ->
         match m st with
         | (st', Coq_inl e) ->
-           let e' = translateMemError e in
-           (ND.NDkilled e', st')
-        | (st',Coq_inr a) -> (ND.NDactive a, st')
+           let e' = translate_memMError e in
+           (NDkilled e', st')
+        | (st',Coq_inr a) -> (NDactive a, st')
       )
 
-
-(* Types from Coq-extracted code:
-
-     type 'a memM = (mem_state, memMError, 'a) errS
-
-     type ('st, 'errT, 'a) errS = 'st -> 'st * ('errT, 'a) sum
-
-     type ('a, 'b) sum =
-     | Coq_inl of 'a
-     | Coq_inr of 'b
-
-   *)
+  let eq_ptrval (a:pointer_value) (b:pointer_value) : bool memM =
+    lift_coq_memM (MM.eq_ptrval a b)
 
 (*
   val allocate_object:

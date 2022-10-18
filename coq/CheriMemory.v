@@ -14,7 +14,7 @@ From ExtLib.Data Require Import List.
 From ExtLib.Structures Require Import Monad Monads MonadExc MonadState Traversable.
 From ExtLib.Data.Monads Require Import EitherMonad OptionMonad.
 
-Require Import SimpleError Capabilities Addr Memory_model Mem_common ErrorWithState Undefined Morello ErrorWithState Location Symbol CoqImplementation Tags Utils Switches AilTypesAux.
+Require Import SimpleError Capabilities Addr Memory_model Mem_common ErrorWithState CoqUndefined Morello ErrorWithState CoqLocation Symbol CoqImplementation Tags Utils Switches AilTypesAux.
 
 Local Open Scope string_scope.
 Local Open Scope type_scope.
@@ -36,7 +36,7 @@ Module CheriMemory
        (MorelloPermission)
   )
   (IMP: Implementation)
-  : Memory(MorelloAddr).
+  <: Memory(MorelloAddr).
 
   Include Mem_common(MorelloAddr).
   Include AilTypesAux(IMP).

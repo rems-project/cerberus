@@ -7,7 +7,7 @@ Require Import Coq.ZArith.Zcompare.
 Require Import ExtLib.Structures.Monad.
 Require Import ExtLib.Structures.MonadExc.
 
-Require Import Location.
+Require Import CoqLocation.
 Require Import Symbol.
 Require Import Annot.
 Require Import Utils.
