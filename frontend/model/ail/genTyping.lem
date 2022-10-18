@@ -483,7 +483,18 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
   let annotate_expression = annotate_expression sigm gamm in
   let annotate_rvalue     = annotate_rvalue sigm gamm     in
   let annotate_assignee   = annotate_assignee sigm gamm   in
-  let annotate_arguments  = annotate_arguments sigm gamm  in
+  let annotate_arguments loc is_variadic args = function
+    | Just params ->
+        annotate_arguments_aux false sigm gamm (List.length args) (List.length params) loc is_variadic args params
+    | Nothing ->
+        error "annotate_arguments ==> no proto"
+  end in
+  let annotate_and_cast_arguments loc is_variadic args = function
+    | Just params ->
+        annotate_arguments_aux true sigm gamm (List.length args) (List.length params) loc is_variadic args params
+    | Nothing ->
+        error "annotate_and_cast_arguments ==> no proto"
+  end in
   match expr_ with
     | AilEunary (Plus as uop) e ->
         (* STD §6.5.3.3#1, sentence 1 *)
@@ -829,7 +840,9 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
                   let gen_fun_ty = GenRValueType $GenFunction (no_qualifiers, Ctype [] $ Basic (Integer Bool))
                                        ((qs, Ctype [] $ Pointer qs object_ty, false) :: params_wo_ptr) false in
                   guard_violation loc_cursor (AtomicAddressArgumentMustBeAtomic AtomicCompareExchange object_ty) (AAux.is_atomic object_ty) >>= fun () ->
-                  annotate_arguments loc_cursor false (expected_e :: desired_e :: order_success_e :: order_failure_e :: args) (Just params_wo_ptr) >>= fun es' ->
+                  let (params1, params2) = List.splitAt 2 params_wo_ptr in
+                  annotate_and_cast_arguments loc_cursor false [expected_e; desired_e] (Just params1)             >>= fun args1 ->
+                  annotate_arguments loc_cursor false (order_success_e :: order_failure_e :: args) (Just params2) >>= fun args2 ->
                   (* TODO: The failure argument shall be no stronger than the success argument. *)
                   match memory_order_of_expr order_failure_e with
                   | Just Cmm_csem.Release ->
@@ -837,7 +850,7 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
                   | Just Cmm_csem.Acq_rel ->
                     E.undef loc_cursor Undefined.UB207_atomic_compare_exchange_memorder
                   | _ ->
-                    E.return (AilEcall (AnnotatedExpression gen_fun_ty annots' loc' $ AilEbuiltin b) (object_e' :: es')
+                    E.return (AilEcall (AnnotatedExpression gen_fun_ty annots' loc' $ AilEbuiltin b) (object_e' :: args1 ++ args2)
                              , GenRValueType (GenBasic (GenInteger (Concrete Bool))))
                   end
               | gty ->
@@ -854,7 +867,9 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
                   let gen_fun_ty = GenRValueType $GenFunction (no_qualifiers, Ctype [] $ Basic (Integer Bool))
                                        ((qs, Ctype [] $ Pointer qs object_ty, false) :: params_wo_ptr) false in
                   guard_violation loc_cursor (AtomicAddressArgumentMustBeAtomic AtomicCompareExchange object_ty) (AAux.is_atomic object_ty) >>= fun () ->
-                  annotate_arguments loc_cursor false (expected_e :: desired_e :: order_success_e :: order_failure_e :: args) (Just params_wo_ptr) >>= fun es' ->
+                  let (params1, params2) = List.splitAt 2 params_wo_ptr in
+                  annotate_and_cast_arguments loc_cursor false [expected_e; desired_e] (Just params1)             >>= fun args1 ->
+                  annotate_arguments loc_cursor false (order_success_e :: order_failure_e :: args) (Just params2) >>= fun args2 ->
                   (* TODO: The failure argument shall be no stronger than the success argument. *)
                   match memory_order_of_expr order_failure_e with
                   | Just Cmm_csem.Release ->
@@ -862,7 +877,7 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
                   | Just Cmm_csem.Acq_rel ->
                     E.undef loc_cursor Undefined.UB207_atomic_compare_exchange_memorder
                   | _ ->
-                    E.return (AilEcall (AnnotatedExpression gen_fun_ty annots' loc' $ AilEbuiltin b) (object_e' :: es')
+                    E.return (AilEcall (AnnotatedExpression gen_fun_ty annots' loc' $ AilEbuiltin b) (object_e' :: args1 ++ args2)
                              , GenRValueType (GenBasic (GenInteger (Concrete Bool))))
                   end
               | gty ->
@@ -1682,10 +1697,10 @@ and annotate_assignee sigm gamm is_init a_ctxt loc ty1 e2 =
   E.return e2
 
 
-and annotate_arguments_aux sigm gamm n_args n_params loc is_variadic args params =
+and annotate_arguments_aux add_casts sigm gamm n_args n_params loc is_variadic args params =
   let annotate_expression = annotate_expression sigm gamm CTXother in
   let annotate_assignee   = annotate_assignee sigm gamm false FunctionParameterAsSimpleAssignment in
-  let annotate_arguments_aux = annotate_arguments_aux sigm gamm n_args n_params loc is_variadic in
+  let annotate_arguments_aux = annotate_arguments_aux add_casts sigm gamm n_args n_params loc is_variadic in
   match (args, params) with
     | ([], []) ->
         let () = Debug.print_debug 1 [] (fun () ->
@@ -1700,10 +1715,19 @@ and annotate_arguments_aux sigm gamm n_args n_params loc is_variadic args params
 (*
         if has_proto then
 *)
-          (* TODO: add location *)
-          annotate_assignee Loc.unknown (AAux.rvalue_coercion param_ty1) arg_e >>= fun a_arg_e ->
-          annotate_arguments_aux args' params'                                 >>= fun a_args' ->
-          E.return (a_arg_e :: a_args')
+          (* NOTE: we use 'unknown' location here because the location of the
+             argument argment is used in the end *)
+          let rvalue_ty = (AAux.rvalue_coercion param_ty1) in
+          annotate_assignee Loc.unknown rvalue_ty arg_e >>= fun a_arg_e ->
+          annotate_arguments_aux  args' params'         >>= fun a_args' ->
+          let a_arg_e' =
+            if add_casts then
+              AnnotatedExpression (GenRValueType (GenTypes.inject_type rvalue_ty)) [] (Loc.locOf a_arg_e)
+                (AilEcast no_qualifiers rvalue_ty a_arg_e)
+            else
+                a_arg_e
+          in
+          E.return (a_arg_e' :: a_args')
 (*
         else
           (* the called function has a type that does not include a prototype *)
@@ -1730,18 +1754,6 @@ and annotate_arguments_aux sigm gamm n_args n_params loc is_variadic args params
     | (_, _) ->
         E.constraint_violation loc (FunctionCallTooFewArguments n_params n_args)
   end
-
-and annotate_arguments sigm gamm loc is_variadic args = function
-  | Just params ->
-      annotate_arguments_aux sigm gamm (List.length args) (List.length params) loc is_variadic args params
-  | Nothing ->
-      error "annotate_arguments ==> no proto"
-end
-
-
-
-
-
 
 
 
