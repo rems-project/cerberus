@@ -84,6 +84,7 @@ type mem_error =
   | MerrAccess of access_kind * access_error
   | MerrWriteOnReadOnly of bool (* is_string_literal *)
   | MerrReadUninit 
+  | MerrTrapRepresentation of access_kind
 
   
   | MerrUndefinedFree of free_error
@@ -120,8 +121,12 @@ instance (Show mem_error)
         stringFromAccess_error err
     | MerrWriteOnReadOnly _ ->
         "MerrWriteOnReadOnly"
-    |   MerrReadUninit ->
+    | MerrReadUninit ->
         "MerrReadUninit"
+    | MerrTrapRepresentation StoreAccess ->
+        "MerrTrapRepresentation Store" 
+    | MerrTrapRepresentation LoadAccess ->
+        "MerrTrapRepresentation Load" 
     | MerrAccess StoreAccess err ->
         "MerrAccess Store " ^
         stringFromAccess_error err
@@ -228,6 +233,8 @@ let undefinedFromMem_error = function
       Just [Undefined.UB064_modifying_const]
   | MerrReadUninit ->
       Just [Undefined.UB011_use_indeterminate_automatic_object]
+  | MerrTrapRepresentation LoadAccess ->
+      Just [Undefined.UB012_lvalue_read_trap_representation]
   | _ ->
       Nothing
 end

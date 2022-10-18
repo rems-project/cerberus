@@ -1506,6 +1506,23 @@ module Concrete : Memory = struct
               ", @" ^ Pp_utils.to_plain_string (pp_pointer_value (PV (prov, ptrval_))) ^
               " ==> mval= " ^ Pp_utils.to_plain_string (pp_mem_value mval)
              );
+            (* trap representation for _Bool *)
+            (* TODO: might be nicer to have that part of the Ocaml_implementation interface
+               (even so we probably will only ever use it for _Bool) *)
+            begin if AilTypesAux.is_Bool ty then
+              let is_trap n =
+                not N.(equal n zero || equal n (succ zero)) in
+              match mval with
+                | MVunspecified _ ->
+                    fail ~loc (MerrTrapRepresentation LoadAccess)
+                | MVinteger (_, (IV (_, n))) when is_trap n ->
+                    fail ~loc (MerrTrapRepresentation LoadAccess)
+                | _ ->
+                    return ()
+            else
+              return ()
+            end >>= fun () ->
+
             if Switches.(has_switch SW_strict_reads) then
               match mval with
                 | MVunspecified _ ->
