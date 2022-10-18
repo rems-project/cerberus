@@ -4,8 +4,8 @@ Require Import Coq.Strings.String.
 Require Import Addr.
 Require Import CoqUndefined.
 Require Import CoqLocation.
-Require AilSyntax.
-Require Import Ctype.
+Require CoqAilSyntax.
+Require Import CoqCtype.
 Require Import SimpleError.
 
 Module Mem_common (A:VADDR).
@@ -285,8 +285,8 @@ Inductive floating_operator : Set :=
 | FloatDiv : floating_operator.
 
 Inductive derivecap_op : Set :=
-| DCunary : AilSyntax.unaryOperator -> derivecap_op
-| DCbinary : AilSyntax.binaryOperator -> derivecap_op.
+| DCunary : CoqAilSyntax.unaryOperator -> derivecap_op
+| DCbinary : CoqAilSyntax.binaryOperator -> derivecap_op.
 
 (*
 Inductive pure_memop : Set :=
@@ -317,7 +317,7 @@ Inductive generic_memop (sym : Set) : Set :=
 | Va_end : generic_memop sym
 | Copy_alloc_id : generic_memop sym
 | CHERI_intrinsic :
-  string -> Cerb_frontend.Ctype.ctype * list Cerb_frontend.Ctype.ctype ->
+  string -> Cerb_frontend.CoqCtype.ctype * list Cerb_frontend.CoqCtype.ctype ->
   generic_memop sym.
 
 Arguments PtrEq {_}.
@@ -428,15 +428,15 @@ Definition instance_Nondeterminism_Constraints_Mem_common_mem_constraint_dict
 *)
 
 Inductive type_predicate : Set :=
-| TyPred : (Ctype.ctype -> serr bool) -> type_predicate
+| TyPred : (CoqCtype.ctype -> serr bool) -> type_predicate
 | TyIsPointer : type_predicate.
 
 Inductive instrinsics_ret_spec : Set :=
-| ExactRet : Ctype.ctype -> instrinsics_ret_spec
+| ExactRet : CoqCtype.ctype -> instrinsics_ret_spec
 | CopyRet : nat -> instrinsics_ret_spec.
 
 Inductive intrinsics_arg_spec : Set :=
-| ExactArg : Ctype.ctype -> intrinsics_arg_spec
+| ExactArg : CoqCtype.ctype -> intrinsics_arg_spec
 | PolymorphicArg : list type_predicate -> intrinsics_arg_spec
 | CopyArg : nat -> intrinsics_arg_spec.
 
@@ -480,40 +480,40 @@ Fixpoint either_sequence {a b : Set} (xs : list (Either.either a b))
     end
   end.
 
-Definition try_usual_arithmetic (function_parameter : Cerb_frontend.Ctype.ctype)
-  : Cerb_frontend.Ctype.ctype -> option Cerb_frontend.Ctype.ctype :=
-  let 'Cerb_frontend.Ctype.Ctype _ ty1 := function_parameter in
-  fun (function_parameter : Cerb_frontend.Ctype.ctype) =>
-    let 'Cerb_frontend.Ctype.Ctype _ ty2 := function_parameter in
+Definition try_usual_arithmetic (function_parameter : Cerb_frontend.CoqCtype.ctype)
+  : Cerb_frontend.CoqCtype.ctype -> option Cerb_frontend.CoqCtype.ctype :=
+  let 'Cerb_frontend.CoqCtype.Ctype _ ty1 := function_parameter in
+  fun (function_parameter : Cerb_frontend.CoqCtype.ctype) =>
+    let 'Cerb_frontend.CoqCtype.Ctype _ ty2 := function_parameter in
     match (ty1, ty2) with
     |
-      (Cerb_frontend.Ctype.Basic (Cerb_frontend.Ctype.Integer ity1),
-        Cerb_frontend.Ctype.Basic (Cerb_frontend.Ctype.Integer ity2)) =>
+      (Cerb_frontend.CoqCtype.Basic (Cerb_frontend.CoqCtype.Integer ity1),
+        Cerb_frontend.CoqCtype.Basic (Cerb_frontend.CoqCtype.Integer ity2)) =>
       Some
-        (Cerb_frontend.Ctype.Ctype nil
-          (Cerb_frontend.Ctype.Basic
-            (Cerb_frontend.Ctype.Integer
+        (Cerb_frontend.CoqCtype.Ctype nil
+          (Cerb_frontend.CoqCtype.Basic
+            (Cerb_frontend.CoqCtype.Integer
               (Cerb_frontend.AilTypesAux.usual_arithmetic_integer
                 (Cerb_frontend.Implementation.integerImpl tt) ity1 ity2))))
     | _ => None
     end.
 
 Fixpoint resolve_arg
-  (n_value : int) (get_arg : int -> Cerb_frontend.Ctype.ctype * bool)
+  (n_value : int) (get_arg : int -> Cerb_frontend.CoqCtype.ctype * bool)
   (get_spec : int -> intrinsics_arg_spec)
-  (function_parameter : Cerb_frontend.Ctype.ctype * bool)
-  : intrinsics_arg_spec -> Either.either string Cerb_frontend.Ctype.ctype :=
+  (function_parameter : Cerb_frontend.CoqCtype.ctype * bool)
+  : intrinsics_arg_spec -> Either.either string Cerb_frontend.CoqCtype.ctype :=
   let '(arg, is_null_pointer_constant1) := function_parameter in
   fun (spec : intrinsics_arg_spec) =>
     let resolve_arg1 := resolve_arg n_value get_arg get_spec in
     match spec with
     | ExactArg ty =>
-      if Cerb_frontend.Ctype.ctypeEqual arg ty then
+      if Cerb_frontend.CoqCtype.ctypeEqual arg ty then
         Either.Right arg
       else
         match try_usual_arithmetic ty arg with
         | Some usual_ty =>
-          if Cerb_frontend.Ctype.ctypeEqual usual_ty ty then
+          if Cerb_frontend.CoqCtype.ctypeEqual usual_ty ty then
             Either.Right usual_ty
           else
             Either.Left "ExactArg -- common type didn't match"
@@ -522,7 +522,7 @@ Fixpoint resolve_arg
     | PolymorphicArg tyl =>
       let opt :=
         Stdlib.List.fold_left
-          (fun (acc : option Cerb_frontend.Ctype.ctype) =>
+          (fun (acc : option Cerb_frontend.CoqCtype.ctype) =>
             fun (p_value : type_predicate) =>
               match (acc, p_value) with
               | (Some ty, _) => Some ty
@@ -537,9 +537,9 @@ Fixpoint resolve_arg
                 else
                   if is_null_pointer_constant1 then
                     Some
-                      (Cerb_frontend.Ctype.mk_ctype_pointer
-                        Cerb_frontend.Ctype.no_qualifiers
-                        Cerb_frontend.Ctype.void)
+                      (Cerb_frontend.CoqCtype.mk_ctype_pointer
+                        Cerb_frontend.CoqCtype.no_qualifiers
+                        Cerb_frontend.CoqCtype.void)
                   else
                     None
               end) None tyl in
@@ -558,10 +558,10 @@ Fixpoint resolve_arg
     end.
 
 Definition derive_intrinsic_signature
-  (args : list (Cerb_frontend.Ctype.ctype * bool))
+  (args : list (Cerb_frontend.CoqCtype.ctype * bool))
   (function_parameter : instrinsics_ret_spec * list intrinsics_arg_spec)
   : Either.either string
-    (Cerb_frontend.Ctype.ctype * list Cerb_frontend.Ctype.ctype) :=
+    (Cerb_frontend.CoqCtype.ctype * list Cerb_frontend.CoqCtype.ctype) :=
   let '(ret_spec, specs) := function_parameter in
   let n_value := CoqOfOCaml.List.length args in
   if negb (equiv_decb n_value (CoqOfOCaml.List.length specs)) then

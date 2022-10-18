@@ -90,6 +90,9 @@ module CHERIMorello : Memory = struct
   let translate_mem_error (e:MM.mem_error) : mem_error = assert false (* TODO *)
   let translate_location (l:CoqLocation.location_ocaml): Location_ocaml.t = assert false (* TODO *)
   let translate_undefined_behaviour (u:CoqUndefined.undefined_behaviour) : Undefined.undefined_behaviour = assert false (* TODO *)
+  let translate_Symbol_prefix (p:Symbol.prefix) : CoqSymbol.prefix = assert false (* TODO *)
+  let translate_thread_id (tid:thread_id) : MM.thread_id = assert false (* TODO *)
+  let translate_ctype (ty:Ctype.ctype) : CoqCtype.ctype = assert false (* TODO *)
 
   let translate_memMError (e:MM.memMError) : mem_error Nondeterminism.kill_reason =
     match e with
@@ -107,20 +110,20 @@ module CHERIMorello : Memory = struct
         | (st',Coq_inr a) -> (NDactive a, st')
       )
 
-  let eq_ptrval (a:pointer_value) (b:pointer_value) : bool memM =
-    lift_coq_memM (MM.eq_ptrval a b)
+  let allocate_object
+        (tid: Mem_common.thread_id)
+        (pref: Symbol.prefix)
+        (int_val: integer_value)
+        (ty: Ctype.ctype)
+        (init_opt: mem_value option): pointer_value memM =
+    lift_coq_memM (MM.allocate_object
+                     (translate_thread_id tid)
+                     (translate_Symbol_prefix pref)
+                     int_val
+                     (translate_ctype ty)
+                     init_opt)
 
-(*
-  val allocate_object:
-       Mem_common.thread_id      (* the allocating thread *)
-    -> Symbol.prefix  (* symbols coming from the Core/C program, for debugging purpose *)
-    -> integer_value  (* alignment constraint *)
-    -> Ctype.ctype    (* type of the allocation *)
-    -> mem_value option   (* optional initialisation value (if provided the allocation is made read-only) *)
-    -> pointer_value memM =
-    lift_coq_memM (MM.allocate_object _ _ _)
- *)
-  
+
   (*
 
   let cs_module : (module Constraints with type t = mem_iv_constraint)
@@ -163,14 +166,23 @@ module CHERIMorello : Memory = struct
    (* concrete pointer *) (unit -> 'a) ->
    (* unspecified value *) (unit -> 'a) -> 'a
   val case_funsym_opt: mem_state -> pointer_value -> Symbol.sym option
+   *)
 
   (* Operations on pointer values *)
-  val eq_ptrval: pointer_value -> pointer_value -> bool memM
-  val ne_ptrval: pointer_value -> pointer_value -> bool memM
-  val lt_ptrval: pointer_value -> pointer_value -> bool memM
-  val gt_ptrval: pointer_value -> pointer_value -> bool memM
-  val le_ptrval: pointer_value -> pointer_value -> bool memM
-  val ge_ptrval: pointer_value -> pointer_value -> bool memM
+  let eq_ptrval (a:pointer_value) (b:pointer_value) : bool memM =
+    lift_coq_memM (MM.eq_ptrval a b)
+  let ne_ptrval (a:pointer_value) (b:pointer_value) : bool memM =
+    lift_coq_memM (MM.ne_ptrval a b)
+  let lt_ptrval (a:pointer_value) (b:pointer_value) : bool memM =
+    lift_coq_memM (MM.lt_ptrval a b)
+  let gt_ptrval (a:pointer_value) (b:pointer_value) : bool memM =
+    lift_coq_memM (MM.gt_ptrval a b)
+  let le_ptrval (a:pointer_value) (b:pointer_value) : bool memM =
+    lift_coq_memM (MM.le_ptrval a b)
+  let ge_ptrval (a:pointer_value) (b:pointer_value) : bool memM =
+    lift_coq_memM (MM.ge_ptrval a b)
+
+  (*
   val diff_ptrval: Ctype.ctype -> pointer_value -> pointer_value -> integer_value memM
 
   val update_prefix: (Symbol.prefix * mem_value) -> unit memM

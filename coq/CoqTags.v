@@ -3,8 +3,8 @@
    from tags.ml
  *)
 
-Require Import Symbol.
-Require Import Ctype.
+Require Import CoqSymbol.
+Require Import CoqCtype.
 
-Definition tagDefs: unit -> (SymMap.t Ctype.tag_definition) :=
+Definition tagDefs: unit -> (SymMap.t CoqCtype.tag_definition) :=
   fun _ => @SymMap.empty _.

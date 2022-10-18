@@ -1,5 +1,5 @@
 (coq.theory
  (name Cerberus)
- (modules CapFns CapFnsTypes SimpleError Utils Addr CoqLocation Capabilities Morello Annot Ctype Switches CoqImplementation AilSyntax AilTypesAux ErrorWithState Mem_common Memory_model Symbol CoqUndefined Tags CheriMemory)
+ (modules CapFns CapFnsTypes SimpleError Utils Addr CoqLocation Capabilities Morello CoqAnnot CoqCtype CoqSwitches CoqImplementation CoqAilSyntax CoqAilTypesAux ErrorWithState CoqMem_common Memory_model CoqSymbol CoqUndefined CoqTags CheriMemory)
 )
 

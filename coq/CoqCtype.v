@@ -8,8 +8,8 @@ Require Import ExtLib.Structures.Monad.
 Require Import ExtLib.Structures.MonadExc.
 
 Require Import CoqLocation.
-Require Import Symbol.
-Require Import Annot.
+Require Import CoqSymbol.
+Require Import CoqAnnot.
 Require Import Utils.
 Require Import SimpleError.
 
@@ -38,7 +38,7 @@ Inductive integerType : Type := (* [name = "^\\(\\|\\([a-z A-Z]+_\\)\\)ity[0-9]*
  | Bool: integerType
  | Signed:  integerBaseType  -> integerType
  | Unsigned:  integerBaseType  -> integerType
- | Enum:  Symbol.sym  -> integerType
+ | Enum:  sym  -> integerType
    (* Things defined in the standard libraries *)
  | Wchar_t: integerType
  | Wint_t: integerType
@@ -119,23 +119,23 @@ Inductive ctype' : Type := (*[name = "^\\([a-z A-Z]*_\\)?ty[0-9]*'?$"]*)
   | Pointer:  qualifiers  ->  ctype  -> ctype'
     (* STD Â§6.2.5#20, bullet 6 *)
   | Atomic:  ctype  -> ctype'
-  | Struct:  Symbol.sym  -> ctype'
-  | Union:  Symbol.sym  -> ctype'
+  | Struct:  sym  -> ctype'
+  | Union:  sym  -> ctype'
 with ctype : Type :=
-  Ctype:  list  Annot.annot  ->  ctype'  -> ctype .
+  Ctype:  list  CoqAnnot.annot  ->  ctype'  -> ctype .
 
 
-Definition struct_tag : Type :=  Symbol.sym.
-Definition union_tag : Type :=   Symbol.sym .
-Definition member_id : Type :=   Symbol.sym .
+Definition struct_tag : Type :=  sym.
+Definition union_tag : Type :=   sym .
+Definition member_id : Type :=   sym .
 
 Inductive flexible_array_member : Type :=
     (* NOTE: the last parameter is the element type of the array *)
-  | FlexibleArrayMember:  Annot.attributes  ->  Symbol.identifier  ->  qualifiers  ->  ctype  -> flexible_array_member .
+  | FlexibleArrayMember:  CoqAnnot.attributes  ->  CoqSymbol.identifier  ->  qualifiers  ->  ctype  -> flexible_array_member .
 
 Inductive tag_definition : Type :=
-  | StructDef:  list  ((Symbol.identifier  * ((Annot.attributes  * qualifiers  * ctype ) % type)) % type) ->  option  flexible_array_member   -> tag_definition
-  | UnionDef:  list  ((Symbol.identifier  * ((Annot.attributes  * qualifiers  * ctype ) % type)) % type) -> tag_definition .
+  | StructDef:  list  ((CoqSymbol.identifier  * ((CoqAnnot.attributes  * qualifiers  * ctype ) % type)) % type) ->  option  flexible_array_member   -> tag_definition
+  | UnionDef:  list  ((CoqSymbol.identifier  * ((CoqAnnot.attributes  * qualifiers  * ctype ) % type)) % type) -> tag_definition .
 
 (** Type class instances *)
 

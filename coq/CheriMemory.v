@@ -14,7 +14,7 @@ From ExtLib.Data Require Import List.
 From ExtLib.Structures Require Import Monad Monads MonadExc MonadState Traversable.
 From ExtLib.Data.Monads Require Import EitherMonad OptionMonad.
 
-Require Import SimpleError Capabilities Addr Memory_model Mem_common ErrorWithState CoqUndefined Morello ErrorWithState CoqLocation Symbol CoqImplementation Tags Utils Switches AilTypesAux.
+Require Import SimpleError Capabilities Addr Memory_model CoqMem_common ErrorWithState CoqUndefined Morello ErrorWithState CoqLocation CoqSymbol CoqImplementation CoqTags Utils CoqSwitches CoqAilTypesAux.
 
 Local Open Scope string_scope.
 Local Open Scope type_scope.
@@ -53,7 +53,7 @@ Module CheriMemory
   | Prov_device : provenance.
 
   Inductive function_pointer : Set :=
-  | FP_valid : Symbol.sym -> function_pointer
+  | FP_valid : CoqSymbol.sym -> function_pointer
   | FP_invalid : C.t -> function_pointer.
 
   Inductive pointer_value_base : Set :=
@@ -74,41 +74,41 @@ Module CheriMemory
   Definition floating_value : Set := float. (* 64 bit *)
 
   Inductive mem_value_with_err :=
-  | MVEunspecified : Ctype.ctype -> mem_value_with_err
+  | MVEunspecified : CoqCtype.ctype -> mem_value_with_err
   | MVEinteger :
-    Ctype.integerType -> integer_value ->
+    CoqCtype.integerType -> integer_value ->
     mem_value_with_err
   | MVEfloating :
-    Ctype.floatingType -> floating_value ->
+    CoqCtype.floatingType -> floating_value ->
     mem_value_with_err
   | MVEpointer :
-    Ctype.ctype -> pointer_value -> mem_value_with_err
+    CoqCtype.ctype -> pointer_value -> mem_value_with_err
   | MVEarray : list mem_value_with_err -> mem_value_with_err
   | MVEstruct :
-    Symbol.sym ->
-    list  (Symbol.identifier *  Ctype.ctype * mem_value_with_err) ->
+    CoqSymbol.sym ->
+    list  (CoqSymbol.identifier *  CoqCtype.ctype * mem_value_with_err) ->
     mem_value_with_err
   | MVEunion :
-    Symbol.sym ->
-    Symbol.identifier -> mem_value_with_err ->
+    CoqSymbol.sym ->
+    CoqSymbol.identifier -> mem_value_with_err ->
     mem_value_with_err
   | MVErr : mem_error -> mem_value_with_err.
 
   Inductive mem_value_ind :=
-  | MVunspecified : Ctype.ctype -> mem_value_ind
+  | MVunspecified : CoqCtype.ctype -> mem_value_ind
   | MVinteger :
-    Ctype.integerType -> integer_value -> mem_value_ind
+    CoqCtype.integerType -> integer_value -> mem_value_ind
   | MVfloating :
-    Ctype.floatingType -> floating_value -> mem_value_ind
+    CoqCtype.floatingType -> floating_value -> mem_value_ind
   | MVpointer :
-    Ctype.ctype -> pointer_value -> mem_value_ind
+    CoqCtype.ctype -> pointer_value -> mem_value_ind
   | MVarray : list mem_value_ind -> mem_value_ind
   | MVstruct :
-    Symbol.sym ->
-    list (Symbol.identifier * Ctype.ctype * mem_value_ind) -> mem_value_ind
+    CoqSymbol.sym ->
+    list (CoqSymbol.identifier * CoqCtype.ctype * mem_value_ind) -> mem_value_ind
   | MVunion :
-    Symbol.sym ->
-    Symbol.identifier -> mem_value_ind -> mem_value_ind.
+    CoqSymbol.sym ->
+    CoqSymbol.identifier -> mem_value_ind -> mem_value_ind.
 
   Definition mem_value := mem_value_ind.
 
@@ -139,10 +139,10 @@ Module CheriMemory
 
   Record allocation :=
     {
-      prefix : Symbol.prefix;
+      prefix : CoqSymbol.prefix;
       base : MorelloAddr.t;
       size : Z;
-      ty : option Ctype.ctype;
+      ty : option CoqCtype.ctype;
       is_readonly : readonly_status;
       taint : allocation_taint
     }.
@@ -188,7 +188,7 @@ Module CheriMemory
       funptrmap : ZMap.t
                     (digest * string * C.t);
       varargs : ZMap.t
-                  (Z * list (Ctype.ctype * pointer_value));
+                  (Z * list (CoqCtype.ctype * pointer_value));
       next_varargs_id : Z;
       bytemap : ZMap.t AbsByte;
       captags : ZMap.t bool;
@@ -253,7 +253,7 @@ Module CheriMemory
       allocations := ZMap.empty allocation;
       iota_map := ZMap.empty (storage_instance_id + storage_instance_id * storage_instance_id);
       funptrmap := ZMap.empty (digest * string * C.t);
-      varargs := ZMap.empty (Z * list (Ctype.ctype * pointer_value));
+      varargs := ZMap.empty (Z * list (CoqCtype.ctype * pointer_value));
       next_varargs_id := Z0;
       bytemap := ZMap.empty AbsByte;
       captags := ZMap.empty bool;
@@ -433,44 +433,44 @@ Module CheriMemory
 
   Definition alignof
     (fuel: nat)
-    (maybe_tagDefs : option (SymMap.t Ctype.tag_definition))
-    (ty: Ctype.ctype): serr Z
+    (maybe_tagDefs : option (SymMap.t CoqCtype.tag_definition))
+    (ty: CoqCtype.ctype): serr Z
     :=
     let tagDefs :=
       match maybe_tagDefs with
       | Some x => x
-      | None => Tags.tagDefs tt
+      | None => CoqTags.tagDefs tt
       end in
     let fix alignof_ (fuel: nat) ty  :=
       match fuel with
       | O => raise "alignof out of fuel"
       | S fuel =>
           match ty with
-          | Ctype.Ctype _ Ctype.Void => raise "no alignment for void"
-          | Ctype.Ctype _ (Ctype.Basic (Ctype.Integer ity)) =>
+          | CoqCtype.Ctype _ CoqCtype.Void => raise "no alignment for void"
+          | CoqCtype.Ctype _ (CoqCtype.Basic (CoqCtype.Integer ity)) =>
               ret (IMP.get.(alignof_ity) ity)
-          | Ctype.Ctype _ (Ctype.Basic (Ctype.Floating fty)) =>
+          | CoqCtype.Ctype _ (CoqCtype.Basic (CoqCtype.Floating fty)) =>
               ret (IMP.get.(alignof_fty) fty)
-          | Ctype.Ctype _ (Ctype.Array elem_ty _) =>
+          | CoqCtype.Ctype _ (CoqCtype.Array elem_ty _) =>
               alignof_ fuel elem_ty
           |
-            (Ctype.Ctype _ (Ctype.Function _ _ _) |
-              Ctype.Ctype _ (Ctype.FunctionNoParams _)) =>
+            (CoqCtype.Ctype _ (CoqCtype.Function _ _ _) |
+              CoqCtype.Ctype _ (CoqCtype.FunctionNoParams _)) =>
               raise "no alighment for function types"
-          | Ctype.Ctype _ (Ctype.Pointer _ _) =>
+          | CoqCtype.Ctype _ (CoqCtype.Pointer _ _) =>
               ret (IMP.get.(alignof_pointer))
-          | Ctype.Ctype _ (Ctype.Atomic atom_ty) =>
+          | CoqCtype.Ctype _ (CoqCtype.Atomic atom_ty) =>
               alignof_ fuel  atom_ty
-          | Ctype.Ctype _ (Ctype.Struct tag_sym) =>
+          | CoqCtype.Ctype _ (CoqCtype.Struct tag_sym) =>
               match SymMap.find tag_sym tagDefs with
-              | Some (Ctype.UnionDef _) =>
+              | Some (CoqCtype.UnionDef _) =>
                   raise "no alignment for struct with union tag"
-              | Some (Ctype.StructDef membrs flexible_opt) =>
+              | Some (CoqCtype.StructDef membrs flexible_opt) =>
                   init <-
                     match flexible_opt with
                     | None => ret 0
-                    | Some (Ctype.FlexibleArrayMember _ _ _ elem_ty) =>
-                        alignof_ fuel (Ctype.Ctype nil (Ctype.Array elem_ty None))
+                    | Some (CoqCtype.FlexibleArrayMember _ _ _ elem_ty) =>
+                        alignof_ fuel (CoqCtype.Ctype nil (CoqCtype.Array elem_ty None))
                     end ;;
                   monadic_fold_left
                     (fun acc '(_, (_, _, ty)) =>
@@ -481,11 +481,11 @@ Module CheriMemory
                     init
               | None => raise "could not find struct tag to compute alignment"
               end
-          | Ctype.Ctype _ (Ctype.Union tag_sym) =>
+          | CoqCtype.Ctype _ (CoqCtype.Union tag_sym) =>
               match SymMap.find tag_sym tagDefs with
-              | Some (Ctype.StructDef _ _) =>
+              | Some (CoqCtype.StructDef _ _) =>
                   raise "no alignment for union with struct tag"
-              | Some (Ctype.UnionDef membrs) =>
+              | Some (CoqCtype.UnionDef membrs) =>
                   monadic_fold_left
                     (fun acc '(_, (_, _, ty)) =>
                        al <- alignof_ fuel ty ;;
@@ -501,19 +501,19 @@ Module CheriMemory
 
   Fixpoint offsetsof
     (fuel: nat)
-    (tagDefs : SymMap.t Ctype.tag_definition)
-    (tag_sym : Symbol.sym)
-    : serr (list (Symbol.identifier * Ctype.ctype * Z) * Z)
+    (tagDefs : SymMap.t CoqCtype.tag_definition)
+    (tag_sym : CoqSymbol.sym)
+    : serr (list (CoqSymbol.identifier * CoqCtype.ctype * Z) * Z)
     :=
     match fuel with
     | O => raise "offsetof out of fuel"
     | S fuel =>
         match SymMap.find tag_sym tagDefs with
-        | Some (Ctype.StructDef membrs_ flexible_opt) =>
+        | Some (CoqCtype.StructDef membrs_ flexible_opt) =>
             let membrs :=
               match flexible_opt with
               | None => membrs_
-              | Some (Ctype.FlexibleArrayMember attrs ident qs ty) =>
+              | Some (CoqCtype.FlexibleArrayMember attrs ident qs ty) =>
                   List.app membrs_ [ (ident, (attrs, qs, ty)) ]
               end in
             '(xs, maxoffset) <-
@@ -533,15 +533,15 @@ Module CheriMemory
                 membrs
                 (nil, 0) ;;
             ret ((List.rev xs), maxoffset)
-        | Some (Ctype.UnionDef membrs) =>
+        | Some (CoqCtype.UnionDef membrs) =>
             ret ((List.map (fun '(ident, (_, _, ty)) => (ident, ty, 0)) membrs), 0)
         | None => raise "could not find tag"
         end
     end
   with sizeof
          (fuel: nat)
-         (maybe_tagDefs : option (SymMap.t Ctype.tag_definition))
-    : Ctype.ctype -> serr Z
+         (maybe_tagDefs : option (SymMap.t CoqCtype.tag_definition))
+    : CoqCtype.ctype -> serr Z
        :=
          match fuel with
          | O => fun _ => raise "sizeof out of fuel"
@@ -549,28 +549,28 @@ Module CheriMemory
              let tagDefs :=
                match maybe_tagDefs with
                | Some x => x
-               | None => Tags.tagDefs tt
+               | None => CoqTags.tagDefs tt
                end in
-             fun (function_parameter : Ctype.ctype) =>
-               let '(Ctype.Ctype _ ty) as cty := function_parameter in
+             fun (function_parameter : CoqCtype.ctype) =>
+               let '(CoqCtype.Ctype _ ty) as cty := function_parameter in
                match ty with
                |
-                 (Ctype.Void | Ctype.Array _ None |
-                   Ctype.Function _ _ _ |
-                   Ctype.FunctionNoParams _) =>
+                 (CoqCtype.Void | CoqCtype.Array _ None |
+                   CoqCtype.Function _ _ _ |
+                   CoqCtype.FunctionNoParams _) =>
                    raise "no sizeof for function types"
-               | Ctype.Basic (Ctype.Integer ity) =>
+               | CoqCtype.Basic (CoqCtype.Integer ity) =>
                    option2serr "sizeof_ity not defined in Implementation" (IMP.get.(sizeof_ity) ity)
-               | Ctype.Basic (Ctype.Floating fty) =>
+               | CoqCtype.Basic (CoqCtype.Floating fty) =>
                    option2serr "sizeof_fty not defined in Implementation" (IMP.get.(sizeof_fty) fty)
-               | Ctype.Array elem_ty (Some n_value) =>
+               | CoqCtype.Array elem_ty (Some n_value) =>
                    sz <- (sizeof fuel (Some tagDefs) elem_ty) ;;
                    ret (Z.mul n_value sz)
-               | Ctype.Pointer _ _ =>
+               | CoqCtype.Pointer _ _ =>
                    ret (IMP.get.(sizeof_pointer))
-               | Ctype.Atomic atom_ty =>
+               | CoqCtype.Atomic atom_ty =>
                    sizeof fuel (Some tagDefs) atom_ty
-               | Ctype.Struct tag_sym =>
+               | CoqCtype.Struct tag_sym =>
                    '(_, max_offset) <- offsetsof fuel tagDefs tag_sym ;;
                    align <- alignof fuel (Some tagDefs) cty ;;
                    let x_value := Z.modulo max_offset align in
@@ -578,11 +578,11 @@ Module CheriMemory
                           max_offset
                         else
                           Z.add max_offset (Z.sub align x_value))
-               | Ctype.Union tag_sym =>
+               | CoqCtype.Union tag_sym =>
                    match SymMap.find tag_sym tagDefs with
-                   | Some (Ctype.StructDef _ _) =>
+                   | Some (CoqCtype.StructDef _ _) =>
                        raise "no alignment for struct with union tag"
-                   | Some (Ctype.UnionDef membrs) =>
+                   | Some (CoqCtype.UnionDef membrs) =>
                        '(max_size, max_align) <-
                          monadic_fold_left
                            (fun '(acc_size, acc_align) '(_, (_, _, ty)) =>
@@ -607,13 +607,13 @@ Module CheriMemory
     : ZMap.t (digest * string * C.t) * C.t
     :=
     match fp with
-    | FP_valid (Symbol.Symbol file_dig n opt_name) =>
+    | FP_valid (CoqSymbol.Symbol file_dig n opt_name) =>
         match ZMap.find n funptrmap with
         | Some (_, _, c) => (funptrmap, c)
         | None =>
             let c := C.alloc_fun (Z.add initial_address n) in
             (match opt_name with
-             | Symbol.SD_Id name =>
+             | CoqSymbol.SD_Id name =>
                  ZMap.add n (file_dig, name, c) funptrmap
              | _ => funptrmap
              end, c)
@@ -639,7 +639,7 @@ Module CheriMemory
                 (list_init (Z.to_nat sz) (fun _ => absbyte_v Prov_none None None)))
         | MVinteger ity (IV n_value) =>
             iss <- option2serr "Could not get int signedness of a type in repr" (is_signed_ity DEFAULT_FUEL ity) ;;
-            sz <- sizeof DEFAULT_FUEL None (Ctype.Ctype nil (Ctype.Basic (Ctype.Integer ity))) ;;
+            sz <- sizeof DEFAULT_FUEL None (CoqCtype.Ctype nil (CoqCtype.Basic (CoqCtype.Integer ity))) ;;
             bs' <- bytes_of_Z iss (Z.to_nat sz) n_value ;;
             let bs := List.map (fun (x : ascii) => absbyte_v Prov_none None (Some x)) bs' in
             ret (funptrmap, (clear_caps addr (Z.of_nat (List.length bs)) captags), bs)
@@ -650,7 +650,7 @@ Module CheriMemory
                    (fun (i_value : nat) (b_value : ascii) =>
                       absbyte_v Prov_none None (Some b_value)) cb))
         | MVfloating fty fval =>
-            sz <- sizeof DEFAULT_FUEL None (Ctype.Ctype nil (Ctype.Basic (Ctype.Floating fty))) ;;
+            sz <- sizeof DEFAULT_FUEL None (CoqCtype.Ctype nil (CoqCtype.Basic (CoqCtype.Floating fty))) ;;
             bs' <- bytes_of_Z true (Z.to_nat sz) (bits_of_float fval) ;;
             let bs := List.map (fun (x : ascii) => absbyte_v Prov_none None (Some x)) bs'
             in
@@ -658,7 +658,7 @@ Module CheriMemory
         | MVpointer ref_ty (PV prov ptrval_) =>
             match ptrval_ with
             | PVfunction
-                ((FP_valid (Symbol.Symbol file_dig n_value opt_name)) as
+                ((FP_valid (CoqSymbol.Symbol file_dig n_value opt_name)) as
                   fp) =>
                 let '(funptrmap, c_value) := resolve_function_pointer funptrmap fp in
                 '(cb, ct) <- option2serr "pointer encoding error" (C.encode true c_value) ;;
@@ -684,18 +684,18 @@ Module CheriMemory
             ret (funptrmap, captags, (List.concat (List.rev bs_s)))
         | MVstruct tag_sym xs =>
             let padding_byte _ : AbsByte := absbyte_v Prov_none None None in
-            '(offs, last_off) <- offsetsof DEFAULT_FUEL (Tags.tagDefs tt) tag_sym ;;
-            sz <- sizeof DEFAULT_FUEL None (Ctype.Ctype nil (Ctype.Struct tag_sym)) ;;
+            '(offs, last_off) <- offsetsof DEFAULT_FUEL (CoqTags.tagDefs tt) tag_sym ;;
+            sz <- sizeof DEFAULT_FUEL None (CoqCtype.Ctype nil (CoqCtype.Struct tag_sym)) ;;
             let final_pad := Z.sub sz last_off in
             '(funptrmap, captags, _, bs) <-
               monadic_fold_left2
                 (fun (f: ZMap.t (digest * string * C.t) * ZMap.t bool * Z * list AbsByte) =>
                    let '(funptrmap, captags, last_off, acc) := f in
-                   fun (f : Symbol.identifier *  Ctype.ctype * Z) =>
+                   fun (f : CoqSymbol.identifier *  CoqCtype.ctype * Z) =>
                      let '(ident, ty, off) := f in
                      fun (function_parameter :
-                           Symbol.identifier *
-                             Ctype.ctype * mem_value) =>
+                           CoqSymbol.identifier *
+                             CoqCtype.ctype * mem_value) =>
                        let '(_, _, mval) := function_parameter in
                        let pad := Z.sub off last_off in
                        '(funptrmap, captags, bs) <-
@@ -708,7 +708,7 @@ Module CheriMemory
             ret (funptrmap, captags,
                 (List.app bs (list_init (Z.to_nat final_pad) padding_byte)))
         | MVunion tag_sym memb_ident mval =>
-            size <- sizeof DEFAULT_FUEL None (Ctype.Ctype nil (Ctype.Union tag_sym)) ;;
+            size <- sizeof DEFAULT_FUEL None (CoqCtype.Ctype nil (CoqCtype.Union tag_sym)) ;;
             '(funptrmap', captags', bs) <- repr fuel funptrmap captags addr mval ;;
             ret (funptrmap', captags',
                 (List.app bs
@@ -720,9 +720,9 @@ Module CheriMemory
 
   Definition allocate_object
     (tid:thread_id)
-    (pref:Symbol.prefix)
+    (pref:CoqSymbol.prefix)
     (int_val:integer_value)
-    (ty:Ctype.ctype)
+    (ty:CoqCtype.ctype)
     (init_opt:option mem_value)
     : memM pointer_value
     :=
@@ -757,7 +757,7 @@ Module CheriMemory
           | Some mval =>
               let (ro,readonly_status) :=
                 match pref with
-                | Symbol.PrefStringLiteral _ _ => (true,IsReadOnly_string_literal)
+                | CoqSymbol.PrefStringLiteral _ _ => (true,IsReadOnly_string_literal)
                 | _ => (false,IsWritable)
                 end
               in
@@ -806,7 +806,7 @@ Module CheriMemory
 
   Definition allocate_region
     (tid : thread_id)
-    (pref : Symbol.prefix)
+    (pref : CoqSymbol.prefix)
     (align_int : integer_value)
     (size_int : integer_value)
     : memM pointer_value
@@ -821,7 +821,7 @@ Module CheriMemory
     allocator size_n' align_n' >>=
       (fun '(alloc_id, addr) =>
          let alloc :=
-           {| prefix := Symbol.PrefMalloc;
+           {| prefix := CoqSymbol.PrefMalloc;
              base := addr;
              size := size_n';
              ty := None;
@@ -939,7 +939,7 @@ Module CheriMemory
     | PV (Prov_symbolic iota) (PVconcrete addr) =>
         if andb
              (cap_is_null addr)
-             (Switches.has_switch Switches.SW_forbid_nullptr_free)
+             (CoqSwitches.has_switch CoqSwitches.SW_forbid_nullptr_free)
         then
           fail (MerrFreeNullPtr loc)
         else
@@ -989,14 +989,14 @@ Module CheriMemory
                            last_used        := Some alloc_id;
                          |})
                ;;
-               if Switches.has_switch SW_zap_dead_pointers then
+               if CoqSwitches.has_switch SW_zap_dead_pointers then
                  zap_pointers alloc_id
                else
                  ret tt)
     | PV (Prov_some alloc_id) (PVconcrete addr) =>
         (if andb
               (cap_is_null addr)
-              (Switches.has_switch Switches.SW_forbid_nullptr_free)
+              (CoqSwitches.has_switch CoqSwitches.SW_forbid_nullptr_free)
          then
            fail (MerrFreeNullPtr loc)
          else
@@ -1038,7 +1038,7 @@ Module CheriMemory
                                     dynamic_addrs    := st.(dynamic_addrs);
                                     last_used        := Some alloc_id;
                                   |}) ;;
-                             if Switches.has_switch SW_zap_dead_pointers then
+                             if CoqSwitches.has_switch SW_zap_dead_pointers then
                                zap_pointers alloc_id
                              else
                                ret tt
@@ -1179,14 +1179,14 @@ Module CheriMemory
     (funptrmap : ZMap.t (digest * string * C.t))
     (tag_query_f : Z -> option bool)
     (addr : Z)
-    (cty : Ctype.ctype)
+    (cty : CoqCtype.ctype)
     (bs : list AbsByte)
     : serr (taint_ind * mem_value_with_err * list AbsByte)
     :=
     match fuel with
     | O => raise "abst out of fuel"
     | S fuel =>
-        let '(Ctype.Ctype _ ty) := cty in
+        let '(CoqCtype.Ctype _ ty) := cty in
         let self f := abst f loc find_overlaping funptrmap tag_query_f in
         sz <- sizeof DEFAULT_FUEL None cty ;;
         sassert (negb (Nat.ltb (List.length bs) (Z.to_nat sz))) "abst, |bs| < sizeof(ty)" ;;
@@ -1197,12 +1197,12 @@ Module CheriMemory
           | (NewTaint xs, NewTaint ys) => NewTaint (List.app xs ys)
           end in
         match ty with
-        | (Ctype.Void | Ctype.Array _ None |
-            Ctype.Function _ _ _ |
-            Ctype.FunctionNoParams _) =>
+        | (CoqCtype.Void | CoqCtype.Array _ None |
+            CoqCtype.Function _ _ _ |
+            CoqCtype.FunctionNoParams _) =>
             raise "abst on function!"
-        | (Ctype.Basic (Ctype.Integer ((Ctype.Signed Ctype.Intptr_t) as ity))
-          | Ctype.Basic (Ctype.Integer ((Ctype.Unsigned Ctype.Intptr_t) as ity)))
+        | (CoqCtype.Basic (CoqCtype.Integer ((CoqCtype.Signed CoqCtype.Intptr_t) as ity))
+          | CoqCtype.Basic (CoqCtype.Integer ((CoqCtype.Unsigned CoqCtype.Intptr_t) as ity)))
           =>
             sz <- sizeof DEFAULT_FUEL None cty ;;
             let '(bs1, bs2) := split_at (Z.to_nat sz) bs in
@@ -1228,7 +1228,7 @@ Module CheriMemory
                     end, bs2)
             | None => ret (provs_of_bytes bs1, MVEunspecified cty, bs)
             end
-        | Ctype.Basic (Ctype.Floating fty) =>
+        | CoqCtype.Basic (CoqCtype.Floating fty) =>
             sz <- sizeof DEFAULT_FUEL None cty ;;
             let '(bs1, bs2) := split_at (Z.to_nat sz) bs in
             '(_, _, bs1') <- split_bytes bs1 ;;
@@ -1238,7 +1238,7 @@ Module CheriMemory
                 ret (NoTaint,MVEfloating fty (float_of_bits zb),bs2)
             | None => ret (NoTaint, MVEunspecified cty, bs2)
             end
-        | Ctype.Basic (Ctype.Integer ity) =>
+        | CoqCtype.Basic (CoqCtype.Integer ity) =>
             sz <- sizeof DEFAULT_FUEL None cty ;;
             let '(bs1, bs2) := split_at (Z.to_nat sz) bs in
             '(prov, _, bs1') <- split_bytes bs1 ;;
@@ -1250,7 +1250,7 @@ Module CheriMemory
             | None =>
                 ret (provs_of_bytes bs1, MVEunspecified cty, bs2)
             end
-        | Ctype.Array elem_ty (Some n_value) =>
+        | CoqCtype.Array elem_ty (Some n_value) =>
             let fix aux (fuel:nat) (n_value : Z) par (cs : list AbsByte)
               : serr (taint_ind *  mem_value_with_err * list AbsByte)
               :=
@@ -1269,7 +1269,7 @@ Module CheriMemory
               end
             in
             aux fuel n_value (NoTaint, nil) bs
-        | Ctype.Pointer _ ref_ty =>
+        | CoqCtype.Pointer _ ref_ty =>
             sz <- sizeof DEFAULT_FUEL None cty ;;
             let '(bs1, bs2) := split_at (Z.to_nat sz) bs in
             '(prov, prov_status, bs1') <- split_bytes bs1 ;;
@@ -1283,7 +1283,7 @@ Module CheriMemory
                         | None => MVErr (MerrCHERI loc CheriErrDecodingCap)
                         | Some n_value =>
                             match ref_ty with
-                            | Ctype.Ctype _ (Ctype.Function _ _ _) =>
+                            | CoqCtype.Ctype _ (CoqCtype.Function _ _ _) =>
                                 match tag_query_f addr with
                                 | None => MVEunspecified cty
                                 | Some tag =>
@@ -1301,9 +1301,9 @@ Module CheriMemory
                                                 (PV prov
                                                    (PVfunction
                                                       (FP_valid
-                                                         (Symbol.Symbol file_dig
+                                                         (CoqSymbol.Symbol file_dig
                                                             n_value
-                                                            (Symbol.SD_Id name)))))
+                                                            (CoqSymbol.SD_Id name)))))
                                             else
                                               MVEpointer ref_ty
                                                 (PV prov (PVfunction (FP_invalid c_value)))
@@ -1333,13 +1333,13 @@ Module CheriMemory
                     end, bs2)
             | None =>
                 ret (NoTaint,
-                    MVEunspecified (Ctype.Ctype nil (Ctype.Pointer Ctype.no_qualifiers ref_ty)), bs2)
+                    MVEunspecified (CoqCtype.Ctype nil (CoqCtype.Pointer CoqCtype.no_qualifiers ref_ty)), bs2)
             end
-        | Ctype.Atomic atom_ty =>
+        | CoqCtype.Atomic atom_ty =>
             self fuel addr atom_ty bs
-        | Ctype.Struct tag_sym =>
+        | CoqCtype.Struct tag_sym =>
             sz <- sizeof DEFAULT_FUEL None cty ;;
-            '(offsets,_) <- offsetsof DEFAULT_FUEL (Tags.tagDefs tt) tag_sym ;;
+            '(offsets,_) <- offsetsof DEFAULT_FUEL (CoqTags.tagDefs tt) tag_sym ;;
             let '(bs1, bs2) := split_at (Z.to_nat sz) bs in
             '(taint, rev_xs, _, bs') <-
               monadic_fold_left
@@ -1357,7 +1357,7 @@ Module CheriMemory
                 (NoTaint, nil, 0, bs1)
             ;;
             ret (taint, (MVEstruct tag_sym (List.rev rev_xs)), bs2)
-        | Ctype.Union tag_sym =>
+        | CoqCtype.Union tag_sym =>
             raise "TODO: abst, Union (as value)"
         end
     end.
@@ -1453,8 +1453,8 @@ Module CheriMemory
   Definition find_overlaping st addr : overlap_ind
     :=
     let (require_exposed, allow_one_past) :=
-      match Switches.has_switch_pred (fun x => match x with SW_PNVI _ => true | _ => false end) with
-      | Some (Switches.SW_PNVI variant) =>
+      match CoqSwitches.has_switch_pred (fun x => match x with SW_PNVI _ => true | _ => false end) with
+      | Some (CoqSwitches.SW_PNVI variant) =>
           match variant with
           | PLAIN => (false, false)
           | AE => (true, false)
@@ -1558,7 +1558,7 @@ Module CheriMemory
 
   Definition is_within_bound
     (alloc_id : Z.t)
-    (lvalue_ty : Ctype.ctype)
+    (lvalue_ty : CoqCtype.ctype)
     (addr : Z) : memM bool
     :=
     sz <- serr2memM (sizeof DEFAULT_FUEL None lvalue_ty) ;;
@@ -1575,7 +1575,7 @@ Module CheriMemory
     [ (0x40000000, 0x40000004)
       ; (0xABC, 0XAC0) ].
 
-  Definition is_within_device (ty : Ctype.ctype) (addr : Z) : memM bool
+  Definition is_within_device (ty : CoqCtype.ctype) (addr : Z) : memM bool
     :=
     sz <- serr2memM (sizeof DEFAULT_FUEL None ty) ;;
     ret
@@ -1589,7 +1589,7 @@ Module CheriMemory
 
   Definition is_atomic_member_access
     (alloc_id : Z.t)
-    (lvalue_ty : Ctype.ctype)
+    (lvalue_ty : CoqCtype.ctype)
     (addr : Z.t)
     : memM bool
     :=
@@ -1604,7 +1604,7 @@ Module CheriMemory
            end
          with
          | Some ty, true =>
-             e <- serr2memM (Ctype.ctypeEqual DEFAULT_FUEL lvalue_ty ty) ;;
+             e <- serr2memM (CoqCtype.ctypeEqual DEFAULT_FUEL lvalue_ty ty) ;;
              ret
                (negb
                   (Z.eqb addr alloc.(base) && (Z.eqb sz alloc.(size) && e)))
@@ -1613,7 +1613,7 @@ Module CheriMemory
 
   Definition load
     (loc: location_ocaml)
-    (ty: Ctype.ctype)
+    (ty: CoqCtype.ctype)
     (p:pointer_value)
     :
     memM (footprint * mem_value)
@@ -1647,8 +1647,8 @@ Module CheriMemory
            mem_value_strip_err mval >>=
              (fun (mval : mem_value) =>
                 (if orb
-                      (Switches.has_switch (Switches.SW_PNVI AE))
-                      (Switches.has_switch (Switches.SW_PNVI AE_UDI))
+                      (CoqSwitches.has_switch (CoqSwitches.SW_PNVI AE))
+                      (CoqSwitches.has_switch (CoqSwitches.SW_PNVI AE_UDI))
                  then expose_allocations taint
                  else ret tt) ;;
                 (update (fun (st : mem_state) =>
@@ -1658,7 +1658,7 @@ Module CheriMemory
                 let fp := FP addr sz in
                 match bs' with
                 | [] =>
-                    if Switches.has_switch Switches.SW_strict_reads
+                    if CoqSwitches.has_switch CoqSwitches.SW_strict_reads
                     then
                       match mval with
                       | MVunspecified _ =>
@@ -1765,29 +1765,29 @@ Module CheriMemory
     end.
 
   Fixpoint typeof (mval : mem_value)
-    : serr Ctype.ctype :=
+    : serr CoqCtype.ctype :=
     ct <-
       match mval with
-      | MVunspecified (Ctype.Ctype _ ty) => ret ty
+      | MVunspecified (CoqCtype.Ctype _ ty) => ret ty
       | MVinteger ity _ =>
-          ret (Ctype.Basic (Ctype.Integer ity))
+          ret (CoqCtype.Basic (CoqCtype.Integer ity))
       | MVfloating fty _ =>
-          ret (Ctype.Basic (Ctype.Floating fty))
+          ret (CoqCtype.Basic (CoqCtype.Floating fty))
       | MVpointer ref_ty _ =>
-          ret (Ctype.Pointer Ctype.no_qualifiers ref_ty)
+          ret (CoqCtype.Pointer CoqCtype.no_qualifiers ref_ty)
       | MVarray [] =>
           raise "ill-formed value"
       | MVarray ((cons mval _) as mvals) =>
           mt <- typeof mval ;;
-          ret (Ctype.Array mt (Some (Z.of_nat (List.length mvals))))
-      | MVstruct tag_sym _ => ret (Ctype.Struct tag_sym)
-      | MVunion tag_sym _ _ => ret (Ctype.Union tag_sym)
+          ret (CoqCtype.Array mt (Some (Z.of_nat (List.length mvals))))
+      | MVstruct tag_sym _ => ret (CoqCtype.Struct tag_sym)
+      | MVunion tag_sym _ _ => ret (CoqCtype.Union tag_sym)
       end ;;
-    ret (Ctype.Ctype [] ct).
+    ret (CoqCtype.Ctype [] ct).
 
   Definition store
     (loc : location_ocaml)
-    (cty : Ctype.ctype)
+    (cty : CoqCtype.ctype)
     (is_locking : bool)
     (ptr : pointer_value)
     (mval : mem_value)
@@ -1797,8 +1797,8 @@ Module CheriMemory
 
     cond <- serr2memM (
                 mt <- typeof mval ;;
-                Ctype.ctypeEqual DEFAULT_FUEL (Ctype.unatomic cty)
-                  (Ctype.unatomic mt))
+                CoqCtype.ctypeEqual DEFAULT_FUEL (CoqCtype.unatomic cty)
+                  (CoqCtype.unatomic mt))
     ;;
     if negb cond
     then fail (MerrOther "store with an ill-typed memory value")
@@ -1997,11 +1997,11 @@ Module CheriMemory
                  end)
       end.
 
-  Definition null_ptrval (_:Ctype.ctype) : pointer_value
+  Definition null_ptrval (_:CoqCtype.ctype) : pointer_value
     :=
     PV Prov_none (PVconcrete (C.cap_c0 tt)).
 
-  Definition fun_ptrval (sym : Symbol.sym)
+  Definition fun_ptrval (sym : CoqSymbol.sym)
     : serr pointer_value :=
     ret (PV Prov_none (PVfunction (FP_valid sym))).
 
@@ -2014,7 +2014,7 @@ Module CheriMemory
     {A: Set}
     (pv : pointer_value)
     (fnull : unit -> A)
-    (ffun : option Symbol.sym -> A)
+    (ffun : option CoqSymbol.sym -> A)
     (fconc : unit -> A)
     (funspecified : unit -> A) : serr A
     :=
@@ -2041,7 +2041,7 @@ Module CheriMemory
   Definition case_funsym_opt
     (st : mem_state)
     (ptr : pointer_value)
-    : option Symbol.sym
+    : option CoqSymbol.sym
     :=
     let '(_, ptrval) := break_PV ptr in
     match ptrval with
@@ -2053,8 +2053,8 @@ Module CheriMemory
         match ZMap.find n_value st.(funptrmap) with
         | Some (file_dig, name, _) =>
             Some
-              (Symbol.Symbol file_dig n_value
-                 (Symbol.SD_Id name))
+              (CoqSymbol.Symbol file_dig n_value
+                 (CoqSymbol.SD_Id name))
         | None => None
         end
     end.
@@ -2066,7 +2066,7 @@ Module CheriMemory
     let '(prov2, ptrval_2) := break_PV ptr2 in
     match ptrval_1, ptrval_2 with
     | PVfunction (FP_valid sym1), PVfunction (FP_valid sym2) =>
-        ret (Symbol.symbolEquality sym1 sym2)
+        ret (CoqSymbol.symbolEquality sym1 sym2)
     | PVfunction (FP_invalid c1), PVfunction (FP_invalid c2) =>
         ret (Z.eqb (C.cap_get_value c1) (C.cap_get_value c2))
     | PVfunction (FP_valid sym), PVfunction (FP_invalid c_value)
@@ -2078,8 +2078,8 @@ Module CheriMemory
              in
              match ZMap.find n_value st.(funptrmap) with
              | Some (file_dig, name, _) =>
-                 let sym2 := Symbol.Symbol file_dig n_value (Symbol.SD_Id name) in
-                 ret (Symbol.symbolEquality sym sym2)
+                 let sym2 := CoqSymbol.Symbol file_dig n_value (CoqSymbol.SD_Id name) in
+                 ret (CoqSymbol.symbolEquality sym sym2)
              | None =>
                  raise (InternalErr
                           "CHERI.eq_ptrval ==> FP_valid failed to resolve function symbol")
@@ -2105,7 +2105,7 @@ Module CheriMemory
     | PVconcrete addr1, PVconcrete addr2 =>
         if orb (cap_is_null addr1) (cap_is_null addr2) then
           fail (MerrWIP "lt_ptrval ==> one null pointer")
-        else if Switches.has_switch Switches.SW_strict_pointer_relationals then
+        else if CoqSwitches.has_switch CoqSwitches.SW_strict_pointer_relationals then
                match
                  prov1, prov2,
                  (match prov1, prov2 with
@@ -2137,7 +2137,7 @@ Module CheriMemory
     | PVconcrete addr1, PVconcrete addr2 =>
         if orb (cap_is_null addr1) (cap_is_null addr2) then
           fail (MerrWIP "gt_ptrval ==> one null pointer")
-        else if Switches.has_switch Switches.SW_strict_pointer_relationals then
+        else if CoqSwitches.has_switch CoqSwitches.SW_strict_pointer_relationals then
                match
                  prov1, prov2,
                  (match prov1, prov2 with
@@ -2169,7 +2169,7 @@ Module CheriMemory
     | PVconcrete addr1, PVconcrete addr2 =>
         if orb (cap_is_null addr1) (cap_is_null addr2) then
           fail (MerrWIP "le_ptrval ==> one null pointer")
-        else if Switches.has_switch Switches.SW_strict_pointer_relationals then
+        else if CoqSwitches.has_switch CoqSwitches.SW_strict_pointer_relationals then
                match
                  prov1, prov2,
                  (match prov1, prov2 with
@@ -2203,7 +2203,7 @@ Module CheriMemory
     | PVconcrete addr1, PVconcrete addr2 =>
         if orb (cap_is_null addr1) (cap_is_null addr2) then
           fail (MerrWIP "ge_ptrval ==> one null pointer")
-        else if Switches.has_switch Switches.SW_strict_pointer_relationals then
+        else if CoqSwitches.has_switch CoqSwitches.SW_strict_pointer_relationals then
                match
                  prov1, prov2,
                  (match prov1, prov2 with
@@ -2229,7 +2229,7 @@ Module CheriMemory
     end.
 
   Definition diff_ptrval
-    (diff_ty : Ctype.ctype) (ptrval1 ptrval2 : pointer_value)
+    (diff_ty : CoqCtype.ctype) (ptrval1 ptrval2 : pointer_value)
     : memM integer_value
     :=
     let precond (alloc: allocation) (addr1 addr2: Z): bool
@@ -2242,7 +2242,7 @@ Module CheriMemory
     let valid_postcond  (addr1 addr2: Z) : memM integer_value :=
       let diff_ty' :=
         match diff_ty with
-        | Ctype.Ctype _ (Ctype.Array elem_ty _) => elem_ty
+        | CoqCtype.Ctype _ (CoqCtype.Array elem_ty _) => elem_ty
         | _ => diff_ty
         end in
       sz <- serr2memM (sizeof DEFAULT_FUEL None diff_ty') ;;
@@ -2251,7 +2251,7 @@ Module CheriMemory
     let error_postcond := fail MerrPtrdiff
     in
 
-    if Switches.has_switch (Switches.SW_pointer_arith PERMISSIVE)
+    if CoqSwitches.has_switch (CoqSwitches.SW_pointer_arith PERMISSIVE)
     then
       match ptrval1, ptrval2 with
       | PV _ (PVconcrete addr1), PV _ (PVconcrete addr2) =>
@@ -2374,7 +2374,7 @@ Module CheriMemory
       end.
 
   Definition update_prefix
-    (x : Symbol.prefix * mem_value)
+    (x : CoqSymbol.prefix * mem_value)
     : memM unit
     :=
     let '(pref, mval) := x in
@@ -2394,11 +2394,11 @@ Module CheriMemory
     end.
 
   Definition isWellAligned_ptrval
-    (ref_ty:  Ctype.ctype) (ptrval : pointer_value)
+    (ref_ty:  CoqCtype.ctype) (ptrval : pointer_value)
     : memM bool
     :=
-    match Ctype.unatomic_ ref_ty with
-    | (Ctype.Void | Ctype.Function _ _ _) =>
+    match CoqCtype.unatomic_ ref_ty with
+    | (CoqCtype.Void | CoqCtype.Function _ _ _) =>
         fail
           (MerrOther
              "called isWellAligned_ptrval on void or a function type")
@@ -2415,7 +2415,7 @@ Module CheriMemory
     end.
 
   Definition validForDeref_ptrval
-    (ref_ty: Ctype.ctype) (ptrval: pointer_value)
+    (ref_ty: CoqCtype.ctype) (ptrval: pointer_value)
     : memM bool
     :=
     let do_test (alloc_id : storage_instance_id): memM bool
@@ -2473,13 +2473,13 @@ Module CheriMemory
 
   Definition ptrfromint
     (loc : location_ocaml)
-    (int_ty : Ctype.integerType)
-    (ref_ty : Ctype.ctype)
+    (int_ty : CoqCtype.integerType)
+    (ref_ty : CoqCtype.ctype)
     (int_v : integer_value) : memM pointer_value
     :=
     match int_ty, int_v with
-    | Ctype.Unsigned Ctype.Intptr_t, IC _ c_value
-    | Ctype.Signed Ctype.Intptr_t, IC _ c_value
+    | CoqCtype.Unsigned CoqCtype.Intptr_t, IC _ c_value
+    | CoqCtype.Signed CoqCtype.Intptr_t, IC _ c_value
       =>
         let addr := C.cap_get_value c_value in
         get >>=
@@ -2493,8 +2493,8 @@ Module CheriMemory
                       ret (Prov_symbolic iota))
              end >>=
                (fun (prov : provenance) => ret (PV prov (PVconcrete c_value))))
-    | Ctype.Unsigned Ctype.Intptr_t, IV _
-    | Ctype.Signed Ctype.Intptr_t, IV _ =>
+    | CoqCtype.Unsigned CoqCtype.Intptr_t, IV _
+    | CoqCtype.Signed CoqCtype.Intptr_t, IV _ =>
         raise (InternalErr "ptrfromint: invalid encoding for [u]intptr_t")
     | _, IV n_value =>
         if Z.eqb n_value 0
@@ -2529,7 +2529,7 @@ Module CheriMemory
 
   Definition internal_intcast
     (loc : location_ocaml)
-    (ity2 : Ctype.integerType)
+    (ity2 : CoqCtype.integerType)
     (ival : integer_value)
     : serr (sum mem_error integer_value)
     :=
@@ -2547,7 +2547,7 @@ Module CheriMemory
         (0, (Z.sub (Z.pow 2 nbits)(1))) in
     let conv_int_to_ity2 (n_value : Z) : Z :=
       match ity2 with
-      | Ctype.Bool =>
+      | CoqCtype.Bool =>
           if Z.eqb n_value 0 then
             0
           else
@@ -2562,11 +2562,11 @@ Module CheriMemory
             wrapI min_ity2 max_ity2 n_value
       end in
     match ival, ity2 with
-    | IC false _, Ctype.Unsigned Ctype.Intptr_t
-    | IC true _, Ctype.Signed Ctype.Intptr_t =>
+    | IC false _, CoqCtype.Unsigned CoqCtype.Intptr_t
+    | IC true _, CoqCtype.Signed CoqCtype.Intptr_t =>
         ret (inr ival)
-    | IC (false as is_signed) cap, Ctype.Signed Ctype.Intptr_t
-    | IC (true as is_signed) cap,  Ctype.Unsigned Ctype.Intptr_t =>
+    | IC (false as is_signed) cap, CoqCtype.Signed CoqCtype.Intptr_t
+    | IC (true as is_signed) cap,  CoqCtype.Unsigned CoqCtype.Intptr_t =>
         ret (inr  (IC (negb is_signed) cap))
     | IC false cap, _ =>
         let n_value := C.cap_get_value cap in
@@ -2574,8 +2574,8 @@ Module CheriMemory
     | IC true cap, _ =>
         let n_value := C.cap_get_value cap in
         ret (inr (IV (conv_int_to_ity2 (unwrap_cap_value n_value))))
-    | IV n_value, Ctype.Unsigned Ctype.Intptr_t
-    | IV n_value, Ctype.Signed Ctype.Intptr_t =>
+    | IV n_value, CoqCtype.Unsigned CoqCtype.Intptr_t
+    | IV n_value, CoqCtype.Signed CoqCtype.Intptr_t =>
         if Z.eqb n_value 0 then
           ret (inr (IC false (C.cap_c0 tt)))
         else
@@ -2586,7 +2586,7 @@ Module CheriMemory
         ret (inr (IV (conv_int_to_ity2 n_value)))
     end.
 
-  Definition max_ival (ity: Ctype.integerType)
+  Definition max_ival (ity: CoqCtype.integerType)
     : serr integer_value
     :=
     let signed_max (n_value : Z) : Z :=
@@ -2594,63 +2594,63 @@ Module CheriMemory
     let unsigned_max (n_value : Z) : Z :=
       Z.sub (Z.pow 2 (Z.mul 8 n_value)) 1 in
     match ity with
-    | Ctype.Signed Ctype.Intptr_t =>
+    | CoqCtype.Signed CoqCtype.Intptr_t =>
         ret (IV (signed_max (Z.of_nat C.sizeof_vaddr)))
-    | Ctype.Unsigned Ctype.Intptr_t =>
+    | CoqCtype.Unsigned CoqCtype.Intptr_t =>
         ret (IV (unsigned_max (Z.of_nat C.sizeof_vaddr)))
     | _ =>
         n_value <- option2serr "no sizeof_ity!" (IMP.get.(sizeof_ity) ity) ;;
         match ity with
-        | Ctype.Char =>
-            if IMP.get.(CoqImplementation.is_signed_ity) Ctype.Char
+        | CoqCtype.Char =>
+            if IMP.get.(CoqImplementation.is_signed_ity) CoqCtype.Char
             then ret (IV (signed_max n_value))
             else ret (IV (unsigned_max n_value))
-        | Ctype.Bool => ret (IV (unsigned_max n_value))
-        | Ctype.Size_t
-        | Ctype.Wchar_t
-        | Ctype.Unsigned _ => ret (IV (unsigned_max n_value))
-        | Ctype.Ptrdiff_t
-        | Ctype.Wint_t
-        | Ctype.Signed _ => ret (IV (signed_max n_value))
-        | Ctype.Vaddr_t => ret (IV (unsigned_max n_value))
-        | Ctype.Enum _ => ret (IV (signed_max 4))
+        | CoqCtype.Bool => ret (IV (unsigned_max n_value))
+        | CoqCtype.Size_t
+        | CoqCtype.Wchar_t
+        | CoqCtype.Unsigned _ => ret (IV (unsigned_max n_value))
+        | CoqCtype.Ptrdiff_t
+        | CoqCtype.Wint_t
+        | CoqCtype.Signed _ => ret (IV (signed_max n_value))
+        | CoqCtype.Vaddr_t => ret (IV (unsigned_max n_value))
+        | CoqCtype.Enum _ => ret (IV (signed_max 4))
         end
     end.
 
-  Definition min_ival (ity: Ctype.integerType)
+  Definition min_ival (ity: CoqCtype.integerType)
     : serr integer_value
     :=
     let signed_min (n_value: Z) : Z :=
       Z.opp (Z.pow 2 (Z.sub (Z.mul 8 n_value) 1)) in
     match ity with
-    | Ctype.Char =>
-        if IMP.get.(CoqImplementation.is_signed_ity) Ctype.Char
+    | CoqCtype.Char =>
+        if IMP.get.(CoqImplementation.is_signed_ity) CoqCtype.Char
         then ret (IV (signed_min 8))
         else ret (IV 0)
-    | Ctype.Bool
-    | Ctype.Size_t
-    | Ctype.Wchar_t
-    | Ctype.Wint_t
-    | Ctype.Unsigned _ => ret (IV 0)
-    | Ctype.Signed Ctype.Intptr_t =>
+    | CoqCtype.Bool
+    | CoqCtype.Size_t
+    | CoqCtype.Wchar_t
+    | CoqCtype.Wint_t
+    | CoqCtype.Unsigned _ => ret (IV 0)
+    | CoqCtype.Signed CoqCtype.Intptr_t =>
         ret (IV (signed_min (Z.of_nat C.sizeof_vaddr)))
-    | Ctype.Ptrdiff_t
-    | Ctype.Signed _ =>
+    | CoqCtype.Ptrdiff_t
+    | CoqCtype.Signed _ =>
         n_value <- option2serr "no sizeof_ity!" (IMP.get.(sizeof_ity) ity) ;;
         ret (IV (signed_min n_value))
-    | Ctype.Vaddr_t => ret (IV 0)
-    | Ctype.Enum _ => ret (IV (signed_min 4))
+    | CoqCtype.Vaddr_t => ret (IV 0)
+    | CoqCtype.Enum _ => ret (IV (signed_min 4))
     end.
 
   Definition intfromptr
     (loc : location_ocaml)
-    (_ : Ctype.ctype)
-    (ity: Ctype.integerType)
+    (_ : CoqCtype.ctype)
+    (ity: CoqCtype.integerType)
     (ptr: pointer_value)
     : memM integer_value
     :=
     let '(prov,ptrval_) := break_PV ptr in
-    let wrap_intcast (ity2 : Ctype.integerType) (ival : integer_value)
+    let wrap_intcast (ity2 : CoqCtype.integerType) (ival : integer_value)
       : memM integer_value
       :=
       icr <- serr2memM (internal_intcast loc ity2 ival) ;;
@@ -2661,13 +2661,13 @@ Module CheriMemory
     match ptrval_ with
     |
       PVfunction
-        (FP_valid ((Symbol.Symbol _ n_value _) as fp)) =>
+        (FP_valid ((CoqSymbol.Symbol _ n_value _) as fp)) =>
         get >>=
           (fun (st : mem_state) =>
              match ity with
              |
-               (Ctype.Signed Ctype.Intptr_t |
-                 Ctype.Unsigned Ctype.Intptr_t) =>
+               (CoqCtype.Signed CoqCtype.Intptr_t |
+                 CoqCtype.Unsigned CoqCtype.Intptr_t) =>
                  match ZMap.find n_value st.(funptrmap) with
                  | Some (file_dig, name, c_value) =>
                      wrap_intcast ity (IC false c_value)
@@ -2680,15 +2680,15 @@ Module CheriMemory
     | (PVfunction (FP_invalid c_value) | PVconcrete c_value) =>
         if cap_is_null c_value then
           match ity with
-          | Ctype.Signed Ctype.Intptr_t =>
+          | CoqCtype.Signed CoqCtype.Intptr_t =>
               ret (IC true (C.cap_c0 tt))
-          | Ctype.Unsigned Ctype.Intptr_t =>
+          | CoqCtype.Unsigned CoqCtype.Intptr_t =>
               ret (IC false (C.cap_c0 tt))
           | _ => ret (IV 0)
           end
         else
-          (if Switches.has_switch (Switches.SW_PNVI AE) ||
-                Switches.has_switch (Switches.SW_PNVI AE_UDI)
+          (if CoqSwitches.has_switch (CoqSwitches.SW_PNVI AE) ||
+                CoqSwitches.has_switch (CoqSwitches.SW_PNVI AE_UDI)
            then
              match prov with
              | Prov_some alloc_id => expose_allocation alloc_id
@@ -2699,8 +2699,8 @@ Module CheriMemory
           ;;
           match ity with
           |
-            (Ctype.Signed Ctype.Intptr_t |
-              Ctype.Unsigned Ctype.Intptr_t) =>
+            (CoqCtype.Signed CoqCtype.Intptr_t |
+              CoqCtype.Unsigned CoqCtype.Intptr_t) =>
               wrap_intcast ity (IC false c_value)
           | _ =>
               maxival <- serr2memM (max_ival ity) ;;
@@ -2760,12 +2760,12 @@ Module CheriMemory
   Definition null_cap (is_signed : bool) : integer_value :=
     IC is_signed (C.cap_c0 tt).
 
-  Definition array_shift_ptrval: pointer_value -> Ctype.ctype -> integer_value ->
+  Definition array_shift_ptrval: pointer_value -> CoqCtype.ctype -> integer_value ->
                                  serr pointer_value
     := fun _ _ _ => raise "pure array_shift_ptrval not used in CHERI".
 
-  Definition member_shift_ptrval: pointer_value -> Symbol.sym ->
-                                  Symbol.identifier -> serr pointer_value
+  Definition member_shift_ptrval: pointer_value -> CoqSymbol.sym ->
+                                  CoqSymbol.identifier -> serr pointer_value
     := fun _ _ _ => raise "members_shift_ptrval (pure) is not supported in CHERI".
 
   Inductive collapse_ind :=
@@ -2775,7 +2775,7 @@ Module CheriMemory
   Definition eff_array_shift_ptrval
     (loc : location_ocaml)
     (ptrval : pointer_value)
-    (ty : Ctype.ctype)
+    (ty : CoqCtype.ctype)
     (ival_int : integer_value)
     : memM pointer_value
     :=
@@ -2795,8 +2795,8 @@ Module CheriMemory
             Z.add (C.cap_get_value c_value)
               offset in
           let precond (z_value : Z.t) : memM bool :=
-            if Switches.has_switch (Switches.SW_pointer_arith STRICT)
-               || negb (Switches.has_switch (Switches.SW_pointer_arith PERMISSIVE))
+            if CoqSwitches.has_switch (CoqSwitches.SW_pointer_arith STRICT)
+               || negb (CoqSwitches.has_switch (CoqSwitches.SW_pointer_arith PERMISSIVE))
             then
               get_allocation z_value >>=
                 (fun (alloc : allocation) =>
@@ -2820,7 +2820,7 @@ Module CheriMemory
                                  (fun (x : bool) =>
                                     match x with
                                     | true =>
-                                        if Switches.has_switch (SW_pointer_arith PERMISSIVE)
+                                        if CoqSwitches.has_switch (SW_pointer_arith PERMISSIVE)
                                         then ret NoCollapse
                                         else
                                           fail
@@ -2877,8 +2877,8 @@ Module CheriMemory
                end)
     | PV (Prov_some alloc_id) (PVconcrete c_value) =>
         let shifted_addr := Z.add (C.cap_get_value c_value) offset in
-        if Switches.has_switch (Switches.SW_pointer_arith STRICT)
-           || negb (Switches.has_switch (SW_pointer_arith PERMISSIVE))
+        if CoqSwitches.has_switch (CoqSwitches.SW_pointer_arith STRICT)
+           || negb (CoqSwitches.has_switch (SW_pointer_arith PERMISSIVE))
         then
           get_allocation alloc_id >>=
             (fun (alloc : allocation) =>
@@ -2895,8 +2895,8 @@ Module CheriMemory
           ret (PV (Prov_some alloc_id) (PVconcrete c_value))
     | PV Prov_none (PVconcrete c_value) =>
         let shifted_addr := Z.add (C.cap_get_value c_value) offset in
-        if Switches.has_switch (Switches.SW_pointer_arith STRICT)
-           || negb (Switches.has_switch (Switches.SW_pointer_arith PERMISSIVE))
+        if CoqSwitches.has_switch (CoqSwitches.SW_pointer_arith STRICT)
+           || negb (CoqSwitches.has_switch (CoqSwitches.SW_pointer_arith PERMISSIVE))
         then
           fail (MerrOther "out-of-bound pointer arithmetic (Prov_none)")
         else
@@ -2909,9 +2909,9 @@ Module CheriMemory
     end.
 
   Definition offsetof_ival
-    (tagDefs: SymMap.t Ctype.tag_definition)
-    (tag_sym : Symbol.sym)
-    (memb_ident : Symbol.identifier) : serr integer_value
+    (tagDefs: SymMap.t CoqCtype.tag_definition)
+    (tag_sym : CoqSymbol.sym)
+    (memb_ident : CoqSymbol.identifier) : serr integer_value
     :=
     '(xs, _) <- offsetsof DEFAULT_FUEL tagDefs tag_sym ;;
     let pred x : bool :=
@@ -2926,11 +2926,11 @@ Module CheriMemory
   Definition eff_member_shift_ptrval
     (loc : location_ocaml)
     (ptr : pointer_value)
-    (tag_sym: Symbol.sym)
-    (memb_ident: Symbol.identifier):  memM pointer_value
+    (tag_sym: CoqSymbol.sym)
+    (memb_ident: CoqSymbol.identifier):  memM pointer_value
     :=
     let '(prov,ptrval_) := break_PV ptr in
-    ioff <- serr2memM (offsetof_ival (Tags.tagDefs tt) tag_sym memb_ident) ;;
+    ioff <- serr2memM (offsetof_ival (CoqTags.tagDefs tt) tag_sym memb_ident) ;;
     offset <-
       match ioff with
       | IV offset => ret (offset)
@@ -2971,13 +2971,13 @@ Module CheriMemory
       | O => ret ptrval1
       | S index =>
           let i_value := Z.of_nat index in
-          eff_array_shift_ptrval loc ptrval1 Ctype.unsigned_char (IV i_value) >>=
+          eff_array_shift_ptrval loc ptrval1 CoqCtype.unsigned_char (IV i_value) >>=
             (fun ptrval1' =>
-               eff_array_shift_ptrval loc ptrval2 Ctype.unsigned_char (IV i_value) >>=
+               eff_array_shift_ptrval loc ptrval2 CoqCtype.unsigned_char (IV i_value) >>=
                  (fun ptrval2' =>
-                    load loc Ctype.unsigned_char ptrval2' >>=
+                    load loc CoqCtype.unsigned_char ptrval2' >>=
                       (fun '(_, mval) =>
-                         store loc Ctype.unsigned_char false ptrval1' mval ;;
+                         store loc CoqCtype.unsigned_char false ptrval1' mval ;;
                          copy_data index)))
       end
     in
@@ -3002,9 +3002,9 @@ Module CheriMemory
       | O => ret ptrval1
       | S index =>
           let i_value := IV (Z.of_nat index) in
-          eff_array_shift_ptrval loc ptrval1 Ctype.unsigned_char i_value >>=
+          eff_array_shift_ptrval loc ptrval1 CoqCtype.unsigned_char i_value >>=
             (fun ptrval1' =>
-               eff_array_shift_ptrval loc ptrval2 Ctype.unsigned_char i_value >>=
+               eff_array_shift_ptrval loc ptrval2 CoqCtype.unsigned_char i_value >>=
                  (fun ptrval2' =>
                     copy_tag ptrval1' ptrval2' ;;
 
@@ -3029,12 +3029,12 @@ Module CheriMemory
       | O => ret (List.rev acc)
       | S size =>
           let loc := Loc_other "memcmp" in
-          load loc Ctype.unsigned_char ptrval >>=
+          load loc CoqCtype.unsigned_char ptrval >>=
             (fun (x : footprint * mem_value) =>
                match x with
                | (_, MVinteger _ (IV byte_n)) =>
                    eff_array_shift_ptrval loc ptrval
-                     Ctype.unsigned_char (IV 1) >>=
+                     CoqCtype.unsigned_char (IV 1) >>=
                      (fun (ptr' : pointer_value) =>
                         get_bytes ptr' (cons byte_n acc) size)
                | _ =>
@@ -3065,7 +3065,7 @@ Module CheriMemory
     match ptr with
     | PV Prov_none (PVconcrete c_value) =>
         if cap_is_null c_value then
-          allocate_region tid (Symbol.PrefOther "realloc") align size
+          allocate_region tid (CoqSymbol.PrefOther "realloc") align size
         else
           fail (MerrWIP "realloc no provenance")
     | PV (Prov_some alloc_id) (PVconcrete c_value) =>
@@ -3078,7 +3078,7 @@ Module CheriMemory
                  get_allocation alloc_id >>=
                    (fun (alloc : allocation) =>
                       if MorelloAddr.eqb alloc.(base) addr then
-                        allocate_region tid (Symbol.PrefOther "realloc") align size >>=
+                        allocate_region tid (CoqSymbol.PrefOther "realloc") align size >>=
                           (fun (new_ptr : pointer_value) =>
                              let size_to_copy :=
                                let size_n := num_of_int size in
@@ -3098,10 +3098,10 @@ Module CheriMemory
     (ival : integer_value) (ptrval : pointer_value)
     : memM pointer_value
     :=
-    intfromptr Loc_unknown Ctype.void (Ctype.Unsigned Ctype.Intptr_t) ptrval ;;
-    ptrfromint Loc_unknown (Ctype.Unsigned Ctype.Intptr_t) Ctype.void ival.
+    intfromptr Loc_unknown CoqCtype.void (CoqCtype.Unsigned CoqCtype.Intptr_t) ptrval ;;
+    ptrfromint Loc_unknown (CoqCtype.Unsigned CoqCtype.Intptr_t) CoqCtype.void ival.
 
-  Definition concurRead_ival: Ctype.integerType -> Symbol.sym -> serr (integer_value)
+  Definition concurRead_ival: CoqCtype.integerType -> CoqSymbol.sym -> serr (integer_value)
     := fun _ _ => raise "TODO: concurRead_ival".
 
   Definition integer_ival (z:Z): integer_value := IV z.
@@ -3130,31 +3130,31 @@ Module CheriMemory
     | IntExp => int_bin Z.pow v1 v2
     end.
 
-  Definition sizeof_ival (ty : Ctype.ctype): serr integer_value
+  Definition sizeof_ival (ty : CoqCtype.ctype): serr integer_value
     :=
     sz <- sizeof DEFAULT_FUEL None ty ;;
     ret (IV sz).
 
-  Definition alignof_ival (ty: Ctype.ctype): serr integer_value
+  Definition alignof_ival (ty: CoqCtype.ctype): serr integer_value
     :=
     a <- alignof DEFAULT_FUEL None ty ;;
     ret (IV a).
 
   Definition bitwise_complement_ival
-    (ty : Ctype.integerType)
+    (ty : CoqCtype.integerType)
     (v : integer_value) : integer_value
     :=
     IV (Z.sub (Z.opp (num_of_int v)) 1).
 
-  Definition bitwise_and_ival (ty : Ctype.integerType)
+  Definition bitwise_and_ival (ty : CoqCtype.integerType)
     : integer_value -> integer_value -> integer_value :=
     int_bin Z.land.
 
-  Definition bitwise_or_ival (ty : Ctype.integerType)
+  Definition bitwise_or_ival (ty : CoqCtype.integerType)
     : integer_value -> integer_value -> integer_value :=
     int_bin Z.lor.
 
-  Definition bitwise_xor_ival (ty : Ctype.integerType)
+  Definition bitwise_xor_ival (ty : CoqCtype.integerType)
     : integer_value -> integer_value -> integer_value :=
     int_bin Z.lxor.
 
@@ -3205,11 +3205,11 @@ Module CheriMemory
     := raise "fvfromint not implemented".
 
   Definition ivfromfloat
-    (ity: Ctype.integerType)
+    (ity: CoqCtype.integerType)
     (fval: floating_value): serr integer_value
     :=
     match ity with
-    | Ctype.Bool =>
+    | CoqCtype.Bool =>
         ret (IV (if eq_fval fval zero_fval then 0 else 1))
     | _ =>
         nbytes <- option2serr "no sizeof_ity!" (IMP.get.(sizeof_ity) ity) ;;
@@ -3232,44 +3232,44 @@ Module CheriMemory
         raise "ivfromfloat no implemented"
     end.
 
-  Definition unspecified_mval (ty: Ctype.ctype): mem_value := MVunspecified ty.
+  Definition unspecified_mval (ty: CoqCtype.ctype): mem_value := MVunspecified ty.
 
   Definition integer_value_mval
-    (ity: Ctype.integerType) (ival: integer_value)
+    (ity: CoqCtype.integerType) (ival: integer_value)
     : mem_value := MVinteger ity ival.
 
   Definition floating_value_mval
-    (fty: Ctype.floatingType) (fval: floating_value)
+    (fty: CoqCtype.floatingType) (fval: floating_value)
     : mem_value := MVfloating fty fval.
 
   Definition pointer_mval
-    (ref_ty: Ctype.ctype) (ptrval: pointer_value)
+    (ref_ty: CoqCtype.ctype) (ptrval: pointer_value)
     : mem_value := MVpointer ref_ty ptrval.
 
   Definition array_mval (mvals : list mem_value) : mem_value :=
     MVarray mvals.
 
   Definition struct_mval
-    (tag_sym: Symbol.sym)
-    (xs: list(Symbol.identifier * Ctype.ctype * mem_value)): mem_value :=
+    (tag_sym: CoqSymbol.sym)
+    (xs: list(CoqSymbol.identifier * CoqCtype.ctype * mem_value)): mem_value :=
     MVstruct tag_sym xs.
 
   Definition union_mval
-    (tag_sym : Symbol.sym)
-    (memb_ident : Symbol.identifier) (mval : mem_value)
+    (tag_sym : CoqSymbol.sym)
+    (memb_ident : CoqSymbol.identifier) (mval : mem_value)
     : mem_value := MVunion tag_sym memb_ident mval.
 
   Definition case_mem_value
     {A: Set}
     (mval : mem_value)
-    (f_unspec : Ctype.ctype -> A)
-    (f_concur : Ctype.integerType -> Symbol.sym -> A)
-    (f_ival : Ctype.integerType -> integer_value -> A)
-    (f_fval : Ctype.floatingType -> floating_value -> A)
-    (f_ptr : Ctype.ctype -> pointer_value -> A)
+    (f_unspec : CoqCtype.ctype -> A)
+    (f_concur : CoqCtype.integerType -> CoqSymbol.sym -> A)
+    (f_ival : CoqCtype.integerType -> integer_value -> A)
+    (f_fval : CoqCtype.floatingType -> floating_value -> A)
+    (f_ptr : CoqCtype.ctype -> pointer_value -> A)
     (f_array : list mem_value -> A)
-    (f_struct : Symbol.sym -> list (Symbol.identifier * Ctype.ctype * mem_value) -> A)
-    (f_union : Symbol.sym -> Symbol.identifier -> mem_value -> A) : A
+    (f_struct : CoqSymbol.sym -> list (CoqSymbol.identifier * CoqCtype.ctype * mem_value) -> A)
+    (f_union : CoqSymbol.sym -> CoqSymbol.identifier -> mem_value -> A) : A
     :=
     match mval with
     | MVunspecified ty => f_unspec ty
@@ -3403,7 +3403,7 @@ Module CheriMemory
                             ret
                               (Some
                                  (MVinteger
-                                    (Ctype.Signed Ctype.Long)
+                                    (CoqCtype.Signed CoqCtype.Long)
                                     (IV (-1))))
                         | Some res =>
                             let res_size := String.length res in
@@ -3412,16 +3412,16 @@ Module CheriMemory
                               ret
                                 (Some
                                    (MVinteger
-                                      (Ctype.Signed
-                                         Ctype.Long)
+                                      (CoqCtype.Signed
+                                         CoqCtype.Long)
                                       (IV (-1))))
                             else
                               store_string loc res (Z.to_nat maxsize_n) buf_cap ;;
                               (ret
                                  (Some
                                     (MVinteger
-                                       (Ctype.Signed
-                                          Ctype.Long) (IV res_size_n))))
+                                       (CoqCtype.Signed
+                                          CoqCtype.Long) (IV res_size_n))))
                         end)
                | (_, _, _) =>
                    fail
@@ -3447,7 +3447,7 @@ Module CheriMemory
                  update (fun (st : mem_state) => mem_state_with_funptrmap funptrmap st)
                  ;;
                  match upper_val with
-                 | MVinteger Ctype.Size_t (IV n_value) =>
+                 | MVinteger CoqCtype.Size_t (IV n_value) =>
                      let x' := C.cap_get_value c_value in
                      let c_value := C.cap_narrow_bounds c_value (x', (Z.add x' n_value))
                      in ret (Some (update_cap_in_mem_value cap_val c_value))
@@ -3478,10 +3478,10 @@ Module CheriMemory
                          mem_state_with_funptrmap funptrmap st))
                    ;;
                    match mask_val with
-                   | MVinteger (Ctype.Size_t as ity) (IV n_value)
+                   | MVinteger (CoqCtype.Size_t as ity) (IV n_value)
                      =>
                        iss <- option2memM "is_signed_ity failed" (is_signed_ity DEFAULT_FUEL ity) ;;
-                       sz <- serr2memM (sizeof DEFAULT_FUEL None (Ctype.Ctype nil(Ctype.Basic (Ctype.Integer ity)))) ;;
+                       sz <- serr2memM (sizeof DEFAULT_FUEL None (CoqCtype.Ctype nil(CoqCtype.Basic (CoqCtype.Integer ity)))) ;;
                        bytes_value <- serr2memM (bytes_of_Z iss (Z.to_nat sz) n_value) ;;
                        let bits := bool_bits_of_bytes bytes_value in
                        match MorelloPermission.of_list bits with
@@ -3517,7 +3517,7 @@ Module CheriMemory
                              (String.append name "'")))
                  | Some (_, c_value) =>
                      let v_value := C.cap_get_offset c_value in
-                     ret (Some (MVinteger Ctype.Size_t (IV v_value)))
+                     ret (Some (MVinteger CoqCtype.Size_t (IV v_value)))
                  end)
           else
             if String.eqb name "cheri_address_get" then
@@ -3533,7 +3533,7 @@ Module CheriMemory
                                (String.append name "'")))
                    | Some (_, c_value) =>
                        let v_value := C.cap_get_value c_value in
-                       ret (Some (MVinteger Ctype.Vaddr_t (IV v_value)))
+                       ret (Some (MVinteger CoqCtype.Vaddr_t (IV v_value)))
                    end)
             else
               if String.eqb name "cheri_base_get" then
@@ -3549,7 +3549,7 @@ Module CheriMemory
                                  (String.append name "'")))
                      | Some (_, c_value) =>
                          let v_value := fst (C.cap_get_bounds c_value)
-                         in ret (Some (MVinteger Ctype.Vaddr_t (IV v_value)))
+                         in ret (Some (MVinteger CoqCtype.Vaddr_t (IV v_value)))
                      end)
               else
                 if String.eqb name "cheri_length_get" then
@@ -3567,7 +3567,7 @@ Module CheriMemory
                        | Some (_, c_value) =>
                            let '(base, limit) := C.cap_get_bounds c_value in
                            let v_value := Z.sub limit base in
-                           ret (Some (MVinteger Ctype.Size_t (IV v_value)))
+                           ret (Some (MVinteger CoqCtype.Size_t (IV v_value)))
                        end)
                 else
                   if String.eqb name "cheri_tag_get" then
@@ -3584,7 +3584,7 @@ Module CheriMemory
                                      (String.append name "'")))
                          | Some (_, c_value) =>
                              let v_value := if C.cap_is_valid c_value then 1 else 0
-                             in  ret (Some (MVinteger Ctype.Bool (IV v_value)))
+                             in  ret (Some (MVinteger CoqCtype.Bool (IV v_value)))
                          end)
                   else
                     if String.eqb name "cheri_tag_clear" then
@@ -3635,7 +3635,7 @@ Module CheriMemory
                                      0 in
                                  ret
                                    (Some
-                                      (MVinteger Ctype.Bool
+                                      (MVinteger CoqCtype.Bool
                                          (IV v_value)))
                              end)
                       else
@@ -3643,11 +3643,11 @@ Module CheriMemory
                           match List.nth_error args 0%nat with
                           | None =>
                               raise (InternalErr "missing argument")
-                          | Some (MVinteger Ctype.Size_t (IV n_value)) =>
+                          | Some (MVinteger CoqCtype.Size_t (IV n_value)) =>
                               let l_value := C.representable_length n_value in
                               ret
                                 (Some
-                                   (MVinteger Ctype.Size_t
+                                   (MVinteger CoqCtype.Size_t
                                       (IV l_value)))
                           | Some _ =>
                               fail
@@ -3663,12 +3663,12 @@ Module CheriMemory
                             match List.nth_error args 0%nat with
                             | None =>
                                 raise (InternalErr "missing argument")
-                            | Some (MVinteger Ctype.Size_t (IV n_value))
+                            | Some (MVinteger CoqCtype.Size_t (IV n_value))
                               =>
                                 let l_value := C.representable_alignment_mask n_value in
                                 ret
                                   (Some
-                                     (MVinteger Ctype.Size_t
+                                     (MVinteger CoqCtype.Size_t
                                         (IV l_value)))
                             | Some _ =>
                                 fail
@@ -3690,33 +3690,33 @@ Module CheriMemory
     if String.eqb name "strfcap" then
       Some
         ((ExactRet
-            Ctype.signed_long),
+            CoqCtype.signed_long),
           [
             ExactArg
-              (Ctype.Ctype nil
-                 (Ctype.Pointer
+              (CoqCtype.Ctype nil
+                 (CoqCtype.Pointer
                     {|
-                      Ctype.const := false;
-                      Ctype.restrict := true;
-                      Ctype.volatile := false
+                      CoqCtype.const := false;
+                      CoqCtype.restrict := true;
+                      CoqCtype.volatile := false
                     |}
-                    Ctype.signed_char));
+                    CoqCtype.signed_char));
             ExactArg
-              Ctype.size_t;
+              CoqCtype.size_t;
             ExactArg
-              (Ctype.Ctype nil
-                 (Ctype.Pointer
-                    {| Ctype.const := true;
-                      Ctype.restrict := true;
-                      Ctype.volatile := false
+              (CoqCtype.Ctype nil
+                 (CoqCtype.Pointer
+                    {| CoqCtype.const := true;
+                      CoqCtype.restrict := true;
+                      CoqCtype.volatile := false
                     |}
-                    Ctype.signed_char));
+                    CoqCtype.signed_char));
             PolymorphicArg
               [
                 TyPred
-                  (Ctype.ctypeEqual DEFAULT_FUEL Ctype.intptr_t);
+                  (CoqCtype.ctypeEqual DEFAULT_FUEL CoqCtype.intptr_t);
                 TyPred
-                  (Ctype.ctypeEqual DEFAULT_FUEL Ctype.uintptr_t);
+                  (CoqCtype.ctypeEqual DEFAULT_FUEL CoqCtype.uintptr_t);
                 TyIsPointer
               ]
         ])
@@ -3728,13 +3728,13 @@ Module CheriMemory
               PolymorphicArg
                 [
                   TyPred
-                    (Ctype.ctypeEqual DEFAULT_FUEL Ctype.intptr_t);
+                    (CoqCtype.ctypeEqual DEFAULT_FUEL CoqCtype.intptr_t);
                   TyPred
-                    (Ctype.ctypeEqual DEFAULT_FUEL Ctype.uintptr_t);
+                    (CoqCtype.ctypeEqual DEFAULT_FUEL CoqCtype.uintptr_t);
                   TyIsPointer
                 ];
               ExactArg
-                Ctype.size_t
+                CoqCtype.size_t
           ])
       else
         if String.eqb name "cheri_perms_and" then
@@ -3744,26 +3744,26 @@ Module CheriMemory
                 PolymorphicArg
                   [
                     TyPred
-                      (Ctype.ctypeEqual DEFAULT_FUEL Ctype.intptr_t);
+                      (CoqCtype.ctypeEqual DEFAULT_FUEL CoqCtype.intptr_t);
                     TyPred
-                      (Ctype.ctypeEqual DEFAULT_FUEL Ctype.uintptr_t);
+                      (CoqCtype.ctypeEqual DEFAULT_FUEL CoqCtype.uintptr_t);
                     TyIsPointer
                   ];
                 ExactArg
-                  Ctype.size_t
+                  CoqCtype.size_t
             ])
         else
           if String.eqb name "cheri_address_get" then
             Some
               ((ExactRet
-                  (Ctype.vaddr_t tt)),
+                  (CoqCtype.vaddr_t tt)),
                 [
                   PolymorphicArg
                     [
                       TyPred
-                        (Ctype.ctypeEqual DEFAULT_FUEL Ctype.intptr_t);
+                        (CoqCtype.ctypeEqual DEFAULT_FUEL CoqCtype.intptr_t);
                       TyPred
-                        (Ctype.ctypeEqual DEFAULT_FUEL Ctype.uintptr_t);
+                        (CoqCtype.ctypeEqual DEFAULT_FUEL CoqCtype.uintptr_t);
                       TyIsPointer
                     ]
               ])
@@ -3771,14 +3771,14 @@ Module CheriMemory
             if String.eqb name "cheri_base_get" then
               Some
                 ((ExactRet
-                    (Ctype.vaddr_t tt)),
+                    (CoqCtype.vaddr_t tt)),
                   [
                     PolymorphicArg
                       [
                         TyPred
-                          (Ctype.ctypeEqual DEFAULT_FUEL Ctype.intptr_t);
+                          (CoqCtype.ctypeEqual DEFAULT_FUEL CoqCtype.intptr_t);
                         TyPred
-                          (Ctype.ctypeEqual DEFAULT_FUEL Ctype.uintptr_t);
+                          (CoqCtype.ctypeEqual DEFAULT_FUEL CoqCtype.uintptr_t);
                         TyIsPointer
                       ]
                 ])
@@ -3786,14 +3786,14 @@ Module CheriMemory
               if String.eqb name "cheri_length_get" then
                 Some
                   ((ExactRet
-                      Ctype.size_t),
+                      CoqCtype.size_t),
                     [
                       PolymorphicArg
                         [
                           TyPred
-                            (Ctype.ctypeEqual DEFAULT_FUEL Ctype.intptr_t);
+                            (CoqCtype.ctypeEqual DEFAULT_FUEL CoqCtype.intptr_t);
                           TyPred
-                            (Ctype.ctypeEqual DEFAULT_FUEL Ctype.uintptr_t);
+                            (CoqCtype.ctypeEqual DEFAULT_FUEL CoqCtype.uintptr_t);
                           TyIsPointer
                         ]
                   ])
@@ -3801,16 +3801,16 @@ Module CheriMemory
                 if String.eqb name "cheri_tag_get" then
                   Some
                     ((ExactRet
-                        (Ctype.Ctype nil
-                           (Ctype.Basic
-                              (Ctype.Integer Ctype.Bool)))),
+                        (CoqCtype.Ctype nil
+                           (CoqCtype.Basic
+                              (CoqCtype.Integer CoqCtype.Bool)))),
                       [
                         PolymorphicArg
                           [
                             TyPred
-                              (Ctype.ctypeEqual DEFAULT_FUEL Ctype.intptr_t);
+                              (CoqCtype.ctypeEqual DEFAULT_FUEL CoqCtype.intptr_t);
                             TyPred
-                              (Ctype.ctypeEqual DEFAULT_FUEL Ctype.uintptr_t);
+                              (CoqCtype.ctypeEqual DEFAULT_FUEL CoqCtype.uintptr_t);
                             TyIsPointer
                           ]
                     ])
@@ -3822,9 +3822,9 @@ Module CheriMemory
                           PolymorphicArg
                             [
                               TyPred
-                                (Ctype.ctypeEqual DEFAULT_FUEL Ctype.intptr_t);
+                                (CoqCtype.ctypeEqual DEFAULT_FUEL CoqCtype.intptr_t);
                               TyPred
-                                (Ctype.ctypeEqual DEFAULT_FUEL Ctype.uintptr_t);
+                                (CoqCtype.ctypeEqual DEFAULT_FUEL CoqCtype.uintptr_t);
                               TyIsPointer
                             ]
                       ])
@@ -3832,48 +3832,48 @@ Module CheriMemory
                     if String.eqb name "cheri_is_equal_exact" then
                       Some
                         ((ExactRet
-                            (Ctype.Ctype nil
-                               (Ctype.Basic
-                                  (Ctype.Integer
-                                     Ctype.Bool)))),
+                            (CoqCtype.Ctype nil
+                               (CoqCtype.Basic
+                                  (CoqCtype.Integer
+                                     CoqCtype.Bool)))),
                           [
                             PolymorphicArg
                               [
                                 TyPred
-                                  (Ctype.ctypeEqual DEFAULT_FUEL Ctype.intptr_t);
+                                  (CoqCtype.ctypeEqual DEFAULT_FUEL CoqCtype.intptr_t);
                                 TyPred
-                                  (Ctype.ctypeEqual DEFAULT_FUEL Ctype.uintptr_t);
+                                  (CoqCtype.ctypeEqual DEFAULT_FUEL CoqCtype.uintptr_t);
                                 TyIsPointer
                               ];
                             PolymorphicArg
                               [
                                 TyPred
-                                  (Ctype.ctypeEqual DEFAULT_FUEL Ctype.intptr_t);
+                                  (CoqCtype.ctypeEqual DEFAULT_FUEL CoqCtype.intptr_t);
                                 TyPred
-                                  (Ctype.ctypeEqual DEFAULT_FUEL Ctype.uintptr_t);
+                                  (CoqCtype.ctypeEqual DEFAULT_FUEL CoqCtype.uintptr_t);
                                 TyIsPointer
                               ]
                         ])
                     else
                       if String.eqb name "cheri_representable_length" then
-                        Some ((ExactRet Ctype.size_t), [ExactArg Ctype.size_t])
+                        Some ((ExactRet CoqCtype.size_t), [ExactArg CoqCtype.size_t])
                       else
                         if
                           String.eqb name "cheri_representable_alignment_mask"
                         then
-                          Some ((ExactRet Ctype.size_t), [ExactArg Ctype.size_t])
+                          Some ((ExactRet CoqCtype.size_t), [ExactArg CoqCtype.size_t])
                         else
                           if String.eqb name "cheri_offset_get" then
                             Some
                               ((ExactRet
-                                  Ctype.size_t),
+                                  CoqCtype.size_t),
                                 [
                                   PolymorphicArg
                                     [
                                       TyPred
-                                        (Ctype.ctypeEqual DEFAULT_FUEL Ctype.intptr_t);
+                                        (CoqCtype.ctypeEqual DEFAULT_FUEL CoqCtype.intptr_t);
                                       TyPred
-                                        (Ctype.ctypeEqual DEFAULT_FUEL Ctype.uintptr_t);
+                                        (CoqCtype.ctypeEqual DEFAULT_FUEL CoqCtype.uintptr_t);
                                       TyIsPointer
                                     ]
                               ])

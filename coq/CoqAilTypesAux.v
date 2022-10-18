@@ -1,5 +1,5 @@
 Require Import CoqImplementation.
-Require Import Ctype.
+Require Import CoqCtype.
 
 Module AilTypesAux(IMP: Implementation).
 

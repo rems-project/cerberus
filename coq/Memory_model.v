@@ -7,9 +7,9 @@ Require Import ExtLib.Structures.Monad.
 
 Require Import Addr.
 Require Import CoqLocation.
-Require Import Symbol.
-Require Import Mem_common.
-Require Import Ctype.
+Require Import CoqSymbol.
+Require Import CoqMem_common.
+Require Import CoqCtype.
 Require Import SimpleError.
 
 Set Implicit Arguments.
@@ -43,35 +43,35 @@ Module Type Memory (A:VADDR).
   #[local] Declare Instance memM_monad: Monad memM.
 
   Parameter allocate_object :
-    thread_id -> Symbol.prefix ->
-    integer_value -> Ctype.ctype -> option mem_value ->
+    thread_id -> CoqSymbol.prefix ->
+    integer_value -> CoqCtype.ctype -> option mem_value ->
     memM pointer_value.
 
   Parameter allocate_region :
-    thread_id -> Symbol.prefix ->
+    thread_id -> CoqSymbol.prefix ->
     integer_value -> integer_value -> memM pointer_value.
 
   Parameter kill : location_ocaml -> bool -> pointer_value -> memM unit.
 
   Parameter load :
-    location_ocaml -> Ctype.ctype -> pointer_value ->
+    location_ocaml -> CoqCtype.ctype -> pointer_value ->
     memM (footprint * mem_value).
 
   Parameter store :
-    location_ocaml -> Ctype.ctype -> bool -> pointer_value ->
+    location_ocaml -> CoqCtype.ctype -> bool -> pointer_value ->
     mem_value -> memM footprint.
 
-  Parameter null_ptrval : Ctype.ctype -> pointer_value.
-  Parameter fun_ptrval : Symbol.sym -> serr pointer_value.
+  Parameter null_ptrval : CoqCtype.ctype -> pointer_value.
+  Parameter fun_ptrval : CoqSymbol.sym -> serr pointer_value.
   Parameter concrete_ptrval : Z -> A.t -> serr pointer_value.
 
   Parameter case_ptrval :
     forall {A : Set},
-      pointer_value -> (unit -> A) -> (option Symbol.sym -> A) ->
+      pointer_value -> (unit -> A) -> (option CoqSymbol.sym -> A) ->
       (unit -> A) -> (unit -> A) -> serr A.
 
   Parameter case_funsym_opt :
-    mem_state -> pointer_value -> option Symbol.sym.
+    mem_state -> pointer_value -> option CoqSymbol.sym.
 
   Parameter eq_ptrval : pointer_value -> pointer_value -> memM bool.
   Parameter ne_ptrval : pointer_value -> pointer_value -> memM bool.
@@ -81,24 +81,24 @@ Module Type Memory (A:VADDR).
   Parameter ge_ptrval : pointer_value -> pointer_value -> memM bool.
 
   Parameter diff_ptrval :
-    Ctype.ctype -> pointer_value -> pointer_value ->
+    CoqCtype.ctype -> pointer_value -> pointer_value ->
     memM integer_value.
 
-  Parameter update_prefix : Symbol.prefix * mem_value -> memM unit.
+  Parameter update_prefix : CoqSymbol.prefix * mem_value -> memM unit.
 
   (* Parameter prefix_of_pointer : pointer_value -> memM (option string). *)
 
-  Parameter validForDeref_ptrval : Ctype.ctype -> pointer_value -> memM bool.
+  Parameter validForDeref_ptrval : CoqCtype.ctype -> pointer_value -> memM bool.
 
-  Parameter isWellAligned_ptrval : Ctype.ctype -> pointer_value -> memM bool.
+  Parameter isWellAligned_ptrval : CoqCtype.ctype -> pointer_value -> memM bool.
 
   Parameter ptrfromint :
-    location_ocaml -> Ctype.integerType ->
-    Ctype.ctype -> integer_value -> memM pointer_value.
+    location_ocaml -> CoqCtype.integerType ->
+    CoqCtype.ctype -> integer_value -> memM pointer_value.
 
   Parameter intfromptr :
-    location_ocaml -> Ctype.ctype ->
-    Ctype.integerType -> pointer_value -> memM integer_value.
+    location_ocaml -> CoqCtype.ctype ->
+    CoqCtype.integerType -> pointer_value -> memM integer_value.
 
   Parameter derive_cap :
     bool -> derivecap_op -> integer_value ->  integer_value -> serr integer_value.
@@ -111,20 +111,20 @@ Module Type Memory (A:VADDR).
   Parameter null_cap : bool -> integer_value.
 
   Parameter array_shift_ptrval :
-    pointer_value -> Ctype.ctype -> integer_value ->
+    pointer_value -> CoqCtype.ctype -> integer_value ->
     serr pointer_value.
 
   Parameter member_shift_ptrval :
-    pointer_value -> Symbol.sym ->
-    Symbol.identifier -> serr pointer_value.
+    pointer_value -> CoqSymbol.sym ->
+    CoqSymbol.identifier -> serr pointer_value.
 
   Parameter eff_array_shift_ptrval :
-    location_ocaml -> pointer_value -> Ctype.ctype ->
+    location_ocaml -> pointer_value -> CoqCtype.ctype ->
     integer_value -> memM pointer_value.
 
   Parameter eff_member_shift_ptrval :
-    location_ocaml -> pointer_value -> Symbol.sym ->
-    Symbol.identifier -> memM pointer_value.
+    location_ocaml -> pointer_value -> CoqSymbol.sym ->
+    CoqSymbol.identifier -> memM pointer_value.
 
   Parameter memcpy :
     pointer_value -> pointer_value -> integer_value -> memM pointer_value.
@@ -138,44 +138,44 @@ Module Type Memory (A:VADDR).
 
 (* Following could be implemented in OCaml wrapper
   Parameter va_start :
-    list (Ctype.ctype * pointer_value) -> memM integer_value.
+    list (CoqCtype.ctype * pointer_value) -> memM integer_value.
   Parameter va_copy : integer_value -> memM integer_value.
-  Parameter va_arg : integer_value -> Ctype.ctype -> memM pointer_value.
+  Parameter va_arg : integer_value -> CoqCtype.ctype -> memM pointer_value.
   Parameter va_end : integer_value -> memM unit.
   Parameter va_list :
-    Z -> memM (list (Ctype.ctype * pointer_value)).
+    Z -> memM (list (CoqCtype.ctype * pointer_value)).
  *)
 
   Parameter copy_alloc_id : integer_value -> pointer_value -> memM pointer_value.
 
   Parameter concurRead_ival :
-    Ctype.integerType -> Symbol.sym ->
+    CoqCtype.integerType -> CoqSymbol.sym ->
     serr integer_value.
 
   Parameter integer_ival : Z -> integer_value.
-  Parameter max_ival : Ctype.integerType -> serr integer_value.
-  Parameter min_ival : Ctype.integerType -> serr integer_value.
+  Parameter max_ival : CoqCtype.integerType -> serr integer_value.
+  Parameter min_ival : CoqCtype.integerType -> serr integer_value.
   Parameter op_ival :
     integer_operator -> integer_value ->
     integer_value -> integer_value.
 
   Parameter offsetof_ival :
-    (SymMap.t Ctype.tag_definition) ->
-    Symbol.sym -> Symbol.identifier ->
+    (SymMap.t CoqCtype.tag_definition) ->
+    CoqSymbol.sym -> CoqSymbol.identifier ->
     serr integer_value.
 
-  Parameter sizeof_ival : Ctype.ctype -> serr integer_value.
-  Parameter alignof_ival : Ctype.ctype -> serr integer_value.
+  Parameter sizeof_ival : CoqCtype.ctype -> serr integer_value.
+  Parameter alignof_ival : CoqCtype.ctype -> serr integer_value.
   Parameter bitwise_complement_ival :
-    Ctype.integerType -> integer_value -> integer_value.
+    CoqCtype.integerType -> integer_value -> integer_value.
   Parameter bitwise_and_ival :
-    Ctype.integerType -> integer_value -> integer_value ->
+    CoqCtype.integerType -> integer_value -> integer_value ->
     integer_value.
   Parameter bitwise_or_ival :
-    Ctype.integerType -> integer_value -> integer_value ->
+    CoqCtype.integerType -> integer_value -> integer_value ->
     integer_value.
   Parameter bitwise_xor_ival :
-    Ctype.integerType -> integer_value -> integer_value ->
+    CoqCtype.integerType -> integer_value -> integer_value ->
     integer_value.
 
   Parameter case_integer_value :
@@ -209,37 +209,37 @@ Module Type Memory (A:VADDR).
   Parameter fvfromint : integer_value -> serr floating_value.
 
   Parameter ivfromfloat :
-    Ctype.integerType -> floating_value -> serr integer_value.
+    CoqCtype.integerType -> floating_value -> serr integer_value.
 
-  Parameter unspecified_mval : Ctype.ctype -> mem_value.
+  Parameter unspecified_mval : CoqCtype.ctype -> mem_value.
   Parameter integer_value_mval :
-    Ctype.integerType -> integer_value -> mem_value.
+    CoqCtype.integerType -> integer_value -> mem_value.
   Parameter floating_value_mval :
-    Ctype.floatingType -> floating_value -> mem_value.
-  Parameter pointer_mval : Ctype.ctype -> pointer_value -> mem_value.
+    CoqCtype.floatingType -> floating_value -> mem_value.
+  Parameter pointer_mval : CoqCtype.ctype -> pointer_value -> mem_value.
   Parameter array_mval : list mem_value -> mem_value.
   Parameter struct_mval :
-    Symbol.sym ->
+    CoqSymbol.sym ->
     list
-      (Symbol.identifier * Ctype.ctype * mem_value)
+      (CoqSymbol.identifier * CoqCtype.ctype * mem_value)
     -> mem_value.
   Parameter union_mval :
-    Symbol.sym -> Symbol.identifier ->
+    CoqSymbol.sym -> CoqSymbol.identifier ->
     mem_value -> mem_value.
 
   Parameter case_mem_value :
     forall {a : Set},
-      mem_value -> (Ctype.ctype -> a) ->
-      (Ctype.integerType -> Symbol.sym -> a) ->
-      (Ctype.integerType -> integer_value -> a) ->
-      (Ctype.floatingType -> floating_value -> a) ->
-      (Ctype.ctype -> pointer_value -> a) ->
+      mem_value -> (CoqCtype.ctype -> a) ->
+      (CoqCtype.integerType -> CoqSymbol.sym -> a) ->
+      (CoqCtype.integerType -> integer_value -> a) ->
+      (CoqCtype.floatingType -> floating_value -> a) ->
+      (CoqCtype.ctype -> pointer_value -> a) ->
       (list mem_value -> a) ->
-      (Symbol.sym ->
+      (CoqSymbol.sym ->
        list
-         (Symbol.identifier * Ctype.ctype * mem_value)
+         (CoqSymbol.identifier * CoqCtype.ctype * mem_value)
        -> a) ->
-      (Symbol.sym -> Symbol.identifier ->
+      (CoqSymbol.sym -> CoqSymbol.identifier ->
        mem_value -> a) -> a.
   Parameter sequencePoint : memM unit.
   Parameter call_intrinsic :

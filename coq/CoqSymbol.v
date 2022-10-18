@@ -67,7 +67,7 @@ Definition compare_sym   : sym  -> sym  -> ordering :=  symbol_compare.
 *)
 
 Module Symbol_sym_as_OT <: OrderedType.
-  Definition t := Symbol.sym.
+  Definition t := sym.
 
   Definition eq: t -> t -> Prop := fun a b => is_true (symbolEquality a b).
   Definition lt (a b: t): Prop := match symbol_compare a b with

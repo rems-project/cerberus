@@ -1,7 +1,7 @@
 From Coq Require Import Arith Bool List String.
 Require Import Coq.Numbers.BinNums.
 
-Require Import Symbol.
+Require Import CoqSymbol.
 
 Import ListNotations.
 
@@ -12,8 +12,8 @@ Inductive bmc_annot : Type :=
   | Abmc_id:  nat  -> bmc_annot .
 
 Record attribute : Type := {
-  attr_ns: option  Symbol.identifier  ;
-  attr_id: Symbol.identifier ;
+  attr_ns: option  CoqSymbol.identifier  ;
+  attr_id: CoqSymbol.identifier ;
   attr_args: list  ((unit  * string  * list  ((unit  * string ) % type)) % type)
 }.
 Notation "{[ r 'with' 'attr_ns' := e ]}" := ({| attr_ns := e; attr_id := attr_id r; attr_args := attr_args r |}).
@@ -48,7 +48,7 @@ Inductive annot : Type :=
   | Auid:  string  -> annot  (* Unique ID *)
   | Abmc:  bmc_annot  -> annot 
   | Aattrs:  attributes  -> annot  (* C2X attributes *)
-  | Atypedef:  Symbol.sym  -> annot  (* (TODO: I don't like but hey)
+  | Atypedef:  CoqSymbol.sym  -> annot  (* (TODO: I don't like but hey)
                               must only be used on a ctype to indicate it is a unfolding of a typedef *)
   | Anot_explode: annot  (* tell the a-normalisation not to explode if-then-else *)
   | Alabel:  label_annot  -> annot .
@@ -81,7 +81,7 @@ Program Fixpoint get_loc  (annots1 : list (annot ))  : option (unit ) :=
   end.
 (* [?]: removed value specification. *)
 
-Program Fixpoint get_typedef  (annots1 : list (annot ))  : option (Symbol.sym ) :=
+Program Fixpoint get_typedef  (annots1 : list (annot ))  : option (CoqSymbol.sym ) :=
   match ( annots1) with 
     | [] =>
         None
@@ -201,8 +201,8 @@ Definition set_loc  (loc : unit ) (annots1 : list (annot ))  : list (annot ):=
 
 (* CP: not sure where best to put this *)
 Inductive to_pack_unpack : Type :=  
-  | TPU_Struct:  Symbol.sym  -> to_pack_unpack
-  | TPU_Predicate:  Symbol.identifier  -> to_pack_unpack .
+  | TPU_Struct:  CoqSymbol.sym  -> to_pack_unpack
+  | TPU_Predicate:  CoqSymbol.identifier  -> to_pack_unpack .
 Definition to_pack_unpack_default: to_pack_unpack  := TPU_Struct sym_default.
 
 

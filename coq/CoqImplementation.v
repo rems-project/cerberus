@@ -4,7 +4,7 @@ Require Import Coq.Strings.String.
 Require Import Coq.ZArith.ZArith.
 Require Import Lia.
 
-Require Import Ctype.
+Require Import CoqCtype.
 
 Local Open Scope Z_scope.
 Require Import AltBinNotations.
@@ -21,7 +21,7 @@ Record implementation := {
     sizeof_fty: floatingType -> option Z;
     alignof_ity: integerType -> Z;
     alignof_fty: floatingType -> Z;
-    typeof_enum: Symbol.sym -> integerType;
+    typeof_enum: CoqSymbol.sym -> integerType;
   }.
 
 Module Type Implementation.
@@ -128,7 +128,7 @@ Module MorelloImpl : Implementation.
     end.
 
   (* fixing enum type for simplicity. *)
-  Definition typeof_enum_impl (_:Symbol.sym)
+  Definition typeof_enum_impl (_:CoqSymbol.sym)
              := Signed Int_.
 
   Program Definition get :=
