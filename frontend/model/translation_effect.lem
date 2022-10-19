@@ -33,11 +33,23 @@ let elab_init () = <|
   compound_literals= [];
 |>
 
-(* TODO: this does not need to be in the monad *)
+type wrapped_symbol = <|
+  sym_sym: Symbol.sym;
+  sym_pat: C.pattern;
+  sym_pe: C.pexpr;
+|>
+
+(* TODO: this does not need to be in the monad, but it is useful to unsure
+   proper ordering (for "intuitive" sym number) *)
 val wrapped_fresh_symbol: C.core_base_type -> elabM (Symbol.sym * C.pattern * C.pexpr)
 let wrapped_fresh_symbol bTy =
   let sym = Symbol.fresh () in
   return (sym, Caux.mk_sym_pat sym bTy, Caux.mk_sym_pe sym)
+
+val wrapped_fresh_symbol2: C.core_base_type -> elabM wrapped_symbol
+let wrapped_fresh_symbol2 bTy =
+  let sym = Symbol.fresh () in
+  return <|sym_sym= sym; sym_pat= Caux.mk_sym_pat sym bTy; sym_pe= Caux.mk_sym_pe sym |>
 
 val wrapped_fresh_symbol_: Symbol.symbol_description -> C.core_base_type -> elabM (Symbol.sym * C.pattern * C.pexpr)
 let wrapped_fresh_symbol_ descr bTy =
