@@ -2104,12 +2104,12 @@ end
       
       | A.AilEassert e ->
           let oTy = force_core_object_type_of_ctype (ctype_of e) in
-          E.wrapped_fresh_symbol (C.BTy_loaded oTy) >>= fun (_, e_sym_pat    , e_sym_pe    ) ->
-          E.wrapped_fresh_symbol (C.BTy_object oTy) >>= fun (_, obj_sym_pat  , obj_sym_pe  ) ->
-          E.wrapped_fresh_symbol C.BTy_boolean      >>= fun (_, memop_sym_pat, memop_sym_pe) ->
-          self e                                    >>= fun core_e                           ->
+          E.wrapped_fresh_symbol2 (C.BTy_loaded oTy) >>= fun e_wrp     ->
+          E.wrapped_fresh_symbol2 (C.BTy_object oTy) >>= fun obj_wrp   ->
+          E.wrapped_fresh_symbol2 C.BTy_boolean      >>= fun memop_wrp ->
+          self e                                    >>= fun core_e    ->
           E.return begin
-            Caux.mk_sseq_e e_sym_pat core_e
+            Caux.mk_sseq_e e_wrp.E.sym_pat core_e
 begin if AilTypesAux.is_arithmetic (ctype_of e) then
               let zero_pe =
                 if AilTypesAux.is_integer (ctype_of e) then
@@ -2117,22 +2117,22 @@ begin if AilTypesAux.is_arithmetic (ctype_of e) then
                 else
                   Caux.mk_floating_value_pe Mem.zero_fval in
               Caux.mk_pure_e begin
-                Caux.mk_case_pe e_sym_pe
-                  [ ( Caux.mk_specified_pat obj_sym_pat
-                    , Caux.mk_if_pe_ [Annot.Anot_explode] (Caux.mk_op_pe C.OpEq obj_sym_pe zero_pe)
+                Caux.mk_case_pe e_wrp.E.sym_pe
+                  [ ( Caux.mk_specified_pat obj_wrp.E.sym_pat
+                    , Caux.mk_if_pe_ [Annot.Anot_explode] (Caux.mk_op_pe C.OpEq obj_wrp.E.sym_pe zero_pe)
                        (Caux.mk_error_pe "assert() failure" Caux.mk_unit_pe)
                       Caux.mk_unit_pe )
                   ; ( Caux.mk_empty_pat (C.BTy_loaded oTy)
                     , Caux.mk_error_pe "assert() unspecified" Caux.mk_unit_pe ) ]
               end
 else (* is_pointer *)
-              Caux.mk_case_e e_sym_pe
-                [ ( Caux.mk_specified_pat obj_sym_pat
-                  , Caux.mk_wseq_e memop_sym_pat
-                     (Caux.mk_memop_e Mem_common.PtrEq [obj_sym_pe; Caux.mk_nullptr_pe Cty.void])
+              Caux.mk_case_e e_wrp.E.sym_pe
+                [ ( Caux.mk_specified_pat obj_wrp.E.sym_pat
+                  , Caux.mk_wseq_e memop_wrp.E.sym_pat
+                     (Caux.mk_memop_e Mem_common.PtrEq [obj_wrp.E.sym_pe; Caux.mk_nullptr_pe Cty.void])
                      begin
                        Caux.mk_pure_e begin
-                         Caux.mk_if_pe_ [Annot.Anot_explode] memop_sym_pe
+                         Caux.mk_if_pe_ [Annot.Anot_explode] memop_wrp.E.sym_pe
                            (Caux.mk_error_pe "assert() failure" Caux.mk_unit_pe)
                            Caux.mk_unit_pe
                        end
