@@ -2293,15 +2293,15 @@ end
                                     illTypedAil loc "AilEunion, Just null_pointer_constant"
                               end
                             else
-                              E.wrapped_fresh_symbol (C.BTy_loaded oTy) >>= fun (_, e_sym_pat, e_sym_pe) ->
-                              self e                                    >>= fun core_e                   ->
+                              E.wrapped_fresh_symbol2 (C.BTy_loaded oTy) >>= fun e_wrp  ->
+                              self e                                    >>= fun core_e ->
                               let conv_pe =
                                 if AilTypesAux.is_integer memb_ty then
-                                  stdlib.mkcall_conv_loaded_int memb_ty e_sym_pe
+                                  stdlib.mkcall_conv_loaded_int memb_ty e_wrp.E.sym_pe
                                 else
-                                  e_sym_pe in
+                                  e_wrp.E.sym_pe in
                               E.return begin
-                                Caux.mk_wseq_e e_sym_pat core_e (
+                                Caux.mk_wseq_e e_wrp.E.sym_pat core_e (
                                   Caux.mk_pure_e (Caux.mk_specified_pe (Caux.mk_union_pe tag_sym memb_ident conv_pe))
                                 )
                               end
