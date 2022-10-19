@@ -165,13 +165,13 @@ module CHERIMorello : Memory = struct
     =
     lift_coq_serr (MM.fun_ptrval (toCoq_Symbol_sym s))
 
+  (* Pointer value constructors *)
+  let concrete_ptrval (i:Nat_big_num.num) (addr:Nat_big_num.num): pointer_value
+    = lift_coq_serr (MM.concrete_ptrval i addr)
+
   (*
 
-
-  (* Pointer value constructors *)
-
   (*TODO: revise that, just a hack for codegen*)
-  val concrete_ptrval: Nat_big_num.num -> Nat_big_num.num -> pointer_value
   val case_ptrval: pointer_value ->
    (* null pointer *) (unit -> 'a) ->
    (* function pointer *) (Symbol.sym option -> 'a) ->
