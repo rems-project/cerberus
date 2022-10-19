@@ -6,8 +6,9 @@ import Boot Map_extra
 module C    = Core
 module Caux = Core_aux
 
-
-
+val illTypedAil: forall 'a. Loc.t -> string -> 'a
+let illTypedAil loc debug_str =
+  error ("[Translation => '" ^ debug_str ^ "'] fatal error, the Ail program was ill-typed")
 
 val     fetch_stdlib_symbol_aux: forall 'a. ('a -> bool) -> list 'a -> maybe 'a
 let rec fetch_stdlib_symbol_aux pred xs =

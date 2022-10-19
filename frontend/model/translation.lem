@@ -1,22 +1,16 @@
-(* TODO: for now everything is mapped to nonatomics. The translation to atomics
-         still needs to be defined *)
-
 open import Pervasives Utils Global Loc String_extra Num
 
-import State Translation_effect Loc List_extra
+import State Undefined Translation_effect Loc List_extra
 open import Translation_aux
-import Cmm_csem Mem
-
-import Decode
-import Core_typing
-
 import AilSyntax AilSyntaxAux Ctype AilTypesAux
-import GenTypes
-import Core Core_aux Undefined Builtins Annot Core_linking
+import Ctype GenTypes
+import Core Core_aux Core_typing Core_linking
 
+import Builtins Annot Decode
+
+import Cmm_csem Mem
 import Linux
 
-import Ctype
 
 module A    = AilSyntax
 module Aaux = AilSyntaxAux
@@ -40,13 +34,7 @@ module Operators = struct
   let inline (<$>) f ma = E.bind ma (fun a -> E.return (f a))
   let inline (<*>) mf m = E.bind mf (fun f -> f <$> m)
 end
-
 open Operators
-
-
-val illTypedAil: forall 'a. Loc.t -> string -> 'a
-let illTypedAil loc debug_str =
-  error ("[Translation => '" ^ debug_str ^ "'] fatal error, the Ail program was ill-typed")
 
 
 (* NOTE: this function only fails on function types and unspecified sized arrays *)
@@ -57,7 +45,6 @@ let force_core_object_type_of_ctype ty =
     | (*BISECT-IGNORE*) Nothing ->
         error "Translation.force_core_object_type_of_ctype: Nothing"
   end
-
 
 
 (* STD §6.5.13#3, sentence 1 *)
@@ -112,8 +99,6 @@ let oneAil_tau =
     (A.AilEconst (A.ConstantInteger (A.IConstant 1 A.Decimal Nothing)))
 
 
-(* ========================================================================== *)
-
 val translate_integerConstant: A.integerConstant -> C.pexpr
 let translate_integerConstant iCst =
   Caux.mk_value_pe begin
@@ -131,9 +116,10 @@ let translate_integerConstant iCst =
     end
   end
 
+
 val translate_memory_order: A.expression GenTypes.genTypeCategory -> Cmm.memory_order
 let translate_memory_order (A.AnnotatedExpression _ _ _ expr as a_expr) =
-  (* TODO: be more permissive for the memory order *)
+  (* NOTE: we only support constant directly matching a memory order  *)
   match expr with
     | A.AilEconst (A.ConstantInteger (A.IConstant n _ _)) ->
         match Builtins.decode_memory_order (natFromInteger n) with
@@ -144,6 +130,7 @@ let translate_memory_order (A.AnnotatedExpression _ _ _ expr as a_expr) =
     | (*BISECT-IGNORE*) _ ->
         error ("Translation.translate_memory_order: " ^ Pp.stringFromAil_expression a_expr)
   end
+
 
 val translate_linux_memory_order: A.expression GenTypes.genTypeCategory -> Linux.linux_memory_order
 let translate_linux_memory_order (A.AnnotatedExpression _ _ _ expr as a_expr) =
