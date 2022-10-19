@@ -1932,14 +1932,13 @@ end                       )
       
       | A.AilEassign e1 e2 ->
           (* STD §6.5.16 *)
-          let () = Debug.warn [Debug.DB_elaboration] (fun () -> "TODO: AilEassign overlap UB (see §6.5.16.1#3)") in
           (* TODO: model the non-exact overlap UB *)
           let () = Debug.warn [Debug.DB_elaboration] (fun () ->
             "Cerberus does not currently check the undefined behaviour for non-exactly overlapping assignments (see C11 §6.5.16.1#3)"
           ) in
-          E.wrapped_fresh_symbol (C.BTy_object C.OTy_pointer) >>= fun (_, e1_sym_pat, e1_sym_pe)  ->
-          self e1                                             >>= fun core_e1                     ->
-          self e2                                             >>= fun core_e2                     ->
+          E.wrapped_fresh_symbol2 (C.BTy_object C.OTy_pointer) >>= fun e1_wrp  ->
+          self e1                                             >>= fun core_e1 ->
+          self e2                                             >>= fun core_e2 ->
           let ty1 = ctype_of e1 in
           let ty2 = ctype_of e2 in
           begin
@@ -1950,7 +1949,9 @@ if AilTypesAux.atomic_qualified_unqualified AilTypesAux.is_arithmetic ty1 && Ail
               , conv_loaded_arith stdlib ty2 (Ctype.unatomic ty1) )
 
 else if AilTypesAux.atomic_qualified_unqualified AilTypesAux.is_struct_or_union ty1 then
-            (* TODO: if we have multiple translation units, the two struct/union types might be different (?) *)
+            (* NOTE: the two struct/union types could be from two different translation units,
+                     but as far as I can things are sufficiently restricted such that no
+                     conversion is needed here *)
             E.return
               ( force_core_object_type_of_ctype ty2
               , core_e2
@@ -1971,16 +1972,16 @@ else match AilTypesAux.referenced_type (Ctype.unatomic ty1) with
               end
   | Nothing ->
             (* By Ail's typing, e1 must have type _Bool and e2 must be a pointer *)
-            E.wrapped_fresh_symbol (C.BTy_loaded C.OTy_pointer) >>= fun (_, conv_sym_pat, conv_sym_pe) ->
+            E.wrapped_fresh_symbol2 (C.BTy_loaded C.OTy_pointer) >>= fun conv_wrp ->
             E.return
             ( C.OTy_integer
-            , Caux.mk_wseq_e conv_sym_pat core_e2 (stdlib.mkproc_loaded_pointer_to_Bool conv_sym_pe)
+            , Caux.mk_wseq_e conv_wrp.E.sym_pat core_e2 (stdlib.mkproc_loaded_pointer_to_Bool conv_wrp.E.sym_pe)
             , fun z -> z )
 end
           end >>= fun (oTy2, core_e2, mk_stored_pe) ->
-          E.wrapped_fresh_symbol (C.BTy_loaded oTy2) >>= fun (_, e2_sym_pat, e2_sym_pe)  ->
-          let object_pe = Caux.mk_std_pe "§6.5.16#3, sentence 1" e1_sym_pe in
-          let stored_pe = Caux.mk_std_pe "§6.5.16.1#2, conversion" (mk_stored_pe e2_sym_pe) in
+          E.wrapped_fresh_symbol2 (C.BTy_loaded oTy2) >>= fun e2_wrp ->
+          let object_pe = Caux.mk_std_pe "§6.5.16#3, sentence 1" e1_wrp.E.sym_pe in
+          let stored_pe = Caux.mk_std_pe "§6.5.16.1#2, conversion" (mk_stored_pe e2_wrp.E.sym_pe) in
           let core_ty_pe1 = Caux.mk_ail_ctype_pe (AilTypesAux.rvalue_coercion (snd (from_lvalue_type e1))) in
           let mo =
             if AilTypesAux.is_atomic ty1 then
@@ -1990,7 +1991,7 @@ end
               Cmm.NA in
           E.return begin
             Caux.add_std "§6.5.16#3, sentence 4" begin
-              Caux.mk_wseq_e (Caux.mk_tuple_pat [ e1_sym_pat; e2_sym_pat ])
+              Caux.mk_wseq_e (Caux.mk_tuple_pat [ e1_wrp.E.sym_pat; e2_wrp.E.sym_pat ])
                 (Caux.add_std "§6.5.16#3, sentence 5" (Caux.mk_unseq_e [core_e1; core_e2])) begin
                   Caux.mk_wseq_e (Caux.mk_empty_pat C.BTy_unit)
                     (C.Expr [Annot.Astd "§6.5.16.1#2, store"] (
