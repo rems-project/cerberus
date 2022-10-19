@@ -2249,21 +2249,20 @@ end
           end
       
       | A.AilEcompound qs ty e ->
-          (* TODO: only using weak sequencing for now, not sure about this *)
           (* TODO: what if the type is atomic? *)
           let core_ty = Caux.mk_ail_ctype_pe ty in
           let oTy = force_core_object_type_of_ctype (ctype_of e) in
-          E.wrapped_fresh_symbol (C.BTy_object C.OTy_pointer) >>= fun (obj_sym, _        , obj_sym_pe) ->
-          E.wrapped_fresh_symbol (C.BTy_loaded oTy)           >>= fun (e_sym  , e_sym_pat, e_sym_pe  ) ->
-          self e                                              >>= fun core_e                           ->
+          E.wrapped_fresh_symbol2 (C.BTy_object C.OTy_pointer) >>= fun obj_wrp ->
+          E.wrapped_fresh_symbol2 (C.BTy_loaded oTy)           >>= fun e_wrp   ->
+          self e                                              >>= fun core_e  ->
           (* STD §6.5.2.5#3 *)
-          E.register_compound_literal loc (Symbol.PrefCompoundLiteral (locOf e) (Symbol.digest_of_sym e_sym)) obj_sym qs.Ctype.const ty >>= fun () ->
+          E.register_compound_literal loc (Symbol.PrefCompoundLiteral (locOf e) (Symbol.digest_of_sym e_wrp.E.sym_sym)) obj_wrp.E.sym_sym qs.Ctype.const ty >>= fun () ->
           E.return begin
             (* TODO: probably needs a conversion *)
-            Caux.mk_wseq_e e_sym_pat core_e begin
-            Caux.mk_wseq_e (Caux.mk_empty_pat C.BTy_unit) (Caux.pstore loc core_ty obj_sym_pe e_sym_pe Cmm.NA) begin
+            Caux.mk_wseq_e e_wrp.E.sym_pat core_e begin
+            Caux.mk_wseq_e (Caux.mk_empty_pat C.BTy_unit) (Caux.pstore loc core_ty obj_wrp.E.sym_pe e_wrp.E.sym_pe Cmm.NA) begin
               (* STD §6.5.2.5#5, sentence 1 *)
-              Caux.mk_pure_e obj_sym_pe
+              Caux.mk_pure_e obj_wrp.E.sym_pe
             end end
           end
       
