@@ -2329,27 +2329,27 @@ end
                 illTypedAil loc "AilEmemberof"
           end in
           let bTy = if is_lvalue then C.BTy_object C.OTy_pointer else C.BTy_loaded oTy in
-          E.wrapped_fresh_symbol bTy >>= fun (e_sym, e_sym_pat, e_sym_pe) ->
-          self e                     >>= fun core_e                       ->
+          E.wrapped_fresh_symbol2 bTy >>= fun e_wrp  ->
+          self e                     >>= fun core_e ->
           
           if not is_lvalue then
-             E.wrapped_fresh_symbol (C.BTy_object oTy) >>= fun (obj_sym, obj_sym_pat, obj_sym_pe) ->
+             E.wrapped_fresh_symbol2 (C.BTy_object oTy) >>= fun obj_wrp ->
              E.return begin
-               Caux.mk_sseq_e e_sym_pat core_e begin
+               Caux.mk_sseq_e e_wrp.E.sym_pat core_e begin
                  Caux.mk_pure_e begin
-                   Caux.mk_case_pe e_sym_pe
+                   Caux.mk_case_pe e_wrp.E.sym_pe
                      [ ( Caux.mk_unspecified_pat (Caux.mk_empty_pat C.BTy_ctype)
-                       , Caux.mk_undef_pe loc (Undefined.UB_CERB004_unspecified Undefined.UB_unspec_rvalue_memberof) ) (* TODO: check with P *)
-                     ; ( Caux.mk_specified_pat obj_sym_pat
-                       , Caux.mk_memberof_pe tag_sym ident obj_sym_pe ) ]
+                       , Caux.mk_undef_pe loc (Undefined.UB_CERB004_unspecified Undefined.UB_unspec_rvalue_memberof) )
+                     ; ( Caux.mk_specified_pat obj_wrp.E.sym_pat
+                       , Caux.mk_memberof_pe tag_sym ident obj_wrp.E.sym_pe ) ]
                  end
                end
              end
           else
             E.return begin
               C.Expr [Annot.Astd "§6.5.2.3#3, sentence 2"] (
-                C.Esseq e_sym_pat core_e (
-                  Caux.mk_pure_e (Caux.mk_member_shift_pe e_sym_pe tag_sym ident)
+                C.Esseq e_wrp.E.sym_pat core_e (
+                  Caux.mk_pure_e (Caux.mk_member_shift_pe e_wrp.E.sym_pe tag_sym ident)
                 )
               )
             end
