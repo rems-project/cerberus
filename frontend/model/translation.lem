@@ -1583,22 +1583,22 @@ else (* pointer <-> pointer cast *)
 if AilTypesAux.is_arithmetic (ctype_of e1) && AilTypesAux.is_arithmetic (ctype_of e2) then
             let oTy1 = force_core_object_type_of_ctype (ctype_of e1) in
             let oTy2 = force_core_object_type_of_ctype (ctype_of e2) in
-            E.wrapped_fresh_symbol (C.BTy_loaded oTy1) >>= fun (e1_sym  , e1_sym_pat  , e1_sym_pe  ) ->
-            E.wrapped_fresh_symbol (C.BTy_loaded oTy2) >>= fun (e2_sym  , e2_sym_pat  , e2_sym_pe  ) ->
-            E.wrapped_fresh_symbol (C.BTy_object oTy1) >>= fun (obj1_sym, obj1_sym_pat, obj1_sym_pe) ->
-            E.wrapped_fresh_symbol (C.BTy_object oTy2) >>= fun (obj2_sym, obj2_sym_pat, obj2_sym_pe) ->
-            self e1                                    >>= fun core_e1                               ->
-            self e2                                    >>= fun core_e2                               ->
+            E.wrapped_fresh_symbol2 (C.BTy_loaded oTy1) >>= fun e1_wrp   ->
+            E.wrapped_fresh_symbol2 (C.BTy_loaded oTy2) >>= fun e2_wrp   ->
+            E.wrapped_fresh_symbol2 (C.BTy_object oTy1) >>= fun obj1_wrp ->
+            E.wrapped_fresh_symbol2 (C.BTy_object oTy2) >>= fun obj2_wrp ->
+            self e1                                    >>= fun core_e1  ->
+            self e2                                    >>= fun core_e2  ->
             let (promoted1_pe, promoted2_pe) =
               Caux.mk_std_pair_pe "§6.5.6#4"
-                (usual_arithmetic_conversion (ctype_of e1) (ctype_of e2) obj1_sym_pe obj2_sym_pe) in
+                (usual_arithmetic_conversion (ctype_of e1) (ctype_of e2) obj1_wrp.E.sym_pe obj2_wrp.E.sym_pe) in
             E.return begin
               Caux.add_std "§6.5.6" begin
-                Caux.mk_wseq_e (Caux.mk_tuple_pat [ e1_sym_pat; e2_sym_pat ]) (Caux.mk_unseq [core_e1; core_e2]) begin
+                Caux.mk_wseq_e (Caux.mk_tuple_pat [ e1_wrp.E.sym_pat; e2_wrp.E.sym_pat ]) (Caux.mk_unseq [core_e1; core_e2]) begin
                   Caux.mk_pure_e begin
-                    Caux.mk_case_pe (Caux.mk_tuple_pe [e1_sym_pe; e2_sym_pe])
-                      [ ( Caux.mk_tuple_pat [ Caux.mk_specified_pat obj1_sym_pat
-                                            ; Caux.mk_specified_pat obj2_sym_pat ]
+                    Caux.mk_case_pe (Caux.mk_tuple_pe [e1_wrp.E.sym_pe; e2_wrp.E.sym_pe])
+                      [ ( Caux.mk_tuple_pat [ Caux.mk_specified_pat obj1_wrp.E.sym_pat
+                                            ; Caux.mk_specified_pat obj2_wrp.E.sym_pat ]
                         , (* Both operand are specified *)
                           let core_add = Caux.mk_std_pe "§6.5.6#5" (Caux.mk_op_pe C.OpAdd promoted1_pe promoted2_pe) in
                           Caux.mk_specified_pe (
@@ -1622,13 +1622,13 @@ if AilTypesAux.is_arithmetic (ctype_of e1) && AilTypesAux.is_arithmetic (ctype_o
               end
             end
 else (* Here one of the operands is a pointer *)
-            E.wrapped_fresh_symbol (C.BTy_loaded C.OTy_pointer) >>= fun (_, ptr_sym_pat        , ptr_sym_pe)         ->
-            E.wrapped_fresh_symbol (C.BTy_object C.OTy_pointer) >>= fun (_, ptr_obj_sym_pat    , ptr_obj_sym_pe)     ->
-            E.wrapped_fresh_symbol (C.BTy_loaded C.OTy_integer) >>= fun (_, integer_sym_pat    , integer_sym_pe)     ->
-            E.wrapped_fresh_symbol (C.BTy_object C.OTy_integer) >>= fun (_, integer_obj_sym_pat, integer_obj_sym_pe) ->
-            E.wrapped_fresh_symbol (C.BTy_object C.OTy_pointer) >>= fun (_, res_sym_pat, res_sym_pe)                 ->
-            self e1                                             >>= fun core_e1                                      ->
-            self e2                                             >>= fun core_e2                                      ->
+            E.wrapped_fresh_symbol2 (C.BTy_loaded C.OTy_pointer) >>= fun ptr_wrp         ->
+            E.wrapped_fresh_symbol2 (C.BTy_object C.OTy_pointer) >>= fun ptr_obj_wrp     ->
+            E.wrapped_fresh_symbol2 (C.BTy_loaded C.OTy_integer) >>= fun integer_wrp     ->
+            E.wrapped_fresh_symbol2 (C.BTy_object C.OTy_integer) >>= fun integer_obj_wrp ->
+            E.wrapped_fresh_symbol2 (C.BTy_object C.OTy_pointer) >>= fun res_wrp         ->
+            self e1                                             >>= fun core_e1         ->
+            self e2                                             >>= fun core_e2         ->
             let (ptr_ty, ptr_core_e, integer_core_e) =
   if AilTypesAux.is_arithmetic (ctype_of e1) then
               (ctype_of e2, core_e2, core_e1)
@@ -1643,19 +1643,19 @@ else (* Here one of the operands is a pointer *)
               end in
             E.return begin
               Caux.add_std "§6.5.6" begin
-                Caux.mk_wseq_e (Caux.mk_tuple_pat [ ptr_sym_pat; integer_sym_pat ]) (Caux.mk_unseq [ptr_core_e; integer_core_e]) begin
-                  Caux.mk_case_e (Caux.mk_tuple_pe [ptr_sym_pe; integer_sym_pe])
-                    [ ( Caux.mk_tuple_pat [ Caux.mk_specified_pat ptr_obj_sym_pat
-                                          ; Caux.mk_specified_pat integer_obj_sym_pat ]
+                Caux.mk_wseq_e (Caux.mk_tuple_pat [ ptr_wrp.E.sym_pat; integer_wrp.E.sym_pat ]) (Caux.mk_unseq [ptr_core_e; integer_core_e]) begin
+                  Caux.mk_case_e (Caux.mk_tuple_pe [ptr_wrp.E.sym_pe; integer_wrp.E.sym_pe])
+                    [ ( Caux.mk_tuple_pat [ Caux.mk_specified_pat ptr_obj_wrp.E.sym_pat
+                                          ; Caux.mk_specified_pat integer_obj_wrp.E.sym_pat ]
                       , (* Both operand are specified *)
 begin if Global.has_strict_pointer_arith () || Global.is_PNVI () then
-                        Caux.mk_wseq_e res_sym_pat
-                          (Caux.mk_memop_e Mem_common.PtrArrayShift [ptr_obj_sym_pe; Caux.mk_ail_ctype_pe ref_ty; integer_obj_sym_pe])
-                          (Caux.mk_pure_e (Caux.mk_specified_pe res_sym_pe))
+                        Caux.mk_wseq_e res_wrp.E.sym_pat
+                          (Caux.mk_memop_e Mem_common.PtrArrayShift [ptr_obj_wrp.E.sym_pe; Caux.mk_ail_ctype_pe ref_ty; integer_obj_wrp.E.sym_pe])
+                          (Caux.mk_pure_e (Caux.mk_specified_pe res_wrp.E.sym_pe))
 else
                         Caux.mk_pure_e begin
                           Caux.mk_specified_pe begin
-                            Caux.mk_std_pe "§6.5.6#8, sentences 2-3" (Caux.mk_array_shift ptr_obj_sym_pe ref_ty integer_obj_sym_pe)
+                            Caux.mk_std_pe "§6.5.6#8, sentences 2-3" (Caux.mk_array_shift ptr_obj_wrp.E.sym_pe ref_ty integer_obj_wrp.E.sym_pe)
                           end
                         end
 end                   )
