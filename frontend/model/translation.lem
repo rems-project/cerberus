@@ -914,20 +914,20 @@ let translate_atomic_explicit loc translate_expr atomic_op args =
               illTypedAil loc "AilEcall atomic_store_explicit"
         end in
         let oTy = force_core_object_type_of_ctype (ctype_of desired_e) in
-        E.wrapped_fresh_symbol (C.BTy_loaded C.OTy_pointer) >>= fun (_, loaded_sym_pat , loaded_sym_pe ) ->
-        E.wrapped_fresh_symbol (C.BTy_object C.OTy_pointer) >>= fun (_, object_sym_pat , object_sym_pe ) ->
-        E.wrapped_fresh_symbol (C.BTy_loaded oTy)           >>= fun (_, desired_sym_pat, desired_sym_pe) ->
-        translate_expr lobject_e                            >>= fun lobject_core_e                       ->
-        translate_expr desired_e                            >>= fun desired_core_e                       ->
+        E.wrapped_fresh_symbol2 (C.BTy_loaded C.OTy_pointer) >>= fun loaded_wrp     ->
+        E.wrapped_fresh_symbol2 (C.BTy_object C.OTy_pointer) >>= fun object_wrp     ->
+        E.wrapped_fresh_symbol2 (C.BTy_loaded oTy)           >>= fun desired_wrp    ->
+        translate_expr lobject_e                            >>= fun lobject_core_e ->
+        translate_expr desired_e                            >>= fun desired_core_e ->
         E.return begin
-          Caux.mk_sseq_e (Caux.mk_tuple_pat [loaded_sym_pat; desired_sym_pat])
+          Caux.mk_sseq_e (Caux.mk_tuple_pat [loaded_wrp.E.sym_pat; desired_wrp.E.sym_pat])
             begin
               Caux.mk_unseq_e [lobject_core_e; desired_core_e]
             end
             begin
-              Caux.mk_case_e loaded_sym_pe
-                [ ( Caux.mk_specified_pat object_sym_pat
-                  , Caux.pstore loc (Caux.mk_ail_ctype_pe ref_ty) object_sym_pe desired_sym_pe mo )
+              Caux.mk_case_e loaded_wrp.E.sym_pe
+                [ ( Caux.mk_specified_pat object_wrp.E.sym_pat
+                  , Caux.pstore loc (Caux.mk_ail_ctype_pe ref_ty) object_wrp.E.sym_pe desired_wrp.E.sym_pe mo )
                 ; ( Caux.mk_unspecified_pat (Caux.mk_empty_pat C.BTy_ctype)
                   , Caux.mk_pure_e (Caux.mk_undef_pe loc Undefined.UB_unspecified_lvalue) ) ]
             end
@@ -940,15 +940,15 @@ let translate_atomic_explicit loc translate_expr atomic_op args =
           | (*BISECT-IGNORE*) _ ->
               illTypedAil loc "AilEcall atomic_load_explicit"
         end in
-        E.wrapped_fresh_symbol (C.BTy_loaded C.OTy_pointer) >>= fun (_, loaded_sym_pat, loaded_sym_pe) ->
-        E.wrapped_fresh_symbol (C.BTy_object C.OTy_pointer) >>= fun (_, object_sym_pat, object_sym_pe) ->
-        translate_expr lobject_e                            >>= fun lobject_core_e                     ->
+        E.wrapped_fresh_symbol2 (C.BTy_loaded C.OTy_pointer) >>= fun loaded_wrp     ->
+        E.wrapped_fresh_symbol2 (C.BTy_object C.OTy_pointer) >>= fun object_wrp     ->
+        translate_expr lobject_e                            >>= fun lobject_core_e ->
         E.return begin
-          Caux.mk_sseq_e loaded_sym_pat lobject_core_e
+          Caux.mk_sseq_e loaded_wrp.E.sym_pat lobject_core_e
             begin
-              Caux.mk_case_e loaded_sym_pe
-                [ ( Caux.mk_specified_pat object_sym_pat
-                  , Caux.pload loc (Caux.mk_ail_ctype_pe ref_ty) object_sym_pe mo )
+              Caux.mk_case_e loaded_wrp.E.sym_pe
+                [ ( Caux.mk_specified_pat object_wrp.E.sym_pat
+                  , Caux.pload loc (Caux.mk_ail_ctype_pe ref_ty) object_wrp.E.sym_pe mo )
                 ; ( Caux.mk_unspecified_pat (Caux.mk_empty_pat C.BTy_ctype)
                   , Caux.mk_pure_e (Caux.mk_undef_pe loc Undefined.UB_unspecified_lvalue) ) ]
             end
@@ -969,26 +969,25 @@ let translate_atomic_explicit loc translate_expr atomic_op args =
               illTypedAil loc "AilEcall atomic_compare_exchange_strong_explicit"
         end in
         let oTy = force_core_object_type_of_ctype (ctype_of desired_e) in
-
-        E.wrapped_fresh_symbol (C.BTy_loaded C.OTy_pointer) >>= fun (_, loaded_object_sym_pat  , loaded_object_sym_pe  ) ->
-        E.wrapped_fresh_symbol (C.BTy_object C.OTy_pointer) >>= fun (_, object_sym_pat         , object_sym_pe         ) ->
-        E.wrapped_fresh_symbol (C.BTy_loaded C.OTy_pointer) >>= fun (_, loaded_expected_sym_pat, loaded_expected_sym_pe) ->
-        E.wrapped_fresh_symbol (C.BTy_object C.OTy_pointer) >>= fun (_, expected_sym_pat       , expected_sym_pe       ) ->
-        E.wrapped_fresh_symbol (C.BTy_loaded oTy)           >>= fun (_, desired_sym_pat        , desired_sym_pe        ) ->
-        translate_expr object_e                             >>= fun core_object_e                                        ->
-        translate_expr expected_e                           >>= fun core_expected_e                                      ->
-        translate_expr desired_e                            >>= fun core_desired_e                                       ->
-        (* TODO: conversion? *)
+        E.wrapped_fresh_symbol2 (C.BTy_loaded C.OTy_pointer) >>= fun loaded_object_wrp   ->
+        E.wrapped_fresh_symbol2 (C.BTy_object C.OTy_pointer) >>= fun object_wrp          ->
+        E.wrapped_fresh_symbol2 (C.BTy_loaded C.OTy_pointer) >>= fun loaded_expected_wrp ->
+        E.wrapped_fresh_symbol2 (C.BTy_object C.OTy_pointer) >>= fun expected_wrp        ->
+        E.wrapped_fresh_symbol2 (C.BTy_loaded oTy)           >>= fun desired_wrp         ->
+        translate_expr object_e                             >>= fun core_object_e       ->
+        translate_expr expected_e                           >>= fun core_expected_e     ->
+        translate_expr desired_e                            >>= fun core_desired_e      ->
+        (* NOTE: we don't need to convert the arguments because the Ail typing has added casts *)
         E.return begin
-          Caux.mk_sseq_e (Caux.mk_tuple_pat [ loaded_object_sym_pat; loaded_expected_sym_pat; desired_sym_pat ])
+          Caux.mk_sseq_e (Caux.mk_tuple_pat [ loaded_object_wrp.E.sym_pat; loaded_expected_wrp.E.sym_pat; desired_wrp.E.sym_pat ])
             (Caux.mk_unseq_e [ core_object_e; core_expected_e; core_desired_e ])
             begin
-              Caux.mk_case_e (Caux.mk_tuple_pe [ loaded_object_sym_pe; loaded_expected_sym_pe ])
-                [ ( Caux.mk_tuple_pat [ Caux.mk_specified_pat object_sym_pat
-                                      ; Caux.mk_specified_pat expected_sym_pat ]
+              Caux.mk_case_e (Caux.mk_tuple_pe [ loaded_object_wrp.E.sym_pe; loaded_expected_wrp.E.sym_pe ])
+                [ ( Caux.mk_tuple_pat [ Caux.mk_specified_pat object_wrp.E.sym_pat
+                                      ; Caux.mk_specified_pat expected_wrp.E.sym_pat ]
                   , Caux.pcompare_exchange_strong
                       loc (Caux.mk_ail_ctype_pe (Ctype.Ctype [] (Ctype.unatomic_ ty1)))
-                      object_sym_pe expected_sym_pe desired_sym_pe
+                      object_wrp.E.sym_pe expected_wrp.E.sym_pe desired_wrp.E.sym_pe
                       mo_success mo_failure )
                 ; ( Caux.mk_empty_pat (C.BTy_tuple [ C.BTy_loaded C.OTy_pointer
                                                    ; C.BTy_loaded C.OTy_pointer ])
@@ -1006,25 +1005,25 @@ let translate_atomic_explicit loc translate_expr atomic_op args =
             illTypedAil loc "AilEcall atomic_compare_exchange_weak_explicit"
       end in
       let oTy = force_core_object_type_of_ctype (ctype_of desired_e) in
-      E.wrapped_fresh_symbol (C.BTy_loaded C.OTy_pointer) >>= fun (_, loaded_object_sym_pat  , loaded_object_sym_pe  ) ->
-      E.wrapped_fresh_symbol (C.BTy_object C.OTy_pointer) >>= fun (_, object_sym_pat         , object_sym_pe         ) ->
-      E.wrapped_fresh_symbol (C.BTy_loaded C.OTy_pointer) >>= fun (_, loaded_expected_sym_pat, loaded_expected_sym_pe) ->
-      E.wrapped_fresh_symbol (C.BTy_object C.OTy_pointer) >>= fun (_, expected_sym_pat       , expected_sym_pe       ) ->
-      E.wrapped_fresh_symbol (C.BTy_loaded oTy)           >>= fun (_, desired_sym_pat        , desired_sym_pe        ) ->
-      translate_expr object_e                             >>= fun core_object_e                                        ->
-      translate_expr expected_e                           >>= fun core_expected_e                                      ->
-      translate_expr desired_e                            >>= fun core_desired_e                                       ->
-      (* TODO: conversion? *)
+      E.wrapped_fresh_symbol2 (C.BTy_loaded C.OTy_pointer) >>= fun loaded_object_wrp   ->
+      E.wrapped_fresh_symbol2 (C.BTy_object C.OTy_pointer) >>= fun object_wrp          ->
+      E.wrapped_fresh_symbol2 (C.BTy_loaded C.OTy_pointer) >>= fun loaded_expected_wrp ->
+      E.wrapped_fresh_symbol2 (C.BTy_object C.OTy_pointer) >>= fun expected_wrp        ->
+      E.wrapped_fresh_symbol2 (C.BTy_loaded oTy)           >>= fun desired_wrp         ->
+      translate_expr object_e                             >>= fun core_object_e       ->
+      translate_expr expected_e                           >>= fun core_expected_e     ->
+      translate_expr desired_e                            >>= fun core_desired_e      ->
+      (* NOTE: we don't need to convert the arguments because the Ail typing has added casts *)
       E.return begin
-        Caux.mk_sseq_e (Caux.mk_tuple_pat [ loaded_object_sym_pat; loaded_expected_sym_pat; desired_sym_pat ])
+        Caux.mk_sseq_e (Caux.mk_tuple_pat [ loaded_object_wrp.E.sym_pat; loaded_expected_wrp.E.sym_pat; desired_wrp.E.sym_pat ])
           (Caux.mk_unseq_e [ core_object_e; core_expected_e; core_desired_e ])
           begin
-            Caux.mk_case_e (Caux.mk_tuple_pe [ loaded_object_sym_pe; loaded_expected_sym_pe ])
-              [ ( Caux.mk_tuple_pat [ Caux.mk_specified_pat object_sym_pat
-                                    ; Caux.mk_specified_pat expected_sym_pat ]
+            Caux.mk_case_e (Caux.mk_tuple_pe [ loaded_object_wrp.E.sym_pe; loaded_expected_wrp.E.sym_pe ])
+              [ ( Caux.mk_tuple_pat [ Caux.mk_specified_pat object_wrp.E.sym_pat
+                                    ; Caux.mk_specified_pat expected_wrp.E.sym_pat ]
                 , Caux.pcompare_exchange_weak
                     loc (Caux.mk_ail_ctype_pe (Ctype.Ctype [] (Ctype.unatomic_ ty1)))
-                    object_sym_pe expected_sym_pe desired_sym_pe
+                    object_wrp.E.sym_pe expected_wrp.E.sym_pe desired_wrp.E.sym_pe
                     mo_success mo_failure )
               ; ( Caux.mk_empty_pat (C.BTy_tuple [ C.BTy_loaded C.OTy_pointer
                                                  ; C.BTy_loaded C.OTy_pointer ])
@@ -1040,22 +1039,22 @@ let translate_atomic_explicit loc translate_expr atomic_op args =
               illTypedAil loc "AilEcall linux_write"
         end in
         let oTy = force_core_object_type_of_ctype (ctype_of desired_e) in
-        E.wrapped_fresh_symbol (C.BTy_loaded C.OTy_pointer) >>= fun (_, loaded_sym_pat , loaded_sym_pe ) ->
-        E.wrapped_fresh_symbol (C.BTy_object C.OTy_pointer) >>= fun (_, object_sym_pat , object_sym_pe ) ->
-        E.wrapped_fresh_symbol (C.BTy_loaded oTy)           >>= fun (_, desired_sym_pat, desired_sym_pe) ->
-        translate_expr lobject_e                            >>= fun lobject_core_e                       ->
-        translate_expr desired_e                            >>= fun desired_core_e                       ->
+        E.wrapped_fresh_symbol2 (C.BTy_loaded C.OTy_pointer) >>= fun loaded_wrp     ->
+        E.wrapped_fresh_symbol2 (C.BTy_object C.OTy_pointer) >>= fun object_wrp     ->
+        E.wrapped_fresh_symbol2 (C.BTy_loaded oTy)           >>= fun desired_wrp    ->
+        translate_expr lobject_e                            >>= fun lobject_core_e ->
+        translate_expr desired_e                            >>= fun desired_core_e ->
         E.return begin
-          Caux.mk_sseq_e (Caux.mk_tuple_pat [loaded_sym_pat; desired_sym_pat])
+          Caux.mk_sseq_e (Caux.mk_tuple_pat [loaded_wrp.E.sym_pat; desired_wrp.E.sym_pat])
             begin
               Caux.mk_unseq_e [lobject_core_e; desired_core_e]
             end
             begin
-              Caux.mk_case_e loaded_sym_pe
-                [ (Caux.mk_specified_pat object_sym_pat,
-                  Caux.plinux_store loc (Caux.mk_ail_ctype_pe ref_ty) object_sym_pe desired_sym_pe mo)
-                ; (Caux.mk_unspecified_pat (Caux.mk_empty_pat C.BTy_ctype),
-                  Caux.mk_pure_e (Caux.mk_undef_pe loc Undefined.UB_unspecified_lvalue)) ]
+              Caux.mk_case_e loaded_wrp.E.sym_pe
+                [ ( Caux.mk_specified_pat object_wrp.E.sym_pat
+                  , Caux.plinux_store loc (Caux.mk_ail_ctype_pe ref_ty) object_wrp.E.sym_pe desired_wrp.E.sym_pe mo )
+                ; ( Caux.mk_unspecified_pat (Caux.mk_empty_pat C.BTy_ctype)
+                  , Caux.mk_pure_e (Caux.mk_undef_pe loc Undefined.UB_unspecified_lvalue) ) ]
             end
         end
     | (LinuxLoad, [lobject_e; order_e]) ->
@@ -1067,17 +1066,17 @@ let translate_atomic_explicit loc translate_expr atomic_op args =
            | (*BISECT-IGNORE*) _ ->
                illTypedAil loc "AilEcall linux_read"
          end in
-         E.wrapped_fresh_symbol (C.BTy_loaded C.OTy_pointer) >>= fun (_, loaded_sym_pat, loaded_sym_pe) ->
-         E.wrapped_fresh_symbol (C.BTy_object C.OTy_pointer) >>= fun (_, object_sym_pat, object_sym_pe) ->
-         translate_expr lobject_e                            >>= fun lobject_core_e                     ->
+         E.wrapped_fresh_symbol2 (C.BTy_loaded C.OTy_pointer) >>= fun loaded_wrp     ->
+         E.wrapped_fresh_symbol2 (C.BTy_object C.OTy_pointer) >>= fun object_wrp     ->
+         translate_expr lobject_e                            >>= fun lobject_core_e ->
          E.return begin
-           Caux.mk_sseq_e loaded_sym_pat lobject_core_e
+           Caux.mk_sseq_e loaded_wrp.E.sym_pat lobject_core_e
              begin
-               Caux.mk_case_e loaded_sym_pe
-                 [ (Caux.mk_specified_pat object_sym_pat,
-                    Caux.plinux_load loc (Caux.mk_ail_ctype_pe ref_ty) object_sym_pe mo)
-                 ; (Caux.mk_unspecified_pat (Caux.mk_empty_pat C.BTy_ctype),
-                    Caux.mk_pure_e (Caux.mk_undef_pe loc Undefined.UB_unspecified_lvalue)) ]
+               Caux.mk_case_e loaded_wrp.E.sym_pe
+                 [ ( Caux.mk_specified_pat object_wrp.E.sym_pat
+                   , Caux.plinux_load loc (Caux.mk_ail_ctype_pe ref_ty) object_wrp.E.sym_pe mo )
+                 ; ( Caux.mk_unspecified_pat (Caux.mk_empty_pat C.BTy_ctype)
+                   , Caux.mk_pure_e (Caux.mk_undef_pe loc Undefined.UB_unspecified_lvalue) ) ]
              end
          end
     | (LinuxFence, [order_e]) ->
@@ -1094,18 +1093,18 @@ let translate_atomic_explicit loc translate_expr atomic_op args =
               illTypedAil loc "AilEcall linux_rmw"
         end in
         let oTy = force_core_object_type_of_ctype (ctype_of desired_e) in
-        E.wrapped_fresh_symbol (C.BTy_loaded C.OTy_pointer) >>= fun (_, loaded_sym_pat , loaded_sym_pe ) ->
-        E.wrapped_fresh_symbol (C.BTy_object C.OTy_pointer) >>= fun (_, object_sym_pat , object_sym_pe ) ->
-        E.wrapped_fresh_symbol (C.BTy_loaded oTy)           >>= fun (_, desired_sym_pat, desired_sym_pe) ->
-        translate_expr lobject_e                            >>= fun lobject_core_e                       ->
-        translate_expr desired_e                            >>= fun desired_core_e                       ->
+        E.wrapped_fresh_symbol2 (C.BTy_loaded C.OTy_pointer) >>= fun loaded_wrp     ->
+        E.wrapped_fresh_symbol2 (C.BTy_object C.OTy_pointer) >>= fun object_wrp     ->
+        E.wrapped_fresh_symbol2 (C.BTy_loaded oTy)           >>= fun desired_wrp    ->
+        translate_expr lobject_e                            >>= fun lobject_core_e ->
+        translate_expr desired_e                            >>= fun desired_core_e ->
         E.return begin
-          Caux.mk_sseq_e (Caux.mk_tuple_pat [loaded_sym_pat; desired_sym_pat])
+          Caux.mk_sseq_e (Caux.mk_tuple_pat [loaded_wrp.E.sym_pat; desired_wrp.E.sym_pat])
             (Caux.mk_unseq_e [lobject_core_e; desired_core_e])
             begin
-              Caux.mk_case_e loaded_sym_pe
-                [ ( Caux.mk_specified_pat object_sym_pat
-                  , Caux.plinux_rmw loc (Caux.mk_ail_ctype_pe ref_ty) object_sym_pe desired_sym_pe mo )
+              Caux.mk_case_e loaded_wrp.E.sym_pe
+                [ ( Caux.mk_specified_pat object_wrp.E.sym_pat
+                  , Caux.plinux_rmw loc (Caux.mk_ail_ctype_pe ref_ty) object_wrp.E.sym_pe desired_wrp.E.sym_pe mo )
                 ; ( Caux.mk_unspecified_pat (Caux.mk_empty_pat C.BTy_ctype)
                   , Caux.mk_pure_e (Caux.mk_undef_pe loc Undefined.UB_unspecified_lvalue) ) ]
             end
