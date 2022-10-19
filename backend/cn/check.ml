@@ -1059,24 +1059,48 @@ let pp_or_false (ppf : 'a -> Pp.document) (m : 'a orFalse) : Pp.document =
   | False -> parens !^"no return"
 
 
-
-let all_empty loc = 
+let filter_empty_resources loc =
   let@ provable = provable loc in
-  let@ all_resources = all_resources () in
-  ListM.iterM (fun resource ->
+  map_and_fold_resources loc (fun resource xs ->
       let constr = match resource with
         | (P p, _) -> t_ (not_ p.permission)
         | (Q p, _) -> forall_ (p.q, BT.Integer) (not_ p.permission)
       in
       match provable constr with
-      | `True -> return () 
-      | `False -> 
-         let@ model = model () in
+      | `True -> (Deleted, xs)
+      | `False ->
+        let model = Solver.model () in
+        (Unchanged, ((resource, constr, model) :: xs))
+  ) []
+
+let all_empty loc original_resources =
+  let@ remaining_resources = filter_empty_resources loc in
+  (* there will be a model available if at least one resource persisted *)
+  let@ provable = provable loc in
+  let@ global = get_global () in
+  let@ () = ListM.iterM (fun (resource, _, model) ->
+      match Spans.null_resource_check (fst model) global (RE.request resource) with
+        | None -> return ()
+        | Some (pt, ok) ->
+          let uiinfo = (Access Free, (Some (RET.P pt), None)) in
+          begin match provable (t_ ok) with
+            | `True ->
+              debug 6 (lazy (Pp.item "remaining resource null, trying to unpack"
+                  (RET.pp_predicate_type pt)));
+              let@ _ = ResourceInference.General.do_unpack loc uiinfo pt in
+              return ()
+            | `False -> return ()
+          end
+  ) remaining_resources in
+  let@ remaining_resources = filter_empty_resources loc in
+  match remaining_resources with
+    | [] -> return ()
+    | ((resource, constr, model) :: _) ->
          let@ global = get_global () in
          RI.debug_constraint_failure_diagnostics 6 model global constr;
          fail_with_trace (fun trace -> fun ctxt ->
+             let ctxt = { ctxt with resources = original_resources } in
              {loc; msg = Unused_resource {resource; ctxt; model; trace}})
-    ) all_resources
 
 
 type labels = (AT.lt * label_kind) SymMap.t
@@ -1094,7 +1118,7 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
   in
   let name_retv it =
     let info = (loc, lazy (Pp.item "result of" (NewMu.pp_expr e))) in
-    let@ nm = add_l_abbrev (Sym.fresh_named "x") it info in
+    let@ nm = add_l_abbrev (Sym.fresh_pretty_with_id (fun i -> "x" ^ string_of_int i)) it info in
     return (sym_ (nm, IT.bt it))
   in
   match typ, e_ with
@@ -1600,8 +1624,9 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
        | None -> fail (fun _ -> {loc; msg = Generic (!^"undefined code label" ^/^ Sym.pp label_sym)})
        | Some (lt,lkind) -> return (lt,lkind)
      in
+     let@ original_resources = all_resources_tagged () in
      Spine.calltype_lt loc pes (lt,lkind) (fun False ->
-     let@ () = all_empty loc in
+     let@ () = all_empty loc original_resources in
      return ())
   | False, _ ->
      let err = 
@@ -1634,8 +1659,9 @@ let check_expr_rt loc labels ~typ e =
          let@ () = add_l returned_s returned_bt info in
          let@ () = bind_logical loc None returned_lrt in
          let lrt = LRT.subst (IT.make_subst [(return_s, sym_ (returned_s, returned_bt))]) lrt in
+         let@ original_resources = all_resources_tagged () in
          Spine.subtype loc lrt (fun () ->
-         let@ () = all_empty loc in
+         let@ () = all_empty loc original_resources in
          return ())
        )
   | False ->
@@ -1648,8 +1674,9 @@ let check_expr_rt loc labels ~typ e =
 let check_pexpr_rt loc pexpr (RT.Computational ((return_s, return_bt), info, lrt)) =
   check_pexpr pexpr ~expect:return_bt (fun lvt ->
   let lrt = LRT.subst (IT.make_subst [(return_s, lvt)]) lrt in
+  let@ original_resources = all_resources_tagged () in
   Spine.subtype loc lrt (fun () ->
-  let@ () = all_empty loc in
+  let@ () = all_empty loc original_resources in
   return ()))
 
 
