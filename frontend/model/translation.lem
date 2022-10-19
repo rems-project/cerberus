@@ -3713,7 +3713,6 @@ let translate_program stdlib (startup_sym_opt, sigm) =
                   let ret_pe =
                     if startup_sym_opt = Just sym then
                       (* STD §5.1.2.2.3#1 sentence 1*)
-                      (* TODO: "If the return type is not compatible with int" *)
                       Caux.mk_specified_pe (Caux.mk_integer_pe 0)
                     else if AilTypesAux.is_void return_ty && is_Noreturn then
                       Caux.mk_std_undef_pe loc "§6.7.4#8" Undefined.UB071_noreturn
@@ -3722,7 +3721,7 @@ let translate_program stdlib (startup_sym_opt, sigm) =
                     else
                       Caux.mk_std_undef_pe loc "§6.9.1#12" Undefined.UB088_reached_end_of_function in
                   Caux.mk_save_e_ [Annot.Alabel Annot.LAreturn]
-                                  (ret_label, ret_bTy) 
+                                  (ret_label, ret_bTy)
                                   [(ret_sym, ((ret_bTy, Just (return_ty, false)), ret_pe))]
                     (Caux.mk_pure_e (Caux.mk_sym_pe ret_sym))
                 in
@@ -3766,9 +3765,9 @@ let translate_program stdlib (startup_sym_opt, sigm) =
 let translate_extern_map (_, sigm) =
   Map.map (fun (sym, kind) ->
     match kind with
-    | A.IK_declaration -> ([sym], C.LK_none)
-    | A.IK_tentative -> ([sym], C.LK_tentative sym)
-    | A.IK_definition -> ([sym], C.LK_normal sym)
+      | A.IK_declaration -> ([sym], C.LK_none)
+      | A.IK_tentative   -> ([sym], C.LK_tentative sym)
+      | A.IK_definition  -> ([sym], C.LK_normal sym)
     end) sigm.A.extern_idmap
 
 
@@ -3778,12 +3777,8 @@ val translate:
     C.impl -> 
     A.ail_program GenTypes.genTypeCategory ->
     C.file unit
-
 let translate (ailnames, stdlib_fun_map) impl prog =
   let translation_stdlib = mk_translation_stdlib (ailnames, stdlib_fun_map) in
-  
-  (* TODO: this is ugly, we shouldn't expose the internals and properly use the Undefined *)
-  (* TODO2: not sure what that comment is refering too ... *)
   let ((core_tagDefs, cglobs, (*cdecls, *) cfuns, funinfo), st) =
     E.runStateM (translate_program translation_stdlib prog) (E.elab_init ())
   in
