@@ -1059,24 +1059,47 @@ let pp_or_false (ppf : 'a -> Pp.document) (m : 'a orFalse) : Pp.document =
   | False -> parens !^"no return"
 
 
-
-let all_empty loc = 
+let filter_empty_resources loc =
   let@ provable = provable loc in
-  let@ all_resources = all_resources () in
-  ListM.iterM (fun resource ->
+  map_and_fold_resources loc (fun resource xs ->
       let constr = match resource with
         | (P p, _) -> t_ (not_ p.permission)
         | (Q p, _) -> forall_ (p.q, BT.Integer) (not_ p.permission)
       in
       match provable constr with
-      | `True -> return () 
-      | `False -> 
-         let@ model = model () in
+      | `True -> (Deleted, xs)
+      | `False ->
+        let model = Solver.model () in
+        (Unchanged, ((resource, constr, model) :: xs))
+  ) []
+
+let all_empty loc =
+  let@ remaining_resources = filter_empty_resources loc in
+  (* there will be a model available if at least one resource persisted *)
+  let@ provable = provable loc in
+  let@ global = get_global () in
+  let@ () = ListM.iterM (fun (resource, _, model) ->
+      match Spans.null_resource_check (fst model) global (RE.request resource) with
+        | None -> return ()
+        | Some (pt, ok) ->
+          let uiinfo = (Access Free, (Some (RET.P pt), None)) in
+          begin match provable (t_ ok) with
+            | `True ->
+              debug 6 (lazy (Pp.item "remaining resource null, trying to unpack"
+                  (RET.pp_predicate_type pt)));
+              let@ _ = ResourceInference.General.do_unpack loc uiinfo pt in
+              return ()
+            | `False -> return ()
+          end
+  ) remaining_resources in
+  let@ remaining_resources = filter_empty_resources loc in
+  match remaining_resources with
+    | [] -> return ()
+    | ((resource, constr, model) :: _) ->
          let@ global = get_global () in
          RI.debug_constraint_failure_diagnostics 6 model global constr;
          fail_with_trace (fun trace -> fun ctxt ->
              {loc; msg = Unused_resource {resource; ctxt; model; trace}})
-    ) all_resources
 
 
 type labels = (AT.lt * label_kind) SymMap.t
