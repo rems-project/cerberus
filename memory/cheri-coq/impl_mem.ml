@@ -87,10 +87,13 @@ module CHERIMorello : Memory = struct
   let return = Nondeterminism.nd_return
   let bind = Nondeterminism.nd_bind
 
+  (* Coq -> OCaml type conversion *)
   let fromCoq_mem_error (e:MM.mem_error) : mem_error = assert false (* TODO *)
   let fromCoq_location (l:CoqLocation.location_ocaml): Location_ocaml.t = assert false (* TODO *)
   let fromCoq_undefined_behaviour (u:CoqUndefined.undefined_behaviour) : Undefined.undefined_behaviour = assert false (* TODO *)
+  let fromCoq_Symbol_sym (s:CoqSymbol.sym): Symbol.sym = assert false (* TODO *)
 
+  (* OCaml -> Coq type conversion *)
   let toCoq_thread_id (tid:thread_id) : MM.thread_id = assert false (* TODO *)
   let toCoq_ctype (ty:Ctype.ctype) : CoqCtype.ctype = assert false (* TODO *)
   let toCoq_location (l:Location_ocaml.t): CoqLocation.location_ocaml = assert false (* TODO *)
@@ -189,9 +192,8 @@ module CHERIMorello : Memory = struct
        else ffun None
     | _ -> failwith "case_ptrval"
 
-  (*
-    val case_funsym_opt: mem_state -> pointer_value -> Symbol.sym option
-   *)
+  let case_funsym_opt (st:mem_state) (pv:pointer_value): Symbol.sym option
+    = Option.map fromCoq_Symbol_sym (MM.case_funsym_opt st pv)
 
   (* Operations on pointer values *)
   let eq_ptrval (a:pointer_value) (b:pointer_value) : bool memM =

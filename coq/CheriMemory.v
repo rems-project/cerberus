@@ -2058,7 +2058,24 @@ Module CheriMemory
         | None => None
         end
     end.
-*)
+ *)
+
+  Definition case_funsym_opt (st:mem_state) (pv:pointer_value_ind): option CoqSymbol.sym
+    :=
+    let '(_, ptrval) := break_PV pv in
+    match ptrval with
+    | PVfunction (FP_valid sym) => Some sym
+    | PVfunction (FP_invalid c)
+    | PVconcrete c =>
+        let n := (Z.sub (C.cap_get_value c) initial_address) in
+        match ZMap.find n st.(funptrmap) with
+        | Some (file_dig, name, _) =>
+            Some (CoqSymbol.Symbol file_dig n (SD_Id name))
+        | None =>
+            None
+        end
+    end.
+
   Definition eq_ptrval
     (ptr1 ptr2 : pointer_value) : memM bool
     :=

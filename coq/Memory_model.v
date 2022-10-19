@@ -70,8 +70,8 @@ Module Type Memory (A:VADDR).
       pointer_value -> (unit -> A) -> (option CoqSymbol.sym -> A) ->
       (unit -> A) -> (unit -> A) -> serr A. *)
 
-  (* Parameter case_funsym_opt :
-    mem_state -> pointer_value -> option CoqSymbol.sym. *)
+  Parameter case_funsym_opt :
+    mem_state -> pointer_value -> option CoqSymbol.sym.
 
   Parameter eq_ptrval : pointer_value -> pointer_value -> memM bool.
   Parameter ne_ptrval : pointer_value -> pointer_value -> memM bool.
