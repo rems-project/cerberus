@@ -197,9 +197,9 @@ let translate_function_designator translate_expr stdlib (A.AnnotatedExpression _
   let (Ctype.Ctype _ cty as ty) = ctype_of a_expr in
   match (cty, expr) with
     | (Ctype.Function _ params is_variadic, A.AilEunary A.Indirection e) ->
-        E.wrapped_fresh_symbol (C.BTy_loaded C.OTy_pointer) >>= fun (fun_sym, fun_sym_pat, fun_sym_pe) ->
-        translate_expr e                                    >>= fun core_e                             ->
-        E.return (Caux.mk_sseq_e fun_sym_pat core_e (Caux.mk_pure_e (Caux.mk_sym_pe fun_sym)))
+        E.wrapped_fresh_symbol2 (C.BTy_loaded C.OTy_pointer) >>= fun fun_wrp ->
+        translate_expr e                                    >>= fun core_e  ->
+        E.return (Caux.mk_sseq_e fun_wrp.E.sym_pat core_e (Caux.mk_pure_e fun_wrp.E.sym_pe))
     | (Ctype.Function _ params is_variadic, A.AilEident fid) ->
         let fid_pe = match fid with
           | Symbol.Symbol _ _ (Symbol.SD_Id str) ->
