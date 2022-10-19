@@ -65,13 +65,13 @@ Module Type Memory (A:VADDR).
   Parameter fun_ptrval : CoqSymbol.sym -> serr pointer_value.
   Parameter concrete_ptrval : Z -> A.t -> serr pointer_value.
 
-  Parameter case_ptrval :
+  (* Parameter case_ptrval :
     forall {A : Set},
       pointer_value -> (unit -> A) -> (option CoqSymbol.sym -> A) ->
-      (unit -> A) -> (unit -> A) -> serr A.
+      (unit -> A) -> (unit -> A) -> serr A. *)
 
-  Parameter case_funsym_opt :
-    mem_state -> pointer_value -> option CoqSymbol.sym.
+  (* Parameter case_funsym_opt :
+    mem_state -> pointer_value -> option CoqSymbol.sym. *)
 
   Parameter eq_ptrval : pointer_value -> pointer_value -> memM bool.
   Parameter ne_ptrval : pointer_value -> pointer_value -> memM bool.
@@ -178,9 +178,10 @@ Module Type Memory (A:VADDR).
     CoqCtype.integerType -> integer_value -> integer_value ->
     integer_value.
 
-  Parameter case_integer_value :
+  (* Parameter case_integer_value :
     forall {a : Set},
-      integer_value -> (Z -> a) -> (unit -> a) -> a.
+      integer_value -> (Z -> a) -> (unit -> a) -> a. *)
+
   Parameter is_specified_ival : integer_value -> bool.
   Parameter eq_ival : option mem_state -> integer_value -> integer_value -> option bool.
   Parameter lt_ival : option mem_state -> integer_value -> integer_value -> option bool.
@@ -227,7 +228,7 @@ Module Type Memory (A:VADDR).
     CoqSymbol.sym -> CoqSymbol.identifier ->
     mem_value -> mem_value.
 
-  Parameter case_mem_value :
+  (* Parameter case_mem_value :
     forall {a : Set},
       mem_value -> (CoqCtype.ctype -> a) ->
       (CoqCtype.integerType -> CoqSymbol.sym -> a) ->
@@ -240,7 +241,8 @@ Module Type Memory (A:VADDR).
          (CoqSymbol.identifier * CoqCtype.ctype * mem_value)
        -> a) ->
       (CoqSymbol.sym -> CoqSymbol.identifier ->
-       mem_value -> a) -> a.
+       mem_value -> a) -> a. *)
+
   Parameter sequencePoint : memM unit.
   Parameter call_intrinsic :
     location_ocaml -> string -> list mem_value -> memM (option mem_value).

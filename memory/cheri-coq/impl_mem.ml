@@ -169,15 +169,28 @@ module CHERIMorello : Memory = struct
   let concrete_ptrval (i:Nat_big_num.num) (addr:Nat_big_num.num): pointer_value
     = lift_coq_serr (MM.concrete_ptrval i addr)
 
-  (*
-
+  (* We have this one implemented in Coq but it looks like
+     it OK to have in in OCaml for now *)
   (*TODO: revise that, just a hack for codegen*)
-  val case_ptrval: pointer_value ->
-   (* null pointer *) (unit -> 'a) ->
-   (* function pointer *) (Symbol.sym option -> 'a) ->
-   (* concrete pointer *) (unit -> 'a) ->
-   (* unspecified value *) (unit -> 'a) -> 'a
-  val case_funsym_opt: mem_state -> pointer_value -> Symbol.sym option
+  let case_ptrval (pv:pointer_value) fnull ffun fconc _ =
+    match pv with
+    | PV (_, PVfunction (FP_valid sym)) -> ffun (Some sym)
+    | PV (_, PVfunction (FP_invalid c)) ->
+       if MM.cap_is_null c
+       then fnull ()
+       else ffun None
+    | PV (Prov_none, PVconcrete c) ->
+       if MM.cap_is_null c
+       then fconc ()
+       else ffun None
+    | PV (Prov_some i, PVconcrete c) ->
+       if MM.cap_is_null c
+       then fconc ()
+       else ffun None
+    | _ -> failwith "case_ptrval"
+
+  (*
+    val case_funsym_opt: mem_state -> pointer_value -> Symbol.sym option
    *)
 
   (* Operations on pointer values *)
@@ -249,13 +262,14 @@ module CHERIMorello : Memory = struct
   val bitwise_and_ival: Ctype.integerType -> integer_value -> integer_value -> integer_value
   val bitwise_or_ival: Ctype.integerType -> integer_value -> integer_value -> integer_value
   val bitwise_xor_ival: Ctype.integerType -> integer_value -> integer_value -> integer_value
+   *)
 
-  val case_integer_value: (* TODO: expose more ctors *)
-    integer_value ->
-    (Nat_big_num.num -> 'a) ->
-    (unit -> 'a) ->
-    'a
+  (* We have this one implemented in Coq but it looks like
+     it OK to have in in OCaml for now *)
+  let case_integer_value v f_concrete _ =
+    f_concrete (MM.num_of_int v)
 
+(*
   val is_specified_ival: integer_value -> bool
 
   (* Predicats on integer values *)
@@ -269,10 +283,15 @@ module CHERIMorello : Memory = struct
   val zero_fval: floating_value
   val one_fval: floating_value
   val str_fval: string -> floating_value
+ *)
 
   (* Floating value destructors *)
-  val case_fval: floating_value -> (unit -> 'a) -> (float -> 'a) -> 'a
+  (* We have this one implemented in Coq but it looks like
+     it OK to have in in OCaml for now *)
+  let case_fval fval _ fconcrete =
+    fconcrete fval
 
+  (*
   (* Predicates on floating values *)
   val op_fval: Mem_common.floating_operator -> floating_value -> floating_value -> floating_value
   val eq_fval: floating_value -> floating_value -> bool
@@ -295,19 +314,29 @@ module CHERIMorello : Memory = struct
   val struct_mval: Symbol.sym -> (Symbol.identifier * Ctype.ctype * mem_value) list -> mem_value
   val union_mval: Symbol.sym -> Symbol.identifier -> mem_value -> mem_value
 
-  (* Memory value destructor *)
-  val case_mem_value:
-    mem_value ->
-    (Ctype.ctype -> 'a) -> (* unspecified case *)
-    (Ctype.integerType -> Symbol.sym -> 'a) -> (* concurrency read case *)
-    (Ctype.integerType -> integer_value -> 'a) ->
-    (Ctype.floatingType -> floating_value -> 'a) ->
-    (Ctype.ctype -> pointer_value -> 'a) ->
-    (mem_value list -> 'a) ->
-    (Symbol.sym -> (Symbol.identifier * Ctype.ctype * mem_value) list -> 'a) ->
-    (Symbol.sym -> Symbol.identifier -> mem_value -> 'a) ->
-    'a
+ *)
 
+  (* Memory value destructor *)
+  (* We have this one implemented in Coq but it looks like
+     it OK to have in in OCaml for now *)
+  let case_mem_value (mval:mem_value) f_unspec f_concur f_ival f_fval f_ptr f_array f_struct f_union =
+    match mval with
+    | MVunspecified ty ->
+       f_unspec ty
+    | MVinteger (ity, ival) ->
+       f_ival ity ival
+    | MVfloating (fty, fval) ->
+       f_fval fty fval
+    | MVpointer (ref_ty, ptrval) ->
+       f_ptr ref_ty ptrval
+    | MVarray mvals ->
+       f_array mvals
+    | MVstruct (tag_sym, xs) ->
+       f_struct tag_sym xs
+    | MVunion (tag_sym, memb_ident, mval') ->
+       f_union tag_sym memb_ident mval'
+
+(*
 
   (* For race detection *)
   val sequencePoint: unit memM

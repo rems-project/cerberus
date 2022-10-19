@@ -2009,7 +2009,7 @@ Module CheriMemory
     fun _ _ =>
       raise
         "concrete_ptrval: integer to pointer cast is not supported".
-
+(*
   Definition case_ptrval
     {A: Set}
     (pv : pointer_value)
@@ -2058,7 +2058,7 @@ Module CheriMemory
         | None => None
         end
     end.
-
+*)
   Definition eq_ptrval
     (ptr1 ptr2 : pointer_value) : memM bool
     :=
@@ -3158,12 +3158,13 @@ Module CheriMemory
     : integer_value -> integer_value -> integer_value :=
     int_bin Z.lxor.
 
-  Definition case_integer_value
+  (* Definition case_integer_value
     {A : Set}
     (v : integer_value)
     (f : Z -> A)
     (_ : unit -> A) : A :=
     f (num_of_int v).
+   *)
 
   Definition is_specified_ival (ival : integer_value) : bool := true.
 
@@ -3259,7 +3260,7 @@ Module CheriMemory
     (memb_ident : CoqSymbol.identifier) (mval : mem_value)
     : mem_value := MVunion tag_sym memb_ident mval.
 
-  Definition case_mem_value
+  (* Definition case_mem_value
     {A: Set}
     (mval : mem_value)
     (f_unspec : CoqCtype.ctype -> A)
@@ -3280,6 +3281,7 @@ Module CheriMemory
     | MVstruct tag_sym xs => f_struct tag_sym xs
     | MVunion tag_sym memb_ident mval' => f_union tag_sym memb_ident mval'
     end.
+   *)
 
   Definition sequencePoint: memM unit :=
     ret tt.
