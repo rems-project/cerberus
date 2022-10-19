@@ -260,12 +260,7 @@ module General = struct
     | I rt -> return ftyp
     end
 
-  let fresh_unpack_variant s =
-    match Sym.description s with
-    | SD_CN_Id name ->
-       Sym.fresh_make_uniq_kind name "unpack"
-    | _ ->
-       Sym.fresh_make_uniq "unpack"
+
 
   (* similar to bind_logical in check.ml *)
   let rec unpack_packing_ft loc ftyp = begin match ftyp with
