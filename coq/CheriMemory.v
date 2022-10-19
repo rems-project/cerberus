@@ -2410,6 +2410,67 @@ Module CheriMemory
         ret tt
     end.
 
+  Local Open Scope string_scope.
+
+
+  (*
+  Fixpoint prefix_of_pointer_aux addr alloc x :=
+    match x with
+    | None
+    | Some (CoqCtype.Ctype _ CoqCtype.Void)
+    | Some (CoqCtype.Ctype _ (CoqCtype.Function _ _ _))
+    | Some (CoqCtype.Ctype _ (CoqCtype.FunctionNoParams _)) =>
+        ret None
+    | Some (CoqCtype.Ctype _ (CoqCtype.Basic _))
+    | Some (CoqCtype.Ctype _ (CoqCtype.Union _))
+    | Some (CoqCtype.Ctype _ (CoqCtype.Pointer _ _)) =>
+        let offset := Z.sub addr alloc.(base) in
+        ret (Some (CoqSymbol.string_of_prefix alloc.(prefix) ++ " + " ++ String.dec_str offset))
+    | Some (CoqCtype.Ctype _ (CoqCtype.Struct tag_sym)) => (* TODO: nested structs *)
+        let offset := Z.sub addr alloc.(base) in
+        '(offs, _) <- serr2memM (offsetsof DEFAULT_FUEL (CoqTags.tagDefs tt) tag_sym) ;;
+        let fix find y :=
+          match y with
+          | [] => None
+          | (CoqSymbol.Identifier _ memb, _, off) :: offs =>
+              if Z.eqb offset off
+              then Some (CoqSymbol.string_of_prefix alloc.(prefix) ++ "." ++ memb)
+              else find offs
+          end
+        in
+        ret (find offs)
+    | Some (CoqCtype.Ctype _ (CoqCtype.Array ty _)) =>
+        let offset := Z.sub addr alloc.(base) in
+        if Z.ltb offset alloc.(size) then
+          sz <- serr2memM (sizeof DEFAULT_FUEL None ty) ;;
+          let n := Z.div offset sz in
+          ret (Some (CoqSymbol.string_of_prefix alloc.(prefix) ++ "[" ++ String.dec_str n ++ "]"))
+        else
+          ret None
+    | Some (CoqCtype.Ctype _ (CoqCtype.Atomic ty)) =>
+        prefix_of_pointer_aux addr alloc (Some ty)
+    end.
+
+  Definition prefix_of_pointer (ptr:pointer_value): memM (option string)
+    :=
+    let '(prov, pv) := break_PV ptr in
+    match prov with
+    | Prov_some alloc_id =>
+        get_allocation alloc_id >>= fun alloc =>
+            match pv with
+            | PVconcrete addr =>
+                if C.cap_get_value addr = alloc.(base)
+                then ret (Some (CoqSymbol.string_of_prefix alloc.(prefix)))
+                else prefix_of_pointer_aux (C.cap_get_value addr) alloc alloc.(ty)
+            | _ =>
+                ret None
+            end
+    | _ =>
+        ret None
+    end.
+  Local Close Scope string_scope.
+   *)
+
   Definition isWellAligned_ptrval
     (ref_ty:  CoqCtype.ctype) (ptrval : pointer_value)
     : memM bool

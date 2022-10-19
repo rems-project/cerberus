@@ -400,6 +400,9 @@ Inductive prefix : Type :=
   | PrefMalloc: prefix
 | PrefOther:  string  -> prefix .
 
+
+(* Definition string_of_prefix (p:prefix) : string := "". (* TODO *) *)
+
 (*
 (* [?]: removed value specification. *)
 

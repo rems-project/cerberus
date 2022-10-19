@@ -92,6 +92,9 @@ module CHERIMorello : Memory = struct
   let fromCoq_location (l:CoqLocation.location_ocaml): Location_ocaml.t = assert false (* TODO *)
   let fromCoq_undefined_behaviour (u:CoqUndefined.undefined_behaviour) : Undefined.undefined_behaviour = assert false (* TODO *)
   let fromCoq_Symbol_sym (s:CoqSymbol.sym): Symbol.sym = assert false (* TODO *)
+  let fromCoq_Symbol_prefix (p:CoqSymbol.prefix) : Symbol.prefix = assert false (* TODO *)
+  let fromCoq_Symbol_identifier (id:CoqSymbol.identifier) : Symbol.identifier = assert false (* TODO *)
+  let fromCoq_ctype (ty:CoqCtype.ctype) : Ctype.ctype = assert false (* TODO *)
 
   (* OCaml -> Coq type conversion *)
   let toCoq_thread_id (tid:thread_id) : MM.thread_id = assert false (* TODO *)
@@ -209,11 +212,75 @@ module CHERIMorello : Memory = struct
   let ge_ptrval (a:pointer_value) (b:pointer_value) : bool memM =
     lift_coq_memM (MM.ge_ptrval a b)
 
-  (*
-  val diff_ptrval: Ctype.ctype -> pointer_value -> pointer_value -> integer_value memM
+  let diff_ptrval
+        (diff_ty: Ctype.ctype)
+        (ptrval1: pointer_value)
+        (ptrval2: pointer_value)
+      : integer_value memM
+    =
+    lift_coq_memM (MM.diff_ptrval
+                     (toCoq_ctype diff_ty)
+                     ptrval1
+                     ptrval2)
 
-  val update_prefix: (Symbol.prefix * mem_value) -> unit memM
-  val prefix_of_pointer: pointer_value -> string option memM
+  let update_prefix (pref, mval) : unit memM
+    = lift_coq_memM (MM.update_prefix ((toCoq_Symbol_prefix pref), mval))
+
+  (* There is a sketch of implementation of this function in Coq but
+     it requires some dependencies and fixpoint magic.  It OK to have
+     in in OCaml for now *)
+  let prefix_of_pointer (MM.PV (prov, pv)) : string option memM =
+    let open String_symbol in
+    let rec aux addr (alloc:MM.allocation) = function
+      | None
+        | Some (Ctype (_, Void))
+        | Some (Ctype (_, Function _))
+        | Some (Ctype (_, FunctionNoParams _)) ->
+         None
+      | Some (Ctype (_, Basic _))
+        | Some (Ctype (_, Union _))
+        | Some (Ctype (_, Pointer _)) ->
+         let offset = Z.sub addr alloc.base in
+         Some (string_of_prefix (fromCoq_Symbol_prefix alloc.prefix) ^ " + " ^ Z.to_string offset)
+      | Some (Ctype (_, Struct tag_sym)) -> (* TODO: nested structs *)
+         let offset = Z.sub addr alloc.base in
+         let (offs, _) = lift_coq_serr (MM.offsetsof MM.coq_DEFAULT_FUEL (CoqTags.tagDefs ()) (toCoq_Symbol_sym tag_sym)) in
+         let offs = List.map (fun ((id,ty),n) ->(fromCoq_Symbol_identifier id,ty,n)) offs in
+         let rec find = function
+           | [] ->
+              None
+           | (Symbol.Identifier (_, memb), _, off) :: offs ->
+              if offset = off
+              then Some (string_of_prefix (fromCoq_Symbol_prefix alloc.prefix) ^ "." ^ memb)
+              else find offs
+         in find offs
+      | Some (Ctype (_, Array (ty, _))) ->
+         let offset = Z.sub addr alloc.base in
+         if Z.less offset alloc.size then
+           let sz = lift_coq_serr (MM.sizeof MM.coq_DEFAULT_FUEL (Some (CoqTags.tagDefs ())) (toCoq_ctype ty)) in
+           let n = Z.div offset sz in
+           Some (string_of_prefix (fromCoq_Symbol_prefix alloc.prefix) ^ "[" ^ Z.to_string n ^ "]")
+         else
+           None
+      | Some (Ctype (_, Atomic ty)) ->
+         aux addr alloc @@ Some ty
+    in
+    match prov with
+    | Prov_some alloc_id ->
+       bind (lift_coq_memM (MM.get_allocation alloc_id)) (fun alloc ->
+           begin match pv with
+           | PVconcrete addr ->
+              if C.cap_get_value addr = alloc.base then
+                return @@ Some (string_of_prefix (fromCoq_Symbol_prefix alloc.prefix))
+              else
+                return @@ aux C.(cap_get_value addr) alloc (Option.map fromCoq_ctype alloc.ty)
+           | _ ->
+              return None
+           end)
+    | _ ->
+       return None
+
+  (*
 
   val validForDeref_ptrval: Ctype.ctype -> pointer_value -> bool memM
   val isWellAligned_ptrval: Ctype.ctype -> pointer_value -> bool memM
