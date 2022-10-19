@@ -2173,8 +2173,8 @@ end
             match e_opt with
               | Just e ->
                   let oTy = force_core_object_type_of_ctype (ctype_of e) in
-                  E.wrapped_fresh_symbol (C.BTy_loaded oTy) >>= fun (_, e_sym_pat, e_sym_pe) ->
-                  self e                                    >>= fun core_e                   ->
+                  E.wrapped_fresh_symbol2 (C.BTy_loaded oTy) >>= fun e_wrp  ->
+                  self e                                    >>= fun core_e ->
                   let elem_pe =
                     if AilTypesAux.is_pointer elem_ty && Aaux.is_null_pointer_constant e then
                       (* the member is a null pointer constant *)
@@ -2186,13 +2186,13 @@ end
                       end
                     (* TODO: check + std quote *)
                     else if AilTypesAux.is_arithmetic elem_ty && AilTypesAux.is_arithmetic (ctype_of e) then
-                      conv_loaded_arith stdlib (ctype_of e) elem_ty e_sym_pe
+                      conv_loaded_arith stdlib (ctype_of e) elem_ty e_wrp.E.sym_pe
                     else
                       (* TODO: other conversions? *)
-                      e_sym_pe in 
+                      e_wrp.E.sym_pe in 
                   E.return
                     ( elem_pe :: acc
-                    , (Caux.mk_wseq_e e_sym_pat core_e) -| mk_expr )
+                    , (Caux.mk_wseq_e e_wrp.E.sym_pat core_e) -| mk_expr )
               | Nothing ->
                   E.return
                    ( Caux.mk_unspecified_pe elem_ty :: acc
