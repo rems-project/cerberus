@@ -2917,9 +2917,8 @@ let collect_visibles stmt =
 
 
 
-(* TODO: morally the kills and creates should be unseq() *)
-val mk_run_e: Loc.t -> Symbol.sym -> list (Symbol.sym * Ctype.ctype) -> list (Symbol.sym * Ctype.ctype) -> list C.pexpr -> C.expr unit
-let translation_mk_run_e loc sym visibles_before visibles_after pes =
+val mk_run_with_lifetime_e: Loc.t -> Symbol.sym -> list (Symbol.sym * Ctype.ctype) -> list (Symbol.sym * Ctype.ctype) -> list C.pexpr -> C.expr unit
+let mk_run_with_lifetime_e loc sym visibles_before visibles_after pes =
   let killed_syms_tys =
     List.filter (fun (sym,_ty) ->
       Maybe.isNothing (List.lookup sym visibles_after)
@@ -2946,7 +2945,6 @@ let translation_mk_run_e loc sym visibles_before visibles_after pes =
       ) created_sym_tys
     end in
   mk_kills_e (mk_creates_e (Caux.mk_run_e sym ((List.map (fun (sym, _) -> Caux.mk_sym_pe sym) visibles_after) ++ pes)))
-let inline mk_run_e = translation_mk_run_e
 
 
 open Operators
@@ -3226,33 +3224,42 @@ let rec translate_stmt stdlib tagDefs f env (A.AnnotatedStatement loc stmt_attrs
         end
     
     | A.AilSreturn e ->
-        let oTy = force_core_object_type_of_ctype (ctype_of e) in
-        translate_expression true e               >>= fun core_e                       ->
-        E.wrapped_fresh_symbol (C.BTy_loaded oTy) >>= fun (e_sym, e_sym_pat, e_sym_pe) ->
-        E.get_visible_objects                     >>= fun visible_syms                 ->
+        E.get_visible_objects >>= fun visible_syms ->
         E.mapM (fun sym ->
             E.resolve_object_type sym >>= fun (_, ty) ->
             E.return (sym, ty)
-          ) visible_syms >>= fun visible_syms_tys ->
-        
-        (* TODO: typing is not enough (should do like assignments) *)
-        let ret_pe =
-          if AilTypesAux.is_arithmetic env.return_ty && AilTypesAux.is_arithmetic (ctype_of e) then
-             conv_loaded_arith stdlib (ctype_of e) env.return_ty e_sym_pe
-          else if AilTypesAux.is_pointer env.return_ty && Aaux.is_null_pointer_constant e then
-            Caux.mk_specified_pe (Caux.mk_nullptr_pe env.return_ty)
-          else
-            e_sym_pe in
-        
+        ) visible_syms >>= fun visible_syms_tys ->
+        if env.is_Noreturn then
+          E.return (Caux.mk_pure_e (Caux.mk_std_undef_pe loc "§6.7.4#8" Undefined.UB071_noreturn))
+        else if AilTypesAux.atomic_qualified_unqualified AilTypesAux.is_pointer env.return_ty && Aaux.is_null_pointer_constant e then
+          E.return begin
+            mk_run_with_lifetime_e loc env.return_lab visible_syms_tys [] [Caux.mk_specified_pe (Caux.mk_nullptr_pe env.return_ty)]
+          end
+        else
+          let oTy = force_core_object_type_of_ctype (ctype_of e) in
+          translate_expression true e               >>= fun core_e ->
+          E.wrapped_fresh_symbol2 (C.BTy_loaded oTy) >>= fun e_wrp  ->
         (* All the visible objects from the current function need to be killed. *)
-        E.return begin
-          if env.is_Noreturn then
-            Caux.mk_pure_e (Caux.mk_std_undef_pe loc "§6.7.4#8" Undefined.UB071_noreturn)
-          else
-            Caux.mk_sseq_e e_sym_pat core_e (
-              mk_run_e loc env.return_lab visible_syms_tys [] [ret_pe]
-            )
-        end
+        if AilTypesAux.atomic_qualified_unqualified AilTypesAux.is_Bool env.return_ty && AilTypesAux.is_pointer (ctype_of e) then
+            (* By Ail's typing we know that [e] is a pointer *)
+            E.wrapped_fresh_symbol2 (C.BTy_loaded C.OTy_integer) >>= fun conv_wrp ->
+            E.return begin
+              Caux.mk_sseq_e e_wrp.E.sym_pat core_e begin
+                Caux.mk_sseq_e conv_wrp.E.sym_pat (stdlib.mkproc_loaded_pointer_to_Bool e_wrp.E.sym_pe)
+                (mk_run_with_lifetime_e loc env.return_lab visible_syms_tys [] [conv_wrp.E.sym_pe])
+              end
+            end
+        else
+          let ret_pe =
+            if AilTypesAux.atomic_qualified_unqualified AilTypesAux.is_arithmetic env.return_ty && AilTypesAux.is_arithmetic (ctype_of e) then
+                conv_loaded_arith stdlib (ctype_of e) env.return_ty e_wrp.E.sym_pe
+            else
+              e_wrp.E.sym_pe in   
+          E.return begin 
+            Caux.mk_sseq_e e_wrp.E.sym_pat core_e begin
+              mk_run_with_lifetime_e loc env.return_lab visible_syms_tys [] [ret_pe]
+            end
+          end
 
     | A.AilSswitch e s ->
         (* Translate the controlling expression *)
@@ -3353,7 +3360,7 @@ let rec translate_stmt stdlib tagDefs f env (A.AnnotatedStatement loc stmt_attrs
             E.return (sym, ty)
         ) visible_syms >>= fun visible_syms_tys ->
         let visibles_after = fromJust "Translation.translation_statement, AilSgoto" (Map.lookup sym env.label_visibles) in
-        E.return (mk_run_e loc sym visible_syms_tys visibles_after [])
+        E.return (mk_run_with_lifetime_e loc sym visible_syms_tys visibles_after [])
     
     | A.AilSdeclaration sym_es ->
         (* This pass translates the declarations *)
