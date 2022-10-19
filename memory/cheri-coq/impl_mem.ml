@@ -102,6 +102,7 @@ module CHERIMorello : Memory = struct
   let toCoq_location (l:Location_ocaml.t): CoqLocation.location_ocaml = assert false (* TODO *)
   let toCoq_Symbol_prefix (p:Symbol.prefix) : CoqSymbol.prefix = assert false (* TODO *)
   let toCoq_Symbol_sym (s:Symbol.sym): CoqSymbol.sym = assert false (* TODO *)
+  let toCoq_integerType (t:Ctype.integerType): CoqCtype.integerType = assert false (* TODO *)
 
   let fromCoq_memMError (e:MM.memMError) : mem_error Nondeterminism.kill_reason =
     match e with
@@ -280,17 +281,20 @@ module CHERIMorello : Memory = struct
     | _ ->
        return None
 
-  (*
+  let validForDeref_ptrval ref_ty ptrval
+    = lift_coq_memM (MM.validForDeref_ptrval (toCoq_ctype ref_ty) ptrval)
 
-  val validForDeref_ptrval: Ctype.ctype -> pointer_value -> bool memM
-  val isWellAligned_ptrval: Ctype.ctype -> pointer_value -> bool memM
+  let isWellAligned_ptrval ref_ty ptrval
+    = lift_coq_memM (MM.isWellAligned_ptrval (toCoq_ctype ref_ty) ptrval)
 
   (* Casting operations *)
-  (* the first ctype is the original integer type, the second is the target referenced type *)
-  val ptrfromint: Location_ocaml.t -> Ctype.integerType -> Ctype.ctype -> integer_value -> pointer_value memM
-  (* the first ctype is the original referenced type, the integerType is the target integer type *)
-  val intfromptr: Location_ocaml.t -> Ctype.ctype -> Ctype.integerType -> pointer_value -> integer_value memM
+  let ptrfromint (loc:Location_ocaml.t) (int_ty: Ctype.integerType) (ref_ty:Ctype.ctype) (int_v:integer_value): pointer_value memM
+    = lift_coq_memM (MM.ptrfromint (toCoq_location loc) (toCoq_integerType int_ty) (toCoq_ctype ref_ty) int_v)
 
+  let intfromptr (loc:Location_ocaml.t) (ty:Ctype.ctype) (ity:Ctype.integerType) (ptr:pointer_value): integer_value memM
+    = lift_coq_memM (MM.intfromptr (toCoq_location loc) (toCoq_ctype ty) (toCoq_integerType ity) ptr)
+
+  (*
   (* New operations for CHERI *)
   val derive_cap : bool(* is_signed *) -> Mem_common.derivecap_op -> integer_value -> integer_value -> integer_value
   val cap_assign_value: Location_ocaml.t -> integer_value -> integer_value -> integer_value
