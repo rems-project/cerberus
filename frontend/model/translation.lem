@@ -2429,7 +2429,7 @@ end
                 (* STD §6.4.5#6, sentence 5 *)
                 Cty.wchar_t
           end in
-          E.wrapped_fresh_symbol (C.BTy_object C.OTy_pointer) >>= fun (lit_sym, _, lit_sym_pe) ->
+          E.wrapped_fresh_symbol2 (C.BTy_object C.OTy_pointer) >>= fun lit_wrp ->
           (* TODO: making an implementation fix here (ASCII), not doing prefix properly *)
 (*
           let elem_lvals = List.map (fun c_str ->
@@ -2445,10 +2445,10 @@ end
                  (Caux.mk_integer_pe (Decode.decode_character_constant c_str))
              )
           ) strs ++ [Caux.mk_specified_pe (Caux.mk_integer_pe 0)] in
-          E.register_string_literal loc lit_sym (Cty.Ctype [] (Cty.Array elem_ty (Just (integerFromNat (List.length elem_pes)))))
+          E.register_string_literal loc lit_wrp.E.sym_sym (Cty.Ctype [] (Cty.Array elem_ty (Just (integerFromNat (List.length elem_pes)))))
             (Caux.mk_specified_pe (Caux.mk_array_pe elem_pes))  >>
           E.return (
-            Caux.mk_pure_e lit_sym_pe
+            Caux.mk_pure_e lit_wrp.E.sym_pe
           )
       | A.AilEsizeof _ ty ->
           E.return begin
