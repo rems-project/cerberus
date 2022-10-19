@@ -2204,7 +2204,6 @@ end
           end
       
       | A.AilEstruct tag_sym ident_e_opts ->
-          (* TODO(check) ignoring the potential flexible array member, because it should not be part of a struct as value *)
           let ident_tys = match Map.lookup tag_sym tagDefs with
             | Just (Cty.StructDef z _) ->
                 z
@@ -2228,15 +2227,15 @@ end
                             illTypedAil loc "AilEstruct, Just null_pointer_constant"
                       end
                     else
-                      E.wrapped_fresh_symbol (C.BTy_loaded oTy) >>= fun (_, e_sym_pat, e_sym_pe) ->
-                      self e                                    >>= fun core_e                   ->
+                      E.wrapped_fresh_symbol2 (C.BTy_loaded oTy) >>= fun e_wrp  ->
+                      self e                                    >>= fun core_e ->
                       E.return
                         ( ( ident
                           , if AilTypesAux.is_integer memb_ty then
-                              stdlib.mkcall_conv_loaded_int memb_ty e_sym_pe
+                              stdlib.mkcall_conv_loaded_int memb_ty e_wrp.E.sym_pe
                             else
-                              e_sym_pe ) :: acc
-                        , fun z -> Caux.mk_sseq_e e_sym_pat core_e (mk_core z) )
+                              e_wrp.E.sym_pe ) :: acc
+                        , fun z -> Caux.mk_sseq_e e_wrp.E.sym_pat core_e (mk_core z) )
                   end
               | Nothing ->
                   let (_, _, _, ty) = fromJust "Translation.translate_expression, AilEstruct 3" (List.lookup ident ident_tys) in
