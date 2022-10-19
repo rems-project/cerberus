@@ -2576,8 +2576,8 @@ else (* is_pointer *)
           end
 
       | A.AilEreg_load r ->
-          (* TODO *)
-          error "Translation AilEreg_load"
+          (* this is not yet emitted by the frontend *)
+          error "TODO: translation of AilEreg_load"
 
       | A.AilErvalue e ->
           let mo =
@@ -2586,17 +2586,14 @@ else (* is_pointer *)
               Cmm.Seq_cst
             else
               Cmm.NA in
-          (* TODO: check + I don't like have a wseq here *)
           self e >>= fun core_e ->
-          E.wrapped_fresh_symbol (C.BTy_object C.OTy_pointer)
-            >>= fun (_, e_sym_pat, e_sym_pe ) ->
-          E.return (
-            C.Expr [] (
-              C.Ewseq ( (* Caux.mk_specified_pat *) e_sym_pat) core_e (
-                Caux.pload loc (Caux.mk_ail_ctype_pe result_ty) e_sym_pe mo
-              )
-            )
-          )
+          E.wrapped_fresh_symbol2 (C.BTy_object C.OTy_pointer) >>= fun e_wrp ->
+          E.return begin
+            Caux.mk_wseq_e e_wrp.E.sym_pat core_e begin
+              Caux.pload loc (Caux.mk_ail_ctype_pe result_ty) e_wrp.E.sym_pe mo
+            end
+          end
+
       | A.AilEarray_decay e ->
           match GenTypes.genTypeCategoryOf e with
             | GenTypes.GenLValueType _ _ _ ->
