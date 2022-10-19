@@ -372,13 +372,13 @@ let translate_relational_operator translate_expr usual_arithmetic_conversion res
   (* STD "§6.5.8" *)
   let oTy1 = force_core_object_type_of_ctype (ctype_of e1) in
   let oTy2 = force_core_object_type_of_ctype (ctype_of e2) in
-  translate_expr e1                          >>= fun core_e1                                  ->
-  translate_expr e2                          >>= fun core_e2                                  ->
-  E.wrapped_fresh_symbol (C.BTy_loaded oTy1) >>= fun (e1_sym   , e1_sym_pat   , e1_sym_pe   ) ->
-  E.wrapped_fresh_symbol (C.BTy_loaded oTy2) >>= fun (e2_sym   , e2_sym_pat   , e2_sym_pe   ) ->
-  E.wrapped_fresh_symbol (C.BTy_object oTy1) >>= fun (obj1_sym , obj1_sym_pat , obj1_sym_pe ) ->
-  E.wrapped_fresh_symbol (C.BTy_object oTy2) >>= fun (obj2_sym , obj2_sym_pat , obj2_sym_pe ) ->
-  E.wrapped_fresh_symbol C.BTy_boolean       >>= fun (memop_sym, memop_sym_pat, memop_sym_pe) ->
+  translate_expr e1                          >>= fun core_e1   ->
+  translate_expr e2                          >>= fun core_e2   ->
+  E.wrapped_fresh_symbol2 (C.BTy_loaded oTy1) >>= fun e1_wrp    ->
+  E.wrapped_fresh_symbol2 (C.BTy_loaded oTy2) >>= fun e2_wrp    ->
+  E.wrapped_fresh_symbol2 (C.BTy_object oTy1) >>= fun obj1_wrp  ->
+  E.wrapped_fresh_symbol2 (C.BTy_object oTy2) >>= fun obj2_wrp  ->
+  E.wrapped_fresh_symbol2 C.BTy_boolean       >>= fun memop_wrp ->
   (* The object type on which the Core operator is going to work on. *)
   (* From Ail's typing it is enough to look at the type of one of the operand (see STD §6.5.8#2) *)
   let real_bop = match bop with
@@ -391,15 +391,15 @@ let translate_relational_operator translate_expr usual_arithmetic_conversion res
   end in
   E.return begin
     Caux.add_std "§6.5.8" (
-      Caux.mk_wseq_e (Caux.mk_tuple_pat [ e1_sym_pat; e2_sym_pat ]) (Caux.mk_unseq [core_e1; core_e2]) (
-        Caux.mk_case_e (Caux.mk_tuple_pe [e1_sym_pe; e2_sym_pe])
-            [ ( Caux.mk_tuple_pat [ Caux.mk_specified_pat obj1_sym_pat
-                                  ; Caux.mk_specified_pat obj2_sym_pat ]
+      Caux.mk_wseq_e (Caux.mk_tuple_pat [ e1_wrp.E.sym_pat; e2_wrp.E.sym_pat ]) (Caux.mk_unseq [core_e1; core_e2]) (
+        Caux.mk_case_e (Caux.mk_tuple_pe [e1_wrp.E.sym_pe; e2_wrp.E.sym_pe])
+            [ ( Caux.mk_tuple_pat [ Caux.mk_specified_pat obj1_wrp.E.sym_pat
+                                  ; Caux.mk_specified_pat obj2_wrp.E.sym_pat ]
               ,
 begin if AilTypesAux.is_real (ctype_of e1) then
                 let (promoted1_pe, promoted2_pe) =
                   Caux.mk_std_pair_pe "§6.5.8#3"
-                    (usual_arithmetic_conversion (ctype_of e1) (ctype_of e2) obj1_sym_pe obj2_sym_pe) in
+                    (usual_arithmetic_conversion (ctype_of e1) (ctype_of e2) obj1_wrp.E.sym_pe obj2_wrp.E.sym_pe) in
                 Caux.add_std "§6.5.8#6" (
                   Caux.mk_pure_e (
                     Caux.mk_if_pe_ [Annot.Anot_explode] (Caux.mk_op_pe real_bop promoted1_pe promoted2_pe)
@@ -415,10 +415,10 @@ else
                   | A.Ge -> Mem_common.PtrGe
                   | (*BISECT-IGNORE*) _ -> error "[Translation.translate_relational_operator], 'bop' must be relational"
                 end in
-                Caux.mk_wseq_e memop_sym_pat (C.Expr [] (C.Ememop memop [obj1_sym_pe; obj2_sym_pe])) (
+                Caux.mk_wseq_e memop_wrp.E.sym_pat (C.Expr [] (C.Ememop memop [obj1_wrp.E.sym_pe; obj2_wrp.E.sym_pe])) (
                   Caux.add_std "§6.5.8#6" (
                     Caux.mk_pure_e (
-                      Caux.mk_if_pe_ [Annot.Anot_explode] memop_sym_pe
+                      Caux.mk_if_pe_ [Annot.Anot_explode] memop_wrp.E.sym_pe
                         (Caux.mk_specified_pe (Caux.mk_integer_pe 1))
                         (Caux.mk_specified_pe (Caux.mk_integer_pe 0))
                     )
@@ -449,10 +449,10 @@ if    Aaux.is_null_pointer_constant e1 && AilTypesAux.is_pointer (ctype_of e2)
   (* equality test between a null pointer constant and pointer *)
   let e = if Aaux.is_null_pointer_constant e1 then e2 else e1 in
   let nullptr_pe = Caux.mk_std_pe "§6.5.9#5, sentence 2" (Caux.mk_nullptr_pe (ctype_of e)) in
-  translate_expr e                                    >>= fun core_e                           ->
-  E.wrapped_fresh_symbol (C.BTy_loaded C.OTy_pointer) >>= fun (_, e_sym_pat    , e_sym_pe    ) ->
-  E.wrapped_fresh_symbol (C.BTy_object C.OTy_pointer) >>= fun (_, obj_sym_pat  , obj_sym_pe  ) ->
-  E.wrapped_fresh_symbol C.BTy_boolean                >>= fun (_, memop_sym_pat, memop_sym_pe) ->
+  translate_expr e                                    >>= fun core_e    ->
+  E.wrapped_fresh_symbol2 (C.BTy_loaded C.OTy_pointer) >>= fun e_wrp     ->
+  E.wrapped_fresh_symbol2 (C.BTy_object C.OTy_pointer) >>= fun obj_wrp   ->
+  E.wrapped_fresh_symbol2 C.BTy_boolean                >>= fun memop_wrp ->
   let memop = match bop with
     | A.Eq -> Mem_common.PtrEq
     | A.Ne -> Mem_common.PtrNe
@@ -460,13 +460,13 @@ if    Aaux.is_null_pointer_constant e1 && AilTypesAux.is_pointer (ctype_of e2)
         error "[Translation.translate_equality_operator], 'bop' must be an equality operator"
   end in
   E.return begin
-    Caux.mk_wseq_e e_sym_pat core_e begin
-      Caux.mk_case_e e_sym_pe
-        [ ( Caux.mk_specified_pat obj_sym_pat
-          , Caux.mk_wseq_e memop_sym_pat (Caux.mk_memop_e memop [obj_sym_pe; nullptr_pe]) begin
+    Caux.mk_wseq_e e_wrp.E.sym_pat core_e begin
+      Caux.mk_case_e e_wrp.E.sym_pe
+        [ ( Caux.mk_specified_pat obj_wrp.E.sym_pat
+          , Caux.mk_wseq_e memop_wrp.E.sym_pat (Caux.mk_memop_e memop [obj_wrp.E.sym_pe; nullptr_pe]) begin
               Caux.add_std "§6.5.9#3" begin
                 Caux.mk_pure_e begin
-                  Caux.mk_if_pe_ [Annot.Anot_explode] memop_sym_pe
+                  Caux.mk_if_pe_ [Annot.Anot_explode] memop_wrp.E.sym_pe
                     (Caux.mk_specified_pe (Caux.mk_integer_pe 1))
                     (Caux.mk_specified_pe (Caux.mk_integer_pe 0))
                 end
@@ -478,18 +478,18 @@ if    Aaux.is_null_pointer_constant e1 && AilTypesAux.is_pointer (ctype_of e2)
   end
 
 else (* operands both have arithmetic or pointer types *)
-  translate_expr e1 >>= fun core_e1 ->
-  translate_expr e2 >>= fun core_e2 ->
   (* The object type on which the Core operator is going to work on. *)
   let oTy1 = force_core_object_type_of_ctype (ctype_of e1) in
   let oTy2 = force_core_object_type_of_ctype (ctype_of e2) in
-  E.wrapped_fresh_symbol (C.BTy_loaded oTy1) >>= fun (_, e1_sym_pat   , e1_sym_pe   ) ->
-  E.wrapped_fresh_symbol (C.BTy_loaded oTy2) >>= fun (_, e2_sym_pat   , e2_sym_pe   ) ->
-  E.wrapped_fresh_symbol (C.BTy_object oTy1) >>= fun (_, obj1_sym_pat , obj1_sym_pe ) ->
-  E.wrapped_fresh_symbol (C.BTy_object oTy2) >>= fun (_, obj2_sym_pat , obj2_sym_pe ) ->
-  E.wrapped_fresh_symbol C.BTy_boolean       >>= fun (_, memop_sym_pat, memop_sym_pe) ->
+  E.wrapped_fresh_symbol2 (C.BTy_loaded oTy1) >>= fun e1_wrp    ->
+  E.wrapped_fresh_symbol2 (C.BTy_loaded oTy2) >>= fun e2_wrp    ->
+  E.wrapped_fresh_symbol2 (C.BTy_object oTy1) >>= fun obj1_wrp  ->
+  E.wrapped_fresh_symbol2 (C.BTy_object oTy2) >>= fun obj2_wrp  ->
+  E.wrapped_fresh_symbol2 C.BTy_boolean       >>= fun memop_wrp ->
+  translate_expr e1                          >>= fun core_e1   ->
+  translate_expr e2                          >>= fun core_e2   ->
   E.return begin
-    Caux.mk_wseq_e (Caux.mk_tuple_pat [e1_sym_pat; e2_sym_pat]) (Caux.mk_unseq [core_e1; core_e2]) begin
+    Caux.mk_wseq_e (Caux.mk_tuple_pat [e1_wrp.E.sym_pat; e2_wrp.E.sym_pat]) (Caux.mk_unseq [core_e1; core_e2]) begin
 if AilTypesAux.is_arithmetic (ctype_of e1) && AilTypesAux.is_arithmetic (ctype_of e2) then
   let mk_op_pe = match bop with
     | A.Eq -> Caux.mk_op_pe C.OpEq
@@ -498,11 +498,11 @@ if AilTypesAux.is_arithmetic (ctype_of e1) && AilTypesAux.is_arithmetic (ctype_o
         error "[Translation.translate_equality_operator], 'bop' must be an equality operator"
   end in
       Caux.mk_pure_e begin
-        Caux.mk_case_pe (Caux.mk_tuple_pe [e1_sym_pe; e2_sym_pe])
-          [ ( Caux.mk_tuple_pat [ Caux.mk_specified_pat obj1_sym_pat; Caux.mk_specified_pat obj2_sym_pat ]
+        Caux.mk_case_pe (Caux.mk_tuple_pe [e1_wrp.E.sym_pe; e2_wrp.E.sym_pe])
+          [ ( Caux.mk_tuple_pat [ Caux.mk_specified_pat obj1_wrp.E.sym_pat; Caux.mk_specified_pat obj2_wrp.E.sym_pat ]
             , let (promoted1_pe, promoted2_pe) =
                 Caux.mk_std_pair_pe "§6.5.9#4, sentence 1"
-                  (usual_arithmetic_conversion (ctype_of e1) (ctype_of e2) obj1_sym_pe obj2_sym_pe) in
+                  (usual_arithmetic_conversion (ctype_of e1) (ctype_of e2) obj1_wrp.E.sym_pe obj2_wrp.E.sym_pe) in
               Caux.mk_std_pe "§6.5.9#3" begin
                 Caux.mk_if_pe_ [Annot.Anot_explode] (Caux.mk_std_pe "§6.5.9#4, sentence 3" (mk_op_pe promoted1_pe promoted2_pe))
                   (Caux.mk_specified_pe (Caux.mk_integer_pe 1))
@@ -521,12 +521,12 @@ else (* both operand have pointer type *)
   end in
      (* NOTE: our modelling of ptr <-> ptr casting is the identity,
               so nothing is done here for (§6.5.9#5 sentence 3) *)
-      Caux.mk_case_e (Caux.mk_tuple_pe [e1_sym_pe; e2_sym_pe])
-        [ ( Caux.mk_tuple_pat [ Caux.mk_specified_pat obj1_sym_pat; Caux.mk_specified_pat obj2_sym_pat ]
-          , Caux.mk_wseq_e memop_sym_pat (C.Expr [] (C.Ememop memop [obj1_sym_pe; obj2_sym_pe])) begin
+      Caux.mk_case_e (Caux.mk_tuple_pe [e1_wrp.E.sym_pe; e2_wrp.E.sym_pe])
+        [ ( Caux.mk_tuple_pat [ Caux.mk_specified_pat obj1_wrp.E.sym_pat; Caux.mk_specified_pat obj2_wrp.E.sym_pat ]
+          , Caux.mk_wseq_e memop_wrp.E.sym_pat (C.Expr [] (C.Ememop memop [obj1_wrp.E.sym_pe; obj2_wrp.E.sym_pe])) begin
               Caux.mk_pure_e begin
                 Caux.mk_std_pe "§6.5.9#3" begin
-                  Caux.mk_if_pe_ [Annot.Anot_explode] memop_sym_pe
+                  Caux.mk_if_pe_ [Annot.Anot_explode] memop_wrp.E.sym_pe
                     (Caux.mk_specified_pe (Caux.mk_integer_pe 1))
                     (Caux.mk_specified_pe (Caux.mk_integer_pe 0))
                 end
