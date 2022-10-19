@@ -1858,20 +1858,20 @@ end                       )
             self expr >>= fun core_e ->
             if AilTypesAux.is_integer result_ty then
               let e_oTy = force_core_object_type_of_ctype e_ty in
-              E.wrapped_fresh_symbol (C.BTy_loaded e_oTy) >>= fun (_, e_sym_pat, e_sym_pe  ) ->
+              E.wrapped_fresh_symbol2 (C.BTy_loaded e_oTy) >>= fun e_wrp ->
               (* NOTE: if result_ty is an integer type, then e2 and e2 are both integers (so e_ty must be too) *)
               E.return begin
-                Caux.mk_sseq_e e_sym_pat core_e
-                  (Caux.mk_pure_e (stdlib.mkcall_conv_loaded_int result_ty e_sym_pe))
+                Caux.mk_sseq_e e_wrp.E.sym_pat core_e
+                  (Caux.mk_pure_e (stdlib.mkcall_conv_loaded_int result_ty e_wrp.E.sym_pe))
               end
             else if AilTypesAux.is_floating result_ty then
               begin
                 if AilTypesAux.is_integer e_ty then
                   let e_oTy = force_core_object_type_of_ctype e_ty in
-                  E.wrapped_fresh_symbol (C.BTy_loaded e_oTy) >>= fun (_, e_sym_pat, e_sym_pe  ) ->
+                  E.wrapped_fresh_symbol2 (C.BTy_loaded e_oTy) >>= fun e_wrp ->
                   E.return begin
-                    Caux.mk_sseq_e e_sym_pat core_e
-                      (Caux.mk_pure_e (stdlib.mkcall_loaded_fvfromint result_ty e_sym_pe))
+                    Caux.mk_sseq_e e_wrp.E.sym_pat core_e
+                      (Caux.mk_pure_e (stdlib.mkcall_loaded_fvfromint result_ty e_wrp.E.sym_pe))
                   end
                 else
                   E.return core_e (* TODO floating conversion *)
@@ -1900,10 +1900,10 @@ end                       )
           (* NOTE: Ail's typing guarantees that e1 is scalar *)
           self (mkTestExpression TestEq e1) >>= fun core_e1 ->
           (* NOTE: the Core expression 'core_e1' has integer type because we elaborated an equality test *)
-          E.wrapped_fresh_symbol (C.BTy_loaded C.OTy_integer) >>= fun (_, e1_sym_pat  , e1_sym_pe  ) ->
-          E.wrapped_fresh_symbol (C.BTy_object C.OTy_integer) >>= fun (_, obj1_sym_pat, obj1_sym_pe) ->
-          apply_implicit_conversions e2                       >>= fun conv_e2                        ->
-          apply_implicit_conversions e3                       >>= fun conv_e3                        ->
+          E.wrapped_fresh_symbol2 (C.BTy_loaded C.OTy_integer) >>= fun e1_wrp   ->
+          E.wrapped_fresh_symbol2 (C.BTy_object C.OTy_integer) >>= fun obj1_wrp ->
+          apply_implicit_conversions e2                       >>= fun conv_e2  ->
+          apply_implicit_conversions e3                       >>= fun conv_e3  ->
           let (seq_quote, test_quote) =
             match ctx with
               | ECTX_logical_operator ->
@@ -1916,11 +1916,11 @@ end                       )
             Caux.add_stds seq_quote begin
             (* STD (§6.5.15#4, sentence 1) says there is a sequenced point between the
                evaluation of e1 and the e2/e3. Hence the strong sequencing *)
-              Caux.mk_sseq_e e1_sym_pat core_e1 begin
-                Caux.mk_case_e e1_sym_pe
-                  [ ( Caux.mk_specified_pat obj1_sym_pat
+              Caux.mk_sseq_e e1_wrp.E.sym_pat core_e1 begin
+                Caux.mk_case_e e1_wrp.E.sym_pe
+                  [ ( Caux.mk_specified_pat obj1_wrp.E.sym_pat
                     , Caux.add_stds test_quote begin
-                        Caux.mk_if_e (Caux.mk_op_pe C.OpEq obj1_sym_pe (Caux.mk_integer_pe 0))
+                        Caux.mk_if_e (Caux.mk_op_pe C.OpEq obj1_wrp.E.sym_pe (Caux.mk_integer_pe 0))
                           conv_e2
                           conv_e3
                       end )
