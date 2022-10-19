@@ -87,76 +87,88 @@ module CHERIMorello : Memory = struct
   let return = Nondeterminism.nd_return
   let bind = Nondeterminism.nd_bind
 
-  let translate_mem_error (e:MM.mem_error) : mem_error = assert false (* TODO *)
-  let translate_location (l:CoqLocation.location_ocaml): Location_ocaml.t = assert false (* TODO *)
-  let translate_undefined_behaviour (u:CoqUndefined.undefined_behaviour) : Undefined.undefined_behaviour = assert false (* TODO *)
-  let translate_Symbol_prefix (p:Symbol.prefix) : CoqSymbol.prefix = assert false (* TODO *)
-  let translate_thread_id (tid:thread_id) : MM.thread_id = assert false (* TODO *)
-  let translate_ctype (ty:Ctype.ctype) : CoqCtype.ctype = assert false (* TODO *)
+  let fromCoq_mem_error (e:MM.mem_error) : mem_error = assert false (* TODO *)
+  let fromCoq_location (l:CoqLocation.location_ocaml): Location_ocaml.t = assert false (* TODO *)
+  let fromCoq_undefined_behaviour (u:CoqUndefined.undefined_behaviour) : Undefined.undefined_behaviour = assert false (* TODO *)
 
-  let translate_memMError (e:MM.memMError) : mem_error Nondeterminism.kill_reason =
+  let toCoq_thread_id (tid:thread_id) : MM.thread_id = assert false (* TODO *)
+  let toCoq_ctype (ty:Ctype.ctype) : CoqCtype.ctype = assert false (* TODO *)
+  let toCoq_location (l:Location_ocaml.t): CoqLocation.location_ocaml = assert false (* TODO *)
+  let toCoq_Symbol_prefix (p:Symbol.prefix) : CoqSymbol.prefix = assert false (* TODO *)
+  let toCoq_Symbol_sym (s:Symbol.sym): CoqSymbol.sym = assert false (* TODO *)
+
+  let fromCoq_memMError (e:MM.memMError) : mem_error Nondeterminism.kill_reason =
     match e with
-    | Other me -> Other (translate_mem_error me)
+    | Other me -> Other (fromCoq_mem_error me)
     | Undef0 (loc, ubs) ->
-       Undef0 (translate_location loc, List.map translate_undefined_behaviour ubs)
+       Undef0 (fromCoq_location loc, List.map fromCoq_undefined_behaviour ubs)
     | InternalErr msg -> failwith msg
 
   let lift_coq_memM (m:'a MM.memM): 'a memM =
     ND (fun st ->
         match m st with
         | (st', Coq_inl e) ->
-           let e' = translate_memMError e in
+           let e' = fromCoq_memMError e in
            (NDkilled e', st')
         | (st',Coq_inr a) -> (NDactive a, st')
       )
 
+  let lift_coq_serr (s: (string, 'a) Datatypes.sum): 'a =
+    match s with
+    | Coq_inl errs -> failwith errs
+    | Coq_inr v -> v
+
+  (* Memory actions *)
   let allocate_object
         (tid: Mem_common.thread_id)
         (pref: Symbol.prefix)
         (int_val: integer_value)
         (ty: Ctype.ctype)
-        (init_opt: mem_value option): pointer_value memM =
+        (init_opt: mem_value option): pointer_value memM
+    =
     lift_coq_memM (MM.allocate_object
-                     (translate_thread_id tid)
-                     (translate_Symbol_prefix pref)
+                     (toCoq_thread_id tid)
+                     (toCoq_Symbol_prefix pref)
                      int_val
-                     (translate_ctype ty)
+                     (toCoq_ctype ty)
                      init_opt)
 
 
+  let allocate_region
+        (tid:Mem_common.thread_id)
+        (pref:Symbol.prefix)
+        (align_int:integer_value)
+        (size_int: integer_value): pointer_value memM
+    =
+    lift_coq_memM (MM.allocate_region
+                     (toCoq_thread_id tid)
+                     (toCoq_Symbol_prefix pref)
+                     align_int
+                     size_int)
+
+  let kill (loc:Location_ocaml.t) (is_dyn:bool) (pv:pointer_value) : unit memM
+    =
+    lift_coq_memM (MM.kill (toCoq_location loc) is_dyn pv)
+
+  let load (loc:Location_ocaml.t) (ty:Ctype.ctype) (p:pointer_value): (footprint * mem_value) memM
+    =
+    lift_coq_memM (MM.load (toCoq_location loc) (toCoq_ctype ty) p)
+
+  let store (loc:Location_ocaml.t) (ty:Ctype.ctype) (is_locking:bool) (p:pointer_value) (mval:mem_value): footprint memM
+    =
+    lift_coq_memM (MM.store (toCoq_location loc) (toCoq_ctype ty) is_locking p mval)
+
+  let null_ptrval (ty:Ctype.ctype) : pointer_value
+    = MM.null_ptrval (toCoq_ctype ty)
+
+  let fun_ptrval (s:Symbol.sym) : pointer_value
+    =
+    lift_coq_serr (MM.fun_ptrval (toCoq_Symbol_sym s))
+
   (*
 
-  let cs_module : (module Constraints with type t = mem_iv_constraint)
-
-  type 'a memM =
-    ('a, string, Mem_common.mem_error, integer_value Mem_common.mem_constraint, mem_state) Nondeterminism.ndM
-  val return: 'a -> 'a memM
-  val bind: 'a memM -> ('a -> 'b memM) -> 'b memM
-
-  (* Memory actions *)
-  val allocate_object:
-       Mem_common.thread_id      (* the allocating thread *)
-    -> Symbol.prefix  (* symbols coming from the Core/C program, for debugging purpose *)
-    -> integer_value  (* alignment constraint *)
-    -> Ctype.ctype    (* type of the allocation *)
-    -> mem_value option   (* optional initialisation value (if provided the allocation is made read-only) *)
-    -> pointer_value memM
-
-  val allocate_region:
-       Mem_common.thread_id      (* the allocating thread *)
-    -> Symbol.prefix  (* symbols coming from the Core/C program, for debugging purpose *)
-    -> integer_value  (* alignment constraint *)
-    -> integer_value  (* size *)
-    -> pointer_value memM
-
-  val kill: Location_ocaml.t -> bool -> pointer_value -> unit memM
-
-  val load: Location_ocaml.t -> Ctype.ctype -> pointer_value -> (footprint * mem_value) memM
-  val store: Location_ocaml.t -> Ctype.ctype -> (* is_locking *)bool -> pointer_value -> mem_value -> footprint memM
 
   (* Pointer value constructors *)
-  val null_ptrval: Ctype.ctype -> pointer_value
-  val fun_ptrval: Symbol.sym -> pointer_value
 
   (*TODO: revise that, just a hack for codegen*)
   val concrete_ptrval: Nat_big_num.num -> Nat_big_num.num -> pointer_value
