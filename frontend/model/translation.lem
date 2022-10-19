@@ -593,7 +593,7 @@ val translate_postfix:
   A.expression GenTypes.genTypeCategory ->
   E.elabM (C.expr unit)
 let translate_postfix loc translate_expr stdlib result_ty op e =
-  (* TODO: atomicity *)
+  (* TODO: use atomic RMW if the type is atomic *)
   (* NOTE: if I read N2329 correctly, in C2X this will not be an RMW for the atomic case (but a do while
            with compare_exchange_weak with seq_cst, seq_cst) *)
   let (std_para, core_op, ptr_shift_const) =
@@ -611,21 +611,21 @@ let translate_postfix loc translate_expr stdlib result_ty op e =
   let ty  = AilTypesAux.rvalue_coercion (snd (from_lvalue_type e)) in
   let oTy = force_core_object_type_of_ctype ty    in
   let core_ty_e = Caux.mk_ail_ctype_pe ty in
-  E.wrapped_fresh_symbol (C.BTy_object C.OTy_pointer) >>= fun (lvalue_sym, lvalue_sym_pat, lvalue_sym_pe) ->
-  E.wrapped_fresh_symbol (C.BTy_loaded oTy)           >>= fun (load_sym  , load_sym_pat  , load_sym_pe  ) ->
-  E.wrapped_fresh_symbol (C.BTy_object oTy)           >>= fun (obj_sym   , obj_sym_pat   , obj_sym_pe   ) ->
-  translate_expr e                                    >>= fun core_e                                      ->
+  E.wrapped_fresh_symbol2 (C.BTy_object C.OTy_pointer) >>= fun lvalue_wrp ->
+  E.wrapped_fresh_symbol2 (C.BTy_loaded oTy)           >>= fun load_wrp   ->
+  E.wrapped_fresh_symbol2 (C.BTy_object oTy)           >>= fun obj_wrp    ->
+  translate_expr e                                    >>= fun core_e     ->
   E.return begin
     Caux.add_stds ["§6.5.2.4"; std_sentence_n 1; std_sentence_n 3] begin
-      Caux.mk_wseq_e lvalue_sym_pat core_e begin
-        Caux.seq_rmw loc false(* return the value of the load *) core_ty_e oTy lvalue_sym_pe load_sym begin
-          Caux.mk_case_pe load_sym_pe
-            [ ( Caux.mk_specified_pat obj_sym_pat
+      Caux.mk_wseq_e lvalue_wrp.E.sym_pat core_e begin
+        Caux.seq_rmw loc false(* return the value of the load *) core_ty_e oTy lvalue_wrp.E.sym_pe load_wrp.E.sym_sym begin
+          Caux.mk_case_pe load_wrp.E.sym_pe
+            [ ( Caux.mk_specified_pat obj_wrp.E.sym_pat
               , Caux.mk_specified_pe begin
                   Caux.mk_std_pe (std_sentence_n 2)
 match Ctype.unatomic_ ty with
   | Ctype.Basic (Ctype.Integer _) ->
-                    let core_postfix = Caux.mk_op_pe core_op obj_sym_pe (Caux.mk_integer_pe 1) in
+                    let core_postfix = Caux.mk_op_pe core_op obj_wrp.E.sym_pe (Caux.mk_integer_pe 1) in
                     let promoted_ty =
                       fromJust "Translation.translate_postfix promotion"
                         (AilTypesAux.promotion integerImpl (ctype_of e)) in
@@ -636,13 +636,12 @@ match Ctype.unatomic_ ty with
                       stdlib.mkcall_wrapI promoted_ty core_postfix
       end
   | Ctype.Basic (Ctype.Floating (Ctype.RealFloating _)) ->
-                    (* TODO: not correct semantics for float *)
-                    Caux.mk_op_pe core_op obj_sym_pe (Caux.mk_floating_value_pe Mem.one_fval)
+                    (* NOTE: we are not modelling floating UBs *)
+                    Caux.mk_op_pe core_op obj_wrp.E.sym_pe (Caux.mk_floating_value_pe Mem.one_fval)
   | Ctype.Pointer _ ref_ty ->
-                    Caux.mk_array_shift obj_sym_pe ref_ty (Caux.mk_integer_pe ptr_shift_const)
+                    Caux.mk_array_shift obj_wrp.E.sym_pe ref_ty (Caux.mk_integer_pe ptr_shift_const)
   | (*BISECT-IGNORE*) _ ->
       illTypedAil loc "AilEunary PostfixIncr|PostfixDecr"
-
 end
                 end )
             ; ( Caux.mk_unspecified_pat (Caux.mk_empty_pat C.BTy_ctype)
