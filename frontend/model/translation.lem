@@ -295,31 +295,31 @@ let translate_div_mod_operator loc translate_expr usual_arithmetic_conversion st
     | (*BISECT-IGNORE*) _ ->
       illTypedAil loc "AilEbinary Div, Mod"
   end in
-  translate_expr e1                             >>= fun core_e1                                  ->
-  translate_expr e2                             >>= fun core_e2                                  ->
-  E.wrapped_fresh_symbol (C.BTy_loaded oTy1)    >>= fun (e1_sym   , e1_sym_pat   , e1_sym_pe   ) ->
-  E.wrapped_fresh_symbol (C.BTy_loaded oTy2)    >>= fun (e2_sym   , e2_sym_pat   , e2_sym_pe   ) ->
-  E.wrapped_fresh_symbol (C.BTy_object oTy1)    >>= fun (obj1_sym , obj1_sym_pat , obj1_sym_pe ) ->
-  E.wrapped_fresh_symbol (C.BTy_object oTy2)    >>= fun (obj2_sym , obj2_sym_pat , obj2_sym_pe ) ->
-  E.wrapped_fresh_symbol (C.BTy_object oTy_res) >>= fun (conv1_sym, conv1_sym_pat, conv1_sym_pe) ->
-  E.wrapped_fresh_symbol (C.BTy_object oTy_res) >>= fun (conv2_sym, conv2_sym_pat, conv2_sym_pe) ->
+  translate_expr e1                             >>= fun core_e1   ->
+  translate_expr e2                             >>= fun core_e2   ->
+  E.wrapped_fresh_symbol2 (C.BTy_loaded oTy1)    >>= fun e1_wrp    ->
+  E.wrapped_fresh_symbol2 (C.BTy_loaded oTy2)    >>= fun e2_wrp    ->
+  E.wrapped_fresh_symbol2 (C.BTy_object oTy1)    >>= fun obj1_wrp  ->
+  E.wrapped_fresh_symbol2 (C.BTy_object oTy2)    >>= fun obj2_wrp  ->
+  E.wrapped_fresh_symbol2 (C.BTy_object oTy_res) >>= fun conv1_wrp ->
+  E.wrapped_fresh_symbol2 (C.BTy_object oTy_res) >>= fun conv2_wrp ->
   let (promoted1_pe, promoted2_pe) = Caux.mk_std_pair_pe "§6.5.5#3"
-    (usual_arithmetic_conversion (ctype_of e1) (ctype_of e2) obj1_sym_pe obj2_sym_pe) in
+    (usual_arithmetic_conversion (ctype_of e1) (ctype_of e2) obj1_wrp.E.sym_pe obj2_wrp.E.sym_pe) in
   let (ub, core_pe) = match aop with
     | A.Div ->
         ( Undefined.UB045a_division_by_zero
-        , Caux.mk_op_pe C.OpDiv promoted1_pe conv2_sym_pe )
+        , Caux.mk_op_pe C.OpDiv promoted1_pe conv2_wrp.E.sym_pe )
     | A.Mod ->
         ( Undefined.UB045b_modulo_by_zero
-        , Caux.mk_op_pe C.OpRem_t conv1_sym_pe conv2_sym_pe )
+        , Caux.mk_op_pe C.OpRem_t conv1_wrp.E.sym_pe conv2_wrp.E.sym_pe )
     | (*BISECT-IGNORE*) _ ->
         error "[Translation.translate_div_mod_operator], 'aop' must be multiplicative"
   end in
   E.return begin
     Caux.add_std "§6.5.5" (
-      Caux.mk_wseq_e (Caux.mk_tuple_pat [ e1_sym_pat; e2_sym_pat ]) (Caux.mk_unseq [core_e1; core_e2]) (
+      Caux.mk_wseq_e (Caux.mk_tuple_pat [ e1_wrp.E.sym_pat; e2_wrp.E.sym_pat ]) (Caux.mk_unseq [core_e1; core_e2]) (
         Caux.mk_pure_e (
-          Caux.mk_case_pe (Caux.mk_tuple_pe [e1_sym_pe; e2_sym_pe])
+          Caux.mk_case_pe (Caux.mk_tuple_pe [e1_wrp.E.sym_pe; e2_wrp.E.sym_pe])
             [ ( Caux.mk_tuple_pat [ Caux.mk_unspecified_pat (Caux.mk_empty_pat C.BTy_ctype)
                                   ; Caux.mk_empty_pat (C.BTy_loaded oTy2) ]
               ,
@@ -332,14 +332,14 @@ else
                                   ; Caux.mk_unspecified_pat (Caux.mk_empty_pat C.BTy_ctype) ]
               , Caux.mk_std_undef_pe loc "§6.5.5#5, sentence 2" ub )
 
-            ; ( Caux.mk_tuple_pat [ Caux.mk_specified_pat obj1_sym_pat
-                                  ; Caux.mk_specified_pat obj2_sym_pat ]
-              , Caux.mk_let_pe conv1_sym_pat promoted1_pe (
-                  Caux.mk_let_pe conv2_sym_pat promoted2_pe (
-                    Caux.mk_if_pe_ [Annot.Anot_explode] (Caux.mk_op_pe C.OpEq conv2_sym_pe zero_pe)
+            ; ( Caux.mk_tuple_pat [ Caux.mk_specified_pat obj1_wrp.E.sym_pat
+                                  ; Caux.mk_specified_pat obj2_wrp.E.sym_pat ]
+              , Caux.mk_let_pe conv1_wrp.E.sym_pat promoted1_pe (
+                  Caux.mk_let_pe conv2_wrp.E.sym_pat promoted2_pe (
+                    Caux.mk_if_pe_ [Annot.Anot_explode] (Caux.mk_op_pe C.OpEq conv2_wrp.E.sym_pe zero_pe)
                       (Caux.mk_std_undef_pe loc "§6.5.5#5, sentence 2" ub)
                       (* if a/b is representable *)
-                      ( Caux.mk_if_pe_ [Annot.Anot_explode] (stdlib.mkcall_is_representable (Caux.mk_op_pe C.OpDiv promoted1_pe conv2_sym_pe) result_ty)
+                      ( Caux.mk_if_pe_ [Annot.Anot_explode] (stdlib.mkcall_is_representable (Caux.mk_op_pe C.OpDiv promoted1_pe conv2_wrp.E.sym_pe) result_ty)
                           begin
                             Caux.mk_specified_pe (Caux.mk_std_pe "§6.5.5#5, sentence 1" begin
                               if AilTypesAux.is_signed_integer_type result_ty then
