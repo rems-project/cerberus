@@ -3690,6 +3690,8 @@ let translate_program stdlib (startup_sym_opt, sigm) =
                       end
                   else
                     z in
+                (* let is_used_sym = Symbol.fresh () in
+                let is_used_arg_type = (is_used_sym, C.BTy_boolean) in *)
                 let ret_sym = Symbol.fresh () in
                 let core_return =
                   let ret_pe =
@@ -3701,6 +3703,9 @@ let translate_program stdlib (startup_sym_opt, sigm) =
                     else if AilTypesAux.is_void return_ty then
                       Caux.mk_unit_pe
                     else
+                      (* Caux.mk_if_pe (Caux.mk_sym_pe is_used_sym)
+                        (Caux.mk_std_undef_pe loc "§6.9.1#12" Undefined.UB088_reached_end_of_function)
+                        (Caux.mk_unspecified_pe return_ty) in *)
                       Caux.mk_std_undef_pe loc "§6.9.1#12" Undefined.UB088_reached_end_of_function in
                   Caux.mk_save_e_ [Annot.Alabel Annot.LAreturn]
                                   (ret_label, ret_bTy)
@@ -3722,7 +3727,7 @@ let translate_program stdlib (startup_sym_opt, sigm) =
                   ( gacc
                   , Map.insert sym
                      (C.Proc loc ret_bTy
-                             (List.zip param_syms param_bTys ++ variadic_arg_type)
+                             ((*is_used_arg_type :: *)List.zip param_syms param_bTys ++ variadic_arg_type)
                              (Caux.mk_sseq_e (Caux.mk_empty_pat C.BTy_unit) (add_prelude_and_epilogue core_body) core_return)
                      ) facc
                   , Map.insert sym finfo finfoacc )
