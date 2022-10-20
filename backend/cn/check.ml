@@ -70,16 +70,22 @@ let rec bt_of_pattern pat =
     end
 
 
-let fresh_same_id_with_prefix oprefix s =
-  match oprefix, Sym.description s with
-  | Some prefix, SD_CN_Id name ->
-     Sym.fresh_make_uniq_kind name ~prefix
-  | Some prefix, _ ->
-     Sym.fresh_make_uniq prefix
-  | _ -> Sym.fresh ()
+let bt_prefix = function
+  | Unit -> "u"
+  | Bool -> "b"
+  | Integer -> "i"
+  | Real -> "r"
+  | Loc -> "l"
+  | List _ -> "list"
+  | Tuple _ -> "tuple"
+  | Struct _ -> "s"
+  | Datatype _ -> "dt"
+  | Record _ -> "s"
+  | Set _ -> "set"
+  | Map _ -> "m"
 
 
-
+(* TODO: this does not seem to be checking base types any more *)
 (* pattern-matches and binds *)
 let pattern_match =
   let rec aux pat it : ((Sym.t * (BT.t * Sym.t)) list, type_error) m =
@@ -89,7 +95,7 @@ let pattern_match =
        let@ () = WellTyped.WBT.is_bt loc has_bt in
        begin match o_s with
        | Some s ->
-          let s' = fresh_same_id_with_prefix (Some "bind_") s in
+          let s' = Sym.fresh_make_uniq (bt_prefix has_bt) in
           let info = (loc, lazy (let open Pp in
             item "binding" (Sym.pp s ^^^ !^ "in" ^^^ NewMu.PP_MUCORE.pp_pattern pat))) in
           let@ s'' = add_l_abbrev s' it info in
