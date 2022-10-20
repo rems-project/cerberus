@@ -652,6 +652,62 @@ end
   end
 
 
+val translate_assignment_conversion:
+  (A.expression GenTypes.genTypeCategory -> E.elabM (C.expr unit)) ->
+  translation_stdlib ->
+  Ctype.ctype ->
+  A.expression GenTypes.genTypeCategory ->
+  E.elabM (C.core_object_type * C.expr unit * (C.pexpr -> C.pexpr))
+let translate_assignment_conversion translate_expr stdlib ty1 e2 =
+  let ty2 = ctype_of e2 in
+  begin
+    if AilTypesAux.atomic_qualified_unqualified AilTypesAux.is_array ty1 then
+      translate_expr e2 >>= fun core_e2 ->
+      E.return
+        ( force_core_object_type_of_ctype ty2
+        , core_e2
+        , fun z -> z )
+    else if AilTypesAux.atomic_qualified_unqualified AilTypesAux.is_arithmetic ty1 && AilTypesAux.is_arithmetic ty2 then
+      translate_expr e2 >>= fun core_e2 ->
+      E.return
+        ( force_core_object_type_of_ctype ty2
+        , core_e2
+        , conv_loaded_arith stdlib ty2 (Ctype.unatomic ty1) )
+    else if AilTypesAux.atomic_qualified_unqualified AilTypesAux.is_struct_or_union ty1 then
+    (* NOTE: the two struct/union types could be from two different translation units,
+             but as far as I can things are sufficiently restricted such that no conversion is needed here *)
+      translate_expr e2 >>= fun core_e2 ->
+      E.return
+        ( force_core_object_type_of_ctype ty2
+        , core_e2
+        , fun z -> z )
+    (* NOTE: we apply unatomic to ty1 because the left operand may be an atomic pointer to ... (STD §6.5.16.1#1, bullet 3) *)
+    else match AilTypesAux.referenced_type (Ctype.unatomic ty1) with
+      | Just ref_ty ->
+          begin if Aaux.is_null_pointer_constant e2 then
+            E.return
+              ( C.OTy_pointer
+              , Caux.mk_pure_e (Caux.mk_specified_pe (Caux.mk_nullptr_pe ref_ty))
+              , fun z -> z )
+          else
+            translate_expr e2 >>= fun core_e2 ->
+            E.return
+              ( (*C.OTy_pointer*) force_core_object_type_of_ctype ty2
+              , core_e2
+              , fun z -> z )
+          end
+      | Nothing ->
+          (* By Ail's typing, e1 must have type _Bool and e2 must be a pointer *)
+          E.wrapped_fresh_symbol2 (C.BTy_loaded C.OTy_pointer) >>= fun conv_wrp ->
+          translate_expr e2 >>= fun core_e2 ->
+          E.return
+            ( C.OTy_integer
+            , Caux.mk_wseq_e conv_wrp.E.sym_pat core_e2 (stdlib.mkproc_loaded_pointer_to_Bool conv_wrp.E.sym_pe)
+            , fun z -> z )
+    end
+  end
+
+
 val translate_function_call:
   Loc.t ->
   bool -> (* is_used *)
