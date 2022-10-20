@@ -119,13 +119,7 @@ let struct_decl loc fields (tag : BT.tag) =
 
 let resource_counter = ref 0
 
-let oarg_name = function
-  | None ->
-     let i = !resource_counter in
-     resource_counter := i + 1;
-     "R" ^ string_of_int i
-  | Some name ->
-     name
+
 
 
 
@@ -136,8 +130,7 @@ let make_owned_funarg floc i (pointer : IndexTerms.t) path sct =
      Debug_ocaml.error "void argument"
   | _ ->
      let descr = "ARG" ^ string_of_int i in
-     let oarg_name = oarg_name None in
-     let oarg_s = Sym.fresh_named oarg_name in
+     let oarg_s = Sym.fresh_named ("O_&"^descr) in
      let oarg_members = Resources.owned_oargs sct in
      let oarg = sym_ (oarg_s, oarg_members) in
      let value = recordMember_ ~member_bt:(BT.of_sct sct) (oarg, Resources.value_sym) in
@@ -172,7 +165,7 @@ let make_owned ~loc ~oname ~pointer ~path ~sct ~o_permission =
   | Void ->
      fail {loc; msg = Generic !^"cannot make owned void* pointer"}
   | _ ->
-     let oarg_name = oarg_name oname in
+     let oarg_name = oname in
      let oarg_s = Sym.fresh_named oarg_name in
      let oarg_members = Resources.owned_oargs sct in
      let oarg = sym_ (oarg_s, oarg_members) in
@@ -213,7 +206,7 @@ let make_block ~loc ~oname ~pointer ~path ~sct ~o_permission =
   | Void ->
      fail {loc; msg = Generic !^"cannot create 'block' for void* pointer"}
   | _ ->
-     let oarg_name = oarg_name oname in
+     let oarg_name = oname in
      let oarg_s = Sym.fresh_named oarg_name in
      let oarg_members = Resources.block_oargs in
      let oarg = sym_ (oarg_s, oarg_members) in
@@ -251,7 +244,7 @@ let make_qowned ~loc ~oname ~pointer ~q:(qs,qbt) ~step ~condition ~path ~sct =
   | Void ->
      fail {loc; msg = Generic !^"cannot make owned void* pointer"}
   | _ ->
-     let oarg_name = oarg_name oname in
+     let oarg_name = oname in
      let oarg_s = Sym.fresh_named oarg_name in
      let oarg_members = Resources.q_owned_oargs sct in
      let oarg = sym_ (oarg_s, oarg_members) in
@@ -290,7 +283,7 @@ let make_qowned ~loc ~oname ~pointer ~q:(qs,qbt) ~step ~condition ~path ~sct =
 
 
 let make_pred loc (pred, def) ~oname pointer iargs ~o_permission = 
-  let oarg_name = oarg_name oname in
+  let oarg_name = oname in
   let oarg_s = Sym.fresh_named oarg_name in
   let oarg_members = def.oargs in
   let oarg = sym_ (oarg_s, BT.Record oarg_members) in
@@ -318,7 +311,7 @@ let make_qpred loc (pred, def) ~oname ~pointer ~q:(qs,qbt) ~step ~condition iarg
     | BT.Integer -> return ()
     | _ -> fail {loc; msg = Generic (!^"Quantifier for iterated resource must be of type 'integer'")}
   in
-  let oarg_name = oarg_name oname in
+  let oarg_name = oname in
   let oarg_s = Sym.fresh_named oarg_name in
   let oarg_members = List.map_snd (BT.make_map_bt qbt) def.oargs in
   let oarg = sym_ (oarg_s, BT.Record oarg_members) in
@@ -1101,8 +1094,12 @@ let make_fun_spec loc (global : Global.t) fsym (fspec : function_spec)
         | None ->
            return (i, mappings)
         | Some loc -> 
+           let oname = match Sym.description garg.asym with
+             | SD_ObjectAddress name -> "O_"^name
+             | _ -> assert false
+           in
            let@ (i', mapping') = 
-             make_owned ~loc ~oname:None ~pointer:item.it 
+             make_owned ~loc ~oname ~pointer:item.it 
                ~path:item.path ~sct:garg.typ ~o_permission:None
            in
            let mappings = 
@@ -1160,7 +1157,7 @@ let make_fun_spec loc (global : Global.t) fsym (fspec : function_spec)
         | Ast.Resource (oroname, cond) ->
               let@ (i', mapping') = 
                 apply_ownership_spec global
-                  "start" mappings (loc, Some oroname, cond) 
+                  "start" mappings (loc, oroname, cond) 
               in
               let mappings = 
                 mod_mapping "start" mappings
@@ -1208,8 +1205,12 @@ let make_fun_spec loc (global : Global.t) fsym (fspec : function_spec)
         | None -> return (o, mappings)
         | Some loc -> 
            let item = garg_item loc garg in
+           let oname = match Sym.description garg.asym with
+             | SD_ObjectAddress name -> "O_"^name
+             | _ -> assert false
+           in
            let@ (o', mapping') = 
-             make_owned ~loc ~oname:None ~pointer:item.it 
+             make_owned ~loc ~oname ~pointer:item.it 
                ~path:item.path ~sct:garg.typ ~o_permission:None
            in
            let mappings =
@@ -1247,7 +1248,7 @@ let make_fun_spec loc (global : Global.t) fsym (fspec : function_spec)
         | Ast.Resource (oroname, cond) ->
               let@ (o', mapping') = 
                 apply_ownership_spec global
-                  "end" mappings (loc, Some oroname, cond) 
+                  "end" mappings (loc, oroname, cond) 
               in
               let mappings = 
                 mod_mapping "end" mappings 
@@ -1318,8 +1319,12 @@ let make_label_spec
         | None ->  return (i, mappings)
         | Some loc -> 
            let item = garg_item loc garg in
+           let oname = match Sym.description garg.asym with
+             | SD_ObjectAddress name -> "O_"^name
+             | _ -> assert false
+           in
            let@ (i', mapping') = 
-             make_owned ~loc ~oname:None ~pointer:item.it 
+             make_owned ~loc ~oname ~pointer:item.it 
                ~path:item.path ~sct:garg.typ ~o_permission:None
            in
            let mappings = 
@@ -1354,8 +1359,12 @@ let make_label_spec
       ListM.fold_leftM (fun (iA, i, mapping) (aarg : aarg) ->
           let a = (aarg.asym, BT.Loc, (loc, None)) in
           let item = aarg_item loc aarg in
+           let oname = match Sym.description aarg.asym with
+             | SD_ObjectAddress name -> "O_"^name
+             | _ -> assert false
+           in
           let@ (i', mapping') = 
-            make_owned ~loc ~oname:None ~pointer:item.it 
+            make_owned ~loc ~oname ~pointer:item.it 
               ~path:item.path ~sct:aarg.typ ~o_permission:None
           in 
           let c = 
@@ -1380,7 +1389,7 @@ let make_label_spec
         | Ast.Resource (oroname, cond) ->
               let@ (i', mapping') = 
                 apply_ownership_spec global
-                  lname mappings (loc, Some oroname, cond) in
+                  lname mappings (loc, oroname, cond) in
               let mappings = 
                 mod_mapping lname mappings 
                   (fun mapping -> mapping' @ mapping)

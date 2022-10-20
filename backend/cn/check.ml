@@ -148,7 +148,7 @@ let fresh_call_with_prefix ~situation s =
    in an equality constraint that equates it to some rhs, where the rhs is
    global (no vars defined in the return type). if so, return the rhs and
    the remainder of the return type. *)
-let is_eq_in_rt sym rt =
+let not_currently_used__is_eq_in_rt sym rt =
   let rec extract = function
   | LRT.Define ((s, it), oinfo, rt) ->
     Option.map (fun (rhs, rt) -> (rhs, LRT.Define ((s, it), oinfo, rt)))
@@ -1197,7 +1197,7 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
           | PrefSource (_loc, (Symbol (_, _, SD_Id str)) :: _) -> 
              IT.fresh_named Loc ("&" ^ str)
           | PrefFunArg (_loc, _, n) -> 
-             IT.fresh_named Loc ("&FUNARG" ^ string_of_int n)
+             IT.fresh_named Loc ("&ARG" ^ string_of_int n)
           | _ -> 
              IT.fresh Loc
         in
