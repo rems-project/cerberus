@@ -2077,26 +2077,28 @@ end
             | (*BISECT-IGNORE*) _ ->
                 illTypedAil loc "AilEcall"
           end in
-          E.wrapped_fresh_symbol (C.BTy_loaded C.OTy_pointer) >>= fun (_, fun_sym_pat   , fun_sym_pe   ) ->
-          E.wrapped_fresh_symbol C.BTy_ctype                  >>= fun (_, ret_sym_pat   , ret_sym_pe   ) ->
-          E.wrapped_fresh_symbol (C.BTy_list C.BTy_ctype)     >>= fun (_, params_sym_pat, params_sym_pe) ->
-          self e                                              >>= fun core_e                             ->
+          E.wrapped_fresh_symbol2 (C.BTy_loaded C.OTy_pointer) >>= fun fun_wrp    ->
+          E.wrapped_fresh_symbol2 C.BTy_ctype                  >>= fun ret_wrp    ->
+          E.wrapped_fresh_symbol2 (C.BTy_list C.BTy_ctype)     >>= fun params_wrp ->
+          self e                                              >>= fun core_e     ->
           E.return begin
             (* STD §6.5.2.2#10 *)
-            Caux.mk_sseq_e fun_sym_pat core_e
-            (Caux.mk_let_e
-              (Caux.mk_tuple_pat [ret_sym_pat; params_sym_pat; Caux.mk_empty_pat C.BTy_boolean; Caux.mk_empty_pat C.BTy_boolean])
-              (Caux.mk_cfunction_pe fun_sym_pe)
-              (Caux.mk_if_e_ [Annot.Anot_explode]
-                (Caux.mk_op_pe C.OpEq (stdlib.mkcall_params_length params_sym_pe) (Caux.mk_integer_pe 0))
-                (Caux.mk_if_e_ [Annot.Anot_explode]
-                  (Caux.mk_are_compatible (Caux.mk_ail_ctype_pe ret_ty) ret_sym_pe)
-                  (Caux.mk_ccall_e (Caux.mk_ail_ctype_pe (ctype_of e)) fun_sym_pe [])
-                  (Caux.mk_pure_e (Caux.mk_std_undef_pe loc "§6.5.2.2#9" Undefined.UB041_function_not_compatible))
-                )
-                (Caux.mk_pure_e (Caux.mk_std_undef_pe loc "§6.5.2.2#6, sentence 3" Undefined.UB038_number_of_args))
-              )
-            )
+            Caux.mk_sseq_e fun_wrp.E.sym_pat core_e begin
+            Caux.mk_let_e
+              (Caux.mk_tuple_pat [ret_wrp.E.sym_pat; params_wrp.E.sym_pat; Caux.mk_empty_pat C.BTy_boolean; Caux.mk_empty_pat C.BTy_boolean])
+              (Caux.mk_cfunction_pe fun_wrp.E.sym_pe)
+              begin
+                Caux.mk_if_e_ [Annot.Anot_explode]
+                  (Caux.mk_op_pe C.OpEq (stdlib.mkcall_params_length params_wrp.E.sym_pe) (Caux.mk_integer_pe 0))
+                    begin
+                      Caux.mk_if_e_ [Annot.Anot_explode]
+                        (Caux.mk_are_compatible (Caux.mk_ail_ctype_pe ret_ty) ret_wrp.E.sym_pe)
+                          (Caux.mk_ccall_e (Caux.mk_ail_ctype_pe (ctype_of e)) fun_wrp.E.sym_pe [(*Caux.mk_boolean_pe is_used*)])
+                          (Caux.mk_pure_e (Caux.mk_std_undef_pe loc "§6.5.2.2#9" Undefined.UB041_function_not_compatible))
+                    end
+                    (Caux.mk_pure_e (Caux.mk_std_undef_pe loc "§6.5.2.2#6, sentence 3" Undefined.UB038_number_of_args))
+              end
+            end
           end
       
       | A.AilEcall e es ->
