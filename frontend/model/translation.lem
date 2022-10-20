@@ -1205,7 +1205,6 @@ let rec translate_expression is_used ctx variadic_env stdlib tagDefs a_expr =
       | (_, Just _) ->
           (C.Pexpr [] () (C.PEctor C.Cfvfromint [e1]), e2)
       | (Nothing, Nothing) ->
-          (* TODO: this is so readable ... *)
           (* STD §6.3.1.8#1, bullet 4 *)
           match (AilTypesAux.promotion integerImpl ty1, AilTypesAux.promotion integerImpl ty2) with
             | (Just (Ctype.Ctype _ (Ctype.Basic (Ctype.Integer ity1')) as ty1'), Just (Ctype.Ctype _ (Ctype.Basic (Ctype.Integer ity2')) as ty2')) ->
@@ -2231,7 +2230,7 @@ end
             match e_opt with
               | Just e ->
                   translate_assignment_conversion self stdlib elem_ty e >>= fun (conv_oTy, core_e, mk_conv_pe) ->
-                  E.wrapped_fresh_symbol2 (C.BTy_loaded conv_oTy) >>= fun e_wrp  ->
+                  E.wrapped_fresh_symbol2 (C.BTy_loaded conv_oTy)       >>= fun e_wrp                          ->
                   E.return
                     ( mk_conv_pe e_wrp.E.sym_pe :: pe_acc
                     , (e_wrp.E.sym_pat :: pat_acc, core_e :: core_e_acc) )
@@ -2272,7 +2271,6 @@ end
                   E.wrapped_fresh_symbol2 (C.BTy_loaded conv_oTy)       >>= fun e_wrp                          ->
                   E.return
                     ( (ident, mk_conv_pe e_wrp.E.sym_pe) :: acc
-                    (* , fun z -> Caux.mk_wseq_e e_wrp.E.sym_pat core_e (mk_core z) ) *)
                     , (e_wrp.E.sym_pat :: pat_acc, core_e :: core_e_acc) )
               | Nothing ->
                   let (_, _, _, ty) = fromJust "Translation.translate_expression, AilEstruct 3" (List.lookup ident ident_tys) in
@@ -2296,10 +2294,7 @@ end
               Caux.mk_pure_e (Caux.mk_specified_pe (Caux.mk_struct_pe tag_sym (List.reverse core_xs_rev)))
             end
           end
-          (* E.return begin
-            mk_core (Caux.mk_pure_e (Caux.mk_specified_pe (Caux.mk_struct_pe tag_sym (List.reverse core_xs_rev))))
-          end *)
-      
+
       | A.AilEcompound qs ty e ->
           (* TODO: what if the type is atomic? *)
           let core_ty = Caux.mk_ail_ctype_pe ty in
