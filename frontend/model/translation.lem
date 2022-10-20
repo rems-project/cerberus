@@ -2227,7 +2227,7 @@ end
             | (*BISECT-IGNORE*) _ ->
                 illTypedAil loc "AilEarray"
           end in
-          E.foldlM (fun (acc, mk_expr) e_opt ->
+          E.foldlM (fun (pe_acc, (pat_acc, core_e_acc)) e_opt ->
             match e_opt with
               | Just e ->
                   let oTy = force_core_object_type_of_ctype (ctype_of e) in
@@ -2249,16 +2249,28 @@ end
                       (* TODO: other conversions? *)
                       e_wrp.E.sym_pe in 
                   E.return
-                    ( elem_pe :: acc
-                    , (Caux.mk_wseq_e e_wrp.E.sym_pat core_e) -| mk_expr )
+                    ( elem_pe :: pe_acc
+                    , (e_wrp.E.sym_pat :: pat_acc, core_e :: core_e_acc) )
               | Nothing ->
                   E.return
-                   ( Caux.mk_unspecified_pe elem_ty :: acc
-                   , mk_expr )
+                   ( Caux.mk_unspecified_pe elem_ty :: pe_acc
+                   , (pat_acc, core_e_acc) )
             end
-          ) ([], id) e_opts >>= fun (rev_pes, mk_expr) ->
-          E.return begin
-             mk_expr (Caux.mk_pure_e (Caux.mk_specified_pe (Caux.mk_array_pe (List.reverse rev_pes))))
+          ) ([], ([], [])) e_opts >>= fun (rev_pes, (pat_acc, core_e_acc)) ->
+          E.return begin 
+            match (pat_acc, core_e_acc) with
+              | ([pat], [core_e]) ->
+                  Caux.mk_wseq_e pat core_e
+              | (_ :: _, _ :: _) ->
+                  (* STD (§6.7.9#23) the evaluations are unsequenced *)
+                  Caux.mk_wseq_e (Caux.mk_tuple_pat pat_acc) (Caux.add_std "§6.7.9#23" (Caux.mk_unseq_e core_e_acc))
+              | _ ->
+                  (* this is not possible (the Ail would be illformed) *)
+                  error "AilEarray"
+            end
+            begin
+              Caux.mk_pure_e (Caux.mk_specified_pe (Caux.mk_array_pe (List.reverse rev_pes)))
+            end
           end
       
       | A.AilEstruct tag_sym ident_e_opts ->
