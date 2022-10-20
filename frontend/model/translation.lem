@@ -2264,43 +2264,41 @@ end
             | (*BISECT-IGNORE*) _ ->
                 illTypedAil loc "AilEstruct"
           end in
-          E.foldlM (fun (acc, mk_core) (ident, e_opt) ->
+          E.foldlM (fun (acc, (pat_acc, core_e_acc)) (ident, e_opt) ->
             match e_opt with
               | Just e ->
                   let (_, _, _, memb_ty) = fromJust "Translation.translate_expression, AilEstruct 2" (List.lookup ident ident_tys) in
-                  let oTy = force_core_object_type_of_ctype memb_ty in
-                  begin
-                    if AilTypesAux.is_pointer memb_ty && Aaux.is_null_pointer_constant e then
-                      (* the member is a null pointer constant *)
-                      match memb_ty with
-                        | Cty.Ctype _ (Cty.Pointer _ ref_ty) ->
-                            E.return
-                              ( (ident, Caux.mk_specified_pe (Caux.mk_nullptr_pe ref_ty)) :: acc
-                              , mk_core )
-                        | (*BISECT-IGNORE*) _ ->
-                            illTypedAil loc "AilEstruct, Just null_pointer_constant"
-                      end
-                    else
-                      E.wrapped_fresh_symbol2 (C.BTy_loaded oTy) >>= fun e_wrp  ->
-                      self e                                    >>= fun core_e ->
-                      E.return
-                        ( ( ident
-                          , if AilTypesAux.is_integer memb_ty then
-                              stdlib.mkcall_conv_loaded_int memb_ty e_wrp.E.sym_pe
-                            else
-                              e_wrp.E.sym_pe ) :: acc
-                        , fun z -> Caux.mk_sseq_e e_wrp.E.sym_pat core_e (mk_core z) )
-                  end
+                  translate_assignment_conversion self stdlib memb_ty e >>= fun (conv_oTy, core_e, mk_conv_pe) ->
+                  E.wrapped_fresh_symbol2 (C.BTy_loaded conv_oTy)       >>= fun e_wrp                          ->
+                  E.return
+                    ( (ident, mk_conv_pe e_wrp.E.sym_pe) :: acc
+                    (* , fun z -> Caux.mk_wseq_e e_wrp.E.sym_pat core_e (mk_core z) ) *)
+                    , (e_wrp.E.sym_pat :: pat_acc, core_e :: core_e_acc) )
               | Nothing ->
                   let (_, _, _, ty) = fromJust "Translation.translate_expression, AilEstruct 3" (List.lookup ident ident_tys) in
                   E.return
                     ( (ident, Caux.mk_unspecified_pe ty) :: acc
-                    , mk_core )
+                    , (pat_acc, core_e_acc) )
             end
-          ) ([], fun z -> z) ident_e_opts >>= fun (core_xs_rev, mk_core) ->
-          E.return begin
-            mk_core (Caux.mk_pure_e (Caux.mk_specified_pe (Caux.mk_struct_pe tag_sym (List.reverse core_xs_rev))))
+          ) ([], ([], [])) ident_e_opts >>= fun (core_xs_rev, (pat_acc, core_e_acc)) ->
+          E.return begin 
+            match (pat_acc, core_e_acc) with
+              | ([pat], [core_e]) ->
+                  Caux.mk_wseq_e pat core_e
+              | (_ :: _, _ :: _) ->
+                  (* STD (§6.7.9#23) the evaluations are unsequenced *)
+                  Caux.mk_wseq_e (Caux.mk_tuple_pat pat_acc) (Caux.add_std "§6.7.9#23" (Caux.mk_unseq_e core_e_acc))
+              | _ ->
+                  (* this is not possible (the Ail would be illformed) *)
+                  error "AilEstruct"
+            end
+            begin
+              Caux.mk_pure_e (Caux.mk_specified_pe (Caux.mk_struct_pe tag_sym (List.reverse core_xs_rev)))
+            end
           end
+          (* E.return begin
+            mk_core (Caux.mk_pure_e (Caux.mk_specified_pe (Caux.mk_struct_pe tag_sym (List.reverse core_xs_rev))))
+          end *)
       
       | A.AilEcompound qs ty e ->
           (* TODO: what if the type is atomic? *)
