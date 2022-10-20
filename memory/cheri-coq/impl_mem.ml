@@ -95,6 +95,7 @@ module CHERIMorello : Memory = struct
   let fromCoq_Symbol_prefix (p:CoqSymbol.prefix) : Symbol.prefix = assert false (* TODO *)
   let fromCoq_Symbol_identifier (id:CoqSymbol.identifier) : Symbol.identifier = assert false (* TODO *)
   let fromCoq_ctype (ty:CoqCtype.ctype) : Ctype.ctype = assert false (* TODO *)
+  let fromCoq_intrinsics_signature (s:MM.intrinsics_signature) : Mem_common.intrinsics_signature = assert false (* TODO *)
 
   (* OCaml -> Coq type conversion *)
   let toCoq_thread_id (tid:thread_id) : MM.thread_id = assert false (* TODO *)
@@ -103,6 +104,12 @@ module CHERIMorello : Memory = struct
   let toCoq_Symbol_prefix (p:Symbol.prefix) : CoqSymbol.prefix = assert false (* TODO *)
   let toCoq_Symbol_sym (s:Symbol.sym): CoqSymbol.sym = assert false (* TODO *)
   let toCoq_integerType (t:Ctype.integerType): CoqCtype.integerType = assert false (* TODO *)
+  let toCoq_derivecap_op (o:Mem_common.derivecap_op) : MM.derivecap_op = assert false (* TODO *)
+  let toCoq_Symbol_identifier (id:Symbol.identifier): CoqSymbol.identifier = assert false (* TODO *)
+  let toCoq_ionteger_operator (iop:Mem_common.integer_operator) : MM.integer_operator = assert false (* TODO *)
+  let toCoq_SymMap (m:(Symbol.sym, Ctype.tag_definition) Pmap.map) : CoqCtype.tag_definition CoqSymbol.SymMap.t  = assert false (* TODO *)
+  let toCoq_floating_operator (fop:Mem_common.floating_operator) : MM.floating_operator = assert false (* TODO *)
+  let toCoq_floatingType (fty:Ctype.floatingType) : CoqCtype.floatingType = assert false (* TODO *)
 
   let fromCoq_memMError (e:MM.memMError) : mem_error Nondeterminism.kill_reason =
     match e with
@@ -294,48 +301,75 @@ module CHERIMorello : Memory = struct
   let intfromptr (loc:Location_ocaml.t) (ty:Ctype.ctype) (ity:Ctype.integerType) (ptr:pointer_value): integer_value memM
     = lift_coq_memM (MM.intfromptr (toCoq_location loc) (toCoq_ctype ty) (toCoq_integerType ity) ptr)
 
-  (*
   (* New operations for CHERI *)
-  val derive_cap : bool(* is_signed *) -> Mem_common.derivecap_op -> integer_value -> integer_value -> integer_value
-  val cap_assign_value: Location_ocaml.t -> integer_value -> integer_value -> integer_value
-  val ptr_t_int_value: integer_value -> integer_value
-  val null_cap : bool(* is_signed *) -> integer_value
+  let derive_cap is_signed (bop:Mem_common.derivecap_op) ival1 ival2 =
+    MM.derive_cap is_signed (toCoq_derivecap_op bop) ival1 ival2
+
+  let cap_assign_value loc ival_cap ival_n =
+    MM.cap_assign_value (toCoq_location loc) ival_cap ival_n
+
+  let ptr_t_int_value = MM.ptr_t_int_value
+
+  let null_cap = MM.null_cap
 
   (* Pointer shifting constructors *)
-  val array_shift_ptrval:  pointer_value -> Ctype.ctype -> integer_value -> pointer_value
-  val member_shift_ptrval: pointer_value -> Symbol.sym -> Symbol.identifier -> pointer_value
+  let array_shift_ptrval p ty iv = MM.array_shift_ptrval p (toCoq_ctype ty) iv
+  let member_shift_ptrval loc p tag_sym memb_ident =
+    MM.member_shift_ptrval p (toCoq_Symbol_sym tag_sym) (toCoq_Symbol_identifier memb_ident)
+  let eff_array_shift_ptrval loc ptrval ty iv =
+    lift_coq_memM (MM.eff_array_shift_ptrval (toCoq_location loc) ptrval (toCoq_ctype ty) iv)
+  let eff_member_shift_ptrval loc ptrval tag_sym memb_ident =
+    lift_coq_memM (MM.eff_member_shift_ptrval (toCoq_location loc) ptrval (toCoq_Symbol_sym tag_sym) (toCoq_Symbol_identifier memb_ident))
 
-  val eff_array_shift_ptrval: Location_ocaml.t -> pointer_value -> Ctype.ctype -> integer_value -> pointer_value memM
-  val eff_member_shift_ptrval: Location_ocaml.t -> pointer_value -> Symbol.sym -> Symbol.identifier -> pointer_value memM
+  let memcpy ptrval1 ptrval2 size_int =
+    lift_coq_memM (MM.memcpy ptrval1 ptrval2 size_int)
 
-  val memcpy: pointer_value -> pointer_value -> integer_value -> pointer_value memM
-  val memcmp: pointer_value -> pointer_value -> integer_value -> integer_value memM
-  val realloc: Mem_common.thread_id -> integer_value -> pointer_value -> integer_value -> pointer_value memM
+  let memcmp ptrval1 ptrval2 size_int =
+    lift_coq_memM (MM.memcmp ptrval1 ptrval2 size_int)
 
+  let realloc tid align ptr size =
+    lift_coq_memM (MM.realloc tid align ptr size)
+
+  (*
   val va_start: (Ctype.ctype * pointer_value) list -> integer_value memM
   val va_copy: integer_value -> integer_value memM
   val va_arg: integer_value -> Ctype.ctype -> pointer_value memM
   val va_end: integer_value -> unit memM
   val va_list: Nat_big_num.num -> ((Ctype.ctype * pointer_value) list) memM
+   *)
 
-  val copy_alloc_id: integer_value -> pointer_value -> pointer_value memM
+  let copy_alloc_id ival ptrval =
+    lift_coq_memM (MM.copy_alloc_id ival ptrval)
 
   (* Integer value constructors *)
-  val concurRead_ival: Ctype.integerType -> Symbol.sym -> integer_value
-  val integer_ival: Nat_big_num.num -> integer_value
-  val max_ival: Ctype.integerType -> integer_value
-  val min_ival: Ctype.integerType -> integer_value
-  val op_ival: Mem_common.integer_operator -> integer_value -> integer_value -> integer_value
-  val offsetof_ival: (Symbol.sym, Ctype.tag_definition) Pmap.map -> Symbol.sym -> Symbol.identifier -> integer_value
+  let concurRead_ival ity sym =
+    MM.concurRead_ival (toCoq_integerType ity) (toCoq_Symbol_sym sym)
 
-  val sizeof_ival: Ctype.ctype -> integer_value
-  val alignof_ival: Ctype.ctype -> integer_value
+  let integer_ival = MM.integer_ival
+  let max_ival ity = MM.max_ival (toCoq_integerType ity)
+  let min_ival ity = MM.min_ival (toCoq_integerType ity)
 
-  val bitwise_complement_ival: Ctype.integerType -> integer_value -> integer_value
-  val bitwise_and_ival: Ctype.integerType -> integer_value -> integer_value -> integer_value
-  val bitwise_or_ival: Ctype.integerType -> integer_value -> integer_value -> integer_value
-  val bitwise_xor_ival: Ctype.integerType -> integer_value -> integer_value -> integer_value
-   *)
+  let op_ival iop v1 v2 =
+    MM.op_ival (toCoq_ionteger_operator iop) v1 v2
+
+  let offsetof_ival tagDefs tag_sym memb_ident =
+    lift_coq_serr (MM.offsetof_ival
+                     (toCoq_SymMap tagDefs)
+                     (toCoq_Symbol_sym tag_sym)
+                     (toCoq_Symbol_identifier memb_ident))
+
+  let sizeof_ival ty = MM.sizeof_ival (toCoq_ctype ty)
+  let alignof_ival ty = MM.alignof_ival (toCoq_ctype ty)
+
+  let bitwise_complement_ival ity a =
+    MM.bitwise_complement_ival (toCoq_integerType ity) a
+
+  let bitwise_and_ival ity a b =
+    MM.bitwise_and_ival (toCoq_integerType ity) a b
+  let bitwise_or_ival ity a b =
+    MM.bitwise_or_ival (toCoq_integerType ity) a b
+  let bitwise_xor_ival ity a b =
+    MM.bitwise_xor_ival (toCoq_integerType ity) a b
 
   (* We have this one implemented in Coq but it looks like
      it OK to have in in OCaml for now *)
@@ -364,30 +398,41 @@ module CHERIMorello : Memory = struct
   let case_fval fval _ fconcrete =
     fconcrete fval
 
-  (*
+  let op_fval fop a b =
+    MM.op_fval (toCoq_floating_operator fop) a b
+
   (* Predicates on floating values *)
-  val op_fval: Mem_common.floating_operator -> floating_value -> floating_value -> floating_value
-  val eq_fval: floating_value -> floating_value -> bool
-  val lt_fval: floating_value -> floating_value -> bool
-  val le_fval: floating_value -> floating_value -> bool
+  let eq_fval = MM.eq_fval
+  let lt_fval = MM.lt_fval
+  let le_fval = MM.le_fval
 
   (* Integer <-> Floating casting constructors *)
-  val fvfromint: integer_value -> floating_value
-  val ivfromfloat: Ctype.integerType -> floating_value -> integer_value
-
-
+  let fvfromint = MM.fvfromint
+  let ivfromfloat ity fv =
+    MM.ivfromfloat (toCoq_integerType ity) fv
 
   (* Memory value constructors *)
-  (*symbolic_mval: Symbolic.symbolic mem_value pointer_value -> mem_value *)
-  val unspecified_mval: Ctype.ctype -> mem_value
-  val integer_value_mval: Ctype.integerType -> integer_value -> mem_value
-  val floating_value_mval: Ctype.floatingType -> floating_value -> mem_value
-  val pointer_mval: Ctype.ctype -> pointer_value -> mem_value
-  val array_mval: mem_value list -> mem_value
-  val struct_mval: Symbol.sym -> (Symbol.identifier * Ctype.ctype * mem_value) list -> mem_value
-  val union_mval: Symbol.sym -> Symbol.identifier -> mem_value -> mem_value
+  let unspecified_mval ty =
+    MM.unspecified_mval (toCoq_ctype ty)
 
- *)
+  let integer_value_mval ity iv =
+    MM.integer_value_mval (toCoq_integerType ity) iv
+
+  let floating_value_mval fty fv =
+    MM.floating_value_mval (toCoq_floatingType fty) fv
+
+  let pointer_mval ty pv =
+    MM.pointer_mval (toCoq_ctype ty) pv
+
+  let array_mval = MM.array_mval
+
+  let struct_mval tag_sym xs =
+    MM.struct_mval
+      (toCoq_Symbol_sym tag_sym)
+      (List.map (fun (i,ty,v) -> ((toCoq_Symbol_identifier i, toCoq_ctype ty),v) ) xs)
+
+  let union_mval tag_sym memb_ident mval =
+    MM.union_mval (toCoq_Symbol_sym tag_sym) (toCoq_Symbol_identifier memb_ident) mval
 
   (* Memory value destructor *)
   (* We have this one implemented in Coq but it looks like
@@ -409,16 +454,22 @@ module CHERIMorello : Memory = struct
     | MVunion (tag_sym, memb_ident, mval') ->
        f_union tag_sym memb_ident mval'
 
-(*
 
   (* For race detection *)
-  val sequencePoint: unit memM
+  let sequencePoint =
+    lift_coq_memM (MM.sequencePoint)
 
   (* Memory intrinsics (currently used in CHERI) *)
+  let call_intrinsic loc name args =
+    lift_coq_memM (MM.call_intrinsic
+                     (toCoq_location loc)
+                     name
+                     args)
 
-  val call_intrinsic: Location_ocaml.t -> string -> (mem_value list) -> (mem_value option) memM
-  val get_intrinsic_type_spec: string -> Mem_common.intrinsics_signature option
+  let get_intrinsic_type_spec name =
+    Option.map fromCoq_intrinsics_signature (MM.get_intrinsic_type_spec name)
 
+(*
 
   (* pretty printing *)
   val pp_pointer_value: ?is_verbose:bool -> pointer_value -> PPrint.document
