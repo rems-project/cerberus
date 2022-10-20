@@ -138,6 +138,8 @@ let fresh_call_with_prefix ~situation s =
   match Sym.description s with
   | SD_CN_Id name -> 
      Sym.fresh_make_uniq_kind name ~prefix:(TypeErrors.call_prefix situation)
+  | SD_Return -> 
+     Sym.fresh_make_uniq_kind "return" ~prefix:(TypeErrors.call_prefix situation)
   | _ ->
      Sym.fresh ()
 
@@ -205,7 +207,7 @@ let bind_function_call_return_logically loc fsym (rt : RT.t) : (lvt, type_error)
   let Computational ((s, bt), _oinfo, lrt) = rt in
   let s, lrt = 
     LRT.alpha_rename_ 
-      (fresh_call_with_prefix ~situation:(FunctionCall fsym) (Sym.fresh_named "return")) 
+      (fresh_call_with_prefix ~situation:(FunctionCall fsym) (Sym.fresh_description SD_Return)) 
       (s, bt) lrt
   in
   let@ () = add_l s bt (loc, lazy (Sym.pp s)) in
