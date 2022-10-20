@@ -376,21 +376,19 @@ module CHERIMorello : Memory = struct
   let case_integer_value v f_concrete _ =
     f_concrete (MM.num_of_int v)
 
-(*
-  val is_specified_ival: integer_value -> bool
+  let is_specified_ival = MM.is_specified_ival
 
   (* Predicats on integer values *)
-  val eq_ival: mem_state option -> integer_value -> integer_value -> bool option
-  val lt_ival: mem_state option -> integer_value -> integer_value -> bool option
-  val le_ival: mem_state option -> integer_value -> integer_value -> bool option
+  let eq_ival = MM.eq_ival
+  let lt_ival = MM.eq_ival
+  let le_ival = MM.le_ival
 
-  val eval_integer_value: integer_value -> Nat_big_num.num option
+  let eval_integer_value = MM.eval_integer_value
 
   (* Floating value constructors *)
-  val zero_fval: floating_value
-  val one_fval: floating_value
-  val str_fval: string -> floating_value
- *)
+  let zero_fval = MM.zero_fval
+  let one_fval = MM.one_fval
+  let str_fval s = lift_coq_serr (MM.str_fval s)
 
   (* Floating value destructors *)
   (* We have this one implemented in Coq but it looks like
