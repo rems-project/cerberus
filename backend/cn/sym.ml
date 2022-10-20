@@ -60,11 +60,11 @@ let name_make_uniq str =
     | Some i -> i + 1
   in
   StringHash.add name_uses str next;
-  str ^ "__" ^ string_of_int next
+  str ^ string_of_int next
 
 let fresh_make_uniq name = fresh_named (name_make_uniq name)
 
-let fresh_make_uniq_kind pfx name = fresh_named (pfx ^ name_make_uniq name)
+let fresh_make_uniq_kind ~prefix name = fresh_named (name_make_uniq prefix ^ "_" ^ name)
 
 
 

@@ -24,7 +24,7 @@ type access =
   | Free
 
 type call_situation =
-  | FunctionCall 
+  | FunctionCall of Sym.t
   | LabelCall of label_kind
   | Subtyping
   | PackPredicate of Sym.t
@@ -33,7 +33,7 @@ type call_situation =
   | UnpackStruct of Sym.t
 
 let call_prefix = function
-  | FunctionCall -> "call"
+  | FunctionCall fsym -> "call_" ^ Sym.pp_string fsym
   | LabelCall Return -> "return"
   | LabelCall Loop -> "loop"
   | LabelCall Other -> "goto"
@@ -49,7 +49,7 @@ type situation =
 
 
 let call_situation = function
-  | FunctionCall -> !^"checking function call"
+  | FunctionCall fsym -> !^"checking call of function" ^^^ Sym.pp fsym
   | LabelCall Return -> !^"checking return"
   | LabelCall Loop -> !^"checking loop entry"
   | LabelCall Other -> !^"checking label call"
@@ -75,7 +75,7 @@ let for_access = function
 
 let for_situation = function
   | Access access -> for_access access
-  | Call FunctionCall -> !^"for calling function"
+  | Call FunctionCall fsym -> !^"for calling function" ^^^ Sym.pp fsym
   | Call LabelCall Return -> !^"for returning"
   | Call LabelCall Loop -> !^"for loop"
   | Call LabelCall Other -> !^"for calling label"

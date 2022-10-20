@@ -75,7 +75,7 @@ let check_cn_ident ns ((Symbol.Identifier loc str) as ident) =
 
 val register_cn_ident: cn_namespace -> Symbol.identifier -> cn_desugM Symbol.sym
 let register_cn_ident ns ((Symbol.Identifier loc str) as ident) =
-  let sym = Symbol.fresh_pretty str in
+  let sym = Symbol.fresh_cn str in
   let () = Debug.print_debug 4 [] (fun () ->
       "adding a CN identifier: " ^ str ^ "(" ^ show ns ^ ")") in
   check_cn_ident ns ident >>= function
