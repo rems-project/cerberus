@@ -467,27 +467,82 @@ module CHERIMorello : Memory = struct
   let get_intrinsic_type_spec name =
     Option.map fromCoq_intrinsics_signature (MM.get_intrinsic_type_spec name)
 
-(*
 
-  (* pretty printing *)
-  val pp_pointer_value: ?is_verbose:bool -> pointer_value -> PPrint.document
-  val pp_integer_value: integer_value -> PPrint.document
-  val pp_integer_value_for_core: integer_value -> PPrint.document
-  val pp_mem_value: mem_value -> PPrint.document
-  val pp_pretty_pointer_value: pointer_value -> PPrint.document
-  val pp_pretty_integer_value: Boot_printf.formatting -> integer_value -> PPrint.document
-  val pp_pretty_mem_value: Boot_printf.formatting -> mem_value -> PPrint.document
+  open PPrint
+  open Pp_prelude
 
-(*
-  val string_of_pointer_value: pointer_value -> string
-  val string_of_integer_value: integer_value -> string
-  val string_of_mem_value: mem_value -> stri(g
-*)
+  let string_of_provenance = function
+    | MM.Prov_none ->
+       "@empty"
+    | Prov_some alloc_id ->
+       "@" ^ Z.to_string alloc_id
+    | Prov_symbolic iota ->
+       "@iota(" ^ Z.to_string iota ^ ")"
+    | Prov_device ->
+       "@device"
 
+  let pp_pointer_value ?(is_verbose=false) (MM.PV (prov, ptrval_)) =
+    match ptrval_ with
+    | MM.PVfunction (FP_valid sym) ->
+       !^ "Cfunction" ^^ P.parens (!^ (Pp_symbol.to_string_pretty
+                                         (fromCoq_Symbol_sym sym)))
+    | PVfunction (FP_invalid c) ->
+       !^ "Cfunction" ^^ P.parens (!^ "invalid" ^^ P.colon ^^^ !^ (C.to_string c))
+    (* !^ ("<funptr:" ^ Symbol.instance_Show_Show_Symbol_sym_dict.show_method sym ^ ">") *)
+    | PVconcrete c ->
+       if C.eqb c (C.cap_c0 ()) then
+         !^ "NULL"
+       else
+         (* TODO: remove this idiotic hack when Lem's nat_big_num library expose "format" *)
+         P.parens (!^ (string_of_provenance prov) ^^ P.comma ^^^ !^ (C.to_string c))
+
+  let pp_integer_value = function
+    | (MM.IV n) ->
+         !^ (Z.to_string n)
+    | (IC (is_signed, c)) ->
+       let cs = (C.to_string c)
+                ^ (if is_signed then " (signed)" else " (unsigned)")
+       in
+         !^ cs
+
+  let pp_integer_value_for_core = pp_integer_value
+
+  let pp_pretty_pointer_value = pp_pointer_value ~is_verbose:false
+  let pp_pretty_integer_value _ = pp_integer_value
+
+  let rec pp_mem_value = function
+    | MM.MVunspecified _ ->
+       PPrint.string "UNSPEC"
+    | MVinteger (_, ival) ->
+       pp_integer_value ival
+    | MVfloating (_, fval) ->
+       !^ (Float64.to_string fval)
+    | MVpointer (_, ptrval) ->
+       !^ "ptr" ^^ parens (pp_pointer_value ptrval)
+    | MVarray mvals ->
+       braces (
+           comma_list pp_mem_value mvals
+         )
+    | MVstruct (tag_sym, xs) ->
+       parens (!^ "struct" ^^^ !^ (Pp_symbol.to_string_pretty (fromCoq_Symbol_sym tag_sym))) ^^
+         braces (
+             comma_list (fun (ident, _, mval) ->
+                 dot ^^ (Pp_symbol.pp_identifier (fromCoq_Symbol_identifier ident)) ^^ equals ^^^ pp_mem_value mval
+               ) (List.map (fun ((a,b),c) -> (a,b,c)) xs)
+           )
+    | MVunion (tag_sym, membr_ident, mval) ->
+       parens (!^ "union" ^^^ !^ (Pp_symbol.to_string_pretty (fromCoq_Symbol_sym tag_sym))) ^^
+         braces (
+             dot ^^ Pp_symbol.pp_identifier (fromCoq_Symbol_identifier membr_ident) ^^ equals ^^^
+               pp_mem_value mval
+           )
+
+  let pp_pretty_mem_value _ = pp_mem_value
+
+ (*
   (* JSON serialisation *)
   val serialise_mem_state: Digest.t -> mem_state -> Json.json
-
-                *)
+ *)
 
 end
 
