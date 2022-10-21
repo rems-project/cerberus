@@ -393,8 +393,8 @@ module CHERIMorello : Memory = struct
   (* Floating value destructors *)
   (* We have this one implemented in Coq but it looks like
      it OK to have in in OCaml for now *)
-  let case_fval fval _ fconcrete =
-    fconcrete fval
+  let case_fval (fval:floating_value) (_:unit -> 'a) (fconcrete:float -> 'a) : 'a
+    = fconcrete (Float64.to_float fval)
 
   let op_fval fop a b =
     MM.op_fval (toCoq_floating_operator fop) a b
@@ -405,9 +405,9 @@ module CHERIMorello : Memory = struct
   let le_fval = MM.le_fval
 
   (* Integer <-> Floating casting constructors *)
-  let fvfromint = MM.fvfromint
+  let fvfromint x = lift_coq_serr (MM.fvfromint x)
   let ivfromfloat ity fv =
-    MM.ivfromfloat (toCoq_integerType ity) fv
+    lift_coq_serr (MM.ivfromfloat (toCoq_integerType ity) fv)
 
   (* Memory value constructors *)
   let unspecified_mval ty =
