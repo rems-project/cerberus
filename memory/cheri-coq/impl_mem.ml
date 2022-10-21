@@ -539,10 +539,9 @@ module CHERIMorello : Memory = struct
 
   let pp_pretty_mem_value _ = pp_mem_value
 
- (*
-  (* JSON serialisation *)
-  val serialise_mem_state: Digest.t -> mem_state -> Json.json
- *)
+   (* JSON serialisation *)
+  let serialise_mem_state dig (st: mem_state) : Json.json
+    = `Assoc [] (* TODO: not implemented *)
 
 end
 
