@@ -95,6 +95,8 @@ module CHERIMorello : Memory = struct
   let fromCoq_ctype (ty:CoqCtype.ctype) : Ctype.ctype = assert false (* TODO *)
   let fromCoq_intrinsics_signature (s:MM.intrinsics_signature) : Mem_common.intrinsics_signature = assert false (* TODO *)
   let fromCoq_ovelap_status (s:MM.overlap_status) : overlap_status = assert false (* TODO *)
+  let fromCoq_intgerType (s:CoqCtype.integerType) : integerType = assert false (* TODO *)
+  let fromCoq_floatingType (s:CoqCtype.floatingType) : floatingType = assert false (* TODO *)
 
   (* OCaml -> Coq type conversion *)
   let toCoq_thread_id (tid:thread_id) : MM.thread_id = assert false (* TODO *)
@@ -435,22 +437,37 @@ module CHERIMorello : Memory = struct
   (* Memory value destructor *)
   (* We have this one implemented in Coq but it looks like
      it OK to have in in OCaml for now *)
-  let case_mem_value (mval:mem_value) f_unspec f_concur f_ival f_fval f_ptr f_array f_struct f_union =
+  let case_mem_value
+        (mval:mem_value)
+        (f_unspec:ctype -> 'a)
+        (_:Ctype.integerType -> Symbol.sym -> 'a)
+        (f_ival:integerType -> integer_value -> 'a)
+        (f_fval:floatingType -> floating_value -> 'a)
+        (f_ptr:ctype -> pointer_value -> 'a)
+        (f_array:mem_value list -> 'a)
+        (f_struct: Symbol.sym -> (Symbol.identifier * Ctype.ctype * mem_value) list -> 'a)
+        (f_union:Symbol.sym -> Symbol.identifier -> mem_value -> 'a): 'a
+    =
     match mval with
     | MVunspecified ty ->
-       f_unspec ty
+       f_unspec (fromCoq_ctype ty)
     | MVinteger (ity, ival) ->
-       f_ival ity ival
+       f_ival (fromCoq_intgerType ity) ival
     | MVfloating (fty, fval) ->
-       f_fval fty fval
+       f_fval (fromCoq_floatingType fty) fval
     | MVpointer (ref_ty, ptrval) ->
-       f_ptr ref_ty ptrval
+       f_ptr (fromCoq_ctype ref_ty) ptrval
     | MVarray mvals ->
        f_array mvals
     | MVstruct (tag_sym, xs) ->
-       f_struct tag_sym xs
+       f_struct
+         (fromCoq_Symbol_sym tag_sym)
+         (List.map (fun ((i,ty),v) -> (fromCoq_Symbol_identifier i, fromCoq_ctype ty,v) ) xs)
     | MVunion (tag_sym, memb_ident, mval') ->
-       f_union tag_sym memb_ident mval'
+       f_union
+         (fromCoq_Symbol_sym tag_sym)
+         (fromCoq_Symbol_identifier memb_ident)
+         mval'
 
 
   (* For race detection *)
@@ -466,7 +483,6 @@ module CHERIMorello : Memory = struct
 
   let get_intrinsic_type_spec name =
     Option.map fromCoq_intrinsics_signature (MM.get_intrinsic_type_spec name)
-
 
   open PPrint
   open Pp_prelude
@@ -498,12 +514,12 @@ module CHERIMorello : Memory = struct
 
   let pp_integer_value = function
     | (MM.IV n) ->
-         !^ (Z.to_string n)
+       !^ (Z.to_string n)
     | (IC (is_signed, c)) ->
        let cs = (C.to_string c)
                 ^ (if is_signed then " (signed)" else " (unsigned)")
        in
-         !^ cs
+       !^ cs
 
   let pp_integer_value_for_core = pp_integer_value
 
@@ -539,12 +555,23 @@ module CHERIMorello : Memory = struct
 
   let pp_pretty_mem_value _ = pp_mem_value
 
-   (* JSON serialisation *)
+  (* JSON serialisation *)
   let serialise_mem_state dig (st: mem_state) : Json.json
     = `Assoc [] (* TODO: not implemented *)
 
 end
 
-open Morello
-
 include CHERIMorello
+
+let string_of_integer_value ival =
+  Pp_utils.to_plain_string (pp_integer_value ival)
+
+let string_of_mem_value mval =
+  Pp_utils.to_plain_string begin
+      (* TODO: factorise *)
+      let saved = !Colour.do_colour in
+      Colour.do_colour := false;
+      let ret = pp_mem_value mval in
+      Colour.do_colour := saved;
+      ret
+    end
