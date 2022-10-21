@@ -34,8 +34,6 @@ module CHERIMorello : Memory = struct
   type footprint = MM.footprint
   type mem_state = MM.mem_state
 
-  let check_overlap = MM.check_overlap
-
   let initial_mem_state = MM.initial_mem_state
 
   let cs_module = (module struct
@@ -96,6 +94,7 @@ module CHERIMorello : Memory = struct
   let fromCoq_Symbol_identifier (id:CoqSymbol.identifier) : Symbol.identifier = assert false (* TODO *)
   let fromCoq_ctype (ty:CoqCtype.ctype) : Ctype.ctype = assert false (* TODO *)
   let fromCoq_intrinsics_signature (s:MM.intrinsics_signature) : Mem_common.intrinsics_signature = assert false (* TODO *)
+  let fromCoq_ovelap_status (s:MM.overlap_status) : overlap_status = assert false (* TODO *)
 
   (* OCaml -> Coq type conversion *)
   let toCoq_thread_id (tid:thread_id) : MM.thread_id = assert false (* TODO *)
@@ -131,6 +130,8 @@ module CHERIMorello : Memory = struct
     match s with
     | Coq_inl errs -> failwith errs
     | Coq_inr v -> v
+
+  let check_overlap a b = fromCoq_ovelap_status (MM.check_overlap a b)
 
   (* Memory actions *)
   let allocate_object
@@ -188,7 +189,7 @@ module CHERIMorello : Memory = struct
   (*TODO: revise that, just a hack for codegen*)
   let case_ptrval (pv:pointer_value) fnull ffun fconc _ =
     match pv with
-    | PV (_, PVfunction (FP_valid sym)) -> ffun (Some sym)
+    | MM.PV (_, PVfunction (FP_valid sym)) -> ffun (Some (fromCoq_Symbol_sym sym))
     | PV (_, PVfunction (FP_invalid c)) ->
        if MM.cap_is_null c
        then fnull ()
@@ -303,19 +304,19 @@ module CHERIMorello : Memory = struct
 
   (* New operations for CHERI *)
   let derive_cap is_signed (bop:Mem_common.derivecap_op) ival1 ival2 =
-    MM.derive_cap is_signed (toCoq_derivecap_op bop) ival1 ival2
+    lift_coq_serr (MM.derive_cap is_signed (toCoq_derivecap_op bop) ival1 ival2)
 
   let cap_assign_value loc ival_cap ival_n =
-    MM.cap_assign_value (toCoq_location loc) ival_cap ival_n
+    lift_coq_serr (MM.cap_assign_value (toCoq_location loc) ival_cap ival_n)
 
-  let ptr_t_int_value = MM.ptr_t_int_value
+  let ptr_t_int_value v = lift_coq_serr (MM.ptr_t_int_value v)
 
   let null_cap = MM.null_cap
 
   (* Pointer shifting constructors *)
-  let array_shift_ptrval p ty iv = MM.array_shift_ptrval p (toCoq_ctype ty) iv
-  let member_shift_ptrval loc p tag_sym memb_ident =
-    MM.member_shift_ptrval p (toCoq_Symbol_sym tag_sym) (toCoq_Symbol_identifier memb_ident)
+  let array_shift_ptrval p ty iv = lift_coq_serr @@ MM.array_shift_ptrval p (toCoq_ctype ty) iv
+  let member_shift_ptrval p tag_sym memb_ident =
+    lift_coq_serr (MM.member_shift_ptrval p (toCoq_Symbol_sym tag_sym) (toCoq_Symbol_identifier memb_ident))
   let eff_array_shift_ptrval loc ptrval ty iv =
     lift_coq_memM (MM.eff_array_shift_ptrval (toCoq_location loc) ptrval (toCoq_ctype ty) iv)
   let eff_member_shift_ptrval loc ptrval tag_sym memb_ident =
@@ -328,12 +329,12 @@ module CHERIMorello : Memory = struct
     lift_coq_memM (MM.memcmp ptrval1 ptrval2 size_int)
 
   let realloc tid align ptr size =
-    lift_coq_memM (MM.realloc tid align ptr size)
+    lift_coq_memM (MM.realloc (Z.of_int tid) align ptr size)
 
   (* TODO varargs not implemented *)
   let va_start (args:(Ctype.ctype * pointer_value) list): integer_value memM = assert false (* TODO *)
   let va_copy (va:integer_value): integer_value memM = assert false (* TODO *)
-  let va_arg (va:integer_value) (ty:Ctype.ctype) pointer_value memM = assert false (* TODO *)
+  let va_arg (va:integer_value) (ty:Ctype.ctype): pointer_value memM = assert false (* TODO *)
   let va_end (va:integer_value): unit memM = assert false (* TODO *)
   let va_list (va_idx:Nat_big_num.num): ((Ctype.ctype * pointer_value) list) memM = assert false (* TODO *)
 
@@ -342,11 +343,11 @@ module CHERIMorello : Memory = struct
 
   (* Integer value constructors *)
   let concurRead_ival ity sym =
-    MM.concurRead_ival (toCoq_integerType ity) (toCoq_Symbol_sym sym)
+    lift_coq_serr (MM.concurRead_ival (toCoq_integerType ity) (toCoq_Symbol_sym sym))
 
   let integer_ival = MM.integer_ival
-  let max_ival ity = MM.max_ival (toCoq_integerType ity)
-  let min_ival ity = MM.min_ival (toCoq_integerType ity)
+  let max_ival ity = lift_coq_serr @@ MM.max_ival (toCoq_integerType ity)
+  let min_ival ity = lift_coq_serr @@ MM.min_ival (toCoq_integerType ity)
 
   let op_ival iop v1 v2 =
     MM.op_ival (toCoq_ionteger_operator iop) v1 v2
@@ -357,8 +358,8 @@ module CHERIMorello : Memory = struct
                      (toCoq_Symbol_sym tag_sym)
                      (toCoq_Symbol_identifier memb_ident))
 
-  let sizeof_ival ty = MM.sizeof_ival (toCoq_ctype ty)
-  let alignof_ival ty = MM.alignof_ival (toCoq_ctype ty)
+  let sizeof_ival ty = lift_coq_serr @@ MM.sizeof_ival (toCoq_ctype ty)
+  let alignof_ival ty = lift_coq_serr @@ MM.alignof_ival (toCoq_ctype ty)
 
   let bitwise_complement_ival ity a =
     MM.bitwise_complement_ival (toCoq_integerType ity) a
