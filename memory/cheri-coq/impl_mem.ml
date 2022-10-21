@@ -330,13 +330,12 @@ module CHERIMorello : Memory = struct
   let realloc tid align ptr size =
     lift_coq_memM (MM.realloc tid align ptr size)
 
-  (*
-  val va_start: (Ctype.ctype * pointer_value) list -> integer_value memM
-  val va_copy: integer_value -> integer_value memM
-  val va_arg: integer_value -> Ctype.ctype -> pointer_value memM
-  val va_end: integer_value -> unit memM
-  val va_list: Nat_big_num.num -> ((Ctype.ctype * pointer_value) list) memM
-   *)
+  (* TODO varargs not implemented *)
+  let va_start (args:(Ctype.ctype * pointer_value) list): integer_value memM = assert false (* TODO *)
+  let va_copy (va:integer_value): integer_value memM = assert false (* TODO *)
+  let va_arg (va:integer_value) (ty:Ctype.ctype) pointer_value memM = assert false (* TODO *)
+  let va_end (va:integer_value): unit memM = assert false (* TODO *)
+  let va_list (va_idx:Nat_big_num.num): ((Ctype.ctype * pointer_value) list) memM = assert false (* TODO *)
 
   let copy_alloc_id ival ptrval =
     lift_coq_memM (MM.copy_alloc_id ival ptrval)
