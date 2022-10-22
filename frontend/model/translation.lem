@@ -1532,15 +1532,15 @@ end
       | A.AilEcast _ cast_ty e ->
           let e_ty = ctype_of e in
           let oTy = force_core_object_type_of_ctype e_ty in
-          E.wrapped_fresh_symbol (C.BTy_loaded oTy) >>= fun (e_sym,   e_sym_pat,   e_sym_pe  ) ->
-          E.wrapped_fresh_symbol (C.BTy_object oTy) >>= fun (obj_sym, obj_sym_pat, obj_sym_pe) ->
+          E.wrapped_fresh_symbol2 (C.BTy_loaded oTy) >>= fun e_wrp   ->
+          E.wrapped_fresh_symbol2 (C.BTy_object oTy) >>= fun obj_wrp ->
           (* STD §6.3.2.1#2 "lvalue conversion" *)
           self e    >>= fun core_e  ->
           let let_sym = Symbol.fresh () in
           E.return $
             Caux.add_std "§6.5.4" (
 if AilTypesAux.is_void cast_ty then
-              Caux.mk_wseq_e e_sym_pat core_e
+              Caux.mk_wseq_e e_wrp.E.sym_pat core_e
                 Caux.mk_skip_e
 
 else if AilTypesAux.is_pointer cast_ty && Aaux.is_null_pointer_constant e then
@@ -1555,17 +1555,17 @@ else if AilTypesAux.is_arithmetic cast_ty && AilTypesAux.is_arithmetic e_ty then
   if AilTypesAux.is_integer cast_ty then
     if AilTypesAux.is_integer e_ty then
               (* TODO: check *)
-              Caux.mk_wseq_e e_sym_pat core_e (
-                Caux.mk_pure_e (stdlib.mkcall_conv_loaded_int cast_ty e_sym_pe)
+              Caux.mk_wseq_e e_wrp.E.sym_pat core_e (
+                Caux.mk_pure_e (stdlib.mkcall_conv_loaded_int cast_ty e_wrp.E.sym_pe)
               )
     else (* cast_ty is floating since it is an arithmetic type *)
-              Caux.mk_wseq_e e_sym_pat core_e (
-                Caux.mk_pure_e (stdlib.mkcall_loaded_ivfromfloat cast_ty e_sym_pe)
+              Caux.mk_wseq_e e_wrp.E.sym_pat core_e (
+                Caux.mk_pure_e (stdlib.mkcall_loaded_ivfromfloat cast_ty e_wrp.E.sym_pe)
               )
   else
     if AilTypesAux.is_integer e_ty then
-              Caux.mk_wseq_e e_sym_pat core_e (
-                Caux.mk_pure_e (stdlib.mkcall_loaded_fvfromint cast_ty e_sym_pe)
+              Caux.mk_wseq_e e_wrp.E.sym_pat core_e (
+                Caux.mk_pure_e (stdlib.mkcall_loaded_fvfromint cast_ty e_wrp.E.sym_pe)
               )
     else (* cast_ty is floating since it is an arithmetic type *)
            (* TODO: should convert floating types *)
@@ -1577,11 +1577,11 @@ else if AilTypesAux.is_arithmetic cast_ty && AilTypesAux.is_arithmetic e_ty then
 else if AilTypesAux.is_pointer cast_ty && AilTypesAux.is_arithmetic e_ty then
             (* making a pointer from an integer *)
               let ref_ty = fromJust "Translation.translate_expression, AilEcast 1" (AilTypesAux.referenced_type cast_ty) in
-              Caux.mk_wseq_e e_sym_pat core_e (
-                Caux.mk_case_e e_sym_pe
-                  [ ( Caux.mk_specified_pat obj_sym_pat
+              Caux.mk_wseq_e e_wrp.E.sym_pat core_e (
+                Caux.mk_case_e e_wrp.E.sym_pe
+                  [ ( Caux.mk_specified_pat obj_wrp.E.sym_pat
                     , Caux.mk_wseq_e (Caux.mk_sym_pat let_sym (C.BTy_object C.OTy_pointer))
-                        (C.Expr [] (C.Ememop Mem_common.PtrFromInt [Caux.mk_ail_ctype_pe e_ty; Caux.mk_ail_ctype_pe ref_ty; obj_sym_pe]))
+                        (C.Expr [] (C.Ememop Mem_common.PtrFromInt [Caux.mk_ail_ctype_pe e_ty; Caux.mk_ail_ctype_pe ref_ty; obj_wrp.E.sym_pe]))
                         (Caux.mk_pure_e (Caux.mk_specified_pe (Caux.mk_sym_pe let_sym))) )
                   ; ( Caux.mk_unspecified_pat (Caux.mk_empty_pat C.BTy_ctype)
                     , (* Casting an unspecified integer to a pointer type gives an unspecified pointer *)
@@ -1591,11 +1591,11 @@ else if AilTypesAux.is_pointer cast_ty && AilTypesAux.is_arithmetic e_ty then
 else if AilTypesAux.is_arithmetic cast_ty && AilTypesAux.is_pointer e_ty then
               (* making an integer from a pointer *)
               let ref_ty = fromJust "Translation.translate_expression, AilEcast 2" (AilTypesAux.referenced_type e_ty) in
-              Caux.mk_wseq_e e_sym_pat core_e (
-                  Caux.mk_case_e e_sym_pe
-                    [ ( Caux.mk_specified_pat obj_sym_pat
+              Caux.mk_wseq_e e_wrp.E.sym_pat core_e (
+                  Caux.mk_case_e e_wrp.E.sym_pe
+                    [ ( Caux.mk_specified_pat obj_wrp.E.sym_pat
                       , Caux.mk_wseq_e (Caux.mk_sym_pat let_sym (C.BTy_object C.OTy_integer))
-                          (C.Expr [] (C.Ememop Mem_common.IntFromPtr [Caux.mk_ail_ctype_pe ref_ty; Caux.mk_ail_ctype_pe cast_ty; obj_sym_pe]))
+                          (C.Expr [] (C.Ememop Mem_common.IntFromPtr [Caux.mk_ail_ctype_pe ref_ty; Caux.mk_ail_ctype_pe cast_ty; obj_wrp.E.sym_pe]))
                           (Caux.mk_pure_e (Caux.mk_specified_pe (Caux.mk_sym_pe let_sym))) )
                     ; ( Caux.mk_unspecified_pat (Caux.mk_empty_pat C.BTy_ctype)
                       , (* Casting an unspecified pointer to an integer type gives an unspecified integer *)
@@ -1612,12 +1612,12 @@ else (* pointer <-> pointer cast *)
   if AilTypesAux.is_void cast_ref_ty || AilTypesAux.is_function cast_ref_ty then
                     core_e
   else
-                    Caux.mk_wseq_e (Caux.mk_sym_pat e_sym (C.BTy_loaded oTy)) core_e begin
-                      Caux.mk_case_e e_sym_pe
-                        [ ( Caux.mk_specified_pat obj_sym_pat
+                    Caux.mk_wseq_e e_wrp.E.sym_pat core_e begin
+                      Caux.mk_case_e e_wrp.E.sym_pe
+                        [ ( Caux.mk_specified_pat obj_wrp.E.sym_pat
                           , Caux.mk_wseq_e (Caux.mk_sym_pat let_sym C.BTy_boolean)
-                              (C.Expr [] (C.Ememop Mem_common.PtrWellAligned [Caux.mk_ail_ctype_pe cast_ref_ty; obj_sym_pe]))
-                              (Caux.mk_pure_e (Caux.mk_specified_pe (Caux.mk_if_pe_ [Annot.Anot_explode] (Caux.mk_sym_pe let_sym) obj_sym_pe ub_pe))) )
+                              (C.Expr [] (C.Ememop Mem_common.PtrWellAligned [Caux.mk_ail_ctype_pe cast_ref_ty; obj_wrp.E.sym_pe]))
+                              (Caux.mk_pure_e (Caux.mk_specified_pe (Caux.mk_if_pe_ [Annot.Anot_explode] (Caux.mk_sym_pe let_sym) obj_wrp.E.sym_pe ub_pe))) )
                         ; ( Caux.mk_unspecified_pat (Caux.mk_empty_pat C.BTy_ctype)
                           , (* we are being daemonic (case where the resulting pointer would be misaligned) *)
                             Caux.mk_pure_e ub_pe ) ]
