@@ -1818,32 +1818,27 @@ else
                   ref_ty
             end in
             
-            let ptr_sym = Symbol.fresh () in
-            let integer_sym = Symbol.fresh () in
-            let ptr_obj_sym = Symbol.fresh () in
-            let integer_obj_sym = Symbol.fresh () in
-            let ptr_sym_pe         = Caux.mk_sym_pe ptr_sym         in
-            let ptr_obj_sym_pe     = Caux.mk_sym_pe ptr_obj_sym     in
-            let integer_sym_pe     = Caux.mk_sym_pe integer_sym     in
-            let integer_obj_sym_pe = Caux.mk_sym_pe integer_obj_sym in
-            E.wrapped_fresh_symbol2 (C.BTy_object C.OTy_pointer) >>= fun res_wrp ->
+            E.wrapped_fresh_symbol2 (C.BTy_loaded C.OTy_pointer) >>= fun ptr_wrp         ->
+            E.wrapped_fresh_symbol2 (C.BTy_loaded C.OTy_integer) >>= fun integer_wrp     ->
+            E.wrapped_fresh_symbol2 (C.BTy_object C.OTy_pointer) >>= fun ptr_obj_wrp     ->
+            E.wrapped_fresh_symbol2 (C.BTy_object C.OTy_integer) >>= fun integer_obj_wrp ->  
+            E.wrapped_fresh_symbol2 (C.BTy_object C.OTy_pointer) >>= fun res_wrp         ->
             E.return begin
               C.Expr [Annot.Astd "§6.5.6"] (
-                C.Ewseq (Caux.mk_tuple_pat [ Caux.mk_sym_pat ptr_sym     (C.BTy_loaded C.OTy_pointer)
-                                           ; Caux.mk_sym_pat integer_sym (C.BTy_loaded C.OTy_integer) ])
+                C.Ewseq (Caux.mk_tuple_pat [ ptr_wrp.E.sym_pat; integer_wrp.E.sym_pat ])
                   (Caux.mk_unseq [ptr_core_e; integer_core_e]) (
-                    Caux.mk_case_e (Caux.mk_tuple_pe [ptr_sym_pe; integer_sym_pe])
-                        [ (Caux.mk_tuple_pat [ Caux.mk_specified_pat (Caux.mk_sym_pat ptr_obj_sym (C.BTy_object C.OTy_pointer))
-                                           ; Caux.mk_specified_pat (Caux.mk_sym_pat integer_obj_sym (C.BTy_object C.OTy_integer)) ],
+                    Caux.mk_case_e (Caux.mk_tuple_pe [ptr_wrp.E.sym_pe; integer_wrp.E.sym_pe])
+                        [ (Caux.mk_tuple_pat [ Caux.mk_specified_pat (ptr_obj_wrp.E.sym_pat)
+                                             ; Caux.mk_specified_pat (integer_obj_wrp.E.sym_pat) ],
                          (* Both operand are specified *)
 begin if Global.has_strict_pointer_arith () || Global.is_PNVI () then
                         Caux.mk_wseq_e res_wrp.E.sym_pat
-                          (C.Expr [] (C.Ememop Mem_common.PtrArrayShift [ptr_obj_sym_pe; Caux.mk_ail_ctype_pe ref_ty; (Caux.mk_neg_pe integer_obj_sym_pe)]))
+                          (C.Expr [] (C.Ememop Mem_common.PtrArrayShift [ptr_obj_wrp.E.sym_pe; Caux.mk_ail_ctype_pe ref_ty; (Caux.mk_neg_pe integer_obj_wrp.E.sym_pe)]))
                           (Caux.mk_pure_e (Caux.mk_specified_pe res_wrp.E.sym_pe))
 else
                         Caux.mk_pure_e begin
                           Caux.mk_specified_pe begin
-                            Caux.mk_std_pe "§6.5.6#8, sentences 2-3" (Caux.mk_array_shift ptr_obj_sym_pe ref_ty (Caux.mk_neg_pe integer_obj_sym_pe))
+                            Caux.mk_std_pe "§6.5.6#8, sentences 2-3" (Caux.mk_array_shift ptr_obj_wrp.E.sym_pe ref_ty (Caux.mk_neg_pe integer_obj_wrp.E.sym_pe))
                           end
                         end
 end                       )
