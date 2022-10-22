@@ -104,7 +104,7 @@ type named_rewrite = string * rewrite
 
 
 
-let frontend astprints filename state_file =
+let frontend incl_dirs astprints filename state_file =
 
   Global_ocaml.(set_cerb_conf "Cn" false Random false Basic false false false false);
   CF.Ocaml_implementation.(set (HafniumImpl.impl));
@@ -112,7 +112,7 @@ let frontend astprints filename state_file =
   load_core_stdlib () >>= fun stdlib ->
   load_core_impl stdlib impl_name >>= fun impl ->
 
-  c_frontend (conf astprints, io) (stdlib, impl) ~filename >>= fun (_,ail_program_opt,core_file) ->
+  c_frontend (conf incl_dirs astprints, io) (stdlib, impl) ~filename >>= fun (_,ail_program_opt,core_file) ->
   CF.Tags.set_tagDefs core_file.CF.Core.tagDefs;
   print_log_file "original" (CORE core_file);
 
@@ -173,6 +173,7 @@ let check_input_file filename =
 
 let main 
       filename 
+      incl_dirs
       loc_pp 
       debug_level 
       print_level 
@@ -206,7 +207,7 @@ let main
   Check.only := only;
   check_input_file filename;
   Pp.progress_simple "pre-processing" "translating C code";
-  begin match frontend astprints filename state_file with
+  begin match frontend incl_dirs astprints filename state_file with
   | CF.Exception.Exception err ->
      prerr_endline (CF.Pp_errors.to_string err); exit 2
   | CF.Exception.Result (pred_defs, dt_defs, stmts, file) ->
@@ -251,6 +252,12 @@ let file =
   let doc = "Source C file" in
   Arg.(required & pos ~rev:true 0 (some string) None & info [] ~docv:"FILE" ~doc)
 
+
+let incl_dir =
+  let doc = "Add the specified directory to the search path for the\
+             C preprocessor." in
+  Arg.(value & opt_all dir [] & info ["I"; "include-directory"]
+         ~docv:"DIR" ~doc)
 
 let loc_pp =
   let doc = "Print pointer values as hexadecimal or as decimal values (hex | dec)" in
@@ -325,6 +332,7 @@ let () =
   let check_t = 
     pure main $ 
       file $ 
+      incl_dir $
       loc_pp $ 
       debug_level $ 
       print_level $

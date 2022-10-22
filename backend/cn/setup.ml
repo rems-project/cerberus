@@ -2,11 +2,17 @@ open Cerb_backend.Pipeline
 
 let impl_name = "gcc_4.9.0_x86_64-apple-darwin10.8.0"
 
-let cpp_str =
-      "cc -std=c11 -E -CC -Werror -nostdinc -undef -D__cerb__"
-    ^ " -I " ^ Cerb_runtime.in_runtime "libc/include"
-    ^ " -I " ^ Cerb_runtime.in_runtime "libcore"
-    ^ " -DDEBUG -DCN_MODE"
+(* adapting code from backend/driver/main.ml *)
+let cpp_str incl_dirs =
+  String.concat " " 
+    (["cc -std=c11 -E -CC -Werror -nostdinc -undef -D__cerb__";
+      "-I " ^ Cerb_runtime.in_runtime "libc/include";
+      "-I " ^ Cerb_runtime.in_runtime "libcore";]
+     @
+       List.map (fun str -> "-I " ^ str) incl_dirs
+     @
+       [" -DDEBUG -DCN_MODE";]
+    )
 
 let with_cn_keywords str =
   let cn_keywords =
@@ -27,7 +33,7 @@ let with_cn_keywords str =
   ) str cn_keywords
 
 
-let conf astprints (* cpp_str *) = 
+let conf incl_dirs astprints = 
   { debug_level = 0
   ; pprints = []
   ; astprints = astprints
@@ -35,6 +41,6 @@ let conf astprints (* cpp_str *) =
   ; typecheck_core = true
   ; rewrite_core = true
   ; sequentialise_core = true
-  ; cpp_cmd = with_cn_keywords cpp_str
+  ; cpp_cmd = with_cn_keywords (cpp_str incl_dirs)
   ; cpp_stderr = true
   }
