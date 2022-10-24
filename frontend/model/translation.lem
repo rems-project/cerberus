@@ -1146,7 +1146,6 @@ let translate_atomic_explicit loc translate_expr atomic_op args =
             end
         end
     | (LinuxLoad, [lobject_e; order_e]) ->
-         (* TODO: remove code duplication *)
          let mo = translate_linux_memory_order order_e in
          let ref_ty = match ctype_of lobject_e with
            | Ctype.Ctype _ (Ctype.Pointer _ ref_ty) ->
@@ -1288,7 +1287,7 @@ let rec translate_expression is_used ctx variadic_env stdlib tagDefs a_expr =
       end in
   let result_ty = ctype_of a_expr in
   if AilTypesAux.is_pointer result_ty && Aaux.is_null_pointer_constant a_expr then
-    (* TODO: this is a bit tasteless as it makes the case AilEconst, ConstantNull unreachable *)
+    (* NOTE: this is a bit tasteless as it makes the case AilEconst, ConstantNull unreachable *)
     E.return (Caux.mk_pure_e (Caux.mk_specified_pe (Caux.mk_nullptr_pe result_ty)))
   else
     let A.AnnotatedExpression annot std_annots loc expr = a_expr in
@@ -1583,7 +1582,6 @@ else if AilTypesAux.is_pointer cast_ty && Aaux.is_null_pointer_constant e then
 else if AilTypesAux.is_arithmetic cast_ty && AilTypesAux.is_arithmetic e_ty then
   if AilTypesAux.is_integer cast_ty then
     if AilTypesAux.is_integer e_ty then
-              (* TODO: check *)
               Caux.mk_wseq_e e_wrp.E.sym_pat core_e (
                 Caux.mk_pure_e (stdlib.mkcall_conv_loaded_int cast_ty e_wrp.E.sym_pe)
               )
@@ -1748,7 +1746,6 @@ end                   )
               end
             end
       
-      (* TODO: check + try to factorise with A.Add *)
       | A.AilEbinary e1 (A.Arithmetic A.Sub) e2 ->
           self e1 >>= fun core_e1 ->
           self e2 >>= fun core_e2 ->
@@ -1790,16 +1787,13 @@ if AilTypesAux.is_arithmetic (ctype_of e1) && AilTypesAux.is_arithmetic (ctype_o
               )
             )
           end
-
 else if AilTypesAux.is_pointer (ctype_of e1) && AilTypesAux.is_pointer (ctype_of e2) then
           E.wrapped_fresh_symbol (C.BTy_loaded C.OTy_pointer) >>= fun e1_wrp    ->
           E.wrapped_fresh_symbol (C.BTy_loaded C.OTy_pointer) >>= fun e2_wrp    ->
           E.wrapped_fresh_symbol (C.BTy_object C.OTy_pointer) >>= fun obj1_wrp  ->
           E.wrapped_fresh_symbol (C.BTy_object C.OTy_pointer) >>= fun obj2_wrp  ->
           E.wrapped_fresh_symbol (C.BTy_object C.OTy_integer) >>= fun memop_wrp ->
-          
           (* NOTE: by Ail typing we can just use the referenced type of either operand *)
-          (* TODO: check that, we "only" know that their referenced types are compatible *)
           let diff_ty_pe = match (ctype_of e1) with
             | Ctype.Ctype _ (Ctype.Pointer _ ref_ty1) ->
                 Caux.mk_ail_ctype_pe ref_ty1
@@ -1827,7 +1821,6 @@ else if AilTypesAux.is_pointer (ctype_of e1) && AilTypesAux.is_pointer (ctype_of
               )
             )
           end
-
 else
             (* Here one of the operand is pointer *)
             let (ptr_ty, ptr_core_e, integer_core_e) =
@@ -1835,14 +1828,12 @@ else
                 (ctype_of e2, core_e2, core_e1)
               else
                 (ctype_of e1, core_e1, core_e2) in
-            
             let ref_ty = match AilTypesAux.referenced_type ptr_ty with
               | (*BISECT-IGNORE*) Nothing ->
                   illTypedAil loc "A.AilEbinary (A.Arithmetic A.Sub), one is pointer"
               | Just ref_ty ->
                   ref_ty
             end in
-            
             E.wrapped_fresh_symbol (C.BTy_loaded C.OTy_pointer) >>= fun ptr_wrp         ->
             E.wrapped_fresh_symbol (C.BTy_loaded C.OTy_integer) >>= fun integer_wrp     ->
             E.wrapped_fresh_symbol (C.BTy_object C.OTy_pointer) >>= fun ptr_obj_wrp     ->
@@ -2319,7 +2310,6 @@ end
           end
 
       | A.AilEcompound qs ty e ->
-          (* TODO: what if the type is atomic? *)
           let core_ty = Caux.mk_ail_ctype_pe ty in
           let oTy = force_core_object_type_of_ctype (ctype_of e) in
           E.wrapped_fresh_symbol (C.BTy_object C.OTy_pointer) >>= fun obj_wrp ->
@@ -2328,7 +2318,7 @@ end
           (* STD §6.5.2.5#3 *)
           E.register_compound_literal loc (Symbol.PrefCompoundLiteral (locOf e) (Symbol.digest_of_sym e_wrp.E.sym_sym)) obj_wrp.E.sym_sym qs.Ctype.const ty >>= fun () ->
           E.return begin
-            (* TODO: probably needs a conversion *)
+            (* NOTE: the elaboration ensures [ty] and the type of [e] are the same *)
             Caux.mk_wseq_e e_wrp.E.sym_pat core_e begin
             Caux.mk_wseq_e (Caux.mk_empty_pat C.BTy_unit) (Caux.pstore loc core_ty obj_wrp.E.sym_pe e_wrp.E.sym_pe Cmm.NA) begin
               (* STD §6.5.2.5#5, sentence 1 *)
@@ -2363,7 +2353,6 @@ end
                 end
           end
       
-(* TODO: atomic undef *)
       | A.AilEmemberof e ident ->
           (* STD §6.5.2.3 *)
           let (tag_sym, oTy) = match ctype_of e with
@@ -2435,8 +2424,7 @@ end
                             Caux.mk_pure_e begin
                               Caux.mk_if_pe_ [Annot.Anot_explode] test_wrp.E.sym_pe
                                 (Caux.mk_member_shift_pe obj_wrp.E.sym_pe tag_sym ident)
-                                (* TODO: make a new UB for this particular case *)
-                                (Caux.mk_std_undef_pe loc "§6.5.3.3#4, sentence 4" Undefined.UB043_indirection_invalid_value)
+                                (Caux.mk_std_undef_pe loc "§6.5.2.3#4, sentence 4" Undefined.UB043_indirection_invalid_value)
                             end
                           end
                       else
@@ -2459,9 +2447,8 @@ end
               error ((Loc.stringFromLocation (Loc.with_cursor loc)) ^ ": copy_alloc_id() must be directly called")
         end
       
-      (* TODO: prefix + check, §6.4.5#6 *)
       | A.AilEstr (pref_opt, strs) ->
-          let strs = List.concat (List.map snd strs) in (* FIXME *)
+          let strs = List.concat (List.map snd strs) in
           let elem_ty = match pref_opt with
             | Nothing ->
                 (* STD §6.4.5#6, sentence 3 *)
@@ -2480,15 +2467,6 @@ end
                 Cty.wchar_t
           end in
           E.wrapped_fresh_symbol (C.BTy_object C.OTy_pointer) >>= fun lit_wrp ->
-          (* TODO: making an implementation fix here (ASCII), not doing prefix properly *)
-(*
-          let elem_lvals = List.map (fun c_str ->
-            C.LVspecified (C.OVinteger (Mem.integer_ival (Decode.decode_character_constant c_str)))
-          ) strs ++ [C.LVspecified (C.OVinteger (Mem.integer_ival 0))] in
-          E.register_string_literal loc lit_sym (Cty.Array elem_ty (Just (integerFromNat $ List.length elem_lvals)))
-            (C.Pexpr [] () (C.PEval (C.Vloaded (C.LVspecified (C.OVarray elem_lvals))))) >>
-*)
-          (* TODO(check): here we convert the string elements to the type of the array *)
           let elem_pes = List.map (fun c_str ->
              Caux.mk_specified_pe (
                stdlib.mkcall_conv_int elem_ty
@@ -2500,6 +2478,7 @@ end
           E.return (
             Caux.mk_pure_e lit_wrp.E.sym_pe
           )
+      
       | A.AilEsizeof _ ty ->
           E.return begin
             if AilTypesAux.is_character ty then
@@ -2643,7 +2622,6 @@ else (* is_pointer *)
               Caux.pload loc (Caux.mk_ail_ctype_pe result_ty) e_wrp.E.sym_pe mo
             end
           end
-
       | A.AilEarray_decay e ->
           match GenTypes.genTypeCategoryOf e with
             | GenTypes.GenLValueType _ _ _ ->
@@ -2667,10 +2645,11 @@ else (* is_pointer *)
                   )
                 )
             | GenTypes.GenRValueType _ ->
-                error "TODO: AilEarray_decay, rvalue"
+                illTypedAil loc "AilEarray_decay, GenRValueType"
           end
       | A.AilEfunction_decay e ->
           translate_function_designator self stdlib e
+      
       | A.AilEgcc_statement ->
           error ((Loc.stringFromLocation loc) ^ ": GCC statements as expressions not yet supported")
     end
@@ -2743,13 +2722,6 @@ let rec collect_cases_ (A.AnnotatedStatement loc _ stmt) =
   end
 let collect_cases s =
   snd (St.runStateM (collect_cases_ s) <| found_default= false; case_csts= [] |>)
-
-
-type collect_visibles_state = <|
-  visible_syms: list (Symbol.sym * Ctype.ctype);
-  label_visibles_: map Symbol.sym (list (Symbol.sym * Ctype.ctype));
-|>
-
 
 
 type erase_loop_control_state = <|
@@ -2846,7 +2818,6 @@ let rec erase_loop_control_aux (A.AnnotatedStatement loc attrs stmt_) =
         St.return stmt_
   end
 
-
 let erase_loop_control stmt =
   let (stmt', _) = State.runStateM (erase_loop_control_aux stmt) <|
     elc_continue= Nothing;
@@ -2854,6 +2825,10 @@ let erase_loop_control stmt =
   |> in stmt'
 
 
+type collect_visibles_state = <|
+  visible_syms: list (Symbol.sym * Ctype.ctype);
+  label_visibles_: map Symbol.sym (list (Symbol.sym * Ctype.ctype));
+|>
 
 val     collect_visibles_: A.statement GenTypes.genTypeCategory -> St.stateM unit collect_visibles_state
 let rec collect_visibles_ (A.AnnotatedStatement loc _ stmt) =
@@ -2924,9 +2899,6 @@ let collect_visibles stmt =
         <| visible_syms= []
          ; label_visibles_= Map.empty |>
     end
-
-
-
 
 
 val mk_run_with_lifetime_e: Loc.t -> Symbol.sym -> list (Symbol.sym * Ctype.ctype) -> list (Symbol.sym * Ctype.ctype) -> list C.pexpr -> C.expr unit
@@ -3278,7 +3250,6 @@ let rec translate_stmt stdlib tagDefs f env (A.AnnotatedStatement loc stmt_attrs
         E.wrapped_fresh_symbol (C.BTy_object oTy) >>= fun control_wrp ->
         (* Integer promotion *)
         (* STD §6.8.4.2#5, sentence 1 *)
-        (* TODO: check whether this is a correct integer promotion *)
         E.wrapped_fresh_symbol (C.BTy_object oTy) >>= fun promoted_wrp ->
         let promoted_pe =
           Caux.mk_std_pe "§6.8.4.2#5, sentence 1" (
