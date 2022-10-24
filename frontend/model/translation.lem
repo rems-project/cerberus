@@ -2212,6 +2212,7 @@ else (* is_pointer *)
                   , Caux.mk_pure_e (Caux.mk_error_pe "assert() unspecified" Caux.mk_unit_pe) ) ]
 end
           end
+      
       | A.AilEoffsetof ty membr_ident ->
           let tag_sym = match ty with
             | Ctype.Ctype _ (Ctype.Struct x) ->
@@ -2308,23 +2309,6 @@ end
               Caux.mk_pure_e (Caux.mk_specified_pe (Caux.mk_struct_pe tag_sym (List.reverse core_xs_rev)))
             end
           end
-
-      | A.AilEcompound qs ty e ->
-          let core_ty = Caux.mk_ail_ctype_pe ty in
-          let oTy = force_core_object_type_of_ctype (ctype_of e) in
-          E.wrapped_fresh_symbol (C.BTy_object C.OTy_pointer) >>= fun obj_wrp ->
-          E.wrapped_fresh_symbol (C.BTy_loaded oTy)           >>= fun e_wrp   ->
-          self e                                              >>= fun core_e  ->
-          (* STD §6.5.2.5#3 *)
-          E.register_compound_literal loc (Symbol.PrefCompoundLiteral (locOf e) (Symbol.digest_of_sym e_wrp.E.sym_sym)) obj_wrp.E.sym_sym qs.Ctype.const ty >>= fun () ->
-          E.return begin
-            (* NOTE: the elaboration ensures [ty] and the type of [e] are the same *)
-            Caux.mk_wseq_e e_wrp.E.sym_pat core_e begin
-            Caux.mk_wseq_e (Caux.mk_empty_pat C.BTy_unit) (Caux.pstore loc core_ty obj_wrp.E.sym_pe e_wrp.E.sym_pe Cmm.NA) begin
-              (* STD §6.5.2.5#5, sentence 1 *)
-              Caux.mk_pure_e obj_wrp.E.sym_pe
-            end end
-          end
       
       | A.AilEunion tag_sym memb_ident e_opt ->
           match Map.lookup tag_sym tagDefs with
@@ -2351,6 +2335,23 @@ end
                             end
                       end
                 end
+          end
+
+      | A.AilEcompound qs ty e ->
+          let core_ty = Caux.mk_ail_ctype_pe ty in
+          let oTy = force_core_object_type_of_ctype (ctype_of e) in
+          E.wrapped_fresh_symbol (C.BTy_object C.OTy_pointer) >>= fun obj_wrp ->
+          E.wrapped_fresh_symbol (C.BTy_loaded oTy)           >>= fun e_wrp   ->
+          self e                                              >>= fun core_e  ->
+          (* STD §6.5.2.5#3 *)
+          E.register_compound_literal loc (Symbol.PrefCompoundLiteral (locOf e) (Symbol.digest_of_sym e_wrp.E.sym_sym)) obj_wrp.E.sym_sym qs.Ctype.const ty >>= fun () ->
+          E.return begin
+            (* NOTE: the elaboration ensures [ty] and the type of [e] are the same *)
+            Caux.mk_wseq_e e_wrp.E.sym_pat core_e begin
+            Caux.mk_wseq_e (Caux.mk_empty_pat C.BTy_unit) (Caux.pstore loc core_ty obj_wrp.E.sym_pe e_wrp.E.sym_pe Cmm.NA) begin
+              (* STD §6.5.2.5#5, sentence 1 *)
+              Caux.mk_pure_e obj_wrp.E.sym_pe
+            end end
           end
       
       | A.AilEmemberof e ident ->
