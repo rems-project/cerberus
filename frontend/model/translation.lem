@@ -47,6 +47,15 @@ let force_core_object_type_of_ctype ty =
   end
 
 
+let floating_conversion_TODO to_ty from_ty z =
+  (* NOTE: our current implementation of floating types has them all behave like double *)
+  let () = Debug.warn [Debug.DB_elaboration] (fun () ->
+    "casts between floating types is currently a NOP: " ^
+    Pp.stringFromCore_ctype to_ty ^ " <== " ^
+    Pp.stringFromCore_ctype from_ty
+  ) in
+  z
+
 (* STD §6.5.13#3, sentence 1 *)
 (* STD §6.5.14#3, sentence 1 *)
 (* STD §6.5.15#4, sentence 2 *)
@@ -1588,11 +1597,7 @@ else if AilTypesAux.is_arithmetic cast_ty && AilTypesAux.is_arithmetic e_ty then
                 Caux.mk_pure_e (stdlib.mkcall_loaded_fvfromint cast_ty e_wrp.E.sym_pe)
               )
     else (* cast_ty is floating since it is an arithmetic type *)
-           (* TODO: should convert floating types *)
-              let () = Debug.warn [Debug.DB_elaboration] (fun () ->
-                "casts between floating types is currently a NOP"
-              ) in
-             core_e
+              floating_conversion_TODO cast_ty e_ty core_e
 
 else if AilTypesAux.is_pointer cast_ty && AilTypesAux.is_arithmetic e_ty then
             (* making a pointer from an integer *)
@@ -1947,7 +1952,7 @@ end                       )
                       (Caux.mk_pure_e (stdlib.mkcall_loaded_fvfromint result_ty e_wrp.E.sym_pe))
                   end
                 else
-                  E.return core_e (* TODO floating conversion *)
+                  E.return (floating_conversion_TODO result_ty e_ty core_e)
               end
             else if AilTypesAux.is_pointer result_ty then
               begin
