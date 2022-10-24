@@ -741,13 +741,24 @@ let translate_function_call loc is_used translate_expr stdlib e es =
   let arg_ptr_sym_pats = List.map (fun sym -> Caux.mk_sym_pat sym (C.BTy_object C.OTy_pointer)) arg_ptr_syms in
   let arg_ptr_sym_pes = List.map Caux.mk_sym_pe arg_ptr_syms in
   (* elaborate each argument *)
-  E.foldlM (fun (arg_sym_pats, core_arg_es, args_info) arg_e ->
-    let arg_bTy = C.BTy_loaded (force_core_object_type_of_ctype (ctype_of arg_e)) in
-    E.wrapped_fresh_symbol arg_bTy >>= fun arg_wrp    ->
-    translate_expr arg_e           >>= fun core_arg_e ->
-    E.return  ( arg_wrp.E.sym_pat :: arg_sym_pats, core_arg_e :: core_arg_es
+  E.foldlM (fun (n, arg_sym_pats, core_arg_es, args_info) arg_e ->
+    begin if expect_param_is_Bool n && AilTypesAux.is_pointer (ctype_of arg_e) then
+      E.wrapped_fresh_symbol (C.BTy_loaded C.OTy_pointer) >>= fun conv_wrp ->
+      E.wrapped_fresh_symbol (C.BTy_loaded C.OTy_integer) >>= fun arg_wrp  ->
+      translate_expr arg_e                                >>= fun core_e   ->
+      E.return
+        ( arg_wrp
+        , Caux.mk_wseq_e conv_wrp.E.sym_pat core_e (stdlib.mkproc_loaded_pointer_to_Bool conv_wrp.E.sym_pe) )
+    else
+      let arg_bTy = C.BTy_loaded (force_core_object_type_of_ctype (ctype_of arg_e)) in
+      E.wrapped_fresh_symbol arg_bTy >>= fun arg_wrp ->
+      translate_expr arg_e           >>= fun core_e  ->
+      E.return (arg_wrp, core_e)
+    end >>= fun (arg_wrp, core_arg_e) ->
+    E.return  ( (n+1)
+              , arg_wrp.E.sym_pat :: arg_sym_pats, core_arg_e :: core_arg_es
               , (ctype_of arg_e, Aaux.is_null_pointer_constant arg_e, arg_wrp.E.sym_pe) :: args_info )
-  ) ([], [], []) es >>= fun (rev_arg_sym_pats, rev_core_arg_es, rev_args_info) ->
+  ) (0, [], [], []) es >>= fun (_, rev_arg_sym_pats, rev_core_arg_es, rev_args_info) ->
   (* create parameters and convert them *)
   let (args_info, variadic_args_info) = List.splitAt (List.length expect_params) (List.reverse rev_args_info) in
   (* standard arguments *)
@@ -762,9 +773,11 @@ let translate_function_call loc is_used translate_expr stdlib e es =
           (Caux.mk_pure_e (Caux.mk_std_undef_pe loc "§6.5.2.2#9" Undefined.UB041_function_not_compatible))
           begin
             let conv_value =
+              if AilTypesAux.atomic_qualified_unqualified AilTypesAux.is_Bool expect_param_ty && AilTypesAux.is_pointer arg_ty then
+                arg_sym_pe
               (* NOTE: since the expected type is compatible with the parameter type, if one is an integer or
                 floating, the other one must also be an integer or floating (respectively) *)
-              if AilTypesAux.is_integer expect_param_ty then
+              else if AilTypesAux.is_integer expect_param_ty then
                 if AilTypesAux.is_integer arg_ty then
                   stdlib.mkcall_conv_loaded_int_ param_ty_wrp.E.sym_pe arg_sym_pe
                 else
