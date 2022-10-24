@@ -725,6 +725,13 @@ let translate_function_call loc is_used translate_expr stdlib e es =
       | (*BISECT-IGNORE*) _ ->
           illTypedAil loc "AilEcall"
     end in
+  let expect_param_is_Bool n =
+    match List.index expect_params n with
+      | Just (_, ty, _) ->
+        AilTypesAux.atomic_qualified_unqualified AilTypesAux.is_Bool ty
+      | Nothing ->
+          false
+    end in
   (* TODO: This is ignoring has_proto, §6.5.2.2#6 is not being considered! *)
   (* STD §6.5.2.2 *)
   E.wrapped_fresh_symbol (C.BTy_loaded C.OTy_pointer) >>= fun fun_wrp         ->
