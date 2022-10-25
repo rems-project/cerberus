@@ -535,6 +535,14 @@ Module MorelloCapability <:
   Definition value_compare (x y : t) : comparison :=
     Z.compare x.(value) y.(value).
 
+  (* TODO: this implmenetation seems to be incomplete. Must compare
+     all other fields. One idea is to convert both arguments to bit
+     vectors and compare them. This would work if the ordering imposed
+     by this function only used when indexing hash maps with
+     capabilities as keys.
+
+     If used for something else we need to see if this ordering is
+     compatible with one imposed by [value_compare]. E.g.  *)
   Definition exact_compare (x y : t) : comparison :=
     match Bool.compare x.(valid) y.(valid) with
     | Eq => value_compare x y
