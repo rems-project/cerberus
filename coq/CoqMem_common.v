@@ -17,7 +17,7 @@ Module Mem_common (A:VADDR).
   | ExactOverlap : overlap_status
   | PartialOverlap : overlap_status.
 
-    Inductive access_kind : Set :=
+  Inductive access_kind : Set :=
   | LoadAccess : access_kind
   | StoreAccess : access_kind.
 
