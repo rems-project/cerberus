@@ -738,6 +738,11 @@ let is_le = function
   | _ -> None
 
 
+
+let rec split_and it = match is_and it with
+  | Some its -> List.concat (List.map split_and its)
+  | _ -> [it]
+
 (* shorthands *)
 
 

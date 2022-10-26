@@ -2,13 +2,15 @@ module IT = IndexTerms
 module RET = ResourceTypes
 module RE = Resources
 module LAT = LogicalArgumentTypes
+module SymMap = Map.Make(Sym)
+
 
 open IT
 
 exception Failure of Pp.doc
 exception NoResult
 
-let note_failure f x =
+let note_failure_none f x =
   begin try Some (f x)
   with
   | Failure pp ->
@@ -16,6 +18,9 @@ let note_failure f x =
     None
   | NoResult -> None
   end
+
+let note_failure_empty f x =
+  note_failure_none f x |> Option.to_list |> List.concat
 
 let some_result x =
   match x with
@@ -187,9 +192,8 @@ let rec model_res_spans m_g (res : ResourceTypes.t) =
         |> some_result in
       let (cond, active_clause) = get_active_clause m_g clauses in
       let ress = get_packing_ft_owned_resources active_clause.ResourcePredicates.packing_ft in
-      ress |> List.map (note_failure (model_res_spans m_g))
-        |> List.map Option.to_list
-        |> List.concat |> List.concat
+      ress |> List.map (note_failure_empty (model_res_spans m_g))
+	|> List.concat
         |> List.map (fun (span, (orig, res2)) -> (span, (res, res2)))
   | (RET.Q ({name = Owned ct; _} as qpt)) ->
       assert (IT.equal qpt.step (IT.int_ (Memory.size_of_ctype ct)));
@@ -209,7 +213,7 @@ let inter ((i_lb, i_ub), _) ((j_lb, j_ub), _) =
   Z.lt j_lb i_ub && Z.lt i_lb j_ub
 
 let spans_compare_for_pp m g res =
-  note_failure (model_res_spans (m, g)) res
+  note_failure_none (model_res_spans (m, g)) res
   |> Option.map (fun ss ss2 -> List.exists (fun s -> List.exists (inter s) ss2) ss)
 
 let pp_model_spans m g cmp res =
@@ -345,8 +349,7 @@ let intersection_action m g ((orig_req, req), req_span) ((orig_res, res), res_sp
   Some (action, ok)
 
 let model_res_spans_or_empty m g req =
-  note_failure (model_res_spans (m, g)) req
-  |> Option.to_list |> List.concat
+  note_failure_empty (model_res_spans (m, g)) req
 
 let rec gather_same_actions opts = match opts with
   | [] -> []
@@ -383,7 +386,7 @@ let do_null_resource_check m g req =
   then raise NoResult else ();
   (pt, cond)
 
-let null_resource_check m g req = note_failure (do_null_resource_check m g) req
+let null_resource_check m g req = note_failure_none (do_null_resource_check m g) req
 
 let res_pointer m g = function
   | RET.P pt -> eval_extract "resource pointer" (m, g) is_pointer pt.pointer
@@ -467,8 +470,7 @@ let do_guess_span_actions ress req m g =
   gather_same_actions opts
 
 let guess_span_actions ress req m g =
-  note_failure (do_guess_span_actions ress req m) g
-  |> Option.to_list |> List.concat
+  note_failure_empty (do_guess_span_actions ress req m) g
 
 let diag_req ress req m g =
   let act = guess_span_actions ress req m g in
@@ -476,5 +478,96 @@ let diag_req ress req m g =
     | [] -> Pp.item "guess span action: none" (Pp.string "")
     | (action, ok) :: oth -> Pp.item "guessed span action" (pp_action action)
   ))
+
+
+let perm_upper_bound qnm (permission : IT.t) =
+  let is_q = IT.equal (sym_ (qnm, BT.Integer)) in
+  let get_bound it = match IT.term it with
+  | Arith_op (LT (lhs, rhs)) when is_q lhs ->
+        Some rhs
+  | Arith_op (LE (lhs, rhs)) when is_q lhs ->
+        Some (IT.add_ (rhs, IT.z_ (Z.of_int 1)))
+  | _ -> None
+  in
+  match List.filter_map get_bound (IT.split_and permission) with
+  | [ub] -> ub
+  | _ -> raise NoResult
+
+
+let req_pt_ct_count req = match req with
+    | RET.P ({name = Owned ct; pointer; _}) -> (pointer, ct, None)
+    | RET.P ({name = Block ct; pointer; _}) -> (pointer, ct, None)
+    | RET.Q ({name = Owned ct; pointer; q; permission; step; _}) ->
+      let sz = Memory.size_of_ctype ct in
+      assert (IT.equal step (IT.int_ sz));
+      (pointer, ct, Some (perm_upper_bound q permission))
+    | RET.Q ({name = Block ct; pointer; q; permission; step; _}) ->
+      let sz = Memory.size_of_ctype ct in
+      assert (IT.equal step (IT.int_ sz));
+      (pointer, ct, Some (perm_upper_bound q permission))
+    | _ -> raise NoResult
+
+let res_pt_ct_count res = req_pt_ct_count (RE.request res)
+
+
+let rec covering_path_eq (req_pt, req_ct, req_count) req_pt_n m_g
+    conds (res_pt, res_ct, res_count) =
+  let recurse = covering_path_eq (req_pt, req_ct, req_count) req_pt_n m_g in
+  let req_ct_sz = Memory.size_of_ctype req_ct in
+  let res_ct_sz = Memory.size_of_ctype res_ct in
+  if res_ct_sz < req_ct_sz then raise NoResult else ();
+  let res_pt_n = eval_extract "resource pointer" m_g is_pointer res_pt in
+  if Z.gt res_pt_n req_pt_n then raise NoResult else ();
+  let res_ct_n = match res_count with
+    | None -> Z.of_int 1
+    | Some n -> eval_extract "resource iteration count" m_g is_z n
+  in
+  let res_ub = Z.add res_pt_n (Z.mul (Z.of_int res_ct_sz) res_ct_n) in
+  if Z.leq res_ub req_pt_n then raise NoResult else ();
+  let offs = Z.sub req_pt_n res_pt_n in
+  if Z.equal req_pt_n res_pt_n
+    && Sctypes.equal req_ct res_ct
+    && Option.equal (fun _ _ -> true) req_count res_count
+  then (conds, req_pt, res_pt)
+  else begin match (res_ct, res_count) with
+    | (_, Some ub) ->
+      let idx = IT.array_pointer_to_index ~base:res_pt
+          ~item_size:(IT.int_ res_ct_sz) ~pointer:req_pt in
+      let conds2 = [IT.lePointer_ (res_pt, req_pt); IT.le_ (idx, ub)] @ conds in
+      recurse conds2 (IT.arrayShift_ (res_pt, res_ct, idx), res_ct, None)
+    | (Sctypes.Array (ct, Some sz), None) -> recurse conds (res_pt, ct, Some (IT.int_ sz))
+    | (Sctypes.Struct tag, None) ->
+      let g = snd m_g in
+      let layout = SymMap.find tag g.Global.struct_decls in
+      let piece = Memory.offset_to_member tag layout (Z.to_int offs) in
+      let (member, ct) = some_result piece.Memory.member_or_padding in
+      recurse conds (IT.memberShift_ (res_pt, tag, member), ct, None)
+    | _ -> raise NoResult
+  end
+
+
+let do_guess_path_eqs ress req m g =
+  (* for now, this only works for requests of concrete c-types (Owned and Block) *)
+  let (req_pt, req_ct, req_count) = req_pt_ct_count req in
+  let req_pt_n = eval_extract "request pointer" (m, g) is_pointer req_pt in
+  let res_pt_cts = List.filter_map (note_failure_none res_pt_ct_count) ress in
+  let matching_res (pt, ct, count) =
+    covering_path_eq (req_pt, req_ct, req_count) req_pt_n (m, g) [] (pt, ct, count)
+  in
+  res_pt_cts |> List.filter_map (note_failure_none matching_res)
+    |> List.filter (fun (conds, req_pt, res_pt) -> not (IT.equal req_pt res_pt))
+
+let guess_path_eqs ress req m g =
+  note_failure_empty (do_guess_path_eqs ress req m) g
+
+let trace_guess_path_eqs ress req m g =
+  List.iter (fun (conds, req_pt, res_pt) ->
+    Pp.warn Locations.unknown
+        (Pp.item "model path pointer eq" (Pp.typ (IT.pp (IT.eq_ (req_pt, res_pt)))
+            (Pp.brackets (Pp.list IT.pp conds)))))
+  (guess_path_eqs ress req m g)
+
+
+
 
 

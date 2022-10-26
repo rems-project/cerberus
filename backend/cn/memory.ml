@@ -98,6 +98,27 @@ let member_offset (layout : struct_layout) member : int option =
 
 
 
+(* find the (hopefully unique) member that covers this byte offset *)
+let offset_to_member (tag : Sym.t) (layout : struct_layout) (offset : int) =
+  let covering = List.filter (fun (sp : struct_piece) ->
+        sp.offset <= offset && offset < (sp.offset + sp.size))
+    layout in
+  match covering with
+  | [sp] -> sp
+  | [] ->
+    Pp.error Locations.unknown
+        (Pp.item ("offset not in struct: " ^ Int.to_string offset) (Sym.pp tag)) [];
+    assert false
+  | _ :: _ :: _ ->
+    Pp.error Locations.unknown
+        (Pp.item ("offset double-covered in struct: " ^ Int.to_string offset) (Sym.pp tag))
+        (List.map (fun sp -> match sp.member_or_padding with
+            | Some (nm, _) -> Id.pp nm
+            | _ -> Pp.string "padding") covering);
+    assert false
+
+
+
 
 
 
