@@ -479,19 +479,38 @@ let ensure_struct_mem is_good ci ct aux = match Sctypes.is_struct_ctype ct with
   )) [tag] in
   return op_nm
 
-let it_to_coq ci it =
+let rec unfold_if_possible ctxt it = 
+  let open IT in
+  let open LogicalPredicates in
+  match it with
+  | IT (IT.Pred (name, args), _) ->
+     let def = Option.get (Global.get_logical_predicate_def ctxt.Context.global name) in
+     begin match def.definition with
+     | Rec_Def _ -> it
+     | Uninterp -> it
+     | Def body -> 
+        unfold_if_possible ctxt (open_pred def.args body args)
+     end
+  | _ ->
+     it
+
+
+let it_to_coq ctxt ci it =
   let open Pp in
   let eq_of = function
     | BaseTypes.Integer -> "Z.eqb"
     | bt -> fail "eq_of" (BaseTypes.pp bt)
   in
   let rec f bool_eq_prop t =
+    let t = unfold_if_possible ctxt t in
     let aux t = f bool_eq_prop t in
     let abinop s x y = parensM (build [aux x; rets s; aux y]) in
     let with_is_true x = if bool_eq_prop && BaseTypes.equal (IT.bt t) BaseTypes.Bool
         then parensM (build [rets "Is_true"; x]) else x
     in
-    let check_pos t = match IT.is_z t with
+    let check_pos t = 
+      let t = unfold_if_possible ctxt t in
+      match IT.is_z t with
       | Some i when Z.gt i Z.zero -> ()
       | _ -> fail "it_to_coq: divisor not positive const" (IT.pp t)
     in
@@ -617,13 +636,13 @@ let mk_let sym rhs_doc doc =
   let open Pp in
   !^ "let" ^^^ Sym.pp sym ^^^ !^ ":=" ^^^ rhs_doc ^^^ !^ "in" ^^^ doc
 
-let lc_to_coq_check_triv ci = function
+let lc_to_coq_check_triv ctxt ci = function
   | LC.T it -> let it = it_adjust ci it in
     if IT.is_true it then return None
-    else let@ v = it_to_coq ci it in return (Some v)
+    else let@ v = it_to_coq ctxt ci it in return (Some v)
   | LC.Forall ((sym, bt), it) -> let it = it_adjust ci it in
     if IT.is_true it then return None
-    else let@ v = it_to_coq ci it
+    else let@ v = it_to_coq ctxt ci it
     in return (Some (parens (mk_forall ci sym bt v)))
 
 let nth_str_eq n s ss = Option.equal String.equal (List.nth_opt ss n) (Some s)
@@ -637,10 +656,10 @@ let param_spec params =
   ^^ !^"End Parameters."
   ^^ hardline ^^ hardline
 
-let ftyp_to_coq ci ftyp =
+let ftyp_to_coq ctxt ci ftyp =
   let open Pp in
-  let lc_to_coq_c = lc_to_coq_check_triv ci in
-  let it_tc = it_to_coq ci in
+  let lc_to_coq_c = lc_to_coq_check_triv ctxt ci in
+  let it_tc = it_to_coq ctxt ci in
   (* FIXME: handle underdefinition in division *)
   let oapp f opt_x y = match opt_x with
     | Some x -> f x y
@@ -699,10 +718,10 @@ let ftyp_to_coq ci ftyp =
   | Some doc -> return doc
   | None -> rets "Is_true true"
 
-let convert_lemma_defs ci lemma_typs =
+let convert_lemma_defs ctxt ci lemma_typs =
   let lemma_ty (nm, typ, kind) =
     progress_simple ("converting " ^ kind ^ " lemma type") (Sym.pp_string nm);
-    let@ rhs = ftyp_to_coq ci typ in
+    let@ rhs = ftyp_to_coq ctxt ci typ in
     return (defn (Sym.pp_string nm ^ "_type") [] (Some (!^ "Prop")) rhs)
   in
   let (tys, st) = ListM.mapM lemma_ty lemma_typs init_t in
@@ -780,7 +799,7 @@ let get_struct_decls mu_file =
         | _ -> decls
       ) mu_file.mu_tagDefs SymMap.empty
 
-let generate directions mu_file =
+let generate ctxt directions mu_file =
   let open Mu in
   let (filename, kinds) = parse_directions directions in
   let channel = open_out filename in
@@ -813,7 +832,7 @@ let generate directions mu_file =
   let ci = {struct_decls; fun_info} in
   let conv = List.map (fun x -> (x.sym, x.typ, "pure")) pure
     @ List.map (fun x -> (x.sym, Option.get x.scan_res.res_coerce, "coerced")) coerce in
-  let (conv_defs, defs, params) = convert_lemma_defs ci conv in
+  let (conv_defs, defs, params) = convert_lemma_defs ctxt ci conv in
   print channel (param_spec params);
   print channel (defs_module defs conv_defs);
   print channel (mod_spec (List.map (fun (nm, _, _) -> nm) conv));

@@ -227,7 +227,7 @@ let main
          let opts = Retype.{ drop_labels = Option.is_some lemmata } in
          let@ file = Retype.retype_file ctxt opts file in
          begin match lemmata with
-           | Some mode -> Lemmata.generate mode file
+           | Some mode -> Lemmata.generate ctxt mode file
            | None -> Typing.run ctxt (Check.check file)
          end
        in
