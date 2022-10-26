@@ -85,9 +85,55 @@ module CHERIMorello : Memory = struct
   let return = Nondeterminism.nd_return
   let bind = Nondeterminism.nd_bind
 
+  let fromCoq_lexing_position (lp:CoqLocation.lexing_position): Lexing.position =
+    {
+      pos_fname = lp.pos_fname;
+      pos_lnum = Z.to_int lp.pos_lnum;
+      pos_bol = Z.to_int lp.pos_bol;
+      pos_cnum = Z.to_int lp.pos_cnum;
+    }
+
+  let from_Coq_location_cursor (lc:CoqLocation.location_cursor) : Location_ocaml.cursor =
+    match lc with
+    | NoCursor -> NoCursor
+    | PointCursor lp -> PointCursor (fromCoq_lexing_position lp)
+    | RegionCursor (lp1,lp2) -> RegionCursor (fromCoq_lexing_position lp1,fromCoq_lexing_position lp2)
+
   (* Coq -> OCaml type conversion *)
-  let fromCoq_mem_error (e:MM.mem_error) : mem_error = assert false (* TODO *)
-  let fromCoq_location (l:CoqLocation.location_ocaml): Location_ocaml.t = assert false (* TODO *)
+  let fromCoq_location (l:CoqLocation.location_ocaml): Location_ocaml.t =
+    match l with
+    | Loc_unknown -> Location_ocaml.unknown
+    | Loc_other s -> Location_ocaml.other s
+    | Loc_point p -> Location_ocaml.point (fromCoq_lexing_position p)
+    | Loc_region (lp1,lp2,lc) -> Location_ocaml.region (fromCoq_lexing_position lp1,fromCoq_lexing_position lp2) (from_Coq_location_cursor lc)
+    | Loc_regions (ps, lc) -> Location_ocaml.regions
+                                (List.map (fun (lp1,lp2) -> (fromCoq_lexing_position lp1,fromCoq_lexing_position lp2)) ps)
+                                (from_Coq_location_cursor lc)
+
+  let fromCoq_mem_error (e:MM.mem_error) : mem_error =
+    assert false (* TODO *)
+  (*
+    match e with
+    | MerrOutsideLifetime s -> MerrOutsideLifetime s
+    | MerrInternal s -> MerrInternal s
+    | MerrOther s -> MerrOther s
+    | MerrPtrdiff -> MerrPtrdiff
+    | MerrAccess of CoqLocation.location_ocaml * MM.access_kind *
+                      MM.access_error
+    | MerrWriteOnReadOnly of bool * CoqLocation.location_ocaml
+    | MerrReadUninit of CoqLocation.location_ocaml
+    | MerrUndefinedFree of CoqLocation.location_ocaml * MM.free_error
+    | MerrUndefinedRealloc
+    | MerrIntFromPtr of CoqLocation.location_ocaml
+    | MerrPtrFromInt
+    | MerrPtrComparison
+    | MerrArrayShift of CoqLocation.location_ocaml
+    | MerrFreeNullPtr of CoqLocation.location_ocaml
+    | MerrWIP of string
+    | MerrVIP of MM.vip_error
+    | MerrCHERI of CoqLocation.location_ocaml * MM.mem_cheri_error
+   *)
+
   let fromCoq_undefined_behaviour (u:CoqUndefined.undefined_behaviour) : Undefined.undefined_behaviour = assert false (* TODO *)
   let fromCoq_Symbol_sym (s:CoqSymbol.sym): Symbol.sym = assert false (* TODO *)
   let fromCoq_Symbol_prefix (p:CoqSymbol.prefix) : Symbol.prefix = assert false (* TODO *)
@@ -99,9 +145,9 @@ module CHERIMorello : Memory = struct
   let fromCoq_floatingType (s:CoqCtype.floatingType) : floatingType = assert false (* TODO *)
 
   (* OCaml -> Coq type conversion *)
+  let toCoq_location (l:Location_ocaml.t): CoqLocation.location_ocaml = assert false (* TODO *)
   let toCoq_thread_id (tid:thread_id) : MM.thread_id = assert false (* TODO *)
   let toCoq_ctype (ty:Ctype.ctype) : CoqCtype.ctype = assert false (* TODO *)
-  let toCoq_location (l:Location_ocaml.t): CoqLocation.location_ocaml = assert false (* TODO *)
   let toCoq_Symbol_prefix (p:Symbol.prefix) : CoqSymbol.prefix = assert false (* TODO *)
   let toCoq_Symbol_sym (s:Symbol.sym): CoqSymbol.sym = assert false (* TODO *)
   let toCoq_integerType (t:Ctype.integerType): CoqCtype.integerType = assert false (* TODO *)
