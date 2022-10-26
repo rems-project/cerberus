@@ -502,7 +502,6 @@ let it_to_coq ctxt ci it =
     | bt -> fail "eq_of" (BaseTypes.pp bt)
   in
   let rec f bool_eq_prop t =
-    let t = unfold_if_possible ctxt t in
     let aux t = f bool_eq_prop t in
     let abinop s x y = parensM (build [aux x; rets s; aux y]) in
     let with_is_true x = if bool_eq_prop && BaseTypes.equal (IT.bt t) BaseTypes.Bool
