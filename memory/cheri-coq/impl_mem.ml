@@ -93,15 +93,13 @@ module CHERIMorello : Memory = struct
       pos_cnum = Z.to_int lp.pos_cnum;
     }
 
-  let from_Coq_location_cursor (lc:CoqLocation.location_cursor) : Location_ocaml.cursor =
-    match lc with
+  let from_Coq_location_cursor: CoqLocation.location_cursor -> Location_ocaml.cursor = function
     | NoCursor -> NoCursor
     | PointCursor lp -> PointCursor (fromCoq_lexing_position lp)
     | RegionCursor (lp1,lp2) -> RegionCursor (fromCoq_lexing_position lp1,fromCoq_lexing_position lp2)
 
   (* Coq -> OCaml type conversion *)
-  let fromCoq_location (l:CoqLocation.location_ocaml): Location_ocaml.t =
-    match l with
+  let fromCoq_location: CoqLocation.location_ocaml -> Location_ocaml.t = function
     | Loc_unknown -> Location_ocaml.unknown
     | Loc_other s -> Location_ocaml.other s
     | Loc_point p -> Location_ocaml.point (fromCoq_lexing_position p)
@@ -110,29 +108,50 @@ module CHERIMorello : Memory = struct
                                 (List.map (fun (lp1,lp2) -> (fromCoq_lexing_position lp1,fromCoq_lexing_position lp2)) ps)
                                 (from_Coq_location_cursor lc)
 
-  let fromCoq_mem_error (e:MM.mem_error) : mem_error =
-    assert false (* TODO *)
-  (*
-    match e with
+  let fromCoq_access_kind: MM.access_kind -> access_kind = function
+    | LoadAccess -> LoadAccess
+    | StoreAccess -> StoreAccess
+
+  let fromCoq_access_error: MM.access_error -> access_error = function
+    | NullPtr        -> NullPtr
+    | FunctionPtr    -> FunctionPtr
+    | DeadPtr        -> DeadPtr
+    | OutOfBoundPtr  -> OutOfBoundPtr
+    | NoProvPtr      -> NoProvPtr
+    | AtomicMemberof -> AtomicMemberof
+
+  let from_Coq_vip_error (_:MM.vip_error) : vip_error =
+    failwith "vip_error not supported in cheri-coq memory model"
+
+  let from_Coq_mem_cheri_error: MM.mem_cheri_error -> mem_cheri_error = function
+    | CheriErrDecodingCap -> CheriErrDecodingCap
+    | CheriMerrInvalidCap -> CheriMerrInvalidCap
+    | CheriMerrUnsufficientPermissions -> CheriMerrUnsufficientPermissions
+    | CheriBoundsErr (((b, s), a), l) -> CheriBoundsErr ((b, s), a, l)
+
+  let from_Coq_free_error: MM.free_error -> free_error = function
+    | Free_static_allocation -> Free_static_allocation
+    | Free_dead_allocation -> Free_dead_allocation
+    | Free_out_of_bound -> Free_out_of_bound
+
+  let fromCoq_mem_error: MM.mem_error -> mem_error = function
     | MerrOutsideLifetime s -> MerrOutsideLifetime s
     | MerrInternal s -> MerrInternal s
     | MerrOther s -> MerrOther s
     | MerrPtrdiff -> MerrPtrdiff
-    | MerrAccess of CoqLocation.location_ocaml * MM.access_kind *
-                      MM.access_error
-    | MerrWriteOnReadOnly of bool * CoqLocation.location_ocaml
-    | MerrReadUninit of CoqLocation.location_ocaml
-    | MerrUndefinedFree of CoqLocation.location_ocaml * MM.free_error
-    | MerrUndefinedRealloc
-    | MerrIntFromPtr of CoqLocation.location_ocaml
-    | MerrPtrFromInt
-    | MerrPtrComparison
-    | MerrArrayShift of CoqLocation.location_ocaml
-    | MerrFreeNullPtr of CoqLocation.location_ocaml
-    | MerrWIP of string
-    | MerrVIP of MM.vip_error
-    | MerrCHERI of CoqLocation.location_ocaml * MM.mem_cheri_error
-   *)
+    | MerrAccess (l,k,e) -> MerrAccess (fromCoq_location l, fromCoq_access_kind k, fromCoq_access_error e)
+    | MerrWriteOnReadOnly (b,l) -> MerrWriteOnReadOnly (b,fromCoq_location l)
+    | MerrReadUninit l -> MerrReadUninit (fromCoq_location l)
+    | MerrUndefinedFree (l,e) -> MerrUndefinedFree (fromCoq_location l, from_Coq_free_error e)
+    | MerrUndefinedRealloc -> MerrUndefinedRealloc
+    | MerrIntFromPtr l -> MerrIntFromPtr (fromCoq_location l)
+    | MerrPtrFromInt -> MerrPtrFromInt
+    | MerrPtrComparison -> MerrPtrComparison
+    | MerrArrayShift l -> MerrArrayShift (fromCoq_location l)
+    | MerrFreeNullPtr l -> MerrFreeNullPtr (fromCoq_location l)
+    | MerrWIP s -> MerrWIP s
+    | MerrVIP e -> MerrVIP (from_Coq_vip_error e)
+    | MerrCHERI (l, e) -> MerrCHERI (fromCoq_location l, from_Coq_mem_cheri_error e)
 
   let fromCoq_undefined_behaviour (u:CoqUndefined.undefined_behaviour) : Undefined.undefined_behaviour = assert false (* TODO *)
   let fromCoq_Symbol_sym (s:CoqSymbol.sym): Symbol.sym = assert false (* TODO *)
