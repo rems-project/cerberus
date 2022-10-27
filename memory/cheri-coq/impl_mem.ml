@@ -98,7 +98,7 @@ module CHERIMorello : Memory = struct
       pos_cnum = Z.to_int lp.pos_cnum;
     }
 
-  let from_Coq_location_cursor: CoqLocation.location_cursor -> Location_ocaml.cursor = function
+  let fromCoq_location_cursor: CoqLocation.location_cursor -> Location_ocaml.cursor = function
     | NoCursor -> NoCursor
     | PointCursor lp -> PointCursor (fromCoq_lexing_position lp)
     | RegionCursor (lp1,lp2) -> RegionCursor (fromCoq_lexing_position lp1,fromCoq_lexing_position lp2)
@@ -108,10 +108,10 @@ module CHERIMorello : Memory = struct
     | Loc_unknown -> Location_ocaml.unknown
     | Loc_other s -> Location_ocaml.other s
     | Loc_point p -> Location_ocaml.point (fromCoq_lexing_position p)
-    | Loc_region (lp1,lp2,lc) -> Location_ocaml.region (fromCoq_lexing_position lp1,fromCoq_lexing_position lp2) (from_Coq_location_cursor lc)
+    | Loc_region (lp1,lp2,lc) -> Location_ocaml.region (fromCoq_lexing_position lp1,fromCoq_lexing_position lp2) (fromCoq_location_cursor lc)
     | Loc_regions (ps, lc) -> Location_ocaml.regions
                                 (List.map (fun (lp1,lp2) -> (fromCoq_lexing_position lp1,fromCoq_lexing_position lp2)) ps)
-                                (from_Coq_location_cursor lc)
+                                (fromCoq_location_cursor lc)
 
   let fromCoq_access_kind: MM.access_kind -> access_kind = function
     | LoadAccess -> LoadAccess
@@ -512,8 +512,31 @@ module CHERIMorello : Memory = struct
 
 
   (* OCaml -> Coq type conversion *)
-  let toCoq_location (l:Location_ocaml.t): CoqLocation.location_ocaml = assert false (* TODO *)
-  let toCoq_thread_id (tid:thread_id) : MM.thread_id = assert false (* TODO *)
+  let toCoq_thread_id (tid:thread_id) : MM.thread_id = Z.of_int tid
+
+  let toCoq_lexing_position (lp:Lexing.position): CoqLocation.lexing_position =
+    {
+      pos_fname = lp.pos_fname;
+      pos_lnum = Z.of_int lp.pos_lnum;
+      pos_bol = Z.of_int lp.pos_bol;
+      pos_cnum = Z.of_int lp.pos_cnum;
+    }
+
+  let toCoq_location_cursor: Location_ocaml.cursor -> CoqLocation.location_cursor = function
+    | NoCursor -> NoCursor
+    | PointCursor lp -> PointCursor (toCoq_lexing_position lp)
+    | RegionCursor (lp1,lp2) -> RegionCursor (toCoq_lexing_position lp1, toCoq_lexing_position lp2)
+
+  let toCoq_location (l:Location_ocaml.t): CoqLocation.location_ocaml =
+    match (Location_ocaml.to_raw l) with
+    | Loc_unknown -> Loc_unknown
+    | Loc_other s -> Loc_other s
+    | Loc_point p -> Loc_point (toCoq_lexing_position p)
+    | Loc_region (lp1,lp2,lc) -> Loc_region (toCoq_lexing_position lp1, toCoq_lexing_position lp2,toCoq_location_cursor lc)
+    | Loc_regions (ps, lc) -> Loc_regions
+                                ((List.map (fun (lp1,lp2) -> (toCoq_lexing_position lp1, toCoq_lexing_position lp2)) ps),
+                                 toCoq_location_cursor lc)
+
   let toCoq_ctype (ty:Ctype.ctype) : CoqCtype.ctype = assert false (* TODO *)
   let toCoq_Symbol_prefix (p:Symbol.prefix) : CoqSymbol.prefix = assert false (* TODO *)
   let toCoq_Symbol_sym (s:Symbol.sym): CoqSymbol.sym = assert false (* TODO *)
