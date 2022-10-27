@@ -640,9 +640,6 @@ end
 
 
 
-let unconstrained_lvar loc infos lvar = 
-  let (loc, odescr) = SymMap.find lvar infos in
-  fail (fun _ -> {loc; msg = Unconstrained_logical_variable (lvar, odescr)})
 
 
 

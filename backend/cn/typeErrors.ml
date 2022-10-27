@@ -116,15 +116,12 @@ type message =
 
   | Missing_resource_request of {orequest : RET.t option; situation : situation; oinfo : info option; ctxt : Context.t; model: Solver.model_with_q; trace: Trace.t }
   | Merging_multiple_arrays of {orequest : RET.t option; situation : situation; oinfo : info option; ctxt : Context.t; model: Solver.model_with_q }
-  | Resource_mismatch of {has: RE.t; expect: RE.t; situation : situation; ctxt : Context.t; model : Solver.model_with_q }
-  | Uninitialised_read of {ctxt : Context.t; model : Solver.model_with_q}
   | Unused_resource of {resource: RE.t; ctxt : Context.t; model : Solver.model_with_q; trace : Trace.t}
   | Number_members of {has: int; expect: int}
   | Number_arguments of {has: int; expect: int}
   | Number_input_arguments of {has: int; expect: int}
   | Number_output_arguments of {has: int; expect: int}
   | Mismatch of { has: doc; expect: doc; }
-  | Mismatch_lvar of { has: LS.t; expect: LS.t; spec_info: info}
   | Illtyped_it : {context: IT.t; it: IT.t; has: LS.t; expected: string; ctxt : Context.t} -> message (* 'expected' as in Kayvan's Core type checker *)
   | Illtyped_it' : {it: IT.t; has: LS.t; expected: string} -> message (* 'expected' as in Kayvan's Core type checker *)
   | NIA : {context: IT.t; it: IT.t; hint : string; ctxt : Context.t} -> message
@@ -132,18 +129,13 @@ type message =
   | NegativeExponent : {context: IT.t; it: IT.t; ctxt : Context.t} -> message
   | Polymorphic_it : 'bt IndexTerms.term -> message
   | Write_value_unrepresentable of {ct: Sctypes.t; location: IT.t; value: IT.t; ctxt : Context.t; model : Solver.model_with_q }
-  | Write_value_bad of {ct: Sctypes.t; location: IT.t; value: IT.t; ctxt : Context.t; model : Solver.model_with_q }
   | Int_unrepresentable of {value : IT.t; ict : Sctypes.t; ctxt : Context.t; model : Solver.model_with_q}
   | Unsat_constraint of {constr : LC.t; info : info; ctxt : Context.t; model : Solver.model_with_q; trace : Trace.t}
-  | Unconstrained_logical_variable of Sym.t * string option
-  | Array_as_value of Sym.t * string option
-  | Logical_variable_not_good_for_unification of Sym.t * string option
 
   | Undefined_behaviour of {ub : CF.Undefined.undefined_behaviour; ctxt : Context.t; model : Solver.model_with_q}
   | Implementation_defined_behaviour of document * state_report
   | Unspecified of CF.Ctype.ctype
   | StaticError of {err : string; ctxt : Context.t; model : Solver.model_with_q}
-  | No_quantified_constraints of {to_check: IT.t; ctxt: Context.t; model : Solver.model_with_q}
   | Generic of Pp.document
   | Generic_with_model of {err : Pp.document; model : Solver.model_with_q; ctxt : Context.t}
 
@@ -264,23 +256,6 @@ let pp_message te =
      let descr = missing_or_bad_request_description oinfo orequest explanation in
      let state = Explain.state ctxt explanation model orequest in
      { short; descr = descr; state = Some state; trace = None }
-  | Resource_mismatch {has; expect; situation; ctxt; model} ->
-     let short = !^"Resource mismatch" ^^^ for_situation situation in
-     let relevant = IT.SymSet.union (RE.free_vars has) (RE.free_vars expect) in
-     let explanation = Explain.explanation ctxt relevant in
-     let has = RE.pp (RE.subst explanation.substitution has) in
-     let expect = RE.pp (RE.subst explanation.substitution expect) in
-     let state = Explain.state ctxt explanation model None in
-     let descr =
-       !^"Need a resource" ^^^ squotes expect ^^^
-         !^"but have resource" ^^^ squotes has
-     in
-     { short; descr = Some descr; state = Some state; trace = None }
-  | Uninitialised_read {ctxt; model} ->
-     let short = !^"Trying to read uninitialised data" in
-     let explanation = Explain.explanation ctxt IT.SymSet.empty in
-     let state = Explain.state ctxt explanation model None in
-     { short; descr = None; state = Some state; trace = None }
   | Unused_resource {resource; ctxt; model; trace} ->
      let explanation = Explain.explanation ctxt (RE.free_vars resource) in
      let resource = RE.pp (RE.subst explanation.substitution resource) in
@@ -321,20 +296,6 @@ let pp_message te =
      let descr =
        !^"Expected value of type" ^^^ squotes expect ^^^
          !^"but found value of type" ^^^ squotes has
-     in
-     { short; descr = Some descr; state = None; trace = None }
-  | Mismatch_lvar { has; expect; spec_info} ->
-     let short = !^"Type error" in
-     let descr =
-       let (spec_loc, ospec_descr) = spec_info in
-       let (head, _) = Locations.head_pos_of_location spec_loc in
-       !^"Expected value of type" ^^^ squotes (LS.pp expect) ^^^
-         !^"for logical variable from" ^^^ !^head ^^^
-           (match ospec_descr with
-            | Some descr -> parens !^descr ^^ space
-            | None -> Pp.empty
-           ) ^^
-             !^"but found value of type" ^^^ squotes (LS.pp has)
      in
      { short; descr = Some descr; state = None; trace = None }
   | Illtyped_it {context; it; has; expected; ctxt} ->
@@ -415,23 +376,6 @@ let pp_message te =
        !^"value" ^^ colon ^^^ value ^^ dot
      in
      { short; descr = Some descr; state = Some state; trace = None }
-  | Write_value_bad {ct; location; value; ctxt; model} ->
-     let short =
-       !^"Bad write value: the value is not representable at type" ^^^
-         Sctypes.pp ct ^^^ !^"or is a misaligned pointer value"
-     in
-     let explanation =
-       Explain.explanation ctxt
-         (IT.free_vars_list [value; location])
-     in
-     let location = IT.pp (IT.subst explanation.substitution location) in
-     let value = IT.pp (IT.subst explanation.substitution value) in
-     let state = Explain.state ctxt explanation model None in
-     let descr =
-       !^"Location" ^^ colon ^^^ location ^^ comma ^^^
-       !^"value" ^^ colon ^^^ value ^^ dot
-     in
-     { short; descr = Some descr; state = Some state; trace = None }
   | Int_unrepresentable {value; ict; ctxt; model} ->
      let short =
        !^"integer value not representable at type" ^^^
@@ -456,39 +400,6 @@ let pp_message te =
      in
      let trace_doc = Trace.format_ctxt_logical_trace (fst model) ctxt in
      { short; descr = Some descr; state = Some state; trace = Some trace_doc }
-  | Unconstrained_logical_variable (name, odescr) ->
-     let short = !^"Problematic specification" in
-     let descr = match odescr with
-       | Some descr ->
-          !^"Unconstrained logical variable" ^^^
-            squotes (Sym.pp name) ^^^ parens !^descr
-       | None ->
-          !^"Unconstrained logical variable" ^^^
-            squotes (Sym.pp name)
-     in
-     { short; descr = Some descr; state = None; trace = None }
-  | Array_as_value (name, odescr) ->
-     let short = !^"Problematic specification" in
-     let descr = match odescr with
-       | Some descr ->
-          !^"Cannot use array" ^^^ squotes (Sym.pp name) ^^^
-            !^"as value" ^^^ parens !^descr
-       | None ->
-          !^"Cannot use array" ^^^ squotes (Sym.pp name) ^^^
-            !^"as value"
-     in
-     { short; descr = Some descr; state = None; trace = None }
-  | Logical_variable_not_good_for_unification (name, odescr) ->
-     let short = !^"Problematic specification" in
-     let descr = match odescr with
-       | Some descr ->
-          !^"Logical variable not soluble by unification" ^^^
-            squotes (Sym.pp name) ^^^ parens (!^descr)
-       | None ->
-          !^"Logical variable not soluble by unification" ^^^
-            squotes (Sym.pp name)
-     in
-     { short; descr = Some descr; state = None; trace = None }
   | Undefined_behaviour {ub; ctxt; model} ->
      let short = !^"Undefined behaviour" in
      let explanation = Explain.explanation ctxt IT.SymSet.empty in
@@ -508,13 +419,6 @@ let pp_message te =
      let state = Explain.state ctxt explanation model None in
      let descr = !^err in
      { short; descr = Some descr; state = Some state; trace = None }
-  | No_quantified_constraints {to_check; ctxt; model} ->
-     let short = !^"Found no quantified constraints containing this fact" in
-     let explanation = Explain.explanation ctxt (IT.free_vars to_check) in
-     let state = Explain.state ctxt explanation model None in
-     let descr = None in
-       (* parens (!^"to check:" ^^^ IT.pp (IT.subst explanation.substitution to_check)) *)
-     { short; descr = descr; state = Some state; trace = None }
   | Generic err ->
      let short = err in
      { short; descr = None; state = None; trace = None }
