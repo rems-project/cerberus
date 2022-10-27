@@ -1084,6 +1084,8 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
       (k: lvt -> (unit, type_error) m)
     : (unit, type_error) m =
   let (M_Expr (loc, _annots, e_)) = e in
+  let@ () = add_loc_trace loc in
+  let@ locs = get_loc_trace () in
   let@ () = print_with_ctxt (fun ctxt ->
        debug 3 (lazy (action "inferring expression"));
        debug 3 (lazy (item "expr" (group (NewMu.pp_expr e))));
@@ -1535,19 +1537,11 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
 
 
 
-and check_expr_in locs labels ~(typ:BT.t orFalse) (e : 'bty mu_expr) 
-      (k: lvt -> (unit, type_error) m)
-    : (unit, type_error) m =
-  let@ loc_trace = get_loc_trace () in
-  in_loc_trace (locs @ loc_trace) (fun () -> 
-      check_expr labels ~typ e k
-    )
-
-
 let check_expr_rt loc labels ~typ e = 
+  let@ () = add_loc_trace loc in
   match typ with
   | Normal (RT.Computational ((return_s, return_bt), info, lrt)) ->
-     check_expr_in [loc] labels ~typ:(Normal return_bt) e (fun returned_lvt ->
+     check_expr labels ~typ:(Normal return_bt) e (fun returned_lvt ->
          let lrt = LRT.subst (IT.make_subst [(return_s, returned_lvt)]) lrt in
          let@ original_resources = all_resources_tagged () in
          Spine.subtype loc lrt (fun () ->
@@ -1555,7 +1549,7 @@ let check_expr_rt loc labels ~typ e =
          return ())
        )
   | False ->
-     check_expr_in [loc] labels ~typ:False e (fun _ -> assert false)
+     check_expr labels ~typ:False e (fun _ -> assert false)
 
 
 

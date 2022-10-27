@@ -368,6 +368,10 @@ let set_loc_trace tr =
   let@ c = get () in
   set ({c with location_trace = tr})
 
+let add_loc_trace loc = 
+  let@ locs = get_loc_trace () in
+  set_loc_trace (loc :: locs)
+
 let in_loc_trace tr f =
   let@ prev_tr = get_loc_trace () in
   let@ _ = set_loc_trace tr in
