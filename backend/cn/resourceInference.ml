@@ -263,22 +263,26 @@ module General = struct
 
 
   (* similar to bind_logical in check.ml *)
-  let rec unpack_packing_ft loc ftyp = begin match ftyp with
-    | LAT.Resource ((s, (resource, bt)), _, ftyp) ->
-      let s, ftyp = LAT.alpha_rename OutputDef.subst (s, bt) ftyp in
-      let@ () = add_l s bt (loc, lazy (Pp.item "output bound resource" (Sym.pp s))) in
-      let@ () = add_r (resource, O (sym_ (s, bt))) in
-      unpack_packing_ft loc ftyp
-    | Define ((s, it), _, ftyp) ->
-      let ftyp = LAT.subst OutputDef.subst (IT.make_subst [(s, it)]) ftyp in
-      unpack_packing_ft loc ftyp
-    | Constraint (c, _, ftyp) ->
-      let@ () = add_c c in
-      unpack_packing_ft loc ftyp
-    | I output_def ->
-      return output_def
-    end
-
+  let unpack_packing_ft loc pname ftyp = 
+    let record_s = Sym.fresh_make_uniq ("auto_" ^ TypeErrors.call_prefix (UnpackPredicate pname)) in
+    let record = sym_ (record_s, BT.Record (LAT.record_bt (fun _output_def -> []) ftyp)) in
+    let@ () = add_l record_s (IT.bt record) (loc, lazy (Sym.pp record_s)) in
+    let rec aux = function
+      | LAT.Resource ((s, (resource, bt)), _, ftyp) ->
+         let t = recordMember_ ~member_bt:bt (record, s) in
+         let@ () = add_r (resource, O t) in
+         aux (LAT.subst OutputDef.subst (IT.make_subst [(s, t)]) ftyp)
+      | LAT.Define ((s, it), _, ftyp) ->
+         let t = recordMember_ ~member_bt:(IT.bt it) (record, s) in
+         let@ () = add_c (LC.t_ (eq_ (t, it))) in
+         aux (LAT.subst OutputDef.subst (IT.make_subst [(s, t)]) ftyp)
+      | LAT.Constraint (c, _, ftyp) ->
+         let@ () = add_c c in
+         aux ftyp
+      | LAT.I output_def ->
+         return output_def
+    in
+    aux ftyp
 
   (* TODO: check that oargs are in the same order? *)
   let rec predicate_request ~recursive loc uiinfo (requested : RET.predicate_type) =
@@ -1042,7 +1046,7 @@ module General = struct
       | None -> return false
       | Some (res2, O res_oargs) ->
         assert (ResourceTypes.equal (P res2) (P r_pt));
-        let@ unpack_oargs = unpack_packing_ft loc clause.ResourcePredicates.packing_ft in
+        let@ unpack_oargs = unpack_packing_ft loc pname clause.ResourcePredicates.packing_ft in
         let eq = IT.eq_ (res_oargs, OutputDef.to_record unpack_oargs) in
         let@ () = add_c (LC.t_ eq) in
         return true
