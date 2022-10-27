@@ -656,8 +656,52 @@ module CHERIMorello : Memory = struct
     | Struct s -> Struct (toCoq_Symbol_sym s)
     | Union s -> Union (toCoq_Symbol_sym s)
 
-  let toCoq_derivecap_op (o:Mem_common.derivecap_op) : MM.derivecap_op = assert false (* TODO *)
-  let toCoq_ionteger_operator (iop:Mem_common.integer_operator) : MM.integer_operator = assert false (* TODO *)
+  let toCoq_unaryOperator: AilSyntax.unaryOperator -> CoqAilSyntax.unaryOperator = function
+    | Plus        -> Plus
+    | Minus       -> Minus
+    | Bnot        -> Bnot
+    | Address     -> Address
+    | Indirection -> Indirection
+    | PostfixIncr -> PostfixIncr
+    | PostfixDecr -> PostfixDecr
+
+  let toCoq_arithmeticOperator: AilSyntax.arithmeticOperator -> CoqAilSyntax.arithmeticOperator = function
+    | Mul  -> Mul
+    | Div  -> Div
+    | Mod  -> Mod
+    | Add  -> Add
+    | Sub  -> Sub
+    | Shl  -> Shl
+    | Shr  -> Shr
+    | Band -> Band
+    | Bxor -> Bxor
+    | Bor  -> Bor
+
+  let toCoq_binaryOperator : AilSyntax.binaryOperator -> CoqAilSyntax.binaryOperator = function
+    | Arithmetic ao -> Arithmetic (toCoq_arithmeticOperator ao)
+    | Comma ->Comma
+    | And   ->And
+    | Or    ->Or
+    | Lt    ->Lt
+    | Gt    ->Gt
+    | Le    ->Le
+    | Ge    ->Ge
+    | Eq    ->Eq
+    | Ne    ->Ne
+
+  let toCoq_derivecap_op: Mem_common.derivecap_op -> MM.derivecap_op = function
+    | DCunary uo -> DCunary (toCoq_unaryOperator uo)
+    | DCbinary bo -> DCbinary (toCoq_binaryOperator bo)
+
+  let toCoq_integer_operator: Mem_common.integer_operator -> MM.integer_operator = function
+  | IntAdd   -> IntAdd
+  | IntSub   -> IntSub
+  | IntMul   -> IntMul
+  | IntDiv   -> IntDiv
+  | IntRem_t -> IntRem_t
+  | IntRem_f -> IntRem_f
+  | IntExp   -> IntExp
+
   let toCoq_SymMap (m:(Symbol.sym, Ctype.tag_definition) Pmap.map) : CoqCtype.tag_definition CoqSymbol.SymMap.t  = assert false (* TODO *)
   let toCoq_floating_operator (fop:Mem_common.floating_operator) : MM.floating_operator = assert false (* TODO *)
 
@@ -916,7 +960,7 @@ module CHERIMorello : Memory = struct
   let min_ival ity = lift_coq_serr @@ MM.min_ival (toCoq_integerType ity)
 
   let op_ival iop v1 v2 =
-    MM.op_ival (toCoq_ionteger_operator iop) v1 v2
+    MM.op_ival (toCoq_integer_operator iop) v1 v2
 
   let offsetof_ival tagDefs tag_sym memb_ident =
     lift_coq_serr (MM.offsetof_ival
