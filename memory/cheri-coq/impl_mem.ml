@@ -708,7 +708,35 @@ module CHERIMorello : Memory = struct
     | FloatMul -> FloatMul
     | FloatDiv -> FloatDiv
 
-  let toCoq_SymMap (m:(Symbol.sym, Ctype.tag_definition) Pmap.map) : CoqCtype.tag_definition CoqSymbol.SymMap.t  = assert false (* TODO *)
+  let toCoq_flexible_array_member: Ctype.flexible_array_member -> CoqCtype.flexible_array_member = function
+    | FlexibleArrayMember (attr,sym, q, cty) ->
+       FlexibleArrayMember (toCoq_attributes attr,
+                            toCoq_Symbol_identifier sym,
+                            toCoq_qualifiers q,
+                            toCoq_ctype cty)
+
+  let toCoq_tag_definition: Ctype.tag_definition -> CoqCtype.tag_definition = function
+    | StructDef (l, f)
+      -> StructDef (List.map (fun (sym,(attr,q,cty)) ->
+                        (toCoq_Symbol_identifier sym,
+                         ((toCoq_attributes attr,
+                           toCoq_qualifiers q),
+                          toCoq_ctype cty))) l,
+                    Option.map toCoq_flexible_array_member f)
+    | UnionDef l ->
+       UnionDef
+         (List.map (fun (s,(attr,q,cty)) ->
+              (toCoq_Symbol_identifier s,
+               ( (toCoq_attributes attr,
+                  toCoq_qualifiers q),
+                 toCoq_ctype cty))
+            ) l)
+
+  (* very inefficient! *)
+  let toCoq_SymMap (m:(Symbol.sym, Ctype.tag_definition) Pmap.map) : CoqCtype.tag_definition CoqSymbol.SymMap.t =
+    let l = Pmap.bindings_list m in
+    let (e:CoqCtype.tag_definition CoqSymbol.SymMap.t) = CoqSymbol.SymMap.empty in
+    List.fold_left (fun m (s,d) -> CoqSymbol.SymMap.add (toCoq_Symbol_sym s) (toCoq_tag_definition d) m) e l
 
   (* Intrinisics *)
   let fromCoq_type_predicate: MM.type_predicate -> type_predicate = function
