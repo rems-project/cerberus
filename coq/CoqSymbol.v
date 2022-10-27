@@ -9,9 +9,10 @@ Require Import Coq.Structures.OrderedTypeEx.
 
 Require Import StructTact.StructTactics.
 Require Import Lia.
+Require Import CoqLocation.
 
 Inductive identifier : Type :=
-  | Identifier:  unit  ->  string  -> identifier .
+  | Identifier:  location_ocaml  ->  string  -> identifier .
 
 Definition ident_equal (a b: identifier) : bool :=
   match a, b with
@@ -25,7 +26,7 @@ Inductive symbol_description : Type :=
   | SD_Id:  string  -> symbol_description
   | SD_ObjectAddress:  string  -> symbol_description
   | SD_Return: symbol_description
-  | SD_FunArg: unit  ->   nat  -> symbol_description .
+  | SD_FunArg: location_ocaml ->  nat  -> symbol_description .
 
 (* Symbolic identifiers *)
 Inductive sym : Set :=
@@ -393,12 +394,12 @@ Definition show_raw  (s : sym )  : string :=
 
 (* Location prefix *)
 Inductive prefix : Type :=
-  | PrefSource:  unit  ->  list  sym  -> prefix
-  | PrefFunArg:  unit  ->  digest  ->  Z  -> prefix
-  | PrefStringLiteral:  unit  ->  digest  -> prefix
-  | PrefCompoundLiteral:  unit  ->  digest  -> prefix
+  | PrefSource:  location_ocaml  ->  list  sym  -> prefix
+  | PrefFunArg:  location_ocaml  ->  digest  ->  Z  -> prefix
+  | PrefStringLiteral:  location_ocaml  ->  digest  -> prefix
+  | PrefCompoundLiteral:  location_ocaml  ->  digest  -> prefix
   | PrefMalloc: prefix
-| PrefOther:  string  -> prefix .
+  | PrefOther:  string  -> prefix .
 
 
 (* Definition string_of_prefix (p:prefix) : string := "". (* TODO *) *)

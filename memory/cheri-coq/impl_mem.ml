@@ -383,9 +383,27 @@ module CHERIMorello : Memory = struct
     | UB_CHERI_UnsufficientPermissions                     -> UB_CHERI_UnsufficientPermissions
     | UB_CHERI_BoundsViolation                             -> UB_CHERI_BoundsViolation
 
-  let fromCoq_Symbol_sym (s:CoqSymbol.sym): Symbol.sym = assert false (* TODO *)
-  let fromCoq_Symbol_prefix (p:CoqSymbol.prefix) : Symbol.prefix = assert false (* TODO *)
-  let fromCoq_Symbol_identifier (id:CoqSymbol.identifier) : Symbol.identifier = assert false (* TODO *)
+  let fromCoq_Symbol_description: CoqSymbol.symbol_description -> Symbol.symbol_description = function
+    | SD_None -> SD_None
+    | SD_Id s -> SD_Id s
+    | SD_ObjectAddress s -> SD_ObjectAddress s
+    | SD_Return -> SD_Return
+    | SD_FunArg (l,v) -> SD_FunArg (fromCoq_location l, Z.to_int v)
+
+  let fromCoq_Symbol_sym: CoqSymbol.sym -> Symbol.sym = function
+    | Symbol (d,v,desc) -> Symbol (d,Z.to_int v, fromCoq_Symbol_description desc)
+
+  let fromCoq_Symbol_prefix: CoqSymbol.prefix -> Symbol.prefix = function
+    | PrefSource (loc, sl) -> PrefSource (fromCoq_location loc, List.map fromCoq_Symbol_sym sl)
+    | PrefFunArg (l, d, v) -> PrefFunArg (fromCoq_location l, d, Z.to_int v)
+    | PrefStringLiteral (l,d) -> PrefStringLiteral (fromCoq_location l, d)
+    | PrefCompoundLiteral (l,d) ->  PrefCompoundLiteral (fromCoq_location l, d)
+    | PrefMalloc -> PrefMalloc
+    | PrefOther s -> PrefOther s
+
+  let fromCoq_Symbol_identifier: CoqSymbol.identifier -> Symbol.identifier = function
+    | Identifier (l,s) -> Identifier (fromCoq_location l, s)
+
   let fromCoq_ctype (ty:CoqCtype.ctype) : Ctype.ctype = assert false (* TODO *)
   let fromCoq_intrinsics_signature (s:MM.intrinsics_signature) : Mem_common.intrinsics_signature = assert false (* TODO *)
   let fromCoq_ovelap_status (s:MM.overlap_status) : overlap_status = assert false (* TODO *)
