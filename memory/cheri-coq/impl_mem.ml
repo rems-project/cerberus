@@ -499,8 +499,12 @@ module CHERIMorello : Memory = struct
     | Struct s -> Struct (fromCoq_Symbol_sym s)
     | Union s -> Union (fromCoq_Symbol_sym s)
 
+  let fromCoq_ovelap_status: MM.overlap_status -> overlap_status = function
+    | Disjoint -> Disjoint
+    | ExactOverlap -> ExactOverlap
+    | PartialOverlap -> PartialOverlap
+
   let fromCoq_intrinsics_signature (s:MM.intrinsics_signature) : Mem_common.intrinsics_signature = assert false (* TODO *)
-  let fromCoq_ovelap_status (s:MM.overlap_status) : overlap_status = assert false (* TODO *)
 
   (* OCaml -> Coq type conversion *)
   let toCoq_location (l:Location_ocaml.t): CoqLocation.location_ocaml = assert false (* TODO *)
