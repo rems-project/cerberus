@@ -85,6 +85,11 @@ module CHERIMorello : Memory = struct
   let return = Nondeterminism.nd_return
   let bind = Nondeterminism.nd_bind
 
+  let lift_coq_serr (s: (string, 'a) Datatypes.sum): 'a =
+    match s with
+    | Coq_inl errs -> failwith errs
+    | Coq_inr v -> v
+
   let fromCoq_lexing_position (lp:CoqLocation.lexing_position): Lexing.position =
     {
       pos_fname = lp.pos_fname;
@@ -504,7 +509,7 @@ module CHERIMorello : Memory = struct
     | ExactOverlap -> ExactOverlap
     | PartialOverlap -> PartialOverlap
 
-  let fromCoq_intrinsics_signature (s:MM.intrinsics_signature) : Mem_common.intrinsics_signature = assert false (* TODO *)
+
 
   (* OCaml -> Coq type conversion *)
   let toCoq_location (l:Location_ocaml.t): CoqLocation.location_ocaml = assert false (* TODO *)
@@ -520,6 +525,26 @@ module CHERIMorello : Memory = struct
   let toCoq_floating_operator (fop:Mem_common.floating_operator) : MM.floating_operator = assert false (* TODO *)
   let toCoq_floatingType (fty:Ctype.floatingType) : CoqCtype.floatingType = assert false (* TODO *)
 
+  (* Intrinisics *)
+  let fromCoq_type_predicate: MM.type_predicate -> type_predicate = function
+    | TyPred f -> TyPred (fun cty ->
+                      lift_coq_serr (f (toCoq_ctype cty)))
+    | TyIsPointer -> TyIsPointer
+
+  let fromCoq_instrinsics_ret_spec: MM.instrinsics_ret_spec -> instrinsics_ret_spec =function
+    | ExactRet cty -> ExactRet (fromCoq_ctype cty)
+    | CopyRet n -> CopyRet (Z.to_int n)
+
+  let fromCoq_intrinsics_arg_spec: MM.intrinsics_arg_spec -> intrinsics_arg_spec = function
+    | ExactArg ct -> ExactArg (fromCoq_ctype ct)
+    | PolymorphicArg tpl -> PolymorphicArg (List.map fromCoq_type_predicate tpl)
+    | CopyArg n -> CopyArg (Z.to_int n)
+
+  let fromCoq_intrinsics_signature ((rsig,asigs):MM.intrinsics_signature) : Mem_common.intrinsics_signature =
+    (fromCoq_instrinsics_ret_spec rsig,
+     List.map fromCoq_intrinsics_arg_spec asigs)
+
+  (* memMerror *)
   let fromCoq_memMError (e:MM.memMError) : mem_error Nondeterminism.kill_reason =
     match e with
     | Other me -> Other (fromCoq_mem_error me)
@@ -535,11 +560,6 @@ module CHERIMorello : Memory = struct
            (NDkilled e', st')
         | (st',Coq_inr a) -> (NDactive a, st')
       )
-
-  let lift_coq_serr (s: (string, 'a) Datatypes.sum): 'a =
-    match s with
-    | Coq_inl errs -> failwith errs
-    | Coq_inr v -> v
 
   let check_overlap a b = fromCoq_ovelap_status (MM.check_overlap a b)
 
