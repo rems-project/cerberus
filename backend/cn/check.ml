@@ -1834,10 +1834,10 @@ let check mu_file =
   let@ () =
     PmapM.iterM
       (fun fsym (M_funinfo (loc, _attrs, ftyp, trusted, _has_proto)) ->
-        let lc1 = t_ (ne_ (null_, sym_ (fsym, Loc))) in
+        (* let lc1 = t_ (ne_ (null_, sym_ (fsym, Loc))) in *)
         let lc2 = t_ (representable_ (Pointer Void, sym_ (fsym, Loc))) in
         let@ () = add_l fsym Loc (loc, lazy (Pp.item "global fun-ptr" (Sym.pp fsym))) in
-        let@ () = add_cs [lc1; lc2] in
+        let@ () = add_cs [(* lc1; *) lc2] in
         add_fun_decl fsym (loc, ftyp, trusted)
       ) mu_file.mu_funinfo
   in
