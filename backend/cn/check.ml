@@ -931,8 +931,7 @@ end = struct
     let@ original_resources = all_resources_tagged () in
 
     let@ () =
-      let@ trace_length = get_trace_length () in
-      time_f_logs loc 9 "pre_inf_eqs" trace_length
+      time_f_logs loc 9 "pre_inf_eqs"
         (InferenceEqs.add_eqs_for_infer loc) ftyp
     in
 

@@ -755,7 +755,7 @@ let maybe_save_slow_problem solv_inst lc lc_t time solver = match save_slow_prob
     saved_slow_problem ();
     close_out channel
 
-let provable ~loc ~solver ~global ~trace_length ~assumptions ~pointer_facts lc = 
+let provable ~loc ~solver ~global ~assumptions ~pointer_facts lc = 
   debug 12 (lazy (item "provable: checking constraint" (LC.pp lc)));
   let context = solver.context in
   let structs = global.struct_decls in
@@ -770,7 +770,7 @@ let provable ~loc ~solver ~global ~trace_length ~assumptions ~pointer_facts lc =
        List.map (Translate.term context global) 
          (pointer_facts @ Translate.extra_assumptions assumptions qs) in
      let res = 
-       time_f_logs loc 5 "Z3(inc)" trace_length
+       time_f_logs loc 5 "Z3(inc)"
          (Z3.Solver.check solver.incremental) 
          (nlc :: assumptions) 
      in
@@ -781,7 +781,7 @@ let provable ~loc ~solver ~global ~trace_length ~assumptions ~pointer_facts lc =
         debug 5 (lazy (format [] "Z3(inc) unknown/timeout, running full solver"));
         let (elapsed, res) = 
           time_f_elapsed 
-            (time_f_logs loc 5 "Z3" trace_length
+            (time_f_logs loc 5 "Z3"
                (Z3.Solver.check solver.fancy))
             (nlc :: assumptions @ Z3.Solver.get_assertions solver.incremental)
         in

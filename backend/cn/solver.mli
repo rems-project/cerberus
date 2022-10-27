@@ -14,7 +14,6 @@ val provable :
   loc:Locations.t ->
   solver:solver -> 
   global:Global.t -> 
-  trace_length:int ->
   assumptions:Context.LCSet.t -> 
   pointer_facts:IndexTerms.t list ->
   LogicalConstraints.t -> 

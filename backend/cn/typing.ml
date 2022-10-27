@@ -11,7 +11,6 @@ type s = {
     sym_eqs : IT.t SymMap.t;
     equalities: bool ITPairMap.t;
     past_models : (Solver.model_with_q * Context.t) list;
-    trace_length : int;             (* for performance debugging *)
     step_trace : Trace.t;
   }
 
@@ -30,7 +29,6 @@ let run (c : Context.t) (m : ('a, 'e) t) : ('a, 'e) Resultat.t =
       sym_eqs; 
       equalities = ITPairMap.empty;
       past_models = []; 
-      trace_length = 0;
       step_trace = Trace.empty;
     } 
   in
@@ -99,11 +97,6 @@ let upd_models ms = fun s -> Ok ((), {s with past_models = ms})
 
 let drop_models () = upd_models []
 
-let get_trace_length () = 
-  fun s -> Ok (s.trace_length, s)
-
-let increase_trace_length () = 
-  fun s -> Ok ((), {s with trace_length = s.trace_length + 1})
 
 let get_step_trace () = fun s -> Ok (s.step_trace, s)
 
@@ -151,11 +144,10 @@ let all_resources () =
   return (Context.get_rs s)
 
 let make_provable loc =
-  fun {typing_context = s; solver; trace_length; _} -> 
+  fun {typing_context = s; solver; _} -> 
   let pointer_facts = Resources.pointer_facts (Context.get_rs s) in
   let f lc = 
     Solver.provable ~loc ~solver ~global:s.global 
-      ~trace_length
       ~assumptions:s.constraints
       ~pointer_facts lc 
   in
