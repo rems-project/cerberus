@@ -141,37 +141,75 @@ let fresh_call_with_prefix ~situation s =
      Sym.fresh ()
 
 
+(* check if the symbol 'sym' appears in a logical return type exactly one,
+   in an equality constraint that equates it to some rhs, where the rhs is
+   global (no vars defined in the return type). if so, return the rhs and
+   the remainder of the return type. *)
+let not_currently_used__is_eq_in_rt sym rt =
+  let rec extract = function
+  | LRT.Define ((s, it), oinfo, rt) ->
+    Option.map (fun (rhs, rt) -> (rhs, LRT.Define ((s, it), oinfo, rt)))
+        (extract rt)
+  | LRT.Resource ((s, (re, oarg_spec)), oinfo, rt) ->
+    Option.map (fun (rhs, rt) -> (rhs, LRT.Resource ((s, (re, oarg_spec)), oinfo, rt)))
+        (extract rt)
+  | LRT.Constraint (lc, oinfo, rt) ->
+    begin match LC.is_sym_lhs_equality lc with
+    | Some (s, rhs) when Sym.equal s sym -> Some (rhs, rt)
+    | _ ->
+      Option.map (fun (rhs, rt) -> (rhs, LRT.Constraint (lc, oinfo, rt)))
+          (extract rt)
+    end
+  | LRT.I -> None
+  in
+  match extract rt with
+  | None -> None
+  | Some (rhs, rt) ->
+    if SymSet.mem sym (IT.free_vars rhs)
+      || SymSet.mem sym (LRT.free_vars rt)
+      || SymSet.mem sym (LRT.bound rt)
+    then None else Some (rhs, rt)
 
 
-let bind_logical_return record = 
-  let rec aux = function
-  | LRT.Define ((s, it), oinfo, lrt) ->
-     let t = recordMember_ ~member_bt:(IT.bt it) (record, s) in
-     let@ () = add_c (LC.t_ (eq_ (t, it))) in
-     aux (LRT.subst (IT.make_subst [(s, t)]) lrt)
-  | LRT.Resource ((s, (re, oarg_spec)), _oinfo, lrt) -> 
-     let t = recordMember_ ~member_bt:oarg_spec (record, s) in
-     let@ () = add_r (re, O t) in
-     aux (LRT.subst (IT.make_subst [(s, t)]) lrt)
-  | LRT.Constraint (lc, _oinfo, lrt) -> 
+
+
+
+let rec bind_logical_return_of_call loc situation (lrt : LRT.t) = 
+  let fresh = fresh_call_with_prefix ~situation in
+  match lrt with
+  | Define ((s, it), oinfo, rt) ->
+     let s, rt = 
+       let s' = fresh s in
+       LRT.alpha_rename_ s' (s, IT.bt it) rt 
+     in
+     let@ () = add_l s (IT.bt it) (loc, lazy (Sym.pp s)) in
+     let@ () = add_c (LC.t_ (IT.def_ s it)) in
+     bind_logical_return_of_call loc situation rt
+  | Resource ((s, (re, oarg_spec)), _oinfo, rt) -> 
+     let s, rt = 
+       let s' = fresh s in
+       LRT.alpha_rename_ s' (s, oarg_spec) rt 
+     in
+     let@ () = add_l s oarg_spec (loc, lazy (Sym.pp s)) in
+     let@ () = add_r (re, O (sym_ (s, oarg_spec))) in
+     bind_logical_return_of_call loc situation rt
+  | Constraint (lc, _oinfo, rt) -> 
      let@ () = add_c lc in
-     aux lrt
+     bind_logical_return_of_call loc situation rt
   | I -> 
      return ()
+
+
+let bind_function_call_return_logically loc fsym (rt : RT.t) : (lvt, type_error) m =
+  let Computational ((s, bt), _oinfo, lrt) = rt in
+  let s, lrt = 
+    LRT.alpha_rename_ 
+      (fresh_call_with_prefix ~situation:(FunctionCall fsym) (Sym.fresh_description SD_Return)) 
+      (s, bt) lrt
   in
-  fun (lrt : LRT.t) -> aux lrt
-
-
-let bind_function_call_return loc fsym (rt : RT.t) : (lvt, type_error) m =
-  let record_s = Sym.fresh_make_uniq (TypeErrors.call_prefix (FunctionCall fsym)) in
-  let record = sym_ (record_s, BT.Record (RT.record_bt rt)) in
-  let@ () = add_l record_s (IT.bt record) (loc, lazy (Sym.pp record_s)) in
-  match rt with
-  |  Computational ((s, bt), _oinfo, lrt) ->
-      let lvt = IT.recordMember_ ~member_bt:bt (record, s) in
-      let lrt = LRT.subst (IT.make_subst [(s, lvt)]) lrt in
-      let@ () = bind_logical_return record lrt in
-      return lvt
+  let@ () = add_l s bt (loc, lazy (Sym.pp s)) in
+  let@ () = bind_logical_return_of_call loc (FunctionCall fsym) lrt in
+  return (sym_ (s, bt))
 
 
 
@@ -1285,7 +1323,7 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
      let@ (_loc, ft, _) = get_fun_decl loc fsym in
 
      Spine.calltype_ft loc ~fsym pes ft (fun rt ->
-     let@ lvt = bind_function_call_return loc fsym rt in
+     let@ lvt = bind_function_call_return_logically loc fsym rt in
      k lvt)
   (* | M_Eproc (fname, pes) -> *)
   (*    let@ (_, decl_typ) = match fname with *)
@@ -1341,9 +1379,7 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
         let condition, outputs = LAT.logical_arguments_and_return right_clause.packing_ft in
         let lc = eq_ (pred_oargs, OutputDef.to_record outputs) in
         let lrt = LRT.concat condition (Constraint (t_ lc, (loc, None), I)) in
-        let record_s = Sym.fresh_make_uniq (TypeErrors.call_prefix (UnpackPredicate pname)) in
-        let record = sym_ (record_s, BT.Record (LRT.record_bt lrt)) in
-        let@ () = bind_logical_return record lrt in
+        let@ () = bind_logical_return_of_call loc (UnpackPredicate pname) lrt in
         k unit_
      | Pack ->
         Spine.calltype_packing loc pname right_clause.packing_ft (fun output_assignment -> 

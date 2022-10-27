@@ -34,12 +34,6 @@ let alpha_unique ss = function
     Computational ((name, bt), oinfo, t)
 
 
-
-let record_bt = function
-  | Computational ((name, bt), oinfo, t) ->
-    (name, bt) :: LRT.record_bt t
-
-
 let map (f : LRT.t -> LRT.t) = function
   | Computational (param, oinfo, t) -> Computational (param, oinfo, f t)
 
