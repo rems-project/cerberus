@@ -1,4 +1,3 @@
-open Pp
 module CF = Cerb_frontend
 module SymSet = Set.Make(Sym)
 module SymMap = Map.Make(Sym)
@@ -47,7 +46,8 @@ let request (r, _oargs) = r
 let oargs_bt (_re, O oargs) = IT.bt oargs
 
 
-let pp (r, oargs) = ResourceTypes.pp r ^^ parens(pp_oargs oargs)
+let pp (r, O oargs) = 
+  ResourceTypes.pp_aux r (Some oargs)
 
 
 let json re : Yojson.Safe.t = `String (Pp.plain (pp re))

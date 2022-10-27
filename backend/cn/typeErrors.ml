@@ -157,7 +157,7 @@ type report = {
   }
 
 
-let missing_or_bad_request_description oinfo orequest explanation = 
+let missing_or_bad_request_description oinfo orequest = 
   match oinfo, orequest with
   | Some (spec_loc, Some descr), _ ->
      let (head, _) = Locations.head_pos_of_location spec_loc in
@@ -166,7 +166,7 @@ let missing_or_bad_request_description oinfo orequest explanation =
      let (head, _) = Locations.head_pos_of_location spec_loc in
      Some (!^"Resource from" ^^^ !^head)
   | None, Some request ->
-     let re_pp = RET.pp (RET.subst explanation.Explain.substitution request) in
+     let re_pp = RET.pp request in
      Some (!^"Resource" ^^^ squotes re_pp)
   | None, None ->
      None  
@@ -234,13 +234,8 @@ let pp_message te =
      { short; descr = Some descr; state = None; trace = None }
   | Missing_resource_request {orequest; situation; oinfo; ctxt; model; trace} ->
      let short = !^"Missing resource" ^^^ for_situation situation in
-     let relevant = match orequest with
-       | None -> IT.SymSet.empty
-       | Some request -> (RET.free_vars request)
-     in
-     let explanation = Explain.explanation ctxt relevant in
-     let descr = missing_or_bad_request_description oinfo orequest explanation in
-     let state = Explain.state ctxt explanation model orequest in
+     let descr = missing_or_bad_request_description oinfo orequest in
+     let state = Explain.state ctxt model orequest in
      let trace_doc = Trace.format_ctxt_logical_trace (fst model) ctxt in
      { short; descr = descr; state = Some state; trace = Some trace_doc }
   | Merging_multiple_arrays {orequest; situation; oinfo; ctxt; model} ->
@@ -248,19 +243,13 @@ let pp_message te =
        !^"Cannot satisfy request for resource" ^^^ for_situation situation ^^ dot ^^^
          !^"It requires merging multiple arrays."
      in
-     let relevant = match orequest with
-       | None -> IT.SymSet.empty
-       | Some request -> (RET.free_vars request)
-     in
-     let explanation = Explain.explanation ctxt relevant in
-     let descr = missing_or_bad_request_description oinfo orequest explanation in
-     let state = Explain.state ctxt explanation model orequest in
+     let descr = missing_or_bad_request_description oinfo orequest in
+     let state = Explain.state ctxt model orequest in
      { short; descr = descr; state = Some state; trace = None }
   | Unused_resource {resource; ctxt; model; trace} ->
-     let explanation = Explain.explanation ctxt (RE.free_vars resource) in
-     let resource = RE.pp (RE.subst explanation.substitution resource) in
+     let resource = RE.pp resource in
      let short = !^"Left-over unused resource" ^^^ squotes resource in
-     let state = Explain.state ctxt explanation model None in
+     let state = Explain.state ctxt model None in
      let trace_doc = Trace.format_ctxt_logical_trace (fst model) ctxt in
      { short; descr = None; state = Some state; trace = Some trace_doc }
   | Number_members {has;expect} ->
@@ -299,10 +288,8 @@ let pp_message te =
      in
      { short; descr = Some descr; state = None; trace = None }
   | Illtyped_it {context; it; has; expected; ctxt} ->
-     let relevant = IT.free_vars_list [it; context] in
-     let explanation = Explain.explanation ctxt relevant in
-     let it = IT.pp (IT.subst explanation.substitution it) in
-     let context = IT.pp (IT.subst explanation.substitution context) in
+     let it = IT.pp it in
+     let context = IT.pp context in
      let short = !^"Type error" in
      let descr =
        !^"Illtyped expression" ^^ squotes context ^^ dot ^^^
@@ -320,10 +307,8 @@ let pp_message te =
      in
      { short; descr = Some descr; state = None; trace = None }
   | NIA {context; it; hint; ctxt} ->
-     let relevant = IT.free_vars_list [it; context] in
-     let explanation = Explain.explanation ctxt relevant in
-     let it = IT.pp (IT.subst explanation.substitution it) in
-     let context = IT.pp (IT.subst explanation.substitution context) in
+     let it = IT.pp it in
+     let context = IT.pp context in
      let short = !^"Type error" in
      let descr = 
        !^"Illtyped expression" ^^ squotes context ^^ dot ^^^
@@ -332,10 +317,8 @@ let pp_message te =
      in
      { short; descr = Some descr; state = None; trace = None }
   | TooBigExponent {context; it; ctxt} ->
-     let relevant = IT.free_vars_list [it; context] in
-     let explanation = Explain.explanation ctxt relevant in
-     let it = IT.pp (IT.subst explanation.substitution it) in
-     let context = IT.pp (IT.subst explanation.substitution context) in
+     let it = IT.pp it in
+     let context = IT.pp context in
      let short = !^"Type error" in
      let descr = 
        !^"Illtyped expression" ^^ squotes context ^^ dot ^^^
@@ -344,10 +327,8 @@ let pp_message te =
      in
      { short; descr = Some descr; state = None; trace = None }
   | NegativeExponent {context; it; ctxt} ->
-     let relevant = IT.free_vars_list [it; context] in
-     let explanation = Explain.explanation ctxt relevant in
-     let it = IT.pp (IT.subst explanation.substitution it) in
-     let context = IT.pp (IT.subst explanation.substitution context) in
+     let it = IT.pp it in
+     let context = IT.pp context in
      let short = !^"Type error" in
      let descr = 
        !^"Illtyped expression" ^^ squotes context ^^ dot ^^^
@@ -364,13 +345,9 @@ let pp_message te =
        !^"Write value not representable at type" ^^^
          Sctypes.pp ct
      in
-     let explanation =
-       Explain.explanation ctxt
-         (IT.free_vars_list [value; location])
-     in
-     let location = IT.pp (IT.subst explanation.substitution location) in
-     let value = IT.pp (IT.subst explanation.substitution value) in
-     let state = Explain.state ctxt explanation model None in
+     let location = IT.pp (location) in
+     let value = IT.pp (value) in
+     let state = Explain.state ctxt model None in
      let descr =
        !^"Location" ^^ colon ^^^ location ^^ comma ^^^
        !^"value" ^^ colon ^^^ value ^^ dot
@@ -381,16 +358,13 @@ let pp_message te =
        !^"integer value not representable at type" ^^^
          Sctypes.pp ict
      in
-     let explanation = Explain.explanation ctxt (IT.free_vars value) in
-     let value = IT.pp (IT.subst explanation.substitution value) in
+     let value = IT.pp (value) in
      let descr = !^"Value" ^^ colon ^^^ value in
-     let state = Explain.state ctxt explanation model None in
+     let state = Explain.state ctxt model None in
      { short; descr = Some descr; state = Some state; trace = None }
   | Unsat_constraint {constr; info; ctxt; model; trace} ->
      let short = !^"Unsatisfied constraint" in
-     let explanation = Explain.explanation ctxt (LC.free_vars constr) in
-     let _constr = LC.pp (LC.subst explanation.substitution constr) in
-     let state = Explain.state ctxt explanation model None in
+     let state = Explain.state ctxt model None in
      let descr =
        let (spec_loc, odescr) = info in
        let (head, _) = Locations.head_pos_of_location spec_loc in
@@ -402,8 +376,7 @@ let pp_message te =
      { short; descr = Some descr; state = Some state; trace = Some trace_doc }
   | Undefined_behaviour {ub; ctxt; model} ->
      let short = !^"Undefined behaviour" in
-     let explanation = Explain.explanation ctxt IT.SymSet.empty in
-     let state = Explain.state ctxt explanation model None in
+     let state = Explain.state ctxt model None in
      let descr = !^(CF.Undefined.ub_short_string ub) in
      { short; descr = Some descr; state = Some state; trace = None }
   | Implementation_defined_behaviour (impl, state) ->
@@ -415,8 +388,7 @@ let pp_message te =
      { short; descr = None; state = None; trace = None }
   | StaticError {err; ctxt; model} ->
      let short = !^"Static error" in
-     let explanation = Explain.explanation ctxt IT.SymSet.empty in
-     let state = Explain.state ctxt explanation model None in
+     let state = Explain.state ctxt model None in
      let descr = !^err in
      { short; descr = Some descr; state = Some state; trace = None }
   | Generic err ->
@@ -424,8 +396,7 @@ let pp_message te =
      { short; descr = None; state = None; trace = None }
   | Generic_with_model {err; model; ctxt} ->
      let short = err in
-     let explanation = Explain.explanation ctxt IT.SymSet.empty in
-     let state = Explain.state ctxt explanation model None in
+     let state = Explain.state ctxt model None in
      { short; descr = None; state = Some state; trace = None }
 
 

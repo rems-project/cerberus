@@ -60,28 +60,42 @@ let predicate_name = function
   | Q p -> p.name
 
 
+let pp_maybe_oargs = function
+  | None -> Pp.empty
+  | Some oargs -> parens (IT.pp oargs)
 
-let pp_predicate_type (p : predicate_type) =
-  let args = 
-    [IT.pp p.pointer;
-     IT.pp p.permission] @
-    List.map IT.pp (p.iargs)
+
+let pp_predicate_type_aux (p : predicate_type) oargs =
+  let args = List.map IT.pp (p.pointer :: p.iargs) in
+  c_app (pp_predicate_name p.name) args 
+  ^^ pp_maybe_oargs oargs
+  ^^ begin match IT.is_true p.permission with
+     | true -> Pp.empty
+     | false -> space ^^ !^"if" ^^^ IT.pp p.permission
+     end
+
+let pp_qpredicate_type_aux (p : qpredicate_type) oargs =
+  let pointer = 
+    IT.pp p.pointer ^^^ plus 
+    ^^^ Sym.pp p.q ^^^ star ^^^ IT.pp p.step 
   in
-  c_app (pp_predicate_name p.name) args
+  let args = pointer :: List.map IT.pp (p.iargs) in
 
-let pp_qpredicate_type (p : qpredicate_type) =
-  let args = 
-    [IT.pp p.pointer ^^^ plus ^^^ parens (Sym.pp p.q ^^^ star ^^^ IT.pp p.step);
-     IT.pp p.permission] @
-    List.map IT.pp (p.iargs)
-  in
-  !^"each" ^^^ Sym.pp p.q ^^ dot ^^^
-  c_app (pp_predicate_name p.name) args
+  !^"each" ^^ 
+    parens (BT.pp Integer ^^^ Sym.pp p.q ^^ semi ^^^ IT.pp p.permission) 
+    ^^ braces (c_app (pp_predicate_name p.name) args)
+    ^^ pp_maybe_oargs oargs
+
+let pp_predicate_type p = pp_predicate_type_aux p None
+let pp_qpredicate_type p = pp_qpredicate_type_aux p None
 
 
-let pp = function
-  | P p -> pp_predicate_type p
-  | Q qp -> pp_qpredicate_type qp
+let pp_aux r o = 
+  match r with
+  | P p -> pp_predicate_type_aux p o
+  | Q qp -> pp_qpredicate_type_aux qp o
+
+let pp r = pp_aux r None
 
 
 

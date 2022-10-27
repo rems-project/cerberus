@@ -1,4 +1,4 @@
-type state_entry = { 
+type state_entry = {
     loc_e : Pp.doc option;
     loc_v : Pp.doc option;
     state : Pp.doc option;
@@ -26,7 +26,7 @@ type resource_entry = {
 
 type state_report = {
     location_trace: Pp.doc list;
-    memory : state_entry list;
+    (* memory : state_entry list; *)
     variables : var_entry list;
     requested : resource_entry list;
     resources : resource_entry list;
@@ -122,22 +122,22 @@ let to_html report =
 
   let sdoc doc = Pp.plain doc in
 
-  let o_sdoc o_doc = 
-    match o_doc with
-    | Some doc -> sdoc doc
-    | None -> ""
-  in
+  (* let o_sdoc o_doc =  *)
+  (*   match o_doc with *)
+  (*   | Some doc -> sdoc doc *)
+  (*   | None -> "" *)
+  (* in *)
 
-  let state_entry {loc_e; loc_v; state} =
-    { header = false;
-      classes = ["memory_entry"];
-      columns = [
-          { classes = ["loc_e"]; content = o_sdoc loc_e; colspan = 1};
-          { classes = ["loc_v"]; content = o_sdoc loc_v; colspan = 1};
-          { classes = ["state"]; content = o_sdoc state; colspan = 1};
-        ]
-    }
-  in
+  (* let state_entry {loc_e; loc_v; state} = *)
+  (*   { header = false; *)
+  (*     classes = ["memory_entry"]; *)
+  (*     columns = [ *)
+  (*         { classes = ["loc_e"]; content = o_sdoc loc_e; colspan = 1}; *)
+  (*         { classes = ["loc_v"]; content = o_sdoc loc_v; colspan = 1}; *)
+  (*         { classes = ["state"]; content = o_sdoc state; colspan = 1}; *)
+  (*       ] *)
+  (*   } *)
+  (* in *)
 
   let variable_entry {var; value} =
     { header = false;
@@ -201,20 +201,20 @@ let to_html report =
   let table = 
     { column_info = ["column1"; "column2"; "column3"];
       rows = (
-        opt_header report.location_trace [("path to error",3)] @
-        List.map location_entry report.location_trace @
-        header [("pointer",1); ("addr",1); ("state",1)] ::
-        List.map state_entry report.memory @
-        header [("expression",1); ("value",2)] ::
-        List.map variable_entry report.variables @
+        (* header [("pointer",1); ("addr",1); ("state",1)] :: *)
+        (* List.map state_entry report.memory @ *)
         opt_header report.requested [("requested resource", 2); ("byte span", 1)] @
         List.map resource_entry report.requested @
-        opt_header report.resources [("available resources", 2); ("byte span and match", 1)] @
-        List.map resource_entry report.resources @
         opt_header report.predicate_hints [("possibly relevant predicate clauses", 3)] @
         List.map predicate_info_entry report.predicate_hints @
+        opt_header report.resources [("available resources", 2); ("byte span and match", 1)] @
+        List.map resource_entry report.resources @
+        header [("expression",1); ("value",2)] ::
+        List.map variable_entry report.variables @
         header [("constraints",3)] ::
-        List.map constraint_entry report.constraints
+        List.map constraint_entry report.constraints @
+        opt_header report.location_trace [("path to error",3)] @
+        List.map location_entry report.location_trace
     )}
   in
 
@@ -222,9 +222,4 @@ let to_html report =
     body = {elements = [Table table]} }
   
 
-let print_report report = 
-  let prev = ! Pp.html_escapes in
-  Pp.html_escapes := true;
-  let report_string = html (to_html report) in
-  Pp.html_escapes := prev;
-  report_string
+let print_report report = html (to_html report)
