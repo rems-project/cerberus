@@ -421,7 +421,7 @@ module CHERIMorello : Memory = struct
     | Intmax_t        -> Intmax_t
     | Intptr_t        -> Intptr_t
       
-  let fromCoq_intgerType: CoqCtype.integerType -> integerType = function
+  let fromCoq_integerType: CoqCtype.integerType -> integerType = function
     | Char          -> Char
     | Bool          -> Bool
     | Signed bt     -> Signed (fromCoq_integerBaseType bt)
@@ -477,8 +477,8 @@ module CHERIMorello : Memory = struct
   | Anot_explode -> Anot_explode
   | Alabel la    -> Alabel (fromCoq_label_annot la)
 
-  let fromCoq_basicType: (CoqCtype.basicType) -> basicType = function
-    | Integer ity -> Integer (fromCoq_intgerType ity)
+  let fromCoq_basicType: CoqCtype.basicType -> basicType = function
+    | Integer ity -> Integer (fromCoq_integerType ity)
     | Floating fty -> Floating (fromCoq_floatingType fty)
 
   let fromCoq_qualifiers (q:CoqCtype.qualifiers): qualifiers =
@@ -489,8 +489,8 @@ module CHERIMorello : Memory = struct
     }
 
   let rec fromCoq_ctype: CoqCtype.ctype -> Ctype.ctype = function
-    | Ctype (la, ct) -> Ctype (List.map fromCoq_annot la, fromCoq_ctype_ ct)
-  and fromCoq_ctype_: CoqCtype.ctype' -> Ctype.ctype_ = function
+    | Ctype (la, ct) -> Ctype (List.map fromCoq_annot la, fromCoq_ctype' ct)
+  and fromCoq_ctype': CoqCtype.ctype' -> Ctype.ctype_ = function
     | Void -> Void
     | Basic bty -> Basic (fromCoq_basicType bty)
     | Array (cty, zo) -> Ctype.Array (fromCoq_ctype cty, zo)
@@ -560,9 +560,102 @@ module CHERIMorello : Memory = struct
   let toCoq_Symbol_identifier: Symbol.identifier -> CoqSymbol.identifier = function
     | Identifier (l,s) -> Identifier (toCoq_location l, s)
 
-  let toCoq_integerType (t:Ctype.integerType): CoqCtype.integerType = assert false (* TODO *)
-  let toCoq_floatingType (fty:Ctype.floatingType) : CoqCtype.floatingType = assert false (* TODO *)
-  let toCoq_ctype (ty:Ctype.ctype) : CoqCtype.ctype = assert false (* TODO *)
+
+  let toCoq_integerBaseType: integerBaseType -> CoqCtype.integerBaseType = function
+    | Ichar           -> Ichar
+    | Short           -> Short
+    | Int_            -> Int_
+    | Long            -> Long
+    | LongLong        -> LongLong
+    | IntN_t n        -> IntN_t (Z.of_int n)
+    | Int_leastN_t n  -> Int_leastN_t (Z.of_int n)
+    | Int_fastN_t n   -> Int_fastN_t (Z.of_int n)
+    | Intmax_t        -> Intmax_t
+    | Intptr_t        -> Intptr_t
+
+  let toCoq_integerType: integerType -> CoqCtype.integerType = function
+    | Char          -> Char
+    | Bool          -> Bool
+    | Signed bt     -> Signed (toCoq_integerBaseType bt)
+    | Unsigned bt   -> Unsigned (toCoq_integerBaseType bt)
+    | Enum s        -> Enum (toCoq_Symbol_sym s)
+    | Wchar_t       -> Wchar_t
+    | Wint_t        -> Wint_t
+    | Size_t        -> Size_t
+    | Ptrdiff_t     -> Ptrdiff_t
+    | Vaddr_t       -> Vaddr_t
+
+  let toCoq_realFloatingType: realFloatingType -> CoqCtype.realFloatingType = function
+    | Float -> Float
+    | Double -> Double
+    | LongDouble -> LongDouble
+
+  let toCoq_floatingType: floatingType -> CoqCtype.floatingType  = function
+    | RealFloating rft -> (toCoq_realFloatingType rft)
+
+  let toCoq_annot: Annot.bmc_annot -> CoqAnnot.bmc_annot  = function
+    | Abmc_id ba -> Z.of_int ba
+
+  let toCoq_attribute (a:Annot.attribute) : CoqAnnot.attribute =
+    {
+      attr_ns = Option.map (toCoq_Symbol_identifier) a.attr_ns;
+      attr_id =  toCoq_Symbol_identifier a.attr_id ;
+      attr_args =
+        List.map (fun (loc, s, ll) ->
+            ((toCoq_location loc,
+              s),
+             List.map (fun (loc', s) -> (toCoq_location loc', s)) ll)
+          ) a.attr_args
+    }
+
+  let toCoq_attributes: Annot.attributes -> CoqAnnot.attributes  = function
+    | Attrs ats -> List.map toCoq_attribute ats
+
+  let toCoq_label_annot: Annot.label_annot -> CoqAnnot.label_annot = function
+    | LAloop_prebody lid  -> LAloop_prebody (Z.of_int lid)
+    | LAloop_body lid     -> LAloop_body (Z.of_int lid)
+    | LAloop_continue lid -> LAloop_continue (Z.of_int lid)
+    | LAloop_break lid    -> LAloop_break (Z.of_int lid)
+    | LAreturn            -> LAreturn
+    | LAswitch            -> LAswitch
+
+  let toCoq_annot: Annot.annot -> CoqAnnot.annot = function
+    | Astd s       -> Astd s
+    | Aloc loc     -> Aloc (toCoq_location loc)
+    | Auid s       -> Auid s
+    | Abmc ba      -> Abmc (toCoq_annot ba)
+    | Aattrs atr   -> Aattrs (toCoq_attributes atr)
+    | Atypedef s   -> Atypedef (toCoq_Symbol_sym s)
+    | Anot_explode -> Anot_explode
+    | Alabel la    -> Alabel (toCoq_label_annot la)
+
+  let toCoq_basicType: basicType -> CoqCtype.basicType = function
+    | Integer ity -> Integer (toCoq_integerType ity)
+    | Floating fty -> Floating (toCoq_floatingType fty)
+
+  let toCoq_qualifiers (q:qualifiers): CoqCtype.qualifiers =
+    {
+      const    = q.const;
+      restrict = q.restrict;
+      volatile = q.volatile
+    }
+
+  let rec toCoq_ctype: Ctype.ctype -> CoqCtype.ctype  = function
+    | Ctype (la, ct) -> Ctype (List.map toCoq_annot la, toCoq_ctype_ ct)
+  and toCoq_ctype_: Ctype.ctype_ -> CoqCtype.ctype'  = function
+    | Void -> Void
+    | Basic bty -> Basic (toCoq_basicType bty)
+    | Array (cty, zo) -> CoqCtype.Array (toCoq_ctype cty, zo)
+    | Function ((q, cty),l,b) ->
+       Function ((toCoq_qualifiers q, toCoq_ctype cty),
+                 List.map (fun (q,cty,b) -> ((toCoq_qualifiers q,toCoq_ctype cty), b)) l,
+                 b)
+    | FunctionNoParams (q, cty) ->  FunctionNoParams (toCoq_qualifiers q, toCoq_ctype cty)
+    | Pointer (q, cty) -> Pointer (toCoq_qualifiers q, toCoq_ctype cty)
+    | Atomic cty ->  Atomic (toCoq_ctype cty)
+    | Struct s -> Struct (toCoq_Symbol_sym s)
+    | Union s -> Union (toCoq_Symbol_sym s)
+
   let toCoq_derivecap_op (o:Mem_common.derivecap_op) : MM.derivecap_op = assert false (* TODO *)
   let toCoq_ionteger_operator (iop:Mem_common.integer_operator) : MM.integer_operator = assert false (* TODO *)
   let toCoq_SymMap (m:(Symbol.sym, Ctype.tag_definition) Pmap.map) : CoqCtype.tag_definition CoqSymbol.SymMap.t  = assert false (* TODO *)
@@ -923,7 +1016,7 @@ module CHERIMorello : Memory = struct
     | MVunspecified ty ->
        f_unspec (fromCoq_ctype ty)
     | MVinteger (ity, ival) ->
-       f_ival (fromCoq_intgerType ity) ival
+       f_ival (fromCoq_integerType ity) ival
     | MVfloating (fty, fval) ->
        f_fval (fromCoq_floatingType fty) fval
     | MVpointer (ref_ty, ptrval) ->
