@@ -537,16 +537,36 @@ module CHERIMorello : Memory = struct
                                 ((List.map (fun (lp1,lp2) -> (toCoq_lexing_position lp1, toCoq_lexing_position lp2)) ps),
                                  toCoq_location_cursor lc)
 
-  let toCoq_ctype (ty:Ctype.ctype) : CoqCtype.ctype = assert false (* TODO *)
-  let toCoq_Symbol_prefix (p:Symbol.prefix) : CoqSymbol.prefix = assert false (* TODO *)
-  let toCoq_Symbol_sym (s:Symbol.sym): CoqSymbol.sym = assert false (* TODO *)
+
+
+  let toCoq_Symbol_description: Symbol.symbol_description -> CoqSymbol.symbol_description = function
+    | SD_None -> SD_None
+    | SD_Id s -> SD_Id s
+    | SD_ObjectAddress s -> SD_ObjectAddress s
+    | SD_Return -> SD_Return
+    | SD_FunArg (l,v) -> SD_FunArg (toCoq_location l, Z.of_int v)
+
+  let toCoq_Symbol_sym: Symbol.sym -> CoqSymbol.sym = function
+    | Symbol (d,v,desc) -> Symbol (d, Z.of_int v, toCoq_Symbol_description desc)
+
+  let toCoq_Symbol_prefix: Symbol.prefix -> CoqSymbol.prefix = function
+    | PrefSource (loc, sl) -> PrefSource (toCoq_location loc, List.map toCoq_Symbol_sym sl)
+    | PrefFunArg (l, d, v) -> PrefFunArg (toCoq_location l, d, Z.of_int v)
+    | PrefStringLiteral (l,d) -> PrefStringLiteral (toCoq_location l, d)
+    | PrefCompoundLiteral (l,d) ->  PrefCompoundLiteral (toCoq_location l, d)
+    | PrefMalloc -> PrefMalloc
+    | PrefOther s -> PrefOther s
+
+  let toCoq_Symbol_identifier: Symbol.identifier -> CoqSymbol.identifier = function
+    | Identifier (l,s) -> Identifier (toCoq_location l, s)
+
   let toCoq_integerType (t:Ctype.integerType): CoqCtype.integerType = assert false (* TODO *)
+  let toCoq_floatingType (fty:Ctype.floatingType) : CoqCtype.floatingType = assert false (* TODO *)
+  let toCoq_ctype (ty:Ctype.ctype) : CoqCtype.ctype = assert false (* TODO *)
   let toCoq_derivecap_op (o:Mem_common.derivecap_op) : MM.derivecap_op = assert false (* TODO *)
-  let toCoq_Symbol_identifier (id:Symbol.identifier): CoqSymbol.identifier = assert false (* TODO *)
   let toCoq_ionteger_operator (iop:Mem_common.integer_operator) : MM.integer_operator = assert false (* TODO *)
   let toCoq_SymMap (m:(Symbol.sym, Ctype.tag_definition) Pmap.map) : CoqCtype.tag_definition CoqSymbol.SymMap.t  = assert false (* TODO *)
   let toCoq_floating_operator (fop:Mem_common.floating_operator) : MM.floating_operator = assert false (* TODO *)
-  let toCoq_floatingType (fty:Ctype.floatingType) : CoqCtype.floatingType = assert false (* TODO *)
 
   (* Intrinisics *)
   let fromCoq_type_predicate: MM.type_predicate -> type_predicate = function
