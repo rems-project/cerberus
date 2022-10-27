@@ -404,11 +404,41 @@ module CHERIMorello : Memory = struct
   let fromCoq_Symbol_identifier: CoqSymbol.identifier -> Symbol.identifier = function
     | Identifier (l,s) -> Identifier (fromCoq_location l, s)
 
+  let fromCoq_integerBaseType: CoqCtype.integerBaseType -> integerBaseType = function
+    | Ichar           -> Ichar
+    | Short           -> Short
+    | Int_            -> Int_
+    | Long            -> Long
+    | LongLong        -> LongLong
+    | IntN_t n        -> IntN_t (Z.to_int n)
+    | Int_leastN_t n  -> Int_leastN_t (Z.to_int n)
+    | Int_fastN_t n   -> Int_fastN_t (Z.to_int n)
+    | Intmax_t        -> Intmax_t
+    | Intptr_t        -> Intptr_t
+      
+  let fromCoq_intgerType: CoqCtype.integerType -> integerType = function
+    | Char          -> Char
+    | Bool          -> Bool
+    | Signed bt     -> Signed (fromCoq_integerBaseType bt)
+    | Unsigned bt   -> Unsigned (fromCoq_integerBaseType bt)
+    | Enum s        -> Enum (fromCoq_Symbol_sym s)
+    | Wchar_t       -> Wchar_t
+    | Wint_t        -> Wint_t
+    | Size_t        -> Size_t
+    | Ptrdiff_t     -> Ptrdiff_t
+    | Vaddr_t       -> Vaddr_t
+
+  let fromCoq_realFloatingType: CoqCtype.realFloatingType -> realFloatingType = function
+    | Float -> Float
+    | Double -> Double
+    | LongDouble -> LongDouble
+
+  let fromCoq_floatingType (rft:CoqCtype.floatingType): floatingType =
+    RealFloating (fromCoq_realFloatingType rft)
+
   let fromCoq_ctype (ty:CoqCtype.ctype) : Ctype.ctype = assert false (* TODO *)
   let fromCoq_intrinsics_signature (s:MM.intrinsics_signature) : Mem_common.intrinsics_signature = assert false (* TODO *)
   let fromCoq_ovelap_status (s:MM.overlap_status) : overlap_status = assert false (* TODO *)
-  let fromCoq_intgerType (s:CoqCtype.integerType) : integerType = assert false (* TODO *)
-  let fromCoq_floatingType (s:CoqCtype.floatingType) : floatingType = assert false (* TODO *)
 
   (* OCaml -> Coq type conversion *)
   let toCoq_location (l:Location_ocaml.t): CoqLocation.location_ocaml = assert false (* TODO *)
