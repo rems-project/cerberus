@@ -56,16 +56,6 @@ and suitably_alpha_rename i_subst syms (s, ls) t =
 
 
 
-let record_bt i_record_bt = 
-  let rec aux = function
-    | Define ((s, it), _, lrt) -> (s, IT.bt it) :: aux lrt
-    | Resource ((s, (_rt, bt)), _, lrt) -> (s, bt) :: aux lrt
-    | Constraint (_, _, lrt) -> aux lrt
-    | I i -> i_record_bt i
-  in
-  aux
-
-
 open Pp
 
 let rec pp_aux i_pp = function
