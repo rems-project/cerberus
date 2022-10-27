@@ -68,6 +68,12 @@ and suitably_alpha_rename syms (s, ls) t =
   else (s, t)
 
 
+let rec record_bt = function
+  | Define ((s, it), _, lrt) -> (s, IT.bt it) :: record_bt lrt
+  | Resource ((s, (_rt, bt)), _, lrt) -> (s, bt) :: record_bt lrt
+  | Constraint (_, _, lrt) -> record_bt lrt
+  | I -> []
+
 
 let rec bound = function
   | Define ((s, _), _, lrt) -> SymSet.add s (bound lrt)
