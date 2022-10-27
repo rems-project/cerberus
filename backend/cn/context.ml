@@ -15,7 +15,7 @@ type l_info = (Locations.t * Pp.doc Lazy.t)
 
 
 type t = {
-    computational : (Sym.t * (BT.t * Sym.t)) list;
+    computational : (Sym.t * IndexTerms.t) list;
     logical : ((Sym.t * LS.t) * l_info) list;
     resources : (RE.t * int) list * int;
     constraints : LCSet.t;
@@ -41,8 +41,8 @@ let get_rs (ctxt : t) = List.map fst (fst ctxt.resources)
 
 let pp (ctxt : t) = 
   item "computational" 
-    (Pp.list (fun (sym, (bt,lsym)) -> 
-         typ (Sym.pp sym) (BT.pp bt ^^ tilde ^^ Sym.pp lsym)
+    (Pp.list (fun (sym, it) -> 
+         typ (Sym.pp sym) (IndexTerms.pp it)
        ) ctxt.computational) ^/^
   item "logical"
     (Pp.list (fun ((sym, ls), _) ->
@@ -71,8 +71,8 @@ let get_a (name: Sym.t) (ctxt: t)  =
 let get_l (name: Sym.t) (ctxt:t) = 
   List.assoc Sym.equal name (List.map fst ctxt.logical)
 
-let add_a aname (bt, lname) ctxt = 
-  {ctxt with computational = (aname, (bt, lname)) :: ctxt.computational}
+let add_a aname it ctxt = 
+  {ctxt with computational = (aname, it) :: ctxt.computational}
 
 let remove_a aname ctxt = 
   {ctxt with computational = List.remove_assoc aname ctxt.computational}
@@ -82,7 +82,7 @@ let remove_l lname ctxt =
 
 
 let add_as avars ctxt = 
-  List.fold_left (fun ctxt (s,(bt,l)) -> add_a s (bt,l) ctxt) ctxt avars
+  List.fold_left (fun ctxt (s,it) -> add_a s it ctxt) ctxt avars
 
 let remove_as avars ctxt = 
   List.fold_left (fun ctxt s -> remove_a s ctxt) ctxt avars
@@ -120,10 +120,9 @@ let add_predicates preds (ctxt : t) =
 let json (ctxt : t) : Yojson.Safe.t = 
 
   let computational  = 
-    List.map (fun (sym, (bt, lname)) ->
+    List.map (fun (sym, it) ->
         `Assoc [("name", Sym.json sym);
-                ("basetype", BT.json bt); 
-                ("logical", Sym.json lname)]        
+                ("term", IndexTerms.json it)]
       ) ctxt.computational
   in
   let logical = 

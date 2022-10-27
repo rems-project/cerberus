@@ -61,7 +61,7 @@ let ctxt_diff ct1 ct2 =
   let open Context in
   let log = list_new ct1.logical ct2.logical in
   let com = list_new ct1.computational ct2.computational
-    |> List.map (fun (nm, (t, _)) -> (nm, t)) in
+    |> List.map (fun (nm, t) -> (nm, t)) in
   let con = set_new ct1.constraints ct2.constraints in
   let rs1 = IntSet.of_list (List.map snd (fst ct1.resources)) in
   let rs2 = IntSet.of_list (List.map snd (fst ct2.resources)) in
@@ -86,6 +86,7 @@ let format_eval model global it =
   | Some v -> IT.pp it ^^^ equals ^^^ IT.pp v
 
 let format_var model global (sym, bt) = format_eval model global (IT.sym_ (sym, bt))
+let format_avar model global (sym, it) = format_eval model global it
 
 let pp_oargs model global = function
   | Resources.O it -> format_eval model global it
@@ -119,7 +120,7 @@ let format_delta model ct1 ct2 =
   let added (rt, oargs) = pp_res_ty rt ^^^ !^"|->" ^^^ pp_oargs model global oargs in
   List.map added rs_add @ List.map deleted rs_del @
     doc_new "Logical vars" (format_var model global) (List.map fst log) @
-    doc_new "Computational vars" (format_var model global) com @
+    doc_new "Computational vars" (format_avar model global) com @
     doc_new "Constraints" LogicalConstraints.pp con
 
 let format_mu_step model (s : mu_trace_step) =

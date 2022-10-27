@@ -28,12 +28,12 @@ val model_with : Locations.t -> IndexTerms.t -> (Solver.model_with_q option, 'e)
 val prev_models_with : Locations.t -> IndexTerms.t -> (Solver.model_with_q list, 'e) m
 val bound_a : Sym.t -> (bool, 'e) m
 val bound_l : Sym.t -> (bool, 'e) m
-val get_a : Sym.t -> (BaseTypes.t * Sym.t, 'e) m
+val get_a : Sym.t -> (IndexTerms.t, 'e) m
 val get_l : Sym.t -> (LogicalSorts.t, 'e) m
-val add_a : Sym.t -> (BaseTypes.t * Sym.t) -> (unit, 'e) m
+val add_a : Sym.t -> IndexTerms.t -> (unit, 'e) m
 val remove_a : Sym.t -> (unit, 'e) m
 val add_l : Sym.t -> LogicalSorts.t -> Context.l_info -> (unit, 'e) m
-val add_as : (Sym.t * (BaseTypes.t * Sym.t)) list -> (unit, 'e) m
+val add_as : (Sym.t * IndexTerms.t) list -> (unit, 'e) m
 val remove_as : Sym.t list -> (unit, 'e) m
 val add_ls : ((Sym.t * LogicalSorts.t) * Context.l_info) list -> (unit, 'e) m
 val add_l_abbrev : Sym.t -> IndexTerms.t -> Context.l_info -> (Sym.t, 'e) m

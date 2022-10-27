@@ -85,22 +85,17 @@ let bt_prefix = function
   | Map _ -> "m"
 
 
-(* TODO: this does not seem to be checking base types any more *)
 (* pattern-matches and binds *)
 let pattern_match =
-  let rec aux pat it : ((Sym.t * (BT.t * Sym.t)) list, type_error) m =
+  let rec aux pat it : (Sym.t list, type_error) m =
     let (M_Pattern (loc, _, pattern) : mu_pattern) = pat in
     match pattern with
     | M_CaseBase (o_s, has_bt) ->
        let@ () = WellTyped.WBT.is_bt loc has_bt in
        begin match o_s with
        | Some s ->
-          let s' = Sym.fresh_make_uniq (bt_prefix has_bt) in
-          let info = (loc, lazy (let open Pp in
-            item "binding" (Sym.pp s ^^^ !^ "in" ^^^ NewMu.PP_MUCORE.pp_pattern pat))) in
-          let@ s'' = add_l_abbrev s' it info in
-          let@ () = add_a s (has_bt, s'') in
-          return [(s, (has_bt, s''))]
+          let@ () = add_a s it in
+          return [s]
        | None -> return []
        end
     | M_CaseCtor (constructor, pats) ->
@@ -128,10 +123,6 @@ let pattern_match =
           Debug_ocaml.error "todo: array types"
   in
   fun pat -> aux pat
-  (* fun to_match ((M_Pattern (loc, _, _)) as pat : mu_pattern) -> *)
-  (* let@ it = aux pat in *)
-  (* let@ () = WellTyped.ensure_base_type loc ~expect:(IT.bt to_match) (IT.bt it) in *)
-  (* add_c (t_ (eq_ (it, to_match))) *)
 
 let pp_pattern_match p (patv, (l_vs, a_vs)) =
   let open Pp in
@@ -594,9 +585,9 @@ let rec check_pexpr (pe : 'bty mu_pexpr) ~(expect:BT.t)
   match pe_ with
   | M_PEsym sym ->
      let@ () = check_computational_bound loc sym in
-     let@ (bt,lname) = get_a sym in
-     let@ () = WellTyped.ensure_base_type loc ~expect bt in
-     k (sym_ (lname, bt))
+     let@ a_it = get_a sym in
+     let@ () = WellTyped.ensure_base_type loc ~expect (IT.bt a_it) in
+     k a_it
   (* | M_PEimpl i -> *)
   (*    let@ global = get_global () in *)
   (*    let value = Global.get_impl_constant global i in *)
@@ -827,10 +818,10 @@ let rec check_pexpr (pe : 'bty mu_pexpr) ~(expect:BT.t)
      let@ fin = begin_trace_of_pure_step (Some (Mu.M_Pat p)) e1 in
      let@ p_bt = bt_of_pattern p in
      check_pexpr ~expect:p_bt e1 (fun v1 ->
-     let@ pat_a = pattern_match p v1 in
+     let@ bound_a = pattern_match p v1 in
      let@ () = fin () in
      check_pexpr ~expect e2 (fun lvt ->
-     let@ () = remove_as (List.map fst pat_a) in
+     let@ () = remove_as bound_a in
      k lvt))
   (* | M_PEdone pe -> *)
   (*    let@ arg = infer_pexpr pe in *)
@@ -1478,10 +1469,10 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
      let@ fin = begin_trace_of_pure_step (Some (Mu.M_Pat p)) e1 in
      let@ p_bt = bt_of_pattern p in
      check_pexpr ~expect:p_bt e1 (fun v1 ->
-     let@ pat_a = pattern_match p v1 in
+     let@ bound_a = pattern_match p v1 in
      let@ () = fin () in
      check_expr labels ~typ e2 (fun rt ->
-         let@ () = remove_as (List.map fst pat_a) in
+         let@ () = remove_as bound_a in
          k rt
      ))
   | Normal expect, M_Eunseq es ->
@@ -1512,10 +1503,10 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
      let@ fin = begin_trace_of_step (Some (Mu.M_Pat p)) e1 in
      let@ p_bt = bt_of_pattern p in
      check_expr labels ~typ:(Normal p_bt) e1 (fun it ->
-            let@ pat_a = pattern_match p it in
+            let@ bound_a = pattern_match p it in
             let@ () = fin () in
             check_expr labels ~typ e2 (fun it2 ->
-                let@ () = remove_as (List.map fst pat_a) in
+                let@ () = remove_as bound_a in
                 k it2
               )
        )
@@ -1574,7 +1565,7 @@ let check_and_bind_arguments rt_subst loc arguments (function_typ : 'rt AT.t) =
          let ftyp' = AT.subst rt_subst subst ftyp in
          let info = (loc, lazy (Pp.item "argument" (Sym.pp aname))) in
          let@ () = add_l new_lname abt info in
-         let@ () = add_a aname (abt,new_lname) in
+         let@ () = add_a aname (sym_ (new_lname, abt)) in
          check args ftyp'
        else
          fail (fun _ -> {loc; msg = Mismatch {has = BT.pp abt; expect = BT.pp sbt}})
@@ -1824,7 +1815,7 @@ let check mu_file =
            let bt = Loc in
            let info = (Loc.unknown, lazy (Pp.item "global" (Sym.pp lsym))) in
            let@ () = add_l lsym bt info in
-           let@ () = add_a sym (bt, lsym) in
+           let@ () = add_a sym (sym_ (lsym, bt)) in
            let@ () = add_c (t_ (IT.good_pointer ~pointee_ct:ct (sym_ (lsym, bt)))) in
            return ()
       ) mu_file.mu_globs 

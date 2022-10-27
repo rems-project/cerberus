@@ -212,9 +212,9 @@ let get_l sym =
   let@ s = get () in
   return (Context.get_l sym s)
 
-let add_a sym (bt, sym') = 
+let add_a sym it = 
   let@ s = get () in
-  set (Context.add_a sym (bt, sym') s)
+  set (Context.add_a sym it s)
 
 let remove_a sym = 
   let@ s = get () in

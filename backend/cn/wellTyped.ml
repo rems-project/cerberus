@@ -800,7 +800,7 @@ module WRT = struct
       | Computational ((name,bt), info, lrt) ->
          let@ () = WBT.is_bt (fst info) bt in
          let@ () = add_l name bt (loc, lazy (Pp.string "ret-var")) in
-         let@ () = add_a (Sym.fresh_same name) (bt, name) in
+         let@ () = add_a (Sym.fresh_same name) (IndexTerms.sym_ (name, bt)) in
          WLRT.welltyped loc lrt
       end
 
@@ -904,8 +904,8 @@ module WAT (WI: WI_Sig) = struct
     let rec aux = function
       | AT.Computational ((name,bt), info, at) ->
          let@ () = WBT.is_bt (fst info) bt in
-         let@ () = add_l name bt (loc, lazy (Pp.string "ret-var")) in
-         let@ () = add_a (Sym.fresh_same name) (bt, name) in
+         let@ () = add_l name bt (loc, lazy (Pp.string "arg")) in
+         let@ () = add_a (Sym.fresh_same name) (IndexTerms.sym_ (name, bt)) in
          aux at
       | AT.L at ->
          WLAT.welltyped kind loc at
