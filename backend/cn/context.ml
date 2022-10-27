@@ -11,16 +11,6 @@ module Loc = Locations
 
 
 
-
-type where = 
-  | Loc of Loc.t
-  | Label of string
-
-let pp_where = function
-  | Label l -> !^l
-  | Loc loc -> !^(Loc.simple_location loc)
-
-
 type l_info = (Locations.t * Pp.doc Lazy.t)
 
 
