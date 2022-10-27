@@ -702,8 +702,13 @@ module CHERIMorello : Memory = struct
   | IntRem_f -> IntRem_f
   | IntExp   -> IntExp
 
+  let toCoq_floating_operator: Mem_common.floating_operator -> MM.floating_operator = function
+    | FloatAdd -> FloatAdd
+    | FloatSub -> FloatSub
+    | FloatMul -> FloatMul
+    | FloatDiv -> FloatDiv
+
   let toCoq_SymMap (m:(Symbol.sym, Ctype.tag_definition) Pmap.map) : CoqCtype.tag_definition CoqSymbol.SymMap.t  = assert false (* TODO *)
-  let toCoq_floating_operator (fop:Mem_common.floating_operator) : MM.floating_operator = assert false (* TODO *)
 
   (* Intrinisics *)
   let fromCoq_type_predicate: MM.type_predicate -> type_predicate = function
