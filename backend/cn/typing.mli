@@ -39,8 +39,8 @@ val add_ls : ((Sym.t * LogicalSorts.t) * Context.l_info) list -> (unit, 'e) m
 val add_l_abbrev : Sym.t -> IndexTerms.t -> Context.l_info -> (Sym.t, 'e) m
 val add_c : LogicalConstraints.t -> (unit, 'e) m
 val add_cs : LogicalConstraints.t list -> (unit, 'e) m
-val add_r : Context.where option -> Resources.t -> (unit, TypeErrors.type_error) m
-val add_rs : Context.where option -> Resources.t list -> (unit, TypeErrors.type_error) m
+val add_r : Resources.t -> (unit, TypeErrors.type_error) m
+val add_rs : Resources.t list -> (unit, TypeErrors.type_error) m
 val get_loc_trace : unit -> (Locations.loc list, 'e) m
 val add_loc_trace : Locations.t -> (unit, 'e) m
 val get_step_trace : unit -> (Trace.t, 'e) m

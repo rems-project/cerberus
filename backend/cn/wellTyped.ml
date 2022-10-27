@@ -775,7 +775,7 @@ module WLRT = struct
       | Resource ((s, (re, re_oa_spec)), info, lrt) -> 
          let@ () = WRS.welltyped (fst info) (re, re_oa_spec) in
          let@ () = add_l s re_oa_spec (loc, lazy (Pp.string "let-var")) in
-         let@ () = add_r None (re, O (IT.sym_ (s, re_oa_spec))) in
+         let@ () = add_r (re, O (IT.sym_ (s, re_oa_spec))) in
          aux lrt
       | Constraint (lc, info, lrt) ->
          let@ () = WLC.welltyped (fst info) lc in
@@ -868,7 +868,7 @@ module WLAT (WI: WI_Sig) = struct
       | LAT.Resource ((s, (re, re_oa_spec)), info, at) -> 
          let@ () = WRS.welltyped (fst info) (re, re_oa_spec) in
          let@ () = add_l s re_oa_spec (loc, lazy (Pp.string "let-var")) in
-         let@ () = add_r None (re, O (IT.sym_ (s, re_oa_spec))) in
+         let@ () = add_r (re, O (IT.sym_ (s, re_oa_spec))) in
          aux at
       | LAT.Constraint (lc, info, at) ->
          let@ () = WLC.welltyped (fst info) lc in

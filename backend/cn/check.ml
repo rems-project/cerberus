@@ -200,7 +200,7 @@ let rec bind_logical_return_of_call loc situation (lrt : LRT.t) =
        LRT.alpha_rename_ s' (s, oarg_spec) rt 
      in
      let@ () = add_l s oarg_spec (loc, lazy (Sym.pp s)) in
-     let@ () = add_r (Some (Loc loc)) (re, O (sym_ (s, oarg_spec))) in
+     let@ () = add_r (re, O (sym_ (s, oarg_spec))) in
      bind_logical_return_of_call loc situation rt
   | Constraint (lc, _oinfo, rt) -> 
      let@ () = add_c lc in
@@ -1212,7 +1212,7 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
         let@ () = add_c (t_ (representable_ (Pointer act.ct, ret))) in
         let@ () = add_c (t_ (alignedI_ ~align:arg ~t:ret)) in
         let@ () = 
-          add_r (Some (Loc loc))
+          add_r
             (P { name = Block act.ct; 
                  pointer = ret;
                  permission = bool_ true;
@@ -1278,7 +1278,7 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
             }, None)
         in
         let@ () = 
-          add_r (Some (Loc loc))
+          add_r
             (P { name = Owned act.ct;
                  pointer = parg;
                  permission = bool_ true;
@@ -1300,7 +1300,7 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
                }, None))
         in
         let value = snd (List.hd (RI.oargs_list (O point_oargs))) in
-        let@ () = add_r (Some (Loc loc)) (P point, O point_oargs) in
+        let@ () = add_r (P point, O point_oargs) in
         k value)
      | M_RMW (ct, sym1, sym2, sym3, mo1, mo2) -> 
         Debug_ocaml.error "todo: RMW"
@@ -1402,7 +1402,7 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
           }, 
            O output)
         in
-        let@ () = add_r (Some (Loc loc)) resource in
+        let@ () = add_r resource in
         k unit_)
      end))
   | Normal expect, M_Erpredicate (pack_unpack, TPU_Struct tag, pes) ->
@@ -1422,7 +1422,7 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
           RI.Special.fold_struct ~recursive:true loc situation tag 
             pointer_arg (bool_ true) 
         in
-        let@ () = add_r (Some (Loc loc)) (P resource, oarg) in
+        let@ () = add_r (P resource, oarg) in
         k unit_
      | Unpack ->
         let situation = Call (TypeErrors.UnpackStruct tag) in
@@ -1430,7 +1430,7 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
           RI.Special.unfold_struct ~recursive:true loc situation tag 
             pointer_arg (bool_ true) 
         in
-        let@ () = add_rs (Some (Loc loc)) resources in
+        let@ () = add_rs resources in
         k unit_
      end)
   | Normal expect, M_Elpredicate (have_show, pname, asyms) ->
@@ -1628,7 +1628,7 @@ let check_function
       let@ (rt, resources) = 
         check_and_bind_arguments RT.subst loc arguments function_typ 
       in
-      let@ () = ListM.iterM (add_r (Some (Label "start"))) resources in
+      let@ () = ListM.iterM add_r resources in
       (* rbt consistency *)
       let@ () = 
         let Computational ((sname, sbt), _info, t) = rt in
@@ -1694,14 +1694,14 @@ let check_procedure
           | M_Label (loc, lt, args, body, annots) ->
              debug 2 (lazy (headline ("checking label " ^ Sym.pp_string lsym)));
              debug 2 (lazy (item "type" (AT.pp False.pp lt)));
-             let label_name = match Sym.description lsym with
-               | Sym.SD_Id l -> l
-               | _ -> Debug_ocaml.error "label without name"
-             in
+             (* let label_name = match Sym.description lsym with *)
+             (*   | Sym.SD_Id l -> l *)
+             (*   | _ -> Debug_ocaml.error "label without name" *)
+             (* in *)
              let@ (rt, resources) = 
                check_and_bind_arguments False.subst loc args lt 
              in
-             let@ () = ListM.iterM (add_r (Some (Label label_name))) resources in
+             let@ () = ListM.iterM add_r resources in
              let@ () = check_expr_rt loc labels ~typ:False body in
              return ()
           end
@@ -1709,7 +1709,7 @@ let check_procedure
       let check_body () = 
         pure begin 
             debug 2 (lazy (headline ("checking function body " ^ Sym.pp_string fsym)));
-            let@ () = ListM.iterM (add_r (Some (Label "start"))) resources in
+            let@ () = ListM.iterM add_r resources in
             check_expr_rt loc labels ~typ:(Normal rt) body
           end
       in

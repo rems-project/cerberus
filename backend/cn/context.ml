@@ -109,11 +109,11 @@ let add_c c (ctxt : t) =
   if LCSet.mem c s then ctxt
   else { ctxt with constraints = LCSet.add c s }
 
-let add_r owhere r (ctxt : t) =
+let add_r r (ctxt : t) =
   let (rs, ix) = ctxt.resources in
   {ctxt with resources = ((r, ix) :: rs, ix + 1)}
 
-let add_rs owhere r rs ctxt = List.fold_right (add_r owhere) rs ctxt
+let add_rs r rs ctxt = List.fold_right add_r rs ctxt
 
 
 let add_stmt_locs stmts (ctxt : t) =

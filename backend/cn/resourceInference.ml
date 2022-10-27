@@ -267,7 +267,7 @@ module General = struct
     | LAT.Resource ((s, (resource, bt)), _, ftyp) ->
       let s, ftyp = LAT.alpha_rename OutputDef.subst (s, bt) ftyp in
       let@ () = add_l s bt (loc, lazy (Pp.item "output bound resource" (Sym.pp s))) in
-      let@ () = add_r None (resource, O (sym_ (s, bt))) in
+      let@ () = add_r (resource, O (sym_ (s, bt))) in
       unpack_packing_ft loc ftyp
     | Define ((s, it), _, ftyp) ->
       let ftyp = LAT.subst OutputDef.subst (IT.make_subst [(s, it)]) ftyp in
@@ -578,7 +578,7 @@ module General = struct
                  }
              in
              match r with
-             | Some (res, res_oargs) -> add_r None (P res, res_oargs)
+             | Some (res, res_oargs) -> add_r (P res, res_oargs)
              | None -> return ()
            ) necessary_k_ptrs 
        in
@@ -970,14 +970,14 @@ module General = struct
       begin match opt_r with
         | None -> return false
         | Some (resource, oargs) ->
-          let@ _ = add_r None (P resource, oargs) in
+          let@ _ = add_r (P resource, oargs) in
             return true
       end
     | {name = Owned (Sctypes.Struct tag); _} ->
       let@ result = fold_struct ~recursive:true loc uiinfo tag r_pt.pointer (bool_ true) in
       begin match result with
         | Result.Ok (resource, oargs) ->
-          let@ _ = add_r None (P resource, oargs) in
+          let@ _ = add_r (P resource, oargs) in
           return true
         | _ -> return false
       end
@@ -992,7 +992,7 @@ module General = struct
       let@ output_assignment = ftyp_args_request_for_pack loc (fst uiinfo)
           clause.ResourcePredicates.packing_ft in
       let output = record_ (List.map (fun (o : OutputDef.entry) -> (o.name, o.value)) output_assignment) in
-      let@ () = add_r None (RET.P {
+      let@ () = add_r (RET.P {
           name = PName pname;
           pointer = r_pt.pointer;
           permission = bool_ true;
@@ -1011,7 +1011,7 @@ module General = struct
       begin match oqp with
         | None -> return false
         | Some (qp, oargs) ->
-            let@ _ = add_r None (Q qp, oargs) in
+            let@ _ = add_r (Q qp, oargs) in
             return true
       end
     | {name = Owned (Sctypes.Struct tag); _} ->
@@ -1019,7 +1019,7 @@ module General = struct
       begin match ors with
         | None -> return false
         | Some rs ->
-           let@ _ = add_rs None rs in
+           let@ _ = add_rs rs in
            return true
       end
     | {name = PName pname; _} ->

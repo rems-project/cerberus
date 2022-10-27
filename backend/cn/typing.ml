@@ -294,20 +294,20 @@ let check_res_const_step loc r =
   else fail (fun _ -> {loc; msg = Generic
           (Pp.item "could not simplify iter-step to constant" (RET.pp r))})
 
-let add_r oloc (r, oargs) = 
+let add_r (r, oargs) = 
   let@ s = get () in
   let@ values, equalities, log_unfold, lcs = simp_constraints () in
   match RET.simp_or_empty s.global.struct_decls values equalities log_unfold lcs r with
   | None -> return ()
   | Some r ->
     let@ () = check_res_const_step Loc.unknown r in
-    set (Context.add_r oloc (r, oargs) s)
+    set (Context.add_r (r, oargs) s)
 
-let rec add_rs oloc = function
+let rec add_rs = function
   | [] -> return ()
   | r :: rs -> 
-     let@ () = add_r oloc r in
-     add_rs oloc rs
+     let@ () = add_r r in
+     add_rs rs
 
 
 type changed = 
