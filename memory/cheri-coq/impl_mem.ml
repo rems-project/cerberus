@@ -436,7 +436,69 @@ module CHERIMorello : Memory = struct
   let fromCoq_floatingType (rft:CoqCtype.floatingType): floatingType =
     RealFloating (fromCoq_realFloatingType rft)
 
-  let fromCoq_ctype (ty:CoqCtype.ctype) : Ctype.ctype = assert false (* TODO *)
+  let fromCoq_annot (ba:CoqAnnot.bmc_annot): Annot.bmc_annot =
+    Abmc_id (Z.to_int ba)
+
+  let fromCoq_attribute (a:CoqAnnot.attribute) : Annot.attribute =
+    {
+      attr_ns = Option.map (fromCoq_Symbol_identifier) a.attr_ns;
+      attr_id =  fromCoq_Symbol_identifier a.attr_id ;
+      attr_args =
+        List.map (fun ((loc, s), ll) ->
+            (fromCoq_location loc,
+             s,
+             List.map (fun (loc', s) -> (fromCoq_location loc', s)) ll)
+          ) a.attr_args
+    }
+
+  let fromCoq_attributes (ats:CoqAnnot.attributes): Annot.attributes =
+    Attrs (List.map fromCoq_attribute ats)
+
+  let fromCoq_label_annot: CoqAnnot.label_annot -> Annot.label_annot = function
+  | LAloop_prebody lid  -> LAloop_prebody (Z.to_int lid)
+  | LAloop_body lid     -> LAloop_body (Z.to_int lid)
+  | LAloop_continue lid -> LAloop_continue (Z.to_int lid)
+  | LAloop_break lid    -> LAloop_break (Z.to_int lid)
+  | LAreturn            -> LAreturn
+  | LAswitch            -> LAswitch
+
+  let fromCoq_annot: CoqAnnot.annot -> Annot.annot = function
+  | Astd s       -> Astd s
+  | Aloc loc     -> Aloc (fromCoq_location loc)
+  | Auid s       -> Auid s
+  | Abmc ba      -> Abmc (fromCoq_annot ba)
+  | Aattrs atr   -> Aattrs (fromCoq_attributes atr)
+  | Atypedef s   -> Atypedef (fromCoq_Symbol_sym s)
+  | Anot_explode -> Anot_explode
+  | Alabel la    -> Alabel (fromCoq_label_annot la)
+
+  let fromCoq_basicType: (CoqCtype.basicType) -> basicType = function
+    | Integer ity -> Integer (fromCoq_intgerType ity)
+    | Floating fty -> Floating (fromCoq_floatingType fty)
+
+  let fromCoq_qualifiers (q:CoqCtype.qualifiers): qualifiers =
+    {
+      const    = q.const;
+      restrict = q.restrict;
+      volatile = q.volatile
+    }
+
+  let rec fromCoq_ctype: CoqCtype.ctype -> Ctype.ctype = function
+    | Ctype (la, ct) -> Ctype (List.map fromCoq_annot la, fromCoq_ctype_ ct)
+  and fromCoq_ctype_: CoqCtype.ctype' -> Ctype.ctype_ = function
+    | Void -> Void
+    | Basic bty -> Basic (fromCoq_basicType bty)
+    | Array (cty, zo) -> Ctype.Array (fromCoq_ctype cty, zo)
+    | Function ((q, cty),l,b) ->
+       Function ((fromCoq_qualifiers q, fromCoq_ctype cty),
+                 List.map (fun ((q,cty),b) -> (fromCoq_qualifiers q,fromCoq_ctype cty, b)) l,
+                 b)
+    | FunctionNoParams (q, cty) ->  FunctionNoParams (fromCoq_qualifiers q, fromCoq_ctype cty)
+    | Pointer (q, cty) -> Pointer (fromCoq_qualifiers q, fromCoq_ctype cty)
+    | Atomic cty ->  Atomic (fromCoq_ctype cty)
+    | Struct s -> Struct (fromCoq_Symbol_sym s)
+    | Union s -> Union (fromCoq_Symbol_sym s)
+
   let fromCoq_intrinsics_signature (s:MM.intrinsics_signature) : Mem_common.intrinsics_signature = assert false (* TODO *)
   let fromCoq_ovelap_status (s:MM.overlap_status) : overlap_status = assert false (* TODO *)
 

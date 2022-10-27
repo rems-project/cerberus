@@ -2,6 +2,7 @@ From Coq Require Import Arith Bool List String.
 Require Import Coq.Numbers.BinNums.
 
 Require Import CoqSymbol.
+Require Import CoqLocation.
 
 Import ListNotations.
 
@@ -14,7 +15,7 @@ Inductive bmc_annot : Type :=
 Record attribute : Type := {
   attr_ns: option  CoqSymbol.identifier  ;
   attr_id: CoqSymbol.identifier ;
-  attr_args: list  ((unit  * string  * list  ((unit  * string ) % type)) % type)
+  attr_args: list  ((location_ocaml  * string  * list  ((location_ocaml  * string ) % type)) % type)
 }.
 Notation "{[ r 'with' 'attr_ns' := e ]}" := ({| attr_ns := e; attr_id := attr_id r; attr_args := attr_args r |}).
 Notation "{[ r 'with' 'attr_id' := e ]}" := ({| attr_id := e; attr_ns := attr_ns r; attr_args := attr_args r |}).
@@ -44,7 +45,7 @@ Inductive label_annot : Type :=
 
 Inductive annot : Type := 
   | Astd:  string  -> annot  (* ISO C11 Standard Annotation *)
-  | Aloc:  unit  -> annot  (* C source location *)
+  | Aloc:  location_ocaml  -> annot  (* C source location *)
   | Auid:  string  -> annot  (* Unique ID *)
   | Abmc:  bmc_annot  -> annot 
   | Aattrs:  attributes  -> annot  (* C2X attributes *)
