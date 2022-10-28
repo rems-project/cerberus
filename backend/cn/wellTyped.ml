@@ -677,8 +677,8 @@ module WRET = struct
            let sz = Memory.size_of_ctype ct in
            if IT.equal p.step (IT.int_ sz) then return ()
            else fail (fun _ -> {loc; msg = Generic
-             (!^"Iteration step not equal to C type size:" ^^^
-                 commas [IT.pp p.step; Sctypes.pp ct; !^ (Int.to_string sz)])})
+             (!^"Iteration step" ^^^ IT.pp p.step ^^^ !^ "different to sizeof" ^^^
+                 Sctypes.pp ct ^^^ parens (!^ (Int.to_string sz)))})
          | _ -> return ()
        in
        let@ _ = 
