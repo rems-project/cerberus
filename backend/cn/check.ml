@@ -796,47 +796,6 @@ module Spine : sig
 end = struct
 
 
-  let has_exact loc (r : RET.t) =
-    let@ is_ex = RI.General.exact_match () in
-    map_and_fold_resources loc (fun re found -> (Unchanged, found || is_ex (RE.request re, r))) false
-
-  let prioritise_resource loc rt_subst pred ftyp = 
-    let open LAT in
-    let rec aux names ft_so_far ft = 
-      match ft with
-      | Define ((s, it), info, t) ->
-         let ft_so_far' ft = ft_so_far (Define ((s, it), info, ft)) in
-         aux (SymSet.add s names) ft_so_far' t
-      | Resource ((name, (re, bt)), info, t) ->
-         let continue () = 
-           let ft_so_far' ft = ft_so_far (Resource ((name, (re, bt)), info, ft)) in
-           aux (SymSet.add name names) ft_so_far' t 
-         in
-         if not (SymSet.is_empty (SymSet.inter (RET.free_vars re) names)) then 
-           continue ()
-         else
-           let@ pred_holds = pred loc re in
-           if pred_holds then 
-             let name, t = LAT.alpha_rename rt_subst (name, bt) t in
-             return (Resource ((name, (re, bt)), info, (ft_so_far t)))
-           else 
-             continue ()
-      | Constraint (lc, info, t) -> 
-         let ft_so_far' ft = ft_so_far (Constraint (lc, info, ft)) in
-         aux names ft_so_far' t
-      | I rt ->
-         return (ft_so_far (I rt))         
-    in
-    aux SymSet.empty (fun ft -> ft) ftyp
-
-  let prefer_exact loc rt_subst ftyp =
-    if !RI.reorder_points 
-    then prioritise_resource loc rt_subst has_exact ftyp
-    else return ftyp 
-
-
-
-
   let spine_l rt_subst rt_pp loc (situation : call_situation) ftyp k = 
 
     let start_spine = time_log_start "spine_l" "" in
@@ -858,7 +817,6 @@ end = struct
             debug 6 (lazy (item "spec" (LAT.pp rt_pp ftyp)));
           )
         in
-        let@ ftyp = prefer_exact loc rt_subst ftyp in
         let@ ftyp = RI.General.ftyp_args_request_step rt_subst loc (Call situation)
                       original_resources ftyp in
         match ftyp with
