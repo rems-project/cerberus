@@ -131,44 +131,9 @@ let pp_pattern_match p (patv, (l_vs, a_vs)) =
   parens (list (fun (nm, (bt, lsym)) -> Sym.pp nm ^^ colon ^^^ BT.pp bt ^^ colon ^^^ Sym.pp lsym) a_vs)
 
 
-let fresh_call_with_prefix ~situation s = 
-  match Sym.description s with
-  | SD_CN_Id name -> 
-     Sym.fresh_make_uniq_kind name ~prefix:(TypeErrors.call_prefix situation)
-  | SD_Return -> 
-     Sym.fresh_make_uniq_kind "return" ~prefix:(TypeErrors.call_prefix situation)
-  | _ ->
-     Sym.fresh ()
 
 
-(* check if the symbol 'sym' appears in a logical return type exactly one,
-   in an equality constraint that equates it to some rhs, where the rhs is
-   global (no vars defined in the return type). if so, return the rhs and
-   the remainder of the return type. *)
-let not_currently_used__is_eq_in_rt sym rt =
-  let rec extract = function
-  | LRT.Define ((s, it), oinfo, rt) ->
-    Option.map (fun (rhs, rt) -> (rhs, LRT.Define ((s, it), oinfo, rt)))
-        (extract rt)
-  | LRT.Resource ((s, (re, oarg_spec)), oinfo, rt) ->
-    Option.map (fun (rhs, rt) -> (rhs, LRT.Resource ((s, (re, oarg_spec)), oinfo, rt)))
-        (extract rt)
-  | LRT.Constraint (lc, oinfo, rt) ->
-    begin match LC.is_sym_lhs_equality lc with
-    | Some (s, rhs) when Sym.equal s sym -> Some (rhs, rt)
-    | _ ->
-      Option.map (fun (rhs, rt) -> (rhs, LRT.Constraint (lc, oinfo, rt)))
-          (extract rt)
-    end
-  | LRT.I -> None
-  in
-  match extract rt with
-  | None -> None
-  | Some (rhs, rt) ->
-    if SymSet.mem sym (IT.free_vars rhs)
-      || SymSet.mem sym (LRT.free_vars rt)
-      || SymSet.mem sym (LRT.bound rt)
-    then None else Some (rhs, rt)
+
 
 
 open Binding
@@ -894,9 +859,8 @@ end = struct
           )
         in
         let@ ftyp = prefer_exact loc rt_subst ftyp in
-        let@ ftyp = RI.General.ftyp_args_request_step rt_subst loc
-            (fun s -> Some (fresh_call_with_prefix ~situation s)) (Call situation)
-            original_resources ftyp in
+        let@ ftyp = RI.General.ftyp_args_request_step rt_subst loc (Call situation)
+                      original_resources ftyp in
         match ftyp with
         | I rt -> return rt
         | _ -> check ftyp

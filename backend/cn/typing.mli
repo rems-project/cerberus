@@ -36,7 +36,6 @@ val add_l : Sym.t -> LogicalSorts.t -> Context.l_info -> (unit, 'e) m
 val add_as : (Sym.t * IndexTerms.t) list -> (unit, 'e) m
 val remove_as : Sym.t list -> (unit, 'e) m
 val add_ls : ((Sym.t * LogicalSorts.t) * Context.l_info) list -> (unit, 'e) m
-val add_l_abbrev : Sym.t -> IndexTerms.t -> Context.l_info -> (Sym.t, 'e) m
 val add_c : LogicalConstraints.t -> (unit, 'e) m
 val add_cs : LogicalConstraints.t list -> (unit, 'e) m
 val add_r : Resources.t -> (unit, TypeErrors.type_error) m

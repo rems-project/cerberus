@@ -212,7 +212,7 @@ module General = struct
   (* this version is parametric in resource_request (defined below) to ensure
      the return-type (also parametric) is as general as possible *)
   let parametric_ftyp_args_request_step resource_request rt_subst loc
-        naming_scheme situation original_resources ftyp =
+        situation original_resources ftyp =
     (* take one step of the "spine" judgement, reducing a function-type
        by claiming an argument resource or otherwise reducing towards
        an instantiated return-type *)
@@ -235,13 +235,7 @@ module General = struct
             return (LAT.subst rt_subst (IT.make_subst [(s, oargs)]) ftyp)
        end
     | Define ((s, it), info, ftyp) ->
-       let@ tm = match naming_scheme s with
-         | Some s' ->
-           let@ s'' = add_l_abbrev s' it (loc, lazy (Pp.item "input let-bind" (Sym.pp s))) in
-           return (sym_ (s'', IT.bt it))
-         | None -> return it
-       in
-       return (LAT.subst rt_subst (IT.make_subst [(s, tm)]) ftyp)
+       return (LAT.subst rt_subst (IT.make_subst [(s, it)]) ftyp)
     | Constraint (c, info, ftyp) ->
        let@ () = return (debug 9 (lazy (item "checking constraint" (LC.pp c)))) in
        let@ provable = provable loc in
@@ -1044,7 +1038,7 @@ module General = struct
       | LAT.I rt -> return rt
       | _ ->
         let@ ftyp = parametric_ftyp_args_request_step
-                      (resource_request ~recursive:true loc) OutputDef.subst loc (fun _ -> None)
+                      (resource_request ~recursive:true loc) OutputDef.subst loc
                       situation original_resources ftyp in
         loop ftyp
     in

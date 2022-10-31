@@ -110,7 +110,7 @@ let pp =
     | Tuple_op tuple_op -> 
        begin match tuple_op with
        | NthTuple (n,it2) -> 
-          mparens (aux true it2 ^^ dot ^^ !^("component" ^ string_of_int n))
+          mparens (aux true it2 ^^ dot ^^ !^("member" ^ string_of_int n))
        | Tuple its -> 
           braces (separate_map (semi ^^ space) (aux false) its)
        end
