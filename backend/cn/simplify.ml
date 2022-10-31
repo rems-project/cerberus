@@ -764,7 +764,4 @@ let simp_lc struct_decls values equalities log_unfold lcs lc =
 
 
 
-let simp_lc_flatten struct_decls values equalities log_unfold lcs lc =
-  match lc with
-  | LC.T it -> List.map LC.t_ (simp_flatten struct_decls values equalities log_unfold lcs it)
-  | _ -> [simp_lc struct_decls values equalities log_unfold lcs lc]
+

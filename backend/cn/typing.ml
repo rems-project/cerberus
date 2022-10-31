@@ -264,12 +264,12 @@ let add_c lc =
   let@ s = get () in
   let@ solver = solver () in
   let@ values, equalities, log_unfold, simp_lcs = simp_constraints () in
-  let lcs = Simplify.simp_lc_flatten s.global.struct_decls values equalities
-        log_unfold simp_lcs lc in
-  let s = List.fold_right Context.add_c lcs s in
-  let () = List.iter (Solver.add_assumption solver s.global) lcs in
-  let@ _ = add_sym_eqs (List.filter_map (LC.is_sym_lhs_equality) lcs) in
-  let@ _ = add_equalities (List.filter_map LC.is_equality lcs) in
+  let lc = Simplify.simp_lc s.global.struct_decls values equalities
+             log_unfold simp_lcs lc in
+  let s = Context.add_c lc s in
+  let () = Solver.add_assumption solver s.global lc in
+  let@ _ = add_sym_eqs (List.filter_map (LC.is_sym_lhs_equality) [lc]) in
+  let@ _ = add_equalities (List.filter_map LC.is_equality [lc]) in
   set s
 
 let rec add_cs = function
@@ -287,14 +287,15 @@ let check_res_const_step loc r =
   else fail (fun _ -> {loc; msg = Generic
           (Pp.item "could not simplify iter-step to constant" (RET.pp r))})
 
-let add_r (r, oargs) = 
+let add_r (r, RE.O oargs) = 
   let@ s = get () in
   let@ values, equalities, log_unfold, lcs = simp_constraints () in
   match RET.simp_or_empty s.global.struct_decls values equalities log_unfold lcs r with
   | None -> return ()
   | Some r ->
     let@ () = check_res_const_step Loc.unknown r in
-    set (Context.add_r (r, oargs) s)
+    let oargs = Simplify.simp s.global.struct_decls values equalities log_unfold lcs oargs in
+    set (Context.add_r (r, O oargs) s)
 
 let rec add_rs = function
   | [] -> return ()
