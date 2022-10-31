@@ -476,12 +476,13 @@ let check_conv_int loc ~expect (act : _ act) arg =
     | Bool ->
        return (ite_ (eq_ (arg, int_ 0), int_ 0, int_ 1))
     | _ when Sctypes.is_unsigned_integer_type ity ->
+       let representable = representable_ (act.ct, arg) in
        (* TODO: revisit this *)
-       (* begin match provable (t_ (representable_ (act.ct, arg))) with *)
-       (* | `True -> return arg *)
-       (* | `False -> *)
-          return (ite_ (representable_ (act.ct, arg), arg, wrapI loc ity arg))
-       (* end *)
+       begin match provable (t_ representable) with
+       | `True -> return arg
+       | `False ->
+          return (ite_ (representable, arg, wrapI loc ity arg))
+       end
     | _ ->
        begin match provable (t_ (representable_ (act.ct, arg))) with
        | `True -> return arg
