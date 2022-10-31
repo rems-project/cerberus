@@ -1205,9 +1205,8 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
      let@ (_loc, ft, _) = get_fun_decl loc fsym in
 
      Spine.calltype_ft loc ~fsym pes ft (fun rt ->
-     let rmembers = RT.binders rt in
-     let@ record = make_return_record loc (FunctionCall fsym) rmembers in
-     let@ lvt = bind_return loc record rmembers rt in
+     let@ _, members = make_return_record loc (FunctionCall fsym) (RT.binders rt) in
+     let@ lvt = bind_return loc members rt in
      k lvt)
   (* | M_Eproc (fname, pes) -> *)
   (*    let@ (_, decl_typ) = match fname with *)
@@ -1261,9 +1260,8 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
             }, None)
         in
         let lrt = ResourcePredicates.clause_lrt pred_oargs right_clause.packing_ft in
-        let rmembers = LRT.binders lrt in
-        let@ record = make_return_record loc (UnpackPredicate (Manual, pname)) rmembers in
-        let@ () = bind_logical_return loc record rmembers lrt in
+        let@ _, members = make_return_record loc (UnpackPredicate (Manual, pname)) (LRT.binders lrt) in
+        let@ () = bind_logical_return loc members lrt in
         k unit_
      | Pack ->
         Spine.calltype_packing loc pname right_clause.packing_ft (fun output_assignment -> 

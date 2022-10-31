@@ -1020,9 +1020,11 @@ module General = struct
       | Some (res2, O res_oargs) ->
         assert (ResourceTypes.equal (P res2) (P r_pt));
         let unpack_lrt = ResourcePredicates.clause_lrt res_oargs clause.ResourcePredicates.packing_ft in
-        let rmembers = LogicalReturnTypes.binders unpack_lrt in
-        let@ record = Binding.make_return_record loc (UnpackPredicate (Auto, pname)) rmembers in
-        let@ () = Binding.bind_logical_return loc record rmembers unpack_lrt in
+        let@ _, record_members = 
+          Binding.make_return_record loc (UnpackPredicate (Auto, pname)) 
+            (LogicalReturnTypes.binders unpack_lrt)
+        in
+        let@ () = Binding.bind_logical_return loc record_members unpack_lrt in
         return true
       end
     | _ ->
