@@ -214,6 +214,9 @@ let get_l sym =
 
 let add_a sym it = 
   let@ s = get () in
+  let@ values, equalities, log_unfold, simp_lcs = simp_constraints () in
+  let it = Simplify.simp s.global.struct_decls values equalities
+             log_unfold simp_lcs it in
   set (Context.add_a sym it s)
 
 let remove_a sym = 
