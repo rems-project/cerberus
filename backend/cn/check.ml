@@ -20,7 +20,6 @@ module RI = ResourceInference
 open Tools
 open Sctypes
 open Context
-open Global
 open IT
 open TypeErrors
 open CF.Mucore
@@ -172,59 +171,7 @@ let not_currently_used__is_eq_in_rt sym rt =
     then None else Some (rhs, rt)
 
 
-
-
-
-(* This essentially pattern-matches a logical return type against a
-   record pattern. `record_it` is the index term for the record,
-   `members` the pattern for its members. *)
-let bind_logical_return loc record_it = 
-  let rec aux members lrt = 
-    match members, lrt with
-    | (member_s, member_bt) :: members, 
-      LRT.Define ((s, it), _, lrt) ->
-       let@ () = ensure_base_type loc ~expect:(IT.bt it) member_bt in
-       let inst_it = recordMember_ ~member_bt (record_it, member_s) in
-       let@ () = add_c (t_ (eq__ inst_it it)) in
-       aux members (LRT.subst (IT.make_subst [(s, inst_it)]) lrt)
-    | (member_s, member_bt) :: members,
-      LRT.Resource ((s, (re, bt)), _, lrt) -> 
-       let@ () = ensure_base_type loc ~expect:bt member_bt in
-       let inst_it = recordMember_ ~member_bt (record_it, member_s) in
-       let@ () = add_r (re, O inst_it) in
-       aux members (LRT.subst (IT.make_subst [(s, inst_it)]) lrt)
-    | members,
-      LRT.Constraint (lc, _, lrt) -> 
-       let@ () = add_c lc in
-       aux members lrt
-    | [],
-      I -> 
-       return ()
-    | _ ->
-       assert false
-  in
-  fun members lrt -> aux members lrt
-
-
-(* Same for return types *)
-let bind_return loc record_it members (rt : RT.t) : (lvt, type_error) m =
-  match members, rt with
-  | (member_s, member_bt) :: members,
-    Computational ((s, bt), _, lrt) ->
-     let@ () = ensure_base_type loc ~expect:bt member_bt in
-     let inst_it = recordMember_ ~member_bt (record_it, member_s) in
-     let@ () = bind_logical_return loc record_it members 
-                 (LRT.subst (IT.make_subst [(s, inst_it)]) lrt) in
-     return inst_it
-  | _ ->
-     assert false
-
-
-let make_return_record loc call_situation record_members = 
-  let record_s = Sym.fresh_make_uniq (call_prefix call_situation) in
-  let record_bt = BT.Record record_members in
-  let@ () = add_l record_s record_bt (loc, lazy (Sym.pp record_s)) in
-  return (sym_ (record_s, record_bt))
+open Binding
 
 
 
@@ -1384,7 +1331,7 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
      | Unpack ->
         let@ (pred, O pred_oargs) =
           RI.Special.predicate_request ~recursive:false
-            loc (Call (UnpackPredicate pname)) ({
+            loc (Call (UnpackPredicate (Manual, pname))) ({
               name = PName pname;
               pointer = pointer_arg;
               permission = bool_ true;
@@ -1393,7 +1340,7 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
         in
         let lrt = ResourcePredicates.clause_lrt pred_oargs right_clause.packing_ft in
         let rmembers = LRT.binders lrt in
-        let@ record = make_return_record loc (UnpackPredicate pname) rmembers in
+        let@ record = make_return_record loc (UnpackPredicate (Manual, pname)) rmembers in
         let@ () = bind_logical_return loc record rmembers lrt in
         k unit_
      | Pack ->

@@ -23,13 +23,15 @@ type access =
   | Kill
   | Free
 
+type automatic = Auto | Manual
+
 type call_situation =
   | FunctionCall of Sym.t
   | LabelCall of label_kind
   | Subtyping
   | PackPredicate of Sym.t
   | PackStruct of Sym.t
-  | UnpackPredicate of Sym.t
+  | UnpackPredicate of automatic * Sym.t
   | UnpackStruct of Sym.t
 
 let call_prefix = function
@@ -40,7 +42,8 @@ let call_prefix = function
   | Subtyping -> "return"
   | PackPredicate _ -> "pack"
   | PackStruct _ -> "pack_struct"
-  | UnpackPredicate _ -> "unpack"
+  | UnpackPredicate (Auto, _) -> "auto_unpack"
+  | UnpackPredicate (Manual, _) -> "unpack"
   | UnpackStruct _ -> "unpack_struct"
 
 type situation =
@@ -56,7 +59,8 @@ let call_situation = function
   | Subtyping -> !^"checking subtyping"
   | PackPredicate name -> !^"packing predicate" ^^^ Sym.pp name
   | PackStruct tag -> !^"packing struct" ^^^ Sym.pp tag
-  | UnpackPredicate name -> !^"unpacking predicate" ^^^ Sym.pp name
+  | UnpackPredicate (Auto, name) -> !^"automatically unpacking predicate" ^^^ Sym.pp name
+  | UnpackPredicate (Manual, name) -> !^"unpacking predicate" ^^^ Sym.pp name
   | UnpackStruct tag -> !^"unpacking struct" ^^^ Sym.pp tag
 
 let checking_situation = function
@@ -82,7 +86,8 @@ let for_situation = function
   | Call Subtyping -> !^"for subtyping"
   | Call PackPredicate name -> !^"for packing predicate" ^^^ Sym.pp name
   | Call PackStruct tag -> !^"for packing struct" ^^^ Sym.pp tag
-  | Call UnpackPredicate name -> !^"for unpacking predicate" ^^^ Sym.pp name
+  | Call UnpackPredicate (Auto, name) -> !^"for (automatically) unpacking predicate" ^^^ Sym.pp name
+  | Call UnpackPredicate (Manual, name) -> !^"for unpacking predicate" ^^^ Sym.pp name
   | Call UnpackStruct tag -> !^"for unpacking struct" ^^^ Sym.pp tag
 
 
