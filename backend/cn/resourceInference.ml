@@ -262,23 +262,6 @@ module General = struct
 
 
 
-  (* similar to bind_logical in check.ml *)
-  let rec unpack_packing_ft loc ftyp = begin match ftyp with
-    | LAT.Resource ((s, (resource, bt)), _, ftyp) ->
-      let s, ftyp = LAT.alpha_rename OutputDef.subst (s, bt) ftyp in
-      let@ () = add_l s bt (loc, lazy (Pp.item "output bound resource" (Sym.pp s))) in
-      let@ () = add_r (resource, O (sym_ (s, bt))) in
-      unpack_packing_ft loc ftyp
-    | Define ((s, it), _, ftyp) ->
-      let ftyp = LAT.subst OutputDef.subst (IT.make_subst [(s, it)]) ftyp in
-      unpack_packing_ft loc ftyp
-    | Constraint (c, _, ftyp) ->
-      let@ () = add_c c in
-      unpack_packing_ft loc ftyp
-    | I output_def ->
-      return output_def
-    end
-
 
   (* TODO: check that oargs are in the same order? *)
   let rec predicate_request ~recursive loc uiinfo (requested : RET.predicate_type) =
