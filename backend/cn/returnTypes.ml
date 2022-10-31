@@ -6,7 +6,6 @@ module LRT = LogicalReturnTypes
 
 type t = Computational of (Sym.t * BaseTypes.t) * info * LRT.t
 
-let lrt (Computational (_, _, lrt)) = lrt
 
 
 
@@ -14,10 +13,7 @@ let mComputational (name, bound, oinfo) t =
   Computational ((name, bound), oinfo, t)
 
 
-let concat (t1: t) (t2: LRT.t) : t = 
-  match t1 with
-  | Computational (bound, oinfo, t1') -> 
-     Computational (bound, oinfo, LRT.concat t1' t2)
+
 
 
 

@@ -23,3 +23,6 @@ val pp_definition : definition -> Pp.document
 
 
 val predicate_list : Memory.struct_decls -> Sym.t list -> (Sym.t * definition) list
+
+
+val clause_lrt : IndexTerms.t -> LogicalArgumentTypes.packing_ft -> LogicalReturnTypes.t

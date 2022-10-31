@@ -11,18 +11,7 @@ type t =
   | Constraint of LogicalConstraints.t * info * t
   | I
 
-let rec concat (t1: t) (t2: t) : t = 
-  match t1 with
-  | I -> 
-     t2
-  | Define (bound, info, t) ->
-     Define (bound, info, concat t t2)
-  | Resource (bound, info, t) -> 
-     Resource (bound, info, concat t t2)
-  | Constraint (bound, info, t) -> 
-     Constraint (bound, info, concat t t2)
 
-let (@@) = concat
 
 
 let mDefine (name, bound, info) t = 

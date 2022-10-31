@@ -156,19 +156,7 @@ let rec r_resource_requests r =
      []
 
 
-let rec logical_arguments_and_return (at : 'i t) : LRT.t * 'i =
-  match at with
-  | I r ->
-     (LRT.I, r)
-  | Define ((name, it), info, args) ->
-     let (lrt, r) = logical_arguments_and_return args in
-     (LRT.Define ((name, it), info, lrt), r)
-  | Resource ((name, t), info, args) ->
-     let (lrt, r) = logical_arguments_and_return args in
-     (LRT.Resource ((name, t), info, lrt), r)
-  | Constraint (t, info, args) ->
-     let (lrt, r) = logical_arguments_and_return args in
-     (LRT.Constraint (t, info, lrt), r)
+
 
 
 

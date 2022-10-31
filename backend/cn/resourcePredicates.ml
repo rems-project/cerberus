@@ -27,6 +27,16 @@ let subst_clause subst {loc; guard; packing_ft} =
     packing_ft = LAT.subst OutputDef.subst subst packing_ft }
 
 
+let clause_lrt pred_oargs clause_packing_ft = 
+  let rec aux = function
+    | LAT.Define (bound, info, lat) -> LRT.Define (bound, info, aux lat)
+    | LAT.Resource (bound, info, lat) -> LRT.Resource (bound, info, aux lat)
+    | LAT.Constraint (lc, info, lat) -> LRT.Constraint (lc, info, aux lat)
+    | I outputs ->
+       let lc = LC.t_ (IT.eq_ (pred_oargs, OutputDef.to_record outputs)) in
+       LRT.Constraint (lc, (Loc.unknown, None), LRT.I)
+  in
+  aux clause_packing_ft
 
 
 

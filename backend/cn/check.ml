@@ -1391,9 +1391,7 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
               iargs = iargs;
             }, None)
         in
-        let condition, outputs = LAT.logical_arguments_and_return right_clause.packing_ft in
-        let lc = eq_ (pred_oargs, OutputDef.to_record outputs) in
-        let lrt = LRT.concat condition (Constraint (t_ lc, (loc, None), I)) in
+        let lrt = ResourcePredicates.clause_lrt pred_oargs right_clause.packing_ft in
         let rmembers = LRT.binders lrt in
         let@ record = make_return_record loc (UnpackPredicate pname) rmembers in
         let@ () = bind_logical_return loc record rmembers lrt in
