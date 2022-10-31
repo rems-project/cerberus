@@ -21,17 +21,33 @@ let concat (t1: t) (t2: LRT.t) : t =
 
 
 
-let subst (substitution: IT.t Subst.t) rt = 
-  match rt with
-  | Computational ((name, bt), oinfo, t) -> 
+let rec subst (substitution: IT.t Subst.t) at =
+  match at with
+  | Computational ((name, bt), info, t) -> 
      let name, t = LRT.suitably_alpha_rename substitution.relevant (name, bt) t in
-     Computational ((name, bt), oinfo, LRT.subst substitution t)
+     Computational ((name, bt), info, LRT.subst substitution t)
+
+and alpha_rename (s, ls) t = 
+  let s' = Sym.fresh_same s in
+  (s', subst (IT.make_subst [(s, IT.sym_ (s', ls))]) t)
+
+and suitably_alpha_rename syms (s, ls) t = 
+  if SymSet.mem s syms 
+  then alpha_rename (s, ls) t
+  else (s, t)
+
 
 let alpha_unique ss = function
   | Computational ((name, bt), oinfo, t) ->
     let t = LRT.alpha_unique (SymSet.add name ss) t in
     let (name, t) = LRT.suitably_alpha_rename ss (name, bt) t in
     Computational ((name, bt), oinfo, t)
+
+
+let binders = function
+  | Computational ((s, bt), _, t) ->
+     let (s, t) = LRT.alpha_rename (s, bt) t in
+     (s, bt) :: LRT.binders t
 
 
 let map (f : LRT.t -> LRT.t) = function

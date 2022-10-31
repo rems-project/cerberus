@@ -20,16 +20,13 @@ let mComputationals t =
   List.fold_right mComputational t
 
 
-let rec subst i_subst =
-  let rec aux (substitution: IT.t Subst.t) at =
-    match at with
-    | Computational ((name, bt), info, t) -> 
-       let name, t = suitably_alpha_rename i_subst substitution.relevant (name, bt) t in
-       Computational ((name, bt), info, aux substitution t)
-    | L t -> 
-       L (LAT.subst i_subst substitution t)
-  in
-  aux
+let rec subst i_subst (substitution: IT.t Subst.t) at =
+  match at with
+  | Computational ((name, bt), info, t) -> 
+     let name, t = suitably_alpha_rename i_subst substitution.relevant (name, bt) t in
+     Computational ((name, bt), info, subst i_subst substitution t)
+  | L t -> 
+     L (LAT.subst i_subst substitution t)
 
 and alpha_rename i_subst (s, ls) t = 
   let s' = Sym.fresh_same s in
@@ -82,7 +79,15 @@ let alpha_unique ss =
   f ss
 
 
-
+let binders i_binders i_subst = 
+  let rec aux = function
+    | Computational ((s, bt), _, t) ->
+       let (s, t) = alpha_rename i_subst (s, bt) t in
+       (s, bt) :: aux t
+    | L t ->
+       LAT.binders i_binders i_subst t
+  in
+  aux
 
 
 let of_rt (rt : RT.t) (rest : 'i LAT.t) : 'i t = 

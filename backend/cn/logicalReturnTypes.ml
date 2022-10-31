@@ -92,6 +92,22 @@ let alpha_unique ss =
   in f ss
 
 
+let binders = 
+  let rec aux = function
+    | Define ((s, it), _, t) ->
+       let (s, t) = alpha_rename (s, IT.bt it) t in
+       (s, IT.bt it) :: aux t
+    | Resource ((s, (re, bt)), _, t) ->
+       let (s, t) = alpha_rename (s, bt) t in
+       (s, bt) :: aux t
+    | Constraint (lc, _, t) ->
+       aux t
+    | I ->
+       []
+  in
+  aux
+
+
 let free_vars lrt =
   let rec f = function
   | Define ((nm, it), _, t) ->

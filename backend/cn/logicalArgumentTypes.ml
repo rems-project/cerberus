@@ -103,6 +103,23 @@ let alpha_unique ss =
   f ss
 
 
+let binders i_binders i_subst = 
+  let rec aux = function
+    | Define ((s, it), _, t) ->
+       let (s, t) = alpha_rename i_subst (s, IT.bt it) t in
+       (s, IT.bt it) :: aux t
+    | Resource ((s, (re, bt)), _, t) ->
+       let (s, t) = alpha_rename i_subst (s, bt) t in
+       (s, bt) :: aux t
+    | Constraint (lc, _, t) ->
+       aux t
+    | I i ->
+       i_binders i
+  in
+  aux
+
+
+
 let rec of_lrt (lrt : LRT.t) (rest : 'i t) : 'i t = 
   match lrt with
   | LRT.I -> 
