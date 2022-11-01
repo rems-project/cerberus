@@ -81,18 +81,8 @@ let remove_l lname ctxt =
   {ctxt with logical = List.filter (fun ((sym2, _), _) -> not (Sym.equal lname sym2)) ctxt.logical}
 
 
-let add_as avars ctxt = 
-  List.fold_left (fun ctxt (s,it) -> add_a s it ctxt) ctxt avars
-
-let remove_as avars ctxt = 
-  List.fold_left (fun ctxt s -> remove_a s ctxt) ctxt avars
-
-
 let add_l lname ls info (ctxt : t) =
   {ctxt with logical = ((lname, ls), info) :: ctxt.logical}
-
-let add_ls lvars ctxt = 
-  List.fold_left (fun ctxt ((s, ls), info) -> add_l s ls info ctxt) ctxt lvars
 
 let add_c c (ctxt : t) =
   let s = ctxt.constraints in
@@ -102,9 +92,6 @@ let add_c c (ctxt : t) =
 let add_r r (ctxt : t) =
   let (rs, ix) = ctxt.resources in
   {ctxt with resources = ((r, ix) :: rs, ix + 1)}
-
-let add_rs r rs ctxt = List.fold_right add_r rs ctxt
-
 
 let add_stmt_locs stmts (ctxt : t) =
   {ctxt with statement_locs = stmts}

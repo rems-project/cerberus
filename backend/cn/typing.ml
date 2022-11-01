@@ -75,21 +75,6 @@ let pure (m : ('a, 'e) t) : ('a, 'e) t =
   outcome
 
 
-let restore_resources (m : ('a, 'e) t) : ('a, 'e) t =
-  fun old_state ->
-  match m old_state with
-  | Ok (a, new_state) -> 
-     let typing_context = 
-       {new_state.typing_context with 
-         resources = old_state.typing_context.resources} 
-     in
-     Ok (a, { new_state with typing_context })
-  | Error e -> Error e
-  
-
-
-
-
 
 let get_models () = fun s -> Ok (s.past_models, s)
 
@@ -224,10 +209,6 @@ let remove_a sym =
   let s = Context.remove_a sym s in
   set s
 
-let add_as a = 
-  let@ s = get () in
-  set (Context.add_as a s)
-
 let rec remove_as = function
   | [] -> return ()
   | x :: xs -> 
@@ -238,9 +219,11 @@ let add_l sym ls info =
   let@ s = get () in
   set (Context.add_l sym ls info s)
 
-let add_ls lvars =
-  let@ s = get () in
-  set (Context.add_ls lvars s)
+let rec add_ls = function
+  | [] -> return ()
+  | ((s, ls), info) :: lvars ->
+     let@ () = add_l s ls info in
+     add_ls lvars
 
 let add_sym_eqs sym_eqs = 
   fun s -> 

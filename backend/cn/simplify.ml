@@ -499,7 +499,7 @@ let rec simp (struct_decls : Memory.struct_decls) values equalities log_unfold l
        IT (Tuple_op (Tuple its), bt)
     | NthTuple (n, it) ->
        let it = aux it in
-       IT (Tuple_op (NthTuple (n, it)), bt)
+       tuple_nth_reduce it n bt
   in
   
   
@@ -740,6 +740,14 @@ let rec simp (struct_decls : Memory.struct_decls) values equalities log_unfold l
     | Pred (name, args) -> pred name args bt
     (* | Option_op o -> option_op o bt *)
     (* | Let ((s, bound), body) -> letb (s, bound) body bt *)
+
+
+(* let simp a b c d e it =  *)
+(*   let open Pp in *)
+(*   print stdout (item "simplifying" (IT.pp it)); *)
+(*   let it = simp a b c d e it in *)
+(*   print stdout (item "simplified" (IT.pp it)); *)
+(*   it *)
 
 
 

@@ -5,7 +5,6 @@ type 'e failure = Context.t -> 'e
 val return : 'a -> ('a, 'e) m
 val bind : ('a, 'e) m -> ('a -> ('b, 'e) m) -> ('b, 'e) m
 val pure : ('a, 'e) m -> ('a, 'e) m
-val restore_resources : ('a, 'e) m -> ('a, 'e) m
 val (let@) : ('a, 'e) m -> ('a -> ('b, 'e) m) -> ('b, 'e) m
 val fail : 'e failure -> ('a, 'e) m
 val fail_with_trace : (Trace.t -> 'e failure) -> ('a, 'e) m
@@ -33,7 +32,6 @@ val get_l : Sym.t -> (LogicalSorts.t, 'e) m
 val add_a : Sym.t -> IndexTerms.t -> (unit, 'e) m
 val remove_a : Sym.t -> (unit, 'e) m
 val add_l : Sym.t -> LogicalSorts.t -> Context.l_info -> (unit, 'e) m
-val add_as : (Sym.t * IndexTerms.t) list -> (unit, 'e) m
 val remove_as : Sym.t list -> (unit, 'e) m
 val add_ls : ((Sym.t * LogicalSorts.t) * Context.l_info) list -> (unit, 'e) m
 val add_c : LogicalConstraints.t -> (unit, 'e) m
