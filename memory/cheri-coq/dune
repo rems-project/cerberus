@@ -1,6 +1,6 @@
 
 (library
- (name mem_cheri_ciq)
+ (name mem_cheri_coq)
  (public_name cerberus.mem.cheri.coq)
  (modules impl_mem)
  (libraries cerberus.coq)

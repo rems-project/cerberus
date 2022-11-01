@@ -40,7 +40,20 @@
  (libraries result cmdliner str unix
   cerb_frontend cerb_backend mem_cheri util))
 
+(executable
+ (name main_cheri_coq)
+ (public_name cerberus-cheri-coq)
+ (package cerberus)
+ (modules main_cheri_coq)
+ (libraries result cmdliner str unix
+  cerb_frontend cerb_backend mem_cheri_coq util))
+
 (rule
  (target main_cheri.ml)
  (deps main.ml)
  (action (copy main.ml main_cheri.ml)))
+
+(rule
+ (target main_cheri_coq.ml)
+ (deps main.ml)
+ (action (copy main.ml main_cheri_coq.ml)))
