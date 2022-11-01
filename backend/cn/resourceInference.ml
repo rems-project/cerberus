@@ -31,6 +31,13 @@ let get_simp () =
   let simp t = Simplify.simp global.struct_decls values equalities log_unfold lcs t in
   return simp
 
+let get_ret_simp () =
+  let@ global = get_global () in
+  let@ values, equalities, log_unfold, lcs = simp_constraints () in
+  let simp t = RET.simp global.struct_decls values equalities log_unfold lcs t in
+  return simp
+
+
 let unpack_def global name args =
     Option.bind (Global.get_logical_predicate_def global name)
     (fun def ->
@@ -216,8 +223,13 @@ module General = struct
     (* take one step of the "spine" judgement, reducing a function-type
        by claiming an argument resource or otherwise reducing towards
        an instantiated return-type *)
+
+    let@ simp = get_simp () in
+    let@ ret_simp = get_ret_simp () in
+
     begin match ftyp with
     | LAT.Resource ((s, (resource, bt)), info, ftyp) ->
+       let resource = ret_simp resource in
        let uiinfo = (situation, (Some resource, Some info)) in
        let@ o_re_oarg = resource_request uiinfo resource in
        begin match o_re_oarg with
@@ -232,10 +244,10 @@ module General = struct
            )
          | Some (re, O oargs) ->
             assert (ResourceTypes.equal re resource);
-            return (LAT.subst rt_subst (IT.make_subst [(s, oargs)]) ftyp)
+            return (LAT.subst rt_subst (IT.make_subst [(s, simp oargs)]) ftyp)
        end
     | Define ((s, it), info, ftyp) ->
-       return (LAT.subst rt_subst (IT.make_subst [(s, it)]) ftyp)
+       return (LAT.subst rt_subst (IT.make_subst [(s, simp it)]) ftyp)
     | Constraint (c, info, ftyp) ->
        let@ () = return (debug 9 (lazy (item "checking constraint" (LC.pp c)))) in
        let@ provable = provable loc in
