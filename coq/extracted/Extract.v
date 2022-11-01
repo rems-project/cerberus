@@ -13,7 +13,7 @@ Require Import ExtrOcamlZBigInt.
 
 Extraction Language OCaml.
 
-Extraction Blacklist String List Char Core Monad Bool Format.
+Extraction Blacklist String List Char Core Monad Bool Format Nat Int.
 
 (* Set Extraction AccessOpaque. *)
 
