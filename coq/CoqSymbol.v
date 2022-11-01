@@ -263,7 +263,16 @@ Module Symbol_sym_as_OT <: OrderedType.
 
   Lemma eq_dec : forall x y : t, {eq x y} + {~ eq x y}.
   Proof.
-  Admitted.
+    intros x y.
+    destruct x, y.
+    unfold eq, symbolEquality, digest_compare.
+    break_match; cbn.
+    destruct (z =? z0)%Z; cbv.
+    + left; trivial.
+    + right; lia.
+    + right; cbv; lia.
+    + right; cbv; lia.
+  Defined.
 
 End Symbol_sym_as_OT.
 
