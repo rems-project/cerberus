@@ -220,8 +220,6 @@ Definition Z_integerRem_t := Z.rem.
 Definition Z_integerRem_f := Z.rem.
 Definition Z_integerDiv_t := Z.div.
 
-Definition float_of_bits: Z -> float.
-Proof. Admitted. (* TODO *)
+Definition float_of_bits (_:Z): float := PrimFloat.zero. (* TODO: implement *)
 
-Definition bits_of_float: float -> Z.
-Proof. Admitted. (* TODO *)
+Definition bits_of_float (_:float) : Z := Z.zero. (* TODO: implement *)
