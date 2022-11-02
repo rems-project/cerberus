@@ -75,7 +75,7 @@ let bt_prefix = function
   | Bool -> "b"
   | Integer -> "i"
   | Real -> "r"
-  | Loc -> "l"
+  | Loc -> "p"
   | List _ -> "list"
   | Tuple _ -> "tuple"
   | Struct _ -> "s"
