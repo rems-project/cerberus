@@ -73,6 +73,22 @@ Module CheriMemory
 
   Definition floating_value : Set := float. (* 64 bit *)
 
+  (* OCaml Z.sign *)
+  Definition sign (x:Z) : Z :=
+    match x with
+    | Z0 => 0
+    | Zpos _ => 1
+    | Zneg _ => (-1)
+    end.
+
+  (* See [Z.ediv_rem] in OCaml ZArith *)
+  Definition quomod (a b: Z) : (Z*Z) :=
+    let (q,r) := Z.quotrem a b in
+    if Z.geb (sign r) 0 then (q,r) else
+      if Z.geb (sign b) 0 then (Z.pred q, Z.add r b)
+      else (Z.succ q, Z.sub r b).
+
+
   Inductive mem_value_with_err :=
   | MVEunspecified : CoqCtype.ctype -> mem_value_with_err
   | MVEinteger :
@@ -387,7 +403,9 @@ Module CheriMemory
     (captags:ZMap.t bool): ZMap.t bool
     :=
     let align := IMP.get.(alignof_pointer) in
-    let lower_a x := Z.mul (Z.quot x align) align in
+    let lower_a x :=
+      let (q,_) := quomod x align in
+      Z.mul q align in
     let a0 := lower_a addr in
     let a1 := lower_a (Z.pred (Z.add addr size)) in
     ZMap.mapi
@@ -401,8 +419,8 @@ Module CheriMemory
         let alloc_id := st.(next_alloc_id) in
         (
           let z := Z.sub st.(last_address) size in
-          let (q,m) := Z.quotrem z align in
-          let z' := Z.sub z (Z.abs m) in
+          let (q,m) := quomod z align in
+          let z' := Z.sub z (if Z.ltb q 0 then Z.opp m else m) in
           if Z.leb z' 0 then
             fail (MerrOther "CHERI.allocator: failed (out of memory)")
           else
@@ -1047,9 +1065,9 @@ Module CheriMemory
                    end
     end.
 
-  Definition is_pointer_algined (p : Z) : bool :=
-    let a := IMP.get.(alignof_pointer) in
-    let m := Z.rem p a in
+  Definition is_pointer_algined (a : Z) : bool :=
+    let v := IMP.get.(alignof_pointer) in
+    let (_,m) := quomod a v in
     Z.eqb m 0.
 
   (* Convinience function to be used in breaking let to avoid match *)
