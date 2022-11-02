@@ -427,7 +427,6 @@ Module CheriMemory
             ret z'
         )
           >>= fun addr =>
-            let addr := addr in
             put
               {|
                 next_alloc_id    := Z.succ alloc_id;
