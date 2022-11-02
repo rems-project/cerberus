@@ -522,7 +522,7 @@ Module MorelloCapability <:
   Definition representable_alignment_mask (len: Z) : Z :=
     let len' := mword_of_int (len:=Z.of_nat vaddr_bits) len in
     let mask := CapGetRepresentableMask len' in
-    uwordToZ len'.
+    uwordToZ mask.
 
   Definition representable_length (len : Z) : Z :=
     let mask := representable_alignment_mask len in
