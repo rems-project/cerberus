@@ -84,6 +84,8 @@ module CHERIMorello : Memory = struct
 
   let return = Nondeterminism.nd_return
   let bind = Nondeterminism.nd_bind
+  let get = Nondeterminism.nd_get
+  let (>>=) = Nondeterminism.nd_bind
 
   let lift_coq_serr (s: (string, 'a) Datatypes.sum): 'a =
     match s with
@@ -784,6 +786,11 @@ module CHERIMorello : Memory = struct
         (ty: Ctype.ctype)
         (init_opt: mem_value option): pointer_value memM
     =
+    get >>= fun st ->
+    Debug_ocaml.print_debug 1 []
+      (fun () -> "allocate_object. last_address=" ^
+                   (Z.to_string (MM.last_address st))
+      );
     lift_coq_memM (MM.allocate_object
                      (toCoq_thread_id tid)
                      (toCoq_Symbol_prefix pref)
@@ -798,6 +805,7 @@ module CHERIMorello : Memory = struct
         (align_int:integer_value)
         (size_int: integer_value): pointer_value memM
     =
+    Debug_ocaml.print_debug 1 [] (fun () -> "allocate_region");
     lift_coq_memM (MM.allocate_region
                      (toCoq_thread_id tid)
                      (toCoq_Symbol_prefix pref)
