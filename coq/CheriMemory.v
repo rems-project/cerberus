@@ -26,6 +26,8 @@ Require Import AltBinNotations.
 Import ListNotations.
 Import MonadNotation.
 
+Definition print_msg (msg : string) : unit := tt.
+
 Module ZMap := FMapAVL.Make(Z_as_OT).
 
 Module CheriMemory
