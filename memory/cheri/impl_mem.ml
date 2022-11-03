@@ -1356,6 +1356,13 @@ module CHERI (C:Capability
 
 
   let allocate_object tid pref int_val ty init_opt : pointer_value memM =
+
+    get >>= fun st ->
+    Debug_ocaml.print_debug 1 []
+      (fun () -> "allocate_object. last_address=" ^
+                   (Z.to_string (st.last_address))
+      );
+
     let align_n = num_of_int int_val in
     let sz = sizeof ty in
     let size_n = Z.of_int sz in
