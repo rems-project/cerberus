@@ -241,7 +241,7 @@ let pp_message te =
      let short = !^"Missing resource" ^^^ for_situation situation in
      let descr = missing_or_bad_request_description oinfo orequest in
      let state = Explain.state ctxt model orequest in
-     let trace_doc = Trace.format_ctxt_logical_trace (fst model) ctxt in
+     let trace_doc = Trace.format_trace (fst model) trace in
      { short; descr = descr; state = Some state; trace = Some trace_doc }
   | Merging_multiple_arrays {orequest; situation; oinfo; ctxt; model} ->
      let short = 
@@ -255,7 +255,7 @@ let pp_message te =
      let resource = RE.pp resource in
      let short = !^"Left-over unused resource" ^^^ squotes resource in
      let state = Explain.state ctxt model None in
-     let trace_doc = Trace.format_ctxt_logical_trace (fst model) ctxt in
+     let trace_doc = Trace.format_trace (fst model) trace in
      { short; descr = None; state = Some state; trace = Some trace_doc }
   | Number_members {has;expect} ->
      let short = !^"Wrong number of struct members" in
@@ -377,7 +377,7 @@ let pp_message te =
        | None -> !^"Constraint from " ^^^ parens (!^head)
        | Some descr -> !^"Constraint from" ^^^ !^descr ^^^ parens (!^head)
      in
-     let trace_doc = Trace.format_ctxt_logical_trace (fst model) ctxt in
+     let trace_doc = Trace.format_trace (fst model) trace in
      { short; descr = Some descr; state = Some state; trace = Some trace_doc }
   | Undefined_behaviour {ub; ctxt; model} ->
      let short = !^"Undefined behaviour" in
