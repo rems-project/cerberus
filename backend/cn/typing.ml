@@ -1,6 +1,7 @@
 open Context
 open Simplify
 module IT = IndexTerms
+module ITSet = Set.Make(IT)
 module SymMap = Map.Make(Sym)
 module RET = ResourceTypes
 
@@ -12,6 +13,7 @@ type s = {
     equalities: bool ITPairMap.t;
     past_models : (Solver.model_with_q * Context.t) list;
     step_trace : Trace.t;
+    found_equalities : EqTable.table;
   }
 
 type ('a, 'e) t = s -> ('a * s, 'e) Result.t
@@ -30,6 +32,7 @@ let run (c : Context.t) (m : ('a, 'e) t) : ('a, 'e) Resultat.t =
       equalities = ITPairMap.empty;
       past_models = []; 
       step_trace = Trace.empty;
+      found_equalities = EqTable.empty;
     } 
   in
   let outcome = m s in
@@ -81,6 +84,10 @@ let get_models () = fun s -> Ok (s.past_models, s)
 let upd_models ms = fun s -> Ok ((), {s with past_models = ms})
 
 let drop_models () = upd_models []
+
+let get_found_eqs () = fun s -> Ok (s.found_equalities, s)
+
+let upd_found_eqs eqs = fun s -> Ok ((), {s with found_equalities = eqs})
 
 
 let get_step_trace () = fun s -> Ok (s.step_trace, s)
@@ -244,6 +251,10 @@ let add_equalities new_equalities =
   in
   Ok ((), { s with equalities })
 
+let add_found_equalities lc =
+  let@ eqs = get_found_eqs () in
+  upd_found_eqs (EqTable.add_lc_eqs eqs lc)
+
 
 let add_c lc = 
   let@ _ = drop_models () in
@@ -256,6 +267,7 @@ let add_c lc =
   let () = Solver.add_assumption solver s.global lc in
   let@ _ = add_sym_eqs (List.filter_map (LC.is_sym_lhs_equality) [lc]) in
   let@ _ = add_equalities (List.filter_map LC.is_equality [lc]) in
+  let@ _ = add_found_equalities lc in
   set s
 
 let rec add_cs = function
@@ -512,5 +524,36 @@ let logical_predicate_cycle_check () =
           (Pp.item "logical predicate cycle" (Pp.list Sym.pp (nm :: nms)))})
   | Some [] -> assert false
 
+
+let value_eq_group guard x =
+  let@ eqs = get_found_eqs () in
+  return (EqTable.get_eq_vals eqs guard x)
+
+let test_value_eqs loc guard x ys =
+  let prop y = match guard with
+    | None -> LC.t_ (IT.eq_ (x, y))
+    | Some t -> LC.t_ (IT.impl_ (t, IT.eq_ (x, y)))
+  in
+  let@ prover = provable loc in
+  let guard_it = Option.value guard ~default:(IT.bool_ true) in
+  let rec loop group ms = function
+    | [] -> return ()
+    | y :: ys ->
+      let@ counterex = model_has_prop (IT.not_ (IT.eq_ (x, y))) in
+      if ITSet.mem y group || List.exists counterex ms
+      then loop group ms ys
+      else match prover (prop y) with
+        | `True ->
+            let@ () = add_found_equalities (prop y) in
+            let@ group = value_eq_group guard x in
+            loop group ms ys
+        | `False ->
+            let@ _ = model () in
+            let@ ms = prev_models_with loc guard_it in
+            loop group ms ys
+  in
+  let@ group = value_eq_group guard x in
+  let@ ms = prev_models_with loc guard_it in
+  loop group ms ys
 
 
