@@ -24,6 +24,8 @@ opam pin -n coq-struct-tact https://github.com/uwplse/StructTact.git
 Sail coq libraries needs to be pinned manually. To do so:
 
 ```git clone git@github.com:rems-project/sail.git
+cd sail/
+git checkout 57b8acfad416014c38b47e7a5d134120a9c14999
 cd lib/coq
 opam install .
 ```
