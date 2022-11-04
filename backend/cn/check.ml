@@ -1721,13 +1721,9 @@ let check mu_file =
     Pp.progress_simple "checking specifications" "function welltypedness";
     PmapM.iterM
       (fun fsym (M_funinfo (loc, _attrs, ftyp, _trusted, _has_proto)) ->
-        match !only with
-        | Some fname when not (String.equal fname (Sym.pp_string fsym)) ->
-           return ()
-        | _ ->
-           let () = debug 2 (lazy (headline ("checking welltypedness of procedure " ^ Sym.pp_string fsym))) in
-           let () = debug 2 (lazy (item "type" (AT.pp RT.pp ftyp))) in
-           WellTyped.WFT.welltyped "global" loc ftyp
+        let () = debug 2 (lazy (headline ("checking welltypedness of procedure " ^ Sym.pp_string fsym))) in
+        let () = debug 2 (lazy (item "type" (AT.pp RT.pp ftyp))) in
+        WellTyped.WFT.welltyped "global" loc ftyp
       ) mu_file.mu_funinfo
   in
   let () = Debug_ocaml.end_csv_timing "welltypedness" in
