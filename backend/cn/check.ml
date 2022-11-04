@@ -1081,7 +1081,6 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
              | (Symbol (_, _, SD_ObjectAddress str)) :: _ ->
                 IT.fresh_named Loc ("&" ^ str)
              | _ -> 
-                print stdout (item "*****************" !^(Sym.show_symbol (List.hd syms)));
                 IT.fresh Loc
              end
           | PrefFunArg (_loc, _, n) -> 
