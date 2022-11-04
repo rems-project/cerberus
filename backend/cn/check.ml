@@ -1075,8 +1075,15 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
         let@ () = WellTyped.WCT.is_ct act.loc act.ct in
         check_pexpr ~expect:Integer pe (fun arg ->
         let ret_s, ret = match prefix with 
-          | PrefSource (_loc, (Symbol (_, _, SD_Id str)) :: _) -> 
-             IT.fresh_named Loc ("&" ^ str)
+          | PrefSource (_loc, syms) -> 
+             let syms = List.rev syms in
+             begin match syms with
+             | (Symbol (_, _, SD_ObjectAddress str)) :: _ ->
+                IT.fresh_named Loc ("&" ^ str)
+             | _ -> 
+                print stdout (item "*****************" !^(Sym.show_symbol (List.hd syms)));
+                IT.fresh Loc
+             end
           | PrefFunArg (_loc, _, n) -> 
              IT.fresh_named Loc ("&ARG" ^ string_of_int n)
           | _ -> 
