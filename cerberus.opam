@@ -30,6 +30,8 @@ depends: [
   "lem" {= "2020-06-03"}
   "menhir" {<= "20211125"}
   "result" {>= "1.4"}
+  "uutf" {>= "1.0.3"}
+  "jsonm" {>= "1.0.1"}
   "ounit2"
   "ppx_deriving"
   "zarith"
