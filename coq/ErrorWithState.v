@@ -38,7 +38,7 @@ Section withState.
   Global Instance State_errS: MonadState St errS :=
     {
       get := fun s => (s, inr s)
-    ; put := fun _ s => (s, inr tt)
+    ; put := fun t s => (t, inr tt)
     }.
 
   (* Unwrapping/running monad *)

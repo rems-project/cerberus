@@ -558,7 +558,7 @@ type 'a core_dump =
     dump_extern: (Symbol.identifier * (Symbol.sym list * Core.linking_kind)) list;
     dump_funinfo: (Symbol.sym * (Location_ocaml.t * Annot.attributes * Ctype.ctype * (Symbol.sym option * Ctype.ctype) list * bool * bool)) list;
     dump_loop_attributes: (int * Annot.attributes) list;
-  }
+  } [@@warning "-unused-field"]
 
 let sym_compare (Symbol.Symbol (d1, n1, _)) (Symbol.Symbol (d2, n2, _)) =
   if d1 = d2 then compare n1 n2
