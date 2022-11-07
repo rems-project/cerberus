@@ -87,8 +87,7 @@ module CHERIMorello : Memory = struct
   let get = Nondeterminism.nd_get
   let (>>=) = Nondeterminism.nd_bind
 
-  let lift_coq_serr (s: (string, 'a) Datatypes.sum): 'a =
-    match s with
+  let lift_coq_serr: (string, 'a) Datatypes.sum -> 'a = function
     | Coq_inl errs -> failwith errs
     | Coq_inr v -> v
 
