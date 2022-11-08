@@ -8,7 +8,7 @@ open CheriMemory
 open CoqImplementation
 open Morello
 
-module CerbTagDefs: CoqTags.TagDefs = struct
+module CerbTagDefs = struct
 
   let toCoq_lexing_position (lp:Lexing.position): CoqLocation.lexing_position =
     {
@@ -186,7 +186,7 @@ module CerbTagDefs: CoqTags.TagDefs = struct
   let tagDefs _ = toCoq_SymMap (Tags.tagDefs ())
 end
 
-module MM = CheriMemory(MorelloCapability)(MorelloImpl)(CerbTagDefs)
+module MM = CheriMemory(MorelloCapability)(MorelloImpl)(CerbTagDefs: CoqTags.TagDefs)
 module C = MorelloCapability
 
 module Z = struct
@@ -691,6 +691,7 @@ module CHERIMorello : Memory = struct
 
 
   (* OCaml -> Coq type conversion *)
+  open CerbTagDefs
   let toCoq_thread_id (tid:thread_id) : MM.thread_id = Z.of_int tid
 
 
@@ -911,7 +912,7 @@ module CHERIMorello : Memory = struct
          Some (string_of_prefix (fromCoq_Symbol_prefix alloc.prefix) ^ " + " ^ Z.to_string offset)
       | Some (Ctype (_, Struct tag_sym)) -> (* TODO: nested structs *)
          let offset = Z.sub addr alloc.base in
-         let (offs, _) = lift_coq_serr (MM.offsetsof MM.coq_DEFAULT_FUEL (TD.tagDefs ()) (toCoq_Symbol_sym tag_sym)) in
+         let (offs, _) = lift_coq_serr (MM.offsetsof MM.coq_DEFAULT_FUEL (CerbTagDefs.tagDefs ()) (toCoq_Symbol_sym tag_sym)) in
          let offs = List.map (fun ((id,ty),n) ->(fromCoq_Symbol_identifier id,ty,n)) offs in
          let rec find = function
            | [] ->
@@ -924,7 +925,7 @@ module CHERIMorello : Memory = struct
       | Some (Ctype (_, Array (ty, _))) ->
          let offset = Z.sub addr alloc.base in
          if Z.less offset alloc.size then
-           let sz = lift_coq_serr (MM.sizeof MM.coq_DEFAULT_FUEL (Some (TD.tagDefs ())) (toCoq_ctype ty)) in
+           let sz = lift_coq_serr (MM.sizeof MM.coq_DEFAULT_FUEL (Some (CerbTagDefs.tagDefs ())) (toCoq_ctype ty)) in
            let n = Z.div offset sz in
            Some (string_of_prefix (fromCoq_Symbol_prefix alloc.prefix) ^ "[" ^ Z.to_string n ^ "]")
          else
