@@ -38,6 +38,7 @@ Module CheriMemory
        (MorelloPermission)
   )
   (IMP: Implementation)
+  (TD: TagDefs)
   <: Memory(MorelloAddr).
 
   Include Mem_common(MorelloAddr).
@@ -458,7 +459,7 @@ Module CheriMemory
     let tagDefs :=
       match maybe_tagDefs with
       | Some x => x
-      | None => CoqTags.tagDefs tt
+      | None => TD.tagDefs tt
       end in
     let fix alignof_ (fuel: nat) ty  :=
       match fuel with
@@ -568,7 +569,7 @@ Module CheriMemory
              let tagDefs :=
                match maybe_tagDefs with
                | Some x => x
-               | None => CoqTags.tagDefs tt
+               | None => TD.tagDefs tt
                end in
              fun (function_parameter : CoqCtype.ctype) =>
                let '(CoqCtype.Ctype _ ty) as cty := function_parameter in
@@ -703,7 +704,7 @@ Module CheriMemory
             ret (funptrmap, captags, (List.concat (List.rev bs_s)))
         | MVstruct tag_sym xs =>
             let padding_byte _ : AbsByte := absbyte_v Prov_none None None in
-            '(offs, last_off) <- offsetsof DEFAULT_FUEL (CoqTags.tagDefs tt) tag_sym ;;
+            '(offs, last_off) <- offsetsof DEFAULT_FUEL (TD.tagDefs tt) tag_sym ;;
             sz <- sizeof DEFAULT_FUEL None (CoqCtype.Ctype nil (CoqCtype.Struct tag_sym)) ;;
             let final_pad := Z.sub sz last_off in
             '(funptrmap, captags, _, bs) <-
@@ -1358,7 +1359,7 @@ Module CheriMemory
             self fuel addr atom_ty bs
         | CoqCtype.Struct tag_sym =>
             sz <- sizeof DEFAULT_FUEL None cty ;;
-            '(offsets,_) <- offsetsof DEFAULT_FUEL (CoqTags.tagDefs tt) tag_sym ;;
+            '(offsets,_) <- offsetsof DEFAULT_FUEL (TD.tagDefs tt) tag_sym ;;
             let '(bs1, bs2) := split_at (Z.to_nat sz) bs in
             '(taint, rev_xs, _, bs') <-
               monadic_fold_left
@@ -2447,7 +2448,7 @@ Module CheriMemory
         ret (Some (CoqSymbol.string_of_prefix alloc.(prefix) ++ " + " ++ String.dec_str offset))
     | Some (CoqCtype.Ctype _ (CoqCtype.Struct tag_sym)) => (* TODO: nested structs *)
         let offset := Z.sub addr alloc.(base) in
-        '(offs, _) <- serr2memM (offsetsof DEFAULT_FUEL (CoqTags.tagDefs tt) tag_sym) ;;
+        '(offs, _) <- serr2memM (offsetsof DEFAULT_FUEL (TD.tagDefs tt) tag_sym) ;;
         let fix find y :=
           match y with
           | [] => None
@@ -3027,7 +3028,7 @@ Module CheriMemory
     (memb_ident: CoqSymbol.identifier):  memM pointer_value
     :=
     let '(prov,ptrval_) := break_PV ptr in
-    ioff <- serr2memM (offsetof_ival (CoqTags.tagDefs tt) tag_sym memb_ident) ;;
+    ioff <- serr2memM (offsetof_ival (TD.tagDefs tt) tag_sym memb_ident) ;;
     offset <-
       match ioff with
       | IV offset => ret (offset)
