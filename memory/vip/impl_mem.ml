@@ -151,7 +151,7 @@ type mem_state = {
 
   (* Web user-interface stuff *)
   last_used: allocation_id option;
-}
+} [@@warning "-unused-field"]
 
 let initial_mem_state: mem_state =
   { allocations= IntMap.empty

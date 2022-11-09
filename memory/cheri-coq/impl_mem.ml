@@ -1086,7 +1086,7 @@ module CHERIMorello : Memory = struct
 
   (* Predicats on integer values *)
   let eq_ival = MM.eq_ival
-  let lt_ival = MM.eq_ival
+  let lt_ival = MM.lt_ival
   let le_ival = MM.le_ival
 
   let eval_integer_value = MM.eval_integer_value
