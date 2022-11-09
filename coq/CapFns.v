@@ -8,7 +8,6 @@ Open Scope bool.
 Open Scope Z.
 
 
-
 Definition eq_unit (_ : unit) (_ : unit) : {_bool : bool & ArithFact (_bool)} := build_ex (true).
 
 Definition neq_int (x : Z) (y : Z) : {_bool : bool & ArithFact (Bool.eqb (negb (x =? y)) _bool)} :=

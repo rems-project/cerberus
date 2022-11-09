@@ -10,7 +10,8 @@ From stdpp.unstable Require Import bitvector.
 Require Import Sail.Values.
 Require Import Sail.Prompt_monad.
 Require Import Sail.Operators_mwords.
-Require Import specCapFns.capfns_no_monad.
+(* Require Import specCapFns.capfns_no_monad. *)
+Require Import CapFns.
 
 Require Import Capabilities.
 Require Import Addr.
