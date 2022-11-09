@@ -227,3 +227,9 @@ Definition Z_integerDiv_t := Z.div.
 Definition float_of_bits (_:Z): float := PrimFloat.zero. (* TODO: implement *)
 
 Definition bits_of_float (_:float) : Z := Z.zero. (* TODO: implement *)
+
+Definition string_of_bool (b:bool) :=
+  match b with
+  | true => "true"
+  | false => "false"
+  end.

@@ -182,8 +182,6 @@ Module MorelloPermission <: Permission.
       user_perms := List.repeat false user_perms_len
     |}.
 
-  Definition to_string (p:t) := "TODO"%string.
-
   (* raw permissoins in numeric format *)
   Definition to_raw (p:t) := Z0. (*  TODO *)
 
@@ -206,6 +204,11 @@ Module MorelloPermission <: Permission.
           p_value.(permits_store);
           p_value.(permits_load)
         ]).
+
+
+  Definition to_string (p:t) :=
+    String.concat ";"
+      (List.map string_of_bool (to_list p)).
 
 End MorelloPermission.
 
@@ -566,7 +569,16 @@ Module MorelloCapability <:
     (* could not be proven under current definition of eqb! *)
   Admitted.
 
-  Definition to_string (c: t) : string := "TODO".
+  Definition to_string (c: t) : string :=
+    "{" ++
+      ("valid=" ++ string_of_bool c.(valid) ++ ",") ++
+      ("value=" ++ hex_str c.(value) ++ ",") ++
+      ("obj_type=" ++ hex_str c.(obj_type) ++ ",") ++
+      ("bounds=(" ++ hex_str (fst c.(bounds)) ++ "," ++ hex_str (snd c.(bounds)) ++ "),") ++
+
+      ("flags=" ++  (String.concat ";" (List.map string_of_bool c.(flags))) ++ ",") ++
+      ("perms=" ++ MorelloPermission.to_string (c.(perms)) ++ ",") ++
+      "}".
 
   Definition strfcap (formats : string) (capability : t) : option string :=
     None. (* TODO *)
