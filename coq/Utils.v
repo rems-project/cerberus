@@ -154,7 +154,7 @@ Definition bool_bits_of_bytes (bytes : list ascii): list bool
   :=
   let ascii_to_bits (x:ascii) :=
     match x with
-    | Ascii a0 a1 a2 a3 a4 a5 a6 a7 => [a0; a1; a2; a3; a4; a5; a6; a7]
+    | Ascii a0 a1 a2 a3 a4 a5 a6 a7 => [a7; a6; a5; a4; a3; a2; a1; a0]
     end
   in
   List.fold_left (fun l a => List.app l (ascii_to_bits a)) bytes [].
