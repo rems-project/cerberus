@@ -217,7 +217,11 @@ Fixpoint try_map {A B:Type} (f : A -> option B) (l:list A) : option (list B)
 
 (* TODO: check if these are correct *)
 Definition Z_integerRem_t := Z.rem.
-Definition Z_integerRem_f := Z.rem.
+
+Definition Z_integerRem_f a b :=
+  let r := Z.rem a b in
+  if Z.geb (Z.sgn r) 0 then r else Z.add r (Z.abs b).
+
 Definition Z_integerDiv_t := Z.div.
 
 Definition float_of_bits (_:Z): float := PrimFloat.zero. (* TODO: implement *)

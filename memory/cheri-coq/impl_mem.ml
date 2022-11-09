@@ -8,7 +8,185 @@ open CheriMemory
 open CoqImplementation
 open Morello
 
-module MM = CheriMemory(MorelloCapability)(MorelloImpl)
+module CerbTagDefs = struct
+
+  let toCoq_lexing_position (lp:Lexing.position): CoqLocation.lexing_position =
+    {
+      pos_fname = lp.pos_fname;
+      pos_lnum = Z.of_int lp.pos_lnum;
+      pos_bol = Z.of_int lp.pos_bol;
+      pos_cnum = Z.of_int lp.pos_cnum;
+    }
+
+  let toCoq_location_cursor: Location_ocaml.cursor -> CoqLocation.location_cursor = function
+    | NoCursor -> NoCursor
+    | PointCursor lp -> PointCursor (toCoq_lexing_position lp)
+    | RegionCursor (lp1,lp2) -> RegionCursor (toCoq_lexing_position lp1, toCoq_lexing_position lp2)
+
+  let toCoq_location (l:Location_ocaml.t): CoqLocation.location_ocaml =
+    match (Location_ocaml.to_raw l) with
+    | Loc_unknown -> Loc_unknown
+    | Loc_other s -> Loc_other s
+    | Loc_point p -> Loc_point (toCoq_lexing_position p)
+    | Loc_region (lp1,lp2,lc) -> Loc_region (toCoq_lexing_position lp1, toCoq_lexing_position lp2,toCoq_location_cursor lc)
+    | Loc_regions (ps, lc) -> Loc_regions
+                                ((List.map (fun (lp1,lp2) -> (toCoq_lexing_position lp1, toCoq_lexing_position lp2)) ps),
+                                 toCoq_location_cursor lc)
+
+
+
+  let toCoq_Symbol_description: Symbol.symbol_description -> CoqSymbol.symbol_description = function
+    | SD_None -> SD_None
+    | SD_Id s -> SD_Id s
+    | SD_ObjectAddress s -> SD_ObjectAddress s
+    | SD_Return -> SD_Return
+    | SD_FunArg (l,v) -> SD_FunArg (toCoq_location l, Z.of_int v)
+
+  let toCoq_Symbol_sym: Symbol.sym -> CoqSymbol.sym = function
+    | Symbol (d,v,desc) -> Symbol (d, Z.of_int v, toCoq_Symbol_description desc)
+
+  let toCoq_Symbol_prefix: Symbol.prefix -> CoqSymbol.prefix = function
+    | PrefSource (loc, sl) -> PrefSource (toCoq_location loc, List.map toCoq_Symbol_sym sl)
+    | PrefFunArg (l, d, v) -> PrefFunArg (toCoq_location l, d, Z.of_int v)
+    | PrefStringLiteral (l,d) -> PrefStringLiteral (toCoq_location l, d)
+    | PrefCompoundLiteral (l,d) ->  PrefCompoundLiteral (toCoq_location l, d)
+    | PrefMalloc -> PrefMalloc
+    | PrefOther s -> PrefOther s
+
+  let toCoq_Symbol_identifier: Symbol.identifier -> CoqSymbol.identifier = function
+    | Identifier (l,s) -> Identifier (toCoq_location l, s)
+
+
+  let toCoq_annot: Annot.bmc_annot -> CoqAnnot.bmc_annot  = function
+    | Abmc_id ba -> Z.of_int ba
+
+  let toCoq_attribute (a:Annot.attribute) : CoqAnnot.attribute =
+    {
+      attr_ns = Option.map (toCoq_Symbol_identifier) a.attr_ns;
+      attr_id =  toCoq_Symbol_identifier a.attr_id ;
+      attr_args =
+        List.map (fun (loc, s, ll) ->
+            ((toCoq_location loc,
+              s),
+             List.map (fun (loc', s) -> (toCoq_location loc', s)) ll)
+          ) a.attr_args
+    }
+
+  let toCoq_attributes: Annot.attributes -> CoqAnnot.attributes  = function
+    | Attrs ats -> List.map toCoq_attribute ats
+
+  let toCoq_qualifiers (q:qualifiers): CoqCtype.qualifiers =
+    {
+      const    = q.const;
+      restrict = q.restrict;
+      volatile = q.volatile
+    }
+
+  let toCoq_integerBaseType: integerBaseType -> CoqCtype.integerBaseType = function
+    | Ichar           -> Ichar
+    | Short           -> Short
+    | Int_            -> Int_
+    | Long            -> Long
+    | LongLong        -> LongLong
+    | IntN_t n        -> IntN_t (Z.of_int n)
+    | Int_leastN_t n  -> Int_leastN_t (Z.of_int n)
+    | Int_fastN_t n   -> Int_fastN_t (Z.of_int n)
+    | Intmax_t        -> Intmax_t
+    | Intptr_t        -> Intptr_t
+
+  let toCoq_integerType: integerType -> CoqCtype.integerType = function
+    | Char          -> Char
+    | Bool          -> Bool
+    | Signed bt     -> Signed (toCoq_integerBaseType bt)
+    | Unsigned bt   -> Unsigned (toCoq_integerBaseType bt)
+    | Enum s        -> Enum (toCoq_Symbol_sym s)
+    | Wchar_t       -> Wchar_t
+    | Wint_t        -> Wint_t
+    | Size_t        -> Size_t
+    | Ptrdiff_t     -> Ptrdiff_t
+    | Vaddr_t       -> Vaddr_t
+
+  let toCoq_realFloatingType: realFloatingType -> CoqCtype.realFloatingType = function
+    | Float -> Float
+    | Double -> Double
+    | LongDouble -> LongDouble
+
+  let toCoq_floatingType: floatingType -> CoqCtype.floatingType  = function
+    | RealFloating rft -> (toCoq_realFloatingType rft)
+
+  let toCoq_label_annot: Annot.label_annot -> CoqAnnot.label_annot = function
+    | LAloop_prebody lid  -> LAloop_prebody (Z.of_int lid)
+    | LAloop_body lid     -> LAloop_body (Z.of_int lid)
+    | LAloop_continue lid -> LAloop_continue (Z.of_int lid)
+    | LAloop_break lid    -> LAloop_break (Z.of_int lid)
+    | LAreturn            -> LAreturn
+    | LAswitch            -> LAswitch
+
+  let toCoq_annot: Annot.annot -> CoqAnnot.annot = function
+    | Astd s       -> Astd s
+    | Aloc loc     -> Aloc (toCoq_location loc)
+    | Auid s       -> Auid s
+    | Abmc ba      -> Abmc (toCoq_annot ba)
+    | Aattrs atr   -> Aattrs (toCoq_attributes atr)
+    | Atypedef s   -> Atypedef (toCoq_Symbol_sym s)
+    | Anot_explode -> Anot_explode
+    | Alabel la    -> Alabel (toCoq_label_annot la)
+
+  let toCoq_basicType: basicType -> CoqCtype.basicType = function
+    | Integer ity -> Integer (toCoq_integerType ity)
+    | Floating fty -> Floating (toCoq_floatingType fty)
+
+
+  let rec toCoq_ctype: Ctype.ctype -> CoqCtype.ctype  = function
+    | Ctype (la, ct) -> Ctype (List.map toCoq_annot la, toCoq_ctype_ ct)
+  and toCoq_ctype_: Ctype.ctype_ -> CoqCtype.ctype'  = function
+    | Void -> Void
+    | Basic bty -> Basic (toCoq_basicType bty)
+    | Array (cty, zo) -> CoqCtype.Array (toCoq_ctype cty, zo)
+    | Function ((q, cty),l,b) ->
+       Function ((toCoq_qualifiers q, toCoq_ctype cty),
+                 List.map (fun (q,cty,b) -> ((toCoq_qualifiers q,toCoq_ctype cty), b)) l,
+                 b)
+    | FunctionNoParams (q, cty) ->  FunctionNoParams (toCoq_qualifiers q, toCoq_ctype cty)
+    | Pointer (q, cty) -> Pointer (toCoq_qualifiers q, toCoq_ctype cty)
+    | Atomic cty ->  Atomic (toCoq_ctype cty)
+    | Struct s -> Struct (toCoq_Symbol_sym s)
+    | Union s -> Union (toCoq_Symbol_sym s)
+
+  let toCoq_flexible_array_member: Ctype.flexible_array_member -> CoqCtype.flexible_array_member = function
+    | FlexibleArrayMember (attr,sym, q, cty) ->
+       FlexibleArrayMember (toCoq_attributes attr,
+                            toCoq_Symbol_identifier sym,
+                            toCoq_qualifiers q,
+                            toCoq_ctype cty)
+
+  let toCoq_tag_definition: Ctype.tag_definition -> CoqCtype.tag_definition = function
+    | StructDef (l, f)
+      -> StructDef (List.map (fun (sym,(attr,q,cty)) ->
+                        (toCoq_Symbol_identifier sym,
+                         ((toCoq_attributes attr,
+                           toCoq_qualifiers q),
+                          toCoq_ctype cty))) l,
+                    Option.map toCoq_flexible_array_member f)
+    | UnionDef l ->
+       UnionDef
+         (List.map (fun (s,(attr,q,cty)) ->
+              (toCoq_Symbol_identifier s,
+               ( (toCoq_attributes attr,
+                  toCoq_qualifiers q),
+                 toCoq_ctype cty))
+            ) l)
+
+  (* very inefficient! *)
+  let toCoq_SymMap (m:(Symbol.sym, Ctype.tag_definition) Pmap.map) : CoqCtype.tag_definition CoqSymbol.SymMap.t =
+    let l = Pmap.bindings_list m in
+    let (e:CoqCtype.tag_definition CoqSymbol.SymMap.t) = CoqSymbol.SymMap.empty in
+    List.fold_left (fun m (s,d) -> CoqSymbol.SymMap.add (toCoq_Symbol_sym s) (toCoq_tag_definition d) m) e l
+
+  let tagDefs _ = toCoq_SymMap (Tags.tagDefs ())
+end
+
+module MM = CheriMemory(MorelloCapability)(MorelloImpl)(CerbTagDefs: CoqTags.TagDefs)
 module C = MorelloCapability
 
 module Z = struct
@@ -87,8 +265,7 @@ module CHERIMorello : Memory = struct
   let get = Nondeterminism.nd_get
   let (>>=) = Nondeterminism.nd_bind
 
-  let lift_coq_serr (s: (string, 'a) Datatypes.sum): 'a =
-    match s with
+  let lift_coq_serr: (string, 'a) Datatypes.sum -> 'a = function
     | Coq_inl errs -> failwith errs
     | Coq_inr v -> v
 
@@ -514,149 +691,10 @@ module CHERIMorello : Memory = struct
 
 
   (* OCaml -> Coq type conversion *)
+  open CerbTagDefs
   let toCoq_thread_id (tid:thread_id) : MM.thread_id = Z.of_int tid
 
-  let toCoq_lexing_position (lp:Lexing.position): CoqLocation.lexing_position =
-    {
-      pos_fname = lp.pos_fname;
-      pos_lnum = Z.of_int lp.pos_lnum;
-      pos_bol = Z.of_int lp.pos_bol;
-      pos_cnum = Z.of_int lp.pos_cnum;
-    }
 
-  let toCoq_location_cursor: Location_ocaml.cursor -> CoqLocation.location_cursor = function
-    | NoCursor -> NoCursor
-    | PointCursor lp -> PointCursor (toCoq_lexing_position lp)
-    | RegionCursor (lp1,lp2) -> RegionCursor (toCoq_lexing_position lp1, toCoq_lexing_position lp2)
-
-  let toCoq_location (l:Location_ocaml.t): CoqLocation.location_ocaml =
-    match (Location_ocaml.to_raw l) with
-    | Loc_unknown -> Loc_unknown
-    | Loc_other s -> Loc_other s
-    | Loc_point p -> Loc_point (toCoq_lexing_position p)
-    | Loc_region (lp1,lp2,lc) -> Loc_region (toCoq_lexing_position lp1, toCoq_lexing_position lp2,toCoq_location_cursor lc)
-    | Loc_regions (ps, lc) -> Loc_regions
-                                ((List.map (fun (lp1,lp2) -> (toCoq_lexing_position lp1, toCoq_lexing_position lp2)) ps),
-                                 toCoq_location_cursor lc)
-
-
-
-  let toCoq_Symbol_description: Symbol.symbol_description -> CoqSymbol.symbol_description = function
-    | SD_None -> SD_None
-    | SD_Id s -> SD_Id s
-    | SD_ObjectAddress s -> SD_ObjectAddress s
-    | SD_Return -> SD_Return
-    | SD_FunArg (l,v) -> SD_FunArg (toCoq_location l, Z.of_int v)
-
-  let toCoq_Symbol_sym: Symbol.sym -> CoqSymbol.sym = function
-    | Symbol (d,v,desc) -> Symbol (d, Z.of_int v, toCoq_Symbol_description desc)
-
-  let toCoq_Symbol_prefix: Symbol.prefix -> CoqSymbol.prefix = function
-    | PrefSource (loc, sl) -> PrefSource (toCoq_location loc, List.map toCoq_Symbol_sym sl)
-    | PrefFunArg (l, d, v) -> PrefFunArg (toCoq_location l, d, Z.of_int v)
-    | PrefStringLiteral (l,d) -> PrefStringLiteral (toCoq_location l, d)
-    | PrefCompoundLiteral (l,d) ->  PrefCompoundLiteral (toCoq_location l, d)
-    | PrefMalloc -> PrefMalloc
-    | PrefOther s -> PrefOther s
-
-  let toCoq_Symbol_identifier: Symbol.identifier -> CoqSymbol.identifier = function
-    | Identifier (l,s) -> Identifier (toCoq_location l, s)
-
-
-  let toCoq_integerBaseType: integerBaseType -> CoqCtype.integerBaseType = function
-    | Ichar           -> Ichar
-    | Short           -> Short
-    | Int_            -> Int_
-    | Long            -> Long
-    | LongLong        -> LongLong
-    | IntN_t n        -> IntN_t (Z.of_int n)
-    | Int_leastN_t n  -> Int_leastN_t (Z.of_int n)
-    | Int_fastN_t n   -> Int_fastN_t (Z.of_int n)
-    | Intmax_t        -> Intmax_t
-    | Intptr_t        -> Intptr_t
-
-  let toCoq_integerType: integerType -> CoqCtype.integerType = function
-    | Char          -> Char
-    | Bool          -> Bool
-    | Signed bt     -> Signed (toCoq_integerBaseType bt)
-    | Unsigned bt   -> Unsigned (toCoq_integerBaseType bt)
-    | Enum s        -> Enum (toCoq_Symbol_sym s)
-    | Wchar_t       -> Wchar_t
-    | Wint_t        -> Wint_t
-    | Size_t        -> Size_t
-    | Ptrdiff_t     -> Ptrdiff_t
-    | Vaddr_t       -> Vaddr_t
-
-  let toCoq_realFloatingType: realFloatingType -> CoqCtype.realFloatingType = function
-    | Float -> Float
-    | Double -> Double
-    | LongDouble -> LongDouble
-
-  let toCoq_floatingType: floatingType -> CoqCtype.floatingType  = function
-    | RealFloating rft -> (toCoq_realFloatingType rft)
-
-  let toCoq_annot: Annot.bmc_annot -> CoqAnnot.bmc_annot  = function
-    | Abmc_id ba -> Z.of_int ba
-
-  let toCoq_attribute (a:Annot.attribute) : CoqAnnot.attribute =
-    {
-      attr_ns = Option.map (toCoq_Symbol_identifier) a.attr_ns;
-      attr_id =  toCoq_Symbol_identifier a.attr_id ;
-      attr_args =
-        List.map (fun (loc, s, ll) ->
-            ((toCoq_location loc,
-              s),
-             List.map (fun (loc', s) -> (toCoq_location loc', s)) ll)
-          ) a.attr_args
-    }
-
-  let toCoq_attributes: Annot.attributes -> CoqAnnot.attributes  = function
-    | Attrs ats -> List.map toCoq_attribute ats
-
-  let toCoq_label_annot: Annot.label_annot -> CoqAnnot.label_annot = function
-    | LAloop_prebody lid  -> LAloop_prebody (Z.of_int lid)
-    | LAloop_body lid     -> LAloop_body (Z.of_int lid)
-    | LAloop_continue lid -> LAloop_continue (Z.of_int lid)
-    | LAloop_break lid    -> LAloop_break (Z.of_int lid)
-    | LAreturn            -> LAreturn
-    | LAswitch            -> LAswitch
-
-  let toCoq_annot: Annot.annot -> CoqAnnot.annot = function
-    | Astd s       -> Astd s
-    | Aloc loc     -> Aloc (toCoq_location loc)
-    | Auid s       -> Auid s
-    | Abmc ba      -> Abmc (toCoq_annot ba)
-    | Aattrs atr   -> Aattrs (toCoq_attributes atr)
-    | Atypedef s   -> Atypedef (toCoq_Symbol_sym s)
-    | Anot_explode -> Anot_explode
-    | Alabel la    -> Alabel (toCoq_label_annot la)
-
-  let toCoq_basicType: basicType -> CoqCtype.basicType = function
-    | Integer ity -> Integer (toCoq_integerType ity)
-    | Floating fty -> Floating (toCoq_floatingType fty)
-
-  let toCoq_qualifiers (q:qualifiers): CoqCtype.qualifiers =
-    {
-      const    = q.const;
-      restrict = q.restrict;
-      volatile = q.volatile
-    }
-
-  let rec toCoq_ctype: Ctype.ctype -> CoqCtype.ctype  = function
-    | Ctype (la, ct) -> Ctype (List.map toCoq_annot la, toCoq_ctype_ ct)
-  and toCoq_ctype_: Ctype.ctype_ -> CoqCtype.ctype'  = function
-    | Void -> Void
-    | Basic bty -> Basic (toCoq_basicType bty)
-    | Array (cty, zo) -> CoqCtype.Array (toCoq_ctype cty, zo)
-    | Function ((q, cty),l,b) ->
-       Function ((toCoq_qualifiers q, toCoq_ctype cty),
-                 List.map (fun (q,cty,b) -> ((toCoq_qualifiers q,toCoq_ctype cty), b)) l,
-                 b)
-    | FunctionNoParams (q, cty) ->  FunctionNoParams (toCoq_qualifiers q, toCoq_ctype cty)
-    | Pointer (q, cty) -> Pointer (toCoq_qualifiers q, toCoq_ctype cty)
-    | Atomic cty ->  Atomic (toCoq_ctype cty)
-    | Struct s -> Struct (toCoq_Symbol_sym s)
-    | Union s -> Union (toCoq_Symbol_sym s)
 
   let toCoq_unaryOperator: AilSyntax.unaryOperator -> CoqAilSyntax.unaryOperator = function
     | Plus        -> Plus
@@ -709,36 +747,6 @@ module CHERIMorello : Memory = struct
     | FloatSub -> FloatSub
     | FloatMul -> FloatMul
     | FloatDiv -> FloatDiv
-
-  let toCoq_flexible_array_member: Ctype.flexible_array_member -> CoqCtype.flexible_array_member = function
-    | FlexibleArrayMember (attr,sym, q, cty) ->
-       FlexibleArrayMember (toCoq_attributes attr,
-                            toCoq_Symbol_identifier sym,
-                            toCoq_qualifiers q,
-                            toCoq_ctype cty)
-
-  let toCoq_tag_definition: Ctype.tag_definition -> CoqCtype.tag_definition = function
-    | StructDef (l, f)
-      -> StructDef (List.map (fun (sym,(attr,q,cty)) ->
-                        (toCoq_Symbol_identifier sym,
-                         ((toCoq_attributes attr,
-                           toCoq_qualifiers q),
-                          toCoq_ctype cty))) l,
-                    Option.map toCoq_flexible_array_member f)
-    | UnionDef l ->
-       UnionDef
-         (List.map (fun (s,(attr,q,cty)) ->
-              (toCoq_Symbol_identifier s,
-               ( (toCoq_attributes attr,
-                  toCoq_qualifiers q),
-                 toCoq_ctype cty))
-            ) l)
-
-  (* very inefficient! *)
-  let toCoq_SymMap (m:(Symbol.sym, Ctype.tag_definition) Pmap.map) : CoqCtype.tag_definition CoqSymbol.SymMap.t =
-    let l = Pmap.bindings_list m in
-    let (e:CoqCtype.tag_definition CoqSymbol.SymMap.t) = CoqSymbol.SymMap.empty in
-    List.fold_left (fun m (s,d) -> CoqSymbol.SymMap.add (toCoq_Symbol_sym s) (toCoq_tag_definition d) m) e l
 
   (* Intrinisics *)
   let fromCoq_type_predicate: MM.type_predicate -> type_predicate = function
@@ -904,7 +912,7 @@ module CHERIMorello : Memory = struct
          Some (string_of_prefix (fromCoq_Symbol_prefix alloc.prefix) ^ " + " ^ Z.to_string offset)
       | Some (Ctype (_, Struct tag_sym)) -> (* TODO: nested structs *)
          let offset = Z.sub addr alloc.base in
-         let (offs, _) = lift_coq_serr (MM.offsetsof MM.coq_DEFAULT_FUEL (CoqTags.tagDefs ()) (toCoq_Symbol_sym tag_sym)) in
+         let (offs, _) = lift_coq_serr (MM.offsetsof MM.coq_DEFAULT_FUEL (CerbTagDefs.tagDefs ()) (toCoq_Symbol_sym tag_sym)) in
          let offs = List.map (fun ((id,ty),n) ->(fromCoq_Symbol_identifier id,ty,n)) offs in
          let rec find = function
            | [] ->
@@ -917,7 +925,7 @@ module CHERIMorello : Memory = struct
       | Some (Ctype (_, Array (ty, _))) ->
          let offset = Z.sub addr alloc.base in
          if Z.less offset alloc.size then
-           let sz = lift_coq_serr (MM.sizeof MM.coq_DEFAULT_FUEL (Some (CoqTags.tagDefs ())) (toCoq_ctype ty)) in
+           let sz = lift_coq_serr (MM.sizeof MM.coq_DEFAULT_FUEL (Some (CerbTagDefs.tagDefs ())) (toCoq_ctype ty)) in
            let n = Z.div offset sz in
            Some (string_of_prefix (fromCoq_Symbol_prefix alloc.prefix) ^ "[" ^ Z.to_string n ^ "]")
          else

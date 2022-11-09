@@ -6,5 +6,8 @@
 Require Import CoqSymbol.
 Require Import CoqCtype.
 
-Definition tagDefs: unit -> (SymMap.t CoqCtype.tag_definition) :=
-  fun _ => @SymMap.empty _.
+Module Type TagDefs.
+
+  Parameter tagDefs: unit -> (SymMap.t CoqCtype.tag_definition).
+
+End TagDefs.
