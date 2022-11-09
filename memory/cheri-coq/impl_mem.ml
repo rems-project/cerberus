@@ -775,14 +775,61 @@ module CHERIMorello : Memory = struct
        Undef0 (fromCoq_location loc, List.map fromCoq_undefined_behaviour ubs)
     | InternalErr msg -> failwith msg
 
-  let lift_coq_memM (m:'a MM.memM): 'a memM =
+
+  (* --- debugging --- *)
+
+  let string_of_provenance = function
+    | MM.Prov_none ->
+       "@empty"
+    | Prov_some alloc_id ->
+       "@" ^ Z.to_string alloc_id
+    | Prov_symbolic iota ->
+       "@iota(" ^ Z.to_string iota ^ ")"
+    | Prov_device ->
+       "@device"
+
+  let print_bytemap str (st:MM.mem_state) =
+    Printf.fprintf stderr "BEGIN BYTEMAP ==> %s\n" str;
+    let l = ZMap.elements st.bytemap in
+    List.iter (fun (addr, b) ->
+        Printf.fprintf stderr "@0x%s ==> %s: %s%s\n"
+          (Z.format "%x" addr)
+          (string_of_provenance b.MM.prov)
+          (match b.MM.value with None -> "UNSPEC" | Some c -> string_of_int (int_of_char c))
+          (match b.MM.copy_offset with None -> "" | Some n -> " [" ^ Z.to_string n ^ "]")
+      ) l;
+    prerr_endline "END BYTEMAP"
+
+  (** Prints provided capability tags table *)
+  let print_captags str (st:MM.mem_state) =
+    Printf.fprintf stderr "BEGIN CAPTAGS ==> %s\n" str;
+    let l = ZMap.elements st.captags in
+    List.iter (fun (addr, b) ->
+        Printf.fprintf stderr "@0x%s ==> %s\n"
+          (Z.format "%x" addr)
+          (string_of_bool b)
+      ) l;
+    prerr_endline "END CAPTAGS"
+
+  (* lifting memM *)
+
+  let lift_coq_memM label (m:'a MM.memM): 'a memM =
     ND (fun st ->
+        if !Debug_ocaml.debug_level >= 3 then
+          begin
+            print_bytemap label st ;
+            print_captags label st
+          end ;
         match m st with
         | (st', Coq_inl e) ->
            let e' = fromCoq_memMError e in
            (NDkilled e', st')
         | (st',Coq_inr a) -> (NDactive a, st')
       )
+
+
+
+  (* --- Module implementation below *)
 
   let check_overlap a b = fromCoq_ovelap_status (MM.check_overlap a b)
 
@@ -799,7 +846,7 @@ module CHERIMorello : Memory = struct
       (fun () -> "allocate_object. last_address=" ^
                    (Z.to_string (MM.last_address st))
       );
-    lift_coq_memM (MM.allocate_object
+    lift_coq_memM "allocate_object" (MM.allocate_object
                      (toCoq_thread_id tid)
                      (toCoq_Symbol_prefix pref)
                      int_val
@@ -814,7 +861,7 @@ module CHERIMorello : Memory = struct
         (size_int: integer_value): pointer_value memM
     =
     Debug_ocaml.print_debug 1 [] (fun () -> "allocate_region");
-    lift_coq_memM (MM.allocate_region
+    lift_coq_memM "allocate_region" (MM.allocate_region
                      (toCoq_thread_id tid)
                      (toCoq_Symbol_prefix pref)
                      align_int
@@ -822,15 +869,15 @@ module CHERIMorello : Memory = struct
 
   let kill (loc:Location_ocaml.t) (is_dyn:bool) (pv:pointer_value) : unit memM
     =
-    lift_coq_memM (MM.kill (toCoq_location loc) is_dyn pv)
+    lift_coq_memM "kill" (MM.kill (toCoq_location loc) is_dyn pv)
 
   let load (loc:Location_ocaml.t) (ty:Ctype.ctype) (p:pointer_value): (footprint * mem_value) memM
     =
-    lift_coq_memM (MM.load (toCoq_location loc) (toCoq_ctype ty) p)
+    lift_coq_memM "load" (MM.load (toCoq_location loc) (toCoq_ctype ty) p)
 
   let store (loc:Location_ocaml.t) (ty:Ctype.ctype) (is_locking:bool) (p:pointer_value) (mval:mem_value): footprint memM
     =
-    lift_coq_memM (MM.store (toCoq_location loc) (toCoq_ctype ty) is_locking p mval)
+    lift_coq_memM "store" (MM.store (toCoq_location loc) (toCoq_ctype ty) is_locking p mval)
 
   let null_ptrval (ty:Ctype.ctype) : pointer_value
     = MM.null_ptrval (toCoq_ctype ty)
@@ -868,17 +915,17 @@ module CHERIMorello : Memory = struct
 
   (* Operations on pointer values *)
   let eq_ptrval (a:pointer_value) (b:pointer_value) : bool memM =
-    lift_coq_memM (MM.eq_ptrval a b)
+    lift_coq_memM "eq_ptrval" (MM.eq_ptrval a b)
   let ne_ptrval (a:pointer_value) (b:pointer_value) : bool memM =
-    lift_coq_memM (MM.ne_ptrval a b)
+    lift_coq_memM "ne_ptrval" (MM.ne_ptrval a b)
   let lt_ptrval (a:pointer_value) (b:pointer_value) : bool memM =
-    lift_coq_memM (MM.lt_ptrval a b)
+    lift_coq_memM "lt_ptrval" (MM.lt_ptrval a b)
   let gt_ptrval (a:pointer_value) (b:pointer_value) : bool memM =
-    lift_coq_memM (MM.gt_ptrval a b)
+    lift_coq_memM "gt_ptrval" (MM.gt_ptrval a b)
   let le_ptrval (a:pointer_value) (b:pointer_value) : bool memM =
-    lift_coq_memM (MM.le_ptrval a b)
+    lift_coq_memM "le_ptrval" (MM.le_ptrval a b)
   let ge_ptrval (a:pointer_value) (b:pointer_value) : bool memM =
-    lift_coq_memM (MM.ge_ptrval a b)
+    lift_coq_memM "ge_ptrval" (MM.ge_ptrval a b)
 
   let diff_ptrval
         (diff_ty: Ctype.ctype)
@@ -886,13 +933,13 @@ module CHERIMorello : Memory = struct
         (ptrval2: pointer_value)
       : integer_value memM
     =
-    lift_coq_memM (MM.diff_ptrval
+    lift_coq_memM "diff_ptrval" (MM.diff_ptrval
                      (toCoq_ctype diff_ty)
                      ptrval1
                      ptrval2)
 
   let update_prefix (pref, mval) : unit memM
-    = lift_coq_memM (MM.update_prefix ((toCoq_Symbol_prefix pref), mval))
+    = lift_coq_memM "update_prefix" (MM.update_prefix ((toCoq_Symbol_prefix pref), mval))
 
   (* There is a sketch of implementation of this function in Coq but
      it requires some dependencies and fixpoint magic.  It OK to have
@@ -935,7 +982,7 @@ module CHERIMorello : Memory = struct
     in
     match prov with
     | Prov_some alloc_id ->
-       bind (lift_coq_memM (MM.get_allocation alloc_id)) (fun alloc ->
+       bind (lift_coq_memM "get_allocation" (MM.get_allocation alloc_id)) (fun alloc ->
            begin match pv with
            | PVconcrete addr ->
               if C.cap_get_value addr = alloc.base then
@@ -949,17 +996,17 @@ module CHERIMorello : Memory = struct
        return None
 
   let validForDeref_ptrval ref_ty ptrval
-    = lift_coq_memM (MM.validForDeref_ptrval (toCoq_ctype ref_ty) ptrval)
+    = lift_coq_memM "validForDeref_ptrval" (MM.validForDeref_ptrval (toCoq_ctype ref_ty) ptrval)
 
   let isWellAligned_ptrval ref_ty ptrval
-    = lift_coq_memM (MM.isWellAligned_ptrval (toCoq_ctype ref_ty) ptrval)
+    = lift_coq_memM "isWellAligned_ptrval" (MM.isWellAligned_ptrval (toCoq_ctype ref_ty) ptrval)
 
   (* Casting operations *)
   let ptrfromint (loc:Location_ocaml.t) (int_ty: Ctype.integerType) (ref_ty:Ctype.ctype) (int_v:integer_value): pointer_value memM
-    = lift_coq_memM (MM.ptrfromint (toCoq_location loc) (toCoq_integerType int_ty) (toCoq_ctype ref_ty) int_v)
+    = lift_coq_memM "ptrfromint" (MM.ptrfromint (toCoq_location loc) (toCoq_integerType int_ty) (toCoq_ctype ref_ty) int_v)
 
   let intfromptr (loc:Location_ocaml.t) (ty:Ctype.ctype) (ity:Ctype.integerType) (ptr:pointer_value): integer_value memM
-    = lift_coq_memM (MM.intfromptr (toCoq_location loc) (toCoq_ctype ty) (toCoq_integerType ity) ptr)
+    = lift_coq_memM "intfromptr" (MM.intfromptr (toCoq_location loc) (toCoq_ctype ty) (toCoq_integerType ity) ptr)
 
   (* New operations for CHERI *)
   let derive_cap is_signed (bop:Mem_common.derivecap_op) ival1 ival2 =
@@ -977,18 +1024,18 @@ module CHERIMorello : Memory = struct
   let member_shift_ptrval p tag_sym memb_ident =
     lift_coq_serr (MM.member_shift_ptrval p (toCoq_Symbol_sym tag_sym) (toCoq_Symbol_identifier memb_ident))
   let eff_array_shift_ptrval loc ptrval ty iv =
-    lift_coq_memM (MM.eff_array_shift_ptrval (toCoq_location loc) ptrval (toCoq_ctype ty) iv)
+    lift_coq_memM "eff_array_shift_ptrval" (MM.eff_array_shift_ptrval (toCoq_location loc) ptrval (toCoq_ctype ty) iv)
   let eff_member_shift_ptrval loc ptrval tag_sym memb_ident =
-    lift_coq_memM (MM.eff_member_shift_ptrval (toCoq_location loc) ptrval (toCoq_Symbol_sym tag_sym) (toCoq_Symbol_identifier memb_ident))
+    lift_coq_memM "eff_member_shift_ptrval" (MM.eff_member_shift_ptrval (toCoq_location loc) ptrval (toCoq_Symbol_sym tag_sym) (toCoq_Symbol_identifier memb_ident))
 
   let memcpy ptrval1 ptrval2 size_int =
-    lift_coq_memM (MM.memcpy ptrval1 ptrval2 size_int)
+    lift_coq_memM "memcpy" (MM.memcpy ptrval1 ptrval2 size_int)
 
   let memcmp ptrval1 ptrval2 size_int =
-    lift_coq_memM (MM.memcmp ptrval1 ptrval2 size_int)
+    lift_coq_memM "memcmp" (MM.memcmp ptrval1 ptrval2 size_int)
 
   let realloc tid align ptr size =
-    lift_coq_memM (MM.realloc (Z.of_int tid) align ptr size)
+    lift_coq_memM "realloc" (MM.realloc (Z.of_int tid) align ptr size)
 
   (* TODO varargs not implemented *)
   let va_start (args:(Ctype.ctype * pointer_value) list): integer_value memM = assert false (* TODO *)
@@ -998,7 +1045,7 @@ module CHERIMorello : Memory = struct
   let va_list (va_idx:Nat_big_num.num): ((Ctype.ctype * pointer_value) list) memM = assert false (* TODO *)
 
   let copy_alloc_id ival ptrval =
-    lift_coq_memM (MM.copy_alloc_id ival ptrval)
+    lift_coq_memM "copy_alloc_id" (MM.copy_alloc_id ival ptrval)
 
   (* Integer value constructors *)
   let concurRead_ival ity sym =
@@ -1129,11 +1176,11 @@ module CHERIMorello : Memory = struct
 
   (* For race detection *)
   let sequencePoint =
-    lift_coq_memM (MM.sequencePoint)
+    lift_coq_memM "sequencePoint" (MM.sequencePoint)
 
   (* Memory intrinsics (currently used in CHERI) *)
   let call_intrinsic loc name args =
-    lift_coq_memM (MM.call_intrinsic
+    lift_coq_memM "call_intrinsic" (MM.call_intrinsic
                      (toCoq_location loc)
                      name
                      args)
