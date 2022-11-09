@@ -185,7 +185,30 @@ Module MorelloPermission <: Permission.
   (* raw permissoins in numeric format *)
   Definition to_raw (p:t) := Z0. (*  TODO *)
 
-  Definition of_list (l: list bool): option t := None. (* TODO *)
+  Definition of_list (l: list bool): option t :=
+    if Z.eqb (Z.of_nat (List.length l)) perms_zlen
+    then
+      let off := Nat.add user_perms_len 2 in
+      Some
+        {|
+          global                  := List.nth 0 l false;
+          executive               := List.nth 1 l false;
+          user_perms              := List.firstn user_perms_len (List.skipn 2 l);
+          permit_mutable_load     := List.nth (Nat.add off 0) l false;
+          permit_compartment_id   := List.nth (Nat.add off 1) l false;
+          permits_ccall           := List.nth (Nat.add off 2) l false;
+          permits_system_access   := List.nth (Nat.add off 3) l false;
+          permits_unseal          := List.nth (Nat.add off 4) l false;
+          permits_seal            := List.nth (Nat.add off 5) l false;
+          permits_store_local_cap := List.nth (Nat.add off 6) l false;
+          permits_store_cap       := List.nth (Nat.add off 7) l false;
+          permits_load_cap        := List.nth (Nat.add off 8) l false;
+          permits_execute         := List.nth (Nat.add off 9) l false;
+          permits_store           := List.nth (Nat.add off 10) l false;
+          permits_load            := List.nth (Nat.add off 11) l false;
+        |}
+    else
+      None.
 
   Definition to_list (p_value : t) : list bool :=
     List.app [ p_value.(global); p_value.(executive) ]
