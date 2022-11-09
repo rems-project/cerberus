@@ -126,7 +126,7 @@ Module Type Capability
   Parameter cap_get_obj_type : t -> OT.t.
 
   (** Returns bounds in form [base,limit) for covered  memory region. base is inclusive while limit is exclusive *)
-  Parameter cap_get_bounds: t -> (I.t * bool).
+  Parameter cap_get_bounds: t -> I.t.
 
   (** Get informaiton about "seal" on this capability *)
   Parameter cap_get_seal: t -> S.t. 
@@ -266,19 +266,19 @@ Module Type Capability
         [cheri_bounds_set] to set the length to [len] (assuming
         appropriate alignment of the base).
    *)
-  Parameter representable_length: N -> N. 
+  Parameter representable_length: Z -> Z. 
 
   (** returns a bitmask that can be used to align an address downwards
         such that it is sufficiently aligned to create a precisely
         bounded capability.
    *)
-  Parameter representable_alignment_mask: N -> N. 
+  Parameter representable_alignment_mask: Z -> Z. 
 
   (* --- Utility methods --- *)
 
   Parameter to_string: t -> string.       
   
-  (* Parameter strfcap: string -> t -> option string. *)
+  Parameter strfcap: string -> t -> option string.
 
   Parameter cap_is_null_derived: t -> bool.    
 

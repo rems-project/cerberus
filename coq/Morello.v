@@ -12,8 +12,8 @@ Require Import Sail.Prompt_monad.
 Require Import Sail.Operators_mwords.
 Require Import specCapFns.capfns_no_monad.
 
-Require Import machine_capability.
-Require Import machine_address.
+Require Import Capabilities.
+Require Import Addr.
 
 
 (* Notations and their definitions*)
@@ -467,13 +467,18 @@ Module Cap <: Capability (Value) (ObjType) (SealType) (Bounds) (Permissions).
   Definition cap_get_obj_type (cap:t) : ObjType.t := 
     mword_to_bv (CapGetObjectType (bv_to_mword cap)).
 
-  Definition cap_get_bounds (cap:t) : Bounds.t * bool :=
-    let '(base_mw, limit_mw, isExponentValid) := CapGetBounds (bv_to_mword cap) in
-    let base_bv := mword_to_bv base_mw in
-    let limit_bv := mword_to_bv limit_mw in 
-    ((base_bv, limit_bv), isExponentValid).
-
-  Definition cap_get_offset (cap:t) : Z :=
+    Definition cap_get_bounds_ (cap:t) : Bounds.t * bool :=
+      let '(base_mw, limit_mw, isExponentValid) := CapGetBounds (bv_to_mword cap) in
+      let base_bv := mword_to_bv base_mw in
+      let limit_bv := mword_to_bv limit_mw in 
+      ((base_bv, limit_bv), isExponentValid).
+  
+    Definition cap_get_bounds (cap:t) : Bounds.t :=
+        let '(base_mw, limit_mw, isExponentValid) := 
+          cap_get_bounds_ cap in
+        (base_mw, limit_mw).
+  
+        Definition cap_get_offset (cap:t) : Z :=
     (mword_to_bv (CapGetOffset (bv_to_mword cap))).(bv_unsigned).
         
   Definition cap_get_seal (cap:t) : SealType.t := 
@@ -613,16 +618,16 @@ Module Cap <: Capability (Value) (ObjType) (SealType) (Bounds) (Permissions).
     cap_seal_immediate cap SealType.sealed_indirect_entry_pair_ot.
 
   (* Confirm the type of the function is ok *)  
-  Definition representable_alignment_mask (len:N) : N :=
-    mword_to_N (CapGetRepresentableMask (@mword_of_int (Z.of_N Value.len) (Z.of_N len))).
+  Definition representable_alignment_mask (len:Z) : Z :=
+    mword_to_Z_unsigned (CapGetRepresentableMask (@mword_of_int (Z.of_N Value.len) len)).
 
   (* Will need to see how this compares with Microsoft's Small Cheri 
   (Technical report coming up -- as of Oct 24 2022) *)
-  Definition representable_length (len : N) : N :=
-    let mask:N := representable_alignment_mask len in
-    let nmask:Z := Value.bitwise_complement (Z.of_N mask) in
-    let result:Z := Z.land (Z.add (Z.of_N len) nmask) (Z.of_N mask) in 
-      Z.to_N result.
+  Definition representable_length (len : Z) : Z :=
+    let mask:Z := representable_alignment_mask len in
+    let nmask:Z := Value.bitwise_complement mask in
+    let result:Z := Z.land (Z.add len nmask) mask in 
+      result.
 
   Definition make_cap (value : Value.t) (otype : ObjType.t) (bounds : Bounds.t) (perms : Permissions.t) : t :=
     let new_cap := cap_cU () in 
@@ -766,6 +771,8 @@ Module Cap <: Capability (Value) (ObjType) (SealType) (Bounds) (Permissions).
   Definition to_string (cap:t) : string :=
     String.hex_string_of_int (bv_to_Z_unsigned cap).
 
+    Definition strfcap (s:string) (_:t) : option string := None.
+    
   (* Could also implement a prettier to_string that produces something like
     { valid: yes
       value: 0xF...1
@@ -915,7 +922,7 @@ Module test_cap_getters_and_setters.
     let '(new_base,new_limit) := Bounds.of_Zs  (0x0011111111113330, 0x00011111111117440) in 
     (* We can see new_bounds can be represented exactly from cap5: https://www.morello-project.org/capinfo?c=0x1%3Afb00000034473337%3A1011111111113333 *)
     let new_cap := cap_narrow_bounds_exact c5 (new_base,new_limit) in 
-    let '(base_set,limit_set,isExpValid) := cap_get_bounds new_cap in 
+    let '(base_set,limit_set,isExpValid) := cap_get_bounds_ new_cap in 
     isExpValid = true /\ (base_set = new_base) /\ (limit_set =? new_limit) = true
     /\ cap_is_valid c5 = true /\ cap_is_valid new_cap = true.
     Proof. vm_compute. split. reflexivity. split. reflexivity. split. reflexivity. 
@@ -964,7 +971,7 @@ Module test_cap_getters_and_setters.
     /\ (cap_is_in_bounds new_cap) /\ (cap_is_sealed new_cap) = false 
     /\ (cap_get_seal new_cap) = SealType.Cap_Unsealed 
     /\ (cap_get_perms new_cap) = Permissions.perm_alloc
-    /\ (cap_get_bounds new_cap) = (Bounds.of_Zs (1024,3072), true).
+    /\ (cap_get_bounds_ new_cap) = (Bounds.of_Zs (1024,3072), true).
     Proof. vm_compute. repeat (split; try reflexivity). Qed. 
   
   Example alloc_cap_test_2 : 
@@ -974,7 +981,7 @@ Module test_cap_getters_and_setters.
     /\ (cap_is_in_bounds new_cap) /\ (cap_is_sealed new_cap) = false 
     /\ (cap_get_seal new_cap) = SealType.Cap_Unsealed 
     /\ (cap_get_perms new_cap) = Permissions.perm_alloc
-    /\ (cap_get_bounds new_cap) = (Bounds.of_Zs (0xffffffffffffffff,0x10000000000000000), true).
+    /\ (cap_get_bounds_ new_cap) = (Bounds.of_Zs (0xffffffffffffffff,0x10000000000000000), true).
     Proof. vm_compute. repeat (split; try reflexivity). Qed. 
 
   Example alloc_cap_test_3 : 
@@ -984,7 +991,7 @@ Module test_cap_getters_and_setters.
     /\ (cap_is_in_bounds new_cap) = true (* it's in bounds bc these are (0,1) *)
     /\ (cap_is_sealed new_cap) = false /\ (cap_get_seal new_cap) = SealType.Cap_Unsealed 
     /\ (cap_get_perms new_cap) = Permissions.perm_alloc  
-    /\ (cap_get_bounds new_cap) <> (Bounds.of_Zs (0x10000000000000000,0x10000000000000001), true).
+    /\ (cap_get_bounds_ new_cap) <> (Bounds.of_Zs (0x10000000000000000,0x10000000000000001), true).
     Proof. vm_compute. repeat (split; try reflexivity). intros H. discriminate H. Qed.
 
   Example alloc_cap_test_4 : 
@@ -993,7 +1000,7 @@ Module test_cap_getters_and_setters.
     (cap_is_invalid new_cap) /\ (cap_is_not_in_bounds new_cap)
     /\ (cap_is_sealed new_cap) = false /\ (cap_get_seal new_cap) = SealType.Cap_Unsealed 
     /\ (cap_get_perms new_cap) = Permissions.perm_alloc  
-    /\ (cap_get_bounds new_cap) <> (Bounds.of_Zs (0xffffffffffffff,0xfffffffffffffffff), true).
+    /\ (cap_get_bounds_ new_cap) <> (Bounds.of_Zs (0xffffffffffffff,0xfffffffffffffffff), true).
     Proof. vm_compute. repeat (split; try reflexivity). intro H. discriminate H. Qed.   
           
   Example alloc_fun_test_1 : 
@@ -1002,7 +1009,7 @@ Module test_cap_getters_and_setters.
     (cap_is_valid new_cap) = true /\ (cap_get_value new_cap) = value 
       /\ (cap_is_sealed new_cap) = true /\ (cap_get_seal new_cap) = SealType.Cap_SEntry 
       /\ (cap_get_perms new_cap) = Permissions.perm_alloc_fun
-      /\ (cap_get_bounds new_cap) = (Bounds.of_Zs (1024,1026), true).
+      /\ (cap_get_bounds_ new_cap) = (Bounds.of_Zs (1024,1026), true).
     Proof. repeat (split; try reflexivity). Qed. 
 
   Example cap_is_null_derived_test_1 : 
@@ -1166,9 +1173,9 @@ Module MorelloCap <: Capability (ValueZ) (ObjTypeZ) (SealType) (BoundsZ) (Permis
   Definition cap_get_obj_type (cap:t) : ObjTypeZ.t := 
     ObjType.to_Z (Cap.cap_get_obj_type cap).
 
-  Definition cap_get_bounds (cap:t) : BoundsZ.t * bool :=
-    let (bounds,tag) := Cap.cap_get_bounds cap in 
-    (Bounds.to_Zs bounds, tag).
+  (* Removed flag here *)
+  Definition cap_get_bounds (cap:t) : BoundsZ.t :=
+    Bounds.to_Zs (Cap.cap_get_bounds cap).
 
   Definition cap_get_offset (cap:t) : Z := Cap.cap_get_offset cap.
       
@@ -1251,6 +1258,8 @@ Module MorelloCap <: Capability (ValueZ) (ObjTypeZ) (SealType) (BoundsZ) (Permis
   Definition eqb := Cap.eqb.
 
   Definition to_string := Cap.to_string.
+
+  Definition strfcap (s:string) (_:t) : option string := None.
 
   (* Could also implement a prettier to_string that produces something like
     { valid: yes
