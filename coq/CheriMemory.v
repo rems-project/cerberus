@@ -295,6 +295,12 @@ Module CheriMemory
     typeclasses eauto.
   Qed.
 
+  Definition mprint_msg (msg : string) : memM unit :=
+    ret (print_msg msg).
+
+  Definition sprint_msg (msg : string) : serr unit :=
+    ret (print_msg msg).
+
   Definition serr2memM {A: Type} (e:serr A): (memM A)
     := match e with
        | inr v => ret v
