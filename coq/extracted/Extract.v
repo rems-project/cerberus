@@ -1,4 +1,5 @@
 From Cerberus Require CheriMemory.
+From Cerberus Require Morello.
 
 From Coq Require Extraction.
 
@@ -19,6 +20,7 @@ Extraction Blacklist String List Char Core Monad Bool Format Nat Int.
 (* Debugging print *)
 Extraction NoInline CheriMemory.print_msg.
 Extract Constant CheriMemory.print_msg => "print_endline".
+Extract Inlined Constant Morello.MorelloCapability.strfcap => "strfcap".
 
 (* Set Extraction AccessOpaque. *)
 

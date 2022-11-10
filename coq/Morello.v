@@ -602,7 +602,8 @@ Module MorelloCapability <:
       ("perms=" ++ MorelloPermission.to_string (c.(perms)) ++ ",") ++
       "}".
 
-  Definition strfcap (formats : string) (capability : t) : option string :=
-    None. (* TODO *)
+  (* Not implemented in Coq but in extracted code implementation will
+     be mapped to OCaml version *)
+  Definition strfcap (formats : string) (capability : t) : option string :=  None.
 
 End MorelloCapability.
