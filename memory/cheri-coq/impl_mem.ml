@@ -797,7 +797,10 @@ module CHERIMorello : Memory = struct
           (Z.format "%x" a.MM.base)
           (Z.format "%d" a.size)
       ) l;
-    prerr_endline "END Allocations"
+    prerr_endline "END Allocations";
+    Printf.fprintf stderr "Dead Allocations: [%s]\n"
+      (String.concat ","
+         (List.map (Z.to_string) st.MM.dead_allocations))
 
   let print_bytemap str (st:MM.mem_state) =
     Printf.fprintf stderr "BEGIN BYTEMAP ==> %s\n" str;
