@@ -1187,7 +1187,7 @@ Module CheriMemory
 
         (* sprint_msg (string_of_prov_valid_ind _prov);;
         sprint_msg (string_of_prov_ptr_valid_ind pptrvalid) ;;  *)
-        ret (pvalid,pptrvalid,List.rev rev_values)
+        ret (pvalid,pptrvalid,rev_values)
     end.
 
   Definition provs_of_bytes (bs : list AbsByte) : taint_ind :=
