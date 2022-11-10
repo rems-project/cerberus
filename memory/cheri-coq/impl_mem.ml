@@ -791,11 +791,11 @@ module CHERIMorello : Memory = struct
   let print_allocations str st =
     Printf.fprintf stderr "BEGIN Allocation ==> %s\n" str;
     let l = ZMap.elements st.MM.allocations in
-    List.iter (fun (addr,a) ->
-        Printf.fprintf stderr "%s: %s,%s\n"
-          (Z.format "%x" addr)
+    List.iter (fun (aid,a) ->
+        Printf.fprintf stderr "@%s: 0x%s,%s\n"
+          (Z.format "%d" aid)
           (Z.format "%x" a.MM.base)
-          (Z.format "%x" a.size)
+          (Z.format "%d" a.size)
       ) l;
     prerr_endline "END Allocations"
 
