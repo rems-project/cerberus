@@ -792,10 +792,14 @@ module CHERIMorello : Memory = struct
     Printf.fprintf stderr "BEGIN Allocation ==> %s\n" str;
     let l = ZMap.elements st.MM.allocations in
     List.iter (fun (aid,a) ->
-        Printf.fprintf stderr "@%s: 0x%s,%s\n"
+        Printf.fprintf stderr "@%s: 0x%s,%s (%s)\n"
           (Z.format "%d" aid)
           (Z.format "%x" a.MM.base)
           (Z.format "%d" a.size)
+          (match a.taint with
+           | MM.Exposed -> "exposed"
+           | MM.Unexposed -> "unexposed"
+          )
       ) l;
     prerr_endline "END Allocations";
     Printf.fprintf stderr "Dead Allocations: [%s]\n"
