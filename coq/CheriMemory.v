@@ -2755,7 +2755,7 @@ Module CheriMemory
     match ity with
     | CoqCtype.Char =>
         if IMP.get.(CoqImplementation.is_signed_ity) CoqCtype.Char
-        then ret (IV (signed_min 8))
+        then ret (IV (signed_min 1))
         else ret (IV 0)
     | CoqCtype.Bool
     | CoqCtype.Size_t
