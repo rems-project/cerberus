@@ -788,6 +788,17 @@ module CHERIMorello : Memory = struct
     | Prov_device ->
        "@device"
 
+  let print_allocations str st =
+    Printf.fprintf stderr "BEGIN Allocation ==> %s\n" str;
+    let l = ZMap.elements st.MM.allocations in
+    List.iter (fun (addr,a) ->
+        Printf.fprintf stderr "%s: %s,%s\n"
+          (Z.format "%x" addr)
+          (Z.format "%x" a.MM.base)
+          (Z.format "%x" a.size)
+      ) l;
+    prerr_endline "END Allocations"
+
   let print_bytemap str (st:MM.mem_state) =
     Printf.fprintf stderr "BEGIN BYTEMAP ==> %s\n" str;
     let l = ZMap.elements st.bytemap in
@@ -817,6 +828,7 @@ module CHERIMorello : Memory = struct
     ND (fun st ->
         if !Debug_ocaml.debug_level >= 3 then
           begin
+            print_allocations label st ;
             print_bytemap label st ;
             print_captags label st
           end ;
