@@ -703,7 +703,7 @@ Module Cap <: Capability (Value) (ObjType) (SealType) (Bounds) (Permissions).
      and Cerberus bytes ([ascii]). *)
   Definition memory_byte_to_ascii (b:memory_byte) : option ascii :=
     match List.map bool_of_bit b with
-    | [a1;a2;a3;a4;a5;a6;a7;a8] => Some (Ascii a1 a2 a3 a4 a5 a6 a7 a8)
+    | [a1;a2;a3;a4;a5;a6;a7;a8] => Some (Ascii a8 a7 a6 a5 a4 a3 a2 a1)
     | _ => None
     end.
 
@@ -732,7 +732,7 @@ Module Cap <: Capability (Value) (ObjType) (SealType) (Bounds) (Permissions).
     match mem_bytes_of_bits w with
     | Some bytes =>
         match try_map memory_byte_to_ascii bytes with
-        | Some chars => Some ((List.rev chars), tag)
+        | Some chars => Some (chars, tag)
         | None => None
         end
     | None => None

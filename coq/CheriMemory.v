@@ -1123,9 +1123,9 @@ Module CheriMemory
                        Z.eqb iota1 iota2
                    | _ => false
                    end with
-                 | (VALID (Prov_some alloc_id1), Prov_some alloc_id2), true, _
+                 | (VALID (Prov_some alloc_id1), Prov_some alloc_id2), false, _
                    => ret INVALID
-                 | (VALID (Prov_symbolic iota1), Prov_symbolic iota2), _, true
+                 | (VALID (Prov_symbolic iota1), Prov_symbolic iota2), _, false
                    => ret INVALID
                  | (VALID (Prov_symbolic iota1), Prov_some alloc_id'), _, _
                    => raise "TODO(iota) split_bytes 1"
@@ -1495,7 +1495,7 @@ Module CheriMemory
                    else if allow_one_past then
                           (* PNVI-ae-udi *)
                           if Z.eqb addr (Z.add alloc.(base) alloc.(size))
-                             && negb require_exposed && (negb (allocation_taint_eqb alloc.(taint) Exposed))
+                             && negb (require_exposed && (negb (allocation_taint_eqb alloc.(taint) Exposed)))
                           then Some alloc_id
                           else None
                         else None
