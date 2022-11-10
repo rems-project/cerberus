@@ -1056,12 +1056,22 @@ module CHERIMorello : Memory = struct
   let realloc tid align ptr size =
     lift_coq_memM "realloc" (MM.realloc (Z.of_int tid) align ptr size)
 
-  (* TODO varargs not implemented *)
-  let va_start (args:(Ctype.ctype * pointer_value) list): integer_value memM = assert false (* TODO *)
-  let va_copy (va:integer_value): integer_value memM = assert false (* TODO *)
-  let va_arg (va:integer_value) (ty:Ctype.ctype): pointer_value memM = assert false (* TODO *)
-  let va_end (va:integer_value): unit memM = assert false (* TODO *)
-  let va_list (va_idx:Nat_big_num.num): ((Ctype.ctype * pointer_value) list) memM = assert false (* TODO *)
+  let va_start (args:(Ctype.ctype * pointer_value) list): integer_value memM =
+    let args = List.map (fun (t,p) -> (toCoq_ctype t, p)) args in
+    lift_coq_memM "va_start" (MM.va_start args)
+
+  let va_copy (va:integer_value): integer_value memM =
+    lift_coq_memM "va_copy" (MM.va_copy va)
+
+  let va_arg (va:integer_value) (ty:Ctype.ctype): pointer_value memM =
+    lift_coq_memM "va_arg" (MM.va_arg va (toCoq_ctype ty))
+
+  let va_end (va:integer_value): unit memM =
+    lift_coq_memM "va_end" (MM.va_end va)
+
+  let va_list (va_idx:Nat_big_num.num): ((Ctype.ctype * pointer_value) list) memM =
+    lift_coq_memM "va_list" (MM.va_list va_idx) >>= fun res ->
+    return (List.map (fun (t,p) -> (fromCoq_ctype t, p)) res)
 
   let copy_alloc_id ival ptrval =
     lift_coq_memM "copy_alloc_id" (MM.copy_alloc_id ival ptrval)

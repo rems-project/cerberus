@@ -1,5 +1,4 @@
 Require Import Coq.Arith.PeanoNat.
-From Coq.Lists Require Import List ListSet.
 Require Import Coq.Numbers.BinNums.
 Require Import Coq.ZArith.Zcompare.
 Require Import Coq.Floats.PrimFloat.
@@ -13,6 +12,8 @@ Require Import Lia.
 From ExtLib.Data Require Import List.
 From ExtLib.Structures Require Import Monad Monads MonadExc MonadState Traversable.
 From ExtLib.Data.Monads Require Import EitherMonad OptionMonad.
+
+From Coq.Lists Require Import List ListSet. (* after exltlib *)
 
 Require Import SimpleError Capabilities Addr Memory_model CoqMem_common ErrorWithState CoqUndefined Morello ErrorWithState CoqLocation CoqSymbol CoqImplementation CoqTags Utils CoqSwitches CoqAilTypesAux.
 
@@ -258,6 +259,10 @@ Module CheriMemory
 
   Definition mem_state_with_funptrmap funptrmap (r : mem_state) :=
     Build_mem_state_r r.(next_alloc_id) r.(next_iota) r.(last_address) r.(allocations) r.(iota_map) funptrmap r.(varargs) r.(next_varargs_id) r.(bytemap) r.(captags) r.(dead_allocations) r.(dynamic_addrs) r.(last_used).
+
+  Definition mem_state_with_varargs_next_varargs_id varargs next_varargs_id (r : mem_state) :=
+    Build_mem_state_r r.(next_alloc_id) r.(next_iota) r.(last_address) r.(allocations) r.(iota_map) r.(funptrmap) varargs next_varargs_id r.(bytemap) r.(captags) r.(dead_allocations) r.(dynamic_addrs) r.(last_used).
+
 
   Definition initial_address := (HexString.to_Z "0xFFFFFFFF").
 
@@ -3223,6 +3228,87 @@ Module CheriMemory
     | PV _ _ =>
         fail (MerrWIP "realloc: invalid pointer")
     end.
+
+  Definition va_start (args:  list (CoqCtype.ctype * pointer_value)) : memM integer_value :=
+    get >>= fun st =>
+        let id := st.(next_varargs_id) in
+        update (fun st => mem_state_with_varargs_next_varargs_id (ZMap.add id (0, args) st.(varargs)) (Z.succ st.(next_varargs_id)) st) ;;
+        ret (IV id).
+
+  Definition va_copy (va : integer_value) : memM integer_value :=
+    match va with
+    | IV id =>
+        get >>=
+          fun st =>
+            match ZMap.find id st.(varargs) with
+            | Some args =>
+                let id := st.(next_varargs_id) in
+                update
+                  (fun st =>
+                     mem_state_with_varargs_next_varargs_id
+                       (ZMap.add id args st.(varargs))
+                       (Z.succ st.(next_varargs_id))
+                       st) ;;
+                ret (IV id)
+            | None =>
+                fail (MerrWIP "va_copy: not initiliased")
+            end
+    | _ => fail (MerrWIP "va_copy: invalid va_list")
+    end.
+
+  Definition va_arg (va: integer_value) (ty: CoqCtype.ctype): memM pointer_value :=
+    match va with
+    | IV id =>
+        get >>=
+          fun st =>
+            match ZMap.find id st.(varargs) with
+            | Some (i_value, args) =>
+                match Lists.List.nth_error args (Z.to_nat i_value) with
+                | Some (_, ptr) =>
+                    update
+                      (fun st =>
+                         mem_state_with_varargs_next_varargs_id
+                           (ZMap.add id ((Z.add i_value 1), args) st.(varargs))
+                           st.(next_varargs_id) (* unchanged *)
+                                st) ;;
+                    ret ptr
+                | None =>
+                    fail
+                      (MerrWIP
+                         "va_arg: invalid number of arguments")
+                end
+            | None =>
+                fail (MerrWIP "va_arg: not initiliased")
+            end
+    | _ => fail (MerrWIP "va_arg: invalid va_list")
+    end.
+
+  Definition va_end (va : integer_value): memM unit :=
+    match va with
+    | IV id =>
+        get >>=
+          fun st =>
+            match ZMap.find id st.(varargs) with
+            | Some _ =>
+                update
+                  (fun (st : mem_state) =>
+                     mem_state_with_varargs_next_varargs_id
+                       (ZMap.remove id st.(varargs))
+                       st.(next_varargs_id) (* unchanged *)
+                            st)
+            | None =>
+                fail (MerrWIP "va_end: not initiliased")
+            end
+    | _ => fail (MerrWIP "va_end: invalid va_list")
+    end.
+
+  Definition va_list (va_idx:Z) : memM (list (CoqCtype.ctype * pointer_value)) :=
+    get >>=
+      fun st=>
+        match ZMap.find va_idx st.(varargs) with
+        | Some (n_value, args) => ret args
+        | None => fail (MerrWIP "va_list")
+        end.
 
   Definition copy_alloc_id
     (ival : integer_value) (ptrval : pointer_value)
