@@ -2951,7 +2951,7 @@ module CHERI (C:Capability
     IV (begin match ity with
         | Char ->
            if (Ocaml_implementation.get ()).is_signed_ity Char then
-             signed_min 8
+             signed_min 1
            else
              zero
         | Bool
