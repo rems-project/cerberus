@@ -1495,7 +1495,7 @@ Module CheriMemory
                    else if allow_one_past then
                           (* PNVI-ae-udi *)
                           if Z.eqb addr (Z.add alloc.(base) alloc.(size))
-                             && negb require_exposed && (negb (allocation_taint_eqb alloc.(taint) Exposed))
+                             && negb (require_exposed && (negb (allocation_taint_eqb alloc.(taint) Exposed)))
                           then Some alloc_id
                           else None
                         else None
