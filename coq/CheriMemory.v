@@ -1099,36 +1099,52 @@ Module CheriMemory
   | NotValidPtrProv
   | ValidPtrProv.
 
+  Definition string_of_prov_ptr_valid_ind p :=
+    match p with
+    | NotValidPtrProv => "NotValidPtrProv"
+    | ValidPtrProv => "ValidPtrProv"
+    end.
+
   Inductive prov_valid_ind :=
   | VALID: provenance -> prov_valid_ind
   | INVALID: prov_valid_ind.
+
+  Definition string_of_prov_valid_ind p :=
+    match p with
+    | VALID _ => "VALID _"
+    | INVALID => "INVALID"
+    end.
 
   Inductive bytes_ind :=
   | PtrBytes: Z -> bytes_ind
   | OtherBytes: bytes_ind.
 
-  Definition split_bytes (function_parameter : list AbsByte)
+  Definition split_bytes (bs : list AbsByte)
     : serr (provenance * prov_ptr_valid_ind * list (option ascii))
     :=
-    match function_parameter with
+    match bs with
     | [] => raise "CHERI.AbsByte.split_bytes: called on an empty list"
     | bs =>
         '(_prov, rev_values, offset_status) <-
           monadic_fold_left
             (fun '(prov_acc, val_acc, offset_acc) b_value =>
+
+               let acond :=
+                 match prov_acc, b_value.(prov) with
+                 | VALID (Prov_some alloc_id1), Prov_some alloc_id2 =>
+                     Z.eqb alloc_id1 alloc_id2
+                 | _, _ => false
+                 end in
+
+               let icond :=
+                 match prov_acc, b_value.(prov) with
+                 | VALID (Prov_symbolic iota1), Prov_symbolic iota2 =>
+                     Z.eqb iota1 iota2
+                 | _, _ => false
+                 end in
+
                prov_acc' <-
-                 match
-                   (prov_acc, b_value.(prov)),
-                   match (prov_acc, b_value.(prov)) with
-                   | (VALID (Prov_some alloc_id1), Prov_some alloc_id2) =>
-                       Z.eqb alloc_id1 alloc_id2
-                   | _ => false
-                   end,
-                   match (prov_acc, b_value.(prov)) with
-                   | (VALID (Prov_symbolic iota1), Prov_symbolic iota2) =>
-                       Z.eqb iota1 iota2
-                   | _ => false
-                   end with
+                 match (prov_acc, b_value.(prov)), acond, icond with
                  | (VALID (Prov_some alloc_id1), Prov_some alloc_id2), false, _
                    => ret INVALID
                  | (VALID (Prov_symbolic iota1), Prov_symbolic iota2), _, false
@@ -1143,26 +1159,35 @@ Module CheriMemory
                      ret (VALID new_prov)
                  | (prev_acc, _), _, _ => ret prev_acc
                  end ;;
+
                let offset_acc' :=
-                 match
-                   (offset_acc, b_value.(copy_offset)),
-                   match (offset_acc, b_value.(copy_offset)) with
-                   | (PtrBytes n1, Some n2) => Z.eqb n1 (Z.of_nat n2)
-                   | _ => false
-                   end with
-                 | (PtrBytes n1, Some n2), true => PtrBytes (Z.add n1 1)
-                 | _, _ => OtherBytes
+                 let ncond :=
+                   match offset_acc, b_value.(copy_offset) with
+                   | PtrBytes n1, Some n2 => Z.eqb n1 (Z.of_nat n2)
+                   | _, _ => false
+                   end in
+
+                 match offset_acc, b_value.(copy_offset),ncond with
+                 | PtrBytes n1, Some n2, true => PtrBytes (Z.add n1 1)
+                 | _, _, _ => OtherBytes
                  end in
+
                ret (prov_acc', (cons b_value.(value) val_acc), offset_acc'))
-            bs ((VALID Prov_none), nil, (PtrBytes 0)) ;;
-        ret (match _prov with
-             | INVALID => Prov_none
-             | VALID z_value => z_value
-             end,
-            match offset_status with
-            | OtherBytes => NotValidPtrProv
-            | _ => ValidPtrProv
-            end, (List.rev rev_values))
+            (List.rev bs) ((VALID Prov_none), nil, (PtrBytes 0)) ;;
+
+        let pvalid := match _prov with
+                      | INVALID => Prov_none
+                      | VALID z_value => z_value
+                      end in
+
+        let pptrvalid := match offset_status with
+                         | OtherBytes => NotValidPtrProv
+                         | _ => ValidPtrProv
+                         end in
+
+        (* sprint_msg (string_of_prov_valid_ind _prov);;
+        sprint_msg (string_of_prov_ptr_valid_ind pptrvalid) ;;  *)
+        ret (pvalid,pptrvalid,List.rev rev_values)
     end.
 
   Definition provs_of_bytes (bs : list AbsByte) : taint_ind :=
@@ -1299,22 +1324,22 @@ Module CheriMemory
             sz <- sizeof DEFAULT_FUEL None cty ;;
             let '(bs1, bs2) := split_at (Z.to_nat sz) bs in
             '(prov, prov_status, bs1') <- split_bytes bs1 ;;
+            (* sprint_msg ("BS1 prov_status=" ++ (string_of_prov_ptr_valid_ind prov_status)) ;; *)
             match extract_unspec bs1' with
             | Some cs =>
-                ret (NoTaint,
-                    match tag_query_f addr with
-                    | None => MVEunspecified cty
+                  match tag_query_f addr with
+                    | None => ret (NoTaint, MVEunspecified cty, bs2)
                     | Some tag =>
                         match C.decode cs tag with
-                        | None => MVErr (MerrCHERI loc CheriErrDecodingCap)
+                        | None => ret (NoTaint, MVErr (MerrCHERI loc CheriErrDecodingCap), bs2)
                         | Some n_value =>
                             match ref_ty with
                             | CoqCtype.Ctype _ (CoqCtype.Function _ _ _) =>
                                 match tag_query_f addr with
-                                | None => MVEunspecified cty
+                                | None => ret (NoTaint, MVEunspecified cty, bs2)
                                 | Some tag =>
                                     match C.decode cs tag with
-                                    | None => MVErr (MerrCHERI loc CheriErrDecodingCap)
+                                    | None => ret (NoTaint, MVErr (MerrCHERI loc CheriErrDecodingCap), bs2)
                                     | Some c_value =>
                                         let n_value :=
                                           Z.sub
@@ -1323,19 +1348,19 @@ Module CheriMemory
                                         match ZMap.find n_value funptrmap with
                                         | Some (file_dig, name, c') =>
                                             if C.eqb c_value c' then
-                                              MVEpointer ref_ty
+                                              ret (NoTaint, MVEpointer ref_ty
                                                 (PV prov
                                                    (PVfunction
                                                       (FP_valid
                                                          (CoqSymbol.Symbol file_dig
                                                             n_value
-                                                            (CoqSymbol.SD_Id name)))))
+                                                            (CoqSymbol.SD_Id name))))), bs2)
                                             else
-                                              MVEpointer ref_ty
-                                                (PV prov (PVfunction (FP_invalid c_value)))
+                                              ret (NoTaint, MVEpointer ref_ty
+                                                (PV prov (PVfunction (FP_invalid c_value))), bs2)
                                         | None =>
-                                            MVEpointer ref_ty
-                                              (PV prov (PVfunction (FP_invalid c_value)))
+                                            ret (NoTaint, MVEpointer ref_ty
+                                              (PV prov (PVfunction (FP_invalid c_value))), bs2)
                                         end
                                     end
                                 end
@@ -1353,10 +1378,11 @@ Module CheriMemory
                                       end
                                   | ValidPtrProv => prov
                                   end in
-                                MVEpointer ref_ty (PV prov (PVconcrete n_value))
+                                (* sprint_msg (C.to_string n_value) ;; *)
+                                ret (NoTaint, MVEpointer ref_ty (PV prov (PVconcrete n_value)), bs2)
                             end
                         end
-                    end, bs2)
+                    end
             | None =>
                 ret (NoTaint,
                     MVEunspecified (CoqCtype.Ctype nil (CoqCtype.Pointer CoqCtype.no_qualifiers ref_ty)), bs2)
