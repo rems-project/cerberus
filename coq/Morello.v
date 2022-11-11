@@ -230,9 +230,25 @@ Module MorelloPermission <: Permission.
         ]).
 
 
-  Definition to_string (p:t) :=
-    String.concat ";"
-      (List.map string_of_bool (to_list p)).
+  (**  Returns an abbreviated textual representation of permissions
+       listing zero or more of the following characters:
+
+       r  LOAD permission
+       w  STORE permission
+       x  EXECUTE permission
+       R  LOAD_CAP permission
+       W  STORE_CAP permission
+       E  EXECUTIVE permission (Morello only)
+
+   *)
+  Definition to_string (p:t) : string :=
+    let s (f:bool) l := if f then l else "" in
+    s p.(permits_load) "r"
+    ++ s p.(permits_store) "w"
+    ++ s p.(permits_execute) "x"
+    ++ s p.(permits_load_cap) "R"
+    ++ s p.(permits_store_cap) "W"
+    ++ s p.(executive) "E".
 
 End MorelloPermission.
 
