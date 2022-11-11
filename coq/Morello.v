@@ -6,6 +6,7 @@ Require Import Coq.Numbers.BinNums.
 Require Import Coq.ZArith.Zcompare.
 Require Import Coq.ZArith.Zdigits.
 Require Import Coq.Bool.Bool.
+Require Import Coq.Strings.HexString.
 
 Require Import StructTact.StructTactics.
 
@@ -594,9 +595,9 @@ Module MorelloCapability <:
   Definition to_string (c: t) : string :=
     "{" ++
       ("valid=" ++ string_of_bool c.(valid) ++ ",") ++
-      ("value=0x" ++ hex_str c.(value) ++ ",") ++
-      ("obj_type=0x" ++ hex_str c.(obj_type) ++ ",") ++
-      ("bounds=(0x" ++ hex_str (fst c.(bounds)) ++ ",0x" ++ hex_str (snd c.(bounds)) ++ "),") ++
+      ("value=0x" ++ HexString.of_Z c.(value) ++ ",") ++
+      ("obj_type=0x" ++ HexString.of_Z c.(obj_type) ++ ",") ++
+      ("bounds=(0x" ++ HexString.of_Z (fst c.(bounds)) ++ ",0x" ++ HexString.of_Z (snd c.(bounds)) ++ "),") ++
 
       ("flags=" ++  (String.concat ";" (List.map string_of_bool c.(flags))) ++ ",") ++
       ("perms=" ++ MorelloPermission.to_string (c.(perms)) ++ ",") ++
