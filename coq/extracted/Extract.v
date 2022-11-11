@@ -18,8 +18,8 @@ Unset Extraction Optimize. (* trying to make print_msg work *)
 Extraction Blacklist String List Char Core Monad Bool Format Nat Int.
 
 (* Debugging print *)
-Extraction NoInline CheriMemory.print_msg.
-Extract Constant CheriMemory.print_msg => "print_endline".
+Extraction NoInline Cerberus.Utils.print_msg.
+Extract Constant Cerberus.Utils.print_msg => "print_endline".
 Extract Inlined Constant Morello.MorelloCapability.strfcap => "strfcap".
 
 (* Set Extraction AccessOpaque. *)

@@ -22,6 +22,12 @@ Local Open Scope string_scope.
 Local Open Scope Z_scope.
 Local Open Scope bool_scope.
 
+(* this definiton will be remapped on extractoin to OCaml's print_endline *)
+Definition print_msg (msg : string) : unit := tt.
+
+Definition sprint_msg (msg : string) : serr unit :=
+  ret (print_msg msg).
+
 Fixpoint list_init {A:Type} (n:nat) (f:nat -> A): list A
   :=
   match n with

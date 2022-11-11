@@ -27,8 +27,6 @@ Require Import AltBinNotations.
 Import ListNotations.
 Import MonadNotation.
 
-Definition print_msg (msg : string) : unit := tt.
-
 Module ZMap := FMapAVL.Make(Z_as_OT).
 
 Module CheriMemory
@@ -301,9 +299,6 @@ Module CheriMemory
   Qed.
 
   Definition mprint_msg (msg : string) : memM unit :=
-    ret (print_msg msg).
-
-  Definition sprint_msg (msg : string) : serr unit :=
     ret (print_msg msg).
 
   Definition serr2memM {A: Type} (e:serr A): (memM A)
