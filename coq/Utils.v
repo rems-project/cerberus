@@ -136,7 +136,7 @@ Program Definition extract_num (a:Z) (off:nat) (len:nat): serr Z :=
           let v := Z_to_two_compl (off + len')%nat a in
           let v := vector_drop (t:=len) off v in
           let v := Vector.take len _ v in
-          ret (two_compl_value len' v)
+          ret (binary_value len v)
       end
   end.
 
