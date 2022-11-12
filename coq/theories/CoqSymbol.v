@@ -16,7 +16,7 @@ Inductive identifier : Type :=
 
 Definition ident_equal (a b: identifier) : bool :=
   match a, b with
-  | Identifier _ s1, Identifier _ s2 => String.eqb s1 s1
+  | Identifier _ s1, Identifier _ s2 => String.eqb s1 s2
   end.
 
 Definition digest := string.

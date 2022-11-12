@@ -22,6 +22,12 @@ Local Open Scope string_scope.
 Local Open Scope Z_scope.
 Local Open Scope bool_scope.
 
+(* this definiton will be remapped on extractoin to OCaml's print_endline *)
+Definition print_msg (msg : string) : unit := tt.
+
+Definition sprint_msg (msg : string) : serr unit :=
+  ret (print_msg msg).
+
 Fixpoint list_init {A:Type} (n:nat) (f:nat -> A): list A
   :=
   match n with
@@ -130,7 +136,7 @@ Program Definition extract_num (a:Z) (off:nat) (len:nat): serr Z :=
           let v := Z_to_two_compl (off + len')%nat a in
           let v := vector_drop (t:=len) off v in
           let v := Vector.take len _ v in
-          ret (two_compl_value len' v)
+          ret (binary_value len v)
       end
   end.
 

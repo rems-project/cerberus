@@ -136,7 +136,6 @@ Module Type Memory (A:VADDR).
     thread_id -> integer_value -> pointer_value ->
     integer_value -> memM pointer_value.
 
-(* Following could be implemented in OCaml wrapper
   Parameter va_start :
     list (CoqCtype.ctype * pointer_value) -> memM integer_value.
   Parameter va_copy : integer_value -> memM integer_value.
@@ -144,7 +143,6 @@ Module Type Memory (A:VADDR).
   Parameter va_end : integer_value -> memM unit.
   Parameter va_list :
     Z -> memM (list (CoqCtype.ctype * pointer_value)).
- *)
 
   Parameter copy_alloc_id : integer_value -> pointer_value -> memM pointer_value.
 

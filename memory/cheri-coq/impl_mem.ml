@@ -186,8 +186,211 @@ module CerbTagDefs = struct
   let tagDefs _ = toCoq_SymMap (Tags.tagDefs ())
 end
 
-module MM = CheriMemory(MorelloCapability)(MorelloImpl)(CerbTagDefs: CoqTags.TagDefs)
-module C = MorelloCapability
+
+module MorelloCapabilityWithStrfcap = struct
+  include MorelloCapability
+
+  let is_sealed c =
+    match cap_get_seal c with
+    | Cap_Unsealed -> false
+    | _ -> true
+
+    (* Helper function to check if sealed entry capability *)
+  let is_sentry c =
+    match cap_get_seal c with
+    | Cap_SEntry -> true
+    | _ -> false
+
+  let flags_as_str c =
+      let attrs =
+        let a f s l = if f then s::l else l in
+        a (not c.valid) "invald"
+        @@ a (is_sentry c) "sentry"
+        @@ a ((not (is_sentry c)) && is_sealed c) "sealed" []
+      in
+      if List.length attrs = 0 then ""
+      else " (" ^ String.concat "," attrs ^ ")"
+
+  (** String representation of permission using
+      format string as in strfcap(3) *)
+  let strfcap: string -> t -> string option = fun formats capability ->
+    let module State = struct
+        type num_state = | Initial | Precision | Width | Final
+      end in
+    let is_digit = function '0' .. '9' -> true | _ -> false in
+    let as_digit c = Char.code c - Char.code '0' in
+    let as_string = Printf.sprintf "%c" in
+    let explode s = List.of_seq (String.to_seq s) in
+    let (@) s = function
+      | None -> None
+      | Some t -> Some (s ^ t)
+    in
+    let rec loop cap = function
+      | [] -> Some ""
+      | '%'::fs -> strf cap false fs
+      | c::fs -> as_string c @ loop cap fs
+    and strf cap alt = function
+      | [] ->
+         (Debug_ocaml.warn []
+            (fun () -> "Morello.strfcap: unexpected end of format specifiction in: " ^ formats));
+         None
+      | '#'::fs -> strf cap true fs (* mutiple # are allowed *)
+      | '%'::fs -> "%" @ loop cap fs
+      (* non-numeric formats *)
+      | 'A'::fs ->
+         let s = flags_as_str cap in
+         s @ loop cap fs
+      | 'B'::fs ->
+         (*
+         let bits = encode_to_bits true cap in
+         let z = uint bits in
+         Some (Z.format "%02hhx" z)
+          *)
+         None (* TODO: format not implemented *)
+      | 'C'::fs ->
+         if cap_is_null_derived cap then
+           numf State.Initial (-1) (-1) false true 'x' cap ('a'::fs)
+         else
+           begin
+             match loop cap (explode "%#xa [%P,%#xb-%#xt]%? %A") with
+             | None -> None
+             | Some s -> s  @ loop cap fs
+           end
+      | 'P'::fs ->
+         let s = MorelloPermission.to_string (cap_get_perms cap) in
+         s @ loop cap fs
+      | 'T'::fs ->
+         loop {cap with valid = true } fs
+      | '?'::fs -> skip cap fs
+      (* try numeric formats *)
+      | x::fs as f -> numf State.Initial 1 1 false alt 'd' cap f
+    and numf state width prec right_pad alt number_fmt cap f =
+      let strnum z =
+        (* TODO(CHERI) In C implementation of "strfcap" the
+           following code is used to format numbers:
+
+           *fmtp++ = '%';
+           if (alt)
+           *fmtp++ = '#';
+           if (right_pad)
+           *fmtp++ = '-';
+           *fmtp++ = '*';
+           *fmtp++ = '.';
+           *fmtp++ = '*';
+           *fmtp++ = 'l';
+           *fmtp++ = number_fmt;
+           *fmtp = '\0';
+           snprintf(tmp, sizeof(tmp), fmt, width, precision, number);
+
+           Unforntunately [Z.format] does not support precision
+           specification for integers, so we just ignore it for
+           now.
+         *)
+        let fmt  =
+          "%"
+          ^ (if alt then "#" else "")
+          ^ (if right_pad then "-" else "")
+          ^ (if width > 0 then Stdlib.string_of_int width else "")
+          ^ (as_string number_fmt)
+        in
+        (if prec <> -1 then
+           Debug_ocaml.warn [] (fun () -> "Morello.P.strfcap: Precision specification is not supported in: " ^ formats));
+        Z.format fmt z
+      in
+      match state, f with
+      | _, [] ->
+         (Debug_ocaml.warn []
+            (fun () -> "Morello.strfcap: unexpected end of numeric format specifiction in: " ^ formats));
+         None
+      (* width *)
+      | Initial, c::fs when is_digit c ->
+         if c='0' then
+           begin
+             (Debug_ocaml.warn []
+                (fun () -> "Morello.strfcap: leading zero in width not allowed in format specification: " ^ formats));
+             None
+           end
+         else numf State.Width (as_digit c) prec right_pad alt number_fmt cap fs
+      | Width, c::fs when is_digit c ->
+         numf State.Width (width*10+(as_digit c)) prec right_pad alt number_fmt cap fs
+
+      (* precision *)
+      | Width, '.'::fs | Initial, '.'::fs ->
+         numf State.Precision width 0 right_pad alt number_fmt cap fs
+      | Precision, c::fs when is_digit c ->
+         numf State.Precision width (prec*10+(as_digit c)) right_pad alt number_fmt cap fs
+
+      (* right pad. could be specificed anywhere and repeated *)
+      | _, '-'::fs ->
+         numf State.Initial width prec true alt number_fmt cap fs
+
+      (* alt pad. could be specificed anywhere and repeated *)
+      | _, '#'::fs ->
+         numf State.Final width prec right_pad true number_fmt cap fs
+
+      (* hex could be specificed anywhere and repeated *)
+      | _, ('x' as d)::fs
+        | _, ('X' as d)::fs ->
+         numf State.Final width prec right_pad alt d cap fs
+
+      (* collaps to final *)
+      | Width, _
+        | Precision, _
+        | Initial, _ -> numf State.Final width prec right_pad alt number_fmt cap f
+
+      (* Actual numeric options *)
+      | Final, 'a'::fs ->
+         let z = cap_get_value cap in
+         strnum z @ loop cap fs
+      | Final, 'b'::fs ->
+         let z = fst (cap_get_bounds cap) in
+         strnum z @ loop cap fs
+      | Final, 'l'::fs ->
+         let (base,limit) = cap_get_bounds cap in
+         let z = Z.sub limit base in
+         strnum z @ loop cap fs
+      | Final, 'o'::fs ->
+         let base = fst (cap_get_bounds cap) in
+         let addr = cap_get_value cap in
+         let z = Z.sub addr base in
+         strnum z @ loop cap fs
+      | Final, 'p'::fs ->
+         let z = MorelloPermission.to_raw (cap_get_perms cap) in
+         strnum z @ loop cap fs
+      | Final, 's'::fs ->
+         let z = cap_get_obj_type cap in
+         strnum z @ loop cap fs
+      | Final, 'S'::fs ->
+         let s =
+           match cap_get_seal cap with
+           | Cap_Unsealed -> "<unsealed>"
+           | Cap_SEntry -> "<sentry>"
+           | _ -> strnum cap.obj_type
+         in
+         s @ loop cap fs
+      | Final, 't'::fs ->
+         let (base,limit) = cap_get_bounds cap in
+         let z = Z.add base limit in
+         strnum z @ loop cap fs
+      | Final, 'v'::fs ->
+         let z = if cap_is_valid cap then Z.succ Z.zero else Z.zero in
+         strnum z @ loop cap fs
+      | Final, c::_ ->
+         (Debug_ocaml.warn []
+            (fun () -> "Morello.strfcap: Unknown format specifier: '" ^
+                         (as_string c) ^
+                           "' in " ^ formats));
+         None
+    and skip cap = function
+      | [] -> None
+      | ('%'::fs) as f -> loop cap f
+      | _::fs -> skip cap fs
+    in loop capability (explode formats)
+
+end
+
+module MM = CheriMemory(MorelloCapabilityWithStrfcap)(MorelloImpl)(CerbTagDefs: CoqTags.TagDefs)
+module C = MorelloCapabilityWithStrfcap
 
 module Z = struct
   include Nat_big_num
@@ -1056,12 +1259,22 @@ module CHERIMorello : Memory = struct
   let realloc tid align ptr size =
     lift_coq_memM "realloc" (MM.realloc (Z.of_int tid) align ptr size)
 
-  (* TODO varargs not implemented *)
-  let va_start (args:(Ctype.ctype * pointer_value) list): integer_value memM = assert false (* TODO *)
-  let va_copy (va:integer_value): integer_value memM = assert false (* TODO *)
-  let va_arg (va:integer_value) (ty:Ctype.ctype): pointer_value memM = assert false (* TODO *)
-  let va_end (va:integer_value): unit memM = assert false (* TODO *)
-  let va_list (va_idx:Nat_big_num.num): ((Ctype.ctype * pointer_value) list) memM = assert false (* TODO *)
+  let va_start (args:(Ctype.ctype * pointer_value) list): integer_value memM =
+    let args = List.map (fun (t,p) -> (toCoq_ctype t, p)) args in
+    lift_coq_memM "va_start" (MM.va_start args)
+
+  let va_copy (va:integer_value): integer_value memM =
+    lift_coq_memM "va_copy" (MM.va_copy va)
+
+  let va_arg (va:integer_value) (ty:Ctype.ctype): pointer_value memM =
+    lift_coq_memM "va_arg" (MM.va_arg va (toCoq_ctype ty))
+
+  let va_end (va:integer_value): unit memM =
+    lift_coq_memM "va_end" (MM.va_end va)
+
+  let va_list (va_idx:Nat_big_num.num): ((Ctype.ctype * pointer_value) list) memM =
+    lift_coq_memM "va_list" (MM.va_list va_idx) >>= fun res ->
+    return (List.map (fun (t,p) -> (fromCoq_ctype t, p)) res)
 
   let copy_alloc_id ival ptrval =
     lift_coq_memM "copy_alloc_id" (MM.copy_alloc_id ival ptrval)

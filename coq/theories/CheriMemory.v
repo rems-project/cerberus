@@ -1,5 +1,4 @@
 Require Import Coq.Arith.PeanoNat.
-From Coq.Lists Require Import List ListSet.
 Require Import Coq.Numbers.BinNums.
 Require Import Coq.ZArith.Zcompare.
 Require Import Coq.Floats.PrimFloat.
@@ -14,6 +13,8 @@ From ExtLib.Data Require Import List.
 From ExtLib.Structures Require Import Monad Monads MonadExc MonadState Traversable.
 From ExtLib.Data.Monads Require Import EitherMonad OptionMonad.
 
+From Coq.Lists Require Import List ListSet. (* after exltlib *)
+
 Require Import SimpleError Capabilities Addr Memory_model CoqMem_common ErrorWithState CoqUndefined Morello ErrorWithState CoqLocation CoqSymbol CoqImplementation CoqTags Utils CoqSwitches CoqAilTypesAux.
 
 Local Open Scope string_scope.
@@ -25,8 +26,6 @@ Local Open Scope bool_scope.
 Require Import AltBinNotations.
 Import ListNotations.
 Import MonadNotation.
-
-Definition print_msg (msg : string) : unit := tt.
 
 Module ZMap := FMapAVL.Make(Z_as_OT).
 
@@ -259,6 +258,10 @@ Module CheriMemory
   Definition mem_state_with_funptrmap funptrmap (r : mem_state) :=
     Build_mem_state_r r.(next_alloc_id) r.(next_iota) r.(last_address) r.(allocations) r.(iota_map) funptrmap r.(varargs) r.(next_varargs_id) r.(bytemap) r.(captags) r.(dead_allocations) r.(dynamic_addrs) r.(last_used).
 
+  Definition mem_state_with_varargs_next_varargs_id varargs next_varargs_id (r : mem_state) :=
+    Build_mem_state_r r.(next_alloc_id) r.(next_iota) r.(last_address) r.(allocations) r.(iota_map) r.(funptrmap) varargs next_varargs_id r.(bytemap) r.(captags) r.(dead_allocations) r.(dynamic_addrs) r.(last_used).
+
+
   Definition initial_address := (HexString.to_Z "0xFFFFFFFF").
 
   Definition DEFAULT_FUEL:nat := 1000%nat. (* TODO maybe needs to be abstracted *)
@@ -294,6 +297,9 @@ Module CheriMemory
   Proof.
     typeclasses eauto.
   Qed.
+
+  Definition mprint_msg (msg : string) : memM unit :=
+    ret (print_msg msg).
 
   Definition serr2memM {A: Type} (e:serr A): (memM A)
     := match e with
@@ -1093,36 +1099,52 @@ Module CheriMemory
   | NotValidPtrProv
   | ValidPtrProv.
 
+  Definition string_of_prov_ptr_valid_ind p :=
+    match p with
+    | NotValidPtrProv => "NotValidPtrProv"
+    | ValidPtrProv => "ValidPtrProv"
+    end.
+
   Inductive prov_valid_ind :=
   | VALID: provenance -> prov_valid_ind
   | INVALID: prov_valid_ind.
+
+  Definition string_of_prov_valid_ind p :=
+    match p with
+    | VALID _ => "VALID _"
+    | INVALID => "INVALID"
+    end.
 
   Inductive bytes_ind :=
   | PtrBytes: Z -> bytes_ind
   | OtherBytes: bytes_ind.
 
-  Definition split_bytes (function_parameter : list AbsByte)
+  Definition split_bytes (bs : list AbsByte)
     : serr (provenance * prov_ptr_valid_ind * list (option ascii))
     :=
-    match function_parameter with
+    match bs with
     | [] => raise "CHERI.AbsByte.split_bytes: called on an empty list"
     | bs =>
         '(_prov, rev_values, offset_status) <-
           monadic_fold_left
             (fun '(prov_acc, val_acc, offset_acc) b_value =>
+
+               let acond :=
+                 match prov_acc, b_value.(prov) with
+                 | VALID (Prov_some alloc_id1), Prov_some alloc_id2 =>
+                     Z.eqb alloc_id1 alloc_id2
+                 | _, _ => false
+                 end in
+
+               let icond :=
+                 match prov_acc, b_value.(prov) with
+                 | VALID (Prov_symbolic iota1), Prov_symbolic iota2 =>
+                     Z.eqb iota1 iota2
+                 | _, _ => false
+                 end in
+
                prov_acc' <-
-                 match
-                   (prov_acc, b_value.(prov)),
-                   match (prov_acc, b_value.(prov)) with
-                   | (VALID (Prov_some alloc_id1), Prov_some alloc_id2) =>
-                       Z.eqb alloc_id1 alloc_id2
-                   | _ => false
-                   end,
-                   match (prov_acc, b_value.(prov)) with
-                   | (VALID (Prov_symbolic iota1), Prov_symbolic iota2) =>
-                       Z.eqb iota1 iota2
-                   | _ => false
-                   end with
+                 match (prov_acc, b_value.(prov)), acond, icond with
                  | (VALID (Prov_some alloc_id1), Prov_some alloc_id2), false, _
                    => ret INVALID
                  | (VALID (Prov_symbolic iota1), Prov_symbolic iota2), _, false
@@ -1137,26 +1159,35 @@ Module CheriMemory
                      ret (VALID new_prov)
                  | (prev_acc, _), _, _ => ret prev_acc
                  end ;;
+
                let offset_acc' :=
-                 match
-                   (offset_acc, b_value.(copy_offset)),
-                   match (offset_acc, b_value.(copy_offset)) with
-                   | (PtrBytes n1, Some n2) => Z.eqb n1 (Z.of_nat n2)
-                   | _ => false
-                   end with
-                 | (PtrBytes n1, Some n2), true => PtrBytes (Z.add n1 1)
-                 | _, _ => OtherBytes
+                 let ncond :=
+                   match offset_acc, b_value.(copy_offset) with
+                   | PtrBytes n1, Some n2 => Z.eqb n1 (Z.of_nat n2)
+                   | _, _ => false
+                   end in
+
+                 match offset_acc, b_value.(copy_offset),ncond with
+                 | PtrBytes n1, Some n2, true => PtrBytes (Z.add n1 1)
+                 | _, _, _ => OtherBytes
                  end in
+
                ret (prov_acc', (cons b_value.(value) val_acc), offset_acc'))
-            bs ((VALID Prov_none), nil, (PtrBytes 0)) ;;
-        ret (match _prov with
-             | INVALID => Prov_none
-             | VALID z_value => z_value
-             end,
-            match offset_status with
-            | OtherBytes => NotValidPtrProv
-            | _ => ValidPtrProv
-            end, (List.rev rev_values))
+            (List.rev bs) ((VALID Prov_none), nil, (PtrBytes 0)) ;;
+
+        let pvalid := match _prov with
+                      | INVALID => Prov_none
+                      | VALID z_value => z_value
+                      end in
+
+        let pptrvalid := match offset_status with
+                         | OtherBytes => NotValidPtrProv
+                         | _ => ValidPtrProv
+                         end in
+
+        (* sprint_msg (string_of_prov_valid_ind _prov);;
+        sprint_msg (string_of_prov_ptr_valid_ind pptrvalid) ;;  *)
+        ret (pvalid,pptrvalid,rev_values)
     end.
 
   Definition provs_of_bytes (bs : list AbsByte) : taint_ind :=
@@ -1293,22 +1324,22 @@ Module CheriMemory
             sz <- sizeof DEFAULT_FUEL None cty ;;
             let '(bs1, bs2) := split_at (Z.to_nat sz) bs in
             '(prov, prov_status, bs1') <- split_bytes bs1 ;;
+            (* sprint_msg ("BS1 prov_status=" ++ (string_of_prov_ptr_valid_ind prov_status)) ;; *)
             match extract_unspec bs1' with
             | Some cs =>
-                ret (NoTaint,
-                    match tag_query_f addr with
-                    | None => MVEunspecified cty
+                  match tag_query_f addr with
+                    | None => ret (NoTaint, MVEunspecified cty, bs2)
                     | Some tag =>
                         match C.decode cs tag with
-                        | None => MVErr (MerrCHERI loc CheriErrDecodingCap)
+                        | None => ret (NoTaint, MVErr (MerrCHERI loc CheriErrDecodingCap), bs2)
                         | Some n_value =>
                             match ref_ty with
                             | CoqCtype.Ctype _ (CoqCtype.Function _ _ _) =>
                                 match tag_query_f addr with
-                                | None => MVEunspecified cty
+                                | None => ret (NoTaint, MVEunspecified cty, bs2)
                                 | Some tag =>
                                     match C.decode cs tag with
-                                    | None => MVErr (MerrCHERI loc CheriErrDecodingCap)
+                                    | None => ret (NoTaint, MVErr (MerrCHERI loc CheriErrDecodingCap), bs2)
                                     | Some c_value =>
                                         let n_value :=
                                           Z.sub
@@ -1317,19 +1348,19 @@ Module CheriMemory
                                         match ZMap.find n_value funptrmap with
                                         | Some (file_dig, name, c') =>
                                             if C.eqb c_value c' then
-                                              MVEpointer ref_ty
+                                              ret (NoTaint, MVEpointer ref_ty
                                                 (PV prov
                                                    (PVfunction
                                                       (FP_valid
                                                          (CoqSymbol.Symbol file_dig
                                                             n_value
-                                                            (CoqSymbol.SD_Id name)))))
+                                                            (CoqSymbol.SD_Id name))))), bs2)
                                             else
-                                              MVEpointer ref_ty
-                                                (PV prov (PVfunction (FP_invalid c_value)))
+                                              ret (NoTaint, MVEpointer ref_ty
+                                                (PV prov (PVfunction (FP_invalid c_value))), bs2)
                                         | None =>
-                                            MVEpointer ref_ty
-                                              (PV prov (PVfunction (FP_invalid c_value)))
+                                            ret (NoTaint, MVEpointer ref_ty
+                                              (PV prov (PVfunction (FP_invalid c_value))), bs2)
                                         end
                                     end
                                 end
@@ -1347,10 +1378,11 @@ Module CheriMemory
                                       end
                                   | ValidPtrProv => prov
                                   end in
-                                MVEpointer ref_ty (PV prov (PVconcrete n_value))
+                                (* sprint_msg (C.to_string n_value) ;; *)
+                                ret (NoTaint, MVEpointer ref_ty (PV prov (PVconcrete n_value)), bs2)
                             end
                         end
-                    end, bs2)
+                    end
             | None =>
                 ret (NoTaint,
                     MVEunspecified (CoqCtype.Ctype nil (CoqCtype.Pointer CoqCtype.no_qualifiers ref_ty)), bs2)
@@ -2723,7 +2755,7 @@ Module CheriMemory
     match ity with
     | CoqCtype.Char =>
         if IMP.get.(CoqImplementation.is_signed_ity) CoqCtype.Char
-        then ret (IV (signed_min 8))
+        then ret (IV (signed_min 1))
         else ret (IV 0)
     | CoqCtype.Bool
     | CoqCtype.Size_t
@@ -3191,6 +3223,87 @@ Module CheriMemory
     | PV _ _ =>
         fail (MerrWIP "realloc: invalid pointer")
     end.
+
+  Definition va_start (args:  list (CoqCtype.ctype * pointer_value)) : memM integer_value :=
+    get >>= fun st =>
+        let id := st.(next_varargs_id) in
+        update (fun st => mem_state_with_varargs_next_varargs_id (ZMap.add id (0, args) st.(varargs)) (Z.succ st.(next_varargs_id)) st) ;;
+        ret (IV id).
+
+  Definition va_copy (va : integer_value) : memM integer_value :=
+    match va with
+    | IV id =>
+        get >>=
+          fun st =>
+            match ZMap.find id st.(varargs) with
+            | Some args =>
+                let id := st.(next_varargs_id) in
+                update
+                  (fun st =>
+                     mem_state_with_varargs_next_varargs_id
+                       (ZMap.add id args st.(varargs))
+                       (Z.succ st.(next_varargs_id))
+                       st) ;;
+                ret (IV id)
+            | None =>
+                fail (MerrWIP "va_copy: not initiliased")
+            end
+    | _ => fail (MerrWIP "va_copy: invalid va_list")
+    end.
+
+  Definition va_arg (va: integer_value) (ty: CoqCtype.ctype): memM pointer_value :=
+    match va with
+    | IV id =>
+        get >>=
+          fun st =>
+            match ZMap.find id st.(varargs) with
+            | Some (i_value, args) =>
+                match Lists.List.nth_error args (Z.to_nat i_value) with
+                | Some (_, ptr) =>
+                    update
+                      (fun st =>
+                         mem_state_with_varargs_next_varargs_id
+                           (ZMap.add id ((Z.add i_value 1), args) st.(varargs))
+                           st.(next_varargs_id) (* unchanged *)
+                                st) ;;
+                    ret ptr
+                | None =>
+                    fail
+                      (MerrWIP
+                         "va_arg: invalid number of arguments")
+                end
+            | None =>
+                fail (MerrWIP "va_arg: not initiliased")
+            end
+    | _ => fail (MerrWIP "va_arg: invalid va_list")
+    end.
+
+  Definition va_end (va : integer_value): memM unit :=
+    match va with
+    | IV id =>
+        get >>=
+          fun st =>
+            match ZMap.find id st.(varargs) with
+            | Some _ =>
+                update
+                  (fun (st : mem_state) =>
+                     mem_state_with_varargs_next_varargs_id
+                       (ZMap.remove id st.(varargs))
+                       st.(next_varargs_id) (* unchanged *)
+                            st)
+            | None =>
+                fail (MerrWIP "va_end: not initiliased")
+            end
+    | _ => fail (MerrWIP "va_end: invalid va_list")
+    end.
+
+  Definition va_list (va_idx:Z) : memM (list (CoqCtype.ctype * pointer_value)) :=
+    get >>=
+      fun st=>
+        match ZMap.find va_idx st.(varargs) with
+        | Some (n_value, args) => ret args
+        | None => fail (MerrWIP "va_list")
+        end.
 
   Definition copy_alloc_id
     (ival : integer_value) (ptrval : pointer_value)
