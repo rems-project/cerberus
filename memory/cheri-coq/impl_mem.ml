@@ -204,7 +204,7 @@ module MorelloCapabilityWithStrfcap = struct
   let flags_as_str c =
       let attrs =
         let a f s l = if f then s::l else l in
-        a (not c.valid) "invald"
+        a (not (cap_is_valid c)) "invald"
         @@ a (is_sentry c) "sentry"
         @@ a ((not (is_sentry c)) && is_sealed c) "sealed" []
       in
@@ -257,10 +257,10 @@ module MorelloCapabilityWithStrfcap = struct
              | Some s -> s  @ loop cap fs
            end
       | 'P'::fs ->
-         let s = MorelloPermission.to_string (cap_get_perms cap) in
+         let s = PermissionsZ.to_string (cap_get_perms cap) in
          s @ loop cap fs
-      | 'T'::fs ->
-         loop {cap with valid = true } fs
+      | 'T'::fs -> None
+         (*loop {cap with valid = true } fs Ricardo commented this as valid is not a field in my caps *)
       | '?'::fs -> skip cap fs
       (* try numeric formats *)
       | x::fs as f -> numf State.Initial 1 1 false alt 'd' cap f
@@ -355,7 +355,7 @@ module MorelloCapabilityWithStrfcap = struct
          let z = Z.sub addr base in
          strnum z @ loop cap fs
       | Final, 'p'::fs ->
-         let z = MorelloPermission.to_raw (cap_get_perms cap) in
+         let z = PermissionsZ.to_raw (cap_get_perms cap) in
          strnum z @ loop cap fs
       | Final, 's'::fs ->
          let z = cap_get_obj_type cap in
@@ -365,7 +365,7 @@ module MorelloCapabilityWithStrfcap = struct
            match cap_get_seal cap with
            | Cap_Unsealed -> "<unsealed>"
            | Cap_SEntry -> "<sentry>"
-           | _ -> strnum cap.obj_type
+           | _ -> strnum (*cap.obj_type*) (cap_get_obj_type cap)
          in
          s @ loop cap fs
       | Final, 't'::fs ->
