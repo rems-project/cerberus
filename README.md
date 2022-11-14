@@ -160,6 +160,14 @@ You can also compile all the targets with:
 $ make all
 ```
 
+Building CN
+---
+First build Cerberus and install it (via `make install`). 
+Then build and install CN via `make install_cn`. 
+
+To apply CN to some input C file run `cn CFILE`.
+
+
 
 Docker image
 ------------
@@ -182,6 +190,7 @@ Contributors:
 <ul>
 <li>  <a href="http://www.cl.cam.ac.uk/users/km569">Kayvan Memarian</a></li>
 <li>  <a href="http://www.cl.cam.ac.uk/users/cp526">Christopher Pulte</a></li>
+<li>  <a href="https://www.cst.cam.ac.uk/people/tals4">Thomas Sewell</a></li>
 <li>  <a href="http://www.cl.cam.ac.uk/users/vb358">Victor B. F. Gomes</a></li>
 <li>  <a href="https://www.csail.mit.edu/person/stella-lau">Stella Lau</a></li>
 <li>  <a href="http://www.cl.cam.ac.uk/users/kn307">Kyndylan Nienhuis</a></li>
@@ -193,7 +202,7 @@ Contributors:
 </ul>
 
 The main Cerberus developer is Kayvan Memarian.
-The experimental CN backend is by Christopher Pulte.
+The CN backend is by Christopher Pulte and Thomas Sewell.
 Victor Gomes made substantial contributions across the system, and Stella Lau was the main developer of Cerberus BMC. 
 Kyndylan Nienhuis worked on the operational semantics for C11
 concurrency. 
