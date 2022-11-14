@@ -162,11 +162,7 @@ $ make all
 
 Building CN
 ---
-First build Cerberus and install it (via `make install`). 
-Then build and install CN via `make install_cn`. 
-
-To apply CN to some input C file run `cn CFILE`.
-
+See https://github.com/rems-project/cerberus/blob/master/backend/cn/INSTALL.md
 
 
 Docker image
