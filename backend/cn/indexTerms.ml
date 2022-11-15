@@ -851,17 +851,7 @@ let (%.) struct_decls t member =
   in
   member_ ~member_bt (tag, t, member)
 
-let rec member_simp_ bt it member = match term it with
-  | Struct_op (Struct (_, members)) ->
-    List.assoc Id.equal member members
-  | Struct_op (StructUpdate ((t, member2), v)) ->
-    if Id.equal member member2
-    then v
-    else member_simp_ bt t member
-  | _ ->
-     (* TODO: what's this? *)
-    let member_bt = bt in
-    member_ ~member_bt ("foo", it, member)
+
 
 
 let record_ members = 
