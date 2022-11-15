@@ -911,10 +911,15 @@ let array_pointer_to_index ~base ~item_size ~pointer =
 
 let subarray_condition ~base ~item_size ~from_index ~to_index ~qpointer =
   let offset = array_offset_of_pointer ~base ~pointer:qpointer in
-  let index = array_pointer_to_index ~base ~item_size ~pointer:qpointer in
-  and_ [lePointer_ (base, qpointer);
-        divisible_ (offset, item_size);
-        le_ (from_index, index); lt_ (index, to_index)]  
+  and_ [
+      lePointer_ (pointer_offset_ (base, mul_ (item_size, from_index)),
+                  qpointer);
+      ltPointer_ (qpointer,
+                  pointer_offset_ (base, mul_ (item_size, to_index)));
+      divisible_ (offset, item_size)
+    ]
+
+  
 
 
 let cellPointer_ ~base ~step ~starti ~endi ~p =
