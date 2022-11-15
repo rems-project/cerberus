@@ -40,7 +40,6 @@ module Terms = struct
     | MemberShift of {pointer:term; member:string}
     (* | ArrayShift of {pointer:term; index:term} *)
     | CellPointer of (term * term) * (term * term) * term
-    | Disjoint of (term * term) * (term * term)
     | DatatypeCons of (string * (string * term) list)
     | App of term * term
     | Env of term * string
@@ -133,11 +132,6 @@ module Terms = struct
             [pp false base; pp false step; 
              pp false from_index; pp false to_index; 
              pp false pointer])
-    | Disjoint ((p1, sz1), (p2, sz2)) ->
-       mparens atomic 
-         (c_app !^"cellPointer" 
-            [pp false p1; pp false sz1; 
-             pp false p2; pp false sz2])
     | DatatypeCons (nm, eqs) ->
        mparens atomic (!^ nm ^^^ braces (flow comma (List.map
             (fun (nm, t) -> !^ nm ^^^ equals ^^^ pp true t) eqs)))
@@ -239,8 +233,6 @@ module Terms = struct
       (*    aux pointer || aux index *)
       | CellPointer ((t1, t2), (t3, t4), t5) ->
          aux t1 || aux t2 || aux t3 || aux t4 || aux t5
-      | Disjoint ((t1, t2), (t3, t4)) ->
-         aux t1 || aux t2 || aux t3 || aux t4
       | DatatypeCons (nm, eqs) ->
          List.exists (fun (_, t) -> aux t) eqs
       | App (t1, t2) ->

@@ -678,12 +678,6 @@ let resolve_index_term loc
        let t = cellPointer_ ~base ~step ~starti:from_index ~endi:to_index 
                  ~p:pointer in
        return (t, None)
-    | Disjoint ((p1, sz1), (p2, sz2)) ->
-       let@ (p1, _) = resolve p1 mapping quantifiers in
-       let@ (sz1, _) = resolve sz1 mapping quantifiers in
-       let@ (p2, _) = resolve p2 mapping quantifiers in
-       let@ (sz2, _) = resolve sz2 mapping quantifiers in
-       return (disjoint_ (p1, sz1) (p2, sz2), None)
     | DatatypeCons (nm, mems) ->
        let@ (sym, info) = match lookup_sym_map_by_string "datatype constructors"
            nm global.Global.datatype_constrs
