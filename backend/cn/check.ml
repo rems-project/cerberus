@@ -1318,17 +1318,21 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
   | Normal expect, M_Einstantiate (oid, pe) ->
      let@ () = WellTyped.ensure_base_type loc ~expect Unit in
      check_pexpr ~expect:Integer pe (fun arg ->
+     let arg_s = Sym.fresh_make_uniq "instance" in
+     let arg_it = sym_ (arg_s, IT.bt arg) in
+     let@ () = add_l arg_s (IT.bt arg_it) (loc, lazy (Sym.pp arg_s)) in
+     let@ () = add_c (LC.t_ (eq__ arg_it arg)) in
      let@ constraints = all_constraints () in
-     let omentions_pred it = match oid with
-       | Some id -> IT.mentions_pred id it
-       | None -> true
-     in
      let extra_assumptions = 
+       let omentions_pred it = match oid with
+         | Some id -> IT.mentions_pred id it
+         | None -> true
+       in
        List.filter_map (fun lc ->
            match lc with
            | Forall ((s, bt), t) 
-                when BT.equal bt (IT.bt arg) && omentions_pred t ->
-              Some (LC.t_ (IT.subst (IT.make_subst [(s, arg)]) t))
+                when BT.equal bt (IT.bt arg_it) && omentions_pred t ->
+              Some (LC.t_ (IT.subst (IT.make_subst [(s, arg_it)]) t))
            | _ -> 
               None
          ) (LCSet.elements constraints)
