@@ -257,10 +257,10 @@ module MorelloCapabilityWithStrfcap = struct
              | Some s -> s  @ loop cap fs
            end
       | 'P'::fs ->
-         let s = PermissionsZ.to_string (cap_get_perms cap) in
+         let s = Permissions.to_string (cap_get_perms cap) in
          s @ loop cap fs
-      | 'T'::fs -> None
-         (*loop {cap with valid = true } fs Ricardo commented this as valid is not a field in my caps *)
+      | 'T'::fs -> None (* TODO later *)
+        (* loop {cap (*with valid = true *)} fs *)
       | '?'::fs -> skip cap fs
       (* try numeric formats *)
       | x::fs as f -> numf State.Initial 1 1 false alt 'd' cap f
@@ -355,7 +355,7 @@ module MorelloCapabilityWithStrfcap = struct
          let z = Z.sub addr base in
          strnum z @ loop cap fs
       | Final, 'p'::fs ->
-         let z = PermissionsZ.to_raw (cap_get_perms cap) in
+         let z = Permissions.to_raw (cap_get_perms cap) in
          strnum z @ loop cap fs
       | Final, 's'::fs ->
          let z = cap_get_obj_type cap in

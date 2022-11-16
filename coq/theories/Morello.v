@@ -77,7 +77,7 @@ Module tests_convertors.
   Proof. reflexivity. Qed.
 End tests_convertors. 
 
-Module Permissions <: Permission.
+Module PermissionsBV <: Permission.
   Definition len:N := 18. (* CAP_PERMS_NUM_BITS = 16 bits of actual perms + 2 bits for Executive and Global. *)
   Definition t := bv len. 
   
@@ -340,10 +340,10 @@ Module Permissions <: Permission.
   Definition to_list (perms:t) : list bool := 
     bv_to_list_bool perms.
   
-End Permissions.
+End PermissionsBV.
 
 
-Module Value <: VADDR.
+Module ValueBV <: VADDR.
   Definition len:N := 64.
   Definition t := bv len.
 
@@ -362,10 +362,10 @@ Module Value <: VADDR.
   Definition ltb_irref: forall a:t, ltb a a = false.
   Proof. intros. unfold ltb. unfold lt. rewrite Z.ltb_irrefl. reflexivity. Qed. 
   
-End Value.
+End ValueBV.
 
 
-Module ObjType <: OTYPE.
+Module ObjTypeBV <: OTYPE.
   Definition len:N := 64.
   Definition t := bv len.  (* ObtTypes are effectively 15-bit values,
   but the ASL extracts this field from a cap as a 64-bit word, 
@@ -378,7 +378,7 @@ Module ObjType <: OTYPE.
 
   Definition of_Z (z:Z) : t := Z_to_bv len z.
   Definition to_Z (o:t) : Z := bv_to_Z_unsigned o.
-End ObjType.
+End ObjTypeBV.
 
 
 Module SealType <: CAP_SEAL_T. 
@@ -387,16 +387,16 @@ Module SealType <: CAP_SEAL_T.
   | Cap_SEntry (* "RB" in Morello *)
   | Cap_Indirect_SEntry (* "LB" in Morello *)
   | Cap_Indirect_SEntry_Pair (* "LPB" in Morello. TODO see why unused *)
-  | Cap_Sealed (seal : ObjType.t).
+  | Cap_Sealed (seal : ObjTypeBV.t).
   
   Definition t := cap_seal_t. 
 
-  Definition get_seal_ot (seal:t) : ObjType.t :=
+  Definition get_seal_ot (seal:t) : ObjTypeBV.t :=
     match seal with 
-      Cap_Unsealed => ObjType.of_Z 0
-    | Cap_SEntry => ObjType.of_Z 1
-    | Cap_Indirect_SEntry => ObjType.of_Z 3
-    | Cap_Indirect_SEntry_Pair => ObjType.of_Z 2
+      Cap_Unsealed => ObjTypeBV.of_Z 0
+    | Cap_SEntry => ObjTypeBV.of_Z 1
+    | Cap_Indirect_SEntry => ObjTypeBV.of_Z 3
+    | Cap_Indirect_SEntry_Pair => ObjTypeBV.of_Z 2
     | Cap_Sealed seal => seal
     end.
 
@@ -407,7 +407,7 @@ Module SealType <: CAP_SEAL_T.
 End SealType.
 
 
-Module Bounds <: VADDR_INTERVAL(Value).
+Module BoundsBV <: VADDR_INTERVAL(ValueBV).
   (* Definition t := bv 87. *)
   Definition bound_len:N := 65.
   Definition t := ((bv bound_len) * (bv bound_len))%type.
@@ -418,9 +418,9 @@ Module Bounds <: VADDR_INTERVAL(Value).
     let (base,top) := bounds in   
     (bv_to_Z_unsigned base, bv_to_Z_unsigned top).
 
-  Definition address_is_in_interval (bounds:Bounds.t) (value:Value.t) : bool :=
+  Definition address_is_in_interval (bounds:t) (value:ValueBV.t) : bool :=
     let '(base,limit) := bounds in 
-    let value : (bv Bounds.bound_len) := bv_to_bv value in 
+    let value : (bv bound_len) := bv_to_bv value in 
     (base <=? value) && (value <? limit).
 
   (* Vadim: is this what we want? *)
@@ -430,19 +430,19 @@ Module Bounds <: VADDR_INTERVAL(Value).
     ((base_a <? base_b) && (limit_a <=? limit_b))
     || ((base_a <=? base_b) && (limit_a <? limit_b)).
 
-End Bounds. 
+End BoundsBV. 
 
 
-Module Cap <: Capability (Value) (ObjType) (SealType) (Bounds) (Permissions).
+Module Cap <: Capability (ValueBV) (ObjTypeBV) (SealType) (BoundsBV) (PermissionsBV).
   Definition len:N := 129.
   Definition t := bv len.
 
   Definition of_Z (z:Z) : t := Z_to_bv len z.
      
-  Definition cap_SEAL_TYPE_UNSEALED : ObjType.t := ObjType.of_Z 0.
-  Definition cap_SEAL_TYPE_RB : ObjType.t := ObjType.of_Z 1. 
-  Definition cap_SEAL_TYPE_LPB : ObjType.t := ObjType.of_Z 2. 
-  Definition cap_SEAL_TYPE_LB : ObjType.t := ObjType.of_Z 3.
+  Definition cap_SEAL_TYPE_UNSEALED : ObjTypeBV.t := ObjTypeBV.of_Z 0.
+  Definition cap_SEAL_TYPE_RB : ObjTypeBV.t := ObjTypeBV.of_Z 1. 
+  Definition cap_SEAL_TYPE_LPB : ObjTypeBV.t := ObjTypeBV.of_Z 2. 
+  Definition cap_SEAL_TYPE_LB : ObjTypeBV.t := ObjTypeBV.of_Z 3.
 
   Definition sizeof_vaddr := 8%nat. (* in bytes *)
   (* Definition vaddr_bits := sizeof_vaddr * 8. *)
@@ -458,28 +458,28 @@ Module Cap <: Capability (Value) (ObjType) (SealType) (Bounds) (Permissions).
   Definition cap_flags_len := 8 % nat.
   Definition Flags := { l : list bool | length l = cap_flags_len }.
   
-  Definition cap_get_value (cap:t) : Value.t := 
+  Definition cap_get_value (cap:t) : ValueBV.t := 
     mword_to_bv (CapGetValue (bv_to_mword cap)).
   
-  Definition cap_get_obj_type (cap:t) : ObjType.t := 
+  Definition cap_get_obj_type (cap:t) : ObjTypeBV.t := 
     mword_to_bv (CapGetObjectType (bv_to_mword cap)).
 
-    Definition cap_get_bounds_ (cap:t) : Bounds.t * bool :=
-      let '(base_mw, limit_mw, isExponentValid) := CapGetBounds (bv_to_mword cap) in
-      let base_bv := mword_to_bv base_mw in
-      let limit_bv := mword_to_bv limit_mw in 
-      ((base_bv, limit_bv), isExponentValid).
+  Definition cap_get_bounds_ (cap:t) : BoundsBV.t * bool :=
+    let '(base_mw, limit_mw, isExponentValid) := CapGetBounds (bv_to_mword cap) in
+    let base_bv := mword_to_bv base_mw in
+    let limit_bv := mword_to_bv limit_mw in 
+    ((base_bv, limit_bv), isExponentValid).
   
-    Definition cap_get_bounds (cap:t) : Bounds.t :=
-        let '(base_mw, limit_mw, isExponentValid) := 
-          cap_get_bounds_ cap in
-        (base_mw, limit_mw).
+  Definition cap_get_bounds (cap:t) : BoundsBV.t :=
+      let '(base_mw, limit_mw, isExponentValid) := 
+        cap_get_bounds_ cap in
+      (base_mw, limit_mw).
   
-        Definition cap_get_offset (cap:t) : Z :=
+  Definition cap_get_offset (cap:t) : Z :=
     (mword_to_bv (CapGetOffset (bv_to_mword cap))).(bv_unsigned).
         
   Definition cap_get_seal (cap:t) : SealType.t := 
-    let ot:ObjType.t := cap_get_obj_type cap in
+    let ot:ObjTypeBV.t := cap_get_obj_type cap in
     if (ot =? cap_SEAL_TYPE_UNSEALED)%stdpp then SealType.Cap_Unsealed else
     if (ot =? cap_SEAL_TYPE_RB)%stdpp then SealType.Cap_SEntry else
     if (ot =? cap_SEAL_TYPE_LPB)%stdpp then SealType.Cap_Indirect_SEntry else 
@@ -498,7 +498,7 @@ Module Cap <: Capability (Value) (ObjType) (SealType) (Bounds) (Permissions).
   let l : (list bool) := (mword_to_list_bool m) in
   l. *)
 
-  Definition cap_get_perms (cap:t) : Permissions.t := 
+  Definition cap_get_perms (cap:t) : PermissionsBV.t := 
     mword_to_bv (CapGetPermissions (bv_to_mword cap)).
 
   Definition cap_is_sealed (cap:t) : bool :=
@@ -506,7 +506,7 @@ Module Cap <: Capability (Value) (ObjType) (SealType) (Bounds) (Permissions).
   
   Definition cap_invalidate (cap:t) : t := mword_to_bv (CapWithTagClear (bv_to_mword cap)).
   
-  Definition cap_set_value (cap:t) (value:Value.t) : t :=
+  Definition cap_set_value (cap:t) (value:ValueBV.t) : t :=
     let new_cap := mword_to_bv (CapSetValue (bv_to_mword cap) (bv_to_mword value)) in 
     if (cap_is_sealed cap) then (cap_invalidate new_cap) else new_cap.
   
@@ -524,36 +524,36 @@ Module Cap <: Capability (Value) (ObjType) (SealType) (Bounds) (Permissions).
         mword_to_bv (CapSetFlags (bv_to_mword cap) flags')       in 
     if (cap_is_sealed cap) then (cap_invalidate new_cap) else new_cap. *)
   
-  Definition cap_set_objtype (cap:t) (ot:ObjType.t) : t :=
+  Definition cap_set_objtype (cap:t) (ot:ObjTypeBV.t) : t :=
     mword_to_bv (CapSetObjectType (bv_to_mword cap) (zero_extend (bv_to_mword ot) 64)).
 
   (* [perms] must contain [1] for permissions to be cleared and [0] for those to be kept *)
-  Definition cap_narrow_perms (cap:t) (perms:Permissions.t) : t :=
-    let perms_mw : (mword (Z.of_N Permissions.len)) := bv_to_mword perms in 
+  Definition cap_narrow_perms (cap:t) (perms:PermissionsBV.t) : t :=
+    let perms_mw : (mword (Z.of_N PermissionsBV.len)) := bv_to_mword perms in 
     let mask : (mword 64) := 
       zero_extend perms_mw 64 in
     let new_cap := mword_to_bv (CapClearPerms (bv_to_mword cap) mask) in 
     if (cap_is_sealed cap) then (cap_invalidate new_cap) else new_cap.
 
   Definition cap_clear_global_perm (cap:t) : t := 
-    cap_narrow_perms cap (list_bool_to_bv (Permissions.make_permissions [Permissions.Global_perm])).
+    cap_narrow_perms cap (list_bool_to_bv (PermissionsBV.make_permissions [PermissionsBV.Global_perm])).
 
-  Definition cap_set_bounds (cap : t) (bounds : Bounds.t) (exact : bool) : t :=
+  Definition cap_set_bounds (cap : t) (bounds : BoundsBV.t) (exact : bool) : t :=
     (* CapSetBounds sets the lower bound to the value of the input cap,
        so we first have to set the value of cap to bounds.base. *)
     let '(base,limit) := bounds in
-    let base_as_val : Value.t := bv_to_bv base in  
+    let base_as_val : ValueBV.t := bv_to_bv base in  
     let new_cap := cap_set_value cap base_as_val in 
-    let req_len : (mword (Z.of_N Bounds.bound_len)) := 
+    let req_len : (mword (Z.of_N BoundsBV.bound_len)) := 
       mword_of_int (Z.sub (bv_to_Z_unsigned limit) (bv_to_Z_unsigned base)) in 
     let new_cap := 
       mword_to_bv (CapSetBounds (bv_to_mword new_cap) req_len exact) in 
     if (cap_is_sealed cap) then (cap_invalidate new_cap) else new_cap.
 
-  Definition cap_narrow_bounds (cap : t) (bounds : Bounds.t) : t :=
+  Definition cap_narrow_bounds (cap : t) (bounds : BoundsBV.t) : t :=
     cap_set_bounds cap bounds false.
 
-  Definition cap_narrow_bounds_exact (cap : t) (bounds : Bounds.t) : t :=
+  Definition cap_narrow_bounds_exact (cap : t) (bounds : BoundsBV.t) : t :=
     cap_set_bounds cap bounds true.
 
   Definition cap_is_valid (cap:t) : bool := Bool.eqb (CapIsTagClear (bv_to_mword cap)) false.
@@ -580,12 +580,12 @@ Module Cap <: Capability (Value) (ObjType) (SealType) (Bounds) (Permissions).
   Definition cap_has_global_perm (cap:t) : bool := cap_has_perm cap CAP_PERM_GLOBAL.
 
   Definition cap_seal (c : t) (k : t) : t :=
-    let key : ObjType.t := (cap_get_value k) in 
+    let key : ObjTypeBV.t := (cap_get_value k) in 
     let sealed_cap := cap_set_objtype c key in 
     if (cap_is_valid c) && (cap_is_valid k) && 
        (cap_is_unsealed c) && (cap_is_unsealed k) && 
        (cap_has_seal_perm k) && (cap_is_in_bounds k) &&
-       (Z.to_N (bv_to_Z_unsigned key) <=? ObjType.CAP_MAX_OBJECT_TYPE)%N then 
+       (Z.to_N (bv_to_Z_unsigned key) <=? ObjTypeBV.CAP_MAX_OBJECT_TYPE)%N then 
        sealed_cap
     else
        cap_invalidate sealed_cap.
@@ -606,7 +606,7 @@ Module Cap <: Capability (Value) (ObjType) (SealType) (Bounds) (Permissions).
     else 
       cap_invalidate unsealed_sealed_cap.
 
-  Definition cap_seal_immediate (cap : t) (seal_ot : ObjType.t) 
+  Definition cap_seal_immediate (cap : t) (seal_ot : ObjTypeBV.t) 
     `{ArithFact ((bv_to_Z_unsigned seal_ot >? 0)%Z && (bv_to_Z_unsigned seal_ot <=? 4)%Z)} : t :=
     let new_cap := cap_set_objtype cap seal_ot in 
     if (cap_is_valid cap && cap_is_unsealed cap) then 
@@ -628,17 +628,17 @@ Module Cap <: Capability (Value) (ObjType) (SealType) (Bounds) (Permissions).
 
   (* Confirm the type of the function is ok *)  
   Definition representable_alignment_mask (len:Z) : Z :=
-    mword_to_Z_unsigned (CapGetRepresentableMask (@mword_of_int (Z.of_N Value.len) len)).
+    mword_to_Z_unsigned (CapGetRepresentableMask (@mword_of_int (Z.of_N ValueBV.len) len)).
 
   (* Will need to see how this compares with Microsoft's Small Cheri 
   (Technical report coming up -- as of Oct 24 2022) *)
   Definition representable_length (len : Z) : Z :=
     let mask:Z := representable_alignment_mask len in
-    let nmask:Z := Value.bitwise_complement mask in
+    let nmask:Z := ValueBV.bitwise_complement mask in
     let result:Z := Z.land (Z.add len nmask) mask in 
       result.
 
-  Definition make_cap (value : Value.t) (otype : ObjType.t) (bounds : Bounds.t) (perms : Permissions.t) : t :=
+  Definition make_cap (value : ValueBV.t) (otype : ObjTypeBV.t) (bounds : BoundsBV.t) (perms : PermissionsBV.t) : t :=
     let new_cap := cap_cU () in 
     let perms_to_clear := list_bool_to_bv (map negb (bv_to_list_bool perms)) in 
     let new_cap := cap_narrow_perms new_cap perms_to_clear in 
@@ -647,19 +647,19 @@ Module Cap <: Capability (Value) (ObjType) (SealType) (Bounds) (Permissions).
       cap_set_objtype new_cap otype.
     
   (* Should we check that size is not too large? *)
-  Definition alloc_cap (a_value : Value.t) (size : Value.t) : t :=
+  Definition alloc_cap (a_value : ValueBV.t) (size : ValueBV.t) : t :=
     make_cap 
       a_value 
       cap_SEAL_TYPE_UNSEALED 
-      (Bounds.of_Zs (bv_to_Z_unsigned a_value, Z.add (bv_to_Z_unsigned a_value) (bv_to_Z_unsigned size)))
-      (Permissions.perm_alloc).
+      (BoundsBV.of_Zs (bv_to_Z_unsigned a_value, Z.add (bv_to_Z_unsigned a_value) (bv_to_Z_unsigned size)))
+      (PermissionsBV.perm_alloc).
     
-  Definition alloc_fun (a_value : Value.t) : t :=
+  Definition alloc_fun (a_value : ValueBV.t) : t :=
     make_cap 
       a_value 
       cap_SEAL_TYPE_RB 
-      (Bounds.of_Zs (bv_to_Z_unsigned a_value, Z.succ (Z.succ (bv_to_Z_unsigned a_value)))) 
-      Permissions.perm_alloc_fun.
+      (BoundsBV.of_Zs (bv_to_Z_unsigned a_value, Z.succ (Z.succ (bv_to_Z_unsigned a_value)))) 
+      PermissionsBV.perm_alloc_fun.
 
   Definition value_compare (cap1 cap2 : t) : comparison :=
     if (cap_get_value cap1 =? cap_get_value cap2)%stdpp then Eq
@@ -671,15 +671,15 @@ Module Cap <: Capability (Value) (ObjType) (SealType) (Bounds) (Permissions).
     else if (cap1 <? cap2) then Lt 
     else Gt.
 
-  Definition cap_vaddr_representable (c : t) (a : Value.t) : bool :=
+  Definition cap_vaddr_representable (c : t) (a : ValueBV.t) : bool :=
     CapIsRepresentable (bv_to_mword c) (bv_to_mword a).
   
-  Definition cap_bounds_representable_exactly (cap : t) (bounds : Bounds.t) : bool :=
+  Definition cap_bounds_representable_exactly (cap : t) (bounds : BoundsBV.t) : bool :=
     let '(base, limit) := bounds in
     let len := Z.sub (bv_to_Z_unsigned limit) (bv_to_Z_unsigned base) in
-    let base' : (bv Value.len) := 
-      Z_to_bv Value.len (bv_to_Z_unsigned base) in 
-    let len' := mword_of_int (len:=Z.of_N Bounds.bound_len) len in 
+    let base' : (bv ValueBV.len) := 
+      Z_to_bv ValueBV.len (bv_to_Z_unsigned base) in 
+    let len' := mword_of_int (len:=Z.of_N BoundsBV.bound_len) len in 
     let new_cap : (bv _) := cap_set_value cap base' in
     let new_cap : (mword _) := CapSetBounds (bv_to_mword new_cap) len' true in
     CapIsTagSet new_cap.
@@ -828,9 +828,9 @@ End Cap.
   (* Definition flags1:list bool := [false; false; false; false; false; false; false; false]. 
   Definition flags2:list bool := [false; true; false; true; false; true; false; true].  *)
     
-  Definition perm_Load : list bool := Permissions.make_permissions [Permissions.Load_perm].
-  Definition perm_Load_Store : list bool := Permissions.make_permissions [Permissions.Load_perm; Permissions.Store_perm].
-  Definition perm_Load_Execute : list bool := Permissions.make_permissions [Permissions.Load_perm; Permissions.Execute_perm].
+  Definition perm_Load : list bool := PermissionsBV.make_permissions [PermissionsBV.Load_perm].
+  Definition perm_Load_Store : list bool := PermissionsBV.make_permissions [PermissionsBV.Load_perm; PermissionsBV.Store_perm].
+  Definition perm_Load_Execute : list bool := PermissionsBV.make_permissions [PermissionsBV.Load_perm; PermissionsBV.Execute_perm].
   
   Example is_valid_test_1 :
     cap_is_valid c1 = true.
@@ -849,7 +849,7 @@ End Cap.
     Proof. reflexivity. Qed.
 
   Example value_test_1 : 
-    let value:Value.t := Value.of_Z 50 in
+    let value:ValueBV.t := ValueBV.of_Z 50 in
     value = cap_get_value (cap_set_value c1 value).
     Proof. reflexivity. Qed. 
 
@@ -859,28 +859,28 @@ End Cap.
   Example flags_test_2 : flags2 = cap_get_flags (cap_set_flags c1 flags2).
     Proof. reflexivity. Qed. 
   
-  Import Permissions.
+  Import PermissionsBV.
   
   Example permissions_test_1 : 
-    Permissions.perm_Universal = cap_get_perms c1.
+    PermissionsBV.perm_Universal = cap_get_perms c1.
     Proof. reflexivity. Qed.
 
   Example permissions_test_2 : 
-    let mask : Permissions.t := list_bool_to_bv (map negb perm_Load_Store) in
+    let mask : PermissionsBV.t := list_bool_to_bv (map negb perm_Load_Store) in
     list_bool_to_bv perm_Load_Store = cap_get_perms (cap_narrow_perms c1 mask).
     Proof. reflexivity. Qed.
 
   Example permissions_test_3 : 
-    let mask : Permissions.t := list_bool_to_bv (map negb perm_Load_Store) in
+    let mask : PermissionsBV.t := list_bool_to_bv (map negb perm_Load_Store) in
     let cap := (cap_narrow_perms c1 mask) in 
-    let mask : Permissions.t := list_bool_to_bv (map negb perm_Load_Execute) in
+    let mask : PermissionsBV.t := list_bool_to_bv (map negb perm_Load_Execute) in
     list_bool_to_bv perm_Load = cap_get_perms (cap_narrow_perms cap mask).
     Proof. vm_compute. reflexivity. Qed.
 
   Example permissions_test_4 : 
-    let mask : Permissions.t := list_bool_to_bv (map negb (make_permissions [Load_perm; Execute_perm])) in  
+    let mask : PermissionsBV.t := list_bool_to_bv (map negb (make_permissions [Load_perm; Execute_perm])) in  
     let capA := (cap_narrow_perms c1 mask) in     
-    let perms : Permissions.t := Permissions.perm_Universal in 
+    let perms : PermissionsBV.t := PermissionsBV.perm_Universal in 
     let perms := perm_clear_store_cap perms in 
     let perms := perm_clear_store perms in 
     let perms := perm_clear_global perms in 
@@ -897,8 +897,8 @@ End Cap.
     let perms := perm_clear_user3 perms in 
     let perms := perm_clear_user2 perms in 
     let perms := perm_clear_user1 perms in 
-    let perms := Permissions.of_list (map negb (Permissions.to_list perms)) in
-    let capB := (cap_narrow_perms c1 (match perms with Some p => p | None => Permissions.perm_Universal end)) in
+    let perms := PermissionsBV.of_list (map negb (PermissionsBV.to_list perms)) in
+    let capB := (cap_narrow_perms c1 (match perms with Some p => p | None => PermissionsBV.perm_Universal end)) in
     capA = capB.
     Proof. vm_compute. reflexivity. Qed.
 
@@ -906,32 +906,32 @@ End Cap.
     let user_perms_A : (list bool) := get_user_perms (cap_get_perms (cap_cU ())) in 
     let user_perms_A := [ nth 0 user_perms_A false; negb (nth 1 user_perms_A false);
                         nth 2 user_perms_A false; negb (nth 3 user_perms_A false) ] in 
-    let user_perms_B : Permissions.t := 
+    let user_perms_B : PermissionsBV.t := 
       perm_and_user_perms (cap_get_perms (cap_cU ())) user_perms_A in
       user_perms_A = [true; false; true; false] /\
       get_user_perms user_perms_B = user_perms_A.
     Proof. vm_compute. split. reflexivity. reflexivity. Qed. 
  
   Example eqb_and_narrow_perm_test_1 :
-    let mask : Permissions.t := list_bool_to_bv (map negb perm_Load_Store) in
+    let mask : PermissionsBV.t := list_bool_to_bv (map negb perm_Load_Store) in
     (c2 = (cap_narrow_perms c1 mask))%stdpp.
     Proof. vm_compute. reflexivity. Qed.
 
   Example bounds_representable_exactly_test_1 :
-    let bounds : Bounds.t := 
-      (Z_to_bv Bounds.bound_len 305402128, Z_to_bv Bounds.bound_len 305427248) in (* the bounds of c3, which we know is representable *) 
+    let bounds : BoundsBV.t := 
+      (Z_to_bv BoundsBV.bound_len 305402128, Z_to_bv BoundsBV.bound_len 305427248) in (* the bounds of c3, which we know is representable *) 
     cap_bounds_representable_exactly c4 bounds = true.
     Proof. reflexivity. Qed. 
       
   Example bounds_representable_exactly_test_2 :
-    let bounds : Bounds.t := 
-      (Z_to_bv Bounds.bound_len 305402128, Z_to_bv Bounds.bound_len 306427248) in (* now we changed the common part of the bounds *) 
+    let bounds : BoundsBV.t := 
+      (Z_to_bv BoundsBV.bound_len 305402128, Z_to_bv BoundsBV.bound_len 306427248) in (* now we changed the common part of the bounds *) 
     cap_bounds_representable_exactly c4 bounds = false.
     Proof. reflexivity. Qed. 
   
   Example narrow_exact_and_get_bounds_test_1 : 
     (* The bounds of capability c5 are         (0x0011111111110000, 0x00011111111117770). *)
-    let '(new_base,new_limit) := Bounds.of_Zs  (0x0011111111113330, 0x00011111111117440) in 
+    let '(new_base,new_limit) := BoundsBV.of_Zs  (0x0011111111113330, 0x00011111111117440) in 
     (* We can see new_bounds can be represented exactly from cap5: https://www.morello-project.org/capinfo?c=0x1%3Afb00000034473337%3A1011111111113333 *)
     let new_cap := cap_narrow_bounds_exact c5 (new_base,new_limit) in 
     let result := cap_get_bounds new_cap in 
@@ -979,62 +979,62 @@ End Cap.
     Proof. repeat ( split; try reflexivity ). Qed.
         
   Example alloc_cap_test_1 : 
-    let value := Value.of_Z 1024 in 
-    let new_cap := alloc_cap value (Value.of_Z 2048) in 
+    let value := ValueBV.of_Z 1024 in 
+    let new_cap := alloc_cap value (ValueBV.of_Z 2048) in 
     (cap_is_valid new_cap) /\ (cap_get_value new_cap) = value 
     /\ (cap_is_in_bounds new_cap) /\ (cap_is_sealed new_cap) = false 
     /\ (cap_get_seal new_cap) = SealType.Cap_Unsealed 
-    /\ (cap_get_perms new_cap) = Permissions.perm_alloc
-    /\ (cap_get_bounds_ new_cap) = (Bounds.of_Zs (1024,3072), true).
+    /\ (cap_get_perms new_cap) = PermissionsBV.perm_alloc
+    /\ (cap_get_bounds_ new_cap) = (BoundsBV.of_Zs (1024,3072), true).
     Proof. vm_compute. repeat (split; try reflexivity). Qed. 
   
   Example alloc_cap_test_2 : 
-    let value := Value.of_Z 0xffffffffffffffff in (* 16 f's = the largest Value possible *)
-    let new_cap := alloc_cap value (Value.of_Z 1) in 
+    let value := ValueBV.of_Z 0xffffffffffffffff in (* 16 f's = the largest Value possible *)
+    let new_cap := alloc_cap value (ValueBV.of_Z 1) in 
     (cap_is_valid new_cap) = true /\ (cap_get_value new_cap) = value 
     /\ (cap_is_in_bounds new_cap) /\ (cap_is_sealed new_cap) = false 
     /\ (cap_get_seal new_cap) = SealType.Cap_Unsealed 
-    /\ (cap_get_perms new_cap) = Permissions.perm_alloc
-    /\ (cap_get_bounds_ new_cap) = (Bounds.of_Zs (0xffffffffffffffff,0x10000000000000000), true).
+    /\ (cap_get_perms new_cap) = PermissionsBV.perm_alloc
+    /\ (cap_get_bounds_ new_cap) = (BoundsBV.of_Zs (0xffffffffffffffff,0x10000000000000000), true).
     Proof. vm_compute. repeat (split; try reflexivity). Qed. 
 
   Example alloc_cap_test_3 : 
-    let value := Value.of_Z 0x10000000000000000 in (* 1 past the largest Value possible; it gets passed as just 0 *)
-    let new_cap := alloc_cap value (Value.of_Z 1) in 
+    let value := ValueBV.of_Z 0x10000000000000000 in (* 1 past the largest Value possible; it gets passed as just 0 *)
+    let new_cap := alloc_cap value (ValueBV.of_Z 1) in 
     (cap_is_valid new_cap) = true 
     /\ (cap_is_in_bounds new_cap) = true (* it's in bounds bc these are (0,1) *)
     /\ (cap_is_sealed new_cap) = false /\ (cap_get_seal new_cap) = SealType.Cap_Unsealed 
-    /\ (cap_get_perms new_cap) = Permissions.perm_alloc  
-    /\ (cap_get_bounds_ new_cap) <> (Bounds.of_Zs (0x10000000000000000,0x10000000000000001), true).
+    /\ (cap_get_perms new_cap) = PermissionsBV.perm_alloc  
+    /\ (cap_get_bounds_ new_cap) <> (BoundsBV.of_Zs (0x10000000000000000,0x10000000000000001), true).
     Proof. vm_compute. repeat (split; try reflexivity). intros H. discriminate H. Qed.
 
   Example alloc_cap_test_4 : 
-    let value := Value.of_Z 0xffffffffffffff in (* 14 f's *)
-    let new_cap := alloc_cap value (Value.of_Z 0xfff) in (* this sends the limit above the max limit allowed *)
+    let value := ValueBV.of_Z 0xffffffffffffff in (* 14 f's *)
+    let new_cap := alloc_cap value (ValueBV.of_Z 0xfff) in (* this sends the limit above the max limit allowed *)
     (cap_is_invalid new_cap) /\ (cap_is_not_in_bounds new_cap)
     /\ (cap_is_sealed new_cap) = false /\ (cap_get_seal new_cap) = SealType.Cap_Unsealed 
-    /\ (cap_get_perms new_cap) = Permissions.perm_alloc  
-    /\ (cap_get_bounds_ new_cap) <> (Bounds.of_Zs (0xffffffffffffff,0xfffffffffffffffff), true).
+    /\ (cap_get_perms new_cap) = PermissionsBV.perm_alloc  
+    /\ (cap_get_bounds_ new_cap) <> (BoundsBV.of_Zs (0xffffffffffffff,0xfffffffffffffffff), true).
     Proof. vm_compute. repeat (split; try reflexivity). intro H. discriminate H. Qed.   
           
   Example alloc_fun_test_1 : 
-    let value := Value.of_Z 1024 in 
+    let value := ValueBV.of_Z 1024 in 
     let new_cap := alloc_fun value in 
     (cap_is_valid new_cap) = true /\ (cap_get_value new_cap) = value 
       /\ (cap_is_sealed new_cap) = true /\ (cap_get_seal new_cap) = SealType.Cap_SEntry 
-      /\ (cap_get_perms new_cap) = Permissions.perm_alloc_fun
-      /\ (cap_get_bounds_ new_cap) = (Bounds.of_Zs (1024,1026), true).
+      /\ (cap_get_perms new_cap) = PermissionsBV.perm_alloc_fun
+      /\ (cap_get_bounds_ new_cap) = (BoundsBV.of_Zs (1024,1026), true).
     Proof. repeat (split; try reflexivity). Qed. 
 
   Example cap_is_null_derived_test_1 : 
     let new_cap := cap_c0 () in 
-    let new_cap := cap_set_value new_cap (Value.of_Z 512) in 
+    let new_cap := cap_set_value new_cap (ValueBV.of_Z 512) in 
     (cap_is_null_derived new_cap) = true.
     Proof. vm_compute. reflexivity. Qed.
       
   Example cap_is_null_derived_test_2 : 
     let new_cap := cap_cU () in 
-    let new_cap := cap_set_value new_cap (Value.of_Z 512) in 
+    let new_cap := cap_set_value new_cap (ValueBV.of_Z 512) in 
     (cap_is_null_derived new_cap) = false.
     Proof. vm_compute. reflexivity. Qed.
 
@@ -1055,69 +1055,69 @@ End Cap.
  
 End test_cap_getters_and_setters. 
 
-Module PermissionsZ <: Permission. 
+Module Permissions <: Permission. 
   Definition t := Z. 
 
-  Definition user_perms_len := Permissions.user_perms_len.
+  Definition user_perms_len := PermissionsBV.user_perms_len.
 
   Definition has_global_perm (perms:t) : bool := 
-    Permissions.has_global_perm (Permissions.of_Z perms).
+    PermissionsBV.has_global_perm (PermissionsBV.of_Z perms).
    
   Definition has_execute_perm (perms:t) : bool := 
-    Permissions.has_execute_perm (Permissions.of_Z perms).
+    PermissionsBV.has_execute_perm (PermissionsBV.of_Z perms).
   Definition has_ccall_perm (perms:t) : bool := 
-    Permissions.has_ccall_perm (Permissions.of_Z perms).
+    PermissionsBV.has_ccall_perm (PermissionsBV.of_Z perms).
   Definition has_load_perm (perms:t) : bool := 
-    Permissions.has_load_perm (Permissions.of_Z perms).
+    PermissionsBV.has_load_perm (PermissionsBV.of_Z perms).
   Definition has_load_cap_perm (perms:t) : bool := 
-    Permissions.has_load_cap_perm (Permissions.of_Z perms).
+    PermissionsBV.has_load_cap_perm (PermissionsBV.of_Z perms).
   Definition has_seal_perm (perms:t) : bool := 
-    Permissions.has_seal_perm (Permissions.of_Z perms).
+    PermissionsBV.has_seal_perm (PermissionsBV.of_Z perms).
   Definition has_store_perm (perms:t) : bool := 
-    Permissions.has_store_perm (Permissions.of_Z perms).
+    PermissionsBV.has_store_perm (PermissionsBV.of_Z perms).
   Definition has_store_cap_perm (perms:t) : bool := 
-    Permissions.has_store_cap_perm (Permissions.of_Z perms).
+    PermissionsBV.has_store_cap_perm (PermissionsBV.of_Z perms).
   Definition has_store_local_cap_perm (perms:t) : bool := 
-    Permissions.has_store_local_cap_perm (Permissions.of_Z perms).
+    PermissionsBV.has_store_local_cap_perm (PermissionsBV.of_Z perms).
   Definition has_system_access_perm (perms:t) : bool := 
-    Permissions.has_system_access_perm (Permissions.of_Z perms).
+    PermissionsBV.has_system_access_perm (PermissionsBV.of_Z perms).
   Definition has_unseal_perm (perms:t) : bool := 
-    Permissions.has_unseal_perm (Permissions.of_Z perms).
+    PermissionsBV.has_unseal_perm (PermissionsBV.of_Z perms).
   
   Definition get_user_perms (perms:t) : list bool :=
-    Permissions.get_user_perms (Permissions.of_Z perms).
+    PermissionsBV.get_user_perms (PermissionsBV.of_Z perms).
  
 
   Definition perm_clear_global (perms:t) : t := 
-    bv_to_Z_unsigned (Permissions.perm_clear_global (Permissions.of_Z perms)).
+    bv_to_Z_unsigned (PermissionsBV.perm_clear_global (PermissionsBV.of_Z perms)).
   
-  Definition perm_clear_execute (perms:t) : t := bv_to_Z_unsigned (Permissions.perm_clear_execute (Permissions.of_Z perms)).
-  Definition perm_clear_ccall (perms:t) : t := bv_to_Z_unsigned (Permissions.perm_clear_ccall (Permissions.of_Z perms)).
-  Definition perm_clear_load (perms:t) : t := bv_to_Z_unsigned (Permissions.perm_clear_load (Permissions.of_Z perms)).
-  Definition perm_clear_load_cap (perms:t) : t := bv_to_Z_unsigned (Permissions.perm_clear_load_cap (Permissions.of_Z perms)).
-  Definition perm_clear_seal (perms:t) : t := bv_to_Z_unsigned (Permissions.perm_clear_seal (Permissions.of_Z perms)).
-  Definition perm_clear_store (perms:t) : t := bv_to_Z_unsigned (Permissions.perm_clear_store (Permissions.of_Z perms)).
-  Definition perm_clear_store_cap (perms:t) : t := bv_to_Z_unsigned (Permissions.perm_clear_store_cap (Permissions.of_Z perms)).
-  Definition perm_clear_store_local_cap (perms:t) : t := bv_to_Z_unsigned (Permissions.perm_clear_store_local_cap (Permissions.of_Z perms)).
-  Definition perm_clear_system_access (perms:t) : t := bv_to_Z_unsigned (Permissions.perm_clear_system_access (Permissions.of_Z perms)).
-  Definition perm_clear_unseal (perms:t) : t := bv_to_Z_unsigned (Permissions.perm_clear_unseal (Permissions.of_Z perms)).
+  Definition perm_clear_execute (perms:t) : t := bv_to_Z_unsigned (PermissionsBV.perm_clear_execute (PermissionsBV.of_Z perms)).
+  Definition perm_clear_ccall (perms:t) : t := bv_to_Z_unsigned (PermissionsBV.perm_clear_ccall (PermissionsBV.of_Z perms)).
+  Definition perm_clear_load (perms:t) : t := bv_to_Z_unsigned (PermissionsBV.perm_clear_load (PermissionsBV.of_Z perms)).
+  Definition perm_clear_load_cap (perms:t) : t := bv_to_Z_unsigned (PermissionsBV.perm_clear_load_cap (PermissionsBV.of_Z perms)).
+  Definition perm_clear_seal (perms:t) : t := bv_to_Z_unsigned (PermissionsBV.perm_clear_seal (PermissionsBV.of_Z perms)).
+  Definition perm_clear_store (perms:t) : t := bv_to_Z_unsigned (PermissionsBV.perm_clear_store (PermissionsBV.of_Z perms)).
+  Definition perm_clear_store_cap (perms:t) : t := bv_to_Z_unsigned (PermissionsBV.perm_clear_store_cap (PermissionsBV.of_Z perms)).
+  Definition perm_clear_store_local_cap (perms:t) : t := bv_to_Z_unsigned (PermissionsBV.perm_clear_store_local_cap (PermissionsBV.of_Z perms)).
+  Definition perm_clear_system_access (perms:t) : t := bv_to_Z_unsigned (PermissionsBV.perm_clear_system_access (PermissionsBV.of_Z perms)).
+  Definition perm_clear_unseal (perms:t) : t := bv_to_Z_unsigned (PermissionsBV.perm_clear_unseal (PermissionsBV.of_Z perms)).
   
   (** perform bitwise AND of user permissions *)
   Definition perm_and_user_perms (perms:t) (l:list bool) : t := 
-    bv_to_Z_unsigned (Permissions.perm_and_user_perms (Permissions.of_Z perms) l).
+    bv_to_Z_unsigned (PermissionsBV.perm_and_user_perms (PermissionsBV.of_Z perms) l).
  
   (** null permission *)
-  Definition perm_p0: t := bv_to_Z_unsigned (Permissions.perm_p0).
+  Definition perm_p0: t := bv_to_Z_unsigned (PermissionsBV.perm_p0).
 
   (** permissions for newly allocated region *)
-  Definition perm_alloc: t := bv_to_Z_unsigned (Permissions.perm_alloc).
+  Definition perm_alloc: t := bv_to_Z_unsigned (PermissionsBV.perm_alloc).
 
   (** permissions for newly allocated function *)
-  Definition perm_alloc_fun: t := bv_to_Z_unsigned (Permissions.perm_alloc_fun).
+  Definition perm_alloc_fun: t := bv_to_Z_unsigned (PermissionsBV.perm_alloc_fun).
 
   (* --- Utility methods --- *)
 
-  Definition to_string (perms:t) : string := Permissions.to_string (Permissions.of_Z perms).
+  Definition to_string (perms:t) : string := PermissionsBV.to_string (PermissionsBV.of_Z perms).
 
   (* raw permissoins in numeric format *)
   Definition to_raw (perms:t) : Z := perms.
@@ -1126,70 +1126,70 @@ Module PermissionsZ <: Permission.
      contents of the list is implementation-specific.
      Returns None in case of error *)
   Definition of_list (l:list bool) : option t := 
-    match Permissions.of_list l with 
+    match PermissionsBV.of_list l with 
       Some c => Some (bv_to_Z_unsigned c) | None => None
     end.
 
   (* inverse of [of_list] *)
-  Definition to_list (perms:t) : list bool := Permissions.to_list (Permissions.of_Z perms).
-End PermissionsZ.
+  Definition to_list (perms:t) : list bool := PermissionsBV.to_list (PermissionsBV.of_Z perms).
+End Permissions.
 
-Module ValueZ <: VADDR.
+Module Value <: VADDR.
   Definition t := Z.
 
-  Definition bitwise_complement (a:Z) : Z := Value.bitwise_complement a.
+  Definition bitwise_complement (a:Z) : Z := ValueBV.bitwise_complement a.
     
-  Definition eqb (v1:t) (v2:t) : bool := Value.eqb (Value.of_Z v1) (Value.of_Z v2).
-  Definition ltb (v1:t) (v2:t) : bool := Value.ltb (Value.of_Z v1) (Value.of_Z v2).
-  Definition leb (v1:t) (v2:t) : bool := Value.leb (Value.of_Z v1) (Value.of_Z v2).
+  Definition eqb (v1:t) (v2:t) : bool := ValueBV.eqb (ValueBV.of_Z v1) (ValueBV.of_Z v2).
+  Definition ltb (v1:t) (v2:t) : bool := ValueBV.ltb (ValueBV.of_Z v1) (ValueBV.of_Z v2).
+  Definition leb (v1:t) (v2:t) : bool := ValueBV.leb (ValueBV.of_Z v1) (ValueBV.of_Z v2).
   
   Definition ltb_irref: forall a:t, ltb a a = false.
-  Proof. intros. unfold ltb. unfold Value.ltb. unfold lt. rewrite Z.ltb_irrefl. reflexivity. Qed. 
+  Proof. intros. unfold ltb. unfold ValueBV.ltb. unfold lt. rewrite Z.ltb_irrefl. reflexivity. Qed. 
 
   Definition of_Z (z:Z) := z.
   Definition to_Z (v:t) := v.
   
-End ValueZ.
+End Value.
 
 
-Module ObjTypeZ <: OTYPE.
+Module ObjType <: OTYPE.
   Definition t := Z.  
-End ObjTypeZ.
+End ObjType.
 
 
-Module BoundsZ <: VADDR_INTERVAL(ValueZ).
+Module Bounds <: VADDR_INTERVAL(Value).
   Definition t := (Z * Z)%type.
   
-  Definition address_is_in_interval (bounds:t) (value:ValueZ.t) : bool :=
-    Bounds.address_is_in_interval (Bounds.of_Zs bounds) (Value.of_Z value). 
+  Definition address_is_in_interval (bounds:t) (value:Value.t) : bool :=
+    BoundsBV.address_is_in_interval (BoundsBV.of_Zs bounds) (ValueBV.of_Z value). 
 
   (* Vadim: is this what we want? *)
-  Definition ltb (a b:t) := Bounds.ltb (Bounds.of_Zs a) (Bounds.of_Zs b).
+  Definition ltb (a b:t) := BoundsBV.ltb (BoundsBV.of_Zs a) (BoundsBV.of_Zs b).
 
-End BoundsZ. 
+End Bounds. 
 
-Module MorelloCapability <: Capability (ValueZ) (ObjTypeZ) (SealType) (BoundsZ) (PermissionsZ).
+Module MorelloCapability <: Capability (Value) (ObjType) (SealType) (Bounds) (Permissions).
   Definition t := Cap.t.
   
   (* Definition vaddr_bits := sizeof_vaddr * 8. *)
   Definition sizeof_vaddr := Cap.sizeof_vaddr. (* in bytes *)
-  Definition min_vaddr := Value.to_Z Cap.min_vaddr.  
-  Definition max_vaddr := Value.to_Z Cap.max_vaddr.
+  Definition min_vaddr := ValueBV.to_Z Cap.min_vaddr.  
+  Definition max_vaddr := ValueBV.to_Z Cap.max_vaddr.
 
   Definition cap_c0 := Cap.cap_c0.
   
   Definition cap_flags_len := Cap.cap_flags_len.
   Definition Flags := Cap.Flags.
 
-  Definition cap_get_value (cap:t) : ValueZ.t := 
-    Value.to_Z (Cap.cap_get_value cap). 
+  Definition cap_get_value (cap:t) : Value.t := 
+    ValueBV.to_Z (Cap.cap_get_value cap). 
   
-  Definition cap_get_obj_type (cap:t) : ObjTypeZ.t := 
-    ObjType.to_Z (Cap.cap_get_obj_type cap).
+  Definition cap_get_obj_type (cap:t) : ObjType.t := 
+    ObjTypeBV.to_Z (Cap.cap_get_obj_type cap).
 
   (* Removed flag here *)
-  Definition cap_get_bounds (cap:t) : BoundsZ.t :=
-    Bounds.to_Zs (Cap.cap_get_bounds cap).
+  Definition cap_get_bounds (cap:t) : Bounds.t :=
+    BoundsBV.to_Zs (Cap.cap_get_bounds cap).
 
   Definition cap_get_offset (cap:t) : Z := Cap.cap_get_offset cap.
       
@@ -1199,30 +1199,30 @@ Module MorelloCapability <: Capability (ValueZ) (ObjTypeZ) (SealType) (BoundsZ) 
   Definition cap_get_flags (cap:t) : Flags (* list bool *) := 
     Cap.cap_get_flags cap. 
 
-  Definition cap_get_perms (cap:t) : PermissionsZ.t :=
-    Permissions.to_Z (Cap.cap_get_perms cap).
+  Definition cap_get_perms (cap:t) : Permissions.t :=
+    PermissionsBV.to_Z (Cap.cap_get_perms cap).
     
   Definition cap_invalidate (cap:t) : t := Cap.cap_invalidate cap.
 
-  Definition cap_set_value (cap:t) (value:ValueZ.t) : t :=
-    Cap.cap_set_value cap (Value.of_Z value).
+  Definition cap_set_value (cap:t) (value:Value.t) : t :=
+    Cap.cap_set_value cap (ValueBV.of_Z value).
     
   Definition cap_set_flags := Cap.cap_set_flags.
   
-  Definition cap_set_objtype (cap:t) (ot:ObjTypeZ.t) : t :=
-    Cap.cap_set_objtype cap (ObjType.of_Z ot).
+  Definition cap_set_objtype (cap:t) (ot:ObjType.t) : t :=
+    Cap.cap_set_objtype cap (ObjTypeBV.of_Z ot).
     
   Definition cap_is_sealed := Cap.cap_is_sealed.
 
   (* [perms] must contain [1] for permissions to be cleared and [0] for those to be kept *)
-  Definition cap_narrow_perms (cap:t) (perms:PermissionsZ.t) : t :=
-    Cap.cap_narrow_perms cap (Permissions.of_Z perms).
+  Definition cap_narrow_perms (cap:t) (perms:Permissions.t) : t :=
+    Cap.cap_narrow_perms cap (PermissionsBV.of_Z perms).
     
-  Definition cap_narrow_bounds (cap : t) (bounds : BoundsZ.t) : t :=
-    Cap.cap_narrow_bounds cap (Bounds.of_Zs bounds).
+  Definition cap_narrow_bounds (cap : t) (bounds : Bounds.t) : t :=
+    Cap.cap_narrow_bounds cap (BoundsBV.of_Zs bounds).
 
-  Definition cap_narrow_bounds_exact (cap : t) (bounds : BoundsZ.t) : t :=
-    Cap.cap_narrow_bounds_exact cap (Bounds.of_Zs bounds).
+  Definition cap_narrow_bounds_exact (cap : t) (bounds : Bounds.t) : t :=
+    Cap.cap_narrow_bounds_exact cap (BoundsBV.of_Zs bounds).
 
   Definition cap_is_valid := Cap.cap_is_valid.
 
@@ -1247,21 +1247,21 @@ Module MorelloCapability <: Capability (ValueZ) (ObjTypeZ) (SealType) (BoundsZ) 
   Definition representable_length := Cap.representable_length.
     
   (* Should we check that size is not too large? *)
-  Definition alloc_cap (a_value : ValueZ.t) (size : ValueZ.t) : t :=
-    Cap.alloc_cap (Value.of_Z a_value) (Value.of_Z size).
+  Definition alloc_cap (a_value : Value.t) (size : Value.t) : t :=
+    Cap.alloc_cap (ValueBV.of_Z a_value) (ValueBV.of_Z size).
   
-  Definition alloc_fun (a_value : ValueZ.t) : t :=
-    Cap.alloc_fun (Value.of_Z a_value).
+  Definition alloc_fun (a_value : Value.t) : t :=
+    Cap.alloc_fun (ValueBV.of_Z a_value).
 
   Definition value_compare := Cap.value_compare.
 
   Definition exact_compare := Cap.exact_compare.
 
-  Definition cap_vaddr_representable (c : t) (a : ValueZ.t) : bool :=
-    Cap.cap_vaddr_representable c (Value.of_Z a).
+  Definition cap_vaddr_representable (c : t) (a : Value.t) : bool :=
+    Cap.cap_vaddr_representable c (ValueBV.of_Z a).
   
-  Definition cap_bounds_representable_exactly (cap : t) (bounds : BoundsZ.t) : bool :=
-    Cap.cap_bounds_representable_exactly cap (Bounds.of_Zs bounds).
+  Definition cap_bounds_representable_exactly (cap : t) (bounds : Bounds.t) : bool :=
+    Cap.cap_bounds_representable_exactly cap (BoundsBV.of_Zs bounds).
 
   Definition cap_is_null_derived := Cap.cap_is_null_derived.
   
