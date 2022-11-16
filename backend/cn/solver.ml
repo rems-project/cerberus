@@ -805,237 +805,224 @@ module Eval = struct
 
   let eval global (context, model) to_be_evaluated = 
 
-    let z3_expr = 
-      (* informed by this: https://stackoverflow.com/questions/22885457/read-func-interp-of-a-z3-array-from-the-z3-model/22918197 *)
-      let rec func_interp func_decl = 
-        let domain = match Z3.FuncDecl.get_domain func_decl with
-          | [domain] -> domain
-          | [] -> Debug_ocaml.error "unexpected constant function"
-          | _ -> failwith "multi-argument functions"
-        in      
-        let func_interp = match Z3.Model.get_func_interp model func_decl with
-          | None -> Debug_ocaml.error "func_decl without interpretation"
-          | Some interp -> interp
-        in
-        let base_value = aux (Z3.Model.FuncInterp.get_else func_interp) in
-        let entries = Z3.Model.FuncInterp.get_entries func_interp in
-        List.fold_right (fun entry map_value ->
-            match Z3.Model.FuncInterp.FuncEntry.get_args entry with
-            | [index] ->
-               let index = aux index in
-               let value = aux (Z3.Model.FuncInterp.FuncEntry.get_value entry) in
-               map_set_ map_value (index, value)
-            | [] ->
-               Debug_ocaml.error "unexpected constant function"
-            | _ ->
-               failwith "multi-argument functions"
-          ) entries (const_map_ (z3_sort domain) base_value)
+    (* informed by this: https://stackoverflow.com/questions/22885457/read-func-interp-of-a-z3-array-from-the-z3-model/22918197 *)
+    let rec func_interp func_decl = 
+      let domain = Z3.FuncDecl.get_domain func_decl in
+      assert (List.length domain = 1);
+      let argument_sort = List.hd domain in
+      let func_interp = Option.get (Z3.Model.get_func_interp model func_decl) in
+      let base_value = z3_expr (Z3.Model.FuncInterp.get_else func_interp) in
+      let entries = Z3.Model.FuncInterp.get_entries func_interp in
+      List.fold_right (fun entry map_value ->
+          let entry_args = Z3.Model.FuncInterp.FuncEntry.get_args entry in
+          assert (List.length entry_args = 1);
+          let index = List.hd entry_args in
+          let value = z3_expr (Z3.Model.FuncInterp.FuncEntry.get_value entry) in
+          map_set_ map_value (z3_expr index, value)
+        ) entries (const_map_ (z3_sort argument_sort) base_value)
 
 
-      and aux (expr : Z3.Expr.expr) : IT.t = 
-        let unsupported what = 
-          let err = 
-            Printf.sprintf "unsupported %s. expr: %s"
-              what (Z3.Expr.to_string expr)
-          in
-          failwith err
+    and z3_expr (expr : Z3.Expr.expr) : IT.t = 
+      let unsupported what = 
+        let err = 
+          Printf.sprintf "unsupported %s. expr: %s"
+            what (Z3.Expr.to_string expr)
         in
-        let args = try Z3.Expr.get_args expr with | _ -> [] in
-        let args = List.map aux args in
+        failwith err
+      in
+      let args = try Z3.Expr.get_args expr with | _ -> [] in
+      let args = List.map z3_expr args in
+      match () with
+
+      | () when Z3.AST.is_quantifier (Z3.Expr.ast_of_expr expr) ->
+         unsupported "quantifiers/lambdas"
+
+      | () when Z3.Arithmetic.is_add expr ->
+         List.fold_left (Tools.curry add_) (hd args) (tl args)
+
+      | () when Z3.Boolean.is_and expr ->
+         and_ args
+
+      | () when Z3.Z3Array.is_as_array expr ->
+         (* informed by this:
+            https://stackoverflow.com/questions/22885457/read-func-interp-of-a-z3-array-from-the-z3-model/22918197 *)
+         let as_array_func_parameter = List.hd (Z3.FuncDecl.get_parameters (Z3.Expr.get_func_decl expr)) in
+         let func_decl = Z3.FuncDecl.Parameter.get_func_decl as_array_func_parameter in
+         func_interp func_decl
+
+      | () when Z3.Z3Array.is_constant_array expr ->
+         let abt = z3_sort (Z3.Z3Array.get_range (Z3.Expr.get_sort expr)) in
+         const_map_ abt (hd args)
+
+      | () when Z3.Z3Array.is_default_array expr ->
+         unsupported "z3 array default"
+
+      | () when Z3.Set.is_difference expr ->
+         setDifference_ (nth args 0, nth args 1)
+
+      | () when Z3.Boolean.is_distinct expr ->
+         unsupported "z3 is_distinct"
+
+      | () when Z3.Arithmetic.is_idiv expr ->
+         div_ (nth args 0, nth args 1)
+
+      | () when Z3.Boolean.is_eq expr ->
+         eq_ (nth args 0, nth args 1)
+
+      | () when Z3.Boolean.is_false expr ->
+         bool_ false
+
+      | () when Z3.Arithmetic.is_ge expr ->
+         ge_ (nth args 0, nth args 1)
+
+      | () when Z3.Arithmetic.is_gt expr ->
+         gt_ (nth args 0, nth args 1)
+
+      | () when Z3.Boolean.is_implies expr ->
+         impl_ (nth args 0, nth args 1)
+
+      | () when Z3.Arithmetic.is_int_numeral expr ->
+         z_ (Z3.Arithmetic.Integer.get_big_int expr)
+
+      | () when Z3.Boolean.is_ite expr ->
+         ite_ (nth args 0, nth args 1, nth args 2)
+
+      | () when Z3.Arithmetic.is_le expr ->
+         le_ (nth args 0, nth args 1)
+
+      | () when Z3.Arithmetic.is_lt expr ->
+         lt_ (nth args 0, nth args 1)
+
+      | () when Z3.Arithmetic.is_modulus expr ->
+         mod_ (nth args 0, nth args 1)
+
+      | () when Z3.Arithmetic.is_mul expr ->
+         mul_ (nth args 0, nth args 1)
+
+      | () when Z3.Boolean.is_not expr ->
+         not_ (nth args 0)
+
+      | () when Z3.Boolean.is_or expr ->
+         or_ args
+
+      | () when Z3.Arithmetic.is_rat_numeral expr ->
+         q1_ (Z3.Arithmetic.Real.get_ratio expr)
+
+      | () when Z3.Arithmetic.is_remainder expr ->
+         rem_ (nth args 0, nth args 1)
+
+      | () when Z3.Z3Array.is_select expr ->
+         map_get_ (nth args 0) (nth args 1)
+
+      | () when Z3.Z3Array.is_store expr ->
+         map_set_ (nth args 0) (nth args 1, nth args 2)
+
+      | () when Z3.Arithmetic.is_sub expr ->
+         sub_ (nth args 0, nth args 1)
+
+      | () when Z3.Set.is_subset expr ->
+         subset_ (nth args 0, nth args 1)
+
+      | () when Z3.Boolean.is_true expr ->
+         bool_ true
+
+      | () when Z3.Arithmetic.is_uminus expr ->
+         let arg = nth args 0 in
+         begin match IT.bt arg with
+         | Integer -> sub_ (int_ 0, arg)
+         | Real -> sub_ (q_ (0, 1), arg)
+         | _ -> Debug_ocaml.error "illtyped index term"
+         end
+
+      | () when Z3.AST.is_var (Z3.Expr.ast_of_expr expr) ->
+         unsupported "variables from quantifiers/lambdas"
+
+      | () ->
+        let func_decl = Z3.Expr.get_func_decl expr in
+        let func_name = Z3.FuncDecl.get_name func_decl in
         match () with
 
-        | () when Z3.AST.is_quantifier (Z3.Expr.ast_of_expr expr) ->
-           unsupported "quantifiers/lambdas"
-
-        | () when Z3.Arithmetic.is_add expr ->
-           List.fold_left (Tools.curry add_) (hd args) (tl args)
-
-        | () when Z3.Boolean.is_and expr ->
-           and_ args
-
-        | () when Z3.Z3Array.is_as_array expr ->
-           (* informed by this:
-              https://stackoverflow.com/questions/22885457/read-func-interp-of-a-z3-array-from-the-z3-model/22918197 *)
-           let as_array_func_parameter = List.hd (Z3.FuncDecl.get_parameters (Z3.Expr.get_func_decl expr)) in
-           let func_decl = Z3.FuncDecl.Parameter.get_func_decl as_array_func_parameter in
-           func_interp func_decl
-
-        | () when Z3.Z3Array.is_constant_array expr ->
-           let abt = z3_sort (Z3.Z3Array.get_range (Z3.Expr.get_sort expr)) in
-           const_map_ abt (hd args)
-
-        | () when Z3.Z3Array.is_default_array expr ->
-           unsupported "z3 array default"
-
-        | () when Z3.Set.is_difference expr ->
-           setDifference_ (nth args 0, nth args 1)
-
-        | () when Z3.Boolean.is_distinct expr ->
-           unsupported "z3 is_distinct"
-
-        | () when Z3.Arithmetic.is_idiv expr ->
-           div_ (nth args 0, nth args 1)
-
-        | () when Z3.Boolean.is_eq expr ->
-           eq_ (nth args 0, nth args 1)
-
-        | () when Z3.Boolean.is_false expr ->
-           bool_ false
-
-        | () when Z3.Arithmetic.is_ge expr ->
-           ge_ (nth args 0, nth args 1)
-
-        | () when Z3.Arithmetic.is_gt expr ->
-           gt_ (nth args 0, nth args 1)
-
-        | () when Z3.Boolean.is_implies expr ->
-           impl_ (nth args 0, nth args 1)
-
-        | () when Z3.Arithmetic.is_int_numeral expr ->
-           z_ (Z3.Arithmetic.Integer.get_big_int expr)
-
-        | () when Z3.Boolean.is_ite expr ->
-           ite_ (nth args 0, nth args 1, nth args 2)
-
-        | () when Z3.Arithmetic.is_le expr ->
-           le_ (nth args 0, nth args 1)
-
-        | () when Z3.Arithmetic.is_lt expr ->
-           lt_ (nth args 0, nth args 1)
-
-        | () when Z3.Arithmetic.is_modulus expr ->
-           mod_ (nth args 0, nth args 1)
-
-        | () when Z3.Arithmetic.is_mul expr ->
-           mul_ (nth args 0, nth args 1)
-
-        | () when Z3.Boolean.is_not expr ->
-           not_ (nth args 0)
-
-        | () when Z3.Boolean.is_or expr ->
-           or_ args
-
-        | () when Z3.Arithmetic.is_rat_numeral expr ->
-           q1_ (Z3.Arithmetic.Real.get_ratio expr)
-
-        | () when Z3.Arithmetic.is_remainder expr ->
-           rem_ (nth args 0, nth args 1)
-
-        | () when Z3.Z3Array.is_select expr ->
-           map_get_ (nth args 0) (nth args 1)
-
-        | () when Z3.Z3Array.is_store expr ->
-           map_set_ (nth args 0) (nth args 1, nth args 2)
-
-        | () when Z3.Arithmetic.is_sub expr ->
-           sub_ (nth args 0, nth args 1)
-
-        | () when Z3.Set.is_subset expr ->
-           subset_ (nth args 0, nth args 1)
-
-        | () when Z3.Boolean.is_true expr ->
-           bool_ true
-
-        | () when Z3.Arithmetic.is_uminus expr ->
-           let arg = nth args 0 in
-           begin match IT.bt arg with
-           | Integer -> sub_ (int_ 0, arg)
-           | Real -> sub_ (q_ (0, 1), arg)
-           | _ -> Debug_ocaml.error "illtyped index term"
+        | () when 
+               Z3.FuncDecl.equal func_decl
+                 (loc_to_integer_fundecl context global) ->
+           let p = nth args 0 in
+           begin match IT.is_pointer p with
+           | Some z -> z_ z
+           | _ -> pointerToIntegerCast_ p
            end
 
-        | () when Z3.AST.is_var (Z3.Expr.ast_of_expr expr) ->
-           unsupported "variables from quantifiers/lambdas"
+        | () when 
+               Z3.FuncDecl.equal func_decl 
+                 (integer_to_loc_fundecl context global) ->
+           let i = nth args 0 in
+           begin match IT.is_z i with
+           | Some z -> pointer_ z
+           | _ -> integerToPointerCast_ i
+           end
 
-        | () ->
-          let func_decl = Z3.Expr.get_func_decl expr in
-          let func_name = Z3.FuncDecl.get_name func_decl in
-          match () with
+        | () when Z3Symbol_Table.mem z3sym_table func_name ->
+           begin match Z3Symbol_Table.find z3sym_table func_name with
+           | DefaultFunc {bt} ->
+              default_ bt
+           | MemberFunc {tag; member} ->
+              let sd = Memory.member_types (SymMap.find tag global.struct_decls) in
+              let member_bt = BT.of_sct (List.assoc Id.equal member sd) in
+              member_ ~member_bt (tag, nth args 0, member)
+           | StructFunc {tag} ->
+              let sd = Memory.members (SymMap.find tag global.struct_decls) in
+              struct_ (tag, List.combine sd args)
+           | CompFunc {bts; i} ->
+              let comp_bt = List.nth bts i in
+              nthTuple_ ~item_bt:comp_bt (i, nth args 0)
+           | TupleFunc {bts} ->
+              tuple_ args
+           | RecordFunc {mbts} ->
+              IT (Record_op (Record (List.combine (List.map fst mbts) args)), 
+                  Record mbts)
+           | RecordMemberFunc {mbts; member} ->
+              let member_bt = List.assoc Sym.equal member mbts in
+              IT (Record_op (RecordMember (nth args 0, member)), member_bt)
+           | DatatypeConsFunc {nm} ->
+              let info = SymMap.find nm global.datatype_constrs in
+              datatype_cons_ nm info.c_datatype_tag
+                  (List.combine (List.map fst info.c_params) args)
+           | DatatypeConsRecogFunc {nm} ->
+              (* not supported inside CN, hopefully we shouldn't need it *)
+              failwith ("Reconstructing Z3 term with datatype recogniser unsupported")
+           | DatatypeAccFunc xs ->
+              Simplify.datatype_member_reduce (nth args 0) xs.nm xs.bt
+           end
 
-          | () when 
-                 Z3.FuncDecl.equal func_decl
-                   (loc_to_integer_fundecl context global) ->
-             let p = nth args 0 in
-             begin match IT.is_pointer p with
-             | Some z -> z_ z
-             | _ -> pointerToIntegerCast_ p
-             end
+        | () when String.equal (Z3.Symbol.to_string func_name) "^" ->
+           exp_ (nth args 0, nth args 1)
 
-          | () when 
-                 Z3.FuncDecl.equal func_decl 
-                   (integer_to_loc_fundecl context global) ->
-             let i = nth args 0 in
-             begin match IT.is_z i with
-             | Some z -> pointer_ z
-             | _ -> integerToPointerCast_ i
-             end
+        | () when Z3.Arithmetic.is_real2int expr ->
+           realToInt_ (nth args 0)
 
-          | () when Z3Symbol_Table.mem z3sym_table func_name ->
-             begin match Z3Symbol_Table.find z3sym_table func_name with
-             | DefaultFunc {bt} ->
-                default_ bt
-             | MemberFunc {tag; member} ->
-                let sd = Memory.member_types (SymMap.find tag global.struct_decls) in
-                let member_bt = BT.of_sct (List.assoc Id.equal member sd) in
-                member_ ~member_bt (tag, nth args 0, member)
-             | StructFunc {tag} ->
-                let sd = Memory.members (SymMap.find tag global.struct_decls) in
-                struct_ (tag, List.combine sd args)
-             | CompFunc {bts; i} ->
-                let comp_bt = List.nth bts i in
-                nthTuple_ ~item_bt:comp_bt (i, nth args 0)
-             | TupleFunc {bts} ->
-                tuple_ args
-             | RecordFunc {mbts} ->
-                IT (Record_op (Record (List.combine (List.map fst mbts) args)), 
-                    Record mbts)
-             | RecordMemberFunc {mbts; member} ->
-                let member_bt = List.assoc Sym.equal member mbts in
-                IT (Record_op (RecordMember (nth args 0, member)), member_bt)
-             | DatatypeConsFunc {nm} ->
-                let info = SymMap.find nm global.datatype_constrs in
-                datatype_cons_ nm info.c_datatype_tag
-                    (List.combine (List.map fst info.c_params) args)
-             | DatatypeConsRecogFunc {nm} ->
-                (* not supported inside CN, hopefully we shouldn't need it *)
-                failwith ("Reconstructing Z3 term with datatype recogniser unsupported")
-             | DatatypeAccFunc xs ->
-                Simplify.datatype_member_reduce (nth args 0) xs.nm xs.bt
-             end
+        | () when Z3.Arithmetic.is_int2real expr ->
+           intToReal_ (nth args 0)
 
-          | () when String.equal (Z3.Symbol.to_string func_name) "^" ->
-             exp_ (nth args 0, nth args 1)
+        | () when String.equal (Z3.Symbol.get_string func_name) "unit" ->
+           unit_
+        | () when BT.equal Unit (z3_sort (Z3.Expr.get_sort expr)) ->
+           unit_
+        | () -> 
+           let func_decl = 
+             try Z3.Expr.get_func_decl expr with
+             | _ ->
+                print_endline (Z3.Model.to_string model);
+                unsupported ("z3 expression. func_name " ^ Z3.Symbol.to_string func_name)
+           in
+           let arg = match args with
+             | [arg] -> arg
+             | [] -> Debug_ocaml.error ("unexpected constant function: "  
+                                        ^ Z3.Symbol.to_string func_name)
+             | _ -> failwith "multi-argument functions"
+           in      
+           map_get_ (func_interp func_decl) arg
 
-          | () when Z3.Arithmetic.is_real2int expr ->
-             realToInt_ (nth args 0)
-
-          | () when Z3.Arithmetic.is_int2real expr ->
-             intToReal_ (nth args 0)
-
-          | () when String.equal (Z3.Symbol.get_string func_name) "unit" ->
-             unit_
-          | () when BT.equal Unit (z3_sort (Z3.Expr.get_sort expr)) ->
-             unit_
-          | () -> 
-             let func_decl = 
-               try Z3.Expr.get_func_decl expr with
-               | _ ->
-                  print_endline (Z3.Model.to_string model);
-                  unsupported ("z3 expression. func_name " ^ Z3.Symbol.to_string func_name)
-             in
-             let arg = match args with
-               | [arg] -> arg
-               | [] -> Debug_ocaml.error ("unexpected constant function: "  
-                                          ^ Z3.Symbol.to_string func_name)
-               | _ -> failwith "multi-argument functions"
-             in      
-             map_get_ (func_interp func_decl) arg
-
-      in
-
-      fun expr -> 
-      aux expr
     in
+
 
     let expr = Translate.term ~warn_lambda:false context global to_be_evaluated in
     match Z3.Model.eval model expr true with
