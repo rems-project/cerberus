@@ -787,26 +787,26 @@ module Eval = struct
   open Translate
 
   let is_array_sort sort = 
-    try let _ = Z3.Z3Array.get_domain sort in true with 
-    | _ -> false
+    try 
+      Some (Z3.Z3Array.get_domain sort, 
+            Z3.Z3Array.get_range sort) 
+    with 
+    | _ -> None
 
   let find_already_translated_sort sort = 
     try Sort_Table.find sort_table sort with
     | Not_found -> failwith (Z3.Sort.to_string sort^"' not in Sort_Table")
 
   let rec z3_sort (sort : Z3.Sort.sort) = 
-    if is_array_sort sort then 
-      Map (z3_sort (Z3.Z3Array.get_domain sort), 
-           z3_sort (Z3.Z3Array.get_range sort))
-    else
-      find_already_translated_sort sort
+    match is_array_sort sort with
+    | Some (domain, range) -> Map (z3_sort domain, z3_sort range)
+    | None -> find_already_translated_sort sort
 
 
   let eval global (context, model) to_be_evaluated = 
 
-    let struct_decls = global.struct_decls in
-
     let z3_expr = 
+      (* informed by this: https://stackoverflow.com/questions/22885457/read-func-interp-of-a-z3-array-from-the-z3-model/22918197 *)
       let rec func_interp func_decl = 
         let domain = match Z3.FuncDecl.get_domain func_decl with
           | [domain] -> domain
@@ -856,28 +856,9 @@ module Eval = struct
         | () when Z3.Z3Array.is_as_array expr ->
            (* informed by this:
               https://stackoverflow.com/questions/22885457/read-func-interp-of-a-z3-array-from-the-z3-model/22918197 *)
-           let abt = z3_sort (Z3.Z3Array.get_range (Z3.Expr.get_sort expr)) in
-           let as_array_func_decl = Z3.Expr.get_func_decl expr in
-           let as_array_parameters = Z3.FuncDecl.get_parameters as_array_func_decl in
-           let as_array_func_parameter = List.nth as_array_parameters 0 in
-           let array_func_decl = Z3.FuncDecl.Parameter.get_func_decl as_array_func_parameter in
-           let array_func_interp = match Z3.Model.get_func_interp model array_func_decl with
-             | None -> Debug_ocaml.error "as-array: func_decl without interpretation"
-             | Some interp -> interp
-           in
-           let base_value = aux (Z3.Model.FuncInterp.get_else array_func_interp) in
-           let entries = Z3.Model.FuncInterp.get_entries array_func_interp in
-           List.fold_right (fun entry map_value ->
-               match Z3.Model.FuncInterp.FuncEntry.get_args entry with
-               | [index] ->
-                  let index = aux index in
-                  let value = aux (Z3.Model.FuncInterp.FuncEntry.get_value entry) in
-                  map_set_ map_value (index, value)
-               | [] ->
-                  Debug_ocaml.error "unexpected zero-dimenstional map/array"
-               | _ ->
-                  failwith "multi-dimensional maps/arrays (from as-value)"
-             ) entries (const_map_ abt base_value)
+           let as_array_func_parameter = List.hd (Z3.FuncDecl.get_parameters (Z3.Expr.get_func_decl expr)) in
+           let func_decl = Z3.FuncDecl.Parameter.get_func_decl as_array_func_parameter in
+           func_interp func_decl
 
         | () when Z3.Z3Array.is_constant_array expr ->
            let abt = z3_sort (Z3.Z3Array.get_range (Z3.Expr.get_sort expr)) in
@@ -994,11 +975,11 @@ module Eval = struct
              | DefaultFunc {bt} ->
                 default_ bt
              | MemberFunc {tag; member} ->
-                let sd = Memory.member_types (SymMap.find tag struct_decls) in
+                let sd = Memory.member_types (SymMap.find tag global.struct_decls) in
                 let member_bt = BT.of_sct (List.assoc Id.equal member sd) in
                 member_ ~member_bt (tag, nth args 0, member)
              | StructFunc {tag} ->
-                let sd = Memory.members (SymMap.find tag struct_decls) in
+                let sd = Memory.members (SymMap.find tag global.struct_decls) in
                 struct_ (tag, List.combine sd args)
              | CompFunc {bts; i} ->
                 let comp_bt = List.nth bts i in
