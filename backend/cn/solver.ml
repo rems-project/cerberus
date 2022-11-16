@@ -1008,13 +1008,8 @@ module Eval = struct
         | () when BT.equal Unit (z3_sort (Z3.Expr.get_sort expr)) ->
            unit_
         | () -> 
-           let arg = match args with
-             | [arg] -> arg
-             | [] -> Debug_ocaml.error ("unexpected constant function: "  
-                                        ^ Z3.Symbol.to_string func_name)
-             | _ -> failwith "multi-argument functions"
-           in      
-           map_get_ (func_interp func_decl) arg
+           assert (List.length args = 1);
+           map_get_ (func_interp func_decl) (List.hd args)
 
     in
 
