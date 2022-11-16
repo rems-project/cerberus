@@ -805,6 +805,14 @@ module Eval = struct
 
   let eval global (context, model) to_be_evaluated = 
 
+    let unsupported expr what = 
+      let err = 
+        Printf.sprintf "unsupported %s. expr: %s"
+          what (Z3.Expr.to_string expr)
+      in
+      failwith err
+    in
+
     (* informed by this: https://stackoverflow.com/questions/22885457/read-func-interp-of-a-z3-array-from-the-z3-model/22918197 *)
     let rec func_interp func_decl = 
       let domain = Z3.FuncDecl.get_domain func_decl in
@@ -823,19 +831,12 @@ module Eval = struct
 
 
     and z3_expr (expr : Z3.Expr.expr) : IT.t = 
-      let unsupported what = 
-        let err = 
-          Printf.sprintf "unsupported %s. expr: %s"
-            what (Z3.Expr.to_string expr)
-        in
-        failwith err
-      in
       let args = try Z3.Expr.get_args expr with | _ -> [] in
       let args = List.map z3_expr args in
       match () with
 
       | () when Z3.AST.is_quantifier (Z3.Expr.ast_of_expr expr) ->
-         unsupported "quantifiers/lambdas"
+         unsupported expr "quantifiers/lambdas"
 
       | () when Z3.Arithmetic.is_add expr ->
          List.fold_left (Tools.curry add_) (hd args) (tl args)
@@ -855,13 +856,13 @@ module Eval = struct
          const_map_ abt (hd args)
 
       | () when Z3.Z3Array.is_default_array expr ->
-         unsupported "z3 array default"
+         unsupported expr "z3 array default"
 
       | () when Z3.Set.is_difference expr ->
          setDifference_ (nth args 0, nth args 1)
 
       | () when Z3.Boolean.is_distinct expr ->
-         unsupported "z3 is_distinct"
+         unsupported expr "z3 is_distinct"
 
       | () when Z3.Arithmetic.is_idiv expr ->
          div_ (nth args 0, nth args 1)
@@ -935,7 +936,7 @@ module Eval = struct
          end
 
       | () when Z3.AST.is_var (Z3.Expr.ast_of_expr expr) ->
-         unsupported "variables from quantifiers/lambdas"
+         unsupported expr "variables from quantifiers/lambdas"
 
       | () ->
         let func_decl = Z3.Expr.get_func_decl expr in
@@ -988,7 +989,7 @@ module Eval = struct
                   (List.combine (List.map fst info.c_params) args)
            | DatatypeConsRecogFunc {nm} ->
               (* not supported inside CN, hopefully we shouldn't need it *)
-              failwith ("Reconstructing Z3 term with datatype recogniser unsupported")
+              unsupported expr ("Reconstructing Z3 term with datatype recogniser")
            | DatatypeAccFunc xs ->
               Simplify.datatype_member_reduce (nth args 0) xs.nm xs.bt
            end
@@ -1007,12 +1008,6 @@ module Eval = struct
         | () when BT.equal Unit (z3_sort (Z3.Expr.get_sort expr)) ->
            unit_
         | () -> 
-           let func_decl = 
-             try Z3.Expr.get_func_decl expr with
-             | _ ->
-                print_endline (Z3.Model.to_string model);
-                unsupported ("z3 expression. func_name " ^ Z3.Symbol.to_string func_name)
-           in
            let arg = match args with
              | [arg] -> arg
              | [] -> Debug_ocaml.error ("unexpected constant function: "  
