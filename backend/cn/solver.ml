@@ -807,8 +807,7 @@ module Eval = struct
     let struct_decls = global.struct_decls in
 
     let z3_expr = 
-      (* TODO: check about binders, shouldn't those be empty here? *)
-      let rec func_interp binders func_decl = 
+      let rec func_interp func_decl = 
         let domain = match Z3.FuncDecl.get_domain func_decl with
           | [domain] -> domain
           | [] -> Debug_ocaml.error "unexpected constant function"
@@ -818,13 +817,13 @@ module Eval = struct
           | None -> Debug_ocaml.error "func_decl without interpretation"
           | Some interp -> interp
         in
-        let base_value = aux binders (Z3.Model.FuncInterp.get_else func_interp) in
+        let base_value = aux (Z3.Model.FuncInterp.get_else func_interp) in
         let entries = Z3.Model.FuncInterp.get_entries func_interp in
         List.fold_right (fun entry map_value ->
             match Z3.Model.FuncInterp.FuncEntry.get_args entry with
             | [index] ->
-               let index = aux binders index in
-               let value = aux binders (Z3.Model.FuncInterp.FuncEntry.get_value entry) in
+               let index = aux index in
+               let value = aux (Z3.Model.FuncInterp.FuncEntry.get_value entry) in
                map_set_ map_value (index, value)
             | [] ->
                Debug_ocaml.error "unexpected constant function"
@@ -833,7 +832,7 @@ module Eval = struct
           ) entries (const_map_ (z3_sort domain) base_value)
 
 
-      and aux (binders : (Sym.t * BT.t) list) (expr : Z3.Expr.expr) : IT.t = 
+      and aux (expr : Z3.Expr.expr) : IT.t = 
         let unsupported what = 
           let err = 
             Printf.sprintf "unsupported %s. expr: %s"
@@ -842,19 +841,11 @@ module Eval = struct
           failwith err
         in
         let args = try Z3.Expr.get_args expr with | _ -> [] in
-        let args = List.map (aux binders) args in
+        let args = List.map aux args in
         match () with
 
         | () when Z3.AST.is_quantifier (Z3.Expr.ast_of_expr expr) ->
-           let qexpr = Z3.Quantifier.quantifier_of_expr expr in
-           let body = Z3.Quantifier.get_body qexpr in
-           let quantifier_sorts = Z3.Quantifier.get_bound_variable_sorts qexpr in
-           let q_bt = match quantifier_sorts with
-             | [q_sort] -> z3_sort q_sort
-             | _ -> unsupported "z3 quantifier list"
-           in
-           let q_s = Sym.fresh_make_uniq "p" in
-           map_def_ (q_s, q_bt) (aux ((q_s, q_bt) :: binders) body)
+           unsupported "quantifiers/lambdas"
 
         | () when Z3.Arithmetic.is_add expr ->
            List.fold_left (Tools.curry add_) (hd args) (tl args)
@@ -874,13 +865,13 @@ module Eval = struct
              | None -> Debug_ocaml.error "as-array: func_decl without interpretation"
              | Some interp -> interp
            in
-           let base_value = aux binders (Z3.Model.FuncInterp.get_else array_func_interp) in
+           let base_value = aux (Z3.Model.FuncInterp.get_else array_func_interp) in
            let entries = Z3.Model.FuncInterp.get_entries array_func_interp in
            List.fold_right (fun entry map_value ->
                match Z3.Model.FuncInterp.FuncEntry.get_args entry with
                | [index] ->
-                  let index = aux binders index in
-                  let value = aux binders (Z3.Model.FuncInterp.FuncEntry.get_value entry) in
+                  let index = aux index in
+                  let value = aux (Z3.Model.FuncInterp.FuncEntry.get_value entry) in
                   map_set_ map_value (index, value)
                | [] ->
                   Debug_ocaml.error "unexpected zero-dimenstional map/array"
@@ -973,7 +964,7 @@ module Eval = struct
            end
 
         | () when Z3.AST.is_var (Z3.Expr.ast_of_expr expr) ->
-           sym_ (nth binders (Z3.Quantifier.get_index expr))
+           unsupported "variables from quantifiers/lambdas"
 
         | () ->
           let func_decl = Z3.Expr.get_func_decl expr in
@@ -1057,12 +1048,12 @@ module Eval = struct
                                           ^ Z3.Symbol.to_string func_name)
                | _ -> failwith "multi-argument functions"
              in      
-             map_get_ (func_interp binders func_decl) arg
+             map_get_ (func_interp func_decl) arg
 
       in
 
       fun expr -> 
-      aux [] expr
+      aux expr
     in
 
     let expr = Translate.term ~warn_lambda:false context global to_be_evaluated in
