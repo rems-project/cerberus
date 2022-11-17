@@ -35,7 +35,6 @@ open Builtins
 
 
 
-
 (* base types *)
 
 let rec bt_of_core_object_type loc ot =
@@ -259,7 +258,7 @@ let make_qowned ~loc ~oname ~pointer ~q:(qs,qbt) ~step ~condition ~path ~sct =
            pointer; 
            q = qs;
            permission = condition; 
-           step = IT.int_ (Memory.size_of_ctype sct);
+           step = Memory.size_of_ctype sct;
            iargs = [];
           },
           oarg_members),
@@ -952,6 +951,7 @@ let apply_ownership_spec global default_mapping_name mappings (loc, oname, {oq; 
              resolve_index_term loc global default_mapping_name mappings
                [(name, (s, bt))] condition 
           in
+          let@ step = CompilePredicates.ensure_int_step loc step in
           make_qpred 
             loc 
             (predicate, def) 

@@ -643,6 +643,8 @@ end
 
 
 
+
+
 module WRET = struct
 
   let welltyped loc r = 
@@ -666,18 +668,12 @@ module WRET = struct
        return ()
     | Q p ->
        let@ _ = WIT.check loc BT.Loc p.pointer in
-       let@ _ = WIT.check loc BT.Integer p.step in
-       let@ c' = WIT.is_const loc p.step in
-       let@ () = if c' then return () else
-           let hint = "Only constant iteration steps are allowed" in
-           fail (fun ctxt -> {loc; msg = NIA {context = p.step; it = p.step; ctxt; hint}})
-       in
        let@ () =  match p.name with
          | Owned ct ->
            let sz = Memory.size_of_ctype ct in
-           if IT.equal p.step (IT.int_ sz) then return ()
+           if p.step = sz then return ()
            else fail (fun _ -> {loc; msg = Generic
-             (!^"Iteration step" ^^^ IT.pp p.step ^^^ !^ "different to sizeof" ^^^
+             (!^"Iteration step" ^^^ Pp.int p.step ^^^ !^ "different to sizeof" ^^^
                  Sctypes.pp ct ^^^ parens (!^ (Int.to_string sz)))})
          | _ -> return ()
        in

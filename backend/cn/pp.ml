@@ -22,6 +22,7 @@ let loc_pp = ref Dec
 
 
 let int i = string (string_of_int i)
+let z i = string (Z.to_string i)
 
 
 let html_escapes = ref false

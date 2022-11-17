@@ -36,7 +36,7 @@ type qpredicate_type = {
     name : predicate_name; 
     pointer: IT.t;            (* I *)
     q: Sym.t;
-    step: IT.t;
+    step: int;
     permission: IT.t;         (* I, function of q *)
     iargs: IT.t list;         (* I, function of q *)
   }
@@ -77,7 +77,7 @@ let pp_predicate_type_aux (p : predicate_type) oargs =
 let pp_qpredicate_type_aux (p : qpredicate_type) oargs =
   let pointer = 
     IT.pp p.pointer ^^^ plus 
-    ^^^ Sym.pp p.q ^^^ star ^^^ IT.pp p.step 
+    ^^^ Sym.pp p.q ^^^ star ^^^ Pp.int p.step 
   in
   let args = pointer :: List.map IT.pp (p.iargs) in
 
@@ -182,8 +182,6 @@ let alpha_equivalent r1 r2 = match r1, r2 with
   | _ -> false
 
 
-let steps_constant = function
-  | Q qp -> Option.is_some (IT.is_z qp.step)
-  | _ -> true
+
 
 
