@@ -815,7 +815,7 @@ module ResourceTypes = struct
       name = qp.name;
       pointer = simp simp_ctxt qp.pointer;
       q = qp.q;
-      step = qp.step;
+      step = simp simp_ctxt qp.step;
       permission = and_ permission;
       iargs = List.map (simp { simp_ctxt with lcs = simp_lcs }) qp.iargs;
     }

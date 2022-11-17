@@ -288,7 +288,12 @@ let rec add_cs = function
 
 
 
-
+let check_res_const_step loc r =
+  let open TypeErrors in
+  if RET.steps_constant r
+  then return ()
+  else fail (fun _ -> {loc; msg = Generic
+          (Pp.item "could not simplify iter-step to constant" (RET.pp r))})
 
 let add_r (r, RE.O oargs) = 
   let@ s = get () in
@@ -296,6 +301,7 @@ let add_r (r, RE.O oargs) =
   match Simplify.ResourceTypes.simp_or_empty simp_ctxt r with
   | None -> return ()
   | Some r ->
+    let@ () = check_res_const_step Loc.unknown r in
     let oargs = Simplify.IndexTerms.simp simp_ctxt oargs in
     set (Context.add_r (r, O oargs) s)
 
@@ -350,6 +356,10 @@ let rec iterM f xs = match xs with
 
 let map_and_fold_resources loc f acc =
   let@ (acc, orig_ix) = map_and_fold_resources_adj loc f acc in
+  let@ ctxt = get () in
+  let new_res = List.filter (fun (re, ix) -> ix > orig_ix) (fst ctxt.resources)
+    |> List.map fst |> List.map fst in
+  let@ _ = iterM (check_res_const_step loc) new_res in
   return acc
 
 let get_loc_trace () =

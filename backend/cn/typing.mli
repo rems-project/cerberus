@@ -32,7 +32,6 @@ val remove_as : Sym.t list -> (unit, 'e) m
 val add_ls : ((Sym.t * LogicalSorts.t) * Context.l_info) list -> (unit, 'e) m
 val add_c : LogicalConstraints.t -> (unit, 'e) m
 val add_cs : LogicalConstraints.t list -> (unit, 'e) m
-val add_equalities : ((IndexTerms.t * IndexTerms.t) * bool) list -> (unit, 'e) m
 val add_r : Resources.t -> (unit, TypeErrors.type_error) m
 val add_rs : Resources.t list -> (unit, TypeErrors.type_error) m
 val get_loc_trace : unit -> (Locations.loc list, 'e) m

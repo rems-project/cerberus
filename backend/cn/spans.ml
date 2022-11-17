@@ -196,7 +196,7 @@ let rec model_res_spans m_g (res : ResourceTypes.t) =
 	|> List.concat
         |> List.map (fun (span, (orig, res2)) -> (span, (res, res2)))
   | (RET.Q ({name = Owned ct; _} as qpt)) ->
-      assert (qpt.step = Memory.size_of_ctype ct);
+      assert (IT.equal qpt.step (IT.int_ (Memory.size_of_ctype ct)));
       let ispans = perm_spans m_g qpt.q qpt.permission in
       let _ = List.length ispans > 0 || raise NoResult in
       if List.exists (fun (lb, rb) -> Option.is_none lb || Option.is_none rb) ispans
@@ -267,7 +267,7 @@ let scan_subterms f t = fold_subterms (fun _ xs t -> match f t with
 let get_witnesses = function
   | RET.P ({name = Owned _; _} as pt) -> [(pt.pointer, pt.permission)]
   | RET.Q ({name = Owned ct; _} as qpt) ->
-     assert (qpt.step = (Memory.size_of_ctype ct));
+     assert (IT.equal qpt.step (IT.int_ (Memory.size_of_ctype ct)));
      let i = sym_ (qpt.q, BT.Integer) in
      let lbs = scan_subterms is_le qpt.permission
        |> List.filter (fun (lhs, rhs) -> IT.equal i rhs)
@@ -293,8 +293,8 @@ let narrow_quantified_to_witness ptr (q_pt : RET.qpredicate_type) =
     | Owned ct -> ct
     | _ -> assert false
   in
-  assert (q_pt.step = (Memory.size_of_ctype ct));
-  let index = IT.array_pointer_to_index ~base:q_pt.pointer ~item_size:(int_ q_pt.step) ~pointer:ptr in
+  assert (IT.equal q_pt.step (IT.int_ (Memory.size_of_ctype ct)));
+  let index = IT.array_pointer_to_index ~base:q_pt.pointer ~item_size:q_pt.step ~pointer:ptr in
   let item_ptr = IT.array_index_to_pointer ~base:q_pt.pointer ~item_ct:ct ~index in
   let sub = make_subst [(q_pt.q, index)] in
   RET.{
@@ -499,11 +499,11 @@ let req_pt_ct_count req = match req with
     | RET.P ({name = Block ct; pointer; _}) -> (pointer, ct, None)
     | RET.Q ({name = Owned ct; pointer; q; permission; step; _}) ->
       let sz = Memory.size_of_ctype ct in
-      assert (step = sz);
+      assert (IT.equal step (IT.int_ sz));
       (pointer, ct, Some (perm_upper_bound q permission))
     | RET.Q ({name = Block ct; pointer; q; permission; step; _}) ->
       let sz = Memory.size_of_ctype ct in
-      assert (step = sz);
+      assert (IT.equal step (IT.int_ sz));
       (pointer, ct, Some (perm_upper_bound q permission))
     | _ -> raise NoResult
 

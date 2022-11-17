@@ -25,10 +25,6 @@ type cn_datatype =
 
 
 
-
-
-
-
 let rec translate_cn_base_type (bTy: CF.Symbol.sym cn_base_type) =
   let open BaseTypes in
   match bTy with
@@ -59,20 +55,6 @@ let rec translate_cn_base_type (bTy: CF.Symbol.sym cn_base_type) =
 
 open Resultat
 open Effectful.Make(Resultat)
-open Pp
-
-
-(* copying something similar that used to be in WellTyped *)
-let ensure_int_step loc step_it =
-  match IT.is_z step_it with
-  | Some z when Z.fits_int32 z -> 
-     return (Z.to_int z)
-  | Some z ->
-     fail {loc; msg = Generic !^"Iteration step too big. (Step must fit in int32)"}
-  | None ->
-     fail {loc; msg = Generic !^"Iteration steps must be constants"}
-
-
 
 let mk_translate_binop loc bop (e1, e2) =
   let open IndexTerms in
@@ -428,7 +410,6 @@ let translate_cn_clause env clause =
                       translate_cn_res_info res_loc pred_loc env' res args in
                let@ (ptr_base, step) = split_pointer_linear_step pred_loc q ptr_expr in
                let@ m_oargs_ty = map_over_record pred_loc oargs_ty in
-               let@ step = ensure_int_step res_loc step in
                let qpt = (ResourceTypes.Q { name = pname
                          ; q
                          ; pointer= ptr_base

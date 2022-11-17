@@ -380,7 +380,7 @@ module General = struct
                 end
              | (Q p', p'_oargs) when equal_predicate_name requested.name p'.name ->
                 let base = p'.pointer in
-                let item_size = int_ p'.step in
+                let item_size = p'.step in
                 let offset = array_offset_of_pointer ~base ~pointer:requested.pointer in
                 let index = array_pointer_to_index ~base ~item_size ~pointer:requested.pointer in
                 let subst = IT.make_subst [(p'.q, index)] in
@@ -607,15 +607,19 @@ module General = struct
        let@ simp_ctxt = simp_ctxt () in
        let@ global = get_global () in
        let needed = requested.permission in
-       let step =  requested.step in
+       let step = Simplify.IndexTerms.simp simp_ctxt requested.step in
+       let@ () = if Option.is_some (IT.is_z step) then return ()
+           else fail (fun _ -> {loc; msg = Generic (!^ "cannot simplify iter-step to constant:"
+               ^^^ IT.pp requested.step ^^ colon ^^^ IT.pp step)}) in
        let@ (needed, oargs) =
          map_and_fold_resources loc (fun re (needed, oargs) ->
              let continue = (Unchanged, (needed, oargs)) in
+             assert (RET.steps_constant (fst re));
              if is_false needed then continue else
              match re with
              | (P p', p'_oargs) when equal_predicate_name requested.name p'.name ->
                 let base = requested.pointer in
-                let item_size = int_ step in
+                let item_size = step in
                 let offset = array_offset_of_pointer ~base ~pointer:p'.pointer in
                 let index = array_pointer_to_index ~base ~item_size ~pointer:p'.pointer in
                 let subst = IT.make_subst [(requested.q, index)] in
@@ -645,7 +649,7 @@ module General = struct
                    continue
                 end
              | (Q p', p'_oargs) when equal_predicate_name requested.name p'.name 
-                         && step = p'.step ->
+                         && IT.equal step p'.step ->
                 let p' = alpha_rename_qpredicate_type requested.q p' in
                 let pmatch = eq_ (requested.pointer, p'.pointer) in
                 begin match provable (LC.T pmatch) with
@@ -725,7 +729,7 @@ module General = struct
           name = Owned item_ct;
           pointer = base;
           q = q_s;
-          step = Memory.size_of_ctype item_ct;
+          step = IT.int_ (Memory.size_of_ctype item_ct);
           iargs = [];
           permission = and_ [permission; (int_ 0) %<= q; q %<= (int_ (length - 1))];
         }
@@ -821,7 +825,7 @@ module General = struct
      {
        name = Owned item_ct;
        pointer = base;
-       step = Memory.size_of_ctype item_ct;
+       step = int_ (Memory.size_of_ctype item_ct);
        q = q_s;
        iargs = [];
        permission = and_ [permission; (int_ 0) %<= q; q %<= (int_ (length - 1))]
