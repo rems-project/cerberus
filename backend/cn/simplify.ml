@@ -22,7 +22,11 @@ type simp_ctxt = {
     global : Global.t;
     values : IT.t SymMap.t;
     equalities: bool ITPairMap.t;
+    lcs : LCSet.t;
   }
+
+
+
 
 
 module IndexTerms = struct
@@ -147,22 +151,22 @@ module IndexTerms = struct
       | Some it3 -> accessor_reduce f it3
     end
 
-  let rec simp (struct_decls : Memory.struct_decls) values equalities log_unfold lcs =
+  let rec simp simp_ctxt =
 
     let add_known_facts new_facts lcs = 
       List.fold_right LCSet.add (List.concat_map flatten new_facts) lcs
     in
 
 
-    let aux2 lcs it = simp struct_decls values equalities log_unfold lcs it in
-    let aux it = aux2 lcs it in
+    let aux2 lcs it = simp { simp_ctxt with lcs } it in
+    let aux it = simp simp_ctxt it in
 
     let lit it bt = 
       match it with
       | Sym _ when BT.equal bt BT.Unit ->
          unit_ 
       | Sym sym ->
-         begin match SymMap.find_opt sym values with
+         begin match SymMap.find_opt sym simp_ctxt.values with
          | Some it when Option.is_some (is_lit it) -> it
          | _ -> IT (Lit (Sym sym), bt)
          end
@@ -372,7 +376,7 @@ module IndexTerms = struct
               | _ -> and_ (List.rev acc)
               end
            | it :: its ->
-              let it = aux2 (add_known_facts acc lcs) it in
+              let it = aux2 (add_known_facts acc simp_ctxt.lcs) it in
               begin match it with
               | IT (Lit (Bool true), _) -> make acc its
               | IT (Lit (Bool false), _) -> bool_ false
@@ -434,8 +438,8 @@ module IndexTerms = struct
          end
       | ITE (a, b, c) ->
          let a = aux a in
-         let b = aux2 (add_known_facts [a] lcs) b in
-         let c = aux2 (add_known_facts [not_ a] lcs) c in
+         let b = aux2 (add_known_facts [a] simp_ctxt.lcs) b in
+         let c = aux2 (add_known_facts [not_ a] simp_ctxt.lcs) c in
          begin match a with
          | IT (Lit (Bool true), _) -> b
          | IT (Lit (Bool false), _) -> c
@@ -470,11 +474,11 @@ module IndexTerms = struct
                     impl_ (not_ cond, bool_ (Z.equal z2 z3))]
               )
          | a, b
-            when ITPairMap.mem (a,b) equalities ||
-                   ITPairMap.mem (b,a) equalities 
+            when ITPairMap.mem (a,b) simp_ctxt.equalities ||
+                   ITPairMap.mem (b,a) simp_ctxt.equalities 
            ->
-            begin match ITPairMap.find_opt (a,b) equalities, 
-                        ITPairMap.find_opt (b,a) equalities with
+            begin match ITPairMap.find_opt (a,b) simp_ctxt.equalities, 
+                        ITPairMap.find_opt (b,a) simp_ctxt.equalities with
             | Some bool, _ -> bool_ bool
             | _, Some bool -> bool_ bool
             | _ -> eq_ (a, b)
@@ -624,7 +628,7 @@ module IndexTerms = struct
             IT (Pointer_op (PointerToIntegerCast a), bt)
          end
       | MemberOffset (tag, member) ->
-         let layout = SymMap.find tag struct_decls in
+         let layout = SymMap.find tag simp_ctxt.global.struct_decls in
          int_ (Option.get (Memory.member_offset layout member))
       | ArrayOffset (ct, t) ->
          let t = aux t in
@@ -722,16 +726,19 @@ module IndexTerms = struct
     let pred name args bt =
       let args = List.map aux args in
       let t = IT (Pred (name, args), bt) in
-      let t' = if List.for_all no_free_vars args
-        then log_unfold t else t in
+      let t' = 
+        if List.for_all no_free_vars args
+        then (LogicalPredicates.open_if_pred simp_ctxt.global.logical_predicates) t 
+        else t 
+      in
       match t' with
       | IT (Pred _, _) -> t'
       | _ -> aux t'
     in
 
     fun it ->
-    if LCSet.mem (LC.T it) lcs then bool_ true else
-    if LCSet.mem (LC.T (not_ it)) lcs then bool_ false else
+    if LCSet.mem (LC.T it) simp_ctxt.lcs then bool_ true else
+    if LCSet.mem (LC.T (not_ it)) simp_ctxt.lcs then bool_ false else
       let (IT (it_, bt)) = it in
       match it_ with
       | Lit l -> lit l bt
@@ -760,8 +767,8 @@ module IndexTerms = struct
 
 
 
-  let simp_flatten struct_decls values equalities log_unfold lcs term =
-    match simp struct_decls values equalities log_unfold lcs term with
+  let simp_flatten simp_ctxt term =
+    match simp simp_ctxt term with
     | IT (Lit (Bool true), _) -> []
     | IT (Bool_op (And lcs), _) -> lcs
     | lc -> [lc]
@@ -772,12 +779,12 @@ module LogicalConstraints = struct
 
   open IndexTerms
 
-  let simp struct_decls values equalities log_unfold lcs lc =
+  let simp simp_ctxt lc =
     match lc with
-    | LC.T it -> LC.T (simp struct_decls values equalities log_unfold lcs it)
+    | LC.T it -> LC.T (simp simp_ctxt it)
     | LC.Forall ((q, qbt), body) ->
        let q, body = IT.alpha_rename (q, qbt) body in
-       let body = simp struct_decls values equalities log_unfold lcs body in
+       let body = simp simp_ctxt body in
        begin match body with
        | IT (Lit (Bool true), _) -> LC.T (bool_ true)
        | _ -> LC.Forall ((q, qbt), body)
@@ -792,37 +799,37 @@ module ResourceTypes = struct
   open IndexTerms
   open ResourceTypes
 
-  let simp_predicate_type structs values equalities log_unfold lcs (p : predicate_type) = {
+  let simp_predicate_type simp_ctxt (p : predicate_type) = {
       name = p.name; 
-      pointer = simp structs values equalities log_unfold lcs p.pointer;
-      permission = simp structs values equalities log_unfold lcs p.permission;
-      iargs = List.map (simp structs values equalities log_unfold lcs) p.iargs;
+      pointer = simp simp_ctxt p.pointer;
+      permission = simp simp_ctxt p.permission;
+      iargs = List.map (simp simp_ctxt) p.iargs;
     }
 
-  let simp_qpredicate_type structs values equalities log_unfold lcs (qp : qpredicate_type) =
+  let simp_qpredicate_type simp_ctxt (qp : qpredicate_type) =
     let qp = alpha_rename_qpredicate_type (Sym.fresh_same qp.q) qp in
-    let permission = simp_flatten structs values equalities log_unfold lcs qp.permission in
+    let permission = simp_flatten simp_ctxt qp.permission in
     let permission_lcs = LCSet.of_list (List.map LC.t_ permission) in
-    let simp_lcs = LCSet.union permission_lcs lcs in
+    let simp_lcs = LCSet.union permission_lcs simp_ctxt.lcs in
     {
       name = qp.name;
-      pointer = simp structs values equalities log_unfold lcs qp.pointer;
+      pointer = simp simp_ctxt qp.pointer;
       q = qp.q;
-      step = simp structs values equalities log_unfold lcs qp.step;
+      step = simp simp_ctxt qp.step;
       permission = and_ permission;
-      iargs = List.map (simp structs values equalities log_unfold simp_lcs) qp.iargs;
+      iargs = List.map (simp { simp_ctxt with lcs = simp_lcs }) qp.iargs;
     }
 
 
 
-  let simp structs values equalities log_unfold lcs = function
-    | P p -> P (simp_predicate_type structs values equalities log_unfold lcs p)
-    | Q qp -> Q (simp_qpredicate_type structs values equalities log_unfold lcs qp)
+  let simp simp_ctxt = function
+    | P p -> P (simp_predicate_type simp_ctxt p)
+    | Q qp -> Q (simp_qpredicate_type simp_ctxt qp)
 
 
 
-  let simp_or_empty structs values equalities log_unfold lcs resource =
-    match simp structs values equalities log_unfold lcs resource with
+  let simp_or_empty simp_ctxt resource =
+    match simp simp_ctxt resource with
     | P p when IT.is_false p.permission -> None
     | Q p when IT.is_false p.permission -> None
     | re -> Some re

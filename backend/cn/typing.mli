@@ -14,11 +14,7 @@ val run : Context.t -> ('a, 'e) m -> ('a, 'e) Result.t
 val print_with_ctxt : (Context.t -> unit) -> (unit, 'e) m
 val get_global : unit -> (Global.t, 'e) m
 val all_constraints : unit -> (Context.LCSet.t, 'e) m
-val simp_constraints : unit ->
-    ((IndexTerms.t IndexTerms.SymMap.t 
-      * bool Simplify.ITPairMap.t
-      * (IndexTerms.t -> IndexTerms.t)
-      * Context.LCSet.t), 'e) m
+val simp_ctxt : unit -> (Simplify.simp_ctxt, 'e) m
 val all_resources : unit -> (Resources.t list, 'e) m
 val all_resources_tagged : unit -> ((Resources.t * int) list * int, 'e) m
 val provable : Locations.t -> (LogicalConstraints.t -> [> `True | `False], 'e) m

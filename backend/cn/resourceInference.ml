@@ -25,17 +25,7 @@ let oargs_list (O oargs) =
       (s, recordMember_ ~member_bt (oargs, s))
     ) members
 
-let get_simp () =
-  let@ global = get_global () in
-  let@ values, equalities, log_unfold, lcs = simp_constraints () in
-  let simp t = Simplify.IndexTerms.simp global.struct_decls values equalities log_unfold lcs t in
-  return simp
 
-let get_ret_simp () =
-  let@ global = get_global () in
-  let@ values, equalities, log_unfold, lcs = simp_constraints () in
-  let simp t = Simplify.ResourceTypes.simp global.struct_decls values equalities log_unfold lcs t in
-  return simp
 
 
 let unpack_def global name args =
@@ -131,8 +121,8 @@ module General = struct
     }
 
   let exact_ptr_match () =
-    let@ simp = get_simp () in
-    return (fun (p, p') -> is_true (simp (eq_ (p, p'))))
+    let@ simp_ctxt = simp_ctxt () in
+    return (fun (p, p') -> is_true (Simplify.IndexTerms.simp simp_ctxt (eq_ (p, p'))))
 
   let exact_match () =
     let@ pmatch = exact_ptr_match () in
@@ -224,12 +214,11 @@ module General = struct
        by claiming an argument resource or otherwise reducing towards
        an instantiated return-type *)
 
-    let@ simp = get_simp () in
-    let@ ret_simp = get_ret_simp () in
+    let@ simp_ctxt = simp_ctxt () in
 
     begin match ftyp with
     | LAT.Resource ((s, (resource, bt)), info, ftyp) ->
-       let resource = ret_simp resource in
+       let resource = Simplify.ResourceTypes.simp simp_ctxt resource in
        let uiinfo = (situation, (Some resource, Some info)) in
        let@ o_re_oarg = resource_request uiinfo resource in
        begin match o_re_oarg with
@@ -244,10 +233,12 @@ module General = struct
            )
          | Some (re, O oargs) ->
             assert (ResourceTypes.equal re resource);
-            return (LAT.subst rt_subst (IT.make_subst [(s, simp oargs)]) ftyp)
+            let oargs = Simplify.IndexTerms.simp simp_ctxt oargs in
+            return (LAT.subst rt_subst (IT.make_subst [(s, oargs)]) ftyp)
        end
     | Define ((s, it), info, ftyp) ->
-       return (LAT.subst rt_subst (IT.make_subst [(s, simp it)]) ftyp)
+       let it = Simplify.IndexTerms.simp simp_ctxt it in
+       return (LAT.subst rt_subst (IT.make_subst [(s, it)]) ftyp)
     | Constraint (c, info, ftyp) ->
        let@ () = return (debug 9 (lazy (item "checking constraint" (LC.pp c)))) in
        let@ provable = provable loc in
@@ -478,7 +469,7 @@ module General = struct
        let@ provable = provable loc in
        let@ is_ex = exact_match () in
        let is_exact_re re = !reorder_points && (is_ex (Q requested, re)) in
-       let@ simp = get_simp () in
+       let@ simp_ctxt = simp_ctxt () in
        let@ global = get_global () in
        let needed = requested.permission in
        let sub_resource_if = fun cond re (needed, oargs) ->
@@ -508,7 +499,7 @@ module General = struct
                    in
                    let needed' = and_ [needed; not_ (i_match)] in
                    Deleted, 
-                   (simp needed', oargs)
+                   (Simplify.IndexTerms.simp simp_ctxt needed', oargs)
                 | `False ->
                    let model = Solver.model () in
                    debug_constraint_failure_diagnostics 9 model global (LC.T took);
@@ -530,7 +521,7 @@ module General = struct
                    let needed' = and_ [needed; not_ p'.permission] in
                    let permission' = and_ [p'.permission; not_ needed] in
                    Changed (Q {p' with permission = permission'}, p'_oargs), 
-                   (simp needed', oargs)
+                   (Simplify.IndexTerms.simp simp_ctxt needed', oargs)
                 | `False ->
                    let model = Solver.model () in
                    debug_constraint_failure_diagnostics 9 model global (LC.T pmatch);
@@ -545,8 +536,12 @@ module General = struct
        in
        debug 10 (lazy (item "needed after exact matches:" (IT.pp needed)));
        let k_is = scan_key_indices requested.q needed in
-       let k_ptrs = List.map (fun i -> (i, arrayShift_ (requested.pointer, requested_ct, i))) k_is in
-       let k_ptrs = List.map (fun (i, p) -> (simp i, simp p)) k_ptrs in
+       let k_ptrs = 
+         List.map (fun i -> 
+             (Simplify.IndexTerms.simp simp_ctxt i, 
+              Simplify.IndexTerms.simp simp_ctxt (arrayShift_ (requested.pointer, requested_ct, i)))
+           ) k_is 
+       in
        if List.length k_ptrs == 0 then ()
        else debug 10 (lazy (item "key ptrs for additional matches:"
            (Pp.list IT.pp (List.map snd k_ptrs))));
@@ -609,10 +604,10 @@ module General = struct
             return def.oargs
        in
        let@ provable = provable loc in
-       let@ simp = get_simp () in
+       let@ simp_ctxt = simp_ctxt () in
        let@ global = get_global () in
        let needed = requested.permission in
-       let step = simp requested.step in
+       let step = Simplify.IndexTerms.simp simp_ctxt requested.step in
        let@ () = if Option.is_some (IT.is_z step) then return ()
            else fail (fun _ -> {loc; msg = Generic (!^ "cannot simplify iter-step to constant:"
                ^^^ IT.pp requested.step ^^ colon ^^^ IT.pp step)}) in
@@ -647,7 +642,7 @@ module General = struct
                    in
                    let needed' = and_ [needed; not_ i_match] in
                    Deleted, 
-                   (simp needed', oargs)
+                   (Simplify.IndexTerms.simp simp_ctxt needed', oargs)
                 | `False ->
                    let model = Solver.model () in
                    debug_constraint_failure_diagnostics 9 model global (LC.T took);
@@ -671,7 +666,7 @@ module General = struct
                        ) oargs (oargs_list p'_oargs)
                    in
                    Changed (Q {p' with permission = permission'}, p'_oargs), 
-                   (simp needed', oargs)
+                   (Simplify.IndexTerms.simp simp_ctxt needed', oargs)
                 | `False ->
                    let model = Solver.model () in
                    debug_constraint_failure_diagnostics 9 model global (LC.T pmatch);

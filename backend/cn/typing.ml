@@ -115,16 +115,7 @@ let all_constraints () =
   let@ s = get () in
   return s.constraints
 
-let simp_constraints1 () =
-  fun s ->
-  Ok ((s.sym_eqs, 
-       s.equalities,
-       s.typing_context.constraints), s)
 
-let simp_constraints () =
-  let@ (vals, eqs, cons) = simp_constraints1 () in
-  let@ g = get_global () in
-  return (vals, eqs, LogicalPredicates.open_if_pred g.logical_predicates, cons)
 
 let all_resources_tagged () =
   let@ s = get () in
@@ -134,13 +125,31 @@ let all_resources () =
   let@ s = get () in
   return (Context.get_rs s)
 
+let make_simp_ctxt s =
+  Simplify.{
+      global = s.typing_context.global;
+      values = s.sym_eqs;
+      equalities = s.equalities;
+      lcs = s.typing_context.constraints;
+    }
+
+
+let simp_ctxt () = 
+  fun s -> Ok (make_simp_ctxt s, s)
+
+
 let make_provable loc =
-  fun {typing_context = s; solver; _} -> 
+  fun ({typing_context = s; solver; _} as c) -> 
+  let simp_ctxt = make_simp_ctxt c in
   let pointer_facts = Resources.pointer_facts (Context.get_rs s) in
   let f lc = 
-    Solver.provable ~loc ~solver ~global:s.global 
+    Solver.provable 
+      ~loc 
+      ~solver ~global:s.global 
       ~assumptions:s.constraints
-      ~pointer_facts lc 
+      ~simp_ctxt
+      ~pointer_facts 
+      lc 
   in
   f
 
@@ -148,6 +157,10 @@ let provable loc =
   fun s -> 
   Ok (make_provable loc s, s)
   
+
+
+  
+
 
 let model () =
   let m = Solver.model () in
@@ -205,9 +218,8 @@ let get_l sym =
 
 let add_a sym it = 
   let@ s = get () in
-  let@ values, equalities, log_unfold, simp_lcs = simp_constraints () in
-  let it = Simplify.IndexTerms.simp s.global.struct_decls values equalities
-             log_unfold simp_lcs it in
+  let@ simp_ctxt = simp_ctxt () in
+  let it = Simplify.IndexTerms.simp simp_ctxt it in
   set (Context.add_a sym it s)
 
 let remove_a sym = 
@@ -259,9 +271,8 @@ let add_c lc =
   let@ _ = drop_models () in
   let@ s = get () in
   let@ solver = solver () in
-  let@ values, equalities, log_unfold, simp_lcs = simp_constraints () in
-  let lc = Simplify.LogicalConstraints.simp s.global.struct_decls values equalities
-             log_unfold simp_lcs lc in
+  let@ simp_ctxt = simp_ctxt () in
+  let lc = Simplify.LogicalConstraints.simp simp_ctxt lc in
   let s = Context.add_c lc s in
   let () = Solver.add_assumption solver s.global lc in
   let@ _ = add_sym_eqs (List.filter_map (LC.is_sym_lhs_equality) [lc]) in
@@ -286,12 +297,12 @@ let check_res_const_step loc r =
 
 let add_r (r, RE.O oargs) = 
   let@ s = get () in
-  let@ values, equalities, log_unfold, lcs = simp_constraints () in
-  match Simplify.ResourceTypes.simp_or_empty s.global.struct_decls values equalities log_unfold lcs r with
+  let@ simp_ctxt = simp_ctxt () in
+  match Simplify.ResourceTypes.simp_or_empty simp_ctxt r with
   | None -> return ()
   | Some r ->
     let@ () = check_res_const_step Loc.unknown r in
-    let oargs = Simplify.IndexTerms.simp s.global.struct_decls values equalities log_unfold lcs oargs in
+    let oargs = Simplify.IndexTerms.simp simp_ctxt oargs in
     set (Context.add_r (r, O oargs) s)
 
 let rec add_rs = function

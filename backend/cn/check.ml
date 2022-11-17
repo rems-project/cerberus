@@ -167,9 +167,9 @@ let div_groups cmp xs =
 let div_groups_discard cmp xs =
   List.map (List.map snd) (div_groups (fun (k, _) (k2, _) -> cmp k k2) xs)
 
-let unknown_eq_in_group simp ptr_gp = List.find_map (fun (p, req) -> if not req then None
+let unknown_eq_in_group simp_ctxt ptr_gp = List.find_map (fun (p, req) -> if not req then None
   else List.find_map (fun (p2, req) -> if req then None
-    else if is_true (simp (eq_ (p, p2))) then None
+    else if is_true (Simplify.IndexTerms.simp simp_ctxt (eq_ (p, p2))) then None
     else Some (eq_ (p, p2))) ptr_gp) ptr_gp
 
 let upd_ptr_gps_for_model global m ptr_gps =
@@ -207,8 +207,8 @@ let add_eqs_for_infer loc ftyp =
       return ()
     end
     else
-    let@ simp = ResourceInference.get_simp () in
-    let poss_eqs = List.filter_map (unknown_eq_in_group simp) ptr_gps in
+    let@ simp_ctxt = simp_ctxt () in
+    let poss_eqs = List.filter_map (unknown_eq_in_group simp_ctxt) ptr_gps in
     debug 7 (lazy (format [] ("investigating " ^
         Int.to_string (List.length poss_eqs) ^ " possible eqs")));
     if List.length poss_eqs == 0

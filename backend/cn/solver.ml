@@ -695,9 +695,8 @@ let add_assumption solver global lc =
 
 
 (* as similarly suggested by Robbert *)
-let shortcut struct_decls lc = 
-  let lc = Simplify.LogicalConstraints.simp struct_decls SymMap.empty Simplify.ITPairMap.empty
-        (fun t -> t) LCSet.empty lc in
+let shortcut simp_ctxt lc = 
+  let lc = Simplify.LogicalConstraints.simp simp_ctxt lc in
   match lc with
   | LC.T (IT (Lit (Bool true), _)) -> `True
   | _ -> `No_shortcut lc
@@ -743,13 +742,12 @@ let maybe_save_slow_problem solv_inst lc lc_t time solver = match save_slow_prob
     saved_slow_problem ();
     close_out channel
 
-let provable ~loc ~solver ~global ~assumptions ~pointer_facts lc = 
+let provable ~loc ~solver ~global ~assumptions ~simp_ctxt ~pointer_facts lc = 
   debug 12 (lazy (item "provable: checking constraint" (LC.pp lc)));
   let context = solver.context in
-  let structs = global.struct_decls in
   let rtrue () = model_state := No_model; `True in
   let rfalse qs solver = model_state := Model (context, solver, qs); `False in
-  match shortcut structs lc with
+  match shortcut simp_ctxt lc with
   | `True -> rtrue ()
   | `No_shortcut lc ->
      let Translate.{expr; qs} = Translate.goal context global lc in
