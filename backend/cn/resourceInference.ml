@@ -28,13 +28,13 @@ let oargs_list (O oargs) =
 let get_simp () =
   let@ global = get_global () in
   let@ values, equalities, log_unfold, lcs = simp_constraints () in
-  let simp t = Simplify.simp global.struct_decls values equalities log_unfold lcs t in
+  let simp t = Simplify.IndexTerms.simp global.struct_decls values equalities log_unfold lcs t in
   return simp
 
 let get_ret_simp () =
   let@ global = get_global () in
   let@ values, equalities, log_unfold, lcs = simp_constraints () in
-  let simp t = RET.simp global.struct_decls values equalities log_unfold lcs t in
+  let simp t = Simplify.ResourceTypes.simp global.struct_decls values equalities log_unfold lcs t in
   return simp
 
 

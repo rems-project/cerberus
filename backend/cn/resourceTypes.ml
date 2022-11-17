@@ -161,43 +161,9 @@ let free_vars = function
 
 
 
-open Simplify
-
-
-let simp_predicate_type structs values equalities log_unfold lcs (p : predicate_type) = {
-    name = p.name; 
-    pointer = simp structs values equalities log_unfold lcs p.pointer;
-    permission = simp structs values equalities log_unfold lcs p.permission;
-    iargs = List.map (simp structs values equalities log_unfold lcs) p.iargs;
-  }
-
-let simp_qpredicate_type structs values equalities log_unfold lcs (qp : qpredicate_type) =
-  let qp = alpha_rename_qpredicate_type (Sym.fresh_same qp.q) qp in
-  let permission = Simplify.simp_flatten structs values equalities log_unfold lcs qp.permission in
-  let permission_lcs = LCSet.of_list (List.map LC.t_ permission) in
-  let simp_lcs = LCSet.union permission_lcs lcs in
-  {
-    name = qp.name;
-    pointer = simp structs values equalities log_unfold lcs qp.pointer;
-    q = qp.q;
-    step = simp structs values equalities log_unfold lcs qp.step;
-    permission = and_ permission;
-    iargs = List.map (simp structs values equalities log_unfold simp_lcs) qp.iargs;
-  }
 
 
 
-let simp structs values equalities log_unfold lcs = function
-  | P p -> P (simp_predicate_type structs values equalities log_unfold lcs p)
-  | Q qp -> Q (simp_qpredicate_type structs values equalities log_unfold lcs qp)
-
-
-
-let simp_or_empty structs values equalities log_unfold lcs resource =
-  match simp structs values equalities log_unfold lcs resource with
-  | P p when IT.is_false p.permission -> None
-  | Q p when IT.is_false p.permission -> None
-  | re -> Some re
 
 
 

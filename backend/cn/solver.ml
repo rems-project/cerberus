@@ -492,7 +492,7 @@ module Translate = struct
            let z3sym = symbol c_nm in
            let fd = Z3.FuncDecl.mk_func_decl context z3sym
                (List.map (fun (_, bt) -> sort bt) info.c_params) (sort bt) in
-           let args = List.map (fun (nm, _) -> term (Simplify.record_member_reduce elts_rec nm))
+           let args = List.map (fun (nm, _) -> term (Simplify.IndexTerms.record_member_reduce elts_rec nm))
                info.c_params in
            Z3.FuncDecl.apply fd args
          | DatatypeMember (it, member) ->
@@ -696,7 +696,7 @@ let add_assumption solver global lc =
 
 (* as similarly suggested by Robbert *)
 let shortcut struct_decls lc = 
-  let lc = Simplify.simp_lc struct_decls SymMap.empty Simplify.ITPairMap.empty
+  let lc = Simplify.LogicalConstraints.simp struct_decls SymMap.empty Simplify.ITPairMap.empty
         (fun t -> t) LCSet.empty lc in
   match lc with
   | LC.T (IT (Lit (Bool true), _)) -> `True
@@ -991,7 +991,7 @@ module Eval = struct
               (* not supported inside CN, hopefully we shouldn't need it *)
               unsupported expr ("Reconstructing Z3 term with datatype recogniser")
            | DatatypeAccFunc xs ->
-              Simplify.datatype_member_reduce (nth args 0) xs.nm xs.bt
+              Simplify.IndexTerms.datatype_member_reduce (nth args 0) xs.nm xs.bt
            end
 
         | () when String.equal (Z3.Symbol.to_string func_name) "^" ->

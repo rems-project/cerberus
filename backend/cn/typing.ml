@@ -1,5 +1,4 @@
 open Context
-open Simplify
 module IT = IndexTerms
 module ITSet = Set.Make(IT)
 module SymMap = Map.Make(Sym)
@@ -10,7 +9,7 @@ type s = {
     typing_context: Context.t;
     solver : Solver.solver;
     sym_eqs : IT.t SymMap.t;
-    equalities: bool ITPairMap.t;
+    equalities: bool Simplify.ITPairMap.t;
     past_models : (Solver.model_with_q * Context.t) list;
     step_trace : Trace.t;
     found_equalities : EqTable.table;
@@ -29,7 +28,7 @@ let run (c : Context.t) (m : ('a, 'e) t) : ('a, 'e) Resultat.t =
       typing_context = c; 
       solver; 
       sym_eqs; 
-      equalities = ITPairMap.empty;
+      equalities = Simplify.ITPairMap.empty;
       past_models = []; 
       step_trace = Trace.empty;
       found_equalities = EqTable.empty;
@@ -207,7 +206,7 @@ let get_l sym =
 let add_a sym it = 
   let@ s = get () in
   let@ values, equalities, log_unfold, simp_lcs = simp_constraints () in
-  let it = Simplify.simp s.global.struct_decls values equalities
+  let it = Simplify.IndexTerms.simp s.global.struct_decls values equalities
              log_unfold simp_lcs it in
   set (Context.add_a sym it s)
 
@@ -245,7 +244,7 @@ let add_equalities new_equalities =
   fun s ->
   let equalities = 
     List.fold_left (fun acc ((a, b), eq_or_not) ->
-        ITPairMap.add (a,b) eq_or_not acc
+        Simplify.ITPairMap.add (a,b) eq_or_not acc
       )
       s.equalities new_equalities 
   in
@@ -261,7 +260,7 @@ let add_c lc =
   let@ s = get () in
   let@ solver = solver () in
   let@ values, equalities, log_unfold, simp_lcs = simp_constraints () in
-  let lc = Simplify.simp_lc s.global.struct_decls values equalities
+  let lc = Simplify.LogicalConstraints.simp s.global.struct_decls values equalities
              log_unfold simp_lcs lc in
   let s = Context.add_c lc s in
   let () = Solver.add_assumption solver s.global lc in
@@ -288,11 +287,11 @@ let check_res_const_step loc r =
 let add_r (r, RE.O oargs) = 
   let@ s = get () in
   let@ values, equalities, log_unfold, lcs = simp_constraints () in
-  match RET.simp_or_empty s.global.struct_decls values equalities log_unfold lcs r with
+  match Simplify.ResourceTypes.simp_or_empty s.global.struct_decls values equalities log_unfold lcs r with
   | None -> return ()
   | Some r ->
     let@ () = check_res_const_step Loc.unknown r in
-    let oargs = Simplify.simp s.global.struct_decls values equalities log_unfold lcs oargs in
+    let oargs = Simplify.IndexTerms.simp s.global.struct_decls values equalities log_unfold lcs oargs in
     set (Context.add_r (r, O oargs) s)
 
 let rec add_rs = function
