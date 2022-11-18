@@ -400,8 +400,10 @@ Module MorelloPermission <: Permission.
   Definition to_raw (p:t) := Z0. (*  TODO *)
 
   Definition of_list (l: list bool): option t :=
-    if Z.eqb (Z.of_nat (List.length l)) perms_zlen
+    if Z.ltb (Z.of_nat (List.length l)) perms_zlen
     then
+      None
+    else
       let off := Nat.add user_perms_len 2 in
       Some
         {|
@@ -420,9 +422,7 @@ Module MorelloPermission <: Permission.
           permits_execute         := List.nth (Nat.add off 9) l false;
           permits_store           := List.nth (Nat.add off 10) l false;
           permits_load            := List.nth (Nat.add off 11) l false;
-        |}
-    else
-      None.
+        |}.
 
   Definition to_list (p_value : t) : list bool :=
     List.app [ p_value.(global); p_value.(executive) ]
