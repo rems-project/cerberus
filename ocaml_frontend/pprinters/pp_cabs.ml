@@ -697,7 +697,10 @@ and dtree_of_cabs_statement (CabsStatement (loc, attrs, stmt_)) =
       Dnode (pp_stmt_ctor "CabsSpar", List.map dtree_of_cabs_statement ss)
   | CabsSasm _ ->
       Dleaf (pp_stmt_ctor "CabsSasm") (* TODO *)
-
+  
+  | CabsSmarker stmt ->
+      Dnode ( pp_stmt_ctor "CabsSmarker"
+            , [dtree_of_cabs_statement stmt] )
   | CabsSpack (ctpu, es) ->
       Dnode ( pp_stmt_ctor "CabsSpack" ^^ P.parens (pp_cabs_to_pack_unpack ctpu), List.map dtree_of_cabs_expression es )
   | CabsSunpack (ctpu, es) ->

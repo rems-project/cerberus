@@ -80,16 +80,27 @@ let magic_to_attr magik : Annot.attribute =
 let magic_to_attrs = function
   | [] ->
       Annot.Attrs []
-  | magik ->
-      Annot.Attrs [magic_to_attr magik]
+  | magic ->
+      Annot.Attrs [magic_to_attr magic]
+
+let append_magic magic stmt =
+  match magic with
+    | [] -> stmt
+    | _  -> let loc = Location_ocaml.bbox_location (List.map fst magic) in
+            CabsStatement (loc, magic_to_attrs magic, CabsSmarker stmt)
+
+let mk_statement magic (loc, attrs, stmt_) =
+  append_magic magic (CabsStatement (loc, attrs, stmt_))
 %}
 
 (* §6.4.1 keywords *)
-%token AUTO BREAK CASE CHAR CONST CONTINUE DEFAULT DO DOUBLE ELSE ENUM EXTERN
-  FLOAT FOR GOTO IF INLINE INT LONG REGISTER RESTRICT RETURN SHORT SIGNED SIZEOF
-  STATIC STRUCT SWITCH TYPEDEF UNION UNSIGNED VOID VOLATILE WHILE ALIGNAS
+%token AUTO (*BREAK CASE*) CHAR CONST (*CONTINUE DEFAULT DO*) DOUBLE ELSE ENUM EXTERN
+  FLOAT (*FOR GOTO IF*) INLINE INT LONG REGISTER RESTRICT (*RETURN*) SHORT SIGNED SIZEOF
+  STATIC STRUCT (*SWITCH*) TYPEDEF UNION UNSIGNED VOID VOLATILE (*WHILE*) ALIGNAS
   ALIGNOF ATOMIC BOOL COMPLEX GENERIC (* IMAGINARY *) NORETURN STATIC_ASSERT
   THREAD_LOCAL
+
+%token<Tokens.magic_comment> BREAK CASE CONTINUE DEFAULT DO FOR GOTO IF RETURN SWITCH WHILE
 
 (* §6.4.2 Identifiers *)
 %token<string> UNAME (* Uppercase. UNAME is either a variable identifier or a type name *)
@@ -103,11 +114,11 @@ let magic_to_attrs = function
 %token<Cabs.cabs_encoding_prefix option * string list> STRING_LITERAL
 
 (* §6.4.6 Punctuators *)
-%token LBRACK RBRACK LPAREN RPAREN LBRACE RBRACE DOT MINUS_GT
+%token LBRACK RBRACK LPAREN RPAREN (*LBRACE*) RBRACE DOT MINUS_GT
   PLUS_PLUS MINUS_MINUS AMPERSAND STAR PLUS MINUS TILDE BANG
   SLASH PERCENT LT_LT GT_GT LT GT LT_EQ GT_EQ EQ_EQ BANG_EQ CARET PIPE
   AMPERSAND_AMPERSAND PIPE_PIPE
-  QUESTION COLON SEMICOLON ELLIPSIS EQ STAR_EQ SLASH_EQ PERCENT_EQ COLON_COLON
+  QUESTION COLON (*SEMICOLON*) ELLIPSIS EQ STAR_EQ SLASH_EQ PERCENT_EQ COLON_COLON
   PLUS_EQ MINUS_EQ LT_LT_EQ GT_GT_EQ AMPERSAND_EQ CARET_EQ PIPE_EQ COMMA
   LBRACK_LBRACK (*RBRACK_RBRACK*)
 
@@ -116,6 +127,8 @@ let magic_to_attrs = function
 
 (* NON-STD cppmem syntax *)
   LBRACES PIPES RBRACES
+
+%token<Tokens.magic_comment> LBRACE SEMICOLON
 
 %token VA_START VA_COPY VA_ARG VA_END PRINT_TYPE ASM ASM_VOLATILE
 
@@ -169,10 +182,10 @@ let magic_to_attrs = function
 %type<Cabs.cabs_assignment_operator>
   assignment_operator
 
-%type<Cabs.cabs_declaration>
+%type<Tokens.magic_comment * Cabs.cabs_declaration>
   no_leading_attribute_declaration
 
-%type<Cabs.cabs_declaration>
+%type<Tokens.magic_comment * Cabs.cabs_declaration>
   declaration
 
 %type<Cabs.specifiers>
@@ -451,6 +464,16 @@ clear_magic:
   { C_lexer.internal_state.magic_acc <- [] }
 ;
 
+start_ignore:
+| (* empty *)
+  { C_lexer.internal_state.ignore_magic <- true }
+;
+
+end_ignore:
+| (* empty *)
+  { C_lexer.internal_state.ignore_magic <- false }
+;
+
 (* §6.4.4.3 Enumeration constants Primary expressions *)
 enumeration_constant:
 | i= general_identifier
@@ -459,13 +482,13 @@ enumeration_constant:
 
 (* §6.5.1 Primary expressions *)
 primary_expression:
-| str= var_name
+| str= var_name start_ignore
     { CabsExpression (Location_ocaml.(region ($startpos, $endpos) NoCursor),
         CabsEident (Symbol.Identifier (Location_ocaml.point $startpos(str), str))) }
-| cst= CONSTANT
+| cst= CONSTANT start_ignore
     { CabsExpression (Location_ocaml.(region ($startpos, $endpos) NoCursor),
                       CabsEconst cst) }
-| lit= string_literal
+| lit= string_literal start_ignore
     { CabsExpression (Location_ocaml.(region ($startpos, $endpos) NoCursor),
                       CabsEstring lit) }
 | LPAREN expr= expression RPAREN
@@ -776,6 +799,10 @@ expression:
                      , CabsEcomma (expr1, expr2) ) }
 ;
 
+full_expression:
+| expr= terminated(expression, end_ignore)
+    { expr }
+
 (* §6.6 Constant expressions *)
 constant_expression:
 | expr= conditional_expression
@@ -785,28 +812,28 @@ constant_expression:
 (* §6.7 Declarations *)
 no_leading_attribute_declaration:
 | decspecs= declaration_specifiers
-    idecls_opt= init_declarator_list(declarator_varname)? SEMICOLON
-    { Declaration_base (Annot.no_attributes, decspecs, option [] List.rev idecls_opt) }
+    idecls_opt= init_declarator_list(declarator_varname)? prev_magic= SEMICOLON
+    { (prev_magic, Declaration_base (Annot.no_attributes, decspecs, option [] List.rev idecls_opt)) }
 | decspecs= declaration_specifiers_typedef
-    idecls_opt= init_declarator_list(declarator_typedefname)? SEMICOLON
-    { Declaration_base (Annot.no_attributes, decspecs, option [] List.rev idecls_opt) }
+    idecls_opt= init_declarator_list(declarator_typedefname)? prev_magic= SEMICOLON
+    { (prev_magic, Declaration_base (Annot.no_attributes, decspecs, option [] List.rev idecls_opt)) }
 | sa= static_assert_declaration
-    { Declaration_static_assert sa }
+    { ([], Declaration_static_assert sa) }
 ;
 
 declaration:
-| decl= no_leading_attribute_declaration
-    { decl }
+| xs_decl= no_leading_attribute_declaration
+    { xs_decl }
 | attr= attribute_specifier_sequence decspecs= declaration_specifiers
-    idecls_opt= init_declarator_list(declarator_varname)? SEMICOLON
-    { Declaration_base (to_attrs (Some attr), decspecs, option [] List.rev idecls_opt) }
+    idecls_opt= init_declarator_list(declarator_varname)? prev_magic= SEMICOLON
+    { (prev_magic, Declaration_base (to_attrs (Some attr), decspecs, option [] List.rev idecls_opt)) }
 | attr= attribute_specifier_sequence decspecs= declaration_specifiers_typedef
-    idecls_opt= init_declarator_list(declarator_typedefname)? SEMICOLON
-    { Declaration_base (to_attrs (Some attr), decspecs, option [] List.rev idecls_opt) }
+    idecls_opt= init_declarator_list(declarator_typedefname)? prev_magic= SEMICOLON
+    { (prev_magic, Declaration_base (to_attrs (Some attr), decspecs, option [] List.rev idecls_opt)) }
 | attribute_declaration
     { (*TODO: this is a dummy declaration*)
       let loc = Location_ocaml.(region($startpos, $endpos) (PointCursor $startpos)) in
-      Declaration_base (Annot.no_attributes, empty_specs, [InitDecl (loc, Declarator (None, DDecl_identifier (Annot.no_attributes, Symbol.Identifier (loc, "test"))), None)]) }
+      ([], Declaration_base (Annot.no_attributes, empty_specs, [InitDecl (loc, Declarator (None, DDecl_identifier (Annot.no_attributes, Symbol.Identifier (loc, "test"))), None)])) }
 ;
 
 declaration_specifier:
@@ -1280,23 +1307,26 @@ labeled_statement:
     { CabsStatement (Location_ocaml.(region ($startpos, $endpos) NoCursor),
         to_attrs attr_opt,
         CabsSlabel (i, stmt)) }
-| attr_opt= attribute_specifier_sequence? CASE expr= constant_expression COLON
+| attr_opt= attribute_specifier_sequence? prev_magic= CASE expr= constant_expression COLON
   stmt= statement
-    { CabsStatement (Location_ocaml.(region ($startpos, $endpos) NoCursor),
-        to_attrs attr_opt,
-        CabsScase (expr, stmt)) }
-| attr_opt= attribute_specifier_sequence? DEFAULT COLON stmt= statement
-    { CabsStatement (Location_ocaml.(region ($startpos, $endpos) NoCursor),
-                     to_attrs attr_opt,
-                     CabsSdefault stmt) }
+    { mk_statement prev_magic
+        ( Location_ocaml.(region ($startpos, $endpos) NoCursor)
+        , to_attrs attr_opt
+        , CabsScase (expr, stmt) ) }
+| attr_opt= attribute_specifier_sequence? prev_magic= DEFAULT COLON stmt= statement
+    { mk_statement prev_magic
+        ( Location_ocaml.(region ($startpos, $endpos) NoCursor)
+        , to_attrs attr_opt
+        , CabsSdefault stmt ) }
 ;
 
 (* §6.8.2 Compound statement *)
 compound_statement:
-| LBRACE bis_opt= block_item_list? RBRACE
-    { CabsStatement (Location_ocaml.(region ($startpos, $endpos) NoCursor),
-                     Annot.no_attributes,
-                     CabsSblock (option [] List.rev bis_opt)) }
+| prev_magic= LBRACE bis_opt= block_item_list? RBRACE
+    { mk_statement prev_magic
+        ( Location_ocaml.(region ($startpos, $endpos) NoCursor)
+        , Annot.no_attributes
+        , CabsSblock (option [] List.rev bis_opt) ) }
 (* NON-STD cppmem syntax *)
 | LBRACES stmts= separated_nonempty_list(PIPES, statement) RBRACES
     { CabsStatement (Location_ocaml.(region ($startpos, $endpos) NoCursor),
@@ -1312,21 +1342,23 @@ block_item_list: (* NOTE: the list is in reverse *)
 ;
 
 block_item:
-| decl= declaration
-    { CabsStatement (Location_ocaml.(region ($startpos, $endpos) NoCursor),
-                     Annot.no_attributes,
-                     CabsSdecl decl) }
+| xs_decl= declaration
+    { mk_statement (fst xs_decl)
+        ( Location_ocaml.(region ($startpos, $endpos) NoCursor)
+        , Annot.no_attributes
+        , CabsSdecl (snd xs_decl) ) }
 | stmt= statement
     { stmt }
 ;
 
 (* §6.8.3 Expression and null statements *)
 expression_statement:
-| expr_opt= expression? SEMICOLON
-    { CabsStatement (Location_ocaml.(region ($startpos, $endpos) NoCursor),
-                     Annot.no_attributes,
-                     option CabsSnull (fun z -> CabsSexpr z) expr_opt) }
-| attr= attribute_specifier_sequence expr= expression SEMICOLON
+| expr_opt= full_expression? prev_magic= SEMICOLON
+    { mk_statement prev_magic
+        ( Location_ocaml.(region ($startpos, $endpos) NoCursor)
+        , Annot.no_attributes
+        , option CabsSnull (fun z -> CabsSexpr z) expr_opt ) }
+| attr= attribute_specifier_sequence expr= full_expression SEMICOLON
     { CabsStatement (Location_ocaml.(region ($startpos, $endpos) NoCursor),
                      to_attrs (Some attr),
                      CabsSexpr expr) }
@@ -1334,62 +1366,72 @@ expression_statement:
 
 (* §6.8.4 Selection statements *)
 selection_statement:
-| IF LPAREN expr= expression RPAREN stmt= scoped(statement) %prec THEN
-    { CabsStatement (Location_ocaml.(region ($startpos, $endpos) NoCursor),
-                     Annot.no_attributes,
-                     CabsSif (expr, stmt, None)) }
-| IF LPAREN expr= expression RPAREN stmt1= scoped(statement)
+| prev_magic= IF LPAREN expr= full_expression RPAREN stmt= scoped(statement) %prec THEN
+    { mk_statement prev_magic
+        ( Location_ocaml.(region ($startpos, $endpos) NoCursor)
+        , Annot.no_attributes
+        , CabsSif (expr, stmt, None) ) }
+| prev_magic= IF LPAREN expr= full_expression RPAREN stmt1= scoped(statement)
   ELSE stmt2= scoped(statement)
-    { CabsStatement (Location_ocaml.(region ($startpos, $endpos) NoCursor),
-                     Annot.no_attributes,
-                     CabsSif (expr, stmt1, Some stmt2)) }
-| SWITCH LPAREN expr= expression RPAREN stmt= scoped(statement)
-    { CabsStatement (Location_ocaml.(region ($startpos, $endpos) NoCursor),
-                     Annot.no_attributes,
-                     CabsSswitch (expr, stmt)) }
+    { mk_statement prev_magic
+        ( Location_ocaml.(region ($startpos, $endpos) NoCursor)
+        , Annot.no_attributes
+        , CabsSif (expr, stmt1, Some stmt2) ) }
+| prev_magic= SWITCH LPAREN expr= full_expression RPAREN stmt= scoped(statement)
+    { mk_statement prev_magic
+        ( Location_ocaml.(region ($startpos, $endpos) NoCursor)
+        , Annot.no_attributes
+        , CabsSswitch (expr, stmt) ) }
 ;
 
 (* §6.8.5 Iteration statements *)
 iteration_statement:
-| WHILE LPAREN expr= expression clear_magic RPAREN magik= fetch_magic stmt= scoped(statement)
-    { CabsStatement (Location_ocaml.(region ($startpos, $endpos) NoCursor),
-                     magic_to_attrs magik,
-                     CabsSwhile (expr, stmt)) }
-| DO stmt= scoped(statement) WHILE LPAREN expr= expression RPAREN SEMICOLON
-    { CabsStatement (Location_ocaml.(region ($startpos, $endpos) NoCursor),
-                     Annot.no_attributes,
-                     CabsSdo (expr, stmt)) }
-| FOR LPAREN expr1_opt= expression? SEMICOLON expr2_opt= expression? SEMICOLON
-  expr3_opt= expression? clear_magic RPAREN magik= fetch_magic  stmt= scoped(statement)
-    { CabsStatement (Location_ocaml.(region ($startpos, $endpos) NoCursor),
-                     magic_to_attrs magik,
-                     CabsSfor (map_option (fun x -> FC_expr x) expr1_opt,
-                               expr2_opt,expr3_opt, stmt)) }
-| FOR LPAREN decl= declaration expr2_opt= expression? SEMICOLON
-  expr3_opt= expression? clear_magic RPAREN magik= fetch_magic  stmt= scoped(statement)
-    { CabsStatement (Location_ocaml.(region ($startpos, $endpos) NoCursor),
-                     magic_to_attrs magik,
-                     CabsSfor (Some (FC_decl decl), expr2_opt, expr3_opt, stmt)) }
+| prev_magic= WHILE LPAREN expr= full_expression clear_magic RPAREN inv_magic= fetch_magic stmt= scoped(statement)
+    { mk_statement prev_magic
+        ( Location_ocaml.(region ($startpos, $endpos) NoCursor)
+        , magic_to_attrs inv_magic
+        , CabsSwhile (expr, stmt) ) }
+| prev_magic= DO stmt= scoped(statement) WHILE LPAREN expr= full_expression RPAREN SEMICOLON
+    { mk_statement prev_magic
+        ( Location_ocaml.(region ($startpos, $endpos) NoCursor)
+        , Annot.no_attributes
+        , CabsSdo (expr, stmt) ) }
+| prev_magic= FOR LPAREN expr1_opt= full_expression? SEMICOLON expr2_opt= full_expression? SEMICOLON
+  expr3_opt= full_expression? clear_magic RPAREN magik= fetch_magic  stmt= scoped(statement)
+    { mk_statement prev_magic
+        ( Location_ocaml.(region ($startpos, $endpos) NoCursor)
+        , magic_to_attrs magik
+        , CabsSfor (map_option (fun x -> FC_expr x) expr1_opt, expr2_opt,expr3_opt, stmt) ) }
+| prev_magic= FOR LPAREN xs_decl= declaration expr2_opt= full_expression? SEMICOLON
+  expr3_opt= full_expression? clear_magic RPAREN magik= fetch_magic  stmt= scoped(statement)
+    { mk_statement prev_magic
+        ( Location_ocaml.(region ($startpos, $endpos) NoCursor)
+        , magic_to_attrs magik
+        , CabsSfor (Some (FC_decl (snd xs_decl)), expr2_opt, expr3_opt, stmt) ) }
 ;
 
 (* §6.8.6 Jump statements *)
 jump_statement:
-| GOTO i= general_identifier SEMICOLON
-    { CabsStatement (Location_ocaml.(region ($startpos, $endpos) NoCursor),
-                     Annot.no_attributes,
-                     CabsSgoto i) }
-| CONTINUE SEMICOLON
-    { CabsStatement (Location_ocaml.(region ($startpos, $endpos) NoCursor),
-                     Annot.no_attributes,
-                     CabsScontinue) }
-| BREAK SEMICOLON
-    { CabsStatement (Location_ocaml.(region ($startpos, $endpos) NoCursor),
-                     Annot.no_attributes,
-                     CabsSbreak) }
-| RETURN expr_opt= expression? SEMICOLON
-    { CabsStatement (Location_ocaml.(region ($startpos, $endpos) NoCursor),
-                     Annot.no_attributes,
-                     CabsSreturn expr_opt) }
+| prev_magic= GOTO i= general_identifier SEMICOLON
+    { mk_statement prev_magic
+        ( Location_ocaml.(region ($startpos, $endpos) NoCursor)
+        , Annot.no_attributes
+        , CabsSgoto i ) }
+| prev_magic= CONTINUE SEMICOLON
+    { mk_statement prev_magic 
+        ( Location_ocaml.(region ($startpos, $endpos) NoCursor)
+        , Annot.no_attributes
+        , CabsScontinue ) }
+| prev_magic= BREAK SEMICOLON
+    { mk_statement prev_magic
+        ( Location_ocaml.(region ($startpos, $endpos) NoCursor)
+        , Annot.no_attributes
+        , CabsSbreak ) }
+| prev_magic= RETURN expr_opt= full_expression? SEMICOLON
+    { mk_statement prev_magic
+        ( Location_ocaml.(region ($startpos, $endpos) NoCursor)
+        , Annot.no_attributes
+        , CabsSreturn expr_opt ) }
 ;
 
 (* GCC inline assembly extension *)
@@ -1515,8 +1557,8 @@ external_declaration:
     { EDecl_datatypeCN dt }
 | fdef= function_definition
     { EDecl_func fdef }
-| decl= declaration
-    { EDecl_decl decl }
+| xs_decl= declaration
+    { EDecl_decl (snd xs_decl) }
 ;
 
 (* §6.9.1 Function definitions *)
@@ -1549,10 +1591,10 @@ function_definition:
 ;
 
 declaration_list: (* NOTE: the list is in reverse *)
-| decl= no_leading_attribute_declaration
-    { [decl] }
-| decls= declaration_list decl= no_leading_attribute_declaration
-    { decl :: decls }
+| xs_decl= no_leading_attribute_declaration
+    { [snd xs_decl] }
+| decls= declaration_list xs_decl= no_leading_attribute_declaration
+    { (snd xs_decl) :: decls }
 ;
 
 (* (N2335) §6.7.11: Attributes  *)

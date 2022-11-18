@@ -4274,6 +4274,9 @@ let rec desugar_statement_aux ctx (CabsStatement loc attrs stmt_) =
       | CabsSasm is_volatile is_inline xs (* list (list string) *) ->
           (* TODO: erasing inline assembly for now *)
           E.return AilSskip
+      | CabsSmarker s ->
+          E.record_marker () >>= fun id ->
+          AilSmarker id <$> self s
       | CabsSpack (CTPU_Struct tag_ident) es ->
          E.mapM desugar_expression es >>= fun es ->
          (* copying and adapting code from the `TSpec loc (TSpec_struct attrs (Just tag_ident) Nothing)` case *)
@@ -4359,16 +4362,18 @@ let rec register_labels (CabsStatement _ _ stmt_) =
         (* TODO: check whether labels can declared here *)
         E.return ()
 (* BEGIN CN *)
+    | CabsSmarker s ->
+        register_labels s
     | CabsSpack _ _ ->
-       E.return ()
+        E.return ()
     | CabsSunpack _ _ ->
-       E.return ()
+        E.return ()
     | CabsShave _ _ ->
-       E.return ()
+        E.return ()
     | CabsSshow _ _ ->
-       E.return ()
+        E.return ()
     | CabsSinstantiate _ _ ->
-       E.return ()
+        E.return ()
 (* END CN *)
   end
 

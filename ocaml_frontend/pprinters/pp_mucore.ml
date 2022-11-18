@@ -571,6 +571,8 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
                     acc
               | Auid uid ->
                   P.range (handle_uid uid) acc
+              | Amarker n ->
+                  !^"{-" ^^ !^("marker " ^ string_of_int n) ^^ !^"-}" ^^ acc
               | Abmc annot ->
                   begin match annot with
                   | Abmc_id id ->

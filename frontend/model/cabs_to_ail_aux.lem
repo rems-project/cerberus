@@ -275,6 +275,8 @@ let rec has_continue (CabsStatement _ _ stmt_) =
         List.any has_continue ss
     | CabsSasm _ _ _ ->
         false
+    | CabsSmarker s ->
+        has_continue s
     | CabsSpack _ _ ->
         false
     | CabsSunpack _ _ ->

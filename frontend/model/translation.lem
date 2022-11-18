@@ -2710,6 +2710,8 @@ let rec collect_cases_ (A.AnnotatedStatement loc _ stmt) =
         St.mapM_ collect_cases_ ss
     | A.AilSreg_store _ _ ->
         St.return ()
+    | A.AilSmarker _ s ->
+        collect_cases_ s
     | A.AilSpack _ _ ->
         St.return ()
     | A.AilSunpack _ _ ->
@@ -2807,6 +2809,8 @@ let rec erase_loop_control_aux (A.AnnotatedStatement loc attrs stmt_) =
         A.AilSpar <$> St.mapM erase_loop_control_aux ss
     | A.AilSreg_store _ _ ->
         St.return stmt_
+    | A.AilSmarker id s ->
+        A.AilSmarker id <$> erase_loop_control_aux s
     | A.AilSpack _ _ ->
         St.return stmt_
     | A.AilSunpack _ _ ->
@@ -2881,6 +2885,8 @@ let rec collect_visibles_ (A.AnnotatedStatement loc _ stmt) =
         St.mapM_ collect_visibles_ ss
     | A.AilSreg_store _ _ ->
         St.return ()
+    | A.AilSmarker _ s ->
+        collect_visibles_ s
     | A.AilSpack _ _ ->
         St.return ()
     | A.AilSunpack _ _ ->
@@ -3406,6 +3412,15 @@ let rec translate_stmt stdlib tagDefs f env (A.AnnotatedStatement loc stmt_attrs
     | A.AilSreg_store _ _ ->
         (* the frontend doesn't yet emit this *)
         error "TODO: translate_stmt AilSreg_store"
+
+    | A.AilSmarker id s ->
+        self s >>= fun core_s ->
+        E.return begin
+          Caux.add_annot (Annot.Amarker id) begin
+            Caux.mk_sseq_e (Caux.mk_empty_pat C.BTy_unit) (Caux.mk_pure_e (Caux.mk_unit_pe))
+              core_s
+          end
+        end
 
     | A.AilSpack id es ->
        (* copying and adapting code from that for AilEcall *)

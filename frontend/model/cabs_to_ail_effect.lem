@@ -254,6 +254,7 @@ type state = <|
   current_return_type : Ctype.ctype;
   
   loop_attributes: Annot.loop_attributes;
+  markers_env: map nat A.identifier_env;
 
   (* BEGIN CN *)
   cn_state: Cn_desugaring.cn_desugaring_state;
@@ -507,6 +508,7 @@ let initial_state core_eval_stuff = <|
   current_return_type= Ctype.Ctype [] Ctype.Void; (* TODO: this is morally wrong *)
 
   loop_attributes= Map.empty;
+  markers_env= Map.empty;
 
   cn_state= Cn_desugaring.initial_cn_desugaring_state;
   
@@ -836,6 +838,25 @@ val get_loop_attributes: unit -> desugM Annot.loop_attributes
 let get_loop_attributes () = 
   State_exception.get >>= fun st ->
   State_exception.return st.loop_attributes
+
+
+val record_marker: unit -> desugM nat
+let record_marker () =
+  let id = Symbol.fresh_int () in
+  State_exception.get >>= fun st ->
+  let env: map Symbol.identifier (maybe Symbol.sym) = Scope_table.to_map Namespace_ordinary (fun ident -> function
+    | Internal sym _ _ ->
+        Just sym
+    | External ->
+        match Map.lookup (ident, Namespace_ordinary) st.registered_external_identifiers with
+          | Just (_, (sym, _, _)) ->
+              Just sym
+          | Nothing ->
+              Nothing
+        end
+  end) st.registered_identifiers in
+  State_exception.put <|st with markers_env = (Map.insert id env st.markers_env) |> >>= fun () ->
+  State_exception.return id
 
 
 
@@ -1932,6 +1953,7 @@ let mk_current_ail_sigma =
         A.extern_idmap= Map.empty;
         A.typedef_attributes= Map.empty;
         A.loop_attributes= Map.empty;
+        A.markers_env= Map.empty;
         A.cn_functions= [];
         A.cn_predicates= [];
         A.cn_datatypes= []; |>
@@ -2115,6 +2137,7 @@ let extract_program startup_str =
     A.extern_idmap= extern_idmap;
     A.typedef_attributes= Map.map (fun (z, _, _) -> z) st.typedef_definitions;
     A.loop_attributes = st.loop_attributes;
+    A.markers_env= st.markers_env;
     A.cn_predicates=  List.map (fun (_, (_, z)) -> z) (Map_extra.toList st.cn_state.Cn_desugaring.cn_predicates);
     A.cn_functions=  List.map (fun (_, (_, z)) -> z) (Map_extra.toList st.cn_state.Cn_desugaring.cn_functions);
     A.cn_datatypes=  List.map (fun (_, z) -> z) (Map_extra.toList st.cn_state.Cn_desugaring.cn_datatypes);
@@ -2193,6 +2216,7 @@ let get_sigma_sofar =
        A.extern_idmap= Map.empty;
        A.typedef_attributes= Map.map (fun (z, _, _) -> z) st.typedef_definitions;
        A.loop_attributes= st.loop_attributes;
+       A.markers_env= st.markers_env;
        A.cn_predicates=  List.map (fun (_, (_, z)) -> z) (Map_extra.toList st.cn_state.Cn_desugaring.cn_predicates);
        A.cn_functions=  List.map (fun (_, (_, z)) -> z) (Map_extra.toList st.cn_state.Cn_desugaring.cn_functions);
        A.cn_datatypes=  List.map (fun (_, z) -> z) (Map_extra.toList st.cn_state.Cn_desugaring.cn_datatypes);

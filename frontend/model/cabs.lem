@@ -314,6 +314,7 @@ and cabs_statement_ =
   | CabsSasm of bool(*is_volatile*) * bool(*is_inline*) * list (Loc.t * list string)
 
   (* for CN *)
+  | CabsSmarker of cabs_statement
   | CabsSpack of cabs_to_pack_unpack * list cabs_expression
   | CabsSunpack of cabs_to_pack_unpack * list cabs_expression
   | CabsShave of Symbol.identifier * list cabs_expression

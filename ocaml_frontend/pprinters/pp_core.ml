@@ -572,6 +572,8 @@ let rec pp_expr expr =
                   acc
             | Auid uid ->
                 P.range (handle_uid uid) acc
+            | Amarker n ->
+                mk_comment (fun () -> !^ ("marker " ^ string_of_int n)) ^^ acc
             | Abmc annot ->
                 begin match annot with
                   | Abmc_id id ->

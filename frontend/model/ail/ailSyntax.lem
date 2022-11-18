@@ -182,6 +182,8 @@ type storageDuration [name = "^\\([a-z A-Z]*_\\)?dur[0-9]*'?$"] =
 type bindings =
   list (ail_identifier * ((Loc.t * storageDuration * bool) * maybe alignment * qualifiers * ctype))
 
+type identifier_env =
+  map Symbol.identifier (maybe Symbol.sym)
 
 type statement_ 'a [name="s*"] =
   | AilSskip
@@ -203,6 +205,7 @@ type statement_ 'a [name="s*"] =
   | AilSpar of list (statement 'a) (* NON-STD cppmem threads *)
   | AilSreg_store of reg * expression 'a
 (* for CN *)
+  | AilSmarker of nat * statement 'a (* NOTE: this is placeholder we used to carry annotations for CN *)
   | AilSpack of Annot.to_pack_unpack * list (expression 'a)
   | AilSunpack of Annot.to_pack_unpack * list (expression 'a)
   | AilShave of Symbol.identifier * list (expression 'a)
@@ -242,6 +245,7 @@ type sigma 'a = <|
   extern_idmap: map Symbol.identifier (ail_identifier * id_kind);
   typedef_attributes: map ail_identifier Annot.attributes;
   loop_attributes: Annot.loop_attributes;
+  markers_env: map nat identifier_env;
   cn_functions: list (Cn.cn_function Symbol.sym Ctype.ctype);
   cn_predicates: list (Cn.cn_predicate Symbol.sym Ctype.ctype);
   cn_datatypes: list (Cn.cn_datatype Symbol.sym Ctype.ctype);

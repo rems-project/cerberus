@@ -11,14 +11,22 @@ type internal_state = {
   (* HACK fo fix col positions when seing CN keywords (look at C_parser_driver) *)
   mutable cnum_hack: int;
   mutable start_of_comment: Lexing.position;
+  mutable ignore_magic: bool;
   mutable magic_acc: (Location_ocaml.t * string) list;
 }
 let internal_state = {
   inside_cn= false;
   cnum_hack= 0;
   start_of_comment= Lexing.dummy_pos;
+  ignore_magic= false;
   magic_acc= [];
 }
+
+let fetch_and_clear_magic () =
+  let ret = internal_state.magic_acc in
+  internal_state.magic_acc <- [];
+  List.rev ret
+
 
 let new_line lexbuf =
   (* the hacked col offset MUST be reset after every newline *)
@@ -32,84 +40,84 @@ let offset_location lexbuf pos_fname pos_lnum =
   new_line lexbuf
 
 (* STD §6.4.1#1 *)
-let keywords: (string * Tokens.token) list = [
-    "auto"           , AUTO;
-    "break"          , BREAK;
-    "case"           , CASE;
-    "char"           , CHAR;
-    "const"          , CONST;
-    "continue"       , CONTINUE;
-    "default"        , DEFAULT;
-    "do"             , DO;
-    "double"         , DOUBLE;
-    "else"           , ELSE;
-    "enum"           , ENUM;
-    "extern"         , EXTERN;
-    "float"          , FLOAT;
-    "for"            , FOR;
-    "goto"           , GOTO;
-    "if"             , IF;
-    "inline"         , INLINE;
-    "int"            , INT;
-    "long"           , LONG;
-    "register"       , REGISTER;
-    "restrict"       , RESTRICT;
-    "return"         , RETURN;
-    "short"          , SHORT;
-    "signed"         , SIGNED;
-    "sizeof"         , SIZEOF;
-    "static"         , STATIC;
-    "struct"         , STRUCT;
-    "switch"         , SWITCH;
-    "typedef"        , TYPEDEF;
-    "typeof"         , TYPEOF;
-    "union"          , UNION;
-    "unsigned"       , UNSIGNED;
-    "void"           , VOID;
-    "volatile"       , VOLATILE;
-    "while"          , WHILE;
-    "_Alignas"       , ALIGNAS;
-    "_Alignof"       , ALIGNOF;
-    "_Atomic"        , ATOMIC;
-    "_Bool"          , BOOL;
-    "_Complex"       , COMPLEX;
-    "_Generic"       , GENERIC;
-    "_Imaginary"     , IMAGINARY;
-    "_Noreturn"      , NORETURN;
-    "_Static_assert" , STATIC_ASSERT;
-    "_Thread_local"  , THREAD_LOCAL;
+let keywords: (string * (unit -> Tokens.token)) list = [
+    "auto"           , (fun () -> AUTO);
+    "break"          , (fun () -> BREAK (fetch_and_clear_magic ()));
+    "case"           , (fun () -> CASE (fetch_and_clear_magic ()));
+    "char"           , (fun () -> CHAR);
+    "const"          , (fun () -> CONST);
+    "continue"       , (fun () -> CONTINUE (fetch_and_clear_magic ()));
+    "default"        , (fun () -> DEFAULT (fetch_and_clear_magic ()));
+    "do"             , (fun () -> DO (fetch_and_clear_magic ()));
+    "double"         , (fun () -> DOUBLE);
+    "else"           , (fun () -> ELSE);
+    "enum"           , (fun () -> ENUM);
+    "extern"         , (fun () -> EXTERN);
+    "float"          , (fun () -> FLOAT);
+    "for"            , (fun () -> FOR (fetch_and_clear_magic ()));
+    "goto"           , (fun () -> GOTO (fetch_and_clear_magic ()));
+    "if"             , (fun () -> IF (fetch_and_clear_magic ()));
+    "inline"         , (fun () -> INLINE);
+    "int"            , (fun () -> INT);
+    "long"           , (fun () -> LONG);
+    "register"       , (fun () -> REGISTER);
+    "restrict"       , (fun () -> RESTRICT);
+    "return"         , (fun () -> RETURN (fetch_and_clear_magic ()));
+    "short"          , (fun () -> SHORT);
+    "signed"         , (fun () -> SIGNED);
+    "sizeof"         , (fun () -> SIZEOF);
+    "static"         , (fun () -> STATIC);
+    "struct"         , (fun () -> STRUCT);
+    "switch"         , (fun () -> SWITCH (fetch_and_clear_magic ()));
+    "typedef"        , (fun () -> TYPEDEF);
+    "typeof"         , (fun () -> TYPEOF);
+    "union"          , (fun () -> UNION);
+    "unsigned"       , (fun () -> UNSIGNED);
+    "void"           , (fun () -> VOID);
+    "volatile"       , (fun () -> VOLATILE);
+    "while"          , (fun () -> WHILE (fetch_and_clear_magic ()));
+    "_Alignas"       , (fun () -> ALIGNAS);
+    "_Alignof"       , (fun () -> ALIGNOF);
+    "_Atomic"        , (fun () -> ATOMIC);
+    "_Bool"          , (fun () -> BOOL);
+    "_Complex"       , (fun () -> COMPLEX);
+    "_Generic"       , (fun () -> GENERIC);
+    "_Imaginary"     , (fun () -> IMAGINARY);
+    "_Noreturn"      , (fun () -> NORETURN);
+    "_Static_assert" , (fun () -> STATIC_ASSERT);
+    "_Thread_local"  , (fun () -> THREAD_LOCAL);
 
-    "assert", ASSERT;
-    "offsetof", OFFSETOF;
-    "__cerb_va_start", VA_START;
-    "__cerb_va_copy", VA_COPY;
-    "__cerb_va_arg", VA_ARG;
-    "__cerb_va_end", VA_END;
+    "assert", (fun () -> ASSERT);
+    "offsetof", (fun () -> OFFSETOF);
+    "__cerb_va_start", (fun () -> VA_START);
+    "__cerb_va_copy", (fun () -> VA_COPY);
+    "__cerb_va_arg", (fun () -> VA_ARG);
+    "__cerb_va_end", (fun () -> VA_END);
 
-    "__cerb_printtype", PRINT_TYPE;
+    "__cerb_printtype", (fun () -> PRINT_TYPE);
 
-    "__BMC_ASSUME", BMC_ASSUME;
+    "__BMC_ASSUME", (fun () -> BMC_ASSUME);
 
     (* some GCC extensions *)
-    "asm", ASM;
-    "__asm__", ASM;
-    "__volatile__", ASM_VOLATILE;
+    "asm", (fun () -> ASM);
+    "__asm__", (fun () -> ASM);
+    "__volatile__", (fun () -> ASM_VOLATILE);
 
     (* BEGIN CN *)
-    "__cerb_predicate"     , CN_PREDICATE;
-    "__cerb_function"      , CN_FUNCTION;
-    "__cerb_datatype"      , CN_DATATYPE;
-    "__cerb_pack"          , CN_PACK;
-    "__cerb_unpack"        , CN_UNPACK;
-    "__cerb_pack_struct"   , CN_PACK_STRUCT;
-    "__cerb_unpack_struct" , CN_UNPACK_STRUCT;
-    "__cerb_have"          , CN_HAVE;
-    "__cerb_show"          , CN_SHOW;
-    "__cerb_instantiate"   , CN_INSTANTIATE;
+    "__cerb_predicate"     , (fun () -> CN_PREDICATE);
+    "__cerb_function"      , (fun () -> CN_FUNCTION);
+    "__cerb_datatype"      , (fun () -> CN_DATATYPE);
+    "__cerb_pack"          , (fun () -> CN_PACK);
+    "__cerb_unpack"        , (fun () -> CN_UNPACK);
+    "__cerb_pack_struct"   , (fun () -> CN_PACK_STRUCT);
+    "__cerb_unpack_struct" , (fun () -> CN_UNPACK_STRUCT);
+    "__cerb_have"          , (fun () -> CN_HAVE);
+    "__cerb_show"          , (fun () -> CN_SHOW);
+    "__cerb_instantiate"   , (fun () -> CN_INSTANTIATE);
     (* END CN *)
   ]
 
-let lexicon: (string, token) Hashtbl.t =
+let lexicon: (string, unit -> token) Hashtbl.t =
   let lexicon = Hashtbl.create 0 in
   let add (key, builder) = Hashtbl.add lexicon key builder in
   List.iter add keywords; lexicon
@@ -359,7 +367,9 @@ and initial = parse
               let loc = Location_ocaml.(region
                 ( {internal_state.start_of_comment with pos_cnum = internal_state.start_of_comment.pos_cnum + 3}
                 , {lexbuf.lex_curr_p with pos_cnum = lexbuf.lex_curr_p.pos_cnum - 3} ) NoCursor) in
-              internal_state.magic_acc <- (loc, magik) :: internal_state.magic_acc
+              begin if not (internal_state.ignore_magic) then
+                internal_state.magic_acc <- (loc, magik) :: internal_state.magic_acc
+              end
             end;
             initial lexbuf }
 
@@ -432,7 +442,7 @@ and initial = parse
   | ']'   { RBRACK              }
   | '('   { LPAREN              }
   | ')'   { RPAREN              }
-  | '{'   { LBRACE              }
+  | '{'   { LBRACE (fetch_and_clear_magic ()) }
   | '}'   { RBRACE              }
   | '.'   { DOT                 }
   | "->"  { MINUS_GT            }
@@ -461,7 +471,7 @@ and initial = parse
   | '?'   { QUESTION            }
   | "::"  { COLON_COLON         }
   | ':'   { COLON               }
-  | ';'   { SEMICOLON           }
+  | ';'   { SEMICOLON (fetch_and_clear_magic ()) }
   | "..." { ELLIPSIS            }
   | '='   { EQ                  }
   | "*="  { STAR_EQ             }
@@ -483,7 +493,7 @@ and initial = parse
   (* STD §6.4.6#3 *)
   | "<:" { LBRACK }
   | ":>" { RBRACK }
-  | "<%" { LBRACE   }
+  | "<%" { LBRACE (fetch_and_clear_magic ()) }
   | "%>" { RBRACE   }
 (*  | "%:"   *)
 (*  | "%:%:" *)
@@ -506,8 +516,8 @@ and initial = parse
 
   | identifier as id
     { try
-        let tok = Hashtbl.find lexicon id in
-        match tok with
+        let mk_tok = Hashtbl.find lexicon id in
+        match mk_tok () with
           | CN_FUNCTION ->
               (* let old_pos_cnum = lexbuf.lex_curr_p.pos_cnum in
               let new_pos_cnum = old_pos_cnum - (String.length "__cerb_") in
@@ -522,7 +532,7 @@ and initial = parse
                 (old_pos_cnum - lexbuf.lex_curr_p.pos_bol) (new_pos_cnum - lexbuf.lex_curr_p.pos_bol);
               lexbuf.lex_curr_p <- {lexbuf.lex_curr_p with pos_cnum= new_pos_cnum }; *)
               CN_PREDICATE
-          | _ ->
+          | tok ->
               tok
       with Not_found ->
         if internal_state.inside_cn then

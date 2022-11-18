@@ -42,6 +42,7 @@ let empty_sigma = <|
   A.extern_idmap= Map.empty;
   A.typedef_attributes= Map.empty;
   A.loop_attributes= Map.empty;
+  A.markers_env= Map.empty;
   A.cn_predicates= [];
   A.cn_functions= [];
   A.cn_datatypes= [];
