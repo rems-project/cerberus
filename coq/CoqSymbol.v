@@ -115,6 +115,28 @@ Module Symbol_sym_as_OT <: OrderedType.
 
   Lemma eq_sym: forall x y : t, eq x y -> eq y x.
   Proof.
+    unfold eq, symbolEquality, is_true.
+    intros x y H.
+    destruct x,y.
+    apply andb_prop in H.
+    destruct H as [D ZE].
+    apply andb_true_intro.
+    split.
+    -
+      clear - D.
+      apply Z.eqb_eq in D.
+      apply Z.eqb_eq.
+      unfold digest_compare in *.
+      repeat break_match;try lia.
+      +
+        apply compare_eq_iff in Heqc0.
+        rewrite Heqc0 in Heqc.
+        admit.
+      +
+        admit.
+    -
+      apply Z.eqb_eq in ZE.
+      lia.
   Admitted.
 
   Lemma eq_trans: forall x y z : t, eq x y -> eq y z -> eq x z.
