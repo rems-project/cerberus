@@ -80,7 +80,7 @@ export class Experimental extends Tab {
 class SvgGraph extends Tab {
   panzoomOptions: any
   container: JQuery<HTMLElement>
-  svg: JQuery<HTMLElement>
+  svg: JQuery<Element>
   
   constructor(name: string, ee: EventEmitter) {
     super (name, ee)
