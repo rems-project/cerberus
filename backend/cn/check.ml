@@ -1661,7 +1661,6 @@ let check mu_file =
   (* let () = Debug_ocaml.end_csv_timing "impls" in *)
   
 
-  let () = Debug_ocaml.begin_csv_timing "logical predicates" in
   (* check and record logical predicate defs *)
   Pp.progress_simple "checking specifications" "logical predicate welltypedness";
   let@ () =
@@ -1676,9 +1675,7 @@ let check mu_file =
         return ()
       ) mu_file.mu_logical_predicates
   in
-  let () = Debug_ocaml.end_csv_timing "logical predicates" in
 
-  let () = Debug_ocaml.begin_csv_timing "resource predicates" in
   let@ () = 
     (* check and record resource predicate defs *)
     let@ () = 
@@ -1692,10 +1689,8 @@ let check mu_file =
     in
     return ()
   in
-  let () = Debug_ocaml.end_csv_timing "resource predicates" in
 
 
-  let () = Debug_ocaml.begin_csv_timing "globals" in
   let@ () = 
     (* record globals *)
     (* TODO: check the expressions *)
@@ -1713,7 +1708,6 @@ let check mu_file =
            return ()
       ) mu_file.mu_globs 
   in
-  let () = Debug_ocaml.end_csv_timing "globals" in
 
   let@ () =
     PmapM.iterM
@@ -1726,7 +1720,6 @@ let check mu_file =
       ) mu_file.mu_funinfo
   in
 
-  let () = Debug_ocaml.begin_csv_timing "welltypedness" in
   let@ () =
     Pp.progress_simple "checking specifications" "function welltypedness";
     PmapM.iterM
@@ -1736,12 +1729,10 @@ let check mu_file =
         WellTyped.WFT.welltyped "global" loc ftyp
       ) mu_file.mu_funinfo
   in
-  let () = Debug_ocaml.end_csv_timing "welltypedness" in
 
   let check_function =
     fun fsym fn ->
     let@ (loc, ftyp, trusted) = get_fun_decl Locations.unknown fsym in
-    let () = Debug_ocaml.begin_csv_timing "functions" in
     let start = time_log_start "function" (CF.Pp_symbol.to_string fsym) in
     let@ () = match trusted, fn with
       | Trusted _, _ -> 
@@ -1753,15 +1744,11 @@ let check mu_file =
       | _, (M_ProcDecl _ | M_BuiltinDecl _) -> (* TODO: ? *) 
          return ()
     in
-    Debug_ocaml.end_csv_timing "functions";
     time_log_end start;
     return ()
   in
 
-  let () = Debug_ocaml.begin_csv_timing "check stdlib" in
   let@ () = PmapM.iterM check_function mu_file.mu_stdlib in
-  let () = Debug_ocaml.end_csv_timing "check stdlib" in
-  let () = Debug_ocaml.begin_csv_timing "check functions" in
   let@ () = 
     let number_entries = List.length (Pmap.bindings_list mu_file.mu_funs) in
     let ping = Pp.progress "checking function" number_entries in
@@ -1775,10 +1762,8 @@ let check mu_file =
         return ()
       ) mu_file.mu_funs 
   in
-  let () = Debug_ocaml.end_csv_timing "check functions" in
 
 
-  let () = Debug_ocaml.end_csv_timing "total" in
 
   return ()
 
