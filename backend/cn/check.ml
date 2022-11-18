@@ -1606,85 +1606,64 @@ let check_procedure
 
 let only = ref None
 
-
-let check mu_file = 
-
+let record_and_check_tagDefs tagDefs =
   let@ () = 
-    (* check and record tagDefs *)
-    let@ () = 
-      PmapM.iterM (fun tag def ->
-          match def with
-          | M_UnionDef _ -> unsupported Loc.unknown !^"todo: union types"
-          | M_StructDef layout -> add_struct_decl tag layout
-        ) mu_file.mu_tagDefs
-    in
-    let@ () = 
-      PmapM.iterM (fun tag def ->
-          let open Memory in
-          match def with
-          | M_UnionDef _ -> 
-             unsupported Loc.unknown !^"todo: union types"
-          | M_StructDef layout -> 
-             ListM.iterM (fun piece ->
-                 match piece.member_or_padding with
-                 | Some (name, ct) -> WellTyped.WCT.is_ct Loc.unknown ct
-                 | None -> return ()
-               ) layout
-        ) mu_file.mu_tagDefs
-    in
-    return ()
+    PmapM.iterM (fun tag def ->
+        match def with
+        | M_UnionDef _ -> unsupported Loc.unknown !^"todo: union types"
+        | M_StructDef layout -> add_struct_decl tag layout
+      ) tagDefs
   in
+  PmapM.iterM (fun tag def ->
+      let open Memory in
+      match def with
+      | M_UnionDef _ -> 
+         unsupported Loc.unknown !^"todo: union types"
+      | M_StructDef layout -> 
+         ListM.iterM (fun piece ->
+             match piece.member_or_padding with
+             | Some (name, ct) -> WellTyped.WCT.is_ct Loc.unknown ct
+             | None -> return ()
+           ) layout
+    ) tagDefs
 
 
-
-  (* check and record logical predicate defs *)
-  Pp.progress_simple "checking specifications" "logical predicate welltypedness";
+let record_and_check_logical_functions logical_functions =
   let@ () =
     ListM.iterM (fun (name, def) -> add_logical_predicate name def)
-        mu_file.mu_logical_predicates
+        logical_functions
   in
   let@ () = logical_predicate_cycle_check () in
-  let@ () =
-    ListM.iterM (fun (name,(def : LP.definition)) -> 
-        let@ () = WellTyped.WLPD.welltyped def in
-        Pp.debug 1 (lazy (Pp.item "logical predicate" (LP.pp_def (Sym.pp name) def)));
-        return ()
-      ) mu_file.mu_logical_predicates
-  in
+  ListM.iterM (fun (name,(def : LP.definition)) -> 
+      let@ () = WellTyped.WLPD.welltyped def in
+      Pp.debug 1 (lazy (Pp.item "logical predicate" (LP.pp_def (Sym.pp name) def)));
+      return ()
+    ) logical_functions
 
-  let@ () = 
-    (* check and record resource predicate defs *)
-    let@ () = 
-      ListM.iterM (fun (name, def) -> add_resource_predicate name def)
-        mu_file.mu_resource_predicates
-    in
-    Pp.progress_simple "checking specifications" "resource predicate welltypedness";
-    let@ () = 
-      ListM.iterM (fun (name,def) -> WellTyped.WRPD.welltyped def)
-        mu_file.mu_resource_predicates
-    in
-    return ()
-  in
+let record_and_check_resource_predicates preds =
+  (* check and record resource predicate defs *)
+  let@ () = ListM.iterM (fun (name, def) -> add_resource_predicate name def) preds in
+  let@ () = ListM.iterM (fun (name,def) -> WellTyped.WRPD.welltyped def) preds in
+  return ()
 
 
-  let@ () = 
-    (* record globals *)
-    (* TODO: check the expressions *)
-    ListM.iterM (fun (sym, def) ->
-        match def with
-        | M_GlobalDef (lsym, (gbt, ct), _)
-        | M_GlobalDecl (lsym, (gbt, ct)) ->
-           let@ () = WellTyped.WBT.is_bt Loc.unknown gbt in
-           let@ () = WellTyped.WCT.is_ct Loc.unknown ct in
-           let bt = Loc in
-           let info = (Loc.unknown, lazy (Pp.item "global" (Sym.pp lsym))) in
-           let@ () = add_l lsym bt info in
-           let@ () = add_a sym (sym_ (lsym, bt)) in
-           let@ () = add_c (t_ (IT.good_pointer ~pointee_ct:ct (sym_ (lsym, bt)))) in
-           return ()
-      ) mu_file.mu_globs 
-  in
+let record_globals globs =
+  (* TODO: check the expressions *)
+  ListM.iterM (fun (sym, def) ->
+      match def with
+      | M_GlobalDef (lsym, (gbt, ct), _)
+      | M_GlobalDecl (lsym, (gbt, ct)) ->
+         let@ () = WellTyped.WBT.is_bt Loc.unknown gbt in
+         let@ () = WellTyped.WCT.is_ct Loc.unknown ct in
+         let bt = Loc in
+         let info = (Loc.unknown, lazy (Pp.item "global" (Sym.pp lsym))) in
+         let@ () = add_l lsym bt info in
+         let@ () = add_a sym (sym_ (lsym, bt)) in
+         let@ () = add_c (t_ (IT.good_pointer ~pointee_ct:ct (sym_ (lsym, bt)))) in
+         return ()
+    ) globs 
 
+let record_and_wf_check_functions funinfo =
   let@ () =
     PmapM.iterM
       (fun fsym (M_funinfo (loc, _attrs, ftyp, trusted, _has_proto)) ->
@@ -1693,54 +1672,58 @@ let check mu_file =
         let@ () = add_l fsym Loc (loc, lazy (Pp.item "global fun-ptr" (Sym.pp fsym))) in
         let@ () = add_cs [(* lc1; *) lc2] in
         add_fun_decl fsym (loc, ftyp, trusted)
-      ) mu_file.mu_funinfo
+      ) funinfo
   in
+  PmapM.iterM
+    (fun fsym (M_funinfo (loc, _attrs, ftyp, _trusted, _has_proto)) ->
+      let () = debug 2 (lazy (headline ("checking welltypedness of procedure " ^ Sym.pp_string fsym))) in
+      let () = debug 2 (lazy (item "type" (AT.pp RT.pp ftyp))) in
+      WellTyped.WFT.welltyped "global" loc ftyp
+    ) funinfo
 
-  let@ () =
-    Pp.progress_simple "checking specifications" "function welltypedness";
-    PmapM.iterM
-      (fun fsym (M_funinfo (loc, _attrs, ftyp, _trusted, _has_proto)) ->
-        let () = debug 2 (lazy (headline ("checking welltypedness of procedure " ^ Sym.pp_string fsym))) in
-        let () = debug 2 (lazy (item "type" (AT.pp RT.pp ftyp))) in
-        WellTyped.WFT.welltyped "global" loc ftyp
-      ) mu_file.mu_funinfo
+
+
+let check_function fsym fn =
+  let@ (loc, ftyp, trusted) = get_fun_decl Locations.unknown fsym in
+  let start = time_log_start "function" (CF.Pp_symbol.to_string fsym) in
+  let@ () = match trusted, fn with
+    | Trusted _, _ -> 
+       return ()
+    | Checked, M_Fun (rbt, args, body) ->
+       check_function loc (Sym.pp_string fsym) args rbt body ftyp
+    | Checked, M_Proc (loc', rbt, args, body, labels) ->
+       check_procedure loc fsym args rbt body ftyp labels
+    | _, (M_ProcDecl _ | M_BuiltinDecl _) -> (* TODO: ? *) 
+       return ()
   in
+  time_log_end start;
+  return ()
 
-  let check_function =
-    fun fsym fn ->
-    let@ (loc, ftyp, trusted) = get_fun_decl Locations.unknown fsym in
-    let start = time_log_start "function" (CF.Pp_symbol.to_string fsym) in
-    let@ () = match trusted, fn with
-      | Trusted _, _ -> 
+let check_c_functions funs =
+  let number_entries = List.length (Pmap.bindings_list funs) in
+  let ping = Pp.progress "checking function" number_entries in
+  PmapM.iterM (fun fsym fn ->
+      match !only with
+      | Some fname when not (String.equal fname (Sym.pp_string fsym)) ->
          return ()
-      | Checked, M_Fun (rbt, args, body) ->
-         check_function loc (Sym.pp_string fsym) args rbt body ftyp
-      | Checked, M_Proc (loc', rbt, args, body, labels) ->
-         check_procedure loc fsym args rbt body ftyp labels
-      | _, (M_ProcDecl _ | M_BuiltinDecl _) -> (* TODO: ? *) 
-         return ()
-    in
-    time_log_end start;
-    return ()
-  in
+      | _ ->
+      let@ () = return (ping (Sym.pp_string fsym)) in
+      let@ () = check_function fsym fn in
+      return ()
+    ) funs 
 
+
+let check mu_file = 
+  let@ () = record_and_check_tagDefs mu_file.mu_tagDefs in
+  Pp.progress_simple "checking specifications" "logical predicate welltypedness";
+  let@ () = record_and_check_logical_functions mu_file.mu_logical_predicates in
+  Pp.progress_simple "checking specifications" "resource predicate welltypedness";
+  let@ () = record_and_check_resource_predicates mu_file.mu_resource_predicates in
+  let@ () = record_globals mu_file.mu_globs in
+  Pp.progress_simple "checking specifications" "function welltypedness";
+  let@ () = record_and_wf_check_functions mu_file.mu_funinfo in
   let@ () = PmapM.iterM check_function mu_file.mu_stdlib in
-  let@ () = 
-    let number_entries = List.length (Pmap.bindings_list mu_file.mu_funs) in
-    let ping = Pp.progress "checking function" number_entries in
-    PmapM.iterM (fun fsym fn ->
-        match !only with
-        | Some fname when not (String.equal fname (Sym.pp_string fsym)) ->
-           return ()
-        | _ ->
-        let@ () = return (ping (Sym.pp_string fsym)) in
-        let@ () = check_function fsym fn in
-        return ()
-      ) mu_file.mu_funs 
-  in
-
-
-
+  let@ () = check_c_functions mu_file.mu_funs in
   return ()
 
 
