@@ -1,12 +1,11 @@
 module CF=Cerb_frontend
 module CB=Cerb_backend
 open CB.Pipeline
+open Setup
 
 module CTM = CF.Core_to_mucore.Make(Locations)
 module Milicore = CF.Milicore
 
-let (>>=) = CF.Exception.except_bind
-let (>>) m f = m >>= fun _ -> f
 let return = CF.Exception.except_return
 let (let@) = CF.Exception.except_bind
 
@@ -14,65 +13,21 @@ let (let@) = CF.Exception.except_bind
 
 type core_file = (unit,unit) CF.Core.generic_file
 type mu_file = unit NewMu.Old.mu_file
-type retyped_mu_file = unit NewMu.New.mu_file
+
 
 type file = 
   | CORE of core_file
   | MUCORE of mu_file
-  | RETYPED_MUCORE of retyped_mu_file
 
 
 
-
-let io =
-  { pass_message = begin
-        let ref = ref 0 in
-        fun str -> Debug_ocaml.print_success (string_of_int !ref ^ ". " ^ str);
-                   incr ref;
-                   return ()
-      end;
-    set_progress = begin
-      fun str -> return ()
-      end;
-    run_pp = begin
-      fun opts doc -> run_pp opts doc;
-                      return ()
-      end;
-    print_endline = begin
-      fun str -> print_endline str;
-                 return ();
-      end;
-    print_debug = begin
-      fun n mk_str -> Debug_ocaml.print_debug n [] mk_str;
-                      return ()
-      end;
-    warn = begin
-      fun mk_str -> Debug_ocaml.warn [] mk_str;
-                    return ()
-      end;
-  }
-
-
-open Setup
-
-
-
-let print_file ?(remove_path = false) filename file =
+let print_file filename file =
   match file with
   | CORE file ->
-     (* CB.Pipeline.run_pp ~remove_path (Some (filename,"core.ast")) 
-      *   (CF.Pp_core_ast.pp_file file); *)
      Pp.print_file (filename ^ ".core") (CF.Pp_core.All.pp_file file);
   | MUCORE file ->
-     (* CB.Pipeline.run_pp ~remove_path (Some (filename,"mucore.ast")) 
-      *   (CF.Pp_mucore_ast.pp_file file); *)
      Pp.print_file (filename ^ ".mucore")
        (CF.Pp_mucore.Basic_standard_typ.pp_file None file);
-  | RETYPED_MUCORE file ->
-     (* CB.Pipeline.run_pp ~remove_path (Some (filename,"mucore.ast")) 
-      *   (CF.Pp_mucore_ast.pp_file file); *)
-     Pp.print_file (filename ^ ".mucore")
-       (NewMu.PP_MUCORE.pp_file None file);
 
 
 module Log : sig 
@@ -109,10 +64,10 @@ let frontend incl_dirs astprints filename state_file =
   Global_ocaml.(set_cerb_conf "Cn" false Random false Basic false false false false);
   CF.Ocaml_implementation.(set (HafniumImpl.impl));
   CF.Switches.(set ["inner_arg_temps"]);
-  load_core_stdlib () >>= fun stdlib ->
-  load_core_impl stdlib impl_name >>= fun impl ->
+  let@ stdlib = load_core_stdlib () in
+  let@ impl = load_core_impl stdlib impl_name in
 
-  c_frontend (conf incl_dirs astprints, io) (stdlib, impl) ~filename >>= fun (_,ail_program_opt,core_file) ->
+  let@ (_,ail_program_opt,core_file) = c_frontend (conf incl_dirs astprints, io) (stdlib, impl) ~filename in
   CF.Tags.set_tagDefs core_file.CF.Core.tagDefs;
   print_log_file "original" (CORE core_file);
 
@@ -122,18 +77,11 @@ let frontend incl_dirs astprints filename state_file =
   let core_file = CF.Core_peval.rewrite_file core_file in
   let () = print_log_file "after_partial_evaluation" (CORE core_file) in
 
-  (* let@ core_file = CF.Core_typing.typecheck_program core_file in *)
-  (* let core_file = CF.Core_sequentialise.sequentialise_file core_file in *)
-  (* let core_file = CB.Pipeline.untype_file core_file in *)
-  (* let () = print_log_file "after_sequentialisation" (CORE core_file) in *)
-
-  (* let core_file = CF.Core_remove_unused_functions.remove_unused_functions true core_file in *)
   let core_file = { 
       core_file with impl = Pmap.empty CF.Implementation.implementation_constant_compare;
                      stdlib = Pmap.empty CF.Symbol.symbol_compare
     }
   in
-  (* let () = print_log_file "after_removing_unused_functions" (CORE core_file) in *)
 
   let mi_file = Milicore.core_to_micore__file CTM.update_loc core_file in
   let mu_file = CTM.normalise_file mi_file in
