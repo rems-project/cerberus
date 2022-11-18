@@ -169,11 +169,8 @@ let model () =
   let@ () = upd_models ((m, c) :: ms) in
   return m
 
-let check_models_current () =
+let get_just_models () =
   let@ ms = get_models () in
-  let@ c = get () in
-  let ms = List.filter (fun (_, c2) -> Context.constraints_not_extended c c2) ms in
-  let@ () = upd_models ms in
   return (List.map fst ms)
 
 let model_has_prop prop =
@@ -182,12 +179,12 @@ let model_has_prop prop =
   return (fun m -> is_some_true (Solver.eval global (fst m) prop))
 
 let prev_models_with loc prop =
-  let@ ms = check_models_current () in
+  let@ ms = get_just_models () in
   let@ has_prop = model_has_prop prop in
   return (List.filter has_prop ms)
 
 let model_with loc prop =
-  let@ ms = check_models_current () in
+  let@ ms = get_just_models () in
   let@ has_prop = model_has_prop prop in
   match List.find_opt has_prop ms with
     | Some m -> return (Some m)
