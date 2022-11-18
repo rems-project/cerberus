@@ -608,16 +608,33 @@ Module MorelloCapability <:
     (* could not be proven under current definition of eqb! *)
   Admitted.
 
-  Definition to_string (c: t) : string :=
-    "{" ++
-      ("valid=" ++ string_of_bool c.(valid) ++ ",") ++
-      ("value=0x" ++ HexString.of_Z c.(value) ++ ",") ++
-      ("obj_type=0x" ++ HexString.of_Z c.(obj_type) ++ ",") ++
-      ("bounds=(0x" ++ HexString.of_Z (fst c.(bounds)) ++ ",0x" ++ HexString.of_Z (snd c.(bounds)) ++ "),") ++
+  Definition is_sentry (c : t) : bool :=
+    match cap_get_seal c with
+    | MorelloCAP_SEAL_T.Cap_SEntry => true
+    | _ => false
+    end.
 
-      ("flags=" ++  (String.concat ";" (List.map string_of_bool c.(flags))) ++ ",") ++
-      ("perms=" ++ MorelloPermission.to_string (c.(perms)) ++ ",") ++
-      "}".
+  Definition flags_as_str (c:t): string :=
+    let attrs :=
+      let a (f:bool) s l := if f then s::l else l in
+      a (negb c.(valid)) "invald"
+        (a (is_sentry c) "sentry"
+           (a ((negb (is_sentry c)) && is_sealed c) "sealed" []))
+    in
+    if Nat.eqb (List.length attrs) 0%nat then ""
+    else " (" ++ String.concat ";" attrs ++ ")".
+
+  Definition to_string (c:t) : string :=
+    let vstring x := HexString.of_Z x in
+    if cap_is_null_derived c then
+      vstring c.(value)
+    else
+      let (b0,b1) := c.(bounds) in
+      (vstring c.(value)) ++ " " ++
+        "["++ (MorelloPermission.to_string c.(perms)) ++ "," ++
+        (vstring b0) ++ "-" ++
+        (vstring b1) ++ "]" ++
+        (flags_as_str c).
 
   (* Not implemented in Coq but in extracted code implementation will
      be mapped to OCaml version *)
