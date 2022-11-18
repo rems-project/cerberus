@@ -110,19 +110,214 @@ Module MorelloPermission <: Permission.
 
   Definition get_user_perms := user_perms.
 
-  Definition TODO_ID (x:t) := x.
+  Definition perm_clear_global p :=
+    {|
+      global                  := false;
+      executive               := p.(executive               )  ;
+      permits_load            := p.(permits_load            )  ;
+      permits_store           := p.(permits_store           )  ;
+      permits_execute         := p.(permits_execute         )  ;
+      permits_load_cap        := p.(permits_load_cap        )  ;
+      permits_store_cap       := p.(permits_store_cap       )  ;
+      permits_store_local_cap := p.(permits_store_local_cap )  ;
+      permits_seal            := p.(permits_seal            )  ;
+      permits_unseal          := p.(permits_unseal          )  ;
+      permits_system_access   := p.(permits_system_access   )  ;
+      permits_ccall           := p.(permits_ccall           )  ;
+      permit_compartment_id   := p.(permit_compartment_id   )  ;
+      permit_mutable_load     := p.(permit_mutable_load     )  ;
+      user_perms              := p.(user_perms              )  ;
+    |}.
 
-  Definition perm_clear_global := TODO_ID.
-  Definition perm_clear_execute := TODO_ID.
-  Definition perm_clear_ccall := TODO_ID.
-  Definition perm_clear_load := TODO_ID.
-  Definition perm_clear_load_cap := TODO_ID.
-  Definition perm_clear_seal := TODO_ID.
-  Definition perm_clear_store := TODO_ID.
-  Definition perm_clear_store_cap := TODO_ID.
-  Definition perm_clear_store_local_cap := TODO_ID.
-  Definition perm_clear_system_access := TODO_ID.
-  Definition perm_clear_unseal := TODO_ID.
+  Definition perm_clear_execute p :=
+    {|
+      global                  := p.(global                  )  ;
+      executive               := false;
+      permits_load            := p.(permits_load            )  ;
+      permits_store           := p.(permits_store           )  ;
+      permits_execute         := p.(permits_execute         )  ;
+      permits_load_cap        := p.(permits_load_cap        )  ;
+      permits_store_cap       := p.(permits_store_cap       )  ;
+      permits_store_local_cap := p.(permits_store_local_cap )  ;
+      permits_seal            := p.(permits_seal            )  ;
+      permits_unseal          := p.(permits_unseal          )  ;
+      permits_system_access   := p.(permits_system_access   )  ;
+      permits_ccall           := p.(permits_ccall           )  ;
+      permit_compartment_id   := p.(permit_compartment_id   )  ;
+      permit_mutable_load     := p.(permit_mutable_load     )  ;
+      user_perms              := p.(user_perms              )  ;
+    |}.
+
+  Definition perm_clear_ccall p :=
+    {|
+      global                  := p.(global                  )  ;
+      executive               := p.(executive               )  ;
+      permits_load            := p.(permits_load            )  ;
+      permits_store           := p.(permits_store           )  ;
+      permits_execute         := p.(permits_execute         )  ;
+      permits_load_cap        := p.(permits_load_cap        )  ;
+      permits_store_cap       := p.(permits_store_cap       )  ;
+      permits_store_local_cap := p.(permits_store_local_cap )  ;
+      permits_seal            := p.(permits_seal            )  ;
+      permits_unseal          := p.(permits_unseal          )  ;
+      permits_system_access   := p.(permits_system_access   )  ;
+      permits_ccall           := false;
+      permit_compartment_id   := p.(permit_compartment_id   )  ;
+      permit_mutable_load     := p.(permit_mutable_load     )  ;
+      user_perms              := p.(user_perms              )  ;
+    |}.
+
+  Definition perm_clear_load p :=
+    {|
+      global                  := p.(global                  )  ;
+      executive               := p.(executive               )  ;
+      permits_load            := false;
+      permits_store           := p.(permits_store           )  ;
+      permits_execute         := p.(permits_execute         )  ;
+      permits_load_cap        := p.(permits_load_cap        )  ;
+      permits_store_cap       := p.(permits_store_cap       )  ;
+      permits_store_local_cap := p.(permits_store_local_cap )  ;
+      permits_seal            := p.(permits_seal            )  ;
+      permits_unseal          := p.(permits_unseal          )  ;
+      permits_system_access   := p.(permits_system_access   )  ;
+      permits_ccall           := p.(permits_ccall           )  ;
+      permit_compartment_id   := p.(permit_compartment_id   )  ;
+      permit_mutable_load     := p.(permit_mutable_load     )  ;
+      user_perms              := p.(user_perms              )  ;
+    |}.
+
+  Definition perm_clear_load_cap p :=
+    {|
+      global                  := p.(global                  )  ;
+      executive               := p.(executive               )  ;
+      permits_load            := p.(permits_load            )  ;
+      permits_store           := p.(permits_store           )  ;
+      permits_execute         := p.(permits_execute         )  ;
+      permits_load_cap        := false;
+      permits_store_cap       := p.(permits_store_cap       )  ;
+      permits_store_local_cap := p.(permits_store_local_cap )  ;
+      permits_seal            := p.(permits_seal            )  ;
+      permits_unseal          := p.(permits_unseal          )  ;
+      permits_system_access   := p.(permits_system_access   )  ;
+      permits_ccall           := p.(permits_ccall           )  ;
+      permit_compartment_id   := p.(permit_compartment_id   )  ;
+      permit_mutable_load     := p.(permit_mutable_load     )  ;
+      user_perms              := p.(user_perms              )  ;
+    |}.
+
+  Definition perm_clear_seal p :=
+    {|
+      global                  := p.(global                  )  ;
+      executive               := p.(executive               )  ;
+      permits_load            := p.(permits_load            )  ;
+      permits_store           := p.(permits_store           )  ;
+      permits_execute         := p.(permits_execute         )  ;
+      permits_load_cap        := p.(permits_load_cap        )  ;
+      permits_store_cap       := p.(permits_store_cap       )  ;
+      permits_store_local_cap := p.(permits_store_local_cap )  ;
+      permits_seal            := false;
+      permits_unseal          := p.(permits_unseal          )  ;
+      permits_system_access   := p.(permits_system_access   )  ;
+      permits_ccall           := p.(permits_ccall           )  ;
+      permit_compartment_id   := p.(permit_compartment_id   )  ;
+      permit_mutable_load     := p.(permit_mutable_load     )  ;
+      user_perms              := p.(user_perms              )  ;
+    |}.
+
+  Definition perm_clear_store p :=
+    {|
+      global                  := p.(global                  )  ;
+      executive               := p.(executive               )  ;
+      permits_load            := p.(permits_load            )  ;
+      permits_store           := false;
+      permits_execute         := p.(permits_execute         )  ;
+      permits_load_cap        := p.(permits_load_cap        )  ;
+      permits_store_cap       := p.(permits_store_cap       )  ;
+      permits_store_local_cap := p.(permits_store_local_cap )  ;
+      permits_seal            := p.(permits_seal            )  ;
+      permits_unseal          := p.(permits_unseal          )  ;
+      permits_system_access   := p.(permits_system_access   )  ;
+      permits_ccall           := p.(permits_ccall           )  ;
+      permit_compartment_id   := p.(permit_compartment_id   )  ;
+      permit_mutable_load     := p.(permit_mutable_load     )  ;
+      user_perms              := p.(user_perms              )  ;
+    |}.
+
+  Definition perm_clear_store_cap p :=
+    {|
+      global                  := p.(global                  )  ;
+      executive               := p.(executive               )  ;
+      permits_load            := p.(permits_load            )  ;
+      permits_store           := p.(permits_store           )  ;
+      permits_execute         := p.(permits_execute         )  ;
+      permits_load_cap        := p.(permits_load_cap        )  ;
+      permits_store_cap       := false;
+      permits_store_local_cap := p.(permits_store_local_cap )  ;
+      permits_seal            := p.(permits_seal            )  ;
+      permits_unseal          := p.(permits_unseal          )  ;
+      permits_system_access   := p.(permits_system_access   )  ;
+      permits_ccall           := p.(permits_ccall           )  ;
+      permit_compartment_id   := p.(permit_compartment_id   )  ;
+      permit_mutable_load     := p.(permit_mutable_load     )  ;
+      user_perms              := p.(user_perms              )  ;
+    |}.
+
+  Definition perm_clear_store_local_cap p :=
+    {|
+      global                  := p.(global                  )  ;
+      executive               := p.(executive               )  ;
+      permits_load            := p.(permits_load            )  ;
+      permits_store           := p.(permits_store           )  ;
+      permits_execute         := p.(permits_execute         )  ;
+      permits_load_cap        := p.(permits_load_cap        )  ;
+      permits_store_cap       := p.(permits_store_cap       )  ;
+      permits_store_local_cap := false;
+      permits_seal            := p.(permits_seal            )  ;
+      permits_unseal          := p.(permits_unseal          )  ;
+      permits_system_access   := p.(permits_system_access   )  ;
+      permits_ccall           := p.(permits_ccall           )  ;
+      permit_compartment_id   := p.(permit_compartment_id   )  ;
+      permit_mutable_load     := p.(permit_mutable_load     )  ;
+      user_perms              := p.(user_perms              )  ;
+    |}.
+
+  Definition perm_clear_system_access p :=
+    {|
+      global                  := p.(global                  )  ;
+      executive               := p.(executive               )  ;
+      permits_load            := p.(permits_load            )  ;
+      permits_store           := p.(permits_store           )  ;
+      permits_execute         := p.(permits_execute         )  ;
+      permits_load_cap        := p.(permits_load_cap        )  ;
+      permits_store_cap       := p.(permits_store_cap       )  ;
+      permits_store_local_cap := p.(permits_store_local_cap )  ;
+      permits_seal            := p.(permits_seal            )  ;
+      permits_unseal          := p.(permits_unseal          )  ;
+      permits_system_access   := false;
+      permits_ccall           := p.(permits_ccall           )  ;
+      permit_compartment_id   := p.(permit_compartment_id   )  ;
+      permit_mutable_load     := p.(permit_mutable_load     )  ;
+      user_perms              := p.(user_perms              )  ;
+    |}.
+
+  Definition perm_clear_unseal p :=
+    {|
+      global                  := p.(global                  )  ;
+      executive               := p.(executive               )  ;
+      permits_load            := p.(permits_load            )  ;
+      permits_store           := p.(permits_store           )  ;
+      permits_execute         := p.(permits_execute         )  ;
+      permits_load_cap        := p.(permits_load_cap        )  ;
+      permits_store_cap       := p.(permits_store_cap       )  ;
+      permits_store_local_cap := p.(permits_store_local_cap )  ;
+      permits_seal            := p.(permits_seal            )  ;
+      permits_unseal          := false;
+      permits_system_access   := p.(permits_system_access   )  ;
+      permits_ccall           := p.(permits_ccall           )  ;
+      permit_compartment_id   := p.(permit_compartment_id   )  ;
+      permit_mutable_load     := p.(permit_mutable_load     )  ;
+      user_perms              := p.(user_perms              )  ;
+    |}.
 
   Definition perm_and_user_perms (p:t) (np:list bool):= p. (* TODO *)
 
