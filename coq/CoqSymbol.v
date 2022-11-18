@@ -10,6 +10,7 @@ Require Import Coq.Structures.OrderedTypeEx.
 Require Import StructTact.StructTactics.
 Require Import Lia.
 Require Import CoqLocation.
+Require Import Utils.
 
 Inductive identifier : Type :=
   | Identifier:  location_ocaml  ->  string  -> identifier .
@@ -145,7 +146,31 @@ Module Symbol_sym_as_OT <: OrderedType.
 
   Lemma eq_trans: forall x y z : t, eq x y -> eq y z -> eq x z.
   Proof.
-  Admitted.
+    unfold eq, symbolEquality, is_true.
+    intros x y z H H0.
+    destruct x, y, z.
+
+    apply andb_prop in H, H0.
+    destruct H as [D0 ZE0].
+    destruct H0 as [D1 ZE1].
+    apply andb_true_intro.
+    split.
+    -
+      clear - D0 D1.
+      apply Z.eqb_eq in D0, D1.
+      apply Z.eqb_eq.
+      unfold digest_compare in *.
+      repeat break_match;try lia.
+      +
+        erewrite string_eq_trans in Heqc; eauto.
+        inversion Heqc.
+      +
+        erewrite string_eq_trans in Heqc; eauto.
+        inversion Heqc.
+    -
+      apply Z.eqb_eq in ZE0, ZE1.
+      lia.
+  Qed.
 
   Lemma lt_trans : forall x y z : t, lt x y -> lt y z -> lt x z.
   Proof.
