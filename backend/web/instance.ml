@@ -476,6 +476,10 @@ let multiple_steps step_state (m, st) =
                     None, "writing read only memory"
                   | MerrReadUninit ->
                     None, "reading from uninitialised memory"
+                  | MerrTrapRepresentation LoadAccess ->
+                    None, "reading a trap representation"
+                  | MerrTrapRepresentation StoreAccess ->
+                    None, "storing a trap representation"  
                   | MerrUndefinedFree err ->
                     None, "freeing " ^ string_of_free_error err
                   | MerrUndefinedRealloc ->
