@@ -129,15 +129,19 @@ Module Symbol_sym_as_OT <: OrderedType.
       unfold digest_compare in *.
       repeat break_match;try lia.
       +
-        apply compare_eq_iff in Heqc0.
-        rewrite Heqc0 in Heqc.
-        admit.
+        rewrite compare_antisym in Heqc0.
+        unfold CompOpp in Heqc0.
+        rewrite Heqc in Heqc0.
+        inversion Heqc0.
       +
-        admit.
+        rewrite compare_antisym in Heqc0.
+        unfold CompOpp in Heqc0.
+        rewrite Heqc in Heqc0.
+        inversion Heqc0.
     -
       apply Z.eqb_eq in ZE.
       lia.
-  Admitted.
+  Qed.
 
   Lemma eq_trans: forall x y z : t, eq x y -> eq y z -> eq x z.
   Proof.
