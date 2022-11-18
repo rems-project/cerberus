@@ -452,12 +452,14 @@ declarator_typedefname:
     { LF.declare_typedefname (LF.identifier decl); decl }
 ;
 
+(*
 fetch_magic:
 | (* empty *)
   { let xs = C_lexer.internal_state.magic_acc in
     C_lexer.internal_state.magic_acc <- [];
     List.rev xs }
 ;
+*)
 
 clear_magic:
 | (* empty *)
@@ -466,7 +468,7 @@ clear_magic:
 
 start_ignore:
 | (* empty *)
-  { C_lexer.internal_state.ignore_magic <- true }
+  { (*C_lexer.internal_state.ignore_magic <- true*) }
 ;
 
 end_ignore:
@@ -1386,28 +1388,46 @@ selection_statement:
 
 (* §6.8.5 Iteration statements *)
 iteration_statement:
-| prev_magic= WHILE LPAREN expr= full_expression clear_magic RPAREN inv_magic= fetch_magic stmt= scoped(statement)
-    { mk_statement prev_magic
+| prev_magic= WHILE LPAREN expr= full_expression clear_magic RPAREN stmt= scoped(statement)
+    { let (inv_attrs, stmt') =
+        match stmt with
+          | CabsStatement (_, inv_attrs, CabsSmarker inner_stmt) ->
+              (inv_attrs, inner_stmt)
+          | _ ->
+              (Annot.no_attributes, stmt) in
+      mk_statement prev_magic
         ( Location_ocaml.(region ($startpos, $endpos) NoCursor)
-        , magic_to_attrs inv_magic
-        , CabsSwhile (expr, stmt) ) }
+        , inv_attrs
+        , CabsSwhile (expr, stmt') ) }
 | prev_magic= DO stmt= scoped(statement) WHILE LPAREN expr= full_expression RPAREN SEMICOLON
     { mk_statement prev_magic
         ( Location_ocaml.(region ($startpos, $endpos) NoCursor)
         , Annot.no_attributes
         , CabsSdo (expr, stmt) ) }
 | prev_magic= FOR LPAREN expr1_opt= full_expression? SEMICOLON expr2_opt= full_expression? SEMICOLON
-  expr3_opt= full_expression? clear_magic RPAREN magik= fetch_magic  stmt= scoped(statement)
-    { mk_statement prev_magic
+  expr3_opt= full_expression? clear_magic RPAREN stmt= scoped(statement)
+    { let (inv_attrs, stmt') =
+        match stmt with
+          | CabsStatement (_, inv_attrs, CabsSmarker inner_stmt) ->
+              (inv_attrs, inner_stmt)
+          | _ ->
+              (Annot.no_attributes, stmt) in
+      mk_statement prev_magic
         ( Location_ocaml.(region ($startpos, $endpos) NoCursor)
-        , magic_to_attrs magik
-        , CabsSfor (map_option (fun x -> FC_expr x) expr1_opt, expr2_opt,expr3_opt, stmt) ) }
+        , inv_attrs
+        , CabsSfor (map_option (fun x -> FC_expr x) expr1_opt, expr2_opt,expr3_opt, stmt') ) }
 | prev_magic= FOR LPAREN xs_decl= declaration expr2_opt= full_expression? SEMICOLON
-  expr3_opt= full_expression? clear_magic RPAREN magik= fetch_magic  stmt= scoped(statement)
-    { mk_statement prev_magic
+  expr3_opt= full_expression? clear_magic RPAREN stmt= scoped(statement)
+    { let (inv_attrs, stmt') =
+        match stmt with
+          | CabsStatement (_, inv_attrs, CabsSmarker inner_stmt) ->
+              (inv_attrs, inner_stmt)
+          | _ ->
+              (Annot.no_attributes, stmt) in
+      mk_statement prev_magic
         ( Location_ocaml.(region ($startpos, $endpos) NoCursor)
-        , magic_to_attrs magik
-        , CabsSfor (Some (FC_decl (snd xs_decl)), expr2_opt, expr3_opt, stmt) ) }
+        , inv_attrs
+        , CabsSfor (Some (FC_decl (snd xs_decl)), expr2_opt, expr3_opt, stmt') ) }
 ;
 
 (* §6.8.6 Jump statements *)
@@ -1572,7 +1592,7 @@ function_definition1:
 
 function_definition:
 | specifs_decltor_ctxt= function_definition1 rev_decl_opt= declaration_list?
-  magik=fetch_magic stmt= compound_statement has_semi= boption(SEMICOLON)
+  stmt= compound_statement has_semi= boption(SEMICOLON)
     { if has_semi && not (Global_ocaml.isPermissive ()) then
         prerr_endline (Pp_errors.make_message
                          (Location_ocaml.point $startpos(has_semi))
@@ -1580,14 +1600,21 @@ function_definition:
                          Warning);
       let loc = Location_ocaml.(region ($startpos, $endpos) NoCursor) in
       let (attr_opt, specifs, decltor, ctxt) = specifs_decltor_ctxt in
-      let attr_opt' =
+      let (magic_opt, stmt') =
+        match stmt with
+          | CabsStatement (_, magic_attrs, CabsSmarker stmt') ->
+              (Some magic_attrs, stmt')
+          | _ ->
+              (None, stmt) in
+(*
         if magik <> [] then
           match attr_opt with
             | Some xs -> Some ( xs @ [[magic_to_pre_attr magik]])
             | None    -> Some [[magic_to_pre_attr magik]]
         else attr_opt in
+*)
       LF.restore_context ctxt;
-      LF.create_function_definition loc attr_opt' specifs decltor stmt rev_decl_opt }
+      LF.create_function_definition loc attr_opt magic_opt specifs decltor stmt' rev_decl_opt }
 ;
 
 declaration_list: (* NOTE: the list is in reverse *)

@@ -124,7 +124,7 @@ let reinstall_function_context d =
   | DeclFun ctxt -> restore_context ctxt; declare_varname d.id
   | _ -> ()
 
-let create_function_definition loc attr_opt specifs d stmt rev_dlist_opt =
+let create_function_definition loc attr_opt magic_opt specifs d stmt rev_dlist_opt =
   let xs = match attr_opt with
     | None ->
         []
@@ -135,6 +135,12 @@ let create_function_definition loc attr_opt specifs d stmt rev_dlist_opt =
           ; attr_id=   id
           ; attr_args= match args_opt with None -> [] | Some z -> z }
         ) (List.concat z) in
+  let attrs =
+    match magic_opt with
+      | Some magic ->
+          Annot.(combine_attributes magic (Attrs xs))
+      | None ->
+          Annot.Attrs xs in
   match d.sort, rev_dlist_opt with
   | DeclFunIds (_, ids), None ->
     let open Cabs in
@@ -154,9 +160,9 @@ let create_function_definition loc attr_opt specifs d stmt rev_dlist_opt =
       | DDecl_function (ddecl, _) -> DDecl_function (ddecl, Params (params, false))
       | _ -> assert false in
     let decl = Cabs.Declarator (None, direct_declarator) in
-    Cabs.FunDef (loc, Annot.Attrs xs, specifs, decl, stmt)
+    Cabs.FunDef (loc, attrs, specifs, decl, stmt)
   | DeclFunIds (_, ids), Some rev_dlist ->
     raise (KnR_declaration loc)
   | _, _ ->
-    Cabs.FunDef (loc, Annot.Attrs xs, specifs, cabs_of_declarator d, stmt)
+    Cabs.FunDef (loc, attrs, specifs, cabs_of_declarator d, stmt)
 
