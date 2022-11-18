@@ -480,7 +480,7 @@ let print_core (conf, io) ~filename core_file =
   let wrap_fout z = if List.mem FOut conf.ppflags then z else None in
   whenM (List.mem Core conf.astprints) begin
     fun () ->
-      io.run_pp (wrap_fout (Some (filename, "core"))) (Ast_core.ast_file core_file)
+      io.run_pp (wrap_fout (Some (filename, "core"))) (Pp_core_ast.pp_file core_file)
   end >>= fun () ->
   whenM (List.mem Core conf.pprints) begin
       fun () ->
