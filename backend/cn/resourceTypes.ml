@@ -76,8 +76,11 @@ let pp_predicate_type_aux (p : predicate_type) oargs =
 
 let pp_qpredicate_type_aux (p : qpredicate_type) oargs =
   let pointer = 
-    IT.pp p.pointer ^^^ plus 
-    ^^^ Sym.pp p.q ^^^ star ^^^ IT.pp p.step 
+    IT.pp p.pointer 
+    ^^^ plus 
+    ^^^ Sym.pp p.q 
+    ^^^ star 
+    ^^^ IT.pp p.step 
   in
   let args = pointer :: List.map IT.pp (p.iargs) in
 
@@ -138,7 +141,7 @@ let subst_qpredicate_type substitution (qp : qpredicate_type) =
     name = qp.name;
     pointer = IT.subst substitution qp.pointer;
     q = qp.q;
-    step = qp.step;
+    step = IT.subst substitution qp.step;
     permission = IT.subst substitution qp.permission;
     iargs = List.map (IT.subst substitution) qp.iargs;
   }
@@ -156,7 +159,7 @@ let free_vars = function
      IT.free_vars_list (p.pointer :: p.permission :: p.iargs)
   | Q p -> 
      SymSet.union
-       (IT.free_vars p.pointer)
+       (SymSet.union (IT.free_vars p.pointer) (IT.free_vars p.step))
        (SymSet.remove p.q (IT.free_vars_list (p.permission :: p.iargs)))
 
 
