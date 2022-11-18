@@ -151,7 +151,7 @@ module IndexTerms = struct
       | Some it3 -> accessor_reduce f it3
     end
 
-  let rec simp simp_ctxt =
+  let rec simp ?(inline_functions=false) simp_ctxt =
 
     let add_known_facts new_facts lcs = 
       List.fold_right LCSet.add (List.concat_map flatten new_facts) lcs
@@ -725,15 +725,12 @@ module IndexTerms = struct
 
     let pred name args bt =
       let args = List.map aux args in
+      let def = SymMap.find name simp_ctxt.global.logical_predicates in
       let t = IT (Pred (name, args), bt) in
-      let t' = 
-        if List.for_all no_free_vars args
-        then (LogicalPredicates.open_if_pred simp_ctxt.global.logical_predicates) t 
-        else t 
-      in
-      match t' with
-      | IT (Pred _, _) -> t'
-      | _ -> aux t'
+      if not inline_functions then t else 
+        match LogicalPredicates.try_open_pred def name args with
+        | Some inlined -> aux inlined
+        | None -> t
     in
 
     fun it ->

@@ -45,15 +45,10 @@ let open_pred def_args def_body args =
 
 let try_open_pred def name args =
   match def.definition with
-  | Def body -> open_pred def.args body args
-  | _ -> IT.pred_ name args def.return_bt
+  | Def body -> Some (open_pred def.args body args)
+  | _ -> None
 
-let open_if_pred defs t = match IT.term t with
-  | IT.Pred (name, args) -> begin match SymMap.find_opt name defs with
-    | Some def -> try_open_pred def name args
-    | None -> t
-  end
-  | _ -> t
+
 
 
 exception Unknown of Sym.t
