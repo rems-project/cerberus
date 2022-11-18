@@ -74,8 +74,6 @@ val add_fun_decl : Sym.t -> (Locations.t * ArgumentTypes.ft * Cerb_frontend.Muco
 val add_resource_predicate : Sym.t -> ResourcePredicates.definition -> (unit, 'e) m
 val add_logical_predicate : Sym.t -> LogicalPredicates.definition -> (unit, 'e) m
 
-val logical_predicate_cycle_check : unit -> (unit, TypeErrors.t) m
-
 val value_eq_group : IndexTerms.t option -> IndexTerms.t -> (EqTable.ITSet.t, TypeErrors.t) m
 val test_value_eqs : Locations.t -> IndexTerms.t option -> IndexTerms.t ->
     IndexTerms.t list -> (unit, TypeErrors.t) m
