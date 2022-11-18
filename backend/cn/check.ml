@@ -1628,6 +1628,18 @@ let record_and_check_tagDefs tagDefs =
     ) tagDefs
 
 
+let logical_predicate_cycle_check () =
+  let@ global = get_global () in
+  match LogicalPredicates.cycle_check global.logical_predicates with
+  | None -> return ()
+  | Some (nm :: nms) ->
+    let@ def = get_logical_predicate_def Loc.unknown nm in
+    let open TypeErrors in
+    fail (fun _ -> {loc = def.loc; msg = Generic
+          (Pp.item "logical predicate cycle" (Pp.list Sym.pp (nm :: nms)))})
+  | Some [] -> assert false
+
+
 let record_and_check_logical_functions logical_functions =
   let@ () =
     ListM.iterM (fun (name, def) -> add_logical_predicate name def)
