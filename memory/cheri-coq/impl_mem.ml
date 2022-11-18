@@ -1082,7 +1082,11 @@ module CHERIMorello : Memory = struct
         (align_int:integer_value)
         (size_int: integer_value): pointer_value memM
     =
-    Debug_ocaml.print_debug 1 [] (fun () -> "allocate_region");
+    get >>= fun st ->
+    Debug_ocaml.print_debug 1 []
+      (fun () -> "allocate_region. last_address=" ^
+                   (Z.to_string (MM.last_address st))
+      );
     lift_coq_memM "allocate_region" (MM.allocate_region
                      (toCoq_thread_id tid)
                      (toCoq_Symbol_prefix pref)
