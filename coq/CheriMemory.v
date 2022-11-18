@@ -759,8 +759,29 @@ Module CheriMemory
     let size_n' := C.representable_length size_n in
     let align_n' := Z.max align_n (Z.add (Z.succ (0)) (MorelloAddr.bitwise_complement mask)) in
 
+    (*
+    (if (negb ((Z.eqb size_n size_n') && (Z.eqb align_n align_n')))
+    then
+      mprint_msg
+          ("allocate_object CHERI size/alignment adusted. WAS: " ++
+            ", size= " ++ String.dec_str size_n ++
+              ", align= " ++ String.dec_str align_n ++
+                "BECOME: " ++
+                  ", size= " ++ String.dec_str size_n' ++
+                    ", align= " ++ String.dec_str align_n')
+    else ret tt) ;;
+     *)
+
     allocator size_n' align_n' >>=
       (fun '(alloc_id, addr) =>
+         (*
+         mprint_msg
+           ("allocate_object addr="  ++ String.hex_str addr ++
+              ", size=" ++ String.dec_str size_n' ++
+              ", align=" ++ String.dec_str align_n' ++
+              ", alloc_id=" ++ String.dec_str alloc_id
+           ) ;;
+          *)
          (match init_opt with
           | None =>
               let alloc := {| prefix := pref; base:= addr; size:= size_n'; ty:= Some ty; is_readonly:= IsWritable; taint:= Unexposed|} in
