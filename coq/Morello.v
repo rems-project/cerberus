@@ -319,7 +319,25 @@ Module MorelloPermission <: Permission.
       user_perms              := p.(user_perms              )  ;
     |}.
 
-  Definition perm_and_user_perms (p:t) (np:list bool):= p. (* TODO *)
+  Definition perm_and_user_perms (p:t) (np:list bool):=
+    {|
+      global                  := p.(global                  )  ;
+      executive               := p.(executive               )  ;
+      permits_load            := p.(permits_load            )  ;
+      permits_store           := p.(permits_store           )  ;
+      permits_execute         := p.(permits_execute         )  ;
+      permits_load_cap        := p.(permits_load_cap        )  ;
+      permits_store_cap       := p.(permits_store_cap       )  ;
+      permits_store_local_cap := p.(permits_store_local_cap )  ;
+      permits_seal            := p.(permits_seal            )  ;
+      permits_unseal          := p.(permits_unseal          )  ;
+      permits_system_access   := p.(permits_system_access   )  ;
+      permits_ccall           := p.(permits_ccall           )  ;
+      permit_compartment_id   := p.(permit_compartment_id   )  ;
+      permit_mutable_load     := p.(permit_mutable_load     )  ;
+      user_perms              :=
+        List.map (fun '(a,b) =>  andb a b) (List.combine np p.(user_perms))
+    |}.
 
   Definition perm_p0:t :=
     {|
