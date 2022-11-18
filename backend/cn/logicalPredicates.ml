@@ -47,7 +47,7 @@ let pp_def nm def =
   let open Pp in
   nm ^^ colon ^^^ flow (break 1)
     (List.map (fun (sym, t) -> parens (typ (Sym.pp sym) (LogicalSorts.pp t))) def.args) ^^
-    colon ^^^
+    colon ^/^
     begin match def.definition with
     | Uninterp -> !^ "uninterpreted"
     | Def t -> IT.pp t

@@ -27,11 +27,19 @@ let term (IT (t, _)) = t
 
 
 
-let pp = 
-  let rec aux atomic (IT (it, bt)) = 
-    let mparens pped = if atomic then parens pped else pped in    
+let pp =
+  let rec aux ~f atomic (IT (it, bt) as it_) =
+    let aux b x = f x (aux ~f b x) in
+    (* Without the `lparen` inside `nest 2`, the printed `rparen` is indented
+       by 2 (wrt to the lparen). I don't quite understand it, but it works. *)
+    let mparens pped =
+      if atomic then
+        Pp.group ((nest 2 @@ lparen ^^ break 0 ^^ pped) ^^ break 0 ^^ rparen)
+      else
+        Pp.group pped in
+    let break_op x = break 1 ^^ x ^^ space in
     match it with
-    | Lit lit -> 
+    | Lit lit ->
        begin match lit with
        | Sym sym -> Sym.pp sym
        | Z i -> !^(Z.to_string i)
@@ -47,39 +55,39 @@ let pp =
        | Default bt -> c_app !^"default" [BT.pp bt]
        | Null -> !^"null"
        end
-    | Arith_op arith_op -> 
-       begin match arith_op with 
-       | Add (it1,it2) -> 
-          mparens (flow (break 1) [aux true it1; plus; aux true it2])
-       | Sub (it1,it2) -> 
-          mparens (flow (break 1) [aux true it1; minus; aux true it2])
-       | Mul (it1,it2) -> 
-          mparens (flow (break 1) [aux true it1; star; aux true it2])
-       | MulNoSMT (it1,it2) -> 
+    | Arith_op arith_op ->
+       begin match arith_op with
+       | Add (it1,it2) ->
+          mparens (flow (break_op plus) [aux true it1; aux true it2])
+       | Sub (it1,it2) ->
+          mparens (flow (break_op minus) [aux true it1; aux true it2])
+       | Mul (it1,it2) ->
+          mparens (flow (break_op star) [aux true it1; aux true it2])
+       | MulNoSMT (it1,it2) ->
           mparens (c_app !^"mul_uf" [aux true it1; aux true it2])
-       | Div (it1,it2) -> 
-          mparens (flow (break 1) [aux true it1; slash; aux true it2])
-       | DivNoSMT (it1,it2) -> 
+       | Div (it1,it2) ->
+          mparens (flow (break_op slash) [aux true it1; aux true it2])
+       | DivNoSMT (it1,it2) ->
           mparens (c_app !^"div_uf" [aux true it1; aux true it2])
-       | Exp (it1,it2) -> 
+       | Exp (it1,it2) ->
           c_app !^"power" [aux true it1; aux true it2]
        | ExpNoSMT (it1,it2) ->
           c_app !^"power_uf" [aux true it1; aux true it2]
-       | Rem (it1,it2) -> 
+       | Rem (it1,it2) ->
           c_app !^"rem" [aux true it1; aux true it2]
-       | RemNoSMT (it1,it2) -> 
+       | RemNoSMT (it1,it2) ->
           mparens (c_app !^"rem_uf" [aux true it1; aux true it2])
-       | Mod (it1,it2) -> 
+       | Mod (it1,it2) ->
           c_app !^"mod" [aux true it1; aux true it2]
-       | ModNoSMT (it1,it2) -> 
+       | ModNoSMT (it1,it2) ->
           mparens (c_app !^"mod_uf" [aux true it1; aux true it2])
-       | LT (o1,o2) -> 
-          mparens (flow (break 1) [aux true o1; langle (); aux true o2])
-       | LE (o1,o2) -> 
-          mparens (flow (break 1) [aux true o1; langle () ^^ equals; aux true o2])
-       | Min (o1,o2) -> 
+       | LT (o1,o2) ->
+          mparens (flow (break_op @@ langle ()) [aux true o1; aux true o2])
+       | LE (o1,o2) ->
+          mparens (flow (break_op @@ langle () ^^ equals) [aux true o1; aux true o2])
+       | Min (o1,o2) ->
           c_app !^"min" [aux false o1; aux false o2]
-       | Max (o1,o2) -> 
+       | Max (o1,o2) ->
           c_app !^"max" [aux false o1; aux false o2]
        | IntToReal t ->
           c_app !^"intToReal" [aux false t]
@@ -88,53 +96,60 @@ let pp =
        | XORNoSMT (t1, t2) ->
           c_app !^"xor_uf" [aux false t1; aux false t2]
        end
-    | Bool_op bool_op -> 
+    | Bool_op bool_op ->
        begin match bool_op with
-       | And o -> 
-          Pp.group (mparens (flow_map (break 1 ^^ !^"&&" ^^ break 1) (aux true) o))
-       | Or o -> 
-          Pp.group (mparens (flow_map (break 1 ^^ !^"||" ^^ break 1) (aux true) o))
-       | Impl (o1,o2) -> 
-          mparens (flow (break 1) [aux true o1; equals ^^ rangle (); aux true o2])
-       | Not (o1) -> 
+       | And o ->
+          let rec consolidate = function
+            | IT (Bool_op (And o), _) -> List.concat_map consolidate o
+            | it_ -> [ it_ ] in
+          let o = consolidate it_ in
+          mparens (flow_map (break_op !^"&&") (aux true) o)
+       | Or o ->
+          let rec consolidate = function
+            | IT (Bool_op (Or o), _) -> List.concat_map consolidate o
+            | it_ -> [ it_ ] in
+          let o = consolidate it_ in
+          mparens (flow_map (break_op !^"||") (aux true) o)
+       | Impl (o1,o2) ->
+          mparens (flow (break_op (equals ^^ rangle ())) [aux true o1; aux true o2])
+       | Not (o1) ->
           mparens (!^"!" ^^ parens (aux false o1))
-       | ITE (o1,o2,o3) -> 
+       | ITE (o1,o2,o3) ->
           parens (flow (break 1) [aux true o1; !^"?"; aux true o2; colon; aux true o3])
-       | EQ (o1,o2) -> 
-          mparens (flow (break 1) [aux true o1; equals ^^ equals; aux true o2])
+       | EQ (o1,o2) ->
+          mparens (flow (break_op (equals ^^ equals)) [aux true o1; aux true o2])
        | EachI ((i1, s, i2), t) ->
-          mparens
-            (!^"for" ^^ parens(int i1 ^^ comma ^^^ Sym.pp s ^^ comma ^^^ int i2) ^^^
-               braces (aux false t))
+         Pp.(group @@ group (c_app !^"for" [int i1; Sym.pp s; int i2])
+             ^/^ group ((nest 2 @@ lbrace ^^ break 0 ^^ (aux false t)) ^^ break 0 ^^ rbrace))
        end
-    | Tuple_op tuple_op -> 
+    | Tuple_op tuple_op ->
        begin match tuple_op with
-       | NthTuple (n,it2) -> 
+       | NthTuple (n,it2) ->
           mparens (aux true it2 ^^ dot ^^ !^("member" ^ string_of_int n))
-       | Tuple its -> 
+       | Tuple its ->
           braces (separate_map (semi ^^ space) (aux false) its)
        end
-    | Struct_op struct_op -> 
+    | Struct_op struct_op ->
        begin match struct_op with
        | Struct (_tag, members) ->
-          braces (flow_map (comma ^^ break 1) (fun (member,it) -> 
-                      dot ^^ Id.pp member ^^^ equals ^^^ aux false it 
-                    ) members)
+         align @@ lbrace ^^^ flow_map (break 0 ^^ comma ^^ space) (fun (member,it) ->
+             Pp.group @@ (Pp.group @@ dot ^^ Id.pp member ^^^ equals) ^^^ align (aux false it)
+           ) members ^^^ rbrace
        | StructMember (t, member) ->
-          aux true t ^^ dot ^^ Id.pp member
+          prefix 0 0 (aux true t) (dot ^^ Id.pp member )
        | StructUpdate ((t, member), v) ->
-          mparens (aux true t ^^ braces (dot ^^ Id.pp member ^^^ equals ^^^ aux true v))
+          mparens (aux true t ^^ braces @@ (Pp.group @@ dot ^^ Id.pp member ^^^ equals) ^^^ align (aux true v))
        end
-    | Record_op record_op -> 
+    | Record_op record_op ->
        begin match record_op with
        | Record members ->
-          braces (flow_map (comma ^^ break 1) (fun (member,it) -> 
-                      dot ^^ Sym.pp member ^^^ equals ^^^ aux false it 
-                    ) members)
+         align @@ lbrace ^^^ flow_map (break 0 ^^ comma ^^ space) (fun (member,it) ->
+             Pp.group @@ (Pp.group @@ dot ^^ Sym.pp member ^^^ equals) ^^^ align (aux false it)
+           ) members ^^^ rbrace
        | RecordMember (t, member) ->
-          aux true t ^^ dot ^^ Sym.pp member
+          prefix 0 0 (aux true t) (dot ^^ Sym.pp member)
        | RecordUpdate ((t, member), v) ->
-          mparens (aux true t ^^ braces (dot ^^ Sym.pp member ^^^ equals ^^^ aux true v))
+          mparens (aux true t ^^ braces @@ (Pp.group @@ dot ^^ Sym.pp member ^^^ equals) ^^^ align (aux true v))
        end
     | Datatype_op datatype_op ->
        begin match datatype_op with
@@ -142,22 +157,22 @@ let pp =
        | DatatypeMember (x, nm) -> aux true x ^^ dot ^^ Sym.pp nm
        | DatatypeIsCons (nm, x) -> mparens (aux false x ^^^ !^ "is" ^^^ Sym.pp nm)
        end
-    | Pointer_op pointer_op -> 
+    | Pointer_op pointer_op ->
        begin match pointer_op with
-       | LTPointer (o1,o2) -> 
-          mparens (flow (break 1) [aux true o1; langle (); aux true o2])
-       | LEPointer (o1,o2) -> 
-          mparens (flow (break 1) [aux true o1; langle () ^^ equals; aux true o2])
+       | LTPointer (o1,o2) ->
+          mparens (flow (break_op @@ langle ()) [aux true o1; aux true o2])
+       | LEPointer (o1,o2) ->
+          mparens (flow (break_op @@ langle () ^^ equals) [aux true o1; aux true o2])
        | IntegerToPointerCast t ->
-          mparens (parens(!^"pointer") ^^ aux true t)
+          mparens (align @@ parens(!^"pointer") ^^ break 0 ^^ aux true t)
        | PointerToIntegerCast t ->
-          mparens (parens(!^"integer") ^^ aux true t)
+          mparens (align @@ parens(!^"integer") ^^ break 0 ^^ aux true t)
        | MemberOffset (tag, member) ->
           mparens (c_app !^"offsetof" [Sym.pp tag; Id.pp member])
        | ArrayOffset (ct, t) ->
           mparens (c_app !^"arrayOffset" [Sctypes.pp ct; aux false t])
        end
-    | CT_pred ct_pred -> 
+    | CT_pred ct_pred ->
        begin match ct_pred with
        | Aligned (t, rt) ->
           c_app !^"aligned" [aux false t; CT.pp rt]
@@ -168,22 +183,22 @@ let pp =
        | Good (rt, t) ->
           c_app !^"good" [CT.pp rt; aux false t]
        end
-    | List_op list_op -> 
+    | List_op list_op ->
        begin match list_op with
-       | Head (o1) -> 
+       | Head (o1) ->
           c_app !^"hd" [aux false o1]
-       | Tail (o1) -> 
+       | Tail (o1) ->
           c_app !^"tl" [aux false o1]
-       | Nil -> 
+       | Nil ->
           brackets empty
-       | Cons (t1,t2) -> 
+       | Cons (t1,t2) ->
           mparens (aux true t1 ^^ colon ^^ colon ^^ aux true t2)
-       | List its -> 
+       | List its ->
           mparens (brackets (separate_map (comma ^^ space) (aux false) its))
        | NthList (n, t) ->
           mparens (aux true t ^^ brackets !^(string_of_int n))
        end
-    | Set_op set_op -> 
+    | Set_op set_op ->
        begin match set_op with
        | SetMember (t1,t2) ->
           c_app !^"member" [aux false t1; aux false t2]
@@ -196,21 +211,29 @@ let pp =
        | Subset (t1, t2) ->
           c_app !^"subset" [aux false t1; aux false t2]
        end
-    | Map_op map_op -> 
-       begin match map_op with
-       | Const (_, t) ->
-          braces (aux false t)
-       | Set (t1,t2,t3) ->
-          mparens (aux true t1 ^^ lbracket ^^ aux false t2 ^^^ equals ^^^ aux false t3 ^^ rbracket)
-       | Get (t, args) ->
-          mparens ((aux true t) ^^ brackets (aux false args))
-       | Def ((s, abt), body) ->
-          braces (BT.pp abt ^^^ Sym.pp s ^^^ !^"->" ^^^ aux false body)
-       end
+    | Map_op map_op ->
+      let rec consolidate ops = function
+        | IT (Map_op (Set (t1, t2, t3)), _) -> consolidate (`Set (t2, t3) :: ops) t1
+        | IT (Map_op (Get (t, args)), _) ->  consolidate ((`Get args) :: ops) t
+        | it_ -> (it_, ops) in
+      let pp_op = function
+       | `Set (t2,t3) ->
+         Pp.group @@ brackets @@ (aux false t2 ^/^ equals) ^/^ align (aux false t3)
+       | `Get args ->
+          Pp.group @@ brackets @@ aux false args in
+      let (root, ops) = consolidate [] it_ in
+      let root_pp = match root with
+       | IT (Map_op (Const (_, t)), _) ->
+          Pp.group @@ brackets @@ aux false t
+       | IT (Map_op (Def ((s, abt), body)), _) ->
+          Pp.group @@ braces (BT.pp abt ^^^ Sym.pp s ^^^ !^"->" ^^^ aux false body)
+       | it_ -> aux true it_
+       in
+       prefix 2 0 root_pp @@ align (flow_map (break 0) pp_op ops)
     | Pred (name, args) ->
        c_app (Sym.pp name) (List.map (aux false) args)
   in
-  fun (it : 'bt term) -> aux false it
+  fun ?(f=fun _ x -> x) (it : 'bt term) -> aux ~f false it
 
 
 let free_vars_lit = function
@@ -307,7 +330,7 @@ and free_vars_map_op = function
   | Get (t1, t2) -> free_vars_list [t1; t2]
   | Def ((s, _bt), t) -> SymSet.remove s (free_vars t)
 
-and free_vars_info (_str, ts) = 
+and free_vars_info (_str, ts) =
   free_vars_list ts
 
 and free_vars_pred (_pred, ts) =
@@ -331,8 +354,8 @@ and free_vars_term_ = function
 and free_vars (IT (term_, _bt)) =
   free_vars_term_ term_
 
-and free_vars_list xs = 
-  List.fold_left (fun ss t -> 
+and free_vars_list xs =
+  List.fold_left (fun ss t ->
       SymSet.union ss (free_vars t)
     ) SymSet.empty xs
 
@@ -378,7 +401,7 @@ and fold_bool_op f binders acc = function
   | Not t1 -> fold f binders acc t1
   | ITE (t1, t2, t3) -> fold_list f binders acc [t1; t2; t3]
   | EQ (t1, t2) -> fold_list f binders acc [t1; t2]
-  | EachI ((_, s, _), t) -> 
+  | EachI ((_, s, _), t) ->
      fold f (binders @ [(s, BT.Integer)]) acc t
 
 and fold_tuple_op f binders acc = function
@@ -435,7 +458,7 @@ and fold_map_op f binders acc = function
   | Get (t1, t2) -> fold_list f binders acc [t1; t2]
   | Def ((s, bt), t) -> fold f (binders @ [(s, bt)]) acc t
 
-and fold_info f binders acc (_str, ts) = 
+and fold_info f binders acc (_str, ts) =
   fold_list f binders acc ts
 
 and fold_pred f binders acc (_pred, ts) =
@@ -460,10 +483,10 @@ and fold f binders acc (IT (term_, _bt)) =
   let acc' = fold_term_ f binders acc term_ in
   f binders acc' (IT (term_, _bt))
 
-and fold_list f binders acc xs = 
+and fold_list f binders acc xs =
   match xs with
   | [] -> acc
-  | x :: xs -> 
+  | x :: xs ->
      let acc' = fold f binders acc x in
      fold_list f binders acc' xs
 
@@ -493,7 +516,7 @@ let preds_of t =
 
 
 
-let json it : Yojson.Safe.t = 
+let json it : Yojson.Safe.t =
   `String (Pp.plain (pp it))
 
 
@@ -501,7 +524,7 @@ let make_subst = Subst.make free_vars
 
 let rec subst (su : typed subst) (IT (it, bt)) =
   match it with
-  | Lit lit -> 
+  | Lit lit ->
      begin match lit with
      | Sym sym ->
         begin match List.assoc_opt Sym.equal sym su.replace with
@@ -510,7 +533,7 @@ let rec subst (su : typed subst) (IT (it, bt)) =
         end
      | lit -> IT (Lit lit, bt)
      end
-  | Arith_op arith_op -> 
+  | Arith_op arith_op ->
      let arith_op = match arith_op with
        | Add (it, it') -> Add (subst su it, subst su it')
        | Sub (it, it') -> Sub (subst su it, subst su it')
@@ -533,7 +556,7 @@ let rec subst (su : typed subst) (IT (it, bt)) =
        | XORNoSMT (it, it') -> XORNoSMT (subst su it, subst su it')
      in
      IT (Arith_op arith_op, bt)
-  | Bool_op bool_op -> 
+  | Bool_op bool_op ->
      let bool_op = match bool_op with
        | And its -> And (map (subst su) its)
        | Or its -> Or (map (subst su) its)
@@ -546,7 +569,7 @@ let rec subst (su : typed subst) (IT (it, bt)) =
           EachI ((i1, s, i2), subst su t)
      in
      IT (Bool_op bool_op, bt)
-  | Tuple_op tuple_op -> 
+  | Tuple_op tuple_op ->
      let tuple_op = match tuple_op with
        | Tuple its ->
           Tuple (map (subst su) its)
@@ -554,13 +577,13 @@ let rec subst (su : typed subst) (IT (it, bt)) =
           NthTuple (n, subst su it')
      in
      IT (Tuple_op tuple_op, bt)
-  | Struct_op struct_op -> 
+  | Struct_op struct_op ->
      let struct_op = match struct_op with
        | Struct (tag, members) ->
-          let members = 
-            map (fun (member,it) -> 
+          let members =
+            map (fun (member,it) ->
                 (member,subst su it)
-              ) members 
+              ) members
           in
           Struct (tag, members)
        | StructMember (t, m) ->
@@ -569,13 +592,13 @@ let rec subst (su : typed subst) (IT (it, bt)) =
           StructUpdate ((subst su t, m), subst su v)
      in
      IT (Struct_op struct_op, bt)
-  | Record_op record_op -> 
+  | Record_op record_op ->
      let record_op = match record_op with
        | Record members ->
-          let members = 
-            map (fun (member,it) -> 
+          let members =
+            map (fun (member,it) ->
                 (member,subst su it)
-              ) members 
+              ) members
           in
           Record members
        | RecordMember (t, m) ->
@@ -584,7 +607,7 @@ let rec subst (su : typed subst) (IT (it, bt)) =
           RecordUpdate ((subst su t, m), subst su v)
      in
      IT (Record_op record_op, bt)
-  | Datatype_op datatype_op -> 
+  | Datatype_op datatype_op ->
      let datatype_op = match datatype_op with
        | DatatypeCons (tag, members_rec) ->
           DatatypeCons (tag, subst su members_rec)
@@ -594,15 +617,15 @@ let rec subst (su : typed subst) (IT (it, bt)) =
           DatatypeIsCons (tag, subst su t)
      in
      IT (Datatype_op datatype_op, bt)
-  | Pointer_op pointer_op -> 
+  | Pointer_op pointer_op ->
      let pointer_op = match pointer_op with
-       | LTPointer (it, it') -> 
+       | LTPointer (it, it') ->
           LTPointer (subst su it, subst su it')
-       | LEPointer (it, it') -> 
+       | LEPointer (it, it') ->
           LEPointer (subst su it, subst su it')
-       | IntegerToPointerCast t -> 
+       | IntegerToPointerCast t ->
           IntegerToPointerCast (subst su t)
-       | PointerToIntegerCast t -> 
+       | PointerToIntegerCast t ->
           PointerToIntegerCast (subst su t)
        | MemberOffset (tag, member) ->
           MemberOffset (tag, member)
@@ -610,7 +633,7 @@ let rec subst (su : typed subst) (IT (it, bt)) =
           ArrayOffset (tag, subst su t)
      in
      IT (Pointer_op pointer_op, bt)
-  | CT_pred ct_pred -> 
+  | CT_pred ct_pred ->
      let ct_pred = match ct_pred with
        | Aligned (t, ct) -> Aligned (subst su t, ct)
        | AlignedI t -> AlignedI {t= subst su t.t; align= subst su t.align}
@@ -618,7 +641,7 @@ let rec subst (su : typed subst) (IT (it, bt)) =
        | Good (rt, t) -> Good (rt, subst su t)
      in
      IT (CT_pred ct_pred, bt)
-  | List_op list_op -> 
+  | List_op list_op ->
      let list_op = match list_op with
        | Nil -> Nil
        | Cons (it1,it2) -> Cons (subst su it1, subst su it2)
@@ -628,7 +651,7 @@ let rec subst (su : typed subst) (IT (it, bt)) =
        | NthList (i, it) -> NthList (i, subst su it)
      in
      IT (List_op list_op, bt)
-  | Set_op set_op -> 
+  | Set_op set_op ->
      let set_op = match set_op with
        | SetMember (t1,t2) -> SetMember (subst su t1, subst su t2)
        | SetUnion ts -> SetUnion (List.map (subst su) ts)
@@ -637,13 +660,13 @@ let rec subst (su : typed subst) (IT (it, bt)) =
        | Subset (t1, t2) -> Subset (subst su t1, subst su t2)
      in
      IT (Set_op set_op, bt)
-  | Map_op map_op -> 
+  | Map_op map_op ->
      let map_op = match map_op with
-       | Const (bt, t) -> 
+       | Const (bt, t) ->
           Const (bt, subst su t)
-       | Set (t1, t2, t3) -> 
+       | Set (t1, t2, t3) ->
           Set (subst su t1, subst su t2, subst su t3)
-       | Get (it, arg) -> 
+       | Get (it, arg) ->
           Get (subst su it, subst su arg)
        | Def ((s, abt), body) ->
           let s, body = suitably_alpha_rename su.relevant (s, abt) body in
@@ -653,15 +676,15 @@ let rec subst (su : typed subst) (IT (it, bt)) =
   | Pred (name, args) ->
      IT (Pred (name, List.map (subst su) args), bt)
 
-and alpha_rename (s, bt) body = 
+and alpha_rename (s, bt) body =
   let s' = Sym.fresh_same s in
   (s', subst (make_subst [(s, IT (Lit (Sym s'), bt))]) body)
 
-and suitably_alpha_rename syms (s, bt) body = 
-  if SymSet.mem s syms 
+and suitably_alpha_rename syms (s, bt) body =
+  if SymSet.mem s syms
   then alpha_rename (s, bt) body
   else (s, body)
-  
+
 
 
 
@@ -773,7 +796,7 @@ let or2_ (it, it') = match is_or it' with
   | None -> or_ [it; it']
   | Some its -> or_ (it :: its)
 let impl_ (it, it') = IT (Bool_op (Impl (it, it')), BT.Bool)
-let not_ it = 
+let not_ it =
   match it with
   | IT (Lit (Bool b), _) -> bool_ (not b)
   | IT (Bool_op (Not a), _) -> a
@@ -832,12 +855,12 @@ let tuple_ its = IT (Tuple_op (Tuple its), BT.Tuple (List.map bt its))
 let nthTuple_ ~item_bt (n, it) = IT (Tuple_op (NthTuple (n, it)), item_bt)
 
 (* struct_op *)
-let struct_ (tag, members) = 
-  IT (Struct_op (Struct (tag, members)), BT.Struct tag) 
+let struct_ (tag, members) =
+  IT (Struct_op (Struct (tag, members)), BT.Struct tag)
 let member_ ~member_bt (tag, it, member) =
   IT (Struct_op (StructMember (it, member)), member_bt)
 
-let (%.) struct_decls t member = 
+let (%.) struct_decls t member =
   let tag = match bt t with
     | BT.Struct tag -> tag
     | _ -> Debug_ocaml.error "illtyped index term. not a struct"
@@ -854,10 +877,10 @@ let (%.) struct_decls t member =
 
 
 
-let record_ members = 
-  IT (Record_op (Record members), 
+let record_ members =
+  IT (Record_op (Record members),
       BT.Record (List.map (fun (s,t) -> (s, basetype t)) members))
-let recordMember_ ~member_bt (t, member) = 
+let recordMember_ ~member_bt (t, member) =
   IT (Record_op (RecordMember (t, member)), member_bt)
 
 let datatype_cons_ nm dt_tag members =
@@ -873,13 +896,13 @@ let ltPointer_ (it, it') = IT (Pointer_op (LTPointer (it, it')), BT.Bool)
 let lePointer_ (it, it') = IT (Pointer_op (LEPointer (it, it')), BT.Bool)
 let gtPointer_ (it, it') = ltPointer_ (it', it)
 let gePointer_ (it, it') = lePointer_ (it', it)
-let integerToPointerCast_ it = 
+let integerToPointerCast_ it =
   IT (Pointer_op (IntegerToPointerCast it), BT.Loc)
-let pointerToIntegerCast_ it = 
+let pointerToIntegerCast_ it =
   IT (Pointer_op (PointerToIntegerCast it), BT.Integer)
-let memberOffset_ (tag, member) = 
+let memberOffset_ (tag, member) =
   IT (Pointer_op (MemberOffset (tag, member)), BT.Integer)
-let arrayOffset_ (ct, t) = 
+let arrayOffset_ (ct, t) =
   IT (Pointer_op (ArrayOffset (ct, t)), BT.Integer)
 
 let isIntegerToPointerCast = function
@@ -901,12 +924,12 @@ let arrayShift_ (t1, ct, t2) =
 let array_index_to_pointer ~base ~item_ct ~index =
   arrayShift_ (base, item_ct, index)
 
-let array_offset_of_pointer ~base ~pointer = 
-  sub_ (pointerToIntegerCast_ pointer, 
+let array_offset_of_pointer ~base ~pointer =
+  sub_ (pointerToIntegerCast_ pointer,
         pointerToIntegerCast_ base)
 
 let array_pointer_to_index ~base ~item_size ~pointer =
-  div_ (array_offset_of_pointer ~base ~pointer, 
+  div_ (array_offset_of_pointer ~base ~pointer,
         item_size)
 
 let subarray_condition ~base ~item_size ~from_index ~to_index ~qpointer =
@@ -919,11 +942,11 @@ let subarray_condition ~base ~item_size ~from_index ~to_index ~qpointer =
       divisible_ (offset, item_size)
     ]
 
-  
+
 
 
 let cellPointer_ ~base ~step ~starti ~endi ~p =
-  subarray_condition ~base ~item_size:step 
+  subarray_condition ~base ~item_size:step
     ~from_index:starti ~to_index:endi ~qpointer:p
 
 
@@ -951,39 +974,39 @@ let subset_ (it, it') = IT (Set_op (Subset (it, it')), BT.Bool)
 
 
 (* ct_pred *)
-let minInteger_ t = 
+let minInteger_ t =
   z_ (Memory.min_integer_type t)
-let maxInteger_ t = 
+let maxInteger_ t =
   z_ (Memory.max_integer_type t)
-let representable_ (t, it) = 
+let representable_ (t, it) =
   IT (CT_pred (Representable (t, it)), BT.Bool)
 let good_ (sct, it) =
   IT (CT_pred (Good (sct, it)), BT.Bool)
-let aligned_ (t, it) = 
+let aligned_ (t, it) =
   IT (CT_pred (Aligned (t, it)), BT.Bool)
-let alignedI_ ~t ~align = 
+let alignedI_ ~t ~align =
   IT (CT_pred (AlignedI {t; align}), BT.Bool)
 
-let const_map_ index_bt t = 
+let const_map_ index_bt t =
   IT (Map_op (Const (index_bt, t)), BT.Map (index_bt, bt t))
-let map_set_ t1 (t2, t3) = 
+let map_set_ t1 (t2, t3) =
   IT (Map_op (Set (t1, t2, t3)), bt t1)
-let map_get_ v arg = 
+let map_get_ v arg =
   match bt v with
   | BT.Map (_, rbt) ->
      IT (Map_op (Get (v, arg)), rbt)
   | _ -> Debug_ocaml.error "illtyped index term"
-let map_def_ (s, abt) body = 
+let map_def_ (s, abt) body =
   IT (Map_op (Def ((s, abt), body)), BT.Map (abt, bt body))
 
 let make_array_ ~item_bt items (* assumed all of item_bt *) =
-  let (_, value) = 
-    List.fold_left (fun (index, value) item -> 
+  let (_, value) =
+    List.fold_left (fun (index, value) item ->
         (index + 1, map_set_ value (int_ index, item))
       ) (0, const_map_ Integer (default_ item_bt)) items
   in
   value
-  
+
 
 
 
@@ -991,21 +1014,21 @@ let pred_ name args rbt =
   IT (Pred (name, args), rbt)
 
 
-let let_ sym e body = 
+let let_ sym e body =
   subst (make_subst [(sym, e)]) body
 
 
 
 
-let fresh bt = 
+let fresh bt =
   let symbol = Sym.fresh () in
   (symbol, sym_ (symbol, bt))
 
-let fresh_named bt name = 
+let fresh_named bt name =
   let symbol = Sym.fresh_named name in
   (symbol, sym_ (symbol, bt))
 
-let fresh_same bt symbol' = 
+let fresh_same bt symbol' =
   let symbol = Sym.fresh_same symbol' in
   (symbol, sym_ (symbol, bt))
 
@@ -1017,18 +1040,18 @@ let fresh_same bt symbol' =
 
 let def_ sym e = eq_ (sym_ (sym, bt e), e)
 
-let in_range within (min, max) = 
+let in_range within (min, max) =
   and_ [le_ (min, within); le_ (within, max)]
 
 
 
 
-let value_check_pointer alignment ~pointee_ct about = 
+let value_check_pointer alignment ~pointee_ct about =
   let about_int = pointerToIntegerCast_ about in
   let pointee_size = match pointee_ct with
     | Sctypes.Void -> 1
     | Function _ -> 1
-    | _ -> Memory.size_of_ctype pointee_ct 
+    | _ -> Memory.size_of_ctype pointee_ct
   in
   and_ [le_ (z_ Z.zero, about_int);
         le_ (sub_ (add_ (about_int, int_ pointee_size), int_ 1), z_ Memory.max_pointer);
@@ -1037,22 +1060,22 @@ let value_check_pointer alignment ~pointee_ct about =
 let value_check alignment (struct_layouts : Memory.struct_decls) ct about =
   let open Sctypes in
   let open Memory in
-  let rec aux (ct_ : Sctypes.t) about = 
+  let rec aux (ct_ : Sctypes.t) about =
     match ct_ with
-    | Void -> 
+    | Void ->
        bool_ true
-    | Integer it -> 
+    | Integer it ->
        in_range about (z_ (min_integer_type it), z_ (max_integer_type it))
-    | Array (it, None) -> 
+    | Array (it, None) ->
        Debug_ocaml.error "todo: 'representable' for arrays with unknown length"
-    | Array (item_ct, Some n) -> 
+    | Array (item_ct, Some n) ->
        (* let partiality = partiality_check_array ~length:n ~item_ct about in *)
        let i_s, i = fresh BT.Integer in
-       and_ 
+       and_
          [eachI_ (0, i_s, n - 1) (aux item_ct (map_get_ about i))]
-    | Pointer pointee_ct -> 
+    | Pointer pointee_ct ->
        value_check_pointer alignment ~pointee_ct about
-    | Struct tag -> 
+    | Struct tag ->
        and_ begin
            List.filter_map (fun piece ->
                match piece.member_or_padding with
@@ -1060,11 +1083,11 @@ let value_check alignment (struct_layouts : Memory.struct_decls) ct about =
                   let member_bt = BT.of_sct mct in
                   let member_it = member_ ~member_bt (tag, about, member) in
                   Some (aux mct member_it)
-               | None -> 
+               | None ->
                   None
              ) (SymMap.find tag struct_layouts)
          end
-    | Function _ -> 
+    | Function _ ->
        Debug_ocaml.error "todo: function types"
   in
   aux ct about
@@ -1072,7 +1095,7 @@ let value_check alignment (struct_layouts : Memory.struct_decls) ct about =
 let good_value = value_check true
 let representable = value_check false
 
-let good_pointer = value_check_pointer true 
+let good_pointer = value_check_pointer true
 
 
 

@@ -86,7 +86,7 @@ let pp_qpredicate_type_aux (p : qpredicate_type) oargs =
 
   !^"each" ^^ 
     parens (BT.pp Integer ^^^ Sym.pp p.q ^^ semi ^^^ IT.pp p.permission) 
-    ^^ braces (c_app (pp_predicate_name p.name) args)
+    ^/^ braces (c_app (pp_predicate_name p.name) args)
     ^^ pp_maybe_oargs oargs
 
 let pp_predicate_type p = pp_predicate_type_aux p None

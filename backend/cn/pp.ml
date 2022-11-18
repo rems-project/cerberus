@@ -177,13 +177,13 @@ let typ n typ =
   n ^^^ colon ^^^ typ
 
 let item item content = 
-  format [Bold] item ^^ colon ^^ space ^^ align content
+  format [Bold] item ^^ colon ^^ hardline ^^ content
 
 let c_comment pp = 
   !^"/*" ^^ pp ^^ !^"*/"
 
 let c_app f args = 
-  group (f ^^ group (parens (flow (comma ^^ break 1) args)))
+  group @@ f ^^ group @@ parens @@ nest 2 @@ flow (break 0 ^^ comma ^^ space) args
 
 
 

@@ -40,28 +40,34 @@ let unpack_def global name args =
 let debug_constraint_failure_diagnostics lvl (model_with_q : Solver.model_with_q) global c =
   let model = fst model_with_q in
   if ! Pp.print_level == 0 then () else
-  let split tm = match IT.term tm with
-    | IT.Bool_op (IT.And xs) -> Some ("and", xs)
-    | IT.Bool_op (IT.Or xs) -> Some ("or", xs)
-    | IT.Bool_op (IT.Not x) -> Some ("not", [x])
-    | IT.Bool_op (IT.EQ (x, y)) -> Some ("eq", [x; y])
-    | IT.Bool_op (IT.Impl (x, y)) -> Some ("implies", [x; y])
-    | IT.Arith_op (IT.LT (x, y)) -> Some ("lt", [x; y])
-    | IT.Arith_op (IT.LE (x, y)) -> Some ("le", [x; y])
-    | IT.Struct_op (IT.StructMember (x, _)) -> Some ("member", [x])
+  let rec split tm = match IT.term tm with
+    | IT.Bool_op (IT.And xs)
+    | IT.Bool_op (IT.Or xs) -> List.concat_map split xs
+    | IT.Struct_op (IT.StructMember (x, _))
+    | IT.Bool_op (IT.Not x) -> split x
+    | IT.Bool_op (IT.EQ (x, y))
+    | IT.Bool_op (IT.Impl (x, y))
+    | IT.Arith_op (IT.LT (x, y))
+    | IT.Arith_op (IT.LE (x, y)) -> List.concat_map split [x; y]
     | IT.Pred (name, args) when Option.is_some (unpack_def global name args) ->
-        Some (Sym.pp_string name, [Option.get (unpack_def global name args)])
-    | _ -> None
+        [Option.get (unpack_def global name args)]
+    | _ -> []
   in
+  let pp_v tm pp =
+    begin match Solver.eval global model tm with
+      | None -> !^"/* NO_EVAL */" ^^ pp
+      | Some (IT (_, Struct _))
+      | Some (IT (_, Record _))
+      | Some (IT (_, Map (_,_))) ->  pp
+      | Some v -> !^"/*" ^^^ IT.pp v ^^^ !^"*/" ^^ pp
+    end in
   let rec diag_rec i tm =
     let pt = !^ "-" ^^^ Pp.int i ^^ Pp.colon in
-    begin match Solver.eval global model tm with
+    begin match Option.map IT.pp @@ Solver.eval global model tm with
       | None -> Pp.debug lvl (lazy (pt ^^^ !^ "cannot eval:" ^^^ IT.pp tm))
-      | Some v -> Pp.debug lvl (lazy (pt ^^^ IT.pp v ^^^ !^"<-" ^^^ IT.pp tm))
+      | Some v -> Pp.debug lvl (lazy (IT.pp ~f:pp_v tm))
     end;
-    match split tm with
-      | None -> ()
-      | Some (nm, ts) -> List.iter (diag_rec (i + 1)) ts
+    List.iter (diag_rec (i+1)) @@ split tm
   in
   begin match (c, model_with_q) with
   | (LC.T tm, _) ->
