@@ -622,7 +622,7 @@ Module MorelloCapability <:
            (a ((negb (is_sentry c)) && is_sealed c) "sealed" []))
     in
     if Nat.eqb (List.length attrs) 0%nat then ""
-    else " (" ++ String.concat ";" attrs ++ ")".
+    else " (" ++ String.concat "," attrs ++ ")".
 
   Definition to_string (c:t) : string :=
     let vstring x := HexString.of_Z x in
