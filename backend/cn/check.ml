@@ -1608,9 +1608,7 @@ let only = ref None
 
 
 let check mu_file = 
-  let () = Debug_ocaml.begin_csv_timing "total" in
 
-  let () = Debug_ocaml.begin_csv_timing "tagDefs" in
   let@ () = 
     (* check and record tagDefs *)
     let@ () = 
@@ -1636,30 +1634,8 @@ let check mu_file =
     in
     return ()
   in
-  let () = Debug_ocaml.end_csv_timing "tagDefs" in
 
 
-  let () = Debug_ocaml.begin_csv_timing "impls" in
-  (* let@ () =  *)
-  (*   (\* check and record impls *\) *)
-  (*   let open Global in *)
-  (*   PmapM.iterM (fun impl impl_decl -> *)
-  (*       let descr = CF.Implementation.string_of_implementation_constant impl in *)
-  (*       match impl_decl with *)
-  (*       | M_Def (rt, rbt, pexpr) ->  *)
-  (*          let@ () = WellTyped.WRT.welltyped Loc.unknown rt in *)
-  (*          let@ () = WellTyped.WBT.is_bt Loc.unknown rbt in *)
-  (*          let@ () = check_function Loc.unknown descr [] rbt pexpr (AT.L (LAT.I rt)) in *)
-  (*          add_impl_constant impl rt *)
-  (*       | M_IFun (ft, rbt, args, pexpr) -> *)
-  (*          let@ () = WellTyped.WFT.welltyped "implementation-defined function" Loc.unknown ft in *)
-  (*          let@ () = WellTyped.WBT.is_bt Loc.unknown rbt in *)
-  (*          let@ () = check_function Loc.unknown descr args rbt pexpr ft in *)
-  (*          add_impl_fun_decl impl ft *)
-  (*     ) mu_file.mu_impl *)
-  (* in *)
-  (* let () = Debug_ocaml.end_csv_timing "impls" in *)
-  
 
   (* check and record logical predicate defs *)
   Pp.progress_simple "checking specifications" "logical predicate welltypedness";
