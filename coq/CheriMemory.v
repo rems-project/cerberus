@@ -3108,7 +3108,7 @@ Module CheriMemory
     (size_int: integer_value)
     : memM pointer_value
     :=
-    let cap_of_pointer_value (ptr: pointer_value) : serr Z :=
+    let cap_addr_of_pointer_value (ptr: pointer_value) : serr Z :=
       match ptr with
       | PV _ (PVconcrete c_value)
       | PV _ (PVfunction (FP_invalid c_value)) =>
@@ -3117,28 +3117,27 @@ Module CheriMemory
       end in
     let size_n := num_of_int size_int in
     let loc := Loc_other "memcpy" in
+
     let fix copy_data (index: nat): memM pointer_value :=
       match index with
       | O => ret ptrval1
       | S index =>
           let i_value := Z.of_nat index in
-          eff_array_shift_ptrval loc ptrval1 CoqCtype.unsigned_char (IV i_value) >>=
-            (fun ptrval1' =>
-               eff_array_shift_ptrval loc ptrval2 CoqCtype.unsigned_char (IV i_value) >>=
-                 (fun ptrval2' =>
-                    load loc CoqCtype.unsigned_char ptrval2' >>=
-                      (fun '(_, mval) =>
-                         store loc CoqCtype.unsigned_char false ptrval1' mval ;;
-                         copy_data index)))
+          ptrval1' <- eff_array_shift_ptrval loc ptrval1 CoqCtype.unsigned_char (IV i_value) ;;
+          ptrval2' <- eff_array_shift_ptrval loc ptrval2 CoqCtype.unsigned_char (IV i_value) ;;
+          '(_, mval) <- load loc CoqCtype.unsigned_char ptrval2' ;;
+          store loc CoqCtype.unsigned_char false ptrval1' mval ;;
+          copy_data index
       end
     in
     let pointer_sizeof := IMP.get.(sizeof_pointer) in
     let npointer_sizeof := Z.to_nat pointer_sizeof in
+
     let fix copy_tags (index: nat): memM pointer_value :=
       let copy_tag (dst_p : pointer_value) (src_p : pointer_value)
         : memM unit :=
-        dst_a <- serr2memM (cap_of_pointer_value dst_p) ;;
-        src_a <- serr2memM (cap_of_pointer_value src_p) ;;
+        dst_a <- serr2memM (cap_addr_of_pointer_value dst_p) ;;
+        src_a <- serr2memM (cap_addr_of_pointer_value src_p) ;;
         update
           (fun (st : mem_state) =>
              match ZMap.find src_a st.(captags) with
@@ -3153,17 +3152,16 @@ Module CheriMemory
       | O => ret ptrval1
       | S index =>
           let i_value := IV (Z.of_nat index) in
-          eff_array_shift_ptrval loc ptrval1 CoqCtype.unsigned_char i_value >>=
-            (fun ptrval1' =>
-               eff_array_shift_ptrval loc ptrval2 CoqCtype.unsigned_char i_value >>=
-                 (fun ptrval2' =>
-                    copy_tag ptrval1' ptrval2' ;;
-
-                    copy_tags (Nat.sub index npointer_sizeof)))
+          ptrval1' <- eff_array_shift_ptrval loc ptrval1 CoqCtype.unsigned_char i_value ;;
+          ptrval2' <- eff_array_shift_ptrval loc ptrval2 CoqCtype.unsigned_char i_value ;;
+          copy_tag ptrval1' ptrval2' ;;
+          copy_tags index
       end
     in
     copy_data (Z.to_nat size_n) ;;
-    copy_tags (Z.to_nat (Z.mul (Z.quot size_n pointer_sizeof) pointer_sizeof)).
+    let (q,_) := quomod size_n pointer_sizeof in
+    let size_n_bottom_aligned := Z.mul q pointer_sizeof in
+    copy_tags (Z.to_nat size_n_bottom_aligned).
 
   Definition memcmp
     (ptrval1 ptrval2 : pointer_value)
