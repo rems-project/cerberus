@@ -2974,6 +2974,7 @@ Module CheriMemory
                                         if CoqSwitches.has_switch (SW_pointer_arith PERMISSIVE)
                                         then ret NoCollapse
                                         else
+                                          mprint_msg "here1" ;;
                                           fail
                                             (MerrOther
                                                "(PNVI-ae-uid) ambiguous non-zero array shift")
@@ -2984,7 +2985,7 @@ Module CheriMemory
                                  (fun (function_parameter : bool) =>
                                     match function_parameter with
                                     | true => ret (Collapse alloc_id2)
-                                    | false => fail (MerrArrayShift loc)
+                                    | false => mprint_msg "here2" ;; fail (MerrArrayShift loc)
                                     end)
                            end) >>=
                         (fun x =>
@@ -3010,7 +3011,7 @@ Module CheriMemory
                                 (fun (x : bool) =>
                                    match x with
                                    | true => ret tt
-                                   | false => fail (MerrArrayShift loc)
+                                   | false => mprint_msg "here3" ;; fail (MerrArrayShift loc)
                                    end)
                           end)
                      ;;
@@ -3023,7 +3024,7 @@ Module CheriMemory
                         | true =>
                             let c_value := C.cap_set_value c_value shifted_addr in
                             ret (PV prov (PVconcrete c_value))
-                        | false => fail (MerrArrayShift loc)
+                        | false => mprint_msg "here4" ;; fail (MerrArrayShift loc)
                         end)
                end)
     | PV (Prov_some alloc_id) (PVconcrete c_value) =>
@@ -3033,14 +3034,26 @@ Module CheriMemory
         then
           get_allocation alloc_id >>=
             (fun (alloc : allocation) =>
-               if Z.leb alloc.(base) shifted_addr
-                  && Z.leb (Z.add shifted_addr sz)
-                       (Z.add (Z.add alloc.(base) alloc.(size)) sz)
+               if (  Z.leb alloc.(base) shifted_addr
+                  && Z.leb 
+                    (Z.add shifted_addr sz) 
+                    (Z.add (Z.add alloc.(base) alloc.(size)) sz)
+                  )
                then
                  let c_value := C.cap_set_value c_value shifted_addr in
                  ret (PV (Prov_some alloc_id) (PVconcrete c_value))
                else
-                 fail (MerrArrayShift loc))
+               if (negb (  Z.leb alloc.(base) shifted_addr))
+               then
+                  mprint_msg "here51" ;; fail (MerrArrayShift loc)
+               else 
+                  mprint_msg "here52" ;; 
+                  mprint_msg (HexString.of_Z shifted_addr) ;; 
+                  mprint_msg (HexString.of_Z sz) ;; 
+                  mprint_msg (HexString.of_Z (alloc.(base))) ;; 
+                  mprint_msg (HexString.of_Z (alloc.(size))) ;; 
+                  fail (MerrArrayShift loc)
+            )
         else
           let c_value := C.cap_set_value c_value shifted_addr in
           ret (PV (Prov_some alloc_id) (PVconcrete c_value))
@@ -3049,7 +3062,7 @@ Module CheriMemory
         if CoqSwitches.has_switch (CoqSwitches.SW_pointer_arith STRICT)
            || negb (CoqSwitches.has_switch (CoqSwitches.SW_pointer_arith PERMISSIVE))
         then
-          fail (MerrOther "out-of-bound pointer arithmetic (Prov_none)")
+          mprint_msg "here6" ;; fail (MerrOther "out-of-bound pointer arithmetic (Prov_none)")
         else
           let c_value := C.cap_set_value c_value shifted_addr in
           ret (PV Prov_none (PVconcrete c_value))
