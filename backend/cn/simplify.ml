@@ -804,7 +804,7 @@ module ResourceTypes = struct
     }
 
   let simp_qpredicate_type simp_ctxt (qp : qpredicate_type) =
-    let qp = alpha_rename_qpredicate_type (Sym.fresh_same qp.q) qp in
+    let qp = alpha_rename_qpredicate_type_ (Sym.fresh_same qp.q) qp in
     let permission = simp_flatten simp_ctxt qp.permission in
     let permission_lcs = LCSet.of_list (List.map LC.t_ permission) in
     let simp_lcs = LCSet.union permission_lcs simp_ctxt.lcs in

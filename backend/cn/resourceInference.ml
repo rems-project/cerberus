@@ -513,7 +513,7 @@ module General = struct
                    continue
                 end
              | (Q p', p'_oargs) when equal_predicate_name (Owned requested_ct) p'.name ->
-                let p' = alpha_rename_qpredicate_type requested.q p' in
+                let p' = alpha_rename_qpredicate_type_ requested.q p' in
                 let pmatch = eq_ (requested.pointer, p'.pointer) in
                 (* todo: check for p' non-emptiness? *)
                 begin match provable (LC.T pmatch) with
@@ -657,7 +657,7 @@ module General = struct
                 end
              | (Q p', p'_oargs) when equal_predicate_name requested.name p'.name 
                          && IT.equal step p'.step ->
-                let p' = alpha_rename_qpredicate_type requested.q p' in
+                let p' = alpha_rename_qpredicate_type_ requested.q p' in
                 let pmatch = eq_ (requested.pointer, p'.pointer) in
                 begin match provable (LC.T pmatch) with
                 | `True ->

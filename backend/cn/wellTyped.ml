@@ -126,7 +126,6 @@ module WIT = struct
 
 
   open BaseTypes
-  open LogicalSorts
   open IndexTerms
 
   type t = IndexTerms.t
@@ -149,7 +148,7 @@ module WIT = struct
     in
     return r
 
-  let rec infer : 'bt. Loc.t -> context:(BT.t IT.term) -> 'bt IT.term -> (IT.t, type_error) m =
+  let rec infer =
       fun loc ~context (IT (it, _)) ->
       match it with
       | Lit lit ->
@@ -323,6 +322,7 @@ module WIT = struct
               let@ t' = check loc ~context (IT.bt t) t' in
               return (BT.Bool, EQ (t,t')) 
            | EachI ((i1, s, i2), t) ->
+              let s, t = IT.alpha_rename (s, BT.Integer) t in
               pure begin 
                   let@ () = add_l s Integer (loc, lazy (Pp.string "forall-var")) in
                   let@ t = check loc ~context Bool t in
@@ -615,7 +615,7 @@ module WIT = struct
          return (IT (Pred (name, args), def.return_bt))
          
 
-    and check : 'bt. Loc.t -> context:(BT.t IT.term) -> LS.t -> 'bt IT.term -> (IT.t, type_error) m =
+    and check =
       fun loc ~context ls it ->
       let@ () = WLS.is_ls loc ls in
       match it, ls with
@@ -665,6 +665,7 @@ module WRET = struct
        let@ _ = ListM.map2M (fun (_, expected) arg -> WIT.check loc expected arg) iargs p.iargs in
        return ()
     | Q p ->
+       let p = RET.alpha_rename_qpredicate_type p in
        let@ _ = WIT.check loc BT.Loc p.pointer in
        let@ _ = WIT.check loc BT.Integer p.step in
        let@ c' = WIT.is_const loc p.step in
@@ -759,6 +760,7 @@ module WLC = struct
        let@ _ = WIT.check loc BT.Bool it in
        return ()
     | LC.Forall ((s,bt), it) ->
+       let s, it = IT.alpha_rename (s,bt) it in
        let@ () = WBT.is_bt loc bt in
        pure begin
            let@ () = add_l s bt (loc, lazy (Pp.string "forall-var")) in
@@ -777,11 +779,13 @@ module WLRT = struct
   let welltyped loc lrt = 
     let rec aux = function
       | Define ((s, it), info, lrt) ->
+         let s, lrt = LRT.alpha_rename (s, IT.bt it) lrt in
          let@ it = WIT.infer loc it in
          let@ () = add_l s (IT.bt it) (loc, lazy (Pp.string "let-var")) in
          let@ () = add_c (LC.t_ (IT.def_ s it)) in
          aux lrt
       | Resource ((s, (re, re_oa_spec)), info, lrt) -> 
+         let s, lrt = LRT.alpha_rename (s, re_oa_spec) lrt in
          let@ () = WRS.welltyped (fst info) (re, re_oa_spec) in
          let@ () = add_l s re_oa_spec (loc, lazy (Pp.string "let-var")) in
          let@ () = add_r (re, O (IT.sym_ (s, re_oa_spec))) in
@@ -807,6 +811,7 @@ module WRT = struct
   let welltyped loc rt = 
     pure begin match rt with 
       | Computational ((name,bt), info, lrt) ->
+         let name, lrt = LRT.alpha_rename (name, bt) lrt in
          let@ () = WBT.is_bt (fst info) bt in
          let@ () = add_l name bt (loc, lazy (Pp.string "ret-var")) in
          let@ () = add_a (Sym.fresh_same name) (IndexTerms.sym_ (name, bt)) in
@@ -870,11 +875,13 @@ module WLAT (WI: WI_Sig) = struct
   let welltyped kind loc (at : t) : (unit, type_error) m = 
     let rec aux = function
       | LAT.Define ((s, it), info, at) ->
+         let s, at = LAT.alpha_rename WI.subst (s, IT.bt it) at in
          let@ it = WIT.infer loc it in
          let@ () = add_l s (IT.bt it) (loc, lazy (Pp.string "let-var")) in
          let@ () = add_c (LC.t_ (IT.def_ s it)) in
          aux at
       | LAT.Resource ((s, (re, re_oa_spec)), info, at) -> 
+         let s, at = LAT.alpha_rename WI.subst (s, re_oa_spec) at in
          let@ () = WRS.welltyped (fst info) (re, re_oa_spec) in
          let@ () = add_l s re_oa_spec (loc, lazy (Pp.string "let-var")) in
          let@ () = add_r (re, O (IT.sym_ (s, re_oa_spec))) in
@@ -910,6 +917,7 @@ module WAT (WI: WI_Sig) = struct
   let welltyped kind loc (at : t) : (unit, type_error) m = 
     let rec aux = function
       | AT.Computational ((name,bt), info, at) ->
+         let name, at = AT.alpha_rename WI.subst (name, bt) at in
          let@ () = WBT.is_bt (fst info) bt in
          let@ () = add_l name bt (loc, lazy (Pp.string "arg")) in
          let@ () = add_a (Sym.fresh_same name) (IndexTerms.sym_ (name, bt)) in
@@ -931,6 +939,7 @@ module WPackingFT(Spec : WOutputSpec) = WLAT(WOutputDef(Spec))
 module WRPD = struct
 
   let welltyped pd = 
+    let pd = ResourcePredicates.alpha_rename_definition pd in
     pure begin
         let open ResourcePredicates in
         let@ () = add_l pd.pointer BT.Loc (pd.loc, lazy (Pp.string "ptr-var")) in
@@ -969,6 +978,7 @@ end
 module WLPD = struct
 
   let welltyped (pd : LogicalPredicates.definition) = 
+    let pd = LogicalPredicates.alpha_rename_definition pd in
     pure begin
         let@ () = ListM.iterM (WLS.is_ls pd.loc) (List.map snd pd.args) in
         let info = (pd.loc, lazy (Pp.string "arg-var")) in

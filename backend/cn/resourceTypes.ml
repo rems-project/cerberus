@@ -112,7 +112,7 @@ let json re : Yojson.Safe.t =
 
 
 
-let alpha_rename_qpredicate_type (q' : Sym.t) (qp : qpredicate_type) = 
+let alpha_rename_qpredicate_type_ (q' : Sym.t) (qp : qpredicate_type) = 
   let subst = make_subst [(qp.q, sym_ (q', BT.Integer))] in
   { name = qp.name;
     pointer = qp.pointer;
@@ -121,6 +121,9 @@ let alpha_rename_qpredicate_type (q' : Sym.t) (qp : qpredicate_type) =
     permission = IT.subst subst qp.permission;
     iargs = List.map (IT.subst subst) qp.iargs;
   }
+
+let alpha_rename_qpredicate_type qp =
+  alpha_rename_qpredicate_type_ (Sym.fresh_same qp.q) qp
 
 
 let subst_predicate_type substitution (p : predicate_type) = 
@@ -134,7 +137,7 @@ let subst_predicate_type substitution (p : predicate_type) =
 let subst_qpredicate_type substitution (qp : qpredicate_type) =
   let qp = 
     if SymSet.mem qp.q substitution.Subst.relevant
-    then alpha_rename_qpredicate_type (Sym.fresh_same qp.q) qp 
+    then alpha_rename_qpredicate_type qp 
     else qp
   in
   {
@@ -180,7 +183,7 @@ let same_predicate_name r1 r2 =
 let alpha_equivalent r1 r2 = match r1, r2 with
   | P x, P y -> equal_resource_type r1 r2
   | Q x, Q y ->
-    let y2 = alpha_rename_qpredicate_type x.q y in
+    let y2 = alpha_rename_qpredicate_type_ x.q y in
     equal_resource_type (Q x) (Q y2)
   | _ -> false
 

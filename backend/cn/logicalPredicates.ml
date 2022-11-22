@@ -16,6 +16,11 @@ type def_or_uninterp =
   | Rec_Def of IndexTerms.t
   | Uninterp
 
+let subst_def_or_uninterp subst = function
+  | Def it -> Def (IT.subst subst it)
+  | Rec_Def it -> Rec_Def (IT.subst subst it)
+  | Uninterp -> Uninterp
+
 type definition = {
     loc : Locations.t;
     args : (Sym.t * LogicalSorts.t) list;
@@ -25,6 +30,17 @@ type definition = {
     return_bt: BT.t;
     definition : def_or_uninterp;
   }
+
+
+let alpha_rename_definition def = 
+  let args, subst = 
+    List.fold_right (fun (s, ls) (args, subst) ->
+        let s' = Sym.fresh_same s in
+        ((s', ls) :: args, (s, sym_ (s', ls)) :: subst)
+      ) def.args ([],[])
+  in
+  let definition = subst_def_or_uninterp (IT.make_subst subst) def.definition in
+  { loc = def.loc; args; return_bt = def.return_bt; definition }
 
 
 let pp_def nm def =
