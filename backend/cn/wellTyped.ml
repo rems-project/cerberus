@@ -728,14 +728,7 @@ let oargs_spec loc = function
 
 
 
-module WRE = struct
 
-  let welltyped loc ((resource, O resource_oargs) : RE.t) = 
-    let@ () = WRET.welltyped loc resource in
-    let@ oargs_spec = oargs_spec loc resource in
-    WIT.check loc oargs_spec resource_oargs
-
-end
 
 
 module WRS = struct
