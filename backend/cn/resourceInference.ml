@@ -75,20 +75,27 @@ let debug_constraint_failure_diagnostics lvl (model_with_q : Solver.model_with_q
     Pp.warn Loc.unknown (Pp.bold "unexpected quantifier count with model")
   end
 
-let select_resource_predicate_clause def loc pointer_arg iargs =
-  match ResourcePredicates.instantiate_clauses def pointer_arg iargs with
-    | None -> return (Result.Error (!^ "uninterpreted predicate"))
-    | Some clauses ->
+let select_resource_predicate_clause def loc pointer_arg iargs err_prefix =
+  let@ clauses = match ResourcePredicates.instantiate_clauses def pointer_arg iargs with
+    | None -> fail (fun _ -> {loc; msg = Generic
+          (err_prefix ^^ colon ^^^ !^ "uninterpreted predicate")})
+    | Some [] -> fail (fun _ -> {loc; msg = Generic
+          (err_prefix ^^ colon ^^^ !^ "no clauses")})
+    | Some clauses -> return clauses
+  in
   let@ provable = provable loc in
   let open ResourcePredicates in
   let rec try_clauses negated_guards clauses =
     match clauses with
     | clause :: clauses ->
        begin match provable (t_ (and_ (clause.guard :: negated_guards))) with
-       | `True -> return (Result.Ok clause)
+       | `True -> return clause
        | `False -> try_clauses (not_ clause.guard :: negated_guards) clauses
        end
-    | [] -> return (Result.Error (!^ "no clause required by context"))
+    | [] ->
+      let@ model = model () in
+      fail (fun ctxt -> {loc; msg = Generic_with_model {model; ctxt;
+          err = err_prefix ^^ colon ^^^ !^ "no specific clause necessary"}})
   in
   try_clauses [] clauses
 
@@ -967,12 +974,8 @@ module General = struct
       end
     | {name = PName pname; _} ->
       let@ def = Typing.get_resource_predicate_def loc pname in
-      let@ res = select_resource_predicate_clause def loc r_pt.pointer r_pt.iargs in
-      let@ clause = match res with
-        | Result.Ok clause -> return clause
-        | Result.Error e -> fail (fun _ -> {loc; msg = Generic
-          (!^ "Cannot fold predicate: " ^^^ Sym.pp pname ^^ colon ^^^ e)})
-      in
+      let@ clause = select_resource_predicate_clause def loc r_pt.pointer r_pt.iargs
+          (!^ "Cannot fold predicate: " ^^^ Sym.pp pname) in
       let@ output_assignment = ftyp_args_request_for_pack loc (fst uiinfo)
           clause.ResourcePredicates.packing_ft in
       let output = record_ (List.map (fun (o : OutputDef.entry) -> (o.name, o.value)) output_assignment) in
@@ -1008,12 +1011,8 @@ module General = struct
       end
     | {name = PName pname; _} ->
       let@ def = Typing.get_resource_predicate_def loc pname in
-      let@ res = select_resource_predicate_clause def loc r_pt.pointer r_pt.iargs in
-      let@ clause = match res with
-        | Result.Ok clause -> return clause
-        | Result.Error e -> fail (fun _ -> {loc; msg = Generic
-          (!^ "Cannot fold predicate: " ^^^ Sym.pp pname ^^ colon ^^^ e)})
-      in
+      let@ clause = select_resource_predicate_clause def loc r_pt.pointer r_pt.iargs
+          (!^ "Cannot unfold predicate: " ^^^ Sym.pp pname) in
       let@ x = predicate_request ~recursive:true
           loc uiinfo {
             name = PName pname;

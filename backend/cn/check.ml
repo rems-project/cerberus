@@ -1244,17 +1244,12 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
      in
      check_pexpr ~expect:Loc pointer_pe (fun pointer_arg ->
      check_pexprs (List.combine iarg_pes (List.map snd def.iargs)) (fun iargs ->
-     let@ res = ResourceInference.select_resource_predicate_clause def
-         loc pointer_arg iargs in
-     let@ right_clause = match res with
-       | Result.Ok clause -> return clause
-       | Result.Error msg ->
-            let err = match pack_unpack with
-              | Pack -> !^ "cannot pack:" ^^^ Sym.pp pname ^^ colon ^^^ msg
-              | Unpack -> !^ "cannot unpack:" ^^^ Sym.pp pname ^^ colon ^^^ msg
-            in
-	    fail (fun _ -> {loc; msg = Generic err})
+     let err_prefix = match pack_unpack with
+       | Pack -> !^ "cannot pack:" ^^^ Sym.pp pname
+       | Unpack -> !^ "cannot unpack:" ^^^ Sym.pp pname
      in
+     let@ right_clause = ResourceInference.select_resource_predicate_clause def
+         loc pointer_arg iargs err_prefix in
      begin match pack_unpack with
      | Unpack ->
         let@ (pred, O pred_oargs) =
