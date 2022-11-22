@@ -17,7 +17,7 @@ open Typing
 open Effectful.Make(Typing)
 
 
-let check_consistency = ref true
+
 
 
 let ensure_logical_sort (loc : loc) ~(expect : LS.t) (has : LS.t) : (unit, type_error) m =
@@ -886,11 +886,9 @@ module WLAT (WI: WI_Sig) = struct
       | LAT.I i -> 
          let@ provable = provable loc in
          let@ () = 
-           if !check_consistency then
-             match provable (LC.t_ (IT.bool_ false)) with
-             | `True -> fail (fun _ -> {loc; msg = Generic !^("this "^kind^" makes inconsistent assumptions")})
-             | `False -> return ()
-           else return ()
+           match provable (LC.t_ (IT.bool_ false)) with
+           | `True -> fail (fun _ -> {loc; msg = Generic !^("this "^kind^" makes inconsistent assumptions")})
+           | `False -> return ()
          in
          let@ () = WI.welltyped loc i in
          return ()

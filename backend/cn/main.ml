@@ -132,7 +132,6 @@ let main
       no_reorder_points
       no_additional_sat_check
       no_model_eqs
-      skip_consistency
       only
       csv_times
       log_times
@@ -145,7 +144,6 @@ let main
         CF.Pp_errors.fatal ("print level must be 0 for json output");
     end;
   Debug_ocaml.debug_level := debug_level;
-  WellTyped.check_consistency := not skip_consistency;
   Pp.loc_pp := loc_pp;
   Pp.print_level := print_level;
   Pp.print_timestamps := not no_timestamps;
@@ -239,10 +237,6 @@ let lemmata =
   let doc = "lemmata generation mode (target filename)" in
   Arg.(value & opt (some string) None & info ["lemmata"] ~docv:"FILE" ~doc)
 
-let skip_consistency = 
-  let doc = "Skip check for logical consistency of function specifications." in
-  Arg.(value & flag & info["skip_consistency"] ~doc)
-
 let no_reorder_points =
   let doc = "Deactivate 'reorder points' optimisation in resource inference." in
   Arg.(value & flag & info["no_reorder_points"] ~doc)
@@ -291,7 +285,6 @@ let () =
       no_reorder_points $
       no_additional_sat_check $
       no_model_eqs $
-      skip_consistency $
       only $
       csv_times $
       log_times $
