@@ -1,3 +1,4 @@
+module BT = BaseTypes
 module IT = IndexTerms
 module LS = LogicalSorts
 module LRT = LogicalReturnTypes
@@ -47,6 +48,22 @@ type definition = {
     oargs : (Sym.t * LS.t) list;
     clauses : (clause list) option;
   }
+
+
+let alpha_rename_definition def = 
+  let iargs, subst = 
+    List.fold_right (fun (s, ls) (iargs, subst) ->
+        let s' = Sym.fresh_same s in
+        ((s', ls) :: iargs, (s, IT.sym_ (s', ls)) :: subst)
+      ) def.iargs ([],[])
+  in
+  let pointer = Sym.fresh_same def.pointer in
+  let subst = IT.make_subst ((def.pointer, IT.sym_ (pointer, BT.Loc)) :: subst) in
+  let clauses = Option.map (List.map (subst_clause subst)) def.clauses in
+  { loc = def.loc; pointer; iargs; oargs = def.oargs; clauses }
+  
+
+
 
 let pp_definition def = 
   item "pointer" (Sym.pp def.pointer) ^/^
