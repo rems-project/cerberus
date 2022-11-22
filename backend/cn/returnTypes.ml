@@ -40,6 +40,12 @@ let alpha_unique ss = function
     Computational ((name, bt), oinfo, t)
 
 
+let simp simp_it simp_lc simp_re = function
+  | Computational ((s, bt), info, lt) ->
+     let s, lt = LRT.alpha_rename (s, bt) lt in
+     Computational ((s, bt), info, LRT.simp simp_it simp_lc simp_re lt)
+
+
 let binders = function
   | Computational ((s, bt), _, t) ->
      let (s, t) = LRT.alpha_rename (s, bt) t in

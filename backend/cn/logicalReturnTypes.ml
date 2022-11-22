@@ -110,6 +110,28 @@ let free_vars lrt =
   f lrt
 
 
+let simp simp_it simp_lc simp_re = 
+  let rec aux = function
+    | Define ((s, it), info, t) ->
+       let it = simp_it it in
+       let s, t = alpha_rename (s, IT.bt it) t in
+       Define ((s, it), info, aux t)
+    | Resource ((s, (re, bt)), info, t) ->
+       let re = simp_re re in
+       let s, t = alpha_rename (s, bt) t in
+       Resource ((s, (re, bt)), info, aux t)
+    | Constraint (lc, info, t) ->
+       let lc = simp_lc lc in
+       Constraint (lc, info, aux t)
+    | I ->
+       I
+  in
+  aux
+
+
+
+
+
 let rec pp_aux lrt =
   let open Pp in
   match lrt with

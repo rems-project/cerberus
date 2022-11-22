@@ -56,6 +56,26 @@ and suitably_alpha_rename i_subst syms (s, ls) t =
 
 
 
+let simp i_subst simp_i simp_it simp_lc simp_re = 
+  let rec aux = function
+    | Define ((s, it), info, t) ->
+       let it = simp_it it in
+       let s, t = alpha_rename i_subst (s, IT.bt it) t in
+       Define ((s, it), info, aux t)
+    | Resource ((s, (re, bt)), info, t) ->
+       let re = simp_re re in
+       let s, t = alpha_rename i_subst (s, bt) t in
+       Resource ((s, (re, bt)), info, aux t)
+    | Constraint (lc, info, t) ->
+       let lc = simp_lc lc in
+       Constraint (lc, info, aux t)
+    | I i ->
+       let i = simp_i i in
+       I i
+  in
+  aux
+
+
 open Pp
 
 let rec pp_aux i_pp = function

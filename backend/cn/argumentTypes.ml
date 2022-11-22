@@ -38,6 +38,18 @@ and suitably_alpha_rename i_subst syms (s, ls) t =
   else (s, t)
 
 
+let simp i_subst simp_i simp_it simp_lc simp_re = 
+  let rec aux = function
+    | Computational ((s, bt), info, t) ->
+       let s, t = alpha_rename i_subst (s, bt) t in
+       Computational ((s, bt), info, aux t)
+    | L lt ->
+       L (LAT.simp i_subst simp_i simp_it simp_lc simp_re lt)
+  in
+  aux
+
+
+
 
 let pp i_pp ft = 
   let open Pp in
@@ -77,6 +89,11 @@ let alpha_unique ss =
        L (LAT.alpha_unique ss t)
   in
   f ss
+
+
+
+  
+
 
 
 let binders i_binders i_subst = 
