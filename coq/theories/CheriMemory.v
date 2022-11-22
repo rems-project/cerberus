@@ -3028,6 +3028,8 @@ Module CheriMemory
                         end)
                end)
     | PV (Prov_some alloc_id) (PVconcrete c_value) =>
+        mprint_msg (HexString.of_Z (C.cap_get_value c_value)) ;;
+        (* mprint_msg (HexString.of_Z c_value) ;; *)
         let shifted_addr := Z.add (C.cap_get_value c_value) offset in
         if CoqSwitches.has_switch (CoqSwitches.SW_pointer_arith STRICT)
            || negb (CoqSwitches.has_switch (SW_pointer_arith PERMISSIVE))
@@ -3052,6 +3054,8 @@ Module CheriMemory
                   mprint_msg (HexString.of_Z sz) ;; 
                   mprint_msg (HexString.of_Z (alloc.(base))) ;; 
                   mprint_msg (HexString.of_Z (alloc.(size))) ;; 
+                  mprint_msg (HexString.of_Z (C.cap_get_value c_value)) ;; 
+                  mprint_msg (HexString.of_Z (offset)) ;; 
                   fail (MerrArrayShift loc)
             )
         else
