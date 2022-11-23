@@ -1,0 +1,10 @@
+-R theories Cerberus
+-Q ./stdpp/stdpp stdpp
+-Q ./stdpp/stdpp_unstable stdpp.unstable
+
+
+
+#-R . Cerberus
+
+# -Q ./stdpp/stdpp stdpp
+# -Q ./stdd/stdpp_unstable stdpp.unstable
