@@ -770,6 +770,15 @@ module IndexTerms = struct
     | IT (Bool_op (And lcs), _) -> lcs
     | lc -> [lc]
 
+
+
+  let eval global = 
+    simp ~inline_functions:true 
+      { global; 
+        values = SymMap.empty; 
+        equalities = ITPairMap.empty;
+        lcs = LCSet.empty }
+
 end
 
 module LogicalConstraints = struct

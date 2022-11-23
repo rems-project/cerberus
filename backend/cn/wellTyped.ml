@@ -669,11 +669,15 @@ module WRET = struct
        let p = RET.alpha_rename_qpredicate_type p in
        let@ _ = WIT.check loc BT.Loc p.pointer in
        let@ _ = WIT.check loc BT.Integer p.step in
-       let@ c' = WIT.is_const loc p.step in
-       let@ () = if c' then return () else
+       let@ global = get_global () in
+       let step = Simplify.IndexTerms.eval global p.step in
+       let@ () = match IT.is_z step with
+         | Some _ -> return () 
+         | None ->
            let hint = "Only constant iteration steps are allowed" in
            fail (fun ctxt -> {loc; msg = NIA {context = p.step; it = p.step; ctxt; hint}})
        in
+       let p = { p with step } in
        let@ () =  match p.name with
          | Owned ct ->
            let sz = Memory.size_of_ctype ct in
