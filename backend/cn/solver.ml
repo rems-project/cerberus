@@ -10,6 +10,7 @@ open Pp
 open Global
 open LogicalPredicates
 module LCSet = Set.Make(LC)
+module BT = BaseTypes
 
 
 
@@ -161,6 +162,7 @@ module Translate = struct
   let bt_table = BT_Table.create 1000
   let sort_table = Sort_Table.create 1000
 
+  let bt_id_table = BT_Table.create 1000
 
   let z3sym_table : z3sym_table_entry Z3Symbol_Table.t = 
     Z3Symbol_Table.create 10000
@@ -171,21 +173,35 @@ module Translate = struct
 
   let string context str =
     Z3.Symbol.mk_string context str
+  let symbol_string pfx sym = pfx ^ Sym.pp_string sym ^ "_a" ^ string_of_int (Sym.num sym)
   let prefix_symbol context pfx sym =
-    let str = pfx ^ Sym.pp_string sym ^ "_a" ^ string_of_int (Sym.num sym) in
-    Z3.Symbol.mk_string context str
+    Z3.Symbol.mk_string context (symbol_string pfx sym)
   let symbol context sym = prefix_symbol context "" sym
 
-  
+  let bt_id bt = match BT_Table.find_opt bt_id_table bt with
+    | Some id -> id
+    | None ->
+      let id = BT_Table.length bt_id_table + 1 in
+      let () = BT_Table.add bt_id_table bt id in
+      id
 
-  let bt_name bt = 
-    Pp.plain (BT.pp bt)
+  let bt_pp_name bt =
+    let open Pp in
+    match bt with
+      | BT.Struct nm -> !^ "struct_" ^^ Sym.pp nm
+      | BT.Datatype nm -> !^ "datatype_" ^^ Sym.pp nm
+      | BT.Tuple _ -> !^ "tuple_" ^^ Pp.int (bt_id bt)
+      | BT.Record mems -> !^ "rec_" ^^
+          Pp.flow_map (!^ "_") (fun (nm, _) -> Sym.pp nm) mems ^^ !^ "_" ^^ Pp.int (bt_id bt)
+      | _ -> BT.pp bt
+
+  let bt_name bt = Pp.plain (bt_pp_name bt)
 
   let tuple_field_name bts i = 
     bt_name (Tuple bts) ^ string_of_int i
 
   let record_member_name bts member = 
-    bt_name (Record bts) ^ "_" ^ Sym.pp_string member
+    Sym.pp_string member ^ "_of_" ^ bt_name (Record bts)
 
   let member_name tag id = 
     bt_name (BT.Struct tag) ^ "_" ^ Id.s id
