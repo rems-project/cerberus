@@ -784,6 +784,15 @@ module Eval = struct
 
   open Translate
 
+  let trace_z3_evals = ref false
+
+  let trace_z3_eval expr evaluated =
+    if ! trace_z3_evals then
+      Pp.debug 8 (lazy (Pp.item "Z3 evaluation" (Pp.list
+        (fun expr -> Pp.string (Z3.Expr.to_string expr)) [expr; evaluated])))
+    else ()
+
+
   let is_array_sort sort = 
     try 
       Some (Z3.Z3Array.get_domain sort, 
@@ -1011,11 +1020,12 @@ module Eval = struct
 
     in
 
-
     let expr = Translate.term ~warn_lambda:false context global to_be_evaluated in
     match Z3.Model.eval model expr true with
     | None -> None
-    | Some v -> Some (z3_expr v)
+    | Some v ->
+      trace_z3_eval expr v;
+      Some (z3_expr v)
 
 end
 
