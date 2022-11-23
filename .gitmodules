@@ -1,3 +1,0 @@
-[submodule "coq"]
-	path = coq
-	url = https://github.com/rems-project/stdpp_MC.git
