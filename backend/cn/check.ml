@@ -945,7 +945,8 @@ let all_empty loc original_resources =
     | [] -> return ()
     | ((resource, constr, model) :: _) ->
          let@ global = get_global () in
-         RI.debug_constraint_failure_diagnostics 6 model global constr;
+         let@ simp_ctxt = simp_ctxt () in
+         RI.debug_constraint_failure_diagnostics 6 model global simp_ctxt constr;
          fail_with_trace (fun trace -> fun ctxt ->
              let ctxt = { ctxt with resources = original_resources } in
              {loc; msg = Unused_resource {resource; ctxt; model; trace}})

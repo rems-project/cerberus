@@ -37,7 +37,8 @@ let unpack_def global name args =
     | _ -> None
     )
 
-let debug_constraint_failure_diagnostics lvl (model_with_q : Solver.model_with_q) global c =
+let debug_constraint_failure_diagnostics lvl (model_with_q : Solver.model_with_q)
+        global simp_ctxt c =
   let model = fst model_with_q in
   if ! Pp.print_level == 0 then () else
   let rec split tm = match IT.term tm with
@@ -69,17 +70,21 @@ let debug_constraint_failure_diagnostics lvl (model_with_q : Solver.model_with_q
     end;
     List.iter (diag_rec (i+1)) @@ split tm
   in
-  begin match (c, model_with_q) with
-  | (LC.T tm, _) ->
-    Pp.debug lvl (lazy (Pp.item "counterexample, expanding" (IT.pp tm)));
-    diag_rec 0 tm
-  | (LC.Forall ((sym, bt), tm), (_, [q])) ->
-    let tm' = IT.subst (IT.make_subst [(sym, IT.sym_ q)]) tm in
-    Pp.debug lvl (lazy (Pp.item "quantified counterexample, expanding" (IT.pp tm)));
-    diag_rec 0 tm'
-  | _ ->
-    Pp.warn Loc.unknown (Pp.bold "unexpected quantifier count with model")
-  end
+  let diag msg c = match (c, model_with_q) with
+      | (LC.T tm, _) ->
+        Pp.debug lvl (lazy (Pp.item msg (IT.pp tm)));
+        diag_rec 0 tm
+      | (LC.Forall ((sym, bt), tm), (_, [q])) ->
+        let tm' = IT.subst (IT.make_subst [(sym, IT.sym_ q)]) tm in
+        Pp.debug lvl (lazy (Pp.item ("quantified " ^ msg) (IT.pp tm)));
+        diag_rec 0 tm'
+      | _ ->
+        Pp.warn Loc.unknown (Pp.bold "unexpected quantifier count with model")
+  in
+  diag "counterexample, expanding" c;
+  let c2 = Simplify.LogicalConstraints.simp simp_ctxt c in
+  if LC.equal c c2 then ()
+  else diag "simplified variant" c2
 
 let select_resource_predicate_clause def loc pointer_arg iargs err_prefix =
   let@ clauses = match ResourcePredicates.instantiate_clauses def pointer_arg iargs with
@@ -261,7 +266,7 @@ module General = struct
        | `False ->
            let@ model = model () in
            let@ global = get_global () in
-           debug_constraint_failure_diagnostics 6 model global c;
+           debug_constraint_failure_diagnostics 6 model global simp_ctxt c;
            fail_with_trace (fun trace -> fun ctxt ->
                   let ctxt = { ctxt with resources = original_resources } in
                   {loc; msg = Unsat_constraint {constr = c; info; ctxt; model; trace}}
@@ -285,6 +290,7 @@ module General = struct
        let@ is_ex = exact_match () in
        let is_exact_re (re : RET.t) = !reorder_points && (is_ex (RET.P requested, re)) in
        let@ global = get_global () in
+       let@ simp_ctxt = simp_ctxt () in
        let needed = requested.permission in 
        let sub_resource_if = fun cond re (needed, oargs) ->
              let continue = (Unchanged, (needed, oargs)) in
@@ -301,7 +307,7 @@ module General = struct
                    (bool_ false, p'_oargs)
                 | `False ->
                    let model = Solver.model () in
-                   debug_constraint_failure_diagnostics 9 model global (LC.T took);
+                   debug_constraint_failure_diagnostics 9 model global simp_ctxt (LC.T took);
                    continue
                 end
              | (Q p', p'_oargs) when equal_predicate_name (Owned requested_ct) p'.name ->
@@ -329,7 +335,7 @@ module General = struct
                    (bool_ false, O (record_ oargs))
                 | `False ->
                    let model = Solver.model () in
-                   debug_constraint_failure_diagnostics 9 model global (LC.T took);
+                   debug_constraint_failure_diagnostics 9 model global simp_ctxt (LC.T took);
                    continue
                 end
              | _ ->
@@ -370,6 +376,7 @@ module General = struct
        in
        let@ provable = provable loc in
        let@ global = get_global () in
+       let@ simp_ctxt = simp_ctxt () in
        let needed = requested.permission in 
        let sub_predicate_if = fun cond re (needed, oargs) ->
              let continue = (Unchanged, (needed, oargs)) in
@@ -388,7 +395,7 @@ module General = struct
                    (bool_ false, p'_oargs)
                 | `False ->
                    let model = Solver.model () in
-                   debug_constraint_failure_diagnostics 9 model global (LC.T took);
+                   debug_constraint_failure_diagnostics 9 model global simp_ctxt (LC.T took);
                    continue
                 end
              | (Q p', p'_oargs) when equal_predicate_name requested.name p'.name ->
@@ -414,7 +421,7 @@ module General = struct
                    (bool_ false, O (record_ oargs))
                 | `False ->
                    let model = Solver.model () in
-                   debug_constraint_failure_diagnostics 9 model global (LC.T took);
+                   debug_constraint_failure_diagnostics 9 model global simp_ctxt (LC.T took);
                    continue
                 end
              | re ->
@@ -515,7 +522,7 @@ module General = struct
                    (Simplify.IndexTerms.simp simp_ctxt needed', oargs)
                 | `False ->
                    let model = Solver.model () in
-                   debug_constraint_failure_diagnostics 9 model global (LC.T took);
+                   debug_constraint_failure_diagnostics 9 model global simp_ctxt (LC.T took);
                    continue
                 end
              | (Q p', p'_oargs) when equal_predicate_name (Owned requested_ct) p'.name ->
@@ -537,7 +544,7 @@ module General = struct
                    (Simplify.IndexTerms.simp simp_ctxt needed', oargs)
                 | `False ->
                    let model = Solver.model () in
-                   debug_constraint_failure_diagnostics 9 model global (LC.T pmatch);
+                   debug_constraint_failure_diagnostics 9 model global simp_ctxt (LC.T pmatch);
                    continue
                 end
              | re ->
@@ -604,7 +611,7 @@ module General = struct
        | `True -> return (Some oargs)
        | `False ->
 	 let@ model = model () in
-         debug_constraint_failure_diagnostics 9 model global nothing_more_needed;
+         debug_constraint_failure_diagnostics 9 model global simp_ctxt nothing_more_needed;
          return None
        end
     | pname ->
@@ -658,7 +665,7 @@ module General = struct
                    (Simplify.IndexTerms.simp simp_ctxt needed', oargs)
                 | `False ->
                    let model = Solver.model () in
-                   debug_constraint_failure_diagnostics 9 model global (LC.T took);
+                   debug_constraint_failure_diagnostics 9 model global simp_ctxt (LC.T took);
                    continue
                 end
              | (Q p', p'_oargs) when equal_predicate_name requested.name p'.name 
@@ -682,7 +689,7 @@ module General = struct
                    (Simplify.IndexTerms.simp simp_ctxt needed', oargs)
                 | `False ->
                    let model = Solver.model () in
-                   debug_constraint_failure_diagnostics 9 model global (LC.T pmatch);
+                   debug_constraint_failure_diagnostics 9 model global simp_ctxt (LC.T pmatch);
                    continue
                 end
              | re ->
@@ -695,7 +702,7 @@ module General = struct
        | `True -> return (Some oargs)
        | `False ->
          let@ model = model () in
-         debug_constraint_failure_diagnostics 9 model global nothing_more_needed;
+         debug_constraint_failure_diagnostics 9 model global simp_ctxt nothing_more_needed;
          return None
        end
 
