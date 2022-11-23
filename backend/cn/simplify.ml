@@ -483,9 +483,18 @@ module IndexTerms = struct
             | _, Some bool -> bool_ bool
             | _ -> eq_ (a, b)
             end
-         | IT (Tuple_op (Tuple items1), _), 
+         | IT (Tuple_op (Tuple items1), _),
            IT (Tuple_op (Tuple items2), _)  ->
-            and_ (List.map2 eq__ items1 items2)
+            aux (and_ (List.map2 eq__ items1 items2))
+         | IT (Record_op (Record members1), _),
+           IT (Record_op (Record members2), _)  ->
+            assert (List.for_all2 (fun x y -> Sym.equal (fst x) (fst y)) members1 members2);
+            aux (and_ (List.map2 (fun x y -> eq_ (snd x, snd y)) members1 members2))
+         | IT (Datatype_op (DatatypeCons (nm1, members1)), _),
+           IT (Datatype_op (DatatypeCons (nm2, members2)), _)  ->
+            if Sym.equal nm1 nm2
+            then aux (eq_ (members1, members2))
+            else bool_ false
          | IT (Pointer_op (IntegerToPointerCast a), _), 
            IT (Pointer_op (IntegerToPointerCast b), _) ->
             eq_ (a, b)
