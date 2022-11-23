@@ -154,6 +154,8 @@ module Translate = struct
     | DatatypeConsFunc of { nm: Sym.t }
     | DatatypeConsRecogFunc of { nm: Sym.t }
     | DatatypeAccFunc of { nm: Sym.t; dt: Sym.t; bt: BT.t }
+  [@@deriving eq]
+
 
 
 
@@ -355,8 +357,14 @@ module Translate = struct
     in
 
 
+    let apply_matching_func sym_role fds args =
+      let matching fd = equal_z3sym_table_entry sym_role
+          (Z3Symbol_Table.find z3sym_table (Z3.FuncDecl.get_name fd))
+      in
+      let fd = List.find matching fds in
+      Z3.FuncDecl.apply fd args
+    in
 
-    
 
     let rec term (IT (it_, bt)) =
       begin match it_ with
@@ -505,20 +513,20 @@ module Translate = struct
          begin match datatype_op with
          | DatatypeCons (c_nm, elts_rec) ->
            let info = SymMap.find c_nm global.datatype_constrs in
-           let z3sym = symbol c_nm in
-           let fd = Z3.FuncDecl.mk_func_decl context z3sym
-               (List.map (fun (_, bt) -> sort bt) info.c_params) (sort bt) in
            let args = List.map (fun (nm, _) -> term (Simplify.IndexTerms.record_member_reduce elts_rec nm))
                info.c_params in
-           Z3.FuncDecl.apply fd args
+           apply_matching_func (DatatypeConsFunc {nm = c_nm})
+               (Z3.Datatype.get_constructors (sort bt)) args
          | DatatypeMember (it, member) ->
-           let z3sym = symbol member in
-           let fd = Z3.FuncDecl.mk_func_decl context z3sym [sort (IT.bt it)] (sort bt) in
-           Z3.FuncDecl.apply fd [term it]
+           let dt_nm = match IT.bt it with
+             | BT.Datatype nm -> nm
+             | _ -> assert false
+           in
+           apply_matching_func (DatatypeAccFunc {nm = member; dt = dt_nm; bt})
+               (Z3.Datatype.get_constructors (sort bt)) [term it]
          | DatatypeIsCons (c_nm, t) ->
-           let z3sym = dt_recog_name context c_nm in
-           let fd = Z3.FuncDecl.mk_func_decl context z3sym [sort (IT.bt t)] (sort bt) in
-           Z3.FuncDecl.apply fd [term t]
+           apply_matching_func (DatatypeConsRecogFunc {nm = c_nm})
+               (Z3.Datatype.get_constructors (sort bt)) [term t]
          end
       | Pointer_op pointer_op -> 
          let open Z3.Arithmetic in
