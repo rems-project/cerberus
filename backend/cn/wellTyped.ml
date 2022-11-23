@@ -4,6 +4,7 @@ module SymSet = Set.Make(Sym)
 module TE = TypeErrors
 module RE = Resources
 module RET = ResourceTypes
+module LRT = LogicalReturnTypes
 module AT = ArgumentTypes
 module LAT = LogicalArgumentTypes
 
@@ -663,7 +664,7 @@ module WRET = struct
        (* +1 because of pointer argument *)
        let@ () = ensure_same_argument_number loc `Input (1 + has_iargs) ~expect:(1 + expect_iargs) in
        let@ _ = ListM.map2M (fun (_, expected) arg -> WIT.check loc expected arg) iargs p.iargs in
-       return ()
+       return (RET.P p)
     | Q p ->
        let p = RET.alpha_rename_qpredicate_type p in
        let@ _ = WIT.check loc BT.Loc p.pointer in
@@ -705,7 +706,7 @@ module WRET = struct
              ListM.map2M (fun (_, expected) arg -> WIT.check loc expected arg) iargs p.iargs
            end  
        in
-       return ()
+       return (RET.Q p)
 end
 
 
@@ -733,11 +734,12 @@ let oargs_spec loc = function
 
 module WRS = struct
 
-  let welltyped loc ((resource, bt)) = 
-    let@ () = WRET.welltyped loc resource in
+  let welltyped loc (resource, bt) = 
+    let@ resource = WRET.welltyped loc resource in
     let@ () = WBT.is_bt loc bt in
     let@ oargs_spec = oargs_spec loc resource in
-    ensure_base_type loc ~expect:oargs_spec bt
+    let@ () = ensure_base_type loc ~expect:oargs_spec bt in
+    return (resource, bt)
 
 end
 
@@ -776,19 +778,22 @@ module WLRT = struct
          let@ it = WIT.infer loc it in
          let@ () = add_l s (IT.bt it) (loc, lazy (Pp.string "let-var")) in
          let@ () = add_c (LC.t_ (IT.def_ s it)) in
-         aux lrt
+         let@ lrt = aux lrt in
+         return (Define ((s, it), info, lrt))
       | Resource ((s, (re, re_oa_spec)), info, lrt) -> 
          let s, lrt = LRT.alpha_rename (s, re_oa_spec) lrt in
-         let@ () = WRS.welltyped (fst info) (re, re_oa_spec) in
+         let@ (re, re_oa_spec) = WRS.welltyped (fst info) (re, re_oa_spec) in
          let@ () = add_l s re_oa_spec (loc, lazy (Pp.string "let-var")) in
          let@ () = add_r (re, O (IT.sym_ (s, re_oa_spec))) in
-         aux lrt
+         let@ lrt = aux lrt in
+         return (Resource ((s, (re, re_oa_spec)), info, lrt))
       | Constraint (lc, info, lrt) ->
          let@ () = WLC.welltyped (fst info) lc in
          let@ () = add_c lc in
-         aux lrt
+         let@ lrt = aux lrt in
+         return (Constraint (lc, info, lrt))
       | I -> 
-         return ()
+         return I
     in
     pure (aux lrt)
 
@@ -798,34 +803,44 @@ end
 
 module WRT = struct
 
-  include ReturnTypes
   type t = ReturnTypes.t
+  let subst = ReturnTypes.subst
+  let pp = ReturnTypes.pp
 
   let welltyped loc rt = 
     pure begin match rt with 
-      | Computational ((name,bt), info, lrt) ->
+      | RT.Computational ((name,bt), info, lrt) ->
          let name, lrt = LRT.alpha_rename (name, bt) lrt in
          let@ () = WBT.is_bt (fst info) bt in
          let@ () = add_l name bt (loc, lazy (Pp.string "ret-var")) in
          let@ () = add_a (Sym.fresh_same name) (IndexTerms.sym_ (name, bt)) in
-         WLRT.welltyped loc lrt
+         let@ lrt = WLRT.welltyped loc lrt in
+         return (RT.Computational ((name, bt), info, lrt))
       end
 
 end
 
 
 
+
+
+
+
+
 module WFalse = struct
-  include False
   type t = False.t
-  let welltyped _ _ = return ()
+  let subst = False.subst
+  let pp = False.pp
+  let welltyped _ False.False = 
+    return False.False
 end
 
-module type WOutputSpec = sig val name_bts : (Sym.t * LS.t) list end
-module WOutputDef (Spec : WOutputSpec) = struct
-  include OutputDef
+module WOutputDef = struct
+  open OutputDef
   type t = OutputDef.t
-  let welltyped loc assignment =
+  let subst = OutputDef.subst
+  let pp = OutputDef.pp
+  let welltyped spec_name_bts loc assignment =
     let rec aux name_bts assignment =
       match name_bts, assignment with
       | [], [] -> 
@@ -841,57 +856,43 @@ module WOutputDef (Spec : WOutputSpec) = struct
       | _, {loc = loc'; name = name'; _} :: _ -> 
          fail (fun _ -> {loc; msg = Generic (!^"unexpected output argument" ^^^ Sym.pp name')})
     in
-    aux Spec.name_bts assignment
+    let@ () = aux spec_name_bts assignment in
+    return assignment
 
 end
 
 
-module type WI_Sig = sig
+module WLAT = struct
 
-  type t
-
-  val subst : IndexTerms.t Subst.t -> t -> t
-
-  val pp : t -> Pp.document
-
-  val welltyped : 
-    Loc.t -> 
-    t -> 
-    (unit, type_error) m
-end
-
-
-module WLAT (WI: WI_Sig) = struct
-
-  type t = WI.t LAT.t
-
-  let welltyped kind loc (at : t) : (unit, type_error) m = 
+  let welltyped i_subst i_welltyped kind loc (at : 'i LAT.t) : ('i LAT.t, type_error) m = 
     let rec aux = function
       | LAT.Define ((s, it), info, at) ->
-         let s, at = LAT.alpha_rename WI.subst (s, IT.bt it) at in
+         let s, at = LAT.alpha_rename i_subst (s, IT.bt it) at in
          let@ it = WIT.infer loc it in
          let@ () = add_l s (IT.bt it) (loc, lazy (Pp.string "let-var")) in
          let@ () = add_c (LC.t_ (IT.def_ s it)) in
-         aux at
+         let@ at = aux at in
+         return (LAT.Define ((s, it), info, at))
       | LAT.Resource ((s, (re, re_oa_spec)), info, at) -> 
-         let s, at = LAT.alpha_rename WI.subst (s, re_oa_spec) at in
-         let@ () = WRS.welltyped (fst info) (re, re_oa_spec) in
+         let s, at = LAT.alpha_rename i_subst (s, re_oa_spec) at in
+         let@ (re, re_oa_spec) = WRS.welltyped (fst info) (re, re_oa_spec) in
          let@ () = add_l s re_oa_spec (loc, lazy (Pp.string "let-var")) in
          let@ () = add_r (re, O (IT.sym_ (s, re_oa_spec))) in
-         aux at
+         let@ at = aux at in
+         return (LAT.Resource ((s, (re, re_oa_spec)), info, at))
       | LAT.Constraint (lc, info, at) ->
          let@ () = WLC.welltyped (fst info) lc in
          let@ () = add_c lc in
-         aux at
+         let@ at = aux at in
+         return (LAT.Constraint (lc, info, at))
       | LAT.I i -> 
          let@ provable = provable loc in
-         let@ () = 
-           match provable (LC.t_ (IT.bool_ false)) with
+         let@ () = match provable (LC.t_ (IT.bool_ false)) with
            | `True -> fail (fun _ -> {loc; msg = Generic !^("this "^kind^" makes inconsistent assumptions")})
            | `False -> return ()
          in
-         let@ () = WI.welltyped loc i in
-         return ()
+         let@ i = i_welltyped loc i in
+         return (LAT.I i)
     in
     pure (aux at)
 
@@ -901,22 +902,20 @@ end
 
 
 
-module WAT (WI: WI_Sig) = struct
+module WAT = struct
 
-  module WLAT = WLAT(WI)
-
-  type t = WI.t AT.t
-
-  let welltyped kind loc (at : t) : (unit, type_error) m = 
+  let welltyped i_subst i_welltyped kind loc (at : 'i AT.t) : ('i AT.t, type_error) m = 
     let rec aux = function
       | AT.Computational ((name,bt), info, at) ->
-         let name, at = AT.alpha_rename WI.subst (name, bt) at in
+         let name, at = AT.alpha_rename i_subst (name, bt) at in
          let@ () = WBT.is_bt (fst info) bt in
          let@ () = add_l name bt (loc, lazy (Pp.string "arg")) in
          let@ () = add_a (Sym.fresh_same name) (IndexTerms.sym_ (name, bt)) in
-         aux at
+         let@ at = aux at in
+         return (AT.Computational ((name, bt), info, at))
       | AT.L at ->
-         WLAT.welltyped kind loc at
+         let@ at = WLAT.welltyped i_subst i_welltyped kind loc at in
+         return (AT.L at)
     in
     pure (aux at)
 
@@ -925,16 +924,24 @@ module WAT (WI: WI_Sig) = struct
 end
 
 
-module WFT = WAT(WRT)
-module WLT = WAT(WFalse)
-module WPackingFT(Spec : WOutputSpec) = WLAT(WOutputDef(Spec))
+module WFT = struct 
+  let welltyped = WAT.welltyped WRT.subst WRT.welltyped
+end
+
+module WLT = struct
+  let welltyped = WAT.welltyped WFalse.subst WFalse.welltyped
+end
+
+(* module WPackingFT(struct let name_bts = pd.oargs end) = 
+   WLAT(WOutputDef.welltyped (pd.oargs)) *)
 
 module WRPD = struct
+
+  open ResourcePredicates 
 
   let welltyped pd = 
     let pd = ResourcePredicates.alpha_rename_definition pd in
     pure begin
-        let open ResourcePredicates in
         let@ () = add_l pd.pointer BT.Loc (pd.loc, lazy (Pp.string "ptr-var")) in
         let@ () = 
           ListM.iterM (fun (s, ls) -> 
@@ -943,25 +950,27 @@ module WRPD = struct
             ) pd.iargs 
         in
         let@ () = ListM.iterM (WLS.is_ls pd.loc) (List.map snd pd.oargs) in
-        let module WPackingFT = WPackingFT(struct let name_bts = pd.oargs end)  in
-        match pd.clauses with
-        | None -> return ()
-        | Some clauses ->
-           let rec aux negated_guards = function
-             | [] -> 
-                return ()
-             | {loc; guard; packing_ft} :: clauses ->
-                let@ _ = WIT.check loc BT.Bool guard in
-                let@ () = 
-                  pure begin 
-                      let@ _ = add_c (LC.t_ guard) in
-                      let@ _ = add_c (LC.t_ (IT.and_ negated_guards)) in
-                      WPackingFT.welltyped "clause" pd.loc packing_ft
-                    end
-                in
-                aux (IT.not_ guard :: negated_guards) clauses
-           in
-           aux [] clauses
+        let@ clauses = match pd.clauses with
+          | None -> return None
+          | Some clauses ->
+             let@ clauses = 
+               ListM.fold_leftM (fun acc {loc; guard; packing_ft} ->
+                   let@ _ = WIT.check loc BT.Bool guard in
+                   let negated_guards = List.map (fun clause -> IT.not_ clause.guard) acc in
+                   pure begin 
+                       let@ () = add_c (LC.t_ guard) in
+                       let@ () = add_c (LC.t_ (IT.and_ negated_guards)) in
+                       let@ packing_ft = 
+                         WLAT.welltyped WOutputDef.subst (WOutputDef.welltyped (pd.oargs))
+                           "clause" loc packing_ft
+                       in
+                       return (acc @ [{loc; guard; packing_ft}])
+                     end
+                 ) [] clauses
+             in
+             return (Some clauses)
+        in
+        return { pd with clauses }
       end
 
 end

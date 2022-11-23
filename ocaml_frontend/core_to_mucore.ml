@@ -836,14 +836,14 @@ let normalise_fun_map_decl (name1: symbol) d
      in
      let labels' = 
        Pmap.map (function
-           | Mi_Return (loc, lt) -> 
-              M_Return (loc, lt)
+           | Mi_Return loc (* (loc, lt) *) -> 
+              M_Return loc (* (loc, lt) *)
            | Mi_Label (loc, lt, args, e, annots) ->
               let e = normalise_expr loc returns e in
-              M_Label (loc, lt, args, e, annots)
+              M_Label (loc, lt, args, (), e, annots)
          ) labels
      in
-     M_Proc(loc, bt, args, normalise_expr loc returns e, labels')
+     M_Proc(loc, bt, (args, ()), normalise_expr loc returns e, labels')
   | Mi_ProcDecl(loc, bt, bts) -> M_ProcDecl(loc, bt, bts)
   | Mi_BuiltinDecl(loc, bt, bts) -> M_BuiltinDecl(loc, bt, bts)
 

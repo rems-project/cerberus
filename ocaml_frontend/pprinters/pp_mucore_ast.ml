@@ -401,9 +401,9 @@ module Make(PP_Typ : Pp_mucore.PP_Typ) = struct
 
   let dtree_of_label l def =
     match def with
-    | M_Return (loc,_) -> 
+    | M_Return (loc) -> 
        (Dleaf (!^"return" ^^^ Location_ocaml.pp_location ~clever:false loc))
-    | M_Label (loc, _, _, body, _) -> 
+    | M_Label (loc, _, _, _, body, _) -> 
        Dnode (pp_symbol l ^^^ Location_ocaml.pp_location ~clever:false loc, [dtree_of_expr body])
 
   let dtrees_of_labels labels = 
@@ -420,7 +420,7 @@ module Make(PP_Typ : Pp_mucore.PP_Typ) = struct
             Dnode ( pp_field "Fun" ^^^ pp_symbol sym ^^ P.colon ^^^ MuPP.pp_bt bTy
                   , [ Dnode (pp_field ".params", List.map dtree_of_param params)
                     ; Dnode (pp_field ".body", [dtree_of_pexpr pe]) ] )
-        | M_Proc (loc, bTy, params, e, labels) ->
+        | M_Proc (loc, bTy, (params, _logical_arguments), e, labels) ->
             Dnode ( pp_field "PRoc" ^^^ pp_symbol sym ^^ P.colon ^^^ MuPP.pp_bt bTy
                   , [ Dnode (pp_field ".params", List.map dtree_of_param params)
                     ; Dnode (pp_field ".body", [dtree_of_expr e])

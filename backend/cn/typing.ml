@@ -405,7 +405,7 @@ let todo_opt_get_resource_predicate_def_s id =
   let@ global = get_global () in
   let odef = 
     SymMap.choose_opt
-      (SymMap.filter (fun s _ -> String.equal (Sym.pp_string s) id)
+      (SymMap.filter (fun s _ -> String.equal (Tools.todo_string_of_sym s) id)
          global.resource_predicates)
   in
   return odef
@@ -414,7 +414,7 @@ let todo_opt_get_logical_predicate_def_s id =
   let@ global = get_global () in
   let odef = 
     SymMap.choose_opt
-      (SymMap.filter (fun s _ -> String.equal (Sym.pp_string s) id)
+      (SymMap.filter (fun s _ -> String.equal (Tools.todo_string_of_sym s) id)
          global.logical_predicates)
   in
   return odef

@@ -1070,7 +1070,7 @@ let mod_mappings mapping_names mappings f =
 (*     |> List.map (fun {path; it; _} -> (Pp.plain (Ast.Terms.pp true path), it))) *)
 
 let make_fun_spec loc (global : Global.t) fsym (fspec : function_spec)
-    : (AT.ft * CF.Mucore.trusted * mapping, type_error) m = 
+    : (AT.ft * CF.Mucore.trusted * (Sym.t * ((Sym.t * BT.t) list)) * mapping, type_error) m = 
   let open AT in
   let open RT in
 
@@ -1276,17 +1276,41 @@ let make_fun_spec loc (global : Global.t) fsym (fspec : function_spec)
   in
   let rt = RT.mComputational oA lrt in
   
-  let lft =
-    List.fold_right (fun (iarg, info) lft ->
+  let lft, lrecord_members =
+    List.fold_right (fun (iarg, info) (lft, lrecord_members) ->
         match iarg with
-        | `Define (s, it) -> LAT.Define ((s, it), info, lft)
-        | `Resource (s, re, oargs) -> LAT.Resource ((s, (re, oargs)), info, lft)
-        | `Constraint lc -> LAT.Constraint (lc, info, lft)
-      ) i (LAT.I rt)
+        | `Define (s, it) -> 
+           LAT.Define ((s, it), info, lft),
+           (s, IT.bt it) :: lrecord_members
+        | `Resource (s, re, oargs) -> 
+           LAT.Resource ((s, (re, oargs)), info, lft),
+           (s, oargs) :: lrecord_members
+        | `Constraint lc -> 
+           LAT.Constraint (lc, info, lft),
+           lrecord_members
+      ) i (LAT.I rt, [])
   in
   let ft = AT.mComputationals iA (AT.L lft) in
 
-  return (ft, fspec.trusted, StringMap.find "start" mappings)
+  let lrecord_members = 
+    List.map (fun (s, bt, _) -> (s, bt)) iA @
+    lrecord_members 
+  in
+
+  let lrecord, lrecord_it = IT.fresh_named (BT.Record lrecord_members) "this@start" in
+  
+  let label_mapping_subst = 
+    List.map (fun (s, bt) -> (s, recordMember_ ~member_bt:bt (lrecord_it, s))
+      ) lrecord_members
+  in
+  let start_mapping_for_labels =
+    let subst = IT.make_subst label_mapping_subst in
+    List.map (fun item -> 
+        { item with it = IT.subst subst item.it }
+      ) (StringMap.find "start" mappings)
+  in
+
+  return (ft, fspec.trusted, (lrecord, lrecord_members), start_mapping_for_labels)
 
 
   
@@ -1408,17 +1432,31 @@ let make_label_spec
   in
 
 
-  let llt =
-    List.fold_right (fun (iarg, info) lt ->
+  let llt, lrecord_members =
+    List.fold_right (fun (iarg, info) (lt, lrecord_members) ->
         match iarg with
-        | `Define (s, it) -> LAT.Define ((s, it), info, lt)
-        | `Resource (s, re, oargs) -> LAT.Resource ((s, (re, oargs)), info, lt)
-        | `Constraint lc -> LAT.Constraint (lc, info, lt)
-      ) i (LAT.I False.False)
+        | `Define (s, it) -> 
+           LAT.Define ((s, it), info, lt),
+           (s, IT.bt it) :: lrecord_members
+        | `Resource (s, re, oargs) -> 
+           LAT.Resource ((s, (re, oargs)), info, lt),
+           (s, oargs) :: lrecord_members
+        | `Constraint lc -> 
+           LAT.Constraint (lc, info, lt),
+           lrecord_members
+      ) i (LAT.I False.False, [])
   in
+
   let lt = AT.mComputationals iA (AT.L llt) in
 
-  return (lt, StringMap.find lname mappings)
+  let lrecord_members = 
+    List.map (fun (s, bt, _) -> (s, bt)) iA @
+    lrecord_members
+  in
+
+  let lrecord_s = Sym.fresh_named ("this@"^lname) in
+
+  return (lt, (lrecord_s, lrecord_members))
 
 
 

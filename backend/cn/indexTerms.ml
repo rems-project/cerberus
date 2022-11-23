@@ -472,16 +472,16 @@ let fold_subterms : 'a 'bt. ((Sym.t * BT.t) list -> 'a -> 'bt term -> 'a) -> 'a 
   fun f acc t -> fold f [] acc t
 
 
-let is_pred (pred: string) (IT (it_, bt)) = 
+let todo_is_pred (pred: string) (IT (it_, bt)) = 
   match pred, it_ with
-  | _, Pred (name, _) when String.equal (Sym.pp_string name) pred -> true
+  | _, Pred (name, _) when String.equal (Tools.todo_string_of_sym name) pred -> true
   | "good", CT_pred (Good _) -> true
   | _ -> false
 
-let mentions_pred (pred: Id.t) =
+let todo_mentions_pred (pred: Id.t) =
   let pred = Id.s pred in
   fold_subterms (fun _binders acc it ->
-      acc || is_pred pred it
+      acc || todo_is_pred pred it
     ) false
 
 let preds_of t =

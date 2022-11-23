@@ -24,7 +24,8 @@ open Tools
 open NewMu
 
 type funinfos = New.mu_funinfos
-type funinfo_extras = (Sym.t, Ast.function_spec * Mapping.t) Pmap.map
+type funinfo_extras = 
+  (Sym.t, Ast.function_spec * (Sym.t * (Sym.t * BT.t) list) * Mapping.t) Pmap.map
 
 
 
@@ -627,12 +628,12 @@ let retype_file (context : Context.t) opts (file : 'TY Old.mu_file)
         let ret_ctype = Sctypes.of_ctype_unsafe loc ret_ctype in
         let args = List.map_snd (Sctypes.of_ctype_unsafe loc) args in
         let@ fspec = Parse.parse_function glob_typs trusted args ret_ctype attrs in
-        let@ (ftyp, trusted, mappings) = 
+        let@ (ftyp, trusted, largs, mappings) = 
           Conversions.make_fun_spec loc global fsym fspec
         in
         let funinfo_entry = New.M_funinfo (floc,attrs,ftyp, trusted, has_proto) in
         let funinfo = Pmap.add fsym funinfo_entry funinfo in
-        let funinfo_extra = Pmap.add fsym (fspec, mappings) funinfo_extra in
+        let funinfo_extra = Pmap.add fsym (fspec, largs, mappings) funinfo_extra in
         return (funinfo, funinfo_extra)
     in
     PmapM.foldM retype_funinfo file.mu_funinfo (Pmap.empty Sym.compare, Pmap.empty Sym.compare)
@@ -640,14 +641,14 @@ let retype_file (context : Context.t) opts (file : 'TY Old.mu_file)
 
   let retype_label ~fsym (lsym : Sym.t) def = 
     match def with
-    | Old.M_Return (loc, _) ->
-       let return_type = match Pmap.lookup fsym funinfo with
-         | Some (New.M_funinfo (_,_,ftyp, _trusted, _)) -> (AT.get_return ftyp)
-         | None -> error (Sym.pp_string fsym^" not found in funinfo")
-       in
-       let lt = AT.of_rt return_type (LAT.I False.False) in
-       return (New.M_Return (loc, lt))
-    | Old.M_Label (loc, argtyps, args, e, annots) -> 
+    | Old.M_Return loc ->
+       (* let return_type = match Pmap.lookup fsym funinfo with *)
+       (*   | Some (New.M_funinfo (_,_,ftyp, _trusted, _)) -> (AT.get_return ftyp) *)
+       (*   | None -> error (Sym.pp_string fsym^" not found in funinfo") *)
+       (* in *)
+       (* let lt = AT.of_rt return_type (LAT.I False.False) in *)
+       return (New.M_Return loc)
+    | Old.M_Label (loc, argtyps, args, (), e, annots) -> 
        let@ args = mapM (retype_arg loc) args in
        let@ argtyps = 
          ListM.mapM (fun (msym, (ct,by_pointer)) ->
@@ -669,15 +670,15 @@ let retype_file (context : Context.t) opts (file : 'TY Old.mu_file)
             | _ -> failwith "label without name"
           in
           let (global_arguments, start_mapping) = match Pmap.lookup fsym funinfo_extra with
-            | Some (fspec, start_mapping) -> (fspec.global_arguments, start_mapping)
+            | Some (fspec, _largs, start_mapping) -> (fspec.global_arguments, start_mapping)
             | None -> error (Sym.pp_string fsym^" not found in funinfo")
           in
           let@ lspec = Parse.parse_label lname argtyps global_arguments this_attrs in
-          let@ (lt,mapping) = 
+          let@ (lt, lrecord) = 
             Conversions.make_label_spec fsym loc global lname start_mapping lspec
           in
           let@ e = retype_expr e in
-          return (New.M_Label (loc, lt,args,e,annots))
+          return (New.M_Label (loc, lt, args, lrecord, e, annots))
        | Some (LAloop_body loop_id) ->
           error "body label has not been inlined"
        | Some (LAloop_continue loop_id) ->
@@ -701,14 +702,17 @@ let retype_file (context : Context.t) opts (file : 'TY Old.mu_file)
       let@ args = mapM (retype_arg Loc.unknown) args in
       let@ pexpr = retype_pexpr pexpr in
       return (New.M_Fun (bt,args,pexpr))
-   | Old.M_Proc (loc,cbt,args,expr,labels) ->
+   | Old.M_Proc (loc,cbt,(args, ()),expr,labels) ->
+      let (_, largs, _) = Pmap.find fsym funinfo_extra in
       let@ bt = Conversions.bt_of_core_base_type loc cbt in
       let@ args = mapM (retype_arg loc) args in
       let@ expr = retype_expr expr in
-      let@ labels = if opts.drop_labels
-          then return (Pmap.empty Sym.compare)
-          else PmapM.mapM (retype_label ~fsym) labels Sym.compare in
-      return (New.M_Proc (loc,bt,args,expr,labels))
+      let@ labels = 
+        if opts.drop_labels
+        then return (Pmap.empty Sym.compare)
+        else PmapM.mapM (retype_label ~fsym) labels Sym.compare 
+      in
+      return (New.M_Proc (loc,bt,(args,largs),expr,labels))
    | Old.M_ProcDecl (loc,cbt,args) ->
       let@ bt = Conversions.bt_of_core_base_type loc cbt in
       let@ args = mapM (Conversions.bt_of_core_base_type loc) args in
@@ -730,7 +734,7 @@ let retype_file (context : Context.t) opts (file : 'TY Old.mu_file)
         | Some body -> body
         | None -> error (Sym.pp_string sym ^ " not in funs")
   in
-  let log_c_defs = Pmap.fold (fun fsym (fspec, _) defs ->
+  let log_c_defs = Pmap.fold (fun fsym (fspec, _, _) defs ->
         let open Ast in
         List.map (fun id -> (id, fsym, new_body fsym)) fspec.defines_log_funs @ defs)
     funinfo_extra []

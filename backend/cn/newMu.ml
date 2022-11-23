@@ -13,6 +13,7 @@ module SR_Types = struct
   type gt = ct
   type ut = unit
   type mapping = Mapping.t
+  type logical_arguments = (Sym.t * (Sym.t * BaseTypes.t) list)
   type resource_predicates = (Sym.t * ResourcePredicates.definition) list
   type logical_predicates = (Sym.t * LogicalPredicates.definition) list
 end

@@ -896,7 +896,7 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
         | M_BuiltinDecl (loc, bTy, bTys) ->
             pp_cond loc @@
             pp_keyword "builtin" ^^^ pp_symbol sym ^^^ P.parens (comma_list pp_bt bTys)
-        | M_Proc (loc, bTy, params, e, labels) ->
+        | M_Proc (loc, bTy, (params, _logical_arguments), e, labels) ->
             pp_cond loc @@
             pp_keyword "proc" ^^^ pp_symbol sym ^^^ pp_params params ^^ P.colon ^^^ pp_keyword "eff" ^^^ pp_bt bTy ^^^
             P.colon ^^ P.equals ^^
@@ -906,9 +906,9 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
               (Pmap.fold (fun sym def acc ->
                    acc ^^
                    begin match def with
-                   | M_Return (_, lt) -> 
-                      P.break 1 ^^ !^"return label" ^^^ pp_symbol sym ^^ P.colon ^^^ pp_lt lt
-                   | M_Label (_, lt, args, lbody, annots) ->
+                   | M_Return _ -> 
+                      P.break 1 ^^ !^"return label" ^^^ pp_symbol sym (* ^^ P.colon ^^^ pp_lt lt *)
+                   | M_Label (_, lt, args, _largs, lbody, annots) ->
                       P.break 1 ^^ !^"label" ^^^ pp_symbol sym ^^ P.colon ^^^ pp_lt lt ^^
                         (* label core function definition *)
                         P.break 1 ^^ !^"label" ^^^ pp_symbol sym ^^^ 

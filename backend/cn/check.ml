@@ -1320,7 +1320,7 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
      let@ constraints = all_constraints () in
      let extra_assumptions = 
        let omentions_pred it = match oid with
-         | Some id -> IT.mentions_pred id it
+         | Some id -> IT.todo_mentions_pred id it
          | None -> true
        in
        List.filter_map (fun lc ->
@@ -1443,46 +1443,61 @@ let check_pexpr_rt loc pexpr (RT.Computational ((return_s, return_bt), info, lrt
   return ()))
 
 
-let check_and_bind_arguments rt_subst loc arguments (function_typ : 'rt AT.t) = 
-  let rec check args (ftyp : 'rt AT.t) =
-    match args, ftyp with
-    | ((aname, abt) :: args), (AT.Computational ((lname, sbt), _info, ftyp)) ->
+let check_and_bind_arguments rt_subst loc arguments (lrecord_s, lmembers) (function_typ : 'rt AT.t) = 
+
+  let open LAT in
+
+  let lrecord = sym_ (lrecord_s, BT.Record lmembers) in
+  let@ () = add_l lrecord_s (IT.bt lrecord) (loc, lazy (Sym.pp lrecord_s)) in
+
+  let rec check_l resources lmembers (ftyp : 'rt LAT.t) = 
+    match lmembers, ftyp with
+    | ((lmember,member_bt) :: lmembers), 
+      (Define ((sname, it), info, ftyp)) ->
+       let@ () = WellTyped.ensure_base_type (fst info) ~expect:(IT.bt it) member_bt in
+       let member_it = recordMember_ ~member_bt (lrecord, lmember) in
+       let@ () = add_c (t_ (eq__ member_it it)) in
+       check_l resources lmembers (LAT.subst rt_subst (IT.make_subst [(sname, member_it)]) ftyp)
+    | ((lmember,member_bt) :: lmembers), 
+      (Resource ((s, (re, bt)), info, ftyp)) ->
+       let@ () = WellTyped.ensure_base_type (fst info) ~expect:bt member_bt in
+       let member_it = recordMember_ ~member_bt (lrecord, lmember) in
+       let resources = ((re, O member_it) :: resources) in
+       check_l resources lmembers (LAT.subst rt_subst (IT.make_subst [(s, member_it)]) ftyp)
+    | lmembers, 
+      Constraint (lc, _, ftyp) ->
+       let@ () = add_c lc in
+       check_l resources lmembers ftyp
+    | [], 
+      I rt ->
+       return (rt, resources)
+    | _ ->
+       assert false
+  in
+
+  let rec check_a args lmembers (ftyp : 'rt AT.t) =
+    match args, lmembers, ftyp with
+    | ((aname, abt) :: args), 
+      ((lmember,member_bt) :: lmembers),
+      (AT.Computational ((lname, sbt), _info, ftyp)) ->
+       assert (BT.equal abt member_bt);
        if BT.equal abt sbt then
-         let new_lname = Sym.fresh_same aname in
-         let subst = make_subst [(lname, sym_ (new_lname, sbt))] in
-         let ftyp' = AT.subst rt_subst subst ftyp in
-         let info = (loc, lazy (Pp.item "argument" (Sym.pp aname))) in
-         let@ () = add_l new_lname abt info in
-         let@ () = add_a aname (sym_ (new_lname, abt)) in
-         check args ftyp'
+         let it = recordMember_ ~member_bt (lrecord,lmember) in
+         let@ () = add_a aname it in
+         check_a args lmembers (AT.subst rt_subst (make_subst [(lname, it)]) ftyp)
        else
          fail (fun _ -> {loc; msg = Mismatch {has = BT.pp abt; expect = BT.pp sbt}})
-    | [], (AT.Computational (_, _, _))
-    | (_ :: _), (AT.L _) ->
+    | [], _, (AT.Computational (_, _, _))
+    | (_ :: _), _, (AT.L _) ->
        let expect = AT.count_computational function_typ in
        let has = List.length arguments in
        fail (fun _ -> {loc; msg = Number_arguments {expect; has}})
-    | [], AT.L ftyp ->
-       let open LAT in
-       let rec bind resources = function
-         | Define ((sname, it), _, ftyp) ->
-            let info = (loc, lazy (Pp.item "argument let-bind" (Sym.pp sname))) in
-            let@ () = add_l sname (IT.bt it) info in
-            let@ () = add_c (t_ (def_ sname it)) in
-            bind resources ftyp
-         | Resource ((s, (re, bt)), _, ftyp) ->
-            let info = (loc, lazy (Pp.item "argument let-res-bind" (Sym.pp s))) in
-            let@ () = add_l s bt info in
-            bind ((re, O (sym_ (s, bt))) :: resources) ftyp
-         | Constraint (lc, _, ftyp) ->
-            let@ () = add_c lc in
-            bind resources ftyp
-         | I rt ->
-            return (rt, resources)
-       in
-       bind [] ftyp
+    | [], lmembers, AT.L ftyp ->
+       check_l [] lmembers ftyp
+    | _ -> 
+       assert false
   in
-  check arguments function_typ
+  check_a arguments lmembers function_typ
 
 
 (* let do_post_typing info = *)
@@ -1494,33 +1509,41 @@ let check_and_bind_arguments rt_subst loc arguments (function_typ : 'rt AT.t) =
 
 
 (* check_function: type check a (pure) function *)
-let check_function 
-      (loc : loc) 
-      (info : string) 
-      (arguments : (Sym.t * BT.t) list) 
-      (rbt : BT.t) 
-      (body : 'bty mu_pexpr) 
-      (function_typ : AT.ft)
-    : (unit, type_error) Typing.m =
-  debug 2 (lazy (headline ("checking function " ^ info)));
-  pure begin
-      let@ (rt, resources) = 
-        check_and_bind_arguments RT.subst loc arguments function_typ 
-      in
-      let@ () = ListM.iterM add_r resources in
-      (* rbt consistency *)
-      let@ () = 
-        let Computational ((sname, sbt), _info, t) = rt in
-        WellTyped.ensure_base_type loc ~expect:sbt rbt
-      in
-      check_pexpr_rt loc body rt
-    end
+(* let check_function  *)
+(*       (loc : loc)  *)
+(*       (info : string)  *)
+(*       (arguments : (Sym.t * BT.t) list)  *)
+(*       (rbt : BT.t)  *)
+(*       (body : 'bty mu_pexpr)  *)
+(*       (function_typ : AT.ft) *)
+(*     : (unit, type_error) Typing.m = *)
+(*   debug 2 (lazy (headline ("checking function " ^ info))); *)
+(*   pure begin *)
+(*       let@ (rt, resources) =  *)
+(*         check_and_bind_arguments loc RT.subst loc arguments [] function_typ  *)
+(*       in *)
+(*       let@ () = ListM.iterM add_r resources in *)
+(*       (\* rbt consistency *\) *)
+(*       let@ () =  *)
+(*         let Computational ((sname, sbt), _info, t) = rt in *)
+(*         WellTyped.ensure_base_type loc ~expect:sbt rbt *)
+(*       in *)
+(*       check_pexpr_rt loc body rt *)
+(*     end *)
+
+
+(* let rt_and_label_defs_subst substitution (rt, label_defs) =  *)
+(*   (RT.subst substitution rt,  *)
+(*    subst_label_defs (AT.subst False.subst) substitution label_defs) *)
+
+
 
 (* check_procedure: type check an (impure) procedure *)
 let check_procedure 
       (loc : loc) 
       (fsym : Sym.t)
       (arguments : (Sym.t * BT.t) list)
+      (larguments : (Sym.t * (Sym.t * BT.t) list))
       (rbt : BT.t) 
       (body : 'bty mu_expr)
       (function_typ : AT.ft) 
@@ -1530,47 +1553,104 @@ let check_procedure
   debug 2 (lazy (item "type" (AT.pp RT.pp function_typ)));
 
   pure begin 
+
+
+      (* let function_typ = AT.map (fun rt -> (rt, label_defs)) function_typ in *)
+      (* let@ function_typ =  *)
+      (*   WellTyped.WAT.welltyped rt_and_label_defs_subst (fun _loc (rt, label_defs) -> *)
+      (*       let@ rt = pure (WellTyped.WRT.welltyped loc rt) in *)
+      (*       let@ label_defs =  *)
+      (*         PmapM.mapM (fun _ def -> *)
+      (*             pure begin *)
+      (*                 match def with *)
+      (*                 | M_Return (loc, lt) -> *)
+      (*                    let@ lt = WellTyped.WLT.welltyped "return" loc lt in *)
+      (*                    return (M_Return (loc, lt)) *)
+      (*                 | M_Label (loc, lt, args, largs, body, annots) ->  *)
+      (*                    let@ lt = WellTyped.WLT.welltyped "in-function type annotation" loc lt in *)
+      (*                    return (M_Label (loc, lt, args, largs, body, annots)) *)
+      (*               end *)
+      (*           ) label_defs Sym.compare *)
+      (*       in *)
+      (*       return (rt, label_defs) *)
+      (*     ) "in-function type annotation" loc function_typ *)
+      (* in *)
+
       (* check and bind the function arguments *)
-      let@ ((rt, label_defs), resources) = 
-        let function_typ = AT.map (fun rt -> (rt, label_defs)) function_typ in
-        let rt_and_label_defs_subst substitution (rt, label_defs) = 
-          (RT.subst substitution rt, 
-           subst_label_defs (AT.subst False.subst) substitution label_defs)
-        in
-        check_and_bind_arguments rt_and_label_defs_subst
-          loc arguments function_typ 
+      let@ (rt, resources) = 
+        check_and_bind_arguments RT.subst
+          loc arguments larguments function_typ 
       in
       (* rbt consistency *)
       let@ () = 
         let Computational ((sname, sbt), _info, t) = rt in
         WellTyped.ensure_base_type loc ~expect:sbt rbt
       in
-      (* check well-typedness of labels and record their types *)
+
+      (* let@ () = print_with_ctxt (fun ctxt -> *)
+      (*     debug 6 (lazy (item "arguments" (Pp.list (fun (s,bt) -> Sym.pp s) arguments))); *)
+      (*   ) *)
+      (* in *)
+
+      (* let@ () = print_with_ctxt (fun ctxt -> *)
+      (*     debug 6 (lazy (item "larguments" (Pp.list (fun (s,bt) -> Sym.pp s) larguments))); *)
+      (*   ) *)
+      (* in *)
+
+      (* let@ () = print_with_ctxt (fun ctxt -> *)
+      (*     debug 6 (lazy (item "ctxt" (Context.pp ctxt))); *)
+      (*   ) *)
+      (* in *)
+
+
+      (* let () = Pmap.iter (fun s def -> *)
+      (*              match def with *)
+      (*              | M_Return (loc) -> *)
+      (*                 print stdout (item "s" (Sym.pp s)); *)
+      (*                 print stdout (!^"return") *)
+      (*              | M_Label (loc, lt, args, largs, body, annots) -> *)
+      (*                 print stdout (item "s" (Sym.pp s)); *)
+      (*                 print stdout (item "def" (AT.pp False.pp lt)) *)
+      (*            ) label_defs *)
+      (* in *)
+
+      let@ label_defs = 
+        PmapM.mapM (fun _ def ->
+            pure begin
+                match def with
+                | M_Return loc ->
+                   return (M_Return loc)
+                | M_Label (loc, lt, args, largs, body, annots) ->
+                   let@ lt = WellTyped.WLT.welltyped "in-function type annotation" loc lt in
+                   return (M_Label (loc, lt, args, largs, body, annots))
+              end
+          ) label_defs Sym.compare
+      in
+
+      (* record label types *)
       let@ labels = 
         PmapM.foldM (fun sym def acc ->
-            pure begin 
-                match def with
-                | M_Return (loc, lt) ->
-                   let@ () = WellTyped.WLT.welltyped "return label" loc lt in
-                   return (SymMap.add sym (lt, Return) acc)
-                | M_Label (loc, lt, _, _, annots) -> 
-                   let label_kind = match CF.Annot.get_label_annot annots with
-                     | Some (LAloop_body loop_id) -> Loop
-                     | Some (LAloop_continue loop_id) -> Loop
-                     | _ -> Other
-                   in
-                   let@ () = WellTyped.WLT.welltyped "label" loc lt in
-                   return (SymMap.add sym (lt, label_kind) acc)
-              end
+            (* todo: remember location *)
+            match def with
+            | M_Return loc ->
+               let lt = AT.of_rt rt (LAT.I False.False) in
+               return (SymMap.add sym (lt, Return) acc)
+            | M_Label (loc, lt, _, _, _, annots) -> 
+               let label_kind = match CF.Annot.get_label_annot annots with
+                 | Some (LAloop_body loop_id) -> Loop
+                 | Some (LAloop_continue loop_id) -> Loop
+                 | _ -> Other
+               in
+               return (SymMap.add sym (lt, label_kind) acc)
           ) label_defs SymMap.empty 
       in
       (* check each label *)
       let check_label lsym def =
         pure begin 
           match def with
-          | M_Return (loc, lt) ->
+          | M_Return loc ->
              return ()
-          | M_Label (loc, lt, args, body, annots) ->
+          | M_Label (loc, lt, args, largs, body, annots) ->
              debug 2 (lazy (headline ("checking label " ^ Sym.pp_string lsym)));
              debug 2 (lazy (item "type" (AT.pp False.pp lt)));
              (* let label_name = match Sym.description lsym with *)
@@ -1578,7 +1658,7 @@ let check_procedure
              (*   | _ -> Debug_ocaml.error "label without name" *)
              (* in *)
              let@ (rt, resources) = 
-               check_and_bind_arguments False.subst loc args lt 
+               check_and_bind_arguments False.subst loc args largs lt 
              in
              let@ () = ListM.iterM add_r resources in
              let@ () = check_expr_rt loc labels ~typ:False body in
@@ -1648,10 +1728,20 @@ let record_and_check_logical_functions logical_functions =
     ) logical_functions
 
 let record_and_check_resource_predicates preds =
-  (* check and record resource predicate defs *)
-  let@ () = ListM.iterM (fun (name, def) -> add_resource_predicate name def) preds in
-  let@ () = ListM.iterM (fun (name,def) -> WellTyped.WRPD.welltyped def) preds in
-  return ()
+  ListM.iterM (fun (name, def) ->
+      let@ def = 
+        pure begin
+          (* add def to context without body (for recursive
+             definitions) *)
+          let@ () = add_resource_predicate name { def with clauses = None } in
+          (* check well-typedness of def and return possibly-simplified
+             (and alpha-renamed) definition *)
+          WellTyped.WRPD.welltyped def
+        end 
+      in
+      (* add simplified def to the context *)
+      add_resource_predicate name def
+    ) preds
 
 
 let record_globals globs =
@@ -1671,22 +1761,21 @@ let record_globals globs =
     ) globs 
 
 let record_and_wf_check_functions funinfo =
-  let@ () =
-    PmapM.iterM
-      (fun fsym (M_funinfo (loc, _attrs, ftyp, trusted, _has_proto)) ->
-        (* let lc1 = t_ (ne_ (null_, sym_ (fsym, Loc))) in *)
-        let lc2 = t_ (representable_ (Pointer Void, sym_ (fsym, Loc))) in
-        let@ () = add_l fsym Loc (loc, lazy (Pp.item "global fun-ptr" (Sym.pp fsym))) in
-        let@ () = add_cs [(* lc1; *) lc2] in
-        add_fun_decl fsym (loc, ftyp, trusted)
-      ) funinfo
-  in
-  PmapM.iterM
-    (fun fsym (M_funinfo (loc, _attrs, ftyp, _trusted, _has_proto)) ->
+  PmapM.iterM (fun fsym (M_funinfo (loc, _attrs, ftyp, trusted, _has_proto)) ->
+      (* check welltypedness and possibly simplify *)
       let () = debug 2 (lazy (headline ("checking welltypedness of procedure " ^ Sym.pp_string fsym))) in
       let () = debug 2 (lazy (item "type" (AT.pp RT.pp ftyp))) in
-      WellTyped.WFT.welltyped "global" loc ftyp
+      let@ ftyp = WellTyped.WFT.welltyped "global" loc ftyp in
+
+      (* add to context *)
+
+      (* let lc1 = t_ (ne_ (null_, sym_ (fsym, Loc))) in *)
+      let lc2 = t_ (representable_ (Pointer Void, sym_ (fsym, Loc))) in
+      let@ () = add_l fsym Loc (loc, lazy (Pp.item "global fun-ptr" (Sym.pp fsym))) in
+      let@ () = add_cs [(* lc1; *) lc2] in
+      add_fun_decl fsym (loc, ftyp, trusted)
     ) funinfo
+
 
 
 
@@ -1697,9 +1786,10 @@ let check_function fsym fn =
     | Trusted _, _ -> 
        return ()
     | Checked, M_Fun (rbt, args, body) ->
-       check_function loc (Sym.pp_string fsym) args rbt body ftyp
-    | Checked, M_Proc (loc', rbt, args, body, labels) ->
-       check_procedure loc fsym args rbt body ftyp labels
+       assert false;
+       (* check_function loc (Sym.pp_string fsym) args rbt body ftyp *)
+    | Checked, M_Proc (loc', rbt, (args, largs), body, labels) ->
+       check_procedure loc fsym args largs rbt body ftyp labels
     | _, (M_ProcDecl _ | M_BuiltinDecl _) -> (* TODO: ? *) 
        return ()
   in
@@ -1742,4 +1832,5 @@ let check mu_file =
    - rem_t vs rem_f
    - check globals with expressions
    - inline TODOs
+   - make sure all variables disjoint from global variables and function names
  *)

@@ -83,7 +83,8 @@ let rec symb_exec_mu_expr label_defs var_map expr =
     | Some (M_Return _) ->
       assert (List.length args == 1);
       return (CallRet (List.hd arg_vs))
-    | Some (M_Label (_, _, args, body, _)) ->
+    (* TODO: I'm unsure. Can you check the largs thing, Thomas? *)
+    | Some (M_Label (_, _, args, largs, body, _)) ->
       symb_exec_mu_expr label_defs (mk_var_map (List.map fst args) arg_vs) body
     | None -> fail {loc; msg = Generic (Pp.item "undefined code label" (Sym.pp sym))}
     end
@@ -115,7 +116,8 @@ let c_fun_to_it id fsym def
     let arg_map = mk_var_map (List.map fst args) def_args in
     let@ r = symb_exec_mu_pexpr arg_map body in
     return r
-  | M_Proc (loc, rbt, args, body, labels) ->
+  (* TODO: I'm unsure. Can you check the largs thing, Thomas? *)
+  | M_Proc (loc, rbt, (args, _largs), body, labels) ->
     let arg_map = mk_var_map (List.map fst args) def_args in
     let@ r = symb_exec_mu_expr labels arg_map body in
     begin match r with

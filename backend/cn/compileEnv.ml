@@ -60,7 +60,7 @@ let add_logical sym bTy env =
 
 let add_function loc sym func_sig env =
   (* upstream of this an incorrect string->sym conversion was done *)
-  let str = Sym.pp_string sym in
+  let str = Tools.todo_string_of_sym sym in
   let@ _ = name_to_sym loc str env.func_names in
   return {env with functions= SymMap.add sym func_sig env.functions;
     func_names = Y.add str sym env.func_names }

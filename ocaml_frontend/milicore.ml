@@ -11,7 +11,7 @@ type ft = Ctype.ctype * (Symbol.sym * Ctype.ctype) list * bool
 type lt = (Symbol.sym option * (Ctype.ctype * bool)) list
 
 type 'TY mi_label_def = 
-  | Mi_Return of loc * lt
+  | Mi_Return of loc
   | Mi_Label of loc * lt * ((symbol * bt) list) * 'TY Core.expr * annot list
 
 type 'TY mi_label_defs = (symbol, ('TY mi_label_def)) Pmap.map
@@ -109,7 +109,21 @@ let core_to_micore__funmap_decl update_loc = function
            let params = List.map (fun (sym, (((bt, _), _))) -> (sym,bt)) params in
            let lloc = update_loc loc (Annot.get_loc_ annots) in
            if is_return annots
-           then Mi_Return (lloc, param_tys)
+           then 
+             (* bogus: *)
+             (* let () =  *)
+             (*   if not (List.equal Core.eq_core_base_type (List.map snd args) (List.map snd params)) then *)
+             (*     let open Pp_prelude.P in *)
+             (*     let err =  *)
+             (*       string *)
+             (*       string "mismatch:" ^^ space ^^ *)
+             (*       Pp_core.Basic.pp_params args ^^ space ^^ *)
+             (*       string "vs" ^^ space ^^ *)
+             (*       Pp_core.Basic.pp_params params *)
+             (*     in *)
+             (*     Debug_ocaml.error (Pp_utils.to_plain_pretty_string err) *)
+             (* in *)
+             Mi_Return (lloc(* , param_tys *))
            else Mi_Label (lloc, param_tys, params, remove_save body, annots)
          ) (Core_aux.m_collect_saves e)
      in

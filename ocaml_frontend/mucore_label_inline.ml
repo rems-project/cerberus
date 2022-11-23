@@ -89,6 +89,7 @@ let rec ib_texpr label e =
     
 
 
+(* TODO: check about largs *)
 let rec inline_label_labels_and_body to_inline to_keep body = 
    ((match to_inline with
   | [] -> (to_keep, body)
@@ -101,8 +102,8 @@ let rec inline_label_labels_and_body to_inline to_keep body =
      let to_keep' = 
        (Pmap.map (fun def -> (match def with
          | M_Return _ -> def
-         | M_Label(loc, lt, args, lbody, annot) -> 
-            M_Label(loc, lt, args, (ib_texpr l lbody), annot)
+         | M_Label(loc, lt, args, (largs : unit), lbody, annot) -> 
+            M_Label(loc, lt, args, largs, (ib_texpr l lbody), annot)
          )) to_keep)
      in
      let body' = (ib_texpr l body) in
@@ -120,7 +121,7 @@ let ib_fun_map_decl
           (let aux label def (to_keep, to_inline)=
              ((match def with
             | M_Return _ -> (Pmap.add label def to_keep, to_inline)
-            | M_Label(_loc, lt1, args, lbody, annot2) ->
+            | M_Label(_loc, lt1, args, (largs : unit), lbody, annot2) ->
                match get_label_annot annot2 with
                | Some (LAloop_break _)
                | Some (LAloop_continue _) 

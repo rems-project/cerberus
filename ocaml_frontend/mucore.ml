@@ -34,6 +34,8 @@ module type TYPES = sig
   type lt
   type gt
 
+  type logical_arguments
+
   type resource_predicates
   type logical_predicates
 
@@ -258,29 +260,29 @@ type have_show =
     Pmap.map
 
   type 'TY mu_label_def = 
-    | M_Return of loc * T.lt
-    | M_Label of loc * T.lt * ((symbol * T.bt) list) * 'TY mu_expr * annot list
+    | M_Return of loc
+    | M_Label of loc * T.lt * ((symbol * T.bt) list) * T.logical_arguments * 'TY mu_expr * annot list
 
   type 'TY mu_label_defs = (symbol, ('TY mu_label_def)) Pmap.map
 
-  let subst_label_def lt_subst substitution label_def =
-    match label_def with
-    | M_Return (loc, lt) -> 
-       let lt = lt_subst substitution lt in
-       M_Return (loc, lt)
-    | M_Label (loc, lt, args, body, annots) ->
-       let lt = lt_subst substitution lt in
-       M_Label (loc, lt, args, body, annots)
+  (* let subst_label_def lt_subst substitution label_def = *)
+  (*   match label_def with *)
+  (*   | M_Return (loc, lt) ->  *)
+  (*      let lt = lt_subst substitution lt in *)
+  (*      M_Return (loc, lt) *)
+  (*   | M_Label (loc, lt, args, largs, body, annots) -> *)
+  (*      let lt = lt_subst substitution lt in *)
+  (*      M_Label (loc, lt, args, largs, body, annots) *)
 
-  let subst_label_defs lt_subst substitution (label_defs : 'TY mu_label_defs) =
-    Pmap.map (fun def ->
-      subst_label_def lt_subst substitution def
-    ) label_defs
+  (* let subst_label_defs lt_subst substitution (label_defs : 'TY mu_label_defs) = *)
+  (*   Pmap.map (fun def -> *)
+  (*     subst_label_def lt_subst substitution def *)
+  (*   ) label_defs *)
 
 
   type 'TY mu_fun_map_decl =
     | M_Fun of T.bt * (symbol * T.bt) list * 'TY mu_pexpr
-    | M_Proc of Location_ocaml.t * T.bt * (symbol * T.bt) list * 'TY mu_expr * 'TY mu_label_defs
+    | M_Proc of Location_ocaml.t * T.bt * ((symbol * T.bt) list * T.logical_arguments) * 'TY mu_expr * 'TY mu_label_defs
     | M_ProcDecl of Location_ocaml.t * T.bt * T.bt list
     | M_BuiltinDecl of Location_ocaml.t * T.bt * T.bt list
 
@@ -351,6 +353,7 @@ module SimpleTypes : TYPES
        with type ft = Ctype.ctype * (Symbol.sym * Ctype.ctype) list * bool
        with type lt = (Symbol.sym option * (Ctype.ctype * bool)) list
        with type gt = Ctype.ctype
+       with type logical_arguments = unit
        with type resource_predicates = unit
        with type logical_predicates = unit
   = 
@@ -366,6 +369,7 @@ struct
   type ft = ct * (Symbol.sym * ct) list * bool
   type lt = (Symbol.sym option * (Ctype.ctype * bool)) list
   type gt = ct
+  type logical_arguments = unit
   type resource_predicates = unit
   type logical_predicates = unit
 
