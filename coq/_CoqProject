@@ -1,6 +1,6 @@
 -R . Cerberus
--Q ./stdpp/stdpp stdpp
--Q ./stdpp/stdpp_unstable stdpp.unstable
+#-Q ./stdpp_MC/stdpp stdpp
+#-Q ./stdpp_MC/stdpp_unstable stdpp.unstable
 
 
 
