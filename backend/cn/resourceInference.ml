@@ -212,6 +212,9 @@ module General = struct
   let span_confirmed loc f =
     let@ provable = provable loc in
     let@ m = model_with loc (bool_ true) in
+    let@ ms = prev_models_with loc (bool_ true) in
+    let gives_same_action act m2 = List.exists
+        (fun (act2, _) -> Spans.equal_action act act2) (f m2) in
     begin match m with
       | None -> return None
       | Some (model, _) ->
@@ -219,8 +222,14 @@ module General = struct
         let confirmed = List.find_opt (fun (act, confirm) ->
             Pp.debug 8 (lazy (Pp.item "span action condition" (IT.pp confirm)));
             match provable (t_ confirm) with
-                | `False -> false
-                | `True -> true
+                | `False ->
+                  Pp.debug 8 (lazy (Pp.item "span action refuted" (IT.pp confirm)));
+                  false
+                | `True ->
+                  Pp.debug 8 (lazy (Pp.item "span action confirmed" (IT.pp confirm)));
+                  List.iter (fun (m2, _) -> if gives_same_action act m2 then ()
+                      else assert false) ms;
+                  true
         ) opts in
         return confirmed
     end

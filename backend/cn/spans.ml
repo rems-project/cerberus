@@ -59,6 +59,10 @@ let pp_res_span (r, span) =
   let open Pp in
   RET.pp r ^^ colon ^^^ pp_pair span
 
+let pp_res_span2 (span, (r, r2)) =
+  let open Pp in
+  RET.pp r ^^ colon ^^^ RET.pp r2 ^^ colon ^^^ pp_pair span
+
 let eval_extract msg m_g f x =
   let (m, global) = m_g in
   match Solver.eval global m x with
@@ -454,6 +458,8 @@ let do_guess_span_actions ress req m g =
     |> List.concat in
   let (same, diff) = List.partition (fun (_, (r, _)) -> same_name r) res_spans in
   let req_spans = model_res_spans_or_empty m g req in
+  Pp.debug 20 (lazy (Pp.item "req_spans mega-debug" (Pp.list pp_res_span2 req_spans)));
+  Pp.debug 20 (lazy (Pp.item "res_spans mega-debug" (Pp.list pp_res_span2 res_spans)));
   let interesting = List.filter_map (fun res_span -> List.find_opt (inter res_span) req_spans
         |> Option.map (fun req_span -> (res_span, req_span)))
     diff
@@ -473,6 +479,7 @@ let guess_span_actions ress req m g =
   note_failure_empty (do_guess_span_actions ress req m) g
 
 let diag_req ress req m g =
+  Pp.debug 5 (lazy (Pp.item "diagnostic span action reporting" (Pp.string ":")));
   let act = guess_span_actions ress req m g in
   Pp.debug 5 (lazy (match act with
     | [] -> Pp.item "guess span action: none" (Pp.string "")
