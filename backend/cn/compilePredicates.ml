@@ -483,37 +483,46 @@ let translate_option_cn_clauses env = function
 
 
 let translate_cn_func_body env body =
+  let open LogicalPredicates in
   let rec aux env body =
     match body with
       | CN_fb_letExpr (loc, sym, e_, cl) ->
           let@ e = translate_cn_expr env e_ in
           let env2 = Env.add_logical sym (IT.basetype e) env in
           let@ b = aux env2 cl in
-          return (IT.let_ sym e b)
+          return (Body.Let ((sym, e), b))
       | CN_fb_return (loc, x) ->
-         translate_cn_expr env x
+         let@ t = translate_cn_expr env x in
+         return (Body.Term t)
       | CN_fb_cases (loc, x, cs) ->
          let@ x = translate_cn_expr env x in
-         let@ dt_tag = match IT.basetype x with
-           | BT.Datatype tag -> return tag
-           | has -> fail {loc; msg = Illtyped_it' {it = x; has; expected = "datatype"}}
+         let@ cs = 
+           ListM.mapM (fun (ctor, body) ->
+               let@ body = aux env body in
+               return (ctor, body)
+             ) cs
          in
-         let@ (dt_info, _) = Env.lookup_datatype loc dt_tag env in
-         let@ cs = ListM.mapM (fun (nm, case_body) ->
-             let@ () = if List.exists (Sym.equal nm) dt_info.dt_constrs
-                 then return ()
-                 else fail {loc; msg = Unknown_datatype_constr nm}
-             in
-             let@ case_body = aux env case_body in
-             return (nm, case_body)) cs in
-         (* FIXME: add a default mechanism, and check that either the default is present
-            or every case is present *)
-         let@ (prev_cs, last) = match List.rev cs with
-           | (x :: xs) -> return (List.rev xs, x)
-           | [] -> fail {loc; msg = Generic (Pp.string "no cases")}
-         in
-         return (List.fold_right (fun (nm, y) z -> IT.ite_ (IT.datatype_is_cons_ nm x, y, z))
-             prev_cs (snd last))
+         return (Body.Case (x, cs))
+         (* let@ dt_tag = match IT.basetype x with *)
+         (*   | BT.Datatype tag -> return tag *)
+         (*   | has -> fail {loc; msg = Illtyped_it' {it = x; has; expected = "datatype"}} *)
+         (* in *)
+         (* let@ (dt_info, _) = Env.lookup_datatype loc dt_tag env in *)
+         (* let@ cs = ListM.mapM (fun (nm, case_body) -> *)
+         (*     let@ () = if List.exists (Sym.equal nm) dt_info.dt_constrs *)
+         (*         then return () *)
+         (*         else fail {loc; msg = Unknown_datatype_constr nm} *)
+         (*     in *)
+         (*     let@ case_body = aux env case_body in *)
+         (*     return (nm, case_body)) cs in *)
+         (* (\* FIXME: add a default mechanism, and check that either the default is present *)
+         (*    or every case is present *\) *)
+         (* let@ (prev_cs, last) = match List.rev cs with *)
+         (*   | (x :: xs) -> return (List.rev xs, x) *)
+         (*   | [] -> fail {loc; msg = Generic (Pp.string "no cases")} *)
+         (* in *)
+         (* return (List.fold_right (fun (nm, y) z -> IT.ite_ (IT.datatype_is_cons_ nm x, y, z)) *)
+         (*     prev_cs (snd last)) *)
   in
   aux env body
 

@@ -84,8 +84,8 @@ module WBT = struct
       | Integer -> return ()
       | Real -> return ()
       | Loc -> return ()
-      | Struct tag -> let@ _ = get_struct_decl loc tag in return ()
-      | Datatype tag -> let@ _ = get_datatype loc tag in return ()
+      | Struct tag -> let@ _struct_decl = get_struct_decl loc tag in return ()
+      | Datatype tag -> let@ _datatype = get_datatype loc tag in return ()
       | Record members -> ListM.iterM (fun (_, bt) -> aux bt) members
       | Map (abt, rbt) -> ListM.iterM aux [abt; rbt]
       | List bt -> aux bt
@@ -115,7 +115,7 @@ module WCT = struct
       | Integer _ -> return ()
       | Array (ct, _) -> aux ct
       | Pointer ct -> aux ct
-      | Struct tag -> let@ _ = get_struct_decl loc tag in return ()
+      | Struct tag -> let@ _struct_decl = get_struct_decl loc tag in return ()
       | Function ((_, rct), args, _) -> ListM.iterM aux (rct :: List.map fst args)
     in
     fun ct -> aux ct
@@ -131,23 +131,7 @@ module WIT = struct
 
   type t = IndexTerms.t
 
-  (* We expect a (sub) term to be constant unless it contains a free variable
-     or it makes use of an uninterpreted logical predicate. *)
-  let is_const_inner global loc t =
-    if not (no_free_vars t) then false
-    else
-    let ps = IndexTerms.preds_of t in
-    let open Global in
-    List.for_all (fun p -> LogicalPredicates.is_fully_defined global.logical_predicates p)
-        (SymSet.elements ps)
-
-  let is_const loc t =
-    let@ global = get_global () in
-    let@ r = try return (is_const_inner global loc t)
-      with LogicalPredicates.Unknown id2 ->
-      (let@ _ = get_logical_predicate_def loc id2 in return false)
-    in
-    return r
+  let eval = Simplify.IndexTerms.eval
 
   let rec infer =
       fun loc ~context (IT (it, _)) ->
@@ -188,49 +172,56 @@ module WIT = struct
             let@ t' = check loc ~context (IT.bt t) t' in
             return (IT (Arith_op (Sub (t, t')), IT.bt t))
          | Mul (t,t') ->
+            let@ simp_ctxt = simp_ctxt () in
             let@ t = infer loc ~context t in
             let@ () = ensure_integer_or_real_type loc context t in
             let@ t' = check loc ~context (IT.bt t) t' in
-            let@ c = is_const loc t in
-            let@ c' = is_const loc t' in
-            let@ () = 
-              if c || c' then return () else
-                let hint = "Only multiplication by constants is allowed" in
-                fail (fun ctxt -> {loc; msg = NIA {context; it = IT.mul_ (t, t'); ctxt; hint}})
-            in
-            return (IT (Arith_op (Mul (t, t')), IT.bt t))
+            begin match (IT.bt t), (eval simp_ctxt t), (eval simp_ctxt t') with
+            | Real, _, _ -> 
+               return (IT (Arith_op (Mul (t, t')), IT.bt t))
+            | Integer, simp_t, _ when Option.is_some (is_lit simp_t) ->
+               return (IT (Arith_op (Mul (simp_t, t')), IT.bt t))
+            | Integer, _, simp_t' when Option.is_some (is_lit simp_t') ->
+               return (IT (Arith_op (Mul (t, simp_t')), IT.bt t))
+            | _ ->
+               let hint = "Integer multiplication only allowed when argument is constant" in
+               fail (fun ctxt -> {loc; msg = NIA {context; it = IT.mul_ (t, t'); ctxt; hint}})
+            end
          | MulNoSMT (t,t') ->
             let@ t = infer loc ~context t in
             let@ () = ensure_integer_or_real_type loc context t in
             let@ t' = check loc ~context (IT.bt t) t' in
             return (IT (Arith_op (MulNoSMT (t, t')), IT.bt t))
          | Div (t,t') ->
+            let@ simp_ctxt = simp_ctxt () in
             let@ t = infer loc ~context t in
             let@ () = ensure_integer_or_real_type loc context t in
             let@ t' = check loc ~context (IT.bt t) t' in
-            let@ c' = is_const loc t' in
-            let@ () = 
-              if c' then return () else
-                let hint = "Only division by constants is allowed" in
-                fail (fun ctxt -> {loc; msg = NIA {context; it = div_ (t, t'); ctxt; hint}})
-            in
-            return (IT (Arith_op (Div (t, t')), IT.bt t))
+            begin match IT.bt t, eval simp_ctxt t' with
+            | Real, _ ->
+               return (IT (Arith_op (Div (t, t')), IT.bt t))
+            | Integer, simp_t' when Option.is_some (is_lit simp_t') ->
+               return (IT (Arith_op (Div (t, simp_t')), IT.bt t))
+            | _ ->
+               let hint = "Integer division only allowed when divisor is constant" in
+               fail (fun ctxt -> {loc; msg = NIA {context; it = div_ (t, t'); ctxt; hint}})
+            end
          | DivNoSMT (t,t') ->
             let@ t = infer loc ~context t in
             let@ () = ensure_integer_or_real_type loc context t in
             let@ t' = check loc ~context (IT.bt t) t' in
             return (IT (Arith_op (DivNoSMT (t, t')), IT.bt t))
          | Exp (t,t') ->
+            let@ simp_ctxt = simp_ctxt () in
             let@ t = check loc ~context Integer t in
             let@ t' = check loc ~context Integer t' in
-            begin match is_z t, is_z t' with
-            | Some z, Some z' -> 
-               if Z.lt z' Z.zero then
-                 fail (fun ctxt -> {loc; msg = NegativeExponent {context; it = exp_ (t, t'); ctxt}})
-               else if Z.fits_int32 z' then
-                 return (IT (Arith_op (Exp (t, t')), Integer))
-               else 
-                 fail (fun ctxt -> {loc; msg = TooBigExponent {context; it = exp_ (t, t'); ctxt}})
+            begin match is_z (eval simp_ctxt t), is_z (eval simp_ctxt t') with
+            | Some _, Some z' when Z.lt z' Z.zero ->
+               fail (fun ctxt -> {loc; msg = NegativeExponent {context; it = exp_ (t, t'); ctxt}})
+            | Some _, Some z' when not (Z.fits_int32 z') ->
+               fail (fun ctxt -> {loc; msg = TooBigExponent {context; it = exp_ (t, t'); ctxt}})
+            | Some z, Some z' ->
+               return (IT (Arith_op (Exp (z_ z, z_ z')), Integer))
             | _ ->
                let hint = "Only exponentiation of two constants is allowed" in
                fail (fun ctxt -> {loc; msg = NIA {context; it = exp_ (t, t'); ctxt; hint}})
@@ -240,29 +231,31 @@ module WIT = struct
               let@ t' = check loc ~context Integer t' in
               return (exp_no_smt_ (t, t'))
            | Rem (t,t') ->
+              let@ simp_ctxt = simp_ctxt () in
               let@ t = check loc ~context Integer t in
               let@ t' = check loc ~context Integer t' in
-	      let@ c' = is_const loc t' in
-              let@ () = 
-                if c' then return () else
-                  let hint = "Only division by constants is allowed" in
-                  fail (fun ctxt -> {loc; msg = NIA {context; it = rem_ (t, t'); ctxt; hint}})
-              in
-              return (IT (Arith_op (Rem (t, t')), Integer))
+              begin match is_z (eval simp_ctxt t') with
+              | None ->
+                 let hint = "Only division (rem) by constants is allowed" in
+                 fail (fun ctxt -> {loc; msg = NIA {context; it = rem_ (t, t'); ctxt; hint}})
+              | Some z' ->
+                 return (IT (Arith_op (Rem (t, z_ z')), Integer))
+              end
            | RemNoSMT (t,t') ->
               let@ t = check loc ~context Integer t in
               let@ t' = check loc ~context Integer t' in
               return (IT (Arith_op (RemNoSMT (t, t')), Integer))
            | Mod (t,t') ->
+              let@ simp_ctxt = simp_ctxt () in
               let@ t = check loc ~context Integer t in
               let@ t' = check loc ~context Integer t' in
-	      let@ c' = is_const loc t' in
-              let@ () = 
-                if c' then return () else
-                  let hint = "Only division by constants is allowed" in
-                  fail (fun ctxt -> {loc; msg = NIA {context; it = mod_ (t, t'); ctxt; hint}})
-              in
-              return (IT (Arith_op (Mod (t, t')), Integer))
+              begin match is_z (eval simp_ctxt t') with
+              | None ->
+                 let hint = "Only division (mod) by constants is allowed" in
+                 fail (fun ctxt -> {loc; msg = NIA {context; it = mod_ (t, t'); ctxt; hint}})
+              | Some z' ->
+                 return (IT (Arith_op (Mod (t, z_ z')), Integer))
+              end
            | ModNoSMT (t,t') ->
               let@ t = check loc ~context Integer t in
               let@ t' = check loc ~context Integer t' in
@@ -646,53 +639,52 @@ end
 
 module WRET = struct
 
+  open IndexTerms
+
   let welltyped loc r = 
-    let@ iargs = match RET.predicate_name r with
+    let@ spec_iargs = match RET.predicate_name r with
       | Block _ ->
          return (Resources.block_iargs)
       | Owned ct ->
          return (Resources.owned_iargs ct)
       | PName name -> 
          let@ def = Typing.get_resource_predicate_def loc name in
-         return (def.iargs)
+         return def.iargs
     in
     match r with
     | P p -> 
-       let@ _ = WIT.check loc BT.Loc p.pointer in
-       let@ _ = WIT.check loc BT.Bool p.permission in
-       let has_iargs, expect_iargs = List.length p.iargs, List.length iargs in
+       let@ pointer = WIT.check loc BT.Loc p.pointer in
+       let@ permission = WIT.check loc BT.Bool p.permission in
+       let has_iargs, expect_iargs = List.length p.iargs, List.length spec_iargs in
        (* +1 because of pointer argument *)
        let@ () = ensure_same_argument_number loc `Input (1 + has_iargs) ~expect:(1 + expect_iargs) in
-       let@ _ = ListM.map2M (fun (_, expected) arg -> WIT.check loc expected arg) iargs p.iargs in
-       return (RET.P p)
+       let@ iargs = ListM.map2M (fun (_, expected) arg -> WIT.check loc expected arg) spec_iargs p.iargs in
+       return (RET.P {name = p.name; pointer; permission; iargs})
     | Q p ->
        let p = RET.alpha_rename_qpredicate_type p in
-       let@ _ = WIT.check loc BT.Loc p.pointer in
-       let@ _ = WIT.check loc BT.Integer p.step in
-       let@ global = get_global () in
-       let step = Simplify.IndexTerms.eval global p.step in
-       let@ () = match IT.is_z step with
-         | Some _ -> return () 
+       let@ pointer = WIT.check loc BT.Loc p.pointer in
+       let@ step = WIT.check loc BT.Integer p.step in
+       let@ simp_ctxt = simp_ctxt () in
+       let@ step = match IT.is_z (Simplify.IndexTerms.eval simp_ctxt step) with
+         | Some z -> return (IT.z_ z) 
          | None ->
            let hint = "Only constant iteration steps are allowed" in
            fail (fun ctxt -> {loc; msg = NIA {context = p.step; it = p.step; ctxt; hint}})
        in
-       let p = { p with step } in
-       let@ () =  match p.name with
+       let@ () = match p.name with
          | Owned ct ->
            let sz = Memory.size_of_ctype ct in
-           if IT.equal p.step (IT.int_ sz) then return ()
+           if IT.equal step (IT.int_ sz) then return ()
            else fail (fun _ -> {loc; msg = Generic
              (!^"Iteration step" ^^^ IT.pp p.step ^^^ !^ "different to sizeof" ^^^
                  Sctypes.pp ct ^^^ parens (!^ (Int.to_string sz)))})
          | _ -> return ()
        in
-       let@ _ = 
+       let@ permission, iargs = 
          pure begin 
              let@ () = add_l p.q Integer (loc, lazy (Pp.string "forall-var")) in
-             let@ _ = WIT.check loc BT.Bool p.permission in
+             let@ permission = WIT.check loc BT.Bool p.permission in
              let@ provable = provable loc in
-             let open IT in
              let only_nonnegative_indices =
                LC.forall_ (p.q, Integer) 
                  (impl_ (p.permission, ge_ (sym_ (p.q, BT.Integer), int_ 0)))
@@ -704,13 +696,14 @@ module WRET = struct
                   let msg = "Iterated resource gives ownership to negative indices." in
                   fail (fun _ -> {loc; msg = Generic !^msg})
              in
-             let has_iargs, expect_iargs = List.length p.iargs, List.length iargs in
+             let has_iargs, expect_iargs = List.length p.iargs, List.length spec_iargs in
              (* +1 because of pointer argument *)
              let@ () = ensure_same_argument_number loc `Input (1 + has_iargs) ~expect:(1 + expect_iargs) in
-             ListM.map2M (fun (_, expected) arg -> WIT.check loc expected arg) iargs p.iargs
+             let@ iargs = ListM.map2M (fun (_, expected) arg -> WIT.check loc expected arg) spec_iargs p.iargs in
+             return (permission, iargs)
            end  
        in
-       return (RET.Q p)
+       return (RET.Q {name = p.name; pointer; q = p.q; step; permission; iargs})
 end
 
 
@@ -756,15 +749,15 @@ module WLC = struct
   let welltyped loc lc =
     match lc with
     | LC.T it -> 
-       let@ _ = WIT.check loc BT.Bool it in
-       return ()
-    | LC.Forall ((s,bt), it) ->
+       let@ it = WIT.check loc BT.Bool it in
+       return (LC.T it)
+    | LC.Forall ((s, bt), it) ->
        let s, it = IT.alpha_rename (s,bt) it in
        let@ () = WBT.is_bt loc bt in
        pure begin
            let@ () = add_l s bt (loc, lazy (Pp.string "forall-var")) in
-           let@ _ = WIT.check loc BT.Bool it in
-           return ()
+           let@ it = WIT.check loc BT.Bool it in
+           return (LC.Forall ((s, bt), it))
        end
 
 end
@@ -792,7 +785,7 @@ module WLRT = struct
          let@ lrt = aux lrt in
          return (Resource ((s, (re, re_oa_spec)), info, lrt))
       | Constraint (lc, info, lrt) ->
-         let@ () = WLC.welltyped (fst info) lc in
+         let@ lc = WLC.welltyped (fst info) lc in
          let@ () = add_c lc in
          let@ lrt = aux lrt in
          return (Constraint (lc, info, lrt))
@@ -847,21 +840,25 @@ module WOutputDef = struct
   let welltyped spec_name_bts loc assignment =
     let rec aux name_bts assignment =
       match name_bts, assignment with
-      | [], [] -> 
-         return ()
-      | (name, bt) :: name_bts, {loc; name = name'; value = it} :: assignment 
-           when Sym.equal name name' ->
-         let@ _ = WIT.check loc bt it in
-         aux name_bts assignment
-      | (name, bt) :: name_bts, {loc; name = name'; value = it} :: _ ->
+      | [], 
+        [] -> 
+         return []
+      | (name, bt) :: name_bts, 
+        a :: assignment when Sym.equal name a.name ->
+         let@ value = WIT.check a.loc bt a.value in
+         let@ assignment = aux name_bts assignment in
+         return ({loc = a.loc; name = a.name; value} :: assignment)
+      | (name, bt) :: name_bts, 
+        {loc; name = name'; value = it} :: _ ->
          fail (fun _ -> {loc; msg = Generic (!^"expected output argument" ^^^ Sym.pp name ^^^ !^"but found" ^^^ Sym.pp name')})
-      | (name, _) :: _, _ -> 
+      | (name, _) :: _, 
+        _ -> 
          fail (fun _ -> {loc; msg = Generic (!^"expected output argument" ^^^ Sym.pp name)})
-      | _, {loc = loc'; name = name'; _} :: _ -> 
+      | _, 
+        {loc = loc'; name = name'; _} :: _ -> 
          fail (fun _ -> {loc; msg = Generic (!^"unexpected output argument" ^^^ Sym.pp name')})
     in
-    let@ () = aux spec_name_bts assignment in
-    return assignment
+    aux spec_name_bts assignment
 
 end
 
@@ -885,7 +882,7 @@ module WLAT = struct
          let@ at = aux at in
          return (LAT.Resource ((s, (re, re_oa_spec)), info, at))
       | LAT.Constraint (lc, info, at) ->
-         let@ () = WLC.welltyped (fst info) lc in
+         let@ lc = WLC.welltyped (fst info) lc in
          let@ () = add_c lc in
          let@ at = aux at in
          return (LAT.Constraint (lc, info, at))
@@ -959,7 +956,7 @@ module WRPD = struct
           | Some clauses ->
              let@ clauses = 
                ListM.fold_leftM (fun acc {loc; guard; packing_ft} ->
-                   let@ _ = WIT.check loc BT.Bool guard in
+                   let@ guard = WIT.check loc BT.Bool guard in
                    let negated_guards = List.map (fun clause -> IT.not_ clause.guard) acc in
                    pure begin 
                        let@ () = add_c (LC.t_ guard) in
@@ -983,6 +980,38 @@ end
 
 module WLPD = struct
 
+  open LogicalPredicates
+
+  let rec welltyped_body loc return_bt body =
+    pure begin
+      match body with
+      | Body.Case (it, cases) ->
+         let@ it = WIT.infer loc it in
+         let@ cases = 
+           ListM.mapM (fun (ctor, case_body) ->
+               pure begin
+                   let@ info = get_datatype_constr loc ctor in
+                   let@ () = ensure_base_type loc ~expect:(IT.bt it)
+                               (Datatype info.c_datatype_tag) in
+                   let@ case_body = welltyped_body loc return_bt case_body in
+                   return (ctor, case_body)
+                 end
+             ) cases
+         in
+         return (Body.Case (it, cases))
+      | Body.Let ((s, it), t) ->
+         let@ it = WIT.infer loc it in
+         let s, t = Body.alpha_rename (s, IT.bt it) t in
+         let@ () = add_l s (IT.bt it) (loc, lazy (Sym.pp s)) in
+         let@ () = add_c (LC.t_ (IT.def_ s it)) in
+         let@ t = welltyped_body loc return_bt t in
+         return (Body.Let ((s, it), t))
+      | Body.Term t -> 
+         let@ t = WIT.check loc return_bt t in
+         return (Body.Term t)
+      end
+
+
   let welltyped (pd : LogicalPredicates.definition) = 
     let pd = LogicalPredicates.alpha_rename_definition pd in
     pure begin
@@ -990,10 +1019,22 @@ module WLPD = struct
         let info = (pd.loc, lazy (Pp.string "arg-var")) in
         let@ () = add_ls (List.map (fun arg -> (arg, info)) pd.args) in
         let@ () = WBT.is_bt pd.loc pd.return_bt in
-        match pd.definition with
-        | Def body -> let@ _ = WIT.check pd.loc pd.return_bt body in return ()
-        | Rec_Def body -> let@ _ = WIT.check pd.loc pd.return_bt body in return ()
-        | Uninterp -> return ()
+        let@ definition = match pd.definition with
+          | Def body -> 
+             let@ body = welltyped_body pd.loc pd.return_bt body in
+             return (Def body)
+          | Rec_Def body -> 
+             let@ body = welltyped_body pd.loc pd.return_bt body in
+             return (Rec_Def body)
+          | Uninterp -> 
+             return Uninterp
+        in
+        return {
+            loc = pd.loc; 
+            args = pd.args; 
+            return_bt = pd.return_bt;
+            definition = definition;
+          }
       end
 
 end

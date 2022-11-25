@@ -27,7 +27,7 @@ let term (IT (t, _)) = t
 
 
 
-let pp =
+let pp ?(atomic=false) =
   let rec aux ~f atomic (IT (it, bt) as it_) =
     let aux b x = f x (aux ~f b x) in
     (* Without the `lparen` inside `nest 2`, the printed `rparen` is indented
@@ -233,7 +233,7 @@ let pp =
     | Pred (name, args) ->
        c_app (Sym.pp name) (List.map (aux false) args)
   in
-  fun ?(f=fun _ x -> x) (it : 'bt term) -> aux ~f false it
+  fun ?(f=fun _ x -> x) (it : 'bt term) -> aux ~f atomic it
 
 
 let free_vars_lit = function
@@ -1014,8 +1014,8 @@ let pred_ name args rbt =
   IT (Pred (name, args), rbt)
 
 
-let let_ sym e body =
-  subst (make_subst [(sym, e)]) body
+(* let let_ sym e body = *)
+(*   subst (make_subst [(sym, e)]) body *)
 
 
 

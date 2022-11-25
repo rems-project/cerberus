@@ -737,7 +737,7 @@ module IndexTerms = struct
       let def = SymMap.find name simp_ctxt.global.logical_predicates in
       let t = IT (Pred (name, args), bt) in
       if not inline_functions then t else 
-        match LogicalPredicates.try_open_pred def name args with
+        match LogicalPredicates.try_open_pred_to_term def name args with
         | Some inlined -> aux inlined
         | None -> t
     in
@@ -781,10 +781,10 @@ module IndexTerms = struct
 
 
 
-  let eval global = 
+  let eval simp_ctxt = 
     simp ~inline_functions:true 
-      { global; 
-        values = SymMap.empty; 
+      { global = simp_ctxt.global; 
+        values = simp_ctxt.values; 
         equalities = ITPairMap.empty;
         lcs = LCSet.empty }
 

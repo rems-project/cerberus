@@ -33,7 +33,8 @@ let unpack_def global name args =
     (fun def ->
     match def.definition with
     | Def body ->
-       Some (LogicalPredicates.open_pred def.args body args)
+       Some (LogicalPredicates.Body.to_term def.return_bt
+               (LogicalPredicates.open_pred def.args body args))
     | _ -> None
     )
 

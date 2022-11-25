@@ -1723,9 +1723,10 @@ let record_and_check_logical_functions logical_functions =
   in
   let@ () = logical_predicate_cycle_check () in
   ListM.iterM (fun (name,(def : LP.definition)) -> 
-      let@ () = WellTyped.WLPD.welltyped def in
+      let@ def = WellTyped.WLPD.welltyped def in
       Pp.debug 1 (lazy (Pp.item "logical predicate" (LP.pp_def (Sym.pp name) def)));
-      return ()
+      (* TODO: a bit ugly: we override def with the possibly-simplified def *)
+      add_logical_predicate name def
     ) logical_functions
 
 let record_and_check_resource_predicates preds =
@@ -1834,4 +1835,5 @@ let check mu_file =
    - check globals with expressions
    - inline TODOs
    - make sure all variables disjoint from global variables and function names
+   - check datatype definition wellformedness
  *)

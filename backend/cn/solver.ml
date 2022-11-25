@@ -592,7 +592,8 @@ module Translate = struct
          let def = Option.get (get_logical_predicate_def global name) in
          begin match def.definition with
          | Def body ->
-            term (LogicalPredicates.open_pred def.args body args)
+            term (LogicalPredicates.Body.to_term def.return_bt
+                    (LogicalPredicates.open_pred def.args body args))
          | _ ->
             let decl = 
               Z3.FuncDecl.mk_func_decl context (symbol name)

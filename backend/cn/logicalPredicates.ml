@@ -5,20 +5,87 @@ module AT = ArgumentTypes
 module LAT = LogicalArgumentTypes
 
 open IndexTerms
+open Subst
+open Pp
 
 
 module SymSet = Set.Make(Sym)
 module SymMap = Map.Make(Sym)
 
 
+module Body = struct
+
+  type t = 
+    | Case of IT.t * (Sym.t * t) list
+    | Let of (Sym.t * IT.t) * t
+    | Term of IT.t
+
+  let rec subst su = function
+    | Case (it, cases) ->
+       let it = IT.subst su it in
+       let cases = List.map_snd (subst su) cases in
+       Case (it, cases)
+    | Let ((s, it), t) -> 
+       let it = IT.subst su it in
+       let s, t = suitably_alpha_rename su.relevant (s, IT.bt it) t in
+       Let ((s, it), subst su t)
+    | Term t ->
+       Term (IT.subst su t)
+
+  and alpha_rename (s, ls) t = 
+    let s' = Sym.fresh_same s in
+    (s', subst (IT.make_subst [(s, IT.sym_ (s', ls))]) t)
+
+  and suitably_alpha_rename syms (s, ls) t = 
+    if SymSet.mem s syms 
+    then alpha_rename (s, ls) t
+    else (s, t)
+
+  let rec pp ?(atomic=false) = function
+    | Case (it, cases) ->
+       !^"switch" ^^ parens (IT.pp it) ^^ hardline 
+       ^^ nest 2
+            ((separate_map hardline (fun (ctor, body) ->
+                  Sym.pp ctor ^^^ lbrace ^^ hardline
+                  ^^ nest 2 (pp body) ^^ hardline
+                  ^^ rbrace
+             )) cases)
+    | Let ((s, it), t) ->
+       let pped = 
+         !^"let" ^^^ Sym.pp s ^^^ !^"equal" ^^^ IT.pp it ^^ semi 
+         ^/^ pp t
+       in
+       if atomic then parens pped else pped
+    | Term t ->
+       IT.pp ~atomic t
+
+
+  let rec to_term bt = function
+    (* adapting earlier compilePredicates.ml code for this *)
+    | Case (it, cases) ->
+       (* TODO: there's a potential blowup due to `it` being repeated. *)
+       List.fold_right (fun (ctor, case_body) acc ->
+           ite_ (IT.datatype_is_cons_ ctor it, 
+                 to_term bt case_body, 
+                 acc)
+         ) cases (default_ bt)
+    | Let ((s, it), t) -> 
+       to_term bt (subst (IT.make_subst [(s, it)]) t)
+    | Term t -> 
+       t
+
+end
+
+
+
 type def_or_uninterp = 
-  | Def of IndexTerms.t
-  | Rec_Def of IndexTerms.t
+  | Def of Body.t
+  | Rec_Def of Body.t
   | Uninterp
 
 let subst_def_or_uninterp subst = function
-  | Def it -> Def (IT.subst subst it)
-  | Rec_Def it -> Rec_Def (IT.subst subst it)
+  | Def it -> Def (Body.subst subst it)
+  | Rec_Def it -> Rec_Def (Body.subst subst it)
   | Uninterp -> Uninterp
 
 type definition = {
@@ -50,20 +117,28 @@ let pp_def nm def =
     colon ^/^
     begin match def.definition with
     | Uninterp -> !^ "uninterpreted"
-    | Def t -> IT.pp t
-    | Rec_Def t -> !^ "rec:" ^^^ IT.pp t
+    | Def t -> Body.pp t
+    | Rec_Def t -> !^ "rec:" ^^^ Body.pp t
     end
 
 
 let open_pred def_args def_body args =
   let su = make_subst (List.map2 (fun (s, _) arg -> (s, arg)) def_args args) in
-  IT.subst su def_body
+  Body.subst su def_body
+
+
+
+
 
 let try_open_pred def name args =
   match def.definition with
   | Def body -> Some (open_pred def.args body args)
   | _ -> None
 
+let try_open_pred_to_term def name args = 
+  Option.map (fun body ->
+      Body.to_term def.return_bt body
+    ) (try_open_pred def name args)
 
 
 
@@ -76,14 +151,18 @@ exception Unknown of Sym.t
 let is_fully_defined (defs : definition SymMap.t) nm =
   let rec scan seen = function
     | [] -> true
-    | nm :: nms -> if SymSet.mem nm seen
-      then scan seen nms
-      else begin match SymMap.find_opt nm defs with
-        | None -> raise (Unknown nm)
-        | Some def -> begin match def.definition with
-            | Def t -> scan (SymSet.add nm seen) (SymSet.elements (IT.preds_of t) @ nms)
-            | _ -> false
-        end
+    | nm :: nms -> 
+       if SymSet.mem nm seen
+       then scan seen nms
+       else begin match SymMap.find_opt nm defs with
+            | None -> raise (Unknown nm)
+            | Some def -> 
+               begin match def.definition with
+               | Def t -> 
+                  scan (SymSet.add nm seen) 
+                    (SymSet.elements (IT.preds_of (Body.to_term def.return_bt t)) @ nms)
+               | _ -> false
+               end
     end
   in
   scan SymSet.empty [nm]
@@ -96,7 +175,7 @@ let cycle_check (defs : definition SymMap.t) =
   let def_preds nm = match SymMap.find_opt nm defs with
     | None -> raise (Unknown nm)
     | Some def -> begin match def.definition with
-        | Def t -> SymSet.elements (IT.preds_of t)
+        | Def t -> SymSet.elements (IT.preds_of (Body.to_term def.return_bt t))
         | _ -> []
     end
   in

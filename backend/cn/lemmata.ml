@@ -322,7 +322,7 @@ let it_adjust ci it =
         let open LogicalPredicates in
         let def = SymMap.find name ci.fun_info in
         begin match def.definition with
-          | Def body -> f (LogicalPredicates.open_pred def.args body args)
+          | Def body -> f (Body.to_term def.return_bt (open_pred def.args body args))
           | _ -> t
         end
     | IT.CT_pred (Good (ct, t2)) -> if Option.is_some (Sctypes.is_struct_ctype ct)
@@ -451,13 +451,15 @@ let ensure_pred ci name aux =
       let ty = List.fold_right (fun at rt -> at ^^^ !^ "->" ^^^ rt) arg_tys ret_ty in
       !^ "  Parameter" ^^^ typ (Sym.pp name) ty ^^ !^ "." ^^ hardline
     ))) []
-  | Def body -> gen_ensure ["predefs"; "pred"; Sym.pp_string name] true
-    (lazy (
-      let@ rhs = aux (it_adjust ci body) in
-      let args = List.map (fun (sym, bt) -> parens (typ (Sym.pp sym) (bt_to_coq ci inf bt)))
-          def.args in
-      return (defn (Sym.pp_string name) args None rhs)
-    )) []
+  | Def body -> 
+     let body = Body.to_term def.return_bt body in
+     gen_ensure ["predefs"; "pred"; Sym.pp_string name] true
+       (lazy (
+         let@ rhs = aux (it_adjust ci body) in
+         let args = List.map (fun (sym, bt) -> parens (typ (Sym.pp sym) (bt_to_coq ci inf bt)))
+             def.args in
+         return (defn (Sym.pp_string name) args None rhs)
+       )) []
   | Rec_Def body ->
     fail "rec-def not yet handled" (Sym.pp name)
   end
@@ -489,7 +491,8 @@ let rec unfold_if_possible ctxt it =
      | Rec_Def _ -> it
      | Uninterp -> it
      | Def body -> 
-        unfold_if_possible ctxt (open_pred def.args body args)
+        unfold_if_possible ctxt 
+          (Body.to_term def.return_bt (open_pred def.args body args))
      end
   | _ ->
      it

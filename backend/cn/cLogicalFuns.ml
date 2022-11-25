@@ -142,7 +142,7 @@ let upd_def id def_tm logical_predicates =
         msg = Generic (Pp.string ("logical predicate multiply defined: " ^ s))}
   in
   match def.definition with
-  | Uninterp -> return ((sym, { def with definition = Def def_tm }) :: rem)
+  | Uninterp -> return ((sym, { def with definition = Def (Body.Term def_tm) }) :: rem)
   | _ -> fail {loc = Id.loc id;
         msg = Generic (Pp.string ("logical predicate already defined: " ^ s))}
 
