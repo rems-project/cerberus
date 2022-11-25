@@ -142,33 +142,32 @@ let try_open_pred_to_term def name args =
 
 
 
-exception Unknown of Sym.t
 
 
 
 
-(* Check for cycles in the logical predicate graph, which would cause
-   the system to loop trying to unfold them. Predicates whose definition
-   are marked with Rec_Def aren't checked, as cycles there are expected. *)
-let cycle_check (defs : definition SymMap.t) =
-  let def_preds nm = match SymMap.find_opt nm defs with
-    | None -> raise (Unknown nm)
-    | Some def -> begin match def.definition with
-        | Def t -> SymSet.elements (IT.preds_of (Body.to_term def.return_bt t))
-        | _ -> []
-    end
-  in
-  let rec search known_ok = function
-    | [] -> None
-    | (nm, Some path) :: q -> if SymSet.mem nm known_ok
-      then search known_ok q
-      else if List.exists (Sym.equal nm) path
-      then Some (List.rev path @ [nm])
-      else
-        let deps = List.map (fun p -> (p, Some (nm :: path))) (def_preds nm) in
-        search known_ok (deps @ [(nm, None)] @ q)
-    | (nm, None) :: q -> search (SymSet.add nm known_ok) q
-  in search SymSet.empty (List.map (fun (p, _) -> (p, Some [])) (SymMap.bindings defs))
+(* (\* Check for cycles in the logical predicate graph, which would cause *)
+(*    the system to loop trying to unfold them. Predicates whose definition *)
+(*    are marked with Rec_Def aren't checked, as cycles there are expected. *\) *)
+(* let cycle_check (defs : definition SymMap.t) = *)
+(*   let def_preds nm =  *)
+(*     let def =  SymMap.find nm defs in *)
+(*     begin match def.definition with *)
+(*     | Def t -> SymSet.elements (IT.preds_of (Body.to_term def.return_bt t)) *)
+(*     | _ -> [] *)
+(*     end *)
+(*   in *)
+(*   let rec search known_ok = function *)
+(*     | [] -> None *)
+(*     | (nm, Some path) :: q -> if SymSet.mem nm known_ok *)
+(*       then search known_ok q *)
+(*       else if List.exists (Sym.equal nm) path *)
+(*       then Some (List.rev path @ [nm]) *)
+(*       else *)
+(*         let deps = List.map (fun p -> (p, Some (nm :: path))) (def_preds nm) in *)
+(*         search known_ok (deps @ [(nm, None)] @ q) *)
+(*     | (nm, None) :: q -> search (SymSet.add nm known_ok) q *)
+(*   in search SymSet.empty (List.map (fun (p, _) -> (p, Some [])) (SymMap.bindings defs)) *)
 
 
 

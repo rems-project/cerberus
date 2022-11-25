@@ -1704,30 +1704,41 @@ let record_and_check_tagDefs tagDefs =
     ) tagDefs
 
 
-let logical_predicate_cycle_check () =
-  let@ global = get_global () in
-  match LogicalPredicates.cycle_check global.logical_predicates with
-  | None -> return ()
-  | Some (nm :: nms) ->
-    let@ def = get_logical_predicate_def Loc.unknown nm in
-    let open TypeErrors in
-    fail (fun _ -> {loc = def.loc; msg = Generic
-          (Pp.item "logical predicate cycle" (Pp.list Sym.pp (nm :: nms)))})
-  | Some [] -> assert false
 
 
 let record_and_check_logical_functions logical_functions =
-  let@ () =
-    ListM.iterM (fun (name, def) -> add_logical_predicate name def)
-        logical_functions
+
+  let recursive, nonrecursive =
+    List.partition (fun (name, def) ->
+        match def.LogicalPredicates.definition with
+        | Rec_Def _ -> true
+        | Def _ -> false
+        | Uninterp -> false
+      ) logical_functions
   in
-  let@ () = logical_predicate_cycle_check () in
-  ListM.iterM (fun (name,(def : LP.definition)) -> 
+
+  (* First check and add non-recursive functions. We check before
+     adding them, because they cannot depend on themselves*)
+  let@ () =
+    ListM.iterM (fun (name, def) -> 
+        let@ def = WellTyped.WLPD.welltyped def in
+        add_logical_predicate name def
+      ) nonrecursive
+  in
+
+  (* Then we check the recursive functions: add them all, check
+     welltypedness of each, then overwrite (post-NIA-simplification --
+     a bit ugly). *)
+
+  let@ () =
+    ListM.iterM (fun (name, def) -> 
+        add_logical_predicate name def
+      ) recursive
+  in
+  ListM.iterM (fun (name, def) -> 
       let@ def = WellTyped.WLPD.welltyped def in
-      Pp.debug 1 (lazy (Pp.item "logical predicate" (LP.pp_def (Sym.pp name) def)));
-      (* TODO: a bit ugly: we override def with the possibly-simplified def *)
       add_logical_predicate name def
-    ) logical_functions
+    ) recursive
 
 let record_and_check_resource_predicates preds =
   ListM.iterM (fun (name, def) ->
