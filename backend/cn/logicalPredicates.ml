@@ -144,28 +144,7 @@ let try_open_pred_to_term def name args =
 
 exception Unknown of Sym.t
 
-(* Compute if a predicate is sufficiently defined, i.e. not uninterpreted
-   nor can it call a predicate that is uninterpreted. recursive functions
-   count as uninterpreted as the SMT solver will not necessarily be given
-   full definitions of them. *)
-let is_fully_defined (defs : definition SymMap.t) nm =
-  let rec scan seen = function
-    | [] -> true
-    | nm :: nms -> 
-       if SymSet.mem nm seen
-       then scan seen nms
-       else begin match SymMap.find_opt nm defs with
-            | None -> raise (Unknown nm)
-            | Some def -> 
-               begin match def.definition with
-               | Def t -> 
-                  scan (SymSet.add nm seen) 
-                    (SymSet.elements (IT.preds_of (Body.to_term def.return_bt t)) @ nms)
-               | _ -> false
-               end
-    end
-  in
-  scan SymSet.empty [nm]
+
 
 
 (* Check for cycles in the logical predicate graph, which would cause
