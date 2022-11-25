@@ -4,16 +4,5 @@
  (theories Cerberus)
 )
  
-(library
- (name extracted)
- (preprocessor_deps CRelationClasses.mli.patch patch.sh)
- (preprocess (per_module
-             ((action (run coq/extracted/patch.sh %{input-file})) CRelationClasses)
-             ))
- (public_name cerberus.coq)
- (libraries zarith coq-core.kernel)
- (wrapped false)
- (flags (:standard -rectypes -w -27-32-33-39-67-37-20-34))
-)
 
 
