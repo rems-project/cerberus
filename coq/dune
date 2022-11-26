@@ -5,9 +5,9 @@
 
 (rule
  (deps extracted/CRelationClasses.mli.patch extracted/patch.sh)
- (target CRelationClasses.ml)
+ (target CRelationClasses.mli)
  (action
-  (with-stdout-to %{target} (run %{dep:extracted/patch.sh} %{dep:extracted/CRelationClasses.ml})
+  (with-stdout-to %{target} (run %{dep:extracted/patch.sh} %{dep:extracted/CRelationClasses.mli})
 )))
  
 (library
