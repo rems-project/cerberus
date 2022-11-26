@@ -5,4 +5,6 @@
  (modules impl_mem)
  (libraries cerberus.coq)
  (flags (:standard -rectypes -w -27-32))
- (implements cerb_frontend))
+ (implements cerb_frontend)
+ (instrumentation (backend landmarks))
+)

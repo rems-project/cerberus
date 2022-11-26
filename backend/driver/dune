@@ -38,7 +38,9 @@
  (package cerberus)
  (modules main_cheri)
  (libraries result cmdliner str unix
-  cerb_frontend cerb_backend mem_cheri util))
+            cerb_frontend cerb_backend mem_cheri util)
+ (instrumentation (backend landmarks))
+)
 
 (executable
  (name main_cheri_coq)
@@ -46,7 +48,9 @@
  (package cerberus)
  (modules main_cheri_coq)
  (libraries result cmdliner str unix
-  cerb_frontend cerb_backend mem_cheri_coq util))
+            cerb_frontend cerb_backend mem_cheri_coq util)
+ (instrumentation (backend landmarks))
+)
 
 (rule
  (target main_cheri.ml)
