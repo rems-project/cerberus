@@ -317,6 +317,7 @@ and cabs_statement_ =
   | CabsSpar of list cabs_statement
   (* GCC inline assembly extension *)
   | CabsSasm of bool(*is_volatile*) * bool(*is_inline*) * list (Loc.t * list string)
+  | CabsScaseGNU of cabs_expression * cabs_expression * cabs_statement
 
   (* for CN *)
   | CabsSmarker of cabs_statement

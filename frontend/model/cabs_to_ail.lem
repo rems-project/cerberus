@@ -3861,7 +3861,7 @@ let desugar_declaration_base attrs specifs idecltors =
 
 
 type stmt_context = <|
-  switch_depth: nat;
+  (* switch_stack: list switch_info; *)
   cont_ident_opt: maybe Symbol.identifier; (* Just ..., if inside a loop *)
 |>
 
@@ -3876,19 +3876,16 @@ let rec desugar_statement_aux ctx (CabsStatement loc attrs stmt_) =
                     <*> E.return Nothing
       
       | CabsScase e s ->
-          if ctx.switch_depth > 0 then
-            AilScase <$> (desugar_expression e >>=
-                          evaluate_integer_constant_expression (Loc.locOf e) Nothing >>= fun n ->
-                          E.return (IConstant n Decimal Nothing))
-                     <*> self s
+          if Global.isAgnostic () then
+            E.fail loc (Errors.Desugar_agnosticFailure "case statements are not supported in the agnostic mode")
           else
-            E.constraint_violation loc LabelStatementOutsideSwitch
+            desugar_expression e >>= evaluate_integer_constant_expression (Loc.locOf e) Nothing >>= fun n ->
+            E.register_case (Loc.locOf e) (E.CaseSelectConst n) >>= fun () ->
+            AilScase n <$> self s
       
       | CabsSdefault s ->
-          if ctx.switch_depth > 0 then
-            AilSdefault <$> self s
-          else
-            E.constraint_violation loc LabelStatementOutsideSwitch
+          E.register_default loc >>= fun () ->
+          AilSdefault <$> self s
       
       | CabsSblock ss ->
           (* TODO: STD check + annot *)
@@ -3975,14 +3972,13 @@ let rec desugar_statement_aux ctx (CabsStatement loc attrs stmt_) =
           end
       
       | CabsSswitch e s ->
-          let ctx' = <| ctx with switch_depth= ctx.switch_depth + 1 |> in
           (* STD §6.8.4#3 both the switch-statement and its sub statement are distinct blocks *)
           (* NOTE: see the note in CabsSif *)
           E.fresh_block_scope >>= fun switch_scope ->
           E.fresh_block_scope >>= fun s_scope      ->
           E.under_scope switch_scope begin
             AilSswitch <$> desugar_expression e
-                       <*> E.under_scope s_scope (desugar_statement_aux ctx' s)
+                       <*> E.under_scope s_scope (E.as_switch_body (self s))
           end
       
       | CabsSwhile e s ->
@@ -3991,7 +3987,7 @@ let rec desugar_statement_aux ctx (CabsStatement loc attrs stmt_) =
           E.register_label cont_ident >>
           E.resolve_label cont_ident >>= fun cont_sym ->
           let ctx' =
-            <| ctx with cont_ident_opt= Just cont_ident |> in
+            <| cont_ident_opt= Just cont_ident |> in
           (* STD §6.8.5#5 both the while-statement and its body are distinct blocks *)
           (* NOTE: the note in CabsSif also applies here *)
           E.fresh_block_scope >>= fun while_scope ->
@@ -4023,7 +4019,7 @@ let rec desugar_statement_aux ctx (CabsStatement loc attrs stmt_) =
           E.register_label cont_ident >>
           E.resolve_label cont_ident >>= fun cont_sym ->
           let ctx' =
-            <| ctx with cont_ident_opt= Just cont_ident |> in
+            <| cont_ident_opt= Just cont_ident |> in
           (* STD §6.8.5#5 both the do-statement and its body are distinct blocks *)
           (* NOTE: the note in CabsSif also applies here *)
           E.fresh_block_scope >>= fun while_scope ->
@@ -4055,7 +4051,7 @@ let rec desugar_statement_aux ctx (CabsStatement loc attrs stmt_) =
           E.register_label cont_ident >>
           E.resolve_label cont_ident >>= fun cont_sym ->
           let ctx' =
-            <| ctx with cont_ident_opt= Just cont_ident |> in
+            <| cont_ident_opt= Just cont_ident |> in
           E.fresh_block_scope >>= fun for_scope ->
           E.under_scope for_scope (
             desugar_type_specifiers specifs.type_specifiers >>= fun (specs_qs, base_ty) ->
@@ -4165,7 +4161,7 @@ let rec desugar_statement_aux ctx (CabsStatement loc attrs stmt_) =
           let loop_id = Symbol.fresh_int () in
           E.record_loop_attribute loop_id attrs >>
           let ctx' =
-            <| ctx with cont_ident_opt= Just cont_ident |> in
+            <| cont_ident_opt= Just cont_ident |> in
           
           (* NOTE: it is important that the expressions and the body are
              desugared in the order of the syntax *)
@@ -4254,13 +4250,16 @@ let rec desugar_statement_aux ctx (CabsStatement loc attrs stmt_) =
           end
       
       | CabsSbreak ->
-          if ctx.switch_depth > 0 then
-            E.return AilSbreak
-          else match ctx.cont_ident_opt with
-            | Just _ ->
+          E.is_in_switch >>= function
+            | true ->
                 E.return AilSbreak
-            | Nothing ->
-                E.constraint_violation loc BreakOutsideSwtichOrLoop
+            | false ->
+                match ctx.cont_ident_opt with
+                  | Just _ ->
+                      E.return AilSbreak
+                  | Nothing ->
+                      E.constraint_violation loc BreakOutsideSwitchOrLoop
+                end
           end
       
       | CabsSreturn Nothing ->
@@ -4285,6 +4284,28 @@ let rec desugar_statement_aux ctx (CabsStatement loc attrs stmt_) =
       | CabsSasm is_volatile is_inline xs (* list (list string) *) ->
           (* TODO: erasing inline assembly for now *)
           E.return AilSskip
+      
+      | CabsScaseGNU e1 e2 s ->
+          let desugar_case_constant e =
+            desugar_expression e >>=
+            evaluate_integer_constant_expression (Loc.locOf e) Nothing in
+          if Global.isAgnostic () then
+            E.fail loc (Errors.Desugar_agnosticFailure "case statements are not supported in the agnostic mode")
+          else
+            E.is_in_switch >>= function
+              | true ->
+                  (* TODOO *)
+                  desugar_case_constant e1 >>= fun n1 ->
+                  desugar_case_constant e2 >>= fun n2 ->
+                  E.register_case (Loc.bbox_location [Loc.locOf e1; Loc.locOf e2]) (E.CaseSelectRange n1 n2) >>= fun () ->
+                  if n1 <= n2 then
+                    AilScase_rangeGNU n1 n2 <$> self s
+                  else
+                    E.warnM (fun () -> "empty case range [" ^ Loc.stringFromLocation loc ^ "] discarded by the desugaring") >>= fun () ->
+                    E.return AilSskip
+              | false ->
+                  E.constraint_violation loc LabelStatementOutsideSwitch
+            end
       | CabsSmarker s ->
           E.record_marker () >>= fun id ->
           AilSmarker id <$> self s
@@ -4326,7 +4347,7 @@ let rec desugar_statement_aux ctx (CabsStatement loc attrs stmt_) =
 
 val desugar_statement: cabs_statement -> E.desugM (statement unit)
 let desugar_statement stmt =
-  desugar_statement_aux <| switch_depth= 0; cont_ident_opt= Nothing |> stmt
+  desugar_statement_aux <| cont_ident_opt= Nothing |> stmt
 
 
 val     register_labels: cabs_statement -> E.desugM unit
@@ -4372,6 +4393,8 @@ let rec register_labels (CabsStatement _ _ stmt_) =
     | CabsSasm _ _ _ ->
         (* TODO: check whether labels can declared here *)
         E.return ()
+    | CabsScaseGNU _ _ s ->
+        register_labels s
 (* BEGIN CN *)
     | CabsSmarker s ->
         register_labels s

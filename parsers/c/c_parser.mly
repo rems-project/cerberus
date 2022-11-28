@@ -1312,6 +1312,12 @@ labeled_statement:
     { CabsStatement (Location_ocaml.(region ($startpos, $endpos) NoCursor),
         to_attrs attr_opt,
         CabsSlabel (i, stmt)) }
+| attr_opt= attribute_specifier_sequence? prev_magic= CASE expr1= constant_expression ELLIPSIS expr2= constant_expression COLON
+  stmt= statement
+    { mk_statement prev_magic
+        ( Location_ocaml.(region ($startpos, $endpos) NoCursor)
+        , to_attrs attr_opt
+        , CabsScaseGNU (expr1, expr2, stmt) ) }
 | attr_opt= attribute_specifier_sequence? prev_magic= CASE expr= constant_expression COLON
   stmt= statement
     { mk_statement prev_magic
@@ -1320,7 +1326,7 @@ labeled_statement:
         , CabsScase (expr, stmt) ) }
 | attr_opt= attribute_specifier_sequence? prev_magic= DEFAULT COLON stmt= statement
     { mk_statement prev_magic
-        ( Location_ocaml.(region ($startpos, $endpos) NoCursor)
+        ( Location_ocaml.(region ($startpos(prev_magic), $endpos) NoCursor)
         , to_attrs attr_opt
         , CabsSdefault stmt ) }
 ;

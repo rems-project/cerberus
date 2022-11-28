@@ -704,7 +704,12 @@ and dtree_of_cabs_statement (CabsStatement (loc, attrs, stmt_)) =
       Dnode (pp_stmt_ctor "CabsSpar", List.map dtree_of_cabs_statement ss)
   | CabsSasm _ ->
       Dleaf (pp_stmt_ctor "CabsSasm") (* TODO *)
-  
+  | CabsScaseGNU (e1, e2, s) ->
+      Dnode ( pp_stmt_ctor "CabsScaseGNU"
+            , let d_e1 = dtree_of_cabs_expression e1 in
+              let d_e2 = dtree_of_cabs_expression e2 in
+              let d_s  = dtree_of_cabs_statement s in
+              [ d_e1; d_e2; d_s ] )
   | CabsSmarker stmt ->
       Dnode ( pp_stmt_ctor "CabsSmarker"
             , [dtree_of_cabs_statement stmt] )

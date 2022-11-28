@@ -477,8 +477,11 @@ let rec dtree_of_statement pp_annot (AnnotatedStatement (loc, attrs, stmt_)) =
         let d_e = dtree_of_expression e in
         let d_s = dtree_of_statement s  in
         Dnode ( pp_stmt_ctor "AilSswitch", [ d_e; d_s ] )
-    | AilScase (iCst, s) ->
-        Dnode ( pp_stmt_ctor "AilScase" ^^^ Pp_ail.pp_integerConstant iCst
+    | AilScase (n, s) ->
+        Dnode ( pp_stmt_ctor "AilScase" ^^^ (!^ (Z.to_string n))
+              , [dtree_of_statement s] )
+    | AilScase_rangeGNU (n1, n2, s) ->
+        Dnode ( pp_stmt_ctor "AilScase_rangeGNU" ^^^ !^ (Z.to_string n1 ^ " ... " ^ Z.to_string n2)
               , [dtree_of_statement s] )
     | AilSdefault s ->
         Dnode ( pp_stmt_ctor "AilSdefault", [dtree_of_statement s] )

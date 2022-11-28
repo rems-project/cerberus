@@ -1,4 +1,5 @@
 open import Pervasives Symbol GenTypes Ctype
+import Loc
 
 type simple_assignment_violation =
   | IncompatibleType
@@ -155,15 +156,17 @@ type violation =
   | LabelRedefinition of identifier (* §6.8.1#3 *)
   (* 6.8.4.1 The if statement *)
   | IfStatementControllingExpressionNotScalar (* §6.8.4.1#1 *)
-  (* 6.8.4.1 The if statement *)
+  (* 6.8.4.2 The switch statement *)
   | SwitchStatementControllingExpressionNotInteger (* §6.8.4.2#1 *)
+  | CaseStatementOverlap of Loc.t
+  | MutipleDefaultStatement of Loc.t
   (* 6.8.5 Iteration statements *)
   | IterationStatementControllingExpressionNotScalar (* §6.8.5#2 *)
   | IllegalStorageClassIterationStatement(* §6.8.5#3 *)
   (* 6.8.5 Jump statements *)
   | UndeclaredLabel of identifier (* §6.8.6.1#1, sentence 1 *)
   | ContinueOutsideLoop (* §6.8.6.2#1 *)
-  | BreakOutsideSwtichOrLoop (* §6.8.6.3#1 *)
+  | BreakOutsideSwitchOrLoop (* §6.8.6.3#1 *)
   (* 6.8.5.4 The return statement  *)
   | NonVoidReturnVoidFunction (* §6.8.6.4#1, sentence 1 *)
   | VoidReturnNonVoidFunction (* §6.8.6.4#1, sentence 2 *)
@@ -403,6 +406,10 @@ let std_of_violation = function
       ["§6.8.4.1#1"]
   | SwitchStatementControllingExpressionNotInteger ->
       ["§6.8.4.2#1"]
+  | CaseStatementOverlap _ ->
+      ["§6.8.4.2#3, sentence 1"]
+  | MutipleDefaultStatement _ ->
+      ["§6.8.4.2#3, sentence 2"]
   | IterationStatementControllingExpressionNotScalar ->
       ["§6.8.5#2"]
   | IllegalStorageClassIterationStatement ->
@@ -411,7 +418,7 @@ let std_of_violation = function
       ["§6.8.6.2#1"]
   | UndeclaredLabel _ ->
       ["§6.8.6.1#1, sentence 1"]
-  | BreakOutsideSwtichOrLoop ->
+  | BreakOutsideSwitchOrLoop ->
       ["§6.8.6.3#1"]
   | NonVoidReturnVoidFunction ->
       ["§6.8.6.4#1, sentence 1"]

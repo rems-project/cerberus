@@ -180,6 +180,10 @@ let string_of_constraint_violation = function
       "redefinition of '" ^ string_of_cid l ^ "'"
   | SwitchStatementControllingExpressionNotInteger ->
       "statement requires expression of integer type"
+  | CaseStatementOverlap prev_loc ->
+      "duplicate case value"
+  | MutipleDefaultStatement prev_loc ->
+      "multiple default labels in one switch"
   | IfStatementControllingExpressionNotScalar
   | IterationStatementControllingExpressionNotScalar ->
       "statement requires expression of scalar type"
@@ -203,7 +207,7 @@ let string_of_constraint_violation = function
       "use of undeclared label '" ^ string_of_cid l ^ "'"
   | ContinueOutsideLoop ->
       "continue statement outside a loop"
-  | BreakOutsideSwtichOrLoop ->
+  | BreakOutsideSwitchOrLoop ->
       "break statement outside a switch or a loop"
   | NonVoidReturnVoidFunction ->
       "void function should not return a value"

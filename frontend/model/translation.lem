@@ -2664,13 +2664,16 @@ let inline (<*>) = State.app
 
 type collect_cases_state = <|
   found_default: bool;
-  case_csts: list A.integerConstant;
+  case_csts: list integer;
+  case_ranges: list (integer * integer);
 |>
 
 val     collect_cases_: A.statement GenTypes.genTypeCategory -> St.stateM unit collect_cases_state
 let rec collect_cases_ (A.AnnotatedStatement loc _ stmt) =
-  let register_case ic_n =
-    St.update (fun s -> <| s with case_csts= ic_n :: s.case_csts |>) in
+  let register_case n =
+    St.update (fun s -> <| s with case_csts= n :: s.case_csts |>) in
+  let register_case_range n1 n2 =
+    St.update (fun s -> <| s with case_ranges= (n1, n2) :: s.case_ranges |>) in
   let register_default =
     St.update (fun s -> <| s with found_default= true |>) in
   match stmt with
@@ -2696,8 +2699,14 @@ let rec collect_cases_ (A.AnnotatedStatement loc _ stmt) =
         St.return ()
     | A.AilSswitch _ _ ->
         St.return ()
-    | A.AilScase ic_n s ->
-        register_case ic_n >> collect_cases_ s
+    | A.AilScase n s ->
+        register_case n >> collect_cases_ s
+    | A.AilScase_rangeGNU n1 n2 s ->
+        if n1 < n2 then
+          register_case_range n1 n2 >> collect_cases_ s
+        else
+          (* the frontend should catch this *)
+          error "Translation found a GNU case with empty range"
     | A.AilSdefault s ->
         register_default >> collect_cases_ s
     | A.AilSlabel _ s _ ->
@@ -2724,7 +2733,7 @@ let rec collect_cases_ (A.AnnotatedStatement loc _ stmt) =
         St.return ()
   end
 let collect_cases s =
-  snd (St.runStateM (collect_cases_ s) <| found_default= false; case_csts= [] |>)
+  snd (St.runStateM (collect_cases_ s) <| found_default= false; case_csts= []; case_ranges= [] |>)
 
 
 type erase_loop_control_state = <|
@@ -2794,8 +2803,10 @@ let rec erase_loop_control_aux (A.AnnotatedStatement loc attrs stmt_) =
                 [ A.AnnotatedStatement loc Annot.no_attributes (A.AilSgoto break_sym); s' ])))
             ; A.AnnotatedStatement loc Annot.no_attributes (A.AilSlabel break_sym (A.AnnotatedStatement loc Annot.no_attributes A.AilSskip) (Just Annot.LAswitch)) ]
           end
-    | A.AilScase iCst s ->
-        A.AilScase iCst <$> erase_loop_control_aux s
+    | A.AilScase n s ->
+        A.AilScase n <$> erase_loop_control_aux s
+    | A.AilScase_rangeGNU n1 n2 s ->
+        A.AilScase_rangeGNU n1 n2 <$> erase_loop_control_aux s
     | A.AilSdefault s ->
         A.AilSdefault <$> erase_loop_control_aux s
     | A.AilSlabel sym s m_loop_annot ->
@@ -2870,6 +2881,8 @@ let rec collect_visibles_ (A.AnnotatedStatement loc _ stmt) =
         collect_visibles_ s
     | A.AilScase _ s ->
         collect_visibles_ s
+    | A.AilScase_rangeGNU _ _ s ->
+        collect_visibles_ s
     | A.AilSdefault s ->
         collect_visibles_ s
     | A.AilSlabel label s _ ->
@@ -2940,6 +2953,10 @@ let mk_run_with_lifetime_e loc sym visibles_before visibles_after pes =
 
 open Operators
 
+type case_selector =
+  | CaseSelectConstant of integer
+  | CaseSelectRange of integer * integer
+
 type translate_stmt_env = <|
   return_ty: Ctype.ctype;
   is_Noreturn: bool;
@@ -2949,7 +2966,7 @@ type translate_stmt_env = <|
 
   return_lab  : Symbol.sym;
   default_lab : maybe Symbol.sym;
-  case_labs   : list (A.integerConstant * Symbol.sym);
+  case_labs   : list (case_selector * Symbol.sym);
   
   (* The lists are the objects visible from the loop and break labels *)
   loop:  maybe (
@@ -3265,10 +3282,15 @@ let rec translate_stmt stdlib tagDefs f env (A.AnnotatedStatement loc stmt_attrs
           ) in
         (* Create case symbols and translate cases block *)
         let cases    = collect_cases s in
-        let nb_cases = List.length cases.case_csts in
+        let nb_cases = List.length (cases.case_csts) + List.length (cases.case_ranges) in
         let case_syms = list_init nb_cases (fun _ -> Symbol.fresh_pretty_with_id (fun x -> "case_" ^ show x)) in
         let default_sym = Symbol.fresh_pretty_with_id (fun x -> "default_" ^ show x) in
-        let case_labs = List.zip cases.case_csts case_syms in
+        let case_labs =
+          List.zip
+            begin
+              (List.map (fun n -> CaseSelectConstant n) cases.case_csts) ++
+              (List.map (fun (n1, n2) -> CaseSelectRange n1 n2) cases.case_ranges)
+            end case_syms in
         translate_cases_block case_labs (Just default_sym) s >>= fun core_s ->
         E.get_visible_objects >>= fun visible_syms ->
         let visible_pes = List.map (fun sym -> Caux.mk_sym_pe sym) visible_syms in
@@ -3283,10 +3305,19 @@ let rec translate_stmt stdlib tagDefs f env (A.AnnotatedStatement loc stmt_attrs
                   Caux.mk_sseq_e promoted_wrp.E.sym_pat
                     (Caux.mk_pure_e promoted_pe)
                     (* For every case.... *)
-                    (List.foldl (fun acc (iCst, case_lab) ->
+                    (List.foldl (fun acc (case_select, case_lab) ->
+                      let select_test =
+                        match case_select with
+                          | CaseSelectConstant case_n ->
+                              Caux.mk_op_pe C.OpEq promoted_wrp.E.sym_pe (Caux.mk_value_pe (C.Vobject (C.OVinteger (Mem.integer_ival case_n))))
+                          | CaseSelectRange case_n1 case_n2 ->
+                              Caux.mk_op_pe C.OpAnd
+                                (Caux.mk_op_pe C.OpLe (Caux.mk_value_pe (C.Vobject (C.OVinteger (Mem.integer_ival case_n1)))) promoted_wrp.E.sym_pe)
+                                (Caux.mk_op_pe C.OpLe promoted_wrp.E.sym_pe (Caux.mk_value_pe (C.Vobject (C.OVinteger (Mem.integer_ival case_n2)))))
+                        end in
                       Caux.mk_sseq_e (Caux.mk_empty_pat C.BTy_unit)
                         (* Check if equal to the constant expression *)
-                        (Caux.mk_if_e (Caux.mk_op_pe C.OpEq promoted_wrp.E.sym_pe (translate_integerConstant iCst))
+                        (Caux.mk_if_e select_test
                           (* TODO: not sure if the visible afters are the same *)
                           (Caux.mk_run_e case_lab visible_pes)
                           (Caux.mk_skip_e))
@@ -3303,14 +3334,28 @@ let rec translate_stmt stdlib tagDefs f env (A.AnnotatedStatement loc stmt_attrs
                ; ( Caux.mk_unspecified_pat (Caux.mk_empty_pat C.BTy_ctype)
                  , Caux.mk_pure_e (Caux.mk_undef_exceptional_condition loc) ) ]))
     
-    | A.AilScase iCst s ->
+    | A.AilScase n s ->
         self s                >>= fun core_s       ->
         E.get_visible_objects >>= fun visible_syms ->
         E.mapM (fun sym ->
             E.resolve_object_type sym >>= fun (_, ty) ->
             E.return (sym, ((C.BTy_object C.OTy_pointer, Just (ty, true)), Caux.mk_sym_pe sym))
           ) visible_syms >>= fun visible_pes ->
-        match List.lookup iCst env.case_labs with
+        match List.lookup (CaseSelectConstant n) env.case_labs with
+          | Just lab ->
+              E.return (Caux.mk_save_e (lab, C.BTy_unit) visible_pes core_s)
+          | (*BISECT-IGNORE*) Nothing ->
+              error "Translation.translate_stmt: case label not found."
+        end
+
+    | A.AilScase_rangeGNU n1 n2 s ->
+        self s                >>= fun core_s       ->
+        E.get_visible_objects >>= fun visible_syms ->
+        E.mapM (fun sym ->
+            E.resolve_object_type sym >>= fun (_, ty) ->
+            E.return (sym, ((C.BTy_object C.OTy_pointer, Just (ty, true)), Caux.mk_sym_pe sym))
+          ) visible_syms >>= fun visible_pes ->
+        match List.lookup (CaseSelectRange n1 n2) env.case_labs with
           | Just lab ->
               E.return (Caux.mk_save_e (lab, C.BTy_unit) visible_pes core_s)
           | (*BISECT-IGNORE*) Nothing ->

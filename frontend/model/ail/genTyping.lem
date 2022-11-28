@@ -2016,9 +2016,12 @@ let rec annotate_statement_ loc sigm gamm ty stmt =
           E.return (AilSswitch e' s')
         else
           E.constraint_violation (Loc.locOf e) SwitchStatementControllingExpressionNotInteger
-    | AilScase ic s ->
+    | AilScase n s ->
         annotate_statement s >>= fun s' ->
-        E.return (AilScase ic s')
+        E.return (AilScase n s')
+    | AilScase_rangeGNU n1 n2 s ->
+        annotate_statement s >>= fun s' ->
+        E.return (AilScase_rangeGNU n1 n2 s')
     | AilSdefault s ->
         annotate_statement s >>= fun s' ->
         E.return (AilSdefault s')

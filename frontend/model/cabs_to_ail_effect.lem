@@ -208,6 +208,17 @@ type global_definition =
   | Definition of A.expression unit
   | ExternalDefinition of A.expression unit
 
+
+type case_selector =
+  | CaseSelectConst of integer
+  | CaseSelectRange of integer * integer (* INVARIAN: n1 < n2 *)
+
+type switch_info = <|
+  cases_info: list (Loc.t * case_selector);
+  default_info: maybe Loc.t;
+|>
+
+
 type state = <|
   (* Counter used to generate fresh cabs label names (see the desugaring of do-while statements) *)
   aux_supply: nat;
@@ -246,6 +257,10 @@ type state = <|
   
   (* STD §6.2.1#1, sentence 2 *)
   enumeration_constants: map A.ail_identifier (A.expression_ unit);
+
+  (* information regarding the case/default statements already seen for a stack
+     of switch statements being desugared *)
+  switch_context: list switch_info;
   
   (* TODO: this is idiotically inefficient, should store here the converse *)
   (* list the object/functions actually used, so that we can forget everything else that is declared/defined.
@@ -483,6 +498,10 @@ let hack_inject_idents_map idents_map =
   )
 
 
+let empty_switch_info =
+  <| cases_info= []; default_info= Nothing |>
+
+
 (* ========================================================================== *)
 val initial_state: (map string Symbol.sym) * Core.fun_map unit * Core.impl -> state
 let initial_state core_eval_stuff = <|
@@ -493,7 +512,8 @@ let initial_state core_eval_stuff = <|
   
   tag_definitions= Map.empty;
 
-  enumeration_constants=       Map.empty;
+  enumeration_constants= Map.empty;
+  switch_context= [];
   
   function_declarations=        Map.empty;
   external_object_declarations= Map.empty;
@@ -729,6 +749,96 @@ let resolve_typedef sym =
     end
   )
 
+
+val register_case: Loc.t -> case_selector -> desugM unit
+let register_case loc case_sel =
+  State_exception.get >>= fun st ->
+  match st.switch_context with
+    | [] ->
+        constraint_violation loc Constraint.LabelStatementOutsideSwitch
+    | x :: xs ->
+        let ctx' = <| x with cases_info= (loc, case_sel) :: x.cases_info |> :: xs in
+        State_exception.put <| st with switch_context= ctx' |>
+  end
+
+val register_default: Loc.t -> desugM unit
+let register_default loc =
+  State_exception.get >>= fun st ->
+  match st.switch_context with
+    | [] ->
+        constraint_violation loc Constraint.LabelStatementOutsideSwitch
+    | x :: xs ->
+        match x.default_info with
+          | Just prev_loc ->
+              constraint_violation loc (Constraint.MutipleDefaultStatement prev_loc)
+          | Nothing ->
+              let ctx' = <| x with default_info= Just loc |> :: xs in
+              State_exception.put <| st with switch_context= ctx' |>
+        end
+  end
+
+let rec check_case_overlap new_case = function
+  | [] ->
+      Nothing
+  | (loc, prev_case) :: xs ->
+      if match (new_case, prev_case) with
+        | (CaseSelectConst new_n, CaseSelectConst prev_n) ->
+            new_n = prev_n
+        | (CaseSelectConst new_n, CaseSelectRange prev_n1 prev_n2) ->
+            prev_n1 <= new_n && new_n <= prev_n2
+        | (CaseSelectRange new_n1 new_n2, CaseSelectConst prev_n) ->
+            new_n1 <= prev_n && prev_n <= new_n2
+        | (CaseSelectRange new_n1 new_n2, CaseSelectRange prev_n1 prev_n2) ->
+            (* NOTE: we are assuming the case_selectors  are well-formed *)
+            prev_n1 <= new_n2 && new_n1 <= prev_n2
+      end then
+        Just  loc
+      else
+        check_case_overlap new_case xs
+end
+
+let rec check_case_overlaps_aux acc = function
+  | [] ->
+        Nothing
+  | (loc, x) :: xs ->
+      match check_case_overlap x acc with
+        | Nothing ->
+            check_case_overlaps_aux ((loc, x) :: acc) xs
+        | Just prev_loc ->
+            Just (loc, prev_loc)
+      end
+end
+let check_case_overlaps xs =
+  check_case_overlaps_aux [] xs
+
+val is_in_switch : desugM bool
+let is_in_switch =
+  State_exception.read (fun st ->
+    match st.switch_context with
+      | []     -> false
+      | _ :: _ -> true
+    end
+  )
+
+val as_switch_body: forall 'a. desugM 'a -> desugM 'a
+let as_switch_body m =
+  State_exception.update (fun st ->
+    <| st with switch_context= empty_switch_info :: st.switch_context |>
+  ) >>= fun () ->
+  m >>= fun ret ->
+  State_exception.get >>= fun st ->
+  match st.switch_context with
+    | [] ->
+        error "Cabs_to_ail.as_switch_body: switch_context = []"
+    | switch_info :: xs ->
+        State_exception.put <| st with switch_context= xs |> >>= fun () ->
+        match check_case_overlaps switch_info.cases_info with
+          | Nothing ->
+              return ret
+          | Just (loc, prev_loc) ->
+              constraint_violation loc (Constraint.CaseStatementOverlap prev_loc)
+        end
+  end
 
 (* BEGIN CN *)
 val liftCnDesug: forall 'a. Cn_desugaring.cn_desugM 'a -> desugM 'a
@@ -2148,6 +2258,10 @@ let extract_program startup_str =
 val print_debugM: nat -> (unit -> string) -> desugM unit
 let inline print_debugM n msg =
   return (Debug.print_debug n [Debug.DB_desugaring] msg)
+
+val warnM: (unit -> string) -> desugM unit
+let inline warnM msg =
+  return (Debug.warn [Debug.DB_desugaring] msg)
 
 
 (* TODO *)

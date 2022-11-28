@@ -651,8 +651,10 @@ let rec pp_statement_aux pp_annot (AnnotatedStatement (_, _, stmt_)) =
         pp_keyword "return" ^^^ pp_expression_aux pp_annot e ^^ P.semi
     | AilSswitch (e, s) ->
         pp_keyword "switch" ^^^ P.parens (pp_expression_aux pp_annot e) ^/^ pp_statement ~is_control:true s
-    | AilScase (ic, s) ->
-        pp_keyword "case" ^^^ pp_integerConstant ic ^^ P.colon ^/^ pp_statement s
+    | AilScase (n, s) ->
+        pp_keyword "case" ^^^ !^ (Z.to_string n) ^^ P.colon ^/^ pp_statement s
+    | AilScase_rangeGNU (n1, n2, s) ->
+        pp_keyword "case" ^^^ !^ (Z.to_string n1 ^ " ... " ^ Z.to_string n2) ^^ P.colon ^/^ pp_statement s
     | AilSdefault s ->
         pp_keyword "default" ^^ P.colon ^/^ pp_statement s
     | AilSlabel (l, s, _) ->
