@@ -919,7 +919,9 @@ let generate ctxt directions mu_file =
   ) skip;
   let fun_info = List.fold_right (fun (s, def) m -> SymMap.add s def m)
         mu_file.mu_logical_predicates SymMap.empty in
-  let ci = {global = ctxt.Context.global; fun_info} in
+  let struct_decls = get_struct_decls mu_file in
+  let global = Global.{ctxt.Context.global with struct_decls} in
+  let ci = {global; fun_info} in
   let conv = List.map (fun x -> (x.sym, x.typ, "pure")) pure
     @ List.map (fun x -> (x.sym, Option.get x.scan_res.res_coerce, "coerced")) coerce in
   let (conv_defs, types, params, defs) = convert_lemma_defs ctxt ci conv in
