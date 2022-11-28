@@ -16,7 +16,7 @@ Require Import ExtrOcamlZBigInt.
 Extraction Language OCaml.
 Unset Extraction Optimize. (* trying to make print_msg work *)
 
-Extraction Blacklist String List Char Core Monad Bool Format Nat Int.
+Extraction Blacklist String List Char Core Monad Bool Format Nat Int Base.
 
 (* Debugging print *)
 Extraction NoInline Cerberus.Utils.print_msg.

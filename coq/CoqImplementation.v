@@ -117,7 +117,7 @@ Module MorelloImpl : Implementation.
          | Int_leastN_t n
          | Int_fastN_t n => Z.div (Z.of_nat n) 8
          | Intmax_t
-         | Intptr_t => 16
+         | Intptr_t => 8
          end)
     | Enum ident => 4 (* TODO: we do not handle registered enums *)
     | Wchar_t
