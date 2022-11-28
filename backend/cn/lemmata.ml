@@ -259,25 +259,8 @@ let tuple_coq_ty doc fld_tys =
   in
   parens (flow (break 1) (stars fld_tys))
 
-type conv_info = {struct_decls : Memory.struct_layout SymMap.t;
+type conv_info = {global : Global.t;
     fun_info : LogicalPredicates.definition SymMap.t}
-
-let bt_to_coq ci loc_info =
-  let open Pp in
-  let rec f bt = match bt with
-  | BaseTypes.Bool -> !^ "bool"
-  | BaseTypes.Integer -> !^ "Z"
-  | BaseTypes.Map (x, y) -> parens (binop "->" (f x) (f y))
-  | BaseTypes.Struct tag ->
-    let (_, fld_bts) = get_struct_xs ci.struct_decls tag in
-    tuple_coq_ty (Sym.pp tag) (List.map f fld_bts)
-  | BaseTypes.Record mems ->
-    tuple_coq_ty (!^ "record") (List.map f (List.map snd mems))
-  | BaseTypes.Loc -> !^ "Z"
-  | _ -> fail "bt_to_coq: unsupported" (BaseTypes.pp bt
-        ^^^ !^ "in converting" ^^^ loc_info)
-  in
-  f
 
 let it_adjust ci it =
   let rec new_nm s nms i =
@@ -326,9 +309,9 @@ let it_adjust ci it =
           | _ -> t
         end
     | IT.CT_pred (Good (ct, t2)) -> if Option.is_some (Sctypes.is_struct_ctype ct)
-        then t else f (IT.good_value ci.struct_decls ct t2)
+        then t else f (IT.good_value ci.global.Global.struct_decls ct t2)
     | IT.CT_pred (Representable (ct, t2)) -> if Option.is_some (Sctypes.is_struct_ctype ct)
-        then t else f (IT.representable ci.struct_decls ct t2)
+        then t else f (IT.representable ci.global.Global.struct_decls ct t2)
     | IT.CT_pred (AlignedI t) ->
         f (IT.divisible_ (IT.pointerToIntegerCast_ t.t, t.align))
     | IT.CT_pred (Aligned (t, ct)) ->
@@ -345,12 +328,6 @@ let fun_prop_ret ci nm = match SymMap.find_opt nm ci.fun_info with
     let open LogicalPredicates in
     BaseTypes.equal BaseTypes.Bool def.return_bt
       && not (StringSet.mem (Sym.pp_string nm) bool_funs)
-
-let mk_forall ci sym bt doc =
-  let open Pp in
-  let inf = !^"forall of" ^^^ Sym.pp sym in
-  !^ "forall" ^^^ parens (typ (Sym.pp sym) (bt_to_coq ci inf bt))
-  ^^ !^"," ^^ break 1 ^^ doc
 
 let tuple_syn xs =
   let open Pp in
@@ -418,6 +395,62 @@ let ensure_fun_upd () =
   let k = ["predefs"; "fun_upd"] in
   gen_ensure k true (lazy (return fun_upd_def)) []
 
+let rec bt_to_coq ci loc_info =
+  let open Pp in
+  let open Global in
+  let rec f bt = match bt with
+  | BaseTypes.Bool -> return (!^ "bool")
+  | BaseTypes.Integer -> return (!^ "Z")
+  | BaseTypes.Map (x, y) ->
+    let@ enc_x = f x in
+    let@ enc_y = f y in
+    return (parens (binop "->" enc_x enc_y))
+  | BaseTypes.Struct tag ->
+    let (_, fld_bts) = get_struct_xs ci.global.struct_decls tag in
+    let@ enc_fld_bts = ListM.mapM f fld_bts in
+    return (tuple_coq_ty (Sym.pp tag) enc_fld_bts)
+  | BaseTypes.Record mems ->
+    let@ enc_mem_bts = ListM.mapM f (List.map snd mems) in
+    return (tuple_coq_ty (!^ "record") enc_mem_bts)
+  | BaseTypes.Loc -> return (!^ "Z")
+  | BaseTypes.Datatype tag ->
+    let@ () = ensure_datatype ci tag in
+    return (Sym.pp tag)
+  | _ -> fail "bt_to_coq: unsupported" (BaseTypes.pp bt
+        ^^^ !^ "in converting" ^^^ loc_info)
+  in
+  f
+
+and ensure_datatype ci dt_tag =
+  let family = Global.mutual_datatypes ci.global dt_tag in
+  let dt_tag = List.hd family in
+  let inf = !^ "datatype" ^^^ Sym.pp dt_tag in
+  let bt_to_coq2 bt = match BT.is_datatype_bt bt with
+    | Some dt_tag2 -> if List.exists (Sym.equal dt_tag2) family
+      then return (Sym.pp dt_tag2)
+      else bt_to_coq ci inf bt
+    | _ -> bt_to_coq ci inf bt
+  in
+  gen_ensure ["params"; "datatype"; Sym.pp_string dt_tag] false
+  (lazy (
+      let open Pp in
+      let cons_line dt_tag c_tag =
+          let info = SymMap.find c_tag ci.global.Global.datatype_constrs in
+          let@ argTs = ListM.mapM (fun (_, bt) -> bt_to_coq2 bt) info.c_params in
+	  return (!^ "    | " ^^ Sym.pp c_tag ^^^ colon ^^^
+              flow (!^ " -> ") (argTs @ [Sym.pp dt_tag]))
+      in
+      let@ dt_eqs = ListM.mapM (fun dt_tag ->
+          let info = SymMap.find dt_tag ci.global.Global.datatypes in
+          let@ c_lines = ListM.mapM (cons_line dt_tag) info.dt_constrs in
+          return (!^ "    " ^^ Sym.pp dt_tag ^^^ colon ^^^ !^"Type :=" ^^
+              hardline ^^ flow hardline c_lines)
+      ) family in
+      return (flow hardline
+          (List.mapi (fun i doc -> !^ (if i = 0 then "  Inductive" else "    with") ^^
+              hardline ^^ doc) dt_eqs) ^^ !^ "." ^^ hardline)
+  )) [dt_tag]
+
 let ensure_tuple_op is_upd nm (ix, l) =
   let ix_s = Int.to_string ix in
   let len_s = Int.to_string l in
@@ -445,18 +478,21 @@ let ensure_pred ci name aux =
   let inf = !^ "pred" ^^^ Sym.pp name in
   begin match def.definition with
   | Uninterp -> gen_ensure ["params"; "pred"; Sym.pp_string name] false
-    (lazy (return (
-      let arg_tys = List.map (fun (_, bt) -> bt_to_coq ci inf bt) def.args in
-      let ret_ty = if fun_prop_ret ci name then !^ "Prop" else bt_to_coq ci inf def.return_bt in
+    (lazy (
+      let@ arg_tys = ListM.mapM (fun (_, bt) -> bt_to_coq ci inf bt) def.args in
+      let@ ret_ty = if fun_prop_ret ci name then return (!^ "Prop")
+        else bt_to_coq ci inf def.return_bt in
       let ty = List.fold_right (fun at rt -> at ^^^ !^ "->" ^^^ rt) arg_tys ret_ty in
-      !^ "  Parameter" ^^^ typ (Sym.pp name) ty ^^ !^ "." ^^ hardline
-    ))) []
+      return (!^ "  Parameter" ^^^ typ (Sym.pp name) ty ^^ !^ "." ^^ hardline)
+    )) []
   | Def body -> 
      let body = Body.to_term def.return_bt body in
      gen_ensure ["predefs"; "pred"; Sym.pp_string name] true
        (lazy (
          let@ rhs = aux (it_adjust ci body) in
-         let args = List.map (fun (sym, bt) -> parens (typ (Sym.pp sym) (bt_to_coq ci inf bt)))
+         let@ args = ListM.mapM (fun (sym, bt) ->
+                 let@ coq_bt = bt_to_coq ci inf bt in
+                 return (parens (typ (Sym.pp sym) coq_bt)))
              def.args in
          return (defn (Sym.pp_string name) args None rhs)
        )) []
@@ -473,10 +509,10 @@ let ensure_struct_mem is_good ci ct aux = match Sctypes.is_struct_ctype ct with
   let op_nm = "struct_" ^ Sym.pp_string tag ^ "_" ^ nm in
   let@ () = gen_ensure k true
   (lazy (
-      let ty = bt_to_coq ci (Pp.string op_nm) bt in
+      let@ ty = bt_to_coq ci (Pp.string op_nm) bt in
       let x = parens (typ (!^ "x") ty) in
       let x_it = IT.sym_ (Sym.fresh_named "x", bt) in
-      let@ rhs = aux (it_adjust ci (IT.good_value ci.struct_decls ct x_it)) in
+      let@ rhs = aux (it_adjust ci (IT.good_value ci.global.Global.struct_decls ct x_it)) in
       return (defn op_nm [x] None rhs)
   )) [tag] in
   return op_nm
@@ -497,6 +533,12 @@ let rec unfold_if_possible ctxt it =
   | _ ->
      it
 
+let mk_forall ci sym bt doc =
+  let open Pp in
+  let inf = !^"forall of" ^^^ Sym.pp sym in
+  let@ coq_bt = bt_to_coq ci inf bt in
+  return (!^ "forall" ^^^ parens (typ (Sym.pp sym) coq_bt)
+      ^^ !^"," ^^ break 1 ^^ doc)
 
 let it_to_coq ctxt ci it =
   let open Pp in
@@ -556,10 +598,11 @@ let it_to_coq ctxt ci it =
         | IT.EQ (x, y) -> abinop (if bool_eq_prop then "=" else "=?") x y
         | IT.EachI ((i1, s, i2), x) -> assert bool_eq_prop;
             let@ x = aux x in
-            return (parens (mk_forall ci s BaseTypes.Integer
+            let@ enc = mk_forall ci s BaseTypes.Integer
                 (binop "->" (binop "/\\"
                     (binop "<=" (Pp.int i1) (Sym.pp s)) (binop "<=" (Sym.pp s) (Pp.int i2)))
-                x)))
+                x) in
+            return (parens enc)
     end
     | IT.Map_op op -> begin match op with
         | IT.Set (m, x, y) ->
@@ -585,12 +628,14 @@ let it_to_coq ctxt ci it =
             let ix = find_tuple_element Sym.equal m Sym.pp (List.map fst flds) in
             let@ op_nm = ensure_tuple_op true (Sym.pp_string m) ix in
             parensM (build [rets op_nm; aux t; aux x])
-        | _ -> fail "it_to_coq: unsupported record op" (IT.pp t)
+        | IT.Record mems ->
+            let@ xs = ListM.mapM aux (List.map snd mems) in
+            parensM (return (flow (comma ^^ break 1) xs))
     end
     | IT.Struct_op op -> begin match op with
         | IT.StructMember (t, m) ->
             let tag = BaseTypes.struct_bt (IT.bt t) in
-            let (mems, bts) = get_struct_xs ci.struct_decls tag in
+            let (mems, bts) = get_struct_xs ci.global.Global.struct_decls tag in
             let ix = find_tuple_element Id.equal m Id.pp mems in
             if List.length mems == 1
             then aux t
@@ -599,7 +644,7 @@ let it_to_coq ctxt ci it =
             parensM (build [rets op_nm; aux t])
         | IT.StructUpdate ((t, m), x) ->
             let tag = BaseTypes.struct_bt (IT.bt t) in
-            let (mems, bts) = get_struct_xs ci.struct_decls tag in
+            let (mems, bts) = get_struct_xs ci.global.Global.struct_decls tag in
             let ix = find_tuple_element Id.equal m Id.pp mems in
             if List.length mems == 1
             then aux x
@@ -630,6 +675,16 @@ let it_to_coq ctxt ci it =
         parensM (build [rets op_nm; aux t2])
         | _ -> fail "it_to_coq: unexpected ctype pred" (IT.pp t)
     end
+    | IT.Datatype_op op -> begin match op with
+        | IT.DatatypeCons (nm, members_rec) ->
+	    let info = SymMap.find nm ci.global.Global.datatype_constrs in
+            let args = List.map
+               (fun (nm, _) -> Simplify.IndexTerms.record_member_reduce members_rec nm)
+               info.c_params in
+            let@ () = ensure_datatype ci info.c_datatype_tag in
+            parensM (build ([return (Sym.pp nm)] @ List.map (f false) args))
+        | _ -> fail "it_to_coq: unsupported datatype op" (IT.pp t)
+    end
     | _ -> fail "it_to_coq: unsupported" (IT.pp t)
   in
   f true it
@@ -644,8 +699,10 @@ let lc_to_coq_check_triv ctxt ci = function
     else let@ v = it_to_coq ctxt ci it in return (Some v)
   | LC.Forall ((sym, bt), it) -> let it = it_adjust ci it in
     if IT.is_true it then return None
-    else let@ v = it_to_coq ctxt ci it
-    in return (Some (parens (mk_forall ci sym bt v)))
+    else
+      let@ v = it_to_coq ctxt ci it in
+      let@ enc = mk_forall ci sym bt v in
+      return (Some (parens enc))
 
 let nth_str_eq n s ss = Option.equal String.equal (List.nth_opt ss n) (Some s)
 
@@ -706,7 +763,12 @@ let ftyp_to_coq ctxt ci ftyp =
   let rec at_doc t = match t with
     | AT.Computational ((sym, bt), _, t) ->
         let@ d = at_doc t in
-        return (omap_split (mk_forall ci sym bt) d)
+        begin match d with
+          | None -> return None
+          | Some doc ->
+	    let@ doc2 = mk_forall ci sym bt (break 1 ^^ doc) in
+            return (Some doc2)
+        end
     | AT.L t -> lat_doc t
   in
   let@ d = at_doc ftyp in
@@ -830,8 +892,7 @@ let generate ctxt directions mu_file =
   ) skip;
   let fun_info = List.fold_right (fun (s, def) m -> SymMap.add s def m)
         mu_file.mu_logical_predicates SymMap.empty in
-  let struct_decls = get_struct_decls mu_file in
-  let ci = {struct_decls; fun_info} in
+  let ci = {global = ctxt.Context.global; fun_info} in
   let conv = List.map (fun x -> (x.sym, x.typ, "pure")) pure
     @ List.map (fun x -> (x.sym, Option.get x.scan_res.res_coerce, "coerced")) coerce in
   let (conv_defs, defs, params) = convert_lemma_defs ctxt ci conv in

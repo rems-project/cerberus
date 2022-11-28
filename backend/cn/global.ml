@@ -83,6 +83,19 @@ let pp global =
   pp_resource_predicate_definitions global.resource_predicates
 
 
+let mutual_datatypes (global : t) tag =
+  let deps tag =
+    let info = SymMap.find tag global.datatypes in
+    info.dt_all_params |> List.filter_map (fun (_, bt) -> BaseTypes.is_datatype_bt bt)
+  in
+  let rec seek tags = function
+    | [] -> tags
+    | (new_tag :: new_tags) ->
+        if SymSet.mem new_tag tags then seek tags new_tags
+        else seek (SymSet.add new_tag tags) (deps new_tag @ new_tags)
+  in
+  seek SymSet.empty [tag] |> SymSet.elements
+
 
 
 
