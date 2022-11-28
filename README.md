@@ -31,10 +31,8 @@ opam install .
 ```
 
 Then, install `coq-stdpp-unstable` by doing:
-- `git clone https://gitlab.mpi-sws.org/iris/stdpp.git` in a separate directory (eg, in the parent directory of `cerberus`)
-- `cd stdpp; ./make-package stdpp_unstable` to build `stdpp_unstable`
-- `./make-package stdpp_unstable install` to install it
-(in the future, the build&install commands should be replaced by `opam install coq-stdpp-unstable`)
+- `opam repo add iris-dev https://gitlab.mpi-sws.org/iris/opam.git`
+- `opam install coq-stdpp-unstable`
 
 `cd` back to the root of `cerberus` and install the remaining dependencies (including `lem` and `menhir`) using opam:
 
