@@ -123,7 +123,7 @@ let mk_statement magic (loc, attrs, stmt_) =
   LBRACK_LBRACK (*RBRACK_RBRACK*)
 
 (* NON-STD: *)
-  ASSERT OFFSETOF TYPEOF
+  ASSERT OFFSETOF TYPEOF QUESTION_COLON BUILTIN_TYPES_COMPATIBLE_P
 
 (* NON-STD cppmem syntax *)
   LBRACES PIPES RBRACES
@@ -567,8 +567,11 @@ postfix_expression:
     { CabsExpression ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                      , CabsEva_end(expr) ) }
 | OFFSETOF LPAREN ty= type_name COMMA i= general_identifier RPAREN
-    { CabsExpression (Location_ocaml.(region ($startpos, $endpos) NoCursor),
-        CabsEoffsetof (ty, i)) }
+    { CabsExpression ( Location_ocaml.(region ($startpos, $endpos) NoCursor)
+                     , CabsEoffsetof (ty, i) ) }
+| BUILTIN_TYPES_COMPATIBLE_P LPAREN ty1= type_name COMMA ty2= type_name RPAREN
+    { CabsExpression ( Location_ocaml.(region ($startpos, $endpos) NoCursor)
+                     , CabsEbuiltinGNU (GNUbuiltin_types_compatible_p (ty1, ty2)) ) }
 (* NOTE: the following is a cerb extension allowing the user to the
    query the type of an expression  *)
 | PRINT_TYPE LPAREN expr= expression RPAREN

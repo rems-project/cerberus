@@ -102,6 +102,7 @@ let keywords: (string * (unit -> Tokens.token)) list = [
     "asm", (fun () -> ASM);
     "__asm__", (fun () -> ASM);
     "__volatile__", (fun () -> ASM_VOLATILE);
+    "__builtin_types_compatible_p", (fun () -> BUILTIN_TYPES_COMPATIBLE_P);
 
     (* BEGIN CN *)
     "__cerb_predicate"     , (fun () -> CN_PREDICATE);
@@ -497,7 +498,10 @@ and initial = parse
   | "%>" { RBRACE   }
 (*  | "%:"   *)
 (*  | "%:%:" *)
-
+  
+  (* NON-STD GNU extensions *)
+  | "?:" { QUESTION_COLON }
+  
   (* NON-STD (cppmem-like thread syntax) *)
   | "{-{" { LBRACES }
   | "|||" { PIPES   }

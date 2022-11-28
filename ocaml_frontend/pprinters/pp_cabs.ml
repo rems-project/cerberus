@@ -29,7 +29,8 @@ let _precedence = function
   | CabsEva_arg _
   | CabsEva_end _
   | CabsEcompound _
-  | CabsEprint_type _ -> Some 1
+  | CabsEprint_type _
+  | CabsEbuiltinGNU _ -> Some 1
   | CabsEunary _
   | CabsEsizeof_expr _
   | CabsEsizeof_type _
@@ -277,6 +278,12 @@ let rec dtree_of_cabs_expression (CabsExpression (loc, expr)) =
         Dnode (pp_stmt_ctor "CabsEbmc_assume" ^^^ d_loc, [dtree_of_cabs_expression e])
     | CabsEgcc_statement s ->
         Dnode (pp_stmt_ctor "CabsEgcc_statement" ^^^ d_loc, [dtree_of_cabs_statement s])
+    | CabsEbuiltinGNU (GNUbuiltin_types_compatible_p (tyname1, tyname2)) ->
+        Dnode ( pp_stmt_ctor "CabsEbuiltinGNU" ^^^ P.squotes (!^ "__builtin_types_compatible_p") ^^^ d_loc
+              , let d_tyname1 = dtree_of_type_name tyname1 in
+                let d_tyname2 = dtree_of_type_name tyname2 in
+                [ d_tyname1; d_tyname2 ] )
+
 
 and dtree_of_cabs_generic_association = function
   | GA_type (tyname, e) ->

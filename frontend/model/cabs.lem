@@ -88,7 +88,12 @@ type cabs_expression_ =
   | CabsEva_end of cabs_expression
   | CabsEprint_type of cabs_expression (* Cerberus extension *)
   | CabsEbmc_assume of cabs_expression (* Cerberus-bmc extension *)
+  (* GNU C extensions *)
   | CabsEgcc_statement of cabs_statement (* GCC extension: https://gcc.gnu.org/onlinedocs/gcc/Statement-Exprs.html *)
+  | CabsEbuiltinGNU of gnu_builtin_function
+
+and gnu_builtin_function =
+  | GNUbuiltin_types_compatible_p of type_name * type_name (* __builtin_types_compatible_p *)
 
 and cabs_expression =
   | CabsExpression of Loc.t * cabs_expression_

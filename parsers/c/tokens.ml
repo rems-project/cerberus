@@ -131,6 +131,8 @@ type token =
   | PRINT_TYPE
   | ASM
   | ASM_VOLATILE
+  | QUESTION_COLON
+  | BUILTIN_TYPES_COMPATIBLE_P
   
   (* CN syntax *)
   | CN_FUNCTION
@@ -275,6 +277,8 @@ let string_of_token = function
   | PRINT_TYPE -> "__cerb_printtype"
   | ASM -> "ASM"
   | ASM_VOLATILE -> "ASM_VOLATILE"
+  | QUESTION_COLON -> "QUESTION_COLON"
+  | BUILTIN_TYPES_COMPATIBLE_P -> "BUILTIN_TYPES_COMPATIBLE_P"
   | EOF -> "EOF"
   | CN_PACK -> "CN_PACK"
   | CN_UNPACK -> "CN_UNPACK"
