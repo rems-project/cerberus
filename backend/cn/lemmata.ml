@@ -22,12 +22,16 @@ module StringList = struct
   let equal = List.equal String.equal
 end
 module StringListMap = Map.Make(StringList)
+module IntMap = Map.Make(Int)
 
 
-module PrevParams = struct
-  type t = {present: (Sym.t list) StringListMap.t; defs: Pp.doc list;
-        params: Pp.doc list}
-  let init_t = {present = StringListMap.empty; defs = []; params = []}
+(* Some things are defined on-demand, so this state monad stores the set
+   of such things defined and the contents of the various setup sections
+   they may be defined into. *)
+module PrevDefs = struct
+  type t = {present: (Sym.t list) StringListMap.t;
+        defs: (Pp.doc list) IntMap.t}
+  let init_t = {present = StringListMap.empty; defs = IntMap.empty}
   type ('a, 'e) m = t -> ('a * t)
   let return (x : 'a) : ('a, 'e) m = (fun st -> (x, st))
   let bind (x : ('a, 'e) m) (f : 'a -> ('b, 'e) m) : ('b, 'e) m = (fun st ->
@@ -36,10 +40,19 @@ module PrevParams = struct
   )
   let get : (t, 'e) m = (fun st -> (st, st))
   let set (st : t) : (unit, 'e) m = (fun _ -> ((), st))
+
+  let get_section section (st : t) =
+    match IntMap.find_opt section st.defs with
+      | None -> []
+      | Some docs -> docs
+  let add section doc (st : t) =
+    let current = get_section section st in
+    let defs = IntMap.add section (doc :: current) st.defs in
+    {st with defs}
 end
-module ParamMonad = Effectful.Make(PrevParams)
-open PrevParams
-open ParamMonad
+module PrevMonad = Effectful.Make(PrevDefs)
+open PrevDefs
+open PrevMonad
 
 
 module Mu = NewMu.New
@@ -376,15 +389,14 @@ let fun_upd_def =
         "(f : A -> B)"; "x"; "y"; "z"]) None
     (Pp.string "if eq x z then y else f z")
 
-let gen_ensure k is_def doc xs =
+let gen_ensure section k doc xs =
   let@ st = get in
   match StringListMap.find_opt k st.present with
   | None ->
     let@ fin_doc = Lazy.force doc in
     (* n.b. finalising the rhs-s of definitions might change the state *)
     let@ st = get in
-    let st = if is_def then {st with defs = fin_doc :: st.defs}
-        else {st with params = fin_doc :: st.params} in
+    let st = add section fin_doc st in
     set {st with present = StringListMap.add k xs st.present}
   | Some ys ->
     if List.equal Sym.equal xs ys
@@ -393,7 +405,7 @@ let gen_ensure k is_def doc xs =
 
 let ensure_fun_upd () =
   let k = ["predefs"; "fun_upd"] in
-  gen_ensure k true (lazy (return fun_upd_def)) []
+  gen_ensure 2 k (lazy (return fun_upd_def)) []
 
 let rec bt_to_coq ci loc_info =
   let open Pp in
@@ -431,7 +443,7 @@ and ensure_datatype ci dt_tag =
       else bt_to_coq ci inf bt
     | _ -> bt_to_coq ci inf bt
   in
-  gen_ensure ["params"; "datatype"; Sym.pp_string dt_tag] false
+  gen_ensure 0 ["types"; "datatype"; Sym.pp_string dt_tag]
   (lazy (
       let open Pp in
       let cons_line dt_tag c_tag =
@@ -469,7 +481,7 @@ let ensure_tuple_op is_upd nm (ix, l) =
         else defn op_nm [infer; t] None (tuple_element t (ix, l)))
   )
   in
-  let@ () = gen_ensure k true doc [] in
+  let@ () = gen_ensure 2 k doc [] in
   return op_nm
 
 let ensure_pred ci name aux =
@@ -477,7 +489,7 @@ let ensure_pred ci name aux =
   let def = SymMap.find name ci.fun_info in
   let inf = !^ "pred" ^^^ Sym.pp name in
   begin match def.definition with
-  | Uninterp -> gen_ensure ["params"; "pred"; Sym.pp_string name] false
+  | Uninterp -> gen_ensure 1 ["params"; "pred"; Sym.pp_string name]
     (lazy (
       let@ arg_tys = ListM.mapM (fun (_, bt) -> bt_to_coq ci inf bt) def.args in
       let@ ret_ty = if fun_prop_ret ci name then return (!^ "Prop")
@@ -487,7 +499,7 @@ let ensure_pred ci name aux =
     )) []
   | Def body -> 
      let body = Body.to_term def.return_bt body in
-     gen_ensure ["predefs"; "pred"; Sym.pp_string name] true
+     gen_ensure 2 ["predefs"; "pred"; Sym.pp_string name]
        (lazy (
          let@ rhs = aux (it_adjust ci body) in
          let@ args = ListM.mapM (fun (sym, bt) ->
@@ -507,7 +519,7 @@ let ensure_struct_mem is_good ci ct aux = match Sctypes.is_struct_ctype ct with
   let nm = if is_good then "good" else "representable" in
   let k = ["predefs"; "struct"; Sym.pp_string tag; nm] in
   let op_nm = "struct_" ^ Sym.pp_string tag ^ "_" ^ nm in
-  let@ () = gen_ensure k true
+  let@ () = gen_ensure 2 k
   (lazy (
       let@ ty = bt_to_coq ci (Pp.string op_nm) bt in
       let x = parens (typ (!^ "x") ty) in
@@ -706,14 +718,29 @@ let lc_to_coq_check_triv ctxt ci = function
 
 let nth_str_eq n s ss = Option.equal String.equal (List.nth_opt ss n) (Some s)
 
+let types_spec types =
+  let open Pp in
+  !^"Module Types."
+  ^^ hardline ^^ hardline
+  ^^ (if List.length types == 0
+    then !^ "  (* no type definitions required *)" ^^ hardline
+    else flow hardline types)
+  ^^ hardline
+  ^^ !^"End Types."
+  ^^ hardline ^^ hardline
+
 let param_spec params =
   let open Pp in
-  !^"Module Type Parameters."
+  !^"Module Type Parameters." ^^ hardline
+  ^^ !^"  Import Types."
   ^^ hardline ^^ hardline
-  ^^ flow hardline params
+  ^^ (if List.length params == 0
+    then !^ "  (* no parameters required *)" ^^ hardline
+    else flow hardline params)
   ^^ hardline
   ^^ !^"End Parameters."
   ^^ hardline ^^ hardline
+
 
 let ftyp_to_coq ctxt ci ftyp =
   let open Pp in
@@ -792,13 +819,13 @@ let convert_lemma_defs ctxt ci lemma_typs =
   Pp.debug 4 (lazy (Pp.item "saved conversion elements"
     (Pp.list (fun (ss, _) -> Pp.parens (Pp.list Pp.string ss))
         (StringListMap.bindings st.present))));
-  (tys, List.rev st.defs, List.rev st.params)
+  (tys, List.rev (get_section 0 st), List.rev (get_section 1 st), List.rev (get_section 2 st))
 
 let defs_module aux_defs lemma_tys =
   let open Pp in
   !^"Module Defs (P : Parameters)."
   ^^ hardline ^^ hardline
-  ^^ !^"  Import P." ^^ hardline
+  ^^ !^"  Import Types P." ^^ hardline
   ^^ !^"  Open Scope Z." ^^ hardline ^^ hardline
   ^^ flow hardline aux_defs
   ^^ hardline
@@ -895,7 +922,8 @@ let generate ctxt directions mu_file =
   let ci = {global = ctxt.Context.global; fun_info} in
   let conv = List.map (fun x -> (x.sym, x.typ, "pure")) pure
     @ List.map (fun x -> (x.sym, Option.get x.scan_res.res_coerce, "coerced")) coerce in
-  let (conv_defs, defs, params) = convert_lemma_defs ctxt ci conv in
+  let (conv_defs, types, params, defs) = convert_lemma_defs ctxt ci conv in
+  print channel (types_spec types);
   print channel (param_spec params);
   print channel (defs_module defs conv_defs);
   print channel (mod_spec (List.map (fun (nm, _, _) -> nm) conv));
