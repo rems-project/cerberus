@@ -307,6 +307,8 @@ let string_of_constraint_violation = function
       "address argument to atomic operation must be a pointer to _Atomic type ('" ^ string_of_ctype ty ^ "' invalid)"
   | AtomicAddressArgumentMustBePointer (_, gty) ->
       "address argument to atomic operation must be a pointer ('" ^ string_of_gentype gty ^ "' invalid)"
+  | GNUConditionalOperatorInvalidOperandType gty ->
+        "illtypd second operand in a GNU ?: expression ('" ^ string_of_gentype gty ^ "')"
 
 let string_of_misc_violation = function
   | MultipleEnumDeclaration x ->

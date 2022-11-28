@@ -325,6 +325,38 @@ let combine_qualifiers_right gty1 gty2 =
         gty2
   end
 
+val well_typed_conditionalGNU:
+    (Loc.t * Loc.t * Loc.t) ->
+    genType -> genType -> E.errorM genTypeCategory
+let well_typed_conditionalGNU (loc_cond, loc_e1, loc_e3) gty1 gty3 =
+  if is_scalar gty1 then
+    E.add "§6.5.15#2" >>
+    if is_arithmetic gty3 then
+      E.add "§6.5.15#3, bullet 1" >>
+      E.add "§6.5.15#5, sentence 1" >>
+      E.return (GenRValueType (usual_arithmetic gty3 gty3))
+    
+    else if GAux.is_struct_or_union gty3 then
+      E.add "§6.5.15#3, bullet 2" >>
+      E.add "§6.5.15#5, sentence 2" >>
+      E.return (GenRValueType gty3)
+    
+    else if GAux.void gty3 then
+      E.add "§6.5.15#3, bullet 3" >>
+      E.add "§6.5.15#5, sentence 3" >>
+      E.return (GenRValueType GenVoid)
+    
+    else if GAux.is_pointer gty3 then
+      E.add "§6.5.15#3, bullet 4" >>
+      E.return (GenRValueType gty3)
+
+    else
+      E.constraint_violation (with_cursor_from loc_e3 loc_cond)
+        (GNUConditionalOperatorInvalidOperandType gty3)
+  else
+    E.constraint_violation (with_cursor_from loc_e1 loc_cond) (ConditionalOperatorControlType gty1)
+
+
 val well_typed_conditional:
     (Loc.t * Loc.t * Loc.t * Loc.t) ->
     genType -> genType -> genType -> bool -> bool -> E.errorM genTypeCategory
@@ -1376,17 +1408,22 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
         else
           E.return (AilEcast qs ty e', GenRValueType (inject_type ty))
     
-    | AilEcond e1 e2 e3 ->
+    | AilEcond e1 Nothing e3 ->
+        annotate_rvalue e1 >>= fun (e1', gty1) ->
+        annotate_rvalue e3 >>= fun (e3', gty3) ->
+        well_typed_conditionalGNU (loc, locOf e1, locOf e3) gty1 gty3 >>= fun genCat ->
+        E.return (AilEcond e1' Nothing e3', genCat)
+    | AilEcond e1 (Just e2) e3 ->
         annotate_rvalue e1 >>= fun (e1', gty1) ->
         annotate_rvalue e2 >>= fun (e2', gty2) ->
         annotate_rvalue e3 >>= fun (e3', gty3) ->
         well_typed_conditional (loc, locOf e1, locOf e2, locOf e3)
-            gty1 gty2 gty3 (is_null_pointer_constant e2') (is_null_pointer_constant e3') >>= fun genCat ->
-        E.return (AilEcond e1' e2' e3', genCat)
+          gty1 gty2 gty3 (is_null_pointer_constant e2') (is_null_pointer_constant e3') >>= fun genCat ->
+        E.return (AilEcond e1' (Just e2') e3', genCat)
     
     | AilEcompoundAssign e1 (Add as aop) e2 ->
         annotate_expression CTXassign e1 >>= fun e1'         ->
-        annotate_rvalue e2     >>= fun (e2', gty2) ->
+        annotate_rvalue e2               >>= fun (e2', gty2) ->
         match GenTypes.genTypeCategoryOf e1' with
           | GenLValueType qs ty _ -> 
               AAux.lvalue_coercion sigm ty >>= fun ty1 ->

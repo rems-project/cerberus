@@ -90,6 +90,7 @@ type cabs_expression_ =
   | CabsEbmc_assume of cabs_expression (* Cerberus-bmc extension *)
   (* GNU C extensions *)
   | CabsEgcc_statement of cabs_statement (* GCC extension: https://gcc.gnu.org/onlinedocs/gcc/Statement-Exprs.html *)
+  | CabsEcondGNU of cabs_expression * cabs_expression (* ?: operator *)
   | CabsEbuiltinGNU of gnu_builtin_function
 
 and gnu_builtin_function =

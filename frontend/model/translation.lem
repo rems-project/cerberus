@@ -1909,7 +1909,7 @@ end                       )
             translate_expression true ECTX_logical_operator variadic_env stdlib tagDefs begin
               A.AnnotatedExpression
                 (GenTypes.GenRValueType GenTypes.signedInt_gty) [] loc
-                (A.AilEcond (mkTestExpression TestEq e1) zeroAil_tau (mkTestExpression TestNe e2))
+                (A.AilEcond (mkTestExpression TestEq e1) (Just zeroAil_tau) (mkTestExpression TestNe e2))
             end
       
       | A.AilEbinary e1 A.Or e2 ->
@@ -1918,10 +1918,14 @@ end                       )
           translate_expression true ECTX_logical_operator variadic_env stdlib tagDefs begin
               A.AnnotatedExpression
                 (GenTypes.GenRValueType GenTypes.signedInt_gty) [] loc
-                (A.AilEcond (mkTestExpression TestEq e1) (mkTestExpression TestNe e2) oneAil_tau)
+                (A.AilEcond (mkTestExpression TestEq e1) (Just (mkTestExpression TestNe e2)) oneAil_tau)
             end
       
-      | A.AilEcond e1 e2 e3 ->
+      | A.AilEcond e1 Nothing e3 ->
+          (* GNU ?: operator *)
+          error "TODO: elaboration of ?: operator"
+      
+      | A.AilEcond e1 (Just e2) e3 ->
           let apply_implicit_conversions expr =
             let e_ty = ctype_of expr in
             self expr >>= fun core_e ->

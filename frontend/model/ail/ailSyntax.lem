@@ -114,7 +114,7 @@ type expression_ 'a [name = "e*"] =
   | AilEbinary of expression 'a * binaryOperator * expression 'a
   | AilEassign of expression 'a * expression 'a
   | AilEcompoundAssign of expression 'a * arithmeticOperator * expression 'a
-  | AilEcond of expression 'a * expression 'a * expression 'a
+  | AilEcond of expression 'a * maybe (expression 'a) * expression 'a
   | AilEcast of qualifiers * ctype * expression 'a
   | AilEcall of expression 'a * list (expression 'a)
   | AilEassert of expression 'a

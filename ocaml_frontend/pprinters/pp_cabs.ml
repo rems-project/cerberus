@@ -59,6 +59,7 @@ let _precedence = function
   | CabsEcomma _ -> Some 15
   | CabsEbmc_assume _ -> None
   | CabsEgcc_statement _ -> None
+  | CabsEcondGNU _ -> Some 13
 
 let _lt_precedence p1 p2 =
   match p1, p2 with
@@ -278,6 +279,11 @@ let rec dtree_of_cabs_expression (CabsExpression (loc, expr)) =
         Dnode (pp_stmt_ctor "CabsEbmc_assume" ^^^ d_loc, [dtree_of_cabs_expression e])
     | CabsEgcc_statement s ->
         Dnode (pp_stmt_ctor "CabsEgcc_statement" ^^^ d_loc, [dtree_of_cabs_statement s])
+    | CabsEcondGNU (e1, e2) ->
+        Dnode ( pp_stmt_ctor "CabsEcondGNU" ^^^ d_loc
+              , let d_e1 = dtree_of_cabs_expression e1 in
+                let d_e2 = dtree_of_cabs_expression e2 in
+                [ d_e1; d_e2 ] )
     | CabsEbuiltinGNU (GNUbuiltin_types_compatible_p (tyname1, tyname2)) ->
         Dnode ( pp_stmt_ctor "CabsEbuiltinGNU" ^^^ P.squotes (!^ "__builtin_types_compatible_p") ^^^ d_loc
               , let d_tyname1 = dtree_of_type_name tyname1 in

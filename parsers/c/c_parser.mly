@@ -759,6 +759,9 @@ conditional_expression:
                                COLON    expr3= conditional_expression
     { CabsExpression ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                      , CabsEcond (expr1, expr2, expr3) ) }
+| expr1= logical_OR_expression QUESTION_COLON expr2= conditional_expression
+    { CabsExpression ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
+                     , CabsEcondGNU (expr1, expr2) ) }
 ;
 
 (* §6.5.16 Assignment operators *)

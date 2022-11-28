@@ -499,7 +499,9 @@ let rec pp_expression_aux mk_pp_annot a_expr =
             !^ "__bmc_assume" ^^ P.parens (pp e)
         | AilEcompoundAssign (e1, o, e2) ->
             pp e1 ^^^ pp_arithmeticOperator o ^^ P.equals ^^^ pp e2
-        | AilEcond (e1, e2, e3) ->
+        | AilEcond (e1, None, e3) ->
+            P.group (pp e1 ^^^ P.qmark ^^ P.colon ^^^ pp e3)
+        | AilEcond (e1, Some e2, e3) ->
             P.group (pp e1 ^^^ P.qmark ^^^ pp e2 ^^^ P.colon ^^^ pp e3)
         | AilEcast (qs, ty, e) ->
             if !Debug_ocaml.debug_level > 5 then

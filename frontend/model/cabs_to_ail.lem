@@ -695,8 +695,15 @@ except when they are contained within a subexpression that is not evaluated.115)
         else
           E.return false
     
-    
-    | AilEcond e1 e2 e3 ->
+    | AilEcond e1 Nothing e3 ->
+        is_integer_constant_expression e1 >>= fun b1 ->
+        if b1 then
+          (* TODO: this is too strict, it is allowed for the dead branch to not be a constant *)
+          is_integer_constant_expression e3
+        else
+          E.return false
+
+    | AilEcond e1 (Just e2) e3 ->
         is_integer_constant_expression e1 >>= fun b1 ->
         if b1 then
           is_integer_constant_expression e2 >>= fun b2 ->
@@ -2304,7 +2311,7 @@ STD_ "§6.5.3.1#3" $
                    <*> desugar_expression e2
     | CabsEcond e1 e2 e3 ->
         AilEcond <$> desugar_expression e1
-                 <*> desugar_expression e2
+                 <*> (Just <$> desugar_expression e2)
                  <*> desugar_expression e3
     | CabsEassign aop e1 e2 ->
         match translate_assignment_operator aop with
@@ -2359,7 +2366,14 @@ STD_ "§6.5.3.1#3" $
         AilEbmc_assume <$> desugar_expression e
     | CabsEgcc_statement s ->
         E.return AilEgcc_statement
+    | CabsEcondGNU e1 e3 ->
+        (* TODO: add extension warning *)
+        AilEcond
+          <$> desugar_expression e1
+          <*> E.return Nothing
+          <*> desugar_expression e3
     | CabsEbuiltinGNU (GNUbuiltin_types_compatible_p tyname1 tyname2) ->
+        (* TODO: add extension warning *)
         (* the GCC documentation says:
             This built-in function returns 1 if the unqualified versions of the types type1
             and type2 (which are types, not expressions) are compatible, 0 otherwise.

@@ -306,7 +306,13 @@ let dtree_of_expression pp_annot expr =
           let d_e2 = self e2 in
           Dnode ( d_ctor ^^^ P.squotes (Pp_ail.pp_arithmeticOperator aop)
                 , (*add_std_annot*) [ d_e1; d_e2 ] )
-      | AilEcond (e1, e2, e3) ->
+      | AilEcond (e1, None, e3) ->
+          let d_ctor = pp_expr_ctor "AilEcond" ^^^ P.parens (!^ "GNU ?:") in
+          let d_e1 = self e1 in
+          let d_e3 = self e3 in
+          Dnode ( d_ctor
+                , (*add_std_annot*) [ d_e1; d_e3 ] )
+      | AilEcond (e1, Some e2, e3) ->
           let d_ctor = pp_expr_ctor "AilEcond" in
           let d_e1 = self e1 in
           let d_e2 = self e2 in
