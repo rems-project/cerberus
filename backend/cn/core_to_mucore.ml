@@ -4,17 +4,6 @@ open Lem_pervasives
 open Ctype
 open Milicore
 
-(* Can be removed if support for OCaml 4.07 is dropped. *)
-module Option = struct
-  type 'a t = 'a option
-
-  let equal eq o1 o2 =
-    match o1, o2 with
-    | None   , None    -> true
-    | Some _ , None
-    | None   , Some _  -> false
-    | Some v1, Some v2 -> eq v1 v2
-end
 
 
 module SymSet = 
