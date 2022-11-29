@@ -3,8 +3,8 @@ module CB=Cerb_backend
 open CB.Pipeline
 open Setup
 
-module CTM = CF.Core_to_mucore.Make(Locations)
 module Milicore = CF.Milicore
+module CTM = Core_to_mucore.Make(Locations)
 
 let return = CF.Exception.except_return
 let (let@) = CF.Exception.except_bind
@@ -27,7 +27,7 @@ let print_file filename file =
      Pp.print_file (filename ^ ".core") (CF.Pp_core.All.pp_file file);
   | MUCORE file ->
      Pp.print_file (filename ^ ".mucore")
-       (CF.Pp_mucore.Basic_standard_typ.pp_file None file);
+       (Pp_mucore.Basic_standard_typ.pp_file None file);
 
 
 module Log : sig 

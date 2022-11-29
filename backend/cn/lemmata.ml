@@ -1,5 +1,4 @@
 module IT=IndexTerms
-module CF=Cerb_frontend
 module BT = BaseTypes
 module LS = LogicalSorts
 module LRT = LogicalReturnTypes
@@ -56,7 +55,7 @@ open PrevMonad
 
 
 module Mu = NewMu.New
-module Muc = CF.Mucore
+module Muc = Mucore
 open Pp
 
 

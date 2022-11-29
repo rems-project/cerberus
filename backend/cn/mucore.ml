@@ -1,13 +1,8 @@
-open Lem_pervasives
+(* open Lem_pervasives *)
 
+open Cerb_frontend
 open Ctype
 open Annot
-open Loc
-open Mem
-open Mem_common
-open Core_aux
-
-open Lem_assert_extra
 
 module Loc = Location_ocaml
 type loc = Loc.t

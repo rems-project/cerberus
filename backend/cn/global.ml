@@ -1,4 +1,3 @@
-module CF = Cerb_frontend
 open Pp
 module SymSet = Set.Make(Sym)
 module SymMap = Map.Make(Sym)
@@ -7,18 +6,14 @@ module StringMap = Map.Make(String)
 module RT = ReturnTypes
 module AT = ArgumentTypes
 
-module ImplMap = 
-  Map.Make (struct 
-      type t = CF.Implementation.implementation_constant
-      let compare = CF.Implementation.implementation_constant_compare 
-    end)
+
 
 
 type t = 
   { struct_decls : Memory.struct_decls; 
     datatypes : BaseTypes.datatype_info SymMap.t;
     datatype_constrs : BaseTypes.constr_info SymMap.t;
-    fun_decls : (Locations.t * AT.ft * CF.Mucore.trusted) SymMap.t;
+    fun_decls : (Locations.t * AT.ft * Mucore.trusted) SymMap.t;
     resource_predicates : ResourcePredicates.definition SymMap.t;
     logical_predicates : LogicalPredicates.definition SymMap.t;
   } 

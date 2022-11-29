@@ -1,6 +1,6 @@
 module AT = ArgumentTypes
 module RT = ReturnTypes
-module CF=Cerb_frontend
+
 
 module SR_Types = struct
   type ct = Sctypes.t
@@ -15,8 +15,8 @@ module SR_Types = struct
   type logical_predicates = (Sym.t * LogicalPredicates.definition) list
 end
 
-module Old = CF.Mucore.Make(CF.Mucore.SimpleTypes)
-module New = CF.Mucore.Make(SR_Types)
+module Old = Mucore.Make(Mucore.SimpleTypes)
+module New = Mucore.Make(SR_Types)
 
 module PP_TYPS = struct
   module T = SR_Types
@@ -29,7 +29,7 @@ module PP_TYPS = struct
 end
 
 
-module PP_MUCORE = CF.Pp_mucore.Make(CF.Pp_mucore.Basic)(PP_TYPS)
+module PP_MUCORE = Pp_mucore.Make(Pp_mucore.Basic)(PP_TYPS)
 let pp_budget () = Some ((! Pp.print_level) + 5)
 let pp_pexpr_w b e = PP_MUCORE.pp_pexpr b e
 let pp_pexpr e = pp_pexpr_w (pp_budget ()) e

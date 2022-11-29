@@ -1,9 +1,9 @@
 [@@@landmark "auto"]
 
 (* copy pasted from pp_core.ml and adapted *)
+open Cerb_frontend
 open Lem_pervasives
 open Core
-open Mucore
 open Annot
 
 open Either
@@ -509,7 +509,7 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
     let pp_actype_or_pexpr = pp_actype_or_pexpr budget in
     let pp_pexpr = pp_pexpr budget in
     let pp_args args mo =
-      P.parens (comma_list pp_actype_or_pexpr args ^^ if mo = Cmm_csem.NA then P.empty else P.comma ^^^ pp_memory_order mo) in
+      P.parens (comma_list pp_actype_or_pexpr args ^^ (match mo with Cmm_csem.NA -> P.empty | _ -> P.comma) ^^^ pp_memory_order mo) in
     match act with
       | M_Create (al, ty, _) ->
           pp_keyword "create" ^^ P.parens (pp_pexpr al ^^ P.comma ^^^ pp_actype ty)

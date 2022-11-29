@@ -22,7 +22,7 @@ open Sctypes
 open Context
 open IT
 open TypeErrors
-open CF.Mucore
+open Mucore
 open Mu
 open Pp
 open BT

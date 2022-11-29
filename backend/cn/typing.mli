@@ -57,7 +57,7 @@ val get_datatype : Locations.t -> Sym.t -> (BaseTypes.datatype_info, TypeErrors.
 val get_datatype_constr : Locations.t -> Sym.t -> (BaseTypes.constr_info, TypeErrors.t) m
 val get_member_type : Locations.t -> Sym.t -> Id.t -> Memory.struct_layout -> (Sctypes.t, TypeErrors.t) m
 val get_struct_member_type : Locations.t -> Sym.t -> Id.t -> (Sctypes.t, TypeErrors.t) m
-val get_fun_decl : Locations.t -> Sym.t -> (Locations.t * Global.AT.ft * Cerb_frontend.Mucore.trusted, TypeErrors.t) m
+val get_fun_decl : Locations.t -> Sym.t -> (Locations.t * Global.AT.ft * Mucore.trusted, TypeErrors.t) m
 
 val get_resource_predicate_def : Locations.t -> Sym.t ->
     (ResourcePredicates.definition, TypeErrors.type_error) m
@@ -70,7 +70,7 @@ val todo_get_logical_predicate_def_s : Locations.t -> string ->
 
 
 val add_struct_decl : Sym.t -> Memory.struct_layout -> (unit, 'e) m
-val add_fun_decl : Sym.t -> (Locations.t * ArgumentTypes.ft * Cerb_frontend.Mucore.trusted) -> (unit, 'e) m
+val add_fun_decl : Sym.t -> (Locations.t * ArgumentTypes.ft * Mucore.trusted) -> (unit, 'e) m
 val add_resource_predicate : Sym.t -> ResourcePredicates.definition -> (unit, 'e) m
 val add_logical_predicate : Sym.t -> LogicalPredicates.definition -> (unit, 'e) m
 
