@@ -84,11 +84,10 @@ let frontend incl_dirs astprints filename state_file =
   in
 
   let mi_file = Milicore.core_to_micore__file CTM.update_loc core_file in
+  let mi_file = CF.Milicore_label_inline.rewrite_file mi_file in
   let mu_file = CTM.normalise_file mi_file in
   print_log_file "after_anf" (MUCORE mu_file);
 
-  let mu_file = CF.Mucore_label_inline.ib_file mu_file in
-  print_log_file "after_inlining_break" (MUCORE mu_file);
   
   let ail_program = match ail_program_opt with
     | None -> assert false

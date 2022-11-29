@@ -2,21 +2,7 @@ open Core_rewriter
 open Core
 
 
-module Identity = struct
-  type 'a t = 'a
-  let return = fun z -> z
-  let bind m f = f m
-  let (>>=) = bind
-  let mapM = List.map
-  let foldlM f xs init =
-    List.fold_left (fun acc x ->
-      f x acc
-    ) init xs
-  
-  let unwrap (x: 'a t) : 'a = x
-end
-
-module RW = Rewriter(Identity)
+module RW = Rewriter(Identity_monad)
 
 
 
@@ -89,10 +75,10 @@ let rewriter : 'bty RW.rewriter =
    }
 
 let rewrite_pexpr pexpr =
-    Identity.unwrap RW.(rewritePexpr rewriter pexpr)
+    Identity_monad.unwrap RW.(rewritePexpr rewriter pexpr)
 
 let rewrite_expr expr =
-  Identity.unwrap RW.(rewriteExpr rewriter expr)
+  Identity_monad.unwrap RW.(rewriteExpr rewriter expr)
 
 let rewrite_file file =
   let rewrite_impl_decl = function
