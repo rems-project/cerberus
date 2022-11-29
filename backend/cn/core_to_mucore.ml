@@ -55,13 +55,6 @@ type mu_paction = unit Mu.mu_paction
 type mu_sym_or_pattern = unit Mu.mu_sym_or_pattern
 
 
-let always_explode_eif:bool=  false
-
-
-
-
-
-
 
 
 (* include other things to ignore *)
@@ -115,77 +108,6 @@ let rec core_to_mu__pattern loc (Core.Pattern (annots, pat_)) : mu_pattern =
 
 
 
-type ('bound, 'body) letbinder = 
-  Loc.t -> Annot.annot list -> mu_sym_or_pattern -> 'bound -> 'body -> 'body
-
-type 'd n_pexpr_domain = 
-  { d_let : (mu_pexpr, 'd) letbinder;
-    (* d_case: Loc.t -> Annot.annot list -> mu_pexpr -> (mu_pattern * 'd) list -> 'd; *)
-    (* d_if: Loc.t -> Annot.annot list -> mu_pexpr -> 'd -> 'd -> 'd; *)
-    (* d_undef : Loc.t -> Annot.annot list -> (Loc.t * Undefined.undefined_behaviour) -> 'd; *)
-    (* d_error : Loc.t -> Annot.annot list -> (string * mu_pexpr) -> 'd; *)
-  }
-
-
-(* let letbind_pexpr_ sym domain pexpr ctxt : 'a =  *)
-(*   let (M_Pexpr (loc, _, bty, _)) = pexpr in *)
-(*   let body = ctxt (M_Pexpr (loc, [], bty, M_PEsym sym)) in *)
-(*   domain.d_let loc [] (M_Symbol sym) pexpr body *)
- 
-(* let letbind_pexpr domain pexpr ctxt =  *)
-(*   letbind_pexpr_ (Symbol.fresh ()) domain pexpr ctxt *)
-
-
-
-let letbinder_pexpr_in_pexpr loc annots pat pexpr body : mu_pexpr = 
-  M_Pexpr (loc, annots, (), M_PElet (pat, pexpr, body))
-
-(* let case_switch_pexpr_in_pexpr loc annots asym cases : mu_tpexpr =  *)
-(*   M_TPexpr (loc, annots, (), M_PEcase (asym, cases)) *)
-
-(* let if_pexpr_in_pexpr loc annots asym pte1 pte2 : mu_pexpr =  *)
-(*   M_Pexpr (loc, annots, (), M_PEif (asym, pte1, pte2)) *)
-
-(* let undef_pexpr_in_pexpr loc annots (uloc, undef) : mu_tpexpr = *)
-(*   M_TPexpr (loc, annots, (), M_PEundef (uloc, undef)) *)
-
-(* let error_pexpr_in_pexpr loc annots (str, asym) : mu_tpexpr = *)
-(*   M_TPexpr (loc, annots, (), M_PEerror (str, asym)) *)
-
-
-let letbinder_pexpr_in_expr loc annots pat pexpr body : mu_expr = 
-  M_Expr (loc, annots, M_Elet (pat, pexpr, body))
-
-(* let case_switch_pexpr_in_expr loc annots asym cases : mu_texpr =  *)
-(*   M_TExpr (loc, annots, M_Ecase (asym, cases)) *)
-
-(* let if_pexpr_in_expr loc annots asym pte1 pte2 : mu_texpr =  *)
-(*   M_TExpr (loc, annots, M_Eif (asym, pte1, pte2)) *)
-
-(* let undef_pexpr_in_expr loc annots (uloc, undef) : mu_texpr = *)
-(*   M_TExpr (loc, annots, M_Eundef (uloc, undef)) *)
-
-(* let error_pexpr_in_expr loc annots (str, asym) : mu_texpr = *)
-(*   M_TExpr (loc, annots, M_Eerror (str, asym)) *)
-
-
-
-let pexpr_n_pexpr_domain = { 
-    d_let = letbinder_pexpr_in_pexpr;
-    (* d_case = case_switch_pexpr_in_pexpr; *)
-    (* d_if = if_pexpr_in_pexpr; *)
-    (* d_undef = undef_pexpr_in_pexpr; *)
-    (* d_error = error_pexpr_in_pexpr; *)
-  }
-
-let expr_n_pexpr_domain = { 
-    d_let = letbinder_pexpr_in_expr;
-    (* d_case = case_switch_pexpr_in_expr; *)
-    (* d_if = if_pexpr_in_expr; *)
-    (* d_undef = undef_pexpr_in_expr; *)
-    (* d_error = error_pexpr_in_expr; *)
-  }
-
 
 
 
@@ -206,10 +128,6 @@ and n_lv loc v =
 
 
 and n_val loc v =
-  (* print_endline ("\n\n\n*******************************************************\nnormalising value\n");
-   * PPrint.ToChannel.compact stdout (Pp_core_ast.pp_expr (Expr ([], (Epure (Pexpr ([], (), PEval v))))));
-   * print_endline "\n";
-   * flush stdout; *)
   match v with
   | Vobject ov -> M_Vobject (n_ov loc ov)
   | Vloaded lv -> M_Vobject (n_lv loc lv)
@@ -425,10 +343,7 @@ let rec n_pexpr loc (Pexpr (annots, bty, pe)) : mu_pexpr =
      loc_error loc "core_anormalisation: PEare_compatible"
 
 
-(* and n_pexpr_t =
- *   fun loc domain e k ->
- *   n_pexpr_name loc domain e (fun asym -> 
- *   M_TPexpr (loc, [], (), M_PEdone asym)) *)
+
 
 
 let normalise_pexpr (loc : Loc.t) (e'' : unit pexpr) = n_pexpr loc e''
@@ -623,10 +538,6 @@ let n_memop loc memop pexprs =
 
 let rec n_expr (loc : Loc.t) (returns : symbol Pset.set)
           (e : ('a, unit) expr) : mu_expr = 
-  (* print_endline ("\n\n\n*******************************************************\nnormalising ");
-   * PPrint.ToChannel.compact stdout (Pp_core_ast.pp_expr e);
-   * print_endline "\n";
-   * flush stdout; *)
   let (Expr (annots, pe)) = e in
   let loc = update_loc loc (get_loc_ annots) in
   let wrap pe = M_Expr (loc, annots, pe) in
