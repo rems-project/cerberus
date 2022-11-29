@@ -69,21 +69,15 @@ type mu_sym_or_pattern = unit Mu.mu_sym_or_pattern
 let always_explode_eif:bool=  false
 
 
-module type LocationCheck = sig
-
-  val good_location : Location_ocaml.t -> bool
-
-end
 
 
 
 
 
-module Make (L : LocationCheck) = struct
 
 (* include other things to ignore *)
 let update_loc loc1 loc2 = 
-  if L.good_location loc2 then loc2 else loc1
+  if Locations.good_location loc2 then loc2 else loc1
 
 
 (* ... adapting the algorithm from
@@ -965,4 +959,4 @@ let normalise_file (file : ('a, 'TY) Milicore.mi_file) : unit Mu.mu_file =
   })
 
 
-end
+

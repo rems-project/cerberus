@@ -4,7 +4,7 @@ open CB.Pipeline
 open Setup
 
 module Milicore = CF.Milicore
-module CTM = Core_to_mucore.Make(Locations)
+module CTM = Core_to_mucore
 
 let return = CF.Exception.except_return
 let (let@) = CF.Exception.except_bind
