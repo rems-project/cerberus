@@ -10,6 +10,23 @@ module Mu = Core_to_mucore.Mu
 open Mu
 
 
+let inline_label loc oannots label args =
+  let (label_sym, label_arg_syms_bts, label_body) = label in
+  assert ((List.length label_arg_syms_bts) = (List.length args));
+  let arguments = (Lem_list.list_combine label_arg_syms_bts args) in
+  let (M_Expr(_, annots2, e_)) = 
+    (List.fold_right (fun ((spec_arg, spec_bt), expr_arg) body ->
+         match expr_arg with
+         | M_Pexpr (_, _, _, M_PEsym s) when Symbol.symbolEquality s spec_arg ->
+            body
+         | _ ->
+            let pat = (M_Pattern (loc, [], M_CaseBase (Some spec_arg, spec_bt))) in
+            M_Expr(loc, [], (M_Elet (M_Pat pat, expr_arg, body)))
+       ) arguments label_body)
+  in
+  (* this combines annotations *)
+  M_Expr (loc, annots2 @ oannots, e_)
+
 
 
 let rec ib_texpr label e = 
@@ -62,28 +79,9 @@ let rec ib_texpr label e =
   (*    wrap (M_Eerror (str, asym)) *)
   | M_Erun(l, args) -> 
      let (label_sym, label_arg_syms_bts, label_body) = label in
-     if not (Symbol.symbolEquality l label_sym) then 
-       e
-     else if not ((List.length label_arg_syms_bts) = (List.length args)) then
-       failwith "M_Erun supplied wrong number of arguments"
-     else
-       let () = 
-         Debug_ocaml.print_debug 1 [] 
-           (fun () -> ("REPLACING LABEL " ^ Symbol.show_symbol l))
-       in
-       let arguments = (Lem_list.list_combine label_arg_syms_bts args) in
-       let (M_Expr(_, annots2, e_)) = 
-         (List.fold_right (fun ((spec_arg, spec_bt), expr_arg) body ->
-              match expr_arg with
-              | M_Pexpr (_, _, _, M_PEsym s) when Symbol.symbolEquality s spec_arg ->
-                 body
-              | _ ->
-                 let pat = (M_Pattern (loc, [], M_CaseBase (Some spec_arg, spec_bt))) in
-                 M_Expr(loc, [], (M_Elet (M_Pat pat, expr_arg, body)))
-            ) arguments label_body)
-       in
-       (* this combines annotations *)
-       M_Expr (loc, annots2 @ oannots, e_)
+     if not (Symbol.symbolEquality l label_sym) 
+     then e
+     else inline_label loc oannots label args
 
 
     
