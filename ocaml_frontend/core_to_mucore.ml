@@ -809,17 +809,17 @@ let normalise_expr (loc : Loc.t) (returns : symbol Pset.set) e =
   n_expr loc returns e
 
 
-let normalise_impl_decl (i : unit generic_impl_decl) : unit mu_impl_decl =
-  match i with
-  | Def(bt, p) -> 
-     let ict = bt in
-     M_Def (ict, bt, normalise_pexpr Loc.unknown p)
-  | IFun(bt, args, body) -> 
-     let ift = (bt, map snd args) in
-     M_IFun (ift, bt, args, normalise_pexpr Loc.unknown body)
+(* let normalise_impl_decl (i : unit generic_impl_decl) : unit mu_impl_decl = *)
+(*   match i with *)
+(*   | Def(bt, p) ->  *)
+(*      let ict = bt in *)
+(*      M_Def (ict, bt, normalise_pexpr Loc.unknown p) *)
+(*   | IFun(bt, args, body) ->  *)
+(*      let ift = (bt, map snd args) in *)
+(*      M_IFun (ift, bt, args, normalise_pexpr Loc.unknown body) *)
 
-let normalise_impl (i : unit generic_impl) : unit mu_impl=
-   (Pmap.map normalise_impl_decl i)
+(* let normalise_impl (i : unit generic_impl) : unit mu_impl= *)
+(*    (Pmap.map normalise_impl_decl i) *)
 
 let normalise_fun_map_decl (name1: symbol) d 
     : unit mu_fun_map_decl=
@@ -953,8 +953,8 @@ let normalise_file (file : ('a, 'TY) Milicore.mi_file) : unit Mu.mu_file =
   check_supported file;
    ({ mu_main = (file.mi_main)
    ; mu_tagDefs = (normalise_tag_definitions file.mi_tagDefs)
-   ; mu_stdlib = (normalise_fun_map file.mi_stdlib)
-   ; mu_impl = (normalise_impl file.mi_impl)
+   (* ; mu_stdlib = (normalise_fun_map file.mi_stdlib) *)
+   (* ; mu_impl = (normalise_impl file.mi_impl) *)
    ; mu_globs = (normalise_globs_list file.mi_globs)
    ; mu_funs = (normalise_fun_map file.mi_funs)
    ; mu_extern = (file.mi_extern)

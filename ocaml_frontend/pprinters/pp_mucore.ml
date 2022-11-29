@@ -28,7 +28,6 @@ module type PP_Typ = sig
   val pp_bt: T.bt -> PPrint.document
   val pp_ct: T.ct -> PPrint.document
   val pp_ft: T.ft -> PPrint.document
-  val pp_gt: T.gt -> PPrint.document
   val pp_lt: T.lt -> PPrint.document
   val pp_st: T.st -> PPrint.document
   val pp_ut: T.ut -> PPrint.document
@@ -926,19 +925,18 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
       ) funs P.empty
 
 
-  let pp_impl budget impl =
-    Pmap.fold (fun iCst iDecl acc ->
-      acc ^^
-      match iDecl with
-        | M_Def (_, bty, pe) ->
-            pp_keyword "def" ^^^ pp_impl iCst ^^^ P.equals ^^
-            P.nest 2 (P.break 1 ^^ pp_pexpr budget pe) ^^ P.break 1 ^^ P.break 1
-
-        | M_IFun (_, bTy, params, pe) ->
-            pp_keyword "fun" ^^^ pp_impl iCst ^^^ pp_params params ^^ P.colon ^^^ pp_bt bTy ^^^
-            P.colon ^^ P.equals ^^
-            P.nest 2 (P.break 1 ^^ pp_pexpr budget pe) ^^ P.break 1 ^^ P.break 1
-    ) impl P.empty
+  (* let pp_impl budget impl = *)
+  (*   Pmap.fold (fun iCst iDecl acc -> *)
+  (*     acc ^^ *)
+  (*     match iDecl with *)
+  (*       | M_Def (_, bty, pe) -> *)
+  (*           pp_keyword "def" ^^^ pp_impl iCst ^^^ P.equals ^^ *)
+  (*           P.nest 2 (P.break 1 ^^ pp_pexpr budget pe) ^^ P.break 1 ^^ P.break 1 *)
+  (*       | M_IFun (_, bTy, params, pe) -> *)
+  (*           pp_keyword "fun" ^^^ pp_impl iCst ^^^ pp_params params ^^ P.colon ^^^ pp_bt bTy ^^^ *)
+  (*           P.colon ^^ P.equals ^^ *)
+  (*           P.nest 2 (P.break 1 ^^ pp_pexpr budget pe) ^^ P.break 1 ^^ P.break 1 *)
+  (*   ) impl P.empty *)
 
   let pp_extern_symmap symmap =
     !^ "-- Extern symbols map:" ^^ P.break 1
@@ -956,7 +954,7 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
         match decl with
         | M_GlobalDef (_, (bTy, gt), e) ->
           acc ^^ pp_keyword "glob" ^^^ pp_symbol sym ^^ P.colon ^^^ pp_bt bTy ^^^
-            P.brackets (!^"ct" ^^^ P.equals ^^^ pp_gt gt) ^^^
+            P.brackets (!^"ct" ^^^ P.equals ^^^ pp_ct gt) ^^^
                 P.colon ^^ P.equals ^^
                 P.nest 2 (P.break 1 ^^ pp_expr budget e) ^^ P.break 1 ^^ P.break 1
         | M_GlobalDecl _ ->
@@ -981,18 +979,18 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
     let show_globs = file.mu_globs != [] in
     let guard b doc = if b then doc else P.empty in
 
-    begin
-      if Debug_ocaml.get_debug_level () > 1 then
-        fun z ->
-          !^ "-- BEGIN STDLIB" ^^ P.break 1 ^^
-          (pp_fun_map budget file.mu_stdlib) ^^ P.break 1 ^^
-          !^ "-- END STDLIB" ^^ P.break 1 ^^
-          !^ "-- BEGIN IMPL" ^^ P.break 1 ^^
-          pp_impl budget file.mu_impl ^^ P.break 1 ^^
-          !^ "-- END IMPL" ^^ P.break 1 ^^ z
-      else
-        id
-    end
+    (* begin *)
+    (*   if Debug_ocaml.get_debug_level () > 1 then *)
+    (*     fun z -> *)
+    (*       !^ "-- BEGIN STDLIB" ^^ P.break 1 ^^ *)
+    (*       (pp_fun_map budget file.mu_stdlib) ^^ P.break 1 ^^ *)
+    (*       !^ "-- END STDLIB" ^^ P.break 1 ^^ *)
+    (*       !^ "-- BEGIN IMPL" ^^ P.break 1 ^^ *)
+    (*       pp_impl budget file.mu_impl ^^ P.break 1 ^^ *)
+    (*       !^ "-- END IMPL" ^^ P.break 1 ^^ z *)
+    (*   else *)
+    (*     id *)
+    (* end *)
 
     begin
       guard show_aggregate begin
@@ -1087,7 +1085,6 @@ module Pp_standard_typ = (struct
   
 
   let pp_ct ty = P.squotes (Pp_core_ctype.pp_ctype ty)
-  let pp_gt = pp_ct
 
   let pp_ut (membrs) = 
     let (ty, tags) = ("union", membrs) in
