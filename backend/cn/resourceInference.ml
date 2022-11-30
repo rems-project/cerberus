@@ -279,7 +279,7 @@ module General = struct
            debug_constraint_failure_diagnostics 6 model global simp_ctxt c;
            fail_with_trace (fun trace -> fun ctxt ->
                   let ctxt = { ctxt with resources = original_resources } in
-                  {loc; msg = Unsat_constraint {constr = c; info; ctxt; model; trace}}
+                  {loc; msg = Unproven_constraint {constr = c; info; ctxt; model; trace}}
                 )
        end
     | I rt -> return ftyp
@@ -304,6 +304,9 @@ module General = struct
        let needed = requested.permission in 
        let sub_resource_if = fun cond re (needed, oargs) ->
              let continue = (Unchanged, (needed, oargs)) in
+             let cond_app = cond (fst re) in
+             debug 15 (lazy (item "doing sub_resource_if" (Pp.flow Pp.comma
+                 [RE.pp re; Pp.bool cond_app; Pp.bool (is_false needed)])));
              if is_false needed || not (cond (fst re)) then continue else
              match re with
              | (P p', p'_oargs) when equal_predicate_name (Owned requested_ct) p'.name ->

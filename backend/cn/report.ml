@@ -29,6 +29,7 @@ type state_report = {
     (* memory : state_entry list; *)
     variables : var_entry list;
     requested : resource_entry list;
+    unproven : Pp.doc list;
     resources : resource_entry list;
     predicate_hints : predicate_clause_entry list;
     constraints: Pp.doc list;
@@ -205,6 +206,8 @@ let to_html report =
         (* List.map state_entry report.memory @ *)
         opt_header report.requested [("requested resource", 2); ("byte span", 1)] @
         List.map resource_entry report.requested @
+        opt_header report.unproven [("unproven constraint", 3)] @
+        List.map constraint_entry report.unproven @
         opt_header report.predicate_hints [("possibly relevant predicate clauses", 3)] @
         List.map predicate_info_entry report.predicate_hints @
         opt_header report.resources [("available resources", 2); ("byte span and match", 1)] @

@@ -23,6 +23,8 @@ let loc_pp = ref Dec
 
 let int i = string (string_of_int i)
 
+let bool b = if b then string "true" else string "false"
+
 
 let html_escapes = ref false
 let unicode = ref true

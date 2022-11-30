@@ -25,6 +25,8 @@ type simp_ctxt = {
     lcs : LCSet.t;
   }
 
+let default global = {global;
+    values = SymMap.empty; equalities = ITPairMap.empty; lcs = LCSet.empty}
 
 
 

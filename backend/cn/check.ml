@@ -732,6 +732,7 @@ let rec check_pexpr (pe : 'bty mu_pexpr) ~(expect:BT.t)
      check_pexpr ~expect:Bool pe (fun c ->
      let aux e cond = 
        let@ () = add_c (t_ cond) in
+       Pp.debug 5 (lazy (Pp.item "checking consistency of if-branch" (IT.pp cond)));
        let@ provable = provable loc in
        match provable (t_ (bool_ false)) with
        | `True -> return ()

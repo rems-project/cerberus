@@ -135,7 +135,7 @@ type message =
   | Polymorphic_it : 'bt IndexTerms.term -> message
   | Write_value_unrepresentable of {ct: Sctypes.t; location: IT.t; value: IT.t; ctxt : Context.t; model : Solver.model_with_q }
   | Int_unrepresentable of {value : IT.t; ict : Sctypes.t; ctxt : Context.t; model : Solver.model_with_q}
-  | Unsat_constraint of {constr : LC.t; info : info; ctxt : Context.t; model : Solver.model_with_q; trace : Trace.t}
+  | Unproven_constraint of {constr : LC.t; info : info; ctxt : Context.t; model : Solver.model_with_q; trace : Trace.t}
 
   | Undefined_behaviour of {ub : CF.Undefined.undefined_behaviour; ctxt : Context.t; model : Solver.model_with_q}
   | Implementation_defined_behaviour of document * state_report
@@ -240,7 +240,7 @@ let pp_message te =
   | Missing_resource_request {orequest; situation; oinfo; ctxt; model; trace} ->
      let short = !^"Missing resource" ^^^ for_situation situation in
      let descr = missing_or_bad_request_description oinfo orequest in
-     let state = Explain.state ctxt model orequest in
+     let state = Explain.state ctxt model Explain.{no_ex with request = orequest} in
      let trace_doc = Trace.format_trace (fst model) trace in
      { short; descr = descr; state = Some state; trace = Some trace_doc }
   | Merging_multiple_arrays {orequest; situation; oinfo; ctxt; model} ->
@@ -249,12 +249,12 @@ let pp_message te =
          !^"It requires merging multiple arrays."
      in
      let descr = missing_or_bad_request_description oinfo orequest in
-     let state = Explain.state ctxt model orequest in
+     let state = Explain.state ctxt model Explain.{no_ex with request = orequest} in
      { short; descr = descr; state = Some state; trace = None }
   | Unused_resource {resource; ctxt; model; trace} ->
      let resource = RE.pp resource in
      let short = !^"Left-over unused resource" ^^^ squotes resource in
-     let state = Explain.state ctxt model None in
+     let state = Explain.state ctxt model Explain.no_ex in
      let trace_doc = Trace.format_trace (fst model) trace in
      { short; descr = None; state = Some state; trace = Some trace_doc }
   | Number_members {has;expect} ->
@@ -352,7 +352,7 @@ let pp_message te =
      in
      let location = IT.pp (location) in
      let value = IT.pp (value) in
-     let state = Explain.state ctxt model None in
+     let state = Explain.state ctxt model Explain.no_ex in
      let descr =
        !^"Location" ^^ colon ^^^ location ^^ comma ^^^
        !^"value" ^^ colon ^^^ value ^^ dot
@@ -365,11 +365,12 @@ let pp_message te =
      in
      let value = IT.pp (value) in
      let descr = !^"Value" ^^ colon ^^^ value in
-     let state = Explain.state ctxt model None in
+     let state = Explain.state ctxt model Explain.no_ex in
      { short; descr = Some descr; state = Some state; trace = None }
-  | Unsat_constraint {constr; info; ctxt; model; trace} ->
-     let short = !^"Unsatisfied constraint" in
-     let state = Explain.state ctxt model None in
+  | Unproven_constraint {constr; info; ctxt; model; trace} ->
+     let short = !^"Unprovable constraint" in
+     let state = Explain.state ctxt model
+         Explain.{no_ex with unproven_constraint = Some constr} in
      let descr =
        let (spec_loc, odescr) = info in
        let (head, _) = Locations.head_pos_of_location spec_loc in
@@ -381,7 +382,7 @@ let pp_message te =
      { short; descr = Some descr; state = Some state; trace = Some trace_doc }
   | Undefined_behaviour {ub; ctxt; model} ->
      let short = !^"Undefined behaviour" in
-     let state = Explain.state ctxt model None in
+     let state = Explain.state ctxt model Explain.no_ex in
      let descr = !^(CF.Undefined.ub_short_string ub) in
      { short; descr = Some descr; state = Some state; trace = None }
   | Implementation_defined_behaviour (impl, state) ->
@@ -393,7 +394,7 @@ let pp_message te =
      { short; descr = None; state = None; trace = None }
   | StaticError {err; ctxt; model} ->
      let short = !^"Static error" in
-     let state = Explain.state ctxt model None in
+     let state = Explain.state ctxt model Explain.no_ex in
      let descr = !^err in
      { short; descr = Some descr; state = Some state; trace = None }
   | Generic err ->
@@ -401,7 +402,7 @@ let pp_message te =
      { short; descr = None; state = None; trace = None }
   | Generic_with_model {err; model; ctxt} ->
      let short = err in
-     let state = Explain.state ctxt model None in
+     let state = Explain.state ctxt model Explain.no_ex in
      { short; descr = None; state = Some state; trace = None }
 
 
