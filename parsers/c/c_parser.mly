@@ -91,6 +91,16 @@ let append_magic magic stmt =
 
 let mk_statement magic (loc, attrs, stmt_) =
   append_magic magic (CabsStatement (loc, attrs, stmt_))
+
+(* use this to show a warning when a NON-STD 'extra' semicolon was parsed *)
+let warn_extra_semicolon pos ctx =
+  if not (Global_ocaml.isPermissive ()) then
+    prerr_endline (Pp_errors.make_message
+                    (Location_ocaml.point pos)
+                    Errors.(CPARSER (Cparser_extra_semi ctx))
+                    Warning)
+  else
+    ()
 %}
 
 (* §6.4.1 keywords *)
@@ -959,8 +969,9 @@ attribute_type_specifier_unique:
 (* §6.7.2.1 Structure and union specifiers *)
 struct_or_union_specifier:
 | ctor= struct_or_union attr_opt= attribute_specifier_sequence?
-    iopt= general_identifier? LBRACE rev_decls= struct_declaration_list RBRACE
-    { ctor (to_attrs attr_opt) iopt (Some (List.rev rev_decls)) }
+    iopt= general_identifier? LBRACE has_extra= boption(SEMICOLON+) rev_decls= struct_declaration_list RBRACE
+    { if has_extra then warn_extra_semicolon $startpos(has_extra) INSIDE_STRUCT;
+      ctor (to_attrs attr_opt) iopt (Some (List.rev rev_decls)) }
 | ctor= struct_or_union attr_opt= attribute_specifier_sequence?
     i= general_identifier
     { ctor (to_attrs attr_opt) (Some i) None }
@@ -989,8 +1000,9 @@ struct_declaration_list: (* NOTE: the list is in reverse *)
 
 struct_declaration:
 | attr_opt= ioption(attribute_specifier_sequence) tspecs_tquals= specifier_qualifier_list
-    rev_sdeclrs_opt= struct_declarator_list? SEMICOLON
-    { let (tspecs, tquals, align_specs) = tspecs_tquals in
+    rev_sdeclrs_opt= struct_declarator_list? SEMICOLON has_extra= boption(SEMICOLON+)
+    { if has_extra then warn_extra_semicolon $startpos(has_extra) INSIDE_STRUCT;
+      let (tspecs, tquals, align_specs) = tspecs_tquals in
       Struct_declaration (to_attrs attr_opt, tspecs, tquals, align_specs,
                           option [] List.rev rev_sdeclrs_opt) }
 | sa_decl= static_assert_declaration
@@ -1605,11 +1617,7 @@ function_definition1:
 function_definition:
 | specifs_decltor_ctxt= function_definition1 rev_decl_opt= declaration_list?
   stmt= compound_statement has_semi= boption(SEMICOLON)
-    { if has_semi && not (Global_ocaml.isPermissive ()) then
-        prerr_endline (Pp_errors.make_message
-                         (Location_ocaml.point $startpos(has_semi))
-                         Errors.(CPARSER Cparser_extra_semi)
-                         Warning);
+    { if has_semi then warn_extra_semicolon $startpos(has_semi) AFTER_FUNCTION;
       let loc = Location_ocaml.(region ($startpos, $endpos) NoCursor) in
       let (attr_opt, specifs, decltor, ctxt) = specifs_decltor_ctxt in
       let (magic_opt, stmt') =

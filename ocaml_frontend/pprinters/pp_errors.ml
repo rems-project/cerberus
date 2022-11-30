@@ -40,8 +40,12 @@ let string_of_cparser_cause = function
       "unexpected token '"^ str ^ "'"
   | Cparser_non_standard_string_concatenation ->
       "unsupported non-standard concatenation of string literals"
-  | Cparser_extra_semi ->
+  | Cparser_extra_semi AFTER_FUNCTION ->
       "found a semicolon after a function definition"
+  | Cparser_extra_semi INSIDE_STRUCT ->
+      "found an extra semicolon inside a struct definition"
+  | Cparser_extra_semi INSIDE_UNION ->
+      "found an extra semicolon inside a union definition"
   | Cparser_KnR_declaration ->
       "found K&R-style declaration (unsupported)"
   | Cparser_nested_comment ->

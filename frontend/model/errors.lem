@@ -50,13 +50,19 @@ type core_run_cause =
   | Unknown_impl
   | Unresolved_symbol of Loc.t * Symbol.sym (* found an unresolved symbolic name in core_eval *)
 
+(* semicolon after a function definition and other places (is an extension it least since C++11) *)
+type extra_semi_context =
+  | AFTER_FUNCTION
+  | INSIDE_STRUCT
+  | INSIDE_UNION
+
 type cparser_cause =
   | Cparser_invalid_symbol
   | Cparser_invalid_line_number of string
   | Cparser_unexpected_eof
   | Cparser_unexpected_token of string
   | Cparser_non_standard_string_concatenation
-  | Cparser_extra_semi (* semicolon after a function definition (is an extension it least since C++11) *)
+  | Cparser_extra_semi of extra_semi_context
   | Cparser_KnR_declaration (* we don't support K&R syntax for declarations *)
   | Cparser_nested_comment
   | Cparser_unterminated_comment of string
