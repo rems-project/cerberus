@@ -1,13 +1,8 @@
-open Lem_pervasives
+(* open Lem_pervasives *)
 
+open Cerb_frontend
 open Ctype
 open Annot
-open Loc
-open Mem
-open Mem_common
-open Core_aux
-
-open Lem_assert_extra
 
 module Loc = Location_ocaml
 type loc = Loc.t
@@ -25,14 +20,10 @@ module type TYPES = sig
   type ct
   type bt
 
-  type ift
-  type ict
-
   type ut
   type st
   type ft
   type lt
-  type gt
 
   type logical_arguments
 
@@ -252,12 +243,12 @@ type have_show =
     M_Expr (loc, [], (M_Epure pe))
 
 
-  type 'TY mu_impl_decl =
-    | M_Def of T.ict * T.bt * 'TY mu_pexpr
-    | M_IFun of T.ift * T.bt * (symbol * T.bt) list * 'TY mu_pexpr
+  (* type 'TY mu_impl_decl = *)
+  (*   | M_Def of T.ict * T.bt * 'TY mu_pexpr *)
+  (*   | M_IFun of T.ift * T.bt * (symbol * T.bt) list * 'TY mu_pexpr *)
 
-  type 'TY mu_impl = (Implementation.implementation_constant, ('TY mu_impl_decl)) 
-    Pmap.map
+  (* type 'TY mu_impl = (Implementation.implementation_constant, ('TY mu_impl_decl))  *)
+  (*   Pmap.map *)
 
   type 'TY mu_label_def = 
     | M_Return of loc
@@ -296,8 +287,8 @@ type have_show =
   type mu_extern_map = Core.extern_map
 
   type 'TY mu_globs =
-    | M_GlobalDef of symbol * (T.bt * T.gt) * 'TY mu_expr
-    | M_GlobalDecl of symbol * (T.bt * T.gt)
+    | M_GlobalDef of symbol * (T.bt * T.ct) * 'TY mu_expr
+    | M_GlobalDecl of symbol * (T.bt * T.ct)
 
   type 'TY mu_globs_map = (symbol, 'TY mu_globs)
     Pmap.map
@@ -323,8 +314,8 @@ type have_show =
   type 'TY mu_file = {
     mu_main    : symbol option;
     mu_tagDefs : mu_tag_definitions;
-    mu_stdlib  : 'TY mu_fun_map;
-    mu_impl    : 'TY mu_impl;
+    (* mu_stdlib  : 'TY mu_fun_map; *)
+    (* mu_impl    : 'TY mu_impl; *)
     mu_globs   : 'TY mu_globs_list;
     mu_funs    : 'TY mu_fun_map;
     mu_extern  : mu_extern_map;
@@ -346,13 +337,10 @@ end
 module SimpleTypes : TYPES
        with type ct = Ctype.ctype
        with type bt = Core.core_base_type
-       with type ift = Core.core_base_type * (Core.core_base_type) list
-       with type ict = Core.core_base_type
        with type ut = (Symbol.identifier * (Annot.attributes * alignment option * qualifiers * Ctype.ctype)) list
        with type st = (Symbol.identifier * (Annot.attributes * alignment option * qualifiers * Ctype.ctype)) list *  flexible_array_member option
        with type ft = Ctype.ctype * (Symbol.sym * Ctype.ctype) list * bool
        with type lt = (Symbol.sym option * (Ctype.ctype * bool)) list
-       with type gt = Ctype.ctype
        with type logical_arguments = unit
        with type resource_predicates = unit
        with type logical_predicates = unit
@@ -361,14 +349,11 @@ struct
 
   type ct = Ctype.ctype
   type bt = Core.core_base_type
-  type ift = bt * bt list
-  type ict = bt
 
   type ut = (Symbol.identifier * (Annot.attributes * alignment option * qualifiers * ct)) list
   type st = (Symbol.identifier * (Annot.attributes * alignment option * qualifiers * ct)) list *  flexible_array_member option
   type ft = ct * (Symbol.sym * ct) list * bool
   type lt = (Symbol.sym option * (Ctype.ctype * bool)) list
-  type gt = ct
   type logical_arguments = unit
   type resource_predicates = unit
   type logical_predicates = unit

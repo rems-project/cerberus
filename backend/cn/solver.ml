@@ -13,6 +13,7 @@ module LCSet = Set.Make(LC)
 module BT = BaseTypes
 
 
+let random_seed = ref 1
 
 let slow_smt_file =
   let open Filename in
@@ -68,14 +69,16 @@ let no_automation_params = [
     ("smt.auto_config", "false");
   ]
 
-let no_randomness_params = [
-    ("sat.random_seed", "1");
+let no_randomness_params () =
+  let seed_str = Int.to_string (! random_seed) in
+  [
+    ("sat.random_seed", seed_str);
     ("nlsat.randomize", "false");
-    ("fp.spacer.random_seed", "1");
+    ("fp.spacer.random_seed", seed_str);
     ("smt.arith.random_initial_value", "false");
-    ("smt.random_seed", "1");
+    ("smt.random_seed", seed_str);
     ("sls.random_offset", "false");
-    ("sls.random_seed", "1");
+    ("sls.random_seed", seed_str);
   ]
 
 let solver_params = [
@@ -103,10 +106,10 @@ let model_params = [
     ("model_evaluator.array_as_stores", "false");
   ]
 
-let params =
+let params () =
   logging_params
   @ no_automation_params
-  @ no_randomness_params
+  @ no_randomness_params ()
   @ solver_params
   @ rewriter_params
   @ model_params
@@ -681,7 +684,7 @@ let tactic context =
 let make global : solver = 
   Z3.Memory.reset ();
 
-  List.iter (fun (c,v) -> Z3.set_global_param c v) params;
+  List.iter (fun (c,v) -> Z3.set_global_param c v) (params ());
 
   let context = Z3.mk_context [] in
 

@@ -3,8 +3,8 @@ module CB=Cerb_backend
 open CB.Pipeline
 open Setup
 
-module CTM = CF.Core_to_mucore.Make(Locations)
 module Milicore = CF.Milicore
+module CTM = Core_to_mucore
 
 let return = CF.Exception.except_return
 let (let@) = CF.Exception.except_bind
@@ -27,7 +27,7 @@ let print_file filename file =
      Pp.print_file (filename ^ ".core") (CF.Pp_core.All.pp_file file);
   | MUCORE file ->
      Pp.print_file (filename ^ ".mucore")
-       (CF.Pp_mucore.Basic_standard_typ.pp_file None file);
+       (Pp_mucore.Basic_standard_typ.pp_file None file);
 
 
 module Log : sig 
@@ -84,11 +84,10 @@ let frontend incl_dirs astprints filename state_file =
   in
 
   let mi_file = Milicore.core_to_micore__file CTM.update_loc core_file in
+  let mi_file = CF.Milicore_label_inline.rewrite_file mi_file in
   let mu_file = CTM.normalise_file mi_file in
   print_log_file "after_anf" (MUCORE mu_file);
 
-  let mu_file = CF.Mucore_label_inline.ib_file mu_file in
-  print_log_file "after_inlining_break" (MUCORE mu_file);
   
   let ail_program = match ail_program_opt with
     | None -> assert false
@@ -135,6 +134,7 @@ let main
       only
       csv_times
       log_times
+      random_seed
       astprints
   =
   if json then begin
@@ -147,6 +147,7 @@ let main
   Pp.loc_pp := loc_pp;
   Pp.print_level := print_level;
   Pp.print_timestamps := not no_timestamps;
+  Solver.random_seed := random_seed;
   ResourceInference.reorder_points := not no_reorder_points;
   ResourceInference.additional_sat_check := not no_additional_sat_check;
   Check.InferenceEqs.use_model_eqs := not no_model_eqs;
@@ -257,6 +258,10 @@ let log_times =
   let doc = "file in which to output hierarchical timing information" in
   Arg.(value & opt (some string) None & info ["log_times"] ~docv:"FILE" ~doc)
 
+let random_seed =
+  let doc = "Set the SMT solver random seed (default 1)." in
+  Arg.(value & opt int 0 & info ["r"; "random-seed"] ~docv:"I" ~doc)
+
 let only =
   let doc = "only type-check this function" in
   Arg.(value & opt (some string) None & info ["only"] ~doc)
@@ -288,6 +293,7 @@ let () =
       only $
       csv_times $
       log_times $
+      random_seed $
       astprints
   in
   Term.exit @@ Term.eval (check_t, Term.info "cn")

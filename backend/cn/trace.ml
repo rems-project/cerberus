@@ -1,6 +1,5 @@
 module CF = Cerb_frontend
 
-module Mucore = CF.Mucore
 module New = NewMu.New
 module SymSet = Set.Make(Sym)
 module StringMap = Map.Make(String)

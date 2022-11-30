@@ -1,0 +1,8 @@
+
+-Q theories CN_Lemmas
+
+theories/Gen_Spec.v
+theories/Setup.v
+theories/Inst_Spec.v
+
+

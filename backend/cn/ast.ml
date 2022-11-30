@@ -1,4 +1,3 @@
-module CF = Cerb_frontend
 module Loc = Locations
 module BT = BaseTypes
 open Pp
@@ -302,7 +301,7 @@ type garg = { asym : Sym.t; lsym : Sym.t; typ : Sctypes.t; accessed : Loc.t opti
 
 
 type function_spec = { 
-    trusted: CF.Mucore.trusted;
+    trusted: Mucore.trusted;
     global_arguments : garg list;
     function_arguments : earg list;
     function_return : varg;

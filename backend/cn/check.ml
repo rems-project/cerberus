@@ -22,7 +22,7 @@ open Sctypes
 open Context
 open IT
 open TypeErrors
-open CF.Mucore
+open Mucore
 open Mu
 open Pp
 open BT
@@ -1832,7 +1832,7 @@ let check mu_file =
   let@ () = record_globals mu_file.mu_globs in
   Pp.progress_simple "checking specifications" "function welltypedness";
   let@ () = record_and_wf_check_functions mu_file.mu_funinfo in
-  let@ () = PmapM.iterM check_function mu_file.mu_stdlib in
+  (* let@ () = PmapM.iterM check_function mu_file.mu_stdlib in *)
   let@ () = check_c_functions mu_file.mu_funs in
   return ()
 

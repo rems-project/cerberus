@@ -1,4 +1,3 @@
-module CF = Cerb_frontend
 module IT = IndexTerms
 
 
@@ -38,7 +37,7 @@ type t = {
   resources: resource_def SymMap.t;
   datatypes : (BaseTypes.datatype_info * Sym.t Y.t) SymMap.t;
   datatype_constrs : BaseTypes.constr_info SymMap.t;
-  tagDefs: CF.Core_to_mucore.Mu.mu_tag_definitions;
+  tagDefs: Core_to_mucore.Mu.mu_tag_definitions;
 }
 
 let empty tagDefs =

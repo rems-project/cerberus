@@ -577,40 +577,40 @@ let retype_file (context : Context.t) opts (file : 'TY Old.mu_file)
   in
 
 
-  let@ impls = 
-    let retype_impl_decl impl def = 
-      match def with
-      | Old.M_Def (ict,cbt,pexpr) ->
-         let@ ict = 
-           let@ bt = Conversions.bt_of_core_base_type Loc.unknown ict in
-           return (RT.Computational ((Sym.fresh (), bt), (Loc.unknown, None), LRT.I))
-         in
-         let@ bt = Conversions.bt_of_core_base_type Loc.unknown cbt in
-         let@ pexpr = retype_pexpr pexpr in
-         return (New.M_Def (ict,bt,pexpr))
-      | Old.M_IFun (ift,cbt,args,pexpr) ->
-         let@ ift = 
-           let (rbt, argbts) = ift in
-           let@ rbt = Conversions.bt_of_core_base_type Loc.unknown rbt in
-           let@ args = 
-             ListM.mapM (fun bt -> 
-                 let@ bt = Conversions.bt_of_core_base_type Loc.unknown bt in
-                 return (Sym.fresh (), bt, (Loc.unknown, None))
-               ) argbts 
-           in
-           let ft = (AT.mComputationals args) 
-                      (AT.L (LAT.I (RT.Computational ((Sym.fresh (), rbt), (Loc.unknown, None), LRT.I))))
-           in
-           return ft
-         in
-         let@ bt = Conversions.bt_of_core_base_type Loc.unknown cbt in
-         let@ args = mapM (retype_arg Loc.unknown) args in
-         let@ pexpr = retype_pexpr pexpr in
-         return (New.M_IFun (ift,bt,args,pexpr))
-    in
-    PmapM.mapM retype_impl_decl file.mu_impl 
-      CF.Implementation.implementation_constant_compare
-  in
+  (* let@ impls =  *)
+  (*   let retype_impl_decl impl def =  *)
+  (*     match def with *)
+  (*     | Old.M_Def (ict,cbt,pexpr) -> *)
+  (*        let@ ict =  *)
+  (*          let@ bt = Conversions.bt_of_core_base_type Loc.unknown ict in *)
+  (*          return (RT.Computational ((Sym.fresh (), bt), (Loc.unknown, None), LRT.I)) *)
+  (*        in *)
+  (*        let@ bt = Conversions.bt_of_core_base_type Loc.unknown cbt in *)
+  (*        let@ pexpr = retype_pexpr pexpr in *)
+  (*        return (New.M_Def (ict,bt,pexpr)) *)
+  (*     | Old.M_IFun (ift,cbt,args,pexpr) -> *)
+  (*        let@ ift =  *)
+  (*          let (rbt, argbts) = ift in *)
+  (*          let@ rbt = Conversions.bt_of_core_base_type Loc.unknown rbt in *)
+  (*          let@ args =  *)
+  (*            ListM.mapM (fun bt ->  *)
+  (*                let@ bt = Conversions.bt_of_core_base_type Loc.unknown bt in *)
+  (*                return (Sym.fresh (), bt, (Loc.unknown, None)) *)
+  (*              ) argbts  *)
+  (*          in *)
+  (*          let ft = (AT.mComputationals args)  *)
+  (*                     (AT.L (LAT.I (RT.Computational ((Sym.fresh (), rbt), (Loc.unknown, None), LRT.I)))) *)
+  (*          in *)
+  (*          return ft *)
+  (*        in *)
+  (*        let@ bt = Conversions.bt_of_core_base_type Loc.unknown cbt in *)
+  (*        let@ args = mapM (retype_arg Loc.unknown) args in *)
+  (*        let@ pexpr = retype_pexpr pexpr in *)
+  (*        return (New.M_IFun (ift,bt,args,pexpr)) *)
+  (*   in *)
+  (*   PmapM.mapM retype_impl_decl file.mu_impl  *)
+  (*     CF.Implementation.implementation_constant_compare *)
+  (* in *)
 
 
 
@@ -723,10 +723,10 @@ let retype_file (context : Context.t) opts (file : 'TY Old.mu_file)
       return (New.M_BuiltinDecl (loc,bt,args))
  in
 
-  let@ stdlib = 
-    PmapM.mapM (fun fsym decl -> retype_fun_map_decl fsym decl
-      ) file.mu_stdlib Sym.compare
-  in
+  (* let@ stdlib =  *)
+  (*   PmapM.mapM (fun fsym decl -> retype_fun_map_decl fsym decl *)
+  (*     ) file.mu_stdlib Sym.compare *)
+  (* in *)
 
   let@ funs = PmapM.mapM (retype_fun_map_decl) file.mu_funs Sym.compare in
 
@@ -744,8 +744,8 @@ let retype_file (context : Context.t) opts (file : 'TY Old.mu_file)
   let file = 
     New.{ mu_main = file.mu_main;
           mu_tagDefs = tagDefs;
-          mu_stdlib = stdlib;
-          mu_impl = impls;
+          (* mu_stdlib = stdlib; *)
+          (* mu_impl = impls; *)
           mu_globs = globs;
           mu_funs = funs;
           mu_extern = file.mu_extern;

@@ -92,6 +92,10 @@ let map_bt = function
   | bt -> Debug_ocaml.error 
            ("illtyped index term: not a map type: " ^ Pp.plain (pp bt))
 
+let is_datatype_bt = function
+  | Datatype sym -> Some sym
+  | _ -> None
+
 
 let make_map_bt abt rbt = Map (abt, rbt)
 

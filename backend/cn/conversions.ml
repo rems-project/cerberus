@@ -1070,7 +1070,7 @@ let mod_mappings mapping_names mappings f =
 (*     |> List.map (fun {path; it; _} -> (Pp.plain (Ast.Terms.pp true path), it))) *)
 
 let make_fun_spec loc (global : Global.t) fsym (fspec : function_spec)
-    : (AT.ft * CF.Mucore.trusted * (Sym.t * ((Sym.t * BT.t) list)) * mapping, type_error) m = 
+    : (AT.ft * Mucore.trusted * (Sym.t * ((Sym.t * BT.t) list)) * mapping, type_error) m = 
   let open AT in
   let open RT in
 

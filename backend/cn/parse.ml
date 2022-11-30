@@ -1,12 +1,13 @@
+(* open Cerb_frontend *)
+open Cerb_frontend.Annot
 open Resultat
 open Effectful.Make(Resultat)
 open TypeErrors
 open Ast
 open Pp
-module CF = Cerb_frontend
-module Loc = Locations
 
-open CF.Annot
+
+module Loc = Locations
 
 (* adapting from core_parser_driver.ml *)
 
@@ -47,7 +48,6 @@ type cn_attribute = {
   }
 
 let cn_attributes attributes =
-  let open CF.Symbol in
   List.concat_map (fun attr ->
       match Option.map Id.s (attr.attr_ns), Id.s attr.attr_id with
       | Some "cn", _ ->
@@ -78,7 +78,7 @@ let make_accessed globals (loc, name) =
     | [] -> 
        fail {loc; msg = Generic !^("'"^name^"' is not a global variable")}
     | garg :: gargs ->
-      match CF.Symbol.symbol_description garg.asym with
+      match Sym.symbol_description garg.asym with
       | SD_ObjectAddress name' when String.equal name name' ->
          begin match garg.accessed with
          | Some _ -> 
@@ -92,7 +92,7 @@ let make_accessed globals (loc, name) =
   in
   aux globals
 
-let make_accessed_id globals (CF.Symbol.Identifier (loc, name)) =
+let make_accessed_id globals (Sym.Identifier (loc, name)) =
   make_accessed globals (loc, name)
 
 
@@ -135,7 +135,7 @@ let parse_function
                 | _ -> fail {loc = keyword_loc; 
                              msg = Generic !^"'trusted' takes no arguments"}
               in
-              return (CF.Mucore.Trusted keyword_loc, globals, pre, post, def_log)
+              return (Mucore.Trusted keyword_loc, globals, pre, post, def_log)
            | "accesses" -> 
               let@ globals = ListM.fold_leftM make_accessed globals arguments in
               return (trusted, globals, pre, post, def_log)
@@ -160,7 +160,7 @@ let parse_function
                (loc, keyword_condition) ->
                match keyword_condition with
                | Trusted ->
-                  return (CF.Mucore.Trusted loc, globals, pre, post, def_log)
+                  return (Mucore.Trusted loc, globals, pre, post, def_log)
                | Accesses a ->
                   let@ globals = ListM.fold_leftM make_accessed_id globals a in
                   return (trusted, globals, pre, post, def_log)
