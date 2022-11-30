@@ -16,7 +16,7 @@ Require Import ExtrOcamlZBigInt.
 Extraction Language OCaml.
 Unset Extraction Optimize. (* trying to make print_msg work *)
 
-Extraction Blacklist String List Char Core Monad Bool Format Nat Int Base Numbers Option.
+Extraction Blacklist String List Char Core Monad Bool Format Nat Int Option base Numbers.
 
 (* Debugging print *)
 Extraction NoInline Cerberus.Utils.print_msg.
@@ -25,6 +25,7 @@ Extract Inlined Constant Morello.MorelloCapability.strfcap => "strfcap".
 
 (* Set Extraction AccessOpaque. *)
 
-
+From stdpp Require Import base.
+Extraction Library base.
 Extraction Library Vector.
 Recursive Extraction Library CheriMemory.
