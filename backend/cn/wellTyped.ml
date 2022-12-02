@@ -30,10 +30,10 @@ let ensure_base_type (loc : loc) ~(expect : BT.t) (has : BT.t) : (unit, type_err
   ensure_logical_sort loc ~expect has
 
 
-let check_bound_l loc s = 
-  let@ is_bound = bound_l s in
-  if is_bound then return ()
-  else fail (fun _ -> {loc; msg = TE.Unknown_variable s})
+(* let check_bound_l loc s =  *)
+(*   let@ is_bound = bound_l s in *)
+(*   if is_bound then return () *)
+(*   else fail (fun _ -> {loc; msg = TE.Unknown_variable s}) *)
 
 
 let illtyped_index_term (loc: loc) context it has expected ctxt =
@@ -139,8 +139,13 @@ module WIT = struct
       | Lit lit ->
          let@ (bt, lit) = match lit with
            | Sym s ->
-              let@ () = check_bound_l loc s in
-              let@ bt = get_l s in
+              let@ is_a = bound_a s in
+              let@ is_l = bound_l s in
+              let@ bt = match () with
+                | () when is_a -> get_a s
+                | () when is_l -> get_l s
+                | () -> fail (fun _ -> {loc; msg = TE.Unknown_variable s})
+              in
               return (bt, Sym s)
            | Z z -> 
               return (Integer, Z z)
@@ -589,6 +594,7 @@ module WIT = struct
               let@ arg = check loc ~context abt arg in
               return (bt, Get (t, arg))
            | Def ((s, abt), body) ->
+              let s, body = IT.alpha_rename (s, abt) body in
               let@ () = WBT.is_bt loc abt in
               pure begin
                   let@ () = add_l s abt (loc, lazy (Pp.string "map-def-var")) in
@@ -809,8 +815,7 @@ module WRT = struct
       | RT.Computational ((name,bt), info, lrt) ->
          let name, lrt = LRT.alpha_rename (name, bt) lrt in
          let@ () = WBT.is_bt (fst info) bt in
-         let@ () = add_l name bt (loc, lazy (Pp.string "ret-var")) in
-         let@ () = add_a (Sym.fresh_same name) (IndexTerms.sym_ (name, bt)) in
+         let@ () = add_a name bt (fst info, lazy (Sym.pp name)) in
          let@ lrt = WLRT.welltyped loc lrt in
          return (RT.Computational ((name, bt), info, lrt))
       end
@@ -910,8 +915,7 @@ module WAT = struct
       | AT.Computational ((name,bt), info, at) ->
          let name, at = AT.alpha_rename i_subst (name, bt) at in
          let@ () = WBT.is_bt (fst info) bt in
-         let@ () = add_l name bt (loc, lazy (Pp.string "arg")) in
-         let@ () = add_a (Sym.fresh_same name) (IndexTerms.sym_ (name, bt)) in
+         let@ () = add_a name bt (fst info, lazy (Sym.pp name)) in
          let@ at = aux at in
          return (AT.Computational ((name, bt), info, at))
       | AT.L at ->
@@ -1017,7 +1021,7 @@ module WLPD = struct
     pure begin
         let@ () = ListM.iterM (WLS.is_ls pd.loc) (List.map snd pd.args) in
         let info = (pd.loc, lazy (Pp.string "arg-var")) in
-        let@ () = add_ls (List.map (fun arg -> (arg, info)) pd.args) in
+        let@ () = add_ls (List.map (fun (s,bt) -> (s, bt, info)) pd.args) in
         let@ () = WBT.is_bt pd.loc pd.return_bt in
         let@ definition = match pd.definition with
           | Def body -> 

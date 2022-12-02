@@ -52,77 +52,68 @@ type pointer_value = CF.Impl_mem.pointer_value
 
 (*** pattern matching *********************************************************)
 
-let rec bt_of_pattern pat =
-  let (M_Pattern (loc, _, pattern) : mu_pattern) = pat in
+let rec infer_pattern (M_Pattern (loc, _, pattern)) =
   match pattern with
-  | M_CaseBase (_, has_bt) -> return has_bt
+  | M_CaseBase (_, has_bt) -> 
+     let@ () = WellTyped.WBT.is_bt loc has_bt in
+     return has_bt
   | M_CaseCtor (constructor, pats) ->
     begin match constructor, pats with
-    | M_Cnil item_bt, _ -> return (BT.List item_bt)
-    | M_Ccons, [_; p2] -> bt_of_pattern p2
+    | M_Cnil item_bt, [] -> 
+       return (BT.List item_bt)
+    | M_Cnil _, _ ->
+       fail (fun _ -> {loc; msg = Number_arguments {has = List.length pats; expect = 0}})
+    | M_Ccons, [p1; p2] -> 
+       let@ bt1 = infer_pattern p1 in
+       let@ bt2 = infer_pattern p2 in
+       let@ () = WellTyped.ensure_base_type loc ~expect:(List bt1) bt2 in
+       return (List bt1)
     | M_Ccons, _ ->
         fail (fun _ -> {loc; msg = Number_arguments {has = List.length pats; expect = 2}})
     | M_Ctuple, pats ->
-        let@ bts = ListM.mapM bt_of_pattern pats in
+        let@ bts = ListM.mapM infer_pattern pats in
         return (BT.Tuple bts)
     | M_Carray, _ ->
         Debug_ocaml.error "todo: array types"
     end
 
 
-let bt_prefix = function
-  | Unit -> "u"
-  | Bool -> "b"
-  | Integer -> "i"
-  | Real -> "r"
-  | Loc -> "p"
-  | List _ -> "list"
-  | Tuple _ -> "tuple"
-  | Struct _ -> "s"
-  | Datatype _ -> "dt"
-  | Record _ -> "s"
-  | Set _ -> "set"
-  | Map _ -> "m"
+
 
 
 (* pattern-matches and binds *)
-let pattern_match =
-  let rec aux pat it : (Sym.t list, type_error) m =
-    let (M_Pattern (loc, _, pattern) : mu_pattern) = pat in
-    match pattern with
-    | M_CaseBase (o_s, has_bt) ->
-       let@ () = WellTyped.WBT.is_bt loc has_bt in
-       begin match o_s with
-       | Some s ->
-          let@ () = add_a s it in
-          return [s]
-       | None -> return []
-       end
-    | M_CaseCtor (constructor, pats) ->
-       match constructor, pats with
-       | M_Cnil item_bt, [] ->
-          let@ () = WellTyped.WBT.is_bt loc item_bt in
-          return []
-       | M_Cnil item_bt, _ ->
-          let@ () = WellTyped.WBT.is_bt loc item_bt in
-          fail (fun _ -> {loc; msg = Number_arguments {has = List.length pats; expect = 0}})
-       | M_Ccons, [p1; p2] ->
-          let@ item_bt = bt_of_pattern p1 in
-          let@ a1 = aux p1 (head_ ~item_bt it) in
-          let@ a2 = aux p2 (tail_ it) in
-          return (a1 @ a2)
-       | M_Ccons, _ ->
-          fail (fun _ -> {loc; msg = Number_arguments {has = List.length pats; expect = 2}})
-       | M_Ctuple, pats ->
-          let@ all_as = ListM.mapiM (fun i p ->
-            let@ item_bt = bt_of_pattern p in
-            aux p (nthTuple_ ~item_bt (i, it))
-          ) pats in
-          return (List.concat all_as)
-       | M_Carray, _ ->
-          Debug_ocaml.error "todo: array types"
-  in
-  fun pat -> aux pat
+let rec pattern_match (M_Pattern (loc, _, pattern)) it =
+  match pattern with
+  | M_CaseBase (o_s, has_bt) ->
+     begin match o_s with
+     | Some s ->
+        let@ () = add_a s (IT.bt it) (loc, lazy (Sym.pp s)) in
+        let@ () = add_c (LC.t_ (def_ s it)) in
+        return [s]
+     | None -> 
+        return []
+     end
+  | M_CaseCtor (constructor, pats) ->
+     match constructor, pats with
+     | M_Cnil item_bt, [] ->
+        let@ () = add_c (LC.t_ (eq__ it (nil_ ~item_bt))) in
+        return []
+     | M_Ccons, [p1; p2] ->
+        let@ item_bt = infer_pattern p1 in
+        let@ a1 = pattern_match p1 (head_ ~item_bt it) in
+        let@ a2 = pattern_match p2 (tail_ it) in
+        let@ () = add_c (LC.t_ (ne_ (it, nil_ ~item_bt))) in
+        return (a1 @ a2)
+     | M_Ctuple, pats ->
+        let@ all_as = ListM.mapiM (fun i p ->
+          let@ item_bt = infer_pattern p in
+          pattern_match p (nthTuple_ ~item_bt (i, it))
+        ) pats in
+        return (List.concat all_as)
+     | M_Carray, _ ->
+        Debug_ocaml.error "todo: array patterns"
+     | _ -> 
+        assert false
 
 let pp_pattern_match p (patv, (l_vs, a_vs)) =
   let open Pp in
@@ -269,7 +260,8 @@ end
 
 let check_computational_bound loc s = 
   let@ is_bound = bound_a s in
-  if is_bound then return () 
+  if is_bound 
+  then return () 
   else fail (fun _ -> {loc; msg = Unknown_variable s})
 
 
@@ -511,9 +503,9 @@ let rec check_pexpr (pe : 'bty mu_pexpr) ~(expect:BT.t)
   match pe_ with
   | M_PEsym sym ->
      let@ () = check_computational_bound loc sym in
-     let@ a_it = get_a sym in
-     let@ () = WellTyped.ensure_base_type loc ~expect (IT.bt a_it) in
-     k a_it
+     let@ bt = get_a sym in
+     let@ () = WellTyped.ensure_base_type loc ~expect bt in
+     k (sym_ (sym, bt))
   (* | M_PEimpl i -> *)
   (*    let@ global = get_global () in *)
   (*    let value = Global.get_impl_constant global i in *)
@@ -743,7 +735,7 @@ let rec check_pexpr (pe : 'bty mu_pexpr) ~(expect:BT.t)
      return ())
   | M_PElet (M_Pat p, e1, e2) ->
      let@ fin = begin_trace_of_pure_step (Some (Mu.M_Pat p)) e1 in
-     let@ p_bt = bt_of_pattern p in
+     let@ p_bt = infer_pattern p in
      check_pexpr ~expect:p_bt e1 (fun v1 ->
      let@ bound_a = pattern_match p v1 in
      let@ () = fin () in
@@ -1360,7 +1352,7 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
      Debug_ocaml.error "todo: End"
   | _, M_Elet (M_Pat p, e1, e2) ->
      let@ fin = begin_trace_of_pure_step (Some (Mu.M_Pat p)) e1 in
-     let@ p_bt = bt_of_pattern p in
+     let@ p_bt = infer_pattern p in
      check_pexpr ~expect:p_bt e1 (fun v1 ->
      let@ bound_a = pattern_match p v1 in
      let@ () = fin () in
@@ -1394,7 +1386,7 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
   | _, M_Ewseq (p, e1, e2)
   | _, M_Esseq (p, e1, e2) ->
      let@ fin = begin_trace_of_step (Some (Mu.M_Pat p)) e1 in
-     let@ p_bt = bt_of_pattern p in
+     let@ p_bt = infer_pattern p in
      check_expr labels ~typ:(Normal p_bt) e1 (fun it ->
             let@ bound_a = pattern_match p it in
             let@ () = fin () in
@@ -1488,7 +1480,8 @@ let check_and_bind_arguments rt_subst loc arguments (lrecord_s, lmembers) (funct
        assert (BT.equal abt member_bt);
        if BT.equal abt sbt then
          let it = recordMember_ ~member_bt (lrecord,lmember) in
-         let@ () = add_a aname it in
+         let@ () = add_a aname abt (loc, lazy (Sym.pp aname)) in
+         let@ () = add_c (LC.t_ (eq__ it (sym_ (aname, abt)))) in
          check_a args lmembers (AT.subst rt_subst (make_subst [(lname, it)]) ftyp)
        else
          fail (fun _ -> {loc; msg = Mismatch {has = BT.pp abt; expect = BT.pp sbt}})
@@ -1772,7 +1765,8 @@ let record_globals globs =
          let bt = Loc in
          let info = (Loc.unknown, lazy (Pp.item "global" (Sym.pp lsym))) in
          let@ () = add_l lsym bt info in
-         let@ () = add_a sym (sym_ (lsym, bt)) in
+         let@ () = add_a sym bt info in
+         let@ () = add_c (LC.t_ (def_ sym (sym_ (lsym, bt)))) in
          let@ () = add_c (t_ (IT.good_pointer ~pointee_ct:ct (sym_ (lsym, bt)))) in
          return ()
     ) globs 

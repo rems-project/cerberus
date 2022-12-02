@@ -56,10 +56,23 @@ let set_new xs ys =
   (* difference between xs and ys, assuming ys (pre-) extends xs *)
   LCSet.elements (LCSet.diff ys xs)
 
+let map_new xs ys = 
+  let open Context in
+  (* difference between xs and ys, assuming ys (pre-) extends xs *)
+  SymMap.bindings
+    (SymMap.merge (fun s in_xs in_ys ->
+         match in_xs, in_ys with
+         | Some _, Some _ -> None
+         | None, Some b -> Some b
+         | Some _, None -> assert false
+         | None, None -> None
+       ) xs ys
+    )
+
 let ctxt_diff ct1 ct2 =
   let open Context in
-  let log = list_new ct1.logical ct2.logical in
-  let com = list_new ct1.computational ct2.computational
+  let log = map_new ct1.logical ct2.logical in
+  let com = map_new ct1.computational ct2.computational
     |> List.map (fun (nm, t) -> (nm, t)) in
   let con = set_new ct1.constraints ct2.constraints in
   let rs1 = IntSet.of_list (List.map snd (fst ct1.resources)) in
@@ -84,8 +97,7 @@ let format_eval model global it =
   | None -> parens (!^ "cannot eval:" ^^^ IT.pp it)
   | Some v -> IT.pp it ^^^ equals ^^^ IT.pp v
 
-let format_var model global (sym, bt) = format_eval model global (IT.sym_ (sym, bt))
-let format_avar model global (sym, it) = format_eval model global it
+let format_var model global (sym, (bt, _)) = format_eval model global (IT.sym_ (sym, bt))
 
 let pp_oargs model global = function
   | Resources.O it -> format_eval model global it
@@ -118,8 +130,8 @@ let format_delta model ct1 ct2 =
   let deleted (rt, _) = pp_res_ty rt ^^^ !^"|-> X" in
   let added (rt, oargs) = pp_res_ty rt ^^^ !^"|->" ^^^ pp_oargs model global oargs in
   List.map added rs_add @ List.map deleted rs_del @
-    doc_new "Logical vars" (format_var model global) (List.map fst log) @
-    doc_new "Computational vars" (format_avar model global) com @
+    doc_new "Logical vars" (format_var model global) log @
+    doc_new "Computational vars" (format_var model global) com @
     doc_new "Constraints" LogicalConstraints.pp con
 
 let format_mu_step model (s : mu_trace_step) =
@@ -255,7 +267,7 @@ let format_eval_sym model global sym bt =
   | Some v -> typ_pp ^^^ equals ^^^ IT.pp v
 
 
-let log_block ctxt model ((sym, bt), (loc, info)) =
+let log_block ctxt model (sym, (bt, (loc, info))) =
   let (head, pos) = Locations.head_pos_of_location loc in
   let open Pp in
   format_eval_sym model ctxt.Context.global sym bt ^^ hardline ^^
@@ -265,8 +277,8 @@ let log_block ctxt model ((sym, bt), (loc, info)) =
 
 let format_ctxt_logical_trace model (ctxt : Context.t) =
   let preamble = [Pp.string "Logical variables created in type-checking:"] in
-  let non_unit = List.filter (fun ((_, bt), _) -> not (BT.equal bt BT.Unit))
-    (List.rev ctxt.Context.logical) in
+  let non_unit = List.filter (fun (_, (bt, _)) -> not (BT.equal bt BT.Unit))
+                   (Context.SymMap.bindings ctxt.Context.logical) in
   Pp.flow Pp.hardline (preamble @ List.map (log_block ctxt model) non_unit)
 
 

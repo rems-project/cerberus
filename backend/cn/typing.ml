@@ -77,6 +77,14 @@ let pure (m : ('a, 'e) t) : ('a, 'e) t =
   outcome
 
 
+(* not clear whether Effectful.Make should be used here instead *)
+let rec iterM f xs = match xs with
+  | [] -> return ()
+  | x :: xs ->
+    let@ () = f x in
+    iterM f xs
+
+
 
 let get_models () = fun s -> Ok (s.past_models, s)
 
@@ -205,6 +213,10 @@ let bound_l sym =
   let@ s = get () in
   return (Context.bound_l sym s)
 
+let bound sym = 
+  let@ s = get () in
+  return (Context.bound sym s)
+
 let get_a sym = 
   let@ s = get () in
   return (Context.get_a sym s)
@@ -213,30 +225,25 @@ let get_l sym =
   let@ s = get () in
   return (Context.get_l sym s)
 
-let add_a sym it = 
+let add_a sym bt info = 
   let@ s = get () in
-  let@ simp_ctxt = simp_ctxt () in
-  let it = Simplify.IndexTerms.simp simp_ctxt it in
-  set (Context.add_a sym it s)
+  set (Context.add_a sym bt info s)
+
+let add_l sym bt info =
+  let@ s = get () in
+  set (Context.add_l sym bt info s)
+
 
 let remove_a sym = 
   let@ s = get () in
-  let s = Context.remove_a sym s in
-  set s
+  set (Context.remove_a sym s)
 
-let rec remove_as = function
-  | [] -> return ()
-  | x :: xs -> 
-     let@ () = remove_a x in
-     remove_as xs
+let remove_as = iterM remove_a
 
-let add_l sym ls info =
-  let@ s = get () in
-  set (Context.add_l sym ls info s)
 
 let rec add_ls = function
   | [] -> return ()
-  | ((s, ls), info) :: lvars ->
+  | (s, ls, info) :: lvars ->
      let@ () = add_l s ls info in
      add_ls lvars
 
@@ -277,11 +284,7 @@ let add_c lc =
   let@ _ = add_found_equalities lc in
   set s
 
-let rec add_cs = function
-  | [] -> return ()
-  | lc :: lcs -> 
-     let@ () = add_c lc in 
-     add_cs lcs
+let add_cs = iterM add_c
 
 
 
@@ -295,11 +298,7 @@ let add_r (r, RE.O oargs) =
     let oargs = Simplify.IndexTerms.simp simp_ctxt oargs in
     set (Context.add_r (r, O oargs) s)
 
-let rec add_rs = function
-  | [] -> return ()
-  | r :: rs -> 
-     let@ () = add_r r in
-     add_rs rs
+let add_rs = iterM add_r
 
 
 type changed = 
@@ -337,12 +336,7 @@ let map_and_fold_resources_adj loc (f : RE.t -> 'acc -> changed * 'acc) (acc : '
   Ok ((acc, orig_ix),
     {s with typing_context = {s.typing_context with resources = (resources, ix)}})
 
-(* not clear whether Effectful.Make should be used here instead *)
-let rec iterM f xs = match xs with
-  | [] -> return ()
-  | x :: xs ->
-    let@ () = f x in
-    iterM f xs
+
 
 let map_and_fold_resources loc f acc =
   let@ (acc, orig_ix) = map_and_fold_resources_adj loc f acc in

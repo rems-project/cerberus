@@ -23,13 +23,14 @@ val model_with : Locations.t -> IndexTerms.t -> (Solver.model_with_q option, 'e)
 val prev_models_with : Locations.t -> IndexTerms.t -> (Solver.model_with_q list, 'e) m
 val bound_a : Sym.t -> (bool, 'e) m
 val bound_l : Sym.t -> (bool, 'e) m
-val get_a : Sym.t -> (IndexTerms.t, 'e) m
-val get_l : Sym.t -> (LogicalSorts.t, 'e) m
-val add_a : Sym.t -> IndexTerms.t -> (unit, 'e) m
+val bound : Sym.t -> (bool, 'e) m
+val get_a : Sym.t -> (BaseTypes.t, 'e) m
+val get_l : Sym.t -> (BaseTypes.t, 'e) m
 val remove_a : Sym.t -> (unit, 'e) m
-val add_l : Sym.t -> LogicalSorts.t -> Context.l_info -> (unit, 'e) m
 val remove_as : Sym.t list -> (unit, 'e) m
-val add_ls : ((Sym.t * LogicalSorts.t) * Context.l_info) list -> (unit, 'e) m
+val add_a : Sym.t -> BaseTypes.t -> Context.l_info -> (unit, 'e) m
+val add_l : Sym.t -> BaseTypes.t -> Context.l_info -> (unit, 'e) m
+val add_ls : (Sym.t * BaseTypes.t * Context.l_info) list -> (unit, 'e) m
 val add_c : LogicalConstraints.t -> (unit, 'e) m
 val add_cs : LogicalConstraints.t list -> (unit, 'e) m
 val add_r : Resources.t -> (unit, TypeErrors.type_error) m
@@ -53,10 +54,10 @@ val map_and_fold_resources :
   'acc -> ('acc, TypeErrors.type_error) m
 
 val get_struct_decl : Locations.t -> Sym.t -> (Memory.struct_decl, TypeErrors.t) m
+val get_struct_member_type : Locations.t -> Sym.t -> Id.t -> (Sctypes.t, TypeErrors.t) m
+val get_member_type : Locations.t -> Sym.t -> Id.t -> Memory.struct_layout -> (Sctypes.t, TypeErrors.t) m
 val get_datatype : Locations.t -> Sym.t -> (BaseTypes.datatype_info, TypeErrors.t) m
 val get_datatype_constr : Locations.t -> Sym.t -> (BaseTypes.constr_info, TypeErrors.t) m
-val get_member_type : Locations.t -> Sym.t -> Id.t -> Memory.struct_layout -> (Sctypes.t, TypeErrors.t) m
-val get_struct_member_type : Locations.t -> Sym.t -> Id.t -> (Sctypes.t, TypeErrors.t) m
 val get_fun_decl : Locations.t -> Sym.t -> (Locations.t * Global.AT.ft * Mucore.trusted, TypeErrors.t) m
 
 val get_resource_predicate_def : Locations.t -> Sym.t ->

@@ -78,10 +78,10 @@ let state ctxt (model_with_q : Solver.model_with_q) (extras : state_extras) =
   in
 
   let variables = 
-    List.map (fun ((s, ls), _) ->
+    List.map (fun (s, (ls, _)) ->
         {var = Sym.pp s; 
          value = mevaluate (sym_ (s, ls))}
-      ) ctxt.logical
+      ) (SymMap.bindings ctxt.logical)
   in
 
   let constraints = List.map LC.pp (LCSet.elements ctxt.constraints) in
