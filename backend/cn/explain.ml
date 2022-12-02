@@ -92,9 +92,10 @@ let state ctxt (model_with_q : Solver.model_with_q) (extras : state_extras) =
       res_span = Spans.pp_model_spans model ctxt.global req_cmp req
     }
   in
-  let res_entry req_cmp res = {
+  let res_entry req_cmp same res = {
       res = RE.pp res;
       res_span = Spans.pp_model_spans model ctxt.global req_cmp (RE.request res)
+        ^^ (if same then !^" - same-type" else !^"")
     }
   in
 
@@ -109,7 +110,7 @@ let state ctxt (model_with_q : Solver.model_with_q) (extras : state_extras) =
       | None -> ([], get_rs ctxt)
       | Some req -> List.partition (fun r -> RET.same_predicate_name req (RE.request r)) (get_rs ctxt)
     in
-    List.map (res_entry req_cmp) (same_res @ diff_res)
+    List.map (res_entry req_cmp true) same_res @ List.map (res_entry req_cmp false) diff_res
   in
 
   let predicate_hints = 

@@ -1314,6 +1314,9 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
      unsupported loc !^"have/show"
   | Normal expect, M_Einstantiate (oid, pe) ->
      let@ () = WellTyped.ensure_base_type loc ~expect Unit in
+     let@ _ = ListM.mapM (todo_get_logical_predicate_def_s loc)
+         (List.filter (fun s -> not (String.equal "good" s))
+             (List.map Id.s (Option.to_list oid))) in
      check_pexpr ~expect:Integer pe (fun arg ->
      let arg_s = Sym.fresh_make_uniq "instance" in
      let arg_it = sym_ (arg_s, IT.bt arg) in
