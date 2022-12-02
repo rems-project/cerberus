@@ -886,10 +886,11 @@ let register_cn_predicate ident mk =
   match Map.lookup ident st.cn_state.Cn_desugaring.cn_predicates with
     | Nothing ->
         resolve_cn_ident Cn.CN_predicate ident >>= fun sym ->
-        mk >>= fun (oargs, iargs, clauses) ->
+        mk >>= fun (attrs, oargs, iargs, clauses) ->
         let pred = <|
           Cn.cn_pred_loc= Loc.locOf ident;
           Cn.cn_pred_name= sym;
+          Cn.cn_pred_attrs = attrs;
           Cn.cn_pred_oargs= oargs;
           Cn.cn_pred_iargs= iargs;
           Cn.cn_pred_clauses= clauses;

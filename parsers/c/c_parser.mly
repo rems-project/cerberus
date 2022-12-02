@@ -2055,7 +2055,7 @@ cn_cons_cases:
 | xs= separated_list (COMMA, cn_cons_case)
     { xs }
 
-cn_function_attrs:
+cn_attrs:
 | nms= delimited (LBRACK, separated_list (COMMA, cn_variable), RBRACK)
     { nms }
 |
@@ -2063,7 +2063,7 @@ cn_function_attrs:
 
 cn_function:
 | CN_FUNCTION enter_cn
-  cn_func_attrs= cn_function_attrs
+  cn_func_attrs= cn_attrs
   cn_func_return_bty=delimited(LPAREN, base_type, RPAREN) str= LNAME VARIABLE
   cn_func_args= delimited(LPAREN, args, RPAREN)
   cn_func_body= cn_option_func_body exit_cn
@@ -2076,13 +2076,16 @@ cn_function:
       ; cn_func_args
       ; cn_func_body} }
 cn_predicate:
-| CN_PREDICATE enter_cn cn_pred_oargs= delimited(LBRACE, args, RBRACE) str= UNAME VARIABLE
+| CN_PREDICATE enter_cn
+  cn_pred_attrs= cn_attrs
+  cn_pred_oargs= delimited(LBRACE, args, RBRACE) str= UNAME VARIABLE
   cn_pred_iargs= delimited(LPAREN, args, RPAREN)
   cn_pred_clauses= cn_option_pred_clauses exit_cn
     { (* TODO: check the name starts with upper case *)
       let loc = Location_ocaml.point $startpos(str) in
       { cn_pred_loc= loc
       ; cn_pred_name= Symbol.Identifier (loc, str)
+      ; cn_pred_attrs
       ; cn_pred_oargs
       ; cn_pred_iargs
       ; cn_pred_clauses} }
