@@ -32,11 +32,15 @@ full-build: prelude-src
 util:
 	@echo "[DUNE] library [$@]"
 	$(Q)dune build _build/default/$@/$@.cma _build/default/$@/$@.cmxa
+	$(Q)dune build _build/profiling/$@/$@.cma _build/profiling/$@/$@.cmxa
+	$(Q)dune build _build/profiling-auto/$@/$@.cma _build/profiling-auto/$@/$@.cmxa
 
 .PHONY: sibylfs
 sibylfs: sibylfs-src
 	@echo "[DUNE] library [$@]"
 	$(Q)dune build _build/default/$@/$@.cma _build/default/$@/$@.cmxa
+	$(Q)dune build _build/profiling/$@/$@.cma _build/profiling/$@/$@.cmxa
+	$(Q)dune build _build/profiling/$@/$@.cma _build/profiling-auto/$@/$@.cmxa
 
 .PHONY: cerberus
 cerberus: prelude-src
