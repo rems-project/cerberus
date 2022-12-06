@@ -1687,7 +1687,7 @@ Module CheriMemory
   Definition load
     (loc: location_ocaml)
     (ty: CoqCtype.ctype)
-    (p:pointer_value)
+    (p: pointer_value)
     :
     memM (footprint * mem_value)
     :=
@@ -1822,6 +1822,12 @@ Module CheriMemory
             (fun (function_parameter : bool) =>
                match function_parameter with
                | false =>
+                   mprint_msg
+                     ("LOAD " ++
+                        of_Z (C.cap_get_value addr) ++
+                        " out of bound, alloc_id=" ++
+                        of_Z alloc_id
+                     ) ;;
                    fail (MerrAccess loc LoadAccess OutOfBoundPtr)
                | true =>
                    is_atomic_member_access alloc_id ty
