@@ -350,7 +350,7 @@ let intersection_action m g ((orig_req, req), req_span) ((orig_res, res), res_sp
     or_ (List.map (fun (w_ptr, perm) -> and_ [perm; lePointer_ (target_lb, w_ptr);
         lePointer_ (w_ptr, target_ub_inclusive)]) witnesses)] in
   let action = if res_outer then Unpack target_pt else Pack target_pt in
-  Some (action, ok)
+  (action, ok)
 
 let model_res_spans_or_empty m g req =
   note_failure_empty (model_res_spans (m, g)) req
@@ -471,7 +471,7 @@ let do_guess_span_actions ress req m g =
   let opts = List.filter_map (fun ((s, res), (s2, req)) ->
     Pp.debug 7 (lazy (Pp.item "resource (partial?) overlap"
       (Pp.list pp_res_span [(fst req, s2); (fst res, s)])));
-    intersection_action m g (req, s2) (res, s)
+    note_failure_none (intersection_action m g (req, s2)) (res, s)
   ) interesting in
   gather_same_actions opts
 
