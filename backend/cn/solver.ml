@@ -515,21 +515,27 @@ module Translate = struct
       | Datatype_op datatype_op ->
          begin match datatype_op with
          | DatatypeCons (c_nm, elts_rec) ->
+           (* ensure datatype added first *)
+           let dt_sort = sort bt in
            let info = SymMap.find c_nm global.datatype_constrs in
            let args = List.map (fun (nm, _) -> term (Simplify.IndexTerms.record_member_reduce elts_rec nm))
                info.c_params in
            apply_matching_func (DatatypeConsFunc {nm = c_nm})
-               (Z3.Datatype.get_constructors (sort bt)) args
+               (Z3.Datatype.get_constructors dt_sort) args
          | DatatypeMember (it, member) ->
+           (* ensure datatype added first *)
+           let dt_sort = sort (IT.bt it) in
            let dt_nm = match IT.bt it with
              | BT.Datatype nm -> nm
              | _ -> assert false
            in
            apply_matching_func (DatatypeAccFunc {nm = member; dt = dt_nm; bt})
-               (Z3.Datatype.get_constructors (sort bt)) [term it]
+               (List.concat (Z3.Datatype.get_accessors dt_sort)) [term it]
          | DatatypeIsCons (c_nm, t) ->
+           (* ensure datatype added *)
+           let dt_sort = sort (IT.bt t) in
            apply_matching_func (DatatypeConsRecogFunc {nm = c_nm})
-               (Z3.Datatype.get_constructors (sort bt)) [term t]
+               (Z3.Datatype.get_recognizers dt_sort) [term t]
          end
       | Pointer_op pointer_op -> 
          let open Z3.Arithmetic in
