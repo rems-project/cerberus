@@ -23,4 +23,4 @@
 (executable
  (name captest)
  (modules captest)
- (libraries capabilities ounit2 cerb_backend mem_cheri))
+ (libraries str capabilities ounit2 cerb_backend mem_cheri))
