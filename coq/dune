@@ -148,6 +148,6 @@
  (name coqcaptest)
  (modules coqcaptest)
  (flags (:standard -rectypes -w -27-32-33-39-67-37-20-34))
- (libraries strfcap ounit2 lem)
+ (libraries str strfcap ounit2 lem)
  (modes byte exe)
  (instrumentation (backend landmarks)))
