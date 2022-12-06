@@ -93,7 +93,7 @@ let string_diff fmt (a,b) =
   pp_close_box fmt ();
   pp_close_box fmt ()
 
-let tests = "morello_caps" >::: [
+let tests = "coq_morello_caps" >::: [
 
 
       "C0" >:: (fun _ -> assert_bool "C0 exists"
@@ -101,17 +101,17 @@ let tests = "morello_caps" >::: [
                             c0 = c0)
                );
 
-      "M.encode C0 tag" >:: (fun _ ->
+      "encode C0 tag" >:: (fun _ ->
         match M.encode true (M.cap_c0 ()) with
-        | None -> assert_failure "M.encode failed"
+        | None -> assert_failure "encode failed"
         | Some (bytes, tag) ->  assert_equal false tag
       );
 
-      "M.encode C0 bytes" >:: (fun _ ->
+      "encode C0 bytes" >:: (fun _ ->
         (* C0 does not M.encode to all zeros due to compresison limitations *)
 
         match M.encode true (M.cap_c0 ()) with
-        | None -> assert_failure "M.encode failed"
+        | None -> assert_failure "encode failed"
         | Some (bytes, tag) ->
            let b = List.map char_of_int [0;0;0;0;0;0;0;0;5;0;1;0;0;0;0;0] in
            assert_equal
@@ -121,10 +121,10 @@ let tests = "morello_caps" >::: [
              bytes
       );
 
-      "M.decode C0" >:: (fun _ ->
+      "decode C0" >:: (fun _ ->
         let b = List.init 16 (fun _ -> '\000') in
         match M.decode b false with
-        | None -> assert_failure "M.decode failed"
+        | None -> assert_failure "decode failed"
         | Some c ->
            assert_equal
              ~cmp:M.eqb
@@ -132,10 +132,10 @@ let tests = "morello_caps" >::: [
              c (M.cap_c0 ())
       );
 
-      "M.decode alt C0" >:: (fun _ ->
+      "decode alt C0" >:: (fun _ ->
         let b = List.map char_of_int [0;0;0;0;0;0;0;0;5;0;1;0;0;0;0;0] in
         match M.decode b false with
-        | None -> assert_failure "M.decode failed"
+        | None -> assert_failure "decode failed"
         | Some c ->
            assert_equal
              ~cmp:M.eqb
@@ -143,11 +143,11 @@ let tests = "morello_caps" >::: [
              c (M.cap_c0 ())
       );
       
-      "M.encode/M.decode C0" >:: (fun _ ->
+      "encode/M.decode C0" >:: (fun _ ->
         let c0 = M.cap_c0 () in
 
         match M.encode true c0 with
-        | None -> assert_failure "M.encode failed"
+        | None -> assert_failure "encode failed"
         | Some (b, t) ->
            begin
              match M.decode b t with
@@ -160,11 +160,11 @@ let tests = "morello_caps" >::: [
            end
       );
 
-      "M.encode/M.decode odd" >:: (fun _ ->
+      "encode/M.decode odd" >:: (fun _ ->
         let c = M.alloc_cap (Z.of_int (0xfffffff3)) (Z.of_int 16) in
 
         match M.encode true c with
-        | None -> assert_failure "M.encode failed"
+        | None -> assert_failure "encode failed"
         | Some (b, t) ->
            begin
              match M.decode b t with
@@ -177,10 +177,10 @@ let tests = "morello_caps" >::: [
            end
       );
 
-      "M.encode/M.decode even" >:: (fun _ ->
+      "encode/M.decode even" >:: (fun _ ->
         let c = M.alloc_cap (Z.of_int (0xfffffff4)) (Z.of_int 16) in
         match M.encode true c with
-        | None -> assert_failure "M.encode failed"
+        | None -> assert_failure "encode failed"
         | Some (b, t) ->
            begin
              match M.decode b t with
@@ -193,10 +193,10 @@ let tests = "morello_caps" >::: [
            end
       );
 
-      "M.encode/M.decode/M.encode" >:: (fun _ ->
+      "encode/M.decode/M.encode" >:: (fun _ ->
         let c = M.alloc_cap (Z.of_int (0xfffffff3)) (Z.of_int 16) in
         match M.encode true c with
-        | None -> assert_failure "M.encode failed"
+        | None -> assert_failure "encode failed"
         | Some (b, t) ->
            begin
              match M.decode b t with
@@ -213,10 +213,10 @@ let tests = "morello_caps" >::: [
            end
       );
 
-      "M.decode_value" >:: (fun _ ->
+      "decode_value" >:: (fun _ ->
         let b = List.map char_of_int [120;255;247;255;255;255;0;0;120;255;124;127;0;64;93;220] in
         match M.decode b true with
-        | None -> assert_failure "M.decode failed"
+        | None -> assert_failure "decode failed"
         | Some c ->
            assert_equal
              ~printer:(Z.format "%#x")
@@ -224,10 +224,10 @@ let tests = "morello_caps" >::: [
              (M.cap_get_value c)
       );
 
-      "M.decode_bounds" >:: (fun _ ->
+      "decode_bounds" >:: (fun _ ->
         let b = List.map char_of_int [120;255;247;255;255;255;0;0;120;255;124;127;0;64;93;220] in
         match M.decode b true with
-        | None -> assert_failure "M.decode failed"
+        | None -> assert_failure "decode failed"
         | Some c ->
            assert_equal
              ~printer:(Z.format "%#x")
@@ -235,10 +235,10 @@ let tests = "morello_caps" >::: [
              (snd (M.cap_get_bounds c))
       );
 
-      "M.encode value and bounds" >:: (fun _ ->
+      "encode value and bounds" >:: (fun _ ->
         let c = M.alloc_cap (Z.of_int 0xfffffff7ff78) (Z.of_int 4) in
         match M.encode true c with
-        | None -> assert_failure "M.encode failed"
+        | None -> assert_failure "encode failed"
         | Some (b, t) ->
            begin
              match M.decode b t with
