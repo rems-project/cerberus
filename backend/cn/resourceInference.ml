@@ -320,6 +320,7 @@ module General = struct
                    (bool_ false, p'_oargs)
                 | `False ->
                    let model = Solver.model () in
+                   Pp.debug 9 (lazy (Pp.item "couldn't use resource" (RET.pp (fst re))));
                    debug_constraint_failure_diagnostics 9 model global simp_ctxt (LC.T took);
                    continue
                 end
@@ -348,6 +349,7 @@ module General = struct
                    (bool_ false, O (record_ oargs))
                 | `False ->
                    let model = Solver.model () in
+                   Pp.debug 9 (lazy (Pp.item "couldn't use q-resource" (RET.pp (fst re))));
                    debug_constraint_failure_diagnostics 9 model global simp_ctxt (LC.T took);
                    continue
                 end
@@ -361,6 +363,7 @@ module General = struct
        let@ (needed, oargs) =
          map_and_fold_resources loc (sub_resource_if (fun re -> not (is_exact_re re)))
            (needed, oargs) in
+       Pp.debug 9 (lazy (Pp.item "checking resource remainder" (IT.pp (not_ needed))));
        let@ res = begin match provable (t_ (not_ needed)) with
        | `True ->
           let r = ({ 
@@ -408,6 +411,7 @@ module General = struct
                    (bool_ false, p'_oargs)
                 | `False ->
                    let model = Solver.model () in
+                   Pp.debug 9 (lazy (Pp.item "couldn't use resource" (RET.pp (fst re))));
                    debug_constraint_failure_diagnostics 9 model global simp_ctxt (LC.T took);
                    continue
                 end
@@ -434,6 +438,7 @@ module General = struct
                    (bool_ false, O (record_ oargs))
                 | `False ->
                    let model = Solver.model () in
+                   Pp.debug 9 (lazy (Pp.item "couldn't use q-resource" (RET.pp (fst re))));
                    debug_constraint_failure_diagnostics 9 model global simp_ctxt (LC.T took);
                    continue
                 end
@@ -450,6 +455,7 @@ module General = struct
          map_and_fold_resources loc (sub_predicate_if (fun re -> not (is_exact_re re)))
              (needed, oargs)
        in
+       Pp.debug 9 (lazy (Pp.item "checking resource remainder" (IT.pp (not_ needed))));
        let@ res = begin match provable (t_ (not_ needed)) with
        | `True ->
           let r = ({ 
@@ -535,6 +541,7 @@ module General = struct
                    (Simplify.IndexTerms.simp simp_ctxt needed', oargs)
                 | `False ->
                    let model = Solver.model () in
+                   Pp.debug 9 (lazy (Pp.item "couldn't use resource" (RET.pp (fst re))));
                    debug_constraint_failure_diagnostics 9 model global simp_ctxt (LC.T took);
                    continue
                 end
@@ -557,6 +564,7 @@ module General = struct
                    (Simplify.IndexTerms.simp simp_ctxt needed', oargs)
                 | `False ->
                    let model = Solver.model () in
+                   Pp.debug 9 (lazy (Pp.item "couldn't use q-resource" (RET.pp (fst re))));
                    debug_constraint_failure_diagnostics 9 model global simp_ctxt (LC.T pmatch);
                    continue
                 end
@@ -618,6 +626,7 @@ module General = struct
            (needed, oargs) 
        in
        let nothing_more_needed = forall_ (requested.q, BT.Integer) (not_ needed) in
+       Pp.debug 9 (lazy (Pp.item "checking resource remainder" (LC.pp nothing_more_needed)));
        let holds = provable nothing_more_needed in
        time_log_end start_timing;
        begin match holds with
@@ -678,6 +687,7 @@ module General = struct
                    (Simplify.IndexTerms.simp simp_ctxt needed', oargs)
                 | `False ->
                    let model = Solver.model () in
+                   Pp.debug 9 (lazy (Pp.item "couldn't use resource" (RET.pp (fst re))));
                    debug_constraint_failure_diagnostics 9 model global simp_ctxt (LC.T took);
                    continue
                 end
@@ -702,6 +712,7 @@ module General = struct
                    (Simplify.IndexTerms.simp simp_ctxt needed', oargs)
                 | `False ->
                    let model = Solver.model () in
+                   Pp.debug 9 (lazy (Pp.item "couldn't use q-resource" (RET.pp (fst re))));
                    debug_constraint_failure_diagnostics 9 model global simp_ctxt (LC.T pmatch);
                    continue
                 end
@@ -710,6 +721,7 @@ module General = struct
            ) (needed, List.map_snd (fun _ -> C []) def_oargs)
        in
        let nothing_more_needed = forall_ (requested.q, BT.Integer) (not_ needed) in
+       Pp.debug 9 (lazy (Pp.item "checking resource remainder" (LC.pp nothing_more_needed)));
        let holds = provable nothing_more_needed in
        begin match holds with
        | `True -> return (Some oargs)
