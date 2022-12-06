@@ -37,3 +37,9 @@ let bswap64 n =
         (logor (shift_right_logical (logand 0x00ff000000000000L n) 40) (shift_right_logical (logand 0xff00000000000000L n) 56))
         (logor (shift_right_logical (logand 0x0000ff0000000000L n) 24) (shift_right_logical (logand 0x000000ff00000000L n) 8)))
   end
+
+let generic_ffs n =
+  if Z.(equal zero n) then
+    n
+  else
+    Z.of_int (1 + Z.trailing_zeros n)

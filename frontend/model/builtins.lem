@@ -471,6 +471,9 @@ end
 
 
 (* Some GCC builtins *)
+val gcc_builtin_generic_ffs: integer -> integer
+declare ocaml target_rep function gcc_builtin_generic_ffs = `Ocaml_gcc_builtins.generic_ffs`
+
 val gcc_builtin_ctz: integer -> integer
 declare ocaml target_rep function gcc_builtin_ctz = `Ocaml_gcc_builtins.ctz`
 

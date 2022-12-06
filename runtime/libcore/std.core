@@ -769,6 +769,34 @@ proc [ailname = "lseek"] lseek_proxy (fd_ptr: pointer, off_ptr: pointer, whence_
 
 
 -- Some GCC builtins
+builtin generic_ffs (integer): eff loaded integer
+
+proc [ailname = "__builtin_ffs"] ffs_proxy (n_ptr: pointer): eff loaded integer :=
+  let strong n_loaded: loaded integer = load('signed int', n_ptr) in
+  case n_loaded of
+    | Specified (n: integer) =>
+        pcall(<builtin_generic_ffs>, n)
+    | _: loaded integer =>
+        pure (undef(<<DUMMY(ffs_proxy)>>))
+  end
+
+proc [ailname = "__builtin_ffsl"] ffsl_proxy (n_ptr: pointer): eff loaded integer :=
+  let strong n_loaded: loaded integer = load('signed long', n_ptr) in
+  case n_loaded of
+    | Specified (n: integer) =>
+        pcall(<builtin_generic_ffs>, n)
+    | _: loaded integer =>
+        pure (undef(<<DUMMY(ffsl_proxy)>>))
+  end
+
+proc [ailname = "__builtin_ffsll"] ffsll_proxy (n_ptr: pointer): eff loaded integer :=
+  let strong n_loaded: loaded integer = load('signed long_long', n_ptr) in
+  case n_loaded of
+    | Specified (n: integer) =>
+        pcall(<builtin_generic_ffs>, n)
+    | _: loaded integer =>
+        pure (undef(<<DUMMY(ffsll_proxy)>>))
+  end
 
 builtin ctz (): eff loaded integer
 builtin bswap16 (): eff loaded integer

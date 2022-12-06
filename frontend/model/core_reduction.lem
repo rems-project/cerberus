@@ -1010,6 +1010,21 @@ let process_impl_proc full_eval_pexpr wrap_proc wrap_expr th_st iCst pes =
               error ("Core_reduction, exit given more than one argument ==> " ^ stringFromList Pp.stringFromCore_pexpr pes)
         end
     (* NOTE: some GCC builtins *)
+    | Implementation.BuiltinFunction "generic_ffs" ->
+        Step_with_runstate2 (RSK_tau "Eproc builtin_generic_ffs" Core_run.TSK_Misc) begin
+          match pes with
+            | [pe] ->
+                full_eval_pexpr pe >>= function
+                  | Vobject (OVinteger n_ival) ->
+                      let n' = Builtins.gcc_builtin_generic_ffs (forceIntegerFromIntegerValue "generic_ffs" n_ival) in
+                      E.return (wrap_expr (Caux.mk_pure_e (Caux.mk_specified_pe (Caux.mk_integer_pe n'))))
+                  | _ ->
+                      error "TODO: generic_ffs illtyped"
+                end
+            | _ ->
+                error "TODO: generic_ffs wrong number of args"
+          end
+        end
     | Implementation.BuiltinFunction "ctz" ->
         Step_with_runstate2 (RSK_tau "Eproc __builtin_ctz" Core_run.TSK_Misc) begin
           match pes with

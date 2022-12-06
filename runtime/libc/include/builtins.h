@@ -1,4 +1,7 @@
 // Some gcc builtins we support
+[[ cerb::hidden ]] int __builtin_ffs (int x);
+[[ cerb::hidden ]] int __builtin_ffsl (long x);
+[[ cerb::hidden ]] int __builtin_ffsll (long long x);
 [[ cerb::hidden ]] int __builtin_ctz (unsigned int x);
 [[ cerb::hidden ]] int __builtin_ctzl (unsigned long x);
 [[ cerb::hidden ]] int __builtin_ctzll (unsigned long long x);
