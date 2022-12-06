@@ -583,6 +583,7 @@ Module MorelloCapability <:
 
   Program Definition decode (bytes : list ascii) (tag : bool) : option t :=
     if Nat.eqb (List.length bytes) 16%nat then
+      let bytes := List.rev bytes in
       let bits := tag::(bool_bits_of_bytes bytes) in
       let bitsu := List.map bitU_of_bool bits in
       let w := vec_of_bits bitsu in
