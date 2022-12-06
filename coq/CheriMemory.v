@@ -1287,7 +1287,7 @@ Module CheriMemory
                     match tag_query_f addr with
                     | None => MVEunspecified cty
                     | Some tag =>
-                        match C.decode cs tag with
+                        match C.decode (List.rev cs) tag with
                         | None => MVErr (MerrCHERI loc CheriErrDecodingCap)
                         | Some c_value =>
                             if iss then
@@ -1351,7 +1351,7 @@ Module CheriMemory
                   match tag_query_f addr with
                     | None => ret (NoTaint, MVEunspecified cty, bs2)
                     | Some tag =>
-                        match C.decode cs tag with
+                        match C.decode (List.rev cs) tag with
                         | None => ret (NoTaint, MVErr (MerrCHERI loc CheriErrDecodingCap), bs2)
                         | Some n_value =>
                             match ref_ty with
@@ -1359,7 +1359,7 @@ Module CheriMemory
                                 match tag_query_f addr with
                                 | None => ret (NoTaint, MVEunspecified cty, bs2)
                                 | Some tag =>
-                                    match C.decode cs tag with
+                                    match C.decode (List.rev cs) tag with
                                     | None => ret (NoTaint, MVErr (MerrCHERI loc CheriErrDecodingCap), bs2)
                                     | Some c_value =>
                                         let n_value :=
