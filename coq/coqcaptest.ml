@@ -93,6 +93,11 @@ let string_diff fmt (a,b) =
   pp_close_box fmt ();
   pp_close_box fmt ()
 
+let debug_print_cap c =
+  match M.strfcap "%#p" c with
+  | Some s -> s
+  | None -> M.to_string c (* fallback *)
+
 let tests = "coq_morello_caps" >::: [
 
 
@@ -128,7 +133,7 @@ let tests = "coq_morello_caps" >::: [
         | Some c ->
            assert_equal
              ~cmp:M.eqb
-             ~printer:M.to_string
+             ~printer:debug_print_cap
              c (M.cap_c0 ())
       );
 
@@ -172,7 +177,7 @@ let tests = "coq_morello_caps" >::: [
              | Some c' ->
                 assert_equal
                   ~cmp:M.eqb
-                  ~printer:M.to_string
+                  ~printer:debug_print_cap
                   c c'
            end
       );
@@ -188,7 +193,7 @@ let tests = "coq_morello_caps" >::: [
              | Some c' ->
                 assert_equal
                   ~cmp:M.eqb
-                  ~printer:M.to_string
+                  ~printer:debug_print_cap
                   c c'
            end
       );
