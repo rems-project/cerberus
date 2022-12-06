@@ -126,8 +126,27 @@
 (library
  (name extracted)
  (public_name cerberus.coq)
+ (modules (:standard \ coqcaptest strfcap))
  (libraries zarith coq-core.kernel)
  (wrapped false)
  (flags (:standard -rectypes -w -27-32-33-39-67-37-20-34))
  (instrumentation (backend landmarks))
 )
+
+(library
+ (name strfcap)
+ (public_name cerberus.strfcap)
+ (modules strfcap)
+ (wrapped false)
+ (flags (:standard -rectypes -w -27-32-33-39-67-37-20-34))
+ (libraries cerberus.coq)
+ (instrumentation (backend landmarks))
+)
+
+;; Unit tests for capabilities library
+(executable
+ (name coqcaptest)
+ (modules coqcaptest)
+ (flags (:standard -rectypes -w -27-32-33-39-67-37-20-34))
+ (libraries strfcap ounit2 lem)
+ (instrumentation (backend landmarks)))
