@@ -709,24 +709,27 @@ module CHERI (C:Capability
     prerr_endline "END CAPTAGS"
 
   let print_allocations str =
-    get >>= (fun st ->
-      Printf.fprintf stderr "BEGIN Allocation ==> %s\n" str;
-      IntMap.iter (fun aid a ->
-          Printf.fprintf stderr "@%s: 0x%s,%s (%s)\n"
-            (Z.format "%d" aid)
-            (Z.format "%x" a.base)
-            (Z.format "%d" a.size)
-            (match a.taint with
-             | `Exposed -> "exposed"
-             | `Unexposed -> "unexposed"
-            )
-        ) st.allocations;
-      prerr_endline "END Allocations";
-      Printf.fprintf stderr "Dead Allocations: [%s]\n"
-        (String.concat ","
-           (List.map (Z.to_string) st.dead_allocations));
+    if !Debug_ocaml.debug_level >= 3 then begin
+        get >>= (fun st ->
+        Printf.fprintf stderr "BEGIN Allocation ==> %s\n" str;
+        IntMap.iter (fun aid a ->
+            Printf.fprintf stderr "@%s: 0x%s,%s (%s)\n"
+              (Z.format "%d" aid)
+              (Z.format "%x" a.base)
+              (Z.format "%d" a.size)
+              (match a.taint with
+               | `Exposed -> "exposed"
+               | `Unexposed -> "unexposed"
+              )
+          ) st.allocations;
+        prerr_endline "END Allocations";
+        Printf.fprintf stderr "Dead Allocations: [%s]\n"
+          (String.concat ","
+             (List.map (Z.to_string) st.dead_allocations));
+        return ()
+      )
+      end else
       return ()
-    )
 
   (** Prints capability tags table from memory state *)
   let print_captags str =
