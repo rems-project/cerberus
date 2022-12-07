@@ -840,12 +840,15 @@ Module MorelloCapability <:
 
   Definition to_string (c:t) : string :=
     let vstring x := HexString.of_Z x in
-    let (b0,b1) := c.(bounds) in
-    (vstring c.(value)) ++ " " ++
-      "["++ (MorelloPermission.to_string c.(perms)) ++ "," ++
-      (vstring b0) ++ "-" ++
-      (vstring b1) ++ "]" ++
-      (flags_as_str c).
+    if cap_is_null_derived c then
+      vstring c.(value)
+    else
+      let (b0,b1) := c.(bounds) in
+      (vstring c.(value)) ++ " " ++
+        "["++ (MorelloPermission.to_string c.(perms)) ++ "," ++
+        (vstring b0) ++ "-" ++
+        (vstring b1) ++ "]" ++
+        (flags_as_str c).
 
   (* Not implemented in Coq but in extracted code implementation will
      be mapped to OCaml version *)
