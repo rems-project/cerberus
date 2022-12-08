@@ -1446,19 +1446,17 @@ module CHERI (C:Capability
          ) >> return ro
     end >>= (fun ro ->
       let c = C.alloc_cap addr size_n' in
-      if C.cap_bounds_representable_exactly c (addr, Z.add addr size_n')
-      then
-        let c =
-          if ro then
-            let p = C.cap_get_perms c in
-            let p = C.P.perm_clear_store p in
-            let p = C.P.perm_clear_store_cap p in
-            let p = C.P.perm_clear_store_local_cap p in
-            C.cap_narrow_perms c p
-          else c
-        in
-        return (PV (Prov_some alloc_id, PVconcrete c))
-      else failwith "Error settting exeact bounds for allocated region")
+      let c =
+        if ro then
+          let p = C.cap_get_perms c in
+          let p = C.P.perm_clear_store p in
+          let p = C.P.perm_clear_store_cap p in
+          let p = C.P.perm_clear_store_local_cap p in
+          C.cap_narrow_perms c p
+        else c
+      in
+      return (PV (Prov_some alloc_id, PVconcrete c))
+    )
 
   let update_prefix (pref, mval) =
     match mval with
@@ -1562,9 +1560,7 @@ module CHERI (C:Capability
       ) >>
       (* malloc *)
       let c = C.alloc_cap addr size_n' in
-      if C.cap_bounds_representable_exactly c (addr, Z.add addr size_n')
-      then return (PV (Prov_some alloc_id, PVconcrete c))
-      else failwith "Error settting exeact bounds for allocated region"
+      return (PV (Prov_some alloc_id, PVconcrete c))
 
   (* zap (make unspecified) any pointer in the memory with provenance matching a
      given allocation id *)
