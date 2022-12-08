@@ -64,7 +64,9 @@ let map_new xs ys =
          match in_xs, in_ys with
          | Some _, Some _ -> None
          | None, Some b -> Some b
-         | Some _, None -> assert false
+         | Some x, None ->
+             Pp.warn Locations.unknown (Pp.item "trace: map_new: element disappeared" (Sym.pp s));
+             None
          | None, None -> None
        ) xs ys
     )
