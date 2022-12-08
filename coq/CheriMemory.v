@@ -836,20 +836,17 @@ Module CheriMemory
            >>=
            (fun ro =>
               let c := C.alloc_cap addr size_n' in
-              if C.cap_bounds_representable_exactly c (addr, Z.add addr size_n')
-              then
-                let c :=
-                  if ro then
-                    let p := C.cap_get_perms c in
-                    let p := MorelloPermission.perm_clear_store p in
-                    let p := MorelloPermission.perm_clear_store_cap p in
-                    let p := MorelloPermission.perm_clear_store_local_cap p in
-                    C.cap_narrow_perms c p
+              let c :=
+                if ro then
+                  let p := C.cap_get_perms c in
+                  let p := MorelloPermission.perm_clear_store p in
+                  let p := MorelloPermission.perm_clear_store_cap p in
+                  let p := MorelloPermission.perm_clear_store_local_cap p in
+                  C.cap_narrow_perms c p
                   else c
-                in
-                ret (PV (Prov_some alloc_id) (PVconcrete c))
-              else
-                raise (InternalErr "Error settting exeact bounds for allocated region"))).
+              in
+              ret (PV (Prov_some alloc_id) (PVconcrete c))
+      )).
 
   Definition allocate_region
     (tid : thread_id)
@@ -894,13 +891,8 @@ Module CheriMemory
               |})
          ;;
          (let c_value := C.alloc_cap addr size_n' in
-          if
-            C.cap_bounds_representable_exactly c_value
-              (addr, (Z.add addr size_n'))
-          then
-            ret (PV (Prov_some alloc_id) (PVconcrete c_value))
-          else
-            raise (InternalErr "Error settting exeact bounds for allocated region"))).
+          ret (PV (Prov_some alloc_id) (PVconcrete c_value))
+      )).
 
   Definition cap_is_null  (c : C.t) : bool :=
     Z.eqb (C.cap_get_value c) 0.
