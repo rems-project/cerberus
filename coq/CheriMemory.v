@@ -1287,7 +1287,7 @@ Module CheriMemory
                     match tag_query_f addr with
                     | None => MVEunspecified cty
                     | Some tag =>
-                        match C.decode cs tag with
+                        match C.decode (List.rev cs) tag with
                         | None => MVErr (MerrCHERI loc CheriErrDecodingCap)
                         | Some c_value =>
                             if iss then
@@ -1351,7 +1351,7 @@ Module CheriMemory
                   match tag_query_f addr with
                     | None => ret (NoTaint, MVEunspecified cty, bs2)
                     | Some tag =>
-                        match C.decode cs tag with
+                        match C.decode (List.rev cs) tag with
                         | None => ret (NoTaint, MVErr (MerrCHERI loc CheriErrDecodingCap), bs2)
                         | Some n_value =>
                             match ref_ty with
@@ -1359,7 +1359,7 @@ Module CheriMemory
                                 match tag_query_f addr with
                                 | None => ret (NoTaint, MVEunspecified cty, bs2)
                                 | Some tag =>
-                                    match C.decode cs tag with
+                                    match C.decode (List.rev cs) tag with
                                     | None => ret (NoTaint, MVErr (MerrCHERI loc CheriErrDecodingCap), bs2)
                                     | Some c_value =>
                                         let n_value :=
@@ -3027,6 +3027,8 @@ Module CheriMemory
                         end)
                end)
     | PV (Prov_some alloc_id) (PVconcrete c_value) =>
+        mprint_msg "A cap: ";; mprint_msg (C.to_string c_value) ;;
+        mprint_msg "Its value: ";; mprint_msg (HexString.of_Z (C.cap_get_value c_value)) ;;
         let shifted_addr := Z.add (C.cap_get_value c_value) offset in
         if CoqSwitches.has_switch (CoqSwitches.SW_pointer_arith STRICT)
            || negb (CoqSwitches.has_switch (SW_pointer_arith PERMISSIVE))
@@ -3040,7 +3042,19 @@ Module CheriMemory
                  let c_value := C.cap_set_value c_value shifted_addr in
                  ret (PV (Prov_some alloc_id) (PVconcrete c_value))
                else
-                 fail (MerrArrayShift loc))
+               if (negb (  Z.leb alloc.(base) shifted_addr))
+               then
+                  mprint_msg "here51" ;; fail (MerrArrayShift loc)
+               else 
+                  mprint_msg "here52" ;; 
+                  mprint_msg (HexString.of_Z shifted_addr) ;; 
+                  mprint_msg (HexString.of_Z sz) ;; 
+                  mprint_msg (HexString.of_Z (alloc.(base))) ;; 
+                  mprint_msg (HexString.of_Z (alloc.(size))) ;; 
+                  mprint_msg (HexString.of_Z (C.cap_get_value c_value)) ;; 
+                  mprint_msg (HexString.of_Z (offset)) ;; 
+                  fail (MerrArrayShift loc)
+                  )
         else
           let c_value := C.cap_set_value c_value shifted_addr in
           ret (PV (Prov_some alloc_id) (PVconcrete c_value))

@@ -743,7 +743,7 @@ Module Cap <: Capability (ValueBV) (ObjTypeBV) (SealType) (BoundsBV) (Permission
     match mem_bytes_of_bits w with
     | Some bytes =>
         match try_map memory_byte_to_ascii bytes with
-        | Some chars => Some (List.rev chars, tag)
+        | Some chars => Some ((*List.rev*) chars, tag)
         | None => None
         end
     | None => None
@@ -751,6 +751,7 @@ Module Cap <: Capability (ValueBV) (ObjTypeBV) (SealType) (BoundsBV) (Permission
 
   Definition decode (bytes : list ascii) (tag : bool) : option (bv Cap.len) :=
     if Nat.eq_dec (List.length bytes) 16%nat then
+      let bytes := List.rev bytes in (* TODO: Delete this? *)
       let bits : (list bool) := tag::(bool_bits_of_bytes bytes) in
       let bitsu := List.map bitU_of_bool bits in
       let w : (mword _) := vec_of_bits bitsu in
@@ -815,6 +816,23 @@ End Cap.
  Module test_cap_getters_and_setters.
 
   Import Cap.
+
+  
+
+  Definition test_cap_1:Z := 0x14C0000007FFFFFF100000000FFFFFFF1.
+  Compute encode true (Cap.of_Z test_cap_1).
+  Definition test_cap_2:Z := 0x1F1FFFFFF00000000F1FFFF7F0000004C.
+  Compute encode true (Cap.of_Z test_cap_2).
+  Definition test_cap_3:Z := 0x1fc000000333711170000000012342222.
+  Compute encode true (Cap.of_Z test_cap_3).
+  Definition test_cap_4:Z := 0x1fc000000399700070000000012342222.
+  Compute encode true (Cap.of_Z test_cap_4).
+  Definition test_cap_5:Z := 0x1fb000000377700070011111111113333.
+  Compute encode true (Cap.of_Z test_cap_5).
+  Definition test_cap_6:Z := 0x1fb0000007a4700000000000000003333.
+  Compute encode true (Cap.of_Z test_cap_6).
+
+
 
   Definition c1:Cap.t := mword_to_bv (concat_vec (Ones 19) (Zeros 110)). (* A valid universal-permission cap = 1^{19}0^{110} *)
   Definition c2:Cap.t := mword_to_bv (concat_vec (Ones 3) (Zeros 126)). (* A valid cap with Load and Store perms *)
