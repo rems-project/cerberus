@@ -27,3 +27,8 @@ webcerb.vip
 a.out
 /tests/csmith/**/LOG
 /tests/csmith/**/LOG.old
+public/dist/main.bundle.js
+public/dist/main.bundle.js.map
+public/dist/style.bundle.css
+public/dist/style.bundle.css.map
+public/package-lock.json
