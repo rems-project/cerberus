@@ -19,8 +19,9 @@ public/node_modules/
 *~
 cerberus-webserver
 config.json
-webcerb.symbolic
 webcerb.concrete
+webcerb.symbolic
+webcerb.vip
 .vscode/settings.json
 
 a.out

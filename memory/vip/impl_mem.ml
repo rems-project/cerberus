@@ -1,10 +1,6 @@
-module N = struct
-  include Nat_big_num
-  let of_float = Z.of_float
-end
-
 open Ctype
 open Memory_model
+open Memory_utils
 module MC = Mem_common
 
 module L = struct
@@ -41,6 +37,10 @@ module AbsByte = struct
     ptrfrag_idx: int option; (* None case is 'none' from the paper *)
   }
 
+  let to_json json_of_prov b : Json.json =
+    `Assoc [ ("prov", json_of_prov b. prov)
+           ; ("value", Json.of_option Json.of_char b.value)
+           ; ("ptrfrag_idx", Json.of_option Json.of_int b.ptrfrag_idx) ]
 end
 
 
@@ -131,15 +131,18 @@ let overlapping _ _ =
   false
 
 
-module IntMap = Map.Make(struct
+(* module IntMap = Map.Make(struct
   type t = Nat_big_num.num
   let compare = N.compare
-end)
+end) *)
 
 type allocation = {
   base: address;
   length: N.num; (* INVARIANT >= 0 *)
   killed: bool;
+  (* NON-semantics fields *)
+  ty: Ctype.ctype;
+  prefix: Symbol.prefix;
 }
 
 type mem_state = {
@@ -370,8 +373,8 @@ let rec repr funptrmap mval : ((Digest.t * string) IntMap.t * AbsByte.t list) =
         (funptrmap', bs @ List.init (size - List.length bs) padding_byte)
 
 
-let rec abst allocations (*funptrmap*) (Ctype (_, ty) as cty) (bs : AbsByte.t list) : mem_value * AbsByte.t list =
-let self ty bs = abst allocations ty bs in
+let rec abst (*allocations*) (*funptrmap*) (Ctype (_, ty) as cty) (bs : AbsByte.t list) : mem_value * AbsByte.t list =
+let self ty bs = abst (*allocations*) ty bs in
 let interp_bytes xs : [ `SPECIFIED of   [ `PROV of allocation_id | `NOPROV ]
                                      * [ `PROV2 of allocation_id | `NOPROV2 ]
                                      * char list
@@ -511,7 +514,7 @@ let in_bounds addr alloc =
   N.less_equal alloc.base addr && N.(less_equal addr (add alloc.base alloc.length))
 
 
-let allocate_object tid pref al_ival ty _ init_opt : pointer_value memM =
+let allocate_object tid prefix al_ival ty _ init_opt : pointer_value memM =
   let n = Z.of_int (Common.sizeof ty) in
   allocator n (ival_to_int al_ival) >>= fun (alloc_id, addr) ->
   let init_mval =
@@ -522,7 +525,7 @@ let allocate_object tid pref al_ival ty _ init_opt : pointer_value memM =
     let (funptrmap, pre_bs) = repr st.funptrmap init_mval in
     let bs = List.mapi (fun i b -> (Nat_big_num.add addr (Nat_big_num.of_int i), b)) pre_bs in
     { st with
-      allocations= IntMap.add alloc_id {base= addr; length= n; killed= false} st.allocations;
+      allocations= IntMap.add alloc_id {base= addr; length= n; killed= false; ty; prefix} st.allocations;
       (* bytemap= set_range st.bytemap addr n (fun _ -> AbsByte.{prov= Prov_empty; value= None; ptrfrag_idx= None}) *)
       bytemap=
         List.fold_left (fun acc (addr, b) ->
@@ -570,7 +573,7 @@ let load loc ty ptrval : (footprint * mem_value) memM =
           get >>= fun st ->
           put { st with last_used= Some alloc_id } >>= fun () ->
           let bs = fetch_bytes st.bytemap addr (Common.sizeof ty) in
-          return (FOOTPRINT, fst (abst st.allocations ty bs))
+          return (FOOTPRINT, fst (abst (*st.allocations*) ty bs))
     | PVfunptr _ ->
       fail ~loc (MerrAccess (LoadAccess, FunctionPtr))
 
@@ -1134,6 +1137,178 @@ let string_of_mem_value mval =
     ret
   end
 
+
 (* JSON serialisation *)
-let serialise_mem_state dig st : Json.json =
-  not_implemented "VIP.serialise_mem_state"
+type ui_value = {
+  kind: [ `Unspec | `Basic | `Char | `Pointer | `Unspecptr
+        | `Funptr | `Intptr | `Padding ];
+  size: int; (* number of square on the left size of the row *)
+  path: string list; (* tag list *)
+  value: string;
+  prov: provenance;
+  bytes: AbsByte.t list option;
+  typ: ctype option;
+}
+
+
+(* 
+   
+type allocation = {
+  base: address;
+  length: N.num; (* INVARIANT >= 0 *)
+  killed: bool;
+  (* NON-semantics fields *)
+  ty: Ctype.ctype;
+  prefix: Symbol.prefix;
+}
+
+*)
+
+type ui_alloc = {
+  id: int;
+  base: string;
+  length: int;
+  killed: bool;
+  prefix: Symbol.prefix;
+  (* dyn: bool; (* dynamic memory *) *)
+  ty: ctype;
+  values: ui_value list;
+}
+
+let rec mk_ui_values st bs ty mval : ui_value list =
+  let mk_ui_values = mk_ui_values st in
+  let mk_scalar kind v p bs_opt =
+    [{ kind; size = Common.sizeof ty; path = []; value = v;
+       prov = p; typ = Some ty; bytes = bs_opt }] in
+  let mk_pad n v =
+    { kind = `Padding; size = n; typ = None; path = []; value = v;
+      prov = Prov_empty; bytes = None } in
+  let add_path p r = { r with path = p :: r.path } in
+  match mval with
+    | MVunspecified (Ctype (_, Pointer _)) ->
+        mk_scalar `Unspecptr "unspecified" Prov_empty (Some bs)
+    | MVunspecified _ ->
+        mk_scalar `Unspec "unspecified" Prov_empty (Some bs)
+    | MVinteger (cty, ival) ->
+      let (prov, n) = match ival with
+        | IVloc (prov, addr) -> (prov, addr)
+        | IVint n -> (Prov_empty, n) in
+      begin match cty with
+        | Char | Signed Ichar | Unsigned Ichar ->
+          mk_scalar `Char (N.to_string n) prov None
+        | Ptrdiff_t | Signed Intptr_t | Unsigned Intptr_t ->
+          mk_scalar `Intptr (N.to_string n) prov None
+        | _ ->
+          mk_scalar `Basic (N.to_string n) prov None
+      end
+    | MVfloating (_, f) ->
+        mk_scalar `Basic (string_of_float f) Prov_empty None
+    | MVpointer (_, ptrval) ->
+      begin match ptrval with
+        | PVnull ->
+            mk_scalar `Pointer "NULL" Prov_empty None
+        | PVloc (prov, addr) ->
+            mk_scalar `Pointer (N.to_string addr) prov (Some bs)
+        | PVfunptr sym ->
+            mk_scalar `Funptr (Pp_symbol.to_string_pretty sym) Prov_empty None
+      end
+    | MVarray mvals ->
+      begin match ty with
+        | Ctype (_, Array (elem_ty, _)) ->
+          (* TODO: the N.to_int on the sizeof() will raise Overflow on huge structs/unions *)
+          let size = Common.sizeof elem_ty in
+          let (rev_rows, _, _) = List.fold_left begin fun (acc, i, acc_bs) mval ->
+              let row = List.map (add_path (string_of_int i)) @@ mk_ui_values acc_bs elem_ty mval in
+              (row::acc, i+1, L.drop size acc_bs)
+            end ([], 0, bs) mvals
+          in List.concat @@ (List.rev rev_rows)
+        | _ ->
+          failwith "mk_ui_values: array type is wrong"
+      end
+    | MVstruct (tag_sym, _) ->
+        let open N in
+        (* NOTE: we recombine the bytes to get paddings *)
+        (* TODO: the N.to_int on the sizeof() will raise Overflow on huge structs *)
+        let (bs1, bs2) = L.split_at (Common.sizeof ty) bs in
+            let (rev_rowss, _, bs') = List.fold_left begin
+            fun (acc_rowss, previous_offset, acc_bs) (Symbol.Identifier (_, memb), memb_ty, memb_offset_) ->
+              let memb_offset = of_int memb_offset_ in
+              let pad = to_int (sub memb_offset previous_offset) in
+              let acc_bs' = L.drop pad acc_bs in
+              let (mval, acc_bs'') = abst memb_ty acc_bs' in
+              let rows = mk_ui_values acc_bs' memb_ty mval in
+              let rows' = List.map (add_path memb) rows in
+              (* TODO: set padding value here *)
+              let rows'' = if pad = 0 then rows' else mk_pad pad "" :: rows' in
+              (rows''::acc_rowss, N.add memb_offset (of_int (Common.sizeof memb_ty)), acc_bs'')
+          end ([], N.zero, bs1) (fst (Common.offsetsof (Tags.tagDefs ()) tag_sym))
+        in List.concat (List.rev rev_rowss)
+    | MVunion (tag_sym, Symbol.Identifier (_, memb), mval) ->
+        List.map (add_path memb) (mk_ui_values bs ty mval) (* FIXME: THE TYPE IS WRONG *)
+
+let mk_ui_alloc st id (alloc: allocation) : ui_alloc =
+  (* let ty = match alloc.ty with Some ty -> ty | None -> Ctype ([], Array (Ctype ([], Basic (Integer Char)), Some alloc.length)) in *)
+  let length = N.to_int alloc.length in
+  let bs = fetch_bytes st.bytemap alloc.base length in
+  let (mval, _) = abst alloc.ty bs in
+  {
+    id;
+    base = N.to_string alloc.base;
+    length;
+    killed = alloc.killed;
+    (* dyn = List.mem alloc.base st.dynamic_addrs; *)
+    ty = alloc.ty;
+    prefix = alloc.prefix;
+    values = mk_ui_values st bs alloc.ty mval;
+  }
+
+let serialise_prov = function
+  | Prov_empty ->
+      `Assoc [ ("kind", `String "empty") ]
+  | Prov_some n ->
+      `Assoc [ ("kind", `String "prov")
+             ; ("value", `Int (N.to_int n)) ]
+
+  let serialise_ui_values (v:ui_value) : Json.json =
+    let string_of_kind = function
+      | `Unspec -> "unspecified"
+      | `Basic -> "basic"
+      | `Pointer -> "pointer"
+      | `Funptr -> "funptr"
+      | `Intptr -> "intptr"
+      | `Unspecptr -> "unspecptr"
+      | `Char -> "char"
+      | `Padding -> "padding"
+    in
+    `Assoc [("kind"), `String (string_of_kind v.kind);
+            ("size", `Int v.size);
+            ("path", `List (List.map Json.of_string v.path));
+            ("value", `String v.value);
+            ("prov", serialise_prov v.prov);
+            ("type", Json.of_option (fun ty -> `String (String_core_ctype.string_of_ctype ty)) v.typ);
+            ("bytes", Json.of_option (fun bs -> `List (List.map (AbsByte.to_json serialise_prov) bs)) v.bytes); ]
+
+let serialise_ui_alloc (a:ui_alloc) : Json.json =
+  `Assoc [ ("id", `Int a.id)
+         ; ("base", `String a.base)
+         ; ("prefix", serialise_prefix a.prefix)
+         ; ("dyn", `Bool false) (* TODO *)
+         ; ("type", `String (String_core_ctype.string_of_ctype a.ty))
+         ; ("size", `Int a.length)
+         ; ("values", `List (List.map serialise_ui_values a.values))
+         ; ("exposed", `Bool false); (* TODO *) ]
+
+let serialise_mem_state dig (st: mem_state) : Json.json =
+  let allocs =
+    IntMap.filter (fun _ (alloc : allocation) ->
+      match alloc.prefix with
+        | Symbol.PrefSource (_, syms) -> List.exists (fun (Symbol.Symbol (hash, _, _)) -> hash = dig) syms
+        | Symbol.PrefStringLiteral (_, hash) -> hash = dig
+        | Symbol.PrefCompoundLiteral (_, hash) -> hash = dig
+        | Symbol.PrefFunArg (_, hash, _) -> hash = dig
+        | Symbol.PrefMalloc -> true
+        | _ -> false
+    ) st.allocations in
+  `Assoc [ ("map", serialise_int_map (fun id alloc -> serialise_ui_alloc @@ mk_ui_alloc st id alloc) allocs)
+         ; ("last_used", Json.of_option (fun v -> `Int (N.to_int v)) st.last_used); ]
+  (* not_implemented "VIP.serialise_mem_state" *)

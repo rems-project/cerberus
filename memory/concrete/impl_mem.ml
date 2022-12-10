@@ -365,12 +365,13 @@ module Concrete : Memory = struct
     | IsReadOnly
   (* INTERNAL: allocation *)
   type allocation = {
-    prefix: Symbol.prefix;
     base: address;
     size: N.num; (*TODO: this is probably unnecessary once we have the type *)
     ty: ctype option; (* None when dynamically allocated *)
     is_readonly: readonly_status;
     taint: [ `Unexposed | `Exposed ]; (* NOTE: PNVI-ae, PNVI-ae-udi *)
+    (* NON-semantics fields *)
+    prefix: Symbol.prefix;
   }
   
   (* INTERNAL: Abstract bytes *)

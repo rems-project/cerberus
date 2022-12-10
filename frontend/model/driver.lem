@@ -845,8 +845,12 @@ let perform_memop_request2 loc memop cvals tid mk_th_st =
         liftMem (Mem.va_end va) >>
         ND.return (mk_th_st Core.Vunit)
 
+    | (Mem_common.Copy_alloc_id, [Core.Vobject (Core.OVinteger ival); Core.Vobject (Core.OVpointer ptrval)]) ->
+        liftMem (Mem.copy_alloc_id ival ptrval) >>= fun ptrval' ->
+        ND.return (mk_th_st (Core.Vobject (Core.OVpointer ptrval')))
+    
     | _ ->
-        error ("WIP memop request: " ^ show memop ^ " ==> " ^ Pp.stringFromCore_value (Core.Vtuple cvals) )
+        error ("INVALID memop request: " ^ show memop ^ " ==> " ^ Pp.stringFromCore_value (Core.Vtuple cvals) )
   end >>= fun th_st' ->
   ND.update (fun dr_st ->
     update_core_state (Core_run.update_thread_state tid th_st' dr_st.core_state) dr_st

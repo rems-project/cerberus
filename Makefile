@@ -94,6 +94,7 @@ cerberus-web: prelude-src config.json tmp/
 	$(Q)dune build cerberus.install cerberus-web.install
 	@cp -L _build/default/backend/web/instance.exe webcerb.concrete
 	@cp -L _build/default/backend/web/instance_symbolic.exe webcerb.symbolic
+	@cp -L _build/default/backend/web/instance_vip.exe webcerb.vip
 	@cp -L _build/default/backend/web/web.exe cerberus-webserver
 
 .PHONY: ui

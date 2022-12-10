@@ -232,6 +232,7 @@ export class CerberusUI {
       model.alloc_model = am
       $('#r_concrete').prop('checked', model.alloc_model === 'concrete')
       $('#r_symbolic').prop('checked', model.alloc_model === 'symbolic')
+      $('#r_vip').prop('checked', model.alloc_model === 'vip')
       this.updateUI(view.state)
     })
 
