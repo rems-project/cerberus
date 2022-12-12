@@ -525,7 +525,7 @@ let rec dtree_of_statement pp_annot (AnnotatedStatement (loc, attrs, stmt_)) =
         Dnode ( pp_stmt_ctor "CabsSinstantiate", [dtree_of_expression e] )
   end
 
-let dtree_of_function_definition pp_annot (fun_sym, (loc, attrs, param_syms, stmt)) =
+let dtree_of_function_definition pp_annot (fun_sym, (loc, _, attrs, param_syms, stmt)) =
   let param_dtrees = [] in
   let pp_loc = Location_ocaml.pp_location ~clever:true loc in
   Dnode ( pp_decl_ctor "FunctionDecl" ^^^ pp_loc ^^^ Pp_ail.pp_id fun_sym

@@ -3688,7 +3688,7 @@ let translate_program stdlib (startup_sym_opt, sigm) =
                       | _ -> Map.insert sym finfo finfoacc
                     end )
             
-            | Just (loc, _, param_syms, stmt) ->
+            | Just (loc, _, _, param_syms, stmt) ->
                 E.mapM (fun (s, bTy) ->
                   let descr = 
                     if not (Global.has_switch SW_inner_arg_temps) then Symbol.SD_None else

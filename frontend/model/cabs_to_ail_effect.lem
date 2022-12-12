@@ -247,7 +247,7 @@ type state = <|
   external_object_declarations: map A.ail_identifier  ((* isTentative *)bool * Loc.t * Annot.attributes * A.storageDuration * (* isRegister *) bool * maybe Ctype.alignment * Ctype.qualifiers * Ctype.ctype);
   internal_object_declarations: map A.ail_identifier  (Loc.t * A.storageDuration * (* isRegister *) bool * maybe Ctype.alignment * Ctype.qualifiers * Ctype.ctype);
   
-  function_definitions: map A.ail_identifier (Loc.t * Annot.attributes * list A.ail_identifier * A.statement unit);
+  function_definitions: map A.ail_identifier (Loc.t * nat * Annot.attributes * list A.ail_identifier * A.statement unit);
   global_object_definitions: map A.ail_identifier global_definition;
   
   (* TODO: I really don't like the potential lack of sync between the next field and registered_identifiers *)
@@ -1631,13 +1631,13 @@ let register_global_object_definition sym gdef =
 
 
 (* NOTE: no check for redefinition is made here *)
-val register_function_definition: A.ail_identifier -> (Loc.t * Annot.attributes * list A.ail_identifier * A.statement unit) -> desugM unit
+val register_function_definition: A.ail_identifier -> (Loc.t * nat * Annot.attributes * list A.ail_identifier * A.statement unit) -> desugM unit
 let register_function_definition sym fdef =
   (* NOTE: unlike for external objects, we don't need to check the scope here,
      because the parse won't allow block scoped function definitions anyway. *)
   State_exception.update (fun st ->
     let () = Debug.print_debug 2 [Debug.DB_desugaring] (fun () ->
-      let (_, _, xs, _) = fdef in
+      let (_, _, _, xs, _) = fdef in
       "registering function definition of '" ^ show sym ^ "' with params: " ^ stringFromList show xs
     ) in
     <| st with function_definitions= Map.insert sym fdef st.function_definitions |>

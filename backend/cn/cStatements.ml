@@ -114,7 +114,7 @@ let add_map_stmt (stmt : 'a statement) m =
   f [stmt] m
 
 let search (sigma : 'a sigma) =
-  List.fold_right (fun (_, (_, _, _, stmt)) m -> add_map_stmt stmt m)
+  List.fold_right (fun (_, (_, _, _, _, stmt)) m -> add_map_stmt stmt m)
     sigma.function_definitions LocMap.empty
 
 

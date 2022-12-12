@@ -4712,8 +4712,9 @@ let desugar_and_register_function_definition (FunDef fundef_loc fundef_attrs spe
             List.elem FS_Noreturn specifs.function_specifiers
           ) >>
           E.set_current_return_type return_ty >>
+          E.record_marker () >>= fun marker_id ->
           desugar_statement stmt >>= fun d_stmt ->
-          E.return (Loc.locOf fun_ident, fun_sym, d_stmt) in
+          E.return (Loc.locOf fun_ident, marker_id, fun_sym, d_stmt) in
         match ty with
           | Ctype.Ctype _ (Ctype.Function return_qs_ty params isVariadic) ->
               process return_qs_ty (Just params) isVariadic
@@ -4723,12 +4724,12 @@ let desugar_and_register_function_definition (FunDef fundef_loc fundef_attrs spe
               (* This should not be possible due to the earlier check *)
               error "Cabs_to_ail.desugar_and_register_function_definition"
         end
-      end >>= fun (loc, fun_sym, d_stmt) ->
+      end >>= fun (loc, marker_id, fun_sym, d_stmt) ->
       E.bindings_of_idents_map idents_map >>= fun bindings ->
       E.register_function_definition fun_sym
       (* NOTE: the Cabs parser can't easily find the location of the
          function identifier, so add it here *)
-      (Loc.with_cursor_from fundef_loc loc, fundef_attrs, List.map fst bindings, d_stmt)
+      (Loc.with_cursor_from fundef_loc loc, marker_id, fundef_attrs, List.map fst bindings, d_stmt)
     end
 
 
