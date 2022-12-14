@@ -247,8 +247,10 @@ module Translate = struct
         (List.map (fun (nm, _) -> symbol context nm) to_translate)
         (List.map (fun (nm, _) -> conv_dt nm) to_translate)
     in
-    List.iter2 (fun (nm, _) sort -> BT_Table.add bt_table (BT.Datatype nm) sort)
-        to_translate sorts
+    List.iter2 (fun (nm, _) sort -> begin
+            BT_Table.add bt_table (BT.Datatype nm) sort;
+            Sort_Table.add sort_table sort (BT.Datatype nm);
+        end) to_translate sorts
 
 
   let sort : Z3.context -> Global.t -> BT.t -> sort =
