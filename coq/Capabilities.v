@@ -98,6 +98,14 @@ Module Type VADDR_INTERVAL (V:VADDR).
   Parameter ltb: t -> t -> bool.
 End VADDR_INTERVAL.
 
+Record CapGhostState :=
+  {
+    tag_unspecified : bool
+  }.
+
+Definition Default_CapGhostStat : CapGhostState
+  := {| tag_unspecified := false |}.
+
 Module Type Capability
   (V:VADDR)
   (OT:OTYPE)
@@ -115,6 +123,14 @@ Module Type Capability
 
   (** the number of user-defined flags *)
   Parameter cap_flags_len: nat.
+
+  (** ghost state management **)
+
+  Parameter get_ghost_state: t -> CapGhostState.
+
+  Parameter set_ghost_state: t -> CapGhostState -> t.
+
+  (** access to various cap fields **)
 
   Parameter cap_is_valid : t -> bool.
 

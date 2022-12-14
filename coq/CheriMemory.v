@@ -423,6 +423,28 @@ Module CheriMemory
          else v
       ) captags.
 
+  (** Remove capability tags for memory region starting from [addr]
+      with [size].
+
+      All tags associated with addresses in this region will be
+      removed.  *)
+  Definition remove_tags
+    (addr: MorelloAddr.t)
+    (size: Z)
+    (captags: ZMap.t bool): ZMap.t bool
+    :=
+    let align := IMP.get.(alignof_pointer) in
+    let lower_a x :=
+      let (q,_) := quomod x align in
+      Z.mul q align in
+    let a0 := lower_a addr in
+    let a1 := lower_a (Z.pred (Z.add addr size)) in
+    ZMap.fold
+      (fun (a:Z) (v:bool) (ct: ZMap.t bool) =>
+         if (Z.geb a a0 && Z.leb a a1)%bool then (ZMap.remove a ct)
+         else ct
+      ) captags captags.
+
   Definition allocator (size:Z) (align:Z) : memM (storage_instance_id * MorelloAddr.t) :=
     get >>= fun st =>
         let alloc_id := st.(next_alloc_id) in
@@ -661,14 +683,14 @@ Module CheriMemory
         match mval with
         | MVunspecified ty =>
             sz <- sizeof DEFAULT_FUEL None ty ;;
-            ret (funptrmap, (clear_caps addr sz captags),
+            ret (funptrmap, (remove_tags addr sz captags),
                 (list_init (Z.to_nat sz) (fun _ => absbyte_v Prov_none None None)))
         | MVinteger ity (IV n_value) =>
             iss <- option2serr "Could not get int signedness of a type in repr" (is_signed_ity DEFAULT_FUEL ity) ;;
             sz <- sizeof DEFAULT_FUEL None (CoqCtype.Ctype nil (CoqCtype.Basic (CoqCtype.Integer ity))) ;;
             bs' <- bytes_of_Z iss (Z.to_nat sz) n_value ;;
             let bs := List.map (fun (x : ascii) => absbyte_v Prov_none None (Some x)) bs' in
-            ret (funptrmap, (clear_caps addr (Z.of_nat (List.length bs)) captags), bs)
+            ret (funptrmap, (remove_tags addr (Z.of_nat (List.length bs)) captags), bs)
         | MVinteger ity (IC _ c_value) =>
             '(cb, ct) <- option2serr "int encoding error" (C.encode true c_value) ;;
             ret (funptrmap, (ZMap.add addr ct captags),
@@ -680,7 +702,7 @@ Module CheriMemory
             bs' <- bytes_of_Z true (Z.to_nat sz) (bits_of_float fval) ;;
             let bs := List.map (fun (x : ascii) => absbyte_v Prov_none None (Some x)) bs'
             in
-            ret (funptrmap, (clear_caps addr (Z.of_nat (List.length bs)) captags), bs)
+            ret (funptrmap, (remove_tags addr (Z.of_nat (List.length bs)) captags), bs)
         | MVpointer ref_ty (PV prov ptrval_) =>
             match ptrval_ with
             | PVfunction
@@ -1443,7 +1465,9 @@ Module CheriMemory
     (intent : access_intention)
     (sz : Z)
     : memM unit :=
-    if C.cap_is_valid c then
+    if (C.get_ghost_state c).(tag_unspecified) then
+      fail (MerrCHERI loc CheriUndefinedTag)
+    else if C.cap_is_valid c then
       let addr :=
         Z.add (C.cap_get_value c)
           offset in
@@ -1462,16 +1486,13 @@ Module CheriMemory
           ret tt
         else
           fail
-            (MerrCHERI loc
-               (CheriBoundsErr (bounds, addr, (Z.to_nat sz))))
+            (MerrCHERI loc (CheriBoundsErr (bounds, addr, (Z.to_nat sz))))
       else
         fail
-          (MerrCHERI loc
-             CheriMerrUnsufficientPermissions)
+          (MerrCHERI loc CheriMerrUnsufficientPermissions)
     else
       fail
-        (MerrCHERI loc
-           CheriMerrInvalidCap).
+        (MerrCHERI loc CheriMerrInvalidCap).
 
   Fixpoint mem_value_strip_err
     (x_value : mem_value_with_err)
@@ -3814,9 +3835,16 @@ Module CheriMemory
                                   (String.append
                                      "CHERI.call_intrinsic: non-cap 1st argument in: '"
                                      (String.append name "'")))
-                         | Some (_, c_value) =>
-                             let v_value := if C.cap_is_valid c_value then 1 else 0
-                             in  ret (Some (MVinteger CoqCtype.Bool (IV v_value)))
+                         | Some (_, c) =>
+                             if (C.get_ghost_state c).(tag_unspecified) then
+                               ret (Some (MVunspecified
+                                            (CoqCtype.Ctype nil
+                                               (CoqCtype.Basic
+                                                  (CoqCtype.Integer
+                                                     CoqCtype.Bool)))))
+                             else
+                               let b_value := if C.cap_is_valid c then 1 else 0
+                               in ret (Some (MVinteger CoqCtype.Bool (IV b_value)))
                          end)
                   else
                     if String.eqb name "cheri_tag_clear" then

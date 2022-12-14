@@ -11,6 +11,8 @@
 )))
 (copy_files extracted/CRelationClasses.ml)
 
+(copy_files extracted/Addr.{ml,mli})
+(copy_files extracted/Capabilities.{ml,mli})
 (copy_files extracted/CoqAilSyntax.{ml,mli})
 (copy_files extracted/CoqAnnot.{ml,mli})
 (copy_files extracted/Applicative.{ml,mli})

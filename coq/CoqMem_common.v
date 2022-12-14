@@ -59,8 +59,8 @@ Module Mem_common (A:VADDR).
   | CheriMerrInvalidCap : mem_cheri_error
   | CheriMerrUnsufficientPermissions : mem_cheri_error
   | CheriBoundsErr : (* bounds,address,length *)
-    (A.t * A.t) * A.t * nat ->
-    mem_cheri_error.
+    (A.t * A.t) * A.t * nat -> mem_cheri_error
+  | CheriUndefinedTag: mem_cheri_error.
 
   Inductive mem_error : Set :=
   | MerrOutsideLifetime : string -> mem_error
@@ -265,6 +265,7 @@ Definition instance_Show_Show_Mem_common_mem_error_dict
         | CheriMerrUnsufficientPermissions =>
             Some UB_CHERI_UnsufficientPermissions
         | CheriBoundsErr _ => Some UB_CHERI_BoundsViolation
+        | CheriUndefinedTag => Some UB_CHERI_UndefinedTag
         end
   | _ => None
   end.

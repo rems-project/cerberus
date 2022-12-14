@@ -481,21 +481,24 @@ Module MorelloCapability <:
       obj_type : MoreloOTYPE.t;
       bounds : MorelloVADDR_INTERVAL.t;
       flags : list bool;
-      perms : MorelloPermission.t
+      perms : MorelloPermission.t;
+      ghost_state: CapGhostState
     }.
 
   Definition with_valid valid (r : morello_cap_t) :=
-    Build_morello_cap_t valid r.(value) r.(obj_type) r.(bounds) r.(flags) r.(perms).
+    Build_morello_cap_t valid r.(value) r.(obj_type) r.(bounds) r.(flags) r.(perms) r.(ghost_state).
   Definition with_value value (r : morello_cap_t) :=
-    Build_morello_cap_t r.(valid) value r.(obj_type) r.(bounds) r.(flags) r.(perms).
+    Build_morello_cap_t r.(valid) value r.(obj_type) r.(bounds) r.(flags) r.(perms) r.(ghost_state).
   Definition with_obj_type obj_type (r : morello_cap_t) :=
-    Build_morello_cap_t r.(valid) r.(value) obj_type r.(bounds) r.(flags) r.(perms).
+    Build_morello_cap_t r.(valid) r.(value) obj_type r.(bounds) r.(flags) r.(perms) r.(ghost_state).
   Definition with_bounds bounds (r : morello_cap_t) :=
-    Build_morello_cap_t r.(valid) r.(value) r.(obj_type) bounds r.(flags) r.(perms).
+    Build_morello_cap_t r.(valid) r.(value) r.(obj_type) bounds r.(flags) r.(perms) r.(ghost_state).
   Definition with_flags flags (r : morello_cap_t) :=
-    Build_morello_cap_t r.(valid) r.(value) r.(obj_type) r.(bounds) flags r.(perms).
+    Build_morello_cap_t r.(valid) r.(value) r.(obj_type) r.(bounds) flags r.(perms) r.(ghost_state).
   Definition with_perms perms (r : morello_cap_t) :=
-    Build_morello_cap_t r.(valid) r.(value) r.(obj_type) r.(bounds) r.(flags) perms.
+    Build_morello_cap_t r.(valid) r.(value) r.(obj_type) r.(bounds) r.(flags) perms r.(ghost_state).
+  Definition with_ghost_state gs (r : morello_cap_t) :=
+    Build_morello_cap_t r.(valid) r.(value) r.(obj_type) r.(bounds) r.(flags) r.(perms) gs.
 
   Definition t := morello_cap_t.
 
@@ -508,6 +511,15 @@ Module MorelloCapability <:
   Definition max_vaddr : Z := Z.sub (Z.pow 2 (Z.of_nat vaddr_bits)) 1.
 
   Definition cap_flags_len : nat := 8%nat.
+
+
+  (** ghost state management **)
+
+  Definition get_ghost_state c := c.(ghost_state).
+
+  Definition set_ghost_state c gs := with_ghost_state gs c.
+
+  (** access to various cap fields **)
 
   Definition cap_is_valid (c_value : t) : bool := c_value.(valid).
 
@@ -578,7 +590,9 @@ Module MorelloCapability <:
               obj_type := otype;
               bounds := (projT1 (uint base'), projT1 (uint limit'));
               flags := flags;
-              perms := perms |}
+              perms := perms;
+              ghost_state := Default_CapGhostStat
+            |}
       end.
 
   Program Definition decode (bytes : list ascii) (tag : bool) : option t :=
@@ -619,7 +633,8 @@ Module MorelloCapability <:
           MorelloPermission.permit_mutable_load := false;
 
           MorelloPermission.user_perms := [false; false; false; false]
-        |}
+        |};
+      ghost_state := Default_CapGhostStat
     |}.
 
   Definition alloc_cap (a_value : MorelloAddr.t) (size : Z) : t :=
@@ -629,7 +644,8 @@ Module MorelloCapability <:
       obj_type := cap_SEAL_TYPE_UNSEALED;
       bounds := (a_value, (Z.add a_value size));
       flags := flags_from_value a_value;
-      perms := MorelloPermission.perm_alloc
+      perms := MorelloPermission.perm_alloc;
+      ghost_state := Default_CapGhostStat
     |}.
 
   Definition alloc_fun (a_value : MorelloAddr.t) : t :=
@@ -639,7 +655,8 @@ Module MorelloCapability <:
       obj_type := cap_SEAL_TYPE_RB;
       bounds := (a_value, (Z.succ (Z.succ a_value)));
       flags := flags_from_value a_value;
-      perms := MorelloPermission.perm_alloc_fun
+      perms := MorelloPermission.perm_alloc_fun;
+      ghost_state := Default_CapGhostStat
     |}.
 
   Definition vaddr_in_range (a_value : Z) : bool :=
