@@ -3888,15 +3888,16 @@ Module CheriMemory
                                          "CHERI.call_intrinsic: non-cap 2nd argument in: '"
                                          (String.append name "'")))
                              | Some (_, c0), Some (_, c1) =>
-                                 let v_value :=
-                                   if C.eqb c0 c1 then
-                                     1
-                                   else
-                                     0 in
-                                 ret
-                                   (Some
-                                      (MVinteger CoqCtype.Bool
-                                         (IV v_value)))
+                                 if (C.get_ghost_state c0).(tag_unspecified) ||
+                                      (C.get_ghost_state c1).(tag_unspecified)
+                                 then
+                                   fail (MerrCHERI loc CheriUndefinedTag)
+                                 else
+                                   let v_value := if C.eqb c0 c1 then 1 else 0 in
+                                   ret
+                                     (Some
+                                        (MVinteger CoqCtype.Bool
+                                           (IV v_value)))
                              end)
                       else
                         if String.eqb name "cheri_representable_length" then
