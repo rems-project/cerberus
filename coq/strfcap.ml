@@ -14,10 +14,10 @@ module MorelloCapabilityWithStrfcap = struct
     | Cap_SEntry -> true
     | _ -> false
 
-  let flags_as_str c =
+  let flags_as_str tag c =
       let attrs =
         let a f s l = if f then s::l else l in
-        a (not c.valid) "invald"
+        a (not tag) "invald"
         @@ a (is_sentry c) "sentry"
         @@ a ((not (is_sentry c)) && is_sealed c) "sealed" []
       in
@@ -38,20 +38,20 @@ module MorelloCapabilityWithStrfcap = struct
       | None -> None
       | Some t -> Some (s ^ t)
     in
-    let rec loop cap = function
+    let rec loop tag cap = function
       | [] -> Some ""
-      | '%'::fs -> strf cap false fs
-      | c::fs -> as_string c @ loop cap fs
-    and strf cap alt = function
+      | '%'::fs -> strf tag cap false fs
+      | c::fs -> as_string c @ loop tag cap fs
+    and strf tag cap alt = function
       | [] ->
          (* unexpected end of format specifiction *)
          None
-      | '#'::fs -> strf cap true fs (* mutiple # are allowed *)
-      | '%'::fs -> "%" @ loop cap fs
+      | '#'::fs -> strf tag cap true fs (* mutiple # are allowed *)
+      | '%'::fs -> "%" @ loop tag cap fs
       (* non-numeric formats *)
       | 'A'::fs ->
-         let s = flags_as_str cap in
-         s @ loop cap fs
+         let s = flags_as_str tag cap in
+         s @ loop tag cap fs
       | 'B'::fs ->
          (*
          let bits = encode_to_bits true cap in
@@ -61,22 +61,21 @@ module MorelloCapabilityWithStrfcap = struct
          None (* TODO: format not implemented *)
       | 'C'::fs ->
          if cap_is_null_derived cap then
-           numf State.Initial (-1) (-1) false true 'x' cap ('a'::fs)
+           numf State.Initial (-1) (-1) false true 'x' tag cap ('a'::fs)
          else
            begin
-             match loop cap (explode "%#xa [%P,%#xb-%#xt]%? %A") with
+             match loop tag cap (explode "%#xa [%P,%#xb-%#xt]%? %A") with
              | None -> None
-             | Some s -> s  @ loop cap fs
+             | Some s -> s  @ loop tag cap fs
            end
       | 'P'::fs ->
          let s = MorelloPermission.to_string (cap_get_perms cap) in
-         s @ loop cap fs
-      | 'T'::fs ->
-         loop {cap with valid = true } fs
-      | '?'::fs -> skip cap fs
+         s @ loop tag cap fs
+      | 'T'::fs -> loop true cap fs
+      | '?'::fs -> skip tag cap fs
       (* try numeric formats *)
-      | x::fs as f -> numf State.Initial 1 1 false alt 'd' cap f
-    and numf state width prec right_pad alt number_fmt cap f =
+      | x::fs as f -> numf State.Initial 1 1 false alt 'd' tag cap f
+    and numf state width prec right_pad alt number_fmt tag cap f =
       let strnum z =
         (* TODO(CHERI) In C implementation of "strfcap" the
            following code is used to format numbers:
@@ -119,56 +118,56 @@ module MorelloCapabilityWithStrfcap = struct
              (* leading zero in width not allowed in format specification *)
              None
            end
-         else numf State.Width (as_digit c) prec right_pad alt number_fmt cap fs
+         else numf State.Width (as_digit c) prec right_pad alt number_fmt tag cap fs
       | Width, c::fs when is_digit c ->
-         numf State.Width (width*10+(as_digit c)) prec right_pad alt number_fmt cap fs
+         numf State.Width (width*10+(as_digit c)) prec right_pad alt number_fmt tag cap fs
 
       (* precision *)
       | Width, '.'::fs | Initial, '.'::fs ->
-         numf State.Precision width 0 right_pad alt number_fmt cap fs
+         numf State.Precision width 0 right_pad alt number_fmt tag cap fs
       | Precision, c::fs when is_digit c ->
-         numf State.Precision width (prec*10+(as_digit c)) right_pad alt number_fmt cap fs
+         numf State.Precision width (prec*10+(as_digit c)) right_pad alt number_fmt tag cap fs
 
       (* right pad. could be specificed anywhere and repeated *)
       | _, '-'::fs ->
-         numf State.Initial width prec true alt number_fmt cap fs
+         numf State.Initial width prec true alt number_fmt tag cap fs
 
       (* alt pad. could be specificed anywhere and repeated *)
       | _, '#'::fs ->
-         numf State.Final width prec right_pad true number_fmt cap fs
+         numf State.Final width prec right_pad true number_fmt tag cap fs
 
       (* hex could be specificed anywhere and repeated *)
       | _, ('x' as d)::fs
         | _, ('X' as d)::fs ->
-         numf State.Final width prec right_pad alt d cap fs
+         numf State.Final width prec right_pad alt d tag cap fs
 
       (* collaps to final *)
       | Width, _
         | Precision, _
-        | Initial, _ -> numf State.Final width prec right_pad alt number_fmt cap f
+        | Initial, _ -> numf State.Final width prec right_pad alt number_fmt tag cap f
 
       (* Actual numeric options *)
       | Final, 'a'::fs ->
          let z = cap_get_value cap in
-         strnum z @ loop cap fs
+         strnum z @ loop tag cap fs
       | Final, 'b'::fs ->
          let z = fst (cap_get_bounds cap) in
-         strnum z @ loop cap fs
+         strnum z @ loop tag cap fs
       | Final, 'l'::fs ->
          let (base,limit) = cap_get_bounds cap in
          let z = Z.sub limit base in
-         strnum z @ loop cap fs
+         strnum z @ loop tag cap fs
       | Final, 'o'::fs ->
          let base = fst (cap_get_bounds cap) in
          let addr = cap_get_value cap in
          let z = Z.sub addr base in
-         strnum z @ loop cap fs
+         strnum z @ loop tag cap fs
       | Final, 'p'::fs ->
          let z = MorelloPermission.to_raw (cap_get_perms cap) in
-         strnum z @ loop cap fs
+         strnum z @ loop tag cap fs
       | Final, 's'::fs ->
          let z = cap_get_obj_type cap in
-         strnum z @ loop cap fs
+         strnum z @ loop tag cap fs
       | Final, 'S'::fs ->
          let s =
            match cap_get_seal cap with
@@ -176,21 +175,21 @@ module MorelloCapabilityWithStrfcap = struct
            | Cap_SEntry -> "<sentry>"
            | _ -> strnum cap.obj_type
          in
-         s @ loop cap fs
+         s @ loop tag cap fs
       | Final, 't'::fs ->
          let (base,limit) = cap_get_bounds cap in
          let z = Z.add base limit in
-         strnum z @ loop cap fs
+         strnum z @ loop tag cap fs
       | Final, 'v'::fs ->
          let z = if cap_is_valid cap then Z.succ Z.zero else Z.zero in
-         strnum z @ loop cap fs
+         strnum z @ loop tag cap fs
       | Final, c::_ ->
          (* Unknown format specifier *)
          None
-    and skip cap = function
+    and skip tag cap = function
       | [] -> None
-      | ('%'::fs) as f -> loop cap f
-      | _::fs -> skip cap fs
-    in loop capability (explode formats)
+      | ('%'::fs) as f -> loop tag cap f
+      | _::fs -> skip tag cap fs
+    in loop (cap_is_valid capability) capability (explode formats)
 
 end

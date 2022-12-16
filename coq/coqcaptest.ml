@@ -94,7 +94,7 @@ let string_diff fmt (a,b) =
   pp_close_box fmt ()
 
 let debug_print_cap c =
-  match M.strfcap "%#p" c with
+  match M.strfcap "%C" c with
   | Some s -> s
   | None -> M.to_string c (* fallback *)
 
@@ -396,6 +396,17 @@ let tests = "coq_morello_caps" >::: [
            assert_equal
              ~pp_diff:string_diff
              "0xffff [rwRW,0xffff-0x20008]" s'
+      );
+
+      "strfcap T-format" >:: (fun _ ->
+        let c0 = M.alloc_cap (Z.of_int 65535) (Z.of_int 10) in
+        let c1 = M.cap_invalidate c0 in
+        match M.strfcap "%C" c0, M.strfcap "%T%C" c1 with
+        | Some s0, Some s1 ->
+           assert_equal
+             ~pp_diff:string_diff
+             s0 s1
+        | _ , _ -> assert_failure "strfcap failed"
       );
 
       "strfcap v-format" >:: (fun _ ->
