@@ -399,30 +399,6 @@ Module CheriMemory
         if is_signed then unwrap_cap_value n else n
     end.
 
-  (** Invalidate capability tags for memory region starting from
-      [addr] with [size].
-
-      All tags which were [true] will be flipped to [false].  For
-      addresses which did not have tags set, they will remain
-      unspecified.
-   *)
-  Definition clear_caps
-    (addr:MorelloAddr.t)
-    (size:Z)
-    (captags:ZMap.t bool): ZMap.t bool
-    :=
-    let align := IMP.get.(alignof_pointer) in
-    let lower_a x :=
-      let (q,_) := quomod x align in
-      Z.mul q align in
-    let a0 := lower_a addr in
-    let a1 := lower_a (Z.pred (Z.add addr size)) in
-    ZMap.mapi
-      (fun (a:Z) (v:bool) =>
-         if (v && Z.geb a a0 && Z.leb a a1)%bool then false
-         else v
-      ) captags.
-
   (** Remove capability tags for memory region starting from [addr]
       with [size].
 
@@ -470,7 +446,7 @@ Module CheriMemory
                 next_varargs_id  := st.(next_varargs_id);
                 bytemap          := st.(bytemap);
                 (* clear tags in newly allocated region *)
-                captags          := clear_caps addr size st.(captags);
+                captags          := remove_tags addr size st.(captags);
                 dead_allocations := st.(dead_allocations);
                 dynamic_addrs    := st.(dynamic_addrs);
                 last_used        := Some alloc_id;
