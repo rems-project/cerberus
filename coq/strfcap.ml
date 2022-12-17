@@ -19,7 +19,7 @@ module MorelloCapabilityWithStrfcap = struct
         let a f s l = if f then s::l else l in
         let gs = get_ghost_state c in
         a gs "notag"
-        @@ (a ((not tag) && (not gs)) "invalid!")
+        @@ (a ((not tag) && (not gs)) "invalid")
         @@ a (is_sentry c) "sentry"
         @@ a ((not (is_sentry c)) && is_sealed c) "sealed" []
       in
