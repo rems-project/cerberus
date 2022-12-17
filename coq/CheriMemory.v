@@ -1274,20 +1274,24 @@ Module CheriMemory
             match extract_unspec bs1' with
             | Some cs =>
                 ret (provs_of_bytes bs1,
-                    match tag_query_f addr with
-                    | None => MVEunspecified cty
-                    | Some tag =>
-                        match C.decode (List.rev cs) tag with
-                        | None => MVErr (MerrCHERI loc CheriErrDecodingCap)
-                        | Some c_value =>
-                            if iss then
-                              let n_value := C.cap_get_value c_value in
-                              let c_value := C.cap_set_value c_value (wrap_cap_value n_value) in
-                              MVEinteger ity (IC true c_value)
-                            else
-                              MVEinteger ity (IC false c_value)
-                        end
-                    end, bs2)
+                    let (tag, is_ghost) :=
+                      match tag_query_f addr with
+                      | None => (false, true)
+                      | Some tag => (tag, false)
+                      end
+                    in
+                    match C.decode (List.rev cs) tag with
+                    | None => MVErr (MerrCHERI loc CheriErrDecodingCap)
+                    | Some c_value =>
+                        let c_value := C.set_ghost_state c_value {| tag_unspecified := is_ghost |} in
+                        if iss then
+                          let n_value := C.cap_get_value c_value in
+                          let c_value := C.cap_set_value c_value (wrap_cap_value n_value) in
+                          MVEinteger ity (IC true c_value)
+                        else
+                          MVEinteger ity (IC false c_value)
+                    end
+                      , bs2)
             | None => ret (provs_of_bytes bs1, MVEunspecified cty, bs)
             end
         | CoqCtype.Basic (CoqCtype.Floating fty) =>
@@ -1338,62 +1342,65 @@ Module CheriMemory
             (* sprint_msg ("BS1 prov_status=" ++ (string_of_prov_ptr_valid_ind prov_status)) ;; *)
             match extract_unspec bs1' with
             | Some cs =>
+                let (tag, is_ghost) :=
                   match tag_query_f addr with
-                    | None => ret (NoTaint, MVEunspecified cty, bs2)
-                    | Some tag =>
-                        match C.decode (List.rev cs) tag with
-                        | None => ret (NoTaint, MVErr (MerrCHERI loc CheriErrDecodingCap), bs2)
-                        | Some n_value =>
-                            match ref_ty with
-                            | CoqCtype.Ctype _ (CoqCtype.Function _ _ _) =>
-                                match tag_query_f addr with
-                                | None => ret (NoTaint, MVEunspecified cty, bs2)
-                                | Some tag =>
-                                    match C.decode (List.rev cs) tag with
-                                    | None => ret (NoTaint, MVErr (MerrCHERI loc CheriErrDecodingCap), bs2)
-                                    | Some c_value =>
-                                        let n_value :=
-                                          Z.sub
-                                            (C.cap_get_value c_value)
-                                            initial_address in
-                                        match ZMap.find n_value funptrmap with
-                                        | Some (file_dig, name, c') =>
-                                            if C.eqb c_value c' then
-                                              ret (NoTaint, MVEpointer ref_ty
-                                                (PV prov
-                                                   (PVfunction
-                                                      (FP_valid
-                                                         (CoqSymbol.Symbol file_dig
-                                                            n_value
-                                                            (CoqSymbol.SD_Id name))))), bs2)
-                                            else
-                                              ret (NoTaint, MVEpointer ref_ty
-                                                (PV prov (PVfunction (FP_invalid c_value))), bs2)
-                                        | None =>
-                                            ret (NoTaint, MVEpointer ref_ty
-                                              (PV prov (PVfunction (FP_invalid c_value))), bs2)
-                                        end
-                                    end
+                  | None => (false, true)
+                  | Some tag => (tag, false)
+                  end
+                in
+                match C.decode (List.rev cs) tag with
+                | None => ret (NoTaint, MVErr (MerrCHERI loc CheriErrDecodingCap), bs2)
+                | Some n_value =>
+                    let n_value := C.set_ghost_state n_value {| tag_unspecified := is_ghost |} in
+                    match ref_ty with
+                    | CoqCtype.Ctype _ (CoqCtype.Function _ _ _) =>
+                        match tag_query_f addr with
+                        | None => ret (NoTaint, MVEunspecified cty, bs2)
+                        | Some tag =>
+                            match C.decode (List.rev cs) tag with
+                            | None => ret (NoTaint, MVErr (MerrCHERI loc CheriErrDecodingCap), bs2)
+                            | Some c_value =>
+                                let n_value :=
+                                  Z.sub
+                                    (C.cap_get_value c_value)
+                                    initial_address in
+                                match ZMap.find n_value funptrmap with
+                                | Some (file_dig, name, c') =>
+                                    if C.eqb c_value c' then
+                                      ret (NoTaint, MVEpointer ref_ty
+                                                      (PV prov
+                                                         (PVfunction
+                                                            (FP_valid
+                                                               (CoqSymbol.Symbol file_dig
+                                                                  n_value
+                                                                  (CoqSymbol.SD_Id name))))), bs2)
+                                    else
+                                      ret (NoTaint, MVEpointer ref_ty
+                                                      (PV prov (PVfunction (FP_invalid c_value))), bs2)
+                                | None =>
+                                    ret (NoTaint, MVEpointer ref_ty
+                                                    (PV prov (PVfunction (FP_invalid c_value))), bs2)
                                 end
-                            | _ =>
-                                let prov :=
-                                  match prov_status with
-                                  | NotValidPtrProv =>
-                                      match
-                                        find_overlaping
-                                          (C.cap_get_value n_value) with
-                                      | NoAlloc => Prov_none
-                                      | SingleAlloc alloc_id => Prov_some alloc_id
-                                      | DoubleAlloc alloc_id1 alloc_id2 =>
-                                          Prov_some alloc_id1
-                                      end
-                                  | ValidPtrProv => prov
-                                  end in
-                                (* sprint_msg (C.to_string n_value) ;; *)
-                                ret (NoTaint, MVEpointer ref_ty (PV prov (PVconcrete n_value)), bs2)
                             end
                         end
+                    | _ =>
+                        let prov :=
+                          match prov_status with
+                          | NotValidPtrProv =>
+                              match
+                                find_overlaping
+                                  (C.cap_get_value n_value) with
+                              | NoAlloc => Prov_none
+                              | SingleAlloc alloc_id => Prov_some alloc_id
+                              | DoubleAlloc alloc_id1 alloc_id2 =>
+                                  Prov_some alloc_id1
+                              end
+                          | ValidPtrProv => prov
+                          end in
+                        (* sprint_msg (C.to_string n_value) ;; *)
+                        ret (NoTaint, MVEpointer ref_ty (PV prov (PVconcrete n_value)), bs2)
                     end
+                end
             | None =>
                 ret (NoTaint,
                     MVEunspecified (CoqCtype.Ctype nil (CoqCtype.Pointer CoqCtype.no_qualifiers ref_ty)), bs2)
@@ -1724,6 +1731,7 @@ Module CheriMemory
                     then
                       match mval with
                       | MVunspecified _ =>
+                          mprint_msg "HERE!" ;;
                           fail (MerrReadUninit loc)
                       | _ => ret (fp, mval)
                       end
