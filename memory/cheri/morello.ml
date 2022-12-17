@@ -286,7 +286,7 @@ module Morello_capability: Capability
     and flags_as_str c =
       let attrs =
         let a f s l = if f then s::l else l in
-        a (not c.valid) "invald"
+        a (not c.valid) "invalid"
         @@ a (is_sentry c) "sentry"
         @@ a ((not (is_sentry c)) && is_sealed c) "sealed" []
       in
