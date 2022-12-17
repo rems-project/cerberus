@@ -669,7 +669,12 @@ Module CheriMemory
             ret (funptrmap, (remove_tags addr (Z.of_nat (List.length bs)) captags), bs)
         | MVinteger ity (IC _ c_value) =>
             '(cb, ct) <- option2serr "int encoding error" (C.encode true c_value) ;;
-            ret (funptrmap, (ZMap.add addr ct captags),
+            let captags :=
+              if (C.get_ghost_state c_value).(tag_unspecified)
+              then ZMap.remove addr captags
+              else ZMap.add addr ct captags
+            in
+            ret (funptrmap, captags,
                 (mapi
                    (fun (i_value : nat) (b_value : ascii) =>
                       absbyte_v Prov_none None (Some b_value)) cb))
@@ -686,13 +691,23 @@ Module CheriMemory
                   fp) =>
                 let '(funptrmap, c_value) := resolve_function_pointer funptrmap fp in
                 '(cb, ct) <- option2serr "pointer encoding error" (C.encode true c_value) ;;
-                ret (funptrmap, (ZMap.add addr ct captags),
+                let captags :=
+                  if (C.get_ghost_state c_value).(tag_unspecified)
+                  then ZMap.remove addr captags
+                  else ZMap.add addr ct captags
+                in
+                ret (funptrmap, captags,
                     (mapi
                        (fun (i_value : nat) (b_value : ascii) =>
                           absbyte_v prov (Some i_value) (Some b_value)) cb))
             | (PVfunction (FP_invalid c_value) | PVconcrete c_value) =>
                 '(cb, ct) <- option2serr "function encoding error" (C.encode true c_value) ;;
-                ret (funptrmap, (ZMap.add addr ct captags),
+                let captags :=
+                  if (C.get_ghost_state c_value).(tag_unspecified)
+                  then ZMap.remove addr captags
+                  else ZMap.add addr ct captags
+                in
+                ret (funptrmap, captags,
                     (mapi
                        (fun (i_value : nat) (b_value : ascii) =>
                           absbyte_v prov (Some i_value) (Some b_value)) cb))
@@ -1731,7 +1746,6 @@ Module CheriMemory
                     then
                       match mval with
                       | MVunspecified _ =>
-                          mprint_msg "HERE!" ;;
                           fail (MerrReadUninit loc)
                       | _ => ret (fp, mval)
                       end
