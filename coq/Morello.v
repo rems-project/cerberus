@@ -848,9 +848,11 @@ Module MorelloCapability <:
   Definition flags_as_str (c:t): string :=
     let attrs :=
       let a (f:bool) s l := if f then s::l else l in
-      a (negb c.(valid)) "invald"
-        (a (is_sentry c) "sentry"
-           (a ((negb (is_sentry c)) && is_sealed c) "sealed" []))
+      let gs := (get_ghost_state c).(tag_unspecified) in
+      a gs "notag"
+        (a (andb (negb c.(valid)) (negb gs)) "invalid"
+           (a (is_sentry c) "sentry"
+              (a ((negb (is_sentry c)) && is_sealed c) "sealed" [])))
     in
     if Nat.eqb (List.length attrs) 0%nat then ""
     else " (" ++ String.concat "," attrs ++ ")".
