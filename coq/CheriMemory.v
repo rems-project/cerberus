@@ -1365,38 +1365,27 @@ Module CheriMemory
                 in
                 match C.decode (List.rev cs) tag with
                 | None => ret (NoTaint, MVErr (MerrCHERI loc CheriErrDecodingCap), bs2)
-                | Some n_value =>
-                    let n_value := C.set_ghost_state n_value {| tag_unspecified := is_ghost |} in
+                | Some c_value =>
+                    let c_value := C.set_ghost_state c_value {| tag_unspecified := is_ghost |} in
                     match ref_ty with
                     | CoqCtype.Ctype _ (CoqCtype.Function _ _ _) =>
-                        match tag_query_f addr with
-                        | None => ret (NoTaint, MVEunspecified cty, bs2)
-                        | Some tag =>
-                            match C.decode (List.rev cs) tag with
-                            | None => ret (NoTaint, MVErr (MerrCHERI loc CheriErrDecodingCap), bs2)
-                            | Some c_value =>
-                                let n_value :=
-                                  Z.sub
-                                    (C.cap_get_value c_value)
-                                    initial_address in
-                                match ZMap.find n_value funptrmap with
-                                | Some (file_dig, name, c') =>
-                                    if C.eqb c_value c' then
-                                      ret (NoTaint, MVEpointer ref_ty
-                                                      (PV prov
-                                                         (PVfunction
-                                                            (FP_valid
-                                                               (CoqSymbol.Symbol file_dig
-                                                                  n_value
-                                                                  (CoqSymbol.SD_Id name))))), bs2)
-                                    else
-                                      ret (NoTaint, MVEpointer ref_ty
-                                                      (PV prov (PVfunction (FP_invalid c_value))), bs2)
-                                | None =>
-                                    ret (NoTaint, MVEpointer ref_ty
-                                                    (PV prov (PVfunction (FP_invalid c_value))), bs2)
-                                end
-                            end
+                        let n_value := Z.sub (C.cap_get_value c_value) initial_address in
+                        match ZMap.find n_value funptrmap with
+                        | Some (file_dig, name, c') =>
+                            if C.eqb c_value c' then
+                              ret (NoTaint, MVEpointer ref_ty
+                                              (PV prov
+                                                 (PVfunction
+                                                    (FP_valid
+                                                       (CoqSymbol.Symbol file_dig
+                                                          n_value
+                                                          (CoqSymbol.SD_Id name))))), bs2)
+                            else
+                              ret (NoTaint, MVEpointer ref_ty
+                                              (PV prov (PVfunction (FP_invalid c_value))), bs2)
+                        | None =>
+                            ret (NoTaint, MVEpointer ref_ty
+                                            (PV prov (PVfunction (FP_invalid c_value))), bs2)
                         end
                     | _ =>
                         let prov :=
@@ -1404,7 +1393,7 @@ Module CheriMemory
                           | NotValidPtrProv =>
                               match
                                 find_overlaping
-                                  (C.cap_get_value n_value) with
+                                  (C.cap_get_value c_value) with
                               | NoAlloc => Prov_none
                               | SingleAlloc alloc_id => Prov_some alloc_id
                               | DoubleAlloc alloc_id1 alloc_id2 =>
@@ -1413,7 +1402,7 @@ Module CheriMemory
                           | ValidPtrProv => prov
                           end in
                         (* sprint_msg (C.to_string n_value) ;; *)
-                        ret (NoTaint, MVEpointer ref_ty (PV prov (PVconcrete n_value)), bs2)
+                        ret (NoTaint, MVEpointer ref_ty (PV prov (PVconcrete c_value)), bs2)
                     end
                 end
             | None =>
