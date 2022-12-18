@@ -122,7 +122,7 @@ let rec wip tagDefs acc path_prefix (outer_path, outer_ty) (Ctype.Ctype _ cty) =
         match Map.lookup tag_sym tagDefs with
           | Just (Struct_definition _ isAnonymous ((first_memb_ident, (_, _, _, first_memb_ty)) :: xs) _) ->
               let () = if isAnonymous then
-                Debug.print_debug 1 [] (fun () ->
+                Debug.print_debug 2 [] (fun () ->
                   "elemPathFromCtype_aux3: this may be WRONG ==> anonymous Struct"
                 )
               else () in
@@ -144,7 +144,7 @@ let rec wip tagDefs acc path_prefix (outer_path, outer_ty) (Ctype.Ctype _ cty) =
         match Map.lookup tag_sym tagDefs with
           | Just (Union_definition _ isAnonymous ((first_memb_ident, (_, _, _, first_memb_ty)) :: _)) ->
               let () = if isAnonymous then
-                Debug.print_debug 1 [] (fun () ->
+                Debug.print_debug 2 [] (fun () ->
                   "elemPathFromCtype_aux3: this may be WRONG ==> anonymous Union"
                 )
               else () in
@@ -170,7 +170,7 @@ let elemPathFromCtype3 is_unknown_size tagDefs (Ctype.Ctype _ entity_ty as entit
               match Map.lookup tag_sym tagDefs with
                 | Just (Struct_definition _ isAnonymous ((first_memb_ident, (_, _, _, first_memb_ty)) :: _) _) ->
                     let () = if isAnonymous then
-                      Debug.print_debug 1 [] (fun () ->
+                      Debug.print_debug 2 [] (fun () ->
                         "elemPathFromCtype3_aux: this may be WRONG ==> anonymous Struct"
                       )
                     else () in
@@ -183,7 +183,7 @@ let elemPathFromCtype3 is_unknown_size tagDefs (Ctype.Ctype _ entity_ty as entit
               match Map.lookup tag_sym tagDefs with
                 | Just (Union_definition _ isAnonymous ((first_memb_ident, (_, _, _, first_memb_ty)) :: _)) ->
                     let () = if isAnonymous then
-                      Debug.print_debug 1 [] (fun () ->
+                      Debug.print_debug 2 [] (fun () ->
                         "elemPathFromCtype3: this may be WRONG ==> anonymous Union"
                       )
                     else () in
@@ -215,7 +215,7 @@ let rec skipTo_aux acc path = function
   | [] ->
       Nothing
   | ((path', _, _) as x) :: xs ->
-      let () = Debug.print_debug 1 [] (fun () ->
+      let () = Debug.print_debug 2 [] (fun () ->
         "path: " ^ stringFromInit_path path ^ " <--> " ^
         "path': " ^ stringFromInit_path path' ^ " === " ^
         (if List.isPrefixOf path path' then "true" else "false")
@@ -311,7 +311,7 @@ let rec cardinalityOfCtype tagDefs (Ctype.Ctype _ ty) =
 
           | Just (Struct_definition _ isAnonymous xs _) ->
               let () = if isAnonymous then
-                Debug.print_debug 1 [] (fun () ->
+                Debug.print_debug 2 [] (fun () ->
                   "cardinalityOfCtype: this may be WRONG ==> anonymous Struct"
                 )
               else () in
@@ -466,7 +466,7 @@ val constructValue: map ail_identifier tag_definition -> list (init_path * expre
 let rec constructValue_aux tagDefs path elems (Ctype.Ctype _ ty as cty) =
   match ty with
     | Ctype.Array _ Nothing ->
-        let () = Debug.print_debug 1 [] (fun () ->
+        let () = Debug.print_debug 2 [] (fun () ->
           "==> " ^ stringFromList (stringFromPair stringFromInit_path Pp.stringFromAil_expression) elems
         ) in
         error "constructValue_aux: Array Nothing"
@@ -482,7 +482,7 @@ let rec constructValue_aux tagDefs path elems (Ctype.Ctype _ ty as cty) =
         match Map.lookup tag_sym tagDefs with
           | Just (Struct_definition _ isAnonymous xs _) ->
               let () = if isAnonymous then
-                Debug.print_debug 1 [] (fun () ->
+                Debug.print_debug 2 [] (fun () ->
                   "constructValue_aux: this may be WRONG ==> anonymous Struct"
                 )
               else () in
@@ -499,7 +499,7 @@ let rec constructValue_aux tagDefs path elems (Ctype.Ctype _ ty as cty) =
         match Map.lookup tag_sym tagDefs with
           | Just (Union_definition _ isAnonymous ((first_memb_ident, (_, _, _, first_memb_ty)) :: _)) ->
               let () = if isAnonymous then
-                Debug.print_debug 1 [] (fun () ->
+                Debug.print_debug 2 [] (fun () ->
                   "constructValue_aux: this may be WRONG ==> anonymous Union"
                 )
               else () in
@@ -801,7 +801,7 @@ let rec is_arithmetic_constant_expression is_lvalue ((AnnotatedExpression () _ l
         if not (AilTypesAux.is_arithmetic ty) then
           E.return false
         else
-          E.print_debugM 1 (fun () -> "WARNING[Cabs_to_ail.is_arithmetic_constant_expression] AilEcast: annoying ==> need to typecheck e...") >>
+          E.print_debugM 2 (fun () -> "WARNING[Cabs_to_ail.is_arithmetic_constant_expression] AilEcast: annoying ==> need to typecheck e...") >>
 (*          E.return true *)
           (* TODO: is_lvalue might be wrong depending on the type of e? *)
           is_arithmetic_constant_expression is_lvalue e
@@ -1064,17 +1064,17 @@ let translate_floating_constant (str, suff_opt) =
   (str, maybe Nothing (Just -| translate_floating_suffix) suff_opt)
 
 
-val translate_character_constant: cabs_character_prefix -> characterPrefix
-let translate_character_constant = function
+val translate_character_prefix: cabs_character_prefix -> characterPrefix
+let translate_character_prefix = function
   | CabsPrefix_L -> Pref_L
   | CabsPrefix_u -> Pref_u
   | CabsPrefix_U -> Pref_U
 end
 
 
-val desugar_character_constant: cabs_character_constant -> E.desugM characterConstant
-let desugar_character_constant (pref_opt, str) =
-  E.return (maybe Nothing (Just -| translate_character_constant) pref_opt, str)
+val translate_character_constant: cabs_character_constant -> characterConstant
+let translate_character_constant (pref_opt, str) =
+  (maybe Nothing (Just -| translate_character_prefix) pref_opt, str)
 
 
 
@@ -1181,8 +1181,7 @@ let desugar_cabs_constant loc = function
   | CabsFloating_const fCst ->
       E.return (ConstantFloating (translate_floating_constant fCst))
   | CabsCharacter_const cCst ->
-      desugar_character_constant cCst >>= fun d_cCst ->
-      E.return (ConstantCharacter d_cCst)
+      E.return (ConstantCharacter (translate_character_constant cCst))
 end
 
 
@@ -2444,9 +2443,9 @@ STD_ "§6.7.1#8" $
 (* TODO: get rid of this function *)
 (* E.desugM (Symbol.identifier * Ctype.qualifiers * Ctype.ctype * desugM (unit -> maybe expression unit)) *)
 and desugar_init_declarator_BROKEN base_qs base_ty (scs: list storage_class_specifier) idecltor =
-  let () = Debug.print_debug 1 [] (fun () ->
+  E.print_debugM 2 (fun () ->
     "TODO ==> USING `desugar_init_declarator_BROKEN'"
-  ) in
+  ) >>= fun () ->
   (* NOTE: this function does NOT check the wf of the storage classes *)
   E.get_scope >>= fun scope ->
   match idecltor with
@@ -2987,11 +2986,11 @@ and foo_aux
                 E.get_tag_definitions >>= fun tagDefs ->
                 let cursor_ty = innerCtype tagDefs outer_ty in
                 desugar_expression e >>= fun d_e ->
-                let () = Debug.print_debug 1 [] (fun () ->
+                E.print_debugM 2 (fun () ->
                   "Init_expr, cursor_ty: " ^ Pp.stringFromAil_ctype Ctype.no_qualifiers cursor_ty ^
                   ", outer_ty: " ^ Pp.stringFromAil_ctype Ctype.no_qualifiers outer_ty ^
                   " ===> " ^ Pp.stringFromAil_expression d_e
-                ) in
+                ) >>= fun () ->
                 (* TODO: should use Ail typing instead of this *)
                 let d_e' =
                   if AilTypesAux.is_pointer cursor_ty && AilSyntaxAux.is_null_pointer_constant d_e then
@@ -3065,17 +3064,19 @@ and foo_aux
                               E.get_tag_definitions >>= fun tagDefs ->
                               match Map.lookup tag_sym tagDefs with
                                 | Just (Struct_definition _ isAnonymous membrs _) ->
-                                    let () = if isAnonymous then
-                                      Debug.print_debug 1 [] (fun () ->
+                                    begin if isAnonymous then
+                                      E.print_debugM 2 (fun () ->
                                         "foo_aux (Init_expr, is_struct): this may be WRONG ==> anonymous Struct"
                                       )
-                                    else () in
+                                    else
+                                      E.return ()
+                                    end >>= fun () ->
                                     let (elems1, elems2) = List.splitAt (List.length membrs) elems in
-                                    let () = Debug.print_debug 1 [] (fun () ->
+                                    E.print_debugM 2 (fun () ->
                                       stringFromList (fun (a,b,_) ->
                                         stringFromInit_path a ^ ", " ^ stringFromInit_path b
                                       ) elems1
-                                    ) in
+                                    ) >>= fun () ->
                                     let acc' = List.foldl (fun acc ((path, _, _), (memb_ident, _)) ->
                                       (path, AnnotatedExpression () []
                                                (Loc.other "init with struct expr") (AilEmemberof d_e memb_ident)) :: acc
@@ -3093,9 +3094,7 @@ and foo_aux
                     end
 (*                    do_scalar e *)
                 | Init_list ys ->
-        let () = Debug.print_debug 1 [] (fun () ->
-          "HELLO 4"
-        ) in
+                    E.print_debugM 2 (fun () -> "HELLO 4") >>= fun () ->
                     E.get_tag_definitions >>= fun tagDefs ->
                     let outerCard = cardinalityOfCtype tagDefs outer_ty in
                     let (inner_elems_, elems') = List.splitAt (natFromInteger outerCard) elems in
@@ -3111,7 +3110,7 @@ and foo_aux
                                 match Map.lookup tag_sym tagDefs with
                                   | Just (Struct_definition _ isAnonymous ((_, (_, _, _, first_memb_ty)) :: _) _) ->
                                       let () = if isAnonymous then
-                                        Debug.print_debug 1 [] (fun () ->
+                                        Debug.print_debug 2 [] (fun () ->
                                           "foo_aux: this may be WRONG ==> anonymous Struct"
                                         )
                                       else () in
@@ -3128,13 +3127,13 @@ and foo_aux
                     (* let inner_elems = List.map (fun (path, opath, ty) ->
                       (match path with [] -> [] | _::xs -> xs end, match opath with [] -> [] | _::xs -> xs end, ty) (* KKK *)
                     ) inner_elems in *)
-        let () = Debug.print_debug 1 [] (fun () ->
-          "ONE"
-        ) in
+                    E.print_debugM 2 (fun () ->
+                      "ONE"
+                    ) >>= fun () ->
                     foo_aux (*outer_ty*) [] inner_elems (*unknown_array*)Nothing ys >>= fun (inner, _, _) ->
-        let () = Debug.print_debug 1 [] (fun () ->
-          "TWO"
-        ) in
+                    E.print_debugM 2 (fun () ->
+                      "TWO"
+                    ) >>= fun () ->
                     foo_aux (*entity_ty*) (List.reverse inner ++ acc) elems' unknown_array xs'
               end
         end
@@ -3161,7 +3160,6 @@ and foo entity_ty init_ : E.desugM (Ctype.ctype * list (init_path * expression u
   E.get_tag_definitions >>= fun tagDefs ->
   match (entity_ty, init_) with
     | (Ctype.Ctype annots (Ctype.Array elem_ty Nothing), Init_list xs) ->
-        let () = Debug.print_debug 1 [] (fun () ->
           "HELLO 5"
         ) in
         let elems = elemPathFromCtype3 true tagDefs elem_ty in
@@ -3178,24 +3176,24 @@ and foo entity_ty init_ : E.desugM (Ctype.ctype * list (init_path * expression u
         end
     | (Ctype.Ctype _ (Ctype.Array _ _), Init_list xs) ->
         let elems = elemPathFromCtype3 false tagDefs entity_ty in
-        let () = Debug.print_debug 1 [] (fun () ->
+        E.print_debugM 2 (fun () ->
           "HELLO 2\n" ^
           stringFromList (fun (x,y,z) ->
             stringFromInit_path x ^ " -- " ^ stringFromInit_path y
                                   ^ " -- " ^ Pp.stringFromAil_ctype Ctype.no_qualifiers z ^ "\n"
           ) elems
-        ) in
+        ) >>= fun () ->
         foo_aux (*entity_ty*) [] elems Nothing xs >>= fun (ret, _, _) ->
         E.return (entity_ty, ret)
     | (Ctype.Ctype _ (Ctype.Struct _), Init_list xs) ->
         let elems = elemPathFromCtype3 false tagDefs entity_ty in
-        let () = Debug.print_debug 1 [] (fun () ->
+        E.print_debugM 2 (fun () ->
           "HELLO 1\n" ^
           stringFromList (fun (x,y,z) ->
             stringFromInit_path x ^ " -- " ^ stringFromInit_path y
                                   ^ " -- " ^ Pp.stringFromAil_ctype Ctype.no_qualifiers z ^ "\n"
           ) elems
-        ) in
+        ) >>= fun () ->
         foo_aux (*entity_ty*) [] elems Nothing xs >>= fun (ret, _, _) ->
         E.return (entity_ty, ret)
     | _ ->
@@ -3236,7 +3234,7 @@ and wip_desugar_initializer_ loc dur current_ty init =
   
   let expr = constructValue tagDefs xs current_ty in
 
-  let () = Debug.print_debug 1 [] (fun () ->
+  let () = Debug.print_debug 2 [] (fun () ->
     "HELLO INITIALIZER_ ==> current_ty: " ^ Pp.stringFromAil_ctype Ctype.no_qualifiers current_ty ^
 (*    "\n desigs ==> " ^ stringFromList stringFromInit_path (elemPathFromCtype_aux tagDefs current_ty) ^ *)
 
@@ -3250,7 +3248,7 @@ and wip_desugar_initializer_ loc dur current_ty init =
                       " := " ^ Pp.stringFromAil_expression expr
                     ) xs
   ) in
-  let () = Debug.print_debug 1 [] (fun () ->
+  let () = Debug.print_debug 2 [] (fun () ->
     "EXPR: " ^ Pp.stringFromAil_expression expr
   ) in
 
@@ -3369,9 +3367,10 @@ let () = error "DONE" in
     error "TODO: wip_desugar_initializer_, An array with element type compatible with a qualified or unqualified version of wchar_t, char16_t, or char32_t"
 
   else
-    let () = Debug.print_debug 1 [] (fun () ->
+    E.print_debugM 2 (fun () ->
       "TODO[wip_desugar_initializer_]: in the remaining cases (object that has aggregate or union type), init must Init_list, otherwise this UNDEFINED BEHAVIOUR..." 
-    ) in
+    ) >>= fun () ->
+
 (*
   if AilTypesAux.is_scalar current_ty then
     (* STD §6.7.9#11 *)
@@ -3418,13 +3417,13 @@ let () = error "DONE" in
           E.get_tag_definitions >>= fun tagDefs ->
           foo current_ty init >>= fun (current_ty', xs) ->
           
-          let () = Debug.print_debug 1 [] (fun () ->
+          E.print_debugM 2 (fun () ->
             "current_ty': " ^ Pp.stringFromAil_ctype Ctype.no_qualifiers current_ty' ^
             ", FOO ==> " ^ stringFromList (fun (path, expr) ->
               stringFromInit_path path ^
               " := " ^ Pp.stringFromAil_expression expr
             ) xs
-          ) in
+          ) >>= fun () ->
           E.return (current_ty', constructValue tagDefs xs current_ty')
     end
 
@@ -3477,7 +3476,7 @@ let () = error "DONE" in
             error "not possible"
         (* Static | Thread *)
         | _ ->
-            let () = Debug.print_debug 1 [] (fun () -> "HELLO Init_expr") in
+            let () = Debug.print_debug 2 [] (fun () -> "HELLO Init_expr") in
             desugar_expression e                   >>= fun d_e ->
             is_initializer_constant_expression d_e >>= function
               | true ->
@@ -3713,7 +3712,7 @@ let () = error "DONE" in
                         error "TODO: Cabs_to_ail.wip_desugar_initializer_, not a singleton list"
                   end
 (*  list (maybe (list designator) * initializer_)  *)
-(*                let () = Debug.print_debug 1
+(*                let () = Debug.print_debug 2
                       ("UNION INIT ==> " ^ stringFromList (stringFromPair show Pp.stringFromAil_ctype) ident_tys)in
                   E.fail loc (Errors.Desugar_OtherViolation "TODO union init") *)
               | _ ->
@@ -3765,9 +3764,9 @@ and desugar_and_register_static_assert_declaration sa_decl =
 (* TODO: this is broken *)
 val desugar_declaration_base: Annot.attributes -> specifiers -> list init_declarator -> E.desugM (list (ail_identifier * expression unit))
 let desugar_declaration_base attrs specifs idecltors =
-  let () = Debug.print_debug 1 [] (fun () ->
+  E.print_debugM 2 (fun () ->
     "BROKEN: desugar_declaration_base"
-  ) in
+  ) >>= fun () ->
           desugar_type_specifiers specifs.type_specifiers >>= fun (specs_qs, base_ty) ->
           (* for each [init_declarator] *)
           E.foldlM (fun acc (InitDecl loc _ _ as init) ->
@@ -3829,13 +3828,13 @@ let desugar_declaration_base attrs specifs idecltors =
                     end >>
                     mk_desug_init () >>= function
                       | Just (ty', d_e) ->
-                          let () = Debug.print_debug 1 [] (fun () ->
+                          E.print_debugM 2 (fun () ->
                             "Hello, ty' = " ^ Pp.stringFromAil_ctype Ctype.no_qualifiers ty'
-                          ) in
+                          ) >>= fun () ->
                           begin if cty <> ty' then
-                            let () = Debug.print_debug 1 [] (fun () ->
+                            E.print_debugM 2 (fun () ->
                               "ty' is new"
-                            ) in
+                            ) >>= fun () ->
                             (* TODO: tentative *)
                             E.update_internal_object_type sym ty'
   (*
@@ -4102,13 +4101,13 @@ let rec desugar_statement_aux ctx (CabsStatement loc attrs stmt_) =
                           mk_desug_init () >>= function
                             | Just (ty', d_e) ->
                                 let dur = determinate_storage_duration link specifs.storage_classes in
-                                let () = Debug.print_debug 1 [] (fun () ->
+                                E.print_debugM 2 (fun () ->
                                   "Hello, ty' = " ^ Pp.stringFromAil_ctype Ctype.no_qualifiers ty'
-                                ) in
+                                ) >>= fun () ->
                                 begin if ty <> ty' then
-                                  let () = Debug.print_debug 1 [] (fun () ->
+                                  E.print_debugM 2 (fun () ->
                                     "ty' is new"
-                                  ) in
+                                  ) >>= fun () ->
                                   (* TODO: tentative *)
                                   E.register_internal_object_declaration sym
                                     (ident_loc, dur, List.elem SC_register specifs.storage_classes, Nothing, qs, ty')
@@ -4839,13 +4838,13 @@ let desugar_and_register_external_declaration edecl =
                     
                     mk_desug_init () >>= function
                       | Just (ty', d_e) ->
-                          let () = Debug.print_debug 1 [] (fun () ->
+                          E.print_debugM 2 (fun () ->
                             "Hello, ty' = " ^ Pp.stringFromAil_ctype Ctype.no_qualifiers ty'
-                          ) in
+                          ) >>=fun () ->
                           begin if ty <> ty' then
-                            let () = Debug.print_debug 1 [] (fun () ->
+                            E.print_debugM 2 (fun () ->
                               "ty' is new"
-                            ) in
+                            ) >>= fun () ->
                             (* TODO: tentative *)
                             E.update_external_object_type sym ty'
                           else
@@ -4928,9 +4927,10 @@ val register_cn_datatype_names: list external_declaration -> E.desugM unit
 let register_cn_datatype_names xs =
   E.mapM_ (function
     | EDecl_datatypeCN dt ->
-         let () = Debug.print_debug 2 [] (fun () ->
-           "adding a datatype name") in
-         E.register_cn_ident Cn.CN_datatype_nm dt.cn_dt_name >>= fun _ ->
+        E.print_debugM 2 (fun () ->
+          "adding a datatype name"
+        ) >>= fun () ->
+        E.register_cn_ident Cn.CN_datatype_nm dt.cn_dt_name >>= fun _ ->
         E.return ()
     | _ ->
         E.return ()

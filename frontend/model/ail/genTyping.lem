@@ -207,7 +207,7 @@ let well_typed_assignment s is_init f loc ty1 gty2 e2 =
           if    AAux.are_compatible (no_qualifiers, conv_ref_ty1) (no_qualifiers, ref_ty2)
              && AAux.sub_qualifiers ref_qs2 ref_qs1 then
             let _ = Debug.print_debug 2 [Debug.DB_ail_typing] (fun () -> "[well_typed_assignment] OK: bullet 3") in (* DEBUG *)
-            let () = Debug.print_debug 1 [] (fun () ->
+            let () = Debug.print_debug 2 [] (fun () ->
               (* TODO !!!! *)
               "FIXME: sub_qualifiers sees the wrong qualifiers (GenTypeCategory RValue seems to be at fault) !!!!"
             ) in
@@ -651,13 +651,13 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
           (* TODO: maybe this is too strict and we want to relax to only having
              the types compatibles? *)
           if inject_type elem_ty <> gty then
-            let () = Debug.print_debug 1 [] (fun () ->
+            let () = Debug.print_debug 2 [] (fun () ->
               "elem_ty: " ^ Pp.stringFromAil_ctype no_qualifiers elem_ty
             ) in
-            let () = Debug.print_debug 1 [] (fun () ->
+            let () = Debug.print_debug 2 [] (fun () ->
               "gty: " ^ Pp.stringFromAil_genType gty
             ) in
-            let () = Debug.print_debug 1 [] (fun () ->
+            let () = Debug.print_debug 2 [] (fun () ->
               "expr: " ^ Pp.stringFromAil_expression expr
             ) in
             E.fail loc (TError "illtyped element of an AilEarray")
@@ -773,12 +773,12 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
     | AilEident sym ->
         match (List.lookup sym gamm, List.lookup sym sigm.declarations) with
           | (Just ((_, _, isRegister), _, qs, ty), Nothing) ->
-              let () = Debug.print_debug 1 [Debug.DB_ail_typing] (fun () ->
+              let () = Debug.print_debug 2 [Debug.DB_ail_typing] (fun () ->
                 "[AilEident (gamma)] " ^ show sym ^ " -- " ^ Pp.stringFromAil_ctype qs ty
               ) in
               E.return (AilEident sym, GenLValueType qs ty isRegister)
           | (Nothing, Just (_, _, Decl_object (_, isRegister) _ qs ty)) ->
-              let () = Debug.print_debug 1 [Debug.DB_ail_typing] (fun () ->
+              let () = Debug.print_debug 2 [Debug.DB_ail_typing] (fun () ->
                 "[AilEident (sigma)] " ^ show sym ^ " -- " ^ Pp.stringFromAil_ctype qs ty
               ) in
               E.return (AilEident sym, GenLValueType qs ty isRegister)
@@ -1346,7 +1346,7 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
         if well_typed_equality gty1 gty2 (is_null_pointer_constant e1') (is_null_pointer_constant e2') then
           E.return (AilEbinary e1' bop e2', GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
         else
-          let () = Debug.print_debug 1 [] (fun () ->
+          let () = Debug.print_debug 2 [] (fun () ->
             "gty1: " ^ Pp.stringFromAil_genType gty1 ^
             " <--> gty2: " ^ Pp.stringFromAil_genType gty2 ^
             " , are_pointers_to_compatible_types: " ^
@@ -1637,7 +1637,7 @@ and perform_decays sigm ctx a_expr =
   end in
   match annotations a_expr with
     | (std_annots, GenLValueType qs ty isRegister) ->
-        let () = Debug.print_debug 1 [] (fun () ->
+        let () = Debug.print_debug 2 [] (fun () ->
           "GenLValueType ==>" ^ Pp.stringFromAil_ctype qs ty
         ) in
         if    not (AAux.is_array ty)
@@ -1740,7 +1740,7 @@ and annotate_arguments_aux add_casts sigm gamm n_args n_params loc is_variadic a
   let annotate_arguments_aux = annotate_arguments_aux add_casts sigm gamm n_args n_params loc is_variadic in
   match (args, params) with
     | ([], []) ->
-        let () = Debug.print_debug 1 [] (fun () ->
+        let () = Debug.print_debug 2 [] (fun () ->
           "WTF []"
         ) in
         E.return []
@@ -1938,7 +1938,7 @@ and annotate_definition_aux sigm gamm (ty, e) =
               error ("WIP: annotate_definition_aux, is_array_of_character ty ==> " ^
                     Pp.stringFromAil_ctype no_qualifiers ty ^ " <===> " ^ Pp.stringFromAil_expression a_e)
             else
-              let () = Debug.print_debug 1 [] (fun () ->
+              let () = Debug.print_debug 2 [] (fun () ->
                 "ty: " ^ Pp.stringFromAil_ctype no_qualifiers ty ^ " <--> gty: " ^
                 match GenTypes.genTypeCategoryOf a_e with
                   | GenLValueType qs' ty' _ ->

@@ -41,7 +41,7 @@ let print_debug_located level doms loc msg =
   print_debug level doms (fun () -> "[" ^ Location_ocaml.location_to_string loc ^ "] - " ^ msg ())
 
 let warn _doms msg =
-  if !debug_level > 0 then
+  if !debug_level > 1 then
     prerr_endline Colour.(ansi_format [Yellow] ("WARNING: " ^ msg ()))
 
 (*

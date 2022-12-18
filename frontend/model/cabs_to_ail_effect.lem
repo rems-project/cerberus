@@ -427,7 +427,7 @@ let collect_with_scope scope m =
                   acc
             end
         | External ->
-            let () = Debug.print_debug 1 [] (fun () ->
+            let () = Debug.print_debug 2 [] (fun () ->
               "KKK: check this"
             ) in
             acc
@@ -639,7 +639,7 @@ let internal_register_identifier if_found ident namespace kind link_opt =
   
   match link_opt with
     | Just Linkage_external ->
-        let () = Debug.print_debug 1 [] (fun () ->
+        let () = Debug.print_debug 2 [] (fun () ->
           "internal_register_identifier ==> link_opt = Just Linkage_external"
         ) in
         (* when registering an identifier with external linkage, we only care
@@ -648,18 +648,18 @@ let internal_register_identifier if_found ident namespace kind link_opt =
           Map.lookup (ident, namespace) st.registered_external_identifiers
         ) >>= function
           | Nothing ->
-              let () = Debug.print_debug 1 [] (fun () ->
+              let () = Debug.print_debug 2 [] (fun () ->
                 "lookup external ==> Nothing"
               ) in
               do_fresh ()
           | Just (scope, decl) ->
-              let () = Debug.print_debug 1 [] (fun () ->
+              let () = Debug.print_debug 2 [] (fun () ->
                 "lookup external ==> Just"
               ) in
               if_found (scope, decl) do_fresh
         end
     | _ ->
-        let () = Debug.print_debug 1 [] (fun () ->
+        let () = Debug.print_debug 2 [] (fun () ->
           "internal_register_identifier ==> link_opt <> Just Linkage_external"
         ) in
         (* TODO: check this is correct for link = Linkage_internal *)
@@ -667,7 +667,7 @@ let internal_register_identifier if_found ident namespace kind link_opt =
           Scope_table.resolve (ident, namespace) st.registered_identifiers
         ) >>= function
           | Just (scope, External) ->
-              let () = Debug.print_debug 1 [] (fun () ->
+              let () = Debug.print_debug 2 [] (fun () ->
                 "lookup registered ==> Just External"
               ) in
               State_exception.read (fun st ->
@@ -676,31 +676,31 @@ let internal_register_identifier if_found ident namespace kind link_opt =
                 | Nothing ->
                     error "[Cabs_to_ail_effect.internal_register_identifier] - internal ERROR"
                 | Just (_, decl) ->
-                    let () = Debug.print_debug 1 [] (fun () ->
+                    let () = Debug.print_debug 2 [] (fun () ->
                       "lookup external ==> Just"
                     ) in
                     if_found (scope, decl) do_fresh
               end
           | Just (scope, Internal sym kind link_opt) ->
-              let () = Debug.print_debug 1 [] (fun () ->
+              let () = Debug.print_debug 2 [] (fun () ->
                 "lookup registered ==> Just Internal"
               ) in
               if_found (scope, (sym, kind, link_opt)) do_fresh
           | Nothing ->
               (* KKK *)
-              let () = Debug.print_debug 1 [] (fun () ->
+              let () = Debug.print_debug 2 [] (fun () ->
                 "lookup registered ==> Nothing"
               ) in
               State_exception.read (fun st ->
                 Map.lookup (ident, namespace) st.registered_external_identifiers
               ) >>= function
                 | Nothing ->
-                    let () = Debug.print_debug 1 [] (fun () ->
+                    let () = Debug.print_debug 2 [] (fun () ->
                       "lookup external ==> Nothing"
                     ) in
                     do_fresh ()
                 | Just (scope, decl) ->
-                    let () = Debug.print_debug 1 [] (fun () ->
+                    let () = Debug.print_debug 2 [] (fun () ->
                       "lookup external ==> Just"
                     ) in
                     if_found (scope, decl) do_fresh
@@ -1591,7 +1591,7 @@ let register_global_object_definition2 loc sym link gdef =
                     constraint_violation loc (Constraint.ExternalRedefinition sym)
                 | Linkage_external ->
                     (* STD §6.9#5, sentence 2 *)
-                    let () = Debug.print_debug 1 [] (fun () ->
+                    let () = Debug.print_debug 2 [] (fun () ->
                       "register_global_object_definition2"
                     ) in
                     undef loc Undefined.UB084
@@ -1695,7 +1695,7 @@ let register_function_declaration loc attrs sym is_proto decl =
           | Just decl' ->
               (* NOTE: we concat the attributes from the previous declartion with the new ones *)
               (* TODO: is it right to only use prev_has_proto? *)
-              let () = Debug.print_debug 1 [] (fun () -> "[register_function_declaration] - had prev, valid composite") in
+              let () = Debug.print_debug 2 [] (fun () -> "[register_function_declaration] - had prev, valid composite") in
               State_exception.update (fun st ->
                 <| st with function_declarations= Map.insert sym (prev_has_proto, prev_loc, Annot.combine_attributes prev_attrs attrs, decl') st.function_declarations |>
               )
@@ -1718,7 +1718,7 @@ let register_function_declaration loc attrs sym is_proto decl =
                 )
           end
         else
-          let () = Debug.print_debug 1 [] (fun () -> "HELLO: decl == prev_decl") in
+          let () = Debug.print_debug 2 [] (fun () -> "HELLO: decl == prev_decl") in
           (* NOTE: we concat the attributes from the previous declartion with the new ones *)
           State_exception.update (fun st ->
             <| st with function_declarations= Map.insert sym (prev_has_proto, prev_loc, Annot.combine_attributes prev_attrs attrs, prev_decl) st.function_declarations |>
@@ -1853,7 +1853,7 @@ let register_external_object_declaration sym ((isTentative, loc, attrs, new_dur,
                     <| st with external_object_declarations= Map.insert sym decl st.external_object_declarations |>
                   )
               | Nothing ->
-                  let () = Debug.print_debug 1 [] (fun () ->
+                  let () = Debug.print_debug 0 [] (fun () ->
                     "prev_ty= " ^ Pp.stringFromAil_ctype prev_qs prev_ty ^ "\n" ^
                     "new_ty= " ^ Pp.stringFromAil_ctype new_qs new_ty
                   ) in
@@ -2105,7 +2105,7 @@ let extract_program startup_str =
       begin map_union
         begin
           Map.map (fun (hasProto, loc, attrs, (ret_qs_ty, params_opt, isVariadic, isInline, isNoreturn)) ->
-            let () = Debug.print_debug 1 [] (fun () ->
+            let () = Debug.print_debug 2 [] (fun () ->
               "KKK: check + find STD quote"
             ) in
             let params = match params_opt with
@@ -2207,7 +2207,7 @@ let extract_program startup_str =
              && List.lookup sym object_defs = Nothing
              && not (Map.member sym st.function_definitions) then
             (* STD §6.9#5, sentence 2 *)
-            let () = Debug.print_debug 1 [] (fun () ->
+            let () = Debug.print_debug 2 [] (fun () ->
               "extract_program"
             ) in
             undef (Loc.locOf ident) Undefined.UB084
@@ -2293,7 +2293,7 @@ let get_sigma_sofar =
       map_union
         begin
           Map.map (fun (hasProto, loc, attrs, (ty, params_opt, isVariadic, isInline, isNoreturn)) ->
-            let () = Debug.print_debug 1 [] (fun () ->
+            let () = Debug.print_debug 2 [] (fun () ->
               "KKK: check + find STD quote"
             ) in
             (* TODO: is it correct "complete" the params like that ? *)
