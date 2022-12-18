@@ -1519,34 +1519,36 @@ let resolve_declarations =
 val is_static_object_identifier: A.ail_identifier -> desugM bool
 let is_static_object_identifier sym =
   State_exception.read (fun st ->
-    (* ... *)
-    let map_union = Map.(union) in
-    map_union
-      (Map.map (fun (isTentative, loc, _, dur, isRegister, align_opt, qs, ty) -> (isTentative, loc, dur, isRegister, align_opt, qs, ty)) st.external_object_declarations)
-      (Map.map (fun (loc, dur, isRegister, align_opt, qs, ty) -> (false, loc, dur, isRegister, align_opt, qs, ty)) st.internal_object_declarations)
-  ) >>= fun decls ->
-  return match Map.lookup sym decls with
-    | Just (_, _, A.Static, _, _, _, _) ->
+    (st.external_object_declarations, st.internal_object_declarations)
+  ) >>= fun (ext_decls, int_decls) ->
+  return match Map.lookup sym ext_decls with
+    | Just (_, _, _, A.Static, _, _, _, _) ->
         true
     | _ ->
-        false
+        match Map.lookup sym int_decls with
+          | Just (_, A.Static, _, _, _, _) ->
+              true
+          | _ ->
+              false
+        end
   end
 
 
 val fetch_object_declaration: A.ail_identifier -> desugM (bool * Loc.t * A.storageDuration * bool * maybe Ctype.alignment * Ctype.qualifiers * Ctype.ctype)
 let fetch_object_declaration sym =
   State_exception.read (fun st ->
-    (* ... *)
-    let map_union = Map.(union) in
-    map_union
-      (Map.map (fun (isTentative, loc, _, dur, isRegister, align_opt, qs, ty) -> (isTentative, loc, dur, isRegister, align_opt, qs, ty)) st.external_object_declarations)
-      (Map.map (fun (loc, dur, isRegister, align_opt, qs, ty) -> (false, loc, dur, isRegister, align_opt, qs, ty)) st.internal_object_declarations)
-  ) >>= fun decls ->
-  match Map.lookup sym decls with
-    | Just decl ->
-        return decl
-    | Nothing ->
-        error ("TODO: failed to fetch object declaration ==> " ^ show sym)
+    (st.external_object_declarations, st.internal_object_declarations)
+  ) >>= fun (ext_decls, int_decls) ->
+  match Map.lookup sym ext_decls with
+    | Just (isTentative, loc, _, dur, isRegister, align_opt, qs, ty) ->
+        return (isTentative, loc, dur, isRegister, align_opt, qs, ty)
+    | _ ->
+        match Map.lookup sym int_decls with
+          | Just (loc, dur, isRegister, align_opt, qs, ty) ->
+              return (false, loc, dur, isRegister, align_opt, qs, ty)
+          | _ ->
+            error ("TODO: failed to fetch object declaration ==> " ^ show sym)
+        end
   end
 
 
