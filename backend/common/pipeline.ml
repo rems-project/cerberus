@@ -174,6 +174,7 @@ let c_frontend (conf, io) (core_stdlib, core_impl) ~filename =
   let ail_typechecking ail_prog =
     ErrorMonad.to_exception (fun (loc, err) -> (loc, Errors.AIL_TYPING err))
       (GenTyping.annotate_program ail_prog) >>= fun (ailtau_prog, _) ->
+    io.pass_message "Ail typing completed!" >>= fun () ->
     whenM (conf.debug_level <= 4 && List.mem Ail conf.astprints) begin
       fun () ->
         let doc = if conf.debug_level = 4 then
