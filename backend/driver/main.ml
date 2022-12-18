@@ -13,7 +13,7 @@ let io, get_progress =
   let progress = ref 0 in
   { pass_message = begin
         let ref = ref 0 in
-        fun str -> Debug_ocaml.print_success (string_of_int !ref ^ ". " ^ str);
+        fun str -> Debug_ocaml.print_success (Printf.sprintf "[%0.4f] %d. %s" (Sys.time ()) !ref str);
                    incr ref;
                    return ()
       end;
