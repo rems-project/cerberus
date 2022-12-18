@@ -3160,8 +3160,9 @@ and foo entity_ty init_ : E.desugM (Ctype.ctype * list (init_path * expression u
   E.get_tag_definitions >>= fun tagDefs ->
   match (entity_ty, init_) with
     | (Ctype.Ctype annots (Ctype.Array elem_ty Nothing), Init_list xs) ->
+        E.print_debugM 2 (fun () ->
           "HELLO 5"
-        ) in
+        ) >>= fun () ->
         let elems = elemPathFromCtype3 true tagDefs elem_ty in
         let elems' =
           List.map (fun (path, opath, ty) ->
