@@ -60,20 +60,16 @@ let rewrite_expr label expr =
 
 (* todo: ensure CN does not loop when inlining *)
 let should_be_inlined annots = 
+  let warn lk = Debug_ocaml.warn [] (fun () -> "inlining"^lk^"label") in
   match Annot.get_label_annot annots with
   | Some (LAloop_break _) -> true
   | Some (LAloop_continue _) -> true
   | Some (LAloop_body _) -> true
-  | Some LAswitch -> 
-     Debug_ocaml.warn [] (fun () -> "inlining switch label"); 
-     true
-  | Some LAcase -> 
-     Debug_ocaml.warn [] (fun () -> "inlining case label"); 
-     true
-  | Some LAdefault -> 
-     Debug_ocaml.warn [] (fun () -> "inlining default label"); 
-     true
-  | _ -> false
+  | Some LAswitch -> warn "switch"; true
+  | Some LAcase -> warn "case"; true
+  | Some LAdefault -> warn "default"; true
+  | Some _ -> false
+  | None -> warn "(generic)"; true
 
 
 (* TODO: check about largs *)
