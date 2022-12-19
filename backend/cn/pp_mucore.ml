@@ -112,6 +112,7 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
     | M_PEnot _
     | M_PEstruct _
     | M_PEunion _
+    | M_PEcfunction _
     | M_PEmemberof _
     | M_PEconv_int _
     | M_PEconv_loaded_int _
@@ -456,6 +457,8 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
               P.braces (
                 P.dot ^^ !^ ident ^^ P.equals ^^^ pp_pexpr pe
               )
+          | M_PEcfunction pe ->
+             pp_keyword "cfunction" ^^ P.parens (pp pe)
           | M_PEmemberof (tag_sym, memb_ident, pe) ->
               pp_keyword "memberof" ^^ P.parens (
                 pp_symbol tag_sym ^^ P.comma ^^^

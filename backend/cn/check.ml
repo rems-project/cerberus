@@ -686,6 +686,9 @@ let rec check_pexpr (pe : 'bty mu_pexpr) ~(expect:BT.t)
      Debug_ocaml.error "todo: PEstruct"
   | M_PEunion _ ->
      Debug_ocaml.error "todo: PEunion"
+  | M_PEcfunction pe ->
+     debug 1 (lazy (!^"function pointer:" ^^^ NewMu.pp_pexpr pe));
+     unsupported loc !^"function pointers"
   | M_PEmemberof _ ->
      Debug_ocaml.error "todo: M_PEmemberof"
   | M_PEbool_to_integer pe ->

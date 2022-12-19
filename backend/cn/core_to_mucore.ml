@@ -247,9 +247,10 @@ let rec n_pexpr loc (Pexpr (annots, bty, pe)) : mu_pexpr =
      let e' = n_pexpr loc e' in
      annotate (M_PEunion(sym1, id1, e'))
   | PEcfunction e' ->
-     debug 1 (lazy (!^"function pointer:" ^^^ Cerb_frontend.Pp_core.Basic.pp_pexpr e'));
-     let err = Errors.UNSUPPORTED "function pointers" in
-       Pp_errors.fatal (Pp_errors.to_string (loc, err)); 
+     let e' = n_pexpr loc e' in
+     annotate (M_PEcfunction e')
+     (* let err = Errors.UNSUPPORTED "function pointers" in *)
+     (*   Pp_errors.fatal (Pp_errors.to_string (loc, err));  *)
   | PEmemberof(sym1, id1, e') ->
      let e' = n_pexpr loc e' in
      annotate (M_PEmemberof(sym1, id1, e'))
@@ -725,12 +726,10 @@ let normalise_expr (loc : Loc.t) (returns : symbol Pset.set) e =
 (* let normalise_impl (i : unit generic_impl) : unit mu_impl= *)
 (*    (Pmap.map normalise_impl_decl i) *)
 
-let normalise_fun_map_decl (name1: symbol) d 
-    : unit mu_fun_map_decl=
+let normalise_fun_map_decl ail_declarations (name1: symbol) d =
   match d with
-  | Mi_Fun (bt, args, pe) -> 
-     M_Fun(bt, args, normalise_pexpr Loc.unknown pe)
-  | Mi_Proc (loc, bt, args, e, labels) -> 
+  | Mi_Proc (loc, bt, args, e, labels) 
+       when List.exists (fun (s, _) -> Sym.equal s name1) ail_declarations -> 
      let returns = 
        Pmap.fold (fun sym label returns ->
            match label with
@@ -747,12 +746,24 @@ let normalise_fun_map_decl (name1: symbol) d
               M_Label (loc, lt, args, (), e, annots)
          ) labels
      in
-     M_Proc(loc, bt, (args, ()), normalise_expr loc returns e, labels')
-  | Mi_ProcDecl(loc, bt, bts) -> M_ProcDecl(loc, bt, bts)
-  | Mi_BuiltinDecl(loc, bt, bts) -> M_BuiltinDecl(loc, bt, bts)
+     let d = M_Proc(loc, bt, (args, ()), normalise_expr loc returns e, labels') in
+     Some d
+  | Mi_Proc _ ->
+     None
+  | Mi_Fun (bt, args, pe) -> 
+     None
+  | Mi_ProcDecl(loc, bt, bts) -> 
+     Some (M_ProcDecl(loc, bt, bts))
+  | Mi_BuiltinDecl(loc, bt, bts) -> 
+     None
+     (* M_BuiltinDecl(loc, bt, bts) *)
 
-let normalise_fun_map fmap : unit mu_fun_map= 
-  (Pmap.mapi normalise_fun_map_decl fmap)
+let normalise_fun_map ail_declarations fmap : unit mu_fun_map= 
+  Pmap.fold (fun name def acc ->
+      match normalise_fun_map_decl ail_declarations name def with
+      | Some def -> Pmap.add name def acc
+      | None -> acc
+    ) fmap (Pmap.empty Sym.compare)
   
 
 
@@ -788,18 +799,25 @@ let normalise_tag_definition = function
 let normalise_tag_definitions tagDefs =
    (Pmap.map normalise_tag_definition tagDefs)
 
-let normalise_funinfo (loc,annots2,ret,args,b1,b2) = 
-  let args = 
-    map (fun (osym, ct) -> 
-        match osym with 
-        | Some sym -> (sym, ct)
-        | None -> (Symbol.fresh (), ct)
-      ) args 
-  in
-  M_funinfo (loc, annots2, (ret,args,b1), Checked, b2)
+let normalise_funinfo ail_declarations name (loc,annots2,ret,args,b1,b2) = 
+  if List.exists (fun (s,_) -> Sym.equal s name) ail_declarations then
+    let args = 
+      map (fun (osym, ct) -> 
+          match osym with 
+          | Some sym -> (sym, ct)
+          | None -> (Symbol.fresh (), ct)
+        ) args 
+    in
+    Some (M_funinfo (loc, annots2, (ret,args,b1), Checked, b2))
+  else 
+    None
 
-let normalise_funinfos funinfos =
-   (Pmap.map normalise_funinfo funinfos)
+let normalise_funinfos ail_declarations funinfos =
+   Pmap.fold (fun name info acc ->
+       match normalise_funinfo ail_declarations name info with
+       | Some info -> Pmap.add name info acc
+       | None -> acc
+     ) funinfos (Pmap.empty Sym.compare)
 
 
 let rec ctype_contains_function_pointer (Ctype.Ctype (_, ct_)) = 
@@ -853,16 +871,16 @@ let check_supported (file : ('a, 'TY) mi_file) =
    * in *)
   ()
 
-let normalise_file (file : ('a, 'TY) Milicore.mi_file) : unit Mu.mu_file = 
+let normalise_file ailfile (file : ('a, 'TY) Milicore.mi_file) : unit Mu.mu_file = 
   check_supported file;
    ({ mu_main = (file.mi_main)
    ; mu_tagDefs = (normalise_tag_definitions file.mi_tagDefs)
    (* ; mu_stdlib = (normalise_fun_map file.mi_stdlib) *)
    (* ; mu_impl = (normalise_impl file.mi_impl) *)
    ; mu_globs = (normalise_globs_list file.mi_globs)
-   ; mu_funs = (normalise_fun_map file.mi_funs)
+   ; mu_funs = (normalise_fun_map ailfile.AilSyntax.declarations file.mi_funs)
    ; mu_extern = (file.mi_extern)
-   ; mu_funinfo = (normalise_funinfos file.mi_funinfo)
+   ; mu_funinfo = (normalise_funinfos ailfile.AilSyntax.declarations file.mi_funinfo)
    ; mu_loop_attributes = file.mi_loop_attributes
    ; mu_resource_predicates = ()
    ; mu_logical_predicates = ()

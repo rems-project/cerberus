@@ -212,6 +212,9 @@ let rec retype_pexpr (Old.M_Pexpr (loc, annots,bty,pexpr_)) =
     | M_PEunion (sym,id,asym) ->
        let@ asym = retype_pexpr asym in
        return (New.M_PEunion (sym,id,asym))
+    | M_PEcfunction pe ->
+       let@ pe = retype_pexpr pe in
+       return (New.M_PEcfunction pe)
     | M_PEmemberof (sym,id,asym) ->
        let@ asym = retype_pexpr asym in
        return (New.M_PEmemberof (sym,id,asym))

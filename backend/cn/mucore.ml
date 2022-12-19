@@ -126,6 +126,7 @@ module Make(T : TYPES) = struct
    | M_PEop of Core.binop * ('TY mu_pexpr) * ('TY mu_pexpr)
    | M_PEstruct of symbol * (Symbol.identifier * 'TY mu_pexpr) list (* C struct expression *)
    | M_PEunion of symbol * Symbol.identifier * 'TY mu_pexpr (* C union expression *)
+   | M_PEcfunction of ('TY mu_pexpr) (* C function pointer expression *)
    | M_PEmemberof of symbol * Symbol.identifier * 'TY mu_pexpr (* C struct/union member access *)
 
    (* | M_PEassert_undef of 'TY mu_pexpr * Location_ocaml.t * Undefined.undefined_behaviour *)
