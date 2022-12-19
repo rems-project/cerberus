@@ -3347,7 +3347,7 @@ let rec translate_stmt stdlib tagDefs f env (A.AnnotatedStatement loc stmt_attrs
           ) visible_syms >>= fun visible_pes ->
         match List.lookup (CaseSelectConstant n) env.case_labs with
           | Just lab ->
-              E.return (Caux.mk_save_e (lab, C.BTy_unit) visible_pes core_s)
+              E.return (Caux.mk_save_e_ [Annot.Alabel (Annot.LAcase)] (lab, C.BTy_unit) visible_pes core_s)
           | (*BISECT-IGNORE*) Nothing ->
               error "Translation.translate_stmt: case label not found."
         end
@@ -3361,7 +3361,7 @@ let rec translate_stmt stdlib tagDefs f env (A.AnnotatedStatement loc stmt_attrs
           ) visible_syms >>= fun visible_pes ->
         match List.lookup (CaseSelectRange n1 n2) env.case_labs with
           | Just lab ->
-              E.return (Caux.mk_save_e (lab, C.BTy_unit) visible_pes core_s)
+              E.return (Caux.mk_save_e_ [Annot.Alabel (Annot.LAcase)] (lab, C.BTy_unit) visible_pes core_s)
           | (*BISECT-IGNORE*) Nothing ->
               error "Translation.translate_stmt: case label not found."
         end
@@ -3370,7 +3370,7 @@ let rec translate_stmt stdlib tagDefs f env (A.AnnotatedStatement loc stmt_attrs
         self s >>= fun core_s ->
         match env.default_lab with
           | Just lab ->
-              E.return (Caux.mk_save_e (lab, C.BTy_unit) [] core_s)
+              E.return (Caux.mk_save_e_ [Annot.Alabel (Annot.LAdefault)] (lab, C.BTy_unit) [] core_s)
           | (*BISECT-IGNORE*) Nothing ->
               error "Translation.translate_stmt: default label not found."
         end

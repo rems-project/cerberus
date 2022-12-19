@@ -692,9 +692,13 @@ let retype_file (context : Context.t) opts (file : 'TY Old.mu_file)
        | Some LAreturn -> 
           error "return label has not been inlined"
        | Some LAswitch -> 
-          error "switch labels"
+          error "switch label"
+       | Some LAcase -> 
+          error "case label"
+       | Some LAdefault -> 
+          error "default label"
        | None -> 
-          error "non-loop labels"
+          error ("non-loop labels: " ^ Sym.pp_string lsym)
        end
   in
 
