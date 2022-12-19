@@ -1074,8 +1074,6 @@ let make_fun_spec loc (global : Global.t) fsym (fspec : function_spec)
   let open AT in
   let open RT in
 
-  debug 1 (lazy (item "translating specification" (Sym.pp fsym)));
-
   let i = [] in
   let o = [] in
   let mappings = StringMap.empty in

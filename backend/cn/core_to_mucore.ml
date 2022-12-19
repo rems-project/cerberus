@@ -6,6 +6,16 @@ open Lem_pervasives
 open Ctype
 open Milicore
 
+module Pmap = struct
+  include Pmap
+  let filter_map compare f map = 
+    Pmap.fold (fun key value acc ->
+        match f key value with
+        | Some value' -> Pmap.add key value' acc
+        | None -> acc
+      ) map (Pmap.empty compare)
+end
+
 
 
 module SymSet = 
@@ -726,10 +736,21 @@ let normalise_expr (loc : Loc.t) (returns : symbol Pset.set) e =
 (* let normalise_impl (i : unit generic_impl) : unit mu_impl= *)
 (*    (Pmap.map normalise_impl_decl i) *)
 
-let normalise_fun_map_decl ail_declarations (name1: symbol) d =
+
+
+let builtins funmap =
+  List.rev (
+    Pmap.fold (fun name d acc ->
+        match d with
+        | Mi_BuiltinDecl _ -> name :: acc
+        | _ -> acc
+      ) funmap []
+    )
+
+
+let normalise_fun_map_decl (name1: symbol) d =
   match d with
-  | Mi_Proc (loc, bt, args, e, labels) 
-       when List.exists (fun (s, _) -> Sym.equal s name1) ail_declarations -> 
+  | Mi_Proc (loc, bt, args, e, labels) ->
      let returns = 
        Pmap.fold (fun sym label returns ->
            match label with
@@ -748,8 +769,6 @@ let normalise_fun_map_decl ail_declarations (name1: symbol) d =
      in
      let d = M_Proc(loc, bt, (args, ()), normalise_expr loc returns e, labels') in
      Some d
-  | Mi_Proc _ ->
-     None
   | Mi_Fun (bt, args, pe) -> 
      None
   | Mi_ProcDecl(loc, bt, bts) -> 
@@ -758,12 +777,10 @@ let normalise_fun_map_decl ail_declarations (name1: symbol) d =
      None
      (* M_BuiltinDecl(loc, bt, bts) *)
 
-let normalise_fun_map ail_declarations fmap : unit mu_fun_map= 
-  Pmap.fold (fun name def acc ->
-      match normalise_fun_map_decl ail_declarations name def with
-      | Some def -> Pmap.add name def acc
-      | None -> acc
-    ) fmap (Pmap.empty Sym.compare)
+
+
+let normalise_fun_map fmap =
+  Pmap.filter_map Sym.compare normalise_fun_map_decl fmap
   
 
 
@@ -799,25 +816,20 @@ let normalise_tag_definition = function
 let normalise_tag_definitions tagDefs =
    (Pmap.map normalise_tag_definition tagDefs)
 
-let normalise_funinfo ail_declarations name (loc,annots2,ret,args,b1,b2) = 
-  if List.exists (fun (s,_) -> Sym.equal s name) ail_declarations then
-    let args = 
-      map (fun (osym, ct) -> 
-          match osym with 
-          | Some sym -> (sym, ct)
-          | None -> (Symbol.fresh (), ct)
-        ) args 
-    in
-    Some (M_funinfo (loc, annots2, (ret,args,b1), Checked, b2))
-  else 
-    None
+let normalise_funinfo name (loc,annots2,ret,args,b1,b2) = 
+  let args = 
+    map (fun (osym, ct) -> 
+        match osym with 
+        | Some sym -> (sym, ct)
+        | None -> 
+           let i = Fresh.int () in
+           (Symbol.fresh_description (SD_FunArgValue ("x" ^ string_of_int i)), ct)
+      ) args 
+  in
+  M_funinfo (loc, annots2, (ret,args,b1), Checked, b2)
 
-let normalise_funinfos ail_declarations funinfos =
-   Pmap.fold (fun name info acc ->
-       match normalise_funinfo ail_declarations name info with
-       | Some info -> Pmap.add name info acc
-       | None -> acc
-     ) funinfos (Pmap.empty Sym.compare)
+let normalise_funinfos funinfos =
+   Pmap.mapi normalise_funinfo funinfos
 
 
 let rec ctype_contains_function_pointer (Ctype.Ctype (_, ct_)) = 
@@ -873,14 +885,24 @@ let check_supported (file : ('a, 'TY) mi_file) =
 
 let normalise_file ailfile (file : ('a, 'TY) Milicore.mi_file) : unit Mu.mu_file = 
   check_supported file;
+  let declarations = List.map fst ailfile.AilSyntax.declarations in
+  let builtins = builtins file.mi_funs in
+  (* print stdout (item "declarations" (list Sym.pp declarations)); *)
+  (* print stdout (item "builtin" (list Sym.pp builtins)); *)
+  let funinfo = 
+    Pmap.filter (fun s _ -> 
+        List.mem Sym.equal s declarations &&
+        not (List.mem Sym.equal s builtins)
+      ) file.mi_funinfo 
+  in
    ({ mu_main = (file.mi_main)
    ; mu_tagDefs = (normalise_tag_definitions file.mi_tagDefs)
    (* ; mu_stdlib = (normalise_fun_map file.mi_stdlib) *)
    (* ; mu_impl = (normalise_impl file.mi_impl) *)
    ; mu_globs = (normalise_globs_list file.mi_globs)
-   ; mu_funs = (normalise_fun_map ailfile.AilSyntax.declarations file.mi_funs)
+   ; mu_funs = (normalise_fun_map file.mi_funs)
    ; mu_extern = (file.mi_extern)
-   ; mu_funinfo = (normalise_funinfos ailfile.AilSyntax.declarations file.mi_funinfo)
+   ; mu_funinfo = (normalise_funinfos funinfo)
    ; mu_loop_attributes = file.mi_loop_attributes
    ; mu_resource_predicates = ()
    ; mu_logical_predicates = ()

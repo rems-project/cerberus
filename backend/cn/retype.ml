@@ -628,6 +628,7 @@ let retype_file (context : Context.t) opts (file : 'TY Old.mu_file)
         let err = !^"Variadic function" ^^^ Sym.pp fsym ^^^ !^"unsupported" in
         unsupported loc err
       else
+        debug 1 (lazy (item "translating function specification" (Sym.pp fsym)));
         let ret_ctype = Sctypes.of_ctype_unsafe loc ret_ctype in
         let args = List.map_snd (Sctypes.of_ctype_unsafe loc) args in
         let@ fspec = Parse.parse_function glob_typs trusted args ret_ctype attrs in
