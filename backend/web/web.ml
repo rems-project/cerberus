@@ -185,6 +185,17 @@ type action =
   | `BMC
   | `Shorten ]
 
+(* implementation of the memory interface *)
+type model =
+  [ `Concrete
+  | `Symbolic
+  | `VIP ]
+
+let string_of_model = function
+  | `Concrete -> "concrete"
+  | `Symbolic -> "symbolic"
+  | `VIP      -> "vip"
+
 let string_of_action = function
   | `Nop        -> "Nop"
   | `Elaborate  -> "Elaborate"
@@ -198,7 +209,7 @@ type incoming_msg =
   { action:  action;
     source:  string;
     name:    string;  (* name of the file in the UI *)
-    model:   string;
+    model:   model;
     bmc_model: bmc_model;
     rewrite: bool;
     sequentialise: bool;
@@ -211,7 +222,7 @@ let parse_incoming_msg content =
   let empty = { action=         `Nop;
                 source=         "";
                 name=           "<unknown>";
-                model=          "concrete";
+                model=          `Concrete;
                 bmc_model=      `C11;
                 rewrite=        false;
                 sequentialise=  false;
@@ -250,6 +261,14 @@ let parse_incoming_msg content =
     | s ->
       Debug.warn ("Unknown boolean " ^ s); false
   in
+  let parse_model = function
+    | "concrete" -> `Concrete
+    | "symbolic" -> `Symbolic
+    | "vip"      -> `VIP
+    | str -> 
+        Debug.warn ("Unknown model: '" ^ str ^ "' (defaulting to 'concrete')");
+        `Concrete
+  in
   let get = function Some m -> m | None -> empty_node_id in
   let parse msg = function
     | ("action", [act])      -> { msg with action= action_from_string act; }
@@ -258,7 +277,7 @@ let parse_incoming_msg content =
     | ("rewrite", [b])       -> { msg with rewrite= parse_bool b; }
     | ("sequentialise", [b]) -> { msg with sequentialise= parse_bool b; }
     | ("libc", [b])          -> { msg with libc= parse_bool b; }
-    | ("model", [model])     -> { msg with model= model; }
+    | ("model", [model])     -> { msg with model= parse_model model; }
     | ("bmc_model", [model]) ->
       begin match bmc_mode_from_string model with
         | Some bmc_model -> { msg with bmc_model }
@@ -580,7 +599,7 @@ let log_request msg flow =
       (Ipaddr.to_string ip)
       (now ())
       (string_of_action msg.action)
-      (msg.model)
+      (string_of_model msg.model)
       (String.escaped msg.source);
     close_out oc
   | _ -> ()
@@ -631,7 +650,14 @@ let cerberus ~rheader ~conf ~flow content =
   in
   let timeout   = float_of_int conf.timeout in
   let request (req: request) : result Lwt.t =
-    let instance = "./webcerb." ^ msg.model in
+    let instance =
+      (* the indirection string -> poly variant -> string is to 
+         prevent the possibility of exploits since the string comes from the client *)
+      "./webcerb." ^ begin match msg.model with
+        | `Concrete -> "concrete"
+        | `Symbolic -> "symbolic"
+        | `VIP      -> "vip"
+      end in
     let cmd = (instance, [| instance; "-d" ^ string_of_int !Debug.level|]) in
     let env = [|"PATH=/usr/bin";
                 "CERB_PATH="^(!webconf()).cerb_path;
