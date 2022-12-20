@@ -777,7 +777,7 @@ Module MorelloCapability <:
     | _ => None
     end.
 
-  Program Definition encode (isexact : bool) (c : t) : option ((list ascii) * bool) :=
+  Definition encode (isexact : bool) (c : t) : option ((list ascii) * bool) :=
     let w := encode_to_word isexact c in
     let tag := CapIsTagSet w in
     (* strip tag bit *)
