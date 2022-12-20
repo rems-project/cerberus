@@ -399,12 +399,15 @@ Module CheriMemory
         if is_signed then unwrap_cap_value n else n
     end.
 
-  (** Remove capability tags for memory region starting from [addr]
+  (** "Ghost" capability tags for memory region starting from [addr]
       with [size].
 
-      All tags associated with addresses in this region will be
-      removed.  *)
-  Definition remove_tags
+      All "true" tags associated with addresses in this region will be
+      removed.
+
+      All "false" tags will be left intact.
+   *)
+  Definition ghost_tags
     (addr: MorelloAddr.t)
     (size: Z)
     (captags: ZMap.t bool): ZMap.t bool
@@ -417,7 +420,7 @@ Module CheriMemory
     let a1 := lower_a (Z.pred (Z.add addr size)) in
     ZMap.fold
       (fun (a:Z) (v:bool) (ct: ZMap.t bool) =>
-         if (Z.geb a a0 && Z.leb a a1)%bool then (ZMap.remove a ct)
+         if (Z.geb a a0 && Z.leb a a1 && v)%bool then (ZMap.remove a ct)
          else ct
       ) captags captags.
 
@@ -446,7 +449,7 @@ Module CheriMemory
                 next_varargs_id  := st.(next_varargs_id);
                 bytemap          := st.(bytemap);
                 (* clear tags in newly allocated region *)
-                captags          := remove_tags addr size st.(captags);
+                captags          := ghost_tags addr size st.(captags);
                 dead_allocations := st.(dead_allocations);
                 dynamic_addrs    := st.(dynamic_addrs);
                 last_used        := Some alloc_id;
@@ -659,14 +662,14 @@ Module CheriMemory
         match mval with
         | MVunspecified ty =>
             sz <- sizeof DEFAULT_FUEL None ty ;;
-            ret (funptrmap, (remove_tags addr sz captags),
+            ret (funptrmap, (ghost_tags addr sz captags),
                 (list_init (Z.to_nat sz) (fun _ => absbyte_v Prov_none None None)))
         | MVinteger ity (IV n_value) =>
             iss <- option2serr "Could not get int signedness of a type in repr" (is_signed_ity DEFAULT_FUEL ity) ;;
             sz <- sizeof DEFAULT_FUEL None (CoqCtype.Ctype nil (CoqCtype.Basic (CoqCtype.Integer ity))) ;;
             bs' <- bytes_of_Z iss (Z.to_nat sz) n_value ;;
             let bs := List.map (fun (x : ascii) => absbyte_v Prov_none None (Some x)) bs' in
-            ret (funptrmap, (remove_tags addr (Z.of_nat (List.length bs)) captags), bs)
+            ret (funptrmap, (ghost_tags addr (Z.of_nat (List.length bs)) captags), bs)
         | MVinteger ity (IC _ c_value) =>
             '(cb, ct) <- option2serr "int encoding error" (C.encode true c_value) ;;
             let captags :=
@@ -683,7 +686,7 @@ Module CheriMemory
             bs' <- bytes_of_Z true (Z.to_nat sz) (bits_of_float fval) ;;
             let bs := List.map (fun (x : ascii) => absbyte_v Prov_none None (Some x)) bs'
             in
-            ret (funptrmap, (remove_tags addr (Z.of_nat (List.length bs)) captags), bs)
+            ret (funptrmap, (ghost_tags addr (Z.of_nat (List.length bs)) captags), bs)
         | MVpointer ref_ty (PV prov ptrval_) =>
             match ptrval_ with
             | PVfunction
