@@ -3029,6 +3029,10 @@ Module CheriMemory
     | PV (Prov_some alloc_id) (PVconcrete c_value) =>
         mprint_msg "A cap: ";; mprint_msg (C.to_string c_value) ;;
         mprint_msg "Its value: ";; mprint_msg (HexString.of_Z (C.cap_get_value c_value)) ;;
+        mprint_msg "Its permissions: ";; 
+        mprint_msg (Morello.Permissions.to_string (C.cap_get_perms c_value)) ;;
+        mprint_msg (Morello.Permissions.to_string_hex (C.cap_get_perms c_value)) ;;
+        
         let shifted_addr := Z.add (C.cap_get_value c_value) offset in
         if CoqSwitches.has_switch (CoqSwitches.SW_pointer_arith STRICT)
            || negb (CoqSwitches.has_switch (SW_pointer_arith PERMISSIVE))

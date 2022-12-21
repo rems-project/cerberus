@@ -511,7 +511,8 @@ module Morello_capability: Capability
            let s = P.to_string (cap_get_perms cap) in
            s @ loop cap fs
         | 'T'::fs ->
-           loop {cap with valid = true } fs
+           (*loop {cap with valid = true } fs*)
+           loop cap fs	(* TODO This should be setting the validity tag to true before calling loop *)
         | '?'::fs -> skip cap fs
         (* try numeric formats *)
         | x::fs as f -> numf State.Initial 1 1 false alt 'd' cap f

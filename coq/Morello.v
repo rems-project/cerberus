@@ -330,7 +330,16 @@ Module PermissionsBV <: Permission.
     Next Obligation. reflexivity. Defined.  
   
   Definition to_string (perms:t) : string :=
-    String.hex_string_of_int (bv_to_Z_unsigned perms).
+      let s (f:bool) l := if f then l else "" in
+      s (has_load_perm perms) "r"
+      ++ s (has_store_perm perms) "w"
+      ++ s (has_execute_perm perms) "x"
+      ++ s (has_load_cap_perm perms) "R"
+      ++ s (has_store_cap_perm perms) "W"
+      ++ s (has_executive_perm perms) "E".
+
+  Definition to_string_hex (perms:t) : string :=      
+    String.hex_string_of_int (bv_to_Z_unsigned perms). 
 
   Definition to_raw (perms:t) : Z := bv_to_Z_unsigned perms.
 
@@ -507,7 +516,7 @@ Module Cap <: Capability (ValueBV) (ObjTypeBV) (SealType) (BoundsBV) (Permission
     CapIsSealed (bv_to_mword cap).
   
   Definition cap_invalidate (cap:t) : t := mword_to_bv (CapWithTagClear (bv_to_mword cap)).
-  
+
   Definition cap_set_value (cap:t) (value:ValueBV.t) : t :=
     let new_cap := mword_to_bv (CapSetValue (bv_to_mword cap) (bv_to_mword value)) in 
     if (cap_is_sealed cap) then (cap_invalidate new_cap) else new_cap.
@@ -818,8 +827,13 @@ End Cap.
   Import Cap.
 
   
-
-  Definition test_cap_1:Z := 0x14C0000007FFFFFF100000000FFFFFFF1.
+  Definition test_cap_0:Z := 0x14C0000007F1CFF1500000000FFFFFF15.
+  Definition test_cap_0_enc := encode true (Cap.of_Z test_cap_0).
+  Compute test_cap_0_enc.
+  Definition test_cap_01:Z := 0x1900000007f1cff1500000000ffffff15.
+  Definition test_cap_01_enc := encode true (Cap.of_Z test_cap_01).
+  Compute test_cap_01_enc.
+  (* Definition test_cap_1:Z := 0x14C0000007FFFFFF100000000FFFFFFF1.
   Compute encode true (Cap.of_Z test_cap_1).
   Definition test_cap_2:Z := 0x1F1FFFFFF00000000F1FFFF7F0000004C.
   Compute encode true (Cap.of_Z test_cap_2).
@@ -830,8 +844,20 @@ End Cap.
   Definition test_cap_5:Z := 0x1fb000000377700070011111111113333.
   Compute encode true (Cap.of_Z test_cap_5).
   Definition test_cap_6:Z := 0x1fb0000007a4700000000000000003333.
-  Compute encode true (Cap.of_Z test_cap_6).
+  Compute encode true (Cap.of_Z test_cap_6). *)
 
+
+  (* Compute decode (match test_cap_0_enc with Some (l,b) => l | None => [] end) true.
+  Compute decode (match test_cap_01_enc with Some (l,b) => l | None => [] end) true. *)
+
+  Definition test_cap_7_encoded:(list ascii) := 
+  ["021"%char; "255"%char; "255"%char; "255"%char; "000"%char;
+  "000"%char; "000"%char; "000"%char; "021"%char; "255"%char;
+  "028"%char; "127"%char; "000"%char; "000"%char; "000"%char;
+  "L"%char].
+Definition test_cap_7_decoded:(option t) :=
+    decode test_cap_7_encoded true.
+(* Compute test_cap_7_decoded. *)
 
 
   Definition c1:Cap.t := mword_to_bv (concat_vec (Ones 19) (Zeros 110)). (* A valid universal-permission cap = 1^{19}0^{110} *)
@@ -840,6 +866,9 @@ End Cap.
   Definition c4:Cap.t := Cap.of_Z 0x1fc000000399700070000000012342222. (* The bounds in this cap subsume those of c3 *)
   Definition c5:Cap.t := Cap.of_Z 0x1fb000000377700070011111111113333. (* Cap breakdown: https://www.morello-project.org/capinfo?c=0x1%3Afb00000037770007%3A0011111111113333 *)
   Definition c6:Cap.t := Cap.of_Z 0x1fb0000007a4700000000000000003333. (* Cap breakdown: https://www.morello-project.org/capinfo?c=0x1%3Afb0000007a470000%3A0000000000003333 *)
+  Definition c7:Cap.t := Cap.of_Z 0x14C0000007F1CFF1500000000FFFFFF15.
+  Definition c8:Cap.t := Cap.of_Z 0x1900000007f1cff1500000000ffffff15.
+                                  
   
   Program Definition flags1:Cap.Flags := exist _ [false; false; false; false; false; false; false; false] _. 
     Next Obligation. reflexivity. Defined.
@@ -1070,7 +1099,8 @@ End Cap.
           Some c => c | None => cap_c0 () 
         end in 
         (c_ =? cap) = true in
-      tester c1 /\ tester c2 /\ tester c3 /\ tester c4 /\ tester c5 /\ tester c6.
+      tester c1 /\ tester c2 /\ tester c3 /\ tester c4 /\ tester c5 /\ tester c6 
+      /\ tester c7 /\ tester c8.
     Proof. vm_compute. repeat (split; try reflexivity). Qed.
  
 End test_cap_getters_and_setters. 
@@ -1138,6 +1168,7 @@ Module Permissions <: Permission.
   (* --- Utility methods --- *)
 
   Definition to_string (perms:t) : string := PermissionsBV.to_string (PermissionsBV.of_Z perms).
+  Definition to_string_hex (perms:t) : string := PermissionsBV.to_string_hex (PermissionsBV.of_Z perms).
 
   (* raw permissoins in numeric format *)
   Definition to_raw (perms:t) : Z := perms.

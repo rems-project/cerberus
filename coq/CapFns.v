@@ -622,9 +622,6 @@ Definition CapGetRepresentableMask (len : mword (63 - 0 + 1)) : mword (63 - 0 + 
    let ones_ := OnesN (Z.to_N (Z.sub CAP_VALUE_NUM_BITS exp1)) in 
    mword_of_int (int_of_mword false (concat_vec ones_ zeros_)).
 
-Definition CapWithTagSet (c : mword 129) : mword 129 :=
-   CapSetTag c (zero_extend (('b"1")  : mword 1) 64).
-
 Definition CapIsBaseAboveLimit (c : mword 129) : bool :=
    let base : (bits CAP_BOUND_NUM_BITS) := mword_of_int (Z.add (Z.add (Z.sub 63 0) 1) 1) in 
    let limit : (bits CAP_BOUND_NUM_BITS) := mword_of_int (Z.add (Z.add (Z.sub 63 0) 1) 1) in 

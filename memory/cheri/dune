@@ -5,7 +5,9 @@
  (preprocess (pps ppx_deriving.show ppx_deriving.eq))
  (libraries cerberus.util)
  (modules Capability Morello Sail_morello Sail_lib Util)
- (flags (:standard -w -27-32)))
+ (flags (:standard -w -27-32))
+ (instrumentation (backend landmarks))  
+)
 
 (library
  (name mem_cheri)
@@ -13,10 +15,12 @@
  (modules impl_mem)
  (libraries capabilities)
  (flags (:standard -w -27-32))
- (implements cerb_frontend))
+ (implements cerb_frontend)
+ (instrumentation (backend landmarks))
+)
 
 ;; Unit tests for capabilities library
 (executable
  (name captest)
  (modules captest)
- (libraries capabilities ounit2 cerb_backend mem_cheri))
+ (libraries str capabilities ounit2 cerb_backend mem_cheri))

@@ -708,6 +708,29 @@ module CHERI (C:Capability
       ) captags;
     prerr_endline "END CAPTAGS"
 
+  let print_allocations str =
+    if !Debug_ocaml.debug_level >= 3 then begin
+        get >>= (fun st ->
+        Printf.fprintf stderr "BEGIN Allocation ==> %s\n" str;
+        IntMap.iter (fun aid a ->
+            Printf.fprintf stderr "@%s: 0x%s,%s (%s)\n"
+              (Z.format "%d" aid)
+              (Z.format "%x" a.base)
+              (Z.format "%d" a.size)
+              (match a.taint with
+               | `Exposed -> "exposed"
+               | `Unexposed -> "unexposed"
+              )
+          ) st.allocations;
+        prerr_endline "END Allocations";
+        Printf.fprintf stderr "Dead Allocations: [%s]\n"
+          (String.concat ","
+             (List.map (Z.to_string) st.dead_allocations));
+        return ()
+      )
+      end else
+      return ()
+
   (** Prints capability tags table from memory state *)
   let print_captags str =
     if !Debug_ocaml.debug_level >= 3 then begin
@@ -1423,19 +1446,17 @@ module CHERI (C:Capability
          ) >> return ro
     end >>= (fun ro ->
       let c = C.alloc_cap addr size_n' in
-      if C.cap_bounds_representable_exactly c (addr, Z.add addr size_n')
-      then
-        let c =
-          if ro then
-            let p = C.cap_get_perms c in
-            let p = C.P.perm_clear_store p in
-            let p = C.P.perm_clear_store_cap p in
-            let p = C.P.perm_clear_store_local_cap p in
-            C.cap_narrow_perms c p
-          else c
-        in
-        return (PV (Prov_some alloc_id, PVconcrete c))
-      else failwith "Error settting exeact bounds for allocated region")
+      let c =
+        if ro then
+          let p = C.cap_get_perms c in
+          let p = C.P.perm_clear_store p in
+          let p = C.P.perm_clear_store_cap p in
+          let p = C.P.perm_clear_store_local_cap p in
+          C.cap_narrow_perms c p
+        else c
+      in
+      return (PV (Prov_some alloc_id, PVconcrete c))
+    )
 
   let update_prefix (pref, mval) =
     match mval with
@@ -1539,9 +1560,7 @@ module CHERI (C:Capability
       ) >>
       (* malloc *)
       let c = C.alloc_cap addr size_n' in
-      if C.cap_bounds_representable_exactly c (addr, Z.add addr size_n')
-      then return (PV (Prov_some alloc_id, PVconcrete c))
-      else failwith "Error settting exeact bounds for allocated region"
+      return (PV (Prov_some alloc_id, PVconcrete c))
 
   (* zap (make unspecified) any pointer in the memory with provenance matching a
      given allocation id *)
@@ -1644,13 +1663,15 @@ module CHERI (C:Capability
        let (_,m) = Z.quomod a (Z.of_int v) in
        m = Z.zero
 
+
   let load loc ty (PV (prov, ptrval_)) =
     Debug_ocaml.print_debug 10 [] (fun () ->
         "ENTERING LOAD: ty=" ^ String_core_ctype.string_of_ctype ty ^
           " -> @" ^ Pp_utils.to_plain_string (pp_pointer_value (PV (prov, ptrval_)))
       );
     print_bytemap ("BEFORE LOAD => " ^ Location_ocaml.location_to_string loc) >>
-      print_captags ("BEFORE LOAD => " ^ Location_ocaml.location_to_string loc)
+      print_captags ("BEFORE LOAD => " ^ Location_ocaml.location_to_string loc) >>
+      print_allocations ("BEFORE LOAD => " ^ Location_ocaml.location_to_string loc)
     >>
 
       let do_load alloc_id_opt addr sz =
@@ -1745,7 +1766,7 @@ module CHERI (C:Capability
              begin is_within_bound alloc_id ty (C.cap_get_value addr) >>= function
                    | false ->
                       Debug_ocaml.print_debug 1 [] (fun () ->
-                          "LOAD out of bound, alloc_id=" ^ Z.to_string alloc_id
+                          "LOAD " ^ Z.format "%x" (C.cap_get_value addr) ^ " out of bound, alloc_id=" ^ Z.to_string alloc_id
                         );
                       fail (MerrAccess (loc, LoadAccess, OutOfBoundPtr))
                    | true ->
