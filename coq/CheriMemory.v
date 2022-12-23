@@ -1318,16 +1318,11 @@ Module CheriMemory
             match extract_unspec bs1' with
             | Some cs =>
                 ret (provs_of_bytes bs1,
-                    let (tag, is_ghost) :=
-                      match tag_query_f addr with
-                      | None => (false, true)
-                      | Some tag => (tag, false)
-                      end
-                    in
+                    let (tag,gs) := tag_query_f addr in
                     match C.decode (List.rev cs) tag with
                     | None => MVErr (MerrCHERI loc CheriErrDecodingCap)
                     | Some c_value =>
-                        let c_value := C.set_ghost_state c_value {| tag_unspecified := is_ghost |} in
+                        let c_value := C.set_ghost_state c_value gs in
                         if iss then
                           let n_value := C.cap_get_value c_value in
                           let c_value := C.cap_set_value c_value (wrap_cap_value n_value) in
@@ -1386,16 +1381,11 @@ Module CheriMemory
             (* sprint_msg ("BS1 prov_status=" ++ (string_of_prov_ptr_valid_ind prov_status)) ;; *)
             match extract_unspec bs1' with
             | Some cs =>
-                let (tag, is_ghost) :=
-                  match tag_query_f addr with
-                  | None => (false, true)
-                  | Some tag => (tag, false)
-                  end
-                in
+                let (tag,gs) := tag_query_f addr in
                 match C.decode (List.rev cs) tag with
                 | None => ret (NoTaint, MVErr (MerrCHERI loc CheriErrDecodingCap), bs2)
                 | Some c_value =>
-                    let c_value := C.set_ghost_state c_value {| tag_unspecified := is_ghost |} in
+                    let c_value := C.set_ghost_state c_value gs in
                     match ref_ty with
                     | CoqCtype.Ctype _ (CoqCtype.Function _ _ _) =>
                         let n_value := Z.sub (C.cap_get_value c_value) initial_address in
@@ -1730,18 +1720,26 @@ Module CheriMemory
       get >>=
         (fun (st : mem_state) =>
            let bs := fetch_bytes st.(bytemap) addr sz in
-           let tag_query (a_value : Z) : option bool :=
+           let tag_query (a_value : Z) : bool* CapGhostState :=
              if is_pointer_algined a_value then
-               ZMap.find a_value st.(captags)
+               match ZMap.find a_value st.(capmeta) with
+               | Some x => x
+               | None =>
+                   (* this should not happen *)
+                   (false,
+                     {| tag_unspecified := true;
+                       bounds_unspecified := false |})
+               end
              else
                (* An attempt to load a capability from not properly
                   aligned address. OCaml handles this with [failwith]
-                  but here we just return [None], and [abst] using
-                  this function will fail with [MVEunspecified]. But
-                  the question what error to raise is moot since this
-                  is an internal error which should never happen, and
+                  but here we just return default value. But the
+                  question what error to raise is moot since this is
+                  an internal error which should never happen, and
                   hopefully we will prove so. *)
-               None
+               (false,
+                 {| tag_unspecified := true;
+                   bounds_unspecified := false |})
            in
            '(taint, mval, bs') <-
              serr2memM (abst DEFAULT_FUEL loc (find_overlaping st) st.(funptrmap) tag_query addr ty bs)
@@ -1922,8 +1920,8 @@ Module CheriMemory
         cap_check loc c_value 0 WriteIntent nsz ;;
         let addr := C.cap_get_value c_value in
         st <- get ;;
-        '(funptrmap, captags, pre_bs) <-
-          serr2memM (repr DEFAULT_FUEL st.(funptrmap) st.(captags) addr mval)
+        '(funptrmap, capmeta, pre_bs) <-
+          serr2memM (repr DEFAULT_FUEL st.(funptrmap) st.(capmeta) addr mval)
         ;;
         let bs :=
           mapi (fun (i_value: nat) (b_value: AbsByte)
@@ -1946,7 +1944,7 @@ Module CheriMemory
             varargs          := st.(varargs);
             next_varargs_id  := st.(next_varargs_id);
             bytemap          := bytemap;
-            captags          := captags;
+            capmeta          := capmeta;
             dead_allocations := st.(dead_allocations);
             dynamic_addrs    := st.(dynamic_addrs);
             last_used        := alloc_id_opt;
@@ -3177,12 +3175,12 @@ Module CheriMemory
         src_a <- serr2memM (cap_addr_of_pointer_value src_p) ;;
         update
           (fun (st : mem_state) =>
-             match ZMap.find src_a st.(captags) with
+             match ZMap.find src_a st.(capmeta) with
              | None => st
              | Some t_value =>
                  if negb (is_pointer_algined dst_a)
                  then st
-                 else mem_state_with_captags (ZMap.add dst_a t_value st.(captags)) st
+                 else mem_state_with_capmeta (ZMap.add dst_a t_value st.(capmeta)) st
              end)
       in
       match index with

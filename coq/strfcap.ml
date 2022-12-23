@@ -17,7 +17,7 @@ module MorelloCapabilityWithStrfcap = struct
   let flags_as_str tag c =
       let attrs =
         let a f s l = if f then s::l else l in
-        let gs = get_ghost_state c in
+        let gs = (get_ghost_state c).tag_unspecified in
         a gs "notag"
         @@ (a ((not tag) && (not gs)) "invalid")
         @@ a (is_sentry c) "sentry"
@@ -153,17 +153,27 @@ module MorelloCapabilityWithStrfcap = struct
          let z = cap_get_value cap in
          strnum z @ loop tag cap fs
       | Final, 'b'::fs ->
-         let z = fst (cap_get_bounds cap) in
-         strnum z @ loop tag cap fs
+         (if (get_ghost_state cap).bounds_unspecified
+          then "?"
+          else strnum (fst (cap_get_bounds cap)))
+         @ loop tag cap fs
       | Final, 'l'::fs ->
-         let (base,limit) = cap_get_bounds cap in
-         let z = Z.sub limit base in
-         strnum z @ loop tag cap fs
+         (if (get_ghost_state cap).bounds_unspecified
+          then "?"
+          else
+            let (base,limit) = cap_get_bounds cap in
+            let z = Z.sub limit base in
+            strnum z)
+         @ loop tag cap fs
       | Final, 'o'::fs ->
-         let base = fst (cap_get_bounds cap) in
-         let addr = cap_get_value cap in
-         let z = Z.sub addr base in
-         strnum z @ loop tag cap fs
+         (if (get_ghost_state cap).bounds_unspecified
+          then "?"
+          else
+            let base = fst (cap_get_bounds cap) in
+            let addr = cap_get_value cap in
+            let z = Z.sub addr base in
+            strnum z)
+         @ loop tag cap fs
       | Final, 'p'::fs ->
          let z = MorelloPermission.to_raw (cap_get_perms cap) in
          strnum z @ loop tag cap fs
@@ -180,8 +190,12 @@ module MorelloCapabilityWithStrfcap = struct
          s @ loop tag cap fs
       | Final, 't'::fs ->
          let (base,limit) = cap_get_bounds cap in
-         let z = Z.add base limit in
-         strnum z @ loop tag cap fs
+         (if (get_ghost_state cap).bounds_unspecified
+          then "?"
+          else
+            let z = Z.add base limit in
+            strnum z)
+         @ loop tag cap fs
       | Final, 'v'::fs ->
          let z = if cap_is_valid cap then Z.succ Z.zero else Z.zero in
          strnum z @ loop tag cap fs

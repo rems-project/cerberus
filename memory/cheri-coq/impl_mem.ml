@@ -821,14 +821,19 @@ module CHERIMorello : Memory = struct
       ) l;
     prerr_endline "END BYTEMAP"
 
+  let string_of_ghost_state (gs:Capabilities.coq_CapGhostState): string =
+    let s = if gs.tag_unspecified then " notag" else "" in
+    if gs.bounds_unspecified then (s ^ " nobounds") else s
+
   (** Prints provided capability tags table *)
   let print_captags str (st:MM.mem_state) =
     Printf.fprintf stderr "BEGIN CAPTAGS ==> %s\n" str;
-    let l = ZMap.elements st.captags in
-    List.iter (fun (addr, b) ->
-        Printf.fprintf stderr "@0x%s ==> %s\n"
+    let l = ZMap.elements st.capmeta in
+    List.iter (fun (addr, (b,gs)) ->
+        Printf.fprintf stderr "@0x%s ==> %s%s\n"
           (Z.format "%x" addr)
           (string_of_bool b)
+          (string_of_ghost_state gs)
       ) l;
     prerr_endline "END CAPTAGS"
 
