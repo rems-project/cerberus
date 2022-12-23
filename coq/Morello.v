@@ -591,7 +591,7 @@ Module MorelloCapability <:
               bounds := (projT1 (uint base'), projT1 (uint limit'));
               flags := flags;
               perms := perms;
-              ghost_state := Default_CapGhostStat
+              ghost_state := Default_CapGhostState
             |}
       end.
 
@@ -634,7 +634,7 @@ Module MorelloCapability <:
 
           MorelloPermission.user_perms := [false; false; false; false]
         |};
-      ghost_state := Default_CapGhostStat
+      ghost_state := Default_CapGhostState
     |}.
 
   Definition alloc_cap (a_value : MorelloAddr.t) (size : Z) : t :=
@@ -645,7 +645,7 @@ Module MorelloCapability <:
       bounds := (a_value, (Z.add a_value size));
       flags := flags_from_value a_value;
       perms := MorelloPermission.perm_alloc;
-      ghost_state := Default_CapGhostStat
+      ghost_state := Default_CapGhostState
     |}.
 
   Definition alloc_fun (a_value : MorelloAddr.t) : t :=
@@ -656,7 +656,7 @@ Module MorelloCapability <:
       bounds := (a_value, (Z.succ (Z.succ a_value)));
       flags := flags_from_value a_value;
       perms := MorelloPermission.perm_alloc_fun;
-      ghost_state := Default_CapGhostStat
+      ghost_state := Default_CapGhostState
     |}.
 
   Definition vaddr_in_range (a_value : Z) : bool :=
@@ -862,11 +862,14 @@ Module MorelloCapability <:
     if cap_is_null_derived c then
       vstring c.(value)
     else
-      let (b0,b1) := c.(bounds) in
-      (vstring c.(value)) ++ " " ++
-        "["++ (MorelloPermission.to_string c.(perms)) ++ "," ++
-        (vstring b0) ++ "-" ++
-        (vstring b1) ++ "]" ++
+      (vstring c.(value)) ++ " " ++ "[" ++
+        (if (get_ghost_state c).(bounds_unspecified)
+         then "?-?"
+         else
+           let (b0,b1) := c.(bounds) in
+           (MorelloPermission.to_string c.(perms)) ++ "," ++
+             (vstring b0) ++ "-" ++ (vstring b1))
+        ++ "]" ++
         (flags_as_str c).
 
   (* Not implemented in Coq but in extracted code implementation will

@@ -100,11 +100,12 @@ End VADDR_INTERVAL.
 
 Record CapGhostState :=
   {
-    tag_unspecified : bool
+    tag_unspecified : bool;
+    bounds_unspecified : bool
   }.
 
-Definition Default_CapGhostStat : CapGhostState
-  := {| tag_unspecified := false |}.
+Definition Default_CapGhostState : CapGhostState
+  := {| tag_unspecified := false; bounds_unspecified := false |}.
 
 Module Type Capability
   (V:VADDR)

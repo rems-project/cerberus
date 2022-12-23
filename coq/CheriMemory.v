@@ -209,7 +209,7 @@ Module CheriMemory
                   (Z * list (CoqCtype.ctype * pointer_value));
       next_varargs_id : Z;
       bytemap : ZMap.t AbsByte;
-      captags : ZMap.t bool;
+      capmeta : ZMap.t (bool* CapGhostState);
       dead_allocations : list storage_instance_id;
       dynamic_addrs : list MorelloAddr.t;
       last_used : option storage_instance_id
@@ -228,7 +228,7 @@ Module CheriMemory
                 varargs          := st.(varargs);
                 next_varargs_id  := st.(next_varargs_id);
                 bytemap          := st.(bytemap);
-                captags          := st.(captags);
+                capmeta          := st.(capmeta);
                 dead_allocations := st.(dead_allocations);
                 dynamic_addrs    := st.(dynamic_addrs);
                 last_used        := st.(last_used);
@@ -238,28 +238,28 @@ Module CheriMemory
   Definition mem_state := mem_state_r.
 
   Definition mem_state_with_bytemap bytemap (r : mem_state) :=
-    Build_mem_state_r r.(next_alloc_id) r.(next_iota) r.(last_address) r.(allocations) r.(iota_map) r.(funptrmap) r.(varargs) r.(next_varargs_id) bytemap r.(captags) r.(dead_allocations) r.(dynamic_addrs) r.(last_used).
+    Build_mem_state_r r.(next_alloc_id) r.(next_iota) r.(last_address) r.(allocations) r.(iota_map) r.(funptrmap) r.(varargs) r.(next_varargs_id) bytemap r.(capmeta) r.(dead_allocations) r.(dynamic_addrs) r.(last_used).
 
   Definition mem_state_with_allocations allocations (r : mem_state) :=
-    Build_mem_state_r r.(next_alloc_id) r.(next_iota) r.(last_address) allocations r.(iota_map) r.(funptrmap) r.(varargs) r.(next_varargs_id) r.(bytemap) r.(captags) r.(dead_allocations) r.(dynamic_addrs) r.(last_used).
+    Build_mem_state_r r.(next_alloc_id) r.(next_iota) r.(last_address) allocations r.(iota_map) r.(funptrmap) r.(varargs) r.(next_varargs_id) r.(bytemap) r.(capmeta) r.(dead_allocations) r.(dynamic_addrs) r.(last_used).
 
   Definition mem_state_with_last_used last_used (r : mem_state) :=
-    Build_mem_state_r r.(next_alloc_id) r.(next_iota) r.(last_address) r.(allocations) r.(iota_map) r.(funptrmap) r.(varargs) r.(next_varargs_id) r.(bytemap) r.(captags) r.(dead_allocations) r.(dynamic_addrs) last_used.
+    Build_mem_state_r r.(next_alloc_id) r.(next_iota) r.(last_address) r.(allocations) r.(iota_map) r.(funptrmap) r.(varargs) r.(next_varargs_id) r.(bytemap) r.(capmeta) r.(dead_allocations) r.(dynamic_addrs) last_used.
 
   Definition mem_state_with_iota_map iota_map (r : mem_state) :=
-    Build_mem_state_r r.(next_alloc_id) r.(next_iota) r.(last_address) r.(allocations) iota_map r.(funptrmap) r.(varargs) r.(next_varargs_id) r.(bytemap) r.(captags) r.(dead_allocations) r.(dynamic_addrs) r.(last_used).
+    Build_mem_state_r r.(next_alloc_id) r.(next_iota) r.(last_address) r.(allocations) iota_map r.(funptrmap) r.(varargs) r.(next_varargs_id) r.(bytemap) r.(capmeta) r.(dead_allocations) r.(dynamic_addrs) r.(last_used).
 
   Definition mem_state_with_next_iota next_iota (r : mem_state) :=
-    Build_mem_state_r r.(next_alloc_id) next_iota r.(last_address) r.(allocations) r.(iota_map) r.(funptrmap) r.(varargs) r.(next_varargs_id) r.(bytemap) r.(captags) r.(dead_allocations) r.(dynamic_addrs) r.(last_used).
+    Build_mem_state_r r.(next_alloc_id) next_iota r.(last_address) r.(allocations) r.(iota_map) r.(funptrmap) r.(varargs) r.(next_varargs_id) r.(bytemap) r.(capmeta) r.(dead_allocations) r.(dynamic_addrs) r.(last_used).
 
-  Definition mem_state_with_captags captags (r : mem_state) :=
-    Build_mem_state_r r.(next_alloc_id) r.(next_iota) r.(last_address) r.(allocations) r.(iota_map) r.(funptrmap) r.(varargs) r.(next_varargs_id) r.(bytemap) captags r.(dead_allocations) r.(dynamic_addrs) r.(last_used).
+  Definition mem_state_with_capmeta capmeta (r : mem_state) :=
+    Build_mem_state_r r.(next_alloc_id) r.(next_iota) r.(last_address) r.(allocations) r.(iota_map) r.(funptrmap) r.(varargs) r.(next_varargs_id) r.(bytemap) capmeta r.(dead_allocations) r.(dynamic_addrs) r.(last_used).
 
   Definition mem_state_with_funptrmap funptrmap (r : mem_state) :=
-    Build_mem_state_r r.(next_alloc_id) r.(next_iota) r.(last_address) r.(allocations) r.(iota_map) funptrmap r.(varargs) r.(next_varargs_id) r.(bytemap) r.(captags) r.(dead_allocations) r.(dynamic_addrs) r.(last_used).
+    Build_mem_state_r r.(next_alloc_id) r.(next_iota) r.(last_address) r.(allocations) r.(iota_map) funptrmap r.(varargs) r.(next_varargs_id) r.(bytemap) r.(capmeta) r.(dead_allocations) r.(dynamic_addrs) r.(last_used).
 
   Definition mem_state_with_varargs_next_varargs_id varargs next_varargs_id (r : mem_state) :=
-    Build_mem_state_r r.(next_alloc_id) r.(next_iota) r.(last_address) r.(allocations) r.(iota_map) r.(funptrmap) varargs next_varargs_id r.(bytemap) r.(captags) r.(dead_allocations) r.(dynamic_addrs) r.(last_used).
+    Build_mem_state_r r.(next_alloc_id) r.(next_iota) r.(last_address) r.(allocations) r.(iota_map) r.(funptrmap) varargs next_varargs_id r.(bytemap) r.(capmeta) r.(dead_allocations) r.(dynamic_addrs) r.(last_used).
 
 
   Definition initial_address := (HexString.to_Z "0xFFFFFFFF").
@@ -278,7 +278,7 @@ Module CheriMemory
       varargs := ZMap.empty (Z * list (CoqCtype.ctype * pointer_value));
       next_varargs_id := Z0;
       bytemap := ZMap.empty AbsByte;
-      captags := ZMap.empty bool;
+      capmeta := ZMap.empty _;
       dead_allocations := nil;
       dynamic_addrs := nil;
       last_used := None
@@ -399,18 +399,20 @@ Module CheriMemory
         if is_signed then unwrap_cap_value n else n
     end.
 
-  (** "Ghost" capability tags for memory region starting from [addr]
-      with [size].
+  Fixpoint zmap_range_init {T} (a0:Z) (n:nat) (step:Z) (v:T) (m:ZMap.t T) : ZMap.t T
+    :=
+    match n with
+    | O => m
+    | S n =>
+        let m := ZMap.add (Z.add a0 (Z.mul (Z.of_nat n) step)) v m in
+        zmap_range_init a0 n step v m
+    end.
 
-      All "true" tags associated with addresses in this region will be
-      removed.
-
-      All "false" tags will be left intact.
-   *)
-  Definition ghost_tags
+  (* Creare new cap meta for regiion where all tags are unspecified *)
+  Program Definition init_ghost_tags
     (addr: MorelloAddr.t)
     (size: Z)
-    (captags: ZMap.t bool): ZMap.t bool
+    (capmeta: ZMap.t (bool*CapGhostState)): ZMap.t (bool*CapGhostState)
     :=
     let align := IMP.get.(alignof_pointer) in
     let lower_a x :=
@@ -418,11 +420,36 @@ Module CheriMemory
       Z.mul q align in
     let a0 := lower_a addr in
     let a1 := lower_a (Z.pred (Z.add addr size)) in
-    ZMap.fold
-      (fun (a:Z) (v:bool) (ct: ZMap.t bool) =>
-         if (Z.geb a a0 && Z.leb a a1 && v)%bool then (ZMap.remove a ct)
-         else ct
-      ) captags captags.
+    let v := (false, {| tag_unspecified := true; bounds_unspecified := false |}) in
+    let n := Z.to_nat (Z.div a1 a0) in
+    zmap_range_init a0 n align v capmeta.
+
+  (** "Ghost" capability existing tags for memory region starting from [addr]
+      with [size].
+
+      All "true" tags associated with addresses in this region will be
+      marked as unspecified.
+
+      All "false" tags will be left intact.
+   *)
+  Definition ghost_tags
+    (addr: MorelloAddr.t)
+    (size: Z)
+    (capmeta: ZMap.t (bool*CapGhostState)): ZMap.t (bool*CapGhostState)
+    :=
+    let align := IMP.get.(alignof_pointer) in
+    let lower_a x :=
+      let (q,_) := quomod x align in
+      Z.mul q align in
+    let a0 := lower_a addr in
+    let a1 := lower_a (Z.pred (Z.add addr size)) in
+    ZMap.mapi
+      (fun (a:Z) '(t, gs) =>
+         if ((negb gs.(tag_unspecified)) && t && Z.geb a a0 && Z.leb a a1)%bool
+         then
+           (true, {| tag_unspecified := true; bounds_unspecified := gs.(bounds_unspecified) |})
+         else (t, gs)
+      ) capmeta.
 
   Definition allocator (size:Z) (align:Z) : memM (storage_instance_id * MorelloAddr.t) :=
     get >>= fun st =>
@@ -448,8 +475,8 @@ Module CheriMemory
                 varargs          := st.(varargs);
                 next_varargs_id  := st.(next_varargs_id);
                 bytemap          := st.(bytemap);
-                (* clear tags in newly allocated region *)
-                captags          := ghost_tags addr size st.(captags);
+                (* tags in newly allocated region are unspecified *)
+                capmeta          := init_ghost_tags addr size st.(capmeta);
                 dead_allocations := st.(dead_allocations);
                 dynamic_addrs    := st.(dynamic_addrs);
                 last_used        := Some alloc_id;
@@ -651,10 +678,12 @@ Module CheriMemory
   Fixpoint repr
     (fuel: nat)
     (funptrmap: ZMap.t (digest * string * C.t))
-    (captags : ZMap.t bool)
+    (capmeta : ZMap.t (bool*CapGhostState))
     (addr : Z)
     (mval : mem_value)
-    : serr ((ZMap.t (digest * string * C.t)) * (ZMap.t bool) * (list AbsByte))
+    : serr ((ZMap.t (digest * string * C.t))
+            * (ZMap.t (bool*CapGhostState))
+            * (list AbsByte))
     :=
     match fuel with
     | O => raise "out of fuel in repr"
@@ -662,22 +691,21 @@ Module CheriMemory
         match mval with
         | MVunspecified ty =>
             sz <- sizeof DEFAULT_FUEL None ty ;;
-            ret (funptrmap, (ghost_tags addr sz captags),
+            ret (funptrmap, (ghost_tags addr sz capmeta),
                 (list_init (Z.to_nat sz) (fun _ => absbyte_v Prov_none None None)))
         | MVinteger ity (IV n_value) =>
             iss <- option2serr "Could not get int signedness of a type in repr" (is_signed_ity DEFAULT_FUEL ity) ;;
             sz <- sizeof DEFAULT_FUEL None (CoqCtype.Ctype nil (CoqCtype.Basic (CoqCtype.Integer ity))) ;;
             bs' <- bytes_of_Z iss (Z.to_nat sz) n_value ;;
             let bs := List.map (fun (x : ascii) => absbyte_v Prov_none None (Some x)) bs' in
-            ret (funptrmap, (ghost_tags addr (Z.of_nat (List.length bs)) captags), bs)
+            ret (funptrmap, (ghost_tags addr (Z.of_nat (List.length bs)) capmeta), bs)
         | MVinteger ity (IC _ c_value) =>
             '(cb, ct) <- option2serr "int encoding error" (C.encode true c_value) ;;
-            let captags :=
-              if (C.get_ghost_state c_value).(tag_unspecified)
-              then ZMap.remove addr captags
-              else ZMap.add addr ct captags
+            let capmeta := ZMap.add addr
+                             (C.cap_is_valid c_value, C.get_ghost_state c_value)
+                             capmeta
             in
-            ret (funptrmap, captags,
+            ret (funptrmap, capmeta,
                 (mapi
                    (fun (i_value : nat) (b_value : ascii) =>
                       absbyte_v Prov_none None (Some b_value)) cb))
@@ -686,7 +714,7 @@ Module CheriMemory
             bs' <- bytes_of_Z true (Z.to_nat sz) (bits_of_float fval) ;;
             let bs := List.map (fun (x : ascii) => absbyte_v Prov_none None (Some x)) bs'
             in
-            ret (funptrmap, (ghost_tags addr (Z.of_nat (List.length bs)) captags), bs)
+            ret (funptrmap, (ghost_tags addr (Z.of_nat (List.length bs)) capmeta), bs)
         | MVpointer ref_ty (PV prov ptrval_) =>
             match ptrval_ with
             | PVfunction
@@ -694,65 +722,63 @@ Module CheriMemory
                   fp) =>
                 let '(funptrmap, c_value) := resolve_function_pointer funptrmap fp in
                 '(cb, ct) <- option2serr "pointer encoding error" (C.encode true c_value) ;;
-                let captags :=
-                  if (C.get_ghost_state c_value).(tag_unspecified)
-                  then ZMap.remove addr captags
-                  else ZMap.add addr ct captags
+                let capmeta := ZMap.add addr
+                                 (C.cap_is_valid c_value, C.get_ghost_state c_value)
+                                 capmeta
                 in
-                ret (funptrmap, captags,
+                ret (funptrmap, capmeta,
                     (mapi
                        (fun (i_value : nat) (b_value : ascii) =>
                           absbyte_v prov (Some i_value) (Some b_value)) cb))
             | (PVfunction (FP_invalid c_value) | PVconcrete c_value) =>
                 '(cb, ct) <- option2serr "function encoding error" (C.encode true c_value) ;;
-                let captags :=
-                  if (C.get_ghost_state c_value).(tag_unspecified)
-                  then ZMap.remove addr captags
-                  else ZMap.add addr ct captags
+                let capmeta := ZMap.add addr
+                                 (C.cap_is_valid c_value, C.get_ghost_state c_value)
+                                 capmeta
                 in
-                ret (funptrmap, captags,
+                ret (funptrmap, capmeta,
                     (mapi
                        (fun (i_value : nat) (b_value : ascii) =>
                           absbyte_v prov (Some i_value) (Some b_value)) cb))
             end
         | MVarray mvals =>
-            '(funptrmap, captags, _, bs_s) <-
+            '(funptrmap, capmeta, _, bs_s) <-
               monadic_fold_left
-                (fun '(funptrmap, captags, addr, bs) (mval : mem_value) =>
-                   '(funptrmap, captags, bs') <- repr fuel funptrmap captags addr mval ;;
+                (fun '(funptrmap, captmeta, addr, bs) (mval : mem_value) =>
+                   '(funptrmap, capmeta, bs') <- repr fuel funptrmap capmeta addr mval ;;
                    let addr := Z.add addr (Z.of_nat (List.length bs')) in
-                   ret (funptrmap, captags, addr, (cons bs' bs)))
-                mvals (funptrmap, captags, addr, nil) ;;
-            ret (funptrmap, captags, (List.concat (List.rev bs_s)))
+                   ret (funptrmap, capmeta, addr, (cons bs' bs)))
+                mvals (funptrmap, capmeta, addr, nil) ;;
+            ret (funptrmap, capmeta, (List.concat (List.rev bs_s)))
         | MVstruct tag_sym xs =>
             let padding_byte _ : AbsByte := absbyte_v Prov_none None None in
             '(offs, last_off) <- offsetsof DEFAULT_FUEL (TD.tagDefs tt) tag_sym ;;
             sz <- sizeof DEFAULT_FUEL None (CoqCtype.Ctype nil (CoqCtype.Struct tag_sym)) ;;
             let final_pad := Z.sub sz last_off in
-            '(funptrmap, captags, _, bs) <-
+            '(funptrmap, capmeta, _, bs) <-
               monadic_fold_left2
-                (fun (f: ZMap.t (digest * string * C.t) * ZMap.t bool * Z * list AbsByte) =>
-                   let '(funptrmap, captags, last_off, acc) := f in
+                (fun (f: ZMap.t (digest * string * C.t) * ZMap.t (bool*CapGhostState) * Z * list AbsByte) =>
+                   let '(funptrmap, capmeta, last_off, acc) := f in
                    fun (f : CoqSymbol.identifier *  CoqCtype.ctype * Z) =>
                      let '(ident, ty, off) := f in
                      fun (function_parameter :
-                           CoqSymbol.identifier *
-                             CoqCtype.ctype * mem_value) =>
+                         CoqSymbol.identifier *
+                           CoqCtype.ctype * mem_value) =>
                        let '(_, _, mval) := function_parameter in
                        let pad := Z.sub off last_off in
-                       '(funptrmap, captags, bs) <-
-                         repr fuel funptrmap captags (Z.add addr off) mval ;;
+                       '(funptrmap, capmeta, bs) <-
+                         repr fuel funptrmap capmeta (Z.add addr off) mval ;;
                        sz <- sizeof DEFAULT_FUEL None ty ;;
-                       ret (funptrmap, captags, (Z.add off sz),
+                       ret (funptrmap, capmeta, (Z.add off sz),
                            (List.app acc
                               (List.app (list_init (Z.to_nat pad) padding_byte) bs))))
-                (funptrmap, captags, 0, nil) offs xs ;;
-            ret (funptrmap, captags,
+                (funptrmap, capmeta, 0, nil) offs xs ;;
+            ret (funptrmap, capmeta,
                 (List.app bs (list_init (Z.to_nat final_pad) padding_byte)))
         | MVunion tag_sym memb_ident mval =>
             size <- sizeof DEFAULT_FUEL None (CoqCtype.Ctype nil (CoqCtype.Union tag_sym)) ;;
-            '(funptrmap', captags', bs) <- repr fuel funptrmap captags addr mval ;;
-            ret (funptrmap', captags',
+            '(funptrmap', capmeta', bs) <- repr fuel funptrmap capmeta addr mval ;;
+            ret (funptrmap', capmeta',
                 (List.app bs
                    (list_init (Nat.sub (Z.to_nat size) (List.length bs))
                       (fun _ => absbyte_v Prov_none None None))))
@@ -812,7 +838,7 @@ Module CheriMemory
                           varargs          := st.(varargs);
                           next_varargs_id  := st.(next_varargs_id);
                           bytemap          := st.(bytemap);
-                          captags          := st.(captags);
+                          capmeta          := st.(capmeta);
                           dead_allocations := st.(dead_allocations);
                           dynamic_addrs    := st.(dynamic_addrs);
                           last_used        := st.(last_used);
@@ -827,7 +853,7 @@ Module CheriMemory
               let alloc := {| prefix:= pref; base:= addr; size:= size_n'; ty:= Some ty; is_readonly:= readonly_status; taint:= Unexposed |} in
 
               st <- get ;;
-              '(funptrmap, captags, pre_bs) <- serr2memM (repr DEFAULT_FUEL st.(funptrmap) st.(captags) addr mval) ;;
+              '(funptrmap, capmeta, pre_bs) <- serr2memM (repr DEFAULT_FUEL st.(funptrmap) st.(capmeta) addr mval) ;;
               let bs := mapi (fun i b => (Z.add addr (Z.of_nat i), b)) pre_bs in
               put {|
                   next_alloc_id    := st.(next_alloc_id);
@@ -841,7 +867,7 @@ Module CheriMemory
                   bytemap          := List.fold_left (fun acc '(addr, b) =>
                                                         ZMap.add addr b acc
                                         ) bs st.(bytemap);
-                  captags          := captags;
+                  capmeta          := capmeta;
                   dead_allocations := st.(dead_allocations);
                   dynamic_addrs    := st.(dynamic_addrs);
                   last_used        := st.(last_used);
@@ -900,7 +926,7 @@ Module CheriMemory
                 varargs          := st.(varargs);
                 next_varargs_id  := st.(next_varargs_id);
                 bytemap          := st.(bytemap);
-                captags          := st.(captags);
+                capmeta          := st.(capmeta);
                 dead_allocations := st.(dead_allocations);
                 dynamic_addrs    := addr::st.(dynamic_addrs);
                 last_used        := st.(last_used);
@@ -969,7 +995,7 @@ Module CheriMemory
                     varargs          := st.(varargs);
                     next_varargs_id  := st.(next_varargs_id);
                     bytemap          := st.(bytemap);
-                    captags          := st.(captags);
+                    capmeta          := st.(capmeta);
                     dead_allocations := st.(dead_allocations);
                     dynamic_addrs    := st.(dynamic_addrs);
                     last_used        := st.(last_used);
@@ -1038,7 +1064,7 @@ Module CheriMemory
                            varargs          := st.(varargs);
                            next_varargs_id  := st.(next_varargs_id);
                            bytemap          := st.(bytemap);
-                           captags          := st.(captags);
+                           capmeta          := st.(capmeta);
                            dead_allocations := alloc_id :: st.(dead_allocations);
                            dynamic_addrs    := st.(dynamic_addrs);
                            last_used        := Some alloc_id;
@@ -1088,7 +1114,7 @@ Module CheriMemory
                                     varargs          := st.(varargs);
                                     next_varargs_id  := st.(next_varargs_id);
                                     bytemap          := st.(bytemap);
-                                    captags          := st.(captags);
+                                    capmeta          := st.(capmeta);
                                     dead_allocations := alloc_id :: st.(dead_allocations);
                                     dynamic_addrs    := st.(dynamic_addrs);
                                     last_used        := Some alloc_id;
@@ -1257,7 +1283,7 @@ Module CheriMemory
     (loc : location_ocaml)
     (find_overlaping : Z -> overlap_ind)
     (funptrmap : ZMap.t (digest * string * C.t))
-    (tag_query_f : Z -> option bool)
+    (tag_query_f : Z -> (bool* CapGhostState))
     (addr : Z)
     (cty : CoqCtype.ctype)
     (bs : list AbsByte)
