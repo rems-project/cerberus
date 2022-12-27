@@ -27,7 +27,7 @@ Module MorelloAddr <: VADDR.
 
   Definition bitwise_complement (a:Z) :=
     let bits := Z_to_binary vaddr_bits a in
-    let bits := Vector.map negb bits in
+    let bits := Bvector.Bneg _ bits in
     binary_value _ bits.
 
   Definition eqb := Z.eqb.
