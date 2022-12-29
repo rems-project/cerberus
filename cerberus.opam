@@ -45,6 +45,7 @@ build: [
     "build"
     "-p"
     name
+    "--profile=release"
     "-j"
     jobs
     "@install"
