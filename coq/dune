@@ -53,7 +53,7 @@
 (copy_files extracted/ErrorWithState.{ml,mli})
 (copy_files extracted/Fin.{ml,mli})
 (copy_files extracted/FloatClass.{ml,mli})
-(copy_files extracted/FMapAVL.{ml,mli})
+(copy_files extracted/FMapAVL0.{ml,mli})
 (copy_files extracted/FMapList.{ml,mli})
 (copy_files extracted/Functor.{ml,mli})
 (copy_files extracted/Hexadecimal.{ml,mli})
