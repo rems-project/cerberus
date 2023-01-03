@@ -84,7 +84,7 @@
 (copy_files extracted/NatLib.{ml,mli})
 (copy_files extracted/Number.{ml,mli})
 (copy_files extracted/Operators_mwords.{ml,mli})
-(copy_files extracted/OrderedType.{ml,mli})
+(copy_files extracted/OrderedType0.{ml,mli})
 (copy_files extracted/OrderedTypeEx.{ml,mli})
 (copy_files extracted/Orders.{ml,mli})
 (copy_files extracted/OrdersTac.{ml,mli})

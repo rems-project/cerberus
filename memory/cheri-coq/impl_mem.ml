@@ -259,7 +259,7 @@ module CHERIMorello : Memory = struct
                    end : Constraints with type t = mem_iv_constraint)
 
   type 'a memM =
-    ('a, string, Mem_common.mem_error, integer_value Mem_common.mem_constraint, mem_state) Nondeterminism.ndM
+    ('a, string, Mem_common.mem_error, integer_value Mem_common.mem_constraint, MM.mem_state) Nondeterminism.ndM
 
   let return = Nondeterminism.nd_return
   let bind = Nondeterminism.nd_bind
@@ -841,6 +841,8 @@ module CHERIMorello : Memory = struct
 
   let lift_coq_memM label (m:'a MM.memM): 'a memM =
     ND (fun st ->
+        if !Debug_ocaml.debug_level >= 2 then
+          Printf.fprintf stderr "MEMOP %s\n" label;
         if !Debug_ocaml.debug_level >= 3 then
           begin
             print_allocations label st ;
@@ -851,10 +853,8 @@ module CHERIMorello : Memory = struct
         | (st', Coq_inl e) ->
            let e' = fromCoq_memMError e in
            (NDkilled e', st')
-        | (st',Coq_inr a) -> (NDactive a, st')
+        | (st', Coq_inr a) -> (NDactive a, st')
       )
-
-
 
   (* --- Module implementation below *)
 
@@ -941,7 +941,7 @@ module CHERIMorello : Memory = struct
        else ffun None
     | _ -> failwith "case_ptrval"
 
-  let case_funsym_opt (st:mem_state) (pv:pointer_value): Symbol.sym option
+  let case_funsym_opt (st:MM.mem_state) (pv:pointer_value): Symbol.sym option
     = Option.map fromCoq_Symbol_sym (MM.case_funsym_opt st pv)
 
   (* Operations on pointer values *)
