@@ -462,7 +462,63 @@ let tests = "coq_morello_caps" >::: [
         ListZ.assert_equal
           emz
           m
-      )
+      );
+
+      (* default ghost state on alloc *)
+      "alloc_gs" >:: (fun _ ->
+        let c = M.alloc_cap (Z.of_int (0xfffffff3)) (Z.of_int 16) in
+        let gs = M.get_ghost_state c in
+        assert_equal false gs.bounds_unspecified;
+        assert_equal false gs.tag_unspecified
+      );
+
+      (* setter test *)
+      "change_gs" >:: (fun _ ->
+        let c = M.alloc_cap (Z.of_int (0xfffffff3)) (Z.of_int 16) in
+        let c = M.set_ghost_state c {
+                    tag_unspecified=true;
+                    bounds_unspecified=true
+                  }
+        in
+        let gs = M.get_ghost_state c in
+        assert_equal true gs.bounds_unspecified;
+        assert_equal true gs.tag_unspecified
+      );
+
+      (* Exact compare does not take tag into account *)
+      "gs_exact_compare" >:: (fun _ ->
+        let c0 = M.alloc_cap (Z.of_int (0xfffffff3)) (Z.of_int 16) in
+        let c1 = M.set_ghost_state c0 {
+                     tag_unspecified=true;
+                     bounds_unspecified=true
+                   }
+        in
+        assert_equal
+          ~cmp:M.eqb
+          ~printer:debug_print_cap
+          c0 c1
+      );
+
+      (* ghost state is not preserved in encoding *)
+      "encode/M.decode gs" >:: (fun _ ->
+        let c0 = M.alloc_cap (Z.of_int (0xfffffff3)) (Z.of_int 16) in
+        let c0 = M.set_ghost_state c0 {
+                     tag_unspecified=true;
+                     bounds_unspecified=true
+                   }
+        in
+        match M.encode true c0 with
+        | None -> assert_failure "encode failed"
+        | Some (b, t) ->
+           begin
+             match M.decode b t with
+             | None -> assert_failure "decoding failed"
+             | Some c1 ->
+                let gs1 = M.get_ghost_state c1 in
+                assert_equal false gs1.bounds_unspecified;
+                assert_equal false gs1.tag_unspecified
+           end
+      );
 
     ]
 
