@@ -721,7 +721,7 @@ Module CheriMemory
                 ((FP_valid (CoqSymbol.Symbol file_dig n_value opt_name)) as
                   fp) =>
                 let '(funptrmap, c_value) := resolve_function_pointer funptrmap fp in
-                '(cb, ct) <- option2serr "pointer encoding error" (C.encode true c_value) ;;
+                '(cb, ct) <- option2serr "valid function pointer encoding error" (C.encode true c_value) ;;
                 let capmeta := ZMap.add addr
                                  (C.cap_is_valid c_value, C.get_ghost_state c_value)
                                  capmeta
@@ -731,7 +731,7 @@ Module CheriMemory
                        (fun (i_value : nat) (b_value : ascii) =>
                           absbyte_v prov (Some i_value) (Some b_value)) cb))
             | (PVfunction (FP_invalid c_value) | PVconcrete c_value) =>
-                '(cb, ct) <- option2serr "function encoding error" (C.encode true c_value) ;;
+                '(cb, ct) <- option2serr "pointer encoding error" (C.encode true c_value) ;;
                 let capmeta := ZMap.add addr
                                  (C.cap_is_valid c_value, C.get_ghost_state c_value)
                                  capmeta
