@@ -25,3 +25,6 @@ webcerb.concrete
 /.ignore
 /backend/cheri/cerb.prof
 /cerb.prof
+
+# debug stuff
+log*.txt
