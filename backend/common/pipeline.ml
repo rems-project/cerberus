@@ -574,7 +574,8 @@ let read_core_object (core_stdlib, core_impl) fname =
   let open Core in
   let ic = open_in_bin fname in
   let v = input_line ic in
-  if v <> Version.version then
+  if v <> (Version.version ^ "+" ^ Impl_mem.name)
+  then
     Debug_ocaml.warn [] (fun () -> "WARNING: read core_object file produced with a different version of Cerberus => " ^ v);
   let dump = Marshal.from_channel ic in
   close_in ic;
