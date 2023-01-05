@@ -235,7 +235,7 @@ module CHERI (C:Capability
               with type vaddr_interval = Z.num*Z.num
          ) : Memory = struct
   (* CAUTION: if this string is changed, 'backend/driver/main.ml' needs to be updated *)
-  let name = "CHERI memory model"
+  let name = "cheri"
 
   (* INTERNAL: only for PNVI-ae-udi (this is iota) *)
   type symbolic_storage_instance_id = Z.num

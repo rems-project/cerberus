@@ -225,7 +225,7 @@ and alignof ?(tagDefs= Tags.tagDefs ()) (Ctype (_, ty) as cty) =
 
 
 module Concrete : Memory = struct
-  let name = "I am the concrete memory model"
+  let name = "concrete"
   
   (* INTERNAL: only for PNVI-ae-udi (this is iota) *)
   type symbolic_storage_instance_id = N.num

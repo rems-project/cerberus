@@ -43,7 +43,7 @@ Module CheriMemory
   Include Mem_common(MorelloAddr).
   Include AilTypesAux(IMP).
 
-  Definition name := "CHERI memory model".
+  Definition name := "cheri-coq".
 
   Definition symbolic_storage_instance_id : Set := Z.
   Definition storage_instance_id : Set := Z.
@@ -3449,8 +3449,10 @@ Module CheriMemory
 
   Definition one_fval : float := PrimFloat.one.
 
+  (* Not implmeneted but we need a placeholder to compile libc during build *)
   Definition str_fval (str : string) : serr floating_value :=
-    raise "str_fval not implmented".
+    ret PrimFloat.zero.
+    (* raise "str_fval not implmented". *)
 
   Definition op_fval
     (fop : floating_operator)

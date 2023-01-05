@@ -40,7 +40,7 @@ let io, get_progress =
   }, fun () -> !progress
 
 let is_cheri_memory () =
-  Impl_mem.name = "CHERI memory model"
+  String.starts_with ~prefix:"cheri" Impl_mem.name
 
 let frontend (conf, io) filename core_std =
   if not (Sys.file_exists filename) then
@@ -78,7 +78,8 @@ let core_libraries incl lib_paths libs =
   let libs =
     if incl then
       if Switches.is_CHERI () then
-        "c-cheri" :: libs
+        let mname = Impl_mem.name in
+        ("c-" ^ mname) :: libs
       else
         "c" :: libs
     else libs in
