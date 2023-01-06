@@ -2930,7 +2930,18 @@ Module CheriMemory
     :=
     match ival_cap, ival_n with
     | IC is_signed c_value, IV n_value =>
-        ret (IC is_signed (C.cap_set_value c_value n_value))
+        ret (IC is_signed
+               (C.cap_set_value
+                  (if C.cap_vaddr_representable c_value n_value
+                   then c_value
+                   else C.set_ghost_state
+                          c_value
+                          {|
+                            tag_unspecified := true ;
+                            bounds_unspecified := true
+                          |})
+                  n_value)
+          )
     | _, _ =>
         raise "Unexpected argument types for cap_assign_value"
     end.
