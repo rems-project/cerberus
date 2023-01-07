@@ -3796,8 +3796,11 @@ Module CheriMemory
                              "CHERI.call_intrinsic: non-cap 1st argument in: '"
                              (String.append name "'")))
                  | Some (_, c_value) =>
-                     let v_value := C.cap_get_offset c_value in
-                     ret (Some (MVinteger CoqCtype.Size_t (IV v_value)))
+                     if (C.get_ghost_state c_value).(bounds_unspecified)
+                     then ret (Some (MVunspecified CoqCtype.size_t))
+                     else
+                       let v_value := C.cap_get_offset c_value in
+                       ret (Some (MVinteger CoqCtype.Size_t (IV v_value)))
                  end)
           else
             if String.eqb name "cheri_address_get" then
@@ -3828,8 +3831,11 @@ Module CheriMemory
                                  "CHERI.call_intrinsic: non-cap 1st argument in: '"
                                  (String.append name "'")))
                      | Some (_, c_value) =>
-                         let v_value := fst (C.cap_get_bounds c_value)
-                         in ret (Some (MVinteger CoqCtype.Vaddr_t (IV v_value)))
+                         if (C.get_ghost_state c_value).(bounds_unspecified)
+                         then ret (Some (MVunspecified (CoqCtype.vaddr_t tt)))
+                         else
+                           let v_value := fst (C.cap_get_bounds c_value)
+                           in ret (Some (MVinteger CoqCtype.Vaddr_t (IV v_value)))
                      end)
               else
                 if String.eqb name "cheri_length_get" then
@@ -3845,9 +3851,12 @@ Module CheriMemory
                                    "CHERI.call_intrinsic: non-cap 1st argument in: '"
                                    (String.append name "'")))
                        | Some (_, c_value) =>
-                           let '(base, limit) := C.cap_get_bounds c_value in
-                           let v_value := Z.sub limit base in
-                           ret (Some (MVinteger CoqCtype.Size_t (IV v_value)))
+                           if (C.get_ghost_state c_value).(bounds_unspecified)
+                           then ret (Some (MVunspecified CoqCtype.size_t))
+                           else
+                             let '(base, limit) := C.cap_get_bounds c_value in
+                             let v_value := Z.sub limit base in
+                             ret (Some (MVinteger CoqCtype.Size_t (IV v_value)))
                        end)
                 else
                   if String.eqb name "cheri_tag_get" then
@@ -3915,10 +3924,16 @@ Module CheriMemory
                                          "CHERI.call_intrinsic: non-cap 2nd argument in: '"
                                          (String.append name "'")))
                              | Some (_, c0), Some (_, c1) =>
-                                 if (C.get_ghost_state c0).(tag_unspecified) ||
-                                      (C.get_ghost_state c1).(tag_unspecified)
+                                 let gs0 := C.get_ghost_state c0 in
+                                 let gs1 := C.get_ghost_state c1 in
+                                 if gs0.(tag_unspecified) || gs1.(tag_unspecified)
+                                    || gs0.(bounds_unspecified) || gs1.(bounds_unspecified)
                                  then
-                                   fail (MerrCHERI loc CheriUndefinedTag)
+                                   ret (Some (MVunspecified
+                                                (CoqCtype.Ctype nil
+                                                   (CoqCtype.Basic
+                                                      (CoqCtype.Integer
+                                                         CoqCtype.Bool)))))
                                  else
                                    let v_value := if C.eqb c0 c1 then 1 else 0 in
                                    ret
