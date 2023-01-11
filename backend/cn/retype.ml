@@ -212,6 +212,9 @@ let rec retype_pexpr (Old.M_Pexpr (loc, annots,bty,pexpr_)) =
     | M_PEunion (sym,id,asym) ->
        let@ asym = retype_pexpr asym in
        return (New.M_PEunion (sym,id,asym))
+    | M_PEcfunction pe ->
+       let@ pe = retype_pexpr pe in
+       return (New.M_PEcfunction pe)
     | M_PEmemberof (sym,id,asym) ->
        let@ asym = retype_pexpr asym in
        return (New.M_PEmemberof (sym,id,asym))
@@ -625,6 +628,7 @@ let retype_file (context : Context.t) opts (file : 'TY Old.mu_file)
         let err = !^"Variadic function" ^^^ Sym.pp fsym ^^^ !^"unsupported" in
         unsupported loc err
       else
+        debug 1 (lazy (item "translating function specification" (Sym.pp fsym)));
         let ret_ctype = Sctypes.of_ctype_unsafe loc ret_ctype in
         let args = List.map_snd (Sctypes.of_ctype_unsafe loc) args in
         let@ fspec = Parse.parse_function glob_typs trusted args ret_ctype attrs in
@@ -688,9 +692,13 @@ let retype_file (context : Context.t) opts (file : 'TY Old.mu_file)
        | Some LAreturn -> 
           error "return label has not been inlined"
        | Some LAswitch -> 
-          error "switch labels"
+          error "switch label"
+       | Some LAcase -> 
+          error "case label"
+       | Some LAdefault -> 
+          error "default label"
        | None -> 
-          error "non-loop labels"
+          error ("non-loop labels: " ^ Sym.pp_string lsym)
        end
   in
 

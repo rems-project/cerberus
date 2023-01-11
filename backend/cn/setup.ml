@@ -39,7 +39,9 @@ let cpp_str incl_dirs =
   String.concat " " 
     (["cc -std=c11 -E -CC -Werror -nostdinc -undef -D__cerb__";
       "-I " ^ Cerb_runtime.in_runtime "libc/include";
-      "-I " ^ Cerb_runtime.in_runtime "libcore";]
+      "-I " ^ Cerb_runtime.in_runtime "libcore";
+      "-include " ^ Cerb_runtime.in_runtime "libc/include/builtins.h"
+     ]
      @
        List.map (fun str -> "-I " ^ str) incl_dirs
      @

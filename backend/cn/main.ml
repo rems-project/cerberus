@@ -68,6 +68,10 @@ let frontend incl_dirs astprints filename state_file =
   let@ impl = load_core_impl stdlib impl_name in
 
   let@ (_,ail_program_opt,core_file) = c_frontend (conf incl_dirs astprints, io) (stdlib, impl) ~filename in
+  let ail_program = match ail_program_opt with
+    | None -> assert false
+    | Some (_, sigm) -> sigm
+  in
   CF.Tags.set_tagDefs core_file.CF.Core.tagDefs;
   print_log_file "original" (CORE core_file);
 
@@ -85,14 +89,10 @@ let frontend incl_dirs astprints filename state_file =
 
   let mi_file = Milicore.core_to_micore__file CTM.update_loc core_file in
   let mi_file = CF.Milicore_label_inline.rewrite_file mi_file in
-  let mu_file = CTM.normalise_file mi_file in
+  let mu_file = CTM.normalise_file ail_program mi_file in
   print_log_file "after_anf" (MUCORE mu_file);
 
   
-  let ail_program = match ail_program_opt with
-    | None -> assert false
-    | Some (_, sigm) -> sigm
-  in
   let (pred_defs, dt_defs) =
         let open Effectful.Make(Resultat) in
         match CompilePredicates.translate mu_file.mu_tagDefs 

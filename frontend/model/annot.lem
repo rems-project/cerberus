@@ -38,6 +38,8 @@ type label_annot =
   | LAreturn (* when an Esave is annotated with this it indicates it is the
                 return label *)
   | LAswitch
+  | LAcase
+  | LAdefault
 
 instance (Show label_annot)
   let show = function
@@ -47,6 +49,8 @@ instance (Show label_annot)
     | LAloop_break id -> "loop break " ^ show id
     | LAreturn -> "return"
     | LAswitch -> "switch"
+    | LAcase -> "case"
+    | LAdefault -> "default"
   end
 end
 

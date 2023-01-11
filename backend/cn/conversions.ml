@@ -833,6 +833,8 @@ let iterated_pointer_base_offset resolve loc q_name pointer =
      fail {loc; msg = Generic (!^msg ^^ colon ^^ Ast.pp false pointer)}
 
 
+
+
 let apply_ownership_spec global default_mapping_name mappings (loc, oname, {oq; predicate; arguments; o_permission; typ}) =
   let ownership_kind = match predicate with
     | "Owned" -> `Builtin `Owned
@@ -904,7 +906,10 @@ let apply_ownership_spec global default_mapping_name mappings (loc, oname, {oq; 
         let@ pointee_sct = match typ, p_osct with
           | Some typ, _ ->
              resolve_typ loc global default_mapping_name mappings (Option.map fst oq) typ
-          | _, Some ct -> return ct
+          | _, Some (Pointer pointee_sct) -> 
+             return pointee_sct
+          | _, Some _ ->
+             fail {loc; msg = Generic (Ast.Terms.pp false pointer ^^^ !^"is not a pointer")}
           | _ ->
              fail {loc; msg = Generic (!^"need 'with type' annotation" ^^^ (Ast.Terms.pp false pointer))}
         in

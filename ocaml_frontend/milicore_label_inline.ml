@@ -1,9 +1,21 @@
 open Core
 open Milicore
 open List
+open Pp_prelude
+open PPrint
 
 let inline_label oannots (label_sym, label_arg_syms_bts, label_body) args =
-  assert ((List.length label_arg_syms_bts) = (List.length args));
+  if ((List.length label_arg_syms_bts) <> (List.length args)) 
+  then begin
+      PPrint.ToChannel.compact stdout
+        (!^"label:"  ^^^ !^(Pp_symbol.to_string_pretty_cn label_sym));
+      PPrint.ToChannel.compact stdout
+        (!^"label params:"  ^^^ Pp_core.Basic.pp_params label_arg_syms_bts);
+      PPrint.ToChannel.compact stdout
+        (!^", args:" ^^^ parens (separate_map comma Pp_core.Basic.pp_pexpr args));
+      failwith "Different argument numbers"
+    end 
+  else
   let arguments = (Lem_list.list_combine label_arg_syms_bts args) in
   let (Expr(annots2, e_)) = 
     (List.fold_right (fun ((spec_arg, spec_bt), expr_arg) body ->
@@ -46,12 +58,18 @@ let rewrite_expr label expr =
 
 
 
+(* todo: ensure CN does not loop when inlining *)
 let should_be_inlined annots = 
+  let warn lk = Debug_ocaml.warn [] (fun () -> "inlining"^lk^"label") in
   match Annot.get_label_annot annots with
   | Some (LAloop_break _) -> true
   | Some (LAloop_continue _) -> true
   | Some (LAloop_body _) -> true
-  | _ -> false
+  | Some LAswitch -> warn "switch"; true
+  | Some LAcase -> warn "case"; true
+  | Some LAdefault -> warn "default"; true
+  | Some _ -> false
+  | None -> warn "(generic)"; true
 
 
 (* TODO: check about largs *)
