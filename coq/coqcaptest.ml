@@ -22,19 +22,55 @@ end
 
 module ListZ = OUnitDiff.ListSimpleMake(EZ)
 
-module M = MorelloCapabilityWithStrfcap
+open Capabilities
+open Morello
+
+module M = struct
+  include MorelloCapabilityWithStrfcap
+
+  let cap_1 : t =
+    {
+      valid = true;
+      value = Z.of_string "0x000000000ffffff15";
+      obj_type = Z.of_string "0";
+      bounds = (Z.of_string "0x00000000ffffff15", Z.of_string "0x000000000ffffff1c");
+      flags = [false; false; false; false; false; false; false; false];
+      perms =
+        {
+          global = false;
+          executive = false ;
+          permits_load = true;
+          permits_store = false;
+          permits_execute = false ;
+          permits_load_cap = true;
+          permits_store_cap = false;
+          permits_store_local_cap = false;
+          permits_seal = false;
+          permits_unseal = false;
+          permits_system_access = false;
+          permits_ccall = false;
+          permit_compartment_id = false;
+          permit_mutable_load = false;
+
+          user_perms = [false; false; false; false]
+        };
+      ghost_state = coq_Default_CapGhostState
+    }
+end
 
 (* let string_of_char_list l =
   let open List in
   "[" ^
     (String.concat ";" @@ map string_of_int @@ map int_of_char l)
     ^ "]" *)
-(*
-let string_of_bit_list l =
+
+let string_of_bool_list l =
   let open List in
   "[" ^
-    (String.concat ";" @@ map string_of_bit l)
+    (String.concat ";" @@ map string_of_bool l)
     ^ "]"
+
+(*
 
 let indexed_string_of_bit_list l =
   let open List in
@@ -195,6 +231,38 @@ let tests = "coq_morello_caps" >::: [
                   ~cmp:M.eqb
                   ~printer:debug_print_cap
                   c c'
+           end
+      );
+
+      "encode/M.decode C1" >:: (fun _ ->
+        let c = M.cap_1  in
+        match M.encode true c with
+        | None -> assert_failure "encode failed"
+        | Some (b, t) ->
+           begin
+             match M.decode b t with
+             | None -> assert_failure "decoding failed"
+             | Some c' ->
+                assert_equal
+                  ~cmp:M.eqb
+                  ~printer:debug_print_cap
+                  c c'
+           end
+      );
+
+      "encode/M.decode/getFlags C1" >:: (fun _ ->
+        let c = M.cap_1  in
+        match M.encode true c with
+        | None -> assert_failure "encode failed"
+        | Some (b, t) ->
+           begin
+             match M.decode b t with
+             | None -> assert_failure "decoding failed"
+             | Some c' ->
+                assert_equal
+                  ~printer:string_of_bool_list
+                  (M.cap_get_flags c)
+                  (M.cap_get_flags c')
            end
       );
 
