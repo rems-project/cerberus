@@ -38,10 +38,10 @@ module M = struct
       perms =
         {
           global = false;
-          executive = false ;
+          executive = false;
           permits_load = true;
           permits_store = false;
-          permits_execute = false ;
+          permits_execute = false;
           permits_load_cap = true;
           permits_store_cap = false;
           permits_store_local_cap = false;
@@ -160,6 +160,33 @@ let tests = "coq_morello_caps" >::: [
              ~printer:cap_bits_str
              b
              bytes
+      );
+
+      "encode C1 bytes" >:: (fun _ ->
+        (* C1 corresponds to https://www.morello-project.org/capinfo?c=0x1%3A900000007F1CFF15%3A00000000FFFFFF15 *)
+        let expected_bytes = 
+          (* List.map char_of_int [21;255;255;255;0;0;0;0;21;255;28;127;0;0;0;144] in *)
+          List.map char_of_int [0x15;0xff;0xff;0xff;0;0;0;0;0x15;0xff;0x1c;0x7f;0;0;0;0x90] in 
+        match M.encode true M.cap_1 with
+        | None -> assert_failure "encode failed"
+        | Some (actual_bytes, t) ->
+          assert_equal
+            actual_bytes 
+            expected_bytes
+      );
+
+      "decode/strfcap/perm C1" >:: (fun _ ->
+        (* C1 corresponds to https://www.morello-project.org/capinfo?c=0x1%3A900000007F1CFF15%3A00000000FFFFFF15 *)
+        let bytes_ = List.map char_of_int [0x15;0xff;0xff;0xff;0;0;0;0;0x15;0xff;0x1c;0x7f;0;0;0;0x90] in 
+        match M.decode bytes_ true with 
+        | None -> assert_failure "decode failed"
+        | Some c -> 
+          match M.strfcap "%P" c with 
+          | None -> assert_failure "strfcap failed"
+          | Some s' ->
+             assert_equal
+               ~pp_diff:string_diff
+               "rR" s'  
       );
 
       "decode C0" >:: (fun _ ->
