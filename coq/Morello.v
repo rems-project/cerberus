@@ -826,27 +826,6 @@ End Cap.
 
   Import Cap.
 
-  
-  (* Definition test_cap_0:Z := 0x14C0000007F1CFF1500000000FFFFFF15.
-  Definition test_cap_0_enc := encode true (Cap.of_Z test_cap_0).
-  Compute test_cap_0_enc.
-  Definition test_cap_01:Z := 0x1900000007f1cff1500000000ffffff15.
-  Definition test_cap_01_enc := encode true (Cap.of_Z test_cap_01).
-  Compute test_cap_01_enc. *)
-  (* Definition test_cap_1:Z := 0x14C0000007FFFFFF100000000FFFFFFF1.
-  Compute encode true (Cap.of_Z test_cap_1).
-  Definition test_cap_2:Z := 0x1F1FFFFFF00000000F1FFFF7F0000004C.
-  Compute encode true (Cap.of_Z test_cap_2).
-  Definition test_cap_3:Z := 0x1fc000000333711170000000012342222.
-  Compute encode true (Cap.of_Z test_cap_3).
-  Definition test_cap_4:Z := 0x1fc000000399700070000000012342222.
-  Compute encode true (Cap.of_Z test_cap_4).
-  Definition test_cap_5:Z := 0x1fb000000377700070011111111113333.
-  Compute encode true (Cap.of_Z test_cap_5).
-  Definition test_cap_6:Z := 0x1fb0000007a4700000000000000003333.
-  Compute encode true (Cap.of_Z test_cap_6). *)
-
-
   (* Compute decode (match test_cap_0_enc with Some (l,b) => l | None => [] end) true.
   Compute decode (match test_cap_01_enc with Some (l,b) => l | None => [] end) true. *)
 
