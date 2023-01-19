@@ -410,7 +410,7 @@ Module CheriMemory
 
   (* Creare new cap meta for regiion where all tags are unspecified *)
   Program Definition init_ghost_tags
-    (addr: MorelloAddr.t)
+    (addr: Morello.Value.t)
     (size: Z)
     (capmeta: ZMap.t (bool*CapGhostState)): ZMap.t (bool*CapGhostState)
     :=
@@ -878,16 +878,14 @@ Module CheriMemory
            >>=
            (fun ro =>
               let c := C.alloc_cap addr size_n' in
-              if C.cap_bounds_representable_exactly c (addr, Z.add addr size_n')
-              then
-                let c :=
-                  if ro then
-                    let p := C.cap_get_perms c in
-                    let p := Morello.Permissions.perm_clear_store p in
-                    let p := Morello.Permissions.perm_clear_store_cap p in
-                    let p := Morello.Permissions.perm_clear_store_local_cap p in
-                    C.cap_narrow_perms c p
-                  else c
+              let c :=
+                if ro then
+                  let p := C.cap_get_perms c in
+                  let p := Morello.Permissions.perm_clear_store p in
+                  let p := Morello.Permissions.perm_clear_store_cap p in
+                  let p := Morello.Permissions.perm_clear_store_local_cap p in
+                  C.cap_narrow_perms c p
+                else c
               in
               ret (PV (Prov_some alloc_id) (PVconcrete c))
       )).

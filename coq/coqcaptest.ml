@@ -28,34 +28,8 @@ open Morello
 module M = struct
   include MorelloCapabilityWithStrfcap
 
-  let cap_1 : t =
-    {
-      valid = true;
-      value = Z.of_string "0x000000000ffffff15";
-      obj_type = Z.of_string "0";
-      bounds = (Z.of_string "0x00000000ffffff15", Z.of_string "0x000000000ffffff1c");
-      flags = [false; false; false; false; false; false; false; false];
-      perms =
-        {
-          global = false;
-          executive = false;
-          permits_load = true;
-          permits_store = false;
-          permits_execute = false;
-          permits_load_cap = true;
-          permits_store_cap = false;
-          permits_store_local_cap = false;
-          permits_seal = false;
-          permits_unseal = false;
-          permits_system_access = false;
-          permits_ccall = false;
-          permit_compartment_id = false;
-          permit_mutable_load = false;
+  let cap_1 : t = TestCaps.c1
 
-          user_perms = [false; false; false; false]
-        };
-      ghost_state = coq_Default_CapGhostState
-    }
 end
 
 (* let string_of_char_list l =
