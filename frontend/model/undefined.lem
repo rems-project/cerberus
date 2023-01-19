@@ -697,6 +697,7 @@ type undefined_behaviour =
   | UB_CHERI_InvalidCap
   | UB_CHERI_UnsufficientPermissions
   | UB_CHERI_BoundsViolation
+  | UB_CHERI_UndefinedTag
 
 
 val std_of_undefined_behaviour: undefined_behaviour -> maybe string
@@ -1003,6 +1004,7 @@ let ub_str_bimap =
     ; (UB_CHERI_InvalidCap,"UB_CHERI_InvalidCap")
     ; (UB_CHERI_UnsufficientPermissions,"UB_CHERI_UnsufficientPermissions")
     ; (UB_CHERI_BoundsViolation,"UB_CHERI_BoundsViolation")
+    ; (UB_CHERI_UndefinedTag,"UB_CHERI_UndefinedTag")
     ]
 
 

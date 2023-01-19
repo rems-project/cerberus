@@ -9,6 +9,8 @@
  (action
   (with-stdout-to %{target} (run %{dep:extracted/patch.sh} %{dep:extracted/CRelationClasses.mli})
 )))
+(copy_files extracted/Addr.{ml,mli})
+(copy_files extracted/Capabilities.{ml,mli})
 (copy_files extracted/CRelationClasses.ml)
 (copy_files extracted/Option0.{ml,mli})
 (copy_files extracted/base0.{ml,mli})
@@ -95,7 +97,7 @@
 (copy_files extracted/numbers0.{ml,mli})
 (copy_files extracted/Operators_mwords.{ml,mli})
 (copy_files extracted/option0.{ml,mli})
-(copy_files extracted/OrderedType.{ml,mli})
+(copy_files extracted/OrderedType0.{ml,mli})
 (copy_files extracted/OrderedTypeEx.{ml,mli})
 (copy_files extracted/Orders.{ml,mli})
 (copy_files extracted/OrdersTac.{ml,mli})

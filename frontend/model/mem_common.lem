@@ -82,6 +82,7 @@ type mem_cheri_error =
   | CheriMerrInvalidCap
   | CheriMerrUnsufficientPermissions
   | CheriBoundsErr of ((integer*integer)*integer*integer) (* bounds,address,length *)
+  | CheriUndefinedTag
 
 instance (Show mem_cheri_error)
 let show = function
@@ -93,6 +94,8 @@ let show = function
      "CheriMerrUnsufficientPermissions"
   | CheriBoundsErr _ ->
      "CheriBoundsErr" (* TODO(CHERI): print more *)
+  | CheriUndefinedTag ->
+     "CheriUndefinedTag"
   end
 end
 
@@ -263,6 +266,8 @@ let undefinedFromMem_error = function
         Just Undefined.UB_CHERI_UnsufficientPermissions
      | CheriBoundsErr _ ->
        Just Undefined.UB_CHERI_BoundsViolation
+     | CheriUndefinedTag ->
+        Just Undefined.UB_CHERI_UndefinedTag
      end
   | _ ->
      Nothing

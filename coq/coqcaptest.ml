@@ -22,19 +22,55 @@ end
 
 module ListZ = OUnitDiff.ListSimpleMake(EZ)
 
-module M = MorelloCapabilityWithStrfcap
+open Capabilities
+open Morello
+
+module M = struct
+  include MorelloCapabilityWithStrfcap
+
+  let cap_1 : t =
+    {
+      valid = true;
+      value = Z.of_string "0x000000000ffffff15";
+      obj_type = Z.of_string "0";
+      bounds = (Z.of_string "0x00000000ffffff15", Z.of_string "0x000000000ffffff1c");
+      flags = [false; false; false; false; false; false; false; false];
+      perms =
+        {
+          global = false;
+          executive = false;
+          permits_load = true;
+          permits_store = false;
+          permits_execute = false;
+          permits_load_cap = true;
+          permits_store_cap = false;
+          permits_store_local_cap = false;
+          permits_seal = false;
+          permits_unseal = false;
+          permits_system_access = false;
+          permits_ccall = false;
+          permit_compartment_id = false;
+          permit_mutable_load = false;
+
+          user_perms = [false; false; false; false]
+        };
+      ghost_state = coq_Default_CapGhostState
+    }
+end
 
 (* let string_of_char_list l =
   let open List in
   "[" ^
     (String.concat ";" @@ map string_of_int @@ map int_of_char l)
     ^ "]" *)
-(*
-let string_of_bit_list l =
+
+let string_of_bool_list l =
   let open List in
   "[" ^
-    (String.concat ";" @@ map string_of_bit l)
+    (String.concat ";" @@ map string_of_bool l)
     ^ "]"
+
+(*
 
 let indexed_string_of_bit_list l =
   let open List in
@@ -126,6 +162,33 @@ let tests = "coq_morello_caps" >::: [
              bytes
       );
 
+      "encode C1 bytes" >:: (fun _ ->
+        (* C1 corresponds to https://www.morello-project.org/capinfo?c=0x1%3A900000007F1CFF15%3A00000000FFFFFF15 *)
+        let expected_bytes = 
+          (* List.map char_of_int [21;255;255;255;0;0;0;0;21;255;28;127;0;0;0;144] in *)
+          List.map char_of_int [0x15;0xff;0xff;0xff;0;0;0;0;0x15;0xff;0x1c;0x7f;0;0;0;0x90] in 
+        match M.encode true M.cap_1 with
+        | None -> assert_failure "encode failed"
+        | Some (actual_bytes, t) ->
+          assert_equal
+            actual_bytes 
+            expected_bytes
+      );
+
+      "decode/strfcap/perm C1" >:: (fun _ ->
+        (* C1 corresponds to https://www.morello-project.org/capinfo?c=0x1%3A900000007F1CFF15%3A00000000FFFFFF15 *)
+        let bytes_ = List.map char_of_int [0x15;0xff;0xff;0xff;0;0;0;0;0x15;0xff;0x1c;0x7f;0;0;0;0x90] in 
+        match M.decode bytes_ true with 
+        | None -> assert_failure "decode failed"
+        | Some c -> 
+          match M.strfcap "%P" c with 
+          | None -> assert_failure "strfcap failed"
+          | Some s' ->
+             assert_equal
+               ~pp_diff:string_diff
+               "rR" s'  
+      );
+
       "decode C0" >:: (fun _ ->
         let b = List.init 16 (fun _ -> '\000') in
         match M.decode b false with
@@ -195,6 +258,38 @@ let tests = "coq_morello_caps" >::: [
                   ~cmp:M.eqb
                   ~printer:debug_print_cap
                   c c'
+           end
+      );
+
+      "encode/M.decode C1" >:: (fun _ ->
+        let c = M.cap_1  in
+        match M.encode true c with
+        | None -> assert_failure "encode failed"
+        | Some (b, t) ->
+           begin
+             match M.decode b t with
+             | None -> assert_failure "decoding failed"
+             | Some c' ->
+                assert_equal
+                  ~cmp:M.eqb
+                  ~printer:debug_print_cap
+                  c c'
+           end
+      );
+
+      "encode/M.decode/getFlags C1" >:: (fun _ ->
+        let c = M.cap_1  in
+        match M.encode true c with
+        | None -> assert_failure "encode failed"
+        | Some (b, t) ->
+           begin
+             match M.decode b t with
+             | None -> assert_failure "decoding failed"
+             | Some c' ->
+                assert_equal
+                  ~printer:string_of_bool_list
+                  (M.cap_get_flags c)
+                  (M.cap_get_flags c')
            end
       );
 
@@ -437,7 +532,7 @@ let tests = "coq_morello_caps" >::: [
         | Some s' ->
            assert_equal
              ~pp_diff:string_diff
-             "0xffff [rwRW,0xffff-0x20008] (invald)" s'
+             "0xffff [rwRW,0xffff-0x20008] (invalid)" s'
       );
 
       "representable_alignment_mask" >:: (fun _ ->
@@ -462,7 +557,63 @@ let tests = "coq_morello_caps" >::: [
         ListZ.assert_equal
           emz
           m
-      )
+      );
+
+      (* default ghost state on alloc *)
+      "alloc_gs" >:: (fun _ ->
+        let c = M.alloc_cap (Z.of_int (0xfffffff3)) (Z.of_int 16) in
+        let gs = M.get_ghost_state c in
+        assert_equal false gs.bounds_unspecified;
+        assert_equal false gs.tag_unspecified
+      );
+
+      (* setter test *)
+      "change_gs" >:: (fun _ ->
+        let c = M.alloc_cap (Z.of_int (0xfffffff3)) (Z.of_int 16) in
+        let c = M.set_ghost_state c {
+                    tag_unspecified=true;
+                    bounds_unspecified=true
+                  }
+        in
+        let gs = M.get_ghost_state c in
+        assert_equal true gs.bounds_unspecified;
+        assert_equal true gs.tag_unspecified
+      );
+
+      (* Exact compare does not take tag into account *)
+      "gs_exact_compare" >:: (fun _ ->
+        let c0 = M.alloc_cap (Z.of_int (0xfffffff3)) (Z.of_int 16) in
+        let c1 = M.set_ghost_state c0 {
+                     tag_unspecified=true;
+                     bounds_unspecified=true
+                   }
+        in
+        assert_equal
+          ~cmp:M.eqb
+          ~printer:debug_print_cap
+          c0 c1
+      );
+
+      (* ghost state is not preserved in encoding *)
+      "encode/M.decode gs" >:: (fun _ ->
+        let c0 = M.alloc_cap (Z.of_int (0xfffffff3)) (Z.of_int 16) in
+        let c0 = M.set_ghost_state c0 {
+                     tag_unspecified=true;
+                     bounds_unspecified=true
+                   }
+        in
+        match M.encode true c0 with
+        | None -> assert_failure "encode failed"
+        | Some (b, t) ->
+           begin
+             match M.decode b t with
+             | None -> assert_failure "decoding failed"
+             | Some c1 ->
+                let gs1 = M.get_ghost_state c1 in
+                assert_equal false gs1.bounds_unspecified;
+                assert_equal false gs1.tag_unspecified
+           end
+      );
 
     ]
 

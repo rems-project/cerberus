@@ -15,12 +15,10 @@ Definition neq_int (x : Z) (y : Z) : {_bool : bool & ArithFact (Bool.eqb (negb (
 
 Definition neq_bool (x : bool) (y : bool) : bool := negb (Bool.eqb x y).
 
-Definition __id (x : Z) : {_retval : Z & ArithFact (_retval =? x)} := build_ex (x).
+Definition _id (x : Z) : {_retval : Z & ArithFact (_retval =? x)} := build_ex (x).
 
 Definition IsZero {n : Z} (x : mword n) `{ArithFact (n >=? 0)} : bool :=
    eq_vec x (zeros (length_mword x)).
-
-
 
 Definition sail_mask {v0 : Z} (len : Z) (v : mword v0) `{ArithFact ((len >=? 0) && (v0 >=? 0))}
 : mword len :=
@@ -264,16 +262,16 @@ Definition CapBoundsEqual (a : mword 129) (b : mword 129) : bool :=
    let bbase : (bits CAP_BOUND_NUM_BITS) := mword_of_int (Z.add (Z.add (Z.sub 63 0) 1) 1) in 
    let blimit : (bits CAP_BOUND_NUM_BITS) := mword_of_int (Z.add (Z.add (Z.sub 63 0) 1) 1) in  
    let bvalid : bool := false in 
-   let w__0 : (mword (63 - 0 + 1 + 1) * mword (63 - 0 + 1 + 1) * bool) := (CapGetBounds a) in
-   let '(tup__0, tup__1, tup__2) := w__0  : (mword (63 - 0 + 1 + 1) * mword (63 - 0 + 1 + 1) * bool) in
-   let abase : bits CAP_BOUND_NUM_BITS := tup__0 in
-   let alimit : bits CAP_BOUND_NUM_BITS := tup__1 in
-   let avalid : bool := tup__2 in
-   let w__1 : (mword (63 - 0 + 1 + 1) * mword (63 - 0 + 1 + 1) * bool) := CapGetBounds b in   
-   let '(tup__0, tup__1, tup__2) := w__1  : (mword (63 - 0 + 1 + 1) * mword (63 - 0 + 1 + 1) * bool) in
-   let bbase : bits CAP_BOUND_NUM_BITS := tup__0 in
-   let blimit : bits CAP_BOUND_NUM_BITS := tup__1 in
-   let bvalid : bool := tup__2 in
+   let w_0 : (mword (63 - 0 + 1 + 1) * mword (63 - 0 + 1 + 1) * bool) := (CapGetBounds a) in
+   let '(tup_0, tup_1, tup_2) := w_0  : (mword (63 - 0 + 1 + 1) * mword (63 - 0 + 1 + 1) * bool) in
+   let abase : bits CAP_BOUND_NUM_BITS := tup_0 in
+   let alimit : bits CAP_BOUND_NUM_BITS := tup_1 in
+   let avalid : bool := tup_2 in
+   let w_1 : (mword (63 - 0 + 1 + 1) * mword (63 - 0 + 1 + 1) * bool) := CapGetBounds b in
+   let '(tup_0, tup_1, tup_2) := w_1  : (mword (63 - 0 + 1 + 1) * mword (63 - 0 + 1 + 1) * bool) in
+   let bbase : bits CAP_BOUND_NUM_BITS := tup_0 in
+   let blimit : bits CAP_BOUND_NUM_BITS := tup_1 in
+   let bvalid : bool := tup_2 in
    (andb (andb (andb (eq_vec abase bbase) (eq_vec alimit blimit)) avalid) bvalid).
 
 Definition CapIsRepresentable (c : mword 129) (address : mword (63 - 0 + 1)) : bool :=
@@ -291,11 +289,11 @@ Definition CapSetTag (c : mword 129) (t : mword 64) : mword 129 :=
 Definition CapWithTagClear (c : mword 129) : mword 129 :=
    CapSetTag c (zero_extend (('b"0")  : mword 1) 64).
 
-Definition CapSetValue (c__arg : mword 129) (v : mword (63 - 0 + 1)) : mword 129 :=
-   let c : bits 129 := c__arg in
+Definition CapSetValue (c_arg : mword 129) (v : mword (63 - 0 + 1)) : mword 129 :=
+   let c : bits 129 := c_arg in
    let oldv : bits CAP_VALUE_NUM_BITS := CapGetValue c in
-   let w__0 : bool := CapIsRepresentable c v in 
-   let c : mword 129 := if sumbool_of_bool (negb w__0) then CapWithTagClear c else c in
+   let w_0 : bool := CapIsRepresentable c v in
+   let c : mword 129 := if sumbool_of_bool (negb w_0) then CapWithTagClear c else c in
    let c : bits 129 := update_subrange_vec_dec c CAP_VALUE_HI_BIT CAP_VALUE_LO_BIT v in
    let c : mword 129 :=
      if andb (CapBoundsUsesValue (projT1 (CapGetExponent c)))
@@ -317,8 +315,8 @@ Definition CapIsSealed (c : mword 129) : bool :=
 
 Definition CAP_FLAGS_HI_BIT : Z := 63.
 #[export] Hint Unfold CAP_FLAGS_HI_BIT : sail.
-Definition CapSetFlags (c__arg : mword 129) (f : mword (63 - 0 + 1)) : mword 129 :=
-   let c : bits 129 := c__arg in
+Definition CapSetFlags (c_arg : mword 129) (f : mword (63 - 0 + 1)) : mword 129 :=
+   let c : bits 129 := c_arg in
    update_subrange_vec_dec c CAP_FLAGS_HI_BIT CAP_FLAGS_LO_BIT
      (subrange_vec_dec f CAP_FLAGS_HI_BIT CAP_FLAGS_LO_BIT).
 
@@ -386,8 +384,8 @@ Definition CAP_LENGTH_NUM_BITS : Z := Z.add CAP_VALUE_NUM_BITS 1.
 Definition CapUnsignedGreaterThanOrEqual {N : Z} (a : mword N) (b : mword N) : bool :=
    Z.geb (projT1 (uint a)) (projT1 (uint b)).
 
-Definition CapIsRepresentableFast (c : mword 129) (increment_name__arg : mword (63 - 0 + 1)) : bool :=
-   let increment_name : bits CAP_VALUE_NUM_BITS := increment_name__arg in
+Definition CapIsRepresentableFast (c : mword 129) (increment_name_arg : mword (63 - 0 + 1)) : bool :=
+   let increment_name : bits CAP_VALUE_NUM_BITS := increment_name_arg in
    let B3 : bits (0 + (CAP_MW - 1 - (CAP_MW - 3) + 1)) := mword_of_int (Z.add 0 (Z.add (Z.sub (Z.sub (Z.add (Z.sub 79 64) 1) 1) (Z.sub (Z.add (Z.sub 79 64) 1) 3)) 1)) in 
    let R' : bits 16 := mword_of_int 0 in 
    let R3 : bits 3 := mword_of_int 0 in 
@@ -423,9 +421,9 @@ Definition CapAdd (c : mword 129) (increment_name : mword (63 - 0 + 1)) : mword 
    let newc : bits 129 :=
      update_subrange_vec_dec newc CAP_VALUE_HI_BIT CAP_VALUE_LO_BIT
        (add_vec (CapGetValue c) increment_name) in
-   let w__0 : bool := CapIsRepresentableFast c increment_name in 
+   let w_0 : bool := CapIsRepresentableFast c increment_name in
    let newc : mword 129 :=
-     if sumbool_of_bool (negb w__0) then update_vec_dec newc CAP_TAG_BIT (Bit (('b"0")  : mword 1))
+     if sumbool_of_bool (negb w_0) then update_vec_dec newc CAP_TAG_BIT (Bit (('b"0")  : mword 1))
      else newc in
    let newc : mword 129 :=
      if CapIsExponentOutOfRange c then update_vec_dec newc CAP_TAG_BIT (Bit (('b"0")  : mword 1))
@@ -452,11 +450,11 @@ Definition CapIsRangeInBounds
    let base : bits CAP_BOUND_NUM_BITS := mword_of_int (Z.add (Z.add (Z.sub 63 0) 1) 1) in 
    let limit : bits CAP_BOUND_NUM_BITS := mword_of_int (Z.add (Z.add (Z.sub 63 0) 1) 1) in 
    let valid_name : bool := false in 
-   let w__0 : (mword (63 - 0 + 1 + 1) * mword (63 - 0 + 1 + 1) * bool) := CapGetBounds c in
-   let '(tup__0, tup__1, tup__2) := w__0  : (mword (63 - 0 + 1 + 1) * mword (63 - 0 + 1 + 1) * bool) in
-   let base : bits CAP_BOUND_NUM_BITS := tup__0 in
-   let limit : bits CAP_BOUND_NUM_BITS := tup__1 in
-   let valid_name : bool := tup__2 in
+   let w_0 : (mword (63 - 0 + 1 + 1) * mword (63 - 0 + 1 + 1) * bool) := CapGetBounds c in
+   let '(tup_0, tup_1, tup_2) := w_0  : (mword (63 - 0 + 1 + 1) * mword (63 - 0 + 1 + 1) * bool) in
+   let base : bits CAP_BOUND_NUM_BITS := tup_0 in
+   let limit : bits CAP_BOUND_NUM_BITS := tup_1 in
+   let valid_name : bool := tup_2 in
    let start_ext : bits 65 := concat_vec (('b"0")  : mword 1) start_address in
    let limit_ext : bits 65 := add_vec start_ext length in
    andb (andb (CapUnsignedGreaterThanOrEqual start_ext base)
@@ -476,12 +474,12 @@ Definition CapPermsInclude (perms : mword 64) (mask : mword 64) : bool :=
 
 Definition CapGetBase (c : mword 129) : mword (63 - 0 + 1) :=
    let base : bits CAP_BOUND_NUM_BITS := mword_of_int (Z.add (Z.add (Z.sub 63 0) 1) 1) in 
-   let '(__tup_0, __tup_1, __tup_2) := CapGetBounds c in
-   let base : bits CAP_BOUND_NUM_BITS := __tup_0 in
+   let '(_tup_0, _tup_1, _tup_2) := CapGetBounds c in
+   let base : bits CAP_BOUND_NUM_BITS := _tup_0 in
    slice base 0 CAP_VALUE_NUM_BITS.
 
-Definition CapClearPerms (c__arg : mword 129) (mask : mword 64) : mword 129 :=
-   let c : bits 129 := c__arg in
+Definition CapClearPerms (c_arg : mword 129) (mask : mword 64) : mword 129 :=
+   let c : bits 129 := c_arg in
    let old_perms : bits CAP_PERMS_NUM_BITS := CapGetPermissions c in
    let new_perms : bits CAP_PERMS_NUM_BITS :=
      and_vec old_perms (not_vec (subrange_vec_dec mask (Z.sub CAP_PERMS_NUM_BITS 1) 0)) in
@@ -493,8 +491,8 @@ Definition CapIsMutableLoadPermitted (c : mword 129) : bool :=
 Definition CapIsTagSet (c : mword 129) : bool :=
    eq_vec (vec_of_bits [access_vec_dec (CapGetTag c) 0]  : mword 1) (('b"1")  : mword 1).
 
-Definition CapSetObjectType (c__arg : mword 129) (o : mword 64) : mword 129 :=
-   let c : bits 129 := c__arg in
+Definition CapSetObjectType (c_arg : mword 129) (o : mword 64) : mword 129 :=
+   let c : bits 129 := c_arg in
    update_subrange_vec_dec c CAP_OTYPE_HI_BIT CAP_OTYPE_LO_BIT
      (subrange_vec_dec o (Z.sub CAP_OTYPE_NUM_BITS 1) 0).
 
@@ -561,11 +559,11 @@ Definition CapSetBounds (c : mword 129) (req_len : mword (63 - 0 + 1 + 1)) (exac
       ) in       
    let exp := exp in
    let newc : bits 129 := c in
-   let w__0 : (mword (63 - 0 + 1 + 1) * mword (63 - 0 + 1 + 1) * bool) := CapGetBounds c in
-   let '(tup__0, tup__1, tup__2) := w__0  : (mword (63 - 0 + 1 + 1) * mword (63 - 0 + 1 + 1) * bool) in
-   let obase : bits CAP_BOUND_NUM_BITS := tup__0 in
-   let olimit : bits CAP_BOUND_NUM_BITS := tup__1 in
-   let ovalid : bool := tup__2 in
+   let w_0 : (mword (63 - 0 + 1 + 1) * mword (63 - 0 + 1 + 1) * bool) := CapGetBounds c in
+   let '(tup_0, tup_1, tup_2) := w_0  : (mword (63 - 0 + 1 + 1) * mword (63 - 0 + 1 + 1) * bool) in
+   let obase : bits CAP_BOUND_NUM_BITS := tup_0 in
+   let olimit : bits CAP_BOUND_NUM_BITS := tup_1 in
+   let ovalid : bool := tup_2 in
    let newc : mword 129 :=
      if sumbool_of_bool
        (orb
@@ -618,16 +616,16 @@ Definition CapGetRepresentableMask (len : mword (63 - 0 + 1)) : mword (63 - 0 + 
    let c : bits 129 := CapSetBounds c test_length false in 
    let exp : Z :=  (projT1 (CapGetExponent c)) in 
    let exp1 : Z := if CapIsInternalExponent c then Z.add exp 3 else 0 in
-   let zeros_  := ZerosN (Z.to_N (projT1 (__id exp1))) in 
+   let zeros_  := ZerosN (Z.to_N (projT1 (_id exp1))) in
    let ones_ := OnesN (Z.to_N (Z.sub CAP_VALUE_NUM_BITS exp1)) in 
    mword_of_int (int_of_mword false (concat_vec ones_ zeros_)).
 
 Definition CapIsBaseAboveLimit (c : mword 129) : bool :=
    let base : (bits CAP_BOUND_NUM_BITS) := mword_of_int (Z.add (Z.add (Z.sub 63 0) 1) 1) in 
    let limit : (bits CAP_BOUND_NUM_BITS) := mword_of_int (Z.add (Z.add (Z.sub 63 0) 1) 1) in 
-   let '(__tup_0, __tup_1, _) := CapGetBounds c in
-   let base : bits CAP_BOUND_NUM_BITS := __tup_0 in
-   let limit : bits CAP_BOUND_NUM_BITS := __tup_1 in
+   let '(_tup_0, _tup_1, _) := CapGetBounds c in
+   let base : bits CAP_BOUND_NUM_BITS := _tup_0 in
+   let limit : bits CAP_BOUND_NUM_BITS := _tup_1 in
    CapUnsignedGreaterThan base limit.
 
 Definition CapIsSubSetOf (a : mword 129) (b : mword 129) : bool :=
@@ -637,16 +635,16 @@ Definition CapIsSubSetOf (a : mword 129) (b : mword 129) : bool :=
    let bbase : bits CAP_BOUND_NUM_BITS := mword_of_int (Z.add (Z.add (Z.sub 63 0) 1) 1) in 
    let blimit : bits CAP_BOUND_NUM_BITS := mword_of_int (Z.add (Z.add (Z.sub 63 0) 1) 1) in 
    let bvalid : bool := false in 
-   let w__0 : (mword (63 - 0 + 1 + 1) * mword (63 - 0 + 1 + 1) * bool) := CapGetBounds a in 
-   let '(tup__0, tup__1, tup__2) := w__0  : (mword (63 - 0 + 1 + 1) * mword (63 - 0 + 1 + 1) * bool) in
-   let abase : bits CAP_BOUND_NUM_BITS := tup__0 in
-   let alimit : bits CAP_BOUND_NUM_BITS := tup__1 in
-   let avalid : bool := tup__2 in
-   let w__1 : (mword (63 - 0 + 1 + 1) * mword (63 - 0 + 1 + 1) * bool) := CapGetBounds b in
-   let '(tup__0, tup__1, tup__2) := w__1  : (mword (63 - 0 + 1 + 1) * mword (63 - 0 + 1 + 1) * bool) in
-   let bbase : bits CAP_BOUND_NUM_BITS := tup__0 in
-   let blimit : bits CAP_BOUND_NUM_BITS := tup__1 in
-   let bvalid : bool := tup__2 in
+   let w_0 : (mword (63 - 0 + 1 + 1) * mword (63 - 0 + 1 + 1) * bool) := CapGetBounds a in
+   let '(tup_0, tup_1, tup_2) := w_0  : (mword (63 - 0 + 1 + 1) * mword (63 - 0 + 1 + 1) * bool) in
+   let abase : bits CAP_BOUND_NUM_BITS := tup_0 in
+   let alimit : bits CAP_BOUND_NUM_BITS := tup_1 in
+   let avalid : bool := tup_2 in
+   let w_1 : (mword (63 - 0 + 1 + 1) * mword (63 - 0 + 1 + 1) * bool) := CapGetBounds b in
+   let '(tup_0, tup_1, tup_2) := w_1  : (mword (63 - 0 + 1 + 1) * mword (63 - 0 + 1 + 1) * bool) in
+   let bbase : bits CAP_BOUND_NUM_BITS := tup_0 in
+   let blimit : bits CAP_BOUND_NUM_BITS := tup_1 in
+   let bvalid : bool := tup_2 in
    let boundsSubset : bool :=
      andb (CapUnsignedGreaterThanOrEqual abase bbase) (CapUnsignedLessThanOrEqual alimit blimit) in
    let permsSubset : bool :=
@@ -658,17 +656,17 @@ Definition CapUnseal (c : mword 129) : mword 129 := CapSetObjectType c (Zeros 64
 
 Definition CapGetOffset (c : mword 129) : mword (63 - 0 + 1) :=
    let base : bits CAP_BOUND_NUM_BITS := mword_of_int (Z.add (Z.add (Z.sub 63 0) 1) 1) in 
-   let '((__tup_0, _, _)) := CapGetBounds c in
-   let base : bits CAP_BOUND_NUM_BITS := __tup_0 in
+   let '((_tup_0, _, _)) := CapGetBounds c in
+   let base : bits CAP_BOUND_NUM_BITS := _tup_0 in
    let offset : bits 65 := sub_vec (concat_vec (('b"0")  : mword 1) (CapGetValue c)) base in
    slice offset 0 CAP_VALUE_NUM_BITS.
 
 Definition CapGetLength (c : mword 129) : mword (63 - 0 + 1 + 1) :=
    let base : bits CAP_BOUND_NUM_BITS := mword_of_int (Z.add (Z.add (Z.sub 63 0) 1) 1) in 
    let limit : bits CAP_BOUND_NUM_BITS := mword_of_int (Z.add (Z.add (Z.sub 63 0) 1) 1) in 
-   let '((__tup_0, __tup_1, _)) := CapGetBounds c in
-   let base : bits CAP_BOUND_NUM_BITS := __tup_0 in
-   let limit : bits CAP_BOUND_NUM_BITS := __tup_1 in
+   let '((_tup_0, _tup_1, _)) := CapGetBounds c in
+   let base : bits CAP_BOUND_NUM_BITS := _tup_0 in
+   let limit : bits CAP_BOUND_NUM_BITS := _tup_1 in
    sub_vec limit base.
 
 Definition CapIsInBounds (c : mword 129) : bool :=
@@ -680,8 +678,8 @@ Definition CapIsInBounds (c : mword 129) : bool :=
 
 Definition CapSetOffset (c : mword 129) (offset : mword (63 - 0 + 1)) : mword 129 :=
    let base : bits CAP_BOUND_NUM_BITS := mword_of_int (Z.add (Z.add (Z.sub 63 0) 1) 1) in 
-   let '((__tup_0, _, _)) := CapGetBounds c in
-   let base : bits CAP_BOUND_NUM_BITS := __tup_0 in
+   let '((_tup_0, _, _)) := CapGetBounds c in
+   let base : bits CAP_BOUND_NUM_BITS := _tup_0 in
    let newvalue : bits CAP_VALUE_NUM_BITS :=
      add_vec (subrange_vec_dec base (Z.sub CAP_VALUE_NUM_BITS 1) 0) offset in
    let increment_name : bits CAP_VALUE_NUM_BITS := sub_vec newvalue (CapGetValue c) in

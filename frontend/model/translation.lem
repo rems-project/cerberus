@@ -997,7 +997,7 @@ else
                           if Global.is_CHERI () && Ctype.is_ptr_t result_ty then
                             mk_cheri_derive_and_assign_cap is_signed
                               (Mem_common.DCunary A.Bnot)
-                              (Caux.mk_nullcap_pe is_signed, obj_sym_pe)
+                              (obj_sym_pe, Caux.mk_nullcap_pe is_signed)
                               core_bnot
                           else 
                             core_bnot

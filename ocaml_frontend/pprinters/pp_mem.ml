@@ -2,15 +2,27 @@ open Pp_prelude
 
 open Mem_common
 
+let pp_unaryOperator (o:AilSyntax.unaryOperator) =
+  match o with
+  | Plus -> !^ "Plus"
+  | Minus -> !^ "Minus"
+  | Bnot -> !^ "Bnot"
+  | Address -> !^ "Address"
+  | Indirection -> !^ "Indirection"
+  | PostfixIncr -> !^ "PostfixIncr"
+  | PostfixDecr -> !^ "PostfixDecr"
+
+let pp_derivecap_op = function
+  | DCunary u -> pp_unaryOperator u
+  | DCbinary b -> !^ "TODO:binary"
 
 let pp_pure_memop = function
   | DeriveCap (bop, is_signed) ->
-      !^ "DeriveCap[TODO:bop]"
+      !^ "DeriveCap" ^^ P.brackets (pp_derivecap_op bop)
   | CapAssignValue ->
       !^ "CapAssignValue"
   | Ptr_tIntValue ->
       !^ "Ptr_tIntValue"
-
 
 let pp_memop = function
   | PtrEq ->

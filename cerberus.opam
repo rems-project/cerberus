@@ -18,11 +18,12 @@ license: "BSD-2-Clause"
 homepage: "https://www.cl.cam.ac.uk/~pes20/cerberus/"
 bug-reports: "https://github.com/rems-project/cerberus/issues"
 depends: [
-  "dune" {>= "3.5.0"}
+  "ocaml" {>= "4.13.0"}
+  "dune" {>= "2.0.0"}
   "sha" {>= "1.12"}
   "pprint" {>= "20180528"}
   "ppx_sexp_conv" {= "v0.14.3"}
-  "sexplib" {>= "v0.13.0"}
+  "sexplib" {>= "v0.13.0" & <= "v0.14.0"}
   "z3" {>= "4.8.9"}
   "cmdliner" {= "1.0.4"}
   "yojson" {= "1.7.0"}
@@ -41,6 +42,7 @@ depends: [
   "coq-ext-lib"
   "coq-struct-tact"
 ]
+
 build: [
   ["dune" "subst"] {pinned}
   [make "prelude-src"]
@@ -48,6 +50,7 @@ build: [
     "build"
     "-p"
     name
+    "--profile=release"
     "-j"
     jobs
     "@install"

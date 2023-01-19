@@ -235,7 +235,7 @@ module CHERI (C:Capability
               with type vaddr_interval = Z.num*Z.num
          ) : Memory = struct
   (* CAUTION: if this string is changed, 'backend/driver/main.ml' needs to be updated *)
-  let name = "CHERI memory model"
+  let name = "cheri"
 
   (* INTERNAL: only for PNVI-ae-udi (this is iota) *)
   type symbolic_storage_instance_id = Z.num
@@ -1136,45 +1136,32 @@ module CHERI (C:Capability
                   (* could not decode capability *)
                   Debug_ocaml.warn [] (fun () -> "Error decoding pointer cap");
                   MVErr (MerrCHERI (loc, CheriErrDecodingCap))
-               | Some n ->
+               | Some c ->
                   begin match ref_ty with
                   | Ctype (_, Function _) ->
-                     begin match tag_query_f addr with
+                     let n = (Z.sub (C.cap_get_value c) (Z.of_int initial_address)) in
+                     begin match IntMap.find_opt n funptrmap with
+                     | Some (file_dig, name, c') ->
+                        (* check if decoded capability matches
+                           the one we have in `funptrmap` *)
+                        if C.eq c c' then
+                          (* If matches, keep symbolic rperesentation *)
+                          MVEpointer (ref_ty, PV(prov, PVfunction (FP_valid (Symbol.Symbol (file_dig, Z.to_int n, SD_Id name)))))
+                        else
+                          (* Conflicting capability values for
+                             given address in funptrmap and in
+                             memory. The memory takes
+                             precendence.*)
+                          MVEpointer (ref_ty, PV(prov, PVfunction (FP_invalid c)))
                      | None ->
-                        Debug_ocaml.warn  [] (fun () -> "Unspecified tag value for address 0x" ^ (Z.format "%x" addr));
-                        MVEunspecified cty
-                     | Some tag ->
-                        begin match C.decode cs tag with
-                        | None ->
-                           (* could not decode capability *)
-                           Debug_ocaml.warn [] (fun () -> "Error decoding function pointer cap");
-                           MVErr (MerrCHERI (loc, CheriErrDecodingCap))
-                        | Some c ->
-                           let n = (Z.sub (C.cap_get_value c) (Z.of_int initial_address)) in
-                           begin match IntMap.find_opt n funptrmap with
-                           | Some (file_dig, name, c') ->
-                              (* check if decoded capability matches
-                                 the one we have in `funptrmap` *)
-                              if C.eq c c' then
-                                (* If matches, keep symbolic rperesentation *)
-                                MVEpointer (ref_ty, PV(prov, PVfunction (FP_valid (Symbol.Symbol (file_dig, Z.to_int n, SD_Id name)))))
-                              else
-                                (* Conflicting capability values for
-                                   given address in funptrmap and in
-                                   memory. The memory takes
-                                   precendence.*)
-                                MVEpointer (ref_ty, PV(prov, PVfunction (FP_invalid c)))
-                           | None ->
-                              MVEpointer (ref_ty, PV(prov, PVfunction (FP_invalid c)))
-                           end
-                        end
+                        MVEpointer (ref_ty, PV(prov, PVfunction (FP_invalid c)))
                      end
                   | _ ->
                      let prov =
                        match prov_status with
                        | `NotValidPtrProv ->
                           (* KKK print_endline "NotValidPtrProv"; *)
-                          begin match find_overlaping (C.cap_get_value n) with
+                          begin match find_overlaping (C.cap_get_value c) with
                           | `NoAlloc ->
                              Prov_none
                           | `SingleAlloc alloc_id ->
@@ -1188,7 +1175,7 @@ module CHERI (C:Capability
                           (* KKK print_endline ("ValidPtrProv ==> " ^ string_of_provenance prov); *)
                           prov
                      in
-                     MVEpointer (ref_ty, PV (prov, PVconcrete n))
+                     MVEpointer (ref_ty, PV (prov, PVconcrete c))
                   end
                end
             end
