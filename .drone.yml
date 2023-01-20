@@ -15,6 +15,11 @@ steps:
         path: /var/run/docker.sock
     commands:
       - docker build --no-cache -t cerberus-cache -f Dockerfile.ci .
+    when:
+      event:
+        - cron
+      cron:
+      - rebuild-cache
 
   - name: compile-cerberus
     image: cerberus-cache
