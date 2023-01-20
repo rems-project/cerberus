@@ -1,17 +1,20 @@
 kind: pipeline
 type: docker
 name: default
-settings:
-  dockerfile: Dockerfile.ci
   
 steps:
-  - name: rebuild-cache
+  - name: submodules
     image: alpine/git
+    commands:
+      - git submodule update --init --recursive
+
+  - name: rebuild-cache
+    image: docker
     volumes:
       - name: dockersock
         path: /var/run/docker.sock
     commands:
-      - docker build --no-cache -t cerberus-cache .
+      - docker build --no-cache -t cerberus-cache -f Dockerfile.ci .
     when:
       event:
         - cron
