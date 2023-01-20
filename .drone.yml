@@ -6,7 +6,7 @@ settings:
   
 steps:
   - name: rebuild-cache
-    image: docker
+    image: alpine/git
     volumes:
       - name: dockersock
         path: /var/run/docker.sock
