@@ -1,7 +1,9 @@
 kind: pipeline
 type: docker
 name: default
-
+settings:
+  dockerfile: Dockerfile.ci
+  
 steps:
   - name: rebuild-cache
     image: docker
