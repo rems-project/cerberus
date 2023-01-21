@@ -56,6 +56,12 @@ module M = struct
         };
       ghost_state = coq_Default_CapGhostState
     }
+
+  (* re-define compare function to do deep comparison *)
+  let deep_eqb a b =
+    a = b
+
+
 end
 
 let str_of_bool b =
@@ -135,6 +141,15 @@ let tests = "coq_morello_caps" >::: [
              bytes
       );
 
+      (*
+      "C1 representability" >:: (fun _ ->
+        (* C1 corresponds to https://www.morello-project.org/capinfo?c=0x1%3A900000007F1CFF15%3A00000000FFFFFF15 *)
+        assert_bool
+          "C1 addr must be representable"
+          (M.cap_vaddr_representable M.cap_1 (M.cap_get_value M.cap_1))
+      );
+       *)
+
       "encode C1 bytes" >:: (fun _ ->
         (* C1 corresponds to https://www.morello-project.org/capinfo?c=0x1%3A900000007F1CFF15%3A00000000FFFFFF15 *)
         let expected_bytes = 
@@ -156,7 +171,7 @@ let tests = "coq_morello_caps" >::: [
         | None -> assert_failure "decode failed"
         | Some c ->
            assert_equal
-             ~cmp:M.eqb
+             ~cmp:M.deep_eqb
              ~printer:M.to_string
              M.cap_1
              c
@@ -195,7 +210,7 @@ let tests = "coq_morello_caps" >::: [
         | None -> assert_failure "decode failed"
         | Some c ->
            assert_equal
-             ~cmp:M.eqb
+             ~cmp:M.deep_eqb
              ~printer:debug_print_cap
              c (M.cap_c0 ())
       );
@@ -206,7 +221,7 @@ let tests = "coq_morello_caps" >::: [
         | None -> assert_failure "decode failed"
         | Some c ->
            assert_equal
-             ~cmp:M.eqb
+             ~cmp:M.deep_eqb
              ~printer:M.to_string
              c (M.cap_c0 ())
       );
@@ -222,7 +237,7 @@ let tests = "coq_morello_caps" >::: [
              | None -> assert_failure "decoding failed"
              | Some c0' ->
                 assert_equal
-                  ~cmp:M.eqb
+                  ~cmp:M.deep_eqb
                   ~printer:M.to_string
                   c0 c0'
            end
@@ -239,7 +254,7 @@ let tests = "coq_morello_caps" >::: [
              | None -> assert_failure "decoding failed"
              | Some c' ->
                 assert_equal
-                  ~cmp:M.eqb
+                  ~cmp:M.deep_eqb
                   ~printer:debug_print_cap
                   c c'
            end
@@ -255,7 +270,7 @@ let tests = "coq_morello_caps" >::: [
              | None -> assert_failure "decoding failed"
              | Some c' ->
                 assert_equal
-                  ~cmp:M.eqb
+                  ~cmp:M.deep_eqb
                   ~printer:debug_print_cap
                   c c'
            end
@@ -271,7 +286,7 @@ let tests = "coq_morello_caps" >::: [
              | None -> assert_failure "decoding failed"
              | Some c' ->
                 assert_equal
-                  ~cmp:M.eqb
+                  ~cmp:M.deep_eqb
                   ~printer:debug_print_cap
                   c c'
            end
