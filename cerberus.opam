@@ -38,6 +38,8 @@ depends: [
   "coq-sail"
   "coq-ext-lib"
   "coq-struct-tact"
+  "landmarks"
+  "landmarks-ppx"
 ]
 
 build: [
