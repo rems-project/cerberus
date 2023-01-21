@@ -564,7 +564,7 @@ Module MorelloCapability <:
   Definition flags_from_value_bits (x : mword 64) : list bool :=
     let x := zero_extend x 64 in
     let xl := mword_to_bools x in
-    List.skipn (Nat.sub 64 8)%nat xl.
+    List.firstn 8%nat xl.
 
   Definition flags_from_value (v : MorelloAddr.t) : list bool :=
     let w := mword_of_int v (len:= Z.of_nat vaddr_bits) in
