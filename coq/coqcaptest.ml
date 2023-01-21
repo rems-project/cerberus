@@ -171,8 +171,8 @@ let tests = "coq_morello_caps" >::: [
         | None -> assert_failure "encode failed"
         | Some (actual_bytes, t) ->
           assert_equal
-            actual_bytes 
             expected_bytes
+            actual_bytes 
       );
 
       "decode/strfcap/perm C1" >:: (fun _ ->
