@@ -58,45 +58,21 @@ module M = struct
     }
 end
 
-(* let string_of_char_list l =
-  let open List in
-  "[" ^
-    (String.concat ";" @@ map string_of_int @@ map int_of_char l)
-    ^ "]" *)
+let str_of_bool b =
+  if b then "1" else "0"
 
 let string_of_bool_list l =
   let open List in
   "[" ^
-    (String.concat ";" @@ map string_of_bool l)
+    (String.concat "" @@ map str_of_bool l)
     ^ "]"
 
-(*
-
-let indexed_string_of_bit_list l =
-  let open List in
-  let bits = map string_of_bit l in
-  let ibits = mapi (Printf.sprintf "bit %3d:%s") bits in
-  "\n" ^
-    (String.concat "\n" @@ ibits)
-    ^ "\n"
-
-let cap_bits_indexed_str b =
-  let bit_list_of_char c =
-    get_slice_int' (8, (Z.of_int (int_of_char c)), 0) in
-  let bits = List.concat (List.map bit_list_of_char b) in
-  indexed_string_of_bit_list bits
-
-let cap_bits_str b =
-  let bit_list_of_char c =
-    get_slice_int' (8, (Z.of_int (int_of_char c)), 0) in
-  let bits = List.concat (List.map bit_list_of_char b) in
-  string_of_bit_list bits
-
 let cap_bits_diff (fmt:Format.formatter) (c1,c2) =
-  let bit_list_of_char c =
-    get_slice_int' (8, (Z.of_int (int_of_char c)), 0) in
-  let b1 = List.map string_of_bit @@ List.concat (List.map bit_list_of_char c1) in
-  let b2 = List.map string_of_bit @@ List.concat (List.map bit_list_of_char c2) in
+  let nth_bit x n = x land (1 lsl n) <> 0 in
+  let bitarray length x = List.init length (nth_bit x) in
+  let bit_list_of_char c = bitarray 8 (int_of_char c) in
+  let b1 = List.concat (List.map bit_list_of_char c1) in
+  let b2 = List.concat (List.map bit_list_of_char c2) in
   assert(List.length b1 = List.length b2);
   let open Format in
   pp_force_newline fmt ();
@@ -104,13 +80,11 @@ let cap_bits_diff (fmt:Format.formatter) (c1,c2) =
     let x0 = List.nth b1 i in
     let x1 = List.nth b2 i in
     if x0 <> x1 then
-      Format.fprintf fmt "bit %03d: expected %s: but got: %s\n" i x0 x1;
+      Format.fprintf fmt "bit %03d: expected %s: but got: %s\n"
+        i
+        (str_of_bool x0)
+        (str_of_bool x1);
   done
- *)
-
-let cap_bits_str (b:char list) = "" (* TODO *)
-let cap_bits_indexed_str (b:char list) = "" (* TODO *)
-let cap_bits_diff (fmt:Format.formatter) ((c1:char list),(c2:char list)) = () (* TODO *)
 
 let string_diff fmt (a,b) =
   let open Format in
@@ -157,7 +131,6 @@ let tests = "coq_morello_caps" >::: [
            let b = List.map char_of_int [0;0;0;0;0;0;0;0;5;0;1;0;0;0;0;0] in
            assert_equal
              ~pp_diff:cap_bits_diff
-             ~printer:cap_bits_str
              b
              bytes
       );
@@ -165,12 +138,12 @@ let tests = "coq_morello_caps" >::: [
       "encode C1 bytes" >:: (fun _ ->
         (* C1 corresponds to https://www.morello-project.org/capinfo?c=0x1%3A900000007F1CFF15%3A00000000FFFFFF15 *)
         let expected_bytes = 
-          (* List.map char_of_int [21;255;255;255;0;0;0;0;21;255;28;127;0;0;0;144] in *)
-          List.map char_of_int [0x15;0xff;0xff;0xff;0;0;0;0;0x15;0xff;0x1c;0x7f;0;0;0;0x90] in 
+          List.map char_of_int [0x15;0xff;0xff;0xff;0;0;0;0;0x15;0xff;0x1c;0x7f;0;0;0;0x90] in
         match M.encode true M.cap_1 with
         | None -> assert_failure "encode failed"
         | Some (actual_bytes, t) ->
-          assert_equal
+           assert_equal
+             ~pp_diff:cap_bits_diff
             expected_bytes
             actual_bytes 
       );
@@ -307,7 +280,7 @@ let tests = "coq_morello_caps" >::: [
                   | None -> assert_failure "2nd M.encode failed"
                   | Some (b', _) ->
                      assert_equal
-                       ~printer:cap_bits_indexed_str
+                       ~pp_diff:cap_bits_diff
                        b b'
                 end
            end
