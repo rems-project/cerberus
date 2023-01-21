@@ -148,6 +148,20 @@ let tests = "coq_morello_caps" >::: [
             actual_bytes 
       );
 
+      "decode C1 bytes" >:: (fun _ ->
+        (* C1 corresponds to https://www.morello-project.org/capinfo?c=0x1%3A900000007F1CFF15%3A00000000FFFFFF15 *)
+        let c1_bytes =
+          List.map char_of_int [0x15;0xff;0xff;0xff;0;0;0;0;0x15;0xff;0x1c;0x7f;0;0;0;0x90] in
+        match M.decode c1_bytes true  with
+        | None -> assert_failure "decode failed"
+        | Some c ->
+           assert_equal
+             ~cmp:M.eqb
+             ~printer:M.to_string
+             M.cap_1
+             c
+      );
+
       "decode/strfcap/perm C1" >:: (fun _ ->
         (* C1 corresponds to https://www.morello-project.org/capinfo?c=0x1%3A900000007F1CFF15%3A00000000FFFFFF15 *)
         let bytes_ = List.map char_of_int [0x15;0xff;0xff;0xff;0;0;0;0;0x15;0xff;0x1c;0x7f;0;0;0;0x90] in 
@@ -184,7 +198,7 @@ let tests = "coq_morello_caps" >::: [
              c (M.cap_c0 ())
       );
       
-      "encode/M.decode C0" >:: (fun _ ->
+      "encode/decode C0" >:: (fun _ ->
         let c0 = M.cap_c0 () in
 
         match M.encode true c0 with
@@ -201,7 +215,7 @@ let tests = "coq_morello_caps" >::: [
            end
       );
 
-      "encode/M.decode odd" >:: (fun _ ->
+      "encode/decode odd" >:: (fun _ ->
         let c = M.alloc_cap (Z.of_int (0xfffffff3)) (Z.of_int 16) in
 
         match M.encode true c with
@@ -218,7 +232,7 @@ let tests = "coq_morello_caps" >::: [
            end
       );
 
-      "encode/M.decode even" >:: (fun _ ->
+      "encode/decode even" >:: (fun _ ->
         let c = M.alloc_cap (Z.of_int (0xfffffff4)) (Z.of_int 16) in
         match M.encode true c with
         | None -> assert_failure "encode failed"
@@ -234,7 +248,7 @@ let tests = "coq_morello_caps" >::: [
            end
       );
 
-      "encode/M.decode C1" >:: (fun _ ->
+      "encode/decode C1" >:: (fun _ ->
         let c = M.cap_1  in
         match M.encode true c with
         | None -> assert_failure "encode failed"
@@ -250,7 +264,7 @@ let tests = "coq_morello_caps" >::: [
            end
       );
 
-      "encode/M.decode/getFlags C1" >:: (fun _ ->
+      "encode/decode/getFlags C1" >:: (fun _ ->
         let c = M.cap_1  in
         match M.encode true c with
         | None -> assert_failure "encode failed"
@@ -266,7 +280,7 @@ let tests = "coq_morello_caps" >::: [
            end
       );
 
-      "encode/M.decode/M.encode" >:: (fun _ ->
+      "encode/decode/encode" >:: (fun _ ->
         let c = M.alloc_cap (Z.of_int (0xfffffff3)) (Z.of_int 16) in
         match M.encode true c with
         | None -> assert_failure "encode failed"
@@ -328,14 +342,14 @@ let tests = "coq_morello_caps" >::: [
            end
       );
 
-      "two_M.decode" >:: (fun _ ->
+      "two.decode" >:: (fun _ ->
         let b1 = List.map char_of_int [0;14;192;0;127;240;255;236;0;0;0;0;255;255;255;236] in
         let mc1 = M.decode b1 true in
         let b2 = List.map char_of_int  [42;14;192;0;127;240;255;236;0;0;0;0;255;255;255;236] in
         let mc2 = M.decode b2 true in
         match mc1,mc2 with
-        | None, _ -> assert_failure "1st M.decode failed"
-        | _, None -> assert_failure "2nd M.decode failed"
+        | None, _ -> assert_failure "1st decode failed"
+        | _, None -> assert_failure "2nd decode failed"
         | Some c1, Some c2 ->
            if M.cap_get_value c1 = M.cap_get_value c2 then
              assert_failure "vlaue of c1 = value c2 while it should not"
@@ -568,7 +582,7 @@ let tests = "coq_morello_caps" >::: [
       );
 
       (* ghost state is not preserved in encoding *)
-      "encode/M.decode gs" >:: (fun _ ->
+      "encode/decode gs" >:: (fun _ ->
         let c0 = M.alloc_cap (Z.of_int (0xfffffff3)) (Z.of_int 16) in
         let c0 = M.set_ghost_state c0 {
                      tag_unspecified=true;
