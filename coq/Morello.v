@@ -580,6 +580,7 @@ Module MorelloCapability <:
       let flags := flags_from_value_bits value' in
       let perms' := CapGetPermissions bits in
       let perms_data := mword_to_bools perms' in
+      let perms_data := List.rev perms_data in
       match MorelloPermission.of_list perms_data with
       | None => None
       | Some perms =>
@@ -595,19 +596,17 @@ Module MorelloCapability <:
             |}
       end.
 
-  Program Definition decode (bytes : list ascii) (tag : bool) : option t :=
+  Definition decode (bytes : list ascii) (tag : bool) : option t :=
     if Nat.eqb (List.length bytes) 16%nat then
       let bytes := List.rev bytes in
       let bits := tag::(bool_bits_of_bytes bytes) in
       let bitsu := List.map bitU_of_bool bits in
       let w := vec_of_bits bitsu in
+      (* the following line does nothing but hints type system *)
+      let w:mword 129 := mword_of_int (int_of_mword false w) in
       decode_word w
     else
       None.
-  Next Obligation.
-    admit. (* TODO: prove that (lenght (bool_bits_of_bytes)==128)
-              and ehence [w] is 129-bit long *)
-  Admitted.
 
   Definition cap_c0 (_: unit) : t :=
     {| valid := false;
@@ -669,7 +668,7 @@ Module MorelloCapability <:
     :=
     update_subrange_vec_dec zc CAP_PERMS_HI_BIT CAP_PERMS_LO_BIT zp.
 
-  Program Definition encode_to_word (isexact : bool) (c : t) : mword 129 :=
+  Definition encode_to_word (isexact : bool) (c : t) : mword 129 :=
     let bits := CapNull tt in
     let bits :=
       CapSetTag bits
@@ -689,12 +688,12 @@ Module MorelloCapability <:
     let bits := CapSetFlags bits flags in
     let perms :=
       List.map bitU_of_bool (MorelloPermission.to_list (cap_get_perms c)) in
+    let perms := List.rev perms in
     let perms := vec_of_bits perms in
+    let perms : mword MorelloPermission.perms_zlen :=
+      mword_of_int (int_of_mword false perms) in
     let bits := CapSetPermissins bits perms in
     bits.
-  Next Obligation.
-    (* TODO: prove that [(MorelloPermission.to_list (cap_get_perms c)) = perms_len] *)
-  Admitted.
 
   Definition cap_vaddr_representable (c : t) (a : Z) : bool
     :=
