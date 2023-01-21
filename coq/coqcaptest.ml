@@ -177,6 +177,18 @@ let tests = "coq_morello_caps" >::: [
              c
       );
 
+      "decode C1 bytes (value)" >:: (fun _ ->
+        (* C1 corresponds to https://www.morello-project.org/capinfo?c=0x1%3A900000007F1CFF15%3A00000000FFFFFF15 *)
+        let c1_bytes =
+          List.map char_of_int [0x15;0xff;0xff;0xff;0;0;0;0;0x15;0xff;0x1c;0x7f;0;0;0;0x90] in
+        match M.decode c1_bytes true  with
+        | None -> assert_failure "decode failed"
+        | Some c ->
+           assert_equal
+             (M.cap_get_value M.cap_1)
+             (M.cap_get_value c)
+      );
+
       "decode C1 bytes (flags)" >:: (fun _ ->
         (* C1 corresponds to https://www.morello-project.org/capinfo?c=0x1%3A900000007F1CFF15%3A00000000FFFFFF15 *)
         let c1_bytes =
