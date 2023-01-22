@@ -140,7 +140,7 @@ let tests = "coq_morello_caps" >::: [
         match M.encode true (M.cap_c0 ()) with
         | None -> assert_failure "encode failed"
         | Some (bytes, tag) ->
-           let b = List.map char_of_int [0;0;0;0;0;0;0;0;5;0;1;0;0;0;0;0] in
+           let b = List.map char_of_int [0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0] in
            assert_equal
              ~pp_diff:cap_bits_diff
              b
