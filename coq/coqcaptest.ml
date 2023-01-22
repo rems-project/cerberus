@@ -59,8 +59,15 @@ module M = struct
 
   (* re-define compare function to do deep comparison *)
   let deep_eqb a b =
-    a = b
-
+    get_ghost_state a = get_ghost_state b
+    && cap_is_valid a = cap_is_valid b
+    && cap_get_value a = cap_get_value b
+    && cap_get_offset a = cap_get_offset b
+    && cap_get_obj_type a = cap_get_obj_type b
+    && cap_get_bounds a = cap_get_bounds b
+    && cap_get_seal a = cap_get_seal b
+    && cap_get_flags a = cap_get_flags b
+    && cap_get_perms a = cap_get_perms b
 
 end
 
@@ -130,7 +137,6 @@ let tests = "coq_morello_caps" >::: [
 
       "encode C0 bytes" >:: (fun _ ->
         (* C0 does not M.encode to all zeros due to compresison limitations *)
-
         match M.encode true (M.cap_c0 ()) with
         | None -> assert_failure "encode failed"
         | Some (bytes, tag) ->
@@ -140,15 +146,6 @@ let tests = "coq_morello_caps" >::: [
              b
              bytes
       );
-
-      (*
-      "C1 representability" >:: (fun _ ->
-        (* C1 corresponds to https://www.morello-project.org/capinfo?c=0x1%3A900000007F1CFF15%3A00000000FFFFFF15 *)
-        assert_bool
-          "C1 addr must be representable"
-          (M.cap_vaddr_representable M.cap_1 (M.cap_get_value M.cap_1))
-      );
-       *)
 
       "encode C1 bytes" >:: (fun _ ->
         (* C1 corresponds to https://www.morello-project.org/capinfo?c=0x1%3A900000007F1CFF15%3A00000000FFFFFF15 *)
@@ -240,7 +237,6 @@ let tests = "coq_morello_caps" >::: [
       
       "encode/decode C0" >:: (fun _ ->
         let c0 = M.cap_c0 () in
-
         match M.encode true c0 with
         | None -> assert_failure "encode failed"
         | Some (b, t) ->
