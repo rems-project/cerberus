@@ -1,0 +1,39 @@
+kind: pipeline
+type: docker
+name: default
+  
+steps:
+  - name: submodules
+    image: alpine/git
+    commands:
+      - git submodule update --init --recursive
+
+  - name: rebuild-cache
+    image: docker
+    volumes:
+      - name: dockersock
+        path: /var/run/docker.sock
+    commands:
+      - docker build --no-cache -t cerberus-cache -f Dockerfile.ci .
+    when:
+      event:
+        - cron
+      cron:
+      - rebuild-cache
+
+  - name: compile-cerberus
+    image: cerberus-cache
+    pull: never
+    commands:
+      - opam exec -- make
+
+  - name: test-cerberus
+    image: cerberus-cache
+    pull: never
+    commands:
+      - opam exec -- dune exec coq/coqcaptest.exe
+
+volumes:
+  - name: dockersock
+    host:
+      path: /var/run/docker.sock

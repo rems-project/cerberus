@@ -1,0 +1,26 @@
+FROM ubuntu:22.04
+
+# make apt and opam noninteractive (especially important for opam depext)
+RUN echo 'APT::Get::Assume-Yes "true";' > /etc/apt/apt.conf.d/90assumeyes
+ARG OPAMYES=true
+
+RUN apt update
+RUN apt upgrade
+RUN apt install opam
+# OS-level dependecies 
+RUN apt-get install libgmp-dev
+
+RUN opam init --bare --disable-sandboxing
+RUN opam switch create cerberus ocaml-base-compiler.4.14.1 \
+    --repositories=default,coq-released=https://coq.inria.fr/opam/released
+
+RUN opam pin -n coq-struct-tact https://github.com/uwplse/StructTact.git
+
+RUN cd /tmp && git clone https://github.com/rems-project/sail.git && cd sail/ && git checkout 57b8acfad416014c38b47e7a5d134120a9c14999 && cd lib/coq && opam install .
+
+COPY ./cerberus.opam /tmp/cerberus.opam
+RUN opam install --depext-only /tmp/cerberus.opam # system dependencies with apt
+RUN opam install --deps-only /tmp/cerberus.opam   # project dependencies with opam
+
+# run commands in the correct opam environment without [eval $(opam env)]
+ENTRYPOINT ["opam", "exec", "--"]
