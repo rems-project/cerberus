@@ -808,6 +808,12 @@ let eq__ it it' = eq_ (it, it')
 let ne_ (it, it') = not_ (eq_ (it, it'))
 let ne__ it it' = ne_ (it, it')
 
+let disperse_not_ it =
+  match term it with
+  | Bool_op (And xs) -> or_ (List.map not_ xs)
+  | Bool_op (Or xs) -> and_ (List.map not_ xs)
+  | Bool_op (Impl (x, y)) -> and_ [x; not_ y]
+  | _ -> not_ it
 
 
 let eachI_ (i1, s, i2) t = IT (Bool_op (EachI ((i1, s, i2), t)), BT.Bool)
