@@ -531,25 +531,35 @@ Module Cap <: Capability (ValueBV) (ObjTypeBV) (SealType) (BoundsBV) (Permission
   let l : (list bool) := (mword_to_list_bool m) in
   l. *)
 
-  Definition flags_from_value_bits (x : mword 64) : list bool :=
-    let x := zero_extend x 64 in
-    let xl := mword_to_bools x in
-    List.firstn 8%nat xl.
+  Definition cap_get_perms (c:t) : PermissionsBV.t := 
+    mword_to_bv (CapGetPermissions (bv_to_mword c.(cap))).
 
-  Definition flags_from_value (v : MorelloAddr.t) : list bool :=
-    let w := mword_of_int v (len:= Z.of_nat vaddr_bits) in
-    flags_from_value_bits w.
+  Definition cap_is_sealed (c:t) : bool :=
+    CapIsSealed (bv_to_mword c.(cap)).
+  
+  Definition cap_invalidate (c:t) : t := cap_t_to_t (mword_to_bv (CapWithTagClear (bv_to_mword c.(cap)))).
 
-  Definition alloc_cap (a_value : MorelloAddr.t) (size : Z) : t :=
-    {|
-      valid := true;
-      value := a_value;
-      obj_type := cap_SEAL_TYPE_UNSEALED;
-      bounds := (a_value, (Z.add a_value size));
-      flags := flags_from_value a_value;
-      perms := MorelloPermission.perm_alloc;
-      ghost_state := Default_CapGhostState
-    |}.
+  Definition cap_set_value (c:t) (value:ValueBV.t) : t :=
+    let new_cap := cap_t_to_t (mword_to_bv (CapSetValue (bv_to_mword c.(cap)) (bv_to_mword value))) in 
+    if (cap_is_sealed c) then (cap_invalidate new_cap) else new_cap.
+  
+  Definition cap_set_flags (c:t) (f: Flags) : t :=
+    let new_cap :=
+      let flags_m : (mword (Z.of_nat cap_flags_len)) := of_bools (proj1_sig f) in
+      let flags' : (mword 64) := concat_vec flags_m (Zeros (64 - (Z.of_nat cap_flags_len))) in 
+      cap_t_to_t (mword_to_bv (CapSetFlags (bv_to_mword c.(cap)) flags'))      in 
+    if (cap_is_sealed c) then (cap_invalidate new_cap) else new_cap.
+  
+  (* Definition cap_set_flags (cap:t) (f: list bool) : t :=
+    let new_cap :=
+      let flags_m : (mword (Z.of_nat cap_flags_len)) := of_bools f in
+      let flags' : (mword 64) := concat_vec flags_m (Zeros (64 - (Z.of_nat cap_flags_len))) in 
+        mword_to_bv (CapSetFlags (bv_to_mword cap) flags')       in 
+    if (cap_is_sealed cap) then (cap_invalidate new_cap) else new_cap. *)
+  
+  Definition cap_set_objtype (c:t) (ot:ObjTypeBV.t) : t :=
+    cap_t_to_t (mword_to_bv (CapSetObjectType (bv_to_mword c.(cap)) (zero_extend (bv_to_mword ot) 64))).
+
 
   (* [perms] must contain [1] for permissions to be cleared and [0] for those to be kept *)
   Definition cap_narrow_perms (c:t) (perms:PermissionsBV.t) : t :=
