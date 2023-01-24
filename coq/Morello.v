@@ -38,6 +38,8 @@ Definition ltb_ADDR_irrefl (n : bv 64) := Z.ltb_irrefl n.(bv_unsigned).
 
 (** Utility convertors **)
 
+Compute String.hex_string_of_int.
+
 Definition bv_to_mword {n} (b : bv n) : mword (Z.of_N n) :=
   mword_of_int (b.(bv_unsigned)).
 Definition bv_to_Z_unsigned {n} (v : bv n) : Z := v.(bv_unsigned).
