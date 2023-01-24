@@ -139,18 +139,14 @@ let investigate_lc cfg lc = match lc with
   | LC.T t -> investigate_term cfg t
   | LC.Forall (q, t) -> investigate_term cfg t
 
-let get_arc () =
-  try
-    let chan = open_in "diag.txt" in
-    let line = input_line chan in
-    Some line
-  with
-    | End_of_file -> None
-    | Sys_error _ -> None
+let diag_string = ref (None : string option)
+
+let get_arc () = (! diag_string)
 
 let investigate model lc =
   match get_arc () with
-  | None -> Pp.print stdout (Pp.string "create a file diag.txt for branching diagnostics");
+  | None ->
+    Pp.debug 3 (lazy (Pp.bold "branching diagnostics may be available with --diag"));
     return ()
   | Some arc ->
     let cfg = {arc; model; arc_index = 0} in
