@@ -381,6 +381,8 @@ Module ValueBV <: VADDR.
   Definition eqb (v1:t) (v2:t) : bool := v1 =? v2.
   Definition ltb (v1:t) (v2:t) : bool := v1 <? v2.
   Definition leb (v1:t) (v2:t) : bool := v1 <=? v2.
+
+  Definition to_string (v:t) := String.hex_string_of_int (bv_to_Z_unsigned v).
   
   Definition ltb_irref: forall a:t, ltb a a = false.
   Proof. intros. unfold ltb. unfold lt. rewrite Z.ltb_irrefl. reflexivity. Qed. 
@@ -431,6 +433,7 @@ End SealType.
 
 
 Module BoundsBV <: VADDR_INTERVAL(ValueBV).
+
   (* Definition t := bv 87. *)
   Definition bound_len:N := 65.
   Definition t := ((bv bound_len) * (bv bound_len))%type.
@@ -452,6 +455,10 @@ Module BoundsBV <: VADDR_INTERVAL(ValueBV).
     let '(base_b, limit_b) := b in
     ((base_a <? base_b) && (limit_a <=? limit_b))
     || ((base_a <=? base_b) && (limit_a <? limit_b)).
+
+  Definition to_string (b:t) : string := 
+    let (base,top) := b in 
+    String.hex_string_of_int (bv_to_Z_unsigned base) ++ "-" ++ String.hex_string_of_int (bv_to_Z_unsigned base).
 
 End BoundsBV. 
 
@@ -832,8 +839,14 @@ Module Cap <: Capability (ValueBV) (ObjTypeBV) (SealType) (BoundsBV) (Permission
 
   (* Notation "x =? y" := (eqb x y) (at level 70, no associativity). *)
 
+  Definition to_string_pretty (c:t) : string :=
+    ValueBV.to_string (cap_get_value c) ++ "[" ++ PermissionsBV.to_string (cap_get_perms c) ++ BoundsBV.to_string (cap_get_bounds c) ++ "]".
+
+  Definition to_string_full (c:t) : string :=
+    String.hex_string_of_int (bv_to_Z_unsigned c.(cap)). 
+
   Definition to_string (c:t) : string :=
-    String.hex_string_of_int (bv_to_Z_unsigned c.(cap)).
+    to_string_full c ++ " (" ++ to_string_pretty c ++ ")".
 
   Definition strfcap (s:string) (_:t) : option string := None.
     
