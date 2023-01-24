@@ -838,8 +838,8 @@ module CHERIMorello : Memory = struct
     prerr_endline "END CAPTAGS"
 
   (* lifting memM *)
-
-  let lift_coq_memM label (m:'a MM.memM): 'a memM =
+  
+  let lift_coq_memM label (m:'a MM.memM): 'a memM = 
     ND (fun st ->
         if !Debug_ocaml.debug_level >= 2 then
           Printf.fprintf stderr "MEMOP %s\n" label;
@@ -903,7 +903,7 @@ module CHERIMorello : Memory = struct
     lift_coq_memM "kill" (MM.kill (toCoq_location loc) is_dyn pv)
 
   let load (loc:Location_ocaml.t) (ty:Ctype.ctype) (p:pointer_value): (footprint * mem_value) memM
-    =
+    = (* Bookmark *)
     lift_coq_memM "load" (MM.load (toCoq_location loc) (toCoq_ctype ty) p)
 
   let store (loc:Location_ocaml.t) (ty:Ctype.ctype) (is_locking:bool) (p:pointer_value) (mval:mem_value): footprint memM

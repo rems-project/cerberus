@@ -843,7 +843,7 @@ Module CheriMemory
                           dynamic_addrs    := st.(dynamic_addrs);
                           last_used        := st.(last_used);
                         |}) ;; ret false
-          | Some mval =>
+          | Some mval =>  (* here we allocate an object with initiliazer *)
               let (ro,readonly_status) :=
                 match pref with
                 | CoqSymbol.PrefStringLiteral _ _ => (true,IsReadOnly_string_literal)
@@ -878,6 +878,7 @@ Module CheriMemory
            >>=
            (fun ro =>
               let c := C.alloc_cap addr size_n' in
+              (* Check here *)
               let c :=
                 if ro then
                   let p := C.cap_get_perms c in
@@ -1477,6 +1478,16 @@ Module CheriMemory
       let addr :=
         Z.add (C.cap_get_value c)
           offset in
+
+          (* let s :=
+                  match intent with
+                  | ReadIntent => "The intent is Read"
+                  | WriteIntent => "The intent is Write" 
+                  | CallIntent => "The intent is Execute"
+                  end in    
+                let temp := mprint_msg s in 
+                temp ;;  *)
+
       let pcheck :=
         match intent with
         | ReadIntent =>
@@ -1486,6 +1497,17 @@ Module CheriMemory
         | CallIntent =>
             Morello.Permissions.has_execute_perm
         end in
+
+        (* mprint_msg (C.to_string c) ;;
+        mprint_msg "with value: ";; mprint_msg (HexString.of_Z (C.cap_get_value c)) ;;
+        mprint_msg "and permissions: ";; 
+        mprint_msg (Morello.Permissions.to_string (C.cap_get_perms c)) ;;
+        mprint_msg (Morello.Permissions.to_string_hex (C.cap_get_perms c)) ;;
+                
+        mprint_msg (if (Morello.Permissions.has_load_perm (C.cap_get_perms c)) then "This cap has read perms" else "This cap doesn't have read perms") ;;
+        mprint_msg (if (Morello.Permissions.has_store_perm (C.cap_get_perms c)) then "This cap has store perms" else "This cap doesn't have store perms") ;;
+        mprint_msg (if (Morello.Permissions.has_execute_perm (C.cap_get_perms c)) then "This cap has execute perms" else "This cap doesn't have execute perms") ;; *)
+
       if pcheck (C.cap_get_perms c) then
         let bounds := C.cap_get_bounds c in
         if cap_bounds_check bounds addr sz then
@@ -1494,8 +1516,8 @@ Module CheriMemory
           fail
             (MerrCHERI loc (CheriBoundsErr (bounds, addr, (Z.to_nat sz))))
       else
-        fail
-          (MerrCHERI loc CheriMerrUnsufficientPermissions)
+        (* mprint_msg "pcheck has failed" ;; *)
+         fail (MerrCHERI loc CheriMerrUnsufficientPermissions)
     else
       fail
         (MerrCHERI loc CheriMerrInvalidCap).
@@ -1711,6 +1733,15 @@ Module CheriMemory
     memM (footprint * mem_value)
     :=
     let '(prov, ptrval_) := break_PV p in
+
+    (* mprint_msg "Entered load with ptrval=(_," ;;
+    let tmp_str :=
+      match ptrval_ with 
+        PVconcrete c => C.to_string c
+      | _ => "" 
+      end in
+    mprint_msg tmp_str ;; *)
+
     let do_load
           (alloc_id_opt : option storage_instance_id)
           (addr : Z)
@@ -1777,6 +1808,7 @@ Module CheriMemory
           (sz : Z)
       : memM (footprint * mem_value)
       :=
+      (* mprint_msg "calling cap_check from load function" ;; *)
       cap_check loc c 0 ReadIntent sz ;;
       do_load alloc_id_opt  (C.cap_get_value c) sz
     in
@@ -1795,7 +1827,8 @@ Module CheriMemory
                match function_parameter with
                | false =>
                    fail (MerrAccess loc LoadAccess OutOfBoundPtr)
-               | true =>
+               | true => 
+               (* mprint_msg "calling do_load_cap from code1" ;; *)
                    do_load_cap None c sz
                end)
     | Prov_symbolic iota, PVconcrete addr =>
@@ -1831,6 +1864,7 @@ Module CheriMemory
           sz <- serr2memM (sizeof DEFAULT_FUEL None ty) ;;
           resolve_iota precondition iota >>=
             (fun (alloc_id : storage_instance_id) =>
+               (* mprint_msg "calling do_load_cap from code2" ;;  *)
                do_load_cap (Some alloc_id) addr sz)
     | Prov_some alloc_id, PVconcrete addr =>
         if cap_is_null addr then
@@ -1867,6 +1901,7 @@ Module CheriMemory
                             fail (MerrAccess loc LoadAccess AtomicMemberof)
                         | false =>
                             sz <- serr2memM (sizeof DEFAULT_FUEL None ty) ;;
+                            (* mprint_msg "calling do_load_cap from code3 and addr=" ;; mprint_msg (C.to_string addr) ;; *)
                             do_load_cap (Some alloc_id) addr sz
                         end)
                end)
@@ -1917,6 +1952,7 @@ Module CheriMemory
         : memM footprint
         :=
         nsz <- serr2memM (sizeof DEFAULT_FUEL None cty) ;;
+        (* mprint_msg "calling cap_check from store function" ;; *)
         cap_check loc c_value 0 WriteIntent nsz ;;
         let addr := C.cap_get_value c_value in
         st <- get ;;
@@ -3073,11 +3109,11 @@ Module CheriMemory
                         end)
                end)
     | PV (Prov_some alloc_id) (PVconcrete c_value) =>
-        mprint_msg "A cap: ";; mprint_msg (C.to_string c_value) ;;
+        (* mprint_msg "A cap: ";; mprint_msg (C.to_string c_value) ;;
         mprint_msg "Its value: ";; mprint_msg (HexString.of_Z (C.cap_get_value c_value)) ;;
         mprint_msg "Its permissions: ";; 
         mprint_msg (Morello.Permissions.to_string (C.cap_get_perms c_value)) ;;
-        mprint_msg (Morello.Permissions.to_string_hex (C.cap_get_perms c_value)) ;;
+        mprint_msg (Morello.Permissions.to_string_hex (C.cap_get_perms c_value)) ;; *)
         
         let shifted_addr := Z.add (C.cap_get_value c_value) offset in
         if CoqSwitches.has_switch (CoqSwitches.SW_pointer_arith STRICT)
@@ -3094,15 +3130,16 @@ Module CheriMemory
                else
                if (negb (  Z.leb alloc.(base) shifted_addr))
                then
-                  mprint_msg "here51" ;; fail (MerrArrayShift loc)
+                  (* mprint_msg "here51" ;;  *)
+                  fail (MerrArrayShift loc)
                else 
-                  mprint_msg "here52" ;; 
+                  (* mprint_msg "here52" ;; 
                   mprint_msg (HexString.of_Z shifted_addr) ;; 
                   mprint_msg (HexString.of_Z sz) ;; 
                   mprint_msg (HexString.of_Z (alloc.(base))) ;; 
                   mprint_msg (HexString.of_Z (alloc.(size))) ;; 
                   mprint_msg (HexString.of_Z (C.cap_get_value c_value)) ;; 
-                  mprint_msg (HexString.of_Z (offset)) ;; 
+                  mprint_msg (HexString.of_Z (offset)) ;;  *)
                   fail (MerrArrayShift loc)
                   )
         else

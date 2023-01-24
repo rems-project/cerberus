@@ -214,7 +214,8 @@ Module Type Capability
    *)
   Parameter cap_narrow_bounds_exact: t -> I.t -> t.
 
-  (** Reducing the Capability Permissions
+  (** Reducing the Capability Permissions. 
+      The input permissions should be the ones to be kept.
         Related instructions:
         - CAndPerm in RISC V
         - CLRPERM in Morello

@@ -55,7 +55,19 @@ Definition mword_to_bv_2 {z:Z} {n:N} (m : mword z)  : bv n :=
   Z_to_bv n x.
 
 Definition mword_to_list_bool {n} (w : mword n) : list bool := 
-  bitlistFromWord (get_word w). 
+  List.rev (bitlistFromWord (get_word w)). 
+
+
+Definition list_bool_to_mword (l : list bool) : mword (Z.of_nat (List.length l)) := 
+  of_bools (List.rev l).
+  
+Definition invert_bits {n} (m : mword n) : (mword n) :=
+  let l : list bool := mword_to_list_bool m in 
+  let l := map negb l in 
+  let x : mword (Z.of_nat (base.length l)) := list_bool_to_mword l in
+  let x : Z := int_of_mword false x in 
+  mword_of_int x.
+
 
 Definition N_to_mword (m n : N) : mword (Z.of_N m) := 
   mword_of_int (Z.of_N n).
@@ -545,7 +557,7 @@ Module Cap <: Capability (ValueBV) (ObjTypeBV) (SealType) (BoundsBV) (Permission
   
   Definition cap_set_flags (c:t) (f: Flags) : t :=
     let new_cap :=
-      let flags_m : (mword (Z.of_nat cap_flags_len)) := of_bools (proj1_sig f) in
+      let flags_m : (mword (Z.of_nat cap_flags_len)) := of_bools (List.rev (proj1_sig f)) in
       let flags' : (mword 64) := concat_vec flags_m (Zeros (64 - (Z.of_nat cap_flags_len))) in 
       cap_t_to_t (mword_to_bv (CapSetFlags (bv_to_mword c.(cap)) flags'))      in 
     if (cap_is_sealed c) then (cap_invalidate new_cap) else new_cap.
@@ -564,9 +576,9 @@ Module Cap <: Capability (ValueBV) (ObjTypeBV) (SealType) (BoundsBV) (Permission
   (* [perms] must contain [1] for permissions to be cleared and [0] for those to be kept *)
   Definition cap_narrow_perms (c:t) (perms:PermissionsBV.t) : t :=
     let perms_mw : (mword (Z.of_N PermissionsBV.len)) := bv_to_mword perms in 
-    let mask : (mword 64) := 
-      zero_extend perms_mw 64 in
-    let new_cap := cap_t_to_t (mword_to_bv (CapClearPerms (bv_to_mword c.(cap)) mask)) in 
+    let mask : (mword 64) := zero_extend perms_mw 64 in
+    let mask_inv : (mword 64) := invert_bits mask in 
+    let new_cap := cap_t_to_t (mword_to_bv (CapClearPerms (bv_to_mword c.(cap)) mask_inv)) in 
     if (cap_is_sealed c) then (cap_invalidate new_cap) else new_cap.
 
   Definition cap_clear_global_perm (cap:t) : t := 
@@ -674,8 +686,8 @@ Module Cap <: Capability (ValueBV) (ObjTypeBV) (SealType) (BoundsBV) (Permission
 
   Definition make_cap (value : ValueBV.t) (otype : ObjTypeBV.t) (bounds : BoundsBV.t) (perms : PermissionsBV.t) : t :=
     let new_cap := cap_cU () in 
-    let perms_to_clear := list_bool_to_bv (map negb (bv_to_list_bool perms)) in 
-    let new_cap := cap_narrow_perms new_cap perms_to_clear in 
+    let perms_to_keep := list_bool_to_bv ((bv_to_list_bool perms)) in 
+    let new_cap := cap_narrow_perms new_cap perms_to_keep in 
     let new_cap := cap_narrow_bounds new_cap bounds in 
     let new_cap := cap_set_value new_cap value in 
       cap_set_objtype new_cap otype.
@@ -933,8 +945,14 @@ Module test_cap_getters_and_setters.
   Example flags_test_1 : flags1 = cap_get_flags c1.
     Proof. reflexivity. Qed.
 
+
+  (* Definition y_ := (cap_set_flags c1 flags2).
+  Compute (String.hex_string_of_int (bv_to_Z_unsigned y_.(cap))).
+  Compute (String.hex_string_of_int (bv_to_Z_unsigned c1.(cap))). *)
+
+
   Example flags_test_2 : flags2 = cap_get_flags (cap_set_flags c1 flags2).
-    Proof. reflexivity. Qed. 
+    Proof. vm_compute. reflexivity. Qed. 
   
   Import PermissionsBV.
   
@@ -943,19 +961,19 @@ Module test_cap_getters_and_setters.
     Proof. reflexivity. Qed.
 
   Example permissions_test_2 : 
-    let mask : PermissionsBV.t := list_bool_to_bv (map negb perm_Load_Store) in
+    let mask : PermissionsBV.t := list_bool_to_bv (perm_Load_Store) in
     list_bool_to_bv perm_Load_Store = cap_get_perms (cap_narrow_perms c1 mask).
     Proof. reflexivity. Qed.
 
   Example permissions_test_3 : 
-    let mask : PermissionsBV.t := list_bool_to_bv (map negb perm_Load_Store) in
+    let mask : PermissionsBV.t := list_bool_to_bv (perm_Load_Store) in
     let cap := (cap_narrow_perms c1 mask) in 
-    let mask : PermissionsBV.t := list_bool_to_bv (map negb perm_Load_Execute) in
+    let mask : PermissionsBV.t := list_bool_to_bv (perm_Load_Execute) in
     list_bool_to_bv perm_Load = cap_get_perms (cap_narrow_perms cap mask).
     Proof. vm_compute. reflexivity. Qed.
 
   Example permissions_test_4 : 
-    let mask : PermissionsBV.t := list_bool_to_bv (map negb (make_permissions [Load_perm; Execute_perm])) in  
+    let mask : PermissionsBV.t := list_bool_to_bv ((make_permissions [Load_perm; Execute_perm])) in  
     let capA := (cap_narrow_perms c1 mask) in     
     let perms : PermissionsBV.t := PermissionsBV.perm_Universal in 
     let perms := perm_clear_store_cap perms in 
@@ -974,7 +992,7 @@ Module test_cap_getters_and_setters.
     let perms := perm_clear_user3 perms in 
     let perms := perm_clear_user2 perms in 
     let perms := perm_clear_user1 perms in 
-    let perms := PermissionsBV.of_list (map negb (PermissionsBV.to_list perms)) in
+    let perms := PermissionsBV.of_list ((PermissionsBV.to_list perms)) in
     let capB := (cap_narrow_perms c1 (match perms with Some p => p | None => PermissionsBV.perm_Universal end)) in
     capA = capB.
     Proof. vm_compute. reflexivity. Qed.
@@ -990,7 +1008,7 @@ Module test_cap_getters_and_setters.
     Proof. vm_compute. split. reflexivity. reflexivity. Qed. 
  
   Example eqb_and_narrow_perm_test_1 :
-    let mask : PermissionsBV.t := list_bool_to_bv (map negb perm_Load_Store) in
+    let mask : PermissionsBV.t := list_bool_to_bv (perm_Load_Store) in
     (c2 = (cap_narrow_perms c1 mask))%stdpp.
     Proof. vm_compute. reflexivity. Qed.
 
