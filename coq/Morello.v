@@ -458,7 +458,7 @@ Module BoundsBV <: VADDR_INTERVAL(ValueBV).
 
   Definition to_string (b:t) : string := 
     let (base,top) := b in 
-    String.hex_string_of_int (bv_to_Z_unsigned base) ++ "-" ++ String.hex_string_of_int (bv_to_Z_unsigned base).
+    "0x" ++ String.hex_string_of_int (bv_to_Z_unsigned base) ++ "-0x" ++ String.hex_string_of_int (bv_to_Z_unsigned top).
 
 End BoundsBV. 
 
@@ -840,7 +840,7 @@ Module Cap <: Capability (ValueBV) (ObjTypeBV) (SealType) (BoundsBV) (Permission
   (* Notation "x =? y" := (eqb x y) (at level 70, no associativity). *)
 
   Definition to_string_pretty (c:t) : string :=
-    ValueBV.to_string (cap_get_value c) ++ "[" ++ PermissionsBV.to_string (cap_get_perms c) ++ BoundsBV.to_string (cap_get_bounds c) ++ "]".
+    ValueBV.to_string (cap_get_value c) ++ " [" ++ PermissionsBV.to_string (cap_get_perms c) ++ "," ++ BoundsBV.to_string (cap_get_bounds c) ++ "]".
 
   Definition to_string_full (c:t) : string :=
     String.hex_string_of_int (bv_to_Z_unsigned c.(cap)). 
