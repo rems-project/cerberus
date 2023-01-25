@@ -816,7 +816,7 @@ module CHERIMorello : Memory = struct
         Printf.fprintf stderr "@0x%s ==> %s: %s%s\n"
           (Z.format "%x" addr)
           (string_of_provenance b.MM.prov)
-          (match b.MM.value with None -> "UNSPEC" | Some c -> string_of_int (int_of_char c))
+          (match b.MM.value with None -> "UNSPEC" | Some c ->  Printf.sprintf "%02x" (int_of_char c))
           (match b.MM.copy_offset with None -> "" | Some n -> " [" ^ Z.to_string n ^ "]")
       ) l;
     prerr_endline "END BYTEMAP"
