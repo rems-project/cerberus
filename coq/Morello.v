@@ -382,7 +382,7 @@ Module ValueBV <: VADDR.
   Definition ltb (v1:t) (v2:t) : bool := v1 <? v2.
   Definition leb (v1:t) (v2:t) : bool := v1 <=? v2.
 
-  Definition to_string (v:t) := String.hex_string_of_int (bv_to_Z_unsigned v).
+  Definition to_string (v:t) : string := "0x" ++ (String.hex_string_of_int (bv_to_Z_unsigned v)).
   
   Definition ltb_irref: forall a:t, ltb a a = false.
   Proof. intros. unfold ltb. unfold lt. rewrite Z.ltb_irrefl. reflexivity. Qed. 
