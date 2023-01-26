@@ -33,16 +33,6 @@
  (action (copy main.ml main_vip.ml)))
 
 (executable
- (name main_cheri)
- (public_name cerberus-cheri)
- (package cerberus)
- (modules main_cheri)
- (libraries result cmdliner str unix
-            cerb_backend mem_cheri util)
- (instrumentation (backend landmarks))
-)
-
-(executable
  (name main_cheri_coq)
  (public_name cerberus-cheri-coq)
  (package cerberus)
@@ -51,11 +41,6 @@
             cerb_backend mem_cheri_coq util)
  (instrumentation (backend landmarks))
 )
-
-(rule
- (target main_cheri.ml)
- (deps main.ml)
- (action (copy main.ml main_cheri.ml)))
 
 (rule
  (target main_cheri_coq.ml)
