@@ -300,14 +300,6 @@ Module CheriMemory
     typeclasses eauto.
   Qed.
 
-  (* Print memM. *)
-  (* Print unit.
-  Locate unit. *)
-
-  (* Print (memM unit). *)
-
-  (* Print memM tt. *)
-
   Definition mprint_msg (msg : string) : memM unit :=
     if debugging then 
       ret (print_msg msg)
