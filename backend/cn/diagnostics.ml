@@ -92,7 +92,11 @@ let rec investigate_term cfg t =
     | IT.Pred (nm, xs) -> investigate_pred cfg nm xs
     | _ -> return []
   in
-  let opts = sub_t_opts @ simp_opts @ pred_opts in
+  let@ map_get_eq_opts = match IT.is_eq t with
+    | Some (x, y) -> investigate_map_get_eq cfg (x, y)
+    | _ -> return []
+  in
+  let opts = sub_t_opts @ simp_opts @ pred_opts @ map_get_eq_opts in
   if List.length opts == 0
   then Pp.print stdout (Pp.item "out of diagnostic options at" (IT.pp t))
   else ();
@@ -132,8 +136,44 @@ and investigate_pred_pred cfg goal_args hyp_args =
   in
   let@ opts = ListM.mapM eq_opt eqs in
   continue_with opts cfg
-  
-  
+
+and investigate_map_get_eq cfg (x, y) =
+  let (x, y) = match IT.is_map_get x with
+    | None -> (y, x)
+    | _ -> (x, y)
+  in
+  let eq_opt nm eq =
+    let@ doc = term_with_model_name nm cfg eq in
+    return {doc; continue = fun cfg -> investigate_term cfg eq}
+  in
+  match (IT.is_map_get x, IT.is_map_get y) with
+    | (None, None) -> return []
+    | (Some (f1, arg1), Some (f2, arg2)) ->
+       let@ f_opt = eq_opt "map eq" (IT.eq_ (f1, f2)) in
+       let@ arg_opt = eq_opt "arg eq" (IT.eq_ (arg1, arg2)) in
+       return [f_opt; arg_opt]
+    | (None, Some _) -> assert false
+    | (Some (f, arg), _) ->
+  let@ cs_set = all_constraints () in
+  let cs = LCSet.elements cs_set in
+  let cs_maps = List.map (function
+    | LC.Forall _ -> []
+    | LC.T t -> bool_subterms_of t
+  ) cs
+    |> List.concat
+    |> List.filter_map IT.is_eq
+    |> List.map (fun (x, y) -> [x; y]) |> List.concat
+    |> List.filter_map IT.is_map_get
+    |> List.filter (fun (f2, _) -> BT.equal (IT.bt f2) (IT.bt f))
+  in
+  let@ xs = ListM.mapM (fun (f2, arg2) ->
+    let@ e1 = eq_opt "eq to map-get from constraint"
+        (IT.eq_ (IT.map_get_ f arg, IT.map_get_ f2 arg2)) in
+    let@ e2 = eq_opt "trans from previous"
+        (IT.eq_ (IT.map_get_ f2 arg2, y)) in
+    return [e1; e2]
+  ) cs_maps in
+  return (List.concat xs)
 
 let investigate_lc cfg lc = match lc with
   | LC.T t -> investigate_term cfg t
