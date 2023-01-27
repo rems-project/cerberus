@@ -23,11 +23,16 @@ Local Open Scope string_scope.
 Local Open Scope Z_scope.
 Local Open Scope bool_scope.
 
+Definition debugging : bool := false.
+
 (* this definiton will be remapped on extractoin to OCaml's print_endline *)
 Definition print_msg (msg : string) : unit := tt.
 
 Definition sprint_msg (msg : string) : serr unit :=
-  ret (print_msg msg).
+  if debugging then 
+    ret (print_msg msg)
+  else 
+    ret tt.
 
 Fixpoint list_init {A:Type} (n:nat) (f:nat -> A): list A
   :=

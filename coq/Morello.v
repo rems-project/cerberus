@@ -499,7 +499,9 @@ Module Cap <: Capability (ValueBV) (ObjTypeBV) (SealType) (BoundsBV) (Permission
   Definition sizeof_vaddr := 8%nat. (* in bytes *)
   (* Definition vaddr_bits := sizeof_vaddr * 8. *)
   Definition min_vaddr := Z_to_bv (N.of_nat (sizeof_vaddr*8)) 0.  
-  Definition max_vaddr := Z_to_bv (N.of_nat (sizeof_vaddr*8)) (bv_modulus (N.of_nat (sizeof_vaddr*8))).
+  Definition max_vaddr := Z_to_bv (N.of_nat (sizeof_vaddr*8)) (Z.sub (bv_modulus (N.of_nat (sizeof_vaddr*8))) 1).
+
+  Compute max_vaddr.
   
   Definition cap_c0 (u:unit) : t := cap_t_to_t (mword_to_bv (CapNull u)).
 
@@ -958,12 +960,6 @@ Module test_cap_getters_and_setters.
   Example flags_test_1 : flags1 = cap_get_flags c1.
     Proof. reflexivity. Qed.
 
-
-  (* Definition y_ := (cap_set_flags c1 flags2).
-  Compute (String.hex_string_of_int (bv_to_Z_unsigned y_.(cap))).
-  Compute (String.hex_string_of_int (bv_to_Z_unsigned c1.(cap))). *)
-
-
   Example flags_test_2 : flags2 = cap_get_flags (cap_set_flags c1 flags2).
     Proof. vm_compute. reflexivity. Qed. 
   
@@ -1260,6 +1256,8 @@ Module Value <: VADDR.
 
   Definition of_Z (z:Z) := z.
   Definition to_Z (v:t) := v.
+
+  Definition to_string (v:t) : string := "0x" ++ (String.hex_string_of_int v).
   
 End Value.
 
