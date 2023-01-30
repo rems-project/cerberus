@@ -2,12 +2,10 @@ Require Import Coq.Arith.PeanoNat.
 Require Import Coq.Lists.List.
 Require Import Coq.Strings.String.
 Require Import Coq.Strings.Ascii.
+Require Import Coq.Strings.HexString.
 Require Import Coq.ZArith.Zdigits.
 
-(* From stdpp Require Import base. *)
 From stdpp.unstable Require Import bitvector. 
-(*From Cerberus.stdpp_MC.stdpp_unstable Require Import bitvector.*)
-(*From Cerberus.stdpp.MC.stdpp.unstable Require Import bitvector. *)
 Require Import Sail.Values.
 Require Import Sail.Operators_mwords.
 Require Import CapFns.
@@ -297,8 +295,10 @@ Module PermissionsBV <: Permission.
     has_seal_perm perms; has_store_local_cap_perm perms; has_store_cap_perm perms; has_load_cap_perm perms; has_execute_perm perms; has_store_perm perms;
     has_load_perm perms ] _.
     Next Obligation. reflexivity. Defined.
+
   Program Definition perm_clear_ccall (perms:t) : t := 
     perm_clear_branch_sealed_pair perms.  
+
   Program Definition perm_clear_mutable_load (perms:t) : t :=
     @of_list_bool [ has_global_perm perms; has_executive_perm perms; has_user1_perm perms; has_user2_perm perms; has_user3_perm perms; has_user4_perm perms; 
     false; has_compartmentID_perm perms; has_branch_sealed_pair_perm perms; has_system_access_perm perms; has_unseal_perm perms;
@@ -351,7 +351,7 @@ Module PermissionsBV <: Permission.
       ++ s (has_executive_perm perms) "E".
 
   Definition to_string_hex (perms:t) : string :=      
-    String.hex_string_of_int (bv_to_Z_unsigned perms). 
+    HexString.of_Z (bv_to_Z_unsigned perms). 
 
   Definition to_raw (perms:t) : Z := bv_to_Z_unsigned perms.
 
@@ -382,7 +382,7 @@ Module ValueBV <: VADDR.
   Definition ltb (v1:t) (v2:t) : bool := v1 <? v2.
   Definition leb (v1:t) (v2:t) : bool := v1 <=? v2.
 
-  Definition to_string (v:t) : string := "0x" ++ (String.hex_string_of_int (bv_to_Z_unsigned v)).
+  Definition to_string (v:t) : string := HexString.of_Z (bv_to_Z_unsigned v).
   
   Definition ltb_irref: forall a:t, ltb a a = false.
   Proof. intros. unfold ltb. unfold lt. rewrite Z.ltb_irrefl. reflexivity. Qed. 
@@ -458,7 +458,7 @@ Module BoundsBV <: VADDR_INTERVAL(ValueBV).
 
   Definition to_string (b:t) : string := 
     let (base,top) := b in 
-    "0x" ++ String.hex_string_of_int (bv_to_Z_unsigned base) ++ "-0x" ++ String.hex_string_of_int (bv_to_Z_unsigned top).
+    HexString.of_Z (bv_to_Z_unsigned base) ++ "-" ++ HexString.of_Z (bv_to_Z_unsigned top).
 
 End BoundsBV. 
 
@@ -501,8 +501,6 @@ Module Cap <: Capability (ValueBV) (ObjTypeBV) (SealType) (BoundsBV) (Permission
   Definition min_vaddr := Z_to_bv (N.of_nat (sizeof_vaddr*8)) 0.  
   Definition max_vaddr := Z_to_bv (N.of_nat (sizeof_vaddr*8)) (Z.sub (bv_modulus (N.of_nat (sizeof_vaddr*8))) 1).
 
-  Compute max_vaddr.
-  
   Definition cap_c0 (u:unit) : t := cap_t_to_t (mword_to_bv (CapNull u)).
 
   Definition cap_cU (u:unit) : t := cap_t_to_t (mword_to_bv (concat_vec (Ones 19) (Zeros 110))).
@@ -537,7 +535,7 @@ Module Cap <: Capability (ValueBV) (ObjTypeBV) (SealType) (BoundsBV) (Permission
     if (ot =? cap_SEAL_TYPE_UNSEALED)%stdpp then SealType.Cap_Unsealed else
     if (ot =? cap_SEAL_TYPE_RB)%stdpp then SealType.Cap_SEntry else
     if (ot =? cap_SEAL_TYPE_LPB)%stdpp then SealType.Cap_Indirect_SEntry else 
-    if (ot =? cap_SEAL_TYPE_LB)%stdpp then SealType.Cap_Indirect_SEntry else (* confirm duplication *)
+    if (ot =? cap_SEAL_TYPE_LB)%stdpp then SealType.Cap_Indirect_SEntry else 
     SealType.Cap_Sealed ot.
     
   (* The flags are the top byte of the value. *)
@@ -581,8 +579,7 @@ Module Cap <: Capability (ValueBV) (ObjTypeBV) (SealType) (BoundsBV) (Permission
   Definition cap_set_objtype (c:t) (ot:ObjTypeBV.t) : t :=
     cap_t_to_t (mword_to_bv (CapSetObjectType (bv_to_mword c.(cap)) (zero_extend (bv_to_mword ot) 64))).
 
-
-  (* [perms] must contain [1] for permissions to be cleared and [0] for those to be kept *)
+  (* [perms] must contain [1] for permissions to be kept and [0] for those to be cleared *)
   Definition cap_narrow_perms (c:t) (perms:PermissionsBV.t) : t :=
     let perms_mw : (mword (Z.of_N PermissionsBV.len)) := bv_to_mword perms in 
     let mask : (mword 64) := zero_extend perms_mw 64 in
@@ -750,7 +747,6 @@ Module Cap <: Capability (ValueBV) (ObjTypeBV) (SealType) (BoundsBV) (Permission
   :=
   let ascii_to_bits (x:ascii) :=
     match x with
-    (* | Ascii a0 a1 a2 a3 a4 a5 a6 a7 => [a0; a1; a2; a3; a4; a5; a6; a7] *)
     | Ascii a0 a1 a2 a3 a4 a5 a6 a7 => [a7; a6; a5; a4; a3; a2; a1; a0]
     end
   in
@@ -845,10 +841,39 @@ Module Cap <: Capability (ValueBV) (ObjTypeBV) (SealType) (BoundsBV) (Permission
     ValueBV.to_string (cap_get_value c) ++ " [" ++ PermissionsBV.to_string (cap_get_perms c) ++ "," ++ BoundsBV.to_string (cap_get_bounds c) ++ "]".
 
   Definition to_string_full (c:t) : string :=
-    String.hex_string_of_int (bv_to_Z_unsigned c.(cap)). 
+    HexString.of_Z (bv_to_Z_unsigned c.(cap)). 
+
+  Definition is_sentry (c : t) : bool :=
+    match cap_get_seal c with
+    | SealType.Cap_SEntry => true
+    | _ => false
+    end.
+  
+  Definition flags_as_str (c:t): string :=
+    let attrs :=
+      let a (f:bool) s l := if f then s::l else l in
+      let gs := (get_ghost_state c).(tag_unspecified) in
+        a gs "notag"
+          (a (andb (negb (cap_is_valid c)) (negb gs)) "invalid"
+             (a (is_sentry c) "sentry"
+                (a ((negb (is_sentry c)) && cap_is_sealed c) "sealed" [])))
+      in
+    if Nat.eqb (List.length attrs) 0%nat then ""
+    else " (" ++ String.concat "," attrs ++ ")".
 
   Definition to_string (c:t) : string :=
-    to_string_full c ++ " (" ++ to_string_pretty c ++ ")".
+    (* to_string_full c ++ " (" ++ to_string_pretty c ++ ")". *)
+    if cap_is_null_derived c then
+      ValueBV.to_string (cap_get_value c)
+    else
+      (ValueBV.to_string (cap_get_value c)) ++ " " ++ "[" ++
+        (if (get_ghost_state c).(bounds_unspecified)
+         then "?-?"
+         else
+           PermissionsBV.to_string (cap_get_perms c) ++ "," ++
+           BoundsBV.to_string (cap_get_bounds c)  )
+        ++ "]" ++
+        (flags_as_str c).
 
   Definition strfcap (s:string) (_:t) : option string := None.
     
@@ -908,12 +933,11 @@ Module test_cap_getters_and_setters.
   (* Compute decode (match test_cap_0_enc with Some (l,b) => l | None => [] end) true.
   Compute decode (match test_cap_01_enc with Some (l,b) => l | None => [] end) true. *)
 
-  Definition test_cap_7_encoded:(list ascii) := 
+  (* Definition test_cap_7_encoded:(list ascii) := 
   ["021"%char; "255"%char; "255"%char; "255"%char; "000"%char;
   "000"%char; "000"%char; "000"%char; "021"%char; "255"%char;
   "028"%char; "127"%char; "000"%char; "000"%char; "000"%char;
-  "L"%char].
-
+  "L"%char]. *)
 
   Definition c1:Cap.t := cap_t_to_t (mword_to_bv (concat_vec (Ones 19) (Zeros 110))). (* A valid universal-permission cap = 1^{19}0^{110} *)
   Definition c2:Cap.t := cap_t_to_t (mword_to_bv (concat_vec (Ones 3) (Zeros 126))). (* A valid cap with Load and Store perms *)
@@ -923,14 +947,11 @@ Module test_cap_getters_and_setters.
   Definition c6:Cap.t := Cap.of_Z 0x1fb0000007a4700000000000000003333. (* Cap breakdown: https://www.morello-project.org/capinfo?c=0x1%3Afb0000007a470000%3A0000000000003333 *)
   Definition c7:Cap.t := Cap.of_Z 0x14C0000007F1CFF1500000000FFFFFF15.
   Definition c8:Cap.t := Cap.of_Z 0x1900000007f1cff1500000000ffffff15.
-                                  
   
   Program Definition flags1:Cap.Flags := exist _ [false; false; false; false; false; false; false; false] _. 
     Next Obligation. reflexivity. Defined.
   Program Definition flags2:Cap.Flags := exist _ [false; true; false; true; false; true; false; true] _. 
     Next Obligation. reflexivity. Defined.
-  (* Definition flags1:list bool := [false; false; false; false; false; false; false; false]. 
-  Definition flags2:list bool := [false; true; false; true; false; true; false; true].  *)
     
   Definition perm_Load : list bool := PermissionsBV.make_permissions [PermissionsBV.Load_perm].
   Definition perm_Load_Store : list bool := PermissionsBV.make_permissions [PermissionsBV.Load_perm; PermissionsBV.Store_perm].
@@ -1191,8 +1212,7 @@ Module Permissions <: Permission.
     PermissionsBV.has_unseal_perm (PermissionsBV.of_Z perms).
   
   Definition get_user_perms (perms:t) : list bool :=
-    PermissionsBV.get_user_perms (PermissionsBV.of_Z perms).
- 
+    PermissionsBV.get_user_perms (PermissionsBV.of_Z perms). 
 
   Definition perm_clear_global (perms:t) : t := 
     bv_to_Z_unsigned (PermissionsBV.perm_clear_global (PermissionsBV.of_Z perms)).
@@ -1257,7 +1277,7 @@ Module Value <: VADDR.
   Definition of_Z (z:Z) := z.
   Definition to_Z (v:t) := v.
 
-  Definition to_string (v:t) : string := "0x" ++ (String.hex_string_of_int v).
+  Definition to_string (v:t) : string := HexString.of_Z v.
   
 End Value.
 
@@ -1327,7 +1347,7 @@ Module MorelloCapability <: Capability (Value) (ObjType) (SealType) (Bounds) (Pe
     
   Definition cap_is_sealed := Cap.cap_is_sealed.
 
-  (* [perms] must contain [1] for permissions to be cleared and [0] for those to be kept *)
+  (* [perms] must contain [1] for permissions to be kept and [0] for those to be cleared *)
   Definition cap_narrow_perms (cap:t) (perms:Permissions.t) : t :=
     Cap.cap_narrow_perms cap (PermissionsBV.of_Z perms).
     
