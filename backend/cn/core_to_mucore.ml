@@ -885,16 +885,17 @@ let check_supported (file : ('a, 'TY) mi_file) =
 
 let normalise_file ailfile (file : ('a, 'TY) Milicore.mi_file) : unit Mu.mu_file = 
   check_supported file;
-  let declarations = List.map fst ailfile.AilSyntax.declarations in
-  let builtins = builtins file.mi_funs in
+  (* let declarations = List.map fst ailfile.AilSyntax.declarations in *)
+  (* let builtins = builtins file.mi_funs in *)
   (* print stdout (item "declarations" (list Sym.pp declarations)); *)
   (* print stdout (item "builtin" (list Sym.pp builtins)); *)
-  let funinfo = 
-    Pmap.filter (fun s _ -> 
-        List.mem Sym.equal s declarations &&
-        not (List.mem Sym.equal s builtins)
-      ) file.mi_funinfo 
-  in
+  (* let funinfo =  *)
+  (*   Pmap.filter (fun s _ ->  *)
+  (*       List.mem Sym.equal s declarations && *)
+  (*       not (List.mem Sym.equal s builtins) *)
+  (*     ) file.mi_funinfo  *)
+  (* in *)
+  let funinfo = file.mi_funinfo in
    ({ mu_main = (file.mi_main)
    ; mu_tagDefs = (normalise_tag_definitions file.mi_tagDefs)
    (* ; mu_stdlib = (normalise_fun_map file.mi_stdlib) *)
