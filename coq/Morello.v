@@ -356,9 +356,13 @@ Module PermissionsBV <: Permission.
   Definition to_raw (perms:t) : Z := bv_to_Z_unsigned perms.
 
   Definition of_list (l : list bool) : option t := 
-    if ((List.length l) =? (N_to_nat len))%nat then
+    if ((List.length l) <? (N_to_nat len))%nat then
+      None 
+    else
+      Some (@mword_to_bv (Z.of_N len) (of_bools (List.rev (List.firstn (N_to_nat len) l)))).
+    (* if ((List.length l) =? (N_to_nat len))%nat then
       Some (@mword_to_bv (Z.of_N len) (of_bools (List.rev l))) 
-    else None.
+    else None. *)
   
   Definition to_list (perms:t) : list bool := 
     bv_to_list_bool perms.
@@ -863,7 +867,7 @@ Module Cap <: Capability (ValueBV) (ObjTypeBV) (SealType) (BoundsBV) (Permission
 
   Definition to_string (c:t) : string :=
     (* to_string_full c ++ " (" ++ to_string_pretty c ++ ")". *)
-    if cap_is_null_derived c then
+    (if cap_is_null_derived c then
       ValueBV.to_string (cap_get_value c)
     else
       (ValueBV.to_string (cap_get_value c)) ++ " " ++ "[" ++
@@ -873,7 +877,7 @@ Module Cap <: Capability (ValueBV) (ObjTypeBV) (SealType) (BoundsBV) (Permission
            PermissionsBV.to_string (cap_get_perms c) ++ "," ++
            BoundsBV.to_string (cap_get_bounds c)  )
         ++ "]" ++
-        (flags_as_str c).
+        (flags_as_str c)).
 
   Definition strfcap (s:string) (_:t) : option string := None.
     
