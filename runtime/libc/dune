@@ -8,7 +8,7 @@
                 --rewrite -o libm.co src/math.c)))
 
 (rule
- (targets libc.co libc-cheri.co libc-cheri-coq.co)
+ (targets libc.co libc-cheri-coq.co)
  (deps src/ctype.c src/stdio.c src/stdlib.c src/string.c src/time.c
        src/utime.c src/unistd.c src/stat.c src/uio.c src/internal.c
        src/vfscanf.c src/signal.c src/internal.h
@@ -140,10 +140,6 @@
                  --rewrite -o libc.co src/ctype.c src/stdio.c src/stdlib.c
                  src/string.c src/time.c src/utime.c src/unistd.c src/stat.c
                  src/uio.c src/internal.c src/vfscanf.c src/signal.c)
-   (run cerberus-cheri --nolibc -I include -I include/posix --sequentialise
-                 --rewrite -o libc-cheri.co src/ctype.c src/stdio.c src/stdlib.c
-                 src/string.c src/time.c src/utime.c src/unistd.c src/stat.c
-                 src/uio.c src/internal.c src/vfscanf.c src/signal.c)
    (run cerberus-cheri-coq --nolibc -I include -I include/posix --sequentialise
         --rewrite -o libc-cheri-coq.co src/ctype.c src/stdio.c src/stdlib.c
         src/string.c src/time.c src/utime.c src/unistd.c src/stat.c
@@ -153,7 +149,6 @@
  (files
   (libm.co as runtime/libc/libm.co)
   (libc.co as runtime/libc/libc.co)
-  (libc-cheri.co as runtime/libc/libc-cheri.co)
   (libc-cheri-coq.co as runtime/libc/libc-cheri-coq.co))
  (section lib)
  (package cerberus))
