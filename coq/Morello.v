@@ -1446,8 +1446,4 @@ Module TestCaps.
 
   Definition c1:Cap.t := Cap.of_Z 0x1900000007f1cff1500000000ffffff15.
   
-  (* Definition null_cap := (Cap.cap_c0 ()).
-  Compute (cap_get_bounds null_cap).
-  Compute (encode true null_cap). *)
-  
 End TestCaps.
