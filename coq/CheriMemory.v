@@ -1326,21 +1326,20 @@ Module CheriMemory
             let _:bool := iss in (* hack to hint type checker *)
             match extract_unspec bs1' with
             | Some cs =>
-                let (tag,gs) := tag_query_f addr in
-                match C.decode (List.rev cs) tag with
-                 | None => ret (provs_of_bytes bs1, MVErr (MerrCHERI loc CheriErrDecodingCap), bs2)
-                 | Some c_value =>
-                    let c_value := C.set_ghost_state c_value gs in
-                    if iss then
-                      let n_value := C.cap_get_value c_value in
-                      sprint_msg ("Calling C.cap_set_value1 with value = " ++ (Morello.Value.to_string (wrap_cap_value n_value)) ++ " = wrap_cap_value n_value where n_value = " ++ (Morello.Value.to_string n_value) ++ " and cap = " ++
-                      (C.to_string c_value) );; 
-                      let c_value := C.cap_set_value c_value (wrap_cap_value n_value) in                                                     
-                      ret (provs_of_bytes bs1, MVEinteger ity (IC true c_value), bs2)
-                    else
-                      ret (provs_of_bytes bs1, MVEinteger ity (IC false c_value), bs2)
-                end
-                     
+                ret (provs_of_bytes bs1,
+                    let (tag,gs) := tag_query_f addr in
+                    match C.decode (List.rev cs) tag with
+                    | None => MVErr (MerrCHERI loc CheriErrDecodingCap)
+                    | Some c_value =>
+                        let c_value := C.set_ghost_state c_value gs in
+                        if iss then
+                          let n_value := C.cap_get_value c_value in
+                          let c_value := C.cap_set_value c_value (wrap_cap_value n_value) in
+                          MVEinteger ity (IC true c_value)
+                        else
+                          MVEinteger ity (IC false c_value)
+                    end
+                      , bs2)
             | None => ret (provs_of_bytes bs1, MVEunspecified cty, bs)
             end
         | CoqCtype.Basic (CoqCtype.Floating fty) =>
@@ -2995,15 +2994,15 @@ Module CheriMemory
     :=
     match ival_cap, ival_n with
     | IC is_signed c_value, IV n_value =>        
-        if C.cap_vaddr_representable c_value n_value then
+        (* if C.cap_vaddr_representable c_value n_value then
           sprint_msg ("Calling C.cap_set_value4 with value = " ++ (Morello.Value.to_string n_value)) ;;                 
           ret (IC is_signed (C.cap_set_value c_value n_value))
         else 
-          sprint_msg ("Calling C.cap_set_value4 with value = " ++ (Morello.Value.to_string n_value)) ;;                 
-          ret (IC is_signed (C.cap_set_value (C.set_ghost_state c_value {| tag_unspecified := true ; bounds_unspecified := true |}) n_value))
+          sprint_msg ("Non-rep. Calling C.cap_set_value5 with value = " ++ (Morello.Value.to_string n_value)) ;;                 
+          ret (IC is_signed (C.cap_set_value (C.set_ghost_state c_value {| tag_unspecified := true ; bounds_unspecified := true |}) n_value)) *)
 
           (* Original form *)
-          (* ret (IC is_signed
+          ret (IC is_signed
                (C.cap_set_value
                   (if C.cap_vaddr_representable c_value n_value
                    then c_value
@@ -3014,7 +3013,7 @@ Module CheriMemory
                             bounds_unspecified := true
                           |})
                   n_value)
-          ) *)
+          )
 
     | _, _ =>
         raise "Unexpected argument types for cap_assign_value"
@@ -3118,7 +3117,7 @@ Module CheriMemory
                            | NoCollapse => ret tt
                            end))
                      ;;
-                     mprint_msg "Calling C.cap_set_value5" ;;                 
+                     mprint_msg "Calling C.cap_set_value6" ;;                 
                      let c_value := C.cap_set_value c_value shifted_addr in
                      ret (PV prov (PVconcrete c_value))
                    else
