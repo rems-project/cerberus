@@ -132,10 +132,7 @@ let tests = "coq_morello_caps" >::: [
       );
 
       "decode C1 bytes" >:: (fun _ ->
-        (* C1 corresponds to https://www.morello-project.org/capinfo?c=0x1%3A900000007F1CFF15%3A00000000FFFFFF15 *)
-        let c1_bytes =
-          List.map char_of_int [0x15;0xff;0xff;0xff;0;0;0;0;0x15;0xff;0x1c;0x7f;0;0;0;0x90] in
-        match M.decode c1_bytes true  with
+        match M.decode M.c1_bytes true  with
         | None -> assert_failure "decode failed"
         | Some c ->
            assert_equal
@@ -146,22 +143,17 @@ let tests = "coq_morello_caps" >::: [
       );
 
       "decode C1 bytes (value)" >:: (fun _ ->
-        (* C1 corresponds to https://www.morello-project.org/capinfo?c=0x1%3A900000007F1CFF15%3A00000000FFFFFF15 *)
-        let c1_bytes =
-          List.map char_of_int [0x15;0xff;0xff;0xff;0;0;0;0;0x15;0xff;0x1c;0x7f;0;0;0;0x90] in
-        match M.decode c1_bytes true  with
+        match M.decode M.c1_bytes true  with
         | None -> assert_failure "decode failed"
         | Some c ->
            assert_equal
+             ~printer:(Z.format "%#x")
              (M.cap_get_value M.cap_1)
              (M.cap_get_value c)
       );
 
       "decode C1 bytes (flags)" >:: (fun _ ->
-        (* C1 corresponds to https://www.morello-project.org/capinfo?c=0x1%3A900000007F1CFF15%3A00000000FFFFFF15 *)
-        let c1_bytes =
-          List.map char_of_int [0x15;0xff;0xff;0xff;0;0;0;0;0x15;0xff;0x1c;0x7f;0;0;0;0x90] in
-        match M.decode c1_bytes true  with
+        match M.decode M.c1_bytes true  with
         | None -> assert_failure "decode failed"
         | Some c ->
            assert_equal
@@ -484,7 +476,7 @@ let tests = "coq_morello_caps" >::: [
         | Some s' ->
            assert_equal
              ~pp_diff:string_diff
-             "0xffff [rwRW,0xffff-0x20008]" s'
+             "0xffff [rwRW,0xffff-0x10009]" s'
       );
 
       "strfcap T-format" >:: (fun _ ->
@@ -526,7 +518,7 @@ let tests = "coq_morello_caps" >::: [
         | Some s' ->
            assert_equal
              ~pp_diff:string_diff
-             "0xffff [rwRW,0xffff-0x20008] (invalid)" s'
+             "0xffff [rwRW,0xffff-0x10009] (invalid)" s'
       );
 
       "representable_alignment_mask" >:: (fun _ ->
@@ -609,6 +601,42 @@ let tests = "coq_morello_caps" >::: [
            end
       );
 
+      (* https://www.morello-project.org/capinfo?c=1dc00000066d4e6cc00000000ffffe6cc *)
+      "C2 representabitiy" >:: (fun _ ->
+        assert_bool
+          "7FFFE6EC should not be representable"
+          (not (M.cap_vaddr_representable M.cap_1 (Z.of_string "0x7FFFE6EC")))
+      );
+
+      "decode C2 bytes (value)" >:: (fun _ ->
+        match M.decode M.c2_bytes true  with
+        | None -> assert_failure "decode failed"
+        | Some c ->
+           assert_equal
+             ~printer:(Z.format "%#x")
+             (M.cap_get_value M.cap_2)
+             (M.cap_get_value c)
+      );
+
+      "decode C2 bytes (base)" >:: (fun _ ->
+        match M.decode M.c2_bytes true  with
+        | None -> assert_failure "decode failed"
+        | Some c ->
+           assert_equal
+             ~printer:(Z.format "%#x")
+             (fst (M.cap_get_bounds c))
+             (fst (M.cap_get_bounds M.cap_2))
+      );
+
+      "decode C2 bytes (limit)" >:: (fun _ ->
+        match M.decode M.c2_bytes true  with
+        | None -> assert_failure "decode failed"
+        | Some c ->
+           assert_equal
+             ~printer:(Z.format "%#x")
+             (snd (M.cap_get_bounds c))
+             (snd (M.cap_get_bounds M.cap_2))
+      );
     ]
 
 let _ = run_test_tt_main tests

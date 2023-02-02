@@ -194,9 +194,7 @@ module MorelloCapabilityWithStrfcap = struct
          let (base,limit) = cap_get_bounds cap in
          (if (get_ghost_state cap).bounds_unspecified
           then "?"
-          else
-            let z = Z.add base limit in
-            strnum z)
+          else strnum limit)
          @ loop tag cap fs
       | Final, 'v'::fs ->
          let z = if cap_is_valid cap then Z.succ Z.zero else Z.zero in
