@@ -29,6 +29,11 @@ module M = struct
   include MorelloCapabilityWithStrfcap
 
   let cap_1 : t = TestCaps.c1
+  let cap_1_bytes = TestCaps.c1_bytes
+  let cap_2 : t = TestCaps.c2
+  let cap_2_bytes = TestCaps.c2_bytes
+  let cap_3 : t = TestCaps.c3
+  let cap_3_bytes = TestCaps.c3_bytes
 
   let deep_eqb a b =
     get_ghost_state a = get_ghost_state b
@@ -120,8 +125,7 @@ let tests = "coq_morello_caps" >::: [
 
       "encode C1 bytes" >:: (fun _ ->
         (* C1 corresponds to https://www.morello-project.org/capinfo?c=0x1%3A900000007F1CFF15%3A00000000FFFFFF15 *)
-        let expected_bytes = 
-          List.map char_of_int [0x15;0xff;0xff;0xff;0;0;0;0;0x15;0xff;0x1c;0x7f;0;0;0;0x90] in
+        let expected_bytes = M.cap_1_bytes in
         match M.encode true M.cap_1 with
         | None -> assert_failure "encode failed"
         | Some (actual_bytes, t) ->
@@ -164,7 +168,7 @@ let tests = "coq_morello_caps" >::: [
 
       "decode/strfcap/perm C1" >:: (fun _ ->
         (* C1 corresponds to https://www.morello-project.org/capinfo?c=0x1%3A900000007F1CFF15%3A00000000FFFFFF15 *)
-        let bytes_ = List.map char_of_int [0x15;0xff;0xff;0xff;0;0;0;0;0x15;0xff;0x1c;0x7f;0;0;0;0x90] in 
+        let bytes_ = M.cap_1_bytes in 
         match M.decode bytes_ true with 
         | None -> assert_failure "decode failed"
         | Some c -> 
