@@ -697,8 +697,7 @@ Module MorelloCapability <:
 
   Definition cap_vaddr_representable (c : t) (a : Z) : bool
     :=
-    vaddr_in_range a &&
-      CapIsRepresentable (encode_to_word true c) (mword_of_int (len:=64) a).
+    CapIsRepresentable (encode_to_word true c) (mword_of_int (len:=64) a).
 
   Definition cap_bounds_representable_exactly
     (c : t) (intr : MorelloVADDR_INTERVAL.t) : bool
