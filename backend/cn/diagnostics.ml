@@ -5,6 +5,7 @@ module LCSet = Set.Make(LC)
 module IT = IndexTerms
 open Effectful.Make(Typing)
 module BT = BaseTypes
+module ITSet = Set.Make(IT)
 
 type cfg = {
   model : Solver.model_with_q;
@@ -44,22 +45,38 @@ let term_with_model_name nm cfg x =
     let open Pp in
     return (bold nm ^^ colon ^^^ parens (string "cannot eval") ^^ colon ^^^ IT.pp x)
   | Some r ->
+    if IT.is_true r
+    then begin
+      let@ p = provable Locations.unknown in
+      let info = match p (LC.T x) with
+        | `True -> "provably true"
+        | `False -> "true in this model"
+      in
+      let open Pp in
+      return (bold nm ^^ colon ^^^ parens (string info) ^^ colon ^^^ IT.pp x)
+    end else
     let open Pp in
     return (bold nm ^^ colon ^^^ parens (IT.pp r ^^^ string "in model") ^^ colon ^^^ IT.pp x)
 
-let bool_subterms_of t =
-  let rec f t =
-    let xs = match IT.term t with
-    | IT.Bool_op (IT.And xs) -> xs
-    | IT.Bool_op (IT.Or xs) -> xs
-    | IT.Bool_op (IT.Impl (x, y)) -> [x; y]
-    | IT.Bool_op (IT.Not x) -> [x]
-    | IT.Bool_op (IT.EQ (x, y)) -> if BT.equal (IT.bt x) BT.Bool
-        then [x; y] else []
-    | _ -> []
-    in
-    t :: List.concat (List.map f xs)
-  in f t
+let bool_subterms1 t = match IT.term t with
+  | IT.Bool_op (IT.And xs) -> xs
+  | IT.Bool_op (IT.Or xs) -> xs
+  | IT.Bool_op (IT.Impl (x, y)) -> [x; y]
+  | IT.Bool_op (IT.Not x) -> [x]
+  | IT.Bool_op (IT.EQ (x, y)) -> if BT.equal (IT.bt x) BT.Bool
+      then [x; y] else []
+  | _ -> []
+
+let rec bool_subterms_of t =
+  t :: List.concat (List.map bool_subterms_of (bool_subterms1 t))
+
+let constraint_ts () =
+  let@ cs = all_constraints () in
+  let ts = List.filter_map (function
+    | LC.T t -> Some t
+    | _ -> None) (LCSet.elements cs)
+  in
+  return ts
 
 let same_pred nm t = match IT.term t with
   | IT.Pred (nm2, _) -> Sym.equal nm nm2
@@ -69,110 +86,127 @@ let pred_args t = match IT.term t with
   | IT.Pred (_, args) -> args
   | _ -> []
 
+let split_eq x y = match (IT.term x, IT.term y) with
+  | (IT.Map_op (IT.Get (m1, x1)), IT.Map_op (IT.Get (m2, x2))) -> Some [(m1, m2); (x1, x2)]
+  | (IT.Pred (nm, xs), IT.Pred (nm2, ys)) when Sym.equal nm nm2 ->
+    Some (List.map2 (fun x y -> (x, y)) xs ys)
+  | _ -> None
+
 (* investigate the provability of a term *)
 let rec investigate_term cfg t =
   let rec_opt nm t =
     let@ doc = term_with_model_name nm cfg t in
     return {doc; continue = fun cfg -> investigate_term cfg t}
   in
-  let sub_ts = match IT.term t with
-    | IT.Bool_op (IT.And xs) -> xs
-    | IT.Bool_op (IT.Or xs) -> xs
-    | IT.Bool_op (IT.Impl (x, y)) -> [IT.disperse_not_ x; y]
-    | IT.Bool_op (IT.Not x) -> [x]
-    | IT.Bool_op (IT.ITE (x, y, z)) -> [x]
-    | _ -> []
-  in
+  let sub_ts = bool_subterms1 t in
   let@ sub_t_opts = ListM.mapM (rec_opt "sub-term") sub_ts in
   let@ sc = Typing.simp_ctxt () in
   let s_t = Simplify.IndexTerms.simp sc t in
   let s_ts = if IT.equal s_t t then [] else [s_t] in
   let@ simp_opts = ListM.mapM (rec_opt "simplified term") s_ts in
+  let@ eq_opts = match IT.is_eq t with
+    | None -> return []
+    | Some (x, y) ->
+      let@ trans_opts = ListM.mapM (investigate_eq_side cfg) [("lhs", x, y); ("rhs", y, x)] in
+      let get_eq_opt = {doc = Pp.string "check for further eqs at this type";
+        continue = fun cfg -> get_eqs_then_investigate cfg x y} in
+      let@ split_opts = match split_eq x y with
+        | None -> return []
+        | Some bits -> ListM.mapM (fun (x, y) -> rec_opt "parametric eq" (IT.eq_ (x, y))) bits
+      in
+      return (List.concat trans_opts @ [get_eq_opt] @ split_opts)
+  in
   let@ pred_opts = match IT.term t with
-    | IT.Pred (nm, xs) -> investigate_pred cfg nm xs
+    | IT.Pred (nm, xs) -> investigate_pred cfg nm t
     | _ -> return []
   in
-  let@ map_get_eq_opts = match IT.is_eq t with
-    | Some (x, y) -> investigate_map_get_eq cfg (x, y)
-    | _ -> return []
-  in
-  let opts = sub_t_opts @ simp_opts @ pred_opts @ map_get_eq_opts in
+  let@ ite_opts = investigate_ite cfg t in
+  let opts = sub_t_opts @ simp_opts @ eq_opts @ pred_opts @ ite_opts in
   if List.length opts == 0
   then Pp.print stdout (Pp.item "out of diagnostic options at" (IT.pp t))
   else ();
   continue_with opts cfg
 
-and investigate_pred cfg nm xs =
-  let@ cs_set = all_constraints () in
-  let cs = LCSet.elements cs_set in
-  let cs_subts = List.map (function
-    | LC.Forall _ -> []
-    | LC.T t -> List.map (fun t2 -> (t2, t)) (bool_subterms_of t)
-  ) cs
-    |> List.concat
-    |> List.filter (fun (t, ctxt_t) -> same_pred nm t) in
-  let pred_opt p = 
-    let@ doc = term_with_model_name "matching pred from constraint" cfg p in
-    return {doc; continue = fun cfg -> investigate_pred_pred cfg xs (pred_args p)}
+and investigate_eq_side cfg (side_nm, t, t2) =
+  let@ eq_group = value_eq_group None t in
+  let xs = ITSet.elements eq_group |> List.filter (fun x -> not (IT.equal t x)) in
+  let open Pp in
+  let clique_opts = match xs with
+    | [] ->
+    print stdout (string side_nm ^^^ string "is not known equal to any other terms");
+    []
+    | _ ->
+    print stdout (string side_nm ^^^ string "is in an equality group of size"
+      ^^^ int (List.length xs + 1) ^^^ string "with:" ^^^ brackets (list IT.pp xs));
+    [{doc = string "switch with another from" ^^^ string side_nm ^^^ string "eq-group";
+      continue = continue_with (List.map (fun t ->
+          {doc = IT.pp t; continue = fun cfg ->
+              let eq = IT.eq_ (t, t2) in
+              print stdout (bold "investigating eq:" ^^^ IT.pp eq);
+              investigate_term cfg eq}) xs)}]
   in
-  let pred_ctxt_opt t =
-    let@ doc = term_with_model_name "constraint containing pred" cfg t in
-    return {doc; continue = fun cfg -> investigate_term cfg t}
-  in
-  let@ opts = ListM.mapM (fun (p, ctxt_t) ->
-    let@ p_opt = pred_opt p in
-    let cs = if IT.equal p ctxt_t then [] else [ctxt_t] in
-    let@ c_opts = ListM.mapM pred_ctxt_opt cs in
-    return (p_opt :: c_opts)
-  ) cs_subts in
-  return (List.concat opts)
+  let t_opt = {doc = string "transitivity of" ^^^ string side_nm;
+    continue = investigate_trans_eq t} in
+  return ([t_opt] @ clique_opts)
 
-and investigate_pred_pred cfg goal_args hyp_args =
-  Pp.print stdout (Pp.bold "considering equalities of predicate args");
-  let eqs = List.map2 (fun x y -> IT.eq_ (x, y)) goal_args hyp_args in
-  let eq_opt eq =
-    let@ doc = term_with_model_name "pred argument equality" cfg eq in
+and investigate_trans_eq t cfg =
+  let@ cs = constraint_ts () in
+  let eq_xs = IT.fold_list (fun _ acc t -> match IT.is_eq t with
+    | None -> acc
+    | Some (x, y) -> if BT.equal (IT.bt x) (IT.bt t) then [x; y] @ acc else acc
+  ) [] [] cs in
+  let opt_xs = eq_xs
+    |> List.filter (fun x -> Option.is_some (split_eq t x))
+    |> ITSet.of_list |> ITSet.elements in
+  let opt_of x =
+    let eq = (IT.eq_ (t, x)) in
+    let@ doc = term_with_model_name "eq to constraint elem" cfg eq in
     return {doc; continue = fun cfg -> investigate_term cfg eq}
   in
-  let@ opts = ListM.mapM eq_opt eqs in
+  let@ opts = ListM.mapM opt_of opt_xs in
+  if List.length opts == 0
+  then Pp.print stdout (Pp.item "no interesting transitive options for" (IT.pp t))
+  else ();
   continue_with opts cfg
 
-and investigate_map_get_eq cfg (x, y) =
-  let (x, y) = match IT.is_map_get x with
-    | None -> (y, x)
-    | _ -> (x, y)
+and get_eqs_then_investigate cfg x y =
+  let@ cs = constraint_ts () in
+  let x_set = IT.fold_list (fun _ acc t -> if BT.equal (IT.bt t) (IT.bt x)
+    then ITSet.add t acc else acc) [] ITSet.empty cs in
+  let opt_xs = ITSet.elements x_set in
+  let@ () = test_value_eqs Locations.unknown None x opt_xs in
+  let@ () = test_value_eqs Locations.unknown None y opt_xs in
+  investigate_term cfg (IT.eq_ (x, y))
+
+and investigate_pred cfg nm t =
+  let@ cs = constraint_ts () in
+  let ps = IT.fold_list (fun _ acc t -> if same_pred nm t
+    then t :: acc else acc) [] [] cs in
+  let pred_opt p =
+    let@ doc = term_with_model_name "eq to pred in constraint" cfg p in
+    return {doc; continue = fun cfg -> investigate_term cfg (IT.eq_ (t, p))}
   in
-  let eq_opt nm eq =
-    let@ doc = term_with_model_name nm cfg eq in
-    return {doc; continue = fun cfg -> investigate_term cfg eq}
+  ListM.mapM pred_opt ps
+
+and investigate_ite cfg t =
+  let ites = IT.fold (fun _ acc t -> match IT.term t with
+    | IT.Bool_op (ITE (x, y, z)) -> x :: acc
+    | _ -> acc) [] [] t in
+  let@ g = get_global () in
+  let sc1 = Simplify.default g in
+  let sc f = Simplify.{sc1 with lcs = LCSet.of_list [LC.T f]} in
+  let simp f t = Simplify.IndexTerms.simp (sc f) t in
+  let opt x b =
+    let nm = if b then "true" else "false" in
+    let f = if b then x else IT.not_ x in
+    let@ doc = term_with_model_name ("rewrite ite cond to " ^ nm) cfg x in
+    return {doc; continue = fun cfg ->
+          let open Pp in
+          print stdout (bold "rewrote to:" ^^^ IT.pp (simp f t));
+          investigate_term cfg (simp f t)}
   in
-  match (IT.is_map_get x, IT.is_map_get y) with
-    | (None, None) -> return []
-    | (Some (f1, arg1), Some (f2, arg2)) ->
-       let@ f_opt = eq_opt "map eq" (IT.eq_ (f1, f2)) in
-       let@ arg_opt = eq_opt "arg eq" (IT.eq_ (arg1, arg2)) in
-       return [f_opt; arg_opt]
-    | (None, Some _) -> assert false
-    | (Some (f, arg), _) ->
-  let@ cs_set = all_constraints () in
-  let cs = LCSet.elements cs_set in
-  let cs_maps = List.map (function
-    | LC.Forall _ -> []
-    | LC.T t -> bool_subterms_of t
-  ) cs
-    |> List.concat
-    |> List.filter_map IT.is_eq
-    |> List.map (fun (x, y) -> [x; y]) |> List.concat
-    |> List.filter_map IT.is_map_get
-    |> List.filter (fun (f2, _) -> BT.equal (IT.bt f2) (IT.bt f))
-  in
-  let@ xs = ListM.mapM (fun (f2, arg2) ->
-    let@ e1 = eq_opt "eq to map-get from constraint"
-        (IT.eq_ (IT.map_get_ f arg, IT.map_get_ f2 arg2)) in
-    let@ e2 = eq_opt "trans from previous"
-        (IT.eq_ (IT.map_get_ f2 arg2, y)) in
-    return [e1; e2]
-  ) cs_maps in
+  let opts x = ListM.mapM (opt x) [true; false] in
+  let@ xs = ListM.mapM opts ites in
   return (List.concat xs)
 
 let investigate_lc cfg lc = match lc with
