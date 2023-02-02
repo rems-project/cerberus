@@ -513,7 +513,7 @@ let tests = "coq_morello_caps" >::: [
         | Some s' ->
            assert_equal
              ~pp_diff:string_diff
-             "0xffff [rwRW,0xffff-0x20008]" s'
+             "0xffff [rwRW,0xffff-0x10009]" s'
       );
 
       "strfcap T-format" >:: (fun _ ->
@@ -555,7 +555,7 @@ let tests = "coq_morello_caps" >::: [
         | Some s' ->
            assert_equal
              ~pp_diff:string_diff
-             "0xffff [rwRW,0xffff-0x20008] (invalid)" s'
+             "0xffff [rwRW,0xffff-0x10009] (invalid)" s'
       );
 
       "representable_alignment_mask" >:: (fun _ ->
