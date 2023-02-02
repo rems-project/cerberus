@@ -484,8 +484,11 @@ Module Cap <: Capability (ValueBV) (ObjTypeBV) (SealType) (BoundsBV) (Permission
   (** ghost state management **)
   Definition get_ghost_state (c:t) := c.(ghost_state).
   Definition set_ghost_state (c:t) gs := with_ghost_state gs c.
+  Definition with_cap (c:t) (cap_:cap_t) : t :=
+    {| cap := cap_; ghost_state := get_ghost_state c |}.
 
-  Definition cap_t_to_t (c:cap_t) : t := {| cap := c; ghost_state := Default_CapGhostState |}.
+  Definition cap_t_to_t (c:cap_t) (gs:CapGhostState) : t := 
+    {| cap := c; ghost_state := gs |}.
 
   (* Definition mword_to_cap {n} (m : mword n) : t :=  
     cap_t_to_t (@mword_to_bv (n) m). *)
@@ -493,7 +496,7 @@ Module Cap <: Capability (ValueBV) (ObjTypeBV) (SealType) (BoundsBV) (Permission
   Definition cap_to_mword (c:t) : (mword (Z.of_N len)) :=
     bv_to_mword c.(cap).    
   
-  Definition of_Z (z:Z) : t := cap_t_to_t (Z_to_bv len z).
+  Definition of_Z (z:Z) : t := cap_t_to_t (Z_to_bv len z) Default_CapGhostState.
      
   Definition cap_SEAL_TYPE_UNSEALED : ObjTypeBV.t := ObjTypeBV.of_Z 0.
   Definition cap_SEAL_TYPE_RB : ObjTypeBV.t := ObjTypeBV.of_Z 1. 
@@ -505,9 +508,11 @@ Module Cap <: Capability (ValueBV) (ObjTypeBV) (SealType) (BoundsBV) (Permission
   Definition min_vaddr := Z_to_bv (N.of_nat (sizeof_vaddr*8)) 0.  
   Definition max_vaddr := Z_to_bv (N.of_nat (sizeof_vaddr*8)) (Z.sub (bv_modulus (N.of_nat (sizeof_vaddr*8))) 1).
 
-  Definition cap_c0 (u:unit) : t := cap_t_to_t (mword_to_bv (CapNull u)).
+  Definition cap_c0 (u:unit) : t := 
+    cap_t_to_t (mword_to_bv (CapNull u)) Default_CapGhostState.
 
-  Definition cap_cU (u:unit) : t := cap_t_to_t (mword_to_bv (concat_vec (Ones 19) (Zeros 110))).
+  Definition cap_cU (u:unit) : t := 
+    cap_t_to_t (mword_to_bv (concat_vec (Ones 19) (Zeros 110))) Default_CapGhostState.
 
   Definition bound_null (u:unit) : bv 65 := Z_to_bv 65 0.
 
@@ -560,17 +565,19 @@ Module Cap <: Capability (ValueBV) (ObjTypeBV) (SealType) (BoundsBV) (Permission
   Definition cap_is_sealed (c:t) : bool :=
     CapIsSealed (bv_to_mword c.(cap)).
   
-  Definition cap_invalidate (c:t) : t := cap_t_to_t (mword_to_bv (CapWithTagClear (bv_to_mword c.(cap)))).
+  Definition cap_invalidate (c:t) : t := 
+    with_cap c (mword_to_bv (CapWithTagClear (bv_to_mword c.(cap)))).
 
   Definition cap_set_value (c:t) (value:ValueBV.t) : t :=
-    let new_cap := cap_t_to_t (mword_to_bv (CapSetValue (bv_to_mword c.(cap)) (bv_to_mword value))) in 
+    let new_cap := 
+      with_cap c (mword_to_bv (CapSetValue (bv_to_mword c.(cap)) (bv_to_mword value))) in 
     if (cap_is_sealed c) then (cap_invalidate new_cap) else new_cap.
   
   Definition cap_set_flags (c:t) (f: Flags) : t :=
     let new_cap :=
       let flags_m : (mword (Z.of_nat cap_flags_len)) := of_bools (List.rev (proj1_sig f)) in
       let flags' : (mword 64) := concat_vec flags_m (Zeros (64 - (Z.of_nat cap_flags_len))) in 
-      cap_t_to_t (mword_to_bv (CapSetFlags (bv_to_mword c.(cap)) flags'))      in 
+      with_cap c (mword_to_bv (CapSetFlags (bv_to_mword c.(cap)) flags'))      in 
     if (cap_is_sealed c) then (cap_invalidate new_cap) else new_cap.
   
   (* Definition cap_set_flags (cap:t) (f: list bool) : t :=
@@ -581,14 +588,14 @@ Module Cap <: Capability (ValueBV) (ObjTypeBV) (SealType) (BoundsBV) (Permission
     if (cap_is_sealed cap) then (cap_invalidate new_cap) else new_cap. *)
   
   Definition cap_set_objtype (c:t) (ot:ObjTypeBV.t) : t :=
-    cap_t_to_t (mword_to_bv (CapSetObjectType (bv_to_mword c.(cap)) (zero_extend (bv_to_mword ot) 64))).
+    with_cap c (mword_to_bv (CapSetObjectType (bv_to_mword c.(cap)) (zero_extend (bv_to_mword ot) 64))).
 
   (* [perms] must contain [1] for permissions to be kept and [0] for those to be cleared *)
   Definition cap_narrow_perms (c:t) (perms:PermissionsBV.t) : t :=
     let perms_mw : (mword (Z.of_N PermissionsBV.len)) := bv_to_mword perms in 
     let mask : (mword 64) := zero_extend perms_mw 64 in
     let mask_inv : (mword 64) := invert_bits mask in 
-    let new_cap := cap_t_to_t (mword_to_bv (CapClearPerms (bv_to_mword c.(cap)) mask_inv)) in 
+    let new_cap := with_cap c (mword_to_bv (CapClearPerms (bv_to_mword c.(cap)) mask_inv)) in 
     if (cap_is_sealed c) then (cap_invalidate new_cap) else new_cap.
 
   Definition cap_clear_global_perm (cap:t) : t := 
@@ -603,7 +610,7 @@ Module Cap <: Capability (ValueBV) (ObjTypeBV) (SealType) (BoundsBV) (Permission
     let req_len : (mword (Z.of_N BoundsBV.bound_len)) := 
       mword_of_int (Z.sub (bv_to_Z_unsigned limit) (bv_to_Z_unsigned base)) in 
     let new_cap := 
-      cap_t_to_t (mword_to_bv (CapSetBounds (bv_to_mword new_cap.(cap)) req_len exact)) in 
+      with_cap new_cap (mword_to_bv (CapSetBounds (bv_to_mword new_cap.(cap)) req_len exact)) in 
     if (cap_is_sealed c) then (cap_invalidate new_cap) else new_cap.
 
   Definition cap_narrow_bounds (cap : t) (bounds : BoundsBV.t) : t :=
@@ -649,7 +656,8 @@ Module Cap <: Capability (ValueBV) (ObjTypeBV) (SealType) (BoundsBV) (Permission
   Definition cap_unseal (sealed_cap:t) (unsealing_cap:t) : t :=
     let value := cap_get_value unsealing_cap in 
     let key := cap_get_obj_type sealed_cap in 
-    let unsealed_sealed_cap := cap_t_to_t (mword_to_bv (CapUnseal (cap_to_mword sealed_cap))) in 
+    let unsealed_sealed_cap := 
+      with_cap sealed_cap (mword_to_bv (CapUnseal (cap_to_mword sealed_cap))) in 
     let unsealed_sealed_cap := 
       if (negb (cap_has_global_perm unsealing_cap)) then
         cap_clear_global_perm unsealed_sealed_cap
@@ -812,7 +820,7 @@ Module Cap <: Capability (ValueBV) (ObjTypeBV) (SealType) (BoundsBV) (Permission
       let z : Z := mword_to_Z_unsigned w in 
       let c : option cap_t := Z_to_bv_checked Cap.len z in 
       match c with 
-        Some c => Some (cap_t_to_t c)
+        Some c => Some (cap_t_to_t c Default_CapGhostState)
       | None   => None
       end
     else
@@ -943,8 +951,8 @@ Module test_cap_getters_and_setters.
   "028"%char; "127"%char; "000"%char; "000"%char; "000"%char;
   "L"%char]. *)
 
-  Definition c1:Cap.t := cap_t_to_t (mword_to_bv (concat_vec (Ones 19) (Zeros 110))). (* A valid universal-permission cap = 1^{19}0^{110} *)
-  Definition c2:Cap.t := cap_t_to_t (mword_to_bv (concat_vec (Ones 3) (Zeros 126))). (* A valid cap with Load and Store perms *)
+  Definition c1:Cap.t := cap_t_to_t (mword_to_bv (concat_vec (Ones 19) (Zeros 110))) Default_CapGhostState. (* A valid universal-permission cap = 1^{19}0^{110} *)
+  Definition c2:Cap.t := cap_t_to_t (mword_to_bv (concat_vec (Ones 3) (Zeros 126))) Default_CapGhostState. (* A valid cap with Load and Store perms *)
   Definition c3:Cap.t := Cap.of_Z 0x1fc000000333711170000000012342222. (* The default cap on https://www.morello-project.org/capinfo *)
   Definition c4:Cap.t := Cap.of_Z 0x1fc000000399700070000000012342222. (* The bounds in this cap subsume those of c3 *)
   Definition c5:Cap.t := Cap.of_Z 0x1fb000000377700070011111111113333. (* Cap breakdown: https://www.morello-project.org/capinfo?c=0x1%3Afb00000037770007%3A0011111111113333 *)
