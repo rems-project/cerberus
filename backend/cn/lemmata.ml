@@ -95,28 +95,6 @@ let add_it_funs it funs =
   in
   IT.fold_subterms f funs it
 
-(*
-FIXME keep or not
-let add_it_predef it ss =
-  let f _ ss it = match IT.term it with
-    | IT.Map_op op -> begin match op with
-        | IT.Set _ -> StringListSet.add ["fun_upd"] ss
-        | _ -> ss
-    end
-    | IT.Struct_op op -> begin match op with
-        | IT.StructMember (t, m) ->
-            let tag = BaseTypes.struct_bt (IT.bt t) in
-            StringListSet.add ["struct"; Sym.pp_string tag; Id.pp_string m] ss
-        | IT.StructUpdate ((t, m), _) ->
-            let tag = BaseTypes.struct_bt (IT.bt t) in
-            StringListSet.add ["struct"; Sym.pp_string tag; Id.pp_string m] ss
-        | _ -> ss
-    end
-    | _ -> ss
-  in
-  IT.fold_subterms f ss it
-*)
-
 let all_undef_foralls =
   let add (nm, t) nms = StringMap.add nm (Sym.fresh_named nm, t) nms in
   let intf t = BaseTypes.Map (BaseTypes.Integer, t) in
