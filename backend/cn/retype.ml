@@ -518,13 +518,9 @@ let retype_arg (loc : Loc.t) (sym,acbt) =
 
 
 
-type retype_opts = {
-  drop_labels : bool
-}
 
 
-
-let retype_file (context : Context.t) opts (file : 'TY Old.mu_file)
+let retype_file (context : Context.t) (file : 'TY Old.mu_file)
     : ('TY New.mu_file, type_error) m =
 
 
@@ -715,11 +711,7 @@ let retype_file (context : Context.t) opts (file : 'TY Old.mu_file)
       let@ bt = Conversions.bt_of_core_base_type loc cbt in
       let@ args = mapM (retype_arg loc) args in
       let@ expr = retype_expr expr in
-      let@ labels = 
-        if opts.drop_labels
-        then return (Pmap.empty Sym.compare)
-        else PmapM.mapM (retype_label ~fsym) labels Sym.compare 
-      in
+      let@ labels = PmapM.mapM (retype_label ~fsym) labels Sym.compare in
       return (New.M_Proc (loc,bt,(args,largs),expr,labels))
    | Old.M_ProcDecl (loc,cbt,args) ->
       let@ bt = Conversions.bt_of_core_base_type loc cbt in

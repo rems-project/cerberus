@@ -173,8 +173,7 @@ let main
          |> Context.add_predicates pred_defs in
        let result = 
          Pp.progress_simple "pre-processing" "translating specifications";
-         let opts = Retype.{ drop_labels = Option.is_some lemmata } in
-         let@ file = Retype.retype_file ctxt opts file in
+         let@ file = Retype.retype_file ctxt file in
          begin match lemmata with
            | Some mode -> Lemmata.generate ctxt mode file
            | None -> Typing.run ctxt (Check.check file)
