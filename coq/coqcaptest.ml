@@ -92,7 +92,7 @@ module M = struct
 
   (* C2 corresponds to https://www.morello-project.org/capinfo?c=1dc00000066f4e6ec00000000ffffe6ec *)
   let c2_bytes =
-    List.map char_of_int (List.rev [0xdc;0x00;0x00;0x00;0x66;0xf4;0xe6;0xec;0x00;0x00;0x00;0x00;0xff;0xff;0xe6;0xec])
+    List.map char_of_int (List.rev [0xd8;0x00;0x00;0x00;0x66;0xf4;0xe6;0xec;0x00;0x00;0x00;0x00;0xff;0xff;0xe6;0xec])
 
 
   (* re-define compare function to do deep comparison *)
@@ -187,8 +187,7 @@ let tests = "coq_morello_caps" >::: [
 
       "encode C1 bytes" >:: (fun _ ->
         (* C1 corresponds to https://www.morello-project.org/capinfo?c=0x1%3A900000007F1CFF15%3A00000000FFFFFF15 *)
-        let expected_bytes = 
-          List.map char_of_int [0x15;0xff;0xff;0xff;0;0;0;0;0x15;0xff;0x1c;0x7f;0;0;0;0x90] in
+        let expected_bytes = M.c1_bytes in
         match M.encode true M.cap_1 with
         | None -> assert_failure "encode failed"
         | Some (actual_bytes, t) ->
@@ -231,7 +230,7 @@ let tests = "coq_morello_caps" >::: [
 
       "decode/strfcap/perm C1" >:: (fun _ ->
         (* C1 corresponds to https://www.morello-project.org/capinfo?c=0x1%3A900000007F1CFF15%3A00000000FFFFFF15 *)
-        let bytes_ = List.map char_of_int [0x15;0xff;0xff;0xff;0;0;0;0;0x15;0xff;0x1c;0x7f;0;0;0;0x90] in 
+        let bytes_ = M.c1_bytes in 
         match M.decode bytes_ true with 
         | None -> assert_failure "decode failed"
         | Some c -> 
@@ -668,11 +667,39 @@ let tests = "coq_morello_caps" >::: [
            end
       );
 
+      "C1 representabitiy" >:: (fun _ ->
+        assert_bool
+          "7FFFE6EC should not be representable"
+          (not (M.cap_vaddr_representable M.cap_1 (Z.of_string "0x7FFFE6EC")))
+      );
+
       (* https://www.morello-project.org/capinfo?c=1dc00000066d4e6cc00000000ffffe6cc *)
       "C2 representabitiy" >:: (fun _ ->
         assert_bool
           "7FFFE6EC should not be representable"
-          (not (M.cap_vaddr_representable M.cap_1 (Z.of_string "0x7FFFE6EC")))
+          (not (M.cap_vaddr_representable M.cap_2 (Z.of_string "0x7FFFE6EC")))
+      );
+
+      "encode C2 bytes" >:: (fun _ ->
+        let expected_bytes = M.c2_bytes in
+        match M.encode true M.cap_2 with
+        | None -> assert_failure "encode failed"
+        | Some (actual_bytes, t) ->
+           assert_equal
+             ~pp_diff:cap_bits_diff
+            expected_bytes
+            actual_bytes 
+      );
+
+      "decode C2 bytes" >:: (fun _ ->
+        match M.decode M.c2_bytes true  with
+        | None -> assert_failure "decode failed"
+        | Some c ->
+           assert_equal
+             ~cmp:M.deep_eqb
+             ~printer:M.to_string
+             M.cap_2
+             c
       );
 
       "decode C2 bytes (value)" >:: (fun _ ->
