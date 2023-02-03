@@ -5,7 +5,6 @@ Require Import Coq.Strings.Ascii.
 Require Import Coq.Numbers.BinNums.
 Require Import Coq.ZArith.Zcompare.
 Require Import Coq.ZArith.Zdigits.
-Require Import Coq.Bool.Bool.
 Require Import Coq.Strings.HexString.
 
 Require Import StructTact.StructTactics.
@@ -18,12 +17,6 @@ Require Import Addr Capabilities Utils CapFns.
 
 Import ListNotations.
 Open Scope list_scope.
-
-Definition bool_list_cmp (a b: list bool) : bool :=
-  if Nat.eqb (List.length a) (List.length b)
-  then fold_left2 (fun a b c => andb (Bool.eqb b c) a) true a b
-  else false.
-
 
 Module MorelloAddr <: VADDR.
   Definition t := Z. (* but it is always non-negiative *)

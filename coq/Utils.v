@@ -60,6 +60,11 @@ Fixpoint fold_left2 {A B C:Type} (f: A -> B -> C -> A) (accu:A) (l1:list B) (l2:
   | _, _ => accu
   end.
 
+Definition bool_list_cmp (a b: list bool) : bool :=
+  if Nat.eqb (List.length a) (List.length b)
+  then fold_left2 (fun a b c => andb (Bool.eqb b c) a) true a b
+  else false.
+
 Definition mem {A:Type} `{forall (x y:A), Decidable (x = y)} (a:A): (list A) -> bool
   := List.existsb (fun e => decide (e = a)).
 
