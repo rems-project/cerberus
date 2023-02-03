@@ -32,7 +32,6 @@ module M = struct
   let cap_1_bytes = TestCaps.c1_bytes
   let cap_2 : t = TestCaps.c2
   let cap_2_bytes = TestCaps.c2_bytes
-  let cap_3 : t = TestCaps.c3
   let cap_3_bytes = TestCaps.c3_bytes
 
   let deep_eqb a b =
@@ -686,7 +685,7 @@ let tests = "coq_morello_caps" >::: [
         | Some c ->
            assert_equal
              ~printer:string_of_bool_list
-             [false; false; true; false; true; false; true; false]
+             (List.rev [false; false; true; false; true; false; true; false])
              (M.cap_get_flags c)
       );
 

@@ -1462,10 +1462,8 @@ Module TestCaps.
   Definition c2_bytes : list ascii := List.map ascii_of_nat (List.map Z.to_nat (
     List.rev [0xd8;0x00;0x00;0x00;0x66;0xf4;0xe6;0xec;0x00;0x00;0x00;0x00;0xff;0xff;0xe6;0xec])).
 
-  (* c3 corresponds to https://www.morello-project.org/capinfo?c=1dc00000066f4e6ec00000000ffffe6ec *)
-  Definition c3:Cap.t := Cap.of_Z 0x1dc00000066f4e6ec00000000ffffe6ec.
-  Definition c3_bytes : list ascii := List.map ascii_of_nat (List.map Z.to_nat (
-    List.rev [0xdc;0x00;0x00;0x00;0x66;0xf4;0xe6;0xec;0x00;0x00;0x00;0x00;0xff;0xff;0xe6;0xec])).
-
+  (* c3 corresponds to https://www.morello-project.org/capinfo?c=1dc00000066d4e6d02a000000ffffe6d0 *)
+  Definition c3_bytes := ["208"%char;"230"%char;"255"%char;"255"%char;"000"%char;"000"%char;"000"%char;
+    "042"%char;"208"%char;"230"%char;"212"%char;"102"%char;"000"%char;"000"%char;"000"%char;"220"%char].
   
 End TestCaps.
