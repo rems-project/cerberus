@@ -791,6 +791,9 @@ let and_ its = IT (Bool_op (And its), BT.Bool)
 let and2_ (it, it') = match is_and it' with
   | None -> and_ [it; it']
   | Some its -> and_ (it :: its)
+let and3_ its = match its with
+  | [it] -> it
+  | _ -> and_ its
 let or_ its = IT (Bool_op (Or its), BT.Bool)
 let or2_ (it, it') = match is_or it' with
   | None -> or_ [it; it']
@@ -894,6 +897,9 @@ let datatype_cons_ nm dt_tag members =
 
 let datatype_is_cons_ nm t =
   IT (Datatype_op (DatatypeIsCons (nm, t)), BT.Bool)
+
+let datatype_member_ t nm bt =
+  IT (Datatype_op (DatatypeMember (t, nm)), bt)
 
 
 (* pointer_op *)

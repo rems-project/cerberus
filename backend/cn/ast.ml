@@ -31,6 +31,7 @@ module Terms = struct
     | LessOrEqual of term * term
     | GreaterThan of term * term
     | GreaterOrEqual of term * term
+    | IsShape of term * term
     | IntegerToPointerCast of term
     | PointerToIntegerCast of term
     (* | PredEqRegulator of string list * term *)
@@ -113,6 +114,8 @@ module Terms = struct
           mparens atomic (pp true t1 ^^^ !^">" ^^^ pp true t2)
     | GreaterOrEqual (t1, t2) -> 
        mparens atomic (pp true t1 ^^^ !^">=" ^^^ pp true t2)
+    | IsShape (t1, t2) ->
+       mparens atomic (pp true t1 ^^^ !^"??" ^^^ pp true t2)
     | IntegerToPointerCast t1 ->
        mparens atomic (parens !^"pointer" ^^ (pp true t1))
     | PointerToIntegerCast t1 ->
@@ -217,6 +220,8 @@ module Terms = struct
       | GreaterThan (t1, t2) -> 
          aux t1 || aux t2
       | GreaterOrEqual (t1, t2) -> 
+         aux t1 || aux t2
+      | IsShape (t1, t2) ->
          aux t1 || aux t2
       | IntegerToPointerCast t ->
          aux t
