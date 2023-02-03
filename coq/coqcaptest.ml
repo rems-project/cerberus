@@ -94,6 +94,7 @@ module M = struct
   let c2_bytes =
     List.map char_of_int (List.rev [0xd8;0x00;0x00;0x00;0x66;0xf4;0xe6;0xec;0x00;0x00;0x00;0x00;0xff;0xff;0xe6;0xec])
 
+  (* C3 corresponds to https://www.morello-project.org/capinfo?c=1dc00000066d4e6d02a000000ffffe6d0 *)
   let c3_bytes =
     List.map char_of_int [208;230;255;255;0;0;0;42;208;230;212;102;0;0;0;220]
 
@@ -188,7 +189,6 @@ let tests = "coq_morello_caps" >::: [
       );
 
       "encode C1 bytes" >:: (fun _ ->
-        (* C1 corresponds to https://www.morello-project.org/capinfo?c=0x1%3A900000007F1CFF15%3A00000000FFFFFF15 *)
         let expected_bytes = M.c1_bytes in
         match M.encode true M.cap_1 with
         | None -> assert_failure "encode failed"
@@ -231,8 +231,7 @@ let tests = "coq_morello_caps" >::: [
       );
 
       "decode/strfcap/perm C1" >:: (fun _ ->
-        (* C1 corresponds to https://www.morello-project.org/capinfo?c=0x1%3A900000007F1CFF15%3A00000000FFFFFF15 *)
-        let bytes_ = M.c1_bytes in 
+        let bytes_ = M.c1_bytes in
         match M.decode bytes_ true with 
         | None -> assert_failure "decode failed"
         | Some c -> 
@@ -675,7 +674,6 @@ let tests = "coq_morello_caps" >::: [
           (not (M.cap_vaddr_representable M.cap_1 (Z.of_string "0x7FFFE6EC")))
       );
 
-      (* https://www.morello-project.org/capinfo?c=1dc00000066d4e6cc00000000ffffe6cc *)
       "C2 representabitiy" >:: (fun _ ->
         assert_bool
           "7FFFE6EC should not be representable"
