@@ -177,7 +177,7 @@ let tests = "coq_morello_caps" >::: [
 
       "encode C0 bytes" >:: (fun _ ->
         (* C0 does not M.encode to all zeros due to compresison limitations *)
-        match M.encode true (M.cap_c0 ()) with
+        match M.encode false (M.cap_c0 ()) with
         | None -> assert_failure "encode failed"
         | Some (bytes, tag) ->
            let b = List.map char_of_int [0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0] in

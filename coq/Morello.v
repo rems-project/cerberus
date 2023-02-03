@@ -19,6 +19,12 @@ Require Import Addr Capabilities Utils CapFns.
 Import ListNotations.
 Open Scope list_scope.
 
+Definition bool_list_cmp (a b: list bool) : bool :=
+  if Nat.eqb (List.length a) (List.length b)
+  then fold_left2 (fun a b c => andb (Bool.eqb b c) a) true a b
+  else false.
+
+
 Module MorelloAddr <: VADDR.
   Definition t := Z. (* but it is always non-negiative *)
 
@@ -39,6 +45,7 @@ End MorelloAddr.
 
 Module MoreloOTYPE <: OTYPE.
   Definition t := Z.
+  Definition eqb := Z.eqb.
 End MoreloOTYPE.
 
 Module MorelloCAP_SEAL_T <: CAP_SEAL_T.
@@ -50,6 +57,15 @@ Module MorelloCAP_SEAL_T <: CAP_SEAL_T.
   | Cap_Sealed (seal:MoreloOTYPE.t).
 
   Definition t := cap_seal_t.
+
+  Definition eqb (a b: t) :=
+    match a, b with
+    | Cap_Unsealed, Cap_Unsealed => true
+    | Cap_SEntry, Cap_SEntry => true
+    | Cap_Indirect_SEntry, Cap_Indirect_SEntry => true
+    | Cap_Sealed a, Cap_Sealed b => Z.eqb a b
+    | _, _ => false
+    end.
 End MorelloCAP_SEAL_T.
 
 Module MorelloVADDR_INTERVAL <: VADDR_INTERVAL(MorelloAddr).
@@ -60,6 +76,9 @@ Module MorelloVADDR_INTERVAL <: VADDR_INTERVAL(MorelloAddr).
     andb (MorelloAddr.leb base addr) (MorelloAddr.ltb addr limit).
 
   Definition ltb (a b:t):= false. (* TODO *)
+  Definition eqb (a b:t):=
+    andb (MorelloAddr.eqb (fst a) (fst b)) (MorelloAddr.eqb (snd a) (snd b)).
+
 End MorelloVADDR_INTERVAL.
 
 Module MorelloPermission <: Permission.
@@ -463,6 +482,9 @@ Module MorelloPermission <: Permission.
     ++ s p.(permits_store_cap) "W"
     ++ s p.(executive) "E".
 
+  Definition eqb (a b:t) : bool :=
+    bool_list_cmp (to_list a) (to_list b).
+
 End MorelloPermission.
 
 
@@ -539,16 +561,16 @@ Module MorelloCapability <:
 
   Definition cap_get_seal (c_value : t) : MorelloCAP_SEAL_T.t :=
     let x_value := c_value.(obj_type) in
-    if Z.eqb x_value cap_SEAL_TYPE_UNSEALED then
+    if MoreloOTYPE.eqb x_value cap_SEAL_TYPE_UNSEALED then
       MorelloCAP_SEAL_T.Cap_Unsealed
     else
-      if Z.eqb x_value cap_SEAL_TYPE_RB then
+      if MoreloOTYPE.eqb x_value cap_SEAL_TYPE_RB then
         MorelloCAP_SEAL_T.Cap_SEntry
       else
-        if Z.eqb x_value cap_SEAL_TYPE_LPB then
+        if MoreloOTYPE.eqb x_value cap_SEAL_TYPE_LPB then
           MorelloCAP_SEAL_T.Cap_Indirect_SEntry
         else
-          if Z.eqb x_value cap_SEAL_TYPE_LB then
+          if MoreloOTYPE.eqb x_value cap_SEAL_TYPE_LB then
             MorelloCAP_SEAL_T.Cap_Indirect_SEntry
           else
             MorelloCAP_SEAL_T.Cap_Sealed x_value.
@@ -775,20 +797,37 @@ Module MorelloCapability <:
     | _ => None
     end.
 
+  Local Open Scope bool_scope.
+  (* re-define compare function to do deep comparison *)
+  Definition deep_eqb a b :=
+    ghost_state_eqb (get_ghost_state a) (get_ghost_state b)
+    && Bool.eqb (cap_is_valid a) (cap_is_valid b)
+    && MorelloAddr.eqb (cap_get_value a) (cap_get_value b)
+    && Z.eqb (cap_get_offset a) (cap_get_offset b)
+    && MoreloOTYPE.eqb (cap_get_obj_type a) (cap_get_obj_type b)
+    && MorelloVADDR_INTERVAL.eqb (cap_get_bounds a) (cap_get_bounds b)
+    && MorelloCAP_SEAL_T.eqb (cap_get_seal a) (cap_get_seal b)
+    && bool_list_cmp (cap_get_flags a) (cap_get_flags b)
+    && MorelloPermission.eqb (cap_get_perms a) (cap_get_perms b) .
+
   Definition encode (isexact : bool) (c : t) : option ((list ascii) * bool) :=
-    let w := encode_to_word isexact c in
-    let tag := CapIsTagSet w in
-    (* strip tag bit *)
-    let bits := bits_of w in
-    let w1 := vec_of_bits (List.tail bits) in
-    match mem_bytes_of_bits w1 with
-    | Some bytes =>
-        match try_map memory_byte_to_ascii bytes with
-        | Some chars => Some (chars, tag)
-        | None => None
-        end
-    | None => None
-    end.
+    if deep_eqb c (cap_c0 tt) then
+      (* special handing of C0 to produce canonical encoding *)
+      Some ([zero;zero;zero;zero;zero;zero;zero;zero;zero;zero;zero;zero;zero;zero;zero;zero], false)
+    else
+      let w := encode_to_word isexact c in
+      let tag := CapIsTagSet w in
+      (* strip tag bit *)
+      let bits := bits_of w in
+      let w1 := vec_of_bits (List.tail bits) in
+      match mem_bytes_of_bits w1 with
+      | Some bytes =>
+          match try_map memory_byte_to_ascii bytes with
+          | Some chars => Some (chars, tag)
+          | None => None
+          end
+      | None => None
+      end.
 
   Definition representable_alignment_mask (len: Z) : Z :=
     let len' := mword_of_int (len:=Z.of_nat vaddr_bits) len in

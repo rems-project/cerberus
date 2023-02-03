@@ -6,6 +6,7 @@ Require Import Coq.Strings.String.
 Require Import Coq.Strings.Ascii.
 Require Import Coq.Numbers.BinNums.
 Require Import Coq.Init.Datatypes.
+Require Import Coq.Bool.Bool.
 
 Require Import Addr.
 
@@ -81,14 +82,18 @@ Module Type Permission.
 
   (* inverse of [of_list] *)
   Parameter to_list: t -> list bool.
+
+  Parameter eqb: t -> t -> bool.
 End Permission.
 
 Module Type OTYPE.
   Parameter t:Set.
+  Parameter eqb: t -> t -> bool.
 End OTYPE.
 
 Module Type CAP_SEAL_T.
   Parameter t:Set.
+  Parameter eqb: t -> t -> bool.
 End CAP_SEAL_T.
 
 Module Type VADDR_INTERVAL (V:VADDR).
@@ -96,6 +101,7 @@ Module Type VADDR_INTERVAL (V:VADDR).
 
   Parameter addresses_in_interval: t -> V.t -> bool.
   Parameter ltb: t -> t -> bool.
+  Parameter eqb: t -> t -> bool.
 End VADDR_INTERVAL.
 
 Record CapGhostState :=
@@ -103,6 +109,11 @@ Record CapGhostState :=
     tag_unspecified : bool;
     bounds_unspecified : bool
   }.
+
+Definition ghost_state_eqb (a b:CapGhostState) : bool :=
+  andb
+    (eqb a.(tag_unspecified) b.(tag_unspecified))
+    (eqb a.(bounds_unspecified) b.(bounds_unspecified)).
 
 Definition Default_CapGhostState : CapGhostState
   := {| tag_unspecified := false; bounds_unspecified := false |}.
