@@ -744,6 +744,31 @@ let tests = "coq_morello_caps" >::: [
              (M.cap_get_value c)
       );
 
+      "decode C3 bytes (flags)" >:: (fun _ ->
+        match M.decode M.c3_bytes true  with
+        | None -> assert_failure "decode failed"
+        | Some c ->
+           assert_equal
+             ~printer:string_of_bool_list
+             [false; false; true; false; true; false; true; false]
+             (M.cap_get_flags c)
+      );
+
+
+      "C3 decode/encode" >:: (fun _ ->
+        match M.decode M.c3_bytes true with
+        | None -> assert_failure "decoding failed"
+        | Some c ->
+           begin
+             match M.encode true c with
+             | None -> assert_failure "2nd M.encode failed"
+             | Some (b', _) ->
+                assert_equal
+                  ~pp_diff:cap_bits_diff
+                  M.c3_bytes b'
+           end
+      );
+
     ]
 
 let _ = run_test_tt_main tests
