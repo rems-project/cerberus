@@ -94,6 +94,8 @@ module M = struct
   let c2_bytes =
     List.map char_of_int (List.rev [0xd8;0x00;0x00;0x00;0x66;0xf4;0xe6;0xec;0x00;0x00;0x00;0x00;0xff;0xff;0xe6;0xec])
 
+  let c3_bytes =
+    List.map char_of_int [208;230;255;255;0;0;0;42;208;230;212;102;0;0;0;220]
 
   (* re-define compare function to do deep comparison *)
   let deep_eqb a b =
@@ -731,6 +733,17 @@ let tests = "coq_morello_caps" >::: [
              (snd (M.cap_get_bounds c))
              (snd (M.cap_get_bounds M.cap_2))
       );
+
+      "decode C3 bytes (value)" >:: (fun _ ->
+        match M.decode M.c3_bytes true  with
+        | None -> assert_failure "decode failed"
+        | Some c ->
+           assert_equal
+             ~printer:(Z.format "%#x")
+             (Z.of_string "0x2a000000ffffe6d0")
+             (M.cap_get_value c)
+      );
+
     ]
 
 let _ = run_test_tt_main tests
