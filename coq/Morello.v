@@ -615,10 +615,7 @@ Module MorelloCapability <:
     if Nat.eqb (List.length bytes) 16%nat then
       let bytes := List.rev bytes in
       let bits := tag::(bool_bits_of_bytes bytes) in
-      let bitsu := List.map bitU_of_bool bits in
-      let w := vec_of_bits bitsu in
-      (* the following line does nothing but hints type system *)
-      let w:mword 129 := mword_of_int (int_of_mword false w) in
+      let w := of_bools bits in
       decode_word w
     else
       None.
@@ -697,16 +694,12 @@ Module MorelloCapability <:
     let bits := CapSetValue bits (mword_of_int (len:=64) base) in
     let bits := CapSetBounds bits (mword_of_int (len:=65) len) isexact in
     let bits := CapSetValue bits (mword_of_int (len:=64) (cap_get_value c)) in
-    let flags := List.map bitU_of_bool (cap_get_flags c) in
-    let flags := vec_of_bits flags in
+    let flags := of_bools (cap_get_flags c) in
     let flags := zero_extend flags 64 in
     let bits := CapSetFlags bits flags in
-    let perms :=
-      List.map bitU_of_bool (MorelloPermission.to_list (cap_get_perms c)) in
-    let perms := List.rev perms in
-    let perms := vec_of_bits perms in
-    let perms : mword MorelloPermission.perms_zlen :=
-      mword_of_int (int_of_mword false perms) in
+    let perms := of_bools
+                   (List.rev (MorelloPermission.to_list (cap_get_perms c)))
+    in
     let bits := CapSetPermissins bits perms in
     bits.
 
