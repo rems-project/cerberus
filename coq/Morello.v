@@ -695,7 +695,6 @@ Module MorelloCapability <:
     let bits := CapSetBounds bits (mword_of_int (len:=65) len) isexact in
     let bits := CapSetValue bits (mword_of_int (len:=64) (cap_get_value c)) in
     let flags := of_bools (cap_get_flags c) in
-    let flags := zero_extend flags 64 in
     let bits := CapSetFlags bits flags in
     let perms := of_bools
                    (List.rev (MorelloPermission.to_list (cap_get_perms c)))
