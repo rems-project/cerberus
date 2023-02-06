@@ -18,6 +18,7 @@ license: "BSD-2-Clause"
 homepage: "https://www.cl.cam.ac.uk/~pes20/cerberus/"
 bug-reports: "https://github.com/rems-project/cerberus/issues"
 depends: [
+  "coq-stdpp-unstable"
   "ocaml" {>= "4.13.0"}
   "dune" {>= "2.0.0"}
   "sha" {>= "1.12"}

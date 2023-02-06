@@ -53,7 +53,7 @@ Definition mword_to_bv_2 {z:Z} {n:N} (m : mword z)  : bv n :=
   Z_to_bv n x.
 
 Definition mword_to_list_bool {n} (w : mword n) : list bool := 
-  List.rev (bitlistFromWord (get_word w)). 
+   bitlistFromWord_rev (get_word w). 
 
 
 Definition list_bool_to_mword (l : list bool) : mword (Z.of_nat (List.length l)) := 
@@ -849,18 +849,12 @@ Module Cap <: Capability (ValueBV) (ObjTypeBV) (SealType) (BoundsBV) (Permission
 
   (* Notation "x =? y" := (eqb x y) (at level 70, no associativity). *)
 
-  Definition to_string_pretty (c:t) : string :=
-    ValueBV.to_string (cap_get_value c) ++ " [" ++ PermissionsBV.to_string (cap_get_perms c) ++ "," ++ BoundsBV.to_string (cap_get_bounds c) ++ "]".
-
-  Definition to_string_full (c:t) : string :=
-    HexString.of_Z (bv_to_Z_unsigned c.(cap)). 
-
   Definition is_sentry (c : t) : bool :=
     match cap_get_seal c with
     | SealType.Cap_SEntry => true
     | _ => false
     end.
-  
+    
   Definition flags_as_str (c:t): string :=
     let attrs :=
       let a (f:bool) s l := if f then s::l else l in
@@ -873,9 +867,11 @@ Module Cap <: Capability (ValueBV) (ObjTypeBV) (SealType) (BoundsBV) (Permission
     if Nat.eqb (List.length attrs) 0%nat then ""
     else " (" ++ String.concat "," attrs ++ ")".
 
-  Definition to_string (c:t) : string :=
-    (* to_string_full c ++ " (" ++ to_string_pretty c ++ ")". *)
-    (if cap_is_null_derived c then
+  Definition to_string_pretty (c:t) : string :=
+    ValueBV.to_string (cap_get_value c) ++ " [" ++ PermissionsBV.to_string (cap_get_perms c) ++ "," ++ BoundsBV.to_string (cap_get_bounds c) ++ "]".
+
+  Definition to_string_pretty_2 (c:t) : string :=
+    if cap_is_null_derived c then
       ValueBV.to_string (cap_get_value c)
     else
       (ValueBV.to_string (cap_get_value c)) ++ " " ++ "[" ++
@@ -885,7 +881,14 @@ Module Cap <: Capability (ValueBV) (ObjTypeBV) (SealType) (BoundsBV) (Permission
            PermissionsBV.to_string (cap_get_perms c) ++ "," ++
            BoundsBV.to_string (cap_get_bounds c)  )
         ++ "]" ++
-        (flags_as_str c)).
+        (flags_as_str c).
+
+  Definition to_string_full (c:t) : string :=
+    HexString.of_Z (bv_to_Z_unsigned c.(cap)). 
+
+  Definition to_string (c:t) : string :=
+    to_string_full c ++ ": " ++ 
+    to_string_pretty_2 c.
 
   Definition strfcap (s:string) (_:t) : option string := None.
     
@@ -941,15 +944,6 @@ End Cap.
 Module test_cap_getters_and_setters.
 
   Import Cap.
-
-  (* Compute decode (match test_cap_0_enc with Some (l,b) => l | None => [] end) true.
-  Compute decode (match test_cap_01_enc with Some (l,b) => l | None => [] end) true. *)
-
-  (* Definition test_cap_7_encoded:(list ascii) := 
-  ["021"%char; "255"%char; "255"%char; "255"%char; "000"%char;
-  "000"%char; "000"%char; "000"%char; "021"%char; "255"%char;
-  "028"%char; "127"%char; "000"%char; "000"%char; "000"%char;
-  "L"%char]. *)
 
   Definition c1:Cap.t := cap_t_to_t (mword_to_bv (concat_vec (Ones 19) (Zeros 110))) Default_CapGhostState. (* A valid universal-permission cap = 1^{19}0^{110} *)
   Definition c2:Cap.t := cap_t_to_t (mword_to_bv (concat_vec (Ones 3) (Zeros 126))) Default_CapGhostState. (* A valid cap with Load and Store perms *)
@@ -1417,6 +1411,8 @@ Module MorelloCapability <: Capability (Value) (ObjType) (SealType) (Bounds) (Pe
   Definition eqb := Cap.eqb.
 
   Definition to_string := Cap.to_string.
+
+  Definition to_string_full := Cap.to_string_full.
 
   Definition strfcap (s:string) (_:t) : option string := None.
 
