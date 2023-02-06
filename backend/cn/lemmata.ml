@@ -29,8 +29,9 @@ module IntMap = Map.Make(Int)
    they may be defined into. *)
 module PrevDefs = struct
   type t = {present: (Sym.t list) StringListMap.t;
-        defs: (Pp.doc list) IntMap.t}
-  let init_t = {present = StringListMap.empty; defs = IntMap.empty}
+        defs: (Pp.doc list) IntMap.t;
+        dt_params: (IT.t * Sym.t * Sym.t) list}
+  let init_t = {present = StringListMap.empty; defs = IntMap.empty; dt_params = []}
   type ('a, 'e) m = t -> ('a * t)
   let return (x : 'a) : ('a, 'e) m = (fun st -> (x, st))
   let bind (x : ('a, 'e) m) (f : 'a -> ('b, 'e) m) : ('b, 'e) m = (fun st ->
@@ -39,6 +40,7 @@ module PrevDefs = struct
   )
   let get : (t, 'e) m = (fun st -> (st, st))
   let set (st : t) : (unit, 'e) m = (fun _ -> ((), st))
+  let upd (f : t -> t) : (unit, 'e) m = bind get (fun st -> set (f st))
 
   let get_section section (st : t) =
     match IntMap.find_opt section st.defs with
@@ -48,11 +50,25 @@ module PrevDefs = struct
     let current = get_section section st in
     let defs = IntMap.add section (doc :: current) st.defs in
     {st with defs}
+
+  let add_dt_param x = upd (fun st ->
+    {st with dt_params = x :: st.dt_params})
+
+  let get_dt_param it m_nm = bind get (fun st ->
+    return (List.find_opt (fun (it2, m2, sym) -> IT.equal it it2 && Sym.equal m_nm m2)
+        st.dt_params |> Option.map (fun (_, _, sym) -> sym)))
+
 end
 module PrevMonad = Effectful.Make(PrevDefs)
 open PrevDefs
 open PrevMonad
 
+let with_reset_dt_params f =
+  let@ st = get in
+  let@ x = f () in
+  let@ st2 = get in
+  let@ () = set {st2 with dt_params = st.dt_params} in
+  return x
 
 module Mu = NewMu.New
 module Muc = Mucore
@@ -120,7 +136,8 @@ let it_undef_foralls it =
 (* set of functions with boolean return type that are negated
    etc and must return bool (be computational) in Coq. the rest
    return Prop. FIXME: make this configurable. *)
-let bool_funs = StringSet.add "order_aligned" StringSet.empty
+let bool_funs = StringSet.of_list
+  ["order_aligned"; "in_tree"]
 
 exception Cannot_Coerce
 
@@ -344,7 +361,7 @@ let tuple_upd_element t (i, len) y =
 
 let rets s = return (Pp.string s)
 let build = function
-  | [] -> fail "it_to_coq: build" (!^ "empty")
+  | [] -> fail "build" (!^ "empty")
   | xs ->
     let@ docs = ListM.mapM (fun x -> x) xs in
     return (flow (break 1) docs)
@@ -440,6 +457,31 @@ and ensure_datatype ci dt_tag =
               hardline ^^ doc) dt_eqs) ^^ !^ "." ^^ hardline)
   )) [dt_tag]
 
+let ensure_datatype_member ci dt_tag mem_tag bt =
+  let@ () = ensure_datatype ci dt_tag in
+  let op_nm = Sym.pp_string dt_tag ^ "_" ^ Sym.pp_string mem_tag in
+  let dt_info = SymMap.find dt_tag ci.global.Global.datatypes in
+  let inf = Pp.string ("datatype acc for " ^ Sym.pp_string dt_tag) in
+  let@ bt_doc = bt_to_coq ci inf bt in
+  let cons_line c =
+    let c_info = SymMap.find c ci.global.Global.datatype_constrs in
+    let pats = List.map (fun (m2, _) -> if Sym.equal mem_tag m2
+        then Sym.pp mem_tag else Pp.string "_") c_info.c_params in
+    let open Pp in
+    !^ "    |" ^^^ flow (!^ " ") pats ^^^ !^"=>" ^^^
+    (if List.exists (Sym.equal mem_tag) (List.map fst c_info.c_params)
+        then Sym.pp mem_tag else !^ "default")
+  in
+  let@ () = gen_ensure 0 ["types"; "datatype acc";
+        Sym.pp_string dt_tag; Sym.pp_string mem_tag]
+  (lazy (
+      let open Pp in
+      return (defn op_nm [parens (typ (!^ "dt") (Sym.pp dt_tag)); !^ "default"] (Some bt_doc)
+          (flow hardline (!^ "match dt with" :: List.map cons_line dt_info.dt_constrs)))
+  )) [dt_tag; mem_tag]
+  in
+  return op_nm
+
 let ensure_tuple_op is_upd nm (ix, l) =
   let ix_s = Int.to_string ix in
   let len_s = Int.to_string l in
@@ -529,6 +571,51 @@ let mk_forall ci sym bt doc =
   return (!^ "forall" ^^^ parens (typ (Sym.pp sym) coq_bt)
       ^^ !^"," ^^ break 1 ^^ doc)
 
+let add_dt_param_counted (it, m_nm) =
+  let@ st = get in
+  let idx = List.length (st.dt_params) in
+  let sym = Sym.fresh_named (Sym.pp_string m_nm ^ "_" ^ Int.to_string idx) in
+  let@ () = add_dt_param (it, m_nm, sym) in
+  return sym
+
+let dt_split ci x t =
+  let dt = Option.get (BT.is_datatype_bt (IT.bt x)) in
+  let cs_used = IT.fold (fun _ acc t -> match IT.term t with
+    | IT.Datatype_op (IT.DatatypeIsCons (c_nm, y)) when IT.equal x y -> SymSet.add c_nm acc
+    | _ -> acc) [] SymSet.empty t in
+  let mems_used = IT.fold (fun _ acc t -> match IT.term t with
+    | IT.Datatype_op (IT.DatatypeMember (y, m_nm)) when IT.equal x y -> SymSet.add m_nm acc
+    | _ -> acc) [] SymSet.empty t in
+  let dt_info = SymMap.find dt ci.global.Global.datatypes in
+  let need_default = List.length dt_info.BT.dt_constrs > SymSet.cardinal cs_used in
+  let rec redux c_nm t = match IT.term t with
+    | IT.Bool_op (IT.ITE (IT.IT (IT.Datatype_op (IT.DatatypeIsCons (c_nm2, y)), _), x_t, x_f))
+        when IT.equal x y ->
+      if Sym.equal c_nm c_nm2 then redux c_nm x_t else redux c_nm x_f
+    | _ -> t
+  in
+  let f c_nm =
+      let c_info = SymMap.find c_nm ci.global.Global.datatype_constrs in
+      let ms = List.map fst c_info.c_params in
+    (Sym.pp c_nm, ms, mems_used, redux c_nm t)
+  in
+  List.map f (SymSet.elements cs_used) @ (if need_default
+    then [(Pp.string "_", [], mems_used, redux dt t (* any non-cons symbol will redux correctly *))]
+    else [])
+
+let with_selected_dt_params it mem_nms set_used f = with_reset_dt_params (fun () ->
+    let@ xs = ListM.mapM (fun m_nm -> if SymSet.mem m_nm set_used
+        then let@ sym = add_dt_param_counted (it, m_nm) in
+            return (Some sym)
+        else return None) mem_nms in
+    f xs)
+
+let match_some_dt_params c_doc opt_params =
+  build (return c_doc :: List.map (function
+    | None -> rets "_"
+    | Some m_sym -> return (Sym.pp m_sym)
+  ) opt_params)
+
 let it_to_coq ctxt ci it =
   let open Pp in
   let eq_of = function
@@ -582,9 +669,19 @@ let it_to_coq ctxt ci it =
         | IT.Or (x :: xs) -> abinop (if bool_eq_prop then "\\/" else "||") x (IT.or_ xs)
         | IT.Impl (x, y) -> abinop (if bool_eq_prop then "->" else "implb") x y
         | IT.Not x -> parensM (build [rets (if bool_eq_prop then "~" else "negb"); aux x])
+        | IT.ITE (IT.IT (IT.Datatype_op (IT.DatatypeIsCons (c_nm, x)), _), _, _) ->
+            let dt = Option.get (BT.is_datatype_bt (IT.bt x)) in
+            let@ () = ensure_datatype ci dt in
+            let branches = dt_split ci x t in
+            let br (c_doc, ps, ps_used, t2) = with_selected_dt_params x ps ps_used
+              (fun opt_ps -> build [rets "|"; match_some_dt_params c_doc opt_ps;
+                rets "=>"; aux t2])
+            in
+            parensM (build ([rets "match"; f false x; rets "with"]
+                @ List.map br branches @ [rets "end"]))
         | IT.ITE (sw, x, y) -> parensM (build [rets "if"; f false sw; rets "then";
                 aux x; rets "else"; aux y])
-        | IT.EQ (x, y) -> abinop (if bool_eq_prop then "=" else "=?") x y
+        | IT.EQ (x, y) -> build [f false x; rets (if bool_eq_prop then "=" else "=?"); f false y]
         | IT.EachI ((i1, s, i2), x) -> assert bool_eq_prop;
             let@ x = aux x in
             let@ enc = mk_forall ci s BaseTypes.Integer
@@ -672,6 +769,13 @@ let it_to_coq ctxt ci it =
                info.c_params in
             let@ () = ensure_datatype ci info.c_datatype_tag in
             parensM (build ([return (Sym.pp nm)] @ List.map (f false) args))
+        | IT.DatatypeMember (dt, nm) ->
+            let@ o_sym = get_dt_param dt nm in
+            begin match o_sym with
+              | Some sym -> return (Sym.pp sym)
+              | _ -> fail "it_to_coq: access member of datatype not exposed in case-split"
+                  (IT.pp t)
+            end
         | _ -> fail "it_to_coq: unsupported datatype op" (IT.pp t)
     end
     | _ -> fail "it_to_coq: unsupported" (IT.pp t)
