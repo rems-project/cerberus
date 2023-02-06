@@ -82,6 +82,7 @@ module MakePp (Conf: PP_CN) = struct
     | CN_or -> P.bar ^^ P.bar
     | CN_and -> P.ampersand ^^ P.ampersand
     | CN_map_get -> P.string "CN_map_get"
+    | CN_is_shape -> P.string "??"
   
   let rec dtree_of_cn_expr (CNExpr (_, expr_)) =
     match expr_ with
