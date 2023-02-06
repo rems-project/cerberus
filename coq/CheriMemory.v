@@ -706,7 +706,6 @@ Module CheriMemory
             ret (funptrmap, (ghost_tags addr (Z.of_nat (List.length bs)) capmeta), bs)
         | MVinteger ity (IC _ c_value) =>
             '(cb, ct) <- option2serr "int encoding error" (C.encode true c_value) ;;
-            (* mprint_msg "Encode1" ;; *)
             let capmeta := ZMap.add addr
                              (C.cap_is_valid c_value, C.get_ghost_state c_value)
                              capmeta
@@ -728,7 +727,6 @@ Module CheriMemory
                   fp) =>
                 let '(funptrmap, c_value) := resolve_function_pointer funptrmap fp in
                 '(cb, ct) <- option2serr "valid function pointer encoding error" (C.encode true c_value) ;;
-                (* mprint_msg "Encode2" ;;  *)
                 let capmeta := ZMap.add addr
                                  (C.cap_is_valid c_value, C.get_ghost_state c_value)
                                  capmeta
@@ -739,7 +737,6 @@ Module CheriMemory
                           absbyte_v prov (Some i_value) (Some b_value)) cb))
             | (PVfunction (FP_invalid c_value) | PVconcrete c_value) =>
                 '(cb, ct) <- option2serr "pointer encoding error" (C.encode true c_value) ;;
-                (* mprint_msg "Encode3" ;;  *)
                 let capmeta := ZMap.add addr
                                  (C.cap_is_valid c_value, C.get_ghost_state c_value)
                                  capmeta
@@ -1484,18 +1481,7 @@ Module CheriMemory
       fail (MerrCHERI loc CheriUndefinedTag)
     else if C.cap_is_valid c then
       let addr :=
-        Z.add (C.cap_get_value c)
-          offset in
-
-          let s :=
-                  match intent with
-                  | ReadIntent => "The intent is Read"
-                  | WriteIntent => "The intent is Write" 
-                  | CallIntent => "The intent is Execute"
-                  end in    
-                let temp := mprint_msg s in 
-                temp ;; 
-
+        Z.add (C.cap_get_value c) offset in
       let pcheck :=
         match intent with
         | ReadIntent =>
@@ -1505,17 +1491,6 @@ Module CheriMemory
         | CallIntent =>
             Morello.Permissions.has_execute_perm
         end in
-
-        mprint_msg (C.to_string c) ;;
-        mprint_msg "with value: ";; mprint_msg (HexString.of_Z (C.cap_get_value c)) ;;
-        mprint_msg "and permissions: ";; 
-        mprint_msg (Morello.Permissions.to_string (C.cap_get_perms c)) ;;
-        mprint_msg (Morello.Permissions.to_string_hex (C.cap_get_perms c)) ;;
-                
-        mprint_msg (if (Morello.Permissions.has_load_perm (C.cap_get_perms c)) then "This cap has read perms" else "This cap doesn't have read perms") ;;
-        mprint_msg (if (Morello.Permissions.has_store_perm (C.cap_get_perms c)) then "This cap has store perms" else "This cap doesn't have store perms") ;;
-        mprint_msg (if (Morello.Permissions.has_execute_perm (C.cap_get_perms c)) then "This cap has execute perms" else "This cap doesn't have execute perms") ;;
-
       if pcheck (C.cap_get_perms c) then
         let bounds := C.cap_get_bounds c in
         if cap_bounds_check bounds addr sz then
@@ -1524,8 +1499,7 @@ Module CheriMemory
           fail
             (MerrCHERI loc (CheriBoundsErr (bounds, addr, (Z.to_nat sz))))
       else
-        mprint_msg "pcheck has failed" ;;
-         fail (MerrCHERI loc CheriMerrUnsufficientPermissions)
+        fail (MerrCHERI loc CheriMerrUnsufficientPermissions)
     else
       fail
         (MerrCHERI loc CheriMerrInvalidCap).
@@ -1741,15 +1715,6 @@ Module CheriMemory
     memM (footprint * mem_value)
     :=
     let '(prov, ptrval_) := break_PV p in
-
-    (* mprint_msg "Entered load with ptrval=(_," ;;
-    let tmp_str :=
-      match ptrval_ with 
-        PVconcrete c => C.to_string c
-      | _ => "" 
-      end in
-    mprint_msg tmp_str ;; *)
-
     let do_load
           (alloc_id_opt : option storage_instance_id)
           (addr : Z)
@@ -1816,7 +1781,6 @@ Module CheriMemory
           (sz : Z)
       : memM (footprint * mem_value)
       :=
-      (* mprint_msg "calling cap_check from load function" ;; *)
       cap_check loc c 0 ReadIntent sz ;;
       do_load alloc_id_opt  (C.cap_get_value c) sz
     in
@@ -1835,8 +1799,7 @@ Module CheriMemory
                match function_parameter with
                | false =>
                    fail (MerrAccess loc LoadAccess OutOfBoundPtr)
-               | true => 
-               (* mprint_msg "calling do_load_cap from code1" ;; *)
+               | true =>             
                    do_load_cap None c sz
                end)
     | Prov_symbolic iota, PVconcrete addr =>
@@ -1872,7 +1835,6 @@ Module CheriMemory
           sz <- serr2memM (sizeof DEFAULT_FUEL None ty) ;;
           resolve_iota precondition iota >>=
             (fun (alloc_id : storage_instance_id) =>
-               (* mprint_msg "calling do_load_cap from code2" ;;  *)
                do_load_cap (Some alloc_id) addr sz)
     | Prov_some alloc_id, PVconcrete addr =>
         if cap_is_null addr then
@@ -1891,14 +1853,6 @@ Module CheriMemory
             (fun (function_parameter : bool) =>
                match function_parameter with
                | false =>
-                   (*
-                   mprint_msg
-                     ("LOAD " ++
-                        of_Z (C.cap_get_value addr) ++
-                        " out of bound, alloc_id=" ++
-                        of_Z alloc_id
-                     ) ;;
-                    *)
                    fail (MerrAccess loc LoadAccess OutOfBoundPtr)
                | true =>
                    is_atomic_member_access alloc_id ty
@@ -1909,7 +1863,6 @@ Module CheriMemory
                             fail (MerrAccess loc LoadAccess AtomicMemberof)
                         | false =>
                             sz <- serr2memM (sizeof DEFAULT_FUEL None ty) ;;
-                            (* mprint_msg "calling do_load_cap from code3 and addr=" ;; mprint_msg (C.to_string addr) ;; *)
                             do_load_cap (Some alloc_id) addr sz
                         end)
                end)
@@ -1946,8 +1899,6 @@ Module CheriMemory
     :=
     let '(prov,ptrval_) := break_PV ptr in
 
-    mprint_msg "Entered store" ;;
-
     cond <- serr2memM (
                 mt <- typeof mval ;;
                 CoqCtype.ctypeEqual DEFAULT_FUEL (CoqCtype.unatomic cty)
@@ -1961,9 +1912,7 @@ Module CheriMemory
             (c_value : C.t)
         : memM footprint
         :=
-        mprint_msg ("Entered do_store_cap with cap = " ++ C.to_string c_value) ;;
         nsz <- serr2memM (sizeof DEFAULT_FUEL None cty) ;;
-        mprint_msg "Calling cap_check from do_store_cap function" ;;
         cap_check loc c_value 0 WriteIntent nsz ;;
         let addr := C.cap_get_value c_value in
         
@@ -2002,20 +1951,17 @@ Module CheriMemory
       in
       match prov, ptrval_ with
       | _, PVfunction _ =>
-          mprint_msg "Fail" ;;
           fail
             (MerrAccess loc
                StoreAccess
                FunctionPtr)
       | Prov_none, _ =>
-          mprint_msg "Fail" ;;
           fail
             (MerrAccess loc
                StoreAccess
                OutOfBoundPtr)
       | Prov_device, PVconcrete addr =>
           if cap_is_null addr then
-            mprint_msg "Fail" ;;
             fail
               (MerrAccess loc
                  StoreAccess
@@ -2026,11 +1972,9 @@ Module CheriMemory
                  if x
                  then do_store_cap None addr
                  else 
-                    mprint_msg "Fail" ;;
                     fail (MerrAccess loc StoreAccess OutOfBoundPtr))
       | Prov_symbolic iota, PVconcrete addr =>
           if cap_is_null addr then
-              mprint_msg "Fail" ;;
               fail
               (MerrAccess loc
                  StoreAccess
@@ -2042,20 +1986,17 @@ Module CheriMemory
                 (fun (x : bool) =>
                    match x with
                    | false =>
-                      mprint_msg "Fail" ;;
                       ret (FAIL (MerrAccess loc StoreAccess OutOfBoundPtr))
                    | true =>
                        get_allocation z_value >>=
                          (fun (alloc : allocation) =>
                             match alloc.(is_readonly) with
                             | IsReadOnly =>
-                                mprint_msg "Fail" ;;
                                 ret
                                   (FAIL
                                      (MerrWriteOnReadOnly
                                         false loc))
                             | IsReadOnly_string_literal =>
-                                mprint_msg "Fail" ;;
                                 ret
                                   (FAIL
                                      (MerrWriteOnReadOnly true
@@ -2067,7 +2008,6 @@ Module CheriMemory
                                   (fun (x : bool) =>
                                      if x
                                      then 
-                                        mprint_msg "Fail" ;;
                                         ret
                                           (FAIL (MerrAccess loc
                                                      LoadAccess
@@ -2107,7 +2047,6 @@ Module CheriMemory
       | Prov_some alloc_id, PVconcrete addr
         =>
           if cap_is_null addr then
-            mprint_msg "Fail" ;;
             fail (MerrAccess loc StoreAccess NullPtr)
           else
             is_within_bound alloc_id cty (C.cap_get_value addr)
@@ -2115,7 +2054,6 @@ Module CheriMemory
               (fun (x : bool) =>
                  match x with
                  | false =>
-                      mprint_msg "Fail" ;;
                       fail (MerrAccess loc StoreAccess OutOfBoundPtr)
                  | true
                    =>
@@ -2123,10 +2061,8 @@ Module CheriMemory
                        (fun (alloc : allocation) =>
                           match alloc.(is_readonly) with
                           | IsReadOnly =>
-                              mprint_msg "Fail" ;;
                               fail (MerrWriteOnReadOnly false  loc)
                           | IsReadOnly_string_literal =>
-                              mprint_msg "Fail" ;;
                               fail (MerrWriteOnReadOnly true loc)
                           | IsWritable =>
                               is_atomic_member_access alloc_id cty
@@ -2134,7 +2070,6 @@ Module CheriMemory
                                 (fun (x : bool) =>
                                    match x with
                                    | true =>
-                                        mprint_msg "Fail" ;;
                                         fail
                                          (MerrAccess loc LoadAccess AtomicMemberof)
                                    | false =>
@@ -2768,7 +2703,6 @@ Module CheriMemory
                         ret (Prov_symbolic iota))
                end >>=
                  (fun (prov : provenance) =>
-                    mprint_msg "Calling C.cap_set_value2" ;;                 
                     let c_value := C.cap_set_value (C.cap_c0 tt) addr in
                     ret (PV prov (PVconcrete c_value))))
     | _, IC _ _ =>
@@ -2830,7 +2764,6 @@ Module CheriMemory
         else
           let n_value := wrap_cap_value n_value in
           let c_value := C.cap_c0 tt in
-          sprint_msg "Calling C.cap_set_value3" ;;                 
           ret (inr (IC false (C.cap_set_value c_value n_value)))
     | IV n_value, _ =>
         ret (inr (IV (conv_int_to_ity2 n_value)))
@@ -2994,15 +2927,7 @@ Module CheriMemory
     :=
     match ival_cap, ival_n with
     | IC is_signed c_value, IV n_value =>        
-        (* if C.cap_vaddr_representable c_value n_value then
-          sprint_msg ("Calling C.cap_set_value4 with value = " ++ (Morello.Value.to_string n_value)) ;;                 
-          ret (IC is_signed (C.cap_set_value c_value n_value))
-        else 
-          sprint_msg ("Non-rep. Calling C.cap_set_value5 with value = " ++ (Morello.Value.to_string n_value)) ;;                 
-          ret (IC is_signed (C.cap_set_value (C.set_ghost_state c_value {| tag_unspecified := true ; bounds_unspecified := true |}) n_value)) *)
-
-          (* Original form *)
-          ret (IC is_signed
+        ret (IC is_signed
                (C.cap_set_value
                   (if C.cap_vaddr_representable c_value n_value
                    then c_value
@@ -3117,7 +3042,6 @@ Module CheriMemory
                            | NoCollapse => ret tt
                            end))
                      ;;
-                     mprint_msg "Calling C.cap_set_value6" ;;                 
                      let c_value := C.cap_set_value c_value shifted_addr in
                      ret (PV prov (PVconcrete c_value))
                    else
@@ -3134,7 +3058,6 @@ Module CheriMemory
                                    end)
                           end)
                      ;;
-                     mprint_msg "Calling C.cap_set_value6" ;;                 
                      let c_value := C.cap_set_value c_value shifted_addr in
                      ret (PV prov (PVconcrete c_value))
                | inl alloc_id =>
@@ -3142,19 +3065,12 @@ Module CheriMemory
                      (fun (function_parameter : bool) =>
                         match function_parameter with
                         | true =>
-                            mprint_msg "Calling C.cap_set_value7" ;;                 
                             let c_value := C.cap_set_value c_value shifted_addr in
                             ret (PV prov (PVconcrete c_value))
                         | false => fail (MerrArrayShift loc)
                         end)
                end)
     | PV (Prov_some alloc_id) (PVconcrete c_value) =>
-        (* mprint_msg "A cap: ";; mprint_msg (C.to_string c_value) ;;
-        mprint_msg "Its value: ";; mprint_msg (HexString.of_Z (C.cap_get_value c_value)) ;;
-        mprint_msg "Its permissions: ";; 
-        mprint_msg (Morello.Permissions.to_string (C.cap_get_perms c_value)) ;;
-        mprint_msg (Morello.Permissions.to_string_hex (C.cap_get_perms c_value)) ;; *)
-        
         let shifted_addr := Z.add (C.cap_get_value c_value) offset in
         if CoqSwitches.has_switch (CoqSwitches.SW_pointer_arith STRICT)
            || negb (CoqSwitches.has_switch (SW_pointer_arith PERMISSIVE))
@@ -3165,26 +3081,16 @@ Module CheriMemory
                   && Z.leb (Z.add shifted_addr sz)
                        (Z.add (Z.add alloc.(base) alloc.(size)) sz)
                then
-                 mprint_msg ("Calling C.cap_set_value8 with value = " ++ (Morello.Value.to_string shifted_addr)) ;;                 
                  let c_value := C.cap_set_value c_value shifted_addr in
                  ret (PV (Prov_some alloc_id) (PVconcrete c_value))
                else
                if (negb (  Z.leb alloc.(base) shifted_addr))
                then
-                  (* mprint_msg "here51" ;;  *)
                   fail (MerrArrayShift loc)
                else 
-                  (* mprint_msg "here52" ;; 
-                  mprint_msg (HexString.of_Z shifted_addr) ;; 
-                  mprint_msg (HexString.of_Z sz) ;; 
-                  mprint_msg (HexString.of_Z (alloc.(base))) ;; 
-                  mprint_msg (HexString.of_Z (alloc.(size))) ;; 
-                  mprint_msg (HexString.of_Z (C.cap_get_value c_value)) ;; 
-                  mprint_msg (HexString.of_Z (offset)) ;;  *)
                   fail (MerrArrayShift loc)
                   )
         else
-          mprint_msg "Calling C.cap_set_value9" ;;                 
           let c_value := C.cap_set_value c_value shifted_addr in
           ret (PV (Prov_some alloc_id) (PVconcrete c_value))
     | PV Prov_none (PVconcrete c_value) =>
@@ -3194,12 +3100,10 @@ Module CheriMemory
         then
           fail (MerrOther "out-of-bound pointer arithmetic (Prov_none)")
         else
-          mprint_msg "Calling C.cap_set_value10" ;;                 
           let c_value := C.cap_set_value c_value shifted_addr in
           ret (PV Prov_none (PVconcrete c_value))
     | PV Prov_device (PVconcrete c_value) =>
         let shifted_addr := Z.add (C.cap_get_value c_value) offset in
-        mprint_msg "Calling C.cap_set_value11" ;;                 
         let c_value := C.cap_set_value c_value shifted_addr in
         ret (PV Prov_device (PVconcrete c_value))
     end.
@@ -3244,7 +3148,6 @@ Module CheriMemory
           else raise (InternalErr "CHERI.member_shift_ptrval, shifting NULL")
         else
           let addr := C.cap_get_value c_value in
-          mprint_msg ("Calling C.cap_set_value12 with value = " ++ (Morello.Value.to_string (Z.add addr offset) ));;                 
           let c_value := C.cap_set_value c_value (Z.add addr offset) in
           ret (PV prov (PVconcrete c_value))
     end.
