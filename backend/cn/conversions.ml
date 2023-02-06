@@ -616,8 +616,22 @@ let resolve_index_term loc
                fail {loc; msg = Generic err}
           in
           return (IT (Record_op (RecordMember (st, member)), bt), None)
-(* FIXME: add datatype case here *)
-       | _ -> fail {loc; msg = Generic (ppf () ^^^ !^"is not a struct")}
+       | Datatype dt_tag ->
+          let info = SymMap.find dt_tag global.Global.datatypes in
+          let members' = List.map (fun (s, bt) -> (todo_string_of_sym s, (s, bt)))
+              info.BT.dt_all_params in
+          let@ (member_sym, bt) = match List.assoc_opt String.equal (Id.s member) members' with
+            | Some (s, bt) ->
+               return (s, bt)
+            | None ->
+               let err =
+                 !^"Illtyped index term" ^^^ ppf () ^^ dot ^^^
+                   ppf () ^^^ !^"datatype does not have member" ^^^ Id.pp member
+               in
+               fail {loc; msg = Generic err}
+          in
+          return (IT.datatype_member_ st member_sym bt, None)
+       | bt -> fail {loc; msg = Generic (ppf () ^^^ !^"is not a type with members:" ^^^ BT.pp bt)}
        end
     | StructUpdate ((t, m), v) ->
        let@ (t, osct) = resolve t mapping quantifiers in
