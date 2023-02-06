@@ -32,21 +32,22 @@ module PrevDefs = struct
         defs: (Pp.doc list) IntMap.t;
         dt_params: (IT.t * Sym.t * Sym.t) list}
   let init_t = {present = StringListMap.empty; defs = IntMap.empty; dt_params = []}
-  type ('a, 'e) m = t -> ('a * t)
-  let return (x : 'a) : ('a, 'e) m = (fun st -> (x, st))
+  type ('a, 'e) m = t -> ('a * t, 'e) Result.t
+  let return (x : 'a) : ('a, 'e) m = (fun st -> Result.Ok (x, st))
   let bind (x : ('a, 'e) m) (f : 'a -> ('b, 'e) m) : ('b, 'e) m = (fun st ->
-    let (xv, st) = x st in
-    f xv st
+    match x st with
+    | Result.Error e -> Result.Error e
+    | Result.Ok (xv, st) -> f xv st
   )
-  let get : (t, 'e) m = (fun st -> (st, st))
-  let set (st : t) : (unit, 'e) m = (fun _ -> ((), st))
+  let get : (t, 'e) m = (fun st -> Result.Ok (st, st))
+  let set (st : t) : (unit, 'e) m = (fun _ -> Result.Ok ((), st))
   let upd (f : t -> t) : (unit, 'e) m = bind get (fun st -> set (f st))
 
   let get_section section (st : t) =
     match IntMap.find_opt section st.defs with
       | None -> []
       | Some docs -> docs
-  let add section doc (st : t) =
+  let add_to_section section doc (st : t) =
     let current = get_section section st in
     let defs = IntMap.add section (doc :: current) st.defs in
     {st with defs}
@@ -92,6 +93,9 @@ let fail msg details =
   let open Pp in
   print stdout (format [Bold; Red] msg ^^ colon ^^ space ^^ details);
   failwith msg
+
+let fail_m loc msg =
+  (fun st -> Result.Error (TypeErrors.{loc; msg = Generic msg}))
 
 let fail_check_noop = function
   | body -> fail "non-noop lemma body element" (NewMu.pp_expr body)
@@ -390,7 +394,7 @@ let gen_ensure section k doc xs =
     let@ fin_doc = Lazy.force doc in
     (* n.b. finalising the rhs-s of definitions might change the state *)
     let@ st = get in
-    let st = add section fin_doc st in
+    let st = add_to_section section fin_doc st in
     set {st with present = StringListMap.add k xs st.present}
   | Some ys ->
     if List.equal Sym.equal xs ys
@@ -422,8 +426,8 @@ let rec bt_to_coq ci loc_info =
   | BaseTypes.Datatype tag ->
     let@ () = ensure_datatype ci tag in
     return (Sym.pp tag)
-  | _ -> fail "bt_to_coq: unsupported" (BaseTypes.pp bt
-        ^^^ !^ "in converting" ^^^ loc_info)
+  | _ -> fail_m Locations.unknown (Pp.item "bt_to_coq: unsupported"
+        (BaseTypes.pp bt ^^^ !^ "in converting" ^^^ loc_info))
   in
   f
 
@@ -528,7 +532,7 @@ let ensure_pred ci name aux =
          return (defn (Sym.pp_string name) args None rhs)
        )) []
   | Rec_Def body ->
-    fail "rec-def not yet handled" (Sym.pp name)
+    fail_m def.loc (Pp.item "rec-def not yet handled" (Sym.pp name))
   end
 
 let ensure_struct_mem is_good ci ct aux = match Sctypes.is_struct_ctype ct with
@@ -616,11 +620,11 @@ let match_some_dt_params c_doc opt_params =
     | Some m_sym -> return (Sym.pp m_sym)
   ) opt_params)
 
-let it_to_coq ctxt ci it =
+let it_to_coq loc ctxt ci it =
   let open Pp in
   let eq_of = function
-    | BaseTypes.Integer -> "Z.eqb"
-    | bt -> fail "eq_of" (BaseTypes.pp bt)
+    | BaseTypes.Integer -> return "Z.eqb"
+    | bt -> fail_m loc (Pp.item "eq_of" (BaseTypes.pp bt))
   in
   let rec f bool_eq_prop t =
     let aux t = f bool_eq_prop t in
@@ -628,37 +632,37 @@ let it_to_coq ctxt ci it =
     let with_is_true x = if bool_eq_prop && BaseTypes.equal (IT.bt t) BaseTypes.Bool
         then parensM (build [rets "Is_true"; x]) else x
     in
-    let check_pos t = 
+    let check_pos t f = 
       let t = unfold_if_possible ctxt t in
       match IT.is_z t with
-      | Some i when Z.gt i Z.zero -> ()
-      | _ -> fail "it_to_coq: divisor not positive const" (IT.pp t)
+      | Some i when Z.gt i Z.zero -> f
+      | _ -> fail_m loc (Pp.item "it_to_coq: divisor not positive const" (IT.pp t))
     in
     match IT.term t with
     | IT.Lit l -> begin match l with
         | IT.Sym sym -> return (Sym.pp sym)
         | IT.Bool b -> with_is_true (rets (if b then "true" else "false"))
         | IT.Z z -> rets (Z.to_string z)
-        | _ -> fail "it_to_coq: unsupported lit" (IT.pp t)
+        | _ -> fail_m loc (Pp.item "it_to_coq: unsupported lit" (IT.pp t))
     end
     | IT.Arith_op op -> begin match op with
         | Add (x, y) -> abinop "+" x y
         | Sub (x, y) -> abinop "-" x y
         | Mul (x, y) -> abinop "*" x y
         | MulNoSMT (x, y) -> abinop "*" x y
-        | Div (x, y) -> check_pos y; abinop "/" x y
-        | DivNoSMT (x, y) -> check_pos y; abinop "/" x y
-        | Mod (x, y) -> check_pos y; abinop "mod" x y
-        | ModNoSMT (x, y) -> check_pos y; abinop "mod" x y
+        | Div (x, y) -> check_pos y (abinop "/" x y)
+        | DivNoSMT (x, y) -> check_pos y (abinop "/" x y)
+        | Mod (x, y) -> check_pos y (abinop "mod" x y)
+        | ModNoSMT (x, y) -> check_pos y (abinop "mod" x y)
         (* TODO: this can't be right: mod and rem aren't the same *)
-        | Rem (x, y) -> check_pos y; abinop "mod" x y
-        | RemNoSMT (x, y) -> check_pos y; abinop "mod" x y
+        | Rem (x, y) -> check_pos y (abinop "mod" x y)
+        | RemNoSMT (x, y) -> check_pos y (abinop "mod" x y)
         | LT (x, y) -> abinop (if bool_eq_prop then "<" else "<?") x y
         | LE (x, y) -> abinop (if bool_eq_prop then "<=" else "<=?") x y
         | Exp (x, y) -> abinop "^" x y
         | ExpNoSMT (x, y) -> abinop "^" x y
         | XORNoSMT (x, y) -> parensM (build [rets "Z.lxor"; aux x; aux y])
-        | _ -> fail "it_to_coq: unsupported arith op" (IT.pp t)
+        | _ -> fail_m loc (Pp.item "it_to_coq: unsupported arith op" (IT.pp t))
     end
     | IT.Bool_op op -> begin match op with
         | IT.And [] -> aux (IT.bool_ true)
@@ -693,9 +697,10 @@ let it_to_coq ctxt ci it =
     | IT.Map_op op -> begin match op with
         | IT.Set (m, x, y) ->
             let@ () = ensure_fun_upd () in
-            parensM (build [rets "fun_upd"; rets (eq_of (IT.bt x)); aux m; aux x; aux y])
+            let@ e = eq_of (IT.bt x) in
+            parensM (build [rets "fun_upd"; rets e; aux m; aux x; aux y])
         | IT.Get (m, x) -> parensM (build [aux m; aux x])
-        | _ -> fail "it_to_coq: unsupported map op" (IT.pp t)
+        | _ -> fail_m loc (Pp.item "it_to_coq: unsupported map op" (IT.pp t))
     end
     | IT.Record_op op -> begin match op with
         | IT.RecordMember (t, m) ->
@@ -737,14 +742,14 @@ let it_to_coq ctxt ci it =
             else
             let@ op_nm = ensure_tuple_op true (Id.pp_string m) ix in
             parensM (build [rets op_nm; aux t; aux x])
-        | _ -> fail "it_to_coq: unsupported struct op" (IT.pp it)
+        | _ -> fail_m loc (Pp.item "it_to_coq: unsupported struct op" (IT.pp it))
     end
     | IT.Pointer_op op -> begin match op with
         | IT.IntegerToPointerCast t -> aux t
         | IT.PointerToIntegerCast t -> aux t
         | IT.LEPointer (x, y) -> abinop (if bool_eq_prop then "<=" else "<=?") x y
         | IT.LTPointer (x, y) -> abinop (if bool_eq_prop then "<" else "<?") x y
-        | _ -> fail "it_to_coq: unsupported pointer op" (IT.pp it)
+        | _ -> fail_m loc (Pp.item "it_to_coq: unsupported pointer op" (IT.pp it))
     end
     | IT.Pred (name, args) ->
         let prop_ret = fun_prop_ret ci name in
@@ -759,7 +764,7 @@ let it_to_coq ctxt ci it =
         | IT.Representable (ct, t2) when (Option.is_some (Sctypes.is_struct_ctype ct)) ->
         let@ op_nm = ensure_struct_mem true ci ct aux in
         parensM (build [rets op_nm; aux t2])
-        | _ -> fail "it_to_coq: unexpected ctype pred" (IT.pp t)
+        | _ -> fail_m loc (Pp.item "it_to_coq: unexpected ctype pred" (IT.pp t))
     end
     | IT.Datatype_op op -> begin match op with
         | IT.DatatypeCons (nm, members_rec) ->
@@ -773,12 +778,12 @@ let it_to_coq ctxt ci it =
             let@ o_sym = get_dt_param dt nm in
             begin match o_sym with
               | Some sym -> return (Sym.pp sym)
-              | _ -> fail "it_to_coq: access member of datatype not exposed in case-split"
-                  (IT.pp t)
+              | _ -> fail_m loc (Pp.item "it_to_coq: access member of datatype not exposed in case-split"
+                  (IT.pp t))
             end
-        | _ -> fail "it_to_coq: unsupported datatype op" (IT.pp t)
+        | _ -> fail_m loc (Pp.item "it_to_coq: unsupported datatype op" (IT.pp t))
     end
-    | _ -> fail "it_to_coq: unsupported" (IT.pp t)
+    | _ -> fail_m loc (Pp.item "it_to_coq: unsupported" (IT.pp t))
   in
   f true it
 
@@ -786,14 +791,14 @@ let mk_let sym rhs_doc doc =
   let open Pp in
   !^ "let" ^^^ Sym.pp sym ^^^ !^ ":=" ^^^ rhs_doc ^^^ !^ "in" ^^^ doc
 
-let lc_to_coq_check_triv ctxt ci = function
+let lc_to_coq_check_triv loc ctxt ci = function
   | LC.T it -> let it = it_adjust ci it in
     if IT.is_true it then return None
-    else let@ v = it_to_coq ctxt ci it in return (Some v)
+    else let@ v = it_to_coq loc ctxt ci it in return (Some v)
   | LC.Forall ((sym, bt), it) -> let it = it_adjust ci it in
     if IT.is_true it then return None
     else
-      let@ v = it_to_coq ctxt ci it in
+      let@ v = it_to_coq loc ctxt ci it in
       let@ enc = mk_forall ci sym bt v in
       return (Some (parens enc))
 
@@ -823,10 +828,10 @@ let param_spec params =
   ^^ hardline ^^ hardline
 
 
-let ftyp_to_coq ctxt ci ftyp =
+let ftyp_to_coq loc ctxt ci ftyp =
   let open Pp in
-  let lc_to_coq_c = lc_to_coq_check_triv ctxt ci in
-  let it_tc = it_to_coq ctxt ci in
+  let lc_to_coq_c = lc_to_coq_check_triv loc ctxt ci in
+  let it_tc = it_to_coq loc ctxt ci in
   (* FIXME: handle underdefinition in division *)
   let oapp f opt_x y = match opt_x with
     | Some x -> f x y
@@ -849,19 +854,19 @@ let ftyp_to_coq ctxt ci ftyp =
         let@ l = it_tc it in
         return (omap_split (mk_let sym l) d)
     | LRT.I -> return None
-    | _ -> fail "ftyp_to_coq: unsupported" (LRT.pp t)
+    | _ -> fail_m loc (Pp.item "ftyp_to_coq: unsupported" (LRT.pp t))
   in
   let rt_doc t = match t with
     | RT.Computational ((_, bt), _, t2) -> if BaseTypes.equal bt BaseTypes.Unit
         then lrt_doc t2
-        else fail "ftyp_to_coq: unsupported return type" (RT.pp t)
+        else fail_m loc (Pp.item "ftyp_to_coq: unsupported return type" (RT.pp t))
   in
   let rec lat_doc t = match t with
     | LAT.Define ((sym, it), _, t) ->
         let@ d = lat_doc t in
         let@ l = it_tc it in
         return (omap_split (mk_let sym l) d)
-    | LAT.Resource _ -> fail "ftyp_to_coq: unsupported" (LAT.pp RT.pp t)
+    | LAT.Resource _ -> fail_m loc (Pp.item "ftyp_to_coq: unsupported" (LAT.pp RT.pp t))
     | LAT.Constraint (lc, _, t) ->
         let@ c = lc_to_coq_c lc in
         let@ d = lat_doc t in
@@ -891,16 +896,18 @@ let ftyp_to_coq ctxt ci ftyp =
   | None -> rets "Is_true true"
 
 let convert_lemma_defs ctxt ci lemma_typs =
-  let lemma_ty (nm, typ, kind) =
+  let lemma_ty (nm, typ, loc, kind) =
     progress_simple ("converting " ^ kind ^ " lemma type") (Sym.pp_string nm);
-    let@ rhs = ftyp_to_coq ctxt ci typ in
+    let@ rhs = ftyp_to_coq loc ctxt ci typ in
     return (defn (Sym.pp_string nm ^ "_type") [] (Some (!^ "Prop")) rhs)
   in
-  let (tys, st) = ListM.mapM lemma_ty lemma_typs init_t in
+  let@ tys = ListM.mapM lemma_ty lemma_typs in
+  let@ st = get in
   Pp.debug 4 (lazy (Pp.item "saved conversion elements"
     (Pp.list (fun (ss, _) -> Pp.parens (Pp.list Pp.string ss))
         (StringListMap.bindings st.present))));
-  (tys, List.rev (get_section 0 st), List.rev (get_section 1 st), List.rev (get_section 2 st))
+  return (tys, List.rev (get_section 0 st),
+        List.rev (get_section 1 st), List.rev (get_section 2 st))
 
 let defs_module aux_defs lemma_tys =
   let open Pp in
@@ -930,6 +937,14 @@ let mod_spec lemma_nms =
   ^^ !^"End Lemma_Spec."
   ^^ hardline ^^ hardline
 
+let convert_and_print channel ctxt ci conv =
+  let@ (conv_defs, types, params, defs) = convert_lemma_defs ctxt ci conv in
+  print channel (types_spec types);
+  print channel (param_spec params);
+  print channel (defs_module defs conv_defs);
+  print channel (mod_spec (List.map (fun (nm, _, _, _) -> nm) conv));
+  return ()
+ 
 let cmp_line_numbers = function
   | None, None -> 0
   | None, _ -> 1
@@ -1003,14 +1018,10 @@ let generate ctxt directions mu_file =
   let struct_decls = get_struct_decls mu_file in
   let global = Global.{ctxt.Context.global with struct_decls} in
   let ci = {global; fun_info} in
-  let conv = List.map (fun x -> (x.sym, x.typ, "pure")) pure
-    @ List.map (fun x -> (x.sym, Option.get x.scan_res.res_coerce, "coerced")) coerce in
-  let (conv_defs, types, params, defs) = convert_lemma_defs ctxt ci conv in
-  print channel (types_spec types);
-  print channel (param_spec params);
-  print channel (defs_module defs conv_defs);
-  print channel (mod_spec (List.map (fun (nm, _, _) -> nm) conv));
-  Ok ()
-
+  let conv = List.map (fun x -> (x.sym, x.typ, x.loc, "pure")) pure
+    @ List.map (fun x -> (x.sym, Option.get x.scan_res.res_coerce, x.loc, "coerced")) coerce in
+  match convert_and_print channel ctxt ci conv init_t with
+  | Result.Ok _ -> Result.Ok ()
+  | Result.Error e -> Result.Error e
 
 
