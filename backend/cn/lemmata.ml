@@ -608,6 +608,15 @@ let dt_split ci x t =
     then [(Pp.string "_", [], mems_used, redux dt t (* any non-cons symbol will redux correctly *))]
     else [])
 
+let dt_access_error t =
+  Pp.item "cannot convert datatype accessor"
+    (Pp.typ (IT.pp t) (Pp.flow_map (Pp.break 1) Pp.string
+        ["datatype accessor expressions are";
+            "only available in the branch of an";
+            "if-then-else expression (_ ? _ : _)";
+            "whose switch established the datatype";
+            "shape (_ ?? Constructor {})"]))
+
 let with_selected_dt_params it mem_nms set_used f = with_reset_dt_params (fun () ->
     let@ xs = ListM.mapM (fun m_nm -> if SymSet.mem m_nm set_used
         then let@ sym = add_dt_param_counted (it, m_nm) in
@@ -779,8 +788,7 @@ let it_to_coq loc ctxt ci it =
             let@ o_sym = get_dt_param dt nm in
             begin match o_sym with
               | Some sym -> return (Sym.pp sym)
-              | _ -> fail_m loc (Pp.item "it_to_coq: access member of datatype not exposed in case-split"
-                  (IT.pp t))
+              | _ -> fail_m loc (dt_access_error t)
             end
         | _ -> fail_m loc (Pp.item "it_to_coq: unsupported datatype op" (IT.pp t))
     end
