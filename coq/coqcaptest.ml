@@ -112,7 +112,7 @@ let tests = "coq_morello_caps" >::: [
 
       "encode C0 bytes" >:: (fun _ ->
         (* C0 does not M.encode to all zeros due to compresison limitations *)
-        match M.encode true (M.cap_c0 ()) with
+        match M.encode false (M.cap_c0 ()) with
         | None -> assert_failure "encode failed"
         | Some (bytes, tag) ->
            let b = List.map char_of_int [0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0] in
@@ -168,7 +168,7 @@ let tests = "coq_morello_caps" >::: [
       "decode/strfcap/perm C1" >:: (fun _ ->
         (* C1 corresponds to https://www.morello-project.org/capinfo?c=0x1%3A900000007F1CFF15%3A00000000FFFFFF15 *)
         let bytes_ = M.cap_1_bytes in 
-        match M.decode bytes_ true with 
+        match M.decode bytes_ true with
         | None -> assert_failure "decode failed"
         | Some c -> 
           match M.strfcap "%P" c with 
@@ -610,7 +610,6 @@ let tests = "coq_morello_caps" >::: [
           (not (M.cap_vaddr_representable M.cap_1 (Z.of_string "0x7FFFE6EC")))
       );
 
-      (* https://www.morello-project.org/capinfo?c=1dc00000066d4e6cc00000000ffffe6cc *)
       "C2 representabitiy" >:: (fun _ ->
         assert_bool
           "7FFFE6EC should not be representable"

@@ -413,7 +413,7 @@ Module ObjTypeBV <: OTYPE.
 End ObjTypeBV.
 
 
-Module SealType <: CAP_SEAL_T. 
+Module SealType <: CAP_SEAL_T.
   Inductive cap_seal_t :=
   | Cap_Unsealed
   | Cap_SEntry (* "RB" in Morello *)
