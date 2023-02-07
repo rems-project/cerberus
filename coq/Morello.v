@@ -366,7 +366,9 @@ Module PermissionsBV <: Permission.
   
   Definition to_list (perms:t) : list bool := 
     bv_to_list_bool perms.
-  
+
+  Definition eqb (a b:t) : bool := eq a b.
+
 End PermissionsBV.
 
 
@@ -410,6 +412,9 @@ Module ObjTypeBV <: OTYPE.
 
   Definition of_Z (z:Z) : t := Z_to_bv len z.
   Definition to_Z (o:t) : Z := bv_to_Z_unsigned o.
+
+  Definition eqb (a b:t) : bool := eq a b.
+
 End ObjTypeBV.
 
 
@@ -435,6 +440,15 @@ Module SealType <: CAP_SEAL_T.
   Definition sealed_entry_ot := get_seal_ot Cap_SEntry.
   Definition sealed_indirect_entry_ot := get_seal_ot Cap_Indirect_SEntry.
   Definition sealed_indirect_entry_pair_ot := get_seal_ot Cap_Indirect_SEntry_Pair.
+
+  Definition eqb (a b: t) :=
+    match a, b with
+    | Cap_Unsealed, Cap_Unsealed => true
+    | Cap_SEntry, Cap_SEntry => true
+    | Cap_Indirect_SEntry, Cap_Indirect_SEntry => true
+    | Cap_Sealed a, Cap_Sealed b => ObjTypeBV.eqb a b
+    | _, _ => false
+    end.
 
 End SealType.
 
@@ -466,6 +480,11 @@ Module BoundsBV <: VADDR_INTERVAL(ValueBV).
   Definition to_string (b:t) : string := 
     let (base,top) := b in 
     HexString.of_Z (bv_to_Z_unsigned base) ++ "-" ++ HexString.of_Z (bv_to_Z_unsigned top).
+
+  Definition eqb (a b:t) : bool :=
+    let (a0,a1) := a in
+    let (b0,b1) := b in
+    eq a0 b0 && eq a1 b1.
 
 End BoundsBV. 
 
@@ -1183,7 +1202,7 @@ Module test_cap_getters_and_setters.
         match decoded_cap with 
           Some c => c | None => cap_c0 () 
         end in 
-        (eqb c_ cap) = true in
+        (Cap.eqb c_ cap) = true in
       tester c1 /\ tester c2 /\ tester c3 /\ tester c4 /\ tester c5 /\ tester c6 
       /\ tester c7 /\ tester c8.
     Proof. vm_compute. repeat (split; try reflexivity). Qed.
@@ -1268,6 +1287,8 @@ Module Permissions <: Permission.
 
   (* inverse of [of_list] *)
   Definition to_list (perms:t) : list bool := PermissionsBV.to_list (PermissionsBV.of_Z perms).
+
+  Definition eqb := Z.eqb.
 End Permissions.
 
 
@@ -1292,7 +1313,8 @@ End Value.
 
 
 Module ObjType <: OTYPE.
-  Definition t := Z.  
+  Definition t := Z.
+  Definition eqb := Z.eqb.
 End ObjType.
 
 
@@ -1304,6 +1326,9 @@ Module Bounds <: VADDR_INTERVAL(Value).
 
   (* Vadim: is this what we want? *)
   Definition ltb (a b:t) := BoundsBV.ltb (BoundsBV.of_Zs a) (BoundsBV.of_Zs b).
+
+  Definition eqb (a b:t):=
+    andb (Z.eqb (fst a) (fst b)) (Z.eqb (snd a) (snd b)).
 
 End Bounds. 
 
