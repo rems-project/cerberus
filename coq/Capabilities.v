@@ -70,8 +70,7 @@ Module Type Permission.
   (* --- Utility methods --- *)
 
   Parameter to_string: t -> string.
-  Parameter to_string_hex: t -> string.
-
+  
   (* raw permissoins in numeric format *)
   Parameter to_raw: t -> Z.
 

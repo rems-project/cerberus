@@ -2054,7 +2054,7 @@ Module CheriMemory
               (fun (x : bool) =>
                  match x with
                  | false =>
-                      fail (MerrAccess loc StoreAccess OutOfBoundPtr)
+                     fail (MerrAccess loc StoreAccess OutOfBoundPtr)
                  | true
                    =>
                      get_allocation alloc_id >>=
@@ -2070,7 +2070,7 @@ Module CheriMemory
                                 (fun (x : bool) =>
                                    match x with
                                    | true =>
-                                        fail
+                                       fail
                                          (MerrAccess loc LoadAccess AtomicMemberof)
                                    | false =>
                                        do_store_cap (Some alloc_id) addr >>=
@@ -2113,7 +2113,7 @@ Module CheriMemory
     ret (PV Prov_none (PVfunction (FP_valid sym))).
 
   Definition concrete_ptrval : Z -> Z -> serr pointer_value :=
-    fun _ _ =>      
+    fun _ _ =>
       raise
         "concrete_ptrval: integer to pointer cast is not supported".
 (*
@@ -2926,7 +2926,7 @@ Module CheriMemory
     (ival_n: integer_value): serr integer_value
     :=
     match ival_cap, ival_n with
-    | IC is_signed c_value, IV n_value =>        
+    | IC is_signed c_value, IV n_value =>
         ret (IC is_signed
                (C.cap_set_value
                   (if C.cap_vaddr_representable c_value n_value
@@ -3084,11 +3084,7 @@ Module CheriMemory
                  let c_value := C.cap_set_value c_value shifted_addr in
                  ret (PV (Prov_some alloc_id) (PVconcrete c_value))
                else
-               if (negb (  Z.leb alloc.(base) shifted_addr))
-               then
-                  fail (MerrArrayShift loc)
-               else 
-                  fail (MerrArrayShift loc)
+                 fail (MerrArrayShift loc)
                   )
         else
           let c_value := C.cap_set_value c_value shifted_addr in

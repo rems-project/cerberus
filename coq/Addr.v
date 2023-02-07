@@ -7,7 +7,7 @@ Module Type VADDR.
 
   Parameter Inline t:Set.
 
-  Parameter bitwise_complement: Z -> Z.
+  Parameter bitwise_complement: t -> t.
 
   Parameter eqb: t -> t -> bool.
   Parameter ltb: t -> t -> bool.

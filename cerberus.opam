@@ -37,7 +37,6 @@ depends: [
   "ounit2"
   "ppx_deriving"
   "zarith"
-  "coq-stdpp-unstable"
   "coq"
   "coq-sail"
   "coq-ext-lib"

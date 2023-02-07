@@ -377,10 +377,13 @@ Module ValueBV <: VADDR.
   Definition of_Z (z:Z) : t := Z_to_bv len z.
   Definition to_Z (v:t) : Z := bv_to_Z_unsigned v.
 
-  Definition bitwise_complement (a:Z) : Z :=
+  Definition bitwise_complement_Z (a:Z) : Z :=
     let bits := Z_to_binary (N_to_nat len) a in
     let bits := Vector.map negb bits in
     binary_value _ bits.
+
+  Definition bitwise_complement (a:t) : t :=
+    of_Z (bitwise_complement_Z (to_Z a)).
 
   Definition eqb (v1:t) (v2:t) : bool := v1 =? v2.
   Definition ltb (v1:t) (v2:t) : bool := v1 <? v2.
@@ -698,7 +701,7 @@ Module Cap <: Capability (ValueBV) (ObjTypeBV) (SealType) (BoundsBV) (Permission
   (Technical report coming up -- as of Oct 24 2022) *)
   Definition representable_length (len : Z) : Z :=
     let mask:Z := representable_alignment_mask len in
-    let nmask:Z := ValueBV.bitwise_complement mask in
+    let nmask:Z := ValueBV.bitwise_complement_Z mask in
     let result:Z := Z.land (Z.add len nmask) mask in 
       result.
 
@@ -1271,7 +1274,7 @@ End Permissions.
 Module Value <: VADDR.
   Definition t := Z.
 
-  Definition bitwise_complement (a:Z) : Z := ValueBV.bitwise_complement a.
+  Definition bitwise_complement (a:Z) : Z := ValueBV.to_Z( ValueBV.bitwise_complement (ValueBV.of_Z a)).
     
   Definition eqb (v1:t) (v2:t) : bool := ValueBV.eqb (ValueBV.of_Z v1) (ValueBV.of_Z v2).
   Definition ltb (v1:t) (v2:t) : bool := ValueBV.ltb (ValueBV.of_Z v1) (ValueBV.of_Z v2).
