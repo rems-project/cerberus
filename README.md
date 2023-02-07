@@ -19,7 +19,7 @@ First set up additional repositories for Coq and Iris packages:
 ```bash
 opam repo add --this-switch coq-released https://coq.inria.fr/opam/released
 opam pin -n coq-struct-tact https://github.com/uwplse/StructTact.git
-opam repo add iris-dev https://gitlab.mpi-sws.org/iris/opam.git
+opam repo add --this-switch iris-dev https://gitlab.mpi-sws.org/iris/opam.git
 ```
 
 Sail coq libraries needs to be pinned manually. To do so:
