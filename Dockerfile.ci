@@ -6,6 +6,8 @@ ARG OPAMYES=true
 
 RUN apt update
 RUN apt upgrade
+# git used by opam
+RUN apt-get install git
 RUN apt install opam
 # OS-level dependecies 
 RUN apt-get install libgmp-dev
