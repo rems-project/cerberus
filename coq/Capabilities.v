@@ -119,7 +119,7 @@ Module Type Capability
 
   (* Properties of [vadr] *)
 
-  Parameter min_vaddr : V.t. 
+  Parameter min_vaddr : V.t.
   Parameter max_vaddr : V.t.
   Parameter sizeof_vaddr: nat.
 
@@ -136,7 +136,7 @@ Module Type Capability
 
   Parameter cap_is_valid : t -> bool.
 
-  Parameter cap_get_value : t -> V.t. 
+  Parameter cap_get_value : t -> V.t.
 
   Parameter cap_get_offset : t -> Z.
 
@@ -146,7 +146,7 @@ Module Type Capability
   Parameter cap_get_bounds: t -> I.t.
 
   (** Get informaiton about "seal" on this capability *)
-  Parameter cap_get_seal: t -> S.t. 
+  Parameter cap_get_seal: t -> S.t.
 
   (** user-defined flags *)
   Parameter Flags : Type. 
@@ -196,7 +196,7 @@ Module Type Capability
         - SCPARAMETERUE in Morello
         - CCopyType in RISC V
         - CPYTYPE in Morello
-   *) 
+   *)
   Parameter cap_set_value: t -> V.t -> t. 
 
   (** Reducing the Capability Bounds (with rounding)
@@ -218,7 +218,7 @@ Module Type Capability
         Related instructions:
         - CAndPerm in RISC V
         - CLRPERM in Morello
-   *) 
+   *)
   Parameter cap_narrow_perms: t -> P.t -> t.
 
   (* Sealing operations *)
@@ -227,7 +227,7 @@ Module Type Capability
         Related instructions:
         - CSeal in RISC V.
         - SEAL (capabilitiy) in Morello
-   *) 
+   *)
   Parameter cap_seal: t -> t -> t. 
 
   (** Seal Entry
@@ -240,7 +240,7 @@ Module Type Capability
         - CInvokeInd proposed but not implmented RISC V
         - SEAL (immediatete) in Morello
    *)
- Parameter cap_seal_indirect_entry: t -> t.
+  Parameter cap_seal_indirect_entry: t -> t.
 
   (** Seal Entry Pair
         - proposed but not implmented in in RISC V.
@@ -285,13 +285,13 @@ Module Type Capability
         [cheri_bounds_set] to set the length to [len] (assuming
         appropriate alignment of the base).
    *)
-  Parameter representable_length: Z -> Z. 
+  Parameter representable_length: Z -> Z.
 
   (** returns a bitmask that can be used to align an address downwards
         such that it is sufficiently aligned to create a precisely
         bounded capability.
    *)
-  Parameter representable_alignment_mask: Z -> Z. 
+  Parameter representable_alignment_mask: Z -> Z.
 
   (* --- Utility methods --- *)
 
@@ -299,12 +299,12 @@ Module Type Capability
   
   Parameter strfcap: string -> t -> option string.
 
-  Parameter cap_is_null_derived: t -> bool.    
+  Parameter cap_is_null_derived: t -> bool.
 
   (* --- Equality --- *)
 
   (** exact equality. compares capability metadata as well as value *) 
-   Parameter eqb: t -> t -> bool.
+  Parameter eqb: t -> t -> bool.
 
   (** compare value only, ignoring metadata. *)
   Parameter value_compare: t -> t -> comparison.
@@ -315,7 +315,7 @@ Module Type Capability
    *)
   Parameter exact_compare: t -> t -> comparison.
 
- (* Make sure `eqb` and `eqb_exact_compare` are consistent *)
+  (* Make sure `eqb` and `eqb_exact_compare` are consistent *)
   Parameter eqb_exact_compare: forall a b, eqb a b = true <-> exact_compare a b = Eq.
 
   (* Make sure `eqb` and `value_compare` are consistent *)

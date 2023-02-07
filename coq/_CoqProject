@@ -1,6 +1,1 @@
 -R . Cerberus
-
-CapFnsTypes.v
-CapFns.v
-Capabilities.v
-Addr.v

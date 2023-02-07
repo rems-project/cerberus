@@ -1246,8 +1246,6 @@ Module CheriMemory
                          | _ => ValidPtrProv
                          end in
 
-        sprint_msg (string_of_prov_valid_ind _prov);;
-        sprint_msg (string_of_prov_ptr_valid_ind pptrvalid) ;; 
         ret (pvalid,pptrvalid,rev_values)
     end.
 
@@ -1799,7 +1797,7 @@ Module CheriMemory
                match function_parameter with
                | false =>
                    fail (MerrAccess loc LoadAccess OutOfBoundPtr)
-               | true =>             
+               | true =>
                    do_load_cap None c sz
                end)
     | Prov_symbolic iota, PVconcrete addr =>
@@ -1904,8 +1902,8 @@ Module CheriMemory
                 CoqCtype.ctypeEqual DEFAULT_FUEL (CoqCtype.unatomic cty)
                   (CoqCtype.unatomic mt))
     ;;
-    if negb cond then 
-      fail (MerrOther "store with an ill-typed memory value")
+    if negb cond 
+    then fail (MerrOther "store with an ill-typed memory value")
     else
       let do_store_cap
             (alloc_id_opt : option storage_instance_id)
@@ -1971,11 +1969,10 @@ Module CheriMemory
               (fun (x : bool) =>
                  if x
                  then do_store_cap None addr
-                 else 
-                    fail (MerrAccess loc StoreAccess OutOfBoundPtr))
+                 else fail (MerrAccess loc StoreAccess OutOfBoundPtr))
       | Prov_symbolic iota, PVconcrete addr =>
           if cap_is_null addr then
-              fail
+            fail
               (MerrAccess loc
                  StoreAccess
                  NullPtr)
@@ -1986,7 +1983,7 @@ Module CheriMemory
                 (fun (x : bool) =>
                    match x with
                    | false =>
-                      ret (FAIL (MerrAccess loc StoreAccess OutOfBoundPtr))
+                       ret (FAIL (MerrAccess loc StoreAccess OutOfBoundPtr))
                    | true =>
                        get_allocation z_value >>=
                          (fun (alloc : allocation) =>
@@ -2007,11 +2004,10 @@ Module CheriMemory
                                   >>=
                                   (fun (x : bool) =>
                                      if x
-                                     then 
-                                        ret
-                                          (FAIL (MerrAccess loc
-                                                     LoadAccess
-                                                     AtomicMemberof))
+                                     then ret
+                                            (FAIL (MerrAccess loc
+                                                       LoadAccess
+                                                       AtomicMemberof))
                                      else ret OK)
                             end)
                    end)
