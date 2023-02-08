@@ -372,7 +372,7 @@ Module PermissionsBV <: Permission.
 End PermissionsBV.
 
 
-Module ValueBV <: VADDR.
+Module AddressValueBV <: VADDR.
   Definition len:N := 64.
   Definition t := bv len.
 
@@ -396,7 +396,7 @@ Module ValueBV <: VADDR.
   Definition ltb_irref: forall a:t, ltb a a = false.
   Proof. intros. unfold ltb. unfold lt. rewrite Z.ltb_irrefl. reflexivity. Qed. 
   
-End ValueBV.
+End AddressValueBV.
 
 
 Module ObjTypeBV <: OTYPE.
@@ -453,7 +453,7 @@ Module SealType <: CAP_SEAL_T.
 End SealType.
 
 
-Module BoundsBV <: VADDR_INTERVAL(ValueBV).
+Module BoundsBV <: VADDR_INTERVAL(AddressValueBV).
 
   (* Definition t := bv 87. *)
   Definition bound_len:N := 65.
@@ -465,7 +465,7 @@ Module BoundsBV <: VADDR_INTERVAL(ValueBV).
     let (base,top) := bounds in   
     (bv_to_Z_unsigned base, bv_to_Z_unsigned top).
 
-  Definition address_is_in_interval (bounds:t) (value:ValueBV.t) : bool :=
+  Definition address_is_in_interval (bounds:t) (value:AddressValueBV.t) : bool :=
     let '(base,limit) := bounds in 
     let value : (bv bound_len) := bv_to_bv value in 
     (base <=? value) && (value <? limit).
@@ -489,7 +489,7 @@ Module BoundsBV <: VADDR_INTERVAL(ValueBV).
 End BoundsBV. 
 
 
-Module Cap <: Capability (ValueBV) (ObjTypeBV) (SealType) (BoundsBV) (PermissionsBV).
+Module Cap <: Capability (AddressValueBV) (ObjTypeBV) (SealType) (BoundsBV) (PermissionsBV).
   Definition len:N := 129.
   Definition cap_t := bv len.
 
@@ -541,7 +541,7 @@ Module Cap <: Capability (ValueBV) (ObjTypeBV) (SealType) (BoundsBV) (Permission
   Definition cap_flags_len := 8 % nat.
   Definition Flags := { l : list bool | length l = cap_flags_len }.
   
-  Definition cap_get_value (c:t) : ValueBV.t := 
+  Definition cap_get_value (c:t) : AddressValueBV.t := 
     mword_to_bv (CapGetValue (bv_to_mword c.(cap))).
   
   Definition cap_get_obj_type (c:t) : ObjTypeBV.t := 
@@ -590,7 +590,7 @@ Module Cap <: Capability (ValueBV) (ObjTypeBV) (SealType) (BoundsBV) (Permission
   Definition cap_invalidate (c:t) : t := 
     with_cap c (mword_to_bv (CapWithTagClear (bv_to_mword c.(cap)))).
 
-  Definition cap_set_value (c:t) (value:ValueBV.t) : t :=
+  Definition cap_set_value (c:t) (value:AddressValueBV.t) : t :=
     let new_cap := 
       with_cap c (mword_to_bv (CapSetValue (bv_to_mword c.(cap)) (bv_to_mword value))) in 
     if (cap_is_sealed c) then (cap_invalidate new_cap) else new_cap.
@@ -627,7 +627,7 @@ Module Cap <: Capability (ValueBV) (ObjTypeBV) (SealType) (BoundsBV) (Permission
     (* CapSetBounds sets the lower bound to the value of the input cap,
        so we first have to set the value of cap to bounds.base. *)
     let '(base,limit) := bounds in
-    let base_as_val : ValueBV.t := bv_to_bv base in  
+    let base_as_val : AddressValueBV.t := bv_to_bv base in  
     let new_cap := cap_set_value c base_as_val in 
     let req_len : (mword (Z.of_N BoundsBV.bound_len)) := 
       mword_of_int (Z.sub (bv_to_Z_unsigned limit) (bv_to_Z_unsigned base)) in 
@@ -714,17 +714,17 @@ Module Cap <: Capability (ValueBV) (ObjTypeBV) (SealType) (BoundsBV) (Permission
 
   (* Confirm the type of the function is ok *)  
   Definition representable_alignment_mask (len:Z) : Z :=
-    mword_to_Z_unsigned (CapGetRepresentableMask (@mword_of_int (Z.of_N ValueBV.len) len)).
+    mword_to_Z_unsigned (CapGetRepresentableMask (@mword_of_int (Z.of_N AddressValueBV.len) len)).
 
   (* Will need to see how this compares with Microsoft's Small Cheri 
   (Technical report coming up -- as of Oct 24 2022) *)
   Definition representable_length (len : Z) : Z :=
     let mask:Z := representable_alignment_mask len in
-    let nmask:Z := ValueBV.bitwise_complement_Z mask in
+    let nmask:Z := AddressValueBV.bitwise_complement_Z mask in
     let result:Z := Z.land (Z.add len nmask) mask in 
       result.
 
-  Definition make_cap (value : ValueBV.t) (otype : ObjTypeBV.t) (bounds : BoundsBV.t) (perms : PermissionsBV.t) : t :=
+  Definition make_cap (value : AddressValueBV.t) (otype : ObjTypeBV.t) (bounds : BoundsBV.t) (perms : PermissionsBV.t) : t :=
     let new_cap := cap_cU () in 
     let perms_to_keep := list_bool_to_bv ((bv_to_list_bool perms)) in 
     let new_cap := cap_narrow_perms new_cap perms_to_keep in 
@@ -733,14 +733,14 @@ Module Cap <: Capability (ValueBV) (ObjTypeBV) (SealType) (BoundsBV) (Permission
       cap_set_objtype new_cap otype.
     
   (* Should we check that size is not too large? *)
-  Definition alloc_cap (a_value : ValueBV.t) (size : ValueBV.t) : t :=
+  Definition alloc_cap (a_value : AddressValueBV.t) (size : AddressValueBV.t) : t :=
     make_cap 
       a_value 
       cap_SEAL_TYPE_UNSEALED 
       (BoundsBV.of_Zs (bv_to_Z_unsigned a_value, Z.add (bv_to_Z_unsigned a_value) (bv_to_Z_unsigned size)))
       (PermissionsBV.perm_alloc).
     
-  Definition alloc_fun (a_value : ValueBV.t) : t :=
+  Definition alloc_fun (a_value : AddressValueBV.t) : t :=
     make_cap 
       a_value 
       cap_SEAL_TYPE_RB 
@@ -757,14 +757,14 @@ Module Cap <: Capability (ValueBV) (ObjTypeBV) (SealType) (BoundsBV) (Permission
     else if (cap1.(cap) <? cap2.(cap)) then Lt 
     else Gt.
 
-  Definition cap_vaddr_representable (c : t) (a : ValueBV.t) : bool :=
+  Definition cap_vaddr_representable (c : t) (a : AddressValueBV.t) : bool :=
     CapIsRepresentable (bv_to_mword c.(cap)) (bv_to_mword a).
   
   Definition cap_bounds_representable_exactly (cap : t) (bounds : BoundsBV.t) : bool :=
     let '(base, limit) := bounds in
     let len := Z.sub (bv_to_Z_unsigned limit) (bv_to_Z_unsigned base) in
-    let base' : (bv ValueBV.len) := 
-      Z_to_bv ValueBV.len (bv_to_Z_unsigned base) in 
+    let base' : (bv AddressValueBV.len) := 
+      Z_to_bv AddressValueBV.len (bv_to_Z_unsigned base) in 
     let len' := mword_of_int (len:=Z.of_N BoundsBV.bound_len) len in 
     let new_cap : t := cap_set_value cap base' in
     let new_cap : (mword _) := CapSetBounds (cap_to_mword new_cap) len' true in
@@ -890,13 +890,13 @@ Module Cap <: Capability (ValueBV) (ObjTypeBV) (SealType) (BoundsBV) (Permission
     else " (" ++ String.concat "," attrs ++ ")".
 
   Definition to_string_pretty (c:t) : string :=
-    ValueBV.to_string (cap_get_value c) ++ " [" ++ PermissionsBV.to_string (cap_get_perms c) ++ "," ++ BoundsBV.to_string (cap_get_bounds c) ++ "]".
+    AddressValueBV.to_string (cap_get_value c) ++ " [" ++ PermissionsBV.to_string (cap_get_perms c) ++ "," ++ BoundsBV.to_string (cap_get_bounds c) ++ "]".
 
   Definition to_string_pretty_2 (c:t) : string :=
     if cap_is_null_derived c then
-      ValueBV.to_string (cap_get_value c)
+      AddressValueBV.to_string (cap_get_value c)
     else
-      (ValueBV.to_string (cap_get_value c)) ++ " " ++ "[" ++
+      (AddressValueBV.to_string (cap_get_value c)) ++ " " ++ "[" ++
         (if (get_ghost_state c).(bounds_unspecified)
          then "?-?"
          else
@@ -1002,7 +1002,7 @@ Module test_cap_getters_and_setters.
     Proof. reflexivity. Qed.
 
   Example value_test_1 : 
-    let value:ValueBV.t := ValueBV.of_Z 50 in
+    let value:AddressValueBV.t := AddressValueBV.of_Z 50 in
     value = cap_get_value (cap_set_value c1 value).
     Proof. reflexivity. Qed. 
 
@@ -1132,8 +1132,8 @@ Module test_cap_getters_and_setters.
     Proof. repeat ( split; try reflexivity ). Qed.
         
   Example alloc_cap_test_1 : 
-    let value := ValueBV.of_Z 1024 in 
-    let new_cap := alloc_cap value (ValueBV.of_Z 2048) in 
+    let value := AddressValueBV.of_Z 1024 in 
+    let new_cap := alloc_cap value (AddressValueBV.of_Z 2048) in 
     (cap_is_valid new_cap) /\ (cap_get_value new_cap) = value 
     /\ (cap_is_in_bounds new_cap) /\ (cap_is_sealed new_cap) = false 
     /\ (cap_get_seal new_cap) = SealType.Cap_Unsealed 
@@ -1142,8 +1142,8 @@ Module test_cap_getters_and_setters.
     Proof. vm_compute. repeat (split; try reflexivity). Qed. 
   
   Example alloc_cap_test_2 : 
-    let value := ValueBV.of_Z 0xffffffffffffffff in (* 16 f's = the largest Value possible *)
-    let new_cap := alloc_cap value (ValueBV.of_Z 1) in 
+    let value := AddressValueBV.of_Z 0xffffffffffffffff in (* 16 f's = the largest Value possible *)
+    let new_cap := alloc_cap value (AddressValueBV.of_Z 1) in 
     (cap_is_valid new_cap) = true /\ (cap_get_value new_cap) = value 
     /\ (cap_is_in_bounds new_cap) /\ (cap_is_sealed new_cap) = false 
     /\ (cap_get_seal new_cap) = SealType.Cap_Unsealed 
@@ -1152,8 +1152,8 @@ Module test_cap_getters_and_setters.
     Proof. vm_compute. repeat (split; try reflexivity). Qed. 
 
   Example alloc_cap_test_3 : 
-    let value := ValueBV.of_Z 0x10000000000000000 in (* 1 past the largest Value possible; it gets passed as just 0 *)
-    let new_cap := alloc_cap value (ValueBV.of_Z 1) in 
+    let value := AddressValueBV.of_Z 0x10000000000000000 in (* 1 past the largest Value possible; it gets passed as just 0 *)
+    let new_cap := alloc_cap value (AddressValueBV.of_Z 1) in 
     (cap_is_valid new_cap) = true 
     /\ (cap_is_in_bounds new_cap) = true (* it's in bounds bc these are (0,1) *)
     /\ (cap_is_sealed new_cap) = false /\ (cap_get_seal new_cap) = SealType.Cap_Unsealed 
@@ -1162,8 +1162,8 @@ Module test_cap_getters_and_setters.
     Proof. vm_compute. repeat (split; try reflexivity). intros H. discriminate H. Qed.
 
   Example alloc_cap_test_4 : 
-    let value := ValueBV.of_Z 0xffffffffffffff in (* 14 f's *)
-    let new_cap := alloc_cap value (ValueBV.of_Z 0xfff) in (* this sends the limit above the max limit allowed *)
+    let value := AddressValueBV.of_Z 0xffffffffffffff in (* 14 f's *)
+    let new_cap := alloc_cap value (AddressValueBV.of_Z 0xfff) in (* this sends the limit above the max limit allowed *)
     (cap_is_invalid new_cap) /\ (cap_is_not_in_bounds new_cap)
     /\ (cap_is_sealed new_cap) = false /\ (cap_get_seal new_cap) = SealType.Cap_Unsealed 
     /\ (cap_get_perms new_cap) = PermissionsBV.perm_alloc  
@@ -1171,7 +1171,7 @@ Module test_cap_getters_and_setters.
     Proof. vm_compute. repeat (split; try reflexivity). intro H. discriminate H. Qed.   
           
   Example alloc_fun_test_1 : 
-    let value := ValueBV.of_Z 1024 in 
+    let value := AddressValueBV.of_Z 1024 in 
     let new_cap := alloc_fun value in 
     (cap_is_valid new_cap) = true /\ (cap_get_value new_cap) = value 
       /\ (cap_is_sealed new_cap) = true /\ (cap_get_seal new_cap) = SealType.Cap_SEntry 
@@ -1181,13 +1181,13 @@ Module test_cap_getters_and_setters.
 
   Example cap_is_null_derived_test_1 : 
     let new_cap := cap_c0 () in 
-    let new_cap := cap_set_value new_cap (ValueBV.of_Z 512) in 
+    let new_cap := cap_set_value new_cap (AddressValueBV.of_Z 512) in 
     (cap_is_null_derived new_cap) = true.
     Proof. vm_compute. reflexivity. Qed.
       
   Example cap_is_null_derived_test_2 : 
     let new_cap := cap_cU () in 
-    let new_cap := cap_set_value new_cap (ValueBV.of_Z 512) in 
+    let new_cap := cap_set_value new_cap (AddressValueBV.of_Z 512) in 
     (cap_is_null_derived new_cap) = false.
     Proof. vm_compute. reflexivity. Qed.
 
@@ -1292,24 +1292,24 @@ Module Permissions <: Permission.
 End Permissions.
 
 
-Module Value <: VADDR.
+Module AddressValue <: VADDR.
   Definition t := Z.
 
-  Definition bitwise_complement (a:Z) : Z := ValueBV.to_Z( ValueBV.bitwise_complement (ValueBV.of_Z a)).
+  Definition bitwise_complement (a:Z) : Z := AddressValueBV.to_Z( AddressValueBV.bitwise_complement (AddressValueBV.of_Z a)).
     
-  Definition eqb (v1:t) (v2:t) : bool := ValueBV.eqb (ValueBV.of_Z v1) (ValueBV.of_Z v2).
-  Definition ltb (v1:t) (v2:t) : bool := ValueBV.ltb (ValueBV.of_Z v1) (ValueBV.of_Z v2).
-  Definition leb (v1:t) (v2:t) : bool := ValueBV.leb (ValueBV.of_Z v1) (ValueBV.of_Z v2).
+  Definition eqb (v1:t) (v2:t) : bool := AddressValueBV.eqb (AddressValueBV.of_Z v1) (AddressValueBV.of_Z v2).
+  Definition ltb (v1:t) (v2:t) : bool := AddressValueBV.ltb (AddressValueBV.of_Z v1) (AddressValueBV.of_Z v2).
+  Definition leb (v1:t) (v2:t) : bool := AddressValueBV.leb (AddressValueBV.of_Z v1) (AddressValueBV.of_Z v2).
   
   Definition ltb_irref: forall a:t, ltb a a = false.
-  Proof. intros. unfold ltb. unfold ValueBV.ltb. unfold lt. rewrite Z.ltb_irrefl. reflexivity. Qed. 
+  Proof. intros. unfold ltb. unfold AddressValueBV.ltb. unfold lt. rewrite Z.ltb_irrefl. reflexivity. Qed. 
 
   Definition of_Z (z:Z) := z.
   Definition to_Z (v:t) := v.
 
   Definition to_string (v:t) : string := HexString.of_Z v.
   
-End Value.
+End AddressValue.
 
 
 Module ObjType <: OTYPE.
@@ -1318,11 +1318,11 @@ Module ObjType <: OTYPE.
 End ObjType.
 
 
-Module Bounds <: VADDR_INTERVAL(Value).
+Module Bounds <: VADDR_INTERVAL(AddressValue).
   Definition t := (Z * Z)%type.
   
-  Definition address_is_in_interval (bounds:t) (value:Value.t) : bool :=
-    BoundsBV.address_is_in_interval (BoundsBV.of_Zs bounds) (ValueBV.of_Z value). 
+  Definition address_is_in_interval (bounds:t) (value:AddressValue.t) : bool :=
+    BoundsBV.address_is_in_interval (BoundsBV.of_Zs bounds) (AddressValueBV.of_Z value). 
 
   (* Vadim: is this what we want? *)
   Definition ltb (a b:t) := BoundsBV.ltb (BoundsBV.of_Zs a) (BoundsBV.of_Zs b).
@@ -1333,13 +1333,13 @@ Module Bounds <: VADDR_INTERVAL(Value).
 End Bounds. 
 
 
-Module MorelloCapability <: Capability (Value) (ObjType) (SealType) (Bounds) (Permissions).
+Module MorelloCapability <: Capability (AddressValue) (ObjType) (SealType) (Bounds) (Permissions).
   Definition t := Cap.t.
   
   (* Definition vaddr_bits := sizeof_vaddr * 8. *)
   Definition sizeof_vaddr := Cap.sizeof_vaddr. (* in bytes *)
-  Definition min_vaddr := ValueBV.to_Z Cap.min_vaddr.  
-  Definition max_vaddr := ValueBV.to_Z Cap.max_vaddr.
+  Definition min_vaddr := AddressValueBV.to_Z Cap.min_vaddr.  
+  Definition max_vaddr := AddressValueBV.to_Z Cap.max_vaddr.
 
   Definition cap_c0 := Cap.cap_c0.
   
@@ -1348,8 +1348,8 @@ Module MorelloCapability <: Capability (Value) (ObjType) (SealType) (Bounds) (Pe
 
   Definition of_Z := Cap.of_Z.
 
-  Definition cap_get_value (cap:t) : Value.t := 
-    ValueBV.to_Z (Cap.cap_get_value cap). 
+  Definition cap_get_value (cap:t) : AddressValue.t := 
+    AddressValueBV.to_Z (Cap.cap_get_value cap). 
   
   Definition cap_get_obj_type (cap:t) : ObjType.t := 
     ObjTypeBV.to_Z (Cap.cap_get_obj_type cap).
@@ -1371,8 +1371,8 @@ Module MorelloCapability <: Capability (Value) (ObjType) (SealType) (Bounds) (Pe
     
   Definition cap_invalidate (cap:t) : t := Cap.cap_invalidate cap.
 
-  Definition cap_set_value (cap:t) (value:Value.t) : t :=
-    Cap.cap_set_value cap (ValueBV.of_Z value).
+  Definition cap_set_value (cap:t) (value:AddressValue.t) : t :=
+    Cap.cap_set_value cap (AddressValueBV.of_Z value).
     
   Definition cap_set_flags := Cap.cap_set_flags.
   
@@ -1414,18 +1414,18 @@ Module MorelloCapability <: Capability (Value) (ObjType) (SealType) (Bounds) (Pe
   Definition representable_length := Cap.representable_length.
     
   (* Should we check that size is not too large? *)
-  Definition alloc_cap (a_value : Value.t) (size : Value.t) : t :=
-    Cap.alloc_cap (ValueBV.of_Z a_value) (ValueBV.of_Z size).
+  Definition alloc_cap (a_value : AddressValue.t) (size : AddressValue.t) : t :=
+    Cap.alloc_cap (AddressValueBV.of_Z a_value) (AddressValueBV.of_Z size).
   
-  Definition alloc_fun (a_value : Value.t) : t :=
-    Cap.alloc_fun (ValueBV.of_Z a_value).
+  Definition alloc_fun (a_value : AddressValue.t) : t :=
+    Cap.alloc_fun (AddressValueBV.of_Z a_value).
 
   Definition value_compare := Cap.value_compare.
 
   Definition exact_compare := Cap.exact_compare.
 
-  Definition cap_vaddr_representable (c : t) (a : Value.t) : bool :=
-    Cap.cap_vaddr_representable c (ValueBV.of_Z a).
+  Definition cap_vaddr_representable (c : t) (a : AddressValue.t) : bool :=
+    Cap.cap_vaddr_representable c (AddressValueBV.of_Z a).
   
   Definition cap_bounds_representable_exactly (cap : t) (bounds : Bounds.t) : bool :=
     Cap.cap_bounds_representable_exactly cap (BoundsBV.of_Zs bounds).

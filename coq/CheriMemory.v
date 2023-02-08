@@ -32,7 +32,7 @@ Definition debugging : bool := false.
 Module ZMap := FMapAVL.Make(Z_as_OT).
 
 Module CheriMemory
-  (C:Capability(Morello.Value)
+  (C:Capability(Morello.AddressValue)
        (Morello.ObjType)
        (Morello.SealType)
        (Morello.Bounds)
@@ -40,9 +40,9 @@ Module CheriMemory
   )
   (IMP: Implementation)
   (TD: TagDefs)
-  <: Memory(Morello.Value).
+  <: Memory(Morello.AddressValue).
 
-  Include Mem_common(Morello.Value).
+  Include Mem_common(Morello.AddressValue).
   Include AilTypesAux(IMP).
 
   Definition name := "cheri-coq".
@@ -160,7 +160,7 @@ Module CheriMemory
   Record allocation :=
     {
       prefix : CoqSymbol.prefix;
-      base : Morello.Value.t;
+      base : Morello.AddressValue.t;
       size : Z;
       ty : option CoqCtype.ctype;
       is_readonly : readonly_status;
@@ -200,7 +200,7 @@ Module CheriMemory
     {
       next_alloc_id : storage_instance_id;
       next_iota : symbolic_storage_instance_id;
-      last_address : Morello.Value.t;
+      last_address : Morello.AddressValue.t;
       allocations : ZMap.t allocation;
       iota_map : ZMap.t
                    ((* `Single *) storage_instance_id +
@@ -213,7 +213,7 @@ Module CheriMemory
       bytemap : ZMap.t AbsByte;
       capmeta : ZMap.t (bool* CapGhostState);
       dead_allocations : list storage_instance_id;
-      dynamic_addrs : list Morello.Value.t;
+      dynamic_addrs : list Morello.AddressValue.t;
       last_used : option storage_instance_id
     }.
 
@@ -362,7 +362,7 @@ Module CheriMemory
 
   Inductive footprint_ind :=
   (* base address, size *)
-  | FP: Morello.Value.t -> Z -> footprint_ind.
+  | FP: Morello.AddressValue.t -> Z -> footprint_ind.
 
   Definition footprint := footprint_ind.
 
@@ -415,7 +415,7 @@ Module CheriMemory
 
   (* Creare new cap meta for regiion where all tags are unspecified *)
   Program Definition init_ghost_tags
-    (addr: Morello.Value.t)
+    (addr: Morello.AddressValue.t)
     (size: Z)
     (capmeta: ZMap.t (bool*CapGhostState)): ZMap.t (bool*CapGhostState)
     :=
@@ -438,7 +438,7 @@ Module CheriMemory
       All "false" tags will be left intact.
    *)
   Definition ghost_tags
-    (addr: Morello.Value.t)
+    (addr: Morello.AddressValue.t)
     (size: Z)
     (capmeta: ZMap.t (bool*CapGhostState)): ZMap.t (bool*CapGhostState)
     :=
@@ -456,7 +456,7 @@ Module CheriMemory
          else (t, gs)
       ) capmeta.
 
-  Definition allocator (size:Z) (align:Z) : memM (storage_instance_id * Morello.Value.t) :=
+  Definition allocator (size:Z) (align:Z) : memM (storage_instance_id * Morello.AddressValue.t) :=
     get >>= fun st =>
         let alloc_id := st.(next_alloc_id) in
         (
@@ -804,7 +804,7 @@ Module CheriMemory
 
     let mask := C.representable_alignment_mask size_n in
     let size_n' := C.representable_length size_n in
-    let align_n' := Z.max align_n (Z.add (Z.succ (0)) (Morello.Value.bitwise_complement mask)) in
+    let align_n' := Z.max align_n (Z.add (Z.succ (0)) (Morello.AddressValue.bitwise_complement mask)) in
 
     (*
     (if (negb ((Z.eqb size_n size_n') && (Z.eqb align_n align_n')))
@@ -908,7 +908,7 @@ Module CheriMemory
     let mask := C.representable_alignment_mask size_n in
     let size_n' := C.representable_length size_n in
     let align_n' :=
-      Z.max align_n (Z.succ (Morello.Value.bitwise_complement mask)) in
+      Z.max align_n (Z.succ (Morello.AddressValue.bitwise_complement mask)) in
 
     allocator size_n' align_n' >>=
       (fun '(alloc_id, addr) =>
@@ -1040,7 +1040,7 @@ Module CheriMemory
                             get_allocation z >>=
                               (fun alloc =>
                                  if
-                                   Morello.Value.eqb
+                                   Morello.AddressValue.eqb
                                      (C.cap_get_value addr)
                                      alloc.(base)
                                  then
@@ -1107,7 +1107,7 @@ Module CheriMemory
                          raise (InternalErr "Concrete: FREE was called on a dead allocation")
                    | false =>
                        get_allocation alloc_id >>= fun alloc =>
-                           if Morello.Value.eqb (C.cap_get_value addr) alloc.(base) then
+                           if Morello.AddressValue.eqb (C.cap_get_value addr) alloc.(base) then
                              update
                                (fun st =>
                                   {|
@@ -1665,7 +1665,7 @@ Module CheriMemory
                  (Z.add addr sz)
                  (Z.add alloc.(base) alloc.(size))))).
 
-  Definition device_ranges : list (Morello.Value.t * Morello.Value.t) :=
+  Definition device_ranges : list (Morello.AddressValue.t * Morello.AddressValue.t) :=
     [ (0x40000000, 0x40000004)
       ; (0xABC, 0XAC0) ].
 
@@ -3265,7 +3265,7 @@ Module CheriMemory
              | true =>
                  get_allocation alloc_id >>=
                    (fun (alloc : allocation) =>
-                      if Morello.Value.eqb alloc.(base) addr then
+                      if Morello.AddressValue.eqb alloc.(base) addr then
                         allocate_region tid (CoqSymbol.PrefOther "realloc") align size >>=
                           (fun (new_ptr : pointer_value) =>
                              let size_to_copy :=
