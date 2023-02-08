@@ -453,6 +453,13 @@ Module SealType <: CAP_SEAL_T.
 End SealType.
 
 
+Module Flags <: FLAGS.
+
+  Definition length:nat := 8.
+  Definition t := { l : list bool | List.length l = length }.
+
+End Flags.
+
 Module BoundsBV <: VADDR_INTERVAL(AddressValueBV).
 
   (* Definition t := bv 87. *)
@@ -489,7 +496,7 @@ Module BoundsBV <: VADDR_INTERVAL(AddressValueBV).
 End BoundsBV. 
 
 
-Module Cap <: Capability (AddressValueBV) (ObjTypeBV) (SealType) (BoundsBV) (PermissionsBV).
+Module Cap <: Capability (AddressValueBV) (Flags) (ObjTypeBV) (SealType) (BoundsBV) (PermissionsBV).
   Definition len:N := 129.
   Definition cap_t := bv len.
 
@@ -538,8 +545,8 @@ Module Cap <: Capability (AddressValueBV) (ObjTypeBV) (SealType) (BoundsBV) (Per
 
   Definition bound_null (u:unit) : bv 65 := Z_to_bv 65 0.
 
-  Definition cap_flags_len := 8 % nat.
-  Definition Flags := { l : list bool | length l = cap_flags_len }.
+  (* Definition cap_flags_len := 8 % nat. *)
+  (* Definition Flags := { l : list bool | length l = cap_flags_len }. *)
   
   Definition cap_get_value (c:t) : AddressValueBV.t := 
     mword_to_bv (CapGetValue (bv_to_mword c.(cap))).
@@ -570,7 +577,7 @@ Module Cap <: Capability (AddressValueBV) (ObjTypeBV) (SealType) (BoundsBV) (Per
     SealType.Cap_Sealed ot.
     
   (* The flags are the top byte of the value. *)
-  Program Definition cap_get_flags (c:t) : Flags := 
+  Program Definition cap_get_flags (c:t) : Flags.t := 
     let m : (mword _) := subrange_vec_dec (bv_to_mword c.(cap)) CAP_VALUE_HI_BIT CAP_FLAGS_LO_BIT in
     let l : (list bool) := (mword_to_list_bool m) in
     exist _ l _.
@@ -595,10 +602,10 @@ Module Cap <: Capability (AddressValueBV) (ObjTypeBV) (SealType) (BoundsBV) (Per
       with_cap c (mword_to_bv (CapSetValue (bv_to_mword c.(cap)) (bv_to_mword value))) in 
     if (cap_is_sealed c) then (cap_invalidate new_cap) else new_cap.
   
-  Definition cap_set_flags (c:t) (f: Flags) : t :=
+  Definition cap_set_flags (c:t) (f: Flags.t) : t :=
     let new_cap :=
-      let flags_m : (mword (Z.of_nat cap_flags_len)) := of_bools (List.rev (proj1_sig f)) in
-      let flags' : (mword 64) := concat_vec flags_m (Zeros (64 - (Z.of_nat cap_flags_len))) in 
+      let flags_m : (mword (Z.of_nat Flags.length)) := of_bools (List.rev (proj1_sig f)) in
+      let flags' : (mword 64) := concat_vec flags_m (Zeros (64 - (Z.of_nat Flags.length))) in 
       with_cap c (mword_to_bv (CapSetFlags (bv_to_mword c.(cap)) flags'))      in 
     if (cap_is_sealed c) then (cap_invalidate new_cap) else new_cap.
   
@@ -976,9 +983,9 @@ Module test_cap_getters_and_setters.
   Definition c7:Cap.t := Cap.of_Z 0x14C0000007F1CFF1500000000FFFFFF15.
   Definition c8:Cap.t := Cap.of_Z 0x1900000007f1cff1500000000ffffff15.
   
-  Program Definition flags1:Cap.Flags := exist _ [false; false; false; false; false; false; false; false] _. 
+  Program Definition flags1:Flags.t := exist _ [false; false; false; false; false; false; false; false] _. 
     Next Obligation. reflexivity. Defined.
-  Program Definition flags2:Cap.Flags := exist _ [false; true; false; true; false; true; false; true] _. 
+  Program Definition flags2:Flags.t := exist _ [false; true; false; true; false; true; false; true] _. 
     Next Obligation. reflexivity. Defined.
     
   Definition perm_Load : list bool := PermissionsBV.make_permissions [PermissionsBV.Load_perm].
@@ -1333,7 +1340,7 @@ Module Bounds <: VADDR_INTERVAL(AddressValue).
 End Bounds. 
 
 
-Module MorelloCapability <: Capability (AddressValue) (ObjType) (SealType) (Bounds) (Permissions).
+Module MorelloCapability <: Capability (AddressValue) (Flags) (ObjType) (SealType) (Bounds) (Permissions).
   Definition t := Cap.t.
   
   (* Definition vaddr_bits := sizeof_vaddr * 8. *)
@@ -1343,8 +1350,8 @@ Module MorelloCapability <: Capability (AddressValue) (ObjType) (SealType) (Boun
 
   Definition cap_c0 := Cap.cap_c0.
   
-  Definition cap_flags_len := Cap.cap_flags_len.
-  Definition Flags := Cap.Flags.
+  (* Definition cap_flags_len := Cap.cap_flags_len. *)
+  (* Definition Flags := Cap.Flags. *)
 
   Definition of_Z := Cap.of_Z.
 
@@ -1363,7 +1370,7 @@ Module MorelloCapability <: Capability (AddressValue) (ObjType) (SealType) (Boun
   Definition cap_get_seal (cap:t) : SealType.t := Cap.cap_get_seal cap. 
   
   (* The flags are the top byte of the value. *)
-  Definition cap_get_flags (cap:t) : Flags (* list bool *) := 
+  Definition cap_get_flags (cap:t) : Flags.t := 
     Cap.cap_get_flags cap. 
 
   Definition cap_get_perms (cap:t) : Permissions.t :=

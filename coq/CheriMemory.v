@@ -33,6 +33,7 @@ Module ZMap := FMapAVL.Make(Z_as_OT).
 
 Module CheriMemory
   (C:Capability(Morello.AddressValue)
+       (Morello.Flags)
        (Morello.ObjType)
        (Morello.SealType)
        (Morello.Bounds)

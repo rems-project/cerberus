@@ -105,6 +105,12 @@ Module Type VADDR_INTERVAL (V:VADDR).
 End VADDR_INTERVAL.
 
 
+Module Type FLAGS.
+  Parameter t:Set.
+  Parameter length:nat.
+End FLAGS.
+
+
 Record CapGhostState :=
   {
     tag_unspecified : bool;
@@ -121,6 +127,7 @@ Definition Default_CapGhostState : CapGhostState
 
 Module Type Capability
   (V:VADDR)
+  (F:FLAGS)
   (OT:OTYPE)
   (S:CAP_SEAL_T)
   (I:VADDR_INTERVAL V)
@@ -135,7 +142,7 @@ Module Type Capability
   Parameter sizeof_vaddr: nat.
 
   (** the number of user-defined flags *)
-  Parameter cap_flags_len: nat.
+  (* Parameter cap_flags_len: nat. *)
 
   (** ghost state management **)
 
@@ -160,8 +167,8 @@ Module Type Capability
   Parameter cap_get_seal: t -> S.t.
 
   (** user-defined flags *)
-  Parameter Flags : Type. 
-  Parameter cap_get_flags: t -> Flags.
+  (* Parameter Flags : Type.  *)
+  Parameter cap_get_flags: t -> F.t.
   (* Parameter cap_get_flags: t -> list bool. TODO: enforce cap_flags_len? *)
 
   Parameter cap_get_perms: t -> P.t.
@@ -265,7 +272,7 @@ Module Type Capability
         - ORRFLGS in Morello
         - SCFLGS in Morello
    *)
-  Parameter cap_set_flags: t -> (* list bool *) Flags -> t. 
+  Parameter cap_set_flags: t -> F.t -> t. 
 
   (* --- Controlled non-monotonic manipulation --  *)
 
