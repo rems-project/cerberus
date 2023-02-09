@@ -71,7 +71,7 @@ module MorelloCapabilityWithStrfcap = struct
              | Some s -> s  @ loop tag cap fs
            end
       | 'P'::fs ->
-         let s = Morello.PermissionsBV.to_string (cap_get_perms cap) in
+         let s = Morello.Permissions.to_string (cap_get_perms cap) in
          s @ loop tag cap fs
       | 'T'::fs -> loop true cap fs
       | '?'::fs -> skip tag cap fs
@@ -175,7 +175,7 @@ module MorelloCapabilityWithStrfcap = struct
             strnum z)
          @ loop tag cap fs
       | Final, 'p'::fs ->
-         let z = Morello.PermissionsBV.to_raw (cap_get_perms cap) in
+         let z = Morello.Permissions.to_raw (cap_get_perms cap) in
          strnum z @ loop tag cap fs
       | Final, 's'::fs ->
          let z = cap_get_obj_type cap in

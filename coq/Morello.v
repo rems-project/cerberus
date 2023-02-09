@@ -75,7 +75,7 @@ Program Definition list_bool_to_bv (l : list bool) : bv (N.of_nat (List.length l
  {reflexivity. } {reflexivity. } Defined.  
 
 
-Module PermissionsBV <: Permission.
+Module Permissions <: Permission.
   Definition len:N := 18. (* CAP_PERMS_NUM_BITS = 16 bits of actual perms + 2 bits for Executive and Global. *)
   Definition t := bv len. 
   
@@ -355,10 +355,10 @@ Module PermissionsBV <: Permission.
 
   Definition eqb (a b:t) : bool := eqb a b.
 
-End PermissionsBV.
+End Permissions.
 
 
-Module AddressValueBV <: VADDR.
+Module AddressValue <: VADDR.
   Definition len:N := 64.
   Definition t := bv len.
 
@@ -382,10 +382,10 @@ Module AddressValueBV <: VADDR.
   Definition ltb_irref: forall a:t, ltb a a = false.
   Proof. intros. unfold ltb. unfold Morello.ltb. rewrite Z.ltb_irrefl. reflexivity. Qed. 
   
-End AddressValueBV.
+End AddressValue.
 
 
-Module ObjTypeBV <: OTYPE.
+Module ObjType <: OTYPE.
   Definition len:N := 64.
   Definition t := bv len.  (* ObtTypes are effectively 15-bit values,
   but the ASL extracts this field from a cap as a 64-bit word, 
@@ -401,7 +401,7 @@ Module ObjTypeBV <: OTYPE.
 
   Definition eqb (a b:t) : bool := eqb a b.
 
-End ObjTypeBV.
+End ObjType.
 
 
 Module SealType <: CAP_SEAL_T.
@@ -410,16 +410,16 @@ Module SealType <: CAP_SEAL_T.
   | Cap_SEntry (* "RB" in Morello *)
   | Cap_Indirect_SEntry (* "LB" in Morello *)
   | Cap_Indirect_SEntry_Pair (* "LPB" in Morello. TODO see why unused *)
-  | Cap_Sealed (seal : ObjTypeBV.t).
+  | Cap_Sealed (seal : ObjType.t).
   
   Definition t := cap_seal_t. 
 
-  Definition get_seal_ot (seal:t) : ObjTypeBV.t :=
+  Definition get_seal_ot (seal:t) : ObjType.t :=
     match seal with 
-      Cap_Unsealed => ObjTypeBV.of_Z 0
-    | Cap_SEntry => ObjTypeBV.of_Z 1
-    | Cap_Indirect_SEntry => ObjTypeBV.of_Z 3
-    | Cap_Indirect_SEntry_Pair => ObjTypeBV.of_Z 2
+      Cap_Unsealed => ObjType.of_Z 0
+    | Cap_SEntry => ObjType.of_Z 1
+    | Cap_Indirect_SEntry => ObjType.of_Z 3
+    | Cap_Indirect_SEntry_Pair => ObjType.of_Z 2
     | Cap_Sealed seal => seal
     end.
 
@@ -432,7 +432,7 @@ Module SealType <: CAP_SEAL_T.
     | Cap_Unsealed, Cap_Unsealed => true
     | Cap_SEntry, Cap_SEntry => true
     | Cap_Indirect_SEntry, Cap_Indirect_SEntry => true
-    | Cap_Sealed a, Cap_Sealed b => ObjTypeBV.eqb a b
+    | Cap_Sealed a, Cap_Sealed b => ObjType.eqb a b
     | _, _ => false
     end.
 
@@ -448,7 +448,7 @@ Module Flags <: FLAGS.
 End Flags.
 
 
-Module BoundsBV <: VADDR_INTERVAL(AddressValueBV).
+Module Bounds <: VADDR_INTERVAL(AddressValue).
 
   (* Definition t := bv 87. *)
   Definition bound_len:N := 65.
@@ -460,7 +460,7 @@ Module BoundsBV <: VADDR_INTERVAL(AddressValueBV).
     let (base,top) := bounds in   
     (bv_to_Z_unsigned base, bv_to_Z_unsigned top).
 
-  Definition address_is_in_interval (bounds:t) (value:AddressValueBV.t) : bool :=
+  Definition address_is_in_interval (bounds:t) (value:AddressValue.t) : bool :=
     let '(base,limit) := bounds in 
     let value : (bv bound_len) := bv_to_bv value in 
     (base <=? value) && (value <? limit).
@@ -480,10 +480,10 @@ Module BoundsBV <: VADDR_INTERVAL(AddressValueBV).
     let (b0,b1) := b in
     eqb a0 b0 && eqb a1 b1.
 
-End BoundsBV. 
+End Bounds. 
 
 
-Module Capability <: Capability (AddressValueBV) (Flags) (ObjTypeBV) (SealType) (BoundsBV) (PermissionsBV).
+Module Capability <: Capability (AddressValue) (Flags) (ObjType) (SealType) (Bounds) (Permissions).
   Definition len:N := 129.
   Definition cap_t := bv len.
 
@@ -511,10 +511,10 @@ Module Capability <: Capability (AddressValueBV) (Flags) (ObjTypeBV) (SealType) 
   
   Definition of_Z (z:Z) : t := cap_t_to_t (Z_to_bv len z) Default_CapGhostState.
      
-  Definition cap_SEAL_TYPE_UNSEALED : ObjTypeBV.t := ObjTypeBV.of_Z 0.
-  Definition cap_SEAL_TYPE_RB : ObjTypeBV.t := ObjTypeBV.of_Z 1. 
-  Definition cap_SEAL_TYPE_LPB : ObjTypeBV.t := ObjTypeBV.of_Z 2. 
-  Definition cap_SEAL_TYPE_LB : ObjTypeBV.t := ObjTypeBV.of_Z 3.
+  Definition cap_SEAL_TYPE_UNSEALED : ObjType.t := ObjType.of_Z 0.
+  Definition cap_SEAL_TYPE_RB : ObjType.t := ObjType.of_Z 1. 
+  Definition cap_SEAL_TYPE_LPB : ObjType.t := ObjType.of_Z 2. 
+  Definition cap_SEAL_TYPE_LB : ObjType.t := ObjType.of_Z 3.
 
   Definition sizeof_vaddr := 8%nat. (* in bytes *)
   (* Definition vaddr_bits := sizeof_vaddr * 8. *)
@@ -529,19 +529,19 @@ Module Capability <: Capability (AddressValueBV) (Flags) (ObjTypeBV) (SealType) 
 
   Definition bound_null (u:unit) : bv 65 := Z_to_bv 65 0.
 
-  Definition cap_get_value (c:t) : AddressValueBV.t := 
+  Definition cap_get_value (c:t) : AddressValue.t := 
     mword_to_bv (CapGetValue (bv_to_mword c.(cap))).
   
-  Definition cap_get_obj_type (c:t) : ObjTypeBV.t := 
+  Definition cap_get_obj_type (c:t) : ObjType.t := 
     mword_to_bv (CapGetObjectType (bv_to_mword c.(cap))).
 
-  Definition cap_get_bounds_ (c:t) : BoundsBV.t * bool :=
+  Definition cap_get_bounds_ (c:t) : Bounds.t * bool :=
     let '(base_mw, limit_mw, isExponentValid) := CapGetBounds (bv_to_mword c.(cap)) in
     let base_bv := mword_to_bv base_mw in
     let limit_bv := mword_to_bv limit_mw in 
     ((base_bv, limit_bv), isExponentValid).
   
-  Definition cap_get_bounds (cap:t) : BoundsBV.t :=
+  Definition cap_get_bounds (cap:t) : Bounds.t :=
       let '(base_mw, limit_mw, isExponentValid) := 
         cap_get_bounds_ cap in
       (base_mw, limit_mw).
@@ -550,7 +550,7 @@ Module Capability <: Capability (AddressValueBV) (Flags) (ObjTypeBV) (SealType) 
     (mword_to_bv (CapGetOffset (bv_to_mword c.(cap)))).(bv_unsigned).
         
   Definition cap_get_seal (cap:t) : SealType.t := 
-    let ot:ObjTypeBV.t := cap_get_obj_type cap in
+    let ot:ObjType.t := cap_get_obj_type cap in
     if (ot =? cap_SEAL_TYPE_UNSEALED)%stdpp then SealType.Cap_Unsealed else
     if (ot =? cap_SEAL_TYPE_RB)%stdpp then SealType.Cap_SEntry else
     if (ot =? cap_SEAL_TYPE_LPB)%stdpp then SealType.Cap_Indirect_SEntry else 
@@ -564,7 +564,7 @@ Module Capability <: Capability (AddressValueBV) (Flags) (ObjTypeBV) (SealType) 
     exist _ l _.
   Next Obligation. reflexivity. Defined.  
 
-  Definition cap_get_perms (c:t) : PermissionsBV.t := 
+  Definition cap_get_perms (c:t) : Permissions.t := 
     mword_to_bv (CapGetPermissions (bv_to_mword c.(cap))).
 
   Definition cap_is_sealed (c:t) : bool :=
@@ -573,7 +573,7 @@ Module Capability <: Capability (AddressValueBV) (Flags) (ObjTypeBV) (SealType) 
   Definition cap_invalidate (c:t) : t := 
     with_cap c (mword_to_bv (CapWithTagClear (bv_to_mword c.(cap)))).
 
-  Definition cap_set_value (c:t) (value:AddressValueBV.t) : t :=
+  Definition cap_set_value (c:t) (value:AddressValue.t) : t :=
     let new_cap := 
       with_cap c (mword_to_bv (CapSetValue (bv_to_mword c.(cap)) (bv_to_mword value))) in 
     if (cap_is_sealed c) then (cap_invalidate new_cap) else new_cap.
@@ -585,36 +585,36 @@ Module Capability <: Capability (AddressValueBV) (Flags) (ObjTypeBV) (SealType) 
       with_cap c (mword_to_bv (CapSetFlags (bv_to_mword c.(cap)) flags'))      in 
     if (cap_is_sealed c) then (cap_invalidate new_cap) else new_cap.
   
-  Definition cap_set_objtype (c:t) (ot:ObjTypeBV.t) : t :=
+  Definition cap_set_objtype (c:t) (ot:ObjType.t) : t :=
     with_cap c (mword_to_bv (CapSetObjectType (bv_to_mword c.(cap)) (zero_extend (bv_to_mword ot) 64))).
 
   (* [perms] must contain [1] for permissions to be kept and [0] for those to be cleared *)
-  Definition cap_narrow_perms (c:t) (perms:PermissionsBV.t) : t :=
-    let perms_mw : (mword (Z.of_N PermissionsBV.len)) := bv_to_mword perms in 
+  Definition cap_narrow_perms (c:t) (perms:Permissions.t) : t :=
+    let perms_mw : (mword (Z.of_N Permissions.len)) := bv_to_mword perms in 
     let mask : (mword 64) := zero_extend perms_mw 64 in
     let mask_inv : (mword 64) := invert_bits mask in 
     let new_cap := with_cap c (mword_to_bv (CapClearPerms (bv_to_mword c.(cap)) mask_inv)) in 
     if (cap_is_sealed c) then (cap_invalidate new_cap) else new_cap.
 
   Definition cap_clear_global_perm (cap:t) : t := 
-    cap_narrow_perms cap (list_bool_to_bv (PermissionsBV.make_permissions [PermissionsBV.Global_perm])).
+    cap_narrow_perms cap (list_bool_to_bv (Permissions.make_permissions [Permissions.Global_perm])).
 
-  Definition cap_set_bounds (c : t) (bounds : BoundsBV.t) (exact : bool) : t :=
+  Definition cap_set_bounds (c : t) (bounds : Bounds.t) (exact : bool) : t :=
     (* CapSetBounds sets the lower bound to the value of the input cap,
        so we first have to set the value of cap to bounds.base. *)
     let '(base,limit) := bounds in
-    let base_as_val : AddressValueBV.t := bv_to_bv base in  
+    let base_as_val : AddressValue.t := bv_to_bv base in  
     let new_cap := cap_set_value c base_as_val in 
-    let req_len : (mword (Z.of_N BoundsBV.bound_len)) := 
+    let req_len : (mword (Z.of_N Bounds.bound_len)) := 
       mword_of_int (Z.sub (bv_to_Z_unsigned limit) (bv_to_Z_unsigned base)) in 
     let new_cap := 
       with_cap new_cap (mword_to_bv (CapSetBounds (bv_to_mword new_cap.(cap)) req_len exact)) in 
     if (cap_is_sealed c) then (cap_invalidate new_cap) else new_cap.
 
-  Definition cap_narrow_bounds (cap : t) (bounds : BoundsBV.t) : t :=
+  Definition cap_narrow_bounds (cap : t) (bounds : Bounds.t) : t :=
     cap_set_bounds cap bounds false.
 
-  Definition cap_narrow_bounds_exact (cap : t) (bounds : BoundsBV.t) : t :=
+  Definition cap_narrow_bounds_exact (cap : t) (bounds : Bounds.t) : t :=
     cap_set_bounds cap bounds true.
 
   Definition cap_is_valid (c:t) : bool := Bool.eqb (CapIsTagClear (bv_to_mword c.(cap))) false.
@@ -641,12 +641,12 @@ Module Capability <: Capability (AddressValueBV) (Flags) (ObjTypeBV) (SealType) 
   Definition cap_has_global_perm (cap:t) : bool := cap_has_perm cap CAP_PERM_GLOBAL.
 
   Definition cap_seal (cap : t) (k : t) : t :=
-    let key : ObjTypeBV.t := (cap_get_value k) in 
+    let key : ObjType.t := (cap_get_value k) in 
     let sealed_cap := cap_set_objtype cap key in 
     if (cap_is_valid cap) && (cap_is_valid k) && 
        (cap_is_unsealed cap) && (cap_is_unsealed k) && 
        (cap_has_seal_perm k) && (cap_is_in_bounds k) &&
-       (Z.to_N (bv_to_Z_unsigned key) <=? ObjTypeBV.CAP_MAX_OBJECT_TYPE)%N then 
+       (Z.to_N (bv_to_Z_unsigned key) <=? ObjType.CAP_MAX_OBJECT_TYPE)%N then 
        sealed_cap
     else
        cap_invalidate sealed_cap.
@@ -668,7 +668,7 @@ Module Capability <: Capability (AddressValueBV) (Flags) (ObjTypeBV) (SealType) 
     else 
       cap_invalidate unsealed_sealed_cap.
 
-  Definition cap_seal_immediate (cap : t) (seal_ot : ObjTypeBV.t) 
+  Definition cap_seal_immediate (cap : t) (seal_ot : ObjType.t) 
     `{ArithFact ((bv_to_Z_unsigned seal_ot >? 0)%Z && (bv_to_Z_unsigned seal_ot <=? 4)%Z)} : t :=
     let new_cap := cap_set_objtype cap seal_ot in 
     if (cap_is_valid cap && cap_is_unsealed cap) then 
@@ -690,17 +690,17 @@ Module Capability <: Capability (AddressValueBV) (Flags) (ObjTypeBV) (SealType) 
 
   (* Confirm the type of the function is ok *)  
   Definition representable_alignment_mask (len:Z) : Z :=
-    mword_to_Z_unsigned (CapGetRepresentableMask (@mword_of_int (Z.of_N AddressValueBV.len) len)).
+    mword_to_Z_unsigned (CapGetRepresentableMask (@mword_of_int (Z.of_N AddressValue.len) len)).
 
   (* Will need to see how this compares with Microsoft's Small Cheri 
   (Technical report coming up -- as of Oct 24 2022) *)
   Definition representable_length (len : Z) : Z :=
     let mask:Z := representable_alignment_mask len in
-    let nmask:Z := AddressValueBV.bitwise_complement_Z mask in
+    let nmask:Z := AddressValue.bitwise_complement_Z mask in
     let result:Z := Z.land (Z.add len nmask) mask in 
       result.
 
-  Definition make_cap (value : AddressValueBV.t) (otype : ObjTypeBV.t) (bounds : BoundsBV.t) (perms : PermissionsBV.t) : t :=
+  Definition make_cap (value : AddressValue.t) (otype : ObjType.t) (bounds : Bounds.t) (perms : Permissions.t) : t :=
     let new_cap := cap_cU () in 
     let perms_to_keep := list_bool_to_bv ((bv_to_list_bool perms)) in 
     let new_cap := cap_narrow_perms new_cap perms_to_keep in 
@@ -709,19 +709,19 @@ Module Capability <: Capability (AddressValueBV) (Flags) (ObjTypeBV) (SealType) 
       cap_set_objtype new_cap otype.
     
   (* Should we check that size is not too large? *)
-  Definition alloc_cap (a_value : AddressValueBV.t) (size : AddressValueBV.t) : t :=
+  Definition alloc_cap (a_value : AddressValue.t) (size : AddressValue.t) : t :=
     make_cap 
       a_value 
       cap_SEAL_TYPE_UNSEALED 
-      (BoundsBV.of_Zs (bv_to_Z_unsigned a_value, Z.add (bv_to_Z_unsigned a_value) (bv_to_Z_unsigned size)))
-      (PermissionsBV.perm_alloc).
+      (Bounds.of_Zs (bv_to_Z_unsigned a_value, Z.add (bv_to_Z_unsigned a_value) (bv_to_Z_unsigned size)))
+      (Permissions.perm_alloc).
     
-  Definition alloc_fun (a_value : AddressValueBV.t) : t :=
+  Definition alloc_fun (a_value : AddressValue.t) : t :=
     make_cap 
       a_value 
       cap_SEAL_TYPE_RB 
-      (BoundsBV.of_Zs (bv_to_Z_unsigned a_value, Z.succ (Z.succ (bv_to_Z_unsigned a_value)))) 
-      PermissionsBV.perm_alloc_fun.
+      (Bounds.of_Zs (bv_to_Z_unsigned a_value, Z.succ (Z.succ (bv_to_Z_unsigned a_value)))) 
+      Permissions.perm_alloc_fun.
 
   Definition value_compare (cap1 cap2 : t) : comparison :=
     if (cap_get_value cap1 =? cap_get_value cap2)%stdpp then Eq
@@ -733,15 +733,15 @@ Module Capability <: Capability (AddressValueBV) (Flags) (ObjTypeBV) (SealType) 
     else if (cap1.(cap) <? cap2.(cap)) then Lt 
     else Gt.
 
-  Definition cap_vaddr_representable (c : t) (a : AddressValueBV.t) : bool :=
+  Definition cap_vaddr_representable (c : t) (a : AddressValue.t) : bool :=
     CapIsRepresentable (bv_to_mword c.(cap)) (bv_to_mword a).
   
-  Definition cap_bounds_representable_exactly (cap : t) (bounds : BoundsBV.t) : bool :=
+  Definition cap_bounds_representable_exactly (cap : t) (bounds : Bounds.t) : bool :=
     let '(base, limit) := bounds in
     let len := Z.sub (bv_to_Z_unsigned limit) (bv_to_Z_unsigned base) in
-    let base' : (bv AddressValueBV.len) := 
-      Z_to_bv AddressValueBV.len (bv_to_Z_unsigned base) in 
-    let len' := mword_of_int (len:=Z.of_N BoundsBV.bound_len) len in 
+    let base' : (bv AddressValue.len) := 
+      Z_to_bv AddressValue.len (bv_to_Z_unsigned base) in 
+    let len' := mword_of_int (len:=Z.of_N Bounds.bound_len) len in 
     let new_cap : t := cap_set_value cap base' in
     let new_cap : (mword _) := CapSetBounds (cap_to_mword new_cap) len' true in
     CapIsTagSet new_cap.
@@ -864,18 +864,18 @@ Module Capability <: Capability (AddressValueBV) (Flags) (ObjTypeBV) (SealType) 
     else " (" ++ String.concat "," attrs ++ ")".
 
   Definition to_string_pretty (c:t) : string :=
-    AddressValueBV.to_string (cap_get_value c) ++ " [" ++ PermissionsBV.to_string (cap_get_perms c) ++ "," ++ BoundsBV.to_string (cap_get_bounds c) ++ "]".
+    AddressValue.to_string (cap_get_value c) ++ " [" ++ Permissions.to_string (cap_get_perms c) ++ "," ++ Bounds.to_string (cap_get_bounds c) ++ "]".
 
   Definition to_string_pretty_2 (c:t) : string :=
     if cap_is_null_derived c then
-      AddressValueBV.to_string (cap_get_value c)
+      AddressValue.to_string (cap_get_value c)
     else
-      (AddressValueBV.to_string (cap_get_value c)) ++ " " ++ "[" ++
+      (AddressValue.to_string (cap_get_value c)) ++ " " ++ "[" ++
         (if (get_ghost_state c).(bounds_unspecified)
          then "?-?"
          else
-           PermissionsBV.to_string (cap_get_perms c) ++ "," ++
-           BoundsBV.to_string (cap_get_bounds c)  )
+           Permissions.to_string (cap_get_perms c) ++ "," ++
+           Bounds.to_string (cap_get_bounds c)  )
         ++ "]" ++
         (flags_as_str c).
 
