@@ -21,7 +21,7 @@ Extraction Blacklist String List Char Core Monad Bool Vector Format Nat Int Opti
 (* Debugging print *)
 Extraction NoInline Cerberus.Utils.print_msg.
 Extract Constant Cerberus.Utils.print_msg => "print_endline".
-Extract Inlined Constant Morello.MorelloCapability.strfcap => "strfcap".
+Extract Inlined Constant Morello.Capability.strfcap => "strfcap".
 
 (* Set Extraction AccessOpaque. *)
 

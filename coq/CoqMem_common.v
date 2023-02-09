@@ -2,13 +2,14 @@ Require Import Coq.Numbers.BinNums.
 Require Import Coq.Strings.String.
 
 Require Import Addr.
+Require Import Capabilities.
 Require Import CoqUndefined.
 Require Import CoqLocation.
 Require CoqAilSyntax.
 Require Import CoqCtype.
 Require Import SimpleError.
 
-Module Mem_common (A:VADDR).
+Module Mem_common (A:VADDR) (B:VADDR_INTERVAL A).
 
   Definition thread_id := Z. (* Mem_common.thread_id *)
 
@@ -59,7 +60,7 @@ Module Mem_common (A:VADDR).
   | CheriMerrInvalidCap : mem_cheri_error
   | CheriMerrUnsufficientPermissions : mem_cheri_error
   | CheriBoundsErr : (* bounds,address,length *)
-    (A.t * A.t) * A.t * nat -> mem_cheri_error
+    B.t * A.t * nat -> mem_cheri_error
   | CheriUndefinedTag: mem_cheri_error.
 
   Inductive mem_error : Set :=

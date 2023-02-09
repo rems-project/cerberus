@@ -1,6 +1,6 @@
 (coq.theory
  (name Cerberus)
- (modules CapFns CapFnsTypes SimpleError Utils Addr CoqLocation Capabilities Morello CoqAnnot CoqCtype CoqSwitches CoqImplementation CoqAilSyntax CoqAilTypesAux ErrorWithState CoqMem_common Memory_model CoqSymbol CoqUndefined CoqTags CheriMemory)
+ (modules CapFns CapFnsTypes SimpleError Utils Addr CoqLocation Capabilities Morello MorelloTests CoqAnnot CoqCtype CoqSwitches CoqImplementation CoqAilSyntax CoqAilTypesAux ErrorWithState CoqMem_common Memory_model CoqSymbol CoqUndefined CoqTags CheriMemory)
 )
 
 (rule
@@ -91,6 +91,7 @@
 (copy_files extracted/MonadZero.{ml,mli})
 (copy_files extracted/Monoid.{ml,mli})
 (copy_files extracted/Morello.{ml,mli})
+(copy_files extracted/MorelloTests.{ml,mli})
 (copy_files extracted/Nat0.{ml,mli})
 (copy_files extracted/NatLib.{ml,mli})
 (copy_files extracted/Number.{ml,mli})

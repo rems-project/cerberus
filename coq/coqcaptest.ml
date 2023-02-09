@@ -27,7 +27,8 @@ open Morello
 
 module M = struct
   include MorelloCapabilityWithStrfcap
-
+  include TestCaps
+  
   let cap_1 : t = TestCaps.c1
   let cap_1_bytes = TestCaps.c1_bytes
   let cap_2 : t = TestCaps.c2
