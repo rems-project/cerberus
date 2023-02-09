@@ -108,6 +108,7 @@ End VADDR_INTERVAL.
 Module Type FLAGS.
   Parameter t:Set.
   Parameter length:nat.
+  Parameter eqb: t -> t -> bool.
 End FLAGS.
 
 
