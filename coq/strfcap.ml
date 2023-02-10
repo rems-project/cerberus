@@ -1,8 +1,8 @@
 open Morello
 
 module MorelloCapabilityWithStrfcap = struct
-  include MorelloCapability
-
+  include Capability
+  
   let is_sealed c =
     match cap_get_seal c with
     | Cap_Unsealed -> false
@@ -71,7 +71,7 @@ module MorelloCapabilityWithStrfcap = struct
              | Some s -> s  @ loop tag cap fs
            end
       | 'P'::fs ->
-         let s = MorelloPermission.to_string (cap_get_perms cap) in
+         let s = Morello.Permissions.to_string (cap_get_perms cap) in
          s @ loop tag cap fs
       | 'T'::fs -> loop true cap fs
       | '?'::fs -> skip tag cap fs
@@ -175,7 +175,7 @@ module MorelloCapabilityWithStrfcap = struct
             strnum z)
          @ loop tag cap fs
       | Final, 'p'::fs ->
-         let z = MorelloPermission.to_raw (cap_get_perms cap) in
+         let z = Morello.Permissions.to_raw (cap_get_perms cap) in
          strnum z @ loop tag cap fs
       | Final, 's'::fs ->
          let z = cap_get_obj_type cap in
@@ -185,7 +185,8 @@ module MorelloCapabilityWithStrfcap = struct
            match cap_get_seal cap with
            | Cap_Unsealed -> "<unsealed>"
            | Cap_SEntry -> "<sentry>"
-           | _ -> strnum cap.obj_type
+           (* | _ -> strnum cap.obj_type *)
+           | _ -> strnum (cap_get_obj_type cap)
          in
          s @ loop tag cap fs
       | Final, 't'::fs ->

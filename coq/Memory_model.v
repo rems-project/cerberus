@@ -6,6 +6,7 @@ Require Import Coq.Numbers.BinNums.
 Require Import ExtLib.Structures.Monad.
 
 Require Import Addr.
+Require Import Capabilities.
 Require Import CoqLocation.
 Require Import CoqSymbol.
 Require Import CoqMem_common.
@@ -16,10 +17,10 @@ Set Implicit Arguments.
 Set Strict Implicit.
 Generalizable All Variables.
 
-Module Type Memory (A:VADDR).
+Module Type Memory (A:VADDR) (B:VADDR_INTERVAL A).
 
   Import A.
-  Include Mem_common(A).
+  Include Mem_common(A)(B).
 
   (* Module interface below *)
 

@@ -27,20 +27,23 @@ Require Import AltBinNotations.
 Import ListNotations.
 Import MonadNotation.
 
+Definition debugging : bool := false.
+
 Module ZMap := FMapAVL.Make(Z_as_OT).
 
 Module CheriMemory
-  (C:Capability(MorelloAddr)
-       (MoreloOTYPE)
-       (MorelloCAP_SEAL_T)
-       (MorelloVADDR_INTERVAL)
-       (MorelloPermission)
+  (C:Capability(Morello.AddressValue)
+       (Morello.Flags)
+       (Morello.ObjType)
+       (Morello.SealType)
+       (Morello.Bounds)
+       (Morello.Permissions)
   )
   (IMP: Implementation)
   (TD: TagDefs)
-  <: Memory(MorelloAddr).
+  <: Memory(Morello.AddressValue)(Morello.Bounds).
 
-  Include Mem_common(MorelloAddr).
+  Include Mem_common(Morello.AddressValue)(Morello.Bounds).
   Include AilTypesAux(IMP).
 
   Definition name := "cheri-coq".
@@ -158,7 +161,7 @@ Module CheriMemory
   Record allocation :=
     {
       prefix : CoqSymbol.prefix;
-      base : MorelloAddr.t;
+      base : Morello.AddressValue.t;
       size : Z;
       ty : option CoqCtype.ctype;
       is_readonly : readonly_status;
@@ -198,7 +201,7 @@ Module CheriMemory
     {
       next_alloc_id : storage_instance_id;
       next_iota : symbolic_storage_instance_id;
-      last_address : MorelloAddr.t;
+      last_address : Morello.AddressValue.t;
       allocations : ZMap.t allocation;
       iota_map : ZMap.t
                    ((* `Single *) storage_instance_id +
@@ -211,7 +214,7 @@ Module CheriMemory
       bytemap : ZMap.t AbsByte;
       capmeta : ZMap.t (bool* CapGhostState);
       dead_allocations : list storage_instance_id;
-      dynamic_addrs : list MorelloAddr.t;
+      dynamic_addrs : list Morello.AddressValue.t;
       last_used : option storage_instance_id
     }.
 
@@ -262,7 +265,7 @@ Module CheriMemory
     Build_mem_state_r r.(next_alloc_id) r.(next_iota) r.(last_address) r.(allocations) r.(iota_map) r.(funptrmap) varargs next_varargs_id r.(bytemap) r.(capmeta) r.(dead_allocations) r.(dynamic_addrs) r.(last_used).
 
 
-  Definition initial_address := (HexString.to_Z "0xFFFFFFFF").
+  Definition initial_address := AddressValue.of_Z (HexString.to_Z "0xFFFFFFFF").
 
   Definition DEFAULT_FUEL:nat := 1000%nat. (* TODO maybe needs to be abstracted *)
   Definition MAX_STRFCAP_FORMAT_LEN := 4096%nat.
@@ -299,7 +302,10 @@ Module CheriMemory
   Qed.
 
   Definition mprint_msg (msg : string) : memM unit :=
-    ret (print_msg msg).
+    if debugging then 
+      ret (print_msg msg)
+    else 
+      ret tt.
 
   Definition serr2memM {A: Type} (e:serr A): (memM A)
     := match e with
@@ -357,7 +363,7 @@ Module CheriMemory
 
   Inductive footprint_ind :=
   (* base address, size *)
-  | FP: MorelloAddr.t -> Z -> footprint_ind.
+  | FP: Morello.AddressValue.t -> Z -> footprint_ind.
 
   Definition footprint := footprint_ind.
 
@@ -366,11 +372,11 @@ Module CheriMemory
     |  FP b1 sz1, FP b2 sz2 =>
          let b1 := b1 in
          let b2 := b2 in
-         if andb (Z.eqb b1 b2) (Z.eqb sz1 sz2) then
+         if andb (AddressValue.eqb b1 b2) (Z.eqb sz1 sz2) then
            ExactOverlap
          else if orb
-                   (Z.leb (Z.add b1 sz1) b2)
-                   (Z.leb (Z.add b2 sz2) b1)
+                   (Z.leb (Z.add (AddressValue.to_Z b1) sz1) (AddressValue.to_Z b2))
+                   (Z.leb (Z.add (AddressValue.to_Z b2) sz2) (AddressValue.to_Z b1))
               then
                 Disjoint
               else
@@ -395,7 +401,7 @@ Module CheriMemory
     match x with
     | IV n => n
     | IC is_signed c =>
-        let n := C.cap_get_value c in
+        let n := AddressValue.to_Z (C.cap_get_value c) in
         if is_signed then unwrap_cap_value n else n
     end.
 
@@ -410,7 +416,7 @@ Module CheriMemory
 
   (* Creare new cap meta for regiion where all tags are unspecified *)
   Program Definition init_ghost_tags
-    (addr: MorelloAddr.t)
+    (addr: Morello.AddressValue.t)
     (size: Z)
     (capmeta: ZMap.t (bool*CapGhostState)): ZMap.t (bool*CapGhostState)
     :=
@@ -418,8 +424,8 @@ Module CheriMemory
     let lower_a x :=
       let (q,_) := quomod x align in
       Z.mul q align in
-    let a0 := lower_a addr in
-    let a1 := lower_a (Z.pred (Z.add addr size)) in
+    let a0 := lower_a (AddressValue.to_Z addr) in
+    let a1 := lower_a (Z.pred (Z.add (AddressValue.to_Z addr) size)) in
     let v := (false, {| tag_unspecified := true; bounds_unspecified := false |}) in
     let n := Z.to_nat (Z.div a1 a0) in
     zmap_range_init a0 n align v capmeta.
@@ -433,7 +439,7 @@ Module CheriMemory
       All "false" tags will be left intact.
    *)
   Definition ghost_tags
-    (addr: MorelloAddr.t)
+    (addr: Morello.AddressValue.t)
     (size: Z)
     (capmeta: ZMap.t (bool*CapGhostState)): ZMap.t (bool*CapGhostState)
     :=
@@ -441,8 +447,8 @@ Module CheriMemory
     let lower_a x :=
       let (q,_) := quomod x align in
       Z.mul q align in
-    let a0 := lower_a addr in
-    let a1 := lower_a (Z.pred (Z.add addr size)) in
+    let a0 := lower_a (AddressValue.to_Z addr) in
+    let a1 := lower_a (Z.pred (Z.add (AddressValue.to_Z addr) size)) in
     ZMap.mapi
       (fun (a:Z) '(t, gs) =>
          if ((negb gs.(tag_unspecified)) && t && Z.geb a a0 && Z.leb a a1)%bool
@@ -451,11 +457,11 @@ Module CheriMemory
          else (t, gs)
       ) capmeta.
 
-  Definition allocator (size:Z) (align:Z) : memM (storage_instance_id * MorelloAddr.t) :=
+  Definition allocator (size:Z) (align:Z) : memM (storage_instance_id * Morello.AddressValue.t) :=
     get >>= fun st =>
         let alloc_id := st.(next_alloc_id) in
         (
-          let z := Z.sub st.(last_address) size in
+          let z := Z.sub (AddressValue.to_Z st.(last_address)) size in
           let (q,m) := quomod z align in
           let z' := Z.sub z (if Z.ltb q 0 then Z.opp m else m) in
           if Z.leb z' 0 then
@@ -468,7 +474,7 @@ Module CheriMemory
               {|
                 next_alloc_id    := Z.succ alloc_id;
                 next_iota        := st.(next_iota);
-                last_address     := addr ;
+                last_address     := AddressValue.of_Z addr;
                 allocations      := st.(allocations);
                 iota_map         := st.(iota_map);
                 funptrmap        := st.(funptrmap);
@@ -476,13 +482,13 @@ Module CheriMemory
                 next_varargs_id  := st.(next_varargs_id);
                 bytemap          := st.(bytemap);
                 (* tags in newly allocated region are unspecified *)
-                capmeta          := init_ghost_tags addr size st.(capmeta);
+                capmeta          := init_ghost_tags (AddressValue.of_Z addr) size st.(capmeta);
                 dead_allocations := st.(dead_allocations);
                 dynamic_addrs    := st.(dynamic_addrs);
                 last_used        := Some alloc_id;
               |}
             ;;
-            ret (alloc_id, addr).
+            ret (alloc_id, (AddressValue.of_Z addr)).
 
 
   Definition alignof
@@ -665,7 +671,7 @@ Module CheriMemory
         match ZMap.find n funptrmap with
         | Some (_, _, c) => (funptrmap, c)
         | None =>
-            let c := C.alloc_fun (Z.add initial_address n) in
+            let c := C.alloc_fun (AddressValue.of_Z (Z.add (AddressValue.to_Z initial_address) n)) in
             (match opt_name with
              | CoqSymbol.SD_Id name =>
                  ZMap.add n (file_dig, name, c) funptrmap
@@ -691,14 +697,14 @@ Module CheriMemory
         match mval with
         | MVunspecified ty =>
             sz <- sizeof DEFAULT_FUEL None ty ;;
-            ret (funptrmap, (ghost_tags addr sz capmeta),
+            ret (funptrmap, (ghost_tags (AddressValue.of_Z addr) sz capmeta),
                 (list_init (Z.to_nat sz) (fun _ => absbyte_v Prov_none None None)))
         | MVinteger ity (IV n_value) =>
             iss <- option2serr "Could not get int signedness of a type in repr" (is_signed_ity DEFAULT_FUEL ity) ;;
             sz <- sizeof DEFAULT_FUEL None (CoqCtype.Ctype nil (CoqCtype.Basic (CoqCtype.Integer ity))) ;;
             bs' <- bytes_of_Z iss (Z.to_nat sz) n_value ;;
             let bs := List.map (fun (x : ascii) => absbyte_v Prov_none None (Some x)) bs' in
-            ret (funptrmap, (ghost_tags addr (Z.of_nat (List.length bs)) capmeta), bs)
+            ret (funptrmap, (ghost_tags (AddressValue.of_Z addr) (Z.of_nat (List.length bs)) capmeta), bs)
         | MVinteger ity (IC _ c_value) =>
             '(cb, ct) <- option2serr "int encoding error" (C.encode true c_value) ;;
             let capmeta := ZMap.add addr
@@ -714,7 +720,7 @@ Module CheriMemory
             bs' <- bytes_of_Z true (Z.to_nat sz) (bits_of_float fval) ;;
             let bs := List.map (fun (x : ascii) => absbyte_v Prov_none None (Some x)) bs'
             in
-            ret (funptrmap, (ghost_tags addr (Z.of_nat (List.length bs)) capmeta), bs)
+            ret (funptrmap, (ghost_tags (AddressValue.of_Z addr) (Z.of_nat (List.length bs)) capmeta), bs)
         | MVpointer ref_ty (PV prov ptrval_) =>
             match ptrval_ with
             | PVfunction
@@ -799,7 +805,7 @@ Module CheriMemory
 
     let mask := C.representable_alignment_mask size_n in
     let size_n' := C.representable_length size_n in
-    let align_n' := Z.max align_n (Z.add (Z.succ (0)) (MorelloAddr.bitwise_complement mask)) in
+    let align_n' := Z.max align_n (Z.add (Z.succ (0)) (AddressValue.to_Z (Morello.AddressValue.bitwise_complement (AddressValue.of_Z mask)))) in
 
     (*
     (if (negb ((Z.eqb size_n size_n') && (Z.eqb align_n align_n')))
@@ -843,7 +849,7 @@ Module CheriMemory
                           dynamic_addrs    := st.(dynamic_addrs);
                           last_used        := st.(last_used);
                         |}) ;; ret false
-          | Some mval =>
+          | Some mval =>  (* here we allocate an object with initiliazer *)
               let (ro,readonly_status) :=
                 match pref with
                 | CoqSymbol.PrefStringLiteral _ _ => (true,IsReadOnly_string_literal)
@@ -853,8 +859,8 @@ Module CheriMemory
               let alloc := {| prefix:= pref; base:= addr; size:= size_n'; ty:= Some ty; is_readonly:= readonly_status; taint:= Unexposed |} in
 
               st <- get ;;
-              '(funptrmap, capmeta, pre_bs) <- serr2memM (repr DEFAULT_FUEL st.(funptrmap) st.(capmeta) addr mval) ;;
-              let bs := mapi (fun i b => (Z.add addr (Z.of_nat i), b)) pre_bs in
+              '(funptrmap, capmeta, pre_bs) <- serr2memM (repr DEFAULT_FUEL st.(funptrmap) st.(capmeta) (AddressValue.to_Z addr) mval) ;;
+              let bs := mapi (fun i b => (Z.add (AddressValue.to_Z addr) (Z.of_nat i), b)) pre_bs in
               put {|
                   next_alloc_id    := st.(next_alloc_id);
                   next_iota        := st.(next_iota);
@@ -877,15 +883,16 @@ Module CheriMemory
           end)
            >>=
            (fun ro =>
-              let c := C.alloc_cap addr size_n' in
+              let c := C.alloc_cap addr (AddressValue.of_Z size_n') in
+              (* Check here *)
               let c :=
                 if ro then
                   let p := C.cap_get_perms c in
-                  let p := MorelloPermission.perm_clear_store p in
-                  let p := MorelloPermission.perm_clear_store_cap p in
-                  let p := MorelloPermission.perm_clear_store_local_cap p in
+                  let p := Morello.Permissions.perm_clear_store p in
+                  let p := Morello.Permissions.perm_clear_store_cap p in
+                  let p := Morello.Permissions.perm_clear_store_local_cap p in
                   C.cap_narrow_perms c p
-                  else c
+                else c
               in
               ret (PV (Prov_some alloc_id) (PVconcrete c))
       )).
@@ -902,7 +909,7 @@ Module CheriMemory
     let mask := C.representable_alignment_mask size_n in
     let size_n' := C.representable_length size_n in
     let align_n' :=
-      Z.max align_n (Z.succ (MorelloAddr.bitwise_complement mask)) in
+      Z.max align_n (Z.succ (AddressValue.to_Z (Morello.AddressValue.bitwise_complement (AddressValue.of_Z mask)))) in
 
     allocator size_n' align_n' >>=
       (fun '(alloc_id, addr) =>
@@ -932,16 +939,16 @@ Module CheriMemory
                 last_used        := st.(last_used);
               |})
          ;;
-         (let c_value := C.alloc_cap addr size_n' in
+         (let c_value := C.alloc_cap addr (AddressValue.of_Z size_n') in
           ret (PV (Prov_some alloc_id) (PVconcrete c_value))
       )).
 
   Definition cap_is_null  (c : C.t) : bool :=
-    Z.eqb (C.cap_get_value c) 0.
+    Z.eqb (AddressValue.to_Z (C.cap_get_value c)) 0.
 
   Definition is_dynamic addr : memM bool :=
     get >>= fun st =>
-        ret (set_mem Z_as_OT.eq_dec addr st.(dynamic_addrs)).
+        ret (set_mem Z_as_OT.eq_dec (AddressValue.to_Z addr) (List.map AddressValue.to_Z st.(dynamic_addrs))).
 
   Definition is_dead (alloc_id : storage_instance_id) : memM bool :=
     get >>= fun st =>
@@ -1034,7 +1041,7 @@ Module CheriMemory
                             get_allocation z >>=
                               (fun alloc =>
                                  if
-                                   MorelloAddr.eqb
+                                   Morello.AddressValue.eqb
                                      (C.cap_get_value addr)
                                      alloc.(base)
                                  then
@@ -1101,7 +1108,7 @@ Module CheriMemory
                          raise (InternalErr "Concrete: FREE was called on a dead allocation")
                    | false =>
                        get_allocation alloc_id >>= fun alloc =>
-                           if MorelloAddr.eqb (C.cap_get_value addr) alloc.(base) then
+                           if Morello.AddressValue.eqb (C.cap_get_value addr) alloc.(base) then
                              update
                                (fun st =>
                                   {|
@@ -1240,8 +1247,6 @@ Module CheriMemory
                          | _ => ValidPtrProv
                          end in
 
-        (* sprint_msg (string_of_prov_valid_ind _prov);;
-        sprint_msg (string_of_prov_ptr_valid_ind pptrvalid) ;;  *)
         ret (pvalid,pptrvalid,rev_values)
     end.
 
@@ -1274,9 +1279,9 @@ Module CheriMemory
 
   (** Convert an arbitrary integer value to unsinged cap value *)
   Definition wrap_cap_value (n_value : Z) : Z :=
-    if andb (Z.leb n_value C.min_vaddr) (Z.leb n_value C.max_vaddr)
+    if andb (Z.leb n_value (AddressValue.to_Z C.min_vaddr)) (Z.leb n_value (AddressValue.to_Z C.max_vaddr))
     then n_value
-    else  wrapI C.min_vaddr C.max_vaddr n_value.
+    else  wrapI (AddressValue.to_Z C.min_vaddr) (AddressValue.to_Z C.max_vaddr) n_value.
 
   Fixpoint abst
     (fuel: nat)
@@ -1325,7 +1330,7 @@ Module CheriMemory
                         let c_value := C.set_ghost_state c_value gs in
                         if iss then
                           let n_value := C.cap_get_value c_value in
-                          let c_value := C.cap_set_value c_value (wrap_cap_value n_value) in
+                          let c_value := C.cap_set_value c_value (AddressValue.of_Z (wrap_cap_value (AddressValue.to_Z n_value))) in
                           MVEinteger ity (IC true c_value)
                         else
                           MVEinteger ity (IC false c_value)
@@ -1388,7 +1393,7 @@ Module CheriMemory
                     let c_value := C.set_ghost_state c_value gs in
                     match ref_ty with
                     | CoqCtype.Ctype _ (CoqCtype.Function _ _ _) =>
-                        let n_value := Z.sub (C.cap_get_value c_value) initial_address in
+                        let n_value := Z.sub (AddressValue.to_Z (C.cap_get_value c_value)) (AddressValue.to_Z initial_address) in
                         match ZMap.find n_value funptrmap with
                         | Some (file_dig, name, c') =>
                             if C.eqb c_value c' then
@@ -1412,7 +1417,7 @@ Module CheriMemory
                           | NotValidPtrProv =>
                               match
                                 find_overlaping
-                                  (C.cap_get_value c_value) with
+                                  (AddressValue.to_Z (C.cap_get_value c_value)) with
                               | NoAlloc => Prov_none
                               | SingleAlloc alloc_id => Prov_some alloc_id
                               | DoubleAlloc alloc_id1 alloc_id2 =>
@@ -1457,10 +1462,10 @@ Module CheriMemory
 
   (** Checks if memory region starting from [addr] and
       of size [sz] fits withing interval \[b1,b2) *)
-  Definition cap_bounds_check (bounds : Z * Z)
+  Definition cap_bounds_check (bounds : Bounds.t)
     : Z -> Z -> bool
     :=
-    let '(base, limit) := bounds in
+    let '(base, limit) := Bounds.to_Zs bounds in
     fun (addr : Z) (sz : Z) =>
       andb (Z.leb base addr) (Z.leb (Z.add addr sz) limit).
 
@@ -1475,16 +1480,15 @@ Module CheriMemory
       fail (MerrCHERI loc CheriUndefinedTag)
     else if C.cap_is_valid c then
       let addr :=
-        Z.add (C.cap_get_value c)
-          offset in
+        Z.add (AddressValue.to_Z (C.cap_get_value c)) offset in
       let pcheck :=
         match intent with
         | ReadIntent =>
-            MorelloPermission.perm_is_load
+            Morello.Permissions.has_load_perm
         | WriteIntent =>
-            MorelloPermission.perm_is_store
+            Morello.Permissions.has_store_perm
         | CallIntent =>
-            MorelloPermission.perm_is_execute
+            Morello.Permissions.has_execute_perm
         end in
       if pcheck (C.cap_get_perms c) then
         let bounds := C.cap_get_bounds c in
@@ -1492,10 +1496,9 @@ Module CheriMemory
           ret tt
         else
           fail
-            (MerrCHERI loc (CheriBoundsErr (bounds, addr, (Z.to_nat sz))))
+            (MerrCHERI loc (CheriBoundsErr (bounds, AddressValue.of_Z addr, (Z.to_nat sz))))
       else
-        fail
-          (MerrCHERI loc CheriMerrUnsufficientPermissions)
+        fail (MerrCHERI loc CheriMerrUnsufficientPermissions)
     else
       fail
         (MerrCHERI loc CheriMerrInvalidCap).
@@ -1559,14 +1562,14 @@ Module CheriMemory
     ZMap.fold (fun alloc_id alloc acc =>
                  let new_opt :=
                    if negb (mem alloc_id st.(dead_allocations))
-                      && Z.leb alloc.(base) addr && Z.ltb addr (Z.add alloc.(base) alloc.(size)) then
+                      && Z.leb (AddressValue.to_Z alloc.(base)) addr && Z.ltb addr (Z.add (AddressValue.to_Z alloc.(base)) alloc.(size)) then
                      (* PNVI-ae, PNVI-ae-udi *)
                      if require_exposed && (negb (allocation_taint_eqb alloc.(taint) Exposed))
                      then None
                      else Some alloc_id
                    else if allow_one_past then
                           (* PNVI-ae-udi *)
-                          if Z.eqb addr (Z.add alloc.(base) alloc.(size))
+                          if Z.eqb addr (Z.add (AddressValue.to_Z alloc.(base)) alloc.(size))
                              && negb (require_exposed && (negb (allocation_taint_eqb alloc.(taint) Exposed)))
                           then Some alloc_id
                           else None
@@ -1658,14 +1661,14 @@ Module CheriMemory
       (fun (alloc : allocation) =>
          ret
            (andb
-              (Z.leb alloc.(base) addr)
+              (Z.leb (AddressValue.to_Z alloc.(base)) addr)
               (Z.leb
                  (Z.add addr sz)
-                 (Z.add alloc.(base) alloc.(size))))).
+                 (Z.add (AddressValue.to_Z alloc.(base)) alloc.(size))))).
 
-  Definition device_ranges : list (MorelloAddr.t * MorelloAddr.t) :=
-    [ (0x40000000, 0x40000004)
-      ; (0xABC, 0XAC0) ].
+  Definition device_ranges : list (Morello.AddressValue.t * Morello.AddressValue.t) :=
+    [ (AddressValue.of_Z 0x40000000, AddressValue.of_Z 0x40000004)
+      ; (AddressValue.of_Z 0xABC, AddressValue.of_Z 0XAC0) ].
 
   Definition is_within_device (ty : CoqCtype.ctype) (addr : Z) : memM bool
     :=
@@ -1674,8 +1677,8 @@ Module CheriMemory
       (List.existsb
          (fun '(min, max) =>
             andb
-              (Z.leb min addr)
-              (Z.leb (Z.add addr sz) max))
+              (Z.leb (AddressValue.to_Z min) addr)
+              (Z.leb (Z.add addr sz) (AddressValue.to_Z max)))
          device_ranges).
 
 
@@ -1699,7 +1702,7 @@ Module CheriMemory
              e <- serr2memM (CoqCtype.ctypeEqual DEFAULT_FUEL lvalue_ty ty) ;;
              ret
                (negb
-                  (Z.eqb addr alloc.(base) && (Z.eqb sz alloc.(size) && e)))
+                  (Z.eqb addr (AddressValue.to_Z alloc.(base)) && (Z.eqb sz alloc.(size) && e)))
          | _, _ => ret false
          end).
 
@@ -1755,7 +1758,7 @@ Module CheriMemory
                            mem_state_with_last_used alloc_id_opt st))
                 ;;
                 sz <- serr2memM (sizeof DEFAULT_FUEL None ty) ;;
-                let fp := FP addr sz in
+                let fp := FP (AddressValue.of_Z addr) sz in
                 match bs' with
                 | [] =>
                     if CoqSwitches.has_switch CoqSwitches.SW_strict_reads
@@ -1778,7 +1781,7 @@ Module CheriMemory
       : memM (footprint * mem_value)
       :=
       cap_check loc c 0 ReadIntent sz ;;
-      do_load alloc_id_opt  (C.cap_get_value c) sz
+      do_load alloc_id_opt (AddressValue.to_Z (C.cap_get_value c)) sz
     in
     match prov, ptrval_ with
     | _, PVfunction _ =>
@@ -1790,7 +1793,7 @@ Module CheriMemory
           fail (MerrAccess loc LoadAccess NullPtr)
         else
           sz <- serr2memM (sizeof DEFAULT_FUEL None ty) ;;
-          is_within_device ty (C.cap_get_value c) >>=
+          is_within_device ty (AddressValue.to_Z (C.cap_get_value c)) >>=
             (fun (function_parameter : bool) =>
                match function_parameter with
                | false =>
@@ -1812,14 +1815,14 @@ Module CheriMemory
                  if function_parameter
                  then ret (FAIL (MerrAccess loc LoadAccess DeadPtr))
                  else
-                   is_within_bound z_value ty (C.cap_get_value addr) >>=
+                   is_within_bound z_value ty (AddressValue.to_Z (C.cap_get_value addr)) >>=
                      (fun (function_parameter : bool) =>
                         match function_parameter with
                         | false =>
                             ret (FAIL (MerrAccess loc LoadAccess OutOfBoundPtr))
                         | true =>
                             is_atomic_member_access z_value ty
-                              (C.cap_get_value addr) >>=
+                            (AddressValue.to_Z (C.cap_get_value addr)) >>=
                               (fun (function_parameter : bool) =>
                                  match function_parameter with
                                  | true =>
@@ -1845,22 +1848,14 @@ Module CheriMemory
                end)
           ;;
           is_within_bound alloc_id ty
-            (C.cap_get_value addr) >>=
+            (AddressValue.to_Z (C.cap_get_value addr)) >>=
             (fun (function_parameter : bool) =>
                match function_parameter with
                | false =>
-                   (*
-                   mprint_msg
-                     ("LOAD " ++
-                        of_Z (C.cap_get_value addr) ++
-                        " out of bound, alloc_id=" ++
-                        of_Z alloc_id
-                     ) ;;
-                    *)
                    fail (MerrAccess loc LoadAccess OutOfBoundPtr)
                | true =>
                    is_atomic_member_access alloc_id ty
-                     (C.cap_get_value addr) >>=
+                     (AddressValue.to_Z (C.cap_get_value addr)) >>=
                      (fun (function_parameter : bool) =>
                         match function_parameter with
                         | true =>
@@ -1908,7 +1903,7 @@ Module CheriMemory
                 CoqCtype.ctypeEqual DEFAULT_FUEL (CoqCtype.unatomic cty)
                   (CoqCtype.unatomic mt))
     ;;
-    if negb cond
+    if negb cond 
     then fail (MerrOther "store with an ill-typed memory value")
     else
       let do_store_cap
@@ -1918,7 +1913,8 @@ Module CheriMemory
         :=
         nsz <- serr2memM (sizeof DEFAULT_FUEL None cty) ;;
         cap_check loc c_value 0 WriteIntent nsz ;;
-        let addr := C.cap_get_value c_value in
+        let addr := AddressValue.to_Z (C.cap_get_value c_value) in
+        
         st <- get ;;
         '(funptrmap, capmeta, pre_bs) <-
           serr2memM (repr DEFAULT_FUEL st.(funptrmap) st.(capmeta) addr mval)
@@ -1927,7 +1923,7 @@ Module CheriMemory
           mapi (fun (i_value: nat) (b_value: AbsByte)
                 => ((Z.add addr (Z.of_nat i_value)), b_value)) pre_bs
         in
-        let bytemap := (List.fold_left
+        let bytemap : ZMap.t AbsByte := (List.fold_left
                           (fun (acc : ZMap.t AbsByte) =>
                            fun (function_parameter : Z * AbsByte) =>
                              let '(addr, b_value) := function_parameter in
@@ -1950,7 +1946,7 @@ Module CheriMemory
             last_used        := alloc_id_opt;
           |}
         ;;
-        ret (FP addr nsz)
+        ret (FP (AddressValue.of_Z addr) nsz)
       in
       match prov, ptrval_ with
       | _, PVfunction _ =>
@@ -1970,7 +1966,7 @@ Module CheriMemory
                  StoreAccess
                  NullPtr)
           else
-            is_within_device cty (C.cap_get_value addr) >>=
+            is_within_device cty (AddressValue.to_Z (C.cap_get_value addr)) >>=
               (fun (x : bool) =>
                  if x
                  then do_store_cap None addr
@@ -1984,7 +1980,7 @@ Module CheriMemory
           else
             let precondition (z_value : Z) : memM merr
               :=
-              is_within_bound z_value cty (C.cap_get_value addr) >>=
+              is_within_bound z_value cty (AddressValue.to_Z (C.cap_get_value addr)) >>=
                 (fun (x : bool) =>
                    match x with
                    | false =>
@@ -2005,14 +2001,14 @@ Module CheriMemory
                                         loc))
                             | IsWritable =>
                                 is_atomic_member_access z_value cty
-                                  (C.cap_get_value addr)
+                                (AddressValue.to_Z (C.cap_get_value addr))
                                   >>=
                                   (fun (x : bool) =>
                                      if x
                                      then ret
                                             (FAIL (MerrAccess loc
-                                                     LoadAccess
-                                                     AtomicMemberof))
+                                                       LoadAccess
+                                                       AtomicMemberof))
                                      else ret OK)
                             end)
                    end)
@@ -2050,7 +2046,7 @@ Module CheriMemory
           if cap_is_null addr then
             fail (MerrAccess loc StoreAccess NullPtr)
           else
-            is_within_bound alloc_id cty (C.cap_get_value addr)
+            is_within_bound alloc_id cty (AddressValue.to_Z (C.cap_get_value addr))
               >>=
               (fun (x : bool) =>
                  match x with
@@ -2067,7 +2063,7 @@ Module CheriMemory
                               fail (MerrWriteOnReadOnly true loc)
                           | IsWritable =>
                               is_atomic_member_access alloc_id cty
-                                (C.cap_get_value addr) >>=
+                                (AddressValue.to_Z (C.cap_get_value addr)) >>=
                                 (fun (x : bool) =>
                                    match x with
                                    | true =>
@@ -2113,7 +2109,7 @@ Module CheriMemory
     : serr pointer_value :=
     ret (PV Prov_none (PVfunction (FP_valid sym))).
 
-  Definition concrete_ptrval : Z -> Z -> serr pointer_value :=
+  Definition concrete_ptrval : Z -> AddressValue.t -> serr pointer_value :=
     fun _ _ =>
       raise
         "concrete_ptrval: integer to pointer cast is not supported".
@@ -2175,7 +2171,7 @@ Module CheriMemory
     | PVfunction (FP_valid sym) => Some sym
     | PVfunction (FP_invalid c)
     | PVconcrete c =>
-        let n := (Z.sub (C.cap_get_value c) initial_address) in
+        let n := (Z.sub (AddressValue.to_Z (C.cap_get_value c)) (AddressValue.to_Z initial_address)) in
         match ZMap.find n st.(funptrmap) with
         | Some (file_dig, name, _) =>
             Some (CoqSymbol.Symbol file_dig n (SD_Id name))
@@ -2193,13 +2189,13 @@ Module CheriMemory
     | PVfunction (FP_valid sym1), PVfunction (FP_valid sym2) =>
         ret (CoqSymbol.symbolEquality sym1 sym2)
     | PVfunction (FP_invalid c1), PVfunction (FP_invalid c2) =>
-        ret (Z.eqb (C.cap_get_value c1) (C.cap_get_value c2))
+        ret (AddressValue.eqb (C.cap_get_value c1) (C.cap_get_value c2))
     | PVfunction (FP_valid sym), PVfunction (FP_invalid c_value)
     | PVfunction (FP_invalid c_value), PVfunction (FP_valid sym) =>
         get >>=
           (fun (st : mem_state) =>
              let n_value :=
-               Z.sub (C.cap_get_value c_value) initial_address
+               Z.sub (AddressValue.to_Z (C.cap_get_value c_value)) (AddressValue.to_Z initial_address)
              in
              match ZMap.find n_value st.(funptrmap) with
              | Some (file_dig, name, _) =>
@@ -2213,7 +2209,7 @@ Module CheriMemory
     | _, PVfunction _ =>
         ret false
     | PVconcrete c1, PVconcrete c2 =>
-        ret (Z.eqb (C.cap_get_value c1) (C.cap_get_value c2))
+        ret (AddressValue.eqb (C.cap_get_value c1) (C.cap_get_value c2))
     end.
 
   Definition ne_ptrval
@@ -2359,10 +2355,10 @@ Module CheriMemory
     :=
     let precond (alloc: allocation) (addr1 addr2: Z): bool
       :=
-      Z.leb alloc.(base) addr1 &&
-        Z.leb addr1 (Z.add alloc.(base) alloc.(size)) &&
-        Z.leb alloc.(base) addr2 &&
-        Z.leb addr2 (Z.add alloc.(base) alloc.(size))
+      Z.leb (AddressValue.to_Z alloc.(base)) addr1 &&
+        Z.leb addr1 (Z.add (AddressValue.to_Z alloc.(base)) alloc.(size)) &&
+        Z.leb (AddressValue.to_Z alloc.(base)) addr2 &&
+        Z.leb addr2 (Z.add (AddressValue.to_Z alloc.(base)) alloc.(size))
     in
     let valid_postcond  (addr1 addr2: Z) : memM integer_value :=
       let diff_ty' :=
@@ -2380,7 +2376,7 @@ Module CheriMemory
     then
       match ptrval1, ptrval2 with
       | PV _ (PVconcrete addr1), PV _ (PVconcrete addr2) =>
-          valid_postcond (C.cap_get_value addr1)(C.cap_get_value addr2)
+          valid_postcond (AddressValue.to_Z (C.cap_get_value addr1)) (AddressValue.to_Z (C.cap_get_value addr2))
       | _, _=> error_postcond
       end
     else
@@ -2390,9 +2386,9 @@ Module CheriMemory
           if Z.eqb alloc_id1 alloc_id2 then
             get_allocation alloc_id1 >>=
               (fun (alloc : allocation) =>
-                 if precond alloc (C.cap_get_value addr1) (C.cap_get_value addr2)
+                 if precond alloc (AddressValue.to_Z (C.cap_get_value addr1)) (AddressValue.to_Z (C.cap_get_value addr2))
                  then
-                   valid_postcond (C.cap_get_value addr1) (C.cap_get_value addr2)
+                   valid_postcond (AddressValue.to_Z (C.cap_get_value addr1)) (AddressValue.to_Z (C.cap_get_value addr2))
                  else
                    error_postcond)
           else
@@ -2410,12 +2406,12 @@ Module CheriMemory
                        (fun (alloc : allocation) =>
                           if
                             precond alloc
-                              (C.cap_get_value addr1)
-                              (C.cap_get_value addr2)
+                              (AddressValue.to_Z (C.cap_get_value addr1))
+                              (AddressValue.to_Z (C.cap_get_value addr2))
                           then
                             valid_postcond
-                              (C.cap_get_value addr1)
-                              (C.cap_get_value addr2)
+                              (AddressValue.to_Z (C.cap_get_value addr1))
+                              (AddressValue.to_Z (C.cap_get_value addr2))
                           else
                             error_postcond)
                    else
@@ -2426,8 +2422,8 @@ Module CheriMemory
                      get_allocation alloc_id' >>=
                        (fun (alloc : allocation) =>
                           if precond alloc
-                               (C.cap_get_value addr1)
-                               (C.cap_get_value addr2)
+                               (AddressValue.to_Z (C.cap_get_value addr1))
+                               (AddressValue.to_Z (C.cap_get_value addr2))
                           then
                             (update
                                (fun (st : mem_state) =>
@@ -2436,8 +2432,8 @@ Module CheriMemory
                                        st.(iota_map)) st))
                             ;;
                             (valid_postcond
-                               (C.cap_get_value addr1)
-                               (C.cap_get_value addr2))
+                               (AddressValue.to_Z (C.cap_get_value addr1))
+                               (AddressValue.to_Z (C.cap_get_value addr2)))
                           else
                             error_postcond)
                    else
@@ -2481,14 +2477,14 @@ Module CheriMemory
                                      st.(iota_map))) st)
                         ;;
                         valid_postcond
-                          (C.cap_get_value addr1)
-                          (C.cap_get_value addr2)
+                          (AddressValue.to_Z (C.cap_get_value addr1))
+                          (AddressValue.to_Z (C.cap_get_value addr2))
                     | DoubleAlloc alloc_id1 alloc_id2 =>
                         match C.value_compare addr1 addr2 with
                         | Eq =>
                             valid_postcond
-                              (C.cap_get_value addr1)
-                              (C.cap_get_value addr2)
+                              (AddressValue.to_Z (C.cap_get_value addr1))
+                              (AddressValue.to_Z (C.cap_get_value addr2))
                         | _ =>
                             fail
                               (MerrOther
@@ -2596,7 +2592,7 @@ Module CheriMemory
                  "called isWellAligned_ptrval on function pointer")
         | PV _ (PVconcrete addr) =>
             sz <- serr2memM (alignof DEFAULT_FUEL None ref_ty) ;;
-            ret (Z.eqb (Z.modulo (C.cap_get_value addr) sz) 0)
+            ret (Z.eqb (Z.modulo (AddressValue.to_Z (C.cap_get_value addr)) sz) 0)
         end
     end.
 
@@ -2667,7 +2663,7 @@ Module CheriMemory
     | CoqCtype.Unsigned CoqCtype.Intptr_t, IC _ c_value
     | CoqCtype.Signed CoqCtype.Intptr_t, IC _ c_value
       =>
-        let addr := C.cap_get_value c_value in
+        let addr := AddressValue.to_Z (C.cap_get_value c_value) in
         get >>=
           (fun (st : mem_state) =>
              match find_overlaping st addr with
@@ -2687,9 +2683,9 @@ Module CheriMemory
         then ret (PV Prov_none (PVconcrete (C.cap_c0 tt)))
         else
           let addr :=
-            let dlt := Z.succ (Z.sub C.max_vaddr  C.min_vaddr) in
+            let dlt := Z.succ (Z.sub (AddressValue.to_Z C.max_vaddr) (AddressValue.to_Z C.min_vaddr)) in
             let r_value := Z_integerRem_f n_value dlt in
-            if  Z.leb r_value C.max_vaddr
+            if  Z.leb r_value (AddressValue.to_Z C.max_vaddr)
             then r_value
             else Z.sub r_value dlt
           in
@@ -2704,9 +2700,7 @@ Module CheriMemory
                         ret (Prov_symbolic iota))
                end >>=
                  (fun (prov : provenance) =>
-                    let c_value :=
-                      C.cap_set_value
-                        (C.cap_c0 tt) addr in
+                    let c_value := C.cap_set_value (C.cap_c0 tt) (AddressValue.of_Z addr) in
                     ret (PV prov (PVconcrete c_value))))
     | _, IC _ _ =>
         raise (InternalErr
@@ -2755,10 +2749,10 @@ Module CheriMemory
     | IC (true as is_signed) cap,  CoqCtype.Unsigned CoqCtype.Intptr_t =>
         ret (inr  (IC (negb is_signed) cap))
     | IC false cap, _ =>
-        let n_value := C.cap_get_value cap in
+        let n_value := AddressValue.to_Z (C.cap_get_value cap) in
         ret (inr (IV (conv_int_to_ity2 n_value)))
     | IC true cap, _ =>
-        let n_value := C.cap_get_value cap in
+        let n_value := AddressValue.to_Z (C.cap_get_value cap) in
         ret (inr (IV (conv_int_to_ity2 (unwrap_cap_value n_value))))
     | IV n_value, CoqCtype.Unsigned CoqCtype.Intptr_t
     | IV n_value, CoqCtype.Signed CoqCtype.Intptr_t =>
@@ -2767,7 +2761,7 @@ Module CheriMemory
         else
           let n_value := wrap_cap_value n_value in
           let c_value := C.cap_c0 tt in
-          ret (inr (IC false (C.cap_set_value c_value n_value)))
+          ret (inr (IC false (C.cap_set_value c_value (AddressValue.of_Z n_value))))
     | IV n_value, _ =>
         ret (inr (IV (conv_int_to_ity2 n_value)))
     end.
@@ -2861,7 +2855,7 @@ Module CheriMemory
                      raise (InternalErr "intfromptr: Unknown function")
                  end
              | _ =>
-                 ret (IV (Z.add initial_address n_value))
+                 ret (IV (Z.add (AddressValue.to_Z initial_address) n_value))
              end)
     | (PVfunction (FP_invalid c_value) | PVconcrete c_value) =>
         if cap_is_null c_value then
@@ -2893,7 +2887,7 @@ Module CheriMemory
               minival <- serr2memM (min_ival ity) ;;
               let ity_max := num_of_int maxival in
               let ity_min := num_of_int minival in
-              let addr := C.cap_get_value c_value in
+              let addr := AddressValue.to_Z (C.cap_get_value c_value) in
               if Z.ltb addr ity_min || Z.ltb ity_max addr
               then fail (MerrIntFromPtr loc)
               else ret (IV addr)
@@ -2932,7 +2926,7 @@ Module CheriMemory
     | IC is_signed c_value, IV n_value =>
         ret (IC is_signed
                (C.cap_set_value
-                  (if C.cap_vaddr_representable c_value n_value
+                  (if C.cap_vaddr_representable c_value  (AddressValue.of_Z n_value)
                    then c_value
                    else C.set_ghost_state
                           c_value
@@ -2940,8 +2934,9 @@ Module CheriMemory
                             tag_unspecified := true ;
                             bounds_unspecified := true
                           |})
-                  n_value)
+                  (AddressValue.of_Z n_value))
           )
+
     | _, _ =>
         raise "Unexpected argument types for cap_assign_value"
     end.
@@ -2989,7 +2984,7 @@ Module CheriMemory
                    "TODO(shift a null pointer should be undefined behaviour)")
         else
           let shifted_addr :=
-            Z.add (C.cap_get_value c_value)
+            Z.add (AddressValue.to_Z (C.cap_get_value c_value))
               offset in
           let precond (z_value : Z.t) : memM bool :=
             if CoqSwitches.has_switch (CoqSwitches.SW_pointer_arith STRICT)
@@ -2997,10 +2992,10 @@ Module CheriMemory
             then
               get_allocation z_value >>=
                 (fun (alloc : allocation) =>
-                   ret (Z.leb alloc.(base) shifted_addr
+                   ret (Z.leb (AddressValue.to_Z alloc.(base)) shifted_addr
                         && Z.leb
                              (Z.add shifted_addr sz)
-                             (Z.add (Z.add alloc.(base) alloc.(size)) sz)))
+                             (Z.add (Z.add (AddressValue.to_Z alloc.(base)) alloc.(size)) sz)))
             else
               ret true
           in
@@ -3044,7 +3039,7 @@ Module CheriMemory
                            | NoCollapse => ret tt
                            end))
                      ;;
-                     let c_value := C.cap_set_value c_value shifted_addr in
+                     let c_value := C.cap_set_value c_value (AddressValue.of_Z shifted_addr) in
                      ret (PV prov (PVconcrete c_value))
                    else
                      precond alloc_id1 >>=
@@ -3060,48 +3055,49 @@ Module CheriMemory
                                    end)
                           end)
                      ;;
-                     let c_value := C.cap_set_value c_value shifted_addr in
+                     let c_value := C.cap_set_value c_value (AddressValue.of_Z shifted_addr) in
                      ret (PV prov (PVconcrete c_value))
                | inl alloc_id =>
                    precond alloc_id >>=
                      (fun (function_parameter : bool) =>
                         match function_parameter with
                         | true =>
-                            let c_value := C.cap_set_value c_value shifted_addr in
+                            let c_value := C.cap_set_value c_value (AddressValue.of_Z shifted_addr) in
                             ret (PV prov (PVconcrete c_value))
                         | false => fail (MerrArrayShift loc)
                         end)
                end)
     | PV (Prov_some alloc_id) (PVconcrete c_value) =>
-        let shifted_addr := Z.add (C.cap_get_value c_value) offset in
+        let shifted_addr := Z.add (AddressValue.to_Z (C.cap_get_value c_value)) offset in
         if CoqSwitches.has_switch (CoqSwitches.SW_pointer_arith STRICT)
            || negb (CoqSwitches.has_switch (SW_pointer_arith PERMISSIVE))
         then
           get_allocation alloc_id >>=
             (fun (alloc : allocation) =>
-               if Z.leb alloc.(base) shifted_addr
+               if Z.leb (AddressValue.to_Z alloc.(base)) shifted_addr
                   && Z.leb (Z.add shifted_addr sz)
-                       (Z.add (Z.add alloc.(base) alloc.(size)) sz)
+                       (Z.add (Z.add (AddressValue.to_Z alloc.(base)) alloc.(size)) sz)
                then
-                 let c_value := C.cap_set_value c_value shifted_addr in
+                 let c_value := C.cap_set_value c_value (AddressValue.of_Z shifted_addr) in
                  ret (PV (Prov_some alloc_id) (PVconcrete c_value))
                else
-                 fail (MerrArrayShift loc))
+                 fail (MerrArrayShift loc)
+                  )
         else
-          let c_value := C.cap_set_value c_value shifted_addr in
+          let c_value := C.cap_set_value c_value (AddressValue.of_Z shifted_addr) in
           ret (PV (Prov_some alloc_id) (PVconcrete c_value))
     | PV Prov_none (PVconcrete c_value) =>
-        let shifted_addr := Z.add (C.cap_get_value c_value) offset in
+        let shifted_addr := Z.add (AddressValue.to_Z (C.cap_get_value c_value)) offset in
         if CoqSwitches.has_switch (CoqSwitches.SW_pointer_arith STRICT)
            || negb (CoqSwitches.has_switch (CoqSwitches.SW_pointer_arith PERMISSIVE))
         then
           fail (MerrOther "out-of-bound pointer arithmetic (Prov_none)")
         else
-          let c_value := C.cap_set_value c_value shifted_addr in
+          let c_value := C.cap_set_value c_value (AddressValue.of_Z shifted_addr) in
           ret (PV Prov_none (PVconcrete c_value))
     | PV Prov_device (PVconcrete c_value) =>
-        let shifted_addr := Z.add (C.cap_get_value c_value) offset in
-        let c_value := C.cap_set_value c_value shifted_addr in
+        let shifted_addr := Z.add (AddressValue.to_Z (C.cap_get_value c_value)) offset in
+        let c_value := C.cap_set_value c_value (AddressValue.of_Z shifted_addr) in
         ret (PV Prov_device (PVconcrete c_value))
     end.
 
@@ -3144,8 +3140,8 @@ Module CheriMemory
           then ret (PV prov (PVconcrete (C.cap_c0 tt)))
           else raise (InternalErr "CHERI.member_shift_ptrval, shifting NULL")
         else
-          let addr := C.cap_get_value c_value in
-          let c_value := C.cap_set_value c_value (Z.add addr offset) in
+          let addr := AddressValue.to_Z (C.cap_get_value c_value) in
+          let c_value := C.cap_set_value c_value (AddressValue.of_Z (Z.add addr offset)) in
           ret (PV prov (PVconcrete c_value))
     end.
 
@@ -3158,12 +3154,11 @@ Module CheriMemory
       match ptr with
       | PV _ (PVconcrete c_value)
       | PV _ (PVfunction (FP_invalid c_value)) =>
-          ret (C.cap_get_value c_value)
+          ret (AddressValue.to_Z (C.cap_get_value c_value))
       | _ => raise "memcpy: invalid pointer value"
       end in
     let size_n := num_of_int size_int in
     let loc := Loc_other "memcpy" in
-
     let fix copy_data (index: nat): memM pointer_value :=
       match index with
       | O => ret ptrval1
@@ -3178,7 +3173,6 @@ Module CheriMemory
     in
     let pointer_sizeof := IMP.get.(sizeof_pointer) in
     let npointer_sizeof := Z.to_nat pointer_sizeof in
-
     let fix copy_tags (index: nat): memM pointer_value :=
       let copy_tag (dst_p : pointer_value) (src_p : pointer_value)
         : memM unit :=
@@ -3264,7 +3258,7 @@ Module CheriMemory
         else
           fail (MerrWIP "realloc no provenance")
     | PV (Prov_some alloc_id) (PVconcrete c_value) =>
-        let addr := C.cap_get_value c_value in
+        let addr := (C.cap_get_value c_value) in
         is_dynamic addr >>=
           (fun (function_parameter : bool) =>
              match function_parameter with
@@ -3272,7 +3266,7 @@ Module CheriMemory
              | true =>
                  get_allocation alloc_id >>=
                    (fun (alloc : allocation) =>
-                      if MorelloAddr.eqb alloc.(base) addr then
+                      if Morello.AddressValue.eqb alloc.(base) addr then
                         allocate_region tid (CoqSymbol.PrefOther "realloc") align size >>=
                           (fun (new_ptr : pointer_value) =>
                              let size_to_copy :=
@@ -3595,7 +3589,7 @@ Module CheriMemory
       | O => raise (InternalErr "string too long")
       | S max_len =>
           cap_check loc c_value offset ReadIntent 1 ;;
-          let addr :=  Z.add (C.cap_get_value c_value) offset
+          let addr := Z.add (AddressValue.to_Z (C.cap_get_value c_value)) offset
           in
           get >>=
             (fun st =>
@@ -3632,7 +3626,7 @@ Module CheriMemory
               {| prov := Prov_none; copy_offset := None;
                                     value := Some "000" % char |}
             ] in
-        let addr := C.cap_get_value c_value in
+        let addr := AddressValue.to_Z (C.cap_get_value c_value) in
         let bs :=
           mapi
             (fun (i_value : nat) (b_value : AbsByte) =>
@@ -3728,8 +3722,8 @@ Module CheriMemory
                  ;;
                  match upper_val with
                  | MVinteger CoqCtype.Size_t (IV n_value) =>
-                     let x' := C.cap_get_value c_value in
-                     let c_value := C.cap_narrow_bounds c_value (x', (Z.add x' n_value))
+                     let x' := AddressValue.to_Z (C.cap_get_value c_value) in
+                     let c_value := C.cap_narrow_bounds c_value (Bounds.of_Zs (x', (Z.add x' n_value)))
                      in ret (Some (update_cap_in_mem_value cap_val c_value))
                  | _ =>
                      fail
@@ -3764,7 +3758,7 @@ Module CheriMemory
                        sz <- serr2memM (sizeof DEFAULT_FUEL None (CoqCtype.Ctype nil(CoqCtype.Basic (CoqCtype.Integer ity)))) ;;
                        bytes_value <- serr2memM (bytes_of_Z iss (Z.to_nat sz) n_value) ;;
                        let bits := bool_bits_of_bytes bytes_value in
-                       match MorelloPermission.of_list bits with
+                       match Morello.Permissions.of_list bits with
                        | None =>
                            fail
                              (MerrOther
@@ -3815,7 +3809,7 @@ Module CheriMemory
                                "CHERI.call_intrinsic: non-cap 1st argument in: '"
                                (String.append name "'")))
                    | Some (_, c_value) =>
-                       let v_value := C.cap_get_value c_value in
+                       let v_value := AddressValue.to_Z (C.cap_get_value c_value) in
                        ret (Some (MVinteger CoqCtype.Vaddr_t (IV v_value)))
                    end)
             else
@@ -3834,7 +3828,7 @@ Module CheriMemory
                          if (C.get_ghost_state c_value).(bounds_unspecified)
                          then ret (Some (MVunspecified (CoqCtype.vaddr_t tt)))
                          else
-                           let v_value := fst (C.cap_get_bounds c_value)
+                           let v_value := fst (Bounds.to_Zs (C.cap_get_bounds c_value))
                            in ret (Some (MVinteger CoqCtype.Vaddr_t (IV v_value)))
                      end)
               else
@@ -3854,7 +3848,7 @@ Module CheriMemory
                            if (C.get_ghost_state c_value).(bounds_unspecified)
                            then ret (Some (MVunspecified CoqCtype.size_t))
                            else
-                             let '(base, limit) := C.cap_get_bounds c_value in
+                             let '(base, limit) := Bounds.to_Zs (C.cap_get_bounds c_value) in
                              let v_value := Z.sub limit base in
                              ret (Some (MVinteger CoqCtype.Size_t (IV v_value)))
                        end)
@@ -4187,4 +4181,3 @@ Module CheriMemory
 End CheriMemory.
 
 
-(* Module MorelloMemory := CheriMemory(MorelloCapability)(MorelloImpl). *)

@@ -27,78 +27,14 @@ open Morello
 
 module M = struct
   include MorelloCapabilityWithStrfcap
+  include TestCaps
+  
+  let cap_1 : t = TestCaps.c1
+  let cap_1_bytes = TestCaps.c1_bytes
+  let cap_2 : t = TestCaps.c2
+  let cap_2_bytes = TestCaps.c2_bytes
+  let cap_3_bytes = TestCaps.c3_bytes
 
-  (* C1 corresponds to https://www.morello-project.org/capinfo?c=0x1%3A900000007F1CFF15%3A00000000FFFFFF15 *)
-  let c1_bytes =
-    List.map char_of_int [0x15;0xff;0xff;0xff;0;0;0;0;0x15;0xff;0x1c;0x7f;0;0;0;0x90]
-
-  let cap_1 : t =
-    {
-      valid = true;
-      value = Z.of_string "0x000000000ffffff15";
-      obj_type = Z.of_string "0";
-      bounds = (Z.of_string "0x00000000ffffff15", Z.of_string "0x000000000ffffff1c");
-      flags = [false; false; false; false; false; false; false; false];
-      perms =
-        {
-          global = false;
-          executive = false;
-          permits_load = true;
-          permits_store = false;
-          permits_execute = false;
-          permits_load_cap = true;
-          permits_store_cap = false;
-          permits_store_local_cap = false;
-          permits_seal = false;
-          permits_unseal = false;
-          permits_system_access = false;
-          permits_ccall = false;
-          permit_compartment_id = false;
-          permit_mutable_load = false;
-
-          user_perms = [false; false; false; false]
-        };
-      ghost_state = coq_Default_CapGhostState
-    }
-
-  let cap_2 : t =
-    {
-      valid = true;
-      value = Z.of_string "0xffffe6ec";
-      obj_type = Z.of_string "0";
-      bounds = (Z.of_string "0xffffe6ec", Z.of_string "0xffffe6f4");
-      flags = [false; false; false; false; false; false; false; false];
-      perms =
-        {
-          global = false;
-          executive = false;
-          permits_load = true;
-          permits_store = true;
-          permits_execute = false;
-          permits_load_cap = true;
-          permits_store_cap = true;
-          permits_store_local_cap = false;
-          permits_seal = false;
-          permits_unseal = false;
-          permits_system_access = false;
-          permits_ccall = false;
-          permit_compartment_id = false;
-          permit_mutable_load = false;
-
-          user_perms = [false; false; false; false]
-        };
-      ghost_state = coq_Default_CapGhostState
-    }
-
-  (* C2 corresponds to https://www.morello-project.org/capinfo?c=1dc00000066f4e6ec00000000ffffe6ec *)
-  let c2_bytes =
-    List.map char_of_int (List.rev [0xd8;0x00;0x00;0x00;0x66;0xf4;0xe6;0xec;0x00;0x00;0x00;0x00;0xff;0xff;0xe6;0xec])
-
-  (* C3 corresponds to https://www.morello-project.org/capinfo?c=1dc00000066d4e6d02a000000ffffe6d0 *)
-  let c3_bytes =
-    List.map char_of_int [208;230;255;255;0;0;0;42;208;230;212;102;0;0;0;220]
-
-  (* re-define compare function to do deep comparison *)
   let deep_eqb a b =
     get_ghost_state a = get_ghost_state b
     && cap_is_valid a = cap_is_valid b
@@ -109,7 +45,6 @@ module M = struct
     && cap_get_seal a = cap_get_seal b
     && cap_get_flags a = cap_get_flags b
     && cap_get_perms a = cap_get_perms b
-
 end
 
 let str_of_bool b =
@@ -189,7 +124,8 @@ let tests = "coq_morello_caps" >::: [
       );
 
       "encode C1 bytes" >:: (fun _ ->
-        let expected_bytes = M.c1_bytes in
+        (* C1 corresponds to https://www.morello-project.org/capinfo?c=0x1%3A900000007F1CFF15%3A00000000FFFFFF15 *)
+        let expected_bytes = M.cap_1_bytes in
         match M.encode true M.cap_1 with
         | None -> assert_failure "encode failed"
         | Some (actual_bytes, t) ->
@@ -231,8 +167,9 @@ let tests = "coq_morello_caps" >::: [
       );
 
       "decode/strfcap/perm C1" >:: (fun _ ->
-        let bytes_ = M.c1_bytes in
-        match M.decode bytes_ true with 
+        (* C1 corresponds to https://www.morello-project.org/capinfo?c=0x1%3A900000007F1CFF15%3A00000000FFFFFF15 *)
+        let bytes_ = M.cap_1_bytes in 
+        match M.decode bytes_ true with
         | None -> assert_failure "decode failed"
         | Some c -> 
           match M.strfcap "%P" c with 
@@ -748,7 +685,7 @@ let tests = "coq_morello_caps" >::: [
         | Some c ->
            assert_equal
              ~printer:string_of_bool_list
-             [false; false; true; false; true; false; true; false]
+             (List.rev [false; false; true; false; true; false; true; false])
              (M.cap_get_flags c)
       );
 

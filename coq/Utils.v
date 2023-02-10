@@ -23,11 +23,16 @@ Local Open Scope string_scope.
 Local Open Scope Z_scope.
 Local Open Scope bool_scope.
 
+Definition debugging : bool := false.
+
 (* this definiton will be remapped on extractoin to OCaml's print_endline *)
 Definition print_msg (msg : string) : unit := tt.
 
 Definition sprint_msg (msg : string) : serr unit :=
-  ret (print_msg msg).
+  if debugging then 
+    ret (print_msg msg)
+  else 
+    ret tt.
 
 Fixpoint list_init {A:Type} (n:nat) (f:nat -> A): list A
   :=
@@ -239,6 +244,14 @@ Definition Z_integerDiv_t := Z.div.
 Definition float_of_bits (_:Z): float := PrimFloat.zero. (* TODO: implement *)
 
 Definition bits_of_float (_:float) : Z := Z.zero. (* TODO: implement *)
+
+Fixpoint List_bool_eqb (l1:list bool) (l2:list bool) : bool := 
+  match (l1,l2) with
+    ([],[]) => true 
+  | ([],_) => false 
+  | (_,[]) => false 
+  | (h1::t1,h2::t2) => (Bool.eqb h1 h2) && List_bool_eqb t1 t2
+  end.
 
 Definition string_of_bool (b:bool) :=
   match b with

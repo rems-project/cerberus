@@ -14,11 +14,12 @@ Build instructions for the CLI
 
 To build Cerberus, you need opam (>= 2.0.0, see [here](https://opam.ocaml.org/doc/Install.html) to install) and OCaml (>= 4.13.0).
 
-First set up additional repositories for Coq packages:
+First set up additional repositories for Coq and Iris packages:
 
 ```bash
 opam repo add --this-switch coq-released https://coq.inria.fr/opam/released
 opam pin -n coq-struct-tact https://github.com/uwplse/StructTact.git
+opam repo add --this-switch iris-dev https://gitlab.mpi-sws.org/iris/opam.git
 ```
 
 Sail coq libraries needs to be pinned manually. To do so:
@@ -30,7 +31,7 @@ cd lib/coq
 opam install .
 ```
 
-Then, install the dependencies (including `lem` and `menhir`) using opam:
+`cd` back to the root of `cerberus` and install the remaining dependencies (including `lem` and `menhir`) using opam:
 
 ```bash
 $ opam install --deps-only .
