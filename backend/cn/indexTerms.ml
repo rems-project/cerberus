@@ -195,8 +195,10 @@ let pp ?(atomic=false) =
           mparens (aux true t1 ^^ colon ^^ colon ^^ aux true t2)
        | List its ->
           mparens (brackets (separate_map (comma ^^ space) (aux false) its))
-       | NthList (n, t) ->
-          mparens (aux true t ^^ brackets !^(string_of_int n))
+       | NthList (n, xs, d) ->
+          c_app !^"nth_list" [aux false n; aux false xs; aux false d]
+       | ArrayToList (arr, i, len) ->
+          c_app !^"array_to_list" [aux false arr; aux false i; aux false len]
        end
     | Set_op set_op ->
        begin match set_op with
@@ -309,7 +311,8 @@ and free_vars_list_op = function
   | List ts -> free_vars_list ts
   | Head t -> free_vars t
   | Tail t -> free_vars t
-  | NthList (_i, t) -> free_vars t
+  | NthList (i, xs, d) -> free_vars_list [i; xs; d]
+  | ArrayToList (arr, i, len) -> free_vars_list [arr; i; len]
 
 and free_vars_set_op = function
   | SetMember (t1, t2) -> free_vars_list [t1; t2]
@@ -437,7 +440,8 @@ and fold_list_op f binders acc = function
   | List ts -> fold_list f binders acc ts
   | Head t -> fold f binders acc t
   | Tail t -> fold f binders acc t
-  | NthList (_i, t) -> fold f binders acc t
+  | NthList (i, xs, d) -> fold_list f binders acc [i; xs; d]
+  | ArrayToList (arr, i, len) -> fold_list f binders acc [arr; i; len]
 
 and fold_set_op f binders acc = function
   | SetMember (t1, t2) -> fold_list f binders acc [t1; t2]
@@ -648,7 +652,8 @@ let rec subst (su : typed subst) (IT (it, bt)) =
        | List its -> List (map (subst su) its)
        | Head it -> Head (subst su it)
        | Tail it -> Tail (subst su it)
-       | NthList (i, it) -> NthList (i, subst su it)
+       | NthList (i, xs, d) -> NthList (subst su i, subst su xs, subst su d)
+       | ArrayToList (arr, i, len) -> ArrayToList (subst su arr, subst su i, subst su len)
      in
      IT (List_op list_op, bt)
   | Set_op set_op ->
@@ -974,7 +979,8 @@ let cons_ (it, it') = IT (List_op (Cons (it, it')), bt it')
 let list_ ~item_bt its = IT (List_op (List its), BT.List item_bt)
 let head_ ~item_bt it = IT (List_op (Head it), item_bt)
 let tail_ it = IT (List_op (Tail it), bt it)
-let nthList_ ~item_bt (n, it) = IT (List_op (NthList (n, it)), item_bt)
+let nthList_ (n, it, d) = IT (List_op (NthList (n, it, d)), bt d)
+let array_to_list_ (arr, i, len) bt = IT (List_op (ArrayToList (arr, i, len)), bt)
 
 (* set_op *)
 let setMember_ bt (it, it') = IT (Set_op (SetMember (it, it')), BT.Bool)

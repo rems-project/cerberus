@@ -77,7 +77,8 @@ and 'bt list_op =
   | List of 'bt term list
   | Head of 'bt term
   | Tail of 'bt term
-  | NthList of int * 'bt term
+  | NthList of 'bt term * 'bt term * 'bt term
+  | ArrayToList of 'bt term * 'bt term * 'bt term
 
 and 'bt set_op = 
   | SetMember of 'bt term * 'bt term

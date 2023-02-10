@@ -534,10 +534,18 @@ module WIT = struct
               let@ t = infer loc ~context t in
               let@ bt = ensure_list_type loc context t in
               return (BT.List bt, Tail t)
-           | NthList (i, t) ->
-              let@ t = infer loc ~context t in
-              let@ bt = ensure_list_type loc context t in
-              return (bt, NthList (i, t))
+           | NthList (i, xs, d) ->
+              let@ i = check loc ~context Integer i in
+              let@ xs = infer loc ~context xs in
+              let@ bt = ensure_list_type loc context xs in
+              let@ d = check loc ~context bt d in
+              return (bt, NthList (i, xs, d))
+           | ArrayToList (arr, i, len) ->
+              let@ i = check loc ~context Integer i in
+              let@ len = check loc ~context Integer len in
+              let@ arr = infer loc ~context arr in
+              let@ (_, bt) = ensure_map_type loc context arr in
+              return (BT.List bt, ArrayToList (arr, i, len))
          in
          return (IT (List_op list_op, bt))
       | Set_op set_op ->

@@ -15,6 +15,12 @@ let mk_arg2 mk loc = function
   | [x; y] -> return (mk (x, y))
   | xs -> fail {loc; msg = Number_arguments {has = List.length xs; expect = 2}}
 
+let mk_arg3_err mk loc = function
+  | [x; y; z] -> mk loc (x, y, z)
+  | xs -> fail {loc; msg = Number_arguments {has = List.length xs; expect = 3}}
+
+let mk_arg3 mk = mk_arg3_err (fun loc tup -> return (mk tup))
+
 
 let mul_uf_def = (Sym.fresh_named "mul_uf", mk_arg2 mul_no_smt_)
 let div_uf_def = (Sym.fresh_named "div_uf", mk_arg2 div_no_smt_)
@@ -28,6 +34,13 @@ let rem_def = (Sym.fresh_named "rem", mk_arg2 rem_)
 let mod_def = (Sym.fresh_named "mod", mk_arg2 mod_)
 
 let not_def = (Sym.fresh_named "not", mk_arg1 not_)
+
+let nth_list_def = (Sym.fresh_named "nth_list", mk_arg3 nthList_)
+let array_to_list_def = (Sym.fresh_named "array_to_list", mk_arg3_err
+  (fun loc (arr, i, len) -> match BT.is_map_bt (IT.bt arr) with
+    | None -> fail {loc; msg = Illtyped_it' {it = arr; has = IT.bt arr; expected = "map"}}
+    | Some (_, bt) -> return (array_to_list_ (arr, i, len) bt)
+  ))
 
 let builtin_funs = 
   List.map (fun (s, mk) -> (Sym.pp_string s, mk)) [
@@ -43,6 +56,9 @@ let builtin_funs =
       mod_def;
 
       not_def;
+
+      nth_list_def;
+      array_to_list_def;
     ]
 
 let apply_builtin_funs loc nm args =
