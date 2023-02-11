@@ -374,6 +374,40 @@ let get_logical_predicate_def loc id global =
      fail {loc; msg = Unknown_logical_predicate {id = Sym.fresh_named id; resource}}
 
 
+(* mostly copied from compilePredicates *)
+let resolve_is_shape global loc x shape_expr =
+  let rec f x = function
+    | DatatypeCons (nm, exprs) ->
+        let@ (c_sym, cons_info) = match lookup_sym_map_by_string "constructors" nm
+            global.Global.datatype_constrs
+        with
+          | None -> fail {loc; msg = Unknown_datatype_constr (Sym.fresh_named nm)}
+          | Some r -> return r
+        in
+        let m1 = IT.datatype_is_cons_ c_sym x in
+        let nm_map = List.map (fun (s, bt) -> (todo_string_of_sym s, (s, bt))) cons_info.c_params in
+        let memb nm =
+            let@ (sym, bt) = match List.assoc_opt String.equal nm nm_map with
+                | Some x -> return x
+                | None -> fail {loc; msg = Generic
+                    (Pp.string ("Unknown field of " ^ Sym.pp_string cons_info.c_datatype_tag
+                        ^ ": " ^ nm))}
+            in
+            return (IT.datatype_member_ x sym bt)
+        in
+        let@ xs = ListM.mapM (fun (nm, shape) ->
+            let@ x = memb nm in
+            f x shape) exprs in
+        return (m1 :: List.concat xs)
+    | _ ->
+    fail {loc; msg = Generic (Pp.string "rhs of ?? operation can only specify shape"
+        (* FIXME: convert the dtree of the shape expr to something pp-able *))}
+  in
+  let@ xs = f x shape_expr in
+  return (IT.and3_ xs)
+
+
+
 
 
 
@@ -582,8 +616,22 @@ let resolve_index_term loc
                fail {loc; msg = Generic err}
           in
           return (IT (Record_op (RecordMember (st, member)), bt), None)
-(* FIXME: add datatype case here *)
-       | _ -> fail {loc; msg = Generic (ppf () ^^^ !^"is not a struct")}
+       | Datatype dt_tag ->
+          let info = SymMap.find dt_tag global.Global.datatypes in
+          let members' = List.map (fun (s, bt) -> (todo_string_of_sym s, (s, bt)))
+              info.BT.dt_all_params in
+          let@ (member_sym, bt) = match List.assoc_opt String.equal (Id.s member) members' with
+            | Some (s, bt) ->
+               return (s, bt)
+            | None ->
+               let err =
+                 !^"Illtyped index term" ^^^ ppf () ^^ dot ^^^
+                   ppf () ^^^ !^"datatype does not have member" ^^^ Id.pp member
+               in
+               fail {loc; msg = Generic err}
+          in
+          return (IT.datatype_member_ st member_sym bt, None)
+       | bt -> fail {loc; msg = Generic (ppf () ^^^ !^"is not a type with members:" ^^^ BT.pp bt)}
        end
     | StructUpdate ((t, m), v) ->
        let@ (t, osct) = resolve t mapping quantifiers in
@@ -696,6 +744,10 @@ let resolve_index_term loc
            return (nm, t)) mems
        in
        return (datatype_cons_ sym info.c_datatype_tag mems, None)
+    | IsShape (t, shape) ->
+       let@ (t, _) = resolve t mapping quantifiers in
+       let@ p = resolve_is_shape global loc t shape in
+       return (p, None)
     | App (t1, t2) ->
        let@ (it1, _) = resolve t1 mapping quantifiers in
        let@ (it2, _) = resolve t2 mapping quantifiers in

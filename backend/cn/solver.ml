@@ -232,7 +232,7 @@ module Translate = struct
       let sym = symbol context nm in
       let is_sym = dt_recog_name context nm in
       Z3Symbol_Table.add z3sym_table sym (DatatypeConsFunc {nm});
-      Z3Symbol_Table.add z3sym_table is_sym (DatatypeConsRecogFunc {nm});
+      (* Z3Symbol_Table.add z3sym_table is_sym (DatatypeConsRecogFunc {nm}); *)
       List.iter (fun (nm, bt) -> Z3Symbol_Table.add z3sym_table
           (symbol context nm) (DatatypeAccFunc {nm; dt = dt_nm; bt})) info.c_params;
       Z3.Datatype.mk_constructor context sym is_sym
@@ -251,7 +251,6 @@ module Translate = struct
             BT_Table.add bt_table (BT.Datatype nm) sort;
             Sort_Table.add sort_table sort (BT.Datatype nm);
         end) to_translate sorts
-
 
   let sort : Z3.context -> Global.t -> BT.t -> sort =
 
@@ -536,8 +535,13 @@ module Translate = struct
          | DatatypeIsCons (c_nm, t) ->
            (* ensure datatype added *)
            let dt_sort = sort (IT.bt t) in
-           apply_matching_func (DatatypeConsRecogFunc {nm = c_nm})
-               (Z3.Datatype.get_recognizers dt_sort) [term t]
+           let recogs = Z3.Datatype.get_recognizers dt_sort in
+           (* something's funny with these recognizers. assume in same order as constructors *)
+           let dt_nm = Option.get (BT.is_datatype_bt (IT.bt t)) in
+           let info = SymMap.find dt_nm global.datatypes in
+           let assocs = List.map2 (fun c_nm fd -> (c_nm, fd)) info.dt_constrs recogs in
+           let fd = List.assoc Sym.equal c_nm assocs in
+           Z3.FuncDecl.apply fd [term t]
          end
       | Pointer_op pointer_op -> 
          let open Z3.Arithmetic in

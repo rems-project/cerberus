@@ -10,16 +10,16 @@ predicate {integer len} List (pointer p) {
     return { len = 0 };
   }
   else {
-    let point = Owned<struct node>(p);
-    let r = List (point.value.next);
-    return { len = r.len + 1 };
+    let Point = Owned<struct node>(p);
+    let R = List (Point.value.next);
+    return { len = R.len + 1 };
   }
 }
 
 #define NULL ((void *)0)
 
-[[cn::requires("List(p)")]]
-[[cn::ensures("List(return)")]]
+[[cn::requires("let R = List(p)")]]
+[[cn::ensures("let R2 = List(return)")]]
 struct node *
 rev_list (struct node *p) {
   struct node *rev = NULL;
@@ -28,8 +28,8 @@ rev_list (struct node *p) {
   /* FIXME: apparently we need to initialise all loop vars */
   p2 = NULL;
   pack List(NULL);
-  [[cn::inv("List(p)")]]
-  [[cn::inv("List(rev)")]]
+  [[cn::inv("let R = List(p)")]]
+  [[cn::inv("let R2 = List(rev)")]]
   while (p) {
     unpack List(p);
     p2 = p->next;

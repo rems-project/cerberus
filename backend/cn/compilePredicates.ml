@@ -93,6 +93,9 @@ let mk_translate_binop loc bop (e1, e2) =
         return and2_
     | CN_map_get, _ ->
         return (fun (x, y) -> map_get_ x y)
+    | CN_is_shape,_ ->
+        (* should be handled separately *)
+        assert false
     | _ ->
         let open Pp in
         fail {loc; msg = Generic (!^ "mk_translate_binop: types:" ^^^
@@ -184,7 +187,32 @@ let translate_member_access loc env t member =
      fail {loc; msg = Illtyped_it' {it = t; has; expected = "struct"}}
 
 
-
+let translate_is_shape env loc x shape_expr =
+  let rec f x = function
+    | CNExpr (loc2, CNExpr_cons (c_nm, exprs)) ->
+        let@ cons_info = Env.lookup_constr loc c_nm env in
+        let@ (_, mem_syms) = Env.lookup_datatype loc cons_info.c_datatype_tag env in
+        let m1 = IT.datatype_is_cons_ c_nm x in
+        let memb nm =
+            let@ sym = match Env.Y.find_opt (Id.s nm) mem_syms with
+                | Some sym -> return sym
+                | None -> fail {loc = loc2; msg = Generic
+                    (Pp.string ("Unknown field of " ^ Sym.pp_string cons_info.c_datatype_tag
+                        ^ ": " ^ Id.s nm))}
+            in
+            let bt = List.assoc Sym.equal sym cons_info.c_params in
+            return (IT.datatype_member_ x sym bt)
+        in
+        let@ xs = ListM.mapM (fun (nm, shape) ->
+            let@ x = memb nm in
+            f x shape) exprs in
+        return (m1 :: List.concat xs)
+    | _ ->
+    fail {loc; msg = Generic (Pp.string "rhs of ?? operation can only specify shape"
+        (* FIXME: convert the dtree of the shape expr to something pp-able *))}
+  in
+  let@ xs = f x shape_expr in
+  return (IT.and3_ xs)
 
 let translate_cn_expr (env: Env.t) expr =
   let open IndexTerms in
@@ -237,6 +265,9 @@ let translate_cn_expr (env: Env.t) expr =
       | CNExpr_memberof (e, xs) ->
          let@ e = self e in
          translate_member_access loc env e xs
+      | CNExpr_binop (CN_sub, e1_, (CNExpr (_, CNExpr_cons _) as shape)) ->
+          let@ e1 = self e1_ in
+          translate_is_shape env loc e1 shape
       | CNExpr_binop (bop, e1_, e2_) ->
           let@ e1 = self e1_ in
           let@ e2 = self e2_ in

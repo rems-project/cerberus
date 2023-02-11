@@ -241,6 +241,8 @@ term:
       { Ast.App (a1, a2) } 
   | predicate = LNAME arguments = args
       { Ast.Pred (predicate, arguments) }
+  | a1=atomic_term QUESTION QUESTION a2=atomic_term
+      { Ast.IsShape (a1, a2) }
 
 
 

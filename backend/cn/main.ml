@@ -127,6 +127,7 @@ let main
       no_timestamps
       json 
       state_file 
+      diag
       lemmata
       no_reorder_points
       no_additional_sat_check
@@ -152,6 +153,7 @@ let main
   ResourceInference.additional_sat_check := not no_additional_sat_check;
   Check.InferenceEqs.use_model_eqs := not no_model_eqs;
   Check.only := only;
+  Diagnostics.diag_string := diag;
   check_input_file filename;
   Pp.progress_simple "pre-processing" "translating C code";
   begin match frontend incl_dirs astprints filename state_file with
@@ -171,8 +173,7 @@ let main
          |> Context.add_predicates pred_defs in
        let result = 
          Pp.progress_simple "pre-processing" "translating specifications";
-         let opts = Retype.{ drop_labels = Option.is_some lemmata } in
-         let@ file = Retype.retype_file ctxt opts file in
+         let@ file = Retype.retype_file ctxt file in
          begin match lemmata with
            | Some mode -> Lemmata.generate ctxt mode file
            | None -> Typing.run ctxt (Check.check file)
@@ -234,6 +235,10 @@ let state_file =
   let doc = "file in which to output the state" in
   Arg.(value & opt (some string) None & info ["state-file"] ~docv:"FILE" ~doc)
 
+let diag =
+  let doc = "explore branching diagnostics with key string" in
+  Arg.(value & opt (some string) None & info ["diag"] ~doc)
+
 let lemmata =
   let doc = "lemmata generation mode (target filename)" in
   Arg.(value & opt (some string) None & info ["lemmata"] ~docv:"FILE" ~doc)
@@ -286,6 +291,7 @@ let () =
       no_timestamps $
       json $
       state_file $
+      diag $
       lemmata $
       no_reorder_points $
       no_additional_sat_check $

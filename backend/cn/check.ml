@@ -1793,8 +1793,7 @@ let record_and_wf_check_functions funinfo =
 
 
 
-let check_function fsym fn =
-  let@ (loc, ftyp, trusted) = get_fun_decl Locations.unknown fsym in
+let check_function fsym fn (loc, ftyp, trusted) =
   let start = time_log_start "function" (CF.Pp_symbol.to_string fsym) in
   let@ () = match trusted, fn with
     | Trusted _, _ -> 
@@ -1811,16 +1810,18 @@ let check_function fsym fn =
   return ()
 
 let check_c_functions funs =
+  let@ global = get_global () in
   let number_entries = List.length (Pmap.bindings_list funs) in
-  let ping = Pp.progress "checking function" number_entries in
+  let ping = Pp.progress "function" number_entries in
   PmapM.iterM (fun fsym fn ->
-      match !only with
-      | Some fname when not (String.equal fname (Sym.pp_string fsym)) ->
+      match !only, Global.get_fun_decl global fsym with
+      | Some fname, _ when not (String.equal fname (Sym.pp_string fsym)) ->
          return ()
-      | _ ->
-      let@ () = return (ping (Sym.pp_string fsym)) in
-      let@ () = check_function fsym fn in
-      return ()
+      | _, None ->
+         return (ping (Sym.pp_string fsym ^ " (skipped built-in function)"))
+      | _, Some decl ->
+         let@ () = return (ping (Sym.pp_string fsym)) in
+         check_function fsym fn decl
     ) funs 
 
 

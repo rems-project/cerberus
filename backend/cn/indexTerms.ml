@@ -791,6 +791,9 @@ let and_ its = IT (Bool_op (And its), BT.Bool)
 let and2_ (it, it') = match is_and it' with
   | None -> and_ [it; it']
   | Some its -> and_ (it :: its)
+let and3_ its = match its with
+  | [it] -> it
+  | _ -> and_ its
 let or_ its = IT (Bool_op (Or its), BT.Bool)
 let or2_ (it, it') = match is_or it' with
   | None -> or_ [it; it']
@@ -808,6 +811,12 @@ let eq__ it it' = eq_ (it, it')
 let ne_ (it, it') = not_ (eq_ (it, it'))
 let ne__ it it' = ne_ (it, it')
 
+let disperse_not_ it =
+  match term it with
+  | Bool_op (And xs) -> or_ (List.map not_ xs)
+  | Bool_op (Or xs) -> and_ (List.map not_ xs)
+  | Bool_op (Impl (x, y)) -> and_ [x; not_ y]
+  | _ -> not_ it
 
 
 let eachI_ (i1, s, i2) t = IT (Bool_op (EachI ((i1, s, i2), t)), BT.Bool)
@@ -888,6 +897,9 @@ let datatype_cons_ nm dt_tag members =
 
 let datatype_is_cons_ nm t =
   IT (Datatype_op (DatatypeIsCons (nm, t)), BT.Bool)
+
+let datatype_member_ t nm bt =
+  IT (Datatype_op (DatatypeMember (t, nm)), bt)
 
 
 (* pointer_op *)

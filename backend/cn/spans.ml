@@ -337,6 +337,10 @@ let intersection_action m g ((orig_req, req), req_span) ((orig_res, res), res_sp
   let target_owned_pt = match target_pt, target_res with
     | {name = Owned _; _}, _ -> target_pt
     | _, (_, RET.P ({name = Owned _; _} as pt)) -> pt
+    | _, (p, (RET.Q ({name = Owned _; _}) as q)) ->
+        Pp.debug 5 (lazy (Pp.item "span limitation: resource predicate containing quantified array"
+          (Pp.list RET.pp [p; q])));
+        raise NoResult
     | _ -> assert false
   in
   let (target_lb, target_ub_inclusive, target_perm) = match target_owned_pt with

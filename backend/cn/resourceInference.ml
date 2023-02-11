@@ -277,6 +277,7 @@ module General = struct
            let@ model = model () in
            let@ global = get_global () in
            debug_constraint_failure_diagnostics 6 model global simp_ctxt c;
+           let@ () = Diagnostics.investigate model c in
            fail_with_trace (fun trace -> fun ctxt ->
                   let ctxt = { ctxt with resources = original_resources } in
                   {loc; msg = Unproven_constraint {constr = c; info; ctxt; model; trace}}
