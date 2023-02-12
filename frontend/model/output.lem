@@ -954,7 +954,11 @@ let rec store_chars_in_array zero_terminated ptrval = function
           (Mem.integer_ival (Decode.decode_character_constant (Decode.escaped_char c))) in
       (* TODO: maybe needs to be unsigned char *)
       Mem.store (Loc.other "store_chars_in_array()") Ctype.char false ptrval c_mval >>= fun _ ->
-      let ptrval' = Mem.array_shift_ptrval ptrval Ctype.char (Mem.integer_ival 1) in
+      begin if Global.is_CHERI () then
+        Mem.eff_array_shift_ptrval (Loc.other "store_chars_in_array()") ptrval Ctype.char (Mem.integer_ival 1)
+      else
+        Mem.return (Mem.array_shift_ptrval ptrval Ctype.char (Mem.integer_ival 1))
+      end >>= fun ptrval' ->
       store_chars_in_array zero_terminated ptrval' cs
 end
 
