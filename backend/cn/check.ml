@@ -1110,7 +1110,7 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
         check_pexpr ~expect:Loc pe (fun arg ->
         let@ _ = 
           RI.Special.predicate_request ~recursive:true loc (Access Kill) ({
-            name = Owned ct;
+            name = Block ct;
             pointer = arg;
             permission = bool_ true;
             iargs = [];
