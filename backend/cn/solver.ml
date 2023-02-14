@@ -157,6 +157,7 @@ module Translate = struct
     | DatatypeConsFunc of { nm: Sym.t }
     | DatatypeConsRecogFunc of { nm: Sym.t }
     | DatatypeAccFunc of { nm: Sym.t; dt: Sym.t; bt: BT.t }
+    | UninterpretedVal of { nm : Sym.t }
   [@@deriving eq]
 
 
@@ -196,11 +197,14 @@ module Translate = struct
       | BT.Struct nm -> !^ "struct_" ^^ Sym.pp nm
       | BT.Datatype nm -> !^ "datatype_" ^^ Sym.pp nm
       | BT.Tuple _ -> !^ "tuple_" ^^ Pp.int (bt_id bt)
+      | BT.List _ -> !^ "list_" ^^ Pp.int (bt_id bt)
       | BT.Record mems -> !^ "rec_" ^^
           Pp.flow_map (!^ "_") (fun (nm, _) -> Sym.pp nm) mems ^^ !^ "_" ^^ Pp.int (bt_id bt)
       | _ -> BT.pp bt
 
   let bt_name bt = Pp.plain (bt_pp_name bt)
+
+  let bt_suffix_name nm bt = Pp.plain (!^ nm ^^ !^ "_" ^^ bt_pp_name bt)
 
   let tuple_field_name bts i = 
     bt_name (Tuple bts) ^ string_of_int i
@@ -268,7 +272,8 @@ module Translate = struct
            (string (bt_name Loc))
            [string "loc_to_integer"] 
            [sort BT.Integer]
-      | List bt -> Z3.Z3List.mk_sort context (string (bt_name bt)) (sort bt) 
+      | List bt -> (* lists are represented as uninterpreted sorts *)
+        Z3.Sort.mk_uninterpreted_s context (bt_name (List bt))
       | Set bt -> Z3.Set.mk_sort context (sort bt)
       | Map (abt, rbt) -> Z3.Z3Array.mk_sort context (sort abt) (sort rbt)
       | Tuple bts ->
@@ -562,8 +567,23 @@ module Translate = struct
          | ArrayOffset (ct, t) -> 
             term (mul_ (int_ (Memory.size_of_ctype ct), t))
          end
-      | List_op t -> 
-         Debug_ocaml.error "todo: SMT mapping for list operations"
+      | List_op list_op -> begin match list_op with
+         | NthList (i, xs, d) ->
+            let args = List.map term [i; xs; d] in
+            let nm = bt_suffix_name "nth_list" bt in
+            let fdec = Z3.FuncDecl.mk_func_decl_s context nm
+                (List.map sort (List.map IT.bt [i; xs; d])) (sort bt) in
+            Z3.FuncDecl.apply fdec args
+         | ArrayToList (arr, i, len) ->
+            let args = List.map term [arr; i; len] in
+            let list_bt = Option.get (BT.is_list_bt bt) in
+            let nm = bt_suffix_name "array_to_list" list_bt in
+            let fdec = Z3.FuncDecl.mk_func_decl_s context nm
+                (List.map sort (List.map IT.bt [arr; i; len])) (sort bt) in
+            Z3.FuncDecl.apply fdec args
+         | _ ->
+            Debug_ocaml.error "todo: SMT mapping for list operations"
+         end
       | Set_op set_op -> 
          let open Z3.Set in
          begin match set_op with
@@ -669,6 +689,12 @@ module Translate = struct
             | _ -> acc
           ) assumptions []
       ) qs
+
+
+  let extra_logical_facts constraints =
+    let ts = List.filter_map (function | LC.T t -> Some t | _ -> None) constraints in
+    IT.nth_array_to_list_facts ts
+
 
 end
 
@@ -794,7 +820,8 @@ let provable ~loc ~solver ~global ~assumptions ~simp_ctxt ~pointer_facts lc =
      let nlc = Z3.Boolean.mk_not context expr in
      let assumptions = 
        List.map (Translate.term context global) 
-         (pointer_facts @ Translate.extra_assumptions assumptions qs) in
+         (pointer_facts @ Translate.extra_assumptions assumptions qs @
+               Translate.extra_logical_facts (lc :: LCSet.elements assumptions)) in
      let res = 
        time_f_logs loc 5 "Z3(inc)"
          (Z3.Solver.check solver.incremental) 
@@ -988,6 +1015,7 @@ module Eval = struct
       | () ->
         let func_decl = Z3.Expr.get_func_decl expr in
         let func_name = Z3.FuncDecl.get_name func_decl in
+        let expr_bt = z3_sort (Z3.Expr.get_sort expr) in
         match () with
 
         | () when 
@@ -1039,6 +1067,7 @@ module Eval = struct
               unsupported expr ("Reconstructing Z3 term with datatype recogniser")
            | DatatypeAccFunc xs ->
               Simplify.IndexTerms.datatype_member_reduce (nth args 0) xs.nm xs.bt
+           | UninterpretedVal {nm} -> sym_ (nm, expr_bt)
            end
 
         | () when String.equal (Z3.Symbol.to_string func_name) "^" ->
@@ -1050,13 +1079,21 @@ module Eval = struct
         | () when Z3.Arithmetic.is_int2real expr ->
            intToReal_ (nth args 0)
 
-        | () when String.equal (Z3.Symbol.get_string func_name) "unit" ->
+        | () when BT.equal Unit expr_bt ->
            unit_
-        | () when BT.equal Unit (z3_sort (Z3.Expr.get_sort expr)) ->
-           unit_
-        | () -> 
+
+        | () when Option.is_some (BT.is_list_bt expr_bt) && List.length args == 0 ->
+           (* Z3 creates unspecified consts within uninterpreted types - map to vars *)
+           let nm = Sym.fresh_named (Z3.Symbol.to_string func_name) in
+           Z3Symbol_Table.add z3sym_table func_name (UninterpretedVal {nm});
+           sym_ (nm, expr_bt)
+
+        | () when Option.is_some (Z3.Model.get_func_interp model func_decl) ->
            assert (List.length args = 1);
            map_get_ (func_interp func_decl) (List.hd args)
+
+        | () ->
+           unsupported expr ("Reconstructing unknown Z3 term")
 
     in
 

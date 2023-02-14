@@ -96,6 +96,10 @@ let is_datatype_bt = function
   | Datatype sym -> Some sym
   | _ -> None
 
+let is_list_bt = function
+  | List bt -> Some bt
+  | _ -> None
+
 
 let make_map_bt abt rbt = Map (abt, rbt)
 
