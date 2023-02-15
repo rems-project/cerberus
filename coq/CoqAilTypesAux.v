@@ -18,7 +18,7 @@ Module AilTypesAux(IMP: Implementation).
         | Wchar_t => Some (IMP.get.(CoqImplementation.is_signed_ity) Wchar_t)
         | Wint_t =>  Some (IMP.get.(CoqImplementation.is_signed_ity) Wint_t)
         | Ptrdiff_t => Some true
-        | Vaddr_t => Some false
+        | Ptraddr_t => Some false
         end
     end.
 

@@ -250,7 +250,7 @@ let rec simplify_integer_value_base ival_ =
                   | Nothing ->
                       Right ival_
                 end
-            | Vaddr_t ->
+            | Ptraddr_t ->
                Left 0
             | Signed _ ->
                 match Implementation.sizeof_ity ity with
@@ -288,7 +288,7 @@ let rec simplify_integer_value_base ival_ =
                       Left unsigned_max
                   | Ptrdiff_t ->
                       Left signed_max
-                  | Vaddr_t ->
+                  | Ptraddr_t ->
                       Left unsigned_max
                   | Signed _ ->
                       Left signed_max

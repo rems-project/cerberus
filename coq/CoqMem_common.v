@@ -9,7 +9,7 @@ Require CoqAilSyntax.
 Require Import CoqCtype.
 Require Import SimpleError.
 
-Module Mem_common (A:VADDR) (B:VADDR_INTERVAL A).
+Module Mem_common (A:PTRADDR) (B:PTRADDR_INTERVAL A).
 
   Definition thread_id := Z. (* Mem_common.thread_id *)
 

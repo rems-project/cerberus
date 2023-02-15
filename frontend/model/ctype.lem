@@ -31,7 +31,7 @@ type integerType (* [name = "^\\(\\|\\([a-z A-Z]+_\\)\\)ity[0-9]*'?$"] *) =
  | Wint_t
  | Size_t
  | Ptrdiff_t
- | Vaddr_t (* CHERI-specific *)
+ | Ptraddr_t (* CHERI-specific *)
 
 (* STD §6.2.5#10, sentence 1 *)
 type realFloatingType =
@@ -166,7 +166,7 @@ let integerTypeEqual ity1 ity2 =
         7
     | Ptrdiff_t ->
         8
-    | Vaddr_t ->
+    | Ptraddr_t ->
         9
   end in
   match (ity1, ity2) with
@@ -338,7 +338,7 @@ let setElemCompare_integerType ity1 ity2 =
         7
     | Ptrdiff_t ->
         8
-    | Vaddr_t ->
+    | Ptraddr_t ->
        9
 end in
   match (ity1, ity2) with
@@ -557,12 +557,12 @@ val ptrdiff_t: ctype
 let ptrdiff_t =
   Ctype [] (Basic (Integer Ptrdiff_t))
 
-val vaddr_t: unit -> ctype
-let vaddr_t _ =
+val ptraddr_t: unit -> ctype
+let ptraddr_t _ =
   if Global.is_CHERI() then
-    Ctype [] (Basic (Integer Vaddr_t))
+    Ctype [] (Basic (Integer Ptraddr_t))
   else
-    error "vaddr_t is CHERI-specific"
+    error "ptraddr_t is CHERI-specific"
 
 val is_ptr_t: ctype -> bool
 let is_ptr_t (Ctype _ ty_) =

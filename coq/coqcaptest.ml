@@ -608,13 +608,13 @@ let tests = "coq_morello_caps" >::: [
       "C1 representabitiy" >:: (fun _ ->
         assert_bool
           "7FFFE6EC should not be representable"
-          (not (M.cap_vaddr_representable M.cap_1 (Z.of_string "0x7FFFE6EC")))
+          (not (M.cap_ptraddr_representable M.cap_1 (Z.of_string "0x7FFFE6EC")))
       );
 
       "C2 representabitiy" >:: (fun _ ->
         assert_bool
           "7FFFE6EC should not be representable"
-          (not (M.cap_vaddr_representable M.cap_2 (Z.of_string "0x7FFFE6EC")))
+          (not (M.cap_ptraddr_representable M.cap_2 (Z.of_string "0x7FFFE6EC")))
       );
 
       "encode C2 bytes" >:: (fun _ ->

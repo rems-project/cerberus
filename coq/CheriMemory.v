@@ -390,9 +390,9 @@ Module CheriMemory
     else Z.sub r dlt.
 
   Definition unwrap_cap_value n :=
-    let vaddr_bits := (Z.of_nat C.sizeof_vaddr) * 8 in
-    let min_v := Z.opp (Z.pow 2 (vaddr_bits - 1)) in
-    let max_v := Z.sub (Z.pow 2 (vaddr_bits - 1)) 1 in
+    let ptraddr_bits := (Z.of_nat C.sizeof_ptraddr) * 8 in
+    let min_v := Z.opp (Z.pow 2 (ptraddr_bits - 1)) in
+    let max_v := Z.sub (Z.pow 2 (ptraddr_bits - 1)) 1 in
     if andb (Z.leb n min_v) (Z.leb n max_v)
     then n
     else wrapI min_v max_v n.
@@ -1279,9 +1279,9 @@ Module CheriMemory
 
   (** Convert an arbitrary integer value to unsinged cap value *)
   Definition wrap_cap_value (n_value : Z) : Z :=
-    if andb (Z.leb n_value (AddressValue.to_Z C.min_vaddr)) (Z.leb n_value (AddressValue.to_Z C.max_vaddr))
+    if andb (Z.leb n_value (AddressValue.to_Z C.min_ptraddr)) (Z.leb n_value (AddressValue.to_Z C.max_ptraddr))
     then n_value
-    else  wrapI (AddressValue.to_Z C.min_vaddr) (AddressValue.to_Z C.max_vaddr) n_value.
+    else  wrapI (AddressValue.to_Z C.min_ptraddr) (AddressValue.to_Z C.max_ptraddr) n_value.
 
   Fixpoint abst
     (fuel: nat)
@@ -2683,9 +2683,9 @@ Module CheriMemory
         then ret (PV Prov_none (PVconcrete (C.cap_c0 tt)))
         else
           let addr :=
-            let dlt := Z.succ (Z.sub (AddressValue.to_Z C.max_vaddr) (AddressValue.to_Z C.min_vaddr)) in
+            let dlt := Z.succ (Z.sub (AddressValue.to_Z C.max_ptraddr) (AddressValue.to_Z C.min_ptraddr)) in
             let r_value := Z_integerRem_f n_value dlt in
-            if  Z.leb r_value (AddressValue.to_Z C.max_vaddr)
+            if  Z.leb r_value (AddressValue.to_Z C.max_ptraddr)
             then r_value
             else Z.sub r_value dlt
           in
@@ -2775,9 +2775,9 @@ Module CheriMemory
       Z.sub (Z.pow 2 (Z.mul 8 n_value)) 1 in
     match ity with
     | CoqCtype.Signed CoqCtype.Intptr_t =>
-        ret (IV (signed_max (Z.of_nat C.sizeof_vaddr)))
+        ret (IV (signed_max (Z.of_nat C.sizeof_ptraddr)))
     | CoqCtype.Unsigned CoqCtype.Intptr_t =>
-        ret (IV (unsigned_max (Z.of_nat C.sizeof_vaddr)))
+        ret (IV (unsigned_max (Z.of_nat C.sizeof_ptraddr)))
     | _ =>
         n_value <- option2serr "no sizeof_ity!" (IMP.get.(sizeof_ity) ity) ;;
         match ity with
@@ -2792,7 +2792,7 @@ Module CheriMemory
         | CoqCtype.Ptrdiff_t
         | CoqCtype.Wint_t
         | CoqCtype.Signed _ => ret (IV (signed_max n_value))
-        | CoqCtype.Vaddr_t => ret (IV (unsigned_max n_value))
+        | CoqCtype.Ptraddr_t => ret (IV (unsigned_max n_value))
         | CoqCtype.Enum _ => ret (IV (signed_max 4))
         end
     end.
@@ -2813,12 +2813,12 @@ Module CheriMemory
     | CoqCtype.Wint_t
     | CoqCtype.Unsigned _ => ret (IV 0)
     | CoqCtype.Signed CoqCtype.Intptr_t =>
-        ret (IV (signed_min (Z.of_nat C.sizeof_vaddr)))
+        ret (IV (signed_min (Z.of_nat C.sizeof_ptraddr)))
     | CoqCtype.Ptrdiff_t
     | CoqCtype.Signed _ =>
         n_value <- option2serr "no sizeof_ity!" (IMP.get.(sizeof_ity) ity) ;;
         ret (IV (signed_min n_value))
-    | CoqCtype.Vaddr_t => ret (IV 0)
+    | CoqCtype.Ptraddr_t => ret (IV 0)
     | CoqCtype.Enum _ => ret (IV (signed_min 4))
     end.
 
@@ -2926,7 +2926,7 @@ Module CheriMemory
     | IC is_signed c_value, IV n_value =>
         ret (IC is_signed
                (C.cap_set_value
-                  (if C.cap_vaddr_representable c_value  (AddressValue.of_Z n_value)
+                  (if C.cap_ptraddr_representable c_value  (AddressValue.of_Z n_value)
                    then c_value
                    else C.set_ghost_state
                           c_value
@@ -3810,7 +3810,7 @@ Module CheriMemory
                                (String.append name "'")))
                    | Some (_, c_value) =>
                        let v_value := AddressValue.to_Z (C.cap_get_value c_value) in
-                       ret (Some (MVinteger CoqCtype.Vaddr_t (IV v_value)))
+                       ret (Some (MVinteger CoqCtype.Ptraddr_t (IV v_value)))
                    end)
             else
               if String.eqb name "cheri_base_get" then
@@ -3826,10 +3826,10 @@ Module CheriMemory
                                  (String.append name "'")))
                      | Some (_, c_value) =>
                          if (C.get_ghost_state c_value).(bounds_unspecified)
-                         then ret (Some (MVunspecified (CoqCtype.vaddr_t tt)))
+                         then ret (Some (MVunspecified (CoqCtype.ptraddr_t tt)))
                          else
                            let v_value := fst (Bounds.to_Zs (C.cap_get_bounds c_value))
-                           in ret (Some (MVinteger CoqCtype.Vaddr_t (IV v_value)))
+                           in ret (Some (MVinteger CoqCtype.Ptraddr_t (IV v_value)))
                      end)
               else
                 if String.eqb name "cheri_length_get" then
@@ -4053,7 +4053,7 @@ Module CheriMemory
           if String.eqb name "cheri_address_get" then
             Some
               ((ExactRet
-                  (CoqCtype.vaddr_t tt)),
+                  (CoqCtype.ptraddr_t tt)),
                 [
                   PolymorphicArg
                     [
@@ -4068,7 +4068,7 @@ Module CheriMemory
             if String.eqb name "cheri_base_get" then
               Some
                 ((ExactRet
-                    (CoqCtype.vaddr_t tt)),
+                    (CoqCtype.ptraddr_t tt)),
                   [
                     PolymorphicArg
                       [

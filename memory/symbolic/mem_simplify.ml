@@ -82,7 +82,7 @@ let rec simplify_integer_value_base ival_ =
                 | None ->
                     Right ival_
               end
-          | Vaddr_t ->
+          | Ptraddr_t ->
               Left (of_int 0)
 
           | Signed ibty ->
@@ -128,7 +128,7 @@ let rec simplify_integer_value_base ival_ =
                 | Ptrdiff_t
                 | Signed _ ->
                     Left signed_max
-                | Vaddr_t ->
+                | Ptraddr_t ->
                     Left unsigned_max
                 | Enum _ ->
                     failwith "IVmax Enum"

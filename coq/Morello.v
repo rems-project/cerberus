@@ -358,7 +358,7 @@ Module Permissions <: Permission.
 End Permissions.
 
 
-Module AddressValue <: VADDR.
+Module AddressValue <: PTRADDR.
   Definition len:N := 64.
   Definition t := bv len.
 
@@ -448,7 +448,7 @@ Module Flags <: FLAGS.
 End Flags.
 
 
-Module Bounds <: VADDR_INTERVAL(AddressValue).
+Module Bounds <: PTRADDR_INTERVAL(AddressValue).
 
   (* Definition t := bv 87. *)
   Definition bound_len:N := 65.
@@ -516,10 +516,10 @@ Module Capability <: Capability (AddressValue) (Flags) (ObjType) (SealType) (Bou
   Definition cap_SEAL_TYPE_LPB : ObjType.t := ObjType.of_Z 2. 
   Definition cap_SEAL_TYPE_LB : ObjType.t := ObjType.of_Z 3.
 
-  Definition sizeof_vaddr := 8%nat. (* in bytes *)
-  (* Definition vaddr_bits := sizeof_vaddr * 8. *)
-  Definition min_vaddr := Z_to_bv (N.of_nat (sizeof_vaddr*8)) 0.  
-  Definition max_vaddr := Z_to_bv (N.of_nat (sizeof_vaddr*8)) (Z.sub (bv_modulus (N.of_nat (sizeof_vaddr*8))) 1).
+  Definition sizeof_ptraddr := 8%nat. (* in bytes *)
+  (* Definition ptraddr_bits := sizeof_ptraddr * 8. *)
+  Definition min_ptraddr := Z_to_bv (N.of_nat (sizeof_ptraddr*8)) 0.  
+  Definition max_ptraddr := Z_to_bv (N.of_nat (sizeof_ptraddr*8)) (Z.sub (bv_modulus (N.of_nat (sizeof_ptraddr*8))) 1).
 
   Definition cap_c0 (u:unit) : t := 
     cap_t_to_t (mword_to_bv (CapNull u)) Default_CapGhostState.
@@ -733,7 +733,7 @@ Module Capability <: Capability (AddressValue) (Flags) (ObjType) (SealType) (Bou
     else if (cap1.(cap) <? cap2.(cap)) then Lt 
     else Gt.
 
-  Definition cap_vaddr_representable (c : t) (a : AddressValue.t) : bool :=
+  Definition cap_ptraddr_representable (c : t) (a : AddressValue.t) : bool :=
     CapIsRepresentable (bv_to_mword c.(cap)) (bv_to_mword a).
   
   Definition cap_bounds_representable_exactly (cap : t) (bounds : Bounds.t) : bool :=

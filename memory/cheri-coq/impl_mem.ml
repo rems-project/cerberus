@@ -104,7 +104,7 @@ module CerbTagDefs = struct
     | Wint_t        -> Wint_t
     | Size_t        -> Size_t
     | Ptrdiff_t     -> Ptrdiff_t
-    | Vaddr_t       -> Vaddr_t
+    | Ptraddr_t       -> Ptraddr_t
 
   let toCoq_realFloatingType: realFloatingType -> CoqCtype.realFloatingType = function
     | Float -> Float
@@ -613,7 +613,7 @@ module CHERIMorello : Memory = struct
     | Wint_t        -> Wint_t
     | Size_t        -> Size_t
     | Ptrdiff_t     -> Ptrdiff_t
-    | Vaddr_t       -> Vaddr_t
+    | Ptraddr_t       -> Ptraddr_t
 
   let fromCoq_realFloatingType: CoqCtype.realFloatingType -> realFloatingType = function
     | Float -> Float

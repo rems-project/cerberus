@@ -44,7 +44,7 @@ Inductive integerType : Type := (* [name = "^\\(\\|\\([a-z A-Z]+_\\)\\)ity[0-9]*
  | Wint_t: integerType
  | Size_t: integerType
  | Ptrdiff_t: integerType
- | Vaddr_t: integerType .
+ | Ptraddr_t: integerType .
 
 (* STD Â§6.2.5#10, sentence 1 *)
 Inductive realFloatingType : Type :=
@@ -169,7 +169,7 @@ Definition integerTypeEqual  (ity1: integerType ) (ity2: integerType )  : bool
     | Wchar_t =>  6%nat
     | Wint_t =>  7%nat
     | Ptrdiff_t =>  8%nat
-    | Vaddr_t =>  9%nat
+    | Ptraddr_t =>  9%nat
     end
   in
   match ((ity1, ity2)) with
@@ -334,7 +334,7 @@ Definition setElemCompare_integerType  (ity1 : integerType ) (ity2 : integerType
    match (x) with | Char => ( 0%nat : nat ) | Bool =>  1%nat | Signed _ =>
       2%nat | Unsigned _ =>  3%nat | Enum _ =>  4%nat | Size_t =>  5%nat
      | Wchar_t =>  6%nat | Wint_t =>  7%nat | Ptrdiff_t =>  8%nat
-     | Vaddr_t =>  9%nat end in
+     | Ptraddr_t =>  9%nat end in
   match ( (ity1, ity2)) with
     | (Signed ibty1,  Signed ibty2) =>
         setElemCompare_integerBaseType ibty1 ibty2
@@ -519,8 +519,8 @@ Definition size_t   : ctype :=
 Definition ptrdiff_t   : ctype :=
   Ctype nil (Basic (Integer Ptrdiff_t)).
 
-Definition vaddr_t  ( _ : unit )  : ctype :=
-  Ctype nil (Basic (Integer Vaddr_t)).
+Definition ptraddr_t  ( _ : unit )  : ctype :=
+  Ctype nil (Basic (Integer Ptraddr_t)).
 
 (*
 

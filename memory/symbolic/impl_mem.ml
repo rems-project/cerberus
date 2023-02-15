@@ -69,7 +69,7 @@ module Constraints = struct
             [0(*TODO: no idea with I'm doing*)]
         ; mk_ctor "size_t_ity"
         ; mk_ctor "ptrdiff_t_ity"
-        ; mk_ctor "vaddr_t_ity"
+        ; mk_ctor "ptraddr_t_ity"
         ] in
     
     let basicTypeSort =
@@ -289,7 +289,7 @@ let integerType_to_expr slvSt (ity: Ctype.integerType) =
         Expr.mk_app slvSt.ctx (List.nth fdecls 4) []
     | Ptrdiff_t ->
         Expr.mk_app slvSt.ctx (List.nth fdecls 5) []
-    | Vaddr_t ->
+    | Ptraddr_t ->
         Expr.mk_app slvSt.ctx (List.nth fdecls 5) []
     | Wint_t
     | Wchar_t ->

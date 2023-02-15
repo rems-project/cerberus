@@ -83,7 +83,7 @@ module DefaultImpl = struct
       | Ptrdiff_t ->
           (* STD §7.19#2 *)
           true
-      | Vaddr_t ->
+      | Ptraddr_t ->
           false
 
   let sizeof_ity = function
@@ -119,7 +119,7 @@ module DefaultImpl = struct
     | Size_t
     | Ptrdiff_t ->
         Some 8
-    | Vaddr_t ->
+    | Ptraddr_t ->
         Some 8
 
   (* NOTE: the code is bit generic here to allow reusability *)
@@ -174,7 +174,7 @@ module DefaultImpl = struct
     | Size_t
     | Ptrdiff_t ->
         Some 8
-    | Vaddr_t ->
+    | Ptraddr_t ->
         Some 8
 
   let alignof_fty = function
@@ -208,7 +208,7 @@ module DefactoImpl = struct
 
   (* TODO:
     The observable, integer range of a uintptr_t is the same as that
-    of a vaddr_t (or ptrdiff_t for intptr_t ), despite the increased
+    of a ptraddr_t (or ptrdiff_t for intptr_t ), despite the increased
     alignment and storage requirements.
    *)
 
@@ -321,7 +321,7 @@ module HafniumImpl = struct
     | Ptrdiff_t ->
         (* STD *)
         true
-    | Vaddr_t ->
+    | Ptraddr_t ->
         (* STD *)
         false
 
@@ -361,7 +361,7 @@ module HafniumImpl = struct
         Some 8
     | Ptrdiff_t ->
         Some 8
-    | Vaddr_t ->
+    | Ptraddr_t ->
         Some 8
 
   (* No trap representations *)
@@ -419,7 +419,7 @@ module HafniumImpl = struct
         Some 8
     | Ptrdiff_t ->
         Some 8
-    | Vaddr_t ->
+    | Ptraddr_t ->
         Some 8
 
   let alignof_fty = function
@@ -457,7 +457,7 @@ let hafniumIntImpl: IntegerImpl.implementation =
       | None   -> assert false)
   (Size_t)
   (Ptrdiff_t)
-  (Vaddr_t)
+  (Ptraddr_t)
 
 
 (* TODO: this is horrible... *)

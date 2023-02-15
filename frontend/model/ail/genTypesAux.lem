@@ -260,8 +260,8 @@ let rec interpret_genIntegerType loc impl git : errorM integerType =
       return Size_t
   | PtrdiffT ->
       return Ptrdiff_t
-  | VaddrT ->
-      return Vaddr_t
+  | PtraddrT ->
+      return Ptraddr_t
   | Unknown ic ->
       AilTyping.type_of_constant loc impl ic
   | Promote git ->

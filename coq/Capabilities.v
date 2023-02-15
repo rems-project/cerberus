@@ -96,13 +96,13 @@ Module Type CAP_SEAL_T.
   Parameter eqb: t -> t -> bool.
 End CAP_SEAL_T.
 
-Module Type VADDR_INTERVAL (V:VADDR).
+Module Type PTRADDR_INTERVAL (V:PTRADDR).
   Parameter Inline t: Set.
 
   Parameter address_is_in_interval: t -> V.t -> bool.
   Parameter ltb: t -> t -> bool.
   Parameter eqb: t -> t -> bool.
-End VADDR_INTERVAL.
+End PTRADDR_INTERVAL.
 
 
 Module Type FLAGS.
@@ -127,20 +127,20 @@ Definition Default_CapGhostState : CapGhostState
   := {| tag_unspecified := false; bounds_unspecified := false |}.
 
 Module Type Capability
-  (V:VADDR)
+  (V:PTRADDR)
   (F:FLAGS)
   (OT:OTYPE)
   (S:CAP_SEAL_T)
-  (I:VADDR_INTERVAL V)
+  (I:PTRADDR_INTERVAL V)
   (P:Permission).
 
   Parameter t: Set.
 
   (* Properties of [vadr] *)
 
-  Parameter min_vaddr : V.t.
-  Parameter max_vaddr : V.t.
-  Parameter sizeof_vaddr: nat.
+  Parameter min_ptraddr : V.t.
+  Parameter max_ptraddr : V.t.
+  Parameter sizeof_ptraddr: nat.
 
   (** the number of user-defined flags *)
   (* Parameter cap_flags_len: nat. *)
@@ -190,7 +190,7 @@ Module Type Capability
         the bounds to change, a representabilty check fails. Some
         versions of the check may fail in additional cases.
         See: `CapIsRepresentable` in Morello *)
-  Parameter cap_vaddr_representable: t -> V.t -> bool.
+  Parameter cap_ptraddr_representable: t -> V.t -> bool.
 
   (** Whenever given bounds could be encoded exactly. Due to
         encoding issues not all bounds could be reprsented exactly

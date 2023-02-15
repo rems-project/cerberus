@@ -41,7 +41,7 @@ Module MorelloImpl : Implementation.
     | Wchar_t => true
     | Wint_t =>  true
     | Ptrdiff_t => true
-    | Vaddr_t => false
+    | Ptraddr_t => false
     end.
 
   Definition sizeof_ity_impl x
@@ -67,7 +67,7 @@ Module MorelloImpl : Implementation.
         | Wint_t => Some 4
         | Size_t
         | Ptrdiff_t => Some 8
-        | Vaddr_t => Some 8
+        | Ptraddr_t => Some 8
         end.
 
   Definition precision_ity_impl ity :=
@@ -124,7 +124,7 @@ Module MorelloImpl : Implementation.
     | Wint_t => 4
     | Size_t
     | Ptrdiff_t => 8
-    | Vaddr_t => 8
+    | Ptraddr_t => 8
     end.
 
   (* fixing enum type for simplicity. *)

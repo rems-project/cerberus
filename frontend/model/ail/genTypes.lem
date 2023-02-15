@@ -4,7 +4,7 @@ type genIntegerType [name="git*"] =
  | Concrete of integerType
  | SizeT
  | PtrdiffT
- | VaddrT
+ | PtraddrT
  | Unknown of integerConstant
  | Promote of genIntegerType
  | Usual of genIntegerType * genIntegerType
@@ -59,7 +59,7 @@ let rec eq_genIntegerType gity1 gity2 =
         1
     | PtrdiffT ->
         2
-    | VaddrT ->
+    | PtraddrT ->
         3
     | Unknown _ ->
         4

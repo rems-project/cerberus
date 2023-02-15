@@ -39,18 +39,18 @@ type implementation = <|
   impl_precision:   integerType -> nat;
   impl_size_t:      integerType;
   impl_ptrdiff_t:   integerType;
-  impl_vaddr_t  :   integerType;
+  impl_ptraddr_t  :   integerType;
 |>
 
 val make_implementation: binaryMode -> (integerType -> bool) -> (integerType -> nat)
                          -> integerType -> integerType -> integerType -> implementation
-let make_implementation binary_mode signed precision size_ity ptrdiff_ity vaddr_ity = <|
+let make_implementation binary_mode signed precision size_ity ptrdiff_ity ptraddr_ity = <|
   impl_binary_mode= binary_mode;
   impl_signed=      signed;
   impl_precision=   precision;
   impl_size_t=      size_ity;
   impl_ptrdiff_t=   ptrdiff_ity;
-  impl_vaddr_t=     vaddr_ity;
+  impl_ptraddr_t=     ptraddr_ity;
 |>
 
 val integer_range: implementation -> integerType -> range
@@ -91,7 +91,7 @@ let min_integer_range = function
   | Wchar_t -> error "TODO: min_integer_range, Wchar_t"
   | Wint_t -> error "TODO: min_integer_range, Wint_t"
   | Ptrdiff_t -> error "TODO: min_integer_range, Ptrdiff_t"
-  | Vaddr_t -> error "TODO: min_integer_range, Vaddr_t"
+  | Ptraddr_t -> error "TODO: min_integer_range, Ptraddr_t"
 end
 
 val min_implementation_signed_char: implementation
@@ -109,7 +109,7 @@ let min_implementation_signed_char =
         | Wchar_t -> error "TODO: min_implementation_signed_char, Wchar_t 1"
         | Wint_t -> error "TODO: min_implementation_signed_char, Wint_t 1"
         | Ptrdiff_t -> error "TODO: min_implementation_signed_char, Ptrdiff_t 1"
-        | Vaddr_t -> error "TODO: min_implementation_signed_char, Vaddr_t 1"
+        | Ptraddr_t -> error "TODO: min_implementation_signed_char, Ptraddr_t 1"
       end
     )
     ( function
@@ -149,7 +149,7 @@ let min_implementation_signed_char =
         | Wchar_t -> error "TODO: min_implementation_signed_char, Wchar_t 2"
         | Wint_t -> error "TODO: min_implementation_signed_char, Wint_t 2"
         | Ptrdiff_t -> error "TODO: min_implementation_signed_char, Ptrdiff_t 2"
-        | Vaddr_t -> error "TODO: min_implementation_signed_char, Vaddr_t 2"
+        | Ptraddr_t -> error "TODO: min_implementation_signed_char, Ptraddr_t 2"
       end
     )
     (Unsigned Long)
@@ -171,7 +171,7 @@ let min_implementation_unsigned_char =
         | Wchar_t -> error "TODO: min_implementation_unsigned_char, Wchar_t 1"
         | Wint_t -> error "TODO: min_implementation_unsigned_char, Wint_t 1"
         | Ptrdiff_t -> error "TODO: min_implementation_unsigned_char, Ptrdiff_t 1"
-        | Vaddr_t -> error "TODO: min_implementation_unsigned_char, Vaddr_t 1"
+        | Ptraddr_t -> error "TODO: min_implementation_unsigned_char, Ptraddr_t 1"
       end
     )
     ( function
@@ -211,7 +211,7 @@ let min_implementation_unsigned_char =
         | Wchar_t -> error "TODO: min_implementation_unsigned_char, Wchar_t 2"
         | Wint_t -> error "TODO: min_implementation_unsigned_char, Wint_t 2"
         | Ptrdiff_t -> error "TODO: min_implementation_unsigned_char, Ptrdiff_t 2"
-        | Vaddr_t -> error "TODO: min_implementation_unsigned_char, Vaddr_t 2"
+        | Ptraddr_t -> error "TODO: min_implementation_unsigned_char, Ptraddr_t 2"
       end
     )
     (Unsigned Long)

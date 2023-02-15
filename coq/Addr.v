@@ -3,7 +3,7 @@
 Require Import Coq.Numbers.BinNums.
 Require Import Coq.Strings.String.
 
-Module Type VADDR.
+Module Type PTRADDR.
 
   Parameter Inline t:Set.
 
@@ -19,4 +19,4 @@ Module Type VADDR.
   (* Parameter of_Z: Z -> t.
   Parameter to_Z: t -> Z. *)
 
-End VADDR.
+End PTRADDR.

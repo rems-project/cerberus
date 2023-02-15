@@ -6,7 +6,7 @@ typedef __cerbty_size_t      size_t;
 typedef __cerbty_wchar_t     wchar_t;
 
 #ifdef __CHERI__
-typedef __cerbty_vaddr_t   vaddr_t;
+typedef __cerbty_ptraddr_t   ptraddr_t;
 #endif
 
 #ifdef __CHERI_PURE_CAPABILITY__

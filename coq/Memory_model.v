@@ -17,7 +17,7 @@ Set Implicit Arguments.
 Set Strict Implicit.
 Generalizable All Variables.
 
-Module Type Memory (A:VADDR) (B:VADDR_INTERVAL A).
+Module Type Memory (A:PTRADDR) (B:PTRADDR_INTERVAL A).
 
   Import A.
   Include Mem_common(A)(B).
