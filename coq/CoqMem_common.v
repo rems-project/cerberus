@@ -31,7 +31,7 @@ Module Mem_common (A:PTRADDR) (B:PTRADDR_INTERVAL A).
   | AtomicMemberof : access_error.
 
   Inductive free_error : Set :=
-  | Free_static_allocation : free_error
+  | Free_non_matching : free_error
   | Free_dead_allocation : free_error
   | Free_out_of_bound : free_error.
 
@@ -72,7 +72,7 @@ Module Mem_common (A:PTRADDR) (B:PTRADDR_INTERVAL A).
   | MerrWriteOnReadOnly : bool -> location_ocaml -> mem_error
   | MerrReadUninit : location_ocaml -> mem_error
   | MerrUndefinedFree : location_ocaml -> free_error -> mem_error
-  | MerrUndefinedRealloc : mem_error
+  | MerrUndefinedRealloc : location_ocaml -> free_error -> mem_error
   | MerrIntFromPtr : location_ocaml -> mem_error
   | MerrPtrFromInt : mem_error
   | MerrPtrComparison : mem_error
@@ -246,13 +246,22 @@ Definition instance_Show_Show_Mem_common_mem_error_dict
         Some UB_CERB002b_out_of_bound_store
     | MerrAccess _ _ AtomicMemberof =>
         Some UB042_access_atomic_structUnion_member
-    | MerrUndefinedFree loc Free_static_allocation =>
-        Some UB179a_static_allocation
+
+
+    | MerrUndefinedFree loc Free_non_matching =>
+        Some UB179a_non_matching_allocation_free
     | MerrUndefinedFree loc Free_dead_allocation =>
-        Some UB179b_dead_allocation
-    | MerrUndefinedFree loc Free_out_of_bound => None
-    | MerrUndefinedRealloc =>
-        Some UB179a_static_allocation
+        Some UB179b_dead_allocation_free
+    | MerrUndefinedFree loc Free_out_of_bound =>
+        None (* this is not a UB but rather an internal error *)
+
+    | MerrUndefinedRealloc loc Free_non_matching =>
+        Some UB179c_non_matching_allocation_realloc
+    | MerrUndefinedRealloc loc Free_dead_allocation =>
+        Some UB179d_dead_allocation_realloc
+    | MerrUndefinedRealloc loc Free_out_of_bound =>
+        None (* this is not a UB but rather an internal error *)
+
     | MerrWriteOnReadOnly true _ =>
         Some UB033_modifying_string_literal
     | MerrWriteOnReadOnly false _ =>

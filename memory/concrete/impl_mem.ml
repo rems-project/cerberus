@@ -458,6 +458,7 @@ module Concrete : Memory = struct
       | MerrWriteOnReadOnly (_, loc)
       | MerrReadUninit loc
       | MerrUndefinedFree (loc, _)
+      | MerrUndefinedRealloc (loc, _)
       | MerrFreeNullPtr loc
       | MerrArrayShift loc
       | MerrIntFromPtr loc ->
@@ -466,7 +467,6 @@ module Concrete : Memory = struct
       | MerrInternal _
       | MerrOther _
       | MerrPtrdiff
-      | MerrUndefinedRealloc
       | MerrPtrFromInt
       | MerrPtrComparison
       | MerrWIP _
@@ -1317,7 +1317,7 @@ module Concrete : Memory = struct
         let precondition z =
           is_dead z >>= function
             | true ->
-                return (`FAIL (MerrUndefinedFree (loc, Free_static_allocation)))
+                return (`FAIL (MerrUndefinedFree (loc, Free_dead_allocation)))
             | false ->
                 get_allocation z >>= fun alloc ->
                 if N.equal addr alloc.base then
@@ -1328,7 +1328,7 @@ module Concrete : Memory = struct
           (* this kill is dynamic one (i.e. free() or friends) *)
           is_dynamic addr >>= begin function
             | false ->
-                fail (MerrUndefinedFree (loc, Free_static_allocation))
+                fail (MerrUndefinedFree (loc, Free_non_matching))
             | true ->
                 return ()
           end
@@ -1354,7 +1354,7 @@ module Concrete : Memory = struct
           (* this kill is dynamic one (i.e. free() or friends) *)
           is_dynamic addr >>= begin function
             | false ->
-                fail (MerrUndefinedFree (loc, Free_static_allocation))
+                fail (MerrUndefinedFree (loc, Free_non_matching))
             | true ->
                 return ()
           end
@@ -2480,7 +2480,7 @@ let combine_prov prov1 prov2 =
                    if equal acc zero then of_int (Nat_big_num.compare n1 n2) else acc
                  ) zero (List.combine bytes1 bytes2)))
 
-  let realloc tid align ptr size : pointer_value memM =
+  let realloc loc tid align ptr size : pointer_value memM =
     match ptr with
     | PV (Prov_none, PVnull _) ->
       allocate_region tid (Symbol.PrefOther "realloc") align size
@@ -2489,7 +2489,7 @@ let combine_prov prov1 prov2 =
     | PV (Prov_some alloc_id, PVconcrete addr) ->
       is_dynamic addr >>= begin function
         | false ->
-            fail (MerrUndefinedRealloc)
+            fail (MerrUndefinedRealloc (loc, Free_non_matching))
         | true ->
             get_allocation alloc_id >>= fun alloc ->
             if alloc.base = addr then

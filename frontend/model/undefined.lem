@@ -599,8 +599,10 @@ type undefined_behaviour =
   (* The pointer argument to the free or realloc function does not match a pointer earlier returned
      by a memory management function, or the space has been deallocated by a call to free or realloc
      (7.22.3.3, 7.22.3.5). *)
-  | UB179a_static_allocation
-  | UB179b_dead_allocation
+  | UB179a_non_matching_allocation_free
+  | UB179b_dead_allocation_free
+  | UB179c_non_matching_allocation_realloc
+  | UB179d_dead_allocation_realloc
 
   (* The value of the object allocated by the malloc function is used (7.22.3.4). *)
   | UB180
@@ -967,8 +969,10 @@ let ub_str_bimap =
     ; (UB176, "UB176")
     ; (UB177, "UB177")
     ; (UB178, "UB178")
-    ; (UB179a_static_allocation, "UB179a_static_allocation")
-    ; (UB179b_dead_allocation, "UB179b_dead_allocation")
+    ; (UB179a_non_matching_allocation_free, "UB179a_non_matching_allocation_free")
+    ; (UB179b_dead_allocation_free, "UB179b_dead_allocation_free")
+    ; (UB179c_non_matching_allocation_realloc, "UB179c_non_matching_allocation_realloc")
+    ; (UB179d_dead_allocation_realloc,"UB179d_dead_allocation_realloc")
     ; (UB180, "UB180")
     ; (UB181, "UB181")
     ; (UB182, "UB182")

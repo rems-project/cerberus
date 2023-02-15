@@ -326,6 +326,7 @@ Module CheriMemory
       | MerrWriteOnReadOnly _ loc
       | MerrReadUninit loc
       | MerrUndefinedFree loc _
+      | MerrUndefinedRealloc loc _
       | MerrFreeNullPtr loc
       | MerrArrayShift loc
       | MerrIntFromPtr loc =>
@@ -334,7 +335,6 @@ Module CheriMemory
       | MerrInternal _
       | MerrOther _
       | MerrPtrdiff
-      | MerrUndefinedRealloc
       | MerrPtrFromInt
       | MerrPtrComparison
       | MerrWIP _
@@ -1036,7 +1036,7 @@ Module CheriMemory
               (fun x => match x with
                         | true =>
                             ret
-                              (FAIL (MerrUndefinedFree loc Free_static_allocation))
+                              (FAIL (MerrUndefinedFree loc Free_dead_allocation))
                         | false =>
                             get_allocation z >>=
                               (fun alloc =>
@@ -1055,7 +1055,7 @@ Module CheriMemory
              (is_dynamic (C.cap_get_value addr)) >>=
                (fun (b : bool) =>
                   if b then ret tt
-                  else fail (MerrUndefinedFree loc Free_static_allocation))
+                  else fail (MerrUndefinedFree loc Free_non_matching))
            else
              ret tt) ;;
           resolve_iota precondition iota >>=
@@ -1093,7 +1093,7 @@ Module CheriMemory
              is_dynamic (C.cap_get_value addr) >>=
                fun x => match x with
                         | false =>
-                            fail (MerrUndefinedFree loc (Free_static_allocation))
+                            fail (MerrUndefinedFree loc (Free_non_matching))
                         | true => ret tt
                         end
            else
@@ -3248,6 +3248,7 @@ Module CheriMemory
                         (List.combine bytes1 bytes2) 0)))).
 
   Definition realloc
+    (loc : location_ocaml)
     (tid : thread_id) (align : integer_value) (ptr : pointer_value)
     (size : integer_value) : memM pointer_value
     :=
@@ -3259,10 +3260,11 @@ Module CheriMemory
           fail (MerrWIP "realloc no provenance")
     | PV (Prov_some alloc_id) (PVconcrete c_value) =>
         let addr := (C.cap_get_value c_value) in
+        (* TODO: should we also check `is_dead` here? *)
         is_dynamic addr >>=
           (fun (function_parameter : bool) =>
              match function_parameter with
-             | false => fail MerrUndefinedRealloc
+             | false => fail (MerrUndefinedRealloc loc Free_non_matching)
              | true =>
                  get_allocation alloc_id >>=
                    (fun (alloc : allocation) =>
@@ -3277,7 +3279,7 @@ Module CheriMemory
                              ret new_ptr)
                       else
                         fail
-                          (MerrWIP "realloc: invalid pointer"))
+                          (MerrUndefinedRealloc loc Free_out_of_bound))
              end)
     | PV _ _ =>
         fail (MerrWIP "realloc: invalid pointer")
