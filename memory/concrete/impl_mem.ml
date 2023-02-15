@@ -2491,17 +2491,21 @@ let combine_prov prov1 prov2 =
         | false ->
             fail (MerrUndefinedRealloc (loc, Free_non_matching))
         | true ->
-            get_allocation alloc_id >>= fun alloc ->
-            if alloc.base = addr then
-              allocate_region tid (Symbol.PrefOther "realloc") align size >>= fun new_ptr ->
-              let size_to_copy =
-                let IV (_, size_n) = size in
-                IV (Prov_none, Nat_big_num.min alloc.size size_n) in
-              memcpy new_ptr ptr size_to_copy >>= fun _ ->
-              kill (Location_ocaml.other "realloc") true ptr >>= fun () ->
-              return new_ptr
-            else
-              fail (MerrWIP "realloc: invalid pointer")
+           is_dead alloc_id >>= (function
+            | true ->
+                fail (MerrUndefinedRealloc (loc, Free_dead_allocation))
+            | false ->
+               get_allocation alloc_id >>= fun alloc ->
+               if alloc.base = addr then
+                 allocate_region tid (Symbol.PrefOther "realloc") align size >>= fun new_ptr ->
+                 let size_to_copy =
+                   let IV (_, size_n) = size in
+                   IV (Prov_none, Nat_big_num.min alloc.size size_n) in
+                 memcpy new_ptr ptr size_to_copy >>= fun _ ->
+                 kill (Location_ocaml.other "realloc") true ptr >>= fun () ->
+                 return new_ptr
+               else
+                 fail (MerrWIP "realloc: invalid pointer"))
       end
     | PV _ ->
       fail (MerrWIP "realloc: invalid pointer")

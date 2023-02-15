@@ -3260,26 +3260,31 @@ Module CheriMemory
           fail (MerrWIP "realloc no provenance")
     | PV (Prov_some alloc_id) (PVconcrete c_value) =>
         let addr := (C.cap_get_value c_value) in
-        (* TODO: should we also check `is_dead` here? *)
         is_dynamic addr >>=
-          (fun (function_parameter : bool) =>
-             match function_parameter with
+          (fun (x : bool) =>
+             match x with
              | false => fail (MerrUndefinedRealloc loc Free_non_matching)
              | true =>
-                 get_allocation alloc_id >>=
-                   (fun (alloc : allocation) =>
-                      if Morello.AddressValue.eqb alloc.(base) addr then
-                        allocate_region tid (CoqSymbol.PrefOther "realloc") align size >>=
-                          (fun (new_ptr : pointer_value) =>
-                             let size_to_copy :=
-                               let size_n := num_of_int size in
-                               IV (Z.min (CheriMemory.size alloc) size_n) in
-                             memcpy new_ptr ptr size_to_copy ;;
-                             kill (Loc_other "realloc") true ptr ;;
-                             ret new_ptr)
-                      else
-                        fail
-                          (MerrUndefinedRealloc loc Free_out_of_bound))
+                 is_dead alloc_id >>=
+                   (fun x => match x with
+                          | true =>
+                              fail (MerrUndefinedRealloc loc Free_dead_allocation)
+                          | false =>
+                              get_allocation alloc_id >>=
+                                (fun (alloc : allocation) =>
+                                   if Morello.AddressValue.eqb alloc.(base) addr then
+                                     allocate_region tid (CoqSymbol.PrefOther "realloc") align size >>=
+                                       (fun (new_ptr : pointer_value) =>
+                                          let size_to_copy :=
+                                            let size_n := num_of_int size in
+                                            IV (Z.min (CheriMemory.size alloc) size_n) in
+                                          memcpy new_ptr ptr size_to_copy ;;
+                                          kill (Loc_other "realloc") true ptr ;;
+                                          ret new_ptr)
+                                   else
+                                     fail
+                                       (MerrUndefinedRealloc loc Free_out_of_bound))
+                          end)
              end)
     | PV _ _ =>
         fail (MerrWIP "realloc: invalid pointer")
