@@ -144,6 +144,11 @@ let cn_keywords: (string * Tokens.token) list = [
     "NULL"          , CN_NULL;
     "true"          , CN_TRUE;
     "false"         , CN_FALSE;
+    "requires"      , CN_REQUIRES;
+    "ensures"       , CN_ENSURES;
+    "inv"           , CN_INV;
+    "accesses"      , CN_ACCESSES;
+    "trusted"       , CN_TRUSTED
   ]
 
 let cn_lexicon: (string, token) Hashtbl.t =

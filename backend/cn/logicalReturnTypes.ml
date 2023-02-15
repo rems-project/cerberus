@@ -3,6 +3,7 @@ module SymSet = Set.Make(Sym)
 module BT = BaseTypes
 module RT = ResourceTypes
 module IT = IndexTerms
+module LC = LogicalConstraints
 
 
 type t = 
@@ -10,6 +11,7 @@ type t =
   | Resource of (Sym.t * (RT.t * BT.t)) * info * t
   | Constraint of LogicalConstraints.t * info * t
   | I
+
 
 
 
@@ -47,7 +49,7 @@ let rec subst (substitution: IT.t Subst.t) lrt =
 and alpha_rename_ s' (s, ls) t =
   (s', subst (IT.make_subst [(s, IT.sym_ (s', ls))]) t)
 
-and alpha_rename (s, ls) t = 
+and alpha_rename (s, ls) t =
   let s' = Sym.fresh_same s in
   alpha_rename_ s' (s, ls) t
 
@@ -177,3 +179,32 @@ let rec json = function
   | I ->
      `Variant ("I", None)
      
+
+
+
+let rec alpha_equivalent lrt lrt' =
+  match lrt, lrt' with
+  | Define ((s,it), _, lrt),
+    Define ((s',it'), _, lrt') ->
+     let new_s = Sym.fresh_same s in
+     let _, lrt = alpha_rename_ new_s (s, IT.bt it) lrt in
+     let _, lrt' = alpha_rename_ new_s (s', IT.bt it') lrt' in
+     IT.equal it it' 
+     && alpha_equivalent lrt lrt'
+  | Resource ((s, (re, bt)), _, lrt),
+    Resource ((s', (re', bt')), _, lrt') ->
+     let new_s = Sym.fresh_same s in
+     let _, lrt = alpha_rename_ new_s (s, bt) lrt in
+     let _, lrt' = alpha_rename_ new_s (s', bt') lrt' in
+     RT.equal re re' 
+     && BT.equal bt bt' 
+     && alpha_equivalent lrt lrt'
+  | Constraint (lc, _, lrt),
+    Constraint (lc', _, lrt') ->
+     LC.equal lc lc'
+     && alpha_equivalent lrt lrt'
+  | I,
+    I ->
+     true
+  | _ ->
+     false

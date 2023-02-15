@@ -64,7 +64,7 @@ let call_function file f_nm arg_cvals =
         error "Core_eval.call_function, called on a ProcDecl"
     | BuiltinDecl _ _ _ ->
         error "Core_eval.call_function, called on a BuiltinDecl"
-    | Proc _ _ _ _ ->
+    | Proc _ _ _ _ _ ->
         error "Core_eval.call_function, called on a Proc"
   end
 
@@ -474,7 +474,7 @@ let rec step_eval_pexpr n loc parent_call_loc_opt core_extern env mem_st_opt fil
           | Nothing ->
               (* NOTE: check if it is a procedure pointer *)
               match Map.lookup sym file.funs with
-                | Just (Proc _ _ _ _) ->
+                | Just (Proc _ _ _ _ _) ->
                     EU.return (PEval (Vobject (OVpointer (Mem.null_ptrval (Ctype.Ctype [] Ctype.Void)))))
                 | _ ->
                     EU.fail (Unresolved_symbol loc sym)

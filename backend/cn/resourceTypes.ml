@@ -193,3 +193,7 @@ let steps_constant = function
   | _ -> true
 
 
+
+let pointer = function
+  | P pred -> pred.pointer
+  | Q pred -> pred.pointer

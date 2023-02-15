@@ -502,6 +502,14 @@ let add_logical_predicate name entry =
   let@ global = get_global () in
   set_global { global with logical_predicates = Global.SymMap.add name entry global.logical_predicates }
 
+let add_datatype name entry = 
+  let@ global = get_global () in
+  set_global { global with datatypes = SymMap.add name entry global.datatypes }
+
+let add_datatype_constr name entry = 
+  let@ global = get_global () in
+  set_global { global with datatype_constrs = SymMap.add name entry global.datatype_constrs }
+
 
 
 
@@ -538,3 +546,14 @@ let test_value_eqs loc guard x ys =
   loop group ms ys
 
 
+let set_statement_locs statement_locs = 
+  let@ ctxt = get () in
+  set { ctxt with statement_locs }
+
+
+
+let embed_resultat (m : ('a, 'e) Resultat.t) : ('a, 'e) m = 
+  fun s ->
+  match m with
+  | Ok r -> Ok (r , s)
+  | Error e -> Error e

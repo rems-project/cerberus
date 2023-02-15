@@ -12,7 +12,7 @@ module P = PPrint
 
 let string_of_ns = function
   | CN_oarg -> "output argument"
-  | CN_logical -> "logical variable"
+  | CN_vars -> "variable"
   | CN_predicate -> "predicate"
   | CN_function -> "specification function"
   | CN_datatype_nm -> "datatype"
@@ -94,8 +94,8 @@ module MakePp (Conf: PP_CN) = struct
           Dleaf (pp_ctor "CNExpr_const" ^^^ !^ (if b then "true" else "false"))
       | CNExpr_var ident ->
           Dleaf (pp_ctor "CNExpr_var" ^^^ P.squotes (Conf.pp_ident ident))
-      | CNExpr_rvar ident ->
-          Dleaf (pp_ctor "CNExpr_rvar" ^^^ P.squotes (Conf.pp_ident ident))
+      (* | CNExpr_rvar ident -> *)
+      (*     Dleaf (pp_ctor "CNExpr_rvar" ^^^ P.squotes (Conf.pp_ident ident)) *)
       | CNExpr_list es ->
           Dnode (pp_ctor "CNExpr_list", List.map dtree_of_cn_expr es)
       | CNExpr_memberof (e, z) ->
@@ -127,6 +127,14 @@ module MakePp (Conf: PP_CN) = struct
       | CNExpr_ite (e1, e2, e3) ->
           Dnode (pp_ctor "CNExpr_ite"
                , List.map dtree_of_cn_expr [e1;e2;e3])
+      | CNExpr_good (ty, e) ->
+          Dnode (pp_ctor "CNExpr_good"
+               , [Dleaf (Conf.pp_ty ty); dtree_of_cn_expr e])
+      | CNExpr_deref e ->
+          Dnode (pp_ctor "CNExpr_deref", [dtree_of_cn_expr e])
+      | CNExpr_value_of_c_variable ident ->
+          Dleaf (pp_ctor "CNExpr_value_of_c_variable" ^^^ Conf.pp_ident ident)
+        
 
   let dtree_of_cn_pred = function
     | CN_owned ty ->

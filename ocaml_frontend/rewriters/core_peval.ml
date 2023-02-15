@@ -796,7 +796,7 @@ let rewrite_file file =
       : ('bty, 'a) generic_fun_map_decl =
     match d with
     | Fun (bt, args, pe) -> Fun (bt, args, rw_pexpr pe)
-    | Proc (loc, bt, args, e) -> Proc (loc, bt, args, rw_expr e)
+    | Proc (loc, mrk, bt, args, e) -> Proc (loc, mrk, bt, args, rw_expr e)
     | ProcDecl (loc, bt, bts) -> ProcDecl (loc, bt, bts)
     | BuiltinDecl (loc, bt, bts) -> BuiltinDecl (loc, bt, bts)
   in

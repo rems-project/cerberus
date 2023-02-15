@@ -415,7 +415,7 @@ let do_fun_map definitely_keep (fmap : ('bty,'a) generic_fun_map) =
            name_collector.names_in_core_base_type cbt
          ) >>
        name_collector.names_in_pexpr pe
-    | Proc (_loc, cbt, args, e) -> 
+    | Proc (_loc, _mrk, cbt, args, e) -> 
        name_collector.names_in_core_base_type cbt >>
        iterate args (fun (sym,cbt) ->
            record_dep (Sym fn) (Sym sym) >>

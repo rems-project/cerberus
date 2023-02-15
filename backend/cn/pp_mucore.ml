@@ -1,7 +1,9 @@
 [@@@landmark "auto"]
 
 (* copy pasted from pp_core.ml and adapted *)
+module PpThis = Pp
 open Cerb_frontend
+module Pp = PpThis              (* todo: fix *)
 open Lem_pervasives
 open Core
 open Annot
@@ -23,16 +25,6 @@ module Loc = Location_ocaml
 
 
 
-module type PP_Typ = sig
-  module T : Mucore.TYPES
-  val pp_bt: T.bt -> PPrint.document
-  val pp_ct: T.ct -> PPrint.document
-  val pp_ft: T.ft -> PPrint.document
-  val pp_lt: T.lt -> PPrint.document
-  val pp_st: T.st -> PPrint.document
-  val pp_ut: T.ut -> PPrint.document
-end
-
 module type CONFIG = sig
   val ansi_format: ansi_style list -> string -> string
   val show_std: bool
@@ -49,14 +41,25 @@ let pp_symbol  a = !^ ((* ansi_format [Blue] *) (Pp_symbol.to_string_pretty_cn a
 (* NOTE: Used to distinguish struct/unions globally *)
 
 
+module Pp_typ = struct
+  let pp_bt = BaseTypes.pp
+  let pp_ct = Sctypes.pp
+  let pp_ft = ArgumentTypes.pp ReturnTypes.pp
+  let pp_rt = ReturnTypes.pp
+  let pp_ut _ = Pp.string "todo: implement union type printer"
+  let pp_st _ = Pp.string "todo: implement struct type printer"
+end
 
 
-module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
+
+
+
+module Make (Config: CONFIG) = struct
 
   open Config
 
-  module Mu = Mucore.Make(Pp_typ.T)
-  open Mu
+  (* module Mu = Mucore.Make(Pp_typ.T) *)
+  open Mucore
 
   include Pp_typ
 
@@ -881,6 +884,25 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
   let pp_params params =
     P.parens (comma_list pp_argument params)
 
+  let rec pp_mu_arguments_l ppf = function
+    | M_Define ((s, it), _info, l) ->
+       Pp.parens (!^"let" ^^^ Sym.pp s ^^^ Pp.equals ^^^ IndexTerms.pp it) ^^^
+         pp_mu_arguments_l ppf l
+    | M_Resource ((s, (re, _bt)), _info, l) ->
+       Pp.parens (!^"let" ^^^ Sym.pp s ^^^ Pp.equals ^^^ ResourceTypes.pp re) ^^^
+         pp_mu_arguments_l ppf l
+    | M_Constraint (lc, _info, l) ->
+       Pp.parens (LogicalConstraints.pp lc) ^^^ pp_mu_arguments_l ppf l
+    | M_I i ->
+       !^"->" ^^^ Pp.parens (ppf i)
+
+  let rec pp_mu_arguments ppf = function
+    | M_Computational ((s, bt), _info, a) ->
+       Pp.parens (Pp.typ (Sym.pp s) (pp_bt bt)) ^^^ pp_mu_arguments ppf a
+    | M_L l ->
+       pp_mu_arguments_l ppf l
+
+
   let pp_fun_map budget funs =
     let pp_cond loc d =
       if show_include || Location_ocaml.from_main_file loc then d else P.empty
@@ -888,58 +910,48 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
     Pmap.fold (fun sym decl acc ->
       acc ^^
       begin match decl with
-        | M_Fun (bTy, params, pe) ->
-            pp_keyword "fun" ^^^ pp_symbol sym ^^^ pp_params params ^^ P.colon ^^^ pp_bt bTy ^^^
-            P.colon ^^ P.equals ^^
-            P.nest 2 (P.break 1 ^^ pp_pexpr budget pe)
-        | M_ProcDecl (loc, bTy, bTys) ->
+        (* | M_Fun (bTy, params, pe) -> *)
+        (*     pp_keyword "fun" ^^^ pp_symbol sym ^^^ pp_params params ^^ P.colon ^^^ pp_bt bTy ^^^ *)
+        (*     P.colon ^^ P.equals ^^ *)
+        (*     P.nest 2 (P.break 1 ^^ pp_pexpr budget pe) *)
+        | M_ProcDecl (loc, ft) ->
             pp_cond loc @@
-            pp_keyword "proc" ^^^ pp_symbol sym ^^^ P.parens (comma_list pp_bt bTys)
-        | M_BuiltinDecl (loc, bTy, bTys) ->
+            pp_keyword "proc" ^^^ pp_symbol sym ^^ Pp.colon ^^^ pp_ft ft
+        (* | M_BuiltinDecl (loc, bTy, bTys) -> *)
+        (*     pp_cond loc @@ *)
+        (*     pp_keyword "builtin" ^^^ pp_symbol sym ^^^ P.parens (comma_list pp_bt bTys) *)
+        | M_Proc (loc, args_and_body, ft, _trusted) ->
             pp_cond loc @@
-            pp_keyword "builtin" ^^^ pp_symbol sym ^^^ P.parens (comma_list pp_bt bTys)
-        | M_Proc (loc, bTy, (params, _logical_arguments), e, labels) ->
-            pp_cond loc @@
-            pp_keyword "proc" ^^^ pp_symbol sym ^^^ pp_params params ^^ P.colon ^^^ pp_keyword "eff" ^^^ pp_bt bTy ^^^
-            P.colon ^^ P.equals ^^
-            P.hardline ^^
-            P.nest 2 (
-                (* pp label definitions *)
-              (Pmap.fold (fun sym def acc ->
-                   acc ^^
-                   begin match def with
-                   | M_Return _ -> 
-                      P.break 1 ^^ !^"return label" ^^^ pp_symbol sym (* ^^ P.colon ^^^ pp_lt lt *)
-                   | M_Label (_, lt, args, _largs, lbody, annots) ->
-                      P.break 1 ^^ !^"label" ^^^ pp_symbol sym ^^ P.colon ^^^ pp_lt lt ^^
-                        (* label core function definition *)
-                        P.break 1 ^^ !^"label" ^^^ pp_symbol sym ^^^ 
-                          P.parens (comma_list (fun (sym, bt) -> pp_symbol sym ^^ P.colon ^^^ pp_bt bt) args) ^^ P.equals ^^
-                            (P.nest 2 (P.break 1 ^^ pp_expr budget lbody))
-                   end  ^^ P.hardline
-                 ) labels P.empty
-              ) 
-              ^^ 
-                (* pp body *)
-              P.break 1 ^^ !^"body" ^^^ P.equals ^^^ P.nest 2 (P.break 1 ^^ pp_expr budget e)
-            )
+            pp_keyword "proc" ^^^ pp_symbol sym ^^ Pp.colon ^^^ pp_ft ft ^^^ Pp.equals ^^^
+            pp_mu_arguments begin fun (body, labels, rt) ->
+              P.equals ^^^
+              P.hardline ^^
+              P.nest 2 (
+                  (* pp label definitions *)
+                (Pmap.fold (fun sym def acc ->
+                     acc ^^
+                     begin match def with
+                     | M_Return _ -> 
+                        P.break 1 ^^ !^"return label" ^^^ pp_symbol sym (* ^^ P.colon ^^^ pp_lt lt *)
+                     | M_Label (_loc , label_args_and_body, _lt, annots) ->
+                        P.break 1 ^^ !^"label" ^^^ pp_symbol sym ^^ Pp.equals ^^^ 
+                          pp_mu_arguments begin fun label_body ->
+                          (* label core function definition *)
+                            (P.nest 2 (P.break 1 ^^ pp_expr budget label_body))
+                          end label_args_and_body
+                     end  ^^ P.hardline
+                   ) labels P.empty
+                ) 
+                ^^ 
+                  (* pp body *)
+                P.break 1 ^^ !^"body" ^^^ P.equals ^^^ P.nest 2 (P.break 1 ^^ pp_expr budget body)
+              )
+            end args_and_body
       end ^^ P.hardline ^^ P.hardline
                
       ) funs P.empty
 
 
-  (* let pp_impl budget impl = *)
-  (*   Pmap.fold (fun iCst iDecl acc -> *)
-  (*     acc ^^ *)
-  (*     match iDecl with *)
-  (*       | M_Def (_, bty, pe) -> *)
-  (*           pp_keyword "def" ^^^ pp_impl iCst ^^^ P.equals ^^ *)
-  (*           P.nest 2 (P.break 1 ^^ pp_pexpr budget pe) ^^ P.break 1 ^^ P.break 1 *)
-  (*       | M_IFun (_, bTy, params, pe) -> *)
-  (*           pp_keyword "fun" ^^^ pp_impl iCst ^^^ pp_params params ^^ P.colon ^^^ pp_bt bTy ^^^ *)
-  (*           P.colon ^^ P.equals ^^ *)
-  (*           P.nest 2 (P.break 1 ^^ pp_pexpr budget pe) ^^ P.break 1 ^^ P.break 1 *)
-  (*   ) impl P.empty *)
 
   let pp_extern_symmap symmap =
     !^ "-- Extern symbols map:" ^^ P.break 1
@@ -955,7 +967,7 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
   let pp_globs budget globs =
     List.fold_left (fun acc (sym, decl) ->
         match decl with
-        | M_GlobalDef (_, (bTy, gt), e) ->
+        | M_GlobalDef ((bTy, gt), e) ->
           acc ^^ pp_keyword "glob" ^^^ pp_symbol sym ^^ P.colon ^^^ pp_bt bTy ^^^
             P.brackets (!^"ct" ^^^ P.equals ^^^ pp_ct gt) ^^^
                 P.colon ^^ P.equals ^^
@@ -963,18 +975,7 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
         | M_GlobalDecl _ ->
           acc) P.empty globs
 
-  let pp_funinfo finfos =
-      Pmap.fold (fun sym (M_funinfo (_, _, ft, _trusted, has_proto)) acc ->
-          acc ^^ pp_symbol sym ^^ P.colon
-          ^^^ pp_ft ft
-          ^^ P.hardline) finfos P.empty
 
-    let pp_funinfo_with_attributes finfos =
-      Pmap.fold (fun sym (M_funinfo (loc, attrs, ft, _trusted, has_proto)) acc ->
-          acc ^^ pp_symbol sym ^^ P.colon
-          ^^^ pp_ft ft
-          ^^^ (* P.at ^^^ Location_ocaml.pp_location loc ^^^ *) Pp_ail.pp_attributes attrs
-          ^^ P.hardline) finfos P.empty
 
 
   let pp_file budget file =
@@ -1000,11 +1001,6 @@ module Make (Config: CONFIG) (Pp_typ: PP_Typ) = struct
         !^ "-- Aggregates" ^^ P.break 1 ^^
         pp_tagDefinitions file.mu_tagDefs ^^
         P.break 1 ^^ P.break 1
-      end ^^
-
-      guard (show_include || Debug_ocaml.get_debug_level () > 1) begin
-        !^ "-- C function types" ^^ P.break 1 ^^
-        pp_funinfo file.mu_funinfo
       end ^^
 
       guard show_globs begin
@@ -1077,7 +1073,7 @@ let rec pp_core_base_type = function
 
 module Pp_standard_typ = (struct
 
-  module T = Mucore.SimpleTypes
+  (* module T = Mucore.SimpleTypes *)
 
 
   (* type object_type = core_object_type
@@ -1119,9 +1115,12 @@ module Pp_standard_typ = (struct
    * type lt = CA.lt *)
 
   (* stealing from Pp_core *)
-  let pp_ft (ret_ty, params, is_variadic) = 
-    let mk_pair (_, ty) = (Ctype.no_qualifiers, ty, false) in
-    pp_ct (Ctype ([], Function ((Ctype.no_qualifiers, ret_ty), List.map mk_pair params, is_variadic)))
+  let pp_rt ret_bt =
+    pp_core_base_type ret_bt
+
+  let pp_ft (ret_bt, params) = 
+    pp_core_base_type ret_bt ^^ 
+      Pp.parens (Pp.flow_map Pp.comma pp_bt params)
 
     (* let pp_lt = None *)
   (* stealing from Pp_core *)
@@ -1136,7 +1135,7 @@ end)
 
 
 
-module Basic = (struct
+module Basic = Make(struct
   (* let ansi_format = Colour.ansi_format *)
   let ansi_format _ s = s
   let show_std = false
@@ -1146,7 +1145,7 @@ module Basic = (struct
   let handle_uid _ _ = ()
 end)
 
-module All = (struct
+module All = Make(struct
   (* let ansi_format = Colour.ansi_format *)
   let ansi_format _ s = s
   let show_std = true
@@ -1156,7 +1155,7 @@ module All = (struct
   let handle_uid _ _ = ()
 end)
 
-module WithLocations = (struct
+module WithLocations = Make(struct
   let ansi_format _ s = s
   (* let ansi_format = Colour.ansi_format *)
   let show_std = false
@@ -1167,6 +1166,8 @@ module WithLocations = (struct
 end)
 
 
-module Basic_standard_typ = Make(Basic)(Pp_standard_typ)
-module All_standard_typ = Make(All)(Pp_standard_typ)
-module WithLocations_standard_typ = Make(WithLocations)(Pp_standard_typ)
+let pp_budget () = Some ((! Pp.print_level) + 5)
+let pp_pexpr_w b e = Basic.pp_pexpr b e
+let pp_pexpr e = pp_pexpr_w (pp_budget ()) e
+let pp_expr_w b e = Basic.pp_expr b e
+let pp_expr e = pp_expr_w (pp_budget ()) e

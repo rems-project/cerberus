@@ -90,8 +90,8 @@ let rewrite_file file =
   let rewrite_fun_map_decl = function
     | Fun (bTy, args, pe) ->
         Fun (bTy, args, rewrite_pexpr pe)
-    | Proc (loc, bTy, args, e) ->
-        Proc (loc, bTy, args, rewrite_expr e)
+    | Proc (loc, mrk, bTy, args, e) ->
+        Proc (loc, mrk, bTy, args, rewrite_expr e)
     | decl ->
         decl in
   

@@ -8,7 +8,7 @@ type loc = Location_ocaml.t
 
 type bt = Core.core_base_type
 type ft = Ctype.ctype * (Symbol.sym * Ctype.ctype) list * bool
-type lt = (Symbol.sym option * (Ctype.ctype * bool)) list
+type lt = (Symbol.sym option * (Ctype.ctype * Core.pass_by_value_or_pointer)) list
 
 type 'TY mi_label_def = 
   | Mi_Return of loc
@@ -18,12 +18,14 @@ type 'TY mi_label_defs = (symbol, ('TY mi_label_def)) Pmap.map
 
 type 'TY mi_fun_map_decl =
   | Mi_Fun of bt * (symbol * bt) list * Core.pexpr
-  | Mi_Proc of Location_ocaml.t * bt * (symbol * bt) list * 'TY Core.expr * 'TY mi_label_defs
+  | Mi_Proc of Location_ocaml.t * int option * bt * (symbol * bt) list * 'TY Core.expr * 'TY mi_label_defs
   | Mi_ProcDecl of Location_ocaml.t * bt * bt list
   | Mi_BuiltinDecl of Location_ocaml.t * bt * bt list
 
 type 'TY mi_fun_map = (symbol, ('TY mi_fun_map_decl)) Pmap.map
 
+
+type mi_funinfo = (Symbol.sym, (Location_ocaml.t * Annot.attributes * Ctype.ctype * (Symbol.sym option * Ctype.ctype) list * bool * bool)) Pmap.map
 
 (* a Core file is just a set of named functions *)
 type ('a, 'TY) mi_file = {
@@ -34,7 +36,7 @@ type ('a, 'TY) mi_file = {
   mi_globs   : (Symbol.sym * ('a, 'TY) Core.generic_globs) list;
   mi_funs    : 'TY mi_fun_map;
   mi_extern  : Core.extern_map;
-  mi_funinfo :  (Symbol.sym, (Location_ocaml.t * Annot.attributes * Ctype.ctype * (Symbol.sym option * Ctype.ctype) list * bool * bool)) Pmap.map;
+  mi_funinfo :  mi_funinfo;
   mi_loop_attributes : Annot.loop_attributes;
 }
 
@@ -94,7 +96,7 @@ let core_to_micore__funmap_decl update_loc = function
   | Core.Fun (bt, args, pe) -> Mi_Fun (bt, args, pe)
   | Core.ProcDecl (loc, bt, bts) -> Mi_ProcDecl (loc, bt, bts)
   | Core.BuiltinDecl (loc, bt, bts) -> Mi_BuiltinDecl (loc, bt, bts)
-  | Core.Proc (loc, bt, args, e) ->
+  | Core.Proc (loc, mrk, bt, args, e) ->
      let saves =
        Pmap.map (fun (_,params,body,annots) ->
            let param_tys = 
@@ -127,7 +129,7 @@ let core_to_micore__funmap_decl update_loc = function
            else Mi_Label (lloc, param_tys, params, remove_save body, annots)
          ) (Core_aux.m_collect_saves e)
      in
-     Mi_Proc(loc, bt, args, remove_save e, saves)
+     Mi_Proc(loc, mrk, bt, args, remove_save e, saves)
 
 
 

@@ -144,6 +144,8 @@ type message =
   | Generic of Pp.document
   | Generic_with_model of {err : Pp.document; model : Solver.model_with_q; ctxt : Context.t}
 
+  | Parser of Cerb_frontend.Errors.cparser_cause
+
 
 type type_error = {
     loc : Locations.t;
@@ -404,6 +406,9 @@ let pp_message te =
      let short = err in
      let state = Explain.state ctxt model Explain.no_ex in
      { short; descr = None; state = Some state; trace = None }
+  | Parser err ->
+     let short = !^(Cerb_frontend.Pp_errors.string_of_cparser_cause err) in
+     { short; descr = None; state = None; trace = None }
 
 
 type t = type_error

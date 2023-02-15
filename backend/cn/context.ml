@@ -100,16 +100,8 @@ let add_r r (ctxt : t) =
   let (rs, ix) = ctxt.resources in
   {ctxt with resources = ((r, ix) :: rs, ix + 1)}
 
-let add_stmt_locs stmts (ctxt : t) =
-  {ctxt with statement_locs = stmts}
 
-let add_datatypes dts (ctxt : t) =
-  let global = Global.add_datatypes dts ctxt.global in
-  {ctxt with global}
 
-let add_predicates preds (ctxt : t) =
-  let global = Global.add_predicates preds ctxt.global in
-  {ctxt with global}
 
 let json (ctxt : t) : Yojson.Safe.t = 
 

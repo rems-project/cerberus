@@ -856,11 +856,14 @@ let inline resolve_cn_ident ns ident      = liftCnDesug (Cn_desugaring.resolve_c
 (* let inline  fetch_oarg acc ident = function *)
 let inline check_cn_oargs loc xs          = liftCnDesug (Cn_desugaring.check_cn_oargs loc xs)
 
+
+
 let register_cn_function ident mk =
   State_exception.get >>= fun st ->
-  match Map.lookup ident st.cn_state.Cn_desugaring.cn_functions with
+  match List.lookup ident st.cn_state.Cn_desugaring.cn_functions with
     | Nothing ->
-        resolve_cn_ident Cn.CN_function ident >>= fun sym ->
+        resolve_cn_ident Cn.CN_function ident >>= fun sym_resolved ->
+        let sym = Cn.ensure_not_c_variable sym_resolved in
         mk >>= fun (attrs, return_bty, args, body) ->
         let func = <|
           Cn.cn_func_loc= Loc.locOf ident;
@@ -872,7 +875,7 @@ let register_cn_function ident mk =
         |> in
         liftCnDesug begin
           State_exception.update (fun cn_st' ->
-            <| cn_st' with Cn_desugaring.cn_functions= Map.insert ident (sym, func) cn_st'.Cn_desugaring.cn_functions;
+            <| cn_st' with Cn_desugaring.cn_functions= (ident, (sym, func)) :: cn_st'.Cn_desugaring.cn_functions;
                            Cn_desugaring.cn_current_scope= Map.empty; |>
           )
         end
@@ -883,9 +886,10 @@ let register_cn_function ident mk =
 
 let register_cn_predicate ident mk =
   State_exception.get >>= fun st ->
-  match Map.lookup ident st.cn_state.Cn_desugaring.cn_predicates with
+  match List.lookup ident st.cn_state.Cn_desugaring.cn_predicates with
     | Nothing ->
-        resolve_cn_ident Cn.CN_predicate ident >>= fun sym ->
+        resolve_cn_ident Cn.CN_predicate ident >>= fun sym_resolved ->
+        let sym = Cn.ensure_not_c_variable sym_resolved in
         mk >>= fun (attrs, oargs, iargs, clauses) ->
         let pred = <|
           Cn.cn_pred_loc= Loc.locOf ident;
@@ -897,7 +901,7 @@ let register_cn_predicate ident mk =
         |> in
         liftCnDesug begin
           State_exception.update (fun cn_st' ->
-            <| cn_st' with Cn_desugaring.cn_predicates= Map.insert ident (sym, pred) cn_st'.Cn_desugaring.cn_predicates;
+            <| cn_st' with Cn_desugaring.cn_predicates= (ident, (sym, pred)) :: cn_st'.Cn_desugaring.cn_predicates;
                            Cn_desugaring.cn_current_scope= Map.empty; |>
           )
         end
@@ -907,9 +911,10 @@ let register_cn_predicate ident mk =
 
 let register_cn_datatype ident mk_cases =
   State_exception.get >>= fun st ->
-  match Map.lookup ident st.cn_state.Cn_desugaring.cn_datatypes with
+  match List.lookup ident st.cn_state.Cn_desugaring.cn_datatypes with
     | Nothing ->
-        resolve_cn_ident Cn.CN_datatype_nm ident >>= fun sym ->
+        resolve_cn_ident Cn.CN_datatype_nm ident >>= fun sym_resolved ->
+        let sym = Cn.ensure_not_c_variable sym_resolved in
         mk_cases >>= fun cases ->
         let dt = <|
           Cn.cn_dt_loc= Loc.locOf ident;
@@ -918,7 +923,7 @@ let register_cn_datatype ident mk_cases =
         |> in
         liftCnDesug begin
           State_exception.update (fun cn_st' ->
-            <| cn_st' with Cn_desugaring.cn_datatypes = Map.insert ident dt cn_st'.Cn_desugaring.cn_datatypes;
+            <| cn_st' with Cn_desugaring.cn_datatypes = (ident, dt) :: cn_st'.Cn_desugaring.cn_datatypes;
                            Cn_desugaring.cn_current_scope= Map.empty; |>
           )
         end
@@ -955,13 +960,13 @@ val record_marker: unit -> desugM nat
 let record_marker () =
   let id = Symbol.fresh_int () in
   State_exception.get >>= fun st ->
-  let env: map Symbol.identifier (maybe Symbol.sym) = Scope_table.to_map Namespace_ordinary (fun ident -> function
+  let env: A.identifier_env = Scope_table.to_map Namespace_ordinary (fun ident -> function
     | Internal sym _ _ ->
-        Just sym
+        Just (A.Marker_Local, sym)
     | External ->
         match Map.lookup (ident, Namespace_ordinary) st.registered_external_identifiers with
           | Just (_, (sym, _, _)) ->
-              Just sym
+              Just (A.Marker_Global, sym)
           | Nothing ->
               Nothing
         end
@@ -2251,9 +2256,9 @@ let extract_program startup_str =
     A.typedef_attributes= Map.map (fun (z, _, _) -> z) st.typedef_definitions;
     A.loop_attributes = st.loop_attributes;
     A.markers_env= st.markers_env;
-    A.cn_predicates=  List.map (fun (_, (_, z)) -> z) (Map_extra.toList st.cn_state.Cn_desugaring.cn_predicates);
-    A.cn_functions=  List.map (fun (_, (_, z)) -> z) (Map_extra.toList st.cn_state.Cn_desugaring.cn_functions);
-    A.cn_datatypes=  List.map (fun (_, z) -> z) (Map_extra.toList st.cn_state.Cn_desugaring.cn_datatypes);
+    A.cn_predicates=  List.reverse (List.map (fun (_, (_, z)) -> z) (st.cn_state.Cn_desugaring.cn_predicates));
+    A.cn_functions=  List.reverse (List.map (fun (_, (_, z)) -> z) (st.cn_state.Cn_desugaring.cn_functions));
+    A.cn_datatypes=  List.reverse (List.map (fun (_, z) -> z) (st.cn_state.Cn_desugaring.cn_datatypes));
    |>)
 
 
@@ -2334,8 +2339,8 @@ let get_sigma_sofar =
        A.typedef_attributes= Map.map (fun (z, _, _) -> z) st.typedef_definitions;
        A.loop_attributes= st.loop_attributes;
        A.markers_env= st.markers_env;
-       A.cn_predicates=  List.map (fun (_, (_, z)) -> z) (Map_extra.toList st.cn_state.Cn_desugaring.cn_predicates);
-       A.cn_functions=  List.map (fun (_, (_, z)) -> z) (Map_extra.toList st.cn_state.Cn_desugaring.cn_functions);
-       A.cn_datatypes=  List.map (fun (_, z) -> z) (Map_extra.toList st.cn_state.Cn_desugaring.cn_datatypes);
+       A.cn_predicates=  List.reverse (List.map (fun (_, (_, z)) -> z) (st.cn_state.Cn_desugaring.cn_predicates));
+       A.cn_functions= List.reverse (List.map (fun (_, (_, z)) -> z) (st.cn_state.Cn_desugaring.cn_functions));
+       A.cn_datatypes= List.reverse (List.map (fun (_, z) -> z) (st.cn_state.Cn_desugaring.cn_datatypes));
       |>
   )

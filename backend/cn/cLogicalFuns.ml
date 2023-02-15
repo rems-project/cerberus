@@ -1,13 +1,11 @@
-
 open Resultat
 open Effectful.Make(Resultat)
 open TypeErrors
 module SymMap = Map.Make(Sym)
 module StringMap = Map.Make(String)
 
-open NewMu
-open New
 
+open Mucore
 
 module IT = IndexTerms
 
@@ -30,10 +28,10 @@ let symb_exec_mu_pexpr var_map pexpr =
   | M_PEval v -> begin match mu_val_to_it v with
     | Some r -> return r
     | _ -> fail {loc; msg = Generic (Pp.item "getting expr from C syntax: unsupported"
-        (NewMu.pp_pexpr pexpr))}
+        (Pp_mucore.pp_pexpr pexpr))}
   end
   | _ -> fail {loc; msg = Generic (Pp.item "getting expr from C syntax: unsupported"
-        (NewMu.pp_pexpr pexpr))}
+        (Pp_mucore.pp_pexpr pexpr))}
 
 let add_pattern p v expr var_map =
   let (M_Pattern (loc, _, pattern) : mu_pattern) = p in
@@ -44,7 +42,7 @@ let add_pattern p v expr var_map =
     return var_map
   | _ ->
     fail {loc; msg = Generic (Pp.item "getting expr from C syntax: unsupported pattern"
-        (NewMu.pp_expr expr))}
+        (Pp_mucore.pp_expr expr))}
 
 let rec mk_var_map nms vs = match nms, vs with
   | [], [] -> SymMap.empty
@@ -83,32 +81,27 @@ let rec symb_exec_mu_expr label_defs var_map expr =
     | Some (M_Return _) ->
       assert (List.length args == 1);
       return (CallRet (List.hd arg_vs))
-    (* TODO: I'm unsure. Can you check the largs thing, Thomas? *)
-    | Some (M_Label (_, _, args, largs, body, _)) ->
-      symb_exec_mu_expr label_defs (mk_var_map (List.map fst args) arg_vs) body
-    | None -> fail {loc; msg = Generic (Pp.item "undefined code label" (Sym.pp sym))}
+    | _ ->
+       fail {loc; msg = Generic Pp.(!^"function has goto-labels in control-flow")}
     end
   | _ -> fail {loc; msg = Generic (Pp.item "getting expr from C syntax: unsupported"
-        (NewMu.pp_expr expr))}
+        (Pp_mucore.pp_expr expr))}
 
 let c_function_to_it fsym rbt args body label_defs : (IT.t, type_error) m  =
-  let open New in
   let (M_Pexpr (loc, _, _, pe_)) = body in
   match pe_ with
   | M_PEval _ -> fail {loc; msg = Generic (Pp.string "PEval")}
   | _ -> fail {loc; msg = Generic (Pp.string "not PEval")}
 
 let c_function_to_it2 fsym rbt args body label_defs : (IT.t, type_error) m  =
-  let open New in
   let (M_Expr (loc, _, e_)) = body in
   match e_ with
   | M_Epure pe -> c_function_to_it fsym rbt args pe label_defs
-  | _ -> fail {loc; msg = Generic (Pp.item "c_function_to_it2" (NewMu.pp_expr body))}
+  | _ -> fail {loc; msg = Generic (Pp.item "c_function_to_it2" (Pp_mucore.pp_expr body))}
 
 
 let c_fun_to_it id fsym def
-        (fn : 'bty New.mu_fun_map_decl) =
-  let open New in
+        (fn : 'bty mu_fun_map_decl) =
   let def_args = def.LogicalPredicates.args
     |> List.map IndexTerms.sym_ in
   match fn with
@@ -116,14 +109,30 @@ let c_fun_to_it id fsym def
     let arg_map = mk_var_map (List.map fst args) def_args in
     let@ r = symb_exec_mu_pexpr arg_map body in
     return r
-  (* TODO: I'm unsure. Can you check the largs thing, Thomas? *)
-  | M_Proc (loc, rbt, (args, _largs), body, labels) ->
-    let arg_map = mk_var_map (List.map fst args) def_args in
+  | M_Proc (loc, args_and_body, _ft, _trusted) ->
+     let rec ignore_l = function
+       | M_Define (_, _, l) -> ignore_l l
+       | M_Resource (_, _, l) -> ignore_l l
+       | M_Constraint (_, _, l) -> ignore_l l
+       | M_I i -> i
+     in
+     let rec mk_var_map acc args_and_body def_args = 
+       (* TODO: fix: this is just ignoring the types *)
+       match args_and_body, def_args with
+       | M_Computational ((s, bt), _, args_and_body), 
+         v :: def_args ->
+          mk_var_map (SymMap.add s v acc) args_and_body def_args
+       | M_L l, [] ->
+          (acc, ignore_l l)
+       | _ -> 
+          assert false
+     in
+    let (arg_map, (body, labels, rt)) = mk_var_map SymMap.empty args_and_body def_args in
     let@ r = symb_exec_mu_expr labels arg_map body in
     begin match r with
     | CallRet it -> return it
     | _ -> fail {loc = Id.loc id;
-        msg = Generic (Pp.item "c_fun_to_it: does not return" (NewMu.pp_expr body))}
+        msg = Generic (Pp.item "c_fun_to_it: does not return" (Pp_mucore.pp_expr body))}
     end
   | _ ->
     fail {loc = Id.loc id;

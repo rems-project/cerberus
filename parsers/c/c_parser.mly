@@ -147,6 +147,7 @@ let warn_extra_semicolon pos ctx =
 
 (* CN syntax *)
 (* %token<string> CN_PREDNAME *)
+%token CN_ACCESSES CN_TRUSTED CN_REQUIRES CN_ENSURES CN_INV
 %token CN_PACK CN_UNPACK CN_PACK_STRUCT CN_UNPACK_STRUCT CN_HAVE CN_SHOW CN_INSTANTIATE
 %token CN_BOOL CN_INTEGER CN_REAL CN_POINTER CN_MAP CN_LIST CN_TUPLE CN_SET
 %token CN_LET CN_OWNED CN_BLOCK CN_EACH CN_FUNCTION CN_PREDICATE CN_DATATYPE
@@ -315,6 +316,8 @@ let warn_extra_semicolon pos ctx =
   located_string_literal
 
 %start<Cerb_frontend.Cabs.translation_unit> translation_unit
+%start function_spec
+%start loop_spec
 
 
 %type<Symbol.identifier Cerb_frontend.Cn.cn_base_type> base_type
@@ -325,6 +328,9 @@ let warn_extra_semicolon pos ctx =
 %type<(Symbol.identifier, Cabs.type_name) Cerb_frontend.Cn.cn_clause> clause
 %type<(Symbol.identifier, Cabs.type_name) Cerb_frontend.Cn.cn_resource> resource
 %type<(Symbol.identifier, Cabs.type_name) Cerb_frontend.Cn.cn_pred> pred
+%type<(Symbol.identifier, Cabs.type_name) Cerb_frontend.Cn.cn_condition> condition
+%type<(Cerb_frontend.Symbol.identifier, Cerb_frontend.Cabs.type_name) Cerb_frontend.Cn.cn_function_spec> function_spec
+%type<(Cerb_frontend.Symbol.identifier, Cerb_frontend.Cabs.type_name) Cerb_frontend.Cn.cn_loop_spec> loop_spec
 
 
 
@@ -1888,10 +1894,8 @@ prim_expr:
         | _ ->
             raise (C_lexer.Error (Cparser_unexpected_token "TODO cn integer const"))
     }
-| ident= cn_l_variable
+| ident= cn_variable
     { Cerb_frontend.Cn.(CNExpr (Location_ocaml.point $startpos, CNExpr_var ident)) }
-| ident= cn_u_variable
-    { Cerb_frontend.Cn.(CNExpr (Location_ocaml.point $startpos, CNExpr_rvar ident)) }
 (* | ident= cn_variable DOT ident_membr= cn_variable *)
 | e= prim_expr DOT member=cn_variable
     { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
@@ -2204,4 +2208,38 @@ ctype:
 | ty= type_name
     { ty }
 ;
+
+
+/* copying 'clause' and adjusting */
+condition:
+| CN_LET str= UNAME VARIABLE EQ res= resource
+    { let loc = Location_ocaml.point $startpos(str) in
+      Cerb_frontend.Cn.CN_cletResource (loc, Symbol.Identifier (loc, str), res) }
+| CN_LET str= LNAME VARIABLE EQ e= expr 
+    { let loc = Location_ocaml.point $startpos(str) in
+      Cerb_frontend.Cn.CN_cletExpr (loc, Symbol.Identifier (loc, str), e) }
+| e= assert_expr
+    { Cerb_frontend.Cn.CN_cconstr (Location_ocaml.region $loc NoCursor, e) }
+;
+
+
+function_spec:
+| CN_TRUSTED EOF
+  { let loc = Location_ocaml.region ($startpos, $endpos) NoCursor in
+      Cerb_frontend.Cn.CN_trusted loc }
+| CN_ACCESSES accs=separated_list(SEMICOLON, cn_variable) EOF
+  { let loc = Location_ocaml.region ($startpos, $endpos) NoCursor in
+      Cerb_frontend.Cn.CN_accesses (loc, accs) }
+| CN_REQUIRES c=condition EOF
+  { let loc = Location_ocaml.region ($startpos, $endpos) NoCursor in
+      Cerb_frontend.Cn.CN_requires (loc, c) }
+| CN_ENSURES c=condition EOF
+  { let loc = Location_ocaml.region ($startpos, $endpos) NoCursor in
+      Cerb_frontend.Cn.CN_requires (loc, c) }
+
+loop_spec:
+| CN_INV c=condition EOF
+  { let loc = Location_ocaml.region ($startpos, $endpos) NoCursor in
+      Cerb_frontend.Cn.CN_inv (loc, c) }
+
 (* END CN *)

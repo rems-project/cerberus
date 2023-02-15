@@ -1627,7 +1627,7 @@ let drive (with_concurrency: bool) file (arg_strs: list string) =
               ND.kill (ND.Other (DErr_other "the startup function has no definition"))
           | Core.BuiltinDecl _ _ _ ->
               ND.kill (ND.Other (DErr_other "the startup function has no definition"))
-          | Core.Proc loc _ params e ->
+          | Core.Proc loc _ _ params e ->
               ND.return (loc, params, e)
         end >>= fun (loc, params, expr) ->
         

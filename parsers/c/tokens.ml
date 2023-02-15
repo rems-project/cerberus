@@ -161,6 +161,11 @@ type token =
   | CN_NULL
   | CN_TRUE
   | CN_FALSE
+  | CN_REQUIRES
+  | CN_ENSURES
+  | CN_INV
+  | CN_ACCESSES
+  | CN_TRUSTED
 
 
 let string_of_token = function
@@ -306,4 +311,9 @@ let string_of_token = function
   | CN_FUNCTION -> "CN_FUNCTION"
   | CN_PREDICATE -> "CN_PREDICATE"
   | CN_DATATYPE -> "CN_DATATYPE"
+  | CN_REQUIRES -> "CN_REQUIRES"
+  | CN_ENSURES -> "CN_ENSURES"
+  | CN_INV -> "CN_INV"
+  | CN_ACCESSES -> "CN_ACCESSES"
+  | CN_TRUSTED -> "CN_TRUSTED"
 

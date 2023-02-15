@@ -39,8 +39,8 @@ val get_loc_trace : unit -> (Locations.loc list, 'e) m
 val add_loc_trace : Locations.t -> (unit, 'e) m
 val get_step_trace : unit -> (Trace.t, 'e) m
 
-val begin_trace_of_step : Trace.opt_pat -> 'a NewMu.New.mu_expr -> (unit -> (unit, 'e) m, 'e) m
-val begin_trace_of_pure_step : Trace.opt_pat -> 'a NewMu.New.mu_pexpr -> (unit -> (unit, 'e) m, 'e) m
+val begin_trace_of_step : Trace.opt_pat -> 'a Mucore.mu_expr -> (unit -> (unit, 'e) m, 'e) m
+val begin_trace_of_pure_step : Trace.opt_pat -> 'a Mucore.mu_pexpr -> (unit -> (unit, 'e) m, 'e) m
 
 type changed = 
   | Deleted
@@ -58,7 +58,7 @@ val get_struct_member_type : Locations.t -> Sym.t -> Id.t -> (Sctypes.t, TypeErr
 val get_member_type : Locations.t -> Sym.t -> Id.t -> Memory.struct_layout -> (Sctypes.t, TypeErrors.t) m
 val get_datatype : Locations.t -> Sym.t -> (BaseTypes.datatype_info, TypeErrors.t) m
 val get_datatype_constr : Locations.t -> Sym.t -> (BaseTypes.constr_info, TypeErrors.t) m
-val get_fun_decl : Locations.t -> Sym.t -> (Locations.t * Global.AT.ft * Mucore.trusted, TypeErrors.t) m
+val get_fun_decl : Locations.t -> Sym.t -> (Locations.t * Global.AT.ft, TypeErrors.t) m
 
 val get_resource_predicate_def : Locations.t -> Sym.t ->
     (ResourcePredicates.definition, TypeErrors.type_error) m
@@ -71,11 +71,17 @@ val todo_get_logical_predicate_def_s : Locations.t -> string ->
 
 
 val add_struct_decl : Sym.t -> Memory.struct_layout -> (unit, 'e) m
-val add_fun_decl : Sym.t -> (Locations.t * ArgumentTypes.ft * Mucore.trusted) -> (unit, 'e) m
+val add_fun_decl : Sym.t -> (Locations.t * ArgumentTypes.ft) -> (unit, 'e) m
 val add_resource_predicate : Sym.t -> ResourcePredicates.definition -> (unit, 'e) m
 val add_logical_predicate : Sym.t -> LogicalPredicates.definition -> (unit, 'e) m
+val add_datatype : Sym.t -> BaseTypes.datatype_info -> (unit, 'e) m
+val add_datatype_constr : Sym.t -> BaseTypes.constr_info -> (unit, 'e) m
+
+
+val set_statement_locs : Locations.loc CStatements.LocMap.t -> (unit, 'e) m
 
 val value_eq_group : IndexTerms.t option -> IndexTerms.t -> (EqTable.ITSet.t, TypeErrors.t) m
 val test_value_eqs : Locations.t -> IndexTerms.t option -> IndexTerms.t ->
     IndexTerms.t list -> (unit, TypeErrors.t) m
 
+val embed_resultat : ('a, 'e) Resultat.t -> ('a, 'e) m

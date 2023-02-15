@@ -17,9 +17,9 @@ let mDefine (name, it, info) t = Define ((name, it), info, t)
 let mResource (bound, info) t = Resource (bound, info, t)
 let mConstraint (bound, info) t = Constraint (bound, info, t)
 
-let mDefines t = List.fold_right mDefine t
-let mResources t  = List.fold_right mResource t
-let mConstraints t  = List.fold_right mConstraint t
+let mDefines defs t = List.fold_right mDefine defs t
+let mResources ress t = List.fold_right mResource ress t
+let mConstraints cons t = List.fold_right mConstraint cons t
 
 
 

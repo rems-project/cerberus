@@ -428,8 +428,8 @@ let untype_file (file: 'a Core.typed_file) : 'a Core.file =
   let untype_generic_fun_map_decl = function
     | Fun (bty, xs, pe) ->
         Fun (bty, xs, untype_pexpr pe)
-    | Proc (loc, bTy, xs, e) ->
-        Proc (loc, bTy, xs, untype_expr e)
+    | Proc (loc, mrk, bTy, xs, e) ->
+        Proc (loc, mrk, bTy, xs, untype_expr e)
     | ProcDecl _ as decl ->
         decl
     | BuiltinDecl _ as decl ->

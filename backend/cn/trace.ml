@@ -1,17 +1,14 @@
 module CF = Cerb_frontend
-
-module New = NewMu.New
 module SymSet = Set.Make(Sym)
 module StringMap = Map.Make(String)
-
 module IntSet = Set.Make(Int)
-
 module IT = IndexTerms
 module BT = BaseTypes
+open Mucore
 
-type opt_pat = unit New.mu_sym_or_pattern option
-type expr = unit New.mu_expr
-type pexpr = unit New.mu_pexpr
+type opt_pat = unit mu_sym_or_pattern option
+type expr = unit mu_expr
+type pexpr = unit mu_pexpr
 
 type mu_trace_step = {
     expr_doc : Pp.doc Lazy.t;
@@ -29,15 +26,15 @@ type t = {
 
 let empty = {mu_trace = []}
 
-let add_trace_step pat (expr : 'a New.mu_expr) (ct1, ct2) (tr : t) =
-  let expr_doc = lazy (NewMu.pp_expr_w (Some 100) expr) in
-  let expr_loc = New.loc_of_expr expr in
+let add_trace_step pat (expr : 'a mu_expr) (ct1, ct2) (tr : t) =
+  let expr_doc = lazy (Pp_mucore.pp_expr_w (Some 100) expr) in
+  let expr_loc = loc_of_expr expr in
   let step = {expr_doc; expr_loc; pat; ct_before = ct1; ct_after = ct2} in
   {mu_trace = step :: tr.mu_trace}
 
-let add_pure_trace_step pat (expr : 'a New.mu_pexpr) (ct1, ct2) (tr : t) =
-  let expr_doc = lazy (NewMu.pp_pexpr_w (Some 100) expr) in
-  let expr_loc = New.loc_of_pexpr expr in
+let add_pure_trace_step pat (expr : 'a mu_pexpr) (ct1, ct2) (tr : t) =
+  let expr_doc = lazy (Pp_mucore.pp_pexpr_w (Some 100) expr) in
+  let expr_loc = loc_of_pexpr expr in
   let step = {expr_doc; expr_loc; pat; ct_before = ct1; ct_after = ct2} in
   {mu_trace = step :: tr.mu_trace}
 
@@ -91,7 +88,8 @@ let format_mu (p : opt_pat) expr_doc =
   match p with
     | None -> rhs
     (* | Some (M_Symbol sym) -> Sym.pp sym ^^^ string "<-" ^^^ rhs *)
-    | Some (M_Pat pat) -> !^ "mu_step:" ^^^ NewMu.PP_MUCORE.pp_pattern pat ^^^ !^ "<-" ^^^ rhs
+    | Some (M_Pat pat) -> 
+       !^ "mu_step:" ^^^ Pp_mucore.Basic.pp_pattern pat ^^^ !^ "<-" ^^^ rhs
 
 let format_eval model global it =
   let open Pp in

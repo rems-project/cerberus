@@ -181,8 +181,13 @@ type storageDuration [name = "^\\([a-z A-Z]*_\\)?dur[0-9]*'?$"] =
 type bindings =
   list (ail_identifier * ((Loc.t * storageDuration * bool) * maybe alignment * qualifiers * ctype))
 
+type identifier_item_kind =
+  | Marker_Local
+  | Marker_Global
+
+
 type identifier_env =
-  map Symbol.identifier (maybe Symbol.sym)
+  map Symbol.identifier (maybe (identifier_item_kind * Symbol.sym))
 
 type statement_ 'a [name="s*"] =
   | AilSskip

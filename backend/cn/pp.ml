@@ -316,39 +316,13 @@ let print_json =
 
 
 
-
-(* let progress_bar name total_number = 
- *   let module P = Progress in
- *   P.Line.list [
- *       P.Line.const "  "; P.Line.rpad 20 (P.Line.const name); 
- *       P.Line.count_to total_number;
- *       P.Line.bar ~color:(P.Color.ansi `cyan) total_number
- *     ] *)
-
-
-
-let progress title total_number : (string -> unit) = 
-  let counter = ref 0 in
-  fun current ->
-  let () = counter := !counter + 1 in
-  let total_number_str = string_of_int total_number in
-  let n = String.length total_number_str in
-  let msg = 
-    format [Blue] title ^^^ 
-    brackets (
-       !^(Printf.sprintf "%0*d" n !counter) ^^ slash ^^ 
-       !^total_number_str
-      ) ^^
-    colon ^^^
-    !^current
-  in
-  print stdout msg
-
-
 let progress_simple title name = 
   let msg = format [Blue] title ^^ colon ^^^ !^name in
   print stdout msg
 
-  
+
+let of_total cur total = 
+  Printf.sprintf "[%d/%d]" cur total
+
 
 

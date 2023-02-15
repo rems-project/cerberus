@@ -3141,7 +3141,7 @@ let rec translate_stmt stdlib tagDefs f env (A.AnnotatedStatement loc stmt_attrs
             (Caux.mk_run_e sym_loop [ Caux.mk_sym_pe sym | forall (sym MEM visible_syms) | true ]) in
         E.mapM (fun sym ->
           E.resolve_object_type sym >>= fun (_, ty) ->
-          E.return (sym, ((C.BTy_object C.OTy_pointer, Just (ty, true)), Caux.mk_sym_pe sym))
+          E.return (sym, ((C.BTy_object C.OTy_pointer, Just (ty, C.By_pointer)), Caux.mk_sym_pe sym))
         ) visible_syms >>= fun args ->
         E.return begin
           Caux.mk_save_e_ [Annot.Alabel (Annot.LAloop_prebody loop_id)] (sym_loop, C.BTy_unit) args begin
@@ -3181,7 +3181,7 @@ let rec translate_stmt stdlib tagDefs f env (A.AnnotatedStatement loc stmt_attrs
 
         E.mapM (fun sym ->
             E.resolve_object_type sym >>= fun (_, ty) ->            
-            E.return (sym, ((C.BTy_object C.OTy_pointer, Just (ty, true)), Caux.mk_sym_pe sym))
+            E.return (sym, ((C.BTy_object C.OTy_pointer, Just (ty, C.By_pointer)), Caux.mk_sym_pe sym))
           ) visible_syms >>= fun args ->
         E.return begin
           Caux.mk_save_e_ [Annot.Alabel (Annot.LAloop_body loop_id)] (sym_loop, C.BTy_unit) args (
@@ -3343,7 +3343,7 @@ let rec translate_stmt stdlib tagDefs f env (A.AnnotatedStatement loc stmt_attrs
         E.get_visible_objects >>= fun visible_syms ->
         E.mapM (fun sym ->
             E.resolve_object_type sym >>= fun (_, ty) ->
-            E.return (sym, ((C.BTy_object C.OTy_pointer, Just (ty, true)), Caux.mk_sym_pe sym))
+            E.return (sym, ((C.BTy_object C.OTy_pointer, Just (ty, C.By_pointer)), Caux.mk_sym_pe sym))
           ) visible_syms >>= fun visible_pes ->
         match List.lookup (CaseSelectConstant n) env.case_labs with
           | Just lab ->
@@ -3357,7 +3357,7 @@ let rec translate_stmt stdlib tagDefs f env (A.AnnotatedStatement loc stmt_attrs
         E.get_visible_objects >>= fun visible_syms ->
         E.mapM (fun sym ->
             E.resolve_object_type sym >>= fun (_, ty) ->
-            E.return (sym, ((C.BTy_object C.OTy_pointer, Just (ty, true)), Caux.mk_sym_pe sym))
+            E.return (sym, ((C.BTy_object C.OTy_pointer, Just (ty, C.By_pointer)), Caux.mk_sym_pe sym))
           ) visible_syms >>= fun visible_pes ->
         match List.lookup (CaseSelectRange n1 n2) env.case_labs with
           | Just lab ->
@@ -3371,7 +3371,7 @@ let rec translate_stmt stdlib tagDefs f env (A.AnnotatedStatement loc stmt_attrs
         E.get_visible_objects >>= fun visible_syms ->
         E.mapM (fun sym ->
             E.resolve_object_type sym >>= fun (_, ty) ->
-            E.return (sym, ((C.BTy_object C.OTy_pointer, Just (ty, true)), Caux.mk_sym_pe sym))
+            E.return (sym, ((C.BTy_object C.OTy_pointer, Just (ty, C.By_pointer)), Caux.mk_sym_pe sym))
           ) visible_syms >>= fun visible_pes ->
         match env.default_lab with
           | Just lab ->
@@ -3385,7 +3385,7 @@ let rec translate_stmt stdlib tagDefs f env (A.AnnotatedStatement loc stmt_attrs
         E.get_visible_objects >>= fun visible_syms ->
         E.mapM (fun sym ->
             E.resolve_object_type sym >>= fun (_, ty) ->
-            E.return (sym, ((C.BTy_object C.OTy_pointer, Just (ty, true)), Caux.mk_sym_pe sym))
+            E.return (sym, ((C.BTy_object C.OTy_pointer, Just (ty, C.By_pointer)), Caux.mk_sym_pe sym))
           ) visible_syms >>= fun args ->
         let annots = match m_label_annot with
           | Just loop_annot -> [Annot.Alabel loop_annot]
@@ -3693,7 +3693,7 @@ let translate_program stdlib (startup_sym_opt, sigm) =
                       | _ -> Map.insert sym finfo finfoacc
                     end )
             
-            | Just (loc, _, _, param_syms, stmt) ->
+            | Just (loc, mrk, _, param_syms, stmt) ->
                 E.mapM (fun (s, bTy) ->
                   let descr = 
                     if not (Global.has_switch SW_inner_arg_temps) then Symbol.SD_None else
@@ -3798,7 +3798,7 @@ let translate_program stdlib (startup_sym_opt, sigm) =
                       Caux.mk_std_undef_pe loc "§6.9.1#12" Undefined.UB088_reached_end_of_function in
                   Caux.mk_save_e_ [Annot.Alabel Annot.LAreturn]
                                   (ret_label, ret_bTy)
-                                  [(ret_sym, ((ret_bTy, Just (return_ty, false)), ret_pe))]
+                                  [(ret_sym, ((ret_bTy, Just (return_ty, C.By_value)), ret_pe))]
                     (Caux.mk_pure_e (Caux.mk_sym_pe ret_sym))
                 in
                 let variadic_arg_type =
@@ -3815,7 +3815,7 @@ let translate_program stdlib (startup_sym_opt, sigm) =
                 E.return
                   ( gacc
                   , Map.insert sym
-                     (C.Proc loc ret_bTy
+                     (C.Proc loc (Just mrk) ret_bTy
                              ((*is_used_arg_type :: *)List.zip param_syms param_bTys ++ variadic_arg_type)
                              (Caux.mk_sseq_e (Caux.mk_empty_pat C.BTy_unit) (add_prelude_and_epilogue core_body) core_return)
                      ) facc

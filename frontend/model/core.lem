@@ -297,6 +297,11 @@ instance (Show dyn_annotation)
     end
 end
 
+type pass_by_value_or_pointer = 
+  | By_pointer
+  | By_value
+
+
 type generic_expr_ 'a 'bty 'sym =  (* (effectful) expression *)
  | Epure of (generic_pexpr 'bty 'sym)
  | Ememop of Mem_common.memop * list (generic_pexpr 'bty 'sym) (* pointer op involving memory *)
@@ -311,7 +316,7 @@ type generic_expr_ 'a 'bty 'sym =  (* (effectful) expression *)
  | Esseq of (generic_pattern 'sym) * (generic_expr 'a 'bty 'sym) * (generic_expr 'a 'bty 'sym) (* strong sequencing *)
  | Ebound of (generic_expr 'a 'bty 'sym) (* $\ldots$and boundary *)
  | End of list (generic_expr 'a 'bty 'sym) (* nondeterministic sequencing *)
- | Esave of ('sym * core_base_type) * list ('sym * ((core_base_type * maybe (Ctype.ctype * bool)) * generic_pexpr 'bty 'sym)) * (generic_expr 'a 'bty 'sym) (* save label *)
+ | Esave of ('sym * core_base_type) * list ('sym * ((core_base_type * maybe (Ctype.ctype * pass_by_value_or_pointer)) * generic_pexpr 'bty 'sym)) * (generic_expr 'a 'bty 'sym) (* save label *)
  | Erun of 'a * 'sym * list (generic_pexpr 'bty 'sym) (* run from label *)
  | Epar of list (generic_expr 'a 'bty 'sym) (* cppmem-like thread creation *)
  (* This two only exists during the execution *)
@@ -336,7 +341,7 @@ type generic_impl 'bty = map Implementation.implementation_constant (generic_imp
 
 type generic_fun_map_decl 'bty 'a =
   | Fun of core_base_type * list (Symbol.sym * core_base_type) * generic_pexpr 'bty Symbol.sym
-  | Proc of Loc.t * core_base_type * list (Symbol.sym * core_base_type) * generic_expr 'a 'bty Symbol.sym
+  | Proc of Loc.t * maybe nat (* marker env *) * core_base_type * list (Symbol.sym * core_base_type) * generic_expr 'a 'bty Symbol.sym
   | ProcDecl of Loc.t * core_base_type * list core_base_type
   | BuiltinDecl of Loc.t * core_base_type * list core_base_type
 

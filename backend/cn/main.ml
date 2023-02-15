@@ -3,8 +3,6 @@ module CB=Cerb_backend
 open CB.Pipeline
 open Setup
 
-module Milicore = CF.Milicore
-module CTM = Core_to_mucore
 
 let return = CF.Exception.except_return
 let (let@) = CF.Exception.except_bind
@@ -12,7 +10,7 @@ let (let@) = CF.Exception.except_bind
 
 
 type core_file = (unit,unit) CF.Core.generic_file
-type mu_file = unit NewMu.Old.mu_file
+type mu_file = unit Mucore.mu_file
 
 
 type file = 
@@ -27,14 +25,14 @@ let print_file filename file =
      Pp.print_file (filename ^ ".core") (CF.Pp_core.All.pp_file file);
   | MUCORE file ->
      Pp.print_file (filename ^ ".mucore")
-       (Pp_mucore.Basic_standard_typ.pp_file None file);
+       (Pp_mucore.Basic.pp_file None file);
 
 
 module Log : sig 
-  val print_log_file : string -> file -> unit
+  val print_log_file : (string * file) -> unit
 end = struct
   let print_count = ref 0
-  let print_log_file filename file =
+  let print_log_file (filename, file) =
     if !Debug_ocaml.debug_level > 0 then
       begin
         Colour.do_colour := false;
@@ -53,59 +51,37 @@ end
 open Log
 
 
-type rewrite = core_file -> (core_file, CF.Errors.error) CF.Exception.exceptM
-type named_rewrite = string * rewrite
 
 
 
 
 let frontend incl_dirs astprints filename state_file =
-
-  Global_ocaml.(set_cerb_conf "Cn" false Random false Basic false false false false);
-  CF.Ocaml_implementation.(set (HafniumImpl.impl));
-  CF.Switches.(set ["inner_arg_temps"]);
+  let open CF in
+  Global_ocaml.set_cerb_conf "Cn" false Random false Basic false false false false;
+  Ocaml_implementation.set Ocaml_implementation.HafniumImpl.impl;
+  Switches.set ["inner_arg_temps"];
   let@ stdlib = load_core_stdlib () in
   let@ impl = load_core_impl stdlib impl_name in
+  let@ (_, ail_prog_opt, prog0) = c_frontend (conf incl_dirs astprints, io) (stdlib, impl) ~filename in
+  let _, ail_prog = Option.get ail_prog_opt in
+  Tags.set_tagDefs prog0.Core.tagDefs;
+  let prog1 = Remove_unspecs.rewrite_file prog0 in
+  let prog2 = Core_peval.rewrite_file prog1 in
+  let prog3 = Milicore.core_to_micore__file Locations.update prog2 in
+  let prog4 = Milicore_label_inline.rewrite_file prog3 in
+  let statement_locs = CStatements.search ail_prog in
+  print_log_file ("original", CORE prog0);
+  print_log_file ("without_unspec", CORE prog1);
+  print_log_file ("after_peval", CORE prog2);
+  return (prog4, ail_prog, statement_locs)
 
-  let@ (_,ail_program_opt,core_file) = c_frontend (conf incl_dirs astprints, io) (stdlib, impl) ~filename in
-  let ail_program = match ail_program_opt with
-    | None -> assert false
-    | Some (_, sigm) -> sigm
-  in
-  CF.Tags.set_tagDefs core_file.CF.Core.tagDefs;
-  print_log_file "original" (CORE core_file);
 
-  let core_file = CF.Remove_unspecs.rewrite_file core_file in
-  let () = print_log_file "after_remove_unspecified" (CORE core_file) in
+let handle_frontend_error = function
+  | CF.Exception.Exception err ->
+     prerr_endline (CF.Pp_errors.to_string err); exit 2
+  | CF.Exception.Result result ->
+     result
 
-  let core_file = CF.Core_peval.rewrite_file core_file in
-  let () = print_log_file "after_partial_evaluation" (CORE core_file) in
-
-  let core_file = { 
-      core_file with impl = Pmap.empty CF.Implementation.implementation_constant_compare;
-                     stdlib = Pmap.empty CF.Symbol.symbol_compare
-    }
-  in
-
-  let mi_file = Milicore.core_to_micore__file CTM.update_loc core_file in
-  let mi_file = CF.Milicore_label_inline.rewrite_file mi_file in
-  let mu_file = CTM.normalise_file ail_program mi_file in
-  print_log_file "after_anf" (MUCORE mu_file);
-
-  
-  let (pred_defs, dt_defs) =
-        let open Effectful.Make(Resultat) in
-        match CompilePredicates.translate mu_file.mu_tagDefs 
-                ail_program.CF.AilSyntax.cn_functions
-                ail_program.CF.AilSyntax.cn_predicates
-                ail_program.CF.AilSyntax.cn_datatypes
-        with
-        | Result.Error err -> TypeErrors.report ?state_file err; exit 1
-        | Result.Ok xs -> xs
-  in
-  let statement_locs = CStatements.search ail_program in
-  
-  return (pred_defs, dt_defs, statement_locs, mu_file)
 
 
 
@@ -155,41 +131,35 @@ let main
   Check.only := only;
   Diagnostics.diag_string := diag;
   check_input_file filename;
-  Pp.progress_simple "pre-processing" "translating C code";
-  begin match frontend incl_dirs astprints filename state_file with
-  | CF.Exception.Exception err ->
-     prerr_endline (CF.Pp_errors.to_string err); exit 2
-  | CF.Exception.Result (pred_defs, dt_defs, stmts, file) ->
-     try
-       let open Resultat in
-       print_log_file "final" (MUCORE file);
-       Debug_ocaml.maybe_open_csv_timing_file ();
-       Pp.maybe_open_times_channel (match (csv_times, log_times) with
-         | (Some times, _) -> Some (times, "csv")
-         | (_, Some times) -> Some (times, "log")
-         | _ -> None);
-       let ctxt = Context.add_stmt_locs stmts Context.empty
-         |> Context.add_datatypes dt_defs
-         |> Context.add_predicates pred_defs in
-       let result = 
-         Pp.progress_simple "pre-processing" "translating specifications";
-         let@ file = Retype.retype_file ctxt file in
-         begin match lemmata with
-           | Some mode -> Lemmata.generate ctxt mode file
-           | None -> Typing.run ctxt (Check.check file)
-         end
+  let (prog4, ail_prog, statement_locs) = 
+    handle_frontend_error 
+      (frontend incl_dirs astprints filename state_file)
+  in
+  Debug_ocaml.maybe_open_csv_timing_file ();
+  Pp.maybe_open_times_channel 
+    (match (csv_times, log_times) with
+     | (Some times, _) -> Some (times, "csv")
+     | (_, Some times) -> Some (times, "log")
+     | _ -> None);
+  try begin
+      let result = 
+        let open Resultat in
+         let@ prog5 = Core_to_mucore.normalise_file ail_prog prog4 in
+         print_log_file ("mucore", MUCORE prog5);
+         Typing.run Context.empty (Check.check prog5 statement_locs lemmata)
        in
        Pp.maybe_close_times_channel ();
        match result with
        | Ok () -> exit 0
        | Error e when json -> TypeErrors.report_json ?state_file e; exit 1
        | Error e -> TypeErrors.report ?state_file e; exit 1
+     end 
      with
      | exc -> 
         Debug_ocaml.maybe_close_csv_timing_file ();
         Pp.maybe_close_times_channel ();
         Printexc.raise_with_backtrace exc (Printexc.get_raw_backtrace ())
-  end
+
 
 
 open Cmdliner
