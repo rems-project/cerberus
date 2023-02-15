@@ -86,7 +86,8 @@ let header filename =
   let open Pp in
   !^"(*" ^^^ !^ filename ^^ !^": generated lemma specifications from CN *)"
   ^^ hardline ^^ hardline
-  ^^ !^"Require Import ZArith Bool."
+  ^^ !^"Require Import ZArith Bool." ^^ hardline
+  ^^ !^"Require CN_Lemmas.CN_Lib."
   ^^ hardline ^^ hardline
 
 let fail msg details =
@@ -271,7 +272,52 @@ let tuple_coq_ty doc fld_tys =
   parens (flow (break 1) (stars fld_tys))
 
 type conv_info = {global : Global.t;
-    fun_info : LogicalPredicates.definition SymMap.t}
+    fun_info : LogicalPredicates.definition SymMap.t;
+    (* pairs ('a, nm) if 'a list is monomorphised to datatype named nm *)
+    list_mono : (BT.t * Sym.t) list}
+
+let add_list_mono_datatype (bt, nm) global =
+  let open Global in
+  let bt_name = Sym.pp_string (Option.get (BT.is_datatype_bt bt)) in
+  let nil = Sym.fresh_named ("Nil_of_" ^ bt_name) in
+  let cons = Sym.fresh_named ("Cons_of_" ^ bt_name) in
+  let hd = Sym.fresh_named ("hd_of_" ^ bt_name) in
+  let tl = Sym.fresh_named ("tl_of_" ^ bt_name) in
+  let mems = [(hd, bt); (tl, BT.Datatype nm)] in
+  let datatypes = SymMap.add nm
+        BT.{dt_constrs = [nil; cons]; dt_all_params = mems} global.datatypes in
+  let datatype_constrs = global.datatype_constrs
+    |> SymMap.add nil BT.{c_params = []; c_datatype_tag = nm}
+    |> SymMap.add cons BT.{c_params = mems; c_datatype_tag = nm}
+  in
+  {global with datatypes; datatype_constrs}
+
+let mono_list_bt list_mono bt = Option.bind (BT.is_list_bt bt)
+  (fun arg_bt -> Option.bind
+    (List.find_opt (fun (bt2, _) -> BT.equal arg_bt bt2) list_mono)
+    (fun (_, dt_sym) -> Some (BT.Datatype dt_sym)))
+
+let monomorphise_dt_lists global =
+  let dt_lists = function
+    | BT.List (BT.Datatype sym) -> Some sym
+    | _ -> None
+  in
+  let all_dt_types = SymMap.fold (fun _ dt_info ss ->
+        List.filter_map dt_lists (List.map snd dt_info.BT.dt_all_params) @ ss)
+    global.Global.datatypes [] in
+  let uniq_dt_types = SymSet.elements (SymSet.of_list all_dt_types) in
+  let new_sym sym = (sym, Sym.fresh_named ("list_of_" ^ Sym.pp_string sym)) in
+  let new_syms = List.map new_sym uniq_dt_types in
+  let list_mono = List.map (fun (s1, s2) -> (BT.Datatype s1, s2)) new_syms in
+  let global = List.fold_right add_list_mono_datatype list_mono global in
+  let map_bt bt = Option.value ~default:bt (mono_list_bt list_mono bt) in
+  let map_mems = List.map (fun (nm, bt) -> (nm, map_bt bt)) in
+  let datatypes = SymMap.map (fun info ->
+    BT.{info with dt_all_params = map_mems info.dt_all_params}) global.Global.datatypes in
+  let datatype_constrs = SymMap.map (fun info ->
+    BT.{info with c_params = map_mems info.c_params}) global.Global.datatype_constrs in
+  let global = Global.{global with datatypes; datatype_constrs} in
+  (list_mono, global)
 
 let it_adjust ci it =
   let rec new_nm s nms i =
@@ -391,6 +437,8 @@ let gen_ensure section k doc xs =
   let@ st = get in
   match StringListMap.find_opt k st.present with
   | None ->
+    Pp.debug 8 (lazy (Pp.item "finalising doc for section"
+        (Pp.brackets (Pp.list Pp.string k))));
     let@ fin_doc = Lazy.force doc in
     (* n.b. finalising the rhs-s of definitions might change the state *)
     let@ st = get in
@@ -408,6 +456,8 @@ let ensure_fun_upd () =
 let rec bt_to_coq ci loc_info =
   let open Pp in
   let open Global in
+  let do_fail nm bt = fail_m (fst loc_info) (Pp.item ("bt_to_coq: " ^ nm)
+        (BaseTypes.pp bt ^^^ !^ "in converting" ^^^ (snd loc_info))) in
   let rec f bt = match bt with
   | BaseTypes.Bool -> return (!^ "bool")
   | BaseTypes.Integer -> return (!^ "Z")
@@ -426,8 +476,11 @@ let rec bt_to_coq ci loc_info =
   | BaseTypes.Datatype tag ->
     let@ () = ensure_datatype ci (fst loc_info) tag in
     return (Sym.pp tag)
-  | _ -> fail_m (fst loc_info) (Pp.item "bt_to_coq: unsupported"
-        (BaseTypes.pp bt ^^^ !^ "in converting" ^^^ (snd loc_info)))
+  | BaseTypes.List bt2 -> begin match mono_list_bt ci.list_mono bt with
+    | Some bt3 -> f bt3
+    | _ -> do_fail "polymorphic list" bt
+  end
+  | _ -> do_fail "unsupported" bt
   in
   f
 
@@ -485,6 +538,30 @@ let ensure_datatype_member ci loc dt_tag mem_tag bt =
   )) [dt_tag; mem_tag]
   in
   return op_nm
+
+let ensure_list ci loc bt =
+  let@ dt_bt = match mono_list_bt ci.list_mono bt with
+    | Some x -> return x
+    | None -> fail_m loc (Pp.item "ensure_list: not a monomorphised list" (BT.pp bt))
+  in
+  let dt_sym = Option.get (BT.is_datatype_bt dt_bt) in
+  let dt_info = SymMap.find dt_sym ci.global.Global.datatypes in
+  let (nil_nm, cons_nm) = match dt_info.BT.dt_constrs with
+    | [nil; cons] -> (nil, cons)
+    | _ -> assert false
+  in
+  let open Pp in
+  let cons = parens (!^ "fun x ->" ^^^ Sym.pp cons_nm ^^^ !^ "x") in
+  let dest_op_nm = "dest_" ^ Sym.pp_string dt_sym in
+  let@ () = gen_ensure 0 ["types"; "list destructor"; Sym.pp_string dt_sym]
+  (lazy (
+      let nil_line = !^ "    |" ^^^ Sym.pp nil_nm ^^^ !^ "=>" ^^^ !^"None" in
+      let cons_line = !^ "    |" ^^^ Sym.pp cons_nm ^^^ !^ "y ys =>" ^^^ !^"Some (y, ys)" in
+      return (defn dest_op_nm [parens (typ (!^ "xs") (Sym.pp dt_sym))] None
+          (flow hardline [!^ "match xs with"; nil_line; cons_line; !^"    end"]))
+  )) [dt_sym]
+  in
+  return (Sym.pp nil_nm, cons, Pp.string dest_op_nm)
 
 let ensure_tuple_op is_upd nm (ix, l) =
   let ix_s = Int.to_string ix in
@@ -792,6 +869,17 @@ let it_to_coq loc ctxt ci it =
             end
         | _ -> fail_m loc (Pp.item "it_to_coq: unsupported datatype op" (IT.pp t))
     end
+    | IT.List_op op -> begin match op with
+        | IT.NthList (n, xs, d) ->
+            let@ (_, _, dest) = ensure_list ci loc (IT.bt xs) in
+            parensM (build [rets "CN_Lib.nth_list_z"; return dest;
+                aux n; aux xs; aux d])
+        | IT.ArrayToList (arr, i, len) ->
+            let@ (nil, cons, _) = ensure_list ci loc (IT.bt t) in
+            parensM (build [rets "CN_Lib.array_to_list"; return nil; return cons;
+                aux arr; aux i; aux len])
+        | _ -> fail_m loc (Pp.item "it_to_coq: unsupported list op" (IT.pp t))
+    end
     | _ -> fail_m loc (Pp.item "it_to_coq: unsupported" (IT.pp t))
   in
   f true it
@@ -1026,7 +1114,8 @@ let generate ctxt directions mu_file =
         mu_file.mu_logical_predicates SymMap.empty in
   let struct_decls = get_struct_decls mu_file in
   let global = Global.{ctxt.Context.global with struct_decls} in
-  let ci = {global; fun_info} in
+  let (list_mono, global) = monomorphise_dt_lists global in
+  let ci = {global; fun_info; list_mono} in
   let conv = List.map (fun x -> (x.sym, x.typ, x.loc, "pure")) pure
     @ List.map (fun x -> (x.sym, Option.get x.scan_res.res_coerce, x.loc, "coerced")) coerce in
   match convert_and_print channel ctxt ci conv init_t with
