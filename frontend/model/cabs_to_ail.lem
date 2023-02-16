@@ -2982,10 +2982,9 @@ and foo_aux
                     foo_aux acc elems (Just (i+1, elems_)) xs
               end
           | (cursor_path, _(*outer_path*), outer_ty) :: elems' ->
-              let do_scalar e =
+              let do_scalar d_e =
                 E.get_tag_definitions >>= fun tagDefs ->
                 let cursor_ty = innerCtype tagDefs outer_ty in
-                desugar_expression e >>= fun d_e ->
                 E.print_debugM 2 (fun () ->
                   "Init_expr, cursor_ty: " ^ Pp.stringFromAil_ctype Ctype.no_qualifiers cursor_ty ^
                   ", outer_ty: " ^ Pp.stringFromAil_ctype Ctype.no_qualifiers outer_ty ^
@@ -2999,6 +2998,9 @@ and foo_aux
                     d_e in
                 foo_aux (*entity_ty*) ((cursor_path, d_e') :: acc) elems' unknown_array xs'
               in
+              let do_scalar_with_desugar e =
+                desugar_expression e >>= fun d_e ->
+                do_scalar d_e in
               
               let do_string_literal loc lit =
                 if not (AilTypesAux.is_array_of_character outer_ty) then
@@ -3027,12 +3029,12 @@ and foo_aux
               match init_ with
                 | Init_expr (CabsExpression loc (CabsEstring lit) as e) ->
                     if AilTypesAux.is_scalar outer_ty then
-                      do_scalar e
+                      do_scalar_with_desugar e
                     else
                       do_string_literal loc lit
                 | Init_list [(Nothing, Init_expr (CabsExpression loc (CabsEstring lit) as e))] ->
                     if AilTypesAux.is_scalar outer_ty then
-                      do_scalar e
+                      do_scalar_with_desugar e
                     else
                       do_string_literal loc lit
 (*
@@ -3090,7 +3092,7 @@ and foo_aux
                           else if AilTypesAux.is_union ty then
                             error "TODO: foo_aux, Init_expr ==> union"
                           else
-                            do_scalar e
+                            do_scalar d_e
                     end
 (*                    do_scalar e *)
                 | Init_list ys ->
