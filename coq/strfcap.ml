@@ -162,7 +162,11 @@ module MorelloCapabilityWithStrfcap = struct
           then "?"
           else
             let (base,limit) = cap_get_bounds cap in
-            let z = Z.sub limit base in
+            (* length, as computed from the internal
+               representation of bounds, could exceed
+               the width of the return type. To avoid
+               that we cap it here *)
+            let z =  Z.min (Z.sub limit base) max_ptraddr in
             strnum z)
          @ loop tag cap fs
       | Final, 'o'::fs ->
@@ -193,7 +197,10 @@ module MorelloCapabilityWithStrfcap = struct
          let (base,limit) = cap_get_bounds cap in
          (if (get_ghost_state cap).bounds_unspecified
           then "?"
-          else strnum limit)
+          else
+           (* Internal representation of the limit could exceed the
+              width of the ptraddr_t. To avoid that we cap it here *)
+            strnum (Z.min limit max_ptraddr))
          @ loop tag cap fs
       | Final, 'v'::fs ->
          let z = if cap_is_valid cap then Z.succ Z.zero else Z.zero in

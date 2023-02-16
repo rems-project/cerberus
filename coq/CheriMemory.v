@@ -3849,8 +3849,13 @@ Module CheriMemory
                            then ret (Some (MVunspecified CoqCtype.size_t))
                            else
                              let '(base, limit) := Bounds.to_Zs (C.cap_get_bounds c_value) in
-                             let v_value := Z.sub limit base in
-                             ret (Some (MVinteger CoqCtype.Size_t (IV v_value)))
+                             (* length, as computed from the internal
+                                representation of bounds, could exceed
+                                the width of the return type. To avoid
+                                that we cap it here *)
+                             max_size_t <- serr2memM (max_ival CoqCtype.Size_t) ;;
+                             let length := Z.min (Z.sub limit base) (num_of_int max_size_t) in
+                             ret (Some (MVinteger CoqCtype.Size_t (IV length)))
                        end)
                 else
                   if String.eqb name "cheri_tag_get" then
