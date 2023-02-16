@@ -180,6 +180,7 @@ let fail err =
     | MerrWriteOnReadOnly (_, loc)
     | MerrReadUninit loc
     | MerrUndefinedFree (loc, _)
+    | MerrUndefinedRealloc (loc, _)
     | MerrFreeNullPtr loc
     | MerrArrayShift loc
     | MerrIntFromPtr loc ->
@@ -188,7 +189,6 @@ let fail err =
     | MerrInternal _
     | MerrOther _
     | MerrPtrdiff
-    | MerrUndefinedRealloc
     | MerrPtrFromInt
     | MerrPtrComparison
     | MerrWIP _
@@ -937,7 +937,7 @@ let memcmp ptrval1 ptrval2 sz_ival : integer_value memM =
         if equal acc zero then of_int (N.compare n1 n2) else acc
       ) zero (List.combine bytes1 bytes2)))
 
-let realloc tid al_ival ptrval size_ival : pointer_value memM =
+let realloc loc tid al_ival ptrval size_ival : pointer_value memM =
   not_implemented "VIP.realloc"
 
 

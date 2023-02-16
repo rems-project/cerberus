@@ -602,8 +602,10 @@ Inductive undefined_behaviour : Type :=
   (* The pointer argument to the free or realloc function does not match a pointer earlier returned
      by a memory management function, or the space has been deallocated by a call to free or realloc
      (7.22.3.3, 7.22.3.5). *)
-  | UB179a_static_allocation: undefined_behaviour 
-  | UB179b_dead_allocation: undefined_behaviour 
+  | UB179a_non_matching_allocation_free : undefined_behaviour
+  | UB179b_dead_allocation_free : undefined_behaviour
+  | UB179c_non_matching_allocation_realloc : undefined_behaviour
+  | UB179d_dead_allocation_realloc : undefined_behaviour
 
   (* The value of the object allocated by the malloc function is used (7.22.3.4). *)
   | UB180: undefined_behaviour 
@@ -691,8 +693,10 @@ Inductive undefined_behaviour : Type :=
   (* UB from variant 1 of the no integer provenance semantics (see note 0117) *)
   | UB_CERB001_integer_to_dead_pointer: undefined_behaviour 
   
-  | UB_CERB002a_out_of_bound_load: undefined_behaviour 
-  | UB_CERB002b_out_of_bound_store: undefined_behaviour 
+  | UB_CERB002a_out_of_bound_load: undefined_behaviour
+  | UB_CERB002b_out_of_bound_store: undefined_behaviour
+  | UB_CERB002c_out_of_bound_free: undefined_behaviour
+  | UB_CERB002d_out_of_bound_realloc: undefined_behaviour
 
   | UB_CERB003_invalid_function_pointer: undefined_behaviour 
 
