@@ -566,6 +566,8 @@ module CHERIMorello : Memory = struct
     | UB_CERB001_integer_to_dead_pointer                   -> UB_CERB001_integer_to_dead_pointer
     | UB_CERB002a_out_of_bound_load                        -> UB_CERB002a_out_of_bound_load
     | UB_CERB002b_out_of_bound_store                       -> UB_CERB002b_out_of_bound_store
+    | UB_CERB002c_out_of_bound_free                        -> UB_CERB002c_out_of_bound_free
+    | UB_CERB002d_out_of_bound_realloc                     -> UB_CERB002d_out_of_bound_realloc
     | UB_CERB003_invalid_function_pointer                  -> UB_CERB003_invalid_function_pointer
     | UB_CHERI_InvalidCap                                  -> UB_CHERI_InvalidCap
     | UB_CHERI_UnsufficientPermissions                     -> UB_CHERI_UnsufficientPermissions

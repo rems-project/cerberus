@@ -693,8 +693,10 @@ Inductive undefined_behaviour : Type :=
   (* UB from variant 1 of the no integer provenance semantics (see note 0117) *)
   | UB_CERB001_integer_to_dead_pointer: undefined_behaviour 
   
-  | UB_CERB002a_out_of_bound_load: undefined_behaviour 
-  | UB_CERB002b_out_of_bound_store: undefined_behaviour 
+  | UB_CERB002a_out_of_bound_load: undefined_behaviour
+  | UB_CERB002b_out_of_bound_store: undefined_behaviour
+  | UB_CERB002c_out_of_bound_free: undefined_behaviour
+  | UB_CERB002d_out_of_bound_realloc: undefined_behaviour
 
   | UB_CERB003_invalid_function_pointer: undefined_behaviour 
 

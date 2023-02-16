@@ -692,8 +692,11 @@ type undefined_behaviour =
   
   | UB_CERB002a_out_of_bound_load
   | UB_CERB002b_out_of_bound_store
+  | UB_CERB002c_out_of_bound_free
+  | UB_CERB002d_out_of_bound_realloc
 
   | UB_CERB003_invalid_function_pointer
+
 
   (* CHERI-specific UBs below  *)
   | UB_CHERI_InvalidCap
@@ -1004,6 +1007,8 @@ let ub_str_bimap =
     ; (UB_CERB001_integer_to_dead_pointer, "UB_CERB001_integer_to_dead_pointer")
     ; (UB_CERB002a_out_of_bound_load, "UB_CERB002a_out_of_bound_load")
     ; (UB_CERB002b_out_of_bound_store, "UB_CERB002b_out_of_bound_store")
+    ; (UB_CERB002c_out_of_bound_free, "UB_CERB002c_out_of_bound_free")
+    ; (UB_CERB002d_out_of_bound_realloc, "UB_CERB002d_out_of_bound_realloc")
     ; (UB_CERB003_invalid_function_pointer, "UB_CERB003_invalid_function_pointer")
     ; (UB_CHERI_InvalidCap,"UB_CHERI_InvalidCap")
     ; (UB_CHERI_UnsufficientPermissions,"UB_CHERI_UnsufficientPermissions")
@@ -1099,6 +1104,10 @@ let ub_short_string = function
       "out of bounds pointer at memory load"
   | UB_CERB002b_out_of_bound_store ->
       "out of bounds pointer at memory store"
+  | UB_CERB002c_out_of_bound_free ->
+      "out of bounds pointer in free()"
+  | UB_CERB002d_out_of_bound_realloc ->
+      "out of bounds pointer in realloc()"
   | UB_CERB003_invalid_function_pointer ->
       "invalid function pointer"
   | ub ->
@@ -1224,6 +1233,10 @@ let pretty_string_of_undefined_behaviour = function
       "(CERB) provenance check failed during a load"
   | UB_CERB002b_out_of_bound_store ->
       "(CERB) provenance check failed during a store"
+  | UB_CERB002c_out_of_bound_free ->
+      "(CERB) provenance check failed in free()"
+  | UB_CERB002d_out_of_bound_realloc ->
+      "(CERB) provenance check failed in realloc()"
   | UB_CERB003_invalid_function_pointer ->
       "invalid function pointer"
   | Invalid_format str ->

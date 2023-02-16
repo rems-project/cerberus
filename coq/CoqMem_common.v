@@ -253,14 +253,14 @@ Definition instance_Show_Show_Mem_common_mem_error_dict
     | MerrUndefinedFree loc Free_dead_allocation =>
         Some UB179b_dead_allocation_free
     | MerrUndefinedFree loc Free_out_of_bound =>
-        None (* this is not a UB but rather an internal error *)
+        Some UB_CERB002c_out_of_bound_free
 
     | MerrUndefinedRealloc loc Free_non_matching =>
         Some UB179c_non_matching_allocation_realloc
     | MerrUndefinedRealloc loc Free_dead_allocation =>
         Some UB179d_dead_allocation_realloc
     | MerrUndefinedRealloc loc Free_out_of_bound =>
-        None (* this is not a UB but rather an internal error *)
+        Some UB_CERB002d_out_of_bound_realloc
 
     | MerrWriteOnReadOnly true _ =>
         Some UB033_modifying_string_literal
