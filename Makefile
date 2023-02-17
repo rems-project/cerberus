@@ -46,6 +46,12 @@ sibylfs: sibylfs-src
 cerberus: prelude-src
 	@echo "[DUNE] cerberus"
 	$(Q)dune build cerberus.install
+	
+.PHONY: test
+test: prelude-src
+	@echo "testing"
+	$(Q)dune build coq/Morello/MorelloTests.vo
+	dune exec coq/coqcaptest.exe
 
 .PHONY: cerberus-bmc bmc
 bmc: cerberus-bmc

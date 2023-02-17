@@ -1,5 +1,5 @@
 
-From Cerberus Require CheriMemory.
+From CheriMemory Require CheriMemory.
 From Morello Require Morello.
 
 From Coq Require Extraction.
