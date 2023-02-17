@@ -47,7 +47,7 @@ Module test_cap_getters_and_setters.
   Definition c7:Capability.t := Capability.of_Z 0x14C0000007F1CFF1500000000FFFFFF15.
   Definition c8:Capability.t := Capability.of_Z 0x1900000007f1cff1500000000ffffff15.
   
-  Program Definition flags1:Flags.t := exist _ [true; false; false; false; false; false; false; false] _. 
+  Program Definition flags1:Flags.t := exist _ [false; false; false; false; false; false; false; false] _. 
     Next Obligation. reflexivity. Defined.
   Program Definition flags2:Flags.t := exist _ [false; true; false; true; false; true; false; true] _. 
     Next Obligation. reflexivity. Defined.
