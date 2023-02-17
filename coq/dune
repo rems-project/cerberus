@@ -1,7 +1,3 @@
-(coq.theory
- (name Cerberus)
- (modules CapFns CapFnsTypes SimpleError Utils Addr CoqLocation Capabilities Morello MorelloTests CoqAnnot CoqCtype CoqSwitches CoqImplementation CoqAilSyntax CoqAilTypesAux ErrorWithState CoqMem_common Memory_model CoqSymbol CoqUndefined CoqTags CheriMemory)
-)
 
 (rule
  (deps extracted/CRelationClasses.mli.patch extracted/patch.sh)

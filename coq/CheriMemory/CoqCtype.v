@@ -7,11 +7,11 @@ Require Import Coq.ZArith.Zcompare.
 Require Import ExtLib.Structures.Monad.
 Require Import ExtLib.Structures.MonadExc.
 
+From Common Require Import Utils SimpleError.
+
 Require Import CoqLocation.
 Require Import CoqSymbol.
 Require Import CoqAnnot.
-Require Import Utils.
-Require Import SimpleError.
 
 Import MonadNotation.
 
