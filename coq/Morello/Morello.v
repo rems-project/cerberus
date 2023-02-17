@@ -9,7 +9,7 @@ From stdpp.unstable Require Import bitvector.
 Require Import Sail.Values.
 Require Import Sail.Operators_mwords.
 Require Import CapFns.
-Require Import Utils.
+Require Import Common.Utils.
 
 Require Import Capabilities.
 Require Import Addr.

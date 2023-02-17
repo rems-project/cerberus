@@ -1,0 +1,5 @@
+(coq.theory
+ (name Cerberus)
+ (modules CoqLocation CoqAnnot CoqCtype CoqSwitches CoqImplementation CoqAilSyntax CoqAilTypesAux ErrorWithState CoqMem_common Memory_model CoqSymbol CoqUndefined CoqTags CheriMemory)
+ (theories Common Morello)
+)

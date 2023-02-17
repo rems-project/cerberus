@@ -10,7 +10,7 @@ Require Import Coq.Structures.OrderedTypeEx.
 Require Import StructTact.StructTactics.
 Require Import Lia.
 Require Import CoqLocation.
-Require Import Utils.
+Require Import Common.Utils.
 
 Inductive identifier : Type :=
   | Identifier:  location_ocaml  ->  string  -> identifier .

@@ -15,7 +15,9 @@ From ExtLib.Data.Monads Require Import EitherMonad OptionMonad.
 
 From Coq.Lists Require Import List ListSet. (* after exltlib *)
 
-Require Import SimpleError Capabilities Addr Memory_model CoqMem_common ErrorWithState CoqUndefined Morello ErrorWithState CoqLocation CoqSymbol CoqImplementation CoqTags Utils CoqSwitches CoqAilTypesAux.
+From Common Require Import SimpleError Utils.
+From Morello Require Import Addr Capabilities Morello.
+Require Import Memory_model CoqMem_common ErrorWithState CoqUndefined ErrorWithState CoqLocation CoqSymbol CoqImplementation CoqTags CoqSwitches CoqAilTypesAux.
 
 Local Open Scope string_scope.
 Local Open Scope type_scope.

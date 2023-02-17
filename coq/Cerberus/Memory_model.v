@@ -5,13 +5,12 @@ Require Import Coq.Numbers.BinNums.
 
 Require Import ExtLib.Structures.Monad.
 
-Require Import Addr.
-Require Import Capabilities.
+From Morello Require Import Addr Capabilities.
 Require Import CoqLocation.
 Require Import CoqSymbol.
 Require Import CoqMem_common.
 Require Import CoqCtype.
-Require Import SimpleError.
+Require Import Common.SimpleError.
 
 Set Implicit Arguments.
 Set Strict Implicit.

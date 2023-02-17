@@ -1,13 +1,12 @@
 Require Import Coq.Numbers.BinNums.
 Require Import Coq.Strings.String.
 
-Require Import Addr.
-Require Import Capabilities.
+From Morello Require Import Addr Capabilities.
 Require Import CoqUndefined.
 Require Import CoqLocation.
 Require CoqAilSyntax.
 Require Import CoqCtype.
-Require Import SimpleError.
+Require Import Common.SimpleError.
 
 Module Mem_common (A:PTRADDR) (B:PTRADDR_INTERVAL A).
 
