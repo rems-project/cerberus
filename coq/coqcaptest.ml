@@ -403,6 +403,26 @@ let tests = "coq_morello_caps" >::: [
              "0" s'
       );
 
+      "strfcap C0 hex len" >:: (fun _ ->
+        let c = M.cap_c0 () in
+        match M.strfcap "%xl" c with
+        | None -> assert_failure "strfcap failed"
+        | Some s' ->
+           assert_equal
+             ~pp_diff:string_diff
+             "ffffffffffffffff" s'
+      );
+
+      "strfcap C0 hex top" >:: (fun _ ->
+        let c = M.cap_c0 () in
+        match M.strfcap "%xt" c with
+        | None -> assert_failure "strfcap failed"
+        | Some s' ->
+           assert_equal
+             ~pp_diff:string_diff
+             "ffffffffffffffff" s'
+      );
+
       "strfcap C0 perm" >:: (fun _ ->
         let c = M.cap_c0 () in
         match M.strfcap "%P" c with

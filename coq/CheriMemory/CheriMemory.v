@@ -216,7 +216,7 @@ Module CheriMemory
       bytemap : ZMap.t AbsByte;
       capmeta : ZMap.t (bool* CapGhostState);
       dead_allocations : list storage_instance_id;
-      dynamic_addrs : list Morello.AddressValue.t;
+      dynamic_addrs : list C.t;
       last_used : option storage_instance_id
     }.
 
@@ -328,6 +328,7 @@ Module CheriMemory
       | MerrWriteOnReadOnly _ loc
       | MerrReadUninit loc
       | MerrUndefinedFree loc _
+      | MerrUndefinedRealloc loc _
       | MerrFreeNullPtr loc
       | MerrArrayShift loc
       | MerrIntFromPtr loc =>
@@ -336,7 +337,6 @@ Module CheriMemory
       | MerrInternal _
       | MerrOther _
       | MerrPtrdiff
-      | MerrUndefinedRealloc
       | MerrPtrFromInt
       | MerrPtrComparison
       | MerrWIP _
@@ -923,6 +923,7 @@ Module CheriMemory
              is_readonly := IsWritable;
              taint := Unexposed |}
          in
+         let c_value := C.alloc_cap addr (AddressValue.of_Z size_n') in
          update
            (fun (st : mem_state) =>
               {|
@@ -937,20 +938,20 @@ Module CheriMemory
                 bytemap          := st.(bytemap);
                 capmeta          := st.(capmeta);
                 dead_allocations := st.(dead_allocations);
-                dynamic_addrs    := addr::st.(dynamic_addrs);
+                dynamic_addrs    := c_value::st.(dynamic_addrs);
                 last_used        := st.(last_used);
               |})
          ;;
-         (let c_value := C.alloc_cap addr (AddressValue.of_Z size_n') in
-          ret (PV (Prov_some alloc_id) (PVconcrete c_value))
+          ret (PV (Prov_some alloc_id) (PVconcrete c_value)
       )).
 
   Definition cap_is_null  (c : C.t) : bool :=
     Z.eqb (AddressValue.to_Z (C.cap_get_value c)) 0.
 
-  Definition is_dynamic addr : memM bool :=
+
+  Definition is_dynamic c : memM bool :=
     get >>= fun st =>
-        ret (set_mem Z_as_OT.eq_dec (AddressValue.to_Z addr) (List.map AddressValue.to_Z st.(dynamic_addrs))).
+        ret (List.existsb (C.eqb c) st.(dynamic_addrs)).
 
   Definition is_dead (alloc_id : storage_instance_id) : memM bool :=
     get >>= fun st =>
@@ -1038,7 +1039,7 @@ Module CheriMemory
               (fun x => match x with
                         | true =>
                             ret
-                              (FAIL (MerrUndefinedFree loc Free_static_allocation))
+                              (FAIL (MerrUndefinedFree loc Free_dead_allocation))
                         | false =>
                             get_allocation z >>=
                               (fun alloc =>
@@ -1054,10 +1055,10 @@ Module CheriMemory
                         end)
           in
           (if is_dyn then
-             (is_dynamic (C.cap_get_value addr)) >>=
+             (is_dynamic addr) >>=
                (fun (b : bool) =>
                   if b then ret tt
-                  else fail (MerrUndefinedFree loc Free_static_allocation))
+                  else fail (MerrUndefinedFree loc Free_non_matching))
            else
              ret tt) ;;
           resolve_iota precondition iota >>=
@@ -1092,10 +1093,10 @@ Module CheriMemory
          else
            if is_dyn then
              (* this kill is dynamic one (i.e. free() or friends) *)
-             is_dynamic (C.cap_get_value addr) >>=
+             is_dynamic addr >>=
                fun x => match x with
                         | false =>
-                            fail (MerrUndefinedFree loc (Free_static_allocation))
+                            fail (MerrUndefinedFree loc (Free_non_matching))
                         | true => ret tt
                         end
            else
@@ -3250,6 +3251,7 @@ Module CheriMemory
                         (List.combine bytes1 bytes2) 0)))).
 
   Definition realloc
+    (loc : location_ocaml)
     (tid : thread_id) (align : integer_value) (ptr : pointer_value)
     (size : integer_value) : memM pointer_value
     :=
@@ -3261,25 +3263,31 @@ Module CheriMemory
           fail (MerrWIP "realloc no provenance")
     | PV (Prov_some alloc_id) (PVconcrete c_value) =>
         let addr := (C.cap_get_value c_value) in
-        is_dynamic addr >>=
-          (fun (function_parameter : bool) =>
-             match function_parameter with
-             | false => fail MerrUndefinedRealloc
+        is_dynamic c_value >>=
+          (fun (x : bool) =>
+             match x with
+             | false => fail (MerrUndefinedRealloc loc Free_non_matching)
              | true =>
-                 get_allocation alloc_id >>=
-                   (fun (alloc : allocation) =>
-                      if Morello.AddressValue.eqb alloc.(base) addr then
-                        allocate_region tid (CoqSymbol.PrefOther "realloc") align size >>=
-                          (fun (new_ptr : pointer_value) =>
-                             let size_to_copy :=
-                               let size_n := num_of_int size in
-                               IV (Z.min (CheriMemory.size alloc) size_n) in
-                             memcpy new_ptr ptr size_to_copy ;;
-                             kill (Loc_other "realloc") true ptr ;;
-                             ret new_ptr)
-                      else
-                        fail
-                          (MerrWIP "realloc: invalid pointer"))
+                 is_dead alloc_id >>=
+                   (fun x => match x with
+                          | true =>
+                              fail (MerrUndefinedRealloc loc Free_dead_allocation)
+                          | false =>
+                              get_allocation alloc_id >>=
+                                (fun (alloc : allocation) =>
+                                   if Morello.AddressValue.eqb alloc.(base) addr then
+                                     allocate_region tid (CoqSymbol.PrefOther "realloc") align size >>=
+                                       (fun (new_ptr : pointer_value) =>
+                                          let size_to_copy :=
+                                            let size_n := num_of_int size in
+                                            IV (Z.min (CheriMemory.size alloc) size_n) in
+                                          memcpy new_ptr ptr size_to_copy ;;
+                                          kill (Loc_other "realloc") true ptr ;;
+                                          ret new_ptr)
+                                   else
+                                     fail
+                                       (MerrUndefinedRealloc loc Free_out_of_bound))
+                          end)
              end)
     | PV _ _ =>
         fail (MerrWIP "realloc: invalid pointer")
@@ -3851,8 +3859,13 @@ Module CheriMemory
                            then ret (Some (MVunspecified CoqCtype.size_t))
                            else
                              let '(base, limit) := Bounds.to_Zs (C.cap_get_bounds c_value) in
-                             let v_value := Z.sub limit base in
-                             ret (Some (MVinteger CoqCtype.Size_t (IV v_value)))
+                             (* length, as computed from the internal
+                                representation of bounds, could exceed
+                                the width of the return type. To avoid
+                                that we cap it here *)
+                             max_size_t <- serr2memM (max_ival CoqCtype.Size_t) ;;
+                             let length := Z.min (Z.sub limit base) (num_of_int max_size_t) in
+                             ret (Some (MVinteger CoqCtype.Size_t (IV length)))
                        end)
                 else
                   if String.eqb name "cheri_tag_get" then

@@ -599,8 +599,10 @@ type undefined_behaviour =
   (* The pointer argument to the free or realloc function does not match a pointer earlier returned
      by a memory management function, or the space has been deallocated by a call to free or realloc
      (7.22.3.3, 7.22.3.5). *)
-  | UB179a_static_allocation
-  | UB179b_dead_allocation
+  | UB179a_non_matching_allocation_free
+  | UB179b_dead_allocation_free
+  | UB179c_non_matching_allocation_realloc
+  | UB179d_dead_allocation_realloc
 
   (* The value of the object allocated by the malloc function is used (7.22.3.4). *)
   | UB180
@@ -690,8 +692,11 @@ type undefined_behaviour =
   
   | UB_CERB002a_out_of_bound_load
   | UB_CERB002b_out_of_bound_store
+  | UB_CERB002c_out_of_bound_free
+  | UB_CERB002d_out_of_bound_realloc
 
   | UB_CERB003_invalid_function_pointer
+
 
   (* CHERI-specific UBs below  *)
   | UB_CHERI_InvalidCap
@@ -967,8 +972,10 @@ let ub_str_bimap =
     ; (UB176, "UB176")
     ; (UB177, "UB177")
     ; (UB178, "UB178")
-    ; (UB179a_static_allocation, "UB179a_static_allocation")
-    ; (UB179b_dead_allocation, "UB179b_dead_allocation")
+    ; (UB179a_non_matching_allocation_free, "UB179a_non_matching_allocation_free")
+    ; (UB179b_dead_allocation_free, "UB179b_dead_allocation_free")
+    ; (UB179c_non_matching_allocation_realloc, "UB179c_non_matching_allocation_realloc")
+    ; (UB179d_dead_allocation_realloc,"UB179d_dead_allocation_realloc")
     ; (UB180, "UB180")
     ; (UB181, "UB181")
     ; (UB182, "UB182")
@@ -1000,6 +1007,8 @@ let ub_str_bimap =
     ; (UB_CERB001_integer_to_dead_pointer, "UB_CERB001_integer_to_dead_pointer")
     ; (UB_CERB002a_out_of_bound_load, "UB_CERB002a_out_of_bound_load")
     ; (UB_CERB002b_out_of_bound_store, "UB_CERB002b_out_of_bound_store")
+    ; (UB_CERB002c_out_of_bound_free, "UB_CERB002c_out_of_bound_free")
+    ; (UB_CERB002d_out_of_bound_realloc, "UB_CERB002d_out_of_bound_realloc")
     ; (UB_CERB003_invalid_function_pointer, "UB_CERB003_invalid_function_pointer")
     ; (UB_CHERI_InvalidCap,"UB_CHERI_InvalidCap")
     ; (UB_CHERI_UnsufficientPermissions,"UB_CHERI_UnsufficientPermissions")
@@ -1095,6 +1104,10 @@ let ub_short_string = function
       "out of bounds pointer at memory load"
   | UB_CERB002b_out_of_bound_store ->
       "out of bounds pointer at memory store"
+  | UB_CERB002c_out_of_bound_free ->
+      "out of bounds pointer in free()"
+  | UB_CERB002d_out_of_bound_realloc ->
+      "out of bounds pointer in realloc()"
   | UB_CERB003_invalid_function_pointer ->
       "invalid function pointer"
   | ub ->
@@ -1220,6 +1233,10 @@ let pretty_string_of_undefined_behaviour = function
       "(CERB) provenance check failed during a load"
   | UB_CERB002b_out_of_bound_store ->
       "(CERB) provenance check failed during a store"
+  | UB_CERB002c_out_of_bound_free ->
+      "(CERB) provenance check failed in free()"
+  | UB_CERB002d_out_of_bound_realloc ->
+      "(CERB) provenance check failed in realloc()"
   | UB_CERB003_invalid_function_pointer ->
       "invalid function pointer"
   | Invalid_format str ->

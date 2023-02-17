@@ -133,6 +133,7 @@ Module Type Memory (A:PTRADDR) (B:PTRADDR_INTERVAL A).
     pointer_value -> pointer_value -> integer_value -> memM integer_value.
 
   Parameter realloc :
+    location_ocaml ->
     thread_id -> integer_value -> pointer_value ->
     integer_value -> memM pointer_value.
 

@@ -110,7 +110,7 @@ module type Memory = sig
   
   val memcpy: pointer_value -> pointer_value -> integer_value -> pointer_value memM
   val memcmp: pointer_value -> pointer_value -> integer_value -> integer_value memM
-  val realloc: Mem_common.thread_id -> integer_value -> pointer_value -> integer_value -> pointer_value memM
+  val realloc: Location_ocaml.t -> Mem_common.thread_id -> integer_value -> pointer_value -> integer_value -> pointer_value memM
 
   val va_start: (Ctype.ctype * pointer_value) list -> integer_value memM
   val va_copy: integer_value -> integer_value memM

@@ -42,14 +42,15 @@ let stringFromAccess_error = function
       "AtomicMemberof"
 end
 
+(* used for both free and realloc *)
 type free_error =
-  | Free_static_allocation
+  | Free_non_matching (* does not match any existing dynamic allocation *)
   | Free_dead_allocation
-  | Free_out_of_bound
+  | Free_out_of_bound (* the address is matching, but out of bound of the provenance *)
 
 let stringFromFree_error = function
-  | Free_static_allocation ->
-      "Free_static_allocation"
+  | Free_non_matching ->
+      "Free_non_matching"
   | Free_dead_allocation ->
       "Free_dead_allocation"
   | Free_out_of_bound ->
@@ -111,7 +112,7 @@ type mem_error =
 
   
   | MerrUndefinedFree of Loc.t * free_error
-  | MerrUndefinedRealloc
+  | MerrUndefinedRealloc of Loc.t * free_error
   
   | MerrIntFromPtr of Loc.t
   | MerrPtrFromInt
@@ -153,8 +154,8 @@ instance (Show mem_error)
     
     | MerrUndefinedFree loc err ->
         "MerrUndefinedFree [" ^ Loc.stringFromLocation loc ^ "] " ^ stringFromFree_error err
-    | MerrUndefinedRealloc ->
-        "MerrUndefinedRealloc"
+    | MerrUndefinedRealloc loc err ->
+        "MerrUndefinedRealloc [" ^ Loc.stringFromLocation loc ^ "] " ^ stringFromFree_error err
     | MerrIntFromPtr loc ->
         "MerrIntFromPtr [" ^ Loc.stringFromLocation loc ^ "]"
     | MerrPtrFromInt ->
@@ -240,15 +241,20 @@ let undefinedFromMem_error = function
   | MerrAccess _ _ AtomicMemberof ->
       Just Undefined.UB042_access_atomic_structUnion_member
   
-  | MerrUndefinedFree loc Free_static_allocation ->
-      Just Undefined.UB179a_static_allocation
+  | MerrUndefinedFree loc Free_non_matching ->
+      Just Undefined.UB179a_non_matching_allocation_free
   | MerrUndefinedFree loc Free_dead_allocation ->
-      Just Undefined.UB179b_dead_allocation
+      Just Undefined.UB179b_dead_allocation_free
   | MerrUndefinedFree loc Free_out_of_bound ->
-      Nothing (* TODO *)
-  | MerrUndefinedRealloc ->
-      (* TODO *)
-      Just Undefined.UB179a_static_allocation
+     Nothing (* this is not a UB but rather an internal error *)
+
+  | MerrUndefinedRealloc loc Free_non_matching ->
+      Just Undefined.UB179c_non_matching_allocation_realloc
+  | MerrUndefinedRealloc loc Free_dead_allocation ->
+      Just Undefined.UB179d_dead_allocation_realloc
+  | MerrUndefinedRealloc loc Free_out_of_bound ->
+     Nothing (* this is not a UB but rather an internal error *)
+
   | MerrWriteOnReadOnly true _ ->
       Just Undefined.UB033_modifying_string_literal
   | MerrWriteOnReadOnly false _ ->

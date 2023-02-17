@@ -316,7 +316,7 @@ module CHERIMorello : Memory = struct
     | CheriUndefinedTag -> CheriUndefinedTag
 
   let from_Coq_free_error: MM.free_error -> free_error = function
-    | Free_static_allocation -> Free_static_allocation
+    | Free_non_matching -> Free_non_matching
     | Free_dead_allocation -> Free_dead_allocation
     | Free_out_of_bound -> Free_out_of_bound
 
@@ -329,7 +329,7 @@ module CHERIMorello : Memory = struct
     | MerrWriteOnReadOnly (b,l) -> MerrWriteOnReadOnly (b,fromCoq_location l)
     | MerrReadUninit l -> MerrReadUninit (fromCoq_location l)
     | MerrUndefinedFree (l,e) -> MerrUndefinedFree (fromCoq_location l, from_Coq_free_error e)
-    | MerrUndefinedRealloc -> MerrUndefinedRealloc
+    | MerrUndefinedRealloc (l,e) -> MerrUndefinedRealloc (fromCoq_location l, from_Coq_free_error e)
     | MerrIntFromPtr l -> MerrIntFromPtr (fromCoq_location l)
     | MerrPtrFromInt -> MerrPtrFromInt
     | MerrPtrComparison -> MerrPtrComparison
@@ -531,8 +531,10 @@ module CHERIMorello : Memory = struct
     | UB176                                                -> UB176
     | UB177                                                -> UB177
     | UB178                                                -> UB178
-    | UB179a_static_allocation                             -> UB179a_static_allocation
-    | UB179b_dead_allocation                               -> UB179b_dead_allocation
+    | UB179a_non_matching_allocation_free                  -> UB179a_non_matching_allocation_free
+    | UB179b_dead_allocation_free                          -> UB179b_dead_allocation_free
+    | UB179c_non_matching_allocation_realloc               -> UB179c_non_matching_allocation_realloc
+    | UB179d_dead_allocation_realloc                       -> UB179d_dead_allocation_realloc
     | UB180                                                -> UB180
     | UB181                                                -> UB181
     | UB182                                                -> UB182
@@ -564,6 +566,8 @@ module CHERIMorello : Memory = struct
     | UB_CERB001_integer_to_dead_pointer                   -> UB_CERB001_integer_to_dead_pointer
     | UB_CERB002a_out_of_bound_load                        -> UB_CERB002a_out_of_bound_load
     | UB_CERB002b_out_of_bound_store                       -> UB_CERB002b_out_of_bound_store
+    | UB_CERB002c_out_of_bound_free                        -> UB_CERB002c_out_of_bound_free
+    | UB_CERB002d_out_of_bound_realloc                     -> UB_CERB002d_out_of_bound_realloc
     | UB_CERB003_invalid_function_pointer                  -> UB_CERB003_invalid_function_pointer
     | UB_CHERI_InvalidCap                                  -> UB_CHERI_InvalidCap
     | UB_CHERI_UnsufficientPermissions                     -> UB_CHERI_UnsufficientPermissions
@@ -1065,8 +1069,8 @@ module CHERIMorello : Memory = struct
   let memcmp ptrval1 ptrval2 size_int =
     lift_coq_memM "memcmp" (MM.memcmp ptrval1 ptrval2 size_int)
 
-  let realloc tid align ptr size =
-    lift_coq_memM "realloc" (MM.realloc (Z.of_int tid) align ptr size)
+  let realloc loc tid align ptr size =
+    lift_coq_memM "realloc" (MM.realloc (toCoq_location loc) (Z.of_int tid) align ptr size)
 
   let va_start (args:(Ctype.ctype * pointer_value) list): integer_value memM =
     let args = List.map (fun (t,p) -> (toCoq_ctype t, p)) args in
