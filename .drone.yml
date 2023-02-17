@@ -20,20 +20,20 @@ steps:
     commands:
       - |
         if [ '${DRONE_BUILD_EVENT}' = cron ] || [ '${DRONE_BUILD_EVENT}' = promote ]                          || \
-           [ -z "$(docker image ls --quiet 'cache--${DRONE_REPO_NAME}:${DRONE_BRANCH}')" ]                   || \
+           [ -z "$(docker image ls --quiet 'cache--${DRONE_REPO_NAME}:${DRONE_SOURCE_BRANCH}')" ]                   || \
            ! git diff --quiet --exit-code ${DRONE_COMMIT_BEFORE}..${DRONE_COMMIT_AFTER} Dockerfile.ci cerberus.opam ;  \
         then                                                                                                     \
-            docker build --no-cache -t 'cache--${DRONE_REPO_NAME}:${DRONE_BRANCH}' -f Dockerfile.ci . ;     \
+            docker build --no-cache -t 'cache--${DRONE_REPO_NAME}:${DRONE_SOURCE_BRANCH}' -f Dockerfile.ci . ;     \
         fi
 
   - name: compile-cerberus
-    image: cache--${DRONE_REPO_NAME}:${DRONE_BRANCH}
+    image: cache--${DRONE_REPO_NAME}:${DRONE_SOURCE_BRANCH}
     pull: never
     commands:
       - opam exec -- make
 
   - name: test-cerberus
-    image: cache--${DRONE_REPO_NAME}:${DRONE_BRANCH}
+    image: cache--${DRONE_REPO_NAME}:${DRONE_SOURCE_BRANCH}
     pull: never
     commands:
       - opam exec -- dune exec coq/coqcaptest.exe
