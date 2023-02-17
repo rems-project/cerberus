@@ -1,5 +1,4 @@
--R . Cerberus
-
-# -R Common/ Common
-# -Q Morello/ Morello
-# -Q CheriMemory CheriMemory
+-R . ""
+-R Common/ Common
+-R Morello/ Morello
+-R CheriMemory/ CheriMemory
