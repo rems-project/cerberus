@@ -36,7 +36,7 @@ steps:
     image: cache--${DRONE_REPO_NAME}:${DRONE_SOURCE_BRANCH}
     pull: never
     commands:
-      - opam exec -- dune exec coq/coqcaptest.exe
+      - opam exec -- make test
 
 volumes:
   - name: dockersock
