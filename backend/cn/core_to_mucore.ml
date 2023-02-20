@@ -847,6 +847,8 @@ let make_rt (loc : loc) (env : C.env) (s, ct) conditions =
   let ct = convert_ct loc ct in
   let bt = BT.of_sct ct in
   let@ lrt = make_lrt (C.add_computational s bt env) conditions in
+  let info = (loc, Some "return value good") in
+  let lrt = LRT.mConstraint (LC.t_ (IT.good_ (ct, IT.sym_ (s, bt))), info) lrt in
   return (RT.mComputational ((s, bt), (loc, None)) lrt)
 
 
@@ -875,17 +877,24 @@ let make_largs f_i =
   in
   aux
 
+let require_good loc args lat =
+  let good (s, ct) =
+    let info = (loc, Some (Sym.pp_string s ^ " good")) in
+    let bt = BT.of_sct ct in
+    (LC.t_ (IT.good_ (ct, IT.sym_ (s, bt))), info)
+  in
+  Mu.mConstraints (List.map good args) lat
 
 let make_args f_i loc env args conditions =
+  let args = List.map_snd (convert_ct loc) args in
   let rec aux env = function
     | (s, ct) :: rest ->
-       let ct = convert_ct loc ct in
        let bt = BT.of_sct ct in
        let@ at = aux (C.add_computational s bt env) rest in
        return (Mu.mComputational ((s, bt), (loc, None)) at)
     | [] -> 
        let@ lat = make_largs f_i env conditions in
-       return (M_L lat)
+       return (M_L (require_good loc args lat))
   in
   aux env args
 
@@ -1035,6 +1044,7 @@ let normalise_fun_map_decl ail_prog env globals d_st (funinfo: mi_funinfo) loop_
   | Mi_Fun (bt, args, pe) -> 
      assert false
   | Mi_Proc (loc, _mrk, ret_bt, args, body, labels) -> 
+     Print.debug 2 (lazy (Print.item ("normalising procedure") (Sym.pp fname)));
      let (_, ail_marker, _, _, _) = List.assoc Sym.equal fname ail_prog.function_definitions in
      let ail_env = Pmap.find ail_marker ail_prog.markers_env in
      let@ trusted, accesses, requires, ensures = Parse.parse_function_spec attrs in

@@ -47,13 +47,16 @@ let parse_function_spec (Attrs attributes) =
   let attributes = List.rev attributes in
   let@ conditions =
     ListM.concat_mapM (fun attr ->
-        match Option.map Id.s (attr.attr_ns), Id.s (attr.attr_id) with
-        | Some "cerb", "magic" ->
-           ListM.mapM (fun (loc, arg, _) ->
+        let k = (Option.value ~default:"<>" (Option.map Id.s attr.attr_ns), Id.s attr.attr_id) in
+        (* FIXME (TS): I'm not sure if the check against cerb::magic was strange,
+            or if it was checking the wrong thing the whole time *)
+        let use = List.exists (fun (x, y) -> String.equal x (fst k) && String.equal y (snd k))
+            [("cerb", "magic"); ("cn", "requires"); ("cn", "ensures");
+                ("cn", "accesses"); ("cn", "trusted")] in
+        if use then ListM.mapM (fun (loc, arg, _) ->
                parse C_parser.function_spec (loc, arg)
              ) attr.attr_args
-        | _ ->
-           return []
+        else return []
       ) attributes
   in
   ListM.fold_leftM (fun acc cond ->

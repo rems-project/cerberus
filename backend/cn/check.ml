@@ -1668,15 +1668,21 @@ let record_and_wf_check_functions mu_funs =
     let@ () = add_cs [(* lc1; *) lc2] in
     add_fun_decl fsym (loc, ft)
   in
+  let welltyped_ping fsym ft =
+    debug 2 (lazy (headline ("checking welltypedness of procedure " ^ Sym.pp_string fsym)));
+    debug 2 (lazy (item "procedure type" (AT.pp RT.pp ft)))
+  in
   PmapM.foldM (fun fsym def (trusted, checked) ->
       match def with
       | M_Proc (loc, args_and_body, ft, tr) ->
+         welltyped_ping fsym ft;
          let@ ft = WellTyped.WFT.welltyped "global" loc ft in
          let@ () = add fsym loc ft in
          return (match tr with
                  | Trusted _ -> ((fsym, (loc, ft)) :: trusted, checked)
                  | Checked -> (trusted, (fsym, (loc, args_and_body, ft)) :: checked))
       | M_ProcDecl (loc, ft) ->
+         welltyped_ping fsym ft;
          let@ ft = WellTyped.WFT.welltyped "global" loc ft in
          let@ () = add fsym loc ft in
          return (trusted, checked)
