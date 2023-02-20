@@ -892,20 +892,19 @@ let make_args f_i loc env args conditions =
 let todo_invent_cabs_to_ail_state () : Cerb_frontend.Cabs_to_ail_effect.state =
   assert false
 
-let wrap_cta_effect loc f =
-  let st = todo_invent_cabs_to_ail_state () in
-  match f st with
-    | Exception.Result (x, _) -> x
-    | Exception.Exception msg ->
-      Print.error loc (Print.string "cabs-to-ail exception") [];
-      assert false
+let do_desugar_op desugar_state f =
+  match f desugar_state with
+    | Exception.Result (x, _) -> return x
+    | Exception.Exception (loc, msg) ->
+      fail {loc; msg = Generic (Print.item "desugaring exception"
+          (Print.string (Pp_errors.short_message msg)))}
 
-let desugar_cond loc = function
+let desugar_cond d_st = function
   | Cn.CN_cletResource (loc, id, res) ->
     (* generate a new symbol for this new binding *)
     let sym = Sym.fresh_named (Id.s id) in
-    let res2 = wrap_cta_effect loc (Cabs_to_ail.desugar_cn_resource res) in
-    Cn.CN_cletResource (loc, sym, res2)
+    let@ res2 = do_desugar_op d_st (Cabs_to_ail.desugar_cn_resource res) in
+    return (Cn.CN_cletResource (loc, sym, res2))
   | Cn.CN_cletExpr _ -> assert false
   | Cn.CN_cconstr _ -> assert false
 
@@ -954,7 +953,7 @@ let translate_accesses env globs accesses requires ensures =
   in
   aux accesses
 
-let normalise_label loop_attributes (env : C.env) label_name label =
+let normalise_label loop_attributes (env : C.env) d_st label_name label =
   match label with
   | Mi_Return loc -> 
      return (M_Return loc)
@@ -965,7 +964,7 @@ let normalise_label loop_attributes (env : C.env) label_name label =
           | Some (_, attrs) -> Parse.parse_inv_spec attrs 
           | None -> return []
         in
-        let inv = List.map (desugar_cond loc) inv in
+        let@ inv = ListM.mapM (desugar_cond d_st) inv in
         let combined_label_args = combine_label_args loc lt label_args in
         let inv = 
           List.fold_right (fun (s, ct) inv ->
@@ -1006,7 +1005,7 @@ let normalise_label loop_attributes (env : C.env) label_name label =
 
   
 
-let normalise_fun_map_decl ail_prog env globals (funinfo: mi_funinfo) loop_attributes fname decl = 
+let normalise_fun_map_decl ail_prog env globals d_st (funinfo: mi_funinfo) loop_attributes fname decl =
   let (loc, attrs, ret_ct, arg_cts, variadic, _) = Pmap.find fname funinfo in
   if variadic then Tools.unsupported loc !^"variadic functions";
   match decl with
@@ -1018,14 +1017,14 @@ let normalise_fun_map_decl ail_prog env globals (funinfo: mi_funinfo) loop_attri
      let ienv = Pmap.find ail_marker ail_prog.markers_env in
 *)
      let@ trusted, accesses, requires, ensures = Parse.parse_function_spec attrs in
-     let requires = List.map (desugar_cond loc) (List.map snd requires) in
-     let ensures = List.map (desugar_cond loc) (List.map snd ensures) in
+     let@ requires = ListM.mapM (desugar_cond d_st) (List.map snd requires) in
+     let@ ensures = ListM.mapM (desugar_cond d_st) (List.map snd ensures) in
      let@ (requires, ensures) = translate_accesses env globals accesses requires ensures in
      let@ args_and_body = 
        make_args (fun env ->
            let body = n_expr loc body in
            let@ labels = 
-             PmapM.mapM (normalise_label loop_attributes env) 
+             PmapM.mapM (normalise_label loop_attributes env d_st)
                labels Sym.compare in
            let@ returned = make_rt loc env (combine_return loc ret_ct ret_bt) ensures in
            return (body, labels, returned)
@@ -1036,8 +1035,8 @@ let normalise_fun_map_decl ail_prog env globals (funinfo: mi_funinfo) loop_attri
   | Mi_ProcDecl(loc, ret_bt, bts) -> 
      let args = List.map2 (fun (o_s, _) bt -> (Option.get o_s, bt)) arg_cts bts in
      let@ trusted, accesses, requires, ensures = Parse.parse_function_spec attrs in
-     let requires = List.map (desugar_cond loc) (List.map snd requires) in
-     let ensures = List.map (desugar_cond loc) (List.map snd ensures) in
+     let@ requires = ListM.mapM (desugar_cond d_st) (List.map snd requires) in
+     let@ ensures = ListM.mapM (desugar_cond d_st) (List.map snd ensures) in
      let@ args_and_rt =
        make_args (fun env ->
            make_rt loc env (combine_return loc ret_ct ret_bt) ensures
@@ -1049,8 +1048,8 @@ let normalise_fun_map_decl ail_prog env globals (funinfo: mi_funinfo) loop_attri
      assert false
      (* M_BuiltinDecl(loc, convert_bt loc bt, List.map (convert_bt loc) bts) *)
 
-let normalise_fun_map ail_prog env globals funinfo loop_attributes fmap = 
-  PmapM.mapM (normalise_fun_map_decl ail_prog env globals funinfo loop_attributes) 
+let normalise_fun_map ail_prog env globals d_st funinfo loop_attributes fmap =
+  PmapM.mapM (normalise_fun_map_decl ail_prog env globals d_st funinfo loop_attributes)
     fmap Sym.compare
 
   
@@ -1149,7 +1148,11 @@ let normalise_file ail_prog file =
 
   let env = List.fold_left register_glob env globs in
 
-  let@ funs = normalise_fun_map ail_prog env globs file.mi_funinfo file.mi_loop_attributes file.mi_funs in
+  let desugar_state = Cerb_frontend.Cabs_to_ail_effect.further_cn_desugaring_state
+        ail_prog.cn_idents ail_prog.translation_tag_definitions in
+
+  let@ funs = normalise_fun_map ail_prog env globs desugar_state
+        file.mi_funinfo file.mi_loop_attributes file.mi_funs in
   let file = {
       mu_main = file.mi_main;
       mu_tagDefs = tagDefs;

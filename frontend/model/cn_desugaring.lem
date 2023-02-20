@@ -24,6 +24,8 @@ let initial_cn_desugaring_state = <|
   cn_c_identifier_env= Map.empty;
 |>
 
+let state_with_idents idents = <| initial_cn_desugaring_state with cn_idents= idents |>
+
 type cn_desugM 'a = State_exception.stExceptM 'a cn_desugaring_state Errors.error
 
 module Eff = State_exception

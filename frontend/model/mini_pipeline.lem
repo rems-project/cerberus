@@ -46,6 +46,8 @@ let empty_sigma = <|
   A.cn_predicates= [];
   A.cn_functions= [];
   A.cn_datatypes= [];
+  A.cn_idents= Map.empty;
+  A.translation_tag_definitions= Map.empty;
 |>
 
 
