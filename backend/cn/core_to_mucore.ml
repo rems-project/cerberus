@@ -32,6 +32,7 @@ open Mu
 module Loc = Locations
 module C = Compile
 module SymMap = Map.Make(Sym)
+module IdMap = Map.Make(Id)
 open Print
 open TypeErrors
 open Cn
@@ -889,29 +890,47 @@ let make_args f_i loc env args conditions =
   aux env args
 
 
-let todo_invent_cabs_to_ail_state () : Cerb_frontend.Cabs_to_ail_effect.state =
-  assert false
-
-let do_desugar_op desugar_state f =
+let do_ail_desugar_op desugar_state f =
   match f desugar_state with
-    | Exception.Result (x, _) -> return x
+    | Exception.Result (x, st2) -> return (x, st2)
     | Exception.Exception (loc, msg) ->
       fail {loc; msg = Generic (Print.item "desugaring exception"
           (Print.string (Pp_errors.short_message msg)))}
 
+let do_ail_desugar_rdonly desugar_state f =
+  let@ (x, _) = do_ail_desugar_op desugar_state f in
+  return x
+
+let register_new_cn_local id d_st =
+  do_ail_desugar_op d_st (Cabs_to_ail.register_additional_cn_var id)
+
 let desugar_cond d_st = function
   | Cn.CN_cletResource (loc, id, res) ->
     (* generate a new symbol for this new binding *)
-    let sym = Sym.fresh_named (Id.s id) in
-    let@ res2 = do_desugar_op d_st (Cabs_to_ail.desugar_cn_resource res) in
-    return (Cn.CN_cletResource (loc, sym, res2))
-  | Cn.CN_cletExpr _ -> assert false
-  | Cn.CN_cconstr _ -> assert false
+    let@ res = do_ail_desugar_rdonly d_st (Cabs_to_ail.desugar_cn_resource res) in
+    let@ (sym, d_st) = register_new_cn_local id d_st in
+    return (Cn.CN_cletResource (loc, sym, res), d_st)
+  | Cn.CN_cletExpr (loc, id, expr) ->
+    let@ expr = do_ail_desugar_rdonly d_st (Cabs_to_ail.desugar_cn_expr expr) in
+    let@ (sym, d_st) = register_new_cn_local id d_st in
+    return (Cn.CN_cletExpr (loc, sym, expr), d_st)
+  | Cn.CN_cconstr (loc, constr) ->
+    let@ constr = do_ail_desugar_rdonly d_st (Cabs_to_ail.desugar_cn_assertion constr) in
+    return (Cn.CN_cconstr (loc, constr), d_st)
 
-let desugar_id x =
-  (* FIXME: actually needs to be fetched from either the CN or C scope *)
-  Sym.fresh_named (Id.s x)
-  
+let desugar_conds d_st conds =
+  let@ (conds, d_st) = ListM.fold_leftM (fun (conds, d_st) cond ->
+    let@ (cond, d_st) = desugar_cond d_st cond in
+    return (cond :: conds, d_st)) ([], d_st) conds in
+  return (List.rev conds, d_st)
+
+let fetch_ail_env_id (ail_env : AilSyntax.identifier_env) loc x =
+  match Pmap.lookup x ail_env with
+  | Some (Some (_, sym)) -> return sym
+  | Some None -> fail {loc; msg = Generic
+    (Print.item "C identifier has null details" (Id.pp x))}
+  | None -> fail {loc; msg = Generic
+    (Print.item "C identifier unknown" (Id.pp x))}
 
 let ownership loc s (ct : ctype) =
   let name = match Sym.description s with
@@ -936,8 +955,10 @@ let convert_resource = function
 *)
 
 
-let translate_accesses env globs accesses requires ensures =
-  let accesses = List.map_snd desugar_id accesses in
+let translate_accesses ail_env globs accesses requires ensures =
+  let@ accesses = ListM.mapM (fun (loc, id) ->
+    let@ sym = fetch_ail_env_id ail_env loc id in
+    return (loc, sym)) accesses in
   let rec aux = function
     | [] -> return (requires, ensures)
     | (loc, s) :: rest ->
@@ -964,7 +985,7 @@ let normalise_label loop_attributes (env : C.env) d_st label_name label =
           | Some (_, attrs) -> Parse.parse_inv_spec attrs 
           | None -> return []
         in
-        let@ inv = ListM.mapM (desugar_cond d_st) inv in
+        let@ (inv, _) = desugar_conds d_st inv in
         let combined_label_args = combine_label_args loc lt label_args in
         let inv = 
           List.fold_right (fun (s, ct) inv ->
@@ -1006,51 +1027,54 @@ let normalise_label loop_attributes (env : C.env) d_st label_name label =
   
 
 let normalise_fun_map_decl ail_prog env globals d_st (funinfo: mi_funinfo) loop_attributes fname decl =
-  let (loc, attrs, ret_ct, arg_cts, variadic, _) = Pmap.find fname funinfo in
+  match Pmap.lookup fname funinfo with
+  | None -> return None
+  | Some (loc, attrs, ret_ct, arg_cts, variadic, _) ->
   if variadic then Tools.unsupported loc !^"variadic functions";
   match decl with
   | Mi_Fun (bt, args, pe) -> 
      assert false
   | Mi_Proc (loc, _mrk, ret_bt, args, body, labels) -> 
-(* when we actually use ail marker envs
      let (_, ail_marker, _, _, _) = List.assoc Sym.equal fname ail_prog.function_definitions in
-     let ienv = Pmap.find ail_marker ail_prog.markers_env in
-*)
+     let ail_env = Pmap.find ail_marker ail_prog.markers_env in
      let@ trusted, accesses, requires, ensures = Parse.parse_function_spec attrs in
-     let@ requires = ListM.mapM (desugar_cond d_st) (List.map snd requires) in
-     let@ ensures = ListM.mapM (desugar_cond d_st) (List.map snd ensures) in
-     let@ (requires, ensures) = translate_accesses env globals accesses requires ensures in
+     let@ (requires, d_st2) = desugar_conds d_st (List.map snd requires) in
+     let@ (ensures, _) = desugar_conds d_st2 (List.map snd ensures) in
+     let@ (requires, ensures) = translate_accesses ail_env globals accesses requires ensures in
      let@ args_and_body = 
        make_args (fun env ->
            let body = n_expr loc body in
            let@ labels = 
-             PmapM.mapM (normalise_label loop_attributes env d_st)
+             PmapM.mapM (normalise_label loop_attributes env d_st2)
                labels Sym.compare in
            let@ returned = make_rt loc env (combine_return loc ret_ct ret_bt) ensures in
            return (body, labels, returned)
          ) loc env (combine_function_args loc arg_cts args) requires
      in
      let ft = at_of_arguments (fun (_body, _labels, rt) -> rt) args_and_body in
-     return (M_Proc(loc, args_and_body, ft, trusted))
+     return (Some (M_Proc(loc, args_and_body, ft, trusted)))
   | Mi_ProcDecl(loc, ret_bt, bts) -> 
-     let args = List.map2 (fun (o_s, _) bt -> (Option.get o_s, bt)) arg_cts bts in
      let@ trusted, accesses, requires, ensures = Parse.parse_function_spec attrs in
-     let@ requires = ListM.mapM (desugar_cond d_st) (List.map snd requires) in
-     let@ ensures = ListM.mapM (desugar_cond d_st) (List.map snd ensures) in
+     let@ (requires, d_st2) = desugar_conds d_st (List.map snd requires) in
+     let@ (ensures, _) = desugar_conds d_st2 (List.map snd ensures) in
+     let arg_protos = List.mapi (fun i -> function
+        | (Some sym, ct) -> (sym, ct)
+        | (None, ct) -> (Sym.fresh_named ("default_" ^ Int.to_string i), ct)) arg_cts in
      let@ args_and_rt =
        make_args (fun env ->
            make_rt loc env (combine_return loc ret_ct ret_bt) ensures
-         ) loc env (combine_function_args loc arg_cts args) requires
+         ) loc env arg_protos requires
      in
      let ft = at_of_arguments Tools.id args_and_rt in
-     return (M_ProcDecl(loc, ft))
+     return (Some (M_ProcDecl(loc, ft)))
   | Mi_BuiltinDecl(loc, bt, bts) -> 
      assert false
      (* M_BuiltinDecl(loc, convert_bt loc bt, List.map (convert_bt loc) bts) *)
 
 let normalise_fun_map ail_prog env globals d_st funinfo loop_attributes fmap =
-  PmapM.mapM (normalise_fun_map_decl ail_prog env globals d_st funinfo loop_attributes)
-    fmap Sym.compare
+  let@ m1 = PmapM.mapM (normalise_fun_map_decl ail_prog env globals d_st funinfo loop_attributes)
+    fmap Sym.compare in
+  return (Pmap.filter_map Sym.compare (fun _ x -> x) m1)
 
   
 

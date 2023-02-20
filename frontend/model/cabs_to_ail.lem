@@ -4978,6 +4978,8 @@ let register_cn_datatype_names xs =
         E.return ()
   end) xs
 
+val register_additional_cn_var: Symbol.identifier -> E.desugM Symbol.sym
+let register_additional_cn_var id = E.register_cn_ident CN_vars id
 
 
 import Core
