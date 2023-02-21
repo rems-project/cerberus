@@ -9,9 +9,20 @@ module Cn = Cerb_frontend.Cn
 
 module Loc = Locations
 
+let diagnostic_get_tokens string =
+  let lexbuf = Lexing.from_string string in
+  let rec f xs = match C_lexer.lexer lexbuf with
+    | Tokens.EOF -> List.rev ("EOF" :: xs)
+    | t -> f (Tokens.string_of_token t :: xs)
+  in
+  f []
+
+
 (* adapting from core_parser_driver.ml *)
 
-let parse parser_start (loc, string) = 
+let parse parser_start (loc, string) =
+  let lexbuf = Lexing.from_string "" in
+  let () = C_parser.just_enter_cn C_lexer.lexer lexbuf in
   let lexbuf = Lexing.from_string string in
   let () = 
     let open Location_ocaml in
@@ -38,7 +49,10 @@ let parse parser_start (loc, string) =
        fail {loc; msg = Parser err}
     | C_parser.Error ->
        let loc = Location_ocaml.(region (Lexing.lexeme_start_p lexbuf, Lexing.lexeme_end_p lexbuf) NoCursor) in
-       fail {loc; msg = Generic !^ ("Unexpected token " ^ Lexing.lexeme lexbuf)}
+       Pp.debug 6 (lazy (
+           let toks = diagnostic_get_tokens string in
+           Pp.item "failed to parse tokens" (Pp.braces (Pp.list Pp.string toks))));
+       fail {loc; msg = Generic (Pp.string ("Unexpected token " ^ Lexing.lexeme lexbuf))}
   in
   return parsed_spec
 

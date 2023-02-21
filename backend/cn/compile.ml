@@ -337,10 +337,36 @@ let translate_is_shape env loc x shape_expr =
   let@ xs = f x shape_expr in
   return (IT.and3_ xs)
 
+let pp_cnexpr_kind expr_ =
+  let open Pp in
+  match expr_ with
+  | CNExpr_const CNConst_NULL -> !^ "NULL"
+  | CNExpr_const (CNConst_integer n) -> Pp.string (Z.to_string n)
+  | CNExpr_const (CNConst_bool b) -> !^ (if b then "true" else "false")
+  | CNExpr_var sym -> parens (typ (!^ "var") (Sym.pp sym))
+  | CNExpr_deref e -> !^ "(deref ...)"
+  | CNExpr_value_of_c_variable sym -> parens (typ (!^ "c:var") (Sym.pp sym))
+  | CNExpr_list es_ -> !^ "[...]"
+  | CNExpr_memberof (e, xs) -> !^ "_." ^^ Id.pp xs
+  | CNExpr_binop (bop, x, y) -> !^ "(binop (_, _, _))"
+  | CNExpr_sizeof ct -> !^ "(sizeof _)"
+  | CNExpr_offsetof (tag, member) -> !^ "(offsetof (_, _))"
+  | CNExpr_cast (bt, expr) -> !^ "(cast (_, _))"
+  | CNExpr_call (nm, exprs) -> !^ "(" ^^ Id.pp nm ^^^ !^ "(...))"
+  | CNExpr_cons (c_nm, exprs) -> !^ "(" ^^ Sym.pp c_nm ^^^ !^ "{...})"
+  | CNExpr_each (sym, r, e) -> !^ "(each ...)"
+  | CNExpr_ite (e1, e2, e3) -> !^ "(if ... then ...)"
+  | CNExpr_good (ty, e) -> !^ "(good (_, _))"
+
+
 let translate_cn_expr (env: env) expr =
   let open IndexTerms in
   let module BT = BaseTypes in
   let rec trans env (CNExpr (loc, expr_)) =
+    (*
+    Pp.debug 8 (lazy (Pp.item "translate_cn_expr at"
+        (Pp.typ (pp_cnexpr_kind expr_) (Locations.pp loc))));
+    *)
     let self = trans env in
     match expr_ with
       | CNExpr_const CNConst_NULL ->
@@ -351,10 +377,14 @@ let translate_cn_expr (env: env) expr =
           return (bool_ b)
       | CNExpr_var sym ->
           begin match lookup_computational_or_logical sym env with
-            | None -> fail {loc; msg= Unknown_variable sym}
+            | None ->
+                Pp.debug 2 (lazy (Pp.item ("failed lookup of CNExpr_var " ^ Sym.pp_string sym)
+                  (Pp.list (fun (nm, _) -> Sym.pp nm) (SymMap.bindings env.computationals))));
+                fail {loc; msg= Unknown_variable sym}
             | Some bTy -> return (IT (Lit (Sym sym), bTy))
           end
       | CNExpr_deref e ->
+         Pp.debug 2 (lazy (Pp.string ("seeing CNExpr_deref")));
          let@ expr = self e in
          let@ (re, O oa) = lookup_resource_for_pointer loc expr env in
          begin match re with

@@ -855,8 +855,10 @@ let make_rt (loc : loc) (env : C.env) (s, ct) conditions =
 let make_largs f_i =
   let rec aux env = function
     | Cn.CN_cletResource (loc, name, resource) :: conds -> 
+       (* Print.debug 6 (lazy (Print.string ("finalising let-resource"))); *)
        let@ _, pt, lcs = 
          C.translate_cn_let_resource env (loc, name, resource) in
+       (* Print.debug 6 (lazy (Print.item "got lcs" (Print.list LC.pp (List.map fst lcs)))); *)
        let (pt_ret, oa_bt) = pt in
        let env = C.add_logical name oa_bt env in
        let env = C.add_resource (pt_ret, O (IT.sym_ (name, oa_bt))) env in
@@ -864,10 +866,12 @@ let make_largs f_i =
        return (Mu.mResource ((name, pt), (loc, None)) 
               (Mu.mConstraints lcs lat))
     | Cn.CN_cletExpr (loc, name, expr) :: conds ->
+       (* Print.debug 6 (lazy (Print.string ("finalising let-expr"))); *)
        let@ expr = C.translate_cn_expr env expr in
        let@ lat = aux (C.add_logical name (IT.bt expr) env) conds in
        return (Mu.mDefine ((name, expr), (loc, None)) lat)
     | Cn.CN_cconstr (loc, constr) :: conds ->
+       (* Print.debug 6 (lazy (Print.string ("finalising constraint"))); *)
        let@ lc = C.translate_cn_assrt env (loc, constr) in
        let@ lat = aux env conds in
        return (Mu.mConstraint (lc, (loc, None)) lat)
@@ -915,7 +919,6 @@ let register_new_cn_local id d_st =
 
 let desugar_cond d_st = function
   | Cn.CN_cletResource (loc, id, res) ->
-    (* generate a new symbol for this new binding *)
     let@ res = do_ail_desugar_rdonly d_st (Cabs_to_ail.desugar_cn_resource res) in
     let@ (sym, d_st) = register_new_cn_local id d_st in
     return (Cn.CN_cletResource (loc, sym, res), d_st)
@@ -994,6 +997,8 @@ let normalise_label loop_attributes (env : C.env) d_st label_name label =
           | Some (_, attrs) -> Parse.parse_inv_spec attrs 
           | None -> return []
         in
+        (* Print.debug 6 (lazy (Print.string ("normalising loop invs"))); *)
+        (* FIXME: find correct marker and set the appropriate c env *)
         let@ (inv, _) = desugar_conds d_st inv in
         let combined_label_args = combine_label_args loc lt label_args in
         let inv = 
@@ -1033,7 +1038,6 @@ let normalise_label loop_attributes (env : C.env) d_st label_name label =
 
 
 
-  
 
 let normalise_fun_map_decl ail_prog env globals d_st (funinfo: mi_funinfo) loop_attributes fname decl =
   match Pmap.lookup fname funinfo with
@@ -1047,21 +1051,31 @@ let normalise_fun_map_decl ail_prog env globals d_st (funinfo: mi_funinfo) loop_
      Print.debug 2 (lazy (Print.item ("normalising procedure") (Sym.pp fname)));
      let (_, ail_marker, _, _, _) = List.assoc Sym.equal fname ail_prog.function_definitions in
      let ail_env = Pmap.find ail_marker ail_prog.markers_env in
+     let d_st = Cerb_frontend.Cabs_to_ail_effect.set_cn_c_identifier_env ail_env d_st in
      let@ trusted, accesses, requires, ensures = Parse.parse_function_spec attrs in
-     let@ (requires, d_st2) = desugar_conds d_st (List.map snd requires) in
-     let@ (ensures, _) = desugar_conds d_st2 (List.map snd ensures) in
+     let@ (requires, d_st) = desugar_conds d_st (List.map snd requires) in
+     (* Print.debug 6 (lazy (Print.string "desugared requires conds")); *)
+     let@ (ensures, _) = desugar_conds d_st (List.map snd ensures) in
+     (* Print.debug 6 (lazy (Print.string "desugared ensures conds")); *)
      let@ (requires, ensures) = translate_accesses ail_env globals accesses requires ensures in
+     (* Print.debug 6 (lazy (Print.string "translated accesses")); *)
+     let combined_args = combine_function_args loc arg_cts args in
+     (* Print.debug 6 (lazy (Print.string "combined arguments")); *)
      let@ args_and_body = 
        make_args (fun env ->
+           (* Print.debug 6 (lazy (Print.string "normalising body")); *)
            let body = n_expr loc body in
+           (* Print.debug 6 (lazy (Print.string "normalising labels")); *)
            let@ labels = 
-             PmapM.mapM (normalise_label loop_attributes env d_st2)
+             PmapM.mapM (normalise_label loop_attributes env d_st)
                labels Sym.compare in
            let@ returned = make_rt loc env (combine_return loc ret_ct ret_bt) ensures in
+           (* Print.debug 6 (lazy (Print.string "made return-type")); *)
            return (body, labels, returned)
-         ) loc env (combine_function_args loc arg_cts args) requires
+         ) loc env combined_args requires
      in
      let ft = at_of_arguments (fun (_body, _labels, rt) -> rt) args_and_body in
+     (* Print.debug 6 (lazy (Print.item "normalised function-type" (AT.pp RT.pp ft))); *)
      return (Some (M_Proc(loc, args_and_body, ft, trusted)))
   | Mi_ProcDecl(loc, ret_bt, bts) -> 
      let@ trusted, accesses, requires, ensures = Parse.parse_function_spec attrs in

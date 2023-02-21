@@ -543,6 +543,12 @@ let further_cn_desugaring_state idents tags =
   let cn_state = Cn_desugaring.state_with_idents idents in
   <| init_st with tag_definitions = tags; cn_state = cn_state |>
 
+val set_cn_c_identifier_env:
+  A.identifier_env -> state -> state
+let set_cn_c_identifier_env env st =
+  let cn_state = Cn_desugaring.set_c_identifier_env env st.cn_state in
+  <| st with cn_state = cn_state |>
+
 
 val eval: forall 'a. (map string Symbol.sym) * Core.fun_map unit * Core.impl -> desugM 'a -> Exception.exceptM 'a Errors.error
 let cabs_to_ail_effect_eval core_eval_stuff m =
