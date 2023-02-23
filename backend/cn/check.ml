@@ -1628,19 +1628,18 @@ let record_and_check_logical_functions funs =
     ) recursive
 
 let record_and_check_resource_predicates preds =
+  let@ simp_preds = pure begin
+    (* add the names to the context, so recursive preds check *)
+    let@ () = ListM.iterM (fun (name, def) ->
+        add_resource_predicate name { def with clauses = None }) preds in
+    ListM.mapM (fun (name, def) ->
+      let@ def = WellTyped.WRPD.welltyped def in
+      return (name, def)) preds
+  end in
   ListM.iterM (fun (name, def) ->
-      let@ def = 
-        pure begin
-          (* add def to context without body (for recursive definitions) *)
-          let@ () = add_resource_predicate name { def with clauses = None } in
-          (* check well-typedness of def and return possibly-simplified
-             (and alpha-renamed) definition *)
-          WellTyped.WRPD.welltyped def
-        end 
-      in
       (* add simplified def to the context *)
       add_resource_predicate name def
-    ) preds
+    ) simp_preds
 
 
 let record_globals globs =
