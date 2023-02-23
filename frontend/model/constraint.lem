@@ -150,8 +150,12 @@ type violation =
   | IllegalInitialisation of illegal_initialisation (* §6.7.9#3 *)
   | IllegalStorageClassStaticOrThreadInitializer (* §6.7.9#4 *)
   | IllegalLinkageAndInitialization (* §6.7.9#5 *)
+  | IllegalArrayDesignatorUsage (* §6.7.9#6, sentence 1 *)
   | IllegalTypeArrayDesignator (* §6.7.9#6, sentence 1 *)
   | IllegalSizeArrayDesignator (* §6.7.9#6, sentence 2 *)
+  | IllegalMemberDesignatorUsage (* §6.7.9#7 *)
+  | IllegalMemberDesignatorFlexibleArrayMember of Symbol.identifier (* §6.7.9#3 *)
+  | IllegalMemberDesignator of Symbol.identifier * ctype (* §6.7.9#7 *)
   | InitializationAsSimpleAssignment of simple_assignment_violation * ctype * genType (* §6.7.9#11, sentence 2 *)
   (* 6.7.10 Static assertions *)
   | StaticAssertFailed of string (* §6.7.10#2 *)
@@ -399,10 +403,18 @@ let std_of_violation = function
       ["§6.7.9#4"]
   | IllegalLinkageAndInitialization ->
       ["§6.7.9#5"]
+  | IllegalArrayDesignatorUsage ->
+      ["§6.7.9#6, sentence 1"]
   | IllegalTypeArrayDesignator ->
       ["§6.7.9#6, sentence 1"]
   | IllegalSizeArrayDesignator ->
       ["§6.7.9#6, sentence 2"]
+  | IllegalMemberDesignatorUsage ->
+      ["§6.7.9#3"]
+  | IllegalMemberDesignatorFlexibleArrayMember _ ->
+      ["§6.7.9#3"]
+  | IllegalMemberDesignator _ _ ->
+      ["§6.7.9#7"]
   | InitializationAsSimpleAssignment viol _ _ ->
       "§6.7.9#11, sentence 2" :: std_of_assign_violation viol
   | StaticAssertFailed _ ->

@@ -271,10 +271,18 @@ let string_of_constraint_violation = function
       "initializer element is not a compile-time constant"
   | IllegalLinkageAndInitialization ->
       "identifier linkage forbids to have an initializer"
+  | IllegalArrayDesignatorUsage ->
+      "array designator used for an entity with a non-array type"
   | IllegalTypeArrayDesignator ->
       "expression is not an integer constant expression"
   | IllegalSizeArrayDesignator ->
       "array designator value is negative"
+  | IllegalMemberDesignatorUsage ->
+      "member designator used for an entity with a non-struct/union type"
+  | IllegalMemberDesignatorFlexibleArrayMember (Symbol.Identifier (_, memb_str)) ->
+      "member designator '." ^ memb_str ^ "' refers to a flexible array member"
+  | IllegalMemberDesignator (Symbol.Identifier (_, memb_str), ty) ->
+      "member designator '." ^ memb_str ^ "' does not refer to a valid member for type '" ^ string_of_ctype ty ^ "'"
   | InitializationAsSimpleAssignment (IncompatibleType, ty1, gty2) ->
       "initializing '" ^ string_of_ctype ty1 ^ "' with an expression of incompatible type '" ^ string_of_gentype gty2 ^ "'"
   | InitializationAsSimpleAssignment (IncompatiblePointerType, ty1, gty2) ->
