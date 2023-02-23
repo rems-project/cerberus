@@ -82,8 +82,8 @@ void walk_b_tree (struct b_node *p);
 
 void
 walk_a_tree (struct a_node *p)
-/*@ requires let T = A_Tree (p) @*/
 /*@ accesses global_val @*/
+/*@ requires let T = A_Tree (p) @*/
 /*@ ensures let T2 = A_Tree (p) @*/
 {
   if (! p)
@@ -95,8 +95,8 @@ walk_a_tree (struct a_node *p)
 
 void
 walk_b_tree (struct b_node *p)
-/*@ requires let T = B_Tree (p) @*/
 /*@ accesses global_val @*/
+/*@ requires let T = B_Tree (p) @*/
 /*@ ensures let T2 = B_Tree (p) @*/
 {
   if (! p)
@@ -186,8 +186,8 @@ a_tree_keys_node_lemma (int k, int v, struct b_node *left, struct b_node *right)
 /*@ requires let R = B_Tree (right) @*/
 /*@ ensures let L2 = B_Tree (left) @*/
 /*@ ensures let R2 = B_Tree (right) @*/
-/*@ ensures L2.t == {L.t}@start @*/
-/*@ ensures R2.t == {R.t}@start @*/
+/*@ ensures L2.t == L.t @*/
+/*@ ensures R2.t == R.t @*/
 /*@ ensures (a_tree_keys (A_Node {k = k, v = v, left = L2.t, right = R2.t}))
   == (concat (b_tree_keys(L2.t), K_Cons {k = k, tail = (b_tree_keys(R2.t))})) @*/
 {
@@ -201,8 +201,8 @@ b_tree_keys_node_lemma (struct a_node *even, struct a_node *odd)
 /*@ requires let O = A_Tree (odd) @*/
 /*@ ensures let E2 = A_Tree (even) @*/
 /*@ ensures let O2 = A_Tree (odd) @*/
-/*@ ensures E2.t == {E.t}@start @*/
-/*@ ensures O2.t == {O.t}@start @*/
+/*@ ensures E2.t == E.t @*/
+/*@ ensures O2.t == O.t @*/
 /*@ ensures (b_tree_keys (B_Node {even = E2.t, odd = O2.t}))
   == (merge (double_list (a_tree_keys (E2.t)), inc_list (double_list (a_tree_keys (O2.t))))) @*/
 {
@@ -217,8 +217,8 @@ a_tree_keys_node_concat_inc_lemma (int k, struct b_node *left, struct b_node *ri
 /*@ requires let R = B_Tree (right) @*/
 /*@ ensures let L2 = B_Tree (left) @*/
 /*@ ensures let R2 = B_Tree (right) @*/
-/*@ ensures L2.t == {L.t}@start @*/
-/*@ ensures R2.t == {R.t}@start @*/
+/*@ ensures L2.t == L.t @*/
+/*@ ensures R2.t == R.t @*/
 /*@ ensures (inc_list (concat (b_tree_keys(L2.t), K_Cons {k = k, tail = (b_tree_keys(R2.t))})))
   == (concat (inc_list (b_tree_keys(L2.t)), inc_list (K_Cons {k = k, tail = (b_tree_keys(R2.t))})))
 @*/
@@ -232,7 +232,7 @@ a_tree_keys_node_concat_cons_inc_lemma (int k, struct b_node *right)
 /*@ trusted @*/
 /*@ requires let R = B_Tree (right) @*/
 /*@ ensures let R2 = B_Tree (right) @*/
-/*@ ensures R2.t == {R.t}@start @*/
+/*@ ensures R2.t == R.t @*/
 /*@ ensures (inc_list (K_Cons {k = k, tail = (b_tree_keys(R2.t))}))
   == (K_Cons {k = k + 1, tail = inc_list (b_tree_keys(R2.t))}) @*/
 {
@@ -247,8 +247,8 @@ b_tree_keys_node_merge_inc_lemma (struct a_node *even, struct a_node *odd)
 /*@ requires let O = A_Tree (odd) @*/
 /*@ ensures let E2 = A_Tree (even) @*/
 /*@ ensures let O2 = A_Tree (odd) @*/
-/*@ ensures E2.t == {E.t}@start @*/
-/*@ ensures O2.t == {O.t}@start @*/
+/*@ ensures E2.t == E.t @*/
+/*@ ensures O2.t == O.t @*/
 /*@ ensures (inc_list (merge (double_list (a_tree_keys (E2.t)),
         inc_list (double_list (a_tree_keys (O2.t))))))
   == (merge (inc_list (double_list (a_tree_keys (E2.t))),
@@ -267,8 +267,8 @@ b_tree_keys_node_merge_flip_lemma (struct a_node *even, struct a_node *odd)
 /*@ requires let O = A_Tree (odd) @*/
 /*@ ensures let E2 = A_Tree (even) @*/
 /*@ ensures let O2 = A_Tree (odd) @*/
-/*@ ensures E2.t == {E.t}@start @*/
-/*@ ensures O2.t == {O.t}@start @*/
+/*@ ensures E2.t == E.t @*/
+/*@ ensures O2.t == O.t @*/
 /*@ ensures (merge (inc_list (double_list (a_tree_keys (E2.t))),
         inc_list (inc_list (double_list (a_tree_keys (O2.t))))))
   == (merge (inc_list (inc_list (double_list (a_tree_keys (O2.t)))),
@@ -283,7 +283,7 @@ b_tree_keys_node_inc_inc_double_lemma (struct a_node *odd)
 /*@ trusted @*/
 /*@ requires let O = A_Tree (odd) @*/
 /*@ ensures let O2 = A_Tree (odd) @*/
-/*@ ensures O2.t == {O.t}@start @*/
+/*@ ensures O2.t == O.t @*/
 /*@ ensures (inc_list (inc_list (double_list (a_tree_keys (O2.t)))))
   == (double_list (inc_list (a_tree_keys (O2.t)))) @*/
 {
@@ -327,7 +327,7 @@ int
 inc_a_tree (struct a_node *p)
 /*@ requires let T = A_Tree (p) @*/
 /*@ ensures let T2 = A_Tree (p) @*/
-/*@ ensures (return == 0) || ((a_tree_keys(T2.t)) == (inc_list(a_tree_keys({T.t}@start)))) @*/
+/*@ ensures (return == 0) || ((a_tree_keys(T2.t)) == (inc_list(a_tree_keys(T.t)))) @*/
 {
   int r = 0;
   if (! p) {
@@ -352,7 +352,7 @@ int
 inc_b_tree (struct b_node *p)
 /*@ requires let T = B_Tree (p) @*/
 /*@ ensures let T2 = B_Tree (p) @*/
-/*@ ensures (return == 0) || ((b_tree_keys(T2.t)) == (inc_list(b_tree_keys({T.t}@start)))) @*/
+/*@ ensures (return == 0) || ((b_tree_keys(T2.t)) == (inc_list(b_tree_keys(T.t)))) @*/
 {
   struct a_node *tmp = NULL;
   int r = 0;
