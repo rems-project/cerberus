@@ -24,9 +24,12 @@ let inline (<*>)    = E.app
 
 (* STD §6.9.2#2, sentence 1 *)
 (* TODO replace the bool by this type? *)
+(*
+THIS IS UNUSED
 type tentative_definition_bool =
   | IsTentativeDefinition
   | NotTentativeDefinition
+*)
 
 type declaration_context =
   | Object_decl_context
@@ -87,7 +90,6 @@ let stringFromInit_path xs =
 
 
 
-
 (* STD §6.7.9#3 *)
 let check_initialised_type_constraint loc ty =
   E.is_complete_object ty >>= fun is_complete_object ->
@@ -101,6 +103,7 @@ let check_initialised_type_constraint loc ty =
     E.constraint_violation loc (IllegalInitialisation kind)
   else
     E.return ()
+
 
 
 
@@ -253,10 +256,11 @@ update inner elements
 
 *)
 
+(* 
 type withElemsM 'a = State.stateM 'a (list path_elem)
 
-val skipToPath: init_path -> withElemsM (list path_elem)
-let skipToPath path =
+val _UNUSED_skipToPath: init_path -> withElemsM (list path_elem)
+let _UNUSED_skipToPath path =
   State.bind State.get (fun elems ->
   match skipTo path elems with
     | Nothing ->
@@ -268,8 +272,8 @@ let skipToPath path =
   end)
 
 
-val getElem: withElemsM (maybe path_elem)
-let getElem =
+val _UNUSED_getElem: withElemsM (maybe path_elem)
+let _UNUSED_getElem =
   State.bind State.get function
     |  [] ->
         State.return Nothing
@@ -278,13 +282,13 @@ let getElem =
   end
 
 
-val getElems: integer -> withElemsM (list path_elem)
-let getElems n =
+val _UNUSED_getElems: integer -> withElemsM (list path_elem)
+let _UNUSED_getElems n =
   State.bind State.get begin fun elems ->
     let (xs,ys) = List.splitAt (natFromInteger n) elems in
     State.bind (State.put ys) (fun () -> State.return xs)
   end
-
+ *)
 
 
 
@@ -353,8 +357,8 @@ let rec cardinalityOfCtype tagDefs (Ctype.Ctype _ ty) =
 
 
 
-val     ctypeAtPath: map ail_identifier tag_definition -> Ctype.ctype -> init_path -> Ctype.ctype
-let rec ctypeAtPath tagDefs (Ctype.Ctype _ ty as cty) path =
+val     _UNUSED_ctypeAtPath: map ail_identifier tag_definition -> Ctype.ctype -> init_path -> Ctype.ctype
+let rec _UNUSED_ctypeAtPath tagDefs (Ctype.Ctype _ ty as cty) path =
   match (ty, path) with
     | (_, []) ->
         cty
@@ -362,7 +366,7 @@ let rec ctypeAtPath tagDefs (Ctype.Ctype _ ty as cty) path =
         if n1 <= n2 then
           error "ctypeAtPath: array type smaller than path needed"
         else
-          ctypeAtPath tagDefs elem_ty path'
+          _UNUSED_ctypeAtPath tagDefs elem_ty path'
     | (Ctype.Struct tag_sym, Elem_member memb_ident :: path') ->
         match Map.lookup tag_sym tagDefs with
           | Just (Struct_definition _ _ xs _) ->
@@ -370,7 +374,7 @@ let rec ctypeAtPath tagDefs (Ctype.Ctype _ ty as cty) path =
                 | Nothing ->
                     error "ctypeAtPath: Struct, invalid member"
                 | Just (_, _, _, memb_ty) ->
-                    ctypeAtPath tagDefs memb_ty path'
+                    _UNUSED_ctypeAtPath tagDefs memb_ty path'
               end
           | _ ->
               error "ctypeAtPath: Struct"
@@ -420,7 +424,7 @@ let rec innerCtype tagDefs (Ctype.Ctype _ ty as cty) =
 
 
 
-val     outerValidPath: map ail_identifier tag_definition -> Ctype.ctype -> list (init_element) -> init_path
+val     _UNUSED_outerValidPath: map ail_identifier tag_definition -> Ctype.ctype -> list (init_element) -> init_path
 let rec outerValidPath_aux tagDefs (Ctype.Ctype _ ty) path acc =
   match (ty, path) with
     | (_, []) ->
@@ -458,7 +462,7 @@ let rec outerValidPath_aux tagDefs (Ctype.Ctype _ ty) path acc =
         error "outerValidPath: wildcard"
   end
 
-let outerValidPath tagDefs ty path =
+let _UNUSED_outerValidPath tagDefs ty path =
   outerValidPath_aux tagDefs ty path []
 
 
@@ -901,8 +905,8 @@ let is_address_constant a_expr =
 (* As defined in STD §6.6#7, in the context of initializers, "constant expressions" 
    can have more things in them *)
 (* TODO: "or evaluate to" *)
-val is_initializer_constant_expression: expression unit -> E.desugM bool
-let is_initializer_constant_expression (AnnotatedExpression () _ loc expr as a_expr) =
+val is_initializer_constant_expression_or_string_literal: expression unit -> E.desugM bool
+let is_initializer_constant_expression_or_string_literal (AnnotatedExpression () _ loc expr as a_expr) =
   is_arithmetic_constant_expression false (* TODO check *) a_expr >>= fun b1 ->
   is_address_constant a_expr               >>= fun b2 ->
   (* STD §6.6#7, bullets 1 - 3 *)
@@ -1011,7 +1015,7 @@ val desugar_for_clause:
 val wip_desugar_initializer_:
   Loc.t -> storageDuration -> Ctype.ctype -> initializer_ -> E.desugM (Ctype.ctype * expression unit)
 
-val static_thread_implicit_initializer:
+val _UNUSED_static_thread_implicit_initializer:
   map ail_identifier tag_definition -> Ctype.ctype -> constant
 
 
@@ -1270,13 +1274,13 @@ let project_base_type_specifiers =
 
 
 (* TODO: this is temporary *)
-val     is_fully_non_designated: list (maybe (list designator) * initializer_) -> bool
-let rec is_fully_non_designated xs =
+val     _UNUSED_is_fully_non_designated: list (maybe (list designator) * initializer_) -> bool
+let rec _UNUSED_is_fully_non_designated xs =
   List.all function
     | (Nothing, Init_expr _) ->
         true
     | (Nothing, Init_list xs') ->
-        is_fully_non_designated xs'
+        _UNUSED_is_fully_non_designated xs'
     | _ ->
         false
   end xs
@@ -1681,7 +1685,7 @@ let rec desugar_type_specifiers specs =
               end
 
           | [TSpec loc (TSpec_typeof_expr e)] ->
-              desugar_expression e >>= fun d_e ->
+              desugar_expression e >>= fun d_e  ->
               E.get_sigma_sofar    >>= fun sigm ->
               E.get_gamma_sofar    >>= fun gamm ->
               match ErrorMonad.runErrorMonad (GenTyping.annotate_expression sigm gamm GenTyping.CTXsizeof d_e) with
@@ -2832,7 +2836,7 @@ OTHER
 
 
 (* STD §6.7.9#10, second sentence *)
-and static_thread_implicit_initializer tagDefs (Ctype.Ctype _ ty as cty) =
+and _UNUSED_static_thread_implicit_initializer tagDefs (Ctype.Ctype _ ty as cty) =
   let () = Debug.print_debug 8 [Debug.DB_desugaring]
       (fun () -> "ENTERING Cabs_to_ail.static_thread_implicit_initializer: " ^ Pp.stringFromAil_ctype Ctype.no_qualifiers cty) in
   match ty with
@@ -2846,7 +2850,7 @@ and static_thread_implicit_initializer tagDefs (Ctype.Ctype _ ty as cty) =
     | Ctype.Array elem_ty n_opt ->
         match n_opt with
           | Just n ->
-              ConstantArray elem_ty (Utils.replicate_list (static_thread_implicit_initializer tagDefs elem_ty) (natFromInteger n))
+              ConstantArray elem_ty (Utils.replicate_list (_UNUSED_static_thread_implicit_initializer tagDefs elem_ty) (natFromInteger n))
           | Nothing ->
               error "type error, (TODO find quote): subarray with no size"
         end
@@ -2857,7 +2861,7 @@ and static_thread_implicit_initializer tagDefs (Ctype.Ctype _ ty as cty) =
               ConstantStruct tag_sym $
                 List.map (fun (ident, (_, _, _, ty)) ->
                   (* we ignore the qualifiers, initialisers don't care about them *)
-                  (ident, static_thread_implicit_initializer tagDefs ty)
+                  (ident, _UNUSED_static_thread_implicit_initializer tagDefs ty)
                 ) xs
           | Just (Struct_definition _ _ _ (Just _)) ->
               error "TODO: Cabs_to_ail.static_thread_implicit_initializer => flexible array member"
@@ -2876,7 +2880,7 @@ and static_thread_implicit_initializer tagDefs (Ctype.Ctype _ ty as cty) =
                     z
               end in
               (* we ignore the qualifiers, initialisers don't care about them *)
-              ConstantUnion tag_sym ident (static_thread_implicit_initializer tagDefs ty)
+              ConstantUnion tag_sym ident (_UNUSED_static_thread_implicit_initializer tagDefs ty)
           | _ ->
               error "Cabs_to_ail.static_thread_implicit, Union, not Union_definition"
         end
@@ -3115,17 +3119,14 @@ and foo_aux
                             | Ctype.Ctype _ (Ctype.Array elem_ty _) ->
                                 elem_ty
                             | Ctype.Ctype _ (Ctype.Struct tag_sym) ->
-                                match Map.lookup tag_sym tagDefs with
-                                  | Just (Struct_definition _ isAnonymous ((_, (_, _, _, first_memb_ty)) :: _) _) ->
-                                      let () = if isAnonymous then
-                                        Debug.print_debug 2 [] (fun () ->
-                                          "foo_aux: this may be WRONG ==> anonymous Struct"
-                                        )
-                                      else () in
-                                      first_memb_ty
-                                  | _ ->
-                                      error "foo_aux: Init_list, Struct"
-                                end
+                                let (_, isAnonymous, xs, _) = desug_get_structDefs tagDefs tag_sym in
+                                let (_, (_, _, _, first_memb_ty)) = List_extra.head xs in
+                                let () = if isAnonymous then
+                                  Debug.print_debug 2 [] (fun () ->
+                                    "foo_aux: this may be WRONG ==> anonymous Struct"
+                                  )
+                                else () in
+                                first_memb_ty
                             | _ ->
                                 ty
                           end in
@@ -3237,34 +3238,6 @@ and foo entity_ty init_ : E.desugM (Ctype.ctype * list (init_path * expression u
 
 (* NOTE: the check for STD §6.7.9#3 is done by [desugar_init_declarator] *)
 and wip_desugar_initializer_ loc dur current_ty init =
-(*
-  E.get_tag_definitions >>= fun tagDefs ->
-  foo current_ty init >>= fun xs ->
-  
-  let expr = constructValue tagDefs xs current_ty in
-
-  let () = Debug.print_debug 2 [] (fun () ->
-    "HELLO INITIALIZER_ ==> current_ty: " ^ Pp.stringFromAil_ctype Ctype.no_qualifiers current_ty ^
-(*    "\n desigs ==> " ^ stringFromList stringFromInit_path (elemPathFromCtype_aux tagDefs current_ty) ^ *)
-
-    "\n desigs ==> " ^ stringFromList (fun (path, outer_path, outer_ty) ->
-                         stringFromInit_path path ^ " --> outer: " ^
-                         stringFromInit_path outer_path ^ " (" ^
-                         Pp.stringFromAil_ctype Ctype.no_qualifiers outer_ty ^ ")"
-                       ) (elemPathFromCtype3 tagDefs current_ty) ^
-    "\n FOO ==> " ^ stringFromList (fun (path, expr) ->
-                      stringFromInit_path path ^
-                      " := " ^ Pp.stringFromAil_expression expr
-                    ) xs
-  ) in
-  let () = Debug.print_debug 2 [] (fun () ->
-    "EXPR: " ^ Pp.stringFromAil_expression expr
-  ) in
-
-let () = error "DONE" in
-*)
-
-
   (* YUCK + TODO: move somewhere *)
   let is_string_literal_init = function
     | Init_expr (CabsExpression _ (CabsEstring _)) ->
@@ -3291,7 +3264,7 @@ let () = error "DONE" in
     desugar_expression e >>= fun d_e ->
     (* STD §6.7.9#4 *)
     if dur = Static || dur = Thread then
-      is_initializer_constant_expression d_e >>= function
+      is_initializer_constant_expression_or_string_literal d_e >>= function
         | false ->
             E.constraint_violation (Loc.locOf d_e) IllegalStorageClassStaticOrThreadInitializer
         | true ->
@@ -3379,44 +3352,6 @@ let () = error "DONE" in
     E.print_debugM 2 (fun () ->
       "TODO[wip_desugar_initializer_]: in the remaining cases (object that has aggregate or union type), init must Init_list, otherwise this UNDEFINED BEHAVIOUR..." 
     ) >>= fun () ->
-
-(*
-  if AilTypesAux.is_scalar current_ty then
-    (* STD §6.7.9#11 *)
-    match init with
-      | Init_expr e ->
-          E.return e
-      | Init_list [(Nothing, Init_expr e)] ->
-          E.return e
-      | _ ->
-          (* STD §6.7.9#11, sentence 1 *)
-          (* TODO: that's an undefined behaviour *)
-          E.fail loc (Errors.Desugar_ConstraintViolation "§6.7.9#11, sentence 1")
-    end >>= fun e ->
-    desugar_expression e >>= fun d_e ->
-    E.return (current_ty, d_e)
-  
-  let desugar_struct_union_initializer_ tag =
-    match init with
-      | Init_expr e ->
-          sugar_expression e >>= d_e ->
-          E.return (current_ty, d_e)
-      | Init_list desigs_opt_inits ->
-          
-    end
-  in
-  
-  
-  match current_ty with
-    | Ctype.Struct tag ->
-        desugar_struct_initializer_ tag
-    | Ctype.Union tag ->
-        desugar_union_initializer_ tag
-  end
-  
-  
-  
-  else *)
     match (Ctype.unatomic_ current_ty, init) with
       | (Ctype.Struct _, Init_expr e) ->
           (* TODO: hack *)
@@ -3435,322 +3370,6 @@ let () = error "DONE" in
           ) >>= fun () ->
           E.return (current_ty', constructValue tagDefs xs current_ty')
     end
-
-
-  
-
-
-(* KKKK: new init
-
- match init with
-  | Init_expr e ->
-      (* we ignore the type here because the type checking will catch
-         errors later *)
-      let update_literal_type n =
-        match current_ty with
-          | Ctype.Array elem_ty Nothing ->
-              Ctype.Array elem_ty (Just n)
-          | _ ->
-              current_ty
-      end in
-      match dur with
-        | Ctype.Automatic ->
-            (* TODO: what if the string it too short/long for current_ty *)
-            desugar_expression e >>= function
-              | (AnnotatedExpression () _ _ (AilEstr (Nothing, str)) as d_e) ->
-
-(* TODO: regarding the twos following commented regions:
-         
-         first §6.7.9#14 is not a constraint, second the text allows something instead of forbidding something *)
-(*
-                  if not (AilTypesAux.is_array_of_character current_ty) then
-                    E.fail loc (Errors.Desugar_ConstraintViolation "§6.7.9#14")
-                  else
-*)
-                    E.return (update_literal_type (integerFromNat (List.length str + 1)), d_e)
-              | (AnnotatedExpression () _ _ (AilEstr (Just Enc_u8, str)) as d_e) ->
-(*
-                  if not (AilTypesAux.is_array_of_character current_ty) then
-                    E.fail loc (Errors.Desugar_ConstraintViolation "§6.7.9#14")
-                  else
-*)
-                    E.return (update_literal_type (integerFromNat (List.length str + 1)), d_e)
-              | (AnnotatedExpression () _ _ (AilEstr (Just _, str)) as d_e) ->
-                  E.fail loc (Errors.Desugar_NotYetSupported "string litteral initialisation with encoding prefix")
-              | d_e ->
-                  E.return (current_ty, d_e)
-            end
-            
-        | Ctype.Allocated ->
-            error "not possible"
-        (* Static | Thread *)
-        | _ ->
-            let () = Debug.print_debug 2 [] (fun () -> "HELLO Init_expr") in
-            desugar_expression e                   >>= fun d_e ->
-            is_initializer_constant_expression d_e >>= function
-              | true ->
-                  match d_e with
-                    | AnnotatedExpression () _ _ (AilEstr (Nothing, str)) ->
-                        if not (AilTypesAux.is_array_of_character current_ty) then
-                          E.fail loc (Errors.Desugar_ConstraintViolation "§6.7.9#14")
-                        else
-                          E.return (update_literal_type (integerFromNat (List.length str + 1)), d_e)
-                    | AnnotatedExpression () _ _ (AilEstr (Just Enc_u8, str)) ->
-                        if not (AilTypesAux.is_array_of_character current_ty) then
-                          E.fail loc (Errors.Desugar_ConstraintViolation "§6.7.9#14")
-                        else
-                          E.return (update_literal_type (integerFromNat (List.length str + 1)), d_e)
-                    | AnnotatedExpression () _ _ (AilEstr (Just _, str)) ->
-                        E.fail loc (Errors.Desugar_NotYetSupported "string litteral initialisation with encoding prefix")
-                    | _ ->
-                        E.return (current_ty, d_e)
-                  end
-              | false ->
-                  (* NOTE: we don't to check whether d_e is a string literal because the 
-                     predicate would have been true. *)
-                  E.fail (Loc.locOf e) (Errors.Desugar_ConstraintViolation "§6.7.9#4")
-            end
-      end
-  
-  | Init_list desigs_opt_inits ->
-      (* NOTE: I know it would be more efficient to factorize these checks, but
-         these is more readable *)
-      if List.any (function
-           | (Just (Desig_array _ :: _), _) -> true
-           | _                              -> false
-         end) desigs_opt_inits && not (AilTypesAux.is_array current_ty) then
-        (* STD §6.7.9#6 *)
-        E.fail loc (Errors.Desugar_ConstraintViolation "§6.7.9#6")
-      else
-      E.get_tag_definitions >>= fun tagDefs ->
-      (* TODO: atomic *)
-      match current_ty with
-        | Ctype.Array elem_ty n_opt ->
-            let n = match n_opt with
-              | Just z ->
-                  z
-              | Nothing ->
-                  integerFromNat (List.length desigs_opt_inits)
-            end in
-            let implicit = AnnotatedExpression () [] Loc.unknown (* TODO *) $ AilEconst match dur with
-              | Ctype.Automatic ->
-                  (* STD §6.7.9#10, first sentence *)
-                  ConstantIndeterminate elem_ty
-              | Ctype.Allocated ->
-                  error "not possible"
-              (* Static | Thread *)
-              | _ ->
-                  static_thread_implicit_initializer tagDefs elem_ty
-            end in
-            
-            E.foldlM (fun (i, acc) (desigs_opt, init) ->
-              match desigs_opt with
-                | Just (Desig_member _ :: _) ->
-                    E.fail Loc.unknown (Errors.Desugar_ConstraintViolation "§6.7.9#7")
-                | Just [Desig_array desig_e] ->
-                    desugar_expression desig_e               >>= fun d_desig_e ->
-                    is_integer_constant_expression d_desig_e >>= function
-                      | true ->
-                          evaluate_integer_constant_expression (Loc.locOf desig_e) Nothing d_desig_e >>= fun j                  ->
-                          wip_desugar_initializer_ loc dur elem_ty init                      >>= fun (elem_ty', d_init) ->
-                          (* TODO: use elem_ty' *)
-                          (* comparing the specified index with the
-                             expected current index *)
-                          match compare j i with
-                            | LT ->
-                                E.fail (Loc.locOf desig_e) (Errors.Desugar_ConstraintViolation "TODO: find the STD text")
-                            | EQ ->
-                                E.return (i+1, Just d_init :: acc)
-                            | GT ->
-                                (*  *)
-                                E.return (j+1, Just d_init :: (Utils.replicate_list (Just implicit) (natFromInteger $ j-i)) ++ acc)
-                          end
-                      | false ->
-                          E.fail (Loc.locOf desig_e) (Errors.Desugar_ConstraintViolation "§6.7.9#6")
-                    end
-                | Nothing ->
-                    wip_desugar_initializer_ loc dur elem_ty init >>= fun (elem_ty', d_init) ->
-                    (* TODO: use elem_ty' *)
-                    E.return (i+1, Just d_init :: acc)
-                | _ ->
-                    (* Multi-array designator *)
-                    E.fail Loc.unknown (Errors.Desugar_NotYetSupported "sucks to be you")
-              end
-            ) (0, []) desigs_opt_inits >>= fun (_, xs_rev) ->
-            
-            let conved_elems =
-              List.map (function
-                | Nothing ->
-                    Nothing
-                | Just z ->
-                    Just (
-                      AnnotatedExpression () [] loc (AilEcast AilTypes.no_qualifiers elem_ty z)
-                    )
-              end) (List.reverse (Utils.replicate_list (Just implicit) (natFromInteger n - List.length xs_rev) ++ xs_rev)) in
-            E.return
-              ( Ctype.Array elem_ty (Just n)
-              , AnnotatedExpression () [] Loc.unknown(* TODO *)
-                  (* TODO: should use ConstantArray when possible *)
-                  (AilEarray false elem_ty conved_elems) )
-        
-        | Ctype.Struct tag ->
-            (* TODO: check the STD!!!!! *)
-            E.resolve_tag_definition tag >>= function
-              | Just (Struct_definition isAnonymous ident_tys) ->
-                  (* TODO: (for now) only allowing explicit and complete initializer *)
-                  if List.all (function
-                       | (Just [Desig_member _], Init_expr _) -> true
-                       | _                                    -> false
-                     end) desigs_opt_inits then
-                    E.foldlM (fun acc desigs_opt_init ->
-                      match desigs_opt_init with
-                        | (Just [Desig_member ident], Init_expr e) ->
-                            desugar_expression e >>= fun d_e ->
-                            E.return $ (ident, d_e) :: acc
-                        | _ ->
-                            error "TODO: Cabs_to_ail.wip_desugar_initializer_, Struct, Struct_definition, not Desig_member vs Init_expr"
-                      end
-                    ) [] desigs_opt_inits >>= fun xs_rev ->
-                    E.return
-                      ( current_ty
-                      , AnnotatedExpression () [] Loc.unknown(* TODO *) (
-                          AilEstruct tag (List.map (fun (ident, _) -> (ident, List.lookup ident xs_rev)) ident_tys)
-                        ) )
-                  
-                  (* TODO: OR a flat implicit initializer *)
-(*                else if List.all (function
-                            | (Nothing, Init_expr _) -> true
-                            | _                      -> false
-                          end) desigs_opt_inits then
-                    E.foldlM (fun desigs_opt_init acc ->
-                      match desigs_opt_init with
-                        | ((ident, _), (Nothing, Init_expr e)) ->
-                            desugar_expression e >>= fun d_e ->
-                            E.return $ (ident, Just d_e) :: acc
-                        | _ ->
-                            error "WIP: Cabs_to_ail.wip_desugar_initializer_, Struct, Struct_definition, else"
-                      end
-                    ) (List.zip ident_tys desigs_opt_inits) [] >>= fun xs_rev ->
-                    
-                    E.return $
-                      AnnotatedExpression () Loc.unknown(* TODO *) (
-                        AilEstruct tag (List.reverse xs_rev)
-                      )
-*)
-                  else if is_fully_non_designated desigs_opt_inits then
-                    E.foldlM (fun acc desigs_opt_init ->
-                      match desigs_opt_init with
-                        | ((ident, (_, _)), (Nothing, Init_expr e)) ->
-                            desugar_expression e >>= fun d_e ->
-                            E.return $ (ident, Just d_e) :: acc
-                        | ((ident, (_, membr_ty)), (Nothing, init)) ->
-                            (* we ignore the qualifiers, initialisers don't care about them *)
-                            wip_desugar_initializer_ loc dur membr_ty init >>= fun (membr_ty', d_e) ->
-                            (* TODO: use membr_ty' *)
-                            E.return $ (ident, Just d_e) :: acc
-(*                      | ((ident, membr_ty), (Nothing, Init_list non_designated_inits)) ->
-                            E.mapM (fun (Nothing, init) ->
-                              wip_desugar_initializer_ loc dur membr_ty init
-                            ) non_designated_inits >>= fun d_es ->
-                            E.return (ident,
-                              match membr_ty with
-                                | Array elem_ty _ ->
-                                    AilEarray elem_ty d_es
-                                | Struct tag_sym ->
-                                    AilEstruct 
-                              end    *)
-                        | _ ->
-                            error "TODO: Cabs_to_ail.wip_desugar_initializer_, Struct, Struct_definition, else"
-                      end
-                    ) [] (List.zip ident_tys desigs_opt_inits) >>= fun xs_rev ->
-                    E.return
-                      ( current_ty
-                      , AnnotatedExpression () [] Loc.unknown(* TODO *) (
-                          AilEstruct tag (List.reverse xs_rev)
-                        ) )
-                  
-                  else
-                    (* TODO: crazy stuff we don't deal with yet *)
-                    E.fail loc (Errors.Desugar_NotYetSupported "crazy struct initializers")
-
-              | _ ->
-                  E.fail loc (Errors.Desugar_TODO "[TODO msg], Struct init thing")
-            end
-
-        | Ctype.Union tag ->
-            (* TODO: check the STD, the following is mostly improvised... *)
-            E.resolve_tag_definition tag >>= function
-              | Just (Union_definition isAnonymous ident_tys) ->
-                  match desigs_opt_inits with
-                    | [(Nothing, init')] ->
-                        let (first_ident, (_, first_ty)) = match ident_tys with
-                          | [] ->
-                              (* NOTE: I don't the parser can produce an empty Union_definition *)
-                              error "Cabs_to_ail.wip_desugar_initializer_ ==> empty Union_definition"
-                          | z :: _ ->
-                              z
-                        end in
-                        (* we ignore the qualifiers, initialisers don't care about them *)
-                        wip_desugar_initializer_ loc dur first_ty init' >>= fun (first_ty', d_e) ->
-                        (* TODO: use first_ty' *)
-                        E.return
-                          ( current_ty
-                          , AnnotatedExpression () [] loc (
-                              AilEunion tag first_ident (Just d_e)
-                            )
-                          )
-                    | [(Just [Desig_member memb_ident], init')] ->
-                        match List.lookup memb_ident ident_tys with
-                          | Just (_, ty) ->
-                              (* we ignore the qualifiers, initialisers don't care about them *)
-                              E.return ty
-                          | Nothing ->
-                              E.constraint_violation loc (InvalidMember memb_ident current_ty)
-                        end >>= fun memb_ty ->
-                        wip_desugar_initializer_ loc dur memb_ty init' >>= fun (membr_ty', d_e) ->
-                        (* TODO: use membr_ty' *)
-                        E.return
-                          ( current_ty
-                          , AnnotatedExpression () [] loc (
-                              AilEunion tag memb_ident (Just d_e)
-                            )
-                          )
-                    | _ ->
-                        (* NOTE: finding a Desig_array here should be impossible
-                           before of an earlier check *)
-                        error "TODO: Cabs_to_ail.wip_desugar_initializer_, not a singleton list"
-                  end
-(*  list (maybe (list designator) * initializer_)  *)
-(*                let () = Debug.print_debug 2
-                      ("UNION INIT ==> " ^ stringFromList (stringFromPair show Pp.stringFromAil_ctype) ident_tys)in
-                  E.fail loc (Errors.Desugar_OtherViolation "TODO union init") *)
-              | _ ->
-                  E.fail loc (Errors.Desugar_TODO "[TODO msg], Union init thing")
-            end
-
-(*
-        | Ctype.Array elem_ty Nothing ->
-            let _ = desigs_opt_inits in
-            E.fail loc (Errors.Desugar_NotYetSupported "not allowing array with no size for now")
-*)
-
-        (* NOTE: should be a scalar type *)
-        | _ ->
-            (* STD §6.7.9#11, sentence 1 *)
-            match desigs_opt_inits with
-              (* this the "optionaly enclosed in braces" case from (§6.7.9#11, sentence 1) *)
-              | [(Nothing, init)] ->
-                  wip_desugar_initializer_ loc dur current_ty init
-              | _ ->
-                  (* TODO: this (at leat) possible with something like:
-                       int a = {1, 2}; *)
-                  error "TODO: error message. is that even a possible case? (11)"
-            end
-
-      end
-end
-*)
-
 
 
 and desugar_and_register_static_assert_declaration sa_decl =
