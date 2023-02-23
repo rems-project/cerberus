@@ -690,11 +690,7 @@ let debug_level =
   Arg.(value & opt int 0 & info ["d"; "debug"] ~docv:"N" ~doc)
 
 let () =
-  let instance = Term.(pure instance $ debug_level) in
+  let instance = Term.(const instance $ debug_level) in
   let doc  = "Cerberus instance with a fixed memory model." in
-  let info = Term.info "Cerberus instance" ~doc in
-  match Term.eval (instance, info) with
-  | `Error _ -> exit 1;
-  | `Ok _
-  | `Version
-  | `Help -> exit 0
+  let info = Cmd.info "Cerberus instance" ~doc in
+  Stdlib.exit @@ Cmd.eval (Cmd.v info instance)

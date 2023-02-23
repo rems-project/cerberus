@@ -165,5 +165,5 @@ let file =
 
 
 let () =
-  let playground_t = Term.(pure playground(*_core*) $ file) in
-  Term.exit @@ Term.eval (playground_t, Term.info "Core playground")
+  let playground_t = Term.(const playground(*_core*) $ file) in
+  Stdlib.exit @@ Cmd.eval (Cmd.(v (info "Core playground") playground_t))
