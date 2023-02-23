@@ -1899,6 +1899,9 @@ prim_expr:
 | ident= cn_variable
     { Cerb_frontend.Cn.(CNExpr (Location_ocaml.point $startpos, CNExpr_var ident)) }
 (* | ident= cn_variable DOT ident_membr= cn_variable *)
+| RETURN
+    { Cerb_frontend.Cn.(CNExpr (Location_ocaml.point $startpos,
+        CNExpr_var (Symbol.Identifier (Location_ocaml.point $startpos($1), "return")))) }
 | e= prim_expr DOT member=cn_variable
     { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                                , CNExpr_memberof (e, member))) }
@@ -2237,7 +2240,7 @@ function_spec:
       Cerb_frontend.Cn.CN_requires (loc, c) }
 | CN_ENSURES c=condition EOF
   { let loc = Location_ocaml.region ($startpos, $endpos) NoCursor in
-      Cerb_frontend.Cn.CN_requires (loc, c) }
+      Cerb_frontend.Cn.CN_ensures (loc, c) }
 
 just_enter_cn:
 | enter_cn EOF

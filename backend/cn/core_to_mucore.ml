@@ -799,8 +799,7 @@ let combine_function_args loc arg_cts args =
       (s, ct)      
     ) arg_cts args
 
-let combine_return loc ret_ct ret_bt = 
-  let ret_s = Sym.fresh_named "return" in
+let combine_return loc ret_s ret_ct ret_bt =
   assertl loc (BT.equal (convert_bt loc ret_bt) 
               (BT.of_sct (convert_ct loc ret_ct))) 
     !^"function return type mismatch";
@@ -917,14 +916,17 @@ let register_new_cn_local id d_st =
 
 let desugar_cond d_st = function
   | Cn.CN_cletResource (loc, id, res) ->
+    Print.debug 6 (lazy (Print.typ (Print.string "desugaring a let-resource at") (Locations.pp loc)));
     let@ res = do_ail_desugar_rdonly d_st (Cabs_to_ail.desugar_cn_resource res) in
     let@ (sym, d_st) = register_new_cn_local id d_st in
     return (Cn.CN_cletResource (loc, sym, res), d_st)
   | Cn.CN_cletExpr (loc, id, expr) ->
+    Print.debug 6 (lazy (Print.typ (Print.string "desugaring a let-expr at") (Locations.pp loc)));
     let@ expr = do_ail_desugar_rdonly d_st (Cabs_to_ail.desugar_cn_expr expr) in
     let@ (sym, d_st) = register_new_cn_local id d_st in
     return (Cn.CN_cletExpr (loc, sym, expr), d_st)
   | Cn.CN_cconstr (loc, constr) ->
+    Print.debug 6 (lazy (Print.typ (Print.string "desugaring a constraint at") (Locations.pp loc)));
     let@ constr = do_ail_desugar_rdonly d_st (Cabs_to_ail.desugar_cn_assertion constr) in
     return (Cn.CN_cconstr (loc, constr), d_st)
 
@@ -933,6 +935,10 @@ let desugar_conds d_st conds =
     let@ (cond, d_st) = desugar_cond d_st cond in
     return (cond :: conds, d_st)) ([], d_st) conds in
   return (List.rev conds, d_st)
+
+let declare_return loc ret_ct ret_bt d_st =
+  let@ (sym, d_st) = register_new_cn_local (Id.id "return") d_st in
+  return (combine_return loc sym ret_ct ret_bt, d_st)
 
 let fetch_ail_env_id (ail_env : AilSyntax.identifier_env) loc x =
   match Pmap.lookup x ail_env with
@@ -1051,10 +1057,12 @@ let normalise_fun_map_decl ail_prog env globals d_st (funinfo: mi_funinfo) loop_
          (mut_arg, IT.sym_ (pure_arg, (convert_bt loc bt)))) ail_args args in
      let env = C.add_c_var_values arg_var_vals env in
      let@ trusted, accesses, requires, ensures = Parse.parse_function_spec attrs in
+     Print.debug 6 (lazy (Print.string "parsed spec attrs"));
      let@ (requires, d_st) = desugar_conds d_st (List.map snd requires) in
-     (* Print.debug 6 (lazy (Print.string "desugared requires conds")); *)
-     let@ (ensures, _) = desugar_conds d_st (List.map snd ensures) in
-     (* Print.debug 6 (lazy (Print.string "desugared ensures conds")); *)
+     Print.debug 6 (lazy (Print.string "desugared requires conds"));
+     let@ (ret, ret_d_st) = declare_return loc ret_ct ret_bt d_st in
+     let@ (ensures, _) = desugar_conds ret_d_st (List.map snd ensures) in
+     Print.debug 6 (lazy (Print.string "desugared ensures conds"));
      let@ (var_vals, requires, ensures) = translate_accesses ail_env
          globals accesses requires ensures in
      let env = C.add_c_var_values var_vals env in
@@ -1069,7 +1077,7 @@ let normalise_fun_map_decl ail_prog env globals d_st (funinfo: mi_funinfo) loop_
            let@ labels = 
              PmapM.mapM (normalise_label loop_attributes env d_st)
                labels Sym.compare in
-           let@ returned = make_rt loc env (combine_return loc ret_ct ret_bt) ensures in
+           let@ returned = make_rt loc env ret ensures in
            (* Print.debug 6 (lazy (Print.string "made return-type")); *)
            return (body, labels, returned)
          ) loc env combined_args requires
@@ -1080,13 +1088,14 @@ let normalise_fun_map_decl ail_prog env globals d_st (funinfo: mi_funinfo) loop_
   | Mi_ProcDecl(loc, ret_bt, bts) -> 
      let@ trusted, accesses, requires, ensures = Parse.parse_function_spec attrs in
      let@ (requires, d_st2) = desugar_conds d_st (List.map snd requires) in
-     let@ (ensures, _) = desugar_conds d_st2 (List.map snd ensures) in
+     let@ (ret, ret_d_st) = declare_return loc ret_ct ret_bt d_st2 in
+     let@ (ensures, _) = desugar_conds ret_d_st (List.map snd ensures) in
      let arg_protos = List.mapi (fun i -> function
         | (Some sym, ct) -> (sym, ct)
         | (None, ct) -> (Sym.fresh_named ("default_" ^ Int.to_string i), ct)) arg_cts in
      let@ args_and_rt =
        make_args (fun env ->
-           make_rt loc env (combine_return loc ret_ct ret_bt) ensures
+           make_rt loc env ret ensures
          ) loc env arg_protos requires
      in
      let ft = at_of_arguments Tools.id args_and_rt in
