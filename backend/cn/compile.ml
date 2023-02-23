@@ -424,6 +424,14 @@ let translate_cn_expr (env: env) expr =
       | CNExpr_binop (CN_sub, e1_, (CNExpr (_, CNExpr_cons _) as shape)) ->
           let@ e1 = self e1_ in
           translate_is_shape env loc e1 shape
+      | CNExpr_binop (CN_at_env, e1_, e2_) ->
+          let@ e2 = self e2_ in
+          let@ () = match IT.is_bool e2 with
+            | Some true -> return ()
+            | _ -> fail {loc; msg = Generic (!^"hack for {_}@start: not start:" ^^^ IT.pp e2)}
+          in
+          Pp.warn loc (!^ "use of legacy {_}@start syntax");
+          self e1_
       | CNExpr_binop (bop, e1_, e2_) ->
           let@ e1 = self e1_ in
           let@ e2 = self e2_ in

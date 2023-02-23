@@ -33,6 +33,7 @@ let string_of_error = function
       "the " ^ string_of_ns ns ^ " `" ^ str ^ "' is not declared"
   | CNErr_missing_oarg sym ->
       "missing an assignment for the oarg `" ^ Pp_symbol.to_string_pretty sym ^ "'" 
+  | CNErr_general s -> s
     
 
 
@@ -83,6 +84,7 @@ module MakePp (Conf: PP_CN) = struct
     | CN_and -> P.ampersand ^^ P.ampersand
     | CN_map_get -> P.string "CN_map_get"
     | CN_is_shape -> P.string "??"
+    | CN_at_env -> P.string "%"
   
   let rec dtree_of_cn_expr (CNExpr (_, expr_)) =
     match expr_ with

@@ -9,20 +9,36 @@ module Cn = Cerb_frontend.Cn
 
 module Loc = Locations
 
+(* the character @ is not a separator in C, so supporting @start as a
+   legacy syntax requires special hacks *)
+let fiddle_at_hack string =
+  let ss = String.split_on_char '@' string in
+  let starts_start s = String.length s >= String.length "start"
+    && String.equal (String.sub s 0 (String.length "start")) "start" in
+  let rec fix = function
+    | [] -> ""
+    | [s] -> s
+    | (s1 :: s2 :: ss) -> if starts_start s2
+        then fix ((s1 ^ "%" ^ s2) :: ss)
+        else fix ((s1 ^ "@" ^ s2) :: ss)
+  in
+  fix ss
+
 let diagnostic_get_tokens string =
+  C_lexer.internal_state.inside_cn <- true;
   let lexbuf = Lexing.from_string string in
-  let rec f xs = match C_lexer.lexer lexbuf with
+  let rec f xs = try begin match C_lexer.lexer lexbuf with
     | Tokens.EOF -> List.rev ("EOF" :: xs)
     | t -> f (Tokens.string_of_token t :: xs)
+  end with C_lexer.Error err -> List.rev (CF.Pp_errors.string_of_cparser_cause err :: xs)
   in
   f []
-
 
 (* adapting from core_parser_driver.ml *)
 
 let parse parser_start (loc, string) =
-  let lexbuf = Lexing.from_string "" in
-  let () = C_parser.just_enter_cn C_lexer.lexer lexbuf in
+  let string = fiddle_at_hack string in
+  C_lexer.internal_state.inside_cn <- true;
   let lexbuf = Lexing.from_string string in
   let () = 
     let open Location_ocaml in

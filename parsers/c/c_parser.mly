@@ -1922,6 +1922,9 @@ prim_expr:
 | arr= prim_expr LBRACK idx= expr RBRACK
     { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                                , CNExpr_binop (CN_map_get, arr, idx))) }
+| LBRACE a=expr RBRACE PERCENT l=NAME VARIABLE
+    { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($4)))
+                               , CNExpr_binop (CN_at_env, a, mk_bool (String.compare l "start" == 0)))) }
 
 
 

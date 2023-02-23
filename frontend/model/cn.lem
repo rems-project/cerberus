@@ -41,6 +41,7 @@ type cn_binop =
   | CN_and
   | CN_map_get
   | CN_is_shape
+  | CN_at_env
 
 (*
   | Exponentiation of term * term
@@ -78,6 +79,8 @@ type cn_expr_ 'a 'ty =
 
 and cn_expr 'a 'ty =
   | CNExpr of Loc.t * cn_expr_ 'a 'ty
+
+let mk_bool b = CNExpr Loc.unknown (CNExpr_const (CNConst_bool b))
 
 type cn_fun_body 'a 'ty =
   | CN_fb_letExpr of Loc.t * 'a * cn_expr 'a 'ty * cn_fun_body 'a 'ty
@@ -176,6 +179,7 @@ type cn_error =
   | CNErr_invalid_tag
   | CNErr_unknown_identifier of cn_namespace * Symbol.identifier
   | CNErr_missing_oarg of Symbol.sym
+  | CNErr_general of string
 
 type cn_typing_error =
   | CNErr_typing_TODO
