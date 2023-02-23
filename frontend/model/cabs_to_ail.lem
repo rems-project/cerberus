@@ -2251,10 +2251,10 @@ STD_ "§6.5.2.1#2, sentence 2" $
     | CabsEpostdecr e ->
         AilEunary PostfixDecr <$> desugar_expression e
     | CabsEcompound tyname inits ->
-        desugar_type_name tyname >>= fun (qs, ty) ->
-        (* TODO: the storage duration is wrong here, if we are inside the body of a function, it should be automatic *)
+        desugar_type_name tyname >>= fun (qs, ty)    ->
+        E.is_inside_function     >>= fun inside_func ->
         (* NOTE: there is no need to do the check for STD §6.7.9#3 here, because of the ail typing *)
-        wip_desugar_initializer_ loc Static ty (Init_list inits) >>= fun (ty', d_e) ->
+        wip_desugar_initializer_ loc (if inside_func then Automatic else Static) ty (Init_list inits) >>= fun (ty', d_e) ->
         E.return (AilEcompound qs ty' d_e)
     | CabsEpreincr e ->
 STD_ "§6.5.3.1#2, sentence 3" $
@@ -4719,10 +4719,11 @@ let desugar_and_register_function_definition (FunDef fundef_loc fundef_attrs spe
             List.elem FS_inline   specifs.function_specifiers,
             List.elem FS_Noreturn specifs.function_specifiers
           ) >>
-          E.set_current_return_type return_ty >>
-          E.record_marker () >>= fun marker_id ->
-          desugar_statement stmt >>= fun d_stmt ->
-          E.return (Loc.locOf fun_ident, marker_id, fun_sym, d_stmt) in
+          E.inside_function return_ty begin
+            E.record_marker ()     >>= fun marker_id ->
+            desugar_statement stmt >>= fun d_stmt    ->
+            E.return (Loc.locOf fun_ident, marker_id, fun_sym, d_stmt)
+          end in
         match ty with
           | Ctype.Ctype _ (Ctype.Function return_qs_ty params isVariadic) ->
               process return_qs_ty (Just params) isVariadic
