@@ -516,12 +516,16 @@ let translate_cn_res_info res_loc loc env res args =
   in
   let@ (pname, oargs_ty) = match res with
     | CN_owned oty ->
-       let@ ty = match oty with
-         | Some ty -> return ty
+       let@ scty = match oty with
+         | Some ty -> return (Sctypes.of_ctype_unsafe res_loc ty)
          | None ->
-            fail {loc; msg = Generic !^"cannot tell C-type of pointer"}
+            match IT.bt ptr_expr with
+            | Loc (Some ty) -> return ty
+            | Loc None ->
+               fail {loc; msg = Generic !^"cannot tell C-type of pointer"}
+            | has ->
+               fail {loc; msg = Illtyped_it' {it = Terms.pp ptr_expr; has = SBT.pp has; expected = "pointer"}}
        in
-       let scty = Sctypes.of_ctype_unsafe res_loc ty in
        (* we don't take Resources.owned_oargs here because we want to
           maintain the C-type information *)
        let oargs_ty = SBT.Record [(Resources.value_sym, SBT.of_sct scty)] in
