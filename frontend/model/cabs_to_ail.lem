@@ -4527,9 +4527,11 @@ let rec desugar_cn_expr (CNExpr loc expr_) =
   E.return (CNExpr loc ret)
 
 let desugar_cn_pred = function
-  | CN_owned tyname ->
+  | CN_owned (Just tyname) ->
       desugar_type_name tyname >>= fun (_, ty) ->
-      E.return (CN_owned ty)
+      E.return (CN_owned (Just ty))
+  | CN_owned Nothing ->
+      E.return (CN_owned Nothing)
   | CN_block tyname ->
       desugar_type_name tyname >>= fun (_, ty) ->
       E.return (CN_block ty)

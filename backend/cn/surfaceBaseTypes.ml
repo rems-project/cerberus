@@ -1,13 +1,7 @@
+(* copy of baseTypes.ml, adjusted *)
+
 open Pp
 
-
-type tag = Sym.t
-let equal_tag = Sym.equal
-let compare_tag = Sym.compare
-
-type member = Id.t
-let equal_member = Id.equal
-let compare_member = Id.compare
 
 
 type basetype =
@@ -15,9 +9,9 @@ type basetype =
   | Bool
   | Integer
   | Real
-  | Loc
-  | Struct of tag
-  | Datatype of tag
+  | Loc of Sctypes.t option
+  | Struct of BaseTypes.tag
+  | Datatype of BaseTypes.tag
   | Record of member_types
   | Map of basetype * basetype
   | List of basetype
@@ -38,12 +32,12 @@ let compare = compare_basetype
 
 
 type datatype_info = {
-  dt_constrs: tag list;
+  dt_constrs: BaseTypes.tag list;
   dt_all_params: member_types;
 }
 type constr_info = {
   c_params: member_types;
-  c_datatype_tag: tag
+  c_datatype_tag: BaseTypes.tag
 }
 
 let cons_dom_rng info =
@@ -55,7 +49,8 @@ let rec pp = function
   | Bool -> !^"bool"
   | Integer -> !^"integer"
   | Real -> !^"real"
-  | Loc -> !^"pointer"
+  | Loc (Some ct) -> !^"pointer" ^^ angles (Sctypes.pp ct)
+  | Loc None -> !^"pointer"
   | Struct sym -> !^"struct" ^^^ Sym.pp sym
   | Datatype sym -> !^"datatype" ^^^ Sym.pp sym
   | Record members -> braces (flow_map comma (fun (s, bt) -> pp bt ^^^ Sym.pp s) members)
@@ -99,10 +94,6 @@ let is_datatype_bt = function
 
 let make_map_bt abt rbt = Map (abt, rbt)
 
-(* let option_bt = function *)
-(*   | Option bt -> bt  *)
-(*   | bt -> Debug_ocaml.error  *)
-(*            ("illtyped index term: not an option type: " ^ Pp.plain (pp bt)) *)
 
 
 
@@ -110,27 +101,38 @@ let rec of_sct = function
   | Sctypes.Void -> Unit
   | Integer _ -> Integer
   | Array (sct, _) -> Map (Integer, of_sct sct)
-  | Pointer _ -> Loc
+  | Pointer ct -> Loc (Some ct)
   | Struct tag -> Struct tag
   | Function _ -> Debug_ocaml.error "todo: function types"
 
 
+module BT = BaseTypes
 
-let rec hash = function
-  | Unit -> 0
-  | Bool -> 1
-  | Integer -> 2
-  | Real -> 3
-  | Loc -> 4
-  | List _ -> 5
-  | Tuple _ -> 6
-  | Set _ -> 7
-  (* | Option _ -> 8 *)
-  | Struct tag -> 1000 + Sym.num tag
-  | Datatype tag -> 4000 + Sym.num tag
-  | Record _ -> 3000
-  | Map (abt,rbt) -> 2000 + hash abt + hash rbt
-
-
+let rec of_basetype = function
+  | BT.Unit -> Unit
+  | BT.Bool -> Bool
+  | BT.Integer -> Integer
+  | BT.Real -> Real
+  | BT.Loc -> Loc None
+  | BT.Struct tag -> Struct tag
+  | BT.Datatype tag -> Datatype tag
+  | BT.Record member_types -> Record (List.map_snd of_basetype member_types)
+  | BT.Map (bt1, bt2) -> Map (of_basetype bt1, of_basetype bt2)
+  | BT.List bt -> List (of_basetype bt)
+  | BT.Tuple bts -> Tuple (List.map of_basetype bts)
+  | BT.Set bt -> Set (of_basetype bt)
 
 
+let rec to_basetype = function
+  | Unit -> BT.Unit
+  | Bool -> BT.Bool
+  | Integer -> BT.Integer
+  | Real -> BT.Real
+  | Loc _ -> BT.Loc
+  | Struct tag -> BT.Struct tag
+  | Datatype tag -> BT.Datatype tag
+  | Record member_types -> BT.Record (List.map_snd to_basetype member_types)
+  | Map (bt1, bt2) -> BT.Map (to_basetype bt1, to_basetype bt2)
+  | List bt -> BT.List (to_basetype bt)
+  | Tuple bts -> BT.Tuple (List.map to_basetype bts)
+  | Set bt -> BT.Set (to_basetype bt)

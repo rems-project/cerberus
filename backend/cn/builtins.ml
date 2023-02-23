@@ -1,3 +1,4 @@
+module SBT = SurfaceBaseTypes
 open Resultat
 open Effectful.Make(Resultat)
 open TypeErrors
@@ -33,12 +34,14 @@ let power_def = (Sym.fresh_named "power", mk_arg2 exp_)
 let rem_def = (Sym.fresh_named "rem", mk_arg2 rem_)
 let mod_def = (Sym.fresh_named "mod", mk_arg2 mod_)
 
-let not_def = (Sym.fresh_named "not", mk_arg1 not_)
+let not_def = (Sym.fresh_named "not", mk_arg1 (fun it -> IT (Bool_op (Not it), SBT.Bool)))
 
 let nth_list_def = (Sym.fresh_named "nth_list", mk_arg3 nthList_)
-let array_to_list_def = (Sym.fresh_named "array_to_list", mk_arg3_err
-  (fun loc (arr, i, len) -> match BT.is_map_bt (IT.bt arr) with
-    | None -> fail {loc; msg = Illtyped_it' {it = arr; has = IT.bt arr; expected = "map"}}
+
+let array_to_list_def = 
+  (Sym.fresh_named "array_to_list", mk_arg3_err
+  (fun loc (arr, i, len) -> match SBT.is_map_bt (IT.bt arr) with
+    | None -> fail {loc; msg = Illtyped_it' {it = IT.pp arr; has = SBT.pp (IT.bt arr); expected = "map"}}
     | Some (_, bt) -> return (array_to_list_ (arr, i, len) bt)
   ))
 

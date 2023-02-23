@@ -112,10 +112,10 @@ type message =
   | Unknown_resource_predicate of {id: Sym.t; logical: bool}
   | Unknown_logical_predicate of {id: Sym.t; resource: bool}
   | Unknown_member of BT.tag * BT.member
-  | Unknown_record_member of BT.member_types * Id.t
+  | Unknown_record_member of Pp.doc * Id.t
 
   (* some from Kayvan's compilePredicates module *)
-  | First_iarg_missing of { pname: ResourceTypes.predicate_name }
+  | First_iarg_missing
   | First_iarg_not_pointer of { pname : ResourceTypes.predicate_name; found_bty: BaseTypes.t }
 
 
@@ -128,7 +128,7 @@ type message =
   | Number_output_arguments of {has: int; expect: int}
   | Mismatch of { has: doc; expect: doc; }
   | Illtyped_it : {context: IT.t; it: IT.t; has: LS.t; expected: string; ctxt : Context.t} -> message (* 'expected' as in Kayvan's Core type checker *)
-  | Illtyped_it' : {it: IT.t; has: LS.t; expected: string} -> message (* 'expected' as in Kayvan's Core type checker *)
+  | Illtyped_it' : {it: Pp.doc; has: Pp.doc; expected: string} -> message (* 'expected' as in Kayvan's Core type checker *)
   | NIA : {context: IT.t; it: IT.t; hint : string; ctxt : Context.t} -> message
   | TooBigExponent : {context: IT.t; it: IT.t; ctxt : Context.t} -> message
   | NegativeExponent : {context: IT.t; it: IT.t; ctxt : Context.t} -> message
@@ -217,24 +217,22 @@ let pp_message te =
            Id.pp member
      in
      { short; descr = Some descr; state = None; trace = None }
-  | Unknown_record_member (members, member) ->
+  | Unknown_record_member (bt, member) ->
      let short = !^"Unknown member" ^^^ Id.pp member in
      let descr =
-       !^"struct type" ^^^ BT.pp (Record members) ^^^
+       !^"struct type" ^^^ bt ^^^
          !^"does not have member" ^^^
            Id.pp member
      in
      { short; descr = Some descr; state = None; trace = None }
-  | First_iarg_missing { pname } ->
+  | First_iarg_missing ->
      let short = !^"Missing pointer input argument" in
-     let descr = 
-       !^ "a predicate definition must have at least one iarg (missing from: " ^^ ResourceTypes.pp_predicate_name pname ^^ !^ ")"
-     in
+     let descr = !^ "a predicate definition must have at least one input argument" in
      { short; descr = Some descr; state = None; trace = None }
   | First_iarg_not_pointer { pname; found_bty } ->
      let short = !^"Non-pointer first input argument" in
      let descr = 
-        !^ "the first iarg of predicate" ^^^ Pp.squotes (ResourceTypes.pp_predicate_name pname) ^^^
+        !^ "the first input argument of predicate" ^^^ Pp.squotes (ResourceTypes.pp_predicate_name pname) ^^^
         !^ "must have type" ^^^ Pp.squotes (BaseTypes.(pp Loc)) ^^^ !^ "but was found with type" ^^^
         Pp.squotes (BaseTypes.(pp found_bty))
      in
@@ -305,12 +303,11 @@ let pp_message te =
      in
      { short; descr = Some descr; state = None; trace = None }
   | Illtyped_it' {it; has; expected} ->
-     let it = IT.pp it in
      let short = !^"Type error" in
      let descr =
        !^"Illtyped expression" ^^ squotes it ^^ dot ^^^
          !^"Expected" ^^^ it ^^^ !^"to be" ^^^ squotes !^expected ^^^
-           !^"but is" ^^^ squotes (LS.pp has)
+           !^"but is" ^^^ squotes has
      in
      { short; descr = Some descr; state = None; trace = None }
   | NIA {context; it; hint; ctxt} ->

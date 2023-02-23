@@ -2205,7 +2205,9 @@ resource:
 
 pred:
 | CN_OWNED ty= delimited(LT, ctype, GT)
-    { Cerb_frontend.Cn.CN_owned ty }
+    { Cerb_frontend.Cn.CN_owned (Some ty) }
+| CN_OWNED
+    { Cerb_frontend.Cn.CN_owned None }
 | CN_BLOCK ty= delimited(LT, ctype, GT)
     { Cerb_frontend.Cn.CN_block ty }
 | str= UNAME VARIABLE

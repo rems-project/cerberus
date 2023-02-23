@@ -27,6 +27,7 @@ module SymSet =
 open Core
 open Annot
 module BT = BaseTypes
+module SBT = SurfaceBaseTypes
 module Mu = Mucore
 open Mu
 module Loc = Locations
@@ -823,17 +824,16 @@ module IT = IndexTerms
 
 let rec make_lrt env = function
   | Cn.CN_cletResource (loc, name, resource) :: conds -> 
-     let@ _, pt, lcs = 
+     let@ (pt_ret, oa_bt), lcs = 
        C.translate_cn_let_resource env (loc, name, resource) in
-     let (pt_ret, oa_bt) = pt in
      let env = C.add_logical name oa_bt env in
      let@ lrt = make_lrt env conds in
-     return (LRT.mResource ((name, pt), (loc, None)) 
+     return (LRT.mResource ((name, (pt_ret, SBT.to_basetype oa_bt)), (loc, None)) 
             (LRT.mConstraints lcs lrt))
   | Cn.CN_cletExpr (loc, name, expr) :: conds ->
      let@ expr = C.translate_cn_expr env expr in
      let@ lrt = make_lrt (C.add_logical name (IT.bt expr) env) conds in
-     return (LRT.mDefine (name, expr, (loc, None)) lrt)
+     return (LRT.mDefine (name, IT.term_of_sterm expr, (loc, None)) lrt)
   | Cn.CN_cconstr (loc, constr) :: conds ->
      let@ lc = C.translate_cn_assrt env (loc, constr) in
      let@ lrt = make_lrt env conds in
@@ -843,8 +843,9 @@ let rec make_lrt env = function
 
 let make_rt (loc : loc) (env : C.env) (s, ct) conditions =
   let ct = convert_ct loc ct in
-  let bt = BT.of_sct ct in
-  let@ lrt = make_lrt (C.add_computational s bt env) conditions in
+  let sbt = SBT.of_sct ct in
+  let bt = SBT.to_basetype sbt in
+  let@ lrt = make_lrt (C.add_computational s sbt env) conditions in
   let info = (loc, Some "return value good") in
   let lrt = LRT.mConstraint (LC.t_ (IT.good_ (ct, IT.sym_ (s, bt))), info) lrt in
   return (RT.mComputational ((s, bt), (loc, None)) lrt)
@@ -854,19 +855,18 @@ let make_largs f_i =
   let rec aux env = function
     | Cn.CN_cletResource (loc, name, resource) :: conds -> 
        (* Print.debug 6 (lazy (Print.string ("finalising let-resource"))); *)
-       let@ _, pt, lcs = 
+       let@ (pt_ret, oa_bt), lcs = 
          C.translate_cn_let_resource env (loc, name, resource) in
        (* Print.debug 6 (lazy (Print.item "got lcs" (Print.list LC.pp (List.map fst lcs)))); *)
-       let (pt_ret, oa_bt) = pt in
        let env = C.add_logical name oa_bt env in
        let@ lat = aux env conds in
-       return (Mu.mResource ((name, pt), (loc, None)) 
+       return (Mu.mResource ((name, (pt_ret, SBT.to_basetype oa_bt)), (loc, None)) 
               (Mu.mConstraints lcs lat))
     | Cn.CN_cletExpr (loc, name, expr) :: conds ->
        (* Print.debug 6 (lazy (Print.string ("finalising let-expr"))); *)
        let@ expr = C.translate_cn_expr env expr in
        let@ lat = aux (C.add_logical name (IT.bt expr) env) conds in
-       return (Mu.mDefine ((name, expr), (loc, None)) lat)
+       return (Mu.mDefine ((name, IT.term_of_sterm expr), (loc, None)) lat)
     | Cn.CN_cconstr (loc, constr) :: conds ->
        (* Print.debug 6 (lazy (Print.string ("finalising constraint"))); *)
        let@ lc = C.translate_cn_assrt env (loc, constr) in
@@ -890,8 +890,9 @@ let make_args f_i loc env args conditions =
   let args = List.map_snd (convert_ct loc) args in
   let rec aux env = function
     | (s, ct) :: rest ->
-       let bt = BT.of_sct ct in
-       let@ at = aux (C.add_computational s bt env) rest in
+       let sbt = SBT.of_sct ct in
+       let bt = SBT.to_basetype sbt in
+       let@ at = aux (C.add_computational s sbt env) rest in
        return (Mu.mComputational ((s, bt), (loc, None)) at)
     | [] -> 
        let@ lat = make_largs f_i env conditions in
@@ -954,8 +955,8 @@ let ownership loc s (ct : ctype) =
     | _ -> assert false
   in
   let os = Sym.fresh_make_uniq ("O_"^name) in
-  let pred = CN_pred (loc, CN_owned ct, [CNExpr (loc, CNExpr_var s)]) in
-  let oa = IT.sym_ (os, BT.of_sct (convert_ct loc ct)) in
+  let pred = CN_pred (loc, CN_owned (Some ct), [CNExpr (loc, CNExpr_var s)]) in
+  let oa = IT.sym_ (os, SBT.of_sct (convert_ct loc ct)) in
   ((s, oa), Cn.CN_cletResource (loc, os, pred))
 
 (*
@@ -1053,8 +1054,16 @@ let normalise_fun_map_decl ail_prog env globals d_st (funinfo: mi_funinfo) loop_
          Sym.equal fname ail_prog.function_definitions in
      let ail_env = Pmap.find ail_marker ail_prog.markers_env in
      let d_st = Cerb_frontend.Cabs_to_ail_effect.set_cn_c_identifier_env ail_env d_st in
-     let arg_var_vals = List.map2 (fun mut_arg (pure_arg, bt) ->
-         (mut_arg, IT.sym_ (pure_arg, (convert_bt loc bt)))) ail_args args in
+     let arg_var_vals = 
+       List.map2 (fun (mut_arg, (mut_arg', ct)) (pure_arg, bt) ->
+           assert (Option.equal Sym.equal (Some mut_arg) mut_arg');
+           let ct = convert_ct loc ct in
+           let sbt = SBT.of_sct ct in
+           let bt = convert_bt loc bt in
+           assert (BT.equal bt (SBT.to_basetype sbt));
+           (mut_arg, IT.sym_ (pure_arg, sbt))) 
+         (List.combine ail_args arg_cts) args 
+     in
      let env = C.add_c_var_values arg_var_vals env in
      let@ trusted, accesses, requires, ensures = Parse.parse_function_spec attrs in
      Print.debug 6 (lazy (Print.string "parsed spec attrs"));
@@ -1183,11 +1192,13 @@ let normalise_tag_definitions tagDefs =
 let register_glob env (sym, glob) = 
   match glob with
   | M_GlobalDef ((bt, ct), e) ->
-     C.add_computational sym bt env
-     |> C.add_c_var_value sym (IT.sym_ (sym, bt))
+     assert (BT.equal bt Loc);
+     C.add_computational sym (SBT.Loc (Some ct)) env
+     (* |> C.add_c_var_value sym (IT.sym_ (sym, bt)) *)
   | M_GlobalDecl (bt, ct) ->
-     C.add_computational sym bt env
-     |> C.add_c_var_value sym (IT.sym_ (sym, bt))
+     assert (BT.equal bt Loc);
+     C.add_computational sym (SBT.Loc (Some ct)) env
+     (* |> C.add_c_var_value sym (IT.sym_ (sym, bt)) *)
      
 
 

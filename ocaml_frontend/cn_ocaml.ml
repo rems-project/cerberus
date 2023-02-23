@@ -139,8 +139,10 @@ module MakePp (Conf: PP_CN) = struct
         
 
   let dtree_of_cn_pred = function
-    | CN_owned ty ->
+    | CN_owned (Some ty) ->
       Dleaf (pp_stmt_ctor "CN_owned" ^^^ Conf.pp_ty ty)
+    | CN_owned None ->
+      Dleaf (pp_stmt_ctor "CN_owned" ^^^ P.parens !^"no C-type")
     | CN_block ty ->
       Dleaf (pp_stmt_ctor "CN_block" ^^^ Conf.pp_ty ty)
     | CN_named ident ->
