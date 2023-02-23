@@ -828,7 +828,6 @@ let rec make_lrt env = function
        C.translate_cn_let_resource env (loc, name, resource) in
      let (pt_ret, oa_bt) = pt in
      let env = C.add_logical name oa_bt env in
-     let env = (C.add_resource (pt_ret, O (IT.sym_ (name, oa_bt))) env) in
      let@ lrt = make_lrt env conds in
      return (LRT.mResource ((name, pt), (loc, None)) 
             (LRT.mConstraints lcs lrt))
@@ -861,7 +860,6 @@ let make_largs f_i =
        (* Print.debug 6 (lazy (Print.item "got lcs" (Print.list LC.pp (List.map fst lcs)))); *)
        let (pt_ret, oa_bt) = pt in
        let env = C.add_logical name oa_bt env in
-       let env = C.add_resource (pt_ret, O (IT.sym_ (name, oa_bt))) env in
        let@ lat = aux env conds in
        return (Mu.mResource ((name, pt), (loc, None)) 
               (Mu.mConstraints lcs lat))
@@ -951,7 +949,8 @@ let ownership loc s (ct : ctype) =
   in
   let os = Sym.fresh_make_uniq ("O_"^name) in
   let pred = CN_pred (loc, CN_owned ct, [CNExpr (loc, CNExpr_var s)]) in
-  Cn.CN_cletResource (loc, os, pred)
+  let oa = IT.sym_ (os, BT.of_sct (convert_ct loc ct)) in
+  ((s, oa), Cn.CN_cletResource (loc, os, pred))
 
 (*
 let convert_pred loc = function
@@ -968,23 +967,18 @@ let convert_resource = function
 
 
 let translate_accesses ail_env globs accesses requires ensures =
-  let@ accesses = ListM.mapM (fun (loc, id) ->
-    let@ sym = fetch_ail_env_id ail_env loc id in
-    return (loc, sym)) accesses in
-  let rec aux = function
-    | [] -> return (requires, ensures)
-    | (loc, s) :: rest ->
+  let@ ownerships = ListM.mapM (fun (loc, id) ->
+       let@ s = fetch_ail_env_id ail_env loc id in
        let@ ct = match List.assoc_opt Sym.equal s globs with
          | Some (M_GlobalDef ((_, ct), _)) -> return ct
          | Some (M_GlobalDecl ((_, ct))) -> return ct
          | None -> fail {loc; msg = Generic (Sym.pp s ^^^ !^"is not a global") }
        in
        let ct = Sctypes.to_ctype ct in
-       let@ reqs, enss = aux rest in
-       return (ownership loc s ct :: reqs,
-               ownership loc s ct :: enss)
-  in
-  aux accesses
+       return (ownership loc s ct)
+  ) accesses in
+  let (var_vals, preds) = List.split ownerships in
+  return (var_vals, preds @ requires, preds @ ensures)
 
 let normalise_label loop_attributes (env : C.env) d_st label_name label =
   match label with
@@ -1001,11 +995,11 @@ let normalise_label loop_attributes (env : C.env) d_st label_name label =
         (* FIXME: find correct marker and set the appropriate c env *)
         let@ (inv, _) = desugar_conds d_st inv in
         let combined_label_args = combine_label_args loc lt label_args in
-        let inv = 
-          List.fold_right (fun (s, ct) inv ->
-              ownership loc s ct :: inv
-            ) combined_label_args inv
-        in
+        let args_owned = List.map (fun (s, ct) -> ownership loc s ct)
+            combined_label_args in
+        let (var_vals, preds) = List.split args_owned in
+        let inv = preds @ inv in
+        let env = C.add_c_var_values var_vals env in
         let@ label_args_and_body =
           make_args (fun env ->
               return (n_expr loc label_body)
@@ -1049,15 +1043,21 @@ let normalise_fun_map_decl ail_prog env globals d_st (funinfo: mi_funinfo) loop_
      assert false
   | Mi_Proc (loc, _mrk, ret_bt, args, body, labels) -> 
      Print.debug 2 (lazy (Print.item ("normalising procedure") (Sym.pp fname)));
-     let (_, ail_marker, _, _, _) = List.assoc Sym.equal fname ail_prog.function_definitions in
+     let (_, ail_marker, _, ail_args, _) = List.assoc
+         Sym.equal fname ail_prog.function_definitions in
      let ail_env = Pmap.find ail_marker ail_prog.markers_env in
      let d_st = Cerb_frontend.Cabs_to_ail_effect.set_cn_c_identifier_env ail_env d_st in
+     let arg_var_vals = List.map2 (fun mut_arg (pure_arg, bt) ->
+         (mut_arg, IT.sym_ (pure_arg, (convert_bt loc bt)))) ail_args args in
+     let env = C.add_c_var_values arg_var_vals env in
      let@ trusted, accesses, requires, ensures = Parse.parse_function_spec attrs in
      let@ (requires, d_st) = desugar_conds d_st (List.map snd requires) in
      (* Print.debug 6 (lazy (Print.string "desugared requires conds")); *)
      let@ (ensures, _) = desugar_conds d_st (List.map snd ensures) in
      (* Print.debug 6 (lazy (Print.string "desugared ensures conds")); *)
-     let@ (requires, ensures) = translate_accesses ail_env globals accesses requires ensures in
+     let@ (var_vals, requires, ensures) = translate_accesses ail_env
+         globals accesses requires ensures in
+     let env = C.add_c_var_values var_vals env in
      (* Print.debug 6 (lazy (Print.string "translated accesses")); *)
      let combined_args = combine_function_args loc arg_cts args in
      (* Print.debug 6 (lazy (Print.string "combined arguments")); *)
@@ -1175,8 +1175,10 @@ let register_glob env (sym, glob) =
   match glob with
   | M_GlobalDef ((bt, ct), e) ->
      C.add_computational sym bt env
+     |> C.add_c_var_value sym (IT.sym_ (sym, bt))
   | M_GlobalDecl (bt, ct) ->
      C.add_computational sym bt env
+     |> C.add_c_var_value sym (IT.sym_ (sym, bt))
      
 
 

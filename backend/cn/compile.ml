@@ -39,6 +39,9 @@ type resource_def =
 
 type resource_env = Resources.t list
 
+(* the expression that encodes the current value of this c variable *)
+type c_variable_env = IT.t SymMap.t
+
 type env = {
   computationals: (BaseTypes.t (* * Sctypes.t option *)) SymMap.t;
   logicals: (BaseTypes.t (* * Sctypes.t option *)) SymMap.t;
@@ -46,7 +49,7 @@ type env = {
   predicates: predicate_sig SymMap.t;
   func_names: Sym.t Y.t;
   functions: function_sig SymMap.t;
-  resources: resource_env;
+  c_vars: c_variable_env;
   old_resources: (string * resource_env) list;
   datatypes : (BaseTypes.datatype_info * Sym.t Y.t) SymMap.t;
   datatype_constrs : BaseTypes.constr_info SymMap.t;
@@ -60,7 +63,7 @@ let empty tagDefs =
     predicates= SymMap.empty;
     func_names = Y.empty; 
     functions = SymMap.empty; 
-    resources= [];
+    c_vars= SymMap.empty;
     old_resources= [];
     datatypes = SymMap.empty; 
     datatype_constrs = SymMap.empty;
@@ -91,8 +94,11 @@ let add_function loc sym func_sig env =
 let add_predicate sym pred_sig env =
   {env with predicates= SymMap.add sym pred_sig env.predicates }
 
-let add_resource resource env =
-  { env with resources= resource :: env.resources }
+let add_c_var_value c_sym x env =
+  { env with c_vars= SymMap.add c_sym x env.c_vars }
+
+let add_c_var_values xs env = List.fold_right (fun (sym, x) env ->
+    add_c_var_value sym x env) xs env
 
 let lookup_computational_or_logical sym env =
   match SymMap.find_opt sym env.logicals with
@@ -116,6 +122,7 @@ let lookup_function_by_name nm env = match Y.find_opt nm env.func_names with
 (* let lookup_resource sym env = *)
 (*   SymMap.find_opt sym env.resources *)
 
+(* part of the Deref framework - rework or retire
 let lookup_resource_for_pointer loc e env =
   let found = 
     List.find_opt (fun (ret, _) ->
@@ -125,9 +132,12 @@ let lookup_resource_for_pointer loc e env =
   match found with
   | Some resource -> return resource
   | None ->
-     let msg = Generic (!^"no resource found for pointer" ^^^ IT.pp e)
+     let msg = Generic (Pp.item "no resource found for pointer"
+        (IT.pp e ^^^ !^ "amongst resources" ^^^ Pp.brackets (Pp.list (fun (ret, _) ->
+            IT.pp (RET.pointer ret)) env.resources)))
      in
      fail {loc; msg}
+*)
 
 let lookup_struct sym env =
   match Pmap.lookup sym env.tagDefs with
@@ -363,10 +373,8 @@ let translate_cn_expr (env: env) expr =
   let open IndexTerms in
   let module BT = BaseTypes in
   let rec trans env (CNExpr (loc, expr_)) =
-    (*
     Pp.debug 8 (lazy (Pp.item "translate_cn_expr at"
         (Pp.typ (pp_cnexpr_kind expr_) (Locations.pp loc))));
-    *)
     let self = trans env in
     match expr_ with
       | CNExpr_const CNConst_NULL ->
@@ -385,6 +393,8 @@ let translate_cn_expr (env: env) expr =
           end
       | CNExpr_deref e ->
          Pp.debug 2 (lazy (Pp.string ("seeing CNExpr_deref")));
+         assert false;
+         (* to be fixed and/or retired
          let@ expr = self e in
          let@ (re, O oa) = lookup_resource_for_pointer loc expr env in
          begin match re with
@@ -400,20 +410,11 @@ let translate_cn_expr (env: env) expr =
             in
             fail {loc; msg = Generic msg}
          end
+         *)
       | CNExpr_value_of_c_variable sym ->
-         let@ expr = self (CNExpr (loc, CNExpr_var sym)) in
-         let@ (re, O oa) = lookup_resource_for_pointer loc expr env in
-         begin match re with
-         | P {name = Owned sct; _} -> 
-            let pointee = 
-              recordMember_ ~member_bt:(BT.of_sct sct) (oa, Resources.value_sym) in
-            return pointee
-         | _ -> 
-            let msg = 
-              !^"Have no ownership of pointer" ^^^ IT.pp expr ^^ !^"." 
-              ^^^ !^"If this is a global, please add 'accesses'"
-            in
-            fail {loc; msg = Generic msg}
+         begin match SymMap.find_opt sym env.c_vars with
+         | None -> fail {loc; msg = Generic (!^ "no encoding for C variable (bug):" ^^^ Sym.pp sym)}
+         | Some x -> return x
          end
       | CNExpr_list es_ ->
           let@ es = ListM.mapM self es_ in
@@ -648,7 +649,6 @@ let translate_cn_clause env clause =
                (LAT.mConstraints lcs z))
          in
          let env' = add_logical sym oa_bt env in
-         let env' = add_resource (pt_ret, O (IT.sym_ (sym, oa_bt))) env' in
          translate_cn_clause_aux env' acc' cl
       | CN_letExpr (loc, sym, e_, cl) ->
           let@ e = translate_cn_expr env e_ in
