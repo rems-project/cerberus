@@ -22,18 +22,23 @@ val get_membersDefs_with_tagDefs: map Symbol.sym tag_definition -> Symbol.sym ->
 let get_membersDefs_with_tagDefs tagDefs tag_sym =
   fromJust ("Core_ctype_aux._with_tagDefs[" ^ show tag_sym ^ "]") (Map.lookup tag_sym tagDefs)
 
-val get_structDef: Symbol.sym -> list (Symbol.identifier * (Annot.attributes * maybe alignment * qualifiers * ctype)) * maybe Ctype.flexible_array_member
-let get_structDef tag_sym =
-  match Map.lookup tag_sym (tagDefs ()) with
+val get_structDef_with_tagDefs: map Symbol.sym tag_definition -> Symbol.sym -> list (Symbol.identifier * (Annot.attributes * maybe alignment * qualifiers * ctype)) * maybe Ctype.flexible_array_member
+let get_structDef_with_tagDefs tagDefs tag_sym =
+  match Map.lookup tag_sym tagDefs with
     | Just (StructDef xs flexible_opt) ->
         (xs, flexible_opt)
     | Just _ ->
-        error ("Core_type.aux.get_structDef (" ^ show tag_sym ^
+        error ("Core_type.aux.get_structDef_with_tagDefs (" ^ show tag_sym ^
                "): found a union definition instead of a struct")
     | Nothing ->
-        error ("Core_type.aux.get_structDef (" ^ show tag_sym ^
+        error ("Core_type.aux.get_structDef_with_tagDefs (" ^ show tag_sym ^
                "): couldn't find a struct/union definition")
   end
+
+val get_structDef: Symbol.sym -> list (Symbol.identifier * (Annot.attributes * maybe alignment * qualifiers * ctype)) * maybe Ctype.flexible_array_member
+let get_structDef tag_sym =
+  get_structDef_with_tagDefs (tagDefs ()) tag_sym
+
 
 val get_unionDef: Symbol.sym -> (Symbol.identifier * (Annot.attributes * maybe alignment * qualifiers * ctype)) * list (Symbol.identifier * (Annot.attributes * maybe alignment * qualifiers * ctype))
 let get_unionDef tag_sym =
