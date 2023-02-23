@@ -50,7 +50,8 @@ let parse parser_start (loc, string) =
     | C_parser.Error ->
        let loc = Location_ocaml.(region (Lexing.lexeme_start_p lexbuf, Lexing.lexeme_end_p lexbuf) NoCursor) in
        Pp.debug 6 (lazy (
-           let toks = diagnostic_get_tokens string in
+           let toks = try diagnostic_get_tokens string
+             with C_lexer.Error _ -> ["(re-parse error)"] in
            Pp.item "failed to parse tokens" (Pp.braces (Pp.list Pp.string toks))));
        fail {loc; msg = Generic (Pp.string ("Unexpected token " ^ Lexing.lexeme lexbuf))}
   in

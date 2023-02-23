@@ -373,8 +373,6 @@ let translate_cn_expr (env: env) expr =
   let open IndexTerms in
   let module BT = BaseTypes in
   let rec trans env (CNExpr (loc, expr_)) =
-    Pp.debug 8 (lazy (Pp.item "translate_cn_expr at"
-        (Pp.typ (pp_cnexpr_kind expr_) (Locations.pp loc))));
     let self = trans env in
     match expr_ with
       | CNExpr_const CNConst_NULL ->
@@ -772,6 +770,7 @@ let translate_cn_function env (def: cn_function) =
 
 let translate_cn_predicate env (def: cn_predicate) =
   let open RP in
+  Pp.debug 2 (lazy (Pp.item "translating predicate defn" (Sym.pp def.cn_pred_name)));
   let (iargs, oargs) =
     match lookup_predicate def.cn_pred_name env with
       | None ->
