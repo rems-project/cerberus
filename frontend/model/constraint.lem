@@ -36,6 +36,11 @@ type illegal_alignas =
   | IllegalAlignas_parameter
   | IllegalAlignas_register
 
+type illegal_initialisation =
+  | InitialisedIncomplete of ctype
+  | InitialisedVLA
+
+
 type violation =
   (* 6.5 Expressions *)
   (* 6.5.2.2 Function calls *)
@@ -142,7 +147,7 @@ type violation =
   | IllegalStorageClassFunctionDeclarator (* §6.7.6.3#2 *)
   | IncompleteParameterTypeFunctionDeclarator (* §6.7.6.3#4 *)
   (* 6.7.9 Initialization *)
-  | IllegalInitializer (* §6.7.9#3 *)
+  | IllegalInitialisation of illegal_initialisation (* §6.7.9#3 *)
   | IllegalStorageClassStaticOrThreadInitializer (* §6.7.9#4 *)
   | IllegalLinkageAndInitialization (* §6.7.9#5 *)
   | IllegalTypeArrayDesignator (* §6.7.9#6, sentence 1 *)
@@ -388,7 +393,7 @@ let std_of_violation = function
       ["§6.7.6.3#2"]
   | IncompleteParameterTypeFunctionDeclarator ->
       ["§6.7.6.3#4"]
-  | IllegalInitializer ->
+  | IllegalInitialisation _ ->
       ["§6.7.9#3"]
   | IllegalStorageClassStaticOrThreadInitializer ->
       ["§6.7.9#4"]

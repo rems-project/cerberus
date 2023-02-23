@@ -263,8 +263,10 @@ let string_of_constraint_violation = function
       "invalid storage class specifier in function declarator"
   | IncompleteParameterTypeFunctionDeclarator ->
       "incomplete type"
-  | IllegalInitializer ->
-      "illegal initializer"
+  | IllegalInitialisation (InitialisedIncomplete ty) ->
+      "initialisation of an entity with an incomplete type: '" ^ string_of_ctype ty ^ "'"
+  | IllegalInitialisation InitialisedVLA ->
+      "initialisation of a variable length array"
   | IllegalStorageClassStaticOrThreadInitializer ->
       "initializer element is not a compile-time constant"
   | IllegalLinkageAndInitialization ->

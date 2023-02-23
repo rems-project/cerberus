@@ -88,7 +88,19 @@ let stringFromInit_path xs =
 
 
 
-
+(* STD §6.7.9#3 *)
+let check_initialised_type_constraint loc ty =
+  E.is_complete_object ty >>= fun is_complete_object ->
+  if not (   AilTypesAux.is_array_unknown_size ty
+          || (is_complete_object && not (AilTypesAux.is_vla ty)) ) then
+    let kind =
+      if AilTypesAux.is_vla ty then
+        InitialisedVLA
+      else
+        InitialisedIncomplete ty in
+    E.constraint_violation loc (IllegalInitialisation kind)
+  else
+    E.return ()
 
 
 
@@ -2473,14 +2485,11 @@ and desugar_init_declarator_BROKEN base_qs base_ty (scs: list storage_class_spec
         E.determinate_linkage ident E.Namespace_ordinary kind scs >>= fun link ->
         
         (* STD §6.7.9#3 *)
-        E.is_complete_object ty >>= fun is_complete_object ->
-        if not (   AilTypesAux.is_array_unknown_size ty
-                || (is_complete_object && not (AilTypesAux.is_vla ty)) ) then
-          E.constraint_violation loc IllegalInitializer
+        check_initialised_type_constraint loc ty >>= fun () ->
         
         (* STD §6.7.9#5 *)
-        else if E.is_block_scope scope && (link = Linkage_external || link = Linkage_internal) then
-            E.constraint_violation (Loc.locOf decltor) IllegalLinkageAndInitialization
+        if E.is_block_scope scope && (link = Linkage_external || link = Linkage_internal) then
+          E.constraint_violation (Loc.locOf decltor) IllegalLinkageAndInitialization
         else
           (* postponing the desugaring of the initialiser since the identifier
              (which gets register after the current function) need to be in scope *)
@@ -2538,29 +2547,26 @@ and desugar_init_declarator attrs isAtomic has_alignment base_qs base_ty (scs: l
           (* TODO: I don't like the fact that we are using this function directly here *)
           E.determinate_linkage ident E.Namespace_ordinary kind scs >>= fun link ->
           (* STD §6.7.9#3 *)
-          E.is_complete_object ty >>= fun is_complete_object ->
-          if not (   AilTypesAux.is_array_unknown_size ty
-                  || (is_complete_object && not (AilTypesAux.is_vla ty)) ) then
-            E.constraint_violation loc IllegalInitializer
+          check_initialised_type_constraint loc ty >>= fun () ->
           (* STD §6.7.9#5 *)
-          else if E.is_block_scope scope && (link = Linkage_external || link = Linkage_internal) then
+          if E.is_block_scope scope && (link = Linkage_external || link = Linkage_internal) then
               E.constraint_violation (Loc.locOf decltor) IllegalLinkageAndInitialization
-            else
-              (* postponing the desugaring of the initialiser since the identifier
-                (which gets register after the current function) need to be in scope *)
-              let mk_desug_init () =
-                (* NOTE: not using <$> because of a bug in Lem *)
-                wip_desugar_initializer_ loc (determinate_storage_duration link scs) ty init >>= fun z ->
-                E.return (Just z) in
-              
-              let (ctx, ok) =
-                if AilTypesAux.is_function ty then
-                  (Function_decl_context, E.OK_function)
-                else
-                  (Object_decl_context, E.OK_object false) in
-              check_storage_class_specifiers loc ctx scs >>= fun () ->
-              E.register_ordinary_identifier ident ok scs >>= fun (link, sym) ->
-              E.return (Just (Loc.locOf ident, ident_attrs, link, sym, false, (qs, ty), mk_desug_init))
+           else
+            (* postponing the desugaring of the initialiser since the identifier
+              (which gets register after the current function) need to be in scope *)
+            let mk_desug_init () =
+              (* NOTE: not using <$> because of a bug in Lem *)
+              wip_desugar_initializer_ loc (determinate_storage_duration link scs) ty init >>= fun z ->
+              E.return (Just z) in
+            
+            let (ctx, ok) =
+              if AilTypesAux.is_function ty then
+                (Function_decl_context, E.OK_function)
+              else
+                (Object_decl_context, E.OK_object false) in
+            check_storage_class_specifiers loc ctx scs >>= fun () ->
+            E.register_ordinary_identifier ident ok scs >>= fun (link, sym) ->
+            E.return (Just (Loc.locOf ident, ident_attrs, link, sym, false, (qs, ty), mk_desug_init))
   end
 
 
