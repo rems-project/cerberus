@@ -1467,7 +1467,7 @@ let check_and_bind_arguments
        aux_l resources args ft
     | M_Resource ((s, (re, bt)), info, args),
       LAT.Resource ((s', (re', bt')), _info, ft) ->
-       assert (RET.equal re re');
+       assert (RET.alpha_equivalent re re');
        assert (BT.equal bt bt');
        let@ () = add_l s bt (fst info, lazy (Sym.pp s)) in
        let resources = resources @ [(re, O (sym_ (s, bt)))] in
