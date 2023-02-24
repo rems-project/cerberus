@@ -772,14 +772,6 @@ let rec at_of_arguments f_i = function
 
 
 
-let combine_return loc ret_s ret_ct ret_bt =
-  assertl loc (BT.equal (convert_bt loc ret_bt) 
-              (BT.of_sct (convert_ct loc ret_ct))) 
-    !^"function return type mismatch";
-  (ret_s, ret_ct)
-
-
-
 open Resultat
 open Effectful.Make(Resultat)
 open AilSyntax
@@ -1004,10 +996,6 @@ let desugar_conds d_st conds =
     return (cond :: conds, d_st)) ([], d_st) conds in
   return (List.rev conds, d_st)
 
-let declare_return loc ret_ct ret_bt d_st =
-  let@ (sym, d_st) = register_new_cn_local (Id.id "return") d_st in
-  return (combine_return loc sym ret_ct ret_bt, d_st)
-
 
 
 let normalise_label (accesses, loop_attributes) (env : C.env) d_st label_name label =
@@ -1081,7 +1069,10 @@ let normalise_fun_map_decl ail_prog env globals d_st (funinfo: mi_funinfo) loop_
      let@ accesses = ListM.mapM (desugar_access ail_env globals) accesses in
      let@ (requires, d_st) = desugar_conds d_st (List.map snd requires) in
      Print.debug 6 (lazy (Print.string "desugared requires conds"));
-     let@ (ret, ret_d_st) = declare_return loc ret_ct ret_bt d_st in
+     let@ (ret_s, ret_d_st) = register_new_cn_local (Id.id "return") d_st in
+     assertl loc (BT.equal (convert_bt loc ret_bt) 
+                    (BT.of_sct (convert_ct loc ret_ct))) 
+       !^"function return type mismatch";
      let@ (ensures, _) = desugar_conds ret_d_st (List.map snd ensures) in
      Print.debug 6 (lazy (Print.string "desugared ensures conds"));
      let@ args_and_body = 
@@ -1092,7 +1083,7 @@ let normalise_fun_map_decl ail_prog env globals d_st (funinfo: mi_funinfo) loop_
            let@ labels = 
              PmapM.mapM (normalise_label (accesses, loop_attributes) env d_st)
                labels Sym.compare in
-           let@ returned = make_rt loc env ret (accesses, ensures) in
+           let@ returned = make_rt loc env (ret_s, ret_ct) (accesses, ensures) in
            (* Print.debug 6 (lazy (Print.string "made return-type")); *)
            return (body, labels, returned)
          ) 
