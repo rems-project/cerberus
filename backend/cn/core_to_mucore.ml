@@ -835,7 +835,7 @@ let rec make_lrt env = function
   | ((loc, (addr_s, ct)) :: accesses, ensures) ->
      let@ (name, ((pt_ret, oa_bt), lcs), value) = ownership (loc, (addr_s, ct)) env in
      let env = C.add_logical name oa_bt env in
-     let env = C.add_c_var_value addr_s value env in
+     let env = C.add_c_variable_state addr_s (CVS_Pointer_pointing_to value) env in
      let@ lrt = make_lrt env (accesses, ensures) in
      return (LRT.mResource ((name, (pt_ret, SBT.to_basetype oa_bt)), (loc, None)) 
             (LRT.mConstraints lcs lrt))
@@ -872,7 +872,7 @@ let make_largs f_i =
     | ((loc, (addr_s, ct)) :: accesses, requires) ->
        let@ (name, ((pt_ret, oa_bt), lcs), value) = ownership (loc, (addr_s, ct)) env in
        let env = C.add_logical name oa_bt env in
-       let env = C.add_c_var_value addr_s value env in
+       let env = C.add_c_variable_state addr_s (CVS_Pointer_pointing_to value) env in
        let@ lat = aux env (accesses, requires) in
        return (Mu.mResource ((name, (pt_ret, SBT.to_basetype oa_bt)), (loc, None)) 
               (Mu.mConstraints lcs lat))
@@ -919,7 +919,7 @@ let make_label_args f_i loc env args (accesses, inv) =
        in
        let@ (oa_name, ((pt_ret, oa_bt), lcs), value) = ownership (loc, (s, ct)) env in
        let env = C.add_logical oa_name oa_bt env in
-       let env = C.add_c_var_value s value env in
+       let env = C.add_c_variable_state s (CVS_Pointer_pointing_to value) env in
        let resource = ((oa_name, (pt_ret, SBT.to_basetype oa_bt)), (loc, None)) in
        let@ at = 
          aux (resources @ [resource], 
@@ -946,7 +946,8 @@ let make_function_args f_i loc env args (accesses, requires) =
        let bt = convert_bt loc bt in
        assert (BT.equal bt (SBT.to_basetype sbt));
        let env = C.add_computational pure_arg sbt env in
-       let env = C.add_c_var_value mut_arg (IT.sym_ (pure_arg, sbt)) env in
+       let env = C.add_c_variable_state mut_arg 
+                   (CVS_Value (IT.sym_ (pure_arg, sbt))) env in
        let good_lc = 
          let info = (loc, Some (Sym.pp_string pure_arg ^ " good")) in
          (LC.t_ (IT.good_ (ct, IT.sym_ (pure_arg, bt))), info)
@@ -1003,7 +1004,7 @@ let normalise_label (accesses, loop_attributes) (env : C.env) d_st label_name la
   | Mi_Return loc -> 
      return (M_Return loc)
   | Mi_Label (loc, lt, label_args, label_body, annots) ->
-     let env = C.remove_c_var_values env in
+     let env = C.remove_c_variable_state env in
      begin match Cerb_frontend.Annot.get_label_annot annots with
      | Some (LAloop_prebody loop_id) ->
         let@ inv = match Pmap.lookup loop_id loop_attributes with

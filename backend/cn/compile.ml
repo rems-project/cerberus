@@ -41,7 +41,11 @@ type predicate_sig = {
 type resource_env = Resources.t list
 
 (* the expression that encodes the current value of this c variable *)
-type c_variable_env = IT.sterm SymMap.t
+type c_variable_state =
+  | CVS_Value of IT.sterm           (* currently the variable is a pure value, this one *)
+  | CVS_Pointer_pointing_to of IT.sterm         (* currently the variable is a pointer to memory holding this value *)
+
+type c_variable_state_env = c_variable_state SymMap.t
 
 type env = {
   computationals: SBT.t SymMap.t;
@@ -50,7 +54,7 @@ type env = {
   predicates: predicate_sig SymMap.t;
   func_names: Sym.t Y.t;
   functions: function_sig SymMap.t;
-  c_vars: c_variable_env;
+  c_variable_state: c_variable_state_env;
   (* old_resources: (string * resource_env) list; *)
   datatypes : (BaseTypes.datatype_info * Sym.t Y.t) SymMap.t;
   datatype_constrs : BaseTypes.constr_info SymMap.t;
@@ -64,7 +68,7 @@ let empty tagDefs =
     predicates= SymMap.empty;
     func_names = Y.empty; 
     functions = SymMap.empty; 
-    c_vars= SymMap.empty;
+    c_variable_state= SymMap.empty;
     (* old_resources= []; *)
     datatypes = SymMap.empty; 
     datatype_constrs = SymMap.empty;
@@ -95,14 +99,16 @@ let add_function loc sym func_sig env =
 let add_predicate sym pred_sig env =
   {env with predicates= SymMap.add sym pred_sig env.predicates }
 
-let remove_c_var_values env = 
-  { env with c_vars = SymMap.empty }
+let remove_c_variable_state env = 
+  { env with c_variable_state = SymMap.empty }
 
-let add_c_var_value c_sym x env =
-  { env with c_vars= SymMap.add c_sym x env.c_vars }
+let add_c_variable_state c_sym cvs env =
+  { env with c_variable_state= SymMap.add c_sym cvs env.c_variable_state }
 
-let add_c_var_values xs env = List.fold_right (fun (sym, x) env ->
-    add_c_var_value sym x env) xs env
+let add_c_variable_states cvss env = 
+  List.fold_right (fun (sym, cvs) env ->
+      add_c_variable_state sym cvs env
+    ) cvss env
 
 let lookup_computational_or_logical sym env =
   match SymMap.find_opt sym env.logicals with
@@ -418,9 +424,17 @@ let translate_cn_expr (env: env) expr =
          end
          *)
       | CNExpr_value_of_c_variable sym ->
-         begin match SymMap.find_opt sym env.c_vars with
-         | None -> fail {loc; msg = Generic (!^ "no encoding for C variable (bug):" ^^^ Sym.pp sym)}
-         | Some x -> return x
+         begin match SymMap.find_opt sym env.c_variable_state with
+         | None -> 
+            let msg =
+              !^"Cannot resolve the state of " ^^ Sym.pp sym ^^ !^"." 
+              ^^^ !^ "Is the ownership for accessing" ^^^ Sym.pp sym ^^^ !^"missing?"
+            in
+            fail {loc; msg = Generic msg}
+         | Some (CVS_Value x) -> 
+            return x
+         | Some (CVS_Pointer_pointing_to x) -> 
+            return x
          end
       | CNExpr_list es_ ->
           let@ es = ListM.mapM self es_ in
