@@ -938,7 +938,7 @@ let make_label_args f_i loc env args (accesses, inv) =
 
 
 let make_function_args f_i loc env args (accesses, requires) =
-  let rec aux good_lcs env = function
+  let rec aux arg_states good_lcs env = function
     | ((mut_arg, (mut_arg', ct)), (pure_arg, bt)) :: rest ->
        assert (Option.equal Sym.equal (Some mut_arg) mut_arg');
        let ct = convert_ct loc ct in
@@ -946,19 +946,22 @@ let make_function_args f_i loc env args (accesses, requires) =
        let bt = convert_bt loc bt in
        assert (BT.equal bt (SBT.to_basetype sbt));
        let env = C.add_computational pure_arg sbt env in
-       let env = C.add_c_variable_state mut_arg 
-                   (CVS_Value (IT.sym_ (pure_arg, sbt))) env in
+       let arg_state = C.CVS_Value (IT.sym_ (pure_arg, sbt)) in
+       let env = C.add_c_variable_state mut_arg arg_state env in
        let good_lc = 
          let info = (loc, Some (Sym.pp_string pure_arg ^ " good")) in
          (LC.t_ (IT.good_ (ct, IT.sym_ (pure_arg, bt))), info)
        in
-       let@ at = aux (good_lc :: good_lcs) env rest in
+       let@ at = 
+         aux (arg_states @ [(mut_arg, arg_state)]) 
+           (good_lc :: good_lcs) env rest 
+       in
        return (Mu.mComputational ((pure_arg, bt), (loc, None)) at)
     | [] -> 
-       let@ lat = make_largs f_i env (accesses, requires) in
+       let@ lat = make_largs (f_i arg_states) env (accesses, requires) in
        return (M_L (Mu.mConstraints (List.rev good_lcs) lat))
   in
-  aux [] env args
+  aux [] [] env args
 
 
 let do_ail_desugar_op desugar_state f =
@@ -1004,7 +1007,6 @@ let normalise_label (accesses, loop_attributes) (env : C.env) d_st label_name la
   | Mi_Return loc -> 
      return (M_Return loc)
   | Mi_Label (loc, lt, label_args, label_body, annots) ->
-     let env = C.remove_c_variable_state env in
      begin match Cerb_frontend.Annot.get_label_annot annots with
      | Some (LAloop_prebody loop_id) ->
         let@ inv = match Pmap.lookup loop_id loop_attributes with
@@ -1077,15 +1079,16 @@ let normalise_fun_map_decl ail_prog env globals d_st (funinfo: mi_funinfo) loop_
      let@ (ensures, _) = desugar_conds ret_d_st (List.map snd ensures) in
      Print.debug 6 (lazy (Print.string "desugared ensures conds"));
      let@ args_and_body = 
-       make_function_args (fun env ->
-           (* Print.debug 6 (lazy (Print.string "normalising body")); *)
+       make_function_args (fun arg_states env ->
+           let env = C.remove_c_variable_state env in
            let body = n_expr loc body in
-           (* Print.debug 6 (lazy (Print.string "normalising labels")); *)
+           let@ returned = 
+             make_rt loc (C.add_c_variable_states arg_states env)
+               (ret_s, ret_ct) (accesses, ensures) 
+           in
            let@ labels = 
              PmapM.mapM (normalise_label (accesses, loop_attributes) env d_st)
                labels Sym.compare in
-           let@ returned = make_rt loc env (ret_s, ret_ct) (accesses, ensures) in
-           (* Print.debug 6 (lazy (Print.string "made return-type")); *)
            return (body, labels, returned)
          ) 
          loc 
