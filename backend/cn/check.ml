@@ -1467,7 +1467,8 @@ let check_and_bind_arguments
        aux_l resources args (LAT.subst i_subst (IT.make_subst [(s', sym_ (s, IT.bt it))]) ft)
     | M_Constraint (lc, info, args),
       LAT.Constraint (lc', _info, ft) ->
-       assert (LC.equal lc lc');
+       let@ () = if LC.alpha_equivalent lc lc' then return ()
+           else fail_mismatch (LC.pp lc) (LC.pp lc') in
        let@ () = add_c lc in
        aux_l resources args ft
     | M_Resource ((s, (re, bt)), info, args),

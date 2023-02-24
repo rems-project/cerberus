@@ -47,7 +47,8 @@ let rec subst (substitution: IT.t Subst.t) lrt =
      I
 
 and alpha_rename_ s' (s, ls) t =
-  (s', subst (IT.make_subst [(s, IT.sym_ (s', ls))]) t)
+  (s', if Sym.equal s s' then t
+    else subst (IT.make_subst [(s, IT.sym_ (s', ls))]) t)
 
 and alpha_rename (s, ls) t =
   let s' = Sym.fresh_same s in
@@ -186,22 +187,22 @@ let rec alpha_equivalent lrt lrt' =
   match lrt, lrt' with
   | Define ((s,it), _, lrt),
     Define ((s',it'), _, lrt') ->
-     let new_s = Sym.fresh_same s in
+     let new_s = if Sym.equal s s' then s else Sym.fresh_same s in
      let _, lrt = alpha_rename_ new_s (s, IT.bt it) lrt in
      let _, lrt' = alpha_rename_ new_s (s', IT.bt it') lrt' in
      IT.equal it it' 
      && alpha_equivalent lrt lrt'
   | Resource ((s, (re, bt)), _, lrt),
     Resource ((s', (re', bt')), _, lrt') ->
-     let new_s = Sym.fresh_same s in
+     let new_s = if Sym.equal s s' then s else Sym.fresh_same s in
      let _, lrt = alpha_rename_ new_s (s, bt) lrt in
      let _, lrt' = alpha_rename_ new_s (s', bt') lrt' in
-     RT.equal re re' 
+     RT.alpha_equivalent re re'
      && BT.equal bt bt' 
      && alpha_equivalent lrt lrt'
   | Constraint (lc, _, lrt),
     Constraint (lc', _, lrt') ->
-     LC.equal lc lc'
+     LC.alpha_equivalent lc lc'
      && alpha_equivalent lrt lrt'
   | I,
     I ->
