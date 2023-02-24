@@ -146,6 +146,7 @@ type cn_function_spec 'a 'ty =
   | CN_requires of Loc.t * cn_condition 'a 'ty
   | CN_ensures of Loc.t * cn_condition 'a 'ty
   | CN_trusted of Loc.t
+  | CN_mk_function of Loc.t * 'a
 
 type cn_loop_spec 'a 'ty =
   | CN_inv of Loc.t * cn_condition 'a 'ty

@@ -1452,11 +1452,16 @@ let check_and_bind_arguments
       (full_ft : i ArgumentTypes.t) 
   =
 
+  let fail_mismatch lhs rhs =
+    fail (fun _ -> {loc; msg = Generic (Pp.item "check_and_bind_arguments: mismatch"
+        (lhs ^^^ !^ "vs" ^^^ rhs))}) in
+
   let rec aux_l resources args ft = 
     match args, ft with
     | M_Define ((s, it), info, args),
       LAT.Define ((s', it'), _info, ft) ->
-       assert (IT.equal it it');
+       let@ () = if IT.equal it it' then return ()
+           else fail_mismatch (IT.pp it) (IT.pp it') in
        let@ () = add_l s (IT.bt it) (fst info, lazy (Sym.pp s)) in
        let@ () = add_c (LC.t_ (def_ s it)) in
        aux_l resources args (LAT.subst i_subst (IT.make_subst [(s', sym_ (s, IT.bt it))]) ft)

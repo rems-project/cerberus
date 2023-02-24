@@ -11,6 +11,9 @@ type trusted =
   | Trusted of Location_ocaml.t
   | Checked
 
+type extra_attributes =
+  | Make_Logical_Function of Id.t
+
 
 
 module T = struct

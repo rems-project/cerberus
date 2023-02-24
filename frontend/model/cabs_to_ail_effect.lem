@@ -872,6 +872,11 @@ let inline resolve_cn_ident ns ident      = liftCnDesug (Cn_desugaring.resolve_c
 let inline check_cn_oargs loc xs          = liftCnDesug (Cn_desugaring.check_cn_oargs loc xs)
 
 
+val lookup_cn_function: Symbol.identifier -> desugM Symbol.sym
+let lookup_cn_function id =
+  resolve_cn_ident Cn.CN_function id >>= fun (sym, _) ->
+  return sym
+
 
 let register_cn_function ident mk =
   State_exception.get >>= fun st ->
