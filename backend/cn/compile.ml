@@ -95,6 +95,9 @@ let add_function loc sym func_sig env =
 let add_predicate sym pred_sig env =
   {env with predicates= SymMap.add sym pred_sig env.predicates }
 
+let remove_c_var_values env = 
+  { env with c_vars = SymMap.empty }
+
 let add_c_var_value c_sym x env =
   { env with c_vars= SymMap.add c_sym x env.c_vars }
 

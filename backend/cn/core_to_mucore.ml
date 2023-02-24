@@ -770,35 +770,7 @@ let rec at_of_arguments f_i = function
 
 
 
-let is_pass_by_pointer = function
-  | By_pointer -> true
-  | By_value -> false
 
-
-let combine_label_args loc lt label_args = 
-  List.map2 (fun (o_s, (ct, pass_by_value_or_pointer)) (s, bt) ->
-      assertl loc (Option.equal Sym.equal o_s (Some s)) 
-        (!^"label argument symbol mismatch: " 
-         ^^^ Sym.pp s ^^^ !^"vs" ^^^ Option.pp Sym.pp o_s);
-      assertl loc (BT.equal (convert_bt loc bt) Loc) 
-        !^"label argument non pointer-bt";
-      assertl loc (is_pass_by_pointer pass_by_value_or_pointer) 
-        !^"label argument passed as value";
-      (s, ct)
-      
-    ) lt label_args
-
-let combine_function_args loc arg_cts args = 
-  List.map2 (fun (o_s, ct) (s, bt) ->
-      (* TODO: revisit *)
-      (* assertl loc (Option.equal Sym.equal o_s (Some s))  *)
-      (*   (!^"function argument symbol mismatch:"  *)
-      (*    ^^^ Sym.pp_debug s ^^^ !^"vs" ^^^ Option.pp Sym.pp_debug o_s); *)
-      assertl loc (BT.equal (convert_bt loc bt) 
-                  (BT.of_sct (convert_ct loc ct))) 
-        !^"function argument type mismatch";
-      (s, ct)      
-    ) arg_cts args
 
 let combine_return loc ret_s ret_ct ret_bt =
   assertl loc (BT.equal (convert_bt loc ret_bt) 
@@ -817,35 +789,87 @@ module IT = IndexTerms
 
 (* copying and adjusting variously compile.ml logic *)
 
+let fetch_ail_env_id (ail_env : AilSyntax.identifier_env) loc x =
+  match Pmap.lookup x ail_env with
+  | Some (Some (_, sym)) -> return sym
+  | Some None -> fail {loc; msg = Generic
+    (Print.item "C identifier has null details" (Id.pp x))}
+  | None -> fail {loc; msg = Generic
+    (Print.item "C identifier unknown" (Id.pp x))}
 
+let desugar_access ail_env globs (loc, id) =
+  let@ s = fetch_ail_env_id ail_env loc id in
+  let@ ct = match List.assoc_opt Sym.equal s globs with
+    | Some (M_GlobalDef ((_, ct), _)) -> return ct
+    | Some (M_GlobalDecl ((_, ct))) -> return ct
+    | None -> fail {loc; msg = Generic (Sym.pp s ^^^ !^"is not a global") }
+  in
+  let ct = Sctypes.to_ctype ct in
+  return (loc, (s, ct))
+
+let ownership (loc, (addr_s, ct)) env =
+  let name = match Sym.description addr_s with
+    | SD_ObjectAddress obj_name -> 
+       Sym.fresh_make_uniq ("O_"^obj_name)
+    | _ -> assert false
+  in
+  let resource = CN_pred (loc, CN_owned (Some ct), [CNExpr (loc, CNExpr_var addr_s)]) in
+
+  let@ (pt_ret, oa_bt), lcs = 
+    C.translate_cn_let_resource env (loc, name, resource) in
+  let value = 
+    let ct = convert_ct loc ct in
+    IT.recordMember_ 
+      ~member_bt:(SBT.of_sct ct)
+      (IT.sym_ (name, oa_bt), Resources.value_sym)
+  in
+  return (name, ((pt_ret, oa_bt), lcs), value)
+
+
+
+  (* Cn.CN_cletResource (loc, os, pred)) *)
+
+(* let translate_accesses ail_env globs accesses requires ensures = *)
+(*   let@ ownerships = ListM.mapM (fun (loc, id) -> *)
+(*        return (ownership loc s ct) *)
+(*   ) accesses in *)
+(*   let (var_vals, preds) = List.split ownerships in *)
+(*   return (var_vals, preds @ requires, preds @ ensures) *)
 
 
 
 
 let rec make_lrt env = function
-  | Cn.CN_cletResource (loc, name, resource) :: conds -> 
+  | ((loc, (addr_s, ct)) :: accesses, ensures) ->
+     let@ (name, ((pt_ret, oa_bt), lcs), value) = ownership (loc, (addr_s, ct)) env in
+     let env = C.add_logical name oa_bt env in
+     let env = C.add_c_var_value addr_s value env in
+     let@ lrt = make_lrt env (accesses, ensures) in
+     return (LRT.mResource ((name, (pt_ret, SBT.to_basetype oa_bt)), (loc, None)) 
+            (LRT.mConstraints lcs lrt))
+  | ([], Cn.CN_cletResource (loc, name, resource) :: ensures) -> 
      let@ (pt_ret, oa_bt), lcs = 
        C.translate_cn_let_resource env (loc, name, resource) in
      let env = C.add_logical name oa_bt env in
-     let@ lrt = make_lrt env conds in
+     let@ lrt = make_lrt env ([], ensures) in
      return (LRT.mResource ((name, (pt_ret, SBT.to_basetype oa_bt)), (loc, None)) 
             (LRT.mConstraints lcs lrt))
-  | Cn.CN_cletExpr (loc, name, expr) :: conds ->
+  | ([], Cn.CN_cletExpr (loc, name, expr) :: ensures) ->
      let@ expr = C.translate_cn_expr env expr in
-     let@ lrt = make_lrt (C.add_logical name (IT.bt expr) env) conds in
+     let@ lrt = make_lrt (C.add_logical name (IT.bt expr) env) ([], ensures) in
      return (LRT.mDefine (name, IT.term_of_sterm expr, (loc, None)) lrt)
-  | Cn.CN_cconstr (loc, constr) :: conds ->
+  | ([], Cn.CN_cconstr (loc, constr) :: ensures) ->
      let@ lc = C.translate_cn_assrt env (loc, constr) in
-     let@ lrt = make_lrt env conds in
+     let@ lrt = make_lrt env ([], ensures) in
      return (LRT.mConstraint (lc, (loc, None)) lrt)
-  | [] -> 
+  | ([], []) -> 
      return LRT.I
 
-let make_rt (loc : loc) (env : C.env) (s, ct) conditions =
+let make_rt (loc : loc) (env : C.env) (s, ct) (accesses, ensures) =
   let ct = convert_ct loc ct in
   let sbt = SBT.of_sct ct in
   let bt = SBT.to_basetype sbt in
-  let@ lrt = make_lrt (C.add_computational s sbt env) conditions in
+  let@ lrt = make_lrt (C.add_computational s sbt env) (accesses, ensures) in
   let info = (loc, Some "return value good") in
   let lrt = LRT.mConstraint (LC.t_ (IT.good_ (ct, IT.sym_ (s, bt))), info) lrt in
   return (RT.mComputational ((s, bt), (loc, None)) lrt)
@@ -853,52 +877,95 @@ let make_rt (loc : loc) (env : C.env) (s, ct) conditions =
 
 let make_largs f_i =
   let rec aux env = function
-    | Cn.CN_cletResource (loc, name, resource) :: conds -> 
-       (* Print.debug 6 (lazy (Print.string ("finalising let-resource"))); *)
-       let@ (pt_ret, oa_bt), lcs = 
-         C.translate_cn_let_resource env (loc, name, resource) in
-       (* Print.debug 6 (lazy (Print.item "got lcs" (Print.list LC.pp (List.map fst lcs)))); *)
+    | ((loc, (addr_s, ct)) :: accesses, requires) ->
+       let@ (name, ((pt_ret, oa_bt), lcs), value) = ownership (loc, (addr_s, ct)) env in
        let env = C.add_logical name oa_bt env in
-       let@ lat = aux env conds in
+       let env = C.add_c_var_value addr_s value env in
+       let@ lat = aux env (accesses, requires) in
        return (Mu.mResource ((name, (pt_ret, SBT.to_basetype oa_bt)), (loc, None)) 
               (Mu.mConstraints lcs lat))
-    | Cn.CN_cletExpr (loc, name, expr) :: conds ->
-       (* Print.debug 6 (lazy (Print.string ("finalising let-expr"))); *)
+    | ([], Cn.CN_cletResource (loc, name, resource) :: requires) -> 
+       let@ (pt_ret, oa_bt), lcs = 
+         C.translate_cn_let_resource env (loc, name, resource) in
+       let env = C.add_logical name oa_bt env in
+       let@ lat = aux env ([], requires) in
+       return (Mu.mResource ((name, (pt_ret, SBT.to_basetype oa_bt)), (loc, None)) 
+                 (Mu.mConstraints lcs lat))
+    | ([], Cn.CN_cletExpr (loc, name, expr) :: requires) ->
        let@ expr = C.translate_cn_expr env expr in
-       let@ lat = aux (C.add_logical name (IT.bt expr) env) conds in
+       let@ lat = aux (C.add_logical name (IT.bt expr) env) ([], requires) in
        return (Mu.mDefine ((name, IT.term_of_sterm expr), (loc, None)) lat)
-    | Cn.CN_cconstr (loc, constr) :: conds ->
-       (* Print.debug 6 (lazy (Print.string ("finalising constraint"))); *)
+    | ([], Cn.CN_cconstr (loc, constr) :: requires) ->
        let@ lc = C.translate_cn_assrt env (loc, constr) in
-       let@ lat = aux env conds in
+       let@ lat = aux env ([], requires) in
        return (Mu.mConstraint (lc, (loc, None)) lat)
-    | [] ->
+    | ([], []) ->
        let@ i = f_i env in
        return (M_I i)
   in
   aux
 
-let require_good loc args lat =
-  let good (s, ct) =
-    let info = (loc, Some (Sym.pp_string s ^ " good")) in
-    let bt = BT.of_sct ct in
-    (LC.t_ (IT.good_ (ct, IT.sym_ (s, bt))), info)
-  in
-  Mu.mConstraints (List.map good args) lat
 
-let make_args f_i loc env args conditions =
-  let args = List.map_snd (convert_ct loc) args in
-  let rec aux env = function
-    | (s, ct) :: rest ->
-       let sbt = SBT.of_sct ct in
-       let bt = SBT.to_basetype sbt in
-       let@ at = aux (C.add_computational s sbt env) rest in
-       return (Mu.mComputational ((s, bt), (loc, None)) at)
+let is_pass_by_pointer = function
+  | By_pointer -> true
+  | By_value -> false
+
+
+let make_label_args f_i loc env args (accesses, inv) =
+  let rec aux (resources, good_lcs) env = function
+    | ((o_s, (ct, pass_by_value_or_pointer)), (s, bt)) :: rest ->
+       assert (Option.equal Sym.equal o_s (Some s));
+       assert (BT.equal (convert_bt loc bt) Loc);
+       assert (is_pass_by_pointer pass_by_value_or_pointer);
+       (* now interesting only: s, ct, rest *)
+       let sct = convert_ct loc ct in
+       let p_sbt = SBT.Loc (Some sct) in
+       let env = C.add_computational s p_sbt env in
+       let good_pointer_lc = 
+         let info = (loc, Some (Sym.pp_string s ^ " good")) in
+         (LC.t_ (IT.good_ (Pointer sct, IT.sym_ (s, BT.Loc))), info)
+       in
+       let@ (oa_name, ((pt_ret, oa_bt), lcs), value) = ownership (loc, (s, ct)) env in
+       let env = C.add_logical oa_name oa_bt env in
+       let env = C.add_c_var_value s value env in
+       let resource = ((oa_name, (pt_ret, SBT.to_basetype oa_bt)), (loc, None)) in
+       let@ at = 
+         aux (resources @ [resource], 
+              good_lcs @ good_pointer_lc :: lcs) 
+           env rest 
+       in
+       return (Mu.mComputational ((s, Loc), (loc, None)) at)
     | [] -> 
-       let@ lat = make_largs f_i env conditions in
-       return (M_L (require_good loc args lat))
+       let@ lat = make_largs f_i env (accesses, inv) in
+       let at = Mu.mResources resources (Mu.mConstraints good_lcs lat) in
+       return (M_L at)
   in
-  aux env args
+  aux ([],[]) env args
+
+
+
+
+let make_function_args f_i loc env args (accesses, requires) =
+  let rec aux good_lcs env = function
+    | ((mut_arg, (mut_arg', ct)), (pure_arg, bt)) :: rest ->
+       assert (Option.equal Sym.equal (Some mut_arg) mut_arg');
+       let ct = convert_ct loc ct in
+       let sbt = SBT.of_sct ct in
+       let bt = convert_bt loc bt in
+       assert (BT.equal bt (SBT.to_basetype sbt));
+       let env = C.add_computational pure_arg sbt env in
+       let env = C.add_c_var_value mut_arg (IT.sym_ (pure_arg, sbt)) env in
+       let good_lc = 
+         let info = (loc, Some (Sym.pp_string pure_arg ^ " good")) in
+         (LC.t_ (IT.good_ (ct, IT.sym_ (pure_arg, bt))), info)
+       in
+       let@ at = aux (good_lc :: good_lcs) env rest in
+       return (Mu.mComputational ((pure_arg, bt), (loc, None)) at)
+    | [] -> 
+       let@ lat = make_largs f_i env (accesses, requires) in
+       return (M_L (Mu.mConstraints (List.rev good_lcs) lat))
+  in
+  aux [] env args
 
 
 let do_ail_desugar_op desugar_state f =
@@ -941,57 +1008,14 @@ let declare_return loc ret_ct ret_bt d_st =
   let@ (sym, d_st) = register_new_cn_local (Id.id "return") d_st in
   return (combine_return loc sym ret_ct ret_bt, d_st)
 
-let fetch_ail_env_id (ail_env : AilSyntax.identifier_env) loc x =
-  match Pmap.lookup x ail_env with
-  | Some (Some (_, sym)) -> return sym
-  | Some None -> fail {loc; msg = Generic
-    (Print.item "C identifier has null details" (Id.pp x))}
-  | None -> fail {loc; msg = Generic
-    (Print.item "C identifier unknown" (Id.pp x))}
-
-let ownership loc s (ct : ctype) =
-  let name = match Sym.description s with
-    | SD_ObjectAddress name -> name
-    | _ -> assert false
-  in
-  let os = Sym.fresh_make_uniq ("O_"^name) in
-  let pred = CN_pred (loc, CN_owned (Some ct), [CNExpr (loc, CNExpr_var s)]) in
-  let oa = IT.sym_ (os, SBT.of_sct (convert_ct loc ct)) in
-  ((s, oa), Cn.CN_cletResource (loc, os, pred))
-
-(*
-let convert_pred loc = function
-  | CN_named nm -> CN_named nm
-  | CN_owned ty -> CN_owned (convert_ct loc ty)
-  | CN_block ty -> CN_block (convert_ct loc ty)
-
-let convert_resource = function
-  | Cn.CN_pred (loc, pred, xs) ->
-    Cn.CN_pred (loc, convert_pred loc pred, List.map (n_expr loc) xs)
-  | Cn.CN_each (nm, cn_bt, x, loc, pred, xs) ->
-    Cn.CN_pred (nm, cn_bt, convert_expr loc x, loc, n_pred loc pred, List.map (n_expr loc) xs)
-*)
 
 
-let translate_accesses ail_env globs accesses requires ensures =
-  let@ ownerships = ListM.mapM (fun (loc, id) ->
-       let@ s = fetch_ail_env_id ail_env loc id in
-       let@ ct = match List.assoc_opt Sym.equal s globs with
-         | Some (M_GlobalDef ((_, ct), _)) -> return ct
-         | Some (M_GlobalDecl ((_, ct))) -> return ct
-         | None -> fail {loc; msg = Generic (Sym.pp s ^^^ !^"is not a global") }
-       in
-       let ct = Sctypes.to_ctype ct in
-       return (ownership loc s ct)
-  ) accesses in
-  let (var_vals, preds) = List.split ownerships in
-  return (var_vals, preds @ requires, preds @ ensures)
-
-let normalise_label loop_attributes (env : C.env) d_st label_name label =
+let normalise_label (accesses, loop_attributes) (env : C.env) d_st label_name label =
   match label with
   | Mi_Return loc -> 
      return (M_Return loc)
   | Mi_Label (loc, lt, label_args, label_body, annots) ->
+     let env = C.remove_c_var_values env in
      begin match Cerb_frontend.Annot.get_label_annot annots with
      | Some (LAloop_prebody loop_id) ->
         let@ inv = match Pmap.lookup loop_id loop_attributes with
@@ -1001,16 +1025,14 @@ let normalise_label loop_attributes (env : C.env) d_st label_name label =
         (* Print.debug 6 (lazy (Print.string ("normalising loop invs"))); *)
         (* FIXME: find correct marker and set the appropriate c env *)
         let@ (inv, _) = desugar_conds d_st inv in
-        let combined_label_args = combine_label_args loc lt label_args in
-        let args_owned = List.map (fun (s, ct) -> ownership loc s ct)
-            combined_label_args in
-        let (var_vals, preds) = List.split args_owned in
-        let inv = preds @ inv in
-        let env = C.add_c_var_values var_vals env in
         let@ label_args_and_body =
-          make_args (fun env ->
+          make_label_args (fun env ->
               return (n_expr loc label_body)
-            ) loc env combined_label_args inv
+            ) 
+            loc 
+            env 
+            (List.combine lt label_args) 
+            (accesses, inv)
         in
         let lt = 
           at_of_arguments (fun _body ->
@@ -1054,61 +1076,50 @@ let normalise_fun_map_decl ail_prog env globals d_st (funinfo: mi_funinfo) loop_
          Sym.equal fname ail_prog.function_definitions in
      let ail_env = Pmap.find ail_marker ail_prog.markers_env in
      let d_st = Cerb_frontend.Cabs_to_ail_effect.set_cn_c_identifier_env ail_env d_st in
-     let arg_var_vals = 
-       List.map2 (fun (mut_arg, (mut_arg', ct)) (pure_arg, bt) ->
-           assert (Option.equal Sym.equal (Some mut_arg) mut_arg');
-           let ct = convert_ct loc ct in
-           let sbt = SBT.of_sct ct in
-           let bt = convert_bt loc bt in
-           assert (BT.equal bt (SBT.to_basetype sbt));
-           (mut_arg, IT.sym_ (pure_arg, sbt))) 
-         (List.combine ail_args arg_cts) args 
-     in
-     let env = C.add_c_var_values arg_var_vals env in
      let@ trusted, accesses, requires, ensures = Parse.parse_function_spec attrs in
      Print.debug 6 (lazy (Print.string "parsed spec attrs"));
+     let@ accesses = ListM.mapM (desugar_access ail_env globals) accesses in
      let@ (requires, d_st) = desugar_conds d_st (List.map snd requires) in
      Print.debug 6 (lazy (Print.string "desugared requires conds"));
      let@ (ret, ret_d_st) = declare_return loc ret_ct ret_bt d_st in
      let@ (ensures, _) = desugar_conds ret_d_st (List.map snd ensures) in
      Print.debug 6 (lazy (Print.string "desugared ensures conds"));
-     let@ (var_vals, requires, ensures) = translate_accesses ail_env
-         globals accesses requires ensures in
-     let env = C.add_c_var_values var_vals env in
-     (* Print.debug 6 (lazy (Print.string "translated accesses")); *)
-     let combined_args = combine_function_args loc arg_cts args in
-     (* Print.debug 6 (lazy (Print.string "combined arguments")); *)
      let@ args_and_body = 
-       make_args (fun env ->
+       make_function_args (fun env ->
            (* Print.debug 6 (lazy (Print.string "normalising body")); *)
            let body = n_expr loc body in
            (* Print.debug 6 (lazy (Print.string "normalising labels")); *)
            let@ labels = 
-             PmapM.mapM (normalise_label loop_attributes env d_st)
+             PmapM.mapM (normalise_label (accesses, loop_attributes) env d_st)
                labels Sym.compare in
-           let@ returned = make_rt loc env ret ensures in
+           let@ returned = make_rt loc env ret (accesses, ensures) in
            (* Print.debug 6 (lazy (Print.string "made return-type")); *)
            return (body, labels, returned)
-         ) loc env combined_args requires
+         ) 
+         loc 
+         env 
+         (List.combine (List.combine ail_args arg_cts) args) 
+         (accesses, requires)
      in
      let ft = at_of_arguments (fun (_body, _labels, rt) -> rt) args_and_body in
      (* Print.debug 6 (lazy (Print.item "normalised function-type" (AT.pp RT.pp ft))); *)
      return (Some (M_Proc(loc, args_and_body, ft, trusted)))
   | Mi_ProcDecl(loc, ret_bt, bts) -> 
-     let@ trusted, accesses, requires, ensures = Parse.parse_function_spec attrs in
-     let@ (requires, d_st2) = desugar_conds d_st (List.map snd requires) in
-     let@ (ret, ret_d_st) = declare_return loc ret_ct ret_bt d_st2 in
-     let@ (ensures, _) = desugar_conds ret_d_st (List.map snd ensures) in
-     let arg_protos = List.mapi (fun i -> function
-        | (Some sym, ct) -> (sym, ct)
-        | (None, ct) -> (Sym.fresh_named ("default_" ^ Int.to_string i), ct)) arg_cts in
-     let@ args_and_rt =
-       make_args (fun env ->
-           make_rt loc env ret ensures
-         ) loc env arg_protos requires
-     in
-     let ft = at_of_arguments Tools.id args_and_rt in
-     return (Some (M_ProcDecl(loc, ft)))
+     failwith "mi_procdecl"
+     (* let@ trusted, accesses, requires, ensures = Parse.parse_function_spec attrs in *)
+     (* let@ (requires, d_st2) = desugar_conds d_st (List.map snd requires) in *)
+     (* let@ (ret, ret_d_st) = declare_return loc ret_ct ret_bt d_st2 in *)
+     (* let@ (ensures, _) = desugar_conds ret_d_st (List.map snd ensures) in *)
+     (* let arg_protos = List.mapi (fun i -> function *)
+     (*    | (Some sym, ct) -> (sym, ct) *)
+     (*    | (None, ct) -> (Sym.fresh_named ("default_" ^ Int.to_string i), ct)) arg_cts in *)
+     (* let@ args_and_rt = *)
+     (*   make_args (fun env -> *)
+     (*       make_rt loc env ret ensures *)
+     (*     ) loc env arg_protos requires *)
+     (* in *)
+     (* let ft = at_of_arguments Tools.id args_and_rt in *)
+     (* return (Some (M_ProcDecl(loc, ft))) *)
   | Mi_BuiltinDecl(loc, bt, bts) -> 
      assert false
      (* M_BuiltinDecl(loc, convert_bt loc bt, List.map (convert_bt loc) bts) *)

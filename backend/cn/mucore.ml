@@ -249,7 +249,7 @@ let mConstraint (lc, info) t = M_Constraint (lc, info, t)
 let mComputational (bound, info) t = M_Computational (bound, info, t)
 
 let mConstraints lcs t = List.fold_right mConstraint lcs t
-
+let mResources res t = List.fold_right mResource res t
 
 
 
