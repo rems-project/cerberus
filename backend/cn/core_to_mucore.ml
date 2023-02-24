@@ -1105,7 +1105,7 @@ let normalise_fun_map_decl ail_prog env globals d_st (funinfo: mi_funinfo) loop_
      (* Print.debug 6 (lazy (Print.item "normalised function-type" (AT.pp RT.pp ft))); *)
      return (Some (M_Proc(loc, args_and_body, ft, trusted)))
   | Mi_ProcDecl(loc, ret_bt, bts) -> 
-     failwith "mi_procdecl"
+     return None
      (* let@ trusted, accesses, requires, ensures = Parse.parse_function_spec attrs in *)
      (* let@ (requires, d_st2) = desugar_conds d_st (List.map snd requires) in *)
      (* let@ (ret, ret_d_st) = declare_return loc ret_ct ret_bt d_st2 in *)
