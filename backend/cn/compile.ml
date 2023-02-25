@@ -16,6 +16,7 @@ open Resultat
 open TypeErrors
 
 module SymMap = Map.Make(Sym)
+module STermMap = Map.Make(struct type t = IndexTerms.sterm let compare = Terms.compare SBT.compare end)
 module Y = Map.Make(String)
 
 
@@ -47,6 +48,14 @@ type c_variable_state =
 
 type c_variable_state_env = c_variable_state SymMap.t
 
+type pointee_value_env = IT.sterm STermMap.t
+
+type state_env = {
+    c_variable_state : c_variable_state_env;
+    pointee_values : pointee_value_env
+  }
+
+
 type env = {
   computationals: SBT.t SymMap.t;
   logicals: SBT.t SymMap.t;
@@ -54,12 +63,17 @@ type env = {
   predicates: predicate_sig SymMap.t;
   func_names: Sym.t Y.t;
   functions: function_sig SymMap.t;
-  c_variable_state: c_variable_state_env;
-  (* old_resources: (string * resource_env) list; *)
+  state: state_env;
+  old_states: state_env StringMap.t;
   datatypes : (BaseTypes.datatype_info * Sym.t Y.t) SymMap.t;
   datatype_constrs : BaseTypes.constr_info SymMap.t;
   tagDefs: Mucore.mu_tag_definitions;
 }
+
+let empty_state = { 
+    c_variable_state= SymMap.empty; 
+    pointee_values= STermMap.empty 
+  }
 
 let empty tagDefs =
   { computationals = SymMap.empty;
@@ -68,8 +82,8 @@ let empty tagDefs =
     predicates= SymMap.empty;
     func_names = Y.empty; 
     functions = SymMap.empty; 
-    c_variable_state= SymMap.empty;
-    (* old_resources= []; *)
+    state= empty_state;
+    old_states = StringMap.empty;
     datatypes = SymMap.empty; 
     datatype_constrs = SymMap.empty;
     tagDefs; 
@@ -99,16 +113,26 @@ let add_function loc sym func_sig env =
 let add_predicate sym pred_sig env =
   {env with predicates= SymMap.add sym pred_sig env.predicates }
 
-let remove_c_variable_state env = 
-  { env with c_variable_state = SymMap.empty }
+let make_state_old env old_name = 
+  { env with state = empty_state;
+             old_states = StringMap.add old_name env.state env.old_states }
 
 let add_c_variable_state c_sym cvs env =
-  { env with c_variable_state= SymMap.add c_sym cvs env.c_variable_state }
+  { env with state = { env.state with c_variable_state= SymMap.add c_sym cvs env.state.c_variable_state }}
+
+let add_pointee_value p v env = 
+  { env with state = { env.state with pointee_values = STermMap.add p v env.state.pointee_values }}
+
 
 let add_c_variable_states cvss env = 
   List.fold_right (fun (sym, cvs) env ->
       add_c_variable_state sym cvs env
     ) cvss env
+
+let add_pointee_values pvs env = 
+  List.fold_right (fun (p, v) env ->
+      add_pointee_value p v env
+    ) pvs env
 
 let lookup_computational_or_logical sym env =
   match SymMap.find_opt sym env.logicals with
@@ -404,10 +428,20 @@ let translate_cn_expr (env: env) expr =
             | Some bTy -> return (IT (Lit (Sym sym), bTy))
           end
       | CNExpr_deref e ->
-         Pp.debug 2 (lazy (Pp.string ("seeing CNExpr_deref")));
-         assert false;
-         (* to be fixed and/or retired
          let@ expr = self e in
+         begin match STermMap.find_opt expr env.state.pointee_values with
+         | Some v -> return v
+         | None ->
+            let msg =
+              !^"Cannot dereference " ^^ Terms.pp expr ^^ !^"." 
+              ^^^ !^ "Is the ownership for accessing it missing?"
+            in
+            fail {loc; msg = Generic msg}
+         end
+
+         (* Pp.debug 2 (lazy (Pp.string ("seeing CNExpr_deref"))); *)
+         (* assert false; *)
+         (* to be fixed and/or retired
          let@ (re, O oa) = lookup_resource_for_pointer loc expr env in
          begin match re with
          | P {name = Owned sct; _} -> 
@@ -424,7 +458,7 @@ let translate_cn_expr (env: env) expr =
          end
          *)
       | CNExpr_value_of_c_variable sym ->
-         begin match SymMap.find_opt sym env.c_variable_state with
+         begin match SymMap.find_opt sym env.state.c_variable_state with
          | None -> 
             let msg =
               !^"Cannot resolve the state of " ^^ Sym.pp sym ^^ !^"." 
@@ -582,7 +616,7 @@ let split_pointer_linear_step loc q (ptr_expr : IT.sterm) =
 
 let get_single_member v =
   match IT.basetype v with
-  | BT.Record [(sym, bt)] -> IT.recordMember_ ~member_bt:bt (v, sym)
+  | SBT.Record [(sym, bt)] -> IT.recordMember_ ~member_bt:bt (v, sym)
   | ty -> assert false
 
 (* let iterate_resource_env_info = function *)
@@ -592,14 +626,13 @@ let get_single_member v =
 (*   | _ -> assert false *)
 
 let owned_good loc sym (res_t, oargs_ty) = 
-  let oargs_ty = SBT.to_basetype oargs_ty in
   match res_t with
   | RET.P { name = Owned scty ; permission; _} ->
-     let v = get_single_member (IT.sym_ (sym, oargs_ty)) in
+     let v = IT.term_of_sterm (get_single_member (IT.sym_ (sym, oargs_ty))) in
      [(LC.T (IT.impl_ (permission, IT.good_ (scty, v))), 
        (loc, Some "default value constraint"))]
   | RET.Q { name = Owned scty ; q; permission; _} ->
-     let v = get_single_member (IT.sym_ (sym, oargs_ty)) in
+     let v = IT.term_of_sterm (get_single_member (IT.sym_ (sym, oargs_ty))) in
      let v_el = IT.map_get_ v (IT.sym_ (q, BT.Integer)) in
      [(LC.forall_ (q, BT.Integer)
           (IT.impl_ (permission, IT.good_ (scty, v_el))),
@@ -608,9 +641,7 @@ let owned_good loc sym (res_t, oargs_ty) =
       []
 
 
-
-
-let translate_cn_let_resource__pred env res_loc (pred_loc, res, args) =
+let translate_cn_let_resource__pred env res_loc sym (pred_loc, res, args) =
   let@ (pname, ptr_expr, iargs, oargs_ty) =
          translate_cn_res_info res_loc pred_loc env res args in
   let pt = (RET.P { name = pname
@@ -619,9 +650,13 @@ let translate_cn_let_resource__pred env res_loc (pred_loc, res, args) =
             ; iargs = List.map IT.term_of_sterm iargs},
          oargs_ty)
   in
-  return pt
+  let pointee_value = match pname with
+    | Owned _ -> [ptr_expr, get_single_member (IT.sym_ (sym, oargs_ty))]
+    | _ -> []
+  in
+  return (pt, pointee_value)
 
-let translate_cn_let_resource__each env res_loc (q, bt, guard, pred_loc, res, args) =
+let translate_cn_let_resource__each env res_loc _sym (q, bt, guard, pred_loc, res, args) =
   let bt' = translate_cn_base_type bt in
   let@ () = 
     if SBT.equal bt' SBT.Integer then return ()
@@ -643,18 +678,20 @@ let translate_cn_let_resource__each env res_loc (q, bt, guard, pred_loc, res, ar
             ; iargs = List.map IT.term_of_sterm iargs},
          m_oargs_ty)
   in
-  return pt
+  return (pt, [])
 
 let translate_cn_let_resource env (res_loc, sym, the_res) =
-  let@ pt = match the_res with
+  let@ pt, pointee_values = match the_res with
     | CN_pred (pred_loc, res, args) ->
-       translate_cn_let_resource__pred env res_loc 
+       translate_cn_let_resource__pred env res_loc sym
          (pred_loc, res, args)
     | CN_each (q, bt, guard, pred_loc, res, args) ->
-       translate_cn_let_resource__each env res_loc
+       translate_cn_let_resource__each env res_loc sym
          (q, bt, guard, pred_loc, res, args)  
   in
-  return (pt, owned_good res_loc sym pt)
+  return (pt, 
+          owned_good res_loc sym pt,
+          pointee_values)
 
 
 let translate_cn_assrt env (loc, assrt) =
@@ -679,13 +716,14 @@ let translate_cn_clause env clause =
     let module LAT = LogicalArgumentTypes in
     match clause with
       | CN_letResource (res_loc, sym, the_res, cl) ->
-         let@ (pt_ret, oa_bt), lcs = 
+         let@ (pt_ret, oa_bt), lcs, pointee_vals = 
            translate_cn_let_resource env (res_loc, sym, the_res) in
          let acc' z = 
            acc (LAT.mResource ((sym, (pt_ret, SBT.to_basetype oa_bt)), (res_loc, None)) 
                (LAT.mConstraints lcs z))
          in
          let env' = add_logical sym oa_bt env in
+         let env' = add_pointee_values pointee_vals env' in
          translate_cn_clause_aux env' acc' cl
       | CN_letExpr (loc, sym, e_, cl) ->
           let@ e = translate_cn_expr env e_ in

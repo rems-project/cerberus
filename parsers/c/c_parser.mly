@@ -1907,18 +1907,12 @@ prim_expr:
                                , CNExpr_memberof (e, member))) }
 | e= delimited(LPAREN, expr, RPAREN)
     { e }
-| SIZEOF LT ty= ctype GT
-    { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($1)))
-                               , CNExpr_sizeof ty)) }
 | ident= cn_l_variable LPAREN args=separated_list(COMMA, expr) RPAREN
     { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                                , CNExpr_call (ident, args))) }
 | ident= cn_variable args= cons_args
     { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos(args)))
                                , CNExpr_cons (ident, args))) }
-| OFFSETOF LPAREN tag = cn_variable COMMA member= cn_variable RPAREN
-    { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($1)))
-                               , CNExpr_offsetof (tag, member))) }
 | arr= prim_expr LBRACK idx= expr RBRACK
     { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                                , CNExpr_binop (CN_map_get, arr, idx))) }
@@ -1928,14 +1922,28 @@ prim_expr:
 
 
 
+unary_expr:
+| e= prim_expr
+    { e }
+| STAR arg = unary_expr
+    { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($1)))
+                               , CNExpr_deref arg)) }
+| SIZEOF LT ty= ctype GT
+    { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($1)))
+                               , CNExpr_sizeof ty)) }
+| OFFSETOF LPAREN tag = cn_variable COMMA member= cn_variable RPAREN
+    { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($1)))
+                               , CNExpr_offsetof (tag, member))) }
+
+
 mul_expr:
 (* TODO *)
-| e= prim_expr
+| e= unary_expr
      { e }
-| e1= mul_expr STAR e2= prim_expr
+| e1= mul_expr STAR e2= unary_expr
     { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                                , CNExpr_binop (CN_mul, e1, e2))) }
-| e1= mul_expr SLASH e2= prim_expr
+| e1= mul_expr SLASH e2= unary_expr
     { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                                , CNExpr_binop (CN_div, e1, e2))) }
 

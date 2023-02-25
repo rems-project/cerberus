@@ -807,7 +807,7 @@ let ownership (loc, (addr_s, ct)) env =
   in
   let resource = CN_pred (loc, CN_owned (Some ct), [CNExpr (loc, CNExpr_var addr_s)]) in
 
-  let@ (pt_ret, oa_bt), lcs = 
+  let@ (pt_ret, oa_bt), lcs, _ = 
     C.translate_cn_let_resource env (loc, name, resource) in
   let value = 
     let ct = convert_ct loc ct in
@@ -840,9 +840,10 @@ let rec make_lrt env = function
      return (LRT.mResource ((name, (pt_ret, SBT.to_basetype oa_bt)), (loc, None)) 
             (LRT.mConstraints lcs lrt))
   | ([], Cn.CN_cletResource (loc, name, resource) :: ensures) -> 
-     let@ (pt_ret, oa_bt), lcs = 
+     let@ (pt_ret, oa_bt), lcs, pointee_values = 
        C.translate_cn_let_resource env (loc, name, resource) in
      let env = C.add_logical name oa_bt env in
+     let env = C.add_pointee_values pointee_values env in
      let@ lrt = make_lrt env ([], ensures) in
      return (LRT.mResource ((name, (pt_ret, SBT.to_basetype oa_bt)), (loc, None)) 
             (LRT.mConstraints lcs lrt))
@@ -877,9 +878,10 @@ let make_largs f_i =
        return (Mu.mResource ((name, (pt_ret, SBT.to_basetype oa_bt)), (loc, None)) 
               (Mu.mConstraints lcs lat))
     | ([], Cn.CN_cletResource (loc, name, resource) :: requires) -> 
-       let@ (pt_ret, oa_bt), lcs = 
+       let@ (pt_ret, oa_bt), lcs, pointee_values = 
          C.translate_cn_let_resource env (loc, name, resource) in
        let env = C.add_logical name oa_bt env in
+       let env = C.add_pointee_values pointee_values env in
        let@ lat = aux env ([], requires) in
        return (Mu.mResource ((name, (pt_ret, SBT.to_basetype oa_bt)), (loc, None)) 
                  (Mu.mConstraints lcs lat))
@@ -1080,7 +1082,7 @@ let normalise_fun_map_decl ail_prog env globals d_st (funinfo: mi_funinfo) loop_
      Print.debug 6 (lazy (Print.string "desugared ensures conds"));
      let@ args_and_body = 
        make_function_args (fun arg_states env ->
-           let env = C.remove_c_variable_state env in
+           let env = C.make_state_old env "start" in
            let body = n_expr loc body in
            let@ returned = 
              make_rt loc (C.add_c_variable_states arg_states env)
