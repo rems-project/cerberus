@@ -151,6 +151,7 @@ let warn_extra_semicolon pos ctx =
 %token CN_PACK CN_UNPACK CN_PACK_STRUCT CN_UNPACK_STRUCT CN_HAVE CN_SHOW CN_INSTANTIATE
 %token CN_BOOL CN_INTEGER CN_REAL CN_POINTER CN_MAP CN_LIST CN_TUPLE CN_SET
 %token CN_WHEN CN_LET CN_OWNED CN_BLOCK CN_EACH CN_FUNCTION CN_PREDICATE CN_DATATYPE
+%token CN_UNCHANGED
 %token CN_NULL CN_TRUE CN_FALSE
 
 %token EOF
@@ -1932,7 +1933,9 @@ unary_expr:
 | OFFSETOF LPAREN tag = cn_variable COMMA member= cn_variable RPAREN
     { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($1)))
                                , CNExpr_offsetof (tag, member))) }
-
+| LBRACE e= expr RBRACE CN_UNCHANGED
+    { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($1)))
+                               , CNExpr_unchanged e)) }
 
 mul_expr:
 (* TODO *)

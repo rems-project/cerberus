@@ -151,6 +151,7 @@ let cn_keywords: (string * Tokens.token) list = [
     "trusted"       , CN_TRUSTED;
     "cn_function"   , CN_FUNCTION;
     "when"          , CN_WHEN;
+    "unchanged"     , CN_UNCHANGED;
   ]
 
 let cn_lexicon: (string, token) Hashtbl.t =

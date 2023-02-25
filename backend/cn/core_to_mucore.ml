@@ -1082,7 +1082,7 @@ let normalise_fun_map_decl ail_prog env globals d_st (funinfo: mi_funinfo) loop_
      Print.debug 6 (lazy (Print.string "desugared ensures conds"));
      let@ args_and_body = 
        make_function_args (fun arg_states env ->
-           let env = C.make_state_old env "start" in
+           let env = C.make_state_old env C.EvaluationScope.ES_Start in
            let body = n_expr loc body in
            let@ returned = 
              make_rt loc (C.add_c_variable_states arg_states env)

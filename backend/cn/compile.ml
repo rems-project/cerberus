@@ -3,7 +3,6 @@ module SBT = SurfaceBaseTypes
 module BT = BaseTypes
 module RP = ResourcePredicates
 module IT = IndexTerms
-module StringMap = Map.Make(String)
 module LAT = LogicalArgumentTypes
 module LRT = LogicalReturnTypes
 module LC = LogicalConstraints
@@ -18,6 +17,14 @@ open TypeErrors
 module SymMap = Map.Make(Sym)
 module STermMap = Map.Make(struct type t = IndexTerms.sterm let compare = Terms.compare SBT.compare end)
 module Y = Map.Make(String)
+
+module EvaluationScope = struct
+  type t = 
+    | ES_Start
+  [@@deriving eq, ord]
+end
+open EvaluationScope
+module EvaluationScopeMap = Map.Make(EvaluationScope)
 
 
 
@@ -64,7 +71,7 @@ type env = {
   func_names: Sym.t Y.t;
   functions: function_sig SymMap.t;
   state: state_env;
-  old_states: state_env StringMap.t;
+  old_states: state_env EvaluationScopeMap.t;
   datatypes : (BaseTypes.datatype_info * Sym.t Y.t) SymMap.t;
   datatype_constrs : BaseTypes.constr_info SymMap.t;
   tagDefs: Mucore.mu_tag_definitions;
@@ -83,7 +90,7 @@ let empty tagDefs =
     func_names = Y.empty; 
     functions = SymMap.empty; 
     state= empty_state;
-    old_states = StringMap.empty;
+    old_states = EvaluationScopeMap.empty;
     datatypes = SymMap.empty; 
     datatype_constrs = SymMap.empty;
     tagDefs; 
@@ -115,7 +122,7 @@ let add_predicate sym pred_sig env =
 
 let make_state_old env old_name = 
   { env with state = empty_state;
-             old_states = StringMap.add old_name env.state env.old_states }
+             old_states = EvaluationScopeMap.add old_name env.state env.old_states }
 
 let add_c_variable_state c_sym cvs env =
   { env with state = { env.state with c_variable_state= SymMap.add c_sym cvs env.state.c_variable_state }}
@@ -343,7 +350,7 @@ let translate_member_access loc env (t : IT.sterm) member =
 
   | Datatype tag ->
      let@ (dt_info, mem_syms) = lookup_datatype loc tag env in
-     let@ sym = match StringMap.find_opt (Id.s member) mem_syms with
+     let@ sym = match Y.find_opt (Id.s member) mem_syms with
        | None -> fail {loc; msg= Generic (Pp.string ("Unknown member " ^ Id.s member ^
            " of datatype " ^ Sym.pp_string tag))}
        | Some sym -> return sym
@@ -405,6 +412,7 @@ let pp_cnexpr_kind expr_ =
   | CNExpr_each (sym, r, e) -> !^ "(each ...)"
   | CNExpr_ite (e1, e2, e3) -> !^ "(if ... then ...)"
   | CNExpr_good (ty, e) -> !^ "(good (_, _))"
+  | CNExpr_unchanged e -> !^"(unchanged (_))"
 
 
 let translate_cn_expr (env: env) expr =
@@ -438,25 +446,6 @@ let translate_cn_expr (env: env) expr =
             in
             fail {loc; msg = Generic msg}
          end
-
-         (* Pp.debug 2 (lazy (Pp.string ("seeing CNExpr_deref"))); *)
-         (* assert false; *)
-         (* to be fixed and/or retired
-         let@ (re, O oa) = lookup_resource_for_pointer loc expr env in
-         begin match re with
-         | P {name = Owned sct; _} -> 
-            let pointee = 
-              recordMember_ ~member_bt:(BT.of_sct sct) (oa, Resources.value_sym) in
-            return pointee
-         | _ -> 
-            let msg = 
-              !^"Can only dereference 'Owned' pointers." 
-              ^^^ !^"The resource available for" ^^^ IT.pp expr ^^^ !^"is" 
-              ^^^ RET.pp re
-            in
-            fail {loc; msg = Generic msg}
-         end
-         *)
       | CNExpr_value_of_c_variable sym ->
          begin match SymMap.find_opt sym env.state.c_variable_state with
          | None -> 
@@ -554,6 +543,19 @@ let translate_cn_expr (env: env) expr =
          let scty = Sctypes.of_ctype_unsafe loc ty in
          let@ e = trans env e in
          return (IT (CT_pred (Good (scty, e)), SBT.Bool))
+      | CNExpr_unchanged e->
+         begin match EvaluationScopeMap.find_opt ES_Start env.old_states with
+         | None -> 
+            let msg = 
+              !^"Cannot use 'unchanged' here." 
+                ^/^ !^"'unchanged' can only be used in function post-conditions and loop-invariants."
+            in
+            fail {loc; msg = Generic msg}
+         | Some start_state -> 
+            let@ cur_e = self e in
+            let@ old_e = trans { env with state = start_state } e in
+            mk_translate_binop loc CN_equal (cur_e, old_e)
+         end
   in trans env expr
 
 
@@ -573,7 +575,7 @@ let translate_cn_res_info res_loc loc env res args =
             match IT.bt ptr_expr with
             | Loc (Some ty) -> return ty
             | Loc None ->
-               fail {loc; msg = Generic !^"cannot tell C-type of pointer"}
+               fail {loc; msg = Generic !^"Cannot tell C-type of pointer. Please use Owned with an annotation: \'Owned<CTYPE>'."}
             | has ->
                fail {loc; msg = Illtyped_it' {it = Terms.pp ptr_expr; has = SBT.pp has; expected = "pointer"}}
        in

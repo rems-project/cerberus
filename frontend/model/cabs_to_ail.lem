@@ -4523,6 +4523,9 @@ let rec desugar_cn_expr (CNExpr loc expr_) =
         E.return (CNExpr_deref e)
     | CNExpr_value_of_c_variable _ ->
         Assert_extra.failwith "CNExpr_var_of_c_variable"
+    | CNExpr_unchanged e ->
+       desugar_cn_expr e >>= fun e ->
+       E.return (CNExpr_unchanged e)
   end >>= fun ret ->
   E.return (CNExpr loc ret)
 

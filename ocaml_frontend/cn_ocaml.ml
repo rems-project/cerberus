@@ -140,6 +140,8 @@ module MakePp (Conf: PP_CN) = struct
           Dnode (pp_ctor "CNExpr_deref", [dtree_of_cn_expr e])
       | CNExpr_value_of_c_variable ident ->
           Dleaf (pp_ctor "CNExpr_value_of_c_variable" ^^^ Conf.pp_ident ident)
+      | CNExpr_unchanged e ->
+          Dnode (pp_ctor "CNExpr_unchanged", [dtree_of_cn_expr e])
         
 
   let dtree_of_cn_pred = function
