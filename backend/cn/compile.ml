@@ -641,12 +641,19 @@ let owned_good loc sym (res_t, oargs_ty) =
       []
 
 
-let translate_cn_let_resource__pred env res_loc sym (pred_loc, res, args) =
+let translate_cn_let_resource__pred env res_loc sym (cond, pred_loc, res, args) =
   let@ (pname, ptr_expr, iargs, oargs_ty) =
          translate_cn_res_info res_loc pred_loc env res args in
+  let@ permission = match cond with 
+    | None -> 
+       return (IT.bool_ true)
+    | Some c -> 
+       let@ c = translate_cn_expr env c in
+       return (IT.term_of_sterm c)
+  in
   let pt = (RET.P { name = pname
             ; pointer= IT.term_of_sterm ptr_expr
-            ; permission= IT.bool_ true
+            ; permission= permission
             ; iargs = List.map IT.term_of_sterm iargs},
          oargs_ty)
   in
@@ -682,9 +689,9 @@ let translate_cn_let_resource__each env res_loc _sym (q, bt, guard, pred_loc, re
 
 let translate_cn_let_resource env (res_loc, sym, the_res) =
   let@ pt, pointee_values = match the_res with
-    | CN_pred (pred_loc, res, args) ->
+    | CN_pred (pred_loc, cond, res, args) ->
        translate_cn_let_resource__pred env res_loc sym
-         (pred_loc, res, args)
+         (cond, pred_loc, res, args)
     | CN_each (q, bt, guard, pred_loc, res, args) ->
        translate_cn_let_resource__each env res_loc sym
          (q, bt, guard, pred_loc, res, args)  

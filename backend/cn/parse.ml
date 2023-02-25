@@ -101,11 +101,11 @@ let parse_function_spec (Attrs attributes) =
     | (CN_accesses (loc, _)), _ ->
        fail { loc; msg= Generic !^"Please specify 'accesses' before any 'requires' and 'ensures'" }
     | (CN_requires (loc, cond)), (trusted, accs, reqs, [], ex) ->
-       return (trusted, accs, reqs @ [(loc, cond)], [], ex)
+       return (trusted, accs, reqs @ List.map (fun c -> (loc, c)) cond, [], ex)
     | (CN_requires (loc, _)), _ ->
        fail {loc; msg = Generic !^"Please specify 'requires' before any 'ensures'"}
     | (CN_ensures (loc, cond)), (trusted, accs, reqs, enss, ex) ->
-       return (trusted, accs, reqs, enss @ [(loc, cond)], ex)
+       return (trusted, accs, reqs, enss @ List.map (fun c -> (loc, c)) cond, ex)
     | (CN_mk_function (loc, nm)), (trusted, accs, reqs, enss, ex) ->
        return (trusted, accs, reqs, enss, ex @ [(loc, Mucore.Make_Logical_Function nm)])
     )

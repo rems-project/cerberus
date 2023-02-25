@@ -9,6 +9,10 @@ open Location_ocaml
 
 module P = PPrint
 
+let dtree_of_option dtree_f = function
+  | Some x -> Dnode (pp_stmt_ctor "Some", [dtree_f x])
+  | None -> Dleaf (pp_stmt_ctor "None")
+
 
 let string_of_ns = function
   | CN_oarg -> "output argument"
@@ -149,8 +153,10 @@ module MakePp (Conf: PP_CN) = struct
         Dleaf (pp_stmt_ctor "CN_named" ^^^ P.squotes (Conf.pp_ident ident))
 
   let dtree_of_cn_resource = function
-    | CN_pred (_, pred, es) ->
-        Dnode (pp_stmt_ctor "CN_pred", dtree_of_cn_pred pred :: List.map dtree_of_cn_expr es)
+    | CN_pred (_, cond, pred, es) ->
+        Dnode (pp_stmt_ctor "CN_pred", dtree_of_option dtree_of_cn_expr cond 
+                                       :: dtree_of_cn_pred pred 
+                                       :: List.map dtree_of_cn_expr es)
     | CN_each (ident, bTy, e, _, pred, es) ->
         Dnode ( pp_stmt_ctor "CN_each" ^^^ P.squotes (Conf.pp_ident ident) ^^^ P.colon ^^^ pp_base_type bTy
               , List.map dtree_of_cn_expr es )

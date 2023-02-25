@@ -805,7 +805,7 @@ let ownership (loc, (addr_s, ct)) env =
        Sym.fresh_make_uniq ("O_"^obj_name)
     | _ -> assert false
   in
-  let resource = CN_pred (loc, CN_owned (Some ct), [CNExpr (loc, CNExpr_var addr_s)]) in
+  let resource = CN_pred (loc, None, CN_owned (Some ct), [CNExpr (loc, CNExpr_var addr_s)]) in
 
   let@ (pt_ret, oa_bt), lcs, _ = 
     C.translate_cn_let_resource env (loc, name, resource) in

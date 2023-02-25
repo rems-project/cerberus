@@ -4541,9 +4541,16 @@ let desugar_cn_pred = function
       E.return (CN_named sym)
 end
 
+let desugar_maybe desugar_f o =
+  match o with
+  | Just x -> desugar_f x >>= fun x -> E.return (Just x)
+  | Nothing -> E.return Nothing
+  end
+
 let desugar_cn_resource = function
-  | CN_pred loc pred es ->
-      CN_pred loc <$> desugar_cn_pred pred
+  | CN_pred loc cond pred es ->
+      CN_pred loc <$> desugar_maybe desugar_cn_expr cond
+                  <*> desugar_cn_pred pred
                   <*> E.mapM desugar_cn_expr es
   | CN_each ident bTy e loc pred es ->
       E.register_cn_ident CN_vars ident >>= fun sym ->

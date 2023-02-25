@@ -149,7 +149,8 @@ let cn_keywords: (string * Tokens.token) list = [
     "inv"           , CN_INV;
     "accesses"      , CN_ACCESSES;
     "trusted"       , CN_TRUSTED;
-    "cn_function"   , CN_FUNCTION
+    "cn_function"   , CN_FUNCTION;
+    "when"          , CN_WHEN;
   ]
 
 let cn_lexicon: (string, token) Hashtbl.t =

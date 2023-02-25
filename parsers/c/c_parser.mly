@@ -150,7 +150,7 @@ let warn_extra_semicolon pos ctx =
 %token CN_ACCESSES CN_TRUSTED CN_REQUIRES CN_ENSURES CN_INV
 %token CN_PACK CN_UNPACK CN_PACK_STRUCT CN_UNPACK_STRUCT CN_HAVE CN_SHOW CN_INSTANTIATE
 %token CN_BOOL CN_INTEGER CN_REAL CN_POINTER CN_MAP CN_LIST CN_TUPLE CN_SET
-%token CN_LET CN_OWNED CN_BLOCK CN_EACH CN_FUNCTION CN_PREDICATE CN_DATATYPE
+%token CN_WHEN CN_LET CN_OWNED CN_BLOCK CN_EACH CN_FUNCTION CN_PREDICATE CN_DATATYPE
 %token CN_NULL CN_TRUE CN_FALSE
 
 %token EOF
@@ -2196,9 +2196,13 @@ assert_expr:
 | e= expr
     { Cerb_frontend.Cn.CN_assert_exp e }
 
+resource_when_condition:
+| CN_WHEN LPAREN e=expr RPAREN
+    { e }
+
 resource:
-| p= pred es= delimited(LPAREN, separated_list(COMMA, expr), RPAREN)
-    { Cerb_frontend.Cn.CN_pred (Location_ocaml.region $loc(p) NoCursor, p, es) }
+| p= pred es= delimited(LPAREN, separated_list(COMMA, expr), RPAREN) cond=option(resource_when_condition)
+    { Cerb_frontend.Cn.CN_pred (Location_ocaml.region $loc(p) NoCursor, cond, p, es) }
 | CN_EACH LPAREN bTy= base_type str= LNAME VARIABLE SEMICOLON e1= expr RPAREN
        LBRACE p= pred LPAREN es= separated_list(COMMA, expr) RPAREN RBRACE
     { Cerb_frontend.Cn.CN_each ( Symbol.Identifier (Location_ocaml.point $startpos(str), str)
@@ -2246,12 +2250,12 @@ function_spec:
 | CN_ACCESSES accs=separated_list(SEMICOLON, cn_variable) EOF
   { let loc = Location_ocaml.region ($startpos, $endpos) NoCursor in
       Cerb_frontend.Cn.CN_accesses (loc, accs) }
-| CN_REQUIRES c=condition EOF
+| CN_REQUIRES cs=separated_list(SEMICOLON, condition) EOF
   { let loc = Location_ocaml.region ($startpos, $endpos) NoCursor in
-      Cerb_frontend.Cn.CN_requires (loc, c) }
-| CN_ENSURES c=condition EOF
+      Cerb_frontend.Cn.CN_requires (loc, cs) }
+| CN_ENSURES cs=separated_list(SEMICOLON, condition) EOF
   { let loc = Location_ocaml.region ($startpos, $endpos) NoCursor in
-      Cerb_frontend.Cn.CN_ensures (loc, c) }
+      Cerb_frontend.Cn.CN_ensures (loc, cs) }
 | CN_FUNCTION nm=cn_variable EOF
   { let loc = Location_ocaml.region ($startpos, $endpos) NoCursor in
       Cerb_frontend.Cn.CN_mk_function (loc, nm) }
