@@ -112,15 +112,13 @@ let parse_function_spec (Attrs attributes) =
     (Mucore.Checked, [], [], [], []) conditions
 
 let parse_inv_spec (Attrs attributes) =
-  let@ conditions =
-    ListM.concat_mapM (fun attr ->
-        match Option.map Id.s (attr.attr_ns), Id.s (attr.attr_id) with
-        | Some "cerb", "magic" ->
-           ListM.mapM (fun (loc, arg, _) ->
-               parse C_parser.loop_spec (loc, arg)
-             ) attr.attr_args
-        | _ ->
-           return []
-      ) attributes
-  in
-  return (List.map (fun (Cn.CN_inv (_loc, cond)) -> cond) conditions)
+  ListM.concat_mapM (fun attr ->
+      match Option.map Id.s (attr.attr_ns), Id.s (attr.attr_id) with
+      | Some "cerb", "magic" ->
+         ListM.concat_mapM (fun (loc, arg, _) ->
+             let@ (Cn.CN_inv (_loc, conds)) = parse C_parser.loop_spec (loc, arg) in
+             return conds
+           ) attr.attr_args
+      | _ ->
+         return []
+    ) attributes

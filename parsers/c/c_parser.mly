@@ -2265,8 +2265,8 @@ function_spec:
 
 
 loop_spec:
-| CN_INV c=condition EOF
+| CN_INV cs=separated_list(SEMICOLON, condition) EOF
   { let loc = Location_ocaml.region ($startpos, $endpos) NoCursor in
-      Cerb_frontend.Cn.CN_inv (loc, c) }
+      Cerb_frontend.Cn.CN_inv (loc, cs) }
 
 (* END CN *)
