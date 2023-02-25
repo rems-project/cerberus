@@ -151,6 +151,7 @@ let cn_keywords: (string * Tokens.token) list = [
     "trusted"       , CN_TRUSTED;
     "cn_function"   , CN_FUNCTION;
     "when"          , CN_WHEN;
+    "with"          , CN_WITH;
     "unchanged"     , CN_UNCHANGED;
   ]
 

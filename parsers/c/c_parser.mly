@@ -151,7 +151,7 @@ let warn_extra_semicolon pos ctx =
 %token CN_PACK CN_UNPACK CN_PACK_STRUCT CN_UNPACK_STRUCT CN_HAVE CN_SHOW CN_INSTANTIATE
 %token CN_BOOL CN_INTEGER CN_REAL CN_POINTER CN_MAP CN_LIST CN_TUPLE CN_SET
 %token CN_WHEN CN_LET CN_OWNED CN_BLOCK CN_EACH CN_FUNCTION CN_PREDICATE CN_DATATYPE
-%token CN_UNCHANGED
+%token CN_UNCHANGED CN_WITH
 %token CN_NULL CN_TRUE CN_FALSE
 
 %token EOF
@@ -1937,6 +1937,7 @@ unary_expr:
     { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($1)))
                                , CNExpr_unchanged e)) }
 
+
 mul_expr:
 (* TODO *)
 | e= unary_expr
@@ -2002,6 +2003,10 @@ int_range:
             raise (C_lexer.Error (Cparser_unexpected_token "TODO cn integer const"))
     }
 
+member_update:
+| DOT member=cn_variable EQ e=expr
+     { (member, e) } 
+
 expr:
 | e= list_expr
     { e }
@@ -2022,6 +2027,9 @@ expr:
                                ,
                                let sym = Symbol.Identifier (Location_ocaml.point $startpos(str), str) in
                                CNExpr_each (sym, r, e1))) }
+| LBRACE base_value=expr CN_WITH updates=separated_nonempty_list(COMMA, member_update) RBRACE
+    { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($1)))
+                               , CNExpr_memberupdates (base_value, updates))) }
 ;
 
 (* CN predicate definitions **************************************************)

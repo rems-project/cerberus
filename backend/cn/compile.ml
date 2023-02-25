@@ -18,6 +18,8 @@ module SymMap = Map.Make(Sym)
 module STermMap = Map.Make(struct type t = IndexTerms.sterm let compare = Terms.compare SBT.compare end)
 module Y = Map.Make(String)
 
+module StringSet = Set.Make(String)
+
 let start_evaluation_scope = "start"
 
 
@@ -400,6 +402,7 @@ let pp_cnexpr_kind expr_ =
   | CNExpr_value_of_c_variable sym -> parens (typ (!^ "c:var") (Sym.pp sym))
   | CNExpr_list es_ -> !^ "[...]"
   | CNExpr_memberof (e, xs) -> !^ "_." ^^ Id.pp xs
+  | CNExpr_memberupdates (e, _updates) -> !^ "{_ with ...}"
   | CNExpr_binop (bop, x, y) -> !^ "(binop (_, _, _))"
   | CNExpr_sizeof ct -> !^ "(sizeof _)"
   | CNExpr_offsetof (tag, member) -> !^ "(offsetof (_, _))"
@@ -464,6 +467,26 @@ let translate_cn_expr (env: env) expr =
       | CNExpr_memberof (e, xs) ->
          let@ e = self e in
          translate_member_access loc env e xs
+      | CNExpr_memberupdates (e, updates) ->
+         let@ e = self e in
+         let bt = IT.bt e in
+         begin match IT.bt e with
+         | Struct _ -> 
+            let@ expr, _ = 
+              ListM.fold_leftM (fun (expr, already) (id, v) ->
+                  match StringSet.find_opt (Id.s id) already with
+                  | Some _ -> 
+                     fail {loc; msg = Generic !^"Repeated definition of struct fields." }
+                  | None ->
+                     let@ v = self v in
+                     let expr = IT (Struct_op (StructUpdate ((expr, id), v)), bt) in
+                     return (expr, StringSet.add (Id.s id) already)
+                ) (e, StringSet.empty) updates
+            in
+            return expr
+         | _ ->
+            fail {loc; msg = Generic !^"only struct updates supported" }
+         end
       | CNExpr_binop (CN_sub, e1_, (CNExpr (_, CNExpr_cons _) as shape)) ->
           let@ e1 = self e1_ in
           translate_is_shape env loc e1 shape

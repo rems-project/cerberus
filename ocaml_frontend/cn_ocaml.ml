@@ -108,6 +108,15 @@ module MakePp (Conf: PP_CN) = struct
           Dnode (pp_ctor "CNExpr_member",
                 [dtree_of_cn_expr e;
                  Dleaf (pp_identifier z)])
+      | CNExpr_memberupdates (e, updates) ->
+         let updates = 
+           List.map (fun (z,v) -> 
+               let z = Dleaf (pp_identifier z) in
+               let v = dtree_of_cn_expr v in
+               Dnode (pp_ctor "update", [z; v])
+             ) updates
+         in
+         Dnode (pp_ctor "CNExpr_member", dtree_of_cn_expr e :: updates)
       | CNExpr_binop (bop, e1, e2) ->
           Dnode (pp_ctor "CNExpr_binop" ^^^ pp_cn_binop bop, [dtree_of_cn_expr e1; dtree_of_cn_expr e2])
       | CNExpr_sizeof ty ->

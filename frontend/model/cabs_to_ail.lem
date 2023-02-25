@@ -4484,6 +4484,12 @@ let rec desugar_cn_expr (CNExpr loc expr_) =
     | CNExpr_memberof e ident_membr ->
         CNExpr_memberof <$> desugar_cn_expr e
                         <*> (E.return ident_membr)
+    | CNExpr_memberupdates e updates ->
+        CNExpr_memberupdates <$> desugar_cn_expr e
+                            <*> E.mapM (fun (membr, v) -> 
+                                    desugar_cn_expr v >>= fun v ->
+                                    E.return (membr, v)
+                                  ) updates
     | CNExpr_binop bop e1 e2 ->
         CNExpr_binop bop <$> desugar_cn_expr e1
                          <*> desugar_cn_expr e2
