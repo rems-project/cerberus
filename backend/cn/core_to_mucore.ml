@@ -781,7 +781,9 @@ module IT = IndexTerms
 
 (* copying and adjusting variously compile.ml logic *)
 
-let fetch_ail_env_id (ail_env : AilSyntax.identifier_env) loc x =
+type identifier_env = Annot.identifier_env
+
+let fetch_ail_env_id (ail_env : identifier_env) loc x =
   match Pmap.lookup x ail_env with
   | Some (Some (_, sym)) -> return sym
   | Some None -> fail {loc; msg = Generic
@@ -970,8 +972,7 @@ let do_ail_desugar_op desugar_state f =
   match f desugar_state with
     | Exception.Result (x, st2) -> return (x, st2)
     | Exception.Exception (loc, msg) ->
-      fail {loc; msg = Generic (Print.item "desugaring exception"
-          (Print.string (Pp_errors.short_message msg)))}
+      fail {loc; msg = Generic !^(Pp_errors.short_message msg)}
 
 let do_ail_desugar_rdonly desugar_state f =
   let@ (x, _) = do_ail_desugar_op desugar_state f in
@@ -1012,12 +1013,12 @@ let normalise_label (accesses, loop_attributes) (env : C.env) d_st label_name la
      begin match Cerb_frontend.Annot.get_label_annot annots with
      | Some (LAloop_prebody loop_id) ->
         let@ inv = match Pmap.lookup loop_id loop_attributes with
-          | Some (_, attrs) -> Parse.parse_inv_spec attrs 
+          | Some (identifier_env, attrs) -> 
+             let@ inv = Parse.parse_inv_spec attrs in
+             let@ (inv, _) = desugar_conds (Cerb_frontend.Cabs_to_ail_effect.set_cn_c_identifier_env identifier_env d_st) inv in
+             return inv
           | None -> return []
         in
-        (* Print.debug 6 (lazy (Print.string ("normalising loop invs"))); *)
-        (* FIXME: find correct marker and set the appropriate c env *)
-        let@ (inv, _) = desugar_conds d_st inv in
         let@ label_args_and_body =
           make_label_args (fun env ->
               return (n_expr loc label_body)

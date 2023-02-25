@@ -957,13 +957,13 @@ let register_cn_datatype ident mk_cases =
 val record_loop_attribute: Annot.loop_id -> Annot.attributes -> desugM unit
 let record_loop_attribute id attr = 
   State_exception.get >>= fun st ->
-  let env: map Symbol.identifier (maybe Symbol.sym) = Scope_table.to_map Namespace_ordinary (fun ident -> function
+  let env: A.identifier_env = Scope_table.to_map Namespace_ordinary (fun ident -> function
     | Internal sym _ _ ->
-        Just sym
+        Just (Annot.Marker_Local, sym)
     | External ->
         match Map.lookup (ident, Namespace_ordinary) st.registered_external_identifiers with
           | Just (_, (sym, _, _)) ->
-              Just sym
+              Just (Annot.Marker_Global, sym)
           | Nothing ->
               Nothing
         end
@@ -982,11 +982,11 @@ let record_marker () =
   State_exception.get >>= fun st ->
   let env: A.identifier_env = Scope_table.to_map Namespace_ordinary (fun ident -> function
     | Internal sym _ _ ->
-        Just (A.Marker_Local, sym)
+        Just (Annot.Marker_Local, sym)
     | External ->
         match Map.lookup (ident, Namespace_ordinary) st.registered_external_identifiers with
           | Just (_, (sym, _, _)) ->
-              Just (A.Marker_Global, sym)
+              Just (Annot.Marker_Global, sym)
           | Nothing ->
               Nothing
         end
