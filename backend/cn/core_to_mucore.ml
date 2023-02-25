@@ -1069,7 +1069,7 @@ let normalise_fun_map_decl ail_prog env globals d_st (funinfo: mi_funinfo) loop_
          Sym.equal fname ail_prog.function_definitions in
      let ail_env = Pmap.find ail_marker ail_prog.markers_env in
      let d_st = Cerb_frontend.Cabs_to_ail_effect.set_cn_c_identifier_env ail_env d_st in
-     let@ trusted, accesses, requires, ensures = Parse.parse_function_spec attrs in
+     let@ trusted, accesses, requires, ensures, extra = Parse.parse_function_spec attrs in
      Print.debug 6 (lazy (Print.string "parsed spec attrs"));
      let@ accesses = ListM.mapM (desugar_access ail_env globals) accesses in
      let@ (requires, d_st) = desugar_conds d_st (List.map snd requires) in
@@ -1100,7 +1100,7 @@ let normalise_fun_map_decl ail_prog env globals d_st (funinfo: mi_funinfo) loop_
      in
      let ft = at_of_arguments (fun (_body, _labels, rt) -> rt) args_and_body in
      (* Print.debug 6 (lazy (Print.item "normalised function-type" (AT.pp RT.pp ft))); *)
-     return (Some (M_Proc(loc, args_and_body, ft, trusted)))
+     return (Some (M_Proc(loc, args_and_body, ft, trusted), extra))
   | Mi_ProcDecl(loc, ret_bt, bts) -> 
      return None
      (* let@ trusted, accesses, requires, ensures = Parse.parse_function_spec attrs in *)
@@ -1124,9 +1124,15 @@ let normalise_fun_map_decl ail_prog env globals d_st (funinfo: mi_funinfo) loop_
 let normalise_fun_map ail_prog env globals d_st funinfo loop_attributes fmap =
   let@ m1 = PmapM.mapM (normalise_fun_map_decl ail_prog env globals d_st funinfo loop_attributes)
     fmap Sym.compare in
-  return (Pmap.filter_map Sym.compare (fun _ x -> x) m1)
+  let extras = Pmap.bindings_list m1
+    |> List.map (fun (sym, x) -> List.map (fun y -> (sym, y)) (Option.to_list x))
+    |> List.concat
+    |> List.map (fun (sym, (_, xs)) -> List.map (fun y -> (sym, y)) xs)
+    |> List.concat
+  in
+  let funs = Pmap.filter_map Sym.compare (fun _ x -> Option.map fst x) m1 in
+  return (funs, extras)
 
-  
 
 
 
@@ -1209,6 +1215,16 @@ let register_glob env (sym, glob) =
      (* |> C.add_c_var_value sym (IT.sym_ (sym, bt)) *)
      
 
+let convert_c_logical_funs d_st funs extras lfuns =
+  let fun_convs = List.filter_map (function
+    | (sym, (loc, Mucore.Make_Logical_Function id)) -> Some (sym, loc, id)
+  ) extras in
+  let@ named = ListM.mapM (fun (sym, loc, id) ->
+    let@ pred_nm = do_ail_desugar_rdonly d_st
+        (Cabs_to_ail_effect.lookup_cn_function id) in
+    let body = Pmap.find sym funs in
+    return (sym, body, loc, pred_nm)) fun_convs in
+  CLogicalFuns.add_c_fun_defs lfuns named
 
 
 let normalise_file ail_prog file = 
@@ -1229,8 +1245,11 @@ let normalise_file ail_prog file =
   let desugar_state = Cerb_frontend.Cabs_to_ail_effect.further_cn_desugaring_state
         ail_prog.cn_idents ail_prog.translation_tag_definitions in
 
-  let@ funs = normalise_fun_map ail_prog env globs desugar_state
+  let@ (funs, extras) = normalise_fun_map ail_prog env globs desugar_state
         file.mi_funinfo file.mi_loop_attributes file.mi_funs in
+
+  let@ lfuns = convert_c_logical_funs desugar_state funs extras lfuns in
+
   let file = {
       mu_main = file.mi_main;
       mu_tagDefs = tagDefs;

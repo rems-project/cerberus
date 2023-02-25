@@ -318,7 +318,6 @@ let warn_extra_semicolon pos ctx =
 %start<Cerb_frontend.Cabs.translation_unit> translation_unit
 %start function_spec
 %start loop_spec
-%start just_enter_cn
 
 
 %type<Symbol.identifier Cerb_frontend.Cn.cn_base_type> base_type
@@ -332,7 +331,6 @@ let warn_extra_semicolon pos ctx =
 %type<(Symbol.identifier, Cabs.type_name) Cerb_frontend.Cn.cn_condition> condition
 %type<(Cerb_frontend.Symbol.identifier, Cerb_frontend.Cabs.type_name) Cerb_frontend.Cn.cn_function_spec> function_spec
 %type<(Cerb_frontend.Symbol.identifier, Cerb_frontend.Cabs.type_name) Cerb_frontend.Cn.cn_loop_spec> loop_spec
-%type<unit> just_enter_cn
 
 
 
@@ -2254,10 +2252,10 @@ function_spec:
 | CN_ENSURES c=condition EOF
   { let loc = Location_ocaml.region ($startpos, $endpos) NoCursor in
       Cerb_frontend.Cn.CN_ensures (loc, c) }
+| CN_FUNCTION nm=cn_variable EOF
+  { let loc = Location_ocaml.region ($startpos, $endpos) NoCursor in
+      Cerb_frontend.Cn.CN_mk_function (loc, nm) }
 
-just_enter_cn:
-| enter_cn EOF
-  { () }
 
 loop_spec:
 | CN_INV c=condition EOF

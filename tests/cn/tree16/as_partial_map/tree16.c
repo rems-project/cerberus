@@ -86,13 +86,13 @@ void
 mk_arc_end_lemma (int *xs, int i, int len)
 /*@ trusted @*/
 /*@ requires let Xs = each (integer j; (0 <= j) && (j < len))
-    {Owned<typeof(i)>(xs + (j * 4))} @*/
+    {Owned<int>(xs + (j * 4))} @*/
 /*@ requires ((0 <= len) && (0 <= i) && (i <= len)) @*/
 /*@ requires each (integer j; (0 <= j) && (j < len))
     {(0 <= ((Xs.value)[j])) && (((Xs.value)[j]) < (num_nodes ()))} @*/
 /*@ requires i >= len @*/
 /*@ ensures let Xs2 = each (integer j; (0 <= j) && (j < len))
-    {Owned<typeof(i)>(xs + (j * 4))} @*/
+    {Owned<int>(xs + (j * 4))} @*/
 /*@ ensures Xs2.value == {Xs.value}@start @*/
 /*@ ensures (mk_arc(Xs2.value, i, len)) == Arc_End {} @*/
 {}
@@ -101,13 +101,13 @@ void
 mk_arc_step_lemma (int *xs, int i, int len)
 /*@ trusted @*/
 /*@ requires let Xs = each (integer j; (0 <= j) && (j < len))
-    {Owned<typeof(i)>(xs + (j * 4))} @*/
+    {Owned<int>(xs + (j * 4))} @*/
 /*@ requires ((0 <= len) && (0 <= i) && (i <= len)) @*/
 /*@ requires each (integer j; (0 <= j) && (j < len))
     {(0 <= ((Xs.value)[j])) && (((Xs.value)[j]) < (num_nodes ()))} @*/
 /*@ requires i < len @*/
 /*@ ensures let Xs2 = each (integer j; (0 <= j) && (j < len))
-    {Owned<typeof(i)>(xs + (j * 4))} @*/
+    {Owned<int>(xs + (j * 4))} @*/
 /*@ ensures Xs2.value == {Xs.value}@start @*/
 /*@ ensures (mk_arc(Xs2.value, i, len)) ==
     Arc_Step {i = Xs2.value[i], tail = mk_arc(Xs2.value, i + 1, len)} @*/
@@ -117,12 +117,12 @@ void
 empty_lemma (int *path, int i, int path_len)
 /*@ trusted @*/
 /*@ requires let Xs = each (integer j; (0 <= j) && (j < path_len))
-    {Owned<typeof(i)>(path + (j * 4))} @*/
+    {Owned<int>(path + (j * 4))} @*/
 /*@ requires ((0 <= path_len) && (0 <= i) && (i <= path_len)) @*/
 /*@ requires each (integer j; (0 <= j) && (j < path_len))
     {(0 <= ((Xs.value)[j])) && (((Xs.value)[j]) < (num_nodes ()))} @*/
 /*@ ensures let Xs2 = each (integer j; (0 <= j) && (j < path_len))
-    {Owned<typeof(i)>(path + (j * 4))} @*/
+    {Owned<int>(path + (j * 4))} @*/
 /*@ ensures Xs2.value == {Xs.value}@start @*/
 /*@ ensures ((empty ())[mk_arc(Xs2.value, i, path_len)]) == Node_None {} @*/
 {
@@ -145,7 +145,7 @@ construct_step_lemma (tree t, int *path, int i, int path_len, int idx)
 /*@ trusted @*/
 /*@ requires let T = Tree(t) @*/
 /*@ requires let Xs = each (integer j; (0 <= j) && (j < path_len))
-    {Owned<typeof(i)>(path + (j * 4))} @*/
+    {Owned<int>(path + (j * 4))} @*/
 /*@ requires ((0 <= path_len) && (0 <= i) && (i <= path_len)) @*/
 /*@ requires each (integer j; (0 <= j) && (j < path_len))
     {(0 <= ((Xs.value)[j])) && (((Xs.value)[j]) < (num_nodes ()))} @*/
@@ -155,7 +155,7 @@ construct_step_lemma (tree t, int *path, int i, int path_len, int idx)
 /*@ ensures T2.v == {T.v}@start @*/
 /*@ ensures T2.ns == {T.ns}@start @*/
 /*@ ensures let Xs2 = each (integer j; (0 <= j) && (j < path_len))
-    {Owned<typeof(i)>(path + (j * 4))} @*/
+    {Owned<int>(path + (j * 4))} @*/
 /*@ ensures Xs2.value == {Xs.value}@start @*/
 /*@ ensures ((construct (T2.v, T2.ns))[Arc_Step
         {i = idx, tail = mk_arc(Xs2.value, i + 1, path_len)}]) ==
@@ -170,7 +170,7 @@ int
 lookup_rec (tree t, int *path, int i, int path_len, int *v)
 /*@ requires let T = Tree(t) @*/
 /*@ requires let Xs = each (integer j; (0 <= j) && (j < path_len))
-    {Owned<typeof(i)>(path + (j * 4))} @*/
+    {Owned<int>(path + (j * 4))} @*/
 /*@ requires ((0 <= path_len) && (0 <= i) && (i <= path_len)) @*/
 /*@ requires each (integer j; (0 <= j) && (j < path_len))
     {(0 <= ((Xs.value)[j])) && (((Xs.value)[j]) < (num_nodes ()))} @*/
@@ -178,7 +178,7 @@ lookup_rec (tree t, int *path, int i, int path_len, int *v)
 /*@ ensures let T2 = Tree(t) @*/
 /*@ ensures T2.t == {T.t}@start @*/
 /*@ ensures let Xs2 = each (integer j; (0 <= j) && (j < path_len))
-    {Owned<typeof(i)>(path + (j * 4))} @*/
+    {Owned<int>(path + (j * 4))} @*/
 /*@ ensures Xs2.value == {Xs.value}@start @*/
 /*@ ensures let V2 = Owned(v) @*/
 /*@ ensures ((return == 0) && ((T2.t[mk_arc(Xs2.value, i, path_len)]) == Node_None {}))
