@@ -4526,6 +4526,9 @@ let rec desugar_cn_expr (CNExpr loc expr_) =
     | CNExpr_unchanged e ->
        desugar_cn_expr e >>= fun e ->
        E.return (CNExpr_unchanged e)
+    | CNExpr_at_env e envname ->
+       desugar_cn_expr e >>= fun e ->
+       E.return (CNExpr_at_env e envname)
   end >>= fun ret ->
   E.return (CNExpr loc ret)
 

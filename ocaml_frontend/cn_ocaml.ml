@@ -88,7 +88,7 @@ module MakePp (Conf: PP_CN) = struct
     | CN_and -> P.ampersand ^^ P.ampersand
     | CN_map_get -> P.string "CN_map_get"
     | CN_is_shape -> P.string "??"
-    | CN_at_env -> P.string "%"
+
   
   let rec dtree_of_cn_expr (CNExpr (_, expr_)) =
     match expr_ with
@@ -142,6 +142,8 @@ module MakePp (Conf: PP_CN) = struct
           Dleaf (pp_ctor "CNExpr_value_of_c_variable" ^^^ Conf.pp_ident ident)
       | CNExpr_unchanged e ->
           Dnode (pp_ctor "CNExpr_unchanged", [dtree_of_cn_expr e])
+      | CNExpr_at_env (e, env_name) ->
+          Dnode (pp_ctor "CNExpr_at_env", [dtree_of_cn_expr e; Dleaf !^"env_name"])
         
 
   let dtree_of_cn_pred = function

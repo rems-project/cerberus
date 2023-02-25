@@ -18,13 +18,7 @@ module SymMap = Map.Make(Sym)
 module STermMap = Map.Make(struct type t = IndexTerms.sterm let compare = Terms.compare SBT.compare end)
 module Y = Map.Make(String)
 
-module EvaluationScope = struct
-  type t = 
-    | ES_Start
-  [@@deriving eq, ord]
-end
-open EvaluationScope
-module EvaluationScopeMap = Map.Make(EvaluationScope)
+let start_evaluation_scope = "start"
 
 
 
@@ -71,7 +65,7 @@ type env = {
   func_names: Sym.t Y.t;
   functions: function_sig SymMap.t;
   state: state_env;
-  old_states: state_env EvaluationScopeMap.t;
+  old_states: state_env Y.t;
   datatypes : (BaseTypes.datatype_info * Sym.t Y.t) SymMap.t;
   datatype_constrs : BaseTypes.constr_info SymMap.t;
   tagDefs: Mucore.mu_tag_definitions;
@@ -90,7 +84,7 @@ let empty tagDefs =
     func_names = Y.empty; 
     functions = SymMap.empty; 
     state= empty_state;
-    old_states = EvaluationScopeMap.empty;
+    old_states = Y.empty;
     datatypes = SymMap.empty; 
     datatype_constrs = SymMap.empty;
     tagDefs; 
@@ -122,7 +116,7 @@ let add_predicate sym pred_sig env =
 
 let make_state_old env old_name = 
   { env with state = empty_state;
-             old_states = EvaluationScopeMap.add old_name env.state env.old_states }
+             old_states = Y.add old_name env.state env.old_states }
 
 let add_c_variable_state c_sym cvs env =
   { env with state = { env.state with c_variable_state= SymMap.add c_sym cvs env.state.c_variable_state }}
@@ -179,6 +173,9 @@ let lookup_resource_for_pointer loc e env =
      in
      fail {loc; msg}
 *)
+
+
+
 
 let lookup_struct sym env =
   match Pmap.lookup sym env.tagDefs with
@@ -413,6 +410,7 @@ let pp_cnexpr_kind expr_ =
   | CNExpr_ite (e1, e2, e3) -> !^ "(if ... then ...)"
   | CNExpr_good (ty, e) -> !^ "(good (_, _))"
   | CNExpr_unchanged e -> !^"(unchanged (_))"
+  | CNExpr_at_env (e, es) -> !^"{_}@_"
 
 
 let translate_cn_expr (env: env) expr =
@@ -469,14 +467,6 @@ let translate_cn_expr (env: env) expr =
       | CNExpr_binop (CN_sub, e1_, (CNExpr (_, CNExpr_cons _) as shape)) ->
           let@ e1 = self e1_ in
           translate_is_shape env loc e1 shape
-      | CNExpr_binop (CN_at_env, e1_, e2_) ->
-          let@ e2 = self e2_ in
-          let@ () = match IT.is_bool e2 with
-            | Some true -> return ()
-            | _ -> fail {loc; msg = Generic (!^"hack for {_}@start: not start:" ^^^ IT.pp e2)}
-          in
-          Pp.warn loc (!^ "use of legacy {_}@start syntax");
-          self e1_
       | CNExpr_binop (bop, e1_, e2_) ->
           let@ e1 = self e1_ in
           let@ e2 = self e2_ in
@@ -544,7 +534,7 @@ let translate_cn_expr (env: env) expr =
          let@ e = trans env e in
          return (IT (CT_pred (Good (scty, e)), SBT.Bool))
       | CNExpr_unchanged e->
-         begin match EvaluationScopeMap.find_opt ES_Start env.old_states with
+         begin match Y.find_opt start_evaluation_scope env.old_states with
          | None -> 
             let msg = 
               !^"Cannot use 'unchanged' here." 
@@ -556,6 +546,13 @@ let translate_cn_expr (env: env) expr =
             let@ old_e = trans { env with state = start_state } e in
             mk_translate_binop loc CN_equal (cur_e, old_e)
          end
+      | CNExpr_at_env (e, evaluation_scope) ->
+         let@ old_state = match Y.find_opt evaluation_scope env.old_states with
+           | Some old_state -> return old_state
+           | None -> fail { loc; msg = Generic !^("Unknown evaluation scope '"^evaluation_scope^"'.") }
+         in
+         trans { env with state = old_state } e
+         
   in trans env expr
 
 
