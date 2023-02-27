@@ -138,6 +138,7 @@ let cn_keywords: (string * Tokens.token) list = [
     "tuple"         , CN_TUPLE;
     "set"           , CN_SET;
     "let"           , CN_LET;
+    "take"          , CN_TAKE;
     "Owned"         , CN_OWNED;
     "Block"         , CN_BLOCK;
     "each"          , CN_EACH;

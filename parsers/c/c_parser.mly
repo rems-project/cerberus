@@ -150,7 +150,7 @@ let warn_extra_semicolon pos ctx =
 %token CN_ACCESSES CN_TRUSTED CN_REQUIRES CN_ENSURES CN_INV
 %token CN_PACK CN_UNPACK CN_PACK_STRUCT CN_UNPACK_STRUCT CN_HAVE CN_SHOW CN_INSTANTIATE
 %token CN_BOOL CN_INTEGER CN_REAL CN_POINTER CN_MAP CN_LIST CN_TUPLE CN_SET
-%token CN_WHEN CN_LET CN_OWNED CN_BLOCK CN_EACH CN_FUNCTION CN_PREDICATE CN_DATATYPE
+%token CN_WHEN CN_LET CN_TAKE CN_OWNED CN_BLOCK CN_EACH CN_FUNCTION CN_PREDICATE CN_DATATYPE
 %token CN_UNCHANGED CN_WITH
 %token CN_NULL CN_TRUE CN_FALSE
 
@@ -2200,7 +2200,7 @@ cn_func_body_case:
 
 
 clause:
-| CN_LET str= UNAME VARIABLE EQ res= resource SEMICOLON c= clause
+| CN_TAKE str= UNAME VARIABLE EQ res= resource SEMICOLON c= clause
     { let loc = Location_ocaml.point $startpos(str) in
       Cerb_frontend.Cn.CN_letResource (loc, Symbol.Identifier (loc, str), res, c) }
 | CN_LET str= LNAME VARIABLE EQ e= expr SEMICOLON c= clause
@@ -2257,7 +2257,7 @@ ctype:
 
 /* copying 'clause' and adjusting */
 condition:
-| CN_LET str= UNAME VARIABLE EQ res= resource
+| CN_TAKE str= UNAME VARIABLE EQ res= resource
     { let loc = Location_ocaml.point $startpos(str) in
       Cerb_frontend.Cn.CN_cletResource (loc, Symbol.Identifier (loc, str), res) }
 | CN_LET str= LNAME VARIABLE EQ e= expr 

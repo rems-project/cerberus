@@ -155,6 +155,7 @@ type token =
   | CN_TUPLE
   | CN_SET
   | CN_LET
+  | CN_TAKE
   | CN_OWNED
   | CN_BLOCK
   | CN_EACH
@@ -305,6 +306,7 @@ let string_of_token = function
   | CN_TUPLE -> "CN_TUPLE"
   | CN_SET -> "CN_SET"
   | CN_LET -> "CN_LET"
+  | CN_TAKE -> "CN_TAKE"
   | CN_OWNED -> "CN_OWNED"
   | CN_BLOCK -> "CN_BLOCK"
   | CN_EACH -> "CN_EACH"
