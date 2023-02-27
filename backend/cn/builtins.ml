@@ -23,6 +23,11 @@ let mk_arg3_err mk loc = function
 let mk_arg3 mk = mk_arg3_err (fun loc tup -> return (mk tup))
 
 
+let mk_arg5 mk loc = function
+  | [a;b;c;d;e] -> return (mk (a,b,c,d,e))
+  | xs -> fail {loc; msg = Number_arguments {has = List.length xs; expect = 5}}
+
+
 let mul_uf_def = (Sym.fresh_named "mul_uf", mk_arg2 mul_no_smt_)
 let div_uf_def = (Sym.fresh_named "div_uf", mk_arg2 div_no_smt_)
 let power_uf_def = (Sym.fresh_named "power_uf", mk_arg2 exp_no_smt_)
@@ -45,6 +50,18 @@ let array_to_list_def =
     | Some (_, bt) -> return (array_to_list_ (arr, i, len) bt)
   ))
 
+let cellpointer_def =
+  (Sym.fresh_named "cellPointer", 
+   mk_arg5 (fun (base, step, starti, endi, p) ->
+       let base = IT.term_of_sterm base in
+       let step = IT.term_of_sterm step in
+       let starti = IT.term_of_sterm starti in
+       let endi = IT.term_of_sterm endi in
+       let p = IT.term_of_sterm p in
+       IT.sterm_of_term (IT.cellPointer_ ~base ~step ~starti ~endi ~p)
+     )
+  )
+
 let builtin_funs = 
   List.map (fun (s, mk) -> (Sym.pp_string s, mk)) [
       mul_uf_def;
@@ -62,6 +79,8 @@ let builtin_funs =
 
       nth_list_def;
       array_to_list_def;
+
+      cellpointer_def;
     ]
 
 let apply_builtin_funs loc nm args =
