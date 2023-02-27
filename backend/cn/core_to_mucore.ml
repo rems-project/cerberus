@@ -4,6 +4,8 @@ open Lem_pervasives
 open Ctype
 open Milicore
 module CF = Cerb_frontend
+module CA = Cabs_to_ail
+module CAE = Cabs_to_ail_effect
 
 
 module Pmap = struct
@@ -784,23 +786,7 @@ module IT = IndexTerms
 
 type identifier_env = Annot.identifier_env
 
-let fetch_ail_env_id (ail_env : identifier_env) loc x =
-  match Pmap.lookup x ail_env with
-  | Some (Some (_, sym)) -> return sym
-  | Some None -> fail {loc; msg = Generic
-    (Print.item "C identifier has null details" (Id.pp x))}
-  | None -> fail {loc; msg = Generic
-    (Print.item "C identifier unknown" (Id.pp x))}
 
-let desugar_access ail_env globs (loc, id) =
-  let@ s = fetch_ail_env_id ail_env loc id in
-  let@ ct = match List.assoc_opt Sym.equal s globs with
-    | Some (M_GlobalDef ((_, ct), _)) -> return ct
-    | Some (M_GlobalDecl ((_, ct))) -> return ct
-    | None -> fail {loc; msg = Generic (Sym.pp s ^^^ !^"is not a global") }
-  in
-  let ct = Sctypes.to_ctype ct in
-  return (loc, (s, ct))
 
 let ownership (loc, (addr_s, ct)) env =
   let name = match Sym.description addr_s with
@@ -980,22 +966,45 @@ let do_ail_desugar_rdonly desugar_state f =
   return x
 
 let register_new_cn_local id d_st =
-  do_ail_desugar_op d_st (Cabs_to_ail.register_additional_cn_var id)
+  do_ail_desugar_op d_st (CA.register_additional_cn_var id)
+
+
+let desugar_access d_st globs (loc, id) =
+  let@ (s, var_kind) = do_ail_desugar_rdonly d_st (CAE.liftCnDesug (CF.Cn_desugaring.resolve_cn_ident CN_vars id)) in
+  let@ () = match var_kind with
+    | Var_kind_c -> return ()
+    | Var_kind_cn ->
+       let msg = 
+         !^"The name" ^^^ squotes (Id.pp id) 
+         ^^^ !^"is not bound to a C global variable." 
+         ^^^ !^"Perhaps it has been shadowed by a CN variable?" 
+       in
+       fail {loc; msg = Generic msg}
+  in
+  let@ ct = match List.assoc_opt Sym.equal s globs with
+    | Some (M_GlobalDef ((_, ct), _)) -> return ct
+    | Some (M_GlobalDecl ((_, ct))) -> return ct
+    | None -> fail {loc; msg = Generic (Sym.pp s ^^^ !^"is not a global") }
+  in
+  let ct = Sctypes.to_ctype ct in
+  return (loc, (s, ct))
+
+
 
 let desugar_cond d_st = function
   | Cn.CN_cletResource (loc, id, res) ->
     Print.debug 6 (lazy (Print.typ (Print.string "desugaring a let-resource at") (Locations.pp loc)));
-    let@ res = do_ail_desugar_rdonly d_st (Cabs_to_ail.desugar_cn_resource res) in
+    let@ res = do_ail_desugar_rdonly d_st (CA.desugar_cn_resource res) in
     let@ (sym, d_st) = register_new_cn_local id d_st in
     return (Cn.CN_cletResource (loc, sym, res), d_st)
   | Cn.CN_cletExpr (loc, id, expr) ->
     Print.debug 6 (lazy (Print.typ (Print.string "desugaring a let-expr at") (Locations.pp loc)));
-    let@ expr = do_ail_desugar_rdonly d_st (Cabs_to_ail.desugar_cn_expr expr) in
+    let@ expr = do_ail_desugar_rdonly d_st (CA.desugar_cn_expr expr) in
     let@ (sym, d_st) = register_new_cn_local id d_st in
     return (Cn.CN_cletExpr (loc, sym, expr), d_st)
   | Cn.CN_cconstr (loc, constr) ->
     Print.debug 6 (lazy (Print.typ (Print.string "desugaring a constraint at") (Locations.pp loc)));
-    let@ constr = do_ail_desugar_rdonly d_st (Cabs_to_ail.desugar_cn_assertion constr) in
+    let@ constr = do_ail_desugar_rdonly d_st (CA.desugar_cn_assertion constr) in
     return (Cn.CN_cconstr (loc, constr), d_st)
 
 let desugar_conds d_st conds =
@@ -1006,7 +1015,8 @@ let desugar_conds d_st conds =
 
 
 
-let normalise_label (accesses, loop_attributes) (env : C.env) d_st label_name label =
+let normalise_label (markers_env, precondition_cn_desugaring_state) 
+      (accesses, loop_attributes) (env : C.env) label_name label =
   match label with
   | Mi_Return loc -> 
      return (M_Return loc)
@@ -1014,9 +1024,14 @@ let normalise_label (accesses, loop_attributes) (env : C.env) d_st label_name la
      begin match CF.Annot.get_label_annot annots with
      | Some (LAloop_prebody loop_id) ->
         let@ inv = match Pmap.lookup loop_id loop_attributes with
-          | Some (identifier_env, attrs) -> 
+          | Some (marker_id, attrs) -> 
              let@ inv = Parse.parse_inv_spec attrs in
-             let@ (inv, _) = desugar_conds (CF.Cabs_to_ail_effect.set_cn_c_identifier_env identifier_env d_st) inv in
+             let d_st = CAE.{ 
+                 markers_env2 = markers_env;
+                 inner = { (Pmap.find marker_id markers_env) with cn_state = precondition_cn_desugaring_state };
+               }
+             in
+             let@ (inv, _) = desugar_conds d_st inv in
              return inv
           | None -> return []
         in
@@ -1057,7 +1072,7 @@ let normalise_label (accesses, loop_attributes) (env : C.env) d_st label_name la
 
 
 
-let normalise_fun_map_decl ail_prog env globals d_st (funinfo: mi_funinfo) loop_attributes fname decl =
+let normalise_fun_map_decl (markers_env, ail_prog) env globals (funinfo: mi_funinfo) loop_attributes fname decl =
   match Pmap.lookup fname funinfo with
   | None -> return None
   | Some (loc, attrs, ret_ct, arg_cts, variadic, _) ->
@@ -1069,20 +1084,29 @@ let normalise_fun_map_decl ail_prog env globals d_st (funinfo: mi_funinfo) loop_
      Print.debug 2 (lazy (Print.item ("normalising procedure") (Sym.pp fname)));
      let (_, ail_marker, _, ail_args, _) = List.assoc
          Sym.equal fname ail_prog.function_definitions in
-     let ail_env = Pmap.find ail_marker ail_prog.markers_env in
-     let d_st = CF.Cabs_to_ail_effect.set_cn_c_identifier_env ail_env d_st in
-     (* copying from `under_scope` in Cabs_to_ail_effect *)
-     let d_st = CF.Cabs_to_ail_effect.(create_new_scope Scope_function d_st) in
-     let@ trusted, accesses, requires, ensures, extra = Parse.parse_function_spec attrs in
+     (* let ail_env = Pmap.find ail_marker ail_prog.markers_env in *)
+     (* let d_st = CAE.set_cn_c_identifier_env ail_env d_st in *)
+     let d_st = 
+       CAE.{ inner = Pmap.find ail_marker markers_env;
+                            markers_env2 = markers_env }
+     in
+     let@ trusted, accesses, requires, ensures, mk_functions = Parse.parse_function_spec attrs in
      Print.debug 6 (lazy (Print.string "parsed spec attrs"));
-     let@ accesses = ListM.mapM (desugar_access ail_env globals) accesses in
+     let@ mk_functions =
+       ListM.mapM (fun (loc, Make_Logical_Function id) ->
+           (* from Thomas's convert_c_logical_funs *)
+           let@ logical_fun_sym = do_ail_desugar_rdonly d_st (CAE.lookup_cn_function id) in
+           return (loc, logical_fun_sym)
+         ) mk_functions
+     in
+     let@ accesses = ListM.mapM (desugar_access d_st globals) accesses in
      let@ (requires, d_st) = desugar_conds d_st (List.map snd requires) in
      Print.debug 6 (lazy (Print.string "desugared requires conds"));
      let@ (ret_s, ret_d_st) = register_new_cn_local (Id.id "return") d_st in
      assertl loc (BT.equal (convert_bt loc ret_bt) 
                     (BT.of_sct (convert_ct loc ret_ct))) 
        !^"function return type mismatch";
-     let@ (ensures, _) = desugar_conds ret_d_st (List.map snd ensures) in
+     let@ (ensures, ret_d_st) = desugar_conds ret_d_st (List.map snd ensures) in
      Print.debug 6 (lazy (Print.string "desugared ensures conds"));
      let@ args_and_body = 
        make_function_args (fun arg_states env ->
@@ -1093,7 +1117,8 @@ let normalise_fun_map_decl ail_prog env globals d_st (funinfo: mi_funinfo) loop_
                (ret_s, ret_ct) (accesses, ensures) 
            in
            let@ labels = 
-             PmapM.mapM (normalise_label (accesses, loop_attributes) env d_st)
+             PmapM.mapM (normalise_label (markers_env,CAE.(d_st.inner.cn_state)) 
+                           (accesses, loop_attributes) env)
                labels Sym.compare in
            return (body, labels, returned)
          ) 
@@ -1103,8 +1128,8 @@ let normalise_fun_map_decl ail_prog env globals d_st (funinfo: mi_funinfo) loop_
          (accesses, requires)
      in
      let ft = at_of_arguments (fun (_body, _labels, rt) -> rt) args_and_body in
-     (* Print.debug 6 (lazy (Print.item "normalised function-type" (AT.pp RT.pp ft))); *)
-     return (Some (M_Proc(loc, args_and_body, ft, trusted), extra))
+     
+     return (Some (M_Proc(loc, args_and_body, ft, trusted), mk_functions))
   | Mi_ProcDecl(loc, ret_bt, bts) -> 
      return None
      (* let@ trusted, accesses, requires, ensures = Parse.parse_function_spec attrs in *)
@@ -1125,17 +1150,21 @@ let normalise_fun_map_decl ail_prog env globals d_st (funinfo: mi_funinfo) loop_
      assert false
      (* M_BuiltinDecl(loc, convert_bt loc bt, List.map (convert_bt loc) bts) *)
 
-let normalise_fun_map ail_prog env globals d_st funinfo loop_attributes fmap =
-  let@ m1 = PmapM.mapM (normalise_fun_map_decl ail_prog env globals d_st funinfo loop_attributes)
-    fmap Sym.compare in
-  let extras = Pmap.bindings_list m1
-    |> List.map (fun (sym, x) -> List.map (fun y -> (sym, y)) (Option.to_list x))
-    |> List.concat
-    |> List.map (fun (sym, (_, xs)) -> List.map (fun y -> (sym, y)) xs)
-    |> List.concat
-  in
-  let funs = Pmap.filter_map Sym.compare (fun _ x -> Option.map fst x) m1 in
-  return (funs, extras)
+let normalise_fun_map (markers_env, ail_prog) env globals funinfo loop_attributes fmap =
+  PmapM.foldM (fun fsym fdecl (fmap, mk_functions) ->
+      let@ r = normalise_fun_map_decl (markers_env, ail_prog) env globals funinfo loop_attributes fsym fdecl in
+      match r with
+      | Some (fdecl, more_mk_functions) ->
+         let mk_functions' = 
+           List.map (fun (loc, lsym) -> 
+               (fsym, fdecl, loc, lsym)
+             ) more_mk_functions
+         in
+         return (Pmap.add fsym fdecl fmap, mk_functions' @ mk_functions)
+      | None ->
+         return (fmap, mk_functions)
+    )
+    fmap (Pmap.empty Sym.compare, [])
 
 
 
@@ -1219,19 +1248,10 @@ let register_glob env (sym, glob) =
      (* |> C.add_c_var_value sym (IT.sym_ (sym, bt)) *)
      
 
-let convert_c_logical_funs d_st funs extras lfuns =
-  let fun_convs = List.filter_map (function
-    | (sym, (loc, Mucore.Make_Logical_Function id)) -> Some (sym, loc, id)
-  ) extras in
-  let@ named = ListM.mapM (fun (sym, loc, id) ->
-    let@ pred_nm = do_ail_desugar_rdonly d_st
-        (Cabs_to_ail_effect.lookup_cn_function id) in
-    let body = Pmap.find sym funs in
-    return (sym, body, loc, pred_nm)) fun_convs in
-  CLogicalFuns.add_c_fun_defs lfuns named
 
 
-let normalise_file ail_prog file = 
+
+let normalise_file (markers_env, ail_prog) file = 
 
   let tagDefs = normalise_tag_definitions file.mi_tagDefs in
 
@@ -1246,13 +1266,15 @@ let normalise_file ail_prog file =
 
   let env = List.fold_left register_glob env globs in
 
-  let desugar_state = CF.Cabs_to_ail_effect.further_cn_desugaring_state
-        ail_prog.cn_idents ail_prog.translation_tag_definitions in
+  (* let desugar_state = CAE.further_cn_desugaring_state *)
+  (*       ail_prog.cn_idents ail_prog.translation_tag_definitions in *)
 
-  let@ (funs, extras) = normalise_fun_map ail_prog env globs desugar_state
-        file.mi_funinfo file.mi_loop_attributes file.mi_funs in
+  let@ (funs, mk_functions) = 
+    normalise_fun_map (markers_env, ail_prog) env globs 
+      file.mi_funinfo file.mi_loop_attributes file.mi_funs 
+  in
 
-  let@ lfuns = convert_c_logical_funs desugar_state funs extras lfuns in
+  let@ lfuns = CLogicalFuns.add_c_fun_defs lfuns mk_functions in
 
   let file = {
       mu_main = file.mi_main;

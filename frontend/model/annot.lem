@@ -79,7 +79,7 @@ type identifier_item_kind =
 type identifier_env =
   map Symbol.identifier (maybe (identifier_item_kind * Symbol.sym))
 
-type loop_attributes = map loop_id (identifier_env * attributes)
+type loop_attributes = map loop_id (nat * attributes) (* nat is marker id *)
 
 val     get_loc: list annot -> maybe Loc.t
 let rec get_loc annots =

@@ -997,26 +997,7 @@ let register_cn_datatype ident mk_cases =
 (* END CN *)
 
 
-val record_loop_attribute: Annot.loop_id -> Annot.attributes -> desugM unit
-let record_loop_attribute id attr = 
-  get_inner >>= fun st ->
-  let env: A.identifier_env = Scope_table.to_map Namespace_ordinary (fun ident -> function
-    | Internal sym _ _ ->
-        Just (Annot.Marker_Local, sym)
-    | External ->
-        match Map.lookup (ident, Namespace_ordinary) st.registered_external_identifiers with
-          | Just (_, (sym, _, _)) ->
-              Just (Annot.Marker_Global, sym)
-          | Nothing ->
-              Nothing
-        end
-  end) st.registered_identifiers in
-  put_inner <|st with loop_attributes = (Map.insert id (env, attr) st.loop_attributes) |>
 
-val get_loop_attributes: unit -> desugM Annot.loop_attributes
-let get_loop_attributes () = 
-  get_inner >>= fun st ->
-  State_exception.return st.loop_attributes
 
 
 val record_marker: unit -> desugM nat
@@ -1041,6 +1022,19 @@ let record_marker () =
     State_exception.return ()
   end >>= fun () ->
   State_exception.return id
+
+
+
+val record_loop_attribute: Annot.loop_id -> Annot.attributes -> desugM unit
+let record_loop_attribute id attr = 
+  record_marker () >>= fun marker_id ->
+  get_inner >>= fun st ->
+  put_inner <|st with loop_attributes = (Map.insert id (marker_id, attr) st.loop_attributes) |>
+
+val get_loop_attributes: unit -> desugM Annot.loop_attributes
+let get_loop_attributes () = 
+  get_inner >>= fun st ->
+  State_exception.return st.loop_attributes
 
 
 

@@ -63,7 +63,7 @@ let frontend incl_dirs astprints filename state_file =
   let@ stdlib = load_core_stdlib () in
   let@ impl = load_core_impl stdlib impl_name in
   let@ (_, ail_prog_opt, prog0) = c_frontend (conf incl_dirs astprints, io) (stdlib, impl) ~filename in
-  let _, (_, ail_prog) = Option.get ail_prog_opt in
+  let markers_env, (_, ail_prog) = Option.get ail_prog_opt in
   Tags.set_tagDefs prog0.Core.tagDefs;
   let prog1 = Remove_unspecs.rewrite_file prog0 in
   let prog2 = Core_peval.rewrite_file prog1 in
@@ -73,7 +73,7 @@ let frontend incl_dirs astprints filename state_file =
   print_log_file ("original", CORE prog0);
   print_log_file ("without_unspec", CORE prog1);
   print_log_file ("after_peval", CORE prog2);
-  return (prog4, ail_prog, statement_locs)
+  return (prog4, (markers_env, ail_prog), statement_locs)
 
 
 let handle_frontend_error = function
@@ -131,7 +131,7 @@ let main
   Check.only := only;
   Diagnostics.diag_string := diag;
   check_input_file filename;
-  let (prog4, ail_prog, statement_locs) = 
+  let (prog4, (markers_env, ail_prog), statement_locs) = 
     handle_frontend_error 
       (frontend incl_dirs astprints filename state_file)
   in
@@ -144,7 +144,7 @@ let main
   try begin
       let result = 
         let open Resultat in
-         let@ prog5 = Core_to_mucore.normalise_file ail_prog prog4 in
+         let@ prog5 = Core_to_mucore.normalise_file (markers_env, ail_prog) prog4 in
          print_log_file ("mucore", MUCORE prog5);
          Typing.run Context.empty (Check.check prog5 statement_locs lemmata)
        in
