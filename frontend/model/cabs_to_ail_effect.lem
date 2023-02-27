@@ -1002,8 +1002,8 @@ val record_marker: unit -> desugM nat
 let record_marker () =
   let id = Symbol.fresh_int () in
   begin if Global.backend_name () = "Cn" then
-    get_inner >>= fun st ->
-    State_exception.update (fun st -> <| st with markers_env2= Map.insert id st.inner st.markers_env2 |>)
+    get_inner >>= fun inner ->
+    State_exception.update (fun old_state -> <| old_state with markers_env2= Map.insert id inner old_state.markers_env2 |>)
   else
     State_exception.return ()
   end >>= fun () ->
