@@ -2201,7 +2201,6 @@ let annotate_sigma sigm =
     extern_idmap= sigm.extern_idmap;
     typedef_attributes= sigm.typedef_attributes;
     loop_attributes= sigm.loop_attributes;
-    markers_env= sigm.markers_env;
     cn_predicates=  sigm.cn_predicates;
     cn_functions=  sigm.cn_functions;
     cn_datatypes=  sigm.cn_datatypes;
