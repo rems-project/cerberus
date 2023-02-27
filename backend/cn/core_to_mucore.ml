@@ -970,7 +970,7 @@ let register_new_cn_local id d_st =
 
 
 let desugar_access d_st globs (loc, id) =
-  let@ (s, var_kind) = do_ail_desugar_rdonly d_st (CAE.liftCnDesug (CF.Cn_desugaring.resolve_cn_ident CN_vars id)) in
+  let@ (s, var_kind) = do_ail_desugar_rdonly d_st (CAE.resolve_cn_ident CN_vars id) in
   let@ () = match var_kind with
     | Var_kind_c -> return ()
     | Var_kind_cn ->

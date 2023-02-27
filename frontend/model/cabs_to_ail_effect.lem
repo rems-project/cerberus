@@ -9,7 +9,7 @@ import Map_extra Ctype
 
 import Mem Implementation
 
-import Cn_desugaring
+open import Cn_desugaring Cn
 
 module A      = AilSyntax
 
@@ -572,19 +572,19 @@ let initial_state core_eval_stuff = <|
   markers_env2= Map.empty;
 |>
 
-val further_cn_desugaring_state:
-  (map (Cn.cn_namespace * Symbol.identifier) Symbol.sym) ->
-  (map A.ail_identifier tag_definition) -> state_with_markers
-let further_cn_desugaring_state idents tags =
-  let init_st = initial_state (Map.empty, Map.empty, Map.empty) in
-  let cn_state = Cn_desugaring.state_with_idents idents in
-  <| init_st with inner= <| init_st.inner with tag_definitions = tags; cn_state = cn_state |> |>
+(* val further_cn_desugaring_state: *)
+(*   (map (Cn.cn_namespace * Symbol.identifier) Symbol.sym) -> *)
+(*   (map A.ail_identifier tag_definition) -> state_with_markers *)
+(* let further_cn_desugaring_state idents tags = *)
+(*   let init_st = initial_state (Map.empty, Map.empty, Map.empty) in *)
+(*   let cn_state = Cn_desugaring.state_with_idents idents in *)
+(*   <| init_st with inner= <| init_st.inner with tag_definitions = tags; cn_state = cn_state |> |> *)
 
-val set_cn_c_identifier_env:
-  A.identifier_env -> state_with_markers -> state_with_markers
-let set_cn_c_identifier_env env st =
-  let cn_state = Cn_desugaring.set_c_identifier_env env st.inner.cn_state in
-  <| st with inner= <| st.inner with cn_state = cn_state |> |>
+(* val set_cn_c_identifier_env: *)
+(*   A.identifier_env -> state_with_markers -> state_with_markers *)
+(* let set_cn_c_identifier_env env st = *)
+(*   let cn_state = Cn_desugaring.set_c_identifier_env env st.inner.cn_state in *)
+(*   <| st with inner= <| st.inner with cn_state = cn_state |> |> *)
 
 
 val eval: forall 'a. (map string Symbol.sym) * Core.fun_map unit * Core.impl -> desugM 'a -> Exception.exceptM (markers_env * 'a) Errors.error
@@ -897,20 +897,139 @@ let as_switch_body m =
   end
 
 (* BEGIN CN *)
-val liftCnDesug: forall 'a. Cn_desugaring.cn_desugM 'a -> desugM 'a
-let liftCnDesug mk =
-  begin fun st ->
-    Exception.bind (State_exception.run mk st.inner.cn_state)
-      (fun (ret, cn_st') -> Exception.return (ret, <| st with inner= <| st.inner with cn_state= cn_st' |> |>))
-  end >>= fun ret -> (* (ret, st') -> *)
-  (* put_inner st' >>= fun () -> *)
-  return ret
+(* val liftCnDesug: forall 'a. Cn_desugaring.cn_desugM 'a -> desugM 'a *)
+(* let liftCnDesug mk = *)
+(*   begin fun st -> *)
+(*     Exception.bind (State_exception.run mk st.inner.cn_state) *)
+(*       (fun (ret, cn_st') -> Exception.return (ret, <| st with inner= <| st.inner with cn_state= cn_st' |> |>)) *)
+(*   end >>= fun ret -> (\* (ret, st') -> *\) *)
+(*   (\* put_inner st' >>= fun () -> *\) *)
+(*   return ret *)
 
 
-let inline register_cn_ident ns ident     = liftCnDesug (Cn_desugaring.register_cn_ident ns ident)
-let inline resolve_cn_ident ns ident      = liftCnDesug (Cn_desugaring.resolve_cn_ident ns ident)
-(* let inline  fetch_oarg acc ident = function *)
-let inline check_cn_oargs loc xs          = liftCnDesug (Cn_desugaring.check_cn_oargs loc xs)
+
+val check_cn_ident: Cn.cn_namespace -> Symbol.identifier -> desugM bool
+let check_cn_ident ns _ident =
+  match ns with
+  | Cn.CN_predicate ->
+    return true (* global *)
+  | Cn.CN_function ->
+    return true (* global *)
+  | Cn.CN_vars ->
+    return false (* local *)
+  | Cn.CN_oarg ->
+    return false (* local *)
+  | _ ->
+    return true
+  end
+
+
+let update_cn_state f =
+  update_inner (fun inner ->
+      <| inner with cn_state = f inner.cn_state |>
+    )
+
+let get_cn_state =
+  get_inner >>= fun inner -> return inner.cn_state
+
+
+val register_cn_ident: Cn.cn_namespace -> Symbol.identifier -> desugM Symbol.sym
+let register_cn_ident ns ((Symbol.Identifier loc str) as ident) =
+  let sym = Symbol.fresh_cn str in
+  let () = Debug.print_debug 4 [] (fun () ->
+      "adding a CN identifier: " ^ str ^ "(" ^ show ns ^ ")") in
+  check_cn_ident ns ident >>= function
+  | true ->
+    update_cn_state (fun st ->
+      <| st with cn_idents= Map.insert (ns, ident) sym st.cn_idents |>
+    ) >>= fun () ->
+    return sym
+  | false ->
+    update_cn_state (fun st ->
+      <| st with cn_current_scope= Map.insert (ns, ident) sym st.cn_current_scope |>
+    ) >>= fun () ->
+    return sym
+  end
+
+
+
+
+val resolve_cn_ident: forall 'ty. Cn.cn_namespace -> Symbol.identifier -> desugM (Symbol.sym * Cn.cn_var_kind)
+let resolve_cn_ident ns ident =
+  get_inner >>= fun inner ->
+  let st = inner.cn_state in
+  let fail () =
+    let same_ns xs = List.concat (List.map (fun (ns2, sym) -> if ns2 = ns then [sym] else []) xs) in
+    let () = Debug.print_debug 8 []
+        (fun () -> "available CN identifiers in ns (" ^ show ns ^ ") in local scope:") in
+    let () = Debug.print_debug 8 []
+        (fun () -> show (same_ns (Set_extra.toList (Map.domain st.cn_current_scope)))) in
+    let () = Debug.print_debug 8 [] (fun () -> "and in global scope:") in
+    let () = Debug.print_debug 8 []
+        (fun () -> show (same_ns (Set_extra.toList (Map.domain st.cn_idents)))) in
+    fail (Loc.locOf ident) (Errors.Desugar_CN (Cn.CNErr_unknown_identifier ns ident)) in
+  match Map.lookup (ns, ident) st.cn_current_scope with
+    | Just sym ->
+        return (sym, Cn.Var_kind_cn)
+    | Nothing ->
+        match (Map.lookup (ns, ident) st.cn_idents, ns) with
+          | (Just sym, _) ->
+              return (sym, Cn.Var_kind_cn)
+          | (Nothing, Cn.CN_vars) ->
+             (* based on earlier Cabs_to_ail_effect code  *)
+              match Scope_table.resolve (ident, Namespace_ordinary) inner.registered_identifiers with
+              | Nothing -> 
+                 fail ()
+              | Just (_, Internal sym _identifier_kind _linkage) -> 
+                 return (sym, Cn.Var_kind_c)
+              | Just (_, External) ->
+                 match Map.lookup (ident, Namespace_ordinary) inner.registered_external_identifiers with
+                 | Nothing -> fail ()
+                 | Just (_scope, (sym, _identifier_kind, _linkage)) ->
+                    return (sym, Cn.Var_kind_c)
+                 end
+              end
+          | (Nothing, _) ->
+             fail ()
+        end
+  end
+
+let rec fetch_oarg acc ident = function
+  | [] ->
+      (Nothing, acc)
+  | (((Cn.CN_oarg, ident'), sym) as x) :: xs' ->
+      if ident = ident' then
+        (Just sym, acc ++ xs')
+      else
+        fetch_oarg (x :: acc) ident xs'
+  | x :: xs' ->
+      fetch_oarg (x :: acc) ident xs'
+end
+
+val check_cn_oargs: forall 'a. Loc.t -> list (Symbol.identifier * 'a) -> desugM (list (Symbol.sym * 'a))
+let check_cn_oargs loc xs =
+  get_cn_state >>= fun st ->
+  foldlM (fun (acc, oargs) (ident, x) ->
+    match fetch_oarg [] ident oargs with
+      | (Just sym, oargs') ->
+          return ((sym, x) :: acc, oargs')
+      | (Nothing, _) ->
+          fail (Loc.locOf ident) (Errors.Desugar_CN (Cn.CNErr_unknown_identifier Cn.CN_oarg ident))
+    end
+  ) ([], Map_extra.toList st.cn_current_scope) xs >>= fun (rev_acc, oargs) ->
+  match List.filter (function ((CN_oarg, _), _) -> true | _ -> false end) oargs with
+    | [] ->
+        return (List.reverse rev_acc)
+    | (_, sym) :: _ ->
+        fail loc (Errors.Desugar_CN (Cn.CNErr_missing_oarg sym))
+  end
+
+
+
+(* let inline register_cn_ident ns ident     = liftCnDesug (Cn_desugaring.register_cn_ident ns ident) *)
+(* let inline resolve_cn_ident ns ident      = liftCnDesug (Cn_desugaring.resolve_cn_ident ns ident) *)
+(* (\* let inline  fetch_oarg acc ident = function *\) *)
+(* let inline check_cn_oargs loc xs          = liftCnDesug (Cn_desugaring.check_cn_oargs loc xs) *)
 
 
 val lookup_cn_function: Symbol.identifier -> desugM Symbol.sym
@@ -934,8 +1053,8 @@ let register_cn_function ident mk =
           Cn.cn_func_return_bty= return_bty;
           Cn.cn_func_body= body;
         |> in
-        liftCnDesug begin
-          State_exception.update (fun cn_st' ->
+        (* liftCnDesug *) begin
+          update_cn_state (fun cn_st' ->
             <| cn_st' with Cn_desugaring.cn_functions= (ident, (sym, func)) :: cn_st'.Cn_desugaring.cn_functions;
                            Cn_desugaring.cn_current_scope= Map.empty; |>
           )
@@ -960,8 +1079,8 @@ let register_cn_predicate ident mk =
           Cn.cn_pred_iargs= iargs;
           Cn.cn_pred_clauses= clauses;
         |> in
-        liftCnDesug begin
-          State_exception.update (fun cn_st' ->
+        (* liftCnDesug *) begin
+          update_cn_state (fun cn_st' ->
             <| cn_st' with Cn_desugaring.cn_predicates= (ident, (sym, pred)) :: cn_st'.Cn_desugaring.cn_predicates;
                            Cn_desugaring.cn_current_scope= Map.empty; |>
           )
@@ -982,8 +1101,8 @@ let register_cn_datatype ident mk_cases =
           Cn.cn_dt_name= sym;
           Cn.cn_dt_cases= cases;
         |> in
-        liftCnDesug begin
-          State_exception.update (fun cn_st' ->
+        (* liftCnDesug *) begin
+          update_cn_state (fun cn_st' ->
             <| cn_st' with Cn_desugaring.cn_datatypes = (ident, dt) :: cn_st'.Cn_desugaring.cn_datatypes;
                            Cn_desugaring.cn_current_scope= Map.empty; |>
           )
