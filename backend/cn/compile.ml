@@ -310,10 +310,13 @@ let mk_translate_binop loc bop (e1, e2) =
       assert false
   | _ ->
       let open Pp in
-      fail {loc; msg = Generic (!^ "mk_translate_binop: types:" ^^^
-              CF.Cn_ocaml.PpAil.pp_cn_binop bop ^^ colon ^^^
-              Pp.list SBT.pp [IT.bt e1; IT.bt e2] ^^ colon ^^^
-              Pp.list IT.pp [e1; e2])}
+      let msg =
+        !^"Ill-typed application of binary operation" 
+        ^^^ squotes (CF.Cn_ocaml.PpAil.pp_cn_binop bop) ^^^ dot
+        ^/^ !^"Left-hand-side:" ^^^ squotes (IT.pp e1) ^^^ !^"of type" ^^^ squotes (SBT.pp (IT.bt e1)) ^^ comma
+        ^/^ !^"right-hand-side:" ^^^ squotes (IT.pp e2) ^^^ !^"of type" ^^^ squotes (SBT.pp (IT.bt e2)) ^^ dot
+      in
+      fail {loc; msg = Generic msg}
 
 
 

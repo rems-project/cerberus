@@ -1974,15 +1974,19 @@ rel_expr:
 | e1= rel_expr GT_EQ e2= add_expr
     { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                                , CNExpr_binop (CN_ge, e1, e2))) }
-| e1= rel_expr AMPERSAND_AMPERSAND e2= add_expr
+
+bool_bin_expr:
+| e= rel_expr
+    { e }
+| e1= bool_bin_expr AMPERSAND_AMPERSAND e2= rel_expr
     { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                                , CNExpr_binop (CN_and, e1, e2))) }
-| e1= rel_expr PIPE_PIPE e2= add_expr
+| e1= bool_bin_expr PIPE_PIPE e2= rel_expr
     { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                                , CNExpr_binop (CN_or, e1, e2))) }
 
 list_expr:
-| e= rel_expr
+| e= bool_bin_expr
     { e }
 (* | LBRACK COLON bty= base_type RBRACK *)
 (* | e1= rel_expr COLON_COLON e2= list_expr *)
