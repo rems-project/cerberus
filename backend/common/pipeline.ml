@@ -159,7 +159,7 @@ let c_frontend (conf, io) (core_stdlib, core_impl) ~filename =
   let desugar cabs_tunit =
     let (ailnames, core_stdlib_fun_map) = core_stdlib in
     Cabs_to_ail.desugar (ailnames, core_stdlib_fun_map, core_impl)
-      "main" cabs_tunit >>= fun ail_prog ->
+      "main" cabs_tunit >>= fun (markers_env, ail_prog) ->
           io.set_progress "DESUG"
       >|> io.pass_message "Cabs -> Ail completed!"
           (* NOTE: if the debug level is lower the do the printing after the typing *)
@@ -169,7 +169,7 @@ let c_frontend (conf, io) (core_stdlib, core_impl) ~filename =
       >|> whenM (conf.debug_level > 4 && List.mem Ail conf.pprints) begin
             fun () -> io.run_pp (wrap_fout (Some (filename, "ail"))) (Pp_ail.pp_program true false ail_prog)
           end
-      >>= fun () -> return ail_prog in
+      >>= fun () -> return (markers_env, ail_prog) in
   (* -- *)
   let ail_typechecking ail_prog =
     ErrorMonad.to_exception (fun (loc, err) -> (loc, Errors.AIL_TYPING err))
@@ -195,10 +195,10 @@ let c_frontend (conf, io) (core_stdlib, core_impl) ~filename =
     end >>= fun () -> return ailtau_prog in
   (* -- *)
   io.print_debug 2 (fun () -> "Using the C frontend") >>= fun () ->
-  cpp (conf, io) ~filename    >>= fun file_content ->
-  parse filename file_content >>= fun cabs_tunit   ->
-  desugar cabs_tunit          >>= fun ail_prog     ->
-  ail_typechecking ail_prog   >>= fun ailtau_prog  ->
+  cpp (conf, io) ~filename    >>= fun file_content            ->
+  parse filename file_content >>= fun cabs_tunit              ->
+  desugar cabs_tunit          >>= fun (markers_env, ail_prog) ->
+  ail_typechecking ail_prog   >>= fun ailtau_prog             ->
   (* NOTE: the elaboration sets the struct/union tag definitions, so to allow the frontend to be
      used more than once, we need to do reset here *)
   (* TODO(someday): find a better way *)
@@ -206,7 +206,7 @@ let c_frontend (conf, io) (core_stdlib, core_impl) ~filename =
   let core_file = Translation.translate core_stdlib core_impl ailtau_prog in
   io.set_progress "ELABO" >>= fun () ->
   io.pass_message "Translation to Core completed!" >>= fun () ->
-  return (Some cabs_tunit, Some ailtau_prog, core_file)
+  return (Some cabs_tunit, Some (markers_env, ailtau_prog), core_file)
 
 let core_frontend (conf, io) (core_stdlib, core_impl) ~filename =
   Fresh.set_digest filename;

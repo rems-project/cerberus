@@ -63,7 +63,7 @@ let frontend incl_dirs astprints filename state_file =
   let@ stdlib = load_core_stdlib () in
   let@ impl = load_core_impl stdlib impl_name in
   let@ (_, ail_prog_opt, prog0) = c_frontend (conf incl_dirs astprints, io) (stdlib, impl) ~filename in
-  let _, ail_prog = Option.get ail_prog_opt in
+  let _, (_, ail_prog) = Option.get ail_prog_opt in
   Tags.set_tagDefs prog0.Core.tagDefs;
   let prog1 = Remove_unspecs.rewrite_file prog0 in
   let prog2 = Core_peval.rewrite_file prog1 in
