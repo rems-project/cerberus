@@ -1936,6 +1936,9 @@ unary_expr:
 | LBRACE e= expr RBRACE CN_UNCHANGED
     { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($1)))
                                , CNExpr_unchanged e)) }
+| BANG e= prim_expr
+    { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($1)))
+                               , CNExpr_not e )) }
 
 
 mul_expr:

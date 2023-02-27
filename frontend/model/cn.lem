@@ -78,6 +78,7 @@ type cn_expr_ 'a 'ty =
   | CNExpr_value_of_c_variable of 'a
   | CNExpr_unchanged of cn_expr 'a 'ty
   | CNExpr_at_env of cn_expr 'a 'ty * string
+  | CNExpr_not of cn_expr 'a 'ty
 
 and cn_expr 'a 'ty =
   | CNExpr of Loc.t * cn_expr_ 'a 'ty

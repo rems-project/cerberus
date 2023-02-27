@@ -417,6 +417,7 @@ let pp_cnexpr_kind expr_ =
   | CNExpr_good (ty, e) -> !^ "(good (_, _))"
   | CNExpr_unchanged e -> !^"(unchanged (_))"
   | CNExpr_at_env (e, es) -> !^"{_}@_"
+  | CNExpr_not e -> !^"!_"
 
 
 let translate_cn_expr (env: env) expr =
@@ -578,6 +579,9 @@ let translate_cn_expr (env: env) expr =
            | None -> fail { loc; msg = Generic !^("Unknown evaluation scope '"^evaluation_scope^"'.") }
          in
          trans { env with state = old_state } e
+      | CNExpr_not e ->
+         let@ e = self e in
+         return (IT (Bool_op (Not e), SBT.Bool))
          
   in trans env expr
 
