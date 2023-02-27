@@ -364,13 +364,16 @@ let get_scope =
   State_exception.read (fun st -> Scope_table.current_scope_is st.registered_identifiers)
 
 
+let create_new_scope scope st =
+  <| st with registered_identifiers= Scope_table.create_scope scope st.registered_identifiers; |>
+
 val under_scope: forall 'a. scope -> desugM 'a -> desugM 'a
 let under_scope scope m =
   State_exception.update (fun st ->
     let () = Debug.print_debug 3 [Debug.DB_desugaring] (fun () ->
       "ENTERING Scope: " ^ string_of_scope scope
     ) in
-    <| st with registered_identifiers= Scope_table.create_scope scope st.registered_identifiers; |>
+    create_new_scope scope st
   ) >>
   m >>= fun res ->
   State_exception.update (fun st ->

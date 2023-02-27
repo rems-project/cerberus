@@ -3,6 +3,7 @@ open Cerb_frontend
 open Lem_pervasives
 open Ctype
 open Milicore
+module CF = Cerb_frontend
 
 
 module Pmap = struct
@@ -1010,12 +1011,12 @@ let normalise_label (accesses, loop_attributes) (env : C.env) d_st label_name la
   | Mi_Return loc -> 
      return (M_Return loc)
   | Mi_Label (loc, lt, label_args, label_body, annots) ->
-     begin match Cerb_frontend.Annot.get_label_annot annots with
+     begin match CF.Annot.get_label_annot annots with
      | Some (LAloop_prebody loop_id) ->
         let@ inv = match Pmap.lookup loop_id loop_attributes with
           | Some (identifier_env, attrs) -> 
              let@ inv = Parse.parse_inv_spec attrs in
-             let@ (inv, _) = desugar_conds (Cerb_frontend.Cabs_to_ail_effect.set_cn_c_identifier_env identifier_env d_st) inv in
+             let@ (inv, _) = desugar_conds (CF.Cabs_to_ail_effect.set_cn_c_identifier_env identifier_env d_st) inv in
              return inv
           | None -> return []
         in
@@ -1069,7 +1070,9 @@ let normalise_fun_map_decl ail_prog env globals d_st (funinfo: mi_funinfo) loop_
      let (_, ail_marker, _, ail_args, _) = List.assoc
          Sym.equal fname ail_prog.function_definitions in
      let ail_env = Pmap.find ail_marker ail_prog.markers_env in
-     let d_st = Cerb_frontend.Cabs_to_ail_effect.set_cn_c_identifier_env ail_env d_st in
+     let d_st = CF.Cabs_to_ail_effect.set_cn_c_identifier_env ail_env d_st in
+     (* copying from `under_scope` in Cabs_to_ail_effect *)
+     let d_st = CF.Cabs_to_ail_effect.(create_new_scope Scope_function d_st) in
      let@ trusted, accesses, requires, ensures, extra = Parse.parse_function_spec attrs in
      Print.debug 6 (lazy (Print.string "parsed spec attrs"));
      let@ accesses = ListM.mapM (desugar_access ail_env globals) accesses in
@@ -1243,7 +1246,7 @@ let normalise_file ail_prog file =
 
   let env = List.fold_left register_glob env globs in
 
-  let desugar_state = Cerb_frontend.Cabs_to_ail_effect.further_cn_desugaring_state
+  let desugar_state = CF.Cabs_to_ail_effect.further_cn_desugaring_state
         ail_prog.cn_idents ail_prog.translation_tag_definitions in
 
   let@ (funs, extras) = normalise_fun_map ail_prog env globs desugar_state

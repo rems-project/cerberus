@@ -32,11 +32,11 @@ let string_of_error = function
   | CNErr_unknown_predicate ->
       "undeclared predicate name"
   | CNErr_invalid_tag ->
-      "tag name is no declared or a union tag"
+      "tag name is not declared or a union tag"
   | CNErr_unknown_identifier (ns, Symbol.Identifier (_, str)) ->
       "the " ^ string_of_ns ns ^ " `" ^ str ^ "' is not declared"
   | CNErr_missing_oarg sym ->
-      "missing an assignment for the oarg `" ^ Pp_symbol.to_string_pretty sym ^ "'" 
+      "missing an assignment for the output argument `" ^ Pp_symbol.to_string_pretty sym ^ "'" 
   | CNErr_general s -> s
     
 
