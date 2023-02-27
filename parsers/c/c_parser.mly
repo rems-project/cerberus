@@ -2014,6 +2014,10 @@ member_update:
 | DOT member=cn_variable EQ e=expr
      { (member, e) } 
 
+index_update:
+| i=prim_expr EQ e=expr
+     { (i, e) } 
+
 expr:
 | e= list_expr
     { e }
@@ -2037,6 +2041,9 @@ expr:
 | LBRACE base_value=expr CN_WITH updates=separated_nonempty_list(COMMA, member_update) RBRACE
     { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($1)))
                                , CNExpr_memberupdates (base_value, updates))) }
+| base_value=prim_expr LBRACK updates=separated_nonempty_list(COMMA, index_update) RBRACK
+    { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
+                               , CNExpr_arrayindexupdates (base_value, updates))) }
 ;
 
 (* CN predicate definitions **************************************************)

@@ -116,7 +116,16 @@ module MakePp (Conf: PP_CN) = struct
                Dnode (pp_ctor "update", [z; v])
              ) updates
          in
-         Dnode (pp_ctor "CNExpr_member", dtree_of_cn_expr e :: updates)
+         Dnode (pp_ctor "CNExpr_memberupdates", dtree_of_cn_expr e :: updates)
+      | CNExpr_arrayindexupdates (e, updates) ->
+         let updates = 
+           List.map (fun (i,v) -> 
+               let i = dtree_of_cn_expr i in
+               let v = dtree_of_cn_expr v in
+               Dnode (pp_ctor "update", [i; v])
+             ) updates
+         in
+         Dnode (pp_ctor "CNExpr_arrayindexupdate", dtree_of_cn_expr e :: updates)
       | CNExpr_binop (bop, e1, e2) ->
           Dnode (pp_ctor "CNExpr_binop" ^^^ pp_cn_binop bop, [dtree_of_cn_expr e1; dtree_of_cn_expr e2])
       | CNExpr_sizeof ty ->

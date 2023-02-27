@@ -406,6 +406,7 @@ let pp_cnexpr_kind expr_ =
   | CNExpr_list es_ -> !^ "[...]"
   | CNExpr_memberof (e, xs) -> !^ "_." ^^ Id.pp xs
   | CNExpr_memberupdates (e, _updates) -> !^ "{_ with ...}"
+  | CNExpr_arrayindexupdates (e, _updates) -> !^ "_ [ _ = _ ...]"
   | CNExpr_binop (bop, x, y) -> !^ "(binop (_, _, _))"
   | CNExpr_sizeof ct -> !^ "(sizeof _)"
   | CNExpr_offsetof (tag, member) -> !^ "(offsetof (_, _))"
@@ -491,6 +492,13 @@ let translate_cn_expr (env: env) expr =
          | _ ->
             fail {loc; msg = Generic !^"only struct updates supported" }
          end
+      | CNExpr_arrayindexupdates (e, updates) ->
+         let@ e = self e in
+         ListM.fold_leftM (fun acc (i, v) ->
+             let@ i = self i in
+             let@ v = self v in
+             return (IT (Map_op (Set (acc, i, v)), IT.bt e))
+           ) e updates
       | CNExpr_binop (CN_sub, e1_, (CNExpr (_, CNExpr_cons _) as shape)) ->
           let@ e1 = self e1_ in
           translate_is_shape env loc e1 shape
