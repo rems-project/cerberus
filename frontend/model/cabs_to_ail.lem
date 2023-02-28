@@ -4510,6 +4510,9 @@ let rec desugar_cn_expr (CNExpr loc expr_) =
           | None ->
               E.fail loc (Errors.Desugar_CN CNErr_invalid_tag)
       end
+    | CNExpr_membershift e memb ->
+       desugar_cn_expr e >>= fun e ->
+       E.return (CNExpr_membershift e memb)
     | CNExpr_cast ty e ->
         CNExpr_cast <$> desugar_cn_base_type loc ty
                     <*> desugar_cn_expr e

@@ -1939,6 +1939,9 @@ unary_expr:
 | BANG e= prim_expr
     { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($1)))
                                , CNExpr_not e )) }
+| AMPERSAND LPAREN e= prim_expr MINUS_GT member=cn_variable RPAREN
+    { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($1)))
+                               , CNExpr_membershift (e, member) )) }
 
 
 mul_expr:

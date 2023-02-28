@@ -179,12 +179,26 @@ let lookup_resource_for_pointer loc e env =
 
 
 
-let lookup_struct sym env =
+let lookup_struct_opt sym env =
   match Pmap.lookup sym env.tagDefs with
     | Some (M_StructDef xs) ->
         Some xs
     | Some (M_UnionDef _)| None ->
         None
+
+let lookup_struct loc tag env = 
+  match lookup_struct_opt tag env with
+  | Some def -> return def
+  | None -> fail {loc; msg = Unknown_struct tag}
+
+let lookup_member_opt (def: Memory.struct_layout) member =
+  List.assoc_opt Id.equal member (Memory.member_types def)
+
+let lookup_member loc (tag, def) member =
+  match lookup_member_opt def member with
+  | Some ty -> return ty
+  | None -> fail {loc; msg = Unknown_member (tag, member)}
+
 
 let lookup_datatype loc sym env = match SymMap.find_opt sym env.datatypes with
   | Some info -> return info
@@ -339,17 +353,10 @@ let translate_member_access loc env (t : IT.sterm) member =
      in
      return (IT.recordMember_ ~member_bt (t, member))
   | Struct tag ->
-     let@ members = match lookup_struct tag env with
-       | None -> fail {loc; msg= Unknown_struct tag}
-       | Some defs_ (* TODO flexible *) -> return (Memory.member_types defs_)
-     in
-     let@ ty = match List.assoc_opt Id.equal member members with
-       | None -> fail {loc; msg = Unknown_member (tag, member)}
-       | Some ty -> return ty
-     in
+     let@ defs_ = lookup_struct loc tag env in
+     let@ ty = lookup_member loc (tag, defs_) member in
      let member_bt = SurfaceBaseTypes.of_sct ty in
      return ( IT.IT (Struct_op (StructMember (t, member)), member_bt) )
-
   | Datatype tag ->
      let@ (dt_info, mem_syms) = lookup_datatype loc tag env in
      let@ sym = match Y.find_opt (Id.s member) mem_syms with
@@ -410,6 +417,7 @@ let pp_cnexpr_kind expr_ =
   | CNExpr_binop (bop, x, y) -> !^ "(binop (_, _, _))"
   | CNExpr_sizeof ct -> !^ "(sizeof _)"
   | CNExpr_offsetof (tag, member) -> !^ "(offsetof (_, _))"
+  | CNExpr_membershift (e, member) -> !^ "&(_ -> _)"
   | CNExpr_cast (bt, expr) -> !^ "(cast (_, _))"
   | CNExpr_call (nm, exprs) -> !^ "(" ^^ Id.pp nm ^^^ !^ "(...))"
   | CNExpr_cons (c_nm, exprs) -> !^ "(" ^^ Sym.pp c_nm ^^^ !^ "{...})"
@@ -511,11 +519,26 @@ let translate_cn_expr (env: env) expr =
           let n = Memory.size_of_ctype scty in
           return (IT (Lit (Z (Z.of_int n)), SBT.Integer))
       | CNExpr_offsetof (tag, member) ->
-          let@ () = match lookup_struct tag env with
-            | None -> fail {loc; msg= Unknown_struct tag}
-            | Some _ -> return ()
-          in
+          let@ _ = lookup_struct loc tag env in
           return (IT (Pointer_op (MemberOffset (tag, member)), SBT.Integer))
+      | CNExpr_membershift (e, member) ->
+          let@ e = self e in
+          begin match IT.bt e with
+          | Loc (Some (Struct tag)) -> 
+             let@ struct_def = lookup_struct loc tag env in
+             let@ member_ty = lookup_member loc (tag, struct_def) member in
+             let (IT (it_, _)) = IT.sterm_of_term (memberShift_ (term_of_sterm e, tag, member)) in
+             (* sterm_of_term will not have produced a C-type-annotated bt. So stick that on now. *)
+             return (IT (it_, Loc (Some member_ty)))
+          | Loc None ->
+             let msg = 
+               !^"Cannot tell pointee C-type of"
+               ^^^ squotes (IT.pp e) ^^ dot
+             in
+             fail {loc; msg = Generic msg}
+          | has ->
+             fail {loc; msg = Illtyped_it' {it = Terms.pp e; has = SBT.pp has; expected = "struct pointer"}}
+          end
       | CNExpr_cast (bt, expr) ->
           let@ expr = self expr in
           begin match bt with
