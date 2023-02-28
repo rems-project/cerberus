@@ -127,11 +127,10 @@ type message =
   | Number_input_arguments of {has: int; expect: int}
   | Number_output_arguments of {has: int; expect: int}
   | Mismatch of { has: doc; expect: doc; }
-  | Illtyped_it : {context: IT.t; it: IT.t; has: LS.t; expected: string; ctxt : Context.t} -> message (* 'expected' as in Kayvan's Core type checker *)
-  | Illtyped_it' : {it: Pp.doc; has: Pp.doc; expected: string} -> message (* 'expected' as in Kayvan's Core type checker *)
-  | NIA : {context: IT.t; it: IT.t; hint : string; ctxt : Context.t} -> message
-  | TooBigExponent : {context: IT.t; it: IT.t; ctxt : Context.t} -> message
-  | NegativeExponent : {context: IT.t; it: IT.t; ctxt : Context.t} -> message
+  | Illtyped_it : {it: Pp.doc; has: Pp.doc; expected: string; o_ctxt : Context.t option} -> message (* 'expected' and 'has' as in Kayvan's Core type checker *)
+  | NIA : {it: IT.t; hint : string; ctxt : Context.t} -> message
+  | TooBigExponent : {it: IT.t; ctxt : Context.t} -> message
+  | NegativeExponent : {it: IT.t; ctxt : Context.t} -> message
   | Polymorphic_it : 'bt IndexTerms.term -> message
   | Write_value_unrepresentable of {ct: Sctypes.t; location: IT.t; value: IT.t; ctxt : Context.t; model : Solver.model_with_q }
   | Int_unrepresentable of {value : IT.t; ict : Sctypes.t; ctxt : Context.t; model : Solver.model_with_q}
@@ -292,17 +291,7 @@ let pp_message te =
          !^"but found value of type" ^^^ squotes has
      in
      { short; descr = Some descr; state = None; trace = None }
-  | Illtyped_it {context; it; has; expected; ctxt} ->
-     let it = IT.pp it in
-     let context = IT.pp context in
-     let short = !^"Type error" in
-     let descr =
-       !^"Illtyped expression" ^^ squotes context ^^ dot ^^^
-         !^"Expected" ^^^ it ^^^ !^"to be" ^^^ squotes !^expected ^^^
-           !^"but is" ^^^ squotes (LS.pp has)
-     in
-     { short; descr = Some descr; state = None; trace = None }
-  | Illtyped_it' {it; has; expected} ->
+  | Illtyped_it {it; has; expected; o_ctxt} ->
      let short = !^"Type error" in
      let descr =
        !^"Illtyped expression" ^^ squotes it ^^ dot ^^^
@@ -310,32 +299,29 @@ let pp_message te =
            !^"but is" ^^^ squotes has
      in
      { short; descr = Some descr; state = None; trace = None }
-  | NIA {context; it; hint; ctxt} ->
+  | NIA {it; hint; ctxt} ->
      let it = IT.pp it in
-     let context = IT.pp context in
      let short = !^"Type error" in
      let descr = 
-       !^"Illtyped expression" ^^ squotes context ^^ dot ^^^
+       !^"Illtyped expression" ^^ squotes it ^^ dot ^^^
          !^"Non-linear integer arithmetic in the specification term" ^^^ it ^^ dot ^^^
            !^hint
      in
      { short; descr = Some descr; state = None; trace = None }
-  | TooBigExponent {context; it; ctxt} ->
+  | TooBigExponent {it; ctxt} ->
      let it = IT.pp it in
-     let context = IT.pp context in
      let short = !^"Type error" in
      let descr = 
-       !^"Illtyped expression" ^^ squotes context ^^ dot ^^^
+       !^"Illtyped expression" ^^ squotes it ^^ dot ^^^
          !^"Too big exponent in the specification term" ^^^ it ^^ dot ^^^
            !^("Exponent must fit int32 type")
      in
      { short; descr = Some descr; state = None; trace = None }
-  | NegativeExponent {context; it; ctxt} ->
+  | NegativeExponent {it; ctxt} ->
      let it = IT.pp it in
-     let context = IT.pp context in
      let short = !^"Type error" in
      let descr = 
-       !^"Illtyped expression" ^^ squotes context ^^ dot ^^^
+       !^"Illtyped expression" ^^ squotes it ^^ dot ^^^
          !^"Negative exponent in the specification term" ^^^ it ^^ dot ^^^
            !^("Exponent must be non-negative")
      in

@@ -316,7 +316,7 @@ let mk_translate_binop loc bop (e1, e2) =
      let@ rbt = match IT.bt e1 with
        | Map (_, rbt) -> return rbt
        | has -> 
-          fail {loc; msg = Illtyped_it' {it = Terms.pp e1; has = SBT.pp has; expected = "map/array type"}}
+          fail {loc; msg = Illtyped_it {it = Terms.pp e1; has = SBT.pp has; expected = "map/array type"; o_ctxt = None}}
      in
      return (IT (Map_op (Get (e1, e2)), rbt))
   | CN_is_shape,_ ->
@@ -371,7 +371,7 @@ let translate_member_access loc env (t : IT.sterm) member =
      in
      return (IT.IT (IT.Datatype_op (IT.DatatypeMember (t, sym)), bt))
   | has -> 
-     fail {loc; msg = Illtyped_it' {it = Terms.pp t; has = SurfaceBaseTypes.pp has; expected = "struct"}}
+     fail {loc; msg = Illtyped_it {it = Terms.pp t; has = SurfaceBaseTypes.pp has; expected = "struct"; o_ctxt = None}}
 
 
 let translate_is_shape env loc x shape_expr : (IT.sterm, _) m =
@@ -537,7 +537,7 @@ let translate_cn_expr (env: env) expr =
              in
              fail {loc; msg = Generic msg}
           | has ->
-             fail {loc; msg = Illtyped_it' {it = Terms.pp e; has = SBT.pp has; expected = "struct pointer"}}
+             fail {loc; msg = Illtyped_it {it = Terms.pp e; has = SBT.pp has; expected = "struct pointer"; o_ctxt = None}}
           end
       | CNExpr_cast (bt, expr) ->
           let@ expr = self expr in
@@ -635,7 +635,7 @@ let translate_cn_res_info res_loc loc env res args =
             | Loc None ->
                fail {loc; msg = Generic !^"Cannot tell C-type of pointer. Please use Owned with an annotation: \'Owned<CTYPE>'."}
             | has ->
-               fail {loc; msg = Illtyped_it' {it = Terms.pp ptr_expr; has = SBT.pp has; expected = "pointer"}}
+               fail {loc; msg = Illtyped_it {it = Terms.pp ptr_expr; has = SBT.pp has; expected = "pointer"; o_ctxt = None}}
        in
        (* we don't take Resources.owned_oargs here because we want to
           maintain the C-type information *)

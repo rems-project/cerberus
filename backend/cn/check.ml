@@ -648,12 +648,12 @@ let rec check_pexpr (pe : 'bty mu_pexpr) ~(expect:BT.t)
            if Z.lt z' Z.zero then
              (* we should relax this and map to exp_no_smt_ if we
                 can handle negative exponents there *)
-             fail (fun ctxt -> {loc; msg = NegativeExponent {context = it; it; ctxt}})
+             fail (fun ctxt -> {loc; msg = NegativeExponent {it; ctxt}})
            else if Z.fits_int32 z' then
              k it
            else 
              (* we can probably just relax this and map to exp_no_smt_ *)
-             fail (fun ctxt -> {loc; msg = TooBigExponent {context =it; it; ctxt}})
+             fail (fun ctxt -> {loc; msg = TooBigExponent {it; ctxt}})
         | _ ->
            k (warn_uf loc "power_uf"; exp_no_smt_ (v1, v2))
         end)

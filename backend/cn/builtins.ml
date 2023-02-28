@@ -46,7 +46,7 @@ let nth_list_def = (Sym.fresh_named "nth_list", mk_arg3 nthList_)
 let array_to_list_def = 
   (Sym.fresh_named "array_to_list", mk_arg3_err
   (fun loc (arr, i, len) -> match SBT.is_map_bt (IT.bt arr) with
-    | None -> fail {loc; msg = Illtyped_it' {it = IT.pp arr; has = SBT.pp (IT.bt arr); expected = "map"}}
+    | None -> fail {loc; msg = Illtyped_it {it = IT.pp arr; has = SBT.pp (IT.bt arr); expected = "map"; o_ctxt = None}}
     | Some (_, bt) -> return (array_to_list_ (arr, i, len) bt)
   ))
 
