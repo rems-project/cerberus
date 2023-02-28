@@ -282,7 +282,7 @@ type markers_env =
 
 type state_with_markers = <|
   inner: state;
-  markers_env2: markers_env;
+  markers_env: markers_env;
 |>
 
 type desugM 'a = State_exception.stExceptM 'a state_with_markers Errors.error
@@ -569,7 +569,7 @@ let initial_state core_eval_stuff = <|
     
     core_eval_stuff= core_eval_stuff;
   |>;
-  markers_env2= Map.empty;
+  markers_env= Map.empty;
 |>
 
 (* val further_cn_desugaring_state: *)
@@ -592,7 +592,7 @@ let cabs_to_ail_effect_eval core_eval_stuff m =
   State_exception.eval begin
     m >>= fun res ->
     State_exception.get >>= fun st ->
-    State_exception.return (st.markers_env2, res)
+    State_exception.return (st.markers_env, res)
   end (initial_state core_eval_stuff)
 let inline eval = cabs_to_ail_effect_eval
 
@@ -1122,7 +1122,7 @@ let record_marker () =
   let id = Symbol.fresh_int () in
   begin if Global.backend_name () = "Cn" then
     get_inner >>= fun inner ->
-    State_exception.update (fun old_state -> <| old_state with markers_env2= Map.insert id inner old_state.markers_env2 |>)
+    State_exception.update (fun old_state -> <| old_state with markers_env= Map.insert id inner old_state.markers_env |>)
   else
     State_exception.return ()
   end >>= fun () ->
