@@ -1974,6 +1974,12 @@ add_expr:
 rel_expr:
 | e= add_expr
      { e }
+| e1= add_expr EQ_EQ e2= add_expr
+    { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
+                               , CNExpr_binop (CN_equal, e1, e2))) }
+| e1= add_expr BANG_EQ e2= add_expr
+    { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
+                               , CNExpr_binop (CN_inequal, e1, e2))) }
 | e1= rel_expr LT e2= add_expr
     { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                                , CNExpr_binop (CN_lt, e1, e2))) }
@@ -2030,12 +2036,6 @@ index_update:
 expr:
 | e= list_expr
     { e }
-| e1= expr EQ_EQ e2= list_expr
-    { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
-                               , CNExpr_binop (CN_equal, e1, e2))) }
-| e1= expr BANG_EQ e2= list_expr
-    { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
-                               , CNExpr_binop (CN_inequal, e1, e2))) }
 | e1= list_expr QUESTION e2= list_expr COLON e3= list_expr
     { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                                , CNExpr_ite (e1, e2, e3))) }
