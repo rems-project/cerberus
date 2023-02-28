@@ -1918,6 +1918,12 @@ prim_expr:
 | LBRACE a=expr RBRACE PERCENT l=NAME VARIABLE
     { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($4)))
                                , CNExpr_at_env (a, l))) }
+| LBRACE base_value=expr CN_WITH updates=separated_nonempty_list(COMMA, member_update) RBRACE
+    { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($1)))
+                               , CNExpr_memberupdates (base_value, updates))) }
+| base_value=prim_expr LBRACK updates=separated_nonempty_list(COMMA, index_update) RBRACK
+    { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
+                               , CNExpr_arrayindexupdates (base_value, updates))) }
 
 
 
@@ -2040,12 +2046,6 @@ expr:
     { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) NoCursor)
                                ,
                                CNExpr_each (str, r, e1))) }
-| LBRACE base_value=expr CN_WITH updates=separated_nonempty_list(COMMA, member_update) RBRACE
-    { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($1)))
-                               , CNExpr_memberupdates (base_value, updates))) }
-| base_value=prim_expr LBRACK updates=separated_nonempty_list(COMMA, index_update) RBRACK
-    { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
-                               , CNExpr_arrayindexupdates (base_value, updates))) }
 ;
 
 (* CN predicate definitions **************************************************)
