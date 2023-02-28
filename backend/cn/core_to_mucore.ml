@@ -1027,7 +1027,7 @@ let normalise_label (markers_env, precondition_cn_desugaring_state)
           | Some (marker_id, attrs) -> 
              let@ inv = Parse.parse_inv_spec attrs in
              let d_st = CAE.{ 
-                 markers_env2 = markers_env;
+                 markers_env = markers_env;
                  inner = { (Pmap.find marker_id markers_env) with cn_state = precondition_cn_desugaring_state };
                }
              in
@@ -1088,7 +1088,7 @@ let normalise_fun_map_decl (markers_env, ail_prog) env globals (funinfo: mi_funi
      (* let d_st = CAE.set_cn_c_identifier_env ail_env d_st in *)
      let d_st = 
        CAE.{ inner = Pmap.find ail_marker markers_env;
-                            markers_env2 = markers_env }
+                            markers_env = markers_env }
      in
      let@ trusted, accesses, requires, ensures, mk_functions = Parse.parse_function_spec attrs in
      Print.debug 6 (lazy (Print.string "parsed spec attrs"));
