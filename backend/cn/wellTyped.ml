@@ -321,7 +321,9 @@ module WIT = struct
               let@ t' = check loc (IT.bt t) t' in
               return (BT.Bool, EQ (t,t')) 
            | EachI ((i1, s, i2), t) ->
-              let s, t = IT.alpha_rename (s, BT.Integer) t in
+              (* no need to alpha-rename, because context.ml ensures
+                 there's no name clashes *)
+              (* let s, t = IT.alpha_rename (s, BT.Integer) t in *)
               pure begin 
                   let@ () = add_l s Integer (loc, lazy (Pp.string "forall-var")) in
                   let@ t = check loc Bool t in
@@ -602,7 +604,9 @@ module WIT = struct
               let@ arg = check loc abt arg in
               return (bt, Get (t, arg))
            | Def ((s, abt), body) ->
-              let s, body = IT.alpha_rename (s, abt) body in
+              (* no need to alpha-rename, because context.ml ensures
+                 there's no name clashes *)
+              (* let s, body = IT.alpha_rename (s, abt) body in *)
               let@ () = WBT.is_bt loc abt in
               pure begin
                   let@ () = add_l s abt (loc, lazy (Pp.string "map-def-var")) in
@@ -672,7 +676,9 @@ module WRET = struct
        let@ iargs = ListM.map2M (fun (_, expected) arg -> WIT.check loc expected arg) spec_iargs p.iargs in
        return (RET.P {name = p.name; pointer; permission; iargs})
     | Q p ->
-       let p = RET.alpha_rename_qpredicate_type p in
+       (* no need to alpha-rename, because context.ml ensures
+          there's no name clashes *)
+       (* let p = RET.alpha_rename_qpredicate_type p in *)
        let@ pointer = WIT.check loc BT.Loc p.pointer in
        let@ step = WIT.check loc BT.Integer p.step in
        let@ simp_ctxt = simp_ctxt () in
@@ -763,7 +769,9 @@ module WLC = struct
        let@ it = WIT.check loc BT.Bool it in
        return (LC.T it)
     | LC.Forall ((s, bt), it) ->
-       let s, it = IT.alpha_rename (s,bt) it in
+       (* no need to alpha-rename, because context.ml ensures
+          there's no name clashes *)
+       (* let s, it = IT.alpha_rename (s,bt) it in *)
        let@ () = WBT.is_bt loc bt in
        pure begin
            let@ () = add_l s bt (loc, lazy (Pp.string "forall-var")) in
@@ -782,14 +790,18 @@ module WLRT = struct
   let welltyped loc lrt = 
     let rec aux = function
       | Define ((s, it), info, lrt) ->
-         let s, lrt = LRT.alpha_rename (s, IT.bt it) lrt in
+         (* no need to alpha-rename, because context.ml ensures
+            there's no name clashes *)
+         (* let s, lrt = LRT.alpha_rename (s, IT.bt it) lrt in *)
          let@ it = WIT.infer loc it in
          let@ () = add_l s (IT.bt it) (loc, lazy (Pp.string "let-var")) in
          let@ () = add_c (LC.t_ (IT.def_ s it)) in
          let@ lrt = aux lrt in
          return (Define ((s, it), info, lrt))
       | Resource ((s, (re, re_oa_spec)), info, lrt) -> 
-         let s, lrt = LRT.alpha_rename (s, re_oa_spec) lrt in
+         (* no need to alpha-rename, because context.ml ensures
+            there's no name clashes *)
+         (* let s, lrt = LRT.alpha_rename (s, re_oa_spec) lrt in *)
          let@ (re, re_oa_spec) = WRS.welltyped (fst info) (re, re_oa_spec) in
          let@ () = add_l s re_oa_spec (loc, lazy (Pp.string "let-var")) in
          let@ () = add_r (re, O (IT.sym_ (s, re_oa_spec))) in
@@ -818,7 +830,9 @@ module WRT = struct
   let welltyped loc rt = 
     pure begin match rt with 
       | RT.Computational ((name,bt), info, lrt) ->
-         let name, lrt = LRT.alpha_rename (name, bt) lrt in
+         (* no need to alpha-rename, because context.ml ensures
+            there's no name clashes *)
+         (* let name, lrt = LRT.alpha_rename (name, bt) lrt in *)
          let@ () = WBT.is_bt (fst info) bt in
          let@ () = add_a name bt (fst info, lazy (Sym.pp name)) in
          let@ lrt = WLRT.welltyped loc lrt in
@@ -878,14 +892,18 @@ module WLAT = struct
   let welltyped i_subst i_welltyped kind loc (at : 'i LAT.t) : ('i LAT.t, type_error) m = 
     let rec aux = function
       | LAT.Define ((s, it), info, at) ->
-         let s, at = LAT.alpha_rename i_subst (s, IT.bt it) at in
+         (* no need to alpha-rename, because context.ml ensures
+            there's no name clashes *)
+         (* let s, at = LAT.alpha_rename i_subst (s, IT.bt it) at in *)
          let@ it = WIT.infer loc it in
          let@ () = add_l s (IT.bt it) (loc, lazy (Pp.string "let-var")) in
          let@ () = add_c (LC.t_ (IT.def_ s it)) in
          let@ at = aux at in
          return (LAT.Define ((s, it), info, at))
       | LAT.Resource ((s, (re, re_oa_spec)), info, at) -> 
-         let s, at = LAT.alpha_rename i_subst (s, re_oa_spec) at in
+         (* no need to alpha-rename, because context.ml ensures
+            there's no name clashes *)
+         (* let s, at = LAT.alpha_rename i_subst (s, re_oa_spec) at in *)
          let@ (re, re_oa_spec) = WRS.welltyped (fst info) (re, re_oa_spec) in
          let@ () = add_l s re_oa_spec (loc, lazy (Pp.string "let-var")) in
          let@ () = add_r (re, O (IT.sym_ (s, re_oa_spec))) in
@@ -918,7 +936,9 @@ module WAT = struct
   let welltyped i_subst i_welltyped kind loc (at : 'i AT.t) : ('i AT.t, type_error) m = 
     let rec aux = function
       | AT.Computational ((name,bt), info, at) ->
-         let name, at = AT.alpha_rename i_subst (name, bt) at in
+         (* no need to alpha-rename, because context.ml ensures
+            there's no name clashes *)
+         (* let name, at = AT.alpha_rename i_subst (name, bt) at in *)
          let@ () = WBT.is_bt (fst info) bt in
          let@ () = add_a name bt (fst info, lazy (Sym.pp name)) in
          let@ at = aux at in
@@ -950,7 +970,9 @@ module WRPD = struct
   open ResourcePredicates 
 
   let welltyped pd = 
-    let pd = ResourcePredicates.alpha_rename_definition pd in
+    (* no need to alpha-rename, because context.ml ensures
+       there's no name clashes *)
+    (* let pd = ResourcePredicates.alpha_rename_definition pd in *)
     pure begin
         let@ () = add_l pd.pointer BT.Loc (pd.loc, lazy (Pp.string "ptr-var")) in
         let@ () = 
@@ -1010,7 +1032,9 @@ module WLPD = struct
          return (Body.Case (it, cases))
       | Body.Let ((s, it), t) ->
          let@ it = WIT.infer loc it in
-         let s, t = Body.alpha_rename (s, IT.bt it) t in
+         (* no need to alpha-rename, because context.ml ensures
+            there's no name clashes *)
+         (* let s, t = Body.alpha_rename (s, IT.bt it) t in *)
          let@ () = add_l s (IT.bt it) (loc, lazy (Sym.pp s)) in
          let@ () = add_c (LC.t_ (IT.def_ s it)) in
          let@ t = welltyped_body loc return_bt t in
@@ -1022,7 +1046,9 @@ module WLPD = struct
 
 
   let welltyped (pd : LogicalPredicates.definition) = 
-    let pd = LogicalPredicates.alpha_rename_definition pd in
+    (* no need to alpha-rename, because context.ml ensures
+       there's no name clashes *)
+    (* let pd = LogicalPredicates.alpha_rename_definition pd in *)
     pure begin
         let@ () = ListM.iterM (WLS.is_ls pd.loc) (List.map snd pd.args) in
         let info = (pd.loc, lazy (Pp.string "arg-var")) in
