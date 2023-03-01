@@ -39,7 +39,7 @@ datatype tree_list {
   Cons_List {datatype tree t, datatype tree_list tail}
 }
 
-function (datatype tree_list) array_to_list (map<integer, datatype tree> arr, integer len)
+function (datatype tree_list) array_to_tree_list (map<integer, datatype tree> arr, integer len)
 
 function (map <integer, datatype tree>) default_children ()
 
@@ -54,7 +54,7 @@ predicate {datatype tree t, integer v, map <integer, datatype tree> children}
     let nodes_ptr = ((pointer)((((integer)p) + (offsetof (node, nodes)))));
     let Ns = each (integer i; (0 <= i) && (i < (num_nodes ())))
       {Indirect_Tree((pointer)(((integer)nodes_ptr) + (i * (sizeof <tree>))))};
-    let ts = array_to_list (Ns.t, num_nodes ());
+    let ts = array_to_tree_list (Ns.t, num_nodes ());
     return {t = Node {v = V.value, children = ts}, v = V.value, children = Ns.t};
   }
 }
@@ -72,7 +72,7 @@ datatype arc_in_array {
 function (boolean) in_tree (datatype tree t, datatype arc_in_array arc)
 function (integer) tree_v (datatype tree t, datatype arc_in_array arc)
 
-function (datatype tree) nth_list (datatype tree_list ts, integer i)
+function (datatype tree) nth_tree_list (datatype tree_list ts, integer i)
 
 
 void
@@ -91,15 +91,15 @@ in_tree_tree_v_lemma (tree t, int *path, int i, int path_len)
 /*@ ensures let arc2 = Arc_In_Array {arr = Xs2.value, i = i + 1, len = path_len} @*/
 /*@ ensures (in_tree(T2.t, arc)) == ((T2.t ?? (Node {}))
     ? ((i >= path_len) ? true
-        : (in_tree(nth_list(T2.t.children, Xs2.value[i]), arc2)))
+        : (in_tree(nth_tree_list(T2.t.children, Xs2.value[i]), arc2)))
     : false) @*/
 /*@ ensures (tree_v(T2.t, arc)) == ((T2.t ?? (Node {}))
     ? ((i >= path_len) ? (T2.t.v)
-        : (tree_v(nth_list(T2.t.children, Xs2.value[i]), arc2)))
+        : (tree_v(nth_tree_list(T2.t.children, Xs2.value[i]), arc2)))
     : 0) @*/
 /*@ ensures ((0 <= (Xs2.value[i])) && ((Xs2.value[i]) < (num_nodes())))
     ? ((T2.t ?? (Node {}))
-    ? ((nth_list(array_to_list (T2.children, num_nodes ()), Xs2.value[i])) ==
+    ? ((nth_tree_list(array_to_tree_list (T2.children, num_nodes ()), Xs2.value[i])) ==
             (T2.children[Xs2.value[i]]))
     : true)
     : true @*/
