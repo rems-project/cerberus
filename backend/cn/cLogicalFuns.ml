@@ -104,7 +104,7 @@ let c_fun_to_it id_loc (id : Sym.t) fsym def
   let def_args = def.LogicalPredicates.args
     |> List.map IndexTerms.sym_ in
   match fn with
-  | M_Proc (loc, args_and_body, _ft, _trusted) ->
+  | M_Proc (loc, args_and_body, _trusted) ->
      let rec ignore_l = function
        | M_Define (_, _, l) -> ignore_l l
        | M_Resource (_, _, l) -> ignore_l l

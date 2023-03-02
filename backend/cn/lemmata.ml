@@ -107,7 +107,7 @@ let check_noop _ = ()
 let check_trusted_fun_body fsym (lsym, def) = 
   let open Mucore in
   match def with
-  | Mu.M_Proc (loc, args_body, _ft, _trusted) ->
+  | Mu.M_Proc (loc, args_body, _trusted) ->
      let rec check_l = function
        | M_Define (_, _, l) -> check_l l
        | M_Resource (_, _, l) -> check_l l

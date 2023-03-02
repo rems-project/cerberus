@@ -258,7 +258,7 @@ let mResources res t = List.fold_right mResource res t
 
 type 'TY mu_label_def = 
   | M_Return of loc
-  | M_Label of loc * ('TY mu_expr) mu_arguments * T.lt * annot list
+  | M_Label of loc * ('TY mu_expr) mu_arguments * annot list
 
 type 'TY mu_label_defs = 
   (symbol, ('TY mu_label_def)) Pmap.map
@@ -271,7 +271,7 @@ type 'TY mu_proc_args_and_body =
 
 type 'TY mu_fun_map_decl =
   (* | M_Fun of T.bt * (symbol * T.bt) list * 'TY mu_pexpr *)
-  | M_Proc of Location_ocaml.t * 'TY mu_proc_args_and_body * T.ft * trusted
+  | M_Proc of Location_ocaml.t * 'TY mu_proc_args_and_body * trusted
   | M_ProcDecl of Location_ocaml.t * T.ft
   (* | M_BuiltinDecl of Location_ocaml.t * T.bt * T.bt list *)
 

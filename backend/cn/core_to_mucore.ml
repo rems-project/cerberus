@@ -1044,12 +1044,12 @@ let normalise_label (markers_env, precondition_cn_desugaring_state)
             (List.combine lt label_args) 
             (accesses, inv)
         in
-        let lt = 
-          at_of_arguments (fun _body ->
-              False.False
-            ) label_args_and_body 
-        in
-        return (M_Label (loc, label_args_and_body, lt, annots))
+        (* let lt =  *)
+        (*   at_of_arguments (fun _body -> *)
+        (*       False.False *)
+        (*     ) label_args_and_body  *)
+        (* in *)
+        return (M_Label (loc, label_args_and_body, annots))
      | Some (LAloop_body loop_id) ->
         assert_error loc !^"body label has not been inlined"
      | Some (LAloop_continue loop_id) ->
@@ -1127,9 +1127,9 @@ let normalise_fun_map_decl (markers_env, ail_prog) env globals (funinfo: mi_funi
          (List.combine (List.combine ail_args arg_cts) args) 
          (accesses, requires)
      in
-     let ft = at_of_arguments (fun (_body, _labels, rt) -> rt) args_and_body in
+     (* let ft = at_of_arguments (fun (_body, _labels, rt) -> rt) args_and_body in *)
      
-     return (Some (M_Proc(loc, args_and_body, ft, trusted), mk_functions))
+     return (Some (M_Proc(loc, args_and_body, trusted), mk_functions))
   | Mi_ProcDecl(loc, ret_bt, bts) -> 
      return None
      (* let@ trusted, accesses, requires, ensures = Parse.parse_function_spec attrs in *)

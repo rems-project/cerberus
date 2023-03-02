@@ -7,6 +7,7 @@ module RET = ResourceTypes
 module LRT = LogicalReturnTypes
 module AT = ArgumentTypes
 module LAT = LogicalArgumentTypes
+module Mu = Mucore
 
 open Global
 open TE
@@ -954,6 +955,14 @@ module WAT = struct
 end
 
 
+
+
+
+
+
+
+
+
 module WFT = struct 
   let welltyped = WAT.welltyped WRT.subst WRT.welltyped
 end
@@ -964,6 +973,116 @@ end
 
 (* module WPackingFT(struct let name_bts = pd.oargs end) = 
    WLAT(WOutputDef.welltyped (pd.oargs)) *)
+
+
+
+
+
+
+
+
+module WLArgs = struct
+
+  let welltyped 
+        (i_welltyped : Loc.t -> 'i -> ('i * 'it, type_error) m)
+        kind
+        loc
+        (at : 'i Mu.mu_arguments_l)
+      : ('i Mu.mu_arguments_l * 'it LAT.t, type_error) m = 
+    let rec aux = function
+      | Mu.M_Define ((s, it), info, at) ->
+         (* no need to alpha-rename, because context.ml ensures
+            there's no name clashes *)
+         (* let s, at = LAT.alpha_rename i_subst (s, IT.bt it) at in *)
+         let@ it = WIT.infer loc it in
+         let@ () = add_l s (IT.bt it) (loc, lazy (Pp.string "let-var")) in
+         let@ () = add_c (LC.t_ (IT.def_ s it)) in
+         let@ at, typ = aux at in
+         return (Mu.M_Define ((s, it), info, at), 
+                 LAT.Define ((s, it), info, typ))
+      | Mu.M_Resource ((s, (re, re_oa_spec)), info, at) -> 
+         (* no need to alpha-rename, because context.ml ensures
+            there's no name clashes *)
+         (* let s, at = LAT.alpha_rename i_subst (s, re_oa_spec) at in *)
+         let@ (re, re_oa_spec) = WRS.welltyped (fst info) (re, re_oa_spec) in
+         let@ () = add_l s re_oa_spec (loc, lazy (Pp.string "let-var")) in
+         let@ () = add_r (re, O (IT.sym_ (s, re_oa_spec))) in
+         let@ at, typ = aux at in
+         return (Mu.M_Resource ((s, (re, re_oa_spec)), info, at),
+                 LAT.Resource ((s, (re, re_oa_spec)), info, typ))
+      | Mu.M_Constraint (lc, info, at) ->
+         let@ lc = WLC.welltyped (fst info) lc in
+         let@ () = add_c lc in
+         let@ at, typ = aux at in
+         return (Mu.M_Constraint (lc, info, at),
+                 LAT.Constraint (lc, info, typ))
+      | Mu.M_I i -> 
+         let@ provable = provable loc in
+         let@ () = match provable (LC.t_ (IT.bool_ false)) with
+           | `True -> fail (fun _ -> {loc; msg = Generic !^("this "^kind^" makes inconsistent assumptions")})
+           | `False -> return ()
+         in
+         let@ i, it = i_welltyped loc i in
+         return (Mu.M_I i, 
+                 LAT.I it)
+    in
+    pure (aux at)
+
+
+
+end
+
+
+
+module WArgs = struct
+
+  let welltyped 
+        (i_welltyped : Loc.t -> 'i -> ('i * 'it, type_error) m) 
+        kind 
+        loc
+        (at : 'i Mu.mu_arguments) 
+      : ('i Mu.mu_arguments * 'it AT.t, type_error) m = 
+    let rec aux = function
+      | Mu.M_Computational ((name,bt), info, at) ->
+         (* no need to alpha-rename, because context.ml ensures
+            there's no name clashes *)
+         (* let name, at = AT.alpha_rename i_subst (name, bt) at in *)
+         let@ () = WBT.is_bt (fst info) bt in
+         let@ () = add_a name bt (fst info, lazy (Sym.pp name)) in
+         let@ at, typ = aux at in
+         return (Mu.M_Computational ((name, bt), info, at),
+                 AT.Computational ((name, bt), info, typ))
+      | Mu.M_L at ->
+         let@ at, typ = WLArgs.welltyped i_welltyped kind loc at in
+         return (Mu.M_L at, AT.L typ)
+    in
+    pure (aux at)
+
+end
+
+
+
+
+module WProc = struct 
+  let welltyped (loc : Loc.t) (at : _ Mu.mu_proc_args_and_body)
+      : (_ Mu.mu_proc_args_and_body * AT.ft, type_error) m 
+    =
+    WArgs.welltyped (fun loc (body, labels, rt) ->
+        let@ rt = WRT.welltyped loc rt in
+        return ((body, labels, rt), rt)
+      ) "function" loc at
+end
+
+module WLabel = struct
+  open Mu
+  let welltyped (loc : Loc.t) (lt : _ mu_expr mu_arguments)
+      : (_ mu_expr mu_arguments * AT.lt, type_error) m 
+    =
+    WArgs.welltyped (fun loc body -> 
+        return (body, False.False)
+      ) "loop/label" loc lt
+end
+
 
 module WRPD = struct
 
