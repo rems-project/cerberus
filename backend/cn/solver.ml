@@ -785,6 +785,7 @@ let maybe_save_slow_problem solv_inst lc lc_t time solver = match save_slow_prob
 let provable ~loc ~solver ~global ~assumptions ~simp_ctxt ~pointer_facts lc = 
   debug 12 (lazy (item "provable: checking constraint" (LC.pp lc)));
   let context = solver.context in
+  debug 13 (lazy (item "context" (Context.pp_constraints assumptions)));
   let rtrue () = model_state := No_model; `True in
   let rfalse qs solver = model_state := Model (context, solver, qs); `False in
   match shortcut simp_ctxt lc with
