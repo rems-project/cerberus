@@ -8,7 +8,7 @@ open import Cn
 type cn_desugaring_state = <|
   (* cn_oargs: map Symbol.sym (map Symbol.identifier (Symbol.sym * Cn.base_type Ctype.ctype)); *)
   cn_idents: map (cn_namespace * Symbol.identifier) Symbol.sym;
-  cn_current_scope: map (cn_namespace * Symbol.identifier) Symbol.sym;
+  cn_scopes: list (map (cn_namespace * Symbol.identifier) Symbol.sym);
   cn_predicates: list (Symbol.identifier * (Symbol.sym * cn_predicate Symbol.sym Ctype.ctype));
   cn_datatypes: list (Symbol.identifier * (cn_datatype Symbol.sym Ctype.ctype));
   cn_functions: list (Symbol.identifier * (Symbol.sym * cn_function Symbol.sym Ctype.ctype));
@@ -17,7 +17,7 @@ type cn_desugaring_state = <|
 
 let initial_cn_desugaring_state = <|
   cn_idents= Map.empty;
-  cn_current_scope= Map.empty;
+  cn_scopes= [Map.empty];
   cn_predicates= [];
   cn_datatypes= [];
   cn_functions= [];

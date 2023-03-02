@@ -4524,8 +4524,11 @@ let rec desugar_cn_expr (CNExpr loc expr_) =
        E.mapM (fun (nm2, exp) -> pair nm2 <$> desugar_cn_expr exp) es >>= fun es ->
        E.return (CNExpr_cons sym es)
     | CNExpr_each ident r e ->
+        E.push_cn_scope >>= fun () ->
         E.register_cn_ident CN_vars ident >>= fun sym ->
-        CNExpr_each sym r <$> desugar_cn_expr e
+        desugar_cn_expr e >>= fun e ->
+        E.pop_cn_scope >>= fun () ->
+        E.return (CNExpr_each sym r e)
     | CNExpr_ite e1 e2 e3 ->
         CNExpr_ite <$> desugar_cn_expr e1
                     <*> desugar_cn_expr e2
@@ -4578,12 +4581,14 @@ let desugar_cn_resource = function
                   <*> desugar_cn_pred pred
                   <*> E.mapM desugar_cn_expr es
   | CN_each ident bTy e loc pred es ->
+      desugar_cn_pred pred >>= fun pred ->
+      desugar_cn_base_type (Loc.locOf ident) bTy >>= fun bTy ->
+      E.push_cn_scope >>= fun () ->
       E.register_cn_ident CN_vars ident >>= fun sym ->
-      CN_each sym <$> desugar_cn_base_type (Loc.locOf ident) bTy
-                  <*> desugar_cn_expr e
-                  <*> E.return loc
-                  <*> desugar_cn_pred pred
-                  <*> E.mapM desugar_cn_expr es
+      desugar_cn_expr e >>= fun e ->
+      E.mapM desugar_cn_expr es >>= fun es ->
+      E.pop_cn_scope >>= fun () ->
+      E.return (CN_each sym bTy e loc pred es)
 end
 
 let rec desugar_cn_func_body body =
@@ -4618,31 +4623,34 @@ let desugar_o_cn_func_body = function
        E.return (Just body')
   end
   
-let desugar_cn_assertion ass =
-  match ass with
+let desugar_cn_assertion a =
+  match a with
     | CN_assert_exp e -> CN_assert_exp <$> desugar_cn_expr e
     | CN_assert_qexp ident bTy e1 e2 ->
+      desugar_cn_base_type (Loc.locOf ident) bTy >>= fun bTy ->
+      E.push_cn_scope >>= fun () ->
       E.register_cn_ident CN_vars ident >>= fun sym ->
-      CN_assert_qexp sym <$> desugar_cn_base_type (Loc.locOf ident) bTy
-                         <*> desugar_cn_expr e1
-                         <*> desugar_cn_expr e2
+      desugar_cn_expr e1 >>= fun e1 ->
+      desugar_cn_expr e2 >>= fun e2 ->
+      E.pop_cn_scope >>= fun () ->
+      E.return (CN_assert_qexp sym bTy e1 e2)
   end
 
-let rec desugar_cn_clause clause =
+let rec desugar_cn_clause_aux clause =
   match clause with
     | CN_letResource loc ident res c ->
         desugar_cn_resource res              >>= fun res' ->
         E.register_cn_ident CN_vars ident >>= fun sym  ->
-        desugar_cn_clause c                  >>= fun c'   ->
+        desugar_cn_clause_aux c                  >>= fun c'   ->
         E.return (CN_letResource loc sym res' c')
     | CN_letExpr loc ident e c ->
         desugar_cn_expr e                    >>= fun e'  ->
         E.register_cn_ident CN_vars ident >>= fun sym ->
-        desugar_cn_clause c                  >>= fun c'  ->
+        desugar_cn_clause_aux c                  >>= fun c'  ->
         E.return (CN_letExpr loc sym e' c')
-    | CN_assert loc ass c ->
-        CN_assert loc <$> desugar_cn_assertion ass
-                      <*> desugar_cn_clause c
+    | CN_assert loc a c ->
+        CN_assert loc <$> desugar_cn_assertion a
+                      <*> desugar_cn_clause_aux c
     | CN_return loc xs -> 
         E.mapM (fun (x, e) ->
           desugar_cn_expr e >>= fun e' ->
@@ -4650,6 +4658,13 @@ let rec desugar_cn_clause clause =
         ) xs >>= fun xs' ->
         CN_return loc <$> E.check_cn_oargs loc xs'
   end
+
+let desugar_cn_clause clause = 
+  E.push_cn_scope >>= fun () ->
+  desugar_cn_clause_aux clause >>= fun clause ->
+  E.pop_cn_scope >>= fun () ->
+  E.return clause
+
 
 let rec desugar_cn_clauses clauses =
   match clauses with

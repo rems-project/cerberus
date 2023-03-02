@@ -934,7 +934,35 @@ let get_cn_state =
 
 
 
+let assert_cn_bottom_scope = 
+  get_cn_state >>= fun st ->
+  match st.Cn_desugaring.cn_scopes with
+  | [] -> Assert_extra.failwith "cn_scopes is empty but should never be empty"
+  | [sc] -> return ()
+  | _ -> Assert_extra.failwith "cn_scopes should be a singleton but is not"
+  end
 
+
+let current_cn_scope s =
+  List_extra.head s.cn_scopes
+
+let push_cn_scope =
+  update_cn_state (fun s ->
+      <| s with cn_scopes = current_cn_scope s :: s.cn_scopes |>
+    )
+
+let pop_cn_scope = 
+  update_cn_state (fun s ->
+      <| s with cn_scopes = List_extra.tail s.cn_scopes |>
+    )
+
+
+let update_current_cn_scope f =
+  update_cn_state (fun s ->
+      let cur = List_extra.head s.cn_scopes in
+      let rest = List_extra.tail s.cn_scopes in
+      <| s with cn_scopes = f cur :: rest |>
+    )
 
 
 
@@ -942,7 +970,7 @@ val resolve_cn_ident_opt: forall 'ty. Cn.cn_namespace -> Symbol.identifier -> de
 let resolve_cn_ident_opt ns ident =
   get_inner >>= fun inner ->
   let st = inner.cn_state in
-  match Map.lookup (ns, ident) st.cn_current_scope with
+  match Map.lookup (ns, ident) (current_cn_scope st) with
     | Just sym ->
         return (Just (sym, Cn.Var_kind_cn))
     | Nothing ->
@@ -976,8 +1004,8 @@ let resolve_cn_ident ns ident =
      let same_ns xs = List.concat (List.map (fun (ns2, sym) -> if ns2 = ns then [sym] else []) xs) in
      let () = Debug.print_debug 8 []
                 (fun () -> "available CN identifiers in ns (" ^ show ns ^ ") in local scope:") in
-     let () = Debug.print_debug 8 []
-                (fun () -> show (same_ns (Set_extra.toList (Map.domain st.cn_current_scope)))) in
+     (* let () = Debug.print_debug 8 [] *)
+     (*            (fun () -> show (same_ns (Set_extra.toList (Map.domain st.cn_current_scope)))) in *)
      let () = Debug.print_debug 8 [] (fun () -> "and in global scope:") in
      let () = Debug.print_debug 8 []
                 (fun () -> show (same_ns (Set_extra.toList (Map.domain st.cn_idents)))) in
@@ -1004,8 +1032,8 @@ let register_cn_ident ns ((Symbol.Identifier loc str) as ident) =
       ) >>= fun () ->
       return sym
     | false ->
-      update_cn_state (fun st ->
-        <| st with cn_current_scope= Map.insert (ns, ident) sym st.cn_current_scope |>
+      update_current_cn_scope (fun sc ->
+          Map.insert (ns, ident) sym sc
       ) >>= fun () ->
       return sym
     end
@@ -1034,7 +1062,7 @@ let check_cn_oargs loc xs =
       | (Nothing, _) ->
           fail (Loc.locOf ident) (Errors.Desugar_CN (Cn.CNErr_unknown_identifier Cn.CN_oarg ident))
     end
-  ) ([], Map_extra.toList st.cn_current_scope) xs >>= fun (rev_acc, oargs) ->
+  ) ([], Map_extra.toList (current_cn_scope st)) xs >>= fun (rev_acc, oargs) ->
   match List.filter (function ((CN_oarg, _), _) -> true | _ -> false end) oargs with
     | [] ->
         return (List.reverse rev_acc)
@@ -1062,6 +1090,7 @@ let register_cn_function ident mk =
     | Nothing ->
         resolve_cn_ident Cn.CN_function ident >>= fun sym_resolved ->
         let sym = Cn.ensure_not_c_variable sym_resolved in
+        push_cn_scope >>= fun () ->
         mk >>= fun (attrs, return_bty, args, body) ->
         let func = <|
           Cn.cn_func_loc= Loc.locOf ident;
@@ -1072,9 +1101,10 @@ let register_cn_function ident mk =
           Cn.cn_func_body= body;
         |> in
         (* liftCnDesug *) begin
+          pop_cn_scope >>= fun () ->
+          assert_cn_bottom_scope >>= fun () -> 
           update_cn_state (fun cn_st' ->
-            <| cn_st' with Cn_desugaring.cn_functions= (ident, (sym, func)) :: cn_st'.Cn_desugaring.cn_functions;
-                           Cn_desugaring.cn_current_scope= Map.empty; |>
+            <| cn_st' with Cn_desugaring.cn_functions= (ident, (sym, func)) :: cn_st'.Cn_desugaring.cn_functions; |>
           )
         end
     | Just _ ->
@@ -1088,6 +1118,7 @@ let register_cn_predicate ident mk =
     | Nothing ->
         resolve_cn_ident Cn.CN_predicate ident >>= fun sym_resolved ->
         let sym = Cn.ensure_not_c_variable sym_resolved in
+        push_cn_scope >>= fun () ->
         mk >>= fun (attrs, oargs, iargs, clauses) ->
         let pred = <|
           Cn.cn_pred_loc= Loc.locOf ident;
@@ -1098,9 +1129,10 @@ let register_cn_predicate ident mk =
           Cn.cn_pred_clauses= clauses;
         |> in
         (* liftCnDesug *) begin
+          pop_cn_scope >>= fun () ->
+          assert_cn_bottom_scope >>= fun () -> 
           update_cn_state (fun cn_st' ->
-            <| cn_st' with Cn_desugaring.cn_predicates= (ident, (sym, pred)) :: cn_st'.Cn_desugaring.cn_predicates;
-                           Cn_desugaring.cn_current_scope= Map.empty; |>
+            <| cn_st' with Cn_desugaring.cn_predicates= (ident, (sym, pred)) :: cn_st'.Cn_desugaring.cn_predicates; |>
           )
         end
     | Just _ ->
@@ -1113,6 +1145,7 @@ let register_cn_datatype ident mk_cases =
     | Nothing ->
         resolve_cn_ident Cn.CN_datatype_nm ident >>= fun sym_resolved ->
         let sym = Cn.ensure_not_c_variable sym_resolved in
+        push_cn_scope >>= fun () ->
         mk_cases >>= fun cases ->
         let dt = <|
           Cn.cn_dt_loc= Loc.locOf ident;
@@ -1120,9 +1153,10 @@ let register_cn_datatype ident mk_cases =
           Cn.cn_dt_cases= cases;
         |> in
         (* liftCnDesug *) begin
+          pop_cn_scope >>= fun () ->
+          assert_cn_bottom_scope >>= fun () -> 
           update_cn_state (fun cn_st' ->
-            <| cn_st' with Cn_desugaring.cn_datatypes = (ident, dt) :: cn_st'.Cn_desugaring.cn_datatypes;
-                           Cn_desugaring.cn_current_scope= Map.empty; |>
+            <| cn_st' with Cn_desugaring.cn_datatypes = (ident, dt) :: cn_st'.Cn_desugaring.cn_datatypes; |>
           )
         end
     | Just _ ->
