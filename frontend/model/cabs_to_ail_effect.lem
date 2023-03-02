@@ -933,66 +933,84 @@ let get_cn_state =
   get_inner >>= fun inner -> return inner.cn_state
 
 
-val register_cn_ident: Cn.cn_namespace -> Symbol.identifier -> desugM Symbol.sym
-let register_cn_ident ns ((Symbol.Identifier loc str) as ident) =
-  let sym = Symbol.fresh_cn str in
-  let () = Debug.print_debug 4 [] (fun () ->
-      "adding a CN identifier: " ^ str ^ "(" ^ show ns ^ ")") in
-  check_cn_ident ns ident >>= function
-  | true ->
-    update_cn_state (fun st ->
-      <| st with cn_idents= Map.insert (ns, ident) sym st.cn_idents |>
-    ) >>= fun () ->
-    return sym
-  | false ->
-    update_cn_state (fun st ->
-      <| st with cn_current_scope= Map.insert (ns, ident) sym st.cn_current_scope |>
-    ) >>= fun () ->
-    return sym
-  end
 
 
 
 
-val resolve_cn_ident: forall 'ty. Cn.cn_namespace -> Symbol.identifier -> desugM (Symbol.sym * Cn.cn_var_kind)
-let resolve_cn_ident ns ident =
+
+val resolve_cn_ident_opt: forall 'ty. Cn.cn_namespace -> Symbol.identifier -> desugM (maybe (Symbol.sym * Cn.cn_var_kind))
+let resolve_cn_ident_opt ns ident =
   get_inner >>= fun inner ->
   let st = inner.cn_state in
-  let fail () =
-    let same_ns xs = List.concat (List.map (fun (ns2, sym) -> if ns2 = ns then [sym] else []) xs) in
-    let () = Debug.print_debug 8 []
-        (fun () -> "available CN identifiers in ns (" ^ show ns ^ ") in local scope:") in
-    let () = Debug.print_debug 8 []
-        (fun () -> show (same_ns (Set_extra.toList (Map.domain st.cn_current_scope)))) in
-    let () = Debug.print_debug 8 [] (fun () -> "and in global scope:") in
-    let () = Debug.print_debug 8 []
-        (fun () -> show (same_ns (Set_extra.toList (Map.domain st.cn_idents)))) in
-    fail (Loc.locOf ident) (Errors.Desugar_CN (Cn.CNErr_unknown_identifier ns ident)) in
   match Map.lookup (ns, ident) st.cn_current_scope with
     | Just sym ->
-        return (sym, Cn.Var_kind_cn)
+        return (Just (sym, Cn.Var_kind_cn))
     | Nothing ->
         match (Map.lookup (ns, ident) st.cn_idents, ns) with
           | (Just sym, _) ->
-              return (sym, Cn.Var_kind_cn)
+              return (Just (sym, Cn.Var_kind_cn))
           | (Nothing, Cn.CN_vars) ->
              (* based on earlier Cabs_to_ail_effect code  *)
               match Scope_table.resolve (ident, Namespace_ordinary) inner.registered_identifiers with
               | Nothing -> 
-                 fail ()
+                 return Nothing
               | Just (_, Internal sym _identifier_kind _linkage) -> 
-                 return (sym, Cn.Var_kind_c)
+                 return (Just (sym, Cn.Var_kind_c))
               | Just (_, External) ->
                  match Map.lookup (ident, Namespace_ordinary) inner.registered_external_identifiers with
-                 | Nothing -> fail ()
+                 | Nothing -> return Nothing
                  | Just (_scope, (sym, _identifier_kind, _linkage)) ->
-                    return (sym, Cn.Var_kind_c)
+                    return (Just (sym, Cn.Var_kind_c))
                  end
               end
           | (Nothing, _) ->
-             fail ()
+             return Nothing
         end
   end
+
+let resolve_cn_ident ns ident =
+  resolve_cn_ident_opt ns ident >>= function
+  | Nothing ->
+     get_inner >>= fun inner ->
+     let st = inner.cn_state in
+     let same_ns xs = List.concat (List.map (fun (ns2, sym) -> if ns2 = ns then [sym] else []) xs) in
+     let () = Debug.print_debug 8 []
+                (fun () -> "available CN identifiers in ns (" ^ show ns ^ ") in local scope:") in
+     let () = Debug.print_debug 8 []
+                (fun () -> show (same_ns (Set_extra.toList (Map.domain st.cn_current_scope)))) in
+     let () = Debug.print_debug 8 [] (fun () -> "and in global scope:") in
+     let () = Debug.print_debug 8 []
+                (fun () -> show (same_ns (Set_extra.toList (Map.domain st.cn_idents)))) in
+     fail (Loc.locOf ident) (Errors.Desugar_CN (Cn.CNErr_unknown_identifier ns ident)) 
+  | Just (s, kind) -> 
+     return (s, kind)
+  end
+
+
+
+val register_cn_ident: Cn.cn_namespace -> Symbol.identifier -> desugM Symbol.sym
+let register_cn_ident ns ((Symbol.Identifier loc str) as ident) =
+  resolve_cn_ident_opt ns ident >>= function
+  | Just (s, kind) ->
+     fail (Loc.locOf ident) (Errors.Desugar_CN (CNErr_redeclaration ns))
+  | Nothing ->
+    let sym = Symbol.fresh_cn str in
+    let () = Debug.print_debug 4 [] (fun () ->
+        "adding a CN identifier: " ^ str ^ "(" ^ show ns ^ ")") in
+    check_cn_ident ns ident >>= function
+    | true ->
+      update_cn_state (fun st ->
+        <| st with cn_idents= Map.insert (ns, ident) sym st.cn_idents |>
+      ) >>= fun () ->
+      return sym
+    | false ->
+      update_cn_state (fun st ->
+        <| st with cn_current_scope= Map.insert (ns, ident) sym st.cn_current_scope |>
+      ) >>= fun () ->
+      return sym
+    end
+  end
+
 
 let rec fetch_oarg acc ident = function
   | [] ->
