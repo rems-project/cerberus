@@ -112,10 +112,10 @@ type message =
   | Unknown_resource_predicate of {id: Sym.t; logical: bool}
   | Unknown_logical_predicate of {id: Sym.t; resource: bool}
   | Unknown_member of BT.tag * BT.member
-  | Unknown_record_member of BT.member_types * Id.t
+  | Unknown_record_member of Pp.doc * Id.t
 
   (* some from Kayvan's compilePredicates module *)
-  | First_iarg_missing of { pname: ResourceTypes.predicate_name }
+  | First_iarg_missing
   | First_iarg_not_pointer of { pname : ResourceTypes.predicate_name; found_bty: BaseTypes.t }
 
 
@@ -127,11 +127,10 @@ type message =
   | Number_input_arguments of {has: int; expect: int}
   | Number_output_arguments of {has: int; expect: int}
   | Mismatch of { has: doc; expect: doc; }
-  | Illtyped_it : {context: IT.t; it: IT.t; has: LS.t; expected: string; ctxt : Context.t} -> message (* 'expected' as in Kayvan's Core type checker *)
-  | Illtyped_it' : {it: IT.t; has: LS.t; expected: string} -> message (* 'expected' as in Kayvan's Core type checker *)
-  | NIA : {context: IT.t; it: IT.t; hint : string; ctxt : Context.t} -> message
-  | TooBigExponent : {context: IT.t; it: IT.t; ctxt : Context.t} -> message
-  | NegativeExponent : {context: IT.t; it: IT.t; ctxt : Context.t} -> message
+  | Illtyped_it : {it: Pp.doc; has: Pp.doc; expected: string; o_ctxt : Context.t option} -> message (* 'expected' and 'has' as in Kayvan's Core type checker *)
+  | NIA : {it: IT.t; hint : string; ctxt : Context.t} -> message
+  | TooBigExponent : {it: IT.t; ctxt : Context.t} -> message
+  | NegativeExponent : {it: IT.t; ctxt : Context.t} -> message
   | Polymorphic_it : 'bt IndexTerms.term -> message
   | Write_value_unrepresentable of {ct: Sctypes.t; location: IT.t; value: IT.t; ctxt : Context.t; model : Solver.model_with_q }
   | Int_unrepresentable of {value : IT.t; ict : Sctypes.t; ctxt : Context.t; model : Solver.model_with_q}
@@ -143,6 +142,8 @@ type message =
   | StaticError of {err : string; ctxt : Context.t; model : Solver.model_with_q}
   | Generic of Pp.document
   | Generic_with_model of {err : Pp.document; model : Solver.model_with_q; ctxt : Context.t}
+
+  | Parser of Cerb_frontend.Errors.cparser_cause
 
 
 type type_error = {
@@ -215,24 +216,22 @@ let pp_message te =
            Id.pp member
      in
      { short; descr = Some descr; state = None; trace = None }
-  | Unknown_record_member (members, member) ->
+  | Unknown_record_member (bt, member) ->
      let short = !^"Unknown member" ^^^ Id.pp member in
      let descr =
-       !^"struct type" ^^^ BT.pp (Record members) ^^^
+       !^"struct type" ^^^ bt ^^^
          !^"does not have member" ^^^
            Id.pp member
      in
      { short; descr = Some descr; state = None; trace = None }
-  | First_iarg_missing { pname } ->
+  | First_iarg_missing ->
      let short = !^"Missing pointer input argument" in
-     let descr = 
-       !^ "a predicate definition must have at least one iarg (missing from: " ^^ ResourceTypes.pp_predicate_name pname ^^ !^ ")"
-     in
+     let descr = !^ "a predicate definition must have at least one input argument" in
      { short; descr = Some descr; state = None; trace = None }
   | First_iarg_not_pointer { pname; found_bty } ->
      let short = !^"Non-pointer first input argument" in
      let descr = 
-        !^ "the first iarg of predicate" ^^^ Pp.squotes (ResourceTypes.pp_predicate_name pname) ^^^
+        !^ "the first input argument of predicate" ^^^ Pp.squotes (ResourceTypes.pp_predicate_name pname) ^^^
         !^ "must have type" ^^^ Pp.squotes (BaseTypes.(pp Loc)) ^^^ !^ "but was found with type" ^^^
         Pp.squotes (BaseTypes.(pp found_bty))
      in
@@ -292,51 +291,37 @@ let pp_message te =
          !^"but found value of type" ^^^ squotes has
      in
      { short; descr = Some descr; state = None; trace = None }
-  | Illtyped_it {context; it; has; expected; ctxt} ->
-     let it = IT.pp it in
-     let context = IT.pp context in
-     let short = !^"Type error" in
-     let descr =
-       !^"Illtyped expression" ^^ squotes context ^^ dot ^^^
-         !^"Expected" ^^^ it ^^^ !^"to be" ^^^ squotes !^expected ^^^
-           !^"but is" ^^^ squotes (LS.pp has)
-     in
-     { short; descr = Some descr; state = None; trace = None }
-  | Illtyped_it' {it; has; expected} ->
-     let it = IT.pp it in
+  | Illtyped_it {it; has; expected; o_ctxt} ->
      let short = !^"Type error" in
      let descr =
        !^"Illtyped expression" ^^ squotes it ^^ dot ^^^
          !^"Expected" ^^^ it ^^^ !^"to be" ^^^ squotes !^expected ^^^
-           !^"but is" ^^^ squotes (LS.pp has)
+           !^"but is" ^^^ squotes has
      in
      { short; descr = Some descr; state = None; trace = None }
-  | NIA {context; it; hint; ctxt} ->
+  | NIA {it; hint; ctxt} ->
      let it = IT.pp it in
-     let context = IT.pp context in
      let short = !^"Type error" in
      let descr = 
-       !^"Illtyped expression" ^^ squotes context ^^ dot ^^^
+       !^"Illtyped expression" ^^ squotes it ^^ dot ^^^
          !^"Non-linear integer arithmetic in the specification term" ^^^ it ^^ dot ^^^
            !^hint
      in
      { short; descr = Some descr; state = None; trace = None }
-  | TooBigExponent {context; it; ctxt} ->
+  | TooBigExponent {it; ctxt} ->
      let it = IT.pp it in
-     let context = IT.pp context in
      let short = !^"Type error" in
      let descr = 
-       !^"Illtyped expression" ^^ squotes context ^^ dot ^^^
+       !^"Illtyped expression" ^^ squotes it ^^ dot ^^^
          !^"Too big exponent in the specification term" ^^^ it ^^ dot ^^^
            !^("Exponent must fit int32 type")
      in
      { short; descr = Some descr; state = None; trace = None }
-  | NegativeExponent {context; it; ctxt} ->
+  | NegativeExponent {it; ctxt} ->
      let it = IT.pp it in
-     let context = IT.pp context in
      let short = !^"Type error" in
      let descr = 
-       !^"Illtyped expression" ^^ squotes context ^^ dot ^^^
+       !^"Illtyped expression" ^^ squotes it ^^ dot ^^^
          !^"Negative exponent in the specification term" ^^^ it ^^ dot ^^^
            !^("Exponent must be non-negative")
      in
@@ -404,6 +389,9 @@ let pp_message te =
      let short = err in
      let state = Explain.state ctxt model Explain.no_ex in
      { short; descr = None; state = Some state; trace = None }
+  | Parser err ->
+     let short = !^(Cerb_frontend.Pp_errors.string_of_cparser_cause err) in
+     { short; descr = None; state = None; trace = None }
 
 
 type t = type_error

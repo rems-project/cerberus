@@ -14,7 +14,7 @@ module SymMap = Map.Make(Sym)
 module S = Solver
 module Loc = Locations
 module LP = LogicalPredicates
-module Mu = NewMu.New
+module Mu = Mucore
 module RI = ResourceInference
 
 open Tools
@@ -23,7 +23,6 @@ open Context
 open IT
 open TypeErrors
 open Mucore
-open Mu
 open Pp
 open BT
 open Resources
@@ -115,11 +114,11 @@ let rec pattern_match (M_Pattern (loc, _, pattern)) it =
      | _ -> 
         assert false
 
-let pp_pattern_match p (patv, (l_vs, a_vs)) =
-  let open Pp in
-  NewMu.PP_MUCORE.pp_pattern p ^^ colon ^^^ IT.pp patv ^^ colon ^^^
-  parens (list (fun (nm, bt) -> Sym.pp nm ^^ colon ^^^ BT.pp bt) l_vs) ^^^
-  parens (list (fun (nm, (bt, lsym)) -> Sym.pp nm ^^ colon ^^^ BT.pp bt ^^ colon ^^^ Sym.pp lsym) a_vs)
+(* let pp_pattern_match p (patv, (l_vs, a_vs)) = *)
+(*   let open Pp in *)
+(*   NewMu.PP_MUCORE.pp_pattern p ^^ colon ^^^ IT.pp patv ^^ colon ^^^ *)
+(*   parens (list (fun (nm, bt) -> Sym.pp nm ^^ colon ^^^ BT.pp bt) l_vs) ^^^ *)
+(*   parens (list (fun (nm, (bt, lsym)) -> Sym.pp nm ^^ colon ^^^ BT.pp bt ^^ colon ^^^ Sym.pp lsym) a_vs)s *)
 
 
 
@@ -496,7 +495,7 @@ let rec check_pexpr (pe : 'bty mu_pexpr) ~(expect:BT.t)
   let (M_Pexpr (loc, _, _, pe_)) = pe in
   let@ () = print_with_ctxt (fun ctxt ->
       debug 3 (lazy (action "inferring pure expression"));
-      debug 3 (lazy (item "expr" (NewMu.pp_pexpr pe)));
+      debug 3 (lazy (item "expr" (Pp_mucore.pp_pexpr pe)));
       debug 3 (lazy (item "ctxt" (Context.pp ctxt)))
     )
   in
@@ -649,12 +648,12 @@ let rec check_pexpr (pe : 'bty mu_pexpr) ~(expect:BT.t)
            if Z.lt z' Z.zero then
              (* we should relax this and map to exp_no_smt_ if we
                 can handle negative exponents there *)
-             fail (fun ctxt -> {loc; msg = NegativeExponent {context = it; it; ctxt}})
+             fail (fun ctxt -> {loc; msg = NegativeExponent {it; ctxt}})
            else if Z.fits_int32 z' then
              k it
            else 
              (* we can probably just relax this and map to exp_no_smt_ *)
-             fail (fun ctxt -> {loc; msg = TooBigExponent {context =it; it; ctxt}})
+             fail (fun ctxt -> {loc; msg = TooBigExponent {it; ctxt}})
         | _ ->
            k (warn_uf loc "power_uf"; exp_no_smt_ (v1, v2))
         end)
@@ -687,7 +686,7 @@ let rec check_pexpr (pe : 'bty mu_pexpr) ~(expect:BT.t)
   | M_PEunion _ ->
      Debug_ocaml.error "todo: PEunion"
   | M_PEcfunction pe ->
-     debug 1 (lazy (!^"function pointer:" ^^^ NewMu.pp_pexpr pe));
+     debug 1 (lazy (!^"function pointer:" ^^^ Pp_mucore.pp_pexpr pe));
      unsupported loc !^"function pointers"
   | M_PEmemberof _ ->
      Debug_ocaml.error "todo: M_PEmemberof"
@@ -959,7 +958,7 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
   let@ locs = get_loc_trace () in
   let@ () = print_with_ctxt (fun ctxt ->
        debug 3 (lazy (action "inferring expression"));
-       debug 3 (lazy (item "expr" (group (NewMu.pp_expr e))));
+       debug 3 (lazy (item "expr" (group (Pp_mucore.pp_expr e))));
        debug 3 (lazy (item "ctxt" (Context.pp ctxt)));
     )
   in
@@ -1206,7 +1205,7 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
        | M_Pexpr (_, _, _, M_PEsym fsym) -> fsym
        | _ -> unsupported loc !^"function application of function pointers"
      in
-     let@ (_loc, ft, _) = get_fun_decl loc fsym in
+     let@ (_loc, ft) = get_fun_decl loc fsym in
 
      Spine.calltype_ft loc ~fsym pes ft (fun rt ->
      let@ _, members = make_return_record loc (FunctionCall fsym) (RT.binders rt) in
@@ -1443,99 +1442,37 @@ let check_pexpr_rt loc pexpr (RT.Computational ((return_s, return_bt), info, lrt
   return ()))
 
 
-let check_and_bind_arguments rt_subst loc arguments (lrecord_s, lmembers) (function_typ : 'rt AT.t) = 
 
-  let open LAT in
 
-  let lrecord = sym_ (lrecord_s, BT.Record lmembers) in
-  let@ () = add_l lrecord_s (IT.bt lrecord) (loc, lazy (Sym.pp lrecord_s)) in
+let bind_arguments (loc : Loc.t) (full_args : _ mu_arguments) =
 
-  let rec check_l resources lmembers (ftyp : 'rt LAT.t) = 
-    match lmembers, ftyp with
-    | ((lmember,member_bt) :: lmembers), 
-      (Define ((sname, it), info, ftyp)) ->
-       let@ () = WellTyped.ensure_base_type (fst info) ~expect:(IT.bt it) member_bt in
-       let member_it = recordMember_ ~member_bt (lrecord, lmember) in
-       let@ () = add_c (t_ (eq__ member_it it)) in
-       check_l resources lmembers (LAT.subst rt_subst (IT.make_subst [(sname, member_it)]) ftyp)
-    | ((lmember,member_bt) :: lmembers), 
-      (Resource ((s, (re, bt)), info, ftyp)) ->
-       let@ () = WellTyped.ensure_base_type (fst info) ~expect:bt member_bt in
-       let member_it = recordMember_ ~member_bt (lrecord, lmember) in
-       let resources = ((re, O member_it) :: resources) in
-       check_l resources lmembers (LAT.subst rt_subst (IT.make_subst [(s, member_it)]) ftyp)
-    | lmembers, 
-      Constraint (lc, _, ftyp) ->
+  let rec aux_l resources = function
+    | M_Define ((s, it), info, args) ->
+       let@ () = add_l s (IT.bt it) (fst info, lazy (Sym.pp s)) in
+       let@ () = add_c (LC.t_ (def_ s it)) in
+       aux_l resources args
+    | M_Constraint (lc, info, args) ->
        let@ () = add_c lc in
-       check_l resources lmembers ftyp
-    | [], 
-      I rt ->
-       return (rt, resources)
-    | _ ->
-       assert false
+       aux_l resources args
+    | M_Resource ((s, (re, bt)), info, args) ->
+       let@ () = add_l s bt (fst info, lazy (Sym.pp s)) in
+       aux_l (resources @ [(re, O (sym_ (s, bt)))]) args
+    | M_I i ->
+       return (i, resources)
   in
 
-  let rec check_a args lmembers (ftyp : 'rt AT.t) =
-    match args, lmembers, ftyp with
-    | ((aname, abt) :: args), 
-      ((lmember,member_bt) :: lmembers),
-      (AT.Computational ((lname, sbt), _info, ftyp)) ->
-       assert (BT.equal abt member_bt);
-       if BT.equal abt sbt then
-         let it = recordMember_ ~member_bt (lrecord,lmember) in
-         let@ () = add_a aname abt (loc, lazy (Sym.pp aname)) in
-         let@ () = add_c (LC.t_ (eq__ it (sym_ (aname, abt)))) in
-         check_a args lmembers (AT.subst rt_subst (make_subst [(lname, it)]) ftyp)
-       else
-         fail (fun _ -> {loc; msg = Mismatch {has = BT.pp abt; expect = BT.pp sbt}})
-    | [], _, (AT.Computational (_, _, _))
-    | (_ :: _), _, (AT.L _) ->
-       let expect = AT.count_computational function_typ in
-       let has = List.length arguments in
-       fail (fun _ -> {loc; msg = Number_arguments {expect; has}})
-    | [], lmembers, AT.L ftyp ->
-       check_l [] lmembers ftyp
-    | _ -> 
-       assert false
+  let rec aux_a = function
+    | M_Computational ((s, bt), info, args) ->
+       let@ () = add_a s bt (fst info, lazy (Sym.pp s)) in
+       aux_a args
+    | M_L args ->
+       aux_l [] args
+       
   in
-  check_a arguments lmembers function_typ
 
+  aux_a full_args
 
-(* let do_post_typing info = *)
-(*   let eqs_data = List.filter_map (function *)
-(*     | SuggestEqsData x -> Some x) info *)
-(*   in *)
-(*   SuggestEqs.warn_missing_spec_eqs eqs_data; *)
-(*   return () *)
-
-
-(* check_function: type check a (pure) function *)
-(* let check_function  *)
-(*       (loc : loc)  *)
-(*       (info : string)  *)
-(*       (arguments : (Sym.t * BT.t) list)  *)
-(*       (rbt : BT.t)  *)
-(*       (body : 'bty mu_pexpr)  *)
-(*       (function_typ : AT.ft) *)
-(*     : (unit, type_error) Typing.m = *)
-(*   debug 2 (lazy (headline ("checking function " ^ info))); *)
-(*   pure begin *)
-(*       let@ (rt, resources) =  *)
-(*         check_and_bind_arguments loc RT.subst loc arguments [] function_typ  *)
-(*       in *)
-(*       let@ () = ListM.iterM add_r resources in *)
-(*       (\* rbt consistency *\) *)
-(*       let@ () =  *)
-(*         let Computational ((sname, sbt), _info, t) = rt in *)
-(*         WellTyped.ensure_base_type loc ~expect:sbt rbt *)
-(*       in *)
-(*       check_pexpr_rt loc body rt *)
-(*     end *)
-
-
-(* let rt_and_label_defs_subst substitution (rt, label_defs) =  *)
-(*   (RT.subst substitution rt,  *)
-(*    subst_label_defs (AT.subst False.subst) substitution label_defs) *)
+     
 
 
 
@@ -1543,138 +1480,54 @@ let check_and_bind_arguments rt_subst loc arguments (lrecord_s, lmembers) (funct
 let check_procedure 
       (loc : loc) 
       (fsym : Sym.t)
-      (arguments : (Sym.t * BT.t) list)
-      (larguments : (Sym.t * (Sym.t * BT.t) list))
-      (rbt : BT.t) 
-      (body : 'bty mu_expr)
-      (function_typ : AT.ft) 
-      (label_defs : 'bty mu_label_defs)
+      (args_and_body : 'bty mu_proc_args_and_body)
     : (unit, type_error) Typing.m =
   debug 2 (lazy (headline ("checking procedure " ^ Sym.pp_string fsym)));
-  debug 2 (lazy (item "type" (AT.pp RT.pp function_typ)));
 
   pure begin 
 
+      let@ ((body, label_defs, rt), initial_resources) = bind_arguments loc args_and_body in
 
-      (* let function_typ = AT.map (fun rt -> (rt, label_defs)) function_typ in *)
-      (* let@ function_typ =  *)
-      (*   WellTyped.WAT.welltyped rt_and_label_defs_subst (fun _loc (rt, label_defs) -> *)
-      (*       let@ rt = pure (WellTyped.WRT.welltyped loc rt) in *)
-      (*       let@ label_defs =  *)
-      (*         PmapM.mapM (fun _ def -> *)
-      (*             pure begin *)
-      (*                 match def with *)
-      (*                 | M_Return (loc, lt) -> *)
-      (*                    let@ lt = WellTyped.WLT.welltyped "return" loc lt in *)
-      (*                    return (M_Return (loc, lt)) *)
-      (*                 | M_Label (loc, lt, args, largs, body, annots) ->  *)
-      (*                    let@ lt = WellTyped.WLT.welltyped "in-function type annotation" loc lt in *)
-      (*                    return (M_Label (loc, lt, args, largs, body, annots)) *)
-      (*               end *)
-      (*           ) label_defs Sym.compare *)
-      (*       in *)
-      (*       return (rt, label_defs) *)
-      (*     ) "in-function type annotation" loc function_typ *)
-      (* in *)
-
-      (* check and bind the function arguments *)
-      let@ (rt, resources) = 
-        check_and_bind_arguments RT.subst
-          loc arguments larguments function_typ 
-      in
-      (* rbt consistency *)
-      let@ () = 
-        let Computational ((sname, sbt), _info, t) = rt in
-        WellTyped.ensure_base_type loc ~expect:sbt rbt
-      in
-
-      (* let@ () = print_with_ctxt (fun ctxt -> *)
-      (*     debug 6 (lazy (item "arguments" (Pp.list (fun (s,bt) -> Sym.pp s) arguments))); *)
-      (*   ) *)
-      (* in *)
-
-      (* let@ () = print_with_ctxt (fun ctxt -> *)
-      (*     debug 6 (lazy (item "larguments" (Pp.list (fun (s,bt) -> Sym.pp s) larguments))); *)
-      (*   ) *)
-      (* in *)
-
-      (* let@ () = print_with_ctxt (fun ctxt -> *)
-      (*     debug 6 (lazy (item "ctxt" (Context.pp ctxt))); *)
-      (*   ) *)
-      (* in *)
-
-
-      (* let () = Pmap.iter (fun s def -> *)
-      (*              match def with *)
-      (*              | M_Return (loc) -> *)
-      (*                 print stdout (item "s" (Sym.pp s)); *)
-      (*                 print stdout (!^"return") *)
-      (*              | M_Label (loc, lt, args, largs, body, annots) -> *)
-      (*                 print stdout (item "s" (Sym.pp s)); *)
-      (*                 print stdout (item "def" (AT.pp False.pp lt)) *)
-      (*            ) label_defs *)
-      (* in *)
-
-      let@ label_defs = 
-        PmapM.mapM (fun _ def ->
-            pure begin
-                match def with
+      let@ label_defs, label_context =
+        PmapM.foldM (fun sym def (label_defs, label_context) ->
+            let@ lt, def, kind =
+              pure begin match def with
                 | M_Return loc ->
-                   return (M_Return loc)
-                | M_Label (loc, lt, args, largs, body, annots) ->
-                   let@ lt = WellTyped.WLT.welltyped "in-function type annotation" loc lt in
-                   return (M_Label (loc, lt, args, largs, body, annots))
-              end
-          ) label_defs Sym.compare
+                   return (AT.of_rt rt (LAT.I False.False), M_Return loc, Return)
+                | M_Label (loc, label_args_and_body, annots) ->
+                   let@ label_args_and_body, lt = 
+                     WellTyped.WLabel.welltyped loc label_args_and_body in
+                   let kind = match CF.Annot.get_label_annot annots with
+                     | Some (LAloop_body loop_id) -> Loop
+                     | Some (LAloop_continue loop_id) -> Loop
+                     | _ -> Other
+                   in
+                   return (lt, M_Label (loc, label_args_and_body, annots), kind)
+                end
+            in
+            return ((sym, def) :: label_defs, SymMap.add sym (lt, kind) label_context)
+          ) label_defs ([], SymMap.empty)
       in
 
-      (* record label types *)
-      let@ labels = 
-        PmapM.foldM (fun sym def acc ->
-            (* todo: remember location *)
-            match def with
-            | M_Return loc ->
-               let lt = AT.of_rt rt (LAT.I False.False) in
-               return (SymMap.add sym (lt, Return) acc)
-            | M_Label (loc, lt, _, _, _, annots) -> 
-               let label_kind = match CF.Annot.get_label_annot annots with
-                 | Some (LAloop_body loop_id) -> Loop
-                 | Some (LAloop_continue loop_id) -> Loop
-                 | _ -> Other
-               in
-               return (SymMap.add sym (lt, label_kind) acc)
-          ) label_defs SymMap.empty 
+      let@ () = 
+        debug 2 (lazy (headline ("checking function body " ^ Sym.pp_string fsym)));
+        pure begin
+            let@ () = add_rs initial_resources in 
+            check_expr_rt loc label_context ~typ:(Normal rt) body
+          end 
       in
-      (* check each label *)
-      let check_label lsym def =
-        pure begin 
-          match def with
+      let@ () = ListM.iterM (fun (lsym, def) ->
+        pure begin match def with
           | M_Return loc ->
              return ()
-          | M_Label (loc, lt, args, largs, body, annots) ->
+          | M_Label (loc, label_args_and_body, annots) ->
              debug 2 (lazy (headline ("checking label " ^ Sym.pp_string lsym)));
-             debug 2 (lazy (item "type" (AT.pp False.pp lt)));
-             (* let label_name = match Sym.description lsym with *)
-             (*   | Sym.SD_Id l -> l *)
-             (*   | _ -> Debug_ocaml.error "label without name" *)
-             (* in *)
-             let@ (rt, resources) = 
-               check_and_bind_arguments False.subst loc args largs lt 
-             in
-             let@ () = ListM.iterM add_r resources in
-             let@ () = check_expr_rt loc labels ~typ:False body in
-             return ()
+             let@ (label_body, label_resources) = bind_arguments loc label_args_and_body in
+             let@ () = add_rs label_resources in
+             check_expr_rt loc label_context ~typ:False label_body
           end
+        ) label_defs 
       in
-      let check_body () = 
-        pure begin 
-            debug 2 (lazy (headline ("checking function body " ^ Sym.pp_string fsym)));
-            let@ () = ListM.iterM add_r resources in
-            check_expr_rt loc labels ~typ:(Normal rt) body
-          end
-      in
-      let@ () = check_body () in
-      let@ () = PmapM.iterM check_label label_defs in
       return ()
     end
 
@@ -1682,39 +1535,35 @@ let check_procedure
 
 let only = ref None
 
-let record_and_check_tagDefs tagDefs =
-  let@ () = 
-    PmapM.iterM (fun tag def ->
-        match def with
-        | M_UnionDef _ -> unsupported Loc.unknown !^"todo: union types"
-        | M_StructDef layout -> add_struct_decl tag layout
-      ) tagDefs
-  in
+let record_tagdefs tagDefs = 
   PmapM.iterM (fun tag def ->
-      let open Memory in
       match def with
-      | M_UnionDef _ -> 
-         unsupported Loc.unknown !^"todo: union types"
-      | M_StructDef layout -> 
-         ListM.iterM (fun piece ->
-             match piece.member_or_padding with
-             | Some (name, ct) -> WellTyped.WCT.is_ct Loc.unknown ct
-             | None -> return ()
-           ) layout
+      | M_UnionDef _ -> unsupported Loc.unknown !^"todo: union types"
+      | M_StructDef layout -> add_struct_decl tag layout
     ) tagDefs
 
+let check_tagdefs tagDefs =
+  PmapM.iterM (fun tag def ->
+    let open Memory in
+    match def with
+    | M_UnionDef _ -> 
+       unsupported Loc.unknown !^"todo: union types"
+    | M_StructDef layout -> 
+       ListM.iterM (fun piece ->
+           match piece.member_or_padding with
+           | Some (name, ct) -> WellTyped.WCT.is_ct Loc.unknown ct
+           | None -> return ()
+         ) layout
+  ) tagDefs
 
 
 
-let record_and_check_logical_functions logical_functions =
+let record_and_check_logical_functions funs =
 
   let recursive, nonrecursive =
-    List.partition (fun (name, def) ->
-        match def.LogicalPredicates.definition with
-        | Rec_Def _ -> true
-        | Def _ -> false
-        | Uninterp -> false
-      ) logical_functions
+    List.partition (fun (_, def) ->
+        LogicalPredicates.is_recursive def
+      ) funs
   in
 
   (* First check and add non-recursive functions. We check before
@@ -1741,102 +1590,130 @@ let record_and_check_logical_functions logical_functions =
     ) recursive
 
 let record_and_check_resource_predicates preds =
+  let@ simp_preds = pure begin
+    (* add the names to the context, so recursive preds check *)
+    let@ () = ListM.iterM (fun (name, def) ->
+        add_resource_predicate name { def with clauses = None }) preds in
+    ListM.mapM (fun (name, def) ->
+      let@ def = WellTyped.WRPD.welltyped def in
+      return (name, def)) preds
+  end in
   ListM.iterM (fun (name, def) ->
-      let@ def = 
-        pure begin
-          (* add def to context without body (for recursive
-             definitions) *)
-          let@ () = add_resource_predicate name { def with clauses = None } in
-          (* check well-typedness of def and return possibly-simplified
-             (and alpha-renamed) definition *)
-          WellTyped.WRPD.welltyped def
-        end 
-      in
       (* add simplified def to the context *)
       add_resource_predicate name def
-    ) preds
+    ) simp_preds
 
 
 let record_globals globs =
   (* TODO: check the expressions *)
   ListM.iterM (fun (sym, def) ->
       match def with
-      | M_GlobalDef (lsym, (gbt, ct), _)
-      | M_GlobalDecl (lsym, (gbt, ct)) ->
+      | M_GlobalDef ((gbt, ct), _)
+      | M_GlobalDecl ((gbt, ct)) ->
          let@ () = WellTyped.WBT.is_bt Loc.unknown gbt in
          let@ () = WellTyped.WCT.is_ct Loc.unknown ct in
          let bt = Loc in
-         let info = (Loc.unknown, lazy (Pp.item "global" (Sym.pp lsym))) in
-         let@ () = add_l lsym bt info in
+         let info = (Loc.unknown, lazy (Pp.item "global" (Sym.pp sym))) in
          let@ () = add_a sym bt info in
-         let@ () = add_c (LC.t_ (def_ sym (sym_ (lsym, bt)))) in
-         let@ () = add_c (t_ (IT.good_pointer ~pointee_ct:ct (sym_ (lsym, bt)))) in
+         let@ () = add_c (t_ (IT.good_pointer ~pointee_ct:ct (sym_ (sym, bt)))) in
          return ()
     ) globs 
 
-let record_and_wf_check_functions funinfo =
-  PmapM.iterM (fun fsym (M_funinfo (loc, _attrs, ftyp, trusted, _has_proto)) ->
-      (* check welltypedness and possibly simplify *)
-      let () = debug 2 (lazy (headline ("checking welltypedness of procedure " ^ Sym.pp_string fsym))) in
-      let () = debug 2 (lazy (item "type" (AT.pp RT.pp ftyp))) in
-      let@ ftyp = WellTyped.WFT.welltyped "global" loc ftyp in
 
-      (* add to context *)
-
-      (* let lc1 = t_ (ne_ (null_, sym_ (fsym, Loc))) in *)
-      let lc2 = t_ (representable_ (Pointer Void, sym_ (fsym, Loc))) in
-      let@ () = add_l fsym Loc (loc, lazy (Pp.item "global fun-ptr" (Sym.pp fsym))) in
-      let@ () = add_cs [(* lc1; *) lc2] in
-      add_fun_decl fsym (loc, ftyp, trusted)
-    ) funinfo
-
-
-
-
-let check_function fsym fn (loc, ftyp, trusted) =
-  let start = time_log_start "function" (CF.Pp_symbol.to_string fsym) in
-  let@ () = match trusted, fn with
-    | Trusted _, _ -> 
-       return ()
-    | Checked, M_Fun (rbt, args, body) ->
-       assert false;
-       (* check_function loc (Sym.pp_string fsym) args rbt body ftyp *)
-    | Checked, M_Proc (loc', rbt, (args, largs), body, labels) ->
-       check_procedure loc fsym args largs rbt body ftyp labels
-    | _, (M_ProcDecl _ | M_BuiltinDecl _) -> (* TODO: ? *) 
-       return ()
+let wf_check_and_record_functions mu_funs =
+  let add fsym loc ft =
+    (* add to context *)
+    (* let lc1 = t_ (ne_ (null_, sym_ (fsym, Loc))) in *)
+    let lc2 = t_ (representable_ (Pointer Void, sym_ (fsym, Loc))) in
+    let@ () = add_l fsym Loc (loc, lazy (Pp.item "global fun-ptr" (Sym.pp fsym))) in
+    let@ () = add_cs [(* lc1; *) lc2] in
+    add_fun_decl fsym (loc, ft)
   in
-  time_log_end start;
-  return ()
+  let welltyped_ping fsym =
+    debug 2 (lazy (headline ("checking welltypedness of procedure " ^ Sym.pp_string fsym)))
+  in
+  PmapM.foldM (fun fsym def (trusted, checked) ->
+      match def with
+      | M_Proc (loc, args_and_body, tr) ->
+         welltyped_ping fsym;
+         let@ args_and_body, ft = WellTyped.WProc.welltyped loc args_and_body in
+         let@ () = add fsym loc ft in
+         begin match tr with
+         | Trusted _ -> return ((fsym, (loc, ft)) :: trusted, checked)
+         | Checked -> return (trusted, (fsym, (loc, args_and_body)) :: checked)
+         end
+      | M_ProcDecl (loc, ft) ->
+         welltyped_ping fsym;
+         let@ ft = WellTyped.WFT.welltyped "function" loc ft in
+         let@ () = add fsym loc ft in
+         return (trusted, checked)
+    ) mu_funs ([], [])
+
+
+
 
 let check_c_functions funs =
-  let@ global = get_global () in
-  let number_entries = List.length (Pmap.bindings_list funs) in
-  let ping = Pp.progress "function" number_entries in
-  PmapM.iterM (fun fsym fn ->
-      match !only, Global.get_fun_decl global fsym with
-      | Some fname, _ when not (String.equal fname (Sym.pp_string fsym)) ->
-         return ()
-      | _, None ->
-         return (ping (Sym.pp_string fsym ^ " (skipped built-in function)"))
-      | _, Some decl ->
-         let@ () = return (ping (Sym.pp_string fsym)) in
-         check_function fsym fn decl
-    ) funs 
+  match !only with
+  | Some fname ->
+     let found = 
+       List.find_opt (fun (fsym, _) ->
+           (String.equal fname (Sym.pp_string fsym))
+         ) funs
+     in
+     begin match found with
+     | Some (fsym, (loc, args_and_body)) ->
+        let () = progress_simple (of_total 1 1) (Sym.pp_string fsym) in
+        check_procedure loc fsym args_and_body
+     | None ->
+        Pp.warn_noloc (!^"function" ^^^ !^fname ^^^ !^"not found");
+        return ()
+     end
+  | None ->
+     let number_entries = List.length funs in
+     let@ _ = 
+       ListM.mapiM (fun counter (fsym, (loc, args_and_body)) ->
+           let () = progress_simple (of_total (counter+1) number_entries) (Sym.pp_string fsym) in
+           check_procedure loc fsym args_and_body
+         ) funs
+     in
+     return ()
 
 
-let check mu_file = 
-  let@ () = record_and_check_tagDefs mu_file.mu_tagDefs in
-  Pp.progress_simple "checking specifications" "logical predicate welltypedness";
+
+
+
+
+
+let check mu_file stmt_locs o_lemma_mode = 
+  let@ () = set_statement_locs stmt_locs in
+
+  let@ () = record_tagdefs mu_file.mu_tagDefs in
+  let@ () = check_tagdefs mu_file.mu_tagDefs in
+
+  let@ () = ListM.iterM (fun (s,dt) -> add_datatype s dt) 
+              mu_file.mu_datatypes in
+  let@ () = ListM.iterM (fun (s,pd) -> add_datatype_constr s pd)
+              mu_file.mu_constructors in
+
   let@ () = record_and_check_logical_functions mu_file.mu_logical_predicates in
-  Pp.progress_simple "checking specifications" "resource predicate welltypedness";
   let@ () = record_and_check_resource_predicates mu_file.mu_resource_predicates in
   let@ () = record_globals mu_file.mu_globs in
-  Pp.progress_simple "checking specifications" "function welltypedness";
-  let@ () = record_and_wf_check_functions mu_file.mu_funinfo in
-  (* let@ () = PmapM.iterM check_function mu_file.mu_stdlib in *)
-  let@ () = check_c_functions mu_file.mu_funs in
+  let@ (trusted, checked) = wf_check_and_record_functions mu_file.mu_funs in
+  let@ () = check_c_functions checked in
+
+  let@ global = get_global () in
+  let@ () = match o_lemma_mode with
+  | Some mode -> embed_resultat (Lemmata.generate global mode trusted)
+  | None -> return ()
+  in
   return ()
+
+
+  
+
+
+
+
 
 
 

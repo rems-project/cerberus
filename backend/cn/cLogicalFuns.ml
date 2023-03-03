@@ -1,13 +1,11 @@
-
 open Resultat
 open Effectful.Make(Resultat)
 open TypeErrors
 module SymMap = Map.Make(Sym)
 module StringMap = Map.Make(String)
 
-open NewMu
-open New
 
+open Mucore
 
 module IT = IndexTerms
 
@@ -30,10 +28,10 @@ let symb_exec_mu_pexpr var_map pexpr =
   | M_PEval v -> begin match mu_val_to_it v with
     | Some r -> return r
     | _ -> fail {loc; msg = Generic (Pp.item "getting expr from C syntax: unsupported"
-        (NewMu.pp_pexpr pexpr))}
+        (Pp_mucore.pp_pexpr pexpr))}
   end
   | _ -> fail {loc; msg = Generic (Pp.item "getting expr from C syntax: unsupported"
-        (NewMu.pp_pexpr pexpr))}
+        (Pp_mucore.pp_pexpr pexpr))}
 
 let add_pattern p v expr var_map =
   let (M_Pattern (loc, _, pattern) : mu_pattern) = p in
@@ -44,7 +42,7 @@ let add_pattern p v expr var_map =
     return var_map
   | _ ->
     fail {loc; msg = Generic (Pp.item "getting expr from C syntax: unsupported pattern"
-        (NewMu.pp_expr expr))}
+        (Pp_mucore.pp_expr expr))}
 
 let rec mk_var_map nms vs = match nms, vs with
   | [], [] -> SymMap.empty
@@ -83,80 +81,86 @@ let rec symb_exec_mu_expr label_defs var_map expr =
     | Some (M_Return _) ->
       assert (List.length args == 1);
       return (CallRet (List.hd arg_vs))
-    (* TODO: I'm unsure. Can you check the largs thing, Thomas? *)
-    | Some (M_Label (_, _, args, largs, body, _)) ->
-      symb_exec_mu_expr label_defs (mk_var_map (List.map fst args) arg_vs) body
-    | None -> fail {loc; msg = Generic (Pp.item "undefined code label" (Sym.pp sym))}
+    | _ ->
+       fail {loc; msg = Generic Pp.(!^"function has goto-labels in control-flow")}
     end
   | _ -> fail {loc; msg = Generic (Pp.item "getting expr from C syntax: unsupported"
-        (NewMu.pp_expr expr))}
+        (Pp_mucore.pp_expr expr))}
 
 let c_function_to_it fsym rbt args body label_defs : (IT.t, type_error) m  =
-  let open New in
   let (M_Pexpr (loc, _, _, pe_)) = body in
   match pe_ with
   | M_PEval _ -> fail {loc; msg = Generic (Pp.string "PEval")}
   | _ -> fail {loc; msg = Generic (Pp.string "not PEval")}
 
 let c_function_to_it2 fsym rbt args body label_defs : (IT.t, type_error) m  =
-  let open New in
   let (M_Expr (loc, _, e_)) = body in
   match e_ with
   | M_Epure pe -> c_function_to_it fsym rbt args pe label_defs
-  | _ -> fail {loc; msg = Generic (Pp.item "c_function_to_it2" (NewMu.pp_expr body))}
+  | _ -> fail {loc; msg = Generic (Pp.item "c_function_to_it2" (Pp_mucore.pp_expr body))}
 
-
-let c_fun_to_it id fsym def
-        (fn : 'bty New.mu_fun_map_decl) =
-  let open New in
+let c_fun_to_it id_loc (id : Sym.t) fsym def
+        (fn : 'bty mu_fun_map_decl) =
   let def_args = def.LogicalPredicates.args
     |> List.map IndexTerms.sym_ in
   match fn with
-  | M_Fun (rbt, args, body) ->
-    let arg_map = mk_var_map (List.map fst args) def_args in
-    let@ r = symb_exec_mu_pexpr arg_map body in
-    return r
-  (* TODO: I'm unsure. Can you check the largs thing, Thomas? *)
-  | M_Proc (loc, rbt, (args, _largs), body, labels) ->
-    let arg_map = mk_var_map (List.map fst args) def_args in
+  | M_Proc (loc, args_and_body, _trusted) ->
+     let rec ignore_l = function
+       | M_Define (_, _, l) -> ignore_l l
+       | M_Resource (_, _, l) -> ignore_l l
+       | M_Constraint (_, _, l) -> ignore_l l
+       | M_I i -> i
+     in
+     let rec mk_var_map acc args_and_body def_args = 
+       (* TODO: fix: this is just ignoring the types *)
+       match args_and_body, def_args with
+       | M_Computational ((s, bt), _, args_and_body), 
+         v :: def_args ->
+          mk_var_map (SymMap.add s v acc) args_and_body def_args
+       | M_L l, [] ->
+          (acc, ignore_l l)
+       | _ -> 
+          assert false
+     in
+    let (arg_map, (body, labels, rt)) = mk_var_map SymMap.empty args_and_body def_args in
     let@ r = symb_exec_mu_expr labels arg_map body in
     begin match r with
     | CallRet it -> return it
-    | _ -> fail {loc = Id.loc id;
-        msg = Generic (Pp.item "c_fun_to_it: does not return" (NewMu.pp_expr body))}
+    | _ -> fail {loc;
+        msg = Generic (Pp.item "c_fun_to_it: does not return" (Pp_mucore.pp_expr body))}
     end
   | _ ->
-    fail {loc = Id.loc id;
+    fail {loc = id_loc;
         msg = Generic (Pp.string ("c_fun_to_it: not defined: " ^ Sym.pp_string fsym))}
 
-let upd_def id def_tm logical_predicates =
+let upd_def loc sym def_tm logical_predicates =
   let open LogicalPredicates in
-  let s = Id.s id in
-  let@ (sym, def, rem) = match List.partition
-    (fun (sym, _) -> String.equal s (Tools.todo_string_of_sym sym)) logical_predicates
+  let@ (def, rem) = match List.partition (fun (sym2, _) -> Sym.equal sym sym2)
+    logical_predicates
   with
-  | ([], _) -> fail {loc = Id.loc id;
-        msg = Unknown_logical_predicate {id = Sym.fresh_named s; resource = false}}
-  | ([(sym, def)], rem) -> return (sym, def, rem)
-  | _ -> fail {loc = Id.loc id;
-        msg = Generic (Pp.string ("logical predicate multiply defined: " ^ s))}
+  | ([], _) -> fail {loc;
+        msg = Unknown_logical_predicate {id = sym; resource = false}}
+  | ([(_, def)], rem) -> return (def, rem)
+  | _ -> fail {loc;
+        msg = Generic (Pp.typ (Pp.string "logical predicate multiply defined") (Sym.pp sym))}
   in
   match def.definition with
   | Uninterp -> return ((sym, { def with definition = Def (Body.Term def_tm) }) :: rem)
-  | _ -> fail {loc = Id.loc id;
-        msg = Generic (Pp.string ("logical predicate already defined: " ^ s))}
+  | _ -> fail {loc;
+        msg = Generic (Pp.typ (Pp.string "logical predicate already defined") (Sym.pp sym))}
 
 let add_c_fun_defs logical_predicates log_c_defs =
-  let pred_def_map = List.fold_left (fun m (sym, def) ->
-    StringMap.add (Tools.todo_string_of_sym sym) def m) StringMap.empty
-    logical_predicates in
-  let@ conv_defs = ListM.mapM (fun (id, fsym, fn) ->
-        let@ def = match StringMap.find_opt (Id.s id) pred_def_map with
+  let pred_def_map = List.fold_left (fun m (sym, def) -> SymMap.add sym def m)
+    SymMap.empty logical_predicates in
+  let@ conv_defs = ListM.mapM (fun (fsym, fbody, loc, pred_sym) ->
+        let@ def = match SymMap.find_opt pred_sym pred_def_map with
           | Some def -> return def
-          | None -> fail {loc = Id.loc id;
-                msg = Unknown_logical_predicate {id = Sym.fresh_named (Id.s id); resource = false}}
+          | None -> fail {loc; msg = Unknown_logical_predicate
+                {id = pred_sym; resource = false}}
         in
-        let@ it = c_fun_to_it id fsym def fn in
-        return (id, it)) log_c_defs in
-  ListM.fold_leftM (fun lps (id, it) -> upd_def id it lps) logical_predicates conv_defs
+        let@ it = c_fun_to_it loc pred_sym fsym def fbody in
+        Pp.debug 4 (lazy (Pp.item "converted c function body to logical fun"
+            (Pp.typ (Sym.pp fsym) (IT.pp it))));
+        return (loc, pred_sym, it)) log_c_defs in
+  ListM.fold_leftM (fun lps (loc, id, it) -> upd_def loc id it lps) logical_predicates conv_defs
 

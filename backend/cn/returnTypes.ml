@@ -9,8 +9,12 @@ type t = Computational of (Sym.t * BaseTypes.t) * info * LRT.t
 
 
 
-let mComputational (name, bound, oinfo) t = 
-  Computational ((name, bound), oinfo, t)
+let mComputational (bound, oinfo) t = 
+  Computational (bound, oinfo, t)
+
+
+
+
 
 
 
@@ -23,9 +27,12 @@ let rec subst (substitution: IT.t Subst.t) at =
      let name, t = LRT.suitably_alpha_rename substitution.relevant (name, bt) t in
      Computational ((name, bt), info, LRT.subst substitution t)
 
-and alpha_rename (s, ls) t = 
-  let s' = Sym.fresh_same s in
+and alpha_rename_ s' (s, ls) t =
   (s', subst (IT.make_subst [(s, IT.sym_ (s', ls))]) t)
+
+and alpha_rename (s, ls) t =
+  let s' = Sym.fresh_same s in
+  alpha_rename_ s' (s, ls) t
 
 and suitably_alpha_rename syms (s, ls) t = 
   if SymSet.mem s syms 
@@ -86,3 +93,11 @@ let json = function
 
 
 
+let alpha_equivalent rt rt' = 
+  match rt, rt' with
+  | Computational ((s, bt), _, t),
+    Computational ((s', bt'), _, t') ->
+     let new_s = Sym.fresh_same s in
+     let _, t = LRT.alpha_rename_ new_s (s, bt) t in
+     let _, t' = LRT.alpha_rename_ new_s (s', bt') t' in
+     BaseTypes.equal bt bt' && LRT.alpha_equivalent t t'

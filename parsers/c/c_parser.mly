@@ -147,9 +147,11 @@ let warn_extra_semicolon pos ctx =
 
 (* CN syntax *)
 (* %token<string> CN_PREDNAME *)
+%token CN_ACCESSES CN_TRUSTED CN_REQUIRES CN_ENSURES CN_INV
 %token CN_PACK CN_UNPACK CN_PACK_STRUCT CN_UNPACK_STRUCT CN_HAVE CN_SHOW CN_INSTANTIATE
 %token CN_BOOL CN_INTEGER CN_REAL CN_POINTER CN_MAP CN_LIST CN_TUPLE CN_SET
-%token CN_LET CN_OWNED CN_BLOCK CN_EACH CN_FUNCTION CN_PREDICATE CN_DATATYPE
+%token CN_WHEN CN_LET CN_TAKE CN_OWNED CN_BLOCK CN_EACH CN_FUNCTION CN_PREDICATE CN_DATATYPE
+%token CN_UNCHANGED CN_WITH
 %token CN_NULL CN_TRUE CN_FALSE
 
 %token EOF
@@ -315,6 +317,8 @@ let warn_extra_semicolon pos ctx =
   located_string_literal
 
 %start<Cerb_frontend.Cabs.translation_unit> translation_unit
+%start function_spec
+%start loop_spec
 
 
 %type<Symbol.identifier Cerb_frontend.Cn.cn_base_type> base_type
@@ -325,6 +329,9 @@ let warn_extra_semicolon pos ctx =
 %type<(Symbol.identifier, Cabs.type_name) Cerb_frontend.Cn.cn_clause> clause
 %type<(Symbol.identifier, Cabs.type_name) Cerb_frontend.Cn.cn_resource> resource
 %type<(Symbol.identifier, Cabs.type_name) Cerb_frontend.Cn.cn_pred> pred
+%type<(Symbol.identifier, Cabs.type_name) Cerb_frontend.Cn.cn_condition> condition
+%type<(Cerb_frontend.Symbol.identifier, Cerb_frontend.Cabs.type_name) Cerb_frontend.Cn.cn_function_spec> function_spec
+%type<(Cerb_frontend.Symbol.identifier, Cerb_frontend.Cabs.type_name) Cerb_frontend.Cn.cn_loop_spec> loop_spec
 
 
 
@@ -1888,42 +1895,69 @@ prim_expr:
         | _ ->
             raise (C_lexer.Error (Cparser_unexpected_token "TODO cn integer const"))
     }
-| ident= cn_l_variable
+| ident= cn_variable
     { Cerb_frontend.Cn.(CNExpr (Location_ocaml.point $startpos, CNExpr_var ident)) }
-| ident= cn_u_variable
-    { Cerb_frontend.Cn.(CNExpr (Location_ocaml.point $startpos, CNExpr_rvar ident)) }
 (* | ident= cn_variable DOT ident_membr= cn_variable *)
+| RETURN
+    { Cerb_frontend.Cn.(CNExpr (Location_ocaml.point $startpos,
+        CNExpr_var (Symbol.Identifier (Location_ocaml.point $startpos($1), "return")))) }
 | e= prim_expr DOT member=cn_variable
     { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                                , CNExpr_memberof (e, member))) }
 | e= delimited(LPAREN, expr, RPAREN)
     { e }
-| SIZEOF LT ty= ctype GT
-    { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($1)))
-                               , CNExpr_sizeof ty)) }
-| ident= cn_l_variable LPAREN args=separated_list(COMMA, expr) RPAREN
+| ident= cn_variable LPAREN args=separated_list(COMMA, expr) RPAREN
     { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                                , CNExpr_call (ident, args))) }
 | ident= cn_variable args= cons_args
     { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos(args)))
                                , CNExpr_cons (ident, args))) }
-| OFFSETOF LPAREN tag = cn_variable COMMA member= cn_variable RPAREN
-    { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($1)))
-                               , CNExpr_offsetof (tag, member))) }
 | arr= prim_expr LBRACK idx= expr RBRACK
     { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                                , CNExpr_binop (CN_map_get, arr, idx))) }
+| LBRACE a=expr RBRACE PERCENT l=NAME VARIABLE
+    { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($4)))
+                               , CNExpr_at_env (a, l))) }
+| LBRACE base_value=expr CN_WITH updates=separated_nonempty_list(COMMA, member_update) RBRACE
+    { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($1)))
+                               , CNExpr_memberupdates (base_value, updates))) }
+| base_value=prim_expr LBRACK updates=separated_nonempty_list(COMMA, index_update) RBRACK
+    { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
+                               , CNExpr_arrayindexupdates (base_value, updates))) }
 
+
+
+unary_expr:
+| e= prim_expr
+    { e }
+| STAR arg = unary_expr
+    { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($1)))
+                               , CNExpr_deref arg)) }
+| SIZEOF LT ty= ctype GT
+    { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($1)))
+                               , CNExpr_sizeof ty)) }
+| OFFSETOF LPAREN tag = cn_variable COMMA member= cn_variable RPAREN
+    { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($1)))
+                               , CNExpr_offsetof (tag, member))) }
+| LBRACE e= expr RBRACE CN_UNCHANGED
+    { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($1)))
+                               , CNExpr_unchanged e)) }
+| BANG e= prim_expr
+    { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($1)))
+                               , CNExpr_not e )) }
+| AMPERSAND LPAREN e= prim_expr MINUS_GT member=cn_variable RPAREN
+    { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($1)))
+                               , CNExpr_membershift (e, member) )) }
 
 
 mul_expr:
 (* TODO *)
-| e= prim_expr
+| e= unary_expr
      { e }
-| e1= mul_expr STAR e2= prim_expr
+| e1= mul_expr STAR e2= unary_expr
     { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                                , CNExpr_binop (CN_mul, e1, e2))) }
-| e1= mul_expr SLASH e2= prim_expr
+| e1= mul_expr SLASH e2= unary_expr
     { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                                , CNExpr_binop (CN_div, e1, e2))) }
 
@@ -1940,6 +1974,12 @@ add_expr:
 rel_expr:
 | e= add_expr
      { e }
+| e1= add_expr EQ_EQ e2= add_expr
+    { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
+                               , CNExpr_binop (CN_equal, e1, e2))) }
+| e1= add_expr BANG_EQ e2= add_expr
+    { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
+                               , CNExpr_binop (CN_inequal, e1, e2))) }
 | e1= rel_expr LT e2= add_expr
     { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                                , CNExpr_binop (CN_lt, e1, e2))) }
@@ -1952,15 +1992,19 @@ rel_expr:
 | e1= rel_expr GT_EQ e2= add_expr
     { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                                , CNExpr_binop (CN_ge, e1, e2))) }
-| e1= rel_expr AMPERSAND_AMPERSAND e2= add_expr
+
+bool_bin_expr:
+| e= rel_expr
+    { e }
+| e1= bool_bin_expr AMPERSAND_AMPERSAND e2= rel_expr
     { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                                , CNExpr_binop (CN_and, e1, e2))) }
-| e1= rel_expr PIPE_PIPE e2= add_expr
+| e1= bool_bin_expr PIPE_PIPE e2= rel_expr
     { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                                , CNExpr_binop (CN_or, e1, e2))) }
 
 list_expr:
-| e= rel_expr
+| e= bool_bin_expr
     { e }
 (* | LBRACK COLON bty= base_type RBRACK *)
 (* | e1= rel_expr COLON_COLON e2= list_expr *)
@@ -1981,26 +2025,27 @@ int_range:
             raise (C_lexer.Error (Cparser_unexpected_token "TODO cn integer const"))
     }
 
+member_update:
+| DOT member=cn_variable EQ e=expr
+     { (member, e) } 
+
+index_update:
+| i=prim_expr EQ e=expr
+     { (i, e) } 
+
 expr:
 | e= list_expr
     { e }
-| e1= expr EQ_EQ e2= list_expr
-    { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
-                               , CNExpr_binop (CN_equal, e1, e2))) }
-| e1= expr BANG_EQ e2= list_expr
-    { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
-                               , CNExpr_binop (CN_inequal, e1, e2))) }
 | e1= list_expr QUESTION e2= list_expr COLON e3= list_expr
     { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                                , CNExpr_ite (e1, e2, e3))) }
 | LPAREN ty= base_type RPAREN expr= list_expr
     { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($1)))
                                , CNExpr_cast (ty, expr))) }
-| CN_EACH LPAREN str= LNAME VARIABLE COLON r=int_range SEMICOLON e1= expr RPAREN
+| CN_EACH LPAREN str= cn_variable COLON r=int_range SEMICOLON e1= expr RPAREN
     { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) NoCursor)
                                ,
-                               let sym = Symbol.Identifier (Location_ocaml.point $startpos(str), str) in
-                               CNExpr_each (sym, r, e1))) }
+                               CNExpr_each (str, r, e1))) }
 ;
 
 (* CN predicate definitions **************************************************)
@@ -2064,13 +2109,13 @@ cn_attrs:
 cn_function:
 | CN_FUNCTION enter_cn
   cn_func_attrs= cn_attrs
-  cn_func_return_bty=delimited(LPAREN, base_type, RPAREN) str= LNAME VARIABLE
+  cn_func_return_bty=delimited(LPAREN, base_type, RPAREN) str= cn_variable
   cn_func_args= delimited(LPAREN, args, RPAREN)
   cn_func_body= cn_option_func_body exit_cn
     { (* TODO: check the name starts with lower case *)
       let loc = Location_ocaml.point $startpos(str) in
       { cn_func_loc= loc
-      ; cn_func_name= Symbol.Identifier (loc, str)
+      ; cn_func_name= str
       ; cn_func_return_bty
       ; cn_func_attrs
       ; cn_func_args
@@ -2104,12 +2149,12 @@ cn_datatype:
     { Symbol.Identifier (Location_ocaml.point $startpos(str), str) }
 | str= NAME TYPE
     { Symbol.Identifier (Location_ocaml.point $startpos(str), str) }
-%inline cn_u_variable:
-| str= UNAME VARIABLE
-    { Symbol.Identifier (Location_ocaml.point $startpos(str), str) }
-%inline cn_l_variable:
-| str= LNAME VARIABLE
-    { Symbol.Identifier (Location_ocaml.point $startpos(str), str) }
+/* %inline cn_u_variable: */
+/* | str= UNAME VARIABLE */
+/*     { Symbol.Identifier (Location_ocaml.point $startpos(str), str) } */
+/* %inline cn_l_variable: */
+/* | str= LNAME VARIABLE */
+/*     { Symbol.Identifier (Location_ocaml.point $startpos(str), str) } */
 
 
 args:
@@ -2141,9 +2186,9 @@ cn_option_func_body:
     { None }
 
 cn_func_body:
-| CN_LET str= LNAME VARIABLE EQ e= expr SEMICOLON c= cn_func_body
+| CN_LET str= cn_variable EQ e= expr SEMICOLON c= cn_func_body
     { let loc = Location_ocaml.point $startpos(str) in
-      Cerb_frontend.Cn.CN_fb_letExpr (loc, Symbol.Identifier (loc, str), e, c) }
+      Cerb_frontend.Cn.CN_fb_letExpr (loc, str, e, c) }
 | RETURN e= expr SEMICOLON
     { Cerb_frontend.Cn.CN_fb_return (Location_ocaml.region $loc(e) NoCursor, e) }
 | SWITCH e= delimited(LPAREN, expr, RPAREN) cs= nonempty_list(cn_func_body_case)
@@ -2157,12 +2202,12 @@ cn_func_body_case:
 
 
 clause:
-| CN_LET str= UNAME VARIABLE EQ res= resource SEMICOLON c= clause
+| CN_TAKE str= cn_variable EQ res= resource SEMICOLON c= clause
     { let loc = Location_ocaml.point $startpos(str) in
-      Cerb_frontend.Cn.CN_letResource (loc, Symbol.Identifier (loc, str), res, c) }
-| CN_LET str= LNAME VARIABLE EQ e= expr SEMICOLON c= clause
+      Cerb_frontend.Cn.CN_letResource (loc, str, res, c) }
+| CN_LET str= cn_variable EQ e= expr SEMICOLON c= clause
     { let loc = Location_ocaml.point $startpos(str) in
-      Cerb_frontend.Cn.CN_letExpr (loc, Symbol.Identifier (loc, str), e, c) }
+      Cerb_frontend.Cn.CN_letExpr (loc, str, e, c) }
 | ASSERT e= delimited(LPAREN, assert_expr, RPAREN) SEMICOLON c= clause
     { Cerb_frontend.Cn.CN_assert (Location_ocaml.region $loc NoCursor, e, c) }
 | RETURN xs= delimited(LBRACE, oargs_def, RBRACE)
@@ -2171,19 +2216,23 @@ clause:
 
 
 assert_expr:
-| CN_EACH LPAREN bTy= base_type str= LNAME VARIABLE SEMICOLON e1= expr RPAREN
+| CN_EACH LPAREN bTy= base_type str= cn_variable SEMICOLON e1= expr RPAREN
       LBRACE e2= expr RBRACE
-    { Cerb_frontend.Cn.CN_assert_qexp ( Symbol.Identifier (Location_ocaml.point $startpos(str), str)
+    { Cerb_frontend.Cn.CN_assert_qexp ( str
                                       , bTy, e1, e2) }
 | e= expr
     { Cerb_frontend.Cn.CN_assert_exp e }
 
+resource_when_condition:
+| CN_WHEN LPAREN e=expr RPAREN
+    { e }
+
 resource:
-| p= pred es= delimited(LPAREN, separated_list(COMMA, expr), RPAREN)
-    { Cerb_frontend.Cn.CN_pred (Location_ocaml.region $loc(p) NoCursor, p, es) }
-| CN_EACH LPAREN bTy= base_type str= LNAME VARIABLE SEMICOLON e1= expr RPAREN
+| p= pred es= delimited(LPAREN, separated_list(COMMA, expr), RPAREN) cond=option(resource_when_condition)
+    { Cerb_frontend.Cn.CN_pred (Location_ocaml.region $loc(p) NoCursor, cond, p, es) }
+| CN_EACH LPAREN bTy= base_type str= cn_variable SEMICOLON e1= expr RPAREN
        LBRACE p= pred LPAREN es= separated_list(COMMA, expr) RPAREN RBRACE
-    { Cerb_frontend.Cn.CN_each ( Symbol.Identifier (Location_ocaml.point $startpos(str), str)
+    { Cerb_frontend.Cn.CN_each ( str
                                , bTy
                                , e1
                                , Location_ocaml.region $loc(p) NoCursor
@@ -2193,7 +2242,9 @@ resource:
 
 pred:
 | CN_OWNED ty= delimited(LT, ctype, GT)
-    { Cerb_frontend.Cn.CN_owned ty }
+    { Cerb_frontend.Cn.CN_owned (Some ty) }
+| CN_OWNED
+    { Cerb_frontend.Cn.CN_owned None }
 | CN_BLOCK ty= delimited(LT, ctype, GT)
     { Cerb_frontend.Cn.CN_block ty }
 | str= UNAME VARIABLE
@@ -2204,4 +2255,42 @@ ctype:
 | ty= type_name
     { ty }
 ;
+
+
+/* copying 'clause' and adjusting */
+condition:
+| CN_TAKE str= cn_variable EQ res= resource
+    { let loc = Location_ocaml.point $startpos(str) in
+      Cerb_frontend.Cn.CN_cletResource (loc, str, res) }
+| CN_LET str= cn_variable EQ e= expr 
+    { let loc = Location_ocaml.point $startpos(str) in
+      Cerb_frontend.Cn.CN_cletExpr (loc, str, e) }
+| e= assert_expr
+    { Cerb_frontend.Cn.CN_cconstr (Location_ocaml.region $loc NoCursor, e) }
+;
+
+
+function_spec:
+| CN_TRUSTED EOF
+  { let loc = Location_ocaml.region ($startpos, $endpos) NoCursor in
+      Cerb_frontend.Cn.CN_trusted loc }
+| CN_ACCESSES accs=separated_list(SEMICOLON, cn_variable) EOF
+  { let loc = Location_ocaml.region ($startpos, $endpos) NoCursor in
+      Cerb_frontend.Cn.CN_accesses (loc, accs) }
+| CN_REQUIRES cs=separated_list(SEMICOLON, condition) EOF
+  { let loc = Location_ocaml.region ($startpos, $endpos) NoCursor in
+      Cerb_frontend.Cn.CN_requires (loc, cs) }
+| CN_ENSURES cs=separated_list(SEMICOLON, condition) EOF
+  { let loc = Location_ocaml.region ($startpos, $endpos) NoCursor in
+      Cerb_frontend.Cn.CN_ensures (loc, cs) }
+| CN_FUNCTION nm=cn_variable EOF
+  { let loc = Location_ocaml.region ($startpos, $endpos) NoCursor in
+      Cerb_frontend.Cn.CN_mk_function (loc, nm) }
+
+
+loop_spec:
+| CN_INV cs=separated_list(SEMICOLON, condition) EOF
+  { let loc = Location_ocaml.region ($startpos, $endpos) NoCursor in
+      Cerb_frontend.Cn.CN_inv (loc, cs) }
+
 (* END CN *)

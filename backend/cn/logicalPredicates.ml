@@ -83,6 +83,10 @@ type def_or_uninterp =
   | Rec_Def of Body.t
   | Uninterp
 
+
+
+
+
 let subst_def_or_uninterp subst = function
   | Def it -> Def (Body.subst subst it)
   | Rec_Def it -> Rec_Def (Body.subst subst it)
@@ -97,6 +101,13 @@ type definition = {
     return_bt: BT.t;
     definition : def_or_uninterp;
   }
+
+
+let is_recursive def = 
+  match def.definition with
+  | Rec_Def _ -> true
+  | Def _ -> false
+  | Uninterp -> false
 
 
 let alpha_rename_definition def = 

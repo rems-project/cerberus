@@ -9,10 +9,14 @@ open Location_ocaml
 
 module P = PPrint
 
+let dtree_of_option dtree_f = function
+  | Some x -> Dnode (pp_stmt_ctor "Some", [dtree_f x])
+  | None -> Dleaf (pp_stmt_ctor "None")
+
 
 let string_of_ns = function
   | CN_oarg -> "output argument"
-  | CN_logical -> "logical variable"
+  | CN_vars -> "variable"
   | CN_predicate -> "predicate"
   | CN_function -> "specification function"
   | CN_datatype_nm -> "datatype"
@@ -28,11 +32,12 @@ let string_of_error = function
   | CNErr_unknown_predicate ->
       "undeclared predicate name"
   | CNErr_invalid_tag ->
-      "tag name is no declared or a union tag"
+      "tag name is not declared or a union tag"
   | CNErr_unknown_identifier (ns, Symbol.Identifier (_, str)) ->
       "the " ^ string_of_ns ns ^ " `" ^ str ^ "' is not declared"
   | CNErr_missing_oarg sym ->
-      "missing an assignment for the oarg `" ^ Pp_symbol.to_string_pretty sym ^ "'" 
+      "missing an assignment for the output argument `" ^ Pp_symbol.to_string_pretty sym ^ "'" 
+  | CNErr_general s -> s
     
 
 
@@ -83,6 +88,7 @@ module MakePp (Conf: PP_CN) = struct
     | CN_and -> P.ampersand ^^ P.ampersand
     | CN_map_get -> P.string "CN_map_get"
     | CN_is_shape -> P.string "??"
+
   
   let rec dtree_of_cn_expr (CNExpr (_, expr_)) =
     match expr_ with
@@ -94,14 +100,32 @@ module MakePp (Conf: PP_CN) = struct
           Dleaf (pp_ctor "CNExpr_const" ^^^ !^ (if b then "true" else "false"))
       | CNExpr_var ident ->
           Dleaf (pp_ctor "CNExpr_var" ^^^ P.squotes (Conf.pp_ident ident))
-      | CNExpr_rvar ident ->
-          Dleaf (pp_ctor "CNExpr_rvar" ^^^ P.squotes (Conf.pp_ident ident))
+      (* | CNExpr_rvar ident -> *)
+      (*     Dleaf (pp_ctor "CNExpr_rvar" ^^^ P.squotes (Conf.pp_ident ident)) *)
       | CNExpr_list es ->
           Dnode (pp_ctor "CNExpr_list", List.map dtree_of_cn_expr es)
       | CNExpr_memberof (e, z) ->
           Dnode (pp_ctor "CNExpr_member",
                 [dtree_of_cn_expr e;
                  Dleaf (pp_identifier z)])
+      | CNExpr_memberupdates (e, updates) ->
+         let updates = 
+           List.map (fun (z,v) -> 
+               let z = Dleaf (pp_identifier z) in
+               let v = dtree_of_cn_expr v in
+               Dnode (pp_ctor "update", [z; v])
+             ) updates
+         in
+         Dnode (pp_ctor "CNExpr_memberupdates", dtree_of_cn_expr e :: updates)
+      | CNExpr_arrayindexupdates (e, updates) ->
+         let updates = 
+           List.map (fun (i,v) -> 
+               let i = dtree_of_cn_expr i in
+               let v = dtree_of_cn_expr v in
+               Dnode (pp_ctor "update", [i; v])
+             ) updates
+         in
+         Dnode (pp_ctor "CNExpr_arrayindexupdate", dtree_of_cn_expr e :: updates)
       | CNExpr_binop (bop, e1, e2) ->
           Dnode (pp_ctor "CNExpr_binop" ^^^ pp_cn_binop bop, [dtree_of_cn_expr e1; dtree_of_cn_expr e2])
       | CNExpr_sizeof ty ->
@@ -109,6 +133,9 @@ module MakePp (Conf: PP_CN) = struct
       | CNExpr_offsetof (ty_tag, member) ->
           Dleaf (pp_ctor "CNExpr_offsetof" ^^^ P.squotes (Conf.pp_ident ty_tag) ^^^
                 P.squotes (pp_identifier member))
+      | CNExpr_membershift (e, member) ->
+          Dnode (pp_ctor "CNExpr_membershift", [dtree_of_cn_expr e;
+                                                Dleaf (P.squotes (pp_identifier member))])
       | CNExpr_cast (ty, expr) ->
           Dnode (pp_ctor "CNExpr_cast" ^^^ pp_base_type ty, [dtree_of_cn_expr expr])
       | CNExpr_call (nm, exprs) ->
@@ -127,18 +154,36 @@ module MakePp (Conf: PP_CN) = struct
       | CNExpr_ite (e1, e2, e3) ->
           Dnode (pp_ctor "CNExpr_ite"
                , List.map dtree_of_cn_expr [e1;e2;e3])
+      | CNExpr_good (ty, e) ->
+          Dnode (pp_ctor "CNExpr_good"
+               , [Dleaf (Conf.pp_ty ty); dtree_of_cn_expr e])
+      | CNExpr_deref e ->
+          Dnode (pp_ctor "CNExpr_deref", [dtree_of_cn_expr e])
+      | CNExpr_value_of_c_variable ident ->
+          Dleaf (pp_ctor "CNExpr_value_of_c_variable" ^^^ Conf.pp_ident ident)
+      | CNExpr_unchanged e ->
+          Dnode (pp_ctor "CNExpr_unchanged", [dtree_of_cn_expr e])
+      | CNExpr_at_env (e, env_name) ->
+          Dnode (pp_ctor "CNExpr_at_env", [dtree_of_cn_expr e; Dleaf !^"env_name"])
+      | CNExpr_not e ->
+          Dnode (pp_ctor "CNExpr_not", [dtree_of_cn_expr e])
+        
 
   let dtree_of_cn_pred = function
-    | CN_owned ty ->
+    | CN_owned (Some ty) ->
       Dleaf (pp_stmt_ctor "CN_owned" ^^^ Conf.pp_ty ty)
+    | CN_owned None ->
+      Dleaf (pp_stmt_ctor "CN_owned" ^^^ P.parens !^"no C-type")
     | CN_block ty ->
       Dleaf (pp_stmt_ctor "CN_block" ^^^ Conf.pp_ty ty)
     | CN_named ident ->
         Dleaf (pp_stmt_ctor "CN_named" ^^^ P.squotes (Conf.pp_ident ident))
 
   let dtree_of_cn_resource = function
-    | CN_pred (_, pred, es) ->
-        Dnode (pp_stmt_ctor "CN_pred", dtree_of_cn_pred pred :: List.map dtree_of_cn_expr es)
+    | CN_pred (_, cond, pred, es) ->
+        Dnode (pp_stmt_ctor "CN_pred", dtree_of_option dtree_of_cn_expr cond 
+                                       :: dtree_of_cn_pred pred 
+                                       :: List.map dtree_of_cn_expr es)
     | CN_each (ident, bTy, e, _, pred, es) ->
         Dnode ( pp_stmt_ctor "CN_each" ^^^ P.squotes (Conf.pp_ident ident) ^^^ P.colon ^^^ pp_base_type bTy
               , List.map dtree_of_cn_expr es )

@@ -94,7 +94,7 @@ let playground_core filename =
               assert false
           | Some sym ->
               begin match Pmap.lookup sym file.funs with
-                | Some (Core.Proc (_, _, _, e)) ->
+                | Some (Core.Proc (_, _, _, _, e)) ->
 (*
                     print_endline "===== BEFORE =====";
                     PPrint.ToChannel.pretty 1.0 80 Stdlib.stdout 
@@ -134,7 +134,7 @@ let playground filename =
           | Some sym ->
               Tags.set_tagDefs file.tagDefs;
               begin match Pmap.lookup sym file.funs with
-                | Some (Core.Proc (_, _, _, e)) ->
+                | Some (Core.Proc (_, _, _, _, e)) ->
                     let rec loop e =
                       print_endline "===== BEFORE =====";
                       PPrint.ToChannel.pretty 1.0 80 Stdlib.stdout 

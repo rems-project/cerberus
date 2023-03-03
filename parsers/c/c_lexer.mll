@@ -138,12 +138,22 @@ let cn_keywords: (string * Tokens.token) list = [
     "tuple"         , CN_TUPLE;
     "set"           , CN_SET;
     "let"           , CN_LET;
+    "take"          , CN_TAKE;
     "Owned"         , CN_OWNED;
     "Block"         , CN_BLOCK;
     "each"          , CN_EACH;
     "NULL"          , CN_NULL;
     "true"          , CN_TRUE;
     "false"         , CN_FALSE;
+    "requires"      , CN_REQUIRES;
+    "ensures"       , CN_ENSURES;
+    "inv"           , CN_INV;
+    "accesses"      , CN_ACCESSES;
+    "trusted"       , CN_TRUSTED;
+    "cn_function"   , CN_FUNCTION;
+    "when"          , CN_WHEN;
+    "with"          , CN_WITH;
+    "unchanged"     , CN_UNCHANGED;
   ]
 
 let cn_lexicon: (string, token) Hashtbl.t =

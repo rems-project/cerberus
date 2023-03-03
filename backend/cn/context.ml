@@ -39,23 +39,32 @@ let empty = {
 
 let get_rs (ctxt : t) = List.map fst (fst ctxt.resources)
 
+let pp_computational computational =
+  (Pp.list (fun (sym, (bt, _)) -> 
+       typ (Sym.pp sym) (BaseTypes.pp bt)
+     ) (SymMap.bindings computational))
+
+let pp_logical logical =
+  (Pp.list (fun (sym, (bt, _)) ->
+       typ (Sym.pp sym) (BaseTypes.pp bt)
+     ) (SymMap.bindings logical))
+
+let pp_constraints constraints =
+  (Pp.list (fun lc -> 
+       if (!print_level >= 11 || Option.is_none (LC.is_sym_lhs_equality lc))
+       then LC.pp lc
+       else parens !^"..."
+     ) (LCSet.elements constraints))
+
 let pp (ctxt : t) = 
   item "computational" 
-    (Pp.list (fun (sym, (bt, _)) -> 
-         typ (Sym.pp sym) (BaseTypes.pp bt)
-       ) (SymMap.bindings ctxt.computational)) ^/^
+    (pp_computational ctxt.computational) ^/^
   item "logical"
-    (Pp.list (fun (sym, (bt, _)) ->
-         typ (Sym.pp sym) (BaseTypes.pp bt)
-       ) (SymMap.bindings ctxt.logical)) ^/^
+    (pp_logical ctxt.logical) ^/^
   item "resources" 
     (Pp.list RE.pp (get_rs ctxt)) ^/^
   item "constraints" 
-    (Pp.list (fun lc -> 
-         if (!print_level >= 11 || Option.is_none (LC.is_sym_lhs_equality lc))
-         then LC.pp lc
-         else parens !^"..."
-       ) (LCSet.elements ctxt.constraints))
+    (pp_constraints ctxt.constraints)
 
 
 let bound_a s ctxt =
@@ -100,16 +109,8 @@ let add_r r (ctxt : t) =
   let (rs, ix) = ctxt.resources in
   {ctxt with resources = ((r, ix) :: rs, ix + 1)}
 
-let add_stmt_locs stmts (ctxt : t) =
-  {ctxt with statement_locs = stmts}
 
-let add_datatypes dts (ctxt : t) =
-  let global = Global.add_datatypes dts ctxt.global in
-  {ctxt with global}
 
-let add_predicates preds (ctxt : t) =
-  let global = Global.add_predicates preds ctxt.global in
-  {ctxt with global}
 
 let json (ctxt : t) : Yojson.Safe.t = 
 

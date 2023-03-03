@@ -1,6 +1,18 @@
 open import Pervasives
 import Symbol Ctype
 
+(* for desugaring *)
+
+type cn_var_kind =
+  | Var_kind_c
+  | Var_kind_cn
+
+let ensure_not_c_variable = function
+  | (sym, Var_kind_cn) -> sym
+  | (sym, Var_kind_c) -> Assert_extra.failwith "unexpected c variable"
+end
+
+
 type cn_base_type 'a =
   | CN_unit
   | CN_bool
@@ -50,20 +62,30 @@ type cn_const =
 type cn_expr_ 'a 'ty =
   | CNExpr_const of cn_const
   | CNExpr_var of 'a
-  | CNExpr_rvar of 'a
   | CNExpr_list of list (cn_expr 'a 'ty)
   | CNExpr_memberof of cn_expr 'a 'ty * Symbol.identifier
+  | CNExpr_memberupdates of cn_expr 'a 'ty * list (Symbol.identifier * cn_expr 'a 'ty)
+  | CNExpr_arrayindexupdates of cn_expr 'a 'ty * list (cn_expr 'a 'ty * cn_expr 'a 'ty)
   | CNExpr_binop of cn_binop * cn_expr 'a 'ty * cn_expr 'a 'ty
   | CNExpr_sizeof of 'ty
   | CNExpr_offsetof of 'a * Symbol.identifier
+  | CNExpr_membershift of cn_expr 'a 'ty * Symbol.identifier
   | CNExpr_cast of cn_base_type 'a * cn_expr 'a 'ty
   | CNExpr_call of Symbol.identifier * list (cn_expr 'a 'ty)
   | CNExpr_cons of 'a * list (Symbol.identifier * cn_expr 'a 'ty)
   | CNExpr_each of 'a * (integer * integer) * cn_expr 'a 'ty
   | CNExpr_ite of cn_expr 'a 'ty * cn_expr 'a 'ty * cn_expr 'a 'ty
+  | CNExpr_good of 'ty * cn_expr 'a 'ty
+  | CNExpr_deref of cn_expr 'a 'ty
+  | CNExpr_value_of_c_variable of 'a
+  | CNExpr_unchanged of cn_expr 'a 'ty
+  | CNExpr_at_env of cn_expr 'a 'ty * string
+  | CNExpr_not of cn_expr 'a 'ty
 
 and cn_expr 'a 'ty =
   | CNExpr of Loc.t * cn_expr_ 'a 'ty
+
+let mk_bool b = CNExpr Loc.unknown (CNExpr_const (CNConst_bool b))
 
 type cn_fun_body 'a 'ty =
   | CN_fb_letExpr of Loc.t * 'a * cn_expr 'a 'ty * cn_fun_body 'a 'ty
@@ -71,12 +93,12 @@ type cn_fun_body 'a 'ty =
   | CN_fb_cases of Loc.t * cn_expr 'a 'ty * list ('a * cn_fun_body 'a 'ty)
 
 type cn_pred 'a 'ty =
-  | CN_owned of 'ty
+  | CN_owned of maybe 'ty
   | CN_block of 'ty
   | CN_named of 'a
 
 type cn_resource 'a 'ty =
-  | CN_pred of Loc.t * cn_pred 'a 'ty * list (cn_expr 'a 'ty)
+  | CN_pred of Loc.t * maybe (cn_expr 'a 'ty) * cn_pred 'a 'ty * list (cn_expr 'a 'ty)
   | CN_each of 'a * cn_base_type 'a * cn_expr 'a 'ty * Loc.t * cn_pred 'a 'ty * list (cn_expr 'a 'ty)
 
 type cn_assertion 'a 'ty =
@@ -118,12 +140,29 @@ type cn_datatype 'a 'ty = <|
 |>
 
 
+type cn_condition 'a 'ty =
+  | CN_cletResource of Loc.t * 'a * cn_resource 'a 'ty
+  | CN_cletExpr of Loc.t * 'a * cn_expr 'a 'ty
+  | CN_cconstr of Loc.t * cn_assertion 'a 'ty
+
+
+type cn_function_spec 'a 'ty =
+  | CN_accesses of Loc.t * list Symbol.identifier
+  | CN_requires of Loc.t * list (cn_condition 'a 'ty)
+  | CN_ensures of Loc.t * list (cn_condition 'a 'ty)
+  | CN_trusted of Loc.t
+  | CN_mk_function of Loc.t * 'a
+
+type cn_loop_spec 'a 'ty =
+  | CN_inv of Loc.t * list (cn_condition 'a 'ty)
+
+
 type cn_namespace =
   | CN_predicate
   | CN_function
   | CN_datatype_nm
   | CN_constructor
-  | CN_logical
+  | CN_vars
   | CN_oarg
 
 instance (Show cn_namespace)
@@ -133,7 +172,7 @@ instance (Show cn_namespace)
       | CN_function -> "function"
       | CN_datatype_nm -> "datatype"
       | CN_constructor -> "constructor"
-      | CN_logical   -> "logical"
+      | CN_vars   -> "vars"
       | CN_oarg      -> "oarg"
     end
 end
@@ -146,6 +185,7 @@ type cn_error =
   | CNErr_invalid_tag
   | CNErr_unknown_identifier of cn_namespace * Symbol.identifier
   | CNErr_missing_oarg of Symbol.sym
+  | CNErr_general of string
 
 type cn_typing_error =
   | CNErr_typing_TODO

@@ -904,7 +904,7 @@ let symbolify_impl_or_file decls : ((Core.impl, parsed_core_file) either) Eff.t 
                   symbolify_expr _e >>= fun e        ->
                   close_scope >>= fun _ ->
                   Eff.return ( impl_acc, globs_acc
-                             , Pmap.add decl_sym (Proc (decl_loc, bTy, sym_bTys, e)) fun_map_acc, tagDefs_acc)
+                             , Pmap.add decl_sym (Proc (decl_loc, None, bTy, sym_bTys, e)) fun_map_acc, tagDefs_acc)
             | None ->
                 assert false
           end
@@ -995,7 +995,7 @@ let symbolify_std decls : (unit Core.fun_map) Eff.t =
                 | None ->
                     Eff.return ()
               end >>= fun _ ->
-              Eff.return (Pmap.add decl_sym (Proc (decl_loc, bTy, sym_bTys, e)) fun_map_acc)
+              Eff.return (Pmap.add decl_sym (Proc (decl_loc, None, bTy, sym_bTys, e)) fun_map_acc)
           | None ->
               assert false
         )

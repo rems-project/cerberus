@@ -97,7 +97,7 @@ let rec inline_label_labels_and_body ~to_inline ~to_keep body =
 
 
 let rewrite_fun_map_decl = function
-  | Mi_Proc (loc, rbt, arg_bts, body, label_defs) -> 
+  | Mi_Proc (loc, mrk, rbt, arg_bts, body, label_defs) -> 
      let to_keep, to_inline = 
        Pmap.fold (fun label def (to_keep, to_inline) ->
            match def with
@@ -113,7 +113,7 @@ let rewrite_fun_map_decl = function
          (Pmap.empty Symbol.symbol_compare, [])
      in
      let (label_defs, body) = inline_label_labels_and_body ~to_inline ~to_keep body in
-     Mi_Proc (loc, rbt, arg_bts, body, label_defs)
+     Mi_Proc (loc, mrk, rbt, arg_bts, body, label_defs)
   | d -> d
 
 

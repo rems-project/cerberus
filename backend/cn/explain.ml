@@ -78,10 +78,12 @@ let state ctxt (model_with_q : Solver.model_with_q) (extras : state_extras) =
   in
 
   let variables = 
-    List.map (fun (s, (ls, _)) ->
-        {var = Sym.pp s; 
-         value = mevaluate (sym_ (s, ls))}
-      ) (SymMap.bindings ctxt.logical)
+    let make s ls =
+      {var = Sym.pp s; 
+       value = mevaluate (sym_ (s, ls))}
+    in
+    List.map (fun (s, ls) -> make s ls) quantifier_counter_model @
+    List.map (fun (s, (ls, _)) -> make s ls) (SymMap.bindings ctxt.logical)
   in
 
   let constraints = List.map LC.pp (LCSet.elements ctxt.constraints) in

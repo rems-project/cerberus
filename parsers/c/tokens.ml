@@ -155,12 +155,21 @@ type token =
   | CN_TUPLE
   | CN_SET
   | CN_LET
+  | CN_TAKE
   | CN_OWNED
   | CN_BLOCK
   | CN_EACH
   | CN_NULL
   | CN_TRUE
   | CN_FALSE
+  | CN_REQUIRES
+  | CN_ENSURES
+  | CN_INV
+  | CN_ACCESSES
+  | CN_TRUSTED
+  | CN_WHEN
+  | CN_WITH
+  | CN_UNCHANGED
 
 
 let string_of_token = function
@@ -297,6 +306,7 @@ let string_of_token = function
   | CN_TUPLE -> "CN_TUPLE"
   | CN_SET -> "CN_SET"
   | CN_LET -> "CN_LET"
+  | CN_TAKE -> "CN_TAKE"
   | CN_OWNED -> "CN_OWNED"
   | CN_BLOCK -> "CN_BLOCK"
   | CN_EACH -> "CN_EACH"
@@ -306,4 +316,12 @@ let string_of_token = function
   | CN_FUNCTION -> "CN_FUNCTION"
   | CN_PREDICATE -> "CN_PREDICATE"
   | CN_DATATYPE -> "CN_DATATYPE"
+  | CN_REQUIRES -> "CN_REQUIRES"
+  | CN_ENSURES -> "CN_ENSURES"
+  | CN_INV -> "CN_INV"
+  | CN_ACCESSES -> "CN_ACCESSES"
+  | CN_TRUSTED -> "CN_TRUSTED"
+  | CN_WHEN -> "CN_WHEN"
+  | CN_WITH -> "CN_WITH"
+  | CN_UNCHANGED -> "CN_UNCHANGED"
 

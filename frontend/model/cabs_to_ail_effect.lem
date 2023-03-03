@@ -9,7 +9,7 @@ import Map_extra Ctype
 
 import Mem Implementation
 
-import Cn_desugaring
+open import Cn_desugaring Cn
 
 module A      = AilSyntax
 
@@ -218,7 +218,6 @@ type switch_info = <|
   default_info: maybe Loc.t;
 |>
 
-
 type state = <|
   (* Counter used to generate fresh cabs label names (see the desugaring of do-while statements) *)
   aux_supply: nat;
@@ -269,7 +268,6 @@ type state = <|
   current_return_type: maybe Ctype.ctype;
   
   loop_attributes: Annot.loop_attributes;
-  markers_env: map nat A.identifier_env;
 
   (* BEGIN CN *)
   cn_state: Cn_desugaring.cn_desugaring_state;
@@ -279,7 +277,15 @@ type state = <|
   core_eval_stuff: (map string Symbol.sym) * Core.fun_map unit * Core.impl;
 |>
 
-type desugM 'a = State_exception.stExceptM 'a state Errors.error
+type markers_env =
+  map nat state
+
+type state_with_markers = <|
+  inner: state;
+  markers_env: markers_env;
+|>
+
+type desugM 'a = State_exception.stExceptM 'a state_with_markers Errors.error
 
 val return: forall 'a. 'a -> desugM 'a
 let inline return = State_exception.return
@@ -327,6 +333,32 @@ let inline (<$>)    = fmap
 let inline (<*>)    = app
 
 
+let get_inner =
+  State_exception.get >>= fun st ->
+  State_exception.return st.inner
+
+let put_inner inner_st =
+  State_exception.update (fun st ->
+    <| st with inner= inner_st |>
+  )
+
+let read_inner f =
+  State_exception.read (fun st ->
+    f st.inner
+  )
+
+let update_inner f =
+  State_exception.update (fun st ->
+    <| st with inner= f st.inner |>
+  )
+
+let modify_inner f =
+  State_exception.modify (fun st ->
+    let (a, inner_st') = f st.inner in
+    (a, <| st with inner= inner_st' |>)
+  )
+
+
 val void: forall 'a. desugM 'a -> desugM unit
 let cabs_to_ail_effect_void m =
   fmap (const ()) m
@@ -348,12 +380,12 @@ let inline liftException = State_exception.liftException
 val current_scope_is: scope -> desugM bool
 let cabs_to_ail_effect_current_scope_is scope =
   (* NOTE: it would be equivalent to use [registered_tag_declarations] *)
-  State_exception.read (fun st -> Scope_table.current_scope_is st.registered_identifiers = scope)
+  read_inner (fun st -> Scope_table.current_scope_is st.registered_identifiers = scope)
 let inline current_scope_is = cabs_to_ail_effect_current_scope_is
 
 val scope_is_visible: scope -> desugM bool
 let cabs_to_ail_effect_scope_is_visible scope =
-  State_exception.read (fun st ->
+  read_inner (fun st ->
     Scope_table.scope_is_visible scope st.registered_identifiers
   )
 let inline scope_is_visible = cabs_to_ail_effect_scope_is_visible
@@ -361,8 +393,11 @@ let inline scope_is_visible = cabs_to_ail_effect_scope_is_visible
 val get_scope: desugM scope
 let get_scope =
   (* NOTE: it would be equivalent to use [registered_tag_declarations] *)
-  State_exception.read (fun st -> Scope_table.current_scope_is st.registered_identifiers)
+  read_inner (fun st -> Scope_table.current_scope_is st.registered_identifiers)
 
+
+let create_new_scope scope st =
+  <| st with inner= <| st.inner with registered_identifiers= Scope_table.create_scope scope st.inner.registered_identifiers; |> |>
 
 val under_scope: forall 'a. scope -> desugM 'a -> desugM 'a
 let under_scope scope m =
@@ -370,10 +405,10 @@ let under_scope scope m =
     let () = Debug.print_debug 3 [Debug.DB_desugaring] (fun () ->
       "ENTERING Scope: " ^ string_of_scope scope
     ) in
-    <| st with registered_identifiers= Scope_table.create_scope scope st.registered_identifiers; |>
+    create_new_scope scope st
   ) >>
   m >>= fun res ->
-  State_exception.update (fun st ->
+  update_inner (fun st ->
     let (_, ident_table') = Scope_table.destroy_scope st.registered_identifiers in
     let () = Debug.print_debug 3 [Debug.DB_desugaring] (fun () ->
       "EXITING Scope: " ^ string_of_scope scope
@@ -389,14 +424,14 @@ let under_scope scope m =
    _Thread_local ones *)
 val collect_with_scope: forall 'a. scope -> desugM 'a -> desugM (A.bindings * 'a)
 let collect_with_scope scope m =
-  State_exception.update (fun st ->
+  update_inner (fun st ->
     let () = Debug.print_debug 3 [Debug.DB_desugaring] (fun () ->
       "ENTERING Scope: " ^ string_of_scope scope
     ) in
     <| st with registered_identifiers= Scope_table.create_scope scope st.registered_identifiers; |>
   ) >>
   m >>= fun res ->
-  State_exception.modify (fun st ->
+  modify_inner (fun st ->
     let (idents_map, ident_table') = Scope_table.destroy_scope st.registered_identifiers in
     let () = Debug.print_debug 3 [Debug.DB_desugaring] (fun () ->
       "EXITING Scope: " ^ string_of_scope scope
@@ -440,14 +475,14 @@ let collect_with_scope scope m =
 (* TODO: rename *)
 val with_scope2: forall 'a. scope -> desugM 'a -> desugM (Map.map (Symbol.identifier * namespace) registration * 'a)
 let with_scope2 scope m =
-  State_exception.update (fun st ->
+  update_inner (fun st ->
     let () = Debug.print_debug 2 [Debug.DB_desugaring] (fun () ->
       "ENTERING Scope(2): " ^ string_of_scope scope
     ) in
     <| st with registered_identifiers= Scope_table.create_scope scope st.registered_identifiers; |>
   ) >>
   m >>= fun res ->
-  State_exception.modify (fun st ->
+  modify_inner (fun st ->
     let (idents_map, ident_table') = Scope_table.destroy_scope st.registered_identifiers in
     let () = Debug.print_debug 2 [Debug.DB_desugaring] (fun () ->
       "EXITING Scope(2): " ^ string_of_scope scope
@@ -457,7 +492,7 @@ let with_scope2 scope m =
   return (idents_map, res)
 
 let bindings_of_idents_map idents_map =
-  State_exception.read (fun st ->
+  read_inner (fun st ->
     List.reverse begin
       Set_helpers.fold (fun decl acc ->
         match decl with
@@ -490,7 +525,7 @@ let bindings_of_idents_map idents_map =
 (* TODO: this is a massive hack (see desugar_and_register_function_definition). MUST DO BETTER *)
 val hack_inject_idents_map: Map.map (Symbol.identifier * namespace) registration -> desugM unit
 let hack_inject_idents_map idents_map =
-  State_exception.update (fun st ->
+  update_inner (fun st ->
     <| st with registered_identifiers=
       Map_extra.fold (fun cabs_ident reg acc ->
         Scope_table.register cabs_ident reg acc
@@ -503,55 +538,75 @@ let empty_switch_info =
 
 
 (* ========================================================================== *)
-val initial_state: (map string Symbol.sym) * Core.fun_map unit * Core.impl -> state
+val initial_state: (map string Symbol.sym) * Core.fun_map unit * Core.impl -> state_with_markers
 let initial_state core_eval_stuff = <|
-  aux_supply=    0;
-  
-  registered_external_identifiers= Map.empty;
-  registered_identifiers=      Scope_table.empty;
-  
-  tag_definitions= Map.empty;
-
-  enumeration_constants= Map.empty;
-  switch_context= [];
-  
-  function_declarations=        Map.empty;
-  external_object_declarations= Map.empty;
-  internal_object_declarations= Map.empty;
-  
-  function_definitions=        Map.empty;
-  global_object_definitions=   Map.empty;
-  typedef_definitions=         Map.empty;
-  static_assertions=           [];
-  
-  used_identifier= [];
-  current_return_type= Nothing;
-
-  loop_attributes= Map.empty;
+  inner= <|
+    aux_supply=    0;
+    
+    registered_external_identifiers= Map.empty;
+    registered_identifiers=      Scope_table.empty;
+    
+    tag_definitions= Map.empty;
+    
+    enumeration_constants= Map.empty;
+    switch_context= [];
+    
+    function_declarations=        Map.empty;
+    external_object_declarations= Map.empty;
+    internal_object_declarations= Map.empty;
+    
+    function_definitions=        Map.empty;
+    global_object_definitions=   Map.empty;
+    typedef_definitions=         Map.empty;
+    static_assertions=           [];
+    
+    used_identifier= [];
+    current_return_type= Nothing;
+    
+    loop_attributes= Map.empty;
+    cn_state= Cn_desugaring.initial_cn_desugaring_state;
+    
+    core_eval_stuff= core_eval_stuff;
+  |>;
   markers_env= Map.empty;
-
-  cn_state= Cn_desugaring.initial_cn_desugaring_state;
-  
-  core_eval_stuff= core_eval_stuff;
 |>
 
-val eval: forall 'a. (map string Symbol.sym) * Core.fun_map unit * Core.impl -> desugM 'a -> Exception.exceptM 'a Errors.error
+(* val further_cn_desugaring_state: *)
+(*   (map (Cn.cn_namespace * Symbol.identifier) Symbol.sym) -> *)
+(*   (map A.ail_identifier tag_definition) -> state_with_markers *)
+(* let further_cn_desugaring_state idents tags = *)
+(*   let init_st = initial_state (Map.empty, Map.empty, Map.empty) in *)
+(*   let cn_state = Cn_desugaring.state_with_idents idents in *)
+(*   <| init_st with inner= <| init_st.inner with tag_definitions = tags; cn_state = cn_state |> |> *)
+
+(* val set_cn_c_identifier_env: *)
+(*   A.identifier_env -> state_with_markers -> state_with_markers *)
+(* let set_cn_c_identifier_env env st = *)
+(*   let cn_state = Cn_desugaring.set_c_identifier_env env st.inner.cn_state in *)
+(*   <| st with inner= <| st.inner with cn_state = cn_state |> |> *)
+
+
+val eval: forall 'a. (map string Symbol.sym) * Core.fun_map unit * Core.impl -> desugM 'a -> Exception.exceptM (markers_env * 'a) Errors.error
 let cabs_to_ail_effect_eval core_eval_stuff m =
-  State_exception.eval m (initial_state core_eval_stuff)
+  State_exception.eval begin
+    m >>= fun res ->
+    State_exception.get >>= fun st ->
+    State_exception.return (st.markers_env, res)
+  end (initial_state core_eval_stuff)
 let inline eval = cabs_to_ail_effect_eval
 
 
 
 val freshify: Symbol.identifier -> desugM Symbol.identifier
 let freshify (Symbol.Identifier loc str) =
-  State_exception.modify (fun st ->
+  modify_inner (fun st ->
     let n = st.aux_supply in
     (Symbol.Identifier loc (str ^ show n), <| st with aux_supply= n+1 |>)
   )
 
 val fresh_block_scope: desugM scope
 let fresh_block_scope =
-  State_exception.modify (fun st ->
+  modify_inner (fun st ->
     let n = st.aux_supply in
     (Scope_block n, <| st with aux_supply= n+1 |>)
   )
@@ -561,14 +616,14 @@ let fresh_block_scope =
 (* ========================================================================== *)
 val ident_is_in_scope: Symbol.identifier -> namespace -> desugM bool
 let ident_is_in_scope ident namespace =
-  State_exception.read (fun st ->
+  read_inner (fun st ->
     Scope_table.is_in_scope (ident, namespace) (Scope_table.return_scope st.registered_identifiers)
   )
 
 
 val ident_is_in_current_scope: Symbol.identifier -> namespace -> desugM bool
 let ident_is_in_current_scope ident namespace =
-  State_exception.read (fun st ->
+  read_inner (fun st ->
     Scope_table.is_in_current_scope (ident, namespace) (Scope_table.return_scope st.registered_identifiers)
   )
 
@@ -618,7 +673,7 @@ let internal_register_identifier if_found ident namespace kind link_opt =
       | _ -> Symbol.fresh_pretty str 
     end in
     (* associates it to the identifier *)
-    State_exception.update (fun st ->
+    update_inner (fun st ->
       match link_opt with
         | Just Linkage_external ->
             (* registering a new identifier WITH external linkage *)
@@ -644,7 +699,7 @@ let internal_register_identifier if_found ident namespace kind link_opt =
         ) in
         (* when registering an identifier with external linkage, we only care
            about previous EXTERNAL registrations *)
-        State_exception.read (fun st ->
+           read_inner (fun st ->
           Map.lookup (ident, namespace) st.registered_external_identifiers
         ) >>= function
           | Nothing ->
@@ -663,14 +718,14 @@ let internal_register_identifier if_found ident namespace kind link_opt =
           "internal_register_identifier ==> link_opt <> Just Linkage_external"
         ) in
         (* TODO: check this is correct for link = Linkage_internal *)
-        State_exception.read (fun st ->
+        read_inner (fun st ->
           Scope_table.resolve (ident, namespace) st.registered_identifiers
         ) >>= function
           | Just (scope, External) ->
               let () = Debug.print_debug 2 [] (fun () ->
                 "lookup registered ==> Just External"
               ) in
-              State_exception.read (fun st ->
+              read_inner (fun st ->
                 Map.lookup (ident, namespace) st.registered_external_identifiers
               ) >>= function
                 | Nothing ->
@@ -691,7 +746,7 @@ let internal_register_identifier if_found ident namespace kind link_opt =
               let () = Debug.print_debug 2 [] (fun () ->
                 "lookup registered ==> Nothing"
               ) in
-              State_exception.read (fun st ->
+              read_inner (fun st ->
                 Map.lookup (ident, namespace) st.registered_external_identifiers
               ) >>= function
                 | Nothing ->
@@ -719,7 +774,7 @@ let register_typedef ident (attrs, qs, ty) =
   internal_register_identifier
     (fun (_, (sym, _, _)) _ -> return sym)
     ident Namespace_ordinary (Kind_ordinary OK_typedef) Nothing >>= fun sym ->
-  State_exception.get >>= fun st ->
+  get_inner >>= fun st ->
   match Map.lookup sym st.typedef_definitions with
     | Just (attrs', qs', ty') ->
         (* STD §6.7#3, first bullet *)
@@ -729,20 +784,20 @@ let register_typedef ident (attrs, qs, ty) =
           constraint_violation loc Constraint.TypedefRedefinition
         else
           (* TODO: we combine the attributes, not sure this is right thing to do *)
-          State_exception.put (<| st with
+          put_inner (<| st with
             typedef_definitions= Map.insert sym (Annot.combine_attributes attrs attrs', qs', ty') st.typedef_definitions
-           |>)
+          |>)
           (* return () *)
     | Nothing ->
-        State_exception.put (<| st with
+        put_inner (<| st with
           typedef_definitions= Map.insert sym (attrs, qs, ty) st.typedef_definitions
-         |>)
+        |>)
   end
 
 
 val resolve_typedef: A.ail_identifier -> desugM (Annot.attributes * Ctype.qualifiers * Ctype.ctype)
 let resolve_typedef sym =
-  State_exception.read (fun st ->
+  read_inner (fun st ->
     match Map.lookup sym st.typedef_definitions with
       | Just attrs_qs_ty -> attrs_qs_ty
       | _ -> error "TODO(msg) Cabs_to_ail_effect.resolve_typedef"
@@ -752,18 +807,18 @@ let resolve_typedef sym =
 
 val register_case: Loc.t -> case_selector -> desugM unit
 let register_case loc case_sel =
-  State_exception.get >>= fun st ->
+  get_inner >>= fun st ->
   match st.switch_context with
     | [] ->
         constraint_violation loc Constraint.LabelStatementOutsideSwitch
     | x :: xs ->
         let ctx' = <| x with cases_info= (loc, case_sel) :: x.cases_info |> :: xs in
-        State_exception.put <| st with switch_context= ctx' |>
+        put_inner <| st with switch_context= ctx' |>
   end
 
 val register_default: Loc.t -> desugM unit
 let register_default loc =
-  State_exception.get >>= fun st ->
+  get_inner >>= fun st ->
   match st.switch_context with
     | [] ->
         constraint_violation loc Constraint.LabelStatementOutsideSwitch
@@ -773,7 +828,7 @@ let register_default loc =
               constraint_violation loc (Constraint.MutipleDefaultStatement prev_loc)
           | Nothing ->
               let ctx' = <| x with default_info= Just loc |> :: xs in
-              State_exception.put <| st with switch_context= ctx' |>
+              put_inner <| st with switch_context= ctx' |>
         end
   end
 
@@ -813,7 +868,7 @@ let check_case_overlaps xs =
 
 val is_in_switch : desugM bool
 let is_in_switch =
-  State_exception.read (fun st ->
+  read_inner (fun st ->
     match st.switch_context with
       | []     -> false
       | _ :: _ -> true
@@ -822,16 +877,16 @@ let is_in_switch =
 
 val as_switch_body: forall 'a. desugM 'a -> desugM 'a
 let as_switch_body m =
-  State_exception.update (fun st ->
+  update_inner (fun st ->
     <| st with switch_context= empty_switch_info :: st.switch_context |>
   ) >>= fun () ->
   m >>= fun ret ->
-  State_exception.get >>= fun st ->
+  get_inner >>= fun st ->
   match st.switch_context with
     | [] ->
         error "Cabs_to_ail.as_switch_body: switch_context = []"
     | switch_info :: xs ->
-        State_exception.put <| st with switch_context= xs |> >>= fun () ->
+        put_inner <| st with switch_context= xs |> >>= fun () ->
         match check_case_overlaps switch_info.cases_info with
           | Nothing ->
               return ret
@@ -841,26 +896,224 @@ let as_switch_body m =
   end
 
 (* BEGIN CN *)
-val liftCnDesug: forall 'a. Cn_desugaring.cn_desugM 'a -> desugM 'a
-let liftCnDesug mk =
-  begin fun st ->
-    Exception.bind (State_exception.run mk st.cn_state)
-      (fun (ret, cn_st') -> Exception.return (ret, <| st with cn_state= cn_st' |>))
-  end >>= fun ret -> (* (ret, st') -> *)
-  (* State_exception.put st' >>= fun () -> *)
-  return ret
+(* val liftCnDesug: forall 'a. Cn_desugaring.cn_desugM 'a -> desugM 'a *)
+(* let liftCnDesug mk = *)
+(*   begin fun st -> *)
+(*     Exception.bind (State_exception.run mk st.inner.cn_state) *)
+(*       (fun (ret, cn_st') -> Exception.return (ret, <| st with inner= <| st.inner with cn_state= cn_st' |> |>)) *)
+(*   end >>= fun ret -> (\* (ret, st') -> *\) *)
+(*   (\* put_inner st' >>= fun () -> *\) *)
+(*   return ret *)
 
 
-let inline register_cn_ident ns ident     = liftCnDesug (Cn_desugaring.register_cn_ident ns ident)
-let inline resolve_cn_ident ns ident      = liftCnDesug (Cn_desugaring.resolve_cn_ident ns ident)
-(* let inline  fetch_oarg acc ident = function *)
-let inline check_cn_oargs loc xs          = liftCnDesug (Cn_desugaring.check_cn_oargs loc xs)
+
+val check_cn_ident: Cn.cn_namespace -> Symbol.identifier -> desugM bool
+let check_cn_ident ns _ident =
+  match ns with
+  | Cn.CN_predicate ->
+    return true (* global *)
+  | Cn.CN_function ->
+    return true (* global *)
+  | Cn.CN_vars ->
+    return false (* local *)
+  | Cn.CN_oarg ->
+    return false (* local *)
+  | _ ->
+    return true
+  end
+
+
+let update_cn_state f =
+  update_inner (fun inner ->
+      <| inner with cn_state = f inner.cn_state |>
+    )
+
+let get_cn_state =
+  get_inner >>= fun inner -> return inner.cn_state
+
+
+
+let assert_cn_bottom_scope = 
+  get_cn_state >>= fun st ->
+  match st.Cn_desugaring.cn_scopes with
+  | [] -> Assert_extra.failwith "cn_scopes is empty but should never be empty"
+  | [sc] -> return ()
+  | _ -> Assert_extra.failwith "cn_scopes should be a singleton but is not"
+  end
+
+
+let current_cn_scope s =
+  List_extra.head s.cn_scopes
+
+let push_cn_scope =
+  update_cn_state (fun s ->
+      <| s with cn_scopes = current_cn_scope s :: s.cn_scopes |>
+    )
+
+let pop_cn_scope = 
+  update_cn_state (fun s ->
+      <| s with cn_scopes = List_extra.tail s.cn_scopes |>
+    )
+
+
+let update_current_cn_scope f =
+  update_cn_state (fun s ->
+      let cur = List_extra.head s.cn_scopes in
+      let rest = List_extra.tail s.cn_scopes in
+      <| s with cn_scopes = f cur :: rest |>
+    )
+
+
+(* CN variables cannot shadow CN variables or C variables.  It would
+   be good to make the same true the other way round (C variables not
+   shadowing CN variables), but with the current pipeline shape that's
+   not trivia. So, instead, this function makes C variables take
+   precedence over CN variables, as suggested by Kayvan. *)
+
+val resolve_cn_ident_opt: forall 'ty. Cn.cn_namespace -> Symbol.identifier -> desugM (maybe (Symbol.sym * Cn.cn_var_kind))
+let resolve_cn_ident_opt ns ident =
+
+  get_inner >>= fun inner ->
+  let st = inner.cn_state in
+
+  (* based on earlier Cabs_to_ail_effect code  *)
+  let lookup_in_c_desugaring_state () =
+     match Scope_table.resolve (ident, Namespace_ordinary) inner.registered_identifiers with
+     | Nothing -> 
+        Nothing
+     | Just (_, Internal sym _kind _linkage) -> 
+        Just (sym, Cn.Var_kind_c)
+     | Just (_, External) ->
+        match Map.lookup (ident, Namespace_ordinary) inner.registered_external_identifiers with
+        | Nothing -> Nothing
+        | Just (_scope, (sym, _identifier_kind, _linkage)) ->
+           Just (sym, Cn.Var_kind_c)
+        end
+     end
+  in
+
+  let lookup_in_cn_desugaring_state () =
+    match Map.lookup (ns, ident) (current_cn_scope st) with
+      | Just sym ->
+          Just (sym, Cn.Var_kind_cn)
+      | Nothing ->
+          match Map.lookup (ns, ident) st.cn_idents with
+            | Just sym ->
+                Just (sym, Cn.Var_kind_cn)
+            | Nothing ->
+               Nothing
+          end
+    end
+  in
+  
+  let result = match ns with
+    | Cn.CN_vars ->
+       match lookup_in_c_desugaring_state () with
+       | Nothing -> lookup_in_cn_desugaring_state ()
+       | Just r -> Just r
+       end
+    | _ ->
+      lookup_in_cn_desugaring_state ()
+  end in
+  return result
+
+
+
+let resolve_cn_ident ns ident =
+  resolve_cn_ident_opt ns ident >>= function
+  | Nothing ->
+     get_inner >>= fun inner ->
+     let st = inner.cn_state in
+     let same_ns xs = List.concat (List.map (fun (ns2, sym) -> if ns2 = ns then [sym] else []) xs) in
+     let () = Debug.print_debug 8 []
+                (fun () -> "available CN identifiers in ns (" ^ show ns ^ ") in local scope:") in
+     (* let () = Debug.print_debug 8 [] *)
+     (*            (fun () -> show (same_ns (Set_extra.toList (Map.domain st.cn_current_scope)))) in *)
+     let () = Debug.print_debug 8 [] (fun () -> "and in global scope:") in
+     let () = Debug.print_debug 8 []
+                (fun () -> show (same_ns (Set_extra.toList (Map.domain st.cn_idents)))) in
+     fail (Loc.locOf ident) (Errors.Desugar_CN (Cn.CNErr_unknown_identifier ns ident)) 
+  | Just (s, kind) -> 
+     return (s, kind)
+  end
+
+
+
+val register_cn_ident: Cn.cn_namespace -> Symbol.identifier -> desugM Symbol.sym
+let register_cn_ident ns ((Symbol.Identifier loc str) as ident) =
+  resolve_cn_ident_opt ns ident >>= function
+  | Just (s, kind) ->
+     fail (Loc.locOf ident) (Errors.Desugar_CN (CNErr_redeclaration ns))
+  | Nothing ->
+    let sym = Symbol.fresh_cn str in
+    let () = Debug.print_debug 4 [] (fun () ->
+        "adding a CN identifier: " ^ str ^ "(" ^ show ns ^ ")") in
+    check_cn_ident ns ident >>= function
+    | true ->
+      update_cn_state (fun st ->
+        <| st with cn_idents= Map.insert (ns, ident) sym st.cn_idents |>
+      ) >>= fun () ->
+      return sym
+    | false ->
+      update_current_cn_scope (fun sc ->
+          Map.insert (ns, ident) sym sc
+      ) >>= fun () ->
+      return sym
+    end
+  end
+
+
+let rec fetch_oarg acc ident = function
+  | [] ->
+      (Nothing, acc)
+  | (((Cn.CN_oarg, ident'), sym) as x) :: xs' ->
+      if ident = ident' then
+        (Just sym, acc ++ xs')
+      else
+        fetch_oarg (x :: acc) ident xs'
+  | x :: xs' ->
+      fetch_oarg (x :: acc) ident xs'
+end
+
+val check_cn_oargs: forall 'a. Loc.t -> list (Symbol.identifier * 'a) -> desugM (list (Symbol.sym * 'a))
+let check_cn_oargs loc xs =
+  get_cn_state >>= fun st ->
+  foldlM (fun (acc, oargs) (ident, x) ->
+    match fetch_oarg [] ident oargs with
+      | (Just sym, oargs') ->
+          return ((sym, x) :: acc, oargs')
+      | (Nothing, _) ->
+          fail (Loc.locOf ident) (Errors.Desugar_CN (Cn.CNErr_unknown_identifier Cn.CN_oarg ident))
+    end
+  ) ([], Map_extra.toList (current_cn_scope st)) xs >>= fun (rev_acc, oargs) ->
+  match List.filter (function ((CN_oarg, _), _) -> true | _ -> false end) oargs with
+    | [] ->
+        return (List.reverse rev_acc)
+    | (_, sym) :: _ ->
+        fail loc (Errors.Desugar_CN (Cn.CNErr_missing_oarg sym))
+  end
+
+
+
+(* let inline register_cn_ident ns ident     = liftCnDesug (Cn_desugaring.register_cn_ident ns ident) *)
+(* let inline resolve_cn_ident ns ident      = liftCnDesug (Cn_desugaring.resolve_cn_ident ns ident) *)
+(* (\* let inline  fetch_oarg acc ident = function *\) *)
+(* let inline check_cn_oargs loc xs          = liftCnDesug (Cn_desugaring.check_cn_oargs loc xs) *)
+
+
+val lookup_cn_function: Symbol.identifier -> desugM Symbol.sym
+let lookup_cn_function id =
+  resolve_cn_ident Cn.CN_function id >>= fun (sym, _) ->
+  return sym
+
 
 let register_cn_function ident mk =
-  State_exception.get >>= fun st ->
-  match Map.lookup ident st.cn_state.Cn_desugaring.cn_functions with
+  get_inner >>= fun st ->
+  match List.lookup ident st.cn_state.Cn_desugaring.cn_functions with
     | Nothing ->
-        resolve_cn_ident Cn.CN_function ident >>= fun sym ->
+        resolve_cn_ident Cn.CN_function ident >>= fun sym_resolved ->
+        let sym = Cn.ensure_not_c_variable sym_resolved in
+        push_cn_scope >>= fun () ->
         mk >>= fun (attrs, return_bty, args, body) ->
         let func = <|
           Cn.cn_func_loc= Loc.locOf ident;
@@ -870,10 +1123,11 @@ let register_cn_function ident mk =
           Cn.cn_func_return_bty= return_bty;
           Cn.cn_func_body= body;
         |> in
-        liftCnDesug begin
-          State_exception.update (fun cn_st' ->
-            <| cn_st' with Cn_desugaring.cn_functions= Map.insert ident (sym, func) cn_st'.Cn_desugaring.cn_functions;
-                           Cn_desugaring.cn_current_scope= Map.empty; |>
+        (* liftCnDesug *) begin
+          pop_cn_scope >>= fun () ->
+          assert_cn_bottom_scope >>= fun () -> 
+          update_cn_state (fun cn_st' ->
+            <| cn_st' with Cn_desugaring.cn_functions= (ident, (sym, func)) :: cn_st'.Cn_desugaring.cn_functions; |>
           )
         end
     | Just _ ->
@@ -882,10 +1136,12 @@ let register_cn_function ident mk =
 
 
 let register_cn_predicate ident mk =
-  State_exception.get >>= fun st ->
-  match Map.lookup ident st.cn_state.Cn_desugaring.cn_predicates with
+  get_inner >>= fun st ->
+  match List.lookup ident st.cn_state.Cn_desugaring.cn_predicates with
     | Nothing ->
-        resolve_cn_ident Cn.CN_predicate ident >>= fun sym ->
+        resolve_cn_ident Cn.CN_predicate ident >>= fun sym_resolved ->
+        let sym = Cn.ensure_not_c_variable sym_resolved in
+        push_cn_scope >>= fun () ->
         mk >>= fun (attrs, oargs, iargs, clauses) ->
         let pred = <|
           Cn.cn_pred_loc= Loc.locOf ident;
@@ -895,10 +1151,11 @@ let register_cn_predicate ident mk =
           Cn.cn_pred_iargs= iargs;
           Cn.cn_pred_clauses= clauses;
         |> in
-        liftCnDesug begin
-          State_exception.update (fun cn_st' ->
-            <| cn_st' with Cn_desugaring.cn_predicates= Map.insert ident (sym, pred) cn_st'.Cn_desugaring.cn_predicates;
-                           Cn_desugaring.cn_current_scope= Map.empty; |>
+        (* liftCnDesug *) begin
+          pop_cn_scope >>= fun () ->
+          assert_cn_bottom_scope >>= fun () -> 
+          update_cn_state (fun cn_st' ->
+            <| cn_st' with Cn_desugaring.cn_predicates= (ident, (sym, pred)) :: cn_st'.Cn_desugaring.cn_predicates; |>
           )
         end
     | Just _ ->
@@ -906,20 +1163,23 @@ let register_cn_predicate ident mk =
   end
 
 let register_cn_datatype ident mk_cases =
-  State_exception.get >>= fun st ->
-  match Map.lookup ident st.cn_state.Cn_desugaring.cn_datatypes with
+  get_inner >>= fun st ->
+  match List.lookup ident st.cn_state.Cn_desugaring.cn_datatypes with
     | Nothing ->
-        resolve_cn_ident Cn.CN_datatype_nm ident >>= fun sym ->
+        resolve_cn_ident Cn.CN_datatype_nm ident >>= fun sym_resolved ->
+        let sym = Cn.ensure_not_c_variable sym_resolved in
+        push_cn_scope >>= fun () ->
         mk_cases >>= fun cases ->
         let dt = <|
           Cn.cn_dt_loc= Loc.locOf ident;
           Cn.cn_dt_name= sym;
           Cn.cn_dt_cases= cases;
         |> in
-        liftCnDesug begin
-          State_exception.update (fun cn_st' ->
-            <| cn_st' with Cn_desugaring.cn_datatypes = Map.insert ident dt cn_st'.Cn_desugaring.cn_datatypes;
-                           Cn_desugaring.cn_current_scope= Map.empty; |>
+        (* liftCnDesug *) begin
+          pop_cn_scope >>= fun () ->
+          assert_cn_bottom_scope >>= fun () -> 
+          update_cn_state (fun cn_st' ->
+            <| cn_st' with Cn_desugaring.cn_datatypes = (ident, dt) :: cn_st'.Cn_desugaring.cn_datatypes; |>
           )
         end
     | Just _ ->
@@ -929,45 +1189,32 @@ let register_cn_datatype ident mk_cases =
 (* END CN *)
 
 
-val record_loop_attribute: Annot.loop_id -> Annot.attributes -> desugM unit
-let record_loop_attribute id attr = 
-  State_exception.get >>= fun st ->
-  let env: map Symbol.identifier (maybe Symbol.sym) = Scope_table.to_map Namespace_ordinary (fun ident -> function
-    | Internal sym _ _ ->
-        Just sym
-    | External ->
-        match Map.lookup (ident, Namespace_ordinary) st.registered_external_identifiers with
-          | Just (_, (sym, _, _)) ->
-              Just sym
-          | Nothing ->
-              Nothing
-        end
-  end) st.registered_identifiers in
-  State_exception.put <|st with loop_attributes = (Map.insert id (env, attr) st.loop_attributes) |>
 
-val get_loop_attributes: unit -> desugM Annot.loop_attributes
-let get_loop_attributes () = 
-  State_exception.get >>= fun st ->
-  State_exception.return st.loop_attributes
 
 
 val record_marker: unit -> desugM nat
 let record_marker () =
   let id = Symbol.fresh_int () in
-  State_exception.get >>= fun st ->
-  let env: map Symbol.identifier (maybe Symbol.sym) = Scope_table.to_map Namespace_ordinary (fun ident -> function
-    | Internal sym _ _ ->
-        Just sym
-    | External ->
-        match Map.lookup (ident, Namespace_ordinary) st.registered_external_identifiers with
-          | Just (_, (sym, _, _)) ->
-              Just sym
-          | Nothing ->
-              Nothing
-        end
-  end) st.registered_identifiers in
-  State_exception.put <|st with markers_env = (Map.insert id env st.markers_env) |> >>= fun () ->
+  begin if Global.backend_name () = "Cn" then
+    get_inner >>= fun inner ->
+    State_exception.update (fun old_state -> <| old_state with markers_env= Map.insert id inner old_state.markers_env |>)
+  else
+    State_exception.return ()
+  end >>= fun () ->
   State_exception.return id
+
+
+
+val record_loop_attribute: Annot.loop_id -> Annot.attributes -> desugM unit
+let record_loop_attribute id attr = 
+  record_marker () >>= fun marker_id ->
+  get_inner >>= fun st ->
+  put_inner <|st with loop_attributes = (Map.insert id (marker_id, attr) st.loop_attributes) |>
+
+val get_loop_attributes: unit -> desugM Annot.loop_attributes
+let get_loop_attributes () = 
+  get_inner >>= fun st ->
+  State_exception.return st.loop_attributes
 
 
 
@@ -990,20 +1237,20 @@ let register_identifier_ ident namespace kind link_opt =
   
   let do_fresh =
     (* generates a fresh symbol *)
-    State_exception.modify (fun st ->
+    modify_inner (fun st ->
       let Symbol.Identifier _ str = ident in
       let (sym, symbol_supply) = Symbol.fresh_pretty str st.symbol_supply in
       (sym, <| st with symbol_supply = symbol_supply |>)
     ) >>= fun sym ->
     (* associates it to the identifier *)
-    State_exception.update (fun st ->
+    update_inner (fun st ->
       <| st with registered_identifiers=
         Scope_table.register (ident, namespace) (sym, kind, link_opt) st.registered_identifiers
       |>
     ) >>
     return sym in
   
-  State_exception.read (fun st ->
+  read_inner (fun st ->
     Scope_table.resolve (ident, namespace) st.registered_identifiers
   ) >>= function
     | Just (scope, (sym, kind', link_opt')) ->
@@ -1068,7 +1315,7 @@ let resolve_ordinary_identifier loc ident =
     )
   ) >>
   
-  State_exception.read (fun st ->
+  read_inner (fun st ->
     let reg_opt = match Scope_table.resolve (ident, Namespace_ordinary) st.registered_identifiers with
       | Nothing ->
           match Map.lookup (ident, Namespace_ordinary) st.registered_external_identifiers with
@@ -1106,7 +1353,7 @@ let resolve_ordinary_identifier loc ident =
 val resolve_extraordinary_identifier:
   Symbol.identifier -> namespace -> desugM (maybe (scope * (A.ail_identifier * identifier_kind)))
 let resolve_extraordinary_identifier ident namespace =
-  State_exception.read (fun st ->
+  read_inner (fun st ->
     match Scope_table.resolve (ident, namespace) st.registered_identifiers with
       | Nothing ->
           Nothing
@@ -1124,7 +1371,7 @@ let resolve_extraordinary_identifier ident namespace =
 
 val internal_resolve_identifier: Symbol.identifier -> namespace -> desugM (maybe (scope * registration))
 let internal_resolve_identifier ident namespace =
-  State_exception.read (fun st ->
+  read_inner (fun st ->
     Scope_table.resolve (ident, namespace) st.registered_identifiers
   )
 
@@ -1237,7 +1484,7 @@ let register_ordinary_identifier ident kind storage_classes =
             | Just Linkage_internal ->
                 undef (Loc.locOf ident) Undefined.UB008_multiple_linkage
             | Just Linkage_external ->
-                State_exception.update (fun st ->
+                update_inner (fun st ->
                   <| st with registered_identifiers= 
                     Scope_table.register (ident, Namespace_ordinary) External st.registered_identifiers;
                   |>
@@ -1313,7 +1560,7 @@ let register_tag kind tag_ident_opt =
 val register_tag_definition: Loc.t -> A.ail_identifier -> tag_definition -> desugM unit
 let register_tag_definition loc tag_sym tag_decl =
   let () = Debug.print_debug 5 [Debug.DB_desugaring] (fun () -> "REGISTERING TAG DEFINITION: " ^ show tag_sym) in
-  State_exception.read (fun st ->
+  read_inner (fun st ->
     Map.member tag_sym st.tag_definitions
   ) >>= function
     | true ->
@@ -1322,7 +1569,7 @@ let register_tag_definition loc tag_sym tag_decl =
         return ()
   end >>
   match tag_decl with
-    | Enum_definition ns_rev ->
+    | A.Enum_definition ns_rev ->
         (* NOTE: this function doesn't care about the order of the integers *)
         (* NOTE2: this function is effectful but by its use this shouldn't be observable *)
         if Implementation.register_enum tag_sym ns_rev then
@@ -1333,14 +1580,14 @@ let register_tag_definition loc tag_sym tag_decl =
     | _ ->
         return ()
   end >>
-  State_exception.update (fun st ->
+  update_inner (fun st ->
     <| st with tag_definitions= Map.insert tag_sym tag_decl st.tag_definitions |>
   )
 
 
 val resolve_tag_definition: A.ail_identifier -> desugM (maybe tag_definition)
 let resolve_tag_definition tag_sym =
-  State_exception.read (fun st ->
+  read_inner (fun st ->
     Map.lookup tag_sym st.tag_definitions
   ) 
 (*
@@ -1359,7 +1606,7 @@ let resolve_tag_definition tag_sym =
 
 val get_tag_definitions: desugM (map A.ail_identifier tag_definition)
 let get_tag_definitions =
-  State_exception.read (fun st ->
+  read_inner (fun st ->
     st.tag_definitions
   )
 
@@ -1374,9 +1621,9 @@ let get_anonymous_struct_or_union ty =
   match (* Ctype.unatomic_ *) ty with
     | Ctype.Ctype _ (Ctype.Struct tag_sym) ->
         resolve_tag_definition tag_sym >>= function
-          | Just (Struct_definition _ _ _ (Just _)) ->
+          | Just (A.Struct_definition _ _ _ (Just _)) ->
               fail (Loc.unknown) (Errors.Desugar_ConstraintViolation Constraint.StructMemberFlexibleArray)
-          | Just (Struct_definition _ isAnonymous membrs Nothing) ->
+          | Just (A.Struct_definition _ isAnonymous membrs Nothing) ->
               return begin
                 if isAnonymous then Just membrs else Nothing
               end
@@ -1385,7 +1632,7 @@ let get_anonymous_struct_or_union ty =
         end
     | Ctype.Ctype _ (Ctype.Union tag_sym) ->
         resolve_tag_definition tag_sym >>= function
-          | Just (Union_definition _ isAnonymous membrs) ->
+          | Just (A.Union_definition _ isAnonymous membrs) ->
               return begin
                 if isAnonymous then Just membrs else Nothing
               end
@@ -1416,7 +1663,7 @@ type tag_declaration =
     | Just sym ->
         return sym
     | Nothing ->
-        State_exception.modify (fun st ->
+        modify_inner (fun st ->
           let (sym, symbol_supply) = Symbol.fresh st.symbol_supply in
           (sym, <| st with symbol_supply = symbol_supply |>)
         )
@@ -1427,7 +1674,7 @@ type tag_declaration =
 
 
   (* associates it to the identifier *)
-  State_exception.update (fun st ->
+  update_inner (fun st ->
     <| st with registered_identifiers= Scope_table.register (tag_sym, Namespace_tag) (tag_sym, kind, link) st.registered_identifiers |>
   ) >>
   return sym
@@ -1452,7 +1699,7 @@ type tag_declaration =
 (*
 val resolve_identifier: Symbol.identifier -> t (A.ail_identifier * identifier_kind * linkage)
 let resolve_identifier name =
-  bind (State_exception.read (fun st -> Scope_table.lookup name st.registered_identifiers))
+  bind (read_inner (fun st -> Scope_table.lookup name st.registered_identifiers))
     function
       | Just x  -> return x
       | Nothing -> fail (Constraint.CABS_TO_AIL_UNDECLARED_IDENTIFIER name)
@@ -1504,13 +1751,13 @@ let register_declaration decl =
   
   (* TODO: detect multiple definitions *)
   
-  State_exception.update (fun st ->
+  update_inner (fun st ->
     <| st with registered_declarations= (* assoc_insert ident decl *) decl :: st.registered_declarations |>
   )
 
 val resolve_declarations: t (list (A.sigma_declaration Loc.t unit))
 let resolve_declarations =
-  State_exception.read (fun st ->
+  read_inner (fun st ->
     st.registered_declarations
   )
 *)
@@ -1518,7 +1765,7 @@ let resolve_declarations =
 (* TODO: maybe have an error when the identifier is not even registered for a function *)
 val is_static_object_identifier: A.ail_identifier -> desugM bool
 let is_static_object_identifier sym =
-  State_exception.read (fun st ->
+  read_inner (fun st ->
     (st.external_object_declarations, st.internal_object_declarations)
   ) >>= fun (ext_decls, int_decls) ->
   return match Map.lookup sym ext_decls with
@@ -1536,7 +1783,7 @@ let is_static_object_identifier sym =
 
 val fetch_object_declaration: A.ail_identifier -> desugM (bool * Loc.t * A.storageDuration * bool * maybe Ctype.alignment * Ctype.qualifiers * Ctype.ctype)
 let fetch_object_declaration sym =
-  State_exception.read (fun st ->
+  read_inner (fun st ->
     (st.external_object_declarations, st.internal_object_declarations)
   ) >>= fun (ext_decls, int_decls) ->
   match Map.lookup sym ext_decls with
@@ -1554,9 +1801,9 @@ let fetch_object_declaration sym =
 
 val register_global_object_definition2: Loc.t -> A.ail_identifier -> linkage -> global_definition -> desugM unit
 let register_global_object_definition2 loc sym link gdef =
-  State_exception.get >>= fun st ->
+  get_inner >>= fun st ->
   let do_update new_gdef =
-    State_exception.put <| st with global_object_definitions=
+    put_inner <| st with global_object_definitions=
       Map.insert sym new_gdef st.global_object_definitions
     |> in
   match Map.lookup sym st.global_object_definitions with
@@ -1627,7 +1874,7 @@ let register_global_object_definition sym gdef =
           return false
     end
   end ("register_static_global_definition must only be called for object with static storage duration ==> " ^ show sym) $
-    State_exception.update (fun st ->
+    update_inner (fun st ->
       <| st with global_object_definitions= Map.insert sym gdef st.global_object_definitions |>
     )
 
@@ -1637,7 +1884,7 @@ val register_function_definition: A.ail_identifier -> (Loc.t * nat * Annot.attri
 let register_function_definition sym fdef =
   (* NOTE: unlike for external objects, we don't need to check the scope here,
      because the parse won't allow block scoped function definitions anyway. *)
-  State_exception.update (fun st ->
+  update_inner (fun st ->
     let () = Debug.print_debug 2 [Debug.DB_desugaring] (fun () ->
       let (_, _, _, xs, _) = fdef in
       "registering function definition of '" ^ show sym ^ "' with params: " ^ stringFromList show xs
@@ -1648,19 +1895,19 @@ let register_function_definition sym fdef =
 
 val global_object_is_defined: A.ail_identifier -> desugM bool
 let global_object_is_defined sym =
-  State_exception.read (fun st ->
+  read_inner (fun st ->
     Map.member sym st.global_object_definitions
   )
 
 val is_function_designator: A.ail_identifier -> desugM bool
 let is_function_designator sym =
-  State_exception.read (fun st->
+  read_inner (fun st->
     Map.member sym st.function_declarations
   )
 
 val function_is_defined: A.ail_identifier -> desugM bool
 let function_is_defined sym =
-  State_exception.read (fun st ->
+  read_inner (fun st ->
     Map.member sym st.function_definitions
   )
 
@@ -1686,7 +1933,7 @@ let register_function_declaration loc attrs sym is_proto decl =
     ) params ^ ")" in
 *)
   
-  State_exception.read (fun st ->
+read_inner (fun st ->
     Map.lookup sym st.function_declarations
   ) >>= function
     | Just (prev_has_proto, prev_loc, prev_attrs, prev_decl) ->
@@ -1698,7 +1945,7 @@ let register_function_declaration loc attrs sym is_proto decl =
               (* NOTE: we concat the attributes from the previous declartion with the new ones *)
               (* TODO: is it right to only use prev_has_proto? *)
               let () = Debug.print_debug 2 [] (fun () -> "[register_function_declaration] - had prev, valid composite") in
-              State_exception.update (fun st ->
+              update_inner (fun st ->
                 <| st with function_declarations= Map.insert sym (prev_has_proto, prev_loc, Annot.combine_attributes prev_attrs attrs, decl') st.function_declarations |>
               )
         end
@@ -1715,19 +1962,19 @@ let register_function_declaration loc attrs sym is_proto decl =
             | Just decl' ->
                 (* NOTE: we concat the attributes from the previous declartion with the new ones *)
                 (* TODO: is it right to only use prev_has_proto? *)
-                State_exception.update (fun st ->
+                update_inner (fun st ->
                   <| st with function_declarations= Map.insert sym (prev_has_proto, prev_loc, Annot.combine_attributes prev_attrs attrs, decl') st.function_declarations |>
                 )
           end
         else
           let () = Debug.print_debug 2 [] (fun () -> "HELLO: decl == prev_decl") in
           (* NOTE: we concat the attributes from the previous declartion with the new ones *)
-          State_exception.update (fun st ->
+          update_inner (fun st ->
             <| st with function_declarations= Map.insert sym (prev_has_proto, prev_loc, Annot.combine_attributes prev_attrs attrs, prev_decl) st.function_declarations |>
           )
 *)
     | Nothing ->
-        State_exception.update (fun st ->
+        update_inner (fun st ->
           let () = Debug.print_debug 2 [Debug.DB_desugaring] (fun () ->
             "registering function declaration of '" ^ show sym ^ (if is_proto then "' with PROTOTYPE" else "'") ^ " with decl= " ^
            string_of_decl decl) in
@@ -1739,7 +1986,7 @@ let get_alignof =
   get_tag_definitions >>= fun tagDefs ->
   let pseudo_tagDefs =
     Map.map function
-      | Struct_definition _ _ membrs flex_opt ->
+      | A.Struct_definition _ _ membrs flex_opt ->
           List.map (fun (_, (_, align_opt, _, ty)) -> (align_opt, ty)) membrs ++
           match flex_opt with
             | Nothing ->
@@ -1747,9 +1994,9 @@ let get_alignof =
             | Just (Ctype.FlexibleArrayMember _ _ _ ty) ->
                 [(Nothing, Ctype.Ctype [] (Ctype.Array ty Nothing))]
           end
-      | Union_definition _ _ membrs ->
+      | A.Union_definition _ _ membrs ->
           List.map (fun (_, (_, align_opt, _, ty)) -> (Nothing, ty)) membrs
-      | Enum_definition _ ->
+      | A.Enum_definition _ ->
           [(* dummy, this won't be called *)]
     end tagDefs in
   return (fun z -> Implementation.alignof_ty pseudo_tagDefs z)
@@ -1813,7 +2060,7 @@ let register_external_object_declaration sym ((isTentative, loc, attrs, new_dur,
       "' with dur: " ^ string_of_storageDuration new_dur ^ " qs, ty: " ^ Pp.stringFromAil_ctype new_qs new_ty)
   ) >>
   
-  State_exception.read (fun st ->
+  read_inner (fun st ->
     Map.lookup sym st.external_object_declarations
   ) >>= function
     | Just (_, _, _, prev_dur, _, prev_align_opt, prev_qs, prev_ty) ->
@@ -1851,7 +2098,7 @@ let register_external_object_declaration sym ((isTentative, loc, attrs, new_dur,
               | Just ty' ->
                   (* TODO: what about ty' ?? *)
                   let decl = (isTentative, loc, attrs, new_dur, isRegister, align_opt, new_qs, new_ty) in
-                  State_exception.update (fun st ->
+                  update_inner (fun st ->
                     <| st with external_object_declarations= Map.insert sym decl st.external_object_declarations |>
                   )
               | Nothing ->
@@ -1864,7 +2111,7 @@ let register_external_object_declaration sym ((isTentative, loc, attrs, new_dur,
           else
             return ()
     | Nothing ->
-        State_exception.update (fun st ->
+        update_inner (fun st ->
           <| st with external_object_declarations= Map.insert sym new_decl st.external_object_declarations |>
         )
   end
@@ -1876,7 +2123,7 @@ let update_external_object_type sym ty =
       "updating external object type of `" ^ show sym ^
       "' with ty= " ^ Pp.stringFromAil_ctype Ctype.no_qualifiers ty)
   ) >>
-  State_exception.update (fun st ->
+  update_inner (fun st ->
     match Map.lookup sym st.external_object_declarations with
       | Nothing ->
           error "[Cabs_to_ail_effect.update_external_object_type] called on an unregistered symbol"
@@ -1898,7 +2145,7 @@ let register_internal_object_declaration sym ((loc, _, _, _, _, _) as decl) =
       "' with qs, ty= " ^ Pp.stringFromAil_ctype new_qs new_ty)
   ) >>
   
-  State_exception.read (fun st ->
+  read_inner (fun st ->
     Map.lookup sym st.internal_object_declarations
   ) >>= function
     | Just decl' ->
@@ -1909,7 +2156,7 @@ let register_internal_object_declaration sym ((loc, _, _, _, _, _) as decl) =
         else
           return ()
     | Nothing ->
-        State_exception.update (fun st ->
+        update_inner (fun st ->
           <| st with internal_object_declarations= Map.insert sym decl st.internal_object_declarations |>
         )
   end
@@ -1921,7 +2168,7 @@ let update_internal_object_type sym ty =
       "updating internal object type of `" ^ show sym ^
       "' with ty= " ^ Pp.stringFromAil_ctype Ctype.no_qualifiers ty)
   ) >>
-  State_exception.update (fun st ->
+  update_inner (fun st ->
     match Map.lookup sym st.internal_object_declarations with
       | Nothing ->
           error "[Cabs_to_ail_effect.update_internal_object_type] called on an unregistered symbol"
@@ -1936,7 +2183,7 @@ let update_internal_object_type sym ty =
 
 val register_static_assertion: A.expression unit -> A.stringLiteral -> desugM unit
 let register_static_assertion e strCst =
-  State_exception.update (fun st ->
+  update_inner (fun st ->
     <| st with static_assertions= (e, strCst) :: st.static_assertions |>
   )
 
@@ -1961,7 +2208,7 @@ let resolve_label ident =
 
 (* Returns the return type of the function currently being desugared *)
 let get_current_return_type: desugM Ctype.ctype =
-  State_exception.read (fun st ->
+  read_inner (fun st ->
     match st.current_return_type with
       | Just ty ->
           ty
@@ -1971,7 +2218,7 @@ let get_current_return_type: desugM Ctype.ctype =
   )
 
 let set_current_return_type (ty_opt: maybe Ctype.ctype) : desugM unit =
-  State_exception.update (fun st ->
+  update_inner (fun st ->
     <| st with current_return_type= ty_opt |>
   )
 
@@ -1991,14 +2238,14 @@ let is_inside_function =
 (* TODO: would be more efficient to store in the state the list of unused functions *)
 val add_used_identifier: A.ail_identifier -> desugM unit
 let add_used_identifier sym =
-  State_exception.update (fun st ->
+  update_inner (fun st ->
     let () = Debug.print_debug 2 [Debug.DB_desugaring] (fun () -> "USED IDENTIFIER") in
     <| st with used_identifier= Utils.list_insert sym st.used_identifier |>
   )
 
 val get_used_identifier: desugM (list A.ail_identifier)
 let get_used_identifier =
-  State_exception.read (fun st ->
+  read_inner (fun st ->
     st.used_identifier
   )
 
@@ -2022,13 +2269,13 @@ let register_enum_constant ident expr =
           do_fresh ()
     end
   ) ident Namespace_ordinary (Kind_ordinary OK_enum_constant) Nothing >>= fun sym ->
-  State_exception.update (fun st ->
+  update_inner (fun st ->
     <| st with enumeration_constants= Map.insert sym expr st.enumeration_constants |>
   )
 
 val resolve_enum_constant: A.ail_identifier -> desugM (A.expression_ unit)
 let resolve_enum_constant sym =
-  State_exception.read (fun st ->
+  read_inner (fun st ->
     st.enumeration_constants
   ) >>= fun enumeration_constants ->
   match Map.lookup sym enumeration_constants with
@@ -2069,11 +2316,11 @@ let mk_current_ail_sigma =
           List.reverse begin
             List.foldl (fun acc (ident, tagDef) ->
               match tagDef with
-                | Struct_definition attrs _ xs flexible_opt ->
+                | A.Struct_definition attrs _ xs flexible_opt ->
                     (ident, (attrs, Ctype.StructDef xs flexible_opt)) :: acc
-                | Union_definition attrs _ xs ->
+                | A.Union_definition attrs _ xs ->
                     (ident, (attrs, Ctype.UnionDef xs)) :: acc
-                | Enum_definition _ ->
+                | A.Enum_definition _ ->
                     acc
               end
             ) [] (Map_extra.toList ident_tagDefs)
@@ -2081,10 +2328,11 @@ let mk_current_ail_sigma =
         A.extern_idmap= Map.empty;
         A.typedef_attributes= Map.empty;
         A.loop_attributes= Map.empty;
-        A.markers_env= Map.empty;
         A.cn_functions= [];
         A.cn_predicates= [];
-        A.cn_datatypes= []; |>
+        A.cn_datatypes= [];
+        A.cn_idents= Map.empty;
+        A.translation_tag_definitions= Map.empty|>
 
 val is_complete_object: Ctype.ctype -> desugM bool
 let cabs_to_ail_is_complete_object ty =
@@ -2107,7 +2355,7 @@ let map_union = Map.(union)
 
 val extract_program: string -> desugM (A.ail_program unit)
 let extract_program startup_str =
-  State_exception.get >>= fun st ->
+  get_inner >>= fun st ->
   let startup_sym_opt =
     match Map.lookup (Symbol.Identifier Loc.unknown startup_str, Namespace_ordinary)
             st.registered_external_identifiers with
@@ -2254,21 +2502,22 @@ let extract_program startup_str =
      
      A.tag_definitions= List.foldr (fun (sym, def) acc ->
                           match def with
-                           | Struct_definition attrs _ membersDefs flexible_opt ->
+                           | A.Struct_definition attrs _ membersDefs flexible_opt ->
                                (sym, (attrs, Ctype.StructDef membersDefs flexible_opt)) :: acc
-                           | Union_definition attrs _ membersDefs ->
+                           | A.Union_definition attrs _ membersDefs ->
                                (sym, (attrs, Ctype.UnionDef membersDefs)) :: acc
-                           | Enum_definition _ ->
+                           | A.Enum_definition _ ->
                                acc
                            end
                         ) [] $ Map_extra.toList st.tag_definitions;
     A.extern_idmap= extern_idmap;
     A.typedef_attributes= Map.map (fun (z, _, _) -> z) st.typedef_definitions;
     A.loop_attributes = st.loop_attributes;
-    A.markers_env= st.markers_env;
-    A.cn_predicates=  List.map (fun (_, (_, z)) -> z) (Map_extra.toList st.cn_state.Cn_desugaring.cn_predicates);
-    A.cn_functions=  List.map (fun (_, (_, z)) -> z) (Map_extra.toList st.cn_state.Cn_desugaring.cn_functions);
-    A.cn_datatypes=  List.map (fun (_, z) -> z) (Map_extra.toList st.cn_state.Cn_desugaring.cn_datatypes);
+    A.cn_predicates=  List.reverse (List.map (fun (_, (_, z)) -> z) (st.cn_state.Cn_desugaring.cn_predicates));
+    A.cn_functions=  List.reverse (List.map (fun (_, (_, z)) -> z) (st.cn_state.Cn_desugaring.cn_functions));
+    A.cn_datatypes=  List.reverse (List.map (fun (_, z) -> z) (st.cn_state.Cn_desugaring.cn_datatypes));
+    A.cn_idents=  st.cn_state.Cn_desugaring.cn_idents;
+    A.translation_tag_definitions=  st.tag_definitions
    |>)
 
 
@@ -2286,12 +2535,12 @@ let inline warnM msg =
 import Core
 val get_core_eval_stuff: desugM ((map string Symbol.sym) * Core.fun_map unit * Core.impl)
 let get_core_eval_stuff =
-  State_exception.read (fun st -> st.core_eval_stuff)
+  read_inner (fun st -> st.core_eval_stuff)
 
 
 val get_gamma_sofar: desugM A.gamma
 let get_gamma_sofar =
-  State_exception.read (fun st ->
+  read_inner (fun st ->
     (* TODO: this is putting too much in gamma (i.e. things which are not in the
        current scope). But since we are dealing with fresh symbols, this
        shouldn't be observable? *)
@@ -2305,7 +2554,7 @@ let get_gamma_sofar =
 (* TODO: factorise with extract_program *)
 val get_sigma_sofar: desugM (A.sigma unit)
 let get_sigma_sofar =
-  State_exception.read (fun st ->
+  read_inner (fun st ->
     let decls = Map_extra.toList (
       map_union
         begin
@@ -2337,20 +2586,21 @@ let get_sigma_sofar =
        
        A.tag_definitions= List.foldr (fun (sym, def) acc ->
                             match def with
-                             | Struct_definition attrs _ membersDefs flexible_opt ->
+                             | A.Struct_definition attrs _ membersDefs flexible_opt ->
                                  (sym, (attrs, Ctype.StructDef membersDefs flexible_opt)) :: acc
-                             | Union_definition attrs _ membersDefs ->
+                             | A.Union_definition attrs _ membersDefs ->
                                  (sym, (attrs, Ctype.UnionDef membersDefs)) :: acc
-                             | Enum_definition _ ->
+                             | A.Enum_definition _ ->
                                  acc
                              end
                           ) [] $ Map_extra.toList st.tag_definitions;
        A.extern_idmap= Map.empty;
        A.typedef_attributes= Map.map (fun (z, _, _) -> z) st.typedef_definitions;
        A.loop_attributes= st.loop_attributes;
-       A.markers_env= st.markers_env;
-       A.cn_predicates=  List.map (fun (_, (_, z)) -> z) (Map_extra.toList st.cn_state.Cn_desugaring.cn_predicates);
-       A.cn_functions=  List.map (fun (_, (_, z)) -> z) (Map_extra.toList st.cn_state.Cn_desugaring.cn_functions);
-       A.cn_datatypes=  List.map (fun (_, z) -> z) (Map_extra.toList st.cn_state.Cn_desugaring.cn_datatypes);
-      |>
-  )
+       A.cn_predicates=  List.reverse (List.map (fun (_, (_, z)) -> z) (st.cn_state.Cn_desugaring.cn_predicates));
+       A.cn_functions= List.reverse (List.map (fun (_, (_, z)) -> z) (st.cn_state.Cn_desugaring.cn_functions));
+       A.cn_datatypes= List.reverse (List.map (fun (_, z) -> z) (st.cn_state.Cn_desugaring.cn_datatypes));
+       A.cn_idents=  st.cn_state.Cn_desugaring.cn_idents;
+       A.translation_tag_definitions=  st.tag_definitions
+       |>
+   )

@@ -1851,8 +1851,8 @@ let unsafe_subst_sym_fun_map sym pe' funs =
         ProcDecl loc bTy params
     | BuiltinDecl loc bTy params ->
         BuiltinDecl loc bTy params
-    | Proc loc bTy params e ->
-        Proc loc bTy params (unsafe_subst_sym_expr sym pe' e)
+    | Proc loc mrk bTy params e ->
+        Proc loc mrk bTy params (unsafe_subst_sym_expr sym pe' e)
   end) funs
 
 
@@ -2073,11 +2073,11 @@ val mk_sseq_e: forall 'a. pattern -> expr 'a -> expr 'a -> expr 'a
 let mk_sseq_e pat e1 e2 =
   Expr [] (Esseq pat e1 e2)
 
-val mk_save_e_: list annot -> (Symbol.sym * core_base_type) -> list (Symbol.sym * ((core_base_type * maybe (Ctype.ctype * bool)) * pexpr)) -> expr unit -> expr unit
+val mk_save_e_: list annot -> (Symbol.sym * core_base_type) -> list (Symbol.sym * ((core_base_type * maybe (Ctype.ctype * pass_by_value_or_pointer)) * pexpr)) -> expr unit -> expr unit
 let mk_save_e_ annots sym_ty sym_ty_pes e =
   Expr annots (Esave sym_ty sym_ty_pes e)
 
-val mk_save_e: (Symbol.sym * core_base_type) -> list (Symbol.sym * ((core_base_type * maybe (Ctype.ctype * bool)) * pexpr)) -> expr unit -> expr unit
+val mk_save_e: (Symbol.sym * core_base_type) -> list (Symbol.sym * ((core_base_type * maybe (Ctype.ctype * pass_by_value_or_pointer)) * pexpr)) -> expr unit -> expr unit
 let mk_save_e sym_ty sym_ty_pes e =
   Expr [] (Esave sym_ty sym_ty_pes e)
 
@@ -2259,7 +2259,7 @@ let collect_saves expr =
    didn't want to mess that up, so leaving for now. *)
 
 type m_labeled_continuation 'a = 
-  (core_base_type * list (Symbol.sym * ((core_base_type * maybe (Ctype.ctype * bool)) * pexpr)) * (expr 'a) * list Annot.annot)
+  (core_base_type * list (Symbol.sym * ((core_base_type * maybe (Ctype.ctype * pass_by_value_or_pointer)) * pexpr)) * (expr 'a) * list Annot.annot)
 
 type m_labeled_continuations 'a = 
   map Symbol.sym (m_labeled_continuation 'a)
@@ -2382,7 +2382,7 @@ let collect_labeled_continuations_NEW file =
           acc
       | BuiltinDecl _ _ _ ->
           acc
-      | Proc _ _ _ e ->
+      | Proc _ _ _ _ e ->
           Map.insert fun_sym (collect_saves e) acc
     end
   ) (Map.(union) file.stdlib file.funs) Map.empty

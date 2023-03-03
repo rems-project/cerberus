@@ -36,7 +36,7 @@ let call_proc core_extern file psym cvals =
     (* NOTE: the order of lookups implies that user procedure cannot hide the
        ones from stdlib, do we really want that? *)
     match Map.lookup psym file.stdlib with
-      | Just (Proc _ bTy params body) ->
+      | Just (Proc _ _ bTy params body) ->
           Just (bTy, params, body)
       | _ ->
           let core_sym = match Map.lookup psym core_extern with
@@ -44,7 +44,7 @@ let call_proc core_extern file psym cvals =
             | Nothing -> psym
           end in
           match Map.lookup core_sym file.funs with
-            | Just (Proc _ bTy params body) ->
+            | Just (Proc _ _ bTy params body) ->
                 Just (bTy, params, body)
             | _ ->
                 Nothing

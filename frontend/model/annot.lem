@@ -72,7 +72,14 @@ type annot =
   | Acerb of cerb_attribute
 
 
-type loop_attributes = map loop_id (map Symbol.identifier (maybe Symbol.sym) * attributes)
+type identifier_item_kind =
+  | Marker_Local
+  | Marker_Global
+
+type identifier_env =
+  map Symbol.identifier (maybe (identifier_item_kind * Symbol.sym))
+
+type loop_attributes = map loop_id (nat * attributes) (* nat is marker id *)
 
 val     get_loc: list annot -> maybe Loc.t
 let rec get_loc annots =

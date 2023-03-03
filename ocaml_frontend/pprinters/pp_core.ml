@@ -773,7 +773,7 @@ let pp_fun_map funs =
       | BuiltinDecl (loc, bTy, bTys) ->
           pp_cond loc @@
           pp_keyword "builtin" ^^^ pp_symbol sym ^^^ P.parens (comma_list pp_core_base_type bTys) ^^ P.hardline ^^ P.hardline
-      | Proc (loc, bTy, params, e) ->
+      | Proc (loc, _mrk, bTy, params, e) ->
           pp_cond loc @@
           pp_keyword "proc" ^^^ pp_symbol sym ^^^ pp_params params ^^ P.colon ^^^ pp_keyword "eff" ^^^ pp_core_base_type bTy ^^^
           P.colon ^^ P.equals ^^

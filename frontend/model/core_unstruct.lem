@@ -356,8 +356,8 @@ let rec explode_expr env (Expr annot expr_ as expr) =
 val explode_fun_map: typed_fun_map unit -> typed_fun_map unit
 let explode_fun_map funs =
   Map.map (function
-    | Proc loc bTy xs e ->
-        Proc loc bTy xs (explode_expr Map.empty e)
+    | Proc loc mrk bTy xs e ->
+        Proc loc mrk bTy xs (explode_expr Map.empty e)
     | z ->
         z
   end) funs

@@ -46,6 +46,19 @@ let free_vars = function
      SymSet.remove s (IT.free_vars body)
 
 
+let alpha_equivalent lc lc' = match lc, lc' with
+  | T c, T c' -> IT.equal c c'
+  | Forall ((s, bt), c), Forall ((s', bt'), c') ->
+    BT.equal bt bt' && if Sym.equal s s'
+    then IT.equal c c'
+    else begin
+      let new_s = Sym.fresh_same s in
+      let c = IT.subst (IT.make_subst [(s, IT.sym_ (new_s, bt))]) c in
+      let c' = IT.subst (IT.make_subst [(s', IT.sym_ (new_s, bt))]) c' in
+      IT.equal c c'
+    end
+  | _ -> false
+
 
 
 
