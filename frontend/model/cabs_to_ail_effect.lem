@@ -965,36 +965,60 @@ let update_current_cn_scope f =
     )
 
 
+(* CN variables cannot shadow CN variables or C variables.  It would
+   be good to make the same true the other way round (C variables not
+   shadowing CN variables), but with the current pipeline shape that's
+   not trivia. So, instead, this function makes C variables take
+   precedence over CN variables, as suggested by Kayvan. *)
 
 val resolve_cn_ident_opt: forall 'ty. Cn.cn_namespace -> Symbol.identifier -> desugM (maybe (Symbol.sym * Cn.cn_var_kind))
 let resolve_cn_ident_opt ns ident =
+
   get_inner >>= fun inner ->
   let st = inner.cn_state in
-  match Map.lookup (ns, ident) (current_cn_scope st) with
-    | Just sym ->
-        return (Just (sym, Cn.Var_kind_cn))
-    | Nothing ->
-        match (Map.lookup (ns, ident) st.cn_idents, ns) with
-          | (Just sym, _) ->
-              return (Just (sym, Cn.Var_kind_cn))
-          | (Nothing, Cn.CN_vars) ->
-             (* based on earlier Cabs_to_ail_effect code  *)
-              match Scope_table.resolve (ident, Namespace_ordinary) inner.registered_identifiers with
-              | Nothing -> 
-                 return Nothing
-              | Just (_, Internal sym _identifier_kind _linkage) -> 
-                 return (Just (sym, Cn.Var_kind_c))
-              | Just (_, External) ->
-                 match Map.lookup (ident, Namespace_ordinary) inner.registered_external_identifiers with
-                 | Nothing -> return Nothing
-                 | Just (_scope, (sym, _identifier_kind, _linkage)) ->
-                    return (Just (sym, Cn.Var_kind_c))
-                 end
-              end
-          | (Nothing, _) ->
-             return Nothing
+
+  (* based on earlier Cabs_to_ail_effect code  *)
+  let lookup_in_c_desugaring_state () =
+     match Scope_table.resolve (ident, Namespace_ordinary) inner.registered_identifiers with
+     | Nothing -> 
+        Nothing
+     | Just (_, Internal sym _kind _linkage) -> 
+        Just (sym, Cn.Var_kind_c)
+     | Just (_, External) ->
+        match Map.lookup (ident, Namespace_ordinary) inner.registered_external_identifiers with
+        | Nothing -> Nothing
+        | Just (_scope, (sym, _identifier_kind, _linkage)) ->
+           Just (sym, Cn.Var_kind_c)
         end
-  end
+     end
+  in
+
+  let lookup_in_cn_desugaring_state () =
+    match Map.lookup (ns, ident) (current_cn_scope st) with
+      | Just sym ->
+          Just (sym, Cn.Var_kind_cn)
+      | Nothing ->
+          match Map.lookup (ns, ident) st.cn_idents with
+            | Just sym ->
+                Just (sym, Cn.Var_kind_cn)
+            | Nothing ->
+               Nothing
+          end
+    end
+  in
+  
+  let result = match ns with
+    | Cn.CN_vars ->
+       match lookup_in_c_desugaring_state () with
+       | Nothing -> lookup_in_cn_desugaring_state ()
+       | Just r -> Just r
+       end
+    | _ ->
+      lookup_in_cn_desugaring_state ()
+  end in
+  return result
+
+
 
 let resolve_cn_ident ns ident =
   resolve_cn_ident_opt ns ident >>= function
