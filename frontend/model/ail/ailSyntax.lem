@@ -236,11 +236,6 @@ type id_kind =
   | IK_tentative
   | IK_definition
 
-type translation_tag_definition =
-  | Struct_definition of Annot.attributes * bool(* isAnonymous*) * list (Symbol.identifier * (Annot.attributes * maybe Ctype.alignment * Ctype.qualifiers * Ctype.ctype)) * maybe Ctype.flexible_array_member
-  | Union_definition of Annot.attributes * bool(* isAnonymous*) * list (Symbol.identifier * (Annot.attributes * maybe Ctype.alignment * Ctype.qualifiers * Ctype.ctype))
-  | Enum_definition of list integer
-
 type sigma 'a = <|
   declarations: list (ail_identifier * (Loc.t * Annot.attributes * declaration));
   object_definitions: list (ail_identifier * (expression 'a));
@@ -255,7 +250,6 @@ type sigma 'a = <|
   cn_predicates: list (Cn.cn_predicate Symbol.sym Ctype.ctype);
   cn_datatypes: list (Cn.cn_datatype Symbol.sym Ctype.ctype);
   cn_idents: map (Cn.cn_namespace * Symbol.identifier) Symbol.sym;
-  translation_tag_definitions: map ail_identifier translation_tag_definition;
 |>
 
 

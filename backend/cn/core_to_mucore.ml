@@ -1266,9 +1266,6 @@ let normalise_file (markers_env, ail_prog) file =
 
   let env = List.fold_left register_glob env globs in
 
-  (* let desugar_state = CAE.further_cn_desugaring_state *)
-  (*       ail_prog.cn_idents ail_prog.translation_tag_definitions in *)
-
   let@ (funs, mk_functions) = 
     normalise_fun_map (markers_env, ail_prog) env globs 
       file.mi_funinfo file.mi_loop_attributes file.mi_funs 

@@ -1569,7 +1569,7 @@ let register_tag_definition loc tag_sym tag_decl =
         return ()
   end >>
   match tag_decl with
-    | A.Enum_definition ns_rev ->
+    | Enum_definition ns_rev ->
         (* NOTE: this function doesn't care about the order of the integers *)
         (* NOTE2: this function is effectful but by its use this shouldn't be observable *)
         if Implementation.register_enum tag_sym ns_rev then
@@ -1621,9 +1621,9 @@ let get_anonymous_struct_or_union ty =
   match (* Ctype.unatomic_ *) ty with
     | Ctype.Ctype _ (Ctype.Struct tag_sym) ->
         resolve_tag_definition tag_sym >>= function
-          | Just (A.Struct_definition _ _ _ (Just _)) ->
+          | Just (Struct_definition _ _ _ (Just _)) ->
               fail (Loc.unknown) (Errors.Desugar_ConstraintViolation Constraint.StructMemberFlexibleArray)
-          | Just (A.Struct_definition _ isAnonymous membrs Nothing) ->
+          | Just (Struct_definition _ isAnonymous membrs Nothing) ->
               return begin
                 if isAnonymous then Just membrs else Nothing
               end
@@ -1632,7 +1632,7 @@ let get_anonymous_struct_or_union ty =
         end
     | Ctype.Ctype _ (Ctype.Union tag_sym) ->
         resolve_tag_definition tag_sym >>= function
-          | Just (A.Union_definition _ isAnonymous membrs) ->
+          | Just (Union_definition _ isAnonymous membrs) ->
               return begin
                 if isAnonymous then Just membrs else Nothing
               end
@@ -1986,7 +1986,7 @@ let get_alignof =
   get_tag_definitions >>= fun tagDefs ->
   let pseudo_tagDefs =
     Map.map function
-      | A.Struct_definition _ _ membrs flex_opt ->
+      | Struct_definition _ _ membrs flex_opt ->
           List.map (fun (_, (_, align_opt, _, ty)) -> (align_opt, ty)) membrs ++
           match flex_opt with
             | Nothing ->
@@ -1994,9 +1994,9 @@ let get_alignof =
             | Just (Ctype.FlexibleArrayMember _ _ _ ty) ->
                 [(Nothing, Ctype.Ctype [] (Ctype.Array ty Nothing))]
           end
-      | A.Union_definition _ _ membrs ->
+      | Union_definition _ _ membrs ->
           List.map (fun (_, (_, align_opt, _, ty)) -> (Nothing, ty)) membrs
-      | A.Enum_definition _ ->
+      | Enum_definition _ ->
           [(* dummy, this won't be called *)]
     end tagDefs in
   return (fun z -> Implementation.alignof_ty pseudo_tagDefs z)
@@ -2224,14 +2224,14 @@ let set_current_return_type (ty_opt: maybe Ctype.ctype) : desugM unit =
 
 let inside_function (return_ty: Ctype.ctype) m =
   (* NOTE: doing this in case we ever add support for nested functions *)
-  State_exception.read (fun st -> st.current_return_type) >>= fun saved ->
-  set_current_return_type (Just return_ty)                >>= fun ()    ->
-  m                                                       >>= fun res   ->
-  set_current_return_type saved                           >>= fun ()    ->
+  read_inner (fun st -> st.current_return_type) >>= fun saved ->
+  set_current_return_type (Just return_ty)      >>= fun ()    ->
+  m                                             >>= fun res   ->
+  set_current_return_type saved                 >>= fun ()    ->
   return res
 
 let is_inside_function =
-  isJust <$> State_exception.read (fun st -> st.current_return_type)
+  isJust <$> read_inner (fun st -> st.current_return_type)
 
 
 
@@ -2316,11 +2316,11 @@ let mk_current_ail_sigma =
           List.reverse begin
             List.foldl (fun acc (ident, tagDef) ->
               match tagDef with
-                | A.Struct_definition attrs _ xs flexible_opt ->
+                | Struct_definition attrs _ xs flexible_opt ->
                     (ident, (attrs, Ctype.StructDef xs flexible_opt)) :: acc
-                | A.Union_definition attrs _ xs ->
+                | Union_definition attrs _ xs ->
                     (ident, (attrs, Ctype.UnionDef xs)) :: acc
-                | A.Enum_definition _ ->
+                | Enum_definition _ ->
                     acc
               end
             ) [] (Map_extra.toList ident_tagDefs)
@@ -2331,8 +2331,7 @@ let mk_current_ail_sigma =
         A.cn_functions= [];
         A.cn_predicates= [];
         A.cn_datatypes= [];
-        A.cn_idents= Map.empty;
-        A.translation_tag_definitions= Map.empty|>
+        A.cn_idents= Map.empty; |>
 
 val is_complete_object: Ctype.ctype -> desugM bool
 let cabs_to_ail_is_complete_object ty =
@@ -2502,11 +2501,11 @@ let extract_program startup_str =
      
      A.tag_definitions= List.foldr (fun (sym, def) acc ->
                           match def with
-                           | A.Struct_definition attrs _ membersDefs flexible_opt ->
+                           | Struct_definition attrs _ membersDefs flexible_opt ->
                                (sym, (attrs, Ctype.StructDef membersDefs flexible_opt)) :: acc
-                           | A.Union_definition attrs _ membersDefs ->
+                           | Union_definition attrs _ membersDefs ->
                                (sym, (attrs, Ctype.UnionDef membersDefs)) :: acc
-                           | A.Enum_definition _ ->
+                           | Enum_definition _ ->
                                acc
                            end
                         ) [] $ Map_extra.toList st.tag_definitions;
@@ -2517,7 +2516,6 @@ let extract_program startup_str =
     A.cn_functions=  List.reverse (List.map (fun (_, (_, z)) -> z) (st.cn_state.Cn_desugaring.cn_functions));
     A.cn_datatypes=  List.reverse (List.map (fun (_, z) -> z) (st.cn_state.Cn_desugaring.cn_datatypes));
     A.cn_idents=  st.cn_state.Cn_desugaring.cn_idents;
-    A.translation_tag_definitions=  st.tag_definitions
    |>)
 
 
@@ -2586,11 +2584,11 @@ let get_sigma_sofar =
        
        A.tag_definitions= List.foldr (fun (sym, def) acc ->
                             match def with
-                             | A.Struct_definition attrs _ membersDefs flexible_opt ->
+                             | Struct_definition attrs _ membersDefs flexible_opt ->
                                  (sym, (attrs, Ctype.StructDef membersDefs flexible_opt)) :: acc
-                             | A.Union_definition attrs _ membersDefs ->
+                             | Union_definition attrs _ membersDefs ->
                                  (sym, (attrs, Ctype.UnionDef membersDefs)) :: acc
-                             | A.Enum_definition _ ->
+                             | Enum_definition _ ->
                                  acc
                              end
                           ) [] $ Map_extra.toList st.tag_definitions;
@@ -2601,6 +2599,5 @@ let get_sigma_sofar =
        A.cn_functions= List.reverse (List.map (fun (_, (_, z)) -> z) (st.cn_state.Cn_desugaring.cn_functions));
        A.cn_datatypes= List.reverse (List.map (fun (_, z) -> z) (st.cn_state.Cn_desugaring.cn_datatypes));
        A.cn_idents=  st.cn_state.Cn_desugaring.cn_idents;
-       A.translation_tag_definitions=  st.tag_definitions
        |>
    )
