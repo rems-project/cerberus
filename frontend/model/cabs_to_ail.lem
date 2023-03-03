@@ -1786,7 +1786,7 @@ and desugar_array_declarator under_array (ADecl loc tquals is_static a_decltor_s
   (* NOTE: if we are in prototype scope, then we are dealing with
      a function parameter *)
   E.get_scope >>= function
-     | E.Scope_prototype ->
+     | E.Scope_prototype _ ->
          if under_array = IsUnderArray && (tquals <> [] || is_static) then
 STD_ "§6.7.6.2#1, sentence 5, not outermost" $
            E.constraint_violation loc ArrayDeclarationQsAndStaticOnlyOutmost
@@ -1846,7 +1846,7 @@ STD_ "§6.7.6.2#1, sentence 5, not function parameter" $
     
     | Just ADeclSize_asterisk ->
         E.get_scope >>= function
-          | E.Scope_prototype ->
+          | E.Scope_prototype _ ->
               (* STD §6.7.6.2#4, sentence 2 *)
               E.fail loc (Errors.Desugar_NotYetSupported "variable length array type")
           | _ ->
@@ -1922,7 +1922,8 @@ and desugar_direct_abstract_declarator under_array = function
       (* TODO: documentation (the code the same as for desugar_direct_declarator, DDecl_function *)
       maybe (E.return (fun qs ty -> (qs, ty)))
         (desugar_direct_abstract_declarator under_array) dabs_decltor_opt >>= fun mk_qs_ctype ->
-      E.under_scope E.Scope_prototype
+      E.fresh_prototype_scope >>= fun proto_scope ->
+      E.under_scope proto_scope
         (desugar_parameter_type_list NotFunDef param_tys) >>= fun (params_opt, isVariadic) ->
       match params_opt with
         (* TODO: isn't this dead code ? *)
@@ -1983,14 +1984,22 @@ and desugar_direct_declarator fundef under_array = function
                    mk_outer_qs_ctype array_qs array_ty )
   
   | DDecl_function ddecltor param_tys ->
+      let fundef' =
+        match (fundef, ddecltor) with
+          | (IsFunDef, DDecl_identifier _ _) ->
+              IsFunDef
+          | _ ->
+              NotFunDef
+        end in
       (* TODO: check the NotFunDef *)
-      desugar_direct_declarator NotFunDef under_array ddecltor >>= fun (attrs_ident, mk_qs_ctype) ->
-      match fundef with
+      desugar_direct_declarator fundef under_array ddecltor >>= fun (attrs_ident, mk_qs_ctype) ->
+      match fundef' with
         | IsFunDef ->
-            desugar_parameter_type_list fundef param_tys
+            desugar_parameter_type_list fundef' param_tys
         | NotFunDef ->
-            E.under_scope E.Scope_prototype
-              (desugar_parameter_type_list fundef param_tys)
+            E.fresh_prototype_scope >>= fun proto_scope ->
+            E.under_scope proto_scope
+              (desugar_parameter_type_list fundef' param_tys)
       end >>= fun (_params_opt, isVariadic) ->
       let params_opt =
         (* NOTE2: but our current parser doesn't support identifier-list (this is an old syntax) *)

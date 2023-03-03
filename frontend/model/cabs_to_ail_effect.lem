@@ -95,12 +95,12 @@ end
 
 
 (* STD §6.2.1#2 *)
-type block_id = nat
+type scope_id = nat
 type scope =
   | Scope_function
   | Scope_file
-  | Scope_block of block_id
-  | Scope_prototype
+  | Scope_block of scope_id
+  | Scope_prototype of scope_id
 
 let scopeEqual sc1 sc2 =
   match (sc1, sc2) with
@@ -110,8 +110,8 @@ let scopeEqual sc1 sc2 =
         true
     | (Scope_block id1, Scope_block id2) ->
         id1 = id2
-    | (Scope_prototype, Scope_prototype) ->
-        true
+    | (Scope_prototype id1, Scope_prototype id2) ->
+        id1 = id2
     | _ ->
         false
   end
@@ -130,8 +130,8 @@ let string_of_scope = function
       "file"
   | Scope_block n ->
       "block(" ^ show n ^ ")"
-  | Scope_prototype ->
-      "prototype"
+  | Scope_prototype n ->
+      "prototype(" ^ show n ^ ")"
 end
 
 let is_block_scope = function
@@ -221,6 +221,7 @@ type switch_info = <|
 type state = <|
   (* Counter used to generate fresh cabs label names (see the desugaring of do-while statements) *)
   aux_supply: nat;
+  scope_id_supply: nat;
   (* table (with stacked scopes) associating C identifiers to symbols *)
   
   registered_external_identifiers: map (Symbol.identifier * namespace) (scope * (A.ail_identifier * identifier_kind * maybe linkage));
@@ -541,7 +542,8 @@ let empty_switch_info =
 val initial_state: (map string Symbol.sym) * Core.fun_map unit * Core.impl -> state_with_markers
 let initial_state core_eval_stuff = <|
   inner= <|
-    aux_supply=    0;
+    aux_supply=      0;
+    scope_id_supply= 0;
     
     registered_external_identifiers= Map.empty;
     registered_identifiers=      Scope_table.empty;
@@ -607,10 +609,16 @@ let freshify (Symbol.Identifier loc str) =
 val fresh_block_scope: desugM scope
 let fresh_block_scope =
   modify_inner (fun st ->
-    let n = st.aux_supply in
-    (Scope_block n, <| st with aux_supply= n+1 |>)
+    let n = st.scope_id_supply in
+    (Scope_block n, <| st with scope_id_supply= n+1 |>)
   )
 
+val fresh_prototype_scope: desugM scope
+let fresh_prototype_scope =
+  modify_inner (fun st ->
+    let n = st.scope_id_supply in
+    (Scope_prototype n, <| st with scope_id_supply= n+1 |>)
+  )
 
 
 (* ========================================================================== *)
