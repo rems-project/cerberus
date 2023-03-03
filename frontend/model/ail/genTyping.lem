@@ -1953,7 +1953,12 @@ and annotate_definition_aux sigm gamm (ty, e) =
       error "WIP: annotate_definition_aux, final case"
   else
     (* STD §6.7.9#3 *)
-    E.constraint_violation (Loc.locOf e) IllegalInitializer
+    let kind =
+      if AilTypesAux.is_vla ty then
+        InitialisedVLA
+      else
+        InitialisedIncomplete ty in
+    E.constraint_violation (Loc.locOf e) (IllegalInitialisation kind)
 
 val annotate_definition: sigma unit -> gamma -> (Symbol.sym * expression unit) -> E.errorM (Symbol.sym * expression genTypeCategory)
 let annotate_definition sigm gamm (sym, e) =

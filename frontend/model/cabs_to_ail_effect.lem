@@ -265,7 +265,7 @@ type state = <|
   (* list the object/functions actually used, so that we can forget everything else that is declared/defined.
      This is particularly useful when stdlib headers are included *)
   used_identifier: list A.ail_identifier;
-  current_return_type : Ctype.ctype;
+  current_return_type: maybe Ctype.ctype;
   
   loop_attributes: Annot.loop_attributes;
 
@@ -547,7 +547,7 @@ let initial_state core_eval_stuff = <|
     registered_identifiers=      Scope_table.empty;
     
     tag_definitions= Map.empty;
-
+    
     enumeration_constants= Map.empty;
     switch_context= [];
     
@@ -561,10 +561,9 @@ let initial_state core_eval_stuff = <|
     static_assertions=           [];
     
     used_identifier= [];
-    current_return_type= Ctype.Ctype [] Ctype.Void; (* TODO: this is morally wrong *)
-
+    current_return_type= Nothing;
+    
     loop_attributes= Map.empty;
-
     cn_state= Cn_desugaring.initial_cn_desugaring_state;
     
     core_eval_stuff= core_eval_stuff;
@@ -2208,16 +2207,31 @@ let resolve_label ident =
 
 
 (* Returns the return type of the function currently being desugared *)
-(* val get_current_return_type: desugM Ctype.ctype *)
 let get_current_return_type: desugM Ctype.ctype =
-read_inner (fun st ->
-    st.current_return_type
+  read_inner (fun st ->
+    match st.current_return_type with
+      | Just ty ->
+          ty
+      | Nothing ->
+          error "Cabs_to_ail_effect.get_current_return_type Nothing"
+    end
   )
 
-let set_current_return_type (ty: Ctype.ctype) : desugM unit =
+let set_current_return_type (ty_opt: maybe Ctype.ctype) : desugM unit =
   update_inner (fun st ->
-    <| st with current_return_type= ty |>
+    <| st with current_return_type= ty_opt |>
   )
+
+let inside_function (return_ty: Ctype.ctype) m =
+  (* NOTE: doing this in case we ever add support for nested functions *)
+  State_exception.read (fun st -> st.current_return_type) >>= fun saved ->
+  set_current_return_type (Just return_ty)                >>= fun ()    ->
+  m                                                       >>= fun res   ->
+  set_current_return_type saved                           >>= fun ()    ->
+  return res
+
+let is_inside_function =
+  isJust <$> State_exception.read (fun st -> st.current_return_type)
 
 
 

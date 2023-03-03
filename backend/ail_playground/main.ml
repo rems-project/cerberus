@@ -68,7 +68,7 @@ let cpp_str =
   ^ " -DHEAP_PAGES=10"
 
 
-let learn out filename =
+let learn (*out*) filename =
   match frontend cpp_str filename with
     | Exception.Exception err ->
         prerr_endline (Pp_errors.to_string err)
@@ -86,5 +86,5 @@ let file =
 
 
 let () =
-  let simpl_t = Term.(pure (*query*) learn $ file) in
-  Term.exit @@ Term.eval (simpl_t, Term.info "core-simpl")
+  let simpl_t = Term.(const (*query*) learn $ file) in
+  Stdlib.exit @@ Cmd.eval (Cmd.(v (info "core-simpl") simpl_t))

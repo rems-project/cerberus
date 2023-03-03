@@ -83,6 +83,21 @@ let string_of_storageDuration = function
       "allocated"
 end
 
+val desug_get_structDefs: map Symbol.sym tag_definition -> Symbol.sym -> Annot.attributes * bool * list (Symbol.identifier * (Annot.attributes * maybe Ctype.alignment * Ctype.qualifiers * Ctype.ctype)) * maybe Ctype.flexible_array_member
+let desug_get_structDefs tagDefs tag_sym =
+  match Map.lookup tag_sym tagDefs with
+    | Just (Struct_definition annots isAnonymous xs flex_opt) ->
+        (annots, isAnonymous, xs, flex_opt)
+    | Just _ ->
+        error ("Cabs_to_ail_aux.desug_get_structDefs (" ^ show tag_sym ^
+               "): found a union definition instead of a struct")
+    | Nothing ->
+        error ("Cabs_to_ail_aux.desug_get_structDefs (" ^ show tag_sym ^
+               "): couldn't find a struct/union definition")
+  end
+
+let inline get_structDefs = desug_get_structDefs
+
 
 val mk_zeroInit: map A.ail_identifier tag_definition -> Ctype.ctype -> A.expression unit
 let rec mk_zeroInit_aux tagDefs (Ctype.Ctype _ ty) =

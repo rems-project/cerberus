@@ -928,5 +928,26 @@ let representable = value_check false
 
 let good_pointer = value_check_pointer true
 
+let nth_array_to_list_fact n xs d = match term xs with
+  | List_op (ArrayToList (arr, i, len)) ->
+    let lhs = nthList_ (n, xs, d) in
+    let rhs = ite_ (and_ [le_ (int_ 0, n); lt_ (n, len)], map_get_ arr (add_ (i, n)), d) in
+    Some (eq_ (lhs, rhs))
+  | _ -> None
+
+let nth_array_to_list_facts terms =
+  let nths = fold_list (fun _ acc it -> match term it with
+    | List_op (NthList (n, xs, d)) -> (n, d, bt xs) :: acc
+    | _ -> acc) [] [] terms in
+  let arr_lists = fold_list (fun _ acc it -> match term it with
+    | List_op (ArrayToList _) -> (it, bt it) :: acc
+    | _ -> acc) [] [] terms in
+  List.map (fun (n, d, bt1) -> List.filter_map (fun (xs, bt2) ->
+    if BT.equal bt1 bt2 then nth_array_to_list_fact n xs d else None) arr_lists
+  ) nths |> List.concat
+
+
+
+
 
 

@@ -7,9 +7,9 @@ coq_lemmas/Makefile.coq*
 coq_lemmas/.Makefile.*
 
 *.glob
-*.v
 *.vo
 *.vok
 *.vos
+Gen_Spec.v
 
 

@@ -886,11 +886,7 @@ let port =
   Arg.(value & opt int 80 & info ["p"; "port"] ~docv:"PORT" ~doc)
 
 let () =
-  let server = Term.(pure setup $ config $ cerb_debug_level $ debug_level
+  let server = Term.(const setup $ config $ cerb_debug_level $ debug_level
                      $ timeout $ impl $ port $ docroot) in
-  let info = Term.info "web" ~doc:"Web server frontend for Cerberus." in
-  match Term.eval (server, info) with
-  | `Error _ -> exit 1;
-  | `Ok _
-  | `Version
-  | `Help -> exit 0
+  let info = Cmd.info "web" ~doc:"Web server frontend for Cerberus." in
+  Stdlib.exit @@ Cmd.eval (Cmd.v info server)

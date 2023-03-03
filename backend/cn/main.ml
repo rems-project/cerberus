@@ -252,7 +252,7 @@ let astprints =
 let () =
   let open Term in
   let check_t = 
-    pure main $ 
+    const main $ 
       file $ 
       incl_dir $
       loc_pp $ 
@@ -272,4 +272,4 @@ let () =
       random_seed $
       astprints
   in
-  Term.exit @@ Term.eval (check_t, Term.info "cn")
+  Stdlib.exit @@ Cmd.(eval (v (info "cn") check_t))
