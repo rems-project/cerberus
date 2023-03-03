@@ -711,8 +711,9 @@ module WRET = struct
                | `True ->
                   return ()
                | `False ->
+                  let model = Solver.model () in
                   let msg = "Iterated resource gives ownership to negative indices." in
-                  fail (fun _ -> {loc; msg = Generic !^msg})
+                  fail (fun ctxt -> {loc; msg = Generic_with_model {err= !^msg; ctxt; model}})
              in
              let has_iargs, expect_iargs = List.length p.iargs, List.length spec_iargs in
              (* +1 because of pointer argument *)
