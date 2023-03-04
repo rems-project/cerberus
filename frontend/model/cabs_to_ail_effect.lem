@@ -1545,24 +1545,24 @@ let register_ordinary_identifier ident kind storage_classes =
   return (link, sym)
 
 
-val register_tag: tag_kind -> maybe Symbol.identifier -> desugM A.ail_identifier
-let register_tag kind tag_ident_opt =
-  (* generate a fresh tag identifier if none provided *)
-  maybe
-    (freshify (Symbol.Identifier (Loc.other "anonymous_tag") "anonymous_tag_"))
-    return
-    tag_ident_opt >>= fun tag_ident ->
-  internal_register_identifier (fun (scope, (sym, prev_kind, _)) do_fresh ->
-    current_scope_is scope >>= function
-      | true ->
-          if Kind_tag kind = prev_kind then
-            return sym
-          else
-            constraint_violation (Loc.locOf tag_ident) (Constraint.TagRedeclaration sym)
-      | false ->
-          do_fresh ()
-    end
-  ) tag_ident Namespace_tag (Kind_tag kind) Nothing
+val register_tag: Loc.t -> tag_kind -> maybe Symbol.identifier -> desugM A.ail_identifier
+let register_tag loc kind = function
+  | Nothing ->
+      (* unnamed struct/union *)
+      return (Symbol.fresh_description (Symbol.SD_unnamed_tag loc))
+  | Just tag_ident ->
+      internal_register_identifier (fun (scope, (sym, prev_kind, _)) do_fresh ->
+        current_scope_is scope >>= function
+          | true ->
+              if Kind_tag kind = prev_kind then
+                return sym
+              else
+                constraint_violation (Loc.locOf tag_ident) (Constraint.TagRedeclaration sym)
+          | false ->
+              do_fresh ()
+        end
+      ) tag_ident Namespace_tag (Kind_tag kind) Nothing 
+end
 
 
 val register_tag_definition: Loc.t -> A.ail_identifier -> tag_definition -> desugM unit

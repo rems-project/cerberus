@@ -6,7 +6,7 @@ val pp_keyword: string -> PPrint.document
 val pp_const: string -> PPrint.document
 
 
-val pp_id: ail_identifier -> PPrint.document
+val pp_id: ?is_human:bool -> ail_identifier -> PPrint.document
 val pp_id_obj: ail_identifier -> PPrint.document
 val pp_id_func: ail_identifier -> PPrint.document
 
@@ -33,7 +33,7 @@ let pp_qualifiers_raw
 let rec pp_ctype_raw
 *)
 
-val pp_ctype: qualifiers -> ctype -> PPrint.document
+val pp_ctype: ?is_human:bool -> qualifiers -> ctype -> PPrint.document
 
 (*
 let rec pp_ctype_declaration id

@@ -85,10 +85,10 @@ let pp_const c        = !^ (ansi_format [Magenta] c)
 let pp_comment str    = !^ (ansi_format [Red] str)
 
 
-let pp_id id = !^ (Pp_symbol.to_string_pretty id)
+let pp_id ?(is_human=false) id = !^ (Pp_symbol.to_string_pretty ~is_human id)
 let pp_id_obj id = !^ (ansi_format [Yellow] (Pp_symbol.to_string_pretty id))
 let pp_id_label id = !^ (ansi_format [Magenta] (Pp_symbol.to_string_pretty id))
-let pp_id_type id = !^ (ansi_format [Green] (Pp_symbol.to_string_pretty id))
+let pp_id_type ?(is_human=false) id = !^ (ansi_format [Green] (Pp_symbol.to_string_pretty ~is_human id))
 let pp_id_func id = !^ (ansi_format [Bold; Cyan] (Pp_symbol.to_string_pretty id))
 
 
@@ -224,7 +224,7 @@ let pp_basicType = function
   | Floating rft ->
       pp_floatingType rft
 
-let pp_ctype_aux pp_ident_opt qs (Ctype (_, ty) as cty) =
+let pp_ctype_aux ~is_human pp_ident_opt qs (Ctype (_, ty) as cty) =
   let precOf = function
     | Void
     | Basic _
@@ -279,20 +279,20 @@ let pp_ctype_aux pp_ident_opt qs (Ctype (_, ty) as cty) =
             P.parens (aux no_qualifiers ty P.empty) ^^ k
       | Struct sym ->
           fun k ->
-            pp_qualifiers qs ^^ pp_keyword "struct" ^^^ pp_id_type sym ^^ k
+            pp_qualifiers qs ^^ pp_keyword "struct" ^^^ pp_id_type ~is_human sym ^^ k
       | Union sym ->
           fun k ->
-            pp_qualifiers qs ^^ pp_keyword "union" ^^^ pp_id_type sym ^^ k
+            pp_qualifiers qs ^^ pp_keyword "union" ^^^ pp_id_type ~is_human sym ^^ k
     end in
   let pp_spaced_ident =
     match pp_ident_opt with Some pp_ident -> P.space ^^ pp_ident | None -> P.empty in
   (aux 1 qs cty) pp_spaced_ident
 
-let pp_ctype qs ty =
-  pp_ctype_aux None qs ty
+let pp_ctype ?(is_human=false) qs ty =
+  pp_ctype_aux ~is_human None qs ty
 
 let pp_ctype_declaration pp_ident qs ty =
-  pp_ctype_aux (Some pp_ident) qs ty
+  pp_ctype_aux ~is_human:false (Some pp_ident) qs ty
 
 
 let rec pp_ctype_human qs (Ctype (_, ty)) =
@@ -861,20 +861,20 @@ let pp_genType = function
   | GenBasic gbty ->
       pp_genBasicType gbty
   | GenArray (ty, n_opt) ->
-      !^ "array" ^^^ P.optional pp_integer n_opt ^^^ !^ "of" ^^^ pp_ctype no_qualifiers ty
+      !^ "array" ^^^ P.optional pp_integer n_opt ^^^ !^ "of" ^^^ pp_ctype ~is_human:true no_qualifiers ty
   | GenFunction ((qs, ty), params, is_variadic) ->
       (* TODO: maybe add parameters *)
-      !^ "function returning" ^^^ pp_ctype qs ty
+      !^ "function returning" ^^^ pp_ctype ~is_human:true qs ty
   | GenFunctionNoParams (qs, ty) ->
-      !^ "function (NO PARAMS) returning" ^^^ pp_ctype qs ty
+      !^ "function (NO PARAMS) returning" ^^^ pp_ctype ~is_human:true qs ty
   | GenPointer (ref_qs, ref_ty) ->
-      pp_ctype no_qualifiers (Ctype ([], Pointer (ref_qs, ref_ty)))
+      pp_ctype ~is_human:true no_qualifiers (Ctype ([], Pointer (ref_qs, ref_ty)))
   | GenStruct tag_sym ->
-      !^ "struct" ^^^ pp_id tag_sym
+      !^ "struct" ^^^ pp_id ~is_human:true tag_sym
   | GenUnion tag_sym ->
-      !^ "union" ^^^ pp_id tag_sym
+      !^ "union" ^^^ pp_id ~is_human:true tag_sym
   | GenAtomic ty ->
-      !^ "atomic" ^^^ pp_ctype no_qualifiers ty
+      !^ "atomic" ^^^ pp_ctype ~is_human:true no_qualifiers ty
 
 let pp_genTypeCategory = function
  | GenLValueType (qs, ty, isRegister) ->

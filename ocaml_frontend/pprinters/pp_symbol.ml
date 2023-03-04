@@ -10,7 +10,7 @@ let to_string (Symbol (_, n, sd)) =
     | _ ->
         "a_" ^ string_of_int n
 
-let to_string_pretty (Symbol (_, n, sd)) =
+let to_string_pretty ?(is_human=false) (Symbol (_, n, sd)) =
   let add_number name = name ^ "{" ^ string_of_int n ^ "}" in
   let maybe_add_number name = 
    if !Debug_ocaml.debug_level > 4 then
@@ -20,9 +20,14 @@ let to_string_pretty (Symbol (_, n, sd)) =
   in
   match sd with
     | SD_Id str 
-      | SD_ObjectAddress str
-      | SD_FunArgValue str ->
+    | SD_ObjectAddress str
+    | SD_FunArgValue str ->
         maybe_add_number str
+    | SD_unnamed_tag loc ->
+        if is_human then
+          "(unnamed tag at " ^ Location_ocaml.location_to_string loc ^ ")"
+        else
+          "__cerbty_unnamed_tag_" ^ string_of_int n
     | _ ->
         "a_" ^ string_of_int n
 
@@ -30,7 +35,9 @@ let to_string_pretty (Symbol (_, n, sd)) =
 let to_string_cn (Symbol (dig, n, sd)) =
   let symbol_description_to_string = function
     | SD_None -> 
-        "a" 
+        "a"
+    | SD_unnamed_tag _ ->
+        "__cerbty_unnamed_tag_" ^ string_of_int n
     | SD_Id str -> 
         str 
     | SD_CN_Id str -> 
@@ -61,6 +68,8 @@ let to_string_pretty_cn (Symbol (_, n, sd) as s) =
   let symbol_description = function
     | SD_None -> 
         to_string s
+    | SD_unnamed_tag _ ->
+        "__cerbty_unnamed_tag_" ^ string_of_int n
     | SD_Id name -> 
         name
     | SD_CN_Id name -> 

@@ -76,6 +76,7 @@ end
 
 type symbol_description =
   | SD_None
+  | SD_unnamed_tag of Loc.t
   | SD_Id of string
   | SD_CN_Id of string
   | SD_ObjectAddress of string
@@ -97,23 +98,25 @@ type symbol_description =
 
 let show_symbol_description sd =
   match sd with
-  | SD_None -> 
-     "SD_None"
-  | SD_Id str -> 
-     "SD_Id("^show str^")"
-  | SD_CN_Id str -> 
-     "SD_CN_Id("^show str^")"
-  | SD_ObjectAddress name -> 
-     "SD_ObjectAddress" ^ show name
-  | SD_Return ->
-     "SD_Return"
-  | SD_FunArgValue str -> 
-     "SD_FunArgValue" ^ "(" ^ show str ^ ")"
-  | SD_FunArg _ n ->
-     "SD_FunArg" ^ "(" ^ show n ^ ")"
-  (* | SD_Pointee env symbol_description ->
-   *    "SD_Pointee" ^ show (env, show_symbol_description symbol_description) *)
-end
+    | SD_None -> 
+        "SD_None"
+    | SD_unnamed_tag _ ->
+        "SD_unnamed_tag"
+    | SD_Id str -> 
+        "SD_Id("^show str^")"
+    | SD_CN_Id str -> 
+        "SD_CN_Id("^show str^")"
+    | SD_ObjectAddress name -> 
+        "SD_ObjectAddress" ^ show name
+    | SD_Return ->
+        "SD_Return"
+    | SD_FunArgValue str -> 
+        "SD_FunArgValue" ^ "(" ^ show str ^ ")"
+    | SD_FunArg _ n ->
+        "SD_FunArg" ^ "(" ^ show n ^ ")"
+    (* | SD_Pointee env symbol_description ->
+    *    "SD_Pointee" ^ show (env, show_symbol_description symbol_description) *)
+  end
 
 instance (Show symbol_description)
   let show = show_symbol_description
