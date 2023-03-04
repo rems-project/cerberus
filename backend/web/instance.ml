@@ -98,7 +98,7 @@ let elaborate ~is_bmc ~conf ~filename =
     load_core_impl core_stdlib conf.instance.core_impl >>= fun core_impl ->
     c_frontend (conf.pipeline, conf.io) (core_stdlib, core_impl) ~filename
     >>= function
-    | (Some cabs, Some ail, core) ->
+    | (Some cabs, Some (_, ail), core) ->
       core_passes (conf.pipeline, conf.io) ~filename core
       >>= fun core' ->
       return (core_stdlib, core_impl, cabs, ail, core')
@@ -311,8 +311,8 @@ let set_uid file =
     in Expr (Annot.Auid (fresh ()) :: annots, e_')
   in
   let set_fun fname = function
-    | Proc (loc, bty, args, e) ->
-      Proc (loc, bty, args, set_e e)
+    | Proc (loc, marker_id, bty, args, e) ->
+      Proc (loc, marker_id, bty, args, set_e e)
     | f -> f
   in
   let set_globs (gname, glb) =
