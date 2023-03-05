@@ -63,9 +63,9 @@ let rec pp_ctype_human_aux qs (Ctype (_, ty)) =
     | Atomic atom_ty ->
         prefix_pp_qs ^^ !^ "atomic" ^^^ pp_ctype_human no_qualifiers atom_ty
     | Struct tag_sym ->
-        prefix_pp_qs ^^ !^ "struct" ^^^ Pp_ail.pp_id tag_sym
+        prefix_pp_qs ^^ !^ "struct" ^^^ Pp_ail.pp_id ~is_human:true tag_sym
     | Union tag_sym ->
-        prefix_pp_qs ^^ !^ "union" ^^^ Pp_ail.pp_id tag_sym
+        prefix_pp_qs ^^ !^ "union" ^^^ Pp_ail.pp_id ~is_human:true tag_sym
 
 and pp_ctype_human qs (Ctype (xs, _) as ty) =
   let typedef_opt = List.fold_left (fun acc_opt x ->
@@ -128,9 +128,9 @@ let pp_genType = function
  | GenPointer (ref_qs, ref_ty) ->
      !^ "GenPointer" ^^ P.brackets (pp_ctype_human ref_qs ref_ty)
   | GenStruct sym ->
-      !^ "GenStruct" ^^ Pp_ail.pp_id sym
+      !^ "GenStruct" ^^ Pp_ail.pp_id ~is_human:true sym
   | GenUnion sym ->
-      !^ "GenUnion" ^^ Pp_ail.pp_id sym
+      !^ "GenUnion" ^^ Pp_ail.pp_id ~is_human:true sym
   | GenAtomic ty ->
       !^ "GenAtomic" ^^ pp_ctype_human no_qualifiers ty
 
@@ -216,13 +216,13 @@ let rec pp_constant = function
  | ConstantArray (elem_ty, csts) ->
      P.braces (comma_list pp_constant csts)
  | ConstantStruct (tag_sym, xs) ->
-     P.parens (!^ "struct" ^^^ Pp_ail.pp_id tag_sym) ^^ P.braces (
+     P.parens (!^ "struct" ^^^ Pp_ail.pp_id ~is_human:true tag_sym) ^^ P.braces (
        comma_list (fun (memb_ident, cst) ->
          P.dot ^^ Pp_symbol.pp_identifier memb_ident ^^ P.equals ^^^ pp_constant cst
        ) xs
      )
  | ConstantUnion (tag_sym, memb_ident, cst) ->
-   P.parens (!^ "union" ^^^ Pp_ail.pp_id tag_sym)
+   P.parens (!^ "union" ^^^ Pp_ail.pp_id ~is_human:true tag_sym)
    ^^ P.braces (P.dot ^^ Pp_symbol.pp_identifier memb_ident ^^ P.equals ^^^ pp_constant cst)
 
 let pp_stringLiteral (pref_opt, strs) =
@@ -348,11 +348,11 @@ let dtree_of_expression pp_annot expr =
                                    (List.map (option None self) e_opts)) )
       | AilEstruct (tag_sym, xs) ->
           let d_ctor = pp_expr_ctor "AilEstruct" in
-          Dnode ( d_ctor ^^^ Pp_ail.pp_id tag_sym
+          Dnode ( d_ctor ^^^ Pp_ail.pp_id ~is_human:true tag_sym
                 , (*add_std_annot*) (List.map dtree_of_field xs) )
       | AilEunion (tag_sym, memb_ident, e_opt) ->
           let d_ctor = pp_expr_ctor "AilEunion" in
-          Dnode ( d_ctor ^^^ Pp_ail.pp_id tag_sym
+          Dnode ( d_ctor ^^^ Pp_ail.pp_id ~is_human:true tag_sym
                 , (*add_std_annot*) [dtree_of_field (memb_ident, e_opt)] )
       | AilEcompound (qs, ty, e) ->
           let d_ctor = pp_expr_ctor "AilEcompound" in
@@ -582,12 +582,12 @@ let dtree_of_tag_definition (i, (def_attrs, tag)) =
               fs_
           | Some (FlexibleArrayMember (attrs, ident, qs, elem_ty)) ->
               fs_ @ [(ident, (attrs, None, qs, Ctype ([], Array (elem_ty, None))))] in
-        Dnode (pp_ctor "StructDef" ^^^ Pp_ail.pp_id i
+        Dnode (pp_ctor "StructDef" ^^^ Pp_ail.pp_id ~is_human:true i
               , List.map dleaf_of_field fs)
 
 
     | UnionDef fs ->
-        Dnode (pp_ctor "UnionDef" ^^^ Pp_ail.pp_id i
+        Dnode (pp_ctor "UnionDef" ^^^ Pp_ail.pp_id ~is_human:true i
               , List.map dleaf_of_field fs)
   end
 

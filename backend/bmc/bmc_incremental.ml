@@ -451,12 +451,12 @@ module BmcInline = struct
         (* Check if it is in file.stdlib (e.g. memcmp_proxy) or in file.funs *)
         let (fun_ty, fun_args, fun_expr) =
           match Pmap.lookup fn_ptr_sym file.stdlib with
-          | Some (Proc(_, fun_ty, fun_args, fun_expr)) ->
+          | Some (Proc(_, _, fun_ty, fun_args, fun_expr)) ->
              (fun_ty, fun_args, fun_expr)
           | Some _ -> assert false
           | None ->
               begin match Pmap.lookup fn_ptr_sym file.funs with
-              | Some (Proc (_, fun_ty, fun_args, fun_expr)) ->
+              | Some (Proc (_, _, fun_ty, fun_args, fun_expr)) ->
                   (fun_ty, fun_args, fun_expr)
               | Some (ProcDecl(_,_,_)) ->
                   failwith (sprintf "Function %s not defined"
@@ -516,7 +516,7 @@ module BmcInline = struct
           match name with
           | Sym sym ->
               begin match Pmap.lookup sym file.stdlib with
-              | Some (Proc(_,ty, args, fun_expr)) -> (ty, args, fun_expr)
+              | Some (Proc(_, _, ty, args, fun_expr)) -> (ty, args, fun_expr)
               | _ -> assert false
               end
           | Impl impl ->
@@ -639,11 +639,11 @@ module BmcInline = struct
              : (unit typed_file) eff =
     mapM inline_globs file.globs >>= fun globs ->
     (match Pmap.lookup fn_to_check file.funs with
-     | Some (Proc (annot, bTy, params, e)) ->
+     | Some (Proc (annot, marker_id, bTy, params, e)) ->
          update_proc_expr e >>
          put_fn_type bTy    >>
          inline_e e         >>= fun inlined_e ->
-         return (Proc (annot, bTy, params, inlined_e))
+         return (Proc (annot, marker_id, bTy, params, inlined_e))
      | Some (Fun (ty, params, pe)) ->
          inline_pe pe >>= fun inlined_pe ->
          return (Fun (ty, params, inlined_pe))
@@ -1053,10 +1053,10 @@ module BmcSSA = struct
             : (unit typed_file) eff =
       mapM ssa_globs file.globs >>= fun ssad_globs ->
       (match Pmap.lookup fn_to_check file.funs with
-       | Some (Proc(annot, bTy, params, e)) ->
+       | Some (Proc(annot, marker_id, bTy, params, e)) ->
           mapM ssa_param params  >>= fun ssad_params ->
           ssa_e e                >>= fun ssad_e ->
-          return (Proc (annot, bTy, ssad_params, ssad_e))
+          return (Proc (annot, marker_id, bTy, ssad_params, ssad_e))
        | Some (Fun (ty, params, pe)) ->
           mapM ssa_param params >>= fun ssad_params ->
           ssa_pe pe             >>= fun ssad_pe ->
@@ -1811,10 +1811,10 @@ module BmcZ3 = struct
 
         let ret_ty =
           begin match Pmap.lookup fn_sym file.funs with
-          | Some Proc(_, ret_ty, _, _) -> ret_ty
+          | Some Proc(_, _, ret_ty, _, _) -> ret_ty
           | _ ->
               begin match Pmap.lookup fn_sym file.stdlib with
-              | Some Proc(_, ret_ty, _,_) -> ret_ty
+              | Some Proc(_, _, ret_ty, _,_) -> ret_ty
               | _ ->
                 failwith (sprintf "Unknown ccall: %s" (symbol_to_string fn_sym))
               end
@@ -1911,7 +1911,7 @@ module BmcZ3 = struct
                 : (unit typed_file) eff =
       mapM z3_globs file.globs >>
       (match Pmap.lookup fn_to_check file.funs with
-      | Some (Proc(annot, bTy, params, e)) ->
+      | Some (Proc(annot, _, bTy, params, e)) ->
           z3_params params fn_to_check >>= fun param_actions ->
           set_param_actions param_actions >>
           z3_e e
@@ -2046,7 +2046,7 @@ module BmcDropCont = struct
                      : Expr.expr eff =
     mapM drop_cont_globs file.globs >>
     (match Pmap.lookup fn_to_check file.funs with
-    | Some (Proc(annot, bTy, params, e)) ->
+    | Some (Proc(annot, _, bTy, params, e)) ->
         drop_cont_e e
     | Some (Fun(ty, params, pe)) ->
         return mk_false
@@ -2526,7 +2526,7 @@ module BmcBind = struct
                   : (Expr.expr list * (Location_ocaml.t option * Expr.expr) list) eff =
       mapM bind_globs file.globs >>= fun bound_globs ->
       (match Pmap.lookup fn_to_check file.funs with
-      | Some (Proc(annot, bTy, params, e)) ->
+      | Some (Proc(annot, _, bTy, params, e)) ->
           bind_e e
       | Some (Fun(ty, params, pe)) ->
           bind_pe pe
@@ -2943,7 +2943,7 @@ module BmcVC = struct
                   : (bmc_vc list) eff =
       mapM vcs_globs file.globs >>= fun vcs_globs ->
       (match Pmap.lookup fn_to_check file.funs with
-      | Some (Proc(annot, bTy, params, e)) ->
+      | Some (Proc(annot, _, bTy, params, e)) ->
           vcs_e e
       | Some (Fun(ty, params, pe)) ->
           vcs_pe pe
@@ -3108,7 +3108,7 @@ module BmcRet = struct
   let do_file (file: unit typed_file) (fn_to_check: sym_ty)
               : (Expr.expr * Expr.expr list) eff =
     (match Pmap.lookup fn_to_check file.funs with
-    | Some (Proc(annot, bTy, params, e)) ->
+    | Some (Proc(annot, _, bTy, params, e)) ->
         let uid = get_id_expr e in
         let expr = mk_fresh_const
             (sprintf "ret_%s{%d}" (symbol_to_string fn_to_check) uid)
@@ -4278,7 +4278,7 @@ module BmcSeqMem = struct
               : (Expr.expr list) eff =
     mapM do_globs file.globs >>= fun globs ->
     (match Pmap.lookup fn_to_check file.funs with
-     | Some (Proc (annot, bTy, params, e)) ->
+     | Some (Proc (annot, _, bTy, params, e)) ->
         initialise_params params fn_to_check >>= fun ret_params ->
         do_e e >>= fun ret_e ->
         return { bindings = ret_params.bindings @ ret_e.bindings
@@ -5474,7 +5474,7 @@ module BmcConcActions = struct
     mapM do_taint_globs file.globs   >>
 
     (match Pmap.lookup fn_to_check file.funs with
-     | Some (Proc(annot, bTy, params, e)) ->
+     | Some (Proc(annot, _, bTy, params, e)) ->
          do_actions_params params fn_to_check >>= fun actions_params ->
          do_actions_e e >>= fun actions ->
          do_taint_e e   >>= fun (_, deps) ->

@@ -1490,18 +1490,18 @@ let rec desugar_type_specifiers specs =
     | Just (loc, bty) ->
         E.return (Ctype.no_qualifiers, Ctype.Ctype [Annot.Aloc loc] (Ctype.Basic bty))
     | Nothing ->
-        let desugar_new_struct_or_union attrs struct_or_union tag_ident_opt sdecls =
+        let desugar_new_struct_or_union loc attrs struct_or_union tag_ident_opt sdecls =
           let (kind_ctor, (*def_ctor, *)type_ctor) =
             match struct_or_union with
               | STRUCT ->
-                  (E.Kind_struct, (*Struct_definition attrs, *)fun sym -> Ctype.Ctype [] (Ctype.Struct sym))
+                  (E.Kind_struct, fun sym -> Ctype.Ctype [Annot.Aloc loc] (Ctype.Struct sym))
               | UNION ->
-                  (E.Kind_union, (*Union_definition attrs, *)fun sym -> Ctype.Ctype [] (Ctype.Union sym))
+                  (E.Kind_union, fun sym -> Ctype.Ctype [Annot.Aloc loc] (Ctype.Union sym))
             end in
           (* STD §6.7.2.1#8, sentence 1 *)
           (* NOTE: the std say that because we have a 'Just sdecls', a new
              type is being declared within the translation unit *)
-          E.register_tag kind_ctor tag_ident_opt >>= fun tag_sym ->
+          E.register_tag loc kind_ctor tag_ident_opt >>= fun tag_sym ->
           (* TODO: check that is indeed the UB I'm thinking of... *)
           List.concat <$> E.mapM desugar_struct_declaration sdecls >>= fun all_membDefs ->
           
@@ -1516,7 +1516,7 @@ let rec desugar_type_specifiers specs =
           begin
             if List.length all_membDefs = 0 && struct_or_union = UNION then
               (* STD §6.7.2.1#8, sentence 3 *)
-              E.undef Loc.unknown Undefined.UB061_no_named_members
+              E.undef loc Undefined.UB061_no_named_members
             else if List.length all_membDefs = 1 || struct_or_union = UNION then
               check_members all_membDefs >>= fun _ ->
               E.return Nothing
@@ -1524,7 +1524,7 @@ let rec desugar_type_specifiers specs =
               | Nothing ->
                   (* xs was an empty list *)
                   (* STD §6.7.2.1#8, sentence 3 *)
-                  E.undef Loc.unknown Undefined.UB061_no_named_members
+                  E.undef loc Undefined.UB061_no_named_members
               | Just ((last_ident, (lastMemb_attrs, _, lastMemb_qs, lastMemb_ty)), membDefs) ->
                   (* STD §6.7.2.1#3 *)
                   check_members membDefs >>
@@ -1553,7 +1553,7 @@ let rec desugar_type_specifiers specs =
           end >>= fun flexible_opt ->
           let loc = match tag_ident_opt with
             | Nothing ->
-                Loc.unknown
+                loc
             | Just tag_ident ->
                 Loc.locOf tag_ident
           end in
@@ -1616,7 +1616,7 @@ let rec desugar_type_specifiers specs =
                   | Nothing ->
                       (* STD §6.7.2.3#8 *)
                       (* TODO: check, but this seems right *)
-                      E.register_tag E.Kind_struct (Just tag_ident) >>= fun tag_sym ->
+                      E.register_tag loc E.Kind_struct (Just tag_ident) >>= fun tag_sym ->
                       E.return (Ctype.no_qualifiers, Ctype.Ctype [Annot.Aloc loc] (Ctype.Struct tag_sym))
                 end
           
@@ -1632,15 +1632,15 @@ let rec desugar_type_specifiers specs =
                 | Nothing ->
                     (* STD §6.7.2.3#8 *)
                     (* TODO: check, but this seems right *)
-                    E.register_tag E.Kind_union (Just tag_ident) >>= fun tag_sym ->
+                    E.register_tag loc E.Kind_union (Just tag_ident) >>= fun tag_sym ->
                     E.return (Ctype.no_qualifiers, Ctype.Ctype [Annot.Aloc loc] (Ctype.Union tag_sym))
               end
           
           | [TSpec loc (TSpec_struct attrs tag_ident_opt (Just sdecls))] ->
-              desugar_new_struct_or_union attrs STRUCT tag_ident_opt sdecls
+              desugar_new_struct_or_union loc attrs STRUCT tag_ident_opt sdecls
           
-          | [TSpec _ (TSpec_union attrs tag_ident_opt (Just sdecls))] ->
-              desugar_new_struct_or_union attrs UNION tag_ident_opt sdecls
+          | [TSpec loc (TSpec_union attrs tag_ident_opt (Just sdecls))] ->
+              desugar_new_struct_or_union loc attrs UNION tag_ident_opt sdecls
           
           | [TSpec loc (TSpec_Atomic tyname)] ->
               desugar_type_name tyname >>= fun (qs, ty) ->
@@ -1661,7 +1661,7 @@ let rec desugar_type_specifiers specs =
                 end
           
           | [TSpec loc (TSpec_enum tag_ident_opt (Just enums))] ->
-              E.register_tag E.Kind_enum tag_ident_opt >>= fun tag_sym ->
+              E.register_tag loc E.Kind_enum tag_ident_opt >>= fun tag_sym ->
               register_enumerators loc tag_sym enums >>= fun ns_rev ->
               (* NOTE: this function doesn't care about the order of the integers *)
               E.register_tag_definition loc tag_sym (Enum_definition ns_rev) >>
@@ -1786,7 +1786,7 @@ and desugar_array_declarator under_array (ADecl loc tquals is_static a_decltor_s
   (* NOTE: if we are in prototype scope, then we are dealing with
      a function parameter *)
   E.get_scope >>= function
-     | E.Scope_prototype ->
+     | E.Scope_prototype _ ->
          if under_array = IsUnderArray && (tquals <> [] || is_static) then
 STD_ "§6.7.6.2#1, sentence 5, not outermost" $
            E.constraint_violation loc ArrayDeclarationQsAndStaticOnlyOutmost
@@ -1846,7 +1846,7 @@ STD_ "§6.7.6.2#1, sentence 5, not function parameter" $
     
     | Just ADeclSize_asterisk ->
         E.get_scope >>= function
-          | E.Scope_prototype ->
+          | E.Scope_prototype _ ->
               (* STD §6.7.6.2#4, sentence 2 *)
               E.fail loc (Errors.Desugar_NotYetSupported "variable length array type")
           | _ ->
@@ -1922,7 +1922,8 @@ and desugar_direct_abstract_declarator under_array = function
       (* TODO: documentation (the code the same as for desugar_direct_declarator, DDecl_function *)
       maybe (E.return (fun qs ty -> (qs, ty)))
         (desugar_direct_abstract_declarator under_array) dabs_decltor_opt >>= fun mk_qs_ctype ->
-      E.under_scope E.Scope_prototype
+      E.fresh_prototype_scope >>= fun proto_scope ->
+      E.under_scope proto_scope
         (desugar_parameter_type_list NotFunDef param_tys) >>= fun (params_opt, isVariadic) ->
       match params_opt with
         (* TODO: isn't this dead code ? *)
@@ -1983,14 +1984,22 @@ and desugar_direct_declarator fundef under_array = function
                    mk_outer_qs_ctype array_qs array_ty )
   
   | DDecl_function ddecltor param_tys ->
+      let fundef' =
+        match (fundef, ddecltor) with
+          | (IsFunDef, DDecl_identifier _ _) ->
+              IsFunDef
+          | _ ->
+              NotFunDef
+        end in
       (* TODO: check the NotFunDef *)
-      desugar_direct_declarator NotFunDef under_array ddecltor >>= fun (attrs_ident, mk_qs_ctype) ->
-      match fundef with
+      desugar_direct_declarator fundef under_array ddecltor >>= fun (attrs_ident, mk_qs_ctype) ->
+      match fundef' with
         | IsFunDef ->
-            desugar_parameter_type_list fundef param_tys
+            desugar_parameter_type_list fundef' param_tys
         | NotFunDef ->
-            E.under_scope E.Scope_prototype
-              (desugar_parameter_type_list fundef param_tys)
+            E.fresh_prototype_scope >>= fun proto_scope ->
+            E.under_scope proto_scope
+              (desugar_parameter_type_list fundef' param_tys)
       end >>= fun (_params_opt, isVariadic) ->
       let params_opt =
         (* NOTE2: but our current parser doesn't support identifier-list (this is an old syntax) *)
@@ -3961,7 +3970,7 @@ let rec desugar_statement_aux ctx (CabsStatement loc attrs stmt_) =
          | Just (_, (tag_sym, _)) ->
              E.constraint_violation loc (TagRedeclaration tag_sym)
          | Nothing ->
-             E.register_tag E.Kind_struct (Just tag_ident)
+             E.register_tag loc E.Kind_struct (Just tag_ident)
          end >>= fun tag_sym ->
          E.return (AilSpack (Annot.TPU_Struct tag_sym) es)
       | CabsSpack (CTPU_Predicate id) es ->
@@ -3975,9 +3984,9 @@ let rec desugar_statement_aux ctx (CabsStatement loc attrs stmt_) =
          | Just (_, (tag_sym, _)) ->
              E.constraint_violation loc (TagRedeclaration tag_sym)
          | Nothing ->
-             E.register_tag E.Kind_struct (Just tag_ident)
+             E.register_tag loc E.Kind_struct (Just tag_ident)
          end >>= fun tag_sym ->
-         E.return (AilSunpack (Annot.TPU_Struct tag_sym) es)         
+         E.return (AilSunpack (Annot.TPU_Struct tag_sym) es)
       | CabsSunpack (CTPU_Predicate id) es ->
           AilSunpack (Annot.TPU_Predicate id) <$> E.mapM desugar_expression es
       | CabsShave id es ->
@@ -4488,12 +4497,13 @@ let desugar_and_register_function_definition (FunDef fundef_loc fundef_attrs spe
 
 val desugar_and_register_external_declaration: external_declaration -> E.desugM unit
 let desugar_and_register_external_declaration edecl =
+  let edecl_loc = Loc.locOf edecl in
   let storage_classes =
     maybe [] (fun z -> z.storage_classes) (specifiers_of_external_declaration edecl) in
   
   (* STD §6.9#2 *)
   if List.any (fun z -> z = SC_auto || z = SC_register) storage_classes then
-    E.constraint_violation (Loc.locOf edecl) IllegalStorageClassFileScoped
+    E.constraint_violation edecl_loc IllegalStorageClassFileScoped
   
   else match edecl with
     | EDecl_func fdef ->
@@ -4513,7 +4523,7 @@ let desugar_and_register_external_declaration edecl =
               "TODO(attributes ignored) -- TSpec_struct 3 => " ^ show ident)
           else () in
         STD_ "§6.7.2.3#7"
-        E.void (E.register_tag E.Kind_struct (Just ident))
+        E.void (E.register_tag edecl_loc E.Kind_struct (Just ident))
     
     (* struct-or-union identifier ; *)
     | EDecl_decl (Declaration_base _ <|
@@ -4524,7 +4534,7 @@ let desugar_and_register_external_declaration edecl =
         alignment_specifiers= [];
       |> []) ->
         STD_ "§6.7.2.3#7"
-        E.void (E.register_tag E.Kind_union (Just ident))
+        E.void (E.register_tag edecl_loc E.Kind_union (Just ident))
     
     (* enum identifier ; *)
     | EDecl_decl (Declaration_base _ <|

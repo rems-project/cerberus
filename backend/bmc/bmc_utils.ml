@@ -394,7 +394,7 @@ let set_uid_fun fname =  ((function
   | Fun( bty, args, pe) -> Fun( bty, args, pe)
   | ProcDecl( loc, ret_bty, args_bty) -> ProcDecl( loc, ret_bty, args_bty)
   | BuiltinDecl (loc, ret_bty, args_bty) -> BuiltinDecl (loc, ret_bty, args_bty)
-  | Proc( loc, bty, args, e) -> Proc( loc, bty, args, (set_uid_e (Pp_symbol.to_string_pretty fname)( 1) e))
+  | Proc( loc, marker_id, bty, args, e) -> Proc( loc, marker_id, bty, args, (set_uid_e (Pp_symbol.to_string_pretty fname)( 1) e))
 ))
 
 let set_uid_globs (gname, glb) =
