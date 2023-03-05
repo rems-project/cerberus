@@ -1385,6 +1385,9 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
      let lvt = tuple_ vts in
      k lvt
      )
+  | Normal expect, M_CN_statement _stmt ->
+     failwith "todo"
+
   | _, M_Ewseq (p, e1, e2)
   | _, M_Esseq (p, e1, e2) ->
      let@ fin = begin_trace_of_step (Some (Mu.M_Pat p)) e1 in

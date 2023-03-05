@@ -145,6 +145,7 @@ module Make (Config: CONFIG) = struct
     | M_Elpredicate _
     | M_Einstantiate _
     | M_Eunseq _
+    | M_CN_statement _
     (* | M_Eindet _ *)
     (* | M_Epar _ *)
     (* | M_Ewait _ -> *)
@@ -748,6 +749,15 @@ module Make (Config: CONFIG) = struct
               pp_keyword "instantiate" ^^^ !^ident ^^ P.parens (pp_pexpr pe)
           | M_Einstantiate (None, pe) ->
               pp_keyword "instantiate" ^^^ P.parens (pp_pexpr pe)
+          | M_CN_statement (CN_statement (_loc, stmt_)) ->
+             (* placeholder for something better *)
+             begin match stmt_ with
+             | CN_pack _ -> !^ "pack(todo)"
+             | CN_unpack _ -> !^ "unpack(todo)"
+             | CN_have _ -> !^ "have(todo)"
+             | CN_instantiate _ -> !^ "instantiate(todo)"
+             | CN_unfold _ -> !^ "unfold(todo)"
+             end
           (* | M_Eunseq [] -> *)
           (*     !^ "BUG: UNSEQ must have at least two arguments (seen 0)" *)
           (* | M_Eunseq [e] -> *)

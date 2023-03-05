@@ -157,6 +157,19 @@ type cn_loop_spec 'a 'ty =
   | CN_inv of Loc.t * list (cn_condition 'a 'ty)
 
 
+type cn_statement_ 'a 'ty =
+  | CN_pack of cn_pred 'a 'ty * list (cn_expr 'a 'ty)
+  | CN_unpack of cn_pred 'a 'ty * list (cn_expr 'a 'ty)
+  | CN_have of cn_assertion 'a 'ty
+  | CN_instantiate of maybe 'a * (cn_expr 'a 'ty)
+  | CN_unfold of 'a * list (cn_expr 'a 'ty)
+
+type cn_statement 'a 'ty =
+  CN_statement of Loc.t * cn_statement_ 'a 'ty
+
+
+
+
 type cn_namespace =
   | CN_predicate
   | CN_function

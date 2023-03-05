@@ -154,6 +154,11 @@ let cn_keywords: (string * Tokens.token) list = [
     "when"          , CN_WHEN;
     "with"          , CN_WITH;
     "unchanged"     , CN_UNCHANGED;
+    "pack"          , CN_PACK;
+    "unpack"        , CN_UNPACK;
+    "instantiate"   , CN_INSTANTIATE;
+    "have"          , CN_HAVE;
+    "unfold"        , CN_UNFOLD;
   ]
 
 let cn_lexicon: (string, token) Hashtbl.t =

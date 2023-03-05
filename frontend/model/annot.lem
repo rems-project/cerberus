@@ -163,6 +163,52 @@ let rec get_attrs annots =
         get_attrs annots'
   end
 
+
+let get_cerb_magic_attr annots =
+  match get_attrs annots with
+  | Nothing -> Nothing
+  | Just (Attrs attributes) ->
+     let filtered = 
+       List.concatMap (fun attr ->
+           match (attr.attr_ns, attr.attr_id) with
+           | (Just (Symbol.Identifier _loc1 "cerb"), Symbol.Identifier _loc2 "magic") ->
+              List.map (fun (loc, arg, _) -> (loc, arg)) attr.attr_args
+           | _ ->
+              []
+           end
+         ) attributes
+     in
+     match filtered with
+     | [] -> 
+        Nothing
+     | [(loc, arg)] -> 
+        Just (loc, arg)
+     | _ :: (loc, _) :: _ -> 
+        Assert_extra.failwith ("multiple magic statements in one: " ^ String.concat ";" (List.map (fun (_,arg) -> arg) filtered))
+     end
+  end
+
+       
+
+
+
+
+
+val     get_marker: list annot -> maybe nat
+let rec get_marker annots = 
+  match annots with
+    | [] ->
+        Nothing
+    | (Amarker id :: annots') ->
+       match get_marker annots' with
+       | Just _ -> Assert_extra.failwith "found more than one marker"
+       | Nothing -> Just id
+       end
+    | (_ :: annots') ->
+       get_marker annots'
+  end
+
+
 val get_label_annot : list annot -> maybe label_annot
 let rec get_label_annot annots = 
   match annots with

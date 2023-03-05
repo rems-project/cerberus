@@ -148,7 +148,7 @@ let warn_extra_semicolon pos ctx =
 (* CN syntax *)
 (* %token<string> CN_PREDNAME *)
 %token CN_ACCESSES CN_TRUSTED CN_REQUIRES CN_ENSURES CN_INV
-%token CN_PACK CN_UNPACK CN_PACK_STRUCT CN_UNPACK_STRUCT CN_HAVE CN_SHOW CN_INSTANTIATE
+%token CN_PACK CN_UNPACK CN_PACK_STRUCT CN_UNPACK_STRUCT CN_HAVE CN_SHOW CN_INSTANTIATE CN_UNFOLD
 %token CN_BOOL CN_INTEGER CN_REAL CN_POINTER CN_MAP CN_LIST CN_TUPLE CN_SET
 %token CN_WHEN CN_LET CN_TAKE CN_OWNED CN_BLOCK CN_EACH CN_FUNCTION CN_PREDICATE CN_DATATYPE
 %token CN_UNCHANGED CN_WITH
@@ -319,7 +319,7 @@ let warn_extra_semicolon pos ctx =
 %start<Cerb_frontend.Cabs.translation_unit> translation_unit
 %start function_spec
 %start loop_spec
-
+%start cn_statement
 
 %type<Symbol.identifier Cerb_frontend.Cn.cn_base_type> base_type
 %type<(Symbol.identifier, Cabs.type_name) Cerb_frontend.Cn.cn_function> cn_function
@@ -332,6 +332,7 @@ let warn_extra_semicolon pos ctx =
 %type<(Symbol.identifier, Cabs.type_name) Cerb_frontend.Cn.cn_condition> condition
 %type<(Cerb_frontend.Symbol.identifier, Cerb_frontend.Cabs.type_name) Cerb_frontend.Cn.cn_function_spec> function_spec
 %type<(Cerb_frontend.Symbol.identifier, Cerb_frontend.Cabs.type_name) Cerb_frontend.Cn.cn_loop_spec> loop_spec
+%type<(Cerb_frontend.Symbol.identifier, Cerb_frontend.Cabs.type_name) Cerb_frontend.Cn.cn_statement> cn_statement
 
 
 
@@ -2292,5 +2293,26 @@ loop_spec:
 | CN_INV cs=separated_list(SEMICOLON, condition) EOF
   { let loc = Location_ocaml.region ($startpos, $endpos) NoCursor in
       Cerb_frontend.Cn.CN_inv (loc, cs) }
+
+cn_statement:
+/* copying from 'resource' rule */
+| CN_PACK p= pred es= delimited(LPAREN, separated_list(COMMA, expr), RPAREN) SEMICOLON
+    { let loc = Location_ocaml.(region ($startpos, $endpos) NoCursor) in
+      CN_statement (loc , CN_pack (p, es)) }
+/* copying from 'resource' rule */
+| CN_UNPACK p= pred es= delimited(LPAREN, separated_list(COMMA, expr), RPAREN) SEMICOLON
+    { let loc = Location_ocaml.(region ($startpos, $endpos) NoCursor) in
+      CN_statement (loc , CN_pack (p, es)) }
+| CN_HAVE a=assert_expr SEMICOLON
+    { let loc = Location_ocaml.(region ($startpos, $endpos) NoCursor) in
+      CN_statement (loc, CN_have a) }
+| CN_INSTANTIATE oid=ioption(terminated(cn_variable, COMMA)) e=expr SEMICOLON
+    { let loc = Location_ocaml.(region ($startpos, $endpos) NoCursor) in
+      CN_statement (loc, CN_instantiate (oid, e)) }
+| CN_UNFOLD id=cn_variable es= delimited(LPAREN, separated_list(COMMA, expr), RPAREN)
+    { let loc = Location_ocaml.(region ($startpos, $endpos) NoCursor) in
+      CN_statement (loc, CN_unfold (id, es)) }
+
+
 
 (* END CN *)

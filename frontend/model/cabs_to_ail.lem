@@ -4362,6 +4362,41 @@ let desugar_cn_condition condition =
 let desugar_cn_conditions conditions =
   E.mapM desugar_cn_condition conditions
 
+let desugar_cn_statement (CN_statement loc stmt_) =
+  match stmt_ with
+  | CN_pack pred iargs ->
+     (* copying from desugar_cn_resource *)
+     desugar_cn_pred pred >>= fun pred ->
+     E.mapM desugar_cn_expr iargs >>= fun iargs ->
+     E.return (CN_pack pred iargs)
+  | CN_unpack pred iargs ->
+     (* copying from desugar_cn_resource *)
+     desugar_cn_pred pred >>= fun pred ->
+     E.mapM desugar_cn_expr iargs >>= fun iargs ->
+     E.return (CN_unpack pred iargs)
+  | CN_have assrt ->
+     desugar_cn_assertion assrt >>= fun assrt ->
+     E.return (CN_have assrt)
+  | CN_instantiate o_filter expr ->
+     match o_filter with
+     | Nothing -> 
+        E.return Nothing
+     | Just f -> 
+        E.resolve_cn_ident CN_function f >>= fun f_resolved ->
+        let f = Cn.ensure_not_c_variable f_resolved in
+        E.return (Just f)
+     end >>= fun o_filter ->
+     desugar_cn_expr expr >>= fun expr ->
+     E.return (CN_instantiate o_filter expr)
+  | CN_unfold f args ->
+     E.resolve_cn_ident CN_function f >>= fun f_resolved ->
+     let f = Cn.ensure_not_c_variable f_resolved in
+     E.mapM desugar_cn_expr args >>= fun args ->
+     E.return (CN_unfold f args)
+  end >>= fun stmt_ ->
+  E.return (CN_statement loc stmt_)
+
+
 (* END CN *)
 
 

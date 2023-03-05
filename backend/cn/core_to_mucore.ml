@@ -40,6 +40,28 @@ module IdMap = Map.Make(Id)
 open Print
 open TypeErrors
 open Cn
+open Resultat
+open Effectful.Make(Resultat)
+open AilSyntax
+module IT = IndexTerms
+
+
+
+
+let do_ail_desugar_op desugar_state f =
+  match f desugar_state with
+    | Exception.Result (x, st2) -> return (x, st2)
+    | Exception.Exception (loc, msg) ->
+      fail {loc; msg = Generic !^(Pp_errors.short_message msg)}
+
+let do_ail_desugar_rdonly desugar_state f =
+  let@ (x, _) = do_ail_desugar_op desugar_state f in
+  return x
+
+let register_new_cn_local id d_st =
+  do_ail_desugar_op d_st (CA.register_additional_cn_var id)
+
+
 
 
 (* This rewrite should happen after some partial evaluation and
@@ -592,21 +614,22 @@ let n_memop loc memop pexprs =
 
 
 
-let rec n_expr (loc : Loc.t) e : mu_expr = 
+let rec n_expr (loc : Loc.t) desugaring_things e : (mu_expr, type_error) m = 
+  let (markers_env, cn_desugaring_state) = desugaring_things in
   let (Expr (annots, pe)) = e in
   let loc = Loc.update loc (get_loc_ annots) in
   let wrap pe = M_Expr (loc, annots, pe) in
   let n_pexpr = n_pexpr loc in
   let n_paction = (n_paction loc) in
   let n_memop = (n_memop loc) in
-  let n_expr = (n_expr loc) in
+  let n_expr = (n_expr loc desugaring_things) in
   match pe with
   | Epure pexpr2 -> 
-     wrap (M_Epure (n_pexpr pexpr2))
+     return (wrap (M_Epure (n_pexpr pexpr2)))
   | Ememop(memop1, pexprs1) -> 
-     wrap (M_Ememop (n_memop memop1 pexprs1))
+     return (wrap (M_Ememop (n_memop memop1 pexprs1)))
   | Eaction paction2 ->
-     wrap (M_Eaction (n_paction paction2))
+     return (wrap (M_Eaction (n_paction paction2)))
   | Ecase(pexpr, pats_es) ->
      assert_error loc !^"Ecase"
      (* let pexpr = n_pexpr pexpr in *)
@@ -648,8 +671,8 @@ let rec n_expr (loc : Loc.t) e : mu_expr =
      | _ ->
         let e1 = n_pexpr e1 in
         let pat = core_to_mu__pattern loc pat in
-        let e2 = n_expr e2 in
-        wrap (M_Elet(M_Pat pat, e1, e2))
+        let@ e2 = n_expr e2 in
+        return (wrap (M_Elet(M_Pat pat, e1, e2)))
      end
   | Eif(e1, e2, e3) ->
      begin match e2, e3 with
@@ -659,16 +682,16 @@ let rec n_expr (loc : Loc.t) e : mu_expr =
                  Option.equal Z.equal (Mem.eval_integer_value iv2) (Some Z.zero)
        ->
         let e1 = n_pexpr e1 in
-        wrap (M_Epure (M_Pexpr (loc, [], (), M_PEbool_to_integer e1)))
+        return (wrap (M_Epure (M_Pexpr (loc, [], (), M_PEbool_to_integer e1))))
      | Expr (_, Epure (Pexpr (_, _, PEval Vtrue))), 
        Expr (_, Epure (Pexpr (_, _, PEval Vfalse))) ->
         let e1 = n_pexpr e1 in
-        wrap (M_Epure e1)
+        return (wrap (M_Epure e1))
      | _ ->
         let e1 = n_pexpr e1 in
-        let e2 = n_expr e2 in
-        let e3 = n_expr e3 in
-        wrap (M_Eif(e1, e2, e3))
+        let@ e2 = n_expr e2 in
+        let@ e3 = n_expr e3 in
+        return (wrap (M_Eif(e1, e2, e3)))
      end
   | Eccall(_a, ct1, e2, es) ->
      let ct1 = match ct1 with
@@ -694,51 +717,81 @@ let rec n_expr (loc : Loc.t) e : mu_expr =
        | _ -> err ()
      in
      let es = List.map n_pexpr es in
-     wrap (M_Eccall(ct1, e2, es))
+     return (wrap (M_Eccall(ct1, e2, es)))
   | Eproc(_a, name1, es) ->
      assert_error loc !^"Eproc"
   | Eunseq es ->
-     let es = List.map n_expr es in
-     wrap (M_Eunseq es)
+     let@ es = ListM.mapM n_expr es in
+     return (wrap (M_Eunseq es))
   | Ewseq(pat, e1, e2) ->
-     let e1 = n_expr e1 in
+     let@ e1 = n_expr e1 in
      let pat = core_to_mu__pattern loc pat in
-     let e2 = n_expr e2 in
-     wrap (M_Ewseq(pat, e1, e2))
+     let@ e2 = n_expr e2 in
+     return (wrap (M_Ewseq(pat, e1, e2)))
   | Esseq(pat, e1, e2) ->
-     let e1 = n_expr e1 in
+     let () = Print.debug 10 (lazy (Print.item "core_to_mucore Esseq. e1:" (CF.Pp_core_ast.pp_expr e1))) in
+     let () = Print.debug 10 (lazy (Print.item "core_to_mucore Esseq. e2:" (CF.Pp_core_ast.pp_expr e2))) in
+     let@ e1 = match pat, e1 with
+
+       | Pattern ([], CaseBase (None, BTy_unit)),
+         Expr ([], Epure (Pexpr ([], (), PEval Vunit))) ->
+          
+          begin match get_cerb_magic_attr annots with
+
+          | Some (stmt_loc, stmt_str) ->
+             let marker_id = Option.get (get_marker annots) in
+             let@ stmt = Parse.parse C_parser.cn_statement (stmt_loc, stmt_str) in
+             let@ stmt = 
+               do_ail_desugar_rdonly (CAE.{ 
+                     markers_env = markers_env;
+                     inner = { (Pmap.find marker_id markers_env) with cn_state = cn_desugaring_state };
+                 })
+                 (CA.desugar_cn_statement stmt) 
+             in
+             return (M_Expr (loc, [], M_CN_statement stmt))
+
+          | None ->
+
+             n_expr e1
+
+          end
+                
+       | _, _ ->
+          n_expr e1 
+     in
      let pat = core_to_mu__pattern loc pat in
-     let e2 = n_expr e2 in
-     wrap (M_Esseq(pat, e1, e2))
+     let@ e2 = n_expr e2 in
+     return (wrap (M_Esseq(pat, e1, e2)))
   | Ebound e ->
-     wrap (M_Ebound (n_expr e))
+     let@ e = n_expr e in
+     return (wrap (M_Ebound e))
   | End es ->
-     let es = List.map n_expr es in
-     wrap (M_End es)
+     let@ es = ListM.mapM n_expr es in
+     return (wrap (M_End es))
   | Esave((sym1,bt1), syms_typs_pes, e) ->  
      assert_error loc !^"core_anormalisation: Esave"
   | Erun(_a, sym1, pes) ->
      let pes = List.map n_pexpr pes in
-     wrap (M_Erun(sym1, pes))
+     return (wrap (M_Erun(sym1, pes)))
   | Epar es -> 
      assert_error loc !^"core_anormalisation: Epar"
   | Ewait tid1 ->
      assert_error loc !^"core_anormalisation: Ewait"
   | Epack(id, pes) ->
      let pes = List.map n_pexpr pes in
-     wrap (M_Erpredicate(Pack, id, pes))
+     return (wrap (M_Erpredicate(Pack, id, pes)))
   | Eunpack(id, pes) ->
      let pes = List.map n_pexpr pes in
-     wrap (M_Erpredicate(Unpack, id, pes))
+     return (wrap (M_Erpredicate(Unpack, id, pes)))
   | Ehave(id, pes) ->
      let pes = List.map n_pexpr pes in
-     wrap (M_Elpredicate(Have, id, pes))
+     return (wrap (M_Elpredicate(Have, id, pes)))
   | Eshow(id, pes) ->
      let pes = List.map n_pexpr pes in
-     wrap (M_Elpredicate(Show, id, pes))
+     return (wrap (M_Elpredicate(Show, id, pes)))
   | Einstantiate (id, pe) ->
      let pe = n_pexpr pe in
-     wrap (M_Einstantiate (id, pe))
+     return (wrap (M_Einstantiate (id, pe)))
   | Eannot _ ->
       assert_error loc !^"core_anormalisation: Eannot"
   | Eexcluded _ ->
@@ -775,10 +828,6 @@ let rec at_of_arguments f_i = function
 
 
 
-open Resultat
-open Effectful.Make(Resultat)
-open AilSyntax
-module IT = IndexTerms
 
 
 
@@ -955,18 +1004,7 @@ let make_function_args f_i loc env args (accesses, requires) =
   aux [] [] env args
 
 
-let do_ail_desugar_op desugar_state f =
-  match f desugar_state with
-    | Exception.Result (x, st2) -> return (x, st2)
-    | Exception.Exception (loc, msg) ->
-      fail {loc; msg = Generic !^(Pp_errors.short_message msg)}
 
-let do_ail_desugar_rdonly desugar_state f =
-  let@ (x, _) = do_ail_desugar_op desugar_state f in
-  return x
-
-let register_new_cn_local id d_st =
-  do_ail_desugar_op d_st (CA.register_additional_cn_var id)
 
 
 let desugar_access d_st globs (loc, id) =
@@ -1023,7 +1061,8 @@ let normalise_label (markers_env, precondition_cn_desugaring_state)
   | Mi_Label (loc, lt, label_args, label_body, annots) ->
      begin match CF.Annot.get_label_annot annots with
      | Some (LAloop_prebody loop_id) ->
-        let@ inv = match Pmap.lookup loop_id loop_attributes with
+        let@ inv, cn_desugaring_state = 
+          match Pmap.lookup loop_id loop_attributes with
           | Some (marker_id, attrs) -> 
              let@ inv = Parse.parse_inv_spec attrs in
              let d_st = CAE.{ 
@@ -1031,13 +1070,14 @@ let normalise_label (markers_env, precondition_cn_desugaring_state)
                  inner = { (Pmap.find marker_id markers_env) with cn_state = precondition_cn_desugaring_state };
                }
              in
-             let@ (inv, _) = desugar_conds d_st inv in
-             return inv
-          | None -> return []
+             let@ (inv, d_st) = desugar_conds d_st inv in
+             return (inv, d_st.inner.cn_state)
+          | None -> 
+             return ([], precondition_cn_desugaring_state)
         in
         let@ label_args_and_body =
           make_label_args (fun env ->
-              return (n_expr loc label_body)
+              n_expr loc (markers_env, cn_desugaring_state) label_body
             ) 
             loc 
             env 
@@ -1111,7 +1151,7 @@ let normalise_fun_map_decl (markers_env, ail_prog) env globals (funinfo: mi_funi
      let@ args_and_body = 
        make_function_args (fun arg_states env ->
            let env = C.make_state_old env C.start_evaluation_scope in
-           let body = n_expr loc body in
+           let@ body = n_expr loc (markers_env, d_st.inner.cn_state) body in
            let@ returned = 
              make_rt loc (C.add_c_variable_states arg_states env)
                (ret_s, ret_ct) (accesses, ensures) 
@@ -1173,14 +1213,18 @@ let normalise_globs sym g =
   let loc = Loc.unknown in
   match g with
   | GlobalDef ((bt, ct), e) -> 
-     let e = n_expr loc e in
-     M_GlobalDef ((convert_bt loc bt, convert_ct loc ct), e)
+     (* this may have to change *)
+     let@ e = n_expr loc (Pmap.empty Int.compare, CF.Cn_desugaring.initial_cn_desugaring_state) e in
+     return (M_GlobalDef ((convert_bt loc bt, convert_ct loc ct), e))
   | GlobalDecl (bt, ct) -> 
-     M_GlobalDecl (convert_bt loc bt, convert_ct loc ct)
+     return (M_GlobalDecl (convert_bt loc bt, convert_ct loc ct))
 
 
 let normalise_globs_list gs = 
-   List.map (fun (sym,g) -> (sym, normalise_globs sym g)) gs
+   ListM.mapM (fun (sym,g) -> 
+       let@ g = normalise_globs sym g in
+       return (sym, g)
+     ) gs
 
 
 
@@ -1262,7 +1306,7 @@ let normalise_file (markers_env, ail_prog) file =
   let env = C.register_cn_predicates env ail_prog.cn_predicates in
   let@ preds = ListM.mapM (C.translate_cn_predicate env) ail_prog.cn_predicates in
 
-  let globs = normalise_globs_list file.mi_globs in
+  let@ globs = normalise_globs_list file.mi_globs in
 
   let env = List.fold_left register_glob env globs in
 

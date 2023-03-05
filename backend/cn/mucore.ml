@@ -217,6 +217,9 @@ type 'TY mu_expr_ =  (* (effectful) expression *)
  (* | M_Edone of 'TY mu_expr *)
  | M_Erun of symbol * ('TY mu_pexpr) list (* run from label *)
 
+ | M_CN_statement of (Sym.t, Ctype.ctype) Cn.cn_statement
+
+
 and 'TY mu_expr = 
  | M_Expr of loc * annot list * ('TY mu_expr_)
 
