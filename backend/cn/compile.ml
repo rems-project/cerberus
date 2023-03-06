@@ -451,12 +451,19 @@ and free_in_exprs = function
   | e :: es -> SymSet.union (free_in_expr e) (free_in_exprs es)
 
 
+let pp_in_scope = function
+  | Some scope -> !^"in evaluation scope" ^^^ squotes !^scope
+  | None -> !^"in current scope"
 
-let translate_cn_expr (locally_bound : SymSet.t) (env: env) expr =
+
+let translate_cn_expr__parametric 
+      ~(current__value_of_c_variable : Sym.t -> IT.sterm option)
+      ~(current__deref : IT.sterm -> IT.sterm option)
+  =
   let open IndexTerms in
   let module BT = BaseTypes in
-  let rec trans locally_bound env (CNExpr (loc, expr_)) =
-    let self = trans locally_bound env in
+  let rec trans (evaluation_scope : string option) locally_bound env (CNExpr (loc, expr_)) =
+    let self = trans evaluation_scope locally_bound env in
     match expr_ with
       | CNExpr_const CNConst_NULL ->
           return (IT (Lit Null, SBT.Loc None))
@@ -472,42 +479,6 @@ let translate_cn_expr (locally_bound : SymSet.t) (env: env) expr =
                 fail {loc; msg= Unknown_variable sym}
             | Some bTy -> return (IT (Lit (Sym sym), bTy))
           end
-      | CNExpr_deref e ->
-         let locally_bound_in_e = SymSet.inter (free_in_expr e) locally_bound in
-         let@ () = match SymSet.elements locally_bound_in_e with
-           | [] -> 
-              return ()
-           | s :: _ ->
-              let msg =
-                Sym.pp s ^^^ !^"is locally bound in this expression."
-                ^^^ !^"Cannot dereference pointer with locally bound variable."
-              in
-              fail {loc; msg = Generic msg}
-         in
-         let@ expr = self e in
-         begin match STermMap.find_opt expr env.state.pointee_values with
-         | Some v -> return v
-         | None ->
-            let msg =
-              !^"Cannot dereference " ^^ Terms.pp expr ^^ !^"." 
-              ^^^ !^ "Is the ownership for accessing it missing?"
-            in
-            fail {loc; msg = Generic msg}
-         end
-      | CNExpr_value_of_c_variable sym ->
-         assert (not (SymSet.mem sym locally_bound));
-         begin match SymMap.find_opt sym env.state.c_variable_state with
-         | None -> 
-            let msg =
-              !^"Cannot resolve the state of " ^^ Sym.pp sym ^^ !^"." 
-              ^^^ !^ "Is the ownership for accessing" ^^^ Sym.pp sym ^^^ !^"missing?"
-            in
-            fail {loc; msg = Generic msg}
-         | Some (CVS_Value x) -> 
-            return x
-         | Some (CVS_Pointer_pointing_to x) -> 
-            return x
-         end
       | CNExpr_list es_ ->
           let@ es = ListM.mapM self es_ in
           let item_bt = basetype (List.hd es) in
@@ -616,6 +587,7 @@ let translate_cn_expr (locally_bound : SymSet.t) (env: env) expr =
       | CNExpr_each (sym, r, e) ->
           let@ expr = 
             trans 
+              evaluation_scope
               (SymSet.add sym locally_bound)
               (add_logical sym SBT.Integer env) 
               e 
@@ -630,22 +602,92 @@ let translate_cn_expr (locally_bound : SymSet.t) (env: env) expr =
          let scty = Sctypes.of_ctype_unsafe loc ty in
          let@ e = self e in
          return (IT (CT_pred (Good (scty, e)), SBT.Bool))
+      | CNExpr_not e ->
+         let@ e = self e in
+         return (IT (Bool_op (Not e), SBT.Bool))
       | CNExpr_unchanged e ->
          let@ cur_e = self e in
          let@ old_e = self (CNExpr (loc, CNExpr_at_env (e, start_evaluation_scope))) in
          mk_translate_binop loc CN_equal (cur_e, old_e)
-      | CNExpr_at_env (e, evaluation_scope) ->
-         let@ old_state = match Y.find_opt evaluation_scope env.old_states with
-           | Some old_state -> return old_state
-           | None -> fail { loc; msg = Generic !^("Unknown evaluation scope '"^evaluation_scope^"'.") }
+      | CNExpr_at_env (e, scope) ->
+         let@ () = match evaluation_scope with
+           | None -> return ()
+           | Some _ -> fail {loc; msg = Generic !^"Cannot nest evaluation scopes."}
          in
-         trans locally_bound { env with state = old_state } e
-      | CNExpr_not e ->
-         let@ e = self e in
-         return (IT (Bool_op (Not e), SBT.Bool))
-         
+         let@ () = match Y.mem scope env.old_states with
+           | true -> return ()
+           | false -> fail { loc; msg = Generic !^("Unknown evaluation scope '"^scope^"'.") }
+         in
+         trans (Some scope) locally_bound env e
+      | CNExpr_deref e ->
+         let@ () = 
+           let locally_bound_in_e = SymSet.inter (free_in_expr e) locally_bound in
+           match SymSet.elements locally_bound_in_e with
+           | [] -> 
+              return ()
+           | s :: _ ->
+              let msg =
+                Sym.pp s ^^^ !^"is locally bound in this expression."
+                ^/^ !^"Cannot dereference a pointer expression containing a locally bound variable."
+              in
+              fail {loc; msg = Generic msg}
+         in
+         let@ expr = self e in
+         let o_v = match evaluation_scope with
+           | Some scope ->
+              let state = Y.find scope env.old_states in
+              STermMap.find_opt expr state.pointee_values
+           | None ->
+              current__deref expr
+         in
+         begin match o_v with
+         | Some v -> return v
+         | None ->
+            let msg =
+              !^"Cannot dereference" ^^^ squotes (Terms.pp expr) 
+              ^^^ pp_in_scope evaluation_scope ^^ dot
+              ^^^ !^"Is the necessary ownership missing?"
+            in
+            fail {loc; msg = Generic msg}
+         end
+      | CNExpr_value_of_c_variable sym ->
+         assert (not (SymSet.mem sym locally_bound));
+         let o_v = match evaluation_scope with
+           | Some scope ->
+              let state = Y.find scope env.old_states in
+              Option.map (function
+                  | CVS_Value x -> x
+                  | CVS_Pointer_pointing_to x -> x
+                ) (SymMap.find_opt sym state.c_variable_state)
+           | None ->
+              current__value_of_c_variable sym
+         in
+         begin match o_v with
+         | None -> 
+            let msg =
+              !^"Cannot resolve the value of" ^^^ Sym.pp sym
+              ^^^ pp_in_scope evaluation_scope ^^ dot
+              ^^^ !^"Is the ownership for accessing" ^^^ Sym.pp sym ^^^ !^"missing?"
+            in
+            fail {loc; msg = Generic msg}
+         | Some v ->
+            return v
+         end
   in 
-  trans locally_bound env expr
+  trans None
+
+let translate_cn_expr locally_bound env expr = 
+  let current__value_of_c_variable sym = 
+    Option.map (function
+        | CVS_Value x -> x
+        | CVS_Pointer_pointing_to x -> x
+      ) (SymMap.find_opt sym env.state.c_variable_state)
+  in
+  let current__deref it = STermMap.find_opt it env.state.pointee_values in
+  translate_cn_expr__parametric 
+    ~current__value_of_c_variable 
+    ~current__deref
+    locally_bound env expr
 
 
 let translate_cn_res_info res_loc loc env res args =
