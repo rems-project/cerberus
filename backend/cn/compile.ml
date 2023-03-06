@@ -14,6 +14,7 @@ open CF.Cn
 open Resultat
 open TypeErrors
 
+module SymSet = Set.Make(Sym)
 module SymMap = Map.Make(Sym)
 module STermMap = Map.Make(struct type t = IndexTerms.sterm let compare = Terms.compare SBT.compare end)
 module Y = Map.Make(String)
@@ -34,13 +35,6 @@ type predicate_sig = {
   pred_oargs: (Sym.t * BaseTypes.t) list;
 }
 
-(* type resource_def = *)
-(*   | RPred_owned of Sctypes.t *)
-(*   | RPred_block of Sctypes.t *)
-(*   | RPred_named of Sym.t *)
-(*   | RPred_I_owned of Sctypes.t *)
-(*   | RPred_I_block of Sctypes.t *)
-(*   | RPred_I_named of Sym.t *)
 
 type resource_env = Resources.t list
 
@@ -49,13 +43,10 @@ type c_variable_state =
   | CVS_Value of IT.sterm           (* currently the variable is a pure value, this one *)
   | CVS_Pointer_pointing_to of IT.sterm         (* currently the variable is a pointer to memory holding this value *)
 
-type c_variable_state_env = c_variable_state SymMap.t
-
-type pointee_value_env = IT.sterm STermMap.t
 
 type state_env = {
-    c_variable_state : c_variable_state_env;
-    pointee_values : pointee_value_env
+    c_variable_state : c_variable_state SymMap.t;
+    pointee_values : IT.sterm STermMap.t
   }
 
 
@@ -156,25 +147,6 @@ let lookup_function_by_name nm env = match Y.find_opt nm env.func_names with
     SymMap.find_opt sym env.functions |> Option.map (fun fs -> (sym, fs))
   | None -> None
 
-(* let lookup_resource sym env = *)
-(*   SymMap.find_opt sym env.resources *)
-
-(* part of the Deref framework - rework or retire
-let lookup_resource_for_pointer loc e env =
-  let found = 
-    List.find_opt (fun (ret, _) ->
-        IT.equal (RET.pointer ret) e
-      ) env.resources
-  in
-  match found with
-  | Some resource -> return resource
-  | None ->
-     let msg = Generic (Pp.item "no resource found for pointer"
-        (IT.pp e ^^^ !^ "amongst resources" ^^^ Pp.brackets (Pp.list (fun (ret, _) ->
-            IT.pp (RET.pointer ret)) env.resources)))
-     in
-     fail {loc; msg}
-*)
 
 
 
@@ -429,11 +401,62 @@ let pp_cnexpr_kind expr_ =
   | CNExpr_not e -> !^"!_"
 
 
-let translate_cn_expr (env: env) expr =
+let rec free_in_expr (CNExpr (_loc, expr_)) =
+  match expr_ with
+  | CNExpr_const _ -> 
+     SymSet.empty
+  | CNExpr_var v -> 
+     SymSet.singleton v
+  | CNExpr_list es -> 
+     free_in_exprs es
+  | CNExpr_memberof (e, _id) -> 
+     free_in_expr e
+  | CNExpr_memberupdates (e, updates) ->
+     free_in_exprs (e :: List.map snd updates)
+  | CNExpr_arrayindexupdates (e, updates) ->
+     free_in_exprs (e :: List.concat_map (fun (e1, e2) -> [e1; e2]) updates)
+  | CNExpr_binop (_binop, e1, e2) ->
+     free_in_exprs [e1; e2]
+  | CNExpr_sizeof _ -> 
+     SymSet.empty
+  | CNExpr_offsetof _ ->
+     SymSet.empty
+  | CNExpr_membershift (e, _id) ->
+     free_in_expr e
+  | CNExpr_cast (_bt, e) ->
+     free_in_expr e
+  | CNExpr_call (_id, es) ->
+     free_in_exprs es
+  | CNExpr_cons (_c, args) ->
+     free_in_exprs (List.map snd args)
+  | CNExpr_each (s, range, e) ->
+     SymSet.remove s (free_in_expr e)
+  | CNExpr_ite (e1, e2, e3) ->
+     free_in_exprs [e1; e2; e3]
+  | CNExpr_good (typ, e) ->
+     free_in_expr e
+  | CNExpr_deref e ->
+     free_in_expr e
+  | CNExpr_value_of_c_variable s ->
+     SymSet.singleton s
+  | CNExpr_unchanged e ->
+     free_in_expr e
+  | CNExpr_at_env (e, _evaluation_scope) ->
+     free_in_expr e
+  | CNExpr_not e ->
+     free_in_expr e
+
+and free_in_exprs = function
+  | [] -> SymSet.empty
+  | e :: es -> SymSet.union (free_in_expr e) (free_in_exprs es)
+
+
+
+let translate_cn_expr (locally_bound : SymSet.t) (env: env) expr =
   let open IndexTerms in
   let module BT = BaseTypes in
-  let rec trans env (CNExpr (loc, expr_)) =
-    let self = trans env in
+  let rec trans locally_bound env (CNExpr (loc, expr_)) =
+    let self = trans locally_bound env in
     match expr_ with
       | CNExpr_const CNConst_NULL ->
           return (IT (Lit Null, SBT.Loc None))
@@ -450,6 +473,17 @@ let translate_cn_expr (env: env) expr =
             | Some bTy -> return (IT (Lit (Sym sym), bTy))
           end
       | CNExpr_deref e ->
+         let locally_bound_in_e = SymSet.inter (free_in_expr e) locally_bound in
+         let@ () = match SymSet.elements locally_bound_in_e with
+           | [] -> 
+              return ()
+           | s :: _ ->
+              let msg =
+                Sym.pp s ^^^ !^"is locally bound in this expression."
+                ^^^ !^"Cannot dereference pointer with locally bound variable."
+              in
+              fail {loc; msg = Generic msg}
+         in
          let@ expr = self e in
          begin match STermMap.find_opt expr env.state.pointee_values with
          | Some v -> return v
@@ -461,6 +495,7 @@ let translate_cn_expr (env: env) expr =
             fail {loc; msg = Generic msg}
          end
       | CNExpr_value_of_c_variable sym ->
+         assert (not (SymSet.mem sym locally_bound));
          begin match SymMap.find_opt sym env.state.c_variable_state with
          | None -> 
             let msg =
@@ -579,46 +614,41 @@ let translate_cn_expr (env: env) expr =
                            SBT.Record (List.map (fun (s,t) -> (s, basetype t)) exprs)) in
           return (IT (Datatype_op (DatatypeCons (c_nm, record)), SBT.Datatype cons_info.c_datatype_tag))
       | CNExpr_each (sym, r, e) ->
-          let env' = add_logical sym SBT.Integer env in
-          let@ expr = trans env' e in
+          let@ expr = 
+            trans 
+              (SymSet.add sym locally_bound)
+              (add_logical sym SBT.Integer env) 
+              e 
+          in
           return (IT (Bool_op (EachI ((Z.to_int (fst r), sym, Z.to_int (snd r)), expr)), SBT.Bool))
       | CNExpr_ite (e1, e2, e3) ->
-          let@ e1 = trans env e1 in
-          let@ e2 = trans env e2 in
-          let@ e3 = trans env e3 in
+          let@ e1 = self e1 in
+          let@ e2 = self e2 in
+          let@ e3 = self e3 in
           return (ite_ (e1, e2, e3))
       | CNExpr_good (ty, e) ->
          let scty = Sctypes.of_ctype_unsafe loc ty in
-         let@ e = trans env e in
+         let@ e = self e in
          return (IT (CT_pred (Good (scty, e)), SBT.Bool))
-      | CNExpr_unchanged e->
-         begin match Y.find_opt start_evaluation_scope env.old_states with
-         | None -> 
-            let msg = 
-              !^"Cannot use 'unchanged' here." 
-                ^/^ !^"'unchanged' can only be used in function post-conditions and loop-invariants."
-            in
-            fail {loc; msg = Generic msg}
-         | Some start_state -> 
-            let@ cur_e = self e in
-            let@ old_e = trans { env with state = start_state } e in
-            mk_translate_binop loc CN_equal (cur_e, old_e)
-         end
+      | CNExpr_unchanged e ->
+         let@ cur_e = self e in
+         let@ old_e = self (CNExpr (loc, CNExpr_at_env (e, start_evaluation_scope))) in
+         mk_translate_binop loc CN_equal (cur_e, old_e)
       | CNExpr_at_env (e, evaluation_scope) ->
          let@ old_state = match Y.find_opt evaluation_scope env.old_states with
            | Some old_state -> return old_state
            | None -> fail { loc; msg = Generic !^("Unknown evaluation scope '"^evaluation_scope^"'.") }
          in
-         trans { env with state = old_state } e
+         trans locally_bound { env with state = old_state } e
       | CNExpr_not e ->
          let@ e = self e in
          return (IT (Bool_op (Not e), SBT.Bool))
          
-  in trans env expr
+  in 
+  trans locally_bound env expr
 
 
 let translate_cn_res_info res_loc loc env res args =
-  let@ args = ListM.mapM (translate_cn_expr env) args in
   let open Resources in
   let open RET in
   let@ (ptr_expr, iargs) = match args with
@@ -631,7 +661,7 @@ let translate_cn_res_info res_loc loc env res args =
          | Some ty -> return (Sctypes.of_ctype_unsafe res_loc ty)
          | None ->
             match IT.bt ptr_expr with
-            | Loc (Some ty) -> return ty
+            | SBT.Loc (Some ty) -> return ty
             | Loc None ->
                fail {loc; msg = Generic !^"Cannot tell C-type of pointer. Please use Owned with an annotation: \'Owned<CTYPE>'."}
             | has ->
@@ -702,13 +732,14 @@ let owned_good loc sym (res_t, oargs_ty) =
 
 
 let translate_cn_let_resource__pred env res_loc sym (cond, pred_loc, res, args) =
+  let@ args = ListM.mapM (translate_cn_expr SymSet.empty env) args in
   let@ (pname, ptr_expr, iargs, oargs_ty) =
          translate_cn_res_info res_loc pred_loc env res args in
   let@ permission = match cond with 
     | None -> 
        return (IT.bool_ true)
     | Some c -> 
-       let@ c = translate_cn_expr env c in
+       let@ c = translate_cn_expr SymSet.empty env c in
        return (IT.term_of_sterm c)
   in
   let pt = (RET.P { name = pname
@@ -731,7 +762,8 @@ let translate_cn_let_resource__each env res_loc _sym (q, bt, guard, pred_loc, re
         Generic (!^ "quantified v must be integer:" ^^^ SBT.pp bt')}
   in
   let env_with_q = add_logical q SBT.Integer env in
-  let@ guard_expr = translate_cn_expr env_with_q guard in
+  let@ guard_expr = translate_cn_expr (SymSet.singleton q) env_with_q guard in
+  let@ args = ListM.mapM (translate_cn_expr (SymSet.singleton q) env_with_q) args in
   let@ (pname, ptr_expr, iargs, oargs_ty) =
          translate_cn_res_info res_loc pred_loc env_with_q res args in
   let@ (ptr_base, step) = split_pointer_linear_step pred_loc q ptr_expr in
@@ -764,13 +796,13 @@ let translate_cn_let_resource env (res_loc, sym, the_res) =
 let translate_cn_assrt env (loc, assrt) =
   match assrt with
   | CN_assert_exp e_ ->
-     let@ e = translate_cn_expr env e_ in
+     let@ e = translate_cn_expr SymSet.empty env e_ in
      return (LC.T (IT.term_of_sterm e))
   | CN_assert_qexp (sym, bTy, e1_, e2_) ->
      let bt = translate_cn_base_type bTy in
      let env_with_q = add_logical sym bt env in
-     let@ e1 = translate_cn_expr env_with_q e1_ in
-     let@ e2 = translate_cn_expr env_with_q e2_ in
+     let@ e1 = translate_cn_expr (SymSet.singleton sym) env_with_q e1_ in
+     let@ e2 = translate_cn_expr (SymSet.singleton sym) env_with_q e2_ in
      return (LC.Forall ((sym, SBT.to_basetype bt), 
                         IT.impl_ (IT.term_of_sterm e1, 
                                   IT.term_of_sterm e2)))
@@ -793,7 +825,7 @@ let translate_cn_clause env clause =
          let env' = add_pointee_values pointee_vals env' in
          translate_cn_clause_aux env' acc' cl
       | CN_letExpr (loc, sym, e_, cl) ->
-          let@ e = translate_cn_expr env e_ in
+          let@ e = translate_cn_expr SymSet.empty env e_ in
           let acc' =
             fun z -> acc begin
               LAT.mDefine (sym, IT.term_of_sterm e, (loc, None)) z
@@ -806,7 +838,7 @@ let translate_cn_clause env clause =
       | CN_return (loc, xs_) ->
           let@ xs =
             ListM.mapM (fun (sym, e_) ->
-              let@ e = translate_cn_expr env e_ in
+              let@ e = translate_cn_expr SymSet.empty env e_ in
               return (OutputDef.{loc= loc; name= sym; value= IT.term_of_sterm e})
             ) xs_ in
           acc (LAT.I xs) 
@@ -821,7 +853,7 @@ let translate_cn_clauses env clauses =
         let@ cl = translate_cn_clause env cl_ in
         return (RP.{loc= loc; guard= IT.bool_ true; packing_ft= cl} :: acc)
     | CN_if (loc, e_, cl_, clauses') ->
-      let@ e  = translate_cn_expr env e_ in
+      let@ e  = translate_cn_expr SymSet.empty env e_ in
       let@ cl = translate_cn_clause env cl_ in
       self begin
         RP.{loc= loc; guard= IT.term_of_sterm e; packing_ft= cl} :: acc
@@ -843,15 +875,15 @@ let translate_cn_func_body env body =
   let rec aux env body =
     match body with
       | CN_fb_letExpr (loc, sym, e_, cl) ->
-          let@ e = translate_cn_expr env e_ in
+          let@ e = translate_cn_expr SymSet.empty env e_ in
           let env2 = add_logical sym (IT.basetype e) env in
           let@ b = aux env2 cl in
           return (Body.Let ((sym, IT.term_of_sterm e), b))
       | CN_fb_return (loc, x) ->
-         let@ t = translate_cn_expr env x in
+         let@ t = translate_cn_expr SymSet.empty env x in
          return (Body.Term (IT.term_of_sterm t))
       | CN_fb_cases (loc, x, cs) ->
-         let@ x = translate_cn_expr env x in
+         let@ x = translate_cn_expr SymSet.empty env x in
          let@ cs = 
            ListM.mapM (fun (ctor, body) ->
                let@ body = aux env body in

@@ -20,13 +20,6 @@ end
 
 
 
-module SymSet = 
-  Set.Make(struct
-      let compare = Symbol.symbol_compare
-      type t = Symbol.sym
-    end)
-
-
 open Core
 open Annot
 module BT = BaseTypes
@@ -35,6 +28,7 @@ module Mu = Mucore
 open Mu
 module Loc = Locations
 module C = Compile
+module SymSet = Set.Make(Sym)
 module SymMap = Map.Make(Sym)
 module IdMap = Map.Make(Id)
 open Print
@@ -886,7 +880,7 @@ let rec make_lrt env = function
      return (LRT.mResource ((name, (pt_ret, SBT.to_basetype oa_bt)), (loc, None)) 
             (LRT.mConstraints lcs lrt))
   | ([], Cn.CN_cletExpr (loc, name, expr) :: ensures) ->
-     let@ expr = C.translate_cn_expr env expr in
+     let@ expr = C.translate_cn_expr SymSet.empty env expr in
      let@ lrt = make_lrt (C.add_logical name (IT.bt expr) env) ([], ensures) in
      return (LRT.mDefine (name, IT.term_of_sterm expr, (loc, None)) lrt)
   | ([], Cn.CN_cconstr (loc, constr) :: ensures) ->
@@ -924,7 +918,7 @@ let make_largs f_i =
        return (Mu.mResource ((name, (pt_ret, SBT.to_basetype oa_bt)), (loc, None)) 
                  (Mu.mConstraints lcs lat))
     | ([], Cn.CN_cletExpr (loc, name, expr) :: requires) ->
-       let@ expr = C.translate_cn_expr env expr in
+       let@ expr = C.translate_cn_expr SymSet.empty env expr in
        let@ lat = aux (C.add_logical name (IT.bt expr) env) ([], requires) in
        return (Mu.mDefine ((name, IT.term_of_sterm expr), (loc, None)) lat)
     | ([], Cn.CN_cconstr (loc, constr) :: requires) ->
