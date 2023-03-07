@@ -572,7 +572,7 @@ let rec infer_pexpr tagDefs env ((Pexpr annot _ pexpr_ as pexpr) : generic_pexpr
         typecheck_pexpr tagDefs env (BTy_object OTy_pointer) pe >>= fun pe' ->
           match List.lookup memb_ident xs with
             | Nothing ->
-                E.fail loc (CoreTyping_TODO ("PEmember_shift, no member '" ^ show memb_ident ^ "' defined for the tag '" ^ show tag_sym ^ "'"))
+                E.fail loc (InvalidMember tag_sym memb_ident)
             | _ ->
                 E.return (Pexpr annot (InferredType_object OTy_pointer) (PEmember_shift pe' tag_sym memb_ident))
           end
@@ -918,7 +918,7 @@ and typecheck_pexpr tagDefs (env: typing_env) (bTy: core_base_type) (Pexpr annot
           end in
           match List.lookup memb_ident xs with
             | Nothing ->
-                E.fail loc (CoreTyping_TODO ("PEmember_shift, no member '" ^ show memb_ident ^ "' defined for the tag '" ^ show tag_sym ^ "'"))
+                E.fail loc (InvalidMember tag_sym memb_ident)
             | _ ->
                 guard_match loc "member_shift()" bTy (BTy_object OTy_pointer) >>
                 (PEmember_shift <$> typecheck_pexpr tagDefs env (BTy_object OTy_pointer) pe
