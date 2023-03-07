@@ -26,8 +26,8 @@ SOURCE_ail=\
   AilSyntax.lem \
   GenTypes.lem
 
-SOURCE_core_ctype=\
-  core_ctype_aux.lem
+SOURCE_ctype_aux=\
+  ctype_aux.lem
 
 SOURCE_core=\
   core.lem \
@@ -111,7 +111,7 @@ CERBERUS_LEM_FLAT_SOURCES=\
   $(SOURCE_prelude) \
   $(SOURCE_cabs) \
   $(SOURCE_ail) \
-  $(SOURCE_core_ctype) \
+  $(SOURCE_ctype_aux) \
   $(SOURCE_defacto) \
   $(FLAT_SOURCE_concurrency_interface) \
   $(SOURCE_core) \

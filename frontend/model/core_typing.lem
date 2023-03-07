@@ -5,7 +5,7 @@ open import Utils Errors Loc
 import Exception Pp Global
 
 open import Core Core_aux
-import Mem_common Ctype Core_ctype_aux Implementation
+import Mem_common Ctype Ctype_aux Implementation
 
 open import Core_typing_aux
 
@@ -13,7 +13,7 @@ module I = Implementation
 
 module Cty = struct
   include Ctype
-  include Core_ctype_aux
+  include Ctype_aux
 end
 
 import Core_typing_effect

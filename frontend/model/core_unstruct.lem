@@ -1,5 +1,5 @@
 open import Pervasives Utils
-open import Core Ctype Core_ctype_aux
+open import Core Ctype Ctype_aux
 import Symbol State Core_aux Ctype
 
 import Core_typing Core_typing_effect Core_typing_aux
@@ -49,7 +49,7 @@ let extract_alignement_type (Pexpr _ _ pexpr_) =
 
 val type_pexpr: pexpr -> typed_pexpr
 let type_pexpr pexpr =
-  let tagDefs = Core_ctype_aux.tagDefs () in
+  let tagDefs = Ctype_aux.tagDefs () in
   let m =
     Core_typing_effect.bind
       (Core_typing.infer_pexpr tagDefs Core_typing_aux.empty_env pexpr)

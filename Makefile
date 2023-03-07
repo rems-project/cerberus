@@ -107,7 +107,7 @@ LEM_PRELUDE       = utils.lem global.lem loc.lem annot.lem bimap.lem \
                     exception.lem product.lem float.lem any.lem
 LEM_CABS          = cabs.lem undefined.lem constraint.lem ctype.lem
 LEM_AIL           = typingError.lem errorMonad.lem ailSyntax.lem genTypes.lem
-LEM_CORE_CTYPE    = core_ctype_aux.lem
+LEM_CTYPE_AUX     = Ctype_aux.lem
 LEM_CORE          = core.lem errors.lem core_aux.lem core_linking.lem
 LEM_CORE_TYPING   = core_typing.lem core_typing_aux.lem core_typing_effect.lem
 LEM_UTILS         = boot.lem decode.lem exception_undefined.lem multiset.lem \
@@ -135,7 +135,7 @@ LEM_SRC_AUX       = $(LEM_PRELUDE) \
 										$(LEM_CN) \
                     $(LEM_CABS) \
                     $(addprefix ail/, $(LEM_AIL)) \
-                    $(LEM_CORE_CTYPE) \
+                    $(LEM_CTYPE_AUX) \
                     builtins.lem formatted.lem pp.lem implementation.lem \
                     $(LEM_DEFACTO) \
                     $(LEM_UTILS) \

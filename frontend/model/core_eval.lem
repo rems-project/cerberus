@@ -7,7 +7,7 @@ import Mem
 import AilTypesAux
 import Loc Symbol Exception_undefined Pp
 
-import Ctype Core_ctype_aux Core_aux
+import Ctype Ctype_aux Core_aux
 module Caux = Core_aux
 
 module EU  = Exception_undefined

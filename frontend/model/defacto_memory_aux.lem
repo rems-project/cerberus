@@ -3,7 +3,7 @@ open import Pervasives Num_extra Ctype
 open import Utils
 open import AilTypesAux 
 
-import Core_ctype_aux
+import Ctype_aux
 import Implementation
 
 open import Mem_common Defacto_memory_types
@@ -329,7 +329,7 @@ let rec simplify_integer_value_base ival_ =
             | Atomic atom_ty ->
                 simplify_integer_value_base (IVsizeof atom_ty)
             | Struct tag_sym ->
-                let (tagDef, flexible_opt) = Core_ctype_aux.get_structDef tag_sym in
+                let (tagDef, flexible_opt) = Ctype_aux.get_structDef tag_sym in
                 if flexible_opt <> Nothing then
                   error "TODO: Defacto_memmory_aux.simplify_integer_value_base => found flexible array member"
                 else

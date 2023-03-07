@@ -16,11 +16,11 @@ declare hol target_rep function set_tagDefs = `set_tagDefs`
 
 val get_membersDefs: Symbol.sym -> tag_definition
 let get_membersDefs tag_sym =
-  fromJust "Core_ctype_aux.get_membersDefs" (Map.lookup tag_sym (tagDefs ()))
+  fromJust "Ctype_aux.get_membersDefs" (Map.lookup tag_sym (tagDefs ()))
 
 val get_membersDefs_with_tagDefs: map Symbol.sym tag_definition -> Symbol.sym -> tag_definition
 let get_membersDefs_with_tagDefs tagDefs tag_sym =
-  fromJust ("Core_ctype_aux._with_tagDefs[" ^ show tag_sym ^ "]") (Map.lookup tag_sym tagDefs)
+  fromJust ("Ctype_aux._with_tagDefs[" ^ show tag_sym ^ "]") (Map.lookup tag_sym tagDefs)
 
 val get_structDef_with_tagDefs: map Symbol.sym tag_definition -> Symbol.sym -> list (Symbol.identifier * (Annot.attributes * maybe alignment * qualifiers * ctype)) * maybe Ctype.flexible_array_member
 let get_structDef_with_tagDefs tagDefs tag_sym =
@@ -100,7 +100,7 @@ let rec are_compatible_aux ((tagDefs1, tagDefs2) as env) (qs1, Ctype _ ty1) (qs2
               | (Symbol.Symbol _ _ (Symbol.SD_Id tag_str1), Symbol.Symbol _ _ (Symbol.SD_Id tag_str2)) ->
                   (tag_str1, tag_str2)
               | _ ->
-                  error "Core_ctype_aux.are_compatible_aux: failed to destruct a struct tag"
+                  error "Ctype_aux.are_compatible_aux: failed to destruct a struct tag"
             end in
           if tag_str1 = tag_str2 then
             match (Map.lookup tag1 tagDefs1, Map.lookup tag2 tagDefs2) with
@@ -127,7 +127,7 @@ let rec are_compatible_aux ((tagDefs1, tagDefs2) as env) (qs1, Ctype _ ty1) (qs2
                     end
 
               | _ ->
-                  error "Core_ctype_aux.are_compatible_aux: failed to lookup a struct definition"
+                  error "Ctype_aux.are_compatible_aux: failed to lookup a struct definition"
             end
           else
             false
@@ -142,7 +142,7 @@ let rec are_compatible_aux ((tagDefs1, tagDefs2) as env) (qs1, Ctype _ ty1) (qs2
               | (Symbol.Symbol _ _ (Symbol.SD_Id tag_str1), Symbol.Symbol _ _ (Symbol.SD_Id tag_str2)) ->
                   (tag_str1, tag_str2)
               | _ ->
-                  error "Core_ctype_aux.are_compatible_aux: failed to destruct a union tags"
+                  error "Ctype_aux.are_compatible_aux: failed to destruct a union tags"
             end in
           if tag_str1 = tag_str2 then
             match (Map.lookup tag1 tagDefs1, Map.lookup tag2 tagDefs2) with
@@ -160,7 +160,7 @@ let rec are_compatible_aux ((tagDefs1, tagDefs2) as env) (qs1, Ctype _ ty1) (qs2
                       ident1 = ident2 && are_compatible_aux (qs1, ty1) (qs2, ty2)
                     ) (List.zip xs1 xs2)
               | _ ->
-                  error "Core_ctype_aux.are_compatible_aux: failed to lookup a union definition"
+                  error "Ctype_aux.are_compatible_aux: failed to lookup a union definition"
             end
           else
             false
@@ -194,7 +194,7 @@ let are_compatible qs_ty1 qs_ty2 =
       | Symbol.Symbol _ _ (Symbol.SD_Id str) ->
           Map.insert str v acc
       | _ ->
-          error "Core_ctype_aux.are_compatible"
+          error "Ctype_aux.are_compatible"
     end
   ) (tagDefs ()) Map.empty in *)
   let tagDefs = tagDefs () in
