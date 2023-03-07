@@ -518,9 +518,17 @@ let rec pp_expression_aux mk_pp_annot a_expr =
         | AilEgeneric (e, gas) ->
             pp_keyword "_Generic" ^^ P.parens (pp e ^^ P.comma ^^^ comma_list (pp_generic_association_aux mk_pp_annot) gas)
         | AilEarray (_, ty, e_opts) ->
-            P.braces (comma_list (function Some e -> pp e | None -> !^ "_") e_opts)
+            let f i e_opt =
+              P.brackets (!^ (string_of_int i)) ^^ P.equals ^^^
+              Option.(value (map pp e_opt) ~default:(!^ "_")) in
+            P.braces (P.separate (P.comma ^^ P.space) (List.mapi f e_opts))
         | AilEstruct (tag_sym, xs) ->
-            P.parens (!^ "struct" ^^^ pp_id tag_sym) ^^ P.braces (comma_list (function (ident, Some e) -> pp e | (ident, None) -> !^ "_") xs)
+            P.parens (!^ "struct" ^^^ pp_id tag_sym) ^^ P.braces (
+              comma_list (function (ident, e_opt) ->
+                P.dot ^^ Pp_symbol.pp_identifier ident ^^ P.equals ^^^
+                Option.(value (map pp e_opt) ~default:(!^ "_"))
+              ) xs
+            )
         | AilEunion (tag_sym, memb_ident, e_opt) ->
             P.parens (!^ "union" ^^^ pp_id tag_sym) ^^ P.braces (
               P.dot ^^ Pp_symbol.pp_identifier memb_ident ^^ P.equals ^^^ (function None -> !^ "_" | Some e -> pp e) e_opt
