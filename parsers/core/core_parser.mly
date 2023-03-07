@@ -1689,24 +1689,24 @@ def_field:
 ;
 
 def_fields:
-| f=def_field               { [ f ] }
-| f=def_field fs=def_fields { f::fs }
+| f=def_field               { ([], f) }
+| f=def_field fs_=def_fields { let (fs, last) = fs_ in (f::fs, last) }
 ;
 
 def_aggregate_declaration:
 | DEF STRUCT name=SYM COLON_EQ fds_=def_fields
-  { (* NOTE: I don't like that this check is in the parser... *)
-    let (fds, flexible_opt) =
-      match Lem_list.dest_init fds_ with
-        | None ->
-            (fds_, None) (* TODO: technically this should be an error (we can't have empty structs), but
-                            this shouldn't be dealt with by the parser *)
-        | Some (xs, (ident, (attrs, _, qs, elem_ty))) ->
-            (xs, Some (FlexibleArrayMember (attrs, ident, qs, elem_ty)))
-    in
-    Aggregate_decl (name, StructDef (fds, flexible_opt)) }
-| DEF UNION name=SYM COLON_EQ fds=def_fields
-  { Aggregate_decl (name, UnionDef fds) }
+    {
+      let (membrs, flex_opt) =
+        match fds_ with
+          | (xs, (ident, (attrs, _, qs, Ctype (_, Array (elem_ty, None))))) ->
+              (xs, Some (FlexibleArrayMember (attrs, ident, qs, elem_ty)))
+          | (xs, last) ->
+              (xs @ [last], None) in
+        Aggregate_decl (name, StructDef (membrs, flex_opt))
+    }
+| DEF UNION name=SYM COLON_EQ fds_=def_fields
+  { let (xs, last) = fds_ in
+    Aggregate_decl (name, UnionDef (xs @ [last])) }
 ;
 
 ifun_declaration:
