@@ -19,7 +19,7 @@ module Aaux = AilSyntaxAux
 module C    = Core
 module Cty  = struct 
   include import Ctype
-  include import Core_ctype_aux
+  include import Ctype_aux
 end
 module Caux = Core_aux
 module U    = Undefined

@@ -91,10 +91,6 @@ MORE DETAILS ABOUT THE INTERESTING MODULES:
 * core_aux.lem
 : definitions and auxiliary functions for the Core language
 
-* core_ctype.lem
-* core_ctype_aux.lem 
-: definitions and auxiliary functions for the C types used by Core
-
 * cabs_to_ail.lem
 * cabs_to_ail_aux.lem
 * cabs_to_ail_effect.lem

@@ -7,7 +7,7 @@ open import Utils Enum
 import Cabs Dlist Loc
 
 open import Mem_common Defacto_memory_aux Defacto_memory_types Ctype
-import Core_ctype_aux
+import Ctype_aux
 
 module F = Float
 
@@ -347,7 +347,7 @@ let mk_op_ival_ iop ival_1 ival_2 =
 
 
 let mk_offsetof_ival_ acc tag_sym memb_ident =
-  match Core_ctype_aux.get_membersDefs tag_sym with
+  match Ctype_aux.get_membersDefs tag_sym with
     | StructDef _ (Just _) ->
         error "TODO: Defacto_memory.mk_offsetof_ival_ ==> for struct with flexible array member"
     | StructDef xs Nothing ->
@@ -425,12 +425,12 @@ let rec mkUnspec (Ctype _ ty) =
         error ("TODO: Defacto_memory.mkUnspec ==> " ^ stringFromCtype (Ctype [] ty))
     | Struct tag_sym ->
         (* TODO(check) ignoring potential flexible array member, because we are dealing with a struct as value *)
-        let (xs, _) = Core_ctype_aux.get_structDef tag_sym in
+        let (xs, _) = Ctype_aux.get_structDef tag_sym in
         MVstruct tag_sym (
           List.map (fun (ident, (_, _, _, ty)) -> (ident, ty, mkUnspec ty)) xs
         )
     | (Union tag_sym) ->
-        let ((memb_ident, (_, _, _, ty)), _) = Core_ctype_aux.get_unionDef tag_sym in
+        let ((memb_ident, (_, _, _, ty)), _) = Ctype_aux.get_unionDef tag_sym in
         MVunion tag_sym memb_ident (mkUnspec ty)
   end
 
@@ -777,7 +777,7 @@ let apply_shift_path_element lvalue_ty spe mval =
                "' was found."))
        else
 (*
-         let UnionDef xs = Core_ctype_aux.get_membersDefs tag_sym in
+         let UnionDef xs = Ctype_aux.get_membersDefs tag_sym in
 *)
          if memb_ident = memb_ident_ then
            return mval'
@@ -889,7 +889,7 @@ let project_to_lvalue_type (Ctype _ lvalue_ty) mval =
     | (_, MVunion mval_tag memb_ident memb_mval) ->
         (* TODO: this implementing that casting a pointer to a union, to
            a pointer to one of it's member *)
-          let (x, xs) = Core_ctype_aux.get_unionDef mval_tag in
+          let (x, xs) = Ctype_aux.get_unionDef mval_tag in
           match List.lookup memb_ident (x::xs) with
             | Nothing ->
                 error "project_to_lvalue_type, MVunion was ill-typed (wrong member_ident)"
@@ -1292,7 +1292,7 @@ let rec isBeginningShift sh =
             (isBeginningShift sh')
             (return false)
     | (SPE_member tag_sym memb_ident) :: sh' ->
-        let xs = match Core_ctype_aux.get_membersDefs tag_sym with
+        let xs = match Ctype_aux.get_membersDefs tag_sym with
           | StructDef z Nothing -> z
           | StructDef _ (Just _) ->
               error "TODO: Defacto_memory.isBeginningShift ==> for struct with flexible array member"
@@ -2232,7 +2232,7 @@ let rec easy_update_mem_value_aux loc is_strong write_ty sh write_mval current_m
           error "WIP[easy_update_mem_value_aux]: TODO error message ===> union value stored \
                  with incompatible SPE_member tag"
         else
-          let (x, xs) = Core_ctype_aux.get_unionDef tag_sym in
+          let (x, xs) = Ctype_aux.get_unionDef tag_sym in
           match List.lookup new_memb_ident (x::xs) with
             | Nothing ->
                 error "WIP[easy_update_mem_value_aux]: TODO error message ===> union value stored with \
@@ -2254,7 +2254,7 @@ let rec easy_update_mem_value_aux loc is_strong write_ty sh write_mval current_m
                       return (ident, ty, mval')
                     else
                       return (ident, ty, mkUnspec ty)
-                  ) (fst (Core_ctype_aux.get_structDef tag_sym))
+                  ) (fst (Ctype_aux.get_structDef tag_sym))
             | _ ->
                 error "WIP: easy_update_mem_value_aux, _, is_strong"
           end
