@@ -1189,7 +1189,7 @@ module WithinStatements = struct
 
     let open Resultat in
     let open Effectful.Make(Resultat) in
-    let open Mu in
+    let open Cnprog in
 
     let pointee_ct loc it =
       match IT.bt it with
@@ -1206,7 +1206,7 @@ module WithinStatements = struct
          fail {loc; msg}
     in
 
-    let rec handle_using_loads (m : (mu_cn_prog, 'e) E.m) : (mu_cn_prog, 'e) Resultat.m = 
+    let rec handle_using_loads (m : (cn_prog, 'e) E.m) : (cn_prog, 'e) Resultat.m = 
       match m with
       | E.Done x ->
          return x

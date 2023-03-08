@@ -190,21 +190,9 @@ type 'TY mu_memop =
 
 
 
-type have_show =
-  | Have
-  | Show
 
-type mu_cn_statement =
-  | M_CN_pack_unpack of CF.Cn.pack_unpack * ResourceTypes.predicate_type
-  | M_CN_have of LogicalConstraints.t
-  | M_CN_instantiate of Sym.t option * IndexTerms.t
-  | M_CN_unfold of Sym.t * IndexTerms.t list
 
-type mu_cn_load = {ct : T.ct; pointer : IndexTerms.t}
 
-type mu_cn_prog = 
-  | M_CN_let of Loc.t * (Sym.t * mu_cn_load) * mu_cn_prog
-  | M_CN_statement of Loc.t * mu_cn_statement
 
 
 type 'TY mu_expr_ =  (* (effectful) expression *)
@@ -215,7 +203,7 @@ type 'TY mu_expr_ =  (* (effectful) expression *)
  | M_Eccall of 'TY act * 'TY mu_pexpr * ('TY mu_pexpr) list (* C function call *)
  (* | M_Eproc of mu_name * ('TY mu_pexpr) list (\* Core procedure call *\) *)
  | M_Erpredicate of CF.Cn.pack_unpack * Annot.to_pack_unpack * ('TY mu_pexpr) list
- | M_Elpredicate of have_show * Symbol.identifier * ('TY mu_pexpr) list
+ | M_Elpredicate of Cnprog.have_show * Symbol.identifier * ('TY mu_pexpr) list
  | M_Einstantiate of Symbol.identifier option * 'TY mu_pexpr
 
  | M_Elet of ('TY mu_sym_or_pattern) * ('TY mu_pexpr) * ('TY mu_expr)
@@ -229,7 +217,7 @@ type 'TY mu_expr_ =  (* (effectful) expression *)
  (* | M_Edone of 'TY mu_expr *)
  | M_Erun of symbol * ('TY mu_pexpr) list (* run from label *)
 
- | M_CN_prog of mu_cn_prog
+ | M_CN_prog of Cnprog.cn_prog
 
 
 and 'TY mu_expr = 

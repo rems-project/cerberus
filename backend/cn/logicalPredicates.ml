@@ -139,6 +139,14 @@ let open_pred def_args def_body args =
 
 
 
+let single_unfold_to_term def name args =
+  match def.definition with
+  | Def body -> 
+     Some (Body.to_term def.return_bt (open_pred def.args body args))
+  | Rec_Def body -> 
+     Some (Body.to_term def.return_bt (open_pred def.args body args))
+  | _ -> 
+     None
 
 
 let try_open_pred def name args =

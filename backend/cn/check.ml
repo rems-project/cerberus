@@ -950,6 +950,52 @@ let all_empty loc original_resources =
 type labels = (AT.lt * label_kind) SymMap.t
 
 
+let load loc pointer ct =
+  let@ (point, O point_oargs) = 
+    (RI.Special.predicate_request ~recursive:true loc (Access (Load None)) ({ 
+           name = Owned ct;
+           pointer = pointer;
+           permission = bool_ true;
+           iargs = [];
+         }, None))
+  in
+  let value = snd (List.hd (RI.oargs_list (O point_oargs))) in
+  let@ () = add_r (P point, O point_oargs) in
+  return value
+
+
+let instantiate loc oid arg =
+  let@ _ = 
+    (* todo: can be skipped once old CN statements have been retired *)
+    ListM.mapM (todo_get_logical_predicate_def_s loc)
+      (List.filter (fun s -> not (String.equal "good" s))
+          (List.map Id.s (Option.to_list oid))) in
+  let arg_s = Sym.fresh_make_uniq "instance" in
+  let arg_it = sym_ (arg_s, IT.bt arg) in
+  let@ () = add_l arg_s (IT.bt arg_it) (loc, lazy (Sym.pp arg_s)) in
+  let@ () = add_c (LC.t_ (eq__ arg_it arg)) in
+  let@ constraints = all_constraints () in
+  let extra_assumptions = 
+    let omentions_pred it = match oid with
+      | Some id -> IT.todo_mentions_pred id it
+      | None -> true
+    in
+    List.filter_map (fun lc ->
+        match lc with
+        | Forall ((s, bt), t) 
+             when BT.equal bt (IT.bt arg_it) && omentions_pred t ->
+           Some (LC.t_ (IT.subst (IT.make_subst [(s, arg_it)]) t))
+        | _ -> 
+           None
+      ) (LCSet.elements constraints)
+  in
+  if List.length extra_assumptions == 0 then Pp.warn loc (Pp.string "nothing instantiated")
+  else ();
+  add_cs extra_assumptions
+
+
+
+
 let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr) 
       (k: lvt -> (unit, type_error) m)
     : (unit, type_error) m =
@@ -1166,17 +1212,8 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
      | M_Load (act, p_pe, _mo) -> 
         let@ () = WellTyped.WCT.is_ct act.loc act.ct in
         let@ () = WellTyped.ensure_base_type loc ~expect (BT.of_sct act.ct) in
-        check_pexpr ~expect:Loc p_pe (fun parg ->
-        let@ (point, O point_oargs) = 
-          (RI.Special.predicate_request ~recursive:true loc (Access (Load None)) ({ 
-                 name = Owned act.ct;
-                 pointer = parg;
-                 permission = bool_ true;
-                 iargs = [];
-               }, None))
-        in
-        let value = snd (List.hd (RI.oargs_list (O point_oargs))) in
-        let@ () = add_r (P point, O point_oargs) in
+        check_pexpr ~expect:Loc p_pe (fun pointer ->
+        let@ value = load loc pointer act.ct in
         k value)
      | M_RMW (ct, sym1, sym2, sym3, mo1, mo2) -> 
         Debug_ocaml.error "todo: RMW"
@@ -1308,32 +1345,8 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
      unsupported loc !^"have/show"
   | Normal expect, M_Einstantiate (oid, pe) ->
      let@ () = WellTyped.ensure_base_type loc ~expect Unit in
-     let@ _ = ListM.mapM (todo_get_logical_predicate_def_s loc)
-         (List.filter (fun s -> not (String.equal "good" s))
-             (List.map Id.s (Option.to_list oid))) in
      check_pexpr ~expect:Integer pe (fun arg ->
-     let arg_s = Sym.fresh_make_uniq "instance" in
-     let arg_it = sym_ (arg_s, IT.bt arg) in
-     let@ () = add_l arg_s (IT.bt arg_it) (loc, lazy (Sym.pp arg_s)) in
-     let@ () = add_c (LC.t_ (eq__ arg_it arg)) in
-     let@ constraints = all_constraints () in
-     let extra_assumptions = 
-       let omentions_pred it = match oid with
-         | Some id -> IT.todo_mentions_pred id it
-         | None -> true
-       in
-       List.filter_map (fun lc ->
-           match lc with
-           | Forall ((s, bt), t) 
-                when BT.equal bt (IT.bt arg_it) && omentions_pred t ->
-              Some (LC.t_ (IT.subst (IT.make_subst [(s, arg_it)]) t))
-           | _ -> 
-              None
-         ) (LCSet.elements constraints)
-     in
-     if List.length extra_assumptions == 0 then Pp.warn loc (Pp.string "nothing instantiated")
-     else ();
-     let@ () = add_cs extra_assumptions in
+     let@ () = instantiate loc oid arg in
      k unit_)
 
   | _, M_Eif (c_pe, e1, e2) ->
@@ -1385,8 +1398,71 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
      let lvt = tuple_ vts in
      k lvt
      )
-  | Normal expect, M_CN_prog prog ->
-     failwith "todo"
+  | Normal expect, M_CN_prog cn_prog ->
+     let@ () = WellTyped.ensure_base_type loc ~expect Unit in
+     let@ cn_prog = WellTyped.WCNProg.welltyped cn_prog in
+     let rec aux = function
+       | Cnprog.M_CN_let (loc, (sym, {ct; pointer}), cn_prog) ->
+          let@ value = load loc pointer ct in
+          aux (Cnprog.subst (IT.make_subst [(sym, value)]) cn_prog)
+       | Cnprog.M_CN_statement (loc, stmt) ->
+          (* copying bits of code from elsewhere in check.ml *)
+          begin match stmt with
+            | M_CN_pack_unpack (pack_unpack, pt) ->
+               let@ pname, def = match pt.name with
+                 | PName pname -> 
+                    let@ def = Typing.get_resource_predicate_def loc pname in
+                    return (pname, def)
+                 | Owned _ -> 
+                    fail (fun _ -> {loc; msg = Generic !^"Packing/unpacking 'Owned' currently unsupported."})
+                 | Block _ -> 
+                    fail (fun _ -> {loc; msg = Generic !^"Packing/unpacking 'Block' currently unsupported."})
+               in
+               let err_prefix = match pack_unpack with
+                 | Pack -> !^ "cannot pack:" ^^^ pp_predicate_name pt.name
+                 | Unpack -> !^ "cannot unpack:" ^^^ pp_predicate_name pt.name
+               in
+               let@ right_clause = 
+                 ResourceInference.select_resource_predicate_clause def
+                   loc pt.pointer pt.iargs err_prefix 
+               in
+               begin match pack_unpack with
+               | Unpack ->
+                  let@ (pred, O pred_oargs) =
+                    RI.Special.predicate_request ~recursive:false
+                      loc (Call (UnpackPredicate (Manual, pname))) (pt, None)
+                  in
+                  let lrt = ResourcePredicates.clause_lrt pred_oargs right_clause.packing_ft in
+                  let@ _, members = make_return_record loc (UnpackPredicate (Manual, pname)) (LRT.binders lrt) in
+                  let@ () = bind_logical_return loc members lrt in
+                  k unit_
+               | Pack ->
+                  Spine.calltype_packing loc pname right_clause.packing_ft (fun output_assignment -> 
+                  let output = record_ (List.map (fun (o : OutputDef.entry) -> (o.name, o.value)) output_assignment) in
+                  let@ () = add_r (P pt, O output) in
+                  k unit_)
+               end
+            | M_CN_have _lc ->
+               fail (fun _ -> {loc; msg = Generic !^"todo: 'have' not implemented yet"})
+            | M_CN_instantiate (os, it) ->
+               let oid = Option.map (fun s -> Id.id (Sym.pp_string s)) os in
+               instantiate loc oid it
+            | M_CN_unfold (f, args) ->
+               let@ def = get_logical_predicate_def loc f in
+               match LP.single_unfold_to_term def f args with
+               | None ->
+                  let msg = 
+                    !^"Cannot unfold definition of uninterpreted function" 
+                    ^^^ Sym.pp f ^^ dot 
+                  in
+                  fail (fun _ -> {loc; msg = Generic msg})
+               | Some body -> 
+                  add_c (LC.t_ (eq_ (pred_ f args def.return_bt, body)))
+          end
+          
+     in
+     aux cn_prog
+     
 
   | _, M_Ewseq (p, e1, e2)
   | _, M_Esseq (p, e1, e2) ->
