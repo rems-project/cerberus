@@ -224,6 +224,7 @@ let core_frontend (conf, io) (core_stdlib, core_impl) ~filename =
            Core.extern=  Pmap.empty compare;
            Core.funinfo= Pmap.empty compare; (* TODO: need to parse funinfo! *)
            Core.loop_attributes0= Pmap.empty compare;
+           Core.visible_objects_env= Pmap.empty compare;
          }
     | Core_parser_util.Rstd _ ->
         error "Found no main function in the Core program"
@@ -453,7 +454,7 @@ let untype_file (file: 'a Core.typed_file) : 'a Core.file =
   ; extern= file.extern
   ; funinfo= file.funinfo
   ; loop_attributes0= file.loop_attributes0
-
+  ; visible_objects_env= file.visible_objects_env
  }
 
 let typed_core_passes (conf, io) core_file =
@@ -587,6 +588,7 @@ let read_core_object (core_stdlib, core_impl) fname =
     extern=  map_from_assoc cabsid_compare dump.dump_extern;
     funinfo= map_from_assoc sym_compare dump.dump_funinfo;
     loop_attributes0= Pmap.empty compare(* map_from_assoc compare dump.dump_loop_attributes *);
+    visible_objects_env= Pmap.empty compare
   }
 
 let write_core_object core_file fname =

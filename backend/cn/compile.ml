@@ -7,11 +7,11 @@ module LAT = LogicalArgumentTypes
 module LRT = LogicalReturnTypes
 module LC = LogicalConstraints
 module RET = ResourceTypes
+module Mu = Mucore
 
 open Pp
 
 open CF.Cn
-open Resultat
 open TypeErrors
 
 module SymSet = Set.Make(Sym)
@@ -21,673 +21,719 @@ module Y = Map.Make(String)
 
 module StringSet = Set.Make(String)
 
-let start_evaluation_scope = "start"
+
+module E = struct
+
+  type ('a, 'e) m =
+    | Done of 'a
+    | Error of 'e
+    | Value_of_c_variable of Loc.t * Sym.t * (IT.sterm option -> ('a, 'e) m)
+    | Deref of Loc.t * IT.sterm * (IT.sterm option -> ('a, 'e) m)
+
+  let return x = Done x
+
+  let rec bind (m : ('a, 'e) m) (f : 'a -> ('b, 'e) m) : ('b, 'e) m =
+    match m with 
+    | Done x -> 
+       f x
+    | Error err -> 
+       Error err
+    | Value_of_c_variable (loc, s, k) ->
+       Value_of_c_variable (loc, s, fun it_o -> bind (k it_o) f)
+    | Deref (loc, it, k) ->
+       Deref (loc, it, fun it_o -> bind (k it_o) f)
+
+  let fail e = 
+    Error e
+
+  let deref loc it = 
+    Deref (loc, it, fun o_v_it -> Done o_v_it)
+
+  let value_of_c_variable loc sym = 
+    Value_of_c_variable (loc, sym, fun o_v_it -> Done o_v_it)
+
+  let liftResultat = function
+    | Result.Ok a -> Done a
+    | Result.Error e -> Error e
+
+end    
+
+
+module ParametricTranslation = struct
+
+
+  let start_evaluation_scope = "start"
 
 
 
-type function_sig = {
-    args: (Sym.t * BaseTypes.t) list;
-    return_bty: BaseTypes.t;
+  type function_sig = {
+      args: (Sym.t * BaseTypes.t) list;
+      return_bty: BaseTypes.t;
+    }
+
+  type predicate_sig = {
+    pred_iargs: (Sym.t * BaseTypes.t) list;
+    pred_oargs: (Sym.t * BaseTypes.t) list;
   }
 
-type predicate_sig = {
-  pred_iargs: (Sym.t * BaseTypes.t) list;
-  pred_oargs: (Sym.t * BaseTypes.t) list;
-}
+
+  type resource_env = Resources.t list
+
+  (* the expression that encodes the current value of this c variable *)
+  type c_variable_state =
+    | CVS_Value of IT.sterm           (* currently the variable is a pure value, this one *)
+    | CVS_Pointer_pointing_to of IT.sterm         (* currently the variable is a pointer to memory holding this value *)
 
 
-type resource_env = Resources.t list
-
-(* the expression that encodes the current value of this c variable *)
-type c_variable_state =
-  | CVS_Value of IT.sterm           (* currently the variable is a pure value, this one *)
-  | CVS_Pointer_pointing_to of IT.sterm         (* currently the variable is a pointer to memory holding this value *)
+  type state_env = {
+      c_variable_state : c_variable_state SymMap.t;
+      pointee_values : IT.sterm STermMap.t
+    }
 
 
-type state_env = {
-    c_variable_state : c_variable_state SymMap.t;
-    pointee_values : IT.sterm STermMap.t
+  type env = {
+    computationals: SBT.t SymMap.t;
+    logicals: SBT.t SymMap.t;
+    pred_names: Sym.t Y.t;
+    predicates: predicate_sig SymMap.t;
+    func_names: Sym.t Y.t;
+    functions: function_sig SymMap.t;
+    state: state_env;
+    old_states: state_env Y.t;
+    datatypes : (BaseTypes.datatype_info * Sym.t Y.t) SymMap.t;
+    datatype_constrs : BaseTypes.constr_info SymMap.t;
+    tagDefs: Mu.mu_tag_definitions;
   }
 
+  let empty_state = { 
+      c_variable_state= SymMap.empty; 
+      pointee_values= STermMap.empty 
+    }
 
-type env = {
-  computationals: SBT.t SymMap.t;
-  logicals: SBT.t SymMap.t;
-  pred_names: Sym.t Y.t;
-  predicates: predicate_sig SymMap.t;
-  func_names: Sym.t Y.t;
-  functions: function_sig SymMap.t;
-  state: state_env;
-  old_states: state_env Y.t;
-  datatypes : (BaseTypes.datatype_info * Sym.t Y.t) SymMap.t;
-  datatype_constrs : BaseTypes.constr_info SymMap.t;
-  tagDefs: Mucore.mu_tag_definitions;
-}
-
-let empty_state = { 
-    c_variable_state= SymMap.empty; 
-    pointee_values= STermMap.empty 
-  }
-
-let empty tagDefs =
-  { computationals = SymMap.empty;
-    logicals= SymMap.empty; 
-    pred_names= Y.empty; 
-    predicates= SymMap.empty;
-    func_names = Y.empty; 
-    functions = SymMap.empty; 
-    state= empty_state;
-    old_states = Y.empty;
-    datatypes = SymMap.empty; 
-    datatype_constrs = SymMap.empty;
-    tagDefs; 
-  }
-
-let name_to_sym loc nm m = match Y.find_opt nm m with
-  | None ->
-    let sym = Sym.fresh_named nm in
-    return sym
-  | Some _ ->
-    let open TypeErrors in
-    fail {loc; msg = Generic (Pp.string ("redefinition of name: " ^ nm))}
-
-let add_computational sym bTy env =
-  {env with computationals= SymMap.add sym bTy env.computationals }
-
-let add_logical sym bTy env =
-  {env with logicals= SymMap.add sym bTy env.logicals }
-
-let add_function loc sym func_sig env =
-  (* upstream of this an incorrect string->sym conversion was done *)
-  let str = Tools.todo_string_of_sym sym in
-  let@ _ = name_to_sym loc str env.func_names in
-  return {env with functions= SymMap.add sym func_sig env.functions;
-    func_names = Y.add str sym env.func_names }
+  let empty tagDefs =
+    { computationals = SymMap.empty;
+      logicals= SymMap.empty; 
+      pred_names= Y.empty; 
+      predicates= SymMap.empty;
+      func_names = Y.empty; 
+      functions = SymMap.empty; 
+      state= empty_state;
+      old_states = Y.empty;
+      datatypes = SymMap.empty; 
+      datatype_constrs = SymMap.empty;
+      tagDefs; 
+    }
 
-let add_predicate sym pred_sig env =
-  {env with predicates= SymMap.add sym pred_sig env.predicates }
 
-let make_state_old env old_name = 
-  { env with state = empty_state;
-             old_states = Y.add old_name env.state env.old_states }
 
-let add_c_variable_state c_sym cvs env =
-  { env with state = { env.state with c_variable_state= SymMap.add c_sym cvs env.state.c_variable_state }}
+  let add_computational sym bTy env =
+    {env with computationals= SymMap.add sym bTy env.computationals }
 
-let add_pointee_value p v env = 
-  { env with state = { env.state with pointee_values = STermMap.add p v env.state.pointee_values }}
+  let add_logical sym bTy env =
+    {env with logicals= SymMap.add sym bTy env.logicals }
 
 
-let add_c_variable_states cvss env = 
-  List.fold_right (fun (sym, cvs) env ->
-      add_c_variable_state sym cvs env
-    ) cvss env
 
-let add_pointee_values pvs env = 
-  List.fold_right (fun (p, v) env ->
-      add_pointee_value p v env
-    ) pvs env
+  let add_predicate sym pred_sig env =
+    {env with predicates= SymMap.add sym pred_sig env.predicates }
 
-let lookup_computational_or_logical sym env =
-  match SymMap.find_opt sym env.logicals with
-  | Some bt -> Some bt
-  | None -> SymMap.find_opt sym env.computationals
+  let make_state_old env old_name = 
+    { env with state = empty_state;
+               old_states = Y.add old_name env.state env.old_states }
 
-let lookup_pred_name str env =
-  Y.find_opt str env.pred_names
+  let add_c_variable_state c_sym cvs env =
+    { env with state = { env.state with c_variable_state= SymMap.add c_sym cvs env.state.c_variable_state }}
 
-let lookup_predicate sym env =
-  SymMap.find_opt sym env.predicates
+  let add_pointee_value p v env = 
+    { env with state = { env.state with pointee_values = STermMap.add p v env.state.pointee_values }}
 
-let lookup_function sym env =
-  SymMap.find_opt sym env.functions
 
-let lookup_function_by_name nm env = match Y.find_opt nm env.func_names with
-  | Some sym ->
-    SymMap.find_opt sym env.functions |> Option.map (fun fs -> (sym, fs))
-  | None -> None
+  let add_c_variable_states cvss env = 
+    List.fold_right (fun (sym, cvs) env ->
+        add_c_variable_state sym cvs env
+      ) cvss env
 
+  let add_pointee_values pvs env = 
+    List.fold_right (fun (p, v) env ->
+        add_pointee_value p v env
+      ) pvs env
 
+  let lookup_computational_or_logical sym env =
+    match SymMap.find_opt sym env.logicals with
+    | Some bt -> Some bt
+    | None -> 
+       SymMap.find_opt sym env.computationals
 
 
 
-let lookup_struct_opt sym env =
-  match Pmap.lookup sym env.tagDefs with
-    | Some (M_StructDef xs) ->
-        Some xs
-    | Some (M_UnionDef _)| None ->
-        None
 
-let lookup_struct loc tag env = 
-  match lookup_struct_opt tag env with
-  | Some def -> return def
-  | None -> fail {loc; msg = Unknown_struct tag}
+  let lookup_pred_name str env =
+    Y.find_opt str env.pred_names
 
-let lookup_member_opt (def: Memory.struct_layout) member =
-  List.assoc_opt Id.equal member (Memory.member_types def)
+  let lookup_predicate sym env =
+    SymMap.find_opt sym env.predicates
 
-let lookup_member loc (tag, def) member =
-  match lookup_member_opt def member with
-  | Some ty -> return ty
-  | None -> fail {loc; msg = Unknown_member (tag, member)}
-
-
-let lookup_datatype loc sym env = match SymMap.find_opt sym env.datatypes with
-  | Some info -> return info
-  | None -> fail (TypeErrors.{loc; msg = TypeErrors.Unknown_datatype sym})
-
-let add_datatype sym info env =
-  let datatypes = SymMap.add sym info env.datatypes in
-  {env with datatypes}
-
-let lookup_constr loc sym env = match SymMap.find_opt sym env.datatype_constrs with
-  | Some info -> return info
-  | None -> fail (TypeErrors.{loc; msg = TypeErrors.Unknown_datatype_constr sym})
-
-let add_datatype_constr sym info env =
-  let datatype_constrs = SymMap.add sym info env.datatype_constrs in
-  {env with datatype_constrs}
-
-let get_datatype_maps env =
-  (SymMap.bindings (SymMap.map fst env.datatypes), 
-   SymMap.bindings env.datatype_constrs)
-
-
-let debug_known_preds env =
-  Pp.debug 2 (lazy (Pp.item "known logical predicates"
-      (Pp.list (fun (nm, _) -> Pp.string nm) (Y.bindings env.func_names))));
-  Pp.debug 2 (lazy (Pp.item "known resource predicate names"
-      (Pp.list (fun (nm, _) -> Pp.string nm) (Y.bindings env.pred_names))))
-
-
-
-
-
-
-
-
-
-type cn_predicate =
-  (CF.Symbol.sym, CF.Ctype.ctype) CF.Cn.cn_predicate
-
-type cn_function =
-  (CF.Symbol.sym, CF.Ctype.ctype) CF.Cn.cn_function
-
-type cn_datatype =
-  (CF.Symbol.sym, CF.Ctype.ctype) CF.Cn.cn_datatype
-
-
-
-let rec translate_cn_base_type (bTy: CF.Symbol.sym cn_base_type) =
-  let open SurfaceBaseTypes in
-  match bTy with
-    | CN_unit ->
-        Unit
-    | CN_bool ->
-        Bool
-    | CN_integer ->
-        Integer
-    | CN_real ->
-        Real
-    | CN_loc ->
-        Loc None
-    | CN_struct tag_sym ->
-        Struct tag_sym
-    | CN_datatype dt_sym ->
-        Datatype dt_sym
-    | CN_map (bTy1, bTy2) ->
-        Map ( translate_cn_base_type bTy1
-            , translate_cn_base_type bTy2 )
-    | CN_list bTy' -> 
-        List (translate_cn_base_type bTy')
-    | CN_tuple bTys ->
-        Tuple (List.map translate_cn_base_type bTys)
-    | CN_set bTy' ->
-        Set (translate_cn_base_type bTy')
-
-
-open Resultat
-open Effectful.Make(Resultat)
-
-let mk_translate_binop loc bop (e1, e2) =
-  let open IndexTerms in
-  match bop, IT.bt e1 with
-  | CN_add, _ ->
-      return (IT (Arith_op (Add (e1, e2)), IT.bt e1))
-  | CN_sub, _ ->
-      return (IT (Arith_op (Sub (e1, e2)), IT.bt e1))
-  | CN_mul, _ ->
-      return (IT (Arith_op (Mul (e1, e2)), IT.bt e1))
-  | CN_div, _ ->
-      return (IT (Arith_op (Div (e1, e2)), IT.bt e1))
-  | CN_equal, _ ->
-      return (IT (Bool_op (EQ (e1, e2)), SBT.Bool))
-  | CN_inequal, _ ->
-      return (IT (Bool_op (Not (IT (Bool_op (EQ (e1, e2)), SBT.Bool))), SBT.Bool))
-  | CN_lt, (SBT.Integer | SBT.Real) ->
-      return (IT (Arith_op (LT (e1, e2)), SBT.Bool))
-  | CN_lt, SBT.Loc _ ->
-      return (IT (Pointer_op (LTPointer (e1, e2)), SBT.Bool))
-  | CN_le, (SBT.Integer | SBT.Real) ->
-      return (IT (Arith_op (LE (e1, e2)), SBT.Bool))
-  | CN_le, SBT.Loc _ ->
-      return (IT (Pointer_op (LEPointer (e1, e2)), SBT.Bool))
-  | CN_gt, (SBT.Integer | SBT.Real) ->
-      return (IT (Arith_op (LT (e2, e1)), SBT.Bool))
-  | CN_gt, SBT.Loc _ ->
-      return (IT (Pointer_op (LTPointer (e2, e1)), SBT.Bool))
-  | CN_ge, (SBT.Integer | SBT.Real) ->
-      return (IT (Arith_op (LE (e2, e1)), SBT.Bool))
-  | CN_ge, SBT.Loc _ ->
-      return (IT (Pointer_op (LEPointer (e2, e1)), SBT.Bool))
-  | CN_or, SBT.Bool ->
-      return (IT (Bool_op (Or [e1; e2]), SBT.Bool))
-  | CN_and, SBT.Bool ->
-      return (IT (Bool_op (And [e1; e2]), SBT.Bool))
-  | CN_map_get, _ ->
-     let@ rbt = match IT.bt e1 with
-       | Map (_, rbt) -> return rbt
-       | has -> 
-          fail {loc; msg = Illtyped_it {it = Terms.pp e1; has = SBT.pp has; expected = "map/array type"; o_ctxt = None}}
-     in
-     return (IT (Map_op (Get (e1, e2)), rbt))
-  | CN_is_shape,_ ->
-      (* should be handled separately *)
-      assert false
-  | _ ->
-      let open Pp in
-      let msg =
-        !^"Ill-typed application of binary operation" 
-        ^^^ squotes (CF.Cn_ocaml.PpAil.pp_cn_binop bop) ^^^ dot
-        ^/^ !^"Left-hand-side:" ^^^ squotes (IT.pp e1) ^^^ !^"of type" ^^^ squotes (SBT.pp (IT.bt e1)) ^^ comma
-        ^/^ !^"right-hand-side:" ^^^ squotes (IT.pp e2) ^^^ !^"of type" ^^^ squotes (SBT.pp (IT.bt e2)) ^^ dot
-      in
-      fail {loc; msg = Generic msg}
-
-
-
-
-
-
-
-
-
-
-(* just copy-pasting and adapting Kayvan's older version of this code *)
-let translate_member_access loc env (t : IT.sterm) member =
-  match IT.bt t with
-  | SBT.Record members ->
-     let member' = Id.s member in
-     let members' = List.map (fun (s, bt) -> (Tools.todo_string_of_sym s, (s, bt))) members in
-     let@ (member, member_bt) = match List.assoc_opt String.equal member' members' with
-       | Some (member, member_bt) -> return (member, member_bt)
-       | None -> fail {loc; msg = Unknown_record_member (SBT.pp (SBT.Record members), member)}
-     in
-     return (IT.recordMember_ ~member_bt (t, member))
-  | Struct tag ->
-     let@ defs_ = lookup_struct loc tag env in
-     let@ ty = lookup_member loc (tag, defs_) member in
-     let member_bt = SurfaceBaseTypes.of_sct ty in
-     return ( IT.IT (Struct_op (StructMember (t, member)), member_bt) )
-  | Datatype tag ->
-     let@ (dt_info, mem_syms) = lookup_datatype loc tag env in
-     let@ sym = match Y.find_opt (Id.s member) mem_syms with
-       | None -> fail {loc; msg= Generic (Pp.string ("Unknown member " ^ Id.s member ^
-           " of datatype " ^ Sym.pp_string tag))}
-       | Some sym -> return sym
-     in
-     let@ bt = match List.assoc_opt Sym.equal sym dt_info.dt_all_params with
-       | None -> fail {loc; msg = Generic (Pp.string ("Unknown member " ^ Id.s member ^
-           " of datatype " ^ Sym.pp_string tag ^ " at type lookup"))}
-       | Some bt -> return (SurfaceBaseTypes.of_basetype bt)
-     in
-     return (IT.IT (IT.Datatype_op (IT.DatatypeMember (t, sym)), bt))
-  | has -> 
-     fail {loc; msg = Illtyped_it {it = Terms.pp t; has = SurfaceBaseTypes.pp has; expected = "struct"; o_ctxt = None}}
-
-
-let translate_is_shape env loc x shape_expr : (IT.sterm, _) m =
-  let rec f x = function
-    | CNExpr (loc2, CNExpr_cons (c_nm, exprs)) ->
-        let@ cons_info = lookup_constr loc c_nm env in
-        let@ (_, mem_syms) = lookup_datatype loc cons_info.c_datatype_tag env in
-        let m1 = IT.IT (Datatype_op (DatatypeIsCons (c_nm, x)), SBT.Bool) in
-        let memb nm =
-            let@ sym = match Y.find_opt (Id.s nm) mem_syms with
-                | Some sym -> return sym
-                | None -> fail {loc = loc2; msg = Generic
-                    (Pp.string ("Unknown field of " ^ Sym.pp_string cons_info.c_datatype_tag
-                        ^ ": " ^ Id.s nm))}
-            in
-            let bt = List.assoc Sym.equal sym cons_info.c_params in
-            return (IT.IT (Datatype_op (DatatypeMember (x, sym)), SBT.of_basetype bt))
-        in
-        let@ xs = ListM.mapM (fun (nm, shape) ->
-            let@ x = memb nm in
-            f x shape) exprs in
-        return (m1 :: List.concat xs)
-    | _ ->
-    fail {loc; msg = Generic (Pp.string "rhs of ?? operation can only specify shape"
-        (* FIXME: convert the dtree of the shape expr to something pp-able *))}
-  in
-  let@ xs = f x shape_expr in
-  return (IT.IT (Bool_op (And xs), SBT.Bool))
-
-let pp_cnexpr_kind expr_ =
-  let open Pp in
-  match expr_ with
-  | CNExpr_const CNConst_NULL -> !^ "NULL"
-  | CNExpr_const (CNConst_integer n) -> Pp.string (Z.to_string n)
-  | CNExpr_const (CNConst_bool b) -> !^ (if b then "true" else "false")
-  | CNExpr_var sym -> parens (typ (!^ "var") (Sym.pp sym))
-  | CNExpr_deref e -> !^ "(deref ...)"
-  | CNExpr_value_of_c_variable sym -> parens (typ (!^ "c:var") (Sym.pp sym))
-  | CNExpr_list es_ -> !^ "[...]"
-  | CNExpr_memberof (e, xs) -> !^ "_." ^^ Id.pp xs
-  | CNExpr_memberupdates (e, _updates) -> !^ "{_ with ...}"
-  | CNExpr_arrayindexupdates (e, _updates) -> !^ "_ [ _ = _ ...]"
-  | CNExpr_binop (bop, x, y) -> !^ "(binop (_, _, _))"
-  | CNExpr_sizeof ct -> !^ "(sizeof _)"
-  | CNExpr_offsetof (tag, member) -> !^ "(offsetof (_, _))"
-  | CNExpr_membershift (e, member) -> !^ "&(_ -> _)"
-  | CNExpr_cast (bt, expr) -> !^ "(cast (_, _))"
-  | CNExpr_call (nm, exprs) -> !^ "(" ^^ Id.pp nm ^^^ !^ "(...))"
-  | CNExpr_cons (c_nm, exprs) -> !^ "(" ^^ Sym.pp c_nm ^^^ !^ "{...})"
-  | CNExpr_each (sym, r, e) -> !^ "(each ...)"
-  | CNExpr_ite (e1, e2, e3) -> !^ "(if ... then ...)"
-  | CNExpr_good (ty, e) -> !^ "(good (_, _))"
-  | CNExpr_unchanged e -> !^"(unchanged (_))"
-  | CNExpr_at_env (e, es) -> !^"{_}@_"
-  | CNExpr_not e -> !^"!_"
-
-
-let rec free_in_expr (CNExpr (_loc, expr_)) =
-  match expr_ with
-  | CNExpr_const _ -> 
-     SymSet.empty
-  | CNExpr_var v -> 
-     SymSet.singleton v
-  | CNExpr_list es -> 
-     free_in_exprs es
-  | CNExpr_memberof (e, _id) -> 
-     free_in_expr e
-  | CNExpr_memberupdates (e, updates) ->
-     free_in_exprs (e :: List.map snd updates)
-  | CNExpr_arrayindexupdates (e, updates) ->
-     free_in_exprs (e :: List.concat_map (fun (e1, e2) -> [e1; e2]) updates)
-  | CNExpr_binop (_binop, e1, e2) ->
-     free_in_exprs [e1; e2]
-  | CNExpr_sizeof _ -> 
-     SymSet.empty
-  | CNExpr_offsetof _ ->
-     SymSet.empty
-  | CNExpr_membershift (e, _id) ->
-     free_in_expr e
-  | CNExpr_cast (_bt, e) ->
-     free_in_expr e
-  | CNExpr_call (_id, es) ->
-     free_in_exprs es
-  | CNExpr_cons (_c, args) ->
-     free_in_exprs (List.map snd args)
-  | CNExpr_each (s, range, e) ->
-     SymSet.remove s (free_in_expr e)
-  | CNExpr_ite (e1, e2, e3) ->
-     free_in_exprs [e1; e2; e3]
-  | CNExpr_good (typ, e) ->
-     free_in_expr e
-  | CNExpr_deref e ->
-     free_in_expr e
-  | CNExpr_value_of_c_variable s ->
-     SymSet.singleton s
-  | CNExpr_unchanged e ->
-     free_in_expr e
-  | CNExpr_at_env (e, _evaluation_scope) ->
-     free_in_expr e
-  | CNExpr_not e ->
-     free_in_expr e
-
-and free_in_exprs = function
-  | [] -> SymSet.empty
-  | e :: es -> SymSet.union (free_in_expr e) (free_in_exprs es)
-
-
-let pp_in_scope = function
-  | Some scope -> !^"in evaluation scope" ^^^ squotes !^scope
-  | None -> !^"in current scope"
-
-
-let translate_cn_expr__parametric 
-      ~(current__value_of_c_variable : Sym.t -> IT.sterm option)
-      ~(current__deref : IT.sterm -> IT.sterm option)
-  =
-  let open IndexTerms in
-  let module BT = BaseTypes in
-  let rec trans (evaluation_scope : string option) locally_bound env (CNExpr (loc, expr_)) =
-    let self = trans evaluation_scope locally_bound env in
+  let lookup_function sym env =
+    SymMap.find_opt sym env.functions
+
+  let lookup_function_by_name nm env = match Y.find_opt nm env.func_names with
+    | Some sym ->
+      SymMap.find_opt sym env.functions |> Option.map (fun fs -> (sym, fs))
+    | None -> None
+
+
+
+
+
+  let lookup_struct_opt sym env =
+    match Pmap.lookup sym env.tagDefs with
+      | Some (M_StructDef xs) ->
+          Some xs
+      | Some (M_UnionDef _)| None ->
+          None
+
+
+
+  let lookup_member_opt (def: Memory.struct_layout) member =
+    List.assoc_opt Id.equal member (Memory.member_types def)
+
+  let add_datatype sym info env =
+    let datatypes = SymMap.add sym info env.datatypes in
+    {env with datatypes}
+
+
+
+  let add_datatype_constr sym info env =
+    let datatype_constrs = SymMap.add sym info env.datatype_constrs in
+    {env with datatype_constrs}
+
+  let get_datatype_maps env =
+    (SymMap.bindings (SymMap.map fst env.datatypes), 
+     SymMap.bindings env.datatype_constrs)
+
+
+  let debug_known_preds env =
+    Pp.debug 2 (lazy (Pp.item "known logical predicates"
+        (Pp.list (fun (nm, _) -> Pp.string nm) (Y.bindings env.func_names))));
+    Pp.debug 2 (lazy (Pp.item "known resource predicate names"
+        (Pp.list (fun (nm, _) -> Pp.string nm) (Y.bindings env.pred_names))))
+
+
+
+
+
+
+
+
+
+  type cn_predicate =
+    (CF.Symbol.sym, CF.Ctype.ctype) CF.Cn.cn_predicate
+
+  type cn_function =
+    (CF.Symbol.sym, CF.Ctype.ctype) CF.Cn.cn_function
+
+  type cn_datatype =
+    (CF.Symbol.sym, CF.Ctype.ctype) CF.Cn.cn_datatype
+
+
+  let pp_cnexpr_kind expr_ =
+    let open Pp in
     match expr_ with
-      | CNExpr_const CNConst_NULL ->
-          return (IT (Lit Null, SBT.Loc None))
-      | CNExpr_const (CNConst_integer n) ->
-          return (IT (Lit (Z n), SBT.Integer))
-      | CNExpr_const (CNConst_bool b) ->
-          return (IT (Lit (Bool b), SBT.Bool))
-      | CNExpr_var sym ->
-          begin match lookup_computational_or_logical sym env with
-            | None ->
-                Pp.debug 2 (lazy (Pp.item ("failed lookup of CNExpr_var " ^ Sym.pp_string sym)
-                  (Pp.list (fun (nm, _) -> Sym.pp nm) (SymMap.bindings env.computationals))));
-                fail {loc; msg= Unknown_variable sym}
-            | Some bTy -> return (IT (Lit (Sym sym), bTy))
-          end
-      | CNExpr_list es_ ->
-          let@ es = ListM.mapM self es_ in
-          let item_bt = basetype (List.hd es) in
-          return (IT (List_op (List es), SBT.List item_bt))
-      | CNExpr_memberof (e, xs) ->
-         let@ e = self e in
-         translate_member_access loc env e xs
-      | CNExpr_memberupdates (e, updates) ->
-         let@ e = self e in
-         let bt = IT.bt e in
-         begin match IT.bt e with
-         | Struct _ -> 
-            let@ expr, _ = 
-              ListM.fold_leftM (fun (expr, already) (id, v) ->
-                  match StringSet.find_opt (Id.s id) already with
-                  | Some _ -> 
-                     fail {loc; msg = Generic !^"Repeated definition of struct fields." }
-                  | None ->
-                     let@ v = self v in
-                     let expr = IT (Struct_op (StructUpdate ((expr, id), v)), bt) in
-                     return (expr, StringSet.add (Id.s id) already)
-                ) (e, StringSet.empty) updates
-            in
-            return expr
-         | _ ->
-            fail {loc; msg = Generic !^"only struct updates supported" }
-         end
-      | CNExpr_arrayindexupdates (e, updates) ->
-         let@ e = self e in
-         ListM.fold_leftM (fun acc (i, v) ->
-             let@ i = self i in
-             let@ v = self v in
-             return (IT (Map_op (Set (acc, i, v)), IT.bt e))
-           ) e updates
-      | CNExpr_binop (CN_sub, e1_, (CNExpr (_, CNExpr_cons _) as shape)) ->
-          let@ e1 = self e1_ in
-          translate_is_shape env loc e1 shape
-      | CNExpr_binop (bop, e1_, e2_) ->
-          let@ e1 = self e1_ in
-          let@ e2 = self e2_ in
-          mk_translate_binop loc bop (e1, e2)
-      | CNExpr_sizeof ct ->
-          let scty = Sctypes.of_ctype_unsafe loc ct in
-          let n = Memory.size_of_ctype scty in
-          return (IT (Lit (Z (Z.of_int n)), SBT.Integer))
-      | CNExpr_offsetof (tag, member) ->
-          let@ _ = lookup_struct loc tag env in
-          return (IT (Pointer_op (MemberOffset (tag, member)), SBT.Integer))
-      | CNExpr_membershift (e, member) ->
-          let@ e = self e in
-          begin match IT.bt e with
-          | Loc (Some (Struct tag)) -> 
-             let@ struct_def = lookup_struct loc tag env in
-             let@ member_ty = lookup_member loc (tag, struct_def) member in
-             let (IT (it_, _)) = IT.sterm_of_term (memberShift_ (term_of_sterm e, tag, member)) in
-             (* sterm_of_term will not have produced a C-type-annotated bt. So stick that on now. *)
-             return (IT (it_, Loc (Some member_ty)))
-          | Loc None ->
-             let msg = 
-               !^"Cannot tell pointee C-type of"
-               ^^^ squotes (IT.pp e) ^^ dot
-             in
-             fail {loc; msg = Generic msg}
-          | has ->
-             fail {loc; msg = Illtyped_it {it = Terms.pp e; has = SBT.pp has; expected = "struct pointer"; o_ctxt = None}}
-          end
-      | CNExpr_cast (bt, expr) ->
-          let@ expr = self expr in
-          begin match bt with
-          | CN_loc -> return (IT (Pointer_op (IntegerToPointerCast expr), SBT.Loc None))
-          | CN_integer -> return (IT (Pointer_op (PointerToIntegerCast expr), SBT.Integer))
-          | _ -> fail {loc; msg = Generic (Pp.string "can only cast to pointer or integer")}
-          end
-      | CNExpr_call (nm, exprs) ->
-          let@ args = ListM.mapM self exprs in
-          let nm_s = Id.pp_string nm in
-          let@ b = Builtins.apply_builtin_funs loc nm_s args in
-          begin match b with
-            | Some t -> return t
-            | None ->
-              let@ (sym, bt) = match lookup_function_by_name nm_s env with
-                | Some (sym, fsig) -> return (sym, fsig.return_bty)
-                | None ->
-                    debug_known_preds env;
-		    fail {loc; msg = Unknown_logical_predicate
-                        {id = Sym.fresh_named nm_s; resource = false}}
-              in
-              return (pred_ sym args (SurfaceBaseTypes.of_basetype bt))
-          end
-      | CNExpr_cons (c_nm, exprs) ->
+    | CNExpr_const CNConst_NULL -> !^ "NULL"
+    | CNExpr_const (CNConst_integer n) -> Pp.string (Z.to_string n)
+    | CNExpr_const (CNConst_bool b) -> !^ (if b then "true" else "false")
+    | CNExpr_var sym -> parens (typ (!^ "var") (Sym.pp sym))
+    | CNExpr_deref e -> !^ "(deref ...)"
+    | CNExpr_value_of_c_variable sym -> parens (typ (!^ "c:var") (Sym.pp sym))
+    | CNExpr_list es_ -> !^ "[...]"
+    | CNExpr_memberof (e, xs) -> !^ "_." ^^ Id.pp xs
+    | CNExpr_memberupdates (e, _updates) -> !^ "{_ with ...}"
+    | CNExpr_arrayindexupdates (e, _updates) -> !^ "_ [ _ = _ ...]"
+    | CNExpr_binop (bop, x, y) -> !^ "(binop (_, _, _))"
+    | CNExpr_sizeof ct -> !^ "(sizeof _)"
+    | CNExpr_offsetof (tag, member) -> !^ "(offsetof (_, _))"
+    | CNExpr_membershift (e, member) -> !^ "&(_ -> _)"
+    | CNExpr_cast (bt, expr) -> !^ "(cast (_, _))"
+    | CNExpr_call (nm, exprs) -> !^ "(" ^^ Id.pp nm ^^^ !^ "(...))"
+    | CNExpr_cons (c_nm, exprs) -> !^ "(" ^^ Sym.pp c_nm ^^^ !^ "{...})"
+    | CNExpr_each (sym, r, e) -> !^ "(each ...)"
+    | CNExpr_ite (e1, e2, e3) -> !^ "(if ... then ...)"
+    | CNExpr_good (ty, e) -> !^ "(good (_, _))"
+    | CNExpr_unchanged e -> !^"(unchanged (_))"
+    | CNExpr_at_env (e, es) -> !^"{_}@_"
+    | CNExpr_not e -> !^"!_"
+
+
+  let rec free_in_expr (CNExpr (_loc, expr_)) =
+    match expr_ with
+    | CNExpr_const _ -> 
+       SymSet.empty
+    | CNExpr_var v -> 
+       SymSet.singleton v
+    | CNExpr_list es -> 
+       free_in_exprs es
+    | CNExpr_memberof (e, _id) -> 
+       free_in_expr e
+    | CNExpr_memberupdates (e, updates) ->
+       free_in_exprs (e :: List.map snd updates)
+    | CNExpr_arrayindexupdates (e, updates) ->
+       free_in_exprs (e :: List.concat_map (fun (e1, e2) -> [e1; e2]) updates)
+    | CNExpr_binop (_binop, e1, e2) ->
+       free_in_exprs [e1; e2]
+    | CNExpr_sizeof _ -> 
+       SymSet.empty
+    | CNExpr_offsetof _ ->
+       SymSet.empty
+    | CNExpr_membershift (e, _id) ->
+       free_in_expr e
+    | CNExpr_cast (_bt, e) ->
+       free_in_expr e
+    | CNExpr_call (_id, es) ->
+       free_in_exprs es
+    | CNExpr_cons (_c, args) ->
+       free_in_exprs (List.map snd args)
+    | CNExpr_each (s, range, e) ->
+       SymSet.remove s (free_in_expr e)
+    | CNExpr_ite (e1, e2, e3) ->
+       free_in_exprs [e1; e2; e3]
+    | CNExpr_good (typ, e) ->
+       free_in_expr e
+    | CNExpr_deref e ->
+       free_in_expr e
+    | CNExpr_value_of_c_variable s ->
+       SymSet.singleton s
+    | CNExpr_unchanged e ->
+       free_in_expr e
+    | CNExpr_at_env (e, _evaluation_scope) ->
+       free_in_expr e
+    | CNExpr_not e ->
+       free_in_expr e
+
+  and free_in_exprs = function
+    | [] -> SymSet.empty
+    | e :: es -> SymSet.union (free_in_expr e) (free_in_exprs es)
+
+
+  let pp_in_scope = function
+    | Some scope -> !^"in evaluation scope" ^^^ squotes !^scope
+    | None -> !^"in current scope"
+
+
+
+  open Effectful.Make(E)
+  open E
+
+  let name_to_sym loc nm m = match Y.find_opt nm m with
+    | None ->
+      let sym = Sym.fresh_named nm in
+      return sym
+    | Some _ ->
+      let open TypeErrors in
+      fail {loc; msg = Generic (Pp.string ("redefinition of name: " ^ nm))}
+
+
+  let add_function loc sym func_sig env =
+    (* upstream of this an incorrect string->sym conversion was done *)
+    let str = Tools.todo_string_of_sym sym in
+    let@ _ = name_to_sym loc str env.func_names in
+    return {env with functions= SymMap.add sym func_sig env.functions;
+      func_names = Y.add str sym env.func_names }
+
+
+
+
+  let lookup_struct loc tag env = 
+    match lookup_struct_opt tag env with
+    | Some def -> return def
+    | None -> fail {loc; msg = Unknown_struct tag}
+
+  let lookup_member loc (tag, def) member =
+    match lookup_member_opt def member with
+    | Some ty -> return ty
+    | None -> fail {loc; msg = Unknown_member (tag, member)}
+
+  let lookup_datatype loc sym env = match SymMap.find_opt sym env.datatypes with
+    | Some info -> return info
+    | None -> fail (TypeErrors.{loc; msg = TypeErrors.Unknown_datatype sym})
+
+  let lookup_constr loc sym env = match SymMap.find_opt sym env.datatype_constrs with
+    | Some info -> return info
+    | None -> fail (TypeErrors.{loc; msg = TypeErrors.Unknown_datatype_constr sym})
+
+
+
+
+
+  let rec translate_cn_base_type (bTy: CF.Symbol.sym cn_base_type) =
+    let open SurfaceBaseTypes in
+    match bTy with
+      | CN_unit ->
+          Unit
+      | CN_bool ->
+          Bool
+      | CN_integer ->
+          Integer
+      | CN_real ->
+          Real
+      | CN_loc ->
+          Loc None
+      | CN_struct tag_sym ->
+          Struct tag_sym
+      | CN_datatype dt_sym ->
+          Datatype dt_sym
+      | CN_map (bTy1, bTy2) ->
+          Map ( translate_cn_base_type bTy1
+              , translate_cn_base_type bTy2 )
+      | CN_list bTy' -> 
+          List (translate_cn_base_type bTy')
+      | CN_tuple bTys ->
+          Tuple (List.map translate_cn_base_type bTys)
+      | CN_set bTy' ->
+          Set (translate_cn_base_type bTy')
+
+
+  let mk_translate_binop loc bop (e1, e2) =
+    let open IndexTerms in
+    match bop, IT.bt e1 with
+    | CN_add, _ ->
+        return (IT (Arith_op (Add (e1, e2)), IT.bt e1))
+    | CN_sub, _ ->
+        return (IT (Arith_op (Sub (e1, e2)), IT.bt e1))
+    | CN_mul, _ ->
+        return (IT (Arith_op (Mul (e1, e2)), IT.bt e1))
+    | CN_div, _ ->
+        return (IT (Arith_op (Div (e1, e2)), IT.bt e1))
+    | CN_equal, _ ->
+        return (IT (Bool_op (EQ (e1, e2)), SBT.Bool))
+    | CN_inequal, _ ->
+        return (IT (Bool_op (Not (IT (Bool_op (EQ (e1, e2)), SBT.Bool))), SBT.Bool))
+    | CN_lt, (SBT.Integer | SBT.Real) ->
+        return (IT (Arith_op (LT (e1, e2)), SBT.Bool))
+    | CN_lt, SBT.Loc _ ->
+        return (IT (Pointer_op (LTPointer (e1, e2)), SBT.Bool))
+    | CN_le, (SBT.Integer | SBT.Real) ->
+        return (IT (Arith_op (LE (e1, e2)), SBT.Bool))
+    | CN_le, SBT.Loc _ ->
+        return (IT (Pointer_op (LEPointer (e1, e2)), SBT.Bool))
+    | CN_gt, (SBT.Integer | SBT.Real) ->
+        return (IT (Arith_op (LT (e2, e1)), SBT.Bool))
+    | CN_gt, SBT.Loc _ ->
+        return (IT (Pointer_op (LTPointer (e2, e1)), SBT.Bool))
+    | CN_ge, (SBT.Integer | SBT.Real) ->
+        return (IT (Arith_op (LE (e2, e1)), SBT.Bool))
+    | CN_ge, SBT.Loc _ ->
+        return (IT (Pointer_op (LEPointer (e2, e1)), SBT.Bool))
+    | CN_or, SBT.Bool ->
+        return (IT (Bool_op (Or [e1; e2]), SBT.Bool))
+    | CN_and, SBT.Bool ->
+        return (IT (Bool_op (And [e1; e2]), SBT.Bool))
+    | CN_map_get, _ ->
+       let@ rbt = match IT.bt e1 with
+         | Map (_, rbt) -> return rbt
+         | has -> 
+            fail {loc; msg = Illtyped_it {it = Terms.pp e1; has = SBT.pp has; expected = "map/array type"; o_ctxt = None}}
+       in
+       return (IT (Map_op (Get (e1, e2)), rbt))
+    | CN_is_shape,_ ->
+        (* should be handled separately *)
+        assert false
+    | _ ->
+        let open Pp in
+        let msg =
+          !^"Ill-typed application of binary operation" 
+          ^^^ squotes (CF.Cn_ocaml.PpAil.pp_cn_binop bop) ^^^ dot
+          ^/^ !^"Left-hand-side:" ^^^ squotes (IT.pp e1) ^^^ !^"of type" ^^^ squotes (SBT.pp (IT.bt e1)) ^^ comma
+          ^/^ !^"right-hand-side:" ^^^ squotes (IT.pp e2) ^^^ !^"of type" ^^^ squotes (SBT.pp (IT.bt e2)) ^^ dot
+        in
+        fail {loc; msg = Generic msg}
+
+
+  (* just copy-pasting and adapting Kayvan's older version of this code *)
+  let translate_member_access loc env (t : IT.sterm) member =
+    match IT.bt t with
+    | SBT.Record members ->
+       let member' = Id.s member in
+       let members' = List.map (fun (s, bt) -> (Tools.todo_string_of_sym s, (s, bt))) members in
+       let@ (member, member_bt) = match List.assoc_opt String.equal member' members' with
+         | Some (member, member_bt) -> return (member, member_bt)
+         | None -> fail {loc; msg = Unknown_record_member (SBT.pp (SBT.Record members), member)}
+       in
+       return (IT.recordMember_ ~member_bt (t, member))
+    | Struct tag ->
+       let@ defs_ = lookup_struct loc tag env in
+       let@ ty = lookup_member loc (tag, defs_) member in
+       let member_bt = SurfaceBaseTypes.of_sct ty in
+       return ( IT.IT (Struct_op (StructMember (t, member)), member_bt) )
+    | Datatype tag ->
+       let@ (dt_info, mem_syms) = lookup_datatype loc tag env in
+       let@ sym = match Y.find_opt (Id.s member) mem_syms with
+         | None -> fail {loc; msg= Generic (Pp.string ("Unknown member " ^ Id.s member ^
+             " of datatype " ^ Sym.pp_string tag))}
+         | Some sym -> return sym
+       in
+       let@ bt = match List.assoc_opt Sym.equal sym dt_info.dt_all_params with
+         | None -> fail {loc; msg = Generic (Pp.string ("Unknown member " ^ Id.s member ^
+             " of datatype " ^ Sym.pp_string tag ^ " at type lookup"))}
+         | Some bt -> return (SurfaceBaseTypes.of_basetype bt)
+       in
+       return (IT.IT (IT.Datatype_op (IT.DatatypeMember (t, sym)), bt))
+    | has -> 
+       fail {loc; msg = Illtyped_it {it = Terms.pp t; has = SurfaceBaseTypes.pp has; expected = "struct"; o_ctxt = None}}
+
+
+  let translate_is_shape env loc x shape_expr : (IT.sterm, _) m =
+    let rec f x = function
+      | CNExpr (loc2, CNExpr_cons (c_nm, exprs)) ->
           let@ cons_info = lookup_constr loc c_nm env in
           let@ (_, mem_syms) = lookup_datatype loc cons_info.c_datatype_tag env in
-          let@ exprs = ListM.mapM (fun (nm, expr) ->
-              let@ expr = self expr in
+          let m1 = IT.IT (Datatype_op (DatatypeIsCons (c_nm, x)), SBT.Bool) in
+          let memb nm =
               let@ sym = match Y.find_opt (Id.s nm) mem_syms with
-                | Some sym -> return sym
-                | None -> fail {loc; msg = Generic
-                    (Pp.string ("Unknown field of " ^ Sym.pp_string cons_info.c_datatype_tag
-                        ^ ": " ^ Id.s nm))}
+                  | Some sym -> return sym
+                  | None -> fail {loc = loc2; msg = Generic
+                      (Pp.string ("Unknown field of " ^ Sym.pp_string cons_info.c_datatype_tag
+                          ^ ": " ^ Id.s nm))}
               in
-              return (sym, expr)) exprs
+              let bt = List.assoc Sym.equal sym cons_info.c_params in
+              return (IT.IT (Datatype_op (DatatypeMember (x, sym)), SBT.of_basetype bt))
           in
-          let record = IT (Record_op (Record exprs),
-                           SBT.Record (List.map (fun (s,t) -> (s, basetype t)) exprs)) in
-          return (IT (Datatype_op (DatatypeCons (c_nm, record)), SBT.Datatype cons_info.c_datatype_tag))
-      | CNExpr_each (sym, r, e) ->
-          let@ expr = 
-            trans 
-              evaluation_scope
-              (SymSet.add sym locally_bound)
-              (add_logical sym SBT.Integer env) 
-              e 
-          in
-          return (IT (Bool_op (EachI ((Z.to_int (fst r), sym, Z.to_int (snd r)), expr)), SBT.Bool))
-      | CNExpr_ite (e1, e2, e3) ->
-          let@ e1 = self e1 in
-          let@ e2 = self e2 in
-          let@ e3 = self e3 in
-          return (ite_ (e1, e2, e3))
-      | CNExpr_good (ty, e) ->
-         let scty = Sctypes.of_ctype_unsafe loc ty in
-         let@ e = self e in
-         return (IT (CT_pred (Good (scty, e)), SBT.Bool))
-      | CNExpr_not e ->
-         let@ e = self e in
-         return (IT (Bool_op (Not e), SBT.Bool))
-      | CNExpr_unchanged e ->
-         let@ cur_e = self e in
-         let@ old_e = self (CNExpr (loc, CNExpr_at_env (e, start_evaluation_scope))) in
-         mk_translate_binop loc CN_equal (cur_e, old_e)
-      | CNExpr_at_env (e, scope) ->
-         let@ () = match evaluation_scope with
-           | None -> return ()
-           | Some _ -> fail {loc; msg = Generic !^"Cannot nest evaluation scopes."}
-         in
-         let@ () = match Y.mem scope env.old_states with
-           | true -> return ()
-           | false -> fail { loc; msg = Generic !^("Unknown evaluation scope '"^scope^"'.") }
-         in
-         trans (Some scope) locally_bound env e
-      | CNExpr_deref e ->
-         let@ () = 
-           let locally_bound_in_e = SymSet.inter (free_in_expr e) locally_bound in
-           match SymSet.elements locally_bound_in_e with
-           | [] -> 
-              return ()
-           | s :: _ ->
+          let@ xs = ListM.mapM (fun (nm, shape) ->
+              let@ x = memb nm in
+              f x shape) exprs in
+          return (m1 :: List.concat xs)
+      | _ ->
+      fail {loc; msg = Generic (Pp.string "rhs of ?? operation can only specify shape"
+          (* FIXME: convert the dtree of the shape expr to something pp-able *))}
+    in
+    let@ xs = f x shape_expr in
+    return (IT.IT (Bool_op (And xs), SBT.Bool))
+
+
+
+  let translate_cn_expr =
+    let open IndexTerms in
+    let module BT = BaseTypes in
+    let rec trans (evaluation_scope : string option) locally_bound env (CNExpr (loc, expr_)) =
+      let self = trans evaluation_scope locally_bound env in
+      match expr_ with
+        | CNExpr_const CNConst_NULL ->
+            return (IT (Lit Null, SBT.Loc None))
+        | CNExpr_const (CNConst_integer n) ->
+            return (IT (Lit (Z n), SBT.Integer))
+        | CNExpr_const (CNConst_bool b) ->
+            return (IT (Lit (Bool b), SBT.Bool))
+        | CNExpr_var sym ->
+            let@ bTy = match lookup_computational_or_logical sym env with
+              | None ->
+                 Pp.debug 2 (lazy (Pp.item ("failed lookup of CNExpr_var " ^ Sym.pp_string sym)
+                                     (Pp.list (fun (nm, _) -> Sym.pp nm) (SymMap.bindings env.computationals))));
+                 fail {loc; msg= Unknown_variable sym}
+              | Some bt ->
+                 return bt
+            in
+            return (IT (Lit (Sym sym), bTy))
+        | CNExpr_list es_ ->
+            let@ es = ListM.mapM self es_ in
+            let item_bt = basetype (List.hd es) in
+            return (IT (List_op (List es), SBT.List item_bt))
+        | CNExpr_memberof (e, xs) ->
+           let@ e = self e in
+           translate_member_access loc env e xs
+        | CNExpr_memberupdates (e, updates) ->
+           let@ e = self e in
+           let bt = IT.bt e in
+           begin match IT.bt e with
+           | Struct _ -> 
+              let@ expr, _ = 
+                ListM.fold_leftM (fun (expr, already) (id, v) ->
+                    match StringSet.find_opt (Id.s id) already with
+                    | Some _ -> 
+                       fail {loc; msg = Generic !^"Repeated definition of struct fields." }
+                    | None ->
+                       let@ v = self v in
+                       let expr = IT (Struct_op (StructUpdate ((expr, id), v)), bt) in
+                       return (expr, StringSet.add (Id.s id) already)
+                  ) (e, StringSet.empty) updates
+              in
+              return expr
+           | _ ->
+              fail {loc; msg = Generic !^"only struct updates supported" }
+           end
+        | CNExpr_arrayindexupdates (e, updates) ->
+           let@ e = self e in
+           ListM.fold_leftM (fun acc (i, v) ->
+               let@ i = self i in
+               let@ v = self v in
+               return (IT (Map_op (Set (acc, i, v)), IT.bt e))
+             ) e updates
+        | CNExpr_binop (CN_sub, e1_, (CNExpr (_, CNExpr_cons _) as shape)) ->
+            let@ e1 = self e1_ in
+            translate_is_shape env loc e1 shape
+        | CNExpr_binop (bop, e1_, e2_) ->
+            let@ e1 = self e1_ in
+            let@ e2 = self e2_ in
+            mk_translate_binop loc bop (e1, e2)
+        | CNExpr_sizeof ct ->
+            let scty = Sctypes.of_ctype_unsafe loc ct in
+            let n = Memory.size_of_ctype scty in
+            return (IT (Lit (Z (Z.of_int n)), SBT.Integer))
+        | CNExpr_offsetof (tag, member) ->
+            let@ _ = lookup_struct loc tag env in
+            return (IT (Pointer_op (MemberOffset (tag, member)), SBT.Integer))
+        | CNExpr_membershift (e, member) ->
+            let@ e = self e in
+            begin match IT.bt e with
+            | Loc (Some (Struct tag)) -> 
+               let@ struct_def = lookup_struct loc tag env in
+               let@ member_ty = lookup_member loc (tag, struct_def) member in
+               let (IT (it_, _)) = IT.sterm_of_term (memberShift_ (term_of_sterm e, tag, member)) in
+               (* sterm_of_term will not have produced a C-type-annotated bt. So stick that on now. *)
+               return (IT (it_, Loc (Some member_ty)))
+            | Loc None ->
+               let msg = 
+                 !^"Cannot tell pointee C-type of"
+                 ^^^ squotes (IT.pp e) ^^ dot
+               in
+               fail {loc; msg = Generic msg}
+            | has ->
+               fail {loc; msg = Illtyped_it {it = Terms.pp e; has = SBT.pp has; expected = "struct pointer"; o_ctxt = None}}
+            end
+        | CNExpr_cast (bt, expr) ->
+            let@ expr = self expr in
+            begin match bt with
+            | CN_loc -> return (IT (Pointer_op (IntegerToPointerCast expr), SBT.Loc None))
+            | CN_integer -> return (IT (Pointer_op (PointerToIntegerCast expr), SBT.Integer))
+            | _ -> fail {loc; msg = Generic (Pp.string "can only cast to pointer or integer")}
+            end
+        | CNExpr_call (nm, exprs) ->
+            let@ args = ListM.mapM self exprs in
+            let nm_s = Id.pp_string nm in
+            let@ b = liftResultat (Builtins.apply_builtin_funs loc nm_s args) in
+            begin match b with
+              | Some t -> return t
+              | None ->
+                let@ (sym, bt) = match lookup_function_by_name nm_s env with
+                  | Some (sym, fsig) -> return (sym, fsig.return_bty)
+                  | None ->
+                      debug_known_preds env;
+                      fail {loc; msg = Unknown_logical_predicate
+                          {id = Sym.fresh_named nm_s; resource = false}}
+                in
+                return (pred_ sym args (SurfaceBaseTypes.of_basetype bt))
+            end
+        | CNExpr_cons (c_nm, exprs) ->
+            let@ cons_info = lookup_constr loc c_nm env in
+            let@ (_, mem_syms) = lookup_datatype loc cons_info.c_datatype_tag env in
+            let@ exprs = ListM.mapM (fun (nm, expr) ->
+                let@ expr = self expr in
+                let@ sym = match Y.find_opt (Id.s nm) mem_syms with
+                  | Some sym -> return sym
+                  | None -> fail {loc; msg = Generic
+                      (Pp.string ("Unknown field of " ^ Sym.pp_string cons_info.c_datatype_tag
+                          ^ ": " ^ Id.s nm))}
+                in
+                return (sym, expr)) exprs
+            in
+            let record = IT (Record_op (Record exprs),
+                             SBT.Record (List.map (fun (s,t) -> (s, basetype t)) exprs)) in
+            return (IT (Datatype_op (DatatypeCons (c_nm, record)), SBT.Datatype cons_info.c_datatype_tag))
+        | CNExpr_each (sym, r, e) ->
+            let@ expr = 
+              trans 
+                evaluation_scope
+                (SymSet.add sym locally_bound)
+                (add_logical sym SBT.Integer env) 
+                e 
+            in
+            return (IT (Bool_op (EachI ((Z.to_int (fst r), sym, Z.to_int (snd r)), expr)), SBT.Bool))
+        | CNExpr_ite (e1, e2, e3) ->
+            let@ e1 = self e1 in
+            let@ e2 = self e2 in
+            let@ e3 = self e3 in
+            return (ite_ (e1, e2, e3))
+        | CNExpr_good (ty, e) ->
+           let scty = Sctypes.of_ctype_unsafe loc ty in
+           let@ e = self e in
+           return (IT (CT_pred (Good (scty, e)), SBT.Bool))
+        | CNExpr_not e ->
+           let@ e = self e in
+           return (IT (Bool_op (Not e), SBT.Bool))
+        | CNExpr_unchanged e ->
+           let@ cur_e = self e in
+           let@ old_e = self (CNExpr (loc, CNExpr_at_env (e, start_evaluation_scope))) in
+           mk_translate_binop loc CN_equal (cur_e, old_e)
+        | CNExpr_at_env (e, scope) ->
+           let@ () = match evaluation_scope with
+             | None -> return ()
+             | Some _ -> fail {loc; msg = Generic !^"Cannot nest evaluation scopes."}
+           in
+           let@ () = match Y.mem scope env.old_states with
+             | true -> return ()
+             | false -> fail { loc; msg = Generic !^("Unknown evaluation scope '"^scope^"'.") }
+           in
+           trans (Some scope) locally_bound env e
+        | CNExpr_deref e ->
+           let@ () = 
+             let locally_bound_in_e = SymSet.inter (free_in_expr e) locally_bound in
+             match SymSet.elements locally_bound_in_e with
+             | [] -> 
+                return ()
+             | s :: _ ->
+                let msg =
+                  Sym.pp s ^^^ !^"is locally bound in this expression."
+                  ^/^ !^"Cannot dereference a pointer expression containing a locally bound variable."
+                in
+                fail {loc; msg = Generic msg}
+           in
+           let@ expr = self e in
+           let@ o_v = match evaluation_scope with
+             | Some scope ->
+                let state = Y.find scope env.old_states in
+                return (STermMap.find_opt expr state.pointee_values)
+             | None ->
+                deref loc expr
+           in
+           begin match o_v with
+           | Some v -> return v
+           | None ->
               let msg =
-                Sym.pp s ^^^ !^"is locally bound in this expression."
-                ^/^ !^"Cannot dereference a pointer expression containing a locally bound variable."
+                !^"Cannot dereference" ^^^ squotes (Terms.pp expr) 
+                ^^^ pp_in_scope evaluation_scope ^^ dot
+                ^^^ !^"Is the necessary ownership missing?"
               in
               fail {loc; msg = Generic msg}
-         in
-         let@ expr = self e in
-         let o_v = match evaluation_scope with
-           | Some scope ->
-              let state = Y.find scope env.old_states in
-              STermMap.find_opt expr state.pointee_values
-           | None ->
-              current__deref expr
-         in
-         begin match o_v with
-         | Some v -> return v
-         | None ->
-            let msg =
-              !^"Cannot dereference" ^^^ squotes (Terms.pp expr) 
-              ^^^ pp_in_scope evaluation_scope ^^ dot
-              ^^^ !^"Is the necessary ownership missing?"
-            in
-            fail {loc; msg = Generic msg}
-         end
-      | CNExpr_value_of_c_variable sym ->
-         assert (not (SymSet.mem sym locally_bound));
-         let o_v = match evaluation_scope with
-           | Some scope ->
-              let state = Y.find scope env.old_states in
-              Option.map (function
-                  | CVS_Value x -> x
-                  | CVS_Pointer_pointing_to x -> x
-                ) (SymMap.find_opt sym state.c_variable_state)
-           | None ->
-              current__value_of_c_variable sym
-         in
-         begin match o_v with
-         | None -> 
-            let msg =
-              !^"Cannot resolve the value of" ^^^ Sym.pp sym
-              ^^^ pp_in_scope evaluation_scope ^^ dot
-              ^^^ !^"Is the ownership for accessing" ^^^ Sym.pp sym ^^^ !^"missing?"
-            in
-            fail {loc; msg = Generic msg}
-         | Some v ->
-            return v
-         end
-  in 
-  trans None
+           end
+        | CNExpr_value_of_c_variable sym ->
+           assert (not (SymSet.mem sym locally_bound));
+           let@ o_v = match evaluation_scope with
+             | Some scope ->
+                let state = Y.find scope env.old_states in
+                let o_v = 
+                  Option.map (function
+                      | CVS_Value x -> x
+                      | CVS_Pointer_pointing_to x -> x
+                    ) (SymMap.find_opt sym state.c_variable_state)
+                in
+                return o_v
+             | None ->
+                value_of_c_variable loc sym
+           in
+           begin match o_v with
+           | None -> 
+              let msg =
+                !^"Cannot resolve the value of" ^^^ Sym.pp sym
+                ^^^ pp_in_scope evaluation_scope ^^ dot
+                ^^^ !^"Is the ownership for accessing" ^^^ Sym.pp sym ^^^ !^"missing?"
+              in
+              fail {loc; msg = Generic msg}
+           | Some v ->
+              return v
+           end
+    in 
+    trans None
 
-let translate_cn_expr locally_bound env expr = 
-  let current__value_of_c_variable sym = 
-    Option.map (function
-        | CVS_Value x -> x
-        | CVS_Pointer_pointing_to x -> x
-      ) (SymMap.find_opt sym env.state.c_variable_state)
-  in
-  let current__deref it = STermMap.find_opt it env.state.pointee_values in
-  translate_cn_expr__parametric 
-    ~current__value_of_c_variable 
-    ~current__deref
-    locally_bound env expr
+
+
 
 
 let translate_cn_res_info res_loc loc env res args =
@@ -1066,3 +1112,154 @@ let add_datatype_info env (dt : cn_datatype) =
 
 let add_datatype_infos env dts =
   ListM.fold_leftM add_datatype_info env dts
+
+
+end
+
+module P = ParametricTranslation
+
+
+
+
+
+module WithinTypes = struct
+
+  include P
+
+  let rec handle_using_current_environment env : ('a, 'e) E.m -> ('a, 'e) Resultat.m =
+    function
+    | E.Done x -> 
+       Resultat.return x
+    | E.Error e ->
+       Resultat.fail e
+    | E.Value_of_c_variable (loc, sym,k) ->
+       let o_v = 
+         Option.map (function
+             | CVS_Value x -> x
+             | CVS_Pointer_pointing_to x -> x
+           ) (SymMap.find_opt sym env.state.c_variable_state)
+       in
+       handle_using_current_environment env (k o_v)
+    | Deref (loc, it, k) ->
+       let o_v = STermMap.find_opt it env.state.pointee_values in
+       handle_using_current_environment env (k o_v)
+
+
+  let translate_cn_let_resource env r = 
+    handle_using_current_environment env
+      (translate_cn_let_resource env r)
+
+  let translate_cn_expr bound env e =
+    handle_using_current_environment env
+      (translate_cn_expr bound env e)
+
+  let translate_cn_assrt env e =
+    handle_using_current_environment env
+      (translate_cn_assrt env e)
+
+  let translate_cn_function env fn =
+    handle_using_current_environment env
+      (translate_cn_function env fn)
+
+  let translate_cn_predicate env pd =
+    handle_using_current_environment env
+      (translate_cn_predicate env pd)
+
+  let add_datatype_info env dt =
+    handle_using_current_environment env
+      (add_datatype_info env dt)
+
+  let add_datatype_infos env dts =
+    handle_using_current_environment env
+      (add_datatype_infos env dts)
+
+  let register_cn_functions env fns =
+    (handle_using_current_environment env)
+      (register_cn_functions env fns)
+
+end
+
+
+
+
+
+module WithinStatements = struct
+
+  let translate_cn_statement (allocations : Sym.t -> CF.Ctype.ctype) env =
+
+    let open Resultat in
+    let open Effectful.Make(Resultat) in
+    let open Mu in
+
+    let pointee_ct loc it =
+      match IT.bt it with
+      | SBT.Loc (Some ct) -> 
+         return ct
+      | SBT.Loc None ->
+         let msg =
+           !^"Cannot tell pointee C-type of"
+           ^^^ squotes (IT.pp it) ^^ dot
+         in
+         fail {loc; msg = Generic msg}
+      | has ->
+         let msg = Illtyped_it {it= IT.pp it; has= SBT.pp has; expected= "pointer"; o_ctxt = None} in
+         fail {loc; msg}
+    in
+
+    let rec handle_using_loads (m : (mu_cn_prog, 'e) E.m) : (mu_cn_prog, 'e) Resultat.m = 
+      match m with
+      | E.Done x ->
+         return x
+      | E.Error e ->
+         fail e
+      | E.Value_of_c_variable (loc,sym,k) ->
+         let ct = Sctypes.of_ctype_unsafe loc (allocations sym) in
+         let pointer = IT.sym_ (sym, SBT.Loc (Some ct)) in
+         load loc "read" pointer k
+      | Deref (loc, pointer, k) ->
+         load loc "deref" pointer k
+
+    and load loc action_pp pointer k =
+      let@ pointee_ct = pointee_ct loc pointer in
+      let value_s = Sym.fresh_make_uniq (action_pp ^ "_" ^ Pp.plain (IT.pp pointer)) in
+      let value_bt = SBT.of_sct pointee_ct in
+      let value = IT.sym_ (value_s, value_bt) in
+      let@ prog = handle_using_loads (k (Some value)) in
+      let load = {ct = pointee_ct; pointer = IT.term_of_sterm pointer} in
+      return (M_CN_let (loc, (value_s, load), prog))
+    in
+
+    fun (CN_statement (loc, stmt_)) -> 
+    handle_using_loads (
+        let open E in
+        let open Effectful.Make(E) in
+        match stmt_ with
+        | CN_pack_unpack (pack_unpack, pred, args) ->
+           let@ args = ListM.mapM (P.translate_cn_expr SymSet.empty env) args in
+           let@ name, pointer, iargs, oargs_ty =
+             P.translate_cn_res_info loc loc env pred args in
+           let stmt = 
+             M_CN_pack_unpack 
+               (pack_unpack, { 
+                 name = name; 
+                 pointer = IT.term_of_sterm pointer; 
+                 permission = IT.bool_ true; 
+                 iargs = List.map IT.term_of_sterm iargs;
+               })
+           in
+           return (M_CN_statement (loc, stmt))
+        | CN_have assrt ->
+           let@ assrt = P.translate_cn_assrt env (loc, assrt) in
+           return (M_CN_statement (loc, M_CN_have assrt))
+        | CN_instantiate (o_s, expr) ->
+           let@ expr = P.translate_cn_expr SymSet.empty env expr in
+           let expr = IT.term_of_sterm expr in
+           return (M_CN_statement (loc, M_CN_instantiate (o_s, expr)))
+        | CN_unfold (s, args) ->
+           let@ args = ListM.mapM (P.translate_cn_expr SymSet.empty env) args in
+           let args = List.map IT.term_of_sterm args in
+           return (M_CN_statement (loc, M_CN_unfold (s, args)))
+      )
+
+end
+

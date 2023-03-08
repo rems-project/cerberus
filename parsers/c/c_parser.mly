@@ -2298,11 +2298,11 @@ cn_statement:
 /* copying from 'resource' rule */
 | CN_PACK p= pred es= delimited(LPAREN, separated_list(COMMA, expr), RPAREN) SEMICOLON
     { let loc = Location_ocaml.(region ($startpos, $endpos) NoCursor) in
-      CN_statement (loc , CN_pack (p, es)) }
+      CN_statement (loc , CN_pack_unpack (Pack, p, es)) }
 /* copying from 'resource' rule */
 | CN_UNPACK p= pred es= delimited(LPAREN, separated_list(COMMA, expr), RPAREN) SEMICOLON
     { let loc = Location_ocaml.(region ($startpos, $endpos) NoCursor) in
-      CN_statement (loc , CN_pack (p, es)) }
+      CN_statement (loc , CN_pack_unpack (Unpack, p, es)) }
 | CN_HAVE a=assert_expr SEMICOLON
     { let loc = Location_ocaml.(region ($startpos, $endpos) NoCursor) in
       CN_statement (loc, CN_have a) }

@@ -38,6 +38,7 @@ type ('a, 'TY) mi_file = {
   mi_extern  : Core.extern_map;
   mi_funinfo :  mi_funinfo;
   mi_loop_attributes : Annot.loop_attributes;
+  mi_visible_objects_env : Core.visible_objects_env;
 }
 
 
@@ -149,4 +150,5 @@ let core_to_micore__file update_loc (file : ('a, 'TY) Core.generic_file) : ('a, 
     mi_extern = file.extern;
     mi_funinfo = file.funinfo;
     mi_loop_attributes = file.loop_attributes0;
+    mi_visible_objects_env = file.visible_objects_env;
   }

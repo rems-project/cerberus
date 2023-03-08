@@ -272,6 +272,13 @@ let merge_globs gs1 gs2 def_tents =
   List.foldl (fun acc g -> list_remove_assoc g acc) (List.reverse ordered_gs)
     (List.map fst def_tents)
 
+let safe_map_union m1 m2 =
+  if Set.null (Set.intersection (Map.domain m1) (Map.domain m2)) then 
+    m1 union m2
+  else
+    Assert_extra.failwith "safe_map_union: maps are not disjoint"
+
+
 val link_aux: forall 'a 'b. generic_file 'a 'b ->
                            generic_file 'a 'b ->
                            exceptM (generic_file 'a 'b) (Loc.t * cause)
@@ -288,6 +295,11 @@ let link_aux f1 f2 =
        extern=  extern;
        funinfo= f1.funinfo union f2.funinfo;
        loop_attributes= f1.loop_attributes union f2.loop_attributes;
+       visible_objects_env= 
+           (* safe_mergef_visible_objects_env  *)
+         safe_map_union
+           f1.visible_objects_env
+           f2.visible_objects_env;
     |>
 
 val link: forall 'a 'b. list (generic_file 'a 'b) ->

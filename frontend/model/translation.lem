@@ -3469,8 +3469,9 @@ let rec translate_stmt stdlib tagDefs f env (A.AnnotatedStatement loc stmt_attrs
 
     | A.AilSmarker id s ->
         self s >>= fun core_s ->
+        E.record_object_types_marker () >>= fun id2 ->
         E.return begin
-          Caux.add_annot (Annot.Amarker id) begin
+          Caux.add_annots [Annot.Amarker_object_types id2; Annot.Amarker id] begin
             Caux.mk_sseq_e (Caux.mk_empty_pat C.BTy_unit) (Caux.mk_pure_e (Caux.mk_unit_pe))
               core_s
           end
@@ -3866,4 +3867,6 @@ let translate (ailnames, stdlib_fun_map) impl prog =
      C.funs= cfuns;
      C.extern = translate_extern_map prog;
      C.funinfo= funinfo;
-     C.loop_attributes= (snd prog).A.loop_attributes; |>
+     C.loop_attributes= (snd prog).A.loop_attributes; 
+     C.visible_objects_env= st.E.visible_objects_types_markers_env;
+  |>

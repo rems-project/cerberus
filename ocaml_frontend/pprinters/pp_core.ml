@@ -541,6 +541,8 @@ let rec pp_expr expr =
                 P.range (handle_uid uid) acc
             | Amarker n ->
                 in_comment (!^ ("marker " ^ string_of_int n)) ^^ acc
+            | Amarker_object_types n ->
+                in_comment (!^ ("marker_object_types " ^ string_of_int n)) ^^ acc
             | Abmc annot ->
                 begin match annot with
                   | Abmc_id id ->

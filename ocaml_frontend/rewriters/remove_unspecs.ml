@@ -110,4 +110,5 @@ let rewrite_file file =
   ; extern = file.extern
   ; funinfo = file.funinfo 
   ; loop_attributes0 = file.loop_attributes0
+  ; visible_objects_env = file.visible_objects_env
   }

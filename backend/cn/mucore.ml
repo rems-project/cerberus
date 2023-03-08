@@ -1,3 +1,4 @@
+module CF=Cerb_frontend
 open Cerb_frontend
 open Annot
 
@@ -187,13 +188,24 @@ type 'TY mu_memop =
   | M_Va_end of ('TY mu_pexpr)
 
 
-type pack_unpack =
-  | Pack
-  | Unpack
+
 
 type have_show =
   | Have
   | Show
+
+type mu_cn_statement =
+  | M_CN_pack_unpack of CF.Cn.pack_unpack * ResourceTypes.predicate_type
+  | M_CN_have of LogicalConstraints.t
+  | M_CN_instantiate of Sym.t option * IndexTerms.t
+  | M_CN_unfold of Sym.t * IndexTerms.t list
+
+type mu_cn_load = {ct : T.ct; pointer : IndexTerms.t}
+
+type mu_cn_prog = 
+  | M_CN_let of Loc.t * (Sym.t * mu_cn_load) * mu_cn_prog
+  | M_CN_statement of Loc.t * mu_cn_statement
+
 
 type 'TY mu_expr_ =  (* (effectful) expression *)
  | M_Epure of ('TY mu_pexpr)
@@ -202,7 +214,7 @@ type 'TY mu_expr_ =  (* (effectful) expression *)
  | M_Eskip
  | M_Eccall of 'TY act * 'TY mu_pexpr * ('TY mu_pexpr) list (* C function call *)
  (* | M_Eproc of mu_name * ('TY mu_pexpr) list (\* Core procedure call *\) *)
- | M_Erpredicate of pack_unpack * Annot.to_pack_unpack * ('TY mu_pexpr) list
+ | M_Erpredicate of CF.Cn.pack_unpack * Annot.to_pack_unpack * ('TY mu_pexpr) list
  | M_Elpredicate of have_show * Symbol.identifier * ('TY mu_pexpr) list
  | M_Einstantiate of Symbol.identifier option * 'TY mu_pexpr
 
@@ -217,7 +229,7 @@ type 'TY mu_expr_ =  (* (effectful) expression *)
  (* | M_Edone of 'TY mu_expr *)
  | M_Erun of symbol * ('TY mu_pexpr) list (* run from label *)
 
- | M_CN_statement of (Sym.t, Ctype.ctype) Cn.cn_statement
+ | M_CN_prog of mu_cn_prog
 
 
 and 'TY mu_expr = 

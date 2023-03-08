@@ -63,6 +63,7 @@ type annot =
   | Aloc of Loc.t (* C source location *)
   | Auid of string (* Unique ID *)
   | Amarker of nat
+  | Amarker_object_types of nat
   | Abmc of bmc_annot
   | Aattrs of attributes (* C2X attributes *)
   | Atypedef of Symbol.sym (* (TODO: I don't like but hey)
@@ -93,6 +94,8 @@ let rec get_loc annots =
     | (Auid _ :: annots') ->
         get_loc annots'
     | (Amarker _ :: annots') ->
+        get_loc annots'
+    | (Amarker_object_types _ :: annots') ->
         get_loc annots'
     | (Abmc _ :: annots') ->
         get_loc annots'
@@ -145,6 +148,8 @@ let rec get_attrs annots =
     | (Auid _ :: annots') ->
         get_attrs annots'
     | (Amarker _ :: annots') ->
+        get_attrs annots'
+    | (Amarker_object_types _ :: annots') ->
         get_attrs annots'
     | (Abmc _ :: annots') ->
         get_attrs annots'
@@ -208,6 +213,20 @@ let rec get_marker annots =
        get_marker annots'
   end
 
+val     get_marker_object_types: list annot -> maybe nat
+let rec get_marker_object_types annots = 
+  match annots with
+    | [] ->
+        Nothing
+    | (Amarker_object_types id :: annots') ->
+       match get_marker_object_types annots' with
+       | Just _ -> Assert_extra.failwith "found more than one marker (object type marker)"
+       | Nothing -> Just id
+       end
+    | (_ :: annots') ->
+       get_marker_object_types annots'
+  end
+
 
 val get_label_annot : list annot -> maybe label_annot
 let rec get_label_annot annots = 
@@ -230,6 +249,8 @@ let rec get_uid annots =
     | (Auid uid :: _) ->
         Just uid
     | (Amarker _ :: annots') ->
+        get_uid annots'
+    | (Amarker_object_types _ :: annots') ->
         get_uid annots'
     | (Abmc _ :: annots') ->
         get_uid annots'

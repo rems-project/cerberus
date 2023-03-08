@@ -2151,6 +2151,10 @@ val add_annot: Annot.annot -> expr unit -> expr unit
 let add_annot annot (Expr annots expr_) =
   Expr (annot :: annots) expr_
 
+val add_annots: list Annot.annot -> expr unit -> expr unit
+let add_annots annots1 (Expr annots2 expr_) =
+  Expr (annots1 ++ annots2) expr_
+
 type collect_saves_state 'a = <|
   tmp_acc:    map Symbol.sym (list (Symbol.sym * core_base_type) * Core.expr 'a); (*Core.labeled_continuations 'a; *)
   closed_acc: map Symbol.sym (list (Symbol.sym * core_base_type) * Core.expr 'a); (*Core.labeled_continuations 'a; *)

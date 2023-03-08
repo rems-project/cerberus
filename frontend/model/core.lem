@@ -393,6 +393,9 @@ type generic_globs_map 'a 'bty =
 type core_tag_definitions =
   map Symbol.sym Ctype.tag_definition
 
+type visible_objects_env = map nat (list (Symbol.sym * Ctype.ctype))
+
+
 (* a Core file is just a set of named functions *)
 type generic_file 'bty 'a = <|
   main    : maybe Symbol.sym;
@@ -404,6 +407,7 @@ type generic_file 'bty 'a = <|
   extern  : extern_map;
   funinfo : map Symbol.sym (Loc.t * Annot.attributes * ctype * list (maybe Symbol.sym * ctype) * bool * bool);
   loop_attributes : Annot.loop_attributes;
+  visible_objects_env: visible_objects_env;
 |>
 
 

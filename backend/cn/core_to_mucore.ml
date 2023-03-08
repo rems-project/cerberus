@@ -27,7 +27,7 @@ module SBT = SurfaceBaseTypes
 module Mu = Mucore
 open Mu
 module Loc = Locations
-module C = Compile
+module C = Compile.WithinTypes
 module SymSet = Set.Make(Sym)
 module SymMap = Map.Make(Sym)
 module IdMap = Map.Make(Id)
@@ -608,7 +608,7 @@ let n_memop loc memop pexprs =
 
 
 
-let rec n_expr (loc : Loc.t) desugaring_things e : (mu_expr, type_error) m = 
+let rec n_expr (loc : Loc.t) (env, desugaring_things) visible_objects_env e : (mu_expr, type_error) m = 
   let (markers_env, cn_desugaring_state) = desugaring_things in
   let (Expr (annots, pe)) = e in
   let loc = Loc.update loc (get_loc_ annots) in
@@ -616,7 +616,7 @@ let rec n_expr (loc : Loc.t) desugaring_things e : (mu_expr, type_error) m =
   let n_pexpr = n_pexpr loc in
   let n_paction = (n_paction loc) in
   let n_memop = (n_memop loc) in
-  let n_expr = (n_expr loc desugaring_things) in
+  let n_expr = (n_expr loc (env, desugaring_things) visible_objects_env) in
   match pe with
   | Epure pexpr2 -> 
      return (wrap (M_Epure (n_pexpr pexpr2)))
@@ -726,14 +726,12 @@ let rec n_expr (loc : Loc.t) desugaring_things e : (mu_expr, type_error) m =
      let () = Print.debug 10 (lazy (Print.item "core_to_mucore Esseq. e1:" (CF.Pp_core_ast.pp_expr e1))) in
      let () = Print.debug 10 (lazy (Print.item "core_to_mucore Esseq. e2:" (CF.Pp_core_ast.pp_expr e2))) in
      let@ e1 = match pat, e1 with
-
        | Pattern ([], CaseBase (None, BTy_unit)),
          Expr ([], Epure (Pexpr ([], (), PEval Vunit))) ->
-          
           begin match get_cerb_magic_attr annots with
-
           | Some (stmt_loc, stmt_str) ->
              let marker_id = Option.get (get_marker annots) in
+             let marker_id_object_types = Option.get (get_marker_object_types annots) in
              let@ stmt = Parse.parse C_parser.cn_statement (stmt_loc, stmt_str) in
              let@ stmt = 
                do_ail_desugar_rdonly (CAE.{ 
@@ -742,14 +740,17 @@ let rec n_expr (loc : Loc.t) desugaring_things e : (mu_expr, type_error) m =
                  })
                  (CA.desugar_cn_statement stmt) 
              in
-             return (M_Expr (loc, [], M_CN_statement stmt))
+             let visible_objects= Pmap.find marker_id_object_types visible_objects_env in
+             let@ stmt = 
+               Compile.WithinStatements.translate_cn_statement 
+                 (fun sym -> List.assoc Sym.equal sym visible_objects) 
+                 env stmt 
+             in
 
+             return (M_Expr (loc, [], M_CN_prog stmt))
           | None ->
-
              n_expr e1
-
           end
-                
        | _, _ ->
           n_expr e1 
      in
@@ -1047,7 +1048,9 @@ let desugar_conds d_st conds =
 
 
 
-let normalise_label (markers_env, precondition_cn_desugaring_state) 
+let normalise_label 
+      (markers_env, precondition_cn_desugaring_state) 
+      visible_objects_env
       (accesses, loop_attributes) (env : C.env) label_name label =
   match label with
   | Mi_Return loc -> 
@@ -1071,7 +1074,8 @@ let normalise_label (markers_env, precondition_cn_desugaring_state)
         in
         let@ label_args_and_body =
           make_label_args (fun env ->
-              n_expr loc (markers_env, cn_desugaring_state) label_body
+              n_expr loc (env, (markers_env, cn_desugaring_state))
+                visible_objects_env label_body
             ) 
             loc 
             env 
@@ -1106,7 +1110,15 @@ let normalise_label (markers_env, precondition_cn_desugaring_state)
 
 
 
-let normalise_fun_map_decl (markers_env, ail_prog) env globals (funinfo: mi_funinfo) loop_attributes fname decl =
+let normalise_fun_map_decl 
+      (markers_env, ail_prog) 
+      visible_objects_env
+      env 
+      globals 
+      (funinfo: mi_funinfo)
+      loop_attributes
+      fname
+      decl =
   match Pmap.lookup fname funinfo with
   | None -> return None
   | Some (loc, attrs, ret_ct, arg_cts, variadic, _) ->
@@ -1145,13 +1157,15 @@ let normalise_fun_map_decl (markers_env, ail_prog) env globals (funinfo: mi_funi
      let@ args_and_body = 
        make_function_args (fun arg_states env ->
            let env = C.make_state_old env C.start_evaluation_scope in
-           let@ body = n_expr loc (markers_env, d_st.inner.cn_state) body in
+           let@ body = n_expr loc (env, (markers_env, d_st.inner.cn_state)) visible_objects_env body in
            let@ returned = 
              make_rt loc (C.add_c_variable_states arg_states env)
                (ret_s, ret_ct) (accesses, ensures) 
            in
            let@ labels = 
-             PmapM.mapM (normalise_label (markers_env,CAE.(d_st.inner.cn_state)) 
+             PmapM.mapM (normalise_label 
+                           (markers_env,CAE.(d_st.inner.cn_state))
+                           visible_objects_env
                            (accesses, loop_attributes) env)
                labels Sym.compare in
            return (body, labels, returned)
@@ -1184,9 +1198,19 @@ let normalise_fun_map_decl (markers_env, ail_prog) env globals (funinfo: mi_funi
      assert false
      (* M_BuiltinDecl(loc, convert_bt loc bt, List.map (convert_bt loc) bts) *)
 
-let normalise_fun_map (markers_env, ail_prog) env globals funinfo loop_attributes fmap =
+let normalise_fun_map 
+      (markers_env, ail_prog)
+      visible_objects_env
+      env
+      globals
+      funinfo
+      loop_attributes
+      fmap
+  =
   PmapM.foldM (fun fsym fdecl (fmap, mk_functions) ->
-      let@ r = normalise_fun_map_decl (markers_env, ail_prog) env globals funinfo loop_attributes fsym fdecl in
+      let@ r = normalise_fun_map_decl (markers_env, ail_prog) 
+                 visible_objects_env 
+                 env globals funinfo loop_attributes fsym fdecl in
       match r with
       | Some (fdecl, more_mk_functions) ->
          let mk_functions' = 
@@ -1203,20 +1227,26 @@ let normalise_fun_map (markers_env, ail_prog) env globals funinfo loop_attribute
 
 
 
-let normalise_globs sym g =
+let normalise_globs tagDefs sym g =
   let loc = Loc.unknown in
   match g with
   | GlobalDef ((bt, ct), e) -> 
      (* this may have to change *)
-     let@ e = n_expr loc (Pmap.empty Int.compare, CF.Cn_desugaring.initial_cn_desugaring_state) e in
+     let@ e = 
+       n_expr loc 
+         (C.empty tagDefs, (Pmap.empty Int.compare, 
+                            CF.Cn_desugaring.initial_cn_desugaring_state)) 
+         (Pmap.empty Int.compare)
+         e 
+     in
      return (M_GlobalDef ((convert_bt loc bt, convert_ct loc ct), e))
   | GlobalDecl (bt, ct) -> 
      return (M_GlobalDecl (convert_bt loc bt, convert_ct loc ct))
 
 
-let normalise_globs_list gs = 
+let normalise_globs_list tagDefs gs = 
    ListM.mapM (fun (sym,g) -> 
-       let@ g = normalise_globs sym g in
+       let@ g = normalise_globs tagDefs sym g in
        return (sym, g)
      ) gs
 
@@ -1300,12 +1330,13 @@ let normalise_file (markers_env, ail_prog) file =
   let env = C.register_cn_predicates env ail_prog.cn_predicates in
   let@ preds = ListM.mapM (C.translate_cn_predicate env) ail_prog.cn_predicates in
 
-  let@ globs = normalise_globs_list file.mi_globs in
+  let@ globs = normalise_globs_list tagDefs file.mi_globs in
 
   let env = List.fold_left register_glob env globs in
 
   let@ (funs, mk_functions) = 
-    normalise_fun_map (markers_env, ail_prog) env globs 
+    normalise_fun_map (markers_env, ail_prog) file.mi_visible_objects_env 
+      env globs 
       file.mi_funinfo file.mi_loop_attributes file.mi_funs 
   in
 
