@@ -217,7 +217,7 @@ type 'TY mu_expr_ =  (* (effectful) expression *)
  (* | M_Edone of 'TY mu_expr *)
  | M_Erun of symbol * ('TY mu_pexpr) list (* run from label *)
 
- | M_CN_prog of Cnprog.cn_prog
+ | M_CN_progs of Cnprog.cn_prog list
 
 
 and 'TY mu_expr = 

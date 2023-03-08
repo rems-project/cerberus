@@ -728,29 +728,28 @@ let rec n_expr (loc : Loc.t) (env, desugaring_things) visible_objects_env e : (m
      let@ e1 = match pat, e1 with
        | Pattern ([], CaseBase (None, BTy_unit)),
          Expr ([], Epure (Pexpr ([], (), PEval Vunit))) ->
-          begin match get_cerb_magic_attr annots with
-          | Some (stmt_loc, stmt_str) ->
-             let marker_id = Option.get (get_marker annots) in
-             let marker_id_object_types = Option.get (get_marker_object_types annots) in
-             let@ stmt = Parse.parse C_parser.cn_statement (stmt_loc, stmt_str) in
-             let@ stmt = 
-               do_ail_desugar_rdonly (CAE.{ 
-                     markers_env = markers_env;
-                     inner = { (Pmap.find marker_id markers_env) with cn_state = cn_desugaring_state };
-                 })
-                 (CA.desugar_cn_statement stmt) 
-             in
-             let visible_objects= Pmap.find marker_id_object_types visible_objects_env in
-             let@ stmt = 
-               Compile.WithinStatements.translate_cn_statement 
-                 (fun sym -> List.assoc Sym.equal sym visible_objects) 
-                 env stmt 
-             in
-
-             return (M_Expr (loc, [], M_CN_prog stmt))
-          | None ->
-             n_expr e1
-          end
+          let@ stmts =
+            ListM.mapM (fun (stmt_loc, stmt_str) ->
+                let marker_id = Option.get (get_marker annots) in
+                let marker_id_object_types = Option.get (get_marker_object_types annots) in
+                let@ stmt = Parse.parse C_parser.cn_statement (stmt_loc, stmt_str) in
+                let@ stmt = 
+                  do_ail_desugar_rdonly (CAE.{ 
+                        markers_env = markers_env;
+                        inner = { (Pmap.find marker_id markers_env) with cn_state = cn_desugaring_state };
+                    })
+                    (CA.desugar_cn_statement stmt) 
+                in
+                let visible_objects= Pmap.find marker_id_object_types visible_objects_env in
+                let@ stmt = 
+                  Compile.WithinStatements.translate_cn_statement 
+                    (fun sym -> List.assoc Sym.equal sym visible_objects) 
+                    env stmt 
+                in
+                return stmt
+            ) (get_cerb_magic_attr annots)
+          in
+          return (M_Expr (loc, [], M_CN_progs stmts))
        | _, _ ->
           n_expr e1 
      in

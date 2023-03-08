@@ -1398,9 +1398,9 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
      let lvt = tuple_ vts in
      k lvt
      )
-  | Normal expect, M_CN_prog cn_prog ->
+  | Normal expect, M_CN_progs cn_progs ->
      let@ () = WellTyped.ensure_base_type loc ~expect Unit in
-     let@ cn_prog = WellTyped.WCNProg.welltyped cn_prog in
+     let@ cn_progs = ListM.mapM WellTyped.WCNProg.welltyped cn_progs in
      let rec aux = function
        | Cnprog.M_CN_let (loc, (sym, {ct; pointer}), cn_prog) ->
           let@ value = load loc pointer ct in
@@ -1459,9 +1459,8 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
                | Some body -> 
                   add_c (LC.t_ (eq_ (pred_ f args def.return_bt, body)))
           end
-          
      in
-     aux cn_prog
+     ListM.iterM aux cn_progs
      
 
   | _, M_Ewseq (p, e1, e2)
