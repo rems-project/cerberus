@@ -1435,13 +1435,12 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
                   in
                   let lrt = ResourcePredicates.clause_lrt pred_oargs right_clause.packing_ft in
                   let@ _, members = make_return_record loc (UnpackPredicate (Manual, pname)) (LRT.binders lrt) in
-                  let@ () = bind_logical_return loc members lrt in
-                  k unit_
+                  bind_logical_return loc members lrt
                | Pack ->
                   Spine.calltype_packing loc pname right_clause.packing_ft (fun output_assignment -> 
                   let output = record_ (List.map (fun (o : OutputDef.entry) -> (o.name, o.value)) output_assignment) in
-                  let@ () = add_r (P pt, O output) in
-                  k unit_)
+                  add_r (P pt, O output)
+                  )
                end
             | M_CN_have _lc ->
                fail (fun _ -> {loc; msg = Generic !^"todo: 'have' not implemented yet"})
@@ -1465,7 +1464,8 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
                   add_c (LC.t_ (eq_ (pred_ f args def.return_bt, body)))
           end
      in
-     ListM.iterM aux cn_progs
+     let@ () = ListM.iterM aux cn_progs in
+     k unit_
      
 
   | _, M_Ewseq (p, e1, e2)
