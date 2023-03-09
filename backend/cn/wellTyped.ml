@@ -1221,8 +1221,9 @@ module WCNProg = struct
                 return (M_CN_have lc)
              | M_CN_instantiate (o_s, it) ->
                 let@ () = match o_s with
-                  | None -> return ()
-                  | Some f -> 
+                  | I_Everything -> return ()
+                  | I_Good ct -> WCT.is_ct loc ct
+                  | I_Function f -> 
                      let@ _ = get_logical_predicate_def loc f in 
                      return ()
                 in

@@ -11,10 +11,12 @@ type have_show =
   | Have
   | Show
 
+
+
 type cn_statement =
   | M_CN_pack_unpack of CF.Cn.pack_unpack * ResourceTypes.predicate_type
   | M_CN_have of LogicalConstraints.t
-  | M_CN_instantiate of Sym.t option * IndexTerms.t
+  | M_CN_instantiate of (Sym.t, Sctypes.t) CF.Cn.cn_to_instantiate * IndexTerms.t
   | M_CN_unfold of Sym.t * IndexTerms.t list
 
 type cn_load = {ct : Sctypes.t; pointer : IndexTerms.t}

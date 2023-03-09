@@ -126,6 +126,7 @@ let lexicon: (string, unit -> token) Hashtbl.t =
 
 (* BEGIN CN *)
 let cn_keywords: (string * Tokens.token) list = [
+    "good"          , CN_GOOD;
     "bool"          , CN_BOOL;
     "boolean"       , CN_BOOL;
     "CN_bool"       , CN_BOOL;

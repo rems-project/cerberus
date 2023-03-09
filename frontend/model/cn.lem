@@ -161,10 +161,15 @@ type pack_unpack =
   | Unpack
 
 
+type cn_to_instantiate 'a 'ty = 
+  | I_Function of 'a
+  | I_Good of 'ty
+  | I_Everything
+
 type cn_statement_ 'a 'ty =
   | CN_pack_unpack of pack_unpack * cn_pred 'a 'ty * list (cn_expr 'a 'ty)
   | CN_have of cn_assertion 'a 'ty
-  | CN_instantiate of maybe 'a * (cn_expr 'a 'ty)
+  | CN_instantiate of cn_to_instantiate 'a 'ty * (cn_expr 'a 'ty)
   | CN_unfold of 'a * list (cn_expr 'a 'ty)
 
 type cn_statement 'a 'ty =

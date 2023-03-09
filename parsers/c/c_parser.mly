@@ -152,7 +152,7 @@ let warn_extra_semicolon pos ctx =
 %token CN_BOOL CN_INTEGER CN_REAL CN_POINTER CN_MAP CN_LIST CN_TUPLE CN_SET
 %token CN_WHEN CN_LET CN_TAKE CN_OWNED CN_BLOCK CN_EACH CN_FUNCTION CN_PREDICATE CN_DATATYPE
 %token CN_UNCHANGED CN_WITH
-%token CN_NULL CN_TRUE CN_FALSE
+%token CN_GOOD CN_NULL CN_TRUE CN_FALSE
 
 %token EOF
 
@@ -1910,6 +1910,9 @@ prim_expr:
 | ident= cn_variable LPAREN args=separated_list(COMMA, expr) RPAREN
     { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                                , CNExpr_call (ident, args))) }
+| ct= cn_good LPAREN arg=expr RPAREN
+    { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
+                               , CNExpr_good (ct, arg))) }
 | ident= cn_variable args= cons_args
     { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos(args)))
                                , CNExpr_cons (ident, args))) }
@@ -2082,6 +2085,11 @@ enter_cn:
 exit_cn:
 | 
     { C_lexer.internal_state.inside_cn <- false; }
+
+
+cn_good: 
+| CN_GOOD ty= delimited(LT, ctype, GT)
+    { ty }
 
 
 cn_option_pred_clauses:
@@ -2294,6 +2302,14 @@ loop_spec:
   { let loc = Location_ocaml.region ($startpos, $endpos) NoCursor in
       Cerb_frontend.Cn.CN_inv (loc, cs) }
 
+%inline to_be_instantiated:
+| 
+    { Cerb_frontend.Cn.I_Everything }
+| f=cn_variable COMMA
+    { Cerb_frontend.Cn.I_Function f }
+| ct=cn_good COMMA
+    { Cerb_frontend.Cn.I_Good ct }
+
 cn_statement:
 /* copying from 'resource' rule */
 | CN_PACK p= pred es= delimited(LPAREN, separated_list(COMMA, expr), RPAREN) SEMICOLON
@@ -2306,9 +2322,9 @@ cn_statement:
 | CN_HAVE a=assert_expr SEMICOLON
     { let loc = Location_ocaml.(region ($startpos, $endpos) NoCursor) in
       CN_statement (loc, CN_have a) }
-| CN_INSTANTIATE oid=ioption(terminated(cn_variable, COMMA)) e=expr SEMICOLON
+| CN_INSTANTIATE tbi=to_be_instantiated e=expr SEMICOLON
     { let loc = Location_ocaml.(region ($startpos, $endpos) NoCursor) in
-      CN_statement (loc, CN_instantiate (oid, e)) }
+      CN_statement (loc, CN_instantiate (tbi, e)) }
 | CN_UNFOLD id=cn_variable es= delimited(LPAREN, separated_list(COMMA, expr), RPAREN)
     { let loc = Location_ocaml.(region ($startpos, $endpos) NoCursor) in
       CN_statement (loc, CN_unfold (id, es)) }

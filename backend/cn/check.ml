@@ -964,26 +964,17 @@ let load loc pointer ct =
   return value
 
 
-let instantiate loc oid arg =
-  let@ _ = 
-    (* todo: can be skipped once old CN statements have been retired *)
-    ListM.mapM (todo_get_logical_predicate_def_s loc)
-      (List.filter (fun s -> not (String.equal "good" s))
-          (List.map Id.s (Option.to_list oid))) in
+let instantiate loc filter arg =
   let arg_s = Sym.fresh_make_uniq "instance" in
   let arg_it = sym_ (arg_s, IT.bt arg) in
   let@ () = add_l arg_s (IT.bt arg_it) (loc, lazy (Sym.pp arg_s)) in
   let@ () = add_c (LC.t_ (eq__ arg_it arg)) in
   let@ constraints = all_constraints () in
   let extra_assumptions = 
-    let omentions_pred it = match oid with
-      | Some id -> IT.todo_mentions_pred id it
-      | None -> true
-    in
     List.filter_map (fun lc ->
         match lc with
         | Forall ((s, bt), t) 
-             when BT.equal bt (IT.bt arg_it) && omentions_pred t ->
+             when BT.equal bt (IT.bt arg_it) && filter t ->
            Some (LC.t_ (IT.subst (IT.make_subst [(s, arg_it)]) t))
         | _ -> 
            None
@@ -1345,9 +1336,19 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
      unsupported loc !^"have/show"
   | Normal expect, M_Einstantiate (oid, pe) ->
      let@ () = WellTyped.ensure_base_type loc ~expect Unit in
+     let@ _ = 
+       (* todo: can be skipped once old CN statements have been retired *)
+       ListM.mapM (todo_get_logical_predicate_def_s loc)
+         (List.filter (fun s -> not (String.equal "good" s))
+             (List.map Id.s (Option.to_list oid))) in
      check_pexpr ~expect:Integer pe (fun arg ->
-     let@ () = instantiate loc oid arg in
-     k unit_)
+         let omentions_pred it = match oid with
+           | Some id -> IT.todo_mentions_pred id it
+           | None -> true
+         in
+         let@ () = instantiate loc omentions_pred arg in
+         k unit_
+       )
 
   | _, M_Eif (c_pe, e1, e2) ->
      check_pexpr ~expect:Bool c_pe (fun carg ->
@@ -1444,9 +1445,13 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
                end
             | M_CN_have _lc ->
                fail (fun _ -> {loc; msg = Generic !^"todo: 'have' not implemented yet"})
-            | M_CN_instantiate (os, it) ->
-               let oid = Option.map (fun s -> Id.id (Sym.pp_string s)) os in
-               instantiate loc oid it
+            | M_CN_instantiate (to_instantiate, it) ->
+               let filter = match to_instantiate with
+                 | I_Everything -> (fun _ -> true)
+                 | I_Function f -> IT.mentions_call f
+                 | I_Good ct -> IT.mentions_good ct
+               in
+               instantiate loc filter it
             | M_CN_unfold (f, args) ->
                let@ def = get_logical_predicate_def loc f in
                match LP.single_unfold_to_term def f args with

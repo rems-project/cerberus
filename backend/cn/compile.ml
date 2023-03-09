@@ -1251,10 +1251,15 @@ module WithinStatements = struct
         | CN_have assrt ->
            let@ assrt = P.translate_cn_assrt env (loc, assrt) in
            return (M_CN_statement (loc, M_CN_have assrt))
-        | CN_instantiate (o_s, expr) ->
+        | CN_instantiate (to_instantiate, expr) ->
            let@ expr = P.translate_cn_expr SymSet.empty env expr in
            let expr = IT.term_of_sterm expr in
-           return (M_CN_statement (loc, M_CN_instantiate (o_s, expr)))
+           let to_instantiate = match to_instantiate with
+             | I_Everything -> I_Everything
+             | I_Function f -> I_Function f
+             | I_Good ct -> I_Good (Sctypes.of_ctype_unsafe loc ct)
+           in
+           return (M_CN_statement (loc, M_CN_instantiate (to_instantiate, expr)))
         | CN_unfold (s, args) ->
            let@ args = ListM.mapM (P.translate_cn_expr SymSet.empty env) args in
            let args = List.map IT.term_of_sterm args in

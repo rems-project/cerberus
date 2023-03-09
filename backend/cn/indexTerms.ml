@@ -310,6 +310,28 @@ let todo_mentions_pred (pred: Id.t) =
       acc || todo_is_pred pred it
     ) false
 
+let is_call (f: Sym.t) (IT (it_, bt)) = 
+  match it_ with
+  | Pred (f', _) when Sym.equal f f' -> true
+  | _ -> false
+
+let is_good (ct : Sctypes.t) (IT (it_, bt)) = 
+  match it_ with
+  | CT_pred (Good (ct', _)) when Sctypes.equal ct ct' -> true
+  | _ -> false
+
+let mentions_call f =
+  fold_subterms (fun _binders acc it ->
+      acc || is_call f it
+    ) false
+
+let mentions_good ct =
+  fold_subterms (fun _binders acc it ->
+      acc || is_good ct it
+    ) false
+
+
+
 let preds_of t =
   let add_p s = function
     | IT (Pred (id, _), _) -> SymSet.add id s
