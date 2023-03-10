@@ -1235,7 +1235,8 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
      in
      let@ (_loc, ft) = get_fun_decl loc fsym in
 
-     Spine.calltype_ft loc ~fsym pes ft (fun rt ->
+     Spine.calltype_ft loc ~fsym pes ft (fun (Computational ((_, bt), _, _) as rt) ->
+     let@ () = WellTyped.ensure_base_type loc ~expect bt in
      let@ _, members = make_return_record loc (FunctionCall fsym) (RT.binders rt) in
      let@ lvt = bind_return loc members rt in
      k lvt)
