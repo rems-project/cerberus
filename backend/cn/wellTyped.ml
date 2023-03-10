@@ -1196,45 +1196,4 @@ end
 
 
 
-module WCNProg = struct
 
-
-  open Cnprog
-
-  let rec welltyped prog =
-    pure begin
-        match prog with
-        | M_CN_let (loc, (s, {ct; pointer}), prog) ->
-           let@ pointer = WIT.check loc Loc pointer in
-           let@ () = WCT.is_ct loc ct in
-           let@ () = add_a s (BT.of_sct ct) (loc, lazy (Sym.pp s)) in
-           let@ prog = welltyped prog in
-           return (M_CN_let (loc, (s, {ct; pointer}), prog))
-        | M_CN_statement (loc, stmt) ->
-           let@ stmt = match stmt with
-             | M_CN_pack_unpack (pack_unpack, pt) ->
-                let@ pred = WRET.welltyped loc (P pt) in
-                let pt = match pred with P pt -> pt | _ -> assert false in
-                return (M_CN_pack_unpack (pack_unpack, pt))
-             | M_CN_have lc ->
-                let@ lc = WLC.welltyped loc lc in
-                return (M_CN_have lc)
-             | M_CN_instantiate (o_s, it) ->
-                let@ () = match o_s with
-                  | I_Everything -> return ()
-                  | I_Good ct -> WCT.is_ct loc ct
-                  | I_Function f -> 
-                     let@ _ = get_logical_predicate_def loc f in 
-                     return ()
-                in
-                let@ it = WIT.check loc Integer it in
-                return (M_CN_instantiate (o_s, it))
-             | M_CN_unfold (fsym, args) ->
-                let@ _ = get_logical_predicate_def loc fsym in
-                let@ args = ListM.mapM (WIT.infer loc) args in
-                return (M_CN_unfold (fsym, args))
-           in
-           return (M_CN_statement (loc, stmt))
-      end
-
-end

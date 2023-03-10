@@ -18,6 +18,7 @@ type cn_statement =
   | M_CN_have of LogicalConstraints.t
   | M_CN_instantiate of (Sym.t, Sctypes.t) CF.Cn.cn_to_instantiate * IndexTerms.t
   | M_CN_unfold of Sym.t * IndexTerms.t list
+  | M_CN_apply of Sym.t * IndexTerms.t list
 
 type cn_load = {ct : Sctypes.t; pointer : IndexTerms.t}
 
@@ -48,6 +49,9 @@ let rec subst substitution = function
        | M_CN_unfold (fsym, args) ->
           (* fsym is a function symbol *)
           M_CN_unfold (fsym, List.map (IT.subst substitution) args)
+       | M_CN_apply (fsym, args) ->
+          (* fsym is a lemma symbol *)
+          M_CN_apply (fsym, List.map (IT.subst substitution) args)
      in
      M_CN_statement (loc, stmt)
 

@@ -1402,15 +1402,18 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
      )
   | Normal expect, M_CN_progs cn_progs ->
      let@ () = WellTyped.ensure_base_type loc ~expect Unit in
-     let@ cn_progs = ListM.mapM WellTyped.WCNProg.welltyped cn_progs in
      let rec aux = function
        | Cnprog.M_CN_let (loc, (sym, {ct; pointer}), cn_prog) ->
+          let@ pointer = WellTyped.WIT.check loc Loc pointer in
+          let@ () = WCT.is_ct loc ct in
           let@ value = load loc pointer ct in
           aux (Cnprog.subst (IT.make_subst [(sym, value)]) cn_prog)
        | Cnprog.M_CN_statement (loc, stmt) ->
           (* copying bits of code from elsewhere in check.ml *)
           begin match stmt with
             | M_CN_pack_unpack (pack_unpack, pt) ->
+               let@ pred = WRET.welltyped loc (P pt) in
+               let pt = match pred with P pt -> pt | _ -> assert false in
                let@ pname, def = match pt.name with
                  | PName pname -> 
                     let@ def = Typing.get_resource_predicate_def loc pname in
@@ -1443,18 +1446,32 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
                   add_r (P pt, O output)
                   )
                end
-            | M_CN_have _lc ->
+            | M_CN_have lc ->
+               let@ lc = WLC.welltyped loc lc in
                fail (fun _ -> {loc; msg = Generic !^"todo: 'have' not implemented yet"})
             | M_CN_instantiate (to_instantiate, it) ->
-               let filter = match to_instantiate with
-                 | I_Everything -> (fun _ -> true)
-                 | I_Function f -> IT.mentions_call f
-                 | I_Good ct -> IT.mentions_good ct
+               let@ filter = match to_instantiate with
+                 | I_Everything -> 
+                    return (fun _ -> true)
+                 | I_Function f -> 
+                    let@ _ = get_logical_predicate_def loc f in 
+                    return (IT.mentions_call f)
+                 | I_Good ct -> 
+                    let@ () = WCT.is_ct loc ct in 
+                    return (IT.mentions_good ct)
                in
+               let@ it = WIT.check loc Integer it in
                instantiate loc filter it
             | M_CN_unfold (f, args) ->
                let@ def = get_logical_predicate_def loc f in
-               match LP.single_unfold_to_term def f args with
+               let has_args, expect_args = List.length args, List.length def.args in
+               let@ () = WellTyped.ensure_same_argument_number loc `General has_args ~expect:expect_args in
+               let@ args = 
+                 ListM.map2M (fun has_arg (_, def_arg_bt) ->
+                     WellTyped.WIT.check loc def_arg_bt has_arg
+                   ) args def.args
+               in
+               begin match LP.single_unfold_to_term def f args with
                | None ->
                   let msg = 
                     !^"Cannot unfold definition of uninterpreted function" 
@@ -1463,6 +1480,17 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
                   fail (fun _ -> {loc; msg = Generic msg})
                | Some body -> 
                   add_c (LC.t_ (eq_ (pred_ f args def.return_bt, body)))
+               end
+            | M_CN_apply (f, args) ->
+               failwith "todo"
+               (* let@ (_loc, ft) = get_fun_decl loc f in *)
+               (* let@ args = ListM.mapM (WellTyped.WIT.infer loc) args in *)
+               (* Spine.calltype_ft loc ~fsym pes ft (fun (Computational ((_, bt), _, _) as rt) -> *)
+               (*     let@ () = WellTyped.ensure_base_type loc ~expect bt in *)
+               (*     let@ _, members = make_return_record loc (FunctionCall fsym) (RT.binders rt) in *)
+               (*     let@ lvt = bind_return loc members rt in *)
+               (*     return () *)
+               (*   ) *)
           end
      in
      let@ () = ListM.iterM aux cn_progs in
