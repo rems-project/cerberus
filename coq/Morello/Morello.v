@@ -54,11 +54,9 @@ Definition mword_to_bv_2 {z:Z} {n:N} (m : mword z)  : bv n :=
   let x : Z := mword_to_Z_unsigned m in 
   Z_to_bv n x.
 
-Definition mword_to_list_bool {n} (w : mword n) : list bool := 
-   bitlistFromWord_rev (get_word w). 
-
+(* Expects less-significant bits in lower indices *)
 Definition list_bool_to_mword (l : list bool) : mword (Z.of_nat (List.length l)) := 
-  of_bools (List.rev l).
+  of_bools (List.rev l). (* TODO: bypass rev *)
   
 Definition invert_bits {n} (m : mword n) : (mword n) :=
   let l : list bool := mword_to_list_bool m in 
@@ -73,7 +71,6 @@ Program Definition list_bool_to_bv (l : list bool) : bv (N.of_nat (List.length l
   @mword_to_bv (Z.of_nat (List.length l)) (of_bools (List.rev l)).
  Next Obligation. intros. unfold Z.of_nat. destruct (length l). 
  {reflexivity. } {reflexivity. } Defined.  
-
 
 Module Permissions <: Permission.
   Definition len:N := 18. (* CAP_PERMS_NUM_BITS = 16 bits of actual perms + 2 bits for Executive and Global. *)
