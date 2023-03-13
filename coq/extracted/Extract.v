@@ -23,7 +23,12 @@ Extraction NoInline Common.Utils.print_msg.
 Extract Constant Common.Utils.print_msg => "print_endline".
 Extract Inlined Constant Morello.Capability.strfcap => "strfcap".
 
+(* Used by Coq's Real library *)
+Extract Constant ClassicalDedekindReals.sig_forall_dec => "fun _ -> assert false".
+Extract Constant ClassicalDedekindReals.sig_not_dec => false.  (* Ugh *)
+
 (* Set Extraction AccessOpaque. *)
 
 Extraction Library Vector.
 Recursive Extraction Library CheriMemory.
+

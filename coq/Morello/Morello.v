@@ -54,11 +54,6 @@ Definition mword_to_bv_2 {z:Z} {n:N} (m : mword z)  : bv n :=
   let x : Z := mword_to_Z_unsigned m in 
   Z_to_bv n x.
 
-(* Stores less-significant bits in lower indices *)
-Definition mword_to_list_bool {n} (w : mword n) : list bool := 
-   (* bitlistFromWord_rev (get_word w).  *)
-   List.rev (mword_to_bools w). (* TODO: bypass rev *)
-
 (* Expects less-significant bits in lower indices *)
 Definition list_bool_to_mword (l : list bool) : mword (Z.of_nat (List.length l)) := 
   of_bools (List.rev l). (* TODO: bypass rev *)
