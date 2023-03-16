@@ -926,10 +926,10 @@ module Fs_types = struct
     arch_abs_path_slash_slash: bool; (* whether an absolute path can start with a double slash - POSIX has maybe implementation defined *)             (* coverage:sexp *)
     arch_linux_non_posix: bool; (* Linux specific behaviour that is not POSIX compliant FIXME not used? *)                                                             (* coverage:sexp *)
     arch_link_directories: bool; (* whether the implementation allows links on dirs; not supported in this spec *)                                     (* coverage:sexp *)
-    arch_open_flags_of_int: int_open_flags -> finset open_flag  (*o sexp_opaque o*);                                                                   (* coverage:sexp *)
-    arch_int_of_open_flags: finset open_flag -> int_open_flags  (*o sexp_opaque o*);                                                                   (* coverage:sexp *)
-    arch_seek_command_of_int : int_seek_command -> maybe seek_command (*o sexp_opaque o*);                                                             (* coverage:sexp *)
-    arch_int_of_seek_command : seek_command -> int_seek_command  (*o sexp_opaque o*);                                                                  (* coverage:sexp *)
+    arch_open_flags_of_int: int_open_flags -> finset open_flag  (*o [@sexp.opaque] o*);                                                                   (* coverage:sexp *)
+    arch_int_of_open_flags: finset open_flag -> int_open_flags  (*o [@sexp.opaque] o*);                                                                   (* coverage:sexp *)
+    arch_seek_command_of_int : int_seek_command -> maybe seek_command (*o [@sexp.opaque] o*);                                                             (* coverage:sexp *)
+    arch_int_of_seek_command : seek_command -> int_seek_command  (*o [@sexp.opaque] o*);                                                                  (* coverage:sexp *)
                                                                                                                                                        (* coverage:sexp *)
     arch_allows_dir_read : bool; (* allow reading from a directory? If set to false, reading a directory needs readdir command instead of read. *)     (* coverage:sexp *)
     arch_group_from_parent_dir: bool; (* Should new directories inherit the group of their parent dir? If set false, they use                          (* coverage:sexp *)
@@ -956,7 +956,7 @@ module Fs_types = struct
     pops_chown_dir: 'jimpl -> (uid * gid) -> 'dir_ref -> 'jimpl;
 
     pops_uid_is_superuser : 'jimpl -> uid -> bool
-  |> (* sexp_opaque with sexp *)
+  |> (*o with sexp_of o*)
 
 
   (* a dummy implementation of perm_ops with no-ops everywhere *)
@@ -1006,9 +1006,10 @@ module Fs_types = struct
        'jimpl -> (* parent dir *) 'dir_ref -> 'dir_ref  -> bool; 
      cp_has_file_restricted_delete_privilege : bool -> 'jimpl -> (* parent dir *) 'dir_ref -> 'file_ref -> bool; 
 
-  |>
+  |> (*o with sexp_of o*)
 
-
+(* NOTE: this definition is needed otherwise the presence of the following # causes the previous comment to be lost in the generated OCaml *)
+let _protect_comment = ()
   
 # 1003 "t_fs_spec.lem_cppo"
   (*-------------------------------*)
@@ -1061,7 +1062,7 @@ module Fs_types = struct
     fops_observe_dir_register : 'jimpl -> 'dir_ref -> ('jimpl * ty_od_handle 'dir_ref);
     fops_observe_dir : 'jimpl -> ty_od_handle 'dir_ref -> ('jimpl * list ty_od_entry);
     fops_observe_dir_unregister : 'jimpl -> ty_od_handle 'dir_ref -> 'jimpl;
-  |>
+  |> (*o with sexp_of o*)
 
 
   (*-------------------------------*)
@@ -1069,12 +1070,12 @@ module Fs_types = struct
   (*-------------------------------*)
 
   type environment 'dir_ref 'file_ref 'jimpl = <|                                 (* coverage:sexp *)
-    env_ops: fs_ops 'dir_ref 'file_ref 'jimpl  (*o sexp_opaque o*);               (* coverage:sexp *)
+    env_ops: fs_ops 'dir_ref 'file_ref 'jimpl  (*o [@sexp.opaque] o*);               (* coverage:sexp *)
     env_arch: ty_arch;                                                            (* coverage:sexp *)
     
 # 1064 "t_fs_spec.lem_cppo"
-    env_prms : check_permissions 'dir_ref 'file_ref 'jimpl  (*o sexp_opaque o*);  (* coverage:sexp *)
-    env_perm_ops: perm_ops 'dir_ref 'file_ref 'jimpl  (*o sexp_opaque o*);        (* coverage:sexp *)
+    env_prms : check_permissions 'dir_ref 'file_ref 'jimpl  (*o [@sexp.opaque] o*);  (* coverage:sexp *)
+    env_perm_ops: perm_ops 'dir_ref 'file_ref 'jimpl  (*o [@sexp.opaque] o*);        (* coverage:sexp *)
   
 # 1067 "t_fs_spec.lem_cppo"
   |> (*o with sexp_of o*) (* coverage:sexp*)
@@ -1203,7 +1204,7 @@ o*)
   type ty_os_state 'dir_ref 'file_ref 'jimpl = <|                 (* coverage:sexp *)
     oss_pid_table: fmap ty_pid (per_process_state 'dir_ref);      (* coverage:sexp *)
     oss_fid_table: fmap ty_fid (fid_state 'dir_ref 'file_ref);    (* coverage:sexp *)
-    oss_group_table: fmap gid (finset uid) (*o sexp_opaque o*);   (* coverage:sexp *)
+    oss_group_table: fmap gid (finset uid) (*o [@sexp.opaque] o*);   (* coverage:sexp *)
     oss_fs_state: 'jimpl;                                         (* coverage:sexp *)
     oss_env: environment 'dir_ref 'file_ref 'jimpl                (* coverage:sexp *)
   |> (*o with sexp_of o*)                                         (* coverage:sexp *)

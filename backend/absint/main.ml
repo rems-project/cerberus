@@ -347,7 +347,7 @@ let absdomain =
 
 (* entry point *)
 let () =
-  let cerberus_t = Term.(pure cerberus $ debug_level $ progress $
+  let cerberus_t = Term.(const cerberus $ debug_level $ progress $
                          cpp_cmd $ nostdinc $ nolibc $ macros $ macros_undef $
                          incl_dir $ incl_file $ cpp_only $
                          link_lib_path $ link_core_obj $
@@ -360,5 +360,5 @@ let () =
                          output_file $
                          files $ args) in
   let version = Version.version in
-  let info = Term.info "cerberus" ~version ~doc:"Cerberus C semantics"  in
-  Term.exit @@ Term.eval (cerberus_t, info)
+  let info = Cmd.info "cerberus" ~version ~doc:"Cerberus C semantics"  in
+  Stdlib.exit @@ Cmd.eval' (Cmd.v info cerberus_t)

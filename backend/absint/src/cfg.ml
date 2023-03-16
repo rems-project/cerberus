@@ -17,6 +17,8 @@ module Sym = struct
     let descr = function
       | SD_None -> 
          "a" ^ string_of_int n
+      | SD_unnamed_tag _ ->
+          "unnamed_tag"
       | SD_Id s -> 
          s
       | SD_CN_Id s -> 
@@ -992,7 +994,7 @@ let mk_cfg_e ~sequentialise e =
        remove_isolated_vertices ())
 
 let mk_cfg_fun ~sequentialise = function
-  | Proc (_, _, params, e) ->
+  | Proc (_, _, _, params, e) ->
     let (node_id, g) = mk_cfg_e ~sequentialise e in
     Tgraph (List.map fst params, node_id, g)
   | Fun (_, params, pe) ->
@@ -1049,7 +1051,7 @@ let mk_main ?(sequentialise=false) core =
     | None -> assert false
   in
   match Pmap.lookup main core.funs with
-  | Some (Proc (_, _, _, e)) ->
+  | Some (Proc (_, _, _, _, e)) ->
     mk_cfg_e ~sequentialise e
   | _ ->
     assert false

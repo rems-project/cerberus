@@ -2,8 +2,8 @@
 
 (executable
  (name main)
- (public_name playground)
- (package cerberus)
+ ; (public_name playground)
+ ; (package cerberus)
  (flags (:standard -w -27))
  (libraries cmdliner str unix
   cerb_frontend cerb_backend mem_concrete util))

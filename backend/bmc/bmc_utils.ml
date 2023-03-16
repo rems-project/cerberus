@@ -413,6 +413,7 @@ let set_uid file1 =
   funinfo= (file1.funinfo);
   extern=  file1.extern;
   loop_attributes0= file1.loop_attributes0;
+  visible_objects_env = file1.visible_objects_env;
  })
 
 let get_uid_or_fail annots : string =
