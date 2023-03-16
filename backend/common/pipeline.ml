@@ -413,16 +413,6 @@ let untype_file (file: 'a Core.typed_file) : 'a Core.file =
           Epar (List.map untype_expr es)
       | Ewait tid ->
           Ewait tid
-      | Epack (id, pes) ->
-          Epack (id, List.map untype_pexpr pes)
-      | Eunpack (id, pes) ->
-          Eunpack (id, List.map untype_pexpr pes)
-      | Ehave (id, pes) ->
-          Ehave (id, List.map untype_pexpr pes)
-      | Eshow (id, pes) ->
-          Eshow (id, List.map untype_pexpr pes)
-      | Einstantiate (id, pe) ->
-          Einstantiate (id, untype_pexpr pe)
       | Eannot _ | Eexcluded _ ->
           assert false (* only exists during Core runtime *)
     in Expr (annots, aux expr_) in

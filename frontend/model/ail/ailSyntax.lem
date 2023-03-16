@@ -207,11 +207,6 @@ type statement_ 'a [name="s*"] =
   | AilSreg_store of reg * expression 'a
 (* for CN *)
   | AilSmarker of nat * statement 'a (* NOTE: this is placeholder we used to carry annotations for CN *)
-  | AilSpack of Annot.to_pack_unpack * list (expression 'a)
-  | AilSunpack of Annot.to_pack_unpack * list (expression 'a)
-  | AilShave of Symbol.identifier * list (expression 'a)
-  | AilSshow of Symbol.identifier * list (expression 'a)
-  | AilSinstantiate of maybe Symbol.identifier * expression 'a
 and statement 'a [name="s*"] =
   | AnnotatedStatement of Loc.t * Annot.attributes * statement_ 'a
 

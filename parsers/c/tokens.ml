@@ -141,10 +141,7 @@ type token =
   | CN_GOOD
   | CN_PACK
   | CN_UNPACK
-  | CN_PACK_STRUCT
-  | CN_UNPACK_STRUCT
   | CN_HAVE
-  | CN_SHOW
   | CN_INSTANTIATE
   | CN_UNFOLD
   | CN_PREDNAME of string
@@ -294,10 +291,7 @@ let string_of_token = function
   | CN_GOOD -> "CN_GOOD"
   | CN_PACK -> "CN_PACK"
   | CN_UNPACK -> "CN_UNPACK"
-  | CN_PACK_STRUCT -> "CN_PACK_STRUCT"
-  | CN_UNPACK_STRUCT -> "CN_UNPACK_STRUCT"
   | CN_HAVE -> "CN_HAVE"
-  | CN_SHOW -> "CN_SHOW"
   | CN_INSTANTIATE -> "CN_INSTANTIATE"
   | CN_UNFOLD -> "CN_UNFOLD"
   | CN_PREDNAME str -> "CN_PREDNAME(" ^ str ^ ")"

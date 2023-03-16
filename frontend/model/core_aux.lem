@@ -966,16 +966,6 @@ let rec subst_sym_expr sym cval (Expr annot expr_) =
         Epar (List.map (subst_sym_expr sym cval) es)
     | Ewait _ ->
       expr_
-    | Epack id es ->
-       Epack id (List.map (subst_sym_pexpr sym cval) es)
-    | Eunpack id es ->
-       Eunpack id (List.map (subst_sym_pexpr sym cval) es)
-    | Ehave id es ->
-       Ehave id (List.map (subst_sym_pexpr sym cval) es)
-    | Eshow id es ->
-       Eshow id (List.map (subst_sym_pexpr sym cval) es)
-    | Einstantiate id e ->
-       Einstantiate id (subst_sym_pexpr sym cval e)
     | Eannot xs e ->
         Eannot xs (subst_sym_expr sym cval e)
     | Eexcluded n act ->
@@ -1235,16 +1225,6 @@ let rec unsafe_subst_sym_expr sym pe' (Expr annot expr_) =
         Epar (List.map (unsafe_subst_sym_expr sym pe') es)
     | Ewait _ ->
         expr_
-    | Epack id es ->
-       Epack id (List.map (unsafe_subst_sym_pexpr sym pe') es)
-    | Eunpack id es ->
-       Eunpack id (List.map (unsafe_subst_sym_pexpr sym pe') es)
-    | Ehave id es ->
-       Ehave id (List.map (unsafe_subst_sym_pexpr sym pe') es)
-    | Eshow id es ->
-       Eshow id (List.map (unsafe_subst_sym_pexpr sym pe') es)
-    | Einstantiate id e ->
-       Einstantiate id (unsafe_subst_sym_pexpr sym pe' e)
     | Eannot xs e ->
         Eannot xs (unsafe_subst_sym_expr sym pe' e)
     | Eexcluded n act ->
@@ -1518,16 +1498,6 @@ let rec to_pure (Expr annot expr_) (*(expr : expr 'a)*) =
         Nothing
     | Ewait _ ->
         Nothing
-    | Epack _ _ ->
-        Nothing
-    | Eunpack _ _ ->
-        Nothing
-    | Ehave _ _ ->
-        Nothing
-    | Eshow _ _ ->
-        Nothing
-    | Einstantiate _ _ ->
-        Nothing
     | Eannot _ _ ->
         error "to_pure Eannot"
     | Eexcluded _ _ ->
@@ -1611,16 +1581,6 @@ let rec subst_wait tid v (Expr annot expr_) =
          end
        else
          Ewait tid'
-   | Epack _ _ ->
-       expr_
-   | Eunpack _ _ ->
-       expr_
-   | Ehave _ _ ->
-       expr_
-   | Eshow _ _ ->
-       expr_
-   | Einstantiate _ _ ->
-       expr_
    | Eannot xs e ->
        Eannot xs (subst_wait tid v e)
    | Eexcluded _ _ ->
@@ -1711,16 +1671,6 @@ let rec find_labeled_continuation sym (Expr annot expr_) =
         Nothing
     | Ewait _ ->
         Nothing
-    | Epack _ _ ->
-        Nothing
-    | Eunpack _ _ ->
-        Nothing
-    | Ehave _ _ ->
-        Nothing
-    | Eshow _ _ ->
-        Nothing
-    | Einstantiate _ _ ->
-        Nothing
     | Eannot _ _ ->
         (* NOTE: Eannot only appear at runtime, and inside an Ebound, where
                  typing forbids labeled continuation bindings. *)
@@ -1799,16 +1749,6 @@ let rec find_labeled_continuation2_aux acc sym (Expr annot expr_) =
         let () = Debug.warn [] (fun () -> "Core_aux.find_labeled_continuation2_aux assumes there are no Esave inside par()") in
         acc
     | Ewait _ ->
-        acc
-    | Epack _ _ ->
-        acc
-    | Eunpack _ _ ->
-        acc
-    | Ehave _ _ ->
-        acc
-    | Eshow _ _ ->
-        acc
-    | Einstantiate _ _ ->
         acc
     | Eannot _ _ ->
         (* NOTE: Typing forbids labeled continuation bindings inside annot() *)
@@ -1896,16 +1836,6 @@ let rec collect_labeled_continuations (Expr annot expr_) =
         (* TODO: check *)
         Map.empty
     | Ewait _ ->
-        Map.empty
-    | Epack _ _ ->
-        Map.empty
-    | Eunpack _ _ ->
-        Map.empty
-    | Ehave _ _ ->
-        Map.empty
-    | Eshow _ _ ->
-        Map.empty
-    | Einstantiate _ _ ->
         Map.empty
     | Eannot _ _ ->
         Map.empty
@@ -2230,16 +2160,6 @@ let rec collect_saves_aux st (Expr annots expr_) =
                       st.closed_acc |>
     | Ewait _ ->
         st
-    | Epack _ _ ->
-        st
-    | Eunpack _ _ ->
-        st
-    | Ehave _ _ ->
-        st
-    | Eshow _ _ ->
-        st
-    | Einstantiate _ _ ->
-        st
     | Eannot _ _ ->
         (* typing forbids "saves" inside a "annot()" *)
         st
@@ -2347,16 +2267,6 @@ let rec m_collect_saves_aux st (Expr annots expr_) =
           Map.(union) (Map.(union) acc.m_tmp_acc acc.m_closed_acc)
                       st.m_closed_acc |>
     | Ewait _ ->
-        st
-    | Epack _ _ ->
-        st
-    | Eunpack _ _ ->
-        st
-    | Ehave _ _ ->
-        st
-    | Eshow _ _ ->
-        st
-    | Einstantiate _ _ ->
         st
     | Eannot _ _ ->
         st

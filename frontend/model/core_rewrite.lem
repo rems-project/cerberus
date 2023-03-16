@@ -214,21 +214,6 @@ let rec remove_skips (Expr annot expr_ as expr) =
     | Ewait _ ->
         (* unchanged *)
         expr
-    | Epack _ _ ->
-        (* unchanged *)
-        expr
-    | Eunpack _ _ ->
-        (* unchanged *)
-        expr
-    | Ehave _ _ ->
-        (* unchanged *)
-        expr
-    | Eshow _ _ ->
-        (* unchanged *)
-        expr
-    | Einstantiate _ _ ->
-        (* unchanged *)
-        expr
     | Eannot xs e ->
         (* just traversing *)
         Expr annot (Eannot xs (remove_skips e))
@@ -346,21 +331,6 @@ let rec remove_unseqs (Expr annot expr_ as expr) =
         (* just traversing *)
         Expr annot (Epar (List.map remove_unseqs es))
     | Ewait _ ->
-        (* unchanged *)
-        expr
-    | Epack _ _ ->
-        (* unchanged *)
-        expr
-    | Eunpack _ _ ->
-        (* unchanged *)
-        expr
-    | Ehave _ _ ->
-        (* unchanged *)
-        expr
-    | Eshow _ _ ->
-        (* unchanged *)
-        expr
-    | Einstantiate _ _ ->
         (* unchanged *)
         expr
     | Eannot xs e ->
@@ -574,16 +544,6 @@ let rec remove_dead_aux (Expr annot expr_ as expr) =
         end
     | Ewait _ ->
         Left expr
-    | Epack _ _ ->
-        Left expr
-    | Eunpack _ _ ->
-        Left expr
-    | Ehave _ _ ->
-        Left expr
-    | Eshow _ _ ->
-        Left expr
-    | Einstantiate _ _ ->
-        Left expr
     | Eannot xs e ->
         match remove_dead_aux e with
           | Left e' ->
@@ -663,16 +623,6 @@ let rec flatten_seqs (Expr annot expr_ as expr) =
     | Epar es ->
         Expr annot (Epar (List.map flatten_seqs es))
     | Ewait _ ->
-        expr
-    | Epack _ _ ->
-        expr
-    | Eunpack _ _ ->
-        expr
-    | Ehave _ _ ->
-        expr
-    | Eshow _ _ ->
-        expr
-    | Einstantiate _ _ ->
         expr
     | Eannot xs e ->
         Expr annot (Eannot xs (flatten_seqs e))
@@ -850,16 +800,6 @@ let rec remove_conv_int (Expr annot expr_) =
         Epar (List.map remove_conv_int es)
     | Ewait _ ->
         expr_
-    | Epack _ _ ->
-        expr_
-    | Eunpack _ _ ->
-        expr_
-    | Ehave _ _ ->
-        expr_
-    | Eshow _ _ ->
-        expr_
-    | Einstantiate _ _ ->
-        expr_
     | Eannot fps e ->
         Eannot fps (remove_conv_int e)
     | Eexcluded n act ->
@@ -982,16 +922,6 @@ let rec sequentialise_creates_kills (Expr annot expr_) =
     | Epar es ->
         Epar (List.map sequentialise_creates_kills es)
     | Ewait _ ->
-        expr_
-    | Epack _ _ ->
-        expr_
-    | Eunpack _ _ ->
-        expr_
-    | Ehave _ _ ->
-        expr_
-    | Eshow _ _ ->
-        expr_
-    | Einstantiate _ _ ->
         expr_
     | Eannot xs e ->
         Eannot xs (sequentialise_creates_kills e)
@@ -1279,16 +1209,6 @@ let rec pure_propagation2 (Expr annot expr_ as expr) =
         Expr annot (Epar (List.map pure_propagation2 es))
     | Ewait _ ->
         expr
-    | Epack _ _ ->
-        expr
-    | Eunpack _ _ ->
-        expr
-    | Ehave _ _ ->
-        expr
-    | Eshow _ _ ->
-        expr
-    | Einstantiate _ _ ->
-        expr
     | Eannot xs e ->
         Expr annot (Eannot xs (pure_propagation2 e))
     | Eexcluded _ _ ->
@@ -1476,16 +1396,6 @@ let rec simpl_case (Expr annot expr_ as expr) =
     | Epar es ->
         wrap $ Epar (List.map simpl_case es)
     | Ewait _ ->
-        expr
-    | Epack _ _ ->
-        expr
-    | Eunpack _ _ ->
-        expr
-    | Ehave _ _ ->
-        expr
-    | Eshow _ _ ->
-        expr
-    | Einstantiate _ _ ->
         expr
     | Eannot xs e ->
         wrap $ Eannot xs (simpl_case e)

@@ -677,21 +677,6 @@ let rec symbolify_expr ((Expr (annot, expr_)) : parsed_expr) : (unit expr) Eff.t
    | Eannot _
    | Eexcluded _ ->
        assert false
-   | Epack (id, pes) ->
-       Eff.mapM symbolify_pexpr pes >>= fun pes ->
-       Eff.return (Epack (id, pes))
-   | Eunpack (id, pes) ->
-       Eff.mapM symbolify_pexpr pes >>= fun pes ->
-       Eff.return (Eunpack (id, pes))
-   | Ehave (id, pes) ->
-       Eff.mapM symbolify_pexpr pes >>= fun pes ->
-       Eff.return (Ehave (id, pes))
-   | Eshow (id, pes) ->
-       Eff.mapM symbolify_pexpr pes >>= fun pes ->
-       Eff.return (Eshow (id, pes))
-   | Einstantiate (id, pe) ->
-       symbolify_pexpr pe >>= fun pe ->
-       Eff.return (Einstantiate (id, pe))
 
 and symbolify_action_ = function
  | Create (_pe1, _pe2, pref) ->
@@ -791,11 +776,7 @@ let rec register_labels ((Expr (_, expr_)) : parsed_expr) : unit Eff.t  =
     | Eproc _
     | Erun _
     | Ewait _
-    | Epack _ 
-    | Eunpack _ 
-    | Ehave _
-    | Eshow _ 
-    | Einstantiate _ ->
+      ->
         Eff.return ()
     | Ecase (_, _pat_es) ->
         Eff.mapM_ (fun (_, _e) ->

@@ -82,11 +82,6 @@ let rec remove_save expr =
   | Erun _ -> expr
   | Epar es -> wrap (Epar (List.map remove_save es))
   | Ewait _ -> expr
-  | Epack _ -> expr
-  | Eunpack _ -> expr
-  | Ehave _ -> expr
-  | Eshow _ -> expr
-  | Einstantiate _ -> expr
   | Eannot (fps, e) -> wrap (Eannot (fps, remove_save e))
   | Eexcluded _ -> expr
   | End es ->

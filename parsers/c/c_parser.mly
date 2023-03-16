@@ -148,7 +148,7 @@ let warn_extra_semicolon pos ctx =
 (* CN syntax *)
 (* %token<string> CN_PREDNAME *)
 %token CN_ACCESSES CN_TRUSTED CN_REQUIRES CN_ENSURES CN_INV
-%token CN_PACK CN_UNPACK CN_PACK_STRUCT CN_UNPACK_STRUCT CN_HAVE CN_SHOW CN_INSTANTIATE CN_UNFOLD
+%token CN_PACK CN_UNPACK CN_HAVE CN_INSTANTIATE CN_UNFOLD
 %token CN_BOOL CN_INTEGER CN_REAL CN_POINTER CN_MAP CN_LIST CN_TUPLE CN_SET
 %token CN_WHEN CN_LET CN_TAKE CN_OWNED CN_BLOCK CN_EACH CN_FUNCTION CN_PREDICATE CN_DATATYPE
 %token CN_UNCHANGED CN_WITH
@@ -290,7 +290,6 @@ let warn_extra_semicolon pos ctx =
 %type<Cabs.cabs_statement>
   statement labeled_statement compound_statement expression_statement
   selection_statement iteration_statement jump_statement 
-  pack_statement unpack_statement have_statement show_statement instantiate_statement
 
 %type<Cabs.cabs_statement list>
   block_item_list
@@ -1315,17 +1314,6 @@ statement:
     { inject_attr attr_opt stmt }
 | stmt= asm_statement
     { stmt }
-/* for CN */
-| stmt= pack_statement
-    { stmt }
-| stmt= unpack_statement
-    { stmt }
-| stmt= have_statement
-    { stmt }
-| stmt= show_statement
-    { stmt }
-| stmt= instantiate_statement
-    { stmt }
 ;
 
 (* §6.8.1 Labeled statements *)
@@ -1570,27 +1558,6 @@ asm_statement:
 ;
 
 
-pack_statement:
-  | CN_PACK_STRUCT name= general_identifier LPAREN args= argument_expression_list RPAREN SEMICOLON
-    { CabsStatement (Location_ocaml.(region ($startpos, $endpos) NoCursor), Annot.no_attributes, CabsSpack (CTPU_Struct name, args)) }
-  | CN_PACK name= general_identifier LPAREN args= argument_expression_list RPAREN SEMICOLON
-    { CabsStatement (Location_ocaml.(region ($startpos, $endpos) NoCursor), Annot.no_attributes, CabsSpack (CTPU_Predicate name, args)) }
-unpack_statement:
-  | CN_UNPACK_STRUCT name= general_identifier LPAREN args= argument_expression_list RPAREN SEMICOLON
-    { CabsStatement (Location_ocaml.(region ($startpos, $endpos) NoCursor), Annot.no_attributes, CabsSunpack (CTPU_Struct name, args)) }
-  | CN_UNPACK name= general_identifier LPAREN args= argument_expression_list RPAREN SEMICOLON
-    { CabsStatement (Location_ocaml.(region ($startpos, $endpos) NoCursor), Annot.no_attributes, CabsSunpack (CTPU_Predicate name, args)) }
-have_statement:
-  | CN_HAVE name= general_identifier LPAREN args= argument_expression_list RPAREN SEMICOLON
-    { CabsStatement (Location_ocaml.(region ($startpos, $endpos) NoCursor), Annot.no_attributes, CabsShave (name, args)) }
-show_statement:
-  | CN_SHOW name= general_identifier LPAREN args= argument_expression_list RPAREN SEMICOLON
-    { CabsStatement (Location_ocaml.(region ($startpos, $endpos) NoCursor), Annot.no_attributes, CabsSshow (name, args)) }
-instantiate_statement:
-  | CN_INSTANTIATE id=general_identifier COMMA arg=assignment_expression SEMICOLON
-    { CabsStatement (Location_ocaml.(region ($startpos, $endpos) NoCursor), Annot.no_attributes, CabsSinstantiate (Some id, arg)) }
-  | CN_INSTANTIATE arg=assignment_expression SEMICOLON
-    { CabsStatement (Location_ocaml.(region ($startpos, $endpos) NoCursor), Annot.no_attributes, CabsSinstantiate (None, arg)) }
 
 (* §6.9 External definitions *)
 external_declaration_list: (* NOTE: the list is in reverse *)

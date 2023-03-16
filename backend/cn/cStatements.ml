@@ -103,11 +103,6 @@ let add_map_stmt (stmt : 'a statement) m =
     | AilSreturn e -> f ss (do_x l m e)
     | AilSdeclaration xs -> f ss (do_xs l m (List.map snd xs))
     | AilSreg_store (_, x) -> f ss (do_x l m x)
-    | AilSpack (_, xs) -> f ss (do_xs l m xs)
-    | AilSunpack (_, xs) -> f ss (do_xs l m xs)
-    | AilShave (_, xs) -> f ss (do_xs l m xs)
-    | AilSshow (_, xs) -> f ss (do_xs l m xs)
-    | AilSinstantiate (_, x) -> f ss (do_x l m x)
     | _ -> f ss m
     end
   in

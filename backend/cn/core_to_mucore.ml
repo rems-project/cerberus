@@ -774,26 +774,6 @@ let rec n_expr (loc : Loc.t) (env, desugaring_things) (global_types, visible_obj
      assert_error loc !^"core_anormalisation: Epar"
   | Ewait tid1 ->
      assert_error loc !^"core_anormalisation: Ewait"
-  | Epack(id, pes) ->
-     warn loc !^"outdated CN statement";
-     let pes = List.map n_pexpr pes in
-     return (wrap (M_Erpredicate(Pack, id, pes)))
-  | Eunpack(id, pes) ->
-     warn loc !^"outdated CN statement";
-     let pes = List.map n_pexpr pes in
-     return (wrap (M_Erpredicate(Unpack, id, pes)))
-  | Ehave(id, pes) ->
-     warn loc !^"outdated CN statement";
-     let pes = List.map n_pexpr pes in
-     return (wrap (M_Elpredicate(Have, id, pes)))
-  | Eshow(id, pes) ->
-     warn loc !^"outdated CN statement";
-     let pes = List.map n_pexpr pes in
-     return (wrap (M_Elpredicate(Show, id, pes)))
-  | Einstantiate (id, pe) ->
-     warn loc !^"outdated CN statement";
-     let pe = n_pexpr pe in
-     return (wrap (M_Einstantiate (id, pe)))
   | Eannot _ ->
       assert_error loc !^"core_anormalisation: Eannot"
   | Eexcluded _ ->

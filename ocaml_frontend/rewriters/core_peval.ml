@@ -361,16 +361,6 @@ let rec subst_sym_expr2 sym z (Expr (annot, expr_)) =
                 Epar (List.map (subst_sym_expr2 sym z) es)
             | Ewait _ ->
                 expr_ 
-            | Epack (id, pes) ->
-                Epack (id, List.map (subst_sym_pexpr2 sym z) pes)
-            | Eunpack (id, pes) ->
-                Eunpack (id, List.map (subst_sym_pexpr2 sym z) pes)
-            | Ehave (id, pes) ->
-                Ehave (id, List.map (subst_sym_pexpr2 sym z) pes)
-            | Eshow (id, pes) ->
-                Eshow (id, List.map (subst_sym_pexpr2 sym z) pes)
-            | Einstantiate (id, pe) ->
-                Einstantiate (id, subst_sym_pexpr2 sym z pe)
             | Eannot (fps, e) ->
                 Eannot (fps, subst_sym_expr2 sym z e)
             | Eexcluded (n, act) ->

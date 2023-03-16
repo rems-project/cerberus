@@ -322,15 +322,6 @@ and cabs_statement_ =
 
   (* for CN *)
   | CabsSmarker of cabs_statement
-  | CabsSpack of cabs_to_pack_unpack * list cabs_expression
-  | CabsSunpack of cabs_to_pack_unpack * list cabs_expression
-  | CabsShave of Symbol.identifier * list cabs_expression
-  | CabsSshow of Symbol.identifier * list cabs_expression
-  | CabsSinstantiate of maybe Symbol.identifier * cabs_expression
-
-and cabs_to_pack_unpack =
-  | CTPU_Struct of Symbol.identifier
-  | CTPU_Predicate of Symbol.identifier
 
 
 and cabs_statement =

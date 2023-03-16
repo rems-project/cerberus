@@ -353,21 +353,6 @@ let rec add_to_sb p_aids (Expr annot expr_ as expr) =
       | Ewait _ ->
           (* no change *)
           expr_
-      | Epack _ _ ->
-          (* no change *)
-          expr_
-      | Eunpack _ _ ->
-          (* no change *)
-          expr_
-      | Ehave _ _ ->
-          (* no change *)
-          expr_
-      | Eshow _ _ ->
-          (* no change *)
-          expr_
-      | Einstantiate _ _ ->
-          (* no change *)
-          expr_
       | Eannot _ _ ->
           error "Core_run_aux.add_to_sb, Eannot"
       | Eexcluded _ _ ->
@@ -453,21 +438,6 @@ let rec add_to_asw aids (Expr annot expr_ as expr) =
       | Epar es ->
           Epar (List.map (add_to_asw aids) es)
       | Ewait _ ->
-          (* no change *)
-          expr_
-      | Epack _ _ ->
-          (* no change *)
-          expr_
-      | Eunpack _ _ ->
-          (* no change *)
-          expr_
-      | Ehave _ _ ->
-          (* no change *)
-          expr_
-      | Eshow _ _ ->
-          (* no change *)
-          expr_
-      | Einstantiate _ _ ->
           (* no change *)
           expr_
       | Eannot _ _ ->
@@ -670,16 +640,6 @@ let rec convert_expr (Expr annot expr_) =
         Epar (List.map convert_expr es)
     | Ewait tid ->
         Ewait tid
-    | Epack id pes ->
-        Epack id (List.map convert_pexpr pes)
-    | Eunpack id pes ->
-        Eunpack id (List.map convert_pexpr pes)
-    | Ehave id pes ->
-        Ehave id (List.map convert_pexpr pes)
-    | Eshow id pes ->
-        Eshow id (List.map convert_pexpr pes)
-    | Einstantiate id pe ->
-        Einstantiate id (convert_pexpr pe)
     | Eannot fps e ->
         Eannot fps (convert_expr e)
     | Eexcluded n act ->

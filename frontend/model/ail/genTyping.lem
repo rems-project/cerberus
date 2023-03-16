@@ -2084,21 +2084,6 @@ let rec annotate_statement_ loc sigm gamm ty stmt =
     | AilSmarker id s ->
         annotate_statement s >>= fun s' ->
         E.return (AilSmarker id s')
-    | AilSpack id es ->
-        E.mapM annotate_expression es >>= fun es' ->
-        E.return (AilSpack id es')
-    | AilSunpack id es ->
-        E.mapM annotate_expression es >>= fun es' ->
-        E.return (AilSunpack id es')
-    | AilShave id es ->
-        E.mapM annotate_expression es >>= fun es' ->
-        E.return (AilShave id es')
-    | AilSshow id es ->
-        E.mapM annotate_expression es >>= fun es' ->
-        E.return (AilSshow id es')
-    | AilSinstantiate id e ->
-        annotate_expression e >>= fun e' ->
-        E.return (AilSinstantiate id e')
   end
 
 and annotate_statement sigm gamm ty (AnnotatedStatement loc attrs stmt) =

@@ -202,9 +202,6 @@ type 'TY mu_expr_ =  (* (effectful) expression *)
  | M_Eskip
  | M_Eccall of 'TY act * 'TY mu_pexpr * ('TY mu_pexpr) list (* C function call *)
  (* | M_Eproc of mu_name * ('TY mu_pexpr) list (\* Core procedure call *\) *)
- | M_Erpredicate of CF.Cn.pack_unpack * Annot.to_pack_unpack * ('TY mu_pexpr) list
- | M_Elpredicate of Cnprog.have_show * Symbol.identifier * ('TY mu_pexpr) list
- | M_Einstantiate of Symbol.identifier option * 'TY mu_pexpr
 
  | M_Elet of ('TY mu_sym_or_pattern) * ('TY mu_pexpr) * ('TY mu_expr)
  | M_Eunseq of ('TY mu_expr) list (* unsequenced expressions *)

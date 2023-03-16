@@ -438,11 +438,7 @@ let dtree_of_binding (i, ((_, sd, is_reg), align_opt, qs, ty)) =
          ^^^ pp_cond is_reg (pp_type_keyword "register") (P.squotes (pp_ctype qs ty))
          ^^  P.optional (fun z -> P.space ^^ P.brackets (pp_alignment z)) align_opt)
 
-let pp_to_pack_unpack = function
-  | Annot.TPU_Struct sym ->
-      !^ "struct" ^^^ pp_symbol sym
-  | Annot.TPU_Predicate (Symbol.Identifier (_, str)) ->
-      !^ "predicate" ^^^ !^ str
+
 
 let rec dtree_of_statement pp_annot (AnnotatedStatement (loc, attrs, stmt_)) =
   let dtree_of_expression = dtree_of_expression pp_annot in
@@ -511,18 +507,6 @@ let rec dtree_of_statement pp_annot (AnnotatedStatement (loc, attrs, stmt_)) =
     | AilSmarker (n, s) ->
         Dnode ( pp_stmt_ctor "AilSmarker" ^^^ !^("#" ^ string_of_int n)
               , [dtree_of_statement s] )
-    | AilSpack (ctpu, es) ->
-        Dnode ( pp_stmt_ctor "CabsSpack" ^^ P.parens (pp_to_pack_unpack ctpu), List.map dtree_of_expression es )
-    | AilSunpack (ctpu, es) ->
-        Dnode ( pp_stmt_ctor "CabsSunpack" ^^ P.parens (pp_to_pack_unpack ctpu), List.map dtree_of_expression es )
-    | AilShave (Symbol.Identifier (_, str), es) ->
-        Dnode ( pp_stmt_ctor "CabsShave" ^^ P.parens (!^ str), List.map dtree_of_expression es )
-    | AilSshow (Symbol.Identifier (_, str), es) ->
-        Dnode ( pp_stmt_ctor "CabsSshow" ^^ P.parens (!^ str), List.map dtree_of_expression es )
-    | AilSinstantiate (Some (Symbol.Identifier (_, str)), e) ->
-        Dnode ( pp_stmt_ctor "CabsSinstantiate"  ^^ P.parens (!^ str), [dtree_of_expression e] )
-    | AilSinstantiate (None, e) ->
-        Dnode ( pp_stmt_ctor "CabsSinstantiate", [dtree_of_expression e] )
   end
 
 let dtree_of_function_definition pp_annot (fun_sym, (loc, _, attrs, param_syms, stmt)) =

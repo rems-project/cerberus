@@ -110,10 +110,7 @@ let keywords: (string * (unit -> Tokens.token)) list = [
     "__cerb_datatype"      , (fun () -> CN_DATATYPE);
     "__cerb_pack"          , (fun () -> CN_PACK);
     "__cerb_unpack"        , (fun () -> CN_UNPACK);
-    "__cerb_pack_struct"   , (fun () -> CN_PACK_STRUCT);
-    "__cerb_unpack_struct" , (fun () -> CN_UNPACK_STRUCT);
     "__cerb_have"          , (fun () -> CN_HAVE);
-    "__cerb_show"          , (fun () -> CN_SHOW);
     "__cerb_instantiate"   , (fun () -> CN_INSTANTIATE);
     (* END CN *)
   ]

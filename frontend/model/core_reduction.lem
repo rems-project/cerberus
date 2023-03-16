@@ -478,16 +478,6 @@ let rec has_ccall (Expr _ expr_) =
         false (* because any ccall is in the body of another thread *)
     | Ewait _ ->
         false
-    | Epack _ _ ->
-        false
-    | Eunpack _ _ ->
-        false
-    | Ehave _ _ ->
-        false
-    | Eshow _ _ ->
-        false
-    | Einstantiate _ _ ->
-        false
     | Eannot _ e ->
         has_ccall e
     | Eexcluded _ _ ->
@@ -573,16 +563,6 @@ let rec get_ctx (Expr annot expr_ as expr) =
         [(CTX, expr)]
     | Ewait _ ->
         [(CTX, expr)]
-    | Epack _ _ ->
-        error "TODO: Epack"
-    | Eunpack _ _ ->
-        error "TODO: Eunpack"
-    | Ehave _ _ ->
-        error "TODO: Ehave"
-    | Eshow _ _ ->
-        error "TODO: Eshow"
-    | Einstantiate _ _ ->
-        error "TODO: Einstantiate"
     | Eannot _ (Expr _ (Eannot _ e)) ->
         [(CTX, expr)]
     | Eannot xs e ->

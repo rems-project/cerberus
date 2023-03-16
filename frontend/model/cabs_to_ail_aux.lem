@@ -294,16 +294,6 @@ let rec has_continue (CabsStatement _ _ stmt_) =
         has_continue s
     | CabsSmarker s ->
         has_continue s
-    | CabsSpack _ _ ->
-        false
-    | CabsSunpack _ _ ->
-        false
-    | CabsShave _ _ ->
-        false
-    | CabsSshow _ _ ->
-        false
-    | CabsSinstantiate _ _ ->
-        false
   end
 
 

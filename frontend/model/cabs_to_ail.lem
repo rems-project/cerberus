@@ -3961,40 +3961,6 @@ let rec desugar_statement_aux ctx (CabsStatement loc attrs stmt_) =
       | CabsSmarker s ->
           E.record_marker () >>= fun id ->
           AilSmarker id <$> self s
-      | CabsSpack (CTPU_Struct tag_ident) es ->
-         E.mapM desugar_expression es >>= fun es ->
-         (* copying and adapting code from the `TSpec loc (TSpec_struct attrs (Just tag_ident) Nothing)` case *)
-         E.resolve_extraordinary_identifier tag_ident E.Namespace_tag >>= function
-         | Just (_, (tag_sym, E.Kind_tag E.Kind_struct)) ->
-             E.return tag_sym
-         | Just (_, (tag_sym, _)) ->
-             E.constraint_violation loc (TagRedeclaration tag_sym)
-         | Nothing ->
-             E.register_tag loc E.Kind_struct (Just tag_ident)
-         end >>= fun tag_sym ->
-         E.return (AilSpack (Annot.TPU_Struct tag_sym) es)
-      | CabsSpack (CTPU_Predicate id) es ->
-          AilSpack (Annot.TPU_Predicate id) <$> E.mapM desugar_expression es
-      | CabsSunpack (CTPU_Struct tag_ident) es ->
-         E.mapM desugar_expression es >>= fun es ->
-         (* copying and adapting code from the `TSpec loc (TSpec_struct attrs (Just tag_ident) Nothing)` case *)
-         E.resolve_extraordinary_identifier tag_ident E.Namespace_tag >>= function
-         | Just (_, (tag_sym, E.Kind_tag E.Kind_struct)) ->
-             E.return tag_sym
-         | Just (_, (tag_sym, _)) ->
-             E.constraint_violation loc (TagRedeclaration tag_sym)
-         | Nothing ->
-             E.register_tag loc E.Kind_struct (Just tag_ident)
-         end >>= fun tag_sym ->
-         E.return (AilSunpack (Annot.TPU_Struct tag_sym) es)
-      | CabsSunpack (CTPU_Predicate id) es ->
-          AilSunpack (Annot.TPU_Predicate id) <$> E.mapM desugar_expression es
-      | CabsShave id es ->
-          AilShave id <$> E.mapM desugar_expression es
-      | CabsSshow id es ->
-          AilSshow id <$> E.mapM desugar_expression es
-      | CabsSinstantiate id e ->
-          AilSinstantiate id <$> desugar_expression e
     end
 
 val desugar_statement: cabs_statement -> E.desugM (statement unit)
@@ -4050,16 +4016,6 @@ let rec register_labels (CabsStatement _ _ stmt_) =
 (* BEGIN CN *)
     | CabsSmarker s ->
         register_labels s
-    | CabsSpack _ _ ->
-        E.return ()
-    | CabsSunpack _ _ ->
-        E.return ()
-    | CabsShave _ _ ->
-        E.return ()
-    | CabsSshow _ _ ->
-        E.return ()
-    | CabsSinstantiate _ _ ->
-        E.return ()
 (* END CN *)
   end
 

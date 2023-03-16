@@ -210,16 +210,6 @@ let rec free_expr acc (Expr _ e) =
   | Ewait _ ->
       (* globals should not depend on Ewait *)
       error ("TODO: free_expr Ewait")
-  | Epack _ pes ->
-      List.foldl free_pexpr acc pes
-  | Eunpack _ pes ->
-      List.foldl free_pexpr acc pes
-  | Ehave _ pes ->
-      List.foldl free_pexpr acc pes
-  | Eshow _ pes ->
-      List.foldl free_pexpr acc pes
-  | Einstantiate _ pe ->
-      free_pexpr acc pe
 
   | Eannot _ e ->
       free_expr acc e

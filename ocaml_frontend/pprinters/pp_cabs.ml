@@ -170,11 +170,7 @@ let pp_cabs_string_literal (pref_opt, strs) =
   let strs = List.concat (List.map snd strs) in
   P.optional pp_cabs_encoding_prefix pref_opt ^^ P.dquotes (!^ (String.concat "" strs))
 
-let pp_cabs_to_pack_unpack = function
-  | CTPU_Struct (Symbol.Identifier (_, str))->
-      !^ "struct" ^^^ !^ str
-  | CTPU_Predicate (Symbol.Identifier (_, str)) ->
-      !^ "predicate" ^^^ !^ str
+
 
 let rec dtree_of_cabs_expression (CabsExpression (loc, expr)) =
   let d_loc = pp_location ~clever:true loc in
@@ -719,18 +715,6 @@ and dtree_of_cabs_statement (CabsStatement (loc, attrs, stmt_)) =
   | CabsSmarker stmt ->
       Dnode ( pp_stmt_ctor "CabsSmarker"
             , [dtree_of_cabs_statement stmt] )
-  | CabsSpack (ctpu, es) ->
-      Dnode ( pp_stmt_ctor "CabsSpack" ^^ P.parens (pp_cabs_to_pack_unpack ctpu), List.map dtree_of_cabs_expression es )
-  | CabsSunpack (ctpu, es) ->
-      Dnode ( pp_stmt_ctor "CabsSunpack" ^^ P.parens (pp_cabs_to_pack_unpack ctpu), List.map dtree_of_cabs_expression es )
-  | CabsShave (Symbol.Identifier (_, str), es) ->
-      Dnode ( pp_stmt_ctor "CabsShave" ^^ P.parens (!^ str), List.map dtree_of_cabs_expression es )
-  | CabsSshow (Symbol.Identifier (_, str), es) ->
-      Dnode ( pp_stmt_ctor "CabsSshow" ^^ P.parens (!^ str), List.map dtree_of_cabs_expression es )
-  | CabsSinstantiate (Some (Symbol.Identifier (_, str)), e) ->
-      Dnode ( pp_stmt_ctor "CabsSinstantiate"  ^^ P.parens (!^ str), [dtree_of_cabs_expression e] )
-  | CabsSinstantiate (None, e) ->
-      Dnode ( pp_stmt_ctor "CabsSinstantiate", [dtree_of_cabs_expression e] )
   end
 
 and dtree_of_for_clause = function

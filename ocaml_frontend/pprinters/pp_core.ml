@@ -630,28 +630,6 @@ let rec pp_expr expr =
             with_grouped_args (pp_keyword "par") (List.map pp es)
         | Ewait tid ->
             pp_keyword "wait" ^^ P.parens (pp_thread_id tid)
-(* BEGIN CN *)
-        | Epack (tpu, pes) ->
-            let tpu = match tpu with
-              | TPU_Predicate (Symbol.Identifier (_, ident)) -> !^ident
-              | TPU_Struct sym -> !^"struct" ^^^ pp_symbol sym
-            in
-            pp_keyword "pack" ^^^ tpu ^^ P.parens (comma_list pp_pexpr pes)
-        | Eunpack (tpu, pes) ->
-            let tpu = match tpu with
-              | TPU_Predicate (Symbol.Identifier (_, ident)) -> !^ident
-              | TPU_Struct sym -> !^"struct" ^^^ pp_symbol sym
-            in
-            pp_keyword "unpack" ^^^ tpu ^^ P.parens (comma_list pp_pexpr pes)
-        | Ehave (Symbol.Identifier (_, ident), pes) ->
-            pp_keyword "have" ^^^ !^ident ^^ P.parens (comma_list pp_pexpr pes)
-        | Eshow (Symbol.Identifier (_, ident), pes) ->
-            pp_keyword "show" ^^^ !^ident ^^ P.parens (comma_list pp_pexpr pes)
-        | Einstantiate (Some (Symbol.Identifier (_, ident)), pe) ->
-            pp_keyword "instantiate" ^^^ !^ident ^^ (P.parens (pp_pexpr pe))
-        | Einstantiate (None, pe) ->
-            pp_keyword "instantiate" ^^^ P.parens (pp_pexpr pe)
-(* END CN *)
         | Eannot (xs, e) ->
             let pp_dyn_annotations fps =
               let pp_dyn_annotation = function
