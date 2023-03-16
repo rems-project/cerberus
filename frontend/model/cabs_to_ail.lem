@@ -4400,6 +4400,9 @@ let desugar_cn_statement (CN_statement loc stmt_) =
      let f = Cn.ensure_not_c_variable f_resolved in
      E.mapM desugar_cn_expr args >>= fun args ->
      E.return (CN_unfold f args)
+  | CN_assert_stmt e ->
+     desugar_cn_assertion e >>= fun e ->
+     E.return (CN_assert_stmt e)
   end >>= fun stmt_ ->
   E.return (CN_statement loc stmt_)
 

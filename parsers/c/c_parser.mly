@@ -2325,9 +2325,12 @@ cn_statement:
 | CN_INSTANTIATE tbi=to_be_instantiated e=expr SEMICOLON
     { let loc = Location_ocaml.(region ($startpos, $endpos) NoCursor) in
       CN_statement (loc, CN_instantiate (tbi, e)) }
-| CN_UNFOLD id=cn_variable es= delimited(LPAREN, separated_list(COMMA, expr), RPAREN)
+| CN_UNFOLD id=cn_variable es= delimited(LPAREN, separated_list(COMMA, expr), RPAREN) SEMICOLON
     { let loc = Location_ocaml.(region ($startpos, $endpos) NoCursor) in
       CN_statement (loc, CN_unfold (id, es)) }
+| ASSERT LPAREN e=assert_expr RPAREN SEMICOLON
+    { let loc = Location_ocaml.(region ($startpos, $endpos) NoCursor) in 
+      CN_statement (loc, CN_assert_stmt e) }
 
 
 

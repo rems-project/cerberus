@@ -392,13 +392,38 @@ module ParametricTranslation = struct
           Set (translate_cn_base_type bTy')
 
 
+  let cannot_tell_pointee_ctype loc e =
+    let msg = 
+      !^"Cannot tell pointee C-type of"
+      ^^^ squotes (IT.pp e) ^^ dot
+    in
+    fail {loc; msg = Generic msg}
+
   let mk_translate_binop loc bop (e1, e2) =
     let open IndexTerms in
     match bop, IT.bt e1 with
-    | CN_add, _ ->
+    | CN_add, _ (* (SBT.Integer | SBT.Real) *) ->
         return (IT (Arith_op (Add (e1, e2)), IT.bt e1))
-    | CN_sub, _ ->
+    (* | CN_add, (SBT.Loc oct) -> *)
+    (*    begin match oct with *)
+    (*    | Some ct -> *)
+    (*       let (IT (it_, _)) =  *)
+    (*         sterm_of_term (arrayShift_ (term_of_sterm e1, ct, term_of_sterm e2)) in *)
+    (*       return (IT (it_, Loc oct)) *)
+    (*    | None -> *)
+    (*       cannot_tell_pointee_ctype loc e1 *)
+    (*    end *)
+    | CN_sub, _ (* (SBT.Integer | SBT.Real) *) ->
         return (IT (Arith_op (Sub (e1, e2)), IT.bt e1))
+    (* | CN_sub, (SBT.Loc oct) -> *)
+    (*    begin match oct with *)
+    (*    | Some ct -> *)
+    (*       let (IT (it_, _)) =  *)
+    (*         sterm_of_term (arrayShift_ (term_of_sterm e1, ct, sub_ (int_ 0, term_of_sterm e2))) in *)
+    (*       return (IT (it_, Loc oct)) *)
+    (*    | None -> *)
+    (*       cannot_tell_pointee_ctype loc e1 *)
+    (*    end *)
     | CN_mul, _ ->
         return (IT (Arith_op (Mul (e1, e2)), IT.bt e1))
     | CN_div, _ ->
@@ -590,11 +615,7 @@ module ParametricTranslation = struct
                (* sterm_of_term will not have produced a C-type-annotated bt. So stick that on now. *)
                return (IT (it_, Loc (Some member_ty)))
             | Loc None ->
-               let msg = 
-                 !^"Cannot tell pointee C-type of"
-                 ^^^ squotes (IT.pp e) ^^ dot
-               in
-               fail {loc; msg = Generic msg}
+               cannot_tell_pointee_ctype loc e
             | has ->
                fail {loc; msg = Illtyped_it {it = Terms.pp e; has = SBT.pp has; expected = "struct pointer"; o_ctxt = None}}
             end
@@ -1264,6 +1285,9 @@ module WithinStatements = struct
            let@ args = ListM.mapM (P.translate_cn_expr SymSet.empty env) args in
            let args = List.map IT.term_of_sterm args in
            return (M_CN_statement (loc, M_CN_unfold (s, args)))
+        | CN_assert_stmt e ->
+           let@ e = P.translate_cn_assrt env (loc, e) in
+           return (M_CN_statement (loc, M_CN_assert e))
       )
 
 end

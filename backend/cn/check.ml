@@ -1491,6 +1491,17 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
                (*     let@ lvt = bind_return loc members rt in *)
                (*     return () *)
                (*   ) *)
+            | M_CN_assert lc ->
+               let@ lc = WellTyped.WLC.welltyped loc lc in
+               let@ provable = provable loc in
+               begin match provable lc with
+               | `True -> return ()
+               | `False -> 
+                  let@ model = model () in
+                  fail_with_trace (fun trace ctxt ->
+                      {loc; msg = Unproven_constraint {constr = lc; info = (loc, None); ctxt; model; trace}}
+                    )
+               end
           end
      in
      let@ () = ListM.iterM aux cn_progs in
