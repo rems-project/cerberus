@@ -14,7 +14,7 @@ type cfg = {
 
 type opt = {
   doc : Pp.doc;
-  continue : cfg -> (unit, TypeErrors.type_error) m
+  continue : cfg -> (unit) m
 }
 
 let opt_key = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"

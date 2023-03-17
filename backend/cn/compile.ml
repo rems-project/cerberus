@@ -24,15 +24,15 @@ module StringSet = Set.Make(String)
 
 module E = struct
 
-  type ('a, 'e) m =
+  type ('a) m =
     | Done of 'a
-    | Error of 'e
-    | Value_of_c_variable of Loc.t * Sym.t * (IT.sterm option -> ('a, 'e) m)
-    | Deref of Loc.t * IT.sterm * (IT.sterm option -> ('a, 'e) m)
+    | Error of TypeErrors.t
+    | Value_of_c_variable of Loc.t * Sym.t * (IT.sterm option -> ('a) m)
+    | Deref of Loc.t * IT.sterm * (IT.sterm option -> ('a) m)
 
   let return x = Done x
 
-  let rec bind (m : ('a, 'e) m) (f : 'a -> ('b, 'e) m) : ('b, 'e) m =
+  let rec bind (m : ('a) m) (f : 'a -> ('b) m) : ('b) m =
     match m with 
     | Done x -> 
        f x
@@ -509,7 +509,7 @@ module ParametricTranslation = struct
        fail {loc; msg = Illtyped_it {it = Terms.pp t; has = SurfaceBaseTypes.pp has; expected = "struct"; o_ctxt = None}}
 
 
-  let translate_is_shape env loc x shape_expr : (IT.sterm, _) m =
+  let translate_is_shape env loc x shape_expr : (IT.sterm) m =
     let rec f x = function
       | CNExpr (loc2, CNExpr_cons (c_nm, exprs)) ->
           let@ cons_info = lookup_constr loc c_nm env in
@@ -1208,7 +1208,7 @@ module WithinTypes = struct
 
   include P
 
-  let rec handle_using_current_environment env : ('a, 'e) E.m -> ('a, 'e) Resultat.m =
+  let rec handle_using_current_environment env : 'a E.m -> 'a Resultat.m =
     function
     | E.Done x -> 
        Resultat.return x
@@ -1296,7 +1296,7 @@ module WithinStatements = struct
          fail {loc; msg}
     in
 
-    let rec handle_using_loads (m : (cn_prog, 'e) E.m) : (cn_prog, 'e) Resultat.m = 
+    let rec handle_using_loads (m : cn_prog E.m) : cn_prog Resultat.m = 
       match m with
       | E.Done x ->
          return x

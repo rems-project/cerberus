@@ -3,6 +3,7 @@ module IT = IndexTerms
 module ITSet = Set.Make(IT)
 module SymMap = Map.Make(Sym)
 module RET = ResourceTypes
+open TypeErrors
 
 
 type s = {
@@ -15,12 +16,12 @@ type s = {
     found_equalities : EqTable.table;
   }
 
-type ('a, 'e) t = s -> ('a * s, 'e) Result.t
-type ('a, 'e) m = ('a, 'e) t
-type 'e failure = Context.t -> 'e
+type 'a t = s -> ('a * s, TypeErrors.t) Result.t
+type 'a m = 'a t
+type failure = Context.t -> TypeErrors.t
 
 
-let run (c : Context.t) (m : ('a, 'e) t) : ('a, 'e) Resultat.t = 
+let run (c : Context.t) (m : ('a) t) : ('a) Resultat.t = 
   let solver = Solver.make c.global in
   let sym_eqs = SymMap.empty in
   LCSet.iter (Solver.add_assumption solver c.global) c.constraints;
@@ -40,10 +41,10 @@ let run (c : Context.t) (m : ('a, 'e) t) : ('a, 'e) Resultat.t =
   | Error e -> Error e
 
 
-let return (a : 'a) : ('a, 'e) t =
+let return (a : 'a) : ('a) t =
   fun s -> Ok (a, s)
 
-let bind (m : ('a, 'e) t) (f : 'a -> ('b, 'e) t) : ('b, 'e) t = 
+let bind (m : ('a) t) (f : 'a -> ('b) t) : ('b) t = 
   fun s -> 
   match m s with
   | Error e -> Error e
@@ -53,20 +54,20 @@ let bind (m : ('a, 'e) t) (f : 'a -> ('b, 'e) t) : ('b, 'e) t =
 
 let (let@) = bind
 
-let get () : (Context.t, 'e) t = 
+let get () : (Context.t) t = 
   fun s -> Ok (s.typing_context, s)
 
-let set (c : Context.t) : (unit, 'e) t = 
+let set (c : Context.t) : (unit) t = 
   fun s -> Ok ((), {s with typing_context = c})
 
-let solver () : (Solver.solver, 'e) t = 
+let solver () : (Solver.solver) t = 
   fun s -> Ok (s.solver, s)
 
-let fail (f : 'e failure) : ('a, 'e) t = 
+let fail (f : failure) : ('a) t = 
   fun s -> Error (f s.typing_context)
 
 
-let pure (m : ('a, 'e) t) : ('a, 'e) t =
+let pure (m : ('a) t) : ('a) t =
   fun s ->
   Solver.push s.solver;
   let outcome = match m s with
@@ -114,7 +115,7 @@ let get_global () =
   let@ s = get () in
   return (s.global)
 
-let set_global global : (unit, 'e) m = 
+let set_global global : (unit) m = 
   let@ ctxt = get () in
   set {ctxt with global}
 
@@ -377,7 +378,6 @@ let begin_trace_of_pure_step pat pexpr =
 
 let get_resource_predicate_def loc id =
   let@ global = get_global () in
-  let open TypeErrors in
   match Global.get_resource_predicate_def global id with
     | Some def -> return def
     | None -> fail (fun _ -> {loc; msg = Unknown_resource_predicate {id;
@@ -403,7 +403,6 @@ let todo_opt_get_logical_predicate_def_s id =
   return odef
 
 let todo_get_resource_predicate_def_s loc id =
-  let open TypeErrors in
   let@ odef = todo_opt_get_resource_predicate_def_s id in
   match odef with
   | Some def -> return def
@@ -413,7 +412,6 @@ let todo_get_resource_predicate_def_s loc id =
                                   logical = Option.is_some odef}})
 
 let todo_get_logical_predicate_def_s loc id =
-  let open TypeErrors in
   let@ odef = todo_opt_get_logical_predicate_def_s id in
   match odef with
   | Some def -> return def
@@ -424,7 +422,6 @@ let todo_get_logical_predicate_def_s loc id =
 
 
 let get_resource_predicate_def_s loc id =
-  let open TypeErrors in
   let@ global = get_global () in
   match Global.get_resource_predicate_def global id with
   | Some def -> return def
@@ -434,28 +431,24 @@ let get_resource_predicate_def_s loc id =
 
 let get_logical_predicate_def loc id =
   let@ global = get_global () in
-  let open TypeErrors in
   match Global.get_logical_predicate_def global id with
   | Some def -> return def
   | None -> fail (fun _ -> {loc; msg = Unknown_logical_predicate {id;
       resource = Option.is_some (Global.get_resource_predicate_def global id)}})
 
 let get_struct_decl loc tag = 
-  let open TypeErrors in
   let@ global = get_global () in
   match SymMap.find_opt tag global.struct_decls with
   | Some decl -> return decl
   | None -> fail (fun _ -> {loc; msg = Unknown_struct tag})
 
 let get_datatype loc tag = 
-  let open TypeErrors in
   let@ global = get_global () in
   match SymMap.find_opt tag global.datatypes with
   | Some dt -> return dt
   | None -> fail (fun _ -> {loc; msg = Unknown_datatype tag})
 
 let get_datatype_constr loc tag = 
-  let open TypeErrors in
   let@ global = get_global () in
   match SymMap.find_opt tag global.datatype_constrs with
   | Some info -> return info
@@ -463,8 +456,7 @@ let get_datatype_constr loc tag =
 
 
 
-let get_member_type loc tag member layout : (Sctypes.t, TypeErrors.t) m = 
-  let open TypeErrors in
+let get_member_type loc tag member layout : (Sctypes.t) m = 
   match List.assoc_opt Id.equal member (Memory.member_types layout) with
   | Some membertyp -> return membertyp
   | None -> fail (fun _ -> {loc; msg = Unknown_member (tag, member)})
@@ -475,14 +467,12 @@ let get_struct_member_type loc tag member =
   return ty
 
 let get_fun_decl loc fsym = 
-  let open TypeErrors in
   let@ global = get_global () in
   match Global.get_fun_decl global fsym with
   | Some t -> return t
   | None -> fail (fun _ -> {loc; msg = Unknown_function fsym})
 
 let get_lemma loc lsym = 
-  let open TypeErrors in
   let@ global = get_global () in
   match Global.get_lemma global lsym with
   | Some t -> return t
@@ -490,7 +480,7 @@ let get_lemma loc lsym =
 
 
 
-let add_struct_decl tag layout : (unit, 'e) m = 
+let add_struct_decl tag layout : (unit) m = 
   let@ global = get_global () in
   set_global { global with struct_decls = SymMap.add tag layout global.struct_decls }
 
@@ -559,7 +549,7 @@ let set_statement_locs statement_locs =
 
 
 
-let embed_resultat (m : ('a, 'e) Resultat.t) : ('a, 'e) m = 
+let embed_resultat (m : ('a) Resultat.t) : ('a) m = 
   fun s ->
   match m with
   | Ok r -> Ok (r , s)

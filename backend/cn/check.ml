@@ -265,7 +265,7 @@ let check_computational_bound loc s =
 
 
 
-let check_ptrval (loc : loc) ~(expect:BT.t) (ptrval : pointer_value) : (lvt, type_error) m =
+let check_ptrval (loc : loc) ~(expect:BT.t) (ptrval : pointer_value) : (lvt) m =
   let@ () = ensure_base_type loc ~expect BT.Loc in
   CF.Impl_mem.case_ptrval ptrval
     ( fun ct -> 
@@ -279,7 +279,7 @@ let check_ptrval (loc : loc) ~(expect:BT.t) (ptrval : pointer_value) : (lvt, typ
     ( fun _prov p -> 
       return (pointer_ p) )
 
-let rec check_mem_value (loc : loc) ~(expect:BT.t) (mem : mem_value) : (lvt, type_error) m =
+let rec check_mem_value (loc : loc) ~(expect:BT.t) (mem : mem_value) : (lvt) m =
   CF.Impl_mem.case_mem_value mem
     ( fun ct -> 
       let@ () = WellTyped.WCT.is_ct loc (Sctypes.of_ctype_unsafe loc ct) in
@@ -314,7 +314,7 @@ let rec check_mem_value (loc : loc) ~(expect:BT.t) (mem : mem_value) : (lvt, typ
       check_union loc tag id mv )
 
 and check_struct (loc : loc) (tag : tag) 
-                 (member_values : (member * mem_value) list) : (lvt, type_error) m =
+                 (member_values : (member * mem_value) list) : (lvt) m =
   (* might have to make sure the fields are ordered in the same way as
      in the struct declaration *)
   let@ layout = get_struct_decl loc tag in
@@ -338,11 +338,11 @@ and check_struct (loc : loc) (tag : tag)
   return (IT.struct_ (tag, member_its))
 
 and check_union (loc : loc) (tag : tag) (id : Id.t) 
-                (mv : mem_value) : (lvt, type_error) m =
+                (mv : mem_value) : (lvt) m =
   Debug_ocaml.error "todo: union types"
 
 let rec check_object_value (loc : loc) ~(expect: BT.t)
-          (ov : 'bty mu_object_value) : (lvt, type_error) m =
+          (ov : 'bty mu_object_value) : (lvt) m =
   match ov with
   | M_OVinteger iv ->
      let@ () = WellTyped.ensure_base_type loc ~expect Integer in
@@ -375,7 +375,7 @@ let rec check_object_value (loc : loc) ~(expect: BT.t)
 
 
 
-let rec check_value (loc : loc) ~(expect:BT.t) (v : 'bty mu_value) : (lvt, type_error) m = 
+let rec check_value (loc : loc) ~(expect:BT.t) (v : 'bty mu_value) : (lvt) m = 
   match v with
   | M_Vobject ov ->
      check_object_value loc ~expect ov
@@ -491,7 +491,7 @@ let check_array_shift loc ~expect vt1 (loc_ct, ct) vt2 =
 
 (* could potentially return a vt instead of an RT.t *)
 let rec check_pexpr (pe : 'bty mu_pexpr) ~(expect:BT.t) 
-        (k : lvt -> (unit, type_error) m) : (unit, type_error) m =
+        (k : lvt -> (unit) m) : (unit) m =
   let (M_Pexpr (loc, _, _, pe_)) = pe in
   let@ () = print_with_ctxt (fun ctxt ->
       debug 3 (lazy (action "inferring pure expression"));
@@ -766,7 +766,7 @@ let rec check_pexpr (pe : 'bty mu_pexpr) ~(expect:BT.t)
 
 
 and check_pexprs (pes_expects : (_ mu_pexpr * BT.t) list)
-(k : lvt list -> (unit, type_error) m) : (unit, type_error) m =
+(k : lvt list -> (unit) m) : (unit) m =
   match pes_expects with
   | [] -> k []
   | (pe, expect) :: pes_expects ->
@@ -782,13 +782,13 @@ and check_pexprs (pes_expects : (_ mu_pexpr * BT.t) list)
 module Spine : sig
 
   val calltype_ft : 
-    Loc.t -> fsym:Sym.t -> _ mu_pexpr list -> AT.ft -> (RT.t -> (unit, type_error) m) -> (unit, type_error) m
+    Loc.t -> fsym:Sym.t -> _ mu_pexpr list -> AT.ft -> (RT.t -> (unit) m) -> (unit) m
   val calltype_lt : 
-    Loc.t -> _ mu_pexpr list -> AT.lt * label_kind -> (False.t -> (unit, type_error) m) -> (unit, type_error) m
+    Loc.t -> _ mu_pexpr list -> AT.lt * label_kind -> (False.t -> (unit) m) -> (unit) m
   val calltype_packing : 
-    Loc.t -> Sym.t -> LAT.packing_ft -> (OutputDef.t -> (unit, type_error) m) -> (unit, type_error) m
+    Loc.t -> Sym.t -> LAT.packing_ft -> (OutputDef.t -> (unit) m) -> (unit) m
   val subtype : 
-    Loc.t -> LRT.t -> (unit -> (unit, type_error) m) -> (unit, type_error) m
+    Loc.t -> LRT.t -> (unit -> (unit) m) -> (unit) m
 end = struct
 
 
@@ -988,8 +988,8 @@ let instantiate loc filter arg =
 
 
 let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr) 
-      (k: lvt -> (unit, type_error) m)
-    : (unit, type_error) m =
+      (k: lvt -> (unit) m)
+    : (unit) m =
   let (M_Expr (loc, _annots, e_)) = e in
   let@ () = add_loc_trace loc in
   let@ locs = get_loc_trace () in
@@ -1507,7 +1507,7 @@ let check_procedure
       (loc : loc) 
       (fsym : Sym.t)
       (args_and_body : 'bty mu_proc_args_and_body)
-    : (unit, type_error) Typing.m =
+    : (unit) m =
   debug 2 (lazy (headline ("checking procedure " ^ Sym.pp_string fsym)));
 
   pure begin 

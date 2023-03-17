@@ -608,7 +608,7 @@ let n_memop loc memop pexprs =
 
 
 
-let rec n_expr (loc : Loc.t) (env, desugaring_things) (global_types, visible_objects_env) e : (mu_expr, type_error) m = 
+let rec n_expr (loc : Loc.t) (env, desugaring_things) (global_types, visible_objects_env) e : (mu_expr) m = 
   let (markers_env, cn_desugaring_state) = desugaring_things in
   let (Expr (annots, pe)) = e in
   let loc = Loc.update loc (get_loc_ annots) in
