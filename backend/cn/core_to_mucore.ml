@@ -853,25 +853,7 @@ let ownership (loc, (addr_s, ct)) env =
 
 
 
-let rec make_lrt env = function
-  | (Cn.CN_cletResource (loc, name, resource) :: ensures) -> 
-     let@ (pt_ret, oa_bt), lcs, pointee_values = 
-       C.translate_cn_let_resource env (loc, name, resource) in
-     let env = C.add_logical name oa_bt env in
-     let env = C.add_pointee_values pointee_values env in
-     let@ lrt = make_lrt env (ensures) in
-     return (LRT.mResource ((name, (pt_ret, SBT.to_basetype oa_bt)), (loc, None)) 
-            (LRT.mConstraints lcs lrt))
-  | (Cn.CN_cletExpr (loc, name, expr) :: ensures) ->
-     let@ expr = C.translate_cn_expr SymSet.empty env expr in
-     let@ lrt = make_lrt (C.add_logical name (IT.bt expr) env) (ensures) in
-     return (LRT.mDefine (name, IT.term_of_sterm expr, (loc, None)) lrt)
-  | (Cn.CN_cconstr (loc, constr) :: ensures) ->
-     let@ lc = C.translate_cn_assrt env (loc, constr) in
-     let@ lrt = make_lrt env (ensures) in
-     return (LRT.mConstraint (lc, (loc, None)) lrt)
-  | [] -> 
-     return LRT.I
+
 
 let rec make_lrt_with_accesses env (accesses, ensures) =
   match accesses with
@@ -883,7 +865,7 @@ let rec make_lrt_with_accesses env (accesses, ensures) =
      return (LRT.mResource ((name, (pt_ret, SBT.to_basetype oa_bt)), (loc, None)) 
             (LRT.mConstraints lcs lrt))
   | [] ->
-     make_lrt env ensures
+     C.make_lrt env ensures
 
 
 

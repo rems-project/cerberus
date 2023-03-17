@@ -1070,25 +1070,62 @@ let translate_cn_function env (def: cn_function) =
   return (def.cn_func_name, def2)
 
 
-(* copied and adjusted from translate_cn_function *)
-let translate_cn_lemma env (def: cn_lemma) =failwith"asd"
-  (* Pp.debug 2 (lazy (Pp.item "translating lemma defn" (Sym.pp def.cn_lemma_name))); *)
-  (* let args =  *)
+let rec make_lrt_generic env = function
+  | (CN_cletResource (loc, name, resource) :: ensures) -> 
+     let@ (pt_ret, oa_bt), lcs, pointee_values = 
+       translate_cn_let_resource env (loc, name, resource) in
+     let env = add_logical name oa_bt env in
+     let env = add_pointee_values pointee_values env in
+     let@ lrt, env = make_lrt_generic env (ensures) in
+     return ((LRT.mResource ((name, (pt_ret, SBT.to_basetype oa_bt)), (loc, None)) 
+             (LRT.mConstraints lcs lrt)), env)
+  | (CN_cletExpr (loc, name, expr) :: ensures) ->
+     let@ expr = translate_cn_expr SymSet.empty env expr in
+     let@ lrt, env = make_lrt_generic (add_logical name (IT.bt expr) env) (ensures) in
+     return ((LRT.mDefine (name, IT.term_of_sterm expr, (loc, None)) lrt), env)
+  | (CN_cconstr (loc, constr) :: ensures) ->
+     let@ lc = translate_cn_assrt env (loc, constr) in
+     let@ lrt,env = make_lrt_generic env (ensures) in
+     return ((LRT.mConstraint (lc, (loc, None)) lrt), env)
+  | [] -> 
+     return (LRT.I, env)
+
+let make_lrt env conds = 
+  let@ lrt, _ = make_lrt_generic env conds in
+  return lrt
+
+let make_lat env (requires, ensures) = 
+  let@ args_lrt, env = make_lrt_generic env requires in
+  let@ ret_lrt, env = make_lrt_generic env ensures in
+  return (LAT.of_lrt args_lrt (LAT.I ret_lrt))
+  
+
+
+  (* let args = *)
   (*   List.map (fun (bTy, sym) -> (sym, translate_cn_base_type bTy) *)
   (*     ) def.cn_lemma_args in *)
-  (* let env' = *)
+  (* let _env' = *)
   (*   List.fold_left (fun acc (sym, bt) -> add_logical sym bt acc *)
   (*     ) env args in *)
-  (* let@ requires =  *)
-  (*   ListM.mapM translate_cn_condition def.cn_lemma_requires in *)
-  (* let def2 = { *)
-  (*     loc = def.cn_func_loc;  *)
-  (*     args = List.map_snd SBT.to_basetype args;  *)
-  (*     return_bt = SBT.to_basetype return_bt;  *)
-  (*     definition *)
-  (*   }  *)
-  (* in *)
-  (* return (def.cn_func_name, def2) *)
+  (* let _args = List.map_snd SBT.to_basetype args in *)
+
+
+(* copied and adjusted from translate_cn_function *)
+let translate_cn_lemma env (def: cn_lemma) =
+  Pp.debug 2 (lazy (Pp.item "translating lemma defn" (Sym.pp def.cn_lemma_name)));
+  let rec aux env = function
+    | (bTy, sym) :: args' ->
+       let bTy = translate_cn_base_type bTy in
+       let env = add_computational sym bTy env in
+       let@ at = aux env args' in
+       let info = (def.cn_lemma_loc, None) in
+       return (ArgumentTypes.Computational ((sym, SBT.to_basetype bTy), info, at))
+    | [] ->
+       let@ lat = make_lat env (def.cn_lemma_requires, def.cn_lemma_ensures) in
+       return (ArgumentTypes.L lat)
+  in
+  let@ at = aux env def.cn_lemma_args in
+  return (def.cn_lemma_name, (def.cn_lemma_loc, at))
 
 
 
@@ -1221,6 +1258,14 @@ module WithinTypes = struct
   let register_cn_functions env fns =
     (handle_using_current_environment env)
       (register_cn_functions env fns)
+
+  let make_lrt env conds =
+    (handle_using_current_environment env)
+      (make_lrt env conds)
+
+  let translate_cn_lemma env lmma = 
+    (handle_using_current_environment env)
+      (translate_cn_lemma env lmma)
 
 end
 
