@@ -738,7 +738,9 @@ let dtree_of_external_declaration = function
       Dnode (pp_decl_ctor "EDecl_decl", [dtree_of_cabs_declaration decl])
 (* BEGIN CN *)
   | EDecl_funcCN func ->
-      Dnode (pp_decl_ctor "EDecl_predCN", [Cn_ocaml.PpCabs.dtree_of_cn_function func])
+      Dnode (pp_decl_ctor "EDecl_funcCN", [Cn_ocaml.PpCabs.dtree_of_cn_function func])
+  | EDecl_lemmaCN lmma ->
+      Dnode (pp_decl_ctor "EDecl_lemmaCN", [Cn_ocaml.PpCabs.dtree_of_cn_lemma lmma])
   | EDecl_predCN pred ->
       Dnode (pp_decl_ctor "EDecl_predCN", [Cn_ocaml.PpCabs.dtree_of_cn_predicate pred])
   | EDecl_datatypeCN dt ->
@@ -754,6 +756,7 @@ let filter_external_decl =
     | EDecl_decl (Declaration_base (_, _, [])) -> true
     | EDecl_predCN _ -> true
     | EDecl_funcCN _ -> true
+    | EDecl_lemmaCN _ -> true
     | EDecl_datatypeCN _ -> true
   in List.filter pred
 

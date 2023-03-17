@@ -922,6 +922,8 @@ let check_cn_ident ns _ident =
     return true (* global *)
   | Cn.CN_function ->
     return true (* global *)
+  | Cn.CN_lemma ->
+    return true (* global *)
   | Cn.CN_vars ->
     return false (* local *)
   | Cn.CN_oarg ->
@@ -1114,6 +1116,12 @@ let lookup_cn_function id =
   resolve_cn_ident Cn.CN_function id >>= fun (sym, _) ->
   return sym
 
+(* copied and adjusted from lookup_cn_function *)
+val lookup_cn_lemma: Symbol.identifier -> desugM Symbol.sym
+let lookup_cn_lemma id =
+  resolve_cn_ident Cn.CN_lemma id >>= fun (sym, _) ->
+  return sym
+
 
 let register_cn_function ident mk =
   get_inner >>= fun st ->
@@ -1140,6 +1148,33 @@ let register_cn_function ident mk =
         end
     | Just _ ->
         fail (Loc.locOf ident) (Errors.Desugar_CN (Cn.CNErr_redeclaration Cn.CN_function))
+  end
+
+(* copied and adjusted from register_cn_function *)
+let register_cn_lemma ident mk =
+  get_inner >>= fun st ->
+  match List.lookup ident st.cn_state.Cn_desugaring.cn_lemmata with
+    | Nothing ->
+        resolve_cn_ident Cn.CN_lemma ident >>= fun sym_resolved ->
+        let sym = Cn.ensure_not_c_variable sym_resolved in
+        push_cn_scope >>= fun () ->
+        mk >>= fun (args, requires, ensures) ->
+        let lmma = <|
+          Cn.cn_lemma_loc= Loc.locOf ident;
+          Cn.cn_lemma_name= sym;
+          Cn.cn_lemma_args= args;
+          Cn.cn_lemma_requires= requires;
+          Cn.cn_lemma_ensures= ensures;
+        |> in
+        (* liftCnDesug *) begin
+          pop_cn_scope >>= fun () ->
+          assert_cn_bottom_scope >>= fun () -> 
+          update_cn_state (fun cn_st' ->
+            <| cn_st' with Cn_desugaring.cn_lemmata= (ident, (sym, lmma)) :: cn_st'.Cn_desugaring.cn_lemmata; |>
+          )
+        end
+    | Just _ ->
+        fail (Loc.locOf ident) (Errors.Desugar_CN (Cn.CNErr_redeclaration Cn.CN_lemma))
   end
 
 
@@ -2337,6 +2372,7 @@ let mk_current_ail_sigma =
         A.typedef_attributes= Map.empty;
         A.loop_attributes= Map.empty;
         A.cn_functions= [];
+        A.cn_lemmata= [];
         A.cn_predicates= [];
         A.cn_datatypes= [];
         A.cn_idents= Map.empty; |>
@@ -2522,6 +2558,7 @@ let extract_program startup_str =
     A.loop_attributes = st.loop_attributes;
     A.cn_predicates=  List.reverse (List.map (fun (_, (_, z)) -> z) (st.cn_state.Cn_desugaring.cn_predicates));
     A.cn_functions=  List.reverse (List.map (fun (_, (_, z)) -> z) (st.cn_state.Cn_desugaring.cn_functions));
+    A.cn_lemmata=  List.reverse (List.map (fun (_, (_, z)) -> z) (st.cn_state.Cn_desugaring.cn_lemmata));
     A.cn_datatypes=  List.reverse (List.map (fun (_, z) -> z) (st.cn_state.Cn_desugaring.cn_datatypes));
     A.cn_idents=  st.cn_state.Cn_desugaring.cn_idents;
    |>)
@@ -2605,6 +2642,7 @@ let get_sigma_sofar =
        A.loop_attributes= st.loop_attributes;
        A.cn_predicates=  List.reverse (List.map (fun (_, (_, z)) -> z) (st.cn_state.Cn_desugaring.cn_predicates));
        A.cn_functions= List.reverse (List.map (fun (_, (_, z)) -> z) (st.cn_state.Cn_desugaring.cn_functions));
+       A.cn_lemmata= List.reverse (List.map (fun (_, (_, z)) -> z) (st.cn_state.Cn_desugaring.cn_lemmata));
        A.cn_datatypes= List.reverse (List.map (fun (_, z) -> z) (st.cn_state.Cn_desugaring.cn_datatypes));
        A.cn_idents=  st.cn_state.Cn_desugaring.cn_idents;
        |>

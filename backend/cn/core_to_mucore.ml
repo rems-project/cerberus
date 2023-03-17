@@ -851,38 +851,47 @@ let ownership (loc, (addr_s, ct)) env =
 
 
 
+
+
 let rec make_lrt env = function
-  | ((loc, (addr_s, ct)) :: accesses, ensures) ->
-     let@ (name, ((pt_ret, oa_bt), lcs), value) = ownership (loc, (addr_s, ct)) env in
-     let env = C.add_logical name oa_bt env in
-     let env = C.add_c_variable_state addr_s (CVS_Pointer_pointing_to value) env in
-     let@ lrt = make_lrt env (accesses, ensures) in
-     return (LRT.mResource ((name, (pt_ret, SBT.to_basetype oa_bt)), (loc, None)) 
-            (LRT.mConstraints lcs lrt))
-  | ([], Cn.CN_cletResource (loc, name, resource) :: ensures) -> 
+  | (Cn.CN_cletResource (loc, name, resource) :: ensures) -> 
      let@ (pt_ret, oa_bt), lcs, pointee_values = 
        C.translate_cn_let_resource env (loc, name, resource) in
      let env = C.add_logical name oa_bt env in
      let env = C.add_pointee_values pointee_values env in
-     let@ lrt = make_lrt env ([], ensures) in
+     let@ lrt = make_lrt env (ensures) in
      return (LRT.mResource ((name, (pt_ret, SBT.to_basetype oa_bt)), (loc, None)) 
             (LRT.mConstraints lcs lrt))
-  | ([], Cn.CN_cletExpr (loc, name, expr) :: ensures) ->
+  | (Cn.CN_cletExpr (loc, name, expr) :: ensures) ->
      let@ expr = C.translate_cn_expr SymSet.empty env expr in
-     let@ lrt = make_lrt (C.add_logical name (IT.bt expr) env) ([], ensures) in
+     let@ lrt = make_lrt (C.add_logical name (IT.bt expr) env) (ensures) in
      return (LRT.mDefine (name, IT.term_of_sterm expr, (loc, None)) lrt)
-  | ([], Cn.CN_cconstr (loc, constr) :: ensures) ->
+  | (Cn.CN_cconstr (loc, constr) :: ensures) ->
      let@ lc = C.translate_cn_assrt env (loc, constr) in
-     let@ lrt = make_lrt env ([], ensures) in
+     let@ lrt = make_lrt env (ensures) in
      return (LRT.mConstraint (lc, (loc, None)) lrt)
-  | ([], []) -> 
+  | [] -> 
      return LRT.I
+
+let rec make_lrt_with_accesses env (accesses, ensures) =
+  match accesses with
+  | (loc, (addr_s, ct)) :: accesses ->
+     let@ (name, ((pt_ret, oa_bt), lcs), value) = ownership (loc, (addr_s, ct)) env in
+     let env = C.add_logical name oa_bt env in
+     let env = C.add_c_variable_state addr_s (CVS_Pointer_pointing_to value) env in
+     let@ lrt = make_lrt_with_accesses env (accesses, ensures) in
+     return (LRT.mResource ((name, (pt_ret, SBT.to_basetype oa_bt)), (loc, None)) 
+            (LRT.mConstraints lcs lrt))
+  | [] ->
+     make_lrt env ensures
+
+
 
 let make_rt (loc : loc) (env : C.env) (s, ct) (accesses, ensures) =
   let ct = convert_ct loc ct in
   let sbt = SBT.of_sct ct in
   let bt = SBT.to_basetype sbt in
-  let@ lrt = make_lrt (C.add_computational s sbt env) (accesses, ensures) in
+  let@ lrt = make_lrt_with_accesses (C.add_computational s sbt env) (accesses, ensures) in
   let info = (loc, Some "return value good") in
   let lrt = LRT.mConstraint (LC.t_ (IT.good_ (ct, IT.sym_ (s, bt))), info) lrt in
   return (RT.mComputational ((s, bt), (loc, None)) lrt)
@@ -890,34 +899,39 @@ let make_rt (loc : loc) (env : C.env) (s, ct) (accesses, ensures) =
 
 let make_largs f_i =
   let rec aux env = function
-    | ((loc, (addr_s, ct)) :: accesses, requires) ->
-       let@ (name, ((pt_ret, oa_bt), lcs), value) = ownership (loc, (addr_s, ct)) env in
-       let env = C.add_logical name oa_bt env in
-       let env = C.add_c_variable_state addr_s (CVS_Pointer_pointing_to value) env in
-       let@ lat = aux env (accesses, requires) in
-       return (Mu.mResource ((name, (pt_ret, SBT.to_basetype oa_bt)), (loc, None)) 
-              (Mu.mConstraints lcs lat))
-    | ([], Cn.CN_cletResource (loc, name, resource) :: requires) -> 
+    | (Cn.CN_cletResource (loc, name, resource) :: conditions) -> 
        let@ (pt_ret, oa_bt), lcs, pointee_values = 
          C.translate_cn_let_resource env (loc, name, resource) in
        let env = C.add_logical name oa_bt env in
        let env = C.add_pointee_values pointee_values env in
-       let@ lat = aux env ([], requires) in
+       let@ lat = aux env (conditions) in
        return (Mu.mResource ((name, (pt_ret, SBT.to_basetype oa_bt)), (loc, None)) 
                  (Mu.mConstraints lcs lat))
-    | ([], Cn.CN_cletExpr (loc, name, expr) :: requires) ->
+    | (Cn.CN_cletExpr (loc, name, expr) :: conditions) ->
        let@ expr = C.translate_cn_expr SymSet.empty env expr in
-       let@ lat = aux (C.add_logical name (IT.bt expr) env) ([], requires) in
+       let@ lat = aux (C.add_logical name (IT.bt expr) env) (conditions) in
        return (Mu.mDefine ((name, IT.term_of_sterm expr), (loc, None)) lat)
-    | ([], Cn.CN_cconstr (loc, constr) :: requires) ->
+    | (Cn.CN_cconstr (loc, constr) :: conditions) ->
        let@ lc = C.translate_cn_assrt env (loc, constr) in
-       let@ lat = aux env ([], requires) in
+       let@ lat = aux env (conditions) in
        return (Mu.mConstraint (lc, (loc, None)) lat)
-    | ([], []) ->
+    | ([]) ->
        let@ i = f_i env in
        return (M_I i)
   in
   aux
+
+let rec make_largs_with_accesses f_i env (accesses, conditions) = 
+  match accesses with
+  | ((loc, (addr_s, ct)) :: accesses) ->
+     let@ (name, ((pt_ret, oa_bt), lcs), value) = ownership (loc, (addr_s, ct)) env in
+     let env = C.add_logical name oa_bt env in
+     let env = C.add_c_variable_state addr_s (CVS_Pointer_pointing_to value) env in
+     let@ lat = make_largs_with_accesses f_i env (accesses, conditions) in
+     return (Mu.mResource ((name, (pt_ret, SBT.to_basetype oa_bt)), (loc, None)) 
+               (Mu.mConstraints lcs lat))
+  | [] ->
+     make_largs f_i env conditions
 
 
 let is_pass_by_pointer = function
@@ -950,7 +964,7 @@ let make_label_args f_i loc env args (accesses, inv) =
        in
        return (Mu.mComputational ((s, Loc), (loc, None)) at)
     | [] -> 
-       let@ lat = make_largs f_i env (accesses, inv) in
+       let@ lat = make_largs_with_accesses f_i env (accesses, inv) in
        let at = Mu.mResources resources (Mu.mConstraints good_lcs lat) in
        return (M_L at)
   in
@@ -980,7 +994,7 @@ let make_function_args f_i loc env args (accesses, requires) =
        in
        return (Mu.mComputational ((pure_arg, bt), (loc, None)) at)
     | [] -> 
-       let@ lat = make_largs (f_i arg_states) env (accesses, requires) in
+       let@ lat = make_largs_with_accesses (f_i arg_states) env (accesses, requires) in
        return (M_L (Mu.mConstraints (List.rev good_lcs) lat))
   in
   aux [] [] env args
@@ -1313,6 +1327,7 @@ let normalise_file (markers_env, ail_prog) file =
   let@ lfuns = ListM.mapM (C.translate_cn_function env) ail_prog.cn_functions in
   let env = C.register_cn_predicates env ail_prog.cn_predicates in
   let@ preds = ListM.mapM (C.translate_cn_predicate env) ail_prog.cn_predicates in
+  let@ lemmata = ListM.mapM (C.translate_cn_lemma env) ail_prog.cn_lemmata in
 
   let global_types = 
     List.map (fun (s, global) ->
@@ -1344,6 +1359,7 @@ let normalise_file (markers_env, ail_prog) file =
       mu_logical_predicates = lfuns;
       mu_datatypes = SymMap.bindings (SymMap.map fst env.datatypes);
       mu_constructors = SymMap.bindings env.datatype_constrs;
+      mu_lemmata = lemmata;
     }
   in
   return file

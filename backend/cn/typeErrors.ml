@@ -113,6 +113,7 @@ type message =
   | Unknown_logical_predicate of {id: Sym.t; resource: bool}
   | Unknown_member of BT.tag * BT.member
   | Unknown_record_member of Pp.doc * Id.t
+  | Unknown_lemma of Sym.t
 
   (* some from Kayvan's compilePredicates module *)
   | First_iarg_missing
@@ -224,6 +225,9 @@ let pp_message te =
            Id.pp member
      in
      { short; descr = Some descr; state = None; trace = None }
+  | Unknown_lemma sym ->
+     let short = !^"Unknown lemma" ^^^ squotes (Sym.pp sym) in
+     { short; descr = None; state = None; trace = None }
   | First_iarg_missing ->
      let short = !^"Missing pointer input argument" in
      let descr = !^ "a predicate definition must have at least one input argument" in

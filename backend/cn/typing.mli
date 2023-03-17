@@ -59,6 +59,7 @@ val get_member_type : Locations.t -> Sym.t -> Id.t -> Memory.struct_layout -> (S
 val get_datatype : Locations.t -> Sym.t -> (BaseTypes.datatype_info, TypeErrors.t) m
 val get_datatype_constr : Locations.t -> Sym.t -> (BaseTypes.constr_info, TypeErrors.t) m
 val get_fun_decl : Locations.t -> Sym.t -> (Locations.t * Global.AT.ft, TypeErrors.t) m
+val get_lemma : Locations.t -> Sym.t -> (Locations.t * Global.AT.lemmat, TypeErrors.t) m
 
 val get_resource_predicate_def : Locations.t -> Sym.t ->
     (ResourcePredicates.definition, TypeErrors.type_error) m

@@ -232,6 +232,9 @@ module ParametricTranslation = struct
   type cn_function =
     (CF.Symbol.sym, CF.Ctype.ctype) CF.Cn.cn_function
 
+  type cn_lemma =
+    (CF.Symbol.sym, CF.Ctype.ctype) CF.Cn.cn_lemma
+
   type cn_datatype =
     (CF.Symbol.sym, CF.Ctype.ctype) CF.Cn.cn_datatype
 
@@ -1065,6 +1068,27 @@ let translate_cn_function env (def: cn_function) =
     } 
   in
   return (def.cn_func_name, def2)
+
+
+(* copied and adjusted from translate_cn_function *)
+let translate_cn_lemma env (def: cn_lemma) =failwith"asd"
+  (* Pp.debug 2 (lazy (Pp.item "translating lemma defn" (Sym.pp def.cn_lemma_name))); *)
+  (* let args =  *)
+  (*   List.map (fun (bTy, sym) -> (sym, translate_cn_base_type bTy) *)
+  (*     ) def.cn_lemma_args in *)
+  (* let env' = *)
+  (*   List.fold_left (fun acc (sym, bt) -> add_logical sym bt acc *)
+  (*     ) env args in *)
+  (* let@ requires =  *)
+  (*   ListM.mapM translate_cn_condition def.cn_lemma_requires in *)
+  (* let def2 = { *)
+  (*     loc = def.cn_func_loc;  *)
+  (*     args = List.map_snd SBT.to_basetype args;  *)
+  (*     return_bt = SBT.to_basetype return_bt;  *)
+  (*     definition *)
+  (*   }  *)
+  (* in *)
+  (* return (def.cn_func_name, def2) *)
 
 
 

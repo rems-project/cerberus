@@ -124,6 +124,19 @@ type cn_function 'a 'ty = <|
   cn_func_return_bty: cn_base_type 'a;
 |>
 
+type cn_condition 'a 'ty =
+  | CN_cletResource of Loc.t * 'a * cn_resource 'a 'ty
+  | CN_cletExpr of Loc.t * 'a * cn_expr 'a 'ty
+  | CN_cconstr of Loc.t * cn_assertion 'a 'ty
+
+type cn_lemma 'a 'ty = <|
+  cn_lemma_loc: Loc.t;
+  cn_lemma_name: 'a;
+  cn_lemma_args: list (cn_base_type 'a * 'a);
+  cn_lemma_requires: list (cn_condition 'a 'ty);
+  cn_lemma_ensures: list (cn_condition 'a 'ty);
+|>
+
 type cn_predicate 'a 'ty = <|
   cn_pred_loc: Loc.t;
   cn_pred_name: 'a;
@@ -140,10 +153,7 @@ type cn_datatype 'a 'ty = <|
 |>
 
 
-type cn_condition 'a 'ty =
-  | CN_cletResource of Loc.t * 'a * cn_resource 'a 'ty
-  | CN_cletExpr of Loc.t * 'a * cn_expr 'a 'ty
-  | CN_cconstr of Loc.t * cn_assertion 'a 'ty
+
 
 
 type cn_function_spec 'a 'ty =
@@ -182,6 +192,7 @@ type cn_statement 'a 'ty =
 type cn_namespace =
   | CN_predicate
   | CN_function
+  | CN_lemma
   | CN_datatype_nm
   | CN_constructor
   | CN_vars
@@ -192,6 +203,7 @@ instance (Show cn_namespace)
     match ns with
       | CN_predicate -> "predicate"
       | CN_function -> "function"
+      | CN_lemma -> "lemma"
       | CN_datatype_nm -> "datatype"
       | CN_constructor -> "constructor"
       | CN_vars   -> "vars"

@@ -479,7 +479,14 @@ let get_fun_decl loc fsym =
   let@ global = get_global () in
   match Global.get_fun_decl global fsym with
   | Some t -> return t
-  | None -> fail (fun _ -> {loc = Loc.unknown; msg = Unknown_function fsym})
+  | None -> fail (fun _ -> {loc; msg = Unknown_function fsym})
+
+let get_lemma loc lsym = 
+  let open TypeErrors in
+  let@ global = get_global () in
+  match Global.get_lemma global lsym with
+  | Some t -> return t
+  | None -> fail (fun _ -> {loc; msg = Unknown_lemma lsym})
 
 
 

@@ -18,6 +18,7 @@ let string_of_ns = function
   | CN_oarg -> "output argument"
   | CN_vars -> "variable"
   | CN_predicate -> "predicate"
+  | CN_lemma -> "lemma"
   | CN_function -> "specification function"
   | CN_datatype_nm -> "datatype"
   | CN_constructor -> "constructor"
@@ -228,6 +229,18 @@ module MakePp (Conf: PP_CN) = struct
             ) xs in
         Dnode (pp_stmt_ctor "CN_return", docs)
 
+  (* copied and adjusted from dtree_of_cn_clause *)
+  let dtree_of_cn_condition = function
+    | CN_cletResource (_, ident, res) ->
+        Dnode ( pp_stmt_ctor "CN_letResource" ^^^ P.squotes (Conf.pp_ident ident)
+              , [dtree_of_cn_resource res])
+    | CN_cletExpr (_, ident, e) ->
+        Dnode ( pp_stmt_ctor "CN_letExpr" ^^^ P.squotes (Conf.pp_ident ident)
+              , [dtree_of_cn_expr e])
+    | CN_cconstr (_, a) ->
+        Dnode (pp_stmt_ctor "CN_assert", [dtree_of_cn_assertion a])
+
+
   let rec dtree_of_cn_clauses = function
     | CN_clause (_, c) ->
         dtree_of_cn_clause c
@@ -254,6 +267,14 @@ module MakePp (Conf: PP_CN) = struct
             ; Dnode (pp_ctor "[CN]args", dtrees_of_args func.cn_func_args)
             ; Dnode (pp_ctor "[CN]body", [dtree_of_o_cn_func_body func.cn_func_body])
             ; Dnode (pp_ctor "[CN]return_bty", [Dleaf (pp_base_type func.cn_func_return_bty)]) ] ) 
+
+  (* copied and adjusted from dtree_of_cn_function *)
+  let dtree_of_cn_lemma lmma =
+    Dnode ( pp_ctor "[CN]lemma" ^^^ P.squotes (Conf.pp_ident lmma.cn_lemma_name)
+          , [ Dnode (pp_ctor "[CN]args", dtrees_of_args lmma.cn_lemma_args)
+            ; Dnode (pp_ctor "[CN]requires", List.map dtree_of_cn_condition lmma.cn_lemma_requires)
+            ; Dnode (pp_ctor "[CN]ensures", List.map dtree_of_cn_condition lmma.cn_lemma_ensures)
+            ] ) 
 
   let dtree_of_cn_predicate pred =
     Dnode ( pp_ctor "[CN]predicate" ^^^ P.squotes (Conf.pp_ident pred.cn_pred_name)

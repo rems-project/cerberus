@@ -15,6 +15,7 @@ type t =
     fun_decls : (Locations.t * AT.ft) SymMap.t;
     resource_predicates : ResourcePredicates.definition SymMap.t;
     logical_predicates : LogicalPredicates.definition SymMap.t;
+    lemmata : (Locations.t * AT.lemmat) SymMap.t;
   } 
 
 let empty = 
@@ -24,12 +25,14 @@ let empty =
     fun_decls = SymMap.empty;
     resource_predicates = SymMap.empty;
     logical_predicates = SymMap.empty;
+    lemmata = SymMap.empty;
   }
 
 
 let get_resource_predicate_def global id = SymMap.find_opt id global.resource_predicates
 let get_logical_predicate_def global id = SymMap.find_opt id global.logical_predicates
 let get_fun_decl global sym = SymMap.find_opt sym global.fun_decls
+let get_lemma global sym = SymMap.find_opt sym global.lemmata
 
 let sym_map_from_bindings xs = List.fold_left (fun m (nm, x) -> SymMap.add nm x m)
     SymMap.empty xs

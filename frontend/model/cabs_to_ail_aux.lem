@@ -50,6 +50,8 @@ let specifiers_of_external_declaration = function
       Nothing
   | EDecl_funcCN _ ->
       Nothing
+  | EDecl_lemmaCN _ ->
+      Nothing
   | EDecl_datatypeCN _ ->
       Nothing
 end

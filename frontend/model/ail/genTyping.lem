@@ -2,7 +2,7 @@ open import Pervasives Utils AilSyntax AilSyntaxAux AilWf TypingError GenTypes G
 import Constraint Undefined Builtins Debug Pp Cmm_csem Global
 
 import Implementation
-import Cn_typing
+
 
 module AAux = AilTypesAux
 module GAux = GenTypesAux
@@ -2178,8 +2178,6 @@ let annotate_sigma sigm =
         ) xs
   end) sigm.tag_definitions >>
 
-  E.mapM_ (Cn_typing.typecheck_cn_predicate sigm.tag_definitions) sigm.cn_predicates >>= fun () ->
-  E.mapM_ (Cn_typing.typecheck_cn_function sigm.tag_definitions) sigm.cn_functions >>= fun () ->
   
   E.return <|
     declarations=         sigm.declarations;
@@ -2193,6 +2191,7 @@ let annotate_sigma sigm =
     loop_attributes= sigm.loop_attributes;
     cn_predicates=  sigm.cn_predicates;
     cn_functions=  sigm.cn_functions;
+    cn_lemmata=  sigm.cn_lemmata;
     cn_datatypes=  sigm.cn_datatypes;
     cn_idents=  sigm.cn_idents;
   |>

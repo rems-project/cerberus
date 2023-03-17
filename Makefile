@@ -129,7 +129,7 @@ LEM_DEFACTO       = mem_common.lem defacto_memory_types.lem \
 LEM_CONC_INTERF   = cmm_aux.lem
 LEM_CONC          = cmm_csem.lem cmm_op.lem linux.lem
 
-LEM_CN            = cn.lem cn_desugaring.lem cn_typing.lem
+LEM_CN            = cn.lem cn_desugaring.lem
 
 LEM_SRC_AUX       = $(LEM_PRELUDE) \
 										$(LEM_CN) \
