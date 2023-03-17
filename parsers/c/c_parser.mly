@@ -1919,6 +1919,9 @@ unary_expr:
 | AMPERSAND LPAREN e= prim_expr MINUS_GT member=cn_variable RPAREN
     { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($1)))
                                , CNExpr_membershift (e, member) )) }
+| LPAREN ty= base_type RPAREN expr= prim_expr
+    { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($1)))
+                               , CNExpr_cast (ty, expr))) }
 
 
 mul_expr:
@@ -2010,9 +2013,6 @@ expr:
 | e1= list_expr QUESTION e2= list_expr COLON e3= list_expr
     { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                                , CNExpr_ite (e1, e2, e3))) }
-| LPAREN ty= base_type RPAREN expr= list_expr
-    { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($1)))
-                               , CNExpr_cast (ty, expr))) }
 | CN_EACH LPAREN str= cn_variable COLON r=int_range SEMICOLON e1= expr RPAREN
     { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) NoCursor)
                                ,
