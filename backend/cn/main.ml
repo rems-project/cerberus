@@ -112,6 +112,7 @@ let main
       csv_times
       log_times
       random_seed
+      output_decorated
       astprints
   =
   if json then begin
@@ -146,7 +147,26 @@ let main
         let open Resultat in
          let@ prog5 = Core_to_mucore.normalise_file (markers_env, ail_prog) prog4 in
          print_log_file ("mucore", MUCORE prog5);
-         Typing.run Context.empty (Check.check prog5 statement_locs lemmata)
+         let@ res = Typing.run Context.empty (Check.check prog5 statement_locs lemmata) in
+         begin match output_decorated with
+         | None -> ()
+         | Some output_filename ->
+            let oc = Stdlib.open_out output_filename in
+            begin match
+              Source_injection.(output_injections oc
+                { filename; sigm= ail_prog
+                ; pre_post=[(*TODO(Rini): add here the pprints of functions pre/post conditions*)]
+                ; in_stmt=[(*TODO(Rini): add here the pprints of annotations preceding statements *)] }
+              )
+            with
+            | Ok () ->
+                ()
+            | Error str ->
+                (* TODO(Christopher/Rini): maybe lift this error to the exception monad? *)
+                prerr_endline str
+            end
+         end;
+         return res
        in
        Pp.maybe_close_times_channel ();
        match result with
@@ -241,6 +261,11 @@ let only =
   let doc = "only type-check this function" in
   Arg.(value & opt (some string) None & info ["only"] ~doc)
 
+(* TODO(Christopher/Rini): I'm adding a tentative cli option, rename/change it to whatever you prefer *)
+let output_decorated =
+  let doc = "output a version of the translation unit decorated with C runtime translations of the CN annotations" in
+  Arg.(value & opt (some string) None & info ["output_decorated"] ~docv:"FILE" ~doc)
+
 (* copy-pasting from backend/driver/main.ml *)
 let astprints =
   let doc = "Pretty print the intermediate syntax tree for the listed languages \
@@ -270,6 +295,7 @@ let () =
       csv_times $
       log_times $
       random_seed $
+      output_decorated $
       astprints
   in
   Stdlib.exit @@ Cmd.(eval (v (info "cn") check_t))
