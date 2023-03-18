@@ -27,6 +27,9 @@ let fetch_and_clear_magic () =
   internal_state.magic_acc <- [];
   List.rev ret
 
+let restore_magic xs =
+  internal_state.magic_acc <- List.rev xs
+
 
 let new_line lexbuf =
   (* the hacked col offset MUST be reset after every newline *)

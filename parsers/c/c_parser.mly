@@ -564,8 +564,9 @@ postfix_expression:
 | expr= postfix_expression MINUS_MINUS
     { CabsExpression ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                      , CabsEpostdecr expr ) }
-| LPAREN ty= type_name RPAREN LBRACE inits= initializer_list COMMA? RBRACE
-    { CabsExpression (Location_ocaml.(region ($startpos, $endpos) NoCursor),
+| LPAREN ty= type_name RPAREN unused_magic= LBRACE inits= initializer_list COMMA? RBRACE
+    { C_lexer.restore_magic unused_magic;
+      CabsExpression (Location_ocaml.(region ($startpos, $endpos) NoCursor),
                       CabsEcompound (ty, List.rev inits)) }
 (* NOTE: non-std way of dealing with these *)
 | ASSERT LPAREN expr= assignment_expression RPAREN
@@ -976,17 +977,19 @@ attribute_type_specifier_unique:
 (* §6.7.2.1 Structure and union specifiers *)
 struct_or_union_specifier:
 | ctor= struct_or_union attr_opt= attribute_specifier_sequence?
-    iopt= general_identifier? LBRACE has_extra= boption(SEMICOLON+) rev_decls= struct_declaration_list RBRACE
-    { if has_extra then warn_extra_semicolon $startpos(has_extra) INSIDE_STRUCT;
+    iopt= general_identifier? unused_magic= LBRACE has_extra= boption(SEMICOLON+) rev_decls= struct_declaration_list RBRACE
+    { C_lexer.restore_magic unused_magic;
+      if has_extra then warn_extra_semicolon $startpos(has_extra) INSIDE_STRUCT;
       ctor (to_attrs attr_opt) iopt (Some (List.rev rev_decls)) }
 | ctor= struct_or_union attr_opt= attribute_specifier_sequence?
     i= general_identifier
     { ctor (to_attrs attr_opt) (Some i) None }
 | ctor= struct_or_union attr_opt= attribute_specifier_sequence?
-    iopt= general_identifier? LBRACE  RBRACE
+    iopt= general_identifier? unused_magic= LBRACE RBRACE
     (* GCC extension *)
     (* TODO: forbid union *)
-    { ctor (to_attrs attr_opt) iopt (Some []) }
+    { C_lexer.restore_magic unused_magic;
+      ctor (to_attrs attr_opt) iopt (Some []) }
 ;
 
 struct_or_union:
@@ -1008,6 +1011,8 @@ struct_declaration_list: (* NOTE: the list is in reverse *)
 struct_declaration:
 | attr_opt= ioption(attribute_specifier_sequence) tspecs_tquals= specifier_qualifier_list
     rev_sdeclrs_opt= struct_declarator_list? SEMICOLON has_extra= boption(SEMICOLON+)
+    (* NOTE: the semicolons dont need to restore potential magic comments,
+             because this production is always after the LBRACE of a struct_union (which does perform a restore) *)
     { if has_extra then warn_extra_semicolon $startpos(has_extra) INSIDE_STRUCT;
       let (tspecs, tquals, align_specs) = tspecs_tquals in
       Struct_declaration (to_attrs attr_opt, tspecs, tquals, align_specs,
@@ -1043,8 +1048,9 @@ struct_declarator:
 (* §6.7.2.2 Enumeration specifiers *)
 enum_specifier:
 | ENUM ioption(attribute_specifier_sequence) iopt= general_identifier?
-  LBRACE enums= enumerator_list COMMA? RBRACE
-    { TSpec (Location_ocaml.(region ($startpos, $endpos) NoCursor),
+  unused_magic= LBRACE enums= enumerator_list COMMA? RBRACE
+    { C_lexer.restore_magic unused_magic;
+      TSpec (Location_ocaml.(region ($startpos, $endpos) NoCursor),
              TSpec_enum (iopt, Some (List.rev enums))) }
 | ENUM ioption(attribute_specifier_sequence) i= general_identifier
     { TSpec (Location_ocaml.(region ($startpos, $endpos) NoCursor),
@@ -1262,9 +1268,10 @@ function_abstract_declarator:
 initializer_:
 | expr= assignment_expression
     { Init_expr expr }
-| LBRACE inits= initializer_list RBRACE
-| LBRACE inits= initializer_list COMMA RBRACE
-    { Init_list (List.rev inits) }
+| unused_magic= LBRACE inits= initializer_list RBRACE
+| unused_magic= LBRACE inits= initializer_list COMMA RBRACE
+    { C_lexer.restore_magic unused_magic;
+      Init_list (List.rev inits) }
 ;
 
 initializer_list: (* NOTE: the list is in reverse *)
@@ -1392,10 +1399,11 @@ expression_statement:
         ( Location_ocaml.(region ($startpos, $endpos) NoCursor)
         , Annot.no_attributes
         , option CabsSnull (fun z -> CabsSexpr z) expr_opt ) }
-| attr= attribute_specifier_sequence expr= full_expression SEMICOLON
-    { CabsStatement (Location_ocaml.(region ($startpos, $endpos) NoCursor),
-                     to_attrs (Some attr),
-                     CabsSexpr expr) }
+| attr= attribute_specifier_sequence expr= full_expression prev_magic= SEMICOLON
+    { mk_statement prev_magic
+        (Location_ocaml.(region ($startpos, $endpos) NoCursor)
+        , to_attrs (Some attr)
+        , CabsSexpr expr ) }
 ;
 
 (* §6.8.4 Selection statements *)
