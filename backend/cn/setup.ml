@@ -51,6 +51,7 @@ let cpp_str incl_dirs =
 let with_cn_keywords str =
   let cn_keywords =
     [ "predicate"
+    ; "lemma"
     ; "function"
     ; "datatype"
     ; "pack"

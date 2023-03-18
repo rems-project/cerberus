@@ -148,9 +148,9 @@ let warn_extra_semicolon pos ctx =
 (* CN syntax *)
 (* %token<string> CN_PREDNAME *)
 %token CN_ACCESSES CN_TRUSTED CN_REQUIRES CN_ENSURES CN_INV
-%token CN_PACK CN_UNPACK CN_HAVE CN_INSTANTIATE CN_UNFOLD
+%token CN_PACK CN_UNPACK CN_HAVE CN_INSTANTIATE CN_UNFOLD CN_APPLY
 %token CN_BOOL CN_INTEGER CN_REAL CN_POINTER CN_MAP CN_LIST CN_TUPLE CN_SET
-%token CN_WHEN CN_LET CN_TAKE CN_OWNED CN_BLOCK CN_EACH CN_FUNCTION CN_PREDICATE CN_DATATYPE
+%token CN_WHEN CN_LET CN_TAKE CN_OWNED CN_BLOCK CN_EACH CN_FUNCTION CN_LEMMA CN_PREDICATE CN_DATATYPE
 %token CN_UNCHANGED CN_WITH
 %token CN_GOOD CN_NULL CN_TRUE CN_FALSE
 
@@ -1572,6 +1572,8 @@ external_declaration:
     { EDecl_predCN pred }
 | func= cn_function
     { EDecl_funcCN func }
+| lmma= cn_lemma
+    { EDecl_lemmaCN lmma }
 | dt= cn_datatype
     { EDecl_datatypeCN dt }
 | fdef= function_definition
@@ -2110,6 +2112,20 @@ cn_predicate:
       ; cn_pred_oargs
       ; cn_pred_iargs
       ; cn_pred_clauses} }
+cn_lemma:
+| CN_LEMMA enter_cn
+  str= cn_variable
+  cn_lemma_args= delimited(LPAREN, args, RPAREN)
+  CN_REQUIRES cn_lemma_requires=separated_nonempty_list(SEMICOLON, condition)
+  CN_ENSURES cn_lemma_ensures=separated_nonempty_list(SEMICOLON, condition)
+  exit_cn
+    { (* TODO: check the name starts with lower case *)
+      let loc = Location_ocaml.point $startpos(str) in
+      { cn_lemma_loc= loc
+      ; cn_lemma_name= str
+      ; cn_lemma_args
+      ; cn_lemma_requires
+      ; cn_lemma_ensures } }
 cn_datatype:
 | CN_DATATYPE enter_cn nm= cn_variable
   cases= delimited(LBRACE, cn_cons_cases, RBRACE) exit_cn
@@ -2295,6 +2311,9 @@ cn_statement:
 | CN_UNFOLD id=cn_variable es= delimited(LPAREN, separated_list(COMMA, expr), RPAREN) SEMICOLON
     { let loc = Location_ocaml.(region ($startpos, $endpos) NoCursor) in
       CN_statement (loc, CN_unfold (id, es)) }
+| CN_APPLY id=cn_variable es= delimited(LPAREN, separated_list(COMMA, expr), RPAREN) SEMICOLON
+    { let loc = Location_ocaml.(region ($startpos, $endpos) NoCursor) in
+      CN_statement (loc, CN_apply (id, es)) }
 | ASSERT LPAREN e=assert_expr RPAREN SEMICOLON
     { let loc = Location_ocaml.(region ($startpos, $endpos) NoCursor) in 
       CN_statement (loc, CN_assert_stmt e) }

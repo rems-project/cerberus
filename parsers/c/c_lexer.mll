@@ -107,6 +107,7 @@ let keywords: (string * (unit -> Tokens.token)) list = [
     (* BEGIN CN *)
     "__cerb_predicate"     , (fun () -> CN_PREDICATE);
     "__cerb_function"      , (fun () -> CN_FUNCTION);
+    "__cerb_lemma"         , (fun () -> CN_LEMMA);
     "__cerb_datatype"      , (fun () -> CN_DATATYPE);
     "__cerb_pack"          , (fun () -> CN_PACK);
     "__cerb_unpack"        , (fun () -> CN_UNPACK);
@@ -157,6 +158,7 @@ let cn_keywords: (string * Tokens.token) list = [
     "instantiate"   , CN_INSTANTIATE;
     "have"          , CN_HAVE;
     "unfold"        , CN_UNFOLD;
+    "apply"         , CN_APPLY;
   ]
 
 let cn_lexicon: (string, token) Hashtbl.t =
@@ -549,6 +551,13 @@ and initial = parse
                 (old_pos_cnum - lexbuf.lex_curr_p.pos_bol) (new_pos_cnum - lexbuf.lex_curr_p.pos_bol);
               lexbuf.lex_curr_p <- {lexbuf.lex_curr_p with pos_cnum= new_pos_cnum }; *)
               CN_PREDICATE
+          | CN_LEMMA ->
+              (* let old_pos_cnum = lexbuf.lex_curr_p.pos_cnum in
+              let new_pos_cnum = old_pos_cnum - (String.length "__cerb_") in
+              Printf.fprintf stderr "HACK pos_cnum: %d --> %d\n"
+                (old_pos_cnum - lexbuf.lex_curr_p.pos_bol) (new_pos_cnum - lexbuf.lex_curr_p.pos_bol);
+              lexbuf.lex_curr_p <- {lexbuf.lex_curr_p with pos_cnum= new_pos_cnum }; *)
+              CN_LEMMA
           | tok ->
               tok
       with Not_found ->

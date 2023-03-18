@@ -137,6 +137,7 @@ type token =
   (* CN syntax *)
   | CN_FUNCTION
   | CN_PREDICATE
+  | CN_LEMMA
   | CN_DATATYPE
   | CN_GOOD
   | CN_PACK
@@ -144,6 +145,7 @@ type token =
   | CN_HAVE
   | CN_INSTANTIATE
   | CN_UNFOLD
+  | CN_APPLY
   | CN_PREDNAME of string
   | CN_BOOL
   | CN_INTEGER
@@ -294,6 +296,7 @@ let string_of_token = function
   | CN_HAVE -> "CN_HAVE"
   | CN_INSTANTIATE -> "CN_INSTANTIATE"
   | CN_UNFOLD -> "CN_UNFOLD"
+  | CN_APPLY -> "CN_APPLY"
   | CN_PREDNAME str -> "CN_PREDNAME(" ^ str ^ ")"
   | CN_BOOL -> "CN_BOOL"
   | CN_INTEGER -> "CN_INTEGER"
@@ -313,6 +316,7 @@ let string_of_token = function
   | CN_FALSE -> "CN_FALSE"
   | CN_FUNCTION -> "CN_FUNCTION"
   | CN_PREDICATE -> "CN_PREDICATE"
+  | CN_LEMMA -> "CN_LEMMA"
   | CN_DATATYPE -> "CN_DATATYPE"
   | CN_REQUIRES -> "CN_REQUIRES"
   | CN_ENSURES -> "CN_ENSURES"
