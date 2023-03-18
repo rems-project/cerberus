@@ -72,7 +72,7 @@ type token =
   | LPAREN
   | RPAREN
   | LBRACE of magic_comment
-  | RBRACE
+  | RBRACE of magic_comment
   | DOT
   | MINUS_GT
   | PLUS_PLUS
@@ -232,7 +232,7 @@ let string_of_token = function
   | LPAREN -> "LPAREN"
   | RPAREN -> "RPAREN"
   | LBRACE _ -> "LBRACE"
-  | RBRACE -> "RBRACE"
+  | RBRACE _ -> "RBRACE"
   | DOT -> "DOT"
   | MINUS_GT -> "MINUS_GT"
   | PLUS_PLUS -> "PLUS_PLUS"

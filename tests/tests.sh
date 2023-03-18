@@ -191,6 +191,7 @@ citests=(
   0320-invalid_function_declarators.error.c
   0321-invalid_function_declarators.error.c
   0322-invalid_function_declarators.error.c
+  0323-nested_function_declarators.syntax-only.c
 )
 
 # TESTS THAT ARE KNOW TO FAIL (for example .error test for which we need to improve the message)

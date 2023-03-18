@@ -124,7 +124,7 @@ let warn_extra_semicolon pos ctx =
 %token<Cabs.cabs_encoding_prefix option * string list> STRING_LITERAL
 
 (* §6.4.6 Punctuators *)
-%token LBRACK RBRACK LPAREN RPAREN (*LBRACE*) RBRACE DOT MINUS_GT
+%token LBRACK RBRACK LPAREN RPAREN (*LBRACE RBRACE*) DOT MINUS_GT
   PLUS_PLUS MINUS_MINUS AMPERSAND STAR PLUS MINUS TILDE BANG
   SLASH PERCENT LT_LT GT_GT LT GT LT_EQ GT_EQ EQ_EQ BANG_EQ CARET PIPE
   AMPERSAND_AMPERSAND PIPE_PIPE
@@ -138,7 +138,7 @@ let warn_extra_semicolon pos ctx =
 (* NON-STD cppmem syntax *)
   LBRACES PIPES RBRACES
 
-%token<Tokens.magic_comment> LBRACE SEMICOLON
+%token<Tokens.magic_comment> LBRACE RBRACE SEMICOLON
 
 %token VA_START VA_COPY VA_ARG VA_END PRINT_TYPE ASM ASM_VOLATILE
 
@@ -564,8 +564,9 @@ postfix_expression:
 | expr= postfix_expression MINUS_MINUS
     { CabsExpression ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                      , CabsEpostdecr expr ) }
-| LPAREN ty= type_name RPAREN LBRACE inits= initializer_list COMMA? RBRACE
-    { CabsExpression (Location_ocaml.(region ($startpos, $endpos) NoCursor),
+| LPAREN ty= type_name RPAREN unused_magic= LBRACE inits= initializer_list COMMA? RBRACE
+    { C_lexer.restore_magic unused_magic;
+      CabsExpression (Location_ocaml.(region ($startpos, $endpos) NoCursor),
                       CabsEcompound (ty, List.rev inits)) }
 (* NOTE: non-std way of dealing with these *)
 | ASSERT LPAREN expr= assignment_expression RPAREN
@@ -976,17 +977,19 @@ attribute_type_specifier_unique:
 (* §6.7.2.1 Structure and union specifiers *)
 struct_or_union_specifier:
 | ctor= struct_or_union attr_opt= attribute_specifier_sequence?
-    iopt= general_identifier? LBRACE has_extra= boption(SEMICOLON+) rev_decls= struct_declaration_list RBRACE
-    { if has_extra then warn_extra_semicolon $startpos(has_extra) INSIDE_STRUCT;
+    iopt= general_identifier? unused_magic= LBRACE has_extra= boption(SEMICOLON+) rev_decls= struct_declaration_list RBRACE
+    { C_lexer.restore_magic unused_magic;
+      if has_extra then warn_extra_semicolon $startpos(has_extra) INSIDE_STRUCT;
       ctor (to_attrs attr_opt) iopt (Some (List.rev rev_decls)) }
 | ctor= struct_or_union attr_opt= attribute_specifier_sequence?
     i= general_identifier
     { ctor (to_attrs attr_opt) (Some i) None }
 | ctor= struct_or_union attr_opt= attribute_specifier_sequence?
-    iopt= general_identifier? LBRACE  RBRACE
+    iopt= general_identifier? unused_magic= LBRACE RBRACE
     (* GCC extension *)
     (* TODO: forbid union *)
-    { ctor (to_attrs attr_opt) iopt (Some []) }
+    { C_lexer.restore_magic unused_magic;
+      ctor (to_attrs attr_opt) iopt (Some []) }
 ;
 
 struct_or_union:
@@ -1008,6 +1011,8 @@ struct_declaration_list: (* NOTE: the list is in reverse *)
 struct_declaration:
 | attr_opt= ioption(attribute_specifier_sequence) tspecs_tquals= specifier_qualifier_list
     rev_sdeclrs_opt= struct_declarator_list? SEMICOLON has_extra= boption(SEMICOLON+)
+    (* NOTE: the semicolons dont need to restore potential magic comments,
+             because this production is always after the LBRACE of a struct_union (which does perform a restore) *)
     { if has_extra then warn_extra_semicolon $startpos(has_extra) INSIDE_STRUCT;
       let (tspecs, tquals, align_specs) = tspecs_tquals in
       Struct_declaration (to_attrs attr_opt, tspecs, tquals, align_specs,
@@ -1043,8 +1048,9 @@ struct_declarator:
 (* §6.7.2.2 Enumeration specifiers *)
 enum_specifier:
 | ENUM ioption(attribute_specifier_sequence) iopt= general_identifier?
-  LBRACE enums= enumerator_list COMMA? RBRACE
-    { TSpec (Location_ocaml.(region ($startpos, $endpos) NoCursor),
+  unused_magic= LBRACE enums= enumerator_list COMMA? RBRACE
+    { C_lexer.restore_magic unused_magic;
+      TSpec (Location_ocaml.(region ($startpos, $endpos) NoCursor),
              TSpec_enum (iopt, Some (List.rev enums))) }
 | ENUM ioption(attribute_specifier_sequence) i= general_identifier
     { TSpec (Location_ocaml.(region ($startpos, $endpos) NoCursor),
@@ -1262,9 +1268,10 @@ function_abstract_declarator:
 initializer_:
 | expr= assignment_expression
     { Init_expr expr }
-| LBRACE inits= initializer_list RBRACE
-| LBRACE inits= initializer_list COMMA RBRACE
-    { Init_list (List.rev inits) }
+| unused_magic= LBRACE inits= initializer_list RBRACE
+| unused_magic= LBRACE inits= initializer_list COMMA RBRACE
+    { C_lexer.restore_magic unused_magic;
+      Init_list (List.rev inits) }
 ;
 
 initializer_list: (* NOTE: the list is in reverse *)
@@ -1344,8 +1351,20 @@ labeled_statement:
 
 (* §6.8.2 Compound statement *)
 compound_statement:
-| prev_magic= LBRACE bis_opt= block_item_list? RBRACE
-    { mk_statement prev_magic
+| prev_magic= LBRACE bis_opt= block_item_list? post_magic= RBRACE
+    { let bis_opt =
+        match post_magic with
+          | [] -> bis_opt
+          | _ ->
+              let magic_stmt =
+                mk_statement post_magic
+                  ( Location_ocaml.(region ($startpos(post_magic), $endpos(post_magic)) NoCursor)
+                  , Annot.no_attributes
+                  , CabsSnull ) in
+              match bis_opt with
+                | None -> Some [magic_stmt]
+                | Some xs -> Some (magic_stmt :: xs) in
+      mk_statement prev_magic
         ( Location_ocaml.(region ($startpos, $endpos) NoCursor)
         , Annot.no_attributes
         , CabsSblock (option [] List.rev bis_opt) ) }
@@ -1380,10 +1399,11 @@ expression_statement:
         ( Location_ocaml.(region ($startpos, $endpos) NoCursor)
         , Annot.no_attributes
         , option CabsSnull (fun z -> CabsSexpr z) expr_opt ) }
-| attr= attribute_specifier_sequence expr= full_expression SEMICOLON
-    { CabsStatement (Location_ocaml.(region ($startpos, $endpos) NoCursor),
-                     to_attrs (Some attr),
-                     CabsSexpr expr) }
+| attr= attribute_specifier_sequence expr= full_expression prev_magic= SEMICOLON
+    { mk_statement prev_magic
+        (Location_ocaml.(region ($startpos, $endpos) NoCursor)
+        , to_attrs (Some attr)
+        , CabsSexpr expr ) }
 ;
 
 (* §6.8.4 Selection statements *)

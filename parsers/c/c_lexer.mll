@@ -27,6 +27,9 @@ let fetch_and_clear_magic () =
   internal_state.magic_acc <- [];
   List.rev ret
 
+let restore_magic xs =
+  internal_state.magic_acc <- List.rev xs
+
 
 let new_line lexbuf =
   (* the hacked col offset MUST be reset after every newline *)
@@ -459,7 +462,7 @@ and initial = parse
   | '('   { LPAREN              }
   | ')'   { RPAREN              }
   | '{'   { LBRACE (fetch_and_clear_magic ()) }
-  | '}'   { RBRACE              }
+  | '}'   { RBRACE (fetch_and_clear_magic ()) }
   | '.'   { DOT                 }
   | "->"  { MINUS_GT            }
   | "++"  { PLUS_PLUS           }
@@ -510,7 +513,7 @@ and initial = parse
   | "<:" { LBRACK }
   | ":>" { RBRACK }
   | "<%" { LBRACE (fetch_and_clear_magic ()) }
-  | "%>" { RBRACE   }
+  | "%>" { RBRACE (fetch_and_clear_magic ()) }
 (*  | "%:"   *)
 (*  | "%:%:" *)
   
