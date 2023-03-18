@@ -785,6 +785,8 @@ module Spine : sig
     Loc.t -> fsym:Sym.t -> _ mu_pexpr list -> AT.ft -> (RT.t -> (unit) m) -> (unit) m
   val calltype_lt : 
     Loc.t -> _ mu_pexpr list -> AT.lt * label_kind -> (False.t -> (unit) m) -> (unit) m
+  val calltype_lemma :
+    Loc.t -> lemma:Sym.t -> (Loc.t * IT.t) list -> AT.lemmat -> (LRT.t -> unit m) -> unit m
   val calltype_packing : 
     Loc.t -> Sym.t -> LAT.packing_ft -> (OutputDef.t -> (unit) m) -> (unit) m
   val subtype : 
@@ -827,7 +829,7 @@ end = struct
     k rt
 
 
-  let spine rt_subst rt_pp loc (situation : call_situation) args ftyp k =
+  let spine check_arg rt_subst rt_pp loc (situation : call_situation) args ftyp k =
 
     let open ArgumentTypes in
 
@@ -843,8 +845,8 @@ end = struct
 
     let rec check args ftyp k = 
       match args, ftyp with
-      | ((arg : _ mu_pexpr) :: args), (Computational ((s, bt), _info, ftyp)) ->
-         check_pexpr ~expect:bt arg (fun arg ->
+      | (arg :: args), (Computational ((s, bt), _info, ftyp)) ->
+         check_arg arg ~expect:bt (fun arg ->
          check args (subst rt_subst (make_subst [(s, arg)]) ftyp) k)
       | [], (L ftyp) -> 
          k ftyp
@@ -859,12 +861,20 @@ end = struct
 
 
   let calltype_ft loc ~fsym args (ftyp : AT.ft) k =
-    spine RT.subst RT.pp loc (FunctionCall fsym) args ftyp k
+    spine check_pexpr RT.subst RT.pp loc (FunctionCall fsym) args ftyp k
 
 
   let calltype_lt loc args ((ltyp : AT.lt), label_kind) k =
-    spine False.subst False.pp 
+    spine check_pexpr False.subst False.pp 
       loc (LabelCall label_kind) args ltyp k
+
+  let calltype_lemma loc ~lemma args lemma_typ k =
+    let check_it_arg (loc, it_arg) ~(expect:LS.t) k =
+      let@ it_arg = WellTyped.WIT.check loc expect it_arg in
+      k it_arg
+    in
+    spine check_it_arg LRT.subst LRT.pp
+      loc (LemmaApplication lemma) args lemma_typ k
 
   let calltype_packing loc (name : Sym.t) (ft : LAT.packing_ft) k =
     spine_l OutputDef.subst OutputDef.pp 
@@ -1384,16 +1394,14 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
                | Some body -> 
                   add_c (LC.t_ (eq_ (pred_ f args def.return_bt, body)))
                end
-            | M_CN_apply (f, args) ->
-               failwith "todo"
-               (* let@ (_loc, ft) = get_fun_decl loc f in *)
-               (* let@ args = ListM.mapM (WellTyped.WIT.infer loc) args in *)
-               (* Spine.calltype_ft loc ~fsym pes ft (fun (Computational ((_, bt), _, _) as rt) -> *)
-               (*     let@ () = WellTyped.ensure_base_type loc ~expect bt in *)
-               (*     let@ _, members = make_return_record loc (FunctionCall fsym) (RT.binders rt) in *)
-               (*     let@ lvt = bind_return loc members rt in *)
-               (*     return () *)
-               (*   ) *)
+            | M_CN_apply (lemma, args) ->
+               let@ (_loc, lemma_typ) = get_lemma loc lemma in
+               let args = List.map (fun arg -> (loc, arg)) args in
+               Spine.calltype_lemma loc ~lemma args lemma_typ (fun lrt ->
+                   let@ _, members = make_return_record loc (LemmaApplication lemma) (LRT.binders lrt) in
+                   let@ () = bind_logical_return loc members lrt in
+                   return ()
+                 )
             | M_CN_assert lc ->
                let@ lc = WellTyped.WLC.welltyped loc lc in
                let@ provable = provable loc in

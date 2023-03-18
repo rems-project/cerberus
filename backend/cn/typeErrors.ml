@@ -27,6 +27,7 @@ type automatic = Auto | Manual
 
 type call_situation =
   | FunctionCall of Sym.t
+  | LemmaApplication of Sym.t
   | LabelCall of label_kind
   | Subtyping
   | PackPredicate of Sym.t
@@ -36,6 +37,7 @@ type call_situation =
 
 let call_prefix = function
   | FunctionCall fsym -> "call_" ^ Sym.pp_string fsym
+  | LemmaApplication l -> "apply_" ^ Sym.pp_string l
   | LabelCall Return -> "return"
   | LabelCall Loop -> "loop"
   | LabelCall Other -> "goto"
@@ -53,6 +55,7 @@ type situation =
 
 let call_situation = function
   | FunctionCall fsym -> !^"checking call of function" ^^^ Sym.pp fsym
+  | LemmaApplication l -> !^"applying lemma" ^^^ Sym.pp l
   | LabelCall Return -> !^"checking return"
   | LabelCall Loop -> !^"checking loop entry"
   | LabelCall Other -> !^"checking label call"
@@ -80,6 +83,7 @@ let for_access = function
 let for_situation = function
   | Access access -> for_access access
   | Call FunctionCall fsym -> !^"for calling function" ^^^ Sym.pp fsym
+  | Call LemmaApplication l -> !^"for applying lemma" ^^^ Sym.pp l
   | Call LabelCall Return -> !^"for returning"
   | Call LabelCall Loop -> !^"for loop"
   | Call LabelCall Other -> !^"for calling label"
