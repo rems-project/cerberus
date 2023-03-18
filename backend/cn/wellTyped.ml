@@ -1197,3 +1197,9 @@ end
 
 
 
+module WLemma = struct
+
+  let welltyped loc lemma_s lemma_typ = 
+    WAT.welltyped LRT.subst WLRT.welltyped "lemma" loc lemma_typ
+
+end

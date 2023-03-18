@@ -1706,6 +1706,12 @@ let check_c_functions funs =
 
 
 
+(* (Sym.t * (Locations.t * ArgumentTypes.lemmat)) list *)
+
+let wf_check_and_record_lemma (lemma_s, (loc, lemma_typ)) =
+  let@ lemma_typ = WellTyped.WLemma.welltyped loc lemma_s lemma_typ in
+  add_lemma lemma_s (loc, lemma_typ)
+
 
 
 
@@ -1724,6 +1730,7 @@ let check mu_file stmt_locs o_lemma_mode =
   let@ () = record_and_check_logical_functions mu_file.mu_logical_predicates in
   let@ () = record_and_check_resource_predicates mu_file.mu_resource_predicates in
   let@ () = record_globals mu_file.mu_globs in
+  let@ () = ListM.iterM wf_check_and_record_lemma mu_file.mu_lemmata in
   let@ (trusted, checked) = wf_check_and_record_functions mu_file.mu_funs in
   let@ () = check_c_functions checked in
 

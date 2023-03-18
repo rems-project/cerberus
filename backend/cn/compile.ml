@@ -1423,6 +1423,10 @@ let translate_cn_statement
       | CN_assert_stmt e ->
          let@ e = ET.translate_cn_assrt env (loc, e) in
          return (M_CN_statement (loc, M_CN_assert e))
+      | CN_apply (s, args) ->
+         let@ args = ListM.mapM (ET.translate_cn_expr SymSet.empty env) args in
+         let args = List.map IT.term_of_sterm args in
+         return (M_CN_statement (loc, M_CN_apply (s, args)))
     )
 
 

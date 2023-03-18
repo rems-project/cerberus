@@ -4371,6 +4371,11 @@ let desugar_cn_statement (CN_statement loc stmt_) =
   | CN_assert_stmt e ->
      desugar_cn_assertion e >>= fun e ->
      E.return (CN_assert_stmt e)
+  | CN_apply l args ->
+     E.resolve_cn_ident CN_lemma l >>= fun l_resolved ->
+     let l = Cn.ensure_not_c_variable l_resolved in
+     E.mapM desugar_cn_expr args >>= fun args ->
+     E.return (CN_apply l args)
   end >>= fun stmt_ ->
   E.return (CN_statement loc stmt_)
 

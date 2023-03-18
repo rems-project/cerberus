@@ -73,6 +73,7 @@ val todo_get_logical_predicate_def_s : Locations.t -> string ->
 
 val add_struct_decl : Sym.t -> Memory.struct_layout -> (unit) m
 val add_fun_decl : Sym.t -> (Locations.t * ArgumentTypes.ft) -> (unit) m
+val add_lemma : Sym.t -> (Locations.t * ArgumentTypes.lemmat) -> (unit) m
 val add_resource_predicate : Sym.t -> ResourcePredicates.definition -> (unit) m
 val add_logical_predicate : Sym.t -> LogicalPredicates.definition -> (unit) m
 val add_datatype : Sym.t -> BaseTypes.datatype_info -> (unit) m

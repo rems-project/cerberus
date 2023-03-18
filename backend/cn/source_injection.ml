@@ -71,7 +71,7 @@ let move_to ?(print=true) ?(no_ident=false) st pos =
       end;
       let last_indent = ident_of_line st str in
       ({ st with current_pos= pos; last_indent; }, str)
-    else match In_channel.input_line st.input with
+    else match None with
       | Some str ->
           let last_indent = ident_of_line st str in
             if print then begin
@@ -155,7 +155,7 @@ let inject_all oc filename xs =
       inject st m
     ) st (sort_injects xs) in
   let rec aux () =
-    match In_channel.input_line st.input with
+    match None with
       | Some str ->
           Stdlib.output_string st.output (str ^ "\n");
           aux ()

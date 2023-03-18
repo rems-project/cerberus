@@ -488,6 +488,9 @@ let add_fun_decl fname entry =
   let@ global = get_global () in
   set_global { global with fun_decls = SymMap.add fname entry global.fun_decls }
 
+let add_lemma lemma_s (loc, lemma_typ) =
+  let@ global = get_global () in
+  set_global { global with lemmata = SymMap.add lemma_s (loc, lemma_typ) global.lemmata }
 
 
 let add_resource_predicate name entry = 
