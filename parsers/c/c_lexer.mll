@@ -457,7 +457,7 @@ and initial = parse
   | '('   { LPAREN              }
   | ')'   { RPAREN              }
   | '{'   { LBRACE (fetch_and_clear_magic ()) }
-  | '}'   { RBRACE              }
+  | '}'   { RBRACE (fetch_and_clear_magic ()) }
   | '.'   { DOT                 }
   | "->"  { MINUS_GT            }
   | "++"  { PLUS_PLUS           }
@@ -508,7 +508,7 @@ and initial = parse
   | "<:" { LBRACK }
   | ":>" { RBRACK }
   | "<%" { LBRACE (fetch_and_clear_magic ()) }
-  | "%>" { RBRACE   }
+  | "%>" { RBRACE (fetch_and_clear_magic ()) }
 (*  | "%:"   *)
 (*  | "%:%:" *)
   

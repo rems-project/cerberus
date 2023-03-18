@@ -124,7 +124,7 @@ let warn_extra_semicolon pos ctx =
 %token<Cabs.cabs_encoding_prefix option * string list> STRING_LITERAL
 
 (* §6.4.6 Punctuators *)
-%token LBRACK RBRACK LPAREN RPAREN (*LBRACE*) RBRACE DOT MINUS_GT
+%token LBRACK RBRACK LPAREN RPAREN (*LBRACE RBRACE*) DOT MINUS_GT
   PLUS_PLUS MINUS_MINUS AMPERSAND STAR PLUS MINUS TILDE BANG
   SLASH PERCENT LT_LT GT_GT LT GT LT_EQ GT_EQ EQ_EQ BANG_EQ CARET PIPE
   AMPERSAND_AMPERSAND PIPE_PIPE
@@ -138,7 +138,7 @@ let warn_extra_semicolon pos ctx =
 (* NON-STD cppmem syntax *)
   LBRACES PIPES RBRACES
 
-%token<Tokens.magic_comment> LBRACE SEMICOLON
+%token<Tokens.magic_comment> LBRACE RBRACE SEMICOLON
 
 %token VA_START VA_COPY VA_ARG VA_END PRINT_TYPE ASM ASM_VOLATILE
 
@@ -1344,8 +1344,20 @@ labeled_statement:
 
 (* §6.8.2 Compound statement *)
 compound_statement:
-| prev_magic= LBRACE bis_opt= block_item_list? RBRACE
-    { mk_statement prev_magic
+| prev_magic= LBRACE bis_opt= block_item_list? post_magic= RBRACE
+    { let bis_opt =
+        match post_magic with
+          | [] -> bis_opt
+          | _ ->
+              let magic_stmt =
+                mk_statement post_magic
+                  ( Location_ocaml.(region ($startpos(post_magic), $endpos(post_magic)) NoCursor)
+                  , Annot.no_attributes
+                  , CabsSnull ) in
+              match bis_opt with
+                | None -> Some [magic_stmt]
+                | Some xs -> Some (magic_stmt :: xs) in
+      mk_statement prev_magic
         ( Location_ocaml.(region ($startpos, $endpos) NoCursor)
         , Annot.no_attributes
         , CabsSblock (option [] List.rev bis_opt) ) }
