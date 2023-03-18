@@ -71,15 +71,15 @@ let move_to ?(print=true) ?(no_ident=false) st pos =
       end;
       let last_indent = ident_of_line st str in
       ({ st with current_pos= pos; last_indent; }, str)
-    else match None with
-      | Some str ->
+    else match Stdlib.input_line st.input with
+      | str ->
           let last_indent = ident_of_line st str in
             if print then begin
               Stdlib.output_string st.output (str ^ "\n");
             end;
             aux last_indent
               { st with current_pos= { line= st.current_pos.line + 1; col= 1 } }
-      | None -> begin
+      | exception End_of_file -> begin
           Printf.fprintf stderr "st.line= %d\npos.line= %d\n"
             st.current_pos.line pos.line;
           failwith "end of file"
