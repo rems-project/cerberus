@@ -1091,7 +1091,7 @@ module General = struct
     in
     loop ftyp
 
-  and resource_request ~recursive loc uiinfo (request : RET.t) : (RE.t option, type_error) m =
+  and resource_request ~recursive loc uiinfo (request : RET.t) : (RE.t option) m =
     match request with
     | P request ->
        let@ result = predicate_request ~recursive loc uiinfo request in

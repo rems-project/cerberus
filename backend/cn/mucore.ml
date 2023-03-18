@@ -29,7 +29,6 @@ module T = struct
   type logical_arguments = (Sym.t * (Sym.t * BaseTypes.t) list)
   type resource_predicates = (Sym.t * ResourcePredicates.definition) list
   type logical_predicates = (Sym.t * LogicalPredicates.definition) list
-  type lemmata = (Sym.t * ArgumentTypes.lemmat) list
 end
 
 
@@ -312,7 +311,7 @@ type 'TY mu_file = {
   mu_logical_predicates : T.logical_predicates;
   mu_datatypes : (Sym.t * BaseTypes.datatype_info) list;
   mu_constructors : (Sym.t * BaseTypes.constr_info) list;
-  mu_lemmata : T.lemmata;
+  mu_lemmata : (Sym.t * (Locations.t * ArgumentTypes.lemmat)) list;
 }
 
 

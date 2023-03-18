@@ -32,16 +32,16 @@ module PrevDefs = struct
         defs: (Pp.doc list) IntMap.t;
         dt_params: (IT.t * Sym.t * Sym.t) list}
   let init_t = {present = StringListMap.empty; defs = IntMap.empty; dt_params = []}
-  type ('a, 'e) m = t -> ('a * t, 'e) Result.t
-  let return (x : 'a) : ('a, 'e) m = (fun st -> Result.Ok (x, st))
-  let bind (x : ('a, 'e) m) (f : 'a -> ('b, 'e) m) : ('b, 'e) m = (fun st ->
+  type 'a m = t -> ('a * t, TypeErrors.t) Result.t
+  let return (x : 'a) : 'a m = (fun st -> Result.Ok (x, st))
+  let bind (x : 'a m) (f : 'a -> 'b m) : 'b m = (fun st ->
     match x st with
     | Result.Error e -> Result.Error e
     | Result.Ok (xv, st) -> f xv st
   )
-  let get : (t, 'e) m = (fun st -> Result.Ok (st, st))
-  let set (st : t) : (unit, 'e) m = (fun _ -> Result.Ok ((), st))
-  let upd (f : t -> t) : (unit, 'e) m = bind get (fun st -> set (f st))
+  let get : t m = (fun st -> Result.Ok (st, st))
+  let set (st : t) : unit m = (fun _ -> Result.Ok ((), st))
+  let upd (f : t -> t) : unit m = bind get (fun st -> set (f st))
 
   let get_section section (st : t) =
     match IntMap.find_opt section st.defs with

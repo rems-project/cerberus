@@ -22,12 +22,12 @@ open Effectful.Make(Typing)
 
 
 
-let ensure_logical_sort (loc : loc) ~(expect : LS.t) (has : LS.t) : (unit, type_error) m =
+let ensure_logical_sort (loc : loc) ~(expect : LS.t) (has : LS.t) : (unit) m =
   if LS.equal has expect 
   then return () 
   else fail (fun _ -> {loc; msg = Mismatch {has = BT.pp has; expect = BT.pp expect}})
 
-let ensure_base_type (loc : loc) ~(expect : BT.t) (has : BT.t) : (unit, type_error) m =
+let ensure_base_type (loc : loc) ~(expect : BT.t) (has : BT.t) : (unit) m =
   ensure_logical_sort loc ~expect has
 
 
@@ -891,7 +891,7 @@ end
 
 module WLAT = struct
 
-  let welltyped i_subst i_welltyped kind loc (at : 'i LAT.t) : ('i LAT.t, type_error) m = 
+  let welltyped i_subst i_welltyped kind loc (at : 'i LAT.t) : ('i LAT.t) m = 
     let rec aux = function
       | LAT.Define ((s, it), info, at) ->
          (* no need to alpha-rename, because context.ml ensures
@@ -935,7 +935,7 @@ end
 
 module WAT = struct
 
-  let welltyped i_subst i_welltyped kind loc (at : 'i AT.t) : ('i AT.t, type_error) m = 
+  let welltyped i_subst i_welltyped kind loc (at : 'i AT.t) : ('i AT.t) m = 
     let rec aux = function
       | AT.Computational ((name,bt), info, at) ->
          (* no need to alpha-rename, because context.ml ensures
@@ -985,11 +985,11 @@ end
 module WLArgs = struct
 
   let welltyped 
-        (i_welltyped : Loc.t -> 'i -> ('i * 'it, type_error) m)
+        (i_welltyped : Loc.t -> 'i -> ('i * 'it) m)
         kind
         loc
         (at : 'i Mu.mu_arguments_l)
-      : ('i Mu.mu_arguments_l * 'it LAT.t, type_error) m = 
+      : ('i Mu.mu_arguments_l * 'it LAT.t) m = 
     let rec aux = function
       | Mu.M_Define ((s, it), info, at) ->
          (* no need to alpha-rename, because context.ml ensures
@@ -1038,11 +1038,11 @@ end
 module WArgs = struct
 
   let welltyped 
-        (i_welltyped : Loc.t -> 'i -> ('i * 'it, type_error) m) 
+        (i_welltyped : Loc.t -> 'i -> ('i * 'it) m) 
         kind 
         loc
         (at : 'i Mu.mu_arguments) 
-      : ('i Mu.mu_arguments * 'it AT.t, type_error) m = 
+      : ('i Mu.mu_arguments * 'it AT.t) m = 
     let rec aux = function
       | Mu.M_Computational ((name,bt), info, at) ->
          (* no need to alpha-rename, because context.ml ensures
@@ -1066,7 +1066,7 @@ end
 
 module WProc = struct 
   let welltyped (loc : Loc.t) (at : _ Mu.mu_proc_args_and_body)
-      : (_ Mu.mu_proc_args_and_body * AT.ft, type_error) m 
+      : (_ Mu.mu_proc_args_and_body * AT.ft) m 
     =
     WArgs.welltyped (fun loc (body, labels, rt) ->
         let@ rt = WRT.welltyped loc rt in
@@ -1077,7 +1077,7 @@ end
 module WLabel = struct
   open Mu
   let welltyped (loc : Loc.t) (lt : _ mu_expr mu_arguments)
-      : (_ mu_expr mu_arguments * AT.lt, type_error) m 
+      : (_ mu_expr mu_arguments * AT.lt) m 
     =
     WArgs.welltyped (fun loc body -> 
         return (body, False.False)

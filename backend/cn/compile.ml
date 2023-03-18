@@ -8,6 +8,8 @@ module LRT = LogicalReturnTypes
 module LC = LogicalConstraints
 module RET = ResourceTypes
 module Mu = Mucore
+module RT = ReturnTypes
+
 
 open Pp
 
@@ -22,35 +24,358 @@ module Y = Map.Make(String)
 module StringSet = Set.Make(String)
 
 
+type function_sig = {
+    args: (Sym.t * BaseTypes.t) list;
+    return_bty: BaseTypes.t;
+  }
+
+type predicate_sig = {
+  pred_iargs: (Sym.t * BaseTypes.t) list;
+  pred_oargs: (Sym.t * BaseTypes.t) list;
+}
+
+
+type env = {
+  computationals: SBT.t SymMap.t;
+  logicals: SBT.t SymMap.t;
+  pred_names: Sym.t Y.t;
+  predicates: predicate_sig SymMap.t;
+  func_names: Sym.t Y.t;
+  functions: function_sig SymMap.t;
+  (* state: state_env; *)
+  (* old_states: state_env Y.t; *)
+  datatypes : (BaseTypes.datatype_info * Sym.t Y.t) SymMap.t;
+  datatype_constrs : BaseTypes.constr_info SymMap.t;
+  tagDefs: Mu.mu_tag_definitions;
+}
+
+let empty tagDefs =
+  { computationals = SymMap.empty;
+    logicals= SymMap.empty; 
+    pred_names= Y.empty; 
+    predicates= SymMap.empty;
+    func_names = Y.empty; 
+    functions = SymMap.empty; 
+    (* state= empty_state; *)
+    (* old_states = Y.empty; *)
+    datatypes = SymMap.empty; 
+    datatype_constrs = SymMap.empty;
+    tagDefs; 
+  }
+
+
+let add_computational sym bTy env =
+  {env with computationals= SymMap.add sym bTy env.computationals }
+
+let add_logical sym bTy env =
+  {env with logicals= SymMap.add sym bTy env.logicals }
+
+let add_predicate sym pred_sig env =
+  {env with predicates= SymMap.add sym pred_sig env.predicates }
+
+
+let lookup_computational_or_logical sym env =
+  match SymMap.find_opt sym env.logicals with
+  | Some bt -> Some bt
+  | None -> 
+     SymMap.find_opt sym env.computationals
+
+let lookup_pred_name str env =
+  Y.find_opt str env.pred_names
+
+let lookup_predicate sym env =
+  SymMap.find_opt sym env.predicates
+
+let lookup_function sym env =
+  SymMap.find_opt sym env.functions
+
+let lookup_function_by_name nm env = match Y.find_opt nm env.func_names with
+  | Some sym ->
+    SymMap.find_opt sym env.functions |> Option.map (fun fs -> (sym, fs))
+  | None -> None
+
+
+let lookup_struct_opt sym env =
+  match Pmap.lookup sym env.tagDefs with
+    | Some (M_StructDef xs) ->
+        Some xs
+    | Some (M_UnionDef _)| None ->
+        None
+
+let lookup_member_opt (def: Memory.struct_layout) member =
+  List.assoc_opt Id.equal member (Memory.member_types def)
+
+let add_datatype sym info env =
+  let datatypes = SymMap.add sym info env.datatypes in
+  {env with datatypes}
+
+
+
+let add_datatype_constr sym info env =
+  let datatype_constrs = SymMap.add sym info env.datatype_constrs in
+  {env with datatype_constrs}
+
+let get_datatype_maps env =
+  (SymMap.bindings (SymMap.map fst env.datatypes), 
+   SymMap.bindings env.datatype_constrs)
+
+
+let debug_known_preds env =
+  Pp.debug 2 (lazy (Pp.item "known logical predicates"
+      (Pp.list (fun (nm, _) -> Pp.string nm) (Y.bindings env.func_names))));
+  Pp.debug 2 (lazy (Pp.item "known resource predicate names"
+      (Pp.list (fun (nm, _) -> Pp.string nm) (Y.bindings env.pred_names))))
+
+
+
+type cn_predicate =
+  (CF.Symbol.sym, CF.Ctype.ctype) CF.Cn.cn_predicate
+
+type cn_function =
+  (CF.Symbol.sym, CF.Ctype.ctype) CF.Cn.cn_function
+
+type cn_lemma =
+  (CF.Symbol.sym, CF.Ctype.ctype) CF.Cn.cn_lemma
+
+type cn_datatype =
+  (CF.Symbol.sym, CF.Ctype.ctype) CF.Cn.cn_datatype
+
+
+let pp_cnexpr_kind expr_ =
+  let open Pp in
+  match expr_ with
+  | CNExpr_const CNConst_NULL -> !^ "NULL"
+  | CNExpr_const (CNConst_integer n) -> Pp.string (Z.to_string n)
+  | CNExpr_const (CNConst_bool b) -> !^ (if b then "true" else "false")
+  | CNExpr_var sym -> parens (typ (!^ "var") (Sym.pp sym))
+  | CNExpr_deref e -> !^ "(deref ...)"
+  | CNExpr_value_of_c_variable sym -> parens (typ (!^ "c:var") (Sym.pp sym))
+  | CNExpr_list es_ -> !^ "[...]"
+  | CNExpr_memberof (e, xs) -> !^ "_." ^^ Id.pp xs
+  | CNExpr_memberupdates (e, _updates) -> !^ "{_ with ...}"
+  | CNExpr_arrayindexupdates (e, _updates) -> !^ "_ [ _ = _ ...]"
+  | CNExpr_binop (bop, x, y) -> !^ "(binop (_, _, _))"
+  | CNExpr_sizeof ct -> !^ "(sizeof _)"
+  | CNExpr_offsetof (tag, member) -> !^ "(offsetof (_, _))"
+  | CNExpr_membershift (e, member) -> !^ "&(_ -> _)"
+  | CNExpr_cast (bt, expr) -> !^ "(cast (_, _))"
+  | CNExpr_call (nm, exprs) -> !^ "(" ^^ Id.pp nm ^^^ !^ "(...))"
+  | CNExpr_cons (c_nm, exprs) -> !^ "(" ^^ Sym.pp c_nm ^^^ !^ "{...})"
+  | CNExpr_each (sym, r, e) -> !^ "(each ...)"
+  | CNExpr_ite (e1, e2, e3) -> !^ "(if ... then ...)"
+  | CNExpr_good (ty, e) -> !^ "(good (_, _))"
+  | CNExpr_unchanged e -> !^"(unchanged (_))"
+  | CNExpr_at_env (e, es) -> !^"{_}@_"
+  | CNExpr_not e -> !^"!_"
+
+
+
+let rec free_in_expr (CNExpr (_loc, expr_)) =
+  match expr_ with
+  | CNExpr_const _ -> 
+     SymSet.empty
+  | CNExpr_var v -> 
+     SymSet.singleton v
+  | CNExpr_list es -> 
+     free_in_exprs es
+  | CNExpr_memberof (e, _id) -> 
+     free_in_expr e
+  | CNExpr_memberupdates (e, updates) ->
+     free_in_exprs (e :: List.map snd updates)
+  | CNExpr_arrayindexupdates (e, updates) ->
+     free_in_exprs (e :: List.concat_map (fun (e1, e2) -> [e1; e2]) updates)
+  | CNExpr_binop (_binop, e1, e2) ->
+     free_in_exprs [e1; e2]
+  | CNExpr_sizeof _ -> 
+     SymSet.empty
+  | CNExpr_offsetof _ ->
+     SymSet.empty
+  | CNExpr_membershift (e, _id) ->
+     free_in_expr e
+  | CNExpr_cast (_bt, e) ->
+     free_in_expr e
+  | CNExpr_call (_id, es) ->
+     free_in_exprs es
+  | CNExpr_cons (_c, args) ->
+     free_in_exprs (List.map snd args)
+  | CNExpr_each (s, range, e) ->
+     SymSet.remove s (free_in_expr e)
+  | CNExpr_ite (e1, e2, e3) ->
+     free_in_exprs [e1; e2; e3]
+  | CNExpr_good (typ, e) ->
+     free_in_expr e
+  | CNExpr_deref e ->
+     free_in_expr e
+  | CNExpr_value_of_c_variable s ->
+     SymSet.singleton s
+  | CNExpr_unchanged e ->
+     free_in_expr e
+  | CNExpr_at_env (e, _evaluation_scope) ->
+     free_in_expr e
+  | CNExpr_not e ->
+     free_in_expr e
+
+and free_in_exprs = function
+  | [] -> SymSet.empty
+  | e :: es -> SymSet.union (free_in_expr e) (free_in_exprs es)
+
+
+let rec translate_cn_base_type (bTy: CF.Symbol.sym cn_base_type) =
+  let open SurfaceBaseTypes in
+  match bTy with
+    | CN_unit ->
+        Unit
+    | CN_bool ->
+        Bool
+    | CN_integer ->
+        Integer
+    | CN_real ->
+        Real
+    | CN_loc ->
+        Loc None
+    | CN_struct tag_sym ->
+        Struct tag_sym
+    | CN_datatype dt_sym ->
+        Datatype dt_sym
+    | CN_map (bTy1, bTy2) ->
+        Map ( translate_cn_base_type bTy1
+            , translate_cn_base_type bTy2 )
+    | CN_list bTy' -> 
+        List (translate_cn_base_type bTy')
+    | CN_tuple bTys ->
+        Tuple (List.map translate_cn_base_type bTys)
+    | CN_set bTy' ->
+        Set (translate_cn_base_type bTy')
+
+
+let register_cn_predicates env (defs: cn_predicate list) =
+  let aux env def =
+    let translate_args xs =
+      List.map (fun (bTy, sym) ->
+        (sym, translate_cn_base_type bTy)
+      ) xs in
+    let iargs = translate_args def.cn_pred_iargs in
+    let oargs = translate_args def.cn_pred_oargs in
+    add_predicate def.cn_pred_name { 
+        pred_iargs= List.map_snd SBT.to_basetype iargs; 
+        pred_oargs= List.map_snd SBT.to_basetype oargs 
+      } env 
+  in
+  List.fold_left aux env defs
+
+
+open Resultat
+open Effectful.Make(Resultat)
+
+
+let name_to_sym loc nm m = match Y.find_opt nm m with
+  | None ->
+    let sym = Sym.fresh_named nm in
+    return sym
+  | Some _ ->
+    let open TypeErrors in
+    fail {loc; msg = Generic (Pp.string ("redefinition of name: " ^ nm))}
+
+
+let add_function loc sym func_sig env =
+  (* upstream of this an incorrect string->sym conversion was done *)
+  let str = Tools.todo_string_of_sym sym in
+  let@ _ = name_to_sym loc str env.func_names in
+  return {env with functions= SymMap.add sym func_sig env.functions;
+    func_names = Y.add str sym env.func_names }
+
+
+let register_cn_functions env (defs: cn_function list) =
+  let aux env def =
+    let args = 
+      List.map (fun (bTy, sym) -> 
+          (sym, SBT.to_basetype (translate_cn_base_type bTy))
+      ) def.cn_func_args 
+    in
+    let return_bt = 
+      SBT.to_basetype (translate_cn_base_type def.cn_func_return_bty)
+    in
+    let fsig = {args; return_bty = return_bt} in
+    add_function def.cn_func_loc def.cn_func_name fsig env
+  in
+  ListM.fold_leftM aux env defs
+
+
+let add_datatype_info env (dt : cn_datatype) =
+  Pp.debug 2 (lazy (Pp.item "translating datatype declaration" (Sym.pp dt.cn_dt_name)));
+  let add_param_sym m (ty, nm) =
+    let bt = translate_cn_base_type ty in
+    let nm_s = Id.s nm in
+    match Y.find_opt nm_s m with
+    | None ->
+      let sym = Sym.fresh_named nm_s in
+      return (Y.add nm_s (sym, bt) m)
+    | Some (sym, bt2) -> if SBT.equal bt bt2 then return m
+      else fail {loc = Id.loc nm;
+              msg = Generic (Pp.item "different type for datatype member" (Id.pp nm))}
+  in
+  let@ param_sym_tys = ListM.fold_leftM add_param_sym Y.empty
+    (List.concat (List.map snd dt.cn_dt_cases)) in
+  let param_syms = Y.map fst param_sym_tys in
+  let add_constr env (cname, params) =
+    let c_params = 
+      List.map_snd SBT.to_basetype
+      (List.map (fun (_, nm) -> Y.find (Id.s nm) param_sym_tys) params) 
+    in
+    let info = BaseTypes.{c_params; c_datatype_tag = dt.cn_dt_name} in
+    add_datatype_constr cname info env
+  in
+  let env = List.fold_left add_constr env dt.cn_dt_cases in
+  let dt_all_params = 
+    Y.bindings param_sym_tys 
+    |> List.map snd 
+    |> List.map_snd SBT.to_basetype
+  in
+  let dt_constrs = List.map fst dt.cn_dt_cases in
+  return (add_datatype dt.cn_dt_name
+    (BaseTypes.{dt_constrs; dt_all_params}, param_syms) env)
+
+let add_datatype_infos env dts =
+  ListM.fold_leftM add_datatype_info env dts
+
+
 module E = struct
 
-  type ('a, 'e) m =
+  type evaluation_scope = string
+
+  type ('a) m =
     | Done of 'a
-    | Error of 'e
-    | Value_of_c_variable of Loc.t * Sym.t * (IT.sterm option -> ('a, 'e) m)
-    | Deref of Loc.t * IT.sterm * (IT.sterm option -> ('a, 'e) m)
+    | Error of TypeErrors.t
+    | ScopeExists of Loc.t * evaluation_scope * (bool -> 'a m)
+    | Value_of_c_variable of Loc.t * Sym.t * evaluation_scope option * (IT.sterm option -> ('a) m)
+    | Deref of Loc.t * IT.sterm * evaluation_scope option * (IT.sterm option -> ('a) m)
 
   let return x = Done x
 
-  let rec bind (m : ('a, 'e) m) (f : 'a -> ('b, 'e) m) : ('b, 'e) m =
+  let rec bind (m : ('a) m) (f : 'a -> ('b) m) : ('b) m =
     match m with 
     | Done x -> 
        f x
     | Error err -> 
        Error err
-    | Value_of_c_variable (loc, s, k) ->
-       Value_of_c_variable (loc, s, fun it_o -> bind (k it_o) f)
-    | Deref (loc, it, k) ->
-       Deref (loc, it, fun it_o -> bind (k it_o) f)
+    | ScopeExists (loc, scope, k) ->
+       ScopeExists (loc, scope, fun b -> bind (k b) f)
+    | Value_of_c_variable (loc, s, scope, k) ->
+       Value_of_c_variable (loc, s, scope, fun it_o -> bind (k it_o) f)
+    | Deref (loc, it, scope, k) ->
+       Deref (loc, it, scope, fun it_o -> bind (k it_o) f)
 
   let fail e = 
     Error e
 
-  let deref loc it = 
-    Deref (loc, it, fun o_v_it -> Done o_v_it)
+  let scope_exists loc scope =
+    ScopeExists (loc, scope, fun b -> Done b)
 
-  let value_of_c_variable loc sym = 
-    Value_of_c_variable (loc, sym, fun o_v_it -> Done o_v_it)
+  let deref loc it scope = 
+    Deref (loc, it, scope, fun o_v_it -> Done o_v_it)
+
+  let value_of_c_variable loc sym scope = 
+    Value_of_c_variable (loc, sym, scope, fun o_v_it -> Done o_v_it)
 
   let liftResultat = function
     | Result.Ok a -> Done a
@@ -58,289 +383,21 @@ module E = struct
 
 end    
 
+let start_evaluation_scope = "start"
 
-module ParametricTranslation = struct
 
+module EffectfulTranslation = struct
 
-  let start_evaluation_scope = "start"
+  open Effectful.Make(E)
+  open E
 
 
 
-  type function_sig = {
-      args: (Sym.t * BaseTypes.t) list;
-      return_bty: BaseTypes.t;
-    }
-
-  type predicate_sig = {
-    pred_iargs: (Sym.t * BaseTypes.t) list;
-    pred_oargs: (Sym.t * BaseTypes.t) list;
-  }
-
-
-  type resource_env = Resources.t list
-
-  (* the expression that encodes the current value of this c variable *)
-  type c_variable_state =
-    | CVS_Value of IT.sterm           (* currently the variable is a pure value, this one *)
-    | CVS_Pointer_pointing_to of IT.sterm         (* currently the variable is a pointer to memory holding this value *)
-
-
-  type state_env = {
-      c_variable_state : c_variable_state SymMap.t;
-      pointee_values : IT.sterm STermMap.t
-    }
-
-
-  type env = {
-    computationals: SBT.t SymMap.t;
-    logicals: SBT.t SymMap.t;
-    pred_names: Sym.t Y.t;
-    predicates: predicate_sig SymMap.t;
-    func_names: Sym.t Y.t;
-    functions: function_sig SymMap.t;
-    state: state_env;
-    old_states: state_env Y.t;
-    datatypes : (BaseTypes.datatype_info * Sym.t Y.t) SymMap.t;
-    datatype_constrs : BaseTypes.constr_info SymMap.t;
-    tagDefs: Mu.mu_tag_definitions;
-  }
-
-  let empty_state = { 
-      c_variable_state= SymMap.empty; 
-      pointee_values= STermMap.empty 
-    }
-
-  let empty tagDefs =
-    { computationals = SymMap.empty;
-      logicals= SymMap.empty; 
-      pred_names= Y.empty; 
-      predicates= SymMap.empty;
-      func_names = Y.empty; 
-      functions = SymMap.empty; 
-      state= empty_state;
-      old_states = Y.empty;
-      datatypes = SymMap.empty; 
-      datatype_constrs = SymMap.empty;
-      tagDefs; 
-    }
-
-
-
-  let add_computational sym bTy env =
-    {env with computationals= SymMap.add sym bTy env.computationals }
-
-  let add_logical sym bTy env =
-    {env with logicals= SymMap.add sym bTy env.logicals }
-
-
-
-  let add_predicate sym pred_sig env =
-    {env with predicates= SymMap.add sym pred_sig env.predicates }
-
-  let make_state_old env old_name = 
-    { env with state = empty_state;
-               old_states = Y.add old_name env.state env.old_states }
-
-  let add_c_variable_state c_sym cvs env =
-    { env with state = { env.state with c_variable_state= SymMap.add c_sym cvs env.state.c_variable_state }}
-
-  let add_pointee_value p v env = 
-    { env with state = { env.state with pointee_values = STermMap.add p v env.state.pointee_values }}
-
-
-  let add_c_variable_states cvss env = 
-    List.fold_right (fun (sym, cvs) env ->
-        add_c_variable_state sym cvs env
-      ) cvss env
-
-  let add_pointee_values pvs env = 
-    List.fold_right (fun (p, v) env ->
-        add_pointee_value p v env
-      ) pvs env
-
-  let lookup_computational_or_logical sym env =
-    match SymMap.find_opt sym env.logicals with
-    | Some bt -> Some bt
-    | None -> 
-       SymMap.find_opt sym env.computationals
-
-
-
-
-  let lookup_pred_name str env =
-    Y.find_opt str env.pred_names
-
-  let lookup_predicate sym env =
-    SymMap.find_opt sym env.predicates
-
-  let lookup_function sym env =
-    SymMap.find_opt sym env.functions
-
-  let lookup_function_by_name nm env = match Y.find_opt nm env.func_names with
-    | Some sym ->
-      SymMap.find_opt sym env.functions |> Option.map (fun fs -> (sym, fs))
-    | None -> None
-
-
-
-
-
-  let lookup_struct_opt sym env =
-    match Pmap.lookup sym env.tagDefs with
-      | Some (M_StructDef xs) ->
-          Some xs
-      | Some (M_UnionDef _)| None ->
-          None
-
-
-
-  let lookup_member_opt (def: Memory.struct_layout) member =
-    List.assoc_opt Id.equal member (Memory.member_types def)
-
-  let add_datatype sym info env =
-    let datatypes = SymMap.add sym info env.datatypes in
-    {env with datatypes}
-
-
-
-  let add_datatype_constr sym info env =
-    let datatype_constrs = SymMap.add sym info env.datatype_constrs in
-    {env with datatype_constrs}
-
-  let get_datatype_maps env =
-    (SymMap.bindings (SymMap.map fst env.datatypes), 
-     SymMap.bindings env.datatype_constrs)
-
-
-  let debug_known_preds env =
-    Pp.debug 2 (lazy (Pp.item "known logical predicates"
-        (Pp.list (fun (nm, _) -> Pp.string nm) (Y.bindings env.func_names))));
-    Pp.debug 2 (lazy (Pp.item "known resource predicate names"
-        (Pp.list (fun (nm, _) -> Pp.string nm) (Y.bindings env.pred_names))))
-
-
-
-
-
-
-
-
-
-  type cn_predicate =
-    (CF.Symbol.sym, CF.Ctype.ctype) CF.Cn.cn_predicate
-
-  type cn_function =
-    (CF.Symbol.sym, CF.Ctype.ctype) CF.Cn.cn_function
-
-  type cn_lemma =
-    (CF.Symbol.sym, CF.Ctype.ctype) CF.Cn.cn_lemma
-
-  type cn_datatype =
-    (CF.Symbol.sym, CF.Ctype.ctype) CF.Cn.cn_datatype
-
-
-  let pp_cnexpr_kind expr_ =
-    let open Pp in
-    match expr_ with
-    | CNExpr_const CNConst_NULL -> !^ "NULL"
-    | CNExpr_const (CNConst_integer n) -> Pp.string (Z.to_string n)
-    | CNExpr_const (CNConst_bool b) -> !^ (if b then "true" else "false")
-    | CNExpr_var sym -> parens (typ (!^ "var") (Sym.pp sym))
-    | CNExpr_deref e -> !^ "(deref ...)"
-    | CNExpr_value_of_c_variable sym -> parens (typ (!^ "c:var") (Sym.pp sym))
-    | CNExpr_list es_ -> !^ "[...]"
-    | CNExpr_memberof (e, xs) -> !^ "_." ^^ Id.pp xs
-    | CNExpr_memberupdates (e, _updates) -> !^ "{_ with ...}"
-    | CNExpr_arrayindexupdates (e, _updates) -> !^ "_ [ _ = _ ...]"
-    | CNExpr_binop (bop, x, y) -> !^ "(binop (_, _, _))"
-    | CNExpr_sizeof ct -> !^ "(sizeof _)"
-    | CNExpr_offsetof (tag, member) -> !^ "(offsetof (_, _))"
-    | CNExpr_membershift (e, member) -> !^ "&(_ -> _)"
-    | CNExpr_cast (bt, expr) -> !^ "(cast (_, _))"
-    | CNExpr_call (nm, exprs) -> !^ "(" ^^ Id.pp nm ^^^ !^ "(...))"
-    | CNExpr_cons (c_nm, exprs) -> !^ "(" ^^ Sym.pp c_nm ^^^ !^ "{...})"
-    | CNExpr_each (sym, r, e) -> !^ "(each ...)"
-    | CNExpr_ite (e1, e2, e3) -> !^ "(if ... then ...)"
-    | CNExpr_good (ty, e) -> !^ "(good (_, _))"
-    | CNExpr_unchanged e -> !^"(unchanged (_))"
-    | CNExpr_at_env (e, es) -> !^"{_}@_"
-    | CNExpr_not e -> !^"!_"
-
-
-  let rec free_in_expr (CNExpr (_loc, expr_)) =
-    match expr_ with
-    | CNExpr_const _ -> 
-       SymSet.empty
-    | CNExpr_var v -> 
-       SymSet.singleton v
-    | CNExpr_list es -> 
-       free_in_exprs es
-    | CNExpr_memberof (e, _id) -> 
-       free_in_expr e
-    | CNExpr_memberupdates (e, updates) ->
-       free_in_exprs (e :: List.map snd updates)
-    | CNExpr_arrayindexupdates (e, updates) ->
-       free_in_exprs (e :: List.concat_map (fun (e1, e2) -> [e1; e2]) updates)
-    | CNExpr_binop (_binop, e1, e2) ->
-       free_in_exprs [e1; e2]
-    | CNExpr_sizeof _ -> 
-       SymSet.empty
-    | CNExpr_offsetof _ ->
-       SymSet.empty
-    | CNExpr_membershift (e, _id) ->
-       free_in_expr e
-    | CNExpr_cast (_bt, e) ->
-       free_in_expr e
-    | CNExpr_call (_id, es) ->
-       free_in_exprs es
-    | CNExpr_cons (_c, args) ->
-       free_in_exprs (List.map snd args)
-    | CNExpr_each (s, range, e) ->
-       SymSet.remove s (free_in_expr e)
-    | CNExpr_ite (e1, e2, e3) ->
-       free_in_exprs [e1; e2; e3]
-    | CNExpr_good (typ, e) ->
-       free_in_expr e
-    | CNExpr_deref e ->
-       free_in_expr e
-    | CNExpr_value_of_c_variable s ->
-       SymSet.singleton s
-    | CNExpr_unchanged e ->
-       free_in_expr e
-    | CNExpr_at_env (e, _evaluation_scope) ->
-       free_in_expr e
-    | CNExpr_not e ->
-       free_in_expr e
-
-  and free_in_exprs = function
-    | [] -> SymSet.empty
-    | e :: es -> SymSet.union (free_in_expr e) (free_in_exprs es)
 
 
   let pp_in_scope = function
     | Some scope -> !^"in evaluation scope" ^^^ squotes !^scope
     | None -> !^"in current scope"
-
-
-
-  open Effectful.Make(E)
-  open E
-
-  let name_to_sym loc nm m = match Y.find_opt nm m with
-    | None ->
-      let sym = Sym.fresh_named nm in
-      return sym
-    | Some _ ->
-      let open TypeErrors in
-      fail {loc; msg = Generic (Pp.string ("redefinition of name: " ^ nm))}
-
-
-  let add_function loc sym func_sig env =
-    (* upstream of this an incorrect string->sym conversion was done *)
-    let str = Tools.todo_string_of_sym sym in
-    let@ _ = name_to_sym loc str env.func_names in
-    return {env with functions= SymMap.add sym func_sig env.functions;
-      func_names = Y.add str sym env.func_names }
 
 
 
@@ -362,38 +419,6 @@ module ParametricTranslation = struct
   let lookup_constr loc sym env = match SymMap.find_opt sym env.datatype_constrs with
     | Some info -> return info
     | None -> fail (TypeErrors.{loc; msg = TypeErrors.Unknown_datatype_constr sym})
-
-
-
-
-
-  let rec translate_cn_base_type (bTy: CF.Symbol.sym cn_base_type) =
-    let open SurfaceBaseTypes in
-    match bTy with
-      | CN_unit ->
-          Unit
-      | CN_bool ->
-          Bool
-      | CN_integer ->
-          Integer
-      | CN_real ->
-          Real
-      | CN_loc ->
-          Loc None
-      | CN_struct tag_sym ->
-          Struct tag_sym
-      | CN_datatype dt_sym ->
-          Datatype dt_sym
-      | CN_map (bTy1, bTy2) ->
-          Map ( translate_cn_base_type bTy1
-              , translate_cn_base_type bTy2 )
-      | CN_list bTy' -> 
-          List (translate_cn_base_type bTy')
-      | CN_tuple bTys ->
-          Tuple (List.map translate_cn_base_type bTys)
-      | CN_set bTy' ->
-          Set (translate_cn_base_type bTy')
-
 
   let cannot_tell_pointee_ctype loc e =
     let msg = 
@@ -509,7 +534,7 @@ module ParametricTranslation = struct
        fail {loc; msg = Illtyped_it {it = Terms.pp t; has = SurfaceBaseTypes.pp has; expected = "struct"; o_ctxt = None}}
 
 
-  let translate_is_shape env loc x shape_expr : (IT.sterm, _) m =
+  let translate_is_shape env loc x shape_expr : (IT.sterm) m =
     let rec f x = function
       | CNExpr (loc2, CNExpr_cons (c_nm, exprs)) ->
           let@ cons_info = lookup_constr loc c_nm env in
@@ -691,7 +716,9 @@ module ParametricTranslation = struct
              | None -> return ()
              | Some _ -> fail {loc; msg = Generic !^"Cannot nest evaluation scopes."}
            in
-           let@ () = match Y.mem scope env.old_states with
+           let@ scope_exists = scope_exists loc scope in
+           (* let@ () = match Y.mem scope env.old_states with *)
+           let@ () = match scope_exists with
              | true -> return ()
              | false -> fail { loc; msg = Generic !^("Unknown evaluation scope '"^scope^"'.") }
            in
@@ -710,13 +737,14 @@ module ParametricTranslation = struct
                 fail {loc; msg = Generic msg}
            in
            let@ expr = self e in
-           let@ o_v = match evaluation_scope with
-             | Some scope ->
-                let state = Y.find scope env.old_states in
-                return (STermMap.find_opt expr state.pointee_values)
-             | None ->
-                deref loc expr
-           in
+           let@ o_v = deref loc expr evaluation_scope in
+           (* let@ o_v = match evaluation_scope with *)
+           (*   | Some scope -> *)
+           (*      let state = Y.find scope env.old_states in *)
+           (*      return (STermMap.find_opt expr state.pointee_values) *)
+           (*   | None -> *)
+           (*      deref loc expr *)
+           (* in *)
            begin match o_v with
            | Some v -> return v
            | None ->
@@ -729,19 +757,20 @@ module ParametricTranslation = struct
            end
         | CNExpr_value_of_c_variable sym ->
            assert (not (SymSet.mem sym locally_bound));
-           let@ o_v = match evaluation_scope with
-             | Some scope ->
-                let state = Y.find scope env.old_states in
-                let o_v = 
-                  Option.map (function
-                      | CVS_Value x -> x
-                      | CVS_Pointer_pointing_to x -> x
-                    ) (SymMap.find_opt sym state.c_variable_state)
-                in
-                return o_v
-             | None ->
-                value_of_c_variable loc sym
-           in
+           (* let@ o_v = match evaluation_scope with *)
+           (*   | Some scope -> *)
+           (*      let state = Y.find scope env.old_states in *)
+           (*      let o_v =  *)
+           (*        Option.map (function *)
+           (*            | CVS_Value x -> x *)
+           (*            | CVS_Pointer_pointing_to x -> x *)
+           (*          ) (SymMap.find_opt sym state.c_variable_state) *)
+           (*      in *)
+           (*      return o_v *)
+           (*   | None -> *)
+           (*      value_of_c_variable loc sym *)
+           (* in *)
+           let@ o_v = value_of_c_variable loc sym evaluation_scope in
            begin match o_v with
            | None -> 
               let msg =
@@ -759,243 +788,208 @@ module ParametricTranslation = struct
 
 
 
-
-let translate_cn_res_info res_loc loc env res args =
-  let open Resources in
-  let open RET in
-  let@ (ptr_expr, iargs) = match args with
-    | [] -> fail {loc; msg = First_iarg_missing}
-    | (x :: xs) -> return (x, xs)
-  in
-  let@ (pname, oargs_ty) = match res with
-    | CN_owned oty ->
-       let@ scty = match oty with
-         | Some ty -> return (Sctypes.of_ctype_unsafe res_loc ty)
-         | None ->
-            match IT.bt ptr_expr with
-            | SBT.Loc (Some ty) -> return ty
-            | Loc None ->
-               fail {loc; msg = Generic !^"Cannot tell C-type of pointer. Please use Owned with an annotation: \'Owned<CTYPE>'."}
-            | has ->
-               fail {loc; msg = Illtyped_it {it = Terms.pp ptr_expr; has = SBT.pp has; expected = "pointer"; o_ctxt = None}}
-       in
-       (* we don't take Resources.owned_oargs here because we want to
-          maintain the C-type information *)
-       let oargs_ty = SBT.Record [(Resources.value_sym, SBT.of_sct scty)] in
-       return (Owned scty, oargs_ty)
-    | CN_block ty ->
-      let scty = Sctypes.of_ctype_unsafe res_loc ty in
-      return (Block scty, SBT.of_basetype block_oargs)
-    | CN_named pred ->
-      let@ pred_sig = match lookup_predicate pred env with
-        | None -> fail {loc; msg = Unknown_resource_predicate {id = pred; logical = false}}
-        | Some pred_sig -> return pred_sig
-      in
-      return (PName pred, SBT.of_basetype (BT.Record pred_sig.pred_oargs))
-  in
-  return (pname, ptr_expr, iargs, oargs_ty)
-
-let split_pointer_linear_step loc q (ptr_expr : IT.sterm) =
-  let open IndexTerms in
-  let open Pp in
-  let qs = sym_ (q, SBT.Integer) in
-  let msg_s = "Iterated predicate pointer must be (ptr + (q_var * offs)):" in
-  begin match term ptr_expr with
-    | Pointer_op (IntegerToPointerCast (IT (Arith_op (Add (b, offs)), _))) ->
-      begin match term b, term offs with
-        | Pointer_op (PointerToIntegerCast p), Arith_op (Mul (x, y)) when Terms.equal SBT.equal x qs ->
-          return (p, y)
-        | _ -> fail { loc; msg= Generic (!^msg_s ^^^ IT.pp ptr_expr)}
-      end
-    (* temporarily allow this more confusing but more concise syntax,
-       until we have enriched Core's pointer base types *)
-    | Arith_op (Add (p, IT (Arith_op (Mul (x, y)), _))) when Terms.equal SBT.equal x qs ->
-       return (p, y)       
-    | _ ->
-    fail { loc; msg= Generic (!^msg_s ^^^ IT.pp ptr_expr)}
-  end
-
-
-let get_single_member v =
-  match IT.basetype v with
-  | SBT.Record [(sym, bt)] -> IT.recordMember_ ~member_bt:bt (v, sym)
-  | ty -> assert false
-
-(* let iterate_resource_env_info = function *)
-(*   | RPred_owned ct -> RPred_I_owned ct *)
-(*   | RPred_block ct -> RPred_I_block ct *)
-(*   | RPred_named nm -> RPred_I_named nm *)
-(*   | _ -> assert false *)
-
-let owned_good loc sym (res_t, oargs_ty) = 
-  match res_t with
-  | RET.P { name = Owned scty ; permission; _} ->
-     let v = IT.term_of_sterm (get_single_member (IT.sym_ (sym, oargs_ty))) in
-     [(LC.T (IT.impl_ (permission, IT.good_ (scty, v))), 
-       (loc, Some "default value constraint"))]
-  | RET.Q { name = Owned scty ; q; permission; _} ->
-     let v = IT.term_of_sterm (get_single_member (IT.sym_ (sym, oargs_ty))) in
-     let v_el = IT.map_get_ v (IT.sym_ (q, BT.Integer)) in
-     [(LC.forall_ (q, BT.Integer)
-          (IT.impl_ (permission, IT.good_ (scty, v_el))),
-        (loc, Some "default value constraint"))]
-   | _ -> 
-      []
-
-
-let translate_cn_let_resource__pred env res_loc sym (cond, pred_loc, res, args) =
-  let@ args = ListM.mapM (translate_cn_expr SymSet.empty env) args in
-  let@ (pname, ptr_expr, iargs, oargs_ty) =
-         translate_cn_res_info res_loc pred_loc env res args in
-  let@ permission = match cond with 
-    | None -> 
-       return (IT.bool_ true)
-    | Some c -> 
-       let@ c = translate_cn_expr SymSet.empty env c in
-       return (IT.term_of_sterm c)
-  in
-  let pt = (RET.P { name = pname
-            ; pointer= IT.term_of_sterm ptr_expr
-            ; permission= permission
-            ; iargs = List.map IT.term_of_sterm iargs},
-         oargs_ty)
-  in
-  let pointee_value = match pname with
-    | Owned _ -> [ptr_expr, get_single_member (IT.sym_ (sym, oargs_ty))]
-    | _ -> []
-  in
-  return (pt, pointee_value)
-
-let translate_cn_let_resource__each env res_loc _sym (q, bt, guard, pred_loc, res, args) =
-  let bt' = translate_cn_base_type bt in
-  let@ () = 
-    if SBT.equal bt' SBT.Integer then return ()
-    else fail {loc = pred_loc; msg = let open Pp in
-        Generic (!^ "quantified v must be integer:" ^^^ SBT.pp bt')}
-  in
-  let env_with_q = add_logical q SBT.Integer env in
-  let@ guard_expr = translate_cn_expr (SymSet.singleton q) env_with_q guard in
-  let@ args = ListM.mapM (translate_cn_expr (SymSet.singleton q) env_with_q) args in
-  let@ (pname, ptr_expr, iargs, oargs_ty) =
-         translate_cn_res_info res_loc pred_loc env_with_q res args in
-  let@ (ptr_base, step) = split_pointer_linear_step pred_loc q ptr_expr in
-  let oarg_field_tys = SBT.record_bt oargs_ty in
-  let m_oargs_ty = SBT.Record (List.map_snd (fun bt -> SBT.Map (Integer, bt)) oarg_field_tys) in
-  let pt = (RET.Q { name = pname
-            ; q
-            ; pointer= IT.term_of_sterm ptr_base
-            ; step = IT.term_of_sterm step
-            ; permission= IT.term_of_sterm guard_expr
-            ; iargs = List.map IT.term_of_sterm iargs},
-         m_oargs_ty)
-  in
-  return (pt, [])
-
-let translate_cn_let_resource env (res_loc, sym, the_res) =
-  let@ pt, pointee_values = match the_res with
-    | CN_pred (pred_loc, cond, res, args) ->
-       translate_cn_let_resource__pred env res_loc sym
-         (cond, pred_loc, res, args)
-    | CN_each (q, bt, guard, pred_loc, res, args) ->
-       translate_cn_let_resource__each env res_loc sym
-         (q, bt, guard, pred_loc, res, args)  
-  in
-  return (pt, 
-          owned_good res_loc sym pt,
-          pointee_values)
-
-
-let translate_cn_assrt env (loc, assrt) =
-  match assrt with
-  | CN_assert_exp e_ ->
-     let@ e = translate_cn_expr SymSet.empty env e_ in
-     return (LC.T (IT.term_of_sterm e))
-  | CN_assert_qexp (sym, bTy, e1_, e2_) ->
-     let bt = translate_cn_base_type bTy in
-     let env_with_q = add_logical sym bt env in
-     let@ e1 = translate_cn_expr (SymSet.singleton sym) env_with_q e1_ in
-     let@ e2 = translate_cn_expr (SymSet.singleton sym) env_with_q e2_ in
-     return (LC.Forall ((sym, SBT.to_basetype bt), 
-                        IT.impl_ (IT.term_of_sterm e1, 
-                                  IT.term_of_sterm e2)))
-
-
-
-let translate_cn_clause env clause =
-  let open Resources in
-  let rec translate_cn_clause_aux env acc clause =
-    let module LAT = LogicalArgumentTypes in
-    match clause with
-      | CN_letResource (res_loc, sym, the_res, cl) ->
-         let@ (pt_ret, oa_bt), lcs, pointee_vals = 
-           translate_cn_let_resource env (res_loc, sym, the_res) in
-         let acc' z = 
-           acc (LAT.mResource ((sym, (pt_ret, SBT.to_basetype oa_bt)), (res_loc, None)) 
-               (LAT.mConstraints lcs z))
+  let translate_cn_res_info res_loc loc env res args =
+    let open Resources in
+    let open RET in
+    let@ (ptr_expr, iargs) = match args with
+      | [] -> fail {loc; msg = First_iarg_missing}
+      | (x :: xs) -> return (x, xs)
+    in
+    let@ (pname, oargs_ty) = match res with
+      | CN_owned oty ->
+         let@ scty = match oty with
+           | Some ty -> return (Sctypes.of_ctype_unsafe res_loc ty)
+           | None ->
+              match IT.bt ptr_expr with
+              | SBT.Loc (Some ty) -> return ty
+              | Loc None ->
+                 fail {loc; msg = Generic !^"Cannot tell C-type of pointer. Please use Owned with an annotation: \'Owned<CTYPE>'."}
+              | has ->
+                 fail {loc; msg = Illtyped_it {it = Terms.pp ptr_expr; has = SBT.pp has; expected = "pointer"; o_ctxt = None}}
          in
-         let env' = add_logical sym oa_bt env in
-         let env' = add_pointee_values pointee_vals env' in
-         translate_cn_clause_aux env' acc' cl
-      | CN_letExpr (loc, sym, e_, cl) ->
-          let@ e = translate_cn_expr SymSet.empty env e_ in
-          let acc' =
-            fun z -> acc begin
-              LAT.mDefine (sym, IT.term_of_sterm e, (loc, None)) z
-            end in
-          translate_cn_clause_aux (add_logical sym (IT.basetype e) env) acc' cl
-      | CN_assert (loc, assrt, cl) ->
-         let@ lc = translate_cn_assrt env (loc, assrt) in
-         let acc' z = acc (LAT.mConstraint ( lc, (loc, None) ) z) in
-         translate_cn_clause_aux env acc' cl
-      | CN_return (loc, xs_) ->
-          let@ xs =
-            ListM.mapM (fun (sym, e_) ->
-              let@ e = translate_cn_expr SymSet.empty env e_ in
-              return (OutputDef.{loc= loc; name= sym; value= IT.term_of_sterm e})
-            ) xs_ in
-          acc (LAT.I xs) 
-  in
-  translate_cn_clause_aux env (fun z -> return z) clause
+         (* we don't take Resources.owned_oargs here because we want to
+            maintain the C-type information *)
+         let oargs_ty = SBT.Record [(Resources.value_sym, SBT.of_sct scty)] in
+         return (Owned scty, oargs_ty)
+      | CN_block ty ->
+        let scty = Sctypes.of_ctype_unsafe res_loc ty in
+        return (Block scty, SBT.of_basetype block_oargs)
+      | CN_named pred ->
+        let@ pred_sig = match lookup_predicate pred env with
+          | None -> fail {loc; msg = Unknown_resource_predicate {id = pred; logical = false}}
+          | Some pred_sig -> return pred_sig
+        in
+        return (PName pred, SBT.of_basetype (BT.Record pred_sig.pred_oargs))
+    in
+    return (pname, ptr_expr, iargs, oargs_ty)
 
 
 
-let translate_cn_clauses env clauses =
-  let rec self acc = function
-    | CN_clause (loc, cl_) ->
-        let@ cl = translate_cn_clause env cl_ in
-        return (RP.{loc= loc; guard= IT.bool_ true; packing_ft= cl} :: acc)
-    | CN_if (loc, e_, cl_, clauses') ->
-      let@ e  = translate_cn_expr SymSet.empty env e_ in
-      let@ cl = translate_cn_clause env cl_ in
-      self begin
-        RP.{loc= loc; guard= IT.term_of_sterm e; packing_ft= cl} :: acc
-      end clauses'
-  in
-  let@ xs = self [] clauses in
-  return (List.rev xs)
+  let split_pointer_linear_step loc q (ptr_expr : IT.sterm) =
+    let open IndexTerms in
+    let open Pp in
+    let qs = sym_ (q, SBT.Integer) in
+    let msg_s = "Iterated predicate pointer must be (ptr + (q_var * offs)):" in
+    begin match term ptr_expr with
+      | Pointer_op (IntegerToPointerCast (IT (Arith_op (Add (b, offs)), _))) ->
+        begin match term b, term offs with
+          | Pointer_op (PointerToIntegerCast p), Arith_op (Mul (x, y)) when Terms.equal SBT.equal x qs ->
+            return (p, y)
+          | _ -> fail { loc; msg= Generic (!^msg_s ^^^ IT.pp ptr_expr)}
+        end
+      (* temporarily allow this more confusing but more concise syntax,
+         until we have enriched Core's pointer base types *)
+      | Arith_op (Add (p, IT (Arith_op (Mul (x, y)), _))) when Terms.equal SBT.equal x qs ->
+         return (p, y)       
+      | _ ->
+      fail { loc; msg= Generic (!^msg_s ^^^ IT.pp ptr_expr)}
+    end
 
-let translate_option_cn_clauses env = function
-  | Some clauses -> 
-     let@ clauses = translate_cn_clauses env clauses in
-     return (Some clauses)
-  | None -> 
-     return None
+
+  let get_single_member v =
+    match IT.basetype v with
+    | SBT.Record [(sym, bt)] -> IT.recordMember_ ~member_bt:bt (v, sym)
+    | ty -> assert false
+
+  (* let iterate_resource_env_info = function *)
+  (*   | RPred_owned ct -> RPred_I_owned ct *)
+  (*   | RPred_block ct -> RPred_I_block ct *)
+  (*   | RPred_named nm -> RPred_I_named nm *)
+  (*   | _ -> assert false *)
+
+  let owned_good loc sym (res_t, oargs_ty) = 
+    match res_t with
+    | RET.P { name = Owned scty ; permission; _} ->
+       let v = IT.term_of_sterm (get_single_member (IT.sym_ (sym, oargs_ty))) in
+       [(LC.T (IT.impl_ (permission, IT.good_ (scty, v))), 
+         (loc, Some "default value constraint"))]
+    | RET.Q { name = Owned scty ; q; permission; _} ->
+       let v = IT.term_of_sterm (get_single_member (IT.sym_ (sym, oargs_ty))) in
+       let v_el = IT.map_get_ v (IT.sym_ (q, BT.Integer)) in
+       [(LC.forall_ (q, BT.Integer)
+            (IT.impl_ (permission, IT.good_ (scty, v_el))),
+          (loc, Some "default value constraint"))]
+     | _ -> 
+        []
+
+
+  let translate_cn_let_resource__pred env res_loc sym (cond, pred_loc, res, args) =
+    let@ args = ListM.mapM (translate_cn_expr SymSet.empty env) args in
+    let@ (pname, ptr_expr, iargs, oargs_ty) =
+           translate_cn_res_info res_loc pred_loc env res args in
+    let@ permission = match cond with 
+      | None -> 
+         return (IT.bool_ true)
+      | Some c -> 
+         let@ c = translate_cn_expr SymSet.empty env c in
+         return (IT.term_of_sterm c)
+    in
+    let pt = (RET.P { name = pname
+              ; pointer= IT.term_of_sterm ptr_expr
+              ; permission= permission
+              ; iargs = List.map IT.term_of_sterm iargs},
+           oargs_ty)
+    in
+    let pointee_value = match pname with
+      | Owned _ -> [ptr_expr, get_single_member (IT.sym_ (sym, oargs_ty))]
+      | _ -> []
+    in
+    return (pt, pointee_value)
+
+  let translate_cn_let_resource__each env res_loc _sym (q, bt, guard, pred_loc, res, args) =
+    let bt' = translate_cn_base_type bt in
+    let@ () = 
+      if SBT.equal bt' SBT.Integer then return ()
+      else fail {loc = pred_loc; msg = let open Pp in
+          Generic (!^ "quantified v must be integer:" ^^^ SBT.pp bt')}
+    in
+    let env_with_q = add_logical q SBT.Integer env in
+    let@ guard_expr = translate_cn_expr (SymSet.singleton q) env_with_q guard in
+    let@ args = ListM.mapM (translate_cn_expr (SymSet.singleton q) env_with_q) args in
+    let@ (pname, ptr_expr, iargs, oargs_ty) =
+           translate_cn_res_info res_loc pred_loc env_with_q res args in
+    let@ (ptr_base, step) = split_pointer_linear_step pred_loc q ptr_expr in
+    let oarg_field_tys = SBT.record_bt oargs_ty in
+    let m_oargs_ty = SBT.Record (List.map_snd (fun bt -> SBT.Map (Integer, bt)) oarg_field_tys) in
+    let pt = (RET.Q { name = pname
+              ; q
+              ; pointer= IT.term_of_sterm ptr_base
+              ; step = IT.term_of_sterm step
+              ; permission= IT.term_of_sterm guard_expr
+              ; iargs = List.map IT.term_of_sterm iargs},
+           m_oargs_ty)
+    in
+    return (pt, [])
+
+  let translate_cn_let_resource env (res_loc, sym, the_res) =
+    let@ pt, pointee_values = match the_res with
+      | CN_pred (pred_loc, cond, res, args) ->
+         translate_cn_let_resource__pred env res_loc sym
+           (cond, pred_loc, res, args)
+      | CN_each (q, bt, guard, pred_loc, res, args) ->
+         translate_cn_let_resource__each env res_loc sym
+           (q, bt, guard, pred_loc, res, args)  
+    in
+    return (pt, 
+            owned_good res_loc sym pt,
+            pointee_values)
+
+
+  let translate_cn_assrt env (loc, assrt) =
+    match assrt with
+    | CN_assert_exp e_ ->
+       let@ e = translate_cn_expr SymSet.empty env e_ in
+       return (LC.T (IT.term_of_sterm e))
+    | CN_assert_qexp (sym, bTy, e1_, e2_) ->
+       let bt = translate_cn_base_type bTy in
+       let env_with_q = add_logical sym bt env in
+       let@ e1 = translate_cn_expr (SymSet.singleton sym) env_with_q e1_ in
+       let@ e2 = translate_cn_expr (SymSet.singleton sym) env_with_q e2_ in
+       return (LC.Forall ((sym, SBT.to_basetype bt), 
+                          IT.impl_ (IT.term_of_sterm e1, 
+                                    IT.term_of_sterm e2)))
+
+
+end
+
+
+module ET = EffectfulTranslation
+
+module Pure = struct
+
+  let handle what = function
+    | E.Done x -> 
+       Resultat.return x
+    | E.Error e -> 
+       Resultat.fail e
+    | E.Value_of_c_variable (loc, _, _, _) ->
+       let msg = !^what ^^^ !^"are not allowed to refer to (the state of) C variables." in
+       fail {loc; msg = Generic msg}
+    | E.Deref (loc, _, _, _) ->
+       let msg = !^what ^^^ !^"are not allowed to dereference pointers." in
+       fail {loc; msg = Generic msg}
+    | E.ScopeExists (loc, _, _) ->
+       let msg = !^what ^^^ !^"are not allowed to use evaluation scopes." in
+       fail {loc; msg = Generic msg}
+
+end
 
 
 let translate_cn_func_body env body =
   let open LogicalPredicates in
+  let handle = Pure.handle "Function definitions" in
   let rec aux env body =
     match body with
       | CN_fb_letExpr (loc, sym, e_, cl) ->
-          let@ e = translate_cn_expr SymSet.empty env e_ in
+          let@ e = handle (ET.translate_cn_expr SymSet.empty env e_) in
           let env2 = add_logical sym (IT.basetype e) env in
           let@ b = aux env2 cl in
           return (Body.Let ((sym, IT.term_of_sterm e), b))
       | CN_fb_return (loc, x) ->
-         let@ t = translate_cn_expr SymSet.empty env x in
+         let@ t = handle (ET.translate_cn_expr SymSet.empty env x) in
          return (Body.Term (IT.term_of_sterm t))
       | CN_fb_cases (loc, x, cs) ->
-         let@ x = translate_cn_expr SymSet.empty env x in
+         let@ x = handle (ET.translate_cn_expr SymSet.empty env x) in
          let@ cs = 
            ListM.mapM (fun (ctor, body) ->
                let@ body = aux env body in
@@ -1006,37 +1000,6 @@ let translate_cn_func_body env body =
   in
   aux env body
 
-
-
-let register_cn_predicates env (defs: cn_predicate list) =
-  let aux env def =
-    let translate_args xs =
-      List.map (fun (bTy, sym) ->
-        (sym, translate_cn_base_type bTy)
-      ) xs in
-    let iargs = translate_args def.cn_pred_iargs in
-    let oargs = translate_args def.cn_pred_oargs in
-    add_predicate def.cn_pred_name { 
-        pred_iargs= List.map_snd SBT.to_basetype iargs; 
-        pred_oargs= List.map_snd SBT.to_basetype oargs 
-      } env 
-  in
-  List.fold_left aux env defs
-
-let register_cn_functions env (defs: cn_function list) =
-  let aux env def =
-    let args = 
-      List.map (fun (bTy, sym) -> 
-          (sym, SBT.to_basetype (translate_cn_base_type bTy))
-      ) def.cn_func_args 
-    in
-    let return_bt = 
-      SBT.to_basetype (translate_cn_base_type def.cn_func_return_bty)
-    in
-    let fsig = {args; return_bty = return_bt} in
-    add_function def.cn_func_loc def.cn_func_name fsig env
-  in
-  ListM.fold_leftM aux env defs
 
 let known_attrs = ["rec"]
 
@@ -1070,27 +1033,171 @@ let translate_cn_function env (def: cn_function) =
   return (def.cn_func_name, def2)
 
 
-(* copied and adjusted from translate_cn_function *)
-let translate_cn_lemma env (def: cn_lemma) =failwith"asd"
-  (* Pp.debug 2 (lazy (Pp.item "translating lemma defn" (Sym.pp def.cn_lemma_name))); *)
-  (* let args =  *)
-  (*   List.map (fun (bTy, sym) -> (sym, translate_cn_base_type bTy) *)
-  (*     ) def.cn_lemma_args in *)
-  (* let env' = *)
-  (*   List.fold_left (fun acc (sym, bt) -> add_logical sym bt acc *)
-  (*     ) env args in *)
-  (* let@ requires =  *)
-  (*   ListM.mapM translate_cn_condition def.cn_lemma_requires in *)
-  (* let def2 = { *)
-  (*     loc = def.cn_func_loc;  *)
-  (*     args = List.map_snd SBT.to_basetype args;  *)
-  (*     return_bt = SBT.to_basetype return_bt;  *)
-  (*     definition *)
-  (*   }  *)
-  (* in *)
-  (* return (def.cn_func_name, def2) *)
+
+let ownership (loc, (addr_s, ct)) env =
+  let name = match Sym.description addr_s with
+    | SD_ObjectAddress obj_name -> 
+       Sym.fresh_make_uniq ("O_"^obj_name)
+    | _ -> assert false
+  in
+  let resource = CN_pred (loc, None, CN_owned (Some ct), [CNExpr (loc, CNExpr_var addr_s)]) in
+
+  let@ (pt_ret, oa_bt), lcs, _ = 
+    Pure.handle "'Accesses'"
+      (ET.translate_cn_let_resource env (loc, name, resource)) in
+  let value = 
+    let ct = Sctypes.of_ctype_unsafe loc ct in
+    IT.recordMember_ 
+      ~member_bt:(SBT.of_sct ct)
+      (IT.sym_ (name, oa_bt), Resources.value_sym)
+  in
+  return (name, ((pt_ret, oa_bt), lcs), value)
 
 
+
+
+module LocalState = struct
+
+  (* the expression that encodes the current value of this c variable *)
+  type c_variable_state =
+    | CVS_Value of IT.sterm           (* currently the variable is a pure value, this one *)
+    | CVS_Pointer_pointing_to of IT.sterm         (* currently the variable is a pointer to memory holding this value *)
+
+
+
+  type state = {
+      c_variable_state : c_variable_state SymMap.t;
+      pointee_values : IT.sterm STermMap.t
+    }
+
+  let empty_state = { 
+      c_variable_state= SymMap.empty; 
+      pointee_values= STermMap.empty 
+    }
+
+  type states = {
+      state : state;
+      old_states : state Y.t
+    }
+
+  let init_st = {state = empty_state; old_states = Y.empty}
+
+  let make_state_old {state; old_states} old_name =
+    { state = empty_state;
+      old_states = Y.add old_name state old_states }
+
+  let add_c_variable_state c_sym cvs {state; old_states} =
+    { state = { state with c_variable_state = SymMap.add c_sym cvs state.c_variable_state };
+      old_states }
+
+  let add_pointee_value p v {state; old_states} =
+    { state = { state with pointee_values = STermMap.add p v state.pointee_values };
+      old_states }
+
+
+  let add_c_variable_states cvss st =
+    List.fold_left (fun st (sym, cvs) ->
+        add_c_variable_state sym cvs st
+      ) st cvss
+
+  let add_pointee_values pvs st =
+    List.fold_left (fun st (p, v) ->
+        add_pointee_value p v st
+      ) st pvs
+
+
+
+  let handle {state;old_states} : 'a E.m -> 'a Resultat.m =
+    let state_for_scope = function
+      | None -> state
+      | Some s -> Y.find s old_states
+    in
+    let rec aux = function
+      | E.Done x -> 
+         Resultat.return x
+      | E.Error e ->
+         Resultat.fail e
+      | E.Value_of_c_variable (loc, sym, scope, k) ->
+         let variable_state = (state_for_scope scope).c_variable_state in
+         let o_v = 
+           Option.map (function
+               | CVS_Value x -> x
+               | CVS_Pointer_pointing_to x -> x
+             ) (SymMap.find_opt sym variable_state)
+         in
+         aux (k o_v)
+      | E.Deref (loc, it, scope, k) ->
+         let pointee_values = (state_for_scope scope).pointee_values in
+         let o_v = STermMap.find_opt it pointee_values in
+         aux (k o_v)
+      | E.ScopeExists (loc, scope, k) ->
+         aux (k (Y.mem scope old_states))
+    in
+    aux
+
+end
+
+
+let translate_cn_clause env clause =
+  let open Resources in
+  let open LocalState in
+  let rec translate_cn_clause_aux env st acc clause =
+    let module LAT = LogicalArgumentTypes in
+    match clause with
+      | CN_letResource (res_loc, sym, the_res, cl) ->
+         let@ (pt_ret, oa_bt), lcs, pointee_vals = 
+           handle st (ET.translate_cn_let_resource env (res_loc, sym, the_res)) in
+         let acc' z = 
+           acc (LAT.mResource ((sym, (pt_ret, SBT.to_basetype oa_bt)), (res_loc, None)) 
+               (LAT.mConstraints lcs z))
+         in
+         let env' = add_logical sym oa_bt env in
+         let st' = add_pointee_values pointee_vals st in
+         translate_cn_clause_aux env' st' acc' cl
+      | CN_letExpr (loc, sym, e_, cl) ->
+          let@ e = handle st (ET.translate_cn_expr SymSet.empty env e_) in
+          let acc' =
+            fun z -> acc begin
+              LAT.mDefine (sym, IT.term_of_sterm e, (loc, None)) z
+            end in
+          translate_cn_clause_aux (add_logical sym (IT.basetype e) env) st acc' cl
+      | CN_assert (loc, assrt, cl) ->
+         let@ lc = handle st (ET.translate_cn_assrt env (loc, assrt)) in
+         let acc' z = acc (LAT.mConstraint ( lc, (loc, None) ) z) in
+         translate_cn_clause_aux env st acc' cl
+      | CN_return (loc, xs_) ->
+          let@ xs =
+            ListM.mapM (fun (sym, e_) ->
+              let@ e = handle st (ET.translate_cn_expr SymSet.empty env e_) in
+              return (OutputDef.{loc= loc; name= sym; value= IT.term_of_sterm e})
+            ) xs_ in
+          acc (LAT.I xs) 
+  in
+  translate_cn_clause_aux env init_st (fun z -> return z) clause
+
+
+
+let translate_cn_clauses env clauses =
+  let rec self acc = function
+    | CN_clause (loc, cl_) ->
+        let@ cl = translate_cn_clause env cl_ in
+        return (RP.{loc= loc; guard= IT.bool_ true; packing_ft= cl} :: acc)
+    | CN_if (loc, e_, cl_, clauses') ->
+      let@ e  = Pure.handle "Predicate guards" (ET.translate_cn_expr SymSet.empty env e_) in
+      let@ cl = translate_cn_clause env cl_ in
+      self begin
+        RP.{loc= loc; guard= IT.term_of_sterm e; packing_ft= cl} :: acc
+      end clauses'
+  in
+  let@ xs = self [] clauses in
+  return (List.rev xs)
+
+let translate_option_cn_clauses env = function
+  | Some clauses -> 
+     let@ clauses = translate_cn_clauses env clauses in
+     return (Some clauses)
+  | None -> 
+     return None
 
 let translate_cn_predicate env (def: cn_predicate) =
   let open RP in
@@ -1121,198 +1228,202 @@ let translate_cn_predicate env (def: cn_predicate) =
     | [] ->
         fail { loc= def.cn_pred_loc; msg= First_iarg_missing }
 
-let add_datatype_info env (dt : cn_datatype) =
-  Pp.debug 2 (lazy (Pp.item "translating datatype declaration" (Sym.pp dt.cn_dt_name)));
-  let add_param_sym m (ty, nm) =
-    let bt = translate_cn_base_type ty in
-    let nm_s = Id.s nm in
-    match Y.find_opt nm_s m with
-    | None ->
-      let sym = Sym.fresh_named nm_s in
-      return (Y.add nm_s (sym, bt) m)
-    | Some (sym, bt2) -> if SBT.equal bt bt2 then return m
-      else fail {loc = Id.loc nm;
-              msg = Generic (Pp.item "different type for datatype member" (Id.pp nm))}
-  in
-  let@ param_sym_tys = ListM.fold_leftM add_param_sym Y.empty
-    (List.concat (List.map snd dt.cn_dt_cases)) in
-  let param_syms = Y.map fst param_sym_tys in
-  let add_constr env (cname, params) =
-    let c_params = 
-      List.map_snd SBT.to_basetype
-      (List.map (fun (_, nm) -> Y.find (Id.s nm) param_sym_tys) params) 
+
+let rec make_lrt_generic env st = 
+  let open LocalState in
+  function
+  | (CN_cletResource (loc, name, resource) :: ensures) -> 
+     let@ (pt_ret, oa_bt), lcs, pointee_values = 
+       handle st (ET.translate_cn_let_resource env (loc, name, resource)) in
+     let env = add_logical name oa_bt env in
+     let st = add_pointee_values pointee_values st in
+     let@ lrt, env, st = make_lrt_generic env st (ensures) in
+     return ((LRT.mResource ((name, (pt_ret, SBT.to_basetype oa_bt)), (loc, None)) 
+             (LRT.mConstraints lcs lrt)), 
+             env, st)
+  | (CN_cletExpr (loc, name, expr) :: ensures) ->
+     let@ expr = handle st (ET.translate_cn_expr SymSet.empty env expr) in
+     let@ lrt, env, st = make_lrt_generic (add_logical name (IT.bt expr) env) st (ensures) in
+     return ((LRT.mDefine (name, IT.term_of_sterm expr, (loc, None)) lrt), env, st)
+  | (CN_cconstr (loc, constr) :: ensures) ->
+     let@ lc = handle st (ET.translate_cn_assrt env (loc, constr)) in
+     let@ lrt, env, st = make_lrt_generic env st (ensures) in
+     return ((LRT.mConstraint (lc, (loc, None)) lrt), env, st)
+  | [] -> 
+     return (LRT.I, env, st)
+
+  let make_lrt env st conds = 
+    let@ lrt, _env, _st = make_lrt_generic env st conds in
+    return lrt
+
+  let make_lat env st (requires, ensures) = 
+    let@ args_lrt, env, st = make_lrt_generic env st requires in
+    let st = LocalState.make_state_old st start_evaluation_scope in
+    let@ ret_lrt, env, st = make_lrt_generic env st ensures in
+    return (LAT.of_lrt args_lrt (LAT.I ret_lrt))
+
+
+  let rec make_lrt_with_accesses env st (accesses, ensures) =
+    match accesses with
+    | (loc, (addr_s, ct)) :: accesses ->
+       let@ (name, ((pt_ret, oa_bt), lcs), value) = ownership (loc, (addr_s, ct)) env in
+       let env = add_logical name oa_bt env in
+       let st = LocalState.add_c_variable_state addr_s (CVS_Pointer_pointing_to value) st in
+       let@ lrt = make_lrt_with_accesses env st (accesses, ensures) in
+       return (LRT.mResource ((name, (pt_ret, SBT.to_basetype oa_bt)), (loc, None)) 
+              (LRT.mConstraints lcs lrt))
+    | [] ->
+       make_lrt env st ensures
+
+  let make_rt loc (env : env) st (s, ct) (accesses, ensures) =
+    let ct = Sctypes.of_ctype_unsafe loc ct in
+    let sbt = SBT.of_sct ct in
+    let bt = SBT.to_basetype sbt in
+    let@ lrt = make_lrt_with_accesses (add_computational s sbt env) st (accesses, ensures) in
+    let info = (loc, Some "return value good") in
+    let lrt = LRT.mConstraint (LC.t_ (IT.good_ (ct, IT.sym_ (s, bt))), info) lrt in
+    return (RT.mComputational ((s, bt), (loc, None)) lrt)
+
+
+
+  (* copied and adjusted from translate_cn_function *)
+  let translate_cn_lemma env (def: cn_lemma) =
+    Pp.debug 2 (lazy (Pp.item "translating lemma defn" (Sym.pp def.cn_lemma_name)));
+    let rec aux env = function
+      | (bTy, sym) :: args' ->
+         let bTy = translate_cn_base_type bTy in
+         let env = add_computational sym bTy env in
+         let@ at = aux env args' in
+         let info = (def.cn_lemma_loc, None) in
+         return (ArgumentTypes.Computational ((sym, SBT.to_basetype bTy), info, at))
+      | [] ->
+         let@ lat = make_lat env LocalState.init_st (def.cn_lemma_requires, def.cn_lemma_ensures) in
+         return (ArgumentTypes.L lat)
     in
-    let info = BaseTypes.{c_params; c_datatype_tag = dt.cn_dt_name} in
-    add_datatype_constr cname info env
-  in
-  let env = List.fold_left add_constr env dt.cn_dt_cases in
-  let dt_all_params = 
-    Y.bindings param_sym_tys 
-    |> List.map snd 
-    |> List.map_snd SBT.to_basetype
-  in
-  let dt_constrs = List.map fst dt.cn_dt_cases in
-  return (add_datatype dt.cn_dt_name
-    (BaseTypes.{dt_constrs; dt_all_params}, param_syms) env)
-
-let add_datatype_infos env dts =
-  ListM.fold_leftM add_datatype_info env dts
-
-
-end
-
-module P = ParametricTranslation
+    let@ at = aux env def.cn_lemma_args in
+    return (def.cn_lemma_name, (def.cn_lemma_loc, at))
 
 
 
 
 
-module WithinTypes = struct
+module UsingLoads = struct
 
-  include P
-
-  let rec handle_using_current_environment env : ('a, 'e) E.m -> ('a, 'e) Resultat.m =
-    function
-    | E.Done x -> 
-       Resultat.return x
-    | E.Error e ->
-       Resultat.fail e
-    | E.Value_of_c_variable (loc, sym,k) ->
-       let o_v = 
-         Option.map (function
-             | CVS_Value x -> x
-             | CVS_Pointer_pointing_to x -> x
-           ) (SymMap.find_opt sym env.state.c_variable_state)
+  let pointee_ct loc it =
+    match IT.bt it with
+    | SBT.Loc (Some ct) -> 
+       return ct
+    | SBT.Loc None ->
+       let msg =
+         !^"Cannot tell pointee C-type of"
+         ^^^ squotes (IT.pp it) ^^ dot
        in
-       handle_using_current_environment env (k o_v)
-    | Deref (loc, it, k) ->
-       let o_v = STermMap.find_opt it env.state.pointee_values in
-       handle_using_current_environment env (k o_v)
+       fail {loc; msg = Generic msg}
+    | has ->
+       let msg = Illtyped_it {it= IT.pp it; has= SBT.pp has; expected= "pointer"; o_ctxt = None} in
+       fail {loc; msg}
 
 
-  let translate_cn_let_resource env r = 
-    handle_using_current_environment env
-      (translate_cn_let_resource env r)
+  open Cnprog
 
-  let translate_cn_expr bound env e =
-    handle_using_current_environment env
-      (translate_cn_expr bound env e)
+  let handle allocations old_states : cn_prog E.m -> cn_prog Resultat.m = 
 
-  let translate_cn_assrt env e =
-    handle_using_current_environment env
-      (translate_cn_assrt env e)
-
-  let translate_cn_function env fn =
-    handle_using_current_environment env
-      (translate_cn_function env fn)
-
-  let translate_cn_predicate env pd =
-    handle_using_current_environment env
-      (translate_cn_predicate env pd)
-
-  let add_datatype_info env dt =
-    handle_using_current_environment env
-      (add_datatype_info env dt)
-
-  let add_datatype_infos env dts =
-    handle_using_current_environment env
-      (add_datatype_infos env dts)
-
-  let register_cn_functions env fns =
-    (handle_using_current_environment env)
-      (register_cn_functions env fns)
-
-end
-
-
-
-
-
-module WithinStatements = struct
-
-  let translate_cn_statement (allocations : Sym.t -> CF.Ctype.ctype) env =
-
-    let open Resultat in
-    let open Effectful.Make(Resultat) in
-    let open Cnprog in
-
-    let pointee_ct loc it =
-      match IT.bt it with
-      | SBT.Loc (Some ct) -> 
-         return ct
-      | SBT.Loc None ->
-         let msg =
-           !^"Cannot tell pointee C-type of"
-           ^^^ squotes (IT.pp it) ^^ dot
-         in
-         fail {loc; msg = Generic msg}
-      | has ->
-         let msg = Illtyped_it {it= IT.pp it; has= SBT.pp has; expected= "pointer"; o_ctxt = None} in
-         fail {loc; msg}
-    in
-
-    let rec handle_using_loads (m : (cn_prog, 'e) E.m) : (cn_prog, 'e) Resultat.m = 
-      match m with
+    let rec aux = function
       | E.Done x ->
          return x
       | E.Error e ->
          fail e
-      | E.Value_of_c_variable (loc,sym,k) ->
-         let ct = Sctypes.of_ctype_unsafe loc (allocations sym) in
-         let pointer = IT.sym_ (sym, SBT.Loc (Some ct)) in
-         load loc "read" pointer k
-      | Deref (loc, pointer, k) ->
-         load loc "deref" pointer k
+      | E.Value_of_c_variable (loc,sym,scope,k) ->
+         begin match scope with
+         | Some scope ->
+            let variable_state = LocalState.((Y.find scope old_states).c_variable_state) in
+            let o_v = 
+              Option.map (function
+                  | LocalState.CVS_Value x -> x
+                  | LocalState.CVS_Pointer_pointing_to x -> x
+                ) (SymMap.find_opt sym variable_state)
+            in
+            aux (k o_v)
+         | None ->
+            let ct = Sctypes.of_ctype_unsafe loc (allocations sym) in
+            let pointer = IT.sym_ (sym, SBT.Loc (Some ct)) in
+            load loc "read" pointer k
+         end
+      | Deref (loc, pointer, scope, k) ->
+         begin match scope with
+         | Some scope ->
+            let pointee_values = (Y.find scope old_states).pointee_values in
+            let o_v = STermMap.find_opt pointer pointee_values in
+            aux (k o_v)
+         | None ->
+            load loc "deref" pointer k
+         end
+      | ScopeExists (loc, scope, k) ->
+         aux (k (Y.mem scope old_states))
 
     and load loc action_pp pointer k =
       let@ pointee_ct = pointee_ct loc pointer in
       let value_s = Sym.fresh_make_uniq (action_pp ^ "_" ^ Pp.plain (IT.pp pointer)) in
       let value_bt = SBT.of_sct pointee_ct in
       let value = IT.sym_ (value_s, value_bt) in
-      let@ prog = handle_using_loads (k (Some value)) in
+      let@ prog = aux (k (Some value)) in
       let load = {ct = pointee_ct; pointer = IT.term_of_sterm pointer} in
       return (M_CN_let (loc, (value_s, load), prog))
-    in
 
-    fun (CN_statement (loc, stmt_)) -> 
-    handle_using_loads (
-        let open E in
-        let open Effectful.Make(E) in
-        match stmt_ with
-        | CN_pack_unpack (pack_unpack, pred, args) ->
-           let@ args = ListM.mapM (P.translate_cn_expr SymSet.empty env) args in
-           let@ name, pointer, iargs, oargs_ty =
-             P.translate_cn_res_info loc loc env pred args in
-           let stmt = 
-             M_CN_pack_unpack 
-               (pack_unpack, { 
-                 name = name; 
-                 pointer = IT.term_of_sterm pointer; 
-                 permission = IT.bool_ true; 
-                 iargs = List.map IT.term_of_sterm iargs;
-               })
-           in
-           return (M_CN_statement (loc, stmt))
-        | CN_have assrt ->
-           let@ assrt = P.translate_cn_assrt env (loc, assrt) in
-           return (M_CN_statement (loc, M_CN_have assrt))
-        | CN_instantiate (to_instantiate, expr) ->
-           let@ expr = P.translate_cn_expr SymSet.empty env expr in
-           let expr = IT.term_of_sterm expr in
-           let to_instantiate = match to_instantiate with
-             | I_Everything -> I_Everything
-             | I_Function f -> I_Function f
-             | I_Good ct -> I_Good (Sctypes.of_ctype_unsafe loc ct)
-           in
-           return (M_CN_statement (loc, M_CN_instantiate (to_instantiate, expr)))
-        | CN_unfold (s, args) ->
-           let@ args = ListM.mapM (P.translate_cn_expr SymSet.empty env) args in
-           let args = List.map IT.term_of_sterm args in
-           return (M_CN_statement (loc, M_CN_unfold (s, args)))
-        | CN_assert_stmt e ->
-           let@ e = P.translate_cn_assrt env (loc, e) in
-           return (M_CN_statement (loc, M_CN_assert e))
-      )
+    in
+    
+    aux
 
 end
+
+
+let translate_cn_statement 
+      (allocations : Sym.t -> CF.Ctype.ctype)
+      old_states
+      env
+      (CN_statement (loc, stmt_))
+  =
+
+  let open Cnprog in
+
+  UsingLoads.handle allocations old_states (
+      let open E in
+      let open Effectful.Make(E) in
+      match stmt_ with
+      | CN_pack_unpack (pack_unpack, pred, args) ->
+         let@ args = ListM.mapM (ET.translate_cn_expr SymSet.empty env) args in
+         let@ name, pointer, iargs, oargs_ty =
+           ET.translate_cn_res_info loc loc env pred args in
+         let stmt = 
+           M_CN_pack_unpack 
+             (pack_unpack, { 
+               name = name; 
+               pointer = IT.term_of_sterm pointer; 
+               permission = IT.bool_ true; 
+               iargs = List.map IT.term_of_sterm iargs;
+             })
+         in
+         return (M_CN_statement (loc, stmt))
+      | CN_have assrt ->
+         let@ assrt = ET.translate_cn_assrt env (loc, assrt) in
+         return (M_CN_statement (loc, M_CN_have assrt))
+      | CN_instantiate (to_instantiate, expr) ->
+         let@ expr = ET.translate_cn_expr SymSet.empty env expr in
+         let expr = IT.term_of_sterm expr in
+         let to_instantiate = match to_instantiate with
+           | I_Everything -> I_Everything
+           | I_Function f -> I_Function f
+           | I_Good ct -> I_Good (Sctypes.of_ctype_unsafe loc ct)
+         in
+         return (M_CN_statement (loc, M_CN_instantiate (to_instantiate, expr)))
+      | CN_unfold (s, args) ->
+         let@ args = ListM.mapM (ET.translate_cn_expr SymSet.empty env) args in
+         let args = List.map IT.term_of_sterm args in
+         return (M_CN_statement (loc, M_CN_unfold (s, args)))
+      | CN_assert_stmt e ->
+         let@ e = ET.translate_cn_assrt env (loc, e) in
+         return (M_CN_statement (loc, M_CN_assert e))
+    )
+
+
 

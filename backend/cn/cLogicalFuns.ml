@@ -87,13 +87,13 @@ let rec symb_exec_mu_expr label_defs var_map expr =
   | _ -> fail {loc; msg = Generic (Pp.item "getting expr from C syntax: unsupported"
         (Pp_mucore.pp_expr expr))}
 
-let c_function_to_it fsym rbt args body label_defs : (IT.t, type_error) m  =
+let c_function_to_it fsym rbt args body label_defs : (IT.t) m  =
   let (M_Pexpr (loc, _, _, pe_)) = body in
   match pe_ with
   | M_PEval _ -> fail {loc; msg = Generic (Pp.string "PEval")}
   | _ -> fail {loc; msg = Generic (Pp.string "not PEval")}
 
-let c_function_to_it2 fsym rbt args body label_defs : (IT.t, type_error) m  =
+let c_function_to_it2 fsym rbt args body label_defs : (IT.t) m  =
   let (M_Expr (loc, _, e_)) = body in
   match e_ with
   | M_Epure pe -> c_function_to_it fsym rbt args pe label_defs

@@ -27,7 +27,7 @@ module SBT = SurfaceBaseTypes
 module Mu = Mucore
 open Mu
 module Loc = Locations
-module C = Compile.WithinTypes
+module C = Compile
 module SymSet = Set.Make(Sym)
 module SymMap = Map.Make(Sym)
 module IdMap = Map.Make(Id)
@@ -75,10 +75,6 @@ type symbol = Symbol.sym
 type mu_pexpr = unit Mu.mu_pexpr
 type mu_pexprs = mu_pexpr list
 type mu_expr = unit Mu.mu_expr
-
-
-
-
 
 
 
@@ -608,7 +604,7 @@ let n_memop loc memop pexprs =
 
 
 
-let rec n_expr (loc : Loc.t) (env, desugaring_things) (global_types, visible_objects_env) e : (mu_expr, type_error) m = 
+let rec n_expr (loc : Loc.t) ((env, old_states), desugaring_things) (global_types, visible_objects_env) e : (mu_expr) m = 
   let (markers_env, cn_desugaring_state) = desugaring_things in
   let (Expr (annots, pe)) = e in
   let loc = Loc.update loc (get_loc_ annots) in
@@ -616,7 +612,7 @@ let rec n_expr (loc : Loc.t) (env, desugaring_things) (global_types, visible_obj
   let n_pexpr = n_pexpr loc in
   let n_paction = (n_paction loc) in
   let n_memop = (n_memop loc) in
-  let n_expr = (n_expr loc (env, desugaring_things) (global_types, visible_objects_env)) in
+  let n_expr = (n_expr loc ((env, old_states), desugaring_things) (global_types, visible_objects_env)) in
   match pe with
   | Epure pexpr2 -> 
      return (wrap (M_Epure (n_pexpr pexpr2)))
@@ -745,9 +741,9 @@ let rec n_expr (loc : Loc.t) (env, desugaring_things) (global_types, visible_obj
                   Pmap.find marker_id_object_types visible_objects_env 
                 in
                 let@ stmt = 
-                  Compile.WithinStatements.translate_cn_statement 
+                  Compile.translate_cn_statement 
                     (fun sym -> List.assoc Sym.equal sym visible_objects) 
-                    env stmt 
+                    old_states env stmt 
                 in
                 return stmt
             ) (get_cerb_magic_attr annots)
@@ -819,119 +815,51 @@ type identifier_env = Annot.identifier_env
 
 
 
-let ownership (loc, (addr_s, ct)) env =
-  let name = match Sym.description addr_s with
-    | SD_ObjectAddress obj_name -> 
-       Sym.fresh_make_uniq ("O_"^obj_name)
-    | _ -> assert false
-  in
-  let resource = CN_pred (loc, None, CN_owned (Some ct), [CNExpr (loc, CNExpr_var addr_s)]) in
-
-  let@ (pt_ret, oa_bt), lcs, _ = 
-    C.translate_cn_let_resource env (loc, name, resource) in
-  let value = 
-    let ct = convert_ct loc ct in
-    IT.recordMember_ 
-      ~member_bt:(SBT.of_sct ct)
-      (IT.sym_ (name, oa_bt), Resources.value_sym)
-  in
-  return (name, ((pt_ret, oa_bt), lcs), value)
-
-
-
-  (* Cn.CN_cletResource (loc, os, pred)) *)
-
-(* let translate_accesses ail_env globs accesses requires ensures = *)
-(*   let@ ownerships = ListM.mapM (fun (loc, id) -> *)
-(*        return (ownership loc s ct) *)
-(*   ) accesses in *)
-(*   let (var_vals, preds) = List.split ownerships in *)
-(*   return (var_vals, preds @ requires, preds @ ensures) *)
-
-
-
-
-
-
-let rec make_lrt env = function
-  | (Cn.CN_cletResource (loc, name, resource) :: ensures) -> 
-     let@ (pt_ret, oa_bt), lcs, pointee_values = 
-       C.translate_cn_let_resource env (loc, name, resource) in
-     let env = C.add_logical name oa_bt env in
-     let env = C.add_pointee_values pointee_values env in
-     let@ lrt = make_lrt env (ensures) in
-     return (LRT.mResource ((name, (pt_ret, SBT.to_basetype oa_bt)), (loc, None)) 
-            (LRT.mConstraints lcs lrt))
-  | (Cn.CN_cletExpr (loc, name, expr) :: ensures) ->
-     let@ expr = C.translate_cn_expr SymSet.empty env expr in
-     let@ lrt = make_lrt (C.add_logical name (IT.bt expr) env) (ensures) in
-     return (LRT.mDefine (name, IT.term_of_sterm expr, (loc, None)) lrt)
-  | (Cn.CN_cconstr (loc, constr) :: ensures) ->
-     let@ lc = C.translate_cn_assrt env (loc, constr) in
-     let@ lrt = make_lrt env (ensures) in
-     return (LRT.mConstraint (lc, (loc, None)) lrt)
-  | [] -> 
-     return LRT.I
-
-let rec make_lrt_with_accesses env (accesses, ensures) =
-  match accesses with
-  | (loc, (addr_s, ct)) :: accesses ->
-     let@ (name, ((pt_ret, oa_bt), lcs), value) = ownership (loc, (addr_s, ct)) env in
-     let env = C.add_logical name oa_bt env in
-     let env = C.add_c_variable_state addr_s (CVS_Pointer_pointing_to value) env in
-     let@ lrt = make_lrt_with_accesses env (accesses, ensures) in
-     return (LRT.mResource ((name, (pt_ret, SBT.to_basetype oa_bt)), (loc, None)) 
-            (LRT.mConstraints lcs lrt))
-  | [] ->
-     make_lrt env ensures
-
-
-
-let make_rt (loc : loc) (env : C.env) (s, ct) (accesses, ensures) =
-  let ct = convert_ct loc ct in
-  let sbt = SBT.of_sct ct in
-  let bt = SBT.to_basetype sbt in
-  let@ lrt = make_lrt_with_accesses (C.add_computational s sbt env) (accesses, ensures) in
-  let info = (loc, Some "return value good") in
-  let lrt = LRT.mConstraint (LC.t_ (IT.good_ (ct, IT.sym_ (s, bt))), info) lrt in
-  return (RT.mComputational ((s, bt), (loc, None)) lrt)
-
 
 let make_largs f_i =
-  let rec aux env = function
+  let rec aux env st = function
     | (Cn.CN_cletResource (loc, name, resource) :: conditions) -> 
        let@ (pt_ret, oa_bt), lcs, pointee_values = 
-         C.translate_cn_let_resource env (loc, name, resource) in
+         C.LocalState.handle st
+           (C.ET.translate_cn_let_resource env (loc, name, resource)) 
+       in
        let env = C.add_logical name oa_bt env in
-       let env = C.add_pointee_values pointee_values env in
-       let@ lat = aux env (conditions) in
+       let st = C.LocalState.add_pointee_values pointee_values st in
+       let@ lat = aux env st (conditions) in
        return (Mu.mResource ((name, (pt_ret, SBT.to_basetype oa_bt)), (loc, None)) 
                  (Mu.mConstraints lcs lat))
     | (Cn.CN_cletExpr (loc, name, expr) :: conditions) ->
-       let@ expr = C.translate_cn_expr SymSet.empty env expr in
-       let@ lat = aux (C.add_logical name (IT.bt expr) env) (conditions) in
+       let@ expr = 
+         C.LocalState.handle st
+           (C.ET.translate_cn_expr SymSet.empty env expr) 
+       in
+       let@ lat = aux (C.add_logical name (IT.bt expr) env) st (conditions) in
        return (Mu.mDefine ((name, IT.term_of_sterm expr), (loc, None)) lat)
     | (Cn.CN_cconstr (loc, constr) :: conditions) ->
-       let@ lc = C.translate_cn_assrt env (loc, constr) in
-       let@ lat = aux env (conditions) in
+       let@ lc = 
+         C.LocalState.handle st
+           (C.ET.translate_cn_assrt env (loc, constr))
+       in
+       let@ lat = aux env st (conditions) in
        return (Mu.mConstraint (lc, (loc, None)) lat)
-    | ([]) ->
-       let@ i = f_i env in
+    | [] ->
+       let@ i = f_i env st in
        return (M_I i)
   in
   aux
 
-let rec make_largs_with_accesses f_i env (accesses, conditions) = 
+
+let rec make_largs_with_accesses f_i env st (accesses, conditions) = 
   match accesses with
   | ((loc, (addr_s, ct)) :: accesses) ->
-     let@ (name, ((pt_ret, oa_bt), lcs), value) = ownership (loc, (addr_s, ct)) env in
+     let@ (name, ((pt_ret, oa_bt), lcs), value) = C.ownership (loc, (addr_s, ct)) env in
      let env = C.add_logical name oa_bt env in
-     let env = C.add_c_variable_state addr_s (CVS_Pointer_pointing_to value) env in
-     let@ lat = make_largs_with_accesses f_i env (accesses, conditions) in
+     let st = C.LocalState.add_c_variable_state addr_s (CVS_Pointer_pointing_to value) st in
+     let@ lat = make_largs_with_accesses f_i env st (accesses, conditions) in
      return (Mu.mResource ((name, (pt_ret, SBT.to_basetype oa_bt)), (loc, None)) 
                (Mu.mConstraints lcs lat))
   | [] ->
-     make_largs f_i env conditions
+     make_largs f_i env st conditions
 
 
 let is_pass_by_pointer = function
@@ -939,8 +867,8 @@ let is_pass_by_pointer = function
   | By_value -> false
 
 
-let make_label_args f_i loc env args (accesses, inv) =
-  let rec aux (resources, good_lcs) env = function
+let make_label_args f_i loc env st args (accesses, inv) =
+  let rec aux (resources, good_lcs) env st = function
     | ((o_s, (ct, pass_by_value_or_pointer)), (s, bt)) :: rest ->
        assert (Option.equal Sym.equal o_s (Some s));
        assert (BT.equal (convert_bt loc bt) Loc);
@@ -953,28 +881,28 @@ let make_label_args f_i loc env args (accesses, inv) =
          let info = (loc, Some (Sym.pp_string s ^ " good")) in
          (LC.t_ (IT.good_ (Pointer sct, IT.sym_ (s, BT.Loc))), info)
        in
-       let@ (oa_name, ((pt_ret, oa_bt), lcs), value) = ownership (loc, (s, ct)) env in
+       let@ (oa_name, ((pt_ret, oa_bt), lcs), value) = C.ownership (loc, (s, ct)) env in
        let env = C.add_logical oa_name oa_bt env in
-       let env = C.add_c_variable_state s (CVS_Pointer_pointing_to value) env in
+       let st = C.LocalState.add_c_variable_state s (CVS_Pointer_pointing_to value) st in
        let resource = ((oa_name, (pt_ret, SBT.to_basetype oa_bt)), (loc, None)) in
        let@ at = 
          aux (resources @ [resource], 
               good_lcs @ good_pointer_lc :: lcs) 
-           env rest 
+           env st rest 
        in
        return (Mu.mComputational ((s, Loc), (loc, None)) at)
     | [] -> 
-       let@ lat = make_largs_with_accesses f_i env (accesses, inv) in
+       let@ lat = make_largs_with_accesses f_i env st (accesses, inv) in
        let at = Mu.mResources resources (Mu.mConstraints good_lcs lat) in
        return (M_L at)
   in
-  aux ([],[]) env args
+  aux ([],[]) env st args
 
 
 
 
 let make_function_args f_i loc env args (accesses, requires) =
-  let rec aux arg_states good_lcs env = function
+  let rec aux arg_states good_lcs env st = function
     | ((mut_arg, (mut_arg', ct)), (pure_arg, bt)) :: rest ->
        assert (Option.equal Sym.equal (Some mut_arg) mut_arg');
        let ct = convert_ct loc ct in
@@ -982,22 +910,22 @@ let make_function_args f_i loc env args (accesses, requires) =
        let bt = convert_bt loc bt in
        assert (BT.equal bt (SBT.to_basetype sbt));
        let env = C.add_computational pure_arg sbt env in
-       let arg_state = C.CVS_Value (IT.sym_ (pure_arg, sbt)) in
-       let env = C.add_c_variable_state mut_arg arg_state env in
+       let arg_state = C.LocalState.CVS_Value (IT.sym_ (pure_arg, sbt)) in
+       let st = C.LocalState.add_c_variable_state mut_arg arg_state st in
        let good_lc = 
          let info = (loc, Some (Sym.pp_string pure_arg ^ " good")) in
          (LC.t_ (IT.good_ (ct, IT.sym_ (pure_arg, bt))), info)
        in
        let@ at = 
          aux (arg_states @ [(mut_arg, arg_state)]) 
-           (good_lc :: good_lcs) env rest 
+           (good_lc :: good_lcs) env st rest 
        in
        return (Mu.mComputational ((pure_arg, bt), (loc, None)) at)
     | [] -> 
-       let@ lat = make_largs_with_accesses (f_i arg_states) env (accesses, requires) in
+       let@ lat = make_largs_with_accesses (f_i arg_states) env st (accesses, requires) in
        return (M_L (Mu.mConstraints (List.rev good_lcs) lat))
   in
-  aux [] [] env args
+  aux [] [] env (C.LocalState.init_st) args
 
 
 
@@ -1051,7 +979,7 @@ let desugar_conds d_st conds =
 let normalise_label 
       (markers_env, precondition_cn_desugaring_state) 
       (global_types, visible_objects_env)
-      (accesses, loop_attributes) (env : C.env) label_name label =
+      (accesses, loop_attributes) (env : C.env) st label_name label =
   match label with
   | Mi_Return loc -> 
      return (M_Return loc)
@@ -1073,12 +1001,13 @@ let normalise_label
              return ([], precondition_cn_desugaring_state)
         in
         let@ label_args_and_body =
-          make_label_args (fun env ->
-              n_expr loc (env, (markers_env, cn_desugaring_state))
+          make_label_args (fun env st ->
+              n_expr loc ((env, st.old_states), (markers_env, cn_desugaring_state))
                 (global_types, visible_objects_env) label_body
             ) 
             loc 
             env 
+            st
             (List.combine lt label_args) 
             (accesses, inv)
         in
@@ -1154,18 +1083,18 @@ let normalise_fun_map_decl
      let@ (ensures, ret_d_st) = desugar_conds ret_d_st (List.map snd ensures) in
      Print.debug 6 (lazy (Print.string "desugared ensures conds"));
      let@ args_and_body = 
-       make_function_args (fun arg_states env ->
-           let env = C.make_state_old env C.start_evaluation_scope in
-           let@ body = n_expr loc (env, (markers_env, d_st.inner.cn_state)) (global_types, visible_objects_env) body in
+       make_function_args (fun arg_states env st ->
+           let st = C.LocalState.make_state_old st C.start_evaluation_scope in
+           let@ body = n_expr loc ((env,st.old_states), (markers_env, d_st.inner.cn_state)) (global_types, visible_objects_env) body in
            let@ returned = 
-             make_rt loc (C.add_c_variable_states arg_states env)
+             C.make_rt loc env (C.LocalState.add_c_variable_states arg_states st)
                (ret_s, ret_ct) (accesses, ensures) 
            in
            let@ labels = 
              PmapM.mapM (normalise_label 
                            (markers_env,CAE.(d_st.inner.cn_state))
                            (global_types, visible_objects_env)
-                           (accesses, loop_attributes) env)
+                           (accesses, loop_attributes) env st)
                labels Sym.compare in
            return (body, labels, returned)
          ) 
@@ -1232,8 +1161,9 @@ let normalise_globs tagDefs sym g =
      (* this may have to change *)
      let@ e = 
        n_expr loc 
-         (C.empty tagDefs, (Pmap.empty Int.compare, 
-                            CF.Cn_desugaring.initial_cn_desugaring_state)) 
+         ((C.empty tagDefs, (C.LocalState.init_st).old_states), 
+          (Pmap.empty Int.compare, 
+           CF.Cn_desugaring.initial_cn_desugaring_state)) 
          ([], Pmap.empty Int.compare)
          e 
      in
