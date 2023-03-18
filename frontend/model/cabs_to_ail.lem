@@ -1445,10 +1445,19 @@ let arrayFromStringLiteral size_opt (pref_opt, strs) =
 
 
 
-
-
-
-
+let rec reduces_to_ddecl_identifier ddecltor =
+  match ddecltor with
+    | DDecl_identifier _ _ ->
+        true
+    | DDecl_declarator (Declarator Nothing ddecltor') ->
+        reduces_to_ddecl_identifier ddecltor'
+    | DDecl_declarator (Declarator (Just _) _) ->
+        false
+    | DDecl_array _ _ ->
+        false
+    | DDecl_function _ _ ->
+        false
+end
 
 
 
@@ -1985,9 +1994,12 @@ and desugar_direct_declarator fundef under_array = function
   
   | DDecl_function ddecltor param_tys ->
       let fundef' =
-        match (fundef, ddecltor) with
-          | (IsFunDef, DDecl_identifier _ _) ->
-              IsFunDef
+        match fundef with
+          | IsFunDef ->
+              if reduces_to_ddecl_identifier ddecltor then
+                IsFunDef
+              else
+                NotFunDef
           | _ ->
               NotFunDef
         end in
