@@ -164,10 +164,12 @@ exception Cannot_Coerce
 (* attempt to coerce out the resources in this function type.
    we can do this for some lemmas where resources are passed and
    returned unchanged as a way of passing their return values. *)
-let try_coerce_res ftyp =
+let try_coerce_res (ftyp : AT.lemmat) =
   let rec erase_res r t = match t with
-    | LRT.Define (v, info, t) -> LRT.Define (v, info, erase_res r t)
-    | LRT.Constraint (lc, info, t) -> LRT.Constraint (lc, info, erase_res r t)
+    | LRT.Define (v, info, t) -> 
+       LRT.Define (v, info, erase_res r t)
+    | LRT.Constraint (lc, info, t) -> 
+       LRT.Constraint (lc, info, erase_res r t)
     | LRT.Resource ((name, (re, bt)), info, t) ->
         let (arg_name, arg_re) = r in
         if ResourceTypes.alpha_equivalent arg_re re
@@ -181,7 +183,7 @@ let try_coerce_res ftyp =
   in
   let erase_res2 r t =
     Pp.debug 2 (lazy (Pp.item "seeking to erase counterpart" (Sym.pp (fst r))));
-    let res = LAT.map (RT.map (erase_res r)) t in
+    let res = LAT.map ((erase_res r)) t in
     res
   in
   let rec coerce_lat t = match t with
@@ -198,37 +200,36 @@ let try_coerce_res ftyp =
        [], t
   in
   let rec coerce_at t = match t with
-    | AT.Computational (v, info, t) -> AT.Computational (v, info, coerce_at t)
+    | AT.Computational (v, info, t) -> 
+       AT.Computational (v, info, coerce_at t)
     | AT.L t -> 
        let computationals, t = coerce_lat t in
        AT.mComputationals computationals (AT.L t)
   in
   try Some (coerce_at ftyp) with Cannot_Coerce -> None
 
-type scan_res = {res: string option; ret: bool;
-    res_coerce: RT.t AT.t option}
+type scan_res = {
+    res: string option;
+    res_coerce: AT.lemmat option
+  }
 
-let init_scan_res = {res = None; ret = false; res_coerce = None}
+let init_scan_res = {res = None; res_coerce = None}
 
 (* recurse over a function type and detect resources (impureness),
    non-unit return types (non-lemma trusted functions), and the set
    of uninterpreted functions used. *)
-let scan ftyp =
+let scan (ftyp : AT.lemmat) =
   let rec scan_lrt t = match t with
     | LRT.Define ((_, it), _, t) -> scan_lrt t
     | LRT.Resource ((name, _), _, t) -> {(scan_lrt t) with res = Some (Sym.pp_string name)}
     | LRT.Constraint (_, _, t) -> scan_lrt t
     | LRT.I -> init_scan_res
   in
-  let scan_rt = function
-    | RT.Computational ((_, bt), _, t) -> {(scan_lrt t) with ret =
-        not (BaseTypes.equal bt BaseTypes.Unit)}
-  in
   let rec scan_lat t = match t with
     | LAT.Define (_, _, t) -> scan_lat t
     | LAT.Resource ((name, _), _, t) -> {(scan_lat t) with res = Some (Sym.pp_string name)}
     | LAT.Constraint (_, _, t) -> scan_lat t
-    | LAT.I t -> scan_rt t
+    | LAT.I t -> scan_lrt t
   in
   let rec scan_at t = match t with
     | AT.Computational (_, _, t) -> scan_at t
@@ -945,7 +946,7 @@ let param_spec params =
   ^^ hardline ^^ hardline
 
 
-let ftyp_to_coq loc global list_mono ftyp =
+let ftyp_to_coq loc global list_mono (ftyp: AT.lemmat) =
   let open Pp in
   let lc_to_coq_c = lc_to_coq_check_triv loc global list_mono in
   let it_tc = it_to_coq loc global list_mono in
@@ -973,22 +974,18 @@ let ftyp_to_coq loc global list_mono ftyp =
     | LRT.I -> return None
     | _ -> fail_m loc (Pp.item "ftyp_to_coq: unsupported" (LRT.pp t))
   in
-  let rt_doc t = match t with
-    | RT.Computational ((_, bt), _, t2) -> if BaseTypes.equal bt BaseTypes.Unit
-        then lrt_doc t2
-        else fail_m loc (Pp.item "ftyp_to_coq: unsupported return type" (RT.pp t))
-  in
   let rec lat_doc t = match t with
     | LAT.Define ((sym, it), _, t) ->
         let@ d = lat_doc t in
         let@ l = it_tc it in
         return (omap_split (mk_let sym l) d)
-    | LAT.Resource _ -> fail_m loc (Pp.item "ftyp_to_coq: unsupported" (LAT.pp RT.pp t))
+    | LAT.Resource _ -> 
+       fail_m loc (Pp.item "ftyp_to_coq: unsupported" (LAT.pp LRT.pp t))
     | LAT.Constraint (lc, _, t) ->
         let@ c = lc_to_coq_c lc in
         let@ d = lat_doc t in
         return (omap_split (oapp mk_imp c) d)
-    | LAT.I t -> rt_doc t
+    | LAT.I t -> lrt_doc t
   in
   let rec at_doc t = match t with
     | AT.Computational ((sym, bt), _, t) ->
@@ -1013,7 +1010,7 @@ let ftyp_to_coq loc global list_mono ftyp =
   | None -> rets "Is_true true"
 
 let convert_lemma_defs global list_mono lemma_typs =
-  let lemma_ty (nm, typ, loc, kind) =
+  let lemma_ty (nm, (typ: AT.lemmat), loc, kind) =
     Pp.progress_simple ("converting " ^ kind ^ " lemma type") (Sym.pp_string nm);
     let@ rhs = ftyp_to_coq loc global list_mono typ in
     return (defn (Sym.pp_string nm ^ "_type") [] (Some (Pp.string "Prop")) rhs)
@@ -1091,28 +1088,29 @@ let do_re_retype mu_file trusted_funs prev_mode pred_defs pre_retype_mu_file =
   Retype.retype_file pred_defs `CallByValue prev_cut
 *)
 
-type scanned = {sym : Sym.t; loc: Loc.t; typ: RT.t AT.t; scan_res: scan_res}
+type scanned = {
+    sym : Sym.t; 
+    loc: Loc.t; 
+    typ: AT.lemmat; 
+    scan_res: scan_res
+  }
 
 
 
-let generate (global : Global.t) directions trusted_funs =
+let generate (global : Global.t) directions (lemmata : (Sym.t * (Loc.t * AT.lemmat)) list) =
   (* let open Mu in *)
   let (filename, kinds) = parse_directions directions in
   let channel = open_out filename in
   Pp.print channel (header filename);
-  let scan_trusted = 
+  let scan_lemmata = 
     List.map (fun (sym, (loc, typ)) ->
         {sym; loc; typ; scan_res = scan typ}
-      ) trusted_funs 
+      ) lemmata 
     |> List.sort (fun x (y : scanned) -> cmp_loc_line_numbers x.loc y.loc)
   in
-  let (returns, others) = List.partition (fun x -> x.scan_res.ret) scan_trusted in
-  let (impure, pure) = List.partition (fun x -> Option.is_some x.scan_res.res) others in
+  let (impure, pure) = List.partition (fun x -> Option.is_some x.scan_res.res) scan_lemmata in
   let (coerce, skip) = List.partition
         (fun x -> Option.is_some x.scan_res.res_coerce) impure in
-  List.iter (fun x ->
-    Pp.progress_simple "skipping trusted fun with return val" (Sym.pp_string x.sym)
-  ) returns;
   List.iter (fun x ->
     Pp.progress_simple "skipping trusted fun with resource"
         (Sym.pp_string x.sym ^ ": " ^ (Option.get x.scan_res.res))
