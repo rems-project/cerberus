@@ -151,7 +151,7 @@ let warn_extra_semicolon pos ctx =
 %token CN_PACK CN_UNPACK CN_HAVE CN_INSTANTIATE CN_UNFOLD CN_APPLY
 %token CN_BOOL CN_INTEGER CN_REAL CN_POINTER CN_MAP CN_LIST CN_TUPLE CN_SET
 %token CN_WHEN CN_LET CN_TAKE CN_OWNED CN_BLOCK CN_EACH CN_FUNCTION CN_LEMMA CN_PREDICATE CN_DATATYPE
-%token CN_UNCHANGED CN_WITH
+%token CN_UNCHANGED
 %token CN_GOOD CN_NULL CN_TRUE CN_FALSE
 
 %token EOF
@@ -1911,9 +1911,9 @@ prim_expr:
 | LBRACE a=expr RBRACE PERCENT l=NAME VARIABLE
     { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($4)))
                                , CNExpr_at_env (a, l))) }
-| LBRACE base_value=expr CN_WITH updates=separated_nonempty_list(COMMA, member_update) RBRACE
+| LBRACE base_value__updates=nonempty_member_updates RBRACE
     { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($1)))
-                               , CNExpr_memberupdates (base_value, updates))) }
+                               , CNExpr_memberupdates (fst base_value__updates, snd base_value__updates))) }
 | base_value=prim_expr LBRACK updates=separated_nonempty_list(COMMA, index_update) RBRACK
     { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                                , CNExpr_arrayindexupdates (base_value, updates))) }
@@ -2022,11 +2022,22 @@ int_range:
     }
 
 member_update:
-| DOT member=cn_variable EQ e=expr
+| member=cn_variable COLON e=expr
      { (member, e) } 
 
+member_updates:
+| update=member_update COMMA base_value__updates=member_updates
+     { (fst base_value__updates, update::snd base_value__updates) }
+| DOT DOT base_value=expr
+     { (base_value,[]) }
+
+nonempty_member_updates:
+| update=member_update COMMA base_value__updates=member_updates
+     { (fst base_value__updates, update::snd base_value__updates) }
+
+
 index_update:
-| i=prim_expr EQ e=expr
+| i=prim_expr COLON e=expr
      { (i, e) } 
 
 expr:
