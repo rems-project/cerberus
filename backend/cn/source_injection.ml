@@ -299,11 +299,7 @@ let get_magics_of_statement stmt =
         let open Annot in
         match (attr.attr_ns, attr.attr_id, attr.attr_args) with
           | (Some (Symbol.Identifier (_, "cerb")), Symbol.Identifier (_, "magic"), xs) ->
-              let (locs, strs) =
-                List.fold_left (fun (loc_acc, str_acc) (loc, str, _) ->
-                  (loc :: loc_acc, str :: str_acc)
-                ) ([], []) (List.rev xs) in
-              (Location_ocaml.bbox_location locs, String.concat "\n" strs) :: acc
+              List.map (fun (loc, str, _) -> (loc, str)) xs :: acc
          | _ ->
             acc
       ) acc xs in

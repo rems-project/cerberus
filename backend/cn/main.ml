@@ -153,10 +153,12 @@ let main
          | Some output_filename ->
             let oc = Stdlib.open_out output_filename in
             (* TODO(Rini): example for how to use Source_injection.get_magics_of_statement *)
-            (* List.iteri (fun i (_, (_, _, _, _, stmt)) ->
-              List.iter (fun (loc, str) ->
-                Printf.fprintf stderr "[%d] ==> %s -- '%s'\n"
-                i (Location_ocaml.simple_location loc) (String.escaped str)
+            (* List.iter (fun (_, (_, _, _, _, stmt)) ->
+              List.iteri(fun i xs ->
+                List.iteri (fun j (loc, str) ->
+                  Printf.fprintf stderr "[%d] [%d] ==> %s -- '%s'\n"
+                  i j (Location_ocaml.simple_location loc) (String.escaped str)
+                ) xs
               ) (Source_injection.get_magics_of_statement stmt)
             ) ail_prog.function_definitions; *)
             begin match
