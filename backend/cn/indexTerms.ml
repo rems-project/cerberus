@@ -124,7 +124,7 @@ and free_vars_ct_pred = function
   | Representable (_sct, t) -> free_vars t
   | Good (_sct, t) -> free_vars t
   | AlignedI {t; align} -> free_vars_list [t; align]
-  | Aligned (t, _sct) -> free_vars t
+
 
 and free_vars_map_op = function
   | Const (_bt, t) -> free_vars t
@@ -253,7 +253,7 @@ and fold_ct_pred f binders acc = function
   | Representable (_sct, t) -> fold f binders acc t
   | Good (_sct, t) -> fold f binders acc t
   | AlignedI {t; align} -> fold_list f binders acc [t; align]
-  | Aligned (t, _sct) -> fold f binders acc t
+
 
 and fold_map_op f binders acc = function
   | Const (_bt, t) -> fold f binders acc t
@@ -474,7 +474,6 @@ let rec subst (su : typed subst) (IT (it, bt)) =
      IT (Pointer_op pointer_op, bt)
   | CT_pred ct_pred ->
      let ct_pred = match ct_pred with
-       | Aligned (t, ct) -> Aligned (subst su t, ct)
        | AlignedI t -> AlignedI {t= subst su t.t; align= subst su t.align}
        | Representable (rt, t) -> Representable (rt, subst su t)
        | Good (rt, t) -> Good (rt, subst su t)
@@ -835,10 +834,11 @@ let representable_ (t, it) =
   IT (CT_pred (Representable (t, it)), BT.Bool)
 let good_ (sct, it) =
   IT (CT_pred (Good (sct, it)), BT.Bool)
-let aligned_ (t, it) =
-  IT (CT_pred (Aligned (t, it)), BT.Bool)
 let alignedI_ ~t ~align =
   IT (CT_pred (AlignedI {t; align}), BT.Bool)
+let aligned_ (t, ct) =
+  alignedI_ ~t ~align:(int_ (Memory.align_of_ctype ct))
+
 
 let const_map_ index_bt t =
   IT (Map_op (Const (index_bt, t)), BT.Map (index_bt, bt t))

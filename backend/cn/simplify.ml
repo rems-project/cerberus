@@ -658,8 +658,6 @@ module IndexTerms = struct
          IT (CT_pred (Good (ct, aux t)), bt)
       | AlignedI a -> 
          IT (CT_pred (AlignedI {t = aux a.t; align = aux a.align}), bt)
-      | Aligned (t, ct) ->
-         IT (CT_pred (Aligned (aux t, ct)), bt)
     in
 
 

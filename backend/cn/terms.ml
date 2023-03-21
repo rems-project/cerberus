@@ -94,7 +94,7 @@ and 'bt ct_pred =
   | Representable of Sctypes.t * 'bt term
   | Good of Sctypes.t * 'bt term
   | AlignedI of {t : 'bt term; align : 'bt term}
-  | Aligned of 'bt term * Sctypes.t
+
 
 and 'bt map_op = 
   | Const of BaseTypes.t * 'bt term
@@ -273,8 +273,6 @@ let pp : 'bt 'a. ?atomic:bool -> ?f:('bt term -> Pp.doc -> Pp.doc) -> 'bt term -
        end
     | CT_pred ct_pred ->
        begin match ct_pred with
-       | Aligned (t, rt) ->
-          c_app !^"aligned" [aux false t; CT.pp rt]
        | AlignedI t ->
           c_app !^"aligned" [aux false t.t; aux false t.align]
        | Representable (rt, t) ->

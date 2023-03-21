@@ -501,10 +501,6 @@ module WIT = struct
               let@ t_t = check loc Loc t.t in
               let@ t_align = check loc Integer t.align in
               return (BT.Bool, AlignedI {t = t_t; align=t_align})
-           | Aligned (t, ct) ->
-              let@ () = WCT.is_ct loc ct in
-              let@ t = check loc Loc t in
-              return (BT.Bool, Aligned (t, ct))
            | Representable (ct, t) ->
               let@ () = WCT.is_ct loc ct in
               let@ t = check loc (BT.of_sct ct) t in

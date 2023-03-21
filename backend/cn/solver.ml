@@ -597,8 +597,6 @@ module Translate = struct
          begin match ct_pred with
          | AlignedI t ->
             term (divisible_ (pointerToIntegerCast_ t.t, t.align))
-         | Aligned (t, ct) ->
-            term (alignedI_ ~t ~align:(int_ (Memory.align_of_ctype ct)))
          | Representable (ct, t) ->
             term (representable struct_decls ct t)
          | Good (ct, t) ->

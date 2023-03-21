@@ -391,8 +391,6 @@ let it_adjust (global : Global.t) it =
         then t else f (IT.representable global.struct_decls ct t2)
     | IT.CT_pred (AlignedI t) ->
         f (IT.divisible_ (IT.pointerToIntegerCast_ t.t, t.align))
-    | IT.CT_pred (Aligned (t, ct)) ->
-        f (IT.alignedI_ ~t ~align:(IT.int_ (Memory.align_of_ctype ct)))
     | _ -> t
   in
   let res = f it in
