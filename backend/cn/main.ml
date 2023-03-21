@@ -152,16 +152,24 @@ let main
          | None -> ()
          | Some output_filename ->
             let oc = Stdlib.open_out output_filename in
-            let loc = List.nth (CStatements.LocMap.bindings statement_locs) 3 in
-            (* Printf.fprintf stderr ">%s\n" (Location_ocaml.simple_location loc); *)
-            CStatements.LocMap.iter (fun k v -> 
-              Printf.fprintf stderr ">%s -> %s\n" (Location_ocaml.simple_location k) (Location_ocaml.simple_location v)
-            ) statement_locs;
+            (* TODO(Rini): example for how to use Source_injection.get_magics_of_statement *)
+            (* List.iteri (fun i (_, (_, _, _, _, stmt)) ->
+              List.iter (fun (loc, str) ->
+                Printf.fprintf stderr "[%d] ==> %s -- %s \n"
+                i (Location_ocaml.simple_location loc) (String.escaped str)
+              ) (Source_injection.get_magics_of_statement stmt)
+            ) ail_prog.function_definitions;  *)
+            let extracted_statements = List.map (fun (_, (_, _, _, _, stmt)) -> stmt) ail_prog.function_definitions in
+            let magic_statements = List.map Source_injection.get_magics_of_statement extracted_statements in
+            Printf.fprintf stderr "%d -- " (List.length magic_statements);
+            let magic_statements_reduced = List.fold_left List.append [] magic_statements in
+            Printf.fprintf stderr "%d -- " (List.length magic_statements_reduced);
+            (* Printf.fprintf stderr "%d --" ; *)
             begin match
               Source_injection.(output_injections oc
                 { filename; sigm= ail_prog
                 ; pre_post=[(*TODO(Rini): add here the pprints of functions pre/post conditions*)]
-                ; in_stmt=[(fst loc, "Hello world")] }
+                ; in_stmt=magic_statements_reduced}
               )
             with
             | Ok () ->

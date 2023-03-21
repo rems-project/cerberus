@@ -9,10 +9,10 @@ Require Import List.
 Import ListNotations.
 Module Inst.
 
-  Definition nth_list (xs : tree_list) (n : Z) :=
+  Definition nth_tree_list (xs : tree_list) (n : Z) :=
     List.nth (Z.to_nat n) (Setup.to_list xs) Empty_Tree.
 
-  Definition array_to_list := Setup.array_to_list.
+  Definition array_to_tree_list := Setup.array_to_list.
 
   Definition tree_v := Setup.tree_v.
 
@@ -69,7 +69,7 @@ Proof.
     destruct (path_len <=? i) eqn: path_end.
     + destruct (get_t_0_3 T); auto.
     + destruct (get_t_0_3 T); auto.
-  - unfold nth_list, array_to_list, Setup.array_to_list.
+  - unfold nth_tree_list, array_to_tree_list, Setup.array_to_list.
     destruct ((0 <=? Xs i) && (Xs i <? num_nodes)) eqn: Xs_ok; try apply I.
     destruct (get_t_0_3 T); try apply I.
     rewrite to_list_of_list.
