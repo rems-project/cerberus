@@ -801,11 +801,11 @@ let it_to_coq loc global list_mono it =
             return (parens enc)
     end
     | IT.Map_op op -> begin match op with
-        | IT.Set (m, x, y) ->
+        | IT.MapSet (m, x, y) ->
             let@ () = ensure_fun_upd () in
             let@ e = eq_of (IT.bt x) in
             parensM (build [rets "fun_upd"; rets e; aux m; aux x; aux y])
-        | IT.Get (m, x) -> parensM (build [aux m; aux x])
+        | IT.MapGet (m, x) -> parensM (build [aux m; aux x])
         | _ -> fail_m loc (Pp.item "it_to_coq: unsupported map op" (IT.pp t))
     end
     | IT.Record_op op -> begin match op with

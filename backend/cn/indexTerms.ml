@@ -127,10 +127,10 @@ and free_vars_ct_pred = function
 
 
 and free_vars_map_op = function
-  | Const (_bt, t) -> free_vars t
-  | Set (t1, t2, t3) -> free_vars_list [t1; t2; t3]
-  | Get (t1, t2) -> free_vars_list [t1; t2]
-  | Def ((s, _bt), t) -> SymSet.remove s (free_vars t)
+  | MapConst (_bt, t) -> free_vars t
+  | MapSet (t1, t2, t3) -> free_vars_list [t1; t2; t3]
+  | MapGet (t1, t2) -> free_vars_list [t1; t2]
+  | MapDef ((s, _bt), t) -> SymSet.remove s (free_vars t)
 
 and free_vars_info (_str, ts) =
   free_vars_list ts
@@ -256,10 +256,10 @@ and fold_ct_pred f binders acc = function
 
 
 and fold_map_op f binders acc = function
-  | Const (_bt, t) -> fold f binders acc t
-  | Set (t1, t2, t3) -> fold_list f binders acc [t1; t2; t3]
-  | Get (t1, t2) -> fold_list f binders acc [t1; t2]
-  | Def ((s, bt), t) -> fold f (binders @ [(s, bt)]) acc t
+  | MapConst (_bt, t) -> fold f binders acc t
+  | MapSet (t1, t2, t3) -> fold_list f binders acc [t1; t2; t3]
+  | MapGet (t1, t2) -> fold_list f binders acc [t1; t2]
+  | MapDef ((s, bt), t) -> fold f (binders @ [(s, bt)]) acc t
 
 and fold_info f binders acc (_str, ts) =
   fold_list f binders acc ts
@@ -501,15 +501,15 @@ let rec subst (su : typed subst) (IT (it, bt)) =
      IT (Set_op set_op, bt)
   | Map_op map_op ->
      let map_op = match map_op with
-       | Const (bt, t) ->
-          Const (bt, subst su t)
-       | Set (t1, t2, t3) ->
-          Set (subst su t1, subst su t2, subst su t3)
-       | Get (it, arg) ->
-          Get (subst su it, subst su arg)
-       | Def ((s, abt), body) ->
+       | MapConst (bt, t) ->
+          MapConst (bt, subst su t)
+       | MapSet (t1, t2, t3) ->
+          MapSet (subst su t1, subst su t2, subst su t3)
+       | MapGet (it, arg) ->
+          MapGet (subst su it, subst su arg)
+       | MapDef ((s, abt), body) ->
           let s, body = suitably_alpha_rename su.relevant (s, abt) body in
-          Def ((s, abt), subst su body)
+          MapDef ((s, abt), subst su body)
      in
      IT (Map_op map_op, bt)
   | Pred (name, args) ->
@@ -560,7 +560,7 @@ let is_q = function
   | _ -> None
 
 let is_map_get = function
-  | IT (Map_op (Get (f,arg)), _) -> Some (f, arg)
+  | IT (Map_op (MapGet (f,arg)), _) -> Some (f, arg)
   | _ -> None
 
 let zero_frac = function
@@ -841,16 +841,16 @@ let aligned_ (t, ct) =
 
 
 let const_map_ index_bt t =
-  IT (Map_op (Const (index_bt, t)), BT.Map (index_bt, bt t))
+  IT (Map_op (MapConst (index_bt, t)), BT.Map (index_bt, bt t))
 let map_set_ t1 (t2, t3) =
-  IT (Map_op (Set (t1, t2, t3)), bt t1)
+  IT (Map_op (MapSet (t1, t2, t3)), bt t1)
 let map_get_ v arg =
   match bt v with
   | BT.Map (_, rbt) ->
-     IT (Map_op (Get (v, arg)), rbt)
+     IT (Map_op (MapGet (v, arg)), rbt)
   | _ -> Debug_ocaml.error "illtyped index term"
 let map_def_ (s, abt) body =
-  IT (Map_op (Def ((s, abt), body)), BT.Map (abt, bt body))
+  IT (Map_op (MapDef ((s, abt), body)), BT.Map (abt, bt body))
 
 let make_array_ ~item_bt items (* assumed all of item_bt *) =
   let (_, value) =

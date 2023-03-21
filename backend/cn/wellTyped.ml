@@ -585,22 +585,22 @@ module WIT = struct
          return (IT (Set_op set_op, bt))
       | Map_op map_op -> 
          let@ (bt, map_op) = match map_op with
-           | Const (index_bt, t) ->
+           | MapConst (index_bt, t) ->
               let@ () = WBT.is_bt loc index_bt in
               let@ t = infer loc t in
-              return (BT.Map (index_bt, IT.bt t), Const (index_bt, t))
-           | Set (t1, t2, t3) ->
+              return (BT.Map (index_bt, IT.bt t), MapConst (index_bt, t))
+           | MapSet (t1, t2, t3) ->
               let@ t1 = infer loc t1 in
               let@ (abt, rbt) = ensure_map_type loc t1 in
               let@ t2 = check loc abt t2 in
               let@ t3 = check loc rbt t3 in
-              return (IT.bt t1, Set (t1, t2, t3))
-           | Get (t, arg) -> 
+              return (IT.bt t1, MapSet (t1, t2, t3))
+           | MapGet (t, arg) -> 
               let@ t = infer loc t in
               let@ (abt, bt) = ensure_map_type loc t in
               let@ arg = check loc abt arg in
-              return (bt, Get (t, arg))
-           | Def ((s, abt), body) ->
+              return (bt, MapGet (t, arg))
+           | MapDef ((s, abt), body) ->
               (* no need to alpha-rename, because context.ml ensures
                  there's no name clashes *)
               (* let s, body = IT.alpha_rename (s, abt) body in *)
@@ -608,7 +608,7 @@ module WIT = struct
               pure begin
                   let@ () = add_l s abt (loc, lazy (Pp.string "map-def-var")) in
                   let@ body = infer loc body in
-                  return (Map (abt, IT.bt body), Def ((s, abt), body))
+                  return (Map (abt, IT.bt body), MapDef ((s, abt), body))
                 end
          in
          return (IT (Map_op map_op, bt))

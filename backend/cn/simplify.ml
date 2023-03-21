@@ -663,47 +663,47 @@ module IndexTerms = struct
 
     let map_op it bt = 
       match it with
-      | Const (index_bt, t) ->
+      | MapConst (index_bt, t) ->
          let t = aux t in
-         IT (Map_op (Const (index_bt, t)), bt)
-      | Set (t1, t2, t3) ->
+         IT (Map_op (MapConst (index_bt, t)), bt)
+      | MapSet (t1, t2, t3) ->
          let t1 = aux t1 in
          let t2 = aux t2 in
          let t3 = aux t3 in
-         IT (Map_op (Set (t1, t2, t3)), bt)
-      | Get (map, index) ->
+         IT (Map_op (MapSet (t1, t2, t3)), bt)
+      | MapGet (map, index) ->
          let map = aux map in
          let index = aux index in
          let rec make map index = 
            begin match map with
-           | IT (Map_op (Def ((s, abt), body)), _) ->
+           | IT (Map_op (MapDef ((s, abt), body)), _) ->
               assert (BT.equal abt (IT.bt index));
               aux (IT.subst (IT.make_subst [(s, index)]) body)
-           | IT (Map_op (Set (map', index', value')), _) ->
+           | IT (Map_op (MapSet (map', index', value')), _) ->
               begin match index, index' with
               | _, _ when IT.equal index index' ->
                  value'
               | IT (Lit (Z z), _), IT (Lit (Z z'), _) when not (Z.equal z z') ->
                  make map' index
               | _ ->
-                 IT (Map_op (Get (map, index)), bt)
+                 IT (Map_op (MapGet (map, index)), bt)
               end
-           | IT (Bool_op (ITE (cond, map1, map2)), bt') ->
-              (* (if cond then map1 else map2)[index] -->
-               * if cond then map1[index] else map2[index] *)
-              ite_ (cond, 
-                    make map1 index, 
-                    make map2 index)
+           (* | IT (Bool_op (ITE (cond, map1, map2)), bt') -> *)
+           (*    (\* (if cond then map1 else map2)[index] --> *)
+           (*     * if cond then map1[index] else map2[index] *\) *)
+           (*    ite_ (cond,  *)
+           (*          make map1 index,  *)
+           (*          make map2 index) *)
            | _ ->
-              IT (Map_op (Get (map, index)), bt)
+              IT (Map_op (MapGet (map, index)), bt)
            end
          in
          make map index
-      | Def ((s, abt), body) ->
+      | MapDef ((s, abt), body) ->
          let s' = Sym.fresh_same s in 
          let body = IndexTerms.subst (make_subst [(s, sym_ (s', abt))]) body in
          let body = aux body in
-         IT (Map_op (Def ((s', abt), body)), bt)
+         IT (Map_op (MapDef ((s', abt), body)), bt)
     in
 
     (* let option_op o bt =  *)

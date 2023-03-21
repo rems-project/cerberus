@@ -87,7 +87,7 @@ let pred_args t = match IT.term t with
   | _ -> []
 
 let split_eq x y = match (IT.term x, IT.term y) with
-  | (IT.Map_op (IT.Get (m1, x1)), IT.Map_op (IT.Get (m2, x2))) -> Some [(m1, m2); (x1, x2)]
+  | (IT.Map_op (IT.MapGet (m1, x1)), IT.Map_op (IT.MapGet (m2, x2))) -> Some [(m1, m2); (x1, x2)]
   | (IT.Pred (nm, xs), IT.Pred (nm2, ys)) when Sym.equal nm nm2 ->
     Some (List.map2 (fun x y -> (x, y)) xs ys)
   | _ -> None

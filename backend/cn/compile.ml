@@ -486,7 +486,7 @@ module EffectfulTranslation = struct
          | has -> 
             fail {loc; msg = Illtyped_it {it = Terms.pp e1; has = SBT.pp has; expected = "map/array type"; o_ctxt = None}}
        in
-       return (IT (Map_op (Get (e1, e2)), rbt))
+       return (IT (Map_op (MapGet (e1, e2)), rbt))
     | CN_is_shape,_ ->
         (* should be handled separately *)
         assert false
@@ -617,7 +617,7 @@ module EffectfulTranslation = struct
            ListM.fold_leftM (fun acc (i, v) ->
                let@ i = self i in
                let@ v = self v in
-               return (IT (Map_op (Set (acc, i, v)), IT.bt e))
+               return (IT (Map_op (MapSet (acc, i, v)), IT.bt e))
              ) e updates
         | CNExpr_binop (CN_sub, e1_, (CNExpr (_, CNExpr_cons _) as shape)) ->
             let@ e1 = self e1_ in

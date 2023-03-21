@@ -97,10 +97,10 @@ and 'bt ct_pred =
 
 
 and 'bt map_op = 
-  | Const of BaseTypes.t * 'bt term
-  | Set of 'bt term * 'bt term * 'bt term
-  | Get of 'bt term * 'bt term
-  | Def of (Sym.t * BaseTypes.t) * 'bt term
+  | MapConst of BaseTypes.t * 'bt term
+  | MapSet of 'bt term * 'bt term * 'bt term
+  | MapGet of 'bt term * 'bt term
+  | MapDef of (Sym.t * BaseTypes.t) * 'bt term
 
 and 'bt term_ =
   | Lit of lit
@@ -312,8 +312,8 @@ let pp : 'bt 'a. ?atomic:bool -> ?f:('bt term -> Pp.doc -> Pp.doc) -> 'bt term -
        end
     | Map_op map_op ->
       let rec consolidate ops = function
-        | IT (Map_op (Set (t1, t2, t3)), _) -> consolidate (`Set (t2, t3) :: ops) t1
-        | IT (Map_op (Get (t, args)), _) ->  consolidate ((`Get args) :: ops) t
+        | IT (Map_op (MapSet (t1, t2, t3)), _) -> consolidate (`Set (t2, t3) :: ops) t1
+        | IT (Map_op (MapGet (t, args)), _) ->  consolidate ((`Get args) :: ops) t
         | it_ -> (it_, ops) in
       let pp_op = function
        | `Set (t2,t3) ->
@@ -322,9 +322,9 @@ let pp : 'bt 'a. ?atomic:bool -> ?f:('bt term -> Pp.doc -> Pp.doc) -> 'bt term -
           Pp.group @@ brackets @@ aux false args in
       let (root, ops) = consolidate [] it_ in
       let root_pp = match root with
-       | IT (Map_op (Const (_, t)), _) ->
+       | IT (Map_op (MapConst (_, t)), _) ->
           Pp.group @@ brackets @@ aux false t
-       | IT (Map_op (Def ((s, abt), body)), _) ->
+       | IT (Map_op (MapDef ((s, abt), body)), _) ->
           Pp.group @@ braces (BaseTypes.pp abt ^^^ Sym.pp s ^^^ !^"->" ^^^ aux false body)
        | it_ -> aux true it_
        in

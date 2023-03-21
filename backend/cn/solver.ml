@@ -605,15 +605,15 @@ module Translate = struct
       | Map_op map_op -> 
          let open Z3.Z3Array in
          begin match map_op with
-         | Const (abt, t) -> 
+         | MapConst (abt, t) -> 
             mk_const_array context (sort abt) (term t)
-         | Set (t1, t2, t3) -> 
+         | MapSet (t1, t2, t3) -> 
             mk_store context (term t1) (term t2) (term t3)
-         | Get (IT (Map_op (Def ((s, bt), body)), _), arg) -> 
-            term (IT.subst (make_subst [(s, arg)]) body)
-         | Get (f, arg) -> 
+         (* | MapGet (IT (Map_op (Def ((s, bt), body)), _), arg) ->  *)
+         (*    term (IT.subst (make_subst [(s, arg)]) body) *)
+         | MapGet (f, arg) -> 
             mk_select context (term f) (term arg)
-         | Def ((q_s, q_bt), body) ->
+         | MapDef ((q_s, q_bt), body) ->
             if warn_lambda then
               warn_noloc (!^"generating lambda");
               (* warn (!^"generating lambda" ^^ colon ^^^ IT.pp (IT (it_, bt))); *)
