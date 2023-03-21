@@ -519,7 +519,7 @@ and ensure_datatype (global : Global.t) (list_mono : list_mono) loc dt_tag =
       let cons_line dt_tag c_tag =
           let info = SymMap.find c_tag global.datatype_constrs in
           let@ argTs = ListM.mapM (fun (_, bt) -> bt_to_coq2 bt) info.c_params in
-	  return (!^ "    | " ^^ Sym.pp c_tag ^^^ colon ^^^
+          return (!^ "    | " ^^ Sym.pp c_tag ^^^ colon ^^^
               flow (!^ " -> ") (argTs @ [Sym.pp dt_tag]))
       in
       let@ dt_eqs = ListM.mapM (fun dt_tag ->
@@ -544,7 +544,7 @@ let ensure_datatype_member global list_mono loc dt_tag mem_tag bt =
     let pats = List.map (fun (m2, _) -> if Sym.equal mem_tag m2
         then Sym.pp mem_tag else Pp.string "_") c_info.c_params in
     let open Pp in
-    !^ "    |" ^^^ flow (!^ " ") pats ^^^ !^"=>" ^^^
+    !^ "    |" ^^^ flow (!^ " ") (Sym.pp c :: pats) ^^^ !^"=>" ^^^
     (if List.exists (Sym.equal mem_tag) (List.map fst c_info.c_params)
         then Sym.pp mem_tag else !^ "default")
   in
@@ -552,8 +552,33 @@ let ensure_datatype_member global list_mono loc dt_tag mem_tag bt =
         Sym.pp_string dt_tag; Sym.pp_string mem_tag]
   (lazy (
       let open Pp in
+      let eline = [!^ "    end"] in
       return (defn op_nm [parens (typ (!^ "dt") (Sym.pp dt_tag)); !^ "default"] (Some bt_doc)
-          (flow hardline (!^ "match dt with" :: List.map cons_line dt_info.dt_constrs)))
+          (flow hardline (!^ "match dt with" :: List.map cons_line dt_info.dt_constrs @ eline)))
+  )) [dt_tag; mem_tag]
+  in
+  return op_nm
+
+let ensure_single_datatype_member global list_mono loc dt_tag mem_tag bt =
+  let@ () = ensure_datatype global list_mono loc dt_tag in
+  let op_nm = Sym.pp_string dt_tag ^ "_" ^ Sym.pp_string mem_tag in
+  let dt_info = SymMap.find dt_tag global.Global.datatypes in
+  let cons_line c =
+    let c_info = SymMap.find c global.Global.datatype_constrs in
+    let pats = List.map (fun (m2, _) -> if Sym.equal mem_tag m2
+        then Sym.pp mem_tag else Pp.string "_") c_info.c_params in
+    let open Pp in
+    !^ "    |" ^^^ flow (!^ " ") (Sym.pp c :: pats) ^^^ !^"=>" ^^^ Sym.pp mem_tag
+  in
+  let@ () = gen_ensure 0 ["types"; "datatype acc";
+        Sym.pp_string dt_tag; Sym.pp_string mem_tag]
+  (lazy (
+      let inf = (loc, Pp.typ (Pp.string "datatype acc for") (Sym.pp dt_tag)) in
+      let@ bt_doc = bt_to_coq global list_mono inf bt in
+      let open Pp in
+      let eline = [!^ "    end"] in
+      return (defn op_nm [parens (typ (!^ "dt") (Sym.pp dt_tag))] (Some bt_doc)
+          (flow hardline (!^ "match dt with" :: List.map cons_line dt_info.dt_constrs @ eline)))
   )) [dt_tag; mem_tag]
   in
   return op_nm
@@ -874,16 +899,22 @@ let it_to_coq loc global list_mono it =
     end
     | IT.Datatype_op op -> begin match op with
         | IT.DatatypeCons (nm, members_rec) ->
-	    let info = SymMap.find nm global.datatype_constrs in
+            let info = SymMap.find nm global.datatype_constrs in
             let args = List.map
                (fun (nm, _) -> Simplify.IndexTerms.record_member_reduce members_rec nm)
                info.c_params in
             let@ () = ensure_datatype global list_mono loc info.c_datatype_tag in
             parensM (build ([return (Sym.pp nm)] @ List.map (f false) args))
         | IT.DatatypeMember (dt, nm) ->
+            let dt_sym = Option.get (BT.is_datatype_bt (IT.bt dt)) in
+            let info = SymMap.find dt_sym global.datatypes in
             let@ o_sym = get_dt_param dt nm in
-            begin match o_sym with
-              | Some sym -> return (Sym.pp sym)
+            begin match (o_sym, List.length info.dt_constrs == 1) with
+              | Some sym, _ -> return (Sym.pp sym)
+              | _, true ->
+                let@ op_nm = ensure_single_datatype_member global list_mono
+                    loc dt_sym nm (IT.bt t) in
+                parensM (build [rets op_nm; aux dt])
               | _ -> fail_m loc (dt_access_error t)
             end
         | _ -> fail_m loc (Pp.item "it_to_coq: unsupported datatype op" (IT.pp t))
@@ -991,7 +1022,7 @@ let ftyp_to_coq loc global list_mono (ftyp: AT.lemmat) =
         begin match d with
           | None -> return None
           | Some doc ->
-	    let@ doc2 = mk_forall global list_mono loc sym bt (break 1 ^^ doc) in
+            let@ doc2 = mk_forall global list_mono loc sym bt (break 1 ^^ doc) in
             return (Some doc2)
         end
     | AT.L t -> lat_doc t
@@ -1100,6 +1131,8 @@ let generate (global : Global.t) directions (lemmata : (Sym.t * (Loc.t * AT.lemm
   let (filename, kinds) = parse_directions directions in
   let channel = open_out filename in
   Pp.print channel (header filename);
+  Pp.debug 1 (lazy (Pp.item "lemmata generation"
+    (Pp.braces (Pp.list Sym.pp (List.map fst lemmata)))));
   let scan_lemmata = 
     List.map (fun (sym, (loc, typ)) ->
         {sym; loc; typ; scan_res = scan typ}
