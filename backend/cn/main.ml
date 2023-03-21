@@ -152,11 +152,16 @@ let main
          | None -> ()
          | Some output_filename ->
             let oc = Stdlib.open_out output_filename in
+            let loc = List.nth (CStatements.LocMap.bindings statement_locs) 3 in
+            (* Printf.fprintf stderr ">%s\n" (Location_ocaml.simple_location loc); *)
+            CStatements.LocMap.iter (fun k v -> 
+              Printf.fprintf stderr ">%s -> %s\n" (Location_ocaml.simple_location k) (Location_ocaml.simple_location v)
+            ) statement_locs;
             begin match
               Source_injection.(output_injections oc
                 { filename; sigm= ail_prog
                 ; pre_post=[(*TODO(Rini): add here the pprints of functions pre/post conditions*)]
-                ; in_stmt=[(*TODO(Rini): add here the pprints of annotations preceding statements *)] }
+                ; in_stmt=[(fst loc, "Hello world")] }
               )
             with
             | Ok () ->
