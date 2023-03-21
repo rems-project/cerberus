@@ -153,18 +153,19 @@ let main
          | Some output_filename ->
             let oc = Stdlib.open_out output_filename in
             (* TODO(Rini): example for how to use Source_injection.get_magics_of_statement *)
-            (* List.iteri (fun i (_, (_, _, _, _, stmt)) ->
-              List.iter (fun (loc, str) ->
-                Printf.fprintf stderr "[%d] ==> %s -- %s \n"
-                i (Location_ocaml.simple_location loc) (String.escaped str)
+            (* List.iter (fun (_, (_, _, _, _, stmt)) ->
+              List.iteri(fun i xs ->
+                List.iteri (fun j (loc, str) ->
+                  Printf.fprintf stderr "[%d] [%d] ==> %s -- '%s'\n"
+                  i j (Location_ocaml.simple_location loc) (String.escaped str)
+                ) xs
               ) (Source_injection.get_magics_of_statement stmt)
-            ) ail_prog.function_definitions;  *)
+            ) ail_prog.function_definitions; *)
             let extracted_statements = List.map (fun (_, (_, _, _, _, stmt)) -> stmt) ail_prog.function_definitions in
             let magic_statements = List.map Source_injection.get_magics_of_statement extracted_statements in
-            Printf.fprintf stderr "%d -- " (List.length magic_statements);
-            let magic_statements_reduced = List.fold_left List.append [] magic_statements in
-            Printf.fprintf stderr "%d -- " (List.length magic_statements_reduced);
-            (* Printf.fprintf stderr "%d --" ; *)
+            let magic_statements_reduced = List.fold_left List.append [] 
+            (List.fold_left List.append [] magic_statements) 
+            in
             begin match
               Source_injection.(output_injections oc
                 { filename; sigm= ail_prog

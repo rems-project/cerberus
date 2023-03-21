@@ -105,7 +105,7 @@ let inject st inj =
   let st = begin match inj.kind with
     | InStmt str ->
         let (st, _) = move_to ~no_ident:true ~print:false st {inj.end_pos with col= inj.end_pos.col } in
-        do_output st ("CN(" ^ String.escaped str ^ ");")
+        do_output st (String.escaped str)
     | Return None ->
         do_output st ("__CN_RETURN_VOID;")
     | Return (Some (start_pos, end_pos)) ->
@@ -299,11 +299,7 @@ let get_magics_of_statement stmt =
         let open Annot in
         match (attr.attr_ns, attr.attr_id, attr.attr_args) with
           | (Some (Symbol.Identifier (_, "cerb")), Symbol.Identifier (_, "magic"), xs) ->
-              let (locs, strs) =
-                List.fold_left (fun (loc_acc, str_acc) (loc, str, _) ->
-                  (loc :: loc_acc, str :: str_acc)
-                ) ([], []) (List.rev xs) in
-              (Location_ocaml.bbox_location locs, String.concat "\n" strs) :: acc
+              List.map (fun (loc, str, _) -> (loc, str)) xs :: acc
          | _ ->
             acc
       ) acc xs in
