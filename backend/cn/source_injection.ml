@@ -270,13 +270,18 @@ let output_injections oc cn_inj =
   Colour.without_colour begin fun () ->
   let* injs =
     List.fold_left (fun acc_ (fun_sym, (_, _, _, _, stmt)) ->
-      match acc_, List.assoc Symbol.equal_sym fun_sym cn_inj.sigm.A.declarations with
-        | Ok acc, (_, _, A.Decl_function (_, (_, ret_ty), _, _, _, _)) ->
-            let* (pre, post) = pre_post_injs fun_sym ret_ty stmt in
-            let* rets = return_injs stmt in
-            Ok (pre :: post ::  rets @ acc)
-        | _ -> 
-            assert false
+      match List.assoc_opt Symbol.equal_sym fun_sym cn_inj.pre_post with
+        | Some _ ->
+            begin match acc_, List.assoc Symbol.equal_sym fun_sym cn_inj.sigm.A.declarations with
+              | Ok acc, (_, _, A.Decl_function (_, (_, ret_ty), _, _, _, _)) ->
+                  let* (pre, post) = pre_post_injs fun_sym ret_ty stmt in
+                  let* rets = return_injs stmt in
+                  Ok (pre :: post ::  rets @ acc)
+              | _ ->
+                  assert false
+            end
+        | None ->
+            acc_
     ) (Ok []) cn_inj.sigm.A.function_definitions in
     let* in_stmt = in_stmt_injs cn_inj.in_stmt in
     let injs = in_stmt @ injs in
