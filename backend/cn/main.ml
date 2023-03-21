@@ -192,20 +192,16 @@ let main
          | None -> ()
          | Some output_filename ->
             let oc = Stdlib.open_out output_filename in
-            (* TODO(Rini): example for how to use Source_injection.get_magics_of_statement *)
-            (* List.iter (fun (_, (_, _, _, _, stmt)) ->
-              List.iteri(fun i xs ->
-                List.iteri (fun j (loc, str) ->
-                  Printf.fprintf stderr "[%d] [%d] ==> %s -- '%s'\n"
-                  i j (Cerb_location.simple_location loc) (String.escaped str)
-                ) xs
-              ) (Source_injection.get_magics_of_statement stmt)
-            ) ail_prog.function_definitions; *)
+            let loc = List.nth (CStatements.LocMap.bindings statement_locs) 3 in
+            (* Printf.fprintf stderr ">%s\n" (Location_ocaml.simple_location loc); *)
+            CStatements.LocMap.iter (fun k v -> 
+              Printf.fprintf stderr ">%s -> %s\n" (Cerb_location.simple_location k) (Cerb_location.simple_location v)
+            ) statement_locs;
             begin match
               Source_injection.(output_injections oc
                 { filename; sigm= ail_prog
                 ; pre_post=[(*TODO(Rini): add here the pprints of functions pre/post conditions*)]
-                ; in_stmt=[(*TODO(Rini): add here the pprints of annotations preceding statements *)] }
+                ; in_stmt=[(fst loc, "Hello world")] }
               )
             with
             | Ok () ->
