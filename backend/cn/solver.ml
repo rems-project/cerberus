@@ -61,7 +61,7 @@ let xor_no_smt_solver_sym = Sym.fresh_named "xor_uf"
 
 let logging_params = 
     [
-      ("solver.smtlib2_log", Filename.get_temp_dir_name () ^ "/z3_log.smt");
+      (* ("solver.smtlib2_log", Filename.get_temp_dir_name () ^ "/z3_log.smt"); *)
     ]
 
 let no_automation_params = [
