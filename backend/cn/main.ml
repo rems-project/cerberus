@@ -152,6 +152,13 @@ let main
          | None -> ()
          | Some output_filename ->
             let oc = Stdlib.open_out output_filename in
+            (* TODO(Rini): example for how to use Source_injection.get_magics_of_statement *)
+            (* List.iteri (fun i (_, (_, _, _, _, stmt)) ->
+              List.iter (fun (loc, str) ->
+                Printf.fprintf stderr "[%d] ==> %s -- '%s'\n"
+                i (Location_ocaml.simple_location loc) (String.escaped str)
+              ) (Source_injection.get_magics_of_statement stmt)
+            ) ail_prog.function_definitions; *)
             begin match
               Source_injection.(output_injections oc
                 { filename; sigm= ail_prog

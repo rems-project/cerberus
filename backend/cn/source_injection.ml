@@ -288,3 +288,50 @@ let output_injections oc cn_inj =
     ignore (inject_all oc cn_inj.filename injs);
     Ok ()
   end ()
+
+
+open Cerb_frontend
+let get_magics_of_statement stmt =
+  let open AilSyntax in
+  let rec aux acc (AnnotatedStatement (_, Annot.Attrs xs, stmt_)) =
+    let acc =
+      List.fold_left (fun acc attr ->
+        let open Annot in
+        match (attr.attr_ns, attr.attr_id, attr.attr_args) with
+          | (Some (Symbol.Identifier (_, "cerb")), Symbol.Identifier (_, "magic"), xs) ->
+              let (locs, strs) =
+                List.fold_left (fun (loc_acc, str_acc) (loc, str, _) ->
+                  (loc :: loc_acc, str :: str_acc)
+                ) ([], []) (List.rev xs) in
+              (Location_ocaml.bbox_location locs, String.concat "\n" strs) :: acc
+         | _ ->
+            acc
+      ) acc xs in
+    match stmt_ with
+      | AilSskip
+      | AilSexpr _
+      | AilSbreak
+      | AilScontinue
+      | AilSreturnVoid
+      | AilSreturn _
+      | AilSgoto _
+      | AilSdeclaration _
+      | AilSreg_store _ ->
+          acc
+
+      | AilSblock (_, ss)
+      | AilSpar ss ->
+
+          List.fold_left aux acc ss
+      | AilSif (_, s1, s2) ->
+          aux (aux acc s1) s2
+      | AilSwhile (_, s, _)
+      | AilSdo (s, _, _)
+      | AilSswitch (_, s)
+      | AilScase (_, s)
+      | AilScase_rangeGNU (_, _, s)
+      | AilSdefault s
+      | AilSlabel (_, s, _)
+      | AilSmarker (_, s) ->
+        aux acc s
+  in aux [] stmt
