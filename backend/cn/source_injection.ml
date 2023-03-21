@@ -155,12 +155,15 @@ let inject_all oc filename xs =
       inject st m
     ) st (sort_injects xs) in
   let rec aux () =
-    match None with
-      | Some str ->
-          Stdlib.output_string st.output (str ^ "\n");
-          aux ()
-      | None ->
-          st in
+    match Stdlib.input_line st.input with
+      (* | Some str -> *)
+    | str ->
+       Stdlib.output_string st.output (str ^ "\n");
+       aux ()
+      (* | None -> *)
+    | exception End_of_file ->
+       st 
+  in
   aux ()
 
 open Cerb_frontend
