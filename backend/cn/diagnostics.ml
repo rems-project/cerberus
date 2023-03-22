@@ -194,7 +194,7 @@ and investigate_ite cfg t =
     | _ -> acc) [] [] t in
   let@ g = get_global () in
   let sc1 = Simplify.default g in
-  let sc f = Simplify.{sc1 with lcs = LCSet.of_list [LC.T f]} in
+  let sc f = sc1 in
   let simp f t = Simplify.IndexTerms.simp (sc f) t in
   let opt x b =
     let nm = if b then "true" else "false" in
