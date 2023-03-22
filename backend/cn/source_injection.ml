@@ -217,12 +217,13 @@ let rec mapM f xs =
      let* ys = mapM f xs in
      Ok (y :: ys)
 
-let in_stmt_injs xs =
+let in_stmt_injs xs num_headers =
   mapM (fun (loc, str) ->
     let* (start_pos, end_pos) = Pos.of_location loc in
+    let num_headers = if (num_headers != 0) then (num_headers + 1) else num_headers in
     Ok
-      { start_pos= { start_pos with col= start_pos.col - 3 }
-      ; end_pos= {end_pos with col= end_pos.col + 3 }
+      { start_pos= { col= start_pos.col - 3; line= start_pos.line + num_headers }
+      ; end_pos= {col= end_pos.col + 3; line= end_pos.line + num_headers }
       ; kind= InStmt str }
   ) xs
 
@@ -283,11 +284,13 @@ let output_injections oc cn_inj =
         | None ->
             acc_
     ) (Ok []) cn_inj.sigm.A.function_definitions in
-    let* in_stmt = in_stmt_injs cn_inj.in_stmt in
+
+    let* in_stmt = in_stmt_injs cn_inj.in_stmt 0 in
     let injs = in_stmt @ injs in
     ignore (inject_all oc cn_inj.filename injs);
     Ok ()
   end ()
+
 
 
 open Cerb_frontend
