@@ -30,16 +30,6 @@ Proof.
   lia.
 Qed.
 
-Lemma mk_arc_end_lemma : mk_arc_end_lemma_type.
-Proof.
-  unfold mk_arc_end_lemma_type.
-  intros.
-  constructor.
-  - auto.
-  - unfold mk_arc, Setup.mk_arc.
-    rewrite z_to_nat_eq_0; auto; lia.
-Qed.
-
 Lemma z_to_nat_sub_succ:
   forall i len, i < len ->
   Z.to_nat (len - i) = S (Z.to_nat (len - (i + 1))).
@@ -47,14 +37,15 @@ Proof.
   lia.
 Qed.
 
-Lemma mk_arc_step_lemma : mk_arc_step_lemma_type.
+Lemma mk_arc_lemma : mk_arc_lemma_type.
 Proof.
-  unfold mk_arc_step_lemma_type.
+  unfold mk_arc_lemma_type.
   intros.
-  constructor.
-  - auto.
-  - unfold mk_arc, Setup.mk_arc.
-    rewrite (z_to_nat_sub_succ _ _ H5).
+  unfold mk_arc, Setup.mk_arc.
+  destruct (i <? len) eqn: i_lt.
+  - rewrite z_to_nat_sub_succ by lia.
+    auto.
+  - rewrite z_to_nat_eq_0 by lia.
     auto.
 Qed.
 
@@ -65,16 +56,9 @@ Proof.
   auto.
 Qed.
 
-Lemma construct_empty_lemma : construct_empty_lemma_type.
+Lemma construct_lemma : construct_lemma_type.
 Proof.
-  unfold construct_empty_lemma_type.
-  intros.
-  auto.
-Qed.
-
-Lemma construct_step_lemma : construct_step_lemma_type.
-Proof.
-  unfold construct_step_lemma_type.
+  unfold construct_lemma_type.
   intros.
   auto.
 Qed.
