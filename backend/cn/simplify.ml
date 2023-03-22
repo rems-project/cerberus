@@ -155,7 +155,7 @@ module IndexTerms = struct
 
   let rec simp ?(inline_functions=false) simp_ctxt =
 
-    let aux it = simp simp_ctxt it in
+    let aux it = simp ~inline_functions:inline_functions simp_ctxt it in
 
     let lit it bt = 
       match it with
