@@ -163,8 +163,7 @@ let main
             ) ail_prog.function_definitions; *)
             let extracted_statements = List.map (fun (_, (_, _, _, _, stmt)) -> stmt) ail_prog.function_definitions in
             let magic_statements = List.map Source_injection.get_magics_of_statement extracted_statements in
-            let magic_statements_reduced = List.fold_left List.append [] 
-            (List.fold_left List.append [] magic_statements) 
+            let magic_statements_reduced = List.fold_left List.append [] (List.fold_left List.append [] magic_statements) 
             in
             begin match
               Source_injection.(output_injections oc
