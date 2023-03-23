@@ -331,7 +331,7 @@ inc_a_tree (struct a_node *p)
 {
   int r = 0;
   if (! p) {
-    /*@ unpack A_Tree(p) @*/
+    /*@ unpack A_Tree(p); @*/
     a_tree_keys_leaf_lemma();
     inc_list_nil_lemma();
     return 1;

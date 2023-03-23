@@ -161,6 +161,17 @@ let try_open_pred_to_term def name args =
 
 
 
+let add_unfolds_to_terms preds terms =
+  let rec f acc t = match IT.term t with
+    | IT.Pred (name, ts) ->
+      let def = SymMap.find name preds in
+      begin match try_open_pred_to_term def name ts with
+        | None -> acc
+        | Some t2 -> f (t2 :: acc) t2
+      end
+    | _ -> acc
+  in
+  IT.fold_list (fun _ acc t -> f acc t) [] terms terms
 
 
 
