@@ -350,11 +350,11 @@ open Cerb_frontend.Pp_ast
 
 let rec dtree (IT (it_, bt)) =
   match it_ with
-  | Lit (Sym s) -> Dnode (pp_ctor "Sym", [Dleaf (Sym.pp s)])
-  | Lit (Z z) -> Dnode (pp_ctor "Z", [Dleaf !^(Z.to_string z)])
-  | Lit (Q q) -> Dnode (pp_ctor "Q", [Dleaf !^(Q.to_string q)])
-  | Lit (Pointer z) -> Dnode (pp_ctor "Pointer", [Dleaf !^(Z.to_string z)])
-  | Lit (Bool b) -> Dnode (pp_ctor "Bool", [Dleaf !^(if b then "true" else "false")])
+  | Lit (Sym s) -> Dleaf (Sym.pp s)
+  | Lit (Z z) -> Dleaf !^(Z.to_string z)
+  | Lit (Q q) -> Dleaf !^(Q.to_string q)
+  | Lit (Pointer z) -> Dleaf !^(Z.to_string z)
+  | Lit (Bool b) -> Dleaf !^(if b then "true" else "false")
   | Lit Unit -> Dleaf !^"unit"
   | Lit (Default _) -> Dleaf !^"default"
   | Lit Null -> Dleaf !^"null"

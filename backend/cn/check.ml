@@ -1539,6 +1539,8 @@ let check_procedure
                    return (lt, M_Label (loc, label_args_and_body, annots), kind)
                 end
             in
+            debug 2 (lazy (!^"label type within function" ^^^ Sym.pp fsym));
+            debug 2 (lazy (CF.Pp_ast.pp_doc_tree (AT.dtree False.dtree lt)));
             return ((sym, def) :: label_defs, SymMap.add sym (lt, kind) label_context)
           ) label_defs ([], SymMap.empty)
       in
@@ -1671,6 +1673,8 @@ let wf_check_and_record_functions mu_funs =
       | M_Proc (loc, args_and_body, tr) ->
          welltyped_ping fsym;
          let@ args_and_body, ft = WellTyped.WProc.welltyped loc args_and_body in
+         debug 2 (lazy (!^"function type" ^^^ Sym.pp fsym));
+         debug 2 (lazy (CF.Pp_ast.pp_doc_tree (AT.dtree RT.dtree ft)));
          let@ () = add fsym loc ft in
          begin match tr with
          | Trusted _ -> return ((fsym, (loc, ft)) :: trusted, checked)

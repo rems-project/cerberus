@@ -1,8 +1,11 @@
+open Pp
 module CF=Cerb_frontend
 open Cerb_frontend
 open Annot
+open Pp_ast
 
 module Loc = Location_ocaml
+module IT = IndexTerms
 type loc = Loc.t
 
 
@@ -237,9 +240,36 @@ type 'i mu_arguments_l =
   | M_Constraint of LogicalConstraints.t * info * 'i mu_arguments_l
   | M_I of 'i
 
+let dtree_of_mu_arguments_l dtree_i = 
+  let rec aux = function
+  | M_Define ((s, it), _, t) ->
+     Dnode (pp_ctor "Define", [Dleaf (Sym.pp s); IT.dtree it; aux t])
+  | M_Resource ((s, (rt, bt)), _, t) ->
+     Dnode (pp_ctor "Resource", [Dleaf (Sym.pp s); ResourceTypes.dtree rt; Dleaf (BaseTypes.pp bt); aux t])
+  | M_Constraint (lc, _, t) ->
+     Dnode (pp_ctor "Constraint", [LogicalConstraints.dtree lc; aux t])
+  | M_I i ->
+     Dnode (pp_ctor "I", [dtree_i i])
+  in
+  aux
+
+
 type 'i mu_arguments = 
   | M_Computational of (Sym.t * T.bt) * info * 'i mu_arguments
   | M_L of 'i mu_arguments_l
+
+
+let dtree_of_mu_arguments dtree_i = 
+  let rec aux = function
+  | M_Computational ((s, bt), _, lat) ->
+     Dnode (pp_ctor "Computational", [Dleaf (Sym.pp s); aux lat])
+  | M_L l -> 
+     dtree_of_mu_arguments_l dtree_i l
+  in
+  aux
+
+
+
 
 
 let rec mu_count_computational = function
@@ -260,6 +290,15 @@ type 'TY mu_label_def =
   | M_Return of loc
   | M_Label of loc * ('TY mu_expr) mu_arguments * annot list
 
+let dtree_of_label_def = function
+  | M_Return _ -> 
+     Dleaf !^"return label"
+  | M_Label (_loc, args_and_body, _) ->
+     dtree_of_mu_arguments (fun body ->
+         Dleaf !^"(body)"
+       ) args_and_body
+  
+
 type 'TY mu_label_defs = 
   (symbol, ('TY mu_label_def)) Pmap.map
 
@@ -267,6 +306,14 @@ type 'TY mu_label_defs =
 
 type 'TY mu_proc_args_and_body =
   ('TY mu_expr * 'TY mu_label_defs * T.rt) mu_arguments
+
+(* let dtree_of_mu_args_and_body a =  *)
+(*   dtree_of_mu_arguments (fun (_body, labels, rt) -> *)
+(*       Dnode ("FunctionBodyLabelsReturn" [ *)
+(*                  Dleaf !^"(body)"; *)
+(*                  Dnode (pp_ctor "labels" *)
+(*         ]) *)
+(*     ) a *)
 
 
 type 'TY mu_fun_map_decl =

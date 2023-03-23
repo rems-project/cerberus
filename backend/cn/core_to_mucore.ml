@@ -6,6 +6,7 @@ open Milicore
 module CF = Cerb_frontend
 module CA = Cabs_to_ail
 module CAE = Cabs_to_ail_effect
+open Cerb_frontend.Pp_ast
 
 
 module Pmap = struct
@@ -740,11 +741,16 @@ let rec n_expr (loc : Loc.t) ((env, old_states), desugaring_things) (global_type
                   global_types @
                   Pmap.find marker_id_object_types visible_objects_env 
                 in
+                debug 2 (lazy (!^"CN statement before translation"));
+                debug 2 (lazy (pp_doc_tree (Cn_ocaml.PpAil.dtree_of_cn_statement stmt)));
+
                 let@ stmt = 
                   Compile.translate_cn_statement 
                     (fun sym -> List.assoc Sym.equal sym visible_objects) 
                     old_states env stmt 
                 in
+                debug 2 (lazy (!^"CN statement after translation"));
+                debug 2 (lazy (pp_doc_tree (Cnprog.dtree stmt)));
                 return stmt
             ) (get_cerb_magic_attr annots)
           in
@@ -976,7 +982,21 @@ let desugar_conds d_st conds =
 
 
 
+let dtree_of_inv conds = 
+  Dnode (pp_ctor "LoopInvariantAnnotation", List.map CF.Cn_ocaml.PpAil.dtree_of_cn_condition conds)
+let dtree_of_requires conds = 
+  Dnode (pp_ctor "RequiresAnnotation", List.map CF.Cn_ocaml.PpAil.dtree_of_cn_condition conds)
+let dtree_of_ensures conds = 
+  Dnode (pp_ctor "EnsuresAnnotation", List.map CF.Cn_ocaml.PpAil.dtree_of_cn_condition conds)
+let dtree_of_accesses accesses = 
+  Dnode (pp_ctor "AccessesAnnotation", 
+         List.map (fun (_loc, (s, ct)) ->
+             Dnode (pp_ctor "Access", [Dleaf (Sym.pp s); Dleaf (Pp_core_ctype.pp_ctype ct)])
+           ) accesses)
+
+
 let normalise_label 
+      fsym
       (markers_env, precondition_cn_desugaring_state) 
       (global_types, visible_objects_env)
       (accesses, loop_attributes) (env : C.env) st label_name label =
@@ -1000,6 +1020,9 @@ let normalise_label
           | None -> 
              return ([], precondition_cn_desugaring_state)
         in
+        debug 2 (lazy (!^"invariant in function" ^^^ Sym.pp fsym));
+        debug 2 (lazy (pp_doc_tree (dtree_of_inv inv)));
+
         let@ label_args_and_body =
           make_label_args (fun env st ->
               n_expr loc ((env, st.old_states), (markers_env, cn_desugaring_state))
@@ -1082,6 +1105,14 @@ let normalise_fun_map_decl
        !^"function return type mismatch";
      let@ (ensures, ret_d_st) = desugar_conds ret_d_st (List.map snd ensures) in
      Print.debug 6 (lazy (Print.string "desugared ensures conds"));
+
+     debug 2 (lazy (!^"function requires/ensures" ^^^ Sym.pp fname));
+     debug 2 (lazy (pp_doc_tree (dtree_of_accesses accesses)));
+     debug 2 (lazy (pp_doc_tree (dtree_of_requires requires)));
+     debug 2 (lazy (pp_doc_tree (dtree_of_ensures ensures)));
+
+
+
      let@ args_and_body = 
        make_function_args (fun arg_states env st ->
            let st = C.LocalState.make_state_old st C.start_evaluation_scope in
@@ -1091,7 +1122,7 @@ let normalise_fun_map_decl
                (ret_s, ret_ct) (accesses, ensures) 
            in
            let@ labels = 
-             PmapM.mapM (normalise_label 
+             PmapM.mapM (normalise_label fname
                            (markers_env,CAE.(d_st.inner.cn_state))
                            (global_types, visible_objects_env)
                            (accesses, loop_attributes) env st)
