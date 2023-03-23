@@ -296,6 +296,29 @@ module MakePp (Conf: PP_CN) = struct
     Dnode ( pp_ctor "[CN]datatype" ^^^ P.squotes (Conf.pp_ident dt.cn_dt_name)
           , [ Dnode (pp_ctor "[CN]cases", List.map dtree_of_cn_case dt.cn_dt_cases) ])
 
+
+  let dtree_of_to_instantiate = function
+    | I_Function f -> Dnode (pp_ctor "[CN]function", [Dleaf (Conf.pp_ident f)])
+    | I_Good ty -> Dnode(pp_ctor "[CN]good", [Dleaf (Conf.pp_ty ty)])
+    | I_Everything -> Dleaf !^"[CN]everything"
+
+  let dtree_of_cn_statement (CN_statement (_loc, stmt_)) =
+    match stmt_ with
+    | CN_pack_unpack (Pack, pred, args) ->
+       Dnode (pp_ctor "[CN]pack", (dtree_of_cn_pred pred :: List.map dtree_of_cn_expr args))
+    | CN_pack_unpack (Unpack, pred, args) ->
+       Dnode (pp_ctor "[CN]unpack", (dtree_of_cn_pred pred :: List.map dtree_of_cn_expr args))
+    | CN_have assrt ->
+       Dnode (pp_ctor "[CN]have", [dtree_of_cn_assertion assrt])
+    | CN_instantiate (to_instantiate, arg) ->
+       Dnode (pp_ctor "[CN]instantiate", [dtree_of_to_instantiate to_instantiate; dtree_of_cn_expr arg])
+    | CN_unfold (s, args) ->
+       Dnode (pp_ctor "[CN]unfold", Dleaf (Conf.pp_ident s) :: List.map dtree_of_cn_expr args)
+    | CN_assert_stmt assrt ->
+       Dnode (pp_ctor "[CN]assert", [dtree_of_cn_assertion assrt])
+    | CN_apply (s, args) ->
+       Dnode (pp_ctor "[CN]apply", Dleaf (Conf.pp_ident s) :: List.map dtree_of_cn_expr args)
+
 end
 
 module PpCabs = MakePp (struct
