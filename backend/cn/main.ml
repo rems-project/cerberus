@@ -185,10 +185,10 @@ let main
          | Some output_filename ->
             let oc = Stdlib.open_out output_filename in
             let loc = List.nth (CStatements.LocMap.bindings statement_locs) 3 in
-            (* Printf.fprintf stderr ">%s\n" (Location_ocaml.simple_location loc); *)
-            CStatements.LocMap.iter (fun k v -> 
-              Printf.fprintf stderr ">%s -> %s\n" (Cerb_location.simple_location k) (Cerb_location.simple_location v)
-            ) statement_locs;
+            let extracted_statements = List.map (fun (_, (_, _, _, _, stmt)) -> stmt) ail_prog.function_definitions in
+            let magic_statements = List.map Source_injection.get_magics_of_statement extracted_statements in
+            let _magic_statements_reduced = List.fold_left List.append [] (List.fold_left List.append [] magic_statements) 
+            in
             begin match
               Source_injection.(output_injections oc
                 { filename; sigm= ail_prog
