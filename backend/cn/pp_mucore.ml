@@ -734,7 +734,7 @@ module Make (Config: CONFIG) = struct
           | M_Eccall (pe_ty, pe, pes) ->
               pp_keyword "ccall" ^^ P.parens (pp_ct pe_ty.ct) ^^
                 P.parens (comma_list pp_actype_or_pexpr ((* Left pe_ty ::  *) Right pe :: (map (fun pe -> Right pe)) pes))
-          | M_CN_progs _stmts -> pp_keyword "cn_prog(todo)"
+          | M_CN_progs (_, _stmts) -> pp_keyword "cn_prog(todo)"
              (* placeholder for something better *)
           (* | M_Eunseq [] -> *)
           (*     !^ "BUG: UNSEQ must have at least two arguments (seen 0)" *)
@@ -908,7 +908,7 @@ module Make (Config: CONFIG) = struct
         (* | M_BuiltinDecl (loc, bTy, bTys) -> *)
         (*     pp_cond loc @@ *)
         (*     pp_keyword "builtin" ^^^ pp_symbol sym ^^^ P.parens (comma_list pp_bt bTys) *)
-        | M_Proc (loc, args_and_body, _trusted) ->
+        | M_Proc (loc, args_and_body, _trusted, _) ->
             pp_cond loc @@
             pp_keyword "proc" ^^^ pp_symbol sym (* ^^ Pp.colon ^^^ pp_ft ft *) ^^^ Pp.equals ^^^
             pp_mu_arguments begin fun (body, labels, rt) ->
@@ -921,7 +921,7 @@ module Make (Config: CONFIG) = struct
                      begin match def with
                      | M_Return _ -> 
                         P.break 1 ^^ !^"return label" ^^^ pp_symbol sym (* ^^ P.colon ^^^ pp_lt lt *)
-                     | M_Label (_loc , label_args_and_body, annots) ->
+                     | M_Label (_loc , label_args_and_body, annots, _) ->
                         P.break 1 ^^ !^"label" ^^^ pp_symbol sym ^^ Pp.equals ^^^ 
                           pp_mu_arguments begin fun label_body ->
                           (* label core function definition *)

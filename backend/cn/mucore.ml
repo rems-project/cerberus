@@ -217,7 +217,7 @@ type 'TY mu_expr_ =  (* (effectful) expression *)
  (* | M_Edone of 'TY mu_expr *)
  | M_Erun of symbol * ('TY mu_pexpr) list (* run from label *)
 
- | M_CN_progs of Cnprog.cn_prog list
+ | M_CN_progs of ((Sym.t, Ctype.ctype) Cn.cn_statement) list * Cnprog.cn_prog list
 
 
 and 'TY mu_expr = 
@@ -286,14 +286,19 @@ let mResources res t = List.fold_right mResource res t
 
 
 
+type parse_ast_label_spec =
+  { label_spec: (Sym.t, Ctype.ctype) Cn.cn_condition list }
+
 type 'TY mu_label_def = 
   | M_Return of loc
-  | M_Label of loc * ('TY mu_expr) mu_arguments * annot list
+  | M_Label of loc * ('TY mu_expr) mu_arguments * annot list * 
+                 (* for generating runtime assertions *)
+                 parse_ast_label_spec
 
 let dtree_of_label_def = function
   | M_Return _ -> 
      Dleaf !^"return label"
-  | M_Label (_loc, args_and_body, _) ->
+  | M_Label (_loc, args_and_body, _, _) ->
      dtree_of_mu_arguments (fun body ->
          Dleaf !^"(body)"
        ) args_and_body
@@ -316,9 +321,17 @@ type 'TY mu_proc_args_and_body =
 (*     ) a *)
 
 
+type parse_ast_function_specification =
+  { accesses: (Sym.t * Ctype.ctype) list;
+    requires: (Sym.t, Ctype.ctype) Cn.cn_condition list;
+    ensures: (Sym.t, Ctype.ctype) Cn.cn_condition list; }
+
 type 'TY mu_fun_map_decl =
   (* | M_Fun of T.bt * (symbol * T.bt) list * 'TY mu_pexpr *)
-  | M_Proc of Location_ocaml.t * 'TY mu_proc_args_and_body * trusted
+  | M_Proc of Location_ocaml.t * 'TY mu_proc_args_and_body * trusted * 
+                parse_ast_function_specification
+      (* recording the desugared parse ast, for generating runtime checks *)
+                
   | M_ProcDecl of Location_ocaml.t * T.ft
   (* | M_BuiltinDecl of Location_ocaml.t * T.bt * T.bt list *)
 

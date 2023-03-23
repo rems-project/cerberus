@@ -105,24 +105,24 @@ let fail_check_noop = function
 (* TODO *)
 let check_noop _ = ()
 
-let check_trusted_fun_body fsym (lsym, def) = 
-  let open Mucore in
-  match def with
-  | Mu.M_Proc (loc, args_body, _trusted) ->
-     let rec check_l = function
-       | M_Define (_, _, l) -> check_l l
-       | M_Resource (_, _, l) -> check_l l
-       | M_Constraint (_, _, l) -> check_l l
-       | M_I (body, _labels, _rt) ->
-          check_noop body
-     in
-     let rec check = function
-       | M_Computational (_, _, t) -> check t
-       | M_L l -> check_l l
-     in
-     check args_body
-  | _ ->
-    fail "non-proc trusted function" (Sym.pp fsym)
+(* let check_trusted_fun_body fsym (lsym, def) =  *)
+(*   let open Mucore in *)
+(*   match def with *)
+(*   | Mu.M_Proc (loc, args_body, _trusted) -> *)
+(*      let rec check_l = function *)
+(*        | M_Define (_, _, l) -> check_l l *)
+(*        | M_Resource (_, _, l) -> check_l l *)
+(*        | M_Constraint (_, _, l) -> check_l l *)
+(*        | M_I (body, _labels, _rt) -> *)
+(*           check_noop body *)
+(*      in *)
+(*      let rec check = function *)
+(*        | M_Computational (_, _, t) -> check t *)
+(*        | M_L l -> check_l l *)
+(*      in *)
+(*      check args_body *)
+(*   | _ -> *)
+(*     fail "non-proc trusted function" (Sym.pp fsym) *)
 
 let add_it_funs it funs =
   let f _ funs it = match IT.term it with
