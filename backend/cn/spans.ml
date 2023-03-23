@@ -125,31 +125,31 @@ let subtract_closed_spans_from_tagged closed_ss tagged_ss =
 let rec perm_spans m_g q perm =
   let is_q = IT.equal (sym_ (q, BT.Integer)) in
   match term perm with
-  | Bool_op (And xs) -> perm_spans m_g q (not_ (or_ (List.map not_ xs)))
-  | Bool_op (Or xs) ->
+  | And xs -> perm_spans m_g q (not_ (or_ (List.map not_ xs)))
+  | Or xs ->
         let ss = List.map (perm_spans m_g q) xs in
         norm_spans (List.concat ss)
-  | Bool_op (Impl (lhs, rhs)) -> perm_spans m_g q (or_ [not_ lhs; rhs])
-  | Bool_op (Not x) ->
+  | Impl (lhs, rhs) -> perm_spans m_g q (or_ [not_ lhs; rhs])
+  | Not x ->
         let s = perm_spans m_g q x in
         not_flip_spans s
-  | Bool_op (ITE (x,y,z)) -> perm_spans m_g q (or_ [and_ [x; y]; and_ [not_ x; z]])
-  | Bool_op (EQ (lhs, rhs)) when is_q lhs ->
+  | ITE (x,y,z) -> perm_spans m_g q (or_ [and_ [x; y]; and_ [not_ x; z]])
+  | Binop (EQ,lhs, rhs) when is_q lhs ->
         let x = eval_extract "idx eq rhs" m_g is_z rhs in
         [(Some x, Some x)]
-  | Bool_op (EQ (lhs, rhs)) when is_q rhs ->
+  | Binop (EQ,lhs, rhs) when is_q rhs ->
         let x = eval_extract "idx eq lhs" m_g is_z lhs in
         [(Some x, Some x)]
-  | Arith_op (LE (lhs, rhs)) when is_q lhs ->
+  | Binop (LE,lhs, rhs) when is_q lhs ->
         let x = eval_extract "idx less-eq rhs" m_g is_z rhs in
         [(None, Some x)]
-  | Arith_op (LE (lhs, rhs)) when is_q rhs ->
+  | Binop (LE,lhs, rhs) when is_q rhs ->
         let x = eval_extract "idx less-eq lhs" m_g is_z lhs in
         [(Some x, None)]
-  | Arith_op (LT (lhs, rhs)) when is_q lhs ->
+  | Binop (LT,lhs, rhs) when is_q lhs ->
         let x = eval_extract "idx less-than rhs" m_g is_z rhs in
         [(None, dec_b (Some x))]
-  | Arith_op (LT (lhs, rhs)) when is_q rhs ->
+  | Binop (LT,lhs, rhs) when is_q rhs ->
         let x = eval_extract "idx less-than lhs" m_g is_z lhs in
         [(inc_b (Some x), None)]
   | _ ->
@@ -494,9 +494,9 @@ let diag_req ress req m g =
 let perm_upper_bound qnm (permission : IT.t) =
   let is_q = IT.equal (sym_ (qnm, BT.Integer)) in
   let get_bound it = match IT.term it with
-  | Arith_op (LT (lhs, rhs)) when is_q lhs ->
+  | Binop (LT,lhs, rhs) when is_q lhs ->
         Some rhs
-  | Arith_op (LE (lhs, rhs)) when is_q lhs ->
+  | Binop (LE,lhs, rhs) when is_q lhs ->
         Some (IT.add_ (rhs, IT.z_ (Z.of_int 1)))
   | _ -> None
   in

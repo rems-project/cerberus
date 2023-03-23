@@ -164,7 +164,7 @@ let unknown_eq_in_group simp_ctxt ptr_gp = List.find_map (fun (p, req) -> if not
 
 let upd_ptr_gps_for_model global m ptr_gps =
   let eval_f p = match Solver.eval global m p with
-    | Some (IT (Lit (Pointer i), _)) -> i
+    | Some (IT (Const (Pointer i), _)) -> i
     | _ -> (print stderr (IT.pp p); assert false)
   in
   let eval_eqs = List.map (List.map (fun (p, req) -> (eval_f p, (p, req)))) ptr_gps in

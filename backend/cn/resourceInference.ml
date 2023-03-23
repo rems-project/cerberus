@@ -43,14 +43,14 @@ let debug_constraint_failure_diagnostics lvl (model_with_q : Solver.model_with_q
   let model = fst model_with_q in
   if ! Pp.print_level == 0 then () else
   let rec split tm = match IT.term tm with
-    | IT.Bool_op (IT.And xs)
-    | IT.Bool_op (IT.Or xs) -> List.concat_map split xs
-    | IT.Struct_op (IT.StructMember (x, _))
-    | IT.Bool_op (IT.Not x) -> split x
-    | IT.Bool_op (IT.EQ (x, y))
-    | IT.Bool_op (IT.Impl (x, y))
-    | IT.Arith_op (IT.LT (x, y))
-    | IT.Arith_op (IT.LE (x, y)) -> List.concat_map split [x; y]
+    | IT.And xs
+    | IT.Or xs -> List.concat_map split xs
+    | IT.StructMember (x, _)
+    | IT.Not x -> split x
+    | IT.Binop (EQ, x, y)
+    | IT.Impl (x, y)
+    | IT.Binop (IT.LT, x, y)
+    | IT.Binop (IT.LE, x, y) -> List.concat_map split [x; y]
     | IT.Pred (name, args) when Option.is_some (unpack_def global name args) ->
         [Option.get (unpack_def global name args)]
     | _ -> []
@@ -169,16 +169,16 @@ module General = struct
 
   let scan_key_indices v_nm t =
     let is_i t = match t with
-      | IT (Lit (Sym nm2), _) -> Sym.equal nm2 v_nm
+      | IT (Sym nm2, _) -> Sym.equal nm2 v_nm
       | _ -> false
     in
     let rec f pol t = match t with
-      | IT (Bool_op (And xs), _) -> List.concat (List.map (f pol) xs)
-      | IT (Bool_op (Or xs), _) -> List.concat (List.map (f pol) xs)
-      | IT (Bool_op (Impl (x, y)), _) -> f (not pol) x @ f pol y
-      | IT (Bool_op (EQ (x, y)), _) ->
+      | IT (And xs, _) -> List.concat (List.map (f pol) xs)
+      | IT (Or xs, _) -> List.concat (List.map (f pol) xs)
+      | IT (Impl (x, y), _) -> f (not pol) x @ f pol y
+      | IT (Binop (EQ, x, y), _) ->
         if pol && is_i x then [y] else if pol && is_i y then [x] else []
-      | IT (Bool_op (Not x), _) -> f (not pol) x
+      | IT (Not x, _) -> f (not pol) x
       | _ -> []
     in
     let xs = f true t in

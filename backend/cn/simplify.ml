@@ -37,22 +37,22 @@ module IndexTerms = struct
   let z0 = z_ Z.zero
 
   let rec dest_int_addition ts it = match IT.term it with
-      | Lit (Z i1) -> if fst ts || ITSet.mem z1 (snd ts) then ([(z1, i1)], z0) else ([], it)
-      | Arith_op (Add (a, b)) ->
+      | Const (Z i1) -> if fst ts || ITSet.mem z1 (snd ts) then ([(z1, i1)], z0) else ([], it)
+      | Binop (Add, a, b) ->
           let (a_xs, a_r) = dest_int_addition ts a in
           let (b_xs, b_r) = dest_int_addition ts b in
           (a_xs @ b_xs, if IT.equal a_r z0 then b_r else if IT.equal b_r z0 then a_r
               else add_ (a_r, b_r))
-      | Arith_op (Sub (a, b)) ->
+      | Binop (Sub, a, b) ->
           let (a_xs, a_r) = dest_int_addition ts a in
           let (b_xs, b_r) = dest_int_addition ts b in
           let b_xs_neg = List.map (fun (it, i) -> (it, Z.sub Z.zero i)) b_xs in
           (a_xs @ b_xs_neg, if IT.equal b_r z0 then a_r else sub_ (a_r, b_r))
-      | Arith_op (Mul (a, IT (Lit (Z b_i), _))) ->
+      | Binop (Mul, a, IT (Const (Z b_i), _)) ->
           let (a_xs, a_r) = dest_int_addition ts a in
           let a_xs_mul = List.map (fun (it, i) -> (it, Z.mul i b_i)) a_xs in
           (a_xs_mul, if IT.equal a_r z0 then z0 else mul_ (a_r, z_ b_i))
-      | Arith_op (Mul (IT (Lit (Z a_i), _), b)) ->
+      | Binop (Mul, IT (Const (Z a_i), _), b) ->
           let (b_xs, b_r) = dest_int_addition ts b in
           let b_xs_mul = List.map (fun (it, i) -> (it, Z.mul i a_i)) b_xs in
           (b_xs_mul, if IT.equal b_r z0 then z0 else mul_ (z_ a_i, b_r))
@@ -99,17 +99,17 @@ module IndexTerms = struct
 
 
   let flatten = function
-    | IT (Bool_op (And fs), _) -> List.map LC.t_ fs
+    | IT (And fs, _) -> List.map LC.t_ fs
     | f -> [LC.t_ f]
 
 
   let rec record_member_reduce it member =
     match IT.term it with
-      | Record_op (Record members) -> List.assoc Sym.equal member members
-      | Record_op (RecordUpdate ((t, m), v)) ->
+      | Record members -> List.assoc Sym.equal member members
+      | RecordUpdate ((t, m), v) ->
         if Sym.equal m member then v
         else record_member_reduce t member
-      | Bool_op (ITE (cond, it1, it2)) ->
+      | ITE (cond, it1, it2) ->
         ite_ (cond, record_member_reduce it1 member, record_member_reduce it2 member)
       | _ ->
         let member_tys = BT.record_bt (IT.bt it) in
@@ -118,31 +118,31 @@ module IndexTerms = struct
 
   let rec datatype_member_reduce it member member_bt =
     match IT.term it with
-      | Datatype_op (DatatypeCons (nm, members_rec)) ->
+      | DatatypeCons (nm, members_rec) ->
         let members = BT.record_bt (IT.bt members_rec) in
         if List.exists (Sym.equal member) (List.map fst members)
         then record_member_reduce members_rec member
-        else IT.IT (Datatype_op (DatatypeMember (it, member)), member_bt)
-      | Bool_op (ITE (cond, it1, it2)) ->
+        else IT.IT (DatatypeMember (it, member), member_bt)
+      | ITE (cond, it1, it2) ->
         ite_ (cond, datatype_member_reduce it1 member member_bt,
             datatype_member_reduce it2 member member_bt)
-      | _ -> IT.IT (Datatype_op (DatatypeMember (it, member)), member_bt)
+      | _ -> IT.IT (DatatypeMember (it, member), member_bt)
 
   let rec tuple_nth_reduce it n item_bt =
     match IT.term it with
-      | Tuple_op (Tuple items) -> List.nth items n
-      | Bool_op (ITE (cond, it1, it2)) ->
+      | Tuple items -> List.nth items n
+      | ITE (cond, it1, it2) ->
         ite_ (cond, tuple_nth_reduce it1 n item_bt, tuple_nth_reduce it2 n item_bt)
       | _ -> IT.nthTuple_ ~item_bt (n, it)
 
   let rec accessor_reduce (f : IT.t -> IT.t option) it =
     let bt = IT.bt it in
     let (step, it2) = match IT.term it with
-      | Record_op (RecordMember (t, m)) ->
+      | RecordMember (t, m) ->
           (true, record_member_reduce (accessor_reduce f t) m)
-      | Datatype_op (DatatypeMember (t, m)) ->
+      | DatatypeMember (t, m) ->
           (true, datatype_member_reduce (accessor_reduce f t) m bt)
-      | Tuple_op (NthTuple (n, t)) ->
+      | NthTuple (n, t) ->
           (true, tuple_nth_reduce (accessor_reduce f t) n bt)
       | _ -> (false, it)
     in
@@ -157,608 +157,507 @@ module IndexTerms = struct
 
     let aux it = simp ~inline_functions:inline_functions simp_ctxt it in
 
-    let lit it bt = 
-      match it with
-      | Sym _ when BT.equal bt BT.Unit ->
-         unit_ 
-      | Sym sym ->
-         begin match SymMap.find_opt sym simp_ctxt.values with
-         | Some it when Option.is_some (is_lit it) -> it
-         | _ -> IT (Lit (Sym sym), bt)
-         end
-      | Z z ->
-         IT (Lit (Z z), bt)
-      | Q q ->
-         IT (Lit (Q q), bt)
-      | Pointer z ->
-         IT (Lit (Pointer z), bt)
-      | Bool b ->
-         IT (Lit (Bool b), bt)
-      | Unit ->
-         IT (Lit Unit, bt)
-      | Default bt' -> 
-         IT (Lit (Default bt'), bt)
-      | Null -> 
-         IT (Lit Null, bt)
-    in
+    fun (IT (the_term_, the_bt) as the_term) ->
+    match the_term_ with
+    | Sym _ when BT.equal the_bt BT.Unit -> 
+       unit_
+    | Sym sym ->
+       begin match SymMap.find_opt sym simp_ctxt.values with
+       | Some (IT ((Const _ | Sym _), _) as v) ->
+          v
+       | _ ->
+          the_term
+       end
+    | Const _ ->
+       the_term
 
-    let arith_op it bt = 
-      match it with
-      | Add (a, b) ->
-         let a = aux a in
-         let b = aux b in
-         begin match a, b with
-         | IT (Lit (Z i1), _), IT (Lit (Z i2), _) ->
-            IT (Lit (Z (Z.add i1 i2)), bt)
-         | IT (Lit (Q q1), _), IT (Lit (Q q2), _) ->
-            IT (Lit (Q (Q.add q1 q2)), bt) 
-         | a, IT (Lit (Z z), _) when Z.equal z Z.zero ->
-            a
-         | IT (Lit (Z z), _), a when Z.equal z Z.zero ->
-            a
-         | IT (Arith_op (Add (c, IT (Lit (Z i1), _))), _), 
-           IT (Lit (Z i2), _) ->
-            add_ (c, z_ (Z.add i1 i2))
-         | _, _ ->
-            IT (Arith_op (Add (a, b)), bt)
-         end
-      | Sub (a, b) ->
-         let a = aux a in
-         let b = aux b in
-         begin match a, b, bt with
-         | _, _, BT.Integer when IT.equal a b ->
-            int_ 0
-         | _, _, BT.Real when IT.equal a b ->
-            q_ (0, 1)
-         | IT (Lit (Z i1), _), IT (Lit (Z i2), _), _ ->
-            IT (Lit (Z (Z.sub i1 i2)), bt)
-         | IT (Lit (Q q1), _), IT (Lit (Q q2), _), _ ->
-            IT (Lit (Q (Q.sub q1 q2)), bt)
-         | _, IT (Lit (Z i2), _), _ when Z.equal i2 Z.zero ->
-            a
-         | IT (Arith_op (Add (c, d)), _), _, _ when IT.equal c b ->
-            (* (c + d) - b  when  c = b *)
-            d
-         | _, _, _ ->
-            IT (Arith_op (Sub (a, b)), bt) 
-         end
-      | Mul (a, b) ->
-         let a = aux a in
-         let b = aux b in
-         begin match a, b with
-         | _, IT (Lit (Z i2), _) when Z.equal i2 Z.zero ->
-            int_ 0
-         | IT (Lit (Z i1), _), _ when Z.equal i1 Z.zero ->
-            int_ 0
-         | _, IT (Lit (Z i2), _) when Z.equal i2 Z.one ->
-            a
-         | IT (Lit (Z i1), _), _ when Z.equal i1 Z.one ->
-            b
-         | IT (Lit (Z i1), _), IT (Lit (Z i2), _) ->
-            IT (Lit (Z (Z.mul i1 i2)), bt)
-         | _ ->
-            IT (Arith_op (Mul (a, b)), bt)
-         end
-      | MulNoSMT (a, b) ->
-         IT (Arith_op (MulNoSMT (aux a, aux b)), bt)
-      | Div (a, b) ->
-         let a = aux a in
-         let b = aux b in 
-         begin match a, b with
-         | IT (Lit (Z a), _), IT (Lit (Z b), _) ->
-            z_ (Z.div a b)
-         | IT (Lit (Z a), _), _ when Z.equal a (Z.zero) -> 
-            int_ 0
-         | _, IT (Lit (Z b), _) when Z.equal b Z.one -> 
-            a
-         | IT (Arith_op (Mul (b', c)), _), _ when IT.equal b' b ->
-            c
-         | _ ->
-            IT (Arith_op (Div (a, b)), bt) 
-         end
-      | DivNoSMT (a, b) ->
-         IT (Arith_op (DivNoSMT (aux a, aux b)), bt)
-      | Exp (a, b) ->
-         let a = aux a in
-         let b = aux b in
-         begin match a, b with
-         | IT (Lit (Z a), _), IT (Lit (Z b), _) when Z.fits_int b ->
-            z_ (Z.pow a (Z.to_int b))
-         | _ ->
-            IT.exp_ (a, b)
-         end
-      | ExpNoSMT (a, b) ->
-         let a = aux a in
-         let b = aux b in
-         IT.exp_no_smt_ (a, b)
-      | Rem (a, b) ->
-         let a = aux a in
-         let b = aux b in 
-         begin match a, b with
-         | IT (Lit (Z z1), _), IT (Lit (Z z2), _) when Z.geq z1 Z.zero && Z.gt z2 Z.zero ->
-           IT (Lit (Z (Z.rem z1 z2)), bt)
-         | IT (Lit (Z a), _), _ when Z.equal a (Z.zero) -> 
-            int_ 0
-         | IT (Arith_op (Mul (IT (Lit (Z y), _), _)), _), 
-           IT (Lit (Z y'), _) when Z.equal y y' && Z.gt y Z.zero ->
-            int_ 0
-         | _, IT (Lit (Z b), _) when Z.equal b Z.one ->
-            int_ 0
-         | _ ->
-            IT (Arith_op (Rem (a, b)), bt) 
-         end
-      | RemNoSMT (a, b) ->
-         IT (Arith_op (RemNoSMT (aux a, aux b)), bt)
-      | Mod (a, b) ->
-         let a = aux a in
-         let b = aux b in
-         begin match a, b with
-         | IT (Lit (Z a), _), _ when Z.equal a (Z.zero) ->
-            int_ 0
-         | IT (Arith_op (Mul (IT (Lit (Z y), _), _)), _), 
-           IT (Lit (Z y'), _) when Z.equal y y' && Z.gt y Z.zero ->
-            int_ 0
-         | _, IT (Lit (Z b), _) when Z.equal b Z.one ->
-            int_ 0
-         | _ ->
-            IT (Arith_op (Mod (a, b)), bt) 
-         end
-      | ModNoSMT (a, b) ->
-         IT (Arith_op (ModNoSMT (aux a, aux b)), bt)
-      | LT (a, b) -> 
-        let a = aux a in
-        let b = aux b in
-        let (a, b) = simp_comp_if_int a b in
-        begin match a, b with
-        | IT (Lit (Z z1), _), IT (Lit (Z z2), _) ->
-           IT (Lit (Bool (Z.lt z1 z2)), bt)
-        | IT (Lit (Q q1), _), IT (Lit (Q q2), _) ->
-           IT (Lit (Bool (Q.lt q1 q2)), bt)
-        | _, _ ->
-           IT (Arith_op (LT (a, b)), bt)
-        end
-      | LE (a, b) -> 
-        let a = aux a in
-        let b = aux b in
-        let (a, b) = simp_comp_if_int a b in
-        begin match a, b with
-        | IT (Lit (Z z1), _), IT (Lit (Z z2), _) ->
-           IT (Lit (Bool (Z.leq z1 z2)), bt)
-        | IT (Lit (Q q1), _), IT (Lit (Q q2), _) ->
-           IT (Lit (Bool (Q.leq q1 q2)), bt)
-        | _, _ when IT.equal a b ->
-           bool_ true
-        | IT (Arith_op (Rem (_, IT (Lit (Z z1), _))), _), 
-          IT (Lit (Z z2), _) 
-        | IT (Arith_op (Mod (_, IT (Lit (Z z1), _))), _), 
-          IT (Lit (Z z2), _) 
-             when
-               Z.gt z1 Z.zero &&
-                 Z.gt z2 Z.zero &&
-                   Z.equal z1 (Z.add z2 Z.one) ->
-           bool_ true
-        | _, _ ->
-           IT (Arith_op (LE (a, b)), bt)
-        end
-      | Min (a, b) ->
-         let a = aux a in
-         let b = aux b in
-         if IT.equal a b then a else
-         IT (Arith_op (Min (a, b)), bt)
-      | Max (a, b) ->
-         let a = aux a in
-         let b = aux b in
-         if IT.equal a b then a else
-         IT (Arith_op (Max (a, b)), bt)
-      | IntToReal a ->
-         let a = aux a in
-         IT (Arith_op (IntToReal a), bt)
-      | RealToInt a ->
-         let a = aux a in
-         IT (Arith_op (RealToInt a), bt)
-      | XORNoSMT (a, b) ->
-         IT (Arith_op (XORNoSMT (aux a, aux b)), bt)
+    | Binop (Add, a, b) ->
+       let a = aux a in
+       let b = aux b in
+       begin match a, b with
+       | IT (Const (Z i1), _), IT (Const (Z i2), _) ->
+          IT (Const (Z (Z.add i1 i2)), the_bt)
+       | IT (Const (Q q1), _), IT (Const (Q q2), _) ->
+          IT (Const (Q (Q.add q1 q2)), the_bt) 
+       | a, IT (Const (Z z), _) when Z.equal z Z.zero ->
+          a
+       | IT (Const (Z z), _), a when Z.equal z Z.zero ->
+          a
+       | IT (Binop (Add,c, IT (Const (Z i1), _)), _), 
+         IT (Const (Z i2), _) ->
+          add_ (c, z_ (Z.add i1 i2))
+       | _, _ ->
+          IT (Binop (Add, a, b), the_bt)
+       end
+    | Binop (Sub, a, b) ->
+       let a = aux a in
+       let b = aux b in
+       begin match a, b, the_bt with
+       | _, _, BT.Integer when IT.equal a b ->
+          int_ 0
+       | _, _, BT.Real when IT.equal a b ->
+          q_ (0, 1)
+       | IT (Const (Z i1), _), IT (Const (Z i2), _), _ ->
+          IT (Const (Z (Z.sub i1 i2)), the_bt)
+       | IT (Const (Q q1), _), IT (Const (Q q2), _), _ ->
+          IT (Const (Q (Q.sub q1 q2)), the_bt)
+       | _, IT (Const (Z i2), _), _ when Z.equal i2 Z.zero ->
+          a
+       | IT (Binop (Add, c, d), _), _, _ when IT.equal c b ->
+          (* (c + d) - b  when  c = b *)
+          d
+       | _, _, _ ->
+          IT (Binop (Sub, a, b), the_bt) 
+       end
+    | Binop (Mul, a, b) ->
+       let a = aux a in
+       let b = aux b in
+       begin match a, b with
+       | _, IT (Const (Z i2), _) when Z.equal i2 Z.zero ->
+          int_ 0
+       | IT (Const (Z i1), _), _ when Z.equal i1 Z.zero ->
+          int_ 0
+       | _, IT (Const (Z i2), _) when Z.equal i2 Z.one ->
+          a
+       | IT (Const (Z i1), _), _ when Z.equal i1 Z.one ->
+          b
+       | IT (Const (Z i1), _), IT (Const (Z i2), _) ->
+          IT (Const (Z (Z.mul i1 i2)), the_bt)
+       | _ ->
+          IT (Binop (Mul, a, b), the_bt)
+       end
+    | Binop (MulNoSMT, a, b) ->
+       IT (Binop (MulNoSMT, aux a, aux b), the_bt)
+    | Binop (Div, a, b) ->
+       let a = aux a in
+       let b = aux b in 
+       begin match a, b with
+       | IT (Const (Z a), _), IT (Const (Z b), _) ->
+          z_ (Z.div a b)
+       | IT (Const (Z a), _), _ when Z.equal a (Z.zero) -> 
+          int_ 0
+       | _, IT (Const (Z b), _) when Z.equal b Z.one -> 
+          a
+       | IT (Binop (Mul, b', c), _), _ when IT.equal b' b ->
+          c
+       | _ ->
+          IT (Binop (Div, a, b), the_bt) 
+       end
+    | Binop (DivNoSMT, a, b) ->
+       IT (Binop (DivNoSMT, aux a, aux b), the_bt)
+    | Binop (Exp, a, b) ->
+       let a = aux a in
+       let b = aux b in
+       begin match a, b with
+       | IT (Const (Z a), _), IT (Const (Z b), _) when Z.fits_int b ->
+          z_ (Z.pow a (Z.to_int b))
+       | _ ->
+          IT.exp_ (a, b)
+       end
+    | Binop (ExpNoSMT, a, b) ->
+       let a = aux a in
+       let b = aux b in
+       IT.exp_no_smt_ (a, b)
+    | Binop (Rem, a, b) ->
+       let a = aux a in
+       let b = aux b in 
+       begin match a, b with
+       | IT (Const (Z z1), _), IT (Const (Z z2), _) when Z.geq z1 Z.zero && Z.gt z2 Z.zero ->
+         IT (Const (Z (Z.rem z1 z2)), the_bt)
+       | IT (Const (Z a), _), _ when Z.equal a (Z.zero) -> 
+          int_ 0
+       | IT (Binop (Mul, IT (Const (Z y), _), _), _), 
+         IT (Const (Z y'), _) when Z.equal y y' && Z.gt y Z.zero ->
+          int_ 0
+       | _, IT (Const (Z b), _) when Z.equal b Z.one ->
+          int_ 0
+       | _ ->
+          IT (Binop (Rem, a, b), the_bt) 
+       end
+    | Binop (RemNoSMT, a, b) ->
+       IT (Binop (RemNoSMT, aux a, aux b), the_bt)
+    | Binop (Mod, a, b) ->
+       let a = aux a in
+       let b = aux b in
+       begin match a, b with
+       | IT (Const (Z a), _), _ when Z.equal a (Z.zero) ->
+          int_ 0
+       | IT (Binop (Mul, IT (Const (Z y), _), _), _), 
+         IT (Const (Z y'), _) when Z.equal y y' && Z.gt y Z.zero ->
+          int_ 0
+       | _, IT (Const (Z b), _) when Z.equal b Z.one ->
+          int_ 0
+       | _ ->
+          IT (Binop (Mod, a, b), the_bt) 
+       end
+    | Binop (ModNoSMT, a, b) ->
+       IT (Binop (ModNoSMT, aux a, aux b), the_bt)
+    | Binop (LT, a, b) -> 
+      let a = aux a in
+      let b = aux b in
+      let (a, b) = simp_comp_if_int a b in
+      begin match a, b with
+      | IT (Const (Z z1), _), IT (Const (Z z2), _) ->
+         IT (Const (Bool (Z.lt z1 z2)), the_bt)
+      | IT (Const (Q q1), _), IT (Const (Q q2), _) ->
+         IT (Const (Bool (Q.lt q1 q2)), the_bt)
+      | _, _ ->
+         IT (Binop (LT, a, b), the_bt)
+      end
+    | Binop (LE, a, b) -> 
+      let a = aux a in
+      let b = aux b in
+      let (a, b) = simp_comp_if_int a b in
+      begin match a, b with
+      | IT (Const (Z z1), _), IT (Const (Z z2), _) ->
+         IT (Const (Bool (Z.leq z1 z2)), the_bt)
+      | IT (Const (Q q1), _), IT (Const (Q q2), _) ->
+         IT (Const (Bool (Q.leq q1 q2)), the_bt)
+      | _, _ when IT.equal a b ->
+         bool_ true
+      | IT (Binop (Rem, _, IT (Const (Z z1), _)), _), 
+        IT (Const (Z z2), _) 
+      | IT (Binop (Mod, _, IT (Const (Z z1), _)), _), 
+        IT (Const (Z z2), _) 
+           when
+             Z.gt z1 Z.zero &&
+               Z.gt z2 Z.zero &&
+                 Z.equal z1 (Z.add z2 Z.one) ->
+         bool_ true
+      | _, _ ->
+         IT (Binop (LE, a, b), the_bt)
+      end
+    | Binop (Min, a, b) ->
+       let a = aux a in
+       let b = aux b in
+       if IT.equal a b then a else
+       IT (Binop (Min, a, b), the_bt)
+    | Binop (Max, a, b) ->
+       let a = aux a in
+       let b = aux b in
+       if IT.equal a b then a else
+       IT (Binop (Max, a, b), the_bt)
+    | IntToReal a ->
+       let a = aux a in
+       IT (IntToReal a, the_bt)
+    | RealToInt a ->
+       let a = aux a in
+       IT (RealToInt a, the_bt)
+    | Binop (XORNoSMT, a, b) ->
+       IT (Binop (XORNoSMT, aux a, aux b), the_bt)
 
-    in
+    | And its ->
+       let rec make acc = function
+         | [] -> 
+            begin match acc with
+            | [] -> bool_ true
+            | [r] -> r
+            | _ -> and_ (List.rev acc)
+            end
+         | it :: its ->
+            let it = aux it in
+            begin match it with
+            | IT (Const (Bool true), _) -> make acc its
+            | IT (Const (Bool false), _) -> bool_ false
+            | _ when List.exists (fun c -> IT.equal (not_ c) it || IT.equal c (not_ it)) acc -> bool_ false
+            | _ when List.mem IT.equal it acc -> make acc its
+            | IT (Not (IT (Or ys, _)), _) -> make acc ((List.map not_ ys) @ its)
+            | IT (And ys, _) -> make acc (ys @ its)
+            | _ -> make (it :: acc) its
+            end
+       in
+       make [] its
+    | Or its ->
+       let its = List.map aux its in
+       let rec make acc = function
+         | [] ->
+            begin match acc with
+            | [] -> bool_ false
+            | [r] -> r
+            | _ -> or_ (List.rev acc)
+            end
+         | it :: its ->
+            begin match it with
+            | IT (Const (Bool true), _) -> bool_ true
+            | IT (Const (Bool false), _) -> make acc its
+            | _ when List.exists (fun c -> IT.equal (not_ c) it || IT.equal c (not_ it)) acc -> bool_ true 
+            | _ when List.mem IT.equal it acc -> make acc its
+            | IT (Not (IT (And ys, _)), _) -> make acc ((List.map not_ ys) @ its)
+            | IT (Or ys, _) -> make acc (ys @ its)
+            | _ -> make (it :: acc) its
+            end
+       in
+       make [] its
+    | Impl (a, b) ->
+       let a = aux a in
+       let b = aux b in
+       if IT.equal a b then IT (Const (Bool true), the_bt)
+       else
+       begin match a, b with
+       | IT (Const (Bool false), _), _ ->
+          IT (Const (Bool true), the_bt) 
+       | _, IT (Const (Bool true), _) ->
+          IT (Const (Bool true), the_bt)
+       | IT (Const (Bool true), _), _ ->
+          b
+       | _, IT (Const (Bool false), _) ->
+          not_ a
+       | _ ->
+          IT (Impl (a, b), the_bt)
+       end
+    | Not a ->
+       let a = aux a in
+       begin match a with
+       | IT (Const (Bool b), _) ->
+          bool_ (not b)
+       | IT (Not b, _) ->
+          b
+       | _ -> 
+          IT (Not a, the_bt)
+       end
+    | ITE (a, b, c) ->
+       let a = aux a in
+       let b = aux b in
+       let c = aux c in
+       begin match a with
+       | IT (Const (Bool true), _) -> b
+       | IT (Const (Bool false), _) -> c
+       | _ when IT.equal b c -> b
+       | _ -> IT (ITE (a, b, c), the_bt)
+       end
+    | Binop (EQ, a, b) ->
+       let a = aux a in
+       let b = aux b in
+       if isIntegerToPointerCast a || isIntegerToPointerCast b
+       then
+       aux (eq_ (pointerToIntegerCast_ a, pointerToIntegerCast_ b))
+       else
+       begin match a, b with
+       | _ when IT.equal a b ->
+         IT (Const (Bool true), the_bt) 
+       | IT (Const (Z z1), _), IT (Const (Z z2), _) ->
+          bool_ (Z.equal z1 z2)
+       (* (cond ? z1 : z2) == z3 *)
+       | IT (ITE (cond, 
+                  IT (Const (Z z1), _), 
+                  IT (Const (Z z2), _)), _),
+         IT (Const (Z z3), _)
 
-    let bool_op it bt = 
-      match it with
-      | And its ->
-         let rec make acc = function
-           | [] -> 
-              begin match acc with
-              | [] -> bool_ true
-              | [r] -> r
-              | _ -> and_ (List.rev acc)
-              end
-           | it :: its ->
-              let it = aux it in
-              begin match it with
-              | IT (Lit (Bool true), _) -> make acc its
-              | IT (Lit (Bool false), _) -> bool_ false
-              | _ when List.exists (fun c -> IT.equal (not_ c) it || IT.equal c (not_ it)) acc -> bool_ false
-              | _ when List.mem IT.equal it acc -> make acc its
-              | IT (Bool_op (Not (IT (Bool_op (Or ys), _))), _) -> make acc ((List.map not_ ys) @ its)
-              | IT (Bool_op (And ys), _) -> make acc (ys @ its)
-              | _ -> make (it :: acc) its
-              end
-         in
-         make [] its
-      | Or its ->
-         let its = List.map aux its in
-         let rec make acc = function
-           | [] ->
-              begin match acc with
-              | [] -> bool_ false
-              | [r] -> r
-              | _ -> or_ (List.rev acc)
-              end
-           | it :: its ->
-              begin match it with
-              | IT (Lit (Bool true), _) -> bool_ true
-              | IT (Lit (Bool false), _) -> make acc its
-              | _ when List.exists (fun c -> IT.equal (not_ c) it || IT.equal c (not_ it)) acc -> bool_ true 
-              | _ when List.mem IT.equal it acc -> make acc its
-              | IT (Bool_op (Not (IT (Bool_op (And ys), _))), _) -> make acc ((List.map not_ ys) @ its)
-              | IT (Bool_op (Or ys), _) -> make acc (ys @ its)
-              | _ -> make (it :: acc) its
-              end
-         in
-         make [] its
-      | Impl (a, b) ->
-         let a = aux a in
-         let b = aux b in
-         if IT.equal a b then IT (Lit (Bool true), bt)
-         else
-         begin match a, b with
-         | IT (Lit (Bool false), _), _ ->
-            IT (Lit (Bool true), bt) 
-         | _, IT (Lit (Bool true), _) ->
-            IT (Lit (Bool true), bt)
-         | IT (Lit (Bool true), _), _ ->
-            b
-         | _, IT (Lit (Bool false), _) ->
-            not_ a
-         | _ ->
-            IT (Bool_op (Impl (a, b)), bt)
-         end
-      | Not a ->
-         let a = aux a in
-         begin match a with
-         | IT (Lit (Bool b), _) ->
-            bool_ (not b)
-         | IT (Bool_op (Not b), _) ->
-            b
-         | _ -> 
-            IT (Bool_op (Not a), bt)
-         end
-      | ITE (a, b, c) ->
-         let a = aux a in
-         let b = aux b in
-         let c = aux c in
-         begin match a with
-         | IT (Lit (Bool true), _) -> b
-         | IT (Lit (Bool false), _) -> c
-         | _ when IT.equal b c -> b
-         | _ -> IT (Bool_op (ITE (a, b, c)), bt)
-         end
-      | EQ (a, b) ->
-         let a = aux a in
-         let b = aux b in
-         if isIntegerToPointerCast a || isIntegerToPointerCast b
-         then
-         aux (eq_ (pointerToIntegerCast_ a, pointerToIntegerCast_ b))
-         else
-         begin match a, b with
-         | _ when IT.equal a b ->
-           IT (Lit (Bool true), bt) 
-         | IT (Lit (Z z1), _), IT (Lit (Z z2), _) ->
-            bool_ (Z.equal z1 z2)
-         (* (cond ? z1 : z2) == z3 *)
-         | IT (Bool_op (ITE (cond, 
-                             IT (Lit (Z z1), _), 
-                             IT (Lit (Z z2), _))), _),
-           IT (Lit (Z z3), _)
+       | IT (Const (Z z3), _),
+         IT (ITE (cond, 
+                  IT (Const (Z z1), _), 
+                  IT (Const (Z z2), _)), _) ->
 
-         | IT (Lit (Z z3), _),
-           IT (Bool_op (ITE (cond, 
-                             IT (Lit (Z z1), _), 
-                             IT (Lit (Z z2), _))), _) ->
+          aux (
+            and_ [impl_ (cond, bool_ (Z.equal z1 z3));
+                  impl_ (not_ cond, bool_ (Z.equal z2 z3))]
+            )
+       | IT (Tuple items1, _),
+         IT (Tuple items2, _)  ->
+          aux (and_ (List.map2 eq__ items1 items2))
+       | IT (Record members1, _),
+         IT (Record members2, _)  ->
+          assert (List.for_all2 (fun x y -> Sym.equal (fst x) (fst y)) members1 members2);
+          aux (and_ (List.map2 (fun x y -> eq_ (snd x, snd y)) members1 members2))
+       | IT (DatatypeCons (nm1, members1), _),
+         IT (DatatypeCons (nm2, members2), _)  ->
+          if Sym.equal nm1 nm2
+          then aux (eq_ (members1, members2))
+          else bool_ false
+       | IT (IntegerToPointerCast a, _), 
+         IT (IntegerToPointerCast b, _) ->
+          eq_ (a, b)
+       | IT (PointerToIntegerCast a, _), 
+         IT (PointerToIntegerCast b, _) ->
+          eq_ (a, b)
+       | IT (PointerToIntegerCast a, _), b ->
+          eq_ (a, integerToPointerCast_ b)
+       | _, _ ->
+          eq_ (a, b)
+       end
+    | EachI ((i1, s, i2), t) ->
+       let s' = Sym.fresh_same s in 
+       let t = IndexTerms.subst (make_subst [(s, sym_ (s', the_bt))]) t in
+       let t = aux t in
+       IT (EachI ((i1, s', i2), t), the_bt)
 
-            aux (
-              and_ [impl_ (cond, bool_ (Z.equal z1 z3));
-                    impl_ (not_ cond, bool_ (Z.equal z2 z3))]
-              )
-         | IT (Tuple_op (Tuple items1), _),
-           IT (Tuple_op (Tuple items2), _)  ->
-            aux (and_ (List.map2 eq__ items1 items2))
-         | IT (Record_op (Record members1), _),
-           IT (Record_op (Record members2), _)  ->
-            assert (List.for_all2 (fun x y -> Sym.equal (fst x) (fst y)) members1 members2);
-            aux (and_ (List.map2 (fun x y -> eq_ (snd x, snd y)) members1 members2))
-         | IT (Datatype_op (DatatypeCons (nm1, members1)), _),
-           IT (Datatype_op (DatatypeCons (nm2, members2)), _)  ->
-            if Sym.equal nm1 nm2
-            then aux (eq_ (members1, members2))
-            else bool_ false
-         | IT (Pointer_op (IntegerToPointerCast a), _), 
-           IT (Pointer_op (IntegerToPointerCast b), _) ->
-            eq_ (a, b)
-         | IT (Pointer_op (PointerToIntegerCast a), _), 
-           IT (Pointer_op (PointerToIntegerCast b), _) ->
-            eq_ (a, b)
-         | IT (Pointer_op (PointerToIntegerCast a), _), b ->
-            eq_ (a, integerToPointerCast_ b)
-         | _, _ ->
-            eq_ (a, b)
-         end
-      | EachI ((i1, s, i2), t) ->
-         let s' = Sym.fresh_same s in 
-         let t = IndexTerms.subst (make_subst [(s, sym_ (s', bt))]) t in
-         let t = aux t in
-         IT (Bool_op (EachI ((i1, s', i2), t)), bt)
-    in
-
-
-    let tuple_op it bt = 
-      match it with
-      | Tuple its ->
-         let its = List.map aux its in
-         IT (Tuple_op (Tuple its), bt)
-      | NthTuple (n, it) ->
-         let it = aux it in
-         tuple_nth_reduce it n bt
-    in
-
-
-    let struct_op it bt = 
-      match it with
-      | IT.Struct (tag, members) ->
-         begin match members with
-         | (_, IT (Struct_op (StructMember (str, _)), _)) :: _ when 
-                BT.equal (Struct tag) (IT.bt str) &&
-                List.for_all (function 
-                    | (mem, IT (Struct_op (StructMember (str', mem')), _)) ->
-                      Id.equal mem mem' && IT.equal str str'
-                    | _ -> false
-                  ) members
-            ->
-             str
-         | _ ->
-            let members = 
-              List.map (fun (member, it) ->
-                  (member, aux it)
+    | Tuple its ->
+       let its = List.map aux its in
+       IT (Tuple its, the_bt)
+    | NthTuple (n, it) ->
+       let it = aux it in
+       tuple_nth_reduce it n the_bt
+    | IT.Struct (tag, members) ->
+       begin match members with
+       | (_, IT (StructMember (str, _), _)) :: _ when 
+              BT.equal (Struct tag) (IT.bt str) &&
+              List.for_all (function 
+                  | (mem, IT (StructMember (str', mem'), _)) ->
+                    Id.equal mem mem' && IT.equal str str'
+                  | _ -> false
                 ) members
-            in
-            IT (Struct_op (IT.Struct (tag, members)), bt)
-         end
-      | IT.StructMember (it, member) ->
-         let it = aux it in
-         let rec make it = 
-           match it with
-           | IT (Struct_op (Struct (_, members)), _) ->
-              List.assoc Id.equal member members
-           | IT (Bool_op (ITE (cond, it1, it2)), _) ->
-              (* (if cond then it1 else it2) . member -->
-               (if cond then it1.member else it2.member) *)
-              ite_ (cond, make it1, make it2)
-           | _ ->
-              IT (Struct_op (IT.StructMember (it, member)), bt)
-         in
-         make it
-      | IT.StructUpdate ((t, m), v) ->
-         let t = aux t in
-         let v = aux v in
-         IT (Struct_op (StructUpdate ((t, m), v)), bt)
-    in
-
-    let record_op it bt = 
-      match it with
-      | IT.Record members ->
-         let members = 
-           List.map (fun (member, it) ->
-               (member, aux it)
-             ) members
-         in
-         IT (Record_op (IT.Record members), bt)
-      | IT.RecordMember (it, member) ->
-         let it = aux it in
-         record_member_reduce it member
-      | IT.RecordUpdate ((t, m), v) ->
-         let t = aux t in
-         let v = aux v in
-         IT (Record_op (RecordUpdate ((t, m), v)), bt)
-    in
-
-
-    let datatype_op it bt =
-      match it with
-      | IT.DatatypeCons (nm, members_rec) ->
-         IT (Datatype_op (IT.DatatypeCons (nm, aux members_rec)), bt)
-      | IT.DatatypeMember (it, member) ->
-         let it = aux it in
-         datatype_member_reduce it member bt
-      | IT.DatatypeIsCons (nm, it) ->
-         let it = aux it in
-         datatype_is_cons_ nm it
-    in
-
-
-
+          ->
+           str
+       | _ ->
+          let members = 
+            List.map (fun (member, it) ->
+                (member, aux it)
+              ) members
+          in
+          IT (IT.Struct (tag, members), the_bt)
+       end
+    | IT.StructMember (s_it, member) ->
+       let s_it = aux s_it in
+       let rec make t = 
+         match t with
+         | IT (Struct (_, members), _) ->
+            List.assoc Id.equal member members
+         | IT (ITE (cond, it1, it2), _) ->
+            (* (if cond then it1 else it2) . member -->
+             (if cond then it1.member else it2.member) *)
+            ite_ (cond, make it1, make it2)
+         | _ ->
+            IT (IT.StructMember (t, member), the_bt)
+       in
+       make s_it
+    | IT.StructUpdate ((t, m), v) ->
+       let t = aux t in
+       let v = aux v in
+       IT (StructUpdate ((t, m), v), the_bt)
+    | IT.Record members ->
+       let members = 
+         List.map (fun (member, it) ->
+             (member, aux it)
+           ) members
+       in
+       IT (IT.Record members, the_bt)
+    | IT.RecordMember (it, member) ->
+       let it = aux it in
+       record_member_reduce it member
+    | IT.RecordUpdate ((t, m), v) ->
+       let t = aux t in
+       let v = aux v in
+       IT (RecordUpdate ((t, m), v), the_bt)
+    | IT.DatatypeCons (nm, members_rec) ->
+       IT (IT.DatatypeCons (nm, aux members_rec), the_bt)
+    | IT.DatatypeMember (it, member) ->
+       let it = aux it in
+       datatype_member_reduce it member the_bt
+    | IT.DatatypeIsCons (nm, it) ->
+       let it = aux it in
+       datatype_is_cons_ nm it
     (* revisit when memory model changes *)
-    let pointer_op it bt = 
-      match it with
-      | LTPointer (a, b) ->
-         let a = aux a in
-         let b = aux b in
-         if isIntegerToPointerCast a || isIntegerToPointerCast b
-         then
-         aux (lt_ (pointerToIntegerCast_ a, pointerToIntegerCast_ b))
-         else if IT.equal a b
-         then bool_ false
-         else IT (Pointer_op (LTPointer (a, b)), bt)
-      | LEPointer (a, b) ->
-         let a = aux a in
-         let b = aux b in
-         if isIntegerToPointerCast a || isIntegerToPointerCast b
-         then
-         aux (le_ (pointerToIntegerCast_ a, pointerToIntegerCast_ b))
-         else if IT.equal a b
-         then bool_ true
-         else IT (Pointer_op (LEPointer (a, b)), bt)
-      | IntegerToPointerCast a ->
-         let a = aux a in
-         begin match a with
-         | IT (Pointer_op (PointerToIntegerCast b), _) ->
-            b
+    | Binop (LTPointer, a, b) ->
+       let a = aux a in
+       let b = aux b in
+       if isIntegerToPointerCast a || isIntegerToPointerCast b
+       then
+       aux (lt_ (pointerToIntegerCast_ a, pointerToIntegerCast_ b))
+       else if IT.equal a b
+       then bool_ false
+       else IT (Binop (LTPointer, a, b), the_bt)
+    | Binop (LEPointer, a, b) ->
+       let a = aux a in
+       let b = aux b in
+       if isIntegerToPointerCast a || isIntegerToPointerCast b
+       then
+       aux (le_ (pointerToIntegerCast_ a, pointerToIntegerCast_ b))
+       else if IT.equal a b
+       then bool_ true
+       else IT (Binop (LEPointer, a, b), the_bt)
+    | IntegerToPointerCast a ->
+       let a = aux a in
+       begin match a with
+       | IT (PointerToIntegerCast b, _) ->
+          b
+       | _ ->
+          IT (IntegerToPointerCast a, the_bt)
+       end
+    | PointerToIntegerCast a ->
+       let a = aux a in
+       begin match a with
+       | IT (IntegerToPointerCast b, _) ->
+          b
+       | _ ->
+          IT (PointerToIntegerCast a, the_bt)
+       end
+    | MemberOffset (tag, member) ->
+       let layout = SymMap.find tag simp_ctxt.global.struct_decls in
+       int_ (Option.get (Memory.member_offset layout member))
+    | ArrayOffset (ct, t) ->
+       let t = aux t in
+       begin match is_z t with
+       | Some z when Z.equal Z.zero z -> int_ 0
+       | _ -> mul_ (int_ (Memory.size_of_ctype ct), t)
+          (* IT (Pointer_op (ArrayOffset (ct, t)), bt) *)
+       end
+    | Representable (ct, t) ->
+       IT (Representable (ct, aux t), the_bt)
+    | Good (ct, t) ->
+       IT (Good (ct, aux t), the_bt)
+    | AlignedI a -> 
+       IT (AlignedI {t = aux a.t; align = aux a.align}, the_bt)
+
+    | MapConst (index_bt, t) ->
+       let t = aux t in
+       IT (MapConst (index_bt, t), the_bt)
+    | MapSet (t1, t2, t3) ->
+       let t1 = aux t1 in
+       let t2 = aux t2 in
+       let t3 = aux t3 in
+       IT (MapSet (t1, t2, t3), the_bt)
+    | MapGet (map, index) ->
+       let map = aux map in
+       let index = aux index in
+       let rec make map index = 
+         begin match map with
+         | IT (MapDef ((s, abt), body), _) ->
+            assert (BT.equal abt (IT.bt index));
+            aux (IT.subst (IT.make_subst [(s, index)]) body)
+         | IT (MapSet (map', index', value'), _) ->
+            begin match index, index' with
+            | _, _ when IT.equal index index' ->
+               value'
+            | IT (Const (Z z), _), IT (Const (Z z'), _) when not (Z.equal z z') ->
+               make map' index
+            | _ ->
+               IT (MapGet (map, index), the_bt)
+            end
+         (* | IT (Bool_op (ITE (cond, map1, map2)), bt') -> *)
+         (*    (\* (if cond then map1 else map2)[index] --> *)
+         (*     * if cond then map1[index] else map2[index] *\) *)
+         (*    ite_ (cond,  *)
+         (*          make map1 index,  *)
+         (*          make map2 index) *)
          | _ ->
-            IT (Pointer_op (IntegerToPointerCast a), bt)
+            IT (MapGet (map, index), the_bt)
          end
-      | PointerToIntegerCast a ->
-         let a = aux a in
-         begin match a with
-         | IT (Pointer_op (IntegerToPointerCast b), _) ->
-            b
-         | _ ->
-            IT (Pointer_op (PointerToIntegerCast a), bt)
-         end
-      | MemberOffset (tag, member) ->
-         let layout = SymMap.find tag simp_ctxt.global.struct_decls in
-         int_ (Option.get (Memory.member_offset layout member))
-      | ArrayOffset (ct, t) ->
-         let t = aux t in
-         begin match is_z t with
-         | Some z when Z.equal Z.zero z -> int_ 0
-         | _ -> mul_ (int_ (Memory.size_of_ctype ct), t)
-            (* IT (Pointer_op (ArrayOffset (ct, t)), bt) *)
-         end
-    in
+       in
+       make map index
+    | MapDef ((s, abt), body) ->
+       let s' = Sym.fresh_same s in 
+       let body = IndexTerms.subst (make_subst [(s, sym_ (s', abt))]) body in
+       let body = aux body in
+       IT (MapDef ((s', abt), body), the_bt)
 
-    let ct_pred it bt = 
-      match it with
-      | Representable (ct, t) ->
-         IT (CT_pred (Representable (ct, aux t)), bt)
-      | Good (ct, t) ->
-         IT (CT_pred (Good (ct, aux t)), bt)
-      | AlignedI a -> 
-         IT (CT_pred (AlignedI {t = aux a.t; align = aux a.align}), bt)
-    in
+    | Pred (name, args) ->
 
-
-    let map_op it bt = 
-      match it with
-      | MapConst (index_bt, t) ->
-         let t = aux t in
-         IT (Map_op (MapConst (index_bt, t)), bt)
-      | MapSet (t1, t2, t3) ->
-         let t1 = aux t1 in
-         let t2 = aux t2 in
-         let t3 = aux t3 in
-         IT (Map_op (MapSet (t1, t2, t3)), bt)
-      | MapGet (map, index) ->
-         let map = aux map in
-         let index = aux index in
-         let rec make map index = 
-           begin match map with
-           | IT (Map_op (MapDef ((s, abt), body)), _) ->
-              assert (BT.equal abt (IT.bt index));
-              aux (IT.subst (IT.make_subst [(s, index)]) body)
-           | IT (Map_op (MapSet (map', index', value')), _) ->
-              begin match index, index' with
-              | _, _ when IT.equal index index' ->
-                 value'
-              | IT (Lit (Z z), _), IT (Lit (Z z'), _) when not (Z.equal z z') ->
-                 make map' index
-              | _ ->
-                 IT (Map_op (MapGet (map, index)), bt)
-              end
-           (* | IT (Bool_op (ITE (cond, map1, map2)), bt') -> *)
-           (*    (\* (if cond then map1 else map2)[index] --> *)
-           (*     * if cond then map1[index] else map2[index] *\) *)
-           (*    ite_ (cond,  *)
-           (*          make map1 index,  *)
-           (*          make map2 index) *)
-           | _ ->
-              IT (Map_op (MapGet (map, index)), bt)
-           end
-         in
-         make map index
-      | MapDef ((s, abt), body) ->
-         let s' = Sym.fresh_same s in 
-         let body = IndexTerms.subst (make_subst [(s, sym_ (s', abt))]) body in
-         let body = aux body in
-         IT (Map_op (MapDef ((s', abt), body)), bt)
-    in
-
-    (* let option_op o bt =  *)
-    (*   match o with *)
-    (*   | Nothing vbt ->  *)
-    (*      IT (Option_op (Nothing vbt), bt) *)
-    (*   | Something t ->  *)
-    (*      let t = aux t in *)
-    (*      IT (Option_op (Something t), bt) *)
-    (*   | Is_nothing t -> *)
-    (*      let t = aux t in *)
-    (*      IT (Option_op (Is_nothing t), bt) *)
-    (*   | Is_something t -> *)
-    (*      let t = aux t in *)
-    (*      IT (Option_op (Is_something t), bt) *)
-    (*   | Get_some_value t -> *)
-    (*      let t = aux t in *)
-    (*      IT (Option_op (Get_some_value t), bt) *)
-    (* in *)
-
-    (* let letb (s, bound) body bt = *)
-    (*   let bound = aux bound in *)
-    (*   let s' = Sym.fresh_same s in *)
-    (*   let body = IndexTerms.subst (make_subst [(s, sym_ (s', IT.bt bound))]) body in *)
-    (*   let body = aux body in *)
-    (*   IT (Let ((s', bound), body), bt) *)
-    (* in *)
-
-    let pred name args bt =
       let args = List.map aux args in
       let def = SymMap.find name simp_ctxt.global.logical_predicates in
-      let t = IT (Pred (name, args), bt) in
+      let t = IT (Pred (name, args), the_bt) in
       if not inline_functions then t else 
-        match LogicalPredicates.try_open_pred_to_term def name args with
+        begin match LogicalPredicates.try_open_pred_to_term def name args with
         | Some inlined -> aux inlined
         | None -> t
-    in
-
-    fun it ->
-    let (IT (it_, bt)) = it in
-    match it_ with
-    | Lit l -> lit l bt
-    | Arith_op a -> arith_op a bt
-    | Bool_op b -> bool_op b bt
-    | Tuple_op t -> tuple_op t bt
-    | Struct_op s -> struct_op s bt
-    | Record_op r -> record_op r bt
-    | Datatype_op r -> datatype_op r bt
-    | Pointer_op p -> pointer_op p bt
-    | List_op l -> IT (List_op l, bt)
-    | Set_op s -> IT (Set_op s, bt)
-    | CT_pred c -> ct_pred c bt
-    | Map_op a -> map_op a bt
-    | Pred (name, args) -> pred name args bt
-    (* | Option_op o -> option_op o bt *)
-    (* | Let ((s, bound), body) -> letb (s, bound) body bt *)
-
-
-  (* let simp a b c d e it =  *)
-  (*   let open Pp in *)
-  (*   print stdout (item "simplifying" (IT.pp it)); *)
-  (*   let it = simp a b c d e it in *)
-  (*   print stdout (item "simplified" (IT.pp it)); *)
-  (*   it *)
-
+        end
+    | _ ->
+       the_term
 
 
   let simp_flatten simp_ctxt term =
     match simp simp_ctxt term with
-    | IT (Lit (Bool true), _) -> []
-    | IT (Bool_op (And lcs), _) -> lcs
+    | IT (Const (Bool true), _) -> []
+    | IT (And lcs, _) -> lcs
     | lc -> [lc]
 
 
@@ -782,7 +681,7 @@ module LogicalConstraints = struct
        let q, body = IT.alpha_rename (q, qbt) body in
        let body = simp simp_ctxt body in
        begin match body with
-       | IT (Lit (Bool true), _) -> LC.T (bool_ true)
+       | IT (Const (Bool true), _) -> LC.T (bool_ true)
        | _ -> LC.Forall ((q, qbt), body)
        end
 

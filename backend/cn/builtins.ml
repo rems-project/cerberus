@@ -39,7 +39,7 @@ let power_def = (Sym.fresh_named "power", mk_arg2 exp_)
 let rem_def = (Sym.fresh_named "rem", mk_arg2 rem_)
 let mod_def = (Sym.fresh_named "mod", mk_arg2 mod_)
 
-let not_def = (Sym.fresh_named "not", mk_arg1 (fun it -> IT (Bool_op (Not it), SBT.Bool)))
+let not_def = (Sym.fresh_named "not", mk_arg1 (fun it -> IT (Not it, SBT.Bool)))
 
 let nth_list_def = (Sym.fresh_named "nth_list", mk_arg3 nthList_)
 
