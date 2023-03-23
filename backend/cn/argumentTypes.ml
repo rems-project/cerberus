@@ -130,3 +130,18 @@ type ift = IndexTerms.t t
 type ft = ReturnTypes.t t
 type lt = False.t t
 type lemmat = LogicalReturnTypes.t t
+
+
+
+open Cerb_frontend.Pp_ast
+
+
+let dtree dtree_i = 
+  let rec aux = function
+  | Computational ((s, bt), _, lat) ->
+     Dnode (pp_ctor "Computational", [Dleaf (Sym.pp s); aux lat])
+  | L l -> 
+     LAT.dtree dtree_i l
+  in
+  aux
+

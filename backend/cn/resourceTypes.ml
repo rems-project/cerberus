@@ -199,3 +199,33 @@ let pointer = function
   | Q pred -> pred.pointer
 
 
+
+
+open Cerb_frontend.Pp_ast
+open Pp
+
+let dtree_of_predicate_name = function
+  | Block ty -> Dleaf (!^"Block" ^^ angles (Sctypes.pp ty))
+  | Owned ty -> Dleaf (!^"Owned" ^^ angles (Sctypes.pp ty))
+  | PName s -> Dleaf (Sym.pp s)
+
+let dtree_of_predicate_type (pred : predicate_type) =
+  Dnode (pp_ctor "pred", 
+        IT.dtree pred.permission ::
+        dtree_of_predicate_name pred.name ::
+        IT.dtree pred.pointer ::
+        List.map IT.dtree pred.iargs)
+
+let dtree_of_qpredicate_type (pred : qpredicate_type) =
+  Dnode (pp_ctor "qpred", 
+        Dleaf (Sym.pp pred.q) ::
+        IT.dtree pred.step ::
+        IT.dtree pred.permission ::
+        dtree_of_predicate_name pred.name ::
+        IT.dtree pred.pointer ::
+        List.map IT.dtree pred.iargs)
+
+
+let dtree = function
+  | P pred -> dtree_of_predicate_type pred
+  | Q pred -> dtree_of_qpredicate_type pred

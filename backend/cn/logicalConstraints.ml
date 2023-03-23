@@ -111,7 +111,6 @@ let equates_to it2 = function
 
 
 let dtree = 
-  let open Pp_prelude in
   let open Cerb_frontend.Pp_ast in
   function
   | T it -> Dnode (pp_ctor "T", [IT.dtree it])

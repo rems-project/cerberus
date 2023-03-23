@@ -101,3 +101,14 @@ let alpha_equivalent rt rt' =
      let _, t = LRT.alpha_rename_ new_s (s, bt) t in
      let _, t' = LRT.alpha_rename_ new_s (s', bt') t' in
      BaseTypes.equal bt bt' && LRT.alpha_equivalent t t'
+
+
+
+
+open Cerb_frontend.Pp_ast
+
+
+let dtree = function
+  | Computational ((s, bt), _, lrt) ->
+     Dnode (pp_ctor "Computational", [Dleaf (Sym.pp s); LRT.dtree lrt])
+

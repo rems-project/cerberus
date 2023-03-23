@@ -191,3 +191,20 @@ let rec has_resource (f : 'a -> bool) (at : 'a t) =
   | Define (_, _, at) -> has_resource f at
   | Constraint (_, _, at) -> has_resource f at
 
+
+
+open Cerb_frontend.Pp_ast
+
+
+let dtree dtree_i = 
+  let rec aux = function
+  | Define ((s, it), _, t) ->
+     Dnode (pp_ctor "Define", [Dleaf (Sym.pp s); IT.dtree it; aux t])
+  | Resource ((s, (rt, bt)), _, t) ->
+     Dnode (pp_ctor "Resource", [Dleaf (Sym.pp s); RET.dtree rt; Dleaf (BT.pp bt); aux t])
+  | Constraint (lc, _, t) ->
+     Dnode (pp_ctor "Constraint", [LC.dtree lc; aux t])
+  | I i ->
+     Dnode (pp_ctor "I", [dtree_i i])
+  in
+  aux
