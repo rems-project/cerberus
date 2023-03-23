@@ -94,6 +94,30 @@ let check_input_file filename =
 
 
 
+(* Executable spec helper functions *)
+
+type executable_spec = {
+    pre_post: (CF.Symbol.sym * (string * string)) list;
+    in_stmt: (Location_ocaml.t * string) list;
+}
+
+let empty_executable_spec = {
+    pre_post = [];
+    in_stmt = [];
+}
+
+
+let generate_c_statement cn_statement =
+  cn_statement
+
+(* Core_to_mucore.instrumentation list -> executable_spec *)
+let generate_c_spec instrumentation_list =
+  empty_executable_spec
+
+
+
+
+
 let main 
       filename 
       incl_dirs
@@ -146,7 +170,7 @@ let main
       let result = 
         let open Resultat in
          let@ prog5 = Core_to_mucore.normalise_file (markers_env, ail_prog) prog4 in
-         (* let instrumentation = Core_to_mucore.collect_instrumentation prog5 in *)
+         let instrumentation = Core_to_mucore.collect_instrumentation prog5 in
          print_log_file ("mucore", MUCORE prog5);
          let@ res = Typing.run Context.empty (Check.check prog5 statement_locs lemmata) in
          begin match output_decorated with
@@ -162,15 +186,16 @@ let main
                 ) xs
               ) (Source_injection.get_magics_of_statement stmt)
             ) ail_prog.function_definitions; *)
-            let extracted_statements = List.map (fun (_, (_, _, _, _, stmt)) -> stmt) ail_prog.function_definitions in
+            (* let extracted_statements = List.map (fun (_, (_, _, _, _, stmt)) -> stmt) ail_prog.function_definitions in
             let magic_statements = List.map Source_injection.get_magics_of_statement extracted_statements in
-            let magic_statements_reduced = List.fold_left List.append [] (List.fold_left List.append [] magic_statements) 
-            in
+            let magic_statements_reduced = List.fold_left List.append [] (List.fold_left List.append [] magic_statements)  *)
+            (* in *)
+            let executable_spec = generate_c_spec instrumentation in
             begin match
               Source_injection.(output_injections oc
                 { filename; sigm= ail_prog
-                ; pre_post=[(*TODO(Rini): add here the pprints of functions pre/post conditions*)]
-                ; in_stmt=magic_statements_reduced}
+                ; pre_post=executable_spec.pre_post
+                ; in_stmt=executable_spec.in_stmt}
               )
             with
             | Ok () ->
