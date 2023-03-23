@@ -104,6 +104,9 @@ let rec investigate_term cfg t =
   let s_t = Simplify.IndexTerms.simp sc t in
   let s_ts = if IT.equal s_t t then [] else [s_t] in
   let@ simp_opts = ListM.mapM (rec_opt "simplified term") s_ts in
+  let s_t2 = Simplify.IndexTerms.simp ~inline_functions:true sc t in
+  let s_ts2 = if IT.equal s_t2 t || IT.equal s_t2 s_t then [] else [s_t2] in
+  let@ simp_opts2 = ListM.mapM (rec_opt "simplified inlined term") s_ts2 in
   let@ eq_opts = match IT.is_eq t with
     | None -> return []
     | Some (x, y) ->
@@ -121,7 +124,7 @@ let rec investigate_term cfg t =
     | _ -> return []
   in
   let@ ite_opts = investigate_ite cfg t in
-  let opts = sub_t_opts @ simp_opts @ eq_opts @ pred_opts @ ite_opts in
+  let opts = sub_t_opts @ simp_opts @ simp_opts2 @ eq_opts @ pred_opts @ ite_opts in
   if List.length opts == 0
   then Pp.print stdout (Pp.item "out of diagnostic options at" (IT.pp t))
   else ();
@@ -194,7 +197,7 @@ and investigate_ite cfg t =
     | _ -> acc) [] [] t in
   let@ g = get_global () in
   let sc1 = Simplify.default g in
-  let sc f = Simplify.{sc1 with lcs = LCSet.of_list [LC.T f]} in
+  let sc f = sc1 in
   let simp f t = Simplify.IndexTerms.simp (sc f) t in
   let opt x b =
     let nm = if b then "true" else "false" in

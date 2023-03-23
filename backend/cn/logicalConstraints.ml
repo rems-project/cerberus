@@ -108,3 +108,10 @@ let equates_to it2 = function
   | _ -> 
      None
 
+
+
+let dtree = 
+  let open Cerb_frontend.Pp_ast in
+  function
+  | T it -> Dnode (pp_ctor "T", [IT.dtree it])
+  | Forall ((s, bt), t) -> Dnode (pp_ctor "Forall", [Dleaf (Sym.pp s); IT.dtree t])

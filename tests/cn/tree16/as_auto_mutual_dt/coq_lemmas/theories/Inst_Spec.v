@@ -52,18 +52,22 @@ Lemma in_tree_tree_v_lemma : in_tree_tree_v_lemma_type.
 Proof.
   unfold in_tree_tree_v_lemma_type.
   intros.
+  destruct arc as [arr i len].
   repeat (apply conj).
-  - auto.
-  - unfold in_tree, Setup.in_tree.
-    rewrite (arc_from_array_step _ i).
-    destruct (path_len <=? i) eqn: path_end.
-    + destruct (get_t_0_3 T); auto.
-    + destruct (get_t_0_3 T); auto.
   - unfold tree_v, Setup.tree_v.
     rewrite (arc_from_array_step _ i).
-    destruct (path_len <=? i) eqn: path_end.
-    + destruct (get_t_0_3 T); auto.
-    + destruct (get_t_0_3 T); auto.
+    rewrite Z.leb_antisym.
+    cbn.
+    destruct (i <? len) eqn: path_end.
+    + destruct t; auto.
+    + destruct t; auto.
+  - unfold in_tree, Setup.in_tree.
+    rewrite (arc_from_array_step _ i).
+    rewrite Z.leb_antisym.
+    cbn.
+    destruct (i <? len) eqn: path_end.
+    + destruct t; auto.
+    + destruct t; auto.
 Qed.
 
 End Proofs.

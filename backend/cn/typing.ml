@@ -138,8 +138,6 @@ let make_simp_ctxt s =
   Simplify.{
       global = s.typing_context.global;
       values = s.sym_eqs;
-      equalities = s.equalities;
-      lcs = s.typing_context.constraints;
     }
 
 

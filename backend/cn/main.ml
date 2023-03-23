@@ -146,6 +146,7 @@ let main
       let result = 
         let open Resultat in
          let@ prog5 = Core_to_mucore.normalise_file (markers_env, ail_prog) prog4 in
+         (* let instrumentation = Core_to_mucore.collect_instrumentation prog5 in *)
          print_log_file ("mucore", MUCORE prog5);
          let@ res = Typing.run Context.empty (Check.check prog5 statement_locs lemmata) in
          begin match output_decorated with
@@ -282,8 +283,8 @@ let output_decorated =
 (* copy-pasting from backend/driver/main.ml *)
 let astprints =
   let doc = "Pretty print the intermediate syntax tree for the listed languages \
-             (ranging over {cabs, ail, core})." in
-  Arg.(value & opt (list (enum ["cabs", Cabs; "ail", Ail; "core", Core])) [] &
+             (ranging over {cabs, ail, core, types})." in
+  Arg.(value & opt (list (enum [("cabs", Cabs); ("ail", Ail); ("core", Core); ("types", Types)])) [] &
        info ["ast"] ~docv:"LANG1,..." ~doc)
 
 

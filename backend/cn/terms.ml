@@ -336,3 +336,87 @@ let pp : 'bt 'a. ?atomic:bool -> ?f:('bt term -> Pp.doc -> Pp.doc) -> 'bt term -
 
 
 
+
+
+
+
+
+
+
+
+
+open Pp_prelude 
+open Cerb_frontend.Pp_ast
+
+let rec dtree (IT (it_, bt)) =
+  match it_ with
+  | Lit (Sym s) -> Dleaf (Sym.pp s)
+  | Lit (Z z) -> Dleaf !^(Z.to_string z)
+  | Lit (Q q) -> Dleaf !^(Q.to_string q)
+  | Lit (Pointer z) -> Dleaf !^(Z.to_string z)
+  | Lit (Bool b) -> Dleaf !^(if b then "true" else "false")
+  | Lit Unit -> Dleaf !^"unit"
+  | Lit (Default _) -> Dleaf !^"default"
+  | Lit Null -> Dleaf !^"null"
+  | Arith_op (Add (t1, t2)) -> Dnode (pp_ctor "Add", [dtree t1; dtree t2])
+  | Arith_op (Sub (t1, t2)) -> Dnode (pp_ctor "Sub", [dtree t1; dtree t2])
+  | Arith_op (Mul (t1, t2)) -> Dnode (pp_ctor "Mul", [dtree t1; dtree t2])
+  | Arith_op (MulNoSMT (t1, t2)) -> Dnode (pp_ctor "MulNoSMT", [dtree t1; dtree t2])
+  | Arith_op (Div (t1, t2)) -> Dnode (pp_ctor "Div", [dtree t1; dtree t2])
+  | Arith_op (DivNoSMT (t1, t2)) -> Dnode (pp_ctor "DivNoSMT", [dtree t1; dtree t2])
+  | Arith_op (Exp (t1, t2)) -> Dnode (pp_ctor "Exp", [dtree t1; dtree t2])
+  | Arith_op (ExpNoSMT (t1, t2)) -> Dnode (pp_ctor "ExpNoSMT", [dtree t1; dtree t2])
+  | Arith_op (Rem (t1, t2)) -> Dnode (pp_ctor "Rem", [dtree t1; dtree t2])
+  | Arith_op (RemNoSMT (t1, t2)) -> Dnode (pp_ctor "RemNoSMT", [dtree t1; dtree t2])
+  | Arith_op (Mod (t1, t2)) -> Dnode (pp_ctor "Mod", [dtree t1; dtree t2])
+  | Arith_op (ModNoSMT (t1, t2)) -> Dnode (pp_ctor "ModNoSMT", [dtree t1; dtree t2])
+  | Arith_op (LT (t1, t2)) -> Dnode (pp_ctor "LT", [dtree t1; dtree t2])
+  | Arith_op (LE (t1, t2)) -> Dnode (pp_ctor "LE", [dtree t1; dtree t2])
+  | Arith_op (Min (t1, t2)) -> Dnode (pp_ctor "Min", [dtree t1; dtree t2])
+  | Arith_op (Max (t1, t2)) -> Dnode (pp_ctor "Max", [dtree t1; dtree t2])
+  | Arith_op (IntToReal t) -> Dnode (pp_ctor "IntToReal", [dtree t])
+  | Arith_op (RealToInt t) -> Dnode (pp_ctor "RealToInt", [dtree t])
+  | Arith_op (XORNoSMT (t1, t2)) -> Dnode (pp_ctor "XORNoSMT", [dtree t1; dtree t2])
+  | Bool_op (And ts) -> Dnode (pp_ctor "And", List.map dtree ts)
+  | Bool_op (Or ts) -> Dnode (pp_ctor "Or", List.map dtree ts)
+  | Bool_op (Impl (t1, t2)) -> Dnode (pp_ctor "Impl", [dtree t1; dtree t2])
+  | Bool_op (Not t) -> Dnode (pp_ctor "Not", [dtree t])
+  | Bool_op (ITE (t1, t2, t3)) -> Dnode (pp_ctor "Impl", [dtree t1; dtree t2; dtree t3])
+  | Bool_op (EQ (t1, t2)) -> Dnode (pp_ctor "EQ", [dtree t1; dtree t2])
+  | Bool_op (EachI ((starti,i,endi), body)) -> Dnode (pp_ctor "EachI", [Dleaf !^(string_of_int starti); Dleaf (Sym.pp i); Dleaf !^(string_of_int endi); dtree body])
+  | Tuple_op (Tuple its) -> Dnode (pp_ctor "Tuple", List.map dtree its)
+  | Tuple_op (NthTuple (i, t)) -> Dnode (pp_ctor "NthTuple", [Dleaf !^(string_of_int i); dtree t])
+  | Struct_op (Struct (tag, members)) ->
+     Dnode (pp_ctor ("Struct("^Sym.pp_string tag^")"), List.map (fun (member,e) -> Dnode (pp_ctor "Member", [Dleaf (Id.pp member); dtree e])) members)
+  | Struct_op (StructMember (e, member)) ->
+     Dnode (pp_ctor "StructMember", [dtree e; Dleaf (Id.pp member)])
+  | Struct_op (StructUpdate ((base, member), v)) ->
+     Dnode (pp_ctor "StructUpdate", [dtree base; Dleaf (Id.pp member); dtree v])
+  | Record_op (Record members) ->
+     Dnode (pp_ctor "Record", List.map (fun (member,e) -> Dnode (pp_ctor "Member", [Dleaf (Sym.pp member); dtree e])) members)
+  | Record_op (RecordMember (e, member)) ->
+     Dnode (pp_ctor "RecordMember", [dtree e; Dleaf (Sym.pp member)])
+  | Record_op (RecordUpdate ((base, member), v)) ->
+     Dnode (pp_ctor "RecordUpdate", [dtree base; Dleaf (Sym.pp member); dtree v])
+  | Datatype_op (DatatypeCons (s, t)) ->
+     Dnode (pp_ctor "DatatypeCons", [Dleaf (Sym.pp s); dtree t])
+  | Datatype_op (DatatypeMember (t, s)) ->
+     Dnode (pp_ctor "DatatypeMember", [dtree t; Dleaf (Sym.pp s)])
+  | Datatype_op (DatatypeIsCons (s, t)) ->
+     Dnode (pp_ctor "DatatypeIsCons", [Dleaf (Sym.pp s); dtree t])
+  | Pointer_op (LTPointer (t1, t2)) -> Dnode (pp_ctor "LTPointer", [dtree t1; dtree t2])
+  | Pointer_op (LEPointer (t1, t2)) -> Dnode (pp_ctor "LEPointer", [dtree t1; dtree t2])
+  | Pointer_op (IntegerToPointerCast t) -> Dnode (pp_ctor "IntegerToPointerCast", [dtree t])
+  | Pointer_op (PointerToIntegerCast t) -> Dnode (pp_ctor "PointerToIntegerCast", [dtree t])
+  | Pointer_op (MemberOffset (tag, id)) -> Dnode (pp_ctor "MemberOffset", [Dleaf (Sym.pp tag); Dleaf (Id.pp id)])
+  | Pointer_op (ArrayOffset (ty, t)) -> Dnode (pp_ctor "ArrayOffset", [Dleaf (Sctypes.pp ty); dtree t])
+  | List_op _ -> failwith "todo"
+  | Set_op _ -> failwith "todo"
+  | CT_pred (Representable (ty, t)) -> Dnode (pp_ctor "Representable", [Dleaf (Sctypes.pp ty); dtree t])
+  | CT_pred (Good (ty, t)) -> Dnode (pp_ctor "Good", [Dleaf (Sctypes.pp ty); dtree t])
+  | CT_pred (AlignedI a) -> Dnode (pp_ctor "AlignedI", [dtree a.t; dtree a.align])
+  | Map_op (MapConst (bt, t)) -> Dnode (pp_ctor "MapConst", [dtree t])
+  | Map_op (MapSet (t1, t2, t3)) -> Dnode (pp_ctor "MapSet", [dtree t1; dtree t2; dtree t3])
+  | Map_op (MapGet (t1, t2)) -> Dnode (pp_ctor "MapGet", [dtree t1; dtree t2])
+  | Map_op (MapDef ((s, bt), t)) -> Dnode (pp_ctor "MapDef", [Dleaf (Sym.pp s); dtree t])
+  | Pred (f, args) -> Dnode (pp_ctor "Pred", (Dleaf (Sym.pp f) :: List.map dtree args))

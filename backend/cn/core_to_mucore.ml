@@ -6,6 +6,7 @@ open Milicore
 module CF = Cerb_frontend
 module CA = Cabs_to_ail
 module CAE = Cabs_to_ail_effect
+open Cerb_frontend.Pp_ast
 
 
 module Pmap = struct
@@ -724,31 +725,37 @@ let rec n_expr (loc : Loc.t) ((env, old_states), desugaring_things) (global_type
      let@ e1 = match pat, e1 with
        | Pattern ([], CaseBase (None, BTy_unit)),
          Expr ([], Epure (Pexpr ([], (), PEval Vunit))) ->
-          let@ stmts =
+          let@ desugared_stmts_and_stmts =
             ListM.mapM (fun (stmt_loc, stmt_str) ->
                 let marker_id = Option.get (get_marker annots) in
                 let marker_id_object_types = Option.get (get_marker_object_types annots) in
-                let@ stmt = Parse.parse C_parser.cn_statement (stmt_loc, stmt_str) in
-                let@ stmt = 
+                let@ parsed_stmt = Parse.parse C_parser.cn_statement (stmt_loc, stmt_str) in
+                let@ desugared_stmt = 
                   do_ail_desugar_rdonly (CAE.{ 
                         markers_env = markers_env;
                         inner = { (Pmap.find marker_id markers_env) with cn_state = cn_desugaring_state };
                     })
-                    (CA.desugar_cn_statement stmt) 
+                    (CA.desugar_cn_statement parsed_stmt) 
                 in
                 let visible_objects= 
                   global_types @
                   Pmap.find marker_id_object_types visible_objects_env 
                 in
+                debug 2 (lazy (!^"CN statement before translation"));
+                debug 2 (lazy (pp_doc_tree (Cn_ocaml.PpAil.dtree_of_cn_statement desugared_stmt)));
+
                 let@ stmt = 
                   Compile.translate_cn_statement 
                     (fun sym -> List.assoc Sym.equal sym visible_objects) 
-                    old_states env stmt 
+                    old_states env desugared_stmt 
                 in
-                return stmt
+                debug 2 (lazy (!^"CN statement after translation"));
+                debug 2 (lazy (pp_doc_tree (Cnprog.dtree stmt)));
+                return (desugared_stmt, stmt)
             ) (get_cerb_magic_attr annots)
           in
-          return (M_Expr (loc, [], M_CN_progs stmts))
+          let desugared_stmts, stmts = List.split desugared_stmts_and_stmts in
+          return (M_Expr (loc, [], M_CN_progs (desugared_stmts, stmts)))
        | _, _ ->
           n_expr e1 
      in
@@ -976,7 +983,21 @@ let desugar_conds d_st conds =
 
 
 
+let dtree_of_inv conds = 
+  Dnode (pp_ctor "LoopInvariantAnnotation", List.map CF.Cn_ocaml.PpAil.dtree_of_cn_condition conds)
+let dtree_of_requires conds = 
+  Dnode (pp_ctor "RequiresAnnotation", List.map CF.Cn_ocaml.PpAil.dtree_of_cn_condition conds)
+let dtree_of_ensures conds = 
+  Dnode (pp_ctor "EnsuresAnnotation", List.map CF.Cn_ocaml.PpAil.dtree_of_cn_condition conds)
+let dtree_of_accesses accesses = 
+  Dnode (pp_ctor "AccessesAnnotation", 
+         List.map (fun (_loc, (s, ct)) ->
+             Dnode (pp_ctor "Access", [Dleaf (Sym.pp s); Dleaf (Pp_core_ctype.pp_ctype ct)])
+           ) accesses)
+
+
 let normalise_label 
+      fsym
       (markers_env, precondition_cn_desugaring_state) 
       (global_types, visible_objects_env)
       (accesses, loop_attributes) (env : C.env) st label_name label =
@@ -986,7 +1007,7 @@ let normalise_label
   | Mi_Label (loc, lt, label_args, label_body, annots) ->
      begin match CF.Annot.get_label_annot annots with
      | Some (LAloop_prebody loop_id) ->
-        let@ inv, cn_desugaring_state = 
+        let@ desugared_inv, cn_desugaring_state = 
           match Pmap.lookup loop_id loop_attributes with
           | Some (marker_id, attrs) -> 
              let@ inv = Parse.parse_inv_spec attrs in
@@ -1000,6 +1021,9 @@ let normalise_label
           | None -> 
              return ([], precondition_cn_desugaring_state)
         in
+        debug 2 (lazy (!^"invariant in function" ^^^ Sym.pp fsym));
+        debug 2 (lazy (pp_doc_tree (dtree_of_inv desugared_inv)));
+
         let@ label_args_and_body =
           make_label_args (fun env st ->
               n_expr loc ((env, st.old_states), (markers_env, cn_desugaring_state))
@@ -1009,14 +1033,14 @@ let normalise_label
             env 
             st
             (List.combine lt label_args) 
-            (accesses, inv)
+            (accesses, desugared_inv)
         in
         (* let lt =  *)
         (*   at_of_arguments (fun _body -> *)
         (*       False.False *)
         (*     ) label_args_and_body  *)
         (* in *)
-        return (M_Label (loc, label_args_and_body, annots))
+        return (M_Label (loc, label_args_and_body, annots, {label_spec = desugared_inv}))
      | Some (LAloop_body loop_id) ->
         assert_error loc !^"body label has not been inlined"
      | Some (LAloop_continue loop_id) ->
@@ -1082,6 +1106,14 @@ let normalise_fun_map_decl
        !^"function return type mismatch";
      let@ (ensures, ret_d_st) = desugar_conds ret_d_st (List.map snd ensures) in
      Print.debug 6 (lazy (Print.string "desugared ensures conds"));
+
+     debug 2 (lazy (!^"function requires/ensures" ^^^ Sym.pp fname));
+     debug 2 (lazy (pp_doc_tree (dtree_of_accesses accesses)));
+     debug 2 (lazy (pp_doc_tree (dtree_of_requires requires)));
+     debug 2 (lazy (pp_doc_tree (dtree_of_ensures ensures)));
+
+
+
      let@ args_and_body = 
        make_function_args (fun arg_states env st ->
            let st = C.LocalState.make_state_old st C.start_evaluation_scope in
@@ -1091,7 +1123,7 @@ let normalise_fun_map_decl
                (ret_s, ret_ct) (accesses, ensures) 
            in
            let@ labels = 
-             PmapM.mapM (normalise_label 
+             PmapM.mapM (normalise_label fname
                            (markers_env,CAE.(d_st.inner.cn_state))
                            (global_types, visible_objects_env)
                            (accesses, loop_attributes) env st)
@@ -1105,7 +1137,9 @@ let normalise_fun_map_decl
      in
      (* let ft = at_of_arguments (fun (_body, _labels, rt) -> rt) args_and_body in *)
      
-     return (Some (M_Proc(loc, args_and_body, trusted), mk_functions))
+     let desugared_spec = { accesses = List.map snd accesses; requires; ensures } in
+
+     return (Some (M_Proc(loc, args_and_body, trusted, desugared_spec), mk_functions))
   | Mi_ProcDecl(loc, ret_bt, bts) -> 
      return None
      (* let@ trusted, accesses, requires, ensures = Parse.parse_function_spec attrs in *)
@@ -1297,4 +1331,79 @@ let normalise_file (markers_env, ail_prog) file =
 
 
 
+type instrumentation = {
+    fn: Sym.t;
+    fn_loc: Loc.t;
+    accesses : (Sym.t * Ctype.ctype) list;
+    requires: (Sym.t, Ctype.ctype) Cn.cn_condition list;
+    ensures: (Sym.t, Ctype.ctype) Cn.cn_condition list;
+    statements: (Sym.t, Ctype.ctype) cn_statement list;
+  }
 
+  
+
+let collect_instrumentation file =
+
+  let rec in_expr (M_Expr (_, _, e_)) =
+    match e_ with
+    | M_Epure _ -> []
+    | M_Ememop _ -> []
+    | M_Eaction _ -> []
+    | M_Eskip -> []
+    | M_Eccall _ -> []
+    | M_Elet (_, _, e) -> in_expr e
+    | M_Eunseq es -> List.concat_map in_expr es
+    | M_Ewseq (_, e1, e2) -> in_expr e1 @ in_expr e2
+    | M_Esseq (_, e1, e2) -> in_expr e1 @ in_expr e2
+    | M_Eif (_, e1, e2) -> in_expr e1 @ in_expr e2
+    | M_Ebound e -> in_expr e
+    | M_End es -> List.concat_map in_expr es
+    | M_Erun _ -> []
+    | M_CN_progs (stmts, _) -> stmts
+  in
+
+  let rec in_largs f_i = function
+    | M_Define (_, _, a) -> in_largs f_i a
+    | M_Resource (_, _, a) -> in_largs f_i a
+    | M_Constraint (_, _, a) -> in_largs f_i a
+    | M_I i -> f_i i
+  in
+
+  let rec in_args f_i = function
+    | M_Computational (_, _, a) -> in_args f_i a
+    | M_L a -> in_largs f_i a
+  in
+
+  let in_labels labels = 
+    Pmap.fold (fun s def acc ->
+        match def with
+        | M_Return _ -> acc
+        | M_Label (_, a, _, _) -> in_args in_expr a @ acc
+      ) labels []
+  in
+
+  let in_function = 
+    in_args (fun (body, labels, _rt) ->
+        in_expr body @ in_labels labels
+      )
+  in
+
+  Pmap.fold (fun fn decl acc ->
+      match decl with
+      | M_Proc (fn_loc, args_and_body, _trusted, spec) ->
+         { fn = fn;
+           fn_loc = fn_loc; 
+           accesses = spec.accesses;
+           requires = spec.requires;
+           ensures = spec.ensures;
+           statements = in_function args_and_body
+         } :: acc
+      | M_ProcDecl (fn_loc, _ft) ->
+         { fn = fn;
+           fn_loc = fn_loc;
+           accesses = [];
+           requires = [];
+           ensures = [];
+           statements = [];
+         } :: acc
+    ) file.mu_funs []

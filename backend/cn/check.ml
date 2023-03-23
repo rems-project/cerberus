@@ -1313,7 +1313,7 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
      let lvt = tuple_ vts in
      k lvt
      )
-  | Normal expect, M_CN_progs cn_progs ->
+  | Normal expect, M_CN_progs (_, cn_progs) ->
      let@ () = WellTyped.ensure_base_type loc ~expect Unit in
      let rec aux = function
        | Cnprog.M_CN_let (loc, (sym, {ct; pointer}), cn_prog) ->
@@ -1528,7 +1528,7 @@ let check_procedure
               pure begin match def with
                 | M_Return loc ->
                    return (AT.of_rt rt (LAT.I False.False), M_Return loc, Return)
-                | M_Label (loc, label_args_and_body, annots) ->
+                | M_Label (loc, label_args_and_body, annots, parsed_spec) ->
                    let@ label_args_and_body, lt = 
                      WellTyped.WLabel.welltyped loc label_args_and_body in
                    let kind = match CF.Annot.get_label_annot annots with
@@ -1536,9 +1536,11 @@ let check_procedure
                      | Some (LAloop_continue loop_id) -> Loop
                      | _ -> Other
                    in
-                   return (lt, M_Label (loc, label_args_and_body, annots), kind)
+                   return (lt, M_Label (loc, label_args_and_body, annots, parsed_spec), kind)
                 end
             in
+            debug 2 (lazy (!^"label type within function" ^^^ Sym.pp fsym));
+            debug 2 (lazy (CF.Pp_ast.pp_doc_tree (AT.dtree False.dtree lt)));
             return ((sym, def) :: label_defs, SymMap.add sym (lt, kind) label_context)
           ) label_defs ([], SymMap.empty)
       in
@@ -1554,7 +1556,7 @@ let check_procedure
         pure begin match def with
           | M_Return loc ->
              return ()
-          | M_Label (loc, label_args_and_body, annots) ->
+          | M_Label (loc, label_args_and_body, annots, _) ->
              debug 2 (lazy (headline ("checking label " ^ Sym.pp_string lsym)));
              let@ (label_body, label_resources) = bind_arguments loc label_args_and_body in
              let@ () = add_rs label_resources in
@@ -1668,9 +1670,11 @@ let wf_check_and_record_functions mu_funs =
   in
   PmapM.foldM (fun fsym def (trusted, checked) ->
       match def with
-      | M_Proc (loc, args_and_body, tr) ->
+      | M_Proc (loc, args_and_body, tr, _) ->
          welltyped_ping fsym;
          let@ args_and_body, ft = WellTyped.WProc.welltyped loc args_and_body in
+         debug 2 (lazy (!^"function type" ^^^ Sym.pp fsym));
+         debug 2 (lazy (CF.Pp_ast.pp_doc_tree (AT.dtree RT.dtree ft)));
          let@ () = add fsym loc ft in
          begin match tr with
          | Trusted _ -> return ((fsym, (loc, ft)) :: trusted, checked)

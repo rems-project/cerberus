@@ -209,3 +209,17 @@ let rec alpha_equivalent lrt lrt' =
      true
   | _ ->
      false
+
+
+open Cerb_frontend.Pp_ast
+open Pp
+
+let rec dtree = function
+  | Define ((s, it), _, t) ->
+     Dnode (pp_ctor "Define", [Dleaf (Sym.pp s); IT.dtree it; dtree t])
+  | Resource ((s, (rt, bt)), _, t) ->
+     Dnode (pp_ctor "Resource", [Dleaf (Sym.pp s); RT.dtree rt; Dleaf (BT.pp bt); dtree t])
+  | Constraint (lc, _, t) ->
+     Dnode (pp_ctor "Constraint", [LC.dtree lc; dtree t])
+  | I ->
+     Dleaf !^"I"

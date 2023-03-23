@@ -21,12 +21,12 @@ module LCSet = Set.Make(LC)
 type simp_ctxt = {
     global : Global.t;
     values : IT.t SymMap.t;
-    equalities: bool ITPairMap.t;
-    lcs : LCSet.t;
   }
 
-let default global = {global;
-    values = SymMap.empty; equalities = ITPairMap.empty; lcs = LCSet.empty}
+let default global = {
+    global;
+    values = SymMap.empty; 
+  }
 
 
 
@@ -155,13 +155,7 @@ module IndexTerms = struct
 
   let rec simp ?(inline_functions=false) simp_ctxt =
 
-    let add_known_facts new_facts lcs = 
-      List.fold_right LCSet.add (List.concat_map flatten new_facts) lcs
-    in
-
-
-    let aux2 lcs it = simp { simp_ctxt with lcs } it in
-    let aux it = simp simp_ctxt it in
+    let aux it = simp ~inline_functions:inline_functions simp_ctxt it in
 
     let lit it bt = 
       match it with
@@ -378,7 +372,7 @@ module IndexTerms = struct
               | _ -> and_ (List.rev acc)
               end
            | it :: its ->
-              let it = aux2 (add_known_facts acc simp_ctxt.lcs) it in
+              let it = aux it in
               begin match it with
               | IT (Lit (Bool true), _) -> make acc its
               | IT (Lit (Bool false), _) -> bool_ false
@@ -440,8 +434,8 @@ module IndexTerms = struct
          end
       | ITE (a, b, c) ->
          let a = aux a in
-         let b = aux2 (add_known_facts [a] simp_ctxt.lcs) b in
-         let c = aux2 (add_known_facts [not_ a] simp_ctxt.lcs) c in
+         let b = aux b in
+         let c = aux c in
          begin match a with
          | IT (Lit (Bool true), _) -> b
          | IT (Lit (Bool false), _) -> c
@@ -475,16 +469,6 @@ module IndexTerms = struct
               and_ [impl_ (cond, bool_ (Z.equal z1 z3));
                     impl_ (not_ cond, bool_ (Z.equal z2 z3))]
               )
-         | a, b
-            when ITPairMap.mem (a,b) simp_ctxt.equalities ||
-                   ITPairMap.mem (b,a) simp_ctxt.equalities 
-           ->
-            begin match ITPairMap.find_opt (a,b) simp_ctxt.equalities, 
-                        ITPairMap.find_opt (b,a) simp_ctxt.equalities with
-            | Some bool, _ -> bool_ bool
-            | _, Some bool -> bool_ bool
-            | _ -> eq_ (a, b)
-            end
          | IT (Tuple_op (Tuple items1), _),
            IT (Tuple_op (Tuple items2), _)  ->
             aux (and_ (List.map2 eq__ items1 items2))
@@ -743,25 +727,23 @@ module IndexTerms = struct
     in
 
     fun it ->
-    if LCSet.mem (LC.T it) simp_ctxt.lcs then bool_ true else
-    if LCSet.mem (LC.T (not_ it)) simp_ctxt.lcs then bool_ false else
-      let (IT (it_, bt)) = it in
-      match it_ with
-      | Lit l -> lit l bt
-      | Arith_op a -> arith_op a bt
-      | Bool_op b -> bool_op b bt
-      | Tuple_op t -> tuple_op t bt
-      | Struct_op s -> struct_op s bt
-      | Record_op r -> record_op r bt
-      | Datatype_op r -> datatype_op r bt
-      | Pointer_op p -> pointer_op p bt
-      | List_op l -> IT (List_op l, bt)
-      | Set_op s -> IT (Set_op s, bt)
-      | CT_pred c -> ct_pred c bt
-      | Map_op a -> map_op a bt
-      | Pred (name, args) -> pred name args bt
-      (* | Option_op o -> option_op o bt *)
-      (* | Let ((s, bound), body) -> letb (s, bound) body bt *)
+    let (IT (it_, bt)) = it in
+    match it_ with
+    | Lit l -> lit l bt
+    | Arith_op a -> arith_op a bt
+    | Bool_op b -> bool_op b bt
+    | Tuple_op t -> tuple_op t bt
+    | Struct_op s -> struct_op s bt
+    | Record_op r -> record_op r bt
+    | Datatype_op r -> datatype_op r bt
+    | Pointer_op p -> pointer_op p bt
+    | List_op l -> IT (List_op l, bt)
+    | Set_op s -> IT (Set_op s, bt)
+    | CT_pred c -> ct_pred c bt
+    | Map_op a -> map_op a bt
+    | Pred (name, args) -> pred name args bt
+    (* | Option_op o -> option_op o bt *)
+    (* | Let ((s, bound), body) -> letb (s, bound) body bt *)
 
 
   (* let simp a b c d e it =  *)
@@ -785,8 +767,7 @@ module IndexTerms = struct
     simp ~inline_functions:true 
       { global = simp_ctxt.global; 
         values = simp_ctxt.values; 
-        equalities = ITPairMap.empty;
-        lcs = LCSet.empty }
+      }
 
 end
 
@@ -824,15 +805,13 @@ module ResourceTypes = struct
   let simp_qpredicate_type simp_ctxt (qp : qpredicate_type) =
     let qp = alpha_rename_qpredicate_type_ (Sym.fresh_same qp.q) qp in
     let permission = simp_flatten simp_ctxt qp.permission in
-    let permission_lcs = LCSet.of_list (List.map LC.t_ permission) in
-    let simp_lcs = LCSet.union permission_lcs simp_ctxt.lcs in
     {
       name = qp.name;
       pointer = simp simp_ctxt qp.pointer;
       q = qp.q;
       step = simp simp_ctxt qp.step;
       permission = and_ permission;
-      iargs = List.map (simp { simp_ctxt with lcs = simp_lcs }) qp.iargs;
+      iargs = List.map (simp simp_ctxt) qp.iargs;
     }
 
 

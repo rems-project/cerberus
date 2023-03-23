@@ -10,10 +10,10 @@ predicate {integer out1} OtherPred (pointer p) {
 
 predicate {integer z, integer out2} MyPred (pointer p, integer n) {
   if ( n == 10 ) {
-    let Foo = Owned<struct T>(p) ;
+    take Foo = Owned<struct T>(p) ;
     return { z = 42, out2 = 55 } ;
   } else {
-    let R = MyPred(p, n + 10) ;
+    take R = MyPred(p, n + 10) ;
     let x = n + R.z + R.out2 ;
     return { z = n + 100, out2 = 55 } ;
   }
@@ -25,13 +25,17 @@ struct int_list_items {
   struct int_list_items* next;
 };
 
+datatype int_list {
+  Nil {},
+  Cons {integer x, datatype int_list tl}
+}
 
-predicate {list<integer> v} IntList(pointer l) {
+predicate {datatype int_list v} IntList(pointer l) {
   if ( l == NULL ) {
-    return { v = nil(integer) } ;
+    return { v = Nil {} } ;
   } else {
-    let Head_item = Owned<struct int_list_items>(l) ;
-    let Tail = IntList(Head_item.value.next) ;
-    return { v = cons(Head_item.value.iv, Tail.v) } ;
+    take H = Owned<struct int_list_items>(l) ;
+    take T = IntList(H.value.next) ;
+    return { v = Cons {x = H.value.iv, tl = T.v} } ;
   }
 }

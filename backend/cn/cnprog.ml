@@ -21,6 +21,9 @@ type cn_statement =
   | M_CN_apply of Sym.t * IndexTerms.t list
   | M_CN_assert of LogicalConstraints.t
 
+
+
+
 type cn_load = {ct : Sctypes.t; pointer : IndexTerms.t}
 
 
@@ -70,3 +73,42 @@ and suitably_alpha_rename syms (s, ls) prog =
   if SymSet.mem s syms
   then alpha_rename (s, ls) prog
   else (s, prog)
+
+
+
+open Cerb_frontend.Pp_ast
+open Cerb_frontend.Cn
+open Pp
+
+let dtree_of_to_instantiate = function
+  | I_Function f -> Dnode (pp_ctor "[CN]function", [Dleaf (Sym.pp f)])
+  | I_Good ty -> Dnode(pp_ctor "[CN]good", [Dleaf (Sctypes.pp ty)])
+  | I_Everything -> Dleaf !^"[CN]everything"
+
+let dtree_of_cn_statement = function
+  | M_CN_pack_unpack (Pack, pred) ->
+     Dnode (pp_ctor "Pack", [ResourceTypes.dtree_of_predicate_type pred])
+  | M_CN_pack_unpack (Unpack, pred) ->
+     Dnode (pp_ctor "Unpack", [ResourceTypes.dtree_of_predicate_type pred])
+  | M_CN_have lc ->
+     Dnode (pp_ctor "Have", [LC.dtree lc])
+  | M_CN_instantiate (to_instantiate, it) ->
+     Dnode (pp_ctor "Instantiate",
+            [dtree_of_to_instantiate to_instantiate; IT.dtree it])
+  | M_CN_unfold (s, args) ->
+     Dnode (pp_ctor "Unfold", List.map IT.dtree args)
+  | M_CN_apply (s, args) ->
+     Dnode (pp_ctor "Apply", List.map IT.dtree args)
+  | M_CN_assert lc ->
+     Dnode (pp_ctor "Assert", [LC.dtree lc])
+
+
+let rec dtree = function
+  | M_CN_let (_loc, (s, load), prog) ->
+     Dnode (pp_ctor "LetLoad", [
+           Dleaf (Sym.pp s); 
+           IT.dtree load.pointer;
+           Dleaf (Sctypes.pp load.ct);
+           dtree prog])
+  | M_CN_statement (_loc, stmt) ->
+     dtree_of_cn_statement stmt

@@ -57,23 +57,36 @@ Lemma in_tree_tree_v_lemma : in_tree_tree_v_lemma_type.
 Proof.
   unfold in_tree_tree_v_lemma_type.
   intros.
+  destruct arc as [arr i len].
   repeat (apply conj).
-  - auto.
+  (*
   - unfold in_tree, Setup.in_tree.
     rewrite (arc_from_array_step _ i).
     destruct (path_len <=? i) eqn: path_end.
     + destruct (get_t_0_3 T); auto.
     + destruct (get_t_0_3 T); auto.
+    *)
   - unfold tree_v, Setup.tree_v.
     rewrite (arc_from_array_step _ i).
-    destruct (path_len <=? i) eqn: path_end.
-    + destruct (get_t_0_3 T); auto.
-    + destruct (get_t_0_3 T); auto.
+    simpl.
+    rewrite Z.leb_antisym.
+    destruct (i <? len) eqn: path_end.
+    + destruct t; auto.
+    + destruct t; auto.
+  - unfold in_tree, Setup.in_tree.
+    rewrite (arc_from_array_step _ i).
+    simpl.
+    rewrite Z.leb_antisym.
+    destruct (i <? len) eqn: path_end.
+    + destruct t; auto.
+    + destruct t; auto.
   - unfold nth_tree_list, array_to_tree_list, Setup.array_to_list.
-    destruct ((0 <=? Xs i) && (Xs i <? num_nodes)) eqn: Xs_ok; try apply I.
-    destruct (get_t_0_3 T); try apply I.
     rewrite to_list_of_list.
+    cbn.
+    destruct ((0 <=? arr i) && (arr i <? num_nodes)) eqn: ix_ok; try apply I.
+    unfold num_nodes in *.
     rewrite nth_get_array_elts by lia.
+    simpl.
     f_equal.
     lia.
 Qed.

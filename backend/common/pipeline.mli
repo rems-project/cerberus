@@ -1,7 +1,7 @@
 open Cerb_frontend
 
 type language =
-  | Cabs | Ail | Core
+  | Cabs | Ail | Core | Types
 
 type pp_flag =
   | Annot | FOut
