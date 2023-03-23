@@ -119,18 +119,31 @@ type executable_spec = {
     in_stmt: (Cerb_location.t * string) list;
 }
 
-let empty_executable_spec = {
+let _empty_executable_spec = {
     pre_post = [];
     in_stmt = [];
 }
 
 
-let _generate_c_statement cn_statement =
-  cn_statement
+let generate_c_statements cn_statements = []
+  (* let generate_c_statement cn_statement = 
+    (Location_ocaml.Loc_other "hello", "Unknown")
+  in
+  List.map generate_c_statement cn_statements *)
+
 
 (* Core_to_mucore.instrumentation list -> executable_spec *)
-let generate_c_spec instrumentation_list =
-  empty_executable_spec
+let generate_c_specs instrumentation_list =
+  let open Core_to_mucore in
+  let generate_c_spec instrumentation =
+    ([], generate_c_statements instrumentation.surface.statements)
+  in
+  let specs = List.map generate_c_spec instrumentation_list in 
+  let (pre_post, in_stmt) = List.split specs in
+  let pre_post = List.fold_left List.append [] pre_post in
+  let in_stmt = List.fold_left List.append [] in_stmt in
+  let executable_spec = {pre_post = pre_post; in_stmt = in_stmt} in
+  executable_spec
 
 
 
@@ -200,14 +213,14 @@ let main
       let result =
         let open Resultat in
          let@ prog5 = Core_to_mucore.normalise_file (markers_env, ail_prog) prog4 in
-         let instrumentation = Core_to_mucore.collect_instrumentation prog5 in
+         let (instrumentation, sym_table) = Core_to_mucore.collect_instrumentation prog5 in
          print_log_file ("mucore", MUCORE prog5);
          let@ res = Typing.run Context.empty (Check.check prog5 statement_locs lemmata) in
          begin match output_decorated with
          | None -> ()
          | Some output_filename ->
             let oc = Stdlib.open_out output_filename in
-            let executable_spec = generate_c_spec instrumentation in
+            let executable_spec = generate_c_specs instrumentation in
             begin match
               Source_injection.(output_injections oc
                 { filename; sigm= ail_prog
