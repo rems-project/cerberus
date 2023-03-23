@@ -112,8 +112,32 @@ let check_input_file filename =
 
 
 
-let main
-      filename
+(* Executable spec helper functions *)
+
+type executable_spec = {
+    pre_post: (CF.Symbol.sym * (string * string)) list;
+    in_stmt: (Cerb_location.t * string) list;
+}
+
+let empty_executable_spec = {
+    pre_post = [];
+    in_stmt = [];
+}
+
+
+let _generate_c_statement cn_statement =
+  cn_statement
+
+(* Core_to_mucore.instrumentation list -> executable_spec *)
+let generate_c_spec instrumentation_list =
+  empty_executable_spec
+
+
+
+
+
+let main 
+      filename 
       incl_dirs
       incl_files
       loc_pp
@@ -176,24 +200,19 @@ let main
       let result =
         let open Resultat in
          let@ prog5 = Core_to_mucore.normalise_file (markers_env, ail_prog) prog4 in
-         (* let instrumentation = Core_to_mucore.collect_instrumentation prog5 in *)
-         (* for constructor base type information, for now see prog5.mu_datatypes and prog5.mu_constructors *)
+         let instrumentation = Core_to_mucore.collect_instrumentation prog5 in
          print_log_file ("mucore", MUCORE prog5);
          let@ res = Typing.run Context.empty (Check.check prog5 statement_locs lemmata) in
          begin match output_decorated with
          | None -> ()
          | Some output_filename ->
             let oc = Stdlib.open_out output_filename in
-            let loc = List.nth (CStatements.LocMap.bindings statement_locs) 3 in
-            let extracted_statements = List.map (fun (_, (_, _, _, _, stmt)) -> stmt) ail_prog.function_definitions in
-            let magic_statements = List.map Source_injection.get_magics_of_statement extracted_statements in
-            let _magic_statements_reduced = List.fold_left List.append [] (List.fold_left List.append [] magic_statements) 
-            in
+            let executable_spec = generate_c_spec instrumentation in
             begin match
               Source_injection.(output_injections oc
                 { filename; sigm= ail_prog
-                ; pre_post=[(*TODO(Rini): add here the pprints of functions pre/post conditions*)]
-                ; in_stmt=[(fst loc, "Hello world")] }
+                ; pre_post=executable_spec.pre_post
+                ; in_stmt=executable_spec.in_stmt}
               )
             with
             | Ok () ->
