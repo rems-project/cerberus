@@ -663,6 +663,7 @@ module Translate = struct
 
   type reduction = {
       expr : Z3.Expr.expr;
+      it : IT.t;
       qs : (Sym.t * BT.t) list;
     }
 
@@ -670,11 +671,11 @@ module Translate = struct
     let term it = term context global it in
     match lc with
     | T it -> 
-       { expr = term it; qs = [] }
+       { expr = term it; it; qs = [] }
     | Forall ((s, bt), it) -> 
        let v_s, v = IT.fresh_same bt s in
-       { expr = term (IT.subst (make_subst [(s, v)]) it); 
-         qs = [(v_s, bt)] }
+       let it = IT.subst (make_subst [(s, v)]) it in
+       { expr = term it; it; qs = [(v_s, bt)] }
 
 
   let extra_assumptions assumptions qs = 
@@ -689,9 +690,11 @@ module Translate = struct
       ) qs
 
 
-  let extra_logical_facts constraints =
+  let extra_logical_facts global terms constraints =
     let ts = List.filter_map (function | LC.T t -> Some t | _ -> None) constraints in
-    IT.nth_array_to_list_facts ts
+    let all_ts = LogicalPredicates.add_unfolds_to_terms
+        global.logical_predicates (ts @ terms) in
+    IT.nth_array_to_list_facts all_ts
 
 
 end
@@ -815,12 +818,12 @@ let provable ~loc ~solver ~global ~assumptions ~simp_ctxt ~pointer_facts lc =
   match shortcut simp_ctxt lc with
   | `True -> rtrue ()
   | `No_shortcut lc ->
-     let Translate.{expr; qs} = Translate.goal context global lc in
+     let Translate.{expr; it; qs} = Translate.goal context global lc in
      let nlc = Z3.Boolean.mk_not context expr in
-     let assumptions = 
-       List.map (Translate.term context global) 
-         (pointer_facts @ Translate.extra_assumptions assumptions qs @
-               Translate.extra_logical_facts (lc :: LCSet.elements assumptions)) in
+     let extra1 = pointer_facts @ Translate.extra_assumptions assumptions qs in
+     let extra2 = Translate.extra_logical_facts global
+         (it :: extra1) (LCSet.elements assumptions) in
+     let assumptions = List.map (Translate.term context global) (extra1 @ extra2) in
      let res = 
        time_f_logs loc 5 "Z3(inc)"
          (Z3.Solver.check solver.incremental) 
