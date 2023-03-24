@@ -78,7 +78,7 @@ let rec free_vars_ = function
   | MapSet (t1, t2, t3) -> free_vars_list [t1; t2; t3]
   | MapGet (t1, t2) -> free_vars_list [t1; t2]
   | MapDef ((s, _bt), t) -> SymSet.remove s (free_vars t)
-  | Pred (_pred, ts) -> free_vars_list ts
+  | Apply (_pred, ts) -> free_vars_list ts
 
 and free_vars (IT (term_, _bt)) =
   free_vars_ term_
@@ -131,7 +131,7 @@ let rec fold_ f binders acc = function
   | MapSet (t1, t2, t3) -> fold_list f binders acc [t1; t2; t3]
   | MapGet (t1, t2) -> fold_list f binders acc [t1; t2]
   | MapDef ((s, bt), t) -> fold f (binders @ [(s, bt)]) acc t
-  | Pred (_pred, ts) -> fold_list f binders acc ts
+  | Apply (_pred, ts) -> fold_list f binders acc ts
 
 and fold f binders acc (IT (term_, _bt)) =
   let acc' = fold_ f binders acc term_ in
@@ -150,7 +150,7 @@ let fold_subterms : 'a 'bt. ((Sym.t * BT.t) list -> 'a -> 'bt term -> 'a) -> 'a 
 
 let todo_is_pred (pred: string) (IT (it_, bt)) = 
   match pred, it_ with
-  | _, Pred (name, _) when String.equal (Tools.todo_string_of_sym name) pred -> true
+  | _, Apply (name, _) when String.equal (Tools.todo_string_of_sym name) pred -> true
   | "good", Good _ -> true
   | _ -> false
 
@@ -162,7 +162,7 @@ let todo_mentions_pred (pred: Id.t) =
 
 let is_call (f: Sym.t) (IT (it_, bt)) = 
   match it_ with
-  | Pred (f', _) when Sym.equal f f' -> true
+  | Apply (f', _) when Sym.equal f f' -> true
   | _ -> false
 
 let is_good (ct : Sctypes.t) (IT (it_, bt)) = 
@@ -184,7 +184,7 @@ let mentions_good ct =
 
 let preds_of t =
   let add_p s = function
-    | IT (Pred (id, _), _) -> SymSet.add id s
+    | IT (Apply (id, _), _) -> SymSet.add id s
     | _ -> s
   in
   fold_subterms (fun _ -> add_p) SymSet.empty t
@@ -285,8 +285,8 @@ let rec subst (su : typed subst) (IT (it, bt)) =
   | MapDef ((s, abt), body) ->
      let s, body = suitably_alpha_rename su.relevant (s, abt) body in
      IT (MapDef ((s, abt), subst su body), bt)
-  | Pred (name, args) ->
-     IT (Pred (name, List.map (subst su) args), bt)
+  | Apply (name, args) ->
+     IT (Apply (name, List.map (subst su) args), bt)
 
 and alpha_rename (s, bt) body =
   let s' = Sym.fresh_same s in
@@ -634,7 +634,7 @@ let make_array_ ~item_bt items (* assumed all of item_bt *) =
 
 
 let pred_ name args rbt =
-  IT (Pred (name, args), rbt)
+  IT (Apply (name, args), rbt)
 
 
 (* let let_ sym e body = *)

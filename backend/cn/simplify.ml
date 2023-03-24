@@ -640,11 +640,11 @@ module IndexTerms = struct
        let body = aux body in
        IT (MapDef ((s', abt), body), the_bt)
 
-    | Pred (name, args) ->
+    | Apply (name, args) ->
 
       let args = List.map aux args in
       let def = SymMap.find name simp_ctxt.global.logical_functions in
-      let t = IT (Pred (name, args), the_bt) in
+      let t = IT (Apply (name, args), the_bt) in
       if not inline_functions then t else 
         begin match LogicalFunctions.try_open_fun_to_term def name args with
         | Some inlined -> aux inlined

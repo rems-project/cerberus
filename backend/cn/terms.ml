@@ -84,7 +84,7 @@ type 'bt term_ =
   | MapSet of 'bt term * 'bt term * 'bt term
   | MapGet of 'bt term * 'bt term
   | MapDef of (Sym.t * BaseTypes.t) * 'bt term
-  | Pred of Sym.t * ('bt term) list
+  | Apply of Sym.t * ('bt term) list
 
 and 'bt term =
   | IT of 'bt term_ * 'bt
@@ -315,7 +315,7 @@ let pp : 'bt 'a. ?atomic:bool -> ?f:('bt term -> Pp.doc -> Pp.doc) -> 'bt term -
       (*  | it_ -> aux true it_ *)
       (*  in *)
       (*  prefix 2 0 root_pp @@ align (flow_map (break 0) pp_op ops) *)
-    | Pred (name, args) ->
+    | Apply (name, args) ->
        c_app (Sym.pp name) (List.map (aux false) args)
   in
   fun (it : 'bt term) -> aux atomic it
@@ -403,5 +403,5 @@ let rec dtree (IT (it_, bt)) =
   | (MapSet (t1, t2, t3)) -> Dnode (pp_ctor "MapSet", [dtree t1; dtree t2; dtree t3])
   | (MapGet (t1, t2)) -> Dnode (pp_ctor "MapGet", [dtree t1; dtree t2])
   | (MapDef ((s, bt), t)) -> Dnode (pp_ctor "MapDef", [Dleaf (Sym.pp s); dtree t])
-  | Pred (f, args) -> Dnode (pp_ctor "Pred", (Dleaf (Sym.pp f) :: List.map dtree args))
+  | Apply (f, args) -> Dnode (pp_ctor "Apply", (Dleaf (Sym.pp f) :: List.map dtree args))
   | _ -> failwith "todo"

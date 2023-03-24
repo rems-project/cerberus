@@ -560,7 +560,7 @@ module WIT = struct
             let@ body = infer loc body in
             return (IT (MapDef ((s, abt), body), Map (abt, IT.bt body)))
             end
-      | Pred (name, args) ->
+      | Apply (name, args) ->
          let@ def = Typing.get_logical_function_def loc name in
          let has_args, expect_args = List.length args, List.length def.args in
          let@ () = ensure_same_argument_number loc `General has_args ~expect:expect_args in
@@ -569,7 +569,7 @@ module WIT = struct
                check loc def_arg_bt has_arg
              ) args def.args
          in
-         return (IT (Pred (name, args), def.return_bt))
+         return (IT (Apply (name, args), def.return_bt))
          
 
     and check =

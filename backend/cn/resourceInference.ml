@@ -43,7 +43,7 @@ let debug_constraint_failure_diagnostics lvl (model_with_q : Solver.model_with_q
     | IT.Impl (x, y)
     | IT.Binop (IT.LT, x, y)
     | IT.Binop (IT.LE, x, y) -> List.concat_map split [x; y]
-    | IT.Pred (name, args) when Option.is_some (unpack_def global name args) ->
+    | IT.Apply (name, args) when Option.is_some (unpack_def global name args) ->
         [Option.get (unpack_def global name args)]
     | _ -> []
   in

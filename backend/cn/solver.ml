@@ -584,7 +584,7 @@ module Translate = struct
          Z3.Quantifier.expr_of_quantifier
            (Z3.Quantifier.mk_lambda_const context
               [term (sym_ (q_s, q_bt))] (term body))
-      | Pred (name, args) ->
+      | Apply (name, args) ->
          let def = Option.get (get_logical_function_def global name) in
          begin match def.definition with
          | Def body ->

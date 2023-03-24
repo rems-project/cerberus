@@ -126,7 +126,7 @@ let check_noop _ = ()
 
 let add_it_funs it funs =
   let f _ funs it = match IT.term it with
-    | IT.Pred (name, args) -> SymSet.add name funs
+    | IT.Apply (name, args) -> SymSet.add name funs
     | _ -> funs
   in
   IT.fold_subterms f funs it
@@ -375,7 +375,7 @@ let it_adjust (global : Global.t) it =
                 let x = IT.subst (IT.make_subst [(s, IT.sym_ (s2, BT.Integer))]) x in
                 IT.eachI_ (i1, s2, i2) x
             else IT.eachI_ (i1, s, i2) x
-    | IT.Pred (name, args) ->
+    | IT.Apply (name, args) ->
         let open LogicalFunctions in
         let def = SymMap.find name global.logical_functions in
         begin match def.definition with
@@ -675,7 +675,7 @@ let rec unfold_if_possible global it =
   let open IT in
   let open LogicalFunctions in
   match it with
-  | IT (IT.Pred (name, args), _) ->
+  | IT (IT.Apply (name, args), _) ->
      let def = Option.get (Global.get_logical_function_def global name) in
      begin match def.definition with
      | Rec_Def _ -> it
@@ -868,7 +868,7 @@ let it_to_coq loc global list_mono it =
         parensM (build [rets op_nm; aux t; aux x])
     | IT.IntegerToPointerCast t -> aux t
     | IT.PointerToIntegerCast t -> aux t
-    | IT.Pred (name, args) ->
+    | IT.Apply (name, args) ->
         let prop_ret = fun_prop_ret global name in
         let body_aux = f prop_ret in
         let@ () = ensure_pred global list_mono loc name body_aux in
