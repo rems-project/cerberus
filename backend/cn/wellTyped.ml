@@ -561,7 +561,7 @@ module WIT = struct
             return (IT (MapDef ((s, abt), body), Map (abt, IT.bt body)))
             end
       | Pred (name, args) ->
-         let@ def = Typing.get_logical_predicate_def loc name in
+         let@ def = Typing.get_logical_function_def loc name in
          let has_args, expect_args = List.length args, List.length def.args in
          let@ () = ensure_same_argument_number loc `General has_args ~expect:expect_args in
          let@ args = 
@@ -1044,9 +1044,9 @@ end
 
 
 
-module WLPD = struct
+module WLFD = struct
 
-  open LogicalPredicates
+  open LogicalFunctions
 
   let rec welltyped_body loc return_bt body =
     pure begin
@@ -1080,7 +1080,7 @@ module WLPD = struct
       end
 
 
-  let welltyped (pd : LogicalPredicates.definition) = 
+  let welltyped (pd : LogicalFunctions.definition) = 
     (* no need to alpha-rename, because context.ml ensures
        there's no name clashes *)
     (* let pd = LogicalPredicates.alpha_rename_definition pd in *)

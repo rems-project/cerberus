@@ -7,7 +7,7 @@ module AT = ArgumentTypes
 module LAT = LogicalArgumentTypes
 module TE = TypeErrors
 module Loc = Locations
-module LP = LogicalPredicates
+module LF = LogicalFunctions
 module LC = LogicalConstraints
 
 module StringSet = Set.Make(String)
@@ -376,10 +376,10 @@ let it_adjust (global : Global.t) it =
                 IT.eachI_ (i1, s2, i2) x
             else IT.eachI_ (i1, s, i2) x
     | IT.Pred (name, args) ->
-        let open LogicalPredicates in
-        let def = SymMap.find name global.logical_predicates in
+        let open LogicalFunctions in
+        let def = SymMap.find name global.logical_functions in
         begin match def.definition with
-          | Def body -> f (Body.to_term def.return_bt (open_pred def.args body args))
+          | Def body -> f (Body.to_term def.return_bt (open_fun def.args body args))
           | _ -> t
         end
     | IT.Good (ct, t2) -> if Option.is_some (Sctypes.is_struct_ctype ct)
@@ -395,10 +395,10 @@ let it_adjust (global : Global.t) it =
   f it
 
 let fun_prop_ret (global : Global.t) nm = 
-  match SymMap.find_opt nm global.logical_predicates with
+  match SymMap.find_opt nm global.logical_functions with
   | None -> fail "fun_prop_ret: not found" (Sym.pp nm)
   | Some def ->
-    let open LogicalPredicates in
+    let open LogicalFunctions in
     BaseTypes.equal BaseTypes.Bool def.return_bt
       && not (StringSet.mem (Sym.pp_string nm) bool_funs)
 
@@ -626,8 +626,8 @@ let ensure_tuple_op is_upd nm (ix, l) =
   return op_nm
 
 let ensure_pred global list_mono loc name aux =
-  let open LogicalPredicates in
-  let def = SymMap.find name global.Global.logical_predicates in
+  let open LogicalFunctions in
+  let def = SymMap.find name global.Global.logical_functions in
   let inf = (loc, Pp.typ (Pp.string "pred") (Sym.pp name)) in
   begin match def.definition with
   | Uninterp -> gen_ensure 1 ["params"; "pred"; Sym.pp_string name]
@@ -673,16 +673,16 @@ let ensure_struct_mem is_good global list_mono loc ct aux = match Sctypes.is_str
 
 let rec unfold_if_possible global it = 
   let open IT in
-  let open LogicalPredicates in
+  let open LogicalFunctions in
   match it with
   | IT (IT.Pred (name, args), _) ->
-     let def = Option.get (Global.get_logical_predicate_def global name) in
+     let def = Option.get (Global.get_logical_function_def global name) in
      begin match def.definition with
      | Rec_Def _ -> it
      | Uninterp -> it
      | Def body -> 
         unfold_if_possible global 
-          (Body.to_term def.return_bt (open_pred def.args body args))
+          (Body.to_term def.return_bt (open_fun def.args body args))
      end
   | _ ->
      it

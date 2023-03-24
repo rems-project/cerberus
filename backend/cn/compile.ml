@@ -677,7 +677,7 @@ module EffectfulTranslation = struct
                   | Some (sym, fsig) -> return (sym, fsig.return_bty)
                   | None ->
                       debug_known_preds env;
-                      fail {loc; msg = Unknown_logical_predicate
+                      fail {loc; msg = Unknown_logical_function
                           {id = Sym.fresh_named nm_s; resource = false}}
                 in
                 return (pred_ sym args (SurfaceBaseTypes.of_basetype bt))
@@ -980,7 +980,7 @@ end
 
 
 let translate_cn_func_body env body =
-  let open LogicalPredicates in
+  let open LogicalFunctions in
   let handle = Pure.handle "Function definitions" in
   let rec aux env body =
     match body with
@@ -1008,7 +1008,7 @@ let translate_cn_func_body env body =
 let known_attrs = ["rec"]
 
 let translate_cn_function env (def: cn_function) =
-  let open LogicalPredicates in
+  let open LogicalFunctions in
   Pp.debug 2 (lazy (Pp.item "translating function defn" (Sym.pp def.cn_func_name)));
   let args = 
     List.map (fun (bTy, sym) -> (sym, translate_cn_base_type bTy)

@@ -13,7 +13,7 @@ module SymSet = Set.Make(Sym)
 module SymMap = Map.Make(Sym)
 module S = Solver
 module Loc = Locations
-module LP = LogicalPredicates
+module LF = LogicalFunctions
 module Mu = Mucore
 module RI = ResourceInference
 
@@ -1365,7 +1365,7 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
                  | I_Everything -> 
                     return (fun _ -> true)
                  | I_Function f -> 
-                    let@ _ = get_logical_predicate_def loc f in 
+                    let@ _ = get_logical_function_def loc f in 
                     return (IT.mentions_call f)
                  | I_Good ct -> 
                     let@ () = WCT.is_ct loc ct in 
@@ -1374,7 +1374,7 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
                let@ it = WIT.check loc Integer it in
                instantiate loc filter it
             | M_CN_unfold (f, args) ->
-               let@ def = get_logical_predicate_def loc f in
+               let@ def = get_logical_function_def loc f in
                let has_args, expect_args = List.length args, List.length def.args in
                let@ () = WellTyped.ensure_same_argument_number loc `General has_args ~expect:expect_args in
                let@ args = 
@@ -1382,7 +1382,7 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
                      WellTyped.WIT.check loc def_arg_bt has_arg
                    ) args def.args
                in
-               begin match LP.single_unfold_to_term def f args with
+               begin match LF.single_unfold_to_term def f args with
                | None ->
                   let msg = 
                     !^"Cannot unfold definition of uninterpreted function" 
@@ -1596,7 +1596,7 @@ let record_and_check_logical_functions funs =
 
   let recursive, nonrecursive =
     List.partition (fun (_, def) ->
-        LogicalPredicates.is_recursive def
+        LogicalFunctions.is_recursive def
       ) funs
   in
 
@@ -1604,8 +1604,8 @@ let record_and_check_logical_functions funs =
      adding them, because they cannot depend on themselves*)
   let@ () =
     ListM.iterM (fun (name, def) -> 
-        let@ def = WellTyped.WLPD.welltyped def in
-        add_logical_predicate name def
+        let@ def = WellTyped.WLFD.welltyped def in
+        add_logical_function name def
       ) nonrecursive
   in
 
@@ -1615,12 +1615,12 @@ let record_and_check_logical_functions funs =
 
   let@ () =
     ListM.iterM (fun (name, def) -> 
-        add_logical_predicate name def
+        add_logical_function name def
       ) recursive
   in
   ListM.iterM (fun (name, def) -> 
-      let@ def = WellTyped.WLPD.welltyped def in
-      add_logical_predicate name def
+      let@ def = WellTyped.WLFD.welltyped def in
+      add_logical_function name def
     ) recursive
 
 let record_and_check_resource_predicates preds =

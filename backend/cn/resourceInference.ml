@@ -21,12 +21,12 @@ let span_actions = ref true
 
 
 let unpack_def global name args =
-    Option.bind (Global.get_logical_predicate_def global name)
+    Option.bind (Global.get_logical_function_def global name)
     (fun def ->
     match def.definition with
     | Def body ->
-       Some (LogicalPredicates.Body.to_term def.return_bt
-               (LogicalPredicates.open_pred def.args body args))
+       Some (LogicalFunctions.Body.to_term def.return_bt
+               (LogicalFunctions.open_fun def.args body args))
     | _ -> None
     )
 

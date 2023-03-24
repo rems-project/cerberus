@@ -10,7 +10,6 @@ module StringMap = Map.Make(String)
 module Loc = Locations
 open Pp
 
-module LP = LogicalPredicates
 
 type clause = {
     loc : Loc.t;

@@ -8,7 +8,7 @@ open LogicalConstraints
 open List
 open Pp
 open Global
-open LogicalPredicates
+open LogicalFunctions
 module LCSet = Set.Make(LC)
 module BT = BaseTypes
 
@@ -585,11 +585,11 @@ module Translate = struct
            (Z3.Quantifier.mk_lambda_const context
               [term (sym_ (q_s, q_bt))] (term body))
       | Pred (name, args) ->
-         let def = Option.get (get_logical_predicate_def global name) in
+         let def = Option.get (get_logical_function_def global name) in
          begin match def.definition with
          | Def body ->
-            term (LogicalPredicates.Body.to_term def.return_bt
-                    (LogicalPredicates.open_pred def.args body args))
+            term (LogicalFunctions.Body.to_term def.return_bt
+                    (LogicalFunctions.open_fun def.args body args))
          | _ ->
             let decl = 
               Z3.FuncDecl.mk_func_decl context (symbol name)
@@ -657,8 +657,8 @@ module Translate = struct
 
   let extra_logical_facts global terms constraints =
     let ts = List.filter_map (function | LC.T t -> Some t | _ -> None) constraints in
-    let all_ts = LogicalPredicates.add_unfolds_to_terms
-        global.logical_predicates (ts @ terms) in
+    let all_ts = LogicalFunctions.add_unfolds_to_terms
+        global.logical_functions (ts @ terms) in
     IT.nth_array_to_list_facts all_ts
 
 
