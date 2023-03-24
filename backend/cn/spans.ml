@@ -174,7 +174,7 @@ let rec get_packing_ft_owned_resources = function
   | LAT.I _ -> []
   | LAT.Constraint (_, _, ftyp) -> get_packing_ft_owned_resources ftyp
   | LAT.Define ((s, it), _, ftyp) ->
-    let ftyp = LAT.subst OutputDef.subst (IT.make_subst [(s, it)]) ftyp in
+    let ftyp = LAT.subst IT.subst (IT.make_subst [(s, it)]) ftyp in
     get_packing_ft_owned_resources ftyp
   | LAT.Resource ((s, (resource, bt)), _, ftyp) ->
     resource :: get_packing_ft_owned_resources ftyp

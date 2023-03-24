@@ -128,7 +128,7 @@ let state ctxt (model_with_q : Solver.model_with_q) (extras : state_extras) =
       let open ResourcePredicates in
       {
         cond = IT.pp c.guard;
-        clause = LogicalArgumentTypes.pp OutputDef.pp c.packing_ft
+        clause = LogicalArgumentTypes.pp IT.pp c.packing_ft
       }
     in
     List.map doc_clause predicate_clauses 

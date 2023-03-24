@@ -604,9 +604,9 @@ module WRET = struct
   let welltyped loc r = 
     let@ spec_iargs = match RET.predicate_name r with
       | Block _ ->
-         return (Resources.block_iargs)
+         return []
       | Owned ct ->
-         return (Resources.owned_iargs ct)
+         return []
       | PName name -> 
          let@ def = Typing.get_resource_predicate_def loc name in
          return def.iargs
@@ -671,21 +671,22 @@ end
 
 
 
-let oargs_spec loc = function
-  | RET.P {name = Block _; _} -> 
-     return (Resources.block_oargs)
-  | RET.P {name = Owned ct; _} -> 
-     return (Resources.owned_oargs ct)
-  | RET.P {name = PName pn; _} ->
-     let@ def = Typing.get_resource_predicate_def loc pn in
-         return (BT.Record def.oargs)
-  | RET.Q {name = Block _; _} -> 
-     return (Resources.q_block_oargs)
-  | RET.Q {name = Owned ct; _} -> 
-     return (Resources.q_owned_oargs ct)
-  | RET.Q {name = PName pn; _} ->
-     let@ def = Typing.get_resource_predicate_def loc pn in
-     return (BT.Record (List.map_snd (BT.make_map_bt Integer) def.oargs))
+let oarg_bt_of_pred loc = function
+  | RET.Block _ct -> 
+      return (BT.Unit)
+  | RET.Owned ct -> 
+      return (BT.of_sct ct)
+  | RET.PName pn ->
+      let@ def = Typing.get_resource_predicate_def loc pn in
+      return def.oarg_bt
+      
+
+let oarg_bt loc = function
+  | RET.P pred -> 
+      oarg_bt_of_pred loc pred.name
+  | RET.Q pred ->
+      let@ item_bt = oarg_bt_of_pred loc pred.name in
+      return (BT.make_map_bt Integer item_bt)
 
 
 
@@ -697,8 +698,8 @@ module WRS = struct
   let welltyped loc (resource, bt) = 
     let@ resource = WRET.welltyped loc resource in
     let@ () = WBT.is_bt loc bt in
-    let@ oargs_spec = oargs_spec loc resource in
-    let@ () = ensure_base_type loc ~expect:oargs_spec bt in
+    let@ oarg_bt = oarg_bt loc resource in
+    let@ () = ensure_base_type loc ~expect:oarg_bt bt in
     return (resource, bt)
 
 end
@@ -800,36 +801,6 @@ module WFalse = struct
   let pp = False.pp
   let welltyped _ False.False = 
     return False.False
-end
-
-module WOutputDef = struct
-  open OutputDef
-  type t = OutputDef.t
-  let subst = OutputDef.subst
-  let pp = OutputDef.pp
-  let welltyped spec_name_bts loc assignment =
-    let rec aux name_bts assignment =
-      match name_bts, assignment with
-      | [], 
-        [] -> 
-         return []
-      | (name, bt) :: name_bts, 
-        a :: assignment when Sym.equal name a.name ->
-         let@ value = WIT.check a.loc bt a.value in
-         let@ assignment = aux name_bts assignment in
-         return ({loc = a.loc; name = a.name; value} :: assignment)
-      | (name, bt) :: name_bts, 
-        {loc; name = name'; value = it} :: _ ->
-         fail (fun _ -> {loc; msg = Generic (!^"expected output argument" ^^^ Sym.pp name ^^^ !^"but found" ^^^ Sym.pp name')})
-      | (name, _) :: _, 
-        _ -> 
-         fail (fun _ -> {loc; msg = Generic (!^"expected output argument" ^^^ Sym.pp name)})
-      | _, 
-        {loc = loc'; name = name'; _} :: _ -> 
-         fail (fun _ -> {loc; msg = Generic (!^"unexpected output argument" ^^^ Sym.pp name')})
-    in
-    aux spec_name_bts assignment
-
 end
 
 
@@ -1045,7 +1016,7 @@ module WRPD = struct
               add_l s ls (pd.loc, lazy (Pp.string "input-var"))
             ) pd.iargs 
         in
-        let@ () = ListM.iterM (WLS.is_ls pd.loc) (List.map snd pd.oargs) in
+        let@ () = WBT.is_bt pd.loc pd.oarg_bt in
         let@ clauses = match pd.clauses with
           | None -> return None
           | Some clauses ->
@@ -1057,7 +1028,7 @@ module WRPD = struct
                        let@ () = add_c (LC.t_ guard) in
                        let@ () = add_c (LC.t_ (IT.and_ negated_guards)) in
                        let@ packing_ft = 
-                         WLAT.welltyped WOutputDef.subst (WOutputDef.welltyped (pd.oargs))
+                         WLAT.welltyped IT.subst (fun loc it -> WIT.check loc pd.oarg_bt it)
                            "clause" loc packing_ft
                        in
                        return (acc @ [{loc; guard; packing_ft}])

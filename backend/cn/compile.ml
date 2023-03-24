@@ -29,9 +29,13 @@ type function_sig = {
     return_bty: BaseTypes.t;
   }
 
+type pred_output =
+  | PO_record of (Sym.t * BaseTypes.t) list  
+  | PO_basetype of BaseTypes.t
+
 type predicate_sig = {
   pred_iargs: (Sym.t * BaseTypes.t) list;
-  pred_oargs: (Sym.t * BaseTypes.t) list;
+  pred_output: pred_output;
 }
 
 
@@ -147,6 +151,7 @@ let pp_cnexpr_kind expr_ =
   | CNExpr_const CNConst_NULL -> !^ "NULL"
   | CNExpr_const (CNConst_integer n) -> Pp.string (Z.to_string n)
   | CNExpr_const (CNConst_bool b) -> !^ (if b then "true" else "false")
+  | CNExpr_const CNConst_unit -> !^"void"
   | CNExpr_var sym -> parens (typ (!^ "var") (Sym.pp sym))
   | CNExpr_deref e -> !^ "(deref ...)"
   | CNExpr_value_of_c_variable sym -> parens (typ (!^ "c:var") (Sym.pp sym))
@@ -252,13 +257,18 @@ let register_cn_predicates env (defs: cn_predicate list) =
   let aux env def =
     let translate_args xs =
       List.map (fun (bTy, sym) ->
-        (sym, translate_cn_base_type bTy)
+        (sym, SBT.to_basetype (translate_cn_base_type bTy))
       ) xs in
     let iargs = translate_args def.cn_pred_iargs in
-    let oargs = translate_args def.cn_pred_oargs in
+    let output = match def.cn_pred_output with
+      | CN_pred_output_record oargs ->
+         PO_record (translate_args oargs) 
+      | CN_pred_output_basetype (_,bt) ->
+         PO_basetype (SBT.to_basetype (translate_cn_base_type bt))
+    in
     add_predicate def.cn_pred_name { 
-        pred_iargs= List.map_snd SBT.to_basetype iargs; 
-        pred_oargs= List.map_snd SBT.to_basetype oargs 
+        pred_iargs= iargs; 
+        pred_output= output 
       } env 
   in
   List.fold_left aux env defs
@@ -575,6 +585,8 @@ module EffectfulTranslation = struct
             return (IT (Const (Z n), SBT.Integer))
         | CNExpr_const (CNConst_bool b) ->
             return (IT (Const (Bool b), SBT.Bool))
+        | CNExpr_const CNConst_unit ->
+            return (IT (Const Unit, SBT.Unit))
         | CNExpr_var sym ->
             let@ bTy = match lookup_computational_or_logical sym env with
               | None ->
@@ -789,7 +801,6 @@ module EffectfulTranslation = struct
 
 
   let translate_cn_res_info res_loc loc env res args =
-    let open Resources in
     let open RET in
     let@ (ptr_expr, iargs) = match args with
       | [] -> fail {loc; msg = First_iarg_missing}
@@ -809,17 +820,21 @@ module EffectfulTranslation = struct
          in
          (* we don't take Resources.owned_oargs here because we want to
             maintain the C-type information *)
-         let oargs_ty = SBT.Record [(Resources.value_sym, SBT.of_sct scty)] in
+         let oargs_ty = SBT.of_sct scty in
          return (Owned scty, oargs_ty)
       | CN_block ty ->
         let scty = Sctypes.of_ctype_unsafe res_loc ty in
-        return (Block scty, SBT.of_basetype block_oargs)
+        return (Block scty, SBT.Unit)
       | CN_named pred ->
         let@ pred_sig = match lookup_predicate pred env with
           | None -> fail {loc; msg = Unknown_resource_predicate {id = pred; logical = false}}
           | Some pred_sig -> return pred_sig
         in
-        return (PName pred, SBT.of_basetype (BT.Record pred_sig.pred_oargs))
+        let output_bt = match pred_sig.pred_output with
+        | PO_record oargs -> BT.Record oargs
+        | PO_basetype bt -> bt
+        in
+        return (PName pred, SBT.of_basetype output_bt)
     in
     return (pname, ptr_expr, iargs, oargs_ty)
 
@@ -846,25 +861,15 @@ module EffectfulTranslation = struct
     end
 
 
-  let get_single_member v =
-    match IT.basetype v with
-    | SBT.Record [(sym, bt)] -> IT.recordMember_ ~member_bt:bt (v, sym)
-    | ty -> assert false
-
-  (* let iterate_resource_env_info = function *)
-  (*   | RPred_owned ct -> RPred_I_owned ct *)
-  (*   | RPred_block ct -> RPred_I_block ct *)
-  (*   | RPred_named nm -> RPred_I_named nm *)
-  (*   | _ -> assert false *)
 
   let owned_good loc sym (res_t, oargs_ty) = 
     match res_t with
     | RET.P { name = Owned scty ; permission; _} ->
-       let v = IT.term_of_sterm (get_single_member (IT.sym_ (sym, oargs_ty))) in
+       let v = IT.sym_ (sym, SBT.to_basetype oargs_ty) in
        [(LC.T (IT.impl_ (permission, IT.good_ (scty, v))), 
          (loc, Some "default value constraint"))]
     | RET.Q { name = Owned scty ; q; permission; _} ->
-       let v = IT.term_of_sterm (get_single_member (IT.sym_ (sym, oargs_ty))) in
+       let v = IT.sym_ (sym, SBT.to_basetype oargs_ty) in
        let v_el = IT.map_get_ v (IT.sym_ (q, BT.Integer)) in
        [(LC.forall_ (q, BT.Integer)
             (IT.impl_ (permission, IT.good_ (scty, v_el))),
@@ -891,7 +896,7 @@ module EffectfulTranslation = struct
            oargs_ty)
     in
     let pointee_value = match pname with
-      | Owned _ -> [ptr_expr, get_single_member (IT.sym_ (sym, oargs_ty))]
+      | Owned _ -> [(ptr_expr, (IT.sym_ (sym, oargs_ty)))]
       | _ -> []
     in
     return (pt, pointee_value)
@@ -909,8 +914,7 @@ module EffectfulTranslation = struct
     let@ (pname, ptr_expr, iargs, oargs_ty) =
            translate_cn_res_info res_loc pred_loc env_with_q res args in
     let@ (ptr_base, step) = split_pointer_linear_step pred_loc q ptr_expr in
-    let oarg_field_tys = SBT.record_bt oargs_ty in
-    let m_oargs_ty = SBT.Record (List.map_snd (fun bt -> SBT.Map (Integer, bt)) oarg_field_tys) in
+    let m_oargs_ty = SBT.make_map_bt SBT.Integer oargs_ty in
     let pt = (RET.Q { name = pname
               ; q
               ; pointer= IT.term_of_sterm ptr_base
@@ -1045,12 +1049,7 @@ let ownership (loc, (addr_s, ct)) env =
   let@ (pt_ret, oa_bt), lcs, _ = 
     Pure.handle "'Accesses'"
       (ET.translate_cn_let_resource env (loc, name, resource)) in
-  let value = 
-    let ct = Sctypes.of_ctype_unsafe loc ct in
-    IT.recordMember_ 
-      ~member_bt:(SBT.of_sct ct)
-      (IT.sym_ (name, oa_bt), Resources.value_sym)
-  in
+  let value = IT.sym_ (name, oa_bt) in
   return (name, ((pt_ret, oa_bt), lcs), value)
 
 
@@ -1165,13 +1164,17 @@ let translate_cn_clause env clause =
          let@ lc = handle st (ET.translate_cn_assrt env (loc, assrt)) in
          let acc' z = acc (LAT.mConstraint ( lc, (loc, None) ) z) in
          translate_cn_clause_aux env st acc' cl
-      | CN_return (loc, xs_) ->
+      | CN_return (loc, CN_return_record xs_) ->
           let@ xs =
             ListM.mapM (fun (sym, e_) ->
               let@ e = handle st (ET.translate_cn_expr SymSet.empty env e_) in
-              return (OutputDef.{loc= loc; name= sym; value= IT.term_of_sterm e})
+              return (sym, IT.term_of_sterm e)
             ) xs_ in
-          acc (LAT.I xs) 
+          acc (LAT.I (IT.record_ xs)) 
+      | CN_return (loc, CN_return_expression e_) ->
+          let@ e = handle st (ET.translate_cn_expr SymSet.empty env e_) in
+          let e = IT.term_of_sterm e in
+          acc (LAT.I e) 
   in
   translate_cn_clause_aux env init_st (fun z -> return z) clause
 
@@ -1202,17 +1205,21 @@ let translate_option_cn_clauses env = function
 let translate_cn_predicate env (def: cn_predicate) =
   let open RP in
   Pp.debug 2 (lazy (Pp.item "translating predicate defn" (Sym.pp def.cn_pred_name)));
-  let (iargs, oargs) =
+  let (iargs, output_bt) =
     match lookup_predicate def.cn_pred_name env with
       | None ->
           assert false
       | Some pred_sig ->
-          (pred_sig.pred_iargs, pred_sig.pred_oargs) in
+          (pred_sig.pred_iargs, pred_sig.pred_output) in
   let env' =
     List.fold_left (fun acc (sym, bTy) ->
       add_logical sym (SBT.of_basetype bTy) acc
     ) env iargs in
   let@ clauses = translate_option_cn_clauses env' def.cn_pred_clauses in
+  let output_bt = match output_bt with
+    | PO_record oargs -> BT.Record oargs
+    | PO_basetype bt -> bt
+  in
   match iargs with
     | (iarg0, BaseTypes.Loc) :: iargs' ->
         return 
@@ -1220,7 +1227,7 @@ let translate_cn_predicate env (def: cn_predicate) =
           , { loc= def.cn_pred_loc
             ; pointer= iarg0
             ; iargs= iargs'
-            ; oargs= oargs
+            ; oarg_bt= output_bt
             ; clauses= clauses
             } )
     | (_, found_bty) :: _ ->

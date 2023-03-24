@@ -1184,12 +1184,12 @@ let register_cn_predicate ident mk =
         resolve_cn_ident Cn.CN_predicate ident >>= fun sym_resolved ->
         let sym = Cn.ensure_not_c_variable sym_resolved in
         push_cn_scope >>= fun () ->
-        mk >>= fun (attrs, oargs, iargs, clauses) ->
+        mk >>= fun (attrs, output, iargs, clauses) ->
         let pred = <|
           Cn.cn_pred_loc= Loc.locOf ident;
           Cn.cn_pred_name= sym;
           Cn.cn_pred_attrs = attrs;
-          Cn.cn_pred_oargs= oargs;
+          Cn.cn_pred_output= output;
           Cn.cn_pred_iargs= iargs;
           Cn.cn_pred_clauses= clauses;
         |> in

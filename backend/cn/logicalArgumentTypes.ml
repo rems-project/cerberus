@@ -180,7 +180,7 @@ let rec r_resource_requests r =
 
 
 
-type packing_ft = OutputDef.t t
+type packing_ft = IT.t t
 type lft = LogicalReturnTypes.t t
 
 
