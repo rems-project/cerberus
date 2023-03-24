@@ -3,6 +3,7 @@ module CF=Cerb_frontend
 module CB=Cerb_backend
 open CB.Pipeline
 open Setup
+open CF.Cn
 
 
 let return = CF.Exception.except_return
@@ -129,13 +130,66 @@ let _empty_executable_spec = {
     in_stmt = [];
 }
 
+let generate_c_binop = function
+| CN_add -> "+"
+| CN_sub -> "-"
+| CN_mul -> "*"
+| CN_div -> "/"
+| CN_equal -> "=="
+| CN_inequal -> "!="
+| CN_lt -> "<"
+| CN_gt -> ">"
+| CN_le -> "<="
+| CN_ge -> ">="
+| CN_or -> "||"
+| CN_and -> "&&"
+| CN_map_get -> "" (* TODO *)
 
-let [@warning "-27"] generate_c_statements cn_statements =
-  let open CF.Cn in
+
+let [@warning "-27"] rec generate_c_expr (CNExpr (loc, expr_)) =
+  match expr_ with 
+  | CNExpr_const CNConst_NULL -> ""
+  | CNExpr_const (CNConst_integer n) -> Z.to_string n
+  | CNExpr_const (CNConst_bool b) -> string_of_bool b
+  (* 
+  | CNExpr_const (CNConst_bool b)
+  | CNExpr_const CNConst_unit 
+  | CNExpr_var sym
+  | CNExpr_list es
+  | CNExpr_memberof (e, xs)
+  | CNExpr_memberupdates (e, updates)
+  | CNExpr_arrayindexupdates (e, updates)
+  | CNExpr_binop (CN_sub, e1_, (CNExpr (_, CNExpr_cons _) as shape)) *)
+  | CNExpr_binop (bop, e1_, e2_) -> (generate_c_expr e1_) ^ (generate_c_binop bop) ^ (generate_c_expr e2_)
+    (* generate_c_binop bop (generate_c_expr e1_, generate_c_expr e2_) *)
+  (*
+  | CNExpr_sizeof ct
+  | CNExpr_offsetof (tag, member)
+  | CNExpr_membershift (e, member)
+  | CNExpr_cast (bt, expr)
+  | CNExpr_call (nm, exprs)
+  | CNExpr_cons (c_nm, exprs)
+  | CNExpr_each (sym, r, e)
+  | CNExpr_ite (e1, e2, e3)
+  | CNExpr_good (ty, e)
+  | CNExpr_not e 
+  | CNExpr_unchanged e
+  | CNExpr_at_env (e, scope)
+  | CNExpr_deref e -> "hello" *)
+  | _ -> ""
+ 
+
+let generate_c_assertion cn_assertion =
+  match cn_assertion with
+  | CN_assert_exp e_ -> String.concat "" ["assert("; generate_c_expr e_; ")"]
+  | _ -> "" (* TODO: CN_assert_qexp *)
+  
+
+let generate_c_statements cn_statements =
   let generate_c_statement (CN_statement (loc, stmt_)) = 
     let pp_statement =
       match stmt_ with
-      | CN_assert_stmt e -> "hello"
+      | CN_assert_stmt e -> generate_c_assertion e
       | _ -> ""
     in 
   (loc, pp_statement)
