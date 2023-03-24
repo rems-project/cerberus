@@ -128,7 +128,7 @@ let main
   Solver.random_seed := random_seed;
   ResourceInference.reorder_points := not no_reorder_points;
   ResourceInference.additional_sat_check := not no_additional_sat_check;
-  Check.InferenceEqs.use_model_eqs := not no_model_eqs;
+  Check.use_model_eqs := not no_model_eqs;
   Check.only := only;
   Diagnostics.diag_string := diag;
   check_input_file filename;

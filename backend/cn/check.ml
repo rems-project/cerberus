@@ -130,11 +130,11 @@ open Binding
 
 
 
+let use_model_eqs = ref true
 
 
 module InferenceEqs = struct
 
-let use_model_eqs = ref true
 
 (* todo: what is this? Can we replace this by using the predicate_name
    + information about whether iterated or not? *)
@@ -957,7 +957,7 @@ let all_empty loc original_resources =
              {loc; msg = Unused_resource {resource; ctxt; model; trace}})
 
 
-type labels = (AT.lt * label_kind) SymMap.t
+(*type labels = (AT.lt * label_kind) SymMap.t*)
 
 
 let load loc pointer ct =
