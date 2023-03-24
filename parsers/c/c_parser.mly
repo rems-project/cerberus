@@ -2132,7 +2132,7 @@ cn_function:
 cn_predicate:
 | CN_PREDICATE enter_cn
   cn_pred_attrs= cn_attrs
-  cn_pred_oargs= delimited(LBRACE, args, RBRACE) str= UNAME VARIABLE
+  cn_pred_output= cn_pred_output str= UNAME VARIABLE
   cn_pred_iargs= delimited(LPAREN, args, RPAREN)
   cn_pred_clauses= cn_option_pred_clauses exit_cn
     { (* TODO: check the name starts with upper case *)
@@ -2140,7 +2140,7 @@ cn_predicate:
       { cn_pred_loc= loc
       ; cn_pred_name= Symbol.Identifier (loc, str)
       ; cn_pred_attrs
-      ; cn_pred_oargs
+      ; cn_pred_output
       ; cn_pred_iargs
       ; cn_pred_clauses} }
 cn_lemma:
@@ -2185,10 +2185,35 @@ args:
     { xs }
 ;
 
+(* copying from "args" *)
+nonempty_args:
+| xs= separated_nonempty_list(COMMA, pair(base_type, cn_variable))
+    { xs }
+;
+
+
+cn_pred_output:
+| oargs=delimited(LBRACE, nonempty_args, RBRACE)
+    { CN_pred_output_record oargs  }
+| bt=base_type
+    { let loc = Location_ocaml.region $loc(bt) NoCursor in
+      CN_pred_output_basetype (loc,bt) }
+
+
 oargs_def:
 | xs= separated_list(COMMA, separated_pair(cn_variable, EQ, expr))
     { xs }
 ;
+
+pred_return:
+| 
+    (* copying from prim_expr *)
+    { let e = Cerb_frontend.Cn.(CNExpr (Location_ocaml.point $startpos, CNExpr_const CNConst_unit)) in
+      Cerb_frontend.Cn.CN_return_expression e }
+| oargs=delimited(LBRACE, oargs_def, RBRACE)
+    { Cerb_frontend.Cn.CN_return_record oargs }
+| e=expr
+    { Cerb_frontend.Cn.CN_return_expression e }
 
 cons_args:
 | xs= delimited(LBRACE, oargs_def, RBRACE)
@@ -2233,8 +2258,8 @@ clause:
       Cerb_frontend.Cn.CN_letExpr (loc, str, e, c) }
 | ASSERT e= delimited(LPAREN, assert_expr, RPAREN) SEMICOLON c= clause
     { Cerb_frontend.Cn.CN_assert (Location_ocaml.region $loc NoCursor, e, c) }
-| RETURN xs= delimited(LBRACE, oargs_def, RBRACE)
-    { Cerb_frontend.Cn.CN_return (Location_ocaml.region $loc(xs) NoCursor, xs) }
+| RETURN ret= pred_return
+    { Cerb_frontend.Cn.CN_return (Location_ocaml.region $loc(ret) NoCursor, ret) }
 ;
 
 

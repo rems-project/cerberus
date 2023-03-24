@@ -20,21 +20,21 @@ type clause = {
 
 let pp_clause {loc; guard; packing_ft} = 
   item "condition" (IT.pp guard) ^^ comma ^^^
-  item "return type" (LAT.pp OutputDef.pp packing_ft)
+  item "return type" (LAT.pp IT.pp packing_ft)
 
 let subst_clause subst {loc; guard; packing_ft} = 
   { loc = loc;
     guard = IT.subst subst guard; 
-    packing_ft = LAT.subst OutputDef.subst subst packing_ft }
+    packing_ft = LAT.subst IT.subst subst packing_ft }
 
 
-let clause_lrt pred_oargs clause_packing_ft = 
+let clause_lrt (pred_oarg : IT.t) clause_packing_ft = 
   let rec aux = function
     | LAT.Define (bound, info, lat) -> LRT.Define (bound, info, aux lat)
     | LAT.Resource (bound, info, lat) -> LRT.Resource (bound, info, aux lat)
     | LAT.Constraint (lc, info, lat) -> LRT.Constraint (lc, info, aux lat)
-    | I outputs ->
-       let lc = LC.t_ (IT.eq_ (pred_oargs, OutputDef.to_record outputs)) in
+    | I output ->
+       let lc = LC.t_ (IT.eq_ (pred_oarg, output)) in
        LRT.Constraint (lc, (Loc.unknown, None), LRT.I)
   in
   aux clause_packing_ft
@@ -45,7 +45,7 @@ type definition = {
     loc : Loc.t;
     pointer: Sym.t;
     iargs : (Sym.t * LS.t) list;
-    oargs : (Sym.t * LS.t) list;
+    oarg_bt : LS.t;
     clauses : (clause list) option;
   }
 
@@ -60,7 +60,7 @@ let alpha_rename_definition def =
   let pointer = Sym.fresh_same def.pointer in
   let subst = IT.make_subst ((def.pointer, IT.sym_ (pointer, BT.Loc)) :: subst) in
   let clauses = Option.map (List.map (subst_clause subst)) def.clauses in
-  { loc = def.loc; pointer; iargs; oargs = def.oargs; clauses }
+  { loc = def.loc; pointer; iargs; oarg_bt = def.oarg_bt; clauses }
   
 
 
@@ -68,7 +68,7 @@ let alpha_rename_definition def =
 let pp_definition def = 
   item "pointer" (Sym.pp def.pointer) ^/^
   item "iargs" (Pp.list (fun (s,_) -> Sym.pp s) def.iargs) ^/^
-  item "oargs" (Pp.list (fun (s,_) -> Sym.pp s) def.oargs) ^/^
+  item "oarg_bt" (BT.pp def.oarg_bt) ^/^
   item "clauses" (match def.clauses with
                   | Some clauses -> Pp.list pp_clause clauses
                   | None -> !^"(uninterpreted)")

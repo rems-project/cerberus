@@ -99,6 +99,8 @@ module MakePp (Conf: PP_CN) = struct
           Dleaf (pp_ctor "CNExpr_const" ^^^ !^ (Z.to_string n))
       | CNExpr_const (CNConst_bool b) ->
           Dleaf (pp_ctor "CNExpr_const" ^^^ !^ (if b then "true" else "false"))
+      | CNExpr_const CNConst_unit ->
+          Dleaf (pp_ctor "CNExpr_const" ^^^ !^"unit")
       | CNExpr_var ident ->
           Dleaf (pp_ctor "CNExpr_var" ^^^ P.squotes (Conf.pp_ident ident))
       (* | CNExpr_rvar ident -> *)
@@ -213,6 +215,17 @@ module MakePp (Conf: PP_CN) = struct
                   P.squotes (Conf.pp_ident ident)^^ P.colon ^^^ pp_base_type bTy
               , [dtree_of_cn_expr e1; dtree_of_cn_expr e2])
 
+
+  let dtree_of_cn_pred_return = function
+    | CN_return_record xs ->
+      let docs =
+          List.map (fun (ident, e) ->
+            Dnode (Conf.pp_ident ident, [dtree_of_cn_expr e])
+          ) xs in
+      Dnode (pp_stmt_ctor "CN_return_record", docs)
+    | CN_return_expression e ->
+      Dnode (pp_stmt_ctor "CN_return_expression", [dtree_of_cn_expr e])
+
   let rec dtree_of_cn_clause = function
     | CN_letResource (_, ident, res, c) ->
         Dnode ( pp_stmt_ctor "CN_letResource" ^^^ P.squotes (Conf.pp_ident ident)
@@ -223,11 +236,7 @@ module MakePp (Conf: PP_CN) = struct
     | CN_assert (_, a, c) ->
         Dnode (pp_stmt_ctor "CN_assert", [dtree_of_cn_assertion a; dtree_of_cn_clause c])
     | CN_return (_, xs) ->
-        let docs =
-            List.map (fun (ident, e) ->
-              Dnode (Conf.pp_ident ident, [dtree_of_cn_expr e])
-            ) xs in
-        Dnode (pp_stmt_ctor "CN_return", docs)
+       dtree_of_cn_pred_return xs
 
   (* copied and adjusted from dtree_of_cn_clause *)
   let dtree_of_cn_condition = function
@@ -276,11 +285,18 @@ module MakePp (Conf: PP_CN) = struct
             ; Dnode (pp_ctor "[CN]ensures", List.map dtree_of_cn_condition lmma.cn_lemma_ensures)
             ] ) 
 
+
+  let dtree_of_cn_predicate_return = function
+    | CN_pred_output_record oargs -> 
+      dtrees_of_args oargs
+    | CN_pred_output_basetype (_, bt) ->
+      [Dleaf (pp_base_type bt)]
+
   let dtree_of_cn_predicate pred =
     Dnode ( pp_ctor "[CN]predicate" ^^^ P.squotes (Conf.pp_ident pred.cn_pred_name)
           , [ Dnode (pp_ctor "[CN]attrs", dtrees_of_attrs pred.cn_pred_attrs)
             ; Dnode (pp_ctor "[CN]iargs", dtrees_of_args pred.cn_pred_iargs)
-            ; Dnode (pp_ctor "[CN]oargs", dtrees_of_args pred.cn_pred_oargs)
+            ; Dnode (pp_ctor "[CN]output", dtree_of_cn_predicate_return pred.cn_pred_output)
             ; Dnode (pp_ctor "[CN]clauses", [dtree_of_option_cn_clauses pred.cn_pred_clauses]) ] ) 
 
   let dtrees_of_dt_args xs =

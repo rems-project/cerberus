@@ -91,8 +91,8 @@ let is_sym_equality t = match is_sym_lhs_equality t with
 let is_equality = function
   | T it ->
      begin match it with
-     | IT (Bool_op (EQ (a, b)), _) -> Some ((a, b), true)
-     | IT (Bool_op (Not (IT (Bool_op (EQ (a, b)), _))), _) -> Some ((a, b), false)
+     | IT (Binop (EQ,a, b), _) -> Some ((a, b), true)
+     | IT (Not (IT (Binop (EQ,a, b), _)), _) -> Some ((a, b), false)
      | _ -> None
      end
   | _ -> 
@@ -101,8 +101,8 @@ let is_equality = function
 let equates_to it2 = function
   | T it ->
      begin match it with
-     | IT (Bool_op (EQ (a, b)), _) when IT.equal a it2 -> Some b
-     | IT (Bool_op (EQ (a, b)), _) when IT.equal b it2 -> Some a
+     | IT (Binop (EQ,a, b), _) when IT.equal a it2 -> Some b
+     | IT (Binop (EQ,a, b), _) when IT.equal b it2 -> Some a
      | _ -> None
      end
   | _ -> 

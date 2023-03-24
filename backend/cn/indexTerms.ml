@@ -37,74 +37,33 @@ let pp ?(atomic=false) =
 
 
 
-let free_vars_lit = function
+let rec free_vars_ = function
+  | Const _ -> SymSet.empty
   | Sym s -> SymSet.singleton s
-  | Z _ -> SymSet.empty
-  | Q _ -> SymSet.empty
-  | Pointer _ -> SymSet.empty
-  | Bool _ -> SymSet.empty
-  | Unit -> SymSet.empty
-  | Default _ -> SymSet.empty
-  | Null -> SymSet.empty
-
-let rec free_vars_arith_op = function
-  | Add (t1, t2) -> free_vars_list [t1; t2]
-  | Sub (t1, t2) -> free_vars_list [t1; t2]
-  | Mul (t1, t2) -> free_vars_list [t1; t2]
-  | MulNoSMT (t1, t2) -> free_vars_list [t1; t2]
-  | Div (t1, t2) -> free_vars_list [t1; t2]
-  | DivNoSMT (t1, t2) -> free_vars_list [t1; t2]
-  | Exp (t1, t2) -> free_vars_list [t1; t2]
-  | ExpNoSMT (t1, t2) -> free_vars_list [t1; t2]
-  | Rem (t1, t2) -> free_vars_list [t1; t2]
-  | RemNoSMT (t1, t2) -> free_vars_list [t1; t2]
-  | Mod (t1, t2) -> free_vars_list [t1; t2]
-  | ModNoSMT (t1, t2) -> free_vars_list [t1; t2]
-  | LT (t1, t2) -> free_vars_list [t1; t2]
-  | LE (t1, t2) -> free_vars_list [t1; t2]
-  | Min (t1, t2) -> free_vars_list [t1; t2]
-  | Max (t1, t2) -> free_vars_list [t1; t2]
+  | Binop (_bop, t1, t2) -> free_vars_list [t1; t2]
   | IntToReal t1 -> free_vars t1
   | RealToInt t1 -> free_vars t1
-  | XORNoSMT (t1, t2) -> free_vars_list [t1; t2]
-
-and free_vars_bool_op = function
   | And ts -> free_vars_list ts
   | Or ts -> free_vars_list ts
   | Impl (t1, t2) -> free_vars_list [t1; t2]
   | Not t1 -> free_vars t1
   | ITE (t1, t2, t3) -> free_vars_list [t1; t2; t3]
-  | EQ (t1, t2) -> free_vars_list [t1; t2]
   | EachI ((_, s, _), t) -> SymSet.remove s (free_vars t)
-
-and free_vars_tuple_op = function
   | Tuple ts -> free_vars_list ts
   | NthTuple (_, t) -> free_vars t
-
-and free_vars_struct_op = function
   | Struct (_tag, members) -> free_vars_list (List.map snd members)
   | StructMember (t, _member) -> free_vars t
   | StructUpdate ((t1, _member), t2) -> free_vars_list [t1; t2]
-
-and free_vars_record_op = function
   | Record members -> free_vars_list (List.map snd members)
   | RecordMember (t, _member) -> free_vars t
   | RecordUpdate ((t1, _member), t2) -> free_vars_list [t1; t2]
-
-and free_vars_datatype_op = function
   | DatatypeCons (tag, members_xs) -> free_vars members_xs
   | DatatypeMember (t, member) -> free_vars t
   | DatatypeIsCons (tag, t) -> free_vars t
-
-and free_vars_pointer_op = function
-  | LTPointer (t1, t2) -> free_vars_list [t1; t2]
-  | LEPointer (t1, t2) -> free_vars_list [t1; t2]
   | IntegerToPointerCast t1 -> free_vars t1
   | PointerToIntegerCast t1 -> free_vars t1
   | MemberOffset (_tag, _id) -> SymSet.empty
   | ArrayOffset (_sct, t) -> free_vars t
-
-and free_vars_list_op = function
   | Nil -> SymSet.empty
   | Cons (t1, t2) -> free_vars_list [t1; t2]
   | List ts -> free_vars_list ts
@@ -112,49 +71,17 @@ and free_vars_list_op = function
   | Tail t -> free_vars t
   | NthList (i, xs, d) -> free_vars_list [i; xs; d]
   | ArrayToList (arr, i, len) -> free_vars_list [arr; i; len]
-
-and free_vars_set_op = function
-  | SetMember (t1, t2) -> free_vars_list [t1; t2]
-  | SetUnion ts -> free_vars_list ts
-  | SetIntersection ts -> free_vars_list ts
-  | SetDifference (t1, t2) -> free_vars_list [t1; t2]
-  | Subset (t1, t2) -> free_vars_list [t1; t2]
-
-and free_vars_ct_pred = function
   | Representable (_sct, t) -> free_vars t
   | Good (_sct, t) -> free_vars t
   | AlignedI {t; align} -> free_vars_list [t; align]
-
-
-and free_vars_map_op = function
   | MapConst (_bt, t) -> free_vars t
   | MapSet (t1, t2, t3) -> free_vars_list [t1; t2; t3]
   | MapGet (t1, t2) -> free_vars_list [t1; t2]
   | MapDef ((s, _bt), t) -> SymSet.remove s (free_vars t)
-
-and free_vars_info (_str, ts) =
-  free_vars_list ts
-
-and free_vars_pred (_pred, ts) =
-  free_vars_list ts
-
-and free_vars_term_ = function
-  | Lit lit -> free_vars_lit lit
-  | Arith_op arith_op -> free_vars_arith_op arith_op
-  | Bool_op bool_op -> free_vars_bool_op bool_op
-  | Tuple_op tuple_op -> free_vars_tuple_op tuple_op
-  | Struct_op struct_op -> free_vars_struct_op struct_op
-  | Record_op record_op -> free_vars_record_op record_op
-  | Datatype_op datatype_op -> free_vars_datatype_op datatype_op
-  | Pointer_op pointer_op -> free_vars_pointer_op pointer_op
-  | List_op list_op -> free_vars_list_op list_op
-  | Set_op set_op -> free_vars_set_op set_op
-  | CT_pred ct_pred -> free_vars_ct_pred ct_pred
-  | Map_op map_op -> free_vars_map_op map_op
-  | Pred (pred, ts) -> free_vars_pred (pred, ts)
+  | Pred (_pred, ts) -> free_vars_list ts
 
 and free_vars (IT (term_, _bt)) =
-  free_vars_term_ term_
+  free_vars_ term_
 
 and free_vars_list xs =
   List.fold_left (fun ss t ->
@@ -162,78 +89,34 @@ and free_vars_list xs =
     ) SymSet.empty xs
 
 
-let no_free_vars t = SymSet.is_empty (free_vars t)
-
-
-let fold_lit f binders acc = function
-  | Sym s -> acc
-  | Z _ -> acc
-  | Q _ -> acc
-  | Pointer _ -> acc
-  | Bool _ -> acc
-  | Unit -> acc
-  | Default _ -> acc
-  | Null -> acc
-
-let rec fold_arith_op f binders acc = function
-  | Add (t1, t2) -> fold_list f binders acc [t1; t2]
-  | Sub (t1, t2) -> fold_list f binders acc [t1; t2]
-  | Mul (t1, t2) -> fold_list f binders acc [t1; t2]
-  | MulNoSMT (t1, t2) -> fold_list f binders acc [t1; t2]
-  | Div (t1, t2) -> fold_list f binders acc [t1; t2]
-  | DivNoSMT (t1, t2) -> fold_list f binders acc [t1; t2]
-  | Exp (t1, t2) -> fold_list f binders acc [t1; t2]
-  | ExpNoSMT (t1, t2) -> fold_list f binders acc [t1; t2]
-  | Rem (t1, t2) -> fold_list f binders acc [t1; t2]
-  | RemNoSMT (t1, t2) -> fold_list f binders acc [t1; t2]
-  | Mod (t1, t2) -> fold_list f binders acc [t1; t2]
-  | ModNoSMT (t1, t2) -> fold_list f binders acc [t1; t2]
-  | LT (t1, t2) -> fold_list f binders acc [t1; t2]
-  | LE (t1, t2) -> fold_list f binders acc [t1; t2]
-  | Min (t1, t2) -> fold_list f binders acc [t1; t2]
-  | Max (t1, t2) -> fold_list f binders acc [t1; t2]
+let rec fold_ f binders acc = function
+  | Sym _s -> acc
+  | Const _c -> acc
+  | Binop (_bop, t1, t2) -> fold_list f binders acc [t1; t2]
   | IntToReal t1 -> fold f binders acc t1
   | RealToInt t1 -> fold f binders acc t1
-  | XORNoSMT (t1, t2) -> fold_list f binders acc [t1; t2]
-
-and fold_bool_op f binders acc = function
   | And ts -> fold_list f binders acc ts
   | Or ts -> fold_list f binders acc ts
   | Impl (t1, t2) -> fold_list f binders acc [t1; t2]
   | Not t1 -> fold f binders acc t1
   | ITE (t1, t2, t3) -> fold_list f binders acc [t1; t2; t3]
-  | EQ (t1, t2) -> fold_list f binders acc [t1; t2]
   | EachI ((_, s, _), t) ->
      fold f (binders @ [(s, BT.Integer)]) acc t
-
-and fold_tuple_op f binders acc = function
   | Tuple ts -> fold_list f binders acc ts
   | NthTuple (_, t) -> fold f binders acc t
-
-and fold_struct_op f binders acc = function
   | Struct (_tag, members) -> fold_list f binders acc (List.map snd members)
   | StructMember (t, _member) -> fold f binders acc t
   | StructUpdate ((t1, _member), t2) -> fold_list f binders acc [t1; t2]
-
-and fold_record_op f binders acc = function
   | Record members -> fold_list f binders acc (List.map snd members)
   | RecordMember (t, _member) -> fold f binders acc t
   | RecordUpdate ((t1, _member), t2) -> fold_list f binders acc [t1; t2]
-
-and fold_datatype_op f binders acc = function
   | DatatypeCons (tag, members_rec) -> fold f binders acc members_rec
   | DatatypeMember (t, _member) -> fold f binders acc t
   | DatatypeIsCons (tag, t) -> fold f binders acc t
-
-and fold_pointer_op f binders acc = function
-  | LTPointer (t1, t2) -> fold_list f binders acc [t1; t2]
-  | LEPointer (t1, t2) -> fold_list f binders acc [t1; t2]
   | IntegerToPointerCast t1 -> fold f binders acc t1
   | PointerToIntegerCast t1 -> fold f binders acc t1
   | MemberOffset (_tag, _id) -> acc
   | ArrayOffset (_sct, t) -> fold f binders acc t
-
-and fold_list_op f binders acc = function
   | Nil -> acc
   | Cons (t1, t2) -> fold_list f binders acc [t1; t2]
   | List ts -> fold_list f binders acc ts
@@ -241,49 +124,17 @@ and fold_list_op f binders acc = function
   | Tail t -> fold f binders acc t
   | NthList (i, xs, d) -> fold_list f binders acc [i; xs; d]
   | ArrayToList (arr, i, len) -> fold_list f binders acc [arr; i; len]
-
-and fold_set_op f binders acc = function
-  | SetMember (t1, t2) -> fold_list f binders acc [t1; t2]
-  | SetUnion ts -> fold_list f binders acc ts
-  | SetIntersection ts -> fold_list f binders acc ts
-  | SetDifference (t1, t2) -> fold_list f binders acc [t1; t2]
-  | Subset (t1, t2) -> fold_list f binders acc [t1; t2]
-
-and fold_ct_pred f binders acc = function
   | Representable (_sct, t) -> fold f binders acc t
   | Good (_sct, t) -> fold f binders acc t
   | AlignedI {t; align} -> fold_list f binders acc [t; align]
-
-
-and fold_map_op f binders acc = function
   | MapConst (_bt, t) -> fold f binders acc t
   | MapSet (t1, t2, t3) -> fold_list f binders acc [t1; t2; t3]
   | MapGet (t1, t2) -> fold_list f binders acc [t1; t2]
   | MapDef ((s, bt), t) -> fold f (binders @ [(s, bt)]) acc t
-
-and fold_info f binders acc (_str, ts) =
-  fold_list f binders acc ts
-
-and fold_pred f binders acc (_pred, ts) =
-  fold_list f binders acc ts
-
-and fold_term_ f binders acc = function
-  | Lit lit -> fold_lit f binders acc lit
-  | Arith_op arith_op -> fold_arith_op f binders acc arith_op
-  | Bool_op bool_op -> fold_bool_op f binders acc bool_op
-  | Tuple_op tuple_op -> fold_tuple_op f binders acc tuple_op
-  | Struct_op struct_op -> fold_struct_op f binders acc struct_op
-  | Record_op record_op -> fold_record_op f binders acc record_op
-  | Datatype_op datatype_op -> fold_datatype_op f binders acc datatype_op
-  | Pointer_op pointer_op -> fold_pointer_op f binders acc pointer_op
-  | List_op list_op -> fold_list_op f binders acc list_op
-  | Set_op set_op -> fold_set_op f binders acc set_op
-  | CT_pred ct_pred -> fold_ct_pred f binders acc ct_pred
-  | Map_op map_op -> fold_map_op f binders acc map_op
-  | Pred (pred, ts) -> fold_pred f binders acc (pred, ts)
+  | Pred (_pred, ts) -> fold_list f binders acc ts
 
 and fold f binders acc (IT (term_, _bt)) =
-  let acc' = fold_term_ f binders acc term_ in
+  let acc' = fold_ f binders acc term_ in
   f binders acc' (IT (term_, _bt))
 
 and fold_list f binders acc xs =
@@ -293,7 +144,6 @@ and fold_list f binders acc xs =
      let acc' = fold f binders acc x in
      fold_list f binders acc' xs
 
-
 let fold_subterms : 'a 'bt. ((Sym.t * BT.t) list -> 'a -> 'bt term -> 'a) -> 'a -> 'bt term -> 'a =
   fun f acc t -> fold f [] acc t
 
@@ -301,7 +151,7 @@ let fold_subterms : 'a 'bt. ((Sym.t * BT.t) list -> 'a -> 'bt term -> 'a) -> 'a 
 let todo_is_pred (pred: string) (IT (it_, bt)) = 
   match pred, it_ with
   | _, Pred (name, _) when String.equal (Tools.todo_string_of_sym name) pred -> true
-  | "good", CT_pred (Good _) -> true
+  | "good", Good _ -> true
   | _ -> false
 
 let todo_mentions_pred (pred: Id.t) =
@@ -317,7 +167,7 @@ let is_call (f: Sym.t) (IT (it_, bt)) =
 
 let is_good (ct : Sctypes.t) (IT (it_, bt)) = 
   match it_ with
-  | CT_pred (Good (ct', _)) when Sctypes.equal ct ct' -> true
+  | Good (ct', _) when Sctypes.equal ct ct' -> true
   | _ -> false
 
 let mentions_call f =
@@ -342,19 +192,6 @@ let preds_of t =
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
 let json it : Yojson.Safe.t =
   `String (Pp.plain (pp it))
 
@@ -363,161 +200,97 @@ let make_subst = Subst.make free_vars
 
 let rec subst (su : typed subst) (IT (it, bt)) =
   match it with
-  | Lit lit ->
-     begin match lit with
-     | Sym sym ->
-        begin match List.assoc_opt Sym.equal sym su.replace with
-        | Some after -> after
-        | None -> IT (Lit lit, bt)
-        end
-     | lit -> IT (Lit lit, bt)
+  | Sym sym ->
+     begin match List.assoc_opt Sym.equal sym su.replace with
+     | Some after -> after
+     | None -> IT (Sym sym, bt)
      end
-  | Arith_op arith_op ->
-     let arith_op = match arith_op with
-       | Add (it, it') -> Add (subst su it, subst su it')
-       | Sub (it, it') -> Sub (subst su it, subst su it')
-       | Mul (it, it') -> Mul (subst su it, subst su it')
-       | MulNoSMT (it, it') -> MulNoSMT (subst su it, subst su it')
-       | Div (it, it') -> Div (subst su it, subst su it')
-       | DivNoSMT (it, it') -> DivNoSMT (subst su it, subst su it')
-       | Exp (it, it') -> Exp (subst su it, subst su it')
-       | ExpNoSMT (it, it') -> ExpNoSMT (subst su it, subst su it')
-       | Rem (it, it') -> Rem (subst su it, subst su it')
-       | RemNoSMT (it, it') -> RemNoSMT (subst su it, subst su it')
-       | Mod (it, it') -> Mod (subst su it, subst su it')
-       | ModNoSMT (it, it') -> ModNoSMT (subst su it, subst su it')
-       | LT (it, it') -> LT (subst su it, subst su it')
-       | LE (it, it') -> LE (subst su it, subst su it')
-       | Min (it, it') -> Min (subst su it, subst su it')
-       | Max (it, it') -> Max (subst su it, subst su it')
-       | IntToReal it -> IntToReal (subst su it)
-       | RealToInt it -> RealToInt (subst su it)
-       | XORNoSMT (it, it') -> XORNoSMT (subst su it, subst su it')
-     in
-     IT (Arith_op arith_op, bt)
-  | Bool_op bool_op ->
-     let bool_op = match bool_op with
-       | And its -> And (map (subst su) its)
-       | Or its -> Or (map (subst su) its)
-       | Impl (it, it') -> Impl (subst su it, subst su it')
-       | Not it -> Not (subst su it)
-       | ITE (it,it',it'') -> ITE (subst su it, subst su it', subst su it'')
-       | EQ (it, it') -> EQ (subst su it, subst su it')
-       | EachI ((i1, s, i2), t) ->
-          let s, t = suitably_alpha_rename su.relevant (s, BT.Integer) t in
-          EachI ((i1, s, i2), subst su t)
-     in
-     IT (Bool_op bool_op, bt)
-  | Tuple_op tuple_op ->
-     let tuple_op = match tuple_op with
-       | Tuple its ->
-          Tuple (map (subst su) its)
-       | NthTuple (n, it') ->
-          NthTuple (n, subst su it')
-     in
-     IT (Tuple_op tuple_op, bt)
-  | Struct_op struct_op ->
-     let struct_op = match struct_op with
-       | Struct (tag, members) ->
-          let members =
-            map (fun (member,it) ->
-                (member,subst su it)
-              ) members
-          in
-          Struct (tag, members)
-       | StructMember (t, m) ->
-          StructMember (subst su t, m)
-       | StructUpdate ((t, m), v) ->
-          StructUpdate ((subst su t, m), subst su v)
-     in
-     IT (Struct_op struct_op, bt)
-  | Record_op record_op ->
-     let record_op = match record_op with
-       | Record members ->
-          let members =
-            map (fun (member,it) ->
-                (member,subst su it)
-              ) members
-          in
-          Record members
-       | RecordMember (t, m) ->
-          RecordMember (subst su t, m)
-       | RecordUpdate ((t, m), v) ->
-          RecordUpdate ((subst su t, m), subst su v)
-     in
-     IT (Record_op record_op, bt)
-  | Datatype_op datatype_op ->
-     let datatype_op = match datatype_op with
-       | DatatypeCons (tag, members_rec) ->
-          DatatypeCons (tag, subst su members_rec)
-       | DatatypeMember (t, m) ->
-          DatatypeMember (subst su t, m)
-       | DatatypeIsCons (tag, t) ->
-          DatatypeIsCons (tag, subst su t)
-     in
-     IT (Datatype_op datatype_op, bt)
-  | Pointer_op pointer_op ->
-     let pointer_op = match pointer_op with
-       | LTPointer (it, it') ->
-          LTPointer (subst su it, subst su it')
-       | LEPointer (it, it') ->
-          LEPointer (subst su it, subst su it')
-       | IntegerToPointerCast t ->
-          IntegerToPointerCast (subst su t)
-       | PointerToIntegerCast t ->
-          PointerToIntegerCast (subst su t)
-       | MemberOffset (tag, member) ->
-          MemberOffset (tag, member)
-       | ArrayOffset (tag, t) ->
-          ArrayOffset (tag, subst su t)
-     in
-     IT (Pointer_op pointer_op, bt)
-  | CT_pred ct_pred ->
-     let ct_pred = match ct_pred with
-       | AlignedI t -> AlignedI {t= subst su t.t; align= subst su t.align}
-       | Representable (rt, t) -> Representable (rt, subst su t)
-       | Good (rt, t) -> Good (rt, subst su t)
-     in
-     IT (CT_pred ct_pred, bt)
-  | List_op list_op ->
-     let list_op = match list_op with
-       | Nil -> Nil
-       | Cons (it1,it2) -> Cons (subst su it1, subst su it2)
-       | List its -> List (map (subst su) its)
-       | Head it -> Head (subst su it)
-       | Tail it -> Tail (subst su it)
-       | NthList (i, xs, d) -> NthList (subst su i, subst su xs, subst su d)
-       | ArrayToList (arr, i, len) -> ArrayToList (subst su arr, subst su i, subst su len)
-     in
-     IT (List_op list_op, bt)
-  | Set_op set_op ->
-     let set_op = match set_op with
-       | SetMember (t1,t2) -> SetMember (subst su t1, subst su t2)
-       | SetUnion ts -> SetUnion (List.map (subst su) ts)
-       | SetIntersection ts -> SetIntersection (List.map (subst su) ts)
-       | SetDifference (t1, t2) -> SetDifference (subst su t1, subst su t2)
-       | Subset (t1, t2) -> Subset (subst su t1, subst su t2)
-     in
-     IT (Set_op set_op, bt)
-  | Map_op map_op ->
-     let map_op = match map_op with
-       | MapConst (bt, t) ->
-          MapConst (bt, subst su t)
-       | MapSet (t1, t2, t3) ->
-          MapSet (subst su t1, subst su t2, subst su t3)
-       | MapGet (it, arg) ->
-          MapGet (subst su it, subst su arg)
-       | MapDef ((s, abt), body) ->
-          let s, body = suitably_alpha_rename su.relevant (s, abt) body in
-          MapDef ((s, abt), subst su body)
-     in
-     IT (Map_op map_op, bt)
+  | Const const -> 
+     IT (Const const, bt)
+  | Binop (bop, t1, t2) -> 
+     IT (Binop (bop, subst su t1, subst su t2), bt)
+  | IntToReal it -> 
+     IT (IntToReal (subst su it), bt)
+  | RealToInt it -> 
+     IT (RealToInt (subst su it), bt)
+  | And its -> 
+     IT (And (map (subst su) its), bt)
+  | Or its -> 
+     IT (Or (map (subst su) its), bt)
+  | Impl (it, it') -> 
+     IT (Impl (subst su it, subst su it'), bt)
+  | Not it -> 
+     IT (Not (subst su it), bt)
+  | ITE (it,it',it'') -> 
+     IT (ITE (subst su it, subst su it', subst su it''), bt)
+  | EachI ((i1, s, i2), t) ->
+     let s, t = suitably_alpha_rename su.relevant (s, BT.Integer) t in
+     IT (EachI ((i1, s, i2), subst su t), bt)
+  | Tuple its ->
+     IT (Tuple (map (subst su) its), bt)
+  | NthTuple (n, it') ->
+     IT (NthTuple (n, subst su it'), bt)
+  | Struct (tag, members) ->
+     IT (Struct (tag, map_snd (subst su) members), bt)
+  | StructMember (t, m) ->
+     IT (StructMember (subst su t, m), bt)
+  | StructUpdate ((t, m), v) ->
+     IT (StructUpdate ((subst su t, m), subst su v), bt)
+  | Record members ->
+     IT (Record (map_snd (subst su) members), bt)
+  | RecordMember (t, m) ->
+     IT (RecordMember (subst su t, m), bt)
+  | RecordUpdate ((t, m), v) ->
+     IT (RecordUpdate ((subst su t, m), subst su v), bt)
+  | DatatypeCons (tag, members_rec) ->
+     IT (DatatypeCons (tag, subst su members_rec), bt)
+  | DatatypeMember (t, m) ->
+     IT (DatatypeMember (subst su t, m), bt)
+  | DatatypeIsCons (tag, t) ->
+     IT (DatatypeIsCons (tag, subst su t), bt)
+  | IntegerToPointerCast t ->
+     IT (IntegerToPointerCast (subst su t), bt)
+  | PointerToIntegerCast t ->
+     IT (PointerToIntegerCast (subst su t), bt)
+  | MemberOffset (tag, member) ->
+     IT (MemberOffset (tag, member), bt)
+  | ArrayOffset (tag, t) ->
+     IT (ArrayOffset (tag, subst su t), bt)
+  | AlignedI t -> 
+     IT (AlignedI {t= subst su t.t; align= subst su t.align}, bt)
+  | Representable (rt, t) -> 
+     IT (Representable (rt, subst su t), bt)
+  | Good (rt, t) -> 
+     IT (Good (rt, subst su t), bt)
+  | Nil -> 
+     IT (Nil, bt)
+  | Cons (it1,it2) -> 
+     IT (Cons (subst su it1, subst su it2), bt)
+  | List its -> 
+     IT (List (map (subst su) its), bt)
+  | Head it -> 
+     IT (Head (subst su it), bt)
+  | Tail it -> 
+     IT (Tail (subst su it), bt)
+  | NthList (i, xs, d) -> 
+     IT (NthList (subst su i, subst su xs, subst su d), bt)
+  | ArrayToList (arr, i, len) -> 
+     IT (ArrayToList (subst su arr, subst su i, subst su len), bt)
+  | MapConst (bt, t) ->
+     IT (MapConst (bt, subst su t), bt)
+  | MapSet (t1, t2, t3) ->
+     IT (MapSet (subst su t1, subst su t2, subst su t3), bt)
+  | MapGet (it, arg) ->
+     IT (MapGet (subst su it, subst su arg), bt)
+  | MapDef ((s, abt), body) ->
+     let s, body = suitably_alpha_rename su.relevant (s, abt) body in
+     IT (MapDef ((s, abt), subst su body), bt)
   | Pred (name, args) ->
      IT (Pred (name, List.map (subst su) args), bt)
 
 and alpha_rename (s, bt) body =
   let s' = Sym.fresh_same s in
-  (s', subst (make_subst [(s, IT (Lit (Sym s'), bt))]) body)
+  (s', subst (make_subst [(s, IT (Sym s', bt))]) body)
 
 and suitably_alpha_rename syms (s, bt) body =
   if SymSet.mem s syms
@@ -529,74 +302,70 @@ and suitably_alpha_rename syms (s, bt) body =
 
 
 
-
-
-
-
-let is_lit = function
-  | IT (Lit lit, bt) -> Some (lit, bt)
+let is_const = function
+  | IT (Const const, bt) -> Some (const, bt)
   | _ -> None
 
 let is_z = function
-  | IT (Lit (Z z), bt) -> Some z
+  | IT (Const (Z z), bt) -> Some z
   | _ -> None
 
 let is_z_ it = Option.is_some (is_z it)
 
 let is_pointer = function
-  | IT (Lit (Pointer z), bt) -> Some z
+  | IT (Const (Pointer z), bt) -> Some z
   | _ -> None
 
 let is_sym = function
-  | IT (Lit (Sym sym), bt) -> Some (sym, bt)
+  | IT (Sym sym, bt) -> Some (sym, bt)
   | _ -> None
 
 let is_bool = function
-  | IT (Lit (Bool b), _) -> Some b
+  | IT (Const (Bool b), _) -> Some b
   | _ -> None
 
 let is_q = function
-  | IT (Lit (Q q), _) -> Some q
+  | IT (Const (Q q), _) -> Some q
   | _ -> None
 
 let is_map_get = function
-  | IT (Map_op (MapGet (f,arg)), _) -> Some (f, arg)
+  | IT (MapGet (f,arg), _) -> Some (f, arg)
   | _ -> None
 
 let zero_frac = function
-  | IT (Lit (Q q), _) when Q.equal Q.zero q -> true
+  | IT (Const (Q q), _) when Q.equal Q.zero q -> true
   | _ -> false
 
 let is_true = function
-  | IT (Lit (Bool true), _) -> true
+  | IT (Const (Bool true), _) -> true
   | _ -> false
 
 let is_false = function
-  | IT (Lit (Bool false), _) -> true
+  | IT (Const (Bool false), _) -> true
   | _ -> false
 
 let is_eq = function
-  | (IT (Bool_op (EQ (lhs, rhs)), _)) -> Some (lhs, rhs)
+  | (IT (Binop (EQ, lhs, rhs), _)) -> Some (lhs, rhs)
   | _ -> None
 
 let is_and = function
-  | IT (Bool_op (And its), _) -> Some its
+  | IT (And its, _) -> Some its
   | _ -> None
 
 let is_or = function
-  | IT (Bool_op (Or its), _) -> Some its
+  | IT (Or its, _) -> Some its
   | _ -> None
 
 let is_not = function
-  | IT (Bool_op (Not it), _) -> Some it
+  | IT (Not it, _) -> Some it
   | _ -> None
 
 let is_lt = function
-  | IT (Arith_op (LT (x, y)), _) -> Some (x, y)
+  | IT (Binop (LT,x, y), _) -> Some (x, y)
   | _ -> None
 
 let is_le = function
-  | IT (Arith_op (LE (x, y)), _) -> Some (x, y)
+  | IT (Binop (LE,x, y), _) -> Some (x, y)
   | _ -> None
 
 
@@ -609,79 +378,80 @@ let rec split_and it = match is_and it with
 
 
 (* lit *)
-let sym_ (sym, bt) = IT (Lit (Sym sym), bt)
-let z_ n = IT (Lit (Z n), BT.Integer)
-let q_ (n,n') = IT (Lit (Q (Q.make (Z.of_int n) (Z.of_int  n'))), BT.Real)
-let q1_ q = IT (Lit (Q q), BT.Real)
-let pointer_ n = IT (Lit (Pointer n), BT.Loc)
-let bool_ b = IT (Lit (Bool b), BT.Bool)
-let unit_ = IT (Lit Unit, BT.Unit)
+let sym_ (sym, bt) = IT (Sym sym, bt)
+let z_ n = IT (Const (Z n), BT.Integer)
+let q_ (n,n') = IT (Const (Q (Q.make (Z.of_int n) (Z.of_int  n'))), BT.Real)
+let q1_ q = IT (Const (Q q), BT.Real)
+let pointer_ n = IT (Const (Pointer n), BT.Loc)
+let bool_ b = IT (Const (Bool b), BT.Bool)
+let unit_ = IT (Const Unit, BT.Unit)
 let int_ n = z_ (Z.of_int n)
-let default_ bt = IT (Lit (Default bt), bt)
+let default_ bt = IT (Const (Default bt), bt)
 
 (* cmp_op *)
-let lt_ (it, it') = IT (Arith_op (LT (it, it')), BT.Bool)
-let le_ (it, it') = IT (Arith_op (LE (it, it')), BT.Bool)
+let lt_ (it, it') = IT (Binop (LT, it, it'), BT.Bool)
+let le_ (it, it') = IT (Binop (LE,it, it'), BT.Bool)
 let gt_ (it, it') = lt_ (it', it)
 let ge_ (it, it') = le_ (it', it)
 
 (* bool_op *)
-let and_ its = IT (Bool_op (And its), BT.Bool)
+let and_ its = IT (And its, BT.Bool)
 let and2_ (it, it') = match is_and it' with
   | None -> and_ [it; it']
   | Some its -> and_ (it :: its)
 let and3_ its = match its with
   | [it] -> it
   | _ -> and_ its
-let or_ its = IT (Bool_op (Or its), BT.Bool)
+let or_ its = IT (Or its, BT.Bool)
 let or2_ (it, it') = match is_or it' with
   | None -> or_ [it; it']
   | Some its -> or_ (it :: its)
-let impl_ (it, it') = IT (Bool_op (Impl (it, it')), BT.Bool)
+let impl_ (it, it') = IT (Impl (it, it'), BT.Bool)
 let not_ it =
   match it with
-  | IT (Lit (Bool b), _) -> bool_ (not b)
-  | IT (Bool_op (Not a), _) -> a
-  | _ -> IT (Bool_op (Not it), BT.Bool)
+  | IT (Const (Bool b), _) -> bool_ (not b)
+  | IT (Not a, _) -> a
+  | _ -> IT (Not it, BT.Bool)
 
-let ite_ (it, it', it'') = IT (Bool_op (ITE (it, it', it'')), bt it')
-let eq_ (it, it') = IT (Bool_op (EQ (it, it')), BT.Bool)
+let ite_ (it, it', it'') = IT (ITE (it, it', it''), bt it')
+let eq_ (it, it') = IT (Binop (EQ,it, it'), BT.Bool)
 let eq__ it it' = eq_ (it, it')
 let ne_ (it, it') = not_ (eq_ (it, it'))
 let ne__ it it' = ne_ (it, it')
 
-let disperse_not_ it =
-  match term it with
-  | Bool_op (And xs) -> or_ (List.map not_ xs)
-  | Bool_op (Or xs) -> and_ (List.map not_ xs)
-  | Bool_op (Impl (x, y)) -> and_ [x; not_ y]
-  | _ -> not_ it
+(* let disperse_not_ it = *)
+(*   match term it with *)
+(*   | And xs -> or_ (List.map not_ xs) *)
+(*   | Or xs -> and_ (List.map not_ xs) *)
+(*   | Impl (x, y) -> and_ [x; not_ y] *)
+(*   | _ -> not_ it *)
 
 
-let eachI_ (i1, s, i2) t = IT (Bool_op (EachI ((i1, s, i2), t)), BT.Bool)
+let eachI_ (i1, s, i2) t = 
+  IT (EachI ((i1, s, i2), t), BT.Bool)
 (* let existsI_ (i1, s, i2) t = not_ (eachI_ (i1, s, i2) (not_ t)) *)
 
 
 (* arith_op *)
-let add_ (it, it') = IT (Arith_op (Add (it, it')), bt it)
-let sub_ (it, it') = IT (Arith_op (Sub (it, it')), bt it)
-let mul_ (it, it') = IT (Arith_op (Mul (it, it')), bt it)
-let mul_no_smt_ (it, it') = IT (Arith_op (MulNoSMT (it, it')), bt it)
-let div_ (it, it') = IT (Arith_op (Div (it, it')), bt it)
-let div_no_smt_ (it, it') = IT (Arith_op (DivNoSMT (it, it')), bt it)
-let exp_ (it, it') = IT (Arith_op (Exp (it, it')), bt it)
-let exp_no_smt_ (it, it') = IT (Arith_op (ExpNoSMT (it, it')), bt it)
-let rem_ (it, it') = IT (Arith_op (Rem (it, it')), bt it)
-let rem_no_smt_ (it, it') = IT (Arith_op (RemNoSMT (it, it')), bt it)
-let mod_ (it, it') = IT (Arith_op (Mod (it, it')), bt it)
-let mod_no_smt_ (it, it') = IT (Arith_op (ModNoSMT (it, it')), bt it)
+let add_ (it, it') = IT (Binop (Add,it, it'), bt it)
+let sub_ (it, it') = IT (Binop (Sub,it, it'), bt it)
+let mul_ (it, it') = IT (Binop (Mul,it, it'), bt it)
+let mul_no_smt_ (it, it') = IT (Binop (MulNoSMT,it, it'), bt it)
+let div_ (it, it') = IT (Binop (Div,it, it'), bt it)
+let div_no_smt_ (it, it') = IT (Binop (DivNoSMT,it, it'), bt it)
+let exp_ (it, it') = IT (Binop (Exp,it, it'), bt it)
+let exp_no_smt_ (it, it') = IT (Binop (ExpNoSMT,it, it'), bt it)
+let rem_ (it, it') = IT (Binop (Rem,it, it'), bt it)
+let rem_no_smt_ (it, it') = IT (Binop (RemNoSMT,it, it'), bt it)
+let mod_ (it, it') = IT (Binop (Mod,it, it'), bt it)
+let mod_no_smt_ (it, it') = IT (Binop (ModNoSMT,it, it'), bt it)
 let divisible_ (it, it') = eq_ (mod_ (it, it'), int_ 0)
 let rem_f_ (it, it') = mod_ (it, it')
-let min_ (it, it') = IT (Arith_op (Min (it, it')), bt it)
-let max_ (it, it') = IT (Arith_op (Max (it, it')), bt it)
-let intToReal_ it = IT (Arith_op (IntToReal it), BT.Real)
-let realToInt_ it = IT (Arith_op (RealToInt it), BT.Integer)
-let xor_no_smt_ (it, it') = IT (Arith_op (XORNoSMT (it, it')), bt it)
+let min_ (it, it') = IT (Binop (Min,it, it'), bt it)
+let max_ (it, it') = IT (Binop (Max,it, it'), bt it)
+let intToReal_ it = IT (IntToReal it, BT.Real)
+let realToInt_ it = IT (RealToInt it, BT.Integer)
+let xor_no_smt_ (it, it') = IT (Binop (XORNoSMT,it, it'), bt it)
 
 let (%+) t t' = add_ (t, t')
 let (%-) t t' = sub_ (t, t')
@@ -699,14 +469,14 @@ let (%>=) t t' = ge_ (t, t')
 
 
 (* tuple_op *)
-let tuple_ its = IT (Tuple_op (Tuple its), BT.Tuple (List.map bt its))
-let nthTuple_ ~item_bt (n, it) = IT (Tuple_op (NthTuple (n, it)), item_bt)
+let tuple_ its = IT (Tuple its, BT.Tuple (List.map bt its))
+let nthTuple_ ~item_bt (n, it) = IT (NthTuple (n, it), item_bt)
 
 (* struct_op *)
 let struct_ (tag, members) =
-  IT (Struct_op (Struct (tag, members)), BT.Struct tag)
+  IT (Struct (tag, members), BT.Struct tag)
 let member_ ~member_bt (tag, it, member) =
-  IT (Struct_op (StructMember (it, member)), member_bt)
+  IT (StructMember (it, member), member_bt)
 
 let (%.) struct_decls t member =
   let tag = match bt t with
@@ -726,38 +496,38 @@ let (%.) struct_decls t member =
 
 
 let record_ members =
-  IT (Record_op (Record members),
+  IT (Record members,
       BT.Record (List.map (fun (s,t) -> (s, basetype t)) members))
 let recordMember_ ~member_bt (t, member) =
-  IT (Record_op (RecordMember (t, member)), member_bt)
+  IT (RecordMember (t, member), member_bt)
 
 let datatype_cons_ nm dt_tag members =
-  IT (Datatype_op (DatatypeCons (nm, record_ members)), BT.Datatype dt_tag)
+  IT (DatatypeCons (nm, record_ members), BT.Datatype dt_tag)
 
 let datatype_is_cons_ nm t =
-  IT (Datatype_op (DatatypeIsCons (nm, t)), BT.Bool)
+  IT (DatatypeIsCons (nm, t), BT.Bool)
 
 let datatype_member_ t nm bt =
-  IT (Datatype_op (DatatypeMember (t, nm)), bt)
+  IT (DatatypeMember (t, nm), bt)
 
 
 (* pointer_op *)
-let null_ = IT (Lit Null, BT.Loc)
-let ltPointer_ (it, it') = IT (Pointer_op (LTPointer (it, it')), BT.Bool)
-let lePointer_ (it, it') = IT (Pointer_op (LEPointer (it, it')), BT.Bool)
+let null_ = IT (Const Null, BT.Loc)
+let ltPointer_ (it, it') = IT (Binop (LTPointer, it, it'), BT.Bool)
+let lePointer_ (it, it') = IT (Binop (LEPointer, it, it'), BT.Bool)
 let gtPointer_ (it, it') = ltPointer_ (it', it)
 let gePointer_ (it, it') = lePointer_ (it', it)
 let integerToPointerCast_ it =
-  IT (Pointer_op (IntegerToPointerCast it), BT.Loc)
+  IT (IntegerToPointerCast it, BT.Loc)
 let pointerToIntegerCast_ it =
-  IT (Pointer_op (PointerToIntegerCast it), BT.Integer)
+  IT (PointerToIntegerCast it, BT.Integer)
 let memberOffset_ (tag, member) =
-  IT (Pointer_op (MemberOffset (tag, member)), BT.Integer)
+  IT (MemberOffset (tag, member), BT.Integer)
 let arrayOffset_ (ct, t) =
-  IT (Pointer_op (ArrayOffset (ct, t)), BT.Integer)
+  IT (ArrayOffset (ct, t), BT.Integer)
 
 let isIntegerToPointerCast = function
-  | IT (Pointer_op (IntegerToPointerCast _), _) -> true
+  | IT (IntegerToPointerCast _, _) -> true
   | _ -> false
 
 let pointer_offset_ (p, n) =
@@ -808,20 +578,20 @@ let container_of_ (t, tag, member) =
     (sub_ (pointerToIntegerCast_ t, memberOffset_ (tag, member)))
 
 (* list_op *)
-let nil_ ~item_bt = IT (List_op Nil, BT.List item_bt)
-let cons_ (it, it') = IT (List_op (Cons (it, it')), bt it')
-let list_ ~item_bt its = IT (List_op (List its), BT.List item_bt)
-let head_ ~item_bt it = IT (List_op (Head it), item_bt)
-let tail_ it = IT (List_op (Tail it), bt it)
-let nthList_ (n, it, d) = IT (List_op (NthList (n, it, d)), bt d)
-let array_to_list_ (arr, i, len) bt = IT (List_op (ArrayToList (arr, i, len)), bt)
+let nil_ ~item_bt = IT (Nil, BT.List item_bt)
+let cons_ (it, it') = IT (Cons (it, it'), bt it')
+let list_ ~item_bt its = IT (List its, BT.List item_bt)
+let head_ ~item_bt it = IT (Head it, item_bt)
+let tail_ it = IT (Tail it, bt it)
+let nthList_ (n, it, d) = IT (NthList (n, it, d), bt d)
+let array_to_list_ (arr, i, len) bt = IT (ArrayToList (arr, i, len), bt)
 
 (* set_op *)
-let setMember_ bt (it, it') = IT (Set_op (SetMember (it, it')), BT.Bool)
+let setMember_ bt (it, it') = IT (Binop (SetMember,it, it'), BT.Bool)
 (* let setUnion_ its = IT (Set_op (SetUnion its), bt (hd its))
  * let setIntersection_ its = IT (Set_op (SetIntersection its), bt (hd its)) *)
-let setDifference_ (it, it') = IT (Set_op (SetDifference (it, it')), bt it)
-let subset_ (it, it') = IT (Set_op (Subset (it, it')), BT.Bool)
+let setDifference_ (it, it') = IT (Binop (SetDifference,it, it'), bt it)
+let subset_ (it, it') = IT (Binop (Subset,it, it'), BT.Bool)
 
 
 
@@ -831,26 +601,26 @@ let minInteger_ t =
 let maxInteger_ t =
   z_ (Memory.max_integer_type t)
 let representable_ (t, it) =
-  IT (CT_pred (Representable (t, it)), BT.Bool)
+  IT (Representable (t, it), BT.Bool)
 let good_ (sct, it) =
-  IT (CT_pred (Good (sct, it)), BT.Bool)
+  IT (Good (sct, it), BT.Bool)
 let alignedI_ ~t ~align =
-  IT (CT_pred (AlignedI {t; align}), BT.Bool)
+  IT (AlignedI {t; align}, BT.Bool)
 let aligned_ (t, ct) =
   alignedI_ ~t ~align:(int_ (Memory.align_of_ctype ct))
 
 
 let const_map_ index_bt t =
-  IT (Map_op (MapConst (index_bt, t)), BT.Map (index_bt, bt t))
+  IT (MapConst (index_bt, t), BT.Map (index_bt, bt t))
 let map_set_ t1 (t2, t3) =
-  IT (Map_op (MapSet (t1, t2, t3)), bt t1)
+  IT (MapSet (t1, t2, t3), bt t1)
 let map_get_ v arg =
   match bt v with
   | BT.Map (_, rbt) ->
-     IT (Map_op (MapGet (v, arg)), rbt)
+     IT (MapGet (v, arg), rbt)
   | _ -> Debug_ocaml.error "illtyped index term"
 let map_def_ (s, abt) body =
-  IT (Map_op (MapDef ((s, abt), body)), BT.Map (abt, bt body))
+  IT (MapDef ((s, abt), body), BT.Map (abt, bt body))
 
 let make_array_ ~item_bt items (* assumed all of item_bt *) =
   let (_, value) =
@@ -951,7 +721,7 @@ let representable = value_check false
 let good_pointer = value_check_pointer true
 
 let nth_array_to_list_fact n xs d = match term xs with
-  | List_op (ArrayToList (arr, i, len)) ->
+  | ArrayToList (arr, i, len) ->
     let lhs = nthList_ (n, xs, d) in
     let rhs = ite_ (and_ [le_ (int_ 0, n); lt_ (n, len)], map_get_ arr (add_ (i, n)), d) in
     Some (eq_ (lhs, rhs))
@@ -959,10 +729,10 @@ let nth_array_to_list_fact n xs d = match term xs with
 
 let nth_array_to_list_facts terms =
   let nths = fold_list (fun _ acc it -> match term it with
-    | List_op (NthList (n, xs, d)) -> (n, d, bt xs) :: acc
+    | NthList (n, xs, d) -> (n, d, bt xs) :: acc
     | _ -> acc) [] [] terms in
   let arr_lists = fold_list (fun _ acc it -> match term it with
-    | List_op (ArrayToList _) -> (it, bt it) :: acc
+    | ArrayToList _ -> (it, bt it) :: acc
     | _ -> acc) [] [] terms in
   List.map (fun (n, d, bt1) -> List.filter_map (fun (xs, bt2) ->
     if BT.equal bt1 bt2 then nth_array_to_list_fact n xs d else None) arr_lists

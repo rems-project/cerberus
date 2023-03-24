@@ -164,7 +164,7 @@ let unknown_eq_in_group simp_ctxt ptr_gp = List.find_map (fun (p, req) -> if not
 
 let upd_ptr_gps_for_model global m ptr_gps =
   let eval_f p = match Solver.eval global m p with
-    | Some (IT (Lit (Pointer i), _)) -> i
+    | Some (IT (Const (Pointer i), _)) -> i
     | _ -> (print stderr (IT.pp p); assert false)
   in
   let eval_eqs = List.map (List.map (fun (p, req) -> (eval_f p, (p, req)))) ptr_gps in
@@ -788,7 +788,7 @@ module Spine : sig
   val calltype_lemma :
     Loc.t -> lemma:Sym.t -> (Loc.t * IT.t) list -> AT.lemmat -> (LRT.t -> unit m) -> unit m
   val calltype_packing : 
-    Loc.t -> Sym.t -> LAT.packing_ft -> (OutputDef.t -> (unit) m) -> (unit) m
+    Loc.t -> Sym.t -> LAT.packing_ft -> (IT.t -> (unit) m) -> (unit) m
   val subtype : 
     Loc.t -> LRT.t -> (unit -> (unit) m) -> (unit) m
 end = struct
@@ -877,7 +877,7 @@ end = struct
       loc (LemmaApplication lemma) args lemma_typ k
 
   let calltype_packing loc (name : Sym.t) (ft : LAT.packing_ft) k =
-    spine_l OutputDef.subst OutputDef.pp 
+    spine_l IT.subst IT.pp 
       loc (PackPredicate name) ft k
 
   (* The "subtyping" judgment needs the same resource/lvar/constraint
@@ -961,7 +961,7 @@ type labels = (AT.lt * label_kind) SymMap.t
 
 
 let load loc pointer ct =
-  let@ (point, O point_oargs) = 
+  let@ (point, O value) = 
     (RI.Special.predicate_request ~recursive:true loc (Access (Load None)) ({ 
            name = Owned ct;
            pointer = pointer;
@@ -969,8 +969,7 @@ let load loc pointer ct =
            iargs = [];
          }, None))
   in
-  let value = snd (List.hd (RI.oargs_list (O point_oargs))) in
-  let@ () = add_r (P point, O point_oargs) in
+  let@ () = add_r (P point, O value) in
   return value
 
 
@@ -1141,7 +1140,7 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
                  permission = bool_ true;
                  iargs = [];
                }, 
-             O (IT.record_ block_oargs_list))
+             O unit_)
         in
         k ret)
      | M_CreateReadOnly (sym1, ct, sym2, _prefix) -> 
@@ -1207,7 +1206,7 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
                  permission = bool_ true;
                  iargs = [];
                },
-             O (record_ [(Resources.value_sym, varg)]))
+             O varg)
         in
         k unit_))
      | M_Load (act, p_pe, _mo) -> 
@@ -1346,16 +1345,15 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
                in
                begin match pack_unpack with
                | Unpack ->
-                  let@ (pred, O pred_oargs) =
+                  let@ (pred, O pred_oarg) =
                     RI.Special.predicate_request ~recursive:false
                       loc (Call (UnpackPredicate (Manual, pname))) (pt, None)
                   in
-                  let lrt = ResourcePredicates.clause_lrt pred_oargs right_clause.packing_ft in
+                  let lrt = ResourcePredicates.clause_lrt pred_oarg right_clause.packing_ft in
                   let@ _, members = make_return_record loc (UnpackPredicate (Manual, pname)) (LRT.binders lrt) in
                   bind_logical_return loc members lrt
                | Pack ->
-                  Spine.calltype_packing loc pname right_clause.packing_ft (fun output_assignment -> 
-                  let output = record_ (List.map (fun (o : OutputDef.entry) -> (o.name, o.value)) output_assignment) in
+                  Spine.calltype_packing loc pname right_clause.packing_ft (fun output -> 
                   add_r (P pt, O output)
                   )
                end

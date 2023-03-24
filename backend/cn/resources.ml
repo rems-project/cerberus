@@ -2,7 +2,6 @@ module CF = Cerb_frontend
 module SymSet = Set.Make(Sym)
 module SymMap = Map.Make(Sym)
 module IT = IndexTerms
-open IT
 module LC = LogicalConstraints
 module LCSet = Set.Make(LC)
 
@@ -10,26 +9,9 @@ module LCSet = Set.Make(LC)
 
 open ResourceTypes
 
-let value_sym = Sym.fresh_named "value"
-
-let size_sym = Sym.fresh_named "size"
 
 
-let owned_iargs _ct = []
-let owned_oargs_list ct = [(value_sym, BT.of_sct ct)]
-let owned_oargs ct = BT.Record (owned_oargs_list ct)
 
-let q_owned_iargs _ct = []    
-let q_owned_oargs_list ct = [(value_sym, BT.Map (Integer, BT.of_sct ct))]
-let q_owned_oargs ct = BT.Record (q_owned_oargs_list ct)
-
-let block_iargs = []
-let block_oargs_list = []
-let block_oargs = BT.Record block_oargs_list
-
-let q_block_iargs = [(value_sym, BT.Integer)]    
-let q_block_oargs_list = []
-let q_block_oargs = BT.Record q_block_oargs_list
     
 
 

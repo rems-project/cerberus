@@ -59,11 +59,11 @@ let term_with_model_name nm cfg x =
     return (bold nm ^^ colon ^^^ parens (IT.pp r ^^^ string "in model") ^^ colon ^^^ IT.pp x)
 
 let bool_subterms1 t = match IT.term t with
-  | IT.Bool_op (IT.And xs) -> xs
-  | IT.Bool_op (IT.Or xs) -> xs
-  | IT.Bool_op (IT.Impl (x, y)) -> [x; y]
-  | IT.Bool_op (IT.Not x) -> [x]
-  | IT.Bool_op (IT.EQ (x, y)) -> if BT.equal (IT.bt x) BT.Bool
+  | IT.And xs -> xs
+  | IT.Or xs -> xs
+  | IT.Impl (x, y) -> [x; y]
+  | IT.Not x -> [x]
+  | IT.Binop (EQ, x, y) -> if BT.equal (IT.bt x) BT.Bool
       then [x; y] else []
   | _ -> []
 
@@ -87,7 +87,7 @@ let pred_args t = match IT.term t with
   | _ -> []
 
 let split_eq x y = match (IT.term x, IT.term y) with
-  | (IT.Map_op (IT.MapGet (m1, x1)), IT.Map_op (IT.MapGet (m2, x2))) -> Some [(m1, m2); (x1, x2)]
+  | (IT.MapGet (m1, x1), IT.MapGet (m2, x2)) -> Some [(m1, m2); (x1, x2)]
   | (IT.Pred (nm, xs), IT.Pred (nm2, ys)) when Sym.equal nm nm2 ->
     Some (List.map2 (fun x y -> (x, y)) xs ys)
   | _ -> None
@@ -193,7 +193,7 @@ and investigate_pred cfg nm t =
 
 and investigate_ite cfg t =
   let ites = IT.fold (fun _ acc t -> match IT.term t with
-    | IT.Bool_op (ITE (x, y, z)) -> x :: acc
+    | ITE (x, y, z) -> x :: acc
     | _ -> acc) [] [] t in
   let@ g = get_global () in
   let sc1 = Simplify.default g in

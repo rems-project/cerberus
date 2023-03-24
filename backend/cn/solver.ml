@@ -377,31 +377,28 @@ module Translate = struct
 
     let rec term (IT (it_, bt)) =
       begin match it_ with
-      | Lit lit -> 
-         begin match lit with
-         | Sym s -> 
-            Z3.Expr.mk_const context (symbol s) (sort bt)
-         | Z z -> 
-            Z3.Arithmetic.Integer.mk_numeral_s context (Z.to_string z)
-         | Q q -> 
-            Z3.Arithmetic.Real.mk_numeral_s context (Q.to_string q)
-         | Pointer z -> 
-            integer_to_loc
-              (Z3.Arithmetic.Integer.mk_numeral_s context (Z.to_string z))
-         | Bool true -> 
-            Z3.Boolean.mk_true context
-         | Bool false -> 
-            Z3.Boolean.mk_false context
-         | Unit -> 
-            Z3.Expr.mk_const context (string "unit") (sort Unit)
-         | Default bt -> 
-            let sym = Z3.Symbol.mk_string context ("default" ^ (bt_name bt)) in
-            let () = Z3Symbol_Table.add z3sym_table sym (DefaultFunc {bt}) in
-            Z3.Expr.mk_const context sym (sort bt)
-         | Null -> 
-            integer_to_loc (term (int_ 0))
-         end
-      | Arith_op arith_op -> 
+      | Sym s -> 
+         Z3.Expr.mk_const context (symbol s) (sort bt)
+      | Const (Z z) -> 
+         Z3.Arithmetic.Integer.mk_numeral_s context (Z.to_string z)
+      | Const (Q q) -> 
+         Z3.Arithmetic.Real.mk_numeral_s context (Q.to_string q)
+      | Const (Pointer z) -> 
+         integer_to_loc
+           (Z3.Arithmetic.Integer.mk_numeral_s context (Z.to_string z))
+      | Const (Bool true) -> 
+         Z3.Boolean.mk_true context
+      | Const (Bool false) -> 
+         Z3.Boolean.mk_false context
+      | Const Unit -> 
+         Z3.Expr.mk_const context (string "unit") (sort Unit)
+      | Const (Default bt) -> 
+         let sym = Z3.Symbol.mk_string context ("default" ^ (bt_name bt)) in
+         let () = Z3Symbol_Table.add z3sym_table sym (DefaultFunc {bt}) in
+         Z3.Expr.mk_const context sym (sort bt)
+      | Const Null -> 
+         integer_to_loc (term (int_ 0))
+      | Binop (bop, t1, t2) -> 
          let open Z3.Arithmetic in
          let make_uf sym ret_sort args =
            let decl = Z3.FuncDecl.mk_func_decl context (symbol sym)
@@ -409,218 +406,184 @@ module Translate = struct
            in
            Z3.Expr.mk_app context decl (List.map term args)
          in
-
-         begin match arith_op with
-         | Add (t1, t2) -> mk_add context [term t1; term t2]
-         | Sub (t1, t2) -> mk_sub context [term t1; term t2]
-         | Mul (t1, t2) -> mk_mul context [term t1; term t2]
-         | MulNoSMT (t1, t2) -> 
+         begin match bop with
+         | Add -> mk_add context [term t1; term t2]
+         | Sub -> mk_sub context [term t1; term t2]
+         | Mul -> mk_mul context [term t1; term t2]
+         | MulNoSMT -> 
             make_uf mul_no_smt_solver_sym (IT.bt t1) [t1; t2]
-         | Div (t1, t2) -> mk_div context (term t1) (term t2)
-         | DivNoSMT (t1, t2) ->
+         | Div -> mk_div context (term t1) (term t2)
+         | DivNoSMT ->
             make_uf div_no_smt_solver_sym (IT.bt t1) [t1; t2]
-         | Exp (t1, t2) -> 
+         | Exp -> 
             begin match is_z t1, is_z t2 with
             | Some z1, Some z2 when Z.fits_int z2 ->
                term (z_ (Z.pow z1 (Z.to_int z2)))
             | _, _ ->
                assert false
             end
-         | ExpNoSMT (t1, t2) ->
+         | ExpNoSMT ->
             make_uf exp_no_smt_solver_sym (Integer) [t1; t2]
-         | Rem (t1, t2) -> Integer.mk_rem context (term t1) (term t2)
-         | RemNoSMT (t1, t2) ->
+         | Rem -> Integer.mk_rem context (term t1) (term t2)
+         | RemNoSMT ->
             make_uf rem_no_smt_solver_sym (Integer) [t1; t2]
-         | Mod (t1, t2) -> Integer.mk_mod context (term t1) (term t2)
-         | ModNoSMT (t1, t2) ->
+         | Mod -> Integer.mk_mod context (term t1) (term t2)
+         | ModNoSMT ->
             make_uf mod_no_smt_solver_sym (Integer) [t1; t2]
-         | LT (t1, t2) -> mk_lt context (term t1) (term t2)
-         | LE (t1, t2) -> mk_le context (term t1) (term t2)
-         | Min (t1, t2) -> term (ite_ (le_ (t1, t2), t1, t2))
-         | Max (t1, t2) -> term (ite_ (ge_ (t1, t2), t1, t2))
-         | IntToReal t -> Integer.mk_int2real context (term t)
-         | RealToInt t -> Real.mk_real2int context (term t)
-         | XORNoSMT (t1, t2) ->
+         | LT -> mk_lt context (term t1) (term t2)
+         | LE -> mk_le context (term t1) (term t2)
+         | Min -> term (ite_ (le_ (t1, t2), t1, t2))
+         | Max -> term (ite_ (ge_ (t1, t2), t1, t2))
+         | XORNoSMT ->
             make_uf xor_no_smt_solver_sym (Integer) [t1; t2]
-         end
-      | Bool_op bool_op -> 
-         let open Z3.Boolean in
-         begin match bool_op with
-         | And ts -> mk_and context (map term ts)
-         | Or ts -> mk_or context (map term ts)
-         | Impl (t1, t2) -> mk_implies context (term t1) (term t2)
-         | Not t -> mk_not context (term t)
-         | ITE (t1, t2, t3) -> mk_ite context (term t1) (term t2) (term t3)
-         | EQ (t1, t2) -> mk_eq context (term t1) (term t2)
-         | EachI ((i1, s, i2), t) -> 
-             let rec aux i = 
-               if i <= i2 
-               then IT.subst (make_subst [(s, int_ i)]) t :: aux (i + 1)
-               else []
-             in
-             term (and_ (aux i1))
-         end
-      | Tuple_op tuple_op -> 
-         begin match tuple_op with
-         | Tuple ts ->
-            let constructor = Z3.Tuple.get_mk_decl (sort bt) in
-            Z3.Expr.mk_app context constructor (map term ts)
-         | NthTuple (n, t) ->
-            let destructors = Z3.Tuple.get_field_decls (sort (IT.bt t)) in
-            Z3.Expr.mk_app context (nth destructors n) [term t]
-         end
-      | Struct_op struct_op -> 
-         begin match struct_op with
-         | Struct (tag, mts) ->
-            let constructor = Z3.Tuple.get_mk_decl (sort bt) in
-            Z3.Expr.mk_app context constructor (map (fun (_, t) -> term t) mts)
-         | StructMember (t, member) ->
-            let layout = SymMap.find (struct_bt (IT.bt t)) struct_decls in
-            let n = Option.get (Memory.member_number layout member) in
-            let destructors = Z3.Tuple.get_field_decls (sort (IT.bt t)) in
-            Z3.Expr.mk_app context (nth destructors n) [term t]
-         | StructUpdate ((t, member), v) ->
-            let tag = BT.struct_bt (IT.bt t) in
-            let layout = SymMap.find (struct_bt (IT.bt t)) struct_decls in
-            let members = Memory.member_types layout in
-            let str =
-              List.map (fun (member', sct) ->
-                  let value = 
-                    if Id.equal member member' then v 
-                    else member_ ~member_bt:(BT.of_sct sct) (tag, t, member')
-                  in
-                  (member', value)
-                ) members
-            in
-            term (struct_ (tag, str))
-         end
-      | Record_op record_op -> 
-         begin match record_op with
-         | Record mts ->
-            let constructor = Z3.Tuple.get_mk_decl (sort bt) in
-            Z3.Expr.mk_app context constructor (map (fun (_, t) -> term t) mts)
-         | RecordMember (t, member) ->
-            let members = BT.record_bt (IT.bt t) in
-            let members_i = List.mapi (fun i (m, _) -> (m, i)) members in
-            let n = List.assoc Sym.equal member members_i in
-            let destructors = Z3.Tuple.get_field_decls (sort (IT.bt t)) in
-            Z3.Expr.mk_app context (nth destructors n) [term t]
-         | RecordUpdate ((t, member), v) ->
-            let members = BT.record_bt (IT.bt t) in
-            let str =
-              List.map (fun (member', bt) ->
-                  let value = 
-                    if Sym.equal member member' then v 
-                    else IT (Record_op (RecordMember (t, member')), bt)
-                  in
-                  (member', value)
-                ) members
-            in
-            term (IT (Record_op (Record str), IT.bt t))
-         end
-      | Datatype_op datatype_op ->
-         begin match datatype_op with
-         | DatatypeCons (c_nm, elts_rec) ->
-           (* ensure datatype added first *)
-           let dt_sort = sort bt in
-           let info = SymMap.find c_nm global.datatype_constrs in
-           let args = List.map (fun (nm, _) -> term (Simplify.IndexTerms.record_member_reduce elts_rec nm))
-               info.c_params in
-           apply_matching_func (DatatypeConsFunc {nm = c_nm})
-               (Z3.Datatype.get_constructors dt_sort) args
-         | DatatypeMember (it, member) ->
-           (* ensure datatype added first *)
-           let dt_sort = sort (IT.bt it) in
-           let dt_nm = match IT.bt it with
-             | BT.Datatype nm -> nm
-             | _ -> assert false
-           in
-           apply_matching_func (DatatypeAccFunc {nm = member; dt = dt_nm; bt})
-               (List.concat (Z3.Datatype.get_accessors dt_sort)) [term it]
-         | DatatypeIsCons (c_nm, t) ->
-           (* ensure datatype added *)
-           let dt_sort = sort (IT.bt t) in
-           let recogs = Z3.Datatype.get_recognizers dt_sort in
-           (* something's funny with these recognizers. assume in same order as constructors *)
-           let dt_nm = Option.get (BT.is_datatype_bt (IT.bt t)) in
-           let info = SymMap.find dt_nm global.datatypes in
-           let assocs = List.map2 (fun c_nm fd -> (c_nm, fd)) info.dt_constrs recogs in
-           let fd = List.assoc Sym.equal c_nm assocs in
-           Z3.FuncDecl.apply fd [term t]
-         end
-      | Pointer_op pointer_op -> 
-         let open Z3.Arithmetic in
-         begin match pointer_op with
-         | LTPointer (t1, t2) -> 
-            mk_lt context (loc_to_integer (term t1)) 
+         | EQ -> Z3.Boolean.mk_eq context (term t1) (term t2)
+         | SetMember -> Z3.Set.mk_membership context (term t1) (term t2)
+         | SetUnion -> Z3.Set.mk_union context (map term [t1;t2])
+         | SetIntersection -> Z3.Set.mk_intersection context (map term [t1;t2])
+         | SetDifference -> Z3.Set.mk_difference context (term t1) (term t2)
+         | Subset -> Z3.Set.mk_subset context (term t1) (term t2)
+         | LTPointer -> 
+            Z3.Arithmetic.mk_lt context (loc_to_integer (term t1)) 
               (loc_to_integer (term t2))
-         | LEPointer (t1, t2) -> 
-            mk_le context (loc_to_integer (term t1))
+         | LEPointer -> 
+            Z3.Arithmetic.mk_le context (loc_to_integer (term t1))
               (loc_to_integer (term t2))
-         | IntegerToPointerCast t -> 
-            integer_to_loc (term t)
-         | PointerToIntegerCast t -> 
-            loc_to_integer (term t)
-         | MemberOffset (tag, member) ->
-            let decl = SymMap.find tag struct_decls in
-            term (int_ (Option.get (Memory.member_offset decl member)))
-         | ArrayOffset (ct, t) -> 
-            term (mul_ (int_ (Memory.size_of_ctype ct), t))
-         end
-      | List_op list_op -> begin match list_op with
-         | NthList (i, xs, d) ->
-            let args = List.map term [i; xs; d] in
-            let nm = bt_suffix_name "nth_list" bt in
-            let fdec = Z3.FuncDecl.mk_func_decl_s context nm
-                (List.map sort (List.map IT.bt [i; xs; d])) (sort bt) in
-            Z3.FuncDecl.apply fdec args
-         | ArrayToList (arr, i, len) ->
-            let args = List.map term [arr; i; len] in
-            let list_bt = Option.get (BT.is_list_bt bt) in
-            let nm = bt_suffix_name "array_to_list" list_bt in
-            let fdec = Z3.FuncDecl.mk_func_decl_s context nm
-                (List.map sort (List.map IT.bt [arr; i; len])) (sort bt) in
-            Z3.FuncDecl.apply fdec args
-         | _ ->
-            Debug_ocaml.error "todo: SMT mapping for list operations"
-         end
-      | Set_op set_op -> 
-         let open Z3.Set in
-         begin match set_op with
-         | SetMember (t1, t2) -> mk_membership context (term t1) (term t2)
-         | SetUnion ts -> mk_union context (map term ts)
-         | SetIntersection ts -> mk_intersection context (map term ts)
-         | SetDifference (t1, t2) -> mk_difference context (term t1) (term t2)
-         | Subset (t1, t2) -> mk_subset context (term t1) (term t2)
-         end
-      | CT_pred ct_pred -> 
-         begin match ct_pred with
-         | AlignedI t ->
-            term (divisible_ (pointerToIntegerCast_ t.t, t.align))
-         | Representable (ct, t) ->
-            term (representable struct_decls ct t)
-         | Good (ct, t) ->
-            term (good_value struct_decls ct t)
-         end
-      | Map_op map_op -> 
-         let open Z3.Z3Array in
-         begin match map_op with
-         | MapConst (abt, t) -> 
-            mk_const_array context (sort abt) (term t)
-         | MapSet (t1, t2, t3) -> 
-            mk_store context (term t1) (term t2) (term t3)
-         (* | MapGet (IT (Map_op (Def ((s, bt), body)), _), arg) ->  *)
-         (*    term (IT.subst (make_subst [(s, arg)]) body) *)
-         | MapGet (f, arg) -> 
-            mk_select context (term f) (term arg)
-         | MapDef ((q_s, q_bt), body) ->
-            if warn_lambda then
-              warn_noloc (!^"generating lambda");
-              (* warn (!^"generating lambda" ^^ colon ^^^ IT.pp (IT (it_, bt))); *)
-            Z3.Quantifier.expr_of_quantifier
-              (Z3.Quantifier.mk_lambda_const context
-                 [term (sym_ (q_s, q_bt))] (term body))
-         end
+            end
+      | IntToReal t -> 
+         Z3.Arithmetic.Integer.mk_int2real context (term t)
+      | RealToInt t -> 
+         Z3.Arithmetic.Real.mk_real2int context (term t)
+      | And ts -> Z3.Boolean.mk_and context (map term ts)
+      | Or ts -> Z3.Boolean.mk_or context (map term ts)
+      | Impl (t1, t2) -> Z3.Boolean.mk_implies context (term t1) (term t2)
+      | Not t -> Z3.Boolean.mk_not context (term t)
+      | ITE (t1, t2, t3) -> Z3.Boolean.mk_ite context (term t1) (term t2) (term t3)
+      | EachI ((i1, s, i2), t) -> 
+         let rec aux i = 
+           if i <= i2 
+           then IT.subst (make_subst [(s, int_ i)]) t :: aux (i + 1)
+           else []
+         in
+         term (and_ (aux i1))
+      | Tuple ts ->
+         let constructor = Z3.Tuple.get_mk_decl (sort bt) in
+         Z3.Expr.mk_app context constructor (map term ts)
+      | NthTuple (n, t) ->
+         let destructors = Z3.Tuple.get_field_decls (sort (IT.bt t)) in
+         Z3.Expr.mk_app context (nth destructors n) [term t]
+      | Struct (tag, mts) ->
+         let constructor = Z3.Tuple.get_mk_decl (sort bt) in
+         Z3.Expr.mk_app context constructor (map (fun (_, t) -> term t) mts)
+      | StructMember (t, member) ->
+         let layout = SymMap.find (struct_bt (IT.bt t)) struct_decls in
+         let n = Option.get (Memory.member_number layout member) in
+         let destructors = Z3.Tuple.get_field_decls (sort (IT.bt t)) in
+         Z3.Expr.mk_app context (nth destructors n) [term t]
+      | StructUpdate ((t, member), v) ->
+         let tag = BT.struct_bt (IT.bt t) in
+         let layout = SymMap.find (struct_bt (IT.bt t)) struct_decls in
+         let members = Memory.member_types layout in
+         let str =
+           List.map (fun (member', sct) ->
+               let value = 
+                 if Id.equal member member' then v 
+                 else member_ ~member_bt:(BT.of_sct sct) (tag, t, member')
+               in
+               (member', value)
+             ) members
+         in
+         term (struct_ (tag, str))
+      | Record mts ->
+         let constructor = Z3.Tuple.get_mk_decl (sort bt) in
+         Z3.Expr.mk_app context constructor (map (fun (_, t) -> term t) mts)
+      | RecordMember (t, member) ->
+         let members = BT.record_bt (IT.bt t) in
+         let members_i = List.mapi (fun i (m, _) -> (m, i)) members in
+         let n = List.assoc Sym.equal member members_i in
+         let destructors = Z3.Tuple.get_field_decls (sort (IT.bt t)) in
+         Z3.Expr.mk_app context (nth destructors n) [term t]
+      | RecordUpdate ((t, member), v) ->
+         let members = BT.record_bt (IT.bt t) in
+         let str =
+           List.map (fun (member', bt) ->
+               let value = 
+                 if Sym.equal member member' then v 
+                 else IT ((RecordMember (t, member')), bt)
+               in
+               (member', value)
+             ) members
+         in
+         term (IT ((Record str), IT.bt t))
+      | DatatypeCons (c_nm, elts_rec) ->
+         (* ensure datatype added first *)
+         let dt_sort = sort bt in
+         let info = SymMap.find c_nm global.datatype_constrs in
+         let args = List.map (fun (nm, _) -> term (Simplify.IndexTerms.record_member_reduce elts_rec nm))
+                      info.c_params in
+         apply_matching_func (DatatypeConsFunc {nm = c_nm})
+           (Z3.Datatype.get_constructors dt_sort) args
+      | DatatypeMember (it, member) ->
+         (* ensure datatype added first *)
+         let dt_sort = sort (IT.bt it) in
+         let dt_nm = match IT.bt it with
+           | BT.Datatype nm -> nm
+           | _ -> assert false
+         in
+         apply_matching_func (DatatypeAccFunc {nm = member; dt = dt_nm; bt})
+           (List.concat (Z3.Datatype.get_accessors dt_sort)) [term it]
+      | DatatypeIsCons (c_nm, t) ->
+         (* ensure datatype added *)
+         let dt_sort = sort (IT.bt t) in
+         let recogs = Z3.Datatype.get_recognizers dt_sort in
+         (* something's funny with these recognizers. assume in same order as constructors *)
+         let dt_nm = Option.get (BT.is_datatype_bt (IT.bt t)) in
+         let info = SymMap.find dt_nm global.datatypes in
+         let assocs = List.map2 (fun c_nm fd -> (c_nm, fd)) info.dt_constrs recogs in
+         let fd = List.assoc Sym.equal c_nm assocs in
+         Z3.FuncDecl.apply fd [term t]
+      | IntegerToPointerCast t -> 
+         integer_to_loc (term t)
+      | PointerToIntegerCast t -> 
+         loc_to_integer (term t)
+      | MemberOffset (tag, member) ->
+         let decl = SymMap.find tag struct_decls in
+         term (int_ (Option.get (Memory.member_offset decl member)))
+      | ArrayOffset (ct, t) -> 
+         term (mul_ (int_ (Memory.size_of_ctype ct), t))
+      | NthList (i, xs, d) ->
+         let args = List.map term [i; xs; d] in
+         let nm = bt_suffix_name "nth_list" bt in
+         let fdec = Z3.FuncDecl.mk_func_decl_s context nm
+                      (List.map sort (List.map IT.bt [i; xs; d])) (sort bt) in
+         Z3.FuncDecl.apply fdec args
+      | ArrayToList (arr, i, len) ->
+         let args = List.map term [arr; i; len] in
+         let list_bt = Option.get (BT.is_list_bt bt) in
+         let nm = bt_suffix_name "array_to_list" list_bt in
+         let fdec = Z3.FuncDecl.mk_func_decl_s context nm
+                      (List.map sort (List.map IT.bt [arr; i; len])) (sort bt) in
+         Z3.FuncDecl.apply fdec args
+      | AlignedI t ->
+         term (divisible_ (pointerToIntegerCast_ t.t, t.align))
+      | Representable (ct, t) ->
+         term (representable struct_decls ct t)
+      | Good (ct, t) ->
+         term (good_value struct_decls ct t)
+      | MapConst (abt, t) -> 
+         Z3.Z3Array.mk_const_array context (sort abt) (term t)
+      | MapSet (t1, t2, t3) -> 
+         Z3.Z3Array.mk_store context (term t1) (term t2) (term t3)
+      (* | MapGet (IT (Map_op (Def ((s, bt), body)), _), arg) ->  *)
+      (*    term (IT.subst (make_subst [(s, arg)]) body) *)
+      | MapGet (f, arg) -> 
+         Z3.Z3Array.mk_select context (term f) (term arg)
+      | MapDef ((q_s, q_bt), body) ->
+         if warn_lambda then
+           warn_noloc (!^"generating lambda");
+         (* warn (!^"generating lambda" ^^ colon ^^^ IT.pp (IT (it_, bt))); *)
+         Z3.Quantifier.expr_of_quantifier
+           (Z3.Quantifier.mk_lambda_const context
+              [term (sym_ (q_s, q_bt))] (term body))
       | Pred (name, args) ->
          let def = Option.get (get_logical_predicate_def global name) in
          begin match def.definition with
@@ -635,6 +598,8 @@ module Translate = struct
             in
             Z3.Expr.mk_app context decl (List.map term args)
        end
+      | _ ->
+         Debug_ocaml.error "todo: SMT mapping"
       end
 
     in
@@ -765,7 +730,7 @@ let add_assumption solver global lc =
 let shortcut simp_ctxt lc = 
   let lc = Simplify.LogicalConstraints.simp simp_ctxt lc in
   match lc with
-  | LC.T (IT (Lit (Bool true), _)) -> `True
+  | LC.T (IT (Const (Bool true), _)) -> `True
   | _ -> `No_shortcut lc
 
 
@@ -1055,11 +1020,11 @@ module Eval = struct
            | TupleFunc {bts} ->
               tuple_ args
            | RecordFunc {mbts} ->
-              IT (Record_op (Record (List.combine (List.map fst mbts) args)), 
+              IT ((Record (List.combine (List.map fst mbts) args)), 
                   Record mbts)
            | RecordMemberFunc {mbts; member} ->
               let member_bt = List.assoc Sym.equal member mbts in
-              IT (Record_op (RecordMember (nth args 0, member)), member_bt)
+              IT ((RecordMember (nth args 0, member)), member_bt)
            | DatatypeConsFunc {nm} ->
               let info = SymMap.find nm global.datatype_constrs in
               datatype_cons_ nm info.c_datatype_tag
