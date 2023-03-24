@@ -124,11 +124,17 @@ let _empty_executable_spec = {
 }
 
 
-let generate_c_statements cn_statements = []
-  (* let generate_c_statement cn_statement = 
-    (Location_ocaml.Loc_other "hello", "Unknown")
+let generate_c_statements cn_statements =
+  let open CF.Cn in
+  let generate_c_statement (CN_statement (loc, stmt_)) = 
+    let pp_statement =
+      match stmt_ with
+      | CN_assert_stmt e -> "hello"
+      | _ -> ""
+    in 
+  (loc, pp_statement)
   in
-  List.map generate_c_statement cn_statements *)
+  List.map generate_c_statement cn_statements
 
 
 (* Core_to_mucore.instrumentation list -> executable_spec *)
