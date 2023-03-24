@@ -105,7 +105,7 @@ let inject st inj =
   let st = begin match inj.kind with
     | InStmt str ->
         let (st, _) = move_to ~no_ident:true ~print:false st {inj.end_pos with col= inj.end_pos.col } in
-        do_output st (String.trim (String.escaped str))
+        do_output st (String.escaped str)
     | Return None ->
         do_output st ("__CN_RETURN_VOID;")
     | Return (Some (start_pos, end_pos)) ->
