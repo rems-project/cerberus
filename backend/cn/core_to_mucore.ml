@@ -741,16 +741,16 @@ let rec n_expr (loc : Loc.t) ((env, old_states), desugaring_things) (global_type
                   global_types @
                   Pmap.find marker_id_object_types visible_objects_env 
                 in
-                debug 2 (lazy (!^"CN statement before translation"));
-                debug 2 (lazy (pp_doc_tree (Cn_ocaml.PpAil.dtree_of_cn_statement desugared_stmt)));
+                debug 6 (lazy (!^"CN statement before translation"));
+                debug 6 (lazy (pp_doc_tree (Cn_ocaml.PpAil.dtree_of_cn_statement desugared_stmt)));
 
                 let@ stmt = 
                   Compile.translate_cn_statement 
                     (fun sym -> List.assoc Sym.equal sym visible_objects) 
                     old_states env desugared_stmt 
                 in
-                debug 2 (lazy (!^"CN statement after translation"));
-                debug 2 (lazy (pp_doc_tree (Cnprog.dtree stmt)));
+                debug 6 (lazy (!^"CN statement after translation"));
+                debug 6 (lazy (pp_doc_tree (Cnprog.dtree stmt)));
                 return (desugared_stmt, stmt)
             ) (get_cerb_magic_attr annots)
           in
@@ -1021,8 +1021,8 @@ let normalise_label
           | None -> 
              return ([], precondition_cn_desugaring_state)
         in
-        debug 2 (lazy (!^"invariant in function" ^^^ Sym.pp fsym));
-        debug 2 (lazy (pp_doc_tree (dtree_of_inv desugared_inv)));
+        debug 6 (lazy (!^"invariant in function" ^^^ Sym.pp fsym));
+        debug 6 (lazy (pp_doc_tree (dtree_of_inv desugared_inv)));
 
         let@ label_args_and_body =
           make_label_args (fun env st ->
@@ -1107,10 +1107,10 @@ let normalise_fun_map_decl
      let@ (ensures, ret_d_st) = desugar_conds ret_d_st (List.map snd ensures) in
      Print.debug 6 (lazy (Print.string "desugared ensures conds"));
 
-     debug 2 (lazy (!^"function requires/ensures" ^^^ Sym.pp fname));
-     debug 2 (lazy (pp_doc_tree (dtree_of_accesses accesses)));
-     debug 2 (lazy (pp_doc_tree (dtree_of_requires requires)));
-     debug 2 (lazy (pp_doc_tree (dtree_of_ensures ensures)));
+     debug 6 (lazy (!^"function requires/ensures" ^^^ Sym.pp fname));
+     debug 6 (lazy (pp_doc_tree (dtree_of_accesses accesses)));
+     debug 6 (lazy (pp_doc_tree (dtree_of_requires requires)));
+     debug 6 (lazy (pp_doc_tree (dtree_of_ensures ensures)));
 
 
 
