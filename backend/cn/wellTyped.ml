@@ -203,6 +203,10 @@ module WIT = struct
             | Real, _ ->
                return (IT (Binop (Div, t, t'), IT.bt t))
             | Integer, simp_t' when Option.is_some (is_const simp_t') ->
+               let z = Option.get (is_z simp_t') in
+               let@ () = if Z.lt Z.zero z then return ()
+                 else fail (fun _ -> {loc; msg = Generic
+                   (!^"Divisor " ^^^ IT.pp t' ^^^ !^ "must be positive")}) in
                return (IT (Binop (Div, t, simp_t'), IT.bt t))
             | _ ->
                let hint = "Integer division only allowed when divisor is constant" in
@@ -633,7 +637,11 @@ module WRET = struct
        let@ step = WIT.check loc BT.Integer p.step in
        let@ simp_ctxt = simp_ctxt () in
        let@ step = match IT.is_z (Simplify.IndexTerms.eval simp_ctxt step) with
-         | Some z -> return (IT.z_ z) 
+         | Some z ->
+           let@ () = if Z.lt Z.zero z then return ()
+           else fail (fun _ -> {loc; msg = Generic
+             (!^"Iteration step" ^^^ IT.pp p.step ^^^ !^ "must be positive")}) in
+           return (IT.z_ z)
          | None ->
            let hint = "Only constant iteration steps are allowed" in
            fail (fun ctxt -> {loc; msg = NIA {it = p.step; ctxt; hint}})
