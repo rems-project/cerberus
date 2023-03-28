@@ -916,16 +916,6 @@ let rec add_e ~sequentialise (in_v, out_v) in_pat (Expr (_, e_)) =
   | Ewait _ ->
     (* NOTE: not sure about this *)
     add (in_v, out_v) Tskip
-  | Epack _ ->
-     return `OK
-  | Eunpack _ ->
-     return `OK
-  | Ehave _ ->
-     return `OK
-  | Eshow _ ->
-     return `OK
-  | Einstantiate _ ->
-     return `OK
   | Eannot _ | Eexcluded _ ->
      assert false (* only exists during runtime *)
 
@@ -961,16 +951,6 @@ let rec collect_saves (Expr (_, e_)) =
     mapM self es >>= fun _ ->
     return ()
   | Ewait _ ->
-    return ()
-  | Epack _ ->
-    return ()
-  | Eunpack _ ->
-    return ()
-  | Ehave _ ->
-    return ()
-  | Eshow _ ->
-    return ()
-  | Einstantiate _ ->
     return ()
   | Eannot _ | Eexcluded _ ->
     assert false (* only exists during Core runtime *)

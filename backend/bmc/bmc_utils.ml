@@ -381,9 +381,6 @@ let rec set_uid_e uid n (Expr( annots1, e_)) =
   | Erun( x, lab, pes) -> Erun( x, lab, (pure_uids pes))
   | Epar es -> Epar (selfs es)
   | Ewait thid -> Ewait thid
-  | Epack _ | Eunpack _ | Ehave _ | Eshow _ | Einstantiate _ ->
-      (* these two are CN specific contructors *)
-      assert false
   | Eannot _ | Eexcluded _ ->
       assert false (* runtime only *)
   )))
