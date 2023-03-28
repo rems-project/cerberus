@@ -141,8 +141,8 @@ instance (Show binop)
 
 
 type polarity =  (* memory action polarities *)
- | Pos (* sequenced by \ottkw{let\ weak} and \ottkw{let\ strong} *)
- | Neg (* only sequenced by \ottkw{let\ strong} *)
+ | Pos (* sequenced by \ottkw{letweak} and \ottkw{letstrong} *)
+ | Neg (* only sequenced by \ottkw{letstrong} *)
 
 
 type generic_name 'sym = 
@@ -164,33 +164,32 @@ instance forall 'sym. MapKeyType 'sym => (MapKeyType (generic_name 'sym))
 end
 
 
-type generic_object_value 'sym =  (* C object values *)
+type object_value =  (* C object values *)
  | OVinteger of Mem.integer_value (* integer value *)
  | OVfloating of Mem.floating_value (* floating-point value *)
  | OVpointer of Mem.pointer_value (* pointer value *)
- | OVarray of list (generic_loaded_value 'sym) (* C array value *)
- | OVstruct of Symbol.sym * list (Symbol.identifier * ctype * Mem.mem_value) (* C struct value *)
+ | OVarray of list loaded_value (* C array value *)
+ | OVstruct of Symbol.sym * list (Symbol.identifier * Ctype.ctype * Mem.mem_value) (* C struct value *)
  | OVunion of Symbol.sym * Symbol.identifier * Mem.mem_value (* C union value *)
 
-and generic_loaded_value 'sym =  (* potentially unspecified C object values *)
- | LVspecified of (generic_object_value 'sym) (* non-unspecified loaded value *)
- | LVunspecified of ctype (* unspecified loaded value *)
+and loaded_value =  (* potentially unspecified C object values *)
+ | LVspecified of object_value (* non-unspecified loaded value *)
+ | LVunspecified of Ctype.ctype (* unspecified loaded value *)
 
 
-type generic_value 'sym =  (* Core values *)
- | Vobject of (generic_object_value 'sym) (* C object value *)
- | Vloaded of (generic_loaded_value 'sym) (* loaded C object value *)
+type value =  (* Core values *)
+ | Vobject of object_value (* C object value *)
+ | Vloaded of loaded_value (* loaded C object value *)
  | Vunit
  | Vtrue
  | Vfalse
- | Vctype of ctype (* C type as value *)
- | Vlist of core_base_type * list (generic_value 'sym)
- | Vtuple of list (generic_value 'sym) (* tuple *)
+ | Vctype of Ctype.ctype (* C type as value *)
+ | Vlist of core_base_type * list value
+ | Vtuple of list value (* tuple *)
 
 
-type generic_ctor =  (* data constructors *)
- | Cnil of core_base_type (* empty list *) 
- (* annotated with the type of the list items *)
+type ctor =  (* data constructors *)
+ | Cnil of core_base_type (* empty list (annotated with the type of the items) *)
  | Ccons (* list cons *)
  | Ctuple (* tuple *)
  | Carray (* C array *)
@@ -210,7 +209,7 @@ type generic_ctor =  (* data constructors *)
 
 type generic_pattern_ 'sym = 
  | CaseBase of (maybe 'sym * core_base_type)
- | CaseCtor of generic_ctor * list (generic_pattern 'sym)
+ | CaseCtor of ctor * list (generic_pattern 'sym)
 
 and generic_pattern 'sym = 
  | Pattern of list annot * (generic_pattern_ 'sym)
@@ -219,13 +218,13 @@ and generic_pattern 'sym =
 type generic_pexpr_ 'bty 'sym =  (* Core pure expressions *)
  | PEsym of 'sym
  | PEimpl of Implementation.implementation_constant (* implementation-defined constant *)
- | PEval of (generic_value 'sym)
+ | PEval of value
  | PEconstrained of list (Mem.mem_iv_constraint * (generic_pexpr 'bty 'sym)) (* constrained value *)
  | PEundef of Loc.t * Undefined.undefined_behaviour (* undefined behaviour *)
  | PEerror of string * (generic_pexpr 'bty 'sym) (* impl-defined static error *)
- | PEctor of generic_ctor * list (generic_pexpr 'bty 'sym) (* data constructor application *)
+ | PEctor of ctor * list (generic_pexpr 'bty 'sym) (* data constructor application *)
  | PEcase of (generic_pexpr 'bty 'sym) * list ((generic_pattern 'sym) * (generic_pexpr 'bty 'sym)) (* pattern matching *)
- | PEarray_shift of (generic_pexpr 'bty 'sym) * ctype * (generic_pexpr 'bty 'sym) (* pointer array shift *)
+ | PEarray_shift of (generic_pexpr 'bty 'sym) * Ctype.ctype * (generic_pexpr 'bty 'sym) (* pointer array shift *)
  | PEmember_shift of (generic_pexpr 'bty 'sym) * 'sym * Symbol.identifier (* pointer struct/union member shift *)
  | PEnot of (generic_pexpr 'bty 'sym) (* boolean not *)
  | PEop of binop * (generic_pexpr 'bty 'sym) * (generic_pexpr 'bty 'sym)
@@ -254,14 +253,13 @@ type kill_kind =
 let is_dynamic = function
   | Dynamic -> true
   | Static _ -> false
-  
 end
 
 type generic_action_ 'bty 'sym =  (* memory actions *)
  | Create of (generic_pexpr 'bty 'sym) * (generic_pexpr 'bty 'sym) * Symbol.prefix
  | CreateReadOnly of (generic_pexpr 'bty 'sym) * (generic_pexpr 'bty 'sym) * (generic_pexpr 'bty 'sym) * Symbol.prefix
  | Alloc of (generic_pexpr 'bty 'sym) * (generic_pexpr 'bty 'sym) * Symbol.prefix
- | Kill of kill_kind  * (generic_pexpr 'bty 'sym) (* the boolean indicates whether the action is dynamic (i.e. free()), the size *)
+ | Kill of kill_kind * (generic_pexpr 'bty 'sym) (* the boolean indicates whether the action is dynamic (i.e. free()) *)
  | Store of bool * (generic_pexpr 'bty 'sym) * (generic_pexpr 'bty 'sym) * (generic_pexpr 'bty 'sym) * Cmm_csem.memory_order (* the boolean indicates whether the store is locking *)
  | Load of (generic_pexpr 'bty 'sym) * (generic_pexpr 'bty 'sym) * Cmm_csem.memory_order
  | SeqRMW of bool * (generic_pexpr 'bty 'sym) * (generic_pexpr 'bty 'sym) * 'sym * (generic_pexpr 'bty 'sym) (* the boolean indicates whether the value should be that of the update (otherwise it is what was read from memory) *)
@@ -377,7 +375,7 @@ end
 type extern_map =
   map Symbol.identifier (list Symbol.sym * linking_kind)
 
-type generic_globs 'a 'bty=
+type generic_globs 'a 'bty =
   | GlobalDef of (core_base_type * Ctype.ctype) * generic_expr 'a 'bty Symbol.sym
   | GlobalDecl of (core_base_type * Ctype.ctype)
 
@@ -406,10 +404,6 @@ type generic_file 'bty 'a = <|
 
 
 type name            = generic_name Symbol.sym
-type object_value    = generic_object_value Symbol.sym
-type loaded_value    = generic_loaded_value Symbol.sym
-type value           = generic_value Symbol.sym
-type ctor            = generic_ctor
 type pattern         = generic_pattern Symbol.sym
 type pexpr           = generic_pexpr unit Symbol.sym
 type expr 'a         = generic_expr 'a unit Symbol.sym
@@ -421,7 +415,6 @@ type fun_map_decl 'a = generic_fun_map_decl unit 'a
 type fun_map 'a      = generic_fun_map unit 'a
 type file 'a         = generic_file unit 'a
 
-type typed_ctor            = generic_ctor
 type typed_pattern         = generic_pattern Symbol.sym
 type typed_pexpr           = generic_pexpr core_base_type Symbol.sym
 type typed_expr 'a         = generic_expr 'a core_base_type Symbol.sym
@@ -434,28 +427,9 @@ type typed_fun_map 'a      = generic_fun_map core_base_type 'a
 type typed_file 'a         = generic_file core_base_type 'a
 
 
-
 declare {coq} rename type impl = impl_ (* workaround for Lem issue #74 *)
 
-
-
-
-
-
- 
- 
- 
- 
- 
-
- 
- 
- 
- 
- (* basic class instanciations *)
- instance (SetType polarity)
-   let setElemCompare = defaultCompare
- end
-
-
-
+(* basic class instanciations *)
+instance (SetType polarity)
+  let setElemCompare = defaultCompare
+end

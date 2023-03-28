@@ -294,25 +294,6 @@ let symbolify_value _cval =
    | _ ->
        assert false
 
-let convert_ctor : generic_ctor -> ctor = fun ctor -> ctor
-(*  function
- | Cnil ()      -> Cnil ()
- | Ccons        -> Ccons
- | Ctuple       -> Ctuple
- | Carray       -> Carray
- | Civmax       -> Civmax
- | Civmin       -> Civmin
- | Civsizeof    -> Civsizeof
- | Civalignof   -> Civalignof
- | CivCOMPL     -> CivCOMPL
- | CivAND       -> CivAND
- | CivOR        -> CivOR
- | CivXOR       -> CivXOR
- | Cspecified   -> Cspecified
- | Cunspecified -> Cunspecified
- | Cfvfromint   -> Cfvfromint
- | Civfromfloat -> Civfromfloat *)
-
 let do_esave_arg (sym,(cbt,pe)) = (sym,((cbt,None),pe))
 
 
@@ -325,9 +306,9 @@ let rec symbolify_pattern (Pattern (annots, _pat)) : pattern Eff.t =
     | CaseBase (Some _sym, bTy) ->
         register_sym _sym >>= fun sym ->
         Eff.return (Pattern (annots, CaseBase (Some sym, bTy)))
-    | CaseCtor (_ctor, _pats) ->
+    | CaseCtor (ctor, _pats) ->
         Eff.mapM symbolify_pattern _pats >>= fun pat ->
-        Eff.return (Pattern (annots, CaseCtor (convert_ctor _ctor, pat)))
+        Eff.return (Pattern (annots, CaseCtor (ctor, pat)))
 
 let rec symbolify_pexpr (Pexpr (annot, (), _pexpr): parsed_pexpr) : pexpr Eff.t =
   let loc = Annot.get_loc_ annot in
@@ -1127,7 +1108,7 @@ let mk_file decls =
 
 %token EOF
 
-%type<Core_parser_util._sym Core.generic_value>
+%type<Core.value>
   value
 %type<(unit, Core_parser_util._sym) Core.generic_pexpr>
   pexpr
@@ -1452,9 +1433,9 @@ core_ctype:
 
 value:
 (* TODO:
-  | Vconstrained of list (list Mem.mem_constraint * generic_value 'sym)
-  | Vobject of generic_object_value 'sym
-  | Vloaded of generic_object_value 'sym
+  | Vconstrained of list (list Mem.mem_constraint * value)
+  | Vobject of object_value
+  | Vloaded of object_value
   | Vunspecified of ctype
 *)
 | n= INT_CONST
