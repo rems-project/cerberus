@@ -229,7 +229,7 @@ metavar Symbol_identifier
     {{ phantom }}
     {{ com C struct/union member name }}
 metavar ty
-  {{ lem ctype }}
+  {{ lem Ctype.ctype }}
   {{ tex \tau }} ::=
     {{ phantom }}
 
@@ -238,32 +238,32 @@ grammar
     | nullptr ( ty ) :: :: nullptr
 
 % (* Object values (inhabitants of object types, hence values that can be read/stored) *)
-  generic_object_value {{ tex object\_value }}:: 'OV' ::=  {{ auxparam 'sym }} {{ com C object values }} 
+  object_value {{ tex object\_value }}:: 'OV' ::= {{ com C object values }} 
     | Mem_integer_value :: :: integer  {{ com integer value }}
     | Mem_floating_value :: :: floating {{ com floating-point value }}
     | Mem_pointer_value :: :: pointer {{ com pointer value }}
-    | array ( </ generic_loaded_valuei // , // i /> ) :: :: array {{ com C array value }}
+    | array ( </ loaded_valuei // , // i /> ) :: :: array {{ com C array value }}
     | ( struct tag ) { </ . Symbol_identifieri : tyi = Mem_mem_valuei // , // i /> } :: :: struct {{ com C struct value }}
     | ( union tag ) { . Symbol_identifier = Mem_mem_value } :: :: union {{ com C union value }}
   
-  generic_loaded_value {{ tex loaded\_value }} :: 'LV' ::= {{ auxparam 'sym }} {{ com potentially unspecified C object values }}
-    | Specified ( generic_object_value ) :: :: specified {{ com non-unspecified loaded value }}
+  loaded_value {{ tex loaded\_value }} :: 'LV' ::= {{ com potentially unspecified C object values }}
+    | Specified ( object_value ) :: :: specified {{ com non-unspecified loaded value }}
     | Unspecified ( ty ) :: :: unspecified {{ com unspecified loaded value }}
   
-  generic_value {{ tex value }} :: 'V' ::= {{ auxparam 'sym }} {{ com Core values }}
-    | generic_object_value                                    :: :: object {{ com C object value }} 
-    | generic_loaded_value                                    :: :: loaded {{ com loaded C object value }}
-    | Unit                                                    :: :: unit
-    | True                                                    :: :: true
-    | False                                                   :: :: false
-    | ' ty '                                                  :: :: ctype {{ com C type as value }}
-    | core_base_type [ generic_value1 , .. , generic_valuei ] :: :: list {{ tex [ [[generic_value1]] , .. , [[generic_valuei]] ] }}
-    | ( generic_value1 , .. , generic_valuei )                :: :: tuple {{ com tuple }}
+  value {{ tex value }} :: 'V' ::= {{ com Core values }}
+    | object_value                            :: :: object {{ com C object value }} 
+    | loaded_value                            :: :: loaded {{ com loaded C object value }}
+    | Unit                                    :: :: unit
+    | True                                    :: :: true
+    | False                                   :: :: false
+    | ' ty '                                  :: :: ctype {{ com C type as value }}
+    | core_base_type [ value1 , .. , valuei ] :: :: list {{ tex [ [[value1]] , .. , [[valuei]] ] }}
+    | ( value1 , .. , valuei )                :: :: tuple {{ com tuple }}
 
 
 metavar bty {{ lem 'bty }} ::= {{ phantom }}
 grammar
-  generic_ctor {{ tex ctor }} :: 'C' ::= {{ com data constructors }}
+  ctor {{ tex ctor }} :: 'C' ::= {{ com data constructors }}
     | Nil core_base_type :: :: nil         {{ com empty list (annotated with the type of the items) }}                     % : [bTy] 
     | Cons               :: :: cons        {{ com list cons }}                      % : bTy -> [bTy] -> [bTy] 
     | Tuple              :: :: tuple       {{ com tuple }}                          % : bTy1 -> ... -> bTyN -> (bTy1, ..., bTyN) 
@@ -290,8 +290,8 @@ grammar
     | tyvarsym : core_base_type :: :: Just    (+ binders = tyvarsym +)
   
   generic_pattern_aux {{ lem generic_pattern_ }} :: 'Case' ::= {{ auxparam 'sym }}
-    | maybesym_core_base_type                           :: X :: Base % (+ binders = binders(maybesym) +)
-    | generic_ctor ( </ generic_patterni // , // i /> ) ::   :: Ctor % (+ b = b( </ generic_pattern_auxi // , // i /> ) +)
+    | maybesym_core_base_type                   :: X :: Base % (+ binders = binders(maybesym) +)
+    | ctor ( </ generic_patterni // , // i /> ) ::   :: Ctor % (+ b = b( </ generic_pattern_auxi // , // i /> ) +)
   
   generic_pattern :: '' ::= {{ auxparam 'sym }}
     | annots generic_pattern_aux :: :: Pattern % (+ binders = binders(generic_pattern_aux) +)
@@ -309,11 +309,11 @@ grammar
   generic_pexpr_aux {{ lem generic_pexpr_ }} :: 'PE' ::= {{ auxparam 'bty 'sym }} {{ com Core pure expressions }}
     | tyvarsym                                                                         ::   :: sym
     | Implementation__implementation_constant                                          ::   :: impl {{ com implementation-defined constant }} 
-    | generic_value                                                                    ::   :: val
+    | value                                                                            ::   :: val
     | constrained ( </ Mem_mem_iv_constrainti , generic_pexpri // , // i /> )          :: X :: constrained {{ com constrained value }} % TODO: hide from tex
     | undef Loc_t ( Undefined_undefined_behaviour )                                    ::   :: undef {{ com undefined behaviour }}
     | error ( string , generic_pexpr )                                                 ::   :: error {{ com impl-defined static error }}
-    | generic_ctor ( </ generic_pexpri // , // i /> )                                  ::   :: ctor {{ com data constructor application }}
+    | ctor ( </ generic_pexpri // , // i /> )                                          ::   :: ctor {{ com data constructor application }}
     | case generic_pexpr of </ | generic_patterni => generic_pexpri // i /> end        ::   :: case {{ com pattern matching }}
     | array_shift ( generic_pexpr1 , ty , generic_pexpr2 )                             ::   :: array_shift {{ com pointer array shift }}
     | member_shift ( generic_pexpr , tyvarsym , Symbol_identifier )                    ::   :: member_shift {{ com pointer struct/union member shift }}
@@ -417,15 +417,12 @@ grammar
     | case generic_pexpr with </ | generic_patterni => generic_expri // i /> end                              :: :: case   {{ com pattern matching }} % TODO: bindings
     | let generic_pattern = generic_pexpr in generic_expr                                                     :: :: let % TODO: bindings
     | if generic_pexpr then generic_expr1 else generic_expr2                                                  :: :: if
-    | skip                                                                                                    :: :: skip
     | ccall a ( generic_pexpr1 , generic_pexpr2 , </ generic_pexpri // , // i /> )                            :: :: ccall {{ com C function call }}
     | pcall a ( generic_name , </ generic_pexpri // , // i /> )                                               :: :: proc  {{ com Core procedure call }}
     | unseq ( generic_expr1 , .. , generic_exprn )                                                            :: :: unseq {{ com unsequenced expressions }}
     | letweak generic_pattern = generic_expr1 in generic_expr2                                                :: :: wseq  {{ com weak sequencing }} % TODO: bindings
     | letstrong generic_pattern = generic_expr1 in generic_expr2                                              :: :: sseq  {{ com strong sequencing }} % TODO: bindings
-    | letatomic tyvarsym_base_type_pair = generic_action1 in generic_paction2                                 :: :: aseq  {{ com atomic sequencing }}% (* this ctor doesn't exist at runtine *)
-    | indet [ nat ] ( generic_expr )                                                                          :: :: indet {{ com indeterminately sequenced expr }} % (* this ctor doesn't exist at runtine *)
-    | bound [ nat ] ( generic_expr )                                                                          :: :: bound {{ com $\ldots$and boundary }}
+    | bound ( generic_expr )                                                                                  :: :: bound {{ com $\ldots$and boundary }}
     | nd ( generic_expr1 , .. , generic_exprn )                                                               :: :: nd    {{ com nondeterministic sequencing }}
     | save tyvarsym_base_type_pair ( </ tyvarsymi : core_base_type_pexpr_pairi // , // i /> ) in generic_expr :: :: save  {{ com save label }}
     | run a tyvarsym ( </ generic_pexpri // , // i /> )                                                       :: :: run   {{ com run from label }}
@@ -496,7 +493,7 @@ type generic_impl 'bty = map Implementation.implementation_constant (generic_imp
 
 type generic_fun_map_decl 'bty 'a =
   | Fun of core_base_type * list (Symbol.sym * core_base_type) * generic_pexpr 'bty Symbol.sym
-  | Proc of Loc.t * core_base_type * list (Symbol.sym * core_base_type) * generic_expr 'a 'bty Symbol.sym
+  | Proc of Loc.t * maybe nat (* marker env *) * core_base_type * list (Symbol.sym * core_base_type) * generic_expr 'a 'bty Symbol.sym
   | ProcDecl of Loc.t * core_base_type * list core_base_type
   | BuiltinDecl of Loc.t * core_base_type * list core_base_type
 
@@ -548,6 +545,9 @@ type generic_globs_map 'a 'bty =
 type core_tag_definitions =
   map Symbol.sym Ctype.tag_definition
 
+type visible_objects_env = map nat (list (Symbol.sym * Ctype.ctype))
+
+
 (* a Core file is just a set of named functions *)
 type generic_file 'bty 'a = <|
   main    : maybe Symbol.sym;
@@ -559,14 +559,11 @@ type generic_file 'bty 'a = <|
   extern  : extern_map;
   funinfo : map Symbol.sym (Loc.t * Annot.attributes * ctype * list (maybe Symbol.sym * ctype) * bool * bool);
   loop_attributes : Annot.loop_attributes;
+  visible_objects_env: visible_objects_env;
 |>
 
 
 type name            = generic_name Symbol.sym
-type object_value    = generic_object_value Symbol.sym
-type loaded_value    = generic_loaded_value Symbol.sym
-type value           = generic_value Symbol.sym
-type ctor            = generic_ctor
 type pattern         = generic_pattern Symbol.sym
 type pexpr           = generic_pexpr unit Symbol.sym
 type expr 'a         = generic_expr 'a unit Symbol.sym
@@ -578,7 +575,6 @@ type fun_map_decl 'a = generic_fun_map_decl unit 'a
 type fun_map 'a      = generic_fun_map unit 'a
 type file 'a         = generic_file unit 'a
 
-type typed_ctor            = generic_ctor
 type typed_pattern         = generic_pattern Symbol.sym
 type typed_pexpr           = generic_pexpr core_base_type Symbol.sym
 type typed_expr 'a         = generic_expr 'a core_base_type Symbol.sym
@@ -591,43 +587,10 @@ type typed_fun_map 'a      = generic_fun_map core_base_type 'a
 type typed_file 'a         = generic_file core_base_type 'a
 
 
-
 declare {coq} rename type impl = impl_ (* workaround for Lem issue #74 *)
 
-
-
-
-
-
- 
- 
- 
- 
- 
- (* runtime stuff *)
-type continuation_element 'a =
-  | Kunseq of list annot * list (expr 'a) * list (expr 'a)
-  | Kwseq  of list annot * pattern * expr 'a
-  | Ksseq  of list annot * pattern * expr 'a
- (*  | Ktry   list (string * expr 'a) *)
-
-type continuation 'a = list (continuation_element 'a)
-(* type labeled_continuation 'a = list (Symbol.sym * ctype) * expr 'a *)
-type labeled_continuations 'a = map Symbol.sym (list Symbol.sym * expr 'a)
-
-
-type stack 'a =
-  | Stack_empty
-    (* the symbol is that of the procedure being executed *)
-  | Stack_cons of maybe Symbol.sym * (*labeled_continuations 'a * *) continuation 'a * stack 'a
- 
- 
- 
- 
- 
- 
- (* basic class instanciations *)
- instance (SetType polarity)
-   let setElemCompare = defaultCompare
- end
+(* basic class instanciations *)
+instance (SetType polarity)
+  let setElemCompare = defaultCompare
+end
 }}

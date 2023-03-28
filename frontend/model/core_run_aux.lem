@@ -503,50 +503,6 @@ end
 
 (* BEGIN silly *)
 (* Dummy function doing nothing, but required to typecheck *)
-val convert_ctor: Core.generic_ctor -> Core.ctor
-let convert_ctor ctor = ctor (* function
- *   | Cnil bTy ->
- *       Cnil bTy
- *   | Ccons ->
- *       Ccons
- *   | Ctuple ->
- *       Ctuple
- *   | Carray ->
- *       Carray
- *   | Civmax ->
- *       Civmax
- *   | Civmin ->
- *       Civmin
- *   | Civsizeof ->
- *       Civsizeof
- *   | Civalignof ->
- *       Civalignof
- *   | CivCOMPL ->
- *       CivCOMPL
- *   | CivAND ->
- *       CivAND
- *   | CivOR ->
- *       CivOR
- *   | CivXOR ->
- *       CivXOR
- *   | Cspecified ->
- *       Cspecified
- *   | Cunspecified ->
- *       Cunspecified
- *   | Cfvfromint ->
- *       Cfvfromint
- *   | Civfromfloat ->
- *       Civfromfloat
- * end *)
-
-val convert_pattern: Core.generic_pattern Symbol.sym -> Core.pattern
-let convert_pattern (Pattern annots pat) = (Pattern annots pat)
-  (* Pattern annots $ match pat with
-   *   | CaseBase (sym_opt, bTy) ->
-   *       CaseBase (sym_opt, bTy)
-   *   | CaseCtor ctor pats ->
-   *       CaseCtor (convert_ctor ctor) (List.map convert_pattern pats)
-   * end *)
 
 val convert_pexpr: forall 'bty. generic_pexpr 'bty Symbol.sym -> pexpr
 let rec convert_pexpr (Pexpr annot _ pexpr_) =
@@ -564,9 +520,9 @@ let rec convert_pexpr (Pexpr annot _ pexpr_) =
  | PEerror str pe ->
      PEerror str (convert_pexpr pe)
  | PEctor ctor pes ->
-     PEctor (convert_ctor ctor) (List.map convert_pexpr pes)
+     PEctor ctor (List.map convert_pexpr pes)
  | PEcase pe pat_pes ->
-     PEcase (convert_pexpr pe) (List.map (fun (pat, pe) -> (convert_pattern pat, convert_pexpr pe)) pat_pes)
+     PEcase (convert_pexpr pe) (List.map (fun (pat, pe) -> (pat, convert_pexpr pe)) pat_pes)
  | PEarray_shift pe1 ty pe2 ->
      PEarray_shift (convert_pexpr pe1) ty (convert_pexpr pe2)
  | PEmember_shift pe sym ident ->
@@ -586,7 +542,7 @@ let rec convert_pexpr (Pexpr annot _ pexpr_) =
  | PEcall nm pes ->
      PEcall nm (List.map convert_pexpr pes)
  | PElet pat pe1 pe2 ->
-     PElet (convert_pattern pat) (convert_pexpr pe1) (convert_pexpr pe2)
+     PElet pat (convert_pexpr pe1) (convert_pexpr pe2)
  | PEif pe1 pe2 pe3 ->
      PEif (convert_pexpr pe1) (convert_pexpr pe2) (convert_pexpr pe3)
  | PEis_scalar pe ->
@@ -611,11 +567,11 @@ let rec convert_expr (Expr annot expr_) =
     | Ememop memop pes ->
         Ememop memop (List.map convert_pexpr pes)
     | Elet pat pe1 e2 ->
-        Elet (convert_pattern pat) (convert_pexpr pe1) (convert_expr e2)
+        Elet pat (convert_pexpr pe1) (convert_expr e2)
     | Eif pe1 e2 e3 ->
         Eif (convert_pexpr pe1) (convert_expr e2) (convert_expr e3)
     | Ecase pe pat_es ->
-        Ecase (convert_pexpr pe) (List.map (fun (pat, e) -> (convert_pattern pat, convert_expr e)) pat_es)
+        Ecase (convert_pexpr pe) (List.map (fun (pat, e) -> (pat, convert_expr e)) pat_es)
     | Eccall _ ty pe pes ->
         Eccall empty_annotation (convert_pexpr ty) (convert_pexpr pe) (List.map convert_pexpr pes)
     | Eproc _ nm pes ->
@@ -625,9 +581,9 @@ let rec convert_expr (Expr annot expr_) =
     | Eunseq es ->
         Eunseq (List.map convert_expr es)
     | Ewseq pat e1 e2 ->
-        Ewseq (convert_pattern pat) (convert_expr e1) (convert_expr e2)
+        Ewseq pat (convert_expr e1) (convert_expr e2)
     | Esseq pat e1 e2 ->
-        Esseq (convert_pattern pat) (convert_expr e1) (convert_expr e2)
+        Esseq pat (convert_expr e1) (convert_expr e2)
     | Ebound e ->
         Ebound (convert_expr e)
     | Esave sym xs e ->

@@ -123,14 +123,14 @@ let rec all_sequences = function
 (* Transfer expression *)
 type ('a, 'bty) texpr =
   | TEsym of Symbol.sym
-  | TEval of Symbol.sym generic_value
+  | TEval of value
   | TEaction of ('a, 'bty) taction
   | TEmemop of Mem_common.memop * ('a, 'bty) texpr list
   | TEimpl of Implementation.implementation_constant
   | TEconstrained of (Mem.mem_iv_constraint * ('a, 'bty) texpr) list
   | TEundef of Location_ocaml.t * Undefined.undefined_behaviour
   | TEerror of string * ('a, 'bty) texpr
-  | TEctor of generic_ctor * ('a, 'bty) texpr list
+  | TEctor of ctor * ('a, 'bty) texpr list
   | TEarray_shift of ('a, 'bty) texpr * ctype * ('a, 'bty) texpr
   | TEmember_shift of ('a, 'bty) texpr * Symbol.sym * Symbol.identifier
   | TEnot of ('a, 'bty) texpr
@@ -156,7 +156,7 @@ and ('a, 'bty) taction =
 (* Conditionals guards *)
 type ('a, 'bty) cond =
   | Csym of Symbol.sym
-  | Cval of Symbol.sym generic_value
+  | Cval of value
   | Cop of binop * ('a, 'bty) texpr * ('a, 'bty) texpr
   | Cnot of ('a, 'bty) cond
   | Cmatch of (Symbol.sym) generic_pattern * ('a, 'bty) texpr
@@ -916,16 +916,6 @@ let rec add_e ~sequentialise (in_v, out_v) in_pat (Expr (_, e_)) =
   | Ewait _ ->
     (* NOTE: not sure about this *)
     add (in_v, out_v) Tskip
-  | Epack _ ->
-     return `OK
-  | Eunpack _ ->
-     return `OK
-  | Ehave _ ->
-     return `OK
-  | Eshow _ ->
-     return `OK
-  | Einstantiate _ ->
-     return `OK
   | Eannot _ | Eexcluded _ ->
      assert false (* only exists during runtime *)
 
@@ -961,16 +951,6 @@ let rec collect_saves (Expr (_, e_)) =
     mapM self es >>= fun _ ->
     return ()
   | Ewait _ ->
-    return ()
-  | Epack _ ->
-    return ()
-  | Eunpack _ ->
-    return ()
-  | Ehave _ ->
-    return ()
-  | Eshow _ ->
-    return ()
-  | Einstantiate _ ->
     return ()
   | Eannot _ | Eexcluded _ ->
     assert false (* only exists during Core runtime *)

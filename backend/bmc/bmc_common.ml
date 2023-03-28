@@ -237,7 +237,7 @@ let ctype_from_pexpr (ctype_pe: typed_pexpr) =
   | _ -> assert false
 
 
-let ctor_to_z3 (ctor  : typed_ctor)
+let ctor_to_z3 (ctor  : ctor)
                (exprs : Expr.expr list)
                (bTy   : core_base_type option)
                (uid   : int)

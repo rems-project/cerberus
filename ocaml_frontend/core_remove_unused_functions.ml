@@ -151,12 +151,12 @@ module RW = Rewriter(State)
 type ('a,'bty,'sym) name_collector =
   { names_in_pointer_value : Impl_mem.pointer_value -> unit t; 
     names_in_memory_value : Impl_mem.mem_value -> unit t; 
-    names_in_object_value : 'sym generic_object_value -> unit t;
-    names_in_loaded_value : 'sym generic_loaded_value -> unit t;
+    names_in_object_value : object_value -> unit t;
+    names_in_loaded_value : loaded_value -> unit t;
     names_in_ctype : Ctype.ctype -> unit t;
     names_in_core_object_type : core_object_type -> unit t;
     names_in_core_base_type : core_base_type -> unit t;
-    names_in_value : 'sym generic_value -> unit t;
+    names_in_value : value -> unit t;
     names_in_pattern : 'sym generic_pattern -> unit t;
     names_in_name : 'sym generic_name -> unit t;
     names_in_pexpr : ('bty,'sym) generic_pexpr -> unit t;

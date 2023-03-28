@@ -25,7 +25,7 @@ sig
   val pp_pexpr: ('ty, Symbol.sym) generic_pexpr -> PPrint.document
   val pp_expr: ('a, 'b, Symbol.sym) generic_expr -> PPrint.document
   val pp_file: ('a, 'b) generic_file -> PPrint.document
-  val pp_ctor : generic_ctor -> PPrint.document
+  val pp_ctor : ctor -> PPrint.document
 
   val pp_funinfo: (Symbol.sym, Location_ocaml.t * Annot.attributes * Ctype.ctype * (Symbol.sym option * Ctype.ctype) list * bool * bool) Pmap.map -> PPrint.document
   val pp_funinfo_with_attributes: (Symbol.sym, Location_ocaml.t * Annot.attributes * Ctype.ctype * (Symbol.sym option * Ctype.ctype) list * bool * bool) Pmap.map -> PPrint.document
