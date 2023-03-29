@@ -141,16 +141,15 @@ let generate_c_binop = function
 | CN_map_get -> "" (* TODO *)
 
 
-let rec generate_c_expr (CNExpr (loc, expr_)) =
+let rec generate_c_expr ((CNExpr (loc, expr_)) as expr) =
   match expr_ with 
   | CNExpr_const CNConst_NULL -> ""
-  | CNExpr_const (CNConst_integer n) -> Z.to_string n
+  | CNExpr_const (CNConst_integer _) | CNExpr_value_of_c_atom _ -> Cn_to_ail.(pp_ail (cn_to_ail_expr expr))
   | CNExpr_const (CNConst_bool b) -> string_of_bool b
   (* 
   | CNExpr_const (CNConst_bool b)
-  | CNExpr_const CNConst_unit 
-  | CNExpr_var sym
-  | CNExpr_list es
+  | CNExpr_const CNConst_unit *)
+  (*| CNExpr_list es
   | CNExpr_memberof (e, xs)
   | CNExpr_memberupdates (e, updates)
   | CNExpr_arrayindexupdates (e, updates)
@@ -171,7 +170,7 @@ let rec generate_c_expr (CNExpr (loc, expr_)) =
   | CNExpr_unchanged e
   | CNExpr_at_env (e, scope)
   | CNExpr_deref e -> "hello" *)
-  | _ -> ""
+  | _ -> "XXX"
  
 
 let generate_c_assertion cn_assertion =
