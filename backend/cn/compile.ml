@@ -661,11 +661,8 @@ module EffectfulTranslation = struct
             end
         | CNExpr_cast (bt, expr) ->
             let@ expr = self expr in
-            begin match bt with
-            | CN_loc -> return (IT ((IntegerToPointerCast expr), SBT.Loc None))
-            | CN_integer -> return (IT ((PointerToIntegerCast expr), SBT.Integer))
-            | _ -> fail {loc; msg = Generic (Pp.string "can only cast to pointer or integer")}
-            end
+            let bt = translate_cn_base_type bt in
+            return (IT (Cast (SBT.to_basetype bt, expr), bt))
         | CNExpr_call (nm, exprs) ->
             let@ args = ListM.mapM self exprs in
             let nm_s = Id.pp_string nm in
@@ -846,9 +843,9 @@ module EffectfulTranslation = struct
     let qs = sym_ (q, SBT.Integer) in
     let msg_s = "Iterated predicate pointer must be (ptr + (q_var * offs)):" in
     begin match term ptr_expr with
-      | (IntegerToPointerCast (IT (Binop (Add, b, offs), _))) ->
+      | (Cast (Loc, IT (Binop (Add, b, offs), Integer))) ->
         begin match term b, term offs with
-          | (PointerToIntegerCast p), Binop (Mul, x, y) when Terms.equal SBT.equal x qs ->
+          | (Cast (Integer, (IT (_, SBT.Loc _) as p))), Binop (Mul, x, y) when Terms.equal SBT.equal x qs ->
             return (p, y)
           | _ -> fail { loc; msg= Generic (!^msg_s ^^^ IT.pp ptr_expr)}
         end

@@ -46,8 +46,6 @@ type 'bt term_ =
   | Const of const
   | Sym of Sym.t
   | Binop of binop * 'bt term * 'bt term
-  | IntToReal of 'bt term
-  | RealToInt of 'bt term
   | And of 'bt term list
   | Or of 'bt term list
   | Impl of 'bt term * 'bt term
@@ -66,8 +64,6 @@ type 'bt term_ =
   | DatatypeCons of Sym.t * 'bt term
   | DatatypeMember of 'bt term * Sym.t
   | DatatypeIsCons of Sym.t * 'bt term
-  | IntegerToPointerCast of 'bt term
-  | PointerToIntegerCast of 'bt term
   | MemberOffset of BaseTypes.tag * Id.t
   | ArrayOffset of Sctypes.t (*element ct*) * 'bt term (*index*)
   | Nil
@@ -85,6 +81,7 @@ type 'bt term_ =
   | MapGet of 'bt term * 'bt term
   | MapDef of (Sym.t * BaseTypes.t) * 'bt term
   | Apply of Sym.t * ('bt term) list
+  | Cast of BaseTypes.t * 'bt term
 
 and 'bt term =
   | IT of 'bt term_ * 'bt
@@ -184,10 +181,6 @@ let pp : 'bt 'a. ?atomic:bool -> ?f:('bt term -> Pp.doc -> Pp.doc) -> 'bt term -
        (* end *)
     (* | Bool_op bool_op -> *)
     (*    begin match bool_op with *)
-       | IntToReal t ->
-          c_app !^"intToReal" [aux false t]
-       | RealToInt t ->
-          c_app !^"realToInt" [aux false t]
        | And o ->
           let rec consolidate = function
             | IT (And o, _) -> List.concat_map consolidate o
@@ -247,10 +240,8 @@ let pp : 'bt 'a. ?atomic:bool -> ?f:('bt term -> Pp.doc -> Pp.doc) -> 'bt term -
        (* end *)
     (* | Pointer_op pointer_op -> *)
     (*    begin match pointer_op with *)
-       | IntegerToPointerCast t ->
-          mparens (align @@ parens(!^"pointer") ^^ break 0 ^^ aux true t)
-       | PointerToIntegerCast t ->
-          mparens (align @@ parens(!^"integer") ^^ break 0 ^^ aux true t)
+       | Cast (cbt, t) ->
+          mparens (align @@ parens(BaseTypes.pp cbt) ^^ break 0 ^^ aux true t)
        | MemberOffset (tag, member) ->
           mparens (c_app !^"offsetof" [Sym.pp tag; Id.pp member])
        | ArrayOffset (ct, t) ->
@@ -360,8 +351,6 @@ let rec dtree (IT (it_, bt)) =
   | Binop (LE, t1, t2) -> Dnode (pp_ctor "LE", [dtree t1; dtree t2])
   | Binop (Min, t1, t2) -> Dnode (pp_ctor "Min", [dtree t1; dtree t2])
   | Binop (Max, t1, t2) -> Dnode (pp_ctor "Max", [dtree t1; dtree t2])
-  | (IntToReal t) -> Dnode (pp_ctor "IntToReal", [dtree t])
-  | (RealToInt t) -> Dnode (pp_ctor "RealToInt", [dtree t])
   | Binop (XORNoSMT, t1, t2) -> Dnode (pp_ctor "XORNoSMT", [dtree t1; dtree t2])
   | (And ts) -> Dnode (pp_ctor "And", List.map dtree ts)
   | (Or ts) -> Dnode (pp_ctor "Or", List.map dtree ts)
@@ -392,8 +381,7 @@ let rec dtree (IT (it_, bt)) =
      Dnode (pp_ctor "DatatypeIsCons", [Dleaf (Sym.pp s); dtree t])
   | Binop (LTPointer, t1, t2) -> Dnode (pp_ctor "LTPointer", [dtree t1; dtree t2])
   | Binop (LEPointer, t1, t2) -> Dnode (pp_ctor "LEPointer", [dtree t1; dtree t2])
-  | (IntegerToPointerCast t) -> Dnode (pp_ctor "IntegerToPointerCast", [dtree t])
-  | (PointerToIntegerCast t) -> Dnode (pp_ctor "PointerToIntegerCast", [dtree t])
+  | Cast (cbt, t) -> Dnode (pp_ctor "Cast", [Dleaf (BaseTypes.pp cbt); dtree t])
   | (MemberOffset (tag, id)) -> Dnode (pp_ctor "MemberOffset", [Dleaf (Sym.pp tag); Dleaf (Id.pp id)])
   | (ArrayOffset (ty, t)) -> Dnode (pp_ctor "ArrayOffset", [Dleaf (Sctypes.pp ty); dtree t])
   | (Representable (ty, t)) -> Dnode (pp_ctor "Representable", [Dleaf (Sctypes.pp ty); dtree t])

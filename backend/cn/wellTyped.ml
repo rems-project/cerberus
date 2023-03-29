@@ -323,12 +323,6 @@ module WIT = struct
             let@ t' = check loc (Set itembt) t' in
             return (IT (Binop (Subset, t,t'), BT.Bool))
           end
-      | IntToReal t ->
-         let@ t = check loc Integer t in
-         return (IT (IntToReal t, BT.Real))
-      | RealToInt t ->
-         let@ t = check loc Real t in
-         return (IT (IntToReal t, BT.Integer))
       | And ts ->
          let@ ts = ListM.mapM (check loc Bool) ts in
          return (IT (And ts, BT.Bool))
@@ -473,12 +467,21 @@ module WIT = struct
          let (_, res_ty) = BT.cons_dom_rng info in
          let@ t = check loc res_ty t in
          return (IT (DatatypeIsCons (nm, t),BT.Bool))
-       | IntegerToPointerCast t ->
-          let@ t = check loc Integer t in
-          return (IT (IntegerToPointerCast t,Loc))
-       | PointerToIntegerCast t ->
-          let@ t = check loc Loc t in
-          return (IT (PointerToIntegerCast t,Integer))
+       | Cast (cbt, t) ->
+          let@ t = infer loc t in
+          let@ () = match IT.bt t, cbt with
+           | Integer, Loc -> return ()
+           | Loc, Integer -> return ()
+           | Integer, Real -> return ()
+           | Real, Integer -> return ()
+           | source, target -> 
+             let msg = 
+               !^"Unsupported cast from" ^^^ BT.pp source
+               ^^^ !^"to" ^^^ BT.pp target ^^ dot
+             in
+             fail (fun _ -> {loc; msg = Generic msg})
+          in
+          return (IT (Cast (cbt, t), cbt))
        | MemberOffset (tag, member) ->
           let@ layout = get_struct_decl loc tag in
           let decl_members = Memory.member_types layout in

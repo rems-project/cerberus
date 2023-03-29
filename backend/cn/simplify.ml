@@ -337,12 +337,6 @@ module IndexTerms = struct
        let b = aux b in
        if IT.equal a b then a else
        IT (Binop (Max, a, b), the_bt)
-    | IntToReal a ->
-       let a = aux a in
-       IT (IntToReal a, the_bt)
-    | RealToInt a ->
-       let a = aux a in
-       IT (RealToInt a, the_bt)
     | Binop (XORNoSMT, a, b) ->
        IT (Binop (XORNoSMT, aux a, aux b), the_bt)
 
@@ -428,10 +422,6 @@ module IndexTerms = struct
     | Binop (EQ, a, b) ->
        let a = aux a in
        let b = aux b in
-       if isIntegerToPointerCast a || isIntegerToPointerCast b
-       then
-       aux (eq_ (pointerToIntegerCast_ a, pointerToIntegerCast_ b))
-       else
        begin match a, b with
        | _ when IT.equal a b ->
          IT (Const (Bool true), the_bt) 
@@ -464,14 +454,9 @@ module IndexTerms = struct
           if Sym.equal nm1 nm2
           then aux (eq_ (members1, members2))
           else bool_ false
-       | IT (IntegerToPointerCast a, _), 
-         IT (IntegerToPointerCast b, _) ->
-          eq_ (a, b)
-       | IT (PointerToIntegerCast a, _), 
-         IT (PointerToIntegerCast b, _) ->
-          eq_ (a, b)
-       | IT (PointerToIntegerCast a, _), b ->
-          eq_ (a, integerToPointerCast_ b)
+       | IT (Cast (bt1, it1), _),
+         IT (Cast (bt2, it2), _) when BT.equal bt1 bt2 ->
+         aux (eq_ (it1, it2))
        | _, _ ->
           eq_ (a, b)
        end
@@ -565,22 +550,9 @@ module IndexTerms = struct
        else if IT.equal a b
        then bool_ true
        else IT (Binop (LEPointer, a, b), the_bt)
-    | IntegerToPointerCast a ->
+    | Cast (cbt, a) ->
        let a = aux a in
-       begin match a with
-       | IT (PointerToIntegerCast b, _) ->
-          b
-       | _ ->
-          IT (IntegerToPointerCast a, the_bt)
-       end
-    | PointerToIntegerCast a ->
-       let a = aux a in
-       begin match a with
-       | IT (IntegerToPointerCast b, _) ->
-          b
-       | _ ->
-          IT (PointerToIntegerCast a, the_bt)
-       end
+       IT (Cast (cbt, a), the_bt)
     | MemberOffset (tag, member) ->
        let layout = SymMap.find tag simp_ctxt.global.struct_decls in
        int_ (Option.get (Memory.member_offset layout member))
@@ -597,7 +569,6 @@ module IndexTerms = struct
        IT (Good (ct, aux t), the_bt)
     | AlignedI a -> 
        IT (AlignedI {t = aux a.t; align = aux a.align}, the_bt)
-
     | MapConst (index_bt, t) ->
        let t = aux t in
        IT (MapConst (index_bt, t), the_bt)

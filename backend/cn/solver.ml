@@ -449,10 +449,6 @@ module Translate = struct
             Z3.Arithmetic.mk_le context (loc_to_integer (term t1))
               (loc_to_integer (term t2))
             end
-      | IntToReal t -> 
-         Z3.Arithmetic.Integer.mk_int2real context (term t)
-      | RealToInt t -> 
-         Z3.Arithmetic.Real.mk_real2int context (term t)
       | And ts -> Z3.Boolean.mk_and context (map term ts)
       | Or ts -> Z3.Boolean.mk_or context (map term ts)
       | Impl (t1, t2) -> Z3.Boolean.mk_implies context (term t1) (term t2)
@@ -541,10 +537,19 @@ module Translate = struct
          let assocs = List.map2 (fun c_nm fd -> (c_nm, fd)) info.dt_constrs recogs in
          let fd = List.assoc Sym.equal c_nm assocs in
          Z3.FuncDecl.apply fd [term t]
-      | IntegerToPointerCast t -> 
-         integer_to_loc (term t)
-      | PointerToIntegerCast t -> 
-         loc_to_integer (term t)
+      | Cast (cbt, t) ->
+         begin match IT.bt t, cbt with
+         | Integer, Loc ->
+            integer_to_loc (term t)
+         | Loc, Integer ->
+            loc_to_integer (term t)
+         | Real, Integer ->
+            Z3.Arithmetic.Real.mk_real2int context (term t)
+         | Integer, Real ->
+            Z3.Arithmetic.Integer.mk_int2real context (term t)
+         | _ -> 
+            assert false
+         end
       | MemberOffset (tag, member) ->
          let decl = SymMap.find tag struct_decls in
          term (int_ (Option.get (Memory.member_offset decl member)))

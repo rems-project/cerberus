@@ -866,8 +866,15 @@ let it_to_coq loc global list_mono it =
         else
         let@ op_nm = ensure_tuple_op true (Id.pp_string m) ix in
         parensM (build [rets op_nm; aux t; aux x])
-    | IT.IntegerToPointerCast t -> aux t
-    | IT.PointerToIntegerCast t -> aux t
+    | IT.Cast (cbt, t) ->
+      begin match IT.bt t, cbt with
+      | Integer, Loc -> aux t
+      | Loc, Integer -> aux t
+      | source, target -> 
+        let source = Pp.plain (BT.pp source) in
+        let target = Pp.plain (BT.pp target) in
+        failwith ("lemma generation: unsupported cast from " ^ source ^ " to " ^ target)
+      end
     | IT.Apply (name, args) ->
         let prop_ret = fun_prop_ret global name in
         let body_aux = f prop_ret in

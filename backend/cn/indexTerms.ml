@@ -41,8 +41,6 @@ let rec free_vars_ = function
   | Const _ -> SymSet.empty
   | Sym s -> SymSet.singleton s
   | Binop (_bop, t1, t2) -> free_vars_list [t1; t2]
-  | IntToReal t1 -> free_vars t1
-  | RealToInt t1 -> free_vars t1
   | And ts -> free_vars_list ts
   | Or ts -> free_vars_list ts
   | Impl (t1, t2) -> free_vars_list [t1; t2]
@@ -60,8 +58,7 @@ let rec free_vars_ = function
   | DatatypeCons (tag, members_xs) -> free_vars members_xs
   | DatatypeMember (t, member) -> free_vars t
   | DatatypeIsCons (tag, t) -> free_vars t
-  | IntegerToPointerCast t1 -> free_vars t1
-  | PointerToIntegerCast t1 -> free_vars t1
+  | Cast (_cbt, t) -> free_vars t
   | MemberOffset (_tag, _id) -> SymSet.empty
   | ArrayOffset (_sct, t) -> free_vars t
   | Nil -> SymSet.empty
@@ -93,8 +90,6 @@ let rec fold_ f binders acc = function
   | Sym _s -> acc
   | Const _c -> acc
   | Binop (_bop, t1, t2) -> fold_list f binders acc [t1; t2]
-  | IntToReal t1 -> fold f binders acc t1
-  | RealToInt t1 -> fold f binders acc t1
   | And ts -> fold_list f binders acc ts
   | Or ts -> fold_list f binders acc ts
   | Impl (t1, t2) -> fold_list f binders acc [t1; t2]
@@ -113,8 +108,7 @@ let rec fold_ f binders acc = function
   | DatatypeCons (tag, members_rec) -> fold f binders acc members_rec
   | DatatypeMember (t, _member) -> fold f binders acc t
   | DatatypeIsCons (tag, t) -> fold f binders acc t
-  | IntegerToPointerCast t1 -> fold f binders acc t1
-  | PointerToIntegerCast t1 -> fold f binders acc t1
+  | Cast (_cbt, t) -> fold f binders acc t
   | MemberOffset (_tag, _id) -> acc
   | ArrayOffset (_sct, t) -> fold f binders acc t
   | Nil -> acc
@@ -209,10 +203,6 @@ let rec subst (su : typed subst) (IT (it, bt)) =
      IT (Const const, bt)
   | Binop (bop, t1, t2) -> 
      IT (Binop (bop, subst su t1, subst su t2), bt)
-  | IntToReal it -> 
-     IT (IntToReal (subst su it), bt)
-  | RealToInt it -> 
-     IT (RealToInt (subst su it), bt)
   | And its -> 
      IT (And (map (subst su) its), bt)
   | Or its -> 
@@ -248,10 +238,8 @@ let rec subst (su : typed subst) (IT (it, bt)) =
      IT (DatatypeMember (subst su t, m), bt)
   | DatatypeIsCons (tag, t) ->
      IT (DatatypeIsCons (tag, subst su t), bt)
-  | IntegerToPointerCast t ->
-     IT (IntegerToPointerCast (subst su t), bt)
-  | PointerToIntegerCast t ->
-     IT (PointerToIntegerCast (subst su t), bt)
+  | Cast (cbt, t) ->
+     IT (Cast (cbt, subst su t), bt)
   | MemberOffset (tag, member) ->
      IT (MemberOffset (tag, member), bt)
   | ArrayOffset (tag, t) ->
@@ -449,8 +437,8 @@ let divisible_ (it, it') = eq_ (mod_ (it, it'), int_ 0)
 let rem_f_ (it, it') = mod_ (it, it')
 let min_ (it, it') = IT (Binop (Min,it, it'), bt it)
 let max_ (it, it') = IT (Binop (Max,it, it'), bt it)
-let intToReal_ it = IT (IntToReal it, BT.Real)
-let realToInt_ it = IT (RealToInt it, BT.Integer)
+let intToReal_ it = IT (Cast (Real, it), BT.Real)
+let realToInt_ it = IT (Cast (Integer, it), BT.Integer)
 let xor_no_smt_ (it, it') = IT (Binop (XORNoSMT,it, it'), bt it)
 
 let (%+) t t' = add_ (t, t')
@@ -517,17 +505,19 @@ let ltPointer_ (it, it') = IT (Binop (LTPointer, it, it'), BT.Bool)
 let lePointer_ (it, it') = IT (Binop (LEPointer, it, it'), BT.Bool)
 let gtPointer_ (it, it') = ltPointer_ (it', it)
 let gePointer_ (it, it') = lePointer_ (it', it)
+let cast_ bt it =
+  IT (Cast (bt, it), bt)
 let integerToPointerCast_ it =
-  IT (IntegerToPointerCast it, BT.Loc)
+  cast_ Loc it
 let pointerToIntegerCast_ it =
-  IT (PointerToIntegerCast it, BT.Integer)
+  cast_ Integer it
 let memberOffset_ (tag, member) =
   IT (MemberOffset (tag, member), BT.Integer)
 let arrayOffset_ (ct, t) =
   IT (ArrayOffset (ct, t), BT.Integer)
 
 let isIntegerToPointerCast = function
-  | IT (IntegerToPointerCast _, _) -> true
+  | IT (Cast (BT.Loc, IT (_, BT.Integer)), _) -> true
   | _ -> false
 
 let pointer_offset_ (p, n) =
