@@ -496,10 +496,10 @@ module WIT = struct
           let@ () = WCT.is_ct loc ct in
           let@ t = check loc Integer t in
           return (IT (ArrayOffset (ct, t), Integer))
-       | AlignedI t ->
+       | Aligned t ->
           let@ t_t = check loc Loc t.t in
           let@ t_align = check loc Integer t.align in
-          return (IT (AlignedI {t = t_t; align=t_align},BT.Bool))
+          return (IT (Aligned {t = t_t; align=t_align},BT.Bool))
        | Representable (ct, t) ->
           let@ () = WCT.is_ct loc ct in
           let@ t = check loc (BT.of_sct ct) t in

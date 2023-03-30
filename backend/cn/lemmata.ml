@@ -386,7 +386,7 @@ let it_adjust (global : Global.t) it =
         then t else f (IT.good_value global.struct_decls ct t2)
     | Representable (ct, t2) -> if Option.is_some (Sctypes.is_struct_ctype ct)
         then t else f (IT.representable global.struct_decls ct t2)
-    | AlignedI t ->
+    | Aligned t ->
         f (IT.divisible_ (IT.pointerToIntegerCast_ t.t, t.align))
     | _ -> t
   in

@@ -75,7 +75,7 @@ type 'bt term_ =
   | ArrayToList of 'bt term * 'bt term * 'bt term
   | Representable of Sctypes.t * 'bt term
   | Good of Sctypes.t * 'bt term
-  | AlignedI of {t : 'bt term; align : 'bt term}
+  | Aligned of {t : 'bt term; align : 'bt term}
   | MapConst of BaseTypes.t * 'bt term
   | MapSet of 'bt term * 'bt term * 'bt term
   | MapGet of 'bt term * 'bt term
@@ -235,7 +235,7 @@ let pp : 'bt 'a. ?atomic:bool -> ?f:('bt term -> Pp.doc -> Pp.doc) -> 'bt term -
        (* end *)
     (* | CT_pred ct_pred -> *)
     (*    begin match ct_pred with *)
-       | AlignedI t ->
+       | Aligned t ->
           c_app !^"aligned" [aux false t.t; aux false t.align]
        | Representable (rt, t) ->
           c_app !^"repr" [CT.pp rt; aux false t]
@@ -350,7 +350,7 @@ let rec dtree (IT (it_, bt)) =
   | (ArrayOffset (ty, t)) -> Dnode (pp_ctor "ArrayOffset", [Dleaf (Sctypes.pp ty); dtree t])
   | (Representable (ty, t)) -> Dnode (pp_ctor "Representable", [Dleaf (Sctypes.pp ty); dtree t])
   | (Good (ty, t)) -> Dnode (pp_ctor "Good", [Dleaf (Sctypes.pp ty); dtree t])
-  | (AlignedI a) -> Dnode (pp_ctor "AlignedI", [dtree a.t; dtree a.align])
+  | (Aligned a) -> Dnode (pp_ctor "Aligned", [dtree a.t; dtree a.align])
   | (MapConst (bt, t)) -> Dnode (pp_ctor "MapConst", [dtree t])
   | (MapSet (t1, t2, t3)) -> Dnode (pp_ctor "MapSet", [dtree t1; dtree t2; dtree t3])
   | (MapGet (t1, t2)) -> Dnode (pp_ctor "MapGet", [dtree t1; dtree t2])

@@ -544,8 +544,8 @@ module IndexTerms = struct
        IT (Representable (ct, aux t), the_bt)
     | Good (ct, t) ->
        IT (Good (ct, aux t), the_bt)
-    | AlignedI a -> 
-       IT (AlignedI {t = aux a.t; align = aux a.align}, the_bt)
+    | Aligned a -> 
+       IT (Aligned {t = aux a.t; align = aux a.align}, the_bt)
     | MapConst (index_bt, t) ->
        let t = aux t in
        IT (MapConst (index_bt, t), the_bt)

@@ -568,7 +568,7 @@ module Translate = struct
          let fdec = Z3.FuncDecl.mk_func_decl_s context nm
                       (List.map sort (List.map IT.bt [arr; i; len])) (sort bt) in
          Z3.FuncDecl.apply fdec args
-      | AlignedI t ->
+      | Aligned t ->
          term (divisible_ (pointerToIntegerCast_ t.t, t.align))
       | Representable (ct, t) ->
          term (representable struct_decls ct t)
