@@ -906,10 +906,10 @@ type 'a orFalse =
   | Normal of 'a
   | False
 
-let pp_or_false (ppf : 'a -> Pp.document) (m : 'a orFalse) : Pp.document = 
-  match m with
-  | Normal a -> ppf a
-  | False -> parens !^"no return"
+(* let pp_or_false (ppf : 'a -> Pp.document) (m : 'a orFalse) : Pp.document =  *)
+(*   match m with *)
+(*   | Normal a -> ppf a *)
+(*   | False -> parens !^"no return" *)
 
 
 let filter_empty_resources loc =
@@ -1465,13 +1465,13 @@ let check_expr_rt loc labels ~typ e =
 
 
 
-let check_pexpr_rt loc pexpr (RT.Computational ((return_s, return_bt), info, lrt)) =
-  check_pexpr pexpr ~expect:return_bt (fun lvt ->
-  let lrt = LRT.subst (IT.make_subst [(return_s, lvt)]) lrt in
-  let@ original_resources = all_resources_tagged () in
-  Spine.subtype loc lrt (fun () ->
-  let@ () = all_empty loc original_resources in
-  return ()))
+(* let check_pexpr_rt loc pexpr (RT.Computational ((return_s, return_bt), info, lrt)) = *)
+(*   check_pexpr pexpr ~expect:return_bt (fun lvt -> *)
+(*   let lrt = LRT.subst (IT.make_subst [(return_s, lvt)]) lrt in *)
+(*   let@ original_resources = all_resources_tagged () in *)
+(*   Spine.subtype loc lrt (fun () -> *)
+(*   let@ () = all_empty loc original_resources in *)
+(*   return ())) *)
 
 
 
