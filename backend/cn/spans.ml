@@ -125,11 +125,13 @@ let subtract_closed_spans_from_tagged closed_ss tagged_ss =
 let rec perm_spans m_g q perm =
   let is_q = IT.equal (sym_ (q, BT.Integer)) in
   match term perm with
-  | And xs -> perm_spans m_g q (not_ (or_ (List.map not_ xs)))
-  | Or xs ->
-        let ss = List.map (perm_spans m_g q) xs in
+  | Binop (And, lhs,rhs) -> 
+    perm_spans m_g q (not_ (or2_ (not_ lhs, not_ rhs)))
+  | Binop (Or, lhs, rhs) ->
+        let ss = List.map (perm_spans m_g q) [lhs; rhs] in
         norm_spans (List.concat ss)
-  | Impl (lhs, rhs) -> perm_spans m_g q (or_ [not_ lhs; rhs])
+  | Binop (Impl, lhs, rhs) -> 
+        perm_spans m_g q (or_ [not_ lhs; rhs])
   | Not x ->
         let s = perm_spans m_g q x in
         not_flip_spans s

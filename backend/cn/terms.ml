@@ -14,6 +14,9 @@ type const =
 [@@deriving eq, ord]
 
 type binop =
+  | And
+  | Or
+  | Impl
   | Add
   | Sub
   | Mul
@@ -39,16 +42,13 @@ type binop =
   | SetDifference
   | SetMember
   | Subset
-[@@deriving eq, ord]
+[@@deriving eq, ord, show]
 
 (* over integers and reals *)
 type 'bt term_ =
   | Const of const
   | Sym of Sym.t
   | Binop of binop * 'bt term * 'bt term
-  | And of 'bt term list
-  | Or of 'bt term list
-  | Impl of 'bt term * 'bt term
   | Not of 'bt term
   | ITE of 'bt term * 'bt term * 'bt term
   | EachI of (int * Sym.t * int) * 'bt term
@@ -93,7 +93,7 @@ let compare = compare_term
 
 let pp : 'bt 'a. ?atomic:bool -> ?f:('bt term -> Pp.doc -> Pp.doc) -> 'bt term -> Pp.doc =
   fun ?(atomic=false) ?(f=fun _ x -> x) ->
-  let rec aux atomic (IT (it, _) as it_) =
+  let rec aux atomic (IT (it, _)) =
     let aux b x = f x (aux b x) in
     (* Without the `lparen` inside `nest 2`, the printed `rparen` is indented
        by 2 (wrt to the lparen). I don't quite understand it, but it works. *)
@@ -103,9 +103,6 @@ let pp : 'bt 'a. ?atomic:bool -> ?f:('bt term -> Pp.doc -> Pp.doc) -> 'bt term -
       else
         Pp.group pped in
     let break_op x = break 1 ^^ x ^^ space in
-
-    
-
     match it with
     | Const const ->
        begin match const with
@@ -127,6 +124,12 @@ let pp : 'bt 'a. ?atomic:bool -> ?f:('bt term -> Pp.doc -> Pp.doc) -> 'bt term -
     (*    begin match arith_op with *)
     | Binop (bop, it1, it2) ->
        begin match bop with
+       | And ->
+          mparens (flow (break_op (ampersand ^^ ampersand)) [aux true it1; aux true it2])
+       | Or ->
+          mparens (flow (break_op (bar ^^ bar)) [aux true it1; aux true it2])
+       | Impl ->
+          mparens (flow (break_op (minus ^^ rangle ())) [aux true it1; aux true it2])
        | Add ->
           mparens (flow (break_op plus) [aux true it1; aux true it2])
        | Sub ->
@@ -178,23 +181,6 @@ let pp : 'bt 'a. ?atomic:bool -> ?f:('bt term -> Pp.doc -> Pp.doc) -> 'bt term -
        | Subset ->
           c_app !^"subset" [aux false it1; aux false it2]
        end
-       (* end *)
-    (* | Bool_op bool_op -> *)
-    (*    begin match bool_op with *)
-       | And o ->
-          let rec consolidate = function
-            | IT (And o, _) -> List.concat_map consolidate o
-            | it_ -> [ it_ ] in
-          let o = consolidate it_ in
-          mparens (flow_map (break_op !^"&&") (aux true) o)
-       | Or o ->
-          let rec consolidate = function
-            | IT (Or o, _) -> List.concat_map consolidate o
-            | it_ -> [ it_ ] in
-          let o = consolidate it_ in
-          mparens (flow_map (break_op !^"||") (aux true) o)
-       | Impl (o1,o2) ->
-          mparens (flow (break_op (equals ^^ rangle ())) [aux true o1; aux true o2])
        | Not (o1) ->
           mparens (!^"!" ^^ parens (aux false o1))
        | ITE (o1,o2,o3) ->
@@ -335,29 +321,9 @@ let rec dtree (IT (it_, bt)) =
   | Const Unit -> Dleaf !^"unit"
   | Const (Default _) -> Dleaf !^"default"
   | Const Null -> Dleaf !^"null"
-  | Binop (Add, t1, t2) -> Dnode (pp_ctor "Add", [dtree t1; dtree t2])
-  | Binop (Sub, t1, t2) -> Dnode (pp_ctor "Sub", [dtree t1; dtree t2])
-  | Binop (Mul, t1, t2) -> Dnode (pp_ctor "Mul", [dtree t1; dtree t2])
-  | Binop (MulNoSMT, t1, t2) -> Dnode (pp_ctor "MulNoSMT", [dtree t1; dtree t2])
-  | Binop (Div, t1, t2) -> Dnode (pp_ctor "Div", [dtree t1; dtree t2])
-  | Binop (DivNoSMT, t1, t2) -> Dnode (pp_ctor "DivNoSMT", [dtree t1; dtree t2])
-  | Binop (Exp, t1, t2) -> Dnode (pp_ctor "Exp", [dtree t1; dtree t2])
-  | Binop (ExpNoSMT, t1, t2) -> Dnode (pp_ctor "ExpNoSMT", [dtree t1; dtree t2])
-  | Binop (Rem, t1, t2) -> Dnode (pp_ctor "Rem", [dtree t1; dtree t2])
-  | Binop (RemNoSMT, t1, t2) -> Dnode (pp_ctor "RemNoSMT", [dtree t1; dtree t2])
-  | Binop (Mod, t1, t2) -> Dnode (pp_ctor "Mod", [dtree t1; dtree t2])
-  | Binop (ModNoSMT, t1, t2) -> Dnode (pp_ctor "ModNoSMT", [dtree t1; dtree t2])
-  | Binop (LT, t1, t2) -> Dnode (pp_ctor "LT", [dtree t1; dtree t2])
-  | Binop (LE, t1, t2) -> Dnode (pp_ctor "LE", [dtree t1; dtree t2])
-  | Binop (Min, t1, t2) -> Dnode (pp_ctor "Min", [dtree t1; dtree t2])
-  | Binop (Max, t1, t2) -> Dnode (pp_ctor "Max", [dtree t1; dtree t2])
-  | Binop (XORNoSMT, t1, t2) -> Dnode (pp_ctor "XORNoSMT", [dtree t1; dtree t2])
-  | (And ts) -> Dnode (pp_ctor "And", List.map dtree ts)
-  | (Or ts) -> Dnode (pp_ctor "Or", List.map dtree ts)
-  | (Impl (t1, t2)) -> Dnode (pp_ctor "Impl", [dtree t1; dtree t2])
+  | Binop (op, t1, t2) -> Dnode (pp_ctor (show_binop op), [dtree t1; dtree t2])
   | (Not t) -> Dnode (pp_ctor "Not", [dtree t])
   | (ITE (t1, t2, t3)) -> Dnode (pp_ctor "Impl", [dtree t1; dtree t2; dtree t3])
-  | Binop (EQ, t1, t2) -> Dnode (pp_ctor "EQ", [dtree t1; dtree t2])
   | (EachI ((starti,i,endi), body)) -> Dnode (pp_ctor "EachI", [Dleaf !^(string_of_int starti); Dleaf (Sym.pp i); Dleaf !^(string_of_int endi); dtree body])
   | (Tuple its) -> Dnode (pp_ctor "Tuple", List.map dtree its)
   | (NthTuple (i, t)) -> Dnode (pp_ctor "NthTuple", [Dleaf !^(string_of_int i); dtree t])
@@ -379,8 +345,6 @@ let rec dtree (IT (it_, bt)) =
      Dnode (pp_ctor "DatatypeMember", [dtree t; Dleaf (Sym.pp s)])
   | (DatatypeIsCons (s, t)) ->
      Dnode (pp_ctor "DatatypeIsCons", [Dleaf (Sym.pp s); dtree t])
-  | Binop (LTPointer, t1, t2) -> Dnode (pp_ctor "LTPointer", [dtree t1; dtree t2])
-  | Binop (LEPointer, t1, t2) -> Dnode (pp_ctor "LEPointer", [dtree t1; dtree t2])
   | Cast (cbt, t) -> Dnode (pp_ctor "Cast", [Dleaf (BaseTypes.pp cbt); dtree t])
   | (MemberOffset (tag, id)) -> Dnode (pp_ctor "MemberOffset", [Dleaf (Sym.pp tag); Dleaf (Id.pp id)])
   | (ArrayOffset (ty, t)) -> Dnode (pp_ctor "ArrayOffset", [Dleaf (Sctypes.pp ty); dtree t])

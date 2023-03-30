@@ -487,9 +487,9 @@ module EffectfulTranslation = struct
     | CN_ge, SBT.Loc _ ->
         return (IT (Binop (LEPointer, e2, e1), SBT.Bool))
     | CN_or, SBT.Bool ->
-        return (IT ((Or [e1; e2]), SBT.Bool))
+        return (IT (Binop (Or, e1, e2), SBT.Bool))
     | CN_and, SBT.Bool ->
-        return (IT ((And [e1; e2]), SBT.Bool))
+        return (IT (Binop (And, e1, e2), SBT.Bool))
     | CN_map_get, _ ->
        let@ rbt = match IT.bt e1 with
          | Map (_, rbt) -> return rbt
@@ -569,7 +569,8 @@ module EffectfulTranslation = struct
           (* FIXME: convert the dtree of the shape expr to something pp-able *))}
     in
     let@ xs = f x shape_expr in
-    return (IT.IT ((And xs), SBT.Bool))
+    return (IT.sterm_of_term (IT.and_ (List.map IT.term_of_sterm xs)))
+
 
 
 

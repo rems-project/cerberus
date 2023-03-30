@@ -59,9 +59,9 @@ let term_with_model_name nm cfg x =
     return (bold nm ^^ colon ^^^ parens (IT.pp r ^^^ string "in model") ^^ colon ^^^ IT.pp x)
 
 let bool_subterms1 t = match IT.term t with
-  | IT.And xs -> xs
-  | IT.Or xs -> xs
-  | IT.Impl (x, y) -> [x; y]
+  | IT.Binop (And, it,it') -> [it;it']
+  | IT.Binop (Or, it,it') -> [it;it']
+  | IT.Binop (Impl, x, y) -> [x; y]
   | IT.Not x -> [x]
   | IT.Binop (EQ, x, y) -> if BT.equal (IT.bt x) BT.Bool
       then [x; y] else []

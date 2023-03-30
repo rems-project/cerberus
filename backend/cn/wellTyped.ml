@@ -322,17 +322,19 @@ module WIT = struct
             let@ itembt = ensure_set_type loc t in
             let@ t' = check loc (Set itembt) t' in
             return (IT (Binop (Subset, t,t'), BT.Bool))
-          end
-      | And ts ->
-         let@ ts = ListM.mapM (check loc Bool) ts in
-         return (IT (And ts, BT.Bool))
-      | Or ts ->
-         let@ ts = ListM.mapM (check loc Bool) ts in
-         return (IT (Or ts, BT.Bool))
-      | Impl (t,t') ->
-         let@ t = check loc Bool t in
-         let@ t' = check loc Bool t' in
-         return (IT (Impl (t, t'),BT.Bool))
+         | And ->
+            let@ t = check loc Bool t in
+            let@ t' = check loc Bool t' in
+            return (IT (Binop (And, t, t'), Bool))
+         | Or -> 
+            let@ t = check loc Bool t in
+            let@ t' = check loc Bool t' in
+            return (IT (Binop (Or, t, t'), Bool))
+         | Impl ->
+            let@ t = check loc Bool t in
+            let@ t' = check loc Bool t' in
+            return (IT (Binop (Impl, t, t'), Bool))
+         end
       | Not t ->
          let@ t = check loc Bool t in
          return (IT (Not t,BT.Bool))

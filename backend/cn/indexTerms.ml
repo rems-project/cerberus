@@ -41,9 +41,6 @@ let rec free_vars_ = function
   | Const _ -> SymSet.empty
   | Sym s -> SymSet.singleton s
   | Binop (_bop, t1, t2) -> free_vars_list [t1; t2]
-  | And ts -> free_vars_list ts
-  | Or ts -> free_vars_list ts
-  | Impl (t1, t2) -> free_vars_list [t1; t2]
   | Not t1 -> free_vars t1
   | ITE (t1, t2, t3) -> free_vars_list [t1; t2; t3]
   | EachI ((_, s, _), t) -> SymSet.remove s (free_vars t)
@@ -90,9 +87,6 @@ let rec fold_ f binders acc = function
   | Sym _s -> acc
   | Const _c -> acc
   | Binop (_bop, t1, t2) -> fold_list f binders acc [t1; t2]
-  | And ts -> fold_list f binders acc ts
-  | Or ts -> fold_list f binders acc ts
-  | Impl (t1, t2) -> fold_list f binders acc [t1; t2]
   | Not t1 -> fold f binders acc t1
   | ITE (t1, t2, t3) -> fold_list f binders acc [t1; t2; t3]
   | EachI ((_, s, _), t) ->
@@ -203,12 +197,6 @@ let rec subst (su : typed subst) (IT (it, bt)) =
      IT (Const const, bt)
   | Binop (bop, t1, t2) -> 
      IT (Binop (bop, subst su t1, subst su t2), bt)
-  | And its -> 
-     IT (And (map (subst su) its), bt)
-  | Or its -> 
-     IT (Or (map (subst su) its), bt)
-  | Impl (it, it') -> 
-     IT (Impl (subst su it, subst su it'), bt)
   | Not it -> 
      IT (Not (subst su it), bt)
   | ITE (it,it',it'') -> 
@@ -337,11 +325,11 @@ let is_eq = function
   | _ -> None
 
 let is_and = function
-  | IT (And its, _) -> Some its
+  | IT (Binop (And, it, it'), _) -> Some (it, it')
   | _ -> None
 
 let is_or = function
-  | IT (Or its, _) -> Some its
+  | IT (Binop (Or, it, it'), _) -> Some (it, it')
   | _ -> None
 
 let is_not = function
@@ -357,10 +345,11 @@ let is_le = function
   | _ -> None
 
 
+let rec split_and it =
+  match is_and it with
+  | Some (it1, it2) -> split_and it1 @ split_and it2
+  | None -> [it]
 
-let rec split_and it = match is_and it with
-  | Some its -> List.concat (List.map split_and its)
-  | _ -> [it]
 
 (* shorthands *)
 
@@ -383,24 +372,16 @@ let gt_ (it, it') = lt_ (it', it)
 let ge_ (it, it') = le_ (it', it)
 
 (* bool_op *)
-let and_ its = IT (And its, BT.Bool)
-let and2_ (it, it') = match is_and it' with
-  | None -> and_ [it; it']
-  | Some its -> and_ (it :: its)
-let and3_ its = match its with
-  | [it] -> it
-  | _ -> and_ its
-let or_ its = IT (Or its, BT.Bool)
-let or2_ (it, it') = match is_or it' with
-  | None -> or_ [it; it']
-  | Some its -> or_ (it :: its)
-let impl_ (it, it') = IT (Impl (it, it'), BT.Bool)
-let not_ it =
-  match it with
-  | IT (Const (Bool b), _) -> bool_ (not b)
-  | IT (Not a, _) -> a
-  | _ -> IT (Not it, BT.Bool)
+let vargs_binop basevalue binop = function
+  | [] -> basevalue
+  | it::its -> List.fold_left binop it its
 
+let and2_ (it, it') = IT (Binop (And, it, it'), BT.Bool)
+let or2_ (it, it') = IT (Binop (Or, it, it'), BT.Bool)
+let and_ = vargs_binop (bool_ true) (Tools.curry and2_)
+let or_ = vargs_binop (bool_ false) (Tools.curry or2_)
+let impl_ (it, it') = IT (Binop (Impl, it, it'), BT.Bool)
+let not_ it = IT (Not it, BT.Bool)
 let ite_ (it, it', it'') = IT (ITE (it, it', it''), bt it')
 let eq_ (it, it') = IT (Binop (EQ,it, it'), BT.Bool)
 let eq__ it it' = eq_ (it, it')

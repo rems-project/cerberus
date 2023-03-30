@@ -448,10 +448,10 @@ module Translate = struct
          | LEPointer -> 
             Z3.Arithmetic.mk_le context (loc_to_integer (term t1))
               (loc_to_integer (term t2))
-            end
-      | And ts -> Z3.Boolean.mk_and context (map term ts)
-      | Or ts -> Z3.Boolean.mk_or context (map term ts)
-      | Impl (t1, t2) -> Z3.Boolean.mk_implies context (term t1) (term t2)
+         | And -> Z3.Boolean.mk_and context (map term [t1;t2])
+         | Or -> Z3.Boolean.mk_or context (map term [t1;t2])
+         | Impl -> Z3.Boolean.mk_implies context (term t1) (term t2)
+         end
       | Not t -> Z3.Boolean.mk_not context (term t)
       | ITE (t1, t2, t3) -> Z3.Boolean.mk_ite context (term t1) (term t2) (term t3)
       | EachI ((i1, s, i2), t) -> 

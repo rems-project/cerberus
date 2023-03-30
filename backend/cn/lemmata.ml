@@ -348,17 +348,17 @@ let it_adjust (global : Global.t) it =
   in
   let rec f t =
     match IT.term t with
-        | IT.And xs ->
-            let xs = List.map f xs |> List.partition IT.is_true |> snd in
-            if List.length xs == 0 then IT.bool_ true else IT.and_ xs
-        | IT.Or xs ->
-            let xs = List.map f xs |> List.partition IT.is_false |> snd in
-            if List.length xs == 0 then IT.bool_ true else IT.or_ xs
+        | IT.Binop (And, x1, x2) ->
+            let xs = List.map f [x1; x2] |> List.partition IT.is_true |> snd in
+            (* if List.length xs == 0 then IT.bool_ true else *) (* and_ does that *) IT.and_ xs
+        | IT.Binop (Or, x1, x2) ->
+            let xs = List.map f [x1; x2] |> List.partition IT.is_false |> snd in
+            (* if List.length xs == 0 then IT.bool_ true else *) (* or_ does that *) IT.or_ xs
         | IT.Binop (EQ, x, y) ->
             let x = f x in
             let y = f y in
             if IT.equal x y then IT.bool_ true else IT.eq__ x y
-        | IT.Impl (x, y) ->
+        | IT.Binop (Impl, x, y) ->
             let x = f x in
             let y = f y in
             if IT.is_false x || IT.is_true y then IT.bool_ true else IT.impl_ (x, y)
@@ -792,17 +792,13 @@ let it_to_coq loc global list_mono it =
        | ExpNoSMT  -> abinop "^" x y
        | XORNoSMT  -> parensM (build [rets "Z.lxor"; aux x; aux y])
        | EQ -> build [f false x; rets (if bool_eq_prop then "=" else "=?"); f false y]
-       | IT.LEPointer -> abinop (if bool_eq_prop then "<=" else "<=?") x y
-       | IT.LTPointer -> abinop (if bool_eq_prop then "<" else "<?") x y
+       | LEPointer -> abinop (if bool_eq_prop then "<=" else "<=?") x y
+       | LTPointer -> abinop (if bool_eq_prop then "<" else "<?") x y
+       | And -> abinop (if bool_eq_prop then "/\\" else "&&") x y
+       | Or -> abinop (if bool_eq_prop then "\\/" else "||") x y
+       | Impl -> abinop (if bool_eq_prop then "->" else "implb") x y
        | _ -> fail_m loc (Pp.item "it_to_coq: unsupported arith op" (IT.pp t))
        end
-    | IT.And [] -> aux (IT.bool_ true)
-    | IT.And [x] -> aux x
-    | IT.And (x :: xs) -> abinop (if bool_eq_prop then "/\\" else "&&") x (IT.and_ xs)
-    | IT.Or [] -> aux (IT.bool_ false)
-    | IT.Or [x] -> aux x
-    | IT.Or (x :: xs) -> abinop (if bool_eq_prop then "\\/" else "||") x (IT.or_ xs)
-    | IT.Impl (x, y) -> abinop (if bool_eq_prop then "->" else "implb") x y
     | IT.Not x -> parensM (build [rets (if bool_eq_prop then "~" else "negb"); aux x])
     | IT.ITE (IT.IT (IT.DatatypeIsCons (c_nm, x), _), _, _) ->
          let dt = Option.get (BT.is_datatype_bt (IT.bt x)) in

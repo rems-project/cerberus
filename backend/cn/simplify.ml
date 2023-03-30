@@ -98,9 +98,6 @@ module IndexTerms = struct
 
 
 
-  let flatten = function
-    | IT (And fs, _) -> List.map LC.t_ fs
-    | f -> [LC.t_ f]
 
 
   let rec record_member_reduce it member =
@@ -340,49 +337,29 @@ module IndexTerms = struct
     | Binop (XORNoSMT, a, b) ->
        IT (Binop (XORNoSMT, aux a, aux b), the_bt)
 
-    | And its ->
-       let rec make acc = function
-         | [] -> 
-            begin match acc with
-            | [] -> bool_ true
-            | [r] -> r
-            | _ -> and_ (List.rev acc)
-            end
-         | it :: its ->
-            let it = aux it in
-            begin match it with
-            | IT (Const (Bool true), _) -> make acc its
-            | IT (Const (Bool false), _) -> bool_ false
-            | _ when List.exists (fun c -> IT.equal (not_ c) it || IT.equal c (not_ it)) acc -> bool_ false
-            | _ when List.mem IT.equal it acc -> make acc its
-            | IT (Not (IT (Or ys, _)), _) -> make acc ((List.map not_ ys) @ its)
-            | IT (And ys, _) -> make acc (ys @ its)
-            | _ -> make (it :: acc) its
-            end
-       in
-       make [] its
-    | Or its ->
-       let its = List.map aux its in
-       let rec make acc = function
-         | [] ->
-            begin match acc with
-            | [] -> bool_ false
-            | [r] -> r
-            | _ -> or_ (List.rev acc)
-            end
-         | it :: its ->
-            begin match it with
-            | IT (Const (Bool true), _) -> bool_ true
-            | IT (Const (Bool false), _) -> make acc its
-            | _ when List.exists (fun c -> IT.equal (not_ c) it || IT.equal c (not_ it)) acc -> bool_ true 
-            | _ when List.mem IT.equal it acc -> make acc its
-            | IT (Not (IT (And ys, _)), _) -> make acc ((List.map not_ ys) @ its)
-            | IT (Or ys, _) -> make acc (ys @ its)
-            | _ -> make (it :: acc) its
-            end
-       in
-       make [] its
-    | Impl (a, b) ->
+    | Binop (And, it1, it2) ->
+      let it1 = aux it1 in
+      let it2 = aux it2 in
+      begin match it1, it2 with
+      | IT (Const (Bool true), _), _ -> it2
+      | _, IT (Const (Bool true), _) -> it1
+      | IT (Const (Bool false), _), _ -> bool_ false
+      | _, IT (Const (Bool false), _) -> bool_ false
+      | _ when IT.equal it1 it2 -> it1
+      | _ -> IT (Binop (And, it1, it2), the_bt)
+      end
+    | Binop (Or, it1, it2) ->
+      let it1 = aux it1 in
+      let it2 = aux it2 in
+      begin match it1, it2 with
+      | IT (Const (Bool true), _), _ -> bool_ true
+      | _, IT (Const (Bool true), _) -> bool_ true
+      | IT (Const (Bool false),_), _ -> it2
+      | _, IT (Const (Bool false),_) -> it1
+      | _ when IT.equal it1 it2 -> it1
+      | _ -> IT (Binop (Or, it1, it2), the_bt)
+      end
+    | Binop (Impl, a, b) ->
        let a = aux a in
        let b = aux b in
        if IT.equal a b then IT (Const (Bool true), the_bt)
@@ -397,7 +374,7 @@ module IndexTerms = struct
        | _, IT (Const (Bool false), _) ->
           not_ a
        | _ ->
-          IT (Impl (a, b), the_bt)
+          IT (Binop (Impl, a, b), the_bt)
        end
     | Not a ->
        let a = aux a in
@@ -628,7 +605,7 @@ module IndexTerms = struct
   let simp_flatten simp_ctxt term =
     match simp simp_ctxt term with
     | IT (Const (Bool true), _) -> []
-    | IT (And lcs, _) -> lcs
+    | IT (Binop (And, lc1, lc2), _) -> [lc1;lc2]
     | lc -> [lc]
 
 
