@@ -37,7 +37,7 @@ depends: [
   "ounit2"
   "ppx_deriving"
   "zarith"
-  "coq"
+  "coq" {< "8.17.0"}
   "coq-sail"
   "coq-ext-lib"
   "coq-struct-tact"
