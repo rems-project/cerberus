@@ -56,7 +56,7 @@ let simp simp_it simp_lc simp_re = function
 let binders = function
   | Computational ((s, bt), _, t) ->
      let (s, t) = LRT.alpha_rename (s, bt) t in
-     (s, bt) :: LRT.binders t
+     (Id.id (Sym.pp_string s), bt) :: LRT.binders t
 
 
 let map (f : LRT.t -> LRT.t) = function

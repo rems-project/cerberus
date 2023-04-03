@@ -1085,30 +1085,13 @@ let rec fetch_oarg acc ident = function
       fetch_oarg (x :: acc) ident xs'
 end
 
-val check_cn_oargs: forall 'a. Loc.t -> list (Symbol.identifier * 'a) -> desugM (list (Symbol.sym * 'a))
-let check_cn_oargs loc xs =
-  get_cn_state >>= fun st ->
-  foldlM (fun (acc, oargs) (ident, x) ->
-    match fetch_oarg [] ident oargs with
-      | (Just sym, oargs') ->
-          return ((sym, x) :: acc, oargs')
-      | (Nothing, _) ->
-          fail (Loc.locOf ident) (Errors.Desugar_CN (Cn.CNErr_unknown_identifier Cn.CN_oarg ident))
-    end
-  ) ([], Map_extra.toList (current_cn_scope st)) xs >>= fun (rev_acc, oargs) ->
-  match List.filter (function ((CN_oarg, _), _) -> true | _ -> false end) oargs with
-    | [] ->
-        return (List.reverse rev_acc)
-    | (_, sym) :: _ ->
-        fail loc (Errors.Desugar_CN (Cn.CNErr_missing_oarg sym))
-  end
+
 
 
 
 (* let inline register_cn_ident ns ident     = liftCnDesug (Cn_desugaring.register_cn_ident ns ident) *)
 (* let inline resolve_cn_ident ns ident      = liftCnDesug (Cn_desugaring.resolve_cn_ident ns ident) *)
 (* (\* let inline  fetch_oarg acc ident = function *\) *)
-(* let inline check_cn_oargs loc xs          = liftCnDesug (Cn_desugaring.check_cn_oargs loc xs) *)
 
 
 val lookup_cn_function: Symbol.identifier -> desugM Symbol.sym

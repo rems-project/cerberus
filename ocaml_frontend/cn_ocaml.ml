@@ -220,7 +220,7 @@ module MakePp (Conf: PP_CN) = struct
     | CN_return_record xs ->
       let docs =
           List.map (fun (ident, e) ->
-            Dnode (Conf.pp_ident ident, [dtree_of_cn_expr e])
+            Dnode (pp_identifier ident, [dtree_of_cn_expr e])
           ) xs in
       Dnode (pp_stmt_ctor "CN_return_record", docs)
     | CN_return_expression e ->
@@ -285,10 +285,15 @@ module MakePp (Conf: PP_CN) = struct
             ; Dnode (pp_ctor "[CN]ensures", List.map dtree_of_cn_condition lmma.cn_lemma_ensures)
             ] ) 
 
+(* copying and adjusting dtrees_of_args *)
+ let dtrees_of_oargs xs =
+    List.map (fun (bTy, ident) ->
+        Dleaf (pp_identifier ident ^^ P.colon ^^^ pp_base_type bTy)
+      ) xs
 
   let dtree_of_cn_predicate_return = function
     | CN_pred_output_record oargs -> 
-      dtrees_of_args oargs
+      dtrees_of_oargs oargs
     | CN_pred_output_basetype (_, bt) ->
       [Dleaf (pp_base_type bt)]
 

@@ -88,10 +88,10 @@ let binders =
   let rec aux = function
     | Define ((s, it), _, t) ->
        let (s, t) = alpha_rename (s, IT.bt it) t in
-       (s, IT.bt it) :: aux t
+       (Id.id (Sym.pp_string s), IT.bt it) :: aux t
     | Resource ((s, (re, bt)), _, t) ->
        let (s, t) = alpha_rename (s, bt) t in
-       (s, bt) :: aux t
+       (Id.id (Sym.pp_string s), bt) :: aux t
     | Constraint (lc, _, t) ->
        aux t
     | I ->

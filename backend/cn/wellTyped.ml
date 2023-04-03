@@ -425,10 +425,10 @@ module WIT = struct
            | Record members -> return members
            | has -> fail (illtyped_index_term loc t has "struct")
          in
-         let@ bt = match List.assoc_opt Sym.equal member members with
+         let@ bt = match List.assoc_opt Id.equal member members with
            | Some bt -> return bt
            | None -> 
-              let expected = "struct with member " ^ Sym.pp_string member in
+              let expected = "struct with member " ^ Id.pp_string member in
               fail (illtyped_index_term loc t (IT.bt t) expected)
          in
          return (IT (RecordMember (t, member), bt))
@@ -438,10 +438,10 @@ module WIT = struct
            | Record members -> return members
            | has -> fail (illtyped_index_term loc t has "struct")
          in
-         let@ bt = match List.assoc_opt Sym.equal member members with
+         let@ bt = match List.assoc_opt Id.equal member members with
            | Some bt -> return bt
            | None -> 
-              let expected = "struct with member " ^ Sym.pp_string member in
+              let expected = "struct with member " ^ Id.pp_string member in
               fail (illtyped_index_term loc t (IT.bt t) expected)
          in
          let@ v = check loc bt v in
@@ -457,10 +457,10 @@ module WIT = struct
            | Datatype tag -> get_datatype loc tag
            | has -> fail (illtyped_index_term loc t has "record")
          in
-         let@ bt = match List.assoc_opt Sym.equal member info.dt_all_params with
+         let@ bt = match List.assoc_opt Id.equal member info.dt_all_params with
            | Some bt -> return bt
            | None ->
-               let expected = "datatype with member " ^ Sym.pp_string member in
+               let expected = "datatype with member " ^ Id.pp_string member in
                fail (illtyped_index_term loc t (IT.bt t) expected)
          in
          return (IT (DatatypeMember (t, member),bt))

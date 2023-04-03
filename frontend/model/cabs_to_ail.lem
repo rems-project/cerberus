@@ -4246,8 +4246,7 @@ let desugar_cn_pred_return loc = function
       desugar_cn_expr e >>= fun e' ->
       E.return (x, e')
     ) xs >>= fun xs' ->
-      E.check_cn_oargs loc xs' >>= fun xs'' ->
-      E.return (CN_return_record xs'')
+      E.return (CN_return_record xs')
   | CN_return_expression e ->
     desugar_cn_expr e >>= fun e' ->
     E.return (CN_return_expression e')
@@ -4300,9 +4299,14 @@ let desugar_cn_arg ns (bTy, ident) =
   E.register_cn_ident ns ident               >>= fun sym ->
   E.return (bTy', sym)
 
+let desugar_cn_oarg (bTy, ident) =
+  desugar_cn_base_type (Loc.locOf ident) bTy >>= fun bTy' ->
+  E.return (bTy', ident)
+
+
 let desugar_cn_output = function
   | CN_pred_output_record oargs ->
-    E.mapM (desugar_cn_arg CN_oarg) oargs >>= fun oargs ->
+    E.mapM desugar_cn_oarg oargs >>= fun oargs ->
     E.return (CN_pred_output_record oargs)
   | CN_pred_output_basetype loc bt ->
     desugar_cn_base_type loc bt >>= fun bt ->

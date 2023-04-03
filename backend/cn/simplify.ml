@@ -102,22 +102,22 @@ module IndexTerms = struct
 
   let rec record_member_reduce it member =
     match IT.term it with
-      | Record members -> List.assoc Sym.equal member members
+      | Record members -> List.assoc Id.equal member members
       | RecordUpdate ((t, m), v) ->
-        if Sym.equal m member then v
+        if Id.equal m member then v
         else record_member_reduce t member
       | ITE (cond, it1, it2) ->
         ite_ (cond, record_member_reduce it1 member, record_member_reduce it2 member)
       | _ ->
         let member_tys = BT.record_bt (IT.bt it) in
-        let member_bt = List.assoc Sym.equal member member_tys in
+        let member_bt = List.assoc Id.equal member member_tys in
         IT.recordMember_ ~member_bt (it, member)
 
   let rec datatype_member_reduce it member member_bt =
     match IT.term it with
       | DatatypeCons (nm, members_rec) ->
         let members = BT.record_bt (IT.bt members_rec) in
-        if List.exists (Sym.equal member) (List.map fst members)
+        if List.exists (Id.equal member) (List.map fst members)
         then record_member_reduce members_rec member
         else IT.IT (DatatypeMember (it, member), member_bt)
       | ITE (cond, it1, it2) ->
@@ -424,7 +424,7 @@ module IndexTerms = struct
           aux (and_ (List.map2 eq__ items1 items2))
        | IT (Record members1, _),
          IT (Record members2, _)  ->
-          assert (List.for_all2 (fun x y -> Sym.equal (fst x) (fst y)) members1 members2);
+          assert (List.for_all2 (fun x y -> Id.equal (fst x) (fst y)) members1 members2);
           aux (and_ (List.map2 (fun x y -> eq_ (snd x, snd y)) members1 members2))
        | IT (DatatypeCons (nm1, members1), _),
          IT (DatatypeCons (nm2, members2), _)  ->

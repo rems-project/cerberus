@@ -1321,7 +1321,7 @@ let normalise_file (markers_env, ail_prog) file =
       mu_extern = file.mi_extern;
       mu_resource_predicates = preds;
       mu_logical_predicates = lfuns;
-      mu_datatypes = SymMap.bindings (SymMap.map fst env.datatypes);
+      mu_datatypes = SymMap.bindings env.datatypes;
       mu_constructors = SymMap.bindings env.datatype_constrs;
       mu_lemmata = lemmata;
     }

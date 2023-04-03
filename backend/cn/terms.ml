@@ -58,11 +58,11 @@ type 'bt term_ =
   | Struct of BaseTypes.tag * (BaseTypes.member * 'bt term) list
   | StructMember of 'bt term * BaseTypes.member
   | StructUpdate of ('bt term * BaseTypes.member) * 'bt term
-  | Record of (Sym.t * 'bt term) list
-  | RecordMember of 'bt term * Sym.t
-  | RecordUpdate of ('bt term * Sym.t) * 'bt term
+  | Record of (Id.t * 'bt term) list
+  | RecordMember of 'bt term * Id.t
+  | RecordUpdate of ('bt term * Id.t) * 'bt term
   | DatatypeCons of Sym.t * 'bt term
-  | DatatypeMember of 'bt term * Sym.t
+  | DatatypeMember of 'bt term * Id.t
   | DatatypeIsCons of Sym.t * 'bt term
   | MemberOffset of BaseTypes.tag * Id.t
   | ArrayOffset of Sctypes.t (*element ct*) * 'bt term (*index*)
@@ -211,17 +211,17 @@ let pp : 'bt 'a. ?atomic:bool -> ?f:('bt term -> Pp.doc -> Pp.doc) -> 'bt term -
     (*    begin match record_op with *)
        | Record members ->
          align @@ lbrace ^^^ flow_map (break 0 ^^ comma ^^ space) (fun (member,it) ->
-             Pp.group @@ (Pp.group @@ dot ^^ Sym.pp member ^^^ equals) ^^^ align (aux false it)
+             Pp.group @@ (Pp.group @@ dot ^^ Id.pp member ^^^ equals) ^^^ align (aux false it)
            ) members ^^^ rbrace
        | RecordMember (t, member) ->
-          prefix 0 0 (aux true t) (dot ^^ Sym.pp member)
+          prefix 0 0 (aux true t) (dot ^^ Id.pp member)
        | RecordUpdate ((t, member), v) ->
-          mparens (aux true t ^^ braces @@ (Pp.group @@ dot ^^ Sym.pp member ^^^ equals) ^^^ align (aux true v))
+          mparens (aux true t ^^ braces @@ (Pp.group @@ dot ^^ Id.pp member ^^^ equals) ^^^ align (aux true v))
        (* end *)
     (* | Datatype_op datatype_op -> *)
     (*    begin match datatype_op with *)
        | DatatypeCons (nm, members_rec) -> mparens (Sym.pp nm ^^^ aux false members_rec)
-       | DatatypeMember (x, nm) -> aux true x ^^ dot ^^ Sym.pp nm
+       | DatatypeMember (x, nm) -> aux true x ^^ dot ^^ Id.pp nm
        | DatatypeIsCons (nm, x) -> mparens (aux false x ^^^ !^ "is" ^^^ Sym.pp nm)
        (* end *)
     (* | Pointer_op pointer_op -> *)
@@ -334,15 +334,15 @@ let rec dtree (IT (it_, bt)) =
   | (StructUpdate ((base, member), v)) ->
      Dnode (pp_ctor "StructUpdate", [dtree base; Dleaf (Id.pp member); dtree v])
   | (Record members) ->
-     Dnode (pp_ctor "Record", List.map (fun (member,e) -> Dnode (pp_ctor "Member", [Dleaf (Sym.pp member); dtree e])) members)
+     Dnode (pp_ctor "Record", List.map (fun (member,e) -> Dnode (pp_ctor "Member", [Dleaf (Id.pp member); dtree e])) members)
   | (RecordMember (e, member)) ->
-     Dnode (pp_ctor "RecordMember", [dtree e; Dleaf (Sym.pp member)])
+     Dnode (pp_ctor "RecordMember", [dtree e; Dleaf (Id.pp member)])
   | (RecordUpdate ((base, member), v)) ->
-     Dnode (pp_ctor "RecordUpdate", [dtree base; Dleaf (Sym.pp member); dtree v])
+     Dnode (pp_ctor "RecordUpdate", [dtree base; Dleaf (Id.pp member); dtree v])
   | (DatatypeCons (s, t)) ->
      Dnode (pp_ctor "DatatypeCons", [Dleaf (Sym.pp s); dtree t])
   | (DatatypeMember (t, s)) ->
-     Dnode (pp_ctor "DatatypeMember", [dtree t; Dleaf (Sym.pp s)])
+     Dnode (pp_ctor "DatatypeMember", [dtree t; Dleaf (Id.pp s)])
   | (DatatypeIsCons (s, t)) ->
      Dnode (pp_ctor "DatatypeIsCons", [Dleaf (Sym.pp s); dtree t])
   | Cast (cbt, t) -> Dnode (pp_ctor "Cast", [Dleaf (BaseTypes.pp cbt); dtree t])

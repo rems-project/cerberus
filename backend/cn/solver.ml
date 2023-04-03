@@ -152,11 +152,11 @@ module Translate = struct
     | CompFunc of { bts : BT.t list; i : int }
     | TupleFunc of  { bts : BT.t list }
     | RecordFunc of { mbts : BT.member_types }
-    | RecordMemberFunc of { mbts : BT.member_types; member : Sym.t }
+    | RecordMemberFunc of { mbts : BT.member_types; member : Id.t }
     | DefaultFunc of { bt : BT.t }
     | DatatypeConsFunc of { nm: Sym.t }
     | DatatypeConsRecogFunc of { nm: Sym.t }
-    | DatatypeAccFunc of { nm: Sym.t; dt: Sym.t; bt: BT.t }
+    | DatatypeAccFunc of { member: Id.t; dt: Sym.t; bt: BT.t }
     | UninterpretedVal of { nm : Sym.t }
   [@@deriving eq]
 
@@ -191,16 +191,7 @@ module Translate = struct
       let () = BT_Table.add bt_id_table bt id in
       id
 
-  let bt_pp_name bt =
-    let open Pp in
-    match bt with
-      | BT.Struct nm -> !^ "struct_" ^^ Sym.pp nm
-      | BT.Datatype nm -> !^ "datatype_" ^^ Sym.pp nm
-      | BT.Tuple _ -> !^ "tuple_" ^^ Pp.int (bt_id bt)
-      | BT.List _ -> !^ "list_" ^^ Pp.int (bt_id bt)
-      | BT.Record mems -> !^ "rec_" ^^
-          Pp.flow_map (!^ "_") (fun (nm, _) -> Sym.pp nm) mems ^^ !^ "_" ^^ Pp.int (bt_id bt)
-      | _ -> BT.pp bt
+  let bt_pp_name bt = BT.pp bt ^^ Pp.int (bt_id bt)
 
   let bt_name bt = Pp.plain (bt_pp_name bt)
 
@@ -210,7 +201,11 @@ module Translate = struct
     bt_name (Tuple bts) ^ string_of_int i
 
   let record_member_name bts member = 
-    Sym.pp_string member ^ "_of_" ^ bt_name (Record bts)
+    Id.pp_string member ^ "_of_" ^ bt_name (Record bts)
+
+  let accessor_name dt_name member =
+    symbol_string "" dt_name ^ "_" ^ Id.s member
+    
 
   let member_name tag id = 
     bt_name (BT.Struct tag) ^ "_" ^ Id.s id
@@ -237,10 +232,10 @@ module Translate = struct
       let is_sym = dt_recog_name context nm in
       Z3Symbol_Table.add z3sym_table sym (DatatypeConsFunc {nm});
       (* Z3Symbol_Table.add z3sym_table is_sym (DatatypeConsRecogFunc {nm}); *)
-      List.iter (fun (nm, bt) -> Z3Symbol_Table.add z3sym_table
-          (symbol context nm) (DatatypeAccFunc {nm; dt = dt_nm; bt})) info.c_params;
+      List.iter (fun (member, bt) -> Z3Symbol_Table.add z3sym_table
+          (string context (accessor_name dt_nm member)) (DatatypeAccFunc {member; dt = dt_nm; bt})) info.c_params;
       Z3.Datatype.mk_constructor context sym is_sym
-          (List.map (fun (nm, _) -> symbol context nm) info.c_params)
+          (List.map (fun (member, _) -> string context (accessor_name dt_nm member)) info.c_params)
           (List.map fst r) (List.map snd r)
     in
     let conv_dt nm =
@@ -495,7 +490,7 @@ module Translate = struct
       | RecordMember (t, member) ->
          let members = BT.record_bt (IT.bt t) in
          let members_i = List.mapi (fun i (m, _) -> (m, i)) members in
-         let n = List.assoc Sym.equal member members_i in
+         let n = List.assoc Id.equal member members_i in
          let destructors = Z3.Tuple.get_field_decls (sort (IT.bt t)) in
          Z3.Expr.mk_app context (nth destructors n) [term t]
       | RecordUpdate ((t, member), v) ->
@@ -503,7 +498,7 @@ module Translate = struct
          let str =
            List.map (fun (member', bt) ->
                let value = 
-                 if Sym.equal member member' then v 
+                 if Id.equal member member' then v 
                  else IT ((RecordMember (t, member')), bt)
                in
                (member', value)
@@ -525,7 +520,7 @@ module Translate = struct
            | BT.Datatype nm -> nm
            | _ -> assert false
          in
-         apply_matching_func (DatatypeAccFunc {nm = member; dt = dt_nm; bt})
+         apply_matching_func (DatatypeAccFunc {member = member; dt = dt_nm; bt})
            (List.concat (Z3.Datatype.get_accessors dt_sort)) [term it]
       | DatatypeIsCons (c_nm, t) ->
          (* ensure datatype added *)
@@ -1028,7 +1023,7 @@ module Eval = struct
               IT ((Record (List.combine (List.map fst mbts) args)), 
                   Record mbts)
            | RecordMemberFunc {mbts; member} ->
-              let member_bt = List.assoc Sym.equal member mbts in
+              let member_bt = List.assoc Id.equal member mbts in
               IT ((RecordMember (nth args 0, member)), member_bt)
            | DatatypeConsFunc {nm} ->
               let info = SymMap.find nm global.datatype_constrs in
@@ -1038,7 +1033,7 @@ module Eval = struct
               (* not supported inside CN, hopefully we shouldn't need it *)
               unsupported expr ("Reconstructing Z3 term with datatype recogniser")
            | DatatypeAccFunc xs ->
-              Simplify.IndexTerms.datatype_member_reduce (nth args 0) xs.nm xs.bt
+              Simplify.IndexTerms.datatype_member_reduce (nth args 0) xs.member xs.bt
            | UninterpretedVal {nm} -> sym_ (nm, expr_bt)
            end
 

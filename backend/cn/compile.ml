@@ -30,7 +30,7 @@ type function_sig = {
   }
 
 type pred_output =
-  | PO_record of (Sym.t * BaseTypes.t) list  
+  | PO_record of (Id.t * BaseTypes.t) list  
   | PO_basetype of BaseTypes.t
 
 type predicate_sig = {
@@ -48,7 +48,7 @@ type env = {
   functions: function_sig SymMap.t;
   (* state: state_env; *)
   (* old_states: state_env Y.t; *)
-  datatypes : (BaseTypes.datatype_info * Sym.t Y.t) SymMap.t;
+  datatypes : BaseTypes.datatype_info SymMap.t;
   datatype_constrs : BaseTypes.constr_info SymMap.t;
   tagDefs: Mu.mu_tag_definitions;
 }
@@ -120,7 +120,7 @@ let add_datatype_constr sym info env =
   {env with datatype_constrs}
 
 let get_datatype_maps env =
-  (SymMap.bindings (SymMap.map fst env.datatypes), 
+  (SymMap.bindings env.datatypes, 
    SymMap.bindings env.datatype_constrs)
 
 
@@ -256,8 +256,8 @@ let rec translate_cn_base_type (bTy: CF.Symbol.sym cn_base_type) =
 let register_cn_predicates env (defs: cn_predicate list) =
   let aux env def =
     let translate_args xs =
-      List.map (fun (bTy, sym) ->
-        (sym, SBT.to_basetype (translate_cn_base_type bTy))
+      List.map (fun (bTy, id_or_sym) ->
+        (id_or_sym, SBT.to_basetype (translate_cn_base_type bTy))
       ) xs in
     let iargs = translate_args def.cn_pred_iargs in
     let output = match def.cn_pred_output with
@@ -313,37 +313,31 @@ let register_cn_functions env (defs: cn_function list) =
 
 let add_datatype_info env (dt : cn_datatype) =
   Pp.debug 2 (lazy (Pp.item "translating datatype declaration" (Sym.pp dt.cn_dt_name)));
-  let add_param_sym m (ty, nm) =
-    let bt = translate_cn_base_type ty in
-    let nm_s = Id.s nm in
-    match Y.find_opt nm_s m with
+  let add_param m (ty, nm) =
+    match Y.find_opt (Id.s nm) m with
     | None ->
-      let sym = Sym.fresh_named nm_s in
-      return (Y.add nm_s (sym, bt) m)
-    | Some (sym, bt2) -> if SBT.equal bt bt2 then return m
-      else fail {loc = Id.loc nm;
-              msg = Generic (Pp.item "different type for datatype member" (Id.pp nm))}
+      return (Y.add (Id.s nm) (nm, SBT.to_basetype (translate_cn_base_type ty)) m)
+    | Some _ -> 
+        fail {loc = Id.loc nm;
+              msg = Generic (!^"Re-using member name" ^^^ Id.pp nm 
+                             ^^^ !^"within datatype definition.")}
   in
-  let@ param_sym_tys = ListM.fold_leftM add_param_sym Y.empty
-    (List.concat (List.map snd dt.cn_dt_cases)) in
-  let param_syms = Y.map fst param_sym_tys in
+  let@ all_params = ListM.fold_leftM add_param Y.empty
+    (List.concat_map snd dt.cn_dt_cases) in
   let add_constr env (cname, params) =
     let c_params = 
-      List.map_snd SBT.to_basetype
-      (List.map (fun (_, nm) -> Y.find (Id.s nm) param_sym_tys) params) 
+      List.map (fun (ty, nm) -> 
+        (nm, SBT.to_basetype (translate_cn_base_type ty))
+        ) params
     in
-    let info = BaseTypes.{c_params; c_datatype_tag = dt.cn_dt_name} in
+    let info = BT.{c_params; c_datatype_tag = dt.cn_dt_name} in
     add_datatype_constr cname info env
   in
   let env = List.fold_left add_constr env dt.cn_dt_cases in
-  let dt_all_params = 
-    Y.bindings param_sym_tys 
-    |> List.map snd 
-    |> List.map_snd SBT.to_basetype
-  in
+  let dt_all_params = List.map snd (Y.bindings all_params) in
   let dt_constrs = List.map fst dt.cn_dt_cases in
   return (add_datatype dt.cn_dt_name
-    (BaseTypes.{dt_constrs; dt_all_params}, param_syms) env)
+    BT.{dt_constrs; dt_all_params} env)
 
 let add_datatype_infos env dts =
   ListM.fold_leftM add_datatype_info env dts
@@ -515,10 +509,8 @@ module EffectfulTranslation = struct
   let translate_member_access loc env (t : IT.sterm) member =
     match IT.bt t with
     | SBT.Record members ->
-       let member' = Id.s member in
-       let members' = List.map (fun (s, bt) -> (Tools.todo_string_of_sym s, (s, bt))) members in
-       let@ (member, member_bt) = match List.assoc_opt String.equal member' members' with
-         | Some (member, member_bt) -> return (member, member_bt)
+       let@ member_bt = match List.assoc_opt Id.equal member members with
+         | Some member_bt -> return member_bt
          | None -> fail {loc; msg = Unknown_record_member (SBT.pp (SBT.Record members), member)}
        in
        return (IT.recordMember_ ~member_bt (t, member))
@@ -528,18 +520,16 @@ module EffectfulTranslation = struct
        let member_bt = SurfaceBaseTypes.of_sct ty in
        return ( IT.IT ((StructMember (t, member)), member_bt) )
     | Datatype tag ->
-       let@ (dt_info, mem_syms) = lookup_datatype loc tag env in
-       let@ sym = match Y.find_opt (Id.s member) mem_syms with
-         | None -> fail {loc; msg= Generic (Pp.string ("Unknown member " ^ Id.s member ^
-             " of datatype " ^ Sym.pp_string tag))}
-         | Some sym -> return sym
-       in
-       let@ bt = match List.assoc_opt Sym.equal sym dt_info.dt_all_params with
-         | None -> fail {loc; msg = Generic (Pp.string ("Unknown member " ^ Id.s member ^
-             " of datatype " ^ Sym.pp_string tag ^ " at type lookup"))}
+       let@ dt_info = lookup_datatype loc tag env in
+       let@ bt = match List.assoc_opt Id.equal member dt_info.dt_all_params with
+         | None -> 
+             let msg = !^"Unknown member" ^^^ squotes (Id.pp member)
+                       ^^^ !^"of datatype" ^^^ squotes (Sym.pp tag)
+             in
+             fail {loc; msg = Generic msg}
          | Some bt -> return (SurfaceBaseTypes.of_basetype bt)
        in
-       return (IT.IT ((IT.DatatypeMember (t, sym)), bt))
+       return (IT.IT ((IT.DatatypeMember (t, member)), bt))
     | has -> 
        fail {loc; msg = Illtyped_it {it = Terms.pp t; has = SurfaceBaseTypes.pp has; expected = "struct"; o_ctxt = None}}
 
@@ -548,21 +538,26 @@ module EffectfulTranslation = struct
     let rec f x = function
       | CNExpr (loc2, CNExpr_cons (c_nm, exprs)) ->
           let@ cons_info = lookup_constr loc c_nm env in
-          let@ (_, mem_syms) = lookup_datatype loc cons_info.c_datatype_tag env in
+          (* let@ (_, mem_syms) = lookup_datatype loc cons_info.c_datatype_tag env in *)
           let m1 = IT.IT ((DatatypeIsCons (c_nm, x)), SBT.Bool) in
           let memb nm =
-              let@ sym = match Y.find_opt (Id.s nm) mem_syms with
-                  | Some sym -> return sym
-                  | None -> fail {loc = loc2; msg = Generic
-                      (Pp.string ("Unknown field of " ^ Sym.pp_string cons_info.c_datatype_tag
-                          ^ ": " ^ Id.s nm))}
+              let@ bt = match List.assoc_opt Id.equal nm cons_info.c_params with
+                  | Some bt -> return bt
+                  | None -> 
+                    let msg = 
+                      !^"Unknown field" ^^^ squotes (Id.pp nm) ^^^ !^"of" 
+                      ^^^ squotes (Sym.pp cons_info.c_datatype_tag)
+                    in
+                    fail {loc = loc2; msg = Generic msg}
               in
-              let bt = List.assoc Sym.equal sym cons_info.c_params in
-              return (IT.IT ((DatatypeMember (x, sym)), SBT.of_basetype bt))
+              return (IT.IT ((DatatypeMember (x, nm)), SBT.of_basetype bt))
           in
-          let@ xs = ListM.mapM (fun (nm, shape) ->
+          let@ xs = 
+            ListM.mapM (fun (nm, shape) ->
               let@ x = memb nm in
-              f x shape) exprs in
+              f x shape
+            ) exprs 
+          in
           return (m1 :: List.concat xs)
       | _ ->
       fail {loc; msg = Generic (Pp.string "rhs of ?? operation can only specify shape"
@@ -682,16 +677,9 @@ module EffectfulTranslation = struct
             end
         | CNExpr_cons (c_nm, exprs) ->
             let@ cons_info = lookup_constr loc c_nm env in
-            let@ (_, mem_syms) = lookup_datatype loc cons_info.c_datatype_tag env in
             let@ exprs = ListM.mapM (fun (nm, expr) ->
                 let@ expr = self expr in
-                let@ sym = match Y.find_opt (Id.s nm) mem_syms with
-                  | Some sym -> return sym
-                  | None -> fail {loc; msg = Generic
-                      (Pp.string ("Unknown field of " ^ Sym.pp_string cons_info.c_datatype_tag
-                          ^ ": " ^ Id.s nm))}
-                in
-                return (sym, expr)) exprs
+                return (nm, expr)) exprs
             in
             let record = IT ((Record exprs),
                              SBT.Record (List.map (fun (s,t) -> (s, basetype t)) exprs)) in
@@ -1164,9 +1152,9 @@ let translate_cn_clause env clause =
          translate_cn_clause_aux env st acc' cl
       | CN_return (loc, CN_return_record xs_) ->
           let@ xs =
-            ListM.mapM (fun (sym, e_) ->
+            ListM.mapM (fun ((member: Id.t), e_) ->
               let@ e = handle st (ET.translate_cn_expr SymSet.empty env e_) in
-              return (sym, IT.term_of_sterm e)
+              return (member, IT.term_of_sterm e)
             ) xs_ in
           acc (LAT.I (IT.record_ xs)) 
       | CN_return (loc, CN_return_expression e_) ->
