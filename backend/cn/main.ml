@@ -124,58 +124,11 @@ let _empty_executable_spec = {
     in_stmt = [];
 }
 
-let generate_c_binop = function
-| CN_add -> "+"
-| CN_sub -> "-"
-| CN_mul -> "*"
-| CN_div -> "/"
-| CN_equal -> "=="
-| CN_inequal -> "!="
-| CN_lt -> "<"
-| CN_gt -> ">"
-| CN_le -> "<="
-| CN_ge -> ">="
-| CN_or -> "||"
-| CN_and -> "&&"
-| CN_map_get -> "" (* TODO *)
 
-
-let rec generate_c_expr ((CNExpr (loc, expr_)) as expr) =
-  (* let open Cn_to_ail in *)
-  match expr_ with 
-  | CNExpr_const CNConst_NULL
-  | CNExpr_const (CNConst_integer _) 
-  | CNExpr_value_of_c_atom _ -> Cn_to_ail.(pp_ail (cn_to_ail_expr expr))
-  | CNExpr_const (CNConst_bool b) -> string_of_bool b
-  (* 
-  | CNExpr_const CNConst_unit *)
-  (*| CNExpr_list es
-  | CNExpr_memberof (e, xs)
-  | CNExpr_memberupdates (e, updates)
-  | CNExpr_arrayindexupdates (e, updates)
-  | CNExpr_binop (CN_sub, e1_, (CNExpr (_, CNExpr_cons _) as shape)) *)
-  | CNExpr_binop (bop, e1_, e2_) -> (generate_c_expr e1_) ^ (generate_c_binop bop) ^ (generate_c_expr e2_)
-    (* generate_c_binop bop (generate_c_expr e1_, generate_c_expr e2_) *)
-  (*
-  | CNExpr_sizeof ct
-  | CNExpr_offsetof (tag, member)
-  | CNExpr_membershift (e, member)
-  | CNExpr_cast (bt, expr)
-  | CNExpr_call (nm, exprs)
-  | CNExpr_cons (c_nm, exprs)
-  | CNExpr_each (sym, r, e)
-  | CNExpr_ite (e1, e2, e3)
-  | CNExpr_good (ty, e)
-  | CNExpr_not e 
-  | CNExpr_unchanged e
-  | CNExpr_at_env (e, scope)
-  | CNExpr_deref e -> "hello" *)
-  | _ -> "XXX"
- 
-
+  
 let generate_c_assertion cn_assertion =
   match cn_assertion with
-  | CN_assert_exp e_ -> String.concat "" ["assert("; generate_c_expr e_; ")"]
+  | CN_assert_exp e_ -> String.concat "" ["assert("; Cn_to_ail.(pp_ail (cn_to_ail_expr e_)); ")"]
   | _ -> "" (* TODO: CN_assert_qexp *)
   
 
