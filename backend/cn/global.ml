@@ -14,7 +14,7 @@ type t =
     datatype_constrs : BaseTypes.constr_info SymMap.t;
     fun_decls : (Locations.t * AT.ft) SymMap.t;
     resource_predicates : ResourcePredicates.definition SymMap.t;
-    logical_predicates : LogicalPredicates.definition SymMap.t;
+    logical_functions : LogicalFunctions.definition SymMap.t;
     lemmata : (Locations.t * AT.lemmat) SymMap.t;
   } 
 
@@ -24,13 +24,13 @@ let empty =
     datatype_constrs = SymMap.empty;
     fun_decls = SymMap.empty;
     resource_predicates = SymMap.empty;
-    logical_predicates = SymMap.empty;
+    logical_functions = SymMap.empty;
     lemmata = SymMap.empty;
   }
 
 
 let get_resource_predicate_def global id = SymMap.find_opt id global.resource_predicates
-let get_logical_predicate_def global id = SymMap.find_opt id global.logical_predicates
+let get_logical_function_def global id = SymMap.find_opt id global.logical_functions
 let get_fun_decl global sym = SymMap.find_opt sym global.fun_decls
 let get_lemma global sym = SymMap.find_opt sym global.lemmata
 

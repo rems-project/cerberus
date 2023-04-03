@@ -114,7 +114,7 @@ type message =
   | Unknown_datatype of BT.tag
   | Unknown_datatype_constr of BT.tag
   | Unknown_resource_predicate of {id: Sym.t; logical: bool}
-  | Unknown_logical_predicate of {id: Sym.t; resource: bool}
+  | Unknown_logical_function of {id: Sym.t; resource: bool}
   | Unknown_member of BT.tag * BT.member
   | Unknown_record_member of Pp.doc * Id.t
   | Unknown_lemma of Sym.t
@@ -207,8 +207,8 @@ let pp_message te =
              !^" is a known logical predicate.")
          else None in
      { short; descr; state = None; trace = None }
-  | Unknown_logical_predicate {id; resource} ->
-     let short = !^"Unknown logical predicate" ^^^ squotes (Sym.pp id) in
+  | Unknown_logical_function {id; resource} ->
+     let short = !^"Unknown logical function" ^^^ squotes (Sym.pp id) in
      let descr = if resource then Some (!^"Note " ^^^ squotes (Sym.pp id) ^^^
              !^" is a known resource predicate.")
          else None in

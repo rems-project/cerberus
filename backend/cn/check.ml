@@ -13,7 +13,7 @@ module SymSet = Set.Make(Sym)
 module SymMap = Map.Make(Sym)
 module S = Solver
 module Loc = Locations
-module LP = LogicalPredicates
+module LF = LogicalFunctions
 module Mu = Mucore
 module RI = ResourceInference
 
@@ -130,11 +130,11 @@ open Binding
 
 
 
+let use_model_eqs = ref true
 
 
 module InferenceEqs = struct
 
-let use_model_eqs = ref true
 
 (* todo: what is this? Can we replace this by using the predicate_name
    + information about whether iterated or not? *)
@@ -906,10 +906,10 @@ type 'a orFalse =
   | Normal of 'a
   | False
 
-let pp_or_false (ppf : 'a -> Pp.document) (m : 'a orFalse) : Pp.document = 
-  match m with
-  | Normal a -> ppf a
-  | False -> parens !^"no return"
+(* let pp_or_false (ppf : 'a -> Pp.document) (m : 'a orFalse) : Pp.document =  *)
+(*   match m with *)
+(*   | Normal a -> ppf a *)
+(*   | False -> parens !^"no return" *)
 
 
 let filter_empty_resources loc =
@@ -957,7 +957,7 @@ let all_empty loc original_resources =
              {loc; msg = Unused_resource {resource; ctxt; model; trace}})
 
 
-type labels = (AT.lt * label_kind) SymMap.t
+(*type labels = (AT.lt * label_kind) SymMap.t*)
 
 
 let load loc pointer ct =
@@ -1365,7 +1365,7 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
                  | I_Everything -> 
                     return (fun _ -> true)
                  | I_Function f -> 
-                    let@ _ = get_logical_predicate_def loc f in 
+                    let@ _ = get_logical_function_def loc f in 
                     return (IT.mentions_call f)
                  | I_Good ct -> 
                     let@ () = WCT.is_ct loc ct in 
@@ -1374,7 +1374,7 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
                let@ it = WIT.check loc Integer it in
                instantiate loc filter it
             | M_CN_unfold (f, args) ->
-               let@ def = get_logical_predicate_def loc f in
+               let@ def = get_logical_function_def loc f in
                let has_args, expect_args = List.length args, List.length def.args in
                let@ () = WellTyped.ensure_same_argument_number loc `General has_args ~expect:expect_args in
                let@ args = 
@@ -1382,7 +1382,7 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
                      WellTyped.WIT.check loc def_arg_bt has_arg
                    ) args def.args
                in
-               begin match LP.single_unfold_to_term def f args with
+               begin match LF.single_unfold_to_term def f args with
                | None ->
                   let msg = 
                     !^"Cannot unfold definition of uninterpreted function" 
@@ -1465,13 +1465,13 @@ let check_expr_rt loc labels ~typ e =
 
 
 
-let check_pexpr_rt loc pexpr (RT.Computational ((return_s, return_bt), info, lrt)) =
-  check_pexpr pexpr ~expect:return_bt (fun lvt ->
-  let lrt = LRT.subst (IT.make_subst [(return_s, lvt)]) lrt in
-  let@ original_resources = all_resources_tagged () in
-  Spine.subtype loc lrt (fun () ->
-  let@ () = all_empty loc original_resources in
-  return ()))
+(* let check_pexpr_rt loc pexpr (RT.Computational ((return_s, return_bt), info, lrt)) = *)
+(*   check_pexpr pexpr ~expect:return_bt (fun lvt -> *)
+(*   let lrt = LRT.subst (IT.make_subst [(return_s, lvt)]) lrt in *)
+(*   let@ original_resources = all_resources_tagged () in *)
+(*   Spine.subtype loc lrt (fun () -> *)
+(*   let@ () = all_empty loc original_resources in *)
+(*   return ())) *)
 
 
 
@@ -1537,8 +1537,8 @@ let check_procedure
                    return (lt, M_Label (loc, label_args_and_body, annots, parsed_spec), kind)
                 end
             in
-            debug 2 (lazy (!^"label type within function" ^^^ Sym.pp fsym));
-            debug 2 (lazy (CF.Pp_ast.pp_doc_tree (AT.dtree False.dtree lt)));
+            debug 6 (lazy (!^"label type within function" ^^^ Sym.pp fsym));
+            debug 6 (lazy (CF.Pp_ast.pp_doc_tree (AT.dtree False.dtree lt)));
             return ((sym, def) :: label_defs, SymMap.add sym (lt, kind) label_context)
           ) label_defs ([], SymMap.empty)
       in
@@ -1596,7 +1596,7 @@ let record_and_check_logical_functions funs =
 
   let recursive, nonrecursive =
     List.partition (fun (_, def) ->
-        LogicalPredicates.is_recursive def
+        LogicalFunctions.is_recursive def
       ) funs
   in
 
@@ -1604,8 +1604,8 @@ let record_and_check_logical_functions funs =
      adding them, because they cannot depend on themselves*)
   let@ () =
     ListM.iterM (fun (name, def) -> 
-        let@ def = WellTyped.WLPD.welltyped def in
-        add_logical_predicate name def
+        let@ def = WellTyped.WLFD.welltyped def in
+        add_logical_function name def
       ) nonrecursive
   in
 
@@ -1615,12 +1615,12 @@ let record_and_check_logical_functions funs =
 
   let@ () =
     ListM.iterM (fun (name, def) -> 
-        add_logical_predicate name def
+        add_logical_function name def
       ) recursive
   in
   ListM.iterM (fun (name, def) -> 
-      let@ def = WellTyped.WLPD.welltyped def in
-      add_logical_predicate name def
+      let@ def = WellTyped.WLFD.welltyped def in
+      add_logical_function name def
     ) recursive
 
 let record_and_check_resource_predicates preds =
@@ -1671,8 +1671,8 @@ let wf_check_and_record_functions mu_funs =
       | M_Proc (loc, args_and_body, tr, _) ->
          welltyped_ping fsym;
          let@ args_and_body, ft = WellTyped.WProc.welltyped loc args_and_body in
-         debug 2 (lazy (!^"function type" ^^^ Sym.pp fsym));
-         debug 2 (lazy (CF.Pp_ast.pp_doc_tree (AT.dtree RT.dtree ft)));
+         debug 6 (lazy (!^"function type" ^^^ Sym.pp fsym));
+         debug 6 (lazy (CF.Pp_ast.pp_doc_tree (AT.dtree RT.dtree ft)));
          let@ () = add fsym loc ft in
          begin match tr with
          | Trusted _ -> return ((fsym, (loc, ft)) :: trusted, checked)

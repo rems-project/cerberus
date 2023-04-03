@@ -539,8 +539,8 @@ let empty_switch_info =
 
 
 (* ========================================================================== *)
-val initial_state: (map string Symbol.sym) * Core.fun_map unit * Core.impl -> state_with_markers
-let initial_state core_eval_stuff = <|
+val initial_state: (map string Symbol.sym) * Core.fun_map unit * Core.impl -> list (string * Symbol.sym) -> state_with_markers
+let initial_state core_eval_stuff cn_eval_stuff = <|
   inner= <|
     aux_supply=      0;
     scope_id_supply= 0;
@@ -566,7 +566,7 @@ let initial_state core_eval_stuff = <|
     current_return_type= Nothing;
     
     loop_attributes= Map.empty;
-    cn_state= Cn_desugaring.initial_cn_desugaring_state;
+    cn_state= Cn_desugaring.initial_cn_desugaring_state cn_eval_stuff;
     
     core_eval_stuff= core_eval_stuff;
   |>;
@@ -588,13 +588,13 @@ let initial_state core_eval_stuff = <|
 (*   <| st with inner= <| st.inner with cn_state = cn_state |> |> *)
 
 
-val eval: forall 'a. (map string Symbol.sym) * Core.fun_map unit * Core.impl -> desugM 'a -> Exception.exceptM (markers_env * 'a) Errors.error
-let cabs_to_ail_effect_eval core_eval_stuff m =
+val eval: forall 'a. (map string Symbol.sym) * Core.fun_map unit * Core.impl -> list (string * Symbol.sym) -> desugM 'a -> Exception.exceptM (markers_env * 'a) Errors.error
+let cabs_to_ail_effect_eval core_eval_stuff cn_eval_stuff m =
   State_exception.eval begin
     m >>= fun res ->
     State_exception.get >>= fun st ->
     State_exception.return (st.markers_env, res)
-  end (initial_state core_eval_stuff)
+  end (initial_state core_eval_stuff cn_eval_stuff)
 let inline eval = cabs_to_ail_effect_eval
 
 
@@ -1085,30 +1085,13 @@ let rec fetch_oarg acc ident = function
       fetch_oarg (x :: acc) ident xs'
 end
 
-val check_cn_oargs: forall 'a. Loc.t -> list (Symbol.identifier * 'a) -> desugM (list (Symbol.sym * 'a))
-let check_cn_oargs loc xs =
-  get_cn_state >>= fun st ->
-  foldlM (fun (acc, oargs) (ident, x) ->
-    match fetch_oarg [] ident oargs with
-      | (Just sym, oargs') ->
-          return ((sym, x) :: acc, oargs')
-      | (Nothing, _) ->
-          fail (Loc.locOf ident) (Errors.Desugar_CN (Cn.CNErr_unknown_identifier Cn.CN_oarg ident))
-    end
-  ) ([], Map_extra.toList (current_cn_scope st)) xs >>= fun (rev_acc, oargs) ->
-  match List.filter (function ((CN_oarg, _), _) -> true | _ -> false end) oargs with
-    | [] ->
-        return (List.reverse rev_acc)
-    | (_, sym) :: _ ->
-        fail loc (Errors.Desugar_CN (Cn.CNErr_missing_oarg sym))
-  end
+
 
 
 
 (* let inline register_cn_ident ns ident     = liftCnDesug (Cn_desugaring.register_cn_ident ns ident) *)
 (* let inline resolve_cn_ident ns ident      = liftCnDesug (Cn_desugaring.resolve_cn_ident ns ident) *)
 (* (\* let inline  fetch_oarg acc ident = function *\) *)
-(* let inline check_cn_oargs loc xs          = liftCnDesug (Cn_desugaring.check_cn_oargs loc xs) *)
 
 
 val lookup_cn_function: Symbol.identifier -> desugM Symbol.sym

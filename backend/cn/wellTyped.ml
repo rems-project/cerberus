@@ -322,23 +322,19 @@ module WIT = struct
             let@ itembt = ensure_set_type loc t in
             let@ t' = check loc (Set itembt) t' in
             return (IT (Binop (Subset, t,t'), BT.Bool))
-          end
-      | IntToReal t ->
-         let@ t = check loc Integer t in
-         return (IT (IntToReal t, BT.Real))
-      | RealToInt t ->
-         let@ t = check loc Real t in
-         return (IT (IntToReal t, BT.Integer))
-      | And ts ->
-         let@ ts = ListM.mapM (check loc Bool) ts in
-         return (IT (And ts, BT.Bool))
-      | Or ts ->
-         let@ ts = ListM.mapM (check loc Bool) ts in
-         return (IT (Or ts, BT.Bool))
-      | Impl (t,t') ->
-         let@ t = check loc Bool t in
-         let@ t' = check loc Bool t' in
-         return (IT (Impl (t, t'),BT.Bool))
+         | And ->
+            let@ t = check loc Bool t in
+            let@ t' = check loc Bool t' in
+            return (IT (Binop (And, t, t'), Bool))
+         | Or -> 
+            let@ t = check loc Bool t in
+            let@ t' = check loc Bool t' in
+            return (IT (Binop (Or, t, t'), Bool))
+         | Impl ->
+            let@ t = check loc Bool t in
+            let@ t' = check loc Bool t' in
+            return (IT (Binop (Impl, t, t'), Bool))
+         end
       | Not t ->
          let@ t = check loc Bool t in
          return (IT (Not t,BT.Bool))
@@ -429,10 +425,10 @@ module WIT = struct
            | Record members -> return members
            | has -> fail (illtyped_index_term loc t has "struct")
          in
-         let@ bt = match List.assoc_opt Sym.equal member members with
+         let@ bt = match List.assoc_opt Id.equal member members with
            | Some bt -> return bt
            | None -> 
-              let expected = "struct with member " ^ Sym.pp_string member in
+              let expected = "struct with member " ^ Id.pp_string member in
               fail (illtyped_index_term loc t (IT.bt t) expected)
          in
          return (IT (RecordMember (t, member), bt))
@@ -442,10 +438,10 @@ module WIT = struct
            | Record members -> return members
            | has -> fail (illtyped_index_term loc t has "struct")
          in
-         let@ bt = match List.assoc_opt Sym.equal member members with
+         let@ bt = match List.assoc_opt Id.equal member members with
            | Some bt -> return bt
            | None -> 
-              let expected = "struct with member " ^ Sym.pp_string member in
+              let expected = "struct with member " ^ Id.pp_string member in
               fail (illtyped_index_term loc t (IT.bt t) expected)
          in
          let@ v = check loc bt v in
@@ -461,10 +457,10 @@ module WIT = struct
            | Datatype tag -> get_datatype loc tag
            | has -> fail (illtyped_index_term loc t has "record")
          in
-         let@ bt = match List.assoc_opt Sym.equal member info.dt_all_params with
+         let@ bt = match List.assoc_opt Id.equal member info.dt_all_params with
            | Some bt -> return bt
            | None ->
-               let expected = "datatype with member " ^ Sym.pp_string member in
+               let expected = "datatype with member " ^ Id.pp_string member in
                fail (illtyped_index_term loc t (IT.bt t) expected)
          in
          return (IT (DatatypeMember (t, member),bt))
@@ -473,12 +469,21 @@ module WIT = struct
          let (_, res_ty) = BT.cons_dom_rng info in
          let@ t = check loc res_ty t in
          return (IT (DatatypeIsCons (nm, t),BT.Bool))
-       | IntegerToPointerCast t ->
-          let@ t = check loc Integer t in
-          return (IT (IntegerToPointerCast t,Loc))
-       | PointerToIntegerCast t ->
-          let@ t = check loc Loc t in
-          return (IT (PointerToIntegerCast t,Integer))
+       | Cast (cbt, t) ->
+          let@ t = infer loc t in
+          let@ () = match IT.bt t, cbt with
+           | Integer, Loc -> return ()
+           | Loc, Integer -> return ()
+           | Integer, Real -> return ()
+           | Real, Integer -> return ()
+           | source, target -> 
+             let msg = 
+               !^"Unsupported cast from" ^^^ BT.pp source
+               ^^^ !^"to" ^^^ BT.pp target ^^ dot
+             in
+             fail (fun _ -> {loc; msg = Generic msg})
+          in
+          return (IT (Cast (cbt, t), cbt))
        | MemberOffset (tag, member) ->
           let@ layout = get_struct_decl loc tag in
           let decl_members = Memory.member_types layout in
@@ -491,10 +496,10 @@ module WIT = struct
           let@ () = WCT.is_ct loc ct in
           let@ t = check loc Integer t in
           return (IT (ArrayOffset (ct, t), Integer))
-       | AlignedI t ->
+       | Aligned t ->
           let@ t_t = check loc Loc t.t in
           let@ t_align = check loc Integer t.align in
-          return (IT (AlignedI {t = t_t; align=t_align},BT.Bool))
+          return (IT (Aligned {t = t_t; align=t_align},BT.Bool))
        | Representable (ct, t) ->
           let@ () = WCT.is_ct loc ct in
           let@ t = check loc (BT.of_sct ct) t in
@@ -560,8 +565,8 @@ module WIT = struct
             let@ body = infer loc body in
             return (IT (MapDef ((s, abt), body), Map (abt, IT.bt body)))
             end
-      | Pred (name, args) ->
-         let@ def = Typing.get_logical_predicate_def loc name in
+      | Apply (name, args) ->
+         let@ def = Typing.get_logical_function_def loc name in
          let has_args, expect_args = List.length args, List.length def.args in
          let@ () = ensure_same_argument_number loc `General has_args ~expect:expect_args in
          let@ args = 
@@ -569,7 +574,7 @@ module WIT = struct
                check loc def_arg_bt has_arg
              ) args def.args
          in
-         return (IT (Pred (name, args), def.return_bt))
+         return (IT (Apply (name, args), def.return_bt))
          
 
     and check =
@@ -1044,9 +1049,9 @@ end
 
 
 
-module WLPD = struct
+module WLFD = struct
 
-  open LogicalPredicates
+  open LogicalFunctions
 
   let rec welltyped_body loc return_bt body =
     pure begin
@@ -1080,7 +1085,7 @@ module WLPD = struct
       end
 
 
-  let welltyped (pd : LogicalPredicates.definition) = 
+  let welltyped (pd : LogicalFunctions.definition) = 
     (* no need to alpha-rename, because context.ml ensures
        there's no name clashes *)
     (* let pd = LogicalPredicates.alpha_rename_definition pd in *)

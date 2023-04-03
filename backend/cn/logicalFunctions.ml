@@ -133,7 +133,7 @@ let pp_def nm def =
     end
 
 
-let open_pred def_args def_body args =
+let open_fun def_args def_body args =
   let su = make_subst (List.map2 (fun (s, _) arg -> (s, arg)) def_args args) in
   Body.subst su def_body
 
@@ -142,30 +142,30 @@ let open_pred def_args def_body args =
 let single_unfold_to_term def name args =
   match def.definition with
   | Def body -> 
-     Some (Body.to_term def.return_bt (open_pred def.args body args))
+     Some (Body.to_term def.return_bt (open_fun def.args body args))
   | Rec_Def body -> 
-     Some (Body.to_term def.return_bt (open_pred def.args body args))
+     Some (Body.to_term def.return_bt (open_fun def.args body args))
   | _ -> 
      None
 
 
-let try_open_pred def name args =
+let try_open_fun def name args =
   match def.definition with
-  | Def body -> Some (open_pred def.args body args)
+  | Def body -> Some (open_fun def.args body args)
   | _ -> None
 
-let try_open_pred_to_term def name args = 
+let try_open_fun_to_term def name args = 
   Option.map (fun body ->
       Body.to_term def.return_bt body
-    ) (try_open_pred def name args)
+    ) (try_open_fun def name args)
 
 
 
 let add_unfolds_to_terms preds terms =
   let rec f acc t = match IT.term t with
-    | IT.Pred (name, ts) ->
+    | IT.Apply (name, ts) ->
       let def = SymMap.find name preds in
-      begin match try_open_pred_to_term def name ts with
+      begin match try_open_fun_to_term def name ts with
         | None -> acc
         | Some t2 -> f (t2 :: acc) t2
       end

@@ -59,9 +59,9 @@ let term_with_model_name nm cfg x =
     return (bold nm ^^ colon ^^^ parens (IT.pp r ^^^ string "in model") ^^ colon ^^^ IT.pp x)
 
 let bool_subterms1 t = match IT.term t with
-  | IT.And xs -> xs
-  | IT.Or xs -> xs
-  | IT.Impl (x, y) -> [x; y]
+  | IT.Binop (And, it,it') -> [it;it']
+  | IT.Binop (Or, it,it') -> [it;it']
+  | IT.Binop (Impl, x, y) -> [x; y]
   | IT.Not x -> [x]
   | IT.Binop (EQ, x, y) -> if BT.equal (IT.bt x) BT.Bool
       then [x; y] else []
@@ -79,16 +79,16 @@ let constraint_ts () =
   return ts
 
 let same_pred nm t = match IT.term t with
-  | IT.Pred (nm2, _) -> Sym.equal nm nm2
+  | IT.Apply (nm2, _) -> Sym.equal nm nm2
   | _ -> false
 
 let pred_args t = match IT.term t with
-  | IT.Pred (_, args) -> args
+  | IT.Apply (_, args) -> args
   | _ -> []
 
 let split_eq x y = match (IT.term x, IT.term y) with
   | (IT.MapGet (m1, x1), IT.MapGet (m2, x2)) -> Some [(m1, m2); (x1, x2)]
-  | (IT.Pred (nm, xs), IT.Pred (nm2, ys)) when Sym.equal nm nm2 ->
+  | (IT.Apply (nm, xs), IT.Apply (nm2, ys)) when Sym.equal nm nm2 ->
     Some (List.map2 (fun x y -> (x, y)) xs ys)
   | _ -> None
 
@@ -120,7 +120,7 @@ let rec investigate_term cfg t =
       return (List.concat trans_opts @ [get_eq_opt] @ split_opts)
   in
   let@ pred_opts = match IT.term t with
-    | IT.Pred (nm, xs) -> investigate_pred cfg nm t
+    | IT.Apply (nm, xs) -> investigate_pred cfg nm t
     | _ -> return []
   in
   let@ ite_opts = investigate_ite cfg t in

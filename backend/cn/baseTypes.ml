@@ -27,7 +27,7 @@ type basetype =
 [@@deriving eq, ord]
 
 and member_types =
-  (Sym.t * basetype) list
+  (Id.t * basetype) list
 
 
 type t = basetype
@@ -58,7 +58,7 @@ let rec pp = function
   | Loc -> !^"pointer"
   | Struct sym -> !^"struct" ^^^ Sym.pp sym
   | Datatype sym -> !^"datatype" ^^^ Sym.pp sym
-  | Record members -> braces (flow_map comma (fun (s, bt) -> pp bt ^^^ Sym.pp s) members)
+  | Record members -> braces (flow_map comma (fun (s, bt) -> pp bt ^^^ Id.pp s) members)
   | Map (abt, rbt) -> !^"map" ^^ angles (pp abt ^^ comma ^^^ pp rbt)
   | List bt -> !^"list" ^^ angles (pp bt)
   | Tuple nbts -> !^"tuple" ^^ angles (flow_map comma pp nbts)

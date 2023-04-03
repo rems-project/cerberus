@@ -28,30 +28,31 @@ let mk_arg5 mk loc = function
   | xs -> fail {loc; msg = Number_arguments {has = List.length xs; expect = 5}}
 
 
-let mul_uf_def = (Sym.fresh_named "mul_uf", mk_arg2 mul_no_smt_)
-let div_uf_def = (Sym.fresh_named "div_uf", mk_arg2 div_no_smt_)
-let power_uf_def = (Sym.fresh_named "power_uf", mk_arg2 exp_no_smt_)
-let rem_uf_def = (Sym.fresh_named "rem_uf", mk_arg2 rem_no_smt_)
-let mod_uf_def = (Sym.fresh_named "mod_uf", mk_arg2 mod_no_smt_)
-let xor_uf_def = (Sym.fresh_named "xor_uf", mk_arg2 xor_no_smt_)
+let mul_uf_def = ("mul_uf", Sym.fresh_named "mul_uf", mk_arg2 mul_no_smt_)
+let div_uf_def = ("div_uf", Sym.fresh_named "div_uf", mk_arg2 div_no_smt_)
+let power_uf_def = ("power_uf", Sym.fresh_named "power_uf", mk_arg2 exp_no_smt_)
+let rem_uf_def = ("rem_uf", Sym.fresh_named "rem_uf", mk_arg2 rem_no_smt_)
+let mod_uf_def = ("mod_uf", Sym.fresh_named "mod_uf", mk_arg2 mod_no_smt_)
+let xor_uf_def = ("xor_uf", Sym.fresh_named "xor_uf", mk_arg2 xor_no_smt_)
 
-let power_def = (Sym.fresh_named "power", mk_arg2 exp_)
-let rem_def = (Sym.fresh_named "rem", mk_arg2 rem_)
-let mod_def = (Sym.fresh_named "mod", mk_arg2 mod_)
+let power_def = ("power", Sym.fresh_named "power", mk_arg2 exp_)
+let rem_def = ("rem", Sym.fresh_named "rem", mk_arg2 rem_)
+let mod_def = ("mod", Sym.fresh_named "mod", mk_arg2 mod_)
 
-let not_def = (Sym.fresh_named "not", mk_arg1 (fun it -> IT (Not it, SBT.Bool)))
+let not_def = ("not", Sym.fresh_named "not", mk_arg1 (fun it -> IT (Not it, SBT.Bool)))
 
-let nth_list_def = (Sym.fresh_named "nth_list", mk_arg3 nthList_)
+let nth_list_def = ("nth_list", Sym.fresh_named "nth_list", mk_arg3 nthList_)
 
 let array_to_list_def = 
-  (Sym.fresh_named "array_to_list", mk_arg3_err
+  ("array_to_list", Sym.fresh_named "array_to_list", mk_arg3_err
   (fun loc (arr, i, len) -> match SBT.is_map_bt (IT.bt arr) with
     | None -> fail {loc; msg = Illtyped_it {it = IT.pp arr; has = SBT.pp (IT.bt arr); expected = "map"; o_ctxt = None}}
     | Some (_, bt) -> return (array_to_list_ (arr, i, len) bt)
   ))
 
 let cellpointer_def =
-  (Sym.fresh_named "cellPointer", 
+  ("cellPointer",
+   Sym.fresh_named "cellPointer", 
    mk_arg5 (fun (base, step, starti, endi, p) ->
        let base = IT.term_of_sterm base in
        let step = IT.term_of_sterm step in
@@ -63,7 +64,7 @@ let cellpointer_def =
   )
 
 let builtin_funs = 
-  List.map (fun (s, mk) -> (Sym.pp_string s, mk)) [
+  [
       mul_uf_def;
       div_uf_def;
       power_uf_def;
@@ -83,10 +84,12 @@ let builtin_funs =
       cellpointer_def;
     ]
 
-let apply_builtin_funs loc nm args =
-  match List.assoc_opt String.equal nm builtin_funs with
+let apply_builtin_funs loc fsym args =
+  match List.find_opt (fun (_, fsym', _) -> Sym.equal fsym fsym') builtin_funs with
   | None -> return None
-  | Some mk ->
+  | Some (_, _, mk) ->
     let@ t = mk loc args in
     return (Some t)
 
+let cn_builtin_fun_names =
+  List.map (fun (str,sym,_) -> (str, sym)) builtin_funs

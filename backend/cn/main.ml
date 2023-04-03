@@ -1,3 +1,4 @@
+open Builtins
 module CF=Cerb_frontend
 module CB=Cerb_backend
 open CB.Pipeline
@@ -63,7 +64,7 @@ let frontend incl_dirs astprints filename state_file =
   Switches.set ["inner_arg_temps"];
   let@ stdlib = load_core_stdlib () in
   let@ impl = load_core_impl stdlib impl_name in
-  let@ (_, ail_prog_opt, prog0) = c_frontend (conf incl_dirs astprints, io) (stdlib, impl) ~filename in
+  let@ (_, ail_prog_opt, prog0) = c_frontend ~cnnames:cn_builtin_fun_names (conf incl_dirs astprints, io) (stdlib, impl) ~filename in
   let markers_env, (_, ail_prog) = Option.get ail_prog_opt in
   Tags.set_tagDefs prog0.Core.tagDefs;
   let prog1 = Remove_unspecs.rewrite_file prog0 in
@@ -226,7 +227,7 @@ let main
   Solver.random_seed := random_seed;
   ResourceInference.reorder_points := not no_reorder_points;
   ResourceInference.additional_sat_check := not no_additional_sat_check;
-  Check.InferenceEqs.use_model_eqs := not no_model_eqs;
+  Check.use_model_eqs := not no_model_eqs;
   Check.only := only;
   Diagnostics.diag_string := diag;
   check_input_file filename;

@@ -51,7 +51,7 @@ end
 
 
 
-(* KKK initialisation *)
+(* initialisation *)
 
 type init_element =
   | Elem_array of integer
@@ -4121,7 +4121,9 @@ let rec desugar_cn_expr (CNExpr loc expr_) =
         CNExpr_cast <$> desugar_cn_base_type loc ty
                     <*> desugar_cn_expr e
     | CNExpr_call nm es ->
-        CNExpr_call nm <$> E.mapM desugar_cn_expr es
+        E.resolve_cn_ident CN_function nm >>= fun sym_resolved ->
+        let sym = Cn.ensure_not_c_variable sym_resolved in
+        CNExpr_call sym <$> E.mapM desugar_cn_expr es
     | CNExpr_cons nm es ->
        E.resolve_cn_ident CN_constructor nm >>= fun sym_resolved ->
        let sym = Cn.ensure_not_c_variable sym_resolved in
@@ -4246,8 +4248,7 @@ let desugar_cn_pred_return loc = function
       desugar_cn_expr e >>= fun e' ->
       E.return (x, e')
     ) xs >>= fun xs' ->
-      E.check_cn_oargs loc xs' >>= fun xs'' ->
-      E.return (CN_return_record xs'')
+      E.return (CN_return_record xs')
   | CN_return_expression e ->
     desugar_cn_expr e >>= fun e' ->
     E.return (CN_return_expression e')
@@ -4300,9 +4301,14 @@ let desugar_cn_arg ns (bTy, ident) =
   E.register_cn_ident ns ident               >>= fun sym ->
   E.return (bTy', sym)
 
+let desugar_cn_oarg (bTy, ident) =
+  desugar_cn_base_type (Loc.locOf ident) bTy >>= fun bTy' ->
+  E.return (bTy', ident)
+
+
 let desugar_cn_output = function
   | CN_pred_output_record oargs ->
-    E.mapM (desugar_cn_arg CN_oarg) oargs >>= fun oargs ->
+    E.mapM desugar_cn_oarg oargs >>= fun oargs ->
     E.return (CN_pred_output_record oargs)
   | CN_pred_output_basetype loc bt ->
     desugar_cn_base_type loc bt >>= fun bt ->
@@ -4712,11 +4718,11 @@ let register_additional_cn_var id = E.register_cn_ident CN_vars id
 
 
 import Core
-val desugar: (map string Symbol.sym) * Core.fun_map unit * Core.impl -> string -> translation_unit ->
+val desugar: (map string Symbol.sym) * Core.fun_map unit * Core.impl -> list (string * Symbol.sym) -> string -> translation_unit ->
   Exception.exceptM (E.markers_env * ail_program unit) Errors.error
-let desugar core_eval_stuff startup_str (TUnit edecls) =
+let desugar core_eval_stuff cn_eval_stuff startup_str (TUnit edecls) =
 (*
-  E.eval sym_counter core_eval_stuff (
+  E.eval sym_counter core_eval_stuff cn_eval_stuff (
     E.under_scope E.Scope_file (
       let (base_qs1, base_ty1, ptr_decltor1) =
         ( Ctype.make_qualifiers true false false
@@ -4789,7 +4795,7 @@ let desugar core_eval_stuff startup_str (TUnit edecls) =
     )
   ) 
 *)
-  E.eval core_eval_stuff (
+  E.eval core_eval_stuff cn_eval_stuff (
     E.under_scope E.Scope_file (
       register_cn_predicate_names edecls                       >>= fun () ->
       register_cn_function_names edecls                        >>= fun () ->

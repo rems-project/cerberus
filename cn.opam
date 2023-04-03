@@ -3,10 +3,8 @@ synopsis: "The CN type system"
 description: "The CN type system"
 maintainer: ["Christopher Pulte <cp526@cl.cam.ac.uk>"]
 depends: [
-  "landmarks"
   "ppx_tools"
   "monomorphic"
   "ppx_deriving"
-  "landmarks-ppx"
   "z3" {>= "4.8.14"}
 ]

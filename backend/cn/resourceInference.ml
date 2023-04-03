@@ -21,12 +21,12 @@ let span_actions = ref true
 
 
 let unpack_def global name args =
-    Option.bind (Global.get_logical_predicate_def global name)
+    Option.bind (Global.get_logical_function_def global name)
     (fun def ->
     match def.definition with
     | Def body ->
-       Some (LogicalPredicates.Body.to_term def.return_bt
-               (LogicalPredicates.open_pred def.args body args))
+       Some (LogicalFunctions.Body.to_term def.return_bt
+               (LogicalFunctions.open_fun def.args body args))
     | _ -> None
     )
 
@@ -35,15 +35,15 @@ let debug_constraint_failure_diagnostics lvl (model_with_q : Solver.model_with_q
   let model = fst model_with_q in
   if ! Pp.print_level == 0 then () else
   let rec split tm = match IT.term tm with
-    | IT.And xs
-    | IT.Or xs -> List.concat_map split xs
+    | IT.Binop (And, x1, x2)
+    | IT.Binop (Or, x1, x2) -> split x1 @ split x2
     | IT.StructMember (x, _)
     | IT.Not x -> split x
     | IT.Binop (EQ, x, y)
-    | IT.Impl (x, y)
+    | IT.Binop (Impl, x, y)
     | IT.Binop (IT.LT, x, y)
     | IT.Binop (IT.LE, x, y) -> List.concat_map split [x; y]
-    | IT.Pred (name, args) when Option.is_some (unpack_def global name args) ->
+    | IT.Apply (name, args) when Option.is_some (unpack_def global name args) ->
         [Option.get (unpack_def global name args)]
     | _ -> []
   in
@@ -165,9 +165,9 @@ module General = struct
       | _ -> false
     in
     let rec f pol t = match t with
-      | IT (And xs, _) -> List.concat (List.map (f pol) xs)
-      | IT (Or xs, _) -> List.concat (List.map (f pol) xs)
-      | IT (Impl (x, y), _) -> f (not pol) x @ f pol y
+      | IT (Binop (And, x1,x2), _) -> List.concat (List.map (f pol) [x1; x2])
+      | IT (Binop (Or, x1, x2), _) -> List.concat (List.map (f pol) [x1; x2])
+      | IT (Binop (Impl, x, y), _) -> f (not pol) x @ f pol y
       | IT (Binop (EQ, x, y), _) ->
         if pol && is_i x then [y] else if pol && is_i y then [x] else []
       | IT (Not x, _) -> f (not pol) x

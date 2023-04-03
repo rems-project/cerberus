@@ -141,7 +141,7 @@ let cpp (conf, io) ~filename =
         return @@ String.concat "\n" out
   end ()
 
-let c_frontend (conf, io) (core_stdlib, core_impl) ~filename =
+let c_frontend ?(cnnames=[]) (conf, io) (core_stdlib, core_impl) ~filename =
   Fresh.set_digest filename;
   let wrap_fout z = if List.mem FOut conf.ppflags then z else None in
   (* -- *)
@@ -158,7 +158,7 @@ let c_frontend (conf, io) (core_stdlib, core_impl) ~filename =
   (* -- *)
   let desugar cabs_tunit =
     let (ailnames, core_stdlib_fun_map) = core_stdlib in
-    Cabs_to_ail.desugar (ailnames, core_stdlib_fun_map, core_impl)
+    Cabs_to_ail.desugar (ailnames, core_stdlib_fun_map, core_impl) cnnames
       "main" cabs_tunit >>= fun (markers_env, ail_prog) ->
           io.set_progress "DESUG"
       >|> io.pass_message "Cabs -> Ail completed!"

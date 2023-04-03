@@ -41,11 +41,6 @@ let rec free_vars_ = function
   | Const _ -> SymSet.empty
   | Sym s -> SymSet.singleton s
   | Binop (_bop, t1, t2) -> free_vars_list [t1; t2]
-  | IntToReal t1 -> free_vars t1
-  | RealToInt t1 -> free_vars t1
-  | And ts -> free_vars_list ts
-  | Or ts -> free_vars_list ts
-  | Impl (t1, t2) -> free_vars_list [t1; t2]
   | Not t1 -> free_vars t1
   | ITE (t1, t2, t3) -> free_vars_list [t1; t2; t3]
   | EachI ((_, s, _), t) -> SymSet.remove s (free_vars t)
@@ -60,8 +55,7 @@ let rec free_vars_ = function
   | DatatypeCons (tag, members_xs) -> free_vars members_xs
   | DatatypeMember (t, member) -> free_vars t
   | DatatypeIsCons (tag, t) -> free_vars t
-  | IntegerToPointerCast t1 -> free_vars t1
-  | PointerToIntegerCast t1 -> free_vars t1
+  | Cast (_cbt, t) -> free_vars t
   | MemberOffset (_tag, _id) -> SymSet.empty
   | ArrayOffset (_sct, t) -> free_vars t
   | Nil -> SymSet.empty
@@ -73,12 +67,12 @@ let rec free_vars_ = function
   | ArrayToList (arr, i, len) -> free_vars_list [arr; i; len]
   | Representable (_sct, t) -> free_vars t
   | Good (_sct, t) -> free_vars t
-  | AlignedI {t; align} -> free_vars_list [t; align]
+  | Aligned {t; align} -> free_vars_list [t; align]
   | MapConst (_bt, t) -> free_vars t
   | MapSet (t1, t2, t3) -> free_vars_list [t1; t2; t3]
   | MapGet (t1, t2) -> free_vars_list [t1; t2]
   | MapDef ((s, _bt), t) -> SymSet.remove s (free_vars t)
-  | Pred (_pred, ts) -> free_vars_list ts
+  | Apply (_pred, ts) -> free_vars_list ts
 
 and free_vars (IT (term_, _bt)) =
   free_vars_ term_
@@ -93,11 +87,6 @@ let rec fold_ f binders acc = function
   | Sym _s -> acc
   | Const _c -> acc
   | Binop (_bop, t1, t2) -> fold_list f binders acc [t1; t2]
-  | IntToReal t1 -> fold f binders acc t1
-  | RealToInt t1 -> fold f binders acc t1
-  | And ts -> fold_list f binders acc ts
-  | Or ts -> fold_list f binders acc ts
-  | Impl (t1, t2) -> fold_list f binders acc [t1; t2]
   | Not t1 -> fold f binders acc t1
   | ITE (t1, t2, t3) -> fold_list f binders acc [t1; t2; t3]
   | EachI ((_, s, _), t) ->
@@ -113,8 +102,7 @@ let rec fold_ f binders acc = function
   | DatatypeCons (tag, members_rec) -> fold f binders acc members_rec
   | DatatypeMember (t, _member) -> fold f binders acc t
   | DatatypeIsCons (tag, t) -> fold f binders acc t
-  | IntegerToPointerCast t1 -> fold f binders acc t1
-  | PointerToIntegerCast t1 -> fold f binders acc t1
+  | Cast (_cbt, t) -> fold f binders acc t
   | MemberOffset (_tag, _id) -> acc
   | ArrayOffset (_sct, t) -> fold f binders acc t
   | Nil -> acc
@@ -126,12 +114,12 @@ let rec fold_ f binders acc = function
   | ArrayToList (arr, i, len) -> fold_list f binders acc [arr; i; len]
   | Representable (_sct, t) -> fold f binders acc t
   | Good (_sct, t) -> fold f binders acc t
-  | AlignedI {t; align} -> fold_list f binders acc [t; align]
+  | Aligned {t; align} -> fold_list f binders acc [t; align]
   | MapConst (_bt, t) -> fold f binders acc t
   | MapSet (t1, t2, t3) -> fold_list f binders acc [t1; t2; t3]
   | MapGet (t1, t2) -> fold_list f binders acc [t1; t2]
   | MapDef ((s, bt), t) -> fold f (binders @ [(s, bt)]) acc t
-  | Pred (_pred, ts) -> fold_list f binders acc ts
+  | Apply (_pred, ts) -> fold_list f binders acc ts
 
 and fold f binders acc (IT (term_, _bt)) =
   let acc' = fold_ f binders acc term_ in
@@ -148,21 +136,11 @@ let fold_subterms : 'a 'bt. ((Sym.t * BT.t) list -> 'a -> 'bt term -> 'a) -> 'a 
   fun f acc t -> fold f [] acc t
 
 
-let todo_is_pred (pred: string) (IT (it_, bt)) = 
-  match pred, it_ with
-  | _, Pred (name, _) when String.equal (Tools.todo_string_of_sym name) pred -> true
-  | "good", Good _ -> true
-  | _ -> false
 
-let todo_mentions_pred (pred: Id.t) =
-  let pred = Id.s pred in
-  fold_subterms (fun _binders acc it ->
-      acc || todo_is_pred pred it
-    ) false
 
 let is_call (f: Sym.t) (IT (it_, bt)) = 
   match it_ with
-  | Pred (f', _) when Sym.equal f f' -> true
+  | Apply (f', _) when Sym.equal f f' -> true
   | _ -> false
 
 let is_good (ct : Sctypes.t) (IT (it_, bt)) = 
@@ -184,7 +162,7 @@ let mentions_good ct =
 
 let preds_of t =
   let add_p s = function
-    | IT (Pred (id, _), _) -> SymSet.add id s
+    | IT (Apply (id, _), _) -> SymSet.add id s
     | _ -> s
   in
   fold_subterms (fun _ -> add_p) SymSet.empty t
@@ -209,16 +187,6 @@ let rec subst (su : typed subst) (IT (it, bt)) =
      IT (Const const, bt)
   | Binop (bop, t1, t2) -> 
      IT (Binop (bop, subst su t1, subst su t2), bt)
-  | IntToReal it -> 
-     IT (IntToReal (subst su it), bt)
-  | RealToInt it -> 
-     IT (RealToInt (subst su it), bt)
-  | And its -> 
-     IT (And (map (subst su) its), bt)
-  | Or its -> 
-     IT (Or (map (subst su) its), bt)
-  | Impl (it, it') -> 
-     IT (Impl (subst su it, subst su it'), bt)
   | Not it -> 
      IT (Not (subst su it), bt)
   | ITE (it,it',it'') -> 
@@ -248,16 +216,14 @@ let rec subst (su : typed subst) (IT (it, bt)) =
      IT (DatatypeMember (subst su t, m), bt)
   | DatatypeIsCons (tag, t) ->
      IT (DatatypeIsCons (tag, subst su t), bt)
-  | IntegerToPointerCast t ->
-     IT (IntegerToPointerCast (subst su t), bt)
-  | PointerToIntegerCast t ->
-     IT (PointerToIntegerCast (subst su t), bt)
+  | Cast (cbt, t) ->
+     IT (Cast (cbt, subst su t), bt)
   | MemberOffset (tag, member) ->
      IT (MemberOffset (tag, member), bt)
   | ArrayOffset (tag, t) ->
      IT (ArrayOffset (tag, subst su t), bt)
-  | AlignedI t -> 
-     IT (AlignedI {t= subst su t.t; align= subst su t.align}, bt)
+  | Aligned t -> 
+     IT (Aligned {t= subst su t.t; align= subst su t.align}, bt)
   | Representable (rt, t) -> 
      IT (Representable (rt, subst su t), bt)
   | Good (rt, t) -> 
@@ -285,8 +251,8 @@ let rec subst (su : typed subst) (IT (it, bt)) =
   | MapDef ((s, abt), body) ->
      let s, body = suitably_alpha_rename su.relevant (s, abt) body in
      IT (MapDef ((s, abt), subst su body), bt)
-  | Pred (name, args) ->
-     IT (Pred (name, List.map (subst su) args), bt)
+  | Apply (name, args) ->
+     IT (Apply (name, List.map (subst su) args), bt)
 
 and alpha_rename (s, bt) body =
   let s' = Sym.fresh_same s in
@@ -349,11 +315,11 @@ let is_eq = function
   | _ -> None
 
 let is_and = function
-  | IT (And its, _) -> Some its
+  | IT (Binop (And, it, it'), _) -> Some (it, it')
   | _ -> None
 
 let is_or = function
-  | IT (Or its, _) -> Some its
+  | IT (Binop (Or, it, it'), _) -> Some (it, it')
   | _ -> None
 
 let is_not = function
@@ -369,10 +335,11 @@ let is_le = function
   | _ -> None
 
 
+let rec split_and it =
+  match is_and it with
+  | Some (it1, it2) -> split_and it1 @ split_and it2
+  | None -> [it]
 
-let rec split_and it = match is_and it with
-  | Some its -> List.concat (List.map split_and its)
-  | _ -> [it]
 
 (* shorthands *)
 
@@ -395,24 +362,16 @@ let gt_ (it, it') = lt_ (it', it)
 let ge_ (it, it') = le_ (it', it)
 
 (* bool_op *)
-let and_ its = IT (And its, BT.Bool)
-let and2_ (it, it') = match is_and it' with
-  | None -> and_ [it; it']
-  | Some its -> and_ (it :: its)
-let and3_ its = match its with
-  | [it] -> it
-  | _ -> and_ its
-let or_ its = IT (Or its, BT.Bool)
-let or2_ (it, it') = match is_or it' with
-  | None -> or_ [it; it']
-  | Some its -> or_ (it :: its)
-let impl_ (it, it') = IT (Impl (it, it'), BT.Bool)
-let not_ it =
-  match it with
-  | IT (Const (Bool b), _) -> bool_ (not b)
-  | IT (Not a, _) -> a
-  | _ -> IT (Not it, BT.Bool)
+let vargs_binop basevalue binop = function
+  | [] -> basevalue
+  | it::its -> List.fold_left binop it its
 
+let and2_ (it, it') = IT (Binop (And, it, it'), BT.Bool)
+let or2_ (it, it') = IT (Binop (Or, it, it'), BT.Bool)
+let and_ = vargs_binop (bool_ true) (Tools.curry and2_)
+let or_ = vargs_binop (bool_ false) (Tools.curry or2_)
+let impl_ (it, it') = IT (Binop (Impl, it, it'), BT.Bool)
+let not_ it = IT (Not it, BT.Bool)
 let ite_ (it, it', it'') = IT (ITE (it, it', it''), bt it')
 let eq_ (it, it') = IT (Binop (EQ,it, it'), BT.Bool)
 let eq__ it it' = eq_ (it, it')
@@ -449,8 +408,8 @@ let divisible_ (it, it') = eq_ (mod_ (it, it'), int_ 0)
 let rem_f_ (it, it') = mod_ (it, it')
 let min_ (it, it') = IT (Binop (Min,it, it'), bt it)
 let max_ (it, it') = IT (Binop (Max,it, it'), bt it)
-let intToReal_ it = IT (IntToReal it, BT.Real)
-let realToInt_ it = IT (RealToInt it, BT.Integer)
+let intToReal_ it = IT (Cast (Real, it), BT.Real)
+let realToInt_ it = IT (Cast (Integer, it), BT.Integer)
 let xor_no_smt_ (it, it') = IT (Binop (XORNoSMT,it, it'), bt it)
 
 let (%+) t t' = add_ (t, t')
@@ -517,17 +476,19 @@ let ltPointer_ (it, it') = IT (Binop (LTPointer, it, it'), BT.Bool)
 let lePointer_ (it, it') = IT (Binop (LEPointer, it, it'), BT.Bool)
 let gtPointer_ (it, it') = ltPointer_ (it', it)
 let gePointer_ (it, it') = lePointer_ (it', it)
+let cast_ bt it =
+  IT (Cast (bt, it), bt)
 let integerToPointerCast_ it =
-  IT (IntegerToPointerCast it, BT.Loc)
+  cast_ Loc it
 let pointerToIntegerCast_ it =
-  IT (PointerToIntegerCast it, BT.Integer)
+  cast_ Integer it
 let memberOffset_ (tag, member) =
   IT (MemberOffset (tag, member), BT.Integer)
 let arrayOffset_ (ct, t) =
   IT (ArrayOffset (ct, t), BT.Integer)
 
 let isIntegerToPointerCast = function
-  | IT (IntegerToPointerCast _, _) -> true
+  | IT (Cast (BT.Loc, IT (_, BT.Integer)), _) -> true
   | _ -> false
 
 let pointer_offset_ (p, n) =
@@ -605,7 +566,7 @@ let representable_ (t, it) =
 let good_ (sct, it) =
   IT (Good (sct, it), BT.Bool)
 let alignedI_ ~t ~align =
-  IT (AlignedI {t; align}, BT.Bool)
+  IT (Aligned {t; align}, BT.Bool)
 let aligned_ (t, ct) =
   alignedI_ ~t ~align:(int_ (Memory.align_of_ctype ct))
 
@@ -634,7 +595,7 @@ let make_array_ ~item_bt items (* assumed all of item_bt *) =
 
 
 let pred_ name args rbt =
-  IT (Pred (name, args), rbt)
+  IT (Apply (name, args), rbt)
 
 
 (* let let_ sym e body = *)

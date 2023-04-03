@@ -63,19 +63,15 @@ val get_lemma : Locations.t -> Sym.t -> (Locations.t * Global.AT.lemmat) m
 
 val get_resource_predicate_def : Locations.t -> Sym.t ->
     (ResourcePredicates.definition) m
-val get_logical_predicate_def : Locations.t -> Sym.t ->
-    (LogicalPredicates.definition) m
-val todo_get_resource_predicate_def_s : Locations.t -> string ->
-    (Sym.t * ResourcePredicates.definition) m
-val todo_get_logical_predicate_def_s : Locations.t -> string ->
-    (Sym.t * LogicalPredicates.definition) m
+val get_logical_function_def : Locations.t -> Sym.t ->
+    (LogicalFunctions.definition) m
 
 
 val add_struct_decl : Sym.t -> Memory.struct_layout -> (unit) m
 val add_fun_decl : Sym.t -> (Locations.t * ArgumentTypes.ft) -> (unit) m
 val add_lemma : Sym.t -> (Locations.t * ArgumentTypes.lemmat) -> (unit) m
 val add_resource_predicate : Sym.t -> ResourcePredicates.definition -> (unit) m
-val add_logical_predicate : Sym.t -> LogicalPredicates.definition -> (unit) m
+val add_logical_function : Sym.t -> LogicalFunctions.definition -> (unit) m
 val add_datatype : Sym.t -> BaseTypes.datatype_info -> (unit) m
 val add_datatype_constr : Sym.t -> BaseTypes.constr_info -> (unit) m
 

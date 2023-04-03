@@ -15,8 +15,17 @@ type cn_desugaring_state = <|
   cn_lemmata: list (Symbol.identifier * (Symbol.sym * cn_lemma Symbol.sym Ctype.ctype));
 |>
 
-let initial_cn_desugaring_state = <|
-  cn_idents= Map.empty;
+let initial_cn_desugaring_state cn_initial_function_identifiers = 
+  let cn_idents = 
+    List.foldl (fun acc (str, sym) ->
+        let entry = (CN_function, Symbol.Identifier Loc.unknown str) in
+        if Map.member entry acc 
+        then Assert_extra.failwith (str ^ " already registered as CN function name")
+        else Map.insert entry sym acc
+      ) Map.empty cn_initial_function_identifiers
+  in
+<|
+  cn_idents= cn_idents;
   cn_scopes= [Map.empty];
   cn_predicates= [];
   cn_datatypes= [];

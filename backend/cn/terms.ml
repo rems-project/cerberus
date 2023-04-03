@@ -14,6 +14,9 @@ type const =
 [@@deriving eq, ord]
 
 type binop =
+  | And
+  | Or
+  | Impl
   | Add
   | Sub
   | Mul
@@ -39,18 +42,13 @@ type binop =
   | SetDifference
   | SetMember
   | Subset
-[@@deriving eq, ord]
+[@@deriving eq, ord, show]
 
 (* over integers and reals *)
 type 'bt term_ =
   | Const of const
   | Sym of Sym.t
   | Binop of binop * 'bt term * 'bt term
-  | IntToReal of 'bt term
-  | RealToInt of 'bt term
-  | And of 'bt term list
-  | Or of 'bt term list
-  | Impl of 'bt term * 'bt term
   | Not of 'bt term
   | ITE of 'bt term * 'bt term * 'bt term
   | EachI of (int * Sym.t * int) * 'bt term
@@ -60,14 +58,12 @@ type 'bt term_ =
   | Struct of BaseTypes.tag * (BaseTypes.member * 'bt term) list
   | StructMember of 'bt term * BaseTypes.member
   | StructUpdate of ('bt term * BaseTypes.member) * 'bt term
-  | Record of (Sym.t * 'bt term) list
-  | RecordMember of 'bt term * Sym.t
-  | RecordUpdate of ('bt term * Sym.t) * 'bt term
+  | Record of (Id.t * 'bt term) list
+  | RecordMember of 'bt term * Id.t
+  | RecordUpdate of ('bt term * Id.t) * 'bt term
   | DatatypeCons of Sym.t * 'bt term
-  | DatatypeMember of 'bt term * Sym.t
+  | DatatypeMember of 'bt term * Id.t
   | DatatypeIsCons of Sym.t * 'bt term
-  | IntegerToPointerCast of 'bt term
-  | PointerToIntegerCast of 'bt term
   | MemberOffset of BaseTypes.tag * Id.t
   | ArrayOffset of Sctypes.t (*element ct*) * 'bt term (*index*)
   | Nil
@@ -79,12 +75,13 @@ type 'bt term_ =
   | ArrayToList of 'bt term * 'bt term * 'bt term
   | Representable of Sctypes.t * 'bt term
   | Good of Sctypes.t * 'bt term
-  | AlignedI of {t : 'bt term; align : 'bt term}
+  | Aligned of {t : 'bt term; align : 'bt term}
   | MapConst of BaseTypes.t * 'bt term
   | MapSet of 'bt term * 'bt term * 'bt term
   | MapGet of 'bt term * 'bt term
   | MapDef of (Sym.t * BaseTypes.t) * 'bt term
-  | Pred of Sym.t * ('bt term) list
+  | Apply of Sym.t * ('bt term) list
+  | Cast of BaseTypes.t * 'bt term
 
 and 'bt term =
   | IT of 'bt term_ * 'bt
@@ -96,7 +93,7 @@ let compare = compare_term
 
 let pp : 'bt 'a. ?atomic:bool -> ?f:('bt term -> Pp.doc -> Pp.doc) -> 'bt term -> Pp.doc =
   fun ?(atomic=false) ?(f=fun _ x -> x) ->
-  let rec aux atomic (IT (it, _) as it_) =
+  let rec aux atomic (IT (it, _)) =
     let aux b x = f x (aux b x) in
     (* Without the `lparen` inside `nest 2`, the printed `rparen` is indented
        by 2 (wrt to the lparen). I don't quite understand it, but it works. *)
@@ -106,9 +103,6 @@ let pp : 'bt 'a. ?atomic:bool -> ?f:('bt term -> Pp.doc -> Pp.doc) -> 'bt term -
       else
         Pp.group pped in
     let break_op x = break 1 ^^ x ^^ space in
-
-    
-
     match it with
     | Const const ->
        begin match const with
@@ -130,6 +124,12 @@ let pp : 'bt 'a. ?atomic:bool -> ?f:('bt term -> Pp.doc -> Pp.doc) -> 'bt term -
     (*    begin match arith_op with *)
     | Binop (bop, it1, it2) ->
        begin match bop with
+       | And ->
+          mparens (flow (break_op (ampersand ^^ ampersand)) [aux true it1; aux true it2])
+       | Or ->
+          mparens (flow (break_op (bar ^^ bar)) [aux true it1; aux true it2])
+       | Impl ->
+          mparens (flow (break_op (minus ^^ rangle ())) [aux true it1; aux true it2])
        | Add ->
           mparens (flow (break_op plus) [aux true it1; aux true it2])
        | Sub ->
@@ -181,27 +181,6 @@ let pp : 'bt 'a. ?atomic:bool -> ?f:('bt term -> Pp.doc -> Pp.doc) -> 'bt term -
        | Subset ->
           c_app !^"subset" [aux false it1; aux false it2]
        end
-       (* end *)
-    (* | Bool_op bool_op -> *)
-    (*    begin match bool_op with *)
-       | IntToReal t ->
-          c_app !^"intToReal" [aux false t]
-       | RealToInt t ->
-          c_app !^"realToInt" [aux false t]
-       | And o ->
-          let rec consolidate = function
-            | IT (And o, _) -> List.concat_map consolidate o
-            | it_ -> [ it_ ] in
-          let o = consolidate it_ in
-          mparens (flow_map (break_op !^"&&") (aux true) o)
-       | Or o ->
-          let rec consolidate = function
-            | IT (Or o, _) -> List.concat_map consolidate o
-            | it_ -> [ it_ ] in
-          let o = consolidate it_ in
-          mparens (flow_map (break_op !^"||") (aux true) o)
-       | Impl (o1,o2) ->
-          mparens (flow (break_op (equals ^^ rangle ())) [aux true o1; aux true o2])
        | Not (o1) ->
           mparens (!^"!" ^^ parens (aux false o1))
        | ITE (o1,o2,o3) ->
@@ -232,25 +211,23 @@ let pp : 'bt 'a. ?atomic:bool -> ?f:('bt term -> Pp.doc -> Pp.doc) -> 'bt term -
     (*    begin match record_op with *)
        | Record members ->
          align @@ lbrace ^^^ flow_map (break 0 ^^ comma ^^ space) (fun (member,it) ->
-             Pp.group @@ (Pp.group @@ dot ^^ Sym.pp member ^^^ equals) ^^^ align (aux false it)
+             Pp.group @@ (Pp.group @@ dot ^^ Id.pp member ^^^ equals) ^^^ align (aux false it)
            ) members ^^^ rbrace
        | RecordMember (t, member) ->
-          prefix 0 0 (aux true t) (dot ^^ Sym.pp member)
+          prefix 0 0 (aux true t) (dot ^^ Id.pp member)
        | RecordUpdate ((t, member), v) ->
-          mparens (aux true t ^^ braces @@ (Pp.group @@ dot ^^ Sym.pp member ^^^ equals) ^^^ align (aux true v))
+          mparens (aux true t ^^ braces @@ (Pp.group @@ dot ^^ Id.pp member ^^^ equals) ^^^ align (aux true v))
        (* end *)
     (* | Datatype_op datatype_op -> *)
     (*    begin match datatype_op with *)
        | DatatypeCons (nm, members_rec) -> mparens (Sym.pp nm ^^^ aux false members_rec)
-       | DatatypeMember (x, nm) -> aux true x ^^ dot ^^ Sym.pp nm
+       | DatatypeMember (x, nm) -> aux true x ^^ dot ^^ Id.pp nm
        | DatatypeIsCons (nm, x) -> mparens (aux false x ^^^ !^ "is" ^^^ Sym.pp nm)
        (* end *)
     (* | Pointer_op pointer_op -> *)
     (*    begin match pointer_op with *)
-       | IntegerToPointerCast t ->
-          mparens (align @@ parens(!^"pointer") ^^ break 0 ^^ aux true t)
-       | PointerToIntegerCast t ->
-          mparens (align @@ parens(!^"integer") ^^ break 0 ^^ aux true t)
+       | Cast (cbt, t) ->
+          mparens (align @@ parens(BaseTypes.pp cbt) ^^ break 0 ^^ aux true t)
        | MemberOffset (tag, member) ->
           mparens (c_app !^"offsetof" [Sym.pp tag; Id.pp member])
        | ArrayOffset (ct, t) ->
@@ -258,7 +235,7 @@ let pp : 'bt 'a. ?atomic:bool -> ?f:('bt term -> Pp.doc -> Pp.doc) -> 'bt term -
        (* end *)
     (* | CT_pred ct_pred -> *)
     (*    begin match ct_pred with *)
-       | AlignedI t ->
+       | Aligned t ->
           c_app !^"aligned" [aux false t.t; aux false t.align]
        | Representable (rt, t) ->
           c_app !^"repr" [CT.pp rt; aux false t]
@@ -315,7 +292,7 @@ let pp : 'bt 'a. ?atomic:bool -> ?f:('bt term -> Pp.doc -> Pp.doc) -> 'bt term -
       (*  | it_ -> aux true it_ *)
       (*  in *)
       (*  prefix 2 0 root_pp @@ align (flow_map (break 0) pp_op ops) *)
-    | Pred (name, args) ->
+    | Apply (name, args) ->
        c_app (Sym.pp name) (List.map (aux false) args)
   in
   fun (it : 'bt term) -> aux atomic it
@@ -344,31 +321,9 @@ let rec dtree (IT (it_, bt)) =
   | Const Unit -> Dleaf !^"unit"
   | Const (Default _) -> Dleaf !^"default"
   | Const Null -> Dleaf !^"null"
-  | Binop (Add, t1, t2) -> Dnode (pp_ctor "Add", [dtree t1; dtree t2])
-  | Binop (Sub, t1, t2) -> Dnode (pp_ctor "Sub", [dtree t1; dtree t2])
-  | Binop (Mul, t1, t2) -> Dnode (pp_ctor "Mul", [dtree t1; dtree t2])
-  | Binop (MulNoSMT, t1, t2) -> Dnode (pp_ctor "MulNoSMT", [dtree t1; dtree t2])
-  | Binop (Div, t1, t2) -> Dnode (pp_ctor "Div", [dtree t1; dtree t2])
-  | Binop (DivNoSMT, t1, t2) -> Dnode (pp_ctor "DivNoSMT", [dtree t1; dtree t2])
-  | Binop (Exp, t1, t2) -> Dnode (pp_ctor "Exp", [dtree t1; dtree t2])
-  | Binop (ExpNoSMT, t1, t2) -> Dnode (pp_ctor "ExpNoSMT", [dtree t1; dtree t2])
-  | Binop (Rem, t1, t2) -> Dnode (pp_ctor "Rem", [dtree t1; dtree t2])
-  | Binop (RemNoSMT, t1, t2) -> Dnode (pp_ctor "RemNoSMT", [dtree t1; dtree t2])
-  | Binop (Mod, t1, t2) -> Dnode (pp_ctor "Mod", [dtree t1; dtree t2])
-  | Binop (ModNoSMT, t1, t2) -> Dnode (pp_ctor "ModNoSMT", [dtree t1; dtree t2])
-  | Binop (LT, t1, t2) -> Dnode (pp_ctor "LT", [dtree t1; dtree t2])
-  | Binop (LE, t1, t2) -> Dnode (pp_ctor "LE", [dtree t1; dtree t2])
-  | Binop (Min, t1, t2) -> Dnode (pp_ctor "Min", [dtree t1; dtree t2])
-  | Binop (Max, t1, t2) -> Dnode (pp_ctor "Max", [dtree t1; dtree t2])
-  | (IntToReal t) -> Dnode (pp_ctor "IntToReal", [dtree t])
-  | (RealToInt t) -> Dnode (pp_ctor "RealToInt", [dtree t])
-  | Binop (XORNoSMT, t1, t2) -> Dnode (pp_ctor "XORNoSMT", [dtree t1; dtree t2])
-  | (And ts) -> Dnode (pp_ctor "And", List.map dtree ts)
-  | (Or ts) -> Dnode (pp_ctor "Or", List.map dtree ts)
-  | (Impl (t1, t2)) -> Dnode (pp_ctor "Impl", [dtree t1; dtree t2])
+  | Binop (op, t1, t2) -> Dnode (pp_ctor (show_binop op), [dtree t1; dtree t2])
   | (Not t) -> Dnode (pp_ctor "Not", [dtree t])
   | (ITE (t1, t2, t3)) -> Dnode (pp_ctor "Impl", [dtree t1; dtree t2; dtree t3])
-  | Binop (EQ, t1, t2) -> Dnode (pp_ctor "EQ", [dtree t1; dtree t2])
   | (EachI ((starti,i,endi), body)) -> Dnode (pp_ctor "EachI", [Dleaf !^(string_of_int starti); Dleaf (Sym.pp i); Dleaf !^(string_of_int endi); dtree body])
   | (Tuple its) -> Dnode (pp_ctor "Tuple", List.map dtree its)
   | (NthTuple (i, t)) -> Dnode (pp_ctor "NthTuple", [Dleaf !^(string_of_int i); dtree t])
@@ -379,29 +334,26 @@ let rec dtree (IT (it_, bt)) =
   | (StructUpdate ((base, member), v)) ->
      Dnode (pp_ctor "StructUpdate", [dtree base; Dleaf (Id.pp member); dtree v])
   | (Record members) ->
-     Dnode (pp_ctor "Record", List.map (fun (member,e) -> Dnode (pp_ctor "Member", [Dleaf (Sym.pp member); dtree e])) members)
+     Dnode (pp_ctor "Record", List.map (fun (member,e) -> Dnode (pp_ctor "Member", [Dleaf (Id.pp member); dtree e])) members)
   | (RecordMember (e, member)) ->
-     Dnode (pp_ctor "RecordMember", [dtree e; Dleaf (Sym.pp member)])
+     Dnode (pp_ctor "RecordMember", [dtree e; Dleaf (Id.pp member)])
   | (RecordUpdate ((base, member), v)) ->
-     Dnode (pp_ctor "RecordUpdate", [dtree base; Dleaf (Sym.pp member); dtree v])
+     Dnode (pp_ctor "RecordUpdate", [dtree base; Dleaf (Id.pp member); dtree v])
   | (DatatypeCons (s, t)) ->
      Dnode (pp_ctor "DatatypeCons", [Dleaf (Sym.pp s); dtree t])
   | (DatatypeMember (t, s)) ->
-     Dnode (pp_ctor "DatatypeMember", [dtree t; Dleaf (Sym.pp s)])
+     Dnode (pp_ctor "DatatypeMember", [dtree t; Dleaf (Id.pp s)])
   | (DatatypeIsCons (s, t)) ->
      Dnode (pp_ctor "DatatypeIsCons", [Dleaf (Sym.pp s); dtree t])
-  | Binop (LTPointer, t1, t2) -> Dnode (pp_ctor "LTPointer", [dtree t1; dtree t2])
-  | Binop (LEPointer, t1, t2) -> Dnode (pp_ctor "LEPointer", [dtree t1; dtree t2])
-  | (IntegerToPointerCast t) -> Dnode (pp_ctor "IntegerToPointerCast", [dtree t])
-  | (PointerToIntegerCast t) -> Dnode (pp_ctor "PointerToIntegerCast", [dtree t])
+  | Cast (cbt, t) -> Dnode (pp_ctor "Cast", [Dleaf (BaseTypes.pp cbt); dtree t])
   | (MemberOffset (tag, id)) -> Dnode (pp_ctor "MemberOffset", [Dleaf (Sym.pp tag); Dleaf (Id.pp id)])
   | (ArrayOffset (ty, t)) -> Dnode (pp_ctor "ArrayOffset", [Dleaf (Sctypes.pp ty); dtree t])
   | (Representable (ty, t)) -> Dnode (pp_ctor "Representable", [Dleaf (Sctypes.pp ty); dtree t])
   | (Good (ty, t)) -> Dnode (pp_ctor "Good", [Dleaf (Sctypes.pp ty); dtree t])
-  | (AlignedI a) -> Dnode (pp_ctor "AlignedI", [dtree a.t; dtree a.align])
+  | (Aligned a) -> Dnode (pp_ctor "Aligned", [dtree a.t; dtree a.align])
   | (MapConst (bt, t)) -> Dnode (pp_ctor "MapConst", [dtree t])
   | (MapSet (t1, t2, t3)) -> Dnode (pp_ctor "MapSet", [dtree t1; dtree t2; dtree t3])
   | (MapGet (t1, t2)) -> Dnode (pp_ctor "MapGet", [dtree t1; dtree t2])
   | (MapDef ((s, bt), t)) -> Dnode (pp_ctor "MapDef", [Dleaf (Sym.pp s); dtree t])
-  | Pred (f, args) -> Dnode (pp_ctor "Pred", (Dleaf (Sym.pp f) :: List.map dtree args))
+  | Apply (f, args) -> Dnode (pp_ctor "Apply", (Dleaf (Sym.pp f) :: List.map dtree args))
   | _ -> failwith "todo"

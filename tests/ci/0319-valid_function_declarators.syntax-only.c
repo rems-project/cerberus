@@ -14,10 +14,10 @@ int (*fun2(int arg, int x))(int x, int not_arg) {
   return 0;
 }
 
-struct S {
-  void* (*f)(struct S* s);
+struct S2 {
+  void* (*f)(struct S2* s);
 };
-void* (*fun3(struct S *p))(struct S*){
+void* (*fun3(struct S2 *p))(struct S2*){
   return p->f;
 }
 

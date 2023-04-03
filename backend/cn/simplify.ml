@@ -98,29 +98,26 @@ module IndexTerms = struct
 
 
 
-  let flatten = function
-    | IT (And fs, _) -> List.map LC.t_ fs
-    | f -> [LC.t_ f]
 
 
   let rec record_member_reduce it member =
     match IT.term it with
-      | Record members -> List.assoc Sym.equal member members
+      | Record members -> List.assoc Id.equal member members
       | RecordUpdate ((t, m), v) ->
-        if Sym.equal m member then v
+        if Id.equal m member then v
         else record_member_reduce t member
       | ITE (cond, it1, it2) ->
         ite_ (cond, record_member_reduce it1 member, record_member_reduce it2 member)
       | _ ->
         let member_tys = BT.record_bt (IT.bt it) in
-        let member_bt = List.assoc Sym.equal member member_tys in
+        let member_bt = List.assoc Id.equal member member_tys in
         IT.recordMember_ ~member_bt (it, member)
 
   let rec datatype_member_reduce it member member_bt =
     match IT.term it with
       | DatatypeCons (nm, members_rec) ->
         let members = BT.record_bt (IT.bt members_rec) in
-        if List.exists (Sym.equal member) (List.map fst members)
+        if List.exists (Id.equal member) (List.map fst members)
         then record_member_reduce members_rec member
         else IT.IT (DatatypeMember (it, member), member_bt)
       | ITE (cond, it1, it2) ->
@@ -337,58 +334,32 @@ module IndexTerms = struct
        let b = aux b in
        if IT.equal a b then a else
        IT (Binop (Max, a, b), the_bt)
-    | IntToReal a ->
-       let a = aux a in
-       IT (IntToReal a, the_bt)
-    | RealToInt a ->
-       let a = aux a in
-       IT (RealToInt a, the_bt)
     | Binop (XORNoSMT, a, b) ->
        IT (Binop (XORNoSMT, aux a, aux b), the_bt)
 
-    | And its ->
-       let rec make acc = function
-         | [] -> 
-            begin match acc with
-            | [] -> bool_ true
-            | [r] -> r
-            | _ -> and_ (List.rev acc)
-            end
-         | it :: its ->
-            let it = aux it in
-            begin match it with
-            | IT (Const (Bool true), _) -> make acc its
-            | IT (Const (Bool false), _) -> bool_ false
-            | _ when List.exists (fun c -> IT.equal (not_ c) it || IT.equal c (not_ it)) acc -> bool_ false
-            | _ when List.mem IT.equal it acc -> make acc its
-            | IT (Not (IT (Or ys, _)), _) -> make acc ((List.map not_ ys) @ its)
-            | IT (And ys, _) -> make acc (ys @ its)
-            | _ -> make (it :: acc) its
-            end
-       in
-       make [] its
-    | Or its ->
-       let its = List.map aux its in
-       let rec make acc = function
-         | [] ->
-            begin match acc with
-            | [] -> bool_ false
-            | [r] -> r
-            | _ -> or_ (List.rev acc)
-            end
-         | it :: its ->
-            begin match it with
-            | IT (Const (Bool true), _) -> bool_ true
-            | IT (Const (Bool false), _) -> make acc its
-            | _ when List.exists (fun c -> IT.equal (not_ c) it || IT.equal c (not_ it)) acc -> bool_ true 
-            | _ when List.mem IT.equal it acc -> make acc its
-            | IT (Not (IT (And ys, _)), _) -> make acc ((List.map not_ ys) @ its)
-            | IT (Or ys, _) -> make acc (ys @ its)
-            | _ -> make (it :: acc) its
-            end
-       in
-       make [] its
-    | Impl (a, b) ->
+    | Binop (And, it1, it2) ->
+      let it1 = aux it1 in
+      let it2 = aux it2 in
+      begin match it1, it2 with
+      | IT (Const (Bool true), _), _ -> it2
+      | _, IT (Const (Bool true), _) -> it1
+      | IT (Const (Bool false), _), _ -> bool_ false
+      | _, IT (Const (Bool false), _) -> bool_ false
+      | _ when IT.equal it1 it2 -> it1
+      | _ -> IT (Binop (And, it1, it2), the_bt)
+      end
+    | Binop (Or, it1, it2) ->
+      let it1 = aux it1 in
+      let it2 = aux it2 in
+      begin match it1, it2 with
+      | IT (Const (Bool true), _), _ -> bool_ true
+      | _, IT (Const (Bool true), _) -> bool_ true
+      | IT (Const (Bool false),_), _ -> it2
+      | _, IT (Const (Bool false),_) -> it1
+      | _ when IT.equal it1 it2 -> it1
+      | _ -> IT (Binop (Or, it1, it2), the_bt)
+      end
+    | Binop (Impl, a, b) ->
        let a = aux a in
        let b = aux b in
        if IT.equal a b then IT (Const (Bool true), the_bt)
@@ -403,7 +374,7 @@ module IndexTerms = struct
        | _, IT (Const (Bool false), _) ->
           not_ a
        | _ ->
-          IT (Impl (a, b), the_bt)
+          IT (Binop (Impl, a, b), the_bt)
        end
     | Not a ->
        let a = aux a in
@@ -428,10 +399,6 @@ module IndexTerms = struct
     | Binop (EQ, a, b) ->
        let a = aux a in
        let b = aux b in
-       if isIntegerToPointerCast a || isIntegerToPointerCast b
-       then
-       aux (eq_ (pointerToIntegerCast_ a, pointerToIntegerCast_ b))
-       else
        begin match a, b with
        | _ when IT.equal a b ->
          IT (Const (Bool true), the_bt) 
@@ -457,21 +424,16 @@ module IndexTerms = struct
           aux (and_ (List.map2 eq__ items1 items2))
        | IT (Record members1, _),
          IT (Record members2, _)  ->
-          assert (List.for_all2 (fun x y -> Sym.equal (fst x) (fst y)) members1 members2);
+          assert (List.for_all2 (fun x y -> Id.equal (fst x) (fst y)) members1 members2);
           aux (and_ (List.map2 (fun x y -> eq_ (snd x, snd y)) members1 members2))
        | IT (DatatypeCons (nm1, members1), _),
          IT (DatatypeCons (nm2, members2), _)  ->
           if Sym.equal nm1 nm2
           then aux (eq_ (members1, members2))
           else bool_ false
-       | IT (IntegerToPointerCast a, _), 
-         IT (IntegerToPointerCast b, _) ->
-          eq_ (a, b)
-       | IT (PointerToIntegerCast a, _), 
-         IT (PointerToIntegerCast b, _) ->
-          eq_ (a, b)
-       | IT (PointerToIntegerCast a, _), b ->
-          eq_ (a, integerToPointerCast_ b)
+       | IT (Cast (bt1, it1), _),
+         IT (Cast (bt2, it2), _) when BT.equal bt1 bt2 ->
+         aux (eq_ (it1, it2))
        | _, _ ->
           eq_ (a, b)
        end
@@ -565,22 +527,9 @@ module IndexTerms = struct
        else if IT.equal a b
        then bool_ true
        else IT (Binop (LEPointer, a, b), the_bt)
-    | IntegerToPointerCast a ->
+    | Cast (cbt, a) ->
        let a = aux a in
-       begin match a with
-       | IT (PointerToIntegerCast b, _) ->
-          b
-       | _ ->
-          IT (IntegerToPointerCast a, the_bt)
-       end
-    | PointerToIntegerCast a ->
-       let a = aux a in
-       begin match a with
-       | IT (IntegerToPointerCast b, _) ->
-          b
-       | _ ->
-          IT (PointerToIntegerCast a, the_bt)
-       end
+       IT (Cast (cbt, a), the_bt)
     | MemberOffset (tag, member) ->
        let layout = SymMap.find tag simp_ctxt.global.struct_decls in
        int_ (Option.get (Memory.member_offset layout member))
@@ -595,9 +544,8 @@ module IndexTerms = struct
        IT (Representable (ct, aux t), the_bt)
     | Good (ct, t) ->
        IT (Good (ct, aux t), the_bt)
-    | AlignedI a -> 
-       IT (AlignedI {t = aux a.t; align = aux a.align}, the_bt)
-
+    | Aligned a -> 
+       IT (Aligned {t = aux a.t; align = aux a.align}, the_bt)
     | MapConst (index_bt, t) ->
        let t = aux t in
        IT (MapConst (index_bt, t), the_bt)
@@ -640,13 +588,13 @@ module IndexTerms = struct
        let body = aux body in
        IT (MapDef ((s', abt), body), the_bt)
 
-    | Pred (name, args) ->
+    | Apply (name, args) ->
 
       let args = List.map aux args in
-      let def = SymMap.find name simp_ctxt.global.logical_predicates in
-      let t = IT (Pred (name, args), the_bt) in
+      let def = SymMap.find name simp_ctxt.global.logical_functions in
+      let t = IT (Apply (name, args), the_bt) in
       if not inline_functions then t else 
-        begin match LogicalPredicates.try_open_pred_to_term def name args with
+        begin match LogicalFunctions.try_open_fun_to_term def name args with
         | Some inlined -> aux inlined
         | None -> t
         end
@@ -657,7 +605,7 @@ module IndexTerms = struct
   let simp_flatten simp_ctxt term =
     match simp simp_ctxt term with
     | IT (Const (Bool true), _) -> []
-    | IT (And lcs, _) -> lcs
+    | IT (Binop (And, lc1, lc2), _) -> [lc1;lc2]
     | lc -> [lc]
 
 

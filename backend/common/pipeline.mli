@@ -41,6 +41,7 @@ val load_core_impl:
 val cpp: (configuration * io_helpers) -> filename:string -> (string, Location_ocaml.t * Errors.cause) Exception.exceptM
 
 val c_frontend:
+  ?cnnames: (string * Symbol.sym) list ->
   (configuration * io_helpers) ->
   (((string, Symbol.sym) Pmap.map * (unit, unit) Core.generic_fun_map) * unit Core.generic_impl) ->
   filename:string ->

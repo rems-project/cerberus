@@ -353,12 +353,12 @@ let add_loc_trace loc =
   let@ locs = get_loc_trace () in
   set_loc_trace (loc :: locs)
 
-let in_loc_trace tr f =
-  let@ prev_tr = get_loc_trace () in
-  let@ _ = set_loc_trace tr in
-  let@ x = f () in
-  let@ _ = set_loc_trace prev_tr in
-  return x
+(* let in_loc_trace tr f = *)
+(*   let@ prev_tr = get_loc_trace () in *)
+(*   let@ _ = set_loc_trace tr in *)
+(*   let@ x = f () in *)
+(*   let@ _ = set_loc_trace prev_tr in *)
+(*   return x *)
 
 let finish_trace_step do_add ctxt1 () =
   let@ ctxt2 = get () in
@@ -379,59 +379,18 @@ let get_resource_predicate_def loc id =
   match Global.get_resource_predicate_def global id with
     | Some def -> return def
     | None -> fail (fun _ -> {loc; msg = Unknown_resource_predicate {id;
-        logical = Option.is_some (Global.get_logical_predicate_def global id)}})
+        logical = Option.is_some (Global.get_logical_function_def global id)}})
 
 
-let todo_opt_get_resource_predicate_def_s id =
+
+
+
+
+let get_logical_function_def loc id =
   let@ global = get_global () in
-  let odef = 
-    SymMap.choose_opt
-      (SymMap.filter (fun s _ -> String.equal (Tools.todo_string_of_sym s) id)
-         global.resource_predicates)
-  in
-  return odef
-
-let todo_opt_get_logical_predicate_def_s id =
-  let@ global = get_global () in
-  let odef = 
-    SymMap.choose_opt
-      (SymMap.filter (fun s _ -> String.equal (Tools.todo_string_of_sym s) id)
-         global.logical_predicates)
-  in
-  return odef
-
-let todo_get_resource_predicate_def_s loc id =
-  let@ odef = todo_opt_get_resource_predicate_def_s id in
-  match odef with
+  match Global.get_logical_function_def global id with
   | Some def -> return def
-  | None -> 
-     let@ odef = todo_opt_get_logical_predicate_def_s id in
-     fail (fun _ -> {loc; msg = Unknown_resource_predicate {id = Sym.fresh_named id;
-                                  logical = Option.is_some odef}})
-
-let todo_get_logical_predicate_def_s loc id =
-  let@ odef = todo_opt_get_logical_predicate_def_s id in
-  match odef with
-  | Some def -> return def
-  | None -> 
-     let@ odef = todo_opt_get_resource_predicate_def_s id in
-     fail (fun _ -> {loc; msg = Unknown_logical_predicate {id = Sym.fresh_named id;
-                                  resource = Option.is_some odef}})
-
-
-let get_resource_predicate_def_s loc id =
-  let@ global = get_global () in
-  match Global.get_resource_predicate_def global id with
-  | Some def -> return def
-  | None -> fail (fun _ -> {loc; msg = Unknown_resource_predicate {id;
-      logical = Option.is_some (Global.get_logical_predicate_def global id)}})
-
-
-let get_logical_predicate_def loc id =
-  let@ global = get_global () in
-  match Global.get_logical_predicate_def global id with
-  | Some def -> return def
-  | None -> fail (fun _ -> {loc; msg = Unknown_logical_predicate {id;
+  | None -> fail (fun _ -> {loc; msg = Unknown_logical_function {id;
       resource = Option.is_some (Global.get_resource_predicate_def global id)}})
 
 let get_struct_decl loc tag = 
@@ -496,9 +455,9 @@ let add_resource_predicate name entry =
   set_global { global with resource_predicates = Global.SymMap.add name entry global.resource_predicates }
 
 
-let add_logical_predicate name entry = 
+let add_logical_function name entry = 
   let@ global = get_global () in
-  set_global { global with logical_predicates = Global.SymMap.add name entry global.logical_predicates }
+  set_global { global with logical_functions = Global.SymMap.add name entry global.logical_functions }
 
 let add_datatype name entry = 
   let@ global = get_global () in

@@ -101,7 +101,7 @@ let c_function_to_it2 fsym rbt args body label_defs : (IT.t) m  =
 
 let c_fun_to_it id_loc (id : Sym.t) fsym def
         (fn : 'bty mu_fun_map_decl) =
-  let def_args = def.LogicalPredicates.args
+  let def_args = def.LogicalFunctions.args
     |> List.map IndexTerms.sym_ in
   match fn with
   | M_Proc (loc, args_and_body, _trusted, _) ->
@@ -134,12 +134,12 @@ let c_fun_to_it id_loc (id : Sym.t) fsym def
         msg = Generic (Pp.string ("c_fun_to_it: not defined: " ^ Sym.pp_string fsym))}
 
 let upd_def loc sym def_tm logical_predicates =
-  let open LogicalPredicates in
+  let open LogicalFunctions in
   let@ (def, rem) = match List.partition (fun (sym2, _) -> Sym.equal sym sym2)
     logical_predicates
   with
   | ([], _) -> fail {loc;
-        msg = Unknown_logical_predicate {id = sym; resource = false}}
+        msg = Unknown_logical_function {id = sym; resource = false}}
   | ([(_, def)], rem) -> return (def, rem)
   | _ -> fail {loc;
         msg = Generic (Pp.typ (Pp.string "logical predicate multiply defined") (Sym.pp sym))}
@@ -155,7 +155,7 @@ let add_c_fun_defs logical_predicates log_c_defs =
   let@ conv_defs = ListM.mapM (fun (fsym, fbody, loc, pred_sym) ->
         let@ def = match SymMap.find_opt pred_sym pred_def_map with
           | Some def -> return def
-          | None -> fail {loc; msg = Unknown_logical_predicate
+          | None -> fail {loc; msg = Unknown_logical_function
                 {id = pred_sym; resource = false}}
         in
         let@ it = c_fun_to_it loc pred_sym fsym def fbody in
