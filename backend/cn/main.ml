@@ -141,12 +141,13 @@ let generate_c_binop = function
 
 
 let rec generate_c_expr ((CNExpr (loc, expr_)) as expr) =
+  (* let open Cn_to_ail in *)
   match expr_ with 
-  | CNExpr_const CNConst_NULL -> ""
-  | CNExpr_const (CNConst_integer _) | CNExpr_value_of_c_atom _ -> Cn_to_ail.(pp_ail (cn_to_ail_expr expr))
+  | CNExpr_const CNConst_NULL
+  | CNExpr_const (CNConst_integer _) 
+  | CNExpr_value_of_c_atom _ -> Cn_to_ail.(pp_ail (cn_to_ail_expr expr))
   | CNExpr_const (CNConst_bool b) -> string_of_bool b
   (* 
-  | CNExpr_const (CNConst_bool b)
   | CNExpr_const CNConst_unit *)
   (*| CNExpr_list es
   | CNExpr_memberof (e, xs)
