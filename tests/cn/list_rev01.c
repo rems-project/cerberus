@@ -7,12 +7,12 @@ struct node {
 
 predicate {integer len} List (pointer p) {
   if ( p == NULL ) {
-    return { len = 0 };
+    return { len: 0 };
   }
   else {
     take Point = Owned<struct node>(p);
-    take R = List (Point.value.next);
-    return { len = R.len + 1 };
+    take R = List (Point.next);
+    return { len: R.len + 1 };
   }
 }
 

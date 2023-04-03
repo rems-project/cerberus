@@ -8,13 +8,13 @@ struct tree_node {
 
 predicate {integer size} Tree (pointer p) {
   if ( p == NULL ) {
-    return { size = 0 };
+    return { size: 0 };
   }
   else {
     take point = Owned<struct tree_node>(p);
-    take left = Tree (point.value.left);
-    take right = Tree (point.value.right);
-    return { size = left.size + right.size + 1 };
+    take left = Tree (point.left);
+    take right = Tree (point.right);
+    return { size: left.size + right.size + 1 };
   }
 }
 
