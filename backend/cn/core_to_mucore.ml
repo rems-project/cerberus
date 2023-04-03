@@ -1197,7 +1197,7 @@ let normalise_globs tagDefs sym g =
        n_expr loc 
          ((C.empty tagDefs, (C.LocalState.init_st).old_states), 
           (Pmap.empty Int.compare, 
-           CF.Cn_desugaring.initial_cn_desugaring_state)) 
+           CF.Cn_desugaring.initial_cn_desugaring_state [])) 
          ([], Pmap.empty Int.compare)
          e 
      in

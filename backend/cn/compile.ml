@@ -42,12 +42,8 @@ type predicate_sig = {
 type env = {
   computationals: SBT.t SymMap.t;
   logicals: SBT.t SymMap.t;
-  pred_names: Sym.t Y.t;
   predicates: predicate_sig SymMap.t;
-  func_names: Sym.t Y.t;
   functions: function_sig SymMap.t;
-  (* state: state_env; *)
-  (* old_states: state_env Y.t; *)
   datatypes : BaseTypes.datatype_info SymMap.t;
   datatype_constrs : BaseTypes.constr_info SymMap.t;
   tagDefs: Mu.mu_tag_definitions;
@@ -56,12 +52,8 @@ type env = {
 let empty tagDefs =
   { computationals = SymMap.empty;
     logicals= SymMap.empty; 
-    pred_names= Y.empty; 
     predicates= SymMap.empty;
-    func_names = Y.empty; 
     functions = SymMap.empty; 
-    (* state= empty_state; *)
-    (* old_states = Y.empty; *)
     datatypes = SymMap.empty; 
     datatype_constrs = SymMap.empty;
     tagDefs; 
@@ -84,8 +76,6 @@ let lookup_computational_or_logical sym env =
   | None -> 
      SymMap.find_opt sym env.computationals
 
-let lookup_pred_name str env =
-  Y.find_opt str env.pred_names
 
 let lookup_predicate sym env =
   SymMap.find_opt sym env.predicates
@@ -93,10 +83,6 @@ let lookup_predicate sym env =
 let lookup_function sym env =
   SymMap.find_opt sym env.functions
 
-let lookup_function_by_name nm env = match Y.find_opt nm env.func_names with
-  | Some sym ->
-    SymMap.find_opt sym env.functions |> Option.map (fun fs -> (sym, fs))
-  | None -> None
 
 
 let lookup_struct_opt sym env =
@@ -124,11 +110,6 @@ let get_datatype_maps env =
    SymMap.bindings env.datatype_constrs)
 
 
-let debug_known_preds env =
-  Pp.debug 2 (lazy (Pp.item "known logical predicates"
-      (Pp.list (fun (nm, _) -> Pp.string nm) (Y.bindings env.func_names))));
-  Pp.debug 2 (lazy (Pp.item "known resource predicate names"
-      (Pp.list (fun (nm, _) -> Pp.string nm) (Y.bindings env.pred_names))))
 
 
 
@@ -164,7 +145,7 @@ let pp_cnexpr_kind expr_ =
   | CNExpr_offsetof (tag, member) -> !^ "(offsetof (_, _))"
   | CNExpr_membershift (e, member) -> !^ "&(_ -> _)"
   | CNExpr_cast (bt, expr) -> !^ "(cast (_, _))"
-  | CNExpr_call (nm, exprs) -> !^ "(" ^^ Id.pp nm ^^^ !^ "(...))"
+  | CNExpr_call (sym, exprs) -> !^ "(" ^^ Sym.pp sym ^^^ !^ "(...))"
   | CNExpr_cons (c_nm, exprs) -> !^ "(" ^^ Sym.pp c_nm ^^^ !^ "{...})"
   | CNExpr_each (sym, r, e) -> !^ "(each ...)"
   | CNExpr_ite (e1, e2, e3) -> !^ "(if ... then ...)"
@@ -278,21 +259,11 @@ open Resultat
 open Effectful.Make(Resultat)
 
 
-let name_to_sym loc nm m = match Y.find_opt nm m with
-  | None ->
-    let sym = Sym.fresh_named nm in
-    return sym
-  | Some _ ->
-    let open TypeErrors in
-    fail {loc; msg = Generic (Pp.string ("redefinition of name: " ^ nm))}
+
 
 
 let add_function loc sym func_sig env =
-  (* upstream of this an incorrect string->sym conversion was done *)
-  let str = Tools.todo_string_of_sym sym in
-  let@ _ = name_to_sym loc str env.func_names in
-  return {env with functions= SymMap.add sym func_sig env.functions;
-    func_names = Y.add str sym env.func_names }
+  return {env with functions= SymMap.add sym func_sig env.functions }
 
 
 let register_cn_functions env (defs: cn_function list) =
@@ -659,21 +630,19 @@ module EffectfulTranslation = struct
             let@ expr = self expr in
             let bt = translate_cn_base_type bt in
             return (IT (Cast (SBT.to_basetype bt, expr), bt))
-        | CNExpr_call (nm, exprs) ->
+        | CNExpr_call (fsym, exprs) ->
             let@ args = ListM.mapM self exprs in
-            let nm_s = Id.pp_string nm in
-            let@ b = liftResultat (Builtins.apply_builtin_funs loc nm_s args) in
+            let@ b = liftResultat (Builtins.apply_builtin_funs loc fsym args) in
             begin match b with
               | Some t -> return t
               | None ->
-                let@ (sym, bt) = match lookup_function_by_name nm_s env with
-                  | Some (sym, fsig) -> return (sym, fsig.return_bty)
+                let@ bt = match lookup_function fsym env with
+                  | Some fsig -> return fsig.return_bty
                   | None ->
-                      debug_known_preds env;
                       fail {loc; msg = Unknown_logical_function
-                          {id = Sym.fresh_named nm_s; resource = false}}
+                          {id = fsym; resource = false}}
                 in
-                return (pred_ sym args (SurfaceBaseTypes.of_basetype bt))
+                return (pred_ fsym args (SurfaceBaseTypes.of_basetype bt))
             end
         | CNExpr_cons (c_nm, exprs) ->
             let@ cons_info = lookup_constr loc c_nm env in

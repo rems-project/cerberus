@@ -539,8 +539,8 @@ let empty_switch_info =
 
 
 (* ========================================================================== *)
-val initial_state: (map string Symbol.sym) * Core.fun_map unit * Core.impl -> state_with_markers
-let initial_state core_eval_stuff = <|
+val initial_state: (map string Symbol.sym) * Core.fun_map unit * Core.impl -> list (string * Symbol.sym) -> state_with_markers
+let initial_state core_eval_stuff cn_eval_stuff = <|
   inner= <|
     aux_supply=      0;
     scope_id_supply= 0;
@@ -566,7 +566,7 @@ let initial_state core_eval_stuff = <|
     current_return_type= Nothing;
     
     loop_attributes= Map.empty;
-    cn_state= Cn_desugaring.initial_cn_desugaring_state;
+    cn_state= Cn_desugaring.initial_cn_desugaring_state cn_eval_stuff;
     
     core_eval_stuff= core_eval_stuff;
   |>;
@@ -588,13 +588,13 @@ let initial_state core_eval_stuff = <|
 (*   <| st with inner= <| st.inner with cn_state = cn_state |> |> *)
 
 
-val eval: forall 'a. (map string Symbol.sym) * Core.fun_map unit * Core.impl -> desugM 'a -> Exception.exceptM (markers_env * 'a) Errors.error
-let cabs_to_ail_effect_eval core_eval_stuff m =
+val eval: forall 'a. (map string Symbol.sym) * Core.fun_map unit * Core.impl -> list (string * Symbol.sym) -> desugM 'a -> Exception.exceptM (markers_env * 'a) Errors.error
+let cabs_to_ail_effect_eval core_eval_stuff cn_eval_stuff m =
   State_exception.eval begin
     m >>= fun res ->
     State_exception.get >>= fun st ->
     State_exception.return (st.markers_env, res)
-  end (initial_state core_eval_stuff)
+  end (initial_state core_eval_stuff cn_eval_stuff)
 let inline eval = cabs_to_ail_effect_eval
 
 

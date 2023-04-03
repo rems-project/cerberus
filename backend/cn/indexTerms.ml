@@ -136,17 +136,7 @@ let fold_subterms : 'a 'bt. ((Sym.t * BT.t) list -> 'a -> 'bt term -> 'a) -> 'a 
   fun f acc t -> fold f [] acc t
 
 
-let todo_is_pred (pred: string) (IT (it_, bt)) = 
-  match pred, it_ with
-  | _, Apply (name, _) when String.equal (Tools.todo_string_of_sym name) pred -> true
-  | "good", Good _ -> true
-  | _ -> false
 
-let todo_mentions_pred (pred: Id.t) =
-  let pred = Id.s pred in
-  fold_subterms (fun _binders acc it ->
-      acc || todo_is_pred pred it
-    ) false
 
 let is_call (f: Sym.t) (IT (it_, bt)) = 
   match it_ with

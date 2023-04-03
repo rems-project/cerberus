@@ -142,7 +142,7 @@ module MakePp (Conf: PP_CN) = struct
       | CNExpr_cast (ty, expr) ->
           Dnode (pp_ctor "CNExpr_cast" ^^^ pp_base_type ty, [dtree_of_cn_expr expr])
       | CNExpr_call (nm, exprs) ->
-          Dnode (pp_ctor "CNExpr_call" ^^^ P.squotes (pp_identifier nm)
+          Dnode (pp_ctor "CNExpr_call" ^^^ P.squotes (Conf.pp_ident nm)
                  , List.map dtree_of_cn_expr exprs)
       | CNExpr_cons (nm, xs) ->
           let docs =
