@@ -247,7 +247,12 @@ Module Type Capability
         - CSeal in RISC V.
         - SEAL (capabilitiy) in Morello
    *)
-  Parameter cap_seal: t -> t -> t. 
+  Parameter cap_seal: t -> t -> t.
+
+  (* Returns true if the input capability is sealed
+     See also CapIsSealed in Morello
+   *)
+  Parameter cap_is_sealed: t -> bool.
 
   (** Seal Entry
         - CSealEntry in RISC V.
