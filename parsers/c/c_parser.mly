@@ -2212,7 +2212,7 @@ record_def:
 
 
 cons_args:
-| xs= delimited(LBRACE, record_def, RBRACE)
+| xs= delimited(LBRACE, separated_list(COMMA, member_def), RBRACE)
     { xs }
 
 
