@@ -1911,6 +1911,9 @@ prim_expr:
 | LBRACE a=expr RBRACE PERCENT l=NAME VARIABLE
     { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($4)))
                                , CNExpr_at_env (a, l))) }
+| LBRACE members=record_def RBRACE
+    { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos,$endpos) NoCursor)
+                               , CNExpr_record members)) }
 | LBRACE base_value__updates=nonempty_member_updates RBRACE
     { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($1)))
                                , CNExpr_memberupdates (fst base_value__updates, snd base_value__updates))) }
@@ -2021,18 +2024,18 @@ int_range:
             raise (C_lexer.Error (Cparser_unexpected_token "TODO cn integer const"))
     }
 
-member_update:
+member_def:
 | member=cn_variable COLON e=expr
      { (member, e) } 
 
 member_updates:
-| update=member_update COMMA base_value__updates=member_updates
+| update=member_def COMMA base_value__updates=member_updates
      { (fst base_value__updates, update::snd base_value__updates) }
 | DOT DOT base_value=expr
      { (base_value,[]) }
 
 nonempty_member_updates:
-| update=member_update COMMA base_value__updates=member_updates
+| update=member_def COMMA base_value__updates=member_updates
      { (fst base_value__updates, update::snd base_value__updates) }
 
 
@@ -2064,6 +2067,8 @@ base_type:
     { Cerb_frontend.Cn.CN_real }
 | CN_POINTER
     { Cerb_frontend.Cn.CN_loc }
+| members= delimited(LBRACE, nonempty_args, RBRACE)
+    { Cerb_frontend.Cn.CN_record members }
 | STRUCT id= cn_variable
     { Cerb_frontend.Cn.CN_struct id }
 | CN_DATATYPE id= cn_variable
@@ -2132,7 +2137,8 @@ cn_function:
 cn_predicate:
 | CN_PREDICATE enter_cn
   cn_pred_attrs= cn_attrs
-  cn_pred_output= cn_pred_output str= UNAME VARIABLE
+  cn_pred_output= cn_pred_output 
+  str= UNAME VARIABLE
   cn_pred_iargs= delimited(LPAREN, args, RPAREN)
   cn_pred_clauses= cn_option_pred_clauses exit_cn
     { (* TODO: check the name starts with upper case *)
@@ -2193,30 +2199,20 @@ nonempty_args:
 
 
 cn_pred_output:
-| oargs=delimited(LBRACE, nonempty_args, RBRACE)
-    { CN_pred_output_record oargs  }
 | bt=base_type
     { let loc = Location_ocaml.region $loc(bt) NoCursor in
-      CN_pred_output_basetype (loc,bt) }
+      (loc,bt) }
 
 
-oargs_def:
-| xs= separated_list(COMMA, separated_pair(cn_variable, EQ, expr))
+record_def:
+| xs= separated_nonempty_list(COMMA, member_def)
     { xs }
 ;
 
-pred_return:
-| 
-    (* copying from prim_expr *)
-    { let e = Cerb_frontend.Cn.(CNExpr (Location_ocaml.point $startpos, CNExpr_const CNConst_unit)) in
-      Cerb_frontend.Cn.CN_return_expression e }
-| oargs=delimited(LBRACE, oargs_def, RBRACE)
-    { Cerb_frontend.Cn.CN_return_record oargs }
-| e=expr
-    { Cerb_frontend.Cn.CN_return_expression e }
+
 
 cons_args:
-| xs= delimited(LBRACE, oargs_def, RBRACE)
+| xs= delimited(LBRACE, record_def, RBRACE)
     { xs }
 
 
@@ -2258,8 +2254,12 @@ clause:
       Cerb_frontend.Cn.CN_letExpr (loc, str, e, c) }
 | ASSERT e= delimited(LPAREN, assert_expr, RPAREN) SEMICOLON c= clause
     { Cerb_frontend.Cn.CN_assert (Location_ocaml.region $loc NoCursor, e, c) }
-| RETURN ret= pred_return
+| RETURN ret= expr
     { Cerb_frontend.Cn.CN_return (Location_ocaml.region $loc(ret) NoCursor, ret) }
+| RETURN
+(*copying from prim_expr *)
+    { Cerb_frontend.Cn.CN_return (Location_ocaml.region $loc NoCursor, 
+        CNExpr (Location_ocaml.region $loc NoCursor, CNExpr_const CNConst_unit)) }
 ;
 
 

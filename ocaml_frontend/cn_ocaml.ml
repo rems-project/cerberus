@@ -63,6 +63,8 @@ module MakePp (Conf: PP_CN) = struct
         pp_type_keyword "loc"
     | CN_struct ident ->
         pp_type_keyword "struct" ^^^ P.squotes (Conf.pp_ident ident)
+    | CN_record members ->
+        pp_type_keyword "record" ^^^ P.braces (P.separate_map P.comma (fun (bt, id) -> pp_base_type bt ^^^  pp_identifier id) members)
     | CN_datatype ident ->
         pp_type_keyword "datatype" ^^^ P.squotes (Conf.pp_ident ident)
     | CN_map (bTy1, bTy2) ->
@@ -111,6 +113,15 @@ module MakePp (Conf: PP_CN) = struct
           Dnode (pp_ctor "CNExpr_member",
                 [dtree_of_cn_expr e;
                  Dleaf (pp_identifier z)])
+      | CNExpr_record members ->
+         Dnode (pp_ctor "CNExpr_record", 
+             List.map (fun (id, e) -> 
+                Dnode (pp_ctor "member", [
+                  Dleaf (pp_identifier id);
+                  dtree_of_cn_expr e
+                ])
+             ) members
+           )
       | CNExpr_memberupdates (e, updates) ->
          let updates = 
            List.map (fun (z,v) -> 
@@ -216,15 +227,6 @@ module MakePp (Conf: PP_CN) = struct
               , [dtree_of_cn_expr e1; dtree_of_cn_expr e2])
 
 
-  let dtree_of_cn_pred_return = function
-    | CN_return_record xs ->
-      let docs =
-          List.map (fun (ident, e) ->
-            Dnode (pp_identifier ident, [dtree_of_cn_expr e])
-          ) xs in
-      Dnode (pp_stmt_ctor "CN_return_record", docs)
-    | CN_return_expression e ->
-      Dnode (pp_stmt_ctor "CN_return_expression", [dtree_of_cn_expr e])
 
   let rec dtree_of_cn_clause = function
     | CN_letResource (_, ident, res, c) ->
@@ -235,8 +237,8 @@ module MakePp (Conf: PP_CN) = struct
               , [dtree_of_cn_expr e; dtree_of_cn_clause c])
     | CN_assert (_, a, c) ->
         Dnode (pp_stmt_ctor "CN_assert", [dtree_of_cn_assertion a; dtree_of_cn_clause c])
-    | CN_return (_, xs) ->
-       dtree_of_cn_pred_return xs
+    | CN_return (_, x) ->
+       dtree_of_cn_expr x
 
   (* copied and adjusted from dtree_of_cn_clause *)
   let dtree_of_cn_condition = function
@@ -291,10 +293,7 @@ module MakePp (Conf: PP_CN) = struct
         Dleaf (pp_identifier ident ^^ P.colon ^^^ pp_base_type bTy)
       ) xs
 
-  let dtree_of_cn_predicate_return = function
-    | CN_pred_output_record oargs -> 
-      dtrees_of_oargs oargs
-    | CN_pred_output_basetype (_, bt) ->
+  let dtree_of_cn_predicate_return (_, bt) =
       [Dleaf (pp_base_type bt)]
 
   let dtree_of_cn_predicate pred =

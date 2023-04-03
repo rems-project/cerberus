@@ -29,13 +29,11 @@ type function_sig = {
     return_bty: BaseTypes.t;
   }
 
-type pred_output =
-  | PO_record of (Id.t * BaseTypes.t) list  
-  | PO_basetype of BaseTypes.t
+
 
 type predicate_sig = {
   pred_iargs: (Sym.t * BaseTypes.t) list;
-  pred_output: pred_output;
+  pred_output: BaseTypes.t;
 }
 
 
@@ -138,6 +136,7 @@ let pp_cnexpr_kind expr_ =
   | CNExpr_value_of_c_variable sym -> parens (typ (!^ "c:var") (Sym.pp sym))
   | CNExpr_list es_ -> !^ "[...]"
   | CNExpr_memberof (e, xs) -> !^ "_." ^^ Id.pp xs
+  | CNExpr_record members -> !^"{ ... }"
   | CNExpr_memberupdates (e, _updates) -> !^ "{_ with ...}"
   | CNExpr_arrayindexupdates (e, _updates) -> !^ "_ [ _ = _ ...]"
   | CNExpr_binop (bop, x, y) -> !^ "(binop (_, _, _))"
@@ -166,6 +165,8 @@ let rec free_in_expr (CNExpr (_loc, expr_)) =
      free_in_exprs es
   | CNExpr_memberof (e, _id) -> 
      free_in_expr e
+  | CNExpr_record members ->
+     free_in_exprs (List.map snd members)
   | CNExpr_memberupdates (e, updates) ->
      free_in_exprs (e :: List.map snd updates)
   | CNExpr_arrayindexupdates (e, updates) ->
@@ -221,6 +222,8 @@ let rec translate_cn_base_type (bTy: CF.Symbol.sym cn_base_type) =
         Loc None
     | CN_struct tag_sym ->
         Struct tag_sym
+    | CN_record members ->
+        SBT.Record (List.map (fun (bt,m) -> (m, translate_cn_base_type bt)) members)
     | CN_datatype dt_sym ->
         Datatype dt_sym
     | CN_map (bTy1, bTy2) ->
@@ -241,11 +244,8 @@ let register_cn_predicates env (defs: cn_predicate list) =
         (id_or_sym, SBT.to_basetype (translate_cn_base_type bTy))
       ) xs in
     let iargs = translate_args def.cn_pred_iargs in
-    let output = match def.cn_pred_output with
-      | CN_pred_output_record oargs ->
-         PO_record (translate_args oargs) 
-      | CN_pred_output_basetype (_,bt) ->
-         PO_basetype (SBT.to_basetype (translate_cn_base_type bt))
+    let output = 
+      (SBT.to_basetype (translate_cn_base_type (snd def.cn_pred_output)))
     in
     add_predicate def.cn_pred_name { 
         pred_iargs= iargs; 
@@ -571,6 +571,10 @@ module EffectfulTranslation = struct
         | CNExpr_memberof (e, xs) ->
            let@ e = self e in
            translate_member_access loc env e xs
+        | CNExpr_record members ->
+           let@ members = ListM.mapsndM self members in
+           let bts = List.map_snd IT.bt members in
+           return (IT (IT.Record members, SBT.Record bts))
         | CNExpr_memberupdates (e, updates) ->
            let@ e = self e in
            let bt = IT.bt e in
@@ -785,10 +789,7 @@ module EffectfulTranslation = struct
           | None -> fail {loc; msg = Unknown_resource_predicate {id = pred; logical = false}}
           | Some pred_sig -> return pred_sig
         in
-        let output_bt = match pred_sig.pred_output with
-        | PO_record oargs -> BT.Record oargs
-        | PO_basetype bt -> bt
-        in
+        let output_bt = pred_sig.pred_output in
         return (PName pred, SBT.of_basetype output_bt)
     in
     return (pname, ptr_expr, iargs, oargs_ty)
@@ -1119,14 +1120,7 @@ let translate_cn_clause env clause =
          let@ lc = handle st (ET.translate_cn_assrt env (loc, assrt)) in
          let acc' z = acc (LAT.mConstraint ( lc, (loc, None) ) z) in
          translate_cn_clause_aux env st acc' cl
-      | CN_return (loc, CN_return_record xs_) ->
-          let@ xs =
-            ListM.mapM (fun ((member: Id.t), e_) ->
-              let@ e = handle st (ET.translate_cn_expr SymSet.empty env e_) in
-              return (member, IT.term_of_sterm e)
-            ) xs_ in
-          acc (LAT.I (IT.record_ xs)) 
-      | CN_return (loc, CN_return_expression e_) ->
+      | CN_return (loc, e_) ->
           let@ e = handle st (ET.translate_cn_expr SymSet.empty env e_) in
           let e = IT.term_of_sterm e in
           acc (LAT.I e) 
@@ -1171,10 +1165,6 @@ let translate_cn_predicate env (def: cn_predicate) =
       add_logical sym (SBT.of_basetype bTy) acc
     ) env iargs in
   let@ clauses = translate_option_cn_clauses env' def.cn_pred_clauses in
-  let output_bt = match output_bt with
-    | PO_record oargs -> BT.Record oargs
-    | PO_basetype bt -> bt
-  in
   match iargs with
     | (iarg0, BaseTypes.Loc) :: iargs' ->
         return 
