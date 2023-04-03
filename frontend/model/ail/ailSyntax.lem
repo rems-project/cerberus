@@ -11,6 +11,7 @@ type integerSuffix =
  | ULL
  | L
  | LL
+ | B (* For executable specs - boolean type *)
 
 type basis =
   | Octal

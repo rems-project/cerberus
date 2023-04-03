@@ -98,6 +98,7 @@ type injection = {
   kind: injection_kind;
 }
 
+(* start (1, 1) and end (1, 1) for include headers *)
 let inject st inj =
   let open Cerb_frontend in
   let do_output st str = Stdlib.output_string st.output (decorate_injection str); st in
