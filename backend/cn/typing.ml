@@ -382,49 +382,8 @@ let get_resource_predicate_def loc id =
         logical = Option.is_some (Global.get_logical_function_def global id)}})
 
 
-let todo_opt_get_resource_predicate_def_s id =
-  let@ global = get_global () in
-  let odef = 
-    SymMap.choose_opt
-      (SymMap.filter (fun s _ -> String.equal (Tools.todo_string_of_sym s) id)
-         global.resource_predicates)
-  in
-  return odef
-
-let todo_opt_get_logical_function_def_s id =
-  let@ global = get_global () in
-  let odef = 
-    SymMap.choose_opt
-      (SymMap.filter (fun s _ -> String.equal (Tools.todo_string_of_sym s) id)
-         global.logical_functions)
-  in
-  return odef
-
-let todo_get_resource_predicate_def_s loc id =
-  let@ odef = todo_opt_get_resource_predicate_def_s id in
-  match odef with
-  | Some def -> return def
-  | None -> 
-     let@ odef = todo_opt_get_logical_function_def_s id in
-     fail (fun _ -> {loc; msg = Unknown_resource_predicate {id = Sym.fresh_named id;
-                                  logical = Option.is_some odef}})
-
-let todo_get_logical_function_def_s loc id =
-  let@ odef = todo_opt_get_logical_function_def_s id in
-  match odef with
-  | Some def -> return def
-  | None -> 
-     let@ odef = todo_opt_get_resource_predicate_def_s id in
-     fail (fun _ -> {loc; msg = Unknown_logical_function {id = Sym.fresh_named id;
-                                  resource = Option.is_some odef}})
 
 
-(* let get_resource_predicate_def_s loc id = *)
-(*   let@ global = get_global () in *)
-(*   match Global.get_resource_predicate_def global id with *)
-(*   | Some def -> return def *)
-(*   | None -> fail (fun _ -> {loc; msg = Unknown_resource_predicate {id; *)
-(*       logical = Option.is_some (Global.get_logical_function_def global id)}}) *)
 
 
 let get_logical_function_def loc id =

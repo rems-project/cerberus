@@ -65,10 +65,6 @@ val get_resource_predicate_def : Locations.t -> Sym.t ->
     (ResourcePredicates.definition) m
 val get_logical_function_def : Locations.t -> Sym.t ->
     (LogicalFunctions.definition) m
-val todo_get_resource_predicate_def_s : Locations.t -> string ->
-    (Sym.t * ResourcePredicates.definition) m
-val todo_get_logical_function_def_s : Locations.t -> string ->
-    (Sym.t * LogicalFunctions.definition) m
 
 
 val add_struct_decl : Sym.t -> Memory.struct_layout -> (unit) m
