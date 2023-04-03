@@ -511,6 +511,10 @@ let array_offset_of_pointer ~base ~pointer =
         pointerToIntegerCast_ base)
 
 let array_pointer_to_index ~base ~item_size ~pointer =
+  begin match is_z item_size with
+    | None -> assert false
+    | Some z -> assert (Z.lt Z.zero z)
+  end;
   div_ (array_offset_of_pointer ~base ~pointer,
         item_size)
 

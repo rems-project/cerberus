@@ -230,6 +230,7 @@ module IndexTerms = struct
        let b = aux b in 
        begin match a, b with
        | IT (Const (Z a), _), IT (Const (Z b), _) ->
+            assert (Z.lt Z.zero b);
           z_ (Z.div a b)
        | IT (Const (Z a), _), _ when Z.equal a (Z.zero) -> 
           int_ 0

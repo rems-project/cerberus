@@ -10,6 +10,8 @@ val push : solver -> unit
 val pop : solver -> unit
 val add_assumption : solver -> Global.t -> LogicalConstraints.t -> unit
 
+val set_slow_threshold : float -> unit
+
 
 val provable : 
   loc:Locations.t ->

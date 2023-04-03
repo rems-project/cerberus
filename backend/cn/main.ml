@@ -101,6 +101,7 @@ let main
       loc_pp 
       debug_level 
       print_level 
+      slow_threshold
       no_timestamps
       json 
       state_file 
@@ -126,6 +127,7 @@ let main
   Pp.loc_pp := loc_pp;
   Pp.print_level := print_level;
   Pp.print_timestamps := not no_timestamps;
+  Option.iter (fun t -> Solver.set_slow_threshold t) slow_threshold;
   Solver.random_seed := random_seed;
   ResourceInference.reorder_points := not no_reorder_points;
   ResourceInference.additional_sat_check := not no_additional_sat_check;
@@ -221,6 +223,10 @@ let print_level =
   let doc = "Set the debug message level for the type system to $(docv) (should range over [0-15])." in
   Arg.(value & opt int 0 & info ["p"; "print-level"] ~docv:"N" ~doc)
 
+let slow_threshold =
+  let doc = "Set the time threshold (in seconds) for logging to slow_smt.txt temp file." in
+  Arg.(value & opt (some float) None & info ["slow-smt"] ~docv:"TIMEOUT" ~doc)
+
 let no_timestamps =
   let doc = "Disable timestamps in print-level debug messages"
  in
@@ -294,6 +300,7 @@ let () =
       loc_pp $ 
       debug_level $ 
       print_level $
+      slow_threshold $
       no_timestamps $
       json $
       state_file $

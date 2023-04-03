@@ -15,24 +15,23 @@ module BT = BaseTypes
 
 let random_seed = ref 1
 
-let slow_smt_file =
+let slow_smt_file () =
   let open Filename in
   get_temp_dir_name () ^ dir_sep ^ "slow_smt.txt"
 
 
-let save_slow_problems, saved_slow_problem = 
+let save_slow_problems, saved_slow_problem, set_slow_threshold =
   (* not yet written this run, > 3.0s counts as slow, append to this fname *)
-  let slow_problem_ref = ref (false, 3.0, Some slow_smt_file) in
-  let save_slow_problems () =
-    if !Debug_ocaml.debug_level > 0
-    then ! slow_problem_ref
-    else (false, 0.0, None)
-  in
+  let slow_problem_ref = ref (true, 3.0, None) in
+  let save_slow_problems () = (! slow_problem_ref) in
   let saved_slow_problem () = match ! slow_problem_ref with
-    | (false, t, fn) -> slow_problem_ref := (true, t, fn)
+    | (true, t, fn) -> slow_problem_ref := (false, t, fn)
     | _ -> ()
   in
-  save_slow_problems, saved_slow_problem
+  let set_slow_threshold t =
+    (slow_problem_ref := (true, t, Some (slow_smt_file ())))
+  in
+  save_slow_problems, saved_slow_problem, set_slow_threshold
 
 
 type solver = { 
@@ -755,20 +754,21 @@ let model () =
      let model = Option.value_err "SMT solver did not produce a counter model" omodel in
      ((context, model), qs)
 
-let maybe_save_slow_problem solv_inst lc lc_t time solver = match save_slow_problems () with
+let maybe_save_slow_problem assertions lc lc_t time solver = match save_slow_problems () with
   | (_, _, None) -> ()
   | (_, cutoff, _) when (Stdlib.Float.compare time cutoff) = -1 -> ()
-  | (prev_msg, _, Some fname) ->
+  | (first_msg, _, Some fname) ->
     let channel = open_out_gen [Open_append; Open_creat] 0o666 fname in
     output_string channel "\n\n";
-    if prev_msg then output_string channel "## New CN run ##\n\n" else ();
+    if first_msg then output_string channel "## New CN run ##\n\n" else ();
     Colour.without_colour (fun () -> print channel (item "Slow problem"
-      (Pp.list (fun pp -> pp) [
+      (Pp.flow Pp.hardline [
           item "time taken" (format [] (Float.to_string time));
           item "constraint" (LC.pp lc);
           item "SMT constraint" !^(Z3.Expr.to_string lc_t);
-          if !Pp.print_level >= 10 then item "solver statistics" !^(Z3.Statistics.to_string (Z3.Solver.get_statistics solver)) else Pp.empty;
-          if !Pp.print_level >= 11 then item "SMT assertions" (Pp.list (fun e -> format [] (Z3.Expr.to_string e)) (Z3.Solver.get_assertions solv_inst)) else Pp.empty;
+          item "solver statistics" !^(Z3.Statistics.to_string (Z3.Solver.get_statistics solver));
+          item "SMT assertions"
+              (Pp.parens (Pp.list (fun e -> format [] (Z3.Expr.to_string e)) assertions));
       ]))) ();
     output_string channel "\n";
     saved_slow_problem ();
@@ -789,23 +789,27 @@ let provable ~loc ~solver ~global ~assumptions ~simp_ctxt ~pointer_facts lc =
      let extra2 = Translate.extra_logical_facts global
          (it :: extra1) (LCSet.elements assumptions) in
      let assumptions = List.map (Translate.term context global) (extra1 @ extra2) in
-     let res = 
-       time_f_logs loc 5 "Z3(inc)"
-         (Z3.Solver.check solver.incremental) 
-         (nlc :: assumptions) 
+     let (elapsed, res) =
+       time_f_elapsed (time_f_logs loc 5 "Z3(inc)"
+           (Z3.Solver.check solver.incremental))
+         (nlc :: assumptions)
      in
      match res with
-     | Z3.Solver.UNSATISFIABLE -> rtrue ()
+     | Z3.Solver.UNSATISFIABLE ->
+        let all_assumptions = assumptions @ Z3.Solver.get_assertions solver.incremental in
+        maybe_save_slow_problem all_assumptions lc expr elapsed solver.fancy;
+        rtrue ()
      | Z3.Solver.SATISFIABLE -> rfalse qs solver.incremental
      | Z3.Solver.UNKNOWN ->
         debug 5 (lazy (format [] "Z3(inc) unknown/timeout, running full solver"));
+        let all_assumptions = assumptions @ Z3.Solver.get_assertions solver.incremental in
         let (elapsed, res) = 
           time_f_elapsed 
             (time_f_logs loc 5 "Z3"
                (Z3.Solver.check solver.fancy))
-            (nlc :: assumptions @ Z3.Solver.get_assertions solver.incremental)
+            (nlc :: all_assumptions)
         in
-        maybe_save_slow_problem solver.fancy lc expr elapsed solver.fancy;
+        maybe_save_slow_problem all_assumptions lc expr elapsed solver.fancy;
         match res with
         | Z3.Solver.UNSATISFIABLE -> rtrue ()
         | Z3.Solver.SATISFIABLE -> rfalse qs solver.fancy
