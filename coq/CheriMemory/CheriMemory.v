@@ -2926,18 +2926,25 @@ Module CheriMemory
     (ival_n: integer_value): serr integer_value
     :=
     match ival_cap, ival_n with
-    | IC is_signed c_value, IV n_value =>
+    | IC is_signed c, IV n =>
         ret (IC is_signed
                (C.cap_set_value
-                  (if C.cap_ptraddr_representable c_value  (AddressValue.of_Z n_value)
-                   then c_value
+                  (if C.cap_ptraddr_representable c (AddressValue.of_Z n)
+                   then
+                     (if C.cap_is_sealed c
+                      then C.set_ghost_state c
+                             {|
+                               tag_unspecified := true ;
+                               bounds_unspecified := (C.get_ghost_state c).(bounds_unspecified)
+                             |}
+                      else c)
                    else C.set_ghost_state
-                          c_value
+                          c
                           {|
                             tag_unspecified := true ;
                             bounds_unspecified := true
                           |})
-                  (AddressValue.of_Z n_value))
+                  (AddressValue.of_Z n))
           )
 
     | _, _ =>
