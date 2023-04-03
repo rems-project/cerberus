@@ -383,7 +383,8 @@ let pp_integerSuffix =
     | UL  -> "UL"
     | ULL -> "ULL"
     | L   -> "L"
-    | LL  -> "LL" in
+    | LL  -> "LL"
+    | B -> "B" in
   fun z -> P.string (to_string z)
 
 

@@ -85,6 +85,8 @@ let type_of_constant loc impl = function
         return (Unsigned LongLong)
       else
         misc loc (UntypableIntegerConstant n)
+  | IConstant n _ (Just B) ->
+      misc loc (UntypableIntegerConstant n)
   | IConstantMax ity ->
       return ity
   | IConstantMin ity ->

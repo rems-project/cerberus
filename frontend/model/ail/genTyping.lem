@@ -107,6 +107,8 @@ let gen_typing_type_of_constant loc iCst =
             Concrete (Unsigned LongLong)
           else
             Unknown iCst
+      | IConstant n _ (Just B) ->
+          Unknown iCst
       | IConstantMax ity ->
           Concrete ity
       | IConstantMin ity ->
@@ -141,6 +143,8 @@ let gen_typing_type_of_constant loc iCst =
       | IConstant n _ (Just ULL) ->
           (* Decimal, Octal or Hexadecimal *)
           Concrete <$> try_ranges loc n [ Unsigned LongLong ]
+      | IConstant n _ (Just B) ->
+          Concrete <$> try_ranges loc n [ Unsigned Int_ ]
       | IConstantMax ity ->
           E.return (Concrete ity)
       | IConstantMin ity ->
