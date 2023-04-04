@@ -128,7 +128,7 @@ let _empty_executable_spec = {
   
 let generate_c_assertion cn_assertion =
   match cn_assertion with
-  | CN_assert_exp e_ -> String.concat "" ["assert("; Cn_to_ail.(pp_ail (cn_to_ail_expr e_)); ")"]
+  | CN_assert_exp e_ -> String.concat "" ["assert("; Cn_to_ail.(pp_ail (cn_to_ail_expr e_)); ");"]
   | _ -> "" (* TODO: CN_assert_qexp *)
   
 
