@@ -278,5 +278,13 @@ Module test_cap_getters_and_setters.
       /\ tester c7 /\ tester c8.
     Proof. vm_compute. repeat (split; try reflexivity). Qed.
  
+  Example cap_bounds_check_test_1 :
+    cap_bounds_check c1 (cap_get_bounds c1) = true.
+  Proof. vm_compute. reflexivity. Qed.
+  
+  Example cap_bounds_check_test_2 :
+    cap_bounds_check c4 (cap_get_bounds c3) = true.
+  Proof. vm_compute. reflexivity. Qed.
+
 End test_cap_getters_and_setters. 
 
