@@ -198,6 +198,8 @@ Module Type Capability
         See: `CapIsRepresentable` in Morello *)
   Parameter cap_bounds_representable_exactly: t -> I.t -> bool.
 
+  (* Check if all addresses in given interval are within the bounds of
+     given capability *)
   Parameter cap_bounds_check: t -> I.t -> bool.
 
   (* Operations on capabilities.
