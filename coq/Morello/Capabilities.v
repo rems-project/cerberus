@@ -198,6 +198,8 @@ Module Type Capability
         See: `CapIsRepresentable` in Morello *)
   Parameter cap_bounds_representable_exactly: t -> I.t -> bool.
 
+  Parameter cap_bounds_check: t -> I.t -> bool.
+
   (* Operations on capabilities.
        See also:
        - Section "2.6 Manipulating Capabilities" in Morello spec.

@@ -743,6 +743,14 @@ Module Capability <: Capability (AddressValue) (Flags) (ObjType) (SealType) (Bou
     let new_cap : (mword _) := CapSetBounds (cap_to_mword new_cap) len' true in
     CapIsTagSet new_cap.
 
+  Definition cap_bounds_check (cap:t) (bounds : Bounds.t) : bool :=
+    let '(base, limit) := bounds in
+    let len := Z.sub (bv_to_Z_unsigned limit) (bv_to_Z_unsigned base) in
+    let base' : (bv AddressValue.len) := 
+      AddressValue.of_Z (bv_to_Z_unsigned base) in 
+    let len' := mword_of_int (len:=Z.of_N Bounds.bound_len) len in 
+    CapIsRangeInBounds (cap_to_mword cap) (bv_to_mword base') len'.
+
   Definition cap_is_null_derived (c : t) : bool :=
     let a := cap_get_value c in
     let c0 := cap_c0 () in
