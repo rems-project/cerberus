@@ -2202,6 +2202,10 @@ cn_pred_output:
 | bt=base_type
     { let loc = Location_ocaml.region $loc(bt) NoCursor in
       (loc,bt) }
+| bt= delimited(LPAREN, base_type, RPAREN)
+    { let loc = Location_ocaml.region $loc(bt) NoCursor in
+      (loc,bt) }
+
 
 
 record_def:

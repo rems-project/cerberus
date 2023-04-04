@@ -62,7 +62,7 @@ predicate {map<datatype tree_arc, datatype tree_node_option> t,
   }
 }
 
-predicate map <datatype tree_arc, datatype tree_node_option> Indirect_Tree (pointer p) {
+predicate (map <datatype tree_arc, datatype tree_node_option>) Indirect_Tree (pointer p) {
   take V = Owned<tree>(p);
   take T = Tree(V);
   return T.t;
