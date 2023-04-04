@@ -1481,30 +1481,31 @@ Module CheriMemory
     : memM unit :=
     if (C.get_ghost_state c).(tag_unspecified) then
       fail (MerrCHERI loc CheriUndefinedTag)
-    else if C.cap_is_valid c then
-      let addr :=
-        Z.add (AddressValue.to_Z (C.cap_get_value c)) offset in
-      let pcheck :=
-        match intent with
-        | ReadIntent =>
-            Morello.Permissions.has_load_perm
-        | WriteIntent =>
-            Morello.Permissions.has_store_perm
-        | CallIntent =>
-            Morello.Permissions.has_execute_perm
-        end in
-      if pcheck (C.cap_get_perms c) then
-        let bounds := C.cap_get_bounds c in
-        if cap_bounds_check bounds addr sz then
-          ret tt
-        else
-          fail
-            (MerrCHERI loc (CheriBoundsErr (bounds, AddressValue.of_Z addr, (Z.to_nat sz))))
-      else
-        fail (MerrCHERI loc CheriMerrUnsufficientPermissions)
     else
-      fail
-        (MerrCHERI loc CheriMerrInvalidCap).
+      if C.cap_is_valid c then
+        let addr :=
+          Z.add (AddressValue.to_Z (C.cap_get_value c)) offset in
+        let pcheck :=
+          match intent with
+          | ReadIntent =>
+              Morello.Permissions.has_load_perm
+          | WriteIntent =>
+              Morello.Permissions.has_store_perm
+          | CallIntent =>
+              Morello.Permissions.has_execute_perm
+          end in
+        if pcheck (C.cap_get_perms c) then
+          let limit := Z.add addr sz in
+          if C.cap_bounds_check c (Bounds.of_Zs (addr, sz))
+          then ret tt
+          else
+            fail
+              (MerrCHERI loc (CheriBoundsErr (C.cap_get_bounds c, AddressValue.of_Z addr, (Z.to_nat sz))))
+        else
+          fail (MerrCHERI loc CheriMerrUnsufficientPermissions)
+      else
+        fail
+          (MerrCHERI loc CheriMerrInvalidCap).
 
   Fixpoint mem_value_strip_err
     (x_value : mem_value_with_err)
