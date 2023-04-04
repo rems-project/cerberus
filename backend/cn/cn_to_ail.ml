@@ -6,11 +6,14 @@ open Setup *)
 open CF.Cn
 module A=CF.AilSyntax
 module C=CF.Ctype
+open PPrint
 
 let rm_expr (A.AnnotatedExpression (_, _, _, expr_)) = expr_
 
 let mk_expr expr_ = 
   A.AnnotatedExpression ((), [], Cerb_location.unknown, expr_)
+
+let cn_to_ail_base_type = None
 
 let cn_to_ail_binop = function
   | CN_add -> A.(Arithmetic Add)
@@ -47,6 +50,8 @@ let cn_to_ail_const = function
   | CNConst_unit -> A.(AilEconst (ConstantIndeterminate C.(Ctype ([], Void))))
  
 
+let empty_qualifiers : C.qualifiers = {const = false; restrict = false; volatile = false}
+
 (* frontend/model/ail/ailSyntax.lem *)
 (* ocaml_frontend/generated/ailSyntax.ml *)
 let rec cn_to_ail_expr (CNExpr (loc, expr_)) =
@@ -55,29 +60,39 @@ let rec cn_to_ail_expr (CNExpr (loc, expr_)) =
     | CNExpr_value_of_c_atom (sym, _) -> A.(AilEident sym)
     | CNExpr_var sym -> A.(AilEident sym) (* TODO: Check. Need to do more work if this is only a CN var *)
     | CNExpr_deref e -> A.(AilEunary (Indirection, mk_expr (cn_to_ail_expr e)))
+    | CNExpr_binop (bop, x, y) -> A.AilEbinary (mk_expr (cn_to_ail_expr x), cn_to_ail_binop bop, mk_expr (cn_to_ail_expr y))
     (* 
-    | CNExpr_var sym -> parens (typ (!^ "var") (Sym.pp sym))
-    | CNExpr_deref e -> !^ "(deref ...)"
     | CNExpr_list es_ -> !^ "[...]"
-    | CNExpr_memberof (e, xs) -> !^ "_." ^^ Id.pp xs
+    | CNExpr_memberof (e, xs) -> 
     | CNExpr_memberupdates (e, _updates) -> !^ "{_ with ...}"
     | CNExpr_arrayindexupdates (e, _updates) -> !^ "_ [ _ = _ ...]"
     *)
-    | CNExpr_binop (bop, x, y) -> A.AilEbinary (mk_expr (cn_to_ail_expr x), cn_to_ail_binop bop, mk_expr (cn_to_ail_expr y))
+
+    (* TODO: Complete pretty printing *)
+    | CNExpr_sizeof ct -> A.AilEsizeof (empty_qualifiers, ct) 
+    
     (*
-    | CNExpr_sizeof ct -> !^ "(sizeof _)"
     | CNExpr_offsetof (tag, member) -> !^ "(offsetof (_, _))"
-    | CNExpr_membershift (e, member) -> !^ "&(_ -> _)"
-    | CNExpr_cast (bt, expr) -> !^ "(cast (_, _))"
+    | CNExpr_membershift (e, member) -> !^ "&(_ -> _)" *)
+
+    (* TODO: Write cn_to_ail_base_type above and substitute for Void *)
+    | CNExpr_cast (bt, expr) -> A.(AilEcast (empty_qualifiers, C.Ctype ([], Void) , (mk_expr (cn_to_ail_expr expr))))
+    
+    (*
     | CNExpr_call (sym, exprs) -> !^ "(" ^^ Sym.pp sym ^^^ !^ "(...))"
     | CNExpr_cons (c_nm, exprs) -> !^ "(" ^^ Sym.pp c_nm ^^^ !^ "{...})"
-    | CNExpr_each (sym, r, e) -> !^ "(each ...)"
-    | CNExpr_ite (e1, e2, e3) -> !^ "(if ... then ...)"
+    | CNExpr_each (sym, r, e) -> !^ "(each ...)" *)
+
+    (* TODO: Check what None case is for with e2 *)
+    | CNExpr_ite (e1, e2, e3) -> A.AilEcond (mk_expr (cn_to_ail_expr e1), Some (mk_expr (cn_to_ail_expr e2)), mk_expr (cn_to_ail_expr e3))
+    
+    (* 
     | CNExpr_good (ty, e) -> !^ "(good (_, _))"
     | CNExpr_unchanged e -> !^"(unchanged (_))"
-    | CNExpr_at_env (e, es) -> !^"{_}@_"
-    | CNExpr_not e -> !^"!_" 
-    *)
+    | CNExpr_at_env (e, es) -> !^"{_}@_" *)
+
+    (* TODO: Check this isn't overlapping with bitwise not *)
+    | CNExpr_not e -> A.(AilEunary (Bnot, mk_expr (cn_to_ail_expr e))) 
     | _ -> failwith "TODO"
 
 
@@ -109,10 +124,34 @@ let pp_ail_binop = function
   | A.And -> "&&"
   | _ -> ""
 
+
+(* TODO: Complete without ansi_format *)
+let pp_ctype_aux = function
+  | C.Void -> !^ "void"
+  | C.(Basic bty) -> CF.Pp_ail.pp_basicType bty
+  | C.Atomic _ -> failwith "TODO"
+  | C.(Struct sym) -> CF.Pp_ail.pp_id sym
+  | _ -> failwith "TODO"
+  (* | Union _ ->
+      0
+  | Array _ ->
+      1
+  | Function _
+  | FunctionNoParams _ ->
+      2
+  | Pointer _ ->
+      3 *)
+
+let pp_ctype (C.Ctype (_, ty)) = CF.Pp_utils.to_plain_string (pp_ctype_aux ty)
+
 let rec pp_ail ail_expr =
   match ail_expr with
     | A.(AilEconst ail_const) -> pp_ail_const ail_const
     | A.(AilEbinary (x, bop, y)) -> (pp_ail (rm_expr x)) ^ (pp_ail_binop bop) ^ (pp_ail (rm_expr y))
+    | A.(AilEunary (Bnot, ail_expr)) -> "!(" ^ (pp_ail (rm_expr ail_expr)) ^ ")"
+    | A.(AilEsizeof (qs, ct)) -> "sizeof(" ^ pp_ctype ct ^ ")"
+    | A.(AilEcond (e1, Some e2, e3)) -> (pp_ail (rm_expr e1)) ^ " ? " ^ (pp_ail (rm_expr e2)) ^ " : " ^ (pp_ail (rm_expr e3)) 
+    | A.(AilEcond (_, None, _)) -> pp_ail_default ail_expr
     | _ -> pp_ail_default ail_expr
 
 
