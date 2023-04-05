@@ -1,14 +1,13 @@
 open Pp
 
 
-type tag = Sym.t
-let equal_tag = Sym.equal
-let compare_tag = Sym.compare
 
-type member = Id.t
-let equal_member = Id.equal
-let compare_member = Id.compare
+type structrecord = 
+  | Struct of Sym.t
+  | Nothing
 
+let equal_structrecord _ _ = true
+let compare_structrecord _ _ = 0  
 
 type basetype =
   | Unit 
@@ -16,9 +15,8 @@ type basetype =
   | Integer
   | Real
   | Loc
-  | Struct of tag
-  | Datatype of tag
-  | Record of member_types
+  | Datatype of Sym.t
+  | Record of structrecord * member_types
   | Map of basetype * basetype
   | List of basetype
   | Tuple of basetype list
@@ -38,16 +36,17 @@ let compare = compare_basetype
 
 
 type datatype_info = {
-  dt_constrs: tag list;
+  dt_constrs: Sym.t list;
   dt_all_params: member_types;
 }
 type constr_info = {
   c_params: member_types;
-  c_datatype_tag: tag
+  c_datatype_tag: Sym.t
 }
 
 let cons_dom_rng info =
-  (Record info.c_params, Datatype info.c_datatype_tag)
+  (Record (Nothing, info.c_params), 
+   Datatype info.c_datatype_tag)
 
 
 let rec pp = function
@@ -56,9 +55,9 @@ let rec pp = function
   | Integer -> !^"integer"
   | Real -> !^"real"
   | Loc -> !^"pointer"
-  | Struct sym -> !^"struct" ^^^ Sym.pp sym
   | Datatype sym -> !^"datatype" ^^^ Sym.pp sym
-  | Record members -> braces (flow_map comma (fun (s, bt) -> pp bt ^^^ Id.pp s) members)
+  | Record (Struct sym, _) -> !^"struct" ^^^ Sym.pp sym
+  | Record (Nothing, members) -> braces (flow_map comma (fun (s, bt) -> pp bt ^^^ Id.pp s) members)
   | Map (abt, rbt) -> !^"map" ^^ angles (pp abt ^^ comma ^^^ pp rbt)
   | List bt -> !^"list" ^^ angles (pp bt)
   | Tuple nbts -> !^"tuple" ^^ angles (flow_map comma pp nbts)
@@ -72,16 +71,17 @@ let json bt : Yojson.Safe.t =
 
 
 
-
+(*
 let struct_bt = function
   | Struct tag -> tag 
   | bt -> Debug_ocaml.error 
            ("illtyped index term: not a struct type: " ^ Pp.plain (pp bt))
-
+*)
 let record_bt = function
-  | Record members -> members
+  | Record (sr, members) -> (sr, members)
   | bt -> Debug_ocaml.error 
            ("illtyped index term: not a member type: " ^ Pp.plain (pp bt))
+
 
 let is_map_bt = function
   | Map (abt, rbt) -> Some (abt, rbt)
@@ -109,14 +109,19 @@ let make_map_bt abt rbt = Map (abt, rbt)
 (*            ("illtyped index term: not an option type: " ^ Pp.plain (pp bt)) *)
 
 
-
-let rec of_sct = function
-  | Sctypes.Void -> Unit
-  | Integer _ -> Integer
-  | Array (sct, _) -> Map (Integer, of_sct sct)
-  | Pointer _ -> Loc
-  | Struct tag -> Struct tag
-  | Function _ -> Debug_ocaml.error "todo: function types"
+let of_sct struct_decls = 
+  let rec aux = function
+    | Sctypes.Void -> Unit
+    | Integer _ -> Integer
+    | Array (sct, _) -> Map (Integer, aux sct)
+    | Pointer _ -> Loc
+    | Struct tag -> 
+        let member_cts = Memory.(member_types (SymMap.find tag struct_decls)) in
+        let member_bts = List.map_snd aux member_cts in
+        Record (Struct tag, member_bts)
+    | Function _ -> Debug_ocaml.error "todo: function types"
+  in
+  aux
 
 
 
@@ -130,9 +135,9 @@ let rec hash = function
   | Tuple _ -> 6
   | Set _ -> 7
   (* | Option _ -> 8 *)
-  | Struct tag -> 1000 + Sym.num tag
+  | Record (Struct tag, _) -> 1000 + Sym.num tag
+  | Record (Nothing, members) -> 3000 + List.length members
   | Datatype tag -> 4000 + Sym.num tag
-  | Record _ -> 3000
   | Map (abt,rbt) -> 2000 + hash abt + hash rbt
 
 

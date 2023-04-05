@@ -46,9 +46,6 @@ let rec free_vars_ = function
   | EachI ((_, s, _), t) -> SymSet.remove s (free_vars t)
   | Tuple ts -> free_vars_list ts
   | NthTuple (_, t) -> free_vars t
-  | Struct (_tag, members) -> free_vars_list (List.map snd members)
-  | StructMember (t, _member) -> free_vars t
-  | StructUpdate ((t1, _member), t2) -> free_vars_list [t1; t2]
   | Record members -> free_vars_list (List.map snd members)
   | RecordMember (t, _member) -> free_vars t
   | RecordUpdate ((t1, _member), t2) -> free_vars_list [t1; t2]
@@ -93,9 +90,6 @@ let rec fold_ f binders acc = function
      fold f (binders @ [(s, BT.Integer)]) acc t
   | Tuple ts -> fold_list f binders acc ts
   | NthTuple (_, t) -> fold f binders acc t
-  | Struct (_tag, members) -> fold_list f binders acc (List.map snd members)
-  | StructMember (t, _member) -> fold f binders acc t
-  | StructUpdate ((t1, _member), t2) -> fold_list f binders acc [t1; t2]
   | Record members -> fold_list f binders acc (List.map snd members)
   | RecordMember (t, _member) -> fold f binders acc t
   | RecordUpdate ((t1, _member), t2) -> fold_list f binders acc [t1; t2]
@@ -198,12 +192,6 @@ let rec subst (su : typed subst) (IT (it, bt)) =
      IT (Tuple (map (subst su) its), bt)
   | NthTuple (n, it') ->
      IT (NthTuple (n, subst su it'), bt)
-  | Struct (tag, members) ->
-     IT (Struct (tag, map_snd (subst su) members), bt)
-  | StructMember (t, m) ->
-     IT (StructMember (subst su t, m), bt)
-  | StructUpdate ((t, m), v) ->
-     IT (StructUpdate ((subst su t, m), subst su v), bt)
   | Record members ->
      IT (Record (map_snd (subst su) members), bt)
   | RecordMember (t, m) ->
@@ -433,30 +421,17 @@ let nthTuple_ ~item_bt (n, it) = IT (NthTuple (n, it), item_bt)
 
 (* struct_op *)
 let struct_ (tag, members) =
-  IT (Struct (tag, members), BT.Struct tag)
+  IT (Record members, BT.Record (Struct tag, List.map_snd basetype members))
 let member_ ~member_bt (tag, it, member) =
-  IT (StructMember (it, member), member_bt)
+  IT (RecordMember (it, member), member_bt)
 
-let (%.) struct_decls t member =
-  let tag = match bt t with
-    | BT.Struct tag -> tag
-    | _ -> Debug_ocaml.error "illtyped index term. not a struct"
-  in
-  let member_bt = match List.assoc_opt Id.equal member
-         (Memory.member_types (SymMap.find tag struct_decls))
-  with
-    | Some sct -> BT.of_sct sct
-    | None -> Debug_ocaml.error ("struct " ^ Sym.pp_string tag ^
-        " does not have member " ^ (Id.pp_string member))
-  in
-  member_ ~member_bt (tag, t, member)
 
 
 
 
 let record_ members =
   IT (Record members,
-      BT.Record (List.map (fun (s,t) -> (s, basetype t)) members))
+      BT.Record (Nothing, List.map (fun (s,t) -> (s, basetype t)) members))
 let recordMember_ ~member_bt (t, member) =
   IT (RecordMember (t, member), member_bt)
 
@@ -645,7 +620,7 @@ let value_check_pointer alignment ~pointee_ct about =
         le_ (sub_ (add_ (about_int, int_ pointee_size), int_ 1), z_ Memory.max_pointer);
         if alignment then aligned_ (about, pointee_ct) else bool_ true]
 
-let value_check alignment (struct_layouts : Memory.struct_decls) ct about =
+let value_check alignment (struct_decls : Memory.struct_decls) ct about =
   let open Sctypes in
   let open Memory in
   let rec aux (ct_ : Sctypes.t) about =
@@ -668,12 +643,12 @@ let value_check alignment (struct_layouts : Memory.struct_decls) ct about =
            List.filter_map (fun piece ->
                match piece.member_or_padding with
                | Some (member, mct) ->
-                  let member_bt = BT.of_sct mct in
+                  let member_bt = BT.of_sct struct_decls mct in
                   let member_it = member_ ~member_bt (tag, about, member) in
                   Some (aux mct member_it)
                | None ->
                   None
-             ) (SymMap.find tag struct_layouts)
+             ) (SymMap.find tag struct_decls)
          end
     | Function _ ->
        Debug_ocaml.error "todo: function types"

@@ -307,22 +307,24 @@ let rec check_mem_value (loc : loc) ~(expect:BT.t) (mem : mem_value) : (lvt) m =
       let@ values = ListM.mapM (check_mem_value loc ~expect:item_bt) mem_values in
       return (make_array_ ~item_bt values) )
     ( fun tag mvals -> 
-      let@ () = WellTyped.ensure_base_type loc ~expect (Struct tag) in
+      let@ global = get_global () in
+      let@ () = WellTyped.ensure_base_type loc ~expect (BT.of_sct global.struct_decls (Struct tag)) in
       let mvals = List.map (fun (member, _, mv) -> (member, mv)) mvals in
       check_struct loc tag mvals )
     ( fun tag id mv -> 
       check_union loc tag id mv )
 
-and check_struct (loc : loc) (tag : tag) 
-                 (member_values : (member * mem_value) list) : (lvt) m =
+and check_struct (loc : loc) (tag : Sym.t) 
+                 (member_values : (Id.t * mem_value) list) : (lvt) m =
   (* might have to make sure the fields are ordered in the same way as
      in the struct declaration *)
+  let@ global = get_global () in
   let@ layout = get_struct_decl loc tag in
   let rec check fields spec =
     match fields, spec with
     | ((member, mv) :: fields), ((smember, sct) :: spec) 
          when Id.equal member smember ->
-       let@ member_lvt = check_mem_value loc ~expect:(BT.of_sct sct) mv in
+       let@ member_lvt = check_mem_value loc ~expect:(BT.of_sct global.struct_decls sct) mv in
        let@ member_its = check fields spec in
        return ((member, member_lvt) :: member_its)
     | [], [] -> 
@@ -337,7 +339,7 @@ and check_struct (loc : loc) (tag : tag)
   let@ member_its = check member_values (Memory.member_types layout) in
   return (IT.struct_ (tag, member_its))
 
-and check_union (loc : loc) (tag : tag) (id : Id.t) 
+and check_union (loc : loc) (tag : Sym.t) (id : Id.t) 
                 (mv : mem_value) : (lvt) m =
   Debug_ocaml.error "todo: union types"
 
@@ -1163,10 +1165,11 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
         in
         k unit_)
      | M_Store (_is_locking, act, p_pe, v_pe, mo) -> 
+        let@ global = get_global () in
         let@ () = WellTyped.ensure_base_type loc ~expect Unit in
         let@ () = WellTyped.WCT.is_ct act.loc act.ct in
         check_pexpr ~expect:Loc p_pe (fun parg ->
-        check_pexpr ~expect:(BT.of_sct act.ct) v_pe (fun varg ->
+        check_pexpr ~expect:(BT.of_sct global.struct_decls act.ct) v_pe (fun varg ->
         (* The generated Core program will in most cases before this
            already have checked whether the store value is
            representable and done the right thing. Pointers, as I
@@ -1210,8 +1213,9 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
         in
         k unit_))
      | M_Load (act, p_pe, _mo) -> 
+        let@ global = get_global () in
         let@ () = WellTyped.WCT.is_ct act.loc act.ct in
-        let@ () = WellTyped.ensure_base_type loc ~expect (BT.of_sct act.ct) in
+        let@ () = WellTyped.ensure_base_type loc ~expect (BT.of_sct global.struct_decls act.ct) in
         check_pexpr ~expect:Loc p_pe (fun pointer ->
         let@ value = load loc pointer act.ct in
         k value)
@@ -1315,9 +1319,11 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
   | Normal expect, M_CN_progs (_, cn_progs) ->
      let@ () = WellTyped.ensure_base_type loc ~expect Unit in
      let rec aux = function
-       | Cnprog.M_CN_let (loc, (sym, {ct; pointer}), cn_prog) ->
+       | Cnprog.M_CN_let (loc, ((sym, v_bt), {ct; pointer}), cn_prog) ->
+          let@ global = get_global () in
           let@ pointer = WellTyped.WIT.check loc Loc pointer in
           let@ () = WCT.is_ct loc ct in
+          let@ () = WellTyped.ensure_base_type loc ~expect:v_bt (BT.of_sct global.struct_decls ct) in
           let@ value = load loc pointer ct in
           aux (Cnprog.subst (IT.make_subst [(sym, value)]) cn_prog)
        | Cnprog.M_CN_statement (loc, stmt) ->

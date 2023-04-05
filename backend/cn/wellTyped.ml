@@ -85,9 +85,13 @@ module WBT = struct
       | Integer -> return ()
       | Real -> return ()
       | Loc -> return ()
-      | Struct tag -> let@ _struct_decl = get_struct_decl loc tag in return ()
       | Datatype tag -> let@ _datatype = get_datatype loc tag in return ()
-      | Record members -> ListM.iterM (fun (_, bt) -> aux bt) members
+      | Record (sr, members) -> 
+         let@ () = match sr with
+          | Nothing -> return ()
+          | Struct tag -> let@ _sd = get_struct_decl loc tag in return ()
+         in
+         ListM.iterM (fun (_, bt) -> aux bt) members
       | Map (abt, rbt) -> ListM.iterM aux [abt; rbt]
       | List bt -> aux bt
       | Tuple bts -> ListM.iterM aux bts
@@ -374,43 +378,6 @@ module WIT = struct
               fail (illtyped_index_term loc t' has "tuple")
          in
          return (IT (NthTuple (n, t'),item_bt))
-      | Struct (tag, members) ->
-         let@ layout = get_struct_decl loc tag in
-         let decl_members = Memory.member_types layout in
-         let@ () = 
-           let has = List.length members in
-           let expect = List.length decl_members in
-           if has = expect then return ()
-           else fail (fun _ -> {loc; msg = Number_members {has; expect}})
-         in
-         let@ members = 
-           ListM.mapM (fun (member,t) ->
-               let@ bt = match List.assoc_opt Id.equal member decl_members with
-                 | Some sct -> return (BT.of_sct sct)
-                 | None -> fail (fun _ -> {loc; msg = Unknown_member (tag, member)})
-               in
-               let@ t = check loc bt t in
-               return (member, t)
-             ) members
-         in
-         return (IT (Struct (tag, members),BT.Struct tag))
-      | StructMember (t, member) ->
-         let@ t = infer loc t in
-         let@ tag = match IT.bt t with
-           | Struct tag -> return tag
-           | has -> fail (illtyped_index_term loc t has "struct")
-         in
-         let@ field_ct = get_struct_member_type loc tag member in
-         return (IT (StructMember (t, member),BT.of_sct field_ct))
-      | StructUpdate ((t, member), v) ->
-         let@ t = infer loc t in
-         let@ tag = match IT.bt t with
-           | Struct tag -> return tag
-           | has -> fail (illtyped_index_term loc t has "struct")
-         in
-         let@ field_ct = get_struct_member_type loc tag member in
-         let@ v = check loc (BT.of_sct field_ct) v in
-         return (IT (StructUpdate ((t, member), v),BT.Struct tag))
       | Record members ->
          let@ members = 
            ListM.mapM (fun (member,t) ->
@@ -422,11 +389,11 @@ module WIT = struct
            List.map (fun (member, t) -> (member, IT.bt t)
              ) members
          in
-         return (IT (IT.Record members,BT.Record member_types))
+         return (IT (IT.Record members, BT.Record (Nothing, member_types)))
       | RecordMember (t, member) ->
          let@ t = infer loc t in
          let@ members = match IT.bt t with
-           | Record members -> return members
+           | Record (_, members) -> return members
            | has -> fail (illtyped_index_term loc t has "struct")
          in
          let@ bt = match List.assoc_opt Id.equal member members with
@@ -439,7 +406,7 @@ module WIT = struct
       | RecordUpdate ((t, member), v) ->
          let@ t = infer loc t in
          let@ members = match IT.bt t with
-           | Record members -> return members
+           | Record (_, members) -> return members
            | has -> fail (illtyped_index_term loc t has "struct")
          in
          let@ bt = match List.assoc_opt Id.equal member members with
@@ -505,12 +472,14 @@ module WIT = struct
           let@ t_align = check loc Integer t.align in
           return (IT (Aligned {t = t_t; align=t_align},BT.Bool))
        | Representable (ct, t) ->
+          let@ global = get_global () in
           let@ () = WCT.is_ct loc ct in
-          let@ t = check loc (BT.of_sct ct) t in
+          let@ t = check loc (BT.of_sct global.struct_decls ct) t in
           return (IT (Representable (ct, t),BT.Bool))
        | Good (ct, t) ->
+          let@ global = get_global () in
           let@ () = WCT.is_ct loc ct in
-          let@ t = check loc (BT.of_sct ct) t in
+          let@ t = check loc (BT.of_sct global.struct_decls ct) t in
           return (IT (Good (ct, t),BT.Bool))
        | Nil -> 
           fail (fun _ -> {loc; msg = Polymorphic_it it_})
@@ -688,7 +657,8 @@ let oarg_bt_of_pred loc = function
   | RET.Block _ct -> 
       return (BT.Unit)
   | RET.Owned ct -> 
-      return (BT.of_sct ct)
+      let@ global = get_global () in
+      return (BT.of_sct global.struct_decls ct)
   | RET.PName pn ->
       let@ def = Typing.get_resource_predicate_def loc pn in
       return def.oarg_bt

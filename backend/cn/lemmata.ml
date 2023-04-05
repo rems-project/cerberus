@@ -1,3 +1,5 @@
+open Global
+
 module IT=IndexTerms
 module BT = BaseTypes
 module LS = LogicalSorts
@@ -255,13 +257,13 @@ let scan (ftyp : AT.lemmat) =
     end
   end
 
-let struct_layout_field_bts xs =
+let struct_layout_field_bts global xs =
   let open Memory in
   let xs2 = List.filter (fun x -> Option.is_some x.member_or_padding) xs
     |> List.sort (fun (x : struct_piece) y -> Int.compare x.offset y.offset)
     |> List.filter_map (fun x -> x.member_or_padding)
   in
-  (List.map fst xs2, List.map (fun x -> BaseTypes.of_sct (snd x)) xs2)
+  (List.map fst xs2, List.map (fun x -> BaseTypes.of_sct global.struct_decls (snd x)) xs2)
 
 let get_struct_xs struct_decls tag = match SymMap.find_opt tag struct_decls with
   | Some def -> struct_layout_field_bts def
@@ -298,7 +300,6 @@ type list_mono = (BT.t * Sym.t) list
 
 
 let add_list_mono_datatype (bt, nm) global =
-  let open Global in
   let bt_name = Sym.pp_string (Option.get (BT.is_datatype_bt bt)) in
   let nil = Sym.fresh_named ("Nil_of_" ^ bt_name) in
   let cons = Sym.fresh_named ("Cons_of_" ^ bt_name) in
@@ -472,7 +473,6 @@ let ensure_fun_upd () =
 
 let rec bt_to_coq (global : Global.t) (list_mono : list_mono) loc_info =
   let open Pp in
-  let open Global in
   let do_fail nm bt = fail_m (fst loc_info) (Pp.item ("bt_to_coq: " ^ nm)
         (BaseTypes.pp bt ^^^ !^ "in converting" ^^^ (snd loc_info))) in
   let rec f bt = match bt with
@@ -482,11 +482,7 @@ let rec bt_to_coq (global : Global.t) (list_mono : list_mono) loc_info =
     let@ enc_x = f x in
     let@ enc_y = f y in
     return (parens (binop "->" enc_x enc_y))
-  | BaseTypes.Struct tag ->
-    let (_, fld_bts) = get_struct_xs global.struct_decls tag in
-    let@ enc_fld_bts = ListM.mapM f fld_bts in
-    return (tuple_coq_ty (Sym.pp tag) enc_fld_bts)
-  | BaseTypes.Record mems ->
+  | BaseTypes.Record (_, mems) ->
     let@ enc_mem_bts = ListM.mapM f (List.map snd mems) in
     return (tuple_coq_ty (!^ "record") enc_mem_bts)
   | BaseTypes.Loc -> return (!^ "Z")
@@ -664,7 +660,7 @@ let ensure_pred global list_mono loc name aux =
 let ensure_struct_mem is_good global list_mono loc ct aux = match Sctypes.is_struct_ctype ct with
   | None -> fail "ensure_struct_mem: not struct" (Sctypes.pp ct)
   | Some tag ->
-  let bt = BaseTypes.Struct tag in
+  let bt = BaseTypes.of_sct global.struct_decls (Struct tag) in
   let nm = if is_good then "good" else "representable" in
   let k = ["predefs"; "struct"; Sym.pp_string tag; nm] in
   let op_nm = "struct_" ^ Sym.pp_string tag ^ "_" ^ nm in
@@ -833,7 +829,7 @@ let it_to_coq loc global list_mono it =
        parensM (build [rets "fun_upd"; rets e; aux m; aux x; aux y])
     | IT.MapGet (m, x) -> parensM (build [aux m; aux x])
     | IT.RecordMember (t, m) ->
-        let flds = BT.record_bt (IT.bt t) in
+        let _, flds = BT.record_bt (IT.bt t) in
         if List.length flds == 1
         then aux t
         else
@@ -841,7 +837,7 @@ let it_to_coq loc global list_mono it =
         let@ op_nm = ensure_tuple_op false (Id.pp_string m) ix in
         parensM (build [rets op_nm; aux t])
     | IT.RecordUpdate ((t, m), x) ->
-        let flds = BT.record_bt (IT.bt t) in
+        let _, flds = BT.record_bt (IT.bt t) in
         if List.length flds == 1
         then aux x
         else
@@ -851,24 +847,6 @@ let it_to_coq loc global list_mono it =
     | IT.Record mems ->
         let@ xs = ListM.mapM aux (List.map snd mems) in
         parensM (return (flow (comma ^^ break 1) xs))
-    | IT.StructMember (t, m) ->
-        let tag = BaseTypes.struct_bt (IT.bt t) in
-        let (mems, bts) = get_struct_xs global.struct_decls tag in
-        let ix = find_tuple_element Id.equal m Id.pp mems in
-        if List.length mems == 1
-        then aux t
-        else
-        let@ op_nm = ensure_tuple_op false (Id.pp_string m) ix in
-        parensM (build [rets op_nm; aux t])
-    | IT.StructUpdate ((t, m), x) ->
-        let tag = BaseTypes.struct_bt (IT.bt t) in
-        let (mems, bts) = get_struct_xs global.struct_decls tag in
-        let ix = find_tuple_element Id.equal m Id.pp mems in
-        if List.length mems == 1
-        then aux x
-        else
-        let@ op_nm = ensure_tuple_op true (Id.pp_string m) ix in
-        parensM (build [rets op_nm; aux t; aux x])
     | IT.Cast (cbt, t) ->
       begin match IT.bt t, cbt with
       | Integer, Loc -> aux t

@@ -54,7 +54,7 @@ let bind_return loc members (rt : RT.t) =
 
 let make_return_record loc call_situation record_members = 
   let record_s = Sym.fresh_make_uniq (TypeErrors.call_prefix call_situation) in
-  let record_bt = BT.Record record_members in
+  let record_bt = BT.Record (Nothing,record_members) in
   let@ () = add_l record_s record_bt (loc, lazy (Sym.pp record_s)) in
   let record_it = sym_ (record_s, record_bt) in
   let member_its = 

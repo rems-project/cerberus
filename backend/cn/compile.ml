@@ -45,7 +45,15 @@ type env = {
   datatypes : BaseTypes.datatype_info SymMap.t;
   datatype_constrs : BaseTypes.constr_info SymMap.t;
   tagDefs: Mu.mu_tag_definitions;
+  structDecls: Memory.struct_decls; (* derived from the above, but for convenience *)
 }
+
+let structDecls tagDefs = 
+  Pmap.fold (fun sym def acc ->
+    match def with
+    | Mucore.M_StructDef sd -> SymMap.add sym sd acc
+    | Mucore.M_UnionDef _ -> acc
+    ) tagDefs SymMap.empty
 
 let empty tagDefs =
   { computationals = SymMap.empty;
@@ -54,7 +62,8 @@ let empty tagDefs =
     functions = SymMap.empty; 
     datatypes = SymMap.empty; 
     datatype_constrs = SymMap.empty;
-    tagDefs; 
+    tagDefs = tagDefs; 
+    structDecls = structDecls tagDefs;
   }
 
 
@@ -207,9 +216,9 @@ and free_in_exprs = function
   | e :: es -> SymSet.union (free_in_expr e) (free_in_exprs es)
 
 
-let rec translate_cn_base_type (bTy: CF.Symbol.sym cn_base_type) =
+let translate_cn_base_type env =
   let open SurfaceBaseTypes in
-  match bTy with
+  let rec aux = function
     | CN_unit ->
         Unit
     | CN_bool ->
@@ -221,31 +230,33 @@ let rec translate_cn_base_type (bTy: CF.Symbol.sym cn_base_type) =
     | CN_loc ->
         Loc None
     | CN_struct tag_sym ->
-        Struct tag_sym
+        SBT.of_sct env.structDecls (Struct tag_sym)
     | CN_record members ->
-        SBT.Record (List.map (fun (bt,m) -> (m, translate_cn_base_type bt)) members)
+        SBT.Record (Nothing, List.map (fun (bt,m) -> (m, aux bt)) members)
     | CN_datatype dt_sym ->
         Datatype dt_sym
     | CN_map (bTy1, bTy2) ->
-        Map ( translate_cn_base_type bTy1
-            , translate_cn_base_type bTy2 )
+        Map ( aux bTy1
+            , aux bTy2 )
     | CN_list bTy' -> 
-        List (translate_cn_base_type bTy')
+        List (aux bTy')
     | CN_tuple bTys ->
-        Tuple (List.map translate_cn_base_type bTys)
+        Tuple (List.map aux bTys)
     | CN_set bTy' ->
-        Set (translate_cn_base_type bTy')
+        Set (aux bTy')
+    in
+    aux
 
 
 let register_cn_predicates env (defs: cn_predicate list) =
   let aux env def =
     let translate_args xs =
       List.map (fun (bTy, id_or_sym) ->
-        (id_or_sym, SBT.to_basetype (translate_cn_base_type bTy))
+        (id_or_sym, SBT.to_basetype (translate_cn_base_type env bTy))
       ) xs in
     let iargs = translate_args def.cn_pred_iargs in
     let output = 
-      (SBT.to_basetype (translate_cn_base_type (snd def.cn_pred_output)))
+      (SBT.to_basetype (translate_cn_base_type env (snd def.cn_pred_output)))
     in
     add_predicate def.cn_pred_name { 
         pred_iargs= iargs; 
@@ -270,11 +281,11 @@ let register_cn_functions env (defs: cn_function list) =
   let aux env def =
     let args = 
       List.map (fun (bTy, sym) -> 
-          (sym, SBT.to_basetype (translate_cn_base_type bTy))
+          (sym, SBT.to_basetype (translate_cn_base_type env bTy))
       ) def.cn_func_args 
     in
     let return_bt = 
-      SBT.to_basetype (translate_cn_base_type def.cn_func_return_bty)
+      SBT.to_basetype (translate_cn_base_type env def.cn_func_return_bty)
     in
     let fsig = {args; return_bty = return_bt} in
     add_function def.cn_func_loc def.cn_func_name fsig env
@@ -287,7 +298,7 @@ let add_datatype_info env (dt : cn_datatype) =
   let add_param m (ty, nm) =
     match Y.find_opt (Id.s nm) m with
     | None ->
-      return (Y.add (Id.s nm) (nm, SBT.to_basetype (translate_cn_base_type ty)) m)
+      return (Y.add (Id.s nm) (nm, SBT.to_basetype (translate_cn_base_type env ty)) m)
     | Some _ -> 
         fail {loc = Id.loc nm;
               msg = Generic (!^"Re-using member name" ^^^ Id.pp nm 
@@ -298,7 +309,7 @@ let add_datatype_info env (dt : cn_datatype) =
   let add_constr env (cname, params) =
     let c_params = 
       List.map (fun (ty, nm) -> 
-        (nm, SBT.to_basetype (translate_cn_base_type ty))
+        (nm, SBT.to_basetype (translate_cn_base_type env ty))
         ) params
     in
     let info = BT.{c_params; c_datatype_tag = dt.cn_dt_name} in
@@ -479,17 +490,12 @@ module EffectfulTranslation = struct
   (* just copy-pasting and adapting Kayvan's older version of this code *)
   let translate_member_access loc env (t : IT.sterm) member =
     match IT.bt t with
-    | SBT.Record members ->
+    | SBT.Record (_, members) as t_bt ->
        let@ member_bt = match List.assoc_opt Id.equal member members with
          | Some member_bt -> return member_bt
-         | None -> fail {loc; msg = Unknown_record_member (SBT.pp (SBT.Record members), member)}
+         | None -> fail {loc; msg = Unknown_record_member (SBT.pp t_bt, member)}
        in
        return (IT.recordMember_ ~member_bt (t, member))
-    | Struct tag ->
-       let@ defs_ = lookup_struct loc tag env in
-       let@ ty = lookup_member loc (tag, defs_) member in
-       let member_bt = SurfaceBaseTypes.of_sct ty in
-       return ( IT.IT ((StructMember (t, member)), member_bt) )
     | Datatype tag ->
        let@ dt_info = lookup_datatype loc tag env in
        let@ bt = match List.assoc_opt Id.equal member dt_info.dt_all_params with
@@ -574,20 +580,20 @@ module EffectfulTranslation = struct
         | CNExpr_record members ->
            let@ members = ListM.mapsndM self members in
            let bts = List.map_snd IT.bt members in
-           return (IT (IT.Record members, SBT.Record bts))
+           return (IT (IT.Record members, SBT.Record (Nothing, bts)))
         | CNExpr_memberupdates (e, updates) ->
            let@ e = self e in
            let bt = IT.bt e in
-           begin match IT.bt e with
-           | Struct _ -> 
+           begin match bt with
+           | Record _ -> 
               let@ expr, _ = 
                 ListM.fold_leftM (fun (expr, already) (id, v) ->
-                    match StringSet.find_opt (Id.s id) already with
-                    | Some _ -> 
+                    match StringSet.mem (Id.s id) already with
+                    | true -> 
                        fail {loc; msg = Generic !^"Repeated definition of struct fields." }
-                    | None ->
+                    | false ->
                        let@ v = self v in
-                       let expr = IT ((StructUpdate ((expr, id), v)), bt) in
+                       let expr = IT ((RecordUpdate ((expr, id), v)), bt) in
                        return (expr, StringSet.add (Id.s id) already)
                   ) (e, StringSet.empty) updates
               in
@@ -632,7 +638,7 @@ module EffectfulTranslation = struct
             end
         | CNExpr_cast (bt, expr) ->
             let@ expr = self expr in
-            let bt = translate_cn_base_type bt in
+            let bt = translate_cn_base_type env bt in
             return (IT (Cast (SBT.to_basetype bt, expr), bt))
         | CNExpr_call (fsym, exprs) ->
             let@ args = ListM.mapM self exprs in
@@ -655,7 +661,7 @@ module EffectfulTranslation = struct
                 return (nm, expr)) exprs
             in
             let record = IT ((Record exprs),
-                             SBT.Record (List.map (fun (s,t) -> (s, basetype t)) exprs)) in
+                             SBT.Record (Nothing,List.map (fun (s,t) -> (s, basetype t)) exprs)) in
             return (IT ((DatatypeCons (c_nm, record)), SBT.Datatype cons_info.c_datatype_tag))
         | CNExpr_each (sym, r, e) ->
             let@ expr = 
@@ -779,7 +785,7 @@ module EffectfulTranslation = struct
          in
          (* we don't take Resources.owned_oargs here because we want to
             maintain the C-type information *)
-         let oargs_ty = SBT.of_sct scty in
+         let oargs_ty = SBT.of_sct env.structDecls scty in
          return (Owned scty, oargs_ty)
       | CN_block ty ->
         let scty = Sctypes.of_ctype_unsafe res_loc ty in
@@ -858,7 +864,7 @@ module EffectfulTranslation = struct
     return (pt, pointee_value)
 
   let translate_cn_let_resource__each env res_loc _sym (q, bt, guard, pred_loc, res, args) =
-    let bt' = translate_cn_base_type bt in
+    let bt' = translate_cn_base_type env bt in
     let@ () = 
       if SBT.equal bt' SBT.Integer then return ()
       else fail {loc = pred_loc; msg = let open Pp in
@@ -901,7 +907,7 @@ module EffectfulTranslation = struct
        let@ e = translate_cn_expr SymSet.empty env e_ in
        return (LC.T (IT.term_of_sterm e))
     | CN_assert_qexp (sym, bTy, e1_, e2_) ->
-       let bt = translate_cn_base_type bTy in
+       let bt = translate_cn_base_type env bTy in
        let env_with_q = add_logical sym bt env in
        let@ e1 = translate_cn_expr (SymSet.singleton sym) env_with_q e1_ in
        let@ e2 = translate_cn_expr (SymSet.singleton sym) env_with_q e2_ in
@@ -967,7 +973,7 @@ let translate_cn_function env (def: cn_function) =
   let open LogicalFunctions in
   Pp.debug 2 (lazy (Pp.item "translating function defn" (Sym.pp def.cn_func_name)));
   let args = 
-    List.map (fun (bTy, sym) -> (sym, translate_cn_base_type bTy)
+    List.map (fun (bTy, sym) -> (sym, translate_cn_base_type env bTy)
       ) def.cn_func_args in
   let env' =
     List.fold_left (fun acc (sym, bt) -> add_logical sym bt acc
@@ -982,7 +988,7 @@ let translate_cn_function env (def: cn_function) =
        let@ body = translate_cn_func_body env' body in
        return (if is_rec then Rec_Def body else Def body)
     | None -> return Uninterp in
-  let return_bt = translate_cn_base_type def.cn_func_return_bty in
+  let return_bt = translate_cn_base_type env def.cn_func_return_bty in
   let def2 = {
       loc = def.cn_func_loc; 
       args = List.map_snd SBT.to_basetype args; 
@@ -1229,7 +1235,7 @@ let rec make_lrt_generic env st =
 
   let make_rt loc (env : env) st (s, ct) (accesses, ensures) =
     let ct = Sctypes.of_ctype_unsafe loc ct in
-    let sbt = SBT.of_sct ct in
+    let sbt = SBT.of_sct env.structDecls ct in
     let bt = SBT.to_basetype sbt in
     let@ lrt = make_lrt_with_accesses (add_computational s sbt env) st (accesses, ensures) in
     let info = (loc, Some "return value good") in
@@ -1243,7 +1249,7 @@ let rec make_lrt_generic env st =
     Pp.debug 2 (lazy (Pp.item "translating lemma defn" (Sym.pp def.cn_lemma_name)));
     let rec aux env = function
       | (bTy, sym) :: args' ->
-         let bTy = translate_cn_base_type bTy in
+         let bTy = translate_cn_base_type env bTy in
          let env = add_computational sym bTy env in
          let@ at = aux env args' in
          let info = (def.cn_lemma_loc, None) in
@@ -1278,7 +1284,7 @@ module UsingLoads = struct
 
   open Cnprog
 
-  let handle allocations old_states : cn_prog E.m -> cn_prog Resultat.m = 
+  let handle structDecls allocations old_states : cn_prog E.m -> cn_prog Resultat.m = 
 
     let rec aux = function
       | E.Done x ->
@@ -1316,11 +1322,11 @@ module UsingLoads = struct
     and load loc action_pp pointer k =
       let@ pointee_ct = pointee_ct loc pointer in
       let value_s = Sym.fresh_make_uniq (action_pp ^ "_" ^ Pp.plain (IT.pp pointer)) in
-      let value_bt = SBT.of_sct pointee_ct in
+      let value_bt = SBT.of_sct structDecls pointee_ct in
       let value = IT.sym_ (value_s, value_bt) in
       let@ prog = aux (k (Some value)) in
       let load = {ct = pointee_ct; pointer = IT.term_of_sterm pointer} in
-      return (M_CN_let (loc, (value_s, load), prog))
+      return (M_CN_let (loc, ((value_s, SBT.to_basetype value_bt), load), prog))
 
     in
     
@@ -1338,7 +1344,7 @@ let translate_cn_statement
 
   let open Cnprog in
 
-  UsingLoads.handle allocations old_states (
+  UsingLoads.handle env.structDecls allocations old_states (
       let open E in
       let open Effectful.Make(E) in
       match stmt_ with

@@ -1,4 +1,5 @@
 module IT = IndexTerms
+open Global
 open IT
 open Pp
 open ResourceTypes
@@ -37,7 +38,7 @@ let debug_constraint_failure_diagnostics lvl (model_with_q : Solver.model_with_q
   let rec split tm = match IT.term tm with
     | IT.Binop (And, x1, x2)
     | IT.Binop (Or, x1, x2) -> split x1 @ split x2
-    | IT.StructMember (x, _)
+    | IT.RecordMember (x, _) (* Thomas, that good? *)
     | IT.Not x -> split x
     | IT.Binop (EQ, x, y)
     | IT.Binop (Impl, x, y)
@@ -50,7 +51,6 @@ let debug_constraint_failure_diagnostics lvl (model_with_q : Solver.model_with_q
   let pp_v tm pp =
     begin match Solver.eval global model tm with
       | None -> !^"/* NO_EVAL */" ^^ pp
-      | Some (IT (_, Struct _))
       | Some (IT (_, Record _))
       | Some (IT (_, Map (_,_))) ->  pp
       | Some v -> !^"/*" ^^^ IT.pp v ^^^ !^"*/" ^^ pp
@@ -351,7 +351,7 @@ module General = struct
        in
        let@ (needed, oarg) =
          map_and_fold_resources loc (sub_resource_if is_exact_re)
-           (needed, O (default_ (BT.of_sct requested_ct)))
+           (needed, O (default_ (BT.of_sct global.struct_decls requested_ct)))
        in
        let@ (needed, oargs) =
          map_and_fold_resources loc (sub_resource_if (fun re -> not (is_exact_re re)))
@@ -729,10 +729,11 @@ module General = struct
           permission = and_ [permission; (int_ 0) %<= q; q %<= (int_ (length - 1))];
         }
     in
+    let@ global = get_global () in
     match o_value with 
     | None -> return None
     | Some oarg ->
-       let oarg_item_bt = BT.of_sct item_ct in
+       let oarg_item_bt = BT.of_sct global.struct_decls item_ct in
        let@ oarg = cases_to_map loc uiinfo Integer oarg_item_bt oarg in
        let folded_resource = ({
            name = Owned (Array (item_ct, Some length));
@@ -840,12 +841,12 @@ module General = struct
        return (Some qpoint)
 
 
-  and unfolded_struct layout tag pointer_t permission_t value =
+  and unfolded_struct global layout tag pointer_t permission_t value =
     let open Memory in
     List.map (fun {offset; size; member_or_padding} ->
         match member_or_padding with
         | Some (member, sct) ->
-          let member_value = member_ ~member_bt:(BT.of_sct sct) (tag, value, member) in
+          let member_value = member_ ~member_bt:(BT.of_sct global.struct_decls sct) (tag, value, member) in
            let resource = 
              (P {
                  name = Owned sct;
@@ -881,7 +882,7 @@ module General = struct
     | None -> return None
     | Some (point, O value) -> 
        let layout = SymMap.find tag global.struct_decls in
-       let resources =  unfolded_struct layout tag pointer_t permission_t value in
+       let resources =  unfolded_struct global layout tag pointer_t permission_t value in
        return (Some resources)
 
 

@@ -90,13 +90,13 @@ let assertl loc b msg =
 
 let convert_ct loc ct = Sctypes.of_ctype_unsafe loc ct
 
-let convert_bt loc =
+let convert_bt loc env =
 
   let rec bt_of_core_object_type = function
     | OTy_integer -> BT.Integer
     | OTy_pointer -> BT.Loc
     | OTy_array t -> BT.Map (Integer, bt_of_core_object_type t)
-    | OTy_struct tag -> BT.Struct tag
+    | OTy_struct tag -> BT.of_sct env.C.structDecls (Struct tag)
     | OTy_union _tag -> Tools.unsupported loc !^"union types"
     | OTy_floating -> Tools.unsupported loc !^"floats"
   in
@@ -160,17 +160,17 @@ let fensure_ctype__pexpr loc err pe : 'TY act =
 
 
 
-let rec core_to_mu__pattern loc (Pattern (annots, pat_)) = 
+let rec core_to_mu__pattern loc env (Pattern (annots, pat_)) = 
   let loc = Loc.update loc (Annot.get_loc_ annots) in
 
   let wrap pat_ = M_Pattern(loc, annots, pat_) in
   match pat_ with
   | CaseBase (msym, bt1) -> 
-     wrap (M_CaseBase (msym, convert_bt loc bt1))
+     wrap (M_CaseBase (msym, convert_bt loc env bt1))
   | CaseCtor(ctor, pats) -> 
-     let pats = map (core_to_mu__pattern loc) pats in
+     let pats = map (core_to_mu__pattern loc env) pats in
      match ctor with
-     | Cnil bt1 -> wrap (M_CaseCtor (M_Cnil (convert_bt loc bt1), pats))
+     | Cnil bt1 -> wrap (M_CaseCtor (M_Cnil (convert_bt loc env bt1), pats))
      | Ccons -> wrap (M_CaseCtor (M_Ccons, pats))
      | Ctuple -> wrap (M_CaseCtor (M_Ctuple, pats))
      | Carray -> wrap (M_CaseCtor (M_Carray, pats))
@@ -178,7 +178,7 @@ let rec core_to_mu__pattern loc (Pattern (annots, pat_)) =
      | _ -> assert_error loc (!^"core_to_mucore: unsupported pattern")
 
 
-let rec n_ov loc = function
+let rec n_ov loc env = function
   | OVinteger iv -> 
      M_OVinteger iv
   | OVfloating fv -> 
@@ -186,29 +186,29 @@ let rec n_ov loc = function
   | OVpointer pv -> 
      M_OVpointer pv
   | OVarray is -> 
-     M_OVarray (List.map (n_lv loc) is)
+     M_OVarray (List.map (n_lv loc env) is)
   | OVstruct (sym1, is) -> 
      M_OVstruct (sym1, List.map (fun (id,ct,mv) -> (id,convert_ct loc ct,mv)) is)
   | OVunion (sym1, id1, mv) -> 
      M_OVunion (sym1, id1, mv)
 
-and n_lv loc v =
+and n_lv loc env v =
   match v with
   | LVspecified ov -> 
-     n_ov loc ov
+     n_ov loc env ov
   | LVunspecified ct1 -> 
      assert_error loc (!^"core_anormalisation: LVunspecified")
 
 
-and n_val loc = function
-  | Vobject ov -> M_Vobject (n_ov loc ov)
-  | Vloaded lv -> M_Vobject (n_lv loc lv)
+and n_val loc env = function
+  | Vobject ov -> M_Vobject (n_ov loc env ov)
+  | Vloaded lv -> M_Vobject (n_lv loc env lv)
   | Vunit -> M_Vunit
   | Vtrue -> M_Vtrue
   | Vfalse -> M_Vfalse
   | Vctype _ct -> assert_error loc (!^"core_anormalisation: Vctype")
-  | Vlist (cbt, vs) -> M_Vlist (convert_bt loc cbt, List.map (n_val loc) vs)
-  | Vtuple vs -> M_Vtuple (List.map (n_val loc) vs)
+  | Vlist (cbt, vs) -> M_Vlist (convert_bt loc env cbt, List.map (n_val loc env) vs)
+  | Vtuple vs -> M_Vtuple (List.map (n_val loc env) vs)
 
 
 let unit_pat loc annots = 
@@ -216,7 +216,8 @@ let unit_pat loc annots =
 
 
 
-let rec n_pexpr loc (Pexpr (annots, bty, pe)) : mu_pexpr =
+let rec n_pexpr loc env (Pexpr (annots, bty, pe)) : mu_pexpr =
+  let n_pexpr loc = n_pexpr loc env in
   let loc = Loc.update loc (get_loc_ annots) in
   let annotate pe = M_Pexpr (loc, annots, bty, pe) in
   match pe with
@@ -225,7 +226,7 @@ let rec n_pexpr loc (Pexpr (annots, bty, pe)) : mu_pexpr =
   | PEimpl i -> 
      assert_error loc (!^"PEimpl not inlined")
   | PEval v -> 
-     annotate (M_PEval (n_val loc v))
+     annotate (M_PEval (n_val loc env v))
   | PEconstrained l -> 
      let l = List.map (fun (c, e) -> (c, n_pexpr loc e)) l in
      annotate (M_PEconstrained l)
@@ -274,7 +275,7 @@ let rec n_pexpr loc (Pexpr (annots, bty, pe)) : mu_pexpr =
      | Core.Civfromfloat, _ ->
         assert_error loc !^"Civfromfloat applied to wrong number of arguments"
      | Core.Cnil bt1, _ -> 
-        annotate (M_PEctor (M_Cnil (convert_bt loc bt1), 
+        annotate (M_PEctor (M_Cnil (convert_bt loc env bt1), 
                             List.map (n_pexpr loc) args))
      | Core.Ccons, _ ->
         annotate (M_PEctor (M_Ccons, List.map (n_pexpr loc) args))
@@ -380,7 +381,7 @@ let rec n_pexpr loc (Pexpr (annots, bty, pe)) : mu_pexpr =
 
 
      | _ ->
-        let pat = core_to_mu__pattern loc pat in
+        let pat = core_to_mu__pattern loc env pat in
         let e' = n_pexpr loc e' in
         let e'' = n_pexpr loc e'' in
         annotate (M_PElet (M_Pat pat, e', e''))
@@ -424,7 +425,8 @@ let n_kill_kind loc = function
   | Static0 ct -> M_Static (convert_ct loc ct)
 
 
-let n_action loc action =
+let n_action loc env action =
+  let n_pexpr loc = n_pexpr loc env in
   let (Action (loc', _, a1)) = action in
   let loc = Loc.update loc loc' in
   let wrap a1 = M_Action(loc, a1) in
@@ -501,8 +503,8 @@ let n_action loc action =
 
      
 
-let n_paction loc (Paction(pol, a)) = 
-  M_Paction (pol, n_action loc a)
+let n_paction loc env (Paction(pol, a)) = 
+  M_Paction (pol, n_action loc env a)
 
 
 
@@ -511,7 +513,8 @@ let n_paction loc (Paction(pol, a)) =
 let show_n_memop = 
   Mem_common.instance_Show_Show_Mem_common_memop_dict.show_method
 
-let n_memop loc memop pexprs =
+let n_memop loc env memop pexprs =
+  let n_pexpr loc = n_pexpr loc env in
   match (memop, pexprs) with
   | (Mem_common.PtrEq, [pe1;pe2]) ->
      let pe1 = n_pexpr loc pe1 in
@@ -610,9 +613,9 @@ let rec n_expr (loc : Loc.t) ((env, old_states), desugaring_things) (global_type
   let (Expr (annots, pe)) = e in
   let loc = Loc.update loc (get_loc_ annots) in
   let wrap pe = M_Expr (loc, annots, pe) in
-  let n_pexpr = n_pexpr loc in
-  let n_paction = (n_paction loc) in
-  let n_memop = (n_memop loc) in
+  let n_pexpr = n_pexpr loc env in
+  let n_paction = (n_paction loc env) in
+  let n_memop = (n_memop loc env) in
   let n_expr = (n_expr loc ((env, old_states), desugaring_things) (global_types, visible_objects_env)) in
   match pe with
   | Epure pexpr2 -> 
@@ -661,7 +664,7 @@ let rec n_expr (loc : Loc.t) ((env, old_states), desugaring_things) (global_type
 
      | _ ->
         let e1 = n_pexpr e1 in
-        let pat = core_to_mu__pattern loc pat in
+        let pat = core_to_mu__pattern loc env pat in
         let@ e2 = n_expr e2 in
         return (wrap (M_Elet(M_Pat pat, e1, e2)))
      end
@@ -716,7 +719,7 @@ let rec n_expr (loc : Loc.t) ((env, old_states), desugaring_things) (global_type
      return (wrap (M_Eunseq es))
   | Ewseq(pat, e1, e2) ->
      let@ e1 = n_expr e1 in
-     let pat = core_to_mu__pattern loc pat in
+     let pat = core_to_mu__pattern loc env pat in
      let@ e2 = n_expr e2 in
      return (wrap (M_Ewseq(pat, e1, e2)))
   | Esseq(pat, e1, e2) ->
@@ -759,7 +762,7 @@ let rec n_expr (loc : Loc.t) ((env, old_states), desugaring_things) (global_type
        | _, _ ->
           n_expr e1 
      in
-     let pat = core_to_mu__pattern loc pat in
+     let pat = core_to_mu__pattern loc env pat in
      let@ e2 = n_expr e2 in
      return (wrap (M_Esseq(pat, e1, e2)))
   | Ebound e ->
@@ -878,7 +881,7 @@ let make_label_args f_i loc env st args (accesses, inv) =
   let rec aux (resources, good_lcs) env st = function
     | ((o_s, (ct, pass_by_value_or_pointer)), (s, bt)) :: rest ->
        assert (Option.equal Sym.equal o_s (Some s));
-       assert (BT.equal (convert_bt loc bt) Loc);
+       assert (BT.equal (convert_bt loc env bt) Loc);
        assert (is_pass_by_pointer pass_by_value_or_pointer);
        (* now interesting only: s, ct, rest *)
        let sct = convert_ct loc ct in
@@ -913,8 +916,8 @@ let make_function_args f_i loc env args (accesses, requires) =
     | ((mut_arg, (mut_arg', ct)), (pure_arg, bt)) :: rest ->
        assert (Option.equal Sym.equal (Some mut_arg) mut_arg');
        let ct = convert_ct loc ct in
-       let sbt = SBT.of_sct ct in
-       let bt = convert_bt loc bt in
+       let sbt = SBT.of_sct env.C.structDecls ct in
+       let bt = convert_bt loc env bt in
        assert (BT.equal bt (SBT.to_basetype sbt));
        let env = C.add_computational pure_arg sbt env in
        let arg_state = C.LocalState.CVS_Value (IT.sym_ (pure_arg, sbt)) in
@@ -1101,8 +1104,8 @@ let normalise_fun_map_decl
      let@ (requires, d_st) = desugar_conds d_st (List.map snd requires) in
      Print.debug 6 (lazy (Print.string "desugared requires conds"));
      let@ (ret_s, ret_d_st) = register_new_cn_local (Id.id "return") d_st in
-     assertl loc (BT.equal (convert_bt loc ret_bt) 
-                    (BT.of_sct (convert_ct loc ret_ct))) 
+     assertl loc (BT.equal (convert_bt loc env ret_bt) 
+                    (BT.of_sct env.C.structDecls (convert_ct loc ret_ct))) 
        !^"function return type mismatch";
      let@ (ensures, ret_d_st) = desugar_conds ret_d_st (List.map snd ensures) in
      Print.debug 6 (lazy (Print.string "desugared ensures conds"));
@@ -1188,33 +1191,33 @@ let normalise_fun_map
 
 
 
-let normalise_globs tagDefs sym g =
+let normalise_globs env sym g =
   let loc = Loc.unknown in
   match g with
   | GlobalDef ((bt, ct), e) -> 
      (* this may have to change *)
      let@ e = 
        n_expr loc 
-         ((C.empty tagDefs, (C.LocalState.init_st).old_states), 
+         ((C.empty env.C.tagDefs, (C.LocalState.init_st).old_states), 
           (Pmap.empty Int.compare, 
            CF.Cn_desugaring.initial_cn_desugaring_state [])) 
          ([], Pmap.empty Int.compare)
          e 
      in
-     return (M_GlobalDef ((convert_bt loc bt, convert_ct loc ct), e))
+     return (M_GlobalDef ((convert_bt loc env bt, convert_ct loc ct), e))
   | GlobalDecl (bt, ct) -> 
-     return (M_GlobalDecl (convert_bt loc bt, convert_ct loc ct))
+     return (M_GlobalDecl (convert_bt loc env bt, convert_ct loc ct))
 
 
-let normalise_globs_list tagDefs gs = 
+let normalise_globs_list env gs = 
    ListM.mapM (fun (sym,g) -> 
-       let@ g = normalise_globs tagDefs sym g in
+       let@ g = normalise_globs env sym g in
        return (sym, g)
      ) gs
 
 
 
-let make_struct_decl loc fields (tag : BT.tag) = 
+let make_struct_decl loc fields (tag : Sym.t) = 
 
   let open Memory in
   let tagDefs = CF.Tags.tagDefs () in
@@ -1301,7 +1304,7 @@ let normalise_file (markers_env, ail_prog) file =
       ) file.mi_globs
   in
 
-  let@ globs = normalise_globs_list tagDefs file.mi_globs in
+  let@ globs = normalise_globs_list env file.mi_globs in
 
   let env = List.fold_left register_glob env globs in
 

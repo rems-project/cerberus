@@ -17,8 +17,8 @@ type label_kind =
 
 
 type access =
-  | Load of BT.member option
-  | Store of BT.member option
+  | Load of Id.t option
+  | Store of Id.t option
   | Deref
   | Kill
   | Free
@@ -110,12 +110,12 @@ type sym_or_string =
 type message =
   | Unknown_variable of Sym.t
   | Unknown_function of Sym.t
-  | Unknown_struct of BT.tag
-  | Unknown_datatype of BT.tag
-  | Unknown_datatype_constr of BT.tag
+  | Unknown_struct of Sym.t
+  | Unknown_datatype of Sym.t
+  | Unknown_datatype_constr of Sym.t
   | Unknown_resource_predicate of {id: Sym.t; logical: bool}
   | Unknown_logical_function of {id: Sym.t; resource: bool}
-  | Unknown_member of BT.tag * BT.member
+  | Unknown_member of Sym.t * Id.t
   | Unknown_record_member of Pp.doc * Id.t
   | Unknown_lemma of Sym.t
 

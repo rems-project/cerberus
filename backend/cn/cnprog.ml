@@ -29,18 +29,17 @@ type cn_load = {ct : Sctypes.t; pointer : IndexTerms.t}
 
 
 type cn_prog = 
-  | M_CN_let of Loc.t * (Sym.t * cn_load) * cn_prog
+  | M_CN_let of Loc.t * ((Sym.t * BaseTypes.t) * cn_load) * cn_prog
   | M_CN_statement of Loc.t * cn_statement
 
 
 let rec subst substitution = function
-  | M_CN_let (loc, (name, {ct; pointer}), prog) ->
+  | M_CN_let (loc, ((name, bt), {ct; pointer}), prog) ->
      let pointer = IT.subst substitution pointer in
      let name, prog = 
-       suitably_alpha_rename substitution.relevant 
-         (name, BT.of_sct ct) prog
+       suitably_alpha_rename substitution.relevant (name, bt) prog
      in
-     M_CN_let (loc, (name, {ct; pointer}), subst substitution prog)
+     M_CN_let (loc, ((name, bt), {ct; pointer}), subst substitution prog)
   | M_CN_statement (loc, stmt) ->
      let stmt = match stmt with
        | M_CN_pack_unpack (pack_unpack, pt) ->
@@ -104,7 +103,7 @@ let dtree_of_cn_statement = function
 
 
 let rec dtree = function
-  | M_CN_let (_loc, (s, load), prog) ->
+  | M_CN_let (_loc, ((s, _bt), load), prog) ->
      Dnode (pp_ctor "LetLoad", [
            Dleaf (Sym.pp s); 
            IT.dtree load.pointer;
