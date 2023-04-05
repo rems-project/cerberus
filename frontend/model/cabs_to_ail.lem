@@ -4077,6 +4077,17 @@ let rec desugar_cn_base_type loc bTy =
         CN_set <$> desugar_cn_base_type loc bTy
 end
 
+let rec register_cn_match_lhs_idents (CNExpr _ expr_) =
+  match expr_ with
+    | CNExpr_var ident ->
+        E.register_cn_ident CN_vars ident >>= fun _ ->
+        E.return ()
+    | CNExpr_cons _ es ->
+        E.mapM (fun (_, exp) -> register_cn_match_lhs_idents exp) es >>= fun _ ->
+        E.return ()
+    | _ -> E.return ()
+end
+
 let pair x y = (x, y)
 
 let rec desugar_cn_expr (CNExpr loc expr_) =
@@ -4147,6 +4158,15 @@ let rec desugar_cn_expr (CNExpr loc expr_) =
         desugar_cn_expr e >>= fun e ->
         E.pop_cn_scope >>= fun () ->
         E.return (CNExpr_each sym r e)
+    | CNExpr_match x ms ->
+        E.mapM (fun (lhs, rhs) ->
+          E.push_cn_scope >>= fun () ->
+          register_cn_match_lhs_idents lhs >>= fun _ ->
+          desugar_cn_expr lhs >>= fun lhs ->
+          desugar_cn_expr rhs >>= fun rhs ->
+          E.pop_cn_scope >>= fun () ->
+          E.return (lhs, rhs)) ms >>= fun ms ->
+        CNExpr_match <$> desugar_cn_expr x <*> E.return ms
     | CNExpr_ite e1 e2 e3 ->
         CNExpr_ite <$> desugar_cn_expr e1
                     <*> desugar_cn_expr e2

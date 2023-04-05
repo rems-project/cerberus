@@ -156,6 +156,7 @@ let pp_cnexpr_kind expr_ =
   | CNExpr_call (sym, exprs) -> !^ "(" ^^ Sym.pp sym ^^^ !^ "(...))"
   | CNExpr_cons (c_nm, exprs) -> !^ "(" ^^ Sym.pp c_nm ^^^ !^ "{...})"
   | CNExpr_each (sym, r, e) -> !^ "(each ...)"
+  | CNExpr_match (x, ms) -> !^ "match ... {...}"
   | CNExpr_ite (e1, e2, e3) -> !^ "(if ... then ...)"
   | CNExpr_good (ty, e) -> !^ "(good (_, _))"
   | CNExpr_unchanged e -> !^"(unchanged (_))"
@@ -196,6 +197,8 @@ let rec free_in_expr (CNExpr (_loc, expr_)) =
      free_in_exprs (List.map snd args)
   | CNExpr_each (s, range, e) ->
      SymSet.remove s (free_in_expr e)
+  | CNExpr_match (x, ms) ->
+     free_in_exprs (x :: List.map snd ms)
   | CNExpr_ite (e1, e2, e3) ->
      free_in_exprs [e1; e2; e3]
   | CNExpr_good (typ, e) ->
@@ -511,10 +514,10 @@ module EffectfulTranslation = struct
        fail {loc; msg = Illtyped_it {it = Terms.pp t; has = SurfaceBaseTypes.pp has; expected = "struct"; o_ctxt = None}}
 
 
-  let translate_is_shape env loc x shape_expr : (IT.sterm) m =
+  let translate_match env loc x shape_expr : (IT.sterm * (Sym.t * IT.sterm) list) m =
     let rec f x = function
       | CNExpr (loc2, CNExpr_cons (c_nm, exprs)) ->
-          let@ cons_info = lookup_constr loc c_nm env in
+          let@ cons_info = lookup_constr loc2 c_nm env in
           (* let@ (_, mem_syms) = lookup_datatype loc cons_info.c_datatype_tag env in *)
           let m1 = IT.IT ((DatatypeIsCons (c_nm, x)), SBT.Bool) in
           let memb nm =
@@ -535,13 +538,14 @@ module EffectfulTranslation = struct
               f x shape
             ) exprs 
           in
-          return (m1 :: List.concat xs)
-      | _ ->
-      fail {loc; msg = Generic (Pp.string "rhs of ?? operation can only specify shape"
-          (* FIXME: convert the dtree of the shape expr to something pp-able *))}
+          return (m1 :: List.concat (List.map fst xs), List.concat (List.map snd xs))
+      | CNExpr (_, CNExpr_var sym) ->
+          return ([], [(sym, x)])
+      | CNExpr (loc, ex) ->
+          fail {loc; msg = Generic (!^ "not permitted in match pattern:" ^^^ pp_cnexpr_kind ex)}
     in
-    let@ xs = f x shape_expr in
-    return (IT.sterm_of_term (IT.and_ (List.map IT.term_of_sterm xs)))
+    let@ (xs, ys) = f x shape_expr in
+    return (IT.and_sterm_ xs, ys)
 
 
 
@@ -608,9 +612,6 @@ module EffectfulTranslation = struct
                let@ v = self v in
                return (IT ((MapSet (acc, i, v)), IT.bt e))
              ) e updates
-        | CNExpr_binop (CN_sub, e1_, (CNExpr (_, CNExpr_cons _) as shape)) ->
-            let@ e1 = self e1_ in
-            translate_is_shape env loc e1 shape
         | CNExpr_binop (bop, e1_, e2_) ->
             let@ e1 = self e1_ in
             let@ e2 = self e2_ in
@@ -672,6 +673,25 @@ module EffectfulTranslation = struct
                 e 
             in
             return (IT ((EachI ((Z.to_int (fst r), sym, Z.to_int (snd r)), expr)), SBT.Bool))
+        | CNExpr_match (x, ms) ->
+            let@ x = self x in
+            let x_nm = Sym.fresh_named "match_on" in
+            let x_var = IT.sym_ (x_nm, IT.bt x) in
+            let f (lhs, rhs) =
+              let@ (cond, lets) = translate_match env loc x_var lhs in
+              let lb = List.fold_left (fun acc (sym, _) -> SymSet.add sym acc) locally_bound lets in
+              let env = List.fold_left (fun acc (sym, y) -> add_logical sym (IT.bt y) acc) env lets in
+              let@ rhs = trans evaluation_scope lb env rhs in
+              let rhs = List.fold_left (fun x (sym, y) -> IT.let_sterm_ (sym, y, x)) rhs lets in
+              return (cond, rhs)
+            in
+            let@ ms = ListM.mapM f ms in
+            let rec g = function
+              | [] -> assert false (* parser should prevent empty match-set *)
+              | [(_, rhs)] -> rhs
+              | (cond, rhs) :: ms -> ite_ (cond, rhs, g ms)
+            in
+            return (IT.let_sterm_ (x_nm, x, g ms))
         | CNExpr_ite (e1, e2, e3) ->
             let@ e1 = self e1 in
             let@ e2 = self e2 in

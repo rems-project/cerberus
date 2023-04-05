@@ -148,7 +148,7 @@ let warn_extra_semicolon pos ctx =
 (* CN syntax *)
 (* %token<string> CN_PREDNAME *)
 %token CN_ACCESSES CN_TRUSTED CN_REQUIRES CN_ENSURES CN_INV
-%token CN_PACK CN_UNPACK CN_HAVE CN_INSTANTIATE CN_UNFOLD CN_APPLY
+%token CN_PACK CN_UNPACK CN_HAVE CN_INSTANTIATE CN_UNFOLD CN_APPLY CN_MATCH
 %token CN_BOOL CN_INTEGER CN_REAL CN_POINTER CN_MAP CN_LIST CN_TUPLE CN_SET
 %token CN_WHEN CN_LET CN_TAKE CN_OWNED CN_BLOCK CN_EACH CN_FUNCTION CN_LEMMA CN_PREDICATE CN_DATATYPE
 %token CN_UNCHANGED
@@ -1869,6 +1869,7 @@ cn_assertion:
     | App of term * term
     | Env of term * string
 *)
+
 prim_expr:
 | CN_NULL
     { Cerb_frontend.Cn.(CNExpr (Location_ocaml.point $startpos, CNExpr_const CNConst_NULL)) }
@@ -2002,17 +2003,19 @@ bool_bin_expr:
     { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                                , CNExpr_binop (CN_or, e1, e2))) }
 
+(*
 list_expr:
 | e= bool_bin_expr
     { e }
-(* | LBRACK COLON bty= base_type RBRACK *)
-(* | e1= rel_expr COLON_COLON e2= list_expr *)
-(* | es= delimited(LBRACK, separated_nonempty_list(COMMA, rel_expr), RBRACK)
-    { Cerb_frontend.Cn.CNExpr_list es } *)
+ | LBRACK COLON bty= base_type RBRACK
+ | e1= rel_expr COLON_COLON e2= list_expr
+ | es= delimited(LBRACK, separated_nonempty_list(COMMA, rel_expr), RBRACK)
+    { Cerb_frontend.Cn.CNExpr_list es }
   // | Head of 'bt term
   // | Tail of 'bt term
   // | NthList of int * 'bt term
 ;
+*)
 
 int_range:
 | l= CONSTANT COMMA r= CONSTANT
@@ -2043,16 +2046,44 @@ index_update:
 | i=prim_expr COLON e=expr
      { (i, e) } 
 
-expr:
-| e= list_expr
+match_cases:  (* NOTE: the list is in reverse *)
+| m= match_case
+    { [ m ] }
+| ms= match_cases m= match_case
+    { m :: ms }
+
+match_case_lhs: (* very limited subset of Rust options *)
+| ident= cn_variable args= cons_args
+    { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos(args)))
+                               , CNExpr_cons (ident, args))) }
+| ident= cn_variable
+    { Cerb_frontend.Cn.(CNExpr (Location_ocaml.point $startpos, CNExpr_var ident)) }
+
+
+match_case:
+| lhs= match_case_lhs EQ GT rhs= delimited(LBRACE, expr, RBRACE)
+    { (lhs, rhs) }
+
+match_target:
+| ident= cn_variable
+    { Cerb_frontend.Cn.(CNExpr (Location_ocaml.point $startpos, CNExpr_var ident)) }
+| e= delimited(LPAREN, expr, RPAREN)
     { e }
-| e1= list_expr QUESTION e2= list_expr COLON e3= list_expr
+
+expr:
+| e= bool_bin_expr
+    { e }
+| e1= bool_bin_expr QUESTION e2= bool_bin_expr COLON e3= bool_bin_expr
     { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                                , CNExpr_ite (e1, e2, e3))) }
 | CN_EACH LPAREN str= cn_variable COLON r=int_range SEMICOLON e1= expr RPAREN
     { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) NoCursor)
                                ,
                                CNExpr_each (str, r, e1))) }
+| CN_MATCH e= match_target LBRACE ms= match_cases RBRACE
+    { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($1)))
+                               ,
+                               CNExpr_match (e, List.rev ms))) }
 ;
 
 (* CN predicate definitions **************************************************)

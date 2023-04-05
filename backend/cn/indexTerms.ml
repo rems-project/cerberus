@@ -366,6 +366,13 @@ let eq__ it it' = eq_ (it, it')
 let ne_ (it, it') = not_ (eq_ (it, it'))
 let ne__ it it' = ne_ (it, it')
 
+let bool_sterm_ b = IT (Const (Bool b), SurfaceBaseTypes.Bool)
+let and2_sterm_ (it, it') = IT (Binop (And, it, it'), SurfaceBaseTypes.Bool)
+let and_sterm_ = vargs_binop (bool_sterm_ true) (Tools.curry and2_sterm_)
+
+(* TODO: implement let-expressions *)
+let let_sterm_ (nm, x, y) = y
+
 (* let disperse_not_ it = *)
 (*   match term it with *)
 (*   | And xs -> or_ (List.map not_ xs) *)

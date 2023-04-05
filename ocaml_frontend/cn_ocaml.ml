@@ -165,6 +165,9 @@ module MakePp (Conf: PP_CN) = struct
           Dnode (pp_ctor "CNExpr_each" ^^^ P.squotes (Conf.pp_ident ident) ^^^
                      !^ (Z.to_string (fst r)) ^^^ P.string "-" ^^^ !^ (Z.to_string (snd r))
                  , [dtree_of_cn_expr expr])
+      | CNExpr_match (x, ms) ->
+          let m_doc (lhs, rhs) = Dnode (pp_ctor "=>", List.map dtree_of_cn_expr [lhs; rhs]) in
+          Dnode (pp_ctor "CNExpr_match", [dtree_of_cn_expr x] @ List.map m_doc ms)
       | CNExpr_ite (e1, e2, e3) ->
           Dnode (pp_ctor "CNExpr_ite"
                , List.map dtree_of_cn_expr [e1;e2;e3])
