@@ -82,7 +82,6 @@ let rec cn_to_ail_expr (CNExpr (loc, expr_)) =
     | CNExpr_cons (c_nm, exprs) -> !^ "(" ^^ Sym.pp c_nm ^^^ !^ "{...})"
     | CNExpr_each (sym, r, e) -> !^ "(each ...)" *)
 
-    (* TODO: Check what None case is for with e2 *)
     | CNExpr_ite (e1, e2, e3) -> A.AilEcond (mk_expr (cn_to_ail_expr e1), Some (mk_expr (cn_to_ail_expr e2)), mk_expr (cn_to_ail_expr e3))
     
     (* 
