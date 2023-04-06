@@ -672,17 +672,19 @@ module EffectfulTranslation = struct
                 (add_logical sym SBT.Integer env) 
                 e 
             in
-            return (IT ((EachI ((Z.to_int (fst r), sym, Z.to_int (snd r)), expr)), SBT.Bool))
+            return (IT ((EachI ((Z.to_int (fst r), (sym, SBT.Integer), Z.to_int (snd r)), expr)), SBT.Bool))
         | CNExpr_match (x, ms) ->
             let@ x = self x in
             let x_nm = Sym.fresh_named "match_on" in
             let x_var = IT.sym_ (x_nm, IT.bt x) in
+            let env = add_logical x_nm (IT.bt x_var) env in
+            let locally_bound = SymSet.add x_nm locally_bound in
             let f (lhs, rhs) =
               let@ (cond, lets) = translate_match env loc x_var lhs in
               let lb = List.fold_left (fun acc (sym, _) -> SymSet.add sym acc) locally_bound lets in
               let env = List.fold_left (fun acc (sym, y) -> add_logical sym (IT.bt y) acc) env lets in
               let@ rhs = trans evaluation_scope lb env rhs in
-              let rhs = List.fold_left (fun x (sym, y) -> IT.let_sterm_ (sym, y, x)) rhs lets in
+              let rhs = List.fold_left (fun x (sym, y) -> IT.let_ ((sym, y), x)) rhs lets in
               return (cond, rhs)
             in
             let@ ms = ListM.mapM f ms in
@@ -691,7 +693,7 @@ module EffectfulTranslation = struct
               | [(_, rhs)] -> rhs
               | (cond, rhs) :: ms -> ite_ (cond, rhs, g ms)
             in
-            return (IT.let_sterm_ (x_nm, x, g ms))
+            return (IT.let_ ((x_nm, x), g ms))
         | CNExpr_ite (e1, e2, e3) ->
             let@ e1 = self e1 in
             let@ e2 = self e2 in

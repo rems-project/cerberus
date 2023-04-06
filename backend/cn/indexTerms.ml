@@ -18,7 +18,8 @@ type t = BT.t term
 
 
 
-let basetype (IT (_, bt)) = bt
+let basetype : 'a. 'a Terms.term -> 'a = function
+  | IT (_, bt) -> bt
 let bt = basetype
 
 let term (IT (t, _)) = t
@@ -43,7 +44,7 @@ let rec free_vars_ = function
   | Binop (_bop, t1, t2) -> free_vars_list [t1; t2]
   | Not t1 -> free_vars t1
   | ITE (t1, t2, t3) -> free_vars_list [t1; t2; t3]
-  | EachI ((_, s, _), t) -> SymSet.remove s (free_vars t)
+  | EachI ((_, (s, _), _), t) -> SymSet.remove s (free_vars t)
   | Tuple ts -> free_vars_list ts
   | NthTuple (_, t) -> free_vars t
   | Record members -> free_vars_list (List.map snd members)
@@ -70,6 +71,7 @@ let rec free_vars_ = function
   | MapGet (t1, t2) -> free_vars_list [t1; t2]
   | MapDef ((s, _bt), t) -> SymSet.remove s (free_vars t)
   | Apply (_pred, ts) -> free_vars_list ts
+  | Let ((nm, t1), t2) -> SymSet.union (free_vars t1) (SymSet.remove nm (free_vars t2))
 
 and free_vars (IT (term_, _bt)) =
   free_vars_ term_
@@ -86,8 +88,8 @@ let rec fold_ f binders acc = function
   | Binop (_bop, t1, t2) -> fold_list f binders acc [t1; t2]
   | Not t1 -> fold f binders acc t1
   | ITE (t1, t2, t3) -> fold_list f binders acc [t1; t2; t3]
-  | EachI ((_, s, _), t) ->
-     fold f (binders @ [(s, BT.Integer)]) acc t
+  | EachI ((_, (s, bt), _), t) ->
+     fold f (binders @ [(s, bt)]) acc t
   | Tuple ts -> fold_list f binders acc ts
   | NthTuple (_, t) -> fold f binders acc t
   | Record members -> fold_list f binders acc (List.map snd members)
@@ -114,6 +116,9 @@ let rec fold_ f binders acc = function
   | MapGet (t1, t2) -> fold_list f binders acc [t1; t2]
   | MapDef ((s, bt), t) -> fold f (binders @ [(s, bt)]) acc t
   | Apply (_pred, ts) -> fold_list f binders acc ts
+  | Let ((nm, IT (t1_, bt)), t2) ->
+    let acc' = fold f binders acc (IT (t1_, bt)) in
+    fold f (binders @ [(nm, bt)]) acc' t2
 
 and fold f binders acc (IT (term_, _bt)) =
   let acc' = fold_ f binders acc term_ in
@@ -126,7 +131,7 @@ and fold_list f binders acc xs =
      let acc' = fold f binders acc x in
      fold_list f binders acc' xs
 
-let fold_subterms : 'a 'bt. ((Sym.t * BT.t) list -> 'a -> 'bt term -> 'a) -> 'a -> 'bt term -> 'a =
+let fold_subterms : 'a 'bt. ((Sym.t * 'bt) list -> 'a -> 'bt term -> 'a) -> 'a -> 'bt term -> 'a =
   fun f acc t -> fold f [] acc t
 
 
@@ -185,9 +190,9 @@ let rec subst (su : typed subst) (IT (it, bt)) =
      IT (Not (subst su it), bt)
   | ITE (it,it',it'') -> 
      IT (ITE (subst su it, subst su it', subst su it''), bt)
-  | EachI ((i1, s, i2), t) ->
-     let s, t = suitably_alpha_rename su.relevant (s, BT.Integer) t in
-     IT (EachI ((i1, s, i2), subst su t), bt)
+  | EachI ((i1, (s, s_bt), i2), t) ->
+     let s, t = suitably_alpha_rename su.relevant (s, s_bt) t in
+     IT (EachI ((i1, (s, s_bt), i2), subst su t), bt)
   | Tuple its ->
      IT (Tuple (map (subst su) its), bt)
   | NthTuple (n, it') ->
@@ -241,6 +246,9 @@ let rec subst (su : typed subst) (IT (it, bt)) =
      IT (MapDef ((s, abt), subst su body), bt)
   | Apply (name, args) ->
      IT (Apply (name, List.map (subst su) args), bt)
+  | Let ((name, t1), t2) ->
+     let name, t2 = suitably_alpha_rename su.relevant (name, basetype t1) t2 in
+     IT (Let ((name, subst su t1), subst su t2), bt)
 
 and alpha_rename (s, bt) body =
   let s' = Sym.fresh_same s in
@@ -370,8 +378,7 @@ let bool_sterm_ b = IT (Const (Bool b), SurfaceBaseTypes.Bool)
 let and2_sterm_ (it, it') = IT (Binop (And, it, it'), SurfaceBaseTypes.Bool)
 let and_sterm_ = vargs_binop (bool_sterm_ true) (Tools.curry and2_sterm_)
 
-(* TODO: implement let-expressions *)
-let let_sterm_ (nm, x, y) = y
+let let_ ((nm, x), y) = IT (Let ((nm, x), y), basetype y)
 
 (* let disperse_not_ it = *)
 (*   match term it with *)
@@ -382,7 +389,7 @@ let let_sterm_ (nm, x, y) = y
 
 
 let eachI_ (i1, s, i2) t = 
-  IT (EachI ((i1, s, i2), t), BT.Bool)
+  IT (EachI ((i1, (s, BT.Integer), i2), t), BT.Bool)
 (* let existsI_ (i1, s, i2) t = not_ (eachI_ (i1, s, i2) (not_ t)) *)
 
 

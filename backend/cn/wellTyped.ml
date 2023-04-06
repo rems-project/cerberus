@@ -351,14 +351,14 @@ module WIT = struct
          let@ t' = infer loc t' in
          let@ t'' = check loc (IT.bt t') t'' in
          return (IT (ITE (t, t', t''),IT.bt t')) 
-      | EachI ((i1, s, i2), t) ->
+      | EachI ((i1, (s, _), i2), t) ->
          (* no need to alpha-rename, because context.ml ensures
             there's no name clashes *)
          (* let s, t = IT.alpha_rename (s, BT.Integer) t in *)
          pure begin 
              let@ () = add_l s Integer (loc, lazy (Pp.string "forall-var")) in
              let@ t = check loc Bool t in
-             return (IT (EachI ((i1, s, i2), t),BT.Bool))
+             return (IT (EachI ((i1, (s, BT.Integer), i2), t),BT.Bool))
            end
       | Tuple ts ->
          let@ ts = ListM.mapM (infer loc) ts in
@@ -548,7 +548,13 @@ module WIT = struct
              ) args def.args
          in
          return (IT (Apply (name, args), def.return_bt))
-         
+      | Let ((name, t1), t2) ->
+         let@ t1 = infer loc t1 in
+         pure begin
+            let@ () = add_l name (IT.bt t1) (loc, lazy (Pp.string "let-var")) in
+            let@ t2 = infer loc t2 in
+            return (IT (Let ((name, t1), t2), IT.bt t2))
+            end
 
     and check =
       fun loc ls it ->

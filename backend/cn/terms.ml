@@ -51,7 +51,7 @@ type 'bt term_ =
   | Binop of binop * 'bt term * 'bt term
   | Not of 'bt term
   | ITE of 'bt term * 'bt term * 'bt term
-  | EachI of (int * Sym.t * int) * 'bt term
+  | EachI of (int * (Sym.t * 'bt) * int) * 'bt term
   (* add Z3's Distinct for separation facts  *)
   | Tuple of 'bt term list
   | NthTuple of int * 'bt term
@@ -76,8 +76,9 @@ type 'bt term_ =
   | MapConst of BaseTypes.t * 'bt term
   | MapSet of 'bt term * 'bt term * 'bt term
   | MapGet of 'bt term * 'bt term
-  | MapDef of (Sym.t * BaseTypes.t) * 'bt term
+  | MapDef of (Sym.t * 'bt) * 'bt term
   | Apply of Sym.t * ('bt term) list
+  | Let of (Sym.t * 'bt term) * 'bt term
   | Cast of BaseTypes.t * 'bt term
 
 and 'bt term =
@@ -182,7 +183,7 @@ let pp : 'bt 'a. ?atomic:bool -> ?f:('bt term -> Pp.doc -> Pp.doc) -> 'bt term -
           mparens (!^"!" ^^ parens (aux false o1))
        | ITE (o1,o2,o3) ->
           parens (flow (break 1) [aux true o1; !^"?"; aux true o2; colon; aux true o3])
-       | EachI ((i1, s, i2), t) ->
+       | EachI ((i1, (s, _), i2), t) ->
          Pp.(group @@ group (c_app !^"for" [int i1; Sym.pp s; int i2])
              ^/^ group ((nest 2 @@ lbrace ^^ break 0 ^^ (aux false t)) ^^ break 0 ^^ rbrace))
        (* end *)
@@ -255,8 +256,8 @@ let pp : 'bt 'a. ?atomic:bool -> ?f:('bt term -> Pp.doc -> Pp.doc) -> 'bt term -
        | MapSet (t1, t2, t3) ->
           aux true t1 ^^ 
             brackets (aux false t2 ^^^ equals ^^^ aux false t3)
-       | MapDef ((s,bt), t) ->
-          brackets (BaseTypes.pp bt ^^^ Sym.pp s ^^^ !^"->" ^^^ aux false t)
+       | MapDef ((s,_), t) ->
+          brackets (Sym.pp s ^^^ !^"->" ^^^ aux false t)
     (* | Map_op map_op -> *)
 
        (* disabling that for now, because I'll add an expression for updating multiple cells at once *)
@@ -280,6 +281,8 @@ let pp : 'bt 'a. ?atomic:bool -> ?f:('bt term -> Pp.doc -> Pp.doc) -> 'bt term -
       (*  prefix 2 0 root_pp @@ align (flow_map (break 0) pp_op ops) *)
     | Apply (name, args) ->
        c_app (Sym.pp name) (List.map (aux false) args)
+    | Let ((name, x1), x2) -> parens (!^ "let" ^^^ Sym.pp name ^^^ Pp.equals ^^^
+        aux false x1 ^^^ !^ "in" ^^^ aux false x2)
   in
   fun (it : 'bt term) -> aux atomic it
 
@@ -310,7 +313,7 @@ let rec dtree (IT (it_, bt)) =
   | Binop (op, t1, t2) -> Dnode (pp_ctor (show_binop op), [dtree t1; dtree t2])
   | (Not t) -> Dnode (pp_ctor "Not", [dtree t])
   | (ITE (t1, t2, t3)) -> Dnode (pp_ctor "Impl", [dtree t1; dtree t2; dtree t3])
-  | (EachI ((starti,i,endi), body)) -> Dnode (pp_ctor "EachI", [Dleaf !^(string_of_int starti); Dleaf (Sym.pp i); Dleaf !^(string_of_int endi); dtree body])
+  | (EachI ((starti,(i,_),endi), body)) -> Dnode (pp_ctor "EachI", [Dleaf !^(string_of_int starti); Dleaf (Sym.pp i); Dleaf !^(string_of_int endi); dtree body])
   | (Tuple its) -> Dnode (pp_ctor "Tuple", List.map dtree its)
   | (NthTuple (i, t)) -> Dnode (pp_ctor "NthTuple", [Dleaf !^(string_of_int i); dtree t])
   | (Record members) ->

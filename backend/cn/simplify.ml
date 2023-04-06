@@ -438,11 +438,11 @@ module IndexTerms = struct
        | _, _ ->
           eq_ (a, b)
        end
-    | EachI ((i1, s, i2), t) ->
+    | EachI ((i1, (s, s_bt), i2), t) ->
        let s' = Sym.fresh_same s in 
        let t = IndexTerms.subst (make_subst [(s, sym_ (s', the_bt))]) t in
        let t = aux t in
-       IT (EachI ((i1, s', i2), t), the_bt)
+       IT (EachI ((i1, (s', s_bt), i2), t), the_bt)
 
     | Tuple its ->
        let its = List.map aux its in
