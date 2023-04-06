@@ -55,13 +55,16 @@ type 'bt term_ =
   (* add Z3's Distinct for separation facts  *)
   | Tuple of 'bt term list
   | NthTuple of int * 'bt term
+  | Struct of BaseTypes.tag * (BaseTypes.member * 'bt term) list
+  | StructMember of 'bt term * BaseTypes.member
+  | StructUpdate of ('bt term * BaseTypes.member) * 'bt term
   | Record of (Id.t * 'bt term) list
   | RecordMember of 'bt term * Id.t
   | RecordUpdate of ('bt term * Id.t) * 'bt term
   | DatatypeCons of Sym.t * 'bt term
   | DatatypeMember of 'bt term * Id.t
   | DatatypeIsCons of Sym.t * 'bt term
-  | MemberOffset of Sym.t * Id.t
+  | MemberOffset of BaseTypes.tag * Id.t
   | ArrayOffset of Sctypes.t (*element ct*) * 'bt term (*index*)
   | Nil
   | Cons of 'bt term * 'bt term
@@ -194,6 +197,17 @@ let pp : 'bt 'a. ?atomic:bool -> ?f:('bt term -> Pp.doc -> Pp.doc) -> 'bt term -
        | Tuple its ->
           braces (separate_map (semi ^^ space) (aux false) its)
        (* end *)
+    (* | Struct_op struct_op -> *)
+    (*    begin match struct_op with *)
+       | Struct (_tag, members) ->
+         align @@ lbrace ^^^ flow_map (break 0 ^^ comma ^^ space) (fun (member,it) ->
+             Pp.group @@ (Pp.group @@ dot ^^ Id.pp member ^^^ equals) ^^^ align (aux false it)
+           ) members ^^^ rbrace
+       | StructMember (t, member) ->
+          prefix 0 0 (aux true t) (dot ^^ Id.pp member )
+       | StructUpdate ((t, member), v) ->
+          mparens (aux true t ^^ braces @@ (Pp.group @@ dot ^^ Id.pp member ^^^ equals) ^^^ align (aux true v))
+       (* end *)
     (* | Record_op record_op -> *)
     (*    begin match record_op with *)
        | Record members ->
@@ -316,6 +330,12 @@ let rec dtree (IT (it_, bt)) =
   | (EachI ((starti,(i,_),endi), body)) -> Dnode (pp_ctor "EachI", [Dleaf !^(string_of_int starti); Dleaf (Sym.pp i); Dleaf !^(string_of_int endi); dtree body])
   | (Tuple its) -> Dnode (pp_ctor "Tuple", List.map dtree its)
   | (NthTuple (i, t)) -> Dnode (pp_ctor "NthTuple", [Dleaf !^(string_of_int i); dtree t])
+  | (Struct (tag, members)) ->
+     Dnode (pp_ctor ("Struct("^Sym.pp_string tag^")"), List.map (fun (member,e) -> Dnode (pp_ctor "Member", [Dleaf (Id.pp member); dtree e])) members)
+  | (StructMember (e, member)) ->
+     Dnode (pp_ctor "StructMember", [dtree e; Dleaf (Id.pp member)])
+  | (StructUpdate ((base, member), v)) ->
+     Dnode (pp_ctor "StructUpdate", [dtree base; Dleaf (Id.pp member); dtree v])
   | (Record members) ->
      Dnode (pp_ctor "Record", List.map (fun (member,e) -> Dnode (pp_ctor "Member", [Dleaf (Id.pp member); dtree e])) members)
   | (RecordMember (e, member)) ->

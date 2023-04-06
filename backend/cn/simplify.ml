@@ -109,14 +109,14 @@ module IndexTerms = struct
       | ITE (cond, it1, it2) ->
         ite_ (cond, record_member_reduce it1 member, record_member_reduce it2 member)
       | _ ->
-        let _, member_tys = BT.record_bt (IT.bt it) in
+        let member_tys = BT.record_bt (IT.bt it) in
         let member_bt = List.assoc Id.equal member member_tys in
         IT.recordMember_ ~member_bt (it, member)
 
   let rec datatype_member_reduce it member member_bt =
     match IT.term it with
       | DatatypeCons (nm, members_rec) ->
-        let _, members = BT.record_bt (IT.bt members_rec) in
+        let members = BT.record_bt (IT.bt members_rec) in
         if List.exists (Id.equal member) (List.map fst members)
         then record_member_reduce members_rec member
         else IT.IT (DatatypeMember (it, member), member_bt)
@@ -450,6 +450,43 @@ module IndexTerms = struct
     | NthTuple (n, it) ->
        let it = aux it in
        tuple_nth_reduce it n the_bt
+    | IT.Struct (tag, members) ->
+       begin match members with
+       | (_, IT (StructMember (str, _), _)) :: _ when 
+              BT.equal (Struct tag) (IT.bt str) &&
+              List.for_all (function 
+                  | (mem, IT (StructMember (str', mem'), _)) ->
+                    Id.equal mem mem' && IT.equal str str'
+                  | _ -> false
+                ) members
+          ->
+           str
+       | _ ->
+          let members = 
+            List.map (fun (member, it) ->
+                (member, aux it)
+              ) members
+          in
+          IT (IT.Struct (tag, members), the_bt)
+       end
+    | IT.StructMember (s_it, member) ->
+       let s_it = aux s_it in
+       let rec make t = 
+         match t with
+         | IT (Struct (_, members), _) ->
+            List.assoc Id.equal member members
+         | IT (ITE (cond, it1, it2), _) ->
+            (* (if cond then it1 else it2) . member -->
+             (if cond then it1.member else it2.member) *)
+            ite_ (cond, make it1, make it2)
+         | _ ->
+            IT (IT.StructMember (t, member), the_bt)
+       in
+       make s_it
+    | IT.StructUpdate ((t, m), v) ->
+       let t = aux t in
+       let v = aux v in
+       IT (StructUpdate ((t, m), v), the_bt)
     | IT.Record members ->
        let members = 
          List.map (fun (member, it) ->

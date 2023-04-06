@@ -147,6 +147,7 @@ module Translate = struct
 
   type z3sym_table_entry = 
     | MemberFunc of { tag : Sym.t; member : Id.t }
+    | StructFunc of { tag : Sym.t }
     | CompFunc of { bts : BT.t list; i : int }
     | TupleFunc of  { bts : BT.t list }
     | RecordFunc of { mbts : BT.member_types }
@@ -208,13 +209,15 @@ module Translate = struct
   let tuple_field_name bts i = 
     bt_name (Tuple bts) ^ string_of_int i
 
-  let record_member_name record_bt member = 
-    Id.pp_string member ^ "_of_" ^ bt_name record_bt
+  let record_member_name bts member = 
+    Id.pp_string member ^ "_of_" ^ bt_name (Record bts)
 
   let accessor_name dt_name member =
     symbol_string "" dt_name ^ "_" ^ Id.s member
     
 
+  let member_name tag id = 
+    bt_name (BT.Struct tag) ^ "_" ^ Id.s id
 
   let dt_recog_name context nm = prefix_symbol context "is_" nm
 
@@ -289,15 +292,28 @@ module Translate = struct
          in
          let sorts = map sort bts in
          Z3.Tuple.mk_sort context bt_symbol field_symbols sorts
+      | Struct tag ->
+         let struct_symbol = string (bt_name (Struct tag)) in
+         Z3Symbol_Table.add z3sym_table struct_symbol (StructFunc {tag});
+         let layout = SymMap.find tag global.struct_decls in
+         let member_symbols, member_sorts = 
+           map_split (fun (id,sct) -> 
+               let s = string (member_name tag id) in
+               Z3Symbol_Table.add z3sym_table s (MemberFunc {tag; member=id});
+               (s, sort (BT.of_sct sct))
+             ) (Memory.member_types layout)
+         in
+         Z3.Tuple.mk_sort context struct_symbol
+           member_symbols member_sorts
       | Datatype tag ->
          translate_datatypes sort context global;
          BT_Table.find bt_table (Datatype tag)
-      | Record (_, members) as record_bt ->
-         let bt_symbol = string (bt_name record_bt) in
+      | Record members ->
+         let bt_symbol = string (bt_name (Record members)) in
          Z3Symbol_Table.add z3sym_table bt_symbol (RecordFunc {mbts=members});
          let member_symbols = 
            map (fun (member, bt) -> 
-               let sym = string (record_member_name record_bt member) in
+               let sym = string (record_member_name members member) in
                Z3Symbol_Table.add z3sym_table sym (RecordMemberFunc {mbts=members; member});
                sym
              ) members
@@ -456,17 +472,39 @@ module Translate = struct
       | NthTuple (n, t) ->
          let destructors = Z3.Tuple.get_field_decls (sort (IT.bt t)) in
          Z3.Expr.mk_app context (nth destructors n) [term t]
+      | Struct (tag, mts) ->
+         let constructor = Z3.Tuple.get_mk_decl (sort bt) in
+         Z3.Expr.mk_app context constructor (map (fun (_, t) -> term t) mts)
+      | StructMember (t, member) ->
+         let layout = SymMap.find (struct_bt (IT.bt t)) struct_decls in
+         let n = Option.get (Memory.member_number layout member) in
+         let destructors = Z3.Tuple.get_field_decls (sort (IT.bt t)) in
+         Z3.Expr.mk_app context (nth destructors n) [term t]
+      | StructUpdate ((t, member), v) ->
+         let tag = BT.struct_bt (IT.bt t) in
+         let layout = SymMap.find (struct_bt (IT.bt t)) struct_decls in
+         let members = Memory.member_types layout in
+         let str =
+           List.map (fun (member', sct) ->
+               let value = 
+                 if Id.equal member member' then v 
+                 else member_ ~member_bt:(BT.of_sct sct) (tag, t, member')
+               in
+               (member', value)
+             ) members
+         in
+         term (struct_ (tag, str))
       | Record mts ->
          let constructor = Z3.Tuple.get_mk_decl (sort bt) in
          Z3.Expr.mk_app context constructor (map (fun (_, t) -> term t) mts)
       | RecordMember (t, member) ->
-         let _, members = BT.record_bt (IT.bt t) in
+         let members = BT.record_bt (IT.bt t) in
          let members_i = List.mapi (fun i (m, _) -> (m, i)) members in
          let n = List.assoc Id.equal member members_i in
          let destructors = Z3.Tuple.get_field_decls (sort (IT.bt t)) in
          Z3.Expr.mk_app context (nth destructors n) [term t]
       | RecordUpdate ((t, member), v) ->
-         let _, members = BT.record_bt (IT.bt t) in
+         let members = BT.record_bt (IT.bt t) in
          let str =
            List.map (fun (member', bt) ->
                let value = 
@@ -1019,8 +1057,11 @@ module Eval = struct
               default_ bt
            | MemberFunc {tag; member} ->
               let sd = Memory.member_types (SymMap.find tag global.struct_decls) in
-              let member_bt = BT.of_sct global.struct_decls (List.assoc Id.equal member sd) in
+              let member_bt = BT.of_sct (List.assoc Id.equal member sd) in
               member_ ~member_bt (tag, nth args 0, member)
+           | StructFunc {tag} ->
+              let sd = Memory.members (SymMap.find tag global.struct_decls) in
+              struct_ (tag, List.combine sd args)
            | CompFunc {bts; i} ->
               let comp_bt = List.nth bts i in
               nthTuple_ ~item_bt:comp_bt (i, nth args 0)
@@ -1028,7 +1069,7 @@ module Eval = struct
               tuple_ args
            | RecordFunc {mbts} ->
               IT ((Record (List.combine (List.map fst mbts) args)), 
-                  Record (Nothing, mbts))
+                  Record mbts)
            | RecordMemberFunc {mbts; member} ->
               let member_bt = List.assoc Id.equal member mbts in
               IT ((RecordMember (nth args 0, member)), member_bt)
