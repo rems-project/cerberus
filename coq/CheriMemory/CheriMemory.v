@@ -416,7 +416,7 @@ Module CheriMemory
         zmap_range_init a0 n step v m
     end.
 
-  (* Creare new cap meta for regiion where all tags are unspecified *)
+  (* Creare new cap meta for region where all tags are unspecified *)
   Program Definition init_ghost_tags
     (addr: Morello.AddressValue.t)
     (size: Z)
