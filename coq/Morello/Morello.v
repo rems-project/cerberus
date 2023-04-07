@@ -888,7 +888,7 @@ Module Capability <: Capability (AddressValue) (Flags) (ObjType) (SealType) (Bou
     HexString.of_Z (bv_to_Z_unsigned c.(cap)). 
 
   Definition to_string (c:t) : string :=
-    to_string_full c ++ ": " ++ 
+    (* to_string_full c ++ ": " ++  *)
     to_string_pretty_2 c.
 
   Definition strfcap (s:string) (_:t) : option string := None.
