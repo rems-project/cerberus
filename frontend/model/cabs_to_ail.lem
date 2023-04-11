@@ -11,6 +11,7 @@ import AilSyntaxAux AilTypesAux Builtins
 import Errors
 
 import Mini_pipeline
+import Desugaring_init
 
 import Cn
 
@@ -3382,6 +3383,16 @@ and wip_desugar_initializer_ loc dur current_ty init =
           E.return (current_ty, d_e)
       | _ ->
           E.get_tag_definitions >>= fun tagDefs ->
+          let funcs = <|
+            Desugaring_init.desugar_expression= desugar_expression;
+            Desugaring_init.is_integer_constant_expression= is_integer_constant_expression;
+            Desugaring_init.is_initializer_constant_expression_or_string_literal= is_initializer_constant_expression_or_string_literal;
+            Desugaring_init.evaluate_integer_constant_expression= evaluate_integer_constant_expression;
+          |> in
+          Desugaring_init.desugar_init tagDefs funcs (dur = Static || dur = Thread) current_ty init >>= fun (current_ty', init_st, _) ->
+          E.return (current_ty', Desugaring_init.constructValue tagDefs init_st current_ty')
+
+          (* E.get_tag_definitions >>= fun tagDefs ->
           foo current_ty init >>= fun (current_ty', xs) ->
           
           E.print_debugM 2 (fun () ->
@@ -3391,7 +3402,7 @@ and wip_desugar_initializer_ loc dur current_ty init =
               " := " ^ Pp.stringFromAil_expression expr
             ) xs
           ) >>= fun () ->
-          E.return (current_ty', constructValue tagDefs xs current_ty')
+          E.return (current_ty', constructValue tagDefs xs current_ty') *)
     end
 
 
