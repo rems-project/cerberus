@@ -10,6 +10,8 @@ module P = PPrint
 
 let pp_symbol  a = !^ (ansi_format [Blue] (Pp_symbol.to_string_pretty a))
 
+let pp_ident id = Pp_symbol.pp_identifier id
+
 let pp_keyword w =
   !^ (ansi_format [Green] w)
 
@@ -151,13 +153,19 @@ let dtree_of_pexpr pexpr =
           Dnode ( pp_ctor "PEop" ^^^ P.squotes (!^ (string_of_bop bop))
                 , [self pe1; self pe2] )
       | PEstruct (tag_sym, xs) ->
-          assert false
+          Dnode ( pp_ctor "PEstruct" ^^^ P.squotes (pp_symbol tag_sym)
+                , List.map self (List.map snd xs) )
       | PEunion (tag_sym, memb_ident, pe) ->
-          assert false
+          Dnode ( pp_ctor "PEunion" ^^^
+                        P.squotes ((pp_symbol tag_sym) ^^ P.colon ^^ (pp_ident memb_ident))
+                , [self pe] )
       | PEcfunction pe ->
-          assert false
+          Dnode ( pp_ctor "PEcfunction"
+                , [self pe] )
       | PEmemberof (tag_sym, memb_ident, pe) ->
-          assert false
+          Dnode ( pp_ctor "PEstruct" ^^^
+                        P.squotes ((pp_symbol tag_sym) ^^ P.colon ^^ (pp_ident memb_ident))
+                , [self pe] )
       | PEcall (nm, pes) ->
           Dnode (pp_ctor "PEcall" ^^^ pp_name nm,
                  List.map self pes)
