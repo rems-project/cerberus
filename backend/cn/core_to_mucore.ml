@@ -78,11 +78,13 @@ type mu_pexprs = mu_pexpr list
 type mu_expr = unit Mu.mu_expr
 
 
-
+exception ConversionFailed
 
 let assert_error loc msg = 
   Print.error loc msg []; 
-  exit 2
+  if ! Debug_ocaml.debug_level > 0
+  then assert false
+  else raise ConversionFailed
 
 let assertl loc b msg = 
   if b then () 
@@ -722,6 +724,7 @@ let rec n_expr (loc : Loc.t) ((env, old_states), desugaring_things) (global_type
   | Esseq(pat, e1, e2) ->
      let () = Print.debug 10 (lazy (Print.item "core_to_mucore Esseq. e1:" (CF.Pp_core_ast.pp_expr e1))) in
      let () = Print.debug 10 (lazy (Print.item "core_to_mucore Esseq. e2:" (CF.Pp_core_ast.pp_expr e2))) in
+     let () = Print.debug 10 (lazy (Print.item "core_to_mucore Esseq. p:" (CF.Pp_core.Basic.pp_pattern pat))) in
      let@ e1 = match pat, e1 with
        | Pattern ([], CaseBase (None, BTy_unit)),
          Expr ([], Epure (Pexpr ([], (), PEval Vunit))) ->
@@ -1168,7 +1171,9 @@ let normalise_fun_map
       loop_attributes
       fmap
   =
-  PmapM.foldM (fun fsym fdecl (fmap, mk_functions) ->
+  let@ (fmap, mk_functions, failed) =
+  PmapM.foldM (fun fsym fdecl (fmap, mk_functions, failed) ->
+      try begin
       let@ r = normalise_fun_map_decl (markers_env, ail_prog) 
                  (global_types, visible_objects_env)
                  env funinfo loop_attributes fsym fdecl in
@@ -1179,11 +1184,16 @@ let normalise_fun_map
                (fsym, fdecl, loc, lsym)
              ) more_mk_functions
          in
-         return (Pmap.add fsym fdecl fmap, mk_functions' @ mk_functions)
+         return (Pmap.add fsym fdecl fmap, mk_functions' @ mk_functions, failed)
       | None ->
-         return (fmap, mk_functions)
+         return (fmap, mk_functions, failed)
+      end
+      with ConversionFailed -> return (fmap, mk_functions, true)
     )
-    fmap (Pmap.empty Sym.compare, [])
+    fmap (Pmap.empty Sym.compare, [], false)
+  in
+  if failed then exit 2
+  else return (fmap, mk_functions)
 
 
 
