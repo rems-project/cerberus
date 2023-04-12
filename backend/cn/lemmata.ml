@@ -363,7 +363,7 @@ let it_adjust (global : Global.t) it =
             let x = f x in
             let y = f y in
             if IT.is_false x || IT.is_true y then IT.bool_ true else IT.impl_ (x, y)
-        | IT.EachI ((i1, s, i2), x) ->
+        | IT.EachI ((i1, (s, _), i2), x) ->
             let x = f x in
             let vs = IT.free_vars x in
             let other_nms = List.filter (fun sym -> not (Sym.equal sym s)) (SymSet.elements vs)
@@ -819,7 +819,7 @@ let it_to_coq loc global list_mono it =
              @ List.map br branches @ [rets "end"]))
     | IT.ITE (sw, x, y) -> parensM (build [rets "if"; f false sw; rets "then";
              aux x; rets "else"; aux y])
-    | IT.EachI ((i1, s, i2), x) -> assert bool_eq_prop;
+    | IT.EachI ((i1, (s, _), i2), x) -> assert bool_eq_prop;
          let@ x = aux x in
          let@ enc = mk_forall global list_mono loc s BaseTypes.Integer
              (binop "->" (binop "/\\"

@@ -15,24 +15,23 @@ module BT = BaseTypes
 
 let random_seed = ref 1
 
-let slow_smt_file =
+let slow_smt_file () =
   let open Filename in
   get_temp_dir_name () ^ dir_sep ^ "slow_smt.txt"
 
 
-let save_slow_problems, saved_slow_problem = 
+let save_slow_problems, saved_slow_problem, set_slow_threshold =
   (* not yet written this run, > 3.0s counts as slow, append to this fname *)
-  let slow_problem_ref = ref (false, 3.0, Some slow_smt_file) in
-  let save_slow_problems () =
-    if !Debug_ocaml.debug_level > 0
-    then ! slow_problem_ref
-    else (false, 0.0, None)
-  in
+  let slow_problem_ref = ref (true, 3.0, None) in
+  let save_slow_problems () = (! slow_problem_ref) in
   let saved_slow_problem () = match ! slow_problem_ref with
-    | (false, t, fn) -> slow_problem_ref := (true, t, fn)
+    | (true, t, fn) -> slow_problem_ref := (false, t, fn)
     | _ -> ()
   in
-  save_slow_problems, saved_slow_problem
+  let set_slow_threshold t =
+    (slow_problem_ref := (true, t, Some (slow_smt_file ())))
+  in
+  save_slow_problems, saved_slow_problem, set_slow_threshold
 
 
 type solver = { 
@@ -161,7 +160,7 @@ module Translate = struct
   [@@deriving eq]
 
 
-
+  module Z3ExprMap = Map.Make(struct type t = Z3.Expr.expr let compare = Z3.Expr.compare end)
 
 
 
@@ -173,8 +172,18 @@ module Translate = struct
   let z3sym_table : z3sym_table_entry Z3Symbol_Table.t = 
     Z3Symbol_Table.create 10000
 
+  type premise_info =
+    | IsNthList of IT.t
+    | IsArrayToList of IT.t
+    | IsLetVar of (IT.t * IT.t)
 
+  (* note translated terms that need additional premises to be added to goals
+     they are in to fully characterise them *)
+  let needs_premise_table = ref (Z3ExprMap.empty : premise_info Z3ExprMap.t)
 
+  let needs_premise info expr =
+    (needs_premise_table := Z3ExprMap.add expr info (! needs_premise_table));
+    expr
 
 
   let string context str =
@@ -370,8 +379,9 @@ module Translate = struct
     in
 
 
-    let rec term (IT (it_, bt)) =
-      begin match it_ with
+    let rec term it =
+      let bt = IT.bt it in
+      begin match IT.term it with
       | Sym s -> 
          Z3.Expr.mk_const context (symbol s) (sort bt)
       | Const (Z z) -> 
@@ -449,7 +459,7 @@ module Translate = struct
          end
       | Not t -> Z3.Boolean.mk_not context (term t)
       | ITE (t1, t2, t3) -> Z3.Boolean.mk_ite context (term t1) (term t2) (term t3)
-      | EachI ((i1, s, i2), t) -> 
+      | EachI ((i1, (s, _), i2), t) ->
          let rec aux i = 
            if i <= i2 
            then IT.subst (make_subst [(s, int_ i)]) t :: aux (i + 1)
@@ -556,6 +566,7 @@ module Translate = struct
          let fdec = Z3.FuncDecl.mk_func_decl_s context nm
                       (List.map sort (List.map IT.bt [i; xs; d])) (sort bt) in
          Z3.FuncDecl.apply fdec args
+         |> needs_premise (IsNthList it)
       | ArrayToList (arr, i, len) ->
          let args = List.map term [arr; i; len] in
          let list_bt = Option.get (BT.is_list_bt bt) in
@@ -563,6 +574,7 @@ module Translate = struct
          let fdec = Z3.FuncDecl.mk_func_decl_s context nm
                       (List.map sort (List.map IT.bt [arr; i; len])) (sort bt) in
          Z3.FuncDecl.apply fdec args
+         |> needs_premise (IsArrayToList it)
       | Aligned t ->
          term (divisible_ (pointerToIntegerCast_ t.t, t.align))
       | Representable (ct, t) ->
@@ -598,6 +610,11 @@ module Translate = struct
             in
             Z3.Expr.mk_app context decl (List.map term args)
        end
+      | Let ((nm, t1), t2) ->
+         let (nm, t2) = IT.alpha_rename (nm, IT.bt t1) t2 in
+         let x = IT.sym_ (nm, IT.bt t1) in
+         let _ = needs_premise (IsLetVar (x, t1)) (term x) in
+         term t2
       | _ ->
          Debug_ocaml.error "todo: SMT mapping"
       end
@@ -654,12 +671,36 @@ module Translate = struct
           ) assumptions []
       ) qs
 
+  let needs_premise_elts exprs =
+    let m1 = ! needs_premise_table in
+    let rec f m2 xs = function
+      | [] -> xs
+      | expr :: exprs ->
+        let (m2, xs) = if Z3ExprMap.mem expr m1 && not (Z3ExprMap.mem expr m2)
+          then (Z3ExprMap.add expr () m2, (expr, Z3ExprMap.find expr m1) :: xs)
+          else (m2, xs) in
+        f m2 xs (Z3.Expr.get_args expr @ exprs)
+    in
+    f Z3ExprMap.empty [] exprs
 
-  let extra_logical_facts global terms constraints =
-    let ts = List.filter_map (function | LC.T t -> Some t | _ -> None) constraints in
-    let all_ts = LogicalFunctions.add_unfolds_to_terms
-        global.logical_functions (ts @ terms) in
-    IT.nth_array_to_list_facts all_ts
+  let rec extra_logical_facts context global exprs =
+    let key_ts = needs_premise_elts exprs in
+    let array_list_ts = List.filter_map (function
+      | (_, IsNthList x) -> Some x
+      | (_, IsArrayToList x) -> Some x
+      | _ -> None) key_ts in
+    let array_list_facts = IT.nth_array_to_list_facts array_list_ts
+      |> List.map (term context global) in
+    let let_eqs = List.filter_map (function
+      | (_, IsLetVar (x, t)) -> Some (IT.eq_ (x, t))
+      | _ -> None) key_ts in
+    let let_eq_facts = List.map (term context global) let_eqs in
+    let facts = let_eq_facts @ array_list_facts in
+    let exprs2 = facts @ exprs in
+    let key_ts2 = needs_premise_elts exprs2 in
+    if List.length key_ts2 > List.length key_ts
+    then extra_logical_facts context global exprs2
+    else facts
 
 
 end
@@ -755,20 +796,21 @@ let model () =
      let model = Option.value_err "SMT solver did not produce a counter model" omodel in
      ((context, model), qs)
 
-let maybe_save_slow_problem solv_inst lc lc_t time solver = match save_slow_problems () with
+let maybe_save_slow_problem assertions lc lc_t time solver = match save_slow_problems () with
   | (_, _, None) -> ()
   | (_, cutoff, _) when (Stdlib.Float.compare time cutoff) = -1 -> ()
-  | (prev_msg, _, Some fname) ->
+  | (first_msg, _, Some fname) ->
     let channel = open_out_gen [Open_append; Open_creat] 0o666 fname in
     output_string channel "\n\n";
-    if prev_msg then output_string channel "## New CN run ##\n\n" else ();
+    if first_msg then output_string channel "## New CN run ##\n\n" else ();
     Colour.without_colour (fun () -> print channel (item "Slow problem"
-      (Pp.list (fun pp -> pp) [
+      (Pp.flow Pp.hardline [
           item "time taken" (format [] (Float.to_string time));
           item "constraint" (LC.pp lc);
           item "SMT constraint" !^(Z3.Expr.to_string lc_t);
-          if !Pp.print_level >= 10 then item "solver statistics" !^(Z3.Statistics.to_string (Z3.Solver.get_statistics solver)) else Pp.empty;
-          if !Pp.print_level >= 11 then item "SMT assertions" (Pp.list (fun e -> format [] (Z3.Expr.to_string e)) (Z3.Solver.get_assertions solv_inst)) else Pp.empty;
+          item "solver statistics" !^(Z3.Statistics.to_string (Z3.Solver.get_statistics solver));
+          item "SMT assertions"
+              (Pp.parens (Pp.list (fun e -> format [] (Z3.Expr.to_string e)) assertions));
       ]))) ();
     output_string channel "\n";
     saved_slow_problem ();
@@ -785,27 +827,33 @@ let provable ~loc ~solver ~global ~assumptions ~simp_ctxt ~pointer_facts lc =
   | `No_shortcut lc ->
      let Translate.{expr; it; qs} = Translate.goal context global lc in
      let nlc = Z3.Boolean.mk_not context expr in
-     let extra1 = pointer_facts @ Translate.extra_assumptions assumptions qs in
-     let extra2 = Translate.extra_logical_facts global
-         (it :: extra1) (LCSet.elements assumptions) in
-     let assumptions = List.map (Translate.term context global) (extra1 @ extra2) in
-     let res = 
-       time_f_logs loc 5 "Z3(inc)"
-         (Z3.Solver.check solver.incremental) 
-         (nlc :: assumptions) 
+     let extra1 = pointer_facts @ Translate.extra_assumptions assumptions qs
+         |> List.map (Translate.term context global) in
+     let extra2 = Translate.extra_logical_facts context global
+         (nlc :: extra1 @ Z3.Solver.get_assertions solver.incremental) in
+     let (elapsed, res) =
+       time_f_elapsed (time_f_logs loc 5 "Z3(inc)"
+           (Z3.Solver.check solver.incremental))
+         (nlc :: extra1 @ extra2)
      in
      match res with
-     | Z3.Solver.UNSATISFIABLE -> rtrue ()
+     | Z3.Solver.UNSATISFIABLE ->
+        let all_assumptions = extra1 @ extra2 @
+            Z3.Solver.get_assertions solver.incremental in
+        maybe_save_slow_problem all_assumptions lc expr elapsed solver.fancy;
+        rtrue ()
      | Z3.Solver.SATISFIABLE -> rfalse qs solver.incremental
      | Z3.Solver.UNKNOWN ->
         debug 5 (lazy (format [] "Z3(inc) unknown/timeout, running full solver"));
+        let all_assumptions = extra1 @ extra2 @
+            Z3.Solver.get_assertions solver.incremental in
         let (elapsed, res) = 
           time_f_elapsed 
             (time_f_logs loc 5 "Z3"
                (Z3.Solver.check solver.fancy))
-            (nlc :: assumptions @ Z3.Solver.get_assertions solver.incremental)
+            (nlc :: all_assumptions)
         in
-        maybe_save_slow_problem solver.fancy lc expr elapsed solver.fancy;
+        maybe_save_slow_problem all_assumptions lc expr elapsed solver.fancy;
         match res with
         | Z3.Solver.UNSATISFIABLE -> rtrue ()
         | Z3.Solver.SATISFIABLE -> rfalse qs solver.fancy

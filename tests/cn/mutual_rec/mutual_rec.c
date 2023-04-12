@@ -49,25 +49,25 @@ datatype b_tree {
 
 predicate {datatype a_tree t} A_Tree (pointer p) {
   if (p == ((pointer) 0)) {
-    return {t = A_Leaf {}};
+    return {t: A_Leaf {}};
   }
   else {
     take V = Owned<struct a_node>(p);
-    take L = B_Tree(V.value.left);
-    take R = B_Tree(V.value.right);
-    return {t = A_Node {k = V.value.k, v = V.value.v, left = L.t, right = R.t}};
+    take L = B_Tree(V.left);
+    take R = B_Tree(V.right);
+    return {t: A_Node {k: V.k, v: V.v, left: L.t, right: R.t}};
   }
 }
 
 predicate {datatype b_tree t} B_Tree (pointer p) {
   if (p == ((pointer) 0)) {
-    return {t = B_Leaf {}};
+    return {t: B_Leaf {}};
   }
   else {
     take V = Owned<struct b_node>(p);
-    take E = A_Tree(V.value.even);
-    take O = A_Tree(V.value.odd);
-    return {t = B_Node {even = E.t, odd = O.t}};
+    take E = A_Tree(V.even);
+    take O = A_Tree(V.odd);
+    return {t: B_Node {even: E.t, odd: O.t}};
   }
 }
 
@@ -113,8 +113,8 @@ struct a_node *
 predef_a_tree (struct a_node *p)
 /*@ requires take T = A_Tree (p) @*/
 /*@ ensures take T2 = A_Tree (p) @*/
-/*@ ensures (return == ((pointer) 0)) || (T2.t == A_Node {k = 1, v = 0,
-    left = B_Node {even = A_Leaf {}, odd = A_Leaf {}}, right = B_Leaf {}}) @*/
+/*@ ensures (return == ((pointer) 0)) || (T2.t == A_Node {k: 1, v: 0,
+    left: B_Node {even: A_Leaf {}, odd: A_Leaf {}}, right: B_Leaf {}}) @*/
 {
   struct b_node *l = NULL;
   if (! p || ! p->left || p->right) {
@@ -188,8 +188,8 @@ a_tree_keys_node_lemma (int k, int v, struct b_node *left, struct b_node *right)
 /*@ ensures take R2 = B_Tree (right) @*/
 /*@ ensures L2.t == L.t @*/
 /*@ ensures R2.t == R.t @*/
-/*@ ensures (a_tree_keys (A_Node {k = k, v = v, left = L2.t, right = R2.t}))
-  == (concat (b_tree_keys(L2.t), K_Cons {k = k, tail = (b_tree_keys(R2.t))})) @*/
+/*@ ensures (a_tree_keys (A_Node {k: k, v: v, left: L2.t, right: R2.t}))
+  == (concat (b_tree_keys(L2.t), K_Cons {k: k, tail: (b_tree_keys(R2.t))})) @*/
 {
   return;
 }
@@ -203,7 +203,7 @@ b_tree_keys_node_lemma (struct a_node *even, struct a_node *odd)
 /*@ ensures take O2 = A_Tree (odd) @*/
 /*@ ensures E2.t == E.t @*/
 /*@ ensures O2.t == O.t @*/
-/*@ ensures (b_tree_keys (B_Node {even = E2.t, odd = O2.t}))
+/*@ ensures (b_tree_keys (B_Node {even: E2.t, odd: O2.t}))
   == (merge (double_list (a_tree_keys (E2.t)), inc_list (double_list (a_tree_keys (O2.t))))) @*/
 {
   return;
@@ -219,8 +219,8 @@ a_tree_keys_node_concat_inc_lemma (int k, struct b_node *left, struct b_node *ri
 /*@ ensures take R2 = B_Tree (right) @*/
 /*@ ensures L2.t == L.t @*/
 /*@ ensures R2.t == R.t @*/
-/*@ ensures (inc_list (concat (b_tree_keys(L2.t), K_Cons {k = k, tail = (b_tree_keys(R2.t))})))
-  == (concat (inc_list (b_tree_keys(L2.t)), inc_list (K_Cons {k = k, tail = (b_tree_keys(R2.t))})))
+/*@ ensures (inc_list (concat (b_tree_keys(L2.t), K_Cons {k: k, tail: (b_tree_keys(R2.t))})))
+  == (concat (inc_list (b_tree_keys(L2.t)), inc_list (K_Cons {k: k, tail: (b_tree_keys(R2.t))})))
 @*/
 {
   return;
@@ -233,8 +233,8 @@ a_tree_keys_node_concat_cons_inc_lemma (int k, struct b_node *right)
 /*@ requires take R = B_Tree (right) @*/
 /*@ ensures take R2 = B_Tree (right) @*/
 /*@ ensures R2.t == R.t @*/
-/*@ ensures (inc_list (K_Cons {k = k, tail = (b_tree_keys(R2.t))}))
-  == (K_Cons {k = k + 1, tail = inc_list (b_tree_keys(R2.t))}) @*/
+/*@ ensures (inc_list (K_Cons {k: k, tail: (b_tree_keys(R2.t))}))
+  == (K_Cons {k: k + 1, tail: inc_list (b_tree_keys(R2.t))}) @*/
 {
   return;
 }

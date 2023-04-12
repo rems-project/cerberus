@@ -40,22 +40,22 @@ predicate {datatype tree t, integer v, map <integer, datatype tree> children}
   Tree (pointer p)
 {
   if (p == NULL) {
-    return {t = Empty_Tree {}, v = 0, children = default_children ()};
+    return {t: Empty_Tree {}, v: 0, children: default_children ()};
   }
   else {
     take V = Owned<int>((pointer)(((integer)p) + (offsetof (node, v))));
     let nodes_ptr = ((pointer)((((integer)p) + (offsetof (node, nodes)))));
     take Ns = each (integer i; (0 <= i) && (i < (num_nodes ())))
       {Indirect_Tree((pointer)(((integer)nodes_ptr) + (i * (sizeof <tree>))))};
-    let ts = array_to_list (Ns.t, 0, num_nodes ());
-    return {t = Node {v = V.value, children = ts}, v = V.value, children = Ns.t};
+    let ts = array_to_list (Ns, 0, num_nodes ());
+    return {t: Node {v: V, children: ts}, v: V, children: Ns};
   }
 }
 
-predicate {datatype tree t} Indirect_Tree (pointer p) {
+predicate datatype tree Indirect_Tree (pointer p) {
   take V = Owned<tree>(p);
-  take T = Tree(V.value);
-  return {t = T.t};
+  take T = Tree(V);
+  return T.t;
 }
 
 datatype arc_in_array {
@@ -72,7 +72,7 @@ function (integer) tree_v_step (datatype tree t, datatype arc_in_array arc)
     return 0;
   }
   case Node {
-    let arc2 = Arc_In_Array {arr = arc.arr, i = arc.i + 1, len = arc.len};
+    let arc2 = Arc_In_Array {arr: arc.arr, i: arc.i + 1, len: arc.len};
     return ((arc.i < arc.len) ?
         (tree_v(nth_list((arc.arr)[arc.i], t.children, Empty_Tree {}), arc2)) :
         t.v);
@@ -86,7 +86,7 @@ function (boolean) in_tree_step (datatype tree t, datatype arc_in_array arc)
     return false;
   }
   case Node {
-    let arc2 = Arc_In_Array {arr = arc.arr, i = arc.i + 1, len = arc.len};
+    let arc2 = Arc_In_Array {arr: arc.arr, i: arc.i + 1, len: arc.len};
     return ((arc.i < arc.len) ?
         (in_tree(nth_list((arc.arr)[arc.i], t.children, Empty_Tree {}), arc2)) :
         true);
@@ -111,18 +111,18 @@ lookup_rec (tree t, int *path, int i, int path_len, int *v)
     {Owned<typeof(i)>(path + (j * 4))} @*/
 /*@ requires ((0 <= path_len) && (0 <= i) && (i <= path_len)) @*/
 /*@ requires each (integer j; (0 <= j) && (j < path_len))
-    {(0 <= ((Xs.value)[j])) && (((Xs.value)[j]) < (num_nodes ()))} @*/
+    {(0 <= (Xs[j])) && ((Xs[j]) < (num_nodes ()))} @*/
 /*@ requires take V = Owned(v) @*/
-/*@ requires let arc = Arc_In_Array {arr = Xs.value, i = i, len = path_len} @*/
+/*@ requires let arc = Arc_In_Array {arr: Xs, i: i, len: path_len} @*/
 /*@ ensures take T2 = Tree(t) @*/
 /*@ ensures T2.t == {T.t}@start @*/
 /*@ ensures T2.children == {T.children}@start @*/
 /*@ ensures take Xs2 = each (integer j; (0 <= j) && (j < path_len))
     {Owned<typeof(i)>(path + (j * 4))} @*/
-/*@ ensures Xs2.value == {Xs.value}@start @*/
+/*@ ensures Xs2 == {Xs}@start @*/
 /*@ ensures take V2 = Owned(v) @*/
 /*@ ensures ((return == 0) && (not (in_tree (T2.t, arc))))
-  || ((return == 1) && (in_tree (T2.t, arc)) && ((tree_v (T2.t, arc)) == V2.value)) @*/
+  || ((return == 1) && (in_tree (T2.t, arc)) && ((tree_v (T2.t, arc)) == V2)) @*/
 {
   int idx = 0;
   int r = 0;
@@ -164,7 +164,7 @@ lookup (tree t, int *path, int path_len, int *v)
 /*@ ensures A2.arc == {A.arc}@start @*/
 /*@ ensures let V2 = Owned(v) @*/
 /*@ ensures ((return == 0) && ((T2.t[A2.arc]) == Node_None {}))
-  || ((return == 1) && ((T2.t[A2.arc]) == Node {v = V2.value})) @*/
+  || ((return == 1) && ((T2.t[A2.arc]) == Node {v: V2})) @*/
 {
   int i;
 

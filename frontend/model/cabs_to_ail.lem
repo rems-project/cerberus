@@ -11,6 +11,7 @@ import AilSyntaxAux AilTypesAux Builtins
 import Errors
 
 import Mini_pipeline
+import Desugaring_init
 
 import Cn
 
@@ -3382,6 +3383,16 @@ and wip_desugar_initializer_ loc dur current_ty init =
           E.return (current_ty, d_e)
       | _ ->
           E.get_tag_definitions >>= fun tagDefs ->
+          let funcs = <|
+            Desugaring_init.desugar_expression= desugar_expression;
+            Desugaring_init.is_integer_constant_expression= is_integer_constant_expression;
+            Desugaring_init.is_initializer_constant_expression_or_string_literal= is_initializer_constant_expression_or_string_literal;
+            Desugaring_init.evaluate_integer_constant_expression= evaluate_integer_constant_expression;
+          |> in
+          Desugaring_init.desugar_init tagDefs funcs (dur = Static || dur = Thread) current_ty init >>= fun (current_ty', init_st, _) ->
+          E.return (current_ty', Desugaring_init.constructValue tagDefs init_st current_ty')
+
+          (* E.get_tag_definitions >>= fun tagDefs ->
           foo current_ty init >>= fun (current_ty', xs) ->
           
           E.print_debugM 2 (fun () ->
@@ -3391,7 +3402,7 @@ and wip_desugar_initializer_ loc dur current_ty init =
               " := " ^ Pp.stringFromAil_expression expr
             ) xs
           ) >>= fun () ->
-          E.return (current_ty', constructValue tagDefs xs current_ty')
+          E.return (current_ty', constructValue tagDefs xs current_ty') *)
     end
 
 
@@ -4056,6 +4067,12 @@ let rec desugar_cn_base_type loc bTy =
           | Nothing ->
               E.fail loc (Errors.Desugar_CN CNErr_invalid_tag)
         end
+    | CN_record members ->
+       E.mapM (fun (m_bt,member) ->
+           desugar_cn_base_type (Loc.locOf member) m_bt >>= fun m_bt' ->
+           E.return (m_bt',member)
+         ) members >>= fun members' ->
+       E.return (CN_record members')
     | CN_datatype ident ->
        E.resolve_cn_ident CN_datatype_nm ident >>= fun sym_resolved ->
        let sym = Cn.ensure_not_c_variable sym_resolved in
@@ -4069,6 +4086,17 @@ let rec desugar_cn_base_type loc bTy =
         CN_tuple <$> E.mapM (desugar_cn_base_type loc) bTys
     | CN_set bTy ->
         CN_set <$> desugar_cn_base_type loc bTy
+end
+
+let rec register_cn_match_lhs_idents (CNExpr _ expr_) =
+  match expr_ with
+    | CNExpr_var ident ->
+        E.register_cn_ident CN_vars ident >>= fun _ ->
+        E.return ()
+    | CNExpr_cons _ es ->
+        E.mapM (fun (_, exp) -> register_cn_match_lhs_idents exp) es >>= fun _ ->
+        E.return ()
+    | _ -> E.return ()
 end
 
 let pair x y = (x, y)
@@ -4088,6 +4116,12 @@ let rec desugar_cn_expr (CNExpr loc expr_) =
     | CNExpr_memberof e ident_membr ->
         CNExpr_memberof <$> desugar_cn_expr e
                         <*> (E.return ident_membr)
+    | CNExpr_record members ->
+        E.mapM (fun (id, e) ->
+          desugar_cn_expr e >>= fun e' ->
+          E.return (id, e')
+          ) members >>= fun members' ->
+      E.return (CNExpr_record members')
     | CNExpr_memberupdates e updates ->
         CNExpr_memberupdates <$> desugar_cn_expr e
                             <*> E.mapM (fun (membr, v) -> 
@@ -4135,6 +4169,15 @@ let rec desugar_cn_expr (CNExpr loc expr_) =
         desugar_cn_expr e >>= fun e ->
         E.pop_cn_scope >>= fun () ->
         E.return (CNExpr_each sym r e)
+    | CNExpr_match x ms ->
+        E.mapM (fun (lhs, rhs) ->
+          E.push_cn_scope >>= fun () ->
+          register_cn_match_lhs_idents lhs >>= fun _ ->
+          desugar_cn_expr lhs >>= fun lhs ->
+          desugar_cn_expr rhs >>= fun rhs ->
+          E.pop_cn_scope >>= fun () ->
+          E.return (lhs, rhs)) ms >>= fun ms ->
+        CNExpr_match <$> desugar_cn_expr x <*> E.return ms
     | CNExpr_ite e1 e2 e3 ->
         CNExpr_ite <$> desugar_cn_expr e1
                     <*> desugar_cn_expr e2
@@ -4242,17 +4285,7 @@ let desugar_cn_assertion a =
       E.return (CN_assert_qexp sym bTy e1 e2)
   end
 
-let desugar_cn_pred_return loc = function
-  | CN_return_record xs ->
-    E.mapM (fun (x, e) ->
-      desugar_cn_expr e >>= fun e' ->
-      E.return (x, e')
-    ) xs >>= fun xs' ->
-      E.return (CN_return_record xs')
-  | CN_return_expression e ->
-    desugar_cn_expr e >>= fun e' ->
-    E.return (CN_return_expression e')
-end
+
 
 let rec desugar_cn_clause_aux clause =
   match clause with
@@ -4270,7 +4303,7 @@ let rec desugar_cn_clause_aux clause =
         CN_assert loc <$> desugar_cn_assertion a
                       <*> desugar_cn_clause_aux c
     | CN_return loc ret -> 
-      desugar_cn_pred_return loc ret >>= fun ret' ->
+      desugar_cn_expr ret >>= fun ret' ->
       E.return (CN_return loc ret')
   end
 
@@ -4306,14 +4339,10 @@ let desugar_cn_oarg (bTy, ident) =
   E.return (bTy', ident)
 
 
-let desugar_cn_output = function
-  | CN_pred_output_record oargs ->
-    E.mapM desugar_cn_oarg oargs >>= fun oargs ->
-    E.return (CN_pred_output_record oargs)
-  | CN_pred_output_basetype loc bt ->
-    desugar_cn_base_type loc bt >>= fun bt ->
-    E.return (CN_pred_output_basetype loc bt)
-end
+let desugar_cn_output (loc, bt) = 
+  desugar_cn_base_type loc bt >>= fun bt' ->
+  E.return (loc, bt')
+
 
 let desugar_and_register_cn_predicate pred =
   E.register_cn_predicate pred.cn_pred_name begin

@@ -230,6 +230,7 @@ module IndexTerms = struct
        let b = aux b in 
        begin match a, b with
        | IT (Const (Z a), _), IT (Const (Z b), _) ->
+            assert (Z.lt Z.zero b);
           z_ (Z.div a b)
        | IT (Const (Z a), _), _ when Z.equal a (Z.zero) -> 
           int_ 0
@@ -437,11 +438,11 @@ module IndexTerms = struct
        | _, _ ->
           eq_ (a, b)
        end
-    | EachI ((i1, s, i2), t) ->
+    | EachI ((i1, (s, s_bt), i2), t) ->
        let s' = Sym.fresh_same s in 
        let t = IndexTerms.subst (make_subst [(s, sym_ (s', the_bt))]) t in
        let t = aux t in
-       IT (EachI ((i1, s', i2), t), the_bt)
+       IT (EachI ((i1, (s', s_bt), i2), t), the_bt)
 
     | Tuple its ->
        let its = List.map aux its in

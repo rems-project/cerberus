@@ -20,6 +20,7 @@ type cn_base_type 'a =
   | CN_real
   | CN_loc
   | CN_struct of 'a
+  | CN_record of list (cn_base_type 'a * Symbol.identifier)
   | CN_datatype of 'a
   | CN_map of cn_base_type 'a * cn_base_type 'a
   | CN_list of cn_base_type 'a
@@ -67,6 +68,7 @@ type cn_expr_ 'a 'ty =
   | CNExpr_var of 'a
   | CNExpr_list of list (cn_expr 'a 'ty)
   | CNExpr_memberof of cn_expr 'a 'ty * Symbol.identifier
+  | CNExpr_record of list (Symbol.identifier * cn_expr 'a 'ty)
   | CNExpr_memberupdates of cn_expr 'a 'ty * list (Symbol.identifier * cn_expr 'a 'ty)
   | CNExpr_arrayindexupdates of cn_expr 'a 'ty * list (cn_expr 'a 'ty * cn_expr 'a 'ty)
   | CNExpr_binop of cn_binop * cn_expr 'a 'ty * cn_expr 'a 'ty
@@ -77,6 +79,7 @@ type cn_expr_ 'a 'ty =
   | CNExpr_call of 'a * list (cn_expr 'a 'ty)
   | CNExpr_cons of 'a * list (Symbol.identifier * cn_expr 'a 'ty)
   | CNExpr_each of 'a * (integer * integer) * cn_expr 'a 'ty
+  | CNExpr_match of cn_expr 'a 'ty * list (cn_expr 'a 'ty * cn_expr 'a 'ty)
   | CNExpr_ite of cn_expr 'a 'ty * cn_expr 'a 'ty * cn_expr 'a 'ty
   | CNExpr_good of 'ty * cn_expr 'a 'ty
   | CNExpr_deref of cn_expr 'a 'ty
@@ -108,16 +111,13 @@ type cn_assertion 'a 'ty =
   | CN_assert_exp of cn_expr 'a 'ty
   | CN_assert_qexp of 'a * cn_base_type 'a * cn_expr 'a 'ty * cn_expr 'a 'ty
 
-(* todo: this should be unified: the record notation should just become a normal expression *)
-type cn_pred_return 'a 'ty =
-  | CN_return_record of list (Symbol.identifier * cn_expr 'a 'ty)
-  | CN_return_expression of cn_expr 'a 'ty
+
 
 type cn_clause 'a 'ty =
   | CN_letResource of Loc.t * 'a * cn_resource 'a 'ty * cn_clause 'a 'ty
   | CN_letExpr of Loc.t * 'a * cn_expr 'a 'ty * cn_clause 'a 'ty
   | CN_assert of Loc.t * cn_assertion 'a 'ty * cn_clause 'a 'ty
-  | CN_return of Loc.t * cn_pred_return 'a 'ty
+  | CN_return of Loc.t * cn_expr 'a 'ty
 
 type cn_clauses 'a 'ty =
   | CN_clause of Loc.t * cn_clause 'a 'ty
@@ -145,16 +145,12 @@ type cn_lemma 'a 'ty = <|
   cn_lemma_ensures: list (cn_condition 'a 'ty);
 |>
 
-(* todo: fix this: records should just be base types *)
-type cn_predicate_output 'a =
-  | CN_pred_output_record of list (cn_base_type 'a * Symbol.identifier)
-  | CN_pred_output_basetype of Loc.t * cn_base_type 'a
 
 type cn_predicate 'a 'ty = <|
   cn_pred_loc: Loc.t;
   cn_pred_name: 'a;
   cn_pred_attrs: list Symbol.identifier;
-  cn_pred_output: cn_predicate_output 'a;
+  cn_pred_output: Loc.t * cn_base_type 'a;
   cn_pred_iargs: list (cn_base_type 'a * 'a);
   cn_pred_clauses: maybe (cn_clauses 'a 'ty);
 |>

@@ -5,13 +5,13 @@ struct int_list_items {
 
 predicate {integer len} IntList(pointer l) {
   if ( l == NULL ) {
-    return { len = 0 } ;
+    return { len: 0 } ;
   } else {
     take head_item = Owned<struct int_list_items>(l) ;
-    take tail = IntList(head_item.value.next) ;
+    take tail = IntList(head_item.next) ;
 
     assert( tail.wrong ) ;
 
-    return { len = tail.len + 1 } ;
+    return { len: tail.len + 1 } ;
   }
 }

@@ -29,13 +29,11 @@ type function_sig = {
     return_bty: BaseTypes.t;
   }
 
-type pred_output =
-  | PO_record of (Id.t * BaseTypes.t) list  
-  | PO_basetype of BaseTypes.t
+
 
 type predicate_sig = {
   pred_iargs: (Sym.t * BaseTypes.t) list;
-  pred_output: pred_output;
+  pred_output: BaseTypes.t;
 }
 
 
@@ -138,6 +136,7 @@ let pp_cnexpr_kind expr_ =
   | CNExpr_value_of_c_variable sym -> parens (typ (!^ "c:var") (Sym.pp sym))
   | CNExpr_list es_ -> !^ "[...]"
   | CNExpr_memberof (e, xs) -> !^ "_." ^^ Id.pp xs
+  | CNExpr_record members -> !^"{ ... }"
   | CNExpr_memberupdates (e, _updates) -> !^ "{_ with ...}"
   | CNExpr_arrayindexupdates (e, _updates) -> !^ "_ [ _ = _ ...]"
   | CNExpr_binop (bop, x, y) -> !^ "(binop (_, _, _))"
@@ -148,6 +147,7 @@ let pp_cnexpr_kind expr_ =
   | CNExpr_call (sym, exprs) -> !^ "(" ^^ Sym.pp sym ^^^ !^ "(...))"
   | CNExpr_cons (c_nm, exprs) -> !^ "(" ^^ Sym.pp c_nm ^^^ !^ "{...})"
   | CNExpr_each (sym, r, e) -> !^ "(each ...)"
+  | CNExpr_match (x, ms) -> !^ "match ... {...}"
   | CNExpr_ite (e1, e2, e3) -> !^ "(if ... then ...)"
   | CNExpr_good (ty, e) -> !^ "(good (_, _))"
   | CNExpr_unchanged e -> !^"(unchanged (_))"
@@ -166,6 +166,8 @@ let rec free_in_expr (CNExpr (_loc, expr_)) =
      free_in_exprs es
   | CNExpr_memberof (e, _id) -> 
      free_in_expr e
+  | CNExpr_record members ->
+     free_in_exprs (List.map snd members)
   | CNExpr_memberupdates (e, updates) ->
      free_in_exprs (e :: List.map snd updates)
   | CNExpr_arrayindexupdates (e, updates) ->
@@ -186,6 +188,8 @@ let rec free_in_expr (CNExpr (_loc, expr_)) =
      free_in_exprs (List.map snd args)
   | CNExpr_each (s, range, e) ->
      SymSet.remove s (free_in_expr e)
+  | CNExpr_match (x, ms) ->
+     free_in_exprs (x :: List.map snd ms)
   | CNExpr_ite (e1, e2, e3) ->
      free_in_exprs [e1; e2; e3]
   | CNExpr_good (typ, e) ->
@@ -221,6 +225,8 @@ let rec translate_cn_base_type (bTy: CF.Symbol.sym cn_base_type) =
         Loc None
     | CN_struct tag_sym ->
         Struct tag_sym
+    | CN_record members ->
+        SBT.Record (List.map (fun (bt,m) -> (m, translate_cn_base_type bt)) members)
     | CN_datatype dt_sym ->
         Datatype dt_sym
     | CN_map (bTy1, bTy2) ->
@@ -241,11 +247,8 @@ let register_cn_predicates env (defs: cn_predicate list) =
         (id_or_sym, SBT.to_basetype (translate_cn_base_type bTy))
       ) xs in
     let iargs = translate_args def.cn_pred_iargs in
-    let output = match def.cn_pred_output with
-      | CN_pred_output_record oargs ->
-         PO_record (translate_args oargs) 
-      | CN_pred_output_basetype (_,bt) ->
-         PO_basetype (SBT.to_basetype (translate_cn_base_type bt))
+    let output = 
+      (SBT.to_basetype (translate_cn_base_type (snd def.cn_pred_output)))
     in
     add_predicate def.cn_pred_name { 
         pred_iargs= iargs; 
@@ -505,10 +508,10 @@ module EffectfulTranslation = struct
        fail {loc; msg = Illtyped_it {it = Terms.pp t; has = SurfaceBaseTypes.pp has; expected = "struct"; o_ctxt = None}}
 
 
-  let translate_is_shape env loc x shape_expr : (IT.sterm) m =
+  let translate_match env loc x shape_expr : (IT.sterm * (Sym.t * IT.sterm) list) m =
     let rec f x = function
       | CNExpr (loc2, CNExpr_cons (c_nm, exprs)) ->
-          let@ cons_info = lookup_constr loc c_nm env in
+          let@ cons_info = lookup_constr loc2 c_nm env in
           (* let@ (_, mem_syms) = lookup_datatype loc cons_info.c_datatype_tag env in *)
           let m1 = IT.IT ((DatatypeIsCons (c_nm, x)), SBT.Bool) in
           let memb nm =
@@ -529,13 +532,14 @@ module EffectfulTranslation = struct
               f x shape
             ) exprs 
           in
-          return (m1 :: List.concat xs)
-      | _ ->
-      fail {loc; msg = Generic (Pp.string "rhs of ?? operation can only specify shape"
-          (* FIXME: convert the dtree of the shape expr to something pp-able *))}
+          return (m1 :: List.concat (List.map fst xs), List.concat (List.map snd xs))
+      | CNExpr (_, CNExpr_var sym) ->
+          return ([], [(sym, x)])
+      | CNExpr (loc, ex) ->
+          fail {loc; msg = Generic (!^ "not permitted in match pattern:" ^^^ pp_cnexpr_kind ex)}
     in
-    let@ xs = f x shape_expr in
-    return (IT.sterm_of_term (IT.and_ (List.map IT.term_of_sterm xs)))
+    let@ (xs, ys) = f x shape_expr in
+    return (IT.and_sterm_ xs, ys)
 
 
 
@@ -571,6 +575,10 @@ module EffectfulTranslation = struct
         | CNExpr_memberof (e, xs) ->
            let@ e = self e in
            translate_member_access loc env e xs
+        | CNExpr_record members ->
+           let@ members = ListM.mapsndM self members in
+           let bts = List.map_snd IT.bt members in
+           return (IT (IT.Record members, SBT.Record bts))
         | CNExpr_memberupdates (e, updates) ->
            let@ e = self e in
            let bt = IT.bt e in
@@ -598,9 +606,6 @@ module EffectfulTranslation = struct
                let@ v = self v in
                return (IT ((MapSet (acc, i, v)), IT.bt e))
              ) e updates
-        | CNExpr_binop (CN_sub, e1_, (CNExpr (_, CNExpr_cons _) as shape)) ->
-            let@ e1 = self e1_ in
-            translate_is_shape env loc e1 shape
         | CNExpr_binop (bop, e1_, e2_) ->
             let@ e1 = self e1_ in
             let@ e2 = self e2_ in
@@ -661,7 +666,28 @@ module EffectfulTranslation = struct
                 (add_logical sym SBT.Integer env) 
                 e 
             in
-            return (IT ((EachI ((Z.to_int (fst r), sym, Z.to_int (snd r)), expr)), SBT.Bool))
+            return (IT ((EachI ((Z.to_int (fst r), (sym, SBT.Integer), Z.to_int (snd r)), expr)), SBT.Bool))
+        | CNExpr_match (x, ms) ->
+            let@ x = self x in
+            let x_nm = Sym.fresh_named "match_on" in
+            let x_var = IT.sym_ (x_nm, IT.bt x) in
+            let env = add_logical x_nm (IT.bt x_var) env in
+            let locally_bound = SymSet.add x_nm locally_bound in
+            let f (lhs, rhs) =
+              let@ (cond, lets) = translate_match env loc x_var lhs in
+              let lb = List.fold_left (fun acc (sym, _) -> SymSet.add sym acc) locally_bound lets in
+              let env = List.fold_left (fun acc (sym, y) -> add_logical sym (IT.bt y) acc) env lets in
+              let@ rhs = trans evaluation_scope lb env rhs in
+              let rhs = List.fold_left (fun x (sym, y) -> IT.let_ ((sym, y), x)) rhs lets in
+              return (cond, rhs)
+            in
+            let@ ms = ListM.mapM f ms in
+            let rec g = function
+              | [] -> assert false (* parser should prevent empty match-set *)
+              | [(_, rhs)] -> rhs
+              | (cond, rhs) :: ms -> ite_ (cond, rhs, g ms)
+            in
+            return (IT.let_ ((x_nm, x), g ms))
         | CNExpr_ite (e1, e2, e3) ->
             let@ e1 = self e1 in
             let@ e2 = self e2 in
@@ -785,10 +811,7 @@ module EffectfulTranslation = struct
           | None -> fail {loc; msg = Unknown_resource_predicate {id = pred; logical = false}}
           | Some pred_sig -> return pred_sig
         in
-        let output_bt = match pred_sig.pred_output with
-        | PO_record oargs -> BT.Record oargs
-        | PO_basetype bt -> bt
-        in
+        let output_bt = pred_sig.pred_output in
         return (PName pred, SBT.of_basetype output_bt)
     in
     return (pname, ptr_expr, iargs, oargs_ty)
@@ -1119,14 +1142,7 @@ let translate_cn_clause env clause =
          let@ lc = handle st (ET.translate_cn_assrt env (loc, assrt)) in
          let acc' z = acc (LAT.mConstraint ( lc, (loc, None) ) z) in
          translate_cn_clause_aux env st acc' cl
-      | CN_return (loc, CN_return_record xs_) ->
-          let@ xs =
-            ListM.mapM (fun ((member: Id.t), e_) ->
-              let@ e = handle st (ET.translate_cn_expr SymSet.empty env e_) in
-              return (member, IT.term_of_sterm e)
-            ) xs_ in
-          acc (LAT.I (IT.record_ xs)) 
-      | CN_return (loc, CN_return_expression e_) ->
+      | CN_return (loc, e_) ->
           let@ e = handle st (ET.translate_cn_expr SymSet.empty env e_) in
           let e = IT.term_of_sterm e in
           acc (LAT.I e) 
@@ -1171,10 +1187,6 @@ let translate_cn_predicate env (def: cn_predicate) =
       add_logical sym (SBT.of_basetype bTy) acc
     ) env iargs in
   let@ clauses = translate_option_cn_clauses env' def.cn_pred_clauses in
-  let output_bt = match output_bt with
-    | PO_record oargs -> BT.Record oargs
-    | PO_basetype bt -> bt
-  in
   match iargs with
     | (iarg0, BaseTypes.Loc) :: iargs' ->
         return 
