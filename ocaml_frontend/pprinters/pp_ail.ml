@@ -156,7 +156,9 @@ let macro_string_of_integerBaseType = function
  | Intptr_t       -> "INTPTR"
 
 
-let pp_integerType = function
+let pp_integerType ?(c_output=false) = 
+  let pp_type_keyword = if c_output then (fun x -> !^ x) else pp_type_keyword in
+  function
  | Char ->
      pp_type_keyword "char"
  | Bool ->
@@ -207,7 +209,9 @@ let macro_string_of_integerType = function
      "ENUM_" ^ Pp_symbol.to_string_pretty sym
 
 
-let pp_realFloatingType = function
+let pp_realFloatingType ?(c_output=false) = 
+  let pp_type_keyword = if c_output then (fun x -> !^ x) else pp_type_keyword in
+  function
   | Float ->
       pp_type_keyword "float"
   | Double ->
@@ -216,16 +220,16 @@ let pp_realFloatingType = function
       pp_type_keyword "long" ^^^ pp_type_keyword "double"
 
 
-let pp_floatingType = function
+let pp_floatingType ?(c_output=false) = function
   | RealFloating ft ->
-      pp_realFloatingType ft
+      pp_realFloatingType ~c_output:c_output ft
 
 
-let pp_basicType = function
+let pp_basicType ?(c_output=false) = function
   | Integer it ->
-      pp_integerType it
+      pp_integerType ~c_output:c_output it
   | Floating rft ->
-      pp_floatingType rft
+      pp_floatingType ~c_output:c_output rft
 
 let pp_ctype_aux ~is_human pp_ident_opt qs (Ctype (_, ty) as cty) =
   let precOf = function

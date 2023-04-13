@@ -95,7 +95,7 @@ let rec cn_to_ail_expr (CNExpr (loc, expr_)) =
     | CNExpr_offsetof (tag, member) -> !^ "(offsetof (_, _))"
     | CNExpr_membershift (e, member) -> !^ "&(_ -> _)" *)
 
-    (* TODO: Write cn_to_ail_base_type above and substitute for Void *)
+    (* TODO: Complete cn_to_ail_base_type above *)
     | CNExpr_cast (bt, expr) -> A.(AilEcast (empty_qualifiers, C.Ctype ([], cn_to_ail_base_type bt) , (mk_expr (cn_to_ail_expr expr))))
     
     (*
@@ -110,7 +110,6 @@ let rec cn_to_ail_expr (CNExpr (loc, expr_)) =
     | CNExpr_unchanged e -> !^"(unchanged (_))"
     | CNExpr_at_env (e, es) -> !^"{_}@_" *)
 
-    (* TODO: Check this isn't overlapping with bitwise not *)
     | CNExpr_not e -> A.(AilEunary (Bnot, mk_expr (cn_to_ail_expr e))) 
     | _ -> failwith "TODO"
 
@@ -147,7 +146,7 @@ let pp_ail_binop = function
 (* TODO: Complete without ansi_format *)
 let pp_ctype_aux = function
   | C.Void -> !^ "void"
-  | C.(Basic bty) -> CF.Pp_ail.pp_basicType bty
+  | C.(Basic bty) -> CF.Pp_ail.pp_basicType ~c_output:true bty
   | C.Atomic _ -> failwith "TODO"
   | C.(Struct sym) -> CF.Pp_ail.pp_id sym
   | _ -> failwith "TODO"
@@ -168,9 +167,10 @@ let rec pp_ail ail_expr =
     | A.(AilEconst ail_const) -> pp_ail_const ail_const
     | A.(AilEbinary (x, bop, y)) -> (pp_ail (rm_expr x)) ^ (pp_ail_binop bop) ^ (pp_ail (rm_expr y))
     | A.(AilEunary (Bnot, ail_expr)) -> "!(" ^ (pp_ail (rm_expr ail_expr)) ^ ")"
-    | A.(AilEsizeof (qs, ct)) -> "sizeof(" ^ pp_ctype ct ^ ")"
+    | A.(AilEsizeof (_, ct)) -> "sizeof(" ^ pp_ctype ct ^ ")"
     | A.(AilEcond (e1, Some e2, e3)) -> (pp_ail (rm_expr e1)) ^ " ? " ^ (pp_ail (rm_expr e2)) ^ " : " ^ (pp_ail (rm_expr e3)) 
     | A.(AilEcond (_, None, _)) -> pp_ail_default ail_expr
+    | A.(AilEcast (_, ctype , expr)) -> "(" ^ pp_ctype ctype ^ ") " ^ pp_ail (rm_expr expr)
     | _ -> pp_ail_default ail_expr
 
 
