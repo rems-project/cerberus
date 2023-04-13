@@ -17,10 +17,10 @@ val pp_qualifiers: qualifiers -> PPrint.document
 val string_of_integerBaseType: integerBaseType -> string
 
 
-val pp_integerType: integerType -> PPrint.document
-val pp_floatingType: floatingType -> PPrint.document
+val pp_integerType: ?c_output:bool -> integerType -> PPrint.document
+val pp_floatingType: ?c_output:bool -> floatingType -> PPrint.document
 
-val pp_basicType: basicType -> PPrint.document
+val pp_basicType: ?c_output:bool -> basicType -> PPrint.document
 
 val pp_integer: Nat_big_num.num -> PPrint.document
 
