@@ -12,7 +12,24 @@ let rm_expr (A.AnnotatedExpression (_, _, _, expr_)) = expr_
 let mk_expr expr_ = 
   A.AnnotatedExpression ((), [], Cerb_location.unknown, expr_)
 
-let cn_to_ail_base_type = None
+let empty_qualifiers : C.qualifiers = {const = false; restrict = false; volatile = false}
+
+let rec cn_to_ail_base_type = 
+  let generate_ail_array bt = C.(Array (Ctype ([], cn_to_ail_base_type bt), None)) in 
+  function
+  | CN_unit -> C.Void
+  | CN_bool -> C.(Basic (Integer Bool))
+  | CN_integer -> C.(Basic (Integer (Signed Int_))) (* TODO: Discuss integers *)
+  (* | CN_real -> failwith "TODO" *)
+  | CN_loc -> C.(Pointer (empty_qualifiers, Ctype ([], Void))) (* Casting all CN pointers to void star *)
+  | CN_struct sym -> C.(Struct sym)
+  (* | CN_record of list (cn_base_type 'a * Symbol.identifier) *)
+  (* | CN_datatype sym -> failwith "TODO" *)
+  (* | CN_map of cn_base_type 'a * cn_base_type 'a *)
+  | CN_list bt -> generate_ail_array bt (* TODO: What is the optional second pair element for? Have just put None for now *)
+  (* | CN_tuple of list (cn_base_type 'a) *)
+  | CN_set bt -> generate_ail_array bt
+  | _ -> failwith "TODO"
 
 let cn_to_ail_binop = function
   | CN_add -> A.(Arithmetic Add)
@@ -49,7 +66,6 @@ let cn_to_ail_const = function
   | CNConst_unit -> A.(AilEconst (ConstantIndeterminate C.(Ctype ([], Void))))
  
 
-let empty_qualifiers : C.qualifiers = {const = false; restrict = false; volatile = false}
 
 (* frontend/model/ail/ailSyntax.lem *)
 (* ocaml_frontend/generated/ailSyntax.ml *)
@@ -59,7 +75,11 @@ let rec cn_to_ail_expr (CNExpr (loc, expr_)) =
     | CNExpr_value_of_c_atom (sym, _) -> A.(AilEident sym)
     | CNExpr_var sym -> A.(AilEident sym) (* TODO: Check. Need to do more work if this is only a CN var *)
     | CNExpr_deref e -> A.(AilEunary (Indirection, mk_expr (cn_to_ail_expr e)))
-    | CNExpr_binop (bop, x, y) -> A.AilEbinary (mk_expr (cn_to_ail_expr x), cn_to_ail_binop bop, mk_expr (cn_to_ail_expr y))
+
+    (* TODO: binary operations on structs (esp. equality) *)
+    | CNExpr_binop (bop, x, y) -> 
+      A.AilEbinary (mk_expr (cn_to_ail_expr x), cn_to_ail_binop bop, mk_expr (cn_to_ail_expr y))
+    
     (* 
     | CNExpr_list es_ -> !^ "[...]"
     | CNExpr_memberof (e, xs) -> 
@@ -75,7 +95,7 @@ let rec cn_to_ail_expr (CNExpr (loc, expr_)) =
     | CNExpr_membershift (e, member) -> !^ "&(_ -> _)" *)
 
     (* TODO: Write cn_to_ail_base_type above and substitute for Void *)
-    | CNExpr_cast (bt, expr) -> A.(AilEcast (empty_qualifiers, C.Ctype ([], Void) , (mk_expr (cn_to_ail_expr expr))))
+    | CNExpr_cast (bt, expr) -> A.(AilEcast (empty_qualifiers, C.Ctype ([], cn_to_ail_base_type bt) , (mk_expr (cn_to_ail_expr expr))))
     
     (*
     | CNExpr_call (sym, exprs) -> !^ "(" ^^ Sym.pp sym ^^^ !^ "(...))"
