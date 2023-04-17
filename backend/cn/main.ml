@@ -148,7 +148,8 @@ let generate_c_statements cn_statements =
 let generate_c_specs instrumentation_list =
   let open Core_to_mucore in
   let generate_c_spec instrumentation =
-    ([], generate_c_statements instrumentation.surface.statements)
+    (* ([(Sym.fresh_pretty "main", ("int i_old = i;", ""))], generate_c_statements instrumentation.statements) *)
+      ([], generate_c_statements instrumentation.surface.statements)
   in
   let specs = List.map generate_c_spec instrumentation_list in 
   let (pre_post, in_stmt) = List.split specs in
