@@ -64,7 +64,7 @@ type 'TY mu_object_value =  (* C object values *)
 and 'TY mu_value =  (* Core values *)
  | M_Vobject of 'TY mu_object_value (* C object value *)
  (* | M_Vloaded of 'TY mu_loaded_value (\* loaded C object value *\) *)
- | M_Vctype of Sctypes.ctype
+ | M_Vctype of Ctype.ctype
  | M_Vfunction_addr of Symbol.sym
  | M_Vunit
  | M_Vtrue
@@ -368,7 +368,6 @@ type mu_tag_definitions =
 type 'TY mu_globs_list = 
   (symbol * 'TY mu_globs) list
 
-
 type 'TY mu_file = {
   mu_main    : symbol option;
   mu_tagDefs : mu_tag_definitions;
@@ -380,6 +379,7 @@ type 'TY mu_file = {
   mu_datatypes : (Sym.t * BaseTypes.datatype_info) list;
   mu_constructors : (Sym.t * BaseTypes.constr_info) list;
   mu_lemmata : (Sym.t * (Locations.t * ArgumentTypes.lemmat)) list;
+  mu_call_funinfo : (symbol, Sctypes.c_concrete_sig) Pmap.map;
 }
 
 

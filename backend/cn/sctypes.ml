@@ -68,6 +68,8 @@ type t = ctype
 let equal = equal_ctype
 let compare = compare_ctype
 
+type c_concrete_sig = (Ctype.ctype * Ctype.ctype list * bool * bool)
+
 
 let rec subtype ct ct' = 
   match ct, ct' with

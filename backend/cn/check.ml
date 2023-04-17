@@ -275,6 +275,7 @@ let check_ptrval (loc : loc) ~(expect:BT.t) (ptrval : pointer_value) : (lvt) m =
     ( fun sym -> 
       (* just to make sure it exists *)
       let@ _ = get_fun_decl loc sym in
+      (* the symbol of a function is the same as the symbol of its address *)
       return (sym_ (sym, BT.Loc)) ) 
     ( fun _prov p -> 
       return (pointer_ p) )
@@ -381,6 +382,11 @@ let rec check_value (loc : loc) ~(expect:BT.t) (v : 'bty mu_value) : (lvt) m =
      check_object_value loc ~expect ov
   | M_Vctype ct ->
      let@ () = WellTyped.ensure_base_type loc ~expect CType in
+     let@ ct = match Sctypes.of_ctype ct with
+       | Some ct -> return ct
+       | None -> fail (fun _ -> {loc; msg = Generic (!^ "unsupported ctype:" ^^^
+            Cerb_frontend.Pp_core_ctype.pp_ctype ct)})
+     in
      return (IT.const_ctype_ ct)
   (* | M_Vloaded lv -> *)
   (*    check_loaded_value loc ~expect lv *)
@@ -445,18 +451,24 @@ let is_representable_integer arg ity =
   let maxInt = Memory.max_integer_type ity in
   let minInt = Memory.min_integer_type ity in
   and_ [le_ (z_ minInt, arg); le_ (arg, z_ maxInt)]
-  
 
+
+let eq_value_with f expr =
+  let@ group = value_eq_group None expr in
+  match EqTable.ITSet.find_first_opt (fun t -> Option.is_some (f t)) group with
+  | Some x ->
+    let y = Option.get (f x) in
+    return (Some (x, y))
+  | None ->
+    return None
 
 
 let check_single_ct loc expr =
   let@ pointer = WellTyped.WIT.check loc BT.CType expr in
-  let@ group = value_eq_group None expr in
-  match EqTable.ITSet.find_first_opt (fun t -> Option.is_some (IT.is_const t)) group with
-  | Some it -> begin match IT.is_const it with
-      | Some (IT.CType_const ct, _) -> return ct
-      | _ -> assert false (* should be impossible given the type *)
-    end
+  let@ known = eq_value_with IT.is_const expr in
+  match known with
+  | Some (_, (IT.CType_const ct, _)) -> return ct
+  | Some _ -> assert false (* should be impossible given the type *)
   | None ->
     (* backup strategy, try to figure out the single value *)
     let@ m = model_with loc (IT.bool_ false) in
@@ -729,8 +741,30 @@ let rec check_pexpr (pe : 'bty mu_pexpr) ~(expect:BT.t)
   | M_PEunion _ ->
      Debug_ocaml.error "todo: PEunion"
   | M_PEcfunction pe ->
-     debug 1 (lazy (!^"function pointer:" ^^^ Pp_mucore.pp_pexpr pe));
-     unsupported loc !^"function pointers"
+     check_pexpr ~expect:Loc pe (fun ptr ->
+     let@ global = get_global () in
+     (* function vals are just symbols the same as the names of functions *)
+     let is_fun_addr t = match IT.is_sym t with
+       | Some (s, _) -> if SymMap.mem s global.Global.fun_decls
+           then Some s else None
+       | _ -> None
+     in
+     let@ known = eq_value_with is_fun_addr ptr in
+     begin match known with
+     | Some (_, sym) ->
+       (* need to conjure up the characterising 4-tuple *)
+       let@ (_, _, c_sig) = get_fun_decl loc sym in
+       begin match IT.const_of_c_sig c_sig with
+         | Some it -> k it
+         | None -> fail (fun _ -> {loc; msg = Generic (!^ "unsupported c-type in sig of:" ^^^
+             Sym.pp sym)})
+       end
+     | None ->
+       (* this is where we need to do a case split on the options for ptr *)
+       debug 1 (lazy (!^"function pointer:" ^^^ Pp_mucore.pp_pexpr pe));
+       unsupported loc !^"unknown function pointer"
+     end
+  )
   | M_PEmemberof _ ->
      Debug_ocaml.error "todo: M_PEmemberof"
   | M_PEbool_to_integer pe ->
@@ -1287,7 +1321,7 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
        | M_Pexpr (_, _, _, M_PEsym fsym) -> fsym
        | _ -> unsupported loc !^"function application of function pointers"
      in
-     let@ (_loc, ft) = get_fun_decl loc fsym in
+     let@ (_loc, ft, _) = get_fun_decl loc fsym in
 
      Spine.calltype_ft loc ~fsym pes ft (fun (Computational ((_, bt), _, _) as rt) ->
      let@ () = WellTyped.ensure_base_type loc ~expect bt in
@@ -1699,14 +1733,14 @@ let record_globals globs =
     ) globs 
 
 
-let wf_check_and_record_functions mu_funs =
+let wf_check_and_record_functions mu_funs mu_call_sigs =
   let add fsym loc ft =
     (* add to context *)
     (* let lc1 = t_ (ne_ (null_, sym_ (fsym, Loc))) in *)
     let lc2 = t_ (representable_ (Pointer Void, sym_ (fsym, Loc))) in
     let@ () = add_l fsym Loc (loc, lazy (Pp.item "global fun-ptr" (Sym.pp fsym))) in
     let@ () = add_cs [(* lc1; *) lc2] in
-    add_fun_decl fsym (loc, ft)
+    add_fun_decl fsym (loc, ft, Pmap.find fsym mu_call_sigs)
   in
   let welltyped_ping fsym =
     debug 2 (lazy (headline ("checking welltypedness of procedure " ^ Sym.pp_string fsym)))
@@ -1787,7 +1821,8 @@ let check mu_file stmt_locs o_lemma_mode =
   let@ () = record_and_check_resource_predicates mu_file.mu_resource_predicates in
   let@ () = record_globals mu_file.mu_globs in
   let@ lemmata = ListM.mapM wf_check_and_record_lemma mu_file.mu_lemmata in
-  let@ (_trusted, checked) = wf_check_and_record_functions mu_file.mu_funs in
+  let@ (_trusted, checked) = wf_check_and_record_functions mu_file.mu_funs
+            mu_file.mu_call_funinfo in
   let@ () = check_c_functions checked in
 
   let@ global = get_global () in

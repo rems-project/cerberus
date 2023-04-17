@@ -348,7 +348,7 @@ module Make (Config: CONFIG) = struct
     | M_Vobject oval ->
         pp_object_value oval
     | M_Vctype ct ->
-        P.squotes (pp_ct ct)
+        P.squotes (pp_ctype ct)
     | M_Vfunction_addr sym ->
         P.parens (P.ampersand ^^^ Sym.pp sym)
     (* | M_Vloaded lval -> *)

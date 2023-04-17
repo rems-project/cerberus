@@ -208,7 +208,7 @@ and n_val loc = function
   | Vunit -> M_Vunit
   | Vtrue -> M_Vtrue
   | Vfalse -> M_Vfalse
-  | Vctype ct -> M_Vctype (convert_ct loc ct)
+  | Vctype ct -> M_Vctype ct
   | Vlist (cbt, vs) -> M_Vlist (convert_bt loc cbt, List.map (n_val loc) vs)
   | Vtuple vs -> M_Vtuple (List.map (n_val loc) vs)
 
@@ -1337,6 +1337,9 @@ let normalise_file (markers_env, ail_prog) file =
 
   let@ lfuns = CLogicalFuns.add_c_fun_defs lfuns mk_functions in
 
+  let mu_call_funinfo = Pmap.map (fun (_, _, ret, args, variadic, has_proto) ->
+    (ret, List.map snd args, variadic, has_proto)) file.mi_funinfo in
+
   let file = {
       mu_main = file.mi_main;
       mu_tagDefs = tagDefs;
@@ -1348,6 +1351,7 @@ let normalise_file (markers_env, ail_prog) file =
       mu_datatypes = SymMap.bindings env.datatypes;
       mu_constructors = SymMap.bindings env.datatype_constrs;
       mu_lemmata = lemmata;
+      mu_call_funinfo = mu_call_funinfo;
     }
   in
   return file

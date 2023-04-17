@@ -646,7 +646,12 @@ let def_ sym e = eq_ (sym_ (sym, bt e), e)
 let in_range within (min, max) =
   and_ [le_ (min, within); le_ (within, max)]
 
-
+let const_of_c_sig (c_sig : Sctypes.c_concrete_sig) =
+  let (ret_ct, arg_cts, variadic, has_proto) = c_sig in
+  Option.bind (Sctypes.of_ctype ret_ct) (fun ret_ct ->
+  Option.bind (Option.ListM.mapM Sctypes.of_ctype arg_cts) (fun arg_cts ->
+  let arg_v = list_ ~item_bt:BT.CType (List.map const_ctype_ arg_cts) in
+  Some (tuple_ [const_ctype_ ret_ct; arg_v; bool_ variadic; bool_ has_proto])))
 
 
 let value_check_pointer alignment ~pointee_ct about =
