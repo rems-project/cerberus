@@ -4,6 +4,7 @@ module CF=Cerb_frontend
 open CB.Pipeline
 open Setup *)
 open CF.Cn
+open Compile
 module A=CF.AilSyntax
 module C=CF.Ctype
 
@@ -67,7 +68,11 @@ let cn_to_ail_const = function
   | CNConst_bool b -> A.(AilEconst (ConstantInteger (IConstant (Z.of_int (Bool.to_int b), Decimal, Some B))))
   | CNConst_unit -> A.(AilEconst (ConstantIndeterminate C.(Ctype ([], Void))))
  
-
+let cn_to_ail_expr_at_env = function
+  | (CNExpr_at_env (e, es)) ->
+    (match es with
+      | start_evaluation_scope -> failwith "TODO")
+  | _ -> failwith "TODO"
 
 (* frontend/model/ail/ailSyntax.lem *)
 (* ocaml_frontend/generated/ailSyntax.ml *)
@@ -85,7 +90,7 @@ let rec cn_to_ail_expr (CNExpr (loc, expr_)) =
     (* 
     | CNExpr_list es_ -> !^ "[...]" (* Currently unused *)
     *)
-    
+
     | CNExpr_memberof (e, xs) -> A.(AilEmemberof (mk_expr (cn_to_ail_expr e), xs))
     (*
     | CNExpr_memberupdates (e, _updates) -> !^ "{_ with ...}"
@@ -100,17 +105,26 @@ let rec cn_to_ail_expr (CNExpr (loc, expr_)) =
 
     | CNExpr_cast (bt, expr) -> A.(AilEcast (empty_qualifiers, C.Ctype ([], cn_to_ail_base_type bt) , (mk_expr (cn_to_ail_expr expr))))
     
-    (*
-    | CNExpr_call (sym, exprs) -> !^ "(" ^^ Sym.pp sym ^^^ !^ "(...))"
+
+    (* TODO: Check *)
+    | CNExpr_call (sym, exprs) -> 
+      let ail_exprs = List.map (fun e -> mk_expr (cn_to_ail_expr e)) exprs in
+      let f = mk_expr (AilEfunction_decay (mk_expr (AilEident sym))) in
+      A.AilEcall (f, ail_exprs)
+    
+      (*
     | CNExpr_cons (c_nm, exprs) -> !^ "(" ^^ Sym.pp c_nm ^^^ !^ "{...})"
     | CNExpr_each (sym, r, e) -> !^ "(each ...)" *)
 
     | CNExpr_ite (e1, e2, e3) -> A.AilEcond (mk_expr (cn_to_ail_expr e1), Some (mk_expr (cn_to_ail_expr e2)), mk_expr (cn_to_ail_expr e3))
     
     (* 
-    | CNExpr_good (ty, e) -> !^ "(good (_, _))"
-    | CNExpr_unchanged e -> !^"(unchanged (_))"
-    | CNExpr_at_env (e, es) -> !^"{_}@_" *)
+    | CNExpr_good (ty, e) -> !^ "(good (_, _))" *)
+    | CNExpr_at_env (e, es) -> failwith "TODO"
+
+    | CNExpr_unchanged e -> 
+      let e_at_start = CNExpr(loc, CNExpr_at_env (e, start_evaluation_scope)) in
+      cn_to_ail_expr (CNExpr (loc, CNExpr_binop (CN_equal, e, e_at_start)))
 
     | CNExpr_not e -> A.(AilEunary (Bnot, mk_expr (cn_to_ail_expr e))) 
     | _ -> failwith "TODO"
