@@ -128,8 +128,8 @@ type 'TY mu_pexpr_ =  (* Core pure expressions *)
 
  (* | M_PEassert_undef of 'TY mu_pexpr * Location_ocaml.t * Undefined.undefined_behaviour *)
  | M_PEbool_to_integer of 'TY mu_pexpr
- | M_PEconv_int of 'TY act * 'TY mu_pexpr
- | M_PEconv_loaded_int of 'TY act * 'TY mu_pexpr
+ | M_PEconv_int of 'TY mu_pexpr * 'TY mu_pexpr
+ | M_PEconv_loaded_int of 'TY mu_pexpr * 'TY mu_pexpr
  | M_PEwrapI of 'TY act * 'TY mu_pexpr
  | M_PEcatch_exceptional_condition of 'TY act * 'TY mu_pexpr
  | M_PEis_representable_integer of 'TY mu_pexpr * 'TY act

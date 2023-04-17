@@ -449,13 +449,49 @@ let is_representable_integer arg ity =
 
 
 
+let check_single_ct loc expr =
+  let@ pointer = WellTyped.WIT.check loc BT.CType expr in
+  let@ group = value_eq_group None expr in
+  match EqTable.ITSet.find_first_opt (fun t -> Option.is_some (IT.is_const t)) group with
+  | Some it -> begin match IT.is_const it with
+      | Some (IT.CType_const ct, _) -> return ct
+      | _ -> assert false (* should be impossible given the type *)
+    end
+  | None ->
+    (* backup strategy, try to figure out the single value *)
+    let@ m = model_with loc (IT.bool_ false) in
+    let fail2 = (fun msg -> fail (fun _ -> {loc; msg = Generic (!^ "no known value for ctype:"
+        ^^^ (!^ msg))})) in
+    let@ m = match m with
+      | None -> fail2 "cannot get model"
+      | Some m -> return m
+    in
+    let@ g = get_global () in
+    let@ y = match Solver.eval g (fst m) expr with
+      | None -> fail2 "cannot eval term"
+      | Some y -> return y
+    in
+    let@ ct = match IT.is_const y with
+      | Some (IT.CType_const ct, _) -> return ct
+      | _ -> fail2 "cannot eval to constant term"
+    in
+    let eq = IT.eq_ (expr, y) in
+    let@ provable = provable loc in
+    begin match provable (t_ eq) with
+      | `True ->
+        let@ () = add_c (t_ eq) in
+        return ct
+       | `False ->
+        (* TODO: this is the most likely case, give a better error *)
+        fail2 "cannot prove type is constant"
+    end
 
-let check_conv_int loc ~expect (act : _ act) arg = 
+let check_conv_int loc ~expect (ct : Sctypes.ctype) arg =
   let@ () = WellTyped.ensure_base_type loc ~expect Integer in 
-  let@ () = WellTyped.WCT.is_ct act.loc act.ct in
+  let@ () = WellTyped.WCT.is_ct loc ct in
   (* let@ arg = check_pexpr ~expect:Integer pe in *)
   (* try to follow conv_int from runtime/libcore/std.core *)
-  let ity = match act.ct with
+  let ity = match ct with
     | Integer ity -> ity
     | _ -> Debug_ocaml.error "conv_int applied to non-integer type"
   in
@@ -464,7 +500,7 @@ let check_conv_int loc ~expect (act : _ act) arg =
     let@ model = model () in
     fail (fun ctxt ->
         let msg = Int_unrepresentable 
-                    {value = arg; ict = act.ct; ctxt; model} in
+                    {value = arg; ict = ct; ctxt; model} in
         {loc; msg}
       )
   in
@@ -472,7 +508,7 @@ let check_conv_int loc ~expect (act : _ act) arg =
     | Bool ->
        return (ite_ (eq_ (arg, int_ 0), int_ 0, int_ 1))
     | _ when Sctypes.is_unsigned_integer_type ity ->
-       let representable = representable_ (act.ct, arg) in
+       let representable = representable_ (ct, arg) in
        (* TODO: revisit this *)
        begin match provable (t_ representable) with
        | `True -> return arg
@@ -480,7 +516,7 @@ let check_conv_int loc ~expect (act : _ act) arg =
           return (ite_ (representable, arg, wrapI loc ity arg))
        end
     | _ ->
-       begin match provable (t_ (representable_ (act.ct, arg))) with
+       begin match provable (t_ (representable_ (ct, arg))) with
        | `True -> return arg
        | `False -> fail_unrepresentable ()
        end
@@ -701,11 +737,13 @@ let rec check_pexpr (pe : 'bty mu_pexpr) ~(expect:BT.t)
      let@ () = WellTyped.ensure_base_type loc ~expect Integer in
      check_pexpr ~expect:Bool pe (fun arg ->
      k (ite_ (arg, int_ 1, int_ 0)))
-  | M_PEconv_int (act, pe)
-  | M_PEconv_loaded_int (act, pe) ->
+  | M_PEconv_int (ct_expr, pe)
+  | M_PEconv_loaded_int (ct_expr, pe) ->
+     check_pexpr ~expect:BT.CType ct_expr (fun ct_it ->
+     let@ ct = check_single_ct loc ct_it in
      check_pexpr ~expect:Integer pe (fun lvt ->
-     let@ vt = check_conv_int loc ~expect act lvt in
-     k vt)
+     let@ vt = check_conv_int loc ~expect ct lvt in
+     k vt))
   | M_PEwrapI (act, pe) ->
      let@ () = WellTyped.ensure_base_type loc ~expect Integer in
      check_pexpr ~expect:Integer pe (fun arg ->

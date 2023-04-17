@@ -328,14 +328,14 @@ let rec n_pexpr loc (Pexpr (annots, bty, pe)) : mu_pexpr =
      begin match sym1, args with
      | Sym (Symbol (_, _, SD_Id "conv_int")), 
        [arg1;arg2] ->
-        let ct = (ensure_pexpr_ctype loc !^"PEcall(conv_int,_): not a constant ctype" arg1) in
+        let arg1 = n_pexpr loc arg1 in
         let arg2 = n_pexpr loc arg2 in
-        annotate (M_PEconv_int(ct, arg2))
+        annotate (M_PEconv_int(arg1, arg2))
      | Sym (Symbol (_, _, SD_Id "conv_loaded_int")), 
        [arg1;arg2] ->
-        let ct = (ensure_pexpr_ctype loc !^"PEcall(conv_loaded_int,_): not a constant ctype" arg1) in
+        let arg1 = n_pexpr loc arg1 in
         let arg2 = n_pexpr loc arg2 in
-        annotate (M_PEconv_loaded_int(ct, arg2))
+        annotate (M_PEconv_loaded_int(arg1, arg2))
      | Sym (Symbol (_, _, SD_Id "wrapI")), 
        [arg1;arg2] ->
         let ct = (ensure_pexpr_ctype loc !^"PEcall(wrapI,_): not a constant ctype" arg1) in

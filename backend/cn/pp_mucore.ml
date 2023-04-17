@@ -479,10 +479,10 @@ module Make (Config: CONFIG) = struct
               )
           | M_PEbool_to_integer asym ->
               pp_keyword "bool_to_integer" ^^ P.parens (pp_pexpr asym)
-          | M_PEconv_int (act, asym) ->
-              !^"conv_int" ^^ P.parens (pp_ct act.ct ^^ P.comma ^^^ pp_pexpr asym)
-          | M_PEconv_loaded_int (act, asym) ->
-              !^"conv_loaded_int" ^^ P.parens (pp_ct act.ct ^^ P.comma ^^^ pp_pexpr asym)
+          | M_PEconv_int (ct_expr, int_expr) ->
+              Pp.c_app (!^ "conv_int") [pp_pexpr ct_expr; pp_pexpr int_expr]
+          | M_PEconv_loaded_int (ct_expr, int_expr) ->
+              Pp.c_app (!^ "conv_loaded_int") [pp_pexpr ct_expr; pp_pexpr int_expr]
           | M_PEwrapI (act, asym) ->
               !^"wrapI" ^^ P.parens (pp_ct act.ct ^^ P.comma ^^^ pp_pexpr asym)
           | M_PEcatch_exceptional_condition (act, asym) ->
