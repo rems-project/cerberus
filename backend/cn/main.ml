@@ -227,6 +227,7 @@ let main
          let@ prog5 = Core_to_mucore.normalise_file (markers_env, ail_prog) prog4 in
          let (instrumentation, sym_table) = Core_to_mucore.collect_instrumentation prog5 in
          print_log_file ("mucore", MUCORE prog5);
+         Cerb_colour.do_colour := false; (* Needed for executable spec pprinting *)
          let@ res = Typing.run Context.empty (Check.check prog5 statement_locs lemmata) in
          begin match output_decorated with
          | None -> ()

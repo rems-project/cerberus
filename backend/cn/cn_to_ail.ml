@@ -5,7 +5,6 @@ open Setup *)
 open CF.Cn
 module A=CF.AilSyntax
 module C=CF.Ctype
-open PPrint
 
 let rm_expr (A.AnnotatedExpression (_, _, _, expr_)) = expr_
 
@@ -142,10 +141,9 @@ let pp_ail_binop = function
   | _ -> ""
 
 
-(* TODO: Complete without ansi_format *)
-let pp_ctype_aux = function
+(* let pp_ctype_aux = function
   | C.Void -> !^ "void"
-  | C.(Basic bty) -> CF.Pp_ail.pp_basicType ~c_output:true bty
+  | C.(Basic bty) -> CF.Pp_ail.pp_basicType bty
   | C.Atomic _ -> failwith "TODO"
   | C.(Struct sym) -> CF.Pp_ail.pp_id sym
   | _ -> failwith "TODO"
@@ -157,18 +155,18 @@ let pp_ctype_aux = function
   | FunctionNoParams _ ->
       2
   | Pointer _ ->
-      3 *)
+      3 *) *)
 
-let pp_ctype (C.Ctype (_, ty)) = CF.Pp_utils.to_plain_string (pp_ctype_aux ty)
+let pp_ctype ctype = CF.Pp_utils.to_plain_string (CF.Pp_ail.pp_ctype empty_qualifiers ctype)
 
 let rec pp_ail ail_expr =
   match ail_expr with
     | A.(AilEconst ail_const) -> pp_ail_const ail_const
     | A.(AilEbinary (x, bop, y)) -> (pp_ail (rm_expr x)) ^ (pp_ail_binop bop) ^ (pp_ail (rm_expr y))
     | A.(AilEunary (Bnot, ail_expr)) -> "!(" ^ (pp_ail (rm_expr ail_expr)) ^ ")"
-    | A.(AilEsizeof (_, ct)) -> "sizeof(" ^ pp_ctype ct ^ ")"
     | A.(AilEcond (e1, Some e2, e3)) -> (pp_ail (rm_expr e1)) ^ " ? " ^ (pp_ail (rm_expr e2)) ^ " : " ^ (pp_ail (rm_expr e3)) 
     | A.(AilEcond (_, None, _)) -> pp_ail_default ail_expr
+    | A.(AilEsizeof (_, ct)) -> "sizeof(" ^ pp_ctype ct ^ ")"
     | A.(AilEcast (_, ctype , expr)) -> "(" ^ pp_ctype ctype ^ ") " ^ pp_ail (rm_expr expr)
     | _ -> pp_ail_default ail_expr
 
