@@ -64,6 +64,8 @@ type 'TY mu_object_value =  (* C object values *)
 and 'TY mu_value =  (* Core values *)
  | M_Vobject of 'TY mu_object_value (* C object value *)
  (* | M_Vloaded of 'TY mu_loaded_value (\* loaded C object value *\) *)
+ | M_Vctype of Sctypes.ctype
+ | M_Vfunction_addr of Symbol.sym
  | M_Vunit
  | M_Vtrue
  | M_Vfalse
@@ -97,6 +99,11 @@ type 'TY mu_sym_or_pattern =
   (* | M_Symbol of symbol *)
   | M_Pat of mu_pattern
 
+type mu_function = (* some functions that persist into mucore, more than just binops *)
+ | M_params_length
+ | M_params_nth
+ | M_are_compatible
+
 type 'TY mu_pexpr_ =  (* Core pure expressions *)
  | M_PEsym of symbol
  (* | M_PEimpl of Implementation.implementation_constant (\* implementation-defined constant *\) *)
@@ -113,6 +120,7 @@ type 'TY mu_pexpr_ =  (* Core pure expressions *)
  | M_PEmember_shift of ('TY mu_pexpr) * symbol * Symbol.identifier (* pointer struct/union member shift *)
  | M_PEnot of 'TY mu_pexpr (* boolean not *)
  | M_PEop of Core.binop * ('TY mu_pexpr) * ('TY mu_pexpr)
+ | M_PEapply_fun of mu_function * ('TY mu_pexpr) list
  | M_PEstruct of symbol * (Symbol.identifier * 'TY mu_pexpr) list (* C struct expression *)
  | M_PEunion of symbol * Symbol.identifier * 'TY mu_pexpr (* C union expression *)
  | M_PEcfunction of 'TY mu_pexpr

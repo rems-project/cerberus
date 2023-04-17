@@ -85,6 +85,7 @@ module WBT = struct
       | Integer -> return ()
       | Real -> return ()
       | Loc -> return ()
+      | CType -> return ()
       | Struct tag -> let@ _struct_decl = get_struct_decl loc tag in return ()
       | Datatype tag -> let@ _datatype = get_datatype loc tag in return ()
       | Record members -> ListM.iterM (fun (_, bt) -> aux bt) members
@@ -161,6 +162,8 @@ module WIT = struct
          return (IT (Const (Default bt), bt))
       | Const Null ->
          return (IT (Const Null, BT.Loc))
+      | Const (CType_const ct) ->
+         return (IT (Const (CType_const ct), BT.CType))
       | Binop (arith_op, t, t') ->
          begin match arith_op with
          | Add ->

@@ -379,6 +379,9 @@ let rec check_value (loc : loc) ~(expect:BT.t) (v : 'bty mu_value) : (lvt) m =
   match v with
   | M_Vobject ov ->
      check_object_value loc ~expect ov
+  | M_Vctype ct ->
+     let@ () = WellTyped.ensure_base_type loc ~expect CType in
+     return (IT.const_ctype_ ct)
   (* | M_Vloaded lv -> *)
   (*    check_loaded_value loc ~expect lv *)
   | M_Vunit ->
@@ -390,6 +393,8 @@ let rec check_value (loc : loc) ~(expect:BT.t) (v : 'bty mu_value) : (lvt) m =
   | M_Vfalse -> 
      let@ () = WellTyped.ensure_base_type loc ~expect Bool in
      return (IT.bool_ false)
+  | M_Vfunction_addr _ ->
+     Debug_ocaml.error "todo: M_Vfunction_addr"
   | M_Vlist (item_bt, vals) ->
      let@ () = WellTyped.WBT.is_bt loc item_bt in
      let@ () = WellTyped.ensure_base_type loc ~expect (List item_bt) in
@@ -681,6 +686,8 @@ let rec check_pexpr (pe : 'bty mu_pexpr) ~(expect:BT.t)
         check_args_and_ret Bool Bool Bool (fun (v1, v2) ->
         k (or_ [v1; v2]))
      end
+  | M_PEapply_fun (fun_id, args) ->
+     Debug_ocaml.error "todo: PEfun_apply"
   | M_PEstruct _ ->
      Debug_ocaml.error "todo: PEstruct"
   | M_PEunion _ ->

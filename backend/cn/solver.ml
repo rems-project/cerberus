@@ -276,6 +276,11 @@ module Translate = struct
            (string (bt_name Loc))
            [string "loc_to_integer"] 
            [sort BT.Integer]
+      | CType ->
+         Z3.Tuple.mk_sort context
+           (string (bt_name CType))
+           [string "ctype_to_integer"]
+           [sort BT.Integer]
       | List bt -> (* lists are represented as uninterpreted sorts *)
         Z3.Sort.mk_uninterpreted_s context (bt_name (List bt))
       | Set bt -> Z3.Set.mk_sort context (sort bt)

@@ -6,6 +6,7 @@ type basetype =
   | Integer
   | Real
   | Loc
+  | CType
   | Struct of Sym.t
   | Datatype of Sym.t
   | Record of member_types
@@ -46,6 +47,7 @@ let rec pp = function
   | Integer -> !^"integer"
   | Real -> !^"real"
   | Loc -> !^"pointer"
+  | CType -> !^"ctype"
   | Struct sym -> !^"struct" ^^^ Sym.pp sym
   | Datatype sym -> !^"datatype" ^^^ Sym.pp sym
   | Record members -> braces (flow_map comma (fun (s, bt) -> pp bt ^^^ Id.pp s) members)
@@ -116,9 +118,10 @@ let rec hash = function
   | Integer -> 2
   | Real -> 3
   | Loc -> 4
-  | List _ -> 5
-  | Tuple _ -> 6
-  | Set _ -> 7
+  | CType -> 5
+  | List _ -> 6
+  | Tuple _ -> 7
+  | Set _ -> 8
   (* | Option _ -> 8 *)
   | Struct tag -> 1000 + Sym.num tag
   | Datatype tag -> 4000 + Sym.num tag

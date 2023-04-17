@@ -7,8 +7,9 @@ type const =
   | Pointer of Z.t
   | Bool of bool
   | Unit
-  | Default of BaseTypes.t
   | Null
+  | CType_const of Sctypes.ctype
+  | Default of BaseTypes.t
 (* Default bt: equivalent to a unique variable of base type bt, that
    we know nothing about other than Default bt = Default bt *)
 [@@deriving eq, ord]
@@ -119,6 +120,7 @@ let pp : 'bt 'a. ?atomic:bool -> ?f:('bt term -> Pp.doc -> Pp.doc) -> 'bt term -
        | Unit -> !^"void"
        | Default bt -> c_app !^"default" [BaseTypes.pp bt]
        | Null -> !^"null"
+       | CType_const ct -> Pp.squotes (Sctypes.pp ct)
        end
     | Sym sym -> Sym.pp sym
     (* | Arith_op arith_op -> *)

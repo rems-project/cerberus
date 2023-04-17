@@ -111,7 +111,7 @@ let convert_bt loc =
     | BTy_list bt -> BT.List (bt_of_core_base_type bt)
     | BTy_tuple bts -> BT.Tuple (List.map bt_of_core_base_type bts)
     | BTy_storable -> assert_error loc (!^"BTy_storable")
-    | BTy_ctype -> assert_error loc (!^"BTy_ctype")
+    | BTy_ctype -> BT.CType
   in
 
   fun cbt -> bt_of_core_base_type cbt
@@ -123,7 +123,7 @@ let ensure_pexpr_ctype loc err pe : 'TY act =
   | Pexpr (annot, bty, PEval (Vctype ct)) -> 
      {loc; annot; type_annot = bty; ct = convert_ct loc ct}
   | _ ->
-     assert_error loc (err)
+     assert_error loc (err ^^ P.colon ^^^ Pp_core.Basic.pp_pexpr pe)
 
 
 
@@ -208,7 +208,7 @@ and n_val loc = function
   | Vunit -> M_Vunit
   | Vtrue -> M_Vtrue
   | Vfalse -> M_Vfalse
-  | Vctype _ct -> assert_error loc (!^"core_anormalisation: Vctype")
+  | Vctype ct -> M_Vctype (convert_ct loc ct)
   | Vlist (cbt, vs) -> M_Vlist (convert_bt loc cbt, List.map (n_val loc) vs)
   | Vtuple vs -> M_Vtuple (List.map (n_val loc) vs)
 
@@ -216,6 +216,11 @@ and n_val loc = function
 let unit_pat loc annots = 
   M_Pattern (loc, annots, M_CaseBase (None, BT.Unit))
 
+
+let function_ids = [
+    ("params_length", M_params_length);
+    ("params_nth", M_params_nth);
+  ]
 
 
 let rec n_pexpr loc (Pexpr (annots, bty, pe)) : mu_pexpr =
@@ -238,27 +243,27 @@ let rec n_pexpr loc (Pexpr (annots, bty, pe)) : mu_pexpr =
   | PEctor(ctor, args) ->
      begin match ctor, args with
      | Core.CivCOMPL, [ct; arg1] -> 
-        let ct = ensure_pexpr_ctype loc !^"CivCOMPL: first argument not a ctype" ct in
+        let ct = ensure_pexpr_ctype loc !^"CivCOMPL: first argument not a constant ctype" ct in
         let arg1 = n_pexpr loc arg1 in
         annotate (M_CivCOMPL (ct, arg1))
      | Core.CivCOMPL, _ -> 
         assert_error loc !^"CivCOMPL applied to wrong number of arguments"
      | Core.CivAND, [ct; arg1; arg2] -> 
-        let ct = ensure_pexpr_ctype loc !^"CivAND: first argument not a ctype" ct in
+        let ct = ensure_pexpr_ctype loc !^"CivAND: first argument not a constant ctype" ct in
         let arg1 = n_pexpr loc arg1 in
         let arg2 = n_pexpr loc arg2 in
         annotate (M_CivAND (ct, arg1, arg2))
      | Core.CivAND, _ ->
         assert_error loc !^"CivAND applied to wrong number of arguments"
      | Core.CivOR, [ct; arg1; arg2] -> 
-        let ct = ensure_pexpr_ctype loc !^"CivOR: first argument not a ctype" ct in
+        let ct = ensure_pexpr_ctype loc !^"CivOR: first argument not a constant ctype" ct in
         let arg1 = n_pexpr loc arg1 in
         let arg2 = n_pexpr loc arg2 in
         annotate (M_CivOR (ct, arg1, arg2))
      | Core.CivOR, _ ->
         assert_error loc !^"CivOR applied to wrong number of arguments"
      | Core.CivXOR, [ct; arg1; arg2] -> 
-        let ct = ensure_pexpr_ctype loc !^"CivXOR: first argument not a ctype" ct in
+        let ct = ensure_pexpr_ctype loc !^"CivXOR: first argument not a constant ctype" ct in
         let arg1 = n_pexpr loc arg1 in
         let arg2 = n_pexpr loc arg2 in
         annotate (M_CivXOR (ct, arg1, arg2))
@@ -270,7 +275,7 @@ let rec n_pexpr loc (Pexpr (annots, bty, pe)) : mu_pexpr =
      | Core.Cfvfromint, _ ->
         assert_error loc !^"Cfvfromint applied to wrong number of arguments"
      | Core.Civfromfloat, [ct; arg1] -> 
-        let ct = ensure_pexpr_ctype loc !^"Civfromfloat: first argument not a ctype" ct in
+        let ct = ensure_pexpr_ctype loc !^"Civfromfloat: first argument not a constant ctype" ct in
         let arg1 = n_pexpr loc arg1 in
         annotate (M_Civfromfloat(ct, arg1))
      | Core.Civfromfloat, _ ->
@@ -323,29 +328,37 @@ let rec n_pexpr loc (Pexpr (annots, bty, pe)) : mu_pexpr =
      begin match sym1, args with
      | Sym (Symbol (_, _, SD_Id "conv_int")), 
        [arg1;arg2] ->
-        let ct = (ensure_pexpr_ctype loc !^"PEcall(conv_int,_): not a ctype" arg1) in
+        let ct = (ensure_pexpr_ctype loc !^"PEcall(conv_int,_): not a constant ctype" arg1) in
         let arg2 = n_pexpr loc arg2 in
         annotate (M_PEconv_int(ct, arg2))
      | Sym (Symbol (_, _, SD_Id "conv_loaded_int")), 
        [arg1;arg2] ->
-        let ct = (ensure_pexpr_ctype loc !^"PEcall(conv_loaded_int,_): not a ctype" arg1) in
+        let ct = (ensure_pexpr_ctype loc !^"PEcall(conv_loaded_int,_): not a constant ctype" arg1) in
         let arg2 = n_pexpr loc arg2 in
         annotate (M_PEconv_loaded_int(ct, arg2))
      | Sym (Symbol (_, _, SD_Id "wrapI")), 
        [arg1;arg2] ->
-        let ct = (ensure_pexpr_ctype loc !^"PEcall(wrapI,_): not a ctype" arg1) in
+        let ct = (ensure_pexpr_ctype loc !^"PEcall(wrapI,_): not a constant ctype" arg1) in
         let arg2 = n_pexpr loc arg2 in
         annotate (M_PEwrapI(ct, arg2))
      | Sym (Symbol (_, _, SD_Id "catch_exceptional_condition")),
        [arg1; arg2] ->
-        let ct = ensure_pexpr_ctype loc !^"PEcall(catch_exceptional_condition,_): not a ctype" arg1 in
+        let ct = ensure_pexpr_ctype loc !^"PEcall(catch_exceptional_condition,_): not a constant ctype" arg1 in
         let arg2 = n_pexpr loc arg2 in
         annotate (M_PEcatch_exceptional_condition(ct, arg2))
      | Sym (Symbol (_, _, SD_Id "is_representable_integer")),
        [arg1; arg2] ->
         let arg1 = n_pexpr loc arg1 in
-        let ct = ensure_pexpr_ctype loc !^"PEcall(is_representable_integer,_): not a ctype" arg2 in
+        let ct = ensure_pexpr_ctype loc !^"PEcall(is_representable_integer,_): not a constant ctype" arg2 in
         annotate (M_PEis_representable_integer(arg1, ct))
+     | Sym (Symbol (_, _, SD_Id fun_id)), args ->
+        begin match List.assoc_opt String.equal fun_id function_ids with
+        | Some fun_id ->
+           let args = List.map (n_pexpr loc) args in
+           annotate (M_PEapply_fun (fun_id, args))
+        | None ->
+           assert_error loc (!^"PEcall not inlined: " ^^^ !^ fun_id)
+        end
      | Sym sym, _ ->
         assert_error loc (!^"PEcall not inlined:" ^^^ Sym.pp sym)
      | Impl impl, _ ->
@@ -415,9 +428,10 @@ let rec n_pexpr loc (Pexpr (annots, bty, pe)) : mu_pexpr =
      assert_error loc !^"core_anormalisation: PEis_unsigned"
   | PEbmc_assume e' ->
      assert_error loc !^"core_anormalisation: PEbmc_assume"
-  | PEare_compatible(e', e'') ->
-     assert_error loc !^"core_anormalisation: PEare_compatible"
-
+  | PEare_compatible(e1, e2) ->
+     let e1 = n_pexpr loc e1 in
+     let e2 = n_pexpr loc e2 in
+     annotate (M_PEapply_fun (M_are_compatible, [e1; e2]))
 
 
 
@@ -432,11 +446,11 @@ let n_action loc action =
   let wrap a1 = M_Action(loc, a1) in
   match a1 with
   | Create(e1, e2, sym1) ->
-     let ctype1 = (ensure_pexpr_ctype loc !^"Create: not a ctype" e2) in
+     let ctype1 = (ensure_pexpr_ctype loc !^"Create: not a constant ctype" e2) in
      let e1 = n_pexpr loc e1 in
      wrap (M_Create(e1, ctype1, sym1))
   | CreateReadOnly(e1, e2, e3, sym1) ->
-     let ctype1 = (ensure_pexpr_ctype loc !^"CreateReadOnly: not a ctype" e1) in
+     let ctype1 = (ensure_pexpr_ctype loc !^"CreateReadOnly: not a constant ctype" e1) in
      let e1 = n_pexpr loc e1 in
      let e3 = n_pexpr loc e3 in
      wrap (M_CreateReadOnly(e1, ctype1, e3, sym1))
@@ -448,24 +462,24 @@ let n_action loc action =
      let e1 = n_pexpr loc e1 in
      wrap (M_Kill((n_kill_kind loc kind), e1))
   | Store0(b, e1, e2, e3, mo1) ->
-     let ctype1 = (ensure_pexpr_ctype loc !^"Store: not a ctype" e1) in
+     let ctype1 = (ensure_pexpr_ctype loc !^"Store: not a constant ctype" e1) in
      let e2 = n_pexpr loc e2 in
      let e3 = n_pexpr loc e3 in
      wrap (M_Store(b, ctype1, e2, e3, mo1))
   | Load0(e1, e2, mo1) ->
-     let ctype1 = (ensure_pexpr_ctype loc !^"Load: not a ctype" e1) in
+     let ctype1 = (ensure_pexpr_ctype loc !^"Load: not a constant ctype" e1) in
      let e2 = n_pexpr loc e2 in
      wrap (M_Load(ctype1, e2, mo1))
   | SeqRMW (b, e1, e2, sym, e3) ->
       assert_error loc !^"TODO: SeqRMW"
 (*
-     let ctype1 = (ensure_pexpr_ctype loc !^"SeqRMW: not a ctype" e1) in
+     let ctype1 = (ensure_pexpr_ctype loc !^"SeqRMW: not a constant ctype" e1) in
      n_pexpr_in_expr_name e2 (fun e2 ->
      n_pexpr_in_expr_name e3 (fun e3 ->
      k (wrap (M_SeqRMW(ctype1, e2, sym, e3)))))
 *)
   | RMW0(e1, e2, e3, e4, mo1, mo2) ->
-     let ctype1 = (ensure_pexpr_ctype loc !^"RMW: not a ctype" e1) in
+     let ctype1 = (ensure_pexpr_ctype loc !^"RMW: not a constant ctype" e1) in
      let e2 = n_pexpr loc e2 in
      let e3 = n_pexpr loc e3 in
      let e4 = n_pexpr loc e4 in
@@ -473,13 +487,13 @@ let n_action loc action =
   | Fence0 mo1 -> 
      wrap (M_Fence mo1)
   | CompareExchangeStrong(e1, e2, e3, e4, mo1, mo2) ->
-     let ctype1 = (ensure_pexpr_ctype loc !^"CompareExchangeStrong: not a ctype" e1) in
+     let ctype1 = (ensure_pexpr_ctype loc !^"CompareExchangeStrong: not a constant ctype" e1) in
      let e2 = n_pexpr loc e2 in
      let e3 = n_pexpr loc e3 in
      let e4 = n_pexpr loc e4 in
      wrap (M_CompareExchangeStrong(ctype1, e2, e3, e4, mo1, mo2))
   | CompareExchangeWeak(e1, e2, e3, e4, mo1, mo2) ->
-     let ctype1 = (ensure_pexpr_ctype loc !^"CompareExchangeWeak: not a ctype" e1) in
+     let ctype1 = (ensure_pexpr_ctype loc !^"CompareExchangeWeak: not a constant ctype" e1) in
      let e2 = n_pexpr loc e2 in
      let e3 = n_pexpr loc e3 in
      let e4 = n_pexpr loc e4 in
@@ -487,16 +501,16 @@ let n_action loc action =
   | LinuxFence lmo ->
      wrap (M_LinuxFence lmo)
   | LinuxLoad(e1, e2, lmo) ->
-     let ctype1 = (ensure_pexpr_ctype loc !^"LinuxLoad: not a ctype" e1) in
+     let ctype1 = (ensure_pexpr_ctype loc !^"LinuxLoad: not a constant ctype" e1) in
      let e2 = n_pexpr loc e2 in
      wrap (M_LinuxLoad(ctype1, e2, lmo))
   | LinuxStore(e1, e2, e3, lmo) ->
-     let ctype1 = (ensure_pexpr_ctype loc !^"LinuxStore: not a ctype" e1) in
+     let ctype1 = (ensure_pexpr_ctype loc !^"LinuxStore: not a constant ctype" e1) in
      let e2 = n_pexpr loc e2 in
      let e3 = n_pexpr loc e3 in
      wrap (M_LinuxStore(ctype1, e2, e3, lmo))
   | LinuxRMW(e1, e2, e3, lmo) ->
-     let ctype1 = (ensure_pexpr_ctype loc !^"LinuxRMW: not a ctype" e1) in
+     let ctype1 = (ensure_pexpr_ctype loc !^"LinuxRMW: not a constant ctype" e1) in
      let e2 = n_pexpr loc e2 in
      let e3 = n_pexpr loc e3 in
      wrap (M_LinuxRMW(ctype1, e2, e3, lmo))
@@ -540,30 +554,30 @@ let n_memop loc memop pexprs =
      let pe2 = n_pexpr loc pe2 in
      M_PtrGe (pe1, pe2)
   | (Mem_common.Ptrdiff, [ct1;pe1;pe2]) ->
-     let ct1 = (ensure_pexpr_ctype loc !^"Ptrdiff: not a ctype" ct1) in
+     let ct1 = (ensure_pexpr_ctype loc !^"Ptrdiff: not a constant ctype" ct1) in
      let pe1 = n_pexpr loc pe1 in
      let pe2 = n_pexpr loc pe2 in
      M_Ptrdiff (ct1, pe1, pe2)
   | (Mem_common.IntFromPtr, [ct1;ct2;pe]) ->
-     let ct1 = (ensure_pexpr_ctype loc !^"IntFromPtr: not a ctype" ct1) in
-     let ct2 = (ensure_pexpr_ctype loc !^"IntFromPtr: not a ctype" ct2) in
+     let ct1 = (ensure_pexpr_ctype loc !^"IntFromPtr: not a constant ctype" ct1) in
+     let ct2 = (ensure_pexpr_ctype loc !^"IntFromPtr: not a constant ctype" ct2) in
      let pe = n_pexpr loc pe in
      M_IntFromPtr (ct1, ct2, pe)
   | (Mem_common.PtrFromInt, [ct1;ct2;pe]) ->
-     let ct1 = (ensure_pexpr_ctype loc !^"PtrFromInt: not a ctype" ct1) in
-     let ct2 = (ensure_pexpr_ctype loc !^"PtrFromInt: not a ctype" ct2) in
+     let ct1 = (ensure_pexpr_ctype loc !^"PtrFromInt: not a constant ctype" ct1) in
+     let ct2 = (ensure_pexpr_ctype loc !^"PtrFromInt: not a constant ctype" ct2) in
      let pe = n_pexpr loc pe in
      M_PtrFromInt (ct1, ct2, pe)
   | (Mem_common.PtrValidForDeref, [ct1;pe]) ->
-     let ct1 = (ensure_pexpr_ctype loc !^"PtrValidForDeref: not a ctype" ct1) in
+     let ct1 = (ensure_pexpr_ctype loc !^"PtrValidForDeref: not a constant ctype" ct1) in
      let pe = n_pexpr loc pe in
      M_PtrValidForDeref (ct1, pe)
   | (Mem_common.PtrWellAligned, [ct1;pe]) ->
-     let ct1 = (ensure_pexpr_ctype loc !^"PtrWellAligned: not a ctype" ct1) in
+     let ct1 = (ensure_pexpr_ctype loc !^"PtrWellAligned: not a constant ctype" ct1) in
      let pe = n_pexpr loc pe in
      M_PtrWellAligned (ct1, pe)
   | (Mem_common.PtrArrayShift, [pe1;ct1;pe2]) ->
-     let ct1 = (ensure_pexpr_ctype loc !^"PtrArrayShift: not a ctype" ct1) in
+     let ct1 = (ensure_pexpr_ctype loc !^"PtrArrayShift: not a constant ctype" ct1) in
      let pe1 = n_pexpr loc pe1 in
      let pe2 = n_pexpr loc pe2 in
      M_PtrArrayShift (pe1 ,ct1, pe2)
@@ -590,7 +604,7 @@ let n_memop loc memop pexprs =
      let pe = n_pexpr loc pe in
      M_Va_copy pe
   | (Mem_common.Va_arg, [pe;ct1]) ->
-     let ct1 = (ensure_pexpr_ctype loc !^"Va_arg: not a ctype" ct1) in
+     let ct1 = (ensure_pexpr_ctype loc !^"Va_arg: not a constant ctype" ct1) in
      let pe = n_pexpr loc pe in
      M_Va_arg (pe ,ct1)
   | (Mem_common.Va_end, [pe]) ->
@@ -695,7 +709,7 @@ let rec n_expr (loc : Loc.t) ((env, old_states), desugaring_things) (global_type
           assert_error loc !^"core_anormalisation: Eccall with non-ctype first argument"
      in
      let e2 = 
-       let err () = Tools.unsupported loc !^"function pointers" in
+       let err () = Tools.unsupported loc !^"invalid function constant" in
        match e2 with
        | Core.Pexpr(annots, bty, Core.PEval v) ->
           begin match v with
@@ -703,11 +717,11 @@ let rec n_expr (loc : Loc.t) ((env, old_states), desugaring_things) (global_type
           | Vloaded (LVspecified (OVpointer ptrval)) ->
              Impl_mem.case_ptrval ptrval
                ( fun ct -> err ())
-               ( fun sym -> M_Pexpr (loc, annots, bty, (M_PEsym sym)) )
+               ( fun sym -> M_Pexpr (loc, annots, bty, (M_PEval (M_Vfunction_addr sym))) )
                ( fun _prov _ -> err () )
           | _ -> err ()
           end
-       | _ -> err ()
+       | _ -> n_pexpr e2
      in
      let es = List.map n_pexpr es in
      return (wrap (M_Eccall(ct1, e2, es)))

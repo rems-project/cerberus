@@ -362,6 +362,7 @@ let bool_ b = IT (Const (Bool b), BT.Bool)
 let unit_ = IT (Const Unit, BT.Unit)
 let int_ n = z_ (Z.of_int n)
 let default_ bt = IT (Const (Default bt), bt)
+let const_ctype_ ct = IT (Const (CType_const ct), BT.CType)
 
 (* cmp_op *)
 let lt_ (it, it') = IT (Binop (LT, it, it'), BT.Bool)

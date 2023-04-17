@@ -7,6 +7,7 @@ type basetype =
   | Bool
   | Integer
   | Real
+  | CType
   | Loc of Sctypes.t option
   | Struct of Sym.t
   | Datatype of Sym.t
@@ -47,6 +48,7 @@ let rec pp = function
   | Bool -> !^"bool"
   | Integer -> !^"integer"
   | Real -> !^"real"
+  | CType -> !^"ctype"
   | Loc (Some ct) -> !^"pointer" ^^ angles (Sctypes.pp ct)
   | Loc None -> !^"pointer"
   | Struct sym -> !^"struct" ^^^ Sym.pp sym
@@ -111,6 +113,7 @@ let rec of_basetype = function
   | BT.Bool -> Bool
   | BT.Integer -> Integer
   | BT.Real -> Real
+  | BT.CType -> CType
   | BT.Loc -> Loc None
   | BT.Struct tag -> Struct tag
   | BT.Datatype tag -> Datatype tag
@@ -126,6 +129,7 @@ let rec to_basetype = function
   | Bool -> BT.Bool
   | Integer -> BT.Integer
   | Real -> BT.Real
+  | CType -> BT.CType
   | Loc _ -> BT.Loc
   | Struct tag -> BT.Struct tag
   | Datatype tag -> BT.Datatype tag
