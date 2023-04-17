@@ -14,6 +14,8 @@ let mk_expr expr_ =
 
 let empty_qualifiers : C.qualifiers = {const = false; restrict = false; volatile = false}
 
+
+(* TODO: Complete *)
 let rec cn_to_ail_base_type = 
   let generate_ail_array bt = C.(Array (Ctype ([], cn_to_ail_base_type bt), None)) in 
   function
@@ -81,20 +83,21 @@ let rec cn_to_ail_expr (CNExpr (loc, expr_)) =
       A.AilEbinary (mk_expr (cn_to_ail_expr x), cn_to_ail_binop bop, mk_expr (cn_to_ail_expr y))
     
     (* 
-    | CNExpr_list es_ -> !^ "[...]"
-    | CNExpr_memberof (e, xs) -> 
+    | CNExpr_list es_ -> !^ "[...]" (* Currently unused *)
+    *)
+    
+    | CNExpr_memberof (e, xs) -> A.(AilEmemberof (mk_expr (cn_to_ail_expr e), xs))
+    (*
     | CNExpr_memberupdates (e, _updates) -> !^ "{_ with ...}"
     | CNExpr_arrayindexupdates (e, _updates) -> !^ "_ [ _ = _ ...]"
     *)
 
-    (* TODO: Complete pretty printing *)
     | CNExpr_sizeof ct -> A.AilEsizeof (empty_qualifiers, ct) 
     
     (*
     | CNExpr_offsetof (tag, member) -> !^ "(offsetof (_, _))"
     | CNExpr_membershift (e, member) -> !^ "&(_ -> _)" *)
 
-    (* TODO: Complete cn_to_ail_base_type above *)
     | CNExpr_cast (bt, expr) -> A.(AilEcast (empty_qualifiers, C.Ctype ([], cn_to_ail_base_type bt) , (mk_expr (cn_to_ail_expr expr))))
     
     (*
