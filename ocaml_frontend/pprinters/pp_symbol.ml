@@ -10,7 +10,7 @@ let to_string (Symbol (_, n, sd)) =
     | _ ->
         "a_" ^ string_of_int n
 
-let to_string_pretty ?(is_human=false) (Symbol (_, n, sd)) =
+let to_string_pretty ?(is_human=false) ?(executable_spec=false) (Symbol (_, n, sd)) =
   let add_number name = name ^ "{" ^ string_of_int n ^ "}" in
   let maybe_add_number name = 
    if !Debug_ocaml.debug_level > 4 then
@@ -28,6 +28,11 @@ let to_string_pretty ?(is_human=false) (Symbol (_, n, sd)) =
           "(unnamed tag at " ^ Location_ocaml.location_to_string loc ^ ")"
         else
           "__cerbty_unnamed_tag_" ^ string_of_int n
+    | SD_CN_Id str -> 
+        if executable_spec then
+          str
+        else
+          "a_" ^ string_of_int n
     | _ ->
         "a_" ^ string_of_int n
 

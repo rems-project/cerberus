@@ -2,7 +2,7 @@ open Symbol
 
 
 val to_string: sym -> string
-val to_string_pretty: ?is_human:bool -> sym -> string
+val to_string_pretty: ?is_human:bool -> ?executable_spec:bool -> sym -> string
 
 val to_string_cn: sym -> string
 val to_string_pretty_cn: sym -> string
