@@ -85,7 +85,7 @@ let pp_const c        = !^ (ansi_format [Magenta] c)
 let pp_comment str    = !^ (ansi_format [Red] str)
 
 
-let pp_id ?(is_human=false) id = !^ (Pp_symbol.to_string_pretty ~is_human id)
+let pp_id ?(is_human=false) ?(executable_spec = false) id = !^ (Pp_symbol.to_string_pretty ~is_human ~executable_spec id)
 let pp_id_obj id = !^ (ansi_format [Yellow] (Pp_symbol.to_string_pretty id))
 let pp_id_label id = !^ (ansi_format [Magenta] (Pp_symbol.to_string_pretty id))
 let pp_id_type ?(is_human=false) id = !^ (ansi_format [Green] (Pp_symbol.to_string_pretty ~is_human id))
@@ -220,7 +220,7 @@ let pp_floatingType = function
   | RealFloating ft ->
       pp_realFloatingType ft
 
-      
+
 let pp_basicType = function
   | Integer it ->
       pp_integerType it
