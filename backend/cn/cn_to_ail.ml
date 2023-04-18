@@ -70,8 +70,9 @@ let cn_to_ail_const = function
  
 let cn_to_ail_expr_at_env = function
   | (CNExpr_at_env (e, es)) ->
+    Printf.printf "reached";
     (match es with
-      | start_evaluation_scope -> failwith "TODO")
+      | start_evaluation_scope -> A.(AilEident (CF.Symbol.fresh ())))
   | _ -> failwith "TODO"
 
 (* frontend/model/ail/ailSyntax.lem *)
@@ -92,6 +93,7 @@ let rec cn_to_ail_expr (CNExpr (loc, expr_)) =
     *)
 
     | CNExpr_memberof (e, xs) -> A.(AilEmemberof (mk_expr (cn_to_ail_expr e), xs))
+    
     (*
     | CNExpr_memberupdates (e, _updates) -> !^ "{_ with ...}"
     | CNExpr_arrayindexupdates (e, _updates) -> !^ "_ [ _ = _ ...]"
@@ -106,13 +108,13 @@ let rec cn_to_ail_expr (CNExpr (loc, expr_)) =
     | CNExpr_cast (bt, expr) -> A.(AilEcast (empty_qualifiers, C.Ctype ([], cn_to_ail_base_type bt) , (mk_expr (cn_to_ail_expr expr))))
     
 
-    (* TODO: Check *)
+    (* TODO: Fix! Pprinting sym is giving an internal name *)
     | CNExpr_call (sym, exprs) -> 
       let ail_exprs = List.map (fun e -> mk_expr (cn_to_ail_expr e)) exprs in
-      let f = mk_expr (AilEfunction_decay (mk_expr (AilEident sym))) in
+      let f = (mk_expr (AilEident sym)) in
       A.AilEcall (f, ail_exprs)
     
-      (*
+    (*
     | CNExpr_cons (c_nm, exprs) -> !^ "(" ^^ Sym.pp c_nm ^^^ !^ "{...})"
     | CNExpr_each (sym, r, e) -> !^ "(each ...)" *)
 
@@ -120,8 +122,9 @@ let rec cn_to_ail_expr (CNExpr (loc, expr_)) =
     
     (* 
     | CNExpr_good (ty, e) -> !^ "(good (_, _))" *)
-    | CNExpr_at_env (e, es) -> failwith "TODO"
 
+    | CNExpr_at_env (e, es) -> failwith "TODO"
+ 
     | CNExpr_unchanged e -> 
       let e_at_start = CNExpr(loc, CNExpr_at_env (e, start_evaluation_scope)) in
       cn_to_ail_expr (CNExpr (loc, CNExpr_binop (CN_equal, e, e_at_start)))
@@ -159,21 +162,6 @@ let pp_ail_binop = function
   | _ -> ""
 
 
-(* let pp_ctype_aux = function
-  | C.Void -> !^ "void"
-  | C.(Basic bty) -> CF.Pp_ail.pp_basicType bty
-  | C.Atomic _ -> failwith "TODO"
-  | C.(Struct sym) -> CF.Pp_ail.pp_id sym
-  | _ -> failwith "TODO"
-  (* | Union _ ->
-      0
-  | Array _ ->
-      1
-  | Function _
-  | FunctionNoParams _ ->
-      2
-  | Pointer _ ->
-      3 *) *)
 
 let pp_ctype ctype = CF.Pp_utils.to_plain_string (CF.Pp_ail.pp_ctype empty_qualifiers ctype)
 
@@ -186,6 +174,9 @@ let rec pp_ail ail_expr =
     | A.(AilEcond (_, None, _)) -> pp_ail_default ail_expr
     | A.(AilEsizeof (_, ct)) -> "sizeof(" ^ pp_ctype ct ^ ")"
     | A.(AilEcast (_, ctype , expr)) -> "(" ^ pp_ctype ctype ^ ") " ^ pp_ail (rm_expr expr)
+    | A.(AilEcall (A.AnnotatedExpression (_, _, _, (AilEident sym)), ail_exprs)) -> 
+      let str_exprs = List.map (fun e -> pp_ail (rm_expr e)) ail_exprs in
+      CF.String_ail.string_of_cn_id sym ^ "(" ^ String.concat ", " str_exprs ^ ")" 
     | _ -> pp_ail_default ail_expr
 
 
