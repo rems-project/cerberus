@@ -683,7 +683,6 @@ Module Capability <: Capability (AddressValue) (Flags) (ObjType) (SealType) (Bou
   Definition cap_seal_indirect_entry_pair (cap:t) : t := 
     cap_seal_immediate cap SealType.sealed_indirect_entry_pair_ot.
 
-  (* Confirm the type of the function is ok *)  
   Definition representable_alignment_mask (len:Z) : Z :=
     mword_to_Z_unsigned (CapGetRepresentableMask (@mword_of_int (Z.of_N AddressValue.len) len)).
 
