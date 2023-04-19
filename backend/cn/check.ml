@@ -455,7 +455,7 @@ let is_representable_integer arg ity =
 
 let eq_value_with f expr =
   let@ group = value_eq_group None expr in
-  match EqTable.ITSet.find_first_opt (fun t -> Option.is_some (f t)) group with
+  match List.find_opt (fun t -> Option.is_some (f t)) (EqTable.ITSet.elements group) with
   | Some x ->
     let y = Option.get (f x) in
     return (Some (x, y))
@@ -762,7 +762,14 @@ let rec check_pexpr (pe : 'bty mu_pexpr) ~(expect:BT.t)
      | None ->
        (* this is where we need to do a case split on the options for ptr *)
        debug 1 (lazy (!^"function pointer:" ^^^ Pp_mucore.pp_pexpr pe));
-       unsupported loc !^"unknown function pointer"
+       let@ m = model_with loc (IT.bool_ true) in
+       match m with
+       | None ->
+       fail (fun _ -> {loc; msg = Generic (!^ "unknown function pointer (no model):" ^^^
+             IT.pp ptr)})
+       | Some m ->
+       fail (fun ctxt -> {loc; msg = Generic_with_model {err = !^ "unknown function pointer:" ^^^
+             IT.pp ptr; model = m; ctxt}})
      end
   )
   | M_PEmemberof _ ->

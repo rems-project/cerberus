@@ -621,6 +621,7 @@ module Translate = struct
          let _ = needs_premise (IsLetVar (x, t1)) (term x) in
          term t2
       | _ ->
+         Pp.debug 2 (lazy (Pp.item "smt mapping issue" (IT.pp it)));
          Debug_ocaml.error "todo: SMT mapping"
       end
 
