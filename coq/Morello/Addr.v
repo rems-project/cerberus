@@ -1,4 +1,3 @@
-(* From stdpp.unstable Require Import bitvector.  *)
 
 Require Import Coq.Numbers.BinNums.
 Require Import Coq.Strings.String.
@@ -15,8 +14,5 @@ Module Type PTRADDR.
   Parameter ltb_irref: forall a:t, ltb a a = false.
 
   Parameter to_string: t -> string.       
-
-  (* Parameter of_Z: Z -> t.
-  Parameter to_Z: t -> Z. *)
 
 End PTRADDR.
