@@ -128,7 +128,7 @@ let _empty_executable_spec = {
   
 let generate_c_assertion cn_assertion =
   match cn_assertion with
-  | CN_assert_exp e_ -> String.concat "" ["assert("; Cn_to_ail.(pp_ail (cn_to_ail_expr e_)); ");"]
+  | CN_assert_exp e_ -> String.concat "" ["assert("; Cn_to_ail.(pp_ail (cn_to_ail_expr e_)); ");"] (* TODO: Add Ail assertion before printing to string *)
   | _ -> "" (* TODO: CN_assert_qexp *)
   
 
@@ -143,13 +143,37 @@ let generate_c_statements cn_statements =
   in
   List.map generate_c_statement cn_statements
 
+let generate_c_pres_and_posts (instrumentation : Core_to_mucore.instrumentation) function_definitions =
+  let generate_c_pre = function
+    | CF.Cn.CN_cletResource (loc, name, resource) -> (instrumentation.fn, ("hello", ""))
+    | CF.Cn.CN_cletExpr (loc, name, expr) -> (instrumentation.fn, ("hello2", ""))
+    | CF.Cn.CN_cconstr (loc, constr) -> (instrumentation.fn, ("hello3", ""))
+  in
+  let _generate_c_post = function
+    | _ -> ""
+  in 
+  (* let function_identifiers = List.map fst function_definitions in *)
+  let _pres = List.map generate_c_pre instrumentation.surface.requires in
+  (* [(instrumentation.fn, ("some precondition;\n", "some postcondition;\n"))] *)
+  []
+  (* let posts = List.map generate_c_post instrumentation.ensures in *)
+  (* let pres_and_posts = List.combine pres posts in *)
+  (* print_string ((string_of_int (List.length pres_and_posts)) ^ "\n"); *)
+  (* print_string ((string_of_int (List.length function_identifiers)) ^ "\n"); *)
+  (* let pres_and_posts = List.combine function_identifiers pres_and_posts in *)
+  (* pres_and_posts *)
+  (* pres *)
+  (* [(instrumentation.fn, ("pre", "post"))] *)
+
 
 (* Core_to_mucore.instrumentation list -> executable_spec *)
-let generate_c_specs instrumentation_list =
-  let open Core_to_mucore in
-  let generate_c_spec instrumentation =
+let generate_c_specs instrumentation_list function_definitions =
+  (* let open Core_to_mucore in *)
+  let generate_c_spec (instrumentation : Core_to_mucore.instrumentation) =
+    let c_pres_and_posts = generate_c_pres_and_posts instrumentation function_definitions in 
+    let c_statements = generate_c_statements instrumentation.surface.statements in
     (* ([(Sym.fresh_pretty "main", ("int i_old = i;", ""))], generate_c_statements instrumentation.statements) *)
-      ([], generate_c_statements instrumentation.surface.statements)
+    (c_pres_and_posts, c_statements)
   in
   let specs = List.map generate_c_spec instrumentation_list in 
   let (pre_post, in_stmt) = List.split specs in
@@ -234,7 +258,7 @@ let main
          | None -> ()
          | Some output_filename ->
             let oc = Stdlib.open_out output_filename in
-            let executable_spec = generate_c_specs instrumentation in
+            let executable_spec = generate_c_specs instrumentation ail_prog.function_definitions in
             begin match
               Source_injection.(output_injections oc
                 { filename; sigm= ail_prog
