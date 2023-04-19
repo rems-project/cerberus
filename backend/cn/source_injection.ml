@@ -61,6 +61,10 @@ let move_to ?(print=true) ?(no_ident=false) st pos =
   let rec aux st =
     if st.current_pos.line = pos.line then
       let len = pos.col - st.current_pos.col in
+      Printf.printf "Updated pos col: %d\n" pos.col;
+      Printf.printf "Current pos col: %d\n" st.current_pos.col;
+      print_string "\n LENGTH: \n";
+      print_int len;
       let str =
         if len = 0 && not no_ident then
           ""
