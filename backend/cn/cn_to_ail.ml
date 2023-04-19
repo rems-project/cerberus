@@ -68,17 +68,16 @@ let cn_to_ail_const = function
   | CNConst_unit -> A.(AilEconst (ConstantIndeterminate C.(Ctype ([], Void))))
  
 
-
 (* frontend/model/ail/ailSyntax.lem *)
 (* ocaml_frontend/generated/ailSyntax.ml *)
-let rec cn_to_ail_expr (CNExpr (loc, expr_)) =
+let rec cn_to_ail_expr ?(const_prop=None) (CNExpr (loc, expr_)) =
   let cn_to_ail_expr_at_env = (function
   | (CNExpr_at_env (e, es)) ->
     (match es with
       | start_evaluation_scope -> 
         (* let Symbol (digest, nat, _) = CF.Symbol.fresh () in *)
         (* TODO: Make general *)
-        let ail_expr = cn_to_ail_expr e in
+        let ail_expr = cn_to_ail_expr ~const_prop:const_prop e in
         let e_cur_nm =
         match ail_expr with
           | A.(AilEident sym) -> CF.Pp_symbol.to_string_pretty sym (* Should only be AilEident sym - function arguments only *)
@@ -92,19 +91,29 @@ let rec cn_to_ail_expr (CNExpr (loc, expr_)) =
   in
   match expr_ with
     | CNExpr_const cn_cst -> cn_to_ail_const cn_cst
-    | CNExpr_value_of_c_atom (sym, _) -> A.(AilEident sym)
-    | CNExpr_var sym -> A.(AilEident sym) (* TODO: Check. Need to do more work if this is only a CN var *)
-    | CNExpr_deref e -> A.(AilEunary (Indirection, mk_expr (cn_to_ail_expr e)))
+    | CNExpr_value_of_c_atom (sym, _)
+    | CNExpr_var sym -> 
+      (match const_prop with
+        | Some (sym2, cn_const) ->
+            if CF.Symbol.equal_sym sym sym2 then
+              (Printf.printf "MATCHED\n";
+              cn_to_ail_const cn_const)
+            else
+              (Printf.printf "NOT MATCHED\n";
+              A.(AilEident sym))
+        | None -> A.(AilEident sym)  (* TODO: Check. Need to do more work if this is only a CN var *)
+      )
+    | CNExpr_deref e -> A.(AilEunary (Indirection, mk_expr (cn_to_ail_expr ~const_prop:const_prop e)))
 
     (* TODO: binary operations on structs (esp. equality) *)
     | CNExpr_binop (bop, x, y) -> 
-      A.AilEbinary (mk_expr (cn_to_ail_expr x), cn_to_ail_binop bop, mk_expr (cn_to_ail_expr y))
+      A.AilEbinary (mk_expr (cn_to_ail_expr ~const_prop:const_prop x), cn_to_ail_binop bop, mk_expr (cn_to_ail_expr ~const_prop:const_prop y))
     
     (* 
     | CNExpr_list es_ -> !^ "[...]" (* Currently unused *)
     *)
 
-    | CNExpr_memberof (e, xs) -> A.(AilEmemberof (mk_expr (cn_to_ail_expr e), xs))
+    | CNExpr_memberof (e, xs) -> A.(AilEmemberof (mk_expr (cn_to_ail_expr ~const_prop:const_prop e), xs))
     
     (*
     | CNExpr_memberupdates (e, _updates) -> !^ "{_ with ...}"
@@ -117,19 +126,36 @@ let rec cn_to_ail_expr (CNExpr (loc, expr_)) =
     | CNExpr_offsetof (tag, member) -> !^ "(offsetof (_, _))"
     | CNExpr_membershift (e, member) -> !^ "&(_ -> _)" *)
 
-    | CNExpr_cast (bt, expr) -> A.(AilEcast (empty_qualifiers, C.Ctype ([], cn_to_ail_base_type bt) , (mk_expr (cn_to_ail_expr expr))))
+    | CNExpr_cast (bt, expr) -> A.(AilEcast (empty_qualifiers, C.Ctype ([], cn_to_ail_base_type bt) , (mk_expr (cn_to_ail_expr ~const_prop:const_prop expr))))
     
 
     | CNExpr_call (sym, exprs) -> 
-      let ail_exprs = List.map (fun e -> mk_expr (cn_to_ail_expr e)) exprs in
-      let f = (mk_expr (AilEident sym)) in
+      let ail_exprs = List.map (fun e -> mk_expr (cn_to_ail_expr ~const_prop:const_prop e)) exprs in
+      let f = (mk_expr A.(AilEident sym)) in
       A.AilEcall (f, ail_exprs)
     
-    (*
+      (*
     | CNExpr_cons (c_nm, exprs) -> !^ "(" ^^ Sym.pp c_nm ^^^ !^ "{...})"
-    | CNExpr_each (sym, r, e) -> !^ "(each ...)" *)
+    *)
 
-    | CNExpr_ite (e1, e2, e3) -> A.AilEcond (mk_expr (cn_to_ail_expr e1), Some (mk_expr (cn_to_ail_expr e2)), mk_expr (cn_to_ail_expr e3))
+
+    (* Should only be integer range *)
+    | CNExpr_each (sym, _, (r_start, r_end), e) -> 
+      let rec create_list_from_range l_start l_end = 
+        (if l_start > l_end then 
+          []
+        else
+            l_start :: (create_list_from_range (l_start + 1) l_end)
+        )
+      in 
+      let consts = create_list_from_range (Z.to_int r_start) (Z.to_int r_end) in
+      let cn_consts = List.map (fun i -> CNConst_integer (Z.of_int i)) consts in
+      let ail_exprs = List.map (fun cn_const -> cn_to_ail_expr ~const_prop:(Some (sym, cn_const)) e) cn_consts in
+      (* TODO: Combine into AilEbinary *)
+      List.hd ail_exprs 
+
+
+    | CNExpr_ite (e1, e2, e3) -> A.AilEcond (mk_expr (cn_to_ail_expr ~const_prop:const_prop e1), Some (mk_expr (cn_to_ail_expr ~const_prop:const_prop e2)), mk_expr (cn_to_ail_expr ~const_prop:const_prop e3))
     
     (* 
     | CNExpr_good (ty, e) -> !^ "(good (_, _))" *)
@@ -139,9 +165,9 @@ let rec cn_to_ail_expr (CNExpr (loc, expr_)) =
  
     | CNExpr_unchanged e -> 
       let e_at_start = CNExpr(loc, CNExpr_at_env (e, start_evaluation_scope)) in
-      cn_to_ail_expr (CNExpr (loc, CNExpr_binop (CN_equal, e, e_at_start)))
+      cn_to_ail_expr ~const_prop:const_prop (CNExpr (loc, CNExpr_binop (CN_equal, e, e_at_start)))
 
-    | CNExpr_not e -> A.(AilEunary (Bnot, mk_expr (cn_to_ail_expr e))) 
+    | CNExpr_not e -> A.(AilEunary (Bnot, mk_expr (cn_to_ail_expr ~const_prop:const_prop e))) 
     | _ -> failwith "TODO"
 
 
