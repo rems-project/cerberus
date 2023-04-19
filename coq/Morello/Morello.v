@@ -55,7 +55,7 @@ Definition mword_to_bv_2 {z:Z} {n:N} (m : mword z)  : bv n :=
 
 (* Expects less-significant bits in lower indices *)
 Definition list_bool_to_mword (l : list bool) : mword (Z.of_nat (List.length l)) := 
-  of_bools (List.rev l). (* TODO: bypass rev *)
+  of_bools (List.rev l). (* TODO: bypassing rev could make this more efficient *)
   
 Definition invert_bits {n} (m : mword n) : (mword n) :=
   let l : list bool := mword_to_list_bool m in 
@@ -799,7 +799,7 @@ Module Capability <: Capability (AddressValue) (Flags) (ObjType) (SealType) (Bou
 
   Definition decode (bytes : list ascii) (tag : bool) : option t :=
     if Nat.eq_dec (List.length bytes) 16%nat then
-      let bytes := List.rev bytes in (* TODO: Delete this? *)
+      let bytes := List.rev bytes in (* TODO: bypassing rev could make this more efficient *)
       let bits : (list bool) := tag::(bool_bits_of_bytes bytes) in
       let bitsu := List.map bitU_of_bool bits in
       let w : (mword _) := vec_of_bits bitsu in
