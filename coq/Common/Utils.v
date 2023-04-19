@@ -153,10 +153,6 @@ Program Definition extract_num (a:Z) (off:nat) (len:nat): serr Z :=
       end
   end.
 
-(* Using two's complement encoding. We do not perform range checks
-   here assuming Z is in the proper range.
-   (TODO: review)
- *)
 Definition byte_of_Z (z:Z): ascii :=
   match z with
   | Z0 => Ascii.zero
@@ -232,7 +228,6 @@ Fixpoint try_map {A B:Type} (f : A -> option B) (l:list A) : option (list B)
       end
   end.
 
-(* TODO: check if these are correct *)
 Definition Z_integerRem_t := Z.rem.
 
 Definition Z_integerRem_f a b :=
