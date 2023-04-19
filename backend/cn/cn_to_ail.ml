@@ -152,9 +152,9 @@ let rec cn_to_ail_expr ?(const_prop=None) (CNExpr (loc, expr_)) =
       let consts = create_list_from_range (Z.to_int r_start) (Z.to_int r_end) in
       let cn_consts = List.map (fun i -> CNConst_integer (Z.of_int i)) consts in
       let ail_exprs = List.map (fun cn_const -> cn_to_ail_expr ~const_prop:(Some (sym, cn_const)) e) cn_consts in
-      (* TODO: Combine into AilEbinary *)
-      List.hd ail_exprs 
-
+      (match ail_exprs with
+        | (ail_expr1 :: ail_exprs_rest) ->  List.fold_left (fun ae1 ae2 -> A.(AilEbinary (mk_expr ae1, And, mk_expr ae2))) ail_expr1 ail_exprs_rest
+        | [] -> failwith "Cannot have empty expression in CN each")
 
     | CNExpr_ite (e1, e2, e3) -> A.AilEcond (mk_expr (cn_to_ail_expr ~const_prop:const_prop e1), Some (mk_expr (cn_to_ail_expr ~const_prop:const_prop e2)), mk_expr (cn_to_ail_expr ~const_prop:const_prop e3))
     
