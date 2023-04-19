@@ -68,16 +68,29 @@ let cn_to_ail_const = function
   | CNConst_bool b -> A.(AilEconst (ConstantInteger (IConstant (Z.of_int (Bool.to_int b), Decimal, Some B))))
   | CNConst_unit -> A.(AilEconst (ConstantIndeterminate C.(Ctype ([], Void))))
  
-let cn_to_ail_expr_at_env = function
-  | (CNExpr_at_env (e, es)) ->
-    Printf.printf "reached";
-    (match es with
-      | start_evaluation_scope -> A.(AilEident (CF.Symbol.fresh ())))
-  | _ -> failwith "TODO"
+
 
 (* frontend/model/ail/ailSyntax.lem *)
 (* ocaml_frontend/generated/ailSyntax.ml *)
 let rec cn_to_ail_expr (CNExpr (loc, expr_)) =
+  let cn_to_ail_expr_at_env = (function
+  | (CNExpr_at_env (e, es)) ->
+    (match es with
+      | start_evaluation_scope -> 
+        (* let Symbol (digest, nat, _) = CF.Symbol.fresh () in *)
+        (* TODO: Make general *)
+        let ail_expr = cn_to_ail_expr e in
+        let e_cur_nm =
+        match ail_expr with
+          | A.(AilEident sym) -> CF.Pp_symbol.to_string_pretty sym (* Should only be AilEident sym - function arguments only *)
+          | _ -> failwith "Incorrect type of Ail expression"
+        in
+        let e_old_nm = String.concat "" [e_cur_nm; "_old"] in
+        let sym_old = CF.Symbol.Symbol ("", 0, SD_CN_Id e_old_nm) in
+        A.(AilEident sym_old))
+  | _ -> 
+    failwith "TODO")
+  in
   match expr_ with
     | CNExpr_const cn_cst -> cn_to_ail_const cn_cst
     | CNExpr_value_of_c_atom (sym, _) -> A.(AilEident sym)
@@ -108,7 +121,6 @@ let rec cn_to_ail_expr (CNExpr (loc, expr_)) =
     | CNExpr_cast (bt, expr) -> A.(AilEcast (empty_qualifiers, C.Ctype ([], cn_to_ail_base_type bt) , (mk_expr (cn_to_ail_expr expr))))
     
 
-    (* TODO: Fix! Pprinting sym is giving an internal name *)
     | CNExpr_call (sym, exprs) -> 
       let ail_exprs = List.map (fun e -> mk_expr (cn_to_ail_expr e)) exprs in
       let f = (mk_expr (AilEident sym)) in
@@ -123,7 +135,8 @@ let rec cn_to_ail_expr (CNExpr (loc, expr_)) =
     (* 
     | CNExpr_good (ty, e) -> !^ "(good (_, _))" *)
 
-    | CNExpr_at_env (e, es) -> failwith "TODO"
+    (* TODO: Complete *)
+    | CNExpr_at_env (e, es) as cn_expr -> cn_to_ail_expr_at_env cn_expr 
  
     | CNExpr_unchanged e -> 
       let e_at_start = CNExpr(loc, CNExpr_at_env (e, start_evaluation_scope)) in
@@ -167,6 +180,7 @@ let pp_ctype ctype = CF.Pp_utils.to_plain_string (CF.Pp_ail.pp_ctype empty_quali
 
 let rec pp_ail ail_expr =
   match ail_expr with
+    | A.(AilEident sym) -> CF.String_ail.string_of_cn_id sym
     | A.(AilEconst ail_const) -> pp_ail_const ail_const
     | A.(AilEbinary (x, bop, y)) -> (pp_ail (rm_expr x)) ^ (pp_ail_binop bop) ^ (pp_ail (rm_expr y))
     | A.(AilEunary (Bnot, ail_expr)) -> "!(" ^ (pp_ail (rm_expr ail_expr)) ^ ")"
@@ -174,9 +188,9 @@ let rec pp_ail ail_expr =
     | A.(AilEcond (_, None, _)) -> pp_ail_default ail_expr
     | A.(AilEsizeof (_, ct)) -> "sizeof(" ^ pp_ctype ct ^ ")"
     | A.(AilEcast (_, ctype , expr)) -> "(" ^ pp_ctype ctype ^ ") " ^ pp_ail (rm_expr expr)
-    | A.(AilEcall (A.AnnotatedExpression (_, _, _, (AilEident sym)), ail_exprs)) -> 
+    | A.(AilEcall (A.AnnotatedExpression (_, _, _, f), ail_exprs)) -> 
       let str_exprs = List.map (fun e -> pp_ail (rm_expr e)) ail_exprs in
-      CF.String_ail.string_of_cn_id sym ^ "(" ^ String.concat ", " str_exprs ^ ")" 
+      pp_ail f ^ "(" ^ String.concat ", " str_exprs ^ ")" 
     | _ -> pp_ail_default ail_expr
 
 
