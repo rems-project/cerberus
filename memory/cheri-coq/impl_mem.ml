@@ -311,7 +311,7 @@ module CHERIMorello : Memory = struct
   let from_Coq_mem_cheri_error: MM.mem_cheri_error -> mem_cheri_error = function
     | CheriErrDecodingCap -> CheriErrDecodingCap
     | CheriMerrInvalidCap -> CheriMerrInvalidCap
-    | CheriMerrUnsufficientPermissions -> CheriMerrUnsufficientPermissions
+    | CheriMerrInsufficientPermissions -> CheriMerrInsufficientPermissions
     | CheriBoundsErr (((b, s), a), l) -> CheriBoundsErr ((b, s), a, l)
     | CheriUndefinedTag -> CheriUndefinedTag
 
@@ -570,7 +570,7 @@ module CHERIMorello : Memory = struct
     | UB_CERB002d_out_of_bound_realloc                     -> UB_CERB002d_out_of_bound_realloc
     | UB_CERB003_invalid_function_pointer                  -> UB_CERB003_invalid_function_pointer
     | UB_CHERI_InvalidCap                                  -> UB_CHERI_InvalidCap
-    | UB_CHERI_UnsufficientPermissions                     -> UB_CHERI_UnsufficientPermissions
+    | UB_CHERI_InsufficientPermissions                     -> UB_CHERI_InsufficientPermissions
     | UB_CHERI_BoundsViolation                             -> UB_CHERI_BoundsViolation
     | UB_CHERI_UndefinedTag                                -> UB_CHERI_UndefinedTag
 

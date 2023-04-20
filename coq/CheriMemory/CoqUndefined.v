@@ -702,6 +702,6 @@ Inductive undefined_behaviour : Type :=
 
   (* CHERI-specific UBs below  *)
   | UB_CHERI_InvalidCap: undefined_behaviour 
-  | UB_CHERI_UnsufficientPermissions: undefined_behaviour 
+  | UB_CHERI_InsufficientPermissions: undefined_behaviour 
   | UB_CHERI_BoundsViolation: undefined_behaviour
   | UB_CHERI_UndefinedTag: undefined_behaviour .

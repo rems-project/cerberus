@@ -1502,7 +1502,7 @@ Module CheriMemory
             fail
               (MerrCHERI loc (CheriBoundsErr (C.cap_get_bounds c, AddressValue.of_Z addr, (Z.to_nat sz))))
         else
-          fail (MerrCHERI loc CheriMerrUnsufficientPermissions)
+          fail (MerrCHERI loc CheriMerrInsufficientPermissions)
       else
         fail
           (MerrCHERI loc CheriMerrInvalidCap).
