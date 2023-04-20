@@ -1224,7 +1224,7 @@ let normalise_globs_list tagDefs gs =
 
 
 
-let make_struct_decl loc fields (tag : BT.tag) = 
+let make_struct_decl loc fields (tag : Sym.t) = 
 
   let open Memory in
   let tagDefs = CF.Tags.tagDefs () in

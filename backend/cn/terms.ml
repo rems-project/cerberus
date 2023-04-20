@@ -55,16 +55,16 @@ type 'bt term_ =
   (* add Z3's Distinct for separation facts  *)
   | Tuple of 'bt term list
   | NthTuple of int * 'bt term
-  | Struct of BaseTypes.tag * (BaseTypes.member * 'bt term) list
-  | StructMember of 'bt term * BaseTypes.member
-  | StructUpdate of ('bt term * BaseTypes.member) * 'bt term
+  | Struct of Sym.t * (Id.t * 'bt term) list
+  | StructMember of 'bt term * Id.t
+  | StructUpdate of ('bt term * Id.t) * 'bt term
   | Record of (Id.t * 'bt term) list
   | RecordMember of 'bt term * Id.t
   | RecordUpdate of ('bt term * Id.t) * 'bt term
   | DatatypeCons of Sym.t * 'bt term
   | DatatypeMember of 'bt term * Id.t
   | DatatypeIsCons of Sym.t * 'bt term
-  | MemberOffset of BaseTypes.tag * Id.t
+  | MemberOffset of Sym.t * Id.t
   | ArrayOffset of Sctypes.t (*element ct*) * 'bt term (*index*)
   | Nil
   | Cons of 'bt term * 'bt term

@@ -313,8 +313,8 @@ let rec check_mem_value (loc : loc) ~(expect:BT.t) (mem : mem_value) : (lvt) m =
     ( fun tag id mv -> 
       check_union loc tag id mv )
 
-and check_struct (loc : loc) (tag : tag) 
-                 (member_values : (member * mem_value) list) : (lvt) m =
+and check_struct (loc : loc) (tag : Sym.t) 
+                 (member_values : (Id.t * mem_value) list) : (lvt) m =
   (* might have to make sure the fields are ordered in the same way as
      in the struct declaration *)
   let@ layout = get_struct_decl loc tag in
@@ -337,7 +337,7 @@ and check_struct (loc : loc) (tag : tag)
   let@ member_its = check member_values (Memory.member_types layout) in
   return (IT.struct_ (tag, member_its))
 
-and check_union (loc : loc) (tag : tag) (id : Id.t) 
+and check_union (loc : loc) (tag : Sym.t) (id : Id.t) 
                 (mv : mem_value) : (lvt) m =
   Debug_ocaml.error "todo: union types"
 

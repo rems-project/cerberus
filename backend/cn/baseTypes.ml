@@ -1,23 +1,13 @@
 open Pp
 
-
-type tag = Sym.t
-let equal_tag = Sym.equal
-let compare_tag = Sym.compare
-
-type member = Id.t
-let equal_member = Id.equal
-let compare_member = Id.compare
-
-
 type basetype =
   | Unit 
   | Bool
   | Integer
   | Real
   | Loc
-  | Struct of tag
-  | Datatype of tag
+  | Struct of Sym.t
+  | Datatype of Sym.t
   | Record of member_types
   | Map of basetype * basetype
   | List of basetype
@@ -38,12 +28,12 @@ let compare = compare_basetype
 
 
 type datatype_info = {
-  dt_constrs: tag list;
+  dt_constrs: Sym.t list;
   dt_all_params: member_types;
 }
 type constr_info = {
   c_params: member_types;
-  c_datatype_tag: tag
+  c_datatype_tag: Sym.t
 }
 
 let cons_dom_rng info =

@@ -45,13 +45,13 @@ let align_of_struct tag = align_of_ctype (Struct tag)
 type struct_piece = { 
     offset: int;
     size: int;
-    member_or_padding: (BT.member * Sctypes.t) option 
+    member_or_padding: (Id.t * Sctypes.t) option 
   }
 
 type struct_member = { 
     offset: int;
     size: int;
-    member: BT.member * Sctypes.t 
+    member: Id.t * Sctypes.t 
   }
 
 type struct_layout = struct_piece list

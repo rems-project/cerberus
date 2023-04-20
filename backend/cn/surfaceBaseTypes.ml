@@ -2,16 +2,14 @@
 
 open Pp
 
-
-
 type basetype =
   | Unit 
   | Bool
   | Integer
   | Real
   | Loc of Sctypes.t option
-  | Struct of BaseTypes.tag
-  | Datatype of BaseTypes.tag
+  | Struct of Sym.t
+  | Datatype of Sym.t
   | Record of member_types
   | Map of basetype * basetype
   | List of basetype
@@ -32,12 +30,12 @@ let compare = compare_basetype
 
 
 type datatype_info = {
-  dt_constrs: BaseTypes.tag list;
+  dt_constrs: Sym.t list;
   dt_all_params: member_types;
 }
 type constr_info = {
   c_params: member_types;
-  c_datatype_tag: BaseTypes.tag
+  c_datatype_tag: Sym.t
 }
 
 let cons_dom_rng info =
