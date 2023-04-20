@@ -25,8 +25,8 @@ Module Type Permission.
 
   (* Convenience functions to examine some permission bits *)
 
-  (* it is a permssion in RISV but in Morello spec while it is encoded
-     and treated as one, it is sigled out as separate field of logical
+  (* it is a permission in RISCV but in Morello spec while it is encoded
+     and treated as one, it is singled out as separate field of logical
      Capability structure (see R_HRVBQ paragraph in Morello spec. *)
   Parameter has_global_perm: t -> bool.
   Parameter has_execute_perm: t -> bool.
@@ -143,8 +143,7 @@ Module Type Capability
   Parameter sizeof_ptraddr: nat.
 
   (** the number of user-defined flags *)
-  (* Parameter cap_flags_len: nat. *)
-
+  
   (** ghost state management **)
 
   Parameter get_ghost_state: t -> CapGhostState.
@@ -164,14 +163,12 @@ Module Type Capability
   (** Returns bounds in form [base,limit) for covered  memory region. base is inclusive while limit is exclusive *)
   Parameter cap_get_bounds: t -> I.t.
 
-  (** Get informaiton about "seal" on this capability *)
+  (** Get information about "seal" on this capability *)
   Parameter cap_get_seal: t -> S.t.
 
   (** user-defined flags *)
-  (* Parameter Flags : Type.  *)
   Parameter cap_get_flags: t -> F.t.
-  (* Parameter cap_get_flags: t -> list bool. TODO: enforce cap_flags_len? *)
-
+  
   Parameter cap_get_perms: t -> P.t.
 
   (** Null capability *)

@@ -15,9 +15,8 @@ Require Import Capabilities.
 Require Import Addr.
 
 
-(* Notations and their definitions*)
+(** Notations and their definitions **)
 
-(* Notation "x =? y" := (bool_decide (x = y)) (at level 70, no associativity) . *)
 Definition eqb {n} (v1:bv n) (v2:bv n) : bool :=
   v1.(bv_unsigned) =? v2.(bv_unsigned).
 Definition ltb {n} (v1:bv n) (v2:bv n) : bool :=
@@ -36,7 +35,7 @@ Local Notation "(<@{ A } )" := (@lt A) (only parsing) : stdpp_scope.
 Local Notation LtDecision A := (RelDecision (<@{A})).
 
 
-(** Utility convertors **)
+(** Utility converters **)
 
 Definition bv_to_mword {n} (b : bv n) : mword (Z.of_N n) :=
   mword_of_int (b.(bv_unsigned)).
@@ -56,7 +55,7 @@ Definition mword_to_bv_2 {z:Z} {n:N} (m : mword z)  : bv n :=
 
 (* Expects less-significant bits in lower indices *)
 Definition list_bool_to_mword (l : list bool) : mword (Z.of_nat (List.length l)) := 
-  of_bools (List.rev l). (* TODO: bypass rev *)
+  of_bools (List.rev l). (* TODO: bypassing rev could make this more efficient *)
   
 Definition invert_bits {n} (m : mword n) : (mword n) :=
   let l : list bool := mword_to_list_bool m in 
@@ -73,7 +72,7 @@ Program Definition list_bool_to_bv (l : list bool) : bv (N.of_nat (List.length l
  {reflexivity. } {reflexivity. } Defined.  
 
 Module Permissions <: Permission.
-  Definition len:N := 18. (* CAP_PERMS_NUM_BITS = 16 bits of actual perms + 2 bits for Executive and Global. *)
+  Definition len:N := 18. (* CAP_PERMS_NUM_BITS = 16 bits of actual perms + 2 bits for Executive and Global *)
   Definition t := bv len. 
   
   Definition to_Z (perms:t) : Z := bv_to_Z_unsigned perms.
@@ -343,9 +342,6 @@ Module Permissions <: Permission.
       None 
     else
       Some (@mword_to_bv (Z.of_N len) (of_bools (List.rev (List.firstn (N.to_nat len) l)))).
-    (* if ((List.length l) =? (N.to_nat len))%nat then
-      Some (@mword_to_bv (Z.of_N len) (of_bools (List.rev l))) 
-    else None. *)
   
   Definition to_list (perms:t) : list bool := 
     bv_to_list_bool perms.
@@ -356,6 +352,7 @@ End Permissions.
 
 
 Module AddressValue <: PTRADDR.
+
   Definition len:N := 64.
   Definition t := bv len.
 
@@ -383,6 +380,7 @@ End AddressValue.
 
 
 Module ObjType <: OTYPE.
+
   Definition len:N := 64.
   Definition t := bv len.  (* ObtTypes are effectively 15-bit values,
   but the ASL extracts this field from a cap as a 64-bit word, 
@@ -402,11 +400,12 @@ End ObjType.
 
 
 Module SealType <: CAP_SEAL_T.
+
   Inductive cap_seal_t :=
   | Cap_Unsealed
   | Cap_SEntry (* "RB" in Morello *)
   | Cap_Indirect_SEntry (* "LB" in Morello *)
-  | Cap_Indirect_SEntry_Pair (* "LPB" in Morello. TODO see why unused *)
+  | Cap_Indirect_SEntry_Pair (* "LPB" in Morello *)
   | Cap_Sealed (seal : ObjType.t).
   
   Definition t := cap_seal_t. 
@@ -447,7 +446,6 @@ End Flags.
 
 Module Bounds <: PTRADDR_INTERVAL(AddressValue).
 
-  (* Definition t := bv 87. *)
   Definition bound_len:N := 65.
   Definition t := ((bv bound_len) * (bv bound_len))%type.
   Definition of_Zs (bounds : Z * Z) : t :=
@@ -685,12 +683,9 @@ Module Capability <: Capability (AddressValue) (Flags) (ObjType) (SealType) (Bou
   Definition cap_seal_indirect_entry_pair (cap:t) : t := 
     cap_seal_immediate cap SealType.sealed_indirect_entry_pair_ot.
 
-  (* Confirm the type of the function is ok *)  
   Definition representable_alignment_mask (len:Z) : Z :=
     mword_to_Z_unsigned (CapGetRepresentableMask (@mword_of_int (Z.of_N AddressValue.len) len)).
 
-  (* Will need to see how this compares with Microsoft's Small Cheri 
-  (Technical report coming up -- as of Oct 24 2022) *)
   Definition representable_length (len : Z) : Z :=
     let mask:Z := representable_alignment_mask len in
     let nmask:Z := AddressValue.bitwise_complement_Z mask in
@@ -705,7 +700,6 @@ Module Capability <: Capability (AddressValue) (Flags) (ObjType) (SealType) (Bou
     let new_cap := cap_set_value new_cap value in 
       cap_set_objtype new_cap otype.
     
-  (* Should we check that size is not too large? *)
   Definition alloc_cap (a_value : AddressValue.t) (size : AddressValue.t) : t :=
     make_cap 
       a_value 
@@ -757,7 +751,6 @@ Module Capability <: Capability (AddressValue) (Flags) (ObjType) (SealType) (Bou
     let c' := cap_set_value c0 a in
     c.(cap) =? c'.(cap).
     
-  (* Extracted from https://github.com/vzaliva/cerberus/blob/master/coq/Utils.v *)  
   Definition bool_bits_of_bytes (bytes : list ascii): list bool
   :=
   let ascii_to_bits (x:ascii) :=
@@ -767,14 +760,7 @@ Module Capability <: Capability (AddressValue) (Flags) (ObjType) (SealType) (Bou
   in
   List.fold_left (fun l a => List.app l (ascii_to_bits a)) bytes [].  
 
-  (* Definition bool_bits_of_bytes (bytes : list ascii): list bool :=
-    let ascii_to_bits (x:ascii) :=
-      match x with
-      | Ascii a0 a1 a2 a3 a4 a5 a6 a7 => [a0; a1; a2; a3; a4; a5; a6; a7]
-      end in 
-    List.flat_map ascii_to_bits bytes. *)
-   
-  (* Internal helper function to conver between Sail bytes ([memory_byte])
+  (* Internal helper function to convert between Sail bytes ([memory_byte])
      and Cerberus bytes ([ascii]). *)
   Definition memory_byte_to_ascii (b:memory_byte) : option ascii :=
     match List.map bool_of_bit b with
@@ -782,9 +768,6 @@ Module Capability <: Capability (AddressValue) (Flags) (ObjType) (SealType) (Bou
     | _ => None
     end.
 
-  (* Extracted from https://github.com/vzaliva/cerberus/blob/master/coq/Utils.v *)
-  (* could be generalized as monadic map, or implemente as compistion
-   of [map] and [sequence]. *)
   Fixpoint try_map {A B:Type} (f : A -> option B) (l:list A) : option (list B)
   :=
   match l with
@@ -815,7 +798,7 @@ Module Capability <: Capability (AddressValue) (Flags) (ObjType) (SealType) (Bou
 
   Definition decode (bytes : list ascii) (tag : bool) : option t :=
     if Nat.eq_dec (List.length bytes) 16%nat then
-      let bytes := List.rev bytes in (* TODO: Delete this? *)
+      let bytes := List.rev bytes in (* TODO: bypassing rev could make this more efficient *)
       let bits : (list bool) := tag::(bool_bits_of_bytes bytes) in
       let bitsu := List.map bitU_of_bool bits in
       let w : (mword _) := vec_of_bits bitsu in
@@ -887,9 +870,7 @@ Module Capability <: Capability (AddressValue) (Flags) (ObjType) (SealType) (Bou
   Definition to_string_full (c:t) : string :=
     HexString.of_Z (bv_to_Z_unsigned c.(cap)). 
 
-  Definition to_string (c:t) : string :=
-    (* to_string_full c ++ ": " ++  *)
-    to_string_pretty_2 c.
+  Definition to_string (c:t) : string := to_string_pretty_2 c.
 
   Definition strfcap (s:string) (_:t) : option string := None.
     
@@ -944,8 +925,6 @@ End Capability.
 
 
 Module TestCaps.
-
-  (* Import MorelloCapability. *)
 
   (* c1 corresponds to https://www.morello-project.org/capinfo?c=1900000007f1cff1500000000ffffff15 *)
   Definition c1:Capability.t := Capability.of_Z 0x1900000007f1cff1500000000ffffff15.

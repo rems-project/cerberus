@@ -27,7 +27,7 @@ Local Open Scope bool_scope.
 
 Definition debugging : bool := false.
 
-(* this definiton will be remapped on extractoin to OCaml's print_endline *)
+(* this definition will be remapped on extraction to OCaml's print_endline *)
 Definition print_msg (msg : string) : unit := tt.
 
 Definition sprint_msg (msg : string) : serr unit :=
@@ -141,7 +141,7 @@ Definition vector_drop {A:Type} {t:nat} (h:nat) (v:Vector.t A (h+t)) : Vector.t 
  *)
 Program Definition extract_num (a:Z) (off:nat) (len:nat): serr Z :=
   match len with
-  | O => raise "0 lenght not allowed"
+  | O => raise "0 length not allowed"
   | S len' =>
       match a with
       | Z0 => ret 0
@@ -153,10 +153,6 @@ Program Definition extract_num (a:Z) (off:nat) (len:nat): serr Z :=
       end
   end.
 
-(* Using two's complement encoding. We do not perform range checks
-   here assuming Z is in the proper range.
-   (TODO: review)
- *)
 Definition byte_of_Z (z:Z): ascii :=
   match z with
   | Z0 => Ascii.zero
@@ -168,7 +164,6 @@ Definition byte_of_Z (z:Z): ascii :=
       end
   end.
 
-(* TODO: make sure bit order is correct. *)
 Definition bool_bits_of_bytes (bytes : list ascii): list bool
   :=
   let ascii_to_bits (x:ascii) :=
@@ -177,7 +172,6 @@ Definition bool_bits_of_bytes (bytes : list ascii): list bool
     end
   in
   List.fold_left (fun l a => List.app l (ascii_to_bits a)) bytes [].
-
 
 (* size is in bytes *)
 Definition bytes_of_Z (is_signed: bool) (size: nat) (i: Z): serr (list ascii)
@@ -217,7 +211,7 @@ Definition Z_of_bytes (is_signed: bool) (bs:list ascii): serr Z
       aux init cs
   end.
 
-(* could be generalized as monadic map, or implemente as compistion
+(* could be generalized as monadic map, or implemented as composition
    of [map] and [sequence]. *)
 Fixpoint try_map {A B:Type} (f : A -> option B) (l:list A) : option (list B)
   :=
@@ -234,7 +228,6 @@ Fixpoint try_map {A B:Type} (f : A -> option B) (l:list A) : option (list B)
       end
   end.
 
-(* TODO: check if these are correct *)
 Definition Z_integerRem_t := Z.rem.
 
 Definition Z_integerRem_f a b :=
