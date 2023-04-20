@@ -83,14 +83,14 @@ let magic_to_attrs = function
   | magic ->
       Annot.Attrs [magic_to_attr magic]
 
-let append_magic magic stmt =
+let append_magic loc magic stmt =
   match magic with
     | [] -> stmt
-    | _  -> let loc = Location_ocaml.bbox_location (List.map fst magic) in
+    | _  -> (* let loc = Location_ocaml.bbox_location (List.map fst magic) in *)
             CabsStatement (loc, magic_to_attrs magic, CabsSmarker stmt)
 
 let mk_statement magic (loc, attrs, stmt_) =
-  append_magic magic (CabsStatement (loc, attrs, stmt_))
+  append_magic loc magic (CabsStatement (loc, attrs, stmt_))
 
 (* use this to show a warning when a NON-STD 'extra' semicolon was parsed *)
 let warn_extra_semicolon pos ctx =
