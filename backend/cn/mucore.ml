@@ -99,7 +99,7 @@ type 'TY mu_sym_or_pattern =
   (* | M_Symbol of symbol *)
   | M_Pat of mu_pattern
 
-type mu_function = (* some functions that persist into mucore, more than just binops *)
+type mu_function = (* some functions that persist into mucore, not just (infix) binops *)
  | M_params_length
  | M_params_nth
  | M_are_compatible
@@ -292,6 +292,35 @@ let mComputational (bound, info) t = M_Computational (bound, info, t)
 let mConstraints lcs t = List.fold_right mConstraint lcs t
 let mResources res t = List.fold_right mResource res t
 
+let mu_fun_param_types mu_fun =
+  let open BaseTypes in
+  match mu_fun with
+  | M_params_length -> [List CType]
+  | M_params_nth -> [List CType; Integer]
+  | M_are_compatible -> [CType; CType]
+
+let pp_function = function
+  | M_params_length -> !^ "params_length"
+  | M_params_nth -> !^ "params_nth"
+  | M_are_compatible -> !^ "are_compatible"
+
+let evaluate_fun mu_fun args =
+  let args_it = List.map IT.term args in
+  match mu_fun with
+  | M_params_length -> begin match args_it with
+    | [IT.List xs] -> Some (IT.int_ (List.length xs))
+    | _ -> None
+  end
+  | M_params_nth -> begin match args_it, List.map IT.is_z args with
+    | [IT.List xs; _], [_; Some i] -> if Z.lt i (Z.of_int (List.length xs))
+        then List.nth_opt xs (Z.to_int i) else None
+    | _ -> None
+  end
+  | M_are_compatible -> begin match List.map IT.is_const args with
+    | [Some (IT.CType_const ct1, _); Some (IT.CType_const ct2, _)] -> if Sctypes.equal ct1 ct2
+      then Some (IT.bool_ true) else None
+    | _ -> None
+  end
 
 
 type parse_ast_label_spec =

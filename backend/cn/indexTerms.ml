@@ -348,6 +348,11 @@ let rec split_and it =
   | Some (it1, it2) -> split_and it1 @ split_and it2
   | None -> [it]
 
+let rec is_const_val = function
+  | IT (Const _, _) -> true
+  | IT (List xs, _) -> List.for_all is_const_val xs
+  | _ -> false
+
 
 (* shorthands *)
 

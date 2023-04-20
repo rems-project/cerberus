@@ -157,6 +157,7 @@ module Translate = struct
     | DatatypeConsRecogFunc of { nm: Sym.t }
     | DatatypeAccFunc of { member: Id.t; dt: Sym.t; bt: BT.t }
     | UninterpretedVal of { nm : Sym.t }
+    | Term of { it : IT.t }
   [@@deriving eq]
 
 
@@ -185,7 +186,6 @@ module Translate = struct
     (needs_premise_table := Z3ExprMap.add expr info (! needs_premise_table));
     expr
 
-
   let string context str =
     Z3.Symbol.mk_string context str
   let symbol_string pfx sym = pfx ^ Sym.pp_string sym ^ "_a" ^ string_of_int (Sym.num sym)
@@ -206,6 +206,23 @@ module Translate = struct
 
   let bt_suffix_name nm bt = Pp.plain (!^ nm ^^ !^ "_" ^^ bt_pp_name bt)
 
+  module ITMap = Map.Make(IT)
+
+  let uninterp_tab = ref (ITMap.empty, 0)
+
+  let uninterp_term context sort (it : IT.t) =
+    let (m, n) = ! uninterp_tab in
+    match ITMap.find_opt it m with
+    | Some z3_exp -> z3_exp
+    | None -> begin
+      let nm = "uninterp_" ^ Int.to_string n ^ "_" ^ bt_name (IT.bt it) in
+      let sym = string context nm in
+      let z3_exp = Z3.Expr.mk_const context sym sort in
+      uninterp_tab := (ITMap.add it z3_exp m, n + 1);
+      Z3Symbol_Table.add z3sym_table sym (Term {it});
+      z3_exp
+    end
+
   let tuple_field_name bts i = 
     bt_name (Tuple bts) ^ string_of_int i
 
@@ -214,7 +231,6 @@ module Translate = struct
 
   let accessor_name dt_name member =
     symbol_string "" dt_name ^ "_" ^ Id.s member
-    
 
   let member_name tag id = 
     bt_name (BT.Struct tag) ^ "_" ^ Id.s id
@@ -276,11 +292,8 @@ module Translate = struct
            (string (bt_name Loc))
            [string "loc_to_integer"] 
            [sort BT.Integer]
-      | CType ->
-         Z3.Tuple.mk_sort context
-           (string (bt_name CType))
-           [string "ctype_to_integer"]
-           [sort BT.Integer]
+      | CType -> (* the ctype type is represented as an uninterpreted sort *)
+        Z3.Sort.mk_uninterpreted_s context (bt_name CType)
       | List bt -> (* lists are represented as uninterpreted sorts *)
         Z3.Sort.mk_uninterpreted_s context (bt_name (List bt))
       | Set bt -> Z3.Set.mk_sort context (sort bt)
@@ -356,6 +369,7 @@ module Translate = struct
     Z3.Tuple.get_mk_decl (sort context global Loc)
   
 
+
   let term ?(warn_lambda=true) context global : IT.t -> expr =
 
     let struct_decls = global.struct_decls in
@@ -408,6 +422,7 @@ module Translate = struct
          Z3.Expr.mk_const context sym (sort bt)
       | Const Null -> 
          integer_to_loc (term (int_ 0))
+      | Const (CType_const ct) -> uninterp_term context (sort bt) it
       | Binop (bop, t1, t2) -> 
          let open Z3.Arithmetic in
          let make_uf sym ret_sort args =
@@ -565,6 +580,7 @@ module Translate = struct
          term (int_ (Option.get (Memory.member_offset decl member)))
       | ArrayOffset (ct, t) -> 
          term (mul_ (int_ (Memory.size_of_ctype ct), t))
+      | IT.List xs -> uninterp_term context (sort bt) it
       | NthList (i, xs, d) ->
          let args = List.map term [i; xs; d] in
          let nm = bt_suffix_name "nth_list" bt in
@@ -1089,6 +1105,7 @@ module Eval = struct
            | DatatypeAccFunc xs ->
               Simplify.IndexTerms.datatype_member_reduce (nth args 0) xs.member xs.bt
            | UninterpretedVal {nm} -> sym_ (nm, expr_bt)
+           | Term {it} -> it
            end
 
         | () when String.equal (Z3.Symbol.to_string func_name) "^" ->

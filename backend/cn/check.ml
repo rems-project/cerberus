@@ -399,8 +399,10 @@ let rec check_value (loc : loc) ~(expect:BT.t) (v : 'bty mu_value) : (lvt) m =
   | M_Vfalse -> 
      let@ () = WellTyped.ensure_base_type loc ~expect Bool in
      return (IT.bool_ false)
-  | M_Vfunction_addr _ ->
-     Debug_ocaml.error "todo: M_Vfunction_addr"
+  | M_Vfunction_addr sym ->
+     (* check it is a valid function address *)
+     let@ _ = get_fun_decl loc sym in
+     return (IT.sym_ (sym, Loc))
   | M_Vlist (item_bt, vals) ->
      let@ () = WellTyped.WBT.is_bt loc item_bt in
      let@ () = WellTyped.ensure_base_type loc ~expect (List item_bt) in
@@ -453,14 +455,29 @@ let is_representable_integer arg ity =
   and_ [le_ (z_ minInt, arg); le_ (arg, z_ maxInt)]
 
 
-let eq_value_with f expr =
-  let@ group = value_eq_group None expr in
-  match List.find_opt (fun t -> Option.is_some (f t)) (EqTable.ITSet.elements group) with
-  | Some x ->
-    let y = Option.get (f x) in
-    return (Some (x, y))
-  | None ->
-    return None
+let eq_value_with f expr = match f expr with
+  | Some y -> return (Some (expr, y))
+  | None -> begin
+    let@ group = value_eq_group None expr in
+    match List.find_opt (fun t -> Option.is_some (f t)) (EqTable.ITSet.elements group) with
+    | Some x ->
+      let y = Option.get (f x) in
+      return (Some (x, y))
+    | None ->
+      return None
+  end
+
+let prefer_value_with f expr =
+  let@ r = eq_value_with (fun it -> if f it then Some () else None) expr in
+  match r with
+  | None -> return expr
+  | Some (x, _) -> return x
+
+let is_fun_addr global t = match IT.is_sym t with
+  | Some (s, _) -> if SymMap.mem s global.Global.fun_decls
+      then Some s else None
+  | _ -> None
+
 
 
 let check_single_ct loc expr =
@@ -539,7 +556,6 @@ let check_array_shift loc ~expect vt1 (loc_ct, ct) vt2 =
   let@ () = WellTyped.ensure_base_type loc ~expect Loc in
   let@ () = WellTyped.WCT.is_ct loc_ct ct in
   return (arrayShift_ (vt1, ct, vt2))
-
 
 
 (* could potentially return a vt instead of an RT.t *)
@@ -735,7 +751,17 @@ let rec check_pexpr (pe : 'bty mu_pexpr) ~(expect:BT.t)
         k (or_ [v1; v2]))
      end
   | M_PEapply_fun (fun_id, args) ->
-     Debug_ocaml.error "todo: PEfun_apply"
+     let expect_args = Mucore.mu_fun_param_types fun_id in
+     let@ () = if List.length expect_args = List.length args then return ()
+       else fail (fun _ -> {loc; msg = Number_arguments {has = List.length args;
+                expect = List.length expect_args}}) in
+     check_pexprs (List.combine args expect_args) (fun args ->
+     let@ args = ListM.mapM (prefer_value_with IT.is_const_val) args in
+     match Mucore.evaluate_fun fun_id args with
+     | Some t -> k t
+     | None -> fail (fun _ -> {loc; msg = Generic (!^ "cannot evaluate function:" ^^^
+           Pp.c_app (Mucore.pp_function fun_id) (List.map IT.pp args))})
+     )
   | M_PEstruct _ ->
      Debug_ocaml.error "todo: PEstruct"
   | M_PEunion _ ->
@@ -744,15 +770,12 @@ let rec check_pexpr (pe : 'bty mu_pexpr) ~(expect:BT.t)
      check_pexpr ~expect:Loc pe (fun ptr ->
      let@ global = get_global () in
      (* function vals are just symbols the same as the names of functions *)
-     let is_fun_addr t = match IT.is_sym t with
-       | Some (s, _) -> if SymMap.mem s global.Global.fun_decls
-           then Some s else None
-       | _ -> None
-     in
-     let@ known = eq_value_with is_fun_addr ptr in
+     let@ known = eq_value_with (is_fun_addr global) ptr in
      begin match known with
      | Some (_, sym) ->
        (* need to conjure up the characterising 4-tuple *)
+       Pp.debug 5 (lazy (!^ "lookup of C function:" ^^^ Sym.pp sym));
+       Pp.debug 5 (lazy (!^ "in globals:" ^^^ IT.pp (IT.bool_ (SymMap.mem sym global.Global.fun_decls))));
        let@ (_, _, c_sig) = get_fun_decl loc sym in
        begin match IT.const_of_c_sig c_sig with
          | Some it -> k it
@@ -1324,8 +1347,11 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
   | Normal expect, M_Eccall (act, f_pe, pes) ->
      (* todo: do anything with act? *)
      let@ () = WellTyped.WCT.is_ct act.loc act.ct in
-     let fsym = match f_pe with
-       | M_Pexpr (_, _, _, M_PEsym fsym) -> fsym
+     check_pexpr ~expect:Loc f_pe (fun f_it ->
+     let@ global = get_global () in
+     let@ known = eq_value_with (is_fun_addr global) f_it in
+     let@ fsym = match known with
+       | Some (_, sym) -> return sym
        | _ -> unsupported loc !^"function application of function pointers"
      in
      let@ (_loc, ft, _) = get_fun_decl loc fsym in
@@ -1334,7 +1360,7 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
      let@ () = WellTyped.ensure_base_type loc ~expect bt in
      let@ _, members = make_return_record loc (FunctionCall fsym) (RT.binders rt) in
      let@ lvt = bind_return loc members rt in
-     k lvt)
+     k lvt))
   (* | M_Eproc (fname, pes) -> *)
   (*    let@ (_, decl_typ) = match fname with *)
   (*      | CF.Core.Impl impl ->  *)
