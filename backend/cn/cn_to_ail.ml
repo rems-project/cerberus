@@ -83,7 +83,7 @@ let rec cn_to_ail_expr ?(const_prop=None) (CNExpr (loc, expr_)) =
           | A.(AilEident sym) -> CF.Pp_symbol.to_string_pretty sym (* Should only be AilEident sym - function arguments only *)
           | _ -> failwith "Incorrect type of Ail expression"
         in
-        let e_old_nm = String.concat "" [e_cur_nm; "_old"] in
+        let e_old_nm = e_cur_nm ^ "_old" in
         let sym_old = CF.Symbol.Symbol ("", 0, SD_CN_Id e_old_nm) in
         A.(AilEident sym_old))
   | _ -> 
@@ -96,11 +96,9 @@ let rec cn_to_ail_expr ?(const_prop=None) (CNExpr (loc, expr_)) =
       (match const_prop with
         | Some (sym2, cn_const) ->
             if CF.Symbol.equal_sym sym sym2 then
-              (Printf.printf "MATCHED\n";
-              cn_to_ail_const cn_const)
+              cn_to_ail_const cn_const
             else
-              (Printf.printf "NOT MATCHED\n";
-              A.(AilEident sym))
+              A.(AilEident sym)
         | None -> A.(AilEident sym)  (* TODO: Check. Need to do more work if this is only a CN var *)
       )
     (* 
@@ -136,6 +134,7 @@ let rec cn_to_ail_expr ?(const_prop=None) (CNExpr (loc, expr_)) =
     *)
 
     (* Should only be integer range *)
+    (* TODO: Need to implement CNExpr_match (e, es) - which can be passed via e *)
     | CNExpr_each (sym, _, (r_start, r_end), e) -> 
       let rec create_list_from_range l_start l_end = 
         (if l_start > l_end then 
@@ -149,8 +148,9 @@ let rec cn_to_ail_expr ?(const_prop=None) (CNExpr (loc, expr_)) =
       let ail_exprs = List.map (fun cn_const -> cn_to_ail_expr ~const_prop:(Some (sym, cn_const)) e) cn_consts in
       (match ail_exprs with
         | (ail_expr1 :: ail_exprs_rest) ->  List.fold_left (fun ae1 ae2 -> A.(AilEbinary (mk_expr ae1, And, mk_expr ae2))) ail_expr1 ail_exprs_rest
-        | [] -> failwith "Cannot have empty expression in CN each")
+        | [] -> failwith "Cannot have empty expression in CN each expression")
   
+    
     (* 
     | CNExpr_match (e, es) -> failwith "TODO" 
     *)
@@ -170,8 +170,8 @@ let rec cn_to_ail_expr ?(const_prop=None) (CNExpr (loc, expr_)) =
     | CNExpr_unchanged e -> 
       let e_at_start = CNExpr(loc, CNExpr_at_env (e, start_evaluation_scope)) in
       cn_to_ail_expr ~const_prop:const_prop (CNExpr (loc, CNExpr_binop (CN_equal, e, e_at_start)))
-      
-    (* TODO: Complete *)
+  
+    (* TODO: Complete. CNExpr_unchanged (above) relies on it *)
     | CNExpr_at_env (e, es) as cn_expr -> cn_to_ail_expr_at_env cn_expr 
  
     | CNExpr_not e -> A.(AilEunary (Bnot, mk_expr (cn_to_ail_expr ~const_prop:const_prop e))) 

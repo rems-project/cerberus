@@ -5,6 +5,8 @@ open CB.Pipeline
 open Setup
 open CF.Cn
 
+module A=CF.AilSyntax 
+
 
 let return = CF.Exception.except_return
 let (let@) = CF.Exception.except_bind
@@ -115,7 +117,7 @@ let check_input_file filename =
 (* Executable spec helper functions *)
 
 type executable_spec = {
-    pre_post: (CF.Symbol.sym * (string * string)) list;
+    pre_post: (CF.Symbol.sym * (string list * string)) list;
     in_stmt: (Cerb_location.t * string) list;
 }
 
@@ -143,8 +145,8 @@ let generate_c_statements cn_statements =
   in
   List.map generate_c_statement cn_statements
 
-let generate_c_pres_and_posts (instrumentation : Core_to_mucore.instrumentation) function_definitions =
-  let generate_c_pre = function
+let generate_c_pres_and_posts (instrumentation : Core_to_mucore.instrumentation) ail_prog =
+  let _generate_c_pre = function
     | CF.Cn.CN_cletResource (loc, name, resource) -> (instrumentation.fn, ("hello", ""))
     | CF.Cn.CN_cletExpr (loc, name, expr) -> (instrumentation.fn, ("hello2", ""))
     | CF.Cn.CN_cconstr (loc, constr) -> (instrumentation.fn, ("hello3", ""))
@@ -152,25 +154,37 @@ let generate_c_pres_and_posts (instrumentation : Core_to_mucore.instrumentation)
   let _generate_c_post = function
     | _ -> ""
   in 
-  (* let function_identifiers = List.map fst function_definitions in *)
-  let _pres = List.map generate_c_pre instrumentation.surface.requires in
-  (* [(instrumentation.fn, ("some precondition;\n", "some postcondition;\n"))] *)
-  []
-  (* let posts = List.map generate_c_post instrumentation.ensures in *)
-  (* let pres_and_posts = List.combine pres posts in *)
-  (* print_string ((string_of_int (List.length pres_and_posts)) ^ "\n"); *)
-  (* print_string ((string_of_int (List.length function_identifiers)) ^ "\n"); *)
-  (* let pres_and_posts = List.combine function_identifiers pres_and_posts in *)
-  (* pres_and_posts *)
-  (* pres *)
-  (* [(instrumentation.fn, ("pre", "post"))] *)
+  let sym_equality = fun (loc, _) -> CF.Symbol.equal_sym loc instrumentation.fn in
+  let fn_decl = List.filter sym_equality ail_prog.A.declarations in
+  let fn_def = List.filter sym_equality ail_prog.A.function_definitions in
+  let args_list = 
+  match (fn_decl, fn_def) with 
+    | ((_, (_, _, A.(Decl_function (_, _, arg_types, _, _, _)))) :: _), ((_, (_, _, _, arg_syms, _)) :: _) -> 
+      let arg_types = List.map (fun (_, ctype, _) -> ctype) arg_types in
+      List.combine arg_types arg_syms
+    | _ -> []
+  in
+  let gen_old_var_fn = (fun sym -> (CF.Pp_symbol.to_string_pretty sym) ^ "_old") in
+  let empty_qualifiers : CF.Ctype.qualifiers = {const = false; restrict = false; volatile = false} in
+  let pp_ctype ctype = CF.Pp_utils.to_plain_string (CF.Pp_ail.pp_ctype empty_qualifiers ctype) in
+  let arg_str_fn (ctype, sym) =
+    pp_ctype ctype ^
+    " " ^
+    gen_old_var_fn sym ^
+    " = " ^
+    CF.Pp_symbol.to_string_pretty sym ^
+    ";\n"
+  in
+  let arg_strs = List.map arg_str_fn args_list in
+  (* let arg_strs = List.fold_left (^) "" arg_strs in *)
+  [(instrumentation.fn, (arg_strs, ""))]
 
 
 (* Core_to_mucore.instrumentation list -> executable_spec *)
-let generate_c_specs instrumentation_list function_definitions =
+let generate_c_specs instrumentation_list ail_prog =
   (* let open Core_to_mucore in *)
   let generate_c_spec (instrumentation : Core_to_mucore.instrumentation) =
-    let c_pres_and_posts = generate_c_pres_and_posts instrumentation function_definitions in 
+    let c_pres_and_posts = generate_c_pres_and_posts instrumentation ail_prog in 
     let c_statements = generate_c_statements instrumentation.surface.statements in
     (* ([(Sym.fresh_pretty "main", ("int i_old = i;", ""))], generate_c_statements instrumentation.statements) *)
     (c_pres_and_posts, c_statements)
@@ -258,7 +272,7 @@ let main
          | None -> ()
          | Some output_filename ->
             let oc = Stdlib.open_out output_filename in
-            let executable_spec = generate_c_specs instrumentation ail_prog.function_definitions in
+            let executable_spec = generate_c_specs instrumentation ail_prog in
             begin match
               Source_injection.(output_injections oc
                 { filename; sigm= ail_prog
