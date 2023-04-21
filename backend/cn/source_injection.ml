@@ -93,7 +93,7 @@ let move_to ?(print=true) ?(no_ident=false) st pos =
 type injection_kind =
   | InStmt of string
   | Return of (Pos.t * Pos.t) option
-  | Pre of string * Cerb_frontend.Ctype.ctype
+  | Pre of (string list) * Cerb_frontend.Ctype.ctype
   | Post of string * Cerb_frontend.Ctype.ctype
 
 type injection = {
@@ -104,7 +104,7 @@ type injection = {
 
 (* start (1, 1) and end (1, 1) for include headers *)
 let inject st inj =
-  let open Cerb_frontend in
+  (* let open Cerb_frontend in *)
   let do_output st str = Stdlib.output_string st.output (decorate_injection str); st in
   let (st, _) = move_to st inj.start_pos in
   let st = begin match inj.kind with
@@ -118,26 +118,33 @@ let inject st inj =
         let (st, _) = move_to ~print:false st start_pos in
         let (st, _) = move_to ~no_ident:true st end_pos in
         do_output st ");"
-    | Pre (str, ret_ty) ->
+    | Pre (strs, ret_ty) ->
         let indent = String.make st.last_indent ' ' in
+        let indented_strs = List.map (fun str -> str ^ indent) strs in
+        let str = List.fold_left (^) "" indented_strs in
         do_output st begin
-          begin if AilTypesAux.is_void ret_ty then
+          (* begin if AilTypesAux.is_void ret_ty then
             ""
           else
             String_ail.string_of_ctype Ctype.no_qualifiers ret_ty ^ " __cn_ret = { 0 };\n" ^ indent
-          end ^
-          "__CN_PRE(__cn_id_" ^ str ^ ");\n" ^ indent
+          end ^ *)
+          (* "__CN_PRE(__cn_id_" ^ str ^ ");\n"  *)
+          str
+          (* ^ indent *)
         end
     | Post (str, ret_ty) ->
         let indent = String.make st.last_indent ' ' in
         do_output st begin
-          "\n__cn_epilogue:\n" ^
-          indent ^ "__CN_POST(__cn_id_" ^ str ^ ");" ^
-          begin if Cerb_frontend.AilTypesAux.is_void ret_ty then
+          (* "\n__cn_epilogue:\n" ^ *)
+          "\n" ^
+          indent ^ 
+          str 
+          (* "__CN_POST(__cn_id_" ^ str ^ ");" ^ *)
+          (* begin if Cerb_frontend.AilTypesAux.is_void ret_ty then
             ""
           else
             "\n" ^ indent ^ "return __cn_ret;"
-          end
+          end  *)
         end
   end in
   fst (move_to ~print:false st inj.end_pos)
@@ -233,7 +240,7 @@ let in_stmt_injs xs num_headers =
   ) xs
 
 (* build the injections for the pre/post conditions of a C function *)
-let pre_post_injs fun_sym is_void (A.AnnotatedStatement (loc, _, stmt_)) =
+let pre_post_injs pre_post is_void (A.AnnotatedStatement (loc, _, stmt_)) =
   let* (pre_pos, post_pos) =
     match stmt_ with
       | AilSblock (bs, []) ->
@@ -248,9 +255,9 @@ let pre_post_injs fun_sym is_void (A.AnnotatedStatement (loc, _, stmt_)) =
           Error (__FUNCTION__ ^ ": must be called on a function body statement") in
   Ok
     ( { start_pos= pre_pos; end_pos= pre_pos
-      ; kind= Pre (Pp_symbol.to_string_pretty fun_sym, is_void) }
+      ; kind= Pre (fst pre_post, is_void) }
     , { start_pos= post_pos; end_pos= post_pos
-      ; kind= Post (Pp_symbol.to_string_pretty fun_sym, is_void) } )
+      ; kind= Post (snd pre_post, is_void) } )
 
 (* build the injections decorating the return statements in a statement (typically a function body) *)
 let return_injs stmt =
@@ -268,7 +275,7 @@ let return_injs stmt =
 type 'a cn_injection = {
   filename: string;
   sigm: 'a A.sigma;
-  pre_post: (Symbol.sym * (string * string)) list;
+  pre_post: (Symbol.sym * (string list * string)) list;
   in_stmt: (Cerb_location.t * string) list;
 }
 
@@ -277,12 +284,13 @@ let output_injections oc cn_inj =
   let* injs =
     List.fold_left (fun acc_ (fun_sym, (_, _, _, _, stmt)) ->
       match List.assoc_opt Symbol.equal_sym fun_sym cn_inj.pre_post with
-        | Some _ ->
+        | Some pre_post_strs ->
             begin match acc_, List.assoc Symbol.equal_sym fun_sym cn_inj.sigm.A.declarations with
               | Ok acc, (_, _, A.Decl_function (_, (_, ret_ty), _, _, _, _)) ->
-                  let* (pre, post) = pre_post_injs fun_sym ret_ty stmt in
+                  let* (pre, post) = pre_post_injs pre_post_strs ret_ty stmt in
                   let* rets = return_injs stmt in
-                  Ok (pre :: post ::  rets @ acc)
+                  Ok (pre :: post :: acc)
+                  (* Ok (pre :: post ::  rets @ acc) *)
               | _ ->
                   assert false
             end
