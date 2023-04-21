@@ -3,7 +3,7 @@ open Cerb_frontend
 type 'a cn_injection = {
   filename: string;
   sigm: 'a AilSyntax.sigma;
-  pre_post: (Symbol.sym * (string * string)) list;
+  pre_post: (Symbol.sym * (string list * string)) list;
   in_stmt: (Cerb_location.t * string) list;
 }
 
