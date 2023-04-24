@@ -89,8 +89,8 @@ let move_to ?(print=true) ?(no_ident=false) st pos =
 type injection_kind =
   | InStmt of string
   | Return of (Pos.t * Pos.t) option
-  | Pre of (string list) * Cerb_frontend.Ctype.ctype
-  | Post of string * Cerb_frontend.Ctype.ctype
+  | Pre of string list * Cerb_frontend.Ctype.ctype
+  | Post of string list * Cerb_frontend.Ctype.ctype
 
 type injection = {
   start_pos: Pos.t;
@@ -128,13 +128,16 @@ let inject st inj =
           str
           (* ^ indent *)
         end
-    | Post (str, ret_ty) ->
+    | Post (strs, ret_ty) ->
         let indent = String.make st.last_indent ' ' in
+        let indented_strs = List.map (fun str -> "\n" ^ indent ^ str) strs in
+        let str = List.fold_left (^) "" indented_strs in
         do_output st begin
+          str
           (* "\n__cn_epilogue:\n" ^ *)
-          "\n" ^
+          (* "\n" ^
           indent ^ 
-          str 
+          str  *)
           (* "__CN_POST(__cn_id_" ^ str ^ ");" ^ *)
           (* begin if Cerb_frontend.AilTypesAux.is_void ret_ty then
             ""
@@ -271,7 +274,7 @@ let return_injs stmt =
 type 'a cn_injection = {
   filename: string;
   sigm: 'a A.sigma;
-  pre_post: (Symbol.sym * (string list * string)) list;
+  pre_post: (Symbol.sym * (string list * string list)) list;
   in_stmt: (Cerb_location.t * string) list;
 }
 
@@ -286,6 +289,7 @@ let output_injections oc cn_inj =
                   let* (pre, post) = pre_post_injs pre_post_strs ret_ty stmt in
                   let* rets = return_injs stmt in
                   Ok (pre :: post :: acc)
+                  (* TODO: Bring back return injections *)
                   (* Ok (pre :: post ::  rets @ acc) *)
               | _ ->
                   assert false
