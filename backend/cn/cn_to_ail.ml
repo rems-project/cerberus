@@ -118,11 +118,12 @@ let rec cn_to_ail_expr ?(const_prop=None) (CNExpr (loc, expr_)) =
     
     | CNExpr_sizeof ct -> A.AilEsizeof (empty_qualifiers, ct) 
     
-    (*
-    | CNExpr_offsetof (tag, member) -> !^ "(offsetof (_, _))"
-    | CNExpr_membershift (e, member) -> !^ "&(_ -> _)" 
-    *)
+    | CNExpr_offsetof (tag, member) -> 
+      A.(AilEoffsetof (C.(Ctype ([], Struct tag)), member))
 
+    (* TODO: Test *)
+    | CNExpr_membershift (e, _, member) ->
+      A.(AilEunary (Address, mk_expr (AilEmemberofptr (mk_expr (cn_to_ail_expr ~const_prop e), member))))
 
     | CNExpr_cast (bt, expr) -> A.(AilEcast (empty_qualifiers, C.Ctype ([], cn_to_ail_base_type bt) , (mk_expr (cn_to_ail_expr ~const_prop expr))))
     
