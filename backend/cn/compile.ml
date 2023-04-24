@@ -635,7 +635,7 @@ module EffectfulTranslation = struct
                fail {loc; msg = Illtyped_it {it = Terms.pp e; has = SBT.pp has; expected = "struct pointer"; o_ctxt = None}}
             end
         | CNExpr_addr nm ->
-            return (IT (IT.AddrOfGlobal nm, SBT.Loc None))
+            return (sym_ (nm, SBT.Loc None))
         | CNExpr_cast (bt, expr) ->
             let@ expr = self expr in
             let bt = translate_cn_base_type bt in

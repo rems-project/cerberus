@@ -189,7 +189,7 @@ module Translate = struct
 
   let maybe_record_loc_addr_eq global t expr =
     match IT.term t with
-    | AddrOfGlobal sym ->
+    | Sym sym -> 
       if BT.equal (IT.bt t) BT.Loc && SymMap.mem sym global.Global.fun_decls
       then begin Pp.debug 8 (lazy (Pp.item "recording addr in eq" (IT.pp t)));
          needs_premise (IsLocAddrInEq sym) expr end
@@ -592,16 +592,6 @@ module Translate = struct
          term (int_ (Option.get (Memory.member_offset decl member)))
       | ArrayOffset (ct, t) -> 
          term (mul_ (int_ (Memory.size_of_ctype ct), t))
-      | AddrOfGlobal nm ->
-         begin match SymMap.find_opt nm global.Global.fun_decls with
-         | Some _ ->
-           (* function addresses are just variables at global scope *)
-           term (sym_ (nm, Loc))
-         | None ->
-           (* fixme: it would be nice if this failed somewhere other than the SMT mapping *)
-           failwith ("cannot encode addresses of non-function globals (future work): " ^
-               Pp.plain (Sym.pp nm))
-         end
       | IT.List xs -> uninterp_term context (sort bt) it
       | NthList (i, xs, d) ->
          let args = List.map term [i; xs; d] in
