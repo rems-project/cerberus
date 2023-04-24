@@ -140,14 +140,6 @@ let generate_c_statements cn_statements =
   List.map generate_c_statement cn_statements
 
 let generate_c_pres_and_posts (instrumentation : Core_to_mucore.instrumentation) ail_prog =
-  let _generate_c_pre = function
-    | CF.Cn.CN_cletResource (loc, name, resource) -> (instrumentation.fn, ("hello", ""))
-    | CF.Cn.CN_cletExpr (loc, name, expr) -> (instrumentation.fn, ("hello2", ""))
-    | CF.Cn.CN_cconstr (loc, constr) -> (instrumentation.fn, ("hello3", ""))
-  in
-  let _generate_c_post = function
-    | _ -> ""
-  in 
   let sym_equality = fun (loc, _) -> CF.Symbol.equal_sym loc instrumentation.fn in
   let fn_decl = List.filter sym_equality ail_prog.A.declarations in
   let fn_def = List.filter sym_equality ail_prog.A.function_definitions in
@@ -170,8 +162,9 @@ let generate_c_pres_and_posts (instrumentation : Core_to_mucore.instrumentation)
     ";\n"
   in
   let arg_strs = List.map arg_str_fn args_list in
+  let pres = List.map (function pre -> Ail_to_c.pp_ail_stmt (Cn_to_ail.cn_to_ail_condition pre) ^ ";\n") instrumentation.surface.requires in
   (* let arg_strs = List.fold_left (^) "" arg_strs in *)
-  [(instrumentation.fn, (arg_strs, ["hello;"]))]
+  [(instrumentation.fn, (arg_strs @ pres, []))]
 
 
 (* Core_to_mucore.instrumentation list -> executable_spec *)
