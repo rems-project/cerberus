@@ -78,7 +78,7 @@ let rec cn_to_ail_expr ?(const_prop=None) (CNExpr (loc, expr_)) =
       | start_evaluation_scope -> 
         (* let Symbol (digest, nat, _) = CF.Symbol.fresh () in *)
         (* TODO: Make general *)
-        let ail_expr = cn_to_ail_expr ~const_prop:const_prop e in
+        let ail_expr = cn_to_ail_expr ~const_prop e in
         let e_cur_nm =
         match ail_expr with
           | A.(AilEident sym) -> CF.Pp_symbol.to_string_pretty sym (* Should only be AilEident sym - function arguments only *)
@@ -105,7 +105,7 @@ let rec cn_to_ail_expr ?(const_prop=None) (CNExpr (loc, expr_)) =
     (* 
     | CNExpr_list es_ -> !^ "[...]" (* Currently unused *)
     *)
-    | CNExpr_memberof (e, xs) -> A.(AilEmemberof (mk_expr (cn_to_ail_expr ~const_prop:const_prop e), xs))
+    | CNExpr_memberof (e, xs) -> A.(AilEmemberof (mk_expr (cn_to_ail_expr ~const_prop e), xs))
     (* 
     | CNExpr_record es -> failwith "TODO"
     | CNExpr_memberupdates (e, _updates) -> !^ "{_ with ...}"
@@ -114,19 +114,20 @@ let rec cn_to_ail_expr ?(const_prop=None) (CNExpr (loc, expr_)) =
 
     (* TODO: binary operations on structs (esp. equality) *)
     | CNExpr_binop (bop, x, y) -> 
-      A.AilEbinary (mk_expr (cn_to_ail_expr ~const_prop:const_prop x), cn_to_ail_binop bop, mk_expr (cn_to_ail_expr ~const_prop:const_prop y))  
+      A.AilEbinary (mk_expr (cn_to_ail_expr ~const_prop x), cn_to_ail_binop bop, mk_expr (cn_to_ail_expr ~const_prop y))  
     
     | CNExpr_sizeof ct -> A.AilEsizeof (empty_qualifiers, ct) 
+    
     (*
     | CNExpr_offsetof (tag, member) -> !^ "(offsetof (_, _))"
     | CNExpr_membershift (e, member) -> !^ "&(_ -> _)" 
     *)
 
 
-    | CNExpr_cast (bt, expr) -> A.(AilEcast (empty_qualifiers, C.Ctype ([], cn_to_ail_base_type bt) , (mk_expr (cn_to_ail_expr ~const_prop:const_prop expr))))
+    | CNExpr_cast (bt, expr) -> A.(AilEcast (empty_qualifiers, C.Ctype ([], cn_to_ail_base_type bt) , (mk_expr (cn_to_ail_expr ~const_prop expr))))
     
     | CNExpr_call (sym, exprs) -> 
-      let ail_exprs = List.map (fun e -> mk_expr (cn_to_ail_expr ~const_prop:const_prop e)) exprs in
+      let ail_exprs = List.map (fun e -> mk_expr (cn_to_ail_expr ~const_prop e)) exprs in
       let f = (mk_expr A.(AilEident sym)) in
       A.AilEcall (f, ail_exprs)
     
@@ -157,25 +158,24 @@ let rec cn_to_ail_expr ?(const_prop=None) (CNExpr (loc, expr_)) =
     *)
 
     | CNExpr_ite (e1, e2, e3) -> 
-      let ail_e1 = cn_to_ail_expr ~const_prop:const_prop e1 in
-      let ail_e2 = cn_to_ail_expr ~const_prop:const_prop e2 in
-      let ail_e3 = cn_to_ail_expr ~const_prop:const_prop e3 in
+      let ail_e1 = cn_to_ail_expr ~const_prop e1 in
+      let ail_e2 = cn_to_ail_expr ~const_prop e2 in
+      let ail_e3 = cn_to_ail_expr ~const_prop e3 in
       A.AilEcond (mk_expr ail_e1, Some (mk_expr ail_e2), mk_expr ail_e3)
     
     (* 
     | CNExpr_good (ty, e) -> !^ "(good (_, _))" 
     *)
 
-    | CNExpr_deref e -> A.(AilEunary (Indirection, mk_expr (cn_to_ail_expr ~const_prop:const_prop e)))
+    | CNExpr_deref e -> A.(AilEunary (Indirection, mk_expr (cn_to_ail_expr ~const_prop e)))
 
     | CNExpr_unchanged e -> 
       let e_at_start = CNExpr(loc, CNExpr_at_env (e, start_evaluation_scope)) in
-      cn_to_ail_expr ~const_prop:const_prop (CNExpr (loc, CNExpr_binop (CN_equal, e, e_at_start)))
+      cn_to_ail_expr ~const_prop (CNExpr (loc, CNExpr_binop (CN_equal, e, e_at_start)))
   
-    (* TODO: Complete. CNExpr_unchanged (above) relies on it *)
     | CNExpr_at_env (e, es) as cn_expr -> cn_to_ail_expr_at_env cn_expr 
  
-    | CNExpr_not e -> A.(AilEunary (Bnot, mk_expr (cn_to_ail_expr ~const_prop:const_prop e))) 
+    | CNExpr_not e -> A.(AilEunary (Bnot, mk_expr (cn_to_ail_expr ~const_prop e))) 
     | _ -> failwith "TODO"
 
 
