@@ -44,10 +44,16 @@ let rec pp_ail ail_expr =
     | A.(AilEcond (_, None, _)) -> pp_ail_default ail_expr
     | A.(AilEsizeof (_, ct)) -> "sizeof(" ^ pp_ctype ct ^ ")"
     | A.(AilEcast (_, ctype , expr)) -> "(" ^ pp_ctype ctype ^ ") " ^ pp_ail (rm_expr expr)
-    | A.(AilEcall (A.AnnotatedExpression (_, _, _, f), ail_exprs)) -> 
+    | A.(AilEcall (AnnotatedExpression (_, _, _, f), ail_exprs)) -> 
       let str_exprs = List.map (fun e -> pp_ail (rm_expr e)) ail_exprs in
       pp_ail f ^ "(" ^ String.concat ", " str_exprs ^ ")" 
     | _ -> pp_ail_default ail_expr
 
+let pp_ail_stmt_default ail_stmt = CF.String_ail.string_of_statement (mk_stmt ail_stmt)
 
+let pp_ail_stmt ail_stmt = match ail_stmt with
+  | A.AilSdeclaration ((name, Some decl) :: _) -> (* TODO: Add type *)
+    let name_var = A.(AilEident name) in
+    pp_ail name_var ^ " = " ^ pp_ail (rm_expr decl)
+  | _ -> pp_ail_stmt_default ail_stmt
 (* frontend/model/symbol.lem - fresh_pretty function for generating Sym with unimportant digest and nat *)
