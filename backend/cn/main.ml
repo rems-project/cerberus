@@ -118,16 +118,9 @@ let check_input_file filename =
 (* Executable spec helper functions *)
 
 type executable_spec = {
-    pre_post: (CF.Symbol.sym * (string list * string)) list;
+    pre_post: (CF.Symbol.sym * (string list * string list)) list;
     in_stmt: (Cerb_location.t * string) list;
 }
-
-let _empty_executable_spec = {
-    pre_post = [];
-    in_stmt = [];
-}
-
-
   
 let generate_c_assertion cn_assertion =
   match cn_assertion with
@@ -178,7 +171,7 @@ let generate_c_pres_and_posts (instrumentation : Core_to_mucore.instrumentation)
   in
   let arg_strs = List.map arg_str_fn args_list in
   (* let arg_strs = List.fold_left (^) "" arg_strs in *)
-  [(instrumentation.fn, (arg_strs, ""))]
+  [(instrumentation.fn, (arg_strs, ["hello;"]))]
 
 
 (* Core_to_mucore.instrumentation list -> executable_spec *)
