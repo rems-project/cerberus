@@ -15,6 +15,9 @@ let string_of_cn_id sym
 let string_of_expression e =
   Pp_utils.to_plain_string (pp_expression e)
 
+let string_of_statement s =
+  Pp_utils.to_plain_string (pp_statement s)
+
 let string_of_qualifiers_human qs =
   Pp_utils.to_plain_string (pp_qualifiers_human qs)
 
