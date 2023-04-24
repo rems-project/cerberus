@@ -173,3 +173,19 @@ let rec cn_to_ail_expr ?(const_prop=None) (CNExpr (loc, expr_)) =
     | CNExpr_not e -> A.(AilEunary (Bnot, mk_expr (cn_to_ail_expr ~const_prop e))) 
     | _ -> failwith "TODO"
 
+let cn_to_ail_condition = function
+  | CN_cletResource (loc, name, resource) -> failwith "TODO"
+  | CN_cletExpr (_, name, expr) -> 
+    let ail_expr = cn_to_ail_expr expr in
+    A.(AilSdeclaration [(name, Some (mk_expr ail_expr))])
+  | CN_cconstr (loc, constr) -> failwith "TODO"
+
+
+(* let cn_to_ail_function_spec = function
+  | CN_accesses (loc, ids) -> failwith "TODO"
+  | CN_requires (loc, conditions) -> 
+    List.map (fun c -> cn_to_ail_condition (loc, c)) conditions
+  | CN_ensures (loc, conditions) ->
+    List.map (fun c -> cn_to_ail_condition (loc, c)) conditions
+  | CN_trusted loc -> failwith "TODO"
+  | CN_mk_function (loc, _) -> failwith "TODO" *)
