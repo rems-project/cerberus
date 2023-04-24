@@ -24,12 +24,14 @@ val prev_models_with : Locations.t -> IndexTerms.t -> (Solver.model_with_q list)
 val bound_a : Sym.t -> (bool) m
 val bound_l : Sym.t -> (bool) m
 val bound : Sym.t -> (bool) m
-val get_a : Sym.t -> (BaseTypes.t) m
-val get_l : Sym.t -> (BaseTypes.t) m
+val get_a : Sym.t -> Context.basetype_or_value m
+val get_l : Sym.t -> Context.basetype_or_value m
 val remove_a : Sym.t -> (unit) m
 val remove_as : Sym.t list -> (unit) m
 val add_a : Sym.t -> BaseTypes.t -> Context.l_info -> (unit) m
+val add_a_value : Sym.t -> IndexTerms.t -> Context.l_info -> unit m
 val add_l : Sym.t -> BaseTypes.t -> Context.l_info -> (unit) m
+val add_l_value : Sym.t -> IndexTerms.t -> Context.l_info -> unit m
 val add_ls : (Sym.t * BaseTypes.t * Context.l_info) list -> (unit) m
 val add_c : LogicalConstraints.t -> (unit) m
 val add_cs : LogicalConstraints.t list -> (unit) m

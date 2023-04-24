@@ -81,7 +81,7 @@ let rec infer_pattern (M_Pattern (loc, _, pattern)) =
 
 
 (* pattern-matches and binds *)
-let rec pattern_match (M_Pattern (loc, _, pattern)) it =
+let rec old_pattern_match (M_Pattern (loc, _, pattern)) it =
   match pattern with
   | M_CaseBase (o_s, has_bt) ->
      begin match o_s with
@@ -99,14 +99,14 @@ let rec pattern_match (M_Pattern (loc, _, pattern)) it =
         return []
      | M_Ccons, [p1; p2] ->
         let@ item_bt = infer_pattern p1 in
-        let@ a1 = pattern_match p1 (head_ ~item_bt it) in
-        let@ a2 = pattern_match p2 (tail_ it) in
+        let@ a1 = old_pattern_match p1 (head_ ~item_bt it) in
+        let@ a2 = old_pattern_match p2 (tail_ it) in
         let@ () = add_c (LC.t_ (ne_ (it, nil_ ~item_bt))) in
         return (a1 @ a2)
      | M_Ctuple, pats ->
         let@ all_as = ListM.mapiM (fun i p ->
           let@ item_bt = infer_pattern p in
-          pattern_match p (nthTuple_ ~item_bt (i, it))
+          old_pattern_match p (nthTuple_ ~item_bt (i, it))
         ) pats in
         return (List.concat all_as)
      | M_Carray, _ ->
@@ -114,12 +114,41 @@ let rec pattern_match (M_Pattern (loc, _, pattern)) it =
      | _ -> 
         assert false
 
-(* let pp_pattern_match p (patv, (l_vs, a_vs)) = *)
-(*   let open Pp in *)
-(*   NewMu.PP_MUCORE.pp_pattern p ^^ colon ^^^ IT.pp patv ^^ colon ^^^ *)
-(*   parens (list (fun (nm, bt) -> Sym.pp nm ^^ colon ^^^ BT.pp bt) l_vs) ^^^ *)
-(*   parens (list (fun (nm, (bt, lsym)) -> Sym.pp nm ^^ colon ^^^ BT.pp bt ^^ colon ^^^ Sym.pp lsym) a_vs)s *)
+let _old_pattern_match = old_pattern_match (* for the moment keep both versions alive*)        
 
+(* pattern-matches and binds *)
+let rec pattern_match (M_Pattern (loc, _, pattern)) it =
+   match pattern with
+   | M_CaseBase (o_s, has_bt) ->
+      begin match o_s with
+      | Some s ->
+         let@ () = add_a_value s it (loc, lazy (Sym.pp s)) in
+         return [s]
+      | None -> 
+         return []
+      end
+   | M_CaseCtor (constructor, pats) ->
+      match constructor, pats with
+      | M_Cnil item_bt, [] ->
+         let@ () = add_c (LC.t_ (eq__ it (nil_ ~item_bt))) in
+         return []
+      | M_Ccons, [p1; p2] ->
+         let@ item_bt = infer_pattern p1 in
+         let@ a1 = pattern_match p1 (head_ ~item_bt it) in
+         let@ a2 = pattern_match p2 (tail_ it) in
+         let@ () = add_c (LC.t_ (ne_ (it, nil_ ~item_bt))) in
+         return (a1 @ a2)
+      | M_Ctuple, pats ->
+         let@ all_as = ListM.mapiM (fun i p ->
+           let@ item_bt = infer_pattern p in
+           pattern_match p (nthTuple_ ~item_bt (i, it))
+         ) pats in
+         return (List.concat all_as)
+      | M_Carray, _ ->
+         Debug_ocaml.error "todo: array patterns"
+      | _ -> 
+         assert false
+ 
 
 
 
@@ -593,9 +622,15 @@ let rec check_pexpr (pe : 'bty mu_pexpr) ~(expect:BT.t)
   match pe_ with
   | M_PEsym sym ->
      let@ () = check_computational_bound loc sym in
-     let@ bt = get_a sym in
-     let@ () = WellTyped.ensure_base_type loc ~expect bt in
-     k (sym_ (sym, bt))
+     let@ binding = get_a sym in
+     begin match binding with
+     | BaseType bt ->
+        let@ () = WellTyped.ensure_base_type loc ~expect bt in
+        k (sym_ (sym, bt))
+     | Value lvt ->
+        let@ () = WellTyped.ensure_base_type loc ~expect (IT.bt lvt) in
+        k lvt
+     end
   (* | M_PEimpl i -> *)
   (*    let@ global = get_global () in *)
   (*    let value = Global.get_impl_constant global i in *)

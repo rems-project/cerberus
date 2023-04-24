@@ -228,10 +228,17 @@ let add_a sym bt info =
   let@ s = get () in
   set (Context.add_a sym bt info s)
 
+let add_a_value sym value info = 
+  let@ s = get () in
+  set (Context.add_a_value sym value info s)
+
 let add_l sym bt info =
   let@ s = get () in
   set (Context.add_l sym bt info s)
 
+let add_l_value sym value info = 
+  let@ s = get () in
+  set (Context.add_l_value sym value info s)
 
 let remove_a sym = 
   let@ s = get () in
