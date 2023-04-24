@@ -515,6 +515,28 @@ let check_single_ct loc expr =
         fail2 "cannot prove type is constant"
     end
 
+
+let get_eq_in_model loc msg x opts =
+  let@ m = model_with loc (IT.bool_ true) in
+  let@ m = match m with
+    | None -> fail (fun _ -> {loc; msg = Generic (Pp.item "cannot get model for" msg)})
+    | Some m -> return m
+  in
+  let@ g = get_global () in
+  let ev x = Solver.eval g (fst m) x in
+  let@ () = match ev x with
+    | None -> fail (fun _ -> {loc; msg = Generic (Pp.item "get_eq_in_model: cannot eval in model"
+        (IT.pp x ^^^ !^ "for:" ^^^ msg))})
+    | Some _ -> return ()
+  in
+  let y = List.find_opt
+    (fun y -> Option.equal IT.equal (ev (eq_ (x, y))) (Some (IT.bool_ true)))
+    opts in
+  match y with
+    | Some y -> return y
+    | None -> fail (fun _ -> {loc; msg = Generic (Pp.item "get_eq_in_model: no options are equal"
+        ((Pp.typ (IT.pp x) (Pp.braces (Pp.list IT.pp opts))) ^^^ !^ "for:" ^^^ msg))})
+ 
 let check_conv_int loc ~expect (ct : Sctypes.ctype) arg =
   let@ () = WellTyped.ensure_base_type loc ~expect Integer in 
   let@ () = WellTyped.WCT.is_ct loc ct in
@@ -766,8 +788,8 @@ let rec check_pexpr (pe : 'bty mu_pexpr) ~(expect:BT.t)
      Debug_ocaml.error "todo: PEstruct"
   | M_PEunion _ ->
      Debug_ocaml.error "todo: PEunion"
-  | M_PEcfunction pe ->
-     check_pexpr ~expect:Loc pe (fun ptr ->
+  | M_PEcfunction pe2 ->
+     check_pexpr ~expect:Loc pe2 (fun ptr ->
      let@ global = get_global () in
      (* function vals are just symbols the same as the names of functions *)
      let@ known = eq_value_with (is_fun_addr global) ptr in
@@ -783,17 +805,28 @@ let rec check_pexpr (pe : 'bty mu_pexpr) ~(expect:BT.t)
              Sym.pp sym)})
        end
      | None ->
-       (* this is where we need to do a case split on the options for ptr *)
-       debug 1 (lazy (!^"function pointer:" ^^^ Pp_mucore.pp_pexpr pe));
-       let@ m = model_with loc (IT.bool_ true) in
-       match m with
-       | None ->
-       fail (fun _ -> {loc; msg = Generic (!^ "unknown function pointer (no model):" ^^^
-             IT.pp ptr)})
-       | Some m ->
-       fail (fun ctxt -> {loc; msg = Generic_with_model {err = !^ "unknown function pointer:" ^^^
-             IT.pp ptr; model = m; ctxt}})
-     end
+       (* time to case split on function-pointer possibilities. *)
+       let explanation = !^ "a function pointer must be explicitly enumerated" ^^^
+           !^ "e.g. (in_loc_list (p, [fun1; fun2]))" in
+       let@ opts = get_loc_addrs_in_eqs () in
+       let@ () = if List.length opts > 0 then return ()
+         else fail (fun _ -> {loc; msg = Generic (!^"no address eqs found:" ^^^ explanation)}) in
+       let msg = !^ "picking function target" ^^^ Pp.parens explanation in
+       let ptr_opts = List.map (fun nm -> (sym_ (nm, BT.Loc))) opts in
+       let@ eq_opt = get_eq_in_model loc msg ptr ptr_opts in
+       Pp.debug 5 (lazy (Pp.item "function pointer application: case splitting on" (IT.pp eq_opt)));
+       let aux e cond =
+         let@ () = add_c (t_ cond) in
+         Pp.debug 5 (lazy (Pp.item "checking consistency of eq branch" (IT.pp cond)));
+         let@ provable = provable loc in
+         match provable (t_ (bool_ false)) with
+         | `True -> return ()
+         | `False -> check_pexpr ~expect e k
+       in
+       let@ () = pure (aux pe (eq_ (ptr, eq_opt))) in
+       let@ () = pure (aux pe (not_ (eq_ (ptr, eq_opt)))) in
+       return ()
+    end
   )
   | M_PEmemberof _ ->
      Debug_ocaml.error "todo: M_PEmemberof"

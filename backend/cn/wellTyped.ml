@@ -503,6 +503,8 @@ module WIT = struct
           let@ () = WCT.is_ct loc ct in
           let@ t = check loc Integer t in
           return (IT (ArrayOffset (ct, t), Integer))
+       | AddrOfGlobal nm ->
+          return (IT (AddrOfGlobal nm, Loc))
        | Aligned t ->
           let@ t_t = check loc Loc t.t in
           let@ t_align = check loc Integer t.align in

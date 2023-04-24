@@ -67,6 +67,7 @@ type 'bt term_ =
   | DatatypeIsCons of Sym.t * 'bt term
   | MemberOffset of Sym.t * Id.t
   | ArrayOffset of Sctypes.t (*element ct*) * 'bt term (*index*)
+  | AddrOfGlobal of Sym.t
   | Nil
   | Cons of 'bt term * 'bt term
   | List of 'bt term list
@@ -235,6 +236,8 @@ let pp : 'bt 'a. ?atomic:bool -> ?f:('bt term -> Pp.doc -> Pp.doc) -> 'bt term -
           mparens (c_app !^"offsetof" [Sym.pp tag; Id.pp member])
        | ArrayOffset (ct, t) ->
           mparens (c_app !^"arrayOffset" [Sctypes.pp ct; aux false t])
+       | AddrOfGlobal nm ->
+          mparens (!^"&" ^^^ Sym.pp nm)
        (* end *)
     (* | CT_pred ct_pred -> *)
     (*    begin match ct_pred with *)
@@ -355,10 +358,12 @@ let rec dtree (IT (it_, bt)) =
   | (ArrayOffset (ty, t)) -> Dnode (pp_ctor "ArrayOffset", [Dleaf (Sctypes.pp ty); dtree t])
   | (Representable (ty, t)) -> Dnode (pp_ctor "Representable", [Dleaf (Sctypes.pp ty); dtree t])
   | (Good (ty, t)) -> Dnode (pp_ctor "Good", [Dleaf (Sctypes.pp ty); dtree t])
+  | AddrOfGlobal nm -> Dnode (pp_ctor "AddrOfGlobal", [Dleaf (Sym.pp nm)])
+  | List its -> Dnode (pp_ctor "List", (List.map dtree its))
   | (Aligned a) -> Dnode (pp_ctor "Aligned", [dtree a.t; dtree a.align])
   | (MapConst (bt, t)) -> Dnode (pp_ctor "MapConst", [dtree t])
   | (MapSet (t1, t2, t3)) -> Dnode (pp_ctor "MapSet", [dtree t1; dtree t2; dtree t3])
   | (MapGet (t1, t2)) -> Dnode (pp_ctor "MapGet", [dtree t1; dtree t2])
   | (MapDef ((s, bt), t)) -> Dnode (pp_ctor "MapDef", [Dleaf (Sym.pp s); dtree t])
   | Apply (f, args) -> Dnode (pp_ctor "Apply", (Dleaf (Sym.pp f) :: List.map dtree args))
-  | _ -> failwith "todo"
+  | _ -> failwith ("todo: dtree: " ^ Pp.plain (pp (IT (it_, bt))))

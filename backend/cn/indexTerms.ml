@@ -59,6 +59,7 @@ let rec free_vars_ = function
   | Cast (_cbt, t) -> free_vars t
   | MemberOffset (_tag, _id) -> SymSet.empty
   | ArrayOffset (_sct, t) -> free_vars t
+  | AddrOfGlobal _ -> SymSet.empty
   | Nil -> SymSet.empty
   | Cons (t1, t2) -> free_vars_list [t1; t2]
   | List ts -> free_vars_list ts
@@ -107,6 +108,7 @@ let rec fold_ f binders acc = function
   | Cast (_cbt, t) -> fold f binders acc t
   | MemberOffset (_tag, _id) -> acc
   | ArrayOffset (_sct, t) -> fold f binders acc t
+  | AddrOfGlobal _ -> acc
   | Nil -> acc
   | Cons (t1, t2) -> fold_list f binders acc [t1; t2]
   | List ts -> fold_list f binders acc ts
@@ -227,6 +229,7 @@ let rec subst (su : typed subst) (IT (it, bt)) =
      IT (MemberOffset (tag, member), bt)
   | ArrayOffset (tag, t) ->
      IT (ArrayOffset (tag, subst su t), bt)
+  | AddrOfGlobal nm -> IT (it, bt)
   | Aligned t -> 
      IT (Aligned {t= subst su t.t; align= subst su t.align}, bt)
   | Representable (rt, t) -> 
@@ -392,9 +395,13 @@ let eq__ it it' = eq_ (it, it')
 let ne_ (it, it') = not_ (eq_ (it, it'))
 let ne__ it it' = ne_ (it, it')
 
+let eq_sterm_ (it, it') = IT (Binop (EQ, it, it'), SurfaceBaseTypes.Bool)
 let bool_sterm_ b = IT (Const (Bool b), SurfaceBaseTypes.Bool)
 let and2_sterm_ (it, it') = IT (Binop (And, it, it'), SurfaceBaseTypes.Bool)
 let and_sterm_ = vargs_binop (bool_sterm_ true) (Tools.curry and2_sterm_)
+let or2_sterm_ (it, it') = IT (Binop (Or, it, it'), SurfaceBaseTypes.Bool)
+let or_sterm_ = vargs_binop (bool_sterm_ true) (Tools.curry or2_sterm_)
+
 
 let let_ ((nm, x), y) = IT (Let ((nm, x), y), basetype y)
 
@@ -570,6 +577,21 @@ let head_ ~item_bt it = IT (Head it, item_bt)
 let tail_ it = IT (Tail it, bt it)
 let nthList_ (n, it, d) = IT (NthList (n, it, d), bt d)
 let array_to_list_ (arr, i, len) bt = IT (ArrayToList (arr, i, len), bt)
+
+let rec dest_list it = match term it with
+  | Nil -> Some []
+  | Cons (x, xs) -> Option.map (fun ys -> x :: ys) (dest_list xs)
+  | List xs -> Some xs
+  (* TODO: maybe include Tail, if we ever actually use it? *)
+  | _ -> None
+
+
+let mk_in_loc_list loc (ptr, opts) = match dest_list opts with
+  | Some xs -> or_sterm_ (List.map (fun x -> eq_sterm_ (ptr, x)) xs)
+  | None ->
+    Pp.warn loc (Pp.item "cannot enumerate in_loc_list arg, treating as unspecified"
+        (pp opts));
+    sym_ (Sym.fresh_named "unspecified_in_loc_list", SurfaceBaseTypes.Bool)
 
 (* set_op *)
 let setMember_ bt (it, it') = IT (Binop (SetMember,it, it'), BT.Bool)

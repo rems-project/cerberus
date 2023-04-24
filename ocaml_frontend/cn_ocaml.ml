@@ -36,6 +36,8 @@ let string_of_error = function
       "tag name is not declared or a union tag"
   | CNErr_unknown_identifier (ns, Symbol.Identifier (_, str)) ->
       "the " ^ string_of_ns ns ^ " `" ^ str ^ "' is not declared"
+  | CNErr_unknown_c_identifier (Symbol.Identifier (_, str)) ->
+      "the C symbol `" ^ str ^ "' is unknown"
   | CNErr_missing_oarg sym ->
       "missing an assignment for the output argument `" ^ Pp_symbol.to_string_pretty sym ^ "'" 
   | CNErr_general s -> s
@@ -150,6 +152,8 @@ module MakePp (Conf: PP_CN) = struct
       | CNExpr_membershift (e, member) ->
           Dnode (pp_ctor "CNExpr_membershift", [dtree_of_cn_expr e;
                                                 Dleaf (P.squotes (pp_identifier member))])
+      | CNExpr_addr nm ->
+          Dnode (pp_ctor "CNExpr_addr", [Dleaf (Conf.pp_ident nm)])
       | CNExpr_cast (ty, expr) ->
           Dnode (pp_ctor "CNExpr_cast" ^^^ pp_base_type ty, [dtree_of_cn_expr expr])
       | CNExpr_call (nm, exprs) ->

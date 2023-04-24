@@ -84,4 +84,6 @@ val value_eq_group : IndexTerms.t option -> IndexTerms.t -> (EqTable.ITSet.t) m
 val test_value_eqs : Locations.t -> IndexTerms.t option -> IndexTerms.t ->
     IndexTerms.t list -> (unit) m
 
+val get_loc_addrs_in_eqs : unit -> (Sym.t list) m
+
 val embed_resultat : 'a Resultat.t -> 'a m

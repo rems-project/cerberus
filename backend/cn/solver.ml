@@ -177,6 +177,7 @@ module Translate = struct
     | IsNthList of IT.t
     | IsArrayToList of IT.t
     | IsLetVar of (IT.t * IT.t)
+    | IsLocAddrInEq of Sym.t
 
   (* note translated terms that need additional premises to be added to goals
      they are in to fully characterise them *)
@@ -185,6 +186,15 @@ module Translate = struct
   let needs_premise info expr =
     (needs_premise_table := Z3ExprMap.add expr info (! needs_premise_table));
     expr
+
+  let maybe_record_loc_addr_eq global t expr =
+    match IT.term t with
+    | AddrOfGlobal sym ->
+      if BT.equal (IT.bt t) BT.Loc && SymMap.mem sym global.Global.fun_decls
+      then begin Pp.debug 8 (lazy (Pp.item "recording addr in eq" (IT.pp t)));
+         needs_premise (IsLocAddrInEq sym) expr end
+      else expr
+    | _ -> expr
 
   let string context str =
     Z3.Symbol.mk_string context str
@@ -461,7 +471,9 @@ module Translate = struct
          | Max -> term (ite_ (ge_ (t1, t2), t1, t2))
          | XORNoSMT ->
             make_uf xor_no_smt_solver_sym (Integer) [t1; t2]
-         | EQ -> Z3.Boolean.mk_eq context (term t1) (term t2)
+         | EQ -> Z3.Boolean.mk_eq context
+            (maybe_record_loc_addr_eq global t1 (term t1))
+            (maybe_record_loc_addr_eq global t2 (term t2))
          | SetMember -> Z3.Set.mk_membership context (term t1) (term t2)
          | SetUnion -> Z3.Set.mk_union context (map term [t1;t2])
          | SetIntersection -> Z3.Set.mk_intersection context (map term [t1;t2])
@@ -580,6 +592,16 @@ module Translate = struct
          term (int_ (Option.get (Memory.member_offset decl member)))
       | ArrayOffset (ct, t) -> 
          term (mul_ (int_ (Memory.size_of_ctype ct), t))
+      | AddrOfGlobal nm ->
+         begin match SymMap.find_opt nm global.Global.fun_decls with
+         | Some _ ->
+           (* function addresses are just variables at global scope *)
+           term (sym_ (nm, Loc))
+         | None ->
+           (* fixme: it would be nice if this failed somewhere other than the SMT mapping *)
+           failwith ("cannot encode addresses of non-function globals (future work): " ^
+               Pp.plain (Sym.pp nm))
+         end
       | IT.List xs -> uninterp_term context (sort bt) it
       | NthList (i, xs, d) ->
          let args = List.map term [i; xs; d] in
@@ -882,6 +904,19 @@ let provable ~loc ~solver ~global ~assumptions ~simp_ctxt ~pointer_facts lc =
         | Z3.Solver.UNKNOWN -> 
            let reason = Z3.Solver.get_reason_unknown solver.fancy in
            failwith ("SMT solver returned 'unknown'; reason: " ^ reason)
+
+let get_loc_addrs_in_eqs solver ~pointer_facts global =
+  (* FIXME: duplicating what provable does *)
+  let context = solver.context in
+  let extra1 = pointer_facts |> List.map (Translate.term context global) in
+  let extra2 = Translate.extra_logical_facts context global
+    (extra1 @ Z3.Solver.get_assertions solver.incremental) in
+  let all_assumptions = extra1 @ extra2 @
+            Z3.Solver.get_assertions solver.incremental in
+  let key_ts = Translate.needs_premise_elts all_assumptions in
+  List.filter_map (function
+    | (_, Translate.IsLocAddrInEq t) -> Some t
+    | _ -> None) key_ts
 
 
 module Eval = struct

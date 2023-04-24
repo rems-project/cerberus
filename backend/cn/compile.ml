@@ -143,6 +143,7 @@ let pp_cnexpr_kind expr_ =
   | CNExpr_sizeof ct -> !^ "(sizeof _)"
   | CNExpr_offsetof (tag, member) -> !^ "(offsetof (_, _))"
   | CNExpr_membershift (e, member) -> !^ "&(_ -> _)"
+  | CNExpr_addr nm -> !^ "&_"
   | CNExpr_cast (bt, expr) -> !^ "(cast (_, _))"
   | CNExpr_call (sym, exprs) -> !^ "(" ^^ Sym.pp sym ^^^ !^ "(...))"
   | CNExpr_cons (c_nm, exprs) -> !^ "(" ^^ Sym.pp c_nm ^^^ !^ "{...})"
@@ -180,6 +181,8 @@ let rec free_in_expr (CNExpr (_loc, expr_)) =
      SymSet.empty
   | CNExpr_membershift (e, _id) ->
      free_in_expr e
+  | CNExpr_addr _ ->
+     SymSet.empty
   | CNExpr_cast (_bt, e) ->
      free_in_expr e
   | CNExpr_call (_id, es) ->
@@ -631,6 +634,8 @@ module EffectfulTranslation = struct
             | has ->
                fail {loc; msg = Illtyped_it {it = Terms.pp e; has = SBT.pp has; expected = "struct pointer"; o_ctxt = None}}
             end
+        | CNExpr_addr nm ->
+            return (IT (IT.AddrOfGlobal nm, SBT.Loc None))
         | CNExpr_cast (bt, expr) ->
             let@ expr = self expr in
             let bt = translate_cn_base_type bt in
