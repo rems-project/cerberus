@@ -173,6 +173,12 @@ let rec cn_to_ail_expr ?(const_prop=None) (CNExpr (loc, expr_)) =
     | CNExpr_not e -> A.(AilEunary (Bnot, mk_expr (cn_to_ail_expr ~const_prop e))) 
     | _ -> failwith "TODO"
 
+let cn_to_ail_assertion = function
+  | CN_assert_exp e_ -> 
+    A.(AilEassert (mk_expr (cn_to_ail_expr e_)))
+  | CN_assert_qexp (ident, bTy, e1, e2) -> failwith "TODO"
+
+  
 let cn_to_ail_condition = function
   | CN_cletResource (loc, name, resource) -> failwith "TODO"
   | CN_cletExpr (_, name, expr) -> 

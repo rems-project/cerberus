@@ -126,18 +126,13 @@ type executable_spec = {
     pre_post: (CF.Symbol.sym * (string list * string list)) list;
     in_stmt: (Cerb_location.t * string) list;
 }
-  
-let generate_c_assertion cn_assertion =
-  match cn_assertion with
-  | CN_assert_exp e_ -> String.concat "" ["assert("; Ail_to_c.pp_ail (Cn_to_ail.cn_to_ail_expr e_); ");"] (* TODO: Add Ail assertion before printing to string *)
-  | _ -> "" (* TODO: CN_assert_qexp *)
-  
+
 
 let generate_c_statements cn_statements =
   let generate_c_statement (CN_statement (loc, stmt_)) = 
     let pp_statement =
       match stmt_ with
-      | CN_assert_stmt e -> generate_c_assertion e
+      | CN_assert_stmt e -> Ail_to_c.pp_ail_assertion (Cn_to_ail.cn_to_ail_assertion e)
       | _ -> ""
     in 
   (loc, pp_statement)
