@@ -57,3 +57,8 @@ let pp_ail_stmt ail_stmt = match ail_stmt with
     pp_ail name_var ^ " = " ^ pp_ail (rm_expr decl)
   | _ -> pp_ail_stmt_default ail_stmt
 (* frontend/model/symbol.lem - fresh_pretty function for generating Sym with unimportant digest and nat *)
+
+let pp_ail_assertion ail_assertion = match ail_assertion with
+  | A.AilEassert ail_expr -> 
+    "assert(" ^ pp_ail (rm_expr ail_expr) ^ ");"
+  | _ -> failwith "TODO"
