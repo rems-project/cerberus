@@ -33,8 +33,10 @@ let to_string_pretty ?(is_human=false) ?(executable_spec=false) (Symbol (_, n, s
         if executable_spec then
           str
         else
-          "a_" ^ string_of_int n
+          (Printf.printf "In non executable spec case\n";
+          "a_" ^ string_of_int n)
     | _ ->
+        Printf.printf "In default pp_id case";
         "a_" ^ string_of_int n
 
 (* enriched versions used by the CN backend *)
