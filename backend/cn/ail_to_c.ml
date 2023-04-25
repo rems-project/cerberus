@@ -34,19 +34,20 @@ let pp_ail_binop = function
 
 let pp_ctype ctype = CF.Pp_utils.to_plain_string (CF.Pp_ail.pp_ctype empty_qualifiers ctype)
 
-let rec pp_ail ail_expr =
+let rec pp_ail_expr ail_expr =
   match ail_expr with
     | A.(AilEident sym) -> CF.String_ail.string_of_cn_id sym
     | A.(AilEconst ail_const) -> pp_ail_const ail_const
-    | A.(AilEbinary (x, bop, y)) -> (pp_ail (rm_expr x)) ^ (pp_ail_binop bop) ^ (pp_ail (rm_expr y))
-    | A.(AilEunary (Bnot, ail_expr)) -> "!(" ^ (pp_ail (rm_expr ail_expr)) ^ ")"
-    | A.(AilEcond (e1, Some e2, e3)) -> (pp_ail (rm_expr e1)) ^ " ? " ^ (pp_ail (rm_expr e2)) ^ " : " ^ (pp_ail (rm_expr e3)) 
-    | A.(AilEcond (_, None, _)) -> pp_ail_default ail_expr
+    | A.(AilEbinary (x, bop, y)) -> (pp_ail_expr (rm_expr x)) ^ (pp_ail_binop bop) ^ (pp_ail_expr (rm_expr y))
+    | A.(AilEunary (Bnot, ail_expr)) -> "!(" ^ (pp_ail_expr (rm_expr ail_expr)) ^ ")"
+    | A.(AilEcond (e1, Some e2, e3)) -> (pp_ail_expr (rm_expr e1)) ^ " ? " ^ (pp_ail_expr (rm_expr e2)) ^ " : " ^ (pp_ail_expr (rm_expr e3)) 
     | A.(AilEsizeof (_, ct)) -> "sizeof(" ^ pp_ctype ct ^ ")"
-    | A.(AilEcast (_, ctype , expr)) -> "(" ^ pp_ctype ctype ^ ") " ^ pp_ail (rm_expr expr)
+    | A.(AilEcast (_, ctype , expr)) -> "(" ^ pp_ctype ctype ^ ") " ^ pp_ail_expr (rm_expr expr)
     | A.(AilEcall (AnnotatedExpression (_, _, _, f), ail_exprs)) -> 
-      let str_exprs = List.map (fun e -> pp_ail (rm_expr e)) ail_exprs in
-      pp_ail f ^ "(" ^ String.concat ", " str_exprs ^ ")" 
+      let str_exprs = List.map (fun e -> pp_ail_expr (rm_expr e)) ail_exprs in
+      pp_ail_expr f ^ "(" ^ String.concat ", " str_exprs ^ ")" 
+    | A.AilEassert ail_expr -> 
+        "assert(" ^ pp_ail_expr (rm_expr ail_expr) ^ ")"
     | _ -> pp_ail_default ail_expr
 
 let pp_ail_stmt_default ail_stmt = CF.String_ail.string_of_statement (mk_stmt ail_stmt)
@@ -54,12 +55,7 @@ let pp_ail_stmt_default ail_stmt = CF.String_ail.string_of_statement (mk_stmt ai
 let pp_ail_stmt ail_stmt = match ail_stmt with
   | A.AilSdeclaration ((name, Some decl) :: _) -> (* TODO: Add type *)
     let name_var = A.(AilEident name) in
-    pp_ail name_var ^ " = " ^ pp_ail (rm_expr decl)
-  | A.(AilSexpr ail_expr) -> pp_ail (rm_expr ail_expr)
+    pp_ail_expr name_var ^ " = " ^ pp_ail_expr (rm_expr decl)
+  | A.(AilSexpr ail_expr) -> pp_ail_expr (rm_expr ail_expr)
   | _ -> pp_ail_stmt_default ail_stmt
 (* frontend/model/symbol.lem - fresh_pretty function for generating Sym with unimportant digest and nat *)
-
-let pp_ail_assertion ail_assertion = match ail_assertion with
-  | A.AilEassert ail_expr -> 
-    "assert(" ^ pp_ail (rm_expr ail_expr) ^ ");"
-  | _ -> failwith "TODO"
