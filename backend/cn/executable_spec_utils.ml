@@ -8,8 +8,10 @@ let mk_expr expr_ =
 
 let rm_expr (A.AnnotatedExpression (_, _, _, expr_)) = expr_
 
+let rm_stmt (A.AnnotatedStatement (_, _, stmt_)) = stmt_
+
 let mk_stmt stmt_ = 
-  A.AnnotatedStatement(Location_ocaml.unknown, CF.Annot.Attrs [], stmt_)
+  A.AnnotatedStatement (Location_ocaml.unknown, CF.Annot.Attrs [], stmt_)
 
 let mk_ctype ctype_ =
   C.Ctype ([], ctype_)
