@@ -177,13 +177,15 @@ let cn_to_ail_assertion = function
     A.(AilEassert (mk_expr (cn_to_ail_expr e_)))
   | CN_assert_qexp (ident, bTy, e1, e2) -> failwith "TODO"
 
-  
+
 let cn_to_ail_condition = function
-  | CN_cletResource (loc, name, resource) -> failwith "TODO"
+  | CN_cletResource (loc, name, resource) -> A.AilSskip (* TODO *)
   | CN_cletExpr (_, name, expr) -> 
     let ail_expr = cn_to_ail_expr expr in
     A.(AilSdeclaration [(name, Some (mk_expr ail_expr))])
-  | CN_cconstr (loc, constr) -> failwith "TODO"
+  | CN_cconstr (loc, constr) -> 
+    let ail_constr = cn_to_ail_assertion constr in
+    A.(AilSexpr (mk_expr ail_constr))
 
 
 (* let cn_to_ail_function_spec = function
