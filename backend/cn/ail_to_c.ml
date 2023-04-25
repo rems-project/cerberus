@@ -55,6 +55,7 @@ let pp_ail_stmt ail_stmt = match ail_stmt with
   | A.AilSdeclaration ((name, Some decl) :: _) -> (* TODO: Add type *)
     let name_var = A.(AilEident name) in
     pp_ail name_var ^ " = " ^ pp_ail (rm_expr decl)
+  | A.(AilSexpr ail_expr) -> pp_ail (rm_expr ail_expr)
   | _ -> pp_ail_stmt_default ail_stmt
 (* frontend/model/symbol.lem - fresh_pretty function for generating Sym with unimportant digest and nat *)
 
