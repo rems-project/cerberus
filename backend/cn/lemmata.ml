@@ -581,7 +581,7 @@ let ensure_datatype_member global list_mono loc dt_tag (mem_tag: Id.t) bt =
       let eline = [!^ "    end"] in
       return (defn op_nm [parens (typ (!^ "dt") (Sym.pp dt_tag)); !^ "default"] (Some bt_doc)
       (flow hardline (!^ "match dt with" :: List.map cons_line dt_info.dt_constrs @ eline)))
-    )) [dt_tag; (*mem_tag*) failwith "Thomas, can you check?" (*mem_tag now has type Id.t *) ]
+    )) [dt_tag]
   in
   return op_nm
 
@@ -605,7 +605,7 @@ let ensure_single_datatype_member global list_mono loc dt_tag (mem_tag: Id.t) bt
       let eline = [!^ "    end"] in
       return (defn op_nm [parens (typ (!^ "dt") (Sym.pp dt_tag))] (Some bt_doc)
           (flow hardline (!^ "match dt with" :: List.map cons_line dt_info.dt_constrs @ eline)))
-  )) [dt_tag; (*mem_tag*) failwith "Thomas, can you check?" (*mem_tag now has type Id.t*)]
+  )) [dt_tag]
   in
   return op_nm
 
