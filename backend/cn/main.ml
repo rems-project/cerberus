@@ -157,9 +157,26 @@ let generate_c_pres_and_posts (instrumentation : Core_to_mucore.instrumentation)
     ";\n"
   in
   let arg_strs = List.map arg_str_fn args_list in
-  let pres = List.map (function pre -> Ail_to_c.pp_ail_stmt (Cn_to_ail.cn_to_ail_condition pre) ^ ";\n") instrumentation.surface.requires in
+  let generate_condition_str cn_condition =
+    (let ail_condition = Cn_to_ail.cn_to_ail_condition cn_condition in
+    Ail_to_c.pp_ail_stmt ail_condition ^ ";\n")
+  in
+  let pres = List.map generate_condition_str instrumentation.surface.requires in
+  let posts = List.map generate_condition_str instrumentation.surface.ensures in
   (* let arg_strs = List.fold_left (^) "" arg_strs in *)
-  [(instrumentation.fn, (arg_strs @ pres, []))]
+  [(instrumentation.fn, (arg_strs @ pres, posts))]
+  (* let function_identifiers = List.map fst function_definitions in *)
+  (* let _pres = List.map generate_c_pre instrumentation.requires in *)
+  (* [(instrumentation.fn, ("some precondition;\n", ""))] *)
+  
+  (* let posts = List.map generate_c_post instrumentation.ensures in *)
+  (* let pres_and_posts = List.combine pres posts in *)
+  (* print_string ((string_of_int (List.length pres_and_posts)) ^ "\n"); *)
+  (* print_string ((string_of_int (List.length function_identifiers)) ^ "\n"); *)
+  (* let pres_and_posts = List.combine function_identifiers pres_and_posts in *)
+  (* pres_and_posts *)
+  (* pres *)
+  (* [(instrumentation.fn, ("pre", "post"))] *)
 
 
 (* Core_to_mucore.instrumentation list -> executable_spec *)
