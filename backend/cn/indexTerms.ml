@@ -392,9 +392,13 @@ let eq__ it it' = eq_ (it, it')
 let ne_ (it, it') = not_ (eq_ (it, it'))
 let ne__ it it' = ne_ (it, it')
 
+let eq_sterm_ (it, it') = IT (Binop (EQ, it, it'), SurfaceBaseTypes.Bool)
 let bool_sterm_ b = IT (Const (Bool b), SurfaceBaseTypes.Bool)
 let and2_sterm_ (it, it') = IT (Binop (And, it, it'), SurfaceBaseTypes.Bool)
 let and_sterm_ = vargs_binop (bool_sterm_ true) (Tools.curry and2_sterm_)
+let or2_sterm_ (it, it') = IT (Binop (Or, it, it'), SurfaceBaseTypes.Bool)
+let or_sterm_ = vargs_binop (bool_sterm_ true) (Tools.curry or2_sterm_)
+
 
 let let_ ((nm, x), y) = IT (Let ((nm, x), y), basetype y)
 
@@ -570,6 +574,21 @@ let head_ ~item_bt it = IT (Head it, item_bt)
 let tail_ it = IT (Tail it, bt it)
 let nthList_ (n, it, d) = IT (NthList (n, it, d), bt d)
 let array_to_list_ (arr, i, len) bt = IT (ArrayToList (arr, i, len), bt)
+
+let rec dest_list it = match term it with
+  | Nil -> Some []
+  | Cons (x, xs) -> Option.map (fun ys -> x :: ys) (dest_list xs)
+  | List xs -> Some xs
+  (* TODO: maybe include Tail, if we ever actually use it? *)
+  | _ -> None
+
+
+let mk_in_loc_list loc (ptr, opts) = match dest_list opts with
+  | Some xs -> or_sterm_ (List.map (fun x -> eq_sterm_ (ptr, x)) xs)
+  | None ->
+    Pp.warn loc (Pp.item "cannot enumerate in_loc_list arg, treating as unspecified"
+        (pp opts));
+    sym_ (Sym.fresh_named "unspecified_in_loc_list", SurfaceBaseTypes.Bool)
 
 (* set_op *)
 let setMember_ bt (it, it') = IT (Binop (SetMember,it, it'), BT.Bool)

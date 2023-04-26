@@ -141,12 +141,15 @@ module WIT = struct
       | Sym s ->
          let@ is_a = bound_a s in
          let@ is_l = bound_l s in
-         let@ bt = match () with
+         let@ binding = match () with
            | () when is_a -> get_a s
            | () when is_l -> get_l s
            | () -> fail (fun _ -> {loc; msg = TE.Unknown_variable s})
          in
-         return (IT (Sym s, bt))
+         begin match binding with
+         | BaseType bt -> return (IT (Sym s, bt))
+         | Value it -> return it
+         end
       | Const (Z z) ->
          return (IT (Const (Z z), Integer))
       | Const (Q q) ->
@@ -1121,12 +1124,7 @@ module WLFD = struct
           | Uninterp -> 
              return Uninterp
         in
-        return {
-            loc = pd.loc; 
-            args = pd.args; 
-            return_bt = pd.return_bt;
-            definition = definition;
-          }
+        return { pd with definition = definition }
       end
 
 end

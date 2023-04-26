@@ -228,10 +228,17 @@ let add_a sym bt info =
   let@ s = get () in
   set (Context.add_a sym bt info s)
 
+let add_a_value sym value info = 
+  let@ s = get () in
+  set (Context.add_a_value sym value info s)
+
 let add_l sym bt info =
   let@ s = get () in
   set (Context.add_l sym bt info s)
 
+let add_l_value sym value info = 
+  let@ s = get () in
+  set (Context.add_l_value sym value info s)
 
 let remove_a sym = 
   let@ s = get () in
@@ -507,6 +514,14 @@ let set_statement_locs statement_locs =
   let@ ctxt = get () in
   set { ctxt with statement_locs }
 
+
+let get_loc_addrs_in_eqs () =
+  let@ global = get_global () in
+  let@ assumptions = all_constraints () in
+  let@ s = solver () in
+  let@ rs = all_resources () in
+  let pointer_facts = Resources.pointer_facts rs in
+  return (Solver.get_loc_addrs_in_eqs s ~pointer_facts global)
 
 
 let embed_resultat (m : ('a) Resultat.t) : ('a) m = 

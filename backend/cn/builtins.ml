@@ -12,9 +12,11 @@ let mk_arg1 mk loc = function
   | [x] -> return (mk x)
   | xs -> fail {loc; msg = Number_arguments {has = List.length xs; expect = 1}}
 
-let mk_arg2 mk loc = function
-  | [x; y] -> return (mk (x, y))
+let mk_arg2_err mk loc = function
+  | [x; y] -> mk loc (x, y)
   | xs -> fail {loc; msg = Number_arguments {has = List.length xs; expect = 2}}
+
+let mk_arg2 mk = mk_arg2_err (fun loc tup -> return (mk tup))
 
 let mk_arg3_err mk loc = function
   | [x; y; z] -> mk loc (x, y, z)
@@ -50,6 +52,10 @@ let array_to_list_def =
     | Some (_, bt) -> return (array_to_list_ (arr, i, len) bt)
   ))
 
+let in_loc_list_def =
+  ("in_loc_list", Sym.fresh_named "in_loc_list",
+    mk_arg2_err (fun loc tup -> return (IT.mk_in_loc_list loc tup)))
+
 let cellpointer_def =
   ("cellPointer",
    Sym.fresh_named "cellPointer", 
@@ -80,6 +86,7 @@ let builtin_funs =
 
       nth_list_def;
       array_to_list_def;
+      in_loc_list_def;
 
       cellpointer_def;
     ]

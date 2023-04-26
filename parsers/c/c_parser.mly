@@ -1945,6 +1945,9 @@ unary_expr:
 | AMPERSAND LPAREN e= prim_expr MINUS_GT member=cn_variable RPAREN
     { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($1)))
                                , CNExpr_membershift (e, member) )) }
+| AMPERSAND name=cn_variable
+    { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($1)))
+                               , CNExpr_addr name)) }
 | LPAREN ty= base_type RPAREN expr= prim_expr
     { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($1)))
                                , CNExpr_cast (ty, expr))) }
@@ -2003,14 +2006,15 @@ bool_bin_expr:
     { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                                , CNExpr_binop (CN_or, e1, e2))) }
 
-(*
 list_expr:
 | e= bool_bin_expr
     { e }
+| es= delimited(LBRACK, separated_nonempty_list(COMMA, rel_expr), RBRACK)
+    { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) NoCursor)
+                               , CNExpr_list es)) }
+(*
  | LBRACK COLON bty= base_type RBRACK
  | e1= rel_expr COLON_COLON e2= list_expr
- | es= delimited(LBRACK, separated_nonempty_list(COMMA, rel_expr), RBRACK)
-    { Cerb_frontend.Cn.CNExpr_list es }
   // | Head of 'bt term
   // | Tail of 'bt term
   // | NthList of int * 'bt term
@@ -2071,9 +2075,9 @@ match_target:
     { e }
 
 expr:
-| e= bool_bin_expr
+| e= list_expr
     { e }
-| e1= bool_bin_expr QUESTION e2= bool_bin_expr COLON e3= bool_bin_expr
+| e1= list_expr QUESTION e2= list_expr COLON e3= list_expr
     { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                                , CNExpr_ite (e1, e2, e3))) }
 | CN_EACH LPAREN str= cn_variable COLON r=int_range SEMICOLON e1= expr RPAREN

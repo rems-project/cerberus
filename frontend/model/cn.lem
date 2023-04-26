@@ -75,6 +75,7 @@ type cn_expr_ 'a 'ty =
   | CNExpr_sizeof of 'ty
   | CNExpr_offsetof of 'a * Symbol.identifier
   | CNExpr_membershift of cn_expr 'a 'ty * Symbol.identifier
+  | CNExpr_addr of 'a
   | CNExpr_cast of cn_base_type 'a * cn_expr 'a 'ty
   | CNExpr_call of 'a * list (cn_expr 'a 'ty)
   | CNExpr_cons of 'a * list (Symbol.identifier * cn_expr 'a 'ty)
@@ -228,6 +229,7 @@ type cn_error =
   | CNErr_unknown_predicate
   | CNErr_invalid_tag
   | CNErr_unknown_identifier of cn_namespace * Symbol.identifier
+  | CNErr_unknown_c_identifier of Symbol.identifier
   | CNErr_missing_oarg of Symbol.sym
   | CNErr_general of string
 

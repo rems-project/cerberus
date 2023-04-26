@@ -355,10 +355,11 @@ let rec dtree (IT (it_, bt)) =
   | (ArrayOffset (ty, t)) -> Dnode (pp_ctor "ArrayOffset", [Dleaf (Sctypes.pp ty); dtree t])
   | (Representable (ty, t)) -> Dnode (pp_ctor "Representable", [Dleaf (Sctypes.pp ty); dtree t])
   | (Good (ty, t)) -> Dnode (pp_ctor "Good", [Dleaf (Sctypes.pp ty); dtree t])
+  | List its -> Dnode (pp_ctor "List", (List.map dtree its))
   | (Aligned a) -> Dnode (pp_ctor "Aligned", [dtree a.t; dtree a.align])
   | (MapConst (bt, t)) -> Dnode (pp_ctor "MapConst", [dtree t])
   | (MapSet (t1, t2, t3)) -> Dnode (pp_ctor "MapSet", [dtree t1; dtree t2; dtree t3])
   | (MapGet (t1, t2)) -> Dnode (pp_ctor "MapGet", [dtree t1; dtree t2])
   | (MapDef ((s, bt), t)) -> Dnode (pp_ctor "MapDef", [Dleaf (Sym.pp s); dtree t])
   | Apply (f, args) -> Dnode (pp_ctor "Apply", (Dleaf (Sym.pp f) :: List.map dtree args))
-  | _ -> failwith "todo"
+  | _ -> failwith ("todo: dtree: " ^ Pp.plain (pp (IT (it_, bt))))

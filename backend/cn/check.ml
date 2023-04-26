@@ -81,7 +81,7 @@ let rec infer_pattern (M_Pattern (loc, _, pattern)) =
 
 
 (* pattern-matches and binds *)
-let rec pattern_match (M_Pattern (loc, _, pattern)) it =
+let rec old_pattern_match (M_Pattern (loc, _, pattern)) it =
   match pattern with
   | M_CaseBase (o_s, has_bt) ->
      begin match o_s with
@@ -99,14 +99,14 @@ let rec pattern_match (M_Pattern (loc, _, pattern)) it =
         return []
      | M_Ccons, [p1; p2] ->
         let@ item_bt = infer_pattern p1 in
-        let@ a1 = pattern_match p1 (head_ ~item_bt it) in
-        let@ a2 = pattern_match p2 (tail_ it) in
+        let@ a1 = old_pattern_match p1 (head_ ~item_bt it) in
+        let@ a2 = old_pattern_match p2 (tail_ it) in
         let@ () = add_c (LC.t_ (ne_ (it, nil_ ~item_bt))) in
         return (a1 @ a2)
      | M_Ctuple, pats ->
         let@ all_as = ListM.mapiM (fun i p ->
           let@ item_bt = infer_pattern p in
-          pattern_match p (nthTuple_ ~item_bt (i, it))
+          old_pattern_match p (nthTuple_ ~item_bt (i, it))
         ) pats in
         return (List.concat all_as)
      | M_Carray, _ ->
@@ -114,12 +114,41 @@ let rec pattern_match (M_Pattern (loc, _, pattern)) it =
      | _ -> 
         assert false
 
-(* let pp_pattern_match p (patv, (l_vs, a_vs)) = *)
-(*   let open Pp in *)
-(*   NewMu.PP_MUCORE.pp_pattern p ^^ colon ^^^ IT.pp patv ^^ colon ^^^ *)
-(*   parens (list (fun (nm, bt) -> Sym.pp nm ^^ colon ^^^ BT.pp bt) l_vs) ^^^ *)
-(*   parens (list (fun (nm, (bt, lsym)) -> Sym.pp nm ^^ colon ^^^ BT.pp bt ^^ colon ^^^ Sym.pp lsym) a_vs)s *)
+let _old_pattern_match = old_pattern_match (* for the moment keep both versions alive*)        
 
+(* pattern-matches and binds *)
+let rec pattern_match (M_Pattern (loc, _, pattern)) it =
+   match pattern with
+   | M_CaseBase (o_s, has_bt) ->
+      begin match o_s with
+      | Some s ->
+         let@ () = add_a_value s it (loc, lazy (Sym.pp s)) in
+         return [s]
+      | None -> 
+         return []
+      end
+   | M_CaseCtor (constructor, pats) ->
+      match constructor, pats with
+      | M_Cnil item_bt, [] ->
+         let@ () = add_c (LC.t_ (eq__ it (nil_ ~item_bt))) in
+         return []
+      | M_Ccons, [p1; p2] ->
+         let@ item_bt = infer_pattern p1 in
+         let@ a1 = pattern_match p1 (head_ ~item_bt it) in
+         let@ a2 = pattern_match p2 (tail_ it) in
+         let@ () = add_c (LC.t_ (ne_ (it, nil_ ~item_bt))) in
+         return (a1 @ a2)
+      | M_Ctuple, pats ->
+         let@ all_as = ListM.mapiM (fun i p ->
+           let@ item_bt = infer_pattern p in
+           pattern_match p (Simplify.IndexTerms.tuple_nth_reduce it i item_bt)
+         ) pats in
+         return (List.concat all_as)
+      | M_Carray, _ ->
+         Debug_ocaml.error "todo: array patterns"
+      | _ -> 
+         assert false
+ 
 
 
 
@@ -515,6 +544,28 @@ let check_single_ct loc expr =
         fail2 "cannot prove type is constant"
     end
 
+
+let get_eq_in_model loc msg x opts =
+  let@ m = model_with loc (IT.bool_ true) in
+  let@ m = match m with
+    | None -> fail (fun _ -> {loc; msg = Generic (Pp.item "cannot get model for" msg)})
+    | Some m -> return m
+  in
+  let@ g = get_global () in
+  let ev x = Solver.eval g (fst m) x in
+  let@ () = match ev x with
+    | None -> fail (fun _ -> {loc; msg = Generic (Pp.item "get_eq_in_model: cannot eval in model"
+        (IT.pp x ^^^ !^ "for:" ^^^ msg))})
+    | Some _ -> return ()
+  in
+  let y = List.find_opt
+    (fun y -> Option.equal IT.equal (ev (eq_ (x, y))) (Some (IT.bool_ true)))
+    opts in
+  match y with
+    | Some y -> return y
+    | None -> fail (fun _ -> {loc; msg = Generic (Pp.item "get_eq_in_model: no options are equal"
+        ((Pp.typ (IT.pp x) (Pp.braces (Pp.list IT.pp opts))) ^^^ !^ "for:" ^^^ msg))})
+ 
 let check_conv_int loc ~expect (ct : Sctypes.ctype) arg =
   let@ () = WellTyped.ensure_base_type loc ~expect Integer in 
   let@ () = WellTyped.WCT.is_ct loc ct in
@@ -571,9 +622,15 @@ let rec check_pexpr (pe : 'bty mu_pexpr) ~(expect:BT.t)
   match pe_ with
   | M_PEsym sym ->
      let@ () = check_computational_bound loc sym in
-     let@ bt = get_a sym in
-     let@ () = WellTyped.ensure_base_type loc ~expect bt in
-     k (sym_ (sym, bt))
+     let@ binding = get_a sym in
+     begin match binding with
+     | BaseType bt ->
+        let@ () = WellTyped.ensure_base_type loc ~expect bt in
+        k (sym_ (sym, bt))
+     | Value lvt ->
+        let@ () = WellTyped.ensure_base_type loc ~expect (IT.bt lvt) in
+        k lvt
+     end
   (* | M_PEimpl i -> *)
   (*    let@ global = get_global () in *)
   (*    let value = Global.get_impl_constant global i in *)
@@ -766,8 +823,8 @@ let rec check_pexpr (pe : 'bty mu_pexpr) ~(expect:BT.t)
      Debug_ocaml.error "todo: PEstruct"
   | M_PEunion _ ->
      Debug_ocaml.error "todo: PEunion"
-  | M_PEcfunction pe ->
-     check_pexpr ~expect:Loc pe (fun ptr ->
+  | M_PEcfunction pe2 ->
+     check_pexpr ~expect:Loc pe2 (fun ptr ->
      let@ global = get_global () in
      (* function vals are just symbols the same as the names of functions *)
      let@ known = eq_value_with (is_fun_addr global) ptr in
@@ -783,17 +840,28 @@ let rec check_pexpr (pe : 'bty mu_pexpr) ~(expect:BT.t)
              Sym.pp sym)})
        end
      | None ->
-       (* this is where we need to do a case split on the options for ptr *)
-       debug 1 (lazy (!^"function pointer:" ^^^ Pp_mucore.pp_pexpr pe));
-       let@ m = model_with loc (IT.bool_ true) in
-       match m with
-       | None ->
-       fail (fun _ -> {loc; msg = Generic (!^ "unknown function pointer (no model):" ^^^
-             IT.pp ptr)})
-       | Some m ->
-       fail (fun ctxt -> {loc; msg = Generic_with_model {err = !^ "unknown function pointer:" ^^^
-             IT.pp ptr; model = m; ctxt}})
-     end
+       (* time to case split on function-pointer possibilities. *)
+       let explanation = !^ "a function pointer must be explicitly enumerated" ^^^
+           !^ "e.g. (in_loc_list (p, [fun1; fun2]))" in
+       let@ opts = get_loc_addrs_in_eqs () in
+       let@ () = if List.length opts > 0 then return ()
+         else fail (fun _ -> {loc; msg = Generic (!^"no address eqs found:" ^^^ explanation)}) in
+       let msg = !^ "picking function target" ^^^ Pp.parens explanation in
+       let ptr_opts = List.map (fun nm -> (sym_ (nm, BT.Loc))) opts in
+       let@ eq_opt = get_eq_in_model loc msg ptr ptr_opts in
+       Pp.debug 5 (lazy (Pp.item "function pointer application: case splitting on" (IT.pp eq_opt)));
+       let aux e cond =
+         let@ () = add_c (t_ cond) in
+         Pp.debug 5 (lazy (Pp.item "checking consistency of eq branch" (IT.pp cond)));
+         let@ provable = provable loc in
+         match provable (t_ (bool_ false)) with
+         | `True -> return ()
+         | `False -> check_pexpr ~expect e k
+       in
+       let@ () = pure (aux pe (eq_ (ptr, eq_opt))) in
+       let@ () = pure (aux pe (not_ (eq_ (ptr, eq_opt)))) in
+       return ()
+    end
   )
   | M_PEmemberof _ ->
      Debug_ocaml.error "todo: M_PEmemberof"
