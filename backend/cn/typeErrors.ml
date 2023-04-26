@@ -376,7 +376,10 @@ let pp_message te =
   | Undefined_behaviour {ub; ctxt; model} ->
      let short = !^"Undefined behaviour" in
      let state = Explain.state ctxt model Explain.no_ex in
-     let descr = !^(CF.Undefined.ub_short_string ub) in
+     let descr = match CF.Undefined.std_of_undefined_behaviour ub with
+      | Some stdref -> !^(CF.Undefined.ub_short_string ub) ^^^ parens !^stdref
+      | None -> !^(CF.Undefined.ub_short_string ub) 
+     in
      { short; descr = Some descr; state = Some state; trace = None }
   | Implementation_defined_behaviour (impl, state) ->
      let short = !^"Implementation defined behaviour" in
