@@ -141,7 +141,7 @@ let rec pattern_match (M_Pattern (loc, _, pattern)) it =
       | M_Ctuple, pats ->
          let@ all_as = ListM.mapiM (fun i p ->
            let@ item_bt = infer_pattern p in
-           pattern_match p (nthTuple_ ~item_bt (i, it))
+           pattern_match p (Simplify.IndexTerms.tuple_nth_reduce it i item_bt)
          ) pats in
          return (List.concat all_as)
       | M_Carray, _ ->

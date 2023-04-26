@@ -60,6 +60,11 @@ module PrevDefs = struct
     return (List.find_opt (fun (it2, m2, sym) -> IT.equal it it2 && Id.equal m_nm m2)
         st.dt_params |> Option.map (fun (_, _, sym) -> sym)))
 
+  let debug_dt_params i = bind get (fun st ->
+    Pp.debug i (lazy (Pp.item "dt params available"
+        (Pp.brackets (Pp.list (fun (it, m, _) -> Pp.typ (IT.pp it) (Id.pp m)) st.dt_params))));
+    return ())
+
 end
 module PrevMonad = Effectful.Make(PrevDefs)
 open PrevDefs
@@ -340,21 +345,35 @@ let monomorphise_dt_lists global =
   let global = Global.{global with datatypes; datatype_constrs} in
   (list_mono, global)
 
+let rec new_nm s nms i =
+  let s2 = s ^ "_" ^ Int.to_string i in
+  if List.exists (String.equal s2) nms
+  then new_nm s nms (i + 1)
+  else s2
+
+let alpha_rename_if_pp_same (s, bt) body =
+  let vs = IT.free_vars body in
+  let other_nms = List.filter (fun sym -> not (Sym.equal sym s)) (SymSet.elements vs)
+    |> List.map Sym.pp_string in
+  if List.exists (String.equal (Sym.pp_string s)) other_nms
+  then begin
+    Pp.debug 6 (lazy (Pp.item "doing rename"
+        (Pp.typ (Sym.pp s) (Pp.braces (Pp.list Pp.string other_nms)))));
+    let s2 = Sym.fresh_named (new_nm (Sym.pp_string s) other_nms 0) in
+    let body = IT.subst (IT.make_subst [(s, IT.sym_ (s2, bt))]) body in
+    (s2, body, IT.free_vars body)
+  end
+  else (s, body, vs)
+
 let it_adjust (global : Global.t) it =
-  let rec new_nm s nms i =
-    let s2 = s ^ "_" ^ Int.to_string i in
-    if List.exists (String.equal s2) nms
-    then new_nm s nms (i + 1)
-    else s2
-  in
   let rec f t =
     match IT.term t with
         | IT.Binop (And, x1, x2) ->
             let xs = List.map f [x1; x2] |> List.partition IT.is_true |> snd in
-            (* if List.length xs == 0 then IT.bool_ true else *) (* and_ does that *) IT.and_ xs
+            IT.and_ xs
         | IT.Binop (Or, x1, x2) ->
             let xs = List.map f [x1; x2] |> List.partition IT.is_false |> snd in
-            (* if List.length xs == 0 then IT.bool_ true else *) (* or_ does that *) IT.or_ xs
+            IT.or_ xs
         | IT.Binop (EQ, x, y) ->
             let x = f x in
             let y = f y in
@@ -365,21 +384,14 @@ let it_adjust (global : Global.t) it =
             if IT.is_false x || IT.is_true y then IT.bool_ true else IT.impl_ (x, y)
         | IT.EachI ((i1, (s, _), i2), x) ->
             let x = f x in
-            let vs = IT.free_vars x in
-            let other_nms = List.filter (fun sym -> not (Sym.equal sym s)) (SymSet.elements vs)
-              |> List.map Sym.pp_string in
+            let (s, x, vs) = alpha_rename_if_pp_same (s, BT.Integer) x in
             if not (SymSet.mem s vs)
             then (assert (i1 <= i2); x)
-            else if List.exists (String.equal (Sym.pp_string s)) other_nms
-            then
-                let s2 = Sym.fresh_named (new_nm (Sym.pp_string s) other_nms 0) in
-                let x = IT.subst (IT.make_subst [(s, IT.sym_ (s2, BT.Integer))]) x in
-                IT.eachI_ (i1, s2, i2) x
             else IT.eachI_ (i1, s, i2) x
     | IT.Apply (name, args) ->
         let open LogicalFunctions in
         let def = SymMap.find name global.logical_functions in
-        begin match def.definition with
+       begin match def.definition with
           | Def body -> f (Body.to_term def.return_bt (open_fun def.args body args))
           | _ -> t
         end
@@ -389,6 +401,16 @@ let it_adjust (global : Global.t) it =
         then t else f (IT.representable global.struct_decls ct t2)
     | Aligned t ->
         f (IT.divisible_ (IT.pointerToIntegerCast_ t.t, t.align))
+    | IT.Let ((nm, x), y) ->
+        let x = f x in
+        let y = f y in
+        let (nm, y, vs) = alpha_rename_if_pp_same (nm, IT.bt x) y in
+        if Option.is_some (IT.is_sym x)
+        then IT.subst (IT.make_subst [(nm, x)]) y
+        else
+        if not (SymSet.mem nm vs)
+        then y
+        else IT.let_ ((nm, x), y)
     | _ -> t
   in
   let res = f it in
@@ -559,7 +581,7 @@ let ensure_datatype_member global list_mono loc dt_tag (mem_tag: Id.t) bt =
       let eline = [!^ "    end"] in
       return (defn op_nm [parens (typ (!^ "dt") (Sym.pp dt_tag)); !^ "default"] (Some bt_doc)
       (flow hardline (!^ "match dt with" :: List.map cons_line dt_info.dt_constrs @ eline)))
-    )) [dt_tag; (*mem_tag*) failwith "Thomas, can you check?" (*mem_tag now has type Id.t *) ]
+    )) [dt_tag]
   in
   return op_nm
 
@@ -583,7 +605,7 @@ let ensure_single_datatype_member global list_mono loc dt_tag (mem_tag: Id.t) bt
       let eline = [!^ "    end"] in
       return (defn op_nm [parens (typ (!^ "dt") (Sym.pp dt_tag))] (Some bt_doc)
           (flow hardline (!^ "match dt with" :: List.map cons_line dt_info.dt_constrs @ eline)))
-  )) [dt_tag; (*mem_tag*) failwith "Thomas, can you check?" (*mem_tag now has type Id.t*)]
+  )) [dt_tag]
   in
   return op_nm
 
@@ -713,11 +735,14 @@ let dt_split global x t =
   let cs_used = IT.fold (fun _ acc t -> match IT.term t with
     | IT.DatatypeIsCons (c_nm, y) when IT.equal x y -> SymSet.add c_nm acc
     | _ -> acc) [] SymSet.empty t in
+  Pp.debug 7 (lazy (Pp.item "in dt-split, constructors used" (Pp.braces (Pp.list
+    Sym.pp (SymSet.elements cs_used)))));
   let mems_used = IT.fold (fun _ acc t -> match IT.term t with
     | IT.DatatypeMember (y, m_nm) when IT.equal x y -> IdSet.add m_nm acc
     | _ -> acc) [] IdSet.empty t in
+  Pp.debug 7 (lazy (Pp.item "in dt-split, mems used" (Pp.braces (Pp.list
+    Id.pp (IdSet.elements mems_used)))));
   let dt_info = SymMap.find dt global.Global.datatypes in
-  let need_default = List.length dt_info.BT.dt_constrs > SymSet.cardinal cs_used in
   let rec redux c_nm t = match IT.term t with
     | IT.ITE (IT.IT (IT.DatatypeIsCons (c_nm2, y), _), x_t, x_f)
         when IT.equal x y ->
@@ -729,7 +754,12 @@ let dt_split global x t =
       let ms = List.map fst c_info.c_params in
     (Sym.pp c_nm, ms, mems_used, redux c_nm t)
   in
-  List.map f (SymSet.elements cs_used) @ (if need_default
+  let (cs_order, need_default) =
+    if List.length dt_info.BT.dt_constrs > SymSet.cardinal cs_used + 1
+    then (SymSet.elements cs_used, true)
+    else (dt_info.BT.dt_constrs, false)
+  in
+  List.map f cs_order @ (if need_default
     then [(Pp.string "_", [], mems_used, redux dt t (* any non-cons symbol will redux correctly *))]
     else [])
 
@@ -747,6 +777,8 @@ let with_selected_dt_params it mem_nms set_used f = with_reset_dt_params (fun ()
         then let@ sym = add_dt_param_counted (it, m_nm) in
             return (Some sym)
         else return None) mem_nms in
+    Pp.debug 7 (lazy (Pp.item "with_selected_dt_params"
+        (Pp.brackets (Pp.list (function | None -> Pp.string "_" | Some sym -> Sym.pp sym) xs))));
     f xs)
 
 let match_some_dt_params c_doc opt_params =
@@ -754,6 +786,10 @@ let match_some_dt_params c_doc opt_params =
     | None -> rets "_"
     | Some m_sym -> return (Sym.pp m_sym)
   ) opt_params)
+
+let mk_let sym rhs_doc doc =
+  let open Pp in
+  !^ "let" ^^^ Sym.pp sym ^^^ !^ ":=" ^^^ rhs_doc ^^^ !^ "in" ^^^ doc
 
 let it_to_coq loc global list_mono it =
   let open Pp in
@@ -811,9 +847,11 @@ let it_to_coq loc global list_mono it =
          let dt = Option.get (BT.is_datatype_bt (IT.bt x)) in
          let@ () = ensure_datatype global list_mono loc dt in
          let branches = dt_split global x t in
+         Pp.debug 7 (lazy (Pp.item "did dt-split" (Pp.parens (Pp.list
+             (fun (_, _, _, t2) -> IT.pp t2) branches))));
          let br (c_doc, ps, ps_used, t2) = with_selected_dt_params x ps ps_used
            (fun opt_ps -> build [rets "|"; match_some_dt_params c_doc opt_ps;
-             rets "=>"; aux t2])
+             rets "=>"; (let@ () = debug_dt_params 7 in aux t2)])
          in
          parensM (build ([rets "match"; f false x; rets "with"]
              @ List.map br branches @ [rets "end"]))
@@ -826,7 +864,6 @@ let it_to_coq loc global list_mono it =
                  (binop "<=" (Pp.int i1) (Sym.pp s)) (binop "<=" (Sym.pp s) (Pp.int i2)))
              x) in
          return (parens enc)
-
     | IT.MapSet (m, x, y) ->
        let@ () = ensure_fun_upd () in
        let@ e = eq_of (IT.bt x) in
@@ -909,7 +946,9 @@ let it_to_coq loc global list_mono it =
             let@ op_nm = ensure_single_datatype_member global list_mono
                 loc dt_sym nm (IT.bt t) in
             parensM (build [rets op_nm; aux dt])
-          | _ -> fail_m loc (dt_access_error t)
+          | _ ->
+            let@ () = debug_dt_params 2 in
+            fail_m loc (dt_access_error t)
         end
     | IT.NthList (n, xs, d) ->
        let@ (_, _, dest) = ensure_list global list_mono loc (IT.bt xs) in
@@ -919,13 +958,13 @@ let it_to_coq loc global list_mono it =
        let@ (nil, cons, _) = ensure_list global list_mono loc (IT.bt t) in
        parensM (build [rets "CN_Lib.array_to_list"; return nil; return cons;
                        aux arr; aux i; aux len])
+    | IT.Let ((nm, x), y) ->
+       let@ x = aux x in
+       let@ y = aux y in
+       parensM (return (mk_let nm x y))
     | _ -> fail_m loc (Pp.item "it_to_coq: unsupported" (IT.pp t))
   in
   f true it
-
-let mk_let sym rhs_doc doc =
-  let open Pp in
-  !^ "let" ^^^ Sym.pp sym ^^^ !^ ":=" ^^^ rhs_doc ^^^ !^ "in" ^^^ doc
 
 let lc_to_coq_check_triv loc global list_mono = function
   | LC.T it -> let it = it_adjust global it in

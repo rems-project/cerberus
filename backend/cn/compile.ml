@@ -512,7 +512,7 @@ module EffectfulTranslation = struct
 
 
   let translate_match env loc x shape_expr : (IT.sterm * (Sym.t * IT.sterm) list) m =
-    let rec f x = function
+    let rec f x m = match m with
       | CNExpr (loc2, CNExpr_cons (c_nm, exprs)) ->
           let@ cons_info = lookup_constr loc2 c_nm env in
           (* let@ (_, mem_syms) = lookup_datatype loc cons_info.c_datatype_tag env in *)
@@ -542,6 +542,7 @@ module EffectfulTranslation = struct
           fail {loc; msg = Generic (!^ "not permitted in match pattern:" ^^^ pp_cnexpr_kind ex)}
     in
     let@ (xs, ys) = f x shape_expr in
+    Pp.debug 7 (lazy (Pp.item "converted shape_expr" (Pp.brackets (Pp.list IT.pp xs))));
     return (IT.and_sterm_ xs, ys)
 
 
