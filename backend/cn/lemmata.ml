@@ -130,35 +130,6 @@ let check_noop _ = ()
 (*   | _ -> *)
 (*     fail "non-proc trusted function" (Sym.pp fsym) *)
 
-let add_it_funs it funs =
-  let f _ funs it = match IT.term it with
-    | IT.Apply (name, args) -> SymSet.add name funs
-    | _ -> funs
-  in
-  IT.fold_subterms f funs it
-
-let all_undef_foralls =
-  let add (nm, t) nms = StringMap.add nm (Sym.fresh_named nm, t) nms in
-  let intf t = BaseTypes.Map (BaseTypes.Integer, t) in
-  let int3 = intf (intf BaseTypes.Integer) in
-  List.fold_right add [
-    ("div_undef", int3);
-    ("rem_undef", int3);
-    ("mod_undef", int3)
-  ] StringMap.empty
-
-let it_undef_foralls it =
-  let f _ nms it = match IT.term it with
-    | IT.Binop (op, _, _) -> begin match op with
-        | IT.Div -> StringSet.add "div_undef" nms
-        | IT.Rem -> StringSet.add "rem_undef" nms
-        | IT.Mod -> StringSet.add "mod_undef" nms
-        | _ -> nms
-    end
-    | _ -> nms
-  in
-  IT.fold_subterms f StringSet.empty it
-
 (* set of functions with boolean return type that are negated
    etc and must return bool (be computational) in Coq. the rest
    return Prop. FIXME: make this configurable. *)
@@ -391,8 +362,8 @@ let it_adjust (global : Global.t) it =
     | IT.Apply (name, args) ->
         let open LogicalFunctions in
         let def = SymMap.find name global.logical_functions in
-       begin match def.definition with
-          | Def body -> f (Body.to_term def.return_bt (open_fun def.args body args))
+        begin match def.definition, def.emit_coq with
+          | Def body, false -> f (Body.to_term def.return_bt (open_fun def.args body args))
           | _ -> t
         end
     | IT.Good (ct, t2) -> if Option.is_some (Sctypes.is_struct_ctype ct)
@@ -1056,12 +1027,6 @@ let ftyp_to_coq loc global list_mono (ftyp: AT.lemmat) =
     | AT.L t -> lat_doc t
   in
   let@ d = at_doc ftyp in
-  (*
-  let d2 = d |> Option.map (List.fold_right (fun nm d ->
-    let (sym, bt) = StringMap.find nm all_undef_foralls in
-    mk_forall global sym bt d) extra_foralls)
-  in
-  *)
   match d with
   | Some doc -> return doc
   | None -> rets "Is_true true"

@@ -1124,12 +1124,7 @@ module WLFD = struct
           | Uninterp -> 
              return Uninterp
         in
-        return {
-            loc = pd.loc; 
-            args = pd.args; 
-            return_bt = pd.return_bt;
-            definition = definition;
-          }
+        return { pd with definition = definition }
       end
 
 end

@@ -989,7 +989,7 @@ let translate_cn_func_body env body =
   aux env body
 
 
-let known_attrs = ["rec"]
+let known_attrs = ["rec"; "coq_unfold"]
 
 let translate_cn_function env (def: cn_function) =
   let open LogicalFunctions in
@@ -1001,6 +1001,7 @@ let translate_cn_function env (def: cn_function) =
     List.fold_left (fun acc (sym, bt) -> add_logical sym bt acc
       ) env args in
   let is_rec = List.exists (fun id -> String.equal (Id.s id) "rec") def.cn_func_attrs in
+  let coq_unfold = List.exists (fun id -> String.equal (Id.s id) "coq_unfold") def.cn_func_attrs in
   let@ () = ListM.iterM (fun id -> if List.exists (String.equal (Id.s id)) known_attrs
     then return ()
     else fail {loc = def.cn_func_loc; msg = Generic (Pp.item "Unknown attribute" (Id.pp id))}
@@ -1014,7 +1015,8 @@ let translate_cn_function env (def: cn_function) =
   let def2 = {
       loc = def.cn_func_loc; 
       args = List.map_snd SBT.to_basetype args; 
-      return_bt = SBT.to_basetype return_bt; 
+      return_bt = SBT.to_basetype return_bt;
+      emit_coq = not coq_unfold;
       definition
     } 
   in

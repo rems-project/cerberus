@@ -99,6 +99,7 @@ type definition = {
        one of the arguments has to be the index/quantified
        variable. For now at least. *)
     return_bt: BT.t;
+    emit_coq: bool;
     definition : def_or_uninterp;
   }
 
@@ -118,7 +119,7 @@ let alpha_rename_definition def =
       ) def.args ([],[])
   in
   let definition = subst_def_or_uninterp (IT.make_subst subst) def.definition in
-  { loc = def.loc; args; return_bt = def.return_bt; definition }
+  {def with args; definition }
 
 
 let pp_def nm def =
