@@ -36,7 +36,12 @@ let pp_ctype ctype = CF.Pp_utils.to_plain_string (CF.Pp_ail.pp_ctype empty_quali
 
 let rec pp_ail_expr ail_expr =
   match ail_expr with
-    | A.(AilEident sym) -> CF.String_ail.string_of_cn_id sym
+    | A.(AilEident sym) -> 
+      let sym_str = CF.String_ail.string_of_cn_id sym in
+      if String.equal sym_str "return" then
+        "__cn_ret"
+      else
+        sym_str
     | A.(AilEconst ail_const) -> pp_ail_const ail_const
     | A.(AilEbinary (x, bop, y)) -> (pp_ail_expr (rm_expr x)) ^ " " ^ (pp_ail_binop bop) ^ " " ^ (pp_ail_expr (rm_expr y))
     | A.(AilEunary (Bnot, ail_expr)) -> "!(" ^ (pp_ail_expr (rm_expr ail_expr)) ^ ")"
