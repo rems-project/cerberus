@@ -3,7 +3,7 @@ open Executable_spec_utils
 module A=CF.AilSyntax
 module C=CF.Ctype
 
-let ident_map = [
+let ident_list = [
   ("return", "__cn_ret");
   ("power", "pow")
 ]
@@ -43,7 +43,7 @@ let rec pp_ail_expr ail_expr =
   match ail_expr with
     | A.(AilEident sym) -> 
       let sym_str = CF.String_ail.string_of_cn_id sym in
-      let str_from_list = List.assoc_opt String.equal sym_str ident_map in
+      let str_from_list = List.assoc_opt String.equal sym_str ident_list in
       (match str_from_list with
         | Some str -> str
         | None -> sym_str)
