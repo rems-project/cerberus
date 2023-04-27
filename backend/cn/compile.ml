@@ -155,6 +155,7 @@ let pp_cnexpr_kind expr_ =
   | CNExpr_cons (c_nm, exprs) -> !^ "(" ^^ Sym.pp c_nm ^^^ !^ "{...})"
   | CNExpr_each (sym, r, e) -> !^ "(each ...)"
   | CNExpr_match (x, ms) -> !^ "match ... {...}"
+  | CNExpr_let (s, e, body) -> !^ "let ...; ..."
   | CNExpr_ite (e1, e2, e3) -> !^ "(if ... then ...)"
   | CNExpr_good (ty, e) -> !^ "(good (_, _))"
   | CNExpr_unchanged e -> !^"(unchanged (_))"
@@ -199,6 +200,9 @@ let rec free_in_expr (CNExpr (_loc, expr_)) =
      SymSet.remove s (free_in_expr e)
   | CNExpr_match (x, ms) ->
      free_in_exprs (x :: List.map snd ms)
+  | CNExpr_let (s, e, body) ->
+     SymSet.union (free_in_expr e) 
+      (SymSet.remove s (free_in_expr body))
   | CNExpr_ite (e1, e2, e3) ->
      free_in_exprs [e1; e2; e3]
   | CNExpr_good (typ, e) ->
@@ -700,6 +704,13 @@ module EffectfulTranslation = struct
               | (cond, rhs) :: ms -> ite_ (cond, rhs, g ms)
             in
             return (IT.let_ ((x_nm, x), g ms))
+        | CNExpr_let (s, e, body) ->
+            let@ e = self e in
+            let@ body = 
+              trans evaluation_scope (SymSet.add s locally_bound) 
+                (add_logical s (IT.bt e) env) body 
+            in
+            return (IT (Let ((s, e), body), IT.bt body))
         | CNExpr_ite (e1, e2, e3) ->
             let@ e1 = self e1 in
             let@ e2 = self e2 in

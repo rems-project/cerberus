@@ -1977,10 +1977,10 @@ add_expr:
 rel_expr:
 | e= add_expr
      { e }
-| e1= add_expr EQ_EQ e2= add_expr
+| e1= rel_expr EQ_EQ e2= add_expr
     { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                                , CNExpr_binop (CN_equal, e1, e2))) }
-| e1= add_expr BANG_EQ e2= add_expr
+| e1= rel_expr BANG_EQ e2= add_expr
     { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                                , CNExpr_binop (CN_inequal, e1, e2))) }
 | e1= rel_expr LT e2= add_expr
@@ -2074,7 +2074,8 @@ match_target:
 | e= delimited(LPAREN, expr, RPAREN)
     { e }
 
-expr:
+
+expr_without_let:
 | e= list_expr
     { e }
 | e1= list_expr QUESTION e2= list_expr COLON e3= list_expr
@@ -2088,7 +2089,16 @@ expr:
     { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($1)))
                                ,
                                CNExpr_match (e, List.rev ms))) }
+
+expr:
+| e=expr_without_let
+    { e }
+| CN_LET str= cn_variable EQ e1= expr SEMICOLON e2= expr
+    { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.region ($startpos(e1), $endpos(e1)) NoCursor,
+                                 CNExpr_let (str, e1, e2))) }
 ;
+
+
 
 (* CN predicate definitions **************************************************)
 base_type:
@@ -2307,7 +2317,7 @@ assert_expr:
       LBRACE e2= expr RBRACE
     { Cerb_frontend.Cn.CN_assert_qexp ( str
                                       , bTy, e1, e2) }
-| e= expr
+| e= expr_without_let
     { Cerb_frontend.Cn.CN_assert_exp e }
 
 resource_when_condition:

@@ -172,6 +172,8 @@ module MakePp (Conf: PP_CN) = struct
       | CNExpr_match (x, ms) ->
           let m_doc (lhs, rhs) = Dnode (pp_ctor "=>", List.map dtree_of_cn_expr [lhs; rhs]) in
           Dnode (pp_ctor "CNExpr_match", [dtree_of_cn_expr x] @ List.map m_doc ms)
+      | CNExpr_let (s, e, body) ->
+          Dnode (pp_ctor "CNExpr_let", [Dleaf (Conf.pp_ident s); dtree_of_cn_expr e; dtree_of_cn_expr body])
       | CNExpr_ite (e1, e2, e3) ->
           Dnode (pp_ctor "CNExpr_ite"
                , List.map dtree_of_cn_expr [e1;e2;e3])
