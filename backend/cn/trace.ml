@@ -97,7 +97,10 @@ let format_eval model global it =
   | None -> parens (!^ "cannot eval:" ^^^ IT.pp it)
   | Some v -> IT.pp it ^^^ equals ^^^ IT.pp v
 
-let format_var model global (sym, (bt, _)) = format_eval model global (IT.sym_ (sym, bt))
+let format_var model global (sym, (binding, _)) = 
+  match binding with
+  | Context.BaseType bt -> format_eval model global (IT.sym_ (sym, bt))
+  | Context.Value it -> format_eval model global it
 
 let pp_oargs model global = function
   | Resources.O it -> format_eval model global it
@@ -277,8 +280,15 @@ let log_block ctxt model (sym, (bt, (loc, info))) =
 
 let format_ctxt_logical_trace model (ctxt : Context.t) =
   let preamble = [Pp.string "Logical variables created in type-checking:"] in
-  let non_unit = List.filter (fun (_, (bt, _)) -> not (BT.equal bt BT.Unit))
-                   (Context.SymMap.bindings ctxt.Context.logical) in
+  let non_unit = 
+    List.filter_map (fun (s, (binding, linfo)) -> 
+      match binding with
+      | Context.BaseType bt when not (BT.equal bt BT.Unit) ->
+        Some (s, (bt, linfo))
+      | _ ->
+        None
+    ) (Context.SymMap.bindings ctxt.Context.logical) 
+  in
   Pp.flow Pp.hardline (preamble @ List.map (log_block ctxt model) non_unit)
 
 

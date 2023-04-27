@@ -185,6 +185,11 @@ module Make (Config: CONFIG) = struct
    *   | TyEffect baseTy -> P.brackets (pp_base_type baseTy) *)
 
 
+  let pp_function = function
+    | M_params_length -> !^ "params_length"
+    | M_params_nth -> !^ "params_nth"
+    | M_are_compatible -> !^ "are_compatible"
+
   let pp_binop = function
     | OpAdd -> P.plus
     | OpSub -> P.minus
@@ -342,6 +347,10 @@ module Make (Config: CONFIG) = struct
         P.parens (comma_list pp_value cvals)
     | M_Vobject oval ->
         pp_object_value oval
+    | M_Vctype ct ->
+        P.squotes (pp_ctype ct)
+    | M_Vfunction_addr sym ->
+        P.parens (P.ampersand ^^^ Sym.pp sym)
     (* | M_Vloaded lval -> *)
     (*     pp_loaded_value lval *)
 
@@ -446,6 +455,8 @@ module Make (Config: CONFIG) = struct
               pp_keyword "not" ^^ P.parens (pp_pexpr pe)
           | M_PEop (bop, pe1, pe2) ->
               pp_pexpr pe1 ^^^ pp_binop bop ^^^ pp_pexpr pe2
+          | M_PEapply_fun (f, args) ->
+              Pp.c_app (pp_function f) (List.map pp_pexpr args)
           | M_PEstruct (tag_sym, xs) ->
               P.parens (pp_const "struct" ^^^ pp_raw_symbol tag_sym) ^^
               P.braces (
@@ -468,10 +479,10 @@ module Make (Config: CONFIG) = struct
               )
           | M_PEbool_to_integer asym ->
               pp_keyword "bool_to_integer" ^^ P.parens (pp_pexpr asym)
-          | M_PEconv_int (act, asym) ->
-              !^"conv_int" ^^ P.parens (pp_ct act.ct ^^ P.comma ^^^ pp_pexpr asym)
-          | M_PEconv_loaded_int (act, asym) ->
-              !^"conv_loaded_int" ^^ P.parens (pp_ct act.ct ^^ P.comma ^^^ pp_pexpr asym)
+          | M_PEconv_int (ct_expr, int_expr) ->
+              Pp.c_app (!^ "conv_int") [pp_pexpr ct_expr; pp_pexpr int_expr]
+          | M_PEconv_loaded_int (ct_expr, int_expr) ->
+              Pp.c_app (!^ "conv_loaded_int") [pp_pexpr ct_expr; pp_pexpr int_expr]
           | M_PEwrapI (act, asym) ->
               !^"wrapI" ^^ P.parens (pp_ct act.ct ^^ P.comma ^^^ pp_pexpr asym)
           | M_PEcatch_exceptional_condition (act, asym) ->

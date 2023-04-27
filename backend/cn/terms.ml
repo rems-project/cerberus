@@ -7,8 +7,9 @@ type const =
   | Pointer of Z.t
   | Bool of bool
   | Unit
-  | Default of BaseTypes.t
   | Null
+  | CType_const of Sctypes.ctype
+  | Default of BaseTypes.t
 (* Default bt: equivalent to a unique variable of base type bt, that
    we know nothing about other than Default bt = Default bt *)
 [@@deriving eq, ord]
@@ -55,16 +56,16 @@ type 'bt term_ =
   (* add Z3's Distinct for separation facts  *)
   | Tuple of 'bt term list
   | NthTuple of int * 'bt term
-  | Struct of BaseTypes.tag * (BaseTypes.member * 'bt term) list
-  | StructMember of 'bt term * BaseTypes.member
-  | StructUpdate of ('bt term * BaseTypes.member) * 'bt term
+  | Struct of Sym.t * (Id.t * 'bt term) list
+  | StructMember of 'bt term * Id.t
+  | StructUpdate of ('bt term * Id.t) * 'bt term
   | Record of (Id.t * 'bt term) list
   | RecordMember of 'bt term * Id.t
   | RecordUpdate of ('bt term * Id.t) * 'bt term
   | DatatypeCons of Sym.t * 'bt term
   | DatatypeMember of 'bt term * Id.t
   | DatatypeIsCons of Sym.t * 'bt term
-  | MemberOffset of BaseTypes.tag * Id.t
+  | MemberOffset of Sym.t * Id.t
   | ArrayOffset of Sctypes.t (*element ct*) * 'bt term (*index*)
   | Nil
   | Cons of 'bt term * 'bt term
@@ -119,6 +120,7 @@ let pp : 'bt 'a. ?atomic:bool -> ?f:('bt term -> Pp.doc -> Pp.doc) -> 'bt term -
        | Unit -> !^"void"
        | Default bt -> c_app !^"default" [BaseTypes.pp bt]
        | Null -> !^"null"
+       | CType_const ct -> Pp.squotes (Sctypes.pp ct)
        end
     | Sym sym -> Sym.pp sym
     (* | Arith_op arith_op -> *)
@@ -353,10 +355,11 @@ let rec dtree (IT (it_, bt)) =
   | (ArrayOffset (ty, t)) -> Dnode (pp_ctor "ArrayOffset", [Dleaf (Sctypes.pp ty); dtree t])
   | (Representable (ty, t)) -> Dnode (pp_ctor "Representable", [Dleaf (Sctypes.pp ty); dtree t])
   | (Good (ty, t)) -> Dnode (pp_ctor "Good", [Dleaf (Sctypes.pp ty); dtree t])
+  | List its -> Dnode (pp_ctor "List", (List.map dtree its))
   | (Aligned a) -> Dnode (pp_ctor "Aligned", [dtree a.t; dtree a.align])
   | (MapConst (bt, t)) -> Dnode (pp_ctor "MapConst", [dtree t])
   | (MapSet (t1, t2, t3)) -> Dnode (pp_ctor "MapSet", [dtree t1; dtree t2; dtree t3])
   | (MapGet (t1, t2)) -> Dnode (pp_ctor "MapGet", [dtree t1; dtree t2])
   | (MapDef ((s, bt), t)) -> Dnode (pp_ctor "MapDef", [Dleaf (Sym.pp s); dtree t])
   | Apply (f, args) -> Dnode (pp_ctor "Apply", (Dleaf (Sym.pp f) :: List.map dtree args))
-  | _ -> failwith "todo"
+  | _ -> failwith ("todo: dtree: " ^ Pp.plain (pp (IT (it_, bt))))

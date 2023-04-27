@@ -2,16 +2,15 @@
 
 open Pp
 
-
-
 type basetype =
   | Unit 
   | Bool
   | Integer
   | Real
+  | CType
   | Loc of Sctypes.t option
-  | Struct of BaseTypes.tag
-  | Datatype of BaseTypes.tag
+  | Struct of Sym.t
+  | Datatype of Sym.t
   | Record of member_types
   | Map of basetype * basetype
   | List of basetype
@@ -32,12 +31,12 @@ let compare = compare_basetype
 
 
 type datatype_info = {
-  dt_constrs: BaseTypes.tag list;
+  dt_constrs: Sym.t list;
   dt_all_params: member_types;
 }
 type constr_info = {
   c_params: member_types;
-  c_datatype_tag: BaseTypes.tag
+  c_datatype_tag: Sym.t
 }
 
 let cons_dom_rng info =
@@ -49,6 +48,7 @@ let rec pp = function
   | Bool -> !^"bool"
   | Integer -> !^"integer"
   | Real -> !^"real"
+  | CType -> !^"ctype"
   | Loc (Some ct) -> !^"pointer" ^^ angles (Sctypes.pp ct)
   | Loc None -> !^"pointer"
   | Struct sym -> !^"struct" ^^^ Sym.pp sym
@@ -113,6 +113,7 @@ let rec of_basetype = function
   | BT.Bool -> Bool
   | BT.Integer -> Integer
   | BT.Real -> Real
+  | BT.CType -> CType
   | BT.Loc -> Loc None
   | BT.Struct tag -> Struct tag
   | BT.Datatype tag -> Datatype tag
@@ -128,6 +129,7 @@ let rec to_basetype = function
   | Bool -> BT.Bool
   | Integer -> BT.Integer
   | Real -> BT.Real
+  | CType -> BT.CType
   | Loc _ -> BT.Loc
   | Struct tag -> BT.Struct tag
   | Datatype tag -> BT.Datatype tag

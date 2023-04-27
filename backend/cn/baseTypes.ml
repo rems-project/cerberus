@@ -1,23 +1,14 @@
 open Pp
 
-
-type tag = Sym.t
-let equal_tag = Sym.equal
-let compare_tag = Sym.compare
-
-type member = Id.t
-let equal_member = Id.equal
-let compare_member = Id.compare
-
-
 type basetype =
   | Unit 
   | Bool
   | Integer
   | Real
   | Loc
-  | Struct of tag
-  | Datatype of tag
+  | CType
+  | Struct of Sym.t
+  | Datatype of Sym.t
   | Record of member_types
   | Map of basetype * basetype
   | List of basetype
@@ -38,12 +29,12 @@ let compare = compare_basetype
 
 
 type datatype_info = {
-  dt_constrs: tag list;
+  dt_constrs: Sym.t list;
   dt_all_params: member_types;
 }
 type constr_info = {
   c_params: member_types;
-  c_datatype_tag: tag
+  c_datatype_tag: Sym.t
 }
 
 let cons_dom_rng info =
@@ -56,6 +47,7 @@ let rec pp = function
   | Integer -> !^"integer"
   | Real -> !^"real"
   | Loc -> !^"pointer"
+  | CType -> !^"ctype"
   | Struct sym -> !^"struct" ^^^ Sym.pp sym
   | Datatype sym -> !^"datatype" ^^^ Sym.pp sym
   | Record members -> braces (flow_map comma (fun (s, bt) -> pp bt ^^^ Id.pp s) members)
@@ -126,9 +118,10 @@ let rec hash = function
   | Integer -> 2
   | Real -> 3
   | Loc -> 4
-  | List _ -> 5
-  | Tuple _ -> 6
-  | Set _ -> 7
+  | CType -> 5
+  | List _ -> 6
+  | Tuple _ -> 7
+  | Set _ -> 8
   (* | Option _ -> 8 *)
   | Struct tag -> 1000 + Sym.num tag
   | Datatype tag -> 4000 + Sym.num tag

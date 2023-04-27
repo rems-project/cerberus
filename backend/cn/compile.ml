@@ -58,10 +58,16 @@ let empty tagDefs =
   }
 
 
+(* TODO: ugly hack to get started *)
+module SymTable = Hashtbl.Make(Sym)
+let symtable = SymTable.create 10000
+
 let add_computational sym bTy env =
+  SymTable.add symtable sym bTy;
   {env with computationals= SymMap.add sym bTy env.computationals }
 
 let add_logical sym bTy env =
+  SymTable.add symtable sym bTy;
   {env with logicals= SymMap.add sym bTy env.logicals }
 
 let add_predicate sym pred_sig env =
@@ -143,6 +149,7 @@ let pp_cnexpr_kind expr_ =
   | CNExpr_sizeof ct -> !^ "(sizeof _)"
   | CNExpr_offsetof (tag, member) -> !^ "(offsetof (_, _))"
   | CNExpr_membershift (e, member) -> !^ "&(_ -> _)"
+  | CNExpr_addr nm -> !^ "&_"
   | CNExpr_cast (bt, expr) -> !^ "(cast (_, _))"
   | CNExpr_call (sym, exprs) -> !^ "(" ^^ Sym.pp sym ^^^ !^ "(...))"
   | CNExpr_cons (c_nm, exprs) -> !^ "(" ^^ Sym.pp c_nm ^^^ !^ "{...})"
@@ -180,6 +187,8 @@ let rec free_in_expr (CNExpr (_loc, expr_)) =
      SymSet.empty
   | CNExpr_membershift (e, _id) ->
      free_in_expr e
+  | CNExpr_addr _ ->
+     SymSet.empty
   | CNExpr_cast (_bt, e) ->
      free_in_expr e
   | CNExpr_call (_id, es) ->
@@ -509,7 +518,7 @@ module EffectfulTranslation = struct
 
 
   let translate_match env loc x shape_expr : (IT.sterm * (Sym.t * IT.sterm) list) m =
-    let rec f x = function
+    let rec f x m = match m with
       | CNExpr (loc2, CNExpr_cons (c_nm, exprs)) ->
           let@ cons_info = lookup_constr loc2 c_nm env in
           (* let@ (_, mem_syms) = lookup_datatype loc cons_info.c_datatype_tag env in *)
@@ -539,6 +548,7 @@ module EffectfulTranslation = struct
           fail {loc; msg = Generic (!^ "not permitted in match pattern:" ^^^ pp_cnexpr_kind ex)}
     in
     let@ (xs, ys) = f x shape_expr in
+    Pp.debug 7 (lazy (Pp.item "converted shape_expr" (Pp.brackets (Pp.list IT.pp xs))));
     return (IT.and_sterm_ xs, ys)
 
 
@@ -631,6 +641,8 @@ module EffectfulTranslation = struct
             | has ->
                fail {loc; msg = Illtyped_it {it = Terms.pp e; has = SBT.pp has; expected = "struct pointer"; o_ctxt = None}}
             end
+        | CNExpr_addr nm ->
+            return (sym_ (nm, SBT.Loc None))
         | CNExpr_cast (bt, expr) ->
             let@ expr = self expr in
             let bt = translate_cn_base_type bt in
@@ -983,7 +995,7 @@ let translate_cn_func_body env body =
   aux env body
 
 
-let known_attrs = ["rec"]
+let known_attrs = ["rec"; "coq_unfold"]
 
 let translate_cn_function env (def: cn_function) =
   let open LogicalFunctions in
@@ -995,6 +1007,7 @@ let translate_cn_function env (def: cn_function) =
     List.fold_left (fun acc (sym, bt) -> add_logical sym bt acc
       ) env args in
   let is_rec = List.exists (fun id -> String.equal (Id.s id) "rec") def.cn_func_attrs in
+  let coq_unfold = List.exists (fun id -> String.equal (Id.s id) "coq_unfold") def.cn_func_attrs in
   let@ () = ListM.iterM (fun id -> if List.exists (String.equal (Id.s id)) known_attrs
     then return ()
     else fail {loc = def.cn_func_loc; msg = Generic (Pp.item "Unknown attribute" (Id.pp id))}
@@ -1008,7 +1021,8 @@ let translate_cn_function env (def: cn_function) =
   let def2 = {
       loc = def.cn_func_loc; 
       args = List.map_snd SBT.to_basetype args; 
-      return_bt = SBT.to_basetype return_bt; 
+      return_bt = SBT.to_basetype return_bt;
+      emit_coq = not coq_unfold;
       definition
     } 
   in

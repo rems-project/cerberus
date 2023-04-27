@@ -35,3 +35,11 @@ val eval :
   model -> 
   IndexTerms.t -> 
   IndexTerms.t option
+
+
+val get_loc_addrs_in_eqs : solver ->
+  pointer_facts:IndexTerms.t list ->
+  Global.t -> Sym.t list
+
+
+

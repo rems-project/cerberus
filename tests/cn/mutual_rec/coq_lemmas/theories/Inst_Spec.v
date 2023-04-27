@@ -34,79 +34,56 @@ Module Proofs.
 Import Defs Inst.
 Open Scope Z.
 
-Lemma a_tree_keys_leaf_lemma: a_tree_keys_leaf_lemma_type.
+Lemma inc_list_lemma: inc_list_lemma_type.
 Proof.
-  unfold a_tree_keys_leaf_lemma_type.
-  simpl.
-  auto.
-Qed.
-
-Lemma b_tree_keys_leaf_lemma: b_tree_keys_leaf_lemma_type.
-Proof.
-  unfold b_tree_keys_leaf_lemma_type.
-  auto.
-Qed.
-
-Lemma inc_list_nil_lemma: inc_list_nil_lemma_type.
-Proof.
-  unfold inc_list_nil_lemma_type.
-  auto.
-Qed.
-
-Lemma a_tree_keys_node_lemma: a_tree_keys_node_lemma_type.
-Proof.
-  unfold a_tree_keys_node_lemma_type.
+  unfold inc_list_lemma_type, inc_list.
   intros.
-  unfold a_tree_keys, b_tree_keys, concat.
-  simpl.
-  repeat rewrite to_from_list.
-  auto.
+  destruct xs; auto.
 Qed.
 
-Lemma a_tree_keys_node_concat_inc_lemma: a_tree_keys_node_concat_inc_lemma_type.
+Lemma a_tree_keys_lemma: a_tree_keys_lemma_type.
 Proof.
-  unfold a_tree_keys_node_concat_inc_lemma_type.
+  unfold a_tree_keys_lemma_type, a_tree_keys, b_tree_keys, concat.
   intros.
-  unfold inc_list, concat.
+  destruct atree.
+  - auto.
+  - simpl.
+    repeat rewrite to_from_list.
+    auto.
+Qed.
+
+Lemma b_tree_keys_lemma: b_tree_keys_lemma_type.
+Proof.
+  unfold b_tree_keys_lemma_type, a_tree_keys, b_tree_keys,
+    merge, inc_list, double_list.
+  intros.
+  destruct btree.
+  - auto.
+  - simpl.
+    repeat rewrite to_from_list.
+    rewrite List.map_map.
+    auto.
+Qed.
+
+Lemma inc_concat_lemma: inc_concat_lemma_type.
+  unfold inc_concat_lemma_type, inc_list, concat.
+  intros.
   repeat rewrite to_from_list.
   rewrite List.map_app.
   auto.
 Qed.
 
-Lemma a_tree_keys_node_concat_cons_inc_lemma: a_tree_keys_node_concat_cons_inc_lemma_type.
-Proof.
-  unfold a_tree_keys_node_concat_cons_inc_lemma_type.
+Lemma inc_merge_double_lemma: inc_merge_double_lemma_type.
+  unfold inc_merge_double_lemma_type, inc_list, merge.
   intros.
-  unfold inc_list.
-  auto.
-Qed.
-
-Lemma b_tree_keys_node_lemma: b_tree_keys_node_lemma_type.
-Proof.
-  unfold b_tree_keys_node_lemma_type.
-  intros.
-  unfold merge, b_tree_keys, a_tree_keys, double_list, inc_list.
-  simpl.
-  repeat rewrite to_from_list.
-  rewrite List.map_map.
-  auto.
-Qed.
-
-Lemma b_tree_keys_node_merge_inc_lemma: b_tree_keys_node_merge_inc_lemma_type.
-Proof.
-  unfold b_tree_keys_node_merge_inc_lemma_type.
-  intros.
-  unfold inc_list, merge.
   repeat rewrite to_from_list.
   rewrite map_merge by lia.
   auto.
 Qed.
 
-Lemma b_tree_keys_node_merge_flip_lemma: b_tree_keys_node_merge_flip_lemma_type.
-Proof.
-  unfold b_tree_keys_node_merge_flip_lemma_type.
+Lemma flip_merge_lemma: flip_merge_lemma_type.
+  unfold flip_merge_lemma_type, inc_list, merge, double_list.
   intros.
-  unfold merge, inc_list, double_list.
   repeat rewrite to_from_list.
   rewrite merge_flip; try reflexivity.
   rewrite<- List.Forall_forall.
@@ -120,11 +97,9 @@ Proof.
   lia.
 Qed.
 
-Lemma b_tree_keys_node_inc_inc_double_lemma: b_tree_keys_node_inc_inc_double_lemma_type.
-Proof.
-  unfold b_tree_keys_node_inc_inc_double_lemma_type.
+Lemma inc_double_lemma: inc_double_lemma_type.
+  unfold inc_double_lemma_type, double_list, inc_list.
   intros.
-  unfold inc_list, double_list.
   repeat rewrite to_from_list.
   repeat rewrite List.map_map.
   f_equal.

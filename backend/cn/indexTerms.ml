@@ -348,6 +348,11 @@ let rec split_and it =
   | Some (it1, it2) -> split_and it1 @ split_and it2
   | None -> [it]
 
+let rec is_const_val = function
+  | IT (Const _, _) -> true
+  | IT (List xs, _) -> List.for_all is_const_val xs
+  | _ -> false
+
 
 (* shorthands *)
 
@@ -362,6 +367,7 @@ let bool_ b = IT (Const (Bool b), BT.Bool)
 let unit_ = IT (Const Unit, BT.Unit)
 let int_ n = z_ (Z.of_int n)
 let default_ bt = IT (Const (Default bt), bt)
+let const_ctype_ ct = IT (Const (CType_const ct), BT.CType)
 
 (* cmp_op *)
 let lt_ (it, it') = IT (Binop (LT, it, it'), BT.Bool)
@@ -386,9 +392,13 @@ let eq__ it it' = eq_ (it, it')
 let ne_ (it, it') = not_ (eq_ (it, it'))
 let ne__ it it' = ne_ (it, it')
 
+let eq_sterm_ (it, it') = IT (Binop (EQ, it, it'), SurfaceBaseTypes.Bool)
 let bool_sterm_ b = IT (Const (Bool b), SurfaceBaseTypes.Bool)
 let and2_sterm_ (it, it') = IT (Binop (And, it, it'), SurfaceBaseTypes.Bool)
 let and_sterm_ = vargs_binop (bool_sterm_ true) (Tools.curry and2_sterm_)
+let or2_sterm_ (it, it') = IT (Binop (Or, it, it'), SurfaceBaseTypes.Bool)
+let or_sterm_ = vargs_binop (bool_sterm_ true) (Tools.curry or2_sterm_)
+
 
 let let_ ((nm, x), y) = IT (Let ((nm, x), y), basetype y)
 
@@ -565,6 +575,21 @@ let tail_ it = IT (Tail it, bt it)
 let nthList_ (n, it, d) = IT (NthList (n, it, d), bt d)
 let array_to_list_ (arr, i, len) bt = IT (ArrayToList (arr, i, len), bt)
 
+let rec dest_list it = match term it with
+  | Nil -> Some []
+  | Cons (x, xs) -> Option.map (fun ys -> x :: ys) (dest_list xs)
+  | List xs -> Some xs
+  (* TODO: maybe include Tail, if we ever actually use it? *)
+  | _ -> None
+
+
+let mk_in_loc_list loc (ptr, opts) = match dest_list opts with
+  | Some xs -> or_sterm_ (List.map (fun x -> eq_sterm_ (ptr, x)) xs)
+  | None ->
+    Pp.warn loc (Pp.item "cannot enumerate in_loc_list arg, treating as unspecified"
+        (pp opts));
+    sym_ (Sym.fresh_named "unspecified_in_loc_list", SurfaceBaseTypes.Bool)
+
 (* set_op *)
 let setMember_ bt (it, it') = IT (Binop (SetMember,it, it'), BT.Bool)
 (* let setUnion_ its = IT (Set_op (SetUnion its), bt (hd its))
@@ -645,7 +670,12 @@ let def_ sym e = eq_ (sym_ (sym, bt e), e)
 let in_range within (min, max) =
   and_ [le_ (min, within); le_ (within, max)]
 
-
+let const_of_c_sig (c_sig : Sctypes.c_concrete_sig) =
+  let (ret_ct, arg_cts, variadic, has_proto) = c_sig in
+  Option.bind (Sctypes.of_ctype ret_ct) (fun ret_ct ->
+  Option.bind (Option.ListM.mapM Sctypes.of_ctype arg_cts) (fun arg_cts ->
+  let arg_v = list_ ~item_bt:BT.CType (List.map const_ctype_ arg_cts) in
+  Some (tuple_ [const_ctype_ ret_ct; arg_v; bool_ variadic; bool_ has_proto])))
 
 
 let value_check_pointer alignment ~pointee_ct about =

@@ -64,6 +64,8 @@ type 'TY mu_object_value =  (* C object values *)
 and 'TY mu_value =  (* Core values *)
  | M_Vobject of 'TY mu_object_value (* C object value *)
  (* | M_Vloaded of 'TY mu_loaded_value (\* loaded C object value *\) *)
+ | M_Vctype of Ctype.ctype
+ | M_Vfunction_addr of Symbol.sym
  | M_Vunit
  | M_Vtrue
  | M_Vfalse
@@ -97,6 +99,11 @@ type 'TY mu_sym_or_pattern =
   (* | M_Symbol of symbol *)
   | M_Pat of mu_pattern
 
+type mu_function = (* some functions that persist into mucore, not just (infix) binops *)
+ | M_params_length
+ | M_params_nth
+ | M_are_compatible
+
 type 'TY mu_pexpr_ =  (* Core pure expressions *)
  | M_PEsym of symbol
  (* | M_PEimpl of Implementation.implementation_constant (\* implementation-defined constant *\) *)
@@ -113,6 +120,7 @@ type 'TY mu_pexpr_ =  (* Core pure expressions *)
  | M_PEmember_shift of ('TY mu_pexpr) * symbol * Symbol.identifier (* pointer struct/union member shift *)
  | M_PEnot of 'TY mu_pexpr (* boolean not *)
  | M_PEop of Core.binop * ('TY mu_pexpr) * ('TY mu_pexpr)
+ | M_PEapply_fun of mu_function * ('TY mu_pexpr) list
  | M_PEstruct of symbol * (Symbol.identifier * 'TY mu_pexpr) list (* C struct expression *)
  | M_PEunion of symbol * Symbol.identifier * 'TY mu_pexpr (* C union expression *)
  | M_PEcfunction of 'TY mu_pexpr
@@ -120,8 +128,8 @@ type 'TY mu_pexpr_ =  (* Core pure expressions *)
 
  (* | M_PEassert_undef of 'TY mu_pexpr * Location_ocaml.t * Undefined.undefined_behaviour *)
  | M_PEbool_to_integer of 'TY mu_pexpr
- | M_PEconv_int of 'TY act * 'TY mu_pexpr
- | M_PEconv_loaded_int of 'TY act * 'TY mu_pexpr
+ | M_PEconv_int of 'TY mu_pexpr * 'TY mu_pexpr
+ | M_PEconv_loaded_int of 'TY mu_pexpr * 'TY mu_pexpr
  | M_PEwrapI of 'TY act * 'TY mu_pexpr
  | M_PEcatch_exceptional_condition of 'TY act * 'TY mu_pexpr
  | M_PEis_representable_integer of 'TY mu_pexpr * 'TY act
@@ -284,6 +292,35 @@ let mComputational (bound, info) t = M_Computational (bound, info, t)
 let mConstraints lcs t = List.fold_right mConstraint lcs t
 let mResources res t = List.fold_right mResource res t
 
+let mu_fun_param_types mu_fun =
+  let open BaseTypes in
+  match mu_fun with
+  | M_params_length -> [List CType]
+  | M_params_nth -> [List CType; Integer]
+  | M_are_compatible -> [CType; CType]
+
+let pp_function = function
+  | M_params_length -> !^ "params_length"
+  | M_params_nth -> !^ "params_nth"
+  | M_are_compatible -> !^ "are_compatible"
+
+let evaluate_fun mu_fun args =
+  let args_it = List.map IT.term args in
+  match mu_fun with
+  | M_params_length -> begin match args_it with
+    | [IT.List xs] -> Some (IT.int_ (List.length xs))
+    | _ -> None
+  end
+  | M_params_nth -> begin match args_it, List.map IT.is_z args with
+    | [IT.List xs; _], [_; Some i] -> if Z.lt i (Z.of_int (List.length xs))
+        then List.nth_opt xs (Z.to_int i) else None
+    | _ -> None
+  end
+  | M_are_compatible -> begin match List.map IT.is_const args with
+    | [Some (IT.CType_const ct1, _); Some (IT.CType_const ct2, _)] -> if Sctypes.equal ct1 ct2
+      then Some (IT.bool_ true) else None
+    | _ -> None
+  end
 
 
 type parse_ast_label_spec =
@@ -360,7 +397,6 @@ type mu_tag_definitions =
 type 'TY mu_globs_list = 
   (symbol * 'TY mu_globs) list
 
-
 type 'TY mu_file = {
   mu_main    : symbol option;
   mu_tagDefs : mu_tag_definitions;
@@ -372,6 +408,7 @@ type 'TY mu_file = {
   mu_datatypes : (Sym.t * BaseTypes.datatype_info) list;
   mu_constructors : (Sym.t * BaseTypes.constr_info) list;
   mu_lemmata : (Sym.t * (Locations.t * ArgumentTypes.lemmat)) list;
+  mu_call_funinfo : (symbol, Sctypes.c_concrete_sig) Pmap.map;
 }
 
 

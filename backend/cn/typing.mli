@@ -24,12 +24,14 @@ val prev_models_with : Locations.t -> IndexTerms.t -> (Solver.model_with_q list)
 val bound_a : Sym.t -> (bool) m
 val bound_l : Sym.t -> (bool) m
 val bound : Sym.t -> (bool) m
-val get_a : Sym.t -> (BaseTypes.t) m
-val get_l : Sym.t -> (BaseTypes.t) m
+val get_a : Sym.t -> Context.basetype_or_value m
+val get_l : Sym.t -> Context.basetype_or_value m
 val remove_a : Sym.t -> (unit) m
 val remove_as : Sym.t list -> (unit) m
 val add_a : Sym.t -> BaseTypes.t -> Context.l_info -> (unit) m
+val add_a_value : Sym.t -> IndexTerms.t -> Context.l_info -> unit m
 val add_l : Sym.t -> BaseTypes.t -> Context.l_info -> (unit) m
+val add_l_value : Sym.t -> IndexTerms.t -> Context.l_info -> unit m
 val add_ls : (Sym.t * BaseTypes.t * Context.l_info) list -> (unit) m
 val add_c : LogicalConstraints.t -> (unit) m
 val add_cs : LogicalConstraints.t list -> (unit) m
@@ -58,7 +60,8 @@ val get_struct_member_type : Locations.t -> Sym.t -> Id.t -> (Sctypes.t) m
 val get_member_type : Locations.t -> Sym.t -> Id.t -> Memory.struct_layout -> (Sctypes.t) m
 val get_datatype : Locations.t -> Sym.t -> (BaseTypes.datatype_info) m
 val get_datatype_constr : Locations.t -> Sym.t -> (BaseTypes.constr_info) m
-val get_fun_decl : Locations.t -> Sym.t -> (Locations.t * Global.AT.ft) m
+val get_fun_decl : Locations.t -> Sym.t ->
+    (Locations.t * Global.AT.ft * Sctypes.c_concrete_sig) m
 val get_lemma : Locations.t -> Sym.t -> (Locations.t * Global.AT.lemmat) m
 
 val get_resource_predicate_def : Locations.t -> Sym.t ->
@@ -68,7 +71,8 @@ val get_logical_function_def : Locations.t -> Sym.t ->
 
 
 val add_struct_decl : Sym.t -> Memory.struct_layout -> (unit) m
-val add_fun_decl : Sym.t -> (Locations.t * ArgumentTypes.ft) -> (unit) m
+val add_fun_decl : Sym.t -> (Locations.t * ArgumentTypes.ft * Sctypes.c_concrete_sig) ->
+    (unit) m
 val add_lemma : Sym.t -> (Locations.t * ArgumentTypes.lemmat) -> (unit) m
 val add_resource_predicate : Sym.t -> ResourcePredicates.definition -> (unit) m
 val add_logical_function : Sym.t -> LogicalFunctions.definition -> (unit) m
@@ -81,5 +85,7 @@ val set_statement_locs : Locations.loc CStatements.LocMap.t -> (unit) m
 val value_eq_group : IndexTerms.t option -> IndexTerms.t -> (EqTable.ITSet.t) m
 val test_value_eqs : Locations.t -> IndexTerms.t option -> IndexTerms.t ->
     IndexTerms.t list -> (unit) m
+
+val get_loc_addrs_in_eqs : unit -> (Sym.t list) m
 
 val embed_resultat : 'a Resultat.t -> 'a m

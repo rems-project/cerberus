@@ -74,7 +74,7 @@ function (integer) tree_v (datatype tree t, datatype arc_in_array arc)
 
 function (datatype tree) nth_tree_list (datatype tree_list ts, integer i)
 
-function (integer) tree_v_step (datatype tree t, datatype arc_in_array arc)
+function [coq_unfold] (integer) tree_v_step (datatype tree t, datatype arc_in_array arc)
 {
   switch (t)
   case Empty_Tree {
@@ -88,7 +88,7 @@ function (integer) tree_v_step (datatype tree t, datatype arc_in_array arc)
   }
 }
 
-function (boolean) in_tree_step (datatype tree t, datatype arc_in_array arc)
+function [coq_unfold] (boolean) in_tree_step (datatype tree t, datatype arc_in_array arc)
 {
   switch (t)
   case Empty_Tree {

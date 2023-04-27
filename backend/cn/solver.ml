@@ -157,6 +157,7 @@ module Translate = struct
     | DatatypeConsRecogFunc of { nm: Sym.t }
     | DatatypeAccFunc of { member: Id.t; dt: Sym.t; bt: BT.t }
     | UninterpretedVal of { nm : Sym.t }
+    | Term of { it : IT.t }
   [@@deriving eq]
 
 
@@ -176,6 +177,7 @@ module Translate = struct
     | IsNthList of IT.t
     | IsArrayToList of IT.t
     | IsLetVar of (IT.t * IT.t)
+    | IsLocAddrInEq of Sym.t
 
   (* note translated terms that need additional premises to be added to goals
      they are in to fully characterise them *)
@@ -185,6 +187,14 @@ module Translate = struct
     (needs_premise_table := Z3ExprMap.add expr info (! needs_premise_table));
     expr
 
+  let maybe_record_loc_addr_eq global t expr =
+    match IT.term t with
+    | Sym sym -> 
+      if BT.equal (IT.bt t) BT.Loc && SymMap.mem sym global.Global.fun_decls
+      then begin Pp.debug 8 (lazy (Pp.item "recording addr in eq" (IT.pp t)));
+         needs_premise (IsLocAddrInEq sym) expr end
+      else expr
+    | _ -> expr
 
   let string context str =
     Z3.Symbol.mk_string context str
@@ -206,6 +216,23 @@ module Translate = struct
 
   let bt_suffix_name nm bt = Pp.plain (!^ nm ^^ !^ "_" ^^ bt_pp_name bt)
 
+  module ITMap = Map.Make(IT)
+
+  let uninterp_tab = ref (ITMap.empty, 0)
+
+  let uninterp_term context sort (it : IT.t) =
+    let (m, n) = ! uninterp_tab in
+    match ITMap.find_opt it m with
+    | Some z3_exp -> z3_exp
+    | None -> begin
+      let nm = "uninterp_" ^ Int.to_string n ^ "_" ^ bt_name (IT.bt it) in
+      let sym = string context nm in
+      let z3_exp = Z3.Expr.mk_const context sym sort in
+      uninterp_tab := (ITMap.add it z3_exp m, n + 1);
+      Z3Symbol_Table.add z3sym_table sym (Term {it});
+      z3_exp
+    end
+
   let tuple_field_name bts i = 
     bt_name (Tuple bts) ^ string_of_int i
 
@@ -214,7 +241,6 @@ module Translate = struct
 
   let accessor_name dt_name member =
     symbol_string "" dt_name ^ "_" ^ Id.s member
-    
 
   let member_name tag id = 
     bt_name (BT.Struct tag) ^ "_" ^ Id.s id
@@ -276,6 +302,8 @@ module Translate = struct
            (string (bt_name Loc))
            [string "loc_to_integer"] 
            [sort BT.Integer]
+      | CType -> (* the ctype type is represented as an uninterpreted sort *)
+        Z3.Sort.mk_uninterpreted_s context (bt_name CType)
       | List bt -> (* lists are represented as uninterpreted sorts *)
         Z3.Sort.mk_uninterpreted_s context (bt_name (List bt))
       | Set bt -> Z3.Set.mk_sort context (sort bt)
@@ -351,6 +379,7 @@ module Translate = struct
     Z3.Tuple.get_mk_decl (sort context global Loc)
   
 
+
   let term ?(warn_lambda=true) context global : IT.t -> expr =
 
     let struct_decls = global.struct_decls in
@@ -403,6 +432,7 @@ module Translate = struct
          Z3.Expr.mk_const context sym (sort bt)
       | Const Null -> 
          integer_to_loc (term (int_ 0))
+      | Const (CType_const ct) -> uninterp_term context (sort bt) it
       | Binop (bop, t1, t2) -> 
          let open Z3.Arithmetic in
          let make_uf sym ret_sort args =
@@ -441,7 +471,9 @@ module Translate = struct
          | Max -> term (ite_ (ge_ (t1, t2), t1, t2))
          | XORNoSMT ->
             make_uf xor_no_smt_solver_sym (Integer) [t1; t2]
-         | EQ -> Z3.Boolean.mk_eq context (term t1) (term t2)
+         | EQ -> Z3.Boolean.mk_eq context
+            (maybe_record_loc_addr_eq global t1 (term t1))
+            (maybe_record_loc_addr_eq global t2 (term t2))
          | SetMember -> Z3.Set.mk_membership context (term t1) (term t2)
          | SetUnion -> Z3.Set.mk_union context (map term [t1;t2])
          | SetIntersection -> Z3.Set.mk_intersection context (map term [t1;t2])
@@ -560,6 +592,7 @@ module Translate = struct
          term (int_ (Option.get (Memory.member_offset decl member)))
       | ArrayOffset (ct, t) -> 
          term (mul_ (int_ (Memory.size_of_ctype ct), t))
+      | IT.List xs -> uninterp_term context (sort bt) it
       | NthList (i, xs, d) ->
          let args = List.map term [i; xs; d] in
          let nm = bt_suffix_name "nth_list" bt in
@@ -616,6 +649,7 @@ module Translate = struct
          let _ = needs_premise (IsLetVar (x, t1)) (term x) in
          term t2
       | _ ->
+         Pp.debug 2 (lazy (Pp.item "smt mapping issue" (IT.pp it)));
          Debug_ocaml.error "todo: SMT mapping"
       end
 
@@ -861,6 +895,19 @@ let provable ~loc ~solver ~global ~assumptions ~simp_ctxt ~pointer_facts lc =
            let reason = Z3.Solver.get_reason_unknown solver.fancy in
            failwith ("SMT solver returned 'unknown'; reason: " ^ reason)
 
+let get_loc_addrs_in_eqs solver ~pointer_facts global =
+  (* FIXME: duplicating what provable does *)
+  let context = solver.context in
+  let extra1 = pointer_facts |> List.map (Translate.term context global) in
+  let extra2 = Translate.extra_logical_facts context global
+    (extra1 @ Z3.Solver.get_assertions solver.incremental) in
+  let all_assumptions = extra1 @ extra2 @
+            Z3.Solver.get_assertions solver.incremental in
+  let key_ts = Translate.needs_premise_elts all_assumptions in
+  List.filter_map (function
+    | (_, Translate.IsLocAddrInEq t) -> Some t
+    | _ -> None) key_ts
+
 
 module Eval = struct
 
@@ -1083,6 +1130,7 @@ module Eval = struct
            | DatatypeAccFunc xs ->
               Simplify.IndexTerms.datatype_member_reduce (nth args 0) xs.member xs.bt
            | UninterpretedVal {nm} -> sym_ (nm, expr_bt)
+           | Term {it} -> it
            end
 
         | () when String.equal (Z3.Symbol.to_string func_name) "^" ->
