@@ -4,6 +4,11 @@ open Executable_spec_utils
 module A=CF.AilSyntax
 module C=CF.Ctype
 
+let ident_map = [
+  ("return", "__cn_ret");
+  ("power", "pow")
+]
+
 let pp_ail_default ail_expr = CF.String_ail.string_of_expression ~executable_spec:true (mk_expr ail_expr)
 
 let pp_ail_const ail_const = 
@@ -39,10 +44,14 @@ let rec pp_ail_expr ail_expr =
   match ail_expr with
     | A.(AilEident sym) -> 
       let sym_str = CF.String_ail.string_of_cn_id sym in
-      if String.equal sym_str "return" then
+      let str_from_list = List.assoc_opt String.equal sym_str ident_map in
+      (match str_from_list with
+        | Some str -> str
+        | None -> sym_str)
+      (* if String.equal sym_str "return" then
         "__cn_ret"
       else
-        sym_str
+        sym_str *)
     | A.(AilEconst ail_const) -> pp_ail_const ail_const
     | A.(AilEbinary (x, bop, y)) -> (pp_ail_expr (rm_expr x)) ^ " " ^ (pp_ail_binop bop) ^ " " ^ (pp_ail_expr (rm_expr y))
     | A.(AilEunary (Bnot, ail_expr)) -> "!(" ^ (pp_ail_expr (rm_expr ail_expr)) ^ ")"
