@@ -137,12 +137,12 @@ let generate_c_pres_and_posts (instrumentation : Core_to_mucore.instrumentation)
   let sym_equality = fun (loc, _) -> CF.Symbol.equal_sym loc instrumentation.fn in
   let fn_decl = List.filter sym_equality ail_prog.A.declarations in
   let fn_def = List.filter sym_equality ail_prog.A.function_definitions in
-  let args_list = 
+  let (arg_types, arg_syms) = 
   match (fn_decl, fn_def) with 
     | ((_, (_, _, A.(Decl_function (_, _, arg_types, _, _, _)))) :: _), ((_, (_, _, _, arg_syms, _)) :: _) -> 
       let arg_types = List.map (fun (_, ctype, _) -> ctype) arg_types in
-      List.combine arg_types arg_syms
-    | _ -> []
+      (arg_types, arg_syms)
+    | _ -> ([], [])
   in
   let gen_old_var_fn = (fun sym -> (CF.Pp_symbol.to_string_pretty sym) ^ "_old") in
   let empty_qualifiers : CF.Ctype.qualifiers = {const = false; restrict = false; volatile = false} in
@@ -155,13 +155,14 @@ let generate_c_pres_and_posts (instrumentation : Core_to_mucore.instrumentation)
     CF.Pp_symbol.to_string_pretty sym ^
     ";\n"
   in
-  let arg_strs = List.map arg_str_fn args_list in
-  let generate_condition_str cn_condition =
+  let arg_names = List.map CF.Pp_symbol.to_string_pretty arg_syms in
+  let arg_strs = List.map arg_str_fn (List.combine arg_types arg_syms) in
+  let generate_condition_str cn_condition arg_names_opt =
     (let ail_condition = Cn_to_ail.cn_to_ail_condition cn_condition type_map in
-    Ail_to_c.pp_ail_stmt ail_condition ^ ";\n")
+    Ail_to_c.pp_ail_stmt ail_condition arg_names_opt ^ ";\n")
   in
-  let pres = List.map generate_condition_str instrumentation.surface.requires in
-  let posts = List.map generate_condition_str instrumentation.surface.ensures in
+  let pres = List.map (fun i -> generate_condition_str i None) instrumentation.surface.requires in
+  let posts = List.map (fun i -> generate_condition_str i (Some arg_names)) instrumentation.surface.ensures in
   (* let arg_strs = List.fold_left (^) "" arg_strs in *)
   [(instrumentation.fn, (arg_strs @ pres, posts))]
   (* let function_identifiers = List.map fst function_definitions in *)
