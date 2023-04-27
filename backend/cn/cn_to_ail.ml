@@ -7,6 +7,24 @@ open Compile
 open Executable_spec_utils
 module A=CF.AilSyntax
 module C=CF.Ctype
+module BT=BaseTypes
+
+let rec bt_to_cn_base_type = function
+| BT.Unit -> CN_unit
+| BT.Bool -> CN_bool
+| BT.Integer -> CN_integer
+| BT.Real -> CN_real
+| BT.CType -> failwith "TODO"
+| BT.Loc -> CN_loc
+| BT.Struct tag -> CN_struct tag
+| BT.Datatype tag -> CN_datatype tag
+| BT.Record member_types -> failwith "TODO"
+  (* CN_record (List.map_snd of_basetype member_types) *)
+| BT.Map (bt1, bt2) -> CN_map (bt_to_cn_base_type bt1, bt_to_cn_base_type bt2)
+| BT.List bt -> CN_list (bt_to_cn_base_type bt)
+| BT.Tuple bts -> CN_tuple (List.map bt_to_cn_base_type bts)
+| BT.Set bt -> CN_set (bt_to_cn_base_type bt)
+| _ -> failwith "TODO"
 
 
 (* TODO: Complete *)
@@ -178,14 +196,19 @@ let cn_to_ail_assertion = function
   | CN_assert_qexp (ident, bTy, e1, e2) -> failwith "TODO"
 
 
-let cn_to_ail_condition = function
-  | CN_cletResource (loc, name, resource) -> A.AilSskip (* TODO *)
+let cn_to_ail_condition cn_condition type_map = 
+  match cn_condition with
+  | CN_cletResource (loc, name, resource) -> (A.AilSskip, None) (* TODO *)
   | CN_cletExpr (_, name, expr) -> 
     let ail_expr = cn_to_ail_expr expr in
-    A.(AilSdeclaration [(name, Some (mk_expr ail_expr))])
+    let sfb_type = SymTable.find type_map name in
+    let basetype = SurfaceBaseTypes.to_basetype sfb_type in
+    let cn_basetype = bt_to_cn_base_type basetype in
+    let ctype = cn_to_ail_base_type cn_basetype in
+    (A.(AilSdeclaration [(name, Some (mk_expr ail_expr))]), Some (mk_ctype ctype))
   | CN_cconstr (loc, constr) -> 
     let ail_constr = cn_to_ail_assertion constr in
-    A.(AilSexpr (mk_expr ail_constr))
+    (A.(AilSexpr (mk_expr ail_constr)), None)
 
 
 (* let cn_to_ail_function_spec = function
