@@ -125,7 +125,7 @@ let inject st inj =
           begin if AilTypesAux.is_void ret_ty then
             ""
           else
-            String_ail.string_of_ctype Ctype.no_qualifiers ret_ty ^ " __cn_ret = { 0 };\n" ^ indent
+            String_ail.string_of_ctype Ctype.no_qualifiers ret_ty ^ " __cn_ret;\n" ^ indent
           end ^
           (* "__CN_PRE(__cn_id_" ^ str ^ ");\n"  *)
           str
