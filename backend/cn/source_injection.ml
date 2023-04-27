@@ -1,4 +1,6 @@
 [@@@warning "-27"]
+open Cerb_frontend
+
 module Pos = struct
   type t = {
     line: int;
@@ -108,22 +110,23 @@ let inject st inj =
         let (st, _) = move_to ~no_ident:true ~print:false st {inj.end_pos with col= inj.end_pos.col } in
         do_output st (String.escaped str)
     | Return None ->
-        do_output st ("__CN_RETURN_VOID;")
+        do_output st ""
+        (* do_output st ("__CN_RETURN_VOID;") *)
     | Return (Some (start_pos, end_pos)) ->
-        let st = do_output st "__CN_RETURN(" in
+        let st = do_output st "__cn_ret = " in
         let (st, _) = move_to ~print:false st start_pos in
         let (st, _) = move_to ~no_ident:true st end_pos in
-        do_output st ");"
+        do_output st ";"
     | Pre (strs, ret_ty) ->
         let indent = String.make st.last_indent ' ' in
         let indented_strs = List.map (fun str -> str ^ indent) strs in
         let str = List.fold_left (^) "" indented_strs in
         do_output st begin
-          (* begin if AilTypesAux.is_void ret_ty then
+          begin if AilTypesAux.is_void ret_ty then
             ""
           else
             String_ail.string_of_ctype Ctype.no_qualifiers ret_ty ^ " __cn_ret = { 0 };\n" ^ indent
-          end ^ *)
+          end ^
           (* "__CN_PRE(__cn_id_" ^ str ^ ");\n"  *)
           str
           (* ^ indent *)
@@ -134,16 +137,18 @@ let inject st inj =
         let str = List.fold_left (^) "" indented_strs in
         do_output st begin
           str
+          ^
+
           (* "\n__cn_epilogue:\n" ^ *)
           (* "\n" ^
           indent ^ 
           str  *)
           (* "__CN_POST(__cn_id_" ^ str ^ ");" ^ *)
-          (* begin if Cerb_frontend.AilTypesAux.is_void ret_ty then
+          begin if Cerb_frontend.AilTypesAux.is_void ret_ty then
             ""
           else
             "\n" ^ indent ^ "return __cn_ret;"
-          end  *)
+          end 
         end
   end in
   fst (move_to ~print:false st inj.end_pos)
@@ -288,9 +293,7 @@ let output_injections oc cn_inj =
               | Ok acc, (_, _, A.Decl_function (_, (_, ret_ty), _, _, _, _)) ->
                   let* (pre, post) = pre_post_injs pre_post_strs ret_ty stmt in
                   let* rets = return_injs stmt in
-                  Ok (pre :: post :: acc)
-                  (* TODO: Bring back return injections *)
-                  (* Ok (pre :: post ::  rets @ acc) *)
+                  Ok (pre :: post ::  rets @ acc)
               | _ ->
                   assert false
             end
