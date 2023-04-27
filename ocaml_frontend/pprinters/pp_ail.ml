@@ -492,65 +492,65 @@ let pp_alignment = function
 let pp_alignment_opt align_opt =
   P.optional (fun align -> pp_alignment align ^^ P.space) align_opt
 
-let rec pp_expression_aux mk_pp_annot a_expr =
-  let rec pp p (AnnotatedExpression (annot, _, loc, expr)) =
+let rec pp_expression_aux ?(executable_spec=false) mk_pp_annot a_expr =
+  let rec pp ?(executable_spec=false) p (AnnotatedExpression (annot, _, loc, expr)) =
     let p' = precedence expr in
-    let pp z = P.group (pp p' z) in
+    let pp ?(executable_spec=false) z = P.group (pp ~executable_spec p' z) in
     (if lt_precedence p' p then fun z -> z else P.parens)
       (mk_pp_annot annot (match expr with
         | AilEunary (PostfixIncr as o, e)
         | AilEunary (PostfixDecr as o, e) ->
-            pp e ^^ pp_unaryOperator o
+            pp ~executable_spec e ^^ pp_unaryOperator o
         | AilEunary (o, e) ->
-            pp_unaryOperator o ^^ pp e
+            pp_unaryOperator o ^^ pp ~executable_spec e
         | AilEbinary (e1, (Comma as o), e2) ->
-            pp e1 ^^ pp_binaryOperator o ^^ P.space ^^ pp e2
+            pp ~executable_spec e1 ^^ pp_binaryOperator o ^^ P.space ^^ pp ~executable_spec e2
         | AilEbinary (e1, o, e2) ->
-            pp e1 ^^^ pp_binaryOperator o ^^^ pp e2
+            pp ~executable_spec e1 ^^^ pp_binaryOperator o ^^^ pp ~executable_spec e2
         | AilEassign (e1, e2) ->
-            pp e1 ^^^ P.equals ^^^ pp e2
+            pp ~executable_spec e1 ^^^ P.equals ^^^ pp ~executable_spec e2
         | AilEreg_load r ->
             !^("r" ^ string_of_int r)
         | AilEbmc_assume e ->
-            !^ "__bmc_assume" ^^ P.parens (pp e)
+            !^ "__bmc_assume" ^^ P.parens (pp ~executable_spec e)
         | AilEcompoundAssign (e1, o, e2) ->
-            pp e1 ^^^ pp_arithmeticOperator o ^^ P.equals ^^^ pp e2
+            pp ~executable_spec e1 ^^^ pp_arithmeticOperator o ^^ P.equals ^^^ pp ~executable_spec e2
         | AilEcond (e1, None, e3) ->
-            P.group (pp e1 ^^^ P.qmark ^^ P.colon ^^^ pp e3)
+            P.group (pp ~executable_spec e1 ^^^ P.qmark ^^ P.colon ^^^ pp ~executable_spec e3)
         | AilEcond (e1, Some e2, e3) ->
-            P.group (pp e1 ^^^ P.qmark ^^^ pp e2 ^^^ P.colon ^^^ pp e3)
+            P.group (pp ~executable_spec e1 ^^^ P.qmark ^^^ pp ~executable_spec e2 ^^^ P.colon ^^^ pp ~executable_spec e3)
         | AilEcast (qs, ty, e) ->
             if !Cerb_debug.debug_level > 5 then
               (* printing the types in a human readable format *)
-              P.parens (pp_ctype_human qs ty) ^^^ pp e
+              P.parens (pp_ctype_human qs ty) ^^^ pp ~executable_spec e
             else
-              P.parens (pp_ctype qs ty) ^^^ pp e
+              P.parens (pp_ctype qs ty) ^^^ pp ~executable_spec e
         | AilEcall (e, es) ->
-            pp e ^^ P.parens (comma_list pp es)
+            pp ~executable_spec e ^^ P.parens (comma_list (fun e -> pp ~executable_spec e) es)
         | AilEassert e ->
-            !^ "assert" ^^ P.parens (pp e)
+            !^ "assert" ^^ P.parens (pp ~executable_spec e)
         | AilEoffsetof (ty, ident) ->
             !^ "offsetof" ^^ P.parens (pp_ctype no_qualifiers ty ^^ P.comma ^^^ Pp_symbol.pp_identifier ident)
         | AilEgeneric (e, gas) ->
-            pp_keyword "_Generic" ^^ P.parens (pp e ^^ P.comma ^^^ comma_list (pp_generic_association_aux mk_pp_annot) gas)
+            pp_keyword "_Generic" ^^ P.parens (pp ~executable_spec e ^^ P.comma ^^^ comma_list (pp_generic_association_aux mk_pp_annot) gas)
         | AilEarray (_, ty, e_opts) ->
             let f i e_opt =
               P.brackets (!^ (string_of_int i)) ^^ P.equals ^^^
-              Option.(value (map pp e_opt) ~default:(!^ "_")) in
+              Option.(value (map (fun e -> pp ~executable_spec e) e_opt) ~default:(!^ "_")) in
             P.braces (P.separate (P.comma ^^ P.space) (List.mapi f e_opts))
         | AilEstruct (tag_sym, xs) ->
             P.parens (!^ "struct" ^^^ pp_id tag_sym) ^^ P.braces (
               comma_list (function (ident, e_opt) ->
                 P.dot ^^ Pp_symbol.pp_identifier ident ^^ P.equals ^^^
-                Option.(value (map pp e_opt) ~default:(!^ "_"))
+                Option.(value (map (fun e -> pp ~executable_spec e) e_opt) ~default:(!^ "_"))
               ) xs
             )
         | AilEunion (tag_sym, memb_ident, e_opt) ->
             P.parens (!^ "union" ^^^ pp_id tag_sym) ^^ P.braces (
-              P.dot ^^ Pp_symbol.pp_identifier memb_ident ^^ P.equals ^^^ (function None -> !^ "_" | Some e -> pp e) e_opt
+              P.dot ^^ Pp_symbol.pp_identifier memb_ident ^^ P.equals ^^^ (function None -> !^ "_" | Some e -> pp ~executable_spec e) e_opt
             )
         | AilEcompound (qs, ty, e) ->
-            P.parens (pp_ctype qs ty) ^^ P.braces (pp e)
+            P.parens (pp_ctype qs ty) ^^ P.braces (pp ~executable_spec e)
         | AilEbuiltin b ->
             pp_ail_builtin b
         | AilEstr lit ->
@@ -558,7 +558,7 @@ let rec pp_expression_aux mk_pp_annot a_expr =
         | AilEconst c ->
             pp_constant c
         | AilEident x ->
-            pp_id x
+            pp_id ~executable_spec x
         | AilEsizeof (qs, ty) ->
             if !Cerb_debug.debug_level > 5 then
               (* printing the types in a human readable format *)
@@ -566,7 +566,7 @@ let rec pp_expression_aux mk_pp_annot a_expr =
             else
               pp_keyword "sizeof" ^^ P.parens (pp_ctype qs ty)
         | AilEsizeof_expr e ->
-            pp_keyword "sizeof" ^^^ pp e
+            pp_keyword "sizeof" ^^^ pp ~executable_spec e
         | AilEalignof (qs, ty) ->
             if !Cerb_debug.debug_level > 5 then
               (* printing the types in a human readable format *)
@@ -574,34 +574,34 @@ let rec pp_expression_aux mk_pp_annot a_expr =
             else
               pp_keyword "_Alignof" ^^ P.parens (pp_ctype qs ty)
         | AilEmemberof (e, ident) ->
-            pp e ^^ P.dot ^^ Pp_symbol.pp_identifier ident
+            pp ~executable_spec e ^^ P.dot ^^ Pp_symbol.pp_identifier ident
         | AilEmemberofptr (e, ident) ->
-            pp e ^^ (!^ "->") ^^ Pp_symbol.pp_identifier ident
+            pp ~executable_spec e ^^ (!^ "->") ^^ Pp_symbol.pp_identifier ident
         | AilEannot (_, e) ->
-            !^ "/* annot */" ^^^ pp e
+            !^ "/* annot */" ^^^ pp ~executable_spec e
         | AilEva_start (e, sym) ->
-            pp_keyword "va_start" ^^ P.parens (pp e ^^ P.comma ^^^ pp_id sym)
+            pp_keyword "va_start" ^^ P.parens (pp ~executable_spec e ^^ P.comma ^^^ pp_id sym)
         | AilEva_copy (e1, e2) ->
-            pp_keyword "va_copy" ^^ P.parens (pp e1 ^^ P.comma ^^^ pp e2)
+            pp_keyword "va_copy" ^^ P.parens (pp ~executable_spec e1 ^^ P.comma ^^^ pp ~executable_spec e2)
         | AilEva_arg (e, ty) ->
-            pp_keyword "va_arg" ^^ P.parens (pp e ^^ P.comma ^^^ pp_ctype no_qualifiers ty)
+            pp_keyword "va_arg" ^^ P.parens (pp ~executable_spec e ^^ P.comma ^^^ pp_ctype no_qualifiers ty)
         | AilEva_end e ->
-            pp_keyword "va_end" ^^ P.parens (pp e)
+            pp_keyword "va_end" ^^ P.parens (pp ~executable_spec e)
         | AilErvalue e ->
-            pp_ail_keyword "rvalue" ^^ P.parens (pp e)
+            pp_ail_keyword "rvalue" ^^ P.parens (pp ~executable_spec e)
         | AilEarray_decay e ->
-            pp_ail_keyword "array_decay" ^^ P.parens (pp e)
+            pp_ail_keyword "array_decay" ^^ P.parens (pp ~executable_spec e)
         | AilEfunction_decay e ->
-            pp_ail_keyword "function_decay" ^^ P.parens (pp e)
+            pp_ail_keyword "function_decay" ^^ P.parens (pp ~executable_spec e)
         | AilEatomic e ->
-            pp_ail_keyword "atomic" ^^ P.parens (pp e)
-        
+            pp_ail_keyword "atomic" ^^ P.parens (pp ~executable_spec e)
         | AilEprint_type e ->
-              pp_ail_keyword "__cerb_printtype" ^^ P.parens (pp e)
+              pp_ail_keyword "__cerb_printtype" ^^ P.parens (pp ~executable_spec e)
         | AilEgcc_statement (bs, ss) ->
             P.parens (pp_statement_aux mk_pp_annot ~bs:[] (AnnotatedStatement (Cerb_location.unknown, Annot.no_attributes, AilSblock (bs, ss))))
+
       )) in
-  pp None a_expr
+  pp ~executable_spec None a_expr
 
 and pp_generic_association_aux pp_annot = function
   | AilGAtype (ty, e) ->
@@ -877,7 +877,7 @@ let pp_genTypeCategory = function
  | GenRValueType gty ->
      !^ "GenRValueType" ^^ P.brackets (pp_genType gty)
 
-let pp_expression e = pp_expression_aux (fun _ d -> d) e
+let pp_expression ?(executable_spec=false) e = pp_expression_aux ~executable_spec (fun _ d -> d) e
 let pp_generic_association ga = pp_generic_association_aux (fun _ d -> d) ga
 let pp_statement s = pp_statement_aux (fun _ d -> d) ~bs:[] s
 
