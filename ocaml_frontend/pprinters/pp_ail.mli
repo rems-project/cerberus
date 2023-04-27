@@ -59,7 +59,7 @@ val pp_characterConstant: characterConstant -> PPrint.document
 val pp_encodingPrefix: encodingPrefix -> PPrint.document
 val pp_stringLiteral: stringLiteral -> PPrint.document
 val pp_constant: constant -> PPrint.document
-val pp_expression: 'a expression -> PPrint.document
+val pp_expression: ?executable_spec:bool -> 'a expression -> PPrint.document
 val pp_generic_association: 'a generic_association -> PPrint.document
 val pp_statement: 'a statement -> PPrint.document
 
