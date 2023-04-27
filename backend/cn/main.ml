@@ -134,7 +134,7 @@ let generate_c_statements cn_statements =
   in
   List.map generate_c_statement cn_statements
 
-let generate_c_pres_and_posts (instrumentation : Core_to_mucore.instrumentation) ail_prog =
+let generate_c_pres_and_posts (instrumentation : Core_to_mucore.instrumentation) type_map ail_prog =
   let sym_equality = fun (loc, _) -> CF.Symbol.equal_sym loc instrumentation.fn in
   let fn_decl = List.filter sym_equality ail_prog.A.declarations in
   let fn_def = List.filter sym_equality ail_prog.A.function_definitions in
@@ -158,7 +158,7 @@ let generate_c_pres_and_posts (instrumentation : Core_to_mucore.instrumentation)
   in
   let arg_strs = List.map arg_str_fn args_list in
   let generate_condition_str cn_condition =
-    (let ail_condition = Cn_to_ail.cn_to_ail_condition cn_condition in
+    (let ail_condition = Cn_to_ail.cn_to_ail_condition cn_condition type_map in
     Ail_to_c.pp_ail_stmt ail_condition ^ ";\n")
   in
   let pres = List.map generate_condition_str instrumentation.surface.requires in
@@ -180,10 +180,10 @@ let generate_c_pres_and_posts (instrumentation : Core_to_mucore.instrumentation)
 
 
 (* Core_to_mucore.instrumentation list -> executable_spec *)
-let generate_c_specs instrumentation_list ail_prog =
+let generate_c_specs instrumentation_list type_map ail_prog =
   (* let open Core_to_mucore in *)
   let generate_c_spec (instrumentation : Core_to_mucore.instrumentation) =
-    let c_pres_and_posts = generate_c_pres_and_posts instrumentation ail_prog in 
+    let c_pres_and_posts = generate_c_pres_and_posts instrumentation type_map ail_prog in 
     let c_statements = generate_c_statements instrumentation.surface.statements in
     (* ([(Sym.fresh_pretty "main", ("int i_old = i;", ""))], generate_c_statements instrumentation.statements) *)
     (c_pres_and_posts, c_statements)
@@ -263,7 +263,7 @@ let main
       let result =
         let open Resultat in
          let@ prog5 = Core_to_mucore.normalise_file (markers_env, ail_prog) prog4 in
-         let (instrumentation, sym_table) = Core_to_mucore.collect_instrumentation prog5 in
+         let (instrumentation, type_map) = Core_to_mucore.collect_instrumentation prog5 in
          print_log_file ("mucore", MUCORE prog5);
          Cerb_colour.do_colour := false; (* Needed for executable spec pprinting *)
          let@ res = Typing.run Context.empty (Check.check prog5 statement_locs lemmata) in
@@ -271,7 +271,7 @@ let main
          | None -> ()
          | Some output_filename ->
             let oc = Stdlib.open_out output_filename in
-            let executable_spec = generate_c_specs instrumentation ail_prog in
+            let executable_spec = generate_c_specs instrumentation type_map ail_prog in
             begin match
               Source_injection.(output_injections oc
                 { filename; sigm= ail_prog

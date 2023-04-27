@@ -57,10 +57,10 @@ let rec pp_ail_expr ail_expr =
 
 let pp_ail_stmt_default ail_stmt = CF.String_ail.string_of_statement (mk_stmt ail_stmt)
 
-let pp_ail_stmt ail_stmt = match ail_stmt with
-  | A.AilSdeclaration ((name, Some decl) :: _) -> (* TODO: Add type *)
+let pp_ail_stmt ((ail_stmt, extra) as ail_info) = match ail_info with
+  | (A.AilSdeclaration ((name, Some decl) :: _), Some ctype) -> (* TODO: Add type *)
     let name_var = A.(AilEident name) in
-    pp_ail_expr name_var ^ " = " ^ pp_ail_expr (rm_expr decl)
-  | A.(AilSexpr ail_expr) -> pp_ail_expr (rm_expr ail_expr)
+    pp_ctype ctype ^ " " ^ pp_ail_expr name_var ^ " = " ^ pp_ail_expr (rm_expr decl)
+  | (A.(AilSexpr ail_expr), _) -> pp_ail_expr (rm_expr ail_expr)
   | _ -> pp_ail_stmt_default ail_stmt
 (* frontend/model/symbol.lem - fresh_pretty function for generating Sym with unimportant digest and nat *)
