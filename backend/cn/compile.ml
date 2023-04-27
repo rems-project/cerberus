@@ -58,10 +58,16 @@ let empty tagDefs =
   }
 
 
+(* TODO: ugly hack to get started *)
+module SymTable = Hashtbl.Make(Sym)
+let symtable = SymTable.create 10000
+
 let add_computational sym bTy env =
+  SymTable.add symtable sym bTy;
   {env with computationals= SymMap.add sym bTy env.computationals }
 
 let add_logical sym bTy env =
+  SymTable.add symtable sym bTy;
   {env with logicals= SymMap.add sym bTy env.logicals }
 
 let add_predicate sym pred_sig env =

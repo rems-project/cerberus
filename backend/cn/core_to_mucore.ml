@@ -1358,7 +1358,6 @@ let normalise_file (markers_env, ail_prog) file =
 
 
 
-
 type instrumentation = {
     fn: Sym.t;
     fn_loc: Loc.t;
@@ -1416,6 +1415,7 @@ let collect_instrumentation file =
       )
   in
 
+  let instrs = 
   Pmap.fold (fun fn decl acc ->
       match decl with
       | M_Proc (fn_loc, args_and_body, _trusted, spec) ->
@@ -1435,3 +1435,5 @@ let collect_instrumentation file =
            statements = [];
          } :: acc
     ) file.mu_funs []
+   in
+   (instrs, C.symtable)
