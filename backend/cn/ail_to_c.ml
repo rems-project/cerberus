@@ -3,7 +3,7 @@ open Executable_spec_utils
 module A=CF.AilSyntax
 module C=CF.Ctype
 
-let pp_ail_default ail_expr = CF.String_ail.string_of_expression (mk_expr ail_expr)
+let pp_ail_default ail_expr = CF.String_ail.string_of_expression ~executable_spec:true (mk_expr ail_expr)
 
 let pp_ail_const ail_const = 
   match ail_const with
@@ -38,7 +38,7 @@ let rec pp_ail_expr ail_expr =
   match ail_expr with
     | A.(AilEident sym) -> CF.String_ail.string_of_cn_id sym
     | A.(AilEconst ail_const) -> pp_ail_const ail_const
-    | A.(AilEbinary (x, bop, y)) -> (pp_ail_expr (rm_expr x)) ^ (pp_ail_binop bop) ^ (pp_ail_expr (rm_expr y))
+    | A.(AilEbinary (x, bop, y)) -> (pp_ail_expr (rm_expr x)) ^ " " ^ (pp_ail_binop bop) ^ " " ^ (pp_ail_expr (rm_expr y))
     | A.(AilEunary (Bnot, ail_expr)) -> "!(" ^ (pp_ail_expr (rm_expr ail_expr)) ^ ")"
     | A.(AilEcond (e1, Some e2, e3)) -> (pp_ail_expr (rm_expr e1)) ^ " ? " ^ (pp_ail_expr (rm_expr e2)) ^ " : " ^ (pp_ail_expr (rm_expr e3)) 
     | A.(AilEsizeof (_, ct)) -> "sizeof(" ^ pp_ctype ct ^ ")"
