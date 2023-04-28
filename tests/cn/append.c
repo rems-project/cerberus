@@ -44,8 +44,63 @@ struct int_list* IntList_append(struct int_list* xs, struct int_list* ys)
     /*@ unfold append(L1, L2); @*/
     struct int_list *new_tail = IntList_append(xs->tail, ys);
     xs->tail = new_tail;
-    /*@ pack IntList(xs); @*/
     return xs;
   }
 }
+
+function [rec] ({datatype seq fst, datatype seq snd}) split(datatype seq xs) 
+{
+  return (match xs {
+    Seq_Nil {} => { 
+      {fst: Seq_Nil{}, snd: Seq_Nil{}} 
+    }
+    Seq_Cons {head: h1, tail: Seq_Nil{}} => {
+      {fst: Seq_Nil{}, snd: xs} 
+    }
+    Seq_Cons {head: h1, tail: Seq_Cons {head : h2, tail : tl2 }} => {
+      let P = split(tl2);
+      {fst: Seq_Cons { head: h1, tail: P.fst},
+       snd: Seq_Cons { head: h2, tail: P.snd}}
+    }
+    });
+}
+
+
+struct int_list_pair { 
+  struct int_list* fst;
+  struct int_list* snd;
+};
+
+// split [] = ([], []) 
+// split [x] = ([], [x])
+// split (x :: y :: zs) = let (xs, ys) = split(zs) in
+//                        (x :: xs, y :: ys)
    
+
+
+struct int_list_pair split(struct int_list *xs) 
+/*@ requires take Xs = IntList(xs) @*/
+/*@ ensures take Ys = IntList(return.fst) @*/
+/*@ ensures take Zs = IntList(return.snd) @*/
+{ 
+  if (xs == 0) { 
+    struct int_list_pair r = {.fst = 0, .snd = 0};
+    return r;
+  } else {
+    /*@ unpack IntList(xs); @*/
+    if (xs->tail == 0) { 
+      struct int_list_pair r = {.fst = 0, .snd = xs};
+      return r;
+    } else { 
+      struct int_list *cdr = xs->tail;
+      struct int_list_pair p = split(xs->tail->tail);
+      xs->tail = p.fst;
+      cdr->tail = p.snd;
+      struct int_list_pair r = {.fst = xs, .snd = cdr};
+      return r;
+    }
+  }
+}
+
+      
+
