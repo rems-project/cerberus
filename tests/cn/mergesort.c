@@ -20,7 +20,7 @@ predicate (datatype seq) IntList(pointer p) {
 
 function [rec] ({datatype seq fst, datatype seq snd}) split(datatype seq xs) 
 {
-  return (match xs {
+  match xs {
     Seq_Nil {} => { 
       {fst: Seq_Nil{}, snd: Seq_Nil{}} 
     }
@@ -32,11 +32,11 @@ function [rec] ({datatype seq fst, datatype seq snd}) split(datatype seq xs)
       {fst: Seq_Cons { head: h1, tail: P.fst},
        snd: Seq_Cons { head: h2, tail: P.snd}}
     }
-    });
+  }
 }
 
 function [rec] (datatype seq) merge(datatype seq xs, datatype seq ys) { 
-  return (match xs { 
+  match xs { 
       Seq_Nil {} => { ys }
       Seq_Cons {head: x, tail: xs1} => {
 	match ys {
@@ -49,11 +49,11 @@ function [rec] (datatype seq) merge(datatype seq xs, datatype seq ys) {
 	  }
 	}
       }
-    });
+  }
 }
 
 function [rec] (datatype seq) mergesort(datatype seq xs) { 
-  return (match xs {
+  match xs {
       Seq_Nil{} => { xs }
       Seq_Cons{head: x, tail: Seq_Nil{}} => { xs }
       Seq_Cons{head: x, tail: Seq_Cons{head: y, tail: zs}} => {
@@ -62,7 +62,7 @@ function [rec] (datatype seq) mergesort(datatype seq xs) {
 	let L2 = mergesort(P.snd);
 	merge(L1, L2)
       }
-    });
+    }
 }
 	    
 

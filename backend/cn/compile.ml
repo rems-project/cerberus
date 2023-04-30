@@ -981,29 +981,9 @@ end
 
 
 let translate_cn_func_body env body =
-  let open LogicalFunctions in
   let handle = Pure.handle "Function definitions" in
-  let rec aux env body =
-    match body with
-      | CN_fb_letExpr (loc, sym, e_, cl) ->
-          let@ e = handle (ET.translate_cn_expr SymSet.empty env e_) in
-          let env2 = add_logical sym (IT.basetype e) env in
-          let@ b = aux env2 cl in
-          return (Body.Let ((sym, IT.term_of_sterm e), b))
-      | CN_fb_return (loc, x) ->
-         let@ t = handle (ET.translate_cn_expr SymSet.empty env x) in
-         return (Body.Term (IT.term_of_sterm t))
-      | CN_fb_cases (loc, x, cs) ->
-         let@ x = handle (ET.translate_cn_expr SymSet.empty env x) in
-         let@ cs = 
-           ListM.mapM (fun (ctor, body) ->
-               let@ body = aux env body in
-               return (ctor, body)
-             ) cs
-         in
-         return (Body.Case (IT.term_of_sterm x, cs))
-  in
-  aux env body
+  let@ body = handle (ET.translate_cn_expr SymSet.empty env body) in
+  return ((IT.term_of_sterm body))
 
 
 let known_attrs = ["rec"; "coq_unfold"]

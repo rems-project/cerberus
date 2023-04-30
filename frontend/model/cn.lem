@@ -95,10 +95,7 @@ and cn_expr 'a 'ty =
 
 let mk_bool b = CNExpr Loc.unknown (CNExpr_const (CNConst_bool b))
 
-type cn_fun_body 'a 'ty =
-  | CN_fb_letExpr of Loc.t * 'a * cn_expr 'a 'ty * cn_fun_body 'a 'ty
-  | CN_fb_return of Loc.t * cn_expr 'a 'ty
-  | CN_fb_cases of Loc.t * cn_expr 'a 'ty * list ('a * cn_fun_body 'a 'ty)
+
 
 type cn_pred 'a 'ty =
   | CN_owned of maybe 'ty
@@ -130,7 +127,7 @@ type cn_function 'a 'ty = <|
   cn_func_name: 'a;
   cn_func_attrs: list Symbol.identifier;
   cn_func_args: list (cn_base_type 'a * 'a);
-  cn_func_body: maybe (cn_fun_body 'a 'ty);
+  cn_func_body: maybe (cn_expr 'a 'ty);
   cn_func_return_bty: cn_base_type 'a;
 |>
 

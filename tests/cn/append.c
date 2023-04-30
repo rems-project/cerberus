@@ -9,14 +9,14 @@ datatype seq {
 }
 
 function [rec] (datatype seq) append(datatype seq xs, datatype seq ys) { 
-  return (match xs { 
+  match xs { 
     Seq_Nil {} => { 
       ys
     } 
     Seq_Cons {head : h, tail : zs}  => { 
       Seq_Cons {head: h, tail: append(zs, ys)}
     }
-    });
+  }
 }
 
 predicate (datatype seq) IntList(pointer p) {

@@ -1568,7 +1568,7 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
                      WellTyped.WIT.check loc def_arg_bt has_arg
                    ) args def.args
                in
-               begin match LF.single_unfold_to_term def f args with
+               begin match LF.unroll_once def args with
                | None ->
                   let msg = 
                     !^"Cannot unfold definition of uninterpreted function" 

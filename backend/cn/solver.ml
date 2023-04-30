@@ -633,8 +633,7 @@ module Translate = struct
          let def = Option.get (get_logical_function_def global name) in
          begin match def.definition with
          | Def body ->
-            term (LogicalFunctions.Body.to_term def.return_bt
-                    (LogicalFunctions.open_fun def.args body args))
+            term (LogicalFunctions.open_fun def.args body args)
          | _ ->
             let decl = 
               Z3.FuncDecl.mk_func_decl context (symbol name)
@@ -644,10 +643,12 @@ module Translate = struct
             Z3.Expr.mk_app context decl (List.map term args)
        end
       | Let ((nm, t1), t2) ->
+         term (IT.subst (IT.make_subst [(nm, t1)]) t2)
+      (*| Let ((nm, t1), t2) ->
          let (nm, t2) = IT.alpha_rename (nm, IT.bt t1) t2 in
          let x = IT.sym_ (nm, IT.bt t1) in
          let _ = needs_premise (IsLetVar (x, t1)) (term x) in
-         term t2
+         term t2 *)
       | _ ->
          Pp.debug 2 (lazy (Pp.item "smt mapping issue" (IT.pp it)));
          Debug_ocaml.error "todo: SMT mapping"

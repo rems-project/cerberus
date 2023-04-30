@@ -5,82 +5,18 @@ module AT = ArgumentTypes
 module LAT = LogicalArgumentTypes
 
 open IndexTerms
-open Subst
-open Pp
 
 
 module SymSet = Set.Make(Sym)
 module SymMap = Map.Make(Sym)
 
 
-module Body = struct
-
-  type t = 
-    | Case of IT.t * (Sym.t * t) list
-    | Let of (Sym.t * IT.t) * t
-    | Term of IT.t
-
-  let rec subst su = function
-    | Case (it, cases) ->
-       let it = IT.subst su it in
-       let cases = List.map_snd (subst su) cases in
-       Case (it, cases)
-    | Let ((s, it), t) -> 
-       let it = IT.subst su it in
-       let s, t = suitably_alpha_rename su.relevant (s, IT.bt it) t in
-       Let ((s, it), subst su t)
-    | Term t ->
-       Term (IT.subst su t)
-
-  and alpha_rename (s, ls) t = 
-    let s' = Sym.fresh_same s in
-    (s', subst (IT.make_subst [(s, IT.sym_ (s', ls))]) t)
-
-  and suitably_alpha_rename syms (s, ls) t = 
-    if SymSet.mem s syms 
-    then alpha_rename (s, ls) t
-    else (s, t)
-
-  let rec pp ?(atomic=false) = function
-    | Case (it, cases) ->
-       !^"switch" ^^ parens (IT.pp it) ^^ hardline 
-       ^^ nest 2
-            ((separate_map hardline (fun (ctor, body) ->
-                  Sym.pp ctor ^^^ lbrace ^^ hardline
-                  ^^ nest 2 (pp body) ^^ hardline
-                  ^^ rbrace
-             )) cases)
-    | Let ((s, it), t) ->
-       let pped = 
-         !^"let" ^^^ Sym.pp s ^^^ !^"equal" ^^^ IT.pp it ^^ semi 
-         ^/^ pp t
-       in
-       if atomic then parens pped else pped
-    | Term t ->
-       IT.pp ~atomic t
-
-
-  let rec to_term bt = function
-    (* adapting earlier compilePredicates.ml code for this *)
-    | Case (it, cases) ->
-       (* TODO: there's a potential blowup due to `it` being repeated. *)
-       List.fold_right (fun (ctor, case_body) acc ->
-           ite_ (IT.datatype_is_cons_ ctor it, 
-                 to_term bt case_body, 
-                 acc)
-         ) cases (default_ bt)
-    | Let ((s, it), t) -> 
-       to_term bt (subst (IT.make_subst [(s, it)]) t)
-    | Term t -> 
-       t
-
-end
 
 
 
 type def_or_uninterp = 
-  | Def of Body.t
-  | Rec_Def of Body.t
+  | Def of IT.t
+  | Rec_Def of IT.t
   | Uninterp
 
 
@@ -88,8 +24,8 @@ type def_or_uninterp =
 
 
 let subst_def_or_uninterp subst = function
-  | Def it -> Def (Body.subst subst it)
-  | Rec_Def it -> Rec_Def (Body.subst subst it)
+  | Def it -> Def (IT.subst subst it)
+  | Rec_Def it -> Rec_Def (IT.subst subst it)
   | Uninterp -> Uninterp
 
 type definition = {
@@ -129,39 +65,43 @@ let pp_def nm def =
     colon ^/^
     begin match def.definition with
     | Uninterp -> !^ "uninterpreted"
-    | Def t -> Body.pp t
-    | Rec_Def t -> !^ "rec:" ^^^ Body.pp t
+    | Def t -> IT.pp t
+    | Rec_Def t -> !^ "rec:" ^^^ IT.pp t
     end
 
 
 let open_fun def_args def_body args =
   let su = make_subst (List.map2 (fun (s, _) arg -> (s, arg)) def_args args) in
-  Body.subst su def_body
+  IT.subst su def_body
 
 
 
-let single_unfold_to_term def name args =
+let unroll_once def args =
   match def.definition with
-  | Def body -> 
-     Some (Body.to_term def.return_bt (open_fun def.args body args))
+  | Def body
   | Rec_Def body -> 
-     Some (Body.to_term def.return_bt (open_fun def.args body args))
-  | _ -> 
+     Some (open_fun def.args body args)
+  | Uninterp -> 
      None
 
 
-let try_open_fun def name args =
+let try_open_fun def args =
   match def.definition with
-  | Def body -> Some (open_fun def.args body args)
-  | _ -> None
+  | Def body -> 
+     Some (open_fun def.args body args)
+  | Rec_Def _ -> 
+     None
+  | Uninterp ->
+     None
 
+(*
 let try_open_fun_to_term def name args = 
   Option.map (fun body ->
       Body.to_term def.return_bt body
     ) (try_open_fun def name args)
+*)
 
-
-
+(*
 let add_unfolds_to_terms preds terms =
   let rec f acc t = match IT.term t with
     | IT.Apply (name, ts) ->
@@ -173,7 +113,7 @@ let add_unfolds_to_terms preds terms =
     | _ -> acc
   in
   IT.fold_list (fun _ acc t -> f acc t) [] terms terms
-
+*)
 
 
 

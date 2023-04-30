@@ -25,8 +25,7 @@ let unpack_def global name args =
     (fun def ->
     match def.definition with
     | Def body ->
-       Some (LogicalFunctions.Body.to_term def.return_bt
-               (LogicalFunctions.open_fun def.args body args))
+       Some ((LogicalFunctions.open_fun def.args body args))
     | _ -> None
     )
 

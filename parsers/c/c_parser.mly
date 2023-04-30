@@ -2081,6 +2081,9 @@ expr_without_let:
 | e1= list_expr QUESTION e2= list_expr COLON e3= list_expr
     { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                                , CNExpr_ite (e1, e2, e3))) }
+| IF e1= delimited(LPAREN, expr, RPAREN) e2= delimited(LBRACE, expr, RBRACE) ELSE e3= delimited(LBRACE,expr,RBRACE)
+    { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) NoCursor)
+                               , CNExpr_ite (e1, e2, e3))) }
 | CN_EACH LPAREN str= cn_variable COLON r=int_range SEMICOLON e1= expr RPAREN
     { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) NoCursor)
                                ,
@@ -2273,11 +2276,12 @@ clauses:
 ;
 
 cn_option_func_body:
-| cn_func_body=delimited(LBRACE, cn_func_body, RBRACE)
+| cn_func_body=delimited(LBRACE, expr, RBRACE)
     { Some cn_func_body }
 | 
     { None }
 
+(*
 cn_func_body:
 | CN_LET str= cn_variable EQ e= expr SEMICOLON c= cn_func_body
     { let loc = Location_ocaml.point $startpos(str) in
@@ -2292,7 +2296,7 @@ cn_func_body:
 cn_func_body_case:
 | CASE nm= cn_variable LBRACE body=cn_func_body RBRACE
     { (nm, body) }
-
+*)
 
 clause:
 | CN_TAKE str= cn_variable EQ res= resource SEMICOLON c= clause
