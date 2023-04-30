@@ -50,7 +50,7 @@ struct int_list* IntList_append(struct int_list* xs, struct int_list* ys)
 
 function [rec] ({datatype seq fst, datatype seq snd}) split(datatype seq xs) 
 {
-  return (match xs {
+  match xs {
     Seq_Nil {} => { 
       {fst: Seq_Nil{}, snd: Seq_Nil{}} 
     }
@@ -62,7 +62,7 @@ function [rec] ({datatype seq fst, datatype seq snd}) split(datatype seq xs)
       {fst: Seq_Cons { head: h1, tail: P.fst},
        snd: Seq_Cons { head: h2, tail: P.snd}}
     }
-    });
+  }
 }
 
 
