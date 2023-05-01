@@ -176,7 +176,6 @@ module Translate = struct
   type premise_info =
     | IsNthList of IT.t
     | IsArrayToList of IT.t
-    | IsLetVar of (IT.t * IT.t)
     | IsLocAddrInEq of Sym.t
 
   (* note translated terms that need additional premises to be added to goals
@@ -726,11 +725,7 @@ module Translate = struct
       | _ -> None) key_ts in
     let array_list_facts = IT.nth_array_to_list_facts array_list_ts
       |> List.map (term context global) in
-    let let_eqs = List.filter_map (function
-      | (_, IsLetVar (x, t)) -> Some (IT.eq_ (x, t))
-      | _ -> None) key_ts in
-    let let_eq_facts = List.map (term context global) let_eqs in
-    let facts = let_eq_facts @ array_list_facts in
+    let facts = array_list_facts in
     let exprs2 = facts @ exprs in
     let key_ts2 = needs_premise_elts exprs2 in
     if List.length key_ts2 > List.length key_ts
