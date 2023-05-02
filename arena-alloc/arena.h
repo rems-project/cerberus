@@ -2,16 +2,8 @@
 Credit: Chapter 6 (More Memory Management), C Interfaces and Implementations. David R Hanson. 
 */
 
-// #ifndef ARENA_INCLUDED
-// #define ARENA_INCLUDED
-// #include <except.h>
-
 #define T Arena_T
 typedef struct T *T;
-
-/* Arena exceptions */
-// extern const Except_T Arena_NewFailed;
-// extern const Except_T Arena_Failed;
 
 /* Basic functions to create and destroy an arena */
 extern T Arena_new(void);
