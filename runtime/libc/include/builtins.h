@@ -9,3 +9,6 @@
 [[ cerb::hidden ]] __cerbty_uint32_t __builtin_bswap32 (__cerbty_uint32_t x);
 [[ cerb::hidden ]] __cerbty_uint64_t __builtin_bswap64 (__cerbty_uint64_t x);
 [[ cerb::hidden ]] void __builtin_unreachable(void);
+
+// this is an optimisation hint that we can erase
+#define __builtin_expect(EXP, C) ((long)EXP)
