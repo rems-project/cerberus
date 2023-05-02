@@ -106,6 +106,7 @@ let keywords: (string * (unit -> Tokens.token)) list = [
     "__asm__", (fun () -> ASM);
     "__volatile__", (fun () -> ASM_VOLATILE);
     "__builtin_types_compatible_p", (fun () -> BUILTIN_TYPES_COMPATIBLE_P);
+    "__builtin_choose_expr", (fun () -> BUILTIN_CHOOSE_EXPR);
 
     (* BEGIN CN *)
     "__cerb_predicate"     , (fun () -> CN_PREDICATE);

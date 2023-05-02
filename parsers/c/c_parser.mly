@@ -133,7 +133,7 @@ let warn_extra_semicolon pos ctx =
   LBRACK_LBRACK (*RBRACK_RBRACK*)
 
 (* NON-STD: *)
-  ASSERT OFFSETOF TYPEOF QUESTION_COLON BUILTIN_TYPES_COMPATIBLE_P
+  ASSERT OFFSETOF TYPEOF QUESTION_COLON BUILTIN_TYPES_COMPATIBLE_P BUILTIN_CHOOSE_EXPR
 
 (* NON-STD cppmem syntax *)
   LBRACES PIPES RBRACES
@@ -590,6 +590,9 @@ postfix_expression:
 | BUILTIN_TYPES_COMPATIBLE_P LPAREN ty1= type_name COMMA ty2= type_name RPAREN
     { CabsExpression ( Location_ocaml.(region ($startpos, $endpos) NoCursor)
                      , CabsEbuiltinGNU (GNUbuiltin_types_compatible_p (ty1, ty2)) ) }
+| BUILTIN_CHOOSE_EXPR LPAREN const_e= assignment_expression COMMA e1= assignment_expression COMMA e2= assignment_expression RPAREN
+    { CabsExpression ( Location_ocaml.(region ($startpos, $endpos) NoCursor)
+                     , CabsEbuiltinGNU (GNUbuiltin_choose_expr (const_e, e1, e2)) ) }
 (* NOTE: the following is a cerb extension allowing the user to the
    query the type of an expression  *)
 | PRINT_TYPE LPAREN expr= expression RPAREN

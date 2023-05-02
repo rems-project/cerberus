@@ -2423,6 +2423,20 @@ STD_ "§6.5.3.1#3" $
           E.return (AilEconst (ConstantInteger (IConstant 1 Decimal Nothing)))
         else
           E.return (AilEconst (ConstantInteger (IConstant 0 Octal Nothing)))
+    | CabsEbuiltinGNU (GNUbuiltin_choose_expr const_e e1 e2) ->
+        (* TODO: add extension warning *)
+        desugar_expression const_e         >>= fun d_e ->
+        is_integer_constant_expression d_e >>= function
+          | false ->
+              E.constraint_violation (Loc.locOf const_e) GNUBuiltinChooseExprNotIntegerConstant
+          | true ->
+              evaluate_integer_constant_expression loc Nothing d_e >>= fun n ->
+              if n <> 0 then
+                desugar_expression e1
+              else
+                desugar_expression e2
+        end >>= fun (AnnotatedExpression _ _ _ expr_) ->
+        E.return expr_
   end
 
 and desugar_generic_association gas =

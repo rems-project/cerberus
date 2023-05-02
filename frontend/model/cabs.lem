@@ -95,6 +95,8 @@ type cabs_expression_ =
 
 and gnu_builtin_function =
   | GNUbuiltin_types_compatible_p of type_name * type_name (* __builtin_types_compatible_p *)
+  | GNUbuiltin_choose_expr of cabs_expression * cabs_expression * cabs_expression (* __builtin_choose_expr *)
+
 
 and cabs_expression =
   | CabsExpression of Loc.t * cabs_expression_
