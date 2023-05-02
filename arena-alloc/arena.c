@@ -6,13 +6,9 @@ Credit: Chapter 6 (More Memory Management), C Interfaces and Implementations. Da
 #include <string.h>
 #include <assert.h>
 #include <stdbool.h>
-// #include <except.h>
 #include "arena.h"
 
 #define T Arena_T
-
-// const Except_T Arena_NewFailed = { "Arena Creation Failed" };
-// const Except_T Arena_Failed = { "Arena Allocation Failed" };
 
 #define THRESHOLD 10
 
@@ -86,11 +82,6 @@ void *Arena_alloc(T arena, long nbytes, const char *file, int line) {
             /* Check if allocation failed */
             if (ptr == NULL) {
                 assert(false);
-                // (file = NULL) {
-                //     RAISE(Arena_Failed);
-                // }  else {
-                //     Except_raise(&Arena_Failed, file, line);
-                // }
             }
 
             limit = (char *)ptr + m;
