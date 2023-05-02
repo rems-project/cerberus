@@ -97,23 +97,25 @@ function (datatype tree_node_option) construct_app_rhs (integer v,
         map<integer, map<datatype tree_arc, datatype tree_node_option> > ns,
         datatype tree_arc arc)
 {
-  switch (arc)
-  case Arc_End {
-    return Node {v: v};
-  }
-  case Arc_Step {
-    return ns[arc.i][arc.tail];
+  match arc {
+    Arc_End {} => {
+      Node {v: v}
+    }
+    Arc_Step {} => {
+     ns[arc.i][arc.tail]
+    }
   }
 }
 
 function (boolean) arc_first_idx_valid (datatype tree_arc arc)
 {
-  switch (arc)
-  case Arc_End {
-    return true;
-  }
-  case Arc_Step {
-    return (0 <= arc.i) && (arc.i < num_nodes());
+  match arc {
+    Arc_End {} => {
+      true
+    }
+    Arc_Step {} => {
+      (0 <= arc.i) && (arc.i < num_nodes())
+    }
   }
 }
 
