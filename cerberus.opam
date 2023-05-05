@@ -19,6 +19,7 @@ homepage: "https://www.cl.cam.ac.uk/~pes20/cerberus/"
 bug-reports: "https://github.com/rems-project/cerberus/issues"
 depends: [
   "coq-stdpp-unstable" {="dev.2023-02-17.2.2d8ccea3"}
+  "coq-cheri-capabilities"
   "ocaml" {>= "4.13.0"}
   "dune" {>= "2.0.0"}
   "sha" {>= "1.12"}
