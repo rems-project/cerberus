@@ -37,7 +37,6 @@ let save_slow_problems, saved_slow_problem, set_slow_threshold =
 type solver = { 
     context : Z3.context;
     incremental : Z3.Solver.solver;
-    fancy : Z3.Solver.solver;
   }
 type expr = Z3.Expr.expr
 type sort = Z3.Sort.sort
@@ -738,43 +737,13 @@ end
 
 
 
-
-
-
-
-
-let tactics context ts = 
-  match List.map (Z3.Tactic.mk_tactic context) ts with
-  | [] -> Z3.Tactic.skip context
-  | [t] -> t
-  | t1::t2::ts -> Z3.Tactic.and_then context t1 t2 ts
-
-let tactic context = 
-  tactics context [
-      "propagate-values";
-      "solve-eqs";
-      "smt";
-    ]
-
 let make global : solver = 
   Z3.Memory.reset ();
-
   List.iter (fun (c,v) -> Z3.set_global_param c v) (params ());
-
   let context = Z3.mk_context [] in
-
   Translate.init global context;
-
-  let params = Z3.Params.mk_params context in
-  Z3.Params.add_int params (Z3.Symbol.mk_string context "timeout") 500;
-
   let incremental = Z3.Solver.mk_simple_solver context in
-  Z3.Solver.set_parameters incremental params;
-
-  let fancy = Z3.Solver.mk_solver_t context (tactic context) in
-  (* let fancy = Z3.Solver.mk_solver_s context "AUFLIA" in *)
-
-  { context; incremental; fancy }
+  { context; incremental }
 
 
 
@@ -870,26 +839,12 @@ let provable ~loc ~solver ~global ~assumptions ~simp_ctxt ~pointer_facts lc =
      | Z3.Solver.UNSATISFIABLE ->
         let all_assumptions = extra1 @ extra2 @
             Z3.Solver.get_assertions solver.incremental in
-        maybe_save_slow_problem all_assumptions lc expr elapsed solver.fancy;
+        maybe_save_slow_problem all_assumptions lc expr elapsed solver.incremental;
         rtrue ()
      | Z3.Solver.SATISFIABLE -> rfalse qs solver.incremental
      | Z3.Solver.UNKNOWN ->
-        debug 5 (lazy (format [] "Z3(inc) unknown/timeout, running full solver"));
-        let all_assumptions = extra1 @ extra2 @
-            Z3.Solver.get_assertions solver.incremental in
-        let (elapsed, res) = 
-          time_f_elapsed 
-            (time_f_logs loc 5 "Z3"
-               (Z3.Solver.check solver.fancy))
-            (nlc :: all_assumptions)
-        in
-        maybe_save_slow_problem all_assumptions lc expr elapsed solver.fancy;
-        match res with
-        | Z3.Solver.UNSATISFIABLE -> rtrue ()
-        | Z3.Solver.SATISFIABLE -> rfalse qs solver.fancy
-        | Z3.Solver.UNKNOWN -> 
-           let reason = Z3.Solver.get_reason_unknown solver.fancy in
-           failwith ("SMT solver returned 'unknown'; reason: " ^ reason)
+        let reason = Z3.Solver.get_reason_unknown solver.incremental in 
+        failwith ("SMT solver returned 'unknown'; reason: " ^ reason)
 
 let get_loc_addrs_in_eqs solver ~pointer_facts global =
   (* FIXME: duplicating what provable does *)
