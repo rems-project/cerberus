@@ -1,7 +1,8 @@
 ; Add project-wide flags here.
 (env
- (dev     (flags :standard -bin-annot))
- (release (flags :standard -bin-annot)))
+ (dev     (flags :standard -bin-annot -I +unix -I +str))
+ (release (flags :standard -bin-annot -I +unix -I +str)))
 
 (dirs util sibylfs ocaml_frontend memory parsers backend tools runtime)
+
 
