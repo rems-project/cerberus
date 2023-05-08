@@ -82,7 +82,7 @@ let no_randomness_params () =
 let solver_params = [
     ("smt.logic", "QF_AUFLIA");
     ("smt.arith.solver", "2");
-    ("smt.macro_finder", "true");
+    ("smt.macro_finder", "false");
     ("smt.pull-nested-quantifiers", "true");
     ("smt.mbqi", "true");
     ("smt.ematching", "false");
