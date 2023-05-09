@@ -15,8 +15,11 @@ From ExtLib.Data.Monads Require Import EitherMonad OptionMonad.
 
 From Coq.Lists Require Import List ListSet. (* after exltlib *)
 
+From CheriCaps.Morello Require Import Capabilities.
+From CheriCaps.Common Require Import Capabilities.
+
 From Common Require Import SimpleError Utils.
-From Morello Require Import Addr Capabilities Morello.
+From Morello Require Import Capabilities.
 Require Import Memory_model CoqMem_common ErrorWithState CoqUndefined ErrorWithState CoqLocation CoqSymbol CoqImplementation CoqTags CoqSwitches CoqAilTypesAux.
 
 Local Open Scope string_scope.
@@ -34,18 +37,19 @@ Definition debugging : bool := false.
 Module ZMap := FMapAVL.Make(Z_as_OT).
 
 Module CheriMemory
-  (C:Capability(Morello.AddressValue)
-       (Morello.Flags)
-       (Morello.ObjType)
-       (Morello.SealType)
-       (Morello.Bounds)
-       (Morello.Permissions)
+  (C:CAPABILITY_GS
+       (AddressValue)
+       (Flags)
+       (ObjType)
+       (SealType)
+       (Bounds)
+       (Permissions)
   )
   (IMP: Implementation)
   (TD: TagDefs)
-  <: Memory(Morello.AddressValue)(Morello.Bounds).
+  <: Memory(AddressValue)(Bounds).
 
-  Include Mem_common(Morello.AddressValue)(Morello.Bounds).
+  Include Mem_common(AddressValue)(Bounds).
   Include AilTypesAux(IMP).
 
   Definition name := "cheri-coq".
@@ -163,7 +167,7 @@ Module CheriMemory
   Record allocation :=
     {
       prefix : CoqSymbol.prefix;
-      base : Morello.AddressValue.t;
+      base : AddressValue.t;
       size : Z;
       ty : option CoqCtype.ctype;
       is_readonly : readonly_status;
@@ -203,7 +207,7 @@ Module CheriMemory
     {
       next_alloc_id : storage_instance_id;
       next_iota : symbolic_storage_instance_id;
-      last_address : Morello.AddressValue.t;
+      last_address : AddressValue.t;
       allocations : ZMap.t allocation;
       iota_map : ZMap.t
                    ((* `Single *) storage_instance_id +
@@ -365,7 +369,7 @@ Module CheriMemory
 
   Inductive footprint_ind :=
   (* base address, size *)
-  | FP: Morello.AddressValue.t -> Z -> footprint_ind.
+  | FP: AddressValue.t -> Z -> footprint_ind.
 
   Definition footprint := footprint_ind.
 
@@ -418,7 +422,7 @@ Module CheriMemory
 
   (* Creare new cap meta for region where all tags are unspecified *)
   Program Definition init_ghost_tags
-    (addr: Morello.AddressValue.t)
+    (addr: AddressValue.t)
     (size: Z)
     (capmeta: ZMap.t (bool*CapGhostState)): ZMap.t (bool*CapGhostState)
     :=
@@ -441,7 +445,7 @@ Module CheriMemory
       All "false" tags will be left intact.
    *)
   Definition ghost_tags
-    (addr: Morello.AddressValue.t)
+    (addr: AddressValue.t)
     (size: Z)
     (capmeta: ZMap.t (bool*CapGhostState)): ZMap.t (bool*CapGhostState)
     :=
@@ -459,7 +463,7 @@ Module CheriMemory
          else (t, gs)
       ) capmeta.
 
-  Definition allocator (size:Z) (align:Z) : memM (storage_instance_id * Morello.AddressValue.t) :=
+  Definition allocator (size:Z) (align:Z) : memM (storage_instance_id * AddressValue.t) :=
     get >>= fun st =>
         let alloc_id := st.(next_alloc_id) in
         (
@@ -807,7 +811,7 @@ Module CheriMemory
 
     let mask := C.representable_alignment_mask size_n in
     let size_n' := C.representable_length size_n in
-    let align_n' := Z.max align_n (Z.add (Z.succ (0)) (AddressValue.to_Z (Morello.AddressValue.bitwise_complement (AddressValue.of_Z mask)))) in
+    let align_n' := Z.max align_n (Z.add (Z.succ (0)) (AddressValue.to_Z (AddressValue.bitwise_complement (AddressValue.of_Z mask)))) in
 
     (*
     (if (negb ((Z.eqb size_n size_n') && (Z.eqb align_n align_n')))
@@ -890,9 +894,9 @@ Module CheriMemory
               let c :=
                 if ro then
                   let p := C.cap_get_perms c in
-                  let p := Morello.Permissions.perm_clear_store p in
-                  let p := Morello.Permissions.perm_clear_store_cap p in
-                  let p := Morello.Permissions.perm_clear_store_local_cap p in
+                  let p := Permissions.perm_clear_store p in
+                  let p := Permissions.perm_clear_store_cap p in
+                  let p := Permissions.perm_clear_store_local_cap p in
                   C.cap_narrow_perms c p
                 else c
               in
@@ -911,7 +915,7 @@ Module CheriMemory
     let mask := C.representable_alignment_mask size_n in
     let size_n' := C.representable_length size_n in
     let align_n' :=
-      Z.max align_n (Z.succ (AddressValue.to_Z (Morello.AddressValue.bitwise_complement (AddressValue.of_Z mask)))) in
+      Z.max align_n (Z.succ (AddressValue.to_Z (AddressValue.bitwise_complement (AddressValue.of_Z mask)))) in
 
     allocator size_n' align_n' >>=
       (fun '(alloc_id, addr) =>
@@ -1044,7 +1048,7 @@ Module CheriMemory
                             get_allocation z >>=
                               (fun alloc =>
                                  if
-                                   Morello.AddressValue.eqb
+                                   AddressValue.eqb
                                      (C.cap_get_value addr)
                                      alloc.(base)
                                  then
@@ -1111,7 +1115,7 @@ Module CheriMemory
                          raise (InternalErr "Concrete: FREE was called on a dead allocation")
                    | false =>
                        get_allocation alloc_id >>= fun alloc =>
-                           if Morello.AddressValue.eqb (C.cap_get_value addr) alloc.(base) then
+                           if AddressValue.eqb (C.cap_get_value addr) alloc.(base) then
                              update
                                (fun st =>
                                   {|
@@ -1488,11 +1492,11 @@ Module CheriMemory
         let pcheck :=
           match intent with
           | ReadIntent =>
-              Morello.Permissions.has_load_perm
+              Permissions.has_load_perm
           | WriteIntent =>
-              Morello.Permissions.has_store_perm
+              Permissions.has_store_perm
           | CallIntent =>
-              Morello.Permissions.has_execute_perm
+              Permissions.has_execute_perm
           end in
         if pcheck (C.cap_get_perms c) then
           let limit := Z.add addr sz in
@@ -1670,7 +1674,7 @@ Module CheriMemory
                  (Z.add addr sz)
                  (Z.add (AddressValue.to_Z alloc.(base)) alloc.(size))))).
 
-  Definition device_ranges : list (Morello.AddressValue.t * Morello.AddressValue.t) :=
+  Definition device_ranges : list (AddressValue.t * AddressValue.t) :=
     [ (AddressValue.of_Z 0x40000000, AddressValue.of_Z 0x40000004)
       ; (AddressValue.of_Z 0xABC, AddressValue.of_Z 0XAC0) ].
 
@@ -3283,7 +3287,7 @@ Module CheriMemory
                           | false =>
                               get_allocation alloc_id >>=
                                 (fun (alloc : allocation) =>
-                                   if Morello.AddressValue.eqb alloc.(base) addr then
+                                   if AddressValue.eqb alloc.(base) addr then
                                      allocate_region tid (CoqSymbol.PrefOther "realloc") align size >>=
                                        (fun (new_ptr : pointer_value) =>
                                           let size_to_copy :=
@@ -3776,7 +3780,7 @@ Module CheriMemory
                        sz <- serr2memM (sizeof DEFAULT_FUEL None (CoqCtype.Ctype nil(CoqCtype.Basic (CoqCtype.Integer ity)))) ;;
                        bytes_value <- serr2memM (bytes_of_Z iss (Z.to_nat sz) n_value) ;;
                        let bits := bool_bits_of_bytes bytes_value in
-                       match Morello.Permissions.of_list bits with
+                       match Permissions.of_list bits with
                        | None =>
                            fail
                              (MerrOther
