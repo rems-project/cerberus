@@ -1,7 +1,9 @@
 Require Import Coq.Numbers.BinNums.
 Require Import Coq.Strings.String.
 
-From Morello Require Import Addr Capabilities.
+From CheriCaps.Common Require Import Addr Capabilities.
+
+From Morello Require Import Capabilities.
 Require Import CoqUndefined.
 Require Import CoqLocation.
 Require CoqAilSyntax.

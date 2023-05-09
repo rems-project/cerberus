@@ -1,7 +1,7 @@
 open Morello
 
 module MorelloCapabilityWithStrfcap = struct
-  include Capability
+  include Capability_GS
   
   let is_sealed c =
     match cap_get_seal c with

@@ -8,7 +8,7 @@ Require Import Coq.Numbers.BinNums.
 Require Import Coq.Init.Datatypes.
 Require Import Coq.Bool.Bool.
 
-Require Import Addr.
+From CheriCaps.Common Require Import Addr Capabilities.
 
 Set Implicit Arguments.
 Set Strict Implicit.
@@ -16,100 +16,6 @@ Generalizable All Variables.
 
 Open Scope Z_scope.
 Open Scope list_scope.
-
-
-Module Type Permission.
-  Parameter t:Set.
-
-  Parameter user_perms_len: nat.
-
-  (* Convenience functions to examine some permission bits *)
-
-  (* it is a permission in RISCV but in Morello spec while it is encoded
-     and treated as one, it is singled out as separate field of logical
-     Capability structure (see R_HRVBQ paragraph in Morello spec. *)
-  Parameter has_global_perm: t -> bool.
-  Parameter has_execute_perm: t -> bool.
-  Parameter has_ccall_perm: t -> bool. 
-  Parameter has_load_perm: t -> bool.
-  Parameter has_load_cap_perm: t -> bool.
-  Parameter has_seal_perm: t -> bool.
-  Parameter has_store_perm: t -> bool.
-  Parameter has_store_cap_perm: t -> bool.
-  Parameter has_store_local_cap_perm: t -> bool.
-  Parameter has_system_access_perm: t -> bool.
-  Parameter has_unseal_perm: t -> bool.
-
-  (* User-defined permissions *)
-  Parameter get_user_perms: t -> list bool.
-
-  (* Clearing permissions *)
-  Parameter perm_clear_global: t -> t.
-  Parameter perm_clear_execute: t -> t.
-  Parameter perm_clear_ccall: t -> t.
-  Parameter perm_clear_load: t -> t.
-  Parameter perm_clear_load_cap: t -> t.
-  Parameter perm_clear_seal: t -> t.
-  Parameter perm_clear_store: t -> t.
-  Parameter perm_clear_store_cap: t -> t.
-  Parameter perm_clear_store_local_cap: t -> t.
-  Parameter perm_clear_system_access: t -> t.
-  Parameter perm_clear_unseal: t -> t. 
-  
-  (** perform bitwise AND of user permissions *)
-  Parameter perm_and_user_perms: t -> list bool -> t.
-
-  (** null permission *)
-  Parameter perm_p0: t.
-
-  (** permissions for newly allocated region *)
-  Parameter perm_alloc: t.
-
-  (** permissions for newly allocated function *)
-  Parameter perm_alloc_fun: t.
-
-  (* --- Utility methods --- *)
-
-  Parameter to_string: t -> string.
-  
-  (* raw permissoins in numeric format *)
-  Parameter to_raw: t -> Z.
-
-  (* Initialize from list of boolean. The size and
-     contents of the list is implementation-specific.
-     Returns None in case of error *)
-  Parameter of_list: list bool -> option t.
-
-  (* inverse of [of_list] *)
-  Parameter to_list: t -> list bool.
-
-  Parameter eqb: t -> t -> bool.
-End Permission.
-
-Module Type OTYPE.
-  Parameter t:Set.
-  Parameter eqb: t -> t -> bool.
-End OTYPE.
-
-Module Type CAP_SEAL_T.
-  Parameter t:Set.
-  Parameter eqb: t -> t -> bool.
-End CAP_SEAL_T.
-
-Module Type PTRADDR_INTERVAL (V:PTRADDR).
-  Parameter Inline t: Set.
-
-  Parameter address_is_in_interval: t -> V.t -> bool.
-  Parameter ltb: t -> t -> bool.
-  Parameter eqb: t -> t -> bool.
-End PTRADDR_INTERVAL.
-
-
-Module Type FLAGS.
-  Parameter t:Set.
-  Parameter length:nat.
-  Parameter eqb: t -> t -> bool.
-End FLAGS.
 
 
 Record CapGhostState :=
@@ -126,13 +32,13 @@ Definition ghost_state_eqb (a b:CapGhostState) : bool :=
 Definition Default_CapGhostState : CapGhostState
   := {| tag_unspecified := false; bounds_unspecified := false |}.
 
-Module Type Capability
+Module Type CAPABILITY_GS
   (V:PTRADDR)
   (F:FLAGS)
   (OT:OTYPE)
   (S:CAP_SEAL_T)
   (I:PTRADDR_INTERVAL V)
-  (P:Permission).
+  (P:PERMISSIONS) <: CAPABILITY (V) (F) (OT) (S) (I) (P).
 
   Parameter t: Set.
 
@@ -346,4 +252,4 @@ Module Type Capability
   (* Make sure `eqb` and `value_compare` are consistent *)
   Parameter eqb_value_compare: forall a b, eqb a b = true -> value_compare a b = Eq.
 
-End Capability.
+End CAPABILITY_GS.
