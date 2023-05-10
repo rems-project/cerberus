@@ -1,0 +1,13 @@
+
+Gen_Spec.v
+
+.lia.cache
+.*.aux
+Makefile.coq*
+.Makefile.*
+*.glob
+*.vo
+*.vok
+*.vos
+
+
