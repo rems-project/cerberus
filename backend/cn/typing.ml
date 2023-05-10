@@ -78,13 +78,13 @@ let pure (m : ('a) t) : ('a) t =
   outcome
 
 
-(* not clear whether Effectful.Make should be used here instead *)
-let rec iterM f xs = match xs with
-  | [] -> return ()
-  | x :: xs ->
-    let@ () = f x in
-    iterM f xs
+module Eff = Effectful.Make(struct
+  type 'a m = 'a t
+  let bind = bind
+  let return = return
+  end)
 
+let iterM = Eff.ListM.iterM
 
 
 let get_models () = fun s -> Ok (s.past_models, s)
@@ -295,17 +295,30 @@ let add_cs = iterM add_c
 
 
 
-let add_r (r, RE.O oargs) = 
+let add_r loc (r, RE.O oargs) =
   let@ s = get () in
   let@ simp_ctxt = simp_ctxt () in
   match Simplify.ResourceTypes.simp_or_empty simp_ctxt r with
   | None -> return ()
   | Some r ->
     let oargs = Simplify.IndexTerms.simp simp_ctxt oargs in
-    set (Context.add_r (r, O oargs) s)
+    set (Context.add_r loc (r, O oargs) s)
 
-let add_rs = iterM add_r
+let add_rs loc = iterM (add_r loc)
 
+let res_history i =
+  let@ s = get () in
+  return (Context.res_history s i)
+
+let res_written loc i reason =
+  let@ s = get () in
+  Pp.debug 3 (lazy (Pp.item "resource written"
+    (Pp.flow (Pp.break 1) [Pp.int i; Pp.string reason; Locations.pp loc])));
+  let@ () = set (Context.res_written loc i reason s) in
+  let@ h = res_history i in
+  Pp.debug 3 (lazy (Pp.item "double-check"
+    (Pp.flow (Pp.break 1) [Pp.int i; Pp.string h.Context.reason_adjusted])));
+  return ()
 
 type changed = 
   | Deleted
@@ -313,40 +326,47 @@ type changed =
   | Unfolded of RE.t list
   | Changed of RE.t
 
-let map_and_fold_resources_adj loc (f : RE.t -> 'acc -> changed * 'acc) (acc : 'acc) =
-  fun s ->
-  let provable = make_provable loc s in
-  let (resources, orig_ix) = s.typing_context.resources in
-  let resources, ix, acc =
-    List.fold_right (fun (re, i) (resources, ix, acc) ->
+let map_and_fold_resources loc
+    (f : RE.t -> 'acc -> changed * 'acc)
+    (acc : 'acc) =
+  let@ s = get () in
+  let@ provable_f = provable loc in
+  let (resources, orig_ix) = s.resources in
+  let@ resources, ix, acc =
+    Eff.ListM.fold_rightM (fun (re, i) (resources, ix, acc) ->
         let (changed, acc) = f re acc in
         match changed with
         | Deleted ->
-           (resources, ix, acc)
-        | Unchanged -> 
-           ((re, i) :: resources, ix, acc)
+           let@ () = res_written loc i "deleted" in
+           return (resources, ix, acc)
+        | Unchanged ->
+           return ((re, i) :: resources, ix, acc)
         | Unfolded res ->
+           let@ () = res_written loc i "unfolded" in
            let tagged = List.mapi (fun j re -> (re, ix + j)) res in
-           (tagged @ resources, ix + List.length res, acc)
+           let@ () = Eff.ListM.iterM (fun (_, j) -> res_written loc j "came from unfold") tagged in
+           return (tagged @ resources, ix + List.length res, acc)
         | Changed re ->
-           match re with
+           let@ () = res_written loc i "changed" in
+           begin match re with
            | (Q {q; permission; _}, _) ->
-              begin match provable (LC.forall_ (q, Integer) (IT.not_ permission)) with
-              | `True -> (resources, ix, acc)
-              | `False -> ((re, ix) :: resources, ix + 1, acc)
+              begin match provable_f (LC.forall_ (q, Integer) (IT.not_ permission)) with
+              | `True -> return (resources, ix, acc)
+              | `False ->
+                 let@ () = res_written loc ix "changed" in
+                 return ((re, ix) :: resources, ix + 1, acc)
               end
            | _ -> 
-              ((re, ix) :: resources, ix + 1, acc)
+              let@ () = res_written loc ix "changed" in
+              return ((re, ix) :: resources, ix + 1, acc)
+           end
       ) resources ([], orig_ix, acc)
   in
-  Ok ((acc, orig_ix),
-    {s with typing_context = {s.typing_context with resources = (resources, ix)}})
-
-
-
-let map_and_fold_resources loc f acc =
-  let@ (acc, orig_ix) = map_and_fold_resources_adj loc f acc in
+  (* reload s to avoid clobbering the res_written changes *)
+  let@ s = get () in
+  let@ () = set {s with resources = (resources, ix)} in
   return acc
+
 
 let get_loc_trace () =
   let@ c = get () in

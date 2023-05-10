@@ -24,7 +24,7 @@ let bind_logical_return loc =
     | member :: members,
       LRT.Resource ((s, (re, bt)), _, lrt) -> 
        let@ () = ensure_base_type loc ~expect:bt (IT.bt member) in
-       let@ () = add_r (re, O member) in
+       let@ () = add_r loc (re, O member) in
        aux members (LRT.subst (IT.make_subst [(s, member)]) lrt)
     | members,
       LRT.Constraint (lc, _, lrt) -> 

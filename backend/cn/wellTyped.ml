@@ -777,7 +777,7 @@ module WLRT = struct
          (* let s, lrt = LRT.alpha_rename (s, re_oa_spec) lrt in *)
          let@ (re, re_oa_spec) = WRS.welltyped (fst info) (re, re_oa_spec) in
          let@ () = add_l s re_oa_spec (loc, lazy (Pp.string "let-var")) in
-         let@ () = add_r (re, O (IT.sym_ (s, re_oa_spec))) in
+         let@ () = add_r loc (re, O (IT.sym_ (s, re_oa_spec))) in
          let@ lrt = aux lrt in
          return (Resource ((s, (re, re_oa_spec)), info, lrt))
       | Constraint (lc, info, lrt) ->
@@ -849,7 +849,7 @@ module WLAT = struct
          (* let s, at = LAT.alpha_rename i_subst (s, re_oa_spec) at in *)
          let@ (re, re_oa_spec) = WRS.welltyped (fst info) (re, re_oa_spec) in
          let@ () = add_l s re_oa_spec (loc, lazy (Pp.string "let-var")) in
-         let@ () = add_r (re, O (IT.sym_ (s, re_oa_spec))) in
+         let@ () = add_r loc (re, O (IT.sym_ (s, re_oa_spec))) in
          let@ at = aux at in
          return (LAT.Resource ((s, (re, re_oa_spec)), info, at))
       | LAT.Constraint (lc, info, at) ->
@@ -948,7 +948,7 @@ module WLArgs = struct
          (* let s, at = LAT.alpha_rename i_subst (s, re_oa_spec) at in *)
          let@ (re, re_oa_spec) = WRS.welltyped (fst info) (re, re_oa_spec) in
          let@ () = add_l s re_oa_spec (loc, lazy (Pp.string "let-var")) in
-         let@ () = add_r (re, O (IT.sym_ (s, re_oa_spec))) in
+         let@ () = add_r loc (re, O (IT.sym_ (s, re_oa_spec))) in
          let@ at, typ = aux at in
          return (Mu.M_Resource ((s, (re, re_oa_spec)), info, at),
                  LAT.Resource ((s, (re, re_oa_spec)), info, typ))

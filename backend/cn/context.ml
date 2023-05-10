@@ -8,6 +8,7 @@ module LC = LogicalConstraints
 module LCSet = Set.Make(LC)
 module Loc = Locations
 module SymMap = Map.Make(Sym)
+module IntMap = Map.Make(Int)
 
 
 
@@ -17,10 +18,19 @@ type basetype_or_value =
   | BaseType of BT.t
   | Value of IndexTerms.t
 
+type resource_history =
+  {
+    last_adjusted: Locations.loc;
+    reason_adjusted: string;
+    last_read: Locations.loc;
+    last_read_id: int;
+  }
+
 type t = {
     computational : (basetype_or_value * l_info) SymMap.t;
     logical : (basetype_or_value * l_info) SymMap.t;
     resources : (RE.t * int) list * int;
+    resource_history : resource_history IntMap.t;
     constraints : LCSet.t;
     global : Global.t;
     location_trace : Locations.loc list;
@@ -32,6 +42,7 @@ let empty = {
     computational = SymMap.empty;
     logical = SymMap.empty;
     resources = ([], 0);
+    resource_history = IntMap.empty;
     constraints = LCSet.empty;
     global = Global.empty;
     location_trace = [];
@@ -109,11 +120,35 @@ let add_c c (ctxt : t) =
   if LCSet.mem c s then ctxt
   else { ctxt with constraints = LCSet.add c s }
 
-let add_r r (ctxt : t) =
+let add_r loc r (ctxt : t) =
   let (rs, ix) = ctxt.resources in
-  {ctxt with resources = ((r, ix) :: rs, ix + 1)}
+  let resources = ((r, ix) :: rs, ix + 1) in
+  Pp.debug 3 (lazy (begin match IntMap.find_opt ix ctxt.resource_history with
+    | None -> Pp.item "resource add_r: no prior" (Pp.int ix)
+    | Some h -> Pp.item "resource add_r: overwrite" (Pp.int ix)
+  end));
+  let resource_history = IntMap.add ix
+    {last_adjusted = loc; reason_adjusted = "created"; last_read = loc; last_read_id = ix}
+    ctxt.resource_history in
+  {ctxt with resources; resource_history}
 
+let res_history (ctxt : t) id =
+  match IntMap.find_opt id ctxt.resource_history with
+  | Some h -> h
+  | None -> {last_adjusted = Locations.unknown;
+    reason_adjusted = "unknown"; last_read = Locations.unknown;
+    last_read_id = id}
 
+let res_read loc id (ctxt : t) =
+  let (rs, ix) = ctxt.resources in
+  let h = {(res_history ctxt id) with last_read = loc; last_read_id = ix} in
+  let resource_history = IntMap.add id h ctxt.resource_history in
+  {ctxt with resource_history; resources = (rs, ix + 1)}
+
+let res_written loc id reason (ctxt : t) =
+  let h = {(res_history ctxt id) with last_adjusted = loc; reason_adjusted = reason} in
+  let resource_history = IntMap.add id h ctxt.resource_history in
+  {ctxt with resource_history}
 
 
 let json (ctxt : t) : Yojson.Safe.t = 

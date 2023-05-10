@@ -580,7 +580,7 @@ module General = struct
                  }
              in
              match r with
-             | Some (res, res_oargs) -> add_r (P res, res_oargs)
+             | Some (res, res_oargs) -> add_r loc (P res, res_oargs)
              | None -> return ()
            ) necessary_k_ptrs 
        in
@@ -927,14 +927,14 @@ module General = struct
       begin match opt_r with
         | None -> return false
         | Some (resource, oargs) ->
-          let@ _ = add_r (P resource, oargs) in
+          let@ _ = add_r loc (P resource, oargs) in
             return true
       end
     | {name = Owned (Sctypes.Struct tag); _} ->
       let@ result = fold_struct ~recursive:true loc uiinfo tag r_pt.pointer (bool_ true) in
       begin match result with
         | Result.Ok (resource, oargs) ->
-          let@ _ = add_r (P resource, oargs) in
+          let@ _ = add_r loc (P resource, oargs) in
           return true
         | _ -> return false
       end
@@ -944,7 +944,7 @@ module General = struct
           (!^ "Cannot fold predicate: " ^^^ Sym.pp pname) in
       let@ output = ftyp_args_request_for_pack loc (fst uiinfo)
           clause.ResourcePredicates.packing_ft in
-      let@ () = add_r (RET.P {
+      let@ () = add_r loc (RET.P {
           name = PName pname;
           pointer = r_pt.pointer;
           permission = bool_ true;
@@ -963,7 +963,7 @@ module General = struct
       begin match oqp with
         | None -> return false
         | Some (qp, oargs) ->
-            let@ _ = add_r (Q qp, oargs) in
+            let@ _ = add_r loc (Q qp, oargs) in
             return true
       end
     | {name = Owned (Sctypes.Struct tag); _} ->
@@ -971,7 +971,7 @@ module General = struct
       begin match ors with
         | None -> return false
         | Some rs ->
-           let@ _ = add_rs rs in
+           let@ _ = add_rs loc rs in
            return true
       end
     | {name = PName pname; _} ->

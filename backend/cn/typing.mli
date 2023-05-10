@@ -35,11 +35,13 @@ val add_l_value : Sym.t -> IndexTerms.t -> Context.l_info -> unit m
 val add_ls : (Sym.t * BaseTypes.t * Context.l_info) list -> (unit) m
 val add_c : LogicalConstraints.t -> (unit) m
 val add_cs : LogicalConstraints.t list -> (unit) m
-val add_r : Resources.t -> unit m
-val add_rs : Resources.t list -> unit m
+val add_r : Locations.t -> Resources.t -> unit m
+val add_rs : Locations.t -> Resources.t list -> unit m
 val get_loc_trace : unit -> (Locations.loc list) m
 val add_loc_trace : Locations.t -> (unit) m
 val get_step_trace : unit -> (Trace.t) m
+
+val res_history : int -> (Context.resource_history) m
 
 val begin_trace_of_step : Trace.opt_pat -> 'a Mucore.mu_expr -> (unit -> (unit) m) m
 val begin_trace_of_pure_step : Trace.opt_pat -> 'a Mucore.mu_pexpr -> (unit -> (unit) m) m

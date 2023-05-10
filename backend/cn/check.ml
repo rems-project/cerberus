@@ -16,6 +16,8 @@ module Loc = Locations
 module LF = LogicalFunctions
 module Mu = Mucore
 module RI = ResourceInference
+module IntSet = Set.Make(Int)
+module IntMap = Map.Make(Int)
 
 open Tools
 open Sctypes
@@ -1140,6 +1142,32 @@ let all_empty loc original_resources =
              {loc; msg = Unused_resource {resource; ctxt; model; trace}})
 
 
+let compute_written prev_rs post_rs =
+  let prev_ixs = IntSet.of_list (List.map snd prev_rs) in
+  let post_ixs = IntSet.of_list (List.map snd post_rs) in
+  let elts = List.filter (fun (_, i) -> not (IntSet.mem i prev_ixs)) post_rs
+    @ List.filter (fun (_, i) -> not (IntSet.mem i post_ixs)) prev_rs in
+  ListM.mapM (fun (r, i) ->
+    let@ h = res_history i in
+    Pp.debug 3 (lazy (Pp.item "compute_written" (Pp.flow (Pp.break 1)
+        [Pp.int i; RE.pp r; Pp.string h.reason_adjusted])));
+    return (r, i, h)) elts
+
+let check_written_distinct loc ws =
+  let render_loc h =
+    !^ "resource" ^^^ !^ (h.reason_adjusted) ^^^ !^ "at" ^^^ Locations.pp h.last_adjusted
+  in
+  let rec f m = function
+    | [] -> return ()
+    | ((r, i, h) :: ws) -> begin match IntMap.find_opt i m with
+      | None -> f (IntMap.add i h m) ws
+      | Some h2 ->
+        fail (fun _ -> {loc; msg = Generic (Pp.item "undefined behaviour: concurrent use"
+          (RE.pp r ^^^ break 1 ^^^ render_loc h ^^^ break 1 ^^^ render_loc h2))})
+    end
+  in
+  f IntMap.empty ws
+
 (*type labels = (AT.lt * label_kind) SymMap.t*)
 
 
@@ -1152,7 +1180,7 @@ let load loc pointer ct =
            iargs = [];
          }, None))
   in
-  let@ () = add_r (P point, O value) in
+  let@ () = add_r loc (P point, O value) in
   return value
 
 
@@ -1317,7 +1345,7 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
         let@ () = add_c (t_ (representable_ (Pointer act.ct, ret))) in
         let@ () = add_c (t_ (alignedI_ ~align:arg ~t:ret)) in
         let@ () = 
-          add_r
+          add_r loc
             (P { name = Block act.ct; 
                  pointer = ret;
                  permission = bool_ true;
@@ -1383,7 +1411,7 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
             }, None)
         in
         let@ () = 
-          add_r
+          add_r loc
             (P { name = Owned act.ct;
                  pointer = parg;
                  permission = bool_ true;
@@ -1486,18 +1514,18 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
           let msg = Mismatch {has = !^"tuple"; expect = BT.pp expect} in
           fail (fun _ -> {loc; msg})
      in
-     let rec aux es_bts k = match es_bts with
-       | [] -> k []
+     let rec aux es_bts vs written = match es_bts with
        | (e, bt) :: es_bts ->
+          let@ (pre_check, _) = all_resources_tagged () in
           check_expr labels ~typ:(Normal bt) e (fun v ->
-          aux es_bts (fun vs ->
-          k (v :: vs)
-          ))
+          let@ (post_check, _) = all_resources_tagged () in
+          let@ written2 = compute_written pre_check post_check in
+          aux es_bts (v :: vs) (written2 @ written))
+       | [] ->
+          let@ () = check_written_distinct loc written in
+          k (tuple_ (List.rev vs))
      in
-     aux (List.combine es item_bts) (fun vts ->
-     let lvt = tuple_ vts in
-     k lvt
-     )
+     aux (List.combine es item_bts) [] []
   | Normal expect, M_CN_progs (_, cn_progs) ->
      let@ () = WellTyped.ensure_base_type loc ~expect Unit in
      let rec aux = function
@@ -1540,7 +1568,7 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
                   bind_logical_return loc members lrt
                | Pack ->
                   Spine.calltype_packing loc pname right_clause.packing_ft (fun output -> 
-                  add_r (P pt, O output)
+                  add_r loc (P pt, O output)
                   )
                end
             | M_CN_have lc ->
@@ -1732,7 +1760,7 @@ let check_procedure
       let@ () = 
         debug 2 (lazy (headline ("checking function body " ^ Sym.pp_string fsym)));
         pure begin
-            let@ () = add_rs initial_resources in 
+            let@ () = add_rs loc initial_resources in
             check_expr_rt loc label_context ~typ:(Normal rt) body
           end 
       in
@@ -1743,7 +1771,7 @@ let check_procedure
           | M_Label (loc, label_args_and_body, annots, _) ->
              debug 2 (lazy (headline ("checking label " ^ Sym.pp_string lsym)));
              let@ (label_body, label_resources) = bind_arguments loc label_args_and_body in
-             let@ () = add_rs label_resources in
+             let@ () = add_rs loc label_resources in
              check_expr_rt loc label_context ~typ:False label_body
           end
         ) label_defs 
