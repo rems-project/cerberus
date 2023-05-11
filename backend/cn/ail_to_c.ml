@@ -54,9 +54,9 @@ let rec pp_ail_expr ?(arg_names_opt=None) ail_expr =
   match ail_expr with
     | A.(AilEident sym) -> 
       let sym_str = CF.String_ail.string_of_cn_id sym in
-      let str_from_list = List.assoc_opt String.equal sym_str ident_list in
+      let str_from_list_opt = List.assoc_opt String.equal sym_str ident_list in
       let ident_str =
-      (match str_from_list with
+      (match str_from_list_opt with
         | Some str -> str
         | None -> sym_str)
       in 
@@ -73,7 +73,9 @@ let rec pp_ail_expr ?(arg_names_opt=None) ail_expr =
       pp_ail_expr ~arg_names_opt f ^ "(" ^ String.concat ", " str_exprs ^ ")" 
     | A.AilEassert ail_expr -> 
         "assert(" ^ pp_ail_expr ~arg_names_opt (rm_expr ail_expr) ^ ")"
-    | _ -> pp_ail_default ail_expr
+    | _ -> 
+      Printf.printf "entered this case\n";
+      pp_ail_default ail_expr
 
 let pp_ail_stmt_default ail_stmt = CF.String_ail.string_of_statement (mk_stmt ail_stmt)
 

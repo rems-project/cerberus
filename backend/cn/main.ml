@@ -196,8 +196,10 @@ let generate_c_specs instrumentation_list type_map ail_prog =
   let executable_spec = {pre_post = pre_post; in_stmt = in_stmt} in
   executable_spec
 
-
-
+let generate_c_datatypes cn_datatypes = 
+  let ail_datatypes = List.map Cn_to_ail.cn_to_ail_datatype cn_datatypes in
+  let c_datatypes = List.map (fun str -> (Ail_to_c.pp_ail_expr str) ^ "\n") ail_datatypes in
+  List.fold_left (^) "" c_datatypes
 
 
 let main 
@@ -272,7 +274,10 @@ let main
          | None -> ()
          | Some output_filename ->
             let oc = Stdlib.open_out output_filename in
+            let cn_oc = Stdlib.open_out "cn.c" in
             let executable_spec = generate_c_specs instrumentation type_map ail_prog in
+            let c_datatypes = generate_c_datatypes ail_prog.cn_datatypes in
+            Stdlib.output_string cn_oc c_datatypes;
             begin match
               Source_injection.(output_injections oc
                 { filename; sigm= ail_prog
