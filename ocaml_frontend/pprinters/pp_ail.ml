@@ -539,14 +539,19 @@ let rec pp_expression_aux ?(executable_spec=false) mk_pp_annot a_expr =
               Option.(value (map (fun e -> pp ~executable_spec e) e_opt) ~default:(!^ "_")) in
             P.braces (P.separate (P.comma ^^ P.space) (List.mapi f e_opts))
         | AilEstruct (tag_sym, xs) ->
-            P.parens (!^ "struct" ^^^ pp_id tag_sym) ^^ P.braces (
+            let output_doc = !^ "struct" ^^^ pp_id ~executable_spec tag_sym in
+            let output_doc = if executable_spec then output_doc else P.parens output_doc in 
+            let output_doc = output_doc ^^ P.braces (
               comma_list (function (ident, e_opt) ->
                 P.dot ^^ Pp_symbol.pp_identifier ident ^^ P.equals ^^^
                 Option.(value (map (fun e -> pp ~executable_spec e) e_opt) ~default:(!^ "_"))
               ) xs
             )
+            in
+            let output_doc = if executable_spec then output_doc ^^ (!^ ";") else output_doc in 
+            output_doc
         | AilEunion (tag_sym, memb_ident, e_opt) ->
-            P.parens (!^ "union" ^^^ pp_id tag_sym) ^^ P.braces (
+            P.parens (!^ "union" ^^^ pp_id ~executable_spec tag_sym) ^^ P.braces (
               P.dot ^^ Pp_symbol.pp_identifier memb_ident ^^ P.equals ^^^ (function None -> !^ "_" | Some e -> pp ~executable_spec e) e_opt
             )
         | AilEcompound (qs, ty, e) ->
@@ -580,7 +585,7 @@ let rec pp_expression_aux ?(executable_spec=false) mk_pp_annot a_expr =
         | AilEannot (_, e) ->
             !^ "/* annot */" ^^^ pp ~executable_spec e
         | AilEva_start (e, sym) ->
-            pp_keyword "va_start" ^^ P.parens (pp ~executable_spec e ^^ P.comma ^^^ pp_id sym)
+            pp_keyword "va_start" ^^ P.parens (pp ~executable_spec e ^^ P.comma ^^^ pp_id ~executable_spec sym)
         | AilEva_copy (e1, e2) ->
             pp_keyword "va_copy" ^^ P.parens (pp ~executable_spec e1 ^^ P.comma ^^^ pp ~executable_spec e2)
         | AilEva_arg (e, ty) ->

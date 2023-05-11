@@ -166,9 +166,10 @@ let rec cn_to_ail_expr ?(const_prop=None) (CNExpr (loc, expr_)) =
         | [] -> failwith "Cannot have empty expression in CN each expression")
   
     
-    (* 
-    | CNExpr_match (e, es) -> failwith "TODO" 
-    *)
+    (* TODO: Implement. AilSswitch is a statement_ not an expression *)
+    (* Could try making everything a statement via AilSexpr *)
+    (* | CNExpr_match (e, es) -> failwith "TODO"  *)
+   
 
     | CNExpr_ite (e1, e2, e3) -> 
       let ail_e1 = cn_to_ail_expr ~const_prop e1 in
@@ -191,6 +192,10 @@ let rec cn_to_ail_expr ?(const_prop=None) (CNExpr (loc, expr_)) =
     | CNExpr_not e -> A.(AilEunary (Bnot, mk_expr (cn_to_ail_expr ~const_prop e))) 
     | _ -> failwith "TODO"
 
+let cn_to_ail_datatype (cn_datatype : cn_datatype) =
+  A.(AilEstruct (cn_datatype.cn_dt_name, []))
+
+
 let cn_to_ail_assertion = function
   | CN_assert_exp e_ -> 
     A.(AilEassert (mk_expr (cn_to_ail_expr e_)))
@@ -210,13 +215,3 @@ let cn_to_ail_condition cn_condition type_map =
   | CN_cconstr (loc, constr) -> 
     let ail_constr = cn_to_ail_assertion constr in
     (A.(AilSexpr (mk_expr ail_constr)), None)
-
-
-(* let cn_to_ail_function_spec = function
-  | CN_accesses (loc, ids) -> failwith "TODO"
-  | CN_requires (loc, conditions) -> 
-    List.map (fun c -> cn_to_ail_condition (loc, c)) conditions
-  | CN_ensures (loc, conditions) ->
-    List.map (fun c -> cn_to_ail_condition (loc, c)) conditions
-  | CN_trusted loc -> failwith "TODO"
-  | CN_mk_function (loc, _) -> failwith "TODO" *)

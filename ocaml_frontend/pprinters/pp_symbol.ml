@@ -34,7 +34,8 @@ let to_string_pretty ?(is_human=false) ?(executable_spec=false) (Symbol (_, n, s
           str
         else
           (Printf.printf "In non executable spec case\n";
-          "a_" ^ string_of_int n)
+          "a_" ^ string_of_int n
+          )
     | _ ->
         Printf.printf "In default pp_id case";
         "a_" ^ string_of_int n
