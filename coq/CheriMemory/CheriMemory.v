@@ -19,7 +19,8 @@ From CheriCaps.Morello Require Import Capabilities.
 From CheriCaps.Common Require Import Capabilities.
 
 From Common Require Import SimpleError Utils.
-From Morello Require Import Capabilities.
+From Morello Require Import CapabilitiesGS.
+
 Require Import Memory_model CoqMem_common ErrorWithState CoqUndefined ErrorWithState CoqLocation CoqSymbol CoqImplementation CoqTags CoqSwitches CoqAilTypesAux.
 
 Local Open Scope string_scope.

@@ -3,7 +3,7 @@ Require Import Coq.Strings.String.
 
 From CheriCaps.Common Require Import Addr Capabilities.
 
-From Morello Require Import Capabilities.
+From Morello Require Import CapabilitiesGS.
 Require Import CoqUndefined.
 Require Import CoqLocation.
 Require CoqAilSyntax.

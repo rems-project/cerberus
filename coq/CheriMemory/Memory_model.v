@@ -7,7 +7,7 @@ Require Import ExtLib.Structures.Monad.
 
 From CheriCaps.Common Require Import Addr Capabilities.
 
-From Morello Require Import Capabilities.
+From Morello Require Import CapabilitiesGS.
 Require Import CoqLocation.
 Require Import CoqSymbol.
 Require Import CoqMem_common.
