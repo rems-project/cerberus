@@ -854,7 +854,7 @@ module CHERIMorello : Memory = struct
       ) l;
     prerr_endline "END BYTEMAP"
 
-  let string_of_ghost_state (gs:Capabilities.coq_CapGhostState): string =
+  let string_of_ghost_state (gs:CapabilitiesGS.coq_CapGhostState): string =
     let s = if gs.tag_unspecified then " notag" else "" in
     if gs.bounds_unspecified then (s ^ " nobounds") else s
 
