@@ -11,11 +11,13 @@ From Sail Require Import Values Operators_mwords.
 From CheriCaps.Morello Require Import CapFns Capabilities.
 From CheriCaps.Common Require Import Utils Capabilities.
 
-Require Import Capabilities.
+Require Import CapabilitiesGS.
+
+Module MorelloCaps := CheriCaps.Morello.Capabilities.
 
 
-Module Capability_GS <: CAPABILITY_GS (AddressValue) (Flags) (ObjType) (SealType) (Bounds) (Permissions).
-  Definition cap_t := Capability.t.
+Module Capability_GS <: CAPABILITY_GS (MorelloCaps.AddressValue) (MorelloCaps.Flags) (MorelloCaps.ObjType) (MorelloCaps.SealType) (MorelloCaps.Bounds) (MorelloCaps.Permissions).
+  Definition cap_t := MorelloCaps.Capability.t.
 
   Inductive morello_cap_t :=
   {

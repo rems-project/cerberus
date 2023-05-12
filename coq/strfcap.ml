@@ -1,4 +1,4 @@
-open Morello
+open MorelloCapsGS
 
 module MorelloCapabilityWithStrfcap = struct
   include Capability_GS
