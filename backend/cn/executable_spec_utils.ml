@@ -19,6 +19,8 @@ let mk_ctype ctype_ =
 
 let empty_qualifiers : C.qualifiers = {const = false; restrict = false; volatile = false}
 
+let empty_attributes = CF.Annot.Attrs []
+
 type cn_dependencies = CF.Symbol.sym list
 
 type cn_dependency_graph = {
