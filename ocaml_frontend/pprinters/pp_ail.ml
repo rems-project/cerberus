@@ -704,10 +704,11 @@ let pp_alignment = function
   | AlignType ty ->
       pp_keyword "_Alignas" ^^ P.parens (pp_ctype no_qualifiers ty)
 
-let pp_tag_definition (tag, (_, def)) =
+let pp_tag_definition ?(executable_spec=false) (tag, (_, def)) =
   match def with
     | StructDef (ident_qs_tys, flexible_opt) ->
-        pp_keyword "struct" ^^^ pp_id_type tag ^^^ P.braces (
+        let id_doc = if executable_spec then pp_id ~executable_spec tag else pp_id_type tag in 
+        pp_keyword "struct" ^^^ id_doc ^^^ P.braces (
           P.nest 2 (
             P.break 1 ^^
             P.separate_map (P.semi ^^ P.break 1) (fun (ident, (_, align_opt, qs, ty)) ->
