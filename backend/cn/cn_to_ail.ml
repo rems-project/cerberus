@@ -193,7 +193,18 @@ let rec cn_to_ail_expr ?(const_prop=None) (CNExpr (loc, expr_)) =
     | _ -> failwith "TODO"
 
 let cn_to_ail_datatype (cn_datatype : cn_datatype) =
-  A.(AilEstruct (cn_datatype.cn_dt_name, []))
+  let generate_struct_definition (constructor, members) =
+    let identifiers = List.map fst members in
+    (* let xs = List.map (fun id -> (id, None)) identifiers in *)
+    let tag_definition = 
+      (match identifiers with
+        | [] -> C.(StructDef ([], None))
+        | _ -> C.(StructDef ([(List.hd identifiers, (empty_attributes, None, empty_qualifiers, mk_ctype Void))], None)))
+    in
+    (constructor, (Cerb_location.unknown, empty_attributes, tag_definition))
+  in
+  let structs = List.map generate_struct_definition cn_datatype.cn_dt_cases in
+  structs
 
 
 let cn_to_ail_assertion = function
