@@ -198,7 +198,8 @@ let generate_c_specs instrumentation_list type_map ail_prog =
 
 let generate_c_datatypes cn_datatypes = 
   let ail_datatypes = List.map Cn_to_ail.cn_to_ail_datatype cn_datatypes in
-  let c_datatypes = List.map (fun str -> (Ail_to_c.pp_ail_expr str) ^ "\n") ail_datatypes in
+  let ail_datatypes = List.fold_left (@) [] ail_datatypes in
+  let c_datatypes = List.map (fun dt -> CF.Pp_utils.to_plain_string (CF.Pp_ail.pp_tag_definition ~executable_spec:true dt) ^ "\n") ail_datatypes in
   List.fold_left (^) "" c_datatypes
 
 
