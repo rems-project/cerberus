@@ -7,8 +7,8 @@ val pp_const: string -> PPrint.document
 
 
 val pp_id: ?is_human:bool -> ?executable_spec:bool -> ail_identifier -> PPrint.document
-val pp_id_obj: ail_identifier -> PPrint.document
-val pp_id_func: ail_identifier -> PPrint.document
+val pp_id_obj: ?executable_spec:bool -> ail_identifier -> PPrint.document
+val pp_id_func: ?executable_spec:bool -> ail_identifier -> PPrint.document
 
 val pp_storageDuration: storageDuration -> PPrint.document
 
@@ -61,7 +61,7 @@ val pp_stringLiteral: stringLiteral -> PPrint.document
 val pp_constant: constant -> PPrint.document
 val pp_expression: ?executable_spec:bool -> 'a expression -> PPrint.document
 val pp_generic_association: 'a generic_association -> PPrint.document
-val pp_statement: 'a statement -> PPrint.document
+val pp_statement: ?executable_spec:bool -> 'a statement -> PPrint.document
 
 
 
