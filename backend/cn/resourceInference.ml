@@ -1029,6 +1029,36 @@ module General = struct
   let ftyp_args_request_step rt_subst loc = parametric_ftyp_args_request_step
     (resource_request ~recursive:true loc) rt_subst loc
 
+
+  let predicate_request_single_read_only loc (requested : RET.predicate_type) =
+    let@ provable = provable loc in
+    map_and_fold_resources loc (fun re found -> match found with
+      | Some _ -> (Unchanged, found)
+      | None ->
+        begin match re with
+          | (P p', p'_oarg) when equal_predicate_name requested.name p'.name ->
+            let pmatch = eq_ (requested.pointer, p'.pointer) in
+            let took = and_ [pmatch; p'.permission] in
+            begin match provable (LC.T took) with
+              | `True -> (Read, Some (p', p'_oarg))
+              | `False -> (Unchanged, None)
+            end
+          | _ -> (Unchanged, None)
+        end) None
+
+  let predicate_request_read_only ~recursive loc uiinfo (requested : RET.predicate_type) =
+    let@ r = predicate_request_single_read_only loc requested in
+    match r with
+      | Some v -> return (Some v)
+      | None ->
+      let@ r = predicate_request ~recursive loc uiinfo requested in
+      begin match r with
+        | None -> return None
+        | Some (res, res_oargs) ->
+          let@ () = add_r loc (P res, res_oargs) in
+          return r
+      end
+
 end
 
 module Special = struct
@@ -1046,6 +1076,14 @@ module Special = struct
     match result with
     | Some r -> return r
     | None -> fail_missing_resource loc situation (Some (P request), oinfo)
+
+  let predicate_request_read_only ~recursive loc situation (request, oinfo) =
+    let uiinfo = (situation, (Some (P request), oinfo)) in
+    let@ result = General.predicate_request_read_only ~recursive loc uiinfo request in
+    match result with
+    | Some r -> return r
+    | None -> fail_missing_resource loc situation (Some (P request), oinfo)
+
 
   let qpredicate_request loc situation (request, oinfo) = 
     let uiinfo = (situation, (Some (Q request), oinfo)) in

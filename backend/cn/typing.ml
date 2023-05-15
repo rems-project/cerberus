@@ -325,6 +325,7 @@ type changed =
   | Unchanged
   | Unfolded of RE.t list
   | Changed of RE.t
+  | Read
 
 let map_and_fold_resources loc
     (f : RE.t -> 'acc -> changed * 'acc)
@@ -340,6 +341,8 @@ let map_and_fold_resources loc
            let@ () = res_written loc i "deleted" in
            return (resources, ix, acc)
         | Unchanged ->
+           return ((re, i) :: resources, ix, acc)
+        | Read ->
            return ((re, i) :: resources, ix, acc)
         | Unfolded res ->
            let@ () = res_written loc i "unfolded" in

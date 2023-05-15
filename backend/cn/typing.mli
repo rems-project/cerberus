@@ -51,6 +51,7 @@ type changed =
   | Unchanged
   | Unfolded of Resources.t list
   | Changed of Resources.t
+  | Read
 
 val map_and_fold_resources : 
   Locations.t ->

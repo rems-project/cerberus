@@ -1173,14 +1173,13 @@ let check_written_distinct loc ws =
 
 let load loc pointer ct =
   let@ (point, O value) = 
-    (RI.Special.predicate_request ~recursive:true loc (Access (Load None)) ({ 
+    (RI.Special.predicate_request_read_only ~recursive:true loc (Access (Load None)) ({
            name = Owned ct;
            pointer = pointer;
            permission = bool_ true;
            iargs = [];
          }, None))
   in
-  let@ () = add_r loc (P point, O value) in
   return value
 
 
