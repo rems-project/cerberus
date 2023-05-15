@@ -123,10 +123,6 @@ let add_c c (ctxt : t) =
 let add_r loc r (ctxt : t) =
   let (rs, ix) = ctxt.resources in
   let resources = ((r, ix) :: rs, ix + 1) in
-  Pp.debug 3 (lazy (begin match IntMap.find_opt ix ctxt.resource_history with
-    | None -> Pp.item "resource add_r: no prior" (Pp.int ix)
-    | Some h -> Pp.item "resource add_r: overwrite" (Pp.int ix)
-  end));
   let resource_history = IntMap.add ix
     {last_adjusted = loc; reason_adjusted = "created"; last_read = loc; last_read_id = ix}
     ctxt.resource_history in

@@ -312,13 +312,7 @@ let res_history i =
 
 let res_written loc i reason =
   let@ s = get () in
-  Pp.debug 3 (lazy (Pp.item "resource written"
-    (Pp.flow (Pp.break 1) [Pp.int i; Pp.string reason; Locations.pp loc])));
-  let@ () = set (Context.res_written loc i reason s) in
-  let@ h = res_history i in
-  Pp.debug 3 (lazy (Pp.item "double-check"
-    (Pp.flow (Pp.break 1) [Pp.int i; Pp.string h.Context.reason_adjusted])));
-  return ()
+  set (Context.res_written loc i reason s)
 
 type changed = 
   | Deleted
