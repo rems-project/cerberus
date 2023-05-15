@@ -1,6 +1,7 @@
 open Builtins
 module CF=Cerb_frontend
 module CB=Cerb_backend
+open PPrint
 open CB.Pipeline
 open Setup
 open CF.Cn
@@ -203,9 +204,17 @@ let generate_c_specs instrumentation_list type_map ail_prog =
 
 let generate_c_datatypes cn_datatypes = 
   let ail_datatypes = List.map Cn_to_ail.cn_to_ail_datatype cn_datatypes in
-  let ail_datatypes = List.fold_left (@) [] ail_datatypes in
-  let c_datatypes = List.map (fun dt -> CF.Pp_utils.to_plain_string (CF.Pp_ail.pp_tag_definition ~executable_spec:true dt) ^ "\n") ail_datatypes in
-  List.fold_left (^) "" c_datatypes
+  (* TODO: Fix number of newlines generated using fold *)
+  let generate_str_from_ail_dt (ail_dt: unit Cn_to_ail.ail_datatype) = 
+    let consts = ail_dt.consts in
+    let const_doc = CF.Pp_ail.pp_statement consts ^^ PPrint.hardline in
+    let structs_doc = PPrint.concat_map (fun s -> CF.Pp_ail.pp_tag_definition ~executable_spec:true s ^^ PPrint.hardline) ail_dt.structs in 
+    const_doc ^^ structs_doc
+  in
+  let docs = List.map generate_str_from_ail_dt ail_datatypes in
+  let doc = PPrint.concat_map (fun doc -> doc ^^ PPrint.hardline) docs in
+  CF.Pp_utils.to_plain_string doc
+
 
 
 let main
