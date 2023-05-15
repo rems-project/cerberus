@@ -314,6 +314,10 @@ let res_written loc i reason =
   let@ s = get () in
   set (Context.res_written loc i reason s)
 
+let res_read loc i =
+  let@ s = get () in
+  set (Context.res_read loc i s)
+
 type changed = 
   | Deleted
   | Unchanged
@@ -337,6 +341,7 @@ let map_and_fold_resources loc
         | Unchanged ->
            return ((re, i) :: resources, ix, acc)
         | Read ->
+           let@ () = res_read loc i in
            return ((re, i) :: resources, ix, acc)
         | Unfolded res ->
            let@ () = res_written loc i "unfolded" in

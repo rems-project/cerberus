@@ -1142,31 +1142,50 @@ let all_empty loc original_resources =
              {loc; msg = Unused_resource {resource; ctxt; model; trace}})
 
 
-let compute_written prev_rs post_rs =
-  let prev_ixs = IntSet.of_list (List.map snd prev_rs) in
-  let post_ixs = IntSet.of_list (List.map snd post_rs) in
-  let elts = List.filter (fun (_, i) -> not (IntSet.mem i prev_ixs)) post_rs
-    @ List.filter (fun (_, i) -> not (IntSet.mem i post_ixs)) prev_rs in
-  ListM.mapM (fun (r, i) ->
+let all_resources_hist () =
+  let@ (rs, ix) = all_resources_tagged () in
+  let with_history (r, i) =
     let@ h = res_history i in
-    Pp.debug 3 (lazy (Pp.item "compute_written" (Pp.flow (Pp.break 1)
-        [Pp.int i; RE.pp r; Pp.string h.reason_adjusted])));
-    return (r, i, h)) elts
+    return ((r, h), i)
+  in
+  let@ rs = ListM.mapM with_history rs in
+  return (rs, ix)
 
-let check_written_distinct loc ws =
-  let render_loc h =
+let compute_used prev_rs post_rs =
+  let prev_w_ixs = IntSet.of_list (List.map snd prev_rs) in
+  let post_w_ixs = IntSet.of_list (List.map snd post_rs) in
+  let w_elts = List.filter (fun (_, i) -> not (IntSet.mem i prev_w_ixs)) post_rs
+    @ List.filter (fun (_, i) -> not (IntSet.mem i post_w_ixs)) prev_rs in
+  let prev_r_ixs = IntSet.of_list (List.map (fun ((_, h), _) -> h.Context.last_read_id) prev_rs) in
+  (* don't include in read-set anything that appears in write-set *)
+  let r_elts = List.filter (fun ((_, h), i) -> IntSet.mem i prev_w_ixs
+    && not (IntSet.mem h.Context.last_read_id prev_r_ixs)) post_rs in
+  (w_elts, r_elts)
+
+let check_used_distinct loc used =
+  let render_upd h =
     !^ "resource" ^^^ !^ (h.reason_adjusted) ^^^ !^ "at" ^^^ Locations.pp h.last_adjusted
   in
-  let rec f m = function
-    | [] -> return ()
-    | ((r, i, h) :: ws) -> begin match IntMap.find_opt i m with
-      | None -> f (IntMap.add i h m) ws
+  let render_read h =
+    !^ "resource read at " ^^^ Locations.pp h.last_read
+  in
+  let rec check_ws m = function
+    | [] -> return m
+    | (((r, h), i) :: ws) -> begin match IntMap.find_opt i m with
+      | None -> check_ws (IntMap.add i h m) ws
       | Some h2 ->
-        fail (fun _ -> {loc; msg = Generic (Pp.item "undefined behaviour: concurrent use"
-          (RE.pp r ^^^ break 1 ^^^ render_loc h ^^^ break 1 ^^^ render_loc h2))})
+        fail (fun _ -> {loc; msg = Generic (Pp.item "undefined behaviour: concurrent update"
+          (RE.pp r ^^^ break 1 ^^^ render_upd h ^^^ break 1 ^^^ render_upd h2))})
     end
   in
-  f IntMap.empty ws
+  let@ w_map = check_ws IntMap.empty (List.concat (List.map fst used)) in
+  let check_rd ((r, h), i) = match IntMap.find_opt i w_map with
+    | None -> return ()
+    | Some h2 ->
+      fail (fun _ -> {loc; msg = Generic (Pp.item "undefined behaviour: concurrent read & update"
+        (RE.pp r ^^^ break 1 ^^^ render_read h ^^^ break 1 ^^^ render_upd h2))})
+  in
+  ListM.iterM check_rd (List.concat (List.map snd used))
 
 (*type labels = (AT.lt * label_kind) SymMap.t*)
 
@@ -1513,15 +1532,15 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
           let msg = Mismatch {has = !^"tuple"; expect = BT.pp expect} in
           fail (fun _ -> {loc; msg})
      in
-     let rec aux es_bts vs written = match es_bts with
+     let rec aux es_bts vs prev_used = match es_bts with
        | (e, bt) :: es_bts ->
-          let@ (pre_check, _) = all_resources_tagged () in
+          let@ (pre_check, _) = all_resources_hist () in
           check_expr labels ~typ:(Normal bt) e (fun v ->
-          let@ (post_check, _) = all_resources_tagged () in
-          let@ written2 = compute_written pre_check post_check in
-          aux es_bts (v :: vs) (written2 @ written))
+          let@ (post_check, _) = all_resources_hist () in
+          let used = compute_used pre_check post_check in
+          aux es_bts (v :: vs) (used :: prev_used))
        | [] ->
-          let@ () = check_written_distinct loc written in
+          let@ () = check_used_distinct loc prev_used in
           k (tuple_ (List.rev vs))
      in
      aux (List.combine es item_bts) [] []
