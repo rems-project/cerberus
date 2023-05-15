@@ -86,10 +86,10 @@ let pp_comment str    = !^ (ansi_format [Red] str)
 
 
 let pp_id ?(is_human=false) ?(executable_spec = false) id = !^ (Pp_symbol.to_string_pretty ~is_human ~executable_spec id)
-let pp_id_obj id = !^ (ansi_format [Yellow] (Pp_symbol.to_string_pretty id))
-let pp_id_label id = !^ (ansi_format [Magenta] (Pp_symbol.to_string_pretty id))
-let pp_id_type ?(is_human=false) id = !^ (ansi_format [Green] (Pp_symbol.to_string_pretty ~is_human id))
-let pp_id_func id = !^ (ansi_format [Bold; Cyan] (Pp_symbol.to_string_pretty id))
+let pp_id_obj ?(executable_spec = false) id = !^ (ansi_format [Yellow] (Pp_symbol.to_string_pretty ~executable_spec id))
+let pp_id_label ?(executable_spec = false) id = !^ (ansi_format [Magenta] (Pp_symbol.to_string_pretty ~executable_spec id))
+let pp_id_type ?(executable_spec = false) ?(is_human=false) id = !^ (ansi_format [Green] (Pp_symbol.to_string_pretty ~executable_spec ~is_human id))
+let pp_id_func ?(executable_spec = false) id = !^ (ansi_format [Bold; Cyan] (Pp_symbol.to_string_pretty ~executable_spec id))
 
 
 let pp_integer i = P.string (Nat_big_num.to_string i)
@@ -615,8 +615,8 @@ and pp_generic_association_aux pp_annot = function
       pp_keyword "default" ^^ P.colon ^^^ pp_expression_aux pp_annot e
 
 
-and pp_statement_aux pp_annot ~bs (AnnotatedStatement (_, _, stmt_)) =
-  let pp_statement ?(is_control=false) ?(bs=bs) (AnnotatedStatement (_, _, stmt_) as stmt) =
+and pp_statement_aux ?(executable_spec=false) pp_annot ~bs (AnnotatedStatement (_, _, stmt_)) =
+  let pp_statement ?(executable_spec=false) ?(bs=bs) ?(is_control=false) (AnnotatedStatement (_, _, stmt_) as stmt) =
     begin match stmt_ with
       | AilSblock _ ->
           P.empty
@@ -626,33 +626,48 @@ and pp_statement_aux pp_annot ~bs (AnnotatedStatement (_, _, stmt_)) =
           else
             P.empty
     end ^^
-    pp_statement_aux pp_annot ~bs stmt in
+    pp_statement_aux ~executable_spec pp_annot ~bs stmt in
   match stmt_ with
     | AilSskip ->
         P.semi
     | AilSexpr e ->
-        pp_expression_aux pp_annot e ^^ P.semi
+        pp_expression_aux ~executable_spec pp_annot e ^^ P.semi
     | AilSblock ([], []) ->
         P.lbrace ^^ P.rbrace
     | AilSblock ([], ss) ->
         P.lbrace ^^ P.nest 2 (
-          P.break 1 ^^ (P.separate_map (P.break 1) pp_statement ss)
+          P.break 1 ^^ (P.separate_map (P.break 1) (fun s -> pp_statement ~executable_spec ~bs s) ss)
         ) ^^ (if List.length ss > 0 then P.break 1 else P.empty) ^^
         P.rbrace
     | AilSblock (bindings, ss) ->
         let block =
-          P.separate_map (P.break 1) (pp_statement ~bs:(bindings@bs)) ss in
+          P.separate_map
+            (P.semi ^^ P.break 1)
+            (fun (id, (dur_reg_opt,  _align, qs, ty)) ->
+              if !Cerb_debug.debug_level > 5 then
+                (* printing the types in a human readable format *)
+                P.parens ( P.empty
+                             (* TODO
+                  P.optional (fun (dur, isRegister) ->
+                    (fun z -> if isRegister then pp_keyword "register" ^^^ z else z)
+                      (pp_storageDuration dur)
+                  ) dur_reg_opt ^^^ pp_ctype_human qs ty
+                ) ^^^ pp_id_obj id *) )
+              else
+                pp_ctype_declaration (pp_id_obj ~executable_spec id) qs ty
+               ) bindings ^^ P.semi ^^ P.break 1 ^^
+          P.separate_map (P.break 1) (fun s -> pp_statement ~executable_spec ~bs:(bindings@bs) s) ss in
         P.lbrace ^^ P.nest 2 (P.break 1 ^^ block) ^^
         (if List.length ss > 0 then P.break 1 else P.empty) ^^ P.rbrace
     | AilSif (e, s1, s2) ->
-        pp_keyword "if" ^^^ P.parens (pp_expression_aux pp_annot e) ^^^
-          pp_statement ~is_control:true s1 ^/^
+        pp_keyword "if" ^^^ P.parens (pp_expression_aux ~executable_spec pp_annot e) ^^^
+          pp_statement ~executable_spec ~is_control:true s1 ^/^
         pp_keyword "else" ^^^
-          pp_statement ~is_control:true s2
+          pp_statement ~executable_spec ~is_control:true s2
     | AilSwhile (e, s, _) ->
-        pp_keyword "while" ^^^ P.parens (pp_expression_aux pp_annot e) ^^^ pp_statement ~is_control:true s
+        pp_keyword "while" ^^^ P.parens (pp_expression_aux ~executable_spec pp_annot e) ^^^ pp_statement ~executable_spec ~is_control:true s
     | AilSdo (s, e, _) ->
-        pp_keyword "do" ^^^ pp_statement ~is_control:true s ^^^ pp_keyword "while" ^^^ P.parens (pp_expression_aux pp_annot e) ^^ P.semi
+        pp_keyword "do" ^^^ pp_statement ~executable_spec ~is_control:true s ^^^ pp_keyword "while" ^^^ P.parens (pp_expression_aux ~executable_spec pp_annot e) ^^ P.semi
     | AilSbreak ->
         pp_keyword "break" ^^ P.semi
     | AilScontinue ->
@@ -660,19 +675,19 @@ and pp_statement_aux pp_annot ~bs (AnnotatedStatement (_, _, stmt_)) =
     | AilSreturnVoid ->
         pp_keyword "return" ^^ P.semi
     | AilSreturn e ->
-        pp_keyword "return" ^^^ pp_expression_aux pp_annot e ^^ P.semi
+        pp_keyword "return" ^^^ pp_expression_aux ~executable_spec pp_annot e ^^ P.semi
     | AilSswitch (e, s) ->
-        pp_keyword "switch" ^^^ P.parens (pp_expression_aux pp_annot e) ^/^ pp_statement ~is_control:true s
+        pp_keyword "switch" ^^^ P.parens (pp_expression_aux ~executable_spec pp_annot e) ^/^ pp_statement ~executable_spec ~is_control:true s
     | AilScase (n, s) ->
-        pp_keyword "case" ^^^ !^ (Z.to_string n) ^^ P.colon ^/^ pp_statement s
+        pp_keyword "case" ^^^ !^ (Z.to_string n) ^^ P.colon ^/^ pp_statement ~executable_spec s
     | AilScase_rangeGNU (n1, n2, s) ->
-        pp_keyword "case" ^^^ !^ (Z.to_string n1 ^ " ... " ^ Z.to_string n2) ^^ P.colon ^/^ pp_statement s
+        pp_keyword "case" ^^^ !^ (Z.to_string n1 ^ " ... " ^ Z.to_string n2) ^^ P.colon ^/^ pp_statement ~executable_spec s
     | AilSdefault s ->
-        pp_keyword "default" ^^ P.colon ^/^ pp_statement s
+        pp_keyword "default" ^^ P.colon ^/^ pp_statement ~executable_spec s
     | AilSlabel (l, s, _) ->
-        pp_id_label l ^^ P.colon ^/^ pp_statement s
+        pp_id_label l ^^ P.colon ^/^ pp_statement ~executable_spec s
     | AilSgoto l ->
-        pp_keyword "goto" ^^^ pp_id_label l ^^ P.semi
+        pp_keyword "goto" ^^^ pp_id_label ~executable_spec l ^^ P.semi
     | AilSdeclaration [] ->
         pp_comment "// empty decl"
     | AilSdeclaration defs ->
@@ -680,23 +695,23 @@ and pp_statement_aux pp_annot ~bs (AnnotatedStatement (_, _, stmt_)) =
           begin match List.assoc_opt id bs with
             | Some (_, align_opt, qs, ty) ->
                 pp_alignment_opt align_opt ^^
-                pp_ctype_declaration (pp_id_obj id) qs ty
+                pp_ctype_declaration (pp_id_obj ~executable_spec id) qs ty
             | None ->
                 !^ "BINDING_NO_FOUND"
           end
-          (*pp_id_obj id*) ^^ P.optional (fun e -> P.space ^^ P.equals ^^^ pp_expression_aux pp_annot e) e_opt
+          (*pp_id_obj id*) ^^ P.optional (fun e -> P.space ^^ P.equals ^^^ pp_expression_aux ~executable_spec pp_annot e) e_opt
         ) defs ^^
         P.semi
     | AilSpar ss ->
         P.lbrace ^^ P.lbrace ^^ P.lbrace ^^ P.nest 2 (
-          P.break 1 ^^ P.separate_map (P.break 1 ^^ !^ "|||" ^^ P.break 1) pp_statement ss
+          P.break 1 ^^ P.separate_map (P.break 1 ^^ !^ "|||" ^^ P.break 1) (fun s -> pp_statement ~executable_spec ~bs s) ss
         ) ^/^ P.rbrace ^^ P.rbrace ^^ P.rbrace
     | AilSreg_store (r, e) ->
-        !^("r" ^ string_of_int r) ^^^ P.equals ^^^ pp_expression_aux pp_annot e ^^ P.semi
+        !^("r" ^ string_of_int r) ^^^ P.equals ^^^ pp_expression_aux ~executable_spec pp_annot e ^^ P.semi
 
     | AilSmarker (_, s) ->
         pp_comment "// marker" ^^ P.break 1 ^^
-        pp_statement s
+        pp_statement ~executable_spec s
 
 
 let pp_static_assertion pp_annot (e, lit) =
@@ -891,7 +906,7 @@ let pp_genTypeCategory = function
 
 let pp_expression ?(executable_spec=false) e = pp_expression_aux ~executable_spec (fun _ d -> d) e
 let pp_generic_association ga = pp_generic_association_aux (fun _ d -> d) ga
-let pp_statement s = pp_statement_aux (fun _ d -> d) ~bs:[] s
+let pp_statement ?(executable_spec=false) s = pp_statement_aux ~executable_spec (fun _ d -> d) ~bs:[] s
 
 
 

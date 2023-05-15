@@ -194,7 +194,8 @@ let rec cn_to_ail_expr ?(const_prop=None) (CNExpr (loc, expr_)) =
 
 type 'a ail_datatype = {
   structs: (C.union_tag * (Cerb_location.t * CF.Annot.attributes * C.tag_definition)) list;
-  consts: 'a A.statement list;
+  decls: (C.union_tag * A.declaration) list;
+  stats: 'a A.statement list;
 }
 
 let cn_to_ail_datatype (cn_datatype : cn_datatype) =
@@ -216,18 +217,21 @@ let cn_to_ail_datatype (cn_datatype : cn_datatype) =
     CF.Pp_utils.to_plain_string doc in 
     Sym.fresh_pretty str
   in
-  let rec generate_decls cases count =
+  let rec generate_stats cases count =
     (match cases with 
       | [] -> []
       | (constructor, _) :: cs -> 
         let const = mk_expr (A.(AilEconst (ConstantInteger (IConstant (Z.of_int count, Decimal, None))))) in
-        (generate_constructor_sym constructor, Some const) :: (generate_decls cs (count + 1))
+        let constructor_sym = generate_constructor_sym constructor in
+        (constructor_sym, Some const) :: (generate_stats cs (count + 1))
   )
   in
-  let decls = generate_decls cn_datatype.cn_dt_cases 0 in
-  (* let decls = mk_stmt (A.AilSdeclaration decls) in *)
-  let decls = List.map (fun d -> mk_stmt (A.AilSdeclaration [d])) decls in
-  {structs = structs; consts = decls}
+  (* TODO: Make const? *)
+  let decl_object = A.(Decl_object ((Automatic, false), None, empty_qualifiers, mk_ctype C.(Basic (Integer (Signed Int_))))) in
+  let stats = generate_stats cn_datatype.cn_dt_cases 0 in
+  let decls = List.map (fun (sym, _) -> (sym, decl_object)) stats in
+  let stats = List.map (fun d -> mk_stmt (A.AilSdeclaration [d])) stats in
+  {structs = structs; decls = decls; stats = stats}
 
 
 let cn_to_ail_assertion = function
