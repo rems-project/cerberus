@@ -22,8 +22,8 @@ end
 
 module ListZ = OUnitDiff.ListSimpleMake(EZ)
 
-open Capabilities
-open Morello
+open CapabilitiesGS
+open MorelloCapsGS
 
 module M = struct
   include MorelloCapabilityWithStrfcap

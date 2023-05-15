@@ -18,6 +18,7 @@ RUN opam switch create cerberus ocaml-base-compiler.4.14.1 \
 
 RUN opam pin -n coq-struct-tact https://github.com/uwplse/StructTact.git
 RUN opam pin -n coq-sail https://github.com/rems-project/coq-sail.git
+RUN opam pin -n coq-cheri-capabilities https://github.com/rems-project/coq-cheri-capabilities.git
 
 COPY ./cerberus.opam /tmp/cerberus.opam
 RUN opam install --depext-only /tmp/cerberus.opam # system dependencies with apt

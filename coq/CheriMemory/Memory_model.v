@@ -5,7 +5,8 @@ Require Import Coq.Numbers.BinNums.
 
 Require Import ExtLib.Structures.Monad.
 
-From Morello Require Import Addr Capabilities.
+From CheriCaps.Common Require Import Addr Capabilities.
+
 Require Import CoqLocation.
 Require Import CoqSymbol.
 Require Import CoqMem_common.
