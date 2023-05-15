@@ -206,21 +206,18 @@ let generate_c_datatypes cn_datatypes =
   let ail_datatypes = List.map Cn_to_ail.cn_to_ail_datatype cn_datatypes in
   (* TODO: Fix number of newlines generated using fold *)
   let generate_str_from_ail_dt (ail_dt: unit Cn_to_ail.ail_datatype) = 
-    let const_str_fun decl = (Ail_to_c.pp_ail_stmt (Executable_spec_utils.rm_stmt decl, None) None) ^ ";\n" in
-    let consts_str = List.map const_str_fun ail_dt.consts in
-    let consts_str = List.fold_left (^) "" consts_str in
+    let stats = List.map (fun c -> CF.Pp_ail.pp_statement ~executable_spec:true c ^^ PPrint.hardline) ail_dt.stats in
+    let stats = List.fold_left (^^) empty stats in
+    let decls_doc = List.map Ail_to_c.pp_ail_declaration ail_dt.decls in
+    let decls_doc = List.fold_left (^^) empty decls_doc in
     let structs_doc = PPrint.concat_map (fun s -> CF.Pp_ail.pp_tag_definition ~executable_spec:true s ^^ PPrint.hardline) ail_dt.structs in 
-    (consts_str, structs_doc)
+    (decls_doc ^^ PPrint.hardline ^^ stats, structs_doc)
   in
   let docs = List.map generate_str_from_ail_dt ail_datatypes in
   let (consts, structs) = List.split docs in
-  let consts = List.fold_left (^) "" consts in
   let concat_map_newline docs = 
     PPrint.concat_map (fun doc -> doc ^^ PPrint.hardline) docs in
-  let doc = 
-    (* concat_map_newline consts ^^  *)
-    concat_map_newline structs in
-  consts ^ CF.Pp_utils.to_plain_string doc
+  CF.Pp_utils.to_plain_string (concat_map_newline consts ^^ concat_map_newline structs)
 
 
 

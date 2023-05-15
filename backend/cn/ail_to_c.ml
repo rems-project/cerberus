@@ -3,7 +3,9 @@ module CF=Cerb_frontend
 open Executable_spec_utils
 module A=CF.AilSyntax
 module C=CF.Ctype
+open PPrint
 
+(* TODO: Remove reliance on these handwritten functions and switch to executable_spec flag in pp_ail instead *)
 let ident_list = [
   ("return", "__cn_ret");
   ("power", "pow")
@@ -81,17 +83,25 @@ let rec pp_ail_expr ?(arg_names_opt=None) ail_expr =
 let pp_ail_stmt_default ail_stmt = CF.String_ail.string_of_statement (mk_stmt ail_stmt)
 
 
-  
+
 let pp_ail_stmt ((ail_stmt, extra) as ail_info) arg_names_opt = 
   match ail_info with
   | (A.AilSdeclaration ((name, Some decl) :: _), ct) -> 
-    (* TODO: Hack! Remove. *)
     let type_str = (match ct with 
       | Some ctype -> pp_ctype ctype ^ " "
-      | None -> "const int ")
+      | None -> "const int ") (* Not reached *)
     in
     let name_var = A.(AilEident name) in
     type_str ^ pp_ail_expr name_var ^ " = " ^ pp_ail_expr ~arg_names_opt (rm_expr decl)
   | (A.(AilSexpr ail_expr), _) -> pp_ail_expr ~arg_names_opt (rm_expr ail_expr)
   | _ -> pp_ail_stmt_default ail_stmt
 
+let pp_ail_declaration (id, decl) =
+  match decl with
+    | A.Decl_object (msd, _, qs, cty) ->
+         CF.Pp_ail.pp_ctype qs cty 
+         ^^ PPrint.break 1 
+         ^^ CF.Pp_ail.pp_id_obj ~executable_spec:true id 
+         ^^ PPrint.semi 
+         ^^ PPrint.hardline
+    | _ -> failwith "TODO"
