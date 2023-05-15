@@ -200,6 +200,7 @@ type violation =
   (* GNU extensions *)
   (* ?: operator *)
   | GNUConditionalOperatorInvalidOperandType of genType
+  | GNUBuiltinChooseExprNotIntegerConstant
 
 
 type assignment_violation =
@@ -470,5 +471,7 @@ let std_of_violation = function
   | AtomicAddressArgumentMustBePointer op _ ->
       std_of_atomic_operation_synopsis op
   | GNUConditionalOperatorInvalidOperandType _ ->
+      []
+  | GNUBuiltinChooseExprNotIntegerConstant ->
       []
 end

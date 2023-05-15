@@ -172,6 +172,8 @@ module MakePp (Conf: PP_CN) = struct
       | CNExpr_match (x, ms) ->
           let m_doc (lhs, rhs) = Dnode (pp_ctor "=>", List.map dtree_of_cn_expr [lhs; rhs]) in
           Dnode (pp_ctor "CNExpr_match", [dtree_of_cn_expr x] @ List.map m_doc ms)
+      | CNExpr_let (s, e, body) ->
+          Dnode (pp_ctor "CNExpr_let", [Dleaf (Conf.pp_ident s); dtree_of_cn_expr e; dtree_of_cn_expr body])
       | CNExpr_ite (e1, e2, e3) ->
           Dnode (pp_ctor "CNExpr_ite"
                , List.map dtree_of_cn_expr [e1;e2;e3])
@@ -209,22 +211,10 @@ module MakePp (Conf: PP_CN) = struct
         Dnode ( pp_stmt_ctor "CN_each" ^^^ P.squotes (Conf.pp_ident ident) ^^^ P.colon ^^^ pp_base_type bTy
               , List.map dtree_of_cn_expr es )
 
-  let rec dtree_of_cn_func_body = function
-    | CN_fb_letExpr (_, ident, e, c) ->
-        Dnode ( pp_stmt_ctor "CN_fb_letExpr" ^^^ P.squotes (Conf.pp_ident ident)
-              , [dtree_of_cn_expr e; dtree_of_cn_func_body c])
-    | CN_fb_return (_, x) ->
-       dtree_of_cn_expr x
-    | CN_fb_cases (_, x, xs) ->
-       Dnode (pp_stmt_ctor "CN_fb_cases"
-             , dtree_of_cn_expr x :: List.map dtree_of_cn_fb_case xs)
-  and dtree_of_cn_fb_case (nm, x) = 
-       Dnode (pp_stmt_ctor "case" ^^^ P.squotes (Conf.pp_ident nm)
-             , [dtree_of_cn_func_body x])
 
   let dtree_of_o_cn_func_body = function
-    | None -> Dleaf !^"uninterpreted"
-    | Some body -> Dnode (!^"interpreted", [dtree_of_cn_func_body body])
+    | None -> Dleaf !^"None"
+    | Some body -> Dnode (!^"Some", [dtree_of_cn_expr body])
 
   let dtree_of_cn_assertion = function
     | CN_assert_exp e -> Dnode (pp_stmt_ctor "CN_assert_exp", [dtree_of_cn_expr e])

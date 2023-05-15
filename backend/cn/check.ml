@@ -819,8 +819,14 @@ let rec check_pexpr (pe : 'bty mu_pexpr) ~(expect:BT.t)
      | None -> fail (fun _ -> {loc; msg = Generic (!^ "cannot evaluate function:" ^^^
            Pp.c_app (Mucore.pp_function fun_id) (List.map IT.pp args))})
      )
-  | M_PEstruct _ ->
-     Debug_ocaml.error "todo: PEstruct"
+  | M_PEstruct (tag, xs) ->
+     let@ layout = get_struct_decl loc tag in
+     let@ xs_with_expects = ListM.mapM (fun (nm, expr) ->
+       let@ ty = get_member_type loc tag nm layout in
+       return (expr, BT.of_sct ty)) xs in
+     check_pexprs xs_with_expects (fun vs ->
+     let v = struct_ (tag, List.map2 (fun (nm, _) v -> (nm, v)) xs vs) in
+     k v)
   | M_PEunion _ ->
      Debug_ocaml.error "todo: PEunion"
   | M_PEcfunction pe2 ->
@@ -1562,7 +1568,7 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
                      WellTyped.WIT.check loc def_arg_bt has_arg
                    ) args def.args
                in
-               begin match LF.single_unfold_to_term def f args with
+               begin match LF.unroll_once def args with
                | None ->
                   let msg = 
                     !^"Cannot unfold definition of uninterpreted function" 

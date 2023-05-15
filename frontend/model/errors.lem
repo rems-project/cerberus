@@ -17,6 +17,7 @@ type desugar_cause =
   | Desugar_NotYetSupported of string
   | Desugar_NeverSupported of string
   | Desugar_agnosticFailure of string
+  | Desugar_illtypedIntegerConstant
   | Desugar_CN of Cn.cn_error
   | Desugar_TODO of string (* TODO: get rid of this constructor eventually *)
 

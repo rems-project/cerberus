@@ -589,6 +589,7 @@ module WIT = struct
          let@ t1 = infer loc t1 in
          pure begin
             let@ () = add_l name (IT.bt t1) (loc, lazy (Pp.string "let-var")) in
+            let@ () = add_c (LC.t_ (IT.def_ name t1)) in
             let@ t2 = infer loc t2 in
             return (IT (Let ((name, t1), t2), IT.bt t2))
             end
@@ -1073,36 +1074,7 @@ module WLFD = struct
 
   open LogicalFunctions
 
-  let rec welltyped_body loc return_bt body =
-    pure begin
-      match body with
-      | Body.Case (it, cases) ->
-         let@ it = WIT.infer loc it in
-         let@ cases = 
-           ListM.mapM (fun (ctor, case_body) ->
-               pure begin
-                   let@ info = get_datatype_constr loc ctor in
-                   let@ () = ensure_base_type loc ~expect:(IT.bt it)
-                               (Datatype info.c_datatype_tag) in
-                   let@ case_body = welltyped_body loc return_bt case_body in
-                   return (ctor, case_body)
-                 end
-             ) cases
-         in
-         return (Body.Case (it, cases))
-      | Body.Let ((s, it), t) ->
-         let@ it = WIT.infer loc it in
-         (* no need to alpha-rename, because context.ml ensures
-            there's no name clashes *)
-         (* let s, t = Body.alpha_rename (s, IT.bt it) t in *)
-         let@ () = add_l s (IT.bt it) (loc, lazy (Sym.pp s)) in
-         let@ () = add_c (LC.t_ (IT.def_ s it)) in
-         let@ t = welltyped_body loc return_bt t in
-         return (Body.Let ((s, it), t))
-      | Body.Term t -> 
-         let@ t = WIT.check loc return_bt t in
-         return (Body.Term t)
-      end
+  let welltyped_body = WIT.check
 
 
   let welltyped (pd : LogicalFunctions.definition) = 

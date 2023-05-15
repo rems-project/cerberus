@@ -285,6 +285,12 @@ let rec dtree_of_cabs_expression (CabsExpression (loc, expr)) =
               , let d_tyname1 = dtree_of_type_name tyname1 in
                 let d_tyname2 = dtree_of_type_name tyname2 in
                 [ d_tyname1; d_tyname2 ] )
+    | CabsEbuiltinGNU (GNUbuiltin_choose_expr (const_e, e1, e2)) ->
+        Dnode ( pp_stmt_ctor "CabsEbuiltinGNU" ^^^ P.squotes (!^ "__builtin_choose_expr") ^^^ d_loc
+              , let d_const_e = dtree_of_cabs_expression const_e in
+                let d_e1      = dtree_of_cabs_expression e1      in
+                let d_e2      = dtree_of_cabs_expression e2      in
+                [ d_const_e; d_e1; d_e2 ] )
 
 
 and dtree_of_cabs_generic_association = function

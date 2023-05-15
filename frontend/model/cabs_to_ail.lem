@@ -2423,6 +2423,20 @@ STD_ "§6.5.3.1#3" $
           E.return (AilEconst (ConstantInteger (IConstant 1 Decimal Nothing)))
         else
           E.return (AilEconst (ConstantInteger (IConstant 0 Octal Nothing)))
+    | CabsEbuiltinGNU (GNUbuiltin_choose_expr const_e e1 e2) ->
+        (* TODO: add extension warning *)
+        desugar_expression const_e         >>= fun d_e ->
+        is_integer_constant_expression d_e >>= function
+          | false ->
+              E.constraint_violation (Loc.locOf const_e) GNUBuiltinChooseExprNotIntegerConstant
+          | true ->
+              evaluate_integer_constant_expression loc Nothing d_e >>= fun n ->
+              if n <> 0 then
+                desugar_expression e1
+              else
+                desugar_expression e2
+        end >>= fun (AnnotatedExpression _ _ _ expr_) ->
+        E.return expr_
   end
 
 and desugar_generic_association gas =
@@ -4185,6 +4199,14 @@ let rec desugar_cn_expr (CNExpr loc expr_) =
           E.pop_cn_scope >>= fun () ->
           E.return (lhs, rhs)) ms >>= fun ms ->
         CNExpr_match <$> desugar_cn_expr x <*> E.return ms
+    | CNExpr_let ident e body ->
+          (*copy-pasting from CNExpr_match and adjusting*)
+          desugar_cn_expr e >>= fun e ->
+          E.push_cn_scope >>= fun () ->
+          E.register_cn_ident CN_vars ident >>= fun sym ->
+          desugar_cn_expr body >>= fun body ->
+          E.pop_cn_scope >>= fun () ->
+          E.return (CNExpr_let sym e body)
     | CNExpr_ite e1 e2 e3 ->
         CNExpr_ite <$> desugar_cn_expr e1
                     <*> desugar_cn_expr e2
@@ -4247,35 +4269,14 @@ let desugar_cn_resource = function
       E.return (CN_each sym bTy e loc pred es)
 end
 
-let rec desugar_cn_func_body body =
-  match body with
-    | CN_fb_letExpr loc ident e c ->
-        desugar_cn_expr e                    >>= fun e'  ->
-        E.register_cn_ident CN_vars ident >>= fun sym ->
-        desugar_cn_func_body c               >>= fun c'  ->
-        E.return (CN_fb_letExpr loc sym e' c')
-    | CN_fb_return loc e -> 
-        (* E.mapM (fun (x, e) -> *)
-          desugar_cn_expr e >>= fun e' ->
-        (*   E.return (x, e') *)
-        (* ) xs >>= fun xs' -> *)
-        E.return (CN_fb_return loc e')
-    | CN_fb_cases loc e xs ->
-        desugar_cn_expr e                    >>= fun e'  ->
-        E.mapM (fun (nm, x) ->
-          E.resolve_cn_ident CN_constructor nm  >>= fun sym_resolved  ->
-          let nm' = Cn.ensure_not_c_variable sym_resolved in
-          desugar_cn_func_body x                >>= fun x'   ->
-          E.return (nm', x')) xs             >>= fun xs' ->
-        E.return (CN_fb_cases loc e' xs')
-  end
+
 
 
 let desugar_o_cn_func_body = function
     | Nothing -> 
        E.return Nothing
     | Just body ->
-       desugar_cn_func_body body >>= fun body' ->
+       desugar_cn_expr body >>= fun body' ->
        E.return (Just body')
   end
   

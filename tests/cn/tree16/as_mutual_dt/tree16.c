@@ -76,32 +76,33 @@ function (datatype tree) nth_tree_list (datatype tree_list ts, integer i)
 
 function [coq_unfold] (integer) tree_v_step (datatype tree t, datatype arc_in_array arc)
 {
-  switch (t)
-  case Empty_Tree {
-    return 0;
-  }
-  case Node {
-    let arc2 = Arc_In_Array {arr: arc.arr, i: arc.i + 1, len: arc.len};
-    return ((arc.i < arc.len) ?
+  match t {
+    Empty_Tree {} => {
+      0
+    }
+    Node {} => {
+      let arc2 = Arc_In_Array {arr: arc.arr, i: arc.i + 1, len: arc.len};
+      ((arc.i < arc.len) ?
         (tree_v(nth_tree_list(t.children, (arc.arr)[arc.i]), arc2)) :
-        t.v);
+        t.v)
+    }
   }
 }
 
 function [coq_unfold] (boolean) in_tree_step (datatype tree t, datatype arc_in_array arc)
 {
-  switch (t)
-  case Empty_Tree {
-    return false;
-  }
-  case Node {
-    let arc2 = Arc_In_Array {arr: arc.arr, i: arc.i + 1, len: arc.len};
-    return ((arc.i < arc.len) ?
+  match t {
+    Empty_Tree {} => {
+      false
+    }
+    Node {} => {
+      let arc2 = Arc_In_Array {arr: arc.arr, i: arc.i + 1, len: arc.len};
+      ((arc.i < arc.len) ?
         (in_tree(nth_tree_list(t.children, (arc.arr)[arc.i]), arc2)) :
-        true);
+        true)
+    }
   }
 }
-
 
 lemma in_tree_tree_v_lemma (datatype tree t, datatype arc_in_array arc,
     map <integer, datatype tree> t_children)

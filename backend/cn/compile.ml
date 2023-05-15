@@ -155,6 +155,7 @@ let pp_cnexpr_kind expr_ =
   | CNExpr_cons (c_nm, exprs) -> !^ "(" ^^ Sym.pp c_nm ^^^ !^ "{...})"
   | CNExpr_each (sym, r, e) -> !^ "(each ...)"
   | CNExpr_match (x, ms) -> !^ "match ... {...}"
+  | CNExpr_let (s, e, body) -> !^ "let ...; ..."
   | CNExpr_ite (e1, e2, e3) -> !^ "(if ... then ...)"
   | CNExpr_good (ty, e) -> !^ "(good (_, _))"
   | CNExpr_unchanged e -> !^"(unchanged (_))"
@@ -199,6 +200,9 @@ let rec free_in_expr (CNExpr (_loc, expr_)) =
      SymSet.remove s (free_in_expr e)
   | CNExpr_match (x, ms) ->
      free_in_exprs (x :: List.map snd ms)
+  | CNExpr_let (s, e, body) ->
+     SymSet.union (free_in_expr e) 
+      (SymSet.remove s (free_in_expr body))
   | CNExpr_ite (e1, e2, e3) ->
      free_in_exprs [e1; e2; e3]
   | CNExpr_good (typ, e) ->
@@ -700,6 +704,13 @@ module EffectfulTranslation = struct
               | (cond, rhs) :: ms -> ite_ (cond, rhs, g ms)
             in
             return (IT.let_ ((x_nm, x), g ms))
+        | CNExpr_let (s, e, body) ->
+            let@ e = self e in
+            let@ body = 
+              trans evaluation_scope (SymSet.add s locally_bound) 
+                (add_logical s (IT.bt e) env) body 
+            in
+            return (IT (Let ((s, e), body), IT.bt body))
         | CNExpr_ite (e1, e2, e3) ->
             let@ e1 = self e1 in
             let@ e2 = self e2 in
@@ -970,29 +981,9 @@ end
 
 
 let translate_cn_func_body env body =
-  let open LogicalFunctions in
   let handle = Pure.handle "Function definitions" in
-  let rec aux env body =
-    match body with
-      | CN_fb_letExpr (loc, sym, e_, cl) ->
-          let@ e = handle (ET.translate_cn_expr SymSet.empty env e_) in
-          let env2 = add_logical sym (IT.basetype e) env in
-          let@ b = aux env2 cl in
-          return (Body.Let ((sym, IT.term_of_sterm e), b))
-      | CN_fb_return (loc, x) ->
-         let@ t = handle (ET.translate_cn_expr SymSet.empty env x) in
-         return (Body.Term (IT.term_of_sterm t))
-      | CN_fb_cases (loc, x, cs) ->
-         let@ x = handle (ET.translate_cn_expr SymSet.empty env x) in
-         let@ cs = 
-           ListM.mapM (fun (ctor, body) ->
-               let@ body = aux env body in
-               return (ctor, body)
-             ) cs
-         in
-         return (Body.Case (IT.term_of_sterm x, cs))
-  in
-  aux env body
+  let@ body = handle (ET.translate_cn_expr SymSet.empty env body) in
+  return ((IT.term_of_sterm body))
 
 
 let known_attrs = ["rec"; "coq_unfold"]

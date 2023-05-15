@@ -322,7 +322,9 @@ let string_of_constraint_violation = function
   | AtomicAddressArgumentMustBePointer (_, gty) ->
       "address argument to atomic operation must be a pointer ('" ^ string_of_gentype gty ^ "' invalid)"
   | GNUConditionalOperatorInvalidOperandType gty ->
-        "illtypd second operand in a GNU ?: expression ('" ^ string_of_gentype gty ^ "')"
+      "illtypd second operand in a GNU ?: expression ('" ^ string_of_gentype gty ^ "')"
+  | GNUBuiltinChooseExprNotIntegerConstant ->
+      "first operand of __builtin_choose_expr() is not an integer constant expression"
 
 let string_of_misc_violation = function
   | MultipleEnumDeclaration x ->
@@ -353,6 +355,8 @@ let string_of_desugar_cause = function
       "feature not yet supported: " ^ str
   | Desugar_agnosticFailure str ->
       "agnostic mode could not carry on: `" ^ str ^ "' (consider removing --agnotic)"
+  | Desugar_illtypedIntegerConstant ->
+      "failed to typecheck an integer constant expression"
   | Desugar_CN e ->
       Cn_ocaml.string_of_error e
   | Desugar_TODO msg ->

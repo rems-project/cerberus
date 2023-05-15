@@ -363,7 +363,7 @@ let it_adjust (global : Global.t) it =
         let open LogicalFunctions in
         let def = SymMap.find name global.logical_functions in
         begin match def.definition, def.emit_coq with
-          | Def body, false -> f (Body.to_term def.return_bt (open_fun def.args body args))
+          | Def body, false -> f ((open_fun def.args body args))
           | _ -> t
         end
     | IT.Good (ct, t2) -> if Option.is_some (Sctypes.is_struct_ctype ct)
@@ -640,7 +640,6 @@ let ensure_pred global list_mono loc name aux =
       return (!^ "  Parameter" ^^^ typ (Sym.pp name) ty ^^ !^ "." ^^ hardline)
     )) []
   | Def body -> 
-     let body = Body.to_term def.return_bt body in
      gen_ensure 2 ["predefs"; "pred"; Sym.pp_string name]
        (lazy (
          let@ rhs = aux (it_adjust global body) in
@@ -682,7 +681,7 @@ let rec unfold_if_possible global it =
      | Uninterp -> it
      | Def body -> 
         unfold_if_possible global 
-          (Body.to_term def.return_bt (open_fun def.args body args))
+          ((open_fun def.args body args))
      end
   | _ ->
      it

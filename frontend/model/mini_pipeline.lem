@@ -99,7 +99,7 @@ let evalConstantExpressionAux loc (*TODO*)(ailnames, stdlib_fun_map, impl) sigm 
   (* typechecks the expression *)
   match ErrorMonad.runErrorMonad (toAilTau expr) with
     | Left (loc, err) ->
-        error "TODO: integer expression was illtyped"
+        Eff.fail (loc, Errors.DESUGAR Errors.Desugar_illtypedIntegerConstant)
     | Right a_expr ->
         (* applies the provided typing guard *)
         typing_guard (GenTypes.genTypeCategoryOf a_expr) >>= fun () ->

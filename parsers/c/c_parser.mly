@@ -133,7 +133,7 @@ let warn_extra_semicolon pos ctx =
   LBRACK_LBRACK (*RBRACK_RBRACK*)
 
 (* NON-STD: *)
-  ASSERT OFFSETOF TYPEOF QUESTION_COLON BUILTIN_TYPES_COMPATIBLE_P
+  ASSERT OFFSETOF TYPEOF QUESTION_COLON BUILTIN_TYPES_COMPATIBLE_P BUILTIN_CHOOSE_EXPR
 
 (* NON-STD cppmem syntax *)
   LBRACES PIPES RBRACES
@@ -590,6 +590,9 @@ postfix_expression:
 | BUILTIN_TYPES_COMPATIBLE_P LPAREN ty1= type_name COMMA ty2= type_name RPAREN
     { CabsExpression ( Location_ocaml.(region ($startpos, $endpos) NoCursor)
                      , CabsEbuiltinGNU (GNUbuiltin_types_compatible_p (ty1, ty2)) ) }
+| BUILTIN_CHOOSE_EXPR LPAREN const_e= assignment_expression COMMA e1= assignment_expression COMMA e2= assignment_expression RPAREN
+    { CabsExpression ( Location_ocaml.(region ($startpos, $endpos) NoCursor)
+                     , CabsEbuiltinGNU (GNUbuiltin_choose_expr (const_e, e1, e2)) ) }
 (* NOTE: the following is a cerb extension allowing the user to the
    query the type of an expression  *)
 | PRINT_TYPE LPAREN expr= expression RPAREN
@@ -1977,10 +1980,10 @@ add_expr:
 rel_expr:
 | e= add_expr
      { e }
-| e1= add_expr EQ_EQ e2= add_expr
+| e1= rel_expr EQ_EQ e2= add_expr
     { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                                , CNExpr_binop (CN_equal, e1, e2))) }
-| e1= add_expr BANG_EQ e2= add_expr
+| e1= rel_expr BANG_EQ e2= add_expr
     { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                                , CNExpr_binop (CN_inequal, e1, e2))) }
 | e1= rel_expr LT e2= add_expr
@@ -2074,11 +2077,15 @@ match_target:
 | e= delimited(LPAREN, expr, RPAREN)
     { e }
 
-expr:
+
+expr_without_let:
 | e= list_expr
     { e }
 | e1= list_expr QUESTION e2= list_expr COLON e3= list_expr
     { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($2)))
+                               , CNExpr_ite (e1, e2, e3))) }
+| IF e1= delimited(LPAREN, expr, RPAREN) e2= delimited(LBRACE, expr, RBRACE) ELSE e3= delimited(LBRACE,expr,RBRACE)
+    { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) NoCursor)
                                , CNExpr_ite (e1, e2, e3))) }
 | CN_EACH LPAREN str= cn_variable COLON r=int_range SEMICOLON e1= expr RPAREN
     { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) NoCursor)
@@ -2088,7 +2095,16 @@ expr:
     { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.(region ($startpos, $endpos) (PointCursor $startpos($1)))
                                ,
                                CNExpr_match (e, List.rev ms))) }
+
+expr:
+| e=expr_without_let
+    { e }
+| CN_LET str= cn_variable EQ e1= expr SEMICOLON e2= expr
+    { Cerb_frontend.Cn.(CNExpr ( Location_ocaml.region ($startpos(e1), $endpos(e1)) NoCursor,
+                                 CNExpr_let (str, e1, e2))) }
 ;
+
+
 
 (* CN predicate definitions **************************************************)
 base_type:
@@ -2263,11 +2279,12 @@ clauses:
 ;
 
 cn_option_func_body:
-| cn_func_body=delimited(LBRACE, cn_func_body, RBRACE)
+| cn_func_body=delimited(LBRACE, expr, RBRACE)
     { Some cn_func_body }
 | 
     { None }
 
+(*
 cn_func_body:
 | CN_LET str= cn_variable EQ e= expr SEMICOLON c= cn_func_body
     { let loc = Location_ocaml.point $startpos(str) in
@@ -2282,7 +2299,7 @@ cn_func_body:
 cn_func_body_case:
 | CASE nm= cn_variable LBRACE body=cn_func_body RBRACE
     { (nm, body) }
-
+*)
 
 clause:
 | CN_TAKE str= cn_variable EQ res= resource SEMICOLON c= clause
@@ -2307,7 +2324,7 @@ assert_expr:
       LBRACE e2= expr RBRACE
     { Cerb_frontend.Cn.CN_assert_qexp ( str
                                       , bTy, e1, e2) }
-| e= expr
+| e= expr_without_let
     { Cerb_frontend.Cn.CN_assert_exp e }
 
 resource_when_condition:
