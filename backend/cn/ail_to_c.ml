@@ -84,9 +84,13 @@ let pp_ail_stmt_default ail_stmt = CF.String_ail.string_of_statement (mk_stmt ai
   
 let pp_ail_stmt ((ail_stmt, extra) as ail_info) arg_names_opt = 
   match ail_info with
-  | (A.AilSdeclaration ((name, Some decl) :: _), Some ctype) -> (* TODO: Add type *)
+  | (A.AilSdeclaration ((name, Some decl) :: _), ct) -> 
+    let type_str = (match ct with 
+      | Some ctype -> pp_ctype ctype ^ " "
+      | None -> "")
+    in
     let name_var = A.(AilEident name) in
-    pp_ctype ctype ^ " " ^ pp_ail_expr name_var ^ " = " ^ pp_ail_expr ~arg_names_opt (rm_expr decl)
+    type_str ^ pp_ail_expr name_var ^ " = " ^ pp_ail_expr ~arg_names_opt (rm_expr decl)
   | (A.(AilSexpr ail_expr), _) -> pp_ail_expr ~arg_names_opt (rm_expr ail_expr)
   | _ -> pp_ail_stmt_default ail_stmt
 
