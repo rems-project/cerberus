@@ -6,6 +6,7 @@ open Setup *)
 open CF.Cn
 open Compile
 open Executable_spec_utils
+open PPrint
 module A=CF.AilSyntax
 module C=CF.Ctype
 module BT=BaseTypes
@@ -192,19 +193,41 @@ let rec cn_to_ail_expr ?(const_prop=None) (CNExpr (loc, expr_)) =
     | CNExpr_not e -> A.(AilEunary (Bnot, mk_expr (cn_to_ail_expr ~const_prop e))) 
     | _ -> failwith "TODO"
 
+type 'a ail_datatype = {
+  structs: (C.union_tag * (Cerb_location.t * CF.Annot.attributes * C.tag_definition)) list;
+  consts: 'a A.statement;
+}
+
 let cn_to_ail_datatype (cn_datatype : cn_datatype) =
-  let generate_struct_definition (constructor, members) =
-    let identifiers = List.map fst members in
-    (* let xs = List.map (fun id -> (id, None)) identifiers in *)
-    let tag_definition = 
-      (match identifiers with
-        | [] -> C.(StructDef ([], None))
-        | _ -> C.(StructDef ([(List.hd identifiers, (empty_attributes, None, empty_qualifiers, mk_ctype Void))], None)))
+  let generate_tag_definition dt_members = 
+    let identifiers = List.map fst dt_members in
+    let create_member id =
+      (id, (empty_attributes, None, empty_qualifiers, mk_ctype (Pointer (empty_qualifiers, mk_ctype Void))))
     in
-    (constructor, (Cerb_location.unknown, empty_attributes, tag_definition))
+    let members = List.map create_member identifiers in
+    C.(StructDef (members, None))
+  in
+  let generate_struct_definition (constructor, members) = (constructor, (Cerb_location.unknown, empty_attributes, generate_tag_definition members))
   in
   let structs = List.map generate_struct_definition cn_datatype.cn_dt_cases in
-  structs
+  let generate_constructor_sym constructor = 
+    let doc = 
+    CF.Pp_ail.pp_id ~executable_spec:true constructor ^^ (!^ "_tag") in 
+    let str = 
+    CF.Pp_utils.to_plain_string doc in 
+    Sym.fresh_pretty str
+  in
+  let rec generate_decls cases count =
+    (match cases with 
+      | [] -> []
+      | (constructor, _) :: cs -> 
+        let const = mk_expr (A.(AilEconst (ConstantInteger (IConstant (Z.of_int count, Decimal, None))))) in
+        (generate_constructor_sym constructor, Some const) :: (generate_decls cs (count + 1))
+  )
+  in
+  let decls = generate_decls cn_datatype.cn_dt_cases 0 in
+  let decls = mk_stmt (A.AilSdeclaration decls) in
+  {structs = structs; consts = decls}
 
 
 let cn_to_ail_assertion = function
