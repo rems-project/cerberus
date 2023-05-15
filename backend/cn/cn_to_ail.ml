@@ -195,7 +195,7 @@ let rec cn_to_ail_expr ?(const_prop=None) (CNExpr (loc, expr_)) =
 
 type 'a ail_datatype = {
   structs: (C.union_tag * (Cerb_location.t * CF.Annot.attributes * C.tag_definition)) list;
-  consts: 'a A.statement;
+  consts: ('a A.statement) list;
 }
 
 let cn_to_ail_datatype (cn_datatype : cn_datatype) =
@@ -226,7 +226,8 @@ let cn_to_ail_datatype (cn_datatype : cn_datatype) =
   )
   in
   let decls = generate_decls cn_datatype.cn_dt_cases 0 in
-  let decls = mk_stmt (A.AilSdeclaration decls) in
+  (* let decls = mk_stmt (A.AilSdeclaration decls) in *)
+  let decls = List.map (fun d -> mk_stmt (A.AilSdeclaration [d])) decls in
   {structs = structs; consts = decls}
 
 
