@@ -84,13 +84,13 @@ let pp_ail_stmt_default ail_stmt = CF.String_ail.string_of_statement (mk_stmt ai
 let pp_ail_stmt ((ail_stmt, extra) as ail_info) arg_names_opt = 
   match ail_info with
   | (A.AilSdeclaration ((name, Some decl) :: _), ct) -> 
+    (* TODO: Hack! Remove. *)
     let type_str = (match ct with 
       | Some ctype -> pp_ctype ctype ^ " "
-      | None -> "")
+      | None -> "const int ")
     in
     let name_var = A.(AilEident name) in
     type_str ^ pp_ail_expr name_var ^ " = " ^ pp_ail_expr ~arg_names_opt (rm_expr decl)
   | (A.(AilSexpr ail_expr), _) -> pp_ail_expr ~arg_names_opt (rm_expr ail_expr)
   | _ -> pp_ail_stmt_default ail_stmt
 
-(* frontend/model/symbol.lem - fresh_pretty function for generating Sym with unimportant digest and nat *)
