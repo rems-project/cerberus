@@ -121,14 +121,18 @@ let add_c c (ctxt : t) =
   if LCSet.mem c s then ctxt
   else { ctxt with constraints = LCSet.add c s }
 
+let set_history id h (ctxt : t) =
+  let resource_history = IntMap.add id h ctxt.resource_history in
+  Pp.debug 10 (lazy (Pp.item ("setting resource history of " ^ Int.to_string id)
+    (Pp.braces (Pp.int h.last_written_id))));
+  {ctxt with resource_history}
+
 let add_r loc r (ctxt : t) =
   let (rs, ix) = ctxt.resources in
   let resources = ((r, ix) :: rs, ix + 1) in
-  let resource_history = IntMap.add ix
-    {last_written = loc; reason_written = "created"; last_written_id = ix;
-        last_read = loc; last_read_id = ix}
-    ctxt.resource_history in
-  {ctxt with resources; resource_history}
+  let h = {last_written = loc; reason_written = "created"; last_written_id = ix;
+        last_read = loc; last_read_id = ix} in
+  set_history ix h {ctxt with resources}
 
 let res_history (ctxt : t) id =
   match IntMap.find_opt id ctxt.resource_history with
@@ -140,15 +144,13 @@ let res_history (ctxt : t) id =
 let res_read loc id (ctxt : t) =
   let (rs, ix) = ctxt.resources in
   let h = {(res_history ctxt id) with last_read = loc; last_read_id = ix} in
-  let resource_history = IntMap.add id h ctxt.resource_history in
-  {ctxt with resource_history; resources = (rs, ix + 1)}
+  set_history id h {ctxt with resources = (rs, ix + 1)}
 
 let res_written loc id reason (ctxt : t) =
   let (rs, ix) = ctxt.resources in
   let h = {(res_history ctxt id) with last_written_id = ix;
     last_written = loc; reason_written = reason} in
-  let resource_history = IntMap.add id h ctxt.resource_history in
-  {ctxt with resource_history; resources = (rs, ix + 1)}
+  set_history id h {ctxt with resources = (rs, ix + 1)}
 
 
 let json (ctxt : t) : Yojson.Safe.t = 

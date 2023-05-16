@@ -1168,6 +1168,7 @@ let check_used_distinct loc used =
     | ((r, h, i) :: ws) -> begin match IntMap.find_opt i m with
       | None -> check_ws (IntMap.add i h m) ws
       | Some h2 ->
+        Pp.debug 3 (lazy (Pp.typ (!^ "concurrent upds on") (Pp.int i)));
         fail (fun _ -> {loc; msg = Generic (Pp.item "undefined behaviour: concurrent update"
           (RE.pp r ^^^ break 1 ^^^ render_upd h ^^^ break 1 ^^^ render_upd h2))})
     end
@@ -1176,6 +1177,7 @@ let check_used_distinct loc used =
   let check_rd (r, h, i) = match IntMap.find_opt i w_map with
     | None -> return ()
     | Some h2 ->
+      Pp.debug 3 (lazy (Pp.typ (!^ "concurrent accs on") (Pp.int i)));
       fail (fun _ -> {loc; msg = Generic (Pp.item "undefined behaviour: concurrent read & update"
         (RE.pp r ^^^ break 1 ^^^ render_read h ^^^ break 1 ^^^ render_upd h2))})
   in

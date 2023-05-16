@@ -872,17 +872,31 @@ module General = struct
     debug 7 (lazy (item "pointer" (IT.pp pointer_t)));
     debug 7 (lazy (item "permission" (IT.pp permission_t)));
     let@ global = get_global () in
-    let@ result = 
-      predicate_request ~recursive loc uiinfo
-        (unfold_struct_request tag pointer_t permission_t)
-    in
-    match result with
-    | None -> return None
-    | Some (point, O value) -> 
-       let layout = SymMap.find tag global.struct_decls in
-       let resources =  unfolded_struct layout tag pointer_t permission_t value in
-       return (Some resources)
-
+    let req = unfold_struct_request tag pointer_t permission_t in
+    let layout = SymMap.find tag global.struct_decls in
+    let get_resources value = unfolded_struct layout tag pointer_t permission_t value in
+    let@ result1 = map_and_fold_resources loc (fun re found -> match (found, re) with
+      | (true, _) -> (Unchanged, found)
+      | (false, (rt, O v)) -> if ResourceTypes.equal rt (P req)
+        then (Unfolded (get_resources v), true)
+        else (Unchanged, found)
+    ) false in
+    match result1 with
+    | true ->
+      debug 7 (lazy (item "quick-unfolded matching struct" Pp.empty));
+      return true
+    | false ->
+      debug 7 (lazy (item "couldn't quick-unfold struct, doing predicate request" Pp.empty));
+      let@ result =
+        predicate_request ~recursive loc uiinfo
+          (unfold_struct_request tag pointer_t permission_t)
+      in
+      begin match result with
+      | None -> return false
+      | Some (point, O value) ->
+        let@ _ = add_rs loc (get_resources value) in
+        return true
+      end
 
   and span_fold_unfold_step loc uiinfo req =
     let@ ress = all_resources () in
@@ -967,13 +981,7 @@ module General = struct
             return true
       end
     | {name = Owned (Sctypes.Struct tag); _} ->
-      let@ ors = unfold_struct ~recursive:true loc uiinfo tag r_pt.pointer (bool_ true) in
-      begin match ors with
-        | None -> return false
-        | Some rs ->
-           let@ _ = add_rs loc rs in
-           return true
-      end
+      unfold_struct ~recursive:true loc uiinfo tag r_pt.pointer (bool_ true)
     | {name = PName pname; _} ->
       let@ def = Typing.get_resource_predicate_def loc pname in
       let@ clause = select_resource_predicate_clause def loc r_pt.pointer r_pt.iargs
@@ -1093,6 +1101,7 @@ module Special = struct
     | Some r -> return r
     | None -> fail_missing_resource loc situation (Some (Q request), oinfo)
 
+(*
   let unfold_struct ~recursive loc situation tag pointer_t permission_t = 
     let request = General.unfold_struct_request tag pointer_t permission_t in
     let uiinfo = (situation, (Some (P request), None)) in
@@ -1101,7 +1110,7 @@ module Special = struct
     | Some resources -> return resources
     | None -> 
        fail_missing_resource loc situation (Some (P request), None)
-
+*)
 
   let fold_struct ~recursive loc situation tag pointer_t permission_t = 
     let uiinfo = (situation, (None, None)) in

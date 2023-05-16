@@ -318,6 +318,10 @@ let res_read loc i =
   let@ s = get () in
   set (Context.res_read loc i s)
 
+let do_set_history i h =
+  let@ s = get () in
+  set (Context.set_history i h s)
+
 type changed = 
   | Deleted
   | Unchanged
@@ -345,6 +349,8 @@ let map_and_fold_resources loc
            return ((re, i) :: resources, ix, acc)
         | Unfolded res ->
            let tagged = List.mapi (fun j re -> (re, ix + j)) res in
+           let@ h = res_history i in
+           let@ () = Eff.ListM.iterM (fun (_, i) -> do_set_history i h) tagged in
            return (tagged @ resources, ix + List.length res, acc)
         | Changed re ->
            let@ () = res_written loc i "changed" in
