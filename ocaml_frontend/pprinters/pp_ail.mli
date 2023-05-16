@@ -33,7 +33,7 @@ let pp_qualifiers_raw
 let rec pp_ctype_raw
 *)
 
-val pp_ctype: ?is_human:bool -> qualifiers -> ctype -> PPrint.document
+val pp_ctype: ?executable_spec:bool -> ?is_human:bool -> qualifiers -> ctype -> PPrint.document
 
 (*
 let rec pp_ctype_declaration id
