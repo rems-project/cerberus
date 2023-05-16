@@ -198,18 +198,27 @@ type 'a ail_datatype = {
   stats: 'a A.statement list;
 }
 
+
 let cn_to_ail_datatype (cn_datatype : cn_datatype) =
+  let cntype_sym = Sym.fresh_pretty "cntype" in
+  let cntype_struct = (cntype_sym, (Cerb_location.unknown, empty_attributes, C.(StructDef ([], None)))) in
   let generate_tag_definition dt_members = 
     let identifiers = List.map fst dt_members in
-    let create_member id =
-      (id, (empty_attributes, None, empty_qualifiers, mk_ctype (Pointer (empty_qualifiers, mk_ctype Void))))
+    let create_member ?(ctype_=C.(Pointer (empty_qualifiers, Ctype ([], Void)))) id =
+      (id, (empty_attributes, None, empty_qualifiers, mk_ctype ctype_))
     in
-    let members = List.map create_member identifiers in
-    C.(StructDef (members, None))
+    (* TODO: Check if something called tag already exists *)
+    let cntype_pointer = C.(Pointer (empty_qualifiers, mk_ctype (Struct cntype_sym))) in
+    let extra_members = [
+      (create_member ~ctype_:C.(Basic (Integer (Signed Int_))) (Id.id "tag"));
+      (create_member ~ctype_:cntype_pointer (Id.id "cntype"))] in
+    let members = List.map create_member (identifiers) in
+    C.(StructDef (extra_members @ members, None))
   in
   let generate_struct_definition (constructor, members) = (constructor, (Cerb_location.unknown, empty_attributes, generate_tag_definition members))
   in
   let structs = List.map generate_struct_definition cn_datatype.cn_dt_cases in
+  let structs = cntype_struct :: structs in
   let generate_constructor_sym constructor = 
     let doc = 
     CF.Pp_ail.pp_id ~executable_spec:true constructor ^^ (!^ "_tag") in 
