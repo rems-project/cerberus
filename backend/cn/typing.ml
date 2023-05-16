@@ -344,9 +344,7 @@ let map_and_fold_resources loc
            let@ () = res_read loc i in
            return ((re, i) :: resources, ix, acc)
         | Unfolded res ->
-           let@ () = res_written loc i "unfolded" in
            let tagged = List.mapi (fun j re -> (re, ix + j)) res in
-           let@ () = Eff.ListM.iterM (fun (_, j) -> res_written loc j "came from unfold") tagged in
            return (tagged @ resources, ix + List.length res, acc)
         | Changed re ->
            let@ () = res_written loc i "changed" in

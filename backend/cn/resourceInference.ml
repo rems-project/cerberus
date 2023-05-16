@@ -1047,6 +1047,7 @@ module General = struct
         end) None
 
   let predicate_request_read_only ~recursive loc uiinfo (requested : RET.predicate_type) =
+    let@ _ = span_fold_unfolds loc uiinfo (RET.P requested) false in
     let@ r = predicate_request_single_read_only loc requested in
     match r with
       | Some v -> return (Some v)

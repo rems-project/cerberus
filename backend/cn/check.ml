@@ -1142,50 +1142,44 @@ let all_empty loc original_resources =
              {loc; msg = Unused_resource {resource; ctxt; model; trace}})
 
 
-let all_resources_hist () =
-  let@ (rs, ix) = all_resources_tagged () in
-  let with_history (r, i) =
+let compute_used (prev_rs, prev_ix) (post_rs, _) =
+  let post_ixs = IntSet.of_list (List.map snd post_rs) in
+  (* restore previous resources that have disappeared from the context, since they
+     might participate in a race *)
+  let all_rs = post_rs @ List.filter (fun (_, i) -> not (IntSet.mem i post_ixs)) prev_rs in
+  ListM.fold_leftM (fun (rs, ws) (r, i) ->
     let@ h = res_history i in
-    return ((r, h), i)
-  in
-  let@ rs = ListM.mapM with_history rs in
-  return (rs, ix)
-
-let compute_used prev_rs post_rs =
-  let prev_w_ixs = IntSet.of_list (List.map snd prev_rs) in
-  let post_w_ixs = IntSet.of_list (List.map snd post_rs) in
-  let w_elts = List.filter (fun (_, i) -> not (IntSet.mem i prev_w_ixs)) post_rs
-    @ List.filter (fun (_, i) -> not (IntSet.mem i post_w_ixs)) prev_rs in
-  let prev_r_ixs = IntSet.of_list (List.map (fun ((_, h), _) -> h.Context.last_read_id) prev_rs) in
-  (* don't include in read-set anything that appears in write-set *)
-  let r_elts = List.filter (fun ((_, h), i) -> IntSet.mem i prev_w_ixs
-    && not (IntSet.mem h.Context.last_read_id prev_r_ixs)) post_rs in
-  (w_elts, r_elts)
+    if h.last_written_id >= prev_ix
+    then return (rs, (r, h, i) :: ws)
+    else if h.last_read_id >= prev_ix
+    then return ((r, h, i) :: rs, ws)
+    else return (rs, ws)
+  ) ([], []) all_rs
 
 let check_used_distinct loc used =
   let render_upd h =
-    !^ "resource" ^^^ !^ (h.reason_adjusted) ^^^ !^ "at" ^^^ Locations.pp h.last_adjusted
+    !^ "resource" ^^^ !^ (h.reason_written) ^^^ !^ "at" ^^^ Locations.pp h.last_written
   in
   let render_read h =
     !^ "resource read at " ^^^ Locations.pp h.last_read
   in
   let rec check_ws m = function
     | [] -> return m
-    | (((r, h), i) :: ws) -> begin match IntMap.find_opt i m with
+    | ((r, h, i) :: ws) -> begin match IntMap.find_opt i m with
       | None -> check_ws (IntMap.add i h m) ws
       | Some h2 ->
         fail (fun _ -> {loc; msg = Generic (Pp.item "undefined behaviour: concurrent update"
           (RE.pp r ^^^ break 1 ^^^ render_upd h ^^^ break 1 ^^^ render_upd h2))})
     end
   in
-  let@ w_map = check_ws IntMap.empty (List.concat (List.map fst used)) in
-  let check_rd ((r, h), i) = match IntMap.find_opt i w_map with
+  let@ w_map = check_ws IntMap.empty (List.concat (List.map snd used)) in
+  let check_rd (r, h, i) = match IntMap.find_opt i w_map with
     | None -> return ()
     | Some h2 ->
       fail (fun _ -> {loc; msg = Generic (Pp.item "undefined behaviour: concurrent read & update"
         (RE.pp r ^^^ break 1 ^^^ render_read h ^^^ break 1 ^^^ render_upd h2))})
   in
-  ListM.iterM check_rd (List.concat (List.map snd used))
+  ListM.iterM check_rd (List.concat (List.map fst used))
 
 (*type labels = (AT.lt * label_kind) SymMap.t*)
 
@@ -1534,10 +1528,10 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
      in
      let rec aux es_bts vs prev_used = match es_bts with
        | (e, bt) :: es_bts ->
-          let@ (pre_check, _) = all_resources_hist () in
+          let@ pre_check = all_resources_tagged () in
           check_expr labels ~typ:(Normal bt) e (fun v ->
-          let@ (post_check, _) = all_resources_hist () in
-          let used = compute_used pre_check post_check in
+          let@ post_check = all_resources_tagged () in
+          let@ used = compute_used pre_check post_check in
           aux es_bts (v :: vs) (used :: prev_used))
        | [] ->
           let@ () = check_used_distinct loc prev_used in

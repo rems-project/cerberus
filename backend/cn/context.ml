@@ -20,8 +20,9 @@ type basetype_or_value =
 
 type resource_history =
   {
-    last_adjusted: Locations.loc;
-    reason_adjusted: string;
+    last_written: Locations.loc;
+    reason_written: string;
+    last_written_id: int;
     last_read: Locations.loc;
     last_read_id: int;
   }
@@ -124,16 +125,17 @@ let add_r loc r (ctxt : t) =
   let (rs, ix) = ctxt.resources in
   let resources = ((r, ix) :: rs, ix + 1) in
   let resource_history = IntMap.add ix
-    {last_adjusted = loc; reason_adjusted = "created"; last_read = loc; last_read_id = ix}
+    {last_written = loc; reason_written = "created"; last_written_id = ix;
+        last_read = loc; last_read_id = ix}
     ctxt.resource_history in
   {ctxt with resources; resource_history}
 
 let res_history (ctxt : t) id =
   match IntMap.find_opt id ctxt.resource_history with
   | Some h -> h
-  | None -> {last_adjusted = Locations.unknown;
-    reason_adjusted = "unknown"; last_read = Locations.unknown;
-    last_read_id = id}
+  | None -> {last_written = Locations.unknown;
+    reason_written = "unknown"; last_written_id = id;
+    last_read = Locations.unknown; last_read_id = id}
 
 let res_read loc id (ctxt : t) =
   let (rs, ix) = ctxt.resources in
@@ -142,9 +144,11 @@ let res_read loc id (ctxt : t) =
   {ctxt with resource_history; resources = (rs, ix + 1)}
 
 let res_written loc id reason (ctxt : t) =
-  let h = {(res_history ctxt id) with last_adjusted = loc; reason_adjusted = reason} in
+  let (rs, ix) = ctxt.resources in
+  let h = {(res_history ctxt id) with last_written_id = ix;
+    last_written = loc; reason_written = reason} in
   let resource_history = IntMap.add id h ctxt.resource_history in
-  {ctxt with resource_history}
+  {ctxt with resource_history; resources = (rs, ix + 1)}
 
 
 let json (ctxt : t) : Yojson.Safe.t = 
