@@ -310,18 +310,6 @@ let res_history i =
   let@ s = get () in
   return (Context.res_history s i)
 
-let res_written loc i reason =
-  let@ s = get () in
-  set (Context.res_written loc i reason s)
-
-let res_read loc i =
-  let@ s = get () in
-  set (Context.res_read loc i s)
-
-let do_set_history i h =
-  let@ s = get () in
-  set (Context.set_history i h s)
-
 type changed = 
   | Deleted
   | Unchanged
@@ -335,42 +323,40 @@ let map_and_fold_resources loc
   let@ s = get () in
   let@ provable_f = provable loc in
   let (resources, orig_ix) = s.resources in
-  let@ resources, ix, acc =
-    Eff.ListM.fold_rightM (fun (re, i) (resources, ix, acc) ->
+  let orig_hist = s.resource_history in
+  let resources, ix, hist, acc =
+    List.fold_right (fun (re, i) (resources, ix, hist, acc) ->
         let (changed, acc) = f re acc in
         match changed with
         | Deleted ->
-           let@ () = res_written loc i "deleted" in
-           return (resources, ix, acc)
+           let (ix, hist) = Context.res_written loc i "deleted" (ix, hist) in
+           (resources, ix, hist, acc)
         | Unchanged ->
-           return ((re, i) :: resources, ix, acc)
+           ((re, i) :: resources, ix, hist, acc)
         | Read ->
-           let@ () = res_read loc i in
-           return ((re, i) :: resources, ix, acc)
+           let (ix, hist) = Context.res_read loc i (ix, hist) in
+           ((re, i) :: resources, ix, hist, acc)
         | Unfolded res ->
            let tagged = List.mapi (fun j re -> (re, ix + j)) res in
-           let@ h = res_history i in
-           let@ () = Eff.ListM.iterM (fun (_, i) -> do_set_history i h) tagged in
-           return (tagged @ resources, ix + List.length res, acc)
+           let hist = Context.clone_history i (List.map snd tagged) hist in
+           (tagged @ resources, ix + List.length res, hist, acc)
         | Changed re ->
-           let@ () = res_written loc i "changed" in
+           let (ix, hist) = Context.res_written loc i "changed" (ix, hist) in
            begin match re with
            | (Q {q; permission; _}, _) ->
               begin match provable_f (LC.forall_ (q, Integer) (IT.not_ permission)) with
-              | `True -> return (resources, ix, acc)
+              | `True -> (resources, ix, hist, acc)
               | `False ->
-                 let@ () = res_written loc ix "changed" in
-                 return ((re, ix) :: resources, ix + 1, acc)
+                 let (ix, hist) = Context.res_written loc ix "changed" (ix, hist) in
+                 ((re, ix) :: resources, ix + 1, hist, acc)
               end
            | _ -> 
-              let@ () = res_written loc ix "changed" in
-              return ((re, ix) :: resources, ix + 1, acc)
+              let (ix, hist) = Context.res_written loc ix "changed" (ix, hist) in
+              ((re, ix) :: resources, ix + 1, hist, acc)
            end
-      ) resources ([], orig_ix, acc)
+      ) resources ([], orig_ix, orig_hist, acc)
   in
-  (* reload s to avoid clobbering the res_written changes *)
-  let@ s = get () in
-  let@ () = set {s with resources = (resources, ix)} in
+  let@ () = set {s with resources = (resources, ix); resource_history = hist} in
   return acc
 
 

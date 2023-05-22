@@ -132,11 +132,14 @@ let pp_history h =
       ("last written", Pp.int h.last_written_id);
       ("last written at", Locations.pp h.last_written)])
 
-let set_history id h (ctxt : t) =
-  let resource_history = IntMap.add id h ctxt.resource_history in
+let set_map_history id h m =
   Pp.debug 10 (lazy (Pp.item ("setting resource history of " ^ Int.to_string id)
     (pp_history h)));
-  {ctxt with resource_history}
+  IntMap.add id h m
+
+let set_history id h (ctxt : t) =
+  let m = set_map_history id h ctxt.resource_history in
+  {ctxt with resource_history = m}
 
 let add_r loc r (ctxt : t) =
   let (rs, ix) = ctxt.resources in
@@ -145,23 +148,28 @@ let add_r loc r (ctxt : t) =
         last_read = loc; last_read_id = ix} in
   set_history ix h {ctxt with resources}
 
-let res_history (ctxt : t) id =
-  match IntMap.find_opt id ctxt.resource_history with
+let res_map_history m id =
+  match IntMap.find_opt id m with
   | Some h -> h
   | None -> {last_written = Locations.unknown;
     reason_written = "unknown"; last_written_id = id;
     last_read = Locations.unknown; last_read_id = id}
 
-let res_read loc id (ctxt : t) =
-  let (rs, ix) = ctxt.resources in
-  let h = {(res_history ctxt id) with last_read = loc; last_read_id = ix} in
-  set_history id h {ctxt with resources = (rs, ix + 1)}
+let res_history (ctxt : t) id = res_map_history ctxt.resource_history id
 
-let res_written loc id reason (ctxt : t) =
-  let (rs, ix) = ctxt.resources in
-  let h = {(res_history ctxt id) with last_written_id = ix;
+let res_read loc id (ix, m) =
+  let h = {(res_map_history m id) with last_read = loc; last_read_id = ix} in
+  (ix + 1, set_map_history id h m)
+
+let res_written loc id reason (ix, m) =
+  let h = {(res_map_history m id) with last_written_id = ix;
     last_written = loc; reason_written = reason} in
-  set_history id h {ctxt with resources = (rs, ix + 1)}
+  (ix + 1, set_map_history id h m)
+
+(* used during unfold, clone one history to a list of new ids *)
+let clone_history id ids m =
+  let h = res_map_history m id in
+  List.fold_right (fun id2 m -> set_map_history id2 h m) ids m
 
 
 let json (ctxt : t) : Yojson.Safe.t = 
