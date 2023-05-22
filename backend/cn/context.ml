@@ -125,10 +125,17 @@ let add_c c (ctxt : t) =
   if LCSet.mem c s then ctxt
   else { ctxt with constraints = LCSet.add c s }
 
+let pp_history h =
+  Pp.braces (Pp.list (fun (nm, v) -> Pp.typ (Pp.string nm) v)
+    [("last read", Pp.int h.last_read_id);
+      ("last read at", Locations.pp h.last_read);
+      ("last written", Pp.int h.last_written_id);
+      ("last written at", Locations.pp h.last_written)])
+
 let set_history id h (ctxt : t) =
   let resource_history = IntMap.add id h ctxt.resource_history in
   Pp.debug 10 (lazy (Pp.item ("setting resource history of " ^ Int.to_string id)
-    (Pp.braces (Pp.int h.last_written_id))));
+    (pp_history h)));
   {ctxt with resource_history}
 
 let add_r loc r (ctxt : t) =
