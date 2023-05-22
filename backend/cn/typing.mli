@@ -37,6 +37,7 @@ val add_c : LogicalConstraints.t -> (unit) m
 val add_cs : LogicalConstraints.t list -> (unit) m
 val add_r : Locations.t -> Resources.t -> unit m
 val add_rs : Locations.t -> Resources.t list -> unit m
+val add_r_neg_write : Locations.t -> Resources.t -> unit m
 val get_loc_trace : unit -> (Locations.loc list) m
 val add_loc_trace : Locations.t -> (unit) m
 val get_step_trace : unit -> (Trace.t) m

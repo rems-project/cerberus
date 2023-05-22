@@ -19,14 +19,20 @@ type basetype_or_value =
   | Value of IndexTerms.t
 
 (* History information about the most recent read/write actions taken on a
-   resource. These are used to check for and report on concurrent races. The
-   history is kept in a separate map to the resource list, indexed by resource
-   id, so that the final deletion of a resource remains in the history. *)
+   resource. These are used to check for and report on concurrent races in
+   unseq statements. The history is kept in a separate map to the resource
+   list, indexed by resource id, so that the final deletion of a resource
+   remains in the history. Writes with "negative" polarity in the Core
+   semantics are tracked separately, to identify races in the letweak/Ewseq
+   statements as well. *)
 type resource_history =
   {
     last_written: Locations.loc;
     reason_written: string;
     last_written_id: int;
+    last_neg: Locations.loc;
+    reason_neg: string;
+    last_neg_id: int;
     last_read: Locations.loc;
     last_read_id: int;
   }
@@ -141,11 +147,13 @@ let set_history id h (ctxt : t) =
   let m = set_map_history id h ctxt.resource_history in
   {ctxt with resource_history = m}
 
-let add_r loc r (ctxt : t) =
+let add_r loc is_neg_pol r (ctxt : t) =
   let (rs, ix) = ctxt.resources in
   let resources = ((r, ix) :: rs, ix + 1) in
   let h = {last_written = loc; reason_written = "created"; last_written_id = ix;
-        last_read = loc; last_read_id = ix} in
+        last_read = loc; last_read_id = ix;
+        last_neg = loc; reason_neg = "created";
+        last_neg_id = (if is_neg_pol then ix else -1)} in
   set_history ix h {ctxt with resources}
 
 let res_map_history m id =
@@ -153,7 +161,8 @@ let res_map_history m id =
   | Some h -> h
   | None -> {last_written = Locations.unknown;
     reason_written = "unknown"; last_written_id = id;
-    last_read = Locations.unknown; last_read_id = id}
+    last_read = Locations.unknown; last_read_id = id;
+    last_neg = Locations.unknown; reason_neg = "unknown"; last_neg_id = -1}
 
 let res_history (ctxt : t) id = res_map_history ctxt.resource_history id
 

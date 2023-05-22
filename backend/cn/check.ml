@@ -1156,13 +1156,21 @@ let compute_used (prev_rs, prev_ix) (post_rs, _) =
     else return (rs, ws)
   ) ([], []) all_rs
 
+let compute_neg_written (_, prev_ix) (post_rs, _) =
+  ListM.fold_leftM (fun n (r, i) ->
+    let@ h = res_history i in
+    if h.last_neg_id >= prev_ix
+    then return ((r, h, i) :: n)
+    else return n
+  ) [] post_rs
+
+let render_use_point is_write h =
+  if is_write
+  then !^ "resource" ^^^ !^ (h.reason_written) ^^^ !^ "at" ^^^ Locations.pp h.last_written
+  else !^ "resource read at " ^^^ Locations.pp h.last_read
+
 let check_used_distinct loc used =
-  let render_upd h =
-    !^ "resource" ^^^ !^ (h.reason_written) ^^^ !^ "at" ^^^ Locations.pp h.last_written
-  in
-  let render_read h =
-    !^ "resource read at " ^^^ Locations.pp h.last_read
-  in
+  let render_upd = render_use_point true in
   let rec check_ws m = function
     | [] -> return m
     | ((r, h, i) :: ws) -> begin match IntMap.find_opt i m with
@@ -1179,9 +1187,26 @@ let check_used_distinct loc used =
     | Some h2 ->
       Pp.debug 3 (lazy (Pp.typ (!^ "concurrent accs on") (Pp.int i)));
       fail (fun _ -> {loc; msg = Generic (Pp.item "undefined behaviour: concurrent read & update"
-        (RE.pp r ^^^ break 1 ^^^ render_read h ^^^ break 1 ^^^ render_upd h2))})
+        (RE.pp r ^^^ break 1 ^^^ render_use_point false h ^^^ break 1 ^^^ render_upd h2))})
   in
   ListM.iterM check_rd (List.concat (List.map fst used))
+
+let check_neg_weak_distinct loc neg (reads, writes) =
+  let n_ids = List.fold_left (fun m (r, h, i) -> IntMap.add i h m) IntMap.empty neg in
+  Pp.debug 8 (lazy (Pp.item "check_neg_weak_distinct: neg writes"
+    (Pp.brackets (Pp.list Pp.int (List.map fst (IntMap.bindings n_ids))))));
+  let render_neg h =
+    !^ "resource arises (" ^^^ !^ (h.reason_neg) ^^^ !^ ") from non-value expression at" ^^^ Locations.pp h.last_neg
+  in
+  let check is_write (r, h, i) = match IntMap.find_opt i n_ids with
+    | None -> return ()
+    | Some h2 ->
+      Pp.debug 3 (lazy (Pp.typ (!^ "concurrent accs on") (Pp.int i)));
+      fail (fun _ -> {loc; msg = Generic (Pp.item "undefined behaviour: weak sequencing race"
+        (RE.pp r ^^^ break 1 ^^^ render_use_point is_write h ^^^ break 1 ^^^ render_neg h2))})
+  in
+  let@ () = ListM.iterM (check false) reads in
+  ListM.iterM (check true) writes
 
 (*type labels = (AT.lt * label_kind) SymMap.t*)
 
@@ -1335,7 +1360,7 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
      | M_Va_end _ (* (asym 'bty) *) ->
         Debug_ocaml.error "todo: M_Va_end"
      end
-  | Normal expect, M_Eaction (M_Paction (_pol, M_Action (aloc, action_))) ->
+  | Normal expect, M_Eaction (M_Paction (pol, M_Action (aloc, action_))) ->
      begin match action_ with
      | M_Create (pe, act, prefix) -> 
         let@ () = WellTyped.ensure_base_type loc ~expect Loc in
@@ -1424,14 +1449,15 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
               iargs = [];
             }, None)
         in
-        let@ () = 
-          add_r loc
-            (P { name = Owned act.ct;
+        let r = (P { name = Owned act.ct;
                  pointer = parg;
                  permission = bool_ true;
                  iargs = [];
                },
-             O varg)
+             O varg) in
+        let@ () = match pol with
+          | Pos -> add_r loc r
+          | Neg -> add_r_neg_write loc r
         in
         k unit_))
      | M_Load (act, p_pe, _mo) -> 
@@ -1643,9 +1669,7 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
      in
      let@ () = ListM.iterM aux cn_progs in
      k unit_
-     
 
-  | _, M_Ewseq (p, e1, e2)
   | _, M_Esseq (p, e1, e2) ->
      let@ fin = begin_trace_of_step (Some (Mu.M_Pat p)) e1 in
      let@ p_bt = infer_pattern p in
@@ -1654,6 +1678,24 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
             let@ () = fin () in
             check_expr labels ~typ e2 (fun it2 ->
                 let@ () = remove_as bound_a in
+                k it2
+              )
+       )
+  | _, M_Ewseq (p, e1, e2) ->
+     let@ fin = begin_trace_of_step (Some (Mu.M_Pat p)) e1 in
+     let@ p_bt = infer_pattern p in
+     let@ pre_check1 = all_resources_tagged () in
+     check_expr labels ~typ:(Normal p_bt) e1 (fun it ->
+            let@ post_check1 = all_resources_tagged () in
+            let@ neg = compute_neg_written pre_check1 post_check1 in
+            let@ bound_a = pattern_match p it in
+            let@ () = fin () in
+            let@ pre_check2 = all_resources_tagged () in
+            check_expr labels ~typ e2 (fun it2 ->
+                let@ () = remove_as bound_a in
+                let@ post_check2 = all_resources_tagged () in
+                let@ used = compute_used pre_check2 post_check2 in
+                let@ () = check_neg_weak_distinct loc neg used in
                 k it2
               )
        )

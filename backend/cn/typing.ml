@@ -295,14 +295,18 @@ let add_cs = iterM add_c
 
 
 
-let add_r loc (r, RE.O oargs) =
+let add_r_pol is_neg_pol loc (r, RE.O oargs) =
   let@ s = get () in
   let@ simp_ctxt = simp_ctxt () in
   match Simplify.ResourceTypes.simp_or_empty simp_ctxt r with
   | None -> return ()
   | Some r ->
     let oargs = Simplify.IndexTerms.simp simp_ctxt oargs in
-    set (Context.add_r loc (r, O oargs) s)
+    set (Context.add_r loc is_neg_pol (r, O oargs) s)
+
+let add_r = add_r_pol false
+
+let add_r_neg_write = add_r_pol true
 
 let add_rs loc = iterM (add_r loc)
 
