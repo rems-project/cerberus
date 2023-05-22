@@ -18,6 +18,10 @@ type basetype_or_value =
   | BaseType of BT.t
   | Value of IndexTerms.t
 
+(* History information about the most recent read/write actions taken on a
+   resource. These are used to check for and report on concurrent races. The
+   history is kept in a separate map to the resource list, indexed by resource
+   id, so that the final deletion of a resource remains in the history. *)
 type resource_history =
   {
     last_written: Locations.loc;
