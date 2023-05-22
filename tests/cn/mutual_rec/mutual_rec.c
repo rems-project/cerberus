@@ -375,6 +375,7 @@ inc_b_tree (struct b_node *p)
     /*@ apply inc_list_lemma(K_Nil {}); @*/
     return 1;
   }
+  /*@ unpack B_Tree(p); @*/
   b_tree_keys_node_lemma(p->even, p->odd);
   b_tree_keys_node_merge_inc_lemma(p->even, p->odd);
   b_tree_keys_node_merge_flip_lemma(p->even, p->odd);
