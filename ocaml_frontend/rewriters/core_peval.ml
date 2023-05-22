@@ -647,8 +647,12 @@ let core_peval file : 'bty RW.rewriter =
 *)
                 | `MATCHED (Some (pat', e1'), xs) ->
                     (* PARTIAL *)
+                    let expr2_ = match expr_ with
+                      | Ewseq _ -> Ewseq (pat', e1', apply_substs_expr xs e2)
+                      | _ -> Esseq (pat', e1', apply_substs_expr xs e2)
+                    in
                     ChangeDoChildrenPost
-                      ( Identity.return (Expr (annots, Esseq (pat', e1', apply_substs_expr xs e2)))
+                      ( Identity.return (Expr (annots, expr2_))
                       , Identity.return )
               end
           
