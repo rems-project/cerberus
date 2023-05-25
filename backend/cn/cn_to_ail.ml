@@ -165,12 +165,13 @@ let rec cn_to_ail_expr ?(const_prop=None) (CNExpr (loc, expr_)) =
         | (ail_expr1 :: ail_exprs_rest) ->  List.fold_left (fun ae1 ae2 -> A.(AilEbinary (mk_expr ae1, And, mk_expr ae2))) ail_expr1 ail_exprs_rest
         | [] -> failwith "Cannot have empty expression in CN each expression")
   
-    
     (* TODO: Implement. AilSswitch is a statement_ not an expression *)
     (* Could try making everything a statement via AilSexpr *)
+    (* TODO: Add proper error messages for cases handled differently (exprs which are statements in C) *)
     (* | CNExpr_match (e, es) -> failwith "TODO"  *)
-   
 
+  
+    (* TODO: Might want to consider destination-passing style for if-then-else too (if ternary expressions turn out to look too complicated) *)
     | CNExpr_ite (e1, e2, e3) -> 
       let ail_e1 = cn_to_ail_expr ~const_prop e1 in
       let ail_e2 = cn_to_ail_expr ~const_prop e2 in
@@ -188,9 +189,10 @@ let rec cn_to_ail_expr ?(const_prop=None) (CNExpr (loc, expr_)) =
       cn_to_ail_expr ~const_prop (CNExpr (loc, CNExpr_binop (CN_equal, e, e_at_start)))
   
     | CNExpr_at_env (e, es) as cn_expr -> cn_to_ail_expr_at_env cn_expr 
- 
+
     | CNExpr_not e -> A.(AilEunary (Bnot, mk_expr (cn_to_ail_expr ~const_prop e))) 
     | _ -> failwith "TODO"
+
 
 type 'a ail_datatype = {
   structs: (C.union_tag * (Cerb_location.t * CF.Annot.attributes * C.tag_definition)) list;
@@ -219,7 +221,7 @@ let cn_to_ail_datatype (cn_datatype : cn_datatype) =
   in
   let structs = List.map generate_struct_definition cn_datatype.cn_dt_cases in
   let structs = cntype_struct :: structs in
-  let generate_constructor_sym constructor = 
+  let generate_constructor_sym constructor =  
     let doc = 
     CF.Pp_ail.pp_id ~executable_spec:true constructor ^^ (!^ "_tag") in 
     let str = 
@@ -243,22 +245,33 @@ let cn_to_ail_datatype (cn_datatype : cn_datatype) =
   {structs = structs; decls = decls; stats = stats}
 
 
+let is_cn_expr_simple (CNExpr (_, expr_)) = 
+  match expr_ with 
+    | CNExpr_match _ -> false
+    | _ -> true
+
+
 let cn_to_ail_assertion = function
   | CN_assert_exp e_ -> 
-    A.(AilEassert (mk_expr (cn_to_ail_expr e_)))
+    if (is_cn_expr_simple e_) then
+      let ail_expr = A.(AilEassert (mk_expr (cn_to_ail_expr e_))) in 
+      [mk_stmt A.(AilSexpr (mk_expr ail_expr))]
+    else
+      failwith "TODO"
   | CN_assert_qexp (ident, bTy, e1, e2) -> failwith "TODO"
 
 
 let cn_to_ail_condition cn_condition type_map = 
   match cn_condition with
-  | CN_cletResource (loc, name, resource) -> (A.AilSskip, None) (* TODO *)
+  | CN_cletResource (loc, name, resource) -> ([A.AilSskip], None) (* TODO *)
   | CN_cletExpr (_, name, expr) -> 
     let ail_expr = cn_to_ail_expr expr in
     let sfb_type = SymTable.find type_map name in
     let basetype = SurfaceBaseTypes.to_basetype sfb_type in
     let cn_basetype = bt_to_cn_base_type basetype in
     let ctype = cn_to_ail_base_type cn_basetype in
-    (A.(AilSdeclaration [(name, Some (mk_expr ail_expr))]), Some (mk_ctype ctype))
+    ([A.(AilSdeclaration [(name, Some (mk_expr ail_expr))])], Some (mk_ctype ctype))
   | CN_cconstr (loc, constr) -> 
     let ail_constr = cn_to_ail_assertion constr in
-    (A.(AilSexpr (mk_expr ail_constr)), None)
+    let ail_stats_ = List.map rm_stmt ail_constr in
+    (ail_stats_, None)

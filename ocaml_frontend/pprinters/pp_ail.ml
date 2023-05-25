@@ -724,9 +724,9 @@ let pp_alignment = function
       pp_keyword "_Alignas" ^^ P.parens (pp_ctype no_qualifiers ty)
 
 let pp_tag_definition ?(executable_spec=false) (tag, (_, _, def)) =
+  let id_doc = if executable_spec then pp_id ~executable_spec tag else pp_id_type tag in 
   match def with
     | StructDef (ident_qs_tys, flexible_opt) ->
-        let id_doc = if executable_spec then pp_id ~executable_spec tag else pp_id_type tag in 
         pp_keyword "struct" ^^^ id_doc ^^^ P.braces (
           P.nest 2 (
             P.break 1 ^^
@@ -740,11 +740,11 @@ let pp_tag_definition ?(executable_spec=false) (tag, (_, _, def)) =
           ) flexible_opt
           ) ^^ P.semi
     | UnionDef ident_qs_tys ->
-        pp_keyword "union" ^^^ pp_id_type tag ^^^ P.braces (
+        pp_keyword "union" ^^^ id_doc ^^^ P.braces (
           P.nest 2 (
             P.break 1 ^^
             P.separate_map (P.semi ^^ P.break 1) (fun (ident, (_, align_opt, qs, ty)) ->
-              pp_ctype_declaration (Pp_symbol.pp_identifier ident) qs ty ^^
+              pp_ctype_declaration ~executable_spec (Pp_symbol.pp_identifier ident) qs ty ^^
               P.optional (fun align -> P.space ^^ P.brackets (pp_alignment align)) align_opt
             ) ident_qs_tys
           ) ^^ P.semi ^^ P.break 1

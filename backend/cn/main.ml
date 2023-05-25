@@ -125,9 +125,13 @@ type executable_spec = {
 
 let generate_c_statements cn_statements =
   let generate_c_statement (CN_statement (loc, stmt_)) = 
+    (* TODO: Remove pattern matching here - should only be in cn_to_ail.ml *)
     let pp_statement =
       match stmt_ with
-      | CN_assert_stmt e -> Ail_to_c.pp_ail_expr (Cn_to_ail.cn_to_ail_assertion e)
+      | CN_assert_stmt e -> 
+        let ail_stats = Cn_to_ail.cn_to_ail_assertion e in
+        let doc = List.map (fun s -> CF.Pp_ail.pp_statement ~executable_spec:true s) ail_stats in
+        CF.Pp_utils.to_plain_string (List.fold_left (^^) empty doc)
       | _ -> ""
     in 
   (loc, pp_statement)
@@ -159,8 +163,9 @@ let generate_c_pres_and_posts (instrumentation : Core_to_mucore.instrumentation)
   let arg_names = List.map CF.Pp_symbol.to_string_pretty arg_syms in
   let arg_strs = List.map arg_str_fn (List.combine arg_types arg_syms) in
   let generate_condition_str cn_condition arg_names_opt =
-    (let ail_condition = Cn_to_ail.cn_to_ail_condition cn_condition type_map in
-    Ail_to_c.pp_ail_stmt ail_condition arg_names_opt ^ ";\n")
+    (let (ail_stats, type_info) = Cn_to_ail.cn_to_ail_condition cn_condition type_map in
+    let strs = List.map (fun s -> Ail_to_c.pp_ail_stmt (s, type_info) arg_names_opt) ail_stats in
+    (List.fold_left (^) "" strs) ^ ";\n")
   in
   let pres = List.map (fun i -> generate_condition_str i None) instrumentation.surface.requires in
   let posts = List.map (fun i -> generate_condition_str i (Some arg_names)) instrumentation.surface.ensures in

@@ -82,7 +82,7 @@ let rec pp_ail_expr ?(arg_names_opt=None) ail_expr =
 let pp_ail_stmt_default ail_stmt = CF.String_ail.string_of_statement (mk_stmt ail_stmt)
 
 
-
+(* TODO: Remove dependence on this function *)
 let pp_ail_stmt ((ail_stmt, extra) as ail_info) arg_names_opt = 
   match ail_info with
   | (A.AilSdeclaration ((name, Some decl) :: _), ct) -> 
