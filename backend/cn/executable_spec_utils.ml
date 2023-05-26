@@ -17,6 +17,12 @@ let mk_stmt stmt_ =
 let mk_ctype ctype_ =
   C.Ctype ([], ctype_)
 
+let rec split_list_of_triples = function 
+  | [] -> ([], [], [])
+  | (x, y, z) :: tl ->
+    let (xs, ys, zs) = split_list_of_triples tl in 
+    (x::xs, y::ys, z::zs)
+
 let empty_qualifiers : C.qualifiers = {const = false; restrict = false; volatile = false}
 
 let empty_attributes = CF.Annot.Attrs []
