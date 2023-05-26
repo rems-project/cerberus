@@ -98,7 +98,7 @@ let dest : type a. a dest -> _ A.statement_ list * _ A.expression_ -> a =
       s @ [return_stmt]
     | AssignVar x -> 
       let assign_stmt = A.(AilSdeclaration [(x, Some (mk_expr e))]) in
-       s @ [assign_stmt]
+      s @ [assign_stmt]
     | PassBack -> (s, e)
 
 let prefix : type a. a dest -> _ A.statement_ list -> a -> a = 
@@ -115,24 +115,23 @@ let rec cn_to_ail_expr
 : type a. _ option -> _ cn_expr -> a dest -> a
 (* const_prop (CNExpr (loc, expr_)) d = *)
 = fun const_prop (CNExpr (loc, expr_)) d ->
-  (* let cn_to_ail_expr_at_env = (function
-  | (CNExpr_at_env (e, es)) ->
-    (match es with
-      | start_evaluation_scope -> 
-        (* let Symbol (digest, nat, _) = CF.Symbol.fresh () in *)
-        (* TODO: Make general *)
-        let ail_expr = cn_to_ail_expr const_prop e d in
-        let e_cur_nm =
-        match ail_expr with
-          | A.(AilEident sym) -> CF.Pp_symbol.to_string_pretty sym (* Should only be AilEident sym - function arguments only *)
-          | _ -> failwith "Incorrect type of Ail expression"
-        in
-        let e_old_nm = e_cur_nm ^ "_old" in
-        let sym_old = CF.Symbol.Symbol ("", 0, SD_CN_Id e_old_nm) in
-        A.(AilEident sym_old))
-  | _ -> 
-    failwith "TODO")
-  in *)
+  let cn_to_ail_expr_at_env : type a. _ cn_expr -> string -> a dest -> a
+  = (fun e es d ->
+      (match es with
+        | start_evaluation_scope -> 
+          (* let Symbol (digest, nat, _) = CF.Symbol.fresh () in *)
+          (* TODO: Make general *)
+          let s, ail_expr = cn_to_ail_expr const_prop e PassBack in
+          let e_cur_nm =
+          match ail_expr with
+            | A.(AilEident sym) -> CF.Pp_symbol.to_string_pretty sym (* Should only be AilEident sym - function arguments only *)
+            | _ -> failwith "Incorrect type of Ail expression"
+          in
+          let e_old_nm = e_cur_nm ^ "_old" in
+          let sym_old = CF.Symbol.Symbol ("", 0, SD_CN_Id e_old_nm) in
+          dest d (s, A.(AilEident sym_old))
+          ))
+  in
   match expr_ with
     | CNExpr_const cn_cst -> 
       let ail_expr_ = cn_to_ail_const cn_cst in
@@ -249,7 +248,7 @@ let rec cn_to_ail_expr
       let s, e = cn_to_ail_expr const_prop (CNExpr (loc, CNExpr_binop (CN_equal, e, e_at_start))) PassBack in 
       dest d (s, e)
   
-    (* | CNExpr_at_env (e, es) as cn_expr -> cn_to_ail_expr_at_env cn_expr  *)
+    | CNExpr_at_env (e, es) -> cn_to_ail_expr_at_env e es d 
 
     | CNExpr_not e -> 
       let s, e_ = cn_to_ail_expr const_prop e PassBack in
@@ -313,8 +312,6 @@ let cn_to_ail_datatype (cn_datatype : cn_datatype) =
 
 let cn_to_ail_assertion = function
   | CN_assert_exp e_ -> 
-      (* let ail_expr = A.(AilEassert (mk_expr (cn_to_ail_expr e_))) in 
-      [mk_stmt A.(AilSexpr (mk_expr ail_expr))] *)
       let ss = cn_to_ail_expr None e_ Assert in 
       List.map mk_stmt ss
   | CN_assert_qexp (ident, bTy, e1, e2) -> failwith "TODO"
@@ -323,16 +320,14 @@ let cn_to_ail_assertion = function
 let cn_to_ail_condition cn_condition type_map = 
   match cn_condition with
   | CN_cletResource (loc, name, resource) -> ([A.AilSskip], None) (* TODO *)
-  | CN_cletExpr (_, name, expr) -> failwith "TODO"
-  | _ -> failwith "TODO"
-    (* let ail_expr = cn_to_ail_expr expr in
+  | CN_cletExpr (_, name, expr) -> 
+    let ss = cn_to_ail_expr None expr (AssignVar name) in
     let sfb_type = SymTable.find type_map name in
     let basetype = SurfaceBaseTypes.to_basetype sfb_type in
     let cn_basetype = bt_to_cn_base_type basetype in
     let ctype = cn_to_ail_base_type cn_basetype in
-    ([A.(AilSdeclaration [(name, Some (mk_expr ail_expr))])], Some (mk_ctype ctype))
+    (ss, Some (mk_ctype ctype))
   | CN_cconstr (loc, constr) -> 
     let ail_constr = cn_to_ail_assertion constr in
     let ail_stats_ = List.map rm_stmt ail_constr in
     (ail_stats_, None)
-    *)
