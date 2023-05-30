@@ -390,6 +390,8 @@ let pp_integerSuffix =
 
 (* TODO: should reverse the decoding of n *)
 let pp_integerConstant = function
+  | IConstant (n, Decimal, Some B) ->
+    !^ (Bool.to_string (Z.to_int n == 1))
   | IConstant (n, basis, suff_opt) ->
       !^ (match basis with
             | Octal       -> String_nat_big_num.string_of_octal n
