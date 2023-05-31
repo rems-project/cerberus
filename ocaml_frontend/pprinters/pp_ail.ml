@@ -390,6 +390,7 @@ let pp_integerSuffix =
 
 (* TODO: should reverse the decoding of n *)
 let pp_integerConstant = function
+  (* Case only generated during executable spec translation *)
   | IConstant (n, Decimal, Some B) ->
     !^ (Bool.to_string (Z.to_int n == 1))
   | IConstant (n, basis, suff_opt) ->

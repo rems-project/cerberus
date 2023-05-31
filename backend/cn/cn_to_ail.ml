@@ -226,21 +226,25 @@ let rec cn_to_ail_expr
       let (d1, s1, e1) = cn_to_ail_expr const_prop e PassBack in
       let (cases, exprs) = List.split es in
       let lhs = List.map (fun e_ -> cn_to_ail_expr const_prop e_ PassBack) cases in
+      let bindings = [] in
+      let rec generate_switch_stats lhs rhs = 
+        (match (lhs, rhs) with
+          | ([], []) -> []
+          | ((d2, s2, e2) :: ls, (ds, (s :: ss)) :: rs) ->  
+            (* TODO: Add default case for _ pattern match *)
+            let ail_case = A.(AilScase (Nat_big_num.zero, mk_stmt s)) in
+            (List.map mk_stmt (ail_case :: ss)) @ generate_switch_stats ls rs
+          | _ -> failwith "Wrong pattern")  
+      in
       (match d with 
         | Assert -> 
           let rhs = List.map (fun e_ -> cn_to_ail_expr const_prop e_ Assert) exprs in 
-          (* If more than one expression in case, have AilSexpr *)
-          let rec generate_switch_stats lhs rhs = 
-            (match (lhs, rhs) with
-              | ([], []) -> []
-              | ((d2, s2, e2) :: ls, (ds, (s :: ss)) :: rs) ->  
-                let ail_case = A.(AilScase (Nat_big_num.zero, mk_stmt s)) in
-                (List.map mk_stmt (ail_case :: ss)) @ generate_switch_stats ls rs
-              | _ -> failwith "Wrong pattern")  
-          in
-          let switch = A.(AilSswitch (mk_expr e1, mk_stmt (AilSblock ([], generate_switch_stats lhs rhs)))) in
+          let switch = A.(AilSswitch (mk_expr e1, mk_stmt (AilSblock (bindings, generate_switch_stats lhs rhs)))) in
           (d1, s1 @ [switch])
-        | Return -> failwith "TODO"
+        | Return -> 
+          let rhs = List.map (fun e_ -> cn_to_ail_expr const_prop e_ Return) exprs in 
+          let switch = A.(AilSswitch (mk_expr e1, mk_stmt (AilSblock (bindings, generate_switch_stats lhs rhs)))) in
+          (d1, s1 @ [switch])
         | AssignVar x -> failwith "TODO"
         | PassBack -> failwith "TODO")
 
@@ -283,6 +287,12 @@ type 'a ail_datatype = {
   stats: 'a A.statement list;
 }
 
+let generate_constructor_sym constructor =  
+  let doc = 
+  CF.Pp_ail.pp_id ~executable_spec:true constructor ^^ (!^ "_tag") in 
+  let str = 
+  CF.Pp_utils.to_plain_string doc in 
+  Sym.fresh_pretty str
 
 let cn_to_ail_datatype (cn_datatype : cn_datatype) =
   let cntype_sym = Sym.fresh_pretty "cntype" in
@@ -304,13 +314,6 @@ let cn_to_ail_datatype (cn_datatype : cn_datatype) =
   in
   let structs = List.map generate_struct_definition cn_datatype.cn_dt_cases in
   let structs = cntype_struct :: structs in
-  let generate_constructor_sym constructor =  
-    let doc = 
-    CF.Pp_ail.pp_id ~executable_spec:true constructor ^^ (!^ "_tag") in 
-    let str = 
-    CF.Pp_utils.to_plain_string doc in 
-    Sym.fresh_pretty str
-  in
   let rec generate_stats cases count =
     (match cases with 
       | [] -> []
