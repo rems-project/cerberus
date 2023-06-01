@@ -11,6 +11,8 @@ module A=CF.AilSyntax
 module C=CF.Ctype
 module BT=BaseTypes
 
+let generic_cn_dt_sym = Sym.fresh_pretty "generic_cn_datatype"
+
 let rec bt_to_cn_base_type = function
 | BT.Unit -> CN_unit
 | BT.Bool -> CN_bool
@@ -110,6 +112,14 @@ let dest : type a. a dest -> A.declaration list * _ A.statement_ list * _ A.expr
     | AssignVar _, s2 -> s1 @ s2
     | PassBack, (s2, e) -> (s1 @ s2, e) *)
 
+
+let generate_constructor_sym constructor =  
+  let doc = 
+  CF.Pp_ail.pp_id ~executable_spec:true constructor ^^ (!^ "_tag") in 
+  let str = 
+  CF.Pp_utils.to_plain_string doc in 
+  Sym.fresh_pretty str
+
 (* frontend/model/ail/ailSyntax.lem *)
 (* ocaml_frontend/generated/ailSyntax.ml *)
 let rec cn_to_ail_expr 
@@ -196,9 +206,11 @@ let rec cn_to_ail_expr
       let ail_expr_ = A.AilEcall (f, List.map mk_expr es) in 
       dest d (List.concat ds, List.concat ss, ail_expr_)
     
-    (*
-    | CNExpr_cons (c_nm, exprs) -> !^ "(" ^^ Sym.pp c_nm ^^^ !^ "{...})"
-    *)
+    
+    | CNExpr_cons (c_nm, exprs) -> 
+      let tag_sym = generate_constructor_sym c_nm in
+      (* Treating enum value as variable name *)
+      dest d ([], [], AilEident tag_sym)   
 
     (* Should only be integer range *)
     (* TODO: Need to implement CNExpr_match (e, es) - which can be passed via e *)
@@ -221,30 +233,40 @@ let rec cn_to_ail_expr
       in 
       dest d (List.concat ds, List.concat ss, ail_expr)
   
-    (* TODO: Implement. AilSswitch is a statement_ not an expression *)
     (* TODO: Add proper error messages for cases handled differently (exprs which are statements in C) *)
     | CNExpr_match (e, es) -> 
       let (d1, s1, e1) = cn_to_ail_expr const_prop e PassBack in
+      let e1_cast_ctype_ = C.(Pointer (empty_qualifiers, mk_ctype (Struct generic_cn_dt_sym))) in
+      let e1_transformed = 
+        A.(AilEmemberofptr 
+        (mk_expr (AilEcast (empty_qualifiers, mk_ctype e1_cast_ctype_, mk_expr e1)), 
+        CF.Symbol.Identifier (Cerb_location.unknown, "tag"))
+      )
+      in
       let (cases, exprs) = List.split es in
-      let lhs = List.map (fun e_ -> cn_to_ail_expr const_prop e_ PassBack) cases in
+      (* let lhs = List.map (fun e_ -> cn_to_ail_expr const_prop e_ PassBack) cases in *)
       let bindings = [] in
-      let rec generate_switch_stats lhs rhs = 
-        (match (lhs, rhs) with
-          | ([], []) -> []
-          | ((d2, s2, e2) :: ls, (ds, (s :: ss)) :: rs) ->  
+      let rec generate_switch_stats rhs = 
+        (match rhs with
+          | [] -> []
+          | ((ds, (s :: ss)) :: rs) ->  
             (* TODO: Add default case for _ pattern match *)
-            let ail_case = A.(AilScase (Nat_big_num.zero, mk_stmt s)) in
-            (List.map mk_stmt (ail_case :: ss)) @ generate_switch_stats ls rs
+            (* TODO: Add constructor member declarations to body of case *)
+            let ail_case = A.(AilScase (Nat_big_num.zero (* placeholder *), mk_stmt s)) in
+            (* Tag name stored in attribute *)
+            let attribute : CF.Annot.attribute = {attr_ns = None; attr_id = CF.Symbol.Identifier (Cerb_location.unknown, "tag"); attr_args = []} in
+            let ail_case_stmt = A.(AnnotatedStatement (Cerb_location.unknown, CF.Annot.Attrs [attribute], ail_case)) in
+            (ail_case_stmt :: (List.map mk_stmt ss)) @ generate_switch_stats rs
           | _ -> failwith "Wrong pattern")  
       in
       (match d with 
         | Assert -> 
           let rhs = List.map (fun e_ -> cn_to_ail_expr const_prop e_ Assert) exprs in 
-          let switch = A.(AilSswitch (mk_expr e1, mk_stmt (AilSblock (bindings, generate_switch_stats lhs rhs)))) in
+          let switch = A.(AilSswitch (mk_expr e1_transformed, mk_stmt (AilSblock (bindings, generate_switch_stats rhs)))) in
           (d1, s1 @ [switch])
         | Return -> 
           let rhs = List.map (fun e_ -> cn_to_ail_expr const_prop e_ Return) exprs in 
-          let switch = A.(AilSswitch (mk_expr e1, mk_stmt (AilSblock (bindings, generate_switch_stats lhs rhs)))) in
+          let switch = A.(AilSswitch (mk_expr e1_transformed, mk_stmt (AilSblock (bindings, generate_switch_stats rhs)))) in
           (d1, s1 @ [switch])
         | AssignVar x -> failwith "TODO"
         | PassBack -> failwith "TODO")
@@ -288,33 +310,37 @@ type 'a ail_datatype = {
   stats: 'a A.statement list;
 }
 
-let generate_constructor_sym constructor =  
-  let doc = 
-  CF.Pp_ail.pp_id ~executable_spec:true constructor ^^ (!^ "_tag") in 
-  let str = 
-  CF.Pp_utils.to_plain_string doc in 
-  Sym.fresh_pretty str
 
-let cn_to_ail_datatype (cn_datatype : cn_datatype) =
+
+let cn_to_ail_datatype ?(first=false) (cn_datatype : cn_datatype) =
   let cntype_sym = Sym.fresh_pretty "cntype" in
-  let cntype_struct = (cntype_sym, (Cerb_location.unknown, empty_attributes, C.(StructDef ([], None)))) in
+  let create_member ?(ctype_=C.(Pointer (empty_qualifiers, Ctype ([], Void)))) id =
+    (id, (empty_attributes, None, empty_qualifiers, mk_ctype ctype_))
+  in
+  let cntype_pointer = C.(Pointer (empty_qualifiers, mk_ctype (Struct cntype_sym))) in
+  let extra_members = [
+      (create_member ~ctype_:C.(Basic (Integer (Signed Int_))) (Id.id "tag"));
+      (create_member ~ctype_:cntype_pointer (Id.id "cntype"))]
+  in
   let generate_tag_definition dt_members = 
     let identifiers = List.map fst dt_members in
-    let create_member ?(ctype_=C.(Pointer (empty_qualifiers, Ctype ([], Void)))) id =
-      (id, (empty_attributes, None, empty_qualifiers, mk_ctype ctype_))
-    in
     (* TODO: Check if something called tag already exists *)
-    let cntype_pointer = C.(Pointer (empty_qualifiers, mk_ctype (Struct cntype_sym))) in
-    let extra_members = [
-      (create_member ~ctype_:C.(Basic (Integer (Signed Int_))) (Id.id "tag"));
-      (create_member ~ctype_:cntype_pointer (Id.id "cntype"))] in
     let members = List.map create_member (identifiers) in
     C.(StructDef (extra_members @ members, None))
   in
   let generate_struct_definition (constructor, members) = (constructor, (Cerb_location.unknown, empty_attributes, generate_tag_definition members))
   in
   let structs = List.map generate_struct_definition cn_datatype.cn_dt_cases in
-  let structs = cntype_struct :: structs in
+  let structs = if first then 
+    let generic_dt_struct = 
+      (generic_cn_dt_sym, (Cerb_location.unknown, empty_attributes, C.(StructDef (extra_members, None))))
+    in
+    let cntype_struct = (cntype_sym, (Cerb_location.unknown, empty_attributes, C.(StructDef ([], None)))) in
+    generic_dt_struct :: cntype_struct :: structs
+  else
+    (* TODO: Add members to cntype_struct as we go along? *)
+    structs
+  in
   let rec generate_stats cases count =
     (match cases with 
       | [] -> []

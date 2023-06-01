@@ -618,7 +618,7 @@ and pp_generic_association_aux pp_annot = function
       pp_keyword "default" ^^ P.colon ^^^ pp_expression_aux pp_annot e
 
 
-and pp_statement_aux ?(executable_spec=false) pp_annot ~bs (AnnotatedStatement (_, _, stmt_)) =
+and pp_statement_aux ?(executable_spec=false) pp_annot ~bs (AnnotatedStatement (_, Annot.Attrs attrs, stmt_)) =
   let pp_statement ?(executable_spec=false) ?(bs=bs) ?(is_control=false) (AnnotatedStatement (_, _, stmt_) as stmt) =
     begin match stmt_ with
       | AilSblock _ ->
@@ -682,7 +682,15 @@ and pp_statement_aux ?(executable_spec=false) pp_annot ~bs (AnnotatedStatement (
     | AilSswitch (e, s) ->
         pp_keyword "switch" ^^^ P.parens (pp_expression_aux ~executable_spec pp_annot e) ^/^ pp_statement ~executable_spec ~is_control:true s
     | AilScase (n, s) ->
-        pp_keyword "case" ^^^ !^ (Z.to_string n) ^^ P.colon ^/^ pp_statement ~executable_spec s
+        let case_str = 
+          if executable_spec then
+            (let attr = List.nth attrs 0 in
+            match attr.attr_id with
+              | Identifier (_, str) -> str)
+          else
+            Z.to_string n
+        in
+        pp_keyword "case" ^^^ !^ case_str ^^ P.colon ^/^ pp_statement ~executable_spec s
     | AilScase_rangeGNU (n1, n2, s) ->
         pp_keyword "case" ^^^ !^ (Z.to_string n1 ^ " ... " ^ Z.to_string n2) ^^ P.colon ^/^ pp_statement ~executable_spec s
     | AilSdefault s ->
