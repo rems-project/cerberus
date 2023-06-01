@@ -203,7 +203,13 @@ let generate_c_specs instrumentation_list type_map ail_prog =
   executable_spec
 
 let generate_c_datatypes cn_datatypes = 
-  let ail_datatypes = List.map Cn_to_ail.cn_to_ail_datatype cn_datatypes in
+  let ail_datatypes = match cn_datatypes with
+    | [] -> []
+    | (d :: ds) ->
+        let ail_dt1 = Cn_to_ail.cn_to_ail_datatype ~first:true d in
+        let ail_dts = List.map Cn_to_ail.cn_to_ail_datatype ds in
+        ail_dt1 :: ail_dts
+  in
   (* TODO: Fix number of newlines generated using fold *)
   let generate_str_from_ail_dt (ail_dt: unit Cn_to_ail.ail_datatype) = 
     let stats = List.map (fun c -> CF.Pp_ail.pp_statement ~executable_spec:true c ^^ PPrint.hardline) ail_dt.stats in
