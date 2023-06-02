@@ -207,6 +207,9 @@ let generate_c_specs instrumentation_list type_map ail_prog =
   let executable_spec = {pre_post = pre_post; in_stmt = in_stmt} in
   executable_spec
 
+let concat_map_newline docs = 
+  PPrint.concat_map (fun doc -> doc ^^ PPrint.hardline) docs
+
 let generate_c_datatypes cn_datatypes = 
   let ail_datatypes = match cn_datatypes with
     | [] -> []
@@ -226,11 +229,12 @@ let generate_c_datatypes cn_datatypes =
   in
   let docs = List.map generate_str_from_ail_dt ail_datatypes in
   let (consts, structs) = List.split docs in
-  let concat_map_newline docs = 
-    PPrint.concat_map (fun doc -> doc ^^ PPrint.hardline) docs in
   CF.Pp_utils.to_plain_string (concat_map_newline consts ^^ concat_map_newline structs)
 
-
+let generate_c_functions cn_functions = 
+  let ail_stats = List.concat_map Cn_to_ail.cn_to_ail_function cn_functions in
+  let docs = List.map (fun s -> CF.Pp_ail.pp_statement ~executable_spec:true s) ail_stats in 
+  CF.Pp_utils.to_plain_string (concat_map_newline docs)
 
 let main
       filename
@@ -310,7 +314,9 @@ let main
             let cn_oc = Stdlib.open_out "cn.c" in
             let executable_spec = generate_c_specs instrumentation type_map ail_prog in
             let c_datatypes = generate_c_datatypes ail_prog.cn_datatypes in
+            let c_functions = generate_c_functions ail_prog.cn_functions in 
             Stdlib.output_string cn_oc c_datatypes;
+            Stdlib.output_string cn_oc c_functions;
             begin match
               Source_injection.(output_injections oc
                 { filename; sigm= ail_prog
