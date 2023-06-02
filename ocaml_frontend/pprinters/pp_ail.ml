@@ -527,7 +527,7 @@ let rec pp_expression_aux ?(executable_spec=false) mk_pp_annot a_expr =
               (* printing the types in a human readable format *)
               P.parens (pp_ctype_human qs ty) ^^^ pp ~executable_spec e
             else
-              P.parens (pp_ctype qs ty) ^^^ pp ~executable_spec e
+              P.parens (pp_ctype ~executable_spec qs ty) ^^^ pp ~executable_spec e
         | AilEcall (e, es) ->
             pp ~executable_spec e ^^ P.parens (comma_list (fun e -> pp ~executable_spec e) es)
         | AilEassert e ->

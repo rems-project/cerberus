@@ -103,13 +103,13 @@ let dest : type a. a dest -> A.declaration list * _ A.statement_ list * _ A.expr
       (ds, s @ [assign_stmt])
     | PassBack -> (ds, s, e)
 
-(* let prefix : type a. a dest -> _ A.statement_ list -> a -> a = 
-  fun d s1 u -> 
+let prefix : type a. a dest -> (A.declaration list * unit A.statement_ list) -> a -> a = 
+  fun d (d1, s1) u -> 
     match d, u with 
-    | Assert, s2 -> s1 @ s2
-    | Return, s2 -> s1 @ s2
-    | AssignVar _, s2 -> s1 @ s2
-    | PassBack, (s2, e) -> (s1 @ s2, e) *)
+    | Assert, (d2, s2) -> (d1 @ d2, s1 @ s2)
+    | Return, (d2, s2) -> (d1 @ d2, s1 @ s2)
+    | AssignVar _, (d2, s2) -> (d1 @ d2, s1 @ s2)
+    | PassBack, (d2, s2, e) -> (d1 @ d2, s1 @ s2, e)
 
 
 let generate_constructor_sym constructor =  
@@ -283,6 +283,13 @@ let rec cn_to_ail_expr
     | CNExpr_good (ty, e) -> !^ "(good (_, _))" 
     *)
 
+
+    | CNExpr_let (s, e, body) -> 
+      failwith "TODO"
+      (* let d1, s1, e1_ = cn_to_ail_expr const_prop e PassBack in  *)
+      (* TODO: change second arg (look at Neel code) *)
+      (* prefix d (d1, s1) (cn_to_ail_expr const_prop body d) *)
+
     | CNExpr_deref expr -> 
       let ds, s, e = cn_to_ail_expr const_prop expr PassBack in 
       let ail_expr_ = A.(AilEunary (Indirection, mk_expr e)) in 
@@ -357,6 +364,13 @@ let cn_to_ail_datatype ?(first=false) (cn_datatype : cn_datatype) =
   {structs = structs; decls = decls; stats = stats}
 
 
+(* TODO: Finish with rest of function - maybe header file with A.Decl_function (cn.h?) *)
+let cn_to_ail_function cn_function = 
+  match cn_function.cn_func_body with
+    | Some e ->
+      let ds, ss = cn_to_ail_expr None e Return in
+      List.map mk_stmt ss
+    | None -> []
 
 let cn_to_ail_assertion = function
   | CN_assert_exp e_ -> 
