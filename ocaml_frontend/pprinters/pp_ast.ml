@@ -1,6 +1,6 @@
-open Pp_prelude
+open Cerb_pp_prelude
 open Pp_utils
-open Colour
+open Cerb_colour
 
 module P = PPrint
 

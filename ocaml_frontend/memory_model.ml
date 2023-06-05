@@ -58,10 +58,10 @@ module type Memory = sig
     -> integer_value  (* size *)
     -> pointer_value memM
   
-  val kill: Location_ocaml.t -> bool -> pointer_value -> unit memM
+  val kill: Cerb_location.t -> bool -> pointer_value -> unit memM
   
-  val load: Location_ocaml.t -> Ctype.ctype -> pointer_value -> (footprint * mem_value) memM
-  val store: Location_ocaml.t -> Ctype.ctype -> (* is_locking *)bool -> pointer_value -> mem_value -> footprint memM
+  val load: Cerb_location.t -> Ctype.ctype -> pointer_value -> (footprint * mem_value) memM
+  val store: Cerb_location.t -> Ctype.ctype -> (* is_locking *)bool -> pointer_value -> mem_value -> footprint memM
   
   (* Pointer value constructors *)
   val null_ptrval: Ctype.ctype -> pointer_value
@@ -76,13 +76,13 @@ module type Memory = sig
   val case_funsym_opt: mem_state -> pointer_value -> Symbol.sym option
 
   (* Operations on pointer values *)
-  val eq_ptrval: Location_ocaml.t -> pointer_value -> pointer_value -> bool memM
-  val ne_ptrval: Location_ocaml.t -> pointer_value -> pointer_value -> bool memM
-  val lt_ptrval: Location_ocaml.t -> pointer_value -> pointer_value -> bool memM
-  val gt_ptrval: Location_ocaml.t -> pointer_value -> pointer_value -> bool memM
-  val le_ptrval: Location_ocaml.t -> pointer_value -> pointer_value -> bool memM
-  val ge_ptrval: Location_ocaml.t -> pointer_value -> pointer_value -> bool memM
-  val diff_ptrval: Location_ocaml.t -> Ctype.ctype -> pointer_value -> pointer_value -> integer_value memM
+  val eq_ptrval: Cerb_location.t -> pointer_value -> pointer_value -> bool memM
+  val ne_ptrval: Cerb_location.t -> pointer_value -> pointer_value -> bool memM
+  val lt_ptrval: Cerb_location.t -> pointer_value -> pointer_value -> bool memM
+  val gt_ptrval: Cerb_location.t -> pointer_value -> pointer_value -> bool memM
+  val le_ptrval: Cerb_location.t -> pointer_value -> pointer_value -> bool memM
+  val ge_ptrval: Cerb_location.t -> pointer_value -> pointer_value -> bool memM
+  val diff_ptrval: Cerb_location.t -> Ctype.ctype -> pointer_value -> pointer_value -> integer_value memM
 
   val update_prefix: (Symbol.prefix * mem_value) -> unit memM
   val prefix_of_pointer: pointer_value -> string option memM
@@ -92,19 +92,19 @@ module type Memory = sig
   
   (* Casting operations *)
   (* the first ctype is the original integer type, the second is the target referenced type *)
-  val ptrfromint: Location_ocaml.t -> Ctype.integerType -> Ctype.ctype -> integer_value -> pointer_value memM
+  val ptrfromint: Cerb_location.t -> Ctype.integerType -> Ctype.ctype -> integer_value -> pointer_value memM
   (* the first ctype is the original referenced type, the integerType is the target integer type *)
-  val intfromptr: Location_ocaml.t -> Ctype.ctype -> Ctype.integerType -> pointer_value -> integer_value memM
+  val intfromptr: Cerb_location.t -> Ctype.ctype -> Ctype.integerType -> pointer_value -> integer_value memM
   
   (* Pointer shifting constructors *)
   val array_shift_ptrval:  pointer_value -> Ctype.ctype -> integer_value -> pointer_value
   val member_shift_ptrval: pointer_value -> Symbol.sym -> Symbol.identifier -> pointer_value
   
-  val eff_array_shift_ptrval: Location_ocaml.t -> pointer_value -> Ctype.ctype -> integer_value -> pointer_value memM
+  val eff_array_shift_ptrval: Cerb_location.t -> pointer_value -> Ctype.ctype -> integer_value -> pointer_value memM
   
-  val memcpy: Location_ocaml.t -> pointer_value -> pointer_value -> integer_value -> pointer_value memM
+  val memcpy: Cerb_location.t -> pointer_value -> pointer_value -> integer_value -> pointer_value memM
   val memcmp: pointer_value -> pointer_value -> integer_value -> integer_value memM
-  val realloc: Location_ocaml.t -> Mem_common.thread_id -> integer_value -> pointer_value -> integer_value -> pointer_value memM
+  val realloc: Cerb_location.t -> Mem_common.thread_id -> integer_value -> pointer_value -> integer_value -> pointer_value memM
 
   val va_start: (Ctype.ctype * pointer_value) list -> integer_value memM
   val va_copy: integer_value -> integer_value memM
@@ -206,7 +206,7 @@ module type Memory = sig
 *)
 
   (* JSON serialisation *)
-  val serialise_mem_state: Digest.t -> mem_state -> Json.json
+  val serialise_mem_state: Digest.t -> mem_state -> Cerb_json.json
   
   
   

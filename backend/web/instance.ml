@@ -1,7 +1,7 @@
 open Cerb_frontend
 open Cerb_backend
 open Cerb_runtime
-open Util
+open Cerb_util
 open Instance_api
 open Pipeline
 
@@ -65,12 +65,12 @@ let add_bmc_macro ~bmc_model conf =
 
 (* TODO: this hack is due to cerb_conf be undefined when running Cerberus *)
 let hack ?(is_bmc=false) ~conf mode =
-  let open Global_ocaml in
+  let open Cerb_global in
   let conf =
    {  backend_name= if is_bmc then "Bmc" else "Web_instance";
       exec_mode_opt=    Some (mode);
       concurrency=      false;
-      error_verbosity=  Global_ocaml.QuoteStd;
+      error_verbosity=  Cerb_global.QuoteStd;
       defacto=          false;
       permissive=       false;
       agnostic=         false;
@@ -111,7 +111,7 @@ let elaborate ~is_bmc ~conf ~filename =
 
 let string_of_doc d =
   let buf = Buffer.create 1024 in
-  Colour.do_colour := false;
+  Cerb_colour.do_colour := false;
   PPrint.ToBuffer.pretty 1.0 80 buf d;
   Buffer.contents buf
 
@@ -122,7 +122,7 @@ let pp_core core =
       let show_include = false
       let show_locations = false
       let handle_location c_loc core_range =
-        match Location_ocaml.to_cartesian c_loc with
+        match Cerb_location.to_cartesian c_loc with
         | Some c_range ->
           locs := (c_range, core_range)::!locs
         | None -> ()
@@ -205,7 +205,7 @@ let bmc ~filename ~name ~conf ~bmc_model:bmc_model ~filename () =
     raise e
 
 (* execution *)
-let execute ~conf ~filename (mode: Global_ocaml.execution_mode) =
+let execute ~conf ~filename (mode: Cerb_global.execution_mode) =
   let return = Exception.except_return in
   let (>>=)  = Exception.except_bind in
   hack ~conf mode;
@@ -357,7 +357,7 @@ let get_state_details st =
     let loc = Option.case id (fun _ -> ts.Core_run.current_loc) @@ Annot.get_loc arena_annots in
     (loc, maybe_uid, arena, string_of_env ts.env, stdout, stderr)
   | _ ->
-    (Location_ocaml.unknown, None, "", "", stdout, stderr)
+    (Cerb_location.unknown, None, "", "", stdout, stderr)
 
 let get_file_hash core =
   match core.Core.main with

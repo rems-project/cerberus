@@ -2,11 +2,11 @@ open AilSyntax
 open Ctype
 open GenTypes
 
-open Pp_prelude
+open Cerb_pp_prelude
 (*open Pp_ail*)
 
 open Pp_ast
-open Colour
+open Cerb_colour
 
 module P = PPrint
 
@@ -264,9 +264,9 @@ let dtree_of_expression pp_annot expr =
     in
 *)
     let pp_expr_ctor str =
-      pp_std_annot ^^^ pp_stmt_ctor str ^^^ Location_ocaml.pp_location ~clever:true loc ^^^ pp_annot annot in
+      pp_std_annot ^^^ pp_stmt_ctor str ^^^ Cerb_location.pp_location ~clever:true loc ^^^ pp_annot annot in
     let pp_implicit_ctor str =
-      pp_std_annot ^^^ !^ (ansi_format [Bold; Red] str) ^^^ Location_ocaml.pp_location ~clever:true loc ^^^ pp_annot annot in
+      pp_std_annot ^^^ !^ (ansi_format [Bold; Red] str) ^^^ Cerb_location.pp_location ~clever:true loc ^^^ pp_annot annot in
     
     let pp_cabs_id = Pp_symbol.pp_identifier in
     let dtree_of_generic_association = function
@@ -511,7 +511,7 @@ let rec dtree_of_statement pp_annot (AnnotatedStatement (loc, attrs, stmt_)) =
 
 let dtree_of_function_definition pp_annot (fun_sym, (loc, _, attrs, param_syms, stmt)) =
   let param_dtrees = [] in
-  let pp_loc = Location_ocaml.pp_location ~clever:true loc in
+  let pp_loc = Cerb_location.pp_location ~clever:true loc in
   Dnode ( pp_decl_ctor "FunctionDecl" ^^^ pp_loc ^^^ Pp_ail.pp_id fun_sym
         , add_dtree_of_attributes attrs (param_dtrees @ [dtree_of_statement pp_annot stmt]) )
 
@@ -542,7 +542,7 @@ let dtree_of_declaration (i, (_, decl_attrs, decl)) =
     | Decl_function (_, (qs, cty), params, is_var, is_inline, is_noreturn) ->
         Dleaf (pp_decl_ctor "Decl_function" ^^^
                Pp_ail.pp_id_func i ^^^
-               Colour.pp_ansi_format [Green] begin fun () -> 
+               Cerb_colour.pp_ansi_format [Green] begin fun () -> 
                  P.squotes (
                    (pp_cond is_inline !^"inline"
                    (pp_cond is_noreturn !^"_Noreturn"
@@ -609,10 +609,10 @@ let pp_annot gtc =
     | GenLValueType (qs, ty, isRegister) ->
         let qs_ty_doc =
           (* TODO: do the colour turn off in pp_ansi_format *)
-          let saved = !Colour.do_colour in
-          Colour.do_colour := false;
+          let saved = !Cerb_colour.do_colour in
+          Cerb_colour.do_colour := false;
           let ret = P.squotes (pp_ctype_human qs ty) in
-          Colour.do_colour := saved;
+          Cerb_colour.do_colour := saved;
           ret in
         pp_ansi_format [Green] (fun () -> qs_ty_doc) ^^^
         !^ (ansi_format [Cyan] "lvalue") ^^
@@ -623,7 +623,7 @@ let pp_annot gtc =
         )
 
 let filter_external_decl (id, sigma) =
-  let pred (_, (loc, _, _)) = Location_ocaml.from_main_file loc in
+  let pred (_, (loc, _, _)) = Cerb_location.from_main_file loc in
   (id, { sigma with declarations = List.filter pred sigma.declarations} )
 
 (* let pp_loop_attributes xs =
@@ -636,7 +636,7 @@ let filter_external_decl (id, sigma) =
   ) xs P.empty *)
 
 let pp_program do_colour show_include ail_prog =
-  Colour.do_colour := do_colour && Unix.isatty Unix.stdout;
+  Cerb_colour.do_colour := do_colour && Unix.isatty Unix.stdout;
   let filtered_ail_prog = if show_include then ail_prog else filter_external_decl ail_prog in
   (* pp_loop_attributes (snd ail_prog).loop_attributes ^^ P.break 1 ^^ *)
   pp_doc_tree (dtree_of_program (fun _ -> P.empty) filtered_ail_prog)

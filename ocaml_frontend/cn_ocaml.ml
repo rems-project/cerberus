@@ -1,10 +1,10 @@
 open Cn
 
-open Pp_prelude
+open Cerb_pp_prelude
 open Pp_ast
 open Pp_symbol
 
-open Location_ocaml
+open Cerb_location
 
 
 module P = PPrint
@@ -348,7 +348,7 @@ end)
 module PpAil = MakePp (struct
   type ident = Symbol.sym
   type ty = Ctype.ctype
-  let pp_ident ?(clever=false) sym = !^ (Colour.ansi_format [Yellow] (Pp_symbol.to_string_pretty_cn sym))
+  let pp_ident ?(clever=false) sym = !^ (Cerb_colour.ansi_format [Yellow] (Pp_symbol.to_string_pretty_cn sym))
   let pp_ty ty = Pp_ail.pp_ctype Ctype.no_qualifiers ty
 end)
 

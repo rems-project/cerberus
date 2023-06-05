@@ -134,7 +134,7 @@ let dot_of_exeState st value_str eqs_str =
 
 
 
-open Pp_prelude
+open Cerb_pp_prelude
 
 let pp_action act =
   !^ (string_of_action act)

@@ -1,5 +1,5 @@
 open Cerb_frontend
-open Global_ocaml
+open Cerb_global
 
 module Mem = Naive_memory
 
@@ -60,7 +60,7 @@ let catch_result m =
      Debug.print_debug 2 "[Main.catch_result] returning a fake return code";
      exit 0
   | Exception.Exception msg ->
-      print_endline (Colour.ansi_format [Colour.Red] (Pp_errors.to_string msg))
+      print_endline (Cerb_colour.ansi_format [Cerb_colour.Red] (Pp_errors.to_string msg))
 
 
 (* use this when calling a pretty printer *)
@@ -141,10 +141,10 @@ let run_test (run:string->Driver_ocaml.execution_result) (test:Tests.test) =
   let test_result = Tests.compare_results test.Tests.expected_result ex_result in
   match test_result with
   | Exception.Result _      -> 
-      print_endline (Colour.ansi_format [Colour.Green] 
+      print_endline (Cerb_colour.ansi_format [Cerb_colour.Green] 
                                         ("Test succeeded (" ^ test.Tests.file_name ^ ")"))
   | Exception.Exception msg -> 
-      print_endline (Colour.ansi_format [Colour.Red]   
+      print_endline (Cerb_colour.ansi_format [Cerb_colour.Red]   
                                         ("Test failed    (" ^ test.Tests.file_name ^ "): " ^ msg))
 
 (* the entry point *)

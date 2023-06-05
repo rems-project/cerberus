@@ -506,7 +506,7 @@ let declare_address alloc_id : unit solverM =
 *)
 
 let add_constraint slvSt debug_str (cs: Ocaml_mem.mem_iv_constraint) =
-  if !Debug_ocaml.debug_level >= 1 then begin
+  if !Cerb_debug.debug_level >= 1 then begin
     prerr_endline ("ADDING CONSTRAINT [" ^ debug_str ^ "] ==> " ^ String_mem.string_of_iv_memory_constraint cs)
   end;
   match mem_constraint_to_expr slvSt cs with
@@ -587,8 +587,8 @@ let fill_hole_with t fill =
 
 
 let dot_from_nd_tree t =
-  let saved = !Colour.do_colour in
-  Colour.do_colour := false;
+  let saved = !Cerb_colour.do_colour in
+  Cerb_colour.do_colour := false;
   let rec aux n = function
     | Thole ->
         (n+1, [string_of_int n ^ "[label= \"HOLE\"]"], [])
@@ -650,7 +650,7 @@ let dot_from_nd_tree t =
   in
   let (_, nodes, edges) = aux 1 t in
   let ret = "digraph G {node[shape=box];" ^ String.concat ";" (nodes @ edges) ^ ";}" in
-  Colour.do_colour := saved;
+  Cerb_colour.do_colour := saved;
   ret
 
 
@@ -717,13 +717,13 @@ exception Backtrack of
 let check_counter = ref 0
 
 let check_sat slv es =
-(*  prerr_endline (Colour.(ansi_format [Green] (Solver.to_string slv))); *)
-  if !Debug_ocaml.debug_level >= 1 then begin
+(*  prerr_endline (Cerb_colour.(ansi_format [Green] (Solver.to_string slv))); *)
+  if !Cerb_debug.debug_level >= 1 then begin
     prerr_string ("CALLING Z3 (" ^ string_of_int !check_counter ^ ") ... ");
     flush_all ();
   end;
   let ret = Solver.check slv es in
-  if !Debug_ocaml.debug_level >= 1 then begin
+  if !Cerb_debug.debug_level >= 1 then begin
     prerr_endline "done"
   end;
   check_counter := !check_counter + 1;
@@ -745,7 +745,7 @@ let runND_exhaustive m st0 =
     match m_act st with
       | (NDactive a, st') ->
 (*          tree_so_far := fill_hole_with !tree_so_far (Tactive (a, st')); *)
-          if !Debug_ocaml.debug_level >= 1 then begin
+          if !Cerb_debug.debug_level >= 1 then begin
             prerr_endline "NDactive";
             prerr_endline (Solver.to_string slvSt.slv);
           end;
@@ -763,7 +763,7 @@ let runND_exhaustive m st0 =
       
       | (NDkilled r, st') ->
           tree_so_far := fill_hole_with !tree_so_far (Tkilled r);
-          if !Debug_ocaml.debug_level >= 1 then begin
+          if !Cerb_debug.debug_level >= 1 then begin
             prerr_endline "NDkilled BEGIN";
             prerr_endline (Z3.Solver.to_string slvSt.slv);
             prerr_endline "END";
@@ -772,7 +772,7 @@ let runND_exhaustive m st0 =
       
       | (NDnd (debug_str, str_ms), st') ->
           tree_so_far := fill_hole_with !tree_so_far (Tnd (debug_str, List.map (fun (str, _) -> (str, Thole)) str_ms));
-          if !Debug_ocaml.debug_level >= 1 then begin
+          if !Cerb_debug.debug_level >= 1 then begin
             prerr_endline ("NDnd(" ^ debug_str ^ ")[" ^ string_of_int (List.length str_ms) ^ "]");
           end;
           List.fold_left (fun acc (_, m_act) ->
@@ -791,7 +791,7 @@ let runND_exhaustive m st0 =
       
       | (NDguard (debug_str, cs, m_act), st') ->
           tree_so_far := fill_hole_with !tree_so_far (Tguard (debug_str, cs, Thole));
-          if !Debug_ocaml.debug_level >= 1 then begin
+          if !Cerb_debug.debug_level >= 1 then begin
             prerr_endline ("NDguard(" ^ debug_str ^ ")");
           end;
           add_constraint slvSt debug_str cs;
@@ -801,14 +801,14 @@ let runND_exhaustive m st0 =
                 prerr_endline ("BEGIN SOLVER\n" ^ Solver.to_string slvSt.slv ^ "\nEND");
                 prerr_endline ("BEGIN CS\n" ^ String.concat "\n" (Wip.to_strings ()) ^ "\nEND");
 *)
-                if !Debug_ocaml.debug_level >= 1 then begin
+                if !Cerb_debug.debug_level >= 1 then begin
                   prerr_endline "NDguard BACKTRACKING";
                 end;
                 tree_so_far := fill_hole_with !tree_so_far Tdeadend;
                 raise (Backtrack acc)
 
             | Solver.UNKNOWN ->
-                if !Debug_ocaml.debug_level >= 1 then begin
+                if !Cerb_debug.debug_level >= 1 then begin
                   prerr_endline "UNKNOWN in NDguard";
                 end;
                 aux acc m_act st'
@@ -819,7 +819,7 @@ let runND_exhaustive m st0 =
       
       | (NDbranch (debug_str, cs, m_act1, m_act2), st') ->
           tree_so_far := fill_hole_with !tree_so_far (Tbranch (debug_str, cs, Thole, Thole));
-          if !Debug_ocaml.debug_level >= 1 then begin
+          if !Cerb_debug.debug_level >= 1 then begin
             prerr_endline ("NDbranch(" ^ debug_str ^ ")");
           end;
           Wip.push ();
@@ -839,7 +839,7 @@ let runND_exhaustive m st0 =
                      new_acc (* acc *)
                end
             | Solver.UNSATISFIABLE ->
-                if !Debug_ocaml.debug_level >= 2 then begin
+                if !Cerb_debug.debug_level >= 2 then begin
                   prerr_endline "NDbranch ==> UNSATISFIABLE";
                   prerr_endline (Z3.Solver.to_string slvSt.slv);
                   prerr_endline "END\n\n";
@@ -877,7 +877,7 @@ let runND_exhaustive m st0 =
   let ret =
     try
 (*    let act = m st0 in
-    if Global_ocaml.show_action_graph() then (create_dot_file act; create_json_file act);
+    if Cerb_global.show_action_graph() then (create_dot_file act; create_json_file act);
 *)
       aux [] m st0
     with
@@ -1116,7 +1116,7 @@ let runND_interactive (ND m) st0 =
 
 let runND m st0 =
   flush stdout;
-  Global_ocaml.(match current_execution_mode () with
+  Cerb_global.(match current_execution_mode () with
     | Some Random ->
         runND_random m st0
     | Some Exhaustive ->

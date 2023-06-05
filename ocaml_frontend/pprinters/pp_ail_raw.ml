@@ -1,5 +1,5 @@
 open Ctype
-open Colour
+open Cerb_colour
 
 module P = PPrint
 let (!^ ) = P.(!^)

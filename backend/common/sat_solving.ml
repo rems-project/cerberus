@@ -192,7 +192,7 @@ let is_unsat (Assertions (_, _, strs)) =
         Printf.sprintf "(declare-fun %s () %s)" str_name str_sort :: acc
       ) !declared_consts *) (List.filter (fun z -> z <> "") (Dlist.toList strs))
     ) in
-  Debug_ocaml.print_debug 3 [] (fun () -> "IS UNSAT?\n" ^ str_problem ^ "\n=================================\n");
+  Cerb_debug.print_debug 3 [] (fun () -> "IS UNSAT?\n" ^ str_problem ^ "\n=================================\n");
   let ic, oc = Unix.open_process "z3 -nw -t:100 -smt2 -in" in
   Stdlib.output_string oc (str_problem ^ "\n(check-sat)\n(exit)\n");
   Stdlib.flush oc;
@@ -207,7 +207,7 @@ let is_unsat (Assertions (_, _, strs)) =
   | "unsat\n" ->
       true
   | output ->
-      Debug_ocaml.print_debug 3 [] (fun () -> "DEBUG Z3 ==> " ^ output);
+      Cerb_debug.print_debug 3 [] (fun () -> "DEBUG Z3 ==> " ^ output);
       false
 
 let add_mem_constraint constr (Assertions (n, addrs, asserts)) =
@@ -215,14 +215,14 @@ let add_mem_constraint constr (Assertions (n, addrs, asserts)) =
 
 
 let check constr (Assertions (n, addrs, strs)) =
-  Debug_ocaml.print_debug 3 [] (fun () -> "CHECKING [" ^ string_of_int n ^ "]" ^ (Pp_utils.to_plain_string (Pp_defacto_memory.pp_mem_constraint constr)) ^ "\n");
+  Cerb_debug.print_debug 3 [] (fun () -> "CHECKING [" ^ string_of_int n ^ "]" ^ (Pp_utils.to_plain_string (Pp_defacto_memory.pp_mem_constraint constr)) ^ "\n");
   let assert_strs = assertion_of_memory_constraint constr in
   if is_unsat (Assertions (n, addrs, Dlist.append (Dlist.dlist_fromList (List.map (fun z -> Printf.sprintf "(assert %s)" z) assert_strs)) strs)) then
-    (Debug_ocaml.print_debug 3 [] (fun () -> "check returned FALSE");
+    (Cerb_debug.print_debug 3 [] (fun () -> "check returned FALSE");
     Some false)
   else if is_unsat (Assertions (n, addrs, Dlist.append (Dlist.dlist_fromList (List.map (fun z -> Printf.sprintf "(assert (not %s))" z) assert_strs)) strs)) then
-    (Debug_ocaml.print_debug 3 [] (fun () -> "check returned TRUE");
+    (Cerb_debug.print_debug 3 [] (fun () -> "check returned TRUE");
     Some true)
   else
-    (Debug_ocaml.print_debug 3 [] (fun () -> "check returned NONE");
+    (Cerb_debug.print_debug 3 [] (fun () -> "check returned NONE");
     None)

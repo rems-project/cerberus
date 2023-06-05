@@ -37,7 +37,7 @@ let region (b, e) cur =
 let regions xs cur =
   match xs with
     | [] ->
-        failwith "Location_ocaml.region, xs must not be []"
+        failwith "Cerb_location.region, xs must not be []"
     | _ ->
         (* TODO: need to sort the regions *)
         Loc_regions (xs, cur)
@@ -231,7 +231,7 @@ let location_to_string ?(charon=false) loc =
 
 
 module P = PPrint
-open Pp_prelude
+open Cerb_pp_prelude
 
 let print_location loc =
   let print_lex pos =
@@ -242,30 +242,30 @@ let print_location loc =
   in
   let print_cursor = function
     | NoCursor ->
-        !^ "Location_ocaml.NoCursor"
+        !^ "Cerb_location.NoCursor"
     | PointCursor pos ->
-        !^ "Location_ocaml.PointCursor" ^^^ P.parens (print_lex pos)
+        !^ "Cerb_location.PointCursor" ^^^ P.parens (print_lex pos)
     | RegionCursor (b, e) ->
-        !^ "Location_ocaml.RegionCursor"
+        !^ "Cerb_location.RegionCursor"
         ^^^ P.parens (print_lex b)
         ^^^ P.parens (print_lex e)
   in
   match loc with
     | Loc_unknown ->
-        !^"Location_ocaml.unknown"
+        !^"Cerb_location.unknown"
     | Loc_other str ->
-        !^ "Location_ocaml.other" ^^ P.parens (P.dquotes !^ (String.escaped str))
+        !^ "Cerb_location.other" ^^ P.parens (P.dquotes !^ (String.escaped str))
     | Loc_point pos ->
-        !^"Location_ocaml.point" ^^^ P.parens (print_lex pos)
+        !^"Cerb_location.point" ^^^ P.parens (print_lex pos)
     | Loc_region (pos1, pos2, cur) ->
-        !^"Location_ocaml.region"
+        !^"Cerb_location.region"
         ^^^ P.parens (print_lex pos1)
         ^^^ P.parens (print_lex pos2)
         ^^^ P.parens (print_cursor cur)
   | Loc_regions (xs, cur) ->
       let print_pair pp (x, y) = P.parens (pp x ^^ P.comma ^^^ pp y) in
       let print_list pp xs = P.brackets (P.separate_map (P.semi ^^ P.space) pp xs) in
-      !^"Location_ocaml.regions"
+      !^"Cerb_location.regions"
       ^^^ P.parens (print_list (print_pair print_lex) xs)
       ^^^ P.parens (print_cursor cur)
 
@@ -290,7 +290,7 @@ let to_json loc =
         `Assoc [("begin", of_pos pos1); ("end", of_pos pos2)]
 
 
-open Colour
+open Cerb_colour
 
 let pp_location =
   let last_pos = ref Lexing.dummy_pos in
@@ -364,7 +364,7 @@ let string_at_line fname lnum cpos =
       let ic = open_in fname in
       let sub l start n =
         if start + n < String.length l then String.sub l start n
-        else Printf.sprintf "(?error: Location_ocaml.string_at_line with %S, %i-%i)"
+        else Printf.sprintf "(?error: Cerb_location.string_at_line with %S, %i-%i)"
                l start n
       in
       let l =

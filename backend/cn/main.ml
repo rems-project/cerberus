@@ -34,9 +34,9 @@ module Log : sig
 end = struct
   let print_count = ref 0
   let print_log_file (filename, file) =
-    if !Debug_ocaml.debug_level > 0 then
+    if !Cerb_debug.debug_level > 0 then
       begin
-        Colour.do_colour := false;
+        Cerb_colour.do_colour := false;
         let count = !print_count in
         let file_path = 
           (Filename.get_temp_dir_name ()) ^ 
@@ -45,7 +45,7 @@ end = struct
         in
         print_file file_path file;
         print_count := 1 + !print_count;
-        Colour.do_colour := true;
+        Cerb_colour.do_colour := true;
       end
 end
 
@@ -58,7 +58,7 @@ open Log
 
 let frontend incl_dirs astprints filename state_file =
   let open CF in
-  Global_ocaml.set_cerb_conf "Cn" false Random false Basic false false false false;
+  Cerb_global.set_cerb_conf "Cn" false Random false Basic false false false false;
   Ocaml_implementation.set Ocaml_implementation.HafniumImpl.impl;
   Switches.set ["inner_arg_temps"];
   let@ stdlib = load_core_stdlib () in
@@ -123,7 +123,7 @@ let main
       if print_level > 0 then
         CF.Pp_errors.fatal ("print level must be 0 for json output");
     end;
-  Debug_ocaml.debug_level := debug_level;
+  Cerb_debug.debug_level := debug_level;
   Pp.loc_pp := loc_pp;
   Pp.print_level := print_level;
   Pp.print_timestamps := not no_timestamps;
@@ -139,7 +139,7 @@ let main
     handle_frontend_error 
       (frontend incl_dirs astprints filename state_file)
   in
-  Debug_ocaml.maybe_open_csv_timing_file ();
+  Cerb_debug.maybe_open_csv_timing_file ();
   Pp.maybe_open_times_channel 
     (match (csv_times, log_times) with
      | (Some times, _) -> Some (times, "csv")
@@ -161,7 +161,7 @@ let main
               List.iteri(fun i xs ->
                 List.iteri (fun j (loc, str) ->
                   Printf.fprintf stderr "[%d] [%d] ==> %s -- '%s'\n"
-                  i j (Location_ocaml.simple_location loc) (String.escaped str)
+                  i j (Cerb_location.simple_location loc) (String.escaped str)
                 ) xs
               ) (Source_injection.get_magics_of_statement stmt)
             ) ail_prog.function_definitions; *)
@@ -189,7 +189,7 @@ let main
      end 
      with
      | exc -> 
-        Debug_ocaml.maybe_close_csv_timing_file ();
+        Cerb_debug.maybe_close_csv_timing_file ();
         Pp.maybe_close_times_channel ();
         Printexc.raise_with_backtrace exc (Printexc.get_raw_backtrace ())
 

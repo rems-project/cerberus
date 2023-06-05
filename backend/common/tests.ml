@@ -1,10 +1,10 @@
-open Global_ocaml
+open Cerb_global
 open Core
 module E = Exception
 
 (* use this to print a halting error message *)
 let error str =
-  prerr_endline $ Colour.ansi_format [Colour.Red] ("ERROR: " ^ str);
+  prerr_endline $ Cerb_colour.ansi_format [Cerb_colour.Red] ("ERROR: " ^ str);
   exit 1
 
 (* The return type of Core_run.run *)

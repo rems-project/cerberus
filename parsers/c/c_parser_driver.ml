@@ -27,10 +27,10 @@ let parse lexbuf =
     Exception.except_return @@ C_parser.translation_unit lexer_cn_hack lexbuf
   with
   | C_lexer.Error err ->
-    let loc = Location_ocaml.point @@ Lexing.lexeme_start_p lexbuf in
+    let loc = Cerb_location.point @@ Lexing.lexeme_start_p lexbuf in
     Exception.fail (loc, Errors.CPARSER err)
   | C_parser.Error ->
-    let loc = Location_ocaml.(region (Lexing.lexeme_start_p lexbuf, Lexing.lexeme_end_p lexbuf) NoCursor) in
+    let loc = Cerb_location.(region (Lexing.lexeme_start_p lexbuf, Lexing.lexeme_end_p lexbuf) NoCursor) in
     Exception.fail (loc, Errors.CPARSER (Errors.Cparser_unexpected_token (Lexing.lexeme lexbuf)))
   | Failure msg ->
     prerr_endline "CPARSER_DRIVER (Failure)";
@@ -38,8 +38,8 @@ let parse lexbuf =
   | Lexer_feedback.KnR_declaration loc ->
     Exception.fail (loc, Errors.CPARSER Errors.Cparser_KnR_declaration)
   | exn ->
-    let loc = Location_ocaml.point @@ Lexing.lexeme_start_p lexbuf in
-    failwith @@ "CPARSER_DRIVER(" ^ Location_ocaml.location_to_string loc ^ ")" ^ " ==> " ^ Stdlib.Printexc.to_string exn
+    let loc = Cerb_location.point @@ Lexing.lexeme_start_p lexbuf in
+    failwith @@ "CPARSER_DRIVER(" ^ Cerb_location.location_to_string loc ^ ")" ^ " ==> " ^ Stdlib.Printexc.to_string exn
 
 let parse_from_channel input =
   let read f input =

@@ -88,12 +88,12 @@ let rec string_of_trace tact_map t =
   in *) match t with
        | [] -> ""
        | (r, None) :: xs ->
-           Colour.ansi_format [Colour.Blue] (string_of_dyn_rule r) ^ "\n" ^
+           Cerb_colour.ansi_format [Cerb_colour.Blue] (string_of_dyn_rule r) ^ "\n" ^
            string_of_trace tact_map xs
        | (r, Some (bs, a)) :: xs ->
-           Colour.ansi_format [Colour.Blue] (string_of_dyn_rule r) ^ " ==> " ^
-           (* Colour.ansi_format [Colour.Green] (f $ Pset.elements bs)  ^ *)
-           Colour.ansi_format [Colour.Red]  
+           Cerb_colour.ansi_format [Cerb_colour.Blue] (string_of_dyn_rule r) ^ " ==> " ^
+           (* Cerb_colour.ansi_format [Cerb_colour.Green] (f $ Pset.elements bs)  ^ *)
+           Cerb_colour.ansi_format [Cerb_colour.Red]  
            (Nat_big_num.to_string a) ^ ": " ^ string_of_trace_action (Pmap.find a tact_map) ^ "\n" ^ string_of_trace tact_map xs
 
 

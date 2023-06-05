@@ -382,7 +382,7 @@ let load_character_array elem_ty ptrval prec_n_opt =
 
 
 val format_string_of_float: nat -> Float.float -> string
-declare ocaml target_rep function format_string_of_float = `Decode_ocaml.format_string_of_float`
+declare ocaml target_rep function format_string_of_float = `Decode.format_string_of_float`
 
 let is_illtyped_conversion expected_ty arg_ty =
   let arg_ty' = Implementation.normalise_enum arg_ty in

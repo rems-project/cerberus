@@ -1,6 +1,6 @@
 open Cerb_frontend
 open Cerb_backend
-open Global_ocaml
+open Cerb_global
 open Cerb_runtime
 open Pipeline
 
@@ -13,7 +13,7 @@ let io, get_progress =
   let progress = ref 0 in
   { pass_message = begin
         let ref = ref 0 in
-        fun str -> Debug_ocaml.print_success (Printf.sprintf "[%0.4f] %d. %s" (Sys.time ()) !ref str);
+        fun str -> Cerb_debug.print_success (Printf.sprintf "[%0.4f] %d. %s" (Sys.time ()) !ref str);
                    incr ref;
                    return ()
       end;
@@ -30,11 +30,11 @@ let io, get_progress =
                  return ();
       end;
     print_debug = begin
-      fun n mk_str -> Debug_ocaml.print_debug n [] mk_str;
+      fun n mk_str -> Cerb_debug.print_debug n [] mk_str;
                       return ()
       end;
     warn = begin
-      fun mk_str -> Debug_ocaml.warn [] mk_str;
+      fun mk_str -> Cerb_debug.warn [] mk_str;
                     return ()
       end;
   }, fun () -> !progress
@@ -51,7 +51,7 @@ let frontend (conf, io) filename core_std =
     core_frontend (conf, io) core_std ~filename
     >>= core_passes (conf, io) ~filename
   else
-    Exception.fail (Location_ocaml.unknown, Errors.UNSUPPORTED
+    Exception.fail (Cerb_location.unknown, Errors.UNSUPPORTED
                       "The file extention is not supported")
 
 let create_cpp_cmd cpp_cmd nostdinc macros_def macros_undef incl_dirs incl_files nolibc =
@@ -110,7 +110,7 @@ let cerberus debug_level progress core_obj
              fs_dump fs trace
              output_name
              files args_opt =
-  Debug_ocaml.debug_level := debug_level;
+  Cerb_debug.debug_level := debug_level;
   let cpp_cmd =
     create_cpp_cmd cpp_cmd nostdinc macros macros_undef incl_dirs incl_files nolibc
   in
@@ -126,7 +126,7 @@ let cerberus debug_level progress core_obj
     (* Looking for and parsing the core standard library *)
     if iso_switches then begin
       if switches <> [] then
-        Debug_ocaml.warn [] (fun () -> "The --iso argument overrides --switches");
+        Cerb_debug.warn [] (fun () -> "The --iso argument overrides --switches");
       Switches.set_iso_switches ()
     end else
       Switches.set switches;
@@ -184,7 +184,7 @@ let cerberus debug_level progress core_obj
                     0
                 with
                   | Z.Overflow ->
-                      Debug_ocaml.warn [] (fun () -> "Return value overlows (wrapping it down to 255)");
+                      Cerb_debug.warn [] (fun () -> "Return value overlows (wrapping it down to 255)");
                       Z .(to_int (n mod (of_int 256)))
                 end
             | [(_, (Undefined _ | Error _))] ->

@@ -12,7 +12,7 @@ open Core
 open Core_aux
 open Impl_mem
 open Printf
-open Util
+open Cerb_util
 open Z3
 
 module Caux = Core_aux
@@ -1883,7 +1883,7 @@ module BmcZ3 = struct
         return None
       else begin
         mk_create ctype ctype (* TODO: alignment *)
-            (PrefSource(Location_ocaml.other "param", [fn_to_check; sym]))
+            (PrefSource(Cerb_location.other "param", [fn_to_check; sym]))
             >>= fun (_,action) ->
         return (Some action)
       end
@@ -2119,7 +2119,7 @@ module BmcBind = struct
 
   type binding =
   | BindLet of Expr.expr (* Normal let binding *)
-  | BindAssume of Location_ocaml.t option * Expr.expr
+  | BindAssume of Cerb_location.t option * Expr.expr
 
   (*let is_bind_let = function
     | BindLet _ -> true
@@ -2312,7 +2312,7 @@ module BmcBind = struct
     | PEbmc_assume pe ->
         let loc = Annot.get_loc annots in
         (*assert (is_some loc);
-        print_endline ((Location_ocaml.location_to_string (Option.get loc)));*)
+        print_endline ((Cerb_location.location_to_string (Option.get loc)));*)
 
         bind_pe pe >>= fun bound_pe ->
         (* TODO: move this to a separate phase for easier debugging *)
@@ -2508,7 +2508,7 @@ module BmcBind = struct
           return []
 
     let bind_file (file: unit typed_file) (fn_to_check: sym_ty)
-                  : (Expr.expr list * (Location_ocaml.t option * Expr.expr) list) eff =
+                  : (Expr.expr list * (Cerb_location.t option * Expr.expr) list) eff =
       mapM bind_globs file.globs >>= fun bound_globs ->
       (match Pmap.lookup fn_to_check file.funs with
       | Some (Proc(annot, _, bTy, params, e)) ->

@@ -313,7 +313,7 @@ let pp : 'bt 'a. ?atomic:bool -> ?f:('bt term -> Pp.doc -> Pp.doc) -> 'bt term -
 
 
 
-open Pp_prelude 
+open Cerb_pp_prelude 
 open Cerb_frontend.Pp_ast
 
 let rec dtree (IT (it_, bt)) =

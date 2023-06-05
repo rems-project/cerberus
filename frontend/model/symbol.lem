@@ -41,7 +41,7 @@ type digest
 declare ocaml target_rep type digest = `Digest.t`
 
 val digest: unit -> digest
-declare ocaml target_rep function digest = `Fresh.digest`
+declare ocaml target_rep function digest = `Cerb_fresh.digest`
 
 val digest_compare: digest -> digest ->int 
 declare ocaml target_rep function digest_compare = `Digest.compare`
@@ -221,7 +221,7 @@ type prefix =
 
 (* TODO: "nat", "int" *)
 val fresh_int: unit -> nat
-declare ocaml target_rep function fresh_int = `Fresh.int`
+declare ocaml target_rep function fresh_int = `Cerb_fresh.int`
 
 val digest_of_sym: sym -> digest
 let digest_of_sym (Symbol dig _ _) = dig

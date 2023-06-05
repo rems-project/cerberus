@@ -2,12 +2,12 @@
 open Core_rewriter
 open Core
 
-open Debug_ocaml
+open Cerb_debug
 
 
 (* TODO: move this to Core_aux *)
 let rec match_pattern_pexpr loc_opt (Pattern (annots_pat, pat_) as pat) (Pexpr (annots_pe, bTy, pexpr_) as pexpr)
-  : [ `MATCHED of (pattern * pexpr) option * (Symbol.sym * Location_ocaml.t option * [ `VAL of value | `SYM of Symbol.sym ]) list | `MISMATCHED ] =
+  : [ `MATCHED of (pattern * pexpr) option * (Symbol.sym * Cerb_location.t option * [ `VAL of value | `SYM of Symbol.sym ]) list | `MISMATCHED ] =
   let wrap_pat z = Pattern (annots_pat, z) in
   let wrap_pexpr z = Pexpr (annots_pe, bTy, z) in
   match pat_, pexpr_ with
@@ -88,7 +88,7 @@ Vloaded (LVspecified oval)) ->
 
 
 let rec match_pattern_expr (Pattern (annots_pat, pat_) as pat) (Expr (annots_e, expr_) as expr)
-   : [ `MATCHED of (pattern * 'a expr) option * (Symbol.sym * Location_ocaml.t option * [ `VAL of value | `SYM of Symbol.sym ]) list | `MISMATCHED ] =
+   : [ `MATCHED of (pattern * 'a expr) option * (Symbol.sym * Cerb_location.t option * [ `VAL of value | `SYM of Symbol.sym ]) list | `MISMATCHED ] =
   let wrap_pat z = Pattern (annots_pat, z) in
   let wrap_expr z = Expr (annots_e, z) in
   match pat_, expr_ with
@@ -453,7 +453,7 @@ let core_peval file : 'bty RW.rewriter =
 
   let eval_pexpr pexpr =
     let emp = Pmap.empty Symbol.instance_Basic_classes_Ord_Symbol_sym_dict.compare_method in
-    Core_eval.eval_pexpr Location_ocaml.unknown None emp [] None file pexpr in
+    Core_eval.eval_pexpr Cerb_location.unknown None emp [] None file pexpr in
   
   let to_unfold_funs =
     (* The list of stdlib functions to be unfolded (see PEcall) *)

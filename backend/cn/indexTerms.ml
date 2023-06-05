@@ -464,13 +464,13 @@ let member_ ~member_bt (tag, it, member) =
 let (%.) struct_decls t member =
   let tag = match bt t with
     | BT.Struct tag -> tag
-    | _ -> Debug_ocaml.error "illtyped index term. not a struct"
+    | _ -> Cerb_debug.error "illtyped index term. not a struct"
   in
   let member_bt = match List.assoc_opt Id.equal member
          (Memory.member_types (SymMap.find tag struct_decls))
   with
     | Some sct -> BT.of_sct sct
-    | None -> Debug_ocaml.error ("struct " ^ Sym.pp_string tag ^
+    | None -> Cerb_debug.error ("struct " ^ Sym.pp_string tag ^
         " does not have member " ^ (Id.pp_string member))
   in
   member_ ~member_bt (tag, t, member)
@@ -622,7 +622,7 @@ let map_get_ v arg =
   match bt v with
   | BT.Map (_, rbt) ->
      IT (MapGet (v, arg), rbt)
-  | _ -> Debug_ocaml.error "illtyped index term"
+  | _ -> Cerb_debug.error "illtyped index term"
 let map_def_ (s, abt) body =
   IT (MapDef ((s, abt), body), BT.Map (abt, bt body))
 
@@ -699,7 +699,7 @@ let value_check alignment (struct_layouts : Memory.struct_decls) ct about =
     | Integer it ->
        in_range about (z_ (min_integer_type it), z_ (max_integer_type it))
     | Array (it, None) ->
-       Debug_ocaml.error "todo: 'representable' for arrays with unknown length"
+       Cerb_debug.error "todo: 'representable' for arrays with unknown length"
     | Array (item_ct, Some n) ->
        (* let partiality = partiality_check_array ~length:n ~item_ct about in *)
        let i_s, i = fresh BT.Integer in
@@ -720,7 +720,7 @@ let value_check alignment (struct_layouts : Memory.struct_decls) ct about =
              ) (SymMap.find tag struct_layouts)
          end
     | Function _ ->
-       Debug_ocaml.error "todo: function types"
+       Cerb_debug.error "todo: function types"
   in
   aux ct about
 

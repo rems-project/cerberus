@@ -14,7 +14,7 @@ end
 
 module Rewriter = functor (Eff: Monad) -> struct
   type state = {
-    rw_loc: Location_ocaml.t;
+    rw_loc: Cerb_location.t;
     rw_has_changed: bool;
   }
 
@@ -53,13 +53,13 @@ module Rewriter = functor (Eff: Monad) -> struct
     fun st -> (st, ma)
   
   let runM (ma: 'a t) : 'a Eff.t =
-    snd (ma { rw_loc= Location_ocaml.unknown; rw_has_changed= false })
+    snd (ma { rw_loc= Cerb_location.unknown; rw_has_changed= false })
   
   let update_loc loc : unit t =
     fun st ->
       ({ st with rw_loc= loc }, Eff.return ())
   
-  let get_loc : Location_ocaml.t t =
+  let get_loc : Cerb_location.t t =
     fun st ->
       (st, Eff.return st.rw_loc)
   
@@ -88,7 +88,7 @@ module Rewriter = functor (Eff: Monad) -> struct
     | ChangeDoChildrenPost of ('a Eff.t) * ('a -> 'a Eff.t) (* NOTE: the name comes from CIL *)
   
   type 'a rw =
-    | RW of (Location_ocaml.t -> 'a -> 'a action)
+    | RW of (Cerb_location.t -> 'a -> 'a action)
   
   type 'bty rewriter = {
       rw_pexpr : (('bty, Symbol.sym) C.generic_pexpr) rw;

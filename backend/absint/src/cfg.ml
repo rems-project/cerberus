@@ -128,7 +128,7 @@ type ('a, 'bty) texpr =
   | TEmemop of Mem_common.memop * ('a, 'bty) texpr list
   | TEimpl of Implementation.implementation_constant
   | TEconstrained of (Mem.mem_iv_constraint * ('a, 'bty) texpr) list
-  | TEundef of Location_ocaml.t * Undefined.undefined_behaviour
+  | TEundef of Cerb_location.t * Undefined.undefined_behaviour
   | TEerror of string * ('a, 'bty) texpr
   | TEctor of ctor * ('a, 'bty) texpr list
   | TEarray_shift of ('a, 'bty) texpr * ctype * ('a, 'bty) texpr
@@ -186,7 +186,7 @@ type 'a cfg_file =
     impl: unit; (* TODO *)
     globs: int * (unit, ('a, 'a) transfer) Pgraph.graph;
     funs: (Symbol.sym, 'a fun_map_decl) Pmap.map;
-    funinfo: (Symbol.sym, (Location_ocaml.t * Annot.attributes * ctype * (Symbol.sym option * ctype) list * bool * bool)) Pmap.map
+    funinfo: (Symbol.sym, (Cerb_location.t * Annot.attributes * ctype * (Symbol.sym option * ctype) list * bool * bool)) Pmap.map
   }
 
 

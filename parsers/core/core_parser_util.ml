@@ -22,7 +22,7 @@ type result =
   | Rstd  of (string, Symbol.sym) Pmap.map (* Map of ailnames *) * unit Core.fun_map
   | Rimpl of Core.impl (* * unit Core.fun_map *)
 
-exception Core_error of (Location_ocaml.t * Errors.core_parser_cause)
+exception Core_error of (Cerb_location.t * Errors.core_parser_cause)
 
 type token =
   | CONST

@@ -1,5 +1,5 @@
 open Cerb_frontend
-open Global_ocaml
+open Cerb_global
 
 external terminal_size: unit -> (int * int) option = "terminal_size"
 
@@ -22,8 +22,8 @@ let run_pp ?(remove_path = true) with_ext doc =
          (true, Stdlib.open_out filename)
       | None ->
           (false, Stdlib.stdout) in
-  let saved = !Colour.do_colour in
-  Colour.do_colour := not is_fout;
+  let saved = !Cerb_colour.do_colour in
+  Cerb_colour.do_colour := not is_fout;
   let term_col = match terminal_size () with
     | Some (_, col) -> col
     | _ -> 80
@@ -31,7 +31,7 @@ let run_pp ?(remove_path = true) with_ext doc =
   PPrint.ToChannel.pretty 1.0 term_col oc doc;
   if is_fout then
     close_out oc;
-  Colour.do_colour := saved
+  Cerb_colour.do_colour := saved
 
 (* The path to the Core standard library *)
 let core_stdlib_path () =
@@ -136,13 +136,13 @@ let cpp (conf, io) ~filename =
     | _, WSIGNALED n
     | _, WSTOPPED n ->
       if n <> 0 then
-        Exception.fail (Location_ocaml.unknown, Errors.CPP (String.concat "\n" err))
+        Exception.fail (Cerb_location.unknown, Errors.CPP (String.concat "\n" err))
       else
         return @@ String.concat "\n" out
   end ()
 
 let c_frontend ?(cnnames=[]) (conf, io) (core_stdlib, core_impl) ~filename =
-  Fresh.set_digest filename;
+  Cerb_fresh.set_digest filename;
   let wrap_fout z = if List.mem FOut conf.ppflags then z else None in
   (* -- *)
   let parse filename file_content =
@@ -209,7 +209,7 @@ let c_frontend ?(cnnames=[]) (conf, io) (core_stdlib, core_impl) ~filename =
   return (Some cabs_tunit, Some (markers_env, ailtau_prog), core_file)
 
 let core_frontend (conf, io) (core_stdlib, core_impl) ~filename =
-  Fresh.set_digest filename;
+  Cerb_fresh.set_digest filename;
   io.print_debug 2 (fun () -> "Using the Core frontend") >>= fun () ->
   Core_parser_driver.parse core_stdlib filename >>= function
     | Core_parser_util.Rfile (sym_main, globs, funs, tagDefs) ->
@@ -523,11 +523,11 @@ let interp_backend io core_file ~args ~batch ~fs ~driver_conf =
                     Z.to_int n
                   with
                     | Z.Overflow ->
-                        Debug_ocaml.warn [] (fun () -> "Return value overlows (wrapping it down to 255)");
+                        Cerb_debug.warn [] (fun () -> "Return value overlows (wrapping it down to 255)");
                         Z .(to_int (n mod (of_int 256)))
                   end 
               | None ->
-                  Debug_ocaml.warn [] (fun () -> "Return value was not a (simple) specified integer");
+                  Cerb_debug.warn [] (fun () -> "Return value was not a (simple) specified integer");
                   0
           end)
       | (cval :: _) ->
@@ -547,7 +547,7 @@ type 'a core_dump =
     dump_globs: (Symbol.sym * ('a, unit) Core.generic_globs) list;
     dump_funs: (Symbol.sym * (unit, 'a) Core.generic_fun_map_decl) list;
     dump_extern: (Symbol.identifier * (Symbol.sym list * Core.linking_kind)) list;
-    dump_funinfo: (Symbol.sym * (Location_ocaml.t * Annot.attributes * Ctype.ctype * (Symbol.sym option * Ctype.ctype) list * bool * bool)) list;
+    dump_funinfo: (Symbol.sym * (Cerb_location.t * Annot.attributes * Ctype.ctype * (Symbol.sym option * Ctype.ctype) list * bool * bool)) list;
     dump_loop_attributes: (int * Annot.attributes) list;
   }
 
@@ -566,7 +566,7 @@ let read_core_object (core_stdlib, core_impl) fname =
   let ic = open_in_bin fname in
   let v = input_line ic in
   if v <> Version.version then
-    Debug_ocaml.warn [] (fun () -> "WARNING: read core_object file produced with a different version of Cerberus => " ^ v);
+    Cerb_debug.warn [] (fun () -> "WARNING: read core_object file produced with a different version of Cerberus => " ^ v);
   let dump = Marshal.from_channel ic in
   close_in ic;
   { main=    dump.main;

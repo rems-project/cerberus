@@ -4,11 +4,11 @@ open Errors
 open TypingError
 open Constraint
 
-open Global_ocaml
-open Location_ocaml
+open Cerb_global
+open Cerb_location
 
-open Colour
-open Pp_prelude
+open Cerb_colour
+open Cerb_pp_prelude
 
 type kind =
   | Error
@@ -418,7 +418,7 @@ let string_of_core_typing_cause = function
   | UndefinedStartup sym ->
       "undefined startup procedure '" ^ string_of_sym sym ^ "'"
   | Mismatch (str, expected, found) ->
-      (if !Debug_ocaml.debug_level > 0 then "(" ^ str ^ "):\n" else "") ^
+      (if !Cerb_debug.debug_level > 0 then "(" ^ str ^ "):\n" else "") ^
       "this expression is of type '" ^ string_of_bty found ^
       "' but an expression of type '" ^ string_of_bty expected ^ "' was expected"
   | MismatchBinaryOperator bop ->
@@ -428,11 +428,11 @@ let string_of_core_typing_cause = function
   | MismatchIf (then_bTy, else_bTy) ->
       "type mismatch in conditional expression ('" ^ string_of_bty then_bTy ^ "' and '" ^ string_of_bty else_bTy ^ "')"
   | MismatchExpected (str, expected, found) ->
-      (if !Debug_ocaml.debug_level > 0 then "(" ^ str ^ "):\n" else "") ^
+      (if !Cerb_debug.debug_level > 0 then "(" ^ str ^ "):\n" else "") ^
       "this expression is of type '" ^ found ^
       "' but an expression of type '" ^ string_of_bty expected ^ "' was expected"
   | MismatchFound (str, expected, m_found) ->
-      (if !Debug_ocaml.debug_level > 0 then "(" ^ str ^ "):\n" else "") ^
+      (if !Cerb_debug.debug_level > 0 then "(" ^ str ^ "):\n" else "") ^
       (match m_found with Some found -> "this expression is of type '" ^ string_of_bty found ^ "' but " | None -> "") ^
       "an expression of type '" ^ expected ^ "' was expected"
   | CFunctionExpected nm ->
@@ -473,7 +473,7 @@ let string_of_core_run_cause = function
   | Unknown_impl ->
       "unknown implementation constant"
   | Unresolved_symbol (loc, sym) ->
-      "unresolved symbol: " ^ (Pp_utils.to_plain_string (Pp_ail.pp_id sym)) ^ " at " ^ Location_ocaml.location_to_string loc
+      "unresolved symbol: " ^ (Pp_utils.to_plain_string (Pp_ail.pp_id sym)) ^ " at " ^ Cerb_location.location_to_string loc
 
 let string_of_core_parser_cause = function
   | Core_parser_invalid_symbol ->
@@ -578,7 +578,7 @@ let get_quote ref =
   let key =
     String.split_on_char ',' ref |> List.hd (* remove everything after ',' *)
   in
-  match Global_ocaml.n1570 () with
+  match Cerb_global.n1570 () with
   | Some (`Assoc xs) ->
     begin match List.assoc_opt key xs with
       | Some (`String b) -> "\n" ^ b
@@ -587,7 +587,7 @@ let get_quote ref =
   | _ -> failwith "Missing N1507 json file..."
 
 let make_message loc err k =
-  let (head, pos) = Location_ocaml.head_pos_of_location loc in
+  let (head, pos) = Cerb_location.head_pos_of_location loc in
   let kind = string_of_kind k in
   let msg = ansi_format ~err:true [Bold] (short_message err) in
   let rec string_of_refs = function
@@ -600,7 +600,7 @@ let make_message loc err k =
     | [ref] -> ansi_format ~err:true [Bold] ref ^ ": " ^ get_quote ref
     | ref::refs -> ansi_format ~err:true [Bold] ref ^ ": " ^ get_quote ref ^ "\n\n" ^ string_of_quotes refs
   in
-  match Global_ocaml.verbose (), get_std_ref err with
+  match Cerb_global.verbose (), get_std_ref err with
   | Basic, _
   | _, NoRef ->
       Printf.sprintf "%s %s %s\n%s" head kind msg pos

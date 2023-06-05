@@ -1,7 +1,7 @@
 open Global
 open Cabs0
 
-open Colour
+open Cerb_colour
 
 let ($) f x = f x
 let (-|) f g x = f (g x)

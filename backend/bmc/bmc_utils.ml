@@ -13,7 +13,7 @@ open Z3.Arithmetic
 type sym_ty = Sym.sym
 
 type vc_debug =
-| VcDebugUndef of Location_ocaml.t * Undefined.undefined_behaviour
+| VcDebugUndef of Cerb_location.t * Undefined.undefined_behaviour
 | VcDebugStr of string
 
 type bmc_vc = Expr.expr * vc_debug
@@ -191,7 +191,7 @@ let ident_cmp = fun ident1 ident2 ->
 (* ========== Core memory functions ============= *)
 let is_null (ptr: Impl_mem.pointer_value) : bool =
   let (Nondeterminism.ND f) =
-    Impl_mem.eq_ptrval Location_ocaml.unknown ptr (Impl_mem.null_ptrval Ctype.void) in
+    Impl_mem.eq_ptrval Cerb_location.unknown ptr (Impl_mem.null_ptrval Ctype.void) in
   match f (Impl_mem.initial_mem_state) with
   | (Nondeterminism.NDactive b,_) -> b
   | _ -> assert false
@@ -246,7 +246,7 @@ let cartesian_product (xs: 'a list) (ys: 'b list) : ('a * 'b) list =
 
 (* ========== Debug ========== *)
 let debug_print level str =
-  Debug_ocaml.print_debug level [] (fun () -> str)
+  Cerb_debug.print_debug level [] (fun () -> str)
 
 let dprintf = Printf.printf
 
@@ -310,7 +310,7 @@ let read_file filename =
 let vc_debug_to_str (dbg: vc_debug) =
   match dbg with
   | VcDebugUndef (loc, ub) ->
-      Printf.sprintf "(%s,%s)" (Location_ocaml.location_to_string loc)
+      Printf.sprintf "(%s,%s)" (Cerb_location.location_to_string loc)
                                (Undefined.stringFromUndefined_behaviour ub)
   | VcDebugStr str -> str
 

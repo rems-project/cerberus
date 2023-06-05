@@ -102,15 +102,17 @@ ui:
 	make -C public
 
 #### LEM sources for the frontend
-LEM_PRELUDE       = utils.lem global.lem loc.lem annot.lem bimap.lem \
-                    dlist.lem debug.lem enum.lem state.lem symbol.lem \
+LEM_RENAMED = global.lem loc.lem debug.lem decode.lem
+
+LEM_PRELUDE       = utils.lem annot.lem bimap.lem \
+                    dlist.lem enum.lem state.lem symbol.lem \
                     exception.lem product.lem float.lem any.lem
 LEM_CABS          = cabs.lem undefined.lem constraint.lem ctype.lem
 LEM_AIL           = typingError.lem errorMonad.lem ailSyntax.lem genTypes.lem
 LEM_CTYPE_AUX     = ctype_aux.lem
 LEM_CORE          = core.lem errors.lem core_aux.lem core_linking.lem
 LEM_CORE_TYPING   = core_typing.lem core_typing_aux.lem core_typing_effect.lem
-LEM_UTILS         = boot.lem decode.lem exception_undefined.lem multiset.lem \
+LEM_UTILS         = boot.lem exception_undefined.lem multiset.lem \
                     state_exception.lem state_exception_undefined.lem \
                     std.lem monadic_parsing.lem fs.lem trace_event.lem \
 										cerb_attributes.lem
@@ -149,12 +151,18 @@ LEM_SRC_AUX       = $(LEM_PRELUDE) \
                     $(LEM_CORE_DYNAMICS) \
                     $(LEM_ELABORATION)
 
-LEM_SRC = $(addprefix frontend/model/, $(LEM_SRC_AUX)) \
+LEM_SRC_RENAMED = $(addprefix frontend/model/, $(LEM_RENAMED))
+
+LEM_SRC_NOT_RENAMED = $(addprefix frontend/model/, $(LEM_SRC_AUX)) \
 					$(addprefix frontend/concurrency/, $(LEM_CONC))
+
+LEM_SRC = $(LEM_SRC_RENAMED) \
+					$(LEM_SRC_NOT_RENAMED)
 ####
 
 PRELUDE_SRC_DIR = ocaml_frontend/generated
-OCAML_SRC = $(addprefix $(PRELUDE_SRC_DIR)/, $(addsuffix .ml, $(notdir $(basename $(LEM_SRC)))))
+OCAML_SRC = $(addprefix $(PRELUDE_SRC_DIR)/, $(addsuffix .ml, $(notdir $(basename $(LEM_SRC_NOT_RENAMED))))) \
+						$(addprefix $(PRELUDE_SRC_DIR)/lem_, $(addsuffix .ml, $(notdir $(basename $(LEM_RENAMED)))))
 
 # All targets generated at once thanks to [&:].
 $(OCAML_SRC)&: $(LEM_SRC)
@@ -167,7 +175,7 @@ $(OCAML_SRC)&: $(LEM_SRC)
 	@echo "[SED] patching things up in [$(PRELUDE_SRC_DIR)]"
 	$(Q)$(SEDI) -e "s/open Operators//" $(PRELUDE_SRC_DIR)/core_run.ml
 	$(Q)$(SEDI) -e "s/open Operators//" $(PRELUDE_SRC_DIR)/driver.ml
-	$(Q)$(SEDI) -e "s/Debug.DB_/Debug_ocaml.DB_/g" $(OCAML_SRC)
+	$(Q)$(SEDI) -e "s/Lem_debug.DB_/Cerb_debug.DB_/g" $(OCAML_SRC)
 	$(Q)$(SEDI) -e "1 s/.*/&[@@@warning \"-8\"]/" $(PRELUDE_SRC_DIR)/cmm_csem.ml
 	$(Q)$(SEDI) -e "1 s/.*/&[@@@warning \"-8\"]/" $(PRELUDE_SRC_DIR)/cmm_op.ml
 

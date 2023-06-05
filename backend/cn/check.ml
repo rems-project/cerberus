@@ -75,7 +75,7 @@ let rec infer_pattern (M_Pattern (loc, _, pattern)) =
         let@ bts = ListM.mapM infer_pattern pats in
         return (BT.Tuple bts)
     | M_Carray, _ ->
-        Debug_ocaml.error "todo: array types"
+        Cerb_debug.error "todo: array types"
     end
 
 
@@ -112,7 +112,7 @@ let rec old_pattern_match (M_Pattern (loc, _, pattern)) it =
         ) pats in
         return (List.concat all_as)
      | M_Carray, _ ->
-        Debug_ocaml.error "todo: array patterns"
+        Cerb_debug.error "todo: array patterns"
      | _ -> 
         assert false
 
@@ -147,7 +147,7 @@ let rec pattern_match (M_Pattern (loc, _, pattern)) it =
          ) pats in
          return (List.concat all_as)
       | M_Carray, _ ->
-         Debug_ocaml.error "todo: array patterns"
+         Cerb_debug.error "todo: array patterns"
       | _ -> 
          assert false
  
@@ -360,7 +360,7 @@ and check_struct (loc : loc) (tag : Sym.t)
     | [], [] -> 
        return []
     | ((id, mv) :: fields), ((smember, sbt) :: spec) ->
-       Debug_ocaml.error "mismatch in fields in infer_struct"
+       Cerb_debug.error "mismatch in fields in infer_struct"
     | [], ((member, _) :: _) ->
        fail (fun _ -> {loc; msg = Generic (!^"field" ^/^ Id.pp member ^^^ !^"missing")})
     | ((member,_) :: _), [] ->
@@ -371,7 +371,7 @@ and check_struct (loc : loc) (tag : Sym.t)
 
 and check_union (loc : loc) (tag : Sym.t) (id : Id.t) 
                 (mv : mem_value) : (lvt) m =
-  Debug_ocaml.error "todo: union types"
+  Cerb_debug.error "todo: union types"
 
 let rec check_object_value (loc : loc) ~(expect: BT.t)
           (ov : 'bty mu_object_value) : (lvt) m =
@@ -575,7 +575,7 @@ let check_conv_int loc ~expect (ct : Sctypes.ctype) arg =
   (* try to follow conv_int from runtime/libcore/std.core *)
   let ity = match ct with
     | Integer ity -> ity
-    | _ -> Debug_ocaml.error "conv_int applied to non-integer type"
+    | _ -> Cerb_debug.error "conv_int applied to non-integer type"
   in
   let@ provable = provable loc in
   let fail_unrepresentable () = 
@@ -641,7 +641,7 @@ let rec check_pexpr (pe : 'bty mu_pexpr) ~(expect:BT.t)
      let@ vt = check_value loc ~expect v in
      k vt
   | M_PEconstrained _ ->
-     Debug_ocaml.error "todo: PEconstrained"
+     Cerb_debug.error "todo: PEconstrained"
   | M_PEctor (ctor, pes) ->
      begin match ctor, pes with
      | M_Ctuple, _ -> 
@@ -688,16 +688,16 @@ let rec check_pexpr (pe : 'bty mu_pexpr) ~(expect:BT.t)
         fail (fun _ -> {loc; msg = Number_arguments {has = List.length pes; expect = 2}})
      end
   | M_CivCOMPL _ ->
-     Debug_ocaml.error "todo: CivCOMPL"
+     Cerb_debug.error "todo: CivCOMPL"
   | M_CivAND _ ->
-     Debug_ocaml.error "todo: CivAND"
+     Cerb_debug.error "todo: CivAND"
   | M_CivOR _ ->
-     Debug_ocaml.error "todo: CivOR"
+     Cerb_debug.error "todo: CivOR"
   | M_CivXOR (act, pe1, pe2) -> 
      let@ () = WellTyped.ensure_base_type loc ~expect Integer in
      let _ity = match act.ct with
        | Integer ity -> ity
-       | _ -> Debug_ocaml.error "M_CivXOR with non-integer c-type"
+       | _ -> Cerb_debug.error "M_CivXOR with non-integer c-type"
      in
      check_pexpr ~expect:Integer pe1 (fun vt1 ->
      check_pexpr ~expect:Integer pe2 (fun vt2 ->
@@ -830,7 +830,7 @@ let rec check_pexpr (pe : 'bty mu_pexpr) ~(expect:BT.t)
      let v = struct_ (tag, List.map2 (fun (nm, _) v -> (nm, v)) xs vs) in
      k v)
   | M_PEunion _ ->
-     Debug_ocaml.error "todo: PEunion"
+     Cerb_debug.error "todo: PEunion"
   | M_PEcfunction pe2 ->
      check_pexpr ~expect:Loc pe2 (fun ptr ->
      let@ global = get_global () in
@@ -872,7 +872,7 @@ let rec check_pexpr (pe : 'bty mu_pexpr) ~(expect:BT.t)
     end
   )
   | M_PEmemberof _ ->
-     Debug_ocaml.error "todo: M_PEmemberof"
+     Cerb_debug.error "todo: M_PEmemberof"
   | M_PEbool_to_integer pe ->
      let@ () = WellTyped.ensure_base_type loc ~expect Integer in
      check_pexpr ~expect:Bool pe (fun arg ->
@@ -1321,19 +1321,19 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
         let@ lvt = check_array_shift loc ~expect vt1 (act.loc, act.ct) vt2 in
         k lvt))
      | M_Memcpy _ (* (asym 'bty * asym 'bty * asym 'bty) *) ->
-        Debug_ocaml.error "todo: M_Memcpy"
+        Cerb_debug.error "todo: M_Memcpy"
      | M_Memcmp _ (* (asym 'bty * asym 'bty * asym 'bty) *) ->
-        Debug_ocaml.error "todo: M_Memcmp"
+        Cerb_debug.error "todo: M_Memcmp"
      | M_Realloc _ (* (asym 'bty * asym 'bty * asym 'bty) *) ->
-        Debug_ocaml.error "todo: M_Realloc"
+        Cerb_debug.error "todo: M_Realloc"
      | M_Va_start _ (* (asym 'bty * asym 'bty) *) ->
-        Debug_ocaml.error "todo: M_Va_start"
+        Cerb_debug.error "todo: M_Va_start"
      | M_Va_copy _ (* (asym 'bty) *) ->
-        Debug_ocaml.error "todo: M_Va_copy"
+        Cerb_debug.error "todo: M_Va_copy"
      | M_Va_arg _ (* (asym 'bty * actype 'bty) *) ->
-        Debug_ocaml.error "todo: M_Va_arg"
+        Cerb_debug.error "todo: M_Va_arg"
      | M_Va_end _ (* (asym 'bty) *) ->
-        Debug_ocaml.error "todo: M_Va_end"
+        Cerb_debug.error "todo: M_Va_end"
      end
   | Normal expect, M_Eaction (M_Paction (_pol, M_Action (aloc, action_))) ->
      begin match action_ with
@@ -1369,11 +1369,11 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
         in
         k ret)
      | M_CreateReadOnly (sym1, ct, sym2, _prefix) -> 
-        Debug_ocaml.error "todo: CreateReadOnly"
+        Cerb_debug.error "todo: CreateReadOnly"
      | M_Alloc (ct, sym, _prefix) -> 
-        Debug_ocaml.error "todo: Alloc"
+        Cerb_debug.error "todo: Alloc"
      | M_Kill (M_Dynamic, asym) -> 
-        Debug_ocaml.error "todo: Free"
+        Cerb_debug.error "todo: Free"
      | M_Kill (M_Static ct, pe) -> 
         let@ () = WellTyped.ensure_base_type loc ~expect Unit in
         let@ () = WellTyped.WCT.is_ct loc ct in
@@ -1441,21 +1441,21 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
         let@ value = load loc pointer act.ct in
         k value)
      | M_RMW (ct, sym1, sym2, sym3, mo1, mo2) -> 
-        Debug_ocaml.error "todo: RMW"
+        Cerb_debug.error "todo: RMW"
      | M_Fence mo -> 
-        Debug_ocaml.error "todo: Fence"
+        Cerb_debug.error "todo: Fence"
      | M_CompareExchangeStrong (ct, sym1, sym2, sym3, mo1, mo2) -> 
-        Debug_ocaml.error "todo: CompareExchangeStrong"
+        Cerb_debug.error "todo: CompareExchangeStrong"
      | M_CompareExchangeWeak (ct, sym1, sym2, sym3, mo1, mo2) -> 
-        Debug_ocaml.error "todo: CompareExchangeWeak"
+        Cerb_debug.error "todo: CompareExchangeWeak"
      | M_LinuxFence mo -> 
-        Debug_ocaml.error "todo: LinuxFemce"
+        Cerb_debug.error "todo: LinuxFemce"
      | M_LinuxLoad (ct, sym1, mo) -> 
-        Debug_ocaml.error "todo: LinuxLoad"
+        Cerb_debug.error "todo: LinuxLoad"
      | M_LinuxStore (ct, sym1, sym2, mo) -> 
-        Debug_ocaml.error "todo: LinuxStore"
+        Cerb_debug.error "todo: LinuxStore"
      | M_LinuxRMW (ct, sym1, sym2, mo) -> 
-        Debug_ocaml.error "todo: LinuxRMW"
+        Cerb_debug.error "todo: LinuxRMW"
      end
   | Normal expect, M_Eskip -> 
      let@ () = WellTyped.ensure_base_type loc ~expect Unit in
@@ -1506,7 +1506,7 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
   | _, M_Ebound e ->
      check_expr labels ~typ e k
   | _, M_End _ ->
-     Debug_ocaml.error "todo: End"
+     Cerb_debug.error "todo: End"
   | _, M_Elet (M_Pat p, e1, e2) ->
      let@ fin = begin_trace_of_pure_step (Some (Mu.M_Pat p)) e1 in
      let@ p_bt = infer_pattern p in

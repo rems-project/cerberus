@@ -82,7 +82,7 @@ exception ConversionFailed
 
 let assert_error loc msg = 
   Print.error loc msg []; 
-  if ! Debug_ocaml.debug_level > 0
+  if ! Cerb_debug.debug_level > 0
   then assert false
   else raise ConversionFailed
 

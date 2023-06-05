@@ -20,7 +20,7 @@ type debug_state = {
 *)
 
 let error str =
-  prerr_string (Colour.ansi_format ~err:true [Red] "internal error: ");
+  prerr_string (Cerb_colour.ansi_format ~err:true [Red] "internal error: ");
   prerr_endline str;
   failwith @@ "internal error: " ^ str
 
@@ -31,23 +31,23 @@ let get_debug_level () =
 
 let print_success msg =
   if !debug_level > 0 then
-    prerr_endline Colour.(ansi_format [Green] msg)
+    prerr_endline Cerb_colour.(ansi_format [Green] msg)
 
 let print_debug level _doms msg =
   if !debug_level >= level then
-    prerr_endline Colour.(ansi_format [Red] ("(debug " ^ string_of_int level ^ "): " ^ msg ()))
+    prerr_endline Cerb_colour.(ansi_format [Red] ("(debug " ^ string_of_int level ^ "): " ^ msg ()))
 
 let print_debug_located level doms loc msg =
-  print_debug level doms (fun () -> "[" ^ Location_ocaml.location_to_string loc ^ "] - " ^ msg ())
+  print_debug level doms (fun () -> "[" ^ Cerb_location.location_to_string loc ^ "] - " ^ msg ())
 
 let warn _doms msg =
   if !debug_level > 1 then
-    prerr_endline Colour.(ansi_format [Yellow] ("WARNING: " ^ msg ()))
+    prerr_endline Cerb_colour.(ansi_format [Yellow] ("WARNING: " ^ msg ()))
 
 (*
 let print_debug2 msg k =
   if !debug_level > 0 then
-    let _ = prerr_endline Colour.(ansi_format [Red] ("\x1b[31mDEBUG: " ^ msg ^ "\x1b[0m")) in k
+    let _ = prerr_endline Cerb_colour.(ansi_format [Red] ("\x1b[31mDEBUG: " ^ msg ^ "\x1b[0m")) in k
   else
     k
 *)

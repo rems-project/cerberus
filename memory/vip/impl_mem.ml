@@ -37,10 +37,10 @@ module AbsByte = struct
     ptrfrag_idx: int option; (* None case is 'none' from the paper *)
   }
 
-  let to_json json_of_prov b : Json.json =
+  let to_json json_of_prov b : Cerb_json.json =
     `Assoc [ ("prov", json_of_prov b. prov)
-           ; ("value", Json.of_option Json.of_char b.value)
-           ; ("ptrfrag_idx", Json.of_option Json.of_int b.ptrfrag_idx) ]
+           ; ("value", Cerb_json.of_option Cerb_json.of_char b.value)
+           ; ("ptrfrag_idx", Cerb_json.of_option Cerb_json.of_int b.ptrfrag_idx) ]
 end
 
 
@@ -180,7 +180,7 @@ let get = Nondeterminism.nd_get
 let put = Nondeterminism.nd_put
 let update = Nondeterminism.nd_update
 
-let fail ?(loc=Location_ocaml.other "VIP") err =
+let fail ?(loc=Cerb_location.other "VIP") err =
   let open Nondeterminism in
   match MC.undefinedFromMem_error err with
     | Some ubs ->
@@ -318,7 +318,7 @@ let rec repr funptrmap mval : ((Digest.t * string) IntMap.t * AbsByte.t list) =
           (Common.sizeof (Ctype ([], Basic (Floating fty)))) (N.of_int64 (Int64.bits_of_float fval))
       end
     | MVpointer (_, ptrval) ->
-        Debug_ocaml.print_debug 1 [] (fun () -> "NOTE: we fix the sizeof pointers to 8 bytes");
+        Cerb_debug.print_debug 1 [] (fun () -> "NOTE: we fix the sizeof pointers to 8 bytes");
         let ptr_size = match (Ocaml_implementation.get ()).sizeof_pointer with
           | None ->
               failwith "INTERNAL ERROR: the VIP memory model requires a complete implementation"
@@ -326,7 +326,7 @@ let rec repr funptrmap mval : ((Digest.t * string) IntMap.t * AbsByte.t list) =
               z in
         begin match ptrval with
           | PVnull ->
-              Debug_ocaml.print_debug 1 [] (fun () -> "NOTE: we fix the representation of all NULL pointers to be 0x0");
+              Cerb_debug.print_debug 1 [] (fun () -> "NOTE: we fix the representation of all NULL pointers to be 0x0");
               ret @@ List.init ptr_size
                 (fun _ -> AbsByte.{prov= Prov_empty; value= (Some '\000'); ptrfrag_idx= None})
           | PVfunptr (Symbol.Symbol (file_dig, n, opt_name)) ->
@@ -882,7 +882,7 @@ let memcmp ptrval1 ptrval2 sz_ival : integer_value memM =
   | 0 ->
       return (List.rev acc)
   | size ->
-      load Location_ocaml.unknown Ctype.unsigned_char ptrval >>= function
+      load Cerb_location.unknown Ctype.unsigned_char ptrval >>= function
         | (_, MVinteger (_, byte_ival)) ->
             let ptr' = array_shift_ptrval ptrval Ctype.unsigned_char (IVint N.(succ zero)) in
             get_bytes ptr' (ival_to_int byte_ival :: acc) (size-1)
@@ -1065,7 +1065,7 @@ let sequencePoint : unit memM =
 
 (* pretty printing *)
 open PPrint
-open Pp_prelude
+open Cerb_pp_prelude
 
 let string_of_provenance = function
   | Prov_empty ->
@@ -1130,10 +1130,10 @@ let string_of_integer_value ival =
 let string_of_mem_value mval =
   Pp_utils.to_plain_string begin
     (* TODO: factorise *)
-    let saved = !Colour.do_colour in
-    Colour.do_colour := false;
+    let saved = !Cerb_colour.do_colour in
+    Cerb_colour.do_colour := false;
     let ret = pp_mem_value mval in
-    Colour.do_colour := saved;
+    Cerb_colour.do_colour := saved;
     ret
   end
 
@@ -1269,7 +1269,7 @@ let serialise_prov = function
       `Assoc [ ("kind", `String "prov")
              ; ("value", `Int (N.to_int n)) ]
 
-  let serialise_ui_values (v:ui_value) : Json.json =
+  let serialise_ui_values (v:ui_value) : Cerb_json.json =
     let string_of_kind = function
       | `Unspec -> "unspecified"
       | `Basic -> "basic"
@@ -1282,13 +1282,13 @@ let serialise_prov = function
     in
     `Assoc [("kind"), `String (string_of_kind v.kind);
             ("size", `Int v.size);
-            ("path", `List (List.map Json.of_string v.path));
+            ("path", `List (List.map Cerb_json.of_string v.path));
             ("value", `String v.value);
             ("prov", serialise_prov v.prov);
-            ("type", Json.of_option (fun ty -> `String (String_core_ctype.string_of_ctype ty)) v.typ);
-            ("bytes", Json.of_option (fun bs -> `List (List.map (AbsByte.to_json serialise_prov) bs)) v.bytes); ]
+            ("type", Cerb_json.of_option (fun ty -> `String (String_core_ctype.string_of_ctype ty)) v.typ);
+            ("bytes", Cerb_json.of_option (fun bs -> `List (List.map (AbsByte.to_json serialise_prov) bs)) v.bytes); ]
 
-let serialise_ui_alloc (a:ui_alloc) : Json.json =
+let serialise_ui_alloc (a:ui_alloc) : Cerb_json.json =
   `Assoc [ ("id", `Int a.id)
          ; ("base", `String a.base)
          ; ("prefix", serialise_prefix a.prefix)
@@ -1298,7 +1298,7 @@ let serialise_ui_alloc (a:ui_alloc) : Json.json =
          ; ("values", `List (List.map serialise_ui_values a.values))
          ; ("exposed", `Bool false); (* TODO *) ]
 
-let serialise_mem_state dig (st: mem_state) : Json.json =
+let serialise_mem_state dig (st: mem_state) : Cerb_json.json =
   let allocs =
     IntMap.filter (fun _ (alloc : allocation) ->
       match alloc.prefix with
@@ -1310,5 +1310,5 @@ let serialise_mem_state dig (st: mem_state) : Json.json =
         | _ -> false
     ) st.allocations in
   `Assoc [ ("map", serialise_int_map (fun id alloc -> serialise_ui_alloc @@ mk_ui_alloc st id alloc) allocs)
-         ; ("last_used", Json.of_option (fun v -> `Int (N.to_int v)) st.last_used); ]
+         ; ("last_used", Cerb_json.of_option (fun v -> `Int (N.to_int v)) st.last_used); ]
   (* not_implemented "VIP.serialise_mem_state" *)

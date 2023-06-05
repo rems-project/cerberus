@@ -4,7 +4,7 @@ open Cerb_frontend
 open Annot
 open Pp_ast
 
-module Loc = Location_ocaml
+module Loc = Cerb_location
 module IT = IndexTerms
 type loc = Loc.t
 
@@ -12,7 +12,7 @@ type loc = Loc.t
 
 
 type trusted = 
-  | Trusted of Location_ocaml.t
+  | Trusted of Cerb_location.t
   | Checked
 
 type make_logical_function =
@@ -126,7 +126,7 @@ type 'TY mu_pexpr_ =  (* Core pure expressions *)
  | M_PEcfunction of 'TY mu_pexpr
  | M_PEmemberof of symbol * Symbol.identifier * 'TY mu_pexpr (* C struct/union member access *)
 
- (* | M_PEassert_undef of 'TY mu_pexpr * Location_ocaml.t * Undefined.undefined_behaviour *)
+ (* | M_PEassert_undef of 'TY mu_pexpr * Cerb_location.t * Undefined.undefined_behaviour *)
  | M_PEbool_to_integer of 'TY mu_pexpr
  | M_PEconv_int of 'TY mu_pexpr * 'TY mu_pexpr
  | M_PEconv_loaded_int of 'TY mu_pexpr * 'TY mu_pexpr
@@ -134,7 +134,7 @@ type 'TY mu_pexpr_ =  (* Core pure expressions *)
  | M_PEcatch_exceptional_condition of 'TY act * 'TY mu_pexpr
  | M_PEis_representable_integer of 'TY mu_pexpr * 'TY act
 
- | M_PEundef of Location_ocaml.t * Undefined.undefined_behaviour (* undefined behaviour *)
+ | M_PEundef of Cerb_location.t * Undefined.undefined_behaviour (* undefined behaviour *)
  | M_PEerror of string * 'TY mu_pexpr (* impl-defined static error *)
  (* | M_PEcase of ('TY mu_pexpr) * (mu_pattern * 'TY mu_tpexpr) list (\* pattern matching *\) *)
  | M_PElet of ('TY mu_sym_or_pattern) * ('TY mu_pexpr) * ('TY mu_pexpr) (* pure let *)
@@ -171,7 +171,7 @@ type 'TY mu_action_ =  (* memory actions *)
 
 
 type 'TY mu_action = 
- | M_Action of Location_ocaml.t * ('TY mu_action_)
+ | M_Action of Cerb_location.t * ('TY mu_action_)
 
 
 type 'TY mu_paction =  (* memory actions with Core.polarity *)
@@ -365,12 +365,12 @@ type parse_ast_function_specification =
 
 type 'TY mu_fun_map_decl =
   (* | M_Fun of T.bt * (symbol * T.bt) list * 'TY mu_pexpr *)
-  | M_Proc of Location_ocaml.t * 'TY mu_proc_args_and_body * trusted * 
+  | M_Proc of Cerb_location.t * 'TY mu_proc_args_and_body * trusted * 
                 parse_ast_function_specification
       (* recording the desugared parse ast, for generating runtime checks *)
                 
-  | M_ProcDecl of Location_ocaml.t * T.ft
-  (* | M_BuiltinDecl of Location_ocaml.t * T.bt * T.bt list *)
+  | M_ProcDecl of Cerb_location.t * T.ft
+  (* | M_BuiltinDecl of Cerb_location.t * T.bt * T.bt list *)
 
 type 'TY mu_fun_map = 
   (symbol, 'TY mu_fun_map_decl) Pmap.map

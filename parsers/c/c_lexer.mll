@@ -12,7 +12,7 @@ type internal_state = {
   mutable cnum_hack: int;
   mutable start_of_comment: Lexing.position;
   mutable ignore_magic: bool;
-  mutable magic_acc: (Location_ocaml.t * string) list;
+  mutable magic_acc: (Cerb_location.t * string) list;
 }
 let internal_state = {
   inside_cn= false;
@@ -384,7 +384,7 @@ and initial = parse
             (* ignoring magic comment that are not closed with a @*/ (not sure about this) *)
             begin if sz > 0 && String.(get str (sz - 1)) = '@' then
               let magik = String.sub str 0 (sz-1) in
-              let loc = Location_ocaml.(region
+              let loc = Cerb_location.(region
                 ( {internal_state.start_of_comment with pos_cnum = internal_state.start_of_comment.pos_cnum + 3}
                 , {lexbuf.lex_curr_p with pos_cnum = lexbuf.lex_curr_p.pos_cnum - 3} ) NoCursor) in
               begin if not (internal_state.ignore_magic) then

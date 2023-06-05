@@ -12,7 +12,7 @@ let uncurry f (a, b) = f a b
 
 
 let do_stack_trace () = 
-  let open Debug_ocaml in
+  let open Cerb_debug in
   if !debug_level > 0 then 
     let backtrace = Printexc.get_callstack 200 in
     Some (Printexc.raw_backtrace_to_string backtrace)
@@ -29,7 +29,7 @@ let pair_equal equalityA equalityB (a,b) (a',b') =
 (* let at_most_one err_str = function
  *   | [] -> None
  *   | [x] -> (Some x)
- *   | _ -> Debug_ocaml.error err_str *)
+ *   | _ -> Cerb_debug.error err_str *)
 
 
 

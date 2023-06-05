@@ -66,5 +66,5 @@ let n1570 () =
   !!cerb_conf.n1570
 
 let error ?(code = 1) msg =
-  prerr_endline Colour.(ansi_format [Red] ("ERROR: " ^ msg));
+  prerr_endline Cerb_colour.(ansi_format [Red] ("ERROR: " ^ msg));
   exit code

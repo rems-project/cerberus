@@ -32,13 +32,13 @@ val run_pp: ?remove_path:bool -> (string * string) option -> PPrint.document -> 
 val core_stdlib_path: unit -> string
 
 val load_core_stdlib:
-  unit -> ((string, Symbol.sym) Pmap.map * unit Core.fun_map, Location_ocaml.t * Errors.cause) Exception.exceptM
+  unit -> ((string, Symbol.sym) Pmap.map * unit Core.fun_map, Cerb_location.t * Errors.cause) Exception.exceptM
 
 val load_core_impl:
   (string, Symbol.sym) Pmap.map * unit Core.fun_map -> string ->
-  (Core.impl, Location_ocaml.t * Errors.cause) Exception.exceptM
+  (Core.impl, Cerb_location.t * Errors.cause) Exception.exceptM
 
-val cpp: (configuration * io_helpers) -> filename:string -> (string, Location_ocaml.t * Errors.cause) Exception.exceptM
+val cpp: (configuration * io_helpers) -> filename:string -> (string, Cerb_location.t * Errors.cause) Exception.exceptM
 
 val c_frontend:
   ?cnnames: (string * Symbol.sym) list ->
@@ -48,7 +48,7 @@ val c_frontend:
   ( Cabs.translation_unit option
   * (Cabs_to_ail_effect.markers_env * GenTypes.genTypeCategory AilSyntax.ail_program) option
   * unit Core.file
-  , Location_ocaml.t * Errors.cause) Exception.exceptM
+  , Cerb_location.t * Errors.cause) Exception.exceptM
 
 val core_frontend:
   'a * io_helpers ->
@@ -56,26 +56,26 @@ val core_frontend:
   (Implementation.implementation_constant, unit Core.generic_impl_decl)
   Pmap.map ->
   filename:string ->
-  ((unit, unit) Core.generic_file, Location_ocaml.t * Errors.cause) Exception.exceptM
+  ((unit, unit) Core.generic_file, Cerb_location.t * Errors.cause) Exception.exceptM
 
 
 val typed_core_passes:
   (configuration * io_helpers) -> unit Core.file ->
-  (unit Core.file * unit Core.typed_file, Location_ocaml.t * Errors.cause) Exception.exceptM
+  (unit Core.file * unit Core.typed_file, Cerb_location.t * Errors.cause) Exception.exceptM
 
 val core_passes:
   (configuration * io_helpers) -> filename:string -> unit Core.file ->
-  (unit Core.file, Location_ocaml.t * Errors.cause) Exception.exceptM
+  (unit Core.file, Cerb_location.t * Errors.cause) Exception.exceptM
 
 val interp_backend:
   io_helpers -> 'a Core.file ->
   args:(string list) -> batch:[`Batch | `CharonBatch | `JsonBatch | `NotBatch] -> fs:string option -> driver_conf:Driver_ocaml.driver_conf ->
-  ((([`Batch | `CharonBatch | `JsonBatch] * (string list * Driver_ocaml.batch_output) list), int) Either.either, Location_ocaml.t * Errors.cause) Exception.exceptM
+  ((([`Batch | `CharonBatch | `JsonBatch] * (string list * Driver_ocaml.batch_output) list), int) Either.either, Cerb_location.t * Errors.cause) Exception.exceptM
 
 (*
 val ocaml_backend:
   (configuration * io_helpers) -> filename:string -> ocaml_corestd:bool -> unit Core.file ->
-  (int, Location_ocaml.t * Errors.cause) Exception.exceptM
+  (int, Cerb_location.t * Errors.cause) Exception.exceptM
    *)
 
 val read_core_object:

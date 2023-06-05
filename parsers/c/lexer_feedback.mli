@@ -5,7 +5,7 @@
 
 open Cerb_frontend
 
-exception KnR_declaration of Location_ocaml.t
+exception KnR_declaration of Cerb_location.t
 
 type context
 val save_context: unit -> context
@@ -29,7 +29,7 @@ val fun_ids_decl: Symbol.identifier list -> context -> declarator -> declarator
 
 val reinstall_function_context: declarator -> unit
 val create_function_definition:
-  Location_ocaml.t ->
-  ((((Symbol.identifier option * Symbol.identifier) * (((Location_ocaml.t * string * (Location_ocaml.t * string) list) list) option)) list) list) option ->
+  Cerb_location.t ->
+  ((((Symbol.identifier option * Symbol.identifier) * (((Cerb_location.t * string * (Cerb_location.t * string) list) list) option)) list) list) option ->
   Annot.attributes option ->
   Cabs.specifiers -> declarator -> Cabs.cabs_statement -> Cabs.cabs_declaration list option -> Cabs.function_definition

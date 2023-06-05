@@ -13,7 +13,7 @@ instance (Default unit)
 end
 
 val error: forall 'a. string -> 'a
-declare ocaml target_rep function error = `Debug_ocaml.error`
+declare ocaml target_rep function error = `Cerb_debug.error`
 declare hol target_rep function error = `ARB`
 
 val list_init : forall 'a. nat -> (nat -> 'a) -> list 'a
@@ -318,4 +318,4 @@ let product_list xs ys =
   List.concatMap (fun x -> List.map (fun y -> (x,y)) ys) xs
 
 val is_power_of_two: integer -> bool
-declare ocaml target_rep function is_power_of_two = `Util.is_power_of_two`
+declare ocaml target_rep function is_power_of_two = `Cerb_util.is_power_of_two`

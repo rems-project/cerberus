@@ -10,9 +10,9 @@ open Annot
 
 open Either
 
-open Colour
+open Cerb_colour
 
-open Pp_prelude
+open Cerb_pp_prelude
 
 type budget = int option
 
@@ -20,7 +20,7 @@ type budget = int option
 let pp_ctype ty =
   P.squotes (Pp_core_ctype.pp_ctype ty)
 
-module Loc = Location_ocaml
+module Loc = Cerb_location
 
 
 
@@ -30,7 +30,7 @@ module type CONFIG = sig
   val show_std: bool
   val show_include: bool
   val show_locations: bool
-  val handle_location: Location_ocaml.t -> P.range -> unit
+  val handle_location: Cerb_location.t -> P.range -> unit
   val handle_uid: string -> P.range -> unit
 end
 
@@ -78,7 +78,7 @@ module Make (Config: CONFIG) = struct
       fun loc -> P.empty
     else 
       fun loc -> 
-      P.parens (Location_ocaml.pp_location ~clever:true loc) ^^ P.space
+      P.parens (Cerb_location.pp_location ~clever:true loc) ^^ P.space
 
 
 
@@ -904,7 +904,7 @@ module Make (Config: CONFIG) = struct
 
   let pp_fun_map budget funs =
     let pp_cond loc d =
-      if show_include || Location_ocaml.from_main_file loc then d else P.empty
+      if show_include || Cerb_location.from_main_file loc then d else P.empty
     in
     Pmap.fold (fun sym decl acc ->
       acc ^^
@@ -983,7 +983,7 @@ module Make (Config: CONFIG) = struct
     let guard b doc = if b then doc else P.empty in
 
     (* begin *)
-    (*   if Debug_ocaml.get_debug_level () > 1 then *)
+    (*   if Cerb_debug.get_debug_level () > 1 then *)
     (*     fun z -> *)
     (*       !^ "-- BEGIN STDLIB" ^^ P.break 1 ^^ *)
     (*       (pp_fun_map budget file.mu_stdlib) ^^ P.break 1 ^^ *)
@@ -1135,7 +1135,7 @@ end)
 
 
 module Basic = Make(struct
-  (* let ansi_format = Colour.ansi_format *)
+  (* let ansi_format = Cerb_colour.ansi_format *)
   let ansi_format _ s = s
   let show_std = false
   let show_include = true
@@ -1145,7 +1145,7 @@ module Basic = Make(struct
 end)
 
 module All = Make(struct
-  (* let ansi_format = Colour.ansi_format *)
+  (* let ansi_format = Cerb_colour.ansi_format *)
   let ansi_format _ s = s
   let show_std = true
   let show_include = true
@@ -1156,7 +1156,7 @@ end)
 
 module WithLocations = Make(struct
   let ansi_format _ s = s
-  (* let ansi_format = Colour.ansi_format *)
+  (* let ansi_format = Cerb_colour.ansi_format *)
   let show_std = false
   let show_include = true
   let show_locations = true

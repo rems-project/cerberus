@@ -1,7 +1,7 @@
 (* Created by Victor Gomes 2017-03-10 *)
 
 open Cerb_frontend
-open Util
+open Cerb_util
 open Symbol
 open Core
 

@@ -51,7 +51,7 @@ let equal equality oa oa' =
 let value_err (err : string) (oa : 'a option) =
   match oa with
   | Some a -> a
-  | None -> Debug_ocaml.error err
+  | None -> Cerb_debug.error err
 
 let (let@) = bind
 

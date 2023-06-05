@@ -7,7 +7,7 @@ open Cerb_frontend
 
 module IdSet = Set.Make(String)
 
-exception KnR_declaration of Location_ocaml.t
+exception KnR_declaration of Cerb_location.t
 
 type context = IdSet.t
 
@@ -146,7 +146,7 @@ let create_function_definition loc attr_opt magic_opt specifs d stmt rev_dlist_o
     let open Cabs in
     let signed_int_specifiers =
       { storage_classes= [];
-        type_specifiers= [TSpec (Location_ocaml.unknown, TSpec_int)];
+        type_specifiers= [TSpec (Cerb_location.unknown, TSpec_int)];
         type_qualifiers= [];
         function_specifiers= [];
         alignment_specifiers= [];

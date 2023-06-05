@@ -4,10 +4,10 @@ let string_pretty_of_integer_value ival =
 let string_of_mem_value mval =
   Pp_utils.to_plain_string begin
     (* TODO: factorise *)
-    let saved = !Colour.do_colour in
-    Colour.do_colour := false;
+    let saved = !Cerb_colour.do_colour in
+    Cerb_colour.do_colour := false;
     let ret = Impl_mem.pp_mem_value mval in
-    Colour.do_colour := saved;
+    Cerb_colour.do_colour := saved;
     ret
   end
 

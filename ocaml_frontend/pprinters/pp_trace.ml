@@ -1,5 +1,5 @@
-open Colour
-open Pp_prelude
+open Cerb_colour
+open Cerb_pp_prelude
 open Trace_event
 open Impl_mem
 open Pp_symbol
@@ -41,19 +41,19 @@ let pp_trace_event = function
                          ^^^ P.parens (pp_pointer_value ptrval)
 
   | ME_kill (loc, is_dyn, ptrval) ->
-    !^ "kill" ^^^ P.parens !^(Location_ocaml.location_to_string loc)
+    !^ "kill" ^^^ P.parens !^(Cerb_location.location_to_string loc)
               ^^^ !^(string_of_bool is_dyn)
               ^^^ pp_pointer_value ptrval
 
   | ME_load (loc, pref, cty, ptrval, mval) ->
-    !^ "load" ^^^ P.parens !^(Location_ocaml.location_to_string loc)
+    !^ "load" ^^^ P.parens !^(Cerb_location.location_to_string loc)
               ^^^ P.parens (pp_string_opt pref)
               ^^^ P.parens (pp_ctype cty)
               ^^^ P.parens (pp_pointer_value ptrval)
               ^^^ P.parens (pp_mem_value mval)
 
   | ME_store (loc, pref, cty, is_locking, ptrval, mval) ->
-    !^ "store" ^^^ P.parens !^(Location_ocaml.location_to_string loc)
+    !^ "store" ^^^ P.parens !^(Cerb_location.location_to_string loc)
                ^^^ P.parens (pp_string_opt pref)
                ^^^ P.parens (pp_ctype cty)
                ^^^ !^(string_of_bool is_locking)
@@ -67,7 +67,7 @@ let pp_trace_event = function
                      ^^^ P.parens (pp_pointer_value res_ptrval)
 
   | ME_seq_rmw (loc, pref, cty, ptrval, mval, mval') ->
-    !^ "seq_rmw" ^^^ P.parens !^(Location_ocaml.location_to_string loc)
+    !^ "seq_rmw" ^^^ P.parens !^(Cerb_location.location_to_string loc)
                 ^^^ P.parens (pp_string_opt pref)
                 ^^^ P.parens (pp_ctype cty)
                 ^^^ P.parens (pp_pointer_value ptrval)

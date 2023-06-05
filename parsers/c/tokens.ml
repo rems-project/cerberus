@@ -1,7 +1,7 @@
 open Cerb_frontend
 
 type magic_comment =
-  (Location_ocaml.t * string) list
+  (Cerb_location.t * string) list
 
 (* §6.4 Lexical elements *)
 type token =

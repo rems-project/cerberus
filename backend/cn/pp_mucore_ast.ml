@@ -1,10 +1,10 @@
 (* stealing from pp_core_ast *)
 
-open Pp_prelude
+open Cerb_pp_prelude
 (*open Pp_ail*)
 
 open Pp_ast
-open Colour
+open Cerb_colour
 
 module P = PPrint
 
@@ -44,7 +44,7 @@ module Make(PP_Typ : Pp_mucore.PP_Typ) = struct
 
   (* let pp_asym asym =  *)
   (*   let open Mucore in *)
-  (*   pp_symbol asym.sym ^^^ Location_ocaml.pp_location ~clever:false asym.loc *)
+  (*   pp_symbol asym.sym ^^^ Cerb_location.pp_location ~clever:false asym.loc *)
 
   (* let dtree_of_asym asym =  *)
   (*   Pp_ast.Dleaf (pp_asym asym) *)
@@ -52,7 +52,7 @@ module Make(PP_Typ : Pp_mucore.PP_Typ) = struct
 
   let pp_act act = 
     let open Mucore in
-    PP_Typ.pp_ct act.ct ^^^ Location_ocaml.pp_location ~clever:false act.loc
+    PP_Typ.pp_ct act.ct ^^^ Cerb_location.pp_location ~clever:false act.loc
 
   let dtree_of_act act = 
     Pp_ast.Dleaf (pp_act act)
@@ -116,7 +116,7 @@ module Make(PP_Typ : Pp_mucore.PP_Typ) = struct
 
       let pp_ctor str =
         pp_pure_ctor str ^^^ 
-          Location_ocaml.pp_location ~clever:false loc
+          Cerb_location.pp_location ~clever:false loc
       in
 
       match pexpr_ with
@@ -252,7 +252,7 @@ module Make(PP_Typ : Pp_mucore.PP_Typ) = struct
 
       let pp_ctor str =
         pp_eff_ctor str ^^^ 
-          Location_ocaml.pp_location ~clever:false loc
+          Cerb_location.pp_location ~clever:false loc
       in
 
       match expr_ with
@@ -350,7 +350,7 @@ module Make(PP_Typ : Pp_mucore.PP_Typ) = struct
   (
     Symbol.sym
   ,
-   Location_ocaml.t * Annot.attributes * Ctype.ctype *
+   Cerb_location.t * Annot.attributes * Ctype.ctype *
      (Symbol.sym option * Ctype.ctype) list * bool * bool
   )
   Pmap.map
@@ -402,9 +402,9 @@ module Make(PP_Typ : Pp_mucore.PP_Typ) = struct
   let dtree_of_label l def =
     match def with
     | M_Return (loc) -> 
-       (Dleaf (!^"return" ^^^ Location_ocaml.pp_location ~clever:false loc))
+       (Dleaf (!^"return" ^^^ Cerb_location.pp_location ~clever:false loc))
     | M_Label (loc, _, _, _, body, _) -> 
-       Dnode (pp_symbol l ^^^ Location_ocaml.pp_location ~clever:false loc, [dtree_of_expr body])
+       Dnode (pp_symbol l ^^^ Cerb_location.pp_location ~clever:false loc, [dtree_of_expr body])
 
   let dtrees_of_labels labels = 
     Pmap.fold (fun l def acc ->

@@ -1,5 +1,5 @@
 (* API between web server and a cerberus instance *)
-open Global_ocaml
+open Cerb_global
 
 let string_of_exec_mode = function
   | Random -> "random"
@@ -57,16 +57,16 @@ type step_kind =
 type node_info =
   [ `Init
   | `Done of string
-  | `Error of Location_ocaml.t option * string
+  | `Error of Cerb_location.t option * string
   | `Branch
-  | `Step of Json.json
+  | `Step of Cerb_json.json
   | `Unsat ]
 
 type node =
   { node_id: int;
     node_info: node_info;
-    memory: Json.json;
-    c_loc: Location_ocaml.t;
+    memory: Cerb_json.json;
+    c_loc: Cerb_location.t;
     core_uid: string option;
     arena: string;
     env: string; (* maybe an associate list ? *)

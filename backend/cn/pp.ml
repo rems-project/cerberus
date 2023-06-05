@@ -115,10 +115,10 @@ let print_file filename doc =
 
 
 let plain = CF.Pp_utils.to_plain_pretty_string
-let (^^^) = Pp_prelude.(^^^)
+let (^^^) = Cerb_pp_prelude.(^^^)
 
 
-let format_string format str = Colour.ansi_format format str
+let format_string format str = Cerb_colour.ansi_format format str
 
 let format format string = 
   let n = String.length string in
@@ -282,7 +282,7 @@ let warn (loc : Locations.t) msg =
 
 
 
-(* stealing from debug_ocaml *)
+(* stealing from Cerb_debug *)
 let json_output_channel = ref None
 
 let maybe_open_json_output mfile = 

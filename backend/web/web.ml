@@ -1,7 +1,7 @@
 open Lwt
 open Cohttp_lwt_unix
 open Instance_api
-open Util
+open Cerb_util
 
 (* Web server configuration *)
 
@@ -322,7 +322,7 @@ let json_of_exec_tree ((ns, es) : exec_tree) =
       | `Error (loc_opt, reason) ->
         `Assoc [("kind", `String "error");
                 ("reason", `String reason);
-                ("loc", Json.of_option Location_ocaml.to_json loc_opt)]
+                ("loc", Cerb_json.of_option Cerb_location.to_json loc_opt)]
       | `Branch ->
         `Assoc [("kind", `String "branch")]
       | `Step args ->
@@ -333,8 +333,8 @@ let json_of_exec_tree ((ns, es) : exec_tree) =
   in
   let json_of_node n =
     let json_of_loc (loc, uid) =
-      `Assoc [("c", Location_ocaml.to_json loc);
-              ("core", Json.of_opt_string uid) ]
+      `Assoc [("c", Cerb_location.to_json loc);
+              ("core", Cerb_json.of_opt_string uid) ]
     in
     `Assoc [("id", `Int n.node_id);
             ("info", json_of_info n.node_info);
@@ -381,14 +381,14 @@ let json_of_result = function
     `Assoc [
       ("status", `String "elaboration");
       ("pp", `Assoc [
-          ("cabs", Json.of_opt_string r.pp.cabs);
-          ("ail",  Json.of_opt_string r.pp.ail);
-          ("core", Json.of_opt_string r.pp.core);
+          ("cabs", Cerb_json.of_opt_string r.pp.cabs);
+          ("ail",  Cerb_json.of_opt_string r.pp.ail);
+          ("core", Cerb_json.of_opt_string r.pp.core);
         ]);
       ("ast", `Assoc [
-          ("cabs", Json.of_opt_string r.ast.cabs);
-          ("ail",  Json.of_opt_string r.ast.ail);
-          ("core", Json.of_opt_string r.ast.core);
+          ("cabs", Cerb_json.of_opt_string r.ast.cabs);
+          ("ail",  Cerb_json.of_opt_string r.ast.ail);
+          ("core", Cerb_json.of_opt_string r.ast.core);
         ]);
       ("locs", json_of_locs r.locs);
       ("console", `String "");
@@ -414,7 +414,7 @@ let json_of_result = function
       ("steps", json_of_exec_tree t);
       ("activeId", `Int activeId);
       ("status", `String "stepping");
-      ("result", Json.of_opt_string res);
+      ("result", Cerb_json.of_opt_string res);
     ]
   | BMC (`Unsatisfiable (res, dots) | `Satisfiable (res, dots)) ->
     `Assoc [

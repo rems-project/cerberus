@@ -4,8 +4,8 @@ open Core
 
 
 let debug_print pp =
-  Debug_ocaml.print_debug 3
-    [Debug_ocaml.DB_core_rewriting] 
+  Cerb_debug.print_debug 3
+    [Cerb_debug.DB_core_rewriting] 
     pp
 
 

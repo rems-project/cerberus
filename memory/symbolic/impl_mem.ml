@@ -501,7 +501,7 @@ let mem_constraint_to_expr st (constr: mem_iv_constraint) =
     Eff (fun st ->
       Solver.push st.slv;
 (*
-      if !Debug_ocaml.debug_level >= 1 then begin
+      if !Cerb_debug.debug_level >= 1 then begin
         prerr_endline ("ADDING CONSTRAINT [" ^ debug_str ^ "] ==> " ^ String_mem.string_of_iv_memory_constraint cs)
       end;
 *)
@@ -655,7 +655,7 @@ let serialise_mem_value mv =
 let serialise_storage = function
   | Defacto_memory.Storage_static (_, ty, mv_opt) ->
     `Assoc [("type", `String (String_core_ctype.string_of_ctype ty));
-            ("value", Json.of_option serialise_mem_value mv_opt)]
+            ("value", Cerb_json.of_option serialise_mem_value mv_opt)]
   | Defacto_memory.Storage_dynamic _ -> `Null
 
 let serialise_map f m =
@@ -674,9 +674,9 @@ let string_of_integer_value ival =
 let string_of_mem_value mval =
   Pp_utils.to_plain_string begin
     (* TODO: factorise *)
-    let saved = !Colour.do_colour in
-    Colour.do_colour := false;
+    let saved = !Cerb_colour.do_colour in
+    Cerb_colour.do_colour := false;
     let ret = pp_mem_value mval in
-    Colour.do_colour := saved;
+    Cerb_colour.do_colour := saved;
     ret
   end

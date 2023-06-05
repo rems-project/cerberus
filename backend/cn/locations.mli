@@ -1,7 +1,7 @@
 (* taking things from ocaml_locations *)
 
 
-type t = Location_ocaml.t
+type t = Cerb_location.t
 
 type loc = t
 
@@ -19,17 +19,17 @@ val pp : t -> PPrint.document
 
 val to_string : t -> string
 
-val good_location : Location_ocaml.t -> bool
+val good_location : Cerb_location.t -> bool
 
-val update : t -> Location_ocaml.t -> t
+val update : t -> Cerb_location.t -> t
 
-val updateB : t -> Location_ocaml.t -> t * bool
+val updateB : t -> Cerb_location.t -> t * bool
 
-val log : path -> Location_ocaml.t -> path
+val log : path -> Cerb_location.t -> path
 
 val head_pos_of_location : t -> string * string
 
-val unpack : t -> Location_ocaml.t
+val unpack : t -> Cerb_location.t
 
 (* todo *)
 val json_loc : t -> Yojson.Safe.t
@@ -38,8 +38,8 @@ val json_path : path -> Yojson.Safe.t
 type region = Lexing.position * Lexing.position
 
 val point: Lexing.position -> t
-val region: region -> Location_ocaml.cursor -> t
-val regions: region list -> Location_ocaml.cursor -> t
+val region: region -> Cerb_location.cursor -> t
+val regions: region list -> Cerb_location.cursor -> t
 
 
 

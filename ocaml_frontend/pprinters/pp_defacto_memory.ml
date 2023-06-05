@@ -1,5 +1,5 @@
 open Defacto_memory_types
-open Pp_prelude
+open Cerb_pp_prelude
 
 (* Use this to pprint things not yet recognised by the Core parser *)
 (* let nonvalid =

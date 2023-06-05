@@ -5,7 +5,7 @@ open AilSyntax
 open Ctype
 open GenTypes
 
-open Colour
+open Cerb_colour
 
 open Pp_ail_raw
 
@@ -504,7 +504,7 @@ let rec pp_expression_aux mk_pp_annot a_expr =
         | AilEcond (e1, Some e2, e3) ->
             P.group (pp e1 ^^^ P.qmark ^^^ pp e2 ^^^ P.colon ^^^ pp e3)
         | AilEcast (qs, ty, e) ->
-            if !Debug_ocaml.debug_level > 5 then
+            if !Cerb_debug.debug_level > 5 then
               (* printing the types in a human readable format *)
               P.parens (pp_ctype_human qs ty) ^^^ pp e
             else
@@ -544,7 +544,7 @@ let rec pp_expression_aux mk_pp_annot a_expr =
         | AilEident x ->
             pp_id x
         | AilEsizeof (qs, ty) ->
-            if !Debug_ocaml.debug_level > 5 then
+            if !Cerb_debug.debug_level > 5 then
               (* printing the types in a human readable format *)
               pp_keyword "sizeof" ^^ P.parens (pp_ctype_human qs ty)
             else
@@ -552,7 +552,7 @@ let rec pp_expression_aux mk_pp_annot a_expr =
         | AilEsizeof_expr e ->
             pp_keyword "sizeof" ^^^ pp e
         | AilEalignof (qs, ty) ->
-            if !Debug_ocaml.debug_level > 5 then
+            if !Cerb_debug.debug_level > 5 then
               (* printing the types in a human readable format *)
               pp_keyword "_Alignof" ^^ P.parens (pp_ctype_human qs ty)
             else
@@ -579,7 +579,7 @@ let rec pp_expression_aux mk_pp_annot a_expr =
             pp_ail_keyword "function_decay" ^^ P.parens (pp e)
         
         | AilEprint_type e ->
-(*            if !Debug_ocaml.debug_level > 5 then
+(*            if !Cerb_debug.debug_level > 5 then
 *)
               pp_ail_keyword "__cerb_printtype" ^^ P.parens (pp e)
 (*
@@ -627,7 +627,7 @@ let rec pp_statement_aux pp_annot (AnnotatedStatement (_, _, stmt_)) =
           P.separate_map
             (P.semi ^^ P.break 1)
             (fun (id, (dur_reg_opt,  _align, qs, ty)) ->
-              if !Debug_ocaml.debug_level > 5 then
+              if !Cerb_debug.debug_level > 5 then
                 (* printing the types in a human readable format *)
                 P.parens ( P.empty
                              (* TODO
@@ -754,7 +754,7 @@ let pp_program_aux pp_annot (startup, sigm) =
           ) ^^
           P.hardline ^^
           
-          (if !Debug_ocaml.debug_level > 5 then
+          (if !Cerb_debug.debug_level > 5 then
             (* printing the types in a human readable format *)
             pp_id_obj sym ^^ P.colon ^^^ P.parens (pp_ctype_human qs ty)
           else
@@ -776,7 +776,7 @@ let pp_program_aux pp_annot (startup, sigm) =
           (fun k -> if is_inline   then !^ "inline"    ^^^ k else k) (
             (fun k -> if is_Noreturn then !^ "_Noreturn" ^^^ k else k) (
               begin
-                if !Debug_ocaml.debug_level > 5 then
+                if !Cerb_debug.debug_level > 5 then
                   (* printing the types in a human readable format *)
                   pp_ctype_human ret_qs ret_ty ^^^ pp_id_func sym
                 else
@@ -786,7 +786,7 @@ let pp_program_aux pp_annot (startup, sigm) =
                 | Some (_, _, _, param_syms, stmt) ->
                     P.parens (
                       comma_list (fun (sym, (qs, ty, isRegister)) ->
-                        if !Debug_ocaml.debug_level > 5 then
+                        if !Cerb_debug.debug_level > 5 then
                           (* printing the types in a human readable format *)
                           pp_id_obj sym ^^ P.colon ^^^
                           P.parens (
@@ -805,7 +805,7 @@ let pp_program_aux pp_annot (startup, sigm) =
                 | None ->
                     P.parens (
                       comma_list (fun (qs, ty, isRegister) ->
-                        if !Debug_ocaml.debug_level > 5 then
+                        if !Cerb_debug.debug_level > 5 then
                           (* printing the types in a human readable format *)
                           P.parens (
                             (fun z -> if isRegister then !^ "register" ^^^ z else z)
@@ -890,11 +890,11 @@ let _pp_annot gtc doc =
         P.parens (!^ "/*" ^^^ pp_genType gty ^^^ !^ "*/" ^^^ doc)
 
 let filter_external_decl (id, sigma) =
-  let pred (_, (loc, _, _)) = Location_ocaml.from_main_file loc in
+  let pred (_, (loc, _, _)) = Cerb_location.from_main_file loc in
   (id, { sigma with declarations = List.filter pred sigma.declarations} )
 
 let pp_program do_colour show_include ail_prog =
-  Colour.do_colour := do_colour && Unix.isatty Unix.stdout;
+  Cerb_colour.do_colour := do_colour && Unix.isatty Unix.stdout;
   let filtered_ail_prog = if show_include then ail_prog else filter_external_decl ail_prog in
   pp_program_aux (fun _ doc -> doc) filtered_ail_prog
 

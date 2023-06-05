@@ -68,7 +68,7 @@ and sizeof ?(tagDefs= Tags.tagDefs ()) (Ctype (_, ty) as cty) =
         sizeof ~tagDefs atom_ty
     | Struct tag_sym ->
         (* TODO: need to add trailing padding for structs with a flexible array member *)
-        Debug_ocaml.warn [] (fun () -> "TODO: Concrete.sizeof doesn't add trailing padding for structs with a flexible array member");
+        Cerb_debug.warn [] (fun () -> "TODO: Concrete.sizeof doesn't add trailing padding for structs with a flexible array member");
         let (_, max_offset) = offsetsof tagDefs tag_sym in
         let align = alignof ~tagDefs cty in
         let x = max_offset mod align in

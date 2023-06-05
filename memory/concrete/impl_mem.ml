@@ -331,7 +331,7 @@ module Concrete : Memory = struct
       Eff (fun b -> ((if b then `SAT else `UNSAT), b))
     
     let with_constraints _ cs (Eff ma) =
-      Debug_ocaml.print_debug 1 [] (fun () -> "HELLO: Concrete.with_constraints");
+      Cerb_debug.print_debug 1 [] (fun () -> "HELLO: Concrete.with_constraints");
       let rec eval_cs = function
         | MC_empty ->
             true
@@ -387,8 +387,8 @@ module Concrete : Memory = struct
 
     let to_json json_of_prov b =
       `Assoc [("prov", json_of_prov b. prov);
-              ("offset", Json.of_option Json.of_int b.copy_offset);
-              ("value", Json.of_option Json.of_char b.value);]
+              ("offset", Cerb_json.of_option Cerb_json.of_int b.copy_offset);
+              ("value", Cerb_json.of_option Cerb_json.of_char b.value);]
     
     (* Given a (non-empty) list of bytes combine their provenance if their are
        compatible. Returns the empty provenance otherwise *)
@@ -502,7 +502,7 @@ module Concrete : Memory = struct
   let bind = Eff.(>>=)
   
   (* TODO: hackish *)
-  let fail ?(loc=Location_ocaml.other "Concrete") err =
+  let fail ?(loc=Cerb_location.other "Concrete") err =
     let open Nondeterminism in
     match undefinedFromMem_error err with
       | Some ubs ->
@@ -524,7 +524,7 @@ module Concrete : Memory = struct
   
   (* pretty printing *)
   open PPrint
-  open Pp_prelude
+  open Cerb_pp_prelude
   let pp_pointer_value (PV (prov, ptrval_))=
     match ptrval_ with
       | PVnull ty ->
@@ -537,7 +537,7 @@ module Concrete : Memory = struct
           P.parens (!^ (string_of_provenance prov) ^^ P.comma ^^^ !^ ("0x" ^ Z.format "%x" (Z.of_string (Nat_big_num.to_string n))))
   
   let pp_integer_value (IV (prov, n)) =
-    if !Debug_ocaml.debug_level >= 3 then
+    if !Cerb_debug.debug_level >= 3 then
       !^ ("<" ^ string_of_provenance prov ^ ">:" ^ Nat_big_num.to_string n)
     else
       !^ (Nat_big_num.to_string n)
@@ -598,7 +598,7 @@ module Concrete : Memory = struct
   
   (* TODO: DEBUG *)
   let print_bytemap str =
-    if !Debug_ocaml.debug_level >= 3 then begin
+    if !Cerb_debug.debug_level >= 3 then begin
       Printf.fprintf stderr "BEGIN BYTEMAP ==> %s\n" str;
       get >>= fun st ->
       IntMap.iter AbsByte.(fun addr b ->
@@ -932,7 +932,7 @@ module Concrete : Memory = struct
           aux (Nat_big_num.to_int n) (`NoTaint, []) bs
       | Pointer (_, ref_ty) ->
           let (bs1, bs2) = L.split_at (N.to_int (sizeof cty)) bs in
-          Debug_ocaml.print_debug 1 [] (fun () -> "TODO: Concrete, assuming pointer repr is unsigned??");
+          Cerb_debug.print_debug 1 [] (fun () -> "TODO: Concrete, assuming pointer repr is unsigned??");
           let (prov, prov_status, bs1') = AbsByte.split_bytes bs1 in
           ( `NoTaint (* PNVI-ae-udi *)
           , begin match extract_unspec bs1' with
@@ -995,7 +995,7 @@ module Concrete : Memory = struct
                   MVunspecified (Ctype ([], Pointer (no_qualifiers, ref_ty)))
             end, bs2)
       | Atomic atom_ty ->
-          Debug_ocaml.print_debug 1 [] (fun () -> "TODO: Concrete, is it ok to have the repr of atomic types be the same as their non-atomic version??");
+          Cerb_debug.print_debug 1 [] (fun () -> "TODO: Concrete, is it ok to have the repr of atomic types be the same as their non-atomic version??");
           self atom_ty bs
       | Struct tag_sym ->
           (* TODO: the N.to_int on the sizeof() will raise Overflow on huge structs *)
@@ -1093,7 +1093,7 @@ module Concrete : Memory = struct
               (N.to_int (sizeof (Ctype ([], Basic (Floating fty))))) (N.of_int64 (Int64.bits_of_float fval))
           end
       | MVpointer (_, PV (prov, ptrval_)) ->
-          Debug_ocaml.print_debug 1 [] (fun () -> "NOTE: we fix the sizeof pointers to 8 bytes");
+          Cerb_debug.print_debug 1 [] (fun () -> "NOTE: we fix the sizeof pointers to 8 bytes");
           let ptr_size = match (Ocaml_implementation.get ()).sizeof_pointer with
             | None ->
                 failwith "the concrete memory model requires a complete implementation"
@@ -1101,7 +1101,7 @@ module Concrete : Memory = struct
                 z in
           begin match ptrval_ with
             | PVnull _ ->
-                Debug_ocaml.print_debug 1 [] (fun () -> "NOTE: we fix the representation of all NULL pointers to be 0x0");
+                Cerb_debug.print_debug 1 [] (fun () -> "NOTE: we fix the representation of all NULL pointers to be 0x0");
                 ret @@ List.init ptr_size (fun _ -> AbsByte.v Prov_none (Some '\000'))
             | PVfunction (Symbol.Symbol (file_dig, n, opt_name)) ->
                 (* TODO: *)
@@ -1233,7 +1233,7 @@ module Concrete : Memory = struct
             failwith "TODO: cerb::with_address() is yet implemented"
            (* allocator_with_address addr size align *)
     end >>= fun (alloc_id, addr) ->
-    Debug_ocaml.print_debug 10(*KKK*) [] (fun () ->
+    Cerb_debug.print_debug 10(*KKK*) [] (fun () ->
       "STATIC ALLOC - pref: " ^ String_symbol.string_of_prefix pref ^
       " --> alloc_id= " ^ N.to_string alloc_id ^
       ", size= " ^ N.to_string size ^
@@ -1289,12 +1289,12 @@ module Concrete : Memory = struct
           | Some alloc ->
               Some { alloc with prefix = pref }
           | None ->
-              Debug_ocaml.warn [] (fun () -> "update_prefix: allocation does not exist");
+              Cerb_debug.warn [] (fun () -> "update_prefix: allocation does not exist");
               None
         in
         update (fun st -> { st with allocations= IntMap.update alloc_id upd_alloc st.allocations })
     | _ ->
-        Debug_ocaml.warn [] (fun () -> "update_prefix: wrong arguments");
+        Cerb_debug.warn [] (fun () -> "update_prefix: wrong arguments");
         return ()
   
   let prefix_of_pointer (PV (prov, pv)) : string option memM =
@@ -1334,7 +1334,7 @@ module Concrete : Memory = struct
     in
     match prov with
     | Prov_some alloc_id ->
-      get_allocation ~loc:(Location_ocaml.other "concrete") alloc_id >>= fun alloc ->
+      get_allocation ~loc:(Cerb_location.other "concrete") alloc_id >>= fun alloc ->
       begin match pv with
         | PVconcrete (_, addr) ->
           if addr = alloc.base then
@@ -1354,7 +1354,7 @@ module Concrete : Memory = struct
 
   let allocate_region tid pref (IV (_, align_n)) (IV (_, size_n)) =
     allocator size_n align_n >>= fun (alloc_id, addr) ->
-    Debug_ocaml.print_debug 1 [] (fun () ->
+    Cerb_debug.print_debug 1 [] (fun () ->
       "DYNAMIC ALLOC - pref: " ^ String_symbol.string_of_prefix pref ^ (* pref will always be Core *)
       " --> alloc_id= " ^ N.to_string alloc_id ^
       ", size= " ^ N.to_string size_n ^
@@ -1468,7 +1468,7 @@ module Concrete : Memory = struct
           | false ->
               get_allocation ~loc alloc_id >>= fun alloc ->
               if N.equal addr alloc.base then begin
-                Debug_ocaml.print_debug 1 [] (fun () ->
+                Cerb_debug.print_debug 1 [] (fun () ->
                   "KILLING alloc_id= " ^ N.to_string alloc_id
                 );
                 update begin fun st ->
@@ -1485,8 +1485,8 @@ module Concrete : Memory = struct
         end
   
   let load loc ty (PV (prov, ptrval_)) =
-    Debug_ocaml.print_debug 10(*KKK*) [] (fun () ->
-      "ENTERING LOAD: " ^ Location_ocaml.location_to_string loc
+    Cerb_debug.print_debug 10(*KKK*) [] (fun () ->
+      "ENTERING LOAD: " ^ Cerb_location.location_to_string loc
     );
     let do_load alloc_id_opt addr =
       get >>= fun st ->
@@ -1503,7 +1503,7 @@ module Concrete : Memory = struct
       let fp = FP (`R, addr, (sizeof ty)) in
       begin match bs' with
         | [] ->
-            Debug_ocaml.print_debug 10(*KKK*) [] (fun () ->
+            Cerb_debug.print_debug 10(*KKK*) [] (fun () ->
               "EXITING LOAD: ty=" ^ String_core_ctype.string_of_ctype ty ^
               ", @" ^ Pp_utils.to_plain_string (pp_pointer_value (PV (prov, ptrval_))) ^
               " ==> mval= " ^ Pp_utils.to_plain_string (pp_mem_value mval)
@@ -1585,7 +1585,7 @@ module Concrete : Memory = struct
           end >>= fun () ->
           begin is_within_bound ~loc alloc_id ty addr >>= function
             | false ->
-                Debug_ocaml.print_debug 1 [] (fun () ->
+                Cerb_debug.print_debug 1 [] (fun () ->
                   "LOAD out of bound, alloc_id=" ^ N.to_string alloc_id
                 );
                 fail ~loc (MerrAccess (LoadAccess, OutOfBoundPtr))
@@ -1600,7 +1600,7 @@ module Concrete : Memory = struct
   
   
   let store loc ty is_locking (PV (prov, ptrval_)) mval =
-    Debug_ocaml.print_debug 10(*KKK*) [] (fun () ->
+    Cerb_debug.print_debug 10(*KKK*) [] (fun () ->
       "ENTERING STORE: ty=" ^ String_core_ctype.string_of_ctype ty ^
       " -> @" ^ Pp_utils.to_plain_string (pp_pointer_value (PV (prov, ptrval_))) ^
       ", mval= " ^ Pp_utils.to_plain_string (pp_mem_value mval)
@@ -1610,7 +1610,7 @@ module Concrete : Memory = struct
         (String_core_ctype.string_of_ctype ty);
       Printf.printf "STORE typeof mval ==> %s\n"
         (String_core_ctype.string_of_ctype (typeof mval));
-      Printf.printf "STORE ==> %s\n" (Location_ocaml.location_to_string loc);
+      Printf.printf "STORE ==> %s\n" (Cerb_location.location_to_string loc);
       Printf.printf "STORE mval ==> %s\n"
         (Pp_utils.to_plain_string (pp_mem_value mval));
       fail ~loc (MerrOther "store with an ill-typed memory value")
@@ -1634,7 +1634,7 @@ module Concrete : Memory = struct
           | _ ->
               return ()
         end >>= fun () ->
-        print_bytemap ("AFTER STORE => " ^ Location_ocaml.location_to_string loc) >>= fun () ->
+        print_bytemap ("AFTER STORE => " ^ Cerb_location.location_to_string loc) >>= fun () ->
         return (FP (`W, addr, (sizeof ty))) in
       match (prov, ptrval_) with
         | (_, PVnull _) ->
@@ -2058,7 +2058,7 @@ module Concrete : Memory = struct
   let ptrfromint loc _ ref_ty (IV (prov, n)) =
     if not (N.equal n N.zero) then
       (* STD §6.3.2.3#5 *)
-      Debug_ocaml.warn [] (fun () ->
+      Cerb_debug.warn [] (fun () ->
         "implementation defined cast from integer to pointer"
       );
     let n =
@@ -2552,7 +2552,7 @@ let combine_prov prov1 prov2 =
       | 0 ->
           return (List.rev acc)
       | size ->
-          load Location_ocaml.unknown Ctype.unsigned_char ptrval >>= function
+          load Cerb_location.unknown Ctype.unsigned_char ptrval >>= function
             | (_, MVinteger (_, (IV (byte_prov, byte_n)))) ->
                 let ptr' = array_shift_ptrval ptrval Ctype.unsigned_char (IV (Prov_none, Nat_big_num.(succ zero))) in
                 get_bytes ptr' (byte_n :: acc) (size-1)
@@ -2577,14 +2577,14 @@ let combine_prov prov1 prov2 =
         | false ->
             fail (MerrUndefinedRealloc)
         | true ->
-            get_allocation ~loc:(Location_ocaml.other "Concrete.realloc") alloc_id >>= fun alloc ->
+            get_allocation ~loc:(Cerb_location.other "Concrete.realloc") alloc_id >>= fun alloc ->
             if alloc.base = addr then
               allocate_region tid (Symbol.PrefOther "realloc") align size >>= fun new_ptr ->
               let size_to_copy =
                 let IV (_, size_n) = size in
                 IV (Prov_none, Nat_big_num.min alloc.size size_n) in
               memcpy loc new_ptr ptr size_to_copy >>= fun _ ->
-              kill (Location_ocaml.other "realloc") true ptr >>= fun () ->
+              kill (Cerb_location.other "realloc") true ptr >>= fun () ->
               return new_ptr
             else
               fail (MerrWIP "realloc: invalid pointer")
@@ -2663,8 +2663,8 @@ let combine_prov prov1 prov2 =
   let copy_alloc_id ival ptrval =
     (* cast_ptrval_to_ival(uintptr_t,𝑝1),cast_ival_to_ptrval(void,𝑥) *)
     (* the first ctype is the original referenced type, the integerType is the target integer type *)
-    intfromptr (Location_ocaml.other "copy_alloc_id") Ctype.void Ctype.(Unsigned Intptr_t) ptrval >>= fun _ ->
-    ptrfromint (Location_ocaml.other "copy_alloc_id") Ctype.(Unsigned Intptr_t) Ctype.void ival
+    intfromptr (Cerb_location.other "copy_alloc_id") Ctype.void Ctype.(Unsigned Intptr_t) ptrval >>= fun _ ->
+    ptrfromint (Cerb_location.other "copy_alloc_id") Ctype.(Unsigned Intptr_t) Ctype.void ival
 
   (* JSON serialisation: Memory layout for UI *)
 
@@ -2786,29 +2786,29 @@ let combine_prov prov1 prov2 =
       `Assoc [("kind", `String "string literal");
               ("scope", `Null);
               ("name", `String "literal");
-              ("loc", Location_ocaml.to_json loc)]
+              ("loc", Cerb_location.to_json loc)]
     | Symbol.PrefCompoundLiteral (loc, _) ->
       `Assoc [("kind", `String "compound literal");
               ("scope", `Null);
               ("name", `String "literal");
-              ("loc", Location_ocaml.to_json loc)]
+              ("loc", Cerb_location.to_json loc)]
     | Symbol.PrefFunArg (loc, _, n) ->
       `Assoc [("kind", `String "arg");
               ("scope", `Null);
               ("name", `String ("arg" ^ string_of_int n));
-              ("loc", Location_ocaml.to_json loc)]
+              ("loc", Cerb_location.to_json loc)]
     | Symbol.PrefSource (_, []) ->
       failwith "serialise_prefix: PrefSource with an empty list"
     | Symbol.PrefSource (loc, [name]) ->
         `Assoc [("kind", `String "source");
                 ("name", `String (Pp_symbol.to_string_pretty name));
                 ("scope", `Null);
-                ("loc", Location_ocaml.to_json loc);]
+                ("loc", Cerb_location.to_json loc);]
     | Symbol.PrefSource (loc, [scope; name]) ->
         `Assoc [("kind", `String "source");
                 ("name", `String (Pp_symbol.to_string_pretty name));
                 ("scope", `String (Pp_symbol.to_string_pretty scope));
-                ("loc", Location_ocaml.to_json loc);]
+                ("loc", Cerb_location.to_json loc);]
     | Symbol.PrefSource (_, _) ->
       failwith "serialise_prefix: PrefSource with more than one scope"
 
@@ -2830,11 +2830,11 @@ let combine_prov prov1 prov2 =
     | _ ->
       `Assoc [("kind", `String "empty")]
 
-  let serialise_map f m : Json.json =
+  let serialise_map f m : Cerb_json.json =
     let serialise_entry (k, v) = (N.to_string k, f (N.to_int k) v)
     in `Assoc (List.map serialise_entry (IntMap.bindings m))
 
-  let serialise_ui_values st (v:ui_value) : Json.json =
+  let serialise_ui_values st (v:ui_value) : Cerb_json.json =
     let string_of_kind = function
       | `Unspec -> "unspecified"
       | `Basic -> "basic"
@@ -2847,13 +2847,13 @@ let combine_prov prov1 prov2 =
     in
     `Assoc [("kind"), `String (string_of_kind v.kind);
             ("size", `Int v.size);
-            ("path", `List (List.map Json.of_string v.path));
+            ("path", `List (List.map Cerb_json.of_string v.path));
             ("value", `String v.value);
             ("prov", serialise_prov st v.prov);
-            ("type", Json.of_option (fun ty -> `String (String_core_ctype.string_of_ctype ty)) v.typ);
-            ("bytes", Json.of_option (fun bs -> `List (List.map (AbsByte.to_json (serialise_prov st)) bs)) v.bytes); ]
+            ("type", Cerb_json.of_option (fun ty -> `String (String_core_ctype.string_of_ctype ty)) v.typ);
+            ("bytes", Cerb_json.of_option (fun bs -> `List (List.map (AbsByte.to_json (serialise_prov st)) bs)) v.bytes); ]
 
-  let serialise_ui_alloc st (a:ui_alloc) : Json.json =
+  let serialise_ui_alloc st (a:ui_alloc) : Cerb_json.json =
     `Assoc [("id", `Int a.id);
             ("base", `String a.base);
             ("prefix", serialise_prefix a.prefix);
@@ -2864,7 +2864,7 @@ let combine_prov prov1 prov2 =
             ("exposed", `Bool a.exposed);
            ]
 
-  let serialise_mem_state dig (st: mem_state) : Json.json =
+  let serialise_mem_state dig (st: mem_state) : Cerb_json.json =
     let allocs = IntMap.filter (fun _ (alloc : allocation) ->
         match alloc.prefix with
         | Symbol.PrefSource (_, syms) -> List.exists (fun (Symbol.Symbol (hash, _, _)) -> hash = dig) syms
@@ -2875,7 +2875,7 @@ let combine_prov prov1 prov2 =
         | _ -> false
       ) st.allocations in
     `Assoc [("map", serialise_map (fun id alloc -> serialise_ui_alloc st @@ mk_ui_alloc st id alloc) allocs);
-            ("last_used", Json.of_option (fun v -> `Int (N.to_int v)) st.last_used);]
+            ("last_used", Cerb_json.of_option (fun v -> `Int (N.to_int v)) st.last_used);]
 
 
 end
@@ -2888,9 +2888,9 @@ let string_of_integer_value ival =
 let string_of_mem_value mval =
   Pp_utils.to_plain_string begin
     (* TODO: factorise *)
-    let saved = !Colour.do_colour in
-    Colour.do_colour := false;
+    let saved = !Cerb_colour.do_colour in
+    Cerb_colour.do_colour := false;
     let ret = pp_mem_value mval in
-    Colour.do_colour := saved;
+    Cerb_colour.do_colour := saved;
     ret
   end

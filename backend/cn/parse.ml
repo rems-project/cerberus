@@ -41,10 +41,10 @@ let parse parser_start (loc, string) =
   C_lexer.internal_state.inside_cn <- true;
   let lexbuf = Lexing.from_string string in
   let () = 
-    let open Location_ocaml in
+    let open Cerb_location in
     Lexing.set_position lexbuf
       (* revisit *)
-      begin match Location_ocaml.to_raw loc with
+      begin match Cerb_location.to_raw loc with
       | Loc_unknown -> lexbuf.lex_curr_p
       | Loc_other _ -> lexbuf.lex_curr_p
       | Loc_point pos -> pos
@@ -54,17 +54,17 @@ let parse parser_start (loc, string) =
       | Loc_regions ((pos,_) :: _, _) -> pos
       end
   in
-  let () = match Location_ocaml.get_filename loc with
+  let () = match Cerb_location.get_filename loc with
     | Some filename -> lexbuf.lex_curr_p <- { lexbuf.lex_curr_p with pos_fname= filename }
     | None -> () 
   in
   let@ parsed_spec =
     try return (parser_start C_lexer.lexer lexbuf) with
     | C_lexer.Error err ->
-       let loc = Location_ocaml.point @@ Lexing.lexeme_start_p lexbuf in
+       let loc = Cerb_location.point @@ Lexing.lexeme_start_p lexbuf in
        fail {loc; msg = Parser err}
     | C_parser.Error ->
-       let loc = Location_ocaml.(region (Lexing.lexeme_start_p lexbuf, Lexing.lexeme_end_p lexbuf) NoCursor) in
+       let loc = Cerb_location.(region (Lexing.lexeme_start_p lexbuf, Lexing.lexeme_end_p lexbuf) NoCursor) in
        Pp.debug 6 (lazy (
            let toks = try diagnostic_get_tokens string
              with C_lexer.Error _ -> ["(re-parse error)"] in

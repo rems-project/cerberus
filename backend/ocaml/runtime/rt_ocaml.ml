@@ -1,6 +1,6 @@
 (* Created by Victor Gomes 2017-03-10 *)
 
-open Util
+open Cerb_util
 open Cerb_frontend
 
 module M = Impl_mem
@@ -39,7 +39,7 @@ let position fname lnum bol cnum = {
   Lexing.pos_cnum = cnum;
 }
 
-let unknown = Location_ocaml.unknown
+let unknown = Cerb_location.unknown
 
 (* TODO: digest is wrong *)
 let sym (n, s) = Symbol.Symbol ("", n, Some s)
@@ -224,7 +224,7 @@ let alloc pre al n =
 
 let load cty ret e =
   last_memop := Load;
-  M.load Location_ocaml.unknown cty e >>= return % ret % snd
+  M.load Cerb_location.unknown cty e >>= return % ret % snd
 
 let load_integer ity =
   load (C.Basic (C.Integer ity)) get_integer
@@ -246,7 +246,7 @@ let load_union s =
 
 let store f ty b e1 e2 =
   last_memop := Store;
-  M.store Location_ocaml.unknown ty b e1 @@ case_loaded_mval f e2
+  M.store Cerb_location.unknown ty b e1 @@ case_loaded_mval f e2
 
 let store_integer ity =
   store (M.integer_value_mval ity) (C.Basic (C.Integer ity))
@@ -283,7 +283,7 @@ let printf (conv : C.ctype0 -> M.integer_value -> M.integer_value)
     (args:(C.ctype0 * M.pointer_value) list) =
   let encode ival = match Mem_aux.integerFromIntegerValue ival with
     | Some n -> Decode_ocaml.encode_character_constant n
-    | None -> Debug_ocaml.error
+    | None -> Cerb_debug.error
                 "Printf: one of the element of the format array was invalid"
   in
   let eval_conv cty x =

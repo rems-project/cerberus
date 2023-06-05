@@ -10,7 +10,7 @@ sig
   val show_locations: bool
   val show_explode_annot: bool
   (* handle_location c_loc core_range *)
-  val handle_location: Location_ocaml.t -> PPrint.range -> unit
+  val handle_location: Cerb_location.t -> PPrint.range -> unit
   (* handle_uid uid core_range *)
   val handle_uid: string -> PPrint.range -> unit
 end
@@ -28,8 +28,8 @@ sig
   val pp_file: ('a, 'b) generic_file -> PPrint.document
   val pp_ctor : ctor -> PPrint.document
 
-  val pp_funinfo: (Symbol.sym, Location_ocaml.t * Annot.attributes * Ctype.ctype * (Symbol.sym option * Ctype.ctype) list * bool * bool) Pmap.map -> PPrint.document
-  val pp_funinfo_with_attributes: (Symbol.sym, Location_ocaml.t * Annot.attributes * Ctype.ctype * (Symbol.sym option * Ctype.ctype) list * bool * bool) Pmap.map -> PPrint.document
+  val pp_funinfo: (Symbol.sym, Cerb_location.t * Annot.attributes * Ctype.ctype * (Symbol.sym option * Ctype.ctype) list * bool * bool) Pmap.map -> PPrint.document
+  val pp_funinfo_with_attributes: (Symbol.sym, Cerb_location.t * Annot.attributes * Ctype.ctype * (Symbol.sym option * Ctype.ctype) list * bool * bool) Pmap.map -> PPrint.document
   val pp_extern_symmap: (Symbol.sym, Symbol.sym) Pmap.map -> PPrint.document
 
   val pp_action: ('a, Symbol.sym) generic_action_ -> PPrint.document

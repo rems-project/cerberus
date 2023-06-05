@@ -10,7 +10,7 @@ let io =
   let open Pipeline in
   { pass_message = begin
         let ref = ref 0 in
-        fun str -> Debug_ocaml.print_success (string_of_int !ref ^ ". " ^ str);
+        fun str -> Cerb_debug.print_success (string_of_int !ref ^ ". " ^ str);
                    incr ref;
                    return ()
       end;
@@ -26,11 +26,11 @@ let io =
                  return ();
       end;
     print_debug = begin
-      fun n mk_str -> Debug_ocaml.print_debug n [] mk_str;
+      fun n mk_str -> Cerb_debug.print_debug n [] mk_str;
                       return ()
       end;
     warn = begin
-      fun mk_str -> Debug_ocaml.warn [] mk_str;
+      fun mk_str -> Cerb_debug.warn [] mk_str;
                     return ()
       end;
   }
@@ -50,7 +50,7 @@ let frontend cpp_str filename =
     ; cpp_cmd= cpp_str
     ; cpp_stderr= true
   } in
-  Global_ocaml.(set_cerb_conf "Rustic" false Random false Basic false false false);
+  Cerb_global.(set_cerb_conf "Rustic" false Random false Basic false false false);
   load_core_stdlib ()                                  >>= fun stdlib ->
   load_core_impl stdlib impl_name                      >>= fun impl   ->
   c_frontend (conf, io) (stdlib, impl) ~filename

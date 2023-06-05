@@ -1,6 +1,6 @@
 (* Created by Victor Gomes 2017-04-30 *)
 
-open Pp_prelude
+open Cerb_pp_prelude
 open Pp_ocaml
 
 let std_filename = "coreStd.ml"

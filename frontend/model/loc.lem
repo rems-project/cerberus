@@ -1,38 +1,40 @@
 open import Pervasives
 
+declare {ocaml} rename module = Lem_loc
+
 type t
-declare ocaml target_rep type t = `Location_ocaml.t`
+declare ocaml target_rep type t = `Cerb_location.t`
 
 val unknown: t
-declare ocaml target_rep function unknown = `Location_ocaml.unknown`
+declare ocaml target_rep function unknown = `Cerb_location.unknown`
 
 val other: string -> t
-declare ocaml target_rep function other = `Location_ocaml.other`
+declare ocaml target_rep function other = `Cerb_location.other`
 
 val with_regions_and_cursor: list t -> maybe t -> t
-declare ocaml target_rep function with_regions_and_cursor = `Location_ocaml.with_regions_and_cursor`
+declare ocaml target_rep function with_regions_and_cursor = `Cerb_location.with_regions_and_cursor`
 
 val with_cursor: t -> t
-declare ocaml target_rep function with_cursor = `Location_ocaml.with_cursor`
+declare ocaml target_rep function with_cursor = `Cerb_location.with_cursor`
 
 val with_cursor_from: t -> t -> t
-declare ocaml target_rep function with_cursor_from = `Location_ocaml.with_cursor_from`
+declare ocaml target_rep function with_cursor_from = `Cerb_location.with_cursor_from`
 
 val bbox_location: list t -> t
-declare ocaml target_rep function bbox_location = `Location_ocaml.bbox_location`
+declare ocaml target_rep function bbox_location = `Cerb_location.bbox_location`
 
 class (Located 'a)
   val locOf: 'a -> t
 end
 
 val stringFromLocation: t -> string
-declare ocaml target_rep function stringFromLocation = `Location_ocaml.location_to_string`
+declare ocaml target_rep function stringFromLocation = `Cerb_location.location_to_string`
 
 val get_filename: t -> maybe string
-declare ocaml target_rep function get_filename = `Location_ocaml.get_filename`
+declare ocaml target_rep function get_filename = `Cerb_location.get_filename`
 
 val is_library_location: t -> bool
-declare ocaml target_rep function is_library_location = `Location_ocaml.is_library_location`
+declare ocaml target_rep function is_library_location = `Cerb_location.is_library_location`
 
 
 (* Mapping this to unit for the theorem provers *)

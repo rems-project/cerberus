@@ -6,7 +6,7 @@ open Apron
 
 module N = Nat_big_num
 
-let debug msg = Debug_ocaml.print_debug 2 [] (fun _ -> msg)
+let debug msg = Cerb_debug.print_debug 2 [] (fun _ -> msg)
 
 let empty_env = Environment.make [||] [||]
 

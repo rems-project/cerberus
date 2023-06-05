@@ -174,7 +174,7 @@ let rec of_ctype (Ctype.Ctype (_,ct_)) =
      fail
 
 let of_ctype_unsafe loc ct = 
-  let open Pp_prelude in
+  let open Cerb_pp_prelude in
   match of_ctype ct with
   | Some ct -> ct
   | None -> Tools.unsupported loc (!^"C-type" ^^^ Cerb_frontend.Pp_core_ctype.pp_ctype ct)  

@@ -649,7 +649,7 @@ module Translate = struct
          term t2 *)
       | _ ->
          Pp.debug 2 (lazy (Pp.item "smt mapping issue" (IT.pp it)));
-         Debug_ocaml.error "todo: SMT mapping"
+         Cerb_debug.error "todo: SMT mapping"
       end
 
     in
@@ -802,7 +802,7 @@ let maybe_save_slow_problem assertions lc lc_t time solver = match save_slow_pro
     let channel = open_out_gen [Open_append; Open_creat] 0o666 fname in
     output_string channel "\n\n";
     if first_msg then output_string channel "## New CN run ##\n\n" else ();
-    Colour.without_colour (fun () -> print channel (item "Slow problem"
+    Cerb_colour.without_colour (fun () -> print channel (item "Slow problem"
       (Pp.flow Pp.hardline [
           item "time taken" (format [] (Float.to_string time));
           item "constraint" (LC.pp lc);
@@ -1019,7 +1019,7 @@ module Eval = struct
          begin match IT.bt arg with
          | Integer -> sub_ (int_ 0, arg)
          | Real -> sub_ (q_ (0, 1), arg)
-         | _ -> Debug_ocaml.error "illtyped index term"
+         | _ -> Cerb_debug.error "illtyped index term"
          end
 
       | () when Z3.AST.is_var (Z3.Expr.ast_of_expr expr) ->
