@@ -824,6 +824,15 @@ let perform_memop_request2 loc memop cvals tid mk_th_st =
         ) >>
         ND.return (mk_th_st (Core.Vobject (Core.OVpointer res)))
 
+    | (Mem_common.PtrMemberShift tag_sym membr_ident, [Core.Vobject (Core.OVpointer ptrval)]) ->
+        liftMem (Mem.eff_member_shift_ptrval loc ptrval tag_sym membr_ident) >>= fun res ->
+        ND.update (fun dr_st ->
+          <| dr_st with
+            trace= ME_eff_member_shift_ptrval tag_sym membr_ident ptrval res :: dr_st.trace
+          |>
+        ) >>
+        ND.return (mk_th_st (Core.Vobject (Core.OVpointer res)))
+
     | (Mem_common.Va_start, [Core.Vlist _ ty_cvals]) ->
         let ty_ptrs =
           List.map (function
@@ -848,7 +857,20 @@ let perform_memop_request2 loc memop cvals tid mk_th_st =
     | (Mem_common.Copy_alloc_id, [Core.Vobject (Core.OVinteger ival); Core.Vobject (Core.OVpointer ptrval)]) ->
         liftMem (Mem.copy_alloc_id ival ptrval) >>= fun ptrval' ->
         ND.return (mk_th_st (Core.Vobject (Core.OVpointer ptrval')))
-    
+
+    | (Mem_common.CHERI_intrinsic str (ret_ty, tys), cvals) ->
+        let mvals =
+          Utils.map2 (fun ty cval ->
+            fromJust "CHERI_intrinsic call" (Caux.memValueFromValue ty cval)
+          ) tys cvals in
+        liftMem (Mem.call_intrinsic loc str mvals) >>= fun res_opt ->
+        match res_opt with
+          | Just res ->
+              ND.return (mk_th_st (Core.Vobject (snd (Caux.objectValueFromMemValue res))))
+          | Nothing ->
+            ND.return (mk_th_st Core.Vunit)
+        end
+
     | _ ->
         error ("INVALID memop request: " ^ show memop ^ " ==> " ^ Pp.stringFromCore_value (Core.Vtuple cvals) )
   end >>= fun th_st' ->

@@ -32,6 +32,7 @@ depends: [
   "result" {>= "1.5"}
   "cerberus-lib"
 ]
+
 build: [
   ["dune" "subst"] {pinned}
   # [make "prelude-src"]
@@ -39,6 +40,7 @@ build: [
     "build"
     "-p"
     name
+    "--profile=release"
     "-j"
     jobs
     "@install"

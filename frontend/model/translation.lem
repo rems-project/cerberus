@@ -108,6 +108,12 @@ let oneAil_tau =
     (A.AilEconst (A.ConstantInteger (A.IConstant 1 A.Decimal Nothing)))
 
 
+val mk_cheri_derive_and_assign_cap: bool -> Mem_common.derivecap_op -> C.pexpr * C.pexpr -> C.pexpr -> C.pexpr
+let mk_cheri_derive_and_assign_cap is_signed cap_op (obj1_sym_pe, obj2_sym_pe) core_pe =
+  let cap_pe =
+    Caux.mk_memop_pe (Mem_common.DeriveCap cap_op is_signed) [obj1_sym_pe; obj2_sym_pe] in
+  Caux.mk_memop_pe Mem_common.CapAssignValue [cap_pe; core_pe]
+
 val translate_integerConstant: A.integerConstant -> C.pexpr
 let translate_integerConstant iCst =
   Caux.mk_value_pe begin
@@ -241,12 +247,13 @@ val translate_mul_operator:
 let translate_mul_operator loc translate_expr usual_arithmetic_conversion stdlib result_ty e1 e2 =
   let oTy1 = force_core_object_type_of_ctype (ctype_of e1) in
   let oTy2 = force_core_object_type_of_ctype (ctype_of e2) in
-  translate_expr e1                          >>= fun core_e1  ->
-  translate_expr e2                          >>= fun core_e2  ->
-  E.wrapped_fresh_symbol (C.BTy_loaded oTy1) >>= fun e1_wrp   ->
-  E.wrapped_fresh_symbol (C.BTy_loaded oTy2) >>= fun e2_wrp   ->
-  E.wrapped_fresh_symbol (C.BTy_object oTy1) >>= fun obj1_wrp ->
-  E.wrapped_fresh_symbol (C.BTy_object oTy2) >>= fun obj2_wrp ->
+  translate_expr e1                                   >>= fun core_e1  ->
+  translate_expr e2                                   >>= fun core_e2  ->
+  E.wrapped_fresh_symbol (C.BTy_loaded oTy1)          >>= fun e1_wrp   ->
+  E.wrapped_fresh_symbol (C.BTy_loaded oTy2)          >>= fun e2_wrp   ->
+  E.wrapped_fresh_symbol (C.BTy_object oTy1)          >>= fun obj1_wrp ->
+  E.wrapped_fresh_symbol (C.BTy_object oTy2)          >>= fun obj2_wrp ->
+  E.wrapped_fresh_symbol (C.BTy_object C.OTy_integer) >>= fun cap_wrp  -> (* (_, cap_sym_pat, cap_sym_pe) -> *)
   let (promoted1_pe, promoted2_pe) =
     Caux.mk_std_pair_pe "§6.5.5#3"
       (usual_arithmetic_conversion (ctype_of e1) (ctype_of e2) obj1_wrp.E.sym_pe obj2_wrp.E.sym_pe) in
@@ -260,7 +267,14 @@ let translate_mul_operator loc translate_expr usual_arithmetic_conversion stdlib
                (* Both operand are specified *)
                let core_mul = Caux.mk_std_pe "§6.5.5#4" (Caux.mk_op_pe C.OpMul promoted1_pe promoted2_pe) in
                Caux.mk_specified_pe begin
-if AilTypesAux.is_signed_integer_type result_ty then
+if Global.is_CHERI () && Ctype.is_ptr_t result_ty then
+                  Caux.mk_let_pe cap_wrp.E.sym_pat
+                    (Caux.mk_memop_pe (Mem_common.DeriveCap (Mem_common.DCbinary (A.Arithmetic A.Mul)) (AilTypesAux.is_signed_integer_type result_ty))
+                      [obj1_wrp.E.sym_pe; obj2_wrp.E.sym_pe])
+                    (Caux.mk_memop_pe Mem_common.CapAssignValue
+                      [cap_wrp.E.sym_pe; stdlib.mkcall_wrapI result_ty core_mul])
+
+else if AilTypesAux.is_signed_integer_type result_ty then
                  stdlib.mkcall_catch_exceptional_condition result_ty core_mul
 else if AilTypesAux.is_integer result_ty then
                  stdlib.mkcall_wrapI result_ty core_mul
@@ -577,6 +591,7 @@ let translate_bitwise_operator loc translate_expr usual_arithmetic_conversion st
   let (promoted1_pe, promoted2_pe) =
     Caux.mk_std_pair_pe (std_id ^ "#3")
       (usual_arithmetic_conversion (ctype_of e1) (ctype_of e2) obj1_wrp.E.sym_pe obj2_wrp.E.sym_pe) in
+  let core_bop = stdlib_call result_ty promoted1_pe promoted2_pe in
   E.return begin
     Caux.add_std std_id begin
       Caux.mk_wseq_e (Caux.mk_tuple_pat [ e1_wrp.E.sym_pat; e2_wrp.E.sym_pat ]) (Caux.mk_unseq_e [core_e1; core_e2]) begin
@@ -584,7 +599,16 @@ let translate_bitwise_operator loc translate_expr usual_arithmetic_conversion st
           Caux.mk_case_pe (Caux.mk_tuple_pe [e1_wrp.E.sym_pe; e2_wrp.E.sym_pe])
             [ ( Caux.mk_tuple_pat [ Caux.mk_specified_pat obj1_wrp.E.sym_pat ; Caux.mk_specified_pat obj2_wrp.E.sym_pat ]
               , (* Both operand are specified *)
-                Caux.mk_specified_pe (Caux.mk_std_pe (std_id ^ "#4") (stdlib_call result_ty promoted1_pe promoted2_pe)) )
+                Caux.mk_specified_pe (Caux.mk_std_pe (std_id ^ "#4") begin
+                  if Global.is_CHERI () && Ctype.is_ptr_t result_ty then
+                    mk_cheri_derive_and_assign_cap
+                      (AilTypesAux.is_signed_integer_type result_ty)
+                      (Mem_common.DCbinary (A.Arithmetic aop))
+                      (obj1_wrp.E.sym_pe, obj2_wrp.E.sym_pe)
+                      core_bop
+                  else
+                    core_bop
+                end) )
             ; ( Caux.mk_empty_pat (C.BTy_tuple [C.BTy_loaded C.OTy_integer; C.BTy_loaded C.OTy_integer])
               , Caux.mk_unspecified_pe result_ty ) ]
         end
@@ -624,41 +648,85 @@ let translate_postfix loc translate_expr stdlib result_ty op e =
   E.wrapped_fresh_symbol (C.BTy_loaded oTy)           >>= fun load_wrp   ->
   E.wrapped_fresh_symbol (C.BTy_object oTy)           >>= fun obj_wrp    ->
   translate_expr e                                    >>= fun core_e     ->
-  E.return begin
-    Caux.add_stds ["§6.5.2.4"; std_sentence_n 1; std_sentence_n 3] begin
-      Caux.mk_wseq_e lvalue_wrp.E.sym_pat core_e begin
-        Caux.seq_rmw loc false(* return the value of the load *) core_ty_e oTy lvalue_wrp.E.sym_pe load_wrp.E.sym_sym begin
-          Caux.mk_case_pe load_wrp.E.sym_pe
-            [ ( Caux.mk_specified_pat obj_wrp.E.sym_pat
-              , Caux.mk_specified_pe begin
-                  Caux.mk_std_pe (std_sentence_n 2)
+  let mk_common () =
+    E.return begin
+      Caux.add_stds ["§6.5.2.4"; std_sentence_n 1; std_sentence_n 3] begin
+        Caux.mk_wseq_e lvalue_wrp.E.sym_pat core_e begin
+          Caux.seq_rmw loc false(* return the value of the load *) core_ty_e oTy lvalue_wrp.E.sym_pe load_wrp.E.sym_sym begin
+            Caux.mk_case_pe load_wrp.E.sym_pe
+              [ ( Caux.mk_specified_pat obj_wrp.E.sym_pat
+                , Caux.mk_specified_pe begin
+                    Caux.mk_std_pe (std_sentence_n 2)
 match Ctype.unatomic_ ty with
   | Ctype.Basic (Ctype.Integer _) ->
-                    let core_postfix = Caux.mk_op_pe core_op obj_wrp.E.sym_pe (Caux.mk_integer_pe 1) in
-                    let promoted_ty =
-                      fromJust "Translation.translate_postfix promotion"
-                        (AilTypesAux.promotion integerImpl (ctype_of e)) in
-                    stdlib.mkcall_conv_int result_ty
-      begin if AilTypesAux.is_signed_integer_type promoted_ty then
-                      stdlib.mkcall_catch_exceptional_condition promoted_ty core_postfix
+                      (* TODO: check again *)
+                      let mk_cheri pe =
+                        let is_signed = AilTypesAux.is_signed_integer_type result_ty in
+                        if Global.is_CHERI () && Ctype.is_ptr_t result_ty then
+                          mk_cheri_derive_and_assign_cap is_signed
+                          (Mem_common.DCunary op)
+                          (obj_wrp.E.sym_pe, Caux.mk_nullcap_pe is_signed)
+                          pe
+                        else
+                          pe in
+                      let core_postfix = Caux.mk_op_pe core_op obj_wrp.E.sym_pe (Caux.mk_integer_pe 1) in
+                      let promoted_ty =
+                        fromJust "Translation.translate_postfix promotion"
+                          (AilTypesAux.promotion (Implementation.integerImpl ()) (ctype_of e)) in
+                      stdlib.mkcall_conv_int result_ty begin
+      mk_cheri begin if AilTypesAux.is_signed_integer_type promoted_ty then
+                        stdlib.mkcall_catch_exceptional_condition promoted_ty core_postfix
       else (* is unsigned *)
-                      stdlib.mkcall_wrapI promoted_ty core_postfix
+                        stdlib.mkcall_wrapI promoted_ty core_postfix
       end
+                      end
   | Ctype.Basic (Ctype.Floating (Ctype.RealFloating _)) ->
-                    (* NOTE: we are not modelling floating UBs *)
-                    Caux.mk_op_pe core_op obj_wrp.E.sym_pe (Caux.mk_floating_value_pe Mem.one_fval)
+                      (* NOTE: we are not modelling floating UBs *)
+                      Caux.mk_op_pe core_op obj_wrp.E.sym_pe (Caux.mk_floating_value_pe Mem.one_fval)
   | Ctype.Pointer _ ref_ty ->
-                    Caux.mk_array_shift obj_wrp.E.sym_pe ref_ty (Caux.mk_integer_pe ptr_shift_const)
+                      Caux.mk_array_shift obj_wrp.E.sym_pe ref_ty (Caux.mk_integer_pe ptr_shift_const)
   | (*BISECT-IGNORE*) _ ->
       illTypedAil loc "AilEunary PostfixIncr|PostfixDecr"
 end
-                end )
-            ; ( Caux.mk_unspecified_pat (Caux.mk_empty_pat C.BTy_ctype)
-              , Caux.mk_unspecified_pe ty ) ]
+                  end )
+              ; ( Caux.mk_unspecified_pat (Caux.mk_empty_pat C.BTy_ctype)
+                , Caux.mk_unspecified_pe ty ) ]
+          end
         end
       end
-    end
+    end in
+if Global.is_CHERI () then
+  match Ctype.unatomic_ ty with
+    | Ctype.Pointer _ ref_ty ->
+        (* for CHERI we use the effectful array_shift operator *)
+        (* TODO: the load + store are NOT atomic ==> need a new operator in the memory interface ... *)
+        E.wrapped_fresh_symbol (C.BTy_object C.OTy_pointer) >>= fun shift_wrp ->
+        E.return begin
+          Caux.add_stds ["§6.5.2.4"; std_sentence_n 1; std_sentence_n 3] begin
+            Caux.mk_wseq_e lvalue_wrp.E.sym_pat core_e begin
+            Caux.mk_wseq_e load_wrp.E.sym_pat (Caux.pload loc core_ty_e lvalue_wrp.E.sym_pe Cmm.NA) begin
+              Caux.mk_case_e load_wrp.E.sym_pe
+                [ ( Caux.mk_specified_pat obj_wrp.E.sym_pat
+                  , Caux.mk_wseq_e shift_wrp.E.sym_pat
+                      (Caux.mk_memop_e Mem_common.PtrArrayShift [obj_wrp.E.sym_pe; Caux.mk_ail_ctype_pe ref_ty; Caux.mk_integer_pe ptr_shift_const])
+                      begin
+                        Caux.mk_wseq_e (Caux.mk_empty_pat C.BTy_unit)
+                          begin
+                            C.Expr [Annot.Astd (std_sentence_n 4)]
+                              (C.Eaction (C.Paction C.Neg (C.Action loc default (C.Store false(* not locking *) core_ty_e lvalue_wrp.E.sym_pe (Caux.mk_specified_pe shift_wrp.E.sym_pe) Cmm.NA))))
+                          end
+                          (Caux.mk_pure_e load_wrp.E.sym_pe)
+                      end )
+                ; ( Caux.mk_unspecified_pat (Caux.mk_empty_pat C.BTy_ctype)
+                  , Caux.mk_pure_e (Caux.mk_unspecified_pe ty) ) ]
+            end end
+          end
+        end
+    | _ ->
+        mk_common ()
   end
+else
+  mk_common ()
 
 
 val translate_assignment_conversion:
@@ -864,7 +932,7 @@ let translate_function_call loc is_used translate_expr stdlib e es =
   E.foldlM (fun (rev_arg_tys, rev_arg_ty_pes, rev_variadic_core_creates) (arg_ty, arg_is_null, arg_sym_pe) ->
     let (conv_ty, conv_value) =
       if AilTypesAux.is_integer arg_ty then
-        let prom_ty = fromJust "translation: default arguments promotion" (AilTypesAux.promotion integerImpl arg_ty) in
+        let prom_ty = fromJust "translation: default arguments promotion" (AilTypesAux.promotion (Implementation.integerImpl ()) arg_ty) in
         (prom_ty, stdlib.mkcall_conv_loaded_int prom_ty arg_sym_pe)
       else if AilTypesAux.is_floating arg_ty then
         (Ctype.Ctype [] (Ctype.Basic (Ctype.Floating (Ctype.RealFloating Ctype.Double))), arg_sym_pe)
@@ -1223,7 +1291,7 @@ let rec translate_expression is_used ctx variadic_env stdlib tagDefs a_expr =
         false
   end in
   let integer_promotion (ty: Ctype.ctype) (e: C.pexpr) : C.pexpr =
-    let promoted_ty = fromJust "Translation_aux.integer_promotion" (AilTypesAux.promotion integerImpl ty) in
+    let promoted_ty = fromJust "Translation_aux.integer_promotion" (AilTypesAux.promotion (Implementation.integerImpl ()) ty) in
     stdlib.mkcall_conv_int promoted_ty e in
   (* STD §6.3.1.8 *)
   let usual_arithmetic_conversion (ty1: Ctype.ctype) (ty2: Ctype.ctype) (e1: C.pexpr) (e2: C.pexpr) : C.pexpr * C.pexpr =
@@ -1237,7 +1305,7 @@ let rec translate_expression is_used ctx variadic_env stdlib tagDefs a_expr =
           (C.Pexpr [] () (C.PEctor C.Cfvfromint [e1]), e2)
       | (Nothing, Nothing) ->
           (* STD §6.3.1.8#1, bullet 4 *)
-          match (AilTypesAux.promotion integerImpl ty1, AilTypesAux.promotion integerImpl ty2) with
+          match (AilTypesAux.promotion (Implementation.integerImpl ()) ty1, AilTypesAux.promotion (Implementation.integerImpl ()) ty2) with
             | (Just (Ctype.Ctype _ (Ctype.Basic (Ctype.Integer ity1')) as ty1'), Just (Ctype.Ctype _ (Ctype.Basic (Ctype.Integer ity2')) as ty2')) ->
                 (* "If both operants have the same type, then no further conversion is needed." *)
                 if ty1' = ty2' then
@@ -1354,20 +1422,40 @@ else
           E.wrapped_fresh_symbol (C.BTy_loaded oTy) >>= fun e_wrp   ->
           E.wrapped_fresh_symbol (C.BTy_object oTy) >>= fun obj_wrp ->
           self e                                    >>= fun core_e  ->
+          let promoted_e = Caux.mk_std_pe "§6.5.3.3#4, sentence 2" (integer_promotion (ctype_of e) obj_wrp.E.sym_pe) in
+          let core_bnot =
+            (* NOTE: result_ty == promoted type of e *)
+            if AilTypesAux.is_unsigned_integer_type result_ty then
+              (* STD §6.5.3.3#4, sentence 3 *)
+              Caux.mk_std_pe "§6.5.3.3#4, sentence 3"
+                (Caux.mk_op_pe C.OpSub (Caux.mk_ivmax_pe (Caux.mk_ail_ctype_pe result_ty)) promoted_e)
+            else
+              Caux.bitwise_complement_pe (Caux.mk_ail_ctype_pe result_ty) promoted_e in
+          let is_signed = AilTypesAux.is_signed_integer_type result_ty in
           E.return begin
             Caux.add_std "§6.5.3.3#4" begin
               Caux.mk_wseq_e e_wrp.E.sym_pat core_e begin
                 Caux.mk_pure_e begin
                   Caux.mk_case_pe e_wrp.E.sym_pe
                     [ ( Caux.mk_specified_pat obj_wrp.E.sym_pat
-                      , let promoted_e = Caux.mk_std_pe "§6.5.3.3#4, sentence 2" (integer_promotion (ctype_of e) obj_wrp.E.sym_pe) in
+                      , (* NOTE: result_ty == promoted type of e *)
+                        Caux.mk_specified_pe begin
+                          if Global.is_CHERI () && Ctype.is_ptr_t result_ty then
+                            mk_cheri_derive_and_assign_cap is_signed
+                              (Mem_common.DCunary A.Bnot)
+                              (obj_wrp.E.sym_pe, Caux.mk_nullcap_pe is_signed)
+                              core_bnot
+                          else 
+                            core_bnot
+                        end )
+                      (* , let promoted_e = Caux.mk_std_pe "§6.5.3.3#4, sentence 2" (integer_promotion (ctype_of e) obj_wrp.E.sym_pe) in
                         (* NOTE: result_ty == promoted type of e *)
                         Caux.mk_specified_pe begin if AilTypesAux.is_unsigned_integer_type result_ty then
                           (* STD §6.5.3.3#4, sentence 3 *)
                           Caux.mk_std_pe "§6.5.3.3#4, sentence 3" (Caux.mk_op_pe C.OpSub (Caux.mk_ivmax_pe (Caux.mk_ail_ctype_pe result_ty)) promoted_e)
                         else
                           Caux.bitwise_complement_pe (Caux.mk_ail_ctype_pe result_ty) promoted_e
-                        end )
+                        end ) *)
                     ; ( Caux.mk_unspecified_pat (Caux.mk_empty_pat C.BTy_ctype)
                       , Caux.mk_unspecified_pe result_ty ) ]
                 end
@@ -1473,10 +1561,22 @@ end
                                                              (Caux.mk_op_pe C.OpEq (stdlib.mkcall_ctype_width result_ty) promoted2_wrp.E.sym_pe))
                           (Caux.mk_std_undef_pe loc "§6.5.7#4, sentence 3" Undefined.UB51b_shift_too_large)
 begin if AilTypesAux.is_unsigned_integer_type (ctype_of e1) then
-                        (Caux.mk_specified_pe (Caux.mk_std_pe "§6.5.7#4, sentence 2" (
-                          Caux.mk_op_pe C.OpRem_t (Caux.mk_op_pe C.OpMul promoted1_wrp.E.sym_pe (Caux.mk_op_pe C.OpExp (Caux.mk_integer_pe 2) promoted2_wrp.E.sym_pe))
-                                                  (Caux.mk_op_pe C.OpAdd (Caux.mk_ivmax_pe (Caux.mk_ail_ctype_pe result_ty)) (Caux.mk_integer_pe 1))
-                        )))
+let core_shl =
+  Caux.mk_std_pe "§6.5.7#4, sentence 2" begin
+    Caux.mk_op_pe C.OpRem_t (Caux.mk_op_pe C.OpMul promoted1_wrp.E.sym_pe (Caux.mk_op_pe C.OpExp (Caux.mk_integer_pe 2) promoted2_wrp.E.sym_pe))
+      (Caux.mk_op_pe C.OpAdd (Caux.mk_ivmax_pe (Caux.mk_ail_ctype_pe result_ty)) (Caux.mk_integer_pe 1))
+  end in
+  begin if Global.is_CHERI () && Ctype.is_ptr_t result_ty then
+    Caux.mk_specified_pe begin
+      Caux.mk_memop_pe Mem_common.CapAssignValue
+        [ Caux.mk_memop_pe
+            (Mem_common.DeriveCap (Mem_common.DCbinary (A.Arithmetic A.Shl)) (AilTypesAux.is_signed_integer_type result_ty))
+            [obj1_wrp.E.sym_pe; obj2_wrp.E.sym_pe]
+        ; core_shl ]
+    end
+else
+                      Caux.mk_specified_pe core_shl
+end
 else
                         Caux.mk_std_pe "§6.5.7#4, sentence 3"
                           (Caux.mk_if_pe_ [Annot.Anot_explode] (Caux.mk_op_pe C.OpLt promoted1_wrp.E.sym_pe (Caux.mk_integer_pe 0))
@@ -1484,8 +1584,18 @@ else
                           (Caux.mk_let_pe res_wrp.E.sym_pat
                             (Caux.mk_op_pe C.OpMul promoted1_wrp.E.sym_pe (Caux.mk_op_pe C.OpExp (Caux.mk_integer_pe 2) promoted2_wrp.E.sym_pe))
                           (Caux.mk_if_pe_ [Annot.Anot_explode] (stdlib.mkcall_is_representable res_wrp.E.sym_pe result_ty)
+  begin if Global.is_CHERI () && Ctype.is_ptr_t result_ty then
+                          Caux.mk_specified_pe begin
+                            Caux.mk_memop_pe Mem_common.CapAssignValue
+                              [ Caux.mk_memop_pe
+                                  (Mem_common.DeriveCap (Mem_common.DCbinary (A.Arithmetic A.Shl)) (AilTypesAux.is_signed_integer_type result_ty))
+                                  [obj1_wrp.E.sym_pe; obj2_wrp.E.sym_pe]
+                              ; res_wrp.E.sym_pe ]
+                          end
+  else
                             (Caux.mk_specified_pe res_wrp.E.sym_pe)
-                          (Caux.mk_std_undef_pe loc "§6.5.7#3, sentence 3" Undefined.UB052b_non_representable_left_shift))))
+  end
+                            (Caux.mk_std_undef_pe loc "§6.5.7#3, sentence 3" Undefined.UB052b_non_representable_left_shift))))
 end
                            )))) ]
                 end
@@ -1527,7 +1637,17 @@ end
                           (Caux.mk_std_undef_pe loc "§6.5.7#3, sentence 3" Undefined.UB51b_shift_too_large)
                           begin
                             let expr = Caux.mk_op_pe C.OpDiv obj1_wrp.E.sym_pe (Caux.mk_op_pe C.OpExp (Caux.mk_integer_pe 2) promoted2_wrp.E.sym_pe) in
-                            Caux.mk_specified_pe
+                            Caux.mk_specified_pe begin
+begin if Global.is_CHERI () && Ctype.is_ptr_t result_ty then
+    fun z ->
+      Caux.mk_memop_pe Mem_common.CapAssignValue
+      [ Caux.mk_memop_pe
+          (Mem_common.DeriveCap (Mem_common.DCbinary (A.Arithmetic A.Shr)) (AilTypesAux.is_signed_integer_type result_ty))
+          [obj1_wrp.E.sym_pe; obj2_wrp.E.sym_pe]
+      ; z ]
+  else
+    fun z -> z
+end
 begin if AilTypesAux.is_unsigned_integer_type (ctype_of e1) then
                                Caux.mk_std_pe "6.5.7#5, sentence 2" expr
 else
@@ -1538,7 +1658,7 @@ else
                                     [Caux.mk_ail_ctype_pe (ctype_of e1) ; promoted1_wrp.E.sym_pe; promoted2_wrp.E.sym_pe])
                                end
 end
-                          end))) ) ]
+end                       end))) ) ]
                 end
               end
             end
@@ -1582,6 +1702,30 @@ else if AilTypesAux.is_pointer cast_ty && Aaux.is_null_pointer_constant e then
 else if AilTypesAux.is_arithmetic cast_ty && AilTypesAux.is_arithmetic e_ty then
   if AilTypesAux.is_integer cast_ty then
     if AilTypesAux.is_integer e_ty then
+      if Global.is_CHERI () && not (Ctype.is_ptr_t (ctype_of e)) && Ctype.is_ptr_t cast_ty then
+              Caux.mk_wseq_e e_wrp.E.sym_pat core_e begin
+                Caux.mk_pure_e begin
+                  Caux.mk_case_pe e_wrp.E.sym_pe
+                    [ ( Caux.mk_specified_pat obj_wrp.E.sym_pat
+                      , Caux.mk_specified_pe begin
+                          let is_signed = AilTypesAux.is_signed_integer_type cast_ty in
+                          Caux.mk_memop_pe Mem_common.CapAssignValue [Caux.mk_nullcap_pe is_signed; stdlib.mkcall_conv_int cast_ty obj_wrp.E.sym_pe]
+                        end )
+                    ; ( Caux.mk_unspecified_pat (Caux.mk_empty_pat C.BTy_ctype)
+                      , Caux.mk_undef_pe loc (Undefined.DUMMY "integer to [u]intptr_t cast") ) ]
+                end
+              end
+      else if Global.is_CHERI () && Ctype.is_ptr_t (ctype_of e) && not (Ctype.is_ptr_t cast_ty) then
+              Caux.mk_wseq_e e_wrp.E.sym_pat core_e begin
+                Caux.mk_pure_e begin
+                  Caux.mk_case_pe e_wrp.E.sym_pe
+                    [ ( Caux.mk_specified_pat obj_wrp.E.sym_pat
+                      , Caux.mk_specified_pe (stdlib.mkcall_conv_int cast_ty (Caux.mk_memop_pe Mem_common.Ptr_tIntValue [obj_wrp.E.sym_pe])) )
+                    ; ( Caux.mk_unspecified_pat (Caux.mk_empty_pat C.BTy_ctype)
+                      , Caux.mk_undef_pe loc (Undefined.DUMMY "[u]intptr_t to integer cast") ) ]
+                end
+              end
+      else
               Caux.mk_wseq_e e_wrp.E.sym_pat core_e (
                 Caux.mk_pure_e (stdlib.mkcall_conv_loaded_int cast_ty e_wrp.E.sym_pe)
               )
@@ -1664,12 +1808,13 @@ else (* pointer <-> pointer cast *)
 if AilTypesAux.is_arithmetic (ctype_of e1) && AilTypesAux.is_arithmetic (ctype_of e2) then
             let oTy1 = force_core_object_type_of_ctype (ctype_of e1) in
             let oTy2 = force_core_object_type_of_ctype (ctype_of e2) in
-            E.wrapped_fresh_symbol (C.BTy_loaded oTy1) >>= fun e1_wrp   ->
-            E.wrapped_fresh_symbol (C.BTy_loaded oTy2) >>= fun e2_wrp   ->
-            E.wrapped_fresh_symbol (C.BTy_object oTy1) >>= fun obj1_wrp ->
-            E.wrapped_fresh_symbol (C.BTy_object oTy2) >>= fun obj2_wrp ->
-            self e1                                    >>= fun core_e1  ->
-            self e2                                    >>= fun core_e2  ->
+            E.wrapped_fresh_symbol (C.BTy_loaded oTy1)          >>= fun e1_wrp   ->
+            E.wrapped_fresh_symbol (C.BTy_loaded oTy2)          >>= fun e2_wrp   ->
+            E.wrapped_fresh_symbol (C.BTy_object oTy1)          >>= fun obj1_wrp ->
+            E.wrapped_fresh_symbol (C.BTy_object oTy2)          >>= fun obj2_wrp ->
+            E.wrapped_fresh_symbol (C.BTy_object C.OTy_integer) >>= fun cap_wrp  ->
+            self e1                                             >>= fun core_e1  ->
+            self e2                                             >>= fun core_e2  ->
             let (promoted1_pe, promoted2_pe) =
               Caux.mk_std_pair_pe "§6.5.6#4"
                 (usual_arithmetic_conversion (ctype_of e1) (ctype_of e2) obj1_wrp.E.sym_pe obj2_wrp.E.sym_pe) in
@@ -1683,7 +1828,13 @@ if AilTypesAux.is_arithmetic (ctype_of e1) && AilTypesAux.is_arithmetic (ctype_o
                         , (* Both operand are specified *)
                           let core_add = Caux.mk_std_pe "§6.5.6#5" (Caux.mk_op_pe C.OpAdd promoted1_pe promoted2_pe) in
                           Caux.mk_specified_pe (
-  if AilTypesAux.is_signed_integer_type result_ty then
+  if Global.is_CHERI () && Ctype.is_ptr_t result_ty then
+                            Caux.mk_let_pe cap_wrp.E.sym_pat
+                              (Caux.mk_memop_pe (Mem_common.DeriveCap (Mem_common.DCbinary (A.Arithmetic A.Add)) (AilTypesAux.is_signed_integer_type result_ty))
+                                [obj1_wrp.E.sym_pe; obj2_wrp.E.sym_pe])
+                              (Caux.mk_memop_pe Mem_common.CapAssignValue
+                                [cap_wrp.E.sym_pe; stdlib.mkcall_wrapI result_ty core_add])
+  else if AilTypesAux.is_signed_integer_type result_ty then
                             stdlib.mkcall_catch_exceptional_condition result_ty core_add
   else if AilTypesAux.is_integer result_ty then
                             stdlib.mkcall_wrapI result_ty core_add
@@ -1729,7 +1880,7 @@ else (* Here one of the operands is a pointer *)
                     [ ( Caux.mk_tuple_pat [ Caux.mk_specified_pat ptr_obj_wrp.E.sym_pat
                                           ; Caux.mk_specified_pat integer_obj_wrp.E.sym_pat ]
                       , (* Both operand are specified *)
-begin if Global.has_strict_pointer_arith () || Global.is_PNVI () then
+begin if Global.has_strict_pointer_arith () || Global.is_CHERI () || Global.is_PNVI () then
                         Caux.mk_wseq_e res_wrp.E.sym_pat
                           (Caux.mk_memop_e Mem_common.PtrArrayShift [ptr_obj_wrp.E.sym_pe; Caux.mk_ail_ctype_pe ref_ty; integer_obj_wrp.E.sym_pe])
                           (Caux.mk_pure_e (Caux.mk_specified_pe res_wrp.E.sym_pe))
@@ -1752,10 +1903,11 @@ end                   )
 if AilTypesAux.is_arithmetic (ctype_of e1) && AilTypesAux.is_arithmetic (ctype_of e2) then
           let oTy1 = force_core_object_type_of_ctype (ctype_of e1) in
           let oTy2 = force_core_object_type_of_ctype (ctype_of e2) in
-          E.wrapped_fresh_symbol (C.BTy_loaded oTy1) >>= fun e1_wrp   ->
-          E.wrapped_fresh_symbol (C.BTy_loaded oTy2) >>= fun e2_wrp   ->
-          E.wrapped_fresh_symbol (C.BTy_object oTy1) >>= fun obj1_wrp ->
-          E.wrapped_fresh_symbol (C.BTy_object oTy2) >>= fun obj2_wrp ->
+          E.wrapped_fresh_symbol (C.BTy_loaded oTy1)          >>= fun e1_wrp   ->
+          E.wrapped_fresh_symbol (C.BTy_loaded oTy2)          >>= fun e2_wrp   ->
+          E.wrapped_fresh_symbol (C.BTy_object oTy1)          >>= fun obj1_wrp ->
+          E.wrapped_fresh_symbol (C.BTy_object oTy2)          >>= fun obj2_wrp ->
+          E.wrapped_fresh_symbol (C.BTy_object C.OTy_integer) >>= fun cap_wrp  ->
           let (promoted1_pe, promoted2_pe) =
             Caux.mk_std_pair_pe "§6.5.6#4"
               (usual_arithmetic_conversion (ctype_of e1) (ctype_of e2) obj1_wrp.E.sym_pe obj2_wrp.E.sym_pe) in
@@ -1769,7 +1921,13 @@ if AilTypesAux.is_arithmetic (ctype_of e1) && AilTypesAux.is_arithmetic (ctype_o
                       , (* Both operand are specified *)
                         let core_sub = Caux.mk_std_pe "§6.5.6#6" (Caux.mk_op_pe C.OpSub promoted1_pe promoted2_pe) in
                         Caux.mk_specified_pe $
-  if AilTypesAux.is_signed_integer_type result_ty then
+  if Global.is_CHERI () && Ctype.is_ptr_t result_ty then
+                          Caux.mk_let_pe cap_wrp.E.sym_pat
+                            (Caux.mk_memop_pe (Mem_common.DeriveCap (Mem_common.DCbinary (A.Arithmetic A.Sub)) (AilTypesAux.is_signed_integer_type result_ty))
+                              [obj1_wrp.E.sym_pe; obj2_wrp.E.sym_pe])
+                            (Caux.mk_memop_pe Mem_common.CapAssignValue
+                              [cap_wrp.E.sym_pe; stdlib.mkcall_wrapI result_ty core_sub])
+  else if AilTypesAux.is_signed_integer_type result_ty then
                           stdlib.mkcall_catch_exceptional_condition result_ty core_sub
   else if AilTypesAux.is_integer result_ty then
                           stdlib.mkcall_wrapI result_ty core_sub
@@ -1847,7 +2005,7 @@ else
                         [ (Caux.mk_tuple_pat [ Caux.mk_specified_pat (ptr_obj_wrp.E.sym_pat)
                                              ; Caux.mk_specified_pat (integer_obj_wrp.E.sym_pat) ],
                          (* Both operand are specified *)
-begin if Global.has_strict_pointer_arith () || Global.is_PNVI () then
+begin if Global.has_strict_pointer_arith () || Global.is_CHERI () || Global.is_PNVI () then
                         Caux.mk_wseq_e res_wrp.E.sym_pat
                           (C.Expr [] (C.Ememop Mem_common.PtrArrayShift [ptr_obj_wrp.E.sym_pe; Caux.mk_ail_ctype_pe ref_ty; (Caux.mk_neg_pe integer_obj_wrp.E.sym_pe)]))
                           (Caux.mk_pure_e (Caux.mk_specified_pe res_wrp.E.sym_pe))
@@ -2011,20 +2169,31 @@ end                       )
           ) in
           E.wrapped_fresh_symbol (C.BTy_object C.OTy_pointer) >>= fun e1_wrp  ->
           self e1                                             >>= fun core_e1 ->
-          self e2                                             >>= fun core_e2 ->
           let ty1 = ctype_of e1 in
           let ty2 = ctype_of e2 in
           begin
 if AilTypesAux.atomic_qualified_unqualified AilTypesAux.is_arithmetic ty1 && AilTypesAux.is_arithmetic ty2 then
+  begin if Global.is_CHERI () &&
+    (Ctype.is_ptr_t ty1 && not (Ctype.is_ptr_t ty2) || not (Ctype.is_ptr_t ty1) && Ctype.is_ptr_t ty2 ) then
+            self (A.AnnotatedExpression (GenTypes.GenRValueType (GenTypes.inject_type ty1))
+                    [] loc (A.AilEcast Ctype.no_qualifiers ty1 e2)) >>= fun core_e ->
+            E.return
+              ( force_core_object_type_of_ctype ty1
+              , core_e
+              , fun z -> z )
+  else
+            self e2 >>= fun core_e2 ->
             E.return
               ( force_core_object_type_of_ctype ty2
               , core_e2
               , conv_loaded_arith stdlib ty2 (Ctype.unatomic ty1) )
+  end
 
 else if AilTypesAux.atomic_qualified_unqualified AilTypesAux.is_struct_or_union ty1 then
             (* NOTE: the two struct/union types could be from two different translation units,
                      but as far as I can things are sufficiently restricted such that no
                      conversion is needed here *)
+            self e2 >>= fun core_e2 ->
             E.return
               ( force_core_object_type_of_ctype ty2
               , core_e2
@@ -2033,6 +2202,7 @@ else if AilTypesAux.atomic_qualified_unqualified AilTypesAux.is_struct_or_union 
 (* NOTE: we apply unatomic to ty1 because the left operand may be an atomic pointer to ... (STD §6.5.16.1#1, bullet 3) *)
 else match AilTypesAux.referenced_type (Ctype.unatomic ty1) with
   | Just ref_ty ->
+            self e2 >>= fun core_e2 ->
             E.return
               begin if Aaux.is_null_pointer_constant e2 then
                 ( C.OTy_pointer
@@ -2045,6 +2215,7 @@ else match AilTypesAux.referenced_type (Ctype.unatomic ty1) with
               end
   | Nothing ->
             (* By Ail's typing, e1 must have type _Bool and e2 must be a pointer *)
+            self e2 >>= fun core_e2 ->
             E.wrapped_fresh_symbol (C.BTy_loaded C.OTy_pointer) >>= fun conv_wrp ->
             E.return
             ( C.OTy_integer
@@ -2136,6 +2307,40 @@ end
               end
           end
 
+      | A.AilEcall (A.AnnotatedExpression _ _ _ (A.AilEbuiltin (A.AilBCHERI str))) es ->
+          E.mapM self es >>= fun core_es ->
+          let oTy_ret = force_core_object_type_of_ctype result_ty in
+          let oTys = List.map (fun e -> force_core_object_type_of_ctype (ctype_of e)) es in
+          E.wrapped_fresh_symbol (C.BTy_object oTy_ret) >>= fun memop_wrp ->
+          (* E.foldlM (fun (sym_pat_acc, sym_pe_acc, obj_pat_acc, obj_pe_acc) oTy ->
+            E.wrapped_fresh_symbol (C.BTy_loaded oTy)  >>= fun (_, sym_pat, sym_pe) ->
+            E.wrapped_fresh_symbol (C.BTy_object oTy)  >>= fun (_, obj_pat, obj_pe) ->
+            E.return ( sym_pat :: sym_pat_acc
+                     , sym_pe  :: sym_pe_acc
+                     , obj_pat :: obj_pat_acc
+                     , obj_pe  :: obj_pe_acc )
+          ) ([], [], [], []) oTys >>= fun (rev_arg_sym_pats, rev_arg_sym_pes, rev_obj_sym_pats, rev_obj_sym_pes) -> *)
+          let args_bTy = C.BTy_tuple (List.map C.BTy_loaded oTys) in
+          E.wrapped_fresh_symbol args_bTy >>= fun args_wrp ->
+          E.foldlM (fun (obj_pat_acc, obj_pe_acc) oTy ->
+            E.wrapped_fresh_symbol (C.BTy_object oTy) >>= fun obj_wrp ->
+            E.return ( obj_wrp.E.sym_pat :: obj_pat_acc
+                     , obj_wrp.E.sym_pe  :: obj_pe_acc )
+          ) ([], []) oTys >>= fun (rev_obj_sym_pats, rev_obj_sym_pes) ->
+          let memop =
+            Mem_common.CHERI_intrinsic str (result_ty, List.map ctype_of es) in
+          E.return begin
+            Caux.mk_sseq_e args_wrp.E.sym_pat (Caux.mk_unseq_e core_es)
+            begin
+              Caux.mk_case_e args_wrp.E.sym_pe
+                [ ( Caux.mk_tuple_pat (List.map Caux.mk_specified_pat (List.reverse rev_obj_sym_pats))
+                  , Caux.mk_wseq_e memop_wrp.E.sym_pat (C.Expr [] (C.Ememop memop (List.reverse rev_obj_sym_pes)))
+                      (Caux.mk_pure_e (Caux.mk_specified_pe memop_wrp.E.sym_pe)) )
+                ; ( Caux.mk_empty_pat args_bTy
+                  , Caux.mk_pure_e (Caux.mk_undef_pe loc (Undefined.DUMMY "Elab, CHERI intrinsics (unspec)")) ) ]
+            end
+          end
+      
       | A.AilEcall e [] ->
           (* NOTE: when there are no arguments, we don't need all the temporary object creation stuff *)
           (* STD §6.5.2.2 *)
@@ -2393,7 +2598,11 @@ end
             E.return begin
               C.Expr [Annot.Astd "§6.5.2.3#3, sentence 2"] (
                 C.Esseq e_wrp.E.sym_pat core_e (
+begin if Global.has_strict_pointer_arith () || Global.is_CHERI () (* || Global.is_PNVI () *) then
+                  (Caux.mk_memop_e (Mem_common.PtrMemberShift tag_sym ident) [e_wrp.E.sym_pe])
+else
                   Caux.mk_pure_e (Caux.mk_member_shift_pe e_wrp.E.sym_pe tag_sym ident)
+end
                 )
               )
             end
@@ -2414,6 +2623,7 @@ end
           E.wrapped_fresh_symbol (C.BTy_loaded C.OTy_pointer) >>= fun e_wrp    ->
           E.wrapped_fresh_symbol (C.BTy_object C.OTy_pointer) >>= fun obj_wrp  ->
           E.wrapped_fresh_symbol C.BTy_boolean                >>= fun test_wrp ->
+          E.wrapped_fresh_symbol (C.BTy_object C.OTy_pointer) >>= fun res_wrp  ->
           self e                                              >>= fun core_e   ->
           E.return begin
             Caux.add_std "§6.5.2.3#4, sentence 2" begin
@@ -2422,9 +2632,20 @@ end
                   [ ( Caux.mk_unspecified_pat (Caux.mk_empty_pat C.BTy_ctype)
                     , Caux.mk_pure_e (Caux.mk_undef_pe loc (Undefined.UB_CERB004_unspecified Undefined.UB_unspec_memberofptr)) )
                   ; ( Caux.mk_specified_pat obj_wrp.E.sym_pat
-                    , if Global.has_strict_pointer_arith () then
+                    , if Global.has_strict_pointer_arith () || Global.is_CHERI () then
                         Caux.mk_wseq_e test_wrp.E.sym_pat
                           (Caux.mk_memop_e Mem_common.PtrValidForDeref [Caux.mk_ail_ctype_pe ref_ty; obj_wrp.E.sym_pe])
+                      begin if Global.is_CHERI () then
+                        Caux.mk_if_e test_wrp.E.sym_pe
+                          begin
+                            Caux.mk_wseq_e res_wrp.E.sym_pat
+                              (Caux.mk_memop_e (Mem_common.PtrMemberShift tag_sym ident) [obj_wrp.E.sym_pe])
+                              (Caux.mk_pure_e res_wrp.E.sym_pe)
+                          end
+                          (* TODO: make a new UB for this particular case *)
+                          (Caux.mk_pure_e (Caux.mk_std_undef_pe loc "§6.5.3.3#4, sentence 4" Undefined.UB043_indirection_invalid_value))
+                          
+                      else
                           begin
                             Caux.mk_pure_e begin
                               Caux.mk_if_pe_ [Annot.Anot_explode] test_wrp.E.sym_pe
@@ -2432,6 +2653,7 @@ end
                                 (Caux.mk_std_undef_pe loc "§6.5.2.3#4, sentence 4" Undefined.UB043_indirection_invalid_value)
                             end
                           end
+                      end
                       else
                         (* NON-ISO: allowing member_shift on "invalid pointer values" *)
                         Caux.mk_pure_e (Caux.mk_member_shift_pe obj_wrp.E.sym_pe tag_sym ident) ) ]
@@ -2450,6 +2672,9 @@ end
               error ((Loc.stringFromLocation (Loc.with_cursor loc)) ^ ": atomic linux builtins must be directly called")
           | A.AilBcopy_alloc_id ->
               error ((Loc.stringFromLocation (Loc.with_cursor loc)) ^ ": copy_alloc_id() must be directly called")
+          | A.AilBCHERI str ->
+              error ((Loc.stringFromLocation (Loc.with_cursor loc)) ^ ": "^str^"() must be directly called")
+              (* NOTE: other builtins might be legally desugared here *)
         end
       
       | A.AilEstr (pref_opt, strs) ->
@@ -2632,7 +2857,8 @@ else (* is_pointer *)
             | GenTypes.GenLValueType _ _ _ ->
                 (* by Ail typing, [e] is a lvalue. Hence the corresponding Core has a non-loaded type *)
                 self e >>= fun core_e ->
-                E.wrapped_fresh_symbol (C.BTy_object C.OTy_pointer) >>= fun e_wrp ->
+                E.wrapped_fresh_symbol (C.BTy_object C.OTy_pointer) >>= fun e_wrp   ->
+                E.wrapped_fresh_symbol (C.BTy_object C.OTy_pointer) >>= fun res_wrp ->
                 E.return (
                   Caux.mk_wseq_e e_wrp.E.sym_pat core_e (
                     match AilTypesAux.referenced_type result_ty with
@@ -2640,6 +2866,11 @@ else (* is_pointer *)
                           illTypedAil loc "AilEarray_decay, result_ty not a pointer"
                       | Just ref_ty ->
                           C.Expr [Annot.Astd "§6.3.2.1#3"] (
+if Global.has_strict_pointer_arith () || Global.is_CHERI () || Global.is_PNVI () then
+                            C.Ewseq res_wrp.E.sym_pat
+                            (C.Expr [] (C.Ememop Mem_common.PtrArrayShift [e_wrp.E.sym_pe; Caux.mk_ail_ctype_pe ref_ty; Caux.mk_integer_pe 0]))
+                            (Caux.mk_pure_e (Caux.mk_specified_pe res_wrp.E.sym_pe))
+else
                             C.Epure (
                               Caux.mk_specified_pe (Caux.mk_array_shift e_wrp.E.sym_pe
                                 ref_ty (Caux.mk_integer_pe 0)
@@ -3252,7 +3483,7 @@ let rec translate_stmt stdlib tagDefs f env (A.AnnotatedStatement loc stmt_attrs
         let promoted_pe =
           Caux.mk_std_pe "§6.8.4.2#5, sentence 1" (
             stdlib.mkcall_conv_int (fromJust "Translation.translate_stmt: switch expr promotion"
-              (AilTypesAux.promotion integerImpl (ctype_of e))) control_wrp.E.sym_pe
+              (AilTypesAux.promotion (Implementation.integerImpl ()) (ctype_of e))) control_wrp.E.sym_pe
           ) in
         (* Create case symbols and translate cases block *)
         let cases    = collect_cases s in
@@ -3375,23 +3606,24 @@ let rec translate_stmt stdlib tagDefs f env (A.AnnotatedStatement loc stmt_attrs
     | A.AilSdeclaration sym_es ->
         (* This pass translates the declarations *)
         E.mapM (fun (ptr_sym, e) ->
+          let ptr_sym_e = Caux.mk_sym_pe ptr_sym in
           E.resolve_object_type ptr_sym >>= fun (qs, ty) ->
-          let e_bTy = C.BTy_loaded (force_core_object_type_of_ctype (ctype_of e)) in
-          E.wrapped_fresh_symbol e_bTy >>= fun e_wrp ->
+          let oTy = force_core_object_type_of_ctype (ctype_of e) in
+          E.wrapped_fresh_symbol (C.BTy_loaded oTy) >>= fun e_wrp ->
           match Ctype.unatomic_ ty with
             | Ctype.Pointer _ ref_ty ->
                 let mk_store =
                   if qs.Ctype.const then Caux.pstore_lock else Caux.pstore in
                 if Aaux.is_null_pointer_constant e then
                   E.return (
-                    mk_store loc (Caux.mk_ail_ctype_pe ty) (Caux.mk_sym_pe ptr_sym)
+                    mk_store loc (Caux.mk_ail_ctype_pe ty) ptr_sym_e
                       (Caux.mk_specified_pe (Caux.mk_nullptr_pe ref_ty)) Cmm.NA
                   )
                   else
                     translate_expression true e >>= fun core_e ->
                     E.return (
                       Caux.mk_sseq_e e_wrp.E.sym_pat core_e
-                        (mk_store loc (Caux.mk_ail_ctype_pe ty) (Caux.mk_sym_pe ptr_sym) e_wrp.E.sym_pe Cmm.NA)
+                        (mk_store loc (Caux.mk_ail_ctype_pe ty) ptr_sym_e e_wrp.E.sym_pe Cmm.NA)
                     )
             | ty ->
                 let mk_store =
@@ -3404,16 +3636,47 @@ let rec translate_stmt stdlib tagDefs f env (A.AnnotatedStatement loc stmt_attrs
                   E.return begin
                     Caux.mk_sseq_e e_wrp.E.sym_pat core_e begin
                       Caux.mk_sseq_e conv_wrp.E.sym_pat (stdlib.mkproc_loaded_pointer_to_Bool e_wrp.E.sym_pe)
-                        (mk_store loc (Caux.mk_ail_ctype_pe cty) (Caux.mk_sym_pe ptr_sym) conv_wrp.E.sym_pe Cmm.NA)
+                        (mk_store loc (Caux.mk_ail_ctype_pe cty) ptr_sym_e conv_wrp.E.sym_pe Cmm.NA)
                     end
                   end
                 else
                   (* we are not dealing with a pointer on either sides *)
-                  E.return (
+                if Global.is_CHERI () && Ctype.is_ptr_t cty && not (Ctype.is_ptr_t (ctype_of e)) then
+                  E.wrapped_fresh_symbol (C.BTy_object oTy) >>= fun obj_wrp ->
+                  E.return begin
+                    Caux.mk_sseq_e e_wrp.E.sym_pat core_e begin
+                      Caux.mk_case_e e_wrp.E.sym_pe
+                        [ ( Caux.mk_specified_pat obj_wrp.E.sym_pat
+                          , mk_store loc (Caux.mk_ail_ctype_pe cty) ptr_sym_e begin
+                              let is_signed = AilTypesAux.is_signed_integer_type cty in
+                              Caux.mk_specified_pe begin
+                                Caux.mk_memop_pe Mem_common.CapAssignValue
+                                  [Caux.mk_nullcap_pe is_signed; conv_arith stdlib (ctype_of e) cty obj_wrp.E.sym_pe]
+                              end
+                            end Cmm.NA )
+                        ; ( Caux.mk_unspecified_pat (Caux.mk_empty_pat C.BTy_ctype)
+                          , Caux.mk_pure_e (Caux.mk_undef_pe loc (Undefined.DUMMY "AilSdeclaration")) ) ]
+                    end
+                  end
+                else if Global.is_CHERI () && not (Ctype.is_ptr_t cty) && Ctype.is_ptr_t (ctype_of e) then
+                  E.wrapped_fresh_symbol (C.BTy_object oTy) >>= fun obj_wrp ->
+                  E.return begin
+                    Caux.mk_sseq_e e_wrp.E.sym_pat core_e begin
+                      Caux.mk_case_e e_wrp.E.sym_pe
+                        [ ( Caux.mk_specified_pat obj_wrp.E.sym_pat
+                          , mk_store loc (Caux.mk_ail_ctype_pe cty) ptr_sym_e begin
+                              Caux.mk_specified_pe (conv_arith stdlib (ctype_of e) cty (Caux.mk_memop_pe Mem_common.Ptr_tIntValue [obj_wrp.E.sym_pe]))
+                            end Cmm.NA )
+                        ; ( Caux.mk_unspecified_pat (Caux.mk_empty_pat C.BTy_ctype)
+                          , Caux.mk_pure_e (Caux.mk_undef_pe loc (Undefined.DUMMY "[u]intptr_t to integer/floating AilSdeclaration")) ) ]
+                    end
+                  end
+                else
+                  E.return begin
                     Caux.mk_sseq_e e_wrp.E.sym_pat core_e
-                      (mk_store loc (Caux.mk_ail_ctype_pe cty) (Caux.mk_sym_pe ptr_sym)
-                      (if AilTypesAux.is_arithmetic cty then conv_loaded_arith stdlib (ctype_of e) cty e_wrp.E.sym_pe else e_wrp.E.sym_pe) Cmm.NA)
-                  )
+                      (mk_store loc (Caux.mk_ail_ctype_pe cty) ptr_sym_e
+                        (if AilTypesAux.is_arithmetic cty then conv_loaded_arith stdlib (ctype_of e) cty e_wrp.E.sym_pe else e_wrp.E.sym_pe) Cmm.NA)
+                  end
           end
         ) sym_es >>= fun z ->
         

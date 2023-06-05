@@ -83,6 +83,8 @@ module DefaultImpl = struct
       | Ptrdiff_t ->
           (* STD §7.19#2 *)
           true
+      | Ptraddr_t ->
+          false
 
   let sizeof_ity = function
     | Char
@@ -117,7 +119,9 @@ module DefaultImpl = struct
     | Size_t
     | Ptrdiff_t ->
         Some 8
-  
+    | Ptraddr_t ->
+        Some 8
+
   (* NOTE: the code is bit generic here to allow reusability *)
   let precision_ity ity =
     match sizeof_ity ity with
@@ -170,6 +174,8 @@ module DefaultImpl = struct
     | Size_t
     | Ptrdiff_t ->
         Some 8
+    | Ptraddr_t ->
+        Some 8
 
   let alignof_fty = function
     | RealFloating Float ->
@@ -179,6 +185,7 @@ module DefaultImpl = struct
     | RealFloating LongDouble ->
         Some 8 (* TODO:hack ==> 16 *)
   
+  (* CAUTION!! new implementions based on DefaultImpl should redefine this *)
   let impl: implementation = {
     name;
     details;
@@ -199,12 +206,58 @@ end
 module DefactoImpl = struct
   include DefaultImpl
 
+  (* TODO:
+    The observable, integer range of a uintptr_t is the same as that
+    of a ptraddr_t (or ptrdiff_t for intptr_t ), despite the increased
+    alignment and storage requirements.
+   *)
+
+  let sizeof_ity = function
+    | Signed Intptr_t  | Unsigned Intptr_t -> Some 16
+    | ity ->  DefaultImpl.sizeof_ity ity
+
+  let alignof_ity = function
+    | Signed Intptr_t  | Unsigned Intptr_t -> Some 16
+    | ity ->  DefaultImpl.alignof_ity ity
+
+end
+
+module MorelloImpl = struct
+  include DefaultImpl
+
+  let name = "clang11_aarch64-unknown-freebsd13"
+  let details = "clang version 11.0.0\nTarget: Morello"
+
+  let sizeof_pointer =
+    Some 16
+
+  let alignof_pointer =
+    Some 16
+
+  let alignof_ity = function
+    | Signed Intptr_t
+    | Unsigned Intptr_t -> Some 16
+    | ity ->  DefaultImpl.sizeof_ity ity
+
   let sizeof_ity = function
     | Signed Intptr_t
-    | Unsigned Intptr_t ->
-        None
-    | ity ->
-        DefaultImpl.sizeof_ity ity
+    | Unsigned Intptr_t -> Some 16
+    | ity ->  DefaultImpl.sizeof_ity ity
+
+  let impl: implementation = {
+    name;
+    details;
+    sizeof_pointer;
+    alignof_pointer;
+    is_signed_ity;
+    sizeof_ity;
+    precision_ity;
+    sizeof_fty;
+    alignof_ity;
+    alignof_fty;
+    register_enum;
+    typeof_enum;
+  }
 end
 
 
@@ -268,7 +321,10 @@ module HafniumImpl = struct
     | Ptrdiff_t ->
         (* STD *)
         true
-  
+    | Ptraddr_t ->
+        (* STD *)
+        false
+
   let sizeof_ity = function
     | Char ->
         Some 1
@@ -305,7 +361,9 @@ module HafniumImpl = struct
         Some 8
     | Ptrdiff_t ->
         Some 8
-  
+    | Ptraddr_t ->
+        Some 8
+
   (* No trap representations *)
   let precision_ity ity =
     match sizeof_ity ity with
@@ -361,7 +419,9 @@ module HafniumImpl = struct
         Some 8
     | Ptrdiff_t ->
         Some 8
-  
+    | Ptraddr_t ->
+        Some 8
+
   let alignof_fty = function
     | RealFloating Float ->
         Some 4
@@ -397,6 +457,7 @@ let hafniumIntImpl: IntegerImpl.implementation =
       | None   -> assert false)
   (Size_t)
   (Ptrdiff_t)
+  (Ptraddr_t)
 
 
 (* TODO: this is horrible... *)

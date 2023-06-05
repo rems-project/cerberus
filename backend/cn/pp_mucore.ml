@@ -711,6 +711,9 @@ module Make (Config: CONFIG) = struct
                | M_PtrArrayShift (sym1,ct1,sym2) ->
                   (PtrArrayShift, 
                    [msym sym1; mctype ct1; msym sym2])
+               | M_PtrMemberShift (tag_sym, memb_ident, sym) ->
+                  (PtrMemberShift (tag_sym, memb_ident),
+                   [msym sym])
                | M_Memcpy (sym1,sym2,sym3) ->
                   (Memcpy, 
                    [msym sym1; msym sym2; msym sym3])

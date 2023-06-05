@@ -4,6 +4,7 @@ type genIntegerType [name="git*"] =
  | Concrete of integerType
  | SizeT
  | PtrdiffT
+ | PtraddrT
  | Unknown of integerConstant
  | Promote of genIntegerType
  | Usual of genIntegerType * genIntegerType
@@ -61,12 +62,14 @@ let rec eq_genIntegerType gity1 gity2 =
         1
     | PtrdiffT ->
         2
-    | Unknown _ ->
+    | PtraddrT ->
         3
-    | Promote _ ->
+    | Unknown _ ->
         4
-    | Usual _ _ ->
+    | Promote _ ->
         5
+    | Usual _ _ ->
+        6
   end in
   match (gity1, gity2) with
     | (Concrete ity1, Concrete ity2) ->

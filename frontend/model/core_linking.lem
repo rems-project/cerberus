@@ -92,6 +92,8 @@ let rec free_pexpr acc (Pexpr _ _ pe) =
       free_pexpr (free_pexpr acc pe1) pe2
   | PEmember_shift pe1 sym _ ->
       free_pexpr acc pe1
+  | PEmemop _ pes ->
+      List.foldl free_pexpr acc pes
   | PEnot pe ->
       free_pexpr acc pe
   | PEop _ pe1 pe2 ->

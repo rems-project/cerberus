@@ -69,7 +69,7 @@ let rec map2_ f xs ys acc =
     | (x::xs', y::ys') ->
         map2_ f xs' ys' (f x y :: acc)
     | ([],[]) ->
-        acc
+        List.reverse acc
     | _ ->
         error "[Global.foldl2] the twos weren't of same length"
   end
@@ -300,7 +300,7 @@ let list_unfoldr x = list_unfoldr_aux [] x
 val     maybe_mapM: forall 'a 'b. ('a -> maybe 'b) -> list 'a -> maybe (list 'b)
 let rec maybe_mapM_aux acc f = function
   | [] ->
-      Just acc
+      Just (List.reverse acc)
   | x::xs' ->
       match f x with
         | Just x' ->

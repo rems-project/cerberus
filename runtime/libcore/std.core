@@ -58,7 +58,7 @@ fun conv_int (ty: ctype, n: integer): integer :=
 fun conv_aux (ty: ctype, n: integer) : integer :=
   n rem_f (Ivmax(ty) - Ivmin(ty) + 1)
 
-fun conv_loaded_int (ty: ctype, _n: loaded integer): loaded integer :=
+fun conv_loaded_int (is_cheri: boolean, ty: ctype, _n: loaded integer): loaded integer :=
   case _n of
     | Specified(n:integer) =>
         Specified(conv_int(ty, n))
@@ -185,13 +185,17 @@ fun reverse (xs: [integer]): [integer] :=
   reverse_aux (xs, [] : [integer])
 
 proc rev_listFromStr_aux(str: pointer, acc: [integer]) : eff [integer] :=
-  let strong c_: loaded integer = load('char', array_shift(str, 'char', 0)) in
+  let strong shifted: pointer = memop(PtrArrayShift, str, 'char', 0) in
+  let strong c_: loaded integer = load('char', shifted) in
+--  let strong c_: loaded integer = load('char', array_shift(str, 'char', 0)) in
   case c_ of
     | Specified(c: integer) =>
         if c = 0 then
           pure(acc)
         else
-          let strong ret: [integer] = pcall(rev_listFromStr_aux, array_shift(str, 'char', 1), c :: acc) in
+          let strong shifted: pointer = memop(PtrArrayShift, str, 'char', 1) in
+          let strong ret: [integer] = pcall(rev_listFromStr_aux, shifted, c :: acc) in
+--          let strong ret: [integer] = pcall(rev_listFromStr_aux, array_shift(str, 'char', 1), c :: acc) in
           pure(ret)
     | Unspecified(_: ctype) =>
         pure (undef(<<DUMMY(rev_listFromStr_aux)>>)) -- TODO think about that
@@ -205,10 +209,14 @@ proc rev_listFromArray_aux (ptr: pointer, acc: [integer], n: integer): eff [inte
   if n = 0 then
     pure(acc)
   else
-    let strong c_loaded: loaded integer = load('char', array_shift(ptr, 'char', 0)) in
+    let strong shifted: pointer = memop(PtrArrayShift, ptr, 'char', 0) in
+    let strong c_loaded: loaded integer = load('char', shifted) in
+--    let strong c_loaded: loaded integer = load('char', array_shift(ptr, 'char', 0)) in
     case c_loaded of
       | Specified (c: integer) =>
-        pcall(rev_listFromArray_aux, array_shift(ptr, 'char', 1), c :: acc, n - 1)
+          let strong shifted: pointer = memop(PtrArrayShift, ptr, 'char', 1) in
+          pcall(rev_listFromArray_aux, shifted, c :: acc, n - 1)
+--          pcall(rev_listFromArray_aux, array_shift(ptr, 'char', 1), c :: acc, n - 1)
       | Unspecified (_: ctype) =>
         pure (undef(<<DUMMY(rev_listFromPtr_aux)>>))
     end
@@ -343,7 +351,7 @@ proc [ailname = "malloc"] malloc_proxy (size_ptr: pointer) : eff loaded pointer 
   let strong size_: loaded integer = load('size_t', size_ptr) in
   case size_ of
     | Specified(size: integer) =>
-        let strong ptr: pointer = alloc(8 {- TODO -}, size) in
+        let strong ptr: pointer = alloc(16 {-Ivalignof('max_align_t')-}, size) in
         pure(Specified(ptr))
     | Unspecified(_: ctype) =>
         pure(error(<<<malloc_proxy>>>, False))
@@ -354,7 +362,7 @@ proc [ailname = "realloc"] realloc_proxy (old_ptrptr: pointer, size_ptr: pointer
   let strong old_ptrptr_: loaded pointer = load('void *', old_ptrptr) in
   case (size_, old_ptrptr_) of
     | (Specified(size: integer), Specified(old_ptr: pointer)) =>
-        let strong ptr: pointer = memop(Realloc, 8, old_ptr, size) in
+        let strong ptr: pointer = memop(Realloc, 16 {-Ivalignof('max_align_t')-}, old_ptr, size) in
         pure(Specified(ptr))
     | (_: loaded integer, _: loaded pointer) =>
         pure(error(<<<malloc_proxy>>>, False))

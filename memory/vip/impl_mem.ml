@@ -157,7 +157,7 @@ type mem_state = {
 
   (* Web user-interface stuff *)
   last_used: allocation_id option;
-}
+} [@@warning "-unused-field"]
 
 let initial_mem_state: mem_state =
   { allocations= IntMap.empty
@@ -183,8 +183,8 @@ let update = Nondeterminism.nd_update
 let fail ?(loc=Cerb_location.other "VIP") err =
   let open Nondeterminism in
   match MC.undefinedFromMem_error err with
-    | Some ubs ->
-        kill (Undef0 (loc, ubs))
+    | Some ub ->
+        kill (Undef0 (loc, [ub]))
     | None ->
         kill (Other err)
 
@@ -623,7 +623,7 @@ let case_ptrval ptrval f_null f_funptr f_concrete =
     | PVloc (Prov_some alloc_id, addr) ->
         f_concrete (Some alloc_id) addr
     | PVfunptr sym ->
-        f_funptr sym
+        f_funptr (Some sym)
 
 let case_funsym_opt _ ptrval : Symbol.sym option =
   match ptrval with
@@ -788,6 +788,27 @@ let intfromptr _ ref_ty ity ptrval : integer_value memM =
     | PVfunptr sym ->
       fail (MerrVIP (VIP_intcast VIP_funptr))
 
+let derive_cap _ _ _ _ : integer_value =
+  assert false (* CHERI only *)
+
+let cap_assign_value _ _ _ : integer_value =
+  assert false (* CHERI only *)
+
+let ptr_t_int_value ival =
+  ival
+
+let null_cap _ : integer_value =
+  assert false (* CHERI only *)
+
+let get_intrinsic_type_spec _ =
+  assert false (* CHERI only *)
+
+let call_intrinsic _ _ _ =
+  assert false (* CHERI only *)
+
+let intcast _ _ ival =
+  Either.Right ival
+
 (* Pointer shifting constructors *)
 let array_shift_ptrval ptrval ty ival : pointer_value =
   (* TODO: "VIP memory model should be called SWITCH strict_pointer_arith" *)
@@ -860,7 +881,9 @@ let eff_array_shift_ptrval loc ptrval ty ival : pointer_value memM =
           return (PVloc (Prov_some alloc_id, addr'))
     | PVfunptr sym ->
         fail (MerrVIP (VIP_array_shift VIP_funptr))
-      
+
+let eff_member_shift_ptrval _ tag_sym membr_ident ptrval =
+  return (member_shift_ptrval tag_sym membr_ident ptrval)
 
 let memcpy loc ptrval1 ptrval2 sz_ival : pointer_value memM =
   let sz = ival_to_int sz_ival in
@@ -1020,7 +1043,7 @@ let fvfromint ival =
   (* NOTE: if n is too big, the float will be truncated *)
   float_of_string (N.to_string (ival_to_int ival))
 
-  let ivfromfloat fval =
+  let ivfromfloat _ fval =
     IVint (N.of_float fval)
 
 
@@ -1073,7 +1096,7 @@ let string_of_provenance = function
   | Prov_some alloc_id ->
       "@" ^ Nat_big_num.to_string alloc_id
 
-let pp_pointer_value = function
+let pp_pointer_value ?(is_verbose=false) = function
   | PVnull ->
       !^ "NULL"
   | PVloc (prov, addr) ->
@@ -1120,7 +1143,7 @@ let rec pp_mem_value = function
         pp_mem_value mval
       )
 
-let pp_pretty_pointer_value = pp_pointer_value
+let pp_pretty_pointer_value = pp_pointer_value ~is_verbose:false
 let pp_pretty_integer_value _ = pp_integer_value
 let pp_pretty_mem_value _ = pp_mem_value
 

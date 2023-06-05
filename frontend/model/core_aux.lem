@@ -148,9 +148,13 @@ let rec memValueFromValue (Ctype annots ty) cval =
         Nothing
     | (_, Vloaded (LVunspecified ty')) ->
         Just (Mem.unspecified_mval ty') (* TODO: check ty = ty'? *)
+    | (Basic (Integer ity), Vobject (OVinteger ival)) ->
+        Just (Mem.integer_value_mval ity ival)
     | (Basic (Integer ity), Vloaded (LVspecified (OVinteger ival))) ->
         Just (Mem.integer_value_mval ity ival)
     | (Basic (Floating fty), Vloaded (LVspecified (OVfloating fval))) ->
+        Just (Mem.floating_value_mval fty fval)
+    | (Basic (Floating fty), Vobject (OVfloating fval)) ->
         Just (Mem.floating_value_mval fty fval)
     | (Pointer _ ref_ty, Vobject (OVpointer ptr_val)) -> (* TODO: not sure about this *)
         Just (Mem.pointer_mval ref_ty ptr_val)
@@ -332,6 +336,10 @@ val mk_alignof_pe: pexpr -> pexpr
 let mk_alignof_pe pe =
   Pexpr [] () (PEctor Civalignof [pe])
 
+val mk_nullcap_pe: bool -> pexpr
+let mk_nullcap_pe is_signed =
+  Pexpr [] () (PEctor (CivNULLcap is_signed) [])
+
 (* TODO: PEconstrained *)
 
 val mk_undef_pe: Loc.t -> Undefined.undefined_behaviour -> pexpr
@@ -370,6 +378,10 @@ let mk_array_shift pe1 ty pe2 =
 val mk_member_shift_pe: pexpr -> Symbol.sym -> Symbol.identifier -> pexpr
 let mk_member_shift_pe pe1 tag_sym member_ident =
   Pexpr [] () (PEmember_shift pe1 tag_sym member_ident)
+
+val mk_memop_pe: Mem_common.pure_memop -> list pexpr -> pexpr
+let mk_memop_pe mop pes =
+  Pexpr [] () (PEmemop mop pes)
 
 val mk_case_pe: pexpr -> list (pattern * pexpr) -> pexpr
 let mk_case_pe pe pat_pes =
@@ -881,6 +893,8 @@ let rec subst_sym_pexpr sym cval (Pexpr annot bty pexpr_) =
         PEarray_shift (subst_sym_pexpr sym cval pe1) ty (subst_sym_pexpr sym cval pe2)
     | PEmember_shift pe tag_sym memb_ident ->
         PEmember_shift (subst_sym_pexpr sym cval pe) tag_sym memb_ident
+    | PEmemop mop pes ->
+        PEmemop mop (List.map (subst_sym_pexpr sym cval) pes)
     | PEnot pe ->
         PEnot (subst_sym_pexpr sym cval pe)
     | PEop bop pe1 pe2 ->
@@ -1085,6 +1099,8 @@ let rec subst_pattern_val (Pattern _ pat) cval expr =
               "fvfromint"
           | Civfromfloat ->
               "ivfromfloat"
+          | CivNULLcap is_signed ->
+              "ivNULLcap(" ^ if is_signed then "signed" else "unsigned" ^ ")"
         end in
         error ("WIP: Core_aux.subst_pattern_val ==> ctor= " ^ str_ctor ^ ", |pats|= "
                ^ (show (List.length pats)) ^ " -- " ^ Pp.stringFromCore_value cval)
@@ -1143,6 +1159,8 @@ let rec unsafe_subst_sym_pexpr sym (Pexpr annot bty pe_' as pe') (Pexpr _ _ pe_)
         PEarray_shift (unsafe_subst_sym_pexpr sym pe' pe1) ty (unsafe_subst_sym_pexpr sym pe' pe2)
     | PEmember_shift pe tag_sym memb_ident ->
         PEmember_shift (unsafe_subst_sym_pexpr sym pe' pe) tag_sym memb_ident
+    | PEmemop mop pes ->
+        PEmemop mop (List.map (unsafe_subst_sym_pexpr sym pe') pes)
     | PEnot pe ->
         PEnot (unsafe_subst_sym_pexpr sym pe' pe)
     | PEop bop pe1 pe2 ->
@@ -1369,6 +1387,8 @@ let rec unsafe_subst_pattern (Pattern _ pat) pe' expr =
               "fvfromint"
           | Civfromfloat ->
               "ivfromfloat"
+          | CivNULLcap is_signed ->
+              "ivNULLcap(" ^ if is_signed then "signed" else "unsigned" ^ ")"  
         end in
         error ("WIP: Core_aux.unsafe_subst_pattern ==> ctor= " ^ str_ctor ^ ", |pats|= "
                ^ (show (List.length pats)) ^ " -- " ^ Pp.stringFromCore_pexpr pe')
@@ -2369,6 +2389,8 @@ let rec update_env_aux (Pattern _ pat) cval env =
               "fvfromint"
           | Civfromfloat ->
               "ivfromfloat"
+          | CivNULLcap is_signed ->
+              "ivNULLcap(" ^ if is_signed then "signed" else "unsigned" ^ ")"  
         end in
         error ("WIP: Core_aux.update_env_aux ==> ctor= " ^ str_ctor ^ ", |pats|= "
                ^ (show (List.length pats)) ^ " -- " ^ Pp.stringFromCore_value cval)

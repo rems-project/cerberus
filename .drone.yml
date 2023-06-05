@@ -1,0 +1,50 @@
+kind: pipeline
+type: docker
+name: default
+  
+steps:
+  - name: submodules
+    image: alpine/git
+    commands:
+      - git submodule update --init --recursive
+
+  # Cache will be (re)built if:
+  # 1) the build was triggered by a cron job, or was promoted (web interface: top right "..." -> "Promote")
+  # 2) no image is found with the tag expected for this repo+branch
+  # 3) cache definition files have changed since the last build (filenames hardcoded below)
+  - name: rebuild-cache
+    image: docker:git
+    volumes:
+      - name: dockersock
+        path: /var/run/docker.sock
+    commands:
+      - |
+        if [ '${DRONE_BUILD_EVENT}' = cron ]                                 \
+           || [ '${DRONE_BUILD_EVENT}' = promote ]                           \
+           || [ -z "$(docker image ls --quiet                                \
+                   'cache--${DRONE_REPO_NAME}:${DRONE_SOURCE_BRANCH}')" ]    \
+           || ! git diff --quiet --exit-code                                 \
+                   ${DRONE_COMMIT_BEFORE}..${DRONE_COMMIT_AFTER}             \
+                   Dockerfile.ci cerberus.opam ;                             \
+        then                                                                 \
+            docker build --no-cache -t                                       \
+               'cache--${DRONE_REPO_NAME}:${DRONE_SOURCE_BRANCH}'            \
+                -f Dockerfile.ci . ;                                         \
+        fi
+
+  - name: compile-cerberus
+    image: cache--${DRONE_REPO_NAME}:${DRONE_SOURCE_BRANCH}
+    pull: never
+    commands:
+      - opam exec -- make
+
+  - name: test-cerberus
+    image: cache--${DRONE_REPO_NAME}:${DRONE_SOURCE_BRANCH}
+    pull: never
+    commands:
+      - opam exec -- make test
+
+volumes:
+  - name: dockersock
+    host:
+      path: /var/run/docker.sock

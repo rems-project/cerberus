@@ -311,6 +311,8 @@ let untype_file (file: 'a Core.typed_file) : 'a Core.file =
           PEarray_shift (untype_pexpr pe1, ty, untype_pexpr pe2)
       | PEmember_shift (pe1, tag_sym, membr_ident) ->
           PEmember_shift (untype_pexpr pe1, tag_sym, membr_ident)
+      | PEmemop (mop, pes) ->
+          PEmemop (mop, List.map untype_pexpr pes)
       | PEnot pe ->
           PEnot (untype_pexpr pe)
       | PEop (binop, pe1, pe2) ->
@@ -513,7 +515,6 @@ let interp_backend io core_file ~args ~batch ~fs ~driver_conf =
     let open Core in
     D.drive core_file ("cmdname" :: args) fs_state driver_conf >>= function
       | (Vloaded (LVspecified (OVinteger ival)) :: _) ->
-          (* TODO: yuck *)
           return (Either.Right begin
             match Mem.eval_integer_value ival with
               | Some n ->
@@ -547,7 +548,7 @@ type 'a core_dump =
     dump_extern: (Symbol.identifier * (Symbol.sym list * Core.linking_kind)) list;
     dump_funinfo: (Symbol.sym * (Cerb_location.t * Annot.attributes * Ctype.ctype * (Symbol.sym option * Ctype.ctype) list * bool * bool)) list;
     dump_loop_attributes: (int * Annot.attributes) list;
-  }
+  } [@@warning "-unused-field"]
 
 let sym_compare (Symbol.Symbol (d1, n1, _)) (Symbol.Symbol (d2, n2, _)) =
   if d1 = d2 then compare n1 n2
@@ -563,7 +564,8 @@ let read_core_object (core_stdlib, core_impl) fname =
   let open Core in
   let ic = open_in_bin fname in
   let v = input_line ic in
-  if v <> Version.version then
+  if v <> (Version.version ^ "+" ^ Impl_mem.name)
+  then
     Cerb_debug.warn [] (fun () -> "WARNING: read core_object file produced with a different version of Cerberus => " ^ v);
   let dump = Marshal.from_channel ic in
   close_in ic;

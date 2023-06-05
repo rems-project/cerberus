@@ -39,6 +39,9 @@ let io, get_progress =
       end;
   }, fun () -> !progress
 
+let is_cheri_memory () =
+  String.starts_with ~prefix:"cheri" Impl_mem.name
+
 let frontend (conf, io) filename core_std =
   if not (Sys.file_exists filename) then
     error ("The file `" ^ filename ^ "' doesn't exist.");
@@ -58,6 +61,7 @@ let create_cpp_cmd cpp_cmd nostdinc macros_def macros_undef incl_dirs incl_files
   let libc_dirs = [in_runtime "bmc"; in_runtime "libc/include"; in_runtime "libc/include/posix"] in
   let incl_dirs = if nostdinc then incl_dirs else libc_dirs @ incl_dirs in
   let macros_def = if nolibc then macros_def else ("CERB_WITH_LIB", None) :: macros_def in
+  let macros_def = if is_cheri_memory () then ("__CHERI__", None) :: macros_def else macros_def in
   String.concat " " begin
     cpp_cmd ::
     List.map (function
@@ -71,7 +75,14 @@ let create_cpp_cmd cpp_cmd nostdinc macros_def macros_undef incl_dirs incl_files
 
 let core_libraries incl lib_paths libs =
   let lib_paths = if incl then in_runtime "libc" :: lib_paths else lib_paths in
-  let libs = if incl then "c" :: libs else libs in
+  let libs =
+    if incl then
+      if Switches.is_CHERI () then
+        let mname = Impl_mem.name in
+        ("c-" ^ mname) :: libs
+      else
+        "c" :: libs
+    else libs in
   List.map (fun lib ->
       match List.fold_left (fun acc path ->
           match acc with
@@ -101,7 +112,7 @@ let create_executable out =
 
 let cerberus debug_level progress core_obj
              cpp_cmd nostdinc nolibc agnostic macros macros_undef
-             incl_dirs incl_files cpp_only
+             runtime_path_opt incl_dirs incl_files cpp_only
              link_lib_path link_core_obj
              impl_name
              exec exec_mode iso_switches switches batch concurrency
@@ -111,6 +122,7 @@ let cerberus debug_level progress core_obj
              output_name
              files args_opt =
   Cerb_debug.debug_level := debug_level;
+  Cerb_runtime.specified_runtime := runtime_path_opt;
   let cpp_cmd =
     create_cpp_cmd cpp_cmd nostdinc macros macros_undef incl_dirs incl_files nolibc
   in
@@ -124,12 +136,22 @@ let cerberus debug_level progress core_obj
                rewrite_core; sequentialise_core; cpp_cmd; cpp_stderr = true } in
   let prelude =
     (* Looking for and parsing the core standard library *)
-    if iso_switches then begin
+    let switches =
+      if is_cheri_memory () then begin
+        Cerb_frontend.Ocaml_implementation.(set (MorelloImpl.impl));
+        if not (List.mem "CHERI" switches) then
+          "CHERI" :: switches
+        else
+          switches
+      end else switches in
+    begin if iso_switches then begin
       if switches <> [] then
         Cerb_debug.warn [] (fun () -> "The --iso argument overrides --switches");
       Switches.set_iso_switches ()
     end else
-      Switches.set switches;
+      Switches.set switches
+    end;
+    io.pass_message (Printf.sprintf "Using '%s'" Impl_mem.name) >>
     load_core_stdlib () >>= fun core_stdlib ->
     io.pass_message "Core standard library loaded." >>
     (* Looking for and parsing the implementation file *)
@@ -348,6 +370,10 @@ let nolibc =
   let doc = "Do not search the standard system directories for include files." in
   Arg.(value & flag & info ["nolibc"] ~doc)
 
+let runtime_path =
+  let doc = "custom Cerberus runtime directory" in
+  Arg.(value & opt (some string) None & info ["r";"runtime"] ~docv:"DIR" ~doc)
+
 let agnostic =
   let doc = "Asks Cerberus to delay looking at implementation settings until as late \
              as possible. This makes the pipeline somewhat implementation agnostic." in
@@ -454,7 +480,7 @@ let args =
 let () =
   let cerberus_t = Term.(const cerberus $ debug_level $ progress $ core_obj $
                          cpp_cmd $ nostdinc $ nolibc $ agnostic $ macros $ macros_undef $
-                         incl_dir $ incl_file $ cpp_only $
+                         runtime_path $ incl_dir $ incl_file $ cpp_only $
                          link_lib_path $ link_core_obj $
                          impl $
                          exec $ exec_mode $ iso $ switches $ batch $

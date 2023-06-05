@@ -478,6 +478,13 @@ let rec symbolify_pexpr (Pexpr (annot, (), _pexpr): parsed_pexpr) : pexpr Eff.t 
           | _ ->
               Eff.fail loc (Core_parser_ctor_wrong_application (1, List.length _pes))
         end
+    | PEctor (CivNULLcap is_signed, _pes) ->
+        begin match _pes with
+          | [] ->
+              Eff.return (Pexpr (annot, (), PEctor (CivNULLcap is_signed, [])))
+          | _ ->
+              Eff.fail loc (Core_parser_ctor_wrong_application (0, List.length _pes))
+        end
     | PEcase (_pe, _pat_pes) ->
         symbolify_pexpr _pe >>= fun pe ->
         Eff.mapM (fun (_pat, _pe) ->
@@ -500,6 +507,9 @@ let rec symbolify_pexpr (Pexpr (annot, (), _pexpr): parsed_pexpr) : pexpr Eff.t 
           | None ->
              Eff.fail (Cerb_location.(region (snd _tag_sym) NoCursor))
                (Core_parser_unresolved_symbol (fst _tag_sym)))
+    | PEmemop (mop, _pes) ->
+        Eff.mapM symbolify_pexpr _pes >>= fun pes ->
+        Eff.return (Pexpr (annot, (), PEmemop (mop, pes)))
     | PEnot _pe ->
         Caux.mk_not_pe <$> symbolify_pexpr _pe
     | PEop (bop, _pe1, _pe2) ->
@@ -561,7 +571,60 @@ let rec symbolify_expr ((Expr (annot, expr_)) : parsed_expr) : (unit expr) Eff.t
    | Epure _pe ->
        symbolify_pexpr _pe >>= fun pe ->
        Eff.return (Epure pe)
-   | Ememop (memop, _pes) ->
+   | Ememop (_memop, _pes) ->
+       begin
+         let open Mem_common in
+         match _memop with
+          | PtrMemberShift (_tag_sym, membr_ident) ->
+              lookup_sym _tag_sym >>= (function
+                | Some (tag_sym, _) ->
+                    Eff.return (PtrMemberShift (tag_sym, membr_ident))
+                | None ->
+                    Eff.fail (Cerb_location.(region (snd _tag_sym) NoCursor))
+                      (Core_parser_unresolved_symbol (fst _tag_sym)))
+          | PtrEq ->
+               Eff.return PtrEq
+          | PtrNe ->
+              Eff.return PtrNe
+          | PtrLt ->
+              Eff.return PtrLt
+          | PtrGt ->
+              Eff.return PtrGt
+          | PtrLe ->
+              Eff.return PtrLe
+          | PtrGe ->
+              Eff.return PtrGe
+          | Ptrdiff ->
+              Eff.return Ptrdiff
+          | IntFromPtr ->
+              Eff.return IntFromPtr
+          | PtrFromInt ->
+              Eff.return PtrFromInt
+          | PtrValidForDeref ->
+              Eff.return PtrValidForDeref
+          | PtrWellAligned ->
+              Eff.return PtrWellAligned
+          | PtrArrayShift ->
+              Eff.return PtrArrayShift
+          | Memcpy ->
+              Eff.return Memcpy
+          | Memcmp ->
+              Eff.return Memcmp
+          | Realloc ->
+              Eff.return Realloc
+          | Va_start ->
+              Eff.return Va_start
+          | Va_copy ->
+              Eff.return Va_copy
+          | Va_arg ->
+              Eff.return Va_arg
+          | Va_end ->
+              Eff.return Va_end
+          | Copy_alloc_id ->
+              Eff.return Copy_alloc_id
+          | CHERI_intrinsic _ ->
+              assert false
+       end >>= fun memop ->
        Eff.mapM symbolify_pexpr _pes >>= fun pes ->
        Eff.return (Ememop (memop, pes))
    | Eaction _pact ->
@@ -1002,7 +1065,9 @@ let mk_file decls =
 %token <Core_parser_util._sym> SYM
 %token <Implementation.implementation_constant> IMPL
 %token <Undefined.undefined_behaviour> UB
-%token <Mem_common.memop> MEMOP_OP
+%token <Mem_common.pure_memop> PURE_MEMOP_OP
+%token <Core_parser_util._sym Mem_common.generic_memop> MEMOP_OP
+%token PTRMEMBERSHIFT
 
 (* ctype tokens *)
 %token CONST
@@ -1012,7 +1077,7 @@ let mk_file decls =
 %token CHAR BOOL SIGNED UNSIGNED
 %token INT8_T INT16_T INT32_T INT64_T UINT8_T UINT16_T UINT32_T UINT64_T
 %token INTPTR_T INTMAX_T UINTPTR_T UINTMAX_T
-%token SIZE_T PTRDIFF_T
+%token SIZE_T PTRDIFF_T (* MAX_ALIGN_T *)
 %token STRUCT UNION
 
 (* C11 memory orders *)
@@ -1205,6 +1270,10 @@ integer_type:
     { Ctype.Size_t }
 | PTRDIFF_T
     { Ctype.Ptrdiff_t }
+(*
+| MAX_ALIGN_T
+    { Ctype.Max_align_t }
+*)
 ;
 
 floating_type:
@@ -1505,9 +1574,8 @@ pexpr:
     { Pexpr ([Aloc (Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($1))))], (), PEcfunction _pe) }
 | _pe1= pexpr bop= binary_operator _pe2= pexpr
     { Pexpr ([Aloc (Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos(bop))))], (), PEop (bop, _pe1, _pe2)) }
-(*
-  | PEmemop of Mem.pure_memop * list (generic_pexpr 'ty 'sym)
-*)
+| MEMOP LPAREN memop= PURE_MEMOP_OP COMMA _pes= separated_list(COMMA, pexpr) RPAREN
+    { Pexpr ([Aloc (Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($1))))], (), PEmemop (memop, _pes)) }
 | LPAREN STRUCT _sym=SYM RPAREN _mems= delimited(LBRACE,separated_list (COMMA, member), RBRACE)
     { Pexpr ([Aloc (Cerb_location.(region ($startpos, $endpos) NoCursor))], (), PEstruct (_sym, _mems)) }
 | LPAREN UNION _sym=SYM RPAREN LBRACE m=member RBRACE
@@ -1530,6 +1598,12 @@ pexpr:
     { Pexpr ([Aloc (Cerb_location.(region ($startpos, $endpos) NoCursor))], (), PEare_compatible (_pe1, _pe2)) }
 ;
 
+memop_op:
+| memop= MEMOP_OP
+    { memop }
+| PTRMEMBERSHIFT _sym_cid= delimited(LBRACKET, separated_pair(SYM, COMMA, preceded(DOT, cabs_id)), RBRACKET)
+    { let (_sym, cid) = _sym_cid in
+      Mem_common.PtrMemberShift (_sym, cid) }
 
 expr:
 | e_= delimited(LPAREN, expr, RPAREN)
@@ -1537,7 +1611,7 @@ expr:
       Expr (Aloc (Cerb_location.(region ($startpos, $endpos) NoCursor)) :: annot, expr_) }
 | PURE pe_= delimited(LPAREN, pexpr, RPAREN)
     { Expr ([Aloc (Cerb_location.(region ($startpos, $endpos) NoCursor))], Epure pe_) }
-| MEMOP LPAREN memop= MEMOP_OP COMMA pes= separated_list(COMMA, pexpr) RPAREN
+| MEMOP LPAREN memop= memop_op COMMA pes= separated_list(COMMA, pexpr) RPAREN
     { Expr ([Aloc (Cerb_location.(region ($startpos, $endpos) NoCursor))], Ememop (memop, pes)) }
 | LET _pat= pattern EQ _pe1= pexpr IN _e2= expr
     { Expr ( [Aloc (Cerb_location.(region ($startpos, $endpos) NoCursor))]

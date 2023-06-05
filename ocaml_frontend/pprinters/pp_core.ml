@@ -87,6 +87,7 @@ let precedence_pexpr = function
   | PEcase _
   | PEarray_shift _
   | PEmember_shift _
+  | PEmemop _
   | PEnot _
   | PEstruct _
   | PEunion _
@@ -374,6 +375,8 @@ let pp_ctor = function
       pp_datactor "Cfvfromint"
   | Civfromfloat ->
       pp_datactor "Civfromfloat"
+  | CivNULLcap is_signed ->
+      pp_datactor "CivNULLcap" ^^ P.parens (!^ (if is_signed then "signed" else "unsigned"))
 
 
 let rec pp_pattern (Pattern (_, pat)) =
@@ -476,6 +479,8 @@ let pp_pexpr pe =
           pp_keyword "member_shift" ^^ P.parens (
             pp pe ^^ P.comma ^^^ pp_raw_symbol tag_sym ^^ P.comma ^^^ P.dot ^^ !^ memb_ident
           )
+      | PEmemop (pure_memop, pes) ->
+          pp_keyword "memop" ^^ P.parens (Pp_mem.pp_pure_memop pure_memop ^^ P.comma ^^^ comma_list pp pes)
       | PEnot pe ->
           pp_keyword "not" ^^ P.parens (pp pe)
       | PEop (bop, pe1, pe2) ->

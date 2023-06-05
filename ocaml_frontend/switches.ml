@@ -18,6 +18,7 @@ type cerb_switch =
   | SW_strict_pointer_relationals
   
   | SW_PNVI of [ `PLAIN | `AE | `AE_UDI ]
+  | SW_CHERI
   
     (* the elaboration places the allocation/initialisation/deallocation of
        non-variadic functions inside the body of the Core procedures
@@ -27,7 +28,7 @@ type cerb_switch =
     (* allow (with %p) formatted printing of non-void pointers (relaxing ISO) *)
   | SW_permissive_printf
 
-  (* make it so every object allocation is zero initialised *)
+    (* make it so every object allocation is zero initialised *)
   | SW_zero_initialised
 
 let internal_ref =
@@ -73,6 +74,8 @@ let set strs =
         Some SW_permissive_printf
     | "zero_initialised" ->
         Some SW_zero_initialised
+    | "CHERI" ->
+        Some SW_CHERI
     | _ ->
         None in
   List.iter (fun str ->
@@ -92,6 +95,9 @@ let set_iso_switches () =
     ; SW_strict_pointer_equality
     ; SW_strict_pointer_relationals
     ; SW_PNVI `AE_UDI ]
+
+let is_CHERI () =
+  List.exists (function SW_CHERI -> true | _ -> false) !internal_ref
 
 let is_PNVI () =
   List.exists (function SW_PNVI _ -> true | _ -> false) !internal_ref

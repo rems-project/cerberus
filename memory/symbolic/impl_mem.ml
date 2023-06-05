@@ -68,7 +68,9 @@ module Constraints = struct
             [Symbol.mk_string ctx "_Unsigned_ity"] [Some integerBaseTypeSort]
             [0(*TODO: no idea with I'm doing*)]
         ; mk_ctor "size_t_ity"
-        ; mk_ctor "ptrdiff_t_ity" ] in
+        ; mk_ctor "ptrdiff_t_ity"
+        ; mk_ctor "ptraddr_t_ity"
+        ] in
     
     let basicTypeSort =
       Datatype.mk_sort_s ctx "BasicType"
@@ -287,6 +289,8 @@ let integerType_to_expr slvSt (ity: Ctype.integerType) =
         Expr.mk_app slvSt.ctx (List.nth fdecls 4) []
     | Ptrdiff_t ->
         Expr.mk_app slvSt.ctx (List.nth fdecls 5) []
+    | Ptraddr_t ->
+        Expr.mk_app slvSt.ctx (List.nth fdecls 6) []
     | Wint_t
     | Wchar_t ->
         assert false (* TODO *)
@@ -589,12 +593,19 @@ let validForDeref_ptrval = Defacto_memory.impl_validForDeref_ptrval
 let isWellAligned_ptrval = Defacto_memory.impl_isWellAligned_ptrval
 let ptrfromint = Defacto_memory.impl_ptrcast_ival
 let intfromptr = Defacto_memory.impl_intcast_ptrval
+let derive_cap _ _ _ _ = assert false (* CHERI only *)
+let cap_assign_value _ _ _ = assert false (* CHERI only *)
+let ptr_t_int_value _ = assert false (* CHERI only *)
+let get_intrinsic_type_spec _ =  assert false (* CHERI only *)
+let call_intrinsic _ _ _ = assert false (* CHERI only *)
+let null_cap _ = assert false (* CHERI only *)
 let array_shift_ptrval = Defacto_memory.impl_array_shift_ptrval
 let member_shift_ptrval = Defacto_memory.impl_member_shift_ptrval
 let eff_array_shift_ptrval _ _ = failwith "Defacto_memory.impl_array_shift_ptrval"
+let eff_member_shift_ptrval _ _ _ _ = failwith "Defacto_memory.impl_member_shift_ptrval"
 let memcpy = Defacto_memory.impl_memcpy
 let memcmp = Defacto_memory.impl_memcmp
-let realloc _ _ _ = failwith "Defacto: realloc!"
+let realloc _ _ _ _ _ = failwith "Defacto: realloc!"
 let va_start _ = failwith "Defacto: va_start"
 let va_copy _ = failwith "Defacto: va_copy"
 let va_arg _ _ = failwith "Defacto: va_arg"
@@ -628,7 +639,7 @@ let eq_fval = Defacto_memory.impl_eq_fval
 let lt_fval = Defacto_memory.impl_lt_fval
 let le_fval = Defacto_memory.impl_le_fval
 let fvfromint = Defacto_memory.impl_fvfromint
-let ivfromfloat = Defacto_memory.impl_ivfromfloat
+let ivfromfloat _ = Defacto_memory.impl_ivfromfloat
 let unspecified_mval = Defacto_memory.impl_unspecified_mval
 let integer_value_mval = Defacto_memory.impl_integer_value_mval
 let floating_value_mval = Defacto_memory.impl_floating_value_mval

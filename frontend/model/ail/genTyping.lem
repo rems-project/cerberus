@@ -731,7 +731,9 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
               E.misc (Loc.with_cursor loc) GenericFunctionMustBeDirectlyCalled
           | AilBcopy_alloc_id ->
               E.misc (Loc.with_cursor loc) GenericFunctionMustBeDirectlyCalled
-          (* NOTE: other builtins might not need to be call directly *)
+          | AilBCHERI _ ->
+              E.misc (Loc.with_cursor loc) GenericFunctionMustBeDirectlyCalled
+            (* NOTE: other builtins might not need to be call directly *)
         end
 (*
 
@@ -957,8 +959,49 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
             E.return (AilEcall begin
               AnnotatedExpression (GenRValueType (GenFunction (no_qualifiers, ret_ty) params false)) annots' loc' (AilEbuiltin b)
             end es', GenRValueType (inject_type ret_ty))
+       |  (AilBCHERI str, _) ->
+            match Mem.get_intrinsic_type_spec str with
+              | Nothing ->
+                  error ("TODO(msg) unknown CHERI intrinsics '" ^ str ^ "'")
+              | Just spec ->
+                  let params_n = List.length (snd spec) in
+                  let args_n = List.length args in
+                  if params_n <> args_n then
+                    error ("TODO(msg) CHERI intrinsics '" ^ str ^ "' expecting " ^ show params_n ^
+                           " arguments but is given " ^ show args_n)
+                  else
+                    E.mapM annotate_rvalue args >>= fun xs ->
+                    E.mapM (fun (e, gty) ->
+                      GenTypesAux.interpret_genType loc (Implementation.integerImpl ()) gty >>= fun ty ->
+                      E.return (ty, AilSyntaxAux.is_null_pointer_constant e)
+                    ) xs >>= fun tys ->
+                    (* let () = Debug.print_debug 0 [] (fun () ->
+                      "===> tys: " ^ (stringFromList (Pp.stringFromAil_ctype no_qualifiers) tys) ^
+                      "--- specs: " ^ show specs
+                    ) in *)
+                    match Mem_common.derive_intrinsic_signature tys spec with
+                      | Right (ret_ty, args_tys) ->
+                          (* let () = Debug.print_debug 0 [] (fun () ->
+                            "===> args_tys: " ^ (stringFromList (Pp.stringFromAil_ctype no_qualifiers) args_tys)
+                          ) in
+                          let () = Debug.print_debug 0 [] (fun () ->
+                            "===> args: " ^ (stringFromList (Pp.stringFromAil_expression) args)
+                          ) in *)
+                          let params = List.map (fun ty -> (no_qualifiers, ty, false)) args_tys in
+                          annotate_arguments loc false args (Just params) >>= fun args' ->
+                          let cast_args =
+                            Utils.map2 (fun ty e ->
+                              AnnotatedExpression (GenRValueType (inject_type ty)) [] (Loc.locOf e) (AilEcast no_qualifiers ty e)
+                            ) args_tys args' in
+                          E.return (AilEcall begin
+                            AnnotatedExpression (GenRValueType (GenFunction (no_qualifiers, ret_ty) params false)) annots' loc' (AilEbuiltin b)
+                          end cast_args, GenRValueType (inject_type ret_ty))
+                      | Left msg ->
+                          error ("TODO(msg) CHERI intrinsics failed to derive signature ==> " ^ msg)
+                    end
+              end
        | (_, _) ->
-           error "WIP: typing builtin"
+            error "WIP: typing builtin"
     end
     
     (* TODO: this is wrong in so many ways!! *)

@@ -1,6 +1,6 @@
 open import Pervasives Utils Translation_effect Symbol Show Show_extra Ctype
 import Core Core_aux
-import IntegerImpl AilSyntax AilTypesAux GenTypes GenTypesAux
+import Implementation AilSyntax AilTypesAux GenTypes GenTypesAux
 import Boot Map_extra
 
 module C    = Core
@@ -97,19 +97,7 @@ let conv ty1 ty2 e =
     error -- TODO: floats, OR ty1/ty2 are non-scalar hence this function is undefined
 *)
 
-val integerImpl: IntegerImpl.implementation
-let integerImpl =
-  IntegerImpl.make_implementation
-    IntegerImpl.Two'sComplement
-    Implementation.is_signed_ity
-    (fun ity ->
-      match Implementation.precision_ity ity with
-        | Just n -> n
-        | Nothing -> error "Translation_aux.integerImpl, is_precision_ity Nothing"
-      end
-    )
-    (Size_t)
-    (Ptrdiff_t)
+
 
 (*
 (* TODO: temporary ==> gcc-4.8.2 x86_64-apple-darwin13.0.0 *)
@@ -217,7 +205,7 @@ let exp_type_of a_expr =
 val ctype_of: AilSyntax.expression GenTypes.genTypeCategory -> ctype
 let ctype_of a_expr =
   match ErrorMonad.runErrorMonad
-      (GenTypesAux.interpret_genTypeCategory (Loc.locOf a_expr) integerImpl
+      (GenTypesAux.interpret_genTypeCategory (Loc.locOf a_expr) (Implementation.integerImpl ())
         (GenTypes.genTypeCategoryOf a_expr)) with
     | Right (GenTypes.LValueType _ ty _) -> ty
     | Right (GenTypes.RValueType   ty) -> ty
@@ -230,7 +218,7 @@ let ctype_of a_expr =
 val qualified_ctype_of: AilSyntax.expression GenTypes.genTypeCategory -> qualifiers * ctype
 let qualified_ctype_of a_expr =
   match ErrorMonad.runErrorMonad
-      (GenTypesAux.interpret_genTypeCategory (Loc.locOf a_expr) integerImpl
+      (GenTypesAux.interpret_genTypeCategory (Loc.locOf a_expr) (Implementation.integerImpl ())
         (GenTypes.genTypeCategoryOf a_expr)) with
     | Right (GenTypes.LValueType qs ty _) -> (qs, ty)
     | Right (GenTypes.RValueType   ty) -> (no_qualifiers, ty)
@@ -340,12 +328,12 @@ let mk_translation_stdlib (ailnames, stdlib_fun_map) =
        if not (AilTypesAux.is_integer ty) then
          error "mkcall_conv_int called on non integer type"
        else
-         mk_call "conv_int" [Caux.mk_ail_ctype_pe ty; pe]
+          mk_call "conv_int" [Caux.mk_ail_ctype_pe ty; pe]
    ; mkcall_conv_loaded_int= fun ty pe ->
        if not (AilTypesAux.is_integer ty) then
          error "mkcall_conv_loaded_int called on non integer type"
        else
-         mk_call "conv_loaded_int" [Caux.mk_ail_ctype_pe ty; pe]
+         mk_call "conv_loaded_int" [Caux.mk_boolean_pe (Global.is_CHERI ()); Caux.mk_ail_ctype_pe ty; pe]
    ; mkcall_loaded_fvfromint= fun ty pe ->
        if not (AilTypesAux.is_floating ty) then
          error "mkcall_loaded_fvfromint called on a non floating type"
@@ -357,7 +345,7 @@ let mk_translation_stdlib (ailnames, stdlib_fun_map) =
        else
          mk_call "loaded_ivfromfloat" [Caux.mk_ail_ctype_pe ty; pe]
    ; mkcall_conv_loaded_int_= fun pe1 pe2 ->
-       mk_call "conv_loaded_int" [pe1; pe2]
+       mk_call "conv_loaded_int" [Caux.mk_boolean_pe (Global.is_CHERI ()); pe1; pe2]
    ; mkcall_loaded_fvfromint_= fun pe1 pe2 ->
        mk_call "loaded_fvfromint" [pe1; pe2]
    ; mkcall_loaded_ivfromfloat_= fun pe1 pe2 ->
@@ -427,3 +415,26 @@ let warn_atomic_elaboration guard =
     else
       () in
   return ()
+
+val conv_arith: translation_stdlib -> Ctype.ctype -> Ctype.ctype -> C.pexpr -> C.pexpr
+let conv_arith stdlib ty_src ty_dst pe =
+  if AilTypesAux.is_integer ty_src then
+    if AilTypesAux.is_integer ty_dst then
+      stdlib.mkcall_conv_int ty_dst pe
+    else if AilTypesAux.is_floating ty_dst then
+      C.Pexpr [] () (C.PEctor C.Cfvfromint [Caux.mk_ail_ctype_pe ty_dst; pe])
+    else
+      (* NOTE: this case will occurs in particular if ty_dst is an atomic type *)
+      error "Translation_aux.conv_arith, not (is_arithmetic ty_dst)"
+  else if AilTypesAux.is_floating ty_src then
+    if AilTypesAux.is_integer ty_dst then
+      C.Pexpr [] () (C.PEctor C.Civfromfloat [Caux.mk_ail_ctype_pe ty_dst; pe])
+    else if AilTypesAux.is_floating ty_dst then
+      (* TODO: floating vs floating conversion *)
+      pe
+    else
+      (* NOTE: this case will occurs in particular if ty_dst is an atomic type *)
+      error "Translation_aux.conv_arith, not (is_arithmetic ty_dst)"
+  else
+    (* NOTE: this case will occurs in particular if ty_src is an atomic type *)
+    error "Translation_aux.conv_arith, not (is_arithmetic ty_src)"

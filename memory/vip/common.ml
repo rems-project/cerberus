@@ -198,6 +198,8 @@ let ity_max ity =
           | Wint_t (* TODO *)
           | Signed _ ->
               signed_max
+          |  Ptraddr_t ->
+              unsigned_max
           | Enum _ ->
               (* TODO: hack, assuming like int *)
               sub (pow_int (of_int 2) (8*4-1)) (of_int 1)
@@ -229,6 +231,7 @@ let ity_min ity =
           | None ->
               failwith "the VIP memory model requires a complete implementation MIN"
         end
+    | Ptraddr_t -> zero
     | Enum _ ->
         (* TODO: hack, assuming like int *)
         negate (pow_int (of_int 2) (8*4-1))

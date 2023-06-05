@@ -32,16 +32,26 @@ full-build: prelude-src
 util:
 	@echo "[DUNE] library [$@]"
 	$(Q)dune build _build/default/$@/$@.cma _build/default/$@/$@.cmxa
+	$(Q)dune build _build/profiling/$@/$@.cma _build/profiling/$@/$@.cmxa
+	$(Q)dune build _build/profiling-auto/$@/$@.cma _build/profiling-auto/$@/$@.cmxa
 
 .PHONY: sibylfs
 sibylfs: sibylfs-src
 	@echo "[DUNE] library [$@]"
 	$(Q)dune build _build/default/$@/$@.cma _build/default/$@/$@.cmxa
+	$(Q)dune build _build/profiling/$@/$@.cma _build/profiling/$@/$@.cmxa
+	$(Q)dune build _build/profiling/$@/$@.cma _build/profiling-auto/$@/$@.cmxa
 
 .PHONY: cerberus
 cerberus: prelude-src
 	@echo "[DUNE] cerberus"
 	$(Q)dune build cerberus.install
+	
+.PHONY: test
+test: prelude-src
+	@echo "testing"
+	$(Q)dune build coq/Morello/MorelloTests.vo
+	dune exec coq/coqcaptest.exe
 
 .PHONY: cerberus-bmc bmc
 bmc: cerberus-bmc
@@ -250,6 +260,7 @@ clean-sibylfs-src:
 
 .PHONY: clean
 clean:
+	$(Q)rm -f coq/*.{glob,vo,vok}
 	$(Q)rm -f webcerb.concrete webcerb.symbolic cerberus-webserver
 	$(Q)rm -f $(LIBC_TARGETS)
 	$(Q)dune clean

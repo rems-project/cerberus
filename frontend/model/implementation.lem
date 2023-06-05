@@ -1,5 +1,5 @@
 open import Pervasives Utils
-import AilSyntax Ctype
+import AilSyntax Ctype IntegerImpl
 
 val is_signed_ity: Ctype.integerType -> bool
 val sizeof_ity: Ctype.integerType -> maybe nat
@@ -22,6 +22,21 @@ declare ocaml target_rep function typeof_enum = `(Ocaml_implementation.get()).ty
 
 val alignof_ty: map AilSyntax.ail_identifier (list (maybe Ctype.alignment * Ctype.ctype)) ->  Ctype.ctype -> maybe nat
 declare ocaml target_rep function alignof_ty = `Ocaml_implementation.alignof_proxy`
+
+val integerImpl: unit -> IntegerImpl.implementation
+let integerImpl () =
+  IntegerImpl.make_implementation
+    IntegerImpl.Two'sComplement
+    is_signed_ity
+    (fun ity ->
+      match precision_ity ity with
+        | Just n -> n
+        | Nothing -> error "Implemetation.integerImpl, is_precision_ity Nothing"
+      end
+    )
+    (Ctype.Size_t)
+    (Ctype.Ptrdiff_t)
+    (Ctype.Ptraddr_t)
 
 type implementation_constant =
   (* J.3.2 Environment *)

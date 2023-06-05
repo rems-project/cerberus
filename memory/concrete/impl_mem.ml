@@ -267,7 +267,7 @@ and alignof ?(tagDefs= Tags.tagDefs ()) (Ctype (_, ty) as cty) =
 
 
 module Concrete : Memory = struct
-  let name = "I am the concrete memory model"
+  let name = "concrete"
   
   (* INTERNAL: only for PNVI-ae-udi (this is iota) *)
   type symbolic_storage_instance_id = N.num
@@ -505,8 +505,8 @@ module Concrete : Memory = struct
   let fail ?(loc=Cerb_location.other "Concrete") err =
     let open Nondeterminism in
     match undefinedFromMem_error err with
-      | Some ubs ->
-          kill (Undef0 (loc, ubs))
+      | Some ub ->
+          kill (Undef0 (loc, [ub]))
       | None ->
           kill (Other err)
 
@@ -525,7 +525,7 @@ module Concrete : Memory = struct
   (* pretty printing *)
   open PPrint
   open Cerb_pp_prelude
-  let pp_pointer_value (PV (prov, ptrval_))=
+  let pp_pointer_value ?(is_verbose=false) (PV (prov, ptrval_))=
     match ptrval_ with
       | PVnull ty ->
           !^ "NULL" ^^ P.parens (Pp_core_ctype.pp_ctype ty)
@@ -1415,7 +1415,7 @@ module Concrete : Memory = struct
         let precondition z =
           is_dead z >>= function
             | true ->
-                return (`FAIL (loc, MerrUndefinedFree Free_static_allocation))
+                return (`FAIL (loc, MerrUndefinedFree Free_dead_allocation))
             | false ->
                 get_allocation ~loc z >>= fun alloc ->
                 if N.equal addr alloc.base then
@@ -1426,7 +1426,7 @@ module Concrete : Memory = struct
           (* this kill is dynamic one (i.e. free() or friends) *)
           is_dynamic addr >>= begin function
             | false ->
-                fail ~loc (MerrUndefinedFree Free_static_allocation)
+                fail ~loc (MerrUndefinedFree Free_non_matching)
             | true ->
                 return ()
           end
@@ -1452,7 +1452,7 @@ module Concrete : Memory = struct
           (* this kill is dynamic one (i.e. free() or friends) *)
           is_dynamic addr >>= begin function
             | false ->
-                fail ~loc (MerrUndefinedFree Free_static_allocation)
+                fail ~loc (MerrUndefinedFree Free_non_matching)
             | true ->
                 return ()
           end
@@ -1740,7 +1740,7 @@ module Concrete : Memory = struct
   let case_ptrval pv fnull ffun fconc =
     match pv with
     | PV (_, PVnull ty) -> fnull ty
-    | PV (_, PVfunction f) -> ffun f
+    | PV (_, PVfunction f) -> ffun (Some f)
     | PV (Prov_none, PVconcrete (_, addr)) -> fconc None addr
     | PV (Prov_some i, PVconcrete (_, addr)) -> fconc (Some i) addr
     | _ -> failwith "case_ptrval"
@@ -2104,6 +2104,24 @@ module Concrete : Memory = struct
         | _ ->
             return (PV (prov, PVconcrete (None, n)))
   
+  let derive_cap _ _ _ _ : integer_value =
+    assert false (* CHERI only *)
+  
+  let cap_assign_value _ _ _ : integer_value =
+    assert false (* CHERI only *)
+  
+  let ptr_t_int_value _ =
+    assert false (* CHERI only *)
+  
+  let null_cap _ : integer_value =
+    assert false (* CHERI only *)
+
+  let get_intrinsic_type_spec _ =
+    assert false (* CHERI only *)
+
+  let call_intrinsic _ _ _ =
+    assert false (* CHERI only *)
+
   let offsetof_ival tagDefs tag_sym memb_ident =
     let (xs, _) = offsetsof tagDefs tag_sym in
     let pred (ident, _, _) =
@@ -2265,7 +2283,10 @@ module Concrete : Memory = struct
       | PV (Prov_device, PVconcrete (_, addr)) ->
           (* TODO: check *)
           return (PV (Prov_device, PVconcrete (None, N.add addr offset)))
-  
+
+let eff_member_shift_ptrval _ tag_sym membr_ident ptrval =
+  return (member_shift_ptrval tag_sym membr_ident ptrval)
+
   let concurRead_ival ity sym =
     failwith "TODO: concurRead_ival"
   
@@ -2297,6 +2318,8 @@ module Concrete : Memory = struct
             | Wint_t (* TODO *)
             | Signed _ ->
                 signed_max
+            | Ptraddr_t ->
+                unsigned_max
             | Enum _ ->
                 (* TODO: hack, assuming like int *)
                 sub (pow_int (of_int 2) (8*4-1)) (of_int 1)
@@ -2329,6 +2352,7 @@ module Concrete : Memory = struct
             | None ->
                 failwith "the concrete memory model requires a complete implementation MIN"
           end
+      | Ptraddr_t -> zero
       | Enum _ ->
           (* TODO: hack, assuming like int *)
           negate (pow_int (of_int 2) (8*4-1))
@@ -2479,7 +2503,7 @@ let combine_prov prov1 prov2 =
     (* NOTE: if n is too big, the float will be truncated *)
     float_of_string (N.to_string n)
   
-  let ivfromfloat fval =
+  let ivfromfloat _ fval =
     IV (Prov_none, N.of_float fval)
   
   let eq_ival (IV (_, n1)) (IV (_, n2)) =
@@ -2528,7 +2552,7 @@ let combine_prov prov1 prov2 =
   
 
 
-  let pp_pretty_pointer_value = pp_pointer_value
+  let pp_pretty_pointer_value = pp_pointer_value ~is_verbose:false
   let pp_pretty_integer_value _ = pp_integer_value
   let pp_pretty_mem_value _ = pp_mem_value
   
@@ -2571,26 +2595,30 @@ let combine_prov prov1 prov2 =
     | PV (Prov_none, PVnull _) ->
       allocate_region tid (Symbol.PrefOther "realloc") align size
     | PV (Prov_none, _) ->
-      fail (MerrWIP "realloc no provenance")
+      fail ~loc (MerrWIP "realloc no provenance")
     | PV (Prov_some alloc_id, PVconcrete (_, addr)) ->
       is_dynamic addr >>= begin function
         | false ->
-            fail (MerrUndefinedRealloc)
+            fail ~loc (MerrUndefinedRealloc Free_non_matching)
         | true ->
-            get_allocation ~loc:(Cerb_location.other "Concrete.realloc") alloc_id >>= fun alloc ->
-            if alloc.base = addr then
-              allocate_region tid (Symbol.PrefOther "realloc") align size >>= fun new_ptr ->
-              let size_to_copy =
-                let IV (_, size_n) = size in
-                IV (Prov_none, Nat_big_num.min alloc.size size_n) in
-              memcpy loc new_ptr ptr size_to_copy >>= fun _ ->
-              kill (Cerb_location.other "realloc") true ptr >>= fun () ->
-              return new_ptr
-            else
-              fail (MerrWIP "realloc: invalid pointer")
+           is_dead alloc_id >>= (function
+            | true ->
+                fail ~loc (MerrUndefinedRealloc Free_dead_allocation)
+            | false ->
+                get_allocation ~loc:(Cerb_location.other "Concrete.realloc") alloc_id >>= fun alloc ->
+                if alloc.base = addr then
+                  allocate_region tid (Symbol.PrefOther "realloc") align size >>= fun new_ptr ->
+                  let size_to_copy =
+                    let IV (_, size_n) = size in
+                    IV (Prov_none, Nat_big_num.min alloc.size size_n) in
+                  memcpy loc new_ptr ptr size_to_copy >>= fun _ ->
+                  kill (Cerb_location.other "realloc") true ptr >>= fun () ->
+                  return new_ptr
+                else
+                  fail ~loc (MerrWIP "realloc: invalid pointer"))
       end
     | PV _ ->
-      fail (MerrWIP "realloc: invalid pointer")
+        fail ~loc (MerrWIP "realloc: invalid pointer")
 
   let va_start args =
     get >>= fun st ->

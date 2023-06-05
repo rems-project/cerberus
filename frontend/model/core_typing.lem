@@ -139,6 +139,12 @@ let rec infer_pattern (Pattern annots pat) =
                      , Pattern annots (CaseCtor Civfromfloat [tpat]))
         | (Civfromfloat, _) ->
             error "infer_pattern: Cfvfromfloat: wrong number of arguments"
+        | (CivNULLcap is_signed, []) ->
+            E.return ( empty_env
+            , InferredType_object OTy_integer
+            , Pattern annots (CaseCtor (CivNULLcap is_signed) []))
+        | (CivNULLcap _, _) ->
+            error "infer_pattern: CivNULLcap: wrong number of arguments"
       end
 end
 
@@ -279,14 +285,22 @@ and typecheck_pattern expected_bTy (Pattern annots pat) =
         | (Cfvfromint, _, _) ->
             error "typecheck_pattern: Civfromint: wrong number of arguments"
 
-        | (Civfromfloat, BTy_object OTy_integer, [pat]) ->
-            typecheck_pattern (BTy_object OTy_floating) pat >>= fun (env, tpat) ->
-            E.return ( env
-                     , Pattern annots (CaseCtor Civfromfloat [tpat] ))
-        | (Civfromfloat, _, [_]) ->
+        | (Civfromfloat, BTy_object OTy_integer, [pat1; pat2]) ->
+            typecheck_pattern BTy_ctype                 pat1 >>= fun (env1, tpat1) ->
+            typecheck_pattern (BTy_object OTy_floating) pat2 >>= fun (env2, tpat2) ->
+            E.return ( env_union env1 env2
+                     , Pattern annots (CaseCtor Civfromfloat [tpat1; tpat2] ))
+        | (Civfromfloat, _, [_; _]) ->
             E.fail loc (Mismatch "Civfromfloat" expected_bTy (BTy_object OTy_integer))
         | (Civfromfloat, _, _) ->
             error "typecheck_pattern: Civfromfloat: wrong number of arguments"
+        | (CivNULLcap is_signed, BTy_object OTy_integer, []) ->
+            E.return ( empty_env
+                     , Pattern annots (CaseCtor (CivNULLcap is_signed) []))
+        | (CivNULLcap _, _, []) ->
+            E.fail loc (Mismatch "CivNULLcap" expected_bTy (BTy_object OTy_integer))
+        | (CivNULLcap _, _, _) ->
+            error "typecheck_pattern: CivNULLcap: wrong number of arguments"  
       end
 end
 
@@ -576,6 +590,19 @@ let rec infer_pexpr tagDefs env ((Pexpr annot _ pexpr_ as pexpr) : generic_pexpr
             | _ ->
                 E.return (Pexpr annot (InferredType_object OTy_pointer) (PEmember_shift pe' tag_sym memb_ident))
           end
+    | PEmemop (Mem_common.DeriveCap bop is_signed) [pe1; pe2] ->
+        typecheck_pexpr tagDefs env (BTy_object OTy_integer) pe1 >>= fun pe1' ->
+        typecheck_pexpr tagDefs env (BTy_object OTy_integer) pe2 >>= fun pe2' ->
+        E.return (Pexpr annot (InferredType_object OTy_integer) (PEmemop (Mem_common.DeriveCap bop is_signed) [pe1'; pe2']))
+    | PEmemop Mem_common.CapAssignValue [pe1; pe2] ->
+        typecheck_pexpr tagDefs env (BTy_object OTy_integer) pe1 >>= fun pe1' ->
+        typecheck_pexpr tagDefs env (BTy_object OTy_integer) pe2 >>= fun pe2' ->
+        E.return (Pexpr annot (InferredType_object OTy_integer) (PEmemop Mem_common.CapAssignValue [pe1'; pe2']))
+    | PEmemop Mem_common.Ptr_tIntValue [pe] ->
+        typecheck_pexpr tagDefs env (BTy_object OTy_integer) pe >>= fun pe' ->
+        E.return (Pexpr annot (InferredType_object OTy_integer) (PEmemop Mem_common.Ptr_tIntValue [pe']))
+    | PEmemop _ _ ->
+        E.fail loc (CoreTyping_TODO "PEmemop")
     | PEnot pe ->
         Pexpr annot InferredType_boolean <$> (PEnot <$> typecheck_pexpr tagDefs env BTy_boolean pe)
     | PEop bop pe1 pe2 ->
@@ -890,6 +917,10 @@ and typecheck_pexpr tagDefs (env: typing_env) (bTy: core_base_type) (Pexpr annot
               E.return (PEctor Civfromfloat [pe_fval'])
           | (Civfromfloat, _, _) ->
               E.fail loc (Mismatch "Civfromfloat" bTy (BTy_object OTy_integer))
+          | (CivNULLcap is_signed, BTy_object OTy_integer, []) ->
+              E.return (PEctor (CivNULLcap is_signed) [])
+          | (CivNULLcap _, _, _) ->
+              E.fail loc (Mismatch "CivNULLcap" bTy (BTy_object OTy_integer))
         end
     | PEcase pe cases ->
         infer_pexpr tagDefs env pe >>= fun (Pexpr _ infer _ as pe') ->
@@ -925,6 +956,22 @@ and typecheck_pexpr tagDefs (env: typing_env) (bTy: core_base_type) (Pexpr annot
                                 <*> E.return tag_sym
                                 <*> E.return memb_ident)
           end
+    | PEmemop (Mem_common.DeriveCap bop is_signed) [pe1; pe2] ->
+        guard_match loc "memop(derive_cap)" bTy (BTy_object OTy_integer) >>
+        typecheck_pexpr tagDefs env (BTy_object OTy_integer) pe1 >>= fun pe1' ->
+        typecheck_pexpr tagDefs env (BTy_object OTy_integer) pe2 >>= fun pe2' ->
+        E.return (PEmemop (Mem_common.DeriveCap bop is_signed) [pe1'; pe2'])
+    | PEmemop Mem_common.CapAssignValue [pe1; pe2] ->
+        guard_match loc "memop(cap_assign_value)" bTy (BTy_object OTy_integer) >>
+        typecheck_pexpr tagDefs env (BTy_object OTy_integer) pe1 >>= fun pe1' ->
+        typecheck_pexpr tagDefs env (BTy_object OTy_integer) pe2 >>= fun pe2' ->
+        E.return (PEmemop Mem_common.CapAssignValue [pe1'; pe2'])
+    | PEmemop Mem_common.Ptr_tIntValue [pe] ->
+        guard_match loc "memop(ptr_t_int_value)" bTy (BTy_object OTy_integer) >>
+        typecheck_pexpr tagDefs env (BTy_object OTy_integer) pe >>= fun pe' ->
+        E.return (PEmemop Mem_common.Ptr_tIntValue [pe'])
+    | PEmemop _ _ ->
+        E.fail loc (CoreTyping_TODO "PEmemop")
     | PEnot pe ->
         guard_match loc "not()" bTy BTy_boolean >>
         (PEnot <$> typecheck_pexpr tagDefs env BTy_boolean pe)
@@ -1469,6 +1516,8 @@ let memop_signature = function
       (BTy_object OTy_pointer, [BTy_object OTy_integer; BTy_object OTy_pointer; BTy_object OTy_integer])
   | Mem_common.PtrArrayShift ->
       (BTy_object OTy_pointer, [BTy_object OTy_pointer; BTy_ctype; BTy_object OTy_integer])
+  | Mem_common.PtrMemberShift _ _ ->
+      (BTy_object OTy_pointer, [BTy_object OTy_pointer])
   | Mem_common.Va_start ->
       (BTy_object OTy_integer, [BTy_list (BTy_tuple [BTy_ctype; BTy_object OTy_pointer])])
   | Mem_common.Va_copy ->
@@ -1479,6 +1528,14 @@ let memop_signature = function
       (BTy_unit, [BTy_object OTy_integer])
   | Mem_common.Copy_alloc_id ->
       (BTy_object OTy_pointer, [BTy_object OTy_integer; BTy_object OTy_pointer])
+  | Mem_common.CHERI_intrinsic str (ret_ty, tys) ->
+      let oTys_opt = Utils.maybe_mapM Core_aux.core_object_type_of_ctype tys in
+      match (core_object_type_of_ctype ret_ty, oTys_opt ) with
+        | (Just ret_oTy, Just oTys) ->
+            (BTy_object ret_oTy, List.map BTy_object oTys)
+        | _ ->
+            error "when typechecking CHERI intrinsics failed to get the params object types"
+      end
 end
 
 
