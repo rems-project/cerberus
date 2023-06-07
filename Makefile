@@ -261,7 +261,7 @@ clean-sibylfs-src:
 clean:
 	$(Q)rm -f coq/*.{glob,vo,vok}
 	$(Q)rm -f webcerb.concrete webcerb.symbolic cerberus-webserver
-	$(Q)dune clean
+	$(Q)rm -rf _build/
 
 .PHONY: distclean
 distclean: clean clean-prelude-src clean-sibylfs-src
