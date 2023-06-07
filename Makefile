@@ -17,6 +17,12 @@ endif
 # To enable the printing of commands, use [make Q= ...],
 Q = @
 
+ifdef PROFILING
+    DUNEFLAGS="--workspace=dune-workspace.profiling"
+else
+    DUNEFLAGS=
+endif
+
 .PHONY: normal
 normal: cerberus
 
@@ -26,27 +32,31 @@ all: cerberus cerberus-bmc cerberus-web cn #rustic
 .PHONY: full-build
 full-build: prelude-src
 	@echo "[DUNE] full build"
-	$(Q)dune build
+	$(Q)dune $(DUNEFLAGS) build
 
 .PHONY: util
 util:
 	@echo "[DUNE] library [$@]"
-	$(Q)dune build _build/default/$@/$@.cma _build/default/$@/$@.cmxa
-	$(Q)dune build _build/profiling/$@/$@.cma _build/profiling/$@/$@.cmxa
-	$(Q)dune build _build/profiling-auto/$@/$@.cma _build/profiling-auto/$@/$@.cmxa
+	$(Q)dune build $(DUNEFLAGS) _build/default/$@/$@.cma _build/default/$@/$@.cmxa
+	ifdef PROFILING
+		$(Q)dune build $(DUNEFLAGS) _build/profiling/$@/$@.cma _build/profiling/$@/$@.cmxa
+		$(Q)dune build $(DUNEFLAGS) _build/profiling-auto/$@/$@.cma _build/profiling-auto/$@/$@.cmxa
+	endif
 
 .PHONY: sibylfs
 sibylfs: sibylfs-src
 	@echo "[DUNE] library [$@]"
-	$(Q)dune build _build/default/$@/$@.cma _build/default/$@/$@.cmxa
-	$(Q)dune build _build/profiling/$@/$@.cma _build/profiling/$@/$@.cmxa
-	$(Q)dune build _build/profiling/$@/$@.cma _build/profiling-auto/$@/$@.cmxa
+	$(Q)dune build $(DUNEFLAGS) _build/default/$@/$@.cma _build/default/$@/$@.cmxa
+	ifdef PROFILING
+		$(Q)dune build $(DUNEFLAGS) _build/profiling/$@/$@.cma _build/profiling/$@/$@.cmxa
+		$(Q)dune build $(DUNEFLAGS) _build/profiling/$@/$@.cma _build/profiling-auto/$@/$@.cmxa
+	endif
 
 .PHONY: cerberus
 cerberus: prelude-src
 	@echo "[DUNE] cerberus"
-	$(Q)dune build cerberus.install
-	
+	$(Q)dune build $(DUNEFLAGS) cerberus.install
+
 .PHONY: test
 test: prelude-src
 	@echo "testing"
@@ -56,17 +66,17 @@ test: prelude-src
 bmc: cerberus-bmc
 cerberus-bmc: prelude-src
 	@echo "[DUNE] cerberus-bmc"
-	$(Q)dune build cerberus.install cerberus-bmc.install
+	$(Q)dune build $(DUNEFLAGS) cerberus.install cerberus-bmc.install
 
 .PHONY: rustic
 rustic: prelude-src
 	@echo "[DUNE] $@"
-	$(Q)dune build cerberus.install rustic.install
+	$(Q)dune build $(DUNEFLAGS) cerberus.install rustic.install
 
 .PHONY: cn
 cn: prelude-src
 	@echo "[DUNE] $@"
-	$(Q)dune build cerberus.install cn.install
+	$(Q)dune build $(DUNEFLAGS) cerberus.install cn.install
 	@echo "\nDONE"
 
 
@@ -100,7 +110,7 @@ config.json: tools/config.json
 web: cerberus-web
 cerberus-web: prelude-src config.json tmp/
 	@echo "[DUNE] web"
-	$(Q)dune build cerberus.install cerberus-web.install
+	$(Q)dune $(DUNEFLAGS) build cerberus.install cerberus-web.install
 	@cp -L _build/default/backend/web/instance.exe webcerb.concrete
 	@cp -L _build/default/backend/web/instance_symbolic.exe webcerb.symbolic
 	@cp -L _build/default/backend/web/instance_vip.exe webcerb.vip
