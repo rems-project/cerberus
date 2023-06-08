@@ -1,5 +1,5 @@
 (coq.theory
  (name Morello)
  (modules CapabilitiesGS MorelloCapsGS)
- (theories Common)
+ (theories Common CheriCaps Sail bbv stdpp)
 )
