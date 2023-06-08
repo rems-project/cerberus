@@ -17,5 +17,5 @@ For example, to run Cerberus for CHERI C with profiling enabled:
 
 To run it without profiling:
 
-`dune exec --context profiling-auto --no-print-directory --display=quiet --auto-promote --root=$pwd cerberus-cheri-coq -- example.c`
+`dune exec --no-print-directory --display=quiet --auto-promote --root=$pwd cerberus-cheri-coq -- example.c`
 
