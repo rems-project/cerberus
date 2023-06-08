@@ -20,7 +20,7 @@ bug-reports: "https://github.com/rems-project/cerberus/issues"
 depends: [
   "coq-cheri-capabilities"
   "ocaml" {>= "4.13.0"}
-  "dune" {>= "2.0.0" & <= "3.7.1"}
+  "dune" {>= "3.8.0"}
   "sha" {>= "1.12"}
   "pprint" {>= "20180528"}
   "ppx_sexp_conv" {= "v0.14.3"}

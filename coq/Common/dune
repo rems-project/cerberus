@@ -1,4 +1,5 @@
 (coq.theory
  (name Common)
  (modules SimpleError Utils)
+ (theories ExtLib StructTact Sail bbv)
 )
