@@ -178,7 +178,8 @@ let collect_return_locations stmt =
       | AilScontinue
       | AilSgoto _
       | AilSdeclaration _
-      | AilSreg_store _ ->
+      | AilSreg_store _
+      | AilSmagic _ ->
           acc
       | AilSreturnVoid ->
           (loc, None) :: acc
@@ -293,7 +294,7 @@ let output_injections oc cn_inj =
 open Cerb_frontend
 let get_magics_of_statement stmt =
   let open AilSyntax in
-  let rec aux acc (AnnotatedStatement (_, Annot.Attrs xs, stmt_)) =
+  let rec aux acc (AnnotatedStatement (loc, Annot.Attrs xs, stmt_)) =
     let acc =
       List.fold_left (fun acc attr ->
         let open Annot in
@@ -304,6 +305,9 @@ let get_magics_of_statement stmt =
             acc
       ) acc xs in
     match stmt_ with
+      | AilSmagic str ->
+          [(loc, str)] :: acc
+
       | AilSskip
       | AilSexpr _
       | AilSbreak

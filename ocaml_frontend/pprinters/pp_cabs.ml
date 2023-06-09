@@ -718,6 +718,8 @@ and dtree_of_cabs_statement (CabsStatement (loc, attrs, stmt_)) =
               let d_e2 = dtree_of_cabs_expression e2 in
               let d_s  = dtree_of_cabs_statement s in
               [ d_e1; d_e2; d_s ] )
+  | CabsSmagic str ->
+      Dleaf (pp_stmt_ctor "CabsSmagic" ^^^ !^ str)
   | CabsSmarker stmt ->
       Dnode ( pp_stmt_ctor "CabsSmarker"
             , [dtree_of_cabs_statement stmt] )
@@ -743,6 +745,8 @@ let dtree_of_external_declaration = function
   | EDecl_decl decl ->
       Dnode (pp_decl_ctor "EDecl_decl", [dtree_of_cabs_declaration decl])
 (* BEGIN CN *)
+  | EDecl_magic (_, str) ->
+      Dleaf (pp_stmt_ctor "EDecl_magic" ^^^ !^ str)
   | EDecl_funcCN func ->
       Dnode (pp_decl_ctor "EDecl_funcCN", [Cn_ocaml.PpCabs.dtree_of_cn_function func])
   | EDecl_lemmaCN lmma ->
@@ -760,6 +764,7 @@ let filter_external_decl =
     | EDecl_decl (Declaration_base (_, _, InitDecl(loc, _, _)::_)) ->
         Cerb_location.from_main_file loc
     | EDecl_decl (Declaration_base (_, _, [])) -> true
+    | EDecl_magic _ -> true
     | EDecl_predCN _ -> true
     | EDecl_funcCN _ -> true
     | EDecl_lemmaCN _ -> true

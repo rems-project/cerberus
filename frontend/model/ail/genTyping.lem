@@ -2081,6 +2081,8 @@ let rec annotate_statement_ loc sigm gamm ty stmt =
     | AilSreg_store r e ->
         annotate_rvalue e >>= fun (e', _) ->
         E.return (AilSreg_store r e')
+    | AilSmagic s ->
+        E.return (AilSmagic s)
     | AilSmarker id s ->
         annotate_statement s >>= fun s' ->
         E.return (AilSmarker id s')

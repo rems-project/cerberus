@@ -67,6 +67,22 @@ let inject_attr attr_opt (CabsStatement (loc, Annot.Attrs xs, stmt_)) =
   let Annot.Attrs xs' = to_attrs attr_opt in
   CabsStatement (loc, Annot.Attrs (xs @ xs'), stmt_)
 
+let magic_to_attr magik : Annot.attribute =
+  let open Annot in
+  { attr_ns= Some (Symbol.Identifier (Cerb_location.unknown, "cerb"))
+  ; attr_id= Symbol.Identifier (Cerb_location.unknown, "magic")
+  ; attr_args= List.map (fun (loc, str) -> (loc, str, [loc, str])) magik }
+
+let magic_to_attrs = function
+  | [] ->
+      Annot.Attrs []
+  | magic ->
+      Annot.Attrs [magic_to_attr magic]
+
+let magic_to_opt_attrs = function
+  | [] -> None
+  | magic -> Some (magic_to_attrs magic)
+
 (* use this to show a warning when a NON-STD 'extra' semicolon was parsed *)
 let warn_extra_semicolon pos ctx =
   if not (Cerb_global.isPermissive ()) then
@@ -110,6 +126,7 @@ type asm_qualifier =
   QUESTION COLON (*SEMICOLON*) ELLIPSIS EQ STAR_EQ SLASH_EQ PERCENT_EQ COLON_COLON
   PLUS_EQ MINUS_EQ LT_LT_EQ GT_GT_EQ AMPERSAND_EQ CARET_EQ PIPE_EQ COMMA
   LBRACK_LBRACK (*RBRACK_RBRACK*)
+%token LBRACE RBRACE SEMICOLON
 
 (* NON-STD: *)
   ASSERT OFFSETOF TYPEOF QUESTION_COLON BUILTIN_TYPES_COMPATIBLE_P BUILTIN_CHOOSE_EXPR
@@ -117,12 +134,13 @@ type asm_qualifier =
 (* NON-STD cppmem syntax *)
   LBRACES PIPES RBRACES
 
-%token LBRACE RBRACE SEMICOLON
-
 %token VA_START VA_COPY VA_ARG VA_END PRINT_TYPE ASM ASM_VOLATILE
 
 (* BMC syntax *)
 %token BMC_ASSUME
+
+(* magic comment token *)
+%token<Cerb_location.t * string> CERB_MAGIC
 
 (* CN syntax *)
 (* %token<string> CN_PREDNAME *)
@@ -1282,6 +1300,11 @@ statement:
     { inject_attr attr_opt stmt }
 | stmt= asm_statement
     { stmt }
+| magic= CERB_MAGIC
+    { CabsStatement
+        ( Cerb_location.(region ($startpos, $endpos) NoCursor)
+        , Annot.Attrs []
+        , CabsSmagic (snd magic) ) }
 ;
 
 (* §6.8.1 Labeled statements *)
@@ -1537,6 +1560,10 @@ external_declaration_list: (* NOTE: the list is in reverse *)
 ;
 
 external_declaration:
+| magic= CERB_MAGIC
+    { EDecl_magic
+        ( Cerb_location.(region ($startpos, $endpos) NoCursor)
+        , snd magic ) }
 | pred= cn_predicate
     { EDecl_predCN pred }
 | func= cn_function
@@ -1560,27 +1587,22 @@ function_definition1:
       (attr_opt, specifs, decltor, ctxt) }
 ;
 
+magic_comment_list:
+| xs= magic_comment_list magic= CERB_MAGIC
+    { magic :: xs }
+|
+    { [] }
+
 function_definition:
 | specifs_decltor_ctxt= function_definition1 rev_decl_opt= declaration_list?
+  magic= magic_comment_list
   stmt= compound_statement has_semi= boption(SEMICOLON)
     { if has_semi then warn_extra_semicolon $startpos(has_semi) AFTER_FUNCTION;
       let loc = Cerb_location.(region ($startpos, $endpos) NoCursor) in
       let (attr_opt, specifs, decltor, ctxt) = specifs_decltor_ctxt in
-      let (magic_opt, stmt') =
-        match stmt with
-          | CabsStatement (_, magic_attrs, CabsSmarker stmt') ->
-              (Some magic_attrs, stmt')
-          | _ ->
-              (None, stmt) in
-(*
-        if magik <> [] then
-          match attr_opt with
-            | Some xs -> Some ( xs @ [[magic_to_pre_attr magik]])
-            | None    -> Some [[magic_to_pre_attr magik]]
-        else attr_opt in
-*)
+      let magic_opt = magic_to_opt_attrs (List.rev magic) in
       LF.restore_context ctxt;
-      LF.create_function_definition loc attr_opt magic_opt specifs decltor stmt' rev_decl_opt }
+      LF.create_function_definition loc attr_opt magic_opt specifs decltor stmt rev_decl_opt }
 ;
 
 declaration_list: (* NOTE: the list is in reverse *)

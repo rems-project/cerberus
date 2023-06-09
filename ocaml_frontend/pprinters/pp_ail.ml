@@ -684,6 +684,8 @@ let rec pp_statement_aux pp_annot (AnnotatedStatement (_, _, stmt_)) =
     | AilSreg_store (r, e) ->
         !^("r" ^ string_of_int r) ^^^ P.equals ^^^ pp_expression_aux pp_annot e ^^ P.semi
 
+    | AilSmagic s ->
+        pp_comment "// magic comment" ^^^ P.parens (!^ s)
     | AilSmarker (_, s) ->
         pp_comment "// marker" ^^ P.break 1 ^^
         pp_statement s

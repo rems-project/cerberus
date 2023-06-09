@@ -46,6 +46,8 @@ let specifiers_of_external_declaration = function
       Just specifs
   | EDecl_decl (Declaration_static_assert _) ->
       Nothing
+  | EDecl_magic _ ->
+      Nothing
   | EDecl_predCN _ ->
       Nothing
   | EDecl_funcCN _ ->
@@ -294,6 +296,8 @@ let rec has_continue (CabsStatement _ _ stmt_) =
         false
     | CabsScaseGNU _ _ s ->
         has_continue s
+    | CabsSmagic _ ->
+        false
     | CabsSmarker s ->
         has_continue s
   end

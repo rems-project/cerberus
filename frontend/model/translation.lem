@@ -2723,6 +2723,8 @@ let rec collect_cases_ (A.AnnotatedStatement loc _ stmt) =
         St.mapM_ collect_cases_ ss
     | A.AilSreg_store _ _ ->
         St.return ()
+    | A.AilSmagic _ ->
+        St.return ()
     | A.AilSmarker _ s ->
         collect_cases_ s
   end
@@ -2814,6 +2816,8 @@ let rec erase_loop_control_aux (A.AnnotatedStatement loc attrs stmt_) =
         A.AilSpar <$> St.mapM erase_loop_control_aux ss
     | A.AilSreg_store _ _ ->
         St.return stmt_
+    | A.AilSmagic _ ->
+        St.return stmt_
     | A.AilSmarker id s ->
         A.AilSmarker id <$> erase_loop_control_aux s
   end
@@ -2881,6 +2885,8 @@ let rec collect_visibles_ (A.AnnotatedStatement loc _ stmt) =
     | A.AilSpar ss ->
         St.mapM_ collect_visibles_ ss
     | A.AilSreg_store _ _ ->
+        St.return ()
+    | A.AilSmagic _ ->
         St.return ()
     | A.AilSmarker _ s ->
         collect_visibles_ s
@@ -3436,6 +3442,9 @@ let rec translate_stmt stdlib tagDefs f env (A.AnnotatedStatement loc stmt_attrs
     | A.AilSreg_store _ _ ->
         (* the frontend doesn't yet emit this *)
         error "TODO: translate_stmt AilSreg_store"
+
+    | A.AilSmagic s ->
+        error "TODO: translate_stmt AilSmagic"
 
     | A.AilSmarker id s ->
         self s >>= fun core_s ->
