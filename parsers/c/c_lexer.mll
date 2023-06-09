@@ -22,12 +22,16 @@ type internal_state = {
   mutable magic_acc: (Cerb_location.t * string) list;
 }
 let internal_state = {
+  magic_comment_mode= Magic_None;
   inside_cn= false;
   cnum_hack= 0;
   start_of_comment= Lexing.dummy_pos;
   ignore_magic= false;
   magic_acc= [];
 }
+
+let set_magic_comment_mode mode =
+  internal_state.magic_comment_mode <- mode
 
 let new_line lexbuf =
   (* the hacked col offset MUST be reset after every newline *)
@@ -184,17 +188,16 @@ let lex_magic remainder lexbuf =
 
 let magic_token start_pos end_pos chars =
   let len = List.length chars in
+  let loc = Cerb_location.(region (start_pos, end_pos) NoCursor) in
   if len < 2 then None
   else
-  let first, last = List.head chars, List.last chars in
+  let first, last = List.hd chars, List.nth chars (len - 1) in
   match internal_state.magic_comment_mode with
   | Magic_At _ when first == '@' && last == '@' ->
-    let str = String.init (len - 2) (List.nth (List.tail chars)) in
-    let loc = Cerb_location.(region (start_pos, end_pos)) in
+    let str = String.init (len - 2) (List.nth (List.tl chars)) in
     Some (CERB_MAGIC (loc, str))
   | Magic_At warn when first == '@' && warn -> begin
-    prerr_endline (Pp_errors.make_message
-                    (Cerb_location.point pos)
+    prerr_endline (Pp_errors.make_message loc
                     Errors.(CPARSER Cparser_mismatched_magic_comment)
                     Warning);
     None
@@ -396,7 +399,7 @@ and hash = parse
 (* Entry point *)
 and initial = parse
   (* Magic comments *)
-  | "/*@" { let start_p = lexbuf.lex_start_p;
+  | "/*@" { let start_p = lexbuf.lex_start_p in
             internal_state.start_of_comment <- start_p;
             let xs = magic lexbuf in
             match magic_token start_p lexbuf.lex_start_p ('@' :: xs) with
@@ -472,8 +475,8 @@ and initial = parse
   | ']'   { RBRACK              }
   | '('   { LPAREN              }
   | ')'   { RPAREN              }
-  | '{'   { LBRACE (fetch_and_clear_magic ()) }
-  | '}'   { RBRACE (fetch_and_clear_magic ()) }
+  | '{'   { LBRACE              }
+  | '}'   { RBRACE              }
   | '.'   { DOT                 }
   | "->"  { MINUS_GT            }
   | "++"  { PLUS_PLUS           }
@@ -501,7 +504,7 @@ and initial = parse
   | '?'   { QUESTION            }
   | "::"  { COLON_COLON         }
   | ':'   { COLON               }
-  | ';'   { SEMICOLON (fetch_and_clear_magic ()) }
+  | ';'   { SEMICOLON           }
   | "..." { ELLIPSIS            }
   | '='   { EQ                  }
   | "*="  { STAR_EQ             }
@@ -523,8 +526,8 @@ and initial = parse
   (* STD §6.4.6#3 *)
   | "<:" { LBRACK }
   | ":>" { RBRACK }
-  | "<%" { LBRACE (fetch_and_clear_magic ()) }
-  | "%>" { RBRACE (fetch_and_clear_magic ()) }
+  | "<%" { LBRACE }
+  | "%>" { RBRACE }
 (*  | "%:"   *)
 (*  | "%:%:" *)
   
@@ -549,31 +552,7 @@ and initial = parse
 
   | identifier as id
     { try
-        let mk_tok = Hashtbl.find lexicon id in
-        match mk_tok () with
-          | CN_FUNCTION ->
-              (* let old_pos_cnum = lexbuf.lex_curr_p.pos_cnum in
-              let new_pos_cnum = old_pos_cnum - (String.length "__cerb_") in
-              Printf.fprintf stderr "HACK pos_cnum: %d --> %d\n"
-                (old_pos_cnum - lexbuf.lex_curr_p.pos_bol) (new_pos_cnum - lexbuf.lex_curr_p.pos_bol);
-              lexbuf.lex_curr_p <- {lexbuf.lex_curr_p with pos_cnum= new_pos_cnum }; *)
-              CN_FUNCTION
-          | CN_PREDICATE ->
-              (* let old_pos_cnum = lexbuf.lex_curr_p.pos_cnum in
-              let new_pos_cnum = old_pos_cnum - (String.length "__cerb_") in
-              Printf.fprintf stderr "HACK pos_cnum: %d --> %d\n"
-                (old_pos_cnum - lexbuf.lex_curr_p.pos_bol) (new_pos_cnum - lexbuf.lex_curr_p.pos_bol);
-              lexbuf.lex_curr_p <- {lexbuf.lex_curr_p with pos_cnum= new_pos_cnum }; *)
-              CN_PREDICATE
-          | CN_LEMMA ->
-              (* let old_pos_cnum = lexbuf.lex_curr_p.pos_cnum in
-              let new_pos_cnum = old_pos_cnum - (String.length "__cerb_") in
-              Printf.fprintf stderr "HACK pos_cnum: %d --> %d\n"
-                (old_pos_cnum - lexbuf.lex_curr_p.pos_bol) (new_pos_cnum - lexbuf.lex_curr_p.pos_bol);
-              lexbuf.lex_curr_p <- {lexbuf.lex_curr_p with pos_cnum= new_pos_cnum }; *)
-              CN_LEMMA
-          | tok ->
-              tok
+        Hashtbl.find lexicon id
       with Not_found ->
         if internal_state.inside_cn then
           try Hashtbl.find cn_lexicon id
