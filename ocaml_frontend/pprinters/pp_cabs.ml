@@ -718,8 +718,6 @@ and dtree_of_cabs_statement (CabsStatement (loc, attrs, stmt_)) =
               let d_e2 = dtree_of_cabs_expression e2 in
               let d_s  = dtree_of_cabs_statement s in
               [ d_e1; d_e2; d_s ] )
-  | CabsSmagic str ->
-      Dleaf (pp_stmt_ctor "CabsSmagic" ^^^ !^ str)
   | CabsSmarker stmt ->
       Dnode ( pp_stmt_ctor "CabsSmarker"
             , [dtree_of_cabs_statement stmt] )
