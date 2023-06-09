@@ -213,7 +213,7 @@ let generate_c_datatypes cn_datatypes =
         ail_dt1 :: ail_dts
   in
   (* TODO: Fix number of newlines generated using fold *)
-  let generate_str_from_ail_dt (ail_dt: unit Cn_to_ail.ail_datatype) = 
+  let generate_str_from_ail_dt (ail_dt: CF.GenTypes.genTypeCategory Cn_to_ail.ail_datatype) = 
     let stats = List.map (fun c -> CF.Pp_ail.pp_statement ~executable_spec:true c ^^ PPrint.hardline) ail_dt.stats in
     let stats = List.fold_left (^^) empty stats in
     let decls_doc = List.map Ail_to_c.pp_ail_declaration ail_dt.decls in
@@ -225,10 +225,15 @@ let generate_c_datatypes cn_datatypes =
   let (consts, structs) = List.split docs in
   CF.Pp_utils.to_plain_string (concat_map_newline consts ^^ concat_map_newline structs)
 
-let generate_c_functions cn_functions = 
-  let ail_stats = List.concat_map Cn_to_ail.cn_to_ail_function cn_functions in
-  let docs = List.map (fun s -> CF.Pp_ail.pp_statement ~executable_spec:true s) ail_stats in 
-  CF.Pp_utils.to_plain_string (concat_map_newline docs)
+let generate_c_functions (ail_prog : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma) =
+  let cn_functions = ail_prog.cn_functions in 
+  let ail_funs = List.map Cn_to_ail.cn_to_ail_function cn_functions in
+  let (decls, defs) = List.split ail_funs in
+  let modified_prog : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma = {ail_prog with declarations = decls; function_definitions = defs} in
+  let doc = CF.Pp_ail.pp_program ~executable_spec:true ~show_include:true (None, modified_prog) in
+  (* let docs = List.map (fun s -> CF.Pp_ail.pp_statement ~executable_spec:true s) ail_stats in  *)
+  CF.Pp_utils.to_plain_string doc
+  (* (concat_map_newline docs) *)
 
 let main 
       filename 
@@ -305,7 +310,7 @@ let main
             let cn_oc = Stdlib.open_out "cn.c" in
             let executable_spec = generate_c_specs instrumentation type_map ail_prog in
             let c_datatypes = generate_c_datatypes ail_prog.cn_datatypes in
-            let c_functions = generate_c_functions ail_prog.cn_functions in 
+            let c_functions = generate_c_functions ail_prog in 
             Stdlib.output_string cn_oc c_datatypes;
             Stdlib.output_string cn_oc c_functions;
             begin match
