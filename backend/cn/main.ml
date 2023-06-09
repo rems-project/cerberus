@@ -123,13 +123,13 @@ type executable_spec = {
 }
 
 
-let generate_c_statements cn_statements =
+let generate_c_statements cn_statements cn_datatypes =
   let generate_c_statement (CN_statement (loc, stmt_)) = 
     (* TODO: Remove pattern matching here - should only be in cn_to_ail.ml *)
     let pp_statement =
       match stmt_ with
       | CN_assert_stmt e -> 
-        let ail_stats = Cn_to_ail.cn_to_ail_assertion e in
+        let ail_stats = Cn_to_ail.cn_to_ail_assertion e cn_datatypes in
         let doc = List.map (fun s -> CF.Pp_ail.pp_statement ~executable_spec:true s) ail_stats in
         CF.Pp_utils.to_plain_string (List.fold_left (^^) empty doc)
       | _ -> ""
@@ -163,7 +163,7 @@ let generate_c_pres_and_posts (instrumentation : Core_to_mucore.instrumentation)
   let arg_names = List.map CF.Pp_symbol.to_string_pretty arg_syms in
   let arg_strs = List.map arg_str_fn (List.combine arg_types arg_syms) in
   let generate_condition_str cn_condition arg_names_opt =
-    (let (ail_stats, type_info) = Cn_to_ail.cn_to_ail_condition cn_condition type_map in
+    (let (ail_stats, type_info) = Cn_to_ail.cn_to_ail_condition cn_condition type_map ail_prog.cn_datatypes in
     let strs = List.map (fun s -> Ail_to_c.pp_ail_stmt (s, type_info) arg_names_opt) ail_stats in
     (List.fold_left (^) "" strs) ^ ";\n")
   in
@@ -186,11 +186,11 @@ let generate_c_pres_and_posts (instrumentation : Core_to_mucore.instrumentation)
 
 
 (* Core_to_mucore.instrumentation list -> executable_spec *)
-let generate_c_specs instrumentation_list type_map ail_prog =
+let generate_c_specs instrumentation_list type_map (ail_prog : _ CF.AilSyntax.sigma) =
   (* let open Core_to_mucore in *)
   let generate_c_spec (instrumentation : Core_to_mucore.instrumentation) =
     let c_pres_and_posts = generate_c_pres_and_posts instrumentation type_map ail_prog in 
-    let c_statements = generate_c_statements instrumentation.surface.statements in
+    let c_statements = generate_c_statements instrumentation.surface.statements ail_prog.cn_datatypes in
     (* ([(Sym.fresh_pretty "main", ("int i_old = i;", ""))], generate_c_statements instrumentation.statements) *)
     (c_pres_and_posts, c_statements)
   in
@@ -227,7 +227,7 @@ let generate_c_datatypes cn_datatypes =
 
 let generate_c_functions (ail_prog : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma) =
   let cn_functions = ail_prog.cn_functions in 
-  let ail_funs = List.map Cn_to_ail.cn_to_ail_function cn_functions in
+  let ail_funs = List.map (fun cn_f -> Cn_to_ail.cn_to_ail_function cn_f ail_prog.cn_datatypes) cn_functions in
   let (decls, defs) = List.split ail_funs in
   let modified_prog : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma = {ail_prog with declarations = decls; function_definitions = defs} in
   let doc = CF.Pp_ail.pp_program ~executable_spec:true ~show_include:true (None, modified_prog) in
@@ -310,7 +310,8 @@ let main
             let cn_oc = Stdlib.open_out "cn.c" in
             let executable_spec = generate_c_specs instrumentation type_map ail_prog in
             let c_datatypes = generate_c_datatypes ail_prog.cn_datatypes in
-            let c_functions = generate_c_functions ail_prog in 
+            let c_functions = generate_c_functions ail_prog in
+            (* TODO: Topological sort *)
             Stdlib.output_string cn_oc c_datatypes;
             Stdlib.output_string cn_oc c_functions;
             begin match
