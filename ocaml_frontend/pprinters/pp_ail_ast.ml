@@ -504,8 +504,6 @@ let rec dtree_of_statement pp_annot (AnnotatedStatement (loc, attrs, stmt_)) =
     | AilSreg_store (r, e) ->
         Dnode (pp_stmt_ctor "AilSreg_store" ^^^ !^("r" ^ string_of_int r)
               , [dtree_of_expression e])
-    | AilSmagic s ->
-        Dleaf ( pp_stmt_ctor "AilSleaf" ^^^ !^ s )
     | AilSmarker (n, s) ->
         Dnode ( pp_stmt_ctor "AilSmarker" ^^^ !^("#" ^ string_of_int n)
               , [dtree_of_statement s] )

@@ -178,8 +178,7 @@ let collect_return_locations stmt =
       | AilScontinue
       | AilSgoto _
       | AilSdeclaration _
-      | AilSreg_store _
-      | AilSmagic _ ->
+      | AilSreg_store _ ->
           acc
       | AilSreturnVoid ->
           (loc, None) :: acc
@@ -305,9 +304,6 @@ let get_magics_of_statement stmt =
             acc
       ) acc xs in
     match stmt_ with
-      | AilSmagic str ->
-          [(loc, str)] :: acc
-
       | AilSskip
       | AilSexpr _
       | AilSbreak

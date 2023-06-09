@@ -206,7 +206,6 @@ type statement_ 'a [name="s*"] =
   | AilSpar of list (statement 'a) (* NON-STD cppmem threads *)
   | AilSreg_store of reg * expression 'a
 (* for CN *)
-  | AilSmagic of string
   | AilSmarker of nat * statement 'a (* NOTE: this is placeholder we used to carry annotations for CN *)
 and statement 'a [name="s*"] =
   | AnnotatedStatement of Loc.t * Annot.attributes * statement_ 'a

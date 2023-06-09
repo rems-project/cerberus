@@ -296,8 +296,6 @@ let rec has_continue (CabsStatement _ _ stmt_) =
         false
     | CabsScaseGNU _ _ s ->
         has_continue s
-    | CabsSmagic _ ->
-        false
     | CabsSmarker s ->
         has_continue s
   end

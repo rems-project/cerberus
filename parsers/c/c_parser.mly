@@ -1294,11 +1294,6 @@ statement:
     { inject_attr attr_opt stmt }
 | stmt= asm_statement
     { stmt }
-| magic= CERB_MAGIC
-    { CabsStatement
-        ( Cerb_location.(region ($startpos, $endpos) NoCursor)
-        , Annot.Attrs []
-        , CabsSmagic (snd magic) ) }
 ;
 
 (* §6.8.1 Labeled statements *)
@@ -1356,6 +1351,17 @@ block_item:
         , CabsSdecl xs_decl ) }
 | stmt= statement
     { stmt }
+(* magic comments as statements - permitted in blocks but not at all
+   other statement positions to avoid a parse conflict on
+   while(1) /*@ inv X @*/ {} *)
+| magic= CERB_MAGIC
+    {
+      let loc = Cerb_location.(region ($startpos, $endpos) NoCursor) in
+      let null = CabsStatement ( loc, Annot.no_attributes, CabsSnull ) in
+      CabsStatement
+        ( Cerb_location.(region ($startpos, $endpos) NoCursor)
+        , magic_to_attrs [magic]
+        , CabsSmarker null ) }
 ;
 
 (* §6.8.3 Expression and null statements *)
@@ -1392,36 +1398,31 @@ selection_statement:
         , CabsSswitch (expr, stmt) ) }
 ;
 
+magic_comment_list:
+| xs= magic_comment_list magic= CERB_MAGIC
+    { magic :: xs }
+|
+    { [] }
+
 (* §6.8.5 Iteration statements *)
 iteration_statement:
-| WHILE LPAREN expr= full_expression RPAREN stmt= scoped(statement)
-    { let (inv_attrs, stmt') =
-        match stmt with
-          | CabsStatement (_, inv_attrs, CabsSmarker inner_stmt) ->
-              (inv_attrs, inner_stmt)
-          | _ ->
-              (Annot.no_attributes, stmt) in
+| WHILE LPAREN expr= full_expression RPAREN magic= magic_comment_list stmt= scoped(statement)
+    {
       CabsStatement
         ( Cerb_location.(region ($startpos, $endpos) NoCursor)
-        , inv_attrs
-        , CabsSwhile (expr, stmt') ) }
+        , magic_to_attrs (List.rev magic)
+        , CabsSwhile (expr, stmt) ) }
 | DO stmt= scoped(statement) WHILE LPAREN expr= full_expression RPAREN SEMICOLON
     { CabsStatement
         ( Cerb_location.(region ($startpos, $endpos) NoCursor)
         , Annot.no_attributes
         , CabsSdo (expr, stmt) ) }
 | FOR LPAREN expr1_opt= full_expression? SEMICOLON expr2_opt= full_expression? SEMICOLON
-  expr3_opt= full_expression? RPAREN stmt= scoped(statement)
-    { let (inv_attrs, stmt') =
-        match stmt with
-          | CabsStatement (_, inv_attrs, CabsSmarker inner_stmt) ->
-              (inv_attrs, inner_stmt)
-          | _ ->
-              (Annot.no_attributes, stmt) in
-      CabsStatement
+  expr3_opt= full_expression? RPAREN magic= magic_comment_list stmt= scoped(statement)
+    { CabsStatement
         ( Cerb_location.(region ($startpos, $endpos) NoCursor)
-        , inv_attrs
-        , CabsSfor (map_option (fun x -> FC_expr x) expr1_opt, expr2_opt,expr3_opt, stmt') ) }
+        , magic_to_attrs (List.rev magic)
+        , CabsSfor (map_option (fun x -> FC_expr x) expr1_opt, expr2_opt,expr3_opt, stmt) ) }
 | FOR LPAREN xs_decl= declaration expr2_opt= full_expression? SEMICOLON
   expr3_opt= full_expression? RPAREN stmt= scoped(statement)
     { let (inv_attrs, stmt') =
@@ -1580,12 +1581,6 @@ function_definition1:
       LF.reinstall_function_context decltor;
       (attr_opt, specifs, decltor, ctxt) }
 ;
-
-magic_comment_list:
-| xs= magic_comment_list magic= CERB_MAGIC
-    { magic :: xs }
-|
-    { [] }
 
 function_definition:
 | specifs_decltor_ctxt= function_definition1 rev_decl_opt= declaration_list?
