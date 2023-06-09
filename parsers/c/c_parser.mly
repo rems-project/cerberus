@@ -316,6 +316,7 @@ type asm_qualifier =
 %start function_spec
 %start loop_spec
 %start cn_statement
+%start cn_toplevel
 
 %type<Symbol.identifier Cerb_frontend.Cn.cn_base_type> base_type
 %type<(Symbol.identifier, Cabs.type_name) Cerb_frontend.Cn.cn_function> cn_function
@@ -329,6 +330,8 @@ type asm_qualifier =
 %type<(Cerb_frontend.Symbol.identifier, Cerb_frontend.Cabs.type_name) Cerb_frontend.Cn.cn_function_spec> function_spec
 %type<(Cerb_frontend.Symbol.identifier, Cerb_frontend.Cabs.type_name) Cerb_frontend.Cn.cn_loop_spec> loop_spec
 %type<(Cerb_frontend.Symbol.identifier, Cerb_frontend.Cabs.type_name) Cerb_frontend.Cn.cn_statement> cn_statement
+
+%type<Cerb_frontend.Cabs.external_declaration> cn_toplevel 
 
 
 
@@ -1362,10 +1365,10 @@ block_item:
    while(1) /*@ inv X @*/ {} *)
 | magic= CERB_MAGIC
     {
-      let loc = Cerb_location.(region ($startpos, $endpos) NoCursor) in
+      let loc = fst magic in
       let null = CabsStatement ( loc, Annot.no_attributes, CabsSnull ) in
       CabsStatement
-        ( Cerb_location.(region ($startpos, $endpos) NoCursor)
+        ( loc
         , magic_to_attrs [magic]
         , CabsSmarker null ) }
 ;
@@ -1562,9 +1565,7 @@ external_declaration_list: (* NOTE: the list is in reverse *)
 
 external_declaration:
 | magic= CERB_MAGIC
-    { EDecl_magic
-        ( Cerb_location.(region ($startpos, $endpos) NoCursor)
-        , snd magic ) }
+    { EDecl_magic magic }
 | pred= cn_predicate
     { EDecl_predCN pred }
 | func= cn_function
@@ -2402,6 +2403,18 @@ cn_statement:
 | ASSERT LPAREN e=assert_expr RPAREN SEMICOLON
     { let loc = Cerb_location.(region ($startpos, $endpos) NoCursor) in 
       CN_statement (loc, CN_assert_stmt e) }
+
+cn_toplevel:
+| pred= cn_predicate EOF
+    { EDecl_predCN pred }
+| func= cn_function EOF
+    { EDecl_funcCN func }
+| lmma= cn_lemma EOF
+    { EDecl_lemmaCN lmma }
+| dt= cn_datatype EOF
+    { EDecl_datatypeCN dt }
+;
+
 
 
 

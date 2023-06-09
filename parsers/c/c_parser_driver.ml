@@ -22,19 +22,45 @@ let lexer_cn_hack lexbuf =
   else
     C_lexer.lexer lexbuf
 
+let most_recent_lexbuf = ref (Lexing.from_string "foo")
+
+let convert_toplevel_magic = function
+  | Cabs.EDecl_magic (loc, str) ->
+    prerr_endline ("parsing (" ^ str ^ ")");
+    let lexbuf = Lexing.from_string str in
+    let () = match Cerb_location.to_raw loc with Cerb_location.Loc_region (pos, pos2, _) ->
+      prerr_endline ("setting start cnum to " ^ Int.to_string (Lexing.(pos.pos_cnum)));
+      prerr_endline ("end cnum was " ^ Int.to_string (Lexing.(pos2.pos_cnum)));
+      Lexing.set_filename lexbuf (Lexing.(pos.pos_fname));
+      Lexing.set_position lexbuf pos
+      | _ -> ()
+    in
+    C_lexer.internal_state.inside_cn <- true;
+    most_recent_lexbuf := lexbuf;
+    C_parser.cn_toplevel C_lexer.lexer lexbuf
+  | decl -> decl
+
+let parse_with_cn lexbuf =
+  let Cabs.TUnit decls = C_parser.translation_unit lexer_cn_hack lexbuf in
+  Cabs.TUnit (List.map convert_toplevel_magic decls)
+
 let parse lexbuf =
   try
-    Exception.except_return @@ C_parser.translation_unit lexer_cn_hack lexbuf
+    most_recent_lexbuf := lexbuf;
+    Exception.except_return (parse_with_cn lexbuf)
   with
   | C_lexer.Error err ->
+    let lexbuf = ! most_recent_lexbuf in
     let loc = Cerb_location.point @@ Lexing.lexeme_start_p lexbuf in
     Exception.fail (loc, Errors.CPARSER err)
   | C_parser.Error ->
+    let lexbuf = ! most_recent_lexbuf in
     let tok = Lexing.lexeme lexbuf in
     let (tok_str, start_p, end_p) = if String.equal tok "*/"
       then ("(magic comment)", C_lexer.internal_state.start_of_comment, Lexing.lexeme_end_p lexbuf)
       else (tok, Lexing.lexeme_start_p lexbuf, Lexing.lexeme_end_p lexbuf)
     in
+    prerr_endline ("unexpected token starts at " ^ Int.to_string (Lexing.(start_p.pos_cnum)));
     let loc = Cerb_location.(region (start_p, end_p) NoCursor) in
     Exception.fail (loc, Errors.CPARSER (Errors.Cparser_unexpected_token tok_str))
   | Failure msg ->
@@ -43,6 +69,7 @@ let parse lexbuf =
   | Lexer_feedback.KnR_declaration loc ->
     Exception.fail (loc, Errors.CPARSER Errors.Cparser_KnR_declaration)
   | exn ->
+    let lexbuf = ! most_recent_lexbuf in
     let loc = Cerb_location.point @@ Lexing.lexeme_start_p lexbuf in
     failwith @@ "CPARSER_DRIVER(" ^ Cerb_location.location_to_string loc ^ ")" ^ " ==> " ^ Stdlib.Printexc.to_string exn
 
