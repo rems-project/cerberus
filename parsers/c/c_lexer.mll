@@ -6,7 +6,14 @@ open Tokens
 
 exception Error of Errors.cparser_cause
 
+type magic_comment_mode =
+  | Magic_None
+  | Magic_At of bool
+
 type internal_state = {
+  (* maybe make this 'config' rather than 'internal' *)
+  mutable magic_comment_mode: magic_comment_mode;
+
   mutable inside_cn: bool;
   (* HACK fo fix col positions when seing CN keywords (look at C_parser_driver) *)
   mutable cnum_hack: int;
@@ -22,15 +29,6 @@ let internal_state = {
   magic_acc= [];
 }
 
-let fetch_and_clear_magic () =
-  let ret = internal_state.magic_acc in
-  internal_state.magic_acc <- [];
-  List.rev ret
-
-let restore_magic xs =
-  internal_state.magic_acc <- List.rev xs
-
-
 let new_line lexbuf =
   (* the hacked col offset MUST be reset after every newline *)
   internal_state.cnum_hack <- 0;
@@ -43,84 +41,84 @@ let offset_location lexbuf pos_fname pos_lnum =
   new_line lexbuf
 
 (* STD §6.4.1#1 *)
-let keywords: (string * (unit -> Tokens.token)) list = [
-    "auto"           , (fun () -> AUTO);
-    "break"          , (fun () -> BREAK (fetch_and_clear_magic ()));
-    "case"           , (fun () -> CASE (fetch_and_clear_magic ()));
-    "char"           , (fun () -> CHAR);
-    "const"          , (fun () -> CONST);
-    "continue"       , (fun () -> CONTINUE (fetch_and_clear_magic ()));
-    "default"        , (fun () -> DEFAULT (fetch_and_clear_magic ()));
-    "do"             , (fun () -> DO (fetch_and_clear_magic ()));
-    "double"         , (fun () -> DOUBLE);
-    "else"           , (fun () -> ELSE);
-    "enum"           , (fun () -> ENUM);
-    "extern"         , (fun () -> EXTERN);
-    "float"          , (fun () -> FLOAT);
-    "for"            , (fun () -> FOR (fetch_and_clear_magic ()));
-    "goto"           , (fun () -> GOTO (fetch_and_clear_magic ()));
-    "if"             , (fun () -> IF (fetch_and_clear_magic ()));
-    "inline"         , (fun () -> INLINE);
-    "int"            , (fun () -> INT);
-    "long"           , (fun () -> LONG);
-    "register"       , (fun () -> REGISTER);
-    "restrict"       , (fun () -> RESTRICT);
-    "return"         , (fun () -> RETURN (fetch_and_clear_magic ()));
-    "short"          , (fun () -> SHORT);
-    "signed"         , (fun () -> SIGNED);
-    "sizeof"         , (fun () -> SIZEOF);
-    "static"         , (fun () -> STATIC);
-    "struct"         , (fun () -> STRUCT);
-    "switch"         , (fun () -> SWITCH (fetch_and_clear_magic ()));
-    "typedef"        , (fun () -> TYPEDEF);
-    "typeof"         , (fun () -> TYPEOF);
-    "union"          , (fun () -> UNION);
-    "unsigned"       , (fun () -> UNSIGNED);
-    "void"           , (fun () -> VOID);
-    "volatile"       , (fun () -> VOLATILE);
-    "while"          , (fun () -> WHILE (fetch_and_clear_magic ()));
-    "_Alignas"       , (fun () -> ALIGNAS);
-    "_Alignof"       , (fun () -> ALIGNOF);
-    "_Atomic"        , (fun () -> ATOMIC);
-    "_Bool"          , (fun () -> BOOL);
-    "_Complex"       , (fun () -> COMPLEX);
-    "_Generic"       , (fun () -> GENERIC);
-    "_Imaginary"     , (fun () -> IMAGINARY);
-    "_Noreturn"      , (fun () -> NORETURN);
-    "_Static_assert" , (fun () -> STATIC_ASSERT);
-    "_Thread_local"  , (fun () -> THREAD_LOCAL);
+let keywords: (string * Tokens.token) list = [
+    "auto"           , AUTO;
+    "break"          , BREAK;
+    "case"           , CASE;
+    "char"           , CHAR;
+    "const"          , CONST;
+    "continue"       , CONTINUE;
+    "default"        , DEFAULT;
+    "do"             , DO;
+    "double"         , DOUBLE;
+    "else"           , ELSE;
+    "enum"           , ENUM;
+    "extern"         , EXTERN;
+    "float"          , FLOAT;
+    "for"            , FOR;
+    "goto"           , GOTO;
+    "if"             , IF;
+    "inline"         , INLINE;
+    "int"            , INT;
+    "long"           , LONG;
+    "register"       , REGISTER;
+    "restrict"       , RESTRICT;
+    "return"         , RETURN;
+    "short"          , SHORT;
+    "signed"         , SIGNED;
+    "sizeof"         , SIZEOF;
+    "static"         , STATIC;
+    "struct"         , STRUCT;
+    "switch"         , SWITCH;
+    "typedef"        , TYPEDEF;
+    "typeof"         , TYPEOF;
+    "union"          , UNION;
+    "unsigned"       , UNSIGNED;
+    "void"           , VOID;
+    "volatile"       , VOLATILE;
+    "while"          , WHILE;
+    "_Alignas"       , ALIGNAS;
+    "_Alignof"       , ALIGNOF;
+    "_Atomic"        , ATOMIC;
+    "_Bool"          , BOOL;
+    "_Complex"       , COMPLEX;
+    "_Generic"       , GENERIC;
+    "_Imaginary"     , IMAGINARY;
+    "_Noreturn"      , NORETURN;
+    "_Static_assert" , STATIC_ASSERT;
+    "_Thread_local"  , THREAD_LOCAL;
 
-    "assert", (fun () -> ASSERT);
-    "offsetof", (fun () -> OFFSETOF);
-    "__cerb_va_start", (fun () -> VA_START);
-    "__cerb_va_copy", (fun () -> VA_COPY);
-    "__cerb_va_arg", (fun () -> VA_ARG);
-    "__cerb_va_end", (fun () -> VA_END);
+    "assert", ASSERT;
+    "offsetof", OFFSETOF;
+    "__cerb_va_start", VA_START;
+    "__cerb_va_copy", VA_COPY;
+    "__cerb_va_arg", VA_ARG;
+    "__cerb_va_end", VA_END;
 
-    "__cerb_printtype", (fun () -> PRINT_TYPE);
+    "__cerb_printtype", PRINT_TYPE;
 
-    "__BMC_ASSUME", (fun () -> BMC_ASSUME);
+    "__BMC_ASSUME", BMC_ASSUME;
 
     (* some GCC extensions *)
-    "asm", (fun () -> ASM);
-    "__asm__", (fun () -> ASM);
-    "__volatile__", (fun () -> ASM_VOLATILE);
-    "__builtin_types_compatible_p", (fun () -> BUILTIN_TYPES_COMPATIBLE_P);
-    "__builtin_choose_expr", (fun () -> BUILTIN_CHOOSE_EXPR);
+    "asm", ASM;
+    "__asm__", ASM;
+    "__volatile__", ASM_VOLATILE;
+    "__builtin_types_compatible_p", BUILTIN_TYPES_COMPATIBLE_P;
+    "__builtin_choose_expr", BUILTIN_CHOOSE_EXPR;
 
     (* BEGIN CN *)
-    "__cerb_predicate"     , (fun () -> CN_PREDICATE);
-    "__cerb_function"      , (fun () -> CN_FUNCTION);
-    "__cerb_lemma"         , (fun () -> CN_LEMMA);
-    "__cerb_datatype"      , (fun () -> CN_DATATYPE);
-    "__cerb_pack"          , (fun () -> CN_PACK);
-    "__cerb_unpack"        , (fun () -> CN_UNPACK);
-    "__cerb_have"          , (fun () -> CN_HAVE);
-    "__cerb_instantiate"   , (fun () -> CN_INSTANTIATE);
+    "__cerb_predicate"     , CN_PREDICATE;
+    "__cerb_function"      , CN_FUNCTION;
+    "__cerb_lemma"         , CN_LEMMA;
+    "__cerb_datatype"      , CN_DATATYPE;
+    "__cerb_pack"          , CN_PACK;
+    "__cerb_unpack"        , CN_UNPACK;
+    "__cerb_have"          , CN_HAVE;
+    "__cerb_instantiate"   , CN_INSTANTIATE;
     (* END CN *)
   ]
 
-let lexicon: (string, unit -> token) Hashtbl.t =
+let lexicon: (string, token) Hashtbl.t =
   let lexicon = Hashtbl.create 0 in
   let add (key, builder) = Hashtbl.add lexicon key builder in
   List.iter add keywords; lexicon
@@ -181,6 +179,26 @@ let lex_magic remainder lexbuf =
   let ch = lexeme_char lexbuf 0 in
   if ch = '\n' then new_line lexbuf;
   ch :: remainder lexbuf
+
+let magic_token start_pos end_pos chars =
+  let len = List.length chars in
+  if len < 2 then None
+  else
+  let first, last = List.head chars, List.last chars in
+  match internal_state.magic_comment_mode with
+  | Magic_At _ when first == '@' && last == '@' ->
+    let str = String.init (len - 2) (List.nth (List.tail chars)) in
+    let loc = Cerb_location.(region (start_pos, end_pos)) in
+    Some (CERB_MAGIC (loc, str))
+  | Magic_At warn when first == '@' && warn -> begin
+    prerr_endline (Pp_errors.make_message
+                    (Cerb_location.point pos)
+                    Errors.(CPARSER Cparser_mismatched_magic_comment)
+                    Warning);
+    None
+    end
+  | _ -> None
+
 }
 
 (* ========================================================================== *)
@@ -373,26 +391,16 @@ and hash = parse
   | _
       { raise (Error Errors.Cparser_invalid_symbol) }
 
-
 (* Entry point *)
 and initial = parse
   (* Magic comments *)
-  | "/*@" { internal_state.start_of_comment <- lexbuf.lex_start_p;
+  | "/*@" { let start_p = lexbuf.lex_start_p;
+            internal_state.start_of_comment <- start_p;
             let xs = magic lexbuf in
-            let str = String.init (List.length xs) (List.nth xs) in
-            let sz = String.length str in
-            (* ignoring magic comment that are not closed with a @*/ (not sure about this) *)
-            begin if sz > 0 && String.(get str (sz - 1)) = '@' then
-              let magik = String.sub str 0 (sz-1) in
-              let loc = Cerb_location.(region
-                ( {internal_state.start_of_comment with pos_cnum = internal_state.start_of_comment.pos_cnum + 3}
-                , {lexbuf.lex_curr_p with pos_cnum = lexbuf.lex_curr_p.pos_cnum - 3} ) NoCursor) in
-              begin if not (internal_state.ignore_magic) then
-                internal_state.magic_acc <- (loc, magik) :: internal_state.magic_acc
-              end
-            end;
-            initial lexbuf }
-
+            match magic_token start_p lexbuf.lex_start_p ('@' :: xs) with
+            | Some tok -> tok
+            | None -> initial lexbuf
+            }
   (* Beginning of a comment *)
   | "/*" { internal_state.start_of_comment <- lexbuf.lex_start_p;
            ignore (comment lexbuf); initial lexbuf}

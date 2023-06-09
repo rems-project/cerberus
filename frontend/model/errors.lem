@@ -67,6 +67,7 @@ type cparser_cause =
   | Cparser_KnR_declaration (* we don't support K&R syntax for declarations *)
   | Cparser_nested_comment
   | Cparser_unterminated_comment of string
+  | Cparser_mismatched_magic_comment
 
 type core_parser_cause =
   | Core_parser_invalid_symbol

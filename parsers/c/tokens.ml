@@ -1,48 +1,45 @@
 open Cerb_frontend
 
-type magic_comment =
-  (Cerb_location.t * string) list
-
 (* §6.4 Lexical elements *)
 type token =
   | EOF
 
   (* §6.4.1 Keywords *)
   | AUTO
-  | BREAK of magic_comment
-  | CASE of magic_comment
+  | BREAK
+  | CASE
   | CHAR
   | CONST
-  | CONTINUE of magic_comment
-  | DEFAULT of magic_comment
-  | DO of magic_comment
+  | CONTINUE
+  | DEFAULT
+  | DO
   | DOUBLE
   | ELSE
   | ENUM
   | EXTERN
   | FLOAT
-  | FOR of magic_comment
-  | GOTO of magic_comment
-  | IF of magic_comment
+  | FOR
+  | GOTO
+  | IF
   | INLINE
   | INT
   | LONG
   | REGISTER
   | RESTRICT
-  | RETURN of magic_comment
+  | RETURN
   | SHORT
   | SIGNED
   | SIZEOF
   | STATIC
   | STRUCT
-  | SWITCH of magic_comment
+  | SWITCH
   | TYPEDEF
   | TYPEOF
   | UNION
   | UNSIGNED
   | VOID
   | VOLATILE
-  | WHILE of magic_comment
+  | WHILE
   | ALIGNAS
   | ALIGNOF
   | ATOMIC
@@ -71,8 +68,8 @@ type token =
   | RBRACK
   | LPAREN
   | RPAREN
-  | LBRACE of magic_comment
-  | RBRACE of magic_comment
+  | LBRACE
+  | RBRACE
   | DOT
   | MINUS_GT
   | PLUS_PLUS
@@ -99,7 +96,7 @@ type token =
   | PIPE_PIPE
   | QUESTION
   | COLON
-  | SEMICOLON of magic_comment
+  | SEMICOLON
   | COLON_COLON
   | ELLIPSIS
   | EQ
@@ -134,7 +131,10 @@ type token =
   | QUESTION_COLON
   | BUILTIN_TYPES_COMPATIBLE_P
   | BUILTIN_CHOOSE_EXPR
-  
+
+  (* Magic comments as tokens *)
+  | CERB_MAGIC of (Cerb_location.t * string)
+
   (* CN syntax *)
   | CN_FUNCTION
   | CN_PREDICATE
@@ -176,40 +176,40 @@ type token =
 
 let string_of_token = function
   | AUTO -> "AUTO"
-  | BREAK _ -> "BREAK"
-  | CASE _ -> "CASE"
+  | BREAK -> "BREAK"
+  | CASE -> "CASE"
   | CHAR -> "CHAR"
   | CONST -> "CONST"
-  | CONTINUE _ -> "CONTINUE"
-  | DEFAULT _ -> "DEFAULT"
-  | DO _ -> "DO"
+  | CONTINUE -> "CONTINUE"
+  | DEFAULT -> "DEFAULT"
+  | DO -> "DO"
   | DOUBLE -> "DOUBLE"
   | ELSE -> "ELSE"
   | ENUM -> "ENUM"
   | EXTERN -> "EXTERN"
   | FLOAT -> "FLOAT"
-  | FOR _ -> "FOR"
-  | GOTO _ -> "GOTO"
-  | IF _ -> "IF"
+  | FOR -> "FOR"
+  | GOTO -> "GOTO"
+  | IF -> "IF"
   | INLINE -> "INLINE"
   | INT -> "INT"
   | LONG -> "LONG"
   | REGISTER -> "REGISTER"
   | RESTRICT -> "RESTRICT"
-  | RETURN _ -> "RETURN"
+  | RETURN -> "RETURN"
   | SHORT -> "SHORT"
   | SIGNED -> "SIGNED"
   | SIZEOF -> "SIZEOF"
   | STATIC -> "STATIC"
   | STRUCT -> "STRUCT"
-  | SWITCH _ -> "SWITCH"
+  | SWITCH -> "SWITCH"
   | TYPEDEF -> "TYPEDEF"
   | TYPEOF -> "TYPEOF"
   | UNION -> "UNION"
   | UNSIGNED -> "UNSIGNED"
   | VOID -> "VOID"
   | VOLATILE -> "VOLATILE"
-  | WHILE _ -> "WHILE"
+  | WHILE -> "WHILE"
   | ALIGNAS -> "ALIGNAS"
   | ALIGNOF -> "ALIGNOF"
   | ATOMIC -> "ATOMIC"
@@ -224,16 +224,16 @@ let string_of_token = function
   | LNAME s -> "LNAME(" ^ s ^ ")"
   | VARIABLE -> "VARIABLE"
   | TYPE -> "TYPE"
-  | CONSTANT _ -> "CONSTANT"
-  | STRING_LITERAL _ -> "STRING_LITERAL"
+  | CONSTANT -> "CONSTANT"
+  | STRING_LITERAL -> "STRING_LITERAL"
   | LBRACK -> "LBRACK"
   | RBRACK -> "RBRACK"
   | LBRACK_LBRACK -> "LBRACK_LBRACK"
   | RBRACK_RBRACK -> "RBRACK_RBRACK"
   | LPAREN -> "LPAREN"
   | RPAREN -> "RPAREN"
-  | LBRACE _ -> "LBRACE"
-  | RBRACE _ -> "RBRACE"
+  | LBRACE -> "LBRACE"
+  | RBRACE -> "RBRACE"
   | DOT -> "DOT"
   | MINUS_GT -> "MINUS_GT"
   | PLUS_PLUS -> "PLUS_PLUS"
@@ -261,7 +261,7 @@ let string_of_token = function
   | QUESTION -> "QUESTION"
   | COLON -> "COLON"
   | COLON_COLON -> "COLON_COLON"
-  | SEMICOLON _ -> "SEMICOLON"
+  | SEMICOLON -> "SEMICOLON"
   | ELLIPSIS -> "ELLIPSIS"
   | EQ -> "EQ"
   | STAR_EQ -> "STAR_EQ"
@@ -292,6 +292,7 @@ let string_of_token = function
   | BUILTIN_TYPES_COMPATIBLE_P -> "BUILTIN_TYPES_COMPATIBLE_P"
   | BUILTIN_CHOOSE_EXPR -> "BUILTIN_CHOOSE_EXPR"
   | EOF -> "EOF"
+  | CERB_MAGIC (_, str) -> "/*@ " ^ str ^ " @*/"
   | CN_GOOD -> "CN_GOOD"
   | CN_PACK -> "CN_PACK"
   | CN_UNPACK -> "CN_UNPACK"
