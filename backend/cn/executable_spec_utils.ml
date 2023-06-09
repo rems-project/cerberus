@@ -4,8 +4,21 @@ module C=CF.Ctype
 module Cn=CF.Cn
 
 
+
+let empty_qualifiers : C.qualifiers = {const = false; restrict = false; volatile = false}
+let const_qualifiers : C.qualifiers = {const = true; restrict = false; volatile = false}
+
+let empty_attributes = CF.Annot.Attrs []
+
+let mk_ctype ctype_ =
+  C.Ctype ([], ctype_)
+
+
 let mk_expr expr_ = 
-  A.AnnotatedExpression ((), [], Cerb_location.unknown, expr_)
+  A.AnnotatedExpression (
+    CF.GenTypes.GenLValueType (empty_qualifiers, mk_ctype C.Void, false),
+     [], Cerb_location.unknown, expr_)
+
 
 
 let mk_stmt stmt_ = 
@@ -16,8 +29,6 @@ let rm_expr (A.AnnotatedExpression (_, _, _, expr_)) = expr_
 let rm_stmt (A.AnnotatedStatement (_, _, stmt_)) = stmt_
 
 
-let mk_ctype ctype_ =
-  C.Ctype ([], ctype_)
 
 let rec split_list_of_triples = function 
   | [] -> ([], [], [])
@@ -25,9 +36,6 @@ let rec split_list_of_triples = function
     let (xs, ys, zs) = split_list_of_triples tl in 
     (x::xs, y::ys, z::zs)
 
-let empty_qualifiers : C.qualifiers = {const = false; restrict = false; volatile = false}
-
-let empty_attributes = CF.Annot.Attrs []
 
 type cn_dependencies = CF.Symbol.sym list
 

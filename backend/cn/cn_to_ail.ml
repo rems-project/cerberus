@@ -41,7 +41,7 @@ let rec cn_to_ail_base_type =
   | CN_loc -> C.(Pointer (empty_qualifiers, Ctype ([], Void))) (* Casting all CN pointers to void star *)
   | CN_struct sym -> C.(Struct sym)
   (* | CN_record of list (cn_base_type 'a * Symbol.identifier) *)
-  (* | CN_datatype sym -> failwith "TODO" *)
+  | CN_datatype _ -> C.(Pointer (empty_qualifiers, mk_ctype Void))
   (* | CN_map of cn_base_type 'a * cn_base_type 'a *)
   | CN_list bt -> generate_ail_array bt (* TODO: What is the optional second pair element for? Have just put None for now *)
   (* | CN_tuple of list (cn_base_type 'a) *)
@@ -84,12 +84,12 @@ let cn_to_ail_const = function
  
 
 type 'a dest =
-| Assert : (A.declaration list * unit A.statement_ list) dest
-| Return : (A.declaration list * unit A.statement_ list) dest 
-| AssignVar : C.union_tag -> (A.declaration list * unit A.statement_ list) dest
-| PassBack : (A.declaration list * unit A.statement_ list * unit A.expression_) dest
+| Assert : (A.declaration list * CF.GenTypes.genTypeCategory A.statement_ list) dest
+| Return : (A.declaration list * CF.GenTypes.genTypeCategory A.statement_ list) dest 
+| AssignVar : C.union_tag -> (A.declaration list * CF.GenTypes.genTypeCategory A.statement_ list) dest
+| PassBack : (A.declaration list * CF.GenTypes.genTypeCategory A.statement_ list * CF.GenTypes.genTypeCategory A.expression_) dest
 
-let dest : type a. a dest -> A.declaration list * _ A.statement_ list * _ A.expression_ -> a = 
+let dest : type a. a dest -> A.declaration list * CF.GenTypes.genTypeCategory A.statement_ list * CF.GenTypes.genTypeCategory A.expression_ -> a = 
   fun d (ds, s, e) -> 
     match d with
     | Assert -> 
@@ -103,7 +103,7 @@ let dest : type a. a dest -> A.declaration list * _ A.statement_ list * _ A.expr
       (ds, s @ [assign_stmt])
     | PassBack -> (ds, s, e)
 
-let prefix : type a. a dest -> (A.declaration list * unit A.statement_ list) -> a -> a = 
+let prefix : type a. a dest -> (A.declaration list * CF.GenTypes.genTypeCategory A.statement_ list) -> a -> a = 
   fun d (d1, s1) u -> 
     match d, u with 
     | Assert, (d2, s2) -> (d1 @ d2, s1 @ s2)
@@ -361,8 +361,7 @@ let cn_to_ail_datatype ?(first=false) (cn_datatype : cn_datatype) =
         (constructor_sym, Some const) :: (generate_stats cs (count + 1))
   )
   in
-  (* TODO: Make const? *)
-  let decl_object = A.(Decl_object ((Automatic, false), None, empty_qualifiers, mk_ctype C.(Basic (Integer (Signed Int_))))) in
+  let decl_object = A.(Decl_object ((Automatic, false), None, const_qualifiers, mk_ctype C.(Basic (Integer (Signed Int_))))) in
   let stats = generate_stats cn_datatype.cn_dt_cases 0 in
   let decls = List.map (fun (sym, _) -> (sym, decl_object)) stats in
   let stats = List.map (fun d -> mk_stmt (A.AilSdeclaration [d])) stats in
@@ -372,11 +371,23 @@ let cn_to_ail_datatype ?(first=false) (cn_datatype : cn_datatype) =
 
 (* TODO: Finish with rest of function - maybe header file with A.Decl_function (cn.h?) *)
 let cn_to_ail_function cn_function = 
+  let ail_func_body =
   match cn_function.cn_func_body with
     | Some e ->
       let ds, ss = cn_to_ail_expr e Return in
       List.map mk_stmt ss
     | None -> []
+  in
+  let ret_type = cn_to_ail_base_type cn_function.cn_func_return_bty in
+  let params = List.map (fun (cn_nm, cn_bt) -> (mk_ctype (cn_to_ail_base_type cn_bt), cn_nm)) cn_function.cn_func_args in
+  let (param_types, param_names) = List.split params in
+  let param_types = List.map (fun t -> (empty_qualifiers, t, false)) param_types in
+  let func_name = cn_function.cn_func_name in
+  (* Generating function declaration *)
+  let decl = (func_name, (Cerb_location.unknown, empty_attributes, A.(Decl_function (false, (empty_qualifiers, mk_ctype ret_type), param_types, false, false, false)))) in
+  (* Generating function definition *)
+  let def = (func_name, (Cerb_location.unknown, 0, empty_attributes, param_names, mk_stmt A.(AilSblock ([], ail_func_body)))) in
+  (decl, def)
 
 let cn_to_ail_assertion = function
   | CN_assert_exp e_ -> 
