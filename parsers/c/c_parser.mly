@@ -325,7 +325,8 @@ let warn_extra_semicolon pos ctx =
 %type<(Cerb_frontend.Symbol.identifier, Cerb_frontend.Cabs.type_name) Cerb_frontend.Cn.cn_loop_spec> loop_spec
 %type<(Cerb_frontend.Symbol.identifier, Cerb_frontend.Cabs.type_name) Cerb_frontend.Cn.cn_statement> cn_statement
 
-%type<Cerb_frontend.Cabs.external_declaration> cn_toplevel 
+%type<Cerb_frontend.Cabs.external_declaration> cn_toplevel_elem
+%type<Cerb_frontend.Cabs.external_declaration list> cn_toplevel 
 
 
 
@@ -2388,18 +2389,22 @@ cn_statement:
     { let loc = Cerb_location.(region ($startpos, $endpos) NoCursor) in 
       CN_statement (loc, CN_assert_stmt e) }
 
-cn_toplevel:
-| pred= cn_predicate EOF
+cn_toplevel_elem:
+| pred= cn_predicate
     { EDecl_predCN pred }
-| func= cn_function EOF
+| func= cn_function
     { EDecl_funcCN func }
-| lmma= cn_lemma EOF
+| lmma= cn_lemma
     { EDecl_lemmaCN lmma }
-| dt= cn_datatype EOF
+| dt= cn_datatype
     { EDecl_datatypeCN dt }
 ;
 
-
+cn_toplevel:
+| EOF
+    { [] }
+| elem= cn_toplevel_elem elems= cn_toplevel
+    { elem :: elems }
 
 
 (* END CN *)
