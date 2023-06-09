@@ -4,9 +4,11 @@ struct T {
   int something;
 };
 
+/*@
 predicate {integer out1} OtherPred (pointer p) {
   return { out1: 42 } ;
 }
+@*/
 
 predicate {integer z, integer out2} MyPred (pointer p, integer n) {
   if ( n == 10 ) {

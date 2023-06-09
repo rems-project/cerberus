@@ -167,6 +167,10 @@ let cn_keywords: (string * Tokens.token) list = [
     "unfold"        , CN_UNFOLD;
     "apply"         , CN_APPLY;
     "match"         , CN_MATCH;
+    "predicate"     , CN_PREDICATE;
+    "function"      , CN_FUNCTION;
+    "lemma"         , CN_LEMMA;
+    "datatype"      , CN_DATATYPE;
   ]
 
 let cn_lexicon: (string, token) Hashtbl.t =
