@@ -52,6 +52,8 @@ let string_of_cparser_cause = function
       "nested comment"
   | Cparser_unterminated_comment str ->
       "unterminated " ^ str ^ " comment"
+  | Cparser_mismatched_magic_comment ->
+      "magic comment syntax at open but not close"
 
 
 let string_of_constraint_violation = function

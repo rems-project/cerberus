@@ -66,32 +66,6 @@ let inject_attr attr_opt (CabsStatement (loc, Annot.Attrs xs, stmt_)) =
   let Annot.Attrs xs' = to_attrs attr_opt in
   CabsStatement (loc, Annot.Attrs (xs @ xs'), stmt_)
 
-let magic_to_pre_attr magik =
-  ( ( Some (Symbol.Identifier (Cerb_location.unknown, "cerb"))
-    , Symbol.Identifier (Cerb_location.unknown, "magic") )
-  , Some (List.map (fun (loc, str) -> (loc, str, [loc, str])) magik) )
-
-let magic_to_attr magik : Annot.attribute =
-  let open Annot in
-  { attr_ns= Some (Symbol.Identifier (Cerb_location.unknown, "cerb"))
-  ; attr_id= Symbol.Identifier (Cerb_location.unknown, "magic")
-  ; attr_args= List.map (fun (loc, str) -> (loc, str, [loc, str])) magik }
-
-let magic_to_attrs = function
-  | [] ->
-      Annot.Attrs []
-  | magic ->
-      Annot.Attrs [magic_to_attr magic]
-
-let append_magic magic stmt =
-  match magic with
-    | [] -> stmt
-    | _  -> let loc = Cerb_location.bbox_location (List.map fst magic) in
-            CabsStatement (loc, magic_to_attrs magic, CabsSmarker stmt)
-
-let mk_statement magic (loc, attrs, stmt_) =
-  append_magic magic (CabsStatement (loc, attrs, stmt_))
-
 (* use this to show a warning when a NON-STD 'extra' semicolon was parsed *)
 let warn_extra_semicolon pos ctx =
   if not (Cerb_global.isPermissive ()) then
@@ -109,8 +83,7 @@ let warn_extra_semicolon pos ctx =
   STATIC STRUCT (*SWITCH*) TYPEDEF UNION UNSIGNED VOID VOLATILE (*WHILE*) ALIGNAS
   ALIGNOF ATOMIC BOOL COMPLEX GENERIC (* IMAGINARY *) NORETURN STATIC_ASSERT
   THREAD_LOCAL
-
-%token<Tokens.magic_comment> BREAK CASE CONTINUE DEFAULT DO FOR GOTO IF RETURN SWITCH WHILE
+%token BREAK CASE CONTINUE DEFAULT DO FOR GOTO IF RETURN SWITCH WHILE
 
 (* §6.4.2 Identifiers *)
 %token<string> UNAME (* Uppercase. UNAME is either a variable identifier or a type name *)
@@ -138,7 +111,7 @@ let warn_extra_semicolon pos ctx =
 (* NON-STD cppmem syntax *)
   LBRACES PIPES RBRACES
 
-%token<Tokens.magic_comment> LBRACE RBRACE SEMICOLON
+%token LBRACE RBRACE SEMICOLON
 
 %token VA_START VA_COPY VA_ARG VA_END PRINT_TYPE ASM ASM_VOLATILE
 
@@ -194,10 +167,10 @@ let warn_extra_semicolon pos ctx =
 %type<Cabs.cabs_assignment_operator>
   assignment_operator
 
-%type<Tokens.magic_comment * Cabs.cabs_declaration>
+%type<Cabs.cabs_declaration>
   no_leading_attribute_declaration
 
-%type<Tokens.magic_comment * Cabs.cabs_declaration>
+%type<Cabs.cabs_declaration>
   declaration
 
 %type<Cabs.specifiers>
@@ -469,20 +442,6 @@ declarator_typedefname:
     { LF.declare_typedefname (LF.identifier decl); decl }
 ;
 
-(*
-fetch_magic:
-| (* empty *)
-  { let xs = C_lexer.internal_state.magic_acc in
-    C_lexer.internal_state.magic_acc <- [];
-    List.rev xs }
-;
-*)
-
-clear_magic:
-| (* empty *)
-  { C_lexer.internal_state.magic_acc <- [] }
-;
-
 start_ignore:
 | (* empty *)
   { (*C_lexer.internal_state.ignore_magic <- true*) }
@@ -564,9 +523,8 @@ postfix_expression:
 | expr= postfix_expression MINUS_MINUS
     { CabsExpression ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($2)))
                      , CabsEpostdecr expr ) }
-| LPAREN ty= type_name RPAREN unused_magic= LBRACE inits= initializer_list COMMA? RBRACE
-    { C_lexer.restore_magic unused_magic;
-      CabsExpression (Cerb_location.(region ($startpos, $endpos) NoCursor),
+| LPAREN ty= type_name RPAREN LBRACE inits= initializer_list COMMA? RBRACE
+    { CabsExpression (Cerb_location.(region ($startpos, $endpos) NoCursor),
                       CabsEcompound (ty, List.rev inits)) }
 (* NOTE: non-std way of dealing with these *)
 | ASSERT LPAREN expr= assignment_expression RPAREN
@@ -841,28 +799,28 @@ constant_expression:
 (* §6.7 Declarations *)
 no_leading_attribute_declaration:
 | decspecs= declaration_specifiers
-    idecls_opt= init_declarator_list(declarator_varname)? prev_magic= SEMICOLON
-    { (prev_magic, Declaration_base (Annot.no_attributes, decspecs, option [] List.rev idecls_opt)) }
+    idecls_opt= init_declarator_list(declarator_varname)? SEMICOLON
+    { Declaration_base (Annot.no_attributes, decspecs, option [] List.rev idecls_opt) }
 | decspecs= declaration_specifiers_typedef
-    idecls_opt= init_declarator_list(declarator_typedefname)? prev_magic= SEMICOLON
-    { (prev_magic, Declaration_base (Annot.no_attributes, decspecs, option [] List.rev idecls_opt)) }
+    idecls_opt= init_declarator_list(declarator_typedefname)? SEMICOLON
+    { Declaration_base (Annot.no_attributes, decspecs, option [] List.rev idecls_opt) }
 | sa= static_assert_declaration
-    { ([], Declaration_static_assert sa) }
+    { Declaration_static_assert sa }
 ;
 
 declaration:
 | xs_decl= no_leading_attribute_declaration
     { xs_decl }
 | attr= attribute_specifier_sequence decspecs= declaration_specifiers
-    idecls_opt= init_declarator_list(declarator_varname)? prev_magic= SEMICOLON
-    { (prev_magic, Declaration_base (to_attrs (Some attr), decspecs, option [] List.rev idecls_opt)) }
+    idecls_opt= init_declarator_list(declarator_varname)? SEMICOLON
+    { Declaration_base (to_attrs (Some attr), decspecs, option [] List.rev idecls_opt) }
 | attr= attribute_specifier_sequence decspecs= declaration_specifiers_typedef
-    idecls_opt= init_declarator_list(declarator_typedefname)? prev_magic= SEMICOLON
-    { (prev_magic, Declaration_base (to_attrs (Some attr), decspecs, option [] List.rev idecls_opt)) }
+    idecls_opt= init_declarator_list(declarator_typedefname)? SEMICOLON
+    { Declaration_base (to_attrs (Some attr), decspecs, option [] List.rev idecls_opt) }
 | attribute_declaration
     { (*TODO: this is a dummy declaration*)
       let loc = Cerb_location.(region($startpos, $endpos) (PointCursor $startpos)) in
-      ([], Declaration_base (Annot.no_attributes, empty_specs, [InitDecl (loc, Declarator (None, DDecl_identifier (Annot.no_attributes, Symbol.Identifier (loc, "test"))), None)])) }
+      Declaration_base (Annot.no_attributes, empty_specs, [InitDecl (loc, Declarator (None, DDecl_identifier (Annot.no_attributes, Symbol.Identifier (loc, "test"))), None)]) }
 ;
 
 declaration_specifier:
@@ -980,19 +938,17 @@ attribute_type_specifier_unique:
 (* §6.7.2.1 Structure and union specifiers *)
 struct_or_union_specifier:
 | ctor= struct_or_union attr_opt= attribute_specifier_sequence?
-    iopt= general_identifier? unused_magic= LBRACE has_extra= boption(SEMICOLON+) rev_decls= struct_declaration_list RBRACE
-    { C_lexer.restore_magic unused_magic;
-      if has_extra then warn_extra_semicolon $startpos(has_extra) INSIDE_STRUCT;
+    iopt= general_identifier? LBRACE has_extra= boption(SEMICOLON+) rev_decls= struct_declaration_list RBRACE
+    { if has_extra then warn_extra_semicolon $startpos(has_extra) INSIDE_STRUCT;
       ctor (to_attrs attr_opt) iopt (Some (List.rev rev_decls)) }
 | ctor= struct_or_union attr_opt= attribute_specifier_sequence?
     i= general_identifier
     { ctor (to_attrs attr_opt) (Some i) None }
 | ctor= struct_or_union attr_opt= attribute_specifier_sequence?
-    iopt= general_identifier? unused_magic= LBRACE RBRACE
+    iopt= general_identifier? LBRACE RBRACE
     (* GCC extension *)
     (* TODO: forbid union *)
-    { C_lexer.restore_magic unused_magic;
-      ctor (to_attrs attr_opt) iopt (Some []) }
+    { ctor (to_attrs attr_opt) iopt (Some []) }
 ;
 
 struct_or_union:
@@ -1014,8 +970,6 @@ struct_declaration_list: (* NOTE: the list is in reverse *)
 struct_declaration:
 | attr_opt= ioption(attribute_specifier_sequence) tspecs_tquals= specifier_qualifier_list
     rev_sdeclrs_opt= struct_declarator_list? SEMICOLON has_extra= boption(SEMICOLON+)
-    (* NOTE: the semicolons dont need to restore potential magic comments,
-             because this production is always after the LBRACE of a struct_union (which does perform a restore) *)
     { if has_extra then warn_extra_semicolon $startpos(has_extra) INSIDE_STRUCT;
       let (tspecs, tquals, align_specs) = tspecs_tquals in
       Struct_declaration (to_attrs attr_opt, tspecs, tquals, align_specs,
@@ -1051,9 +1005,8 @@ struct_declarator:
 (* §6.7.2.2 Enumeration specifiers *)
 enum_specifier:
 | ENUM ioption(attribute_specifier_sequence) iopt= general_identifier?
-  unused_magic= LBRACE enums= enumerator_list COMMA? RBRACE
-    { C_lexer.restore_magic unused_magic;
-      TSpec (Cerb_location.(region ($startpos, $endpos) NoCursor),
+  LBRACE enums= enumerator_list COMMA? RBRACE
+    { TSpec (Cerb_location.(region ($startpos, $endpos) NoCursor),
              TSpec_enum (iopt, Some (List.rev enums))) }
 | ENUM ioption(attribute_specifier_sequence) i= general_identifier
     { TSpec (Cerb_location.(region ($startpos, $endpos) NoCursor),
@@ -1166,7 +1119,7 @@ array_declarator:
 ;
 
 function_declarator:
-| ddecltor= direct_declarator LPAREN ptys_ctxt=scoped(parameter_type_list) clear_magic RPAREN
+| ddecltor= direct_declarator LPAREN ptys_ctxt=scoped(parameter_type_list) RPAREN
     { let (ptys, ctxt) = ptys_ctxt in LF.fun_decl ptys ctxt ddecltor }
 ;
 
@@ -1271,10 +1224,9 @@ function_abstract_declarator:
 initializer_:
 | expr= assignment_expression
     { Init_expr expr }
-| unused_magic= LBRACE inits= initializer_list RBRACE
-| unused_magic= LBRACE inits= initializer_list COMMA RBRACE
-    { C_lexer.restore_magic unused_magic;
-      Init_list (List.rev inits) }
+| LBRACE inits= initializer_list RBRACE
+| LBRACE inits= initializer_list COMMA RBRACE
+    { Init_list (List.rev inits) }
 ;
 
 initializer_list: (* NOTE: the list is in reverse *)
@@ -1333,41 +1285,29 @@ labeled_statement:
     { CabsStatement (Cerb_location.(region ($startpos, $endpos) NoCursor),
         to_attrs attr_opt,
         CabsSlabel (i, stmt)) }
-| attr_opt= attribute_specifier_sequence? prev_magic= CASE expr1= constant_expression ELLIPSIS expr2= constant_expression COLON
+| attr_opt= attribute_specifier_sequence? CASE expr1= constant_expression ELLIPSIS expr2= constant_expression COLON
   stmt= statement
-    { mk_statement prev_magic
+    { CabsStatement
         ( Cerb_location.(region ($startpos, $endpos) NoCursor)
         , to_attrs attr_opt
         , CabsScaseGNU (expr1, expr2, stmt) ) }
-| attr_opt= attribute_specifier_sequence? prev_magic= CASE expr= constant_expression COLON
+| attr_opt= attribute_specifier_sequence? CASE expr= constant_expression COLON
   stmt= statement
-    { mk_statement prev_magic
+    { CabsStatement
         ( Cerb_location.(region ($startpos, $endpos) NoCursor)
         , to_attrs attr_opt
         , CabsScase (expr, stmt) ) }
-| attr_opt= attribute_specifier_sequence? prev_magic= DEFAULT COLON stmt= statement
-    { mk_statement prev_magic
-        ( Cerb_location.(region ($startpos(prev_magic), $endpos) NoCursor)
+| attr_opt= attribute_specifier_sequence? DEFAULT COLON stmt= statement
+    { CabsStatement
+        ( Cerb_location.(region ($startpos, $endpos) NoCursor)
         , to_attrs attr_opt
         , CabsSdefault stmt ) }
 ;
 
 (* §6.8.2 Compound statement *)
 compound_statement:
-| prev_magic= LBRACE bis_opt= block_item_list? post_magic= RBRACE
-    { let bis_opt =
-        match post_magic with
-          | [] -> bis_opt
-          | _ ->
-              let magic_stmt =
-                mk_statement post_magic
-                  ( Cerb_location.(region ($startpos(post_magic), $endpos(post_magic)) NoCursor)
-                  , Annot.no_attributes
-                  , CabsSnull ) in
-              match bis_opt with
-                | None -> Some [magic_stmt]
-                | Some xs -> Some (magic_stmt :: xs) in
-      mk_statement prev_magic
+| LBRACE bis_opt= block_item_list? RBRACE
+    { CabsStatement
         ( Cerb_location.(region ($startpos, $endpos) NoCursor)
         , Annot.no_attributes
         , CabsSblock (option [] List.rev bis_opt) ) }
@@ -1387,23 +1327,23 @@ block_item_list: (* NOTE: the list is in reverse *)
 
 block_item:
 | xs_decl= declaration
-    { mk_statement (fst xs_decl)
+    { CabsStatement
         ( Cerb_location.(region ($startpos, $endpos) NoCursor)
         , Annot.no_attributes
-        , CabsSdecl (snd xs_decl) ) }
+        , CabsSdecl xs_decl ) }
 | stmt= statement
     { stmt }
 ;
 
 (* §6.8.3 Expression and null statements *)
 expression_statement:
-| expr_opt= full_expression? prev_magic= SEMICOLON
-    { mk_statement prev_magic
+| expr_opt= full_expression? SEMICOLON
+    { CabsStatement
         ( Cerb_location.(region ($startpos, $endpos) NoCursor)
         , Annot.no_attributes
         , option CabsSnull (fun z -> CabsSexpr z) expr_opt ) }
-| attr= attribute_specifier_sequence expr= full_expression prev_magic= SEMICOLON
-    { mk_statement prev_magic
+| attr= attribute_specifier_sequence expr= full_expression SEMICOLON
+    { CabsStatement
         (Cerb_location.(region ($startpos, $endpos) NoCursor)
         , to_attrs (Some attr)
         , CabsSexpr expr ) }
@@ -1411,19 +1351,19 @@ expression_statement:
 
 (* §6.8.4 Selection statements *)
 selection_statement:
-| prev_magic= IF LPAREN expr= full_expression RPAREN stmt= scoped(statement) %prec THEN
-    { mk_statement prev_magic
+| IF LPAREN expr= full_expression RPAREN stmt= scoped(statement) %prec THEN
+    { CabsStatement
         ( Cerb_location.(region ($startpos, $endpos) NoCursor)
         , Annot.no_attributes
         , CabsSif (expr, stmt, None) ) }
-| prev_magic= IF LPAREN expr= full_expression RPAREN stmt1= scoped(statement)
+| IF LPAREN expr= full_expression RPAREN stmt1= scoped(statement)
   ELSE stmt2= scoped(statement)
-    { mk_statement prev_magic
+    { CabsStatement
         ( Cerb_location.(region ($startpos, $endpos) NoCursor)
         , Annot.no_attributes
         , CabsSif (expr, stmt1, Some stmt2) ) }
-| prev_magic= SWITCH LPAREN expr= full_expression RPAREN stmt= scoped(statement)
-    { mk_statement prev_magic
+| SWITCH LPAREN expr= full_expression RPAREN stmt= scoped(statement)
+    { CabsStatement
         ( Cerb_location.(region ($startpos, $endpos) NoCursor)
         , Annot.no_attributes
         , CabsSswitch (expr, stmt) ) }
@@ -1431,67 +1371,67 @@ selection_statement:
 
 (* §6.8.5 Iteration statements *)
 iteration_statement:
-| prev_magic= WHILE LPAREN expr= full_expression clear_magic RPAREN stmt= scoped(statement)
+| WHILE LPAREN expr= full_expression RPAREN stmt= scoped(statement)
     { let (inv_attrs, stmt') =
         match stmt with
           | CabsStatement (_, inv_attrs, CabsSmarker inner_stmt) ->
               (inv_attrs, inner_stmt)
           | _ ->
               (Annot.no_attributes, stmt) in
-      mk_statement prev_magic
+      CabsStatement
         ( Cerb_location.(region ($startpos, $endpos) NoCursor)
         , inv_attrs
         , CabsSwhile (expr, stmt') ) }
-| prev_magic= DO stmt= scoped(statement) WHILE LPAREN expr= full_expression RPAREN SEMICOLON
-    { mk_statement prev_magic
+| DO stmt= scoped(statement) WHILE LPAREN expr= full_expression RPAREN SEMICOLON
+    { CabsStatement
         ( Cerb_location.(region ($startpos, $endpos) NoCursor)
         , Annot.no_attributes
         , CabsSdo (expr, stmt) ) }
-| prev_magic= FOR LPAREN expr1_opt= full_expression? SEMICOLON expr2_opt= full_expression? SEMICOLON
-  expr3_opt= full_expression? clear_magic RPAREN stmt= scoped(statement)
+| FOR LPAREN expr1_opt= full_expression? SEMICOLON expr2_opt= full_expression? SEMICOLON
+  expr3_opt= full_expression? RPAREN stmt= scoped(statement)
     { let (inv_attrs, stmt') =
         match stmt with
           | CabsStatement (_, inv_attrs, CabsSmarker inner_stmt) ->
               (inv_attrs, inner_stmt)
           | _ ->
               (Annot.no_attributes, stmt) in
-      mk_statement prev_magic
+      CabsStatement
         ( Cerb_location.(region ($startpos, $endpos) NoCursor)
         , inv_attrs
         , CabsSfor (map_option (fun x -> FC_expr x) expr1_opt, expr2_opt,expr3_opt, stmt') ) }
-| prev_magic= FOR LPAREN xs_decl= declaration expr2_opt= full_expression? SEMICOLON
-  expr3_opt= full_expression? clear_magic RPAREN stmt= scoped(statement)
+| FOR LPAREN xs_decl= declaration expr2_opt= full_expression? SEMICOLON
+  expr3_opt= full_expression? RPAREN stmt= scoped(statement)
     { let (inv_attrs, stmt') =
         match stmt with
           | CabsStatement (_, inv_attrs, CabsSmarker inner_stmt) ->
               (inv_attrs, inner_stmt)
           | _ ->
               (Annot.no_attributes, stmt) in
-      mk_statement prev_magic
+      CabsStatement
         ( Cerb_location.(region ($startpos, $endpos) NoCursor)
         , inv_attrs
-        , CabsSfor (Some (FC_decl (snd xs_decl)), expr2_opt, expr3_opt, stmt') ) }
+        , CabsSfor (Some (FC_decl xs_decl), expr2_opt, expr3_opt, stmt') ) }
 ;
 
 (* §6.8.6 Jump statements *)
 jump_statement:
-| prev_magic= GOTO i= general_identifier SEMICOLON
-    { mk_statement prev_magic
+| GOTO i= general_identifier SEMICOLON
+    { CabsStatement
         ( Cerb_location.(region ($startpos, $endpos) NoCursor)
         , Annot.no_attributes
         , CabsSgoto i ) }
-| prev_magic= CONTINUE SEMICOLON
-    { mk_statement prev_magic 
+| CONTINUE SEMICOLON
+    { CabsStatement
         ( Cerb_location.(region ($startpos, $endpos) NoCursor)
         , Annot.no_attributes
         , CabsScontinue ) }
-| prev_magic= BREAK SEMICOLON
-    { mk_statement prev_magic
+| BREAK SEMICOLON
+    { CabsStatement
         ( Cerb_location.(region ($startpos, $endpos) NoCursor)
         , Annot.no_attributes
         , CabsSbreak ) }
-| prev_magic= RETURN expr_opt= full_expression? SEMICOLON
-    { mk_statement prev_magic
+| RETURN expr_opt= full_expression? SEMICOLON
+    { CabsStatement
         ( Cerb_location.(region ($startpos, $endpos) NoCursor)
         , Annot.no_attributes
         , CabsSreturn expr_opt ) }
@@ -1602,7 +1542,7 @@ external_declaration:
 | fdef= function_definition
     { EDecl_func fdef }
 | xs_decl= declaration
-    { EDecl_decl (snd xs_decl) }
+    { EDecl_decl xs_decl }
 ;
 
 (* §6.9.1 Function definitions *)
@@ -1639,9 +1579,9 @@ function_definition:
 
 declaration_list: (* NOTE: the list is in reverse *)
 | xs_decl= no_leading_attribute_declaration
-    { [snd xs_decl] }
+    { [xs_decl] }
 | decls= declaration_list xs_decl= no_leading_attribute_declaration
-    { (snd xs_decl) :: decls }
+    { xs_decl :: decls }
 ;
 
 (* (N2335) §6.7.11: Attributes  *)
