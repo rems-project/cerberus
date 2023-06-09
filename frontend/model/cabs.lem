@@ -321,7 +321,8 @@ and cabs_statement_ =
   (* GCC inline assembly extension *)
   | CabsSasm of bool(*is_volatile*) * bool(*is_inline*) * list (Loc.t * list string)
   | CabsScaseGNU of cabs_expression * cabs_expression * cabs_statement
-
+  (* magic comment as a statement *)
+  | CabsSmagic of string
   (* for CN *)
   | CabsSmarker of cabs_statement
 
@@ -345,6 +346,7 @@ type translation_unit =
 and external_declaration =
   | EDecl_func of function_definition
   | EDecl_decl of cabs_declaration
+  | EDecl_magic of (Loc.t * string) (* magic comment at top level *)
   | EDecl_funcCN of Cn.cn_function Symbol.identifier type_name (* CN backend *)
   | EDecl_lemmaCN of Cn.cn_lemma Symbol.identifier type_name (* CN backend *)
   | EDecl_predCN of Cn.cn_predicate Symbol.identifier type_name (* CN backend *)
@@ -426,6 +428,7 @@ instance (Located external_declaration)
           end
       | EDecl_decl (Declaration_static_assert (Static_assert e _)) ->
           locOf e
+      | EDecl_magic (loc, _) -> loc
       | EDecl_funcCN func ->
           locOf (func.Cn.cn_func_name)
       | EDecl_lemmaCN lmma ->

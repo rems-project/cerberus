@@ -18,6 +18,7 @@ type internal_state = {
   (* HACK fo fix col positions when seing CN keywords (look at C_parser_driver) *)
   mutable cnum_hack: int;
   mutable start_of_comment: Lexing.position;
+  mutable last_magic_comment: (Lexing.position * Cerb_location.t) option;
   mutable ignore_magic: bool;
   mutable magic_acc: (Cerb_location.t * string) list;
 }
@@ -26,6 +27,7 @@ let internal_state = {
   inside_cn= false;
   cnum_hack= 0;
   start_of_comment= Lexing.dummy_pos;
+  last_magic_comment= None;
   ignore_magic= false;
   magic_acc= [];
 }
@@ -193,6 +195,7 @@ let magic_token start_pos end_pos chars =
   match internal_state.magic_comment_mode with
   | Magic_At _ when first == '@' && last == '@' ->
     let str = String.init (len - 2) (List.nth (List.tl chars)) in
+    internal_state.last_magic_comment <- Some (end_pos, loc);
     Some (CERB_MAGIC (loc, str))
   | Magic_At warn when first == '@' && warn -> begin
     prerr_endline (Pp_errors.make_message loc

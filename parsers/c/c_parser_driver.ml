@@ -30,8 +30,13 @@ let parse lexbuf =
     let loc = Cerb_location.point @@ Lexing.lexeme_start_p lexbuf in
     Exception.fail (loc, Errors.CPARSER err)
   | C_parser.Error ->
-    let loc = Cerb_location.(region (Lexing.lexeme_start_p lexbuf, Lexing.lexeme_end_p lexbuf) NoCursor) in
-    Exception.fail (loc, Errors.CPARSER (Errors.Cparser_unexpected_token (Lexing.lexeme lexbuf)))
+    let tok = Lexing.lexeme lexbuf in
+    let (tok_str, start_p, end_p) = if String.equal tok "*/"
+      then ("(magic comment)", C_lexer.internal_state.start_of_comment, Lexing.lexeme_end_p lexbuf)
+      else (tok, Lexing.lexeme_start_p lexbuf, Lexing.lexeme_end_p lexbuf)
+    in
+    let loc = Cerb_location.(region (start_p, end_p) NoCursor) in
+    Exception.fail (loc, Errors.CPARSER (Errors.Cparser_unexpected_token tok_str))
   | Failure msg ->
     prerr_endline "CPARSER_DRIVER (Failure)";
     failwith msg

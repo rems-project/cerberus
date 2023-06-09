@@ -59,6 +59,8 @@ open Log
 let frontend incl_dirs astprints filename state_file =
   let open CF in
   Cerb_global.set_cerb_conf "Cn" false Random false Basic false false false false;
+  (* FIXME: make this a global config thing rather than poking state. *)
+  C_lexer.set_magic_comment_mode (C_lexer.(Magic_At true));
   Ocaml_implementation.set Ocaml_implementation.HafniumImpl.impl;
   Switches.set ["inner_arg_temps"];
   let@ stdlib = load_core_stdlib () in

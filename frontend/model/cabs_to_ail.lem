@@ -3995,6 +3995,8 @@ let rec desugar_statement_aux ctx (CabsStatement loc attrs stmt_) =
               | false ->
                   E.constraint_violation loc LabelStatementOutsideSwitch
             end
+      | CabsSmagic s ->
+          E.return (AilSmagic s)
       | CabsSmarker s ->
           E.record_marker () >>= fun id ->
           AilSmarker id <$> self s
@@ -4051,6 +4053,8 @@ let rec register_labels (CabsStatement _ _ stmt_) =
     | CabsScaseGNU _ _ s ->
         register_labels s
 (* BEGIN CN *)
+    | CabsSmagic _ ->
+        E.return ()
     | CabsSmarker s ->
         register_labels s
 (* END CN *)
@@ -4707,6 +4711,8 @@ let desugar_and_register_external_declaration edecl =
   
     | EDecl_decl (Declaration_static_assert sa_decl) ->
         desugar_and_register_static_assert_declaration sa_decl
+    | EDecl_magic str ->
+      E.add_toplevel_magic str
     | EDecl_predCN pred ->
       desugar_and_register_cn_predicate pred
     | EDecl_funcCN pred ->
