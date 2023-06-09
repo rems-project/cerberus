@@ -584,7 +584,13 @@ let rec pp_expression_aux ?(executable_spec=false) mk_pp_annot a_expr =
         | AilEmemberof (e, ident) ->
             pp ~executable_spec e ^^ P.dot ^^ Pp_symbol.pp_identifier ident
         | AilEmemberofptr (e, ident) ->
-            pp ~executable_spec e ^^ (!^ "->") ^^ Pp_symbol.pp_identifier ident
+            let ptr_var = pp ~executable_spec e in
+            let pre = 
+              match e with 
+              | AnnotatedExpression (_, _, _, AilEcast _) -> P.brackets ptr_var
+              | _ -> ptr_var
+            in
+            pre ^^ (!^ "->") ^^ Pp_symbol.pp_identifier ident
         | AilEannot (_, e) ->
             !^ "/* annot */" ^^^ pp ~executable_spec e
         | AilEva_start (e, sym) ->
@@ -761,14 +767,17 @@ let pp_tag_definition ?(executable_spec=false) (tag, (_, _, def)) =
           ) ^^ P.semi ^^ P.break 1
         ) ^^ P.semi
 
-let pp_program_aux pp_annot (startup, sigm) =
+let pp_program_aux ?(executable_spec=false) pp_annot (startup, sigm) =
 (*  isatty := false; (*TODO: Unix.isatty Unix.stdout;*) *)
-  (* Static assersions *)
+  (* Static assertions *)
   begin match sigm.static_assertions with
     | [] ->
         P.empty
     | xs ->
-        P.separate_map (P.break 1 ^^ P.break 1) (pp_static_assertion pp_annot) xs ^^ P.break 1 ^^ P.break 1 ^^ P.break 1 
+        if executable_spec then 
+          P.empty 
+        else
+          P.separate_map (P.break 1 ^^ P.break 1) (pp_static_assertion pp_annot) xs ^^ P.break 1 ^^ P.break 1 ^^ P.break 1 
   end ^^
   
   (* Tag declarations *)
@@ -776,7 +785,10 @@ let pp_program_aux pp_annot (startup, sigm) =
     | [] ->
         P.empty
     | xs ->
-        P.separate_map (P.break 1 ^^ P.break 1) pp_tag_definition xs ^^ P.break 1 ^^ P.break 1 ^^ P.break 1
+        if executable_spec then 
+          P.empty 
+        else
+          P.separate_map (P.break 1 ^^ P.break 1) pp_tag_definition xs ^^ P.break 1 ^^ P.break 1 ^^ P.break 1
   end ^^
   
   P.separate_map (P.break 1 ^^ P.hardline) (fun (sym, (_, _, decl)) ->
@@ -804,12 +816,16 @@ let pp_program_aux pp_annot (startup, sigm) =
       | Decl_function (has_proto, (ret_qs, ret_ty), params, is_variadic, is_inline, is_Noreturn) ->
           (* first pprinting in comments, some human-readably declarations *)
           (* TODO: colour hack *)
-          pp_ansi_format [Red] (fun () -> 
-            !^ "// declare" ^^^ pp_id sym ^^^
-            (if has_proto then !^ "WITH PROTO " else P.empty) ^^
-            !^ "as" ^^^ pp_ctype_human no_qualifiers (Ctype ([], Function ((ret_qs, ret_ty), params, is_variadic)))
-          ) ^^ P.hardline ^^
-          
+          let pre = if executable_spec then 
+            P.empty 
+          else
+            pp_ansi_format [Red] (fun () -> 
+              !^ "// declare" ^^^ pp_id sym ^^^
+              (if has_proto then !^ "WITH PROTO " else P.empty) ^^
+              !^ "as" ^^^ pp_ctype_human no_qualifiers (Ctype ([], Function ((ret_qs, ret_ty), params, is_variadic)))
+            ) ^^ P.hardline
+          in
+          pre ^^
           (fun k -> if is_inline   then !^ "inline"    ^^^ k else k) (
             (fun k -> if is_Noreturn then !^ "_Noreturn" ^^^ k else k) (
               begin
@@ -817,7 +833,7 @@ let pp_program_aux pp_annot (startup, sigm) =
                   (* printing the types in a human readable format *)
                   pp_ctype_human ret_qs ret_ty ^^^ pp_id_func sym
                 else
-                  pp_ctype_declaration (pp_id_func sym) ret_qs ret_ty
+                  pp_ctype_declaration ~executable_spec (pp_id_func ~executable_spec sym) ret_qs ret_ty
               end ^^
               (match List.assoc_opt sym sigm.function_definitions with
                 | Some (_, _, _, param_syms, stmt) ->
@@ -831,14 +847,14 @@ let pp_program_aux pp_annot (startup, sigm) =
                               (pp_ctype_human qs ty)
                           )
                         else
-                          pp_ctype_declaration (pp_id_obj sym) qs ty
+                          pp_ctype_declaration ~executable_spec (pp_id_obj ~executable_spec sym) qs ty
                       ) (List.combine param_syms params) ^^
                       if is_variadic then
                         P.comma ^^^ P.dot ^^ P.dot ^^ P.dot
                       else
                         P.empty
                     ) ^^^ P.break 1 ^^
-                    pp_statement_aux pp_annot ~bs:[] stmt
+                    pp_statement_aux ~executable_spec ~bs:[] pp_annot stmt
                 | None ->
                     P.parens (
                       comma_list (fun (qs, ty, isRegister) ->
@@ -849,7 +865,7 @@ let pp_program_aux pp_annot (startup, sigm) =
                               (pp_ctype_human qs ty)
                           )
                         else
-                          pp_ctype qs ty
+                          pp_ctype ~executable_spec qs ty
                       ) params ^^
                       if is_variadic then
                         P.comma ^^^ P.dot ^^ P.dot ^^ P.dot
@@ -932,9 +948,9 @@ let filter_external_decl (id, sigma) =
   let pred (_, (loc, _, _)) = Cerb_location.from_main_file loc in
   (id, { sigma with declarations = List.filter pred sigma.declarations} )
 
-let pp_program ~show_include ail_prog =
+let pp_program ?(executable_spec=false) ~show_include ail_prog =
   let filtered_ail_prog = if show_include then ail_prog else filter_external_decl ail_prog in
-  pp_program_aux (fun _ doc -> doc) filtered_ail_prog
+  pp_program_aux ~executable_spec (fun _ doc -> doc) filtered_ail_prog
 
 (* For debugging: prints all the type annotations *)
 let pp_program_with_annot =
