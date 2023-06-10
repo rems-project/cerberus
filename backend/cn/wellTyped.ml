@@ -22,13 +22,9 @@ open Effectful.Make(Typing)
 
 
 
-let ensure_logical_sort (loc : loc) ~(expect : LS.t) (has : LS.t) : (unit) m =
-  if LS.equal has expect 
-  then return () 
-  else fail (fun _ -> {loc; msg = Mismatch {has = BT.pp has; expect = BT.pp expect}})
 
-let ensure_base_type (loc : loc) ~(expect : BT.t) (has : BT.t) : (unit) m =
-  ensure_logical_sort loc ~expect has
+let ensure_base_type = Typing.ensure_base_type
+
 
 
 (* let check_bound_l loc s =  *)
@@ -625,9 +621,7 @@ module WRET = struct
 
   let welltyped loc r = 
     let@ spec_iargs = match RET.predicate_name r with
-      | Block _ ->
-         return []
-      | Owned ct ->
+      | Owned (_ct,_init) ->
          return []
       | PName name -> 
          let@ def = Typing.get_resource_predicate_def loc name in
@@ -660,7 +654,7 @@ module WRET = struct
            fail (fun ctxt -> {loc; msg = NIA {it = p.step; ctxt; hint}})
        in
        let@ () = match p.name with
-         | Owned ct ->
+         | (Owned (ct, _init)) ->
            let sz = Memory.size_of_ctype ct in
            if IT.equal step (IT.int_ sz) then return ()
            else fail (fun _ -> {loc; msg = Generic
@@ -698,9 +692,7 @@ end
 
 
 let oarg_bt_of_pred loc = function
-  | RET.Block _ct -> 
-      return (BT.Unit)
-  | RET.Owned ct -> 
+  | RET.Owned (ct,_init) -> 
       return (BT.of_sct ct)
   | RET.PName pn ->
       let@ def = Typing.get_resource_predicate_def loc pn in

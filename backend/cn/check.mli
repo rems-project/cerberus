@@ -487,7 +487,7 @@ val check :
   'a Mucore.mu_file ->
   Cerb_location.t CStatements.LocMap.t -> string option -> unit Typing.t
   *)
-  val use_model_eqs : bool ref
+  (*val use_model_eqs : bool ref*)
   val only : string option ref
 
   val check :

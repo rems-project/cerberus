@@ -825,10 +825,10 @@ module EffectfulTranslation = struct
          (* we don't take Resources.owned_oargs here because we want to
             maintain the C-type information *)
          let oargs_ty = SBT.of_sct scty in
-         return (Owned scty, oargs_ty)
+         return (Owned (scty, Init), oargs_ty)
       | CN_block ty ->
         let scty = Sctypes.of_ctype_unsafe res_loc ty in
-        return (Block scty, SBT.Unit)
+        return (Owned (scty, Uninit), SBT.of_sct scty)
       | CN_named pred ->
         let@ pred_sig = match lookup_predicate pred env with
           | None -> fail {loc; msg = Unknown_resource_predicate {id = pred; logical = false}}
@@ -865,11 +865,11 @@ module EffectfulTranslation = struct
 
   let owned_good loc sym (res_t, oargs_ty) = 
     match res_t with
-    | RET.P { name = Owned scty ; permission; _} ->
+    | RET.P { name = Owned (scty, Init); permission; _} ->
        let v = IT.sym_ (sym, SBT.to_basetype oargs_ty) in
        [(LC.T (IT.impl_ (permission, IT.good_ (scty, v))), 
          (loc, Some "default value constraint"))]
-    | RET.Q { name = Owned scty ; q; permission; _} ->
+    | RET.Q { name = Owned (scty, Init); q; permission; _} ->
        let v = IT.sym_ (sym, SBT.to_basetype oargs_ty) in
        let v_el = IT.map_get_ v (IT.sym_ (q, BT.Integer)) in
        [(LC.forall_ (q, BT.Integer)
@@ -897,7 +897,7 @@ module EffectfulTranslation = struct
            oargs_ty)
     in
     let pointee_value = match pname with
-      | Owned _ -> [(ptr_expr, (IT.sym_ (sym, oargs_ty)))]
+      | Owned (_, Init) -> [(ptr_expr, (IT.sym_ (sym, oargs_ty)))]
       | _ -> []
     in
     return (pt, pointee_value)
@@ -1395,6 +1395,16 @@ let translate_cn_statement
            | I_Good ct -> I_Good (Sctypes.of_ctype_unsafe loc ct)
          in
          return (M_CN_statement (loc, M_CN_instantiate (to_instantiate, expr)))
+      | CN_extract (to_extract, expr) ->
+          let@ expr = ET.translate_cn_expr SymSet.empty env expr in
+          let expr = IT.term_of_sterm expr in
+          let to_extract = match to_extract with
+           | E_Everything -> E_Everything
+           | E_Pred (CN_owned oty) -> E_Pred (CN_owned (Option.map (Sctypes.of_ctype_unsafe loc) oty))
+           | E_Pred (CN_block ty) -> E_Pred (CN_block (Sctypes.of_ctype_unsafe loc ty))
+           | E_Pred (CN_named pn) -> E_Pred (CN_named pn)
+          in
+          return (M_CN_statement (loc, M_CN_extract (to_extract, expr)))
       | CN_unfold (s, args) ->
          let@ args = ListM.mapM (ET.translate_cn_expr SymSet.empty env) args in
          let args = List.map IT.term_of_sterm args in

@@ -49,14 +49,13 @@ val begin_trace_of_pure_step : Trace.opt_pat -> 'a Mucore.mu_pexpr -> (unit -> (
 type changed = 
   | Deleted
   | Unchanged
-  | Unfolded of Resources.t list
   | Changed of Resources.t
-  | Read
 
 val map_and_fold_resources : 
   Locations.t ->
   (Resources.t -> 'acc -> changed * 'acc) -> 
-  'acc -> 'acc m
+  'acc -> 
+  ('acc * int list) m
 
 val get_struct_decl : Locations.t -> Sym.t -> (Memory.struct_decl) m
 val get_struct_member_type : Locations.t -> Sym.t -> Id.t -> (Sctypes.t) m
@@ -92,3 +91,36 @@ val test_value_eqs : Locations.t -> IndexTerms.t option -> IndexTerms.t ->
 val get_loc_addrs_in_eqs : unit -> (Sym.t list) m
 
 val embed_resultat : 'a Resultat.t -> 'a m
+
+
+
+val ensure_logical_sort: Locations.t -> expect:LogicalSorts.t -> LogicalSorts.t -> unit m
+val ensure_base_type: Locations.t -> expect:LogicalSorts.t -> LogicalSorts.t -> unit m
+
+val make_return_record: 
+    Locations.t ->
+    string ->
+    BaseTypes.member_types ->
+    (IndexTerms.t * IndexTerms.t list) m
+
+val bind_logical_return:
+    Locations.t ->
+    IndexTerms.t list ->
+    LogicalReturnTypes.t ->
+    unit m    
+    
+
+val bind_return:
+    Locations.t ->
+    IndexTerms.t list ->
+    ReturnTypes.t ->
+    IndexTerms.t m
+
+
+val add_movable_index:
+    (ResourceTypes.predicate_name * IndexTerms.t) ->
+    unit m
+
+val get_movable_indices:
+    unit ->
+    ((ResourceTypes.predicate_name * IndexTerms.t) list) m

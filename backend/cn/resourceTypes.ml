@@ -9,15 +9,21 @@ module LCSet = Set.Make(LC)
 
 
 
+type init = Init | Uninit
+[@@deriving eq, ord]
+
 type predicate_name = 
-  | Block of Sctypes.t
-  | Owned of Sctypes.t
+  | Owned of Sctypes.t * init
   | PName of Sym.t
 [@@deriving eq, ord]
 
+let pp_init = function
+  | Init -> !^"Init"
+  | Uninit -> !^"Uninit"
+
 let pp_predicate_name = function
-  | Block ct -> !^"Block" ^^ angles (Sctypes.pp ct)
-  | Owned ct -> !^"Owned" ^^ angles (Sctypes.pp ct)
+  | Owned (ct, Init) -> !^"Owned" ^^ angles (Sctypes.pp ct)
+  | Owned (ct, Uninit) -> !^"Block" ^^ angles (Sctypes.pp ct)
   | PName pn -> Sym.pp pn
 
 
@@ -43,6 +49,11 @@ type qpredicate_type = {
 [@@deriving eq, ord]
 
 
+let subsumed p1 p2 = (* p1 subsumed by p2 *)
+  equal_predicate_name p1 p2 ||
+  match p1, p2 with
+  | Owned (ct, Uninit), Owned (ct', Init) when Sctypes.equal ct ct' -> true
+  | _ -> false
 
 
 type resource_type =
@@ -205,8 +216,7 @@ open Cerb_frontend.Pp_ast
 open Pp
 
 let dtree_of_predicate_name = function
-  | Block ty -> Dleaf (!^"Block" ^^ angles (Sctypes.pp ty))
-  | Owned ty -> Dleaf (!^"Owned" ^^ angles (Sctypes.pp ty))
+  | Owned (ty, init) -> Dleaf (!^"Owned" ^^ angles (Sctypes.pp ty ^^ comma ^^ pp_init init))
   | PName s -> Dleaf (Sym.pp s)
 
 let dtree_of_predicate_type (pred : predicate_type) =

@@ -157,123 +157,6 @@ let rec pattern_match (M_Pattern (loc, _, pattern)) it =
 
 
 
-open Binding
-
-
-
-let use_model_eqs = ref true
-
-
-module InferenceEqs = struct
-
-
-(* todo: what is this? Can we replace this by using the predicate_name
-   + information about whether iterated or not? *)
-let res_pointer_kind (res, _) = match res with
-  | (RET.P ({name = Owned ct; _} as res_pt)) -> Some ((("", "Pt"), ct), res_pt.pointer)
-  | (RET.Q ({name = Owned ct; _} as res_qpt)) -> Some ((("", "QPt"), ct), res_qpt.pointer)
-  | (RET.P ({name = PName pn; _} as res_pd)) -> Some (((Sym.pp_string pn, "Pd"), Sctypes.Void), res_pd.pointer)
-  | _ -> None
-
-let div_groups cmp xs =
-  let rec gather x xs gps ys = match ys with
-    | [] -> (x :: xs) :: gps
-    | (z :: zs) -> if cmp x z == 0 then gather z (x :: xs) gps zs
-    else gather z [] ((x :: xs) :: gps) zs
-  in
-  match List.sort cmp xs with
-    | [] -> []
-    | (y :: ys) -> gather y [] [] ys
-
-let div_groups_discard cmp xs =
-  List.map (List.map snd) (div_groups (fun (k, _) (k2, _) -> cmp k k2) xs)
-
-let unknown_eq_in_group simp_ctxt ptr_gp = List.find_map (fun (p, req) -> if not req then None
-  else List.find_map (fun (p2, req) -> if req then None
-    else if is_true (Simplify.IndexTerms.simp simp_ctxt (eq_ (p, p2))) then None
-    else Some (eq_ (p, p2))) ptr_gp) ptr_gp
-
-let upd_ptr_gps_for_model global m ptr_gps =
-  let eval_f p = match Solver.eval global m p with
-    | Some (IT (Const (Pointer i), _)) -> i
-    | _ -> (print stderr (IT.pp p); assert false)
-  in
-  let eval_eqs = List.map (List.map (fun (p, req) -> (eval_f p, (p, req)))) ptr_gps in
-  let ptr_gps = List.concat (List.map (div_groups_discard Z.compare) eval_eqs) in
-  ptr_gps
-
-let add_eqs_for_infer loc ftyp =
-  (* TODO: tweak 'fuel'-related things *)
-  if not (! use_model_eqs) then return ()
-  else
-  begin
-  let start_eqs = time_log_start "eqs" "" in
-  debug 5 (lazy (format [] "pre-inference equality discovery"));
-  let reqs = LAT.r_resource_requests ftyp in
-  let@ ress = map_and_fold_resources loc (fun re xs -> (Unchanged, re :: xs)) [] in
-  let res_ptr_k k r = Option.map (fun (ct, p) -> (ct, (p, k))) (res_pointer_kind r) in
-  let ptrs = List.filter_map (fun (_, r) -> res_ptr_k true r) reqs @
-    (List.filter_map (res_ptr_k false) ress) in
-  let cmp2 = Lem_basic_classes.pairCompare
-        (Lem_basic_classes.pairCompare String.compare String.compare) CT.compare in
-  let ptr_gps = div_groups_discard cmp2 ptrs in
-  let@ ms = prev_models_with loc (bool_ true) in
-  let@ global = get_global () in
-  let ptr_gps = List.fold_right (upd_ptr_gps_for_model global)
-        (List.map fst ms) ptr_gps in
-  let@ provable = provable loc in
-  let rec loop fuel ptr_gps =
-    if fuel <= 0 then begin
-      debug 5 (lazy (format [] "equality discovery fuel exhausted"));
-      return ()
-    end
-    else
-    let@ simp_ctxt = simp_ctxt () in
-    let poss_eqs = List.filter_map (unknown_eq_in_group simp_ctxt) ptr_gps in
-    debug 7 (lazy (format [] ("investigating " ^
-        Int.to_string (List.length poss_eqs) ^ " possible eqs")));
-    if List.length poss_eqs == 0
-    then return ()
-    else match provable (t_ (and_ poss_eqs)) with
-      | `True ->
-        debug 5 (lazy (item "adding equalities" (IT.pp (and_ poss_eqs))));
-        let@ () = add_cs (List.map t_ poss_eqs) in
-        loop (fuel - 1) ptr_gps
-      | `False ->
-        let (m, _) = Solver.model () in
-        debug 7 (lazy (format [] ("eqs refuted, processing model")));
-        let ptr_gps = upd_ptr_gps_for_model global m ptr_gps in
-        loop (fuel - 1) ptr_gps
-  in
-  let@ () = loop 10 ptr_gps in
-  debug 5 (lazy (format [] "finished equality discovery"));
-  time_log_end start_eqs;
-  return ()
-  end
-
-(*
-    let exact_match () =
-      let@ global = get_global () in
-      let@ all_lcs = all_constraints () in
-      return begin fun (request, resource) -> match (request, resource) with
-      | (RER.Point req_p, RE.Point res_p) ->
-        let simp t = Simplify.simp global.struct_decls all_lcs t in
-        let pmatch = eq_ (req_p.pointer, res_p.pointer) in
-        let more_perm = impl_ (req_p.permission, res_p.permission) in
-        (* FIXME: simp of Impl isn't all that clever *)
-        (is_true (simp pmatch) && is_true (simp more_perm))
-      | _ -> false
-      end
-*)
-
-
-end
-
-
-
-
-
-
 (*** function call typing, subtyping, and resource inference *****************)
 
 (* spine is parameterised so it can be used both for function and
@@ -972,8 +855,6 @@ module Spine : sig
     Loc.t -> _ mu_pexpr list -> AT.lt * label_kind -> (False.t -> (unit) m) -> (unit) m
   val calltype_lemma :
     Loc.t -> lemma:Sym.t -> (Loc.t * IT.t) list -> AT.lemmat -> (LRT.t -> unit m) -> unit m
-  val calltype_packing : 
-    Loc.t -> Sym.t -> LAT.packing_ft -> (IT.t -> (unit) m) -> (unit) m
   val subtype : 
     Loc.t -> LRT.t -> (unit -> (unit) m) -> (unit) m
 end = struct
@@ -987,11 +868,6 @@ end = struct
        the resources present, rather than those that remain after some
        arguments are claimed *)
     let@ original_resources = all_resources_tagged () in
-
-    let@ () =
-      time_f_logs loc 9 "pre_inf_eqs"
-        (InferenceEqs.add_eqs_for_infer loc) ftyp
-    in
 
     let@ rt = 
       let rec check ftyp = 
@@ -1061,10 +937,6 @@ end = struct
     spine check_it_arg LRT.subst LRT.pp
       loc (LemmaApplication lemma) args lemma_typ k
 
-  let calltype_packing loc (name : Sym.t) (ft : LAT.packing_ft) k =
-    spine_l IT.subst IT.pp 
-      loc (PackPredicate name) ft k
-
   (* The "subtyping" judgment needs the same resource/lvar/constraint
      inference as the spine judgment. So implement the subtyping
      judgment 'arg <: LRT' by type checking 'f()' for 'f: LRT -> False'. *)
@@ -1099,47 +971,27 @@ type 'a orFalse =
 
 let filter_empty_resources loc =
   let@ provable = provable loc in
-  map_and_fold_resources loc (fun resource xs ->
-      let constr = match resource with
-        | (P p, _) -> t_ (not_ p.permission)
-        | (Q p, _) -> forall_ (p.q, BT.Integer) (not_ p.permission)
-      in
-      match provable constr with
-      | `True -> (Deleted, xs)
-      | `False ->
-        let model = Solver.model () in
-        (Unchanged, ((resource, constr, model) :: xs))
-  ) []
+  let@ filtered, _rw_time = 
+    map_and_fold_resources loc (fun resource xs ->
+         match Pack.resource_empty provable resource with
+         | `Empty -> (Deleted, xs)
+         | `NonEmpty (constr, model) -> (Unchanged, ((resource, constr, model) :: xs))
+   ) []
+  in
+  return filtered
 
 let all_empty loc original_resources =
   let@ remaining_resources = filter_empty_resources loc in
   (* there will be a model available if at least one resource persisted *)
-  let@ provable = provable loc in
-  let@ global = get_global () in
-  let@ () = ListM.iterM (fun (resource, _, model) ->
-      match Spans.null_resource_check (fst model) global (RE.request resource) with
-        | None -> return ()
-        | Some (pt, ok) ->
-          let uiinfo = (Access Free, (Some (RET.P pt), None)) in
-          begin match provable (t_ ok) with
-            | `True ->
-              debug 6 (lazy (Pp.item "remaining resource null, trying to unpack"
-                  (RET.pp_predicate_type pt)));
-              let@ _ = ResourceInference.General.do_unpack loc uiinfo pt in
-              return ()
-            | `False -> return ()
-          end
-  ) remaining_resources in
-  let@ remaining_resources = filter_empty_resources loc in
   match remaining_resources with
-    | [] -> return ()
-    | ((resource, constr, model) :: _) ->
-         let@ global = get_global () in
-         let@ simp_ctxt = simp_ctxt () in
-         RI.debug_constraint_failure_diagnostics 6 model global simp_ctxt constr;
-         fail_with_trace (fun trace -> fun ctxt ->
-             let ctxt = { ctxt with resources = original_resources } in
-             {loc; msg = Unused_resource {resource; ctxt; model; trace}})
+   | [] -> return ()
+   | ((resource, constr, model) :: _) ->
+      let@ global = get_global () in
+      let@ simp_ctxt = simp_ctxt () in
+      RI.debug_constraint_failure_diagnostics 6 model global simp_ctxt constr;
+      fail_with_trace (fun trace ctxt ->
+            let ctxt = { ctxt with resources = original_resources } in
+            {loc; msg = Unused_resource {resource; ctxt; model; trace}})
 
 
 let compute_used (prev_rs, prev_ix) (post_rs, _) =
@@ -1156,7 +1008,7 @@ let compute_used (prev_rs, prev_ix) (post_rs, _) =
     else return (rs, ws)
   ) ([], []) all_rs
 
-let check_used_distinct loc used =
+let _check_used_distinct loc used =
   let render_upd h =
     !^ "resource" ^^^ !^ (h.reason_written) ^^^ !^ "at" ^^^ Locations.pp h.last_written
   in
@@ -1187,14 +1039,11 @@ let check_used_distinct loc used =
 
 
 let load loc pointer ct =
-  let@ (point, O value) = 
-    (RI.Special.predicate_request_read_only ~recursive:true loc (Access (Load None)) ({
-           name = Owned ct;
-           pointer = pointer;
-           permission = bool_ true;
-           iargs = [];
-         }, None))
+  let@ (point, O value), _ = 
+    RI.Special.predicate_request loc (Access Load)
+      ({name = Owned (ct, Init); pointer; permission = bool_ true; iargs = []}, None)
   in
+  let@ () = add_r loc (P point, O value) in
   return value
 
 
@@ -1360,7 +1209,7 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
         let@ () = add_c (t_ (alignedI_ ~align:arg ~t:ret)) in
         let@ () = 
           add_r loc
-            (P { name = Block act.ct; 
+            (P { name = Owned (act.ct, Uninit); 
                  pointer = ret;
                  permission = bool_ true;
                  iargs = [];
@@ -1379,8 +1228,8 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
         let@ () = WellTyped.WCT.is_ct loc ct in
         check_pexpr ~expect:Loc pe (fun arg ->
         let@ _ = 
-          RI.Special.predicate_request ~recursive:true loc (Access Kill) ({
-            name = Block ct;
+          RI.Special.predicate_request loc (Access Kill) ({
+            name = Owned (ct, Uninit);
             pointer = arg;
             permission = bool_ true;
             iargs = [];
@@ -1417,8 +1266,8 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
                )
         in
         let@ _ = 
-          RI.Special.predicate_request ~recursive:true loc (Access (Store None)) ({
-              name = Block act.ct; 
+          RI.Special.predicate_request loc (Access Store) ({
+              name = Owned (act.ct, Uninit); 
               pointer = parg;
               permission = bool_ true;
               iargs = [];
@@ -1426,7 +1275,7 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
         in
         let@ () = 
           add_r loc
-            (P { name = Owned act.ct;
+            (P { name = Owned (act.ct, Init);
                  pointer = parg;
                  permission = bool_ true;
                  iargs = [];
@@ -1474,7 +1323,7 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
 
      Spine.calltype_ft loc ~fsym pes ft (fun (Computational ((_, bt), _, _) as rt) ->
      let@ () = WellTyped.ensure_base_type loc ~expect bt in
-     let@ _, members = make_return_record loc (FunctionCall fsym) (RT.binders rt) in
+     let@ _, members = make_return_record loc (TypeErrors.call_prefix (FunctionCall fsym)) (RT.binders rt) in
      let@ lvt = bind_return loc members rt in
      k lvt))
   (* | M_Eproc (fname, pes) -> *)
@@ -1536,7 +1385,7 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
           let@ used = compute_used pre_check post_check in
           aux es_bts (v :: vs) (used :: prev_used))
        | [] ->
-          let@ () = check_used_distinct loc prev_used in
+          (* let@ () = check_used_distinct loc prev_used in *)
           k (tuple_ (List.rev vs))
      in
      aux (List.combine es item_bts) [] []
@@ -1551,8 +1400,10 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
        | Cnprog.M_CN_statement (loc, stmt) ->
           (* copying bits of code from elsewhere in check.ml *)
           begin match stmt with
-            | M_CN_pack_unpack (pack_unpack, pt) ->
-               let@ pred = WRET.welltyped loc (P pt) in
+            | M_CN_pack_unpack (pack_unpack, pt) -> 
+                    warn loc !^"Explicit pack/unpack unsupported.";
+                    return ()
+(*                let@ pred = WRET.welltyped loc (P pt) in
                let pt = match pred with P pt -> pt | _ -> assert false in
                let@ pname, def = match pt.name with
                  | PName pname -> 
@@ -1584,7 +1435,7 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
                   Spine.calltype_packing loc pname right_clause.packing_ft (fun output -> 
                   add_r loc (P pt, O output)
                   )
-               end
+               end *)
             | M_CN_have lc ->
                let@ lc = WLC.welltyped loc lc in
                fail (fun _ -> {loc; msg = Generic !^"todo: 'have' not implemented yet"})
@@ -1601,6 +1452,10 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
                in
                let@ it = WIT.check loc Integer it in
                instantiate loc filter it
+            | M_CN_extract (to_extract, it) ->
+               let@ predicate_name = RI.predicate_name_of_to_extract loc to_extract in
+               let@ it = WIT.check loc Integer it in
+               add_movable_index (predicate_name, it)
             | M_CN_unfold (f, args) ->
                let@ def = get_logical_function_def loc f in
                let has_args, expect_args = List.length args, List.length def.args in
@@ -1624,7 +1479,7 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
                let@ (_loc, lemma_typ) = get_lemma loc lemma in
                let args = List.map (fun arg -> (loc, arg)) args in
                Spine.calltype_lemma loc ~lemma args lemma_typ (fun lrt ->
-                   let@ _, members = make_return_record loc (LemmaApplication lemma) (LRT.binders lrt) in
+                   let@ _, members = make_return_record loc (TypeErrors.call_prefix (LemmaApplication lemma)) (LRT.binders lrt) in
                    let@ () = bind_logical_return loc members lrt in
                    return ()
                  )

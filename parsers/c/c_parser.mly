@@ -148,7 +148,7 @@ let warn_extra_semicolon pos ctx =
 (* CN syntax *)
 (* %token<string> CN_PREDNAME *)
 %token CN_ACCESSES CN_TRUSTED CN_REQUIRES CN_ENSURES CN_INV
-%token CN_PACK CN_UNPACK CN_HAVE CN_INSTANTIATE CN_UNFOLD CN_APPLY CN_MATCH
+%token CN_PACK CN_UNPACK CN_HAVE CN_EXTRACT CN_INSTANTIATE CN_UNFOLD CN_APPLY CN_MATCH
 %token CN_BOOL CN_INTEGER CN_REAL CN_POINTER CN_MAP CN_LIST CN_TUPLE CN_SET
 %token CN_WHEN CN_LET CN_TAKE CN_OWNED CN_BLOCK CN_EACH CN_FUNCTION CN_LEMMA CN_PREDICATE CN_DATATYPE
 %token CN_UNCHANGED
@@ -2405,6 +2405,13 @@ loop_spec:
 | ct=cn_good COMMA
     { Cerb_frontend.Cn.I_Good ct }
 
+%inline to_be_extracted:
+| 
+    { Cerb_frontend.Cn.E_Everything }
+| p=pred COMMA
+    { Cerb_frontend.Cn.E_Pred p }
+
+
 cn_statement:
 /* copying from 'resource' rule */
 | CN_PACK p= pred es= delimited(LPAREN, separated_list(COMMA, expr), RPAREN) SEMICOLON
@@ -2417,6 +2424,9 @@ cn_statement:
 | CN_HAVE a=assert_expr SEMICOLON
     { let loc = Cerb_location.(region ($startpos, $endpos) NoCursor) in
       CN_statement (loc, CN_have a) }
+| CN_EXTRACT tbe=to_be_extracted e=expr SEMICOLON
+    { let loc = Cerb_location.(region ($startpos, $endpos) NoCursor) in
+      CN_statement (loc, CN_extract (tbe, e)) }
 | CN_INSTANTIATE tbi=to_be_instantiated e=expr SEMICOLON
     { let loc = Cerb_location.(region ($startpos, $endpos) NoCursor) in
       CN_statement (loc, CN_instantiate (tbi, e)) }

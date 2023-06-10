@@ -107,9 +107,6 @@ let main
       state_file 
       diag
       lemmata
-      no_reorder_points
-      no_additional_sat_check
-      no_model_eqs
       only
       csv_times
       log_times
@@ -129,9 +126,6 @@ let main
   Pp.print_timestamps := not no_timestamps;
   Option.iter (fun t -> Solver.set_slow_threshold t) slow_threshold;
   Solver.random_seed := random_seed;
-  ResourceInference.reorder_points := not no_reorder_points;
-  ResourceInference.additional_sat_check := not no_additional_sat_check;
-  Check.use_model_eqs := not no_model_eqs;
   Check.only := only;
   Diagnostics.diag_string := diag;
   check_input_file filename;
@@ -250,18 +244,6 @@ let lemmata =
   let doc = "lemmata generation mode (target filename)" in
   Arg.(value & opt (some string) None & info ["lemmata"] ~docv:"FILE" ~doc)
 
-let no_reorder_points =
-  let doc = "Deactivate 'reorder points' optimisation in resource inference." in
-  Arg.(value & flag & info["no_reorder_points"] ~doc)
-
-let no_additional_sat_check =
-  let doc = "Deactivate 'additional sat check' in inference of q-points." in
-  Arg.(value & flag & info["no_additional_sat_check"] ~doc)
-
-let no_model_eqs =
-  let doc = "Deactivate 'model based eqs' optimisation in resource inference spine judgement." in
-  Arg.(value & flag & info["no_model_eqs"] ~doc)
-
 let csv_times =
   let doc = "file in which to output csv timing information" in
   Arg.(value & opt (some string) None & info ["times"] ~docv:"FILE" ~doc)
@@ -306,9 +288,6 @@ let () =
       state_file $
       diag $
       lemmata $
-      no_reorder_points $
-      no_additional_sat_check $
-      no_model_eqs $
       only $
       csv_times $
       log_times $

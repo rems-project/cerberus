@@ -84,142 +84,33 @@ let instantiate_clauses def ptr_arg iargs = match def.clauses with
   | None -> None
   
 
-(* let byte_sym = Sym.fresh_named "Legacy_Internal_Byte" *)
-(* let char_sym = Sym.fresh_named "Legacy_Internal_Char" *)
-(* let bytev_sym = Sym.fresh_named "Legacy_Internal_ByteV" *)
-(* let early_alloc_sym = Sym.fresh_named "EarlyAlloc" *)
-
-
-(* let byte () =  *)
-(*   let loc = Loc.other "internal (Byte)" in *)
-(*   let pointer_s, pointer = IT.fresh Loc in *)
-(*   let resource_s, resource = IT.fresh (owned_oargs (Integer Char)) in *)
-(*   let point = (P { *)
-(*       name = Owned (Integer Char);  *)
-(*       pointer = pointer; *)
-(*       iargs = []; *)
-(*       permission = bool_ true; *)
-(*     }, *)
-(*     owned_oargs (Integer Char)) *)
-(*   in *)
-(*   let lrt = *)
-(*     LRT.Resource ((resource_s, point), (loc, None), *)
-(*     LRT.I) *)
-(*   in *)
-(*   let clause = { *)
-(*       loc = loc; *)
-(*       guard = bool_ true; *)
-(*       packing_ft = LAT.of_lrt lrt (LAT.I [])  *)
-(*     } *)
-(*   in *)
-(*   let predicate = { *)
-(*       loc = loc; *)
-(*       pointer = pointer_s; *)
-(*       iargs = [];  *)
-(*       oargs = [];  *)
-(*       clauses = Some [clause];  *)
-(*     }  *)
-(*   in *)
-(*   (byte_sym, predicate) *)
-
-
-(* let char () =  *)
-(*   let id = char_sym in *)
-(*   let loc = Loc.other "internal (Char)" in *)
-(*   let pointer_s, pointer = IT.fresh Loc in *)
-
-
-(*   let point = (P { *)
-(*       name = Owned (Integer Char);  *)
-(*       pointer = pointer; *)
-(*       iargs = []; *)
-(*       permission = bool_ true; *)
-(*     }, *)
-(*     owned_oargs (Integer Char)) *)
-(*   in *)
-
-(*   let resource_s, resource = IT.fresh (snd point) in *)
-
-(*   let lrt = *)
-(*     LRT.Resource ((resource_s, point), (loc, None), *)
-(*     LRT.I) *)
-(*   in *)
-(*   let value_s_o = Sym.fresh_named "value" in   *)
-(*   let clause = { *)
-(*       loc = loc; *)
-(*       guard = bool_ true; *)
-(*       packing_ft = LAT.of_lrt lrt (LAT.I [OutputDef.{loc; name = value_s_o; value = recordMember_ ~member_bt:Integer (resource, value_sym)}])  *)
-(*     } *)
-(*   in *)
-(*   let predicate = { *)
-(*       loc = loc; *)
-(*       pointer = pointer_s; *)
-(*       iargs = [];  *)
-(*       oargs = [(value_s_o, Integer)];  *)
-(*       clauses = Some [clause];  *)
-(*     }  *)
-(*   in *)
-(*   (id, predicate) *)
-
-
-
-
-
-(* let bytev () =  *)
-(*   let id = bytev_sym in *)
-(*   let loc = Loc.other "internal (ByteV)" in *)
-(*   let pointer_s, pointer = IT.fresh Loc in *)
-(*   let the_value_s, the_value = IT.fresh Integer in *)
-(*   let point = (P { *)
-(*       name = Owned (Integer Char);  *)
-(*       pointer = pointer; *)
-(*       iargs = []; *)
-(*       permission = bool_ true; *)
-(*     },  *)
-(*     owned_oargs (Integer Char)) *)
-(*   in *)
-(*   let resource_s, resource = IT.fresh (snd point) in *)
-
-(*   let has_value =  *)
-(*     eq_ (recordMember_ ~member_bt:BT.Integer (resource, value_sym),  *)
-(*          the_value) *)
-(*   in *)
-
-(*   let lrt = *)
-(*     LRT.Resource ((resource_s, point), (loc, None), *)
-(*     LRT.Constraint (t_ has_value, (loc, None),  *)
-(*     LRT.I)) *)
-(*   in *)
-(*   let clause = { *)
-(*       loc = loc; *)
-(*       guard = bool_ true; *)
-(*       packing_ft = LAT.of_lrt lrt (LAT.I [])  *)
-(*     } *)
-(*   in *)
-(*   let predicate = { *)
-(*       loc = loc; *)
-(*       pointer = pointer_s; *)
-(*       iargs = [(the_value_s, IT.bt the_value)];  *)
-(*       oargs = [];  *)
-(*       clauses = Some [clause];  *)
-(*     }  *)
-(*   in *)
-(*   (id, predicate) *)
-
-
 
 
 
 
 let predicate_list struct_decls logical_pred_syms =
-  (* char () :: *)
-  (* byte () :: *)
-  (* bytev () :: *)
-  (* early_alloc () :: *)
   []
 
     
 
 
+open IndexTerms
+open LogicalConstraints
 
-
+let identify_right_clause provable def pointer iargs =
+  match instantiate_clauses def pointer iargs with 
+  | None -> 
+      (* "uninterpreted" predicates cannot be un/packed *)
+      None
+  | Some clauses ->
+      let rec try_clauses = function
+        | [] -> None
+        | clause :: clauses ->
+          match provable (t_ clause.guard) with
+          | `True -> Some clause
+          | `False -> 
+            match provable (t_ (not_ clause.guard)) with
+            | `True -> try_clauses clauses
+            | `False -> None          
+      in
+      try_clauses clauses

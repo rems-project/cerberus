@@ -736,9 +736,9 @@ let rec n_expr (loc : Loc.t) ((env, old_states), desugaring_things) (global_type
      let@ e2 = n_expr e2 in
      return (wrap (M_Ewseq(pat, e1, e2)))
   | Esseq(pat, e1, e2) ->
-     let () = Print.debug 10 (lazy (Print.item "core_to_mucore Esseq. e1:" (CF.Pp_core_ast.pp_expr e1))) in
+     (* let () = Print.debug 10 (lazy (Print.item "core_to_mucore Esseq. e1:" (CF.Pp_core_ast.pp_expr e1))) in
      let () = Print.debug 10 (lazy (Print.item "core_to_mucore Esseq. e2:" (CF.Pp_core_ast.pp_expr e2))) in
-     let () = Print.debug 10 (lazy (Print.item "core_to_mucore Esseq. p:" (CF.Pp_core.Basic.pp_pattern pat))) in
+     let () = Print.debug 10 (lazy (Print.item "core_to_mucore Esseq. p:" (CF.Pp_core.Basic.pp_pattern pat))) in *)
      let@ e1 = match pat, e1 with
        | Pattern ([], CaseBase (None, BTy_unit)),
          Expr ([], Epure (Pexpr ([], (), PEval Vunit))) ->
@@ -758,16 +758,16 @@ let rec n_expr (loc : Loc.t) ((env, old_states), desugaring_things) (global_type
                   global_types @
                   Pmap.find marker_id_object_types visible_objects_env 
                 in
-                debug 6 (lazy (!^"CN statement before translation"));
-                debug 6 (lazy (pp_doc_tree (Cn_ocaml.PpAil.dtree_of_cn_statement desugared_stmt)));
+                (* debug 6 (lazy (!^"CN statement before translation"));
+                debug 6 (lazy (pp_doc_tree (Cn_ocaml.PpAil.dtree_of_cn_statement desugared_stmt))); *)
 
                 let@ stmt = 
                   Compile.translate_cn_statement 
                     (fun sym -> List.assoc Sym.equal sym visible_objects) 
                     old_states env desugared_stmt 
                 in
-                debug 6 (lazy (!^"CN statement after translation"));
-                debug 6 (lazy (pp_doc_tree (Cnprog.dtree stmt)));
+                (* debug 6 (lazy (!^"CN statement after translation"));
+                debug 6 (lazy (pp_doc_tree (Cnprog.dtree stmt))); *)
                 return (desugared_stmt, stmt)
             ) (get_cerb_magic_attr annots)
           in

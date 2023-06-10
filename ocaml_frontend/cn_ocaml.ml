@@ -318,6 +318,10 @@ module MakePp (Conf: PP_CN) = struct
     | I_Function f -> Dnode (pp_ctor "[CN]function", [Dleaf (Conf.pp_ident f)])
     | I_Good ty -> Dnode(pp_ctor "[CN]good", [Dleaf (Conf.pp_ty ty)])
     | I_Everything -> Dleaf !^"[CN]everything"
+    
+  let dtree_of_to_extract = function
+    | E_Everything -> Dleaf !^"[CN]everything"
+    | E_Pred pred -> Dnode (pp_ctor "[CN]pred", [dtree_of_cn_pred pred])
 
   let dtree_of_cn_statement (CN_statement (_loc, stmt_)) =
     match stmt_ with
@@ -329,6 +333,8 @@ module MakePp (Conf: PP_CN) = struct
        Dnode (pp_ctor "[CN]have", [dtree_of_cn_assertion assrt])
     | CN_instantiate (to_instantiate, arg) ->
        Dnode (pp_ctor "[CN]instantiate", [dtree_of_to_instantiate to_instantiate; dtree_of_cn_expr arg])
+    | CN_extract (to_extract, arg) ->
+       Dnode (pp_ctor "[CN]extract", [dtree_of_to_extract to_extract; dtree_of_cn_expr arg])
     | CN_unfold (s, args) ->
        Dnode (pp_ctor "[CN]unfold", Dleaf (Conf.pp_ident s) :: List.map dtree_of_cn_expr args)
     | CN_assert_stmt assrt ->

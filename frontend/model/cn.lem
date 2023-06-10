@@ -184,10 +184,15 @@ type cn_to_instantiate 'a 'ty =
   | I_Good of 'ty
   | I_Everything
 
+type cn_to_extract 'a 'ty =
+  | E_Pred of cn_pred 'a 'ty
+  | E_Everything
+
 type cn_statement_ 'a 'ty =
   | CN_pack_unpack of pack_unpack * cn_pred 'a 'ty * list (cn_expr 'a 'ty)
   | CN_have of cn_assertion 'a 'ty
   | CN_instantiate of cn_to_instantiate 'a 'ty * (cn_expr 'a 'ty)
+  | CN_extract of cn_to_extract 'a 'ty * (cn_expr 'a 'ty)
   | CN_unfold of 'a * list (cn_expr 'a 'ty)
   | CN_assert_stmt of cn_assertion 'a 'ty
   | CN_apply of 'a * list (cn_expr 'a 'ty)
