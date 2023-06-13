@@ -19,6 +19,7 @@ let string_of_ns = function
   | CN_vars -> "variable"
   | CN_predicate -> "predicate"
   | CN_lemma -> "lemma"
+  | CN_fun_spec -> "fun_spec"
   | CN_function -> "specification function"
   | CN_datatype_nm -> "datatype"
   | CN_constructor -> "constructor"
@@ -283,6 +284,14 @@ module MakePp (Conf: PP_CN) = struct
             ; Dnode (pp_ctor "[CN]requires", List.map dtree_of_cn_condition lmma.cn_lemma_requires)
             ; Dnode (pp_ctor "[CN]ensures", List.map dtree_of_cn_condition lmma.cn_lemma_ensures)
             ] ) 
+
+  let dtree_of_cn_spec s =
+    Dnode ( pp_ctor "[CN]spec of" ^^^ P.squotes (pp_identifier s.cn_spec_name)
+          , [ Dnode (pp_ctor "[CN]args", dtrees_of_args s.cn_spec_args)
+            ; Dnode (pp_ctor "[CN]requires", List.map dtree_of_cn_condition s.cn_spec_requires)
+            ; Dnode (pp_ctor "[CN]ensures", List.map dtree_of_cn_condition s.cn_spec_ensures)
+            ] )
+
 
 (* copying and adjusting dtrees_of_args *)
  let dtrees_of_oargs xs =

@@ -139,6 +139,7 @@ type token =
   | CN_FUNCTION
   | CN_PREDICATE
   | CN_LEMMA
+  | CN_SPEC
   | CN_DATATYPE
   | CN_GOOD
   | CN_PACK
@@ -323,6 +324,7 @@ let string_of_token = function
   | CN_FUNCTION -> "CN_FUNCTION"
   | CN_PREDICATE -> "CN_PREDICATE"
   | CN_LEMMA -> "CN_LEMMA"
+  | CN_SPEC -> "CN_SPEC"
   | CN_DATATYPE -> "CN_DATATYPE"
   | CN_REQUIRES -> "CN_REQUIRES"
   | CN_ENSURES -> "CN_ENSURES"

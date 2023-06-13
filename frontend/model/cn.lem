@@ -144,6 +144,14 @@ type cn_lemma 'a 'ty = <|
   cn_lemma_ensures: list (cn_condition 'a 'ty);
 |>
 
+type cn_fun_spec 'a 'ty = <|
+  cn_spec_loc: Loc.t;
+  cn_spec_name: Symbol.identifier;
+  cn_spec_args: list (cn_base_type 'a * 'a);
+  cn_spec_requires: list (cn_condition 'a 'ty);
+  cn_spec_ensures: list (cn_condition 'a 'ty);
+|>
+
 
 type cn_predicate 'a 'ty = <|
   cn_pred_loc: Loc.t;
@@ -207,6 +215,7 @@ type cn_namespace =
   | CN_predicate
   | CN_function
   | CN_lemma
+  | CN_fun_spec
   | CN_datatype_nm
   | CN_constructor
   | CN_vars
@@ -218,6 +227,7 @@ instance (Show cn_namespace)
       | CN_predicate -> "predicate"
       | CN_function -> "function"
       | CN_lemma -> "lemma"
+      | CN_fun_spec -> "fun_spec"
       | CN_datatype_nm -> "datatype"
       | CN_constructor -> "constructor"
       | CN_vars   -> "vars"
