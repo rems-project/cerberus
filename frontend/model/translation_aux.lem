@@ -333,29 +333,29 @@ let mk_translation_stdlib (ailnames, stdlib_fun_map) =
   let mk_call str pes = Core.Pexpr [] () (Core.PEcall (Core.Sym (fetch_stdlib_symbol std_syms str)) pes) in
   let mk_proc str pes = Core.Expr [] (Core.Eproc () (Core.Sym (fetch_stdlib_symbol std_syms str)) pes) in
   <| ailnames=                           ailnames
-   ; mkcall_bitwise_AND=                 fun ty pe1 pe2 -> mk_call "bitwise_AND"                [Caux.mk_ail_ctype_pe ty; pe1; pe2]
-   ; mkcall_bitwise_XOR=                 fun ty pe1 pe2 -> mk_call "bitwise_XOR"                [Caux.mk_ail_ctype_pe ty; pe1; pe2]
-   ; mkcall_bitwise_OR=                  fun ty pe1 pe2 -> mk_call "bitwise_OR"                 [Caux.mk_ail_ctype_pe ty; pe1; pe2]
+   ; mkcall_bitwise_AND=                 fun ty pe1 pe2 -> mk_call "bitwise_AND"                [Caux.mk_ctype_pe ty; pe1; pe2]
+   ; mkcall_bitwise_XOR=                 fun ty pe1 pe2 -> mk_call "bitwise_XOR"                [Caux.mk_ctype_pe ty; pe1; pe2]
+   ; mkcall_bitwise_OR=                  fun ty pe1 pe2 -> mk_call "bitwise_OR"                 [Caux.mk_ctype_pe ty; pe1; pe2]
    ; mkcall_conv_int= fun ty pe ->
        if not (AilTypesAux.is_integer ty) then
          error "mkcall_conv_int called on non integer type"
        else
-         mk_call "conv_int" [Caux.mk_ail_ctype_pe ty; pe]
+         mk_call "conv_int" [Caux.mk_ctype_pe ty; pe]
    ; mkcall_conv_loaded_int= fun ty pe ->
        if not (AilTypesAux.is_integer ty) then
          error "mkcall_conv_loaded_int called on non integer type"
        else
-         mk_call "conv_loaded_int" [Caux.mk_ail_ctype_pe ty; pe]
+         mk_call "conv_loaded_int" [Caux.mk_ctype_pe ty; pe]
    ; mkcall_loaded_fvfromint= fun ty pe ->
        if not (AilTypesAux.is_floating ty) then
          error "mkcall_loaded_fvfromint called on a non floating type"
        else
-         mk_call "loaded_fvfromint" [Caux.mk_ail_ctype_pe ty; pe]
+         mk_call "loaded_fvfromint" [Caux.mk_ctype_pe ty; pe]
    ; mkcall_loaded_ivfromfloat= fun ty pe ->
        if not (AilTypesAux.is_integer ty) then
          error "mkcall_loaded_ivfromfloat called on a non integer type"
        else
-         mk_call "loaded_ivfromfloat" [Caux.mk_ail_ctype_pe ty; pe]
+         mk_call "loaded_ivfromfloat" [Caux.mk_ctype_pe ty; pe]
    ; mkcall_conv_loaded_int_= fun pe1 pe2 ->
        mk_call "conv_loaded_int" [pe1; pe2]
    ; mkcall_loaded_fvfromint_= fun pe1 pe2 ->
@@ -363,9 +363,9 @@ let mk_translation_stdlib (ailnames, stdlib_fun_map) =
    ; mkcall_loaded_ivfromfloat_= fun pe1 pe2 ->
        mk_call "loaded_ivfromfloat" [pe1; pe2]
    ; mkcall_wrapI= fun ty pe ->
-       mk_call "wrapI" [Caux.mk_ail_ctype_pe ty; pe]
+       mk_call "wrapI" [Caux.mk_ctype_pe ty; pe]
    ; mkcall_ctype_width= fun ty ->
-       mk_call "ctype_width" [Caux.mk_ail_ctype_pe ty]
+       mk_call "ctype_width" [Caux.mk_ctype_pe ty]
    ; mkcall_is_representable= fun pe ty ->
        let str = if AilTypesAux.is_integer ty then
          "is_representable_integer"
@@ -373,11 +373,11 @@ let mk_translation_stdlib (ailnames, stdlib_fun_map) =
          "is_representable_floating"
        else
          error "Translation_aux.mkcall_is_representable, the type is neither an integer nor a floating" in
-       mk_call str [pe; Caux.mk_ail_ctype_pe ty]
+       mk_call str [pe; Caux.mk_ctype_pe ty]
    ; mkcall_all_values_representable_in= fun ty1 ty2 ->
-       mk_call "all_values_representable_in" [Caux.mk_ail_ctype_pe ty1; Caux.mk_ail_ctype_pe ty2]
+       mk_call "all_values_representable_in" [Caux.mk_ctype_pe ty1; Caux.mk_ctype_pe ty2]
    ; mkcall_catch_exceptional_condition= fun ty pe ->
-       mk_call "catch_exceptional_condition" [Caux.mk_ail_ctype_pe ty; pe]
+       mk_call "catch_exceptional_condition" [Caux.mk_ctype_pe ty; pe]
    ; mkproc_loaded_pointer_to_Bool= fun pe ->
        mk_proc "loaded_pointer_to_Bool" [pe]
    ; mkcall_params_length= fun pe ->
@@ -402,11 +402,11 @@ let conv_loaded_arith stdlib ty_src ty_dst pe =
     else
       (* NOTE: this case will occurs in particular if ty_dst is an atomic type *)
       error "Translation_aux.conv_loaded_arith, not (is_arithmetic ty_dst)"
-(*      C.Pexpr [] () (C.PEctor C.Cfvfromint [Caux.mk_ail_ctype_pe ty_dst; pe]) *)
+(*      C.Pexpr [] () (C.PEctor C.Cfvfromint [Caux.mk_ctype_pe ty_dst; pe]) *)
   else if AilTypesAux.is_floating ty_src then
     if AilTypesAux.is_integer ty_dst then
       stdlib.mkcall_loaded_ivfromfloat ty_dst pe
-(*      C.Pexpr [] () (C.PEctor C.Civfromfloat [Caux.mk_ail_ctype_pe ty_dst; pe]) *)
+(*      C.Pexpr [] () (C.PEctor C.Civfromfloat [Caux.mk_ctype_pe ty_dst; pe]) *)
     else if AilTypesAux.is_floating ty_dst then
       (* TODO: floating vs floating conversion *)
       pe

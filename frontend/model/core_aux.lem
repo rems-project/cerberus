@@ -289,10 +289,6 @@ let mk_boolean_pe b =
 
 (* TODO: PEval Vtrue, Vfalse *)
 
-val mk_ail_ctype_pe: ctype -> pexpr
-let mk_ail_ctype_pe ty =
-  Pexpr [] () (PEval (Vctype ty))
-
 val mk_ctype_pe: ctype -> pexpr
 let mk_ctype_pe ty =
   Pexpr [] () (PEval (Vctype ty))
