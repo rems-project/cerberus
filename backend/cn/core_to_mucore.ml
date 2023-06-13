@@ -169,14 +169,13 @@ let rec core_to_mu__pattern loc (Pattern (annots, pat_)) =
   match pat_ with
   | CaseBase (msym, bt1) -> 
      wrap (M_CaseBase (msym, convert_bt loc bt1))
-  | CaseCtor(ctor, pats) -> 
+  | CaseDtor(dtor, pats) -> 
      let pats = map (core_to_mu__pattern loc) pats in
-     match ctor with
-     | Cnil bt1 -> wrap (M_CaseCtor (M_Cnil (convert_bt loc bt1), pats))
-     | Ccons -> wrap (M_CaseCtor (M_Ccons, pats))
-     | Ctuple -> wrap (M_CaseCtor (M_Ctuple, pats))
-     | Carray -> wrap (M_CaseCtor (M_Carray, pats))
-     | Cspecified -> List.hd pats
+     match dtor with
+     | Dnil bt1 -> wrap (M_CaseCtor (M_Cnil (convert_bt loc bt1), pats))
+     | Dcons -> wrap (M_CaseCtor (M_Ccons, pats))
+     | Dtuple -> wrap (M_CaseCtor (M_Ctuple, pats))
+     | Dspecified -> List.hd pats
      | _ -> assert_error loc (!^"core_to_mucore: unsupported pattern")
 
 
@@ -368,7 +367,7 @@ let rec n_pexpr loc (Pexpr (annots, bty, pe)) : mu_pexpr =
      begin match pat, e' with
      | Pattern (annots, CaseBase (Some sym, _)), 
        Pexpr (annots2, _, PEsym sym2) 
-     | Pattern (annots, CaseCtor (Cspecified, [Pattern (_, CaseBase (Some sym, _))])), 
+     | Pattern (annots, CaseDtor (Dspecified, [Pattern (_, CaseBase (Some sym, _))])), 
        Pexpr (annots2, _, PEsym sym2) 
        ->
         let e'' = Core_peval.subst_sym_pexpr2 sym 
@@ -376,12 +375,12 @@ let rec n_pexpr loc (Pexpr (annots, bty, pe)) : mu_pexpr =
         n_pexpr loc e''
 
 
-     | Pattern (annots, CaseCtor (Ctuple, [Pattern (_, CaseBase (Some sym, _));
+     | Pattern (annots, CaseDtor (Dtuple, [Pattern (_, CaseBase (Some sym, _));
                                            Pattern (_, CaseBase (Some sym', _))])), 
        Pexpr (annots2, _, PEctor (Ctuple, [Pexpr (_, _, PEsym sym2);
                                            Pexpr (_, _, PEsym sym2')]))
-     | Pattern (annots, CaseCtor (Ctuple, [Pattern (_, CaseCtor (Cspecified, [Pattern (_, CaseBase (Some sym, _))]));
-                                           Pattern (_, CaseCtor (Cspecified, [Pattern (_, CaseBase (Some sym', _))]))])), 
+     | Pattern (annots, CaseDtor (Dtuple, [Pattern (_, CaseDtor (Dspecified, [Pattern (_, CaseBase (Some sym, _))]));
+                                           Pattern (_, CaseDtor (Dspecified, [Pattern (_, CaseBase (Some sym', _))]))])), 
        Pexpr (annots2, _, PEctor (Ctuple, [Pexpr (_, _, PEsym sym2);
                                            Pexpr (_, _, PEsym sym2')]))
        (* pairwise disjoint *)
@@ -653,18 +652,18 @@ let rec n_expr (loc : Loc.t) ((env, old_states), desugaring_things) (global_type
      begin match pat, e1 with
      | Pattern (annots, CaseBase (Some sym, _)),
        Pexpr (annots2, _, PEsym sym2) 
-     | Pattern (annots, CaseCtor (Cspecified, [Pattern (_, CaseBase (Some sym, _))])), 
+     | Pattern (annots, CaseDtor (Dspecified, [Pattern (_, CaseBase (Some sym, _))])), 
        Pexpr (annots2, _, PEsym sym2) 
        ->
         let e2 = Core_peval.subst_sym_expr2 sym 
                    (get_loc annots2, `SYM sym2) e2 in
         n_expr e2
-     | Pattern (annots, CaseCtor (Ctuple, [Pattern (_, CaseBase (Some sym, _));
+     | Pattern (annots, CaseDtor (Dtuple, [Pattern (_, CaseBase (Some sym, _));
                                            Pattern (_, CaseBase (Some sym', _))])), 
        Pexpr (annots2, _, PEctor (Ctuple, [Pexpr (_, _, PEsym sym2);
                                            Pexpr (_, _, PEsym sym2')]))
-     | Pattern (annots, CaseCtor (Ctuple, [Pattern (_, CaseCtor (Cspecified, [Pattern (_, CaseBase (Some sym, _))]));
-                                           Pattern (_, CaseCtor (Cspecified, [Pattern (_, CaseBase (Some sym', _))]))])), 
+     | Pattern (annots, CaseDtor (Dtuple, [Pattern (_, CaseDtor (Dspecified, [Pattern (_, CaseBase (Some sym, _))]));
+                                           Pattern (_, CaseDtor (Dspecified, [Pattern (_, CaseBase (Some sym', _))]))])), 
        Pexpr (annots2, _, PEctor (Ctuple, [Pexpr (_, _, PEsym sym2);
                                            Pexpr (_, _, PEsym sym2')]))
        (* pairwise disjoint *)

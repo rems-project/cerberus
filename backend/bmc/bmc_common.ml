@@ -353,28 +353,28 @@ let rec pattern_match (Pattern(_,pattern): typed_pattern)
   match pattern with
   | CaseBase(_,_) ->
       mk_true
-  | CaseCtor(Ctuple, patlist) ->
+  | CaseDtor(Dtuple, patlist) ->
       assert (Expr.get_num_args expr = List.length patlist);
       let expr_list = Expr.get_args expr in
       let match_conditions =
         List.map2 (fun pat e -> pattern_match pat e) patlist expr_list in
       mk_and match_conditions
-  | CaseCtor(Cspecified, [Pattern(_,CaseBase(_, BTy_object OTy_integer))]) ->
+  | CaseDtor(Dspecified, [Pattern(_,CaseBase(_, BTy_object OTy_integer))]) ->
       LoadedInteger.is_specified expr
-  | CaseCtor(Cspecified, [Pattern(_,CaseBase(_, BTy_object OTy_pointer))]) ->
+  | CaseDtor(Dspecified, [Pattern(_,CaseBase(_, BTy_object OTy_pointer))]) ->
       LoadedPointer.is_specified expr
-  | CaseCtor(Cspecified, _) ->
+  | CaseDtor(Dspecified, _) ->
       assert false
-  | CaseCtor(Cunspecified, [Pattern(_,CaseBase(_, BTy_ctype))]) ->
+  | CaseDtor(Dunspecified, [Pattern(_,CaseBase(_, BTy_ctype))]) ->
       if (Sort.equal (Expr.get_sort expr) (LoadedInteger.mk_sort)) then
         LoadedInteger.is_unspecified expr
       else if (Sort.equal (Expr.get_sort expr) (LoadedPointer.mk_sort)) then
         LoadedPointer.is_unspecified expr
       else
         assert false
-  | CaseCtor(Cnil BTy_ctype, []) ->
+  | CaseDtor(Dnil BTy_ctype, []) ->
       CtypeListSort.is_nil expr
-  | CaseCtor(Ccons, [hd;tl]) ->
+  | CaseDtor(Dcons, [hd;tl]) ->
       (* BTy_ctype supported only *)
       assert (Sort.equal (Expr.get_sort expr) (CtypeListSort.mk_sort));
       mk_and [CtypeListSort.is_cons expr
@@ -586,8 +586,8 @@ let extract_cfun_if_cfun_call (pat: typed_pattern)
                               (e2: unit typed_expr)
                               : cfun_call_symbols option =
   match (pat, e1,e2) with
-  | (Pattern(_, (CaseCtor(Ctuple,
-              [ptr_pat1;Pattern(_, (CaseCtor(Ctuple, tuple)))]))),
+  | (Pattern(_, (CaseDtor(Dtuple,
+              [ptr_pat1;Pattern(_, (CaseDtor(Dtuple, tuple)))]))),
      Expr(_, (Esseq(
        ptr_pat2,
        ((Expr(_, (Epure(loaded_ptr_pexpr)))) as loaded_ptr_expr),
@@ -610,7 +610,7 @@ let extract_cfun_if_cfun_call (pat: typed_pattern)
         None
   | (_,
     Expr(_, (Epure(loaded_ptr_pexpr))),
-    Expr(_, (Esseq(Pattern(_, (CaseCtor(Ctuple, tuple))),
+    Expr(_, (Esseq(Pattern(_, (CaseDtor(Dtuple, tuple))),
                    Expr(_,(Epure(Pexpr(_,_,PEcfunction (Pexpr(_,_,PEsym p)))))),
                    continuation
             )))) ->
@@ -630,7 +630,7 @@ let extract_cfun_if_cfun_call (pat: typed_pattern)
              }
       end else
         None
-  | (Pattern(_, (CaseCtor(Ctuple, tuple1::_))),
+  | (Pattern(_, (CaseDtor(Dtuple, tuple1::_))),
      Expr(_, (Eunseq (sub_e1 :: (sub_e2 :: _)))),_) ->
       (* Unseq pattern:
        *  let weak ((p, (...)), _) =
@@ -638,8 +638,8 @@ let extract_cfun_if_cfun_call (pat: typed_pattern)
        *        pure((inner, cfunction(inner))),
        *)
       begin match tuple1,sub_e1 with
-      | (Pattern(_, (CaseCtor(Ctuple,
-              [ptr_pat1;Pattern(_, (CaseCtor(Ctuple, tuple)))])))),
+      | (Pattern(_, (CaseDtor(Dtuple,
+              [ptr_pat1;Pattern(_, (CaseDtor(Dtuple, tuple)))])))),
          Expr(_, (Esseq(
            ptr_pat2,
            ((Expr(_, (Epure(loaded_ptr_pexpr)))) as loaded_ptr_expr),

@@ -278,7 +278,7 @@ let rec explode_expr env (Expr annot expr_ as expr) =
                 List.map (fun (ident, _) -> (ident, Symbol.fresh ())) xs in
               
               let pat' =
-                Pattern pat_annot (CaseCtor Ctuple (List.map (fun (_, z) ->
+                Pattern pat_annot (CaseDtor Dtuple (List.map (fun (_, z) ->
                   Pattern [] (CaseBase (Just z, BTy_object OTy_pointer))
                 ) ys)) in
               

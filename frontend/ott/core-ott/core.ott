@@ -281,6 +281,14 @@ grammar
     | Fvfromint          :: :: fvfromint   {{ com cast integer to floating value }} % : integer -> floating
     | Ivfromfloat        :: :: ivfromfloat {{ com cast floating to integer value }} % : ctype -> floating -> integer
 
+grammar
+  dtor {{ tex dtor }} :: 'D' ::= {{ com data destructors }}
+    | Nil core_base_type :: :: nil         {{ com empty list (annotated with the type of the items) }}                     % : [bTy] 
+    | Cons               :: :: cons        {{ com list cons }}                      % : bTy -> [bTy] -> [bTy] 
+    | Tuple              :: :: tuple       {{ com tuple }}                          % : bTy1 -> ... -> bTyN -> (bTy1, ..., bTyN) 
+    | Specified          :: :: specified   {{ com non-unspecified loaded value }}   % : objTy -> loaded objTy 
+    | Unspecified        :: :: unspecified {{ com unspecified loaded value }}       % : ctype -> loaded (integer|floating|pointer|array|struct|union) 
+
 % TODO: hide from the tex
 metavar annots {{ lem list annot }} ::= {{ phantom }}
 
@@ -291,7 +299,7 @@ grammar
   
   generic_pattern_aux {{ lem generic_pattern_ }} :: 'Case' ::= {{ auxparam 'sym }}
     | maybesym_core_base_type                   :: X :: Base % (+ binders = binders(maybesym) +)
-    | ctor ( </ generic_patterni // , // i /> ) ::   :: Ctor % (+ b = b( </ generic_pattern_auxi // , // i /> ) +)
+    | dtor ( </ generic_patterni // , // i /> ) ::   :: Dtor % (+ b = b( </ generic_pattern_auxi // , // i /> ) +)
   
   generic_pattern :: '' ::= {{ auxparam 'sym }}
     | annots generic_pattern_aux :: :: Pattern % (+ binders = binders(generic_pattern_aux) +)

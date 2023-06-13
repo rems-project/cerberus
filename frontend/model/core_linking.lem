@@ -64,7 +64,7 @@ let rec symbols_in_pattern acc (Pattern _ pat) =
   match pat with
   | CaseBase (Just sym, _) -> Set.insert sym acc
   | CaseBase _ -> {}
-  | CaseCtor _ pats -> List.foldl symbols_in_pattern acc pats
+  | CaseDtor _ pats -> List.foldl symbols_in_pattern acc pats
   end
 
 let rec free_pexpr acc (Pexpr _ _ pe) =

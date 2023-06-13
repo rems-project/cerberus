@@ -206,10 +206,16 @@ type ctor =  (* data constructors *)
  | Cfvfromint (* cast integer to floating value *)
  | Civfromfloat (* cast floating to integer value *)
 
+type dtor = (* data destructors *)
+ | Dnil of core_base_type (* empty list (annotated with the type of the items) *)
+ | Dcons (* list cons *)
+ | Dtuple
+ | Dspecified
+ | Dunspecified
 
 type generic_pattern_ 'sym = 
  | CaseBase of (maybe 'sym * core_base_type)
- | CaseCtor of ctor * list (generic_pattern 'sym)
+ | CaseDtor of dtor * list (generic_pattern 'sym)
 
 and generic_pattern 'sym = 
  | Pattern of list annot * (generic_pattern_ 'sym)

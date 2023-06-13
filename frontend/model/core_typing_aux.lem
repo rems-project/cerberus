@@ -168,52 +168,13 @@ type inferred_paction 'a = generic_paction 'a inferred Symbol.sym
 type inferred_expr 'a    = generic_expr 'a inferred Symbol.sym
 
 
-(* TODO: can maybe be removed, doesn't seem to do anything any more *)
-let export_ctor loc = function
- | Cnil bty ->
-    E.return (Cnil bty)
-     (* maybe (E.fail loc (CoreTyping_TODO "export_ctor"))
-      *   (E.return -| Cnil) (toCoreBaseType infer) *)
- | Ccons ->
-     E.return Ccons
- | Ctuple ->
-     E.return Ctuple
- | Carray ->
-     E.return Carray
- | Civmax ->
-     E.return Civmax
- | Civmin ->
-     E.return Civmin
- | Civsizeof ->
-     E.return Civsizeof
- | Civalignof ->
-     E.return Civalignof
- | CivCOMPL ->
-     E.return CivCOMPL
- | CivAND ->
-     E.return CivAND
- | CivOR ->
-     E.return CivOR
- | CivXOR ->
-     E.return CivXOR
- | Cspecified ->
-     E.return Cspecified
- | Cunspecified ->
-     E.return Cunspecified
- | Cfvfromint ->
-     E.return Cfvfromint
- | Civfromfloat ->
-     E.return Civfromfloat
-end
-
 val     export_pattern: Loc.t -> inferred_pattern -> E.eff typed_pattern
 let rec export_pattern loc (Pattern annots pat) =
   match pat with
    | CaseBase z ->
        E.return (Pattern annots (CaseBase z))
-   | CaseCtor ctor pats ->
-       (fun c args -> Pattern annots (CaseCtor c args)) <$> export_ctor loc ctor
-                                                        <*> E.mapM (export_pattern loc) pats
+   | CaseDtor dtor pats ->
+       (fun d args -> Pattern annots (CaseDtor d args)) dtor <$> E.mapM (export_pattern loc) pats
   end
 
 
@@ -239,8 +200,7 @@ let rec export_pexpr (Pexpr annot infer pexpr_) =
     | PEerror str pe ->
         PEerror str <$> export_pexpr pe
     | PEctor ctor pes ->
-        PEctor <$> export_ctor loc ctor
-               <*> E.mapM (export_pexpr) pes
+        PEctor ctor <$> E.mapM (export_pexpr) pes
     | PEcase pe pat_pes ->
         PEcase <$> export_pexpr pe
                <*> E.mapM (fun (pat, pe) ->

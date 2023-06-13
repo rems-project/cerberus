@@ -267,33 +267,13 @@ let core_rewrite (conf, io) core_file =
 
 let untype_file (file: 'a Core.typed_file) : 'a Core.file =
   let open Core in
-  let untype_ctor = fun ctor -> ctor (* function
-     * | Cnil _ ->
-     *     Cnil ()
-     * | (Ccons as ctor)
-     * | (Ctuple as ctor)
-     * | (Carray as ctor)
-     * | (Civmax as ctor)
-     * | (Civmin as ctor)
-     * | (Civsizeof as ctor)
-     * | (Civalignof as ctor)
-     * | (CivCOMPL as ctor)
-     * | (CivAND as ctor)
-     * | (CivOR as ctor)
-     * | (CivXOR as ctor)
-     * | (Cspecified as ctor)
-     * | (Cunspecified as ctor)
-     * | (Cfvfromint as ctor)
-     * | (Civfromfloat as ctor) ->
-     *     ctor in *)
-  in
   let rec untype_pattern (Pattern (annots, pat_)) =
     Pattern ( annots
             , match pat_ with
                 | (CaseBase _ as pat_) ->
                     pat_
-                | CaseCtor (ctor, pats) ->
-                    CaseCtor (untype_ctor ctor, List.map untype_pattern pats) ) in
+                | CaseDtor (dtor, pats) ->
+                    CaseDtor (dtor, List.map untype_pattern pats) ) in
   let rec untype_pexpr (Pexpr (annots, _, pexpr_) : Core.typed_pexpr) : Core.pexpr =
     let aux = function
       | (PEsym _ as pe)
@@ -306,7 +286,7 @@ let untype_file (file: 'a Core.typed_file) : 'a Core.file =
       | PEconstrained xs ->
           PEconstrained (List.map (fun (z, pe) -> (z, untype_pexpr pe)) xs)
       | PEctor (ctor, pes) ->
-          PEctor (untype_ctor ctor, List.map untype_pexpr pes)
+          PEctor (ctor, List.map untype_pexpr pes)
       | PEcase (pe, pat_pes) ->
           PEcase (untype_pexpr pe, List.map (fun (pat, pe) -> (untype_pattern pat, untype_pexpr pe)) pat_pes)
       | PEarray_shift (pe1, ty, pe2) ->

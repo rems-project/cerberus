@@ -57,9 +57,9 @@ let rec mk_list_pe bTy = function
 
 let rec mk_list_pat bTy = function
   | [] ->
-      Pattern ([], CaseCtor (Cnil bTy, []))
+      Pattern ([], CaseDtor (Dnil bTy, []))
   | _pat::_pats ->
-      Pattern ([], CaseCtor (Ccons, [_pat; mk_list_pat bTy _pats]))
+      Pattern ([], CaseDtor (Dcons, [_pat; mk_list_pat bTy _pats]))
 
 let ensure_list_core_base_type loc = function
   | BTy_list cbt -> cbt
@@ -306,9 +306,9 @@ let rec symbolify_pattern (Pattern (annots, _pat)) : pattern Eff.t =
     | CaseBase (Some _sym, bTy) ->
         register_sym _sym >>= fun sym ->
         Eff.return (Pattern (annots, CaseBase (Some sym, bTy)))
-    | CaseCtor (ctor, _pats) ->
+    | CaseDtor (dtor, _pats) ->
         Eff.mapM symbolify_pattern _pats >>= fun pat ->
-        Eff.return (Pattern (annots, CaseCtor (ctor, pat)))
+        Eff.return (Pattern (annots, CaseDtor (dtor, pat)))
 
 let rec symbolify_pexpr (Pexpr (annot, (), _pexpr): parsed_pexpr) : pexpr Eff.t =
   let loc = Annot.get_loc_ annot in
@@ -1391,13 +1391,18 @@ ctor:
 | IVXOR
     { CivXOR }
 
+dtor:
+| SPECIFIED
+    { Dspecified }
+| UNSPECIFIED
+    { Dunspecified }
 
 list_pattern:
 | BRACKETS COLON bTy= core_base_type
   { let loc = (Cerb_location.(region ($startpos, $endpos) NoCursor)) in
-    Pattern ([Aloc loc], CaseCtor (Cnil (ensure_list_core_base_type loc bTy), [])) }
+    Pattern ([Aloc loc], CaseDtor (Dnil (ensure_list_core_base_type loc bTy), [])) }
 |  _pat1= pattern COLON_COLON _pat2= pattern
-  { Pattern ([Aloc (Cerb_location.(region ($startpos, $endpos) NoCursor))], CaseCtor (Ccons, [_pat1; _pat2])) }
+  { Pattern ([Aloc (Cerb_location.(region ($startpos, $endpos) NoCursor))], CaseDtor (Dcons, [_pat1; _pat2])) }
 | _pats= delimited(LBRACKET, separated_list(COMMA, pattern) , RBRACKET) COLON bTy= core_base_type
     { let loc = (Cerb_location.(region ($startpos, $endpos) NoCursor)) in
       mk_list_pat (ensure_list_core_base_type loc bTy) _pats }
@@ -1411,9 +1416,9 @@ pattern:
 | _pat= list_pattern
     { _pat }
 | LPAREN _pat= pattern COMMA _pats= separated_nonempty_list(COMMA, pattern) RPAREN
-    { Pattern ([Aloc (Cerb_location.(region ($startpos, $endpos) NoCursor))], CaseCtor (Ctuple, _pat :: _pats)) }
-| ctor=ctor _pats= delimited(LPAREN, separated_list(COMMA, pattern), RPAREN)
-    { Pattern ([Aloc (Cerb_location.(region ($startpos, $endpos) NoCursor))], CaseCtor (ctor, _pats)) }
+    { Pattern ([Aloc (Cerb_location.(region ($startpos, $endpos) NoCursor))], CaseDtor (Dtuple, _pat :: _pats)) }
+| dtor= dtor _pats= delimited(LPAREN, separated_list(COMMA, pattern), RPAREN)
+    { Pattern ([Aloc (Cerb_location.(region ($startpos, $endpos) NoCursor))], CaseDtor (dtor, _pats)) }
 ;
 
 pattern_pair(X):

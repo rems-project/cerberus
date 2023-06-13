@@ -33,112 +33,43 @@ let rec infer_pattern (Pattern annots pat) =
       E.return (empty_env, toInferred bTy, Pattern annots (CaseBase (Nothing, bTy)))
   | CaseBase (Just sym, bTy) ->
       E.return (singleton_tdecl_env (Sym sym) (TDsym bTy), toInferred bTy, Pattern annots (CaseBase (Just sym, bTy)))
-  | CaseCtor ctor pats ->
-      match (ctor, pats) with
-        | (Cnil bTy, []) ->
+  | CaseDtor dtor pats ->
+      match (dtor, pats) with
+        | (Dnil bTy, []) ->
             let infer = toInferred (BTy_list bTy) in
-            E.return (empty_env, infer, Pattern annots (CaseCtor (Cnil bTy) []))
-        | (Cnil _, _) ->
+            E.return (empty_env, infer, Pattern annots (CaseDtor (Dnil bTy) []))
+        | (Dnil _, _) ->
             error "infer_pattern: Cnil: wrong number of arguments"
-        | (Ccons, [pat1; pat2]) ->
+        | (Dcons, [pat1; pat2]) ->
             infer_pattern pat1 >>= fun (env1, infer1, tpat1) ->
             match toCoreBaseType infer1 with
               | Just bTy ->
                   typecheck_pattern (BTy_list bTy) pat2 >>= fun (env2, tpat2) ->
-                  E.return (env_union env1 env2, InferredType_list infer1, Pattern annots (CaseCtor Ccons [tpat1; tpat2]))
+                  E.return (env_union env1 env2, InferredType_list infer1, Pattern annots (CaseDtor Dcons [tpat1; tpat2]))
               | Nothing ->
                   E.fail (locOf pat1) TooGeneral
             end
-        | (Ccons, _) ->
+        | (Dcons, _) ->
             error "infer_pattern: Ccons: wrong number of arguments"
-        | (Ctuple, _) ->
+        | (Dtuple, _) ->
             unzip3 <$> E.mapM (infer_pattern) pats >>= fun (envs, infers, pats') ->
             E.return (env_unions envs,
                       InferredType_tuple infers,
-                      Pattern annots (CaseCtor Ctuple pats'))
-        | (Carray, _) ->
-            error "Core_typing.Carray: WIP, Carray"
-        | (Civmax, [pat']) ->
-            typecheck_pattern BTy_ctype pat' >>= fun (env, tpat') ->
-            E.return (env, InferredType_object OTy_integer, Pattern annots (CaseCtor Civmax [tpat']))
-        | (Civmax, _) ->
-            error "infer_pattern: Civmax: wrong number of arguments"
-        | (Civmin, [pat']) ->
-            typecheck_pattern BTy_ctype pat' >>= fun (env, tpat') ->
-            E.return (env, InferredType_object OTy_integer, Pattern annots (CaseCtor Civmin [tpat']))
-        | (Civmin, _) ->
-            error "infer_pattern: Civmin: wrong number of arguments"
-        | (Civsizeof, [pat']) ->
-            typecheck_pattern BTy_ctype pat' >>= fun (env, tpat') ->
-            E.return (env, InferredType_object OTy_integer, Pattern annots (CaseCtor Civsizeof [tpat']))
-        | (Civsizeof, _) ->
-            error "infer_pattern: Civsizeof: wrong number of arguments"
-        | (Civalignof, [pat']) ->
-            typecheck_pattern BTy_ctype pat' >>= fun (env, tpat') ->
-            E.return (env, InferredType_object OTy_integer, Pattern annots (CaseCtor Civalignof [tpat']))
-        | (Civalignof, _) ->
-            error "infer_pattern: Civalignof: wrong number of arguments"
-        | (CivCOMPL, [pat1; pat2]) ->
-            typecheck_pattern BTy_ctype pat1                >>= fun (env1, tpat1) ->
-            typecheck_pattern (BTy_object OTy_integer) pat2 >>= fun (env2, tpat2) ->
-            E.return ( env_union env1 env2
-                     , InferredType_object OTy_integer
-                     , Pattern annots (CaseCtor CivCOMPL [tpat1; tpat2]))
-        | (CivCOMPL, _) ->
-            error "infer_pattern: CivCOMPL: wrong number of arguments"
-        | (CivAND, [pat1; pat2; pat3]) ->
-            typecheck_pattern BTy_ctype pat1                >>= fun (env1, tpat1) ->
-            typecheck_pattern (BTy_object OTy_integer) pat2 >>= fun (env2, tpat2) ->
-            typecheck_pattern (BTy_object OTy_integer) pat3 >>= fun (env3, tpat3) ->
-            E.return ( env_unions [env1; env2; env3]
-                     , InferredType_object OTy_integer
-                     , Pattern annots (CaseCtor CivAND [tpat1; tpat2; tpat3]))
-        | (CivAND, _) ->
-            error "infer_pattern: CivAND: wrong number of arguments"
-        | (CivOR, [pat1; pat2; pat3]) ->
-            typecheck_pattern BTy_ctype pat1                >>= fun (env1, tpat1) ->
-            typecheck_pattern (BTy_object OTy_integer) pat2 >>= fun (env2, tpat2) ->
-            typecheck_pattern (BTy_object OTy_integer) pat3 >>= fun (env3, tpat3) ->
-            E.return ( env_unions [env1; env2; env3]
-                     , InferredType_object OTy_integer
-                     , Pattern annots (CaseCtor CivOR [tpat1; tpat2; tpat3]))
-        | (CivOR, _) ->
-            error "infer_pattern: CivOR: wrong number of arguments"
-        | (CivXOR, [pat1; pat2; pat3]) ->
-            typecheck_pattern BTy_ctype pat1                >>= fun (env1, tpat1) ->
-            typecheck_pattern (BTy_object OTy_integer) pat2 >>= fun (env2, tpat2) ->
-            typecheck_pattern (BTy_object OTy_integer) pat3 >>= fun (env3, tpat3) ->
-            E.return ( env_unions [env1; env2; env3]
-                     , InferredType_object OTy_integer
-                     , Pattern annots (CaseCtor CivXOR [tpat1; tpat2; tpat3]))
-        | (CivXOR, _) ->
-            error "infer_pattern: CivXOR: wrong number of arguments"
-        | (Cspecified, [pat']) ->
+                      Pattern annots (CaseDtor Dtuple pats'))
+        | (Dspecified, [pat']) ->
             infer_pattern pat' >>= fun (env, infer', tpat') ->
             match infer' with
               | InferredType_object oTy ->
-                  E.return (env, InferredType_loaded oTy, Pattern annots (CaseCtor Cspecified [tpat']))
+                  E.return (env, InferredType_loaded oTy, Pattern annots (CaseDtor Dspecified [tpat']))
               | _ ->
                   E.fail (locOf pat') (MismatchFound "Cspecified" "object" (toCoreBaseType infer'))
             end
-        | (Cspecified, _) ->
+        | (Dspecified, _) ->
             error "infer_pattern: Cspecified: wrong number of arguments"
-        | (Cunspecified, [_]) ->
+        | (Dunspecified, [_]) ->
             E.fail loc TooGeneral
-        | (Cunspecified, _) ->
+        | (Dunspecified, _) ->
             error "infer_pattern: Cunspecified: wrong number of arguments"
-        | (Cfvfromint, [pat]) ->
-            typecheck_pattern (BTy_object OTy_integer) pat >>= fun (env, tpat) ->
-            E.return (env, InferredType_object OTy_floating, Pattern annots (CaseCtor Cfvfromint [tpat]))
-        | (Cfvfromint, _) ->
-            error "infer_pattern: Cfvfromint: wrong number of arguments"
-        | (Civfromfloat, [pat]) ->
-            typecheck_pattern (BTy_object OTy_floating) pat >>= fun (env, tpat) ->
-            E.return ( env
-                     , InferredType_object OTy_integer
-                     , Pattern annots (CaseCtor Civfromfloat [tpat]))
-        | (Civfromfloat, _) ->
-            error "infer_pattern: Cfvfromfloat: wrong number of arguments"
       end
 end
 
@@ -153,140 +84,48 @@ and typecheck_pattern expected_bTy (Pattern annots pat) =
   | CaseBase (Just sym, bTy) ->
       guard_match loc ("pattern symbol " ^ show sym) expected_bTy bTy >>
       E.return (singleton_tdecl_env (Sym sym) (TDsym bTy), Pattern annots (CaseBase (Just sym, bTy)))
-  | CaseCtor ctor pats ->
-      match (ctor, expected_bTy, pats) with
-        | (Cnil bTy, _, []) ->
+  | CaseDtor dtor pats ->
+      match (dtor, expected_bTy, pats) with
+        | (Dnil bTy, _, []) ->
            if BTy_list bTy = expected_bTy 
-           then E.return (empty_env, Pattern annots (CaseCtor (Cnil bTy) []))
-           else E.fail loc (Mismatch "Cnil" expected_bTy (BTy_list bTy))
-        | (Cnil _, _, _) ->
-            error "typecheck_pattern: Cnil: wrong number of arguments"
+           then E.return (empty_env, Pattern annots (CaseDtor (Dnil bTy) []))
+           else E.fail loc (Mismatch "Dnil" expected_bTy (BTy_list bTy))
+        | (Dnil _, _, _) ->
+            error "typecheck_pattern: Dnil: wrong number of arguments"
 
-        | (Ccons, BTy_list elem_bTy, [pat1; pat2]) ->
+        | (Dcons, BTy_list elem_bTy, [pat1; pat2]) ->
             typecheck_pattern elem_bTy     pat1 >>= fun (env1, tpat1) ->
             typecheck_pattern expected_bTy pat2 >>= fun (env2, tpat2) ->
-            E.return (env_union env1 env2, Pattern annots (CaseCtor Ccons [tpat1; tpat2]))
-        | (Ccons, _, []) ->
-            E.fail loc (MismatchExpected "Ccons" expected_bTy "list")
-        | (Ccons, _, _) ->
-            error "typecheck_pattern: Ccons: wrong number of arguments"
+            E.return (env_union env1 env2, Pattern annots (CaseDtor Dcons [tpat1; tpat2]))
+        | (Dcons, _, []) ->
+            E.fail loc (MismatchExpected "Dcons" expected_bTy "list")
+        | (Dcons, _, _) ->
+            error "typecheck_pattern: Dcons: wrong number of arguments"
 
-        | (Ctuple, BTy_tuple bTys, _) ->
+        | (Dtuple, BTy_tuple bTys, _) ->
             List.unzip <$> E.mapM (fun (bTy, pat) ->
               typecheck_pattern bTy pat
             ) (List.zip bTys pats) >>= fun (envs, tpats) ->
-            E.return (env_unions envs, Pattern annots (CaseCtor Ctuple tpats))
-        | (Ctuple, _, _) ->
-            E.fail loc (MismatchExpected "Ctuple" expected_bTy "tuple")
+            E.return (env_unions envs, Pattern annots (CaseDtor Dtuple tpats))
+        | (Dtuple, _, _) ->
+            E.fail loc (MismatchExpected "Dtuple" expected_bTy "tuple")
 
-        | (Carray, _, _) ->
-            (* TODO: *)
-            error "Core_typing.Carray: WIP, Carray"
-
-        | (Civmax, BTy_object OTy_integer, [pat']) ->
-            typecheck_pattern (BTy_ctype) pat' >>= fun (env, tpat') ->
-            E.return (env, Pattern annots (CaseCtor Civmax [tpat']))
-        | (Civmax, _, [_]) ->
-            E.fail loc (Mismatch "Civmax" expected_bTy (BTy_object OTy_integer))
-        | (Civmax, _, _) ->
-            error "typecheck_pattern: Civmax: wrong number of arguments"
-
-        | (Civmin, BTy_object OTy_integer, [pat']) ->
-            typecheck_pattern (BTy_ctype) pat' >>= fun (env, tpat') ->
-            E.return (env, Pattern annots (CaseCtor Civmin [tpat']))
-        | (Civmin, _, [_]) ->
-            E.fail loc (Mismatch "Civmin" expected_bTy (BTy_object OTy_integer))
-        | (Civmin, _, _) ->
-            error "typecheck_pattern: Civmin: wrong number of arguments"
-
-        | (Civsizeof, BTy_object OTy_integer, [pat']) ->
-            typecheck_pattern (BTy_ctype) pat' >>= fun (env, tpat') ->
-            E.return (env, Pattern annots (CaseCtor Civsizeof [tpat']))
-        | (Civsizeof, _, [_]) ->
-            E.fail loc (Mismatch "Civsizeof" expected_bTy (BTy_object OTy_integer))
-        | (Civsizeof, _, _) ->
-            error "typecheck_pattern: Civsizeof: wrong number of arguments"
-
-        | (Civalignof, BTy_object OTy_integer, [pat']) ->
-            typecheck_pattern (BTy_ctype) pat' >>= fun (env, tpat') ->
-            E.return (env, Pattern annots (CaseCtor Civalignof [tpat']))
-        | (Civalignof, _, [_]) ->
-            E.fail loc (Mismatch "Civalignof" expected_bTy (BTy_object OTy_integer))
-        | (Civalignof, _, _) ->
-            error "typecheck_pattern: Civalignof: wrong number of arguments"
-
-        | (CivCOMPL, BTy_object OTy_integer, [pat1; pat2]) ->
-            typecheck_pattern BTy_ctype pat1                >>= fun (env, tpat1) ->
-            typecheck_pattern (BTy_object OTy_integer) pat2 >>= fun (env, tpat2) ->
-            E.return (env, Pattern annots (CaseCtor CivCOMPL [tpat1; tpat2]))
-        | (CivCOMPL, _, [_]) ->
-            E.fail loc (Mismatch "CivCOMPL" expected_bTy (BTy_object OTy_integer))
-        | (CivCOMPL, _, _) ->
-            error "typecheck_pattern: CivCOMPL: wrong number of arguments"
-
-        | (CivAND, BTy_object OTy_integer, [pat1; pat2; pat3]) ->
-            typecheck_pattern BTy_ctype pat1                >>= fun (env, tpat1) ->
-            typecheck_pattern (BTy_object OTy_integer) pat2 >>= fun (env, tpat2) ->
-            typecheck_pattern (BTy_object OTy_integer) pat3 >>= fun (env, tpat3) ->
-            E.return (env, Pattern annots (CaseCtor CivAND [tpat1; tpat2; tpat3]))
-        | (CivAND, _, [_]) ->
-            E.fail loc (Mismatch "CivAND" expected_bTy (BTy_object OTy_integer))
-        | (CivAND, _, _) ->
-            error "typecheck_pattern: CivAND: wrong number of arguments"
-
-        | (CivOR, BTy_object OTy_integer, [pat1; pat2; pat3]) ->
-            typecheck_pattern BTy_ctype pat1                >>= fun (env, tpat1) ->
-            typecheck_pattern (BTy_object OTy_integer) pat2 >>= fun (env, tpat2) ->
-            typecheck_pattern (BTy_object OTy_integer) pat3 >>= fun (env, tpat3) ->
-            E.return (env, Pattern annots (CaseCtor CivOR [tpat1; tpat2; tpat3]))
-        | (CivOR, _, [_]) ->
-            E.fail loc (Mismatch "CivOR" expected_bTy (BTy_object OTy_integer))
-        | (CivOR, _, _) ->
-            error "typecheck_pattern: CivOR: wrong number of arguments"
-
-        | (CivXOR, BTy_object OTy_integer, [pat1; pat2; pat3]) ->
-            typecheck_pattern BTy_ctype pat1                >>= fun (env, tpat1) ->
-            typecheck_pattern (BTy_object OTy_integer) pat2 >>= fun (env, tpat2) ->
-            typecheck_pattern (BTy_object OTy_integer) pat3 >>= fun (env, tpat3) ->
-            E.return (env, Pattern annots (CaseCtor CivXOR [tpat1; tpat2; tpat3]))
-        | (CivXOR, _, [_]) ->
-            E.fail loc (Mismatch "CivXOR" expected_bTy (BTy_object OTy_integer))
-        | (CivXOR, _, _) ->
-            error "typecheck_pattern: CivXOR: wrong number of arguments"
-
-        | (Cspecified, BTy_loaded oTy, [pat']) ->
+        | (Dspecified, BTy_loaded oTy, [pat']) ->
             typecheck_pattern (BTy_object oTy) pat' >>= fun (env, tpat') ->
-            E.return (env, Pattern annots (CaseCtor Cspecified [tpat']))
-        | (Cspecified, _, [_]) ->
-            E.fail loc (MismatchExpected "Civspecified" expected_bTy "loaded object")
-        | (Cspecified, _, _) ->
-            error "typecheck_pattern: Cspecified: wrong number of arguments"
+            E.return (env, Pattern annots (CaseDtor Dspecified [tpat']))
+        | (Dspecified, _, [_]) ->
+            E.fail loc (MismatchExpected "Dspecified" expected_bTy "loaded object")
+        | (Dspecified, _, _) ->
+            error "typecheck_pattern: Dspecified: wrong number of arguments"
 
-        | (Cunspecified, BTy_loaded oTy, [pat']) ->
+        | (Dunspecified, BTy_loaded oTy, [pat']) ->
             (* TODO: dependent types here .... *)
             typecheck_pattern BTy_ctype pat' >>= fun (env, tpat') ->
-            E.return (env, Pattern annots (CaseCtor Cunspecified [tpat']))
-        | (Cunspecified, _, [_]) ->
-            E.fail loc (MismatchExpected "Civunspecified" expected_bTy "loaded object")
-        | (Cunspecified, _, _) ->
-            error "typecheck_pattern: Cunspecified: wrong number of arguments"
-
-        | (Cfvfromint, BTy_object OTy_floating, [pat]) ->
-            typecheck_pattern (BTy_object OTy_integer) pat >>= fun (env, tpat) ->
-            E.return (env, Pattern annots (CaseCtor Cfvfromint [tpat]))
-        | (Cfvfromint, _, [_]) ->
-            E.fail loc (Mismatch "Civfromint" expected_bTy (BTy_object OTy_floating))
-        | (Cfvfromint, _, _) ->
-            error "typecheck_pattern: Civfromint: wrong number of arguments"
-
-        | (Civfromfloat, BTy_object OTy_integer, [pat]) ->
-            typecheck_pattern (BTy_object OTy_floating) pat >>= fun (env, tpat) ->
-            E.return ( env
-                     , Pattern annots (CaseCtor Civfromfloat [tpat] ))
-        | (Civfromfloat, _, [_]) ->
-            E.fail loc (Mismatch "Civfromfloat" expected_bTy (BTy_object OTy_integer))
-        | (Civfromfloat, _, _) ->
-            error "typecheck_pattern: Civfromfloat: wrong number of arguments"
+            E.return (env, Pattern annots (CaseDtor Dunspecified [tpat']))
+        | (Dunspecified, _, [_]) ->
+            E.fail loc (MismatchExpected "Dunspecified" expected_bTy "loaded object")
+        | (Dunspecified, _, _) ->
+            error "typecheck_pattern: Dunspecified: wrong number of arguments"
       end
 end
 
