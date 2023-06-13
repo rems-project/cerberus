@@ -2187,12 +2187,12 @@ cn_fun_spec:
   CN_REQUIRES cn_spec_requires=separated_nonempty_list(SEMICOLON, condition)
   CN_ENSURES cn_spec_ensures=separated_nonempty_list(SEMICOLON, condition)
   exit_cn
-    { (* TODO: check the name starts with lower case *)
-      let loc = Cerb_location.point $startpos(str) in
+    { let loc = Cerb_location.point $startpos(str) in
       { cn_spec_loc= loc
       ; cn_spec_name= str
       ; cn_spec_args
       ; cn_spec_requires
+      ; cn_spec_ret_name = Symbol.Identifier (Cerb_location.unknown, "dummy")
       ; cn_spec_ensures } }
 (* all cases where cn_variable is used don't mind if they're shadowing
    a situation where the name has been assigned as a typedef *)

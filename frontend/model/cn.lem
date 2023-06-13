@@ -149,6 +149,7 @@ type cn_fun_spec 'a 'ty = <|
   cn_spec_name: Symbol.identifier;
   cn_spec_args: list (cn_base_type 'a * 'a);
   cn_spec_requires: list (cn_condition 'a 'ty);
+  cn_spec_ret_name: 'a;
   cn_spec_ensures: list (cn_condition 'a 'ty);
 |>
 

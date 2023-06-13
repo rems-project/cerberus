@@ -4416,8 +4416,9 @@ let desugar_and_register_cn_fun_spec spec =
   E.register_cn_fun_spec spec.cn_spec_name begin
     E.mapM (desugar_cn_arg CN_vars) spec.cn_spec_args >>= fun args ->
     desugar_cn_conditions spec.cn_spec_requires >>= fun requires ->
+    E.register_cn_ident CN_vars (Symbol.Identifier Loc.unknown "return") >>= fun rsym ->
     desugar_cn_conditions spec.cn_spec_ensures >>= fun ensures ->
-    E.return (args, requires, ensures)
+    E.return (args, requires, ensures, rsym)
   end
 
 

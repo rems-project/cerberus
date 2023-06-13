@@ -158,6 +158,7 @@ let cn_keywords: (string * Tokens.token) list = [
     "accesses"      , CN_ACCESSES;
     "trusted"       , CN_TRUSTED;
     "cn_function"   , CN_FUNCTION;
+    "spec"          , CN_SPEC;
     "when"          , CN_WHEN;
     "unchanged"     , CN_UNCHANGED;
     "pack"          , CN_PACK;

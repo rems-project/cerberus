@@ -1169,12 +1169,13 @@ let register_cn_lemma ident mk =
 (* copied and adjusted from register_cn_function *)
 let register_cn_fun_spec ident mk =
   push_cn_scope >>= fun () ->
-  mk >>= fun (args, requires, ensures) ->
+  mk >>= fun (args, requires, ensures, rsym) ->
   let spec = <|
     Cn.cn_spec_loc= Loc.locOf ident;
     Cn.cn_spec_name= ident;
     Cn.cn_spec_args= args;
     Cn.cn_spec_requires= requires;
+    Cn.cn_spec_ret_name= rsym;
     Cn.cn_spec_ensures= ensures;
   |> in
   (* liftCnDesug *) begin
