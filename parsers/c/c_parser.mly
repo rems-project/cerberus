@@ -141,7 +141,7 @@ let warn_extra_semicolon pos ctx =
 %token CN_ACCESSES CN_TRUSTED CN_REQUIRES CN_ENSURES CN_INV
 %token CN_PACK CN_UNPACK CN_HAVE CN_INSTANTIATE CN_UNFOLD CN_APPLY CN_MATCH
 %token CN_BOOL CN_INTEGER CN_REAL CN_POINTER CN_MAP CN_LIST CN_TUPLE CN_SET
-%token CN_WHEN CN_LET CN_TAKE CN_OWNED CN_BLOCK CN_EACH CN_FUNCTION CN_LEMMA CN_PREDICATE CN_DATATYPE
+%token CN_WHEN CN_LET CN_TAKE CN_OWNED CN_BLOCK CN_EACH CN_FUNCTION CN_LEMMA CN_PREDICATE CN_DATATYPE CN_SPEC
 %token CN_UNCHANGED
 %token CN_GOOD CN_NULL CN_TRUE CN_FALSE
 
@@ -2180,7 +2180,20 @@ cn_datatype:
       { cn_dt_loc= Cerb_location.point $startpos($1)
       ; cn_dt_name= nm
       ; cn_dt_cases= cases} }
-
+cn_fun_spec:
+| CN_SPEC enter_cn
+  str= cn_variable
+  cn_spec_args= delimited(LPAREN, args, RPAREN)
+  CN_REQUIRES cn_spec_requires=separated_nonempty_list(SEMICOLON, condition)
+  CN_ENSURES cn_spec_ensures=separated_nonempty_list(SEMICOLON, condition)
+  exit_cn
+    { (* TODO: check the name starts with lower case *)
+      let loc = Cerb_location.point $startpos(str) in
+      { cn_spec_loc= loc
+      ; cn_spec_name= str
+      ; cn_spec_args
+      ; cn_spec_requires
+      ; cn_spec_ensures } }
 (* all cases where cn_variable is used don't mind if they're shadowing
    a situation where the name has been assigned as a typedef *)
 %inline cn_variable:
@@ -2398,6 +2411,8 @@ cn_toplevel_elem:
     { EDecl_lemmaCN lmma }
 | dt= cn_datatype
     { EDecl_datatypeCN dt }
+| spec= cn_fun_spec
+    { EDecl_fun_specCN spec }
 ;
 
 cn_toplevel:

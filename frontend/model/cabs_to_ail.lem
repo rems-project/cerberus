@@ -4411,6 +4411,15 @@ let desugar_and_register_cn_lemma lmma =
     E.return (args, requires, ensures)
   end
 
+(* copying and adjusting desugar_and_register_cn_lemma *)
+let desugar_and_register_cn_fun_spec spec =
+  E.register_cn_fun_spec spec.cn_spec_name begin
+    E.mapM (desugar_cn_arg CN_vars) spec.cn_spec_args >>= fun args ->
+    desugar_cn_conditions spec.cn_spec_requires >>= fun requires ->
+    desugar_cn_conditions spec.cn_spec_ensures >>= fun ensures ->
+    E.return (args, requires, ensures)
+  end
+
 
 
 let desugar_cn_statement (CN_statement loc stmt_) =
@@ -4715,6 +4724,8 @@ let desugar_and_register_external_declaration edecl =
       desugar_and_register_cn_function pred
     | EDecl_lemmaCN lmma ->
       desugar_and_register_cn_lemma lmma
+    | EDecl_fun_specCN spec ->
+      desugar_and_register_cn_fun_spec spec
     | EDecl_datatypeCN dt ->
       desugar_and_register_cn_datatype dt
   end

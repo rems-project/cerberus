@@ -1166,6 +1166,24 @@ let register_cn_lemma ident mk =
         fail (Loc.locOf ident) (Errors.Desugar_CN (Cn.CNErr_redeclaration Cn.CN_lemma))
   end
 
+(* copied and adjusted from register_cn_function *)
+let register_cn_fun_spec ident mk =
+  push_cn_scope >>= fun () ->
+  mk >>= fun (args, requires, ensures) ->
+  let spec = <|
+    Cn.cn_spec_loc= Loc.locOf ident;
+    Cn.cn_spec_name= ident;
+    Cn.cn_spec_args= args;
+    Cn.cn_spec_requires= requires;
+    Cn.cn_spec_ensures= ensures;
+  |> in
+  (* liftCnDesug *) begin
+    pop_cn_scope >>= fun () ->
+    assert_cn_bottom_scope >>= fun () ->
+    update_cn_state (fun cn_st' ->
+      <| cn_st' with Cn_desugaring.cn_fun_specs = (ident, spec) :: cn_st'.Cn_desugaring.cn_fun_specs; |>
+    )
+  end
 
 let register_cn_predicate ident mk =
   get_inner >>= fun st ->
