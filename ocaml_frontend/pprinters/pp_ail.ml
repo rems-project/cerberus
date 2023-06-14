@@ -587,7 +587,7 @@ let rec pp_expression_aux ?(executable_spec=false) mk_pp_annot a_expr =
             let ptr_var = pp ~executable_spec e in
             let pre = 
               match e with 
-              | AnnotatedExpression (_, _, _, AilEcast _) -> P.brackets ptr_var
+              | AnnotatedExpression (_, _, _, AilEcast _) -> P.parens ptr_var
               | _ -> ptr_var
             in
             pre ^^ (!^ "->") ^^ Pp_symbol.pp_identifier ident

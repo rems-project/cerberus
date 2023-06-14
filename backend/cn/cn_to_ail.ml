@@ -10,7 +10,7 @@ module A=CF.AilSyntax
 module C=CF.Ctype
 module BT=BaseTypes
 
-let generic_cn_dt_sym = Sym.fresh_pretty "generic_cn_datatype"
+let generic_cn_dt_sym = Sym.fresh_pretty "cn_datatype"
 
 let rec bt_to_cn_base_type = function
 | BT.Unit -> CN_unit
@@ -244,17 +244,66 @@ let rec cn_to_ail_expr_aux
       let (cases, exprs) = List.split es in
       (* let lhs = List.map (fun e_ -> cn_to_ail_expr const_prop e_ PassBack) cases in *)
       let bindings = [] in
+      (* TODO: Return decls too and pass down *)
       let rec generate_switch_stats rhs = 
         (match rhs with
           | [] -> []
           | ((ds, (s :: ss)) :: rs) ->  
             (* TODO: Add default case for _ pattern match *)
-            (* TODO: Add constructor member declarations to body of case *)
-            let ail_case = A.(AilScase (Nat_big_num.zero (* placeholder *), mk_stmt s)) in
+            let tag_name = "some_tag" in
+            (* Generating extra statements for extracting member information for a given datatype constructor *)
+            let constructor_name = String.sub tag_name 0 ((String.length tag_name) - 4) in
+            let constructor_sym = CF.Symbol.fresh_pretty constructor_name in
+            let rec get_members constructor_sym dts = 
+              (let rec get_members_helper dt_cases = 
+                (match dt_cases with
+                  | [] -> None
+                  | (constr, members) :: cs -> 
+                    let eq = String.equal (Sym.pp_string constr) (Sym.pp_string constructor_sym) in
+                    if eq then 
+                      Some members
+                    else 
+                      get_members_helper cs
+                )
+              in
+              match dts with 
+              | [] -> failwith "Constructor not found in CN datatypes list" (* Should never reach this case *)
+              | dt :: dts_ -> 
+                  let members_from_dt = get_members_helper dt.cn_dt_cases in
+                  match members_from_dt with 
+                    | None -> get_members constructor_sym dts_
+                    | Some members -> members
+              )
+            in
+            let members = get_members constructor_sym dts in
+            let (_, member_syms) = List.split members in
+            let constr_var_sym = Sym.fresh_pretty "_constructor" in
+            
+            let rec generate_member_stats member_syms = 
+              (match member_syms with 
+                | [] -> []
+                | sym :: syms -> 
+                  let rhs = A.(AilEmemberofptr 
+                  (mk_expr (AilEident constr_var_sym), sym)) in
+                  let ail_expr = A.(AilEassign (mk_expr (AilEident (CF.Symbol.fresh_pretty (Id.s sym))), mk_expr rhs)) in
+                  A.(AilSexpr (mk_expr ail_expr)) :: (generate_member_stats syms)
+              )
+            in
+            let member_stats = generate_member_stats member_syms in
             (* Tag name stored in attribute *)
-            let attribute : CF.Annot.attribute = {attr_ns = None; attr_id = CF.Symbol.Identifier (Cerb_location.unknown, "tag"); attr_args = []} in
+            let attribute : CF.Annot.attribute = {attr_ns = None; attr_id = CF.Symbol.Identifier (Cerb_location.unknown, tag_name); attr_args = []} in
+            let (first_stat, remaining_stats) = 
+              match member_stats with
+                | [] -> (s, ss)
+                | ms -> 
+                  let cast_type = C.(Pointer (empty_qualifiers, mk_ctype (Struct constructor_sym))) in
+                  let constr_var_expr = mk_expr A.(AilEassign (mk_expr (AilEident constr_var_sym), mk_expr (AilEcast (empty_qualifiers, mk_ctype cast_type, mk_expr e1)))) in
+                  let constructor_var_stat = A.(AilSexpr constr_var_expr) in
+                  (constructor_var_stat, ms @ [s] @ ss) 
+            in 
+            let ail_case = A.(AilScase (Nat_big_num.zero (* placeholder *), mk_stmt first_stat)) in
             let ail_case_stmt = A.(AnnotatedStatement (Cerb_location.unknown, CF.Annot.Attrs [attribute], ail_case)) in
-            (ail_case_stmt :: (List.map mk_stmt ss)) @ generate_switch_stats rs
+            (ail_case_stmt :: (List.map mk_stmt remaining_stats)) @ generate_switch_stats rs
           | _ -> failwith "Wrong pattern")  
       in
       (match d with 
