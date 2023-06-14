@@ -3,7 +3,7 @@ open import Pervasives
 open import Utils Core Core_aux Ctype
 import Symbol Mem
 
-import Pp
+import Pp Mem_aux
 
 module Caux = Core_aux
 
