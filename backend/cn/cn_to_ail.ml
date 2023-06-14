@@ -85,12 +85,12 @@ let cn_to_ail_const = function
  
 
 type 'a dest =
-| Assert : (A.declaration list * CF.GenTypes.genTypeCategory A.statement_ list) dest
-| Return : (A.declaration list * CF.GenTypes.genTypeCategory A.statement_ list) dest 
-| AssignVar : C.union_tag -> (A.declaration list * CF.GenTypes.genTypeCategory A.statement_ list) dest
-| PassBack : (A.declaration list * CF.GenTypes.genTypeCategory A.statement_ list * CF.GenTypes.genTypeCategory A.expression_) dest
+| Assert : ((C.union_tag * A.declaration) list * CF.GenTypes.genTypeCategory A.statement_ list) dest
+| Return : ((C.union_tag * A.declaration) list * CF.GenTypes.genTypeCategory A.statement_ list) dest 
+| AssignVar : C.union_tag -> ((C.union_tag * A.declaration) list * CF.GenTypes.genTypeCategory A.statement_ list) dest
+| PassBack : ((C.union_tag * A.declaration) list * CF.GenTypes.genTypeCategory A.statement_ list * CF.GenTypes.genTypeCategory A.expression_) dest
 
-let dest : type a. a dest -> A.declaration list * CF.GenTypes.genTypeCategory A.statement_ list * CF.GenTypes.genTypeCategory A.expression_ -> a = 
+let dest : type a. a dest -> (C.union_tag * A.declaration) list * CF.GenTypes.genTypeCategory A.statement_ list * CF.GenTypes.genTypeCategory A.expression_ -> a = 
   fun d (ds, s, e) -> 
     match d with
     | Assert -> 
@@ -104,7 +104,7 @@ let dest : type a. a dest -> A.declaration list * CF.GenTypes.genTypeCategory A.
       (ds, s @ [assign_stmt])
     | PassBack -> (ds, s, e)
 
-let prefix : type a. a dest -> (A.declaration list * CF.GenTypes.genTypeCategory A.statement_ list) -> a -> a = 
+let prefix : type a. a dest -> ((C.union_tag * A.declaration) list * CF.GenTypes.genTypeCategory A.statement_ list) -> a -> a = 
   fun d (d1, s1) u -> 
     match d, u with 
     | Assert, (d2, s2) -> (d1 @ d2, s1 @ s2)
@@ -248,7 +248,7 @@ let rec cn_to_ail_expr_aux
       (* TODO: Return decls too and pass down *)
       let rec generate_switch_stats rhs = 
         (match rhs with
-          | [] -> []
+          | [] -> ([], [])
           | ((ds, (s :: ss)) :: rs) ->  
             (* TODO: Add default case for _ pattern match *)
             let tag_name = "some_tag" in
@@ -291,31 +291,38 @@ let rec cn_to_ail_expr_aux
               )
             in
             let member_stats = generate_member_stats member_syms in
-            (* Tag name stored in attribute *)
+            let decl_object = A.(Decl_object ((Automatic, false), None, empty_qualifiers, mk_ctype C.(Pointer (empty_qualifiers, mk_ctype Void)))) in
+            let member_decls = List.map (fun sym -> (Sym.fresh_pretty (Id.s sym), decl_object)) member_syms in
+
+            (* <constructor>_tag stored in attribute *)
             let attribute : CF.Annot.attribute = {attr_ns = None; attr_id = CF.Symbol.Identifier (Cerb_location.unknown, tag_name); attr_args = []} in
-            let (first_stat, remaining_stats) = 
+            let ((first_stat, remaining_stats), constructor_decl) = 
               match member_stats with
-                | [] -> (s, ss)
+                | [] -> ((s, ss), [])
                 | ms -> 
                   let cast_type = C.(Pointer (empty_qualifiers, mk_ctype (Struct constructor_sym))) in
                   let constr_var_expr = mk_expr A.(AilEassign (mk_expr (AilEident constr_var_sym), mk_expr (AilEcast (empty_qualifiers, mk_ctype cast_type, mk_expr e1)))) in
+                  let constr_var_decl_object = A.(Decl_object ((Automatic, false), None, empty_qualifiers, mk_ctype C.(Pointer (empty_qualifiers, mk_ctype (Struct constructor_sym))))) in
                   let constructor_var_stat = A.(AilSexpr constr_var_expr) in
-                  (constructor_var_stat, ms @ [s] @ ss) 
+                  ((constructor_var_stat, ms @ (s :: ss)), [(constr_var_sym, constr_var_decl_object)]) 
             in 
             let ail_case = A.(AilScase (Nat_big_num.zero (* placeholder *), mk_stmt first_stat)) in
             let ail_case_stmt = A.(AnnotatedStatement (Cerb_location.unknown, CF.Annot.Attrs [attribute], ail_case)) in
-            (ail_case_stmt :: (List.map mk_stmt remaining_stats)) @ generate_switch_stats rs
+            let (stats_, decls_) = generate_switch_stats rs in
+            ((ail_case_stmt :: (List.map mk_stmt remaining_stats)) @ stats_, (constructor_decl @ member_decls @ decls_))
           | _ -> failwith "Wrong pattern")  
       in
       (match d with 
         | Assert -> 
-          let rhs = List.map (fun e_ -> cn_to_ail_expr_aux const_prop dts e_ Assert) exprs in 
-          let switch = A.(AilSswitch (mk_expr e1_transformed, mk_stmt (AilSblock (bindings, generate_switch_stats rhs)))) in
-          (d1, s1 @ [switch])
+          failwith "TODO"
+          (* let rhs = List.map (fun e_ -> cn_to_ail_expr_aux const_prop dts e_ Assert) exprs in 
+          let switch = A.(AilSswitch (mk_expr e1_transformed, mk_stmt (AilSblock (bindings, generate_switch_stats lhs rhs)))) in
+          (d1, s1 @ [switch]) *)
         | Return -> 
           let rhs = List.map (fun e_ -> cn_to_ail_expr_aux const_prop dts e_ Return) exprs in 
-          let switch = A.(AilSswitch (mk_expr e1_transformed, mk_stmt (AilSblock (bindings, generate_switch_stats rhs)))) in
-          (d1, s1 @ [switch])
+          let (stats, decls) = generate_switch_stats rhs in
+          let switch = A.(AilSswitch (mk_expr e1_transformed, mk_stmt (AilSblock (bindings, stats)))) in
+          (d1 @ decls, s1 @ [switch])
         | AssignVar x -> failwith "TODO"
         | PassBack -> failwith "TODO")
 
