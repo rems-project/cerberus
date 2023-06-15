@@ -84,32 +84,32 @@ let cn_to_ail_const = function
  
 
 type 'a dest =
-| Assert : ((C.union_tag * A.declaration) list * CF.GenTypes.genTypeCategory A.statement_ list) dest
-| Return : ((C.union_tag * A.declaration) list * CF.GenTypes.genTypeCategory A.statement_ list) dest 
-| AssignVar : C.union_tag -> ((C.union_tag * A.declaration) list * CF.GenTypes.genTypeCategory A.statement_ list) dest
-| PassBack : ((C.union_tag * A.declaration) list * CF.GenTypes.genTypeCategory A.statement_ list * CF.GenTypes.genTypeCategory A.expression_) dest
+| Assert : (CF.GenTypes.genTypeCategory A.statement_ list) dest
+| Return : (CF.GenTypes.genTypeCategory A.statement_ list) dest 
+| AssignVar : C.union_tag -> (CF.GenTypes.genTypeCategory A.statement_ list) dest
+| PassBack : (CF.GenTypes.genTypeCategory A.statement_ list * CF.GenTypes.genTypeCategory A.expression_) dest
 
-let dest : type a. a dest -> (C.union_tag * A.declaration) list * CF.GenTypes.genTypeCategory A.statement_ list * CF.GenTypes.genTypeCategory A.expression_ -> a = 
-  fun d (ds, s, e) -> 
+let dest : type a. a dest -> CF.GenTypes.genTypeCategory A.statement_ list * CF.GenTypes.genTypeCategory A.expression_ -> a = 
+  fun d (s, e) -> 
     match d with
     | Assert -> 
       let assert_stmt = A.(AilSexpr (mk_expr (AilEassert (mk_expr e)))) in
-      (ds, s @ [assert_stmt])
+      s @ [assert_stmt]
     | Return ->
       let return_stmt = A.(AilSreturn (mk_expr e)) in
-      (ds, s @ [return_stmt])
+      s @ [return_stmt]
     | AssignVar x -> 
       let assign_stmt = A.(AilSdeclaration [(x, Some (mk_expr e))]) in
-      (ds, s @ [assign_stmt])
-    | PassBack -> (ds, s, e)
+      s @ [assign_stmt]
+    | PassBack -> (s, e)
 
-let prefix : type a. a dest -> ((C.union_tag * A.declaration) list * CF.GenTypes.genTypeCategory A.statement_ list) -> a -> a = 
+let prefix : type a. a dest -> (A.bindings * CF.GenTypes.genTypeCategory A.statement_ list) -> a -> a = 
   fun d (d1, s1) u -> 
     match d, u with 
-    | Assert, (d2, s2) -> (d1 @ d2, s1 @ s2)
-    | Return, (d2, s2) -> (d1 @ d2, s1 @ s2)
-    | AssignVar _, (d2, s2) -> (d1 @ d2, s1 @ s2)
-    | PassBack, (d2, s2, e) -> (d1 @ d2, s1 @ s2, e)
+    | Assert, s2 -> s1 @ s2
+    | Return, s2 -> s1 @ s2
+    | AssignVar _, s2 -> s1 @ s2
+    | PassBack, (s2, e) -> (s1 @ s2, e)
 
 
 let generate_constructor_sym constructor =  
@@ -130,7 +130,7 @@ let rec cn_to_ail_expr_aux
         | start_evaluation_scope -> 
           (* let Symbol (digest, nat, _) = CF.Symbol.fresh () in *)
           (* TODO: Make general *)
-          let ds, s, ail_expr = cn_to_ail_expr_aux const_prop dts e PassBack in
+          let s, ail_expr = cn_to_ail_expr_aux const_prop dts e PassBack in
           let e_cur_nm =
           match ail_expr with
             | A.(AilEident sym) -> CF.Pp_symbol.to_string_pretty sym (* Should only be AilEident sym - function arguments only *)
@@ -138,13 +138,13 @@ let rec cn_to_ail_expr_aux
           in
           let e_old_nm = e_cur_nm ^ "_old" in
           let sym_old = CF.Symbol.Symbol ("", 0, SD_CN_Id e_old_nm) in
-          dest d (ds, s, A.(AilEident sym_old))
+          dest d (s, A.(AilEident sym_old))
           ))
   in
   match expr_ with
     | CNExpr_const cn_cst -> 
       let ail_expr_ = cn_to_ail_const cn_cst in
-      dest d ([], [], ail_expr_)
+      dest d ([], ail_expr_)
     | CNExpr_value_of_c_atom (sym, _)
     | CNExpr_var sym -> 
       let ail_expr_ = 
@@ -157,14 +157,14 @@ let rec cn_to_ail_expr_aux
         | None -> A.(AilEident sym)  (* TODO: Check. Need to do more work if this is only a CN var *)
       )
       in
-      dest d ([], [], ail_expr_)
+      dest d ([], ail_expr_)
     (* 
     | CNExpr_list es_ -> !^ "[...]" (* Currently unused *)
     *)
     | CNExpr_memberof (e, xs) -> 
-      let ds, s, e_ = cn_to_ail_expr_aux const_prop dts e PassBack in
+      let s, e_ = cn_to_ail_expr_aux const_prop dts e PassBack in
       let ail_expr_ = A.(AilEmemberof (mk_expr e_, xs)) in
-      dest d (ds, s, ail_expr_)
+      dest d (s, ail_expr_)
     (* 
     | CNExpr_record es -> failwith "TODO"
     | CNExpr_memberupdates (e, _updates) -> !^ "{_ with ...}"
@@ -173,42 +173,42 @@ let rec cn_to_ail_expr_aux
 
     (* TODO: binary operations on structs (esp. equality) *)
     | CNExpr_binop (bop, x, y) -> 
-      let ds1, s1, e1 = cn_to_ail_expr_aux const_prop dts x PassBack in
-      let ds2, s2, e2 = cn_to_ail_expr_aux const_prop dts y PassBack in
+      let s1, e1 = cn_to_ail_expr_aux const_prop dts x PassBack in
+      let s2, e2 = cn_to_ail_expr_aux const_prop dts y PassBack in
       let ail_expr_ = A.AilEbinary (mk_expr e1, cn_to_ail_binop bop, mk_expr e2) in 
-      dest d (ds1 @ ds2, s1 @ s2, ail_expr_)  
+      dest d (s1 @ s2, ail_expr_)  
     
     | CNExpr_sizeof ct -> 
       let ail_expr_ = A.AilEsizeof (empty_qualifiers, ct) in
-      dest d ([], [], ail_expr_)
+      dest d ([], ail_expr_)
     
     | CNExpr_offsetof (tag, member) -> 
       let ail_expr_ = A.(AilEoffsetof (C.(Ctype ([], Struct tag)), member)) in
-      dest d ([], [], ail_expr_)
+      dest d ([], ail_expr_)
 
     (* TODO: Test *)
     | CNExpr_membershift (e, _, member) ->
-      let ds, s, e_ = cn_to_ail_expr_aux const_prop dts e PassBack in
+      let s, e_ = cn_to_ail_expr_aux const_prop dts e PassBack in
       let ail_expr_ = A.(AilEunary (Address, mk_expr (AilEmemberofptr (mk_expr e_, member)))) in 
-      dest d (ds, s, ail_expr_)
+      dest d (s, ail_expr_)
 
     | CNExpr_cast (bt, expr) -> 
-      let ds, s, e = cn_to_ail_expr_aux const_prop dts expr PassBack in
+      let s, e = cn_to_ail_expr_aux const_prop dts expr PassBack in
       let ail_expr_ = A.(AilEcast (empty_qualifiers, C.Ctype ([], cn_to_ail_base_type bt) , (mk_expr e))) in 
-      dest d (ds, s, ail_expr_)
+      dest d (s, ail_expr_)
     
     | CNExpr_call (sym, exprs) -> 
-      let list_of_triples = List.map (fun e -> cn_to_ail_expr_aux const_prop dts e PassBack) exprs in
-      let (ds, ss, es) = split_list_of_triples list_of_triples in 
+      let stats_and_exprs = List.map (fun e -> cn_to_ail_expr_aux const_prop dts e PassBack) exprs in
+      let (ss, es) = List.split stats_and_exprs in 
       let f = (mk_expr A.(AilEident sym)) in
       let ail_expr_ = A.AilEcall (f, List.map mk_expr es) in 
-      dest d (List.concat ds, List.concat ss, ail_expr_)
+      dest d (List.concat ss, ail_expr_)
     
     
     | CNExpr_cons (c_nm, exprs) -> 
       let tag_sym = generate_constructor_sym c_nm in
       (* Treating enum value as variable name *)
-      dest d ([], [], AilEident tag_sym)   
+      dest d ([], AilEident tag_sym)   
 
     (* Should only be integer range *)
     (* TODO: Need to implement CNExpr_match (e, es) - which can be passed via e *)
@@ -222,18 +222,18 @@ let rec cn_to_ail_expr_aux
       in 
       let consts = create_list_from_range (Z.to_int r_start) (Z.to_int r_end) in
       let cn_consts = List.map (fun i -> CNConst_integer (Z.of_int i)) consts in
-      let list_of_triples = List.map (fun cn_const -> cn_to_ail_expr_aux (Some (sym, cn_const)) dts e PassBack) cn_consts in
-      let (ds, ss, es_) = split_list_of_triples list_of_triples in 
+      let stats_and_exprs = List.map (fun cn_const -> cn_to_ail_expr_aux (Some (sym, cn_const)) dts e PassBack) cn_consts in
+      let (ss, es_) = List.split stats_and_exprs in 
       let ail_expr =
         match es_ with
           | (ail_expr1 :: ail_exprs_rest) ->  List.fold_left (fun ae1 ae2 -> A.(AilEbinary (mk_expr ae1, And, mk_expr ae2))) ail_expr1 ail_exprs_rest
           | [] -> failwith "Cannot have empty expression in CN each expression"
       in 
-      dest d (List.concat ds, List.concat ss, ail_expr)
+      dest d (List.concat ss, ail_expr)
   
     (* TODO: Add proper error messages for cases handled differently (exprs which are statements in C) *)
     | CNExpr_match (e, es) -> 
-      let (d1, s1, e1) = cn_to_ail_expr_aux const_prop dts e PassBack in
+      let (s1, e1) = cn_to_ail_expr_aux const_prop dts e PassBack in
       let e1_cast_ctype_ = C.(Pointer (empty_qualifiers, mk_ctype (Struct generic_cn_dt_sym))) in
       let e1_transformed = 
         A.(AilEmemberofptr 
@@ -248,7 +248,7 @@ let rec cn_to_ail_expr_aux
       let rec generate_switch_stats rhs = 
         (match rhs with
           | [] -> ([], [])
-          | ((ds, (s :: ss)) :: rs) ->  
+          | (((s :: ss)) :: rs) ->  
             (* TODO: Add default case for _ pattern match *)
             let tag_name = "some_tag" in
             (* Generating extra statements for extracting member information for a given datatype constructor *)
@@ -276,39 +276,52 @@ let rec cn_to_ail_expr_aux
               )
             in
             let members = get_members constructor_sym dts in
-            let (_, member_syms) = List.split members in
+            let (_, member_ids) = List.split members in
             let constr_var_sym = Sym.fresh_pretty "_constructor" in
+
+            let member_syms = List.map (fun id -> CF.Symbol.fresh_pretty (Id.s id)) member_ids in
             
-            let rec generate_member_stats member_syms = 
-              (match member_syms with 
-                | [] -> []
-                | sym :: syms -> 
+            (* TODO: cleanup *)
+            let rec generate_member_stats member_syms member_ids = 
+              (match member_syms, member_ids with 
+                | ([], []) -> []
+                | (sym :: syms, id :: ids) -> 
                   let rhs = A.(AilEmemberofptr 
-                  (mk_expr (AilEident constr_var_sym), sym)) in
-                  let ail_expr = A.(AilEassign (mk_expr (AilEident (CF.Symbol.fresh_pretty (Id.s sym))), mk_expr rhs)) in
-                  A.(AilSexpr (mk_expr ail_expr)) :: (generate_member_stats syms)
+                  (mk_expr (AilEident constr_var_sym), id)) in
+                  let ail_expr = A.(AilEassign (mk_expr (AilEident sym), mk_expr rhs)) in
+                  (mk_stmt A.(AilSexpr (mk_expr ail_expr))) :: (generate_member_stats syms ids)
+                | _ -> failwith "Not possible - same number of syms and ids"
               )
             in
-            let member_stats = generate_member_stats member_syms in
-            let decl_object = A.(Decl_object ((Automatic, false), None, empty_qualifiers, mk_ctype C.(Pointer (empty_qualifiers, mk_ctype Void)))) in
-            let member_decls = List.map (fun sym -> (Sym.fresh_pretty (Id.s sym), decl_object)) member_syms in
+            let member_stats = generate_member_stats member_syms member_ids in
 
+            let create_binding sym ctype = 
+              A.(sym, ((Cerb_location.unknown, Automatic, false), None, empty_qualifiers, ctype))
+            in
             (* <constructor>_tag stored in attribute *)
             let attribute : CF.Annot.attribute = {attr_ns = None; attr_id = CF.Symbol.Identifier (Cerb_location.unknown, tag_name); attr_args = []} in
-            let ((first_stat, remaining_stats), constructor_decl) = 
+            let (stat_block, constructor_decl) = 
               match member_stats with
-                | [] -> ((s, ss), [])
-                | ms -> 
-                  let cast_type = C.(Pointer (empty_qualifiers, mk_ctype (Struct constructor_sym))) in
-                  let constr_var_expr = mk_expr A.(AilEassign (mk_expr (AilEident constr_var_sym), mk_expr (AilEcast (empty_qualifiers, mk_ctype cast_type, mk_expr e1)))) in
-                  let constr_var_decl_object = A.(Decl_object ((Automatic, false), None, empty_qualifiers, mk_ctype C.(Pointer (empty_qualifiers, mk_ctype (Struct constructor_sym))))) in
-                  let constructor_var_stat = A.(AilSexpr constr_var_expr) in
-                  ((constructor_var_stat, ms @ (s :: ss)), [(constr_var_sym, constr_var_decl_object)]) 
+              | [] -> (A.AilSblock ([], List.map mk_stmt (s :: ss)), [])
+              | ms -> 
+                let cast_type = C.(Pointer (empty_qualifiers, mk_ctype (Struct constructor_sym))) in
+                  let constr_struct_type = mk_ctype C.(Pointer (empty_qualifiers, mk_ctype (Struct constructor_sym))) in
+                  let constr_binding = create_binding constr_var_sym constr_struct_type in
+                  let void_ptr_ctype = mk_ctype C.(Pointer (empty_qualifiers, mk_ctype Void)) in
+                  let member_bindings = List.map (fun m -> create_binding m void_ptr_ctype) member_syms in
+                  let constructor_var_assign = mk_stmt A.(AilSdeclaration [(constr_var_sym, Some (mk_expr (AilEcast (empty_qualifiers, mk_ctype cast_type, mk_expr e1))))]) in
+                  (* let constructor_var_stat = A.(AilSexpr constr_var_expr) in *)
+                  (A.(AilSblock (constr_binding :: member_bindings, constructor_var_assign :: ms @ (List.map mk_stmt (s :: ss)))),
+                  [] 
+                  (* [(constr_var_sym, constr_var_decl_object)] *)
+                  ) 
             in 
-            let ail_case = A.(AilScase (Nat_big_num.zero (* placeholder *), mk_stmt first_stat)) in
+            let ail_case = A.(AilScase (Nat_big_num.zero (* placeholder *), mk_stmt stat_block)) in
             let ail_case_stmt = A.(AnnotatedStatement (Cerb_location.unknown, CF.Annot.Attrs [attribute], ail_case)) in
             let (stats_, decls_) = generate_switch_stats rs in
-            ((ail_case_stmt :: (List.map mk_stmt remaining_stats)) @ stats_, (constructor_decl @ member_decls @ decls_))
+            (ail_case_stmt :: stats_, []
+             (* d2 @ d3 @ (constructor_decl @ member_decls @ decls_) *)
+             )
           | _ -> failwith "Wrong pattern")  
       in
       (match d with 
@@ -321,18 +334,18 @@ let rec cn_to_ail_expr_aux
           let rhs = List.map (fun e_ -> cn_to_ail_expr_aux const_prop dts e_ Return) exprs in 
           let (stats, decls) = generate_switch_stats rhs in
           let switch = A.(AilSswitch (mk_expr e1_transformed, mk_stmt (AilSblock (bindings, stats)))) in
-          (d1 @ decls, s1 @ [switch])
+          s1 @ [switch]
         | AssignVar x -> failwith "TODO"
         | PassBack -> failwith "TODO")
 
   
     (* TODO: Might want to consider destination-passing style for if-then-else too (if ternary expressions turn out to look too complicated) *)
     | CNExpr_ite (e1, e2, e3) -> 
-        let d1, s1, e1_ = cn_to_ail_expr_aux const_prop dts e1 PassBack in
-        let d2, s2, e2_ = cn_to_ail_expr_aux const_prop dts e2 PassBack in
-        let d3, s3, e3_ = cn_to_ail_expr_aux const_prop dts e3 PassBack in
+        let s1, e1_ = cn_to_ail_expr_aux const_prop dts e1 PassBack in
+        let s2, e2_ = cn_to_ail_expr_aux const_prop dts e2 PassBack in
+        let s3, e3_ = cn_to_ail_expr_aux const_prop dts e3 PassBack in
         let ail_expr_ = A.AilEcond (mk_expr e1_, Some (mk_expr e2_), mk_expr e3_) in
-        dest d (d1 @ d2 @ d3, s1 @ s2 @ s3, ail_expr_)
+        dest d (s1 @ s2 @ s3, ail_expr_)
     
     (* 
     | CNExpr_good (ty, e) -> !^ "(good (_, _))" 
@@ -346,21 +359,21 @@ let rec cn_to_ail_expr_aux
       (* prefix d (d1, s1) (cn_to_ail_expr_aux const_prop body d) *)
 
     | CNExpr_deref expr -> 
-      let ds, s, e = cn_to_ail_expr_aux const_prop dts expr PassBack in 
+      let s, e = cn_to_ail_expr_aux const_prop dts expr PassBack in 
       let ail_expr_ = A.(AilEunary (Indirection, mk_expr e)) in 
-      dest d (ds, s, ail_expr_)
+      dest d (s, ail_expr_)
 
     | CNExpr_unchanged e -> 
       let e_at_start = CNExpr(loc, CNExpr_at_env (e, start_evaluation_scope)) in
-      let ds, s, e_ = cn_to_ail_expr_aux const_prop dts (CNExpr (loc, CNExpr_binop (CN_equal, e, e_at_start))) PassBack in 
-      dest d (ds, s, e_)
+      let s, e_ = cn_to_ail_expr_aux const_prop dts (CNExpr (loc, CNExpr_binop (CN_equal, e, e_at_start))) PassBack in 
+      dest d (s, e_)
   
     | CNExpr_at_env (e, es) -> cn_to_ail_expr_aux_at_env e es d 
 
     | CNExpr_not e -> 
-      let ds, s, e_ = cn_to_ail_expr_aux const_prop dts e PassBack in
+      let s, e_ = cn_to_ail_expr_aux const_prop dts e PassBack in
       let ail_expr_ = A.(AilEunary (Bnot, mk_expr e_)) in 
-      dest d (ds, s, ail_expr_)
+      dest d (s, ail_expr_)
 
     | _ -> failwith "TODO"
 
@@ -429,10 +442,11 @@ let cn_to_ail_function cn_function cn_datatypes =
   let ail_func_body =
   match cn_function.cn_func_body with
     | Some e ->
-      let ds, ss = cn_to_ail_expr cn_datatypes e Return in
+      let ss = cn_to_ail_expr cn_datatypes e Return in
       List.map mk_stmt ss
     | None -> []
   in
+  (* let var_decls = List.map (fun (sym, decl) -> (sym, (Location_ocaml.unknown, empty_attributes, decl))) var_decls in *)
   let ret_type = cn_to_ail_base_type cn_function.cn_func_return_bty in
   let params = List.map (fun (cn_bt, cn_nm) -> (mk_ctype (cn_to_ail_base_type cn_bt), cn_nm)) cn_function.cn_func_args in
   let (param_types, param_names) = List.split params in
@@ -448,7 +462,7 @@ let cn_to_ail_assertion assertion cn_datatypes =
   match assertion with
   | CN_assert_exp e_ -> 
       (* TODO: Change type signature to keep declarations too *)
-      let _ds, ss = cn_to_ail_expr cn_datatypes e_ Assert in 
+      let ss = cn_to_ail_expr cn_datatypes e_ Assert in 
       List.map mk_stmt ss
   | CN_assert_qexp (ident, bTy, e1, e2) -> failwith "TODO"
 
@@ -458,7 +472,7 @@ let cn_to_ail_condition cn_condition type_map cn_datatypes =
   | CN_cletResource (loc, name, resource) -> ([A.AilSskip], None) (* TODO *)
   | CN_cletExpr (_, name, expr) -> 
     (* TODO: return declarations too *)
-    let ds_, ss = cn_to_ail_expr cn_datatypes expr (AssignVar name) in
+    let ss = cn_to_ail_expr cn_datatypes expr (AssignVar name) in
     let sfb_type = SymTable.find type_map name in
     let basetype = SurfaceBaseTypes.to_basetype sfb_type in
     let cn_basetype = bt_to_cn_base_type basetype in
