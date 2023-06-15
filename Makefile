@@ -252,6 +252,7 @@ clean-sibylfs-src:
 clean:
 	$(Q)rm -f webcerb.concrete webcerb.symbolic cerberus-webserver
 	$(Q)rm -f $(LIBC_TARGETS)
+	$(Q)rm -rf $(PRELUDE_SRC_DIR)
 	$(Q)dune clean
 
 .PHONY: distclean
