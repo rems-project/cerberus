@@ -798,19 +798,19 @@ let pp_program_aux ?(executable_spec=false) pp_annot (startup, sigm) =
           (* TODO: colour hack *)
           pp_ansi_format [Red] (
             fun () ->
-              !^ "// declare" ^^^ pp_id sym ^^^ !^ "as" ^^^ (pp_ctype_human qs ty) ^^
+              !^ "// declare" ^^^ pp_id ~executable_spec sym ^^^ !^ "as" ^^^ (pp_ctype_human qs ty) ^^
               P.optional (fun align -> P.space ^^ P.brackets (pp_alignment align)) align_opt
           ) ^^
           P.hardline ^^
           
           (if !Cerb_debug.debug_level > 5 then
             (* printing the types in a human readable format *)
-            pp_id_obj sym ^^ P.colon ^^^ P.parens (pp_ctype_human qs ty)
+            pp_id_obj ~executable_spec sym ^^ P.colon ^^^ P.parens (pp_ctype_human qs ty)
           else
-            pp_ctype_declaration (pp_id_obj sym) qs ty) ^^
+            pp_ctype_declaration ~executable_spec (pp_id_obj ~executable_spec sym) qs ty) ^^
           
           P.optional (fun e ->
-            P.space ^^ P.equals ^^^ pp_expression_aux pp_annot e
+            P.space ^^ P.equals ^^^ pp_expression_aux ~executable_spec pp_annot e
           ) (List.assoc_opt sym sigm.object_definitions) ^^ P.semi
       
       | Decl_function (has_proto, (ret_qs, ret_ty), params, is_variadic, is_inline, is_Noreturn) ->
