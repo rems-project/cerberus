@@ -700,7 +700,9 @@ let rec pp_statement_aux ?(executable_spec=false) pp_annot (AnnotatedStatement (
     (* TODO: looks odd *)
     | AilSdeclaration defs ->
         comma_list (fun (id, e) -> pp_id_obj ~executable_spec id ^^^ P.equals ^^^ pp_expression_aux ~executable_spec pp_annot e) defs ^^
-        P.semi ^^^ pp_comment "// decl"
+        P.semi ^^^ 
+        if executable_spec then P.empty else
+        pp_comment "// decl"
     | AilSpar ss ->
         P.lbrace ^^ P.lbrace ^^ P.lbrace ^^ P.nest 2 (
           P.break 1 ^^ P.separate_map (P.break 1 ^^ !^ "|||" ^^ P.break 1) executable_spec_pp_statement ss
@@ -780,19 +782,19 @@ let pp_program_aux ?(executable_spec=false) pp_annot (startup, sigm) =
           (* TODO: colour hack *)
           pp_ansi_format [Red] (
             fun () ->
-              !^ "// declare" ^^^ pp_id sym ^^^ !^ "as" ^^^ (pp_ctype_human qs ty) ^^
+              !^ "// declare" ^^^ pp_id ~executable_spec sym ^^^ !^ "as" ^^^ (pp_ctype_human qs ty) ^^
               P.optional (fun align -> P.space ^^ P.brackets (pp_alignment align)) align_opt
           ) ^^
           P.hardline ^^
           
           (if !Debug_ocaml.debug_level > 5 then
             (* printing the types in a human readable format *)
-            pp_id_obj sym ^^ P.colon ^^^ P.parens (pp_ctype_human qs ty)
+            pp_id_obj ~executable_spec sym ^^ P.colon ^^^ P.parens (pp_ctype_human qs ty)
           else
-            pp_ctype_declaration (pp_id_obj sym) qs ty) ^^
+            pp_ctype_declaration ~executable_spec (pp_id_obj ~executable_spec sym) qs ty) ^^
           
           P.optional (fun e ->
-            P.space ^^ P.equals ^^^ pp_expression_aux pp_annot e
+            P.space ^^ P.equals ^^^ pp_expression_aux ~executable_spec pp_annot e
           ) (List.assoc_opt sym sigm.object_definitions) ^^ P.semi
       
       | Decl_function (has_proto, (ret_qs, ret_ty), params, is_variadic, is_inline, is_Noreturn) ->
