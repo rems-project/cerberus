@@ -248,7 +248,7 @@ let rec cn_to_ail_expr_aux
       (* TODO: Return decls too and pass down *)
       let rec generate_switch_stats rhs = 
         (match rhs with
-          | [] -> ([], [])
+          | [] -> []
           | (((s :: ss)) :: rs) ->  
             (* TODO: Add default case for _ pattern match *)
             let tag_name = "some_tag" in
@@ -281,59 +281,55 @@ let rec cn_to_ail_expr_aux
             let constr_var_sym = Sym.fresh_pretty "_constructor" in
 
             let member_syms = List.map (fun id -> CF.Symbol.fresh_pretty (Id.s id)) member_ids in
-            
-            (* TODO: cleanup *)
-            let rec generate_member_stats member_syms member_ids = 
-              (match member_syms, member_ids with 
-                | ([], []) -> []
-                | (sym :: syms, id :: ids) -> 
+
+            let create_id_from_sym sym = 
+              Id.id (Sym.pp_string sym)
+            in
+
+            let rec generate_member_stats member_syms = 
+              (match member_syms with 
+                | [] -> []
+                | sym :: syms -> 
                   let rhs = A.(AilEmemberofptr 
-                  (mk_expr (AilEident constr_var_sym), id)) in
+                  (mk_expr (AilEident constr_var_sym), create_id_from_sym sym)) in
                   let ail_expr = A.(AilEassign (mk_expr (AilEident sym), mk_expr rhs)) in
-                  (mk_stmt A.(AilSexpr (mk_expr ail_expr))) :: (generate_member_stats syms ids)
-                | _ -> failwith "Not possible - same number of syms and ids"
+                  (mk_stmt A.(AilSexpr (mk_expr ail_expr))) :: (generate_member_stats syms)
               )
             in
-            let member_stats = generate_member_stats member_syms member_ids in
+
+            let member_stats = generate_member_stats member_syms in
 
             let create_binding sym ctype = 
               A.(sym, ((Cerb_location.unknown, Automatic, false), None, empty_qualifiers, ctype))
             in
             (* <constructor>_tag stored in attribute *)
             let attribute : CF.Annot.attribute = {attr_ns = None; attr_id = CF.Symbol.Identifier (Cerb_location.unknown, tag_name); attr_args = []} in
-            let (stat_block, constructor_decl) = 
-              match member_stats with
-              | [] -> (A.AilSblock ([], List.map mk_stmt (s :: ss)), [])
+            let stat_block = 
+              (match member_stats with
+              | [] -> A.AilSblock ([], List.map mk_stmt (s :: ss))
               | ms -> 
                 let cast_type = C.(Pointer (empty_qualifiers, mk_ctype (Struct constructor_sym))) in
-                  let constr_struct_type = mk_ctype C.(Pointer (empty_qualifiers, mk_ctype (Struct constructor_sym))) in
-                  let constr_binding = create_binding constr_var_sym constr_struct_type in
-                  let void_ptr_ctype = mk_ctype C.(Pointer (empty_qualifiers, mk_ctype Void)) in
-                  let member_bindings = List.map (fun m -> create_binding m void_ptr_ctype) member_syms in
-                  let constructor_var_assign = mk_stmt A.(AilSdeclaration [(constr_var_sym, Some (mk_expr (AilEcast (empty_qualifiers, mk_ctype cast_type, mk_expr e1))))]) in
-                  (* let constructor_var_stat = A.(AilSexpr constr_var_expr) in *)
-                  (A.(AilSblock (constr_binding :: member_bindings, constructor_var_assign :: ms @ (List.map mk_stmt (s :: ss)))),
-                  [] 
-                  (* [(constr_var_sym, constr_var_decl_object)] *)
-                  ) 
+                let constr_struct_type = mk_ctype C.(Pointer (empty_qualifiers, mk_ctype (Struct constructor_sym))) in
+                let constr_binding = create_binding constr_var_sym constr_struct_type in
+                let void_ptr_ctype = mk_ctype C.(Pointer (empty_qualifiers, mk_ctype Void)) in
+                let member_bindings = List.map (fun m -> create_binding m void_ptr_ctype) member_syms in
+                let constructor_var_assign = mk_stmt A.(AilSdeclaration [(constr_var_sym, Some (mk_expr (AilEcast (empty_qualifiers, mk_ctype cast_type, mk_expr e1))))]) in
+                A.(AilSblock (constr_binding :: member_bindings, constructor_var_assign :: ms @ (List.map mk_stmt (s :: ss)))))
             in 
             let ail_case = A.(AilScase (Nat_big_num.zero (* placeholder *), mk_stmt stat_block)) in
             let ail_case_stmt = A.(AnnotatedStatement (Cerb_location.unknown, CF.Annot.Attrs [attribute], ail_case)) in
-            let (stats_, decls_) = generate_switch_stats rs in
-            (ail_case_stmt :: stats_, []
-             (* d2 @ d3 @ (constructor_decl @ member_decls @ decls_) *)
-             )
+            ail_case_stmt :: (generate_switch_stats rs)
           | _ -> failwith "Wrong pattern")  
       in
       (match d with 
         | Assert -> 
-          failwith "TODO"
-          (* let rhs = List.map (fun e_ -> cn_to_ail_expr_aux const_prop dts e_ Assert) exprs in 
-          let switch = A.(AilSswitch (mk_expr e1_transformed, mk_stmt (AilSblock (bindings, generate_switch_stats lhs rhs)))) in
-          (d1, s1 @ [switch]) *)
+          let rhs = List.map (fun e_ -> cn_to_ail_expr_aux const_prop dts e_ Assert) exprs in 
+          let stats = generate_switch_stats rhs in
+          let switch = A.(AilSswitch (mk_expr e1_transformed, mk_stmt (AilSblock (bindings, stats)))) in
+          s1 @ [switch]
         | Return -> 
           let rhs = List.map (fun e_ -> cn_to_ail_expr_aux const_prop dts e_ Return) exprs in 
-          let (stats, decls) = generate_switch_stats rhs in
+          let stats = generate_switch_stats rhs in
           let switch = A.(AilSswitch (mk_expr e1_transformed, mk_stmt (AilSblock (bindings, stats)))) in
           s1 @ [switch]
         | AssignVar x -> failwith "TODO"
