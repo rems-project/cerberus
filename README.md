@@ -34,6 +34,20 @@ $ dune exec cerberus -- ARG1 .. ARGN
 
 or, after doing `$ make install`, using the `cerberus` executable.
 
+---
+To fully remove all object and Lem generated files:
+
+```
+$ make distclean
+```
+
+To remove the object files, but keep the Lem generated files (allowing for faster build when only working on `.ml` files):
+
+```
+$ make clean
+```
+
+
 Basic usage
 ---
 
