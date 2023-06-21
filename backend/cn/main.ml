@@ -137,7 +137,7 @@ let generate_c_statements cn_statements cn_datatypes =
       | CN_assert_stmt e -> 
         let ail_stats = Cn_to_ail.cn_to_ail_assertion e cn_datatypes in
         let doc = List.map (fun s -> CF.Pp_ail.pp_statement ~executable_spec:true s) ail_stats in
-        CF.Pp_utils.to_plain_string (List.fold_left (^^) empty doc)
+        CF.Pp_utils.to_plain_pretty_string (List.fold_left (^^) empty doc)
       | _ -> ""
     in 
   (loc, pp_statement)
@@ -157,7 +157,7 @@ let generate_c_pres_and_posts (instrumentation : Core_to_mucore.instrumentation)
   in
   let gen_old_var_fn = (fun sym -> (CF.Pp_symbol.to_string_pretty sym) ^ "_old") in
   let empty_qualifiers : CF.Ctype.qualifiers = {const = false; restrict = false; volatile = false} in
-  let pp_ctype ctype = CF.Pp_utils.to_plain_string (CF.Pp_ail.pp_ctype empty_qualifiers ctype) in
+  let pp_ctype ctype = CF.Pp_utils.to_plain_pretty_string (CF.Pp_ail.pp_ctype empty_qualifiers ctype) in
   let arg_str_fn (ctype, sym) =
     pp_ctype ctype ^
     " " ^
@@ -229,7 +229,7 @@ let generate_c_datatypes cn_datatypes =
   in
   let docs = List.map generate_str_from_ail_dt ail_datatypes in
   let (consts, structs) = List.split docs in
-  CF.Pp_utils.to_plain_string (concat_map_newline consts ^^ concat_map_newline structs)
+  CF.Pp_utils.to_plain_pretty_string (concat_map_newline consts ^^ concat_map_newline structs)
 
 let generate_c_functions (ail_prog : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma) =
   let cn_functions = ail_prog.cn_functions in 
@@ -238,7 +238,7 @@ let generate_c_functions (ail_prog : CF.GenTypes.genTypeCategory CF.AilSyntax.si
   let modified_prog : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma = {ail_prog with declarations = decls; function_definitions = defs} in
   let doc = CF.Pp_ail.pp_program ~executable_spec:true ~show_include:true (None, modified_prog) in
   (* let docs = List.map (fun s -> CF.Pp_ail.pp_statement ~executable_spec:true s) ail_stats in  *)
-  CF.Pp_utils.to_plain_string doc
+  CF.Pp_utils.to_plain_pretty_string doc
   (* (concat_map_newline docs) *)
 
 let main
