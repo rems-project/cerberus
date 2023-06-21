@@ -156,7 +156,7 @@ let macro_string_of_integerBaseType = function
  | Intptr_t       -> "INTPTR"
 
 
-let pp_integerType = function
+let pp_integerType ?(executable_spec=false) = function
  | Char ->
      pp_type_keyword "char"
  | Bool ->
@@ -180,7 +180,7 @@ let pp_integerType = function
  | Unsigned ibty ->
      pp_type_keyword "unsigned" ^^^ !^ (string_of_integerBaseType ibty)
  | Enum sym ->
-     pp_type_keyword "enum" ^^^ pp_id sym
+     pp_type_keyword "enum" ^^^ pp_id ~executable_spec sym
 
 let macro_string_of_integerType = function
  | Char ->
@@ -221,9 +221,9 @@ let pp_floatingType = function
       pp_realFloatingType ft
 
 
-let pp_basicType = function
+let pp_basicType ?(executable_spec=false) = function
   | Integer it ->
-      pp_integerType it
+      pp_integerType ~executable_spec it
   | Floating rft ->
       pp_floatingType rft
 
@@ -251,7 +251,7 @@ let pp_ctype_aux ?(executable_spec=false) ~is_human pp_ident_opt qs (Ctype (_, t
       | Void ->
           fun k -> pp_qualifiers qs ^^ pp_type_keyword "void" ^^ k
       | Basic bty ->
-          fun k -> pp_qualifiers qs ^^ pp_basicType bty ^^ k
+          fun k -> pp_qualifiers qs ^^ pp_basicType ~executable_spec bty ^^ k
       | Array (elem_ty, n_opt) ->
           fun k -> aux ~executable_spec p' qs elem_ty (k ^^ (P.brackets (P.optional pp_integer n_opt)))
       | Function ((ret_qs, ret_ty), params, isVariadic) ->
@@ -740,7 +740,7 @@ let pp_alignment = function
   | AlignType ty ->
       pp_keyword "_Alignas" ^^ P.parens (pp_ctype no_qualifiers ty)
 
-let pp_tag_definition ?(executable_spec=false) (tag, (_, _, def)) =
+let pp_tag_definition ?(executable_spec=false) (tag, (_, Annot.Attrs attrs, def)) =
   let id_doc = if executable_spec then pp_id ~executable_spec tag else pp_id_type tag in 
   match def with
     | StructDef (ident_qs_tys, flexible_opt) ->
@@ -757,6 +757,24 @@ let pp_tag_definition ?(executable_spec=false) (tag, (_, _, def)) =
           ) flexible_opt
           ) ^^ P.semi
     | UnionDef ident_qs_tys ->
+      let s (Symbol.Identifier (_,s)) = s in
+      let is_enum = match attrs with 
+        | [] -> false
+        | attr :: _ -> 
+          let str = s attr.attr_id in 
+          String.equal str "enum"
+      in
+      if is_enum then
+        pp_keyword "enum" ^^^ id_doc ^^^ P.braces (
+          P.nest 2 (
+            P.break 1 ^^
+            P.separate_map (P.comma ^^ P.break 1) (fun (ident, (_, align_opt, qs, ty)) ->
+              Pp_symbol.pp_identifier ident ^^
+              P.optional (fun align -> P.space ^^ P.brackets (pp_alignment align)) align_opt
+            ) ident_qs_tys
+          ) ^^ P.break 1
+        ) ^^ P.semi
+      else
         pp_keyword "union" ^^^ id_doc ^^^ P.braces (
           P.nest 2 (
             P.break 1 ^^
