@@ -41,7 +41,7 @@ let rec cn_to_ail_base_type =
   | CN_loc -> C.(Pointer (empty_qualifiers, Ctype ([], Void))) (* Casting all CN pointers to void star *)
   | CN_struct sym -> C.(Struct sym)
   (* | CN_record of list (cn_base_type 'a * Symbol.identifier) *)
-  | CN_datatype _ -> C.(Pointer (empty_qualifiers, mk_ctype Void))
+  | CN_datatype sym -> C.(Pointer (empty_qualifiers, Ctype ([], Struct sym)))
   (* | CN_map of cn_base_type 'a * cn_base_type 'a *)
   | CN_list bt -> generate_ail_array bt (* TODO: What is the optional second pair element for? Have just put None for now *)
   (* | CN_tuple of list (cn_base_type 'a) *)
@@ -112,11 +112,12 @@ let prefix : type a. a dest -> (A.bindings * CF.GenTypes.genTypeCategory A.state
     | PassBack, (s2, e) -> (s1 @ s2, e)
 
 
-let generate_constructor_sym constructor =  
+let generate_sym_with_suffix ?(suffix="tag") ?(uppercase=false) constructor =  
   let doc = 
-  CF.Pp_ail.pp_id ~executable_spec:true constructor ^^ (!^ "_tag") in 
+  CF.Pp_ail.pp_id ~executable_spec:true constructor ^^ (!^ "_" ^^ !^ suffix) in 
   let str = 
   CF.Pp_utils.to_plain_string doc in 
+  let str = if uppercase then String.uppercase_ascii str else str in
   Sym.fresh_pretty str
 
 (* frontend/model/ail/ailSyntax.lem *)
@@ -206,7 +207,7 @@ let rec cn_to_ail_expr_aux
     
     
     | CNExpr_cons (c_nm, exprs) -> 
-      let tag_sym = generate_constructor_sym c_nm in
+      let tag_sym = generate_sym_with_suffix c_nm in
       (* Treating enum value as variable name *)
       dest d ([], AilEident tag_sym)   
 
@@ -382,33 +383,48 @@ let cn_to_ail_expr
 type 'a ail_datatype = {
   structs: (C.union_tag * (Cerb_location.t * CF.Annot.attributes * C.tag_definition)) list;
   decls: (C.union_tag * A.declaration) list;
-  stats: 'a A.statement list;
+  stats: ('a A.statement) list;
 }
 
 
 
 let cn_to_ail_datatype ?(first=false) (cn_datatype : cn_datatype) =
+  let enum_sym = generate_sym_with_suffix cn_datatype.cn_dt_name in
+  let constructor_syms = List.map fst cn_datatype.cn_dt_cases in
+  let generate_enum_member sym = 
+    let doc = CF.Pp_ail.pp_id ~executable_spec:true sym in 
+    let str = CF.Pp_utils.to_plain_string doc in 
+    let str = String.uppercase_ascii str in
+    Id.id str
+  in
+  let enum_member_syms = List.map generate_enum_member constructor_syms in
+  let attr : CF.Annot.attribute = {attr_ns = None; attr_id = Id.id "enum"; attr_args = []} in
+  let attrs = CF.Annot.Attrs [attr] in
+  let enum_members = List.map (fun sym -> (sym, (empty_attributes, None, empty_qualifiers, mk_ctype C.Void))) enum_member_syms in
+  let enum_tag_definition = C.(UnionDef enum_members) in
+  let enum = (enum_sym, (Cerb_location.unknown, attrs, enum_tag_definition)) in
   let cntype_sym = Sym.fresh_pretty "cntype" in
-  let create_member ?(ctype_=C.(Pointer (empty_qualifiers, Ctype ([], Void)))) id =
+  let create_member (ctype_, id) =
     (id, (empty_attributes, None, empty_qualifiers, mk_ctype ctype_))
   in
   let cntype_pointer = C.(Pointer (empty_qualifiers, mk_ctype (Struct cntype_sym))) in
-  let extra_members = [
-      (create_member ~ctype_:C.(Basic (Integer (Signed Int_))) (Id.id "tag"));
-      (create_member ~ctype_:cntype_pointer (Id.id "cntype"))]
+  let extra_members tag_type = [
+      (create_member (tag_type, Id.id "tag"));
+      (create_member (cntype_pointer, Id.id "cntype"))]
   in
   let generate_tag_definition dt_members = 
-    let identifiers = List.map snd dt_members in
+    let ail_dt_members = List.map (fun (cn_type, id) -> (cn_to_ail_base_type cn_type, id)) dt_members in
+    let _void_pointer = C.(Pointer (empty_qualifiers, Ctype ([], Void))) in
     (* TODO: Check if something called tag already exists *)
-    let members = List.map create_member (identifiers) in
-    C.(StructDef (extra_members @ members, None))
+    let members = List.map create_member ail_dt_members in
+    C.(StructDef (members, None))
   in
   let generate_struct_definition (constructor, members) = (constructor, (Cerb_location.unknown, empty_attributes, generate_tag_definition members))
   in
-  let structs = List.map generate_struct_definition cn_datatype.cn_dt_cases in
+  let structs = List.map (fun c -> generate_struct_definition c) cn_datatype.cn_dt_cases in
   let structs = if first then 
     let generic_dt_struct = 
-      (generic_cn_dt_sym, (Cerb_location.unknown, empty_attributes, C.(StructDef (extra_members, None))))
+      (generic_cn_dt_sym, (Cerb_location.unknown, empty_attributes, C.(StructDef (extra_members (C.(Basic (Integer (Signed Int_)))), None))))
     in
     let cntype_struct = (cntype_sym, (Cerb_location.unknown, empty_attributes, C.(StructDef ([], None)))) in
     generic_dt_struct :: cntype_struct :: structs
@@ -416,7 +432,10 @@ let cn_to_ail_datatype ?(first=false) (cn_datatype : cn_datatype) =
     (* TODO: Add members to cntype_struct as we go along? *)
     structs
   in
-  let rec generate_stats cases count =
+  let union_sym = generate_sym_with_suffix ~suffix:"union" cn_datatype.cn_dt_name in
+  let union_member = create_member (C.(Union union_sym), Id.id "u") in
+  let structs = structs @ [(cn_datatype.cn_dt_name, (Cerb_location.unknown, empty_attributes, C.(StructDef ((extra_members (C.(Basic (Integer (Enum enum_sym))))) @ [union_member], None))))] in
+  (* let rec generate_stats cases count =
     (match cases with 
       | [] -> []
       | (constructor, _) :: cs -> 
@@ -424,12 +443,16 @@ let cn_to_ail_datatype ?(first=false) (cn_datatype : cn_datatype) =
         let constructor_sym = generate_constructor_sym constructor in
         (constructor_sym, Some const) :: (generate_stats cs (count + 1))
   )
-  in
-  let decl_object = A.(Decl_object ((Automatic, false), None, const_qualifiers, mk_ctype C.(Basic (Integer (Signed Int_))))) in
-  let stats = generate_stats cn_datatype.cn_dt_cases 0 in
-  let decls = List.map (fun (sym, _) -> (sym, decl_object)) stats in
-  let stats = List.map (fun d -> mk_stmt (A.AilSdeclaration [d])) stats in
-  {structs = structs; decls = decls; stats = stats}
+  in *)
+  (* let decl_object = A.(Decl_object ((Automatic, false), None, const_qualifiers, mk_ctype C.(Basic (Integer (Signed Int_))))) in *)
+  (* let stats = generate_stats cn_datatype.cn_dt_cases 0 in *)
+  (* let generate_enum_from_datatype dt =  *)
+
+  let decls = [] in
+  (* let decls = List.map (fun (sym, _) -> (sym, decl_object)) stats in *)
+  (* let stats = List.map (fun d -> mk_stmt (A.AilSdeclaration [d])) stats in *)
+  let stats = [] in
+  {structs = enum :: structs; decls = decls; stats = stats}
 
 
 

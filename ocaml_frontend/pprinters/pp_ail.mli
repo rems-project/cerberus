@@ -17,14 +17,14 @@ val pp_qualifiers: qualifiers -> PPrint.document
 val string_of_integerBaseType: integerBaseType -> string
 
 
-val pp_integerType: integerType -> PPrint.document
+val pp_integerType: ?executable_spec:bool -> integerType -> PPrint.document
 val pp_floatingType: floatingType -> PPrint.document
 
-val pp_basicType: basicType -> PPrint.document
+val pp_basicType: ?executable_spec:bool -> basicType -> PPrint.document
 
 val pp_integer: Nat_big_num.num -> PPrint.document
 
-val pp_tag_definition: ?executable_spec:bool -> union_tag * (Cerb_location.t * 'a * tag_definition) -> PPrint.document
+val pp_tag_definition: ?executable_spec:bool -> union_tag * (Cerb_location.t * Annot.attributes * tag_definition) -> PPrint.document
 (*
 val pp_integerBaseType_raw: integerBaseType -> PPrint.document
 let pp_integerType_raw
