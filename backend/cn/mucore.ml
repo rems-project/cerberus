@@ -190,6 +190,7 @@ type 'TY mu_memop =
   | M_PtrValidForDeref of ('TY act * 'TY mu_pexpr)
   | M_PtrWellAligned of ('TY act * 'TY mu_pexpr)
   | M_PtrArrayShift of ('TY mu_pexpr * 'TY act * 'TY mu_pexpr)
+  | M_PtrMemberShift of (symbol * Symbol.identifier * 'TY mu_pexpr)
   | M_Memcpy of ('TY mu_pexpr * 'TY mu_pexpr * 'TY mu_pexpr)
   | M_Memcmp of ('TY mu_pexpr * 'TY mu_pexpr * 'TY mu_pexpr)
   | M_Realloc of ('TY mu_pexpr * 'TY mu_pexpr * 'TY mu_pexpr)
