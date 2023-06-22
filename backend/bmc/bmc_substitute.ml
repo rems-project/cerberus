@@ -36,6 +36,8 @@ let rec unsafe_substitute_pexpr (map: substitute_map)
     | PEcfunction pe ->
         PEcfunction(unsafe_substitute_pexpr map pe)
     | PEmemberof _ -> assert false
+    | PEmemop (mop, pelist) ->
+        PEmemop (mop, List.map (fun pe -> unsafe_substitute_pexpr map pe) pelist)
     | PEnot pe ->
         PEnot(unsafe_substitute_pexpr map pe)
     | PEop (binop, pe1, pe2) ->

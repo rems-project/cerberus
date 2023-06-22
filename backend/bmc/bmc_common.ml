@@ -419,7 +419,8 @@ module ImplFunctions = struct
                    | Some x -> x * 8
                    | None   -> assert false );
     impl_size_t     = Unsigned Long;
-    impl_ptrdiff_t  = Signed Long
+    impl_ptrdiff_t  = Signed Long;
+    impl_ptraddr_t  = Unsigned Long;
   }
 
   (* ---- Helper functions ---- *)
