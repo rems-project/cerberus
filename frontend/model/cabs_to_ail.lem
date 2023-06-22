@@ -4413,7 +4413,16 @@ let desugar_and_register_cn_lemma lmma =
 
 (* copying and adjusting desugar_and_register_cn_lemma *)
 let desugar_and_register_cn_fun_spec spec =
-  E.register_cn_fun_spec spec.cn_spec_name begin
+  E.record_marker ()     >>= fun marker_id ->
+  let loc = Loc.locOf spec.cn_spec_name in
+  E.resolve_ordinary_identifier loc spec.cn_spec_name >>= function
+    | Just (_, E.OReg_other nm_sym _ _) ->
+        E.return nm_sym
+    | None ->
+        E.fail loc (Errors.Desugar_CN (CNErr_unknown_c_identifier spec.cn_spec_name))
+  end
+  >>= fun fun_sym ->
+  E.register_cn_fun_spec loc fun_sym marker_id begin
     E.mapM (desugar_cn_arg CN_vars) spec.cn_spec_args >>= fun args ->
     desugar_cn_conditions spec.cn_spec_requires >>= fun requires ->
     E.register_cn_ident CN_vars (Symbol.Identifier Loc.unknown "return") >>= fun rsym ->

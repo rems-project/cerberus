@@ -245,6 +245,7 @@ type sigma 'a = <|
   cn_lemmata: list (Cn.cn_lemma Symbol.sym Ctype.ctype);
   cn_predicates: list (Cn.cn_predicate Symbol.sym Ctype.ctype);
   cn_datatypes: list (Cn.cn_datatype Symbol.sym Ctype.ctype);
+  cn_fun_specs: list (nat * Cn.cn_fun_spec Symbol.sym Ctype.ctype);
   cn_idents: map (Cn.cn_namespace * Symbol.identifier) Symbol.sym;
 |>
 
