@@ -286,7 +286,7 @@ module MakePp (Conf: PP_CN) = struct
             ] ) 
 
   let dtree_of_cn_spec s =
-    Dnode ( pp_ctor "[CN]spec of" ^^^ P.squotes (pp_identifier s.cn_spec_name)
+    Dnode ( pp_ctor "[CN]spec of" ^^^ P.squotes (Conf.pp_ident s.cn_spec_name)
           , [ Dnode (pp_ctor "[CN]args", dtrees_of_args s.cn_spec_args)
             ; Dnode (pp_ctor "[CN]requires", List.map dtree_of_cn_condition s.cn_spec_requires)
             ; Dnode (pp_ctor "[CN]ensures", List.map dtree_of_cn_condition s.cn_spec_ensures)

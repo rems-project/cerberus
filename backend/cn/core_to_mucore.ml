@@ -951,8 +951,26 @@ let make_function_args f_i loc env args (accesses, requires) =
   in
   aux [] [] env (C.LocalState.init_st) args
 
-
-
+let make_fun_with_spec_args f_i loc env args requires =
+  let rec aux good_lcs env st = function
+    | ((cn_bt, pure_arg), ct_ct) :: rest ->
+       let ct = convert_ct loc ct_ct in
+       let sbt = SBT.of_sct ct in
+       let sbt2 = C.translate_cn_base_type cn_bt in
+       assert (SBT.equal sbt sbt2);
+       let bt = SBT.to_basetype sbt in
+       let env = C.add_computational pure_arg sbt env in
+       let good_lc =
+         let info = (loc, Some (Sym.pp_string pure_arg ^ " good")) in
+         (LC.t_ (IT.good_ (ct, IT.sym_ (pure_arg, bt))), info)
+       in
+       let@ at = aux (good_lc :: good_lcs) env st rest in
+       return (Mu.mComputational ((pure_arg, bt), (loc, None)) at)
+    | [] ->
+       let@ lat = make_largs_with_accesses f_i env st ([], requires) in
+       return (M_L (Mu.mConstraints (List.rev good_lcs) lat))
+  in
+  aux [] env (C.LocalState.init_st) args
 
 
 let desugar_access d_st global_types (loc, id) =
@@ -1084,6 +1102,7 @@ let normalise_fun_map_decl
       (markers_env, ail_prog) 
       (global_types, visible_objects_env)
       env 
+      fun_specs
       (funinfo: mi_funinfo)
       loop_attributes
       fname
@@ -1129,6 +1148,7 @@ let normalise_fun_map_decl
      debug 6 (lazy (pp_doc_tree (dtree_of_requires requires)));
      debug 6 (lazy (pp_doc_tree (dtree_of_ensures ensures)));
 
+     (* FIXME: TODO: support separate spec in this situation *)
 
 
      let@ args_and_body = 
@@ -1157,22 +1177,28 @@ let normalise_fun_map_decl
      let desugared_spec = { accesses = List.map snd accesses; requires; ensures } in
 
      return (Some (M_Proc(loc, args_and_body, trusted, desugared_spec), mk_functions))
+
   | Mi_ProcDecl(loc, ret_bt, bts) -> 
-     return None
-     (* let@ trusted, accesses, requires, ensures = Parse.parse_function_spec attrs in *)
-     (* let@ (requires, d_st2) = desugar_conds d_st (List.map snd requires) in *)
-     (* let@ (ret, ret_d_st) = declare_return loc ret_ct ret_bt d_st2 in *)
-     (* let@ (ensures, _) = desugar_conds ret_d_st (List.map snd ensures) in *)
-     (* let arg_protos = List.mapi (fun i -> function *)
-     (*    | (Some sym, ct) -> (sym, ct) *)
-     (*    | (None, ct) -> (Sym.fresh_named ("default_" ^ Int.to_string i), ct)) arg_cts in *)
-     (* let@ args_and_rt = *)
-     (*   make_args (fun env -> *)
-     (*       make_rt loc env ret ensures *)
-     (*     ) loc env arg_protos requires *)
-     (* in *)
-     (* let ft = at_of_arguments Tools.id args_and_rt in *)
-     (* return (Some (M_ProcDecl(loc, ft))) *)
+     begin match SymMap.find_opt fname fun_specs with
+     | None -> return None
+     | Some (ail_marker, (spec : (Symbol.sym, Ctype.ctype) cn_fun_spec)) ->
+       assertl loc (BT.equal (convert_bt loc ret_bt)
+                    (BT.of_sct (convert_ct loc ret_ct)))
+         !^"function return type mismatch";
+       (* let@ (requires, d_st2) = desugar_conds d_st spec.cn_spec_requires in *)
+       (* FIXME: do we need to note the return var somehow? *)
+       (* let@ (ensures, _) = desugar_conds d_st spec.cn_spec_ensures in *)
+       let@ args_and_rt = make_fun_with_spec_args (fun env st ->
+           let@ returned =
+             C.make_rt loc env st
+               (spec.cn_spec_ret_name, ret_ct) ([], spec.cn_spec_ensures)
+           in
+           return (returned, None)
+         ) loc env (List.combine spec.cn_spec_args (List.map snd arg_cts)) spec.cn_spec_requires
+       in
+       (* let ft = at_of_arguments Tools.id args_and_rt in *)
+       assert false (* return (Some (M_ProcDecl(loc, ft))) *)
+     end
   | Mi_BuiltinDecl(loc, bt, bts) -> 
      assert false
      (* M_BuiltinDecl(loc, convert_bt loc bt, List.map (convert_bt loc) bts) *)
@@ -1181,6 +1207,7 @@ let normalise_fun_map
       (markers_env, ail_prog)
       (global_types, visible_objects_env)
       env
+      fun_specs
       funinfo
       loop_attributes
       fmap
@@ -1190,7 +1217,7 @@ let normalise_fun_map
       try begin
       let@ r = normalise_fun_map_decl (markers_env, ail_prog) 
                  (global_types, visible_objects_env)
-                 env funinfo loop_attributes fsym fdecl in
+                 env fun_specs funinfo loop_attributes fsym fdecl in
       match r with
       | Some (fdecl, more_mk_functions) ->
          let mk_functions' = 
@@ -1329,10 +1356,14 @@ let normalise_file (markers_env, ail_prog) file =
 
   let env = List.fold_left register_glob env globs in
 
+  let fun_specs_map = List.fold_right (fun (id, spec) acc ->
+      SymMap.add spec.cn_spec_name (id, spec) acc)
+    ail_prog.cn_fun_specs SymMap.empty in
+
   let@ (funs, mk_functions) = 
     normalise_fun_map (markers_env, ail_prog) (global_types, file.mi_visible_objects_env) 
-      env 
-      file.mi_funinfo file.mi_loop_attributes file.mi_funs 
+      env fun_specs_map
+      file.mi_funinfo file.mi_loop_attributes file.mi_funs
   in
 
   let@ lfuns = CLogicalFuns.add_c_fun_defs lfuns mk_functions in

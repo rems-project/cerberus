@@ -1167,11 +1167,11 @@ let register_cn_lemma ident mk =
   end
 
 (* copied and adjusted from register_cn_function *)
-let register_cn_fun_spec ident mk =
+let register_cn_fun_spec loc (ident : Symbol.sym) (marker_id : nat) mk =
   push_cn_scope >>= fun () ->
   mk >>= fun (args, requires, ensures, rsym) ->
   let spec = <|
-    Cn.cn_spec_loc= Loc.locOf ident;
+    Cn.cn_spec_loc= loc;
     Cn.cn_spec_name= ident;
     Cn.cn_spec_args= args;
     Cn.cn_spec_requires= requires;
@@ -1182,7 +1182,8 @@ let register_cn_fun_spec ident mk =
     pop_cn_scope >>= fun () ->
     assert_cn_bottom_scope >>= fun () ->
     update_cn_state (fun cn_st' ->
-      <| cn_st' with Cn_desugaring.cn_fun_specs = (ident, spec) :: cn_st'.Cn_desugaring.cn_fun_specs; |>
+      <| cn_st' with Cn_desugaring.cn_fun_specs =
+          (marker_id, spec) :: cn_st'.Cn_desugaring.cn_fun_specs; |>
     )
   end
 
@@ -2383,6 +2384,7 @@ let mk_current_ail_sigma =
         A.cn_lemmata= [];
         A.cn_predicates= [];
         A.cn_datatypes= [];
+        A.cn_fun_specs= [];
         A.cn_idents= Map.empty; |>
 
 val is_complete_object: Ctype.ctype -> desugM bool
@@ -2568,6 +2570,7 @@ let extract_program startup_str =
     A.cn_functions=  List.reverse (List.map (fun (_, (_, z)) -> z) (st.cn_state.Cn_desugaring.cn_functions));
     A.cn_lemmata=  List.reverse (List.map (fun (_, (_, z)) -> z) (st.cn_state.Cn_desugaring.cn_lemmata));
     A.cn_datatypes=  List.reverse (List.map (fun (_, z) -> z) (st.cn_state.Cn_desugaring.cn_datatypes));
+    A.cn_fun_specs=  List.reverse st.cn_state.Cn_desugaring.cn_fun_specs;
     A.cn_idents=  st.cn_state.Cn_desugaring.cn_idents;
    |>)
 
@@ -2652,6 +2655,7 @@ let get_sigma_sofar =
        A.cn_functions= List.reverse (List.map (fun (_, (_, z)) -> z) (st.cn_state.Cn_desugaring.cn_functions));
        A.cn_lemmata= List.reverse (List.map (fun (_, (_, z)) -> z) (st.cn_state.Cn_desugaring.cn_lemmata));
        A.cn_datatypes= List.reverse (List.map (fun (_, z) -> z) (st.cn_state.Cn_desugaring.cn_datatypes));
+       A.cn_fun_specs=  List.reverse st.cn_state.Cn_desugaring.cn_fun_specs;
        A.cn_idents=  st.cn_state.Cn_desugaring.cn_idents;
        |>
    )
