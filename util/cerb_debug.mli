@@ -34,7 +34,7 @@ val output_string2: string -> unit (* TODO: rename *)
 val begin_timing: string -> unit
 val end_timing: unit -> unit
 
-val begin_csv_timing: string -> unit
+val begin_csv_timing: unit -> unit
 val end_csv_timing: string -> unit
 
 

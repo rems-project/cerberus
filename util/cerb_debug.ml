@@ -99,13 +99,14 @@ let maybe_close_csv_timing_file () =
     match !csv_timing_stack_file with
     | None -> ()
     | Some oc ->
+       assert (match !csv_timing_stack with [] -> true | _ -> false);
        close_out oc;
        csv_timing_stack_file := None
 
 
-let begin_csv_timing (fun_name: string) =
+let begin_csv_timing () =
   if !debug_level >= 1 then
-    csv_timing_stack := (fun_name, Unix.gettimeofday ()) :: !csv_timing_stack
+    csv_timing_stack := (Unix.gettimeofday ()) :: !csv_timing_stack
 
 let end_csv_timing (fun_name: string) =
   match !csv_timing_stack_file with
@@ -116,10 +117,8 @@ let end_csv_timing (fun_name: string) =
      match !csv_timing_stack with
      | [] ->
         error "empty timing stack when ending timing"
-     | (str, t) :: xs when String.equal str fun_name ->
-        Printf.fprintf oc "%s,%f\n" str (t' -. t);
+     | t :: xs ->
+        Printf.fprintf oc "%s,%f\n" fun_name (t' -. t);
         csv_timing_stack := xs
-     | _ ->
-        error "incorrect use of timing stack"
 
 

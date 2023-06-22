@@ -223,3 +223,10 @@ let rec dtree = function
      Dnode (pp_ctor "Constraint", [LC.dtree lc; dtree t])
   | I ->
      Dleaf !^"I"
+
+
+let rec contains_c = function
+  | Define (_, _, t) -> contains_c t
+  | Resource (_, _, t) -> contains_c t
+  | Constraint (_, _, _) -> true
+  | I -> false

@@ -816,13 +816,16 @@ let maybe_save_slow_problem assertions lc lc_t time solver = match save_slow_pro
     close_out channel
 
 let provable ~loc ~solver ~global ~assumptions ~simp_ctxt ~pointer_facts lc = 
+  Cerb_debug.begin_csv_timing ();
   debug 12 (lazy (item "provable: checking constraint" (LC.pp lc)));
   let context = solver.context in
   debug 13 (lazy (item "context" (Context.pp_constraints assumptions)));
   let rtrue () = model_state := No_model; `True in
   let rfalse qs solver = model_state := Model (context, solver, qs); `False in
   match shortcut simp_ctxt lc with
-  | `True -> rtrue ()
+  | `True -> 
+     Cerb_debug.end_csv_timing "Solver.provable shortcut";
+     rtrue ()
   | `No_shortcut lc ->
      let Translate.{expr; it; qs} = Translate.goal context global lc in
      let nlc = Z3.Boolean.mk_not context expr in
@@ -835,6 +838,12 @@ let provable ~loc ~solver ~global ~assumptions ~simp_ctxt ~pointer_facts lc =
            (Z3.Solver.check solver.incremental))
          (nlc :: extra1 @ extra2)
      in
+     begin match lc with
+     | LC.T (IT (Const (Bool false), _)) ->
+      Cerb_debug.end_csv_timing "Solver.provable false"
+     | _ ->
+     Cerb_debug.end_csv_timing "Solver.provable noshortcut"
+     end;
      match res with
      | Z3.Solver.UNSATISFIABLE ->
         let all_assumptions = extra1 @ extra2 @

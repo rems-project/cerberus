@@ -82,41 +82,7 @@ let rec infer_pattern (M_Pattern (loc, _, pattern)) =
 
 
 
-(* pattern-matches and binds *)
-let rec old_pattern_match (M_Pattern (loc, _, pattern)) it =
-  match pattern with
-  | M_CaseBase (o_s, has_bt) ->
-     begin match o_s with
-     | Some s ->
-        let@ () = add_a s (IT.bt it) (loc, lazy (Sym.pp s)) in
-        let@ () = add_c (LC.t_ (def_ s it)) in
-        return [s]
-     | None -> 
-        return []
-     end
-  | M_CaseCtor (constructor, pats) ->
-     match constructor, pats with
-     | M_Cnil item_bt, [] ->
-        let@ () = add_c (LC.t_ (eq__ it (nil_ ~item_bt))) in
-        return []
-     | M_Ccons, [p1; p2] ->
-        let@ item_bt = infer_pattern p1 in
-        let@ a1 = old_pattern_match p1 (head_ ~item_bt it) in
-        let@ a2 = old_pattern_match p2 (tail_ it) in
-        let@ () = add_c (LC.t_ (ne_ (it, nil_ ~item_bt))) in
-        return (a1 @ a2)
-     | M_Ctuple, pats ->
-        let@ all_as = ListM.mapiM (fun i p ->
-          let@ item_bt = infer_pattern p in
-          old_pattern_match p (nthTuple_ ~item_bt (i, it))
-        ) pats in
-        return (List.concat all_as)
-     | M_Carray, _ ->
-        Cerb_debug.error "todo: array patterns"
-     | _ -> 
-        assert false
 
-let _old_pattern_match = old_pattern_match (* for the moment keep both versions alive*)        
 
 (* pattern-matches and binds *)
 let rec pattern_match (M_Pattern (loc, _, pattern)) it =
@@ -1811,6 +1777,7 @@ let wf_check_and_record_lemma (lemma_s, (loc, lemma_typ)) =
 
 
 let check mu_file stmt_locs o_lemma_mode = 
+  Cerb_debug.begin_csv_timing () (*total*);
   let@ () = set_statement_locs stmt_locs in
 
   let@ () = record_tagdefs mu_file.mu_tagDefs in
@@ -1827,13 +1794,16 @@ let check mu_file stmt_locs o_lemma_mode =
   let@ lemmata = ListM.mapM wf_check_and_record_lemma mu_file.mu_lemmata in
   let@ (_trusted, checked) = wf_check_and_record_functions mu_file.mu_funs
             mu_file.mu_call_funinfo in
+  Cerb_debug.begin_csv_timing () (*type checking functions*);
   let@ () = check_c_functions checked in
+  Cerb_debug.end_csv_timing "type checking functions";
 
   let@ global = get_global () in
   let@ () = match o_lemma_mode with
   | Some mode -> embed_resultat (Lemmata.generate global mode lemmata)
   | None -> return ()
   in
+  Cerb_debug.end_csv_timing "total";
   return ()
 
 
