@@ -1005,12 +1005,13 @@ let _check_used_distinct loc used =
 
 
 let load loc pointer ct =
-  let@ (point, O value), _ = 
-    RI.Special.predicate_request loc (Access Load)
-      ({name = Owned (ct, Init); pointer; permission = bool_ true; iargs = []}, None)
-  in
-  let@ () = add_r loc (P point, O value) in
-  return value
+  pure begin
+    let@ (point, O value), _ = 
+      RI.Special.predicate_request loc (Access Load)
+        ({name = Owned (ct, Init); pointer; permission = bool_ true; iargs = []}, None)
+    in
+    return value
+  end
 
 
 let instantiate loc filter arg =
