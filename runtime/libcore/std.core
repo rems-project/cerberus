@@ -58,7 +58,7 @@ fun conv_int (ty: ctype, n: integer): integer :=
 fun conv_aux (ty: ctype, n: integer) : integer :=
   n rem_f (Ivmax(ty) - Ivmin(ty) + 1)
 
-fun conv_loaded_int (is_cheri: boolean, ty: ctype, _n: loaded integer): loaded integer :=
+fun conv_loaded_int (ty: ctype, _n: loaded integer): loaded integer :=
   case _n of
     | Specified(n:integer) =>
         Specified(conv_int(ty, n))
