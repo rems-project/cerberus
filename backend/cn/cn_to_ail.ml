@@ -240,11 +240,9 @@ let rec cn_to_ail_expr_aux
     (* TODO: Add proper error messages for cases handled differently (exprs which are statements in C) *)
     | CNExpr_match (e, es) -> 
       let (s1, e1) = cn_to_ail_expr_aux const_prop dts e PassBack in
-      let e1_cast_ctype_ = C.(Pointer (empty_qualifiers, mk_ctype (Struct generic_cn_dt_sym))) in
       let e1_transformed = 
         A.(AilEmemberofptr 
-        (mk_expr (AilEcast (empty_qualifiers, mk_ctype e1_cast_ctype_, mk_expr e1)), 
-        CF.Symbol.Identifier (Cerb_location.unknown, "tag"))
+        (mk_expr e1, Id.id "tag")
       )
       in
       let (cases, exprs) = List.split es in
@@ -260,14 +258,13 @@ let rec cn_to_ail_expr_aux
             (* Generating extra statements for extracting member information for a given datatype constructor *)
             (* let constructor_name = String.sub tag_name 0 ((String.length tag_name) - 4) in *)
             let constructor_sym = CF.Symbol.fresh_pretty tag_name in
+            let lc_constructor_sym = CF.Symbol.fresh_pretty (String.lowercase_ascii tag_name) in
             let rec get_members constructor_sym dts = 
               (let rec get_members_helper dt_cases = 
                 (match dt_cases with
                   | [] -> None
                   | (constr, members) :: cs -> 
-                    Printf.printf "%s\n" (String.lowercase_ascii (Sym.pp_string constr));
-                    Printf.printf "%s\n" (String.lowercase_ascii (Sym.pp_string constructor_sym));
-                    let eq = String.equal (String.lowercase_ascii (Sym.pp_string constr)) (String.lowercase_ascii (Sym.pp_string constructor_sym)) in
+                    let eq = String.equal (String.lowercase_ascii (Sym.pp_string constr)) (Sym.pp_string lc_constructor_sym) in
                     if eq then 
                       Some members
                     else 
@@ -284,16 +281,17 @@ let rec cn_to_ail_expr_aux
               )
             in
             let members = get_members constructor_sym dts in
-            let (member_ids, _) = List.split members in
-            let constr_var_sym = Sym.fresh_pretty "_constructor" in
+            let (member_ids, member_cn_types) = List.split members in
+            let constr_var_sym = lc_constructor_sym in
 
             let member_syms = List.map (fun id -> CF.Symbol.fresh_pretty (Id.s id)) member_ids in
+            let member_types_and_syms = List.combine member_cn_types member_syms in
 
             let rec generate_member_stats member_syms = 
               (match member_syms with 
                 | [] -> []
                 | sym :: syms -> 
-                  let rhs = A.(AilEmemberofptr 
+                  let rhs = A.(AilEmemberof 
                   (mk_expr (AilEident constr_var_sym), create_id_from_sym sym)) in
                   let ail_expr = A.(AilEassign (mk_expr (AilEident sym), mk_expr rhs)) in
                   (mk_stmt A.(AilSexpr (mk_expr ail_expr))) :: (generate_member_stats syms)
@@ -311,12 +309,12 @@ let rec cn_to_ail_expr_aux
               (match member_stats with
               | [] -> A.AilSblock ([], List.map mk_stmt (s :: ss))
               | ms -> 
-                let cast_type = C.(Pointer (empty_qualifiers, mk_ctype (Struct constructor_sym))) in
-                let constr_struct_type = mk_ctype C.(Pointer (empty_qualifiers, mk_ctype (Struct constructor_sym))) in
+                let constr_struct_type = mk_ctype (Struct lc_constructor_sym) in
                 let constr_binding = create_binding constr_var_sym constr_struct_type in
-                let void_ptr_ctype = mk_ctype C.(Pointer (empty_qualifiers, mk_ctype Void)) in
-                let member_bindings = List.map (fun m -> create_binding m void_ptr_ctype) member_syms in
-                let constructor_var_assign = mk_stmt A.(AilSdeclaration [(constr_var_sym, Some (mk_expr (AilEcast (empty_qualifiers, mk_ctype cast_type, mk_expr e1))))]) in
+                let member_bindings = List.map (fun (t, s) -> create_binding s (mk_ctype (cn_to_ail_base_type t))) member_types_and_syms in
+                let rhs_memberof_ptr = A.(AilEmemberofptr (mk_expr e1, Id.id "u")) in
+                let rhs_memberof = A.(AilEmemberof (mk_expr rhs_memberof_ptr, create_id_from_sym constr_var_sym)) in
+                let constructor_var_assign = mk_stmt A.(AilSdeclaration [(constr_var_sym, Some (mk_expr rhs_memberof))]) in
                 A.(AilSblock (constr_binding :: member_bindings, constructor_var_assign :: ms @ (List.map mk_stmt (s :: ss)))))
             in 
             let ail_case = A.(AilScase (Nat_big_num.zero (* placeholder *), mk_stmt stat_block)) in
@@ -417,12 +415,14 @@ let cn_to_ail_datatype ?(first=false) (cn_datatype : cn_datatype) =
   in
   let generate_tag_definition dt_members = 
     let ail_dt_members = List.map (fun (id, cn_type) -> (cn_to_ail_base_type cn_type, id)) dt_members in
-    let _void_pointer = C.(Pointer (empty_qualifiers, Ctype ([], Void))) in
     (* TODO: Check if something called tag already exists *)
     let members = List.map create_member ail_dt_members in
     C.(StructDef (members, None))
   in
-  let generate_struct_definition (constructor, members) = (constructor, (Cerb_location.unknown, empty_attributes, generate_tag_definition members))
+  let generate_struct_definition (constructor, members) = 
+    let lc_constructor_str = String.lowercase_ascii (Sym.pp_string constructor) in
+    let lc_constructor = Sym.fresh_pretty lc_constructor_str in
+    (lc_constructor, (Cerb_location.unknown, empty_attributes, generate_tag_definition members))
   in
   let structs = List.map (fun c -> generate_struct_definition c) cn_datatype.cn_dt_cases in
   let structs = if first then 
@@ -436,29 +436,14 @@ let cn_to_ail_datatype ?(first=false) (cn_datatype : cn_datatype) =
     structs
   in
   let union_sym = generate_sym_with_suffix ~suffix:"_union" cn_datatype.cn_dt_name in
-  let union_def_members = List.map (fun sym -> create_member (C.(Struct sym), create_id_from_sym ~lowercase:true sym)) constructor_syms in
+  let union_def_members = List.map (fun sym -> 
+    let lc_sym = Sym.fresh_pretty (String.lowercase_ascii (Sym.pp_string sym)) in
+    create_member (C.(Struct lc_sym), create_id_from_sym ~lowercase:true sym)) constructor_syms in
   let union_def = C.(UnionDef union_def_members) in
   let union_member = create_member (C.(Union union_sym), Id.id "u") in
 
   let structs = structs @ [(union_sym, (Cerb_location.unknown, empty_attributes, union_def)); (cn_datatype.cn_dt_name, (Cerb_location.unknown, empty_attributes, C.(StructDef ((extra_members (C.(Basic (Integer (Enum enum_sym))))) @ [union_member], None))))] in
-  (* let rec generate_stats cases count =
-    (match cases with 
-      | [] -> []
-      | (constructor, _) :: cs -> 
-        let const = mk_expr (A.(AilEconst (ConstantInteger (IConstant (Z.of_int count, Decimal, None))))) in
-        let constructor_sym = generate_constructor_sym constructor in
-        (constructor_sym, Some const) :: (generate_stats cs (count + 1))
-  )
-  in *)
-  (* let decl_object = A.(Decl_object ((Automatic, false), None, const_qualifiers, mk_ctype C.(Basic (Integer (Signed Int_))))) in *)
-  (* let stats = generate_stats cn_datatype.cn_dt_cases 0 in *)
-  (* let generate_enum_from_datatype dt =  *)
-
-  let decls = [] in
-  (* let decls = List.map (fun (sym, _) -> (sym, decl_object)) stats in *)
-  (* let stats = List.map (fun d -> mk_stmt (A.AilSdeclaration [d])) stats in *)
-  let stats = [] in
-  {structs = enum :: structs; decls = decls; stats = stats}
+  {structs = enum :: structs; decls = []; stats = []}
 
 
 

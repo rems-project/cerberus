@@ -663,7 +663,7 @@ and pp_statement_aux ?(executable_spec=false) pp_annot ~bs (AnnotatedStatement (
                   ) dur_reg_opt ^^^ pp_ctype_human qs ty
                 ) ^^^ pp_id_obj id *) )
               else
-                pp_ctype_declaration (pp_id_obj ~executable_spec id) qs ty
+                pp_ctype_declaration ~executable_spec (pp_id_obj ~executable_spec id) qs ty
                ) bindings ^^ P.semi ^^ P.break 1 ^^
           P.separate_map (P.break 1) (fun s -> pp_statement ~executable_spec ~bs:(bindings@bs) s) ss in
         P.lbrace ^^ P.nest 2 (P.break 1 ^^ block) ^^
