@@ -111,10 +111,15 @@ let prefix : type a. a dest -> (A.bindings * CF.GenTypes.genTypeCategory A.state
     | AssignVar _, s2 -> s1 @ s2
     | PassBack, (s2, e) -> (s1 @ s2, e)
 
+let create_id_from_sym ?(lowercase=false) sym =
+  let str = Sym.pp_string sym in 
+  let str = if lowercase then String.lowercase_ascii str else str in
+  Id.id str
 
-let generate_sym_with_suffix ?(suffix="tag") ?(uppercase=false) constructor =  
+
+let generate_sym_with_suffix ?(suffix="_tag") ?(uppercase=false) constructor =  
   let doc = 
-  CF.Pp_ail.pp_id ~executable_spec:true constructor ^^ (!^ "_" ^^ !^ suffix) in 
+  CF.Pp_ail.pp_id ~executable_spec:true constructor ^^ (!^ suffix) in 
   let str = 
   CF.Pp_utils.to_plain_string doc in 
   let str = if uppercase then String.uppercase_ascii str else str in
@@ -207,7 +212,7 @@ let rec cn_to_ail_expr_aux
     
     
     | CNExpr_cons (c_nm, exprs) -> 
-      let tag_sym = generate_sym_with_suffix c_nm in
+      let tag_sym = generate_sym_with_suffix ~suffix:"" ~uppercase:true c_nm in
       (* Treating enum value as variable name *)
       dest d ([], AilEident tag_sym)   
 
@@ -253,14 +258,16 @@ let rec cn_to_ail_expr_aux
             (* TODO: Add default case for _ pattern match *)
             let tag_name = "some_tag" in
             (* Generating extra statements for extracting member information for a given datatype constructor *)
-            let constructor_name = String.sub tag_name 0 ((String.length tag_name) - 4) in
-            let constructor_sym = CF.Symbol.fresh_pretty constructor_name in
+            (* let constructor_name = String.sub tag_name 0 ((String.length tag_name) - 4) in *)
+            let constructor_sym = CF.Symbol.fresh_pretty tag_name in
             let rec get_members constructor_sym dts = 
               (let rec get_members_helper dt_cases = 
                 (match dt_cases with
                   | [] -> None
                   | (constr, members) :: cs -> 
-                    let eq = String.equal (Sym.pp_string constr) (Sym.pp_string constructor_sym) in
+                    Printf.printf "%s\n" (String.lowercase_ascii (Sym.pp_string constr));
+                    Printf.printf "%s\n" (String.lowercase_ascii (Sym.pp_string constructor_sym));
+                    let eq = String.equal (String.lowercase_ascii (Sym.pp_string constr)) (String.lowercase_ascii (Sym.pp_string constructor_sym)) in
                     if eq then 
                       Some members
                     else 
@@ -281,10 +288,6 @@ let rec cn_to_ail_expr_aux
             let constr_var_sym = Sym.fresh_pretty "_constructor" in
 
             let member_syms = List.map (fun id -> CF.Symbol.fresh_pretty (Id.s id)) member_ids in
-
-            let create_id_from_sym sym = 
-              Id.id (Sym.pp_string sym)
-            in
 
             let rec generate_member_stats member_syms = 
               (match member_syms with 
@@ -432,9 +435,12 @@ let cn_to_ail_datatype ?(first=false) (cn_datatype : cn_datatype) =
     (* TODO: Add members to cntype_struct as we go along? *)
     structs
   in
-  let union_sym = generate_sym_with_suffix ~suffix:"union" cn_datatype.cn_dt_name in
+  let union_sym = generate_sym_with_suffix ~suffix:"_union" cn_datatype.cn_dt_name in
+  let union_def_members = List.map (fun sym -> create_member (C.(Struct sym), create_id_from_sym ~lowercase:true sym)) constructor_syms in
+  let union_def = C.(UnionDef union_def_members) in
   let union_member = create_member (C.(Union union_sym), Id.id "u") in
-  let structs = structs @ [(cn_datatype.cn_dt_name, (Cerb_location.unknown, empty_attributes, C.(StructDef ((extra_members (C.(Basic (Integer (Enum enum_sym))))) @ [union_member], None))))] in
+
+  let structs = structs @ [(union_sym, (Cerb_location.unknown, empty_attributes, union_def)); (cn_datatype.cn_dt_name, (Cerb_location.unknown, empty_attributes, C.(StructDef ((extra_members (C.(Basic (Integer (Enum enum_sym))))) @ [union_member], None))))] in
   (* let rec generate_stats cases count =
     (match cases with 
       | [] -> []
