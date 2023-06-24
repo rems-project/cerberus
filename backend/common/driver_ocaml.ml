@@ -196,7 +196,7 @@ let drive file args fs_state conf : execution_result =
       (Driver.drive conf.concurrency file args) initial_dr_st in
   let n_actives = List.length (List.filter isActive values) in
   let n_execs   = List.length values                        in
-  Cerb_debug.print_debug 1 [] (fun () ->
+  Cerb_debug.print_debug 2 [] (fun () ->
     Printf.sprintf "Number of executions: %d actives (%d killed)\n" n_actives (n_execs - n_actives)
   );
   if n_actives = 0 && (n_execs - n_actives) = 0 then begin
@@ -245,7 +245,7 @@ else
             if Cerb_debug.get_debug_level () = 0 then
               (print_string dres.Driver.dres_stdout; prerr_string dres.Driver.dres_stderr; flush_all());
             
-            Cerb_debug.print_debug 1 [] (fun () ->
+            Cerb_debug.print_debug 2 [] (fun () ->
 (*              Printf.sprintf "\n\n\n\n\nExecution #%d (value = %s) under constraints:\n=====\n%s\n=====\n" n str_v (Pp_cmm.pp_old_constraints st.ND.eqs) ^*)
               Printf.sprintf "BEGIN stdout\n%s\nEND stdout\n" dres.Driver.dres_stdout ^
               Printf.sprintf "driver steps: %d\n" dres.Driver.dres_driver_steps (* ^ 

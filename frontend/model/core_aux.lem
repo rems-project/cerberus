@@ -168,7 +168,7 @@ let rec memValueFromValue (Ctype annots ty) cval =
             end
           ) (Just []) lvals
     | (Struct tag_sym1, Vloaded (LVspecified (OVstruct tag_sym2 xs))) ->
-        let () = Debug.print_debug 1 [] (fun () -> "Comparing struct tag symbols: " ^ Symbol.show_raw tag_sym1 ^ " = " ^ Symbol.show_raw tag_sym2) in
+        let () = Debug.print_debug 2 [] (fun () -> "Comparing struct tag symbols: " ^ Symbol.show_raw tag_sym1 ^ " = " ^ Symbol.show_raw tag_sym2) in
         if Ctype_aux.are_compatible
           (no_qualifiers, Ctype [] (Struct tag_sym1))
           (no_qualifiers, Ctype [] (Struct tag_sym2))
@@ -1947,10 +1947,8 @@ let rec match_pattern (Pattern _ pat) cval =
 val     select_case: forall 'a. (Symbol.sym -> value -> 'a -> 'a) -> value -> list (pattern * 'a) -> maybe 'a
 let rec select_case subst_sym cval = function
   | [] ->
-      let () = Debug.print_debug 1 [] (fun () -> "NOTHING") in
       Nothing
   | (pat, pe) :: pat_pes' ->
-      let () = Debug.print_debug 1 [] (fun () -> "SELECT_CASE") in
       match match_pattern pat cval with
         | Nothing ->
             (* trying the next branch *)
@@ -2303,7 +2301,7 @@ let collect_labeled_continuations_NEW file =
 (*
 in
   let _ = Map.mapi (fun sym labs ->
-    Debug.print_debug 1 [] (fun () ->
+    Debug.print_debug 2 [] (fun () ->
       "PROC " ^ show sym ^ " ==>\n" ^
       List.foldl (fun acc (sym, (_, e)) -> show sym ^ " ==> " ^ Pp.stringFromCore_expr e) "" (Map_extra.toList labs) 
     )
