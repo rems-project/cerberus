@@ -1,6 +1,6 @@
 (library
  (name cerb_backend)
- (public_name cerberus.backend_common)
+ (public_name cerberus-lib.backend_common)
  (synopsis "Cerberus backend utilities")
  (flags (:standard -w -27))
  (modules :standard \ smt smt_wrapper boot_pprint2 tests cerbcore cmulator

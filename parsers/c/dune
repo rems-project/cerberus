@@ -1,6 +1,6 @@
 (library
  (name c_parser)
- (public_name cerberus.c_parser)
+ (public_name cerberus-lib.c_parser)
  (synopsis "C parser")
  (flags (:standard -w -27-32))
  (modules :standard)

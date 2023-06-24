@@ -1,6 +1,6 @@
 (library
  (name core_parser)
- (public_name cerberus.core_parser)
+ (public_name cerberus-lib.core_parser)
  (synopsis "Core parser")
  (flags (:standard -w -27-32))
  (modules :standard)

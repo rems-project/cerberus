@@ -2,7 +2,7 @@
 
 (library
  (name cerb_frontend)
- (public_name cerberus.frontend)
+ (public_name cerberus-lib.frontend)
  (synopsis "Cerberus frontend")
  (flags (:standard -w @8@11@12-9-27-33))
  (modules :standard \ pp_naive_memory pp_symbolic pp_constraints pp_cmm pp_sb)

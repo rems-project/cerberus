@@ -1,6 +1,6 @@
 (library
  (name util)
- (public_name cerberus.util)
+ (public_name cerberus-lib.util)
  (synopsis "Cerberus util library")
  (modules :standard)
  (wrapped false)
