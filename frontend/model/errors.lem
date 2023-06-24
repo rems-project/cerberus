@@ -75,6 +75,7 @@ type core_parser_cause =
   | Core_parser_multiple_declaration of string
   | Core_parser_ctor_wrong_application of int (*expected*) * int (* found *)
   | Core_parser_wrong_decl_in_std
+  | Core_parser_unknown_ctype of string
   | Core_parser_undefined_startup
 
 type driver_cause =

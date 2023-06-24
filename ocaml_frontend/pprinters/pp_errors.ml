@@ -488,6 +488,8 @@ let string_of_core_parser_cause = function
       "wrong number of expression in application, expected " ^ string_of_int expected ^ ", found " ^ string_of_int found
   | Core_parser_wrong_decl_in_std ->
       "wrong declaration in std" (* TODO: ?? *)
+  | Core_parser_unknown_ctype str ->
+      "unknown ctype '" ^ str ^ "'"
   | Core_parser_undefined_startup ->
       "undefined startup function"
 

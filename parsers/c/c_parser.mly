@@ -10,6 +10,7 @@
 open Cerb_frontend
 
 open Cabs
+open Cn
 
 module LF = Lexer_feedback
 
@@ -101,6 +102,11 @@ let warn_extra_semicolon pos ctx =
                     Warning)
   else
     ()
+
+type asm_qualifier =
+  | ASM_VOLATILE
+  | ASM_INLINE
+  | ASM_GOTO
 %}
 
 (* §6.4.1 keywords *)
@@ -1505,11 +1511,11 @@ asm_register:
 asm_qualifier:
 | VOLATILE
 | ASM_VOLATILE
-    { `VOLATILE }
+    { ASM_VOLATILE }
 | INLINE
-    { `INLINE }
+    { ASM_INLINE }
 | GOTO
-    { `GOTO }
+    { ASM_GOTO }
 ;
 
 asm_output_input:
@@ -1558,8 +1564,8 @@ asm_with_labels:
 
 asm_statement:
 | ASM qs= asm_qualifier* LPAREN s= string_literal RPAREN
-    { let is_volatile = List.mem `VOLATILE qs in
-      let is_inline = List.mem `INLINE qs in
+    { let is_volatile = List.mem ASM_VOLATILE qs in
+      let is_inline = List.mem ASM_INLINE qs in
       let strs =
         if fst s = None then snd s else
           (* TODO: better error *)
@@ -1568,8 +1574,8 @@ asm_statement:
       CabsStatement (Cerb_location.(region ($startpos, $endpos) NoCursor), Annot.no_attributes,
         CabsSasm (is_volatile, is_inline, strs)) }
 | ASM qs= asm_qualifier* LPAREN s= string_literal args= asm_with_output RPAREN
-    { let is_volatile = List.mem `VOLATILE qs in
-      let is_inline = List.mem `INLINE qs in
+    { let is_volatile = List.mem ASM_VOLATILE qs in
+      let is_inline = List.mem ASM_INLINE qs in
       let strs =
         if fst s = None then snd s else
           (* TODO: better error *)

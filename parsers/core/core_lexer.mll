@@ -17,7 +17,7 @@ let keywords =
       ("_Bool",       T.BOOL       );
       ("char",        T.CHAR       );
       ("double",      T.DOUBLE     );
-      ("enum",        T.ENUM       );
+      (* ("enum",        T.ENUM       ); *)
       ("float",       T.FLOAT      );
       ("int",         T.INT        );
       ("ichar",       T.ICHAR      );
@@ -99,11 +99,8 @@ let keywords =
       ("save",         T.SAVE        );
       ("run",          T.RUN         );
       ("bound",        T.BOUND       );
-      ("raise",        T.RAISE       );
-      ("register",     T.REGISTER    );
       ("nd",           T.ND          );
       ("par",          T.PAR         );
-      ("wait",         T.WAIT        );
       ("array_shift",  T.ARRAY_SHIFT );
       ("member_shift", T.MEMBER_SHIFT);
       ("case",         T.CASE        );

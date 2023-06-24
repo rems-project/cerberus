@@ -1245,7 +1245,8 @@ ctype:
         | Some ty ->
             ty
         | None ->
-            $syntaxerror
+            let loc = (Cerb_location.(region ($startpos, $endpos) NoCursor)) in
+            raise (Core_parser_util.Core_error (loc, Errors.Core_parser_unknown_ctype (fst str)))
     }
 | STRUCT tag= SYM
     (* NOTE: we only collect the string name here *)

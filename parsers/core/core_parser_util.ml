@@ -60,10 +60,10 @@ type token =
   | ATOMIC
   | STRUCT (* TODO *)
   | UNION (* TODO *)
-  | ENUM (* TODO *)
-  | WCHAR_T (* TODO *)
-  | CHAR16_T (* TODO *)
-  | CHAR32_T (* TODO *)
+(*  | ENUM (* TODO *) *)
+(*  | WCHAR_T (* TODO *) *)
+(*  | CHAR16_T (* TODO *) *)
+(*  | CHAR32_T (* TODO *) *)
   | INTEGER
   | FLOATING
   | BOOLEAN
@@ -88,8 +88,6 @@ type token =
   | STRONG
   | SAVE (* TODO *)
   | RUN (* TODO *)
-  | RAISE (* TODO *)
-  | REGISTER (* TODO *)
 (*
   | TRY
   | WITH
@@ -124,7 +122,6 @@ type token =
   | IS_INTEGER
   | IS_SIGNED
   | IS_UNSIGNED
-  | IS_UNSPEC
   | ARE_COMPATIBLE
   | UNSPECIFIED
   
@@ -176,7 +173,6 @@ type token =
   
   | PAR
   | ND
-  | WAIT (* TODO *)
   | ARRAY_SHIFT
   | MEMBER_SHIFT
   

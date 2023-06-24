@@ -85,7 +85,7 @@ let keywords: (string * (unit -> Tokens.token)) list = [
     "_Bool"          , (fun () -> BOOL);
     "_Complex"       , (fun () -> COMPLEX);
     "_Generic"       , (fun () -> GENERIC);
-    "_Imaginary"     , (fun () -> IMAGINARY);
+    (* "_Imaginary"     , (fun () -> IMAGINARY); *)
     "_Noreturn"      , (fun () -> NORETURN);
     "_Static_assert" , (fun () -> STATIC_ASSERT);
     "_Thread_local"  , (fun () -> THREAD_LOCAL);

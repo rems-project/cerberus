@@ -49,7 +49,7 @@ type token =
   | BOOL
   | COMPLEX
   | GENERIC
-  | IMAGINARY
+  (* | IMAGINARY *)
   | NORETURN
   | STATIC_ASSERT
   | THREAD_LOCAL
@@ -115,7 +115,7 @@ type token =
   | PIPE_EQ
   | COMMA
   | LBRACK_LBRACK
-  | RBRACK_RBRACK
+  (* | RBRACK_RBRACK *)
 
   (* NON-STD *)
   | ASSERT
@@ -149,7 +149,7 @@ type token =
   | CN_UNFOLD
   | CN_APPLY
   | CN_MATCH
-  | CN_PREDNAME of string
+  (* | CN_PREDNAME of string *)
   | CN_BOOL
   | CN_INTEGER
   | CN_REAL
@@ -217,7 +217,7 @@ let string_of_token = function
   | BOOL -> "BOOL"
   | COMPLEX -> "COMPLEX"
   | GENERIC -> "GENRIC"
-  | IMAGINARY -> "IMAGINARY"
+  (* | IMAGINARY -> "IMAGINARY" *)
   | NORETURN -> "NORETURN"
   | STATIC_ASSERT -> "STATIC_ASSERT"
   | THREAD_LOCAL -> "THREAD_LOCAL"
@@ -230,7 +230,7 @@ let string_of_token = function
   | LBRACK -> "LBRACK"
   | RBRACK -> "RBRACK"
   | LBRACK_LBRACK -> "LBRACK_LBRACK"
-  | RBRACK_RBRACK -> "RBRACK_RBRACK"
+  (* | RBRACK_RBRACK -> "RBRACK_RBRACK" *)
   | LPAREN -> "LPAREN"
   | RPAREN -> "RPAREN"
   | LBRACE _ -> "LBRACE"
@@ -302,7 +302,7 @@ let string_of_token = function
   | CN_UNFOLD -> "CN_UNFOLD"
   | CN_APPLY -> "CN_APPLY"
   | CN_MATCH -> "CN_MATCH"
-  | CN_PREDNAME str -> "CN_PREDNAME(" ^ str ^ ")"
+  (* | CN_PREDNAME str -> "CN_PREDNAME(" ^ str ^ ")" *)
   | CN_BOOL -> "CN_BOOL"
   | CN_INTEGER -> "CN_INTEGER"
   | CN_REAL -> "CN_REAL"

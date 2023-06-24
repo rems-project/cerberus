@@ -1,4 +1,4 @@
 (lang dune 2.0)
 (name cerberus)
 
-(using menhir 1.0)
+(using menhir 2.0)
