@@ -27,7 +27,7 @@ depends: [
   "cmdliner" {>= "1.1.0"}
   "yojson" {>= "2.0.0"}
   "lem" {>= "2020-06-03"}
-  "menhir" {<= "20211125"}
+  "menhir" {>= "20181006"}
   "result" {>= "1.5"}
 ]
 build: [
