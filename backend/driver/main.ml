@@ -122,6 +122,9 @@ let cerberus debug_level progress core_obj
              output_name
              files args_opt =
   Cerb_debug.debug_level := debug_level;
+  begin if is_cheri_memory () then
+    Cerb_runtime.set_package "cerberus-cheri"
+  end;
   Cerb_runtime.specified_runtime := runtime_path_opt;
   let cpp_cmd =
     create_cpp_cmd cpp_cmd nostdinc macros macros_undef incl_dirs incl_files nolibc

@@ -35,7 +35,7 @@
 (executable
  (name main_cheri_coq)
  (public_name cerberus-cheri-coq)
- (package cerberus)
+ (package cerberus-cheri)
  (modules main_cheri_coq)
  (libraries result cmdliner str unix
             cerb_backend mem_cheri_coq cerb_util)

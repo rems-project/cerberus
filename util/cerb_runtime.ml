@@ -1,5 +1,8 @@
 (** Discover the path to the Cerberus runtime. *)
 
+let package = ref "cerberus"
+let set_package str = package := str
+
 (** If it is set, [specified_runtime] has highest priority, and it can thus be
     used to override the "detected" runtime path from the CLI for example. *)
 let specified_runtime : string option ref = ref None
@@ -20,7 +23,7 @@ let find_build_runtime : unit -> string = fun _ ->
   in
   let runtime_path =
     Filename.concat (find_prefix path)
-      "/lib/cerberus/runtime"
+      "/lib/" ^ !package ^ "/runtime"
   in
   if not (Sys.file_exists runtime_path) then raise Not_found;
   runtime_path
@@ -39,7 +42,7 @@ let detect_runtime : unit -> string = fun _ ->
     try Sys.getenv "OPAM_SWITCH_PREFIX"
     with Not_found -> failwith "OPAM_SWITCH_PREFIX not set."
   in
-  Filename.concat prefix "lib/cerberus/runtime"
+  Filename.concat prefix "lib/" ^ !package ^ "/runtime"
 
 (** [runtime ()] is a memoised version of [detect_runtime ()]. This means that
     if [Failure] is not raised on its first call, it will not be raised later,

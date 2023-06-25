@@ -142,7 +142,7 @@
  
 (library
  (name extracted)
- (public_name cerberus.coq)
+ (public_name cerberus-cheri.coq)
  (modules (:standard \ coqcaptest strfcap))
  (libraries zarith coq-core.kernel)
  (wrapped false)
@@ -152,11 +152,11 @@
 
 (library
  (name strfcap)
- (public_name cerberus.strfcap)
+ (public_name cerberus-cheri.strfcap)
  (modules strfcap)
  (wrapped false)
  (flags (:standard -rectypes -w -27-32-33-39-67-37-20-34))
- (libraries cerberus.coq)
+ (libraries cerberus-cheri.coq)
  (instrumentation (backend landmarks))
 )
 
