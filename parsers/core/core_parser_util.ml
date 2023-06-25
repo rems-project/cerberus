@@ -56,7 +56,7 @@ type token =
   
   | SIZE_T
   | PTRDIFF_T
-  | MAX_ALIGN_T
+  (* | MAX_ALIGN_T *)
   
   | ATOMIC
   | STRUCT (* TODO *)

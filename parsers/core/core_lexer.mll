@@ -44,7 +44,7 @@ let keywords =
       ("uintmax_t",   T.UINTMAX_T  );
       ("size_t",      T.SIZE_T     );
       ("ptrdiff_t",   T.PTRDIFF_T  );
-      ("max_align_t", T.MAX_ALIGN_T);
+      (* ("max_align_t", T.MAX_ALIGN_T); *)
       
       (* for Core object types *)
       ("integer",   T.INTEGER  );
