@@ -733,7 +733,7 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
               E.misc (Loc.with_cursor loc) GenericFunctionMustBeDirectlyCalled
           | AilBCHERI _ ->
               E.misc (Loc.with_cursor loc) GenericFunctionMustBeDirectlyCalled
-            (* NOTE: other builtins might not need to be call directly *)
+          (* NOTE: other builtins might not need to be call directly *)
         end
 (*
 

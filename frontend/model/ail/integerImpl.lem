@@ -39,7 +39,7 @@ type implementation = <|
   impl_precision:   integerType -> nat;
   impl_size_t:      integerType;
   impl_ptrdiff_t:   integerType;
-  impl_ptraddr_t  :   integerType;
+  impl_ptraddr_t:   integerType;
 |>
 
 val make_implementation: binaryMode -> (integerType -> bool) -> (integerType -> nat)
