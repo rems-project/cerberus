@@ -121,7 +121,7 @@ let keywords: (string * Tokens.token) list = [
     "__cerb_unpack"        , CN_UNPACK;
     "__cerb_have"          , CN_HAVE;
     "__cerb_instantiate"   , CN_INSTANTIATE;
-    "__cerb_extract"       , (fun () -> CN_EXTRACT);
+    "__cerb_extract"       , CN_EXTRACT;
     (* END CN *)
   ]
 
