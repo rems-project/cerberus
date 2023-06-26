@@ -104,8 +104,6 @@ let get_l s ctxt =
 
 
 let add_a_binding s binding info ctxt =
-  Pp.debug 1 (lazy (item "computation variable already bound"
-    (pp_l_info (Sym.pp s) info)));
   if (bound s ctxt) then failwith ("already bound: " ^ Sym.pp_string s);
   { ctxt with computational = SymMap.add s (binding, info) ctxt.computational }
 
@@ -113,8 +111,6 @@ let add_a s bt info ctxt = add_a_binding s (BaseType bt) info ctxt
 let add_a_value s value info ctxt = add_a_binding s (Value value) info ctxt
 
 let add_l_binding s binding info ctxt =
-  Pp.debug 1 (lazy (item "logical variable already bound"
-    (pp_l_info (Sym.pp s) info)));
   if (bound s ctxt) then failwith ("already bound: " ^ Sym.pp_string s);
   { ctxt with logical = SymMap.add s (binding, info) ctxt.logical }
 
