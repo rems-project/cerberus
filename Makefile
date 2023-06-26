@@ -79,6 +79,10 @@ cn: prelude-src
 	$(Q)dune build $(DUNEFLAGS) cerberus.install cn.install
 	@echo "\nDONE"
 
+cheri: prelude-src
+	@echo "[DUNE] cerberus-cheri"
+	$(Q)dune build $(DUNEFLAGS) cerberus-cheri.install
+
 
 # .PHONY: cerberus-ocaml ocaml
 # ocaml: cerberus-ocaml
