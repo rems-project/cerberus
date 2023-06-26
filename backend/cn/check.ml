@@ -1181,7 +1181,7 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
                  permission = bool_ true;
                  iargs = [];
                }, 
-             O unit_)
+             O (default_ (BT.of_sct act.ct)))
         in
         k ret)
      | M_CreateReadOnly (sym1, ct, sym2, _prefix) -> 
