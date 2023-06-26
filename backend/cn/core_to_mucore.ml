@@ -1193,11 +1193,12 @@ let normalise_fun_map_decl
              C.make_rt loc env st
                (spec.cn_spec_ret_name, ret_ct) ([], spec.cn_spec_ensures)
            in
-           return (returned, None)
+           return returned
          ) loc env (List.combine spec.cn_spec_args (List.map snd arg_cts)) spec.cn_spec_requires
        in
-       (* let ft = at_of_arguments Tools.id args_and_rt in *)
-       assert false (* return (Some (M_ProcDecl(loc, ft))) *)
+       let ft = at_of_arguments Tools.id args_and_rt in
+       let@ _ = return (M_ProcDecl (loc, ft)) in
+       return (Some (M_ProcDecl(loc, ft), []))
      end
   | Mi_BuiltinDecl(loc, bt, bts) -> 
      assert false
