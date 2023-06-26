@@ -204,9 +204,8 @@ module MakePp (Conf: PP_CN) = struct
         Dleaf (pp_stmt_ctor "CN_named" ^^^ P.squotes (Conf.pp_ident ident))
 
   let dtree_of_cn_resource = function
-    | CN_pred (_, cond, pred, es) ->
-        Dnode (pp_stmt_ctor "CN_pred", dtree_of_option dtree_of_cn_expr cond 
-                                       :: dtree_of_cn_pred pred 
+    | CN_pred (_, pred, es) ->
+        Dnode (pp_stmt_ctor "CN_pred", dtree_of_cn_pred pred 
                                        :: List.map dtree_of_cn_expr es)
     | CN_each (ident, bTy, e, _, pred, es) ->
         Dnode ( pp_stmt_ctor "CN_each" ^^^ P.squotes (Conf.pp_ident ident) ^^^ P.colon ^^^ pp_base_type bTy

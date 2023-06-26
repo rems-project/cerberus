@@ -4254,9 +4254,8 @@ let desugar_maybe desugar_f o =
   end
 
 let desugar_cn_resource = function
-  | CN_pred loc cond pred es ->
-      CN_pred loc <$> desugar_maybe desugar_cn_expr cond
-                  <*> desugar_cn_pred pred
+  | CN_pred loc pred es ->
+      CN_pred loc <$> desugar_cn_pred pred
                   <*> E.mapM desugar_cn_expr es
   | CN_each ident bTy e loc pred es ->
       desugar_cn_pred pred >>= fun pred ->

@@ -297,11 +297,9 @@ let add_c_internal lc =
 let add_r_internal loc (r, RE.O oargs) =
   let@ s = get () in
   let@ simp_ctxt = simp_ctxt () in
-  match Simplify.ResourceTypes.simp_or_empty simp_ctxt r with
-  | None -> return ()
-  | Some r ->
-    let oargs = Simplify.IndexTerms.simp simp_ctxt oargs in
-    set (Context.add_r loc (r, O oargs) s)  
+  let r = Simplify.ResourceTypes.simp simp_ctxt r in
+  let oargs = Simplify.IndexTerms.simp simp_ctxt oargs in
+  set (Context.add_r loc (r, O oargs) s)  
   
   
 type changed = 

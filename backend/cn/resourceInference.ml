@@ -211,22 +211,22 @@ module General = struct
        let@ provable = provable loc in
        let@ global = get_global () in
        let@ simp_ctxt = simp_ctxt () in
-       let needed = requested.permission in 
-       let resource_scan re (needed, oargs) =
+       let needed = true in 
+       let resource_scan re ((needed : bool), oargs) =
              let continue = (Unchanged, (needed, oargs)) in
-             if is_false needed then continue else
+             if not needed then continue else
              match re with
              | (P p', p'_oarg) when RET.subsumed requested.name p'.name ->
                 let pmatch = 
                   eq_ (requested.pointer, p'.pointer)
                   :: List.map2 eq__ requested.iargs p'.iargs
                 in
-                let took = and_ (needed :: p'.permission :: pmatch) in
+                let took = and_ pmatch in
                 begin match provable (LC.T took) with
                 | `True ->
                    Pp.debug 9 (lazy (Pp.item "used resource" (RET.pp (fst re))));
                    Deleted, 
-                   (bool_ false, p'_oarg)
+                   (false, p'_oarg)
                 | `False ->
                    let model = Solver.model () in
                    Pp.debug 9 (lazy (Pp.item "couldn't use resource" (RET.pp (fst re))));
@@ -245,14 +245,14 @@ module General = struct
                         :: divisible_ (offset, item_size)
                         :: List.map2 (fun ia ia' -> eq_ (ia, IT.subst subst ia')) requested.iargs p'.iargs)
                 in
-                let took = and_ [pre_match; needed; IT.subst subst p'.permission] in
+                let took = and_ [pre_match; IT.subst subst p'.permission] in
                 begin match provable (LC.T took) with
                 | `True ->
                    Pp.debug 9 (lazy (Pp.item "used resource" (RET.pp (fst re))));
                    let i_match = eq_ (sym_ (p'.q, Integer), index) in
                    let permission' = and_ [p'.permission; not_ i_match] in
                    Changed (Q {p' with permission = permission'}, O p'_oarg), 
-                   (bool_ false, O (map_get_ p'_oarg index))
+                   (false, O (map_get_ p'_oarg index))
                 | `False ->
                    let model = Solver.model () in
                    Pp.debug 9 (lazy (Pp.item "couldn't use q-resource" (RET.pp (fst re))));
@@ -266,19 +266,18 @@ module General = struct
          map_and_fold_resources loc resource_scan
              (needed, O (default_ oarg_bt))
        in
-       Pp.debug 9 (lazy (Pp.item "checking resource remainder" (IT.pp (not_ needed))));
-       let@ res = begin match provable (t_ (not_ needed)) with
-       | `True ->
-          let r = ({ 
+       Pp.debug 9 (lazy (Pp.item "checking resource remainder" (IT.pp (bool_ needed))));
+       let@ res = begin match needed with
+       | false ->
+          let r = (({ 
               name = requested.name;
               pointer = requested.pointer;
-              permission = requested.permission;
               iargs = requested.iargs; 
-            }, oarg)
+            } : predicate_type), oarg)
           in
           (* let r = RE.simp_predicate ~only_outputs:true global.struct_decls all_lcs r in *)
           return (Some (r, changed_or_deleted))
-       | `False ->
+       | true ->
           begin match packing_ft loc global provable (P requested) with
           | Some packing_ft ->
              let@ o, changed_or_deleted = ftyp_args_request_for_pack loc (fst uiinfo) packing_ft in
@@ -325,7 +324,7 @@ module General = struct
                         :: List.map2 (fun ia ia' -> eq_ (IT.subst subst ia, ia')) requested.iargs p'.iargs
                     )
                 in
-                let took = and_ [pre_match; IT.subst subst needed; p'.permission] in
+                let took = and_ [pre_match; IT.subst subst needed] in
                 begin match provable (LC.T took) with
                 | `True ->
                    Pp.debug 9 (lazy (Pp.item "used resource" (RET.pp (fst re))));
@@ -379,7 +378,6 @@ module General = struct
                        { name = requested.name;
                          pointer = pointer_offset_ (requested.pointer, (mul_ (requested.step, index)));
                          iargs = List.map (IT.subst su) requested.iargs;
-                         permission = needed_at_index;
                        }
                    in
                    match o_re_index with

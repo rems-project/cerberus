@@ -871,9 +871,9 @@ module EffectfulTranslation = struct
 
   let owned_good loc sym (res_t, oargs_ty) = 
     match res_t with
-    | RET.P { name = Owned (scty, Init); permission; _} ->
+    | RET.P { name = Owned (scty, Init); _} ->
        let v = IT.sym_ (sym, SBT.to_basetype oargs_ty) in
-       [(LC.T (IT.impl_ (permission, IT.good_ (scty, v))), 
+       [(LC.T ((IT.good_ (scty, v))), 
          (loc, Some "default value constraint"))]
     | RET.Q { name = Owned (scty, Init); q; permission; _} ->
        let v = IT.sym_ (sym, SBT.to_basetype oargs_ty) in
@@ -885,20 +885,12 @@ module EffectfulTranslation = struct
         []
 
 
-  let translate_cn_let_resource__pred env res_loc sym (cond, pred_loc, res, args) =
+  let translate_cn_let_resource__pred env res_loc sym (pred_loc, res, args) =
     let@ args = ListM.mapM (translate_cn_expr SymSet.empty env) args in
     let@ (pname, ptr_expr, iargs, oargs_ty) =
            translate_cn_res_info res_loc pred_loc env res args in
-    let@ permission = match cond with 
-      | None -> 
-         return (IT.bool_ true)
-      | Some c -> 
-         let@ c = translate_cn_expr SymSet.empty env c in
-         return (IT.term_of_sterm c)
-    in
     let pt = (RET.P { name = pname
               ; pointer= IT.term_of_sterm ptr_expr
-              ; permission= permission
               ; iargs = List.map IT.term_of_sterm iargs},
            oargs_ty)
     in
@@ -934,9 +926,9 @@ module EffectfulTranslation = struct
 
   let translate_cn_let_resource env (res_loc, sym, the_res) =
     let@ pt, pointee_values = match the_res with
-      | CN_pred (pred_loc, cond, res, args) ->
+      | CN_pred (pred_loc, res, args) ->
          translate_cn_let_resource__pred env res_loc sym
-           (cond, pred_loc, res, args)
+           (pred_loc, res, args)
       | CN_each (q, bt, guard, pred_loc, res, args) ->
          translate_cn_let_resource__each env res_loc sym
            (q, bt, guard, pred_loc, res, args)  
@@ -1033,7 +1025,7 @@ let ownership (loc, (addr_s, ct)) env =
        Sym.fresh_make_uniq ("O_"^obj_name)
     | _ -> assert false
   in
-  let resource = CN_pred (loc, None, CN_owned (Some ct), [CNExpr (loc, CNExpr_var addr_s)]) in
+  let resource = CN_pred (loc, CN_owned (Some ct), [CNExpr (loc, CNExpr_var addr_s)]) in
 
   let@ (pt_ret, oa_bt), lcs, _ = 
     Pure.handle "'Accesses'"
@@ -1384,7 +1376,6 @@ let translate_cn_statement
              (pack_unpack, { 
                name = name; 
                pointer = IT.term_of_sterm pointer; 
-               permission = IT.bool_ true; 
                iargs = List.map IT.term_of_sterm iargs;
              })
          in

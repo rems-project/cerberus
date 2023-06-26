@@ -172,7 +172,6 @@ type token =
   | CN_INV
   | CN_ACCESSES
   | CN_TRUSTED
-  | CN_WHEN
   | CN_UNCHANGED
 
 
@@ -331,6 +330,5 @@ let string_of_token = function
   | CN_INV -> "CN_INV"
   | CN_ACCESSES -> "CN_ACCESSES"
   | CN_TRUSTED -> "CN_TRUSTED"
-  | CN_WHEN -> "CN_WHEN"
   | CN_UNCHANGED -> "CN_UNCHANGED"
 

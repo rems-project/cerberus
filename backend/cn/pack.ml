@@ -10,7 +10,7 @@ module LAT = LogicalArgumentTypes
 
 let resource_empty provable resource = 
   let constr = match resource with
-    | (P p, _) -> LC.t_ (not_ p.permission)
+    | (P p, _) -> LC.t_ (bool_ false)
     | (Q p, _) -> LC.forall_ (p.q, BT.Integer) (not_ p.permission)
   in
   match provable constr with
@@ -35,7 +35,7 @@ let packing_ft loc global provable ret =
              q = q_s;
              step = int_ (Memory.size_of_ctype ict);
              iargs = [];
-             permission = and_ [ret.permission; ((int_ 0) %<= q); (q %< (int_ length))]
+             permission = and_ [((int_ 0) %<= q); (q %< (int_ length))]
            }
          in
          let o_s, o = IT.fresh_named (BT.of_sct ct) "value" in
@@ -55,7 +55,6 @@ let packing_ft loc global provable ret =
                     name = Owned (mct, init);
                     pointer = memberShift_ (ret.pointer, tag, member);
                     iargs = [];
-                    permission = ret.permission;
                   }
                 in
                 let m_value_s, m_value = IT.fresh_named (BT.of_sct mct) (Id.s member) in
@@ -68,7 +67,6 @@ let packing_ft loc global provable ret =
                     name = Owned (padding_ct, Uninit);
                     pointer = pointer_offset_ (ret.pointer, int_ offset);
                     iargs = [];
-                    permission = ret.permission;
                   }
                 in
                 let padding_s, padding = IT.fresh_named (BT.of_sct padding_ct) "padding" in
@@ -105,19 +103,20 @@ let unpack loc global provable (ret, O o) =
     | Q ret when equal_predicate_name predicate_name ret.name ->
        let su = IT.make_subst [(ret.q, index)] in
        let index_permission = IT.subst su ret.permission in
-       let at_index = 
-         (P { name = ret.name;
-              pointer = pointer_offset_ (ret.pointer, mul_ (ret.step, index));
-              iargs = List.map (IT.subst su) ret.iargs;
-              permission = index_permission },
-          O (map_get_ o index))
-       in
-       let ret_reduced = 
-         { ret with permission = and_ [ret.permission; ne__ (sym_ (ret.q, Integer)) index ] }
-       in
        begin match provable (LC.t_ index_permission) with
-       | `True -> Some ((Q ret_reduced, O o), at_index)
-       | `False -> None
+        | `True -> 
+          let at_index = 
+            (P { name = ret.name;
+                pointer = pointer_offset_ (ret.pointer, mul_ (ret.step, index));
+                iargs = List.map (IT.subst su) ret.iargs; },
+            O (map_get_ o index))
+          in
+          let ret_reduced = 
+            { ret with permission = and_ [ret.permission; ne__ (sym_ (ret.q, Integer)) index ] }
+          in
+          Some ((Q ret_reduced, O o), at_index)
+       | `False -> 
+          None
        end
     | _ -> 
       None

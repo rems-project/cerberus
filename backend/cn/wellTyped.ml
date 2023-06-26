@@ -630,12 +630,11 @@ module WRET = struct
     match r with
     | P p -> 
        let@ pointer = WIT.check loc BT.Loc p.pointer in
-       let@ permission = WIT.check loc BT.Bool p.permission in
        let has_iargs, expect_iargs = List.length p.iargs, List.length spec_iargs in
        (* +1 because of pointer argument *)
        let@ () = ensure_same_argument_number loc `Input (1 + has_iargs) ~expect:(1 + expect_iargs) in
        let@ iargs = ListM.map2M (fun (_, expected) arg -> WIT.check loc expected arg) spec_iargs p.iargs in
-       return (RET.P {name = p.name; pointer; permission; iargs})
+       return (RET.P {name = p.name; pointer; iargs})
     | Q p ->
        (* no need to alpha-rename, because context.ml ensures
           there's no name clashes *)

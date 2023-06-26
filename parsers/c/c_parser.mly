@@ -147,7 +147,7 @@ type asm_qualifier =
 %token CN_ACCESSES CN_TRUSTED CN_REQUIRES CN_ENSURES CN_INV
 %token CN_PACK CN_UNPACK CN_HAVE CN_EXTRACT CN_INSTANTIATE CN_UNFOLD CN_APPLY CN_MATCH
 %token CN_BOOL CN_INTEGER CN_REAL CN_POINTER CN_MAP CN_LIST CN_TUPLE CN_SET
-%token CN_WHEN CN_LET CN_TAKE CN_OWNED CN_BLOCK CN_EACH CN_FUNCTION CN_LEMMA CN_PREDICATE CN_DATATYPE CN_SPEC
+%token CN_LET CN_TAKE CN_OWNED CN_BLOCK CN_EACH CN_FUNCTION CN_LEMMA CN_PREDICATE CN_DATATYPE CN_SPEC
 %token CN_UNCHANGED
 %token CN_GOOD CN_NULL CN_TRUE CN_FALSE
 
@@ -2305,13 +2305,11 @@ assert_expr:
 | e= expr_without_let
     { Cerb_frontend.Cn.CN_assert_exp e }
 
-resource_when_condition:
-| CN_WHEN LPAREN e=expr RPAREN
-    { e }
+
 
 resource:
-| p= pred es= delimited(LPAREN, separated_list(COMMA, expr), RPAREN) cond=option(resource_when_condition)
-    { Cerb_frontend.Cn.CN_pred (Cerb_location.region $loc(p) NoCursor, cond, p, es) }
+| p= pred es= delimited(LPAREN, separated_list(COMMA, expr), RPAREN)
+    { Cerb_frontend.Cn.CN_pred (Cerb_location.region $loc(p) NoCursor, p, es) }
 | CN_EACH LPAREN bTy= base_type str= cn_variable SEMICOLON e1= expr RPAREN
        LBRACE p= pred LPAREN es= separated_list(COMMA, expr) RPAREN RBRACE
     { Cerb_frontend.Cn.CN_each ( str

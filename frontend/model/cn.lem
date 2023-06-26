@@ -103,7 +103,7 @@ type cn_pred 'a 'ty =
   | CN_named of 'a
 
 type cn_resource 'a 'ty =
-  | CN_pred of Loc.t * maybe (cn_expr 'a 'ty) * cn_pred 'a 'ty * list (cn_expr 'a 'ty)
+  | CN_pred of Loc.t * cn_pred 'a 'ty * list (cn_expr 'a 'ty)
   | CN_each of 'a * cn_base_type 'a * cn_expr 'a 'ty * Loc.t * cn_pred 'a 'ty * list (cn_expr 'a 'ty)
 
 type cn_assertion 'a 'ty =

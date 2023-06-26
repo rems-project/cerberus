@@ -184,14 +184,10 @@ let rec get_packing_ft_owned_resources = function
 let rec model_res_spans m_g (res : ResourceTypes.t) =
   match res with
   | (RET.P ({name = Owned (ct, _); _} as pt)) ->
-      let perm = eval_extract "resource permission" m_g is_bool pt.permission in
-      let _ = perm || raise NoResult in
       let ptr = eval_extract "resource pointer" m_g is_pointer pt.pointer in
       let sz = Memory.size_of_ctype ct in
       [((ptr, Z.add ptr (Z.of_int sz)), (res, res))]
   | (RET.P ({name = PName pname; _} as r_pt)) ->
-      let perm = eval_extract "resource permission" m_g is_bool r_pt.permission in
-      let _ = perm || raise NoResult in
       let rpreds = (snd m_g).Global.resource_predicates in
       let def = SymMap.find_opt pname rpreds |> some_result in
       let clauses = ResourcePredicates.instantiate_clauses def r_pt.pointer r_pt.iargs
@@ -271,7 +267,7 @@ let scan_subterms f t = fold_subterms (fun _ xs t -> match f t with
 
 (* get concrete objects that (probably) exist in this resource/request *)
 let get_witnesses = function
-  | RET.P ({name = Owned _; _} as pt) -> [(pt.pointer, pt.permission)]
+  | RET.P ({name = Owned _; _} as pt) -> [(pt.pointer, bool_ true)]
   | RET.Q ({name = Owned (ct, _); _} as qpt) ->
      assert (IT.equal qpt.step (IT.int_ (Memory.size_of_ctype ct)));
      let i = sym_ (qpt.q, BT.Integer) in
@@ -293,7 +289,7 @@ let get_witnesses = function
        (fun i -> (arrayShift_ (qpt.pointer, ct, add_ (lb, z_ (Z.of_int i))),
            subst (make_subst [(qpt.q, z_ (Z.of_int i))]) qpt.permission))
   | _ -> []
-
+(*
 let narrow_quantified_to_witness ptr (q_pt : RET.qpredicate_type) =
   let ct = match q_pt.name with
     | Owned (ct, _) -> ct
@@ -579,3 +575,4 @@ let trace_guess_path_eqs ress req m g =
 
 
 
+*)

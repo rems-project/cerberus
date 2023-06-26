@@ -32,7 +32,6 @@ let pp_predicate_name = function
 type predicate_type = {
     name : predicate_name; 
     pointer: IT.t;            (* I *)
-    permission: IT.t;         (* I *)
     iargs: IT.t list;         (* I *)
   }
 [@@deriving eq, ord]
@@ -80,10 +79,7 @@ let pp_predicate_type_aux (p : predicate_type) oargs =
   let args = List.map IT.pp (p.pointer :: p.iargs) in
   c_app (pp_predicate_name p.name) args 
   ^^ pp_maybe_oargs oargs
-  ^^ begin match IT.is_true p.permission with
-     | true -> Pp.empty
-     | false -> space ^^ !^"if" ^^^ IT.pp p.permission
-     end
+
 
 let pp_qpredicate_type_aux (p : qpredicate_type) oargs =
   let pointer = 
@@ -141,7 +137,6 @@ let subst_predicate_type substitution (p : predicate_type) =
   {
     name = p.name;
     pointer = IT.subst substitution p.pointer;
-    permission = IT.subst substitution p.permission;
     iargs = List.map (IT.subst substitution) p.iargs;
   }
 
@@ -170,7 +165,7 @@ let subst (substitution : IT.t Subst.t) = function
 
 let free_vars = function
   | P p -> 
-     IT.free_vars_list (p.pointer :: p.permission :: p.iargs)
+     IT.free_vars_list (p.pointer :: p.iargs)
   | Q p -> 
      SymSet.union
        (SymSet.union (IT.free_vars p.pointer) (IT.free_vars p.step))
@@ -221,7 +216,6 @@ let dtree_of_predicate_name = function
 
 let dtree_of_predicate_type (pred : predicate_type) =
   Dnode (pp_ctor "pred", 
-        IT.dtree pred.permission ::
         dtree_of_predicate_name pred.name ::
         IT.dtree pred.pointer ::
         List.map IT.dtree pred.iargs)

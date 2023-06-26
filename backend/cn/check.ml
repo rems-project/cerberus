@@ -1008,7 +1008,7 @@ let load loc pointer ct =
   pure begin
     let@ (point, O value), _ = 
       RI.Special.predicate_request loc (Access Load)
-        ({name = Owned (ct, Init); pointer; permission = bool_ true; iargs = []}, None)
+        ({name = Owned (ct, Init); pointer; iargs = []}, None)
     in
     return value
   end
@@ -1178,7 +1178,6 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
           add_r loc
             (P { name = Owned (act.ct, Uninit); 
                  pointer = ret;
-                 permission = bool_ true;
                  iargs = [];
                }, 
              O (default_ (BT.of_sct act.ct)))
@@ -1198,7 +1197,6 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
           RI.Special.predicate_request loc (Access Kill) ({
             name = Owned (ct, Uninit);
             pointer = arg;
-            permission = bool_ true;
             iargs = [];
           }, None)
         in
@@ -1236,7 +1234,6 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
           RI.Special.predicate_request loc (Access Store) ({
               name = Owned (act.ct, Uninit); 
               pointer = parg;
-              permission = bool_ true;
               iargs = [];
             }, None)
         in
@@ -1244,7 +1241,6 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
           add_r loc
             (P { name = Owned (act.ct, Init);
                  pointer = parg;
-                 permission = bool_ true;
                  iargs = [];
                },
              O varg)
