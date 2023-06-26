@@ -1095,8 +1095,10 @@ let normalise_label
      end
 
 
-
-
+let add_spec_arg_renames loc args (spec : (Symbol.sym, Ctype.ctype) cn_fun_spec) env =
+  List.fold_right (fun ((fun_sym, bt), (_, spec_sym)) env ->
+      C.add_renamed_computational spec_sym fun_sym (SBT.of_basetype (convert_bt loc bt)) env)
+    (List.combine args spec.cn_spec_args) env
 
 let normalise_fun_map_decl 
       (markers_env, ail_prog) 
@@ -1133,6 +1135,8 @@ let normalise_fun_map_decl
            return (loc, logical_fun_sym)
          ) mk_functions
      in
+     let defn_spec_sites = List.map fst requires @ List.map fst ensures @
+       List.map fst accesses in
      let@ accesses = ListM.mapM (desugar_access d_st global_types) accesses in
      let@ (requires, d_st) = desugar_conds d_st (List.map snd requires) in
      Print.debug 6 (lazy (Print.string "desugared requires conds"));
@@ -1143,13 +1147,28 @@ let normalise_fun_map_decl
      let@ (ensures, ret_d_st) = desugar_conds ret_d_st (List.map snd ensures) in
      Print.debug 6 (lazy (Print.string "desugared ensures conds"));
 
+     let@ (spec_req, spec_ens, env) = match SymMap.find_opt fname fun_specs with
+     | Some (_, spec) ->
+        let@ () = match defn_spec_sites with
+          | [] -> return ()
+          | (loc2 :: _) -> fail {loc = loc2; msg = Generic (Sym.pp fname ^^ P.colon ^^^
+              !^"re-specification of CN annotations from:" ^^ P.break 1 ^^^
+              Locations.pp spec.cn_spec_loc)}
+        in
+        let env = add_spec_arg_renames loc args spec env in
+        let env = C.add_renamed_computational spec.cn_spec_ret_name ret_s
+            (SBT.of_sct (convert_ct loc ret_ct)) env in
+        return (spec.cn_spec_requires, spec.cn_spec_ensures, env)
+     | _ -> return ([], [], env)
+     in
+
+     let requires = requires @ spec_req in
+     let ensures = requires @ spec_ens in
+
      debug 6 (lazy (!^"function requires/ensures" ^^^ Sym.pp fname));
      debug 6 (lazy (pp_doc_tree (dtree_of_accesses accesses)));
      debug 6 (lazy (pp_doc_tree (dtree_of_requires requires)));
      debug 6 (lazy (pp_doc_tree (dtree_of_ensures ensures)));
-
-     (* FIXME: TODO: support separate spec in this situation *)
-
 
      let@ args_and_body = 
        make_function_args (fun arg_states env st ->

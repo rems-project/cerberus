@@ -4,8 +4,6 @@
 
 int
 g (int x)
-/*@ requires x >= 0 @*/
-/*@ ensures return == (mod (x, 12)) @*/
 {
   if (x < 12) {
     return x;
