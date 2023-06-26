@@ -103,6 +103,7 @@ let main
       loc_pp 
       debug_level 
       print_level 
+      print_sym_nums
       slow_threshold
       no_timestamps
       json 
@@ -128,6 +129,7 @@ let main
   Cerb_debug.debug_level := debug_level;
   Pp.loc_pp := loc_pp;
   Pp.print_level := print_level;
+  CF.Pp_symbol.pp_cn_sym_nums := print_sym_nums;
   Pp.print_timestamps := not no_timestamps;
   Option.iter (fun t -> Solver.set_slow_threshold t) slow_threshold;
   Solver.random_seed := random_seed;
@@ -225,6 +227,10 @@ let print_level =
   let doc = "Set the debug message level for the type system to $(docv) (should range over [0-15])." in
   Arg.(value & opt int 0 & info ["p"; "print-level"] ~docv:"N" ~doc)
 
+let print_sym_nums =
+  let doc = "Print numeric IDs of Cerberus symbols (variable names)." in
+  Arg.(value & flag & info ["n"; "print-sym-nums"] ~doc)
+
 let slow_threshold =
   let doc = "Set the time threshold (in seconds) for logging to slow_smt.txt temp file." in
   Arg.(value & opt (some float) None & info ["slow-smt"] ~docv:"TIMEOUT" ~doc)
@@ -302,6 +308,7 @@ let () =
       loc_pp $ 
       debug_level $ 
       print_level $
+      print_sym_nums $
       slow_threshold $
       no_timestamps $
       json $
