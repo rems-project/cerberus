@@ -38,7 +38,7 @@ type predicate_sig = {
 
 
 type env = {
-  computationals: SBT.t SymMap.t;
+  computationals: (SBT.t * Sym.t option) SymMap.t;
   logicals: SBT.t SymMap.t;
   predicates: predicate_sig SymMap.t;
   functions: function_sig SymMap.t;
@@ -64,7 +64,11 @@ let symtable = SymTable.create 10000
 
 let add_computational sym bTy env =
   SymTable.add symtable sym bTy;
-  {env with computationals= SymMap.add sym bTy env.computationals }
+  {env with computationals= SymMap.add sym (bTy, None) env.computationals }
+
+let add_renamed_computational sym sym2 bTy env =
+  SymTable.add symtable sym bTy;
+  {env with computationals= SymMap.add sym (bTy, Some sym2) env.computationals }
 
 let add_logical sym bTy env =
   SymTable.add symtable sym bTy;
@@ -76,7 +80,7 @@ let add_predicate sym pred_sig env =
 
 let lookup_computational_or_logical sym env =
   match SymMap.find_opt sym env.logicals with
-  | Some bt -> Some bt
+  | Some bt -> Some (bt, None)
   | None -> 
      SymMap.find_opt sym env.computationals
 
@@ -573,13 +577,15 @@ module EffectfulTranslation = struct
         | CNExpr_const CNConst_unit ->
             return (IT (Const Unit, SBT.Unit))
         | CNExpr_var sym ->
-            let@ bTy = match lookup_computational_or_logical sym env with
+            let@ (sym, bTy) = match lookup_computational_or_logical sym env with
               | None ->
                  Pp.debug 2 (lazy (Pp.item ("failed lookup of CNExpr_var " ^ Sym.pp_string sym)
                                      (Pp.list (fun (nm, _) -> Sym.pp nm) (SymMap.bindings env.computationals))));
                  fail {loc; msg= Unknown_variable sym}
-              | Some bt ->
-                 return bt
+              | Some (bt, None) ->
+                 return (sym, bt)
+              | Some (bt, Some renamed_sym) ->
+                 return (renamed_sym, bt)
             in
             return (IT ((Sym sym), bTy))
         | CNExpr_list es_ ->
