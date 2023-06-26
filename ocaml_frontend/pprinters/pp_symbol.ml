@@ -2,6 +2,7 @@ open Symbol
 open Cerb_pp_prelude
 open Cerb_location
 
+let pp_cn_sym_nums = ref false
 
 let to_string (Symbol (_, n, sd)) =
   match sd with
@@ -61,7 +62,7 @@ let to_string_cn (Symbol (dig, n, sd)) =
 let to_string_pretty_cn (Symbol (_, n, sd) as s) =
   let add_number name = name ^ "{" ^ string_of_int n ^ "}" in
   let maybe_add_number name = 
-      if !Cerb_debug.debug_level > 4 
+      if (!pp_cn_sym_nums) || (!Cerb_debug.debug_level > 4)
       then add_number name
       else name
   in
