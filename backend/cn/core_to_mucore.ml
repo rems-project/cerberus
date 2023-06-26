@@ -1163,7 +1163,7 @@ let normalise_fun_map_decl
      in
 
      let requires = requires @ spec_req in
-     let ensures = requires @ spec_ens in
+     let ensures = ensures @ spec_ens in
 
      debug 6 (lazy (!^"function requires/ensures" ^^^ Sym.pp fname));
      debug 6 (lazy (pp_doc_tree (dtree_of_accesses accesses)));
