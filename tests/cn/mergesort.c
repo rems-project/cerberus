@@ -3,6 +3,7 @@ struct int_list {
   struct int_list* tail;
 };
 
+/*@
 datatype seq { 
   Seq_Nil {},
   Seq_Cons {integer head, datatype seq tail}
@@ -64,7 +65,8 @@ function [rec] (datatype seq) mergesort(datatype seq xs) {
       }
     }
 }
-	    
+@*/
+
 struct int_list_pair { 
   struct int_list* fst;
   struct int_list* snd;
