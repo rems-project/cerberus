@@ -80,3 +80,5 @@ let is_power_of_two (n: Nat_big_num.num) : bool =
     false
   else
     n land (pred n) = zero
+
+external terminal_size: unit -> (int * int) option = "terminal_size"

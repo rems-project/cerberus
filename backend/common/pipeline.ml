@@ -1,8 +1,6 @@
 open Cerb_frontend
 open Cerb_global
 
-external terminal_size: unit -> (int * int) option = "terminal_size"
-
 (* Pipeline *)
 
 let (>>=) = Exception.except_bind
@@ -24,7 +22,7 @@ let run_pp ?(remove_path = true) with_ext doc =
           (false, Stdlib.stdout) in
   let saved = !Cerb_colour.do_colour in
   Cerb_colour.do_colour := not is_fout;
-  let term_col = match terminal_size () with
+  let term_col = match Cerb_util.terminal_size () with
     | Some (_, col) -> col
     | _ -> 80
   in

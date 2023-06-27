@@ -356,7 +356,6 @@ let get_line n ic =
   aux n
 
 
-external terminal_size: unit -> (int * int) option = "terminal_size"
 
 let string_at_line fname lnum cpos =
   try
@@ -369,7 +368,7 @@ let string_at_line fname lnum cpos =
       in
       let l =
         let l_ = get_line lnum ic in
-        match terminal_size () with
+        match Cerb_util.terminal_size () with
           | None ->
               (None, l_)
           | Some (_, term_col) ->
