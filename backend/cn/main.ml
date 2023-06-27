@@ -205,7 +205,7 @@ let file =
 let incl_dir =
   let doc = "Add the specified directory to the search path for the\
              C preprocessor." in
-  Arg.(value & opt_all dir [] & info ["I"; "include-directory"]
+  Arg.(value & opt_all string [] & info ["I"; "include-directory"]
          ~docv:"DIR" ~doc)
 
 let loc_pp =
