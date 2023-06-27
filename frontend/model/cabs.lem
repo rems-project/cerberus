@@ -441,6 +441,8 @@ instance (Located external_declaration)
     end
 end
 
+let loc_of_edecl (edecl : external_declaration) = locOf edecl
+
 instance (SetType cabs_base_type_specifier)
   let setElemCompare bspecif1 bspecif2 =
     let ord = function

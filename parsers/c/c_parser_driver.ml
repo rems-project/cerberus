@@ -22,9 +22,16 @@ let lexer_cn_hack lexbuf =
   else
     C_lexer.lexer lexbuf
 
+let warn_toplevel_deprecated loc = prerr_endline (Pp_utils.to_plain_pretty_string (
+  let open Cerb_pp_prelude in
+  let open Cerb_colour in
+  pp_ansi_format [Bold; Yellow] (fun () -> !^ "warning:") ^^^
+  !^ "deprecated CN declaration: use /*@ @*/ comment:" ^^ PPrint.break 1 ^^^
+  Cerb_location.pp_location ~clever:false loc))
+
 let most_recent_lexbuf = ref (Lexing.from_string "foo")
 
-let convert_toplevel_magic = function
+let convert_toplevel_magic decl = match decl with
   | Cabs.EDecl_magic (loc, str) ->
     let lexbuf = Lexing.from_string str in
     let () = match Cerb_location.to_raw loc with Cerb_location.Loc_region (pos, pos2, _) ->
@@ -35,7 +42,12 @@ let convert_toplevel_magic = function
     C_lexer.internal_state.inside_cn <- true;
     most_recent_lexbuf := lexbuf;
     C_parser.cn_toplevel C_lexer.lexer lexbuf
-  | decl -> [decl]
+  | EDecl_predCN _
+  | EDecl_funcCN _
+  | EDecl_lemmaCN _
+  | EDecl_datatypeCN _
+    -> begin warn_toplevel_deprecated (Cabs.loc_of_edecl decl); [decl] end
+  | _ -> [decl]
 
 let parse_with_cn lexbuf =
   let Cabs.TUnit decls = C_parser.translation_unit lexer_cn_hack lexbuf in
