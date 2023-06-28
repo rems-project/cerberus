@@ -13,7 +13,6 @@ let rec comps (fs : ('a -> 'a) list) (a : 'a) : 'a =
 let curry f a b = f (a, b)
 let uncurry f (a, b) = f a b
 
-
 let do_stack_trace () = 
   let open Cerb_debug in
   if !debug_level > 0 then 
@@ -27,14 +26,10 @@ let do_stack_trace () =
 let pair_equal equalityA equalityB (a,b) (a',b') = 
   equalityA a a' && equalityB b b'
 
-
-
 (* let at_most_one err_str = function
  *   | [] -> None
  *   | [x] -> (Some x)
  *   | _ -> Cerb_debug.error err_str *)
-
-
 
 
 let unsupported (loc : Locations.t) (err : Pp.document) : 'a = 
@@ -42,9 +37,5 @@ let unsupported (loc : Locations.t) (err : Pp.document) : 'a =
   Pp.error loc err (Option.to_list trace);
   exit 2
 
-
-
 let skip swith lrt = if true then swith else lrt
-
-
 

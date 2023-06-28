@@ -37,7 +37,7 @@ let string_of_cparser_cause = function
   | Cparser_unexpected_eof ->
       "unexpected end of file"
   | Cparser_unexpected_token str ->
-      "unexpected token '"^ str ^ "'"
+      "unexpected token " ^ str
   | Cparser_non_standard_string_concatenation ->
       "unsupported non-standard concatenation of string literals"
   | Cparser_extra_semi AFTER_FUNCTION ->

@@ -256,10 +256,11 @@ let time_f_logs (loc : Locations.t) level msg f x =
 
 
 (* stealing some logic from pp_errors *)
-let error (loc : Locations.t) msg extras = 
+let error (loc : Locations.t) (msg : document) extras = 
   let (head, pos) = Locations.head_pos_of_location loc in
-  print stderr (format [Bold; Red] "error:" ^^^ 
-                format [Bold] head ^^^ msg);
+  print stderr (format [Bold] head ^^^
+                format [Bold; Red] "error:" ^^^
+                format [Bold] @@ plain msg);
   if Locations.is_unknown_location loc then () else print stderr !^pos;
   List.iter (fun pp -> print stderr pp) extras
 
@@ -267,8 +268,8 @@ let error (loc : Locations.t) msg extras =
 (* stealing some logic from pp_errors *)
 let warn (loc : Locations.t) msg = 
   let (head, pos) = Locations.head_pos_of_location loc in
-  print stderr (format [Bold; Yellow] "warning:" ^^^ 
-                format [Bold] head ^^^ msg);
+  print stderr (format [Bold] head ^^^
+                format [Bold; Yellow] "warning:" ^^^ msg);
   if Locations.is_unknown_location loc then () else print stderr !^pos
 
 
@@ -320,6 +321,4 @@ let progress_simple title name =
 
 let of_total cur total = 
   Printf.sprintf "[%d/%d]" cur total
-
-
 

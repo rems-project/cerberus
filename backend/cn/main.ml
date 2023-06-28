@@ -145,7 +145,7 @@ let main
      | (Some times, _) -> Some (times, "csv")
      | (_, Some times) -> Some (times, "log")
      | _ -> None);
-  try begin
+  try
       let result = 
         let open Resultat in
          let@ prog5 = Core_to_mucore.normalise_file (markers_env, ail_prog) prog4 in
@@ -186,8 +186,7 @@ let main
        | Ok () -> exit 0
        | Error e when json -> TypeErrors.report_json ?state_file e; exit 1
        | Error e -> TypeErrors.report ?state_file e; exit 1
-     end 
-     with
+ with
      | exc -> 
         Cerb_debug.maybe_close_csv_timing_file ();
         Pp.maybe_close_times_channel ();
