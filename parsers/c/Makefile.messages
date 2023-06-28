@@ -8,13 +8,10 @@
 
 .PHONY: update
 update:
-	@ cp -f c_parser_error.messages /tmp/c_parser_error.messages.bak
-	@ dune exec menhir -- c_parser.mly \
-	    --update-errors c_parser_error.messages \
-	    > /tmp/c_parser_error.updated
-	@ ./err_msg.py /tmp/c_parser_error.updated \
-	    > /tmp/c_parser_error.easy
-	@ mv /tmp/c_parser_error.easy c_parser_error.messages
+	cp -f c_parser_error.messages /tmp/c_parser_error.messages.bak
+	dune exec menhir -- c_parser.mly --update-errors c_parser_error.messages > /tmp/c_parser_error.updated
+	./err_msg.py /tmp/c_parser_error.updated > /tmp/c_parser_error.easy
+	mv /tmp/c_parser_error.easy c_parser_error.messages
 
 # [make strip] strips away the auto-generated comments found in the file
 # c_parser_error.messages. It is typically used after [make update], which
@@ -33,14 +30,11 @@ strip:
 
 .PHONY: complete
 complete:
-	@ dune exec menhir -- c_parser.mly \
-	    --list-errors \
-	    > /tmp/c_parser_error.auto.messages
-	@ dune exec menhir -- c_parser.mly \
+	dune exec menhir -- c_parser.mly --list-errors > /tmp/c_parser_error.auto.messages
+	dune exec menhir -- c_parser.mly \
 	    --merge-errors /tmp/c_parser_error.auto.messages \
 	    --merge-errors c_parser_error.messages \
 	    > /tmp/c_parser_error.merged
-	@ ./err_msg.py /tmp/c_parser_error.merged \
-	    > /tmp/c_parser_error.easy
-	@ mv /tmp/c_parser_error.easy c_parser_error.messages
+	./err_msg.py /tmp/c_parser_error.merged > /tmp/c_parser_error.easy
+	mv /tmp/c_parser_error.easy c_parser_error.messages
 

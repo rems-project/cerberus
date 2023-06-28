@@ -19,8 +19,8 @@
 ; it requires the completeness check to have been run
 
 (rule
-  (action (with-stdout-to c_parser_error.ml
   (deps c_parser_error.check)
+  (action (with-stdout-to c_parser_error.ml
     (run menhir
       %{dep:c_parser.mly}
       --compile-errors %{dep:c_parser_error.messages}))))
