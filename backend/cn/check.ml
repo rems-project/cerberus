@@ -1551,6 +1551,16 @@ let bind_arguments (loc : Loc.t) (full_args : _ mu_arguments) =
   aux_a full_args
 
      
+let post_state_of_rt loc rt = 
+  let open False in
+  let rt_as_at = AT.of_rt rt (LAT.I False) in
+  let rt_as_args = Core_to_mucore.arguments_of_at (fun False -> False) rt_as_at in
+  pure begin
+     let@ False, final_resources = bind_arguments loc rt_as_args in
+     let@ () = add_rs loc final_resources in
+     get ()
+   end
+
 
 
 
@@ -1589,13 +1599,17 @@ let check_procedure
           ) label_defs ([], SymMap.empty)
       in
 
-      let@ () = 
+      let@ (), _mete_pre_state = 
         debug 2 (lazy (headline ("checking function body " ^ Sym.pp_string fsym)));
         pure begin
             let@ () = add_rs loc initial_resources in
-            check_expr_rt loc label_context ~typ:(Normal rt) body
+            let@ pre_state = get () in
+            let@ () = check_expr_rt loc label_context ~typ:(Normal rt) body in
+            return ((), pre_state)
           end 
       in
+      let@ _mete_post_state = post_state_of_rt loc rt in
+
       let@ () = ListM.iterM (fun (lsym, def) ->
         pure begin match def with
           | M_Return loc ->

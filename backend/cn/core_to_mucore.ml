@@ -827,7 +827,21 @@ let rec at_of_arguments f_i = function
      AT.L (lat_of_arguments f_i l)
 
 
-
+let rec arguments_of_lat f_i = function
+  | LAT.Define (def, info, lat) ->
+     M_Define (def, info, arguments_of_lat f_i lat)
+  | LAT.Resource (bound, info, lat) ->
+     M_Resource (bound, info, arguments_of_lat f_i lat)
+  | LAT.Constraint (c, info, lat) ->
+     M_Constraint (c, info, arguments_of_lat f_i lat)
+  | LAT.I i -> 
+     M_I (f_i i)
+     
+let rec arguments_of_at f_i = function
+  | AT.Computational (bound, info, at) ->
+     M_Computational (bound, info, arguments_of_at f_i at)
+  | AT.L lat ->
+     M_L (arguments_of_lat f_i lat)
 
 
 

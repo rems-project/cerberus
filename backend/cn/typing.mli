@@ -10,7 +10,7 @@ val fail : failure -> 'a m
 val fail_with_trace : (Trace.t -> failure) -> 'a m
 val run : Context.t -> 'a m -> ('a, TypeErrors.t) Result.t
 
-(* val get: unit -> Context.t m *)
+val get: unit -> Context.t m
 val print_with_ctxt : (Context.t -> unit) -> unit m
 val get_global : unit -> Global.t m
 val all_constraints : unit -> Context.LCSet.t m
