@@ -797,21 +797,24 @@ let model () =
      let model = Option.value_err "SMT solver did not produce a counter model" omodel in
      ((context, model), qs)
 
-let maybe_save_slow_problem assertions lc lc_t time solver = match save_slow_problems () with
+let maybe_save_slow_problem extra_assertions lc lc_t time solver =
+  match save_slow_problems () with
   | (_, _, None) -> ()
   | (_, cutoff, _) when (Stdlib.Float.compare time cutoff) = -1 -> ()
   | (first_msg, _, Some fname) ->
     let channel = open_out_gen [Open_append; Open_creat] 0o666 fname in
     output_string channel "\n\n";
     if first_msg then output_string channel "## New CN run ##\n\n" else ();
+    let ass_doc = extra_assertions @ Z3.Solver.get_assertions solver
+        |> Pp.flow_map (Pp.break 1) (fun e -> format [] (Z3.Expr.to_string e)) in
+    let smt_doc = ass_doc in
     Cerb_colour.without_colour (fun () -> print channel (item "Slow problem"
       (Pp.flow Pp.hardline [
           item "time taken" (format [] (Float.to_string time));
           item "constraint" (LC.pp lc);
           item "SMT constraint" !^(Z3.Expr.to_string lc_t);
           item "solver statistics" !^(Z3.Statistics.to_string (Z3.Solver.get_statistics solver));
-          item "SMT assertions"
-              (Pp.parens (Pp.list (fun e -> format [] (Z3.Expr.to_string e)) assertions));
+          item "SMT problem" smt_doc;
       ]))) ();
     output_string channel "\n";
     saved_slow_problem ();
@@ -848,15 +851,11 @@ let provable ~loc ~solver ~global ~assumptions ~simp_ctxt ~pointer_facts lc =
      end;
      match res with
      | Z3.Solver.UNSATISFIABLE ->
-        let all_assumptions = extra1 @ extra2 @
-            Z3.Solver.get_assertions solver.incremental in
-        maybe_save_slow_problem all_assumptions lc expr elapsed solver.incremental;
+        maybe_save_slow_problem (extra1 @ extra2) lc expr elapsed solver.incremental;
         rtrue ()
      | Z3.Solver.SATISFIABLE -> rfalse qs solver.incremental
      | Z3.Solver.UNKNOWN ->
-        let all_assumptions = extra1 @ extra2 @
-            Z3.Solver.get_assertions solver.incremental in
-        maybe_save_slow_problem all_assumptions lc expr elapsed solver.incremental;
+        maybe_save_slow_problem (extra1 @ extra2) lc expr elapsed solver.incremental;
         let reason = Z3.Solver.get_reason_unknown solver.incremental in 
         failwith ("SMT solver returned 'unknown'; reason: " ^ reason)
 
