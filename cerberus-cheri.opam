@@ -19,7 +19,6 @@ license: "BSD-2-Clause"
 homepage: "https://www.cl.cam.ac.uk/~pes20/cerberus/"
 bug-reports: "https://github.com/rems-project/cerberus/issues"
 depends: [
-  "coq-cheri-capabilities"
   "ocaml" {>= "4.13.0"}
   "dune" {>= "3.8.0"}
   "sha" {>= "1.12"}
@@ -32,8 +31,7 @@ depends: [
   "lem" {>= "2020-06-03"}
   "menhir" {>= "20181006"}
   "result" {>= "1.5"}
-  "uutf" {>= "1.0.3"}
-  "jsonm" {>= "1.0.1"}
+  "cerberus-lib"
   "ounit2"
   "ppx_deriving"
   "zarith"
@@ -41,9 +39,9 @@ depends: [
   "coq-sail"
   "coq-ext-lib"
   "coq-struct-tact"
+  "coq-cheri-capabilities"
   "landmarks"
   "landmarks-ppx"
-  "cerberus-lib"
 ]
 
 build: [
