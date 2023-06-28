@@ -43,11 +43,11 @@ depends: [
   "coq-struct-tact"
   "landmarks"
   "landmarks-ppx"
+  "cerberus-lib"
 ]
 
 build: [
   ["dune" "subst"] {pinned}
-  [make "prelude-src"]
   ["dune"
     "build"
     "-p"
