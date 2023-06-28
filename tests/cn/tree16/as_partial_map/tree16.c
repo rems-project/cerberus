@@ -13,15 +13,9 @@ struct node {
   tree nodes[NUM_NODES];
 };
 
-#ifdef CN_MODE
-#define CN(foo) foo
-#else
-#define CN(foo)
-#endif
-
-#ifdef CN_MODE
-
+/*@
 function (integer) num_nodes ()
+@*/
 
 int cn_get_num_nodes (void)
 /*@ cn_function num_nodes @*/
@@ -29,6 +23,7 @@ int cn_get_num_nodes (void)
   return NUM_NODES;
 }
 
+/*@
 datatype tree_arc {
   Arc_End {},
   Arc_Step {integer i, datatype tree_arc tail}
@@ -128,7 +123,7 @@ lemma construct_lemma (integer v,
   ensures
     ((construct(v, ns))[arc]) == (construct_app_rhs(v, ns, arc))
 
-#endif
+@*/
 
 int
 lookup_rec (tree t, int *path, int i, int path_len, int *v)

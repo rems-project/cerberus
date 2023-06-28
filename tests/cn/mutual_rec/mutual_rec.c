@@ -205,9 +205,11 @@ b_tree_keys_node_lemma (struct a_node *even, struct a_node *odd)
 }
 
 /* A lemma about increment of concat. */
+/*@
 lemma inc_concat_lemma (datatype key_list xs, datatype key_list ys)
   requires true
   ensures inc_list (concat (xs, ys)) == concat (inc_list (xs), inc_list (ys))
+@*/
 
 void
 a_tree_keys_node_concat_inc_lemma (int k, struct b_node *left, struct b_node *right)

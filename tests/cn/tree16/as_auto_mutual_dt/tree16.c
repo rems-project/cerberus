@@ -13,15 +13,9 @@ struct node {
   tree nodes[NUM_NODES];
 };
 
-#ifdef CN_MODE
-#define CN(foo) foo
-#else
-#define CN(foo)
-#endif
-
-#ifdef CN_MODE
-
+/*@
 function (integer) num_nodes ()
+@*/
 
 int cn_get_num_nodes (void)
 /*@ cn_function num_nodes @*/
@@ -29,6 +23,7 @@ int cn_get_num_nodes (void)
   return NUM_NODES;
 }
 
+/*@
 datatype tree {
   Empty_Tree {},
   Node {integer v, list <datatype tree> children}
@@ -52,7 +47,7 @@ predicate {datatype tree t, integer v, map <integer, datatype tree> children}
   }
 }
 
-predicate datatype tree Indirect_Tree (pointer p) {
+predicate (datatype tree) Indirect_Tree (pointer p) {
   take V = Owned<tree>(p);
   take T = Tree(V);
   return T.t;
@@ -95,17 +90,13 @@ function [coq_unfold] (boolean) in_tree_step (datatype tree t, datatype arc_in_a
   }
 }
 
-
-
 lemma in_tree_tree_v_lemma (datatype tree t, datatype arc_in_array arc,
     map <integer, datatype tree> t_children)
   requires true
   ensures
     (tree_v(t, arc)) == (tree_v_step(t, arc));
     (in_tree(t, arc)) == (in_tree_step(t, arc))
-
-
-#endif
+@*/
 
 int
 lookup_rec (tree t, int *path, int i, int path_len, int *v)
