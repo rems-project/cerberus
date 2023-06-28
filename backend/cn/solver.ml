@@ -211,7 +211,18 @@ module Translate = struct
       let () = BT_Table.add bt_id_table bt id in
       id
 
-  let bt_pp_name bt = BT.pp bt ^^ Pp.int (bt_id bt)
+  let bt_pp_name bt =
+    let open Pp in
+    match bt with
+      | BT.Struct nm -> !^ "struct_" ^^ Sym.pp nm
+      | BT.Datatype nm -> !^ "datatype_" ^^ Sym.pp nm
+      | BT.Tuple _ -> !^ "tuple_" ^^ Pp.int (bt_id bt)
+      | BT.List _ -> !^ "list_" ^^ Pp.int (bt_id bt)
+      | BT.Set _ -> !^ "set_" ^^ Pp.int (bt_id bt)
+      | BT.Map _ -> !^ "map_" ^^ Pp.int (bt_id bt)
+      | BT.Record mems -> !^ "rec_" ^^ Pp.int (bt_id bt) ^^
+          Pp.flow_map (!^ "_") (fun (nm, _) -> Id.pp nm) mems ^^ !^ "_" ^^ Pp.int (bt_id bt)
+      | _ -> BT.pp bt
 
   let bt_name bt = Pp.plain (bt_pp_name bt)
 
