@@ -11,9 +11,11 @@ open Global
 open LogicalFunctions
 module LCSet = Set.Make(LC)
 module BT = BaseTypes
+module StringSet = Set.Make(String)
 
 
 let random_seed = ref 1
+let log_to_temp = ref false
 
 let slow_smt_file () =
   let open Filename in
@@ -55,12 +57,13 @@ let xor_no_smt_solver_sym = Sym.fresh_named "xor_uf"
 
 
 
+let log_file () = match ! log_to_temp with
+  | false -> None
+  | true -> Some (Filename.get_temp_dir_name () ^ "/z3_log.smt")
 
-
-let logging_params = 
-    [
-      (* ("solver.smtlib2_log", Filename.get_temp_dir_name () ^ "/z3_log.smt"); *)
-    ]
+let logging_params () = match log_file () with
+  | None -> []
+  | Some fname -> [ ("solver.smtlib2_log", fname ) ]
 
 let no_automation_params = [
     ("auto_config", "false");
@@ -105,7 +108,7 @@ let model_params = [
   ]
 
 let params () =
-  logging_params
+  logging_params ()
   @ no_automation_params
   @ no_randomness_params ()
   @ solver_params
@@ -797,7 +800,35 @@ let model () =
      let model = Option.value_err "SMT solver did not produce a counter model" omodel in
      ((context, model), qs)
 
-let maybe_save_slow_problem extra_assertions lc lc_t time solver =
+let paren_sexp nm doc = Pp.parens (!^ nm ^^^ doc)
+
+let scan_z3_log_file_decls fname =
+  let f = open_in fname in
+  (* String.fold_left arrives in 4.13 which we're not all on yet *)
+  let paren_count l = Seq.fold_left (fun i c -> if c == '('
+    then i + 1 else if c == ')' then i - 1
+    else i) 0 (String.to_seq l) in
+  let rec read_loop parens ls groups = try
+    let l = input_line f in
+    let parens = parens + paren_count l in
+    if parens == 0 then read_loop 0 [] (rev (l :: ls) :: groups)
+      else read_loop parens (l :: ls) groups
+    with End_of_file -> List.rev groups
+  in
+  let groups = read_loop 0 [] []
+    |> List.filter (function | [] -> false | (s :: _) -> Tools.starts_with "(declar" s)
+  in
+  let rec remdups ss gps = function
+    | [] -> List.rev gps
+    | (gp :: gps2) ->
+      let s = String.concat "\n" gp in
+      if StringSet.mem s ss then remdups ss gps gps2
+      else remdups (StringSet.add s ss) (gp :: gps) gps2
+  in
+  remdups StringSet.empty [] groups
+  |> List.map (fun ss -> Pp.flow_map (Pp.break 1) Pp.string ss)
+
+let maybe_save_slow_problem kind context extra_assertions lc lc_t time solver =
   match save_slow_problems () with
   | (_, _, None) -> ()
   | (_, cutoff, _) when (Stdlib.Float.compare time cutoff) = -1 -> ()
@@ -805,16 +836,24 @@ let maybe_save_slow_problem extra_assertions lc lc_t time solver =
     let channel = open_out_gen [Open_append; Open_creat] 0o666 fname in
     output_string channel "\n\n";
     if first_msg then output_string channel "## New CN run ##\n\n" else ();
-    let ass_doc = extra_assertions @ Z3.Solver.get_assertions solver
-        |> Pp.flow_map (Pp.break 1) (fun e -> format [] (Z3.Expr.to_string e)) in
-    let smt_doc = ass_doc in
+    let lc_doc = Pp.string (Z3.Expr.to_string lc_t) in
+    let check_doc = paren_sexp "check-sat" lc_doc in
+    let ass_docs = extra_assertions @ Z3.Solver.get_assertions solver
+        |> List.map (fun e -> paren_sexp "assert" (Pp.string (Z3.Expr.to_string e))) in
+    let smt_item = match log_file () with
+      | None -> ("SMT assertions (set z3 logging for complete problem)",
+          ass_docs @ [check_doc])
+      | Some fname ->
+      let decls = scan_z3_log_file_decls fname in
+      ("SMT problem", (decls @ ass_docs @ [check_doc]))
+    in
     Cerb_colour.without_colour (fun () -> print channel (item "Slow problem"
       (Pp.flow Pp.hardline [
           item "time taken" (format [] (Float.to_string time));
           item "constraint" (LC.pp lc);
-          item "SMT constraint" !^(Z3.Expr.to_string lc_t);
+          item "SMT constraint" lc_doc;
           item "solver statistics" !^(Z3.Statistics.to_string (Z3.Solver.get_statistics solver));
-          item "SMT problem" smt_doc;
+          item (fst smt_item) (Pp.flow (Pp.break 1) (snd smt_item));
       ]))) ();
     output_string channel "\n";
     saved_slow_problem ();
@@ -851,11 +890,13 @@ let provable ~loc ~solver ~global ~assumptions ~simp_ctxt ~pointer_facts lc =
      end;
      match res with
      | Z3.Solver.UNSATISFIABLE ->
-        maybe_save_slow_problem (extra1 @ extra2) lc expr elapsed solver.incremental;
+        maybe_save_slow_problem "unsat" solver.context (extra1 @ extra2)
+            lc expr elapsed solver.incremental;
         rtrue ()
      | Z3.Solver.SATISFIABLE -> rfalse qs solver.incremental
      | Z3.Solver.UNKNOWN ->
-        maybe_save_slow_problem (extra1 @ extra2) lc expr elapsed solver.incremental;
+        maybe_save_slow_problem "unknown" solver.context (extra1 @ extra2)
+            lc expr elapsed solver.incremental;
         let reason = Z3.Solver.get_reason_unknown solver.incremental in 
         failwith ("SMT solver returned 'unknown'; reason: " ^ reason)
 

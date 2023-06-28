@@ -13,12 +13,10 @@ module Loc = Locations
    legacy syntax requires special hacks *)
 let fiddle_at_hack string =
   let ss = String.split_on_char '@' string in
-  let starts_start s = String.length s >= String.length "start"
-    && String.equal (String.sub s 0 (String.length "start")) "start" in
   let rec fix = function
     | [] -> ""
     | [s] -> s
-    | (s1 :: s2 :: ss) -> if starts_start s2
+    | (s1 :: s2 :: ss) -> if Tools.starts_with "start" s2
         then fix ((s1 ^ "%" ^ s2) :: ss)
         else fix ((s1 ^ "@" ^ s2) :: ss)
   in

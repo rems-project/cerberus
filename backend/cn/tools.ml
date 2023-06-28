@@ -1,5 +1,8 @@
 let id = fun x -> x
 
+let starts_with pfx s = String.length s >= String.length pfx
+    && String.equal (String.sub s 0 (String.length pfx)) pfx
+
 let comp (f : 'b -> 'c) (g : 'a -> 'b) (x : 'a) : 'c = f (g (x))
 let rec comps (fs : ('a -> 'a) list) (a : 'a) : 'a =
   match fs with

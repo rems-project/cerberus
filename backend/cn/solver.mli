@@ -3,6 +3,7 @@ type model
 type model_with_q = model * (Sym.t * LogicalSorts.t) list
 
 val random_seed : int ref
+val log_to_temp : bool ref
 
 val make : Global.t -> solver
 

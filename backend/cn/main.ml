@@ -114,6 +114,7 @@ let main
       csv_times
       log_times
       random_seed
+      solver_logging
       output_decorated
       astprints
   =
@@ -130,6 +131,7 @@ let main
   Pp.print_timestamps := not no_timestamps;
   Option.iter (fun t -> Solver.set_slow_threshold t) slow_threshold;
   Solver.random_seed := random_seed;
+  Solver.log_to_temp := solver_logging;
   Check.only := only;
   Diagnostics.diag_string := diag;
   check_input_file filename;
@@ -264,6 +266,10 @@ let random_seed =
   let doc = "Set the SMT solver random seed (default 1)." in
   Arg.(value & opt int 0 & info ["r"; "random-seed"] ~docv:"I" ~doc)
 
+let solver_logging =
+  let doc = "Have Z3 log in SMT2 format to a file in a temporary directory." in
+  Arg.(value & flag & info ["solver-logging"] ~doc)
+
 let only =
   let doc = "only type-check this function" in
   Arg.(value & opt (some string) None & info ["only"] ~doc)
@@ -301,6 +307,7 @@ let () =
       csv_times $
       log_times $
       random_seed $
+      solver_logging $
       output_decorated $
       astprints
   in
