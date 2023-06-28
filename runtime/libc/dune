@@ -276,7 +276,7 @@
        src/internal.h)
  (action
   (progn
-   (run cerberus-cheri-coq --nolibc -I include -I include/posix --sequentialise
+   (run cerberus-cheri --nolibc -I include -I include/posix --sequentialise
         --rewrite -o libc-cheri-coq.co src/ctype.c src/stdio.c src/stdlib.c
         src/string.c src/time.c src/utime.c src/unistd.c src/stat.c
         src/uio.c src/internal.c src/vfscanf.c src/signal.c))))

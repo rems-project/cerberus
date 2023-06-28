@@ -13,9 +13,9 @@ To use profiling you need to build with profiling support enabled using the foll
 
 For example, to run Cerberus for CHERI C with profiling enabled:
 
-`dune exec --workspace=dune-workspace.profiling --context profiling-auto --no-print-directory --display=quiet --auto-promote --root=$pwd cerberus-cheri-coq -- example.c`
+`dune exec --workspace=dune-workspace.profiling --context profiling-auto --no-print-directory --display=quiet --auto-promote --root=$pwd cerberus-cheri -- example.c`
 
 To run it without profiling:
 
-`dune exec --no-print-directory --display=quiet --auto-promote --root=$pwd cerberus-cheri-coq -- example.c`
+`dune exec --no-print-directory --display=quiet --auto-promote --root=$pwd cerberus-cheri -- example.c`
 
