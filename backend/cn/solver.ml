@@ -706,6 +706,8 @@ module Translate = struct
 
   let needs_premise_elts exprs =
     let m1 = ! needs_premise_table in
+    if Z3ExprMap.is_empty m1 then []
+    else
     let rec f m2 xs = function
       | [] -> xs
       | expr :: exprs ->
@@ -852,6 +854,9 @@ let provable ~loc ~solver ~global ~assumptions ~simp_ctxt ~pointer_facts lc =
         rtrue ()
      | Z3.Solver.SATISFIABLE -> rfalse qs solver.incremental
      | Z3.Solver.UNKNOWN ->
+        let all_assumptions = extra1 @ extra2 @
+            Z3.Solver.get_assertions solver.incremental in
+        maybe_save_slow_problem all_assumptions lc expr elapsed solver.incremental;
         let reason = Z3.Solver.get_reason_unknown solver.incremental in 
         failwith ("SMT solver returned 'unknown'; reason: " ^ reason)
 
