@@ -32,7 +32,7 @@ typedef union
 
 typedef struct
 {
-  target_addr_t ptraddr_tag;
+  target_addr_t vaddr_tag;
   unsigned long int rigged_paddr;
 } tlb_entry_t;
 
@@ -95,7 +95,7 @@ simulator_kernel (int what, environment_t *env)
 
     for (;;)
       {
-	target_addr_t tag = tlb[x].ptraddr_tag;
+	target_addr_t tag = tlb[x].vaddr_tag;
 	host_addr_t rigged_paddr = tlb[x].rigged_paddr;
 
 	if (tag == vaddr_page)
@@ -137,7 +137,7 @@ main ()
   target_addr_t vaddr_page = a_vaddr / 4096;
   a_page = (a_page + 4096 - 1) & -4096;
 
-  env.tlb_tab[((vaddr_page) % 0x100)].ptraddr_tag = vaddr_page;
+  env.tlb_tab[((vaddr_page) % 0x100)].vaddr_tag = vaddr_page;
   env.tlb_tab[((vaddr_page) % 0x100)].rigged_paddr = a_page - vaddr_page * 4096;
   insn.f1.offset = LOAD32_RR;
   env.registers[0] = 0;
