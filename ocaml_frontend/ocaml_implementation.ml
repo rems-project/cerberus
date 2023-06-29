@@ -5,6 +5,7 @@ type implementation = {
   details: string;
   sizeof_pointer: int option;
   alignof_pointer: int option;
+  max_alignment: int;
   is_signed_ity: integerType -> bool;
   sizeof_ity: integerType -> int option;
   precision_ity: integerType -> int option;
@@ -53,7 +54,9 @@ module DefaultImpl = struct
                     Symbol.instance_Show_Show_Symbol_sym_dict.show_method tag_sym ^ "' was not registered")
       | Some (_, z) ->
           z
-
+  let max_alignment =
+    8
+  
   (* NOTE: some of them are not implementation defined *)
   let is_signed_ity ity =
     let ity' =
@@ -191,6 +194,7 @@ module DefaultImpl = struct
     details;
     sizeof_pointer;
     alignof_pointer;
+    max_alignment;
     is_signed_ity;
     sizeof_ity;
     precision_ity;
@@ -234,6 +238,9 @@ module MorelloImpl = struct
   let alignof_pointer =
     Some 16
 
+  let max_alignment =
+    16
+  
   let alignof_ity = function
     | Signed Intptr_t
     | Unsigned Intptr_t -> Some 16
@@ -249,6 +256,7 @@ module MorelloImpl = struct
     details;
     sizeof_pointer;
     alignof_pointer;
+    max_alignment;
     is_signed_ity;
     sizeof_ity;
     precision_ity;
@@ -300,6 +308,9 @@ module HafniumImpl = struct
       | Some (_, z) ->
           z
   
+  let max_alignment =
+    8
+
   let rec is_signed_ity = function
     | Char ->
         false
@@ -435,6 +446,7 @@ module HafniumImpl = struct
     details;
     sizeof_pointer;
     alignof_pointer;
+    max_alignment;
     is_signed_ity;
     sizeof_ity;
     precision_ity;

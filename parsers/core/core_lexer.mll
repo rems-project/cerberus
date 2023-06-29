@@ -44,7 +44,6 @@ let keywords =
       ("uintmax_t",   T.UINTMAX_T  );
       ("size_t",      T.SIZE_T     );
       ("ptrdiff_t",   T.PTRDIFF_T  );
-      (* ("max_align_t", T.MAX_ALIGN_T); *)
       
       (* for Core object types *)
       ("integer",   T.INTEGER  );
@@ -83,6 +82,10 @@ let keywords =
 
       ("Fvfromint",   T.FVFROMINT      );
       ("Ivfromfloat", T.IVFROMFLOAT    );
+
+      (* this is a fake constructor at the syntax level *)
+      (* NOTE: it would be better to pass to the Core parser an env with the C types symbols (to resolve max_align_t) *)
+      ("IvMaxAlignment", T.IVMAX_ALIGNMENT);
       
       (* for Core (pure) expressions *)
       ("not",          T.NOT         );

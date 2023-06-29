@@ -75,8 +75,6 @@ let translate_builtin_typenames = function
   | "__cerbty_jmp_buf" ->
       Nothing
   (* stddef.h *)
-  | "__cerbty_max_align_t" ->
-      Nothing
   | "__cerbty_size_t" ->
       Just size_t
   | "__cerbty_wchar_t" ->
@@ -204,6 +202,7 @@ let translate_builtin_varnames (Symbol.Identifier _ str) =
   match str with
     (* stddef.h *)
     | "__cerbvar_NULL" -> Just (AilEconst ConstantNull)
+    | "__cerbvar_MAX_ALIGNMENT" -> const_ic (integerFromNat Implementation.max_alignment)
     
     (* errno.h *)
     | "__cerbvar_EDOM" -> const_ic $ translate_errno str

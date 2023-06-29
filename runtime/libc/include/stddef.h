@@ -9,11 +9,14 @@ typedef __cerbty_wchar_t     wchar_t;
 typedef __cerbty_ptraddr_t   ptraddr_t;
 #endif
 
-#ifdef __CHERI_PURE_CAPABILITY__
-typedef void* max_align_t;
-#else
-#define max_align_t          __cerbty_max_align_t;
-#endif
+// #ifdef __CHERI_PURE_CAPABILITY__
+// typedef void* max_align_t;
+// #else
+// typedef __cerbty_max_align_t max_align_t;
+typedef struct {
+  _Alignas(__cerbvar_MAX_ALIGNMENT) void* __dummy_max_align_t;
+} max_align_t;
+// #endif
 
 #define NULL                 __cerbvar_NULL
 

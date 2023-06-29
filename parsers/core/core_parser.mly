@@ -1077,7 +1077,7 @@ let mk_file decls =
 %token CHAR BOOL SIGNED UNSIGNED
 %token INT8_T INT16_T INT32_T INT64_T UINT8_T UINT16_T UINT32_T UINT64_T
 %token INTPTR_T INTMAX_T UINTPTR_T UINTMAX_T
-%token SIZE_T PTRDIFF_T (* MAX_ALIGN_T *)
+%token SIZE_T PTRDIFF_T
 %token STRUCT UNION
 
 (* C11 memory orders *)
@@ -1144,6 +1144,7 @@ let mk_file decls =
 (* integer values *)
 %token IVMAX IVMIN IVSIZEOF IVALIGNOF CFUNCTION_VALUE ARRAYCTOR
 %token IVCOMPL IVAND IVOR IVXOR
+%token IVMAX_ALIGNMENT
 %token ARRAY SPECIFIED UNSPECIFIED
 
 %token FVFROMINT IVFROMFLOAT
@@ -1270,10 +1271,6 @@ integer_type:
     { Ctype.Size_t }
 | PTRDIFF_T
     { Ctype.Ptrdiff_t }
-(*
-| MAX_ALIGN_T
-    { Ctype.Max_align_t }
-*)
 ;
 
 floating_type:
@@ -1510,6 +1507,8 @@ value:
 *)
 | n= INT_CONST
     { Vobject (OVinteger (Impl_mem.integer_ival n)) }
+| IVMAX_ALIGNMENT
+    { Vobject (OVinteger (Impl_mem.integer_ival (Z.of_int (Ocaml_implementation.(get ()).max_alignment)))) }
 | NULL ty= delimited(LPAREN, ctype, RPAREN)
     { Vobject (OVpointer (Impl_mem.null_ptrval ty)) }
 | CFUNCTION_VALUE _nm= delimited(LPAREN, name, RPAREN)
