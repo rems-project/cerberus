@@ -31,6 +31,9 @@ type cerb_switch =
     (* make it so every object allocation is zero initialised *)
   | SW_zero_initialised
 
+  (* pointer revocation *)
+  | SW_revocation of [ `INSTANT | `CORNUCOPIA]
+
 val get_switches: unit -> cerb_switch list
 val has_switch: cerb_switch -> bool
 val has_switch_pred: (cerb_switch -> bool) -> cerb_switch option

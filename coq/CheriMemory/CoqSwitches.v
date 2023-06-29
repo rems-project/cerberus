@@ -6,8 +6,9 @@ Local Open Scope list_scope.
 
 Inductive SW_pointer_arith_values := | PERMISSIVE | STRICT.
 
-
 Inductive SW_PNVI_values := | PLAIN | AE | AE_UDI.
+
+Inductive SW_revocation_values := | INSTANT | CORNUCOPIA.
 
 Inductive cerb_switch : Set :=
 | SW_pointer_arith : SW_pointer_arith_values -> cerb_switch
@@ -17,7 +18,8 @@ Inductive cerb_switch : Set :=
 | SW_strict_pointer_equality : cerb_switch
 | SW_strict_pointer_relationals : cerb_switch
 | SW_PNVI : SW_PNVI_values -> cerb_switch
-| SW_CHERI : cerb_switch.
+| SW_CHERI : cerb_switch
+| SW_revocation: SW_revocation_values -> cerb_switch.
 
 Lemma SW_pointer_arith_values_dec: forall x y:SW_pointer_arith_values, {x = y} + {x <> y}.
 Proof. decide equality. Qed.
@@ -25,11 +27,15 @@ Proof. decide equality. Qed.
 Lemma SW_PNVI_values_dec: forall x y:SW_PNVI_values, {x = y} + {x <> y}.
 Proof. decide equality. Qed.
 
+Lemma SW_revocation_values_dec: forall x y:SW_revocation_values, {x = y} + {x <> y}.
+Proof. decide equality. Qed.
+
 Lemma cerb_switch_dec: forall x y:cerb_switch, {x = y} + {x <> y}.
 Proof.
   decide equality.
   apply SW_pointer_arith_values_dec.
   apply SW_PNVI_values_dec.
+  apply SW_revocation_values_dec.
 Qed.
 
 Definition default_switches: set cerb_switch :=

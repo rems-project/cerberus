@@ -31,6 +31,9 @@ type cerb_switch =
     (* make it so every object allocation is zero initialised *)
   | SW_zero_initialised
 
+  (* pointer revocation *)
+  | SW_revocation of [ `INSTANT | `CORNUCOPIA]
+
 let internal_ref =
   ref []
 
@@ -76,6 +79,10 @@ let set strs =
         Some SW_zero_initialised
     | "CHERI" ->
         Some SW_CHERI
+    | "revoke_dead_pointers" ->
+        Some (SW_revocation `INSTANT)
+    | "cornucopia" ->
+        Some (SW_revocation `CORNUCOPIA)
     | _ ->
         None in
   List.iter (fun str ->
