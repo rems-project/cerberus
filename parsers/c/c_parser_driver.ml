@@ -85,9 +85,10 @@ let parse lexbuf =
     let lexbuf = ! most_recent_lexbuf in
     let message =
       try
-        C_parser_error.message state
+        let msg = C_parser_error.message state in
+        if String.equal msg "<YOUR SYNTAX ERROR MESSAGE HERE>\n" then raise Not_found else msg
       with Not_found ->
-        Printf.sprintf "Unknown syntax error (in state %d).\n" state
+        Printf.sprintf "Please add error message for state %d to parsers/c/c_parser_error.messages\n" state
     in
     let message = String.sub message 0 (String.length message - 1) in
     let tok = Lexing.lexeme lexbuf in
