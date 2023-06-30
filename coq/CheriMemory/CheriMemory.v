@@ -21,7 +21,7 @@ From CheriCaps.Common Require Import Capabilities.
 From Common Require Import SimpleError Utils.
 From Morello Require Import CapabilitiesGS MorelloCapsGS.
 
-Require Import Memory_model CoqMem_common ErrorWithState CoqUndefined ErrorWithState CoqLocation CoqSymbol CoqImplementation CoqTags CoqSwitches CoqAilTypesAux.
+Require Import Memory_model CoqMem_common ErrorWithState CoqUndefined ErrorWithState CoqLocation CoqSymbol CoqImplementation CoqTags CoqSwitches CerbSwitches CoqAilTypesAux.
 
 Local Open Scope string_scope.
 Local Open Scope type_scope.
@@ -48,6 +48,7 @@ Module CheriMemory
   )
   (IMP: Implementation)
   (TD: TagDefs)
+  (SW: CerbSwitchesDefs)
   <: Memory(AddressValue)(Bounds).
 
   Include Mem_common(AddressValue)(Bounds).
@@ -1037,7 +1038,7 @@ Module CheriMemory
     | PV (Prov_symbolic iota) (PVconcrete addr) =>
         if andb
              (cap_is_null addr)
-             (CoqSwitches.has_switch CoqSwitches.SW_forbid_nullptr_free)
+             (CoqSwitches.has_switch (SW.get_swtiches tt) CoqSwitches.SW_forbid_nullptr_free)
         then
           fail loc MerrFreeNullPtr
         else
@@ -1087,14 +1088,14 @@ Module CheriMemory
                            last_used        := Some alloc_id;
                          |})
                ;;
-               if CoqSwitches.has_switch SW_zap_dead_pointers then
+               if CoqSwitches.has_switch (SW.get_swtiches tt) SW_zap_dead_pointers then
                  zap_pointers alloc_id
                else
                  ret tt)
     | PV (Prov_some alloc_id) (PVconcrete addr) =>
         (if andb
               (cap_is_null addr)
-              (CoqSwitches.has_switch CoqSwitches.SW_forbid_nullptr_free)
+              (CoqSwitches.has_switch (SW.get_swtiches tt) CoqSwitches.SW_forbid_nullptr_free)
          then
            fail loc MerrFreeNullPtr
          else
@@ -1136,7 +1137,7 @@ Module CheriMemory
                                     dynamic_addrs    := st.(dynamic_addrs);
                                     last_used        := Some alloc_id;
                                   |}) ;;
-                             if CoqSwitches.has_switch SW_zap_dead_pointers then
+                             if CoqSwitches.has_switch (SW.get_swtiches tt) SW_zap_dead_pointers then
                                zap_pointers alloc_id
                              else
                                ret tt
@@ -1559,7 +1560,7 @@ Module CheriMemory
   Definition find_overlaping st addr : overlap_ind
     :=
     let (require_exposed, allow_one_past) :=
-      match CoqSwitches.has_switch_pred (fun x => match x with SW_PNVI _ => true | _ => false end) with
+      match CoqSwitches.has_switch_pred (SW.get_swtiches tt) (fun x => match x with SW_PNVI _ => true | _ => false end) with
       | Some (CoqSwitches.SW_PNVI variant) =>
           match variant with
           | PLAIN => (false, false)
@@ -1761,8 +1762,8 @@ Module CheriMemory
            mem_value_strip_err loc mval >>=
              (fun (mval : mem_value) =>
                 (if orb
-                      (CoqSwitches.has_switch (CoqSwitches.SW_PNVI AE))
-                      (CoqSwitches.has_switch (CoqSwitches.SW_PNVI AE_UDI))
+                      (CoqSwitches.has_switch (SW.get_swtiches tt) (CoqSwitches.SW_PNVI AE))
+                      (CoqSwitches.has_switch (SW.get_swtiches tt) (CoqSwitches.SW_PNVI AE_UDI))
                  then expose_allocations taint
                  else ret tt) ;;
                 (update (fun (st : mem_state) =>
@@ -1772,7 +1773,7 @@ Module CheriMemory
                 let fp := FP Read (AddressValue.of_Z addr) sz in
                 match bs' with
                 | [] =>
-                    if CoqSwitches.has_switch CoqSwitches.SW_strict_reads
+                    if CoqSwitches.has_switch (SW.get_swtiches tt) CoqSwitches.SW_strict_reads
                     then
                       match mval with
                       | MVunspecified _ =>
@@ -2239,7 +2240,7 @@ Module CheriMemory
     | PVconcrete addr1, PVconcrete addr2 =>
         if orb (cap_is_null addr1) (cap_is_null addr2) then
           fail loc (MerrWIP "lt_ptrval ==> one null pointer")
-        else if CoqSwitches.has_switch CoqSwitches.SW_strict_pointer_relationals then
+        else if CoqSwitches.has_switch (SW.get_swtiches tt) CoqSwitches.SW_strict_pointer_relationals then
                match
                  prov1, prov2,
                  (match prov1, prov2 with
@@ -2272,7 +2273,7 @@ Module CheriMemory
     | PVconcrete addr1, PVconcrete addr2 =>
         if orb (cap_is_null addr1) (cap_is_null addr2) then
           fail loc (MerrWIP "gt_ptrval ==> one null pointer")
-        else if CoqSwitches.has_switch CoqSwitches.SW_strict_pointer_relationals then
+        else if CoqSwitches.has_switch (SW.get_swtiches tt) CoqSwitches.SW_strict_pointer_relationals then
                match
                  prov1, prov2,
                  (match prov1, prov2 with
@@ -2305,7 +2306,7 @@ Module CheriMemory
     | PVconcrete addr1, PVconcrete addr2 =>
         if orb (cap_is_null addr1) (cap_is_null addr2) then
           fail loc (MerrWIP "le_ptrval ==> one null pointer")
-        else if CoqSwitches.has_switch CoqSwitches.SW_strict_pointer_relationals then
+        else if CoqSwitches.has_switch (SW.get_swtiches tt) CoqSwitches.SW_strict_pointer_relationals then
                match
                  prov1, prov2,
                  (match prov1, prov2 with
@@ -2340,7 +2341,7 @@ Module CheriMemory
     | PVconcrete addr1, PVconcrete addr2 =>
         if orb (cap_is_null addr1) (cap_is_null addr2) then
           fail loc (MerrWIP "ge_ptrval ==> one null pointer")
-        else if CoqSwitches.has_switch CoqSwitches.SW_strict_pointer_relationals then
+        else if CoqSwitches.has_switch (SW.get_swtiches tt) CoqSwitches.SW_strict_pointer_relationals then
                match
                  prov1, prov2,
                  (match prov1, prov2 with
@@ -2389,7 +2390,7 @@ Module CheriMemory
     let error_postcond := fail loc MerrPtrdiff
     in
 
-    if CoqSwitches.has_switch (CoqSwitches.SW_pointer_arith PERMISSIVE)
+    if CoqSwitches.has_switch (SW.get_swtiches tt) (CoqSwitches.SW_pointer_arith PERMISSIVE)
     then
       match ptrval1, ptrval2 with
       | PV _ (PVconcrete addr1), PV _ (PVconcrete addr2) =>
@@ -2884,8 +2885,8 @@ Module CheriMemory
           | _ => ret (IV 0)
           end
         else
-          (if CoqSwitches.has_switch (CoqSwitches.SW_PNVI AE) ||
-                CoqSwitches.has_switch (CoqSwitches.SW_PNVI AE_UDI)
+          (if CoqSwitches.has_switch (SW.get_swtiches tt) (CoqSwitches.SW_PNVI AE) ||
+                CoqSwitches.has_switch (SW.get_swtiches tt) (CoqSwitches.SW_PNVI AE_UDI)
            then
              match prov with
              | Prov_some alloc_id => expose_allocation alloc_id
@@ -3011,8 +3012,8 @@ Module CheriMemory
             Z.add (AddressValue.to_Z (C.cap_get_value c_value))
               offset in
           let precond (z_value : Z.t) : memM bool :=
-            if CoqSwitches.has_switch (CoqSwitches.SW_pointer_arith STRICT)
-               || negb (CoqSwitches.has_switch (CoqSwitches.SW_pointer_arith PERMISSIVE))
+            if CoqSwitches.has_switch (SW.get_swtiches tt) (CoqSwitches.SW_pointer_arith STRICT)
+               || negb (CoqSwitches.has_switch (SW.get_swtiches tt) (CoqSwitches.SW_pointer_arith PERMISSIVE))
             then
               get_allocation z_value >>=
                 (fun (alloc : allocation) =>
@@ -3036,7 +3037,7 @@ Module CheriMemory
                                  (fun (x : bool) =>
                                     match x with
                                     | true =>
-                                        if CoqSwitches.has_switch (SW_pointer_arith PERMISSIVE)
+                                        if CoqSwitches.has_switch (SW.get_swtiches tt) (SW_pointer_arith PERMISSIVE)
                                         then ret NoCollapse
                                         else
                                           fail loc
@@ -3093,8 +3094,8 @@ Module CheriMemory
                end)
     | PV (Prov_some alloc_id) (PVconcrete c_value) =>
         let shifted_addr := Z.add (AddressValue.to_Z (C.cap_get_value c_value)) offset in
-        if CoqSwitches.has_switch (CoqSwitches.SW_pointer_arith STRICT)
-           || negb (CoqSwitches.has_switch (SW_pointer_arith PERMISSIVE))
+        if CoqSwitches.has_switch (SW.get_swtiches tt) (CoqSwitches.SW_pointer_arith STRICT)
+           || negb (CoqSwitches.has_switch (SW.get_swtiches tt) (SW_pointer_arith PERMISSIVE))
         then
           get_allocation alloc_id >>=
             (fun (alloc : allocation) =>
@@ -3112,8 +3113,8 @@ Module CheriMemory
           ret (PV (Prov_some alloc_id) (PVconcrete c_value))
     | PV Prov_none (PVconcrete c_value) =>
         let shifted_addr := Z.add (AddressValue.to_Z (C.cap_get_value c_value)) offset in
-        if CoqSwitches.has_switch (CoqSwitches.SW_pointer_arith STRICT)
-           || negb (CoqSwitches.has_switch (CoqSwitches.SW_pointer_arith PERMISSIVE))
+        if CoqSwitches.has_switch (SW.get_swtiches tt) (CoqSwitches.SW_pointer_arith STRICT)
+           || negb (CoqSwitches.has_switch (SW.get_swtiches tt) (CoqSwitches.SW_pointer_arith PERMISSIVE))
         then
           fail loc (MerrOther "out-of-bound pointer arithmetic (Prov_none)")
         else

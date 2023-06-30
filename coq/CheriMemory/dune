@@ -1,6 +1,6 @@
 (coq.theory
  (name CheriMemory)
  (package cerberus-cheri)
- (modules CoqLocation CoqAnnot CoqCtype CoqSwitches CoqImplementation CoqAilSyntax CoqAilTypesAux ErrorWithState CoqMem_common Memory_model CoqSymbol CoqUndefined CoqTags CheriMemory)
+ (modules CoqLocation CoqAnnot CoqCtype CoqSwitches CoqImplementation CoqAilSyntax CoqAilTypesAux ErrorWithState CoqMem_common Memory_model CoqSymbol CoqUndefined CoqTags CheriMemory CerbSwitches)
  (theories Common Morello)
 )

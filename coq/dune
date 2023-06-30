@@ -6,7 +6,7 @@
  (action
   (with-stdout-to %{target} (run %{dep:extracted/patch.sh} %{dep:extracted/CRelationClasses.mli})
 )))
-
+(copy_files extracted/CerbSwitches.{ml,mli})
 (copy_files extracted/Addr.{ml,mli})
 (copy_files extracted/Capabilities.{ml,mli})
 (copy_files extracted/Capabilities0.{ml,mli})

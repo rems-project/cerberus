@@ -7,6 +7,36 @@ open Mem_common
 open CheriMemory
 open CoqImplementation
 open Strfcap
+open CoqSwitches
+open Switches
+
+module CerbSwitchesProxy = struct
+
+  let toCoq_switch: Switches.cerb_switch -> CoqSwitches.cerb_switch = function
+    | SW_pointer_arith `PERMISSIVE -> CoqSwitches.SW_pointer_arith CoqSwitches.PERMISSIVE
+    | SW_pointer_arith `STRICT -> CoqSwitches.SW_pointer_arith CoqSwitches.STRICT
+    | SW_strict_reads -> SW_strict_reads
+    | SW_forbid_nullptr_free -> SW_forbid_nullptr_free
+    | SW_zap_dead_pointers -> SW_zap_dead_pointers
+    | SW_strict_pointer_equality -> SW_strict_pointer_equality
+    | SW_strict_pointer_relationals -> SW_strict_pointer_relationals
+    | SW_PNVI `PLAIN -> SW_PNVI PLAIN
+    | SW_PNVI `AE -> SW_PNVI AE
+    | SW_PNVI `AE_UDI -> SW_PNVI AE_UDI
+    | SW_CHERI -> SW_CHERI
+    | SW_inner_arg_temps -> SW_inner_arg_temps
+    | SW_permissive_printf -> SW_permissive_printf
+    | SW_zero_initialised -> SW_zero_initialised
+    | SW_revocation `INSTANT -> SW_revocation INSTANT
+    | SW_revocation `CORNUCOPIA -> SW_revocation CORNUCOPIA
+
+  let toCoq_switches (cs: cerb_switch list): CoqSwitches.cerb_switches_t =
+    let open ListSet in
+    List.fold_left
+      (fun s x -> set_add (=) (toCoq_switch x) s) empty_set cs
+
+  let get_swtiches _ = toCoq_switches (Switches.get_switches ())
+end
 
 module CerbTagDefs = struct
 
@@ -203,7 +233,7 @@ module CerbTagDefs = struct
 end
 
 
-module MM = CheriMemory(MorelloCapabilityWithStrfcap)(MorelloImpl)(CerbTagDefs: CoqTags.TagDefs)
+module MM = CheriMemory(MorelloCapabilityWithStrfcap)(MorelloImpl)(CerbTagDefs: CoqTags.TagDefs)(CerbSwitchesProxy)
 module C = MorelloCapabilityWithStrfcap
 
 module Z = struct
@@ -725,12 +755,10 @@ module CHERIMorello : Memory = struct
     | PartialOverlap -> PartialOverlap
 
 
-
   (* OCaml -> Coq type conversion *)
+
   open CerbTagDefs
   let toCoq_thread_id (tid:thread_id) : MM.thread_id = Z.of_int tid
-
-
 
   let toCoq_unaryOperator: AilSyntax.unaryOperator -> CoqAilSyntax.unaryOperator = function
     | Plus        -> Plus

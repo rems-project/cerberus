@@ -19,6 +19,9 @@ Inductive cerb_switch : Set :=
 | SW_strict_pointer_relationals : cerb_switch
 | SW_PNVI : SW_PNVI_values -> cerb_switch
 | SW_CHERI : cerb_switch
+| SW_inner_arg_temps
+| SW_permissive_printf
+| SW_zero_initialised
 | SW_revocation: SW_revocation_values -> cerb_switch.
 
 Lemma SW_pointer_arith_values_dec: forall x y:SW_pointer_arith_values, {x = y} + {x <> y}.
@@ -38,34 +41,24 @@ Proof.
   apply SW_revocation_values_dec.
 Qed.
 
-Definition default_switches: set cerb_switch :=
-  [
-    SW_CHERI;
-    SW_PNVI AE_UDI;
-    SW_strict_pointer_equality;
-    SW_strict_pointer_relationals;
-    SW_pointer_arith STRICT;
-    SW_strict_reads
-  ].
+Definition cerb_switches_t := set cerb_switch.
 
-Definition get_switches (_ : unit) := default_switches.
+Definition has_switch (switches:cerb_switches_t) (sw : cerb_switch) : bool :=
+  set_mem cerb_switch_dec sw switches.
 
-Definition has_switch (sw : cerb_switch) : bool :=
-  set_mem cerb_switch_dec sw default_switches.
-
-Definition is_PNVI (_ : unit) : bool :=
+Definition is_PNVI (switches:cerb_switches_t) : bool :=
   List.existsb
     (fun (s : cerb_switch) =>
       match s with
       | SW_PNVI _ => true
       | _ => false
-      end) default_switches.
+      end) switches.
 
-Definition is_CHERI (_ : unit) : bool :=
-  has_switch (SW_CHERI).
+Definition is_CHERI (switches:cerb_switches_t) : bool :=
+  has_switch switches (SW_CHERI).
 
-Definition has_strict_pointer_arith (_ : unit) : bool :=
-  has_switch (SW_pointer_arith STRICT).
+Definition has_strict_pointer_arith (switches:cerb_switches_t) : bool :=
+  has_switch switches (SW_pointer_arith STRICT).
 
-Definition has_switch_pred pred :=
-  List.find pred default_switches.
+Definition has_switch_pred (switches:cerb_switches_t) pred :=
+  List.find pred switches.
