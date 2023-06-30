@@ -40,7 +40,13 @@ let io, get_progress =
   }, fun () -> !progress
 
 let is_cheri_memory () =
-  String.starts_with ~prefix:"cheri" Impl_mem.name
+  (* for compability with OCaml 4.12.0 using a local implementation of String.starts_with *)
+  let starts_with ~prefix str =
+    try
+      String.(equal prefix (sub str 0 (length prefix)))
+    with
+      | Invalid_argument _ -> false in
+  starts_with ~prefix:"cheri" Impl_mem.name
 
 let frontend (conf, io) filename core_std =
   if not (Sys.file_exists filename) then
