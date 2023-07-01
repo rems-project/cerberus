@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - master
+  pull_request: {}
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        version: [4.12.0, 4.14.1]
+    
+    runs-on: ubuntu-22.04
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: System dependencies (ubuntu)
+      run: |
+        sudo apt install build-essential libgmp-dev z3 opam
+    
+    - name: Restore cached opam
+      id: cache-opam-restore
+      uses: actions/cache/restore@v3
+      with:
+        path: ~/.opam
+        key: ${{ matrix.version }}
+
+    - name: Setup opam
+      if: steps.cache-opam-restore.outputs.cache-hit != 'true'
+      run: |
+        opam init --yes --no-setup --shell=sh --compiler=${{ matrix.version }}
+    
+    - name: Save cached opam
+      if: steps.cache-opam-restore.outputs.cache-hit != 'true'
+      id: cache-opam-save
+      uses: actions/cache/save@v3
+      with:
+        path: ~/.opam
+        key: ${{ steps.cache-opam-restore.outputs.cache-primary-key }}
+
+    - name: Install Cerberus
+      run: |
+        eval $(opam env)
+        opam pin --yes --no-action add cerberus-lib .
+        opam pin --yes --no-action add cerberus .
+        opam install --yes cerberus-lib
+        opam install --yes cerberus 
+
+    # - name: Test Cerberus
+    #   run: |
+    #     eval $(opam env)
+    #     cd tests; ./run-ci.sh
