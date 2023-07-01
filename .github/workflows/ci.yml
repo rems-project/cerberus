@@ -32,7 +32,7 @@ jobs:
       if: steps.cache-opam-restore.outputs.cache-hit != 'true'
       run: |
         opam init --yes --no-setup --shell=sh --compiler=${{ matrix.version }}
-        opam install --deps-only ./cerberus-lib.opam
+        opam install --deps-only --yes ./cerberus-lib.opam
     
     - name: Save cached opam
       if: steps.cache-opam-restore.outputs.cache-hit != 'true'
