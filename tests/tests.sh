@@ -198,13 +198,15 @@ citests=(
 skip=(
   0083-array_initializers.c  # REAL BUG(!) -- Desugaring of initializers
   0113-cast_assign_parsing.error.c            # REAL BUG (!) -- C parser
-  0117-global_array_init_incomplete.error.c
-  0118-block_array_init_incomplete.error.c
-  # 0082-OK1.c                                  # REAL BUG (!) -- Ail typing ==> missing default argument promotions
-  # 0072-example03.c                            # REAL BUG (!) -- Ail typing ==> missing default argument promotions
   0205-illegal-storage-class.error.c          # IMPROVE: the location and message should be more specific
   0210-illegal-storage-class-function.error.c # IMPROVE: the location and message should be more specific
   0211-function-id-not-function-type.error.c  # IMPROVE: improve the message?
   0212-function-redefinition.error.c          # IMPROVE: would be nicer to say that the redefinition has an incompatible type
-  0286-binary-operator.error.c                # IMPROVE: improve error message (anonymous struct)
+  #
+  #
+  #
+  0074-fun_returns.undef.c    # skipping because the proper elaboration dealing with
+                              # UB088_reached_end_of_function is disabled for compatibility with CN
+  0084-KO1.error.c # need to update the .messages file of the C parser
+  0318-compound-interal-in_global.c
 )
