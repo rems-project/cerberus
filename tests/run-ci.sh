@@ -59,7 +59,13 @@ fi
 # Use the provided path to cerberus, otherwise default to the driver backend build
 # CERB="${WITH_CERB:=dune exec cerberus --no-build -- }"
 CERB="${WITH_CERB:=../_build/default/backend/driver/main.exe}"
-export CERB_RUNTIME=../runtime/
+if [[ -v USE_OPAM ]]; then
+  echo -e "\033[1m\033[33mUsing opam installed cerberus\033[0m";
+  CERB=$OPAM_SWITCH_PREFIX/bin/cerberus
+  export CERB_RUNTIME=$OPAM_SWITCH_PREFIX/lib/cerberus/runtime/
+else
+  export CERB_RUNTIME=../runtime/
+fi
 
 # Running ci tests
 for file in "${citests[@]}"
@@ -76,9 +82,9 @@ do
   fi
 
   if [[ $file == *.syntax-only.c ]]; then
-    ../_build/default/backend/driver/main.exe --nolibc --typecheck-core ci/$file > tmp/result 2> tmp/stderr
+    $CERB --nolibc --typecheck-core ci/$file > tmp/result 2> tmp/stderr
   else
-    ../_build/default/backend/driver/main.exe --nolibc --typecheck-core --exec --batch ci/$file 1> tmp/result 2> tmp/stderr
+    $CERB --nolibc --typecheck-core --exec --batch ci/$file 1> tmp/result 2> tmp/stderr
   fi
   ret=$?;
   if [ -f ./ci/expected/$file.expected ]; then
@@ -109,3 +115,5 @@ do
 done
 echo "CI PASSED: $pass"
 echo "CI FAILED: $fail"
+
+[ $fail -eq 0 ]
