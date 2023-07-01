@@ -59,7 +59,7 @@ fi
 # Use the provided path to cerberus, otherwise default to the driver backend build
 # CERB="${WITH_CERB:=dune exec cerberus --no-build -- }"
 CERB="${WITH_CERB:=../_build/default/backend/driver/main.exe}"
-if [[ -v USE_OPAM ]]; then
+if [[ ! -z "${USE_OPAM+x}" ]]; then
   echo -e "\033[1m\033[33mUsing opam installed cerberus\033[0m";
   CERB=$OPAM_SWITCH_PREFIX/bin/cerberus
   export CERB_RUNTIME=$OPAM_SWITCH_PREFIX/lib/cerberus/runtime/
