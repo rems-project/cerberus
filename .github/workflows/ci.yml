@@ -4,7 +4,7 @@ on:
   push:
     branches:
       - master
-  pull_request: {}
+  # pull_request: {}
 
 jobs:
   build:
@@ -32,6 +32,7 @@ jobs:
       if: steps.cache-opam-restore.outputs.cache-hit != 'true'
       run: |
         opam init --yes --no-setup --shell=sh --compiler=${{ matrix.version }}
+        opam install --deps-only ./cerberus-lib.opam
     
     - name: Save cached opam
       if: steps.cache-opam-restore.outputs.cache-hit != 'true'
@@ -46,10 +47,9 @@ jobs:
         eval $(opam env)
         opam pin --yes --no-action add cerberus-lib .
         opam pin --yes --no-action add cerberus .
-        opam install --yes cerberus-lib
-        opam install --yes cerberus 
+        opam install --yes cerberus
 
-    # - name: Test Cerberus
-    #   run: |
-    #     eval $(opam env)
-    #     cd tests; ./run-ci.sh
+    - name: Run Cerberus CI tests
+      run: |
+        eval $(opam env)
+        cd tests; USE_OPAM='' ./run-ci.sh
