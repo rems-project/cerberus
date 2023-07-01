@@ -1,0 +1,20 @@
+opam-version: "2.0"
+synopsis: "Cerberus web application"
+description: "Server and client-side web interface for the Cerberus C semantics"
+license: "BSD-2-Clause"
+maintainer: ["Kayvan Memarian <kayvan.memarian@cl.cam.ac.uk>"]
+authors: [
+  "Victor Gomes"
+  "Kayvan Memarian"
+]
+homepage: "https://www.cl.cam.ac.uk/~pes20/cerberus/"
+bug-reports: "https://github.com/rems-project/cerberus/issues"
+depends: [
+  "cerberus-lib"
+  "fpath" {>= "0.7.3"}
+  "ezgzip" {>= "0.2.3"}
+  "cohttp-lwt-unix" {>= "4.0.0"}
+  "cmdliner"
+  "lwt"
+  "base64"
+]

@@ -30,6 +30,7 @@ depends: [
   "lem" {>= "2020-06-03"}
   "menhir" {>= "20211230"}
   "result" {>= "1.5"}
+  "cerberus-lib"
 ]
 build: [
   ["dune" "subst"] {pinned}
