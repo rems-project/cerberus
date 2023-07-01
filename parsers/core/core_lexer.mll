@@ -1,7 +1,7 @@
 {
 open Cerb_frontend
 
-exception Error
+exception Error of Errors.core_lexer_cause
 
 module T = Core_parser_util
 type token = T.token
@@ -187,11 +187,11 @@ let scan_impl lexbuf =
   try
     T.IMPL (Pmap.find id Implementation.impl_map)
   with Not_found ->
-    let pref = "<builtin_" in
-    if String.length id >= String.length pref && String.compare (String.sub id 0 9) "<builtin_" = 0 then
-      T.IMPL (Implementation.BuiltinFunction (String.sub id 9 (String.length id - 10)))
-    else
-      failwith ("Found an invalid impl_name: " ^ id)
+    match Cerb_util.remove_prefix ~prefix:"<builtin_" ~trim_end:1 id with
+      | Some str ->
+          T.IMPL (Implementation.BuiltinFunction str)
+      | None ->
+          raise (Error (Core_lexer_invalid_implname id))
 
 
 let scan_ub lexbuf =
@@ -200,12 +200,14 @@ let scan_ub lexbuf =
     | Some ub ->
         T.UB ub
     | None ->
-        (* TODO: hack *)
-        if String.sub id 0 8 = "<<DUMMY(" then
-          T.UB (Undefined.DUMMY (String.sub id 8 (String.length id - 11)))
-        else
-          failwith ("Found an invalid undefined-behaviour: " ^ id)
-
+        begin match Cerb_util.remove_prefix ~prefix:"<<DUMMY(" ~trim_end:3 id with
+          | Some str ->
+              T.UB (Undefined.DUMMY str)
+          | None ->
+              raise (Error (Core_lexer_invalid_ubname id))
+        end
+    | exception _ ->
+        raise (Error (Core_lexer_invalid_ubname id))
 
 
 
@@ -269,8 +271,9 @@ and main = parse
         (* TODO: check this *)
         T.CSTRING (String.concat "" strs) }
 
-  | error_name { let str = Lexing.lexeme lexbuf in
-             T.STRING (String.sub str 3 (String.length str - 6))  }
+  | error_name
+      { let str = Lexing.lexeme lexbuf in
+        T.STRING (String.sub str 3 (String.length str - 6))  }
   | ub_name { scan_ub lexbuf }
   | impl_name { scan_impl lexbuf }
   
@@ -320,8 +323,8 @@ and main = parse
   | symbolic_name { scan_sym lexbuf }
   | '\n' {Lexing.new_line lexbuf; main lexbuf}
   | eof  {T.EOF}
-  | _
-    { raise Error }
+  | _ as c
+    { raise (Error (Core_lexer_invalid_symbol c)) }
 
 
 and comment = parse

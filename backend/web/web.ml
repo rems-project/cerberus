@@ -771,7 +771,7 @@ let post ~conf ~rheader ~flow uri path content =
 
 let parse_req_header header =
   let get k = match Cohttp.Header.get header k with Some v -> v | None -> "" in
-  { accept_gzip= contains (get "accept-encoding") "gzip";
+  { accept_gzip= starts_with ~prefix:"gzip" (get "accept-encoding");
     if_none_match= get "if-none-match";
     referer= get "referer";
     user_agent= get "user-agent";
@@ -798,7 +798,7 @@ let request ~conf (flow, conn) req body =
   begin
     let try_with () =
       let accept_gzip = match Cohttp__.Header.get req.headers "accept-encoding" with
-        | Some enc -> contains enc "gzip"
+        | Some enc -> starts_with ~prefix:"gzip" enc
         | None -> false
       in
       if accept_gzip then Debug.print 10 "accepts gzip";

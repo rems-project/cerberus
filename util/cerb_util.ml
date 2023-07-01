@@ -61,18 +61,20 @@ let diff xs ys = List.filter (fun x -> not (List.mem x ys)) xs
 
 let concatMap f xs = List.concat (List.map f xs)
 
-let contains s1 s2 =
-  try
-    let len = String.length s2 in
-    for i = 0 to String.length s1 - len do
-      if String.sub s1 i len = s2 then raise Exit
-    done;
-    false
-  with
-  | Exit -> true
-  | e ->
-    Debug.error_exception "contains" e;
-    false
+(* NOTE: this function was added to OCaml 4.13.0 stdlib *)
+let starts_with ~prefix str =
+    try
+      String.(equal prefix (sub str 0 (length prefix)))
+    with
+      | Invalid_argument _ -> false
+
+let remove_prefix ~prefix ?(trim_end=0) str =
+  if starts_with ~prefix str then
+    let n = String.length prefix in
+    try Some (String.sub str n (String.length str - n - trim_end)) with
+      | _ -> None
+  else
+    None
 
 let is_power_of_two (n: Nat_big_num.num) : bool =
   let open Z in

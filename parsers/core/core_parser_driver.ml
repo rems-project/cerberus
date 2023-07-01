@@ -19,19 +19,18 @@ let genparse mode std filename =
     try
       Exception.except_return @@ Parser.start Core_lexer.main lexbuf
     with
-    | Core_lexer.Error ->
-      let loc = Cerb_location.point @@ Lexing.lexeme_start_p lexbuf in
-      Exception.fail (loc, Errors.CORE_PARSER Errors.Core_parser_invalid_symbol)
-    | Parser.Error ->
-      let loc = Cerb_location.(region (Lexing.lexeme_start_p lexbuf, Lexing.lexeme_end_p lexbuf) NoCursor) in
-      Exception.fail (loc, Errors.CORE_PARSER (Errors.Core_parser_unexpected_token (Lexing.lexeme lexbuf)))
-    | Core_parser_util.Core_error (loc, err) ->
-      Exception.fail (loc, Errors.CORE_PARSER err)
-    | Failure msg ->
-      prerr_endline "CORE_PARSER_DRIVER (Failure)";
-      failwith msg
-    | _ ->
-      failwith "CORE_PARSER_DRIVER"
+      | Core_lexer.Error cause ->
+          let loc = Cerb_location.point @@ Lexing.lexeme_start_p lexbuf in
+          Exception.fail (loc, Errors.(CORE_PARSER (Core_lexer cause)))
+      | Parser.Error ->
+          let loc = Cerb_location.(region (Lexing.lexeme_start_p lexbuf, Lexing.lexeme_end_p lexbuf) NoCursor) in
+          Exception.fail (loc, Errors.(CORE_PARSER (Core_parser_unexpected_token (Lexing.lexeme lexbuf))))
+      | Core_parser_util.Core_error (loc, err) ->
+          Exception.fail (loc, Errors.CORE_PARSER err)
+      | exn ->
+          let loc = Cerb_location.point @@ Lexing.lexeme_start_p lexbuf in
+          let str = Printf.sprintf "[uncaught exception] '%s'" (String.escaped (Printexc.to_string_default exn)) in
+          Exception.fail (loc, Errors.(CORE_PARSER (Core_parser_internal_error str)))
   in
   read parse_channel filename
 

@@ -478,8 +478,12 @@ let string_of_core_run_cause = function
       "unresolved symbol: " ^ (Pp_utils.to_plain_string (Pp_ail.pp_id sym)) ^ " at " ^ Cerb_location.location_to_string loc
 
 let string_of_core_parser_cause = function
-  | Core_parser_invalid_symbol ->
-      "invalid symbol"
+  | Core_lexer (Core_lexer_invalid_symbol c) ->
+      "invalid symbol '"^ String.make 1 c ^ "'"
+  | Core_lexer (Core_lexer_invalid_implname str) ->
+      "invalid impl-name '"^ str ^ "'"
+  | Core_lexer (Core_lexer_invalid_ubname str) ->
+      "invalid ub-name '"^ str ^ "'"
   | Core_parser_unexpected_token str ->
       "unexpected token '"^ str ^ "'"
   | Core_parser_unresolved_symbol str ->
@@ -494,6 +498,8 @@ let string_of_core_parser_cause = function
       "unknown ctype '" ^ str ^ "'"
   | Core_parser_undefined_startup ->
       "undefined startup function"
+  | Core_parser_internal_error str ->
+      "internal error in the Core parser: " ^ str
 
 let string_of_driver_cause = function
   | Driver_UB ubs ->
