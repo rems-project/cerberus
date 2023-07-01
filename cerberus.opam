@@ -34,7 +34,7 @@ depends: [
 ]
 build: [
   ["dune" "subst"] {pinned}
-  [make "prelude-src"]
+  # [make "prelude-src"]
   ["dune"
     "build"
     "-p"
