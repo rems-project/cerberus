@@ -187,7 +187,8 @@ let scan_impl lexbuf =
   try
     T.IMPL (Pmap.find id Implementation.impl_map)
   with Not_found ->
-    if String.compare (String.sub id 0 9) "<builtin_" = 0 then
+    let pref = "<builtin_" in
+    if String.length id >= String.length pref && String.compare (String.sub id 0 9) "<builtin_" = 0 then
       T.IMPL (Implementation.BuiltinFunction (String.sub id 9 (String.length id - 10)))
     else
       failwith ("Found an invalid impl_name: " ^ id)
