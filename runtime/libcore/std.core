@@ -79,7 +79,7 @@ fun loaded_fvfromint (ty: ctype, _n: loaded integer) : loaded floating :=
 fun loaded_ivfromfloat (ty: ctype, _f: loaded floating) : loaded integer :=
   case _f of
     | Specified(f:floating) =>
-        let n: integer = Ivfromfloat(f) in
+        let n: integer = Ivfromfloat(ty, f) in
         if ty = '_Bool' /\ not (n = 0) then
           -- STD §6.3.1.2#1
           Specified(1)

@@ -472,11 +472,12 @@ let rec symbolify_pexpr (Pexpr (annot, (), _pexpr): parsed_pexpr) : pexpr Eff.t 
         end
     | PEctor (Civfromfloat, _pes) ->
         begin match _pes with
-          | [_pe] ->
-              symbolify_pexpr _pe >>= fun pe ->
-              Eff.return (Pexpr (annot, (), PEctor (Civfromfloat, [pe])))
+          | [_pe1; _pe2] ->
+              symbolify_pexpr _pe1 >>= fun pe1 ->
+              symbolify_pexpr _pe2 >>= fun pe2 ->
+              Eff.return (Pexpr (annot, (), PEctor (Civfromfloat, [pe1; pe2])))
           | _ ->
-              Eff.fail loc (Core_parser_ctor_wrong_application (1, List.length _pes))
+              Eff.fail loc (Core_parser_ctor_wrong_application (2, List.length _pes))
         end
     | PEctor (CivNULLcap is_signed, _pes) ->
         begin match _pes with
