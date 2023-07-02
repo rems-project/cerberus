@@ -557,14 +557,6 @@ let lt_integer_rank ity1 ity2 =
         false
     | (Bool, _) ->
         true
-
-    (* Bottom: In CHERI C intptr_t types have the highest rank so the capabilities metainfromation
-       will be preserved during integer promotion *)
-    | (Signed Intptr_t, _) ->
-        false
-    | (Unsigned Intptr_t, _) ->
-        false
-
     | (_, Char) ->
         false
     | (_, Signed Ichar) ->
@@ -720,31 +712,27 @@ end
 
 
 val usual_arithmetic_integer: IntegerImpl.implementation -> integerType -> integerType -> integerType
-let usual_arithmetic_integer impl ity1 ity2 =
-  (* TODO: this is not standard, but in cerberus we don't treat (u)intptr_t and size_t as an aliased types *)
-  let () = Debug.warn [] (fun () ->
-    "NON STD: usual_arithmetic_integer ==> if any operand is of type size_t, then the common type is size_t"
-  ) in
+let usual_arithmetic_integer_CHERI impl ity1 ity2 =
   match (ity1, ity2) with
-    | (Size_t, Signed Intptr_t) ->
+    | (Size_t, Signed Intptr_t) -> (* NON-std *)
         Unsigned Intptr_t
-    | (Signed Intptr_t, Size_t) ->
+    | (Signed Intptr_t, Size_t) -> (* NON-std *)
         Unsigned Intptr_t
-    | (Signed Intptr_t, Unsigned Intptr_t) ->
+    | (Signed Intptr_t, Unsigned Intptr_t) -> (* NON-std *)
         Unsigned Intptr_t
-    | (Signed Intptr_t, _) ->
+    | (Signed Intptr_t, _) -> (* NON-std *)
         Signed Intptr_t
-    | (Unsigned Intptr_t, Signed Intptr_t) ->
+    | (Unsigned Intptr_t, Signed Intptr_t) -> (* NON-std *)
         Unsigned Intptr_t
-    | (_, Signed Intptr_t) ->
+    | (_, Signed Intptr_t) -> (* NON-std *)
         Signed Intptr_t
-    | (Unsigned Intptr_t, _) ->
+    | (Unsigned Intptr_t, _) -> (* NON-std *)
         Unsigned Intptr_t
-    | (_, Unsigned Intptr_t) ->
+    | (_, Unsigned Intptr_t) -> (* NON-std *)
         Unsigned Intptr_t
-    | (Size_t, _) ->
+    | (Size_t, _) -> (* NON-std *)
         Size_t
-    | (_, Size_t) ->
+    | (_, Size_t) -> (* NON-std *)
         Size_t
     
     | _ ->
@@ -774,6 +762,63 @@ let usual_arithmetic_integer impl ity1 ity2 =
           else
             make_corresponding_unsigned promoted_ity2
   end
+let usual_arithmetic_integer_default impl ity1 ity2 =
+  (* TODO: this is not standard, but in cerberus we don't treat (u)intptr_t and size_t as an aliased types *)
+  let () = Debug.warn [] (fun () ->
+    "NON STD: usual_arithmetic_integer ==> if any operand is of type size_t, then the common type is size_t"
+  ) in
+  match (ity1, ity2) with
+    | (Size_t, _) -> (* NON-std *)
+        Size_t
+    | (_, Size_t) -> (* NON-std *)
+        Size_t
+    | (Signed Intptr_t, Unsigned Intptr_t) -> (* NON-std *)
+        Unsigned Intptr_t
+    | (Signed Intptr_t, _) -> (* NON-std *)
+        Signed Intptr_t
+    | (Unsigned Intptr_t, Signed Intptr_t) -> (* NON-std *)
+        Unsigned Intptr_t
+    | (_, Signed Intptr_t) -> (* NON-std *)
+        Signed Intptr_t
+    | (Unsigned Intptr_t, _) -> (* NON-std *)
+        Unsigned Intptr_t
+    | (_, Unsigned Intptr_t) -> (* NON-std *)
+        Unsigned Intptr_t
+    
+    | _ ->
+        let promoted_ity1 = integer_promotion impl ity1 in
+        let promoted_ity2 = integer_promotion impl ity2 in
+        if    (is_signed_ity promoted_ity1 && is_signed_ity promoted_ity2)
+           || (is_unsigned_ity promoted_ity1 && is_unsigned_ity promoted_ity2) then
+          if lt_integer_rank promoted_ity1 promoted_ity2 then
+            promoted_ity2
+          else
+            promoted_ity1
+        
+        else if is_unsigned_ity promoted_ity1 && ge_integer_rank promoted_ity1 promoted_ity2 then
+          promoted_ity1
+        else if is_unsigned_ity promoted_ity2 && ge_integer_rank promoted_ity2 promoted_ity1 then
+          promoted_ity2
+        
+        else if is_signed_ity promoted_ity1 then
+          if le_integer_range impl promoted_ity2 promoted_ity1 then
+            promoted_ity1
+          else
+            make_corresponding_unsigned promoted_ity1
+        
+        else (* if is_signed_ity promoted_ity2 then *)
+          if le_integer_range impl promoted_ity1 promoted_ity2 then
+            promoted_ity2
+          else
+            make_corresponding_unsigned promoted_ity2
+  end
+
+let usual_arithmetic_integer impl ity1 ity2 =
+  (* TODO: this is a temporary hack, we need to add a type alias mechanism to Ocaml_implemetation.implemention *)
+  if Global.is_CHERI () then
+    usual_arithmetic_integer_CHERI impl ity1 ity2
+  else
+    usual_arithmetic_integer_default impl ity1 ity2
 
 
 (* TODO *)
