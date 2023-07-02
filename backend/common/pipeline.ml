@@ -572,7 +572,7 @@ let read_core_object (core_stdlib, core_impl) fname =
   let v = input_line ic in
   if v <> version_info
   then
-    Cerb_debug.warn [] (fun () -> "WARNING: read core_object file produced with a different version of Cerberus => " ^ v);
+    Cerb_debug.warn [] (fun () -> "read core_object file produced with a different version of Cerberus => " ^ v);
   let dump = Marshal.from_channel ic in
   close_in ic;
   { main=    dump.main;
