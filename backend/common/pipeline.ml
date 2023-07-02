@@ -560,11 +560,17 @@ let cabsid_compare (Symbol.Identifier (_, s1)) (Symbol.Identifier (_, s2)) =
 let map_from_assoc compare =
   List.fold_left (fun acc (k, v) -> Pmap.add k v acc) (Pmap.empty compare)
 
+let version_info =
+  Printf.sprintf "ocaml:%s+cerb:%s+mem:%s"
+    (Sys.ocaml_version)
+    (Version.version)
+    (Impl_mem.name)
+
 let read_core_object (core_stdlib, core_impl) fname =
   let open Core in
   let ic = open_in_bin fname in
   let v = input_line ic in
-  if v <> (Version.version ^ "+" ^ Impl_mem.name)
+  if v <> version_info
   then
     Cerb_debug.warn [] (fun () -> "WARNING: read core_object file produced with a different version of Cerberus => " ^ v);
   let dump = Marshal.from_channel ic in
@@ -594,7 +600,7 @@ let write_core_object core_file fname =
     }
   in
   let oc = open_out_bin fname in
-  output_string oc (Version.version ^ "+" ^ Impl_mem.name ^ "\n");
+  output_string oc (version_info ^ "\n");
   Marshal.to_channel oc dump [];
   close_out oc
 
