@@ -44,5 +44,6 @@
 
 (rule
  (target main_cheri_coq.ml)
+ (package cerberus-cheri)
  (deps main.ml)
  (action (copy main.ml main_cheri_coq.ml)))
