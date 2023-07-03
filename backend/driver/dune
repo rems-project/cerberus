@@ -4,7 +4,7 @@
  (package cerberus)
  (modules main)
  (libraries result cmdliner str unix
-  cerb_backend mem_concrete cerb_util))
+  cerb_backend mem_concrete))
 
 (executable
  (name main_symbolic)
@@ -12,7 +12,7 @@
  (package cerberus)
  (modules main_symbolic)
  (libraries result cmdliner str unix
-  cerb_backend mem_symbolic cerb_util))
+  cerb_backend mem_symbolic))
 
 (rule
  (target main_symbolic.ml)
@@ -25,7 +25,7 @@
  (package cerberus)
  (modules main_vip)
  (libraries result cmdliner str unix
-  cerb_backend mem_vip cerb_util))
+  cerb_backend mem_vip))
 
 (rule
  (target main_vip.ml)
@@ -38,7 +38,7 @@
  (package cerberus-cheri)
  (modules main_cheri_coq)
  (libraries result cmdliner str unix
-            cerb_backend mem_cheri_coq cerb_util)
+            cerb_backend mem_cheri_coq)
  (instrumentation (backend landmarks))
 )
 
