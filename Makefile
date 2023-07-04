@@ -22,9 +22,9 @@ JFLAGVALUE=$(patsubst -j%,%,$(filter -j%,$(MFLAGS)))
 JOBS=$(if $(JFLAGVALUE),$(JFLAGVALUE),"auto")
 
 ifdef PROFILING
-    DUNEFLAGS="--workspace=dune-workspace.profiling -j $(JOBS)"
+    DUNEFLAGS=--workspace=dune-workspace.profiling -j $(JOBS)
 else
-    DUNEFLAGS="-j $(JOBS)"
+    DUNEFLAGS=-j $(JOBS)
 endif
 
 .PHONY: normal
@@ -118,7 +118,7 @@ config.json: tools/config.json
 web: cerberus-web
 cerberus-web: prelude-src config.json tmp/
 	@echo "[DUNE] web"
-	$(Q)dune $(DUNEFLAGS) build cerberus.install cerberus-web.install
+	$(Q)dune build $(DUNEFLAGS) cerberus.install cerberus-web.install
 #	@cp -L _build/default/backend/web/instance.exe webcerb.concrete
 #	@cp -L _build/default/backend/web/instance_symbolic.exe webcerb.symbolic
 #	@cp -L _build/default/backend/web/instance_vip.exe webcerb.vip
