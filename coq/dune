@@ -1,10 +1,12 @@
 
 (rule
  (deps extracted/CRelationClasses.mli.patch extracted/patch.sh)
+ (package cerberus-cheri)
  (target CRelationClasses.mli)
  (action
   (with-stdout-to %{target} (run %{dep:extracted/patch.sh} %{dep:extracted/CRelationClasses.mli})
 )))
+
 (copy_files extracted/Addr.{ml,mli})
 (copy_files extracted/Capabilities.{ml,mli})
 (copy_files extracted/Capabilities0.{ml,mli})
