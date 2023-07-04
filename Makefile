@@ -291,11 +291,9 @@ install: cerberus
 	$(Q)dune install cerberus
 
 .PHONY: install-cheri
-install-cheri: prelude-src
+install-cheri:
 	@echo "[DUNE] install cerberus-cheri"
-        #TODO: remove the following debug print
-	@echo "[DUNE] dune build -p cerberus-cheri --profile=release -j $(JOBS) @install"
-	$(Q)dune build -p cerberus-cheri --profile=release -j $(JOBS) @install
+	$(Q)./tools/cheribuild_hack.sh "dune build -p cerberus-cheri --profile=release -j $(JOBS) @install"
 
 .PHONY: install_cn
 install_cn: cn
