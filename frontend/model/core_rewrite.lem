@@ -1,7 +1,7 @@
 open import Pervasives
 
 open import Utils Core Core_aux Ctype
-import Symbol Mem
+import Symbol Mem Mem_common
 
 import Pp
 
@@ -698,6 +698,8 @@ let rec remove_conv_int_pexpr (Pexpr annot bTy _pe) =
         PEarray_shift (remove_conv_int_pexpr pe1) ty (remove_conv_int_pexpr pe2)
     | PEmember_shift pe tag_sym memb_ident ->
         PEmember_shift (remove_conv_int_pexpr pe) tag_sym memb_ident
+    | PEmemop mop pes ->
+        PEmemop mop (List.map remove_conv_int_pexpr pes)
     | PEnot pe ->
         PEnot (remove_conv_int_pexpr pe)
     | PEop bop pe1 pe2 ->
@@ -1022,6 +1024,17 @@ let rec isAlwaysDefined (Pexpr _ _ pexpr_) =
         isAlwaysDefined pe1 && isAlwaysDefined pe2
     | PEmember_shift pe _ _ ->
         isAlwaysDefined pe
+    | PEmemop mop pes ->
+        (* NOTE: doing this in case we ever add new memops that can be UB *)
+        let () = match mop with
+          | Mem_common.DeriveCap _ _ ->
+              ()
+          | Mem_common.CapAssignValue ->
+              ()
+          | Mem_common.Ptr_tIntValue ->
+              ()
+        end in
+        List.all isAlwaysDefined pes
     | PEnot pe ->
         isAlwaysDefined pe
     | PEop _ pe1 pe2 ->
@@ -1323,6 +1336,8 @@ let rec simpl_case_pexpr (Pexpr annot bTy pexpr_ as pexpr) =
         wrap $ PEarray_shift (simpl_case_pexpr pe1) ty (simpl_case_pexpr pe2)
     | PEmember_shift pe sym ident ->
         wrap $ PEmember_shift (simpl_case_pexpr pe) sym ident
+    | PEmemop mop pes ->
+        wrap $ PEmemop mop (List.map simpl_case_pexpr pes)
     | PEnot pe ->
         wrap $ PEnot (simpl_case_pexpr pe)
     | PEop bop pe1 pe2 ->

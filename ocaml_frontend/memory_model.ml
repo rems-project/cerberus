@@ -71,7 +71,7 @@ module type Memory = sig
   val concrete_ptrval: Nat_big_num.num -> Nat_big_num.num -> pointer_value
   val case_ptrval: pointer_value ->
    (* null pointer *) (Ctype.ctype -> 'a) ->
-   (* function pointer *) (Symbol.sym -> 'a) ->
+   (* function pointer *) (Symbol.sym option -> 'a) ->
    (* concrete pointer *) (Nat_big_num.num option -> Nat_big_num.num -> 'a) -> 'a
   val case_funsym_opt: mem_state -> pointer_value -> Symbol.sym option
 
@@ -95,12 +95,19 @@ module type Memory = sig
   val ptrfromint: Cerb_location.t -> Ctype.integerType -> Ctype.ctype -> integer_value -> pointer_value memM
   (* the first ctype is the original referenced type, the integerType is the target integer type *)
   val intfromptr: Cerb_location.t -> Ctype.ctype -> Ctype.integerType -> pointer_value -> integer_value memM
-  
+
+  (* New operations for CHERI *)
+  val derive_cap : bool(* is_signed *) -> Mem_common.derivecap_op -> integer_value -> integer_value -> integer_value
+  val cap_assign_value: Cerb_location.t -> integer_value -> integer_value -> integer_value
+  val ptr_t_int_value: integer_value -> integer_value
+  val null_cap : bool(* is_signed *) -> integer_value
+
   (* Pointer shifting constructors *)
   val array_shift_ptrval:  pointer_value -> Ctype.ctype -> integer_value -> pointer_value
   val member_shift_ptrval: pointer_value -> Symbol.sym -> Symbol.identifier -> pointer_value
   
   val eff_array_shift_ptrval: Cerb_location.t -> pointer_value -> Ctype.ctype -> integer_value -> pointer_value memM
+  val eff_member_shift_ptrval: Cerb_location.t -> pointer_value -> Symbol.sym -> Symbol.identifier -> pointer_value memM
   
   val memcpy: Cerb_location.t -> pointer_value -> pointer_value -> integer_value -> pointer_value memM
   val memcmp: pointer_value -> pointer_value -> integer_value -> integer_value memM
@@ -159,7 +166,7 @@ module type Memory = sig
   
   (* Integer <-> Floating casting constructors *)
   val fvfromint: integer_value -> floating_value
-  val ivfromfloat: floating_value -> integer_value
+  val ivfromfloat: Ctype.integerType -> floating_value -> integer_value
   
   
   
@@ -190,8 +197,14 @@ module type Memory = sig
   (* For race detection *)
   val sequencePoint: unit memM
 
+  (* Memory intrinsics (currently used in CHERI) *)
+
+  val call_intrinsic: Cerb_location.t -> string -> (mem_value list) -> (mem_value option) memM
+  val get_intrinsic_type_spec: string -> Mem_common.intrinsics_signature option
+
+
   (* pretty printing *)
-  val pp_pointer_value: pointer_value -> PPrint.document
+  val pp_pointer_value: ?is_verbose:bool -> pointer_value -> PPrint.document
   val pp_integer_value: integer_value -> PPrint.document
   val pp_integer_value_for_core: integer_value -> PPrint.document
   val pp_mem_value: mem_value -> PPrint.document

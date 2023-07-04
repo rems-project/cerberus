@@ -82,6 +82,10 @@ let keywords =
 
       ("Fvfromint",   T.FVFROMINT      );
       ("Ivfromfloat", T.IVFROMFLOAT    );
+
+      (* this is a fake constructor at the syntax level *)
+      (* NOTE: it would be better to pass to the Core parser an env with the C types symbols (to resolve max_align_t) *)
+      ("IvMaxAlignment", T.IVMAX_ALIGNMENT);
       
       (* for Core (pure) expressions *)
       ("not",          T.NOT         );
@@ -157,12 +161,18 @@ let keywords =
       ("IntFromPtr",       T.MEMOP_OP Mem_common.IntFromPtr      );
       ("PtrFromInt",       T.MEMOP_OP Mem_common.PtrFromInt      );
       ("PtrValidForDeref", T.MEMOP_OP Mem_common.PtrValidForDeref);
-      ("PtrWellAligned",   T.MEMOP_OP Mem_common.PtrWellAligned);
+      ("PtrWellAligned",   T.MEMOP_OP Mem_common.PtrWellAligned  );
+      ("PtrArrayShift",    T.MEMOP_OP Mem_common.PtrArrayShift   );
+      ("PtrMemberShift",   T.PTRMEMBERSHIFT);
       
-      ("Memcpy", T.MEMOP_OP Mem_common.Memcpy);
-      ("Memcmp", T.MEMOP_OP Mem_common.Memcmp);
-      ("Realloc", T.MEMOP_OP Mem_common.Realloc);
-      ("Va_start", T.MEMOP_OP Mem_common.Va_start);
+      ("Memcpy",        T.MEMOP_OP Mem_common.Memcpy       );
+      ("Memcmp",        T.MEMOP_OP Mem_common.Memcmp       );
+      ("Realloc",       T.MEMOP_OP Mem_common.Realloc      );
+      ("Va_start",      T.MEMOP_OP Mem_common.Va_start     );
+      ("Va_copy",       T.MEMOP_OP Mem_common.Va_copy      );
+      ("Va_arg",        T.MEMOP_OP Mem_common.Va_arg       );
+      ("Va_end",        T.MEMOP_OP Mem_common.Va_end       );
+      ("Copy_alloc_id", T.MEMOP_OP Mem_common.Copy_alloc_id);
       
       (* for source attributes *)
       ("ailname", T.AILNAME);

@@ -29,7 +29,7 @@ via `opam init` after the installation of opam.)
    Z3. (Installation of Z3 usually takes relatively long.)
 
     ```
-    opam install . --deps-only
+    opam install --deps-only ./cerberus-lib.opam ./cn.opam
     ```
 
 6. then run

@@ -1,0 +1,6 @@
+(coq.theory
+ (name Common)
+ (package cerberus-cheri)
+ (modules SimpleError Utils)
+ (theories ExtLib StructTact Sail bbv)
+)

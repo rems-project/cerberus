@@ -303,6 +303,10 @@ let rec n_pexpr loc (Pexpr (annots, bty, pe)) : mu_pexpr =
   | PEmember_shift(e', sym1, id1) ->
      let e' = n_pexpr loc e' in
      annotate (M_PEmember_shift(e', sym1, id1))
+  | PEmemop(mop, pes) ->
+      (* FIXME(CHERI merge) *)
+      (* this construct is currently only used by the CHERI switch *)
+      assert_error loc !^"PEmemop"
   | PEnot e' -> 
      let e' = n_pexpr loc e' in
      annotate (M_PEnot e')
@@ -525,7 +529,7 @@ let n_paction loc (Paction(pol, a)) =
 
 
 let show_n_memop = 
-  Mem_common.instance_Show_Show_Mem_common_memop_dict.show_method
+  Mem_common.(instance_Show_Show_Mem_common_generic_memop_dict Symbol.instance_Show_Show_Symbol_sym_dict).show_method
 
 let n_memop loc memop pexprs =
   match (memop, pexprs) with
@@ -717,7 +721,9 @@ let rec n_expr (loc : Loc.t) ((env, old_states), desugaring_things) (global_type
           | Vloaded (LVspecified (OVpointer ptrval)) ->
              Impl_mem.case_ptrval ptrval
                ( fun ct -> err ())
-               ( fun sym -> M_Pexpr (loc, annots, bty, (M_PEval (M_Vfunction_addr sym))) )
+               ( function
+                   | None -> (* FIXME(CHERI merge) *)err ()
+                   | Some sym -> M_Pexpr (loc, annots, bty, (M_PEval (M_Vfunction_addr sym))) )
                ( fun _prov _ -> err () )
           | _ -> err ()
           end

@@ -46,7 +46,7 @@ function report {
   else
     res="\033[1m\033[31mFAILED!\033[0m"
     fail=$((fail+1))
-    #cat tmp/result tmp/stderr
+    cat tmp/result tmp/stderr
   fi
 
   echo -e "Test $1: $res"

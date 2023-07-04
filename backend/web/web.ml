@@ -169,7 +169,7 @@ let write_tmp_file content =
     Debug.warn "Error when writing the contents in disk.";
     failwith "write_tmp_file"
 
-let string_of_doc d =
+let _string_of_doc d =
   let buf = Buffer.create 1024 in
   PPrint.ToBuffer.pretty 1.0 80 buf d;
   Buffer.contents buf
@@ -818,7 +818,7 @@ let request ~conf (flow, conn) req body =
     Server.respond ~headers ~status:`Moved_permanently ~body:Cohttp_lwt__.Body.empty ()
   end
 
-let redirect ~conf conn req body =
+let _redirect ~conf conn req body =
   let uri  = Request.uri req in
   let meth = Request.meth req in
   match meth, Uri.path uri with

@@ -56,6 +56,7 @@ type token =
   
   | SIZE_T
   | PTRDIFF_T
+  | IVMAX_ALIGNMENT
   
   | ATOMIC
   | STRUCT (* TODO *)
@@ -200,7 +201,9 @@ type token =
   | PURE
   
   | MEMOP
-  | MEMOP_OP of Mem_common.memop
+  | PURE_MEMOP_OP of Mem_common.pure_memop
+  | MEMOP_OP of _sym Mem_common.generic_memop
+  | PTRMEMBERSHIFT
   
   | AILNAME
 

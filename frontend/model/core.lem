@@ -205,6 +205,7 @@ type ctor =  (* data constructors *)
  | Cunspecified (* unspecified loaded value *)
  | Cfvfromint (* cast integer to floating value *)
  | Civfromfloat (* cast floating to integer value *)
+ | CivNULLcap of bool (* CHERI: null capability *)
 
 
 type generic_pattern_ 'sym = 
@@ -226,6 +227,7 @@ type generic_pexpr_ 'bty 'sym =  (* Core pure expressions *)
  | PEcase of (generic_pexpr 'bty 'sym) * list ((generic_pattern 'sym) * (generic_pexpr 'bty 'sym)) (* pattern matching *)
  | PEarray_shift of (generic_pexpr 'bty 'sym) * Ctype.ctype * (generic_pexpr 'bty 'sym) (* pointer array shift *)
  | PEmember_shift of (generic_pexpr 'bty 'sym) * 'sym * Symbol.identifier (* pointer struct/union member shift *)
+ | PEmemop of Mem_common.pure_memop * list (generic_pexpr 'bty 'sym)
  | PEnot of (generic_pexpr 'bty 'sym) (* boolean not *)
  | PEop of binop * (generic_pexpr 'bty 'sym) * (generic_pexpr 'bty 'sym)
  | PEstruct of 'sym * list (Symbol.identifier * (generic_pexpr 'bty 'sym)) (* C struct expression *)
@@ -302,7 +304,7 @@ type pass_by_value_or_pointer =
 
 type generic_expr_ 'a 'bty 'sym =  (* (effectful) expression *)
  | Epure of (generic_pexpr 'bty 'sym)
- | Ememop of Mem_common.memop * list (generic_pexpr 'bty 'sym) (* pointer op involving memory *)
+ | Ememop of Mem_common.generic_memop 'sym * list (generic_pexpr 'bty 'sym) (* pointer op involving memory *)
  | Eaction of (generic_paction 'a 'bty 'sym) (* memory action *)
  | Ecase of (generic_pexpr 'bty 'sym) * list ((generic_pattern 'sym) * (generic_expr 'a 'bty 'sym)) (* pattern matching *)
  | Elet of (generic_pattern 'sym) * (generic_pexpr 'bty 'sym) * (generic_expr 'a 'bty 'sym)

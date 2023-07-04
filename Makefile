@@ -17,6 +17,16 @@ endif
 # To enable the printing of commands, use [make Q= ...],
 Q = @
 
+# parse the -j flag if present, set jobs to "auto" oterwise
+JFLAGVALUE=$(patsubst -j%,%,$(filter -j%,$(MFLAGS)))
+JOBS=$(if $(JFLAGVALUE),$(JFLAGVALUE),"auto")
+
+ifdef PROFILING
+    DUNEFLAGS=--workspace=dune-workspace.profiling -j $(JOBS)
+else
+    DUNEFLAGS=-j $(JOBS)
+endif
+
 .PHONY: normal
 normal: cerberus
 
@@ -26,39 +36,56 @@ all: cerberus cerberus-bmc cerberus-web cn #rustic
 .PHONY: full-build
 full-build: prelude-src
 	@echo "[DUNE] full build"
-	$(Q)dune build
+	$(Q)dune build $(DUNEFLAGS) 
 
 .PHONY: util
 util:
 	@echo "[DUNE] library [$@]"
-	$(Q)dune build _build/default/$@/$@.cma _build/default/$@/$@.cmxa
+	$(Q)dune build $(DUNEFLAGS) _build/default/$@/$@.cma _build/default/$@/$@.cmxa
+	ifdef PROFILING
+		$(Q)dune build $(DUNEFLAGS) _build/profiling/$@/$@.cma _build/profiling/$@/$@.cmxa
+		$(Q)dune build $(DUNEFLAGS) _build/profiling-auto/$@/$@.cma _build/profiling-auto/$@/$@.cmxa
+	endif
 
 .PHONY: sibylfs
 sibylfs: sibylfs-src
 	@echo "[DUNE] library [$@]"
-	$(Q)dune build _build/default/$@/$@.cma _build/default/$@/$@.cmxa
+	$(Q)dune build $(DUNEFLAGS) _build/default/$@/$@.cma _build/default/$@/$@.cmxa
+	ifdef PROFILING
+		$(Q)dune build $(DUNEFLAGS) _build/profiling/$@/$@.cma _build/profiling/$@/$@.cmxa
+		$(Q)dune build $(DUNEFLAGS) _build/profiling/$@/$@.cma _build/profiling-auto/$@/$@.cmxa
+	endif
 
 .PHONY: cerberus
 cerberus: prelude-src
 	@echo "[DUNE] cerberus"
-	$(Q)dune build cerberus.install
+	$(Q)dune build $(DUNEFLAGS) cerberus.install
+
+.PHONY: test
+test: prelude-src
+	@echo "testing"
+	dune exec coq/coqcaptest.exe
 
 .PHONY: cerberus-bmc bmc
 bmc: cerberus-bmc
 cerberus-bmc: prelude-src
 	@echo "[DUNE] cerberus-bmc"
-	$(Q)dune build cerberus.install cerberus-bmc.install
+	$(Q)dune build $(DUNEFLAGS) cerberus.install cerberus-bmc.install
 
 .PHONY: rustic
 rustic: prelude-src
 	@echo "[DUNE] $@"
-	$(Q)dune build cerberus.install rustic.install
+	$(Q)dune build $(DUNEFLAGS) cerberus.install rustic.install
 
 .PHONY: cn
 cn: prelude-src
 	@echo "[DUNE] $@"
-	$(Q)dune build cerberus.install cn.install
+	$(Q)dune build $(DUNEFLAGS) cerberus.install cn.install
 	@echo "\nDONE"
+
+cheri: prelude-src
+	@echo "[DUNE] cerberus-cheri"
+	$(Q)./tools/cheribuild_hack.sh "dune build $(DUNEFLAGS) cerberus-cheri.install"
 
 
 # .PHONY: cerberus-ocaml ocaml
@@ -91,11 +118,11 @@ config.json: tools/config.json
 web: cerberus-web
 cerberus-web: prelude-src config.json tmp/
 	@echo "[DUNE] web"
-	$(Q)dune build cerberus.install cerberus-web.install
-	@cp -L _build/default/backend/web/instance.exe webcerb.concrete
-	@cp -L _build/default/backend/web/instance_symbolic.exe webcerb.symbolic
-	@cp -L _build/default/backend/web/instance_vip.exe webcerb.vip
-	@cp -L _build/default/backend/web/web.exe cerberus-webserver
+	$(Q)dune build $(DUNEFLAGS) cerberus.install cerberus-web.install
+#	@cp -L _build/default/backend/web/instance.exe webcerb.concrete
+#	@cp -L _build/default/backend/web/instance_symbolic.exe webcerb.symbolic
+#	@cp -L _build/default/backend/web/instance_vip.exe webcerb.vip
+#	@cp -L _build/default/backend/web/web.exe cerberus-webserver
 
 .PHONY: ui
 ui:
@@ -250,9 +277,9 @@ clean-sibylfs-src:
 
 .PHONY: clean
 clean:
+	$(Q)rm -f coq/*.{glob,vo,vok}
 	$(Q)rm -f webcerb.concrete webcerb.symbolic cerberus-webserver
-	$(Q)rm -f $(LIBC_TARGETS)
-	$(Q)dune clean
+	$(Q)rm -rf _build/
 
 .PHONY: distclean
 distclean: clean clean-prelude-src clean-sibylfs-src
@@ -262,6 +289,11 @@ distclean: clean clean-prelude-src clean-sibylfs-src
 install: cerberus
 	@echo "[DUNE] install cerberus"
 	$(Q)dune install cerberus
+
+.PHONY: install-cheri
+install-cheri:
+	@echo "[DUNE] install cerberus-cheri"
+	$(Q)./tools/cheribuild_hack.sh "dune build -p cerberus-cheri --profile=release -j $(JOBS) @install"
 
 .PHONY: install_cn
 install_cn: cn

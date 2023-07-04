@@ -133,6 +133,7 @@ type ('a, 'bty) texpr =
   | TEctor of ctor * ('a, 'bty) texpr list
   | TEarray_shift of ('a, 'bty) texpr * ctype * ('a, 'bty) texpr
   | TEmember_shift of ('a, 'bty) texpr * Symbol.sym * Symbol.identifier
+  | TEpure_memop of Mem_common.pure_memop * ('a, 'bty) texpr list
   | TEnot of ('a, 'bty) texpr
   | TEop of binop * ('a, 'bty) texpr * ('a, 'bty) texpr
   | TEstruct of Symbol.sym * (Symbol.identifier * ('a, 'bty) texpr) list
@@ -207,6 +208,7 @@ let show_ctor = function
   | Cunspecified -> "Unspecified"
   | Cfvfromint -> "Cfvfromint"
   | Civfromfloat -> "Civfromfloat"
+  | CivNULLcap is_signed -> "CivNULLcap(" ^ if is_signed then "signed" else "unsigned" ^ ")"
 
 let show_memop =
   let open Mem_common in
@@ -230,7 +232,9 @@ let show_memop =
   | Va_arg -> "Va_arg"
   | Va_end -> "Va_end"
   | PtrArrayShift -> "PtrArrayShift"
+  | PtrMemberShift _ -> "PtrMemberShift"
   | Copy_alloc_id -> "Copy_alloc_id"
+  | CHERI_intrinsic (str, _) -> "Cheri_" ^ str
 
 let show_binop = function
   | OpAdd -> " + "
@@ -315,6 +319,14 @@ let rec show_texpr te =
                             ^ self te2)
   | TEmember_shift (te, x, Symbol.Identifier (_, memb)) ->
     "member_shift" ^ parens (self te ^ ", " ^ Sym.show x ^ ", " ^ memb)
+  | TEpure_memop (pure_memop, tes) ->
+      let str =
+        match pure_memop with
+          | Mem_common.DeriveCap (bop, is_signed) -> "derive_cap(TODO bop)"
+          | CapAssignValue -> "cap_assign_value"
+          | Ptr_tIntValue -> "ptr_t_int_value"
+      in
+      "memop" ^ parens (str ^ ", " ^ comma_list self tes)
   | TEnot te ->
     "not " ^ parens (self te)
   | TEop (bop, te1, te2) ->
@@ -420,6 +432,9 @@ let rec texpr_of_pexpr (Pexpr (_, _, pe_)) =
   | PEmember_shift (pe, ty, memb) ->
     self pe >>= fun te ->
     return @@ TEmember_shift (te, ty, memb)
+  | PEmemop (mop, pes) ->
+      selfs pes >>= fun tes ->
+      return @@ TEpure_memop (mop, tes)
   | PEnot pe ->
     self pe >>= fun te ->
     return @@ TEnot te
@@ -481,6 +496,8 @@ let rec cond_of_pexpr (Pexpr (_, _, pe_)) =
   | PEcase _ ->
     None
   | PEarray_shift _ | PEmember_shift _ ->
+    assert false
+  | PEmemop _ ->
     assert false
   | PEnot pe ->
     cond_of_pexpr pe >>= fun c ->
@@ -603,6 +620,8 @@ let rec add_pe (in_v, out_v) in_pat (Pexpr (_, _, pe_) as pe) =
       self (in_v, mid_v) pat pe >>= fun _ ->
       let te = TEmember_shift (TEsym sym, x, cid) in
       add (mid_v, out_v) (Tassign (in_pat, te))
+    | PEmemop _ ->
+      failwith "PEmemop not implemented"
     | PEnot pe ->
       let (sym, pat) = new_symbol () in
       new_vertex () >>= fun mid_v ->

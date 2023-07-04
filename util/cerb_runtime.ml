@@ -1,5 +1,8 @@
 (** Discover the path to the Cerberus runtime. *)
 
+let package = ref "cerberus"
+let set_package str = package := str
+
 (** If it is set, [specified_runtime] has highest priority, and it can thus be
     used to override the "detected" runtime path from the CLI for example. *)
 let specified_runtime : string option ref = ref None
@@ -9,21 +12,18 @@ let specified_runtime : string option ref = ref None
     is raised in case of failure. *)
 let find_build_runtime : unit -> string = fun _ ->
   let path = String.split_on_char ':' (Sys.getenv "PATH") in
-  let suffix = "/_build/install/default/bin" in
-  let len_suffix = String.length suffix in
+  let suffix_r = Str.regexp {|^\(.*/_build/install/[a-z][a-z\-]*\)/bin$|} in
   let rec find_prefix path =
     match path with
     | []        -> raise Not_found
     | p :: path ->
-    let len = String.length p in
-    if len < len_suffix then find_prefix path else
-    let p_suffix = String.sub p (len - len_suffix) len_suffix in
-    if p_suffix <> suffix then find_prefix path else
-    String.sub p 0 (len - len_suffix)
+       if Str.string_match suffix_r p 0
+       then Str.matched_group 1 p
+       else find_prefix path
   in
   let runtime_path =
     Filename.concat (find_prefix path)
-      "_build/install/default/lib/cerberus/runtime"
+      "/lib/" ^ !package ^ "/runtime"
   in
   if not (Sys.file_exists runtime_path) then raise Not_found;
   runtime_path
@@ -42,7 +42,7 @@ let detect_runtime : unit -> string = fun _ ->
     try Sys.getenv "OPAM_SWITCH_PREFIX"
     with Not_found -> failwith "OPAM_SWITCH_PREFIX not set."
   in
-  Filename.concat prefix "lib/cerberus/runtime"
+  Filename.concat prefix "lib/" ^ !package ^ "/runtime"
 
 (** [runtime ()] is a memoised version of [detect_runtime ()]. This means that
     if [Failure] is not raised on its first call, it will not be raised later,

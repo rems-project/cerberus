@@ -1,5 +1,6 @@
 open import Pervasives
 import Symbol Float Ctype Mem_common
+import AilSyntax
 
 type pointer_value
 type integer_value
@@ -84,7 +85,7 @@ declare ocaml target_rep function fun_ptrval = `Impl_mem.fun_ptrval`
 val concrete_ptrval: integer -> integer -> pointer_value
 val case_ptrval: forall 'a. pointer_value ->
    (* null pointer *) (Ctype.ctype -> 'a) ->
-   (* function pointer *) (Symbol.sym -> 'a) ->
+   (* function pointer *) (maybe Symbol.sym -> 'a) ->
    (* concrete pointer *) (maybe integer -> integer -> 'a) -> 'a
 val case_funsym_opt: mem_state -> pointer_value -> maybe Symbol.sym
 
@@ -127,6 +128,14 @@ val intfromptr: Loc.t -> Ctype.ctype -> Ctype.integerType -> pointer_value -> me
 declare ocaml target_rep function ptrfromint = `Impl_mem.ptrfromint`
 declare ocaml target_rep function intfromptr = `Impl_mem.intfromptr`
 
+val derive_cap : bool(* is_signed *) -> Mem_common.derivecap_op -> integer_value -> integer_value -> integer_value
+val cap_assign_value: Loc.t -> integer_value -> integer_value -> integer_value
+val null_cap : bool(* is_signed *) -> integer_value
+val ptr_t_int_value: integer_value -> integer_value
+declare ocaml target_rep function derive_cap = `Impl_mem.derive_cap`
+declare ocaml target_rep function cap_assign_value = `Impl_mem.cap_assign_value`
+declare ocaml target_rep function null_cap = `Impl_mem.null_cap`
+declare ocaml target_rep function ptr_t_int_value = `Impl_mem.ptr_t_int_value`
 
 (* Pointer shifting constructors *)
 val array_shift_ptrval:  pointer_value -> Ctype.ctype -> integer_value -> pointer_value
@@ -136,7 +145,9 @@ declare ocaml target_rep function member_shift_ptrval = `Impl_mem.member_shift_p
 
 (* Effectfull version of pointer shifting constructors *)
 val eff_array_shift_ptrval: Loc.t -> pointer_value -> Ctype.ctype -> integer_value -> memM pointer_value
+val eff_member_shift_ptrval: Loc.t -> pointer_value -> Symbol.sym -> Symbol.identifier -> memM pointer_value
 declare ocaml target_rep function eff_array_shift_ptrval = `Impl_mem.eff_array_shift_ptrval`
+declare ocaml target_rep function eff_member_shift_ptrval = `Impl_mem.eff_member_shift_ptrval`
 
 
 val memcpy: Loc.t -> pointer_value -> pointer_value -> integer_value -> memM pointer_value
@@ -238,7 +249,7 @@ declare ocaml target_rep function le_fval = `Impl_mem.le_fval`
 
 (* Integer <-> Floating casting constructors *)
 val fvfromint: integer_value -> floating_value
-val ivfromfloat: floating_value -> integer_value
+val ivfromfloat: Ctype.integerType -> floating_value -> integer_value
 declare ocaml target_rep function fvfromint = `Impl_mem.fvfromint`
 declare ocaml target_rep function ivfromfloat = `Impl_mem.ivfromfloat`
 
@@ -274,10 +285,27 @@ val case_mem_value: forall 'a.
   'a
 declare ocaml target_rep function case_mem_value = `Impl_mem.case_mem_value`
 
+(* CHERI memory model *)
+val cheri_pointer_hash_printf: bool -> pointer_value -> string
+declare ocaml target_rep function cheri_pointer_hash_printf = `Impl_mem.cheri_pointer_hash_printf`
 
 
+(* Memory intrinsics (currently used in CHERI) *)
 
+(* Get type signature specification given intrinsic.
+   Returns None, if not supported.
+*)
+val get_intrinsic_type_spec: string -> maybe Mem_common.intrinsics_signature
+declare ocaml target_rep function get_intrinsic_type_spec = `Impl_mem.get_intrinsic_type_spec`
 
+(* Invoke an intrinsic. Parameters:
+   1. Loc.t - location where invoked (to report errors)
+   2. list mem_value - arguments
+   3. return value - (None for void) memM (option mem_value)
+ *)
+
+val call_intrinsic: Loc.t -> string -> list mem_value -> memM (maybe mem_value)
+declare ocaml target_rep function call_intrinsic = `Impl_mem.call_intrinsic`
 
 
 

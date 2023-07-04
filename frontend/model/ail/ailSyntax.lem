@@ -108,6 +108,7 @@ type ail_builtin =
   | AilBatomic of ail_builtin_atomic
   | AilBlinux of ail_builtin_linux
   | AilBcopy_alloc_id (* RefinedC's copy_alloc_id() operator has type void* (uintptr_t, void* ) *)
+  | AilBCHERI of string
 
 type expression_ 'a [name = "e*"] = 
   | AilEunary of unaryOperator * expression 'a

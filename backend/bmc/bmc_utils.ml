@@ -334,6 +334,7 @@ let rec set_uid_pe uid n (Pexpr( annots1, bty, pe_)) =
                         (Lem_list.mapi (fun i (pat, pe) -> (pat, self (i+ 1) pe)) cases))
   | PEarray_shift( pe, cty, pes) -> PEarray_shift( (self( 1) pe), cty, (self( 2) pes))
   | PEmember_shift( pe, sym2, cid) -> PEmember_shift( (self( 1) pe), sym2, cid)
+  | PEmemop( mop, pes) -> PEmemop ( mop, (selfs pes))
   | PEnot pe -> PEnot (self( 1) pe)
   | PEop( bop, pe1, pe2) -> PEop( bop, (self( 1) pe1), (self( 2) pe2))
   | PEstruct( sym2, fields) -> PEstruct( sym2,

@@ -17,7 +17,7 @@ To build Cerberus, you need opam (>= 2.0.0, see [here](https://opam.ocaml.org/do
 First install the dependencies (including `lem` and `menhir`) using opam:
 
 ```bash
-$ opam install --deps-only .
+$ opam install --deps-only ./cerberus-lib.opam ./cerberus.opam
 ```
 
 Then build the CLI using:

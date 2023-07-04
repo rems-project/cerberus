@@ -167,6 +167,8 @@ let rec pull_constrained n (Pexpr _ () pexpr_) =
         wrap_bin (fun pe1 pe2 -> PEarray_shift pe1 cty pe2) pe1 pe2
     | PEmember_shift pe sym cid->
         wrap (fun pe -> PEmember_shift pe sym cid) pe
+    | PEmemop memop pes ->
+        wrap_list (PEmemop memop) pes
     | PEnot pe ->
         wrap PEnot pe
     | PEop binop pe1 pe2 ->
@@ -582,8 +584,11 @@ let rec step_eval_pexpr n loc parent_call_loc_opt core_extern env mem_st_opt fil
 
           | (Cfvfromint, Just [Vobject (OVinteger ival)]) ->
               EU.return $ PEval (Vobject (OVfloating (Mem.fvfromint ival)))
-          | (Civfromfloat, Just [Vobject (OVfloating fval)]) ->
-              EU.return $ PEval (Vobject (OVinteger (Mem.ivfromfloat fval)))
+          | (Civfromfloat, Just [Vctype (Ctype.Ctype _ (Ctype.Basic (Ctype.Integer ity))); Vobject (OVfloating fval)]) ->
+              EU.return $ PEval (Vobject (OVinteger (Mem.ivfromfloat ity fval)))
+
+          | (CivNULLcap is_signed, Just []) ->
+              EU.return $ PEval (Vobject (OVinteger (Mem.null_cap is_signed)))
           
           | (_, Just cvals) ->
               if false (*List.any Caux.isConstrainedValue cvals*) then
@@ -661,6 +666,25 @@ let rec step_eval_pexpr n loc parent_call_loc_opt core_extern env mem_st_opt fil
           | _ ->
               EU.return $ PEmember_shift pe' tag_sym member_ident
         end
+    | PEmemop memop pes ->
+        EU.mapM self pes >>= fun pes' ->
+        match (memop, Caux.valueFromPexprs pes') with
+          | ( Mem_common.DeriveCap op is_signed
+            , Just [ Core.Vobject (Core.OVinteger ival1)
+                   ; Core.Vobject (Core.OVinteger ival2) ] ) ->
+                EU.return (PEval (Vobject (OVinteger (Mem.derive_cap is_signed op ival1 ival2))))
+          | ( Mem_common.CapAssignValue
+            , Just [ Core.Vobject (Core.OVinteger ival1)
+                   ; Core.Vobject (Core.OVinteger ival2) ] ) ->
+             EU.return (PEval (Vobject (OVinteger (Mem.cap_assign_value loc ival1 ival2))))
+          | ( Mem_common.Ptr_tIntValue
+            , Just [ Core.Vobject (Core.OVinteger ival) ] ) ->
+                EU.return (PEval (Vobject (OVinteger (Mem.ptr_t_int_value ival))))
+          | (_, Just _) ->
+              EU.fail $ Illformed_program "PEmemop"
+          | (_, Nothing) ->
+              EU.return (PEmemop memop pes')
+        end        
     | PEnot (Pexpr annot pe_bTy _ as pe) ->
         self pe >>= fun (Pexpr annot pe_bTy pe_' as pe') ->
         match pe_' with
@@ -736,33 +760,38 @@ KKK:              EU.return (PEval (Vloaded (LVspecified (OVstruct tag_sym xs)))
         self pe >>= fun pe' ->
         match Caux.valueFromPexpr pe' with
           | Just (Vloaded (LVspecified (OVpointer pv))) ->
-              let case_funptrval sym = 
-                let () = Debug.print_debug 3 [] (fun () -> "function pointer: " ^ show sym) in
-                match Map.lookup sym file.funinfo with
-                  | Just (_, _, ret, params, is_variadic, has_proto) ->
-                      let () = Debug.print_debug 3 [] (fun () -> "function pointer (lookup): " ^ show sym) in
-                      EU.return (PEval (Vtuple [Vctype ret;
-                                                Vlist BTy_ctype (List.map (fun (_, ty) -> Vctype ty) params);
-                                                if is_variadic then Vtrue else Vfalse;
-                                                if has_proto then Vtrue else Vfalse; ]))
-                  | _ ->
-                     EU.fail $ Illformed_program (Loc.stringFromLocation loc ^ ": '" ^ show sym ^ "' does not point to a function (cfunction)")
-                end in
+              let case_funptrval = function
+                | Just sym ->
+                    let () = Debug.print_debug 3 [] (fun () -> "function pointer: " ^ show sym) in
+                    match Map.lookup sym file.funinfo with
+                      | Just (_, _, ret, params, is_variadic, has_proto) ->
+                          let () = Debug.print_debug 3 [] (fun () -> "function pointer (lookup): " ^ show sym) in
+                          EU.return (PEval (Vtuple [Vctype ret;
+                                                    Vlist BTy_ctype (List.map (fun (_, ty) -> Vctype ty) params);
+                                                    if is_variadic then Vtrue else Vfalse;
+                                                    if has_proto then Vtrue else Vfalse; ]))
+                      | _ ->
+                        EU.fail $ Illformed_program (Loc.stringFromLocation loc ^ ": '" ^ show sym ^ "' does not point to a function (cfunction)")
+                    end
+                | Nothing ->
+                  let ub = Undefined.UB_CERB003_invalid_function_pointer in
+                  Exception.return (Undefined.undef loc [ub])
+              end in
               Mem.case_ptrval pv
                 (fun _ -> EU.fail $ Illformed_program "null function pointer")
-                 case_funptrval
-                (fun _ addr ->
+                case_funptrval
+                (fun _ _ ->
                 (* TODO: not sure about this case! it happens when calling a function pointer casted to void* via: ((void ( * )(void))p)(); *)
                   match mem_st_opt with
                   | Just mem_st ->
                       match Mem.case_funsym_opt mem_st pv with
                       | Just sym ->
-                          case_funptrval sym
+                          case_funptrval (Just sym)
                       | None ->
-                          EU.fail $ Illformed_program (Loc.stringFromLocation loc ^ ": " ^ show addr ^ " does not point to a function")
+                          EU.fail $ Illformed_program (Loc.stringFromLocation loc ^ ": does not point to a function")
                       end
                   | None ->
-                      EU.fail $ Illformed_program (Loc.stringFromLocation loc ^ ": " ^ show addr ^ " does not point to a function")
+                      EU.fail $ Illformed_program (Loc.stringFromLocation loc ^ ": does not point to a function")
                   end)
           | Just (Vloaded (LVunspecified _)) ->
               EU.fail $ Illformed_program "function pointer has an unspecified value"

@@ -1,7 +1,9 @@
 (* Concrete types and functions common to all memory layout models *)
-open import Pervasives
-import Loc
+open import Pervasives Utils
+import Loc Symbol
 import Undefined
+import AilSyntax
+import Ctype AilTypesAux
 
 open import Nondeterminism
 
@@ -40,14 +42,15 @@ let stringFromAccess_error = function
       "AtomicMemberof"
 end
 
+(* used for both free and realloc *)
 type free_error =
-  | Free_static_allocation
+  | Free_non_matching (* does not match any existing dynamic allocation *)
   | Free_dead_allocation
-  | Free_out_of_bound
+  | Free_out_of_bound (* the address is matching, but out of bound of the provenance *)
 
 let stringFromFree_error = function
-  | Free_static_allocation ->
-      "Free_static_allocation"
+  | Free_non_matching ->
+      "Free_non_matching"
   | Free_dead_allocation ->
       "Free_dead_allocation"
   | Free_out_of_bound ->
@@ -75,6 +78,28 @@ type vip_error =
   | VIP_copy_alloc_id_invalid (* UB *)
 
 
+type mem_cheri_error =
+  | CheriErrDecodingCap
+  | CheriMerrInvalidCap
+  | CheriMerrInsufficientPermissions
+  | CheriBoundsErr of ((integer*integer)*integer*integer) (* bounds,address,length *)
+  | CheriUndefinedTag
+
+instance (Show mem_cheri_error)
+let show = function
+  | CheriErrDecodingCap ->
+     "CheriErrDecodingCap"
+  | CheriMerrInvalidCap ->
+     "CheriMerrInvalidCap"
+  | CheriMerrInsufficientPermissions ->
+     "CheriMerrInsufficientPermissions"
+  | CheriBoundsErr _ ->
+     "CheriBoundsErr" (* TODO(CHERI): print more *)
+  | CheriUndefinedTag ->
+     "CheriUndefinedTag"
+  end
+end
+
 type mem_error =
   | MerrOutsideLifetime of string (* mem_read_request *)
   | MerrInternal of string
@@ -88,7 +113,7 @@ type mem_error =
 
   
   | MerrUndefinedFree of free_error
-  | MerrUndefinedRealloc
+  | MerrUndefinedRealloc of free_error
   
   | MerrIntFromPtr
   | MerrPtrFromInt
@@ -103,6 +128,7 @@ type mem_error =
 
     (* for the VIP memory model (should add a mechanism in the memory interface to expose custom errors) *)
   | MerrVIP of vip_error
+  | MerrCHERI of mem_cheri_error
 
 instance (Show mem_error)
   let show = function
@@ -133,8 +159,8 @@ instance (Show mem_error)
     
     | MerrUndefinedFree err ->
         "MerrUndefinedFree " ^ stringFromFree_error err
-    | MerrUndefinedRealloc ->
-        "MerrUndefinedRealloc"
+    | MerrUndefinedRealloc err ->
+        "MerrUndefinedRealloc " ^ stringFromFree_error err
     | MerrIntFromPtr ->
         "MerrIntFromPtr"
     | MerrPtrFromInt ->
@@ -183,60 +209,82 @@ instance (Show mem_error)
           | VIP_copy_alloc_id_invalid ->
               "MerrVIP copy_alloc_id_invalid"
         end
+    | MerrCHERI k ->
+      "MerrCHERI " ^ show k
   end
 end
 
 
 let undefinedFromMem_error = function
   | MerrOutsideLifetime _ ->
-      Just [Undefined.UB009_outside_lifetime]
+      Just Undefined.UB009_outside_lifetime
   | MerrPtrdiff ->
-      Just [Undefined.UB048_disjoint_array_pointers_subtraction]
+      Just Undefined.UB048_disjoint_array_pointers_subtraction
   | MerrAccess _ NullPtr ->
-      Just [Undefined.UB019_lvalue_not_an_object]
+      Just Undefined.UB019_lvalue_not_an_object
   | MerrAccess _ DeadPtr ->
-      Just [Undefined.UB010_pointer_to_dead_object]
+      Just Undefined.UB010_pointer_to_dead_object
   | MerrIntFromPtr ->
-      Just [Undefined.UB024_out_of_range_pointer_to_integer_conversion]
+      Just Undefined.UB024_out_of_range_pointer_to_integer_conversion
   | MerrPtrFromInt ->
-      Just [Undefined.UB_CERB001_integer_to_dead_pointer]
+      Just Undefined.UB_CERB001_integer_to_dead_pointer
   
   | MerrPtrComparison ->
-      Just [Undefined.UB053_distinct_aggregate_union_pointer_comparison]
+      Just Undefined.UB053_distinct_aggregate_union_pointer_comparison
   | MerrArrayShift ->
-      Just [Undefined.UB046_array_pointer_outside]
+      Just Undefined.UB046_array_pointer_outside
   | MerrFreeNullPtr ->
-      Just [Undefined.UB_CERB005_free_nullptr]
+      Just Undefined.UB_CERB005_free_nullptr
 
   
   (* TODO do better *)
   | MerrAccess LoadAccess OutOfBoundPtr ->
-      Just [Undefined.UB_CERB002a_out_of_bound_load]
+      Just Undefined.UB_CERB002a_out_of_bound_load
   | MerrAccess StoreAccess OutOfBoundPtr ->
-      Just [Undefined.UB_CERB002b_out_of_bound_store]
+      Just Undefined.UB_CERB002b_out_of_bound_store
   
   | MerrAccess _ AtomicMemberof ->
-      Just [Undefined.UB042_access_atomic_structUnion_member]
+      Just Undefined.UB042_access_atomic_structUnion_member
   
-  | MerrUndefinedFree Free_static_allocation ->
-      Just [Undefined.UB179a_static_allocation]
+  | MerrUndefinedFree Free_non_matching ->
+      Just Undefined.UB179a_non_matching_allocation_free
   | MerrUndefinedFree Free_dead_allocation ->
-      Just [Undefined.UB179b_dead_allocation]
+      Just Undefined.UB179b_dead_allocation_free
   | MerrUndefinedFree Free_out_of_bound ->
-      Nothing (* TODO *)
-  | MerrUndefinedRealloc ->
-      (* TODO *)
-      Just [Undefined.UB179a_static_allocation]
+      Nothing (* this is not a UB but rather an internal error *)
+  
+  | MerrUndefinedRealloc Free_non_matching ->
+      Just Undefined.UB179c_non_matching_allocation_realloc
+  | MerrUndefinedRealloc Free_dead_allocation ->
+      Just Undefined.UB179d_dead_allocation_realloc
+  | MerrUndefinedRealloc Free_out_of_bound ->
+      Nothing (* this is not a UB but rather an internal error *)
+  
   | MerrWriteOnReadOnly true ->
-      Just [Undefined.UB033_modifying_string_literal]
+      Just Undefined.UB033_modifying_string_literal
   | MerrWriteOnReadOnly false ->
-      Just [Undefined.UB064_modifying_const]
+      Just Undefined.UB064_modifying_const
   | MerrReadUninit ->
-      Just [Undefined.UB011_use_indeterminate_automatic_object]
+      Just Undefined.UB011_use_indeterminate_automatic_object
   | MerrTrapRepresentation LoadAccess ->
-      Just [Undefined.UB012_lvalue_read_trap_representation]
+      Just Undefined.UB012_lvalue_read_trap_representation
+  
+  | MerrCHERI err ->
+     match err with
+      | CheriMerrInvalidCap ->
+          Just Undefined.UB_CHERI_InvalidCap
+      | CheriErrDecodingCap ->
+          Just Undefined.UB012_lvalue_read_trap_representation
+      | CheriMerrInsufficientPermissions ->
+          Just Undefined.UB_CHERI_InsufficientPermissions
+      | CheriBoundsErr _ ->
+        Just Undefined.UB_CHERI_BoundsViolation
+      | CheriUndefinedTag ->
+          Just Undefined.UB_CHERI_UndefinedTag
+     end
+  
   | _ ->
-      Nothing
+     Nothing
 end
 
 
@@ -261,10 +309,19 @@ type floating_operator =
   | FloatDiv
 
 
-type pure_memop =
-  | PURE_MEMOP_TODO
+type derivecap_op =
+  | DCunary of AilSyntax.unaryOperator
+  | DCbinary of AilSyntax.binaryOperator
 
-type memop =
+type pure_memop =
+    (* CHERI *) (* (integer, integer) -> integer *)
+  | DeriveCap of derivecap_op * bool (* is_signed *)
+    (* CHERI*) (* (integer, integer) -> integer (may result in UB) *)
+  | CapAssignValue
+    (* CHERI *) (* integer -> integer *)
+  | Ptr_tIntValue
+
+type generic_memop 'sym =
   | PtrEq
   | PtrNe
   | PtrLt
@@ -277,11 +334,12 @@ type memop =
   | IntFromPtr  (* (ctype, ctype, address) -> eff integer *) (* first type is that of the referenced type, second on is type of integer *)
   | PtrFromInt  (* (ctype, ctype, integer) -> eff address *) (* first type is that of integer, second on is type of reference *)
   | PtrValidForDeref (* (ctype, address) -> eff boolean *)
-  
+
   | PtrWellAligned (* (ctype, address) -> eff boolean *)
   
   | PtrArrayShift (* address -> ctype -> integer -> eff address *)
-  
+  | PtrMemberShift of 'sym * Symbol.identifier (* address -> eff address *)
+
   | Memcpy
   | Memcmp
   | Realloc (* TODO: not sure about this *)
@@ -293,8 +351,12 @@ type memop =
   (* RefinedC *)
   | Copy_alloc_id (* (integer, pointer) -> eff pointer *)
 
+  (* CHERI *)
+  | CHERI_intrinsic of string * (Ctype.ctype * list Ctype.ctype)
 
-instance (Show memop)
+type memop = generic_memop Symbol.sym
+
+instance forall 'a. Show 'a => (Show (generic_memop 'a))
   let show = function
     | PtrEq ->
         "ptreq"
@@ -326,6 +388,8 @@ instance (Show memop)
         "realloc"
     | PtrArrayShift ->
         "ptrarrayshift"
+    | PtrMemberShift tag_sym membr_ident ->
+        "ptrmembershift[" ^ show tag_sym ^ ", " ^ show membr_ident ^ "]"
     | Va_start ->
         "va_start"
     | Va_copy ->
@@ -336,6 +400,8 @@ instance (Show memop)
         "va_end"
     | Copy_alloc_id ->
         "copy_alloc_id"
+    | CHERI_intrinsic str _ ->
+        "cheri_" ^ str
   end
 end
 
@@ -385,9 +451,43 @@ instance forall 'a. (Constraints mem_constraint 'a)
   let concat cs1 cs2 = MC_conj [cs1; cs2]
 end
 
+type type_predicate =
+  | TyPred of (Ctype.ctype -> bool)
+  | TyIsPointer
 
+(* This type describes an element of function specification.
+   It is used for both arguments and return values.
+   Please note, that it allows circular dependencies.
+ *)
+type instrinsics_ret_spec =
+  | ExactRet of Ctype.ctype (* fixed type *)
+  | CopyRet of nat (* the type must be derived from the
+                      resolved type of one of the arguments. *)
 
+type intrinsics_arg_spec =
+  | ExactArg of Ctype.ctype (* fixed type *)
+  | PolymorphicArg of (list type_predicate) (* any type matching this perdicate *)
+  | CopyArg of nat (* the type of this argument will be derived from
+                      the resolved type of another PolymorphicArg or
+                      ExactArg argument with the given index. The
+                      double indirection CopyArg pointing to another
+                      CopyArg), or loops (CopyArg pointing to itself)
+                      are not allowed. *)
 
+(* An intrinsic signature is a specification of return type and list
+   of arguments' type specifications. *)
+type intrinsics_signature = instrinsics_ret_spec * list intrinsics_arg_spec
+
+instance (Show intrinsics_arg_spec)
+  let show = function
+    | ExactArg ty ->
+        "ExactArg"
+    | PolymorphicArg _ ->
+        "PolymorphicArg"
+    | CopyArg i ->
+        "CopyArg(" ^ show i ^ ")"
+  end
+end
 (*
 
 
@@ -440,3 +540,119 @@ type memory_flags = <|
 
 type memory_flag =
   | Allow_disjoint_alloc_tests (* allow (for example) pointer equality between different objects *)
+
+
+
+(* https://hoogle.haskell.org/?hoogle=sequence
+  Should be in some generic library module.
+*)
+val     either_sequence: forall 'a 'b. list (either 'a 'b) -> either 'a (list 'b)
+let rec either_sequence xs =
+  match xs with
+    | [] ->
+        Right []
+    | Left msg :: _ ->
+        Left msg
+    | (Right x) :: xs ->
+        match either_sequence xs with
+          | Left msg ->
+              Left msg
+          | Right xs' ->
+              Right (x::xs')
+        end
+  end
+
+(* Function to derive an actual signature given the list
+  of actual argument types and specification as returned
+  by [get_intrinsic_type_spec].
+
+  Returns None in case of error or a signature as a list
+  of types. The first one is the type of return value and
+  the remaining ones are types of arguments.
+*)
+let try_usual_arithmetic (Ctype.Ctype _ ty1) (Ctype.Ctype _ ty2) =
+  match (ty1, ty2) with
+    | (Ctype.Basic (Ctype.Integer ity1), Ctype.Basic (Ctype.Integer ity2)) ->
+        Just (Ctype.Ctype [] (Ctype.Basic (Ctype.Integer (AilTypesAux.usual_arithmetic_integer (Implementation.integerImpl ()) ity1 ity2))))
+    | _ ->
+        Nothing
+  end
+
+val resolve_arg:
+  nat -> (nat -> Ctype.ctype * bool) -> (nat -> intrinsics_arg_spec) -> (Ctype.ctype * bool) -> intrinsics_arg_spec -> either string Ctype.ctype
+let rec resolve_arg n get_arg get_spec (arg, is_null_pointer_constant) spec =
+  let resolve_arg = resolve_arg n get_arg get_spec in
+  match spec with
+    | ExactArg ty ->
+        if Ctype.ctypeEqual arg ty then
+          Right arg
+        else match try_usual_arithmetic ty arg with
+          | Just usual_ty ->
+              if Ctype.ctypeEqual usual_ty ty then
+                Right usual_ty
+              else
+                Left "ExactArg -- common type didn't match"
+          | Nothing ->
+              Left "ExactArg -- type mismatch"
+        end
+    | PolymorphicArg tyl ->
+      let opt =
+        List.foldl (fun acc p ->
+          match (acc, p) with
+            | (Just ty, _) ->
+                Just ty
+            | (Nothing, TyPred pred) ->
+                if pred arg then
+                  Just arg
+                else
+                  Nothing
+            | (Nothing, TyIsPointer) ->
+                if AilTypesAux.is_pointer arg then
+                  Just arg
+                else if is_null_pointer_constant then
+                  Just (Ctype.mk_ctype_pointer Ctype.no_qualifiers Ctype.void)
+                else
+                  Nothing
+          end
+        ) Nothing tyl in
+      match opt with
+        | Just ty ->
+            Right ty
+        | Nothing ->
+            Left "PolymorphicArg -- all preds failed"
+      end
+    | CopyArg i ->
+      if i>=n then Left "CopyArg -- invalid index" (* spec error! *)
+      else
+        match get_spec i with
+          | CopyArg _ ->
+              Left "CopyArg -- dual indirection not allowed!"
+          | spec' ->
+              resolve_arg (get_arg i) spec'
+        end
+  end
+
+let inline get xs idx =
+  match List.index xs idx with
+    | Just z ->
+        z
+    | Nothing ->
+        error "Mem_common.derive_intrinsic_signature: internal error (get)"
+  end 
+
+val derive_intrinsic_signature: list (Ctype.ctype * bool) -> intrinsics_signature -> either string (Ctype.ctype * list Ctype.ctype)
+let derive_intrinsic_signature args (ret_spec, specs) =
+  let n = List.length args in
+  if n <> List.length specs then Left "|args| <> |specs|"
+  else
+    match either_sequence (Utils.map2 (resolve_arg n (get args) (get specs)) args specs) with
+      | Left msg ->
+          Left msg
+      | Right tys ->
+          Right match ret_spec with
+            | ExactRet ty ->
+                (ty, tys)
+            | CopyRet i ->
+                (get tys i, tys)
+          end
+    end

@@ -18,6 +18,7 @@ type cerb_switch =
   | SW_strict_pointer_relationals
   
   | SW_PNVI of [ `PLAIN | `AE | `AE_UDI ]
+  | SW_CHERI
 
     (* the elaboration places the allocation/initialisation/deallocation of
        non-variadic functions inside the body of the Core procedures
@@ -30,6 +31,9 @@ type cerb_switch =
     (* make it so every object allocation is zero initialised *)
   | SW_zero_initialised
 
+  (* pointer revocation *)
+  | SW_revocation of [ `INSTANT | `CORNUCOPIA]
+
 val get_switches: unit -> cerb_switch list
 val has_switch: cerb_switch -> bool
 val has_switch_pred: (cerb_switch -> bool) -> cerb_switch option
@@ -37,5 +41,6 @@ val set: string list -> unit
 
 val set_iso_switches: unit -> unit
 
+val is_CHERI: unit -> bool
 val is_PNVI: unit -> bool
 val has_strict_pointer_arith: unit -> bool

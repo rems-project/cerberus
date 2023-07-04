@@ -174,6 +174,8 @@ let pp_integerType = function
      pp_type_keyword "wint_t"
  | Ptrdiff_t ->
      pp_type_keyword "ptrdiff_t"
+ | Ptraddr_t ->
+     pp_type_keyword "ptraddr_t"
  | Signed ibty ->
      pp_type_keyword "signed" ^^^ !^ (string_of_integerBaseType ibty)
  | Unsigned ibty ->
@@ -199,6 +201,8 @@ let macro_string_of_integerType = function
      "WINT"
  | Ptrdiff_t ->
      "PTRDIFF"
+ | Ptraddr_t ->
+     "PTRADDR"
  | Enum sym ->
      (* NOTE: this is hackish, these don't exists in C11 *)
      "ENUM_" ^ Pp_symbol.to_string_pretty sym
@@ -475,6 +479,8 @@ let pp_ail_builtin = function
     end
   | AilBcopy_alloc_id ->
       !^"copy_alloc_id"
+  | AilBCHERI str ->
+      !^ str
 
 let rec pp_expression_aux mk_pp_annot a_expr =
   let rec pp p (AnnotatedExpression (annot, _, loc, expr)) =
@@ -834,6 +840,8 @@ let rec pp_genIntegerType = function
       !^ "size_t"
   | PtrdiffT ->
       !^ "ptrdiff_t"
+  | PtraddrT ->
+      !^ "ptraddr_t"
   | Unknown iCst ->
       !^ "unknown constant" ^^^ P.brackets (pp_integerConstant iCst)
   | Promote gity ->

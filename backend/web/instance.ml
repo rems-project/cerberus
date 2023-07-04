@@ -5,7 +5,7 @@ open Cerb_util
 open Instance_api
 open Pipeline
 
-let time label f =
+let _time label f =
   let t = Unix.gettimeofday () in
   let res = f () in
   let delta = string_of_float @@ Unix.gettimeofday () -. t in
@@ -262,6 +262,7 @@ let set_uid file =
                                       List.mapi (fun i (pat, pe) -> (pat, set_pe pe)) cases)
       | PEarray_shift (pe, cty, pes) -> PEarray_shift (set_pe pe, cty, set_pe pes)
       | PEmember_shift (pe, sym, cid) -> PEmember_shift (set_pe pe, sym, cid)
+      | PEmemop (mop, pes) -> PEmemop (mop, List.map set_pe pes)
       | PEnot pe -> PEnot (set_pe pe)
       | PEop (bop, pe1, pe2) -> PEop (bop, set_pe pe1, set_pe pe2)
       | PEstruct (sym, fields) ->
@@ -451,7 +452,7 @@ let multiple_steps step_state (m, st) =
                   | AtomicMemberof -> "member access to atomic"
                 in
                 let string_of_free_error = function
-                  | Free_static_allocation -> "static allocated region"
+                  | Free_non_matching -> "address that does not match any existing dynamic allocation"
                   | Free_dead_allocation -> "dead allocation"
                   | Free_out_of_bound -> "out of bound"
                 in
@@ -480,8 +481,8 @@ let multiple_steps step_state (m, st) =
                     None, "storing a trap representation"  
                   | MerrUndefinedFree err ->
                     None, "freeing " ^ string_of_free_error err
-                  | MerrUndefinedRealloc ->
-                    None, "undefined behaviour in realloc"
+                  | MerrUndefinedRealloc err ->
+                    None, "undefined behaviour in realloc (" ^ string_of_free_error err ^ ")"
                   | MerrIntFromPtr ->
                     None, "invalid cast integer from pointer"
                   | MerrPtrComparison ->
@@ -528,7 +529,9 @@ let multiple_steps step_state (m, st) =
                         | VIP_copy_alloc_id_invalid ->
                             None, "copy_alloc_id () on invalid pointer"
                       end
-                    end
+                  | MerrCHERI err ->
+                      None, "CHERI error"
+                end
             | Driver.DErr_concurrency str ->
                 None, "Concurrency error: " ^ str
             | Driver.DErr_other str ->

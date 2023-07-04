@@ -1,4 +1,4 @@
-open import Pervasives Utils AilSyntax ErrorMonad TypingError Annot Ctype
+open import Pervasives Utils AilSyntax ErrorMonad TypingError Annot Ctype Global
 import Implementation IntegerImpl Loc Debug
 
 (* == Predicates on qualifiers ================================================ *)
@@ -45,6 +45,8 @@ let rec is_signed_ity ity =
     | Ptrdiff_t ->
         (* STD §7.19#2 *)
         true
+    | Ptraddr_t ->
+        false
   end
 
 (* STD §6.2.5#6, sentence 4 *)
@@ -394,6 +396,7 @@ let le_integer_range impl ity1 ity2 =
   | (Size_t, Size_t) -> true
   | (Wchar_t, Wchar_t) -> true
   | (Ptrdiff_t, Ptrdiff_t) -> true
+  | (Ptraddr_t, Ptraddr_t) -> true
   | (Enum _, Enum _) ->
       (* impossible *)
       error "le_integer_range: Enum, Enum"
@@ -402,6 +405,8 @@ let le_integer_range impl ity1 ity2 =
       error "WIP le_integer_range: Char, Size_t"
   | (Char, Ptrdiff_t) ->
       error "WIP le_integer_range: Char, Ptrdiff_t"
+  | (Char, Ptraddr_t) ->
+      error "WIP le_integer_range: Char, Ptraddr_t"
   | (Char, Enum _) ->
       error "WIP le_integer_range: Char, Enum"
   
@@ -409,6 +414,8 @@ let le_integer_range impl ity1 ity2 =
       error "WIP le_integer_range: Bool, Size_t"
   | (Bool, Ptrdiff_t) ->
       error "WIP le_integer_range: Bool, Ptrdiff_t"
+  | (Bool, Ptraddr_t) ->
+      error "WIP le_integer_range: Bool, Ptraddr_t"
   | (Bool, Enum _) ->
       (* impossible *)
       error "le_integer_range: Bool, Enum"
@@ -417,6 +424,8 @@ let le_integer_range impl ity1 ity2 =
       error "WIP le_integer_range: Signed, Size_t"
   | (Signed _, Ptrdiff_t) ->
       error "WIP le_integer_range: Signed, Ptrdiff_t"
+  | (Signed _, Ptraddr_t) ->
+      error "WIP le_integer_range: Signed, Ptraddr_t"
   | (Signed _, Enum _) ->
       (* impossible *)
       error "le_integer_range: Signed, Enum"
@@ -425,6 +434,8 @@ let le_integer_range impl ity1 ity2 =
       error "WIP le_integer_range: Unsigned, Size_t"
   | (Unsigned _, Ptrdiff_t) ->
       error "WIP le_integer_range: Unsigned, Ptrdiff_t"
+  | (Unsigned _, Ptraddr_t) ->
+      error "WIP le_integer_range: Unsigned, Ptraddr_t"
   | (Unsigned _, Enum _) ->
       (* impossible *)
       error "le_integer_range: Unsigned, Enum"
@@ -442,7 +453,25 @@ let le_integer_range impl ity1 ity2 =
       error "le_integer_range: Ptrdiff_t, Enum"
   | (Ptrdiff_t, Size_t) ->
       error "WIP le_integer_range: Ptrdiff_t, Size_t"
-  
+  | (Ptrdiff_t, Ptraddr_t) ->
+      error "WIP le_integer_range: Ptrdiff_t, Ptraddr_t"
+
+  | (Ptraddr_t, Char) ->
+      error "WIP le_integer_range: Ptraddr_t, Char"
+  | (Ptraddr_t, Bool) ->
+      error "WIP le_integer_range: Ptraddr_t, Bool"
+  | (Ptraddr_t, Signed _) ->
+      error "WIP le_integer_range: Ptraddr_t, Signed"
+  | (Ptraddr_t, Unsigned _) ->
+      error "WIP le_integer_range: Ptraddr_t, Unsigned"
+  | (Ptraddr_t, Enum _) ->
+      (* impossible *)
+      error "le_integer_range: Ptraddr_t, Enum"
+  | (Ptraddr_t, Size_t) ->
+      error "WIP le_integer_range: Ptraddr_t, Size_t"
+  | (Ptraddr_t, Ptrdfiff_t) ->
+      error "WIP le_integer_range: Ptraddr_t, Ptrdiff_t"
+
   | (Size_t, Char) ->
       error "WIP le_integer_range: Size_t, Char"
   | (Size_t, Bool) ->
@@ -456,7 +485,9 @@ let le_integer_range impl ity1 ity2 =
       error "le_integer_range: Size_t, Enum"
   | (Size_t, Ptrdiff_t) ->
       error "WIP le_integer_range: Size_t, Ptrdiff_t"
-  
+  | (Size_t, Ptraddr_t) ->
+      error "WIP le_integer_range: Size_t, Ptraddr_t"
+
   | (Enum _, Char) ->
       (* impossible *)
       error "le_integer_range: Enum, Char"
@@ -475,6 +506,9 @@ let le_integer_range impl ity1 ity2 =
   | (Enum _, Ptrdiff_t) ->
       (* impossible *)
       error "le_integer_range: Enum, Ptrdiff_t"
+  | (Enum _, Ptraddr_t) ->
+      (* impossible *)
+      error "le_integer_range: Enum, Ptraddr_t"
 
   | (Wchar_t, _) ->
       error "WIP le_integer_range: wchar_t"
@@ -516,12 +550,13 @@ let eq_integer_rank ity1 ity2 =
 
 val lt_integer_rank: integerType -> integerType -> bool
 let lt_integer_rank ity1 ity2 =
-  match (ity1, ity2) with
+  let lt_integer_rank_ISO ity1 ity2 =
+    match (ity1, ity2) with
+    (* Top: "The rank of _Bool shall be less than the rank of all other standard integer types." *)
     | (_, Bool) ->
         false
     | (Bool, _) ->
         true
-    
     | (_, Char) ->
         false
     | (_, Signed Ichar) ->
@@ -582,8 +617,20 @@ let lt_integer_rank ity1 ity2 =
     
     | _ ->
         (* TODO: this is probably wrong for macro types *)
-        false
-  end
+       false
+    end in
+  if Global.is_CHERI () then
+    match ity1 with
+      (* Bottom: In CHERI C intptr_t types have the highest rank so
+         the capabilities metainfromation will be preserved during
+         integer promotion *)
+    | Signed Intptr_t -> false
+    | Unsigned Intptr_t -> false
+    | _ ->
+       lt_integer_rank_ISO ity1 ity2
+    end
+  else
+    lt_integer_rank_ISO ity1 ity2
 
 val le_integer_rank: integerType -> integerType -> bool
 let le_integer_rank ity1 ity2 =
@@ -665,30 +712,29 @@ end
 
 
 val usual_arithmetic_integer: IntegerImpl.implementation -> integerType -> integerType -> integerType
-let usual_arithmetic_integer impl ity1 ity2 =
-  (* TODO: this is not standard, but in cerberus we don't treat (u)intptr_t and size_t as an aliased types *)
-  let () = Debug.warn [] (fun () ->
-    "NON STD: usual_arithmetic_integer ==> if any operand is of type size_t, then the common type is size_t"
-  ) in
+let usual_arithmetic_integer_CHERI impl ity1 ity2 =
   match (ity1, ity2) with
-    | (Size_t, _) ->
+    | (Size_t, Signed Intptr_t) -> (* NON-std *)
+        Unsigned Intptr_t
+    | (Signed Intptr_t, Size_t) -> (* NON-std *)
+        Unsigned Intptr_t
+    | (Signed Intptr_t, Unsigned Intptr_t) -> (* NON-std *)
+        Unsigned Intptr_t
+    | (Signed Intptr_t, _) -> (* NON-std *)
+        Signed Intptr_t
+    | (Unsigned Intptr_t, Signed Intptr_t) -> (* NON-std *)
+        Unsigned Intptr_t
+    | (_, Signed Intptr_t) -> (* NON-std *)
+        Signed Intptr_t
+    | (Unsigned Intptr_t, _) -> (* NON-std *)
+        Unsigned Intptr_t
+    | (_, Unsigned Intptr_t) -> (* NON-std *)
+        Unsigned Intptr_t
+    | (Size_t, _) -> (* NON-std *)
         Size_t
-    | (_, Size_t) ->
+    | (_, Size_t) -> (* NON-std *)
         Size_t
     
-    | (Signed Intptr_t, Unsigned Intptr_t) ->
-        Unsigned Intptr_t
-    | (Signed Intptr_t, _) ->
-        Signed Intptr_t
-    | (Unsigned Intptr_t, Signed Intptr_t) ->
-        Unsigned Intptr_t
-    | (_, Signed Intptr_t) ->
-        Signed Intptr_t
-    | (Unsigned Intptr_t, _) ->
-        Unsigned Intptr_t
-    | (_, Unsigned Intptr_t) ->
-        Unsigned Intptr_t
-
     | _ ->
         let promoted_ity1 = integer_promotion impl ity1 in
         let promoted_ity2 = integer_promotion impl ity2 in
@@ -716,6 +762,63 @@ let usual_arithmetic_integer impl ity1 ity2 =
           else
             make_corresponding_unsigned promoted_ity2
   end
+let usual_arithmetic_integer_default impl ity1 ity2 =
+  (* TODO: this is not standard, but in cerberus we don't treat (u)intptr_t and size_t as an aliased types *)
+  let () = Debug.warn [] (fun () ->
+    "NON STD: usual_arithmetic_integer ==> if any operand is of type size_t, then the common type is size_t"
+  ) in
+  match (ity1, ity2) with
+    | (Size_t, _) -> (* NON-std *)
+        Size_t
+    | (_, Size_t) -> (* NON-std *)
+        Size_t
+    | (Signed Intptr_t, Unsigned Intptr_t) -> (* NON-std *)
+        Unsigned Intptr_t
+    | (Signed Intptr_t, _) -> (* NON-std *)
+        Signed Intptr_t
+    | (Unsigned Intptr_t, Signed Intptr_t) -> (* NON-std *)
+        Unsigned Intptr_t
+    | (_, Signed Intptr_t) -> (* NON-std *)
+        Signed Intptr_t
+    | (Unsigned Intptr_t, _) -> (* NON-std *)
+        Unsigned Intptr_t
+    | (_, Unsigned Intptr_t) -> (* NON-std *)
+        Unsigned Intptr_t
+    
+    | _ ->
+        let promoted_ity1 = integer_promotion impl ity1 in
+        let promoted_ity2 = integer_promotion impl ity2 in
+        if    (is_signed_ity promoted_ity1 && is_signed_ity promoted_ity2)
+           || (is_unsigned_ity promoted_ity1 && is_unsigned_ity promoted_ity2) then
+          if lt_integer_rank promoted_ity1 promoted_ity2 then
+            promoted_ity2
+          else
+            promoted_ity1
+        
+        else if is_unsigned_ity promoted_ity1 && ge_integer_rank promoted_ity1 promoted_ity2 then
+          promoted_ity1
+        else if is_unsigned_ity promoted_ity2 && ge_integer_rank promoted_ity2 promoted_ity1 then
+          promoted_ity2
+        
+        else if is_signed_ity promoted_ity1 then
+          if le_integer_range impl promoted_ity2 promoted_ity1 then
+            promoted_ity1
+          else
+            make_corresponding_unsigned promoted_ity1
+        
+        else (* if is_signed_ity promoted_ity2 then *)
+          if le_integer_range impl promoted_ity1 promoted_ity2 then
+            promoted_ity2
+          else
+            make_corresponding_unsigned promoted_ity2
+  end
+
+let usual_arithmetic_integer impl ity1 ity2 =
+  (* TODO: this is a temporary hack, we need to add a type alias mechanism to Ocaml_implemetation.implemention *)
+  if Global.is_CHERI () then
+    usual_arithmetic_integer_CHERI impl ity1 ity2
+  else
+    usual_arithmetic_integer_default impl ity1 ity2
 
 
 (* TODO *)
@@ -1108,7 +1211,6 @@ let is_signed_integer_type (Ctype _ ty) =
         false
   end
 
-
 (* STD §6.2.5#6, sentences 1-2 *)
 val is_standard_unsigned_integer_type: ctype -> bool
 let is_standard_unsigned_integer_type (Ctype _ ty) =
@@ -1125,6 +1227,8 @@ match ty with
       true
   | Basic (Integer (Unsigned LongLong)) ->
       true
+  (* | Basic (Integer (Unsigned _)) ->
+      true *)
   | _ ->
       false
 end

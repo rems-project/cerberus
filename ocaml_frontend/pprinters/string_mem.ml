@@ -20,8 +20,8 @@ let string_pretty_of_mem_value_decimal mval =
 
 
 
-let string_of_pointer_value ptr_val =
-  Pp_utils.to_plain_string (Impl_mem.pp_pointer_value ptr_val)
+let string_of_pointer_value is_verbose ptr_val =
+  Pp_utils.to_plain_string (Impl_mem.pp_pointer_value ~is_verbose:false ptr_val)
 
 
 let string_of_iv_memory_constraint cs =

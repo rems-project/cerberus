@@ -74,8 +74,11 @@ let pp_trace_event = function
                 ^^^ P.parens (pp_mem_value mval)
                 ^^^ P.parens (pp_mem_value mval')
 
-  | ME_member_shift _ ->
-    !^ "member_shift (TODO)"
+  | ME_eff_member_shift_ptrval (tag_sym, membr_ident, ptrval, res_ptrval) ->
+    !^ "member_shift" ^^^ P.parens (pp_symbol tag_sym)
+                      ^^^ P.parens (Pp_symbol.pp_identifier membr_ident)
+                      ^^^ P.parens (pp_pointer_value ptrval)
+                      ^^^ P.parens (pp_pointer_value res_ptrval)
 
 let pp_trace evs =
   P.flow P.hardline (List.map pp_trace_event evs)

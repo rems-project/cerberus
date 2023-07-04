@@ -1,5 +1,7 @@
 (** Discover the path to the Cerberus runtime. *)
 
+val set_package : string -> unit
+
 (** [specified_runtime] can be used to override the runtime that is "detected"
     by the [runtime] function. Its initial value is [None], and it must be set
     before the first call to [runtime] otherwise it is not taken into account.

@@ -152,11 +152,16 @@ let check_ptrval (loc : loc) ~(expect:BT.t) (ptrval : pointer_value) : (lvt) m =
       let sct = Sctypes.of_ctype_unsafe loc ct in
       let@ () = WellTyped.WCT.is_ct loc sct in
       return IT.null_ )
-    ( fun sym -> 
-      (* just to make sure it exists *)
-      let@ _ = get_fun_decl loc sym in
-      (* the symbol of a function is the same as the symbol of its address *)
-      return (sym_ (sym, BT.Loc)) ) 
+    ( function
+        | None ->
+            (* FIXME(CHERI merge) *)
+            (* we can now have invalid function pointer values (e.g. if someone touched the bytes in a wrong way) *)
+            unsupported loc !^"invalid function pointer"
+        | Some sym -> 
+            (* just to make sure it exists *)
+            let@ _ = get_fun_decl loc sym in
+            (* the symbol of a function is the same as the symbol of its address *)
+            return (sym_ (sym, BT.Loc)) ) 
     ( fun _prov p -> 
       return (pointer_ p) )
 
@@ -1136,6 +1141,10 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
         check_pexpr ~expect:Integer pe2 (fun vt2 ->
         let@ lvt = check_array_shift loc ~expect vt1 (act.loc, act.ct) vt2 in
         k lvt))
+     | M_PtrMemberShift (tag_sym, memb_ident, pe) ->
+        (* FIXME(CHERI merge) *)
+        (* there is now an effectful variant of the member shift operator (which is UB when creating an out of bound pointer) *)
+        Cerb_debug.error "todo: M_PtrMemberShift"
      | M_Memcpy _ (* (asym 'bty * asym 'bty * asym 'bty) *) ->
         Cerb_debug.error "todo: M_Memcpy"
      | M_Memcmp _ (* (asym 'bty * asym 'bty * asym 'bty) *) ->
