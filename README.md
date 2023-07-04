@@ -1,5 +1,6 @@
-Cerberus C semantics
-=====
+# Cerberus C semantics
+
+[![CI](https://github.com/rems-project/cerberus/actions/workflows/ci.yml/badge.svg)](https://github.com/rems-project/cerberus/actions/workflows/ci.yml)
 
 
 Web interfaces, papers, and web page
@@ -198,31 +199,32 @@ People
 
 Contributors:
 <ul>
-<li>  <a href="http://www.cl.cam.ac.uk/users/km569">Kayvan Memarian</a></li>
-<li>  <a href="http://www.cl.cam.ac.uk/users/cp526">Christopher Pulte</a></li>
+<li>  <a href="https://www.cl.cam.ac.uk/~km569">Kayvan Memarian</a></li>
+<li>  <a href="https://www.cl.cam.ac.uk/~cp526">Christopher Pulte</a></li>
 <li>  <a href="https://www.cst.cam.ac.uk/people/tals4">Thomas Sewell</a></li>
-<li>  <a href="http://www.cl.cam.ac.uk/users/vb358">Victor B. F. Gomes</a></li>
-<li>  <a href="https://www.csail.mit.edu/person/stella-lau">Stella Lau</a></li>
-<li>  <a href="http://www.cl.cam.ac.uk/users/kn307">Kyndylan Nienhuis</a></li>
+<li>  <a href="https://www.cl.cam.ac.uk/~vb358">Victor B. F. Gomes</a></li>
+<li>  <a href="https://people.csail.mit.edu/stellal/">Stella Lau</a></li>
+<li>  <a href="https://www.cl.cam.ac.uk/~kn307/">Kyndylan Nienhuis</a></li>
 <li>  <a href="https://www.cst.cam.ac.uk/people/dcm41">Dhruv Makwana</a></li>
 <li>  <a href="http://www.cl.cam.ac.uk/~jm614">Justus Matthiesen</a></li>
-<li>  <a href="http://www.jchl.co.uk">James Lingard</a></li>
-<li>  <a href="http://www.cl.cam.ac.uk/~dc552">David Chisnall</a></li>
-<li>  <a href="http://www.cl.cam.ac.uk/~rnw24">Robert N. M. Watson</a></li>
-<li>  <a href="http://www.cl.cam.ac.uk/~pes20">Peter Sewell</a></li>
+<li>  James Lingard</li>
+<li>  <a href="https://www.cl.cam.ac.uk/~dc552">David Chisnall</a></li>
+<li>  <a href="https://www.cl.cam.ac.uk/~rnw24">Robert N. M. Watson</a></li>
+<li>  <a href="https://www.cl.cam.ac.uk/~pes20">Peter Sewell</a></li>
+<li>  <a href="https://zaliva.org/">Vadim Zaliva</a></li>
 </ul>
 
 The main Cerberus developer is Kayvan Memarian.
+Victor Gomes made substantial contributions across the system.
+Kyndylan Nienhuis worked on the operational semantics for C11 concurrency. 
+Stella Lau is the main developer of Cerberus BMC.
 The CN backend is by Christopher Pulte and Thomas Sewell.
-Victor Gomes made substantial contributions across the system, and Stella Lau was the main developer of Cerberus BMC. 
-Kyndylan Nienhuis worked on the operational semantics for C11
-concurrency. 
+The CHERI memory model is by Vadim Zaliva.
 Cerberus originated with Justus Matthiesen's 2010-11 Part II project
 dissertation and his 2011-12 MPhil dissertation. James Lingard's
 2013-14 MPhil dissertation developed a certifying translation
 validator for simple C programs for the Clang front-end, w.r.t. the
 Cerberus and Vellvm semantics. 
-
 
 
 Funding
