@@ -23,3 +23,11 @@ Then to build Cerberus-CHERI:
 ```bash
 make cheri
 ```
+
+To install Cerberus-CHERI:
+
+```bash
+opam pin add -n cerberus-lib .
+opam pin add -n cerberus-cheri .
+opam install cerberus-cheri
+```
