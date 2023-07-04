@@ -56,7 +56,7 @@ open Log
 
 
 
-let frontend incl_dirs astprints filename state_file =
+let frontend incl_dirs incl_files astprints filename state_file =
   let open CF in
   Cerb_global.set_cerb_conf "Cn" false Random false Basic false false false false;
   (* FIXME: make this a global config thing rather than poking state. *)
@@ -65,7 +65,8 @@ let frontend incl_dirs astprints filename state_file =
   Switches.set ["inner_arg_temps"];
   let@ stdlib = load_core_stdlib () in
   let@ impl = load_core_impl stdlib impl_name in
-  let@ (_, ail_prog_opt, prog0) = c_frontend ~cnnames:cn_builtin_fun_names (conf incl_dirs astprints, io) (stdlib, impl) ~filename in
+  let conf = Setup.conf incl_dirs incl_files astprints in
+  let@ (_, ail_prog_opt, prog0) = c_frontend ~cnnames:cn_builtin_fun_names (conf, io) (stdlib, impl) ~filename in
   let markers_env, (_, ail_prog) = Option.get ail_prog_opt in
   Tags.set_tagDefs prog0.Core.tagDefs;
   let prog1 = Remove_unspecs.rewrite_file prog0 in
@@ -100,6 +101,7 @@ let check_input_file filename =
 let main 
       filename 
       incl_dirs
+      incl_files
       loc_pp 
       debug_level 
       print_level 
@@ -137,7 +139,7 @@ let main
   check_input_file filename;
   let (prog4, (markers_env, ail_prog), statement_locs) = 
     handle_frontend_error 
-      (frontend incl_dirs astprints filename state_file)
+      (frontend incl_dirs incl_files astprints filename state_file)
   in
   Cerb_debug.maybe_open_csv_timing_file ();
   Pp.maybe_open_times_channel 
@@ -203,11 +205,16 @@ let file =
   Arg.(required & pos ~rev:true 0 (some string) None & info [] ~docv:"FILE" ~doc)
 
 
-let incl_dir =
+let incl_dirs =
   let doc = "Add the specified directory to the search path for the\
              C preprocessor." in
   Arg.(value & opt_all string [] & info ["I"; "include-directory"]
          ~docv:"DIR" ~doc)
+
+let incl_files =
+  let doc = "Adds  an  implicit  #include into the predefines buffer which is \
+             read before the source file is preprocessed." in
+  Arg.(value & opt_all string [] & info ["include"] ~doc)
 
 let loc_pp =
   let doc = "Print pointer values as hexadecimal or as decimal values (hex | dec)" in
@@ -291,7 +298,8 @@ let () =
   let check_t = 
     const main $ 
       file $ 
-      incl_dir $
+      incl_dirs $
+      incl_files $
       loc_pp $ 
       debug_level $ 
       print_level $
