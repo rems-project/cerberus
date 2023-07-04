@@ -36,7 +36,7 @@ all: cerberus cerberus-bmc cerberus-web cn #rustic
 .PHONY: full-build
 full-build: prelude-src
 	@echo "[DUNE] full build"
-	$(Q)dune $(DUNEFLAGS) build
+	$(Q)dune build $(DUNEFLAGS) 
 
 .PHONY: util
 util:
