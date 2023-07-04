@@ -17,10 +17,15 @@ endif
 # To enable the printing of commands, use [make Q= ...],
 Q = @
 
+# parse the -j flag if present, set jobs to 1 oterwise
+JFLAGVALUE=$(patsubst -j%,%,$(filter -j%,$(MFLAGS)))
+JOBS=$(if $(JFLAGVALUE),$(JFLAGVALUE),4)
+JFLAG=$(if $(JFLAGVALUE),"-j $(JFLAGVALUE)","")
+
 ifdef PROFILING
-    DUNEFLAGS="--workspace=dune-workspace.profiling"
+    DUNEFLAGS="--workspace=dune-workspace.profiling $(JFLAG)"
 else
-    DUNEFLAGS=
+    DUNEFLAGS="$(JFLAG)"
 endif
 
 .PHONY: normal
@@ -285,6 +290,11 @@ distclean: clean clean-prelude-src clean-sibylfs-src
 install: cerberus
 	@echo "[DUNE] install cerberus"
 	$(Q)dune install cerberus
+
+.PHONY: install-cheri
+install-cheri: prelude-src
+	@echo "[DUNE] install cerberus-cheri"
+	$(Q)dune build -p cerberus-cheri --profile=release $(JFLAG) @install
 
 .PHONY: install_cn
 install_cn: cn
