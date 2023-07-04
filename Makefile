@@ -81,7 +81,7 @@ cn: prelude-src
 
 cheri: prelude-src
 	@echo "[DUNE] cerberus-cheri"
-	$(Q)dune build $(DUNEFLAGS) cerberus-cheri.install
+	$(Q)./tools/cheribuild_hack.sh "dune build $(DUNEFLAGS) cerberus-cheri.install"
 
 
 # .PHONY: cerberus-ocaml ocaml
