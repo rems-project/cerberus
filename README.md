@@ -1,6 +1,8 @@
 Cerberus C semantics
 =====
 
+NOTE: This fork was merged to https://github.com/rems-project/cerberus and no longer updated.
+
 
 Web interfaces, papers, and web page
 ---
