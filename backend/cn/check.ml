@@ -98,13 +98,13 @@ let rec pattern_match (M_Pattern (loc, _, pattern)) it =
    | M_CaseCtor (constructor, pats) ->
       match constructor, pats with
       | M_Cnil item_bt, [] ->
-         let@ () = add_c (LC.t_ (eq__ it (nil_ ~item_bt))) in
+         let@ () = add_c loc (LC.t_ (eq__ it (nil_ ~item_bt))) in
          return []
       | M_Ccons, [p1; p2] ->
          let@ item_bt = infer_pattern p1 in
          let@ a1 = pattern_match p1 (head_ ~item_bt it) in
          let@ a2 = pattern_match p2 (tail_ it) in
-         let@ () = add_c (LC.t_ (ne_ (it, nil_ ~item_bt))) in
+         let@ () = add_c loc (LC.t_ (ne_ (it, nil_ ~item_bt))) in
          return (a1 @ a2)
       | M_Ctuple, pats ->
          let@ all_as = ListM.mapiM (fun i p ->
@@ -393,7 +393,7 @@ let check_single_ct loc expr =
     let@ provable = provable loc in
     begin match provable (t_ eq) with
       | `True ->
-        let@ () = add_c (t_ eq) in
+        let@ () = add_c loc (t_ eq) in
         return ct
        | `False ->
         (* TODO: this is the most likely case, give a better error *)
@@ -713,7 +713,7 @@ let rec check_pexpr (pe : 'bty mu_pexpr) ~(expect:BT.t)
        let@ eq_opt = get_eq_in_model loc msg ptr ptr_opts in
        Pp.debug 5 (lazy (Pp.item "function pointer application: case splitting on" (IT.pp eq_opt)));
        let aux e cond =
-         let@ () = add_c (t_ cond) in
+         let@ () = add_c loc (t_ cond) in
          Pp.debug 5 (lazy (Pp.item "checking consistency of eq branch" (IT.pp cond)));
          let@ provable = provable loc in
          match provable (t_ (bool_ false)) with
@@ -764,7 +764,7 @@ let rec check_pexpr (pe : 'bty mu_pexpr) ~(expect:BT.t)
   | M_PEif (pe, e1, e2) ->
      check_pexpr ~expect:Bool pe (fun c ->
      let aux e cond = 
-       let@ () = add_c (t_ cond) in
+       let@ () = add_c loc (t_ cond) in
        Pp.debug 5 (lazy (Pp.item "checking consistency of if-branch" (IT.pp cond)));
        let@ provable = provable loc in
        match provable (t_ (bool_ false)) with
@@ -1023,7 +1023,7 @@ let instantiate loc filter arg =
   let arg_s = Sym.fresh_make_uniq "instance" in
   let arg_it = sym_ (arg_s, IT.bt arg) in
   let@ () = add_l arg_s (IT.bt arg_it) (loc, lazy (Sym.pp arg_s)) in
-  let@ () = add_c (LC.t_ (eq__ arg_it arg)) in
+  let@ () = add_c loc (LC.t_ (eq__ arg_it arg)) in
   let@ constraints = all_constraints () in
   let extra_assumptions = 
     List.filter_map (fun lc ->
@@ -1037,7 +1037,7 @@ let instantiate loc filter arg =
   in
   if List.length extra_assumptions == 0 then Pp.warn loc (Pp.string "nothing instantiated")
   else ();
-  add_cs extra_assumptions
+  add_cs loc extra_assumptions
 
 
 
@@ -1181,8 +1181,8 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
              IT.fresh Loc
         in
         let@ () = add_l ret_s (IT.bt ret) (loc, lazy (Pp.string "allocation")) in
-        let@ () = add_c (t_ (representable_ (Pointer act.ct, ret))) in
-        let@ () = add_c (t_ (alignedI_ ~align:arg ~t:ret)) in
+        let@ () = add_c loc (t_ (representable_ (Pointer act.ct, ret))) in
+        let@ () = add_c loc (t_ (alignedI_ ~align:arg ~t:ret)) in
         let@ () = 
           add_r loc
             (P { name = Owned (act.ct, Uninit); 
@@ -1315,7 +1315,7 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
   | _, M_Eif (c_pe, e1, e2) ->
      check_pexpr ~expect:Bool c_pe (fun carg ->
      let aux lc nm e = 
-       let@ () = add_c (t_ lc) in
+       let@ () = add_c loc (t_ lc) in
        let@ provable = provable loc in
        match provable (t_ (bool_ false)) with
        | `True -> return ()
@@ -1427,7 +1427,7 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
             | M_CN_extract (to_extract, it) ->
                let@ predicate_name = RI.predicate_name_of_to_extract loc to_extract in
                let@ it = WIT.check loc Integer it in
-               add_movable_index (predicate_name, it)
+               add_movable_index loc (predicate_name, it)
             | M_CN_unfold (f, args) ->
                let@ def = get_logical_function_def loc f in
                let has_args, expect_args = List.length args, List.length def.args in
@@ -1445,7 +1445,7 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
                   in
                   fail (fun _ -> {loc; msg = Generic msg})
                | Some body -> 
-                  add_c (LC.t_ (eq_ (pred_ f args def.return_bt, body)))
+                  add_c loc (LC.t_ (eq_ (pred_ f args def.return_bt, body)))
                end
             | M_CN_apply (lemma, args) ->
                let@ (_loc, lemma_typ) = get_lemma loc lemma in
@@ -1536,10 +1536,10 @@ let bind_arguments (loc : Loc.t) (full_args : _ mu_arguments) =
   let rec aux_l resources = function
     | M_Define ((s, it), info, args) ->
        let@ () = add_l s (IT.bt it) (fst info, lazy (Sym.pp s)) in
-       let@ () = add_c (LC.t_ (def_ s it)) in
+       let@ () = add_c (fst info) (LC.t_ (def_ s it)) in
        aux_l resources args
     | M_Constraint (lc, info, args) ->
-       let@ () = add_c lc in
+       let@ () = add_c (fst info) lc in
        aux_l resources args
     | M_Resource ((s, (re, bt)), info, args) ->
        let@ () = add_l s bt (fst info, lazy (Sym.pp s)) in
@@ -1718,7 +1718,7 @@ let record_globals globs =
          let bt = Loc in
          let info = (Loc.unknown, lazy (Pp.item "global" (Sym.pp sym))) in
          let@ () = add_a sym bt info in
-         let@ () = add_c (t_ (IT.good_pointer ~pointee_ct:ct (sym_ (sym, bt)))) in
+         let@ () = add_c Loc.unknown (t_ (IT.good_pointer ~pointee_ct:ct (sym_ (sym, bt)))) in
          return ()
     ) globs 
 
@@ -1729,7 +1729,7 @@ let wf_check_and_record_functions mu_funs mu_call_sigs =
     (* let lc1 = t_ (ne_ (null_, sym_ (fsym, Loc))) in *)
     let lc2 = t_ (representable_ (Pointer Void, sym_ (fsym, Loc))) in
     let@ () = add_l fsym Loc (loc, lazy (Pp.item "global fun-ptr" (Sym.pp fsym))) in
-    let@ () = add_cs [(* lc1; *) lc2] in
+    let@ () = add_cs loc [(* lc1; *) lc2] in
     add_fun_decl fsym (loc, ft, Pmap.find fsym mu_call_sigs)
   in
   let welltyped_ping fsym =

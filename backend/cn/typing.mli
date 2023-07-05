@@ -33,8 +33,8 @@ val add_a_value : Sym.t -> IndexTerms.t -> Context.l_info -> unit m
 val add_l : Sym.t -> BaseTypes.t -> Context.l_info -> (unit) m
 val add_l_value : Sym.t -> IndexTerms.t -> Context.l_info -> unit m
 val add_ls : (Sym.t * BaseTypes.t * Context.l_info) list -> (unit) m
-val add_c : LogicalConstraints.t -> (unit) m
-val add_cs : LogicalConstraints.t list -> (unit) m
+val add_c : Locations.t -> LogicalConstraints.t -> (unit) m
+val add_cs : Locations.t -> LogicalConstraints.t list -> (unit) m
 val add_r : Locations.t -> Resources.t -> unit m
 val add_rs : Locations.t -> Resources.t list -> unit m
 val get_loc_trace : unit -> (Locations.loc list) m
@@ -118,6 +118,7 @@ val bind_return:
 
 
 val add_movable_index:
+    Locations.t ->
     (ResourceTypes.predicate_name * IndexTerms.t) ->
     unit m
 

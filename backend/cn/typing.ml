@@ -409,7 +409,7 @@ let get_movable_indices () =
   
 
 (* copying and adjusting map_and_fold_resources *)
-let unfold_resources () = 
+let unfold_resources loc = 
   let rec aux () =
     let@ s = get () in
     let@ movable_indices = get_movable_indices () in
@@ -421,13 +421,13 @@ let unfold_resources () =
     | `False ->
     let keep, unpack, extract =
       List.fold_right (fun (re, i) (keep, unpack, extract) ->
-          match Pack.unpack Loc.unknown s.global provable_f re with
+          match Pack.unpack loc s.global provable_f re with
           | Some unpackable -> 
               let pname = RET.pp_predicate_name (RET.predicate_name (fst re)) in
               (keep, (i, pname, unpackable) :: unpack, extract)
           | None -> 
               let re_reduced, extracted =
-                Pack.extractable_multiple Loc.unknown provable_f movable_indices re in
+                Pack.extractable_multiple loc provable_f movable_indices re in
               let keep' = match extracted with
                | [] -> (re_reduced, i) :: keep
                | _ ->
@@ -439,15 +439,15 @@ let unfold_resources () =
         ) resources ([], [], [])
     in
     let@ () = set {s with resources = (keep, orig_ix)} in
-    let rec do_unpacks = function
-      | [] -> return ()
-      | (_i, pname, lrt) :: rest ->
-          let@ _, members = make_return_record Loc.unknown ("unpack_" ^ Pp.plain pname) (LogicalReturnTypes.binders lrt) in
-          let@ () = bind_logical_return_internal Loc.unknown members lrt in
-          do_unpacks rest
+    let do_unpack = function
+      | (_i, pname, `LRT lrt) ->
+          let@ _, members = make_return_record loc ("unpack_" ^ Pp.plain pname) (LogicalReturnTypes.binders lrt) in
+          bind_logical_return_internal loc members lrt
+      | (_i, _pname, `RES res) ->
+          iterM (add_r_internal loc) res
     in
-    let@ () = do_unpacks unpack in
-    let@ () = iterM (add_r_internal Loc.unknown) extract in
+    let@ () = iterM do_unpack unpack in
+    let@ () = iterM (add_r_internal loc) extract in
     match unpack, extract with
     | [], [] -> return ()
     | _ -> 
@@ -658,30 +658,30 @@ let add_movable_index_internal e : unit m =
   Ok ((), {s with movable_indices = e :: s.movable_indices})
 
 
-let add_movable_index e = 
+let add_movable_index loc e = 
   let@ () = add_movable_index_internal e in
-  unfold_resources ()
+  unfold_resources loc
 
 let add_r loc re = 
    let@ () = add_r_internal loc re in
-   unfold_resources ()
+   unfold_resources loc
 
 let add_rs loc rs =
   let@ () = iterM (add_r_internal loc) rs in
-  unfold_resources ()
+  unfold_resources loc
 
-let add_c c =
+let add_c loc c =
   let@ () = add_c_internal c in
-  unfold_resources ()
+  unfold_resources loc
 
-let add_cs cs = 
+let add_cs loc cs = 
   let@ () = iterM add_c_internal cs in
-  unfold_resources ()
+  unfold_resources loc
   
 
 let bind_logical_return loc members lrt = 
   let@ () = bind_logical_return_internal loc members lrt in
-  unfold_resources ()
+  unfold_resources loc
 
 (* Same for return types *)
 let bind_return loc members (rt : ReturnTypes.t) =

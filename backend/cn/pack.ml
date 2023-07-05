@@ -18,6 +18,18 @@ let resource_empty provable resource =
   | `False -> `NonEmpty (constr, Solver.model ())
 
 
+let unfolded_array init (ict, olength) pointer = 
+  let length = Option.get olength in
+  let q_s, q = IT.fresh_named Integer "i" in
+  Q { 
+    name = Owned (ict, init);
+    pointer = pointer;
+    q = q_s;
+    step = int_ (Memory.size_of_ctype ict);
+    iargs = [];
+    permission = and_ [((int_ 0) %<= q); (q %< (int_ length))]
+  }
+  
 
 let packing_ft loc global provable ret = 
   match ret with
@@ -26,18 +38,7 @@ let packing_ft loc global provable ret =
       | Owned ((Void | Integer _ | Pointer _ | Function _), _init) -> 
          None
       | Owned ((Array (ict, olength)) as ct, init) ->
-         let length = Option.get olength in
-         let qpred = 
-           let q_s, q = IT.fresh_named Integer "i" in
-           Q { 
-             name = Owned (ict, init);
-             pointer = ret.pointer;
-             q = q_s;
-             step = int_ (Memory.size_of_ctype ict);
-             iargs = [];
-             permission = and_ [((int_ 0) %<= q); (q %< (int_ length))]
-           }
-         in
+         let qpred = unfolded_array init (ict, olength) ret.pointer in
          let o_s, o = IT.fresh_named (BT.of_sct ct) "value" in
          let at = 
            LAT.Resource ((o_s, (qpred, IT.bt o)), (loc, None),
@@ -86,11 +87,56 @@ let packing_ft loc global provable ret =
   | Q _ -> 
      None
 
+let unpack_owned global (ct, init) pointer (O o) =
+  let open Sctypes in
+  match ct with
+  | (Void | Integer _ | Pointer _ | Function _) -> 
+     None
+  | Array (ict, olength) ->
+    Some [(unfolded_array init (ict, olength) pointer, O o)]
+  | Struct tag ->
+    let layout = SymMap.find tag global.Global.struct_decls in
+    let res =
+      List.fold_right (fun {offset; size; member_or_padding} res ->
+        match member_or_padding with
+        | Some (member, mct) ->
+          let mresource = 
+            (P {
+              name = Owned (mct, init);
+              pointer = memberShift_ (pointer, tag, member);
+              iargs = [];
+            }, 
+            O (member_ ~member_bt:(BT.of_sct mct) (tag, o, member)))
+          in
+          (mresource :: res)
+        | None ->
+          let padding_ct = Sctypes.Array (Integer Char, Some size) in
+          let mresource = 
+            (P {
+              name = Owned (padding_ct, Uninit);
+              pointer = pointer_offset_ (pointer, int_ offset);
+              iargs = [];
+            }, O (default_ (BT.of_sct padding_ct)))
+          in
+          (mresource :: res)
+        ) layout []
+    in
+    Some res
+     
+
 
 let unpack loc global provable (ret, O o) = 
-  match packing_ft loc global provable ret with
-  | None -> None
-  | Some packing_ft -> Some (ResourcePredicates.clause_lrt o packing_ft)
+  match ret with
+  | P {name = Owned (ct, init); pointer; iargs = []} ->
+    begin match unpack_owned global (ct, init) pointer (O o) with
+    | None -> None
+    | Some re -> Some (`RES re)
+    end
+  | _ ->
+    begin match packing_ft loc global provable ret with
+    | None -> None
+    | Some packing_ft -> Some (`LRT (ResourcePredicates.clause_lrt o packing_ft))
+    end
       
 
 
@@ -135,5 +181,6 @@ let extractable_multiple loc provable =
             aux is (re, extracted)
   in
   fun movable_indices re -> aux movable_indices (re, [])
+
 
 
