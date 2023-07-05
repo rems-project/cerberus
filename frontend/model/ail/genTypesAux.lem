@@ -2,8 +2,8 @@ open import Pervasives AilSyntax Range ErrorMonad TypingError GenTypes Utils Cty
 import AilTypesAux AilTyping IntegerImpl Debug
 
 let unatomic = function
-  | GenAtomic ty ->
-      inject_type ty
+  | GenAtomic gty ->
+      gty
   | gty ->
       gty
 end
@@ -50,6 +50,15 @@ let is_pointer = function
   | _ ->
       false
   end
+
+val is_atomic: genType -> bool
+let is_atomic = function
+  | GenAtomic _ ->
+      (* STD §6.2.5#20, bullet 6 *)
+      true
+  | _ ->
+      false
+end
 
 val is_void: genType -> bool
 let void = function
@@ -282,8 +291,8 @@ let interpret_genBasicType loc impl = function
       return (Floating fty)
 end
 
-val interpret_genType: Loc.t -> IntegerImpl.implementation -> genType -> errorM ctype
-let interpret_genType loc impl gty =
+val     interpret_genType: Loc.t -> IntegerImpl.implementation -> genType -> errorM ctype
+let rec interpret_genType loc impl gty =
   let ret ty = return (Ctype [Annot.Aloc loc] ty) in
   match gty with
     | GenVoid ->
@@ -303,7 +312,8 @@ let interpret_genType loc impl gty =
         ret (Struct tag)
     | GenUnion tag ->
         ret (Union tag)
-    | GenAtomic ty ->
+    | GenAtomic gty ->
+        interpret_genType loc impl gty >>= fun ty ->
         ret (Atomic ty)
   end
 

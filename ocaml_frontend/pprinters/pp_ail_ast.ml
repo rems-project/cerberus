@@ -107,7 +107,7 @@ let pp_genBasicType_raw = function
  | GenFloating fty ->
      Pp_ail.pp_floatingType fty
 
-let pp_genType = function
+let rec pp_genType = function
  | GenVoid ->
      !^ "void"
  | GenBasic gbty ->
@@ -133,8 +133,8 @@ let pp_genType = function
       !^ "GenStruct" ^^ Pp_ail.pp_id ~is_human:true sym
   | GenUnion sym ->
       !^ "GenUnion" ^^ Pp_ail.pp_id ~is_human:true sym
-  | GenAtomic ty ->
-      !^ "GenAtomic" ^^ pp_ctype_human no_qualifiers ty
+  | GenAtomic gty ->
+      !^ "GenAtomic" ^^ pp_genType gty
 
 
 let pp_ctype qs ty =

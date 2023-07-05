@@ -857,7 +857,7 @@ let pp_genBasicType = function
   | GenFloating fty ->
       pp_floatingType fty
 
-let pp_genType = function
+let rec pp_genType = function
   | GenVoid ->
       !^ "void"
   | GenBasic gbty ->
@@ -875,8 +875,8 @@ let pp_genType = function
       !^ "struct" ^^^ pp_id ~is_human:true tag_sym
   | GenUnion tag_sym ->
       !^ "union" ^^^ pp_id ~is_human:true tag_sym
-  | GenAtomic ty ->
-      !^ "atomic" ^^^ pp_ctype ~is_human:true no_qualifiers ty
+  | GenAtomic gty ->
+      !^ "atomic" ^^^ pp_genType gty
 
 let pp_genTypeCategory = function
  | GenLValueType (qs, ty, isRegister) ->

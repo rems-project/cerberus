@@ -1155,9 +1155,9 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
               if GAux.is_incomplete sigm gty then
                 E.constraint_violation (locOf e) (MemberofIncompleteRvalue gty)
               else match gty with
-                | GenAtomic (Ctype _ (Struct tag_sym)) ->
+                | GenAtomic (GenStruct tag_sym) ->
                     do_struct tag_sym
-                | GenAtomic (Ctype _ (Union tag_sym)) ->
+                | GenAtomic (GenUnion tag_sym) ->
                     do_union tag_sym
                 | GenStruct tag_sym ->
                     do_struct tag_sym
