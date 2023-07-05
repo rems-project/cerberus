@@ -429,6 +429,10 @@ let dtree_of_expression pp_annot expr =
           let d_ctor = pp_implicit_ctor "AilEfunction_decay" in
           Dnode ( d_ctor
                 , (*add_std_annot*) [self e] )
+      | AilEatomic e ->
+          let d_ctor = pp_implicit_ctor "AilEatomic" in
+          Dnode ( d_ctor
+                , (*add_std_annot*) [self e] )
       | AilEgcc_statement ->
           Dleaf ( pp_expr_ctor "AilEgcc_statement" )
     end in

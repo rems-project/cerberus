@@ -2892,6 +2892,8 @@ else
           end
       | A.AilEfunction_decay e ->
           translate_function_designator self stdlib e
+      | A.AilEatomic e ->
+          self e
       
       | A.AilEgcc_statement ->
           E.record_error_at loc "GCC statements as expressions not yet supported" >>= fun () ->

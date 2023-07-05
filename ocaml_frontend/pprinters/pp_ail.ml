@@ -583,6 +583,8 @@ let rec pp_expression_aux mk_pp_annot a_expr =
             pp_ail_keyword "array_decay" ^^ P.parens (pp e)
         | AilEfunction_decay e ->
             pp_ail_keyword "function_decay" ^^ P.parens (pp e)
+        | AilEatomic e ->
+            pp_ail_keyword "atomic" ^^ P.parens (pp e)
         
         | AilEprint_type e ->
 (*            if !Cerb_debug.debug_level > 5 then

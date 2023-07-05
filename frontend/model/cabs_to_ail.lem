@@ -641,8 +641,9 @@ let rec is_integer_constant_expression (AnnotatedExpression () _ loc expr_ as ex
     | AilEfunction_decay _ ->
         (* NOTE: this only exists after the Ail typing *)
         error "cabs_to_ail.is_integer_constant_expression (AilEfunction_decay _)"
-
-
+    | AilEatomic _ ->
+        (* NOTE: this only exists after the Ail typing *)
+        error "cabs_to_ail.is_integer_constant_expression (AilEatomic _)"
 
     | AilEconst (ConstantInteger _) ->
         (* NOTE: this includes enumeration constants *)

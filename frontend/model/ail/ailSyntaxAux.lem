@@ -25,6 +25,8 @@ let rec is_null_pointer_constant expr =
         n = 0
     | AilEcast cast_qs (Ctype _ (Pointer referenced_qs (Ctype _ Void))) e ->
         is_null_pointer_constant e && is_unqualified cast_qs && is_unqualified referenced_qs
+    | AilEatomic e ->
+        is_null_pointer_constant e
     | _ ->
         false
   end
