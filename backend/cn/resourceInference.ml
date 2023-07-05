@@ -462,7 +462,8 @@ end
 module Special = struct
 
   let fail_missing_resource loc situation (orequest, oinfo) = 
-    let@ model = model () in
+    let@ model = model_with loc (bool_ true) in
+    let model = Option.get model in
     fail_with_trace (fun trace -> fun ctxt ->
         let msg = Missing_resource {orequest; situation; oinfo; model; trace; ctxt} in
         {loc; msg})
