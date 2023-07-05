@@ -543,10 +543,26 @@ let rec check_pexpr (pe : 'bty mu_pexpr) ~(expect:BT.t)
      end
   | M_CivCOMPL _ ->
      Cerb_debug.error "todo: CivCOMPL"
-  | M_CivAND _ ->
-     Cerb_debug.error "todo: CivAND"
-  | M_CivOR _ ->
-     Cerb_debug.error "todo: CivOR"
+  | M_CivAND (act, pe1, pe2) ->
+     let@ () = WellTyped.ensure_base_type loc ~expect Integer in
+     let _ity = match act.ct with
+       | Integer ity -> ity
+       | _ -> Cerb_debug.error "M_CivAND with non-integer c-type"
+     in
+     check_pexpr ~expect:Integer pe1 (fun vt1 ->
+     check_pexpr ~expect:Integer pe2 (fun vt2 ->
+     let value = warn_uf loc "bw_and_uf"; bw_and_no_smt_ (vt1, vt2) in
+     k value))
+  | M_CivOR (act, pe1, pe2) ->
+     let@ () = WellTyped.ensure_base_type loc ~expect Integer in
+     let _ity = match act.ct with
+       | Integer ity -> ity
+       | _ -> Cerb_debug.error "M_CivOR with non-integer c-type"
+     in
+     check_pexpr ~expect:Integer pe1 (fun vt1 ->
+     check_pexpr ~expect:Integer pe2 (fun vt2 ->
+     let value = warn_uf loc "bw_or_uf"; bw_or_no_smt_ (vt1, vt2) in
+     k value))
   | M_CivXOR (act, pe1, pe2) -> 
      let@ () = WellTyped.ensure_base_type loc ~expect Integer in
      let _ity = match act.ct with

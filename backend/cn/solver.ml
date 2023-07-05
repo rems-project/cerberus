@@ -53,6 +53,8 @@ let exp_no_smt_solver_sym = Sym.fresh_named "power_uf"
 let mod_no_smt_solver_sym = Sym.fresh_named "mod_uf"
 let rem_no_smt_solver_sym = Sym.fresh_named "rem_uf"
 let xor_no_smt_solver_sym = Sym.fresh_named "xor_uf"
+let bw_and_no_smt_solver_sym = Sym.fresh_named "bw_and_uf"
+let bw_or_no_smt_solver_sym = Sym.fresh_named "bw_or_uf"
 
 
 
@@ -483,6 +485,10 @@ module Translate = struct
          | Max -> term (ite_ (ge_ (t1, t2), t1, t2))
          | XORNoSMT ->
             make_uf xor_no_smt_solver_sym (Integer) [t1; t2]
+         | BWAndNoSMT ->
+            make_uf bw_and_no_smt_solver_sym (Integer) [t1; t2]
+         | BWOrNoSMT ->
+            make_uf bw_or_no_smt_solver_sym (Integer) [t1; t2]
          | EQ -> Z3.Boolean.mk_eq context
             (maybe_record_loc_addr_eq global t1 (term t1))
             (maybe_record_loc_addr_eq global t2 (term t2))

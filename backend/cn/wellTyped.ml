@@ -234,10 +234,15 @@ module WIT = struct
                let hint = "Only exponentiation of two constants is allowed" in
                fail (fun ctxt -> {loc; msg = NIA {it = exp_ (t, t'); ctxt; hint}})
             end
-           | ExpNoSMT ->
+           | ExpNoSMT
+           | RemNoSMT
+           | ModNoSMT
+           | XORNoSMT
+           | BWAndNoSMT
+           | BWOrNoSMT ->
               let@ t = check loc Integer t in
               let@ t' = check loc Integer t' in
-              return (exp_no_smt_ (t, t'))
+              return (IT (Binop (arith_op, t, t'), Integer))
            | Rem ->
               let@ simp_ctxt = simp_ctxt () in
               let@ t = check loc Integer t in
@@ -249,10 +254,6 @@ module WIT = struct
               | Some z' ->
                  return (IT (Binop (Rem, t, z_ z'), Integer))
               end
-           | RemNoSMT ->
-              let@ t = check loc Integer t in
-              let@ t' = check loc Integer t' in
-              return (IT (Binop (RemNoSMT, t, t'), Integer))
            | Mod ->
               let@ simp_ctxt = simp_ctxt () in
               let@ t = check loc Integer t in
@@ -264,10 +265,6 @@ module WIT = struct
               | Some z' ->
                  return (IT (Binop (Mod, t, z_ z'), Integer))
               end
-           | ModNoSMT ->
-              let@ t = check loc Integer t in
-              let@ t' = check loc Integer t' in
-              return (IT (Binop (ModNoSMT, t, t'), Integer))
            | LT ->
               let@ t = infer loc t in
               let@ () = ensure_integer_or_real_type loc t in
@@ -288,10 +285,6 @@ module WIT = struct
               let@ () = ensure_integer_or_real_type loc t in
               let@ t' = check loc (IT.bt t) t' in
               return (IT (Binop (Max, t, t'), IT.bt t))
-           | XORNoSMT ->
-              let@ t = check loc Integer t in
-              let@ t' = check loc Integer t' in
-              return (IT (Binop (XORNoSMT, t, t'), BT.Integer))
            | EQ ->
               let@ t = infer loc t in
               let@ t' = check loc (IT.bt t) t' in

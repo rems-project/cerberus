@@ -31,6 +31,8 @@ type binop =
   | Mod
   | ModNoSMT
   | XORNoSMT
+  | BWAndNoSMT
+  | BWOrNoSMT
   | LT
   | LE
   | Min
@@ -173,6 +175,10 @@ let pp : 'bt 'a. ?atomic:bool -> ?f:('bt term -> Pp.doc -> Pp.doc) -> 'bt term -
           c_app !^"max" [aux false it1; aux false it2]
        | XORNoSMT ->
           c_app !^"xor_uf" [aux false it1; aux false it2]
+       | BWAndNoSMT ->
+          c_app !^"bw_and_uf" [aux false it1; aux false it2]
+       | BWOrNoSMT ->
+          c_app !^"bw_or_uf" [aux false it1; aux false it2]
        | SetMember ->
           c_app !^"member" [aux false it1; aux false it2]
        | SetUnion ->
