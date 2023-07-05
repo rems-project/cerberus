@@ -40,6 +40,10 @@ let print_debug level _doms msg =
 let print_debug_located level doms loc msg =
   print_debug level doms (fun () -> "[" ^ Cerb_location.location_to_string loc ^ "] - " ^ msg ())
 
+let print_unsupported str =
+  prerr_string (Cerb_colour.ansi_format ~err:true [Red] "unsupported: ");
+  prerr_endline str
+
 let warn _doms msg =
   if !debug_level > 1 then
     prerr_endline Cerb_colour.(ansi_format [Yellow] ("WARNING: " ^ msg ()))

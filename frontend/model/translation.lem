@@ -2081,7 +2081,8 @@ end                       )
       
       | A.AilEcond e1 Nothing e3 ->
           (* GNU ?: operator *)
-          error "TODO: elaboration of ?: operator"
+          E.record_error_at loc "TODO: elaboration of ?: operator" >>= fun () ->
+          E.return Caux.mk_skip_e
       
       | A.AilEcond e1 (Just e2) e3 ->
           let apply_implicit_conversions expr =
@@ -2441,7 +2442,8 @@ end
       
       | A.AilEgeneric _ _ ->
           (* NOTE: this is already caught by the frontend *)
-          error ((Loc.stringFromLocation (Loc.locOf a_expr)) ^ ": C11 generics not yet supported")
+          E.record_error_at loc "TODO: elaboration of C11 generics" >>= fun () ->
+          E.return Caux.mk_skip_e
       
       | A.AilEarray _ _ e_opts ->
           let elem_ty = match result_ty with
@@ -2667,13 +2669,17 @@ end
       | A.AilEbuiltin b ->
         match b with
           | A.AilBatomic _ ->
-              error ((Loc.stringFromLocation (Loc.with_cursor loc)) ^ ": atomic builtins must be directly called")
+              E.record_error_at loc "atomic builtins must be directly called" >>= fun () ->
+              E.return Caux.mk_skip_e
           | A.AilBlinux _ ->
-              error ((Loc.stringFromLocation (Loc.with_cursor loc)) ^ ": atomic linux builtins must be directly called")
+              E.record_error_at loc "atomic linux builtins must be directly called" >>= fun () ->
+              E.return Caux.mk_skip_e
           | A.AilBcopy_alloc_id ->
-              error ((Loc.stringFromLocation (Loc.with_cursor loc)) ^ ": copy_alloc_id() must be directly called")
+              E.record_error_at loc "copy_alloc_id() must be directly called" >>= fun () ->
+              E.return Caux.mk_skip_e
           | A.AilBCHERI str ->
-              error ((Loc.stringFromLocation (Loc.with_cursor loc)) ^ ": "^str^"() must be directly called")
+              E.record_error_at loc (str^"() must be directly called") >>= fun () ->
+              E.return Caux.mk_skip_e
               (* NOTE: other builtins might be legally desugared here *)
         end
       
@@ -2734,9 +2740,10 @@ end
       
       | A.AilEva_start _ last_sym ->
           let (variadic_sym, last_arg_sym) =
-            match variadic_env with
+          match variadic_env with
             | (Just var_sym, Just last_sym) -> (var_sym, last_sym)
-            | _ -> error ((Loc.stringFromLocation (Loc.locOf a_expr)) ^ ": va_start not in a variadic function")
+            | _ ->
+              error (Loc.stringFromLocation (Loc.locOf a_expr) ^ ": va_start not in a variadic function")
             end in
           E.wrapped_fresh_symbol (C.BTy_object C.OTy_integer) >>= fun va_wrp ->
           E.return begin
@@ -2887,7 +2894,8 @@ else
           translate_function_designator self stdlib e
       
       | A.AilEgcc_statement ->
-          error ((Loc.stringFromLocation loc) ^ ": GCC statements as expressions not yet supported")
+          E.record_error_at loc "GCC statements as expressions not yet supported" >>= fun () ->
+          E.return Caux.mk_skip_e
     end
 
 
@@ -4008,7 +4016,7 @@ val translate:
 let translate (ailnames, stdlib_fun_map) impl prog =
   let translation_stdlib = mk_translation_stdlib (ailnames, stdlib_fun_map) in
   let ((core_tagDefs, cglobs, (*cdecls, *) cfuns, funinfo), st) =
-    E.runStateM (translate_program translation_stdlib prog) (E.elab_init ())
+    E.runStateM_errors (translate_program translation_stdlib prog) (E.elab_init ())
   in
   <| C.main= fst prog;
      C.tagDefs= core_tagDefs;

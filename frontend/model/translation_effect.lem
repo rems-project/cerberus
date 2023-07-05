@@ -22,6 +22,8 @@ type elab_state = <|
   string_literals: list (Loc.t * Symbol.sym * Ctype.ctype * C.pexpr);
   compound_literals: list compound_literal_info;
   visible_objects_types_markers_env: map nat (list (Symbol.sym * Ctype.ctype));
+
+  errors: list string
   
 |>
 
@@ -34,6 +36,7 @@ let elab_init () = <|
   string_literals= [];
   compound_literals= [];
   visible_objects_types_markers_env = Map.empty;
+  errors = [];
 |>
 
 type wrapped_symbol = <|
@@ -148,3 +151,24 @@ let record_object_types_marker () =
       return ()
   end >>
   return marker_id
+
+
+(* record that an (unrecoverable) error occured, but don't abandon
+   translation yet, so the user gets a full list of such errors *)
+val record_error: string -> elabM unit
+let record_error err =
+    let () = Debug.print_unsupported err in
+    update (fun st -> <| st with errors = err :: st.errors |>)
+
+val record_error_at: Loc.t -> string -> elabM unit
+let record_error_at loc err = record_error
+    ((Loc.stringFromLocation (Loc.with_cursor loc)) ^ ": " ^ err)
+
+val runStateM_errors: forall 'a. elabM 'a -> elab_state -> 'a * elab_state
+let runStateM_errors m st =
+  let (rv, st) = runStateM m st in
+  match List.reverse st.errors with
+    | [] -> (rv, st)
+    | (err1 :: _) -> error err1
+  end
+

@@ -35,6 +35,11 @@ declare ocaml target_rep function print_debug_located = `Cerb_debug.print_debug_
 declare hol   target_rep function print_debug_located =
                                   `util$print_debug_located`
 
+val print_unsupported: string -> unit
+declare ocaml target_rep function print_unsupported = `Cerb_debug.print_unsupported`
+declare hol   target_rep function print_unsupported = `util$output_string`
+
+
 val warn: list domain -> (unit -> string) -> unit
 declare ocaml target_rep function warn = `Cerb_debug.warn`
 declare hol   target_rep function warn = `util$output_string`
