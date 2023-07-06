@@ -726,9 +726,7 @@ let rec step_eval_pexpr n loc parent_call_loc_opt core_extern env mem_st_opt fil
                             error "Core_eval, PEstruct => found a flexible array member"
                       end in *)
                       let (_, _, _, memb_ty) = fromJust "Core_eval, PEstruct 1" (List.lookup memb_ident membrs) in
-                      let mval = fromJust ("Core_Eval, PEstruct 2, memb_ty: " ^ Pp.stringFromCore_ctype memb_ty ^
-                                           ", cval: " ^ Pp.stringFromCore_value cval)
-                          (Caux.memValueFromValue memb_ty cval) in
+                      let mval = fromJust "Core_Eval, PEstruct 2" (Caux.memValueFromValue memb_ty cval) in
                       (memb_ident, memb_ty, mval)
                   | Ctype.UnionDef _ ->
                       error "Core_eval.step_eval_pexpr, PEstruct found a UnionDef"
