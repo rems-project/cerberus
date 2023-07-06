@@ -1,5 +1,14 @@
 #!/bin/bash
 
+trap ctrl_c INT
+function ctrl_c() {
+  echo "Aborting...";
+  rm -f tmp/result tmp/stderr;
+  # [ -d tmp ] && rmdir tmp;
+  exit 0
+}
+
+
 export DYLD_LIBRARY_PATH=$DYLD_LIBRARY_PATH:`ocamlfind query Z3`
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:`ocamlfind query Z3`
 
@@ -74,9 +83,12 @@ do
     echo -e "Test $file: \x1b[33mSKIPPED (Cerberus' libc does not currently implement most floating functions)\x1b[0m"
     continue
   fi
-  $CERB $file --cpp="cc -E -C -nostdinc -undef -D__cerb__ -D__LP64__ -I../include/c/libc -I..include/c/posix" --exec > tmp/result 2> tmp/stderr
+  # if [ $file == "tcc/60_errors_and_warnings.c "]; then
+  # else
+  $CERB $file -D__LP64__ --exec > tmp/result 2> tmp/stderr
   cmp --silent tmp/result ${file%.c}.expect
   report $file $?
+  # fi
 done
 echo "TCC PASSED: $pass"
 echo "TCC FAILED: $fail"
