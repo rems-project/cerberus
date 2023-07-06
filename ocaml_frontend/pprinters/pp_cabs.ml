@@ -273,8 +273,8 @@ let rec dtree_of_cabs_expression (CabsExpression (loc, expr)) =
         Dnode (pp_stmt_ctor "CabsEprint_type" ^^^ d_loc, [dtree_of_cabs_expression e])
     | CabsEbmc_assume e ->
         Dnode (pp_stmt_ctor "CabsEbmc_assume" ^^^ d_loc, [dtree_of_cabs_expression e])
-    | CabsEgcc_statement s ->
-        Dnode (pp_stmt_ctor "CabsEgcc_statement" ^^^ d_loc, [dtree_of_cabs_statement s])
+    | CabsEgcc_statement ss ->
+        Dnode (pp_stmt_ctor "CabsEgcc_statement" ^^^ d_loc, List.map dtree_of_cabs_statement ss)
     | CabsEcondGNU (e1, e2) ->
         Dnode ( pp_stmt_ctor "CabsEcondGNU" ^^^ d_loc
               , let d_e1 = dtree_of_cabs_expression e1 in

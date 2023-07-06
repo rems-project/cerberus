@@ -503,9 +503,10 @@ primary_expression:
 | gs= generic_selection
     { gs }
 (* GCC extension: Statement Exprs *)
-| LPAREN stmt= scoped(compound_statement) RPAREN
-    { CabsExpression ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos(stmt)))
-                     , CabsEgcc_statement stmt ) }
+// | LPAREN stmt= scoped(compound_statement) RPAREN
+| LPAREN LBRACE bis_opt= block_item_list? RBRACE RPAREN
+    { CabsExpression ( Cerb_location.(region ($startpos, $endpos) (PointCursor $startpos($2)))
+                     , CabsEgcc_statement (option [] List.rev bis_opt) ) }
 ;
 
 (* §6.5.1.1 Generic selection *)
