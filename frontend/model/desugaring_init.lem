@@ -74,7 +74,7 @@ let go_down_aux tagDefs entering_block pos =
   else
     let mk_cursor_elem kind =
       <| is_block= entering_block; is_overflowing= false; kind= kind |> in
-    match pos.ty with
+    match unatomic pos.ty with
       | Ctype _ (Basic _) ->
           Nothing
       | Ctype _ (Pointer _ _) ->
@@ -157,7 +157,7 @@ let rec go_next_aux tagDefs going_up pos =
                   Just <| pos with cursor= <| elem with is_overflowing= true |> :: cursor' |>
                 else
                   Maybe.bind (go_up pos) (go_next_going_up tagDefs)
-              else if AilTypesAux.is_scalar pos.ty || going_up then
+              else if AilTypesAux.is_scalar (unatomic pos.ty) || going_up then
                 Just <| pos with cursor= <| is_block= elem.is_block; is_overflowing= elem.is_overflowing; kind= Init_array new_idx size_opt |> :: cursor' |>
               else
                 Maybe.bind (go_down tagDefs pos) (go_next tagDefs)
@@ -169,7 +169,7 @@ let rec go_next_aux tagDefs going_up pos =
                 Maybe.bind (go_up pos) (go_next_going_up tagDefs)
           | Init_struct tag_sym prev_membrs current_member next_membrs ->
               let (memb_ident, memb_ty) = List_extra.head next_membrs in
-              if AilTypesAux.is_scalar pos.ty || going_up then
+              if AilTypesAux.is_scalar (unatomic pos.ty) || going_up then
                 Just <| pos with ty= memb_ty; cursor= <| elem with kind=
                   Init_struct tag_sym(prev_membrs ++ [(current_member, pos.ty)]) memb_ident (List_extra.tail next_membrs) |> :: cursor' |>
               else
@@ -303,7 +303,7 @@ let rec moveTo_aux tagDefs funcs is_top (ty_acc, cursor_acc) desigs =
               else
                 E.return idx
           end in
-        match ty_acc with
+        match unatomic ty_acc with
           | Ctype _ (Array elem_ty (Just size)) ->
               common e >>= fun idx ->
               let new_elem =
@@ -322,7 +322,7 @@ let rec moveTo_aux tagDefs funcs is_top (ty_acc, cursor_acc) desigs =
         end
     | Cabs.Desig_member ident :: desigs' ->
         let loc = Loc.locOf ident in
-        match ty_acc with
+        match unatomic ty_acc with
           | Ctype _ (Struct tag_sym) ->
             match find_struct_member tagDefs ident tag_sym with
               | Right (new_ty, prev, next) ->
