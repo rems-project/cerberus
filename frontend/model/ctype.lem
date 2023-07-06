@@ -412,7 +412,7 @@ end
 val proj_ctype_: ctype -> ctype_
 let proj_ctype_ (Ctype _ ty_) = ty_
 
-(* NOTE: a well-formed ctype cannot have an Atomic inside another one *)
+(* NOTE: a well-formed ctype cannot have an Atomic directly inside another one *)
 let unatomic (Ctype annots ty_ as ty) =
 match ty_ with
   | Atomic ty ->

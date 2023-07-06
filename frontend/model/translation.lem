@@ -736,7 +736,7 @@ val translate_assignment_conversion:
   A.expression GenTypes.genTypeCategory ->
   E.elabM (C.core_object_type * C.expr unit * (C.pexpr -> C.pexpr))
 let translate_assignment_conversion translate_expr stdlib ty1 e2 =
-  let ty2 = ctype_of e2 in
+  let ty2 = Ctype.unatomic (ctype_of e2) in
   begin
     if AilTypesAux.atomic_qualified_unqualified AilTypesAux.is_array ty1 then
       translate_expr e2 >>= fun core_e2 ->
@@ -2171,7 +2171,7 @@ end                       )
           E.wrapped_fresh_symbol (C.BTy_object C.OTy_pointer) >>= fun e1_wrp  ->
           self e1                                             >>= fun core_e1 ->
           let ty1 = ctype_of e1 in
-          let ty2 = ctype_of e2 in
+          let ty2 = Ctype.unatomic (ctype_of e2) in
           begin
 if AilTypesAux.atomic_qualified_unqualified AilTypesAux.is_arithmetic ty1 && AilTypesAux.is_arithmetic ty2 then
   begin if Global.is_CHERI () &&
@@ -2856,7 +2856,7 @@ else (* is_pointer *)
           E.wrapped_fresh_symbol (C.BTy_object C.OTy_pointer) >>= fun e_wrp ->
           E.return begin
             Caux.mk_wseq_e e_wrp.E.sym_pat core_e begin
-              Caux.pload loc (Caux.mk_ail_ctype_pe result_ty) e_wrp.E.sym_pe mo
+              Caux.pload loc (Caux.mk_ail_ctype_pe (ctype_of e)) e_wrp.E.sym_pe mo
             end
           end
       | A.AilEarray_decay e ->
@@ -3620,7 +3620,7 @@ let rec translate_stmt stdlib tagDefs f env (A.AnnotatedStatement loc stmt_attrs
           E.resolve_object_type ptr_sym >>= fun (qs, ty) ->
           let oTy = force_core_object_type_of_ctype (ctype_of e) in
           E.wrapped_fresh_symbol (C.BTy_loaded oTy) >>= fun e_wrp ->
-          match Ctype.unatomic_ ty with
+            match (* Ctype.unatomic_ *) Ctype.proj_ctype_ ty with
             | Ctype.Pointer _ ref_ty ->
                 let mk_store =
                   if qs.Ctype.const then Caux.pstore_lock else Caux.pstore in

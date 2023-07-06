@@ -17,8 +17,8 @@ end
 let ident_equal x y =
        Symbol.instance_Basic_classes_Eq_Symbol_identifier_dict.isEqual_method x y
 
-let ctype_equal ty1 ty2 =
-  let rec unqualify (Ctype (_, ty)) =
+let ctype_mem_compatible ty1 ty2 =
+  let rec unqualify_and_unatomic (Ctype (_, ty)) =
     match ty with
       | Void
       | Basic _
@@ -27,19 +27,20 @@ let ctype_equal ty1 ty2 =
           ty
       | Function ((_, ret_ty), xs, b) ->
           Function (
-            (no_qualifiers, Ctype ([], unqualify ret_ty)),
-            List.map (fun (_, ty, _) -> (no_qualifiers, Ctype ([], unqualify ty), false)) xs,
+            (no_qualifiers, Ctype ([], unqualify_and_unatomic ret_ty)),
+            List.map (fun (_, ty, _) -> (no_qualifiers, Ctype ([], unqualify_and_unatomic ty), false)) xs,
             b
           )
       | FunctionNoParams (_, ret_ty) ->
-          FunctionNoParams (no_qualifiers, Ctype ([], unqualify ret_ty))
+          FunctionNoParams (no_qualifiers, Ctype ([], unqualify_and_unatomic ret_ty))
       | Array (elem_ty, n_opt) ->
-          Array (Ctype ([], unqualify elem_ty), n_opt)
+          Array (Ctype ([], unqualify_and_unatomic elem_ty), n_opt)
       | Pointer (_, ref_ty) ->
-          Pointer (no_qualifiers, Ctype ([], unqualify ref_ty))
+          Pointer (no_qualifiers, Ctype ([], unqualify_and_unatomic ref_ty))
       | Atomic atom_ty ->
-          Atomic (Ctype ([], unqualify atom_ty))
-  in Ctype.ctypeEqual (Ctype ([], unqualify ty1)) (Ctype ([], unqualify ty2))
+          unqualify_and_unatomic atom_ty
+          (* Atomic (Ctype ([], unqualify atom_ty)) *)
+  in Ctype.ctypeEqual (Ctype ([], unqualify_and_unatomic ty1)) (Ctype ([], unqualify_and_unatomic ty2))
 
 module Eff : sig
   type ('a, 'err, 'cs, 'st) eff =
@@ -651,6 +652,10 @@ module Concrete : Memory = struct
                first member is accessed and their are no padding bytes ... *)
             return false
           else
+            let () = Printf.fprintf stderr "addr: %s <--> alloc.base: %s\n"
+              (N.to_string addr) (N.to_string alloc.base) in
+            let () = Printf.fprintf stderr "|lvalue_ty|: %s <--> |alloc|: %s\n"
+              (N.to_string (sizeof lvalue_ty)) (N.to_string alloc.size) in
             return true
       | _ ->
           return false
@@ -1605,7 +1610,7 @@ module Concrete : Memory = struct
       " -> @" ^ Pp_utils.to_plain_string (pp_pointer_value (PV (prov, ptrval_))) ^
       ", mval= " ^ Pp_utils.to_plain_string (pp_mem_value mval)
     );
-    if not (ctype_equal (unatomic ty) (unatomic (typeof mval))) then begin
+    if not (ctype_mem_compatible ty (typeof mval)) then begin
       Printf.printf "STORE ty          ==> %s\n"
         (String_core_ctype.string_of_ctype ty);
       Printf.printf "STORE typeof mval ==> %s\n"

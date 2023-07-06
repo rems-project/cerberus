@@ -132,8 +132,9 @@ let valueFromMemValue mem_val =
     (fun sym ident mem_val -> (OTy_union sym, Vloaded (LVspecified (OVunion sym ident mem_val))))
 
 val     memValueFromValue: ctype -> value -> maybe Mem.mem_value
-let rec memValueFromValue (Ctype annots ty) cval =
-  match (ty, cval) with
+let rec memValueFromValue ty cval =
+  let (Ctype annots ty_) = unatomic ty in
+  match (ty_, cval) with
     | (_, Vunit) ->
         Nothing
     | (_, Vtrue) ->
@@ -187,7 +188,7 @@ let rec memValueFromValue (Ctype annots ty) cval =
           Nothing
     | _ ->
         let () = Debug.print_debug 5 [] (fun () -> "memValueFromValue("
-                 ^ Pp.stringFromCore_ctype (Ctype [] ty) ^ ", " ^  Pp.stringFromCore_value cval ^ ")") in
+                 ^ Pp.stringFromCore_ctype (Ctype [] ty_) ^ ", " ^  Pp.stringFromCore_value cval ^ ")") in
         Nothing
   end
 
