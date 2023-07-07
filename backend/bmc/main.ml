@@ -10,34 +10,7 @@ let return = Exception.except_return
 
 let io, get_progress =
   let open Pipeline in
-  let progress = ref 0 in
-  { pass_message = begin
-        let ref = ref 0 in
-        fun str -> Cerb_debug.print_success (string_of_int !ref ^ ". " ^ str);
-                   incr ref;
-                   return ()
-      end;
-    set_progress = begin
-      fun _   -> incr progress;
-                 return ()
-      end;
-    run_pp = begin
-      fun opts doc -> run_pp opts doc;
-                      return ()
-      end;
-    print_endline = begin
-      fun str -> print_endline str;
-                 return ();
-      end;
-    print_debug = begin
-      fun n mk_str -> Cerb_debug.print_debug n [] mk_str;
-                      return ()
-      end;
-    warn = begin
-      fun ?(always=false) mk_str -> Cerb_debug.warn ~always [] mk_str;
-                                    return ()
-      end;
-  }, fun () -> !progress
+  default_io_helpers, get_progress
 
 let frontend (conf, io) filename core_std =
   if not (Sys.file_exists filename) then

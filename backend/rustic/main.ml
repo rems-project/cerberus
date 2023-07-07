@@ -6,35 +6,7 @@ let (>>=) = Exception.except_bind
 let (>>) m f = m >>= fun _ -> f
 let return = Exception.except_return
 
-let io =
-  let open Pipeline in
-  { pass_message = begin
-        let ref = ref 0 in
-        fun str -> Cerb_debug.print_success (string_of_int !ref ^ ". " ^ str);
-                   incr ref;
-                   return ()
-      end;
-    set_progress = begin
-      fun str -> return ()
-      end;
-    run_pp = begin
-      fun opts doc -> run_pp opts doc;
-                      return ()
-      end;
-    print_endline = begin
-      fun str -> print_endline str;
-                 return ();
-      end;
-    print_debug = begin
-      fun n mk_str -> Cerb_debug.print_debug n [] mk_str;
-                      return ()
-      end;
-    warn = begin
-      fun mk_str -> Cerb_debug.warn [] mk_str;
-                    return ()
-      end;
-  }
-
+let io = Pipeline.default_io_helpers
 
 let impl_name = "gcc_4.9.0_x86_64-apple-darwin10.8.0"
 

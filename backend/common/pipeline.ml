@@ -94,6 +94,36 @@ type io_helpers = {
   warn: ?always:bool -> (unit -> string) -> (unit, Errors.error) Exception.exceptM;
 }
 
+let (default_io_helpers, get_progress) =
+  let progress = ref 0 in
+  { pass_message = begin
+        let ref = ref 0 in
+        fun str -> Cerb_debug.print_success (Printf.sprintf "[%0.4f] %d. %s" (Sys.time ()) !ref str);
+                   incr ref;
+                   return ()
+      end;
+    set_progress = begin
+      fun _   -> incr progress;
+                 return ()
+      end;
+    run_pp = begin
+      fun opts doc -> run_pp opts doc;
+                      return ()
+      end;
+    print_endline = begin
+      fun str -> print_endline str;
+                 return ();
+      end;
+    print_debug = begin
+      fun n mk_str -> Cerb_debug.print_debug n [] mk_str;
+                      return ()
+      end;
+    warn = begin
+      fun ?(always=false) mk_str -> Cerb_debug.warn ~always [] mk_str;
+                                    return ()
+      end;
+  }, fun () -> !progress
+
 let cpp (conf, io) ~filename =
   io.print_debug 5 (fun () -> "C prepocessor") >>= fun () ->
   Unix.handle_unix_error begin fun () ->

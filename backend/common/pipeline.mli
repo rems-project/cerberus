@@ -26,6 +26,8 @@ type io_helpers = {
   print_debug: int -> (unit -> string) -> (unit, Errors.error) Exception.exceptM;
   warn: ?always:bool -> (unit -> string) -> (unit, Errors.error) Exception.exceptM;
 }
+val default_io_helpers: io_helpers
+val get_progress: unit -> int
 
 val run_pp: ?remove_path:bool -> (string * string) option -> PPrint.document -> unit
 
