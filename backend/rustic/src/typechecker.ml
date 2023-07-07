@@ -35,7 +35,7 @@ let plop2 = function
 | _ :: _ as l -> "(" ^ String.concat ", " l ^ ")"
 
 let string_of_attr attr =
-  let attr_args = List.map snd attr.Annot.attr_args in
+  let attr_args = List.map (fun (_, z, _) -> z) attr.Annot.attr_args in
   string_of_identifier attr.Annot.attr_id ^ plop2 attr_args
 
 let string_of_attrs attrs =
@@ -54,9 +54,14 @@ let string_of_annots annots =
       | Astd x -> None
       | Aloc loc -> None
       | Auid _ -> None
+      | Amarker _ -> None
+      | Amarker_object_types _ -> None
       | Abmc _ -> None
       | Aattrs (Attrs attrs) -> Some attrs
-      | Atypedef _ -> failwith "?")
+      | Atypedef _ -> failwith "?"
+      | Anot_explode -> None
+      | Alabel _ -> None
+      | Acerb _ -> None)
       annots in
   let annots = List.concat annots in
   String.concat " " (List.map string_of_attr annots)
@@ -69,6 +74,7 @@ and string_of_ctype_ = function
 | Basic x -> "int" (* TODO: lies *)
 | Array (cty, sz) -> "array(" ^ string_of_ctype cty ^ ")"
 | Function _ -> "function"
+| FunctionNoParams _ -> "function_no_params"
 | Pointer (qls, cty) -> string_of_ctype cty ^ "*"
 | Atomic cty -> "atomic(" ^ string_of_ctype cty ^ ")"
 | Struct name -> string_of_sym name
