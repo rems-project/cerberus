@@ -442,12 +442,14 @@ Definition no_qualifiers   : qualifiers :=  {|const    := false;restrict := fals
 Definition combine_qualifiers  (qs1 : qualifiers ) (qs2 : qualifiers )  : qualifiers :=  {|const    := ((const qs1)    ||(const  qs2))   ;restrict := ((restrict qs1) ||(restrict  qs2));volatile := ((volatile qs1) ||(volatile  qs2))
 |}.
 
+*)
 
 (* Some constructors *)
 
 Definition mk_ctype_pointer  (qs : qualifiers ) (ty : ctype )  : ctype :=
-  Ctype [] (Pointer qs ty).
+  Ctype nil (Pointer qs ty).
 
+(*
 Definition mk_ctype_integer  (ity : integerType )  : ctype :=
   Ctype [] (Basic (Integer ity)).
 
