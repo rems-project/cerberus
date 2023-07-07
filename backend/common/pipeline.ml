@@ -91,7 +91,7 @@ type io_helpers = {
   run_pp: (string * string) option -> PPrint.document -> (unit, Errors.error) Exception.exceptM;
   print_endline: string -> (unit, Errors.error) Exception.exceptM;
   print_debug: int -> (unit -> string) -> (unit, Errors.error) Exception.exceptM;
-  warn: (unit -> string) -> (unit, Errors.error) Exception.exceptM;
+  warn: ?always:bool -> (unit -> string) -> (unit, Errors.error) Exception.exceptM;
 }
 
 let cpp (conf, io) ~filename =
@@ -197,6 +197,10 @@ let c_frontend ?(cnnames=[]) (conf, io) (core_stdlib, core_impl) ~filename =
   parse filename file_content >>= fun cabs_tunit              ->
   desugar cabs_tunit          >>= fun (markers_env, ail_prog) ->
   ail_typechecking ail_prog   >>= fun ailtau_prog             ->
+  return (cabs_tunit, (markers_env, ailtau_prog))
+
+let c_frontend_and_elaboration ?(cnnames=[]) (conf, io) (core_stdlib, core_impl) ~filename =
+  c_frontend ~cnnames (conf, io) (core_stdlib, core_impl) ~filename >>= fun (cabs_tunit, (markers_env, ailtau_prog)) ->
   (* NOTE: the elaboration sets the struct/union tag definitions, so to allow the frontend to be
      used more than once, we need to do reset here *)
   (* TODO(someday): find a better way *)

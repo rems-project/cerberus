@@ -25,8 +25,8 @@ let io =
                       return ()
       end;
     warn = begin
-      fun mk_str -> Cerb_debug.warn [] mk_str;
-                    return ()
+      fun ?(always=false) mk_str -> Cerb_debug.warn ~always [] mk_str;
+                                    return ()
       end;
   }
 

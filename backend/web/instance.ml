@@ -27,7 +27,7 @@ let dummy_io =
     run_pp=         (fun _ -> skip);
     print_endline=  skip;
     print_debug=    (fun _ -> skip);
-    warn=           skip;
+    warn=           (fun ?(always=false) -> skip);
   }
 
 let setup conf =
@@ -96,7 +96,7 @@ let elaborate ~is_bmc ~conf ~filename =
   try
     load_core_stdlib () >>= fun core_stdlib ->
     load_core_impl core_stdlib conf.instance.core_impl >>= fun core_impl ->
-    c_frontend (conf.pipeline, conf.io) (core_stdlib, core_impl) ~filename
+    c_frontend_and_elaboration (conf.pipeline, conf.io) (core_stdlib, core_impl) ~filename
     >>= function
     | (Some cabs, Some (_, ail), core) ->
       core_passes (conf.pipeline, conf.io) ~filename core

@@ -34,8 +34,8 @@ let io, get_progress =
                       return ()
       end;
     warn = begin
-      fun mk_str -> Cerb_debug.warn [] mk_str;
-                    return ()
+      fun ?(always=false) mk_str -> Cerb_debug.warn ~always [] mk_str;
+                                    return ()
       end;
   }, fun () -> !progress
 
@@ -54,7 +54,7 @@ let frontend (conf, io) filename core_std =
   if Filename.check_suffix filename ".co" || Filename.check_suffix filename ".o" then
     return @@ read_core_object core_std filename
   else if Filename.check_suffix filename ".c" then
-    c_frontend (conf, io) core_std ~filename >>= fun (_, _, core_file) ->
+    c_frontend_and_elaboration (conf, io) core_std ~filename >>= fun (_, _, core_file) ->
     core_passes (conf, io) ~filename core_file
   else if Filename.check_suffix filename ".core" then
     core_frontend (conf, io) core_std ~filename
@@ -117,7 +117,7 @@ let create_executable out =
   Unix.chmod out 0o755
 
 let cerberus debug_level progress core_obj
-             cpp_cmd nostdinc nolibc agnostic macros macros_undef
+             cpp_cmd syntax_only nostdinc nolibc agnostic macros macros_undef
              runtime_path_opt incl_dirs incl_files cpp_only
              link_lib_path link_core_obj
              impl_name
@@ -155,7 +155,7 @@ let cerberus debug_level progress core_obj
       end else switches in
     begin if iso_switches then begin
       if switches <> [] then
-        Cerb_debug.warn [] (fun () -> "The --iso argument overrides --switches");
+        Cerb_debug.warn ~always:true [] (fun () -> "the --iso argument overrides --switches");
       Switches.set_iso_switches ()
     end else
       Switches.set switches
@@ -267,8 +267,20 @@ let cerberus debug_level progress core_obj
           return ()
           ) () files >>= fun () ->
         return success
-      (* Link and execute *)
+      (* Parsing, Ail typing and stopping there *)
+      else if syntax_only && List.for_all (fun z -> Filename.check_suffix z ".c") files then
+        prelude >>= fun core_std ->
+        Exception.except_mapM (fun filename ->
+          c_frontend (conf, io) core_std ~filename
+        ) files >>= fun _ ->
+        return success
+        (* Link and execute *)
       else
+        begin if syntax_only then
+          io.warn ~always:true (fun () -> "some of the translation units are Core or object files: ignoring --syntax-only")
+        else
+          return ()
+        end >>= fun () ->
         prelude >>= main >>= begin function
           | [] -> assert false
           | f::fs ->
@@ -348,6 +360,10 @@ let cpp_cmd =
 let cpp_only =
   let doc = "Run only the preprocessor stage." in
   Arg.(value & flag & info ["E"] ~doc)
+
+let syntax_only =
+  let doc = "Stop the pipeline after the Ail typechecking (only supported when called on .c files)" in
+  Arg.(value & flag & info ["syntax-only"] ~doc)
 
 let incl_dir =
   let doc = "Add the specified directory to the search path for the\
@@ -488,7 +504,7 @@ let args =
 (* entry point *)
 let () =
   let cerberus_t = Term.(const cerberus $ debug_level $ progress $ core_obj $
-                         cpp_cmd $ nostdinc $ nolibc $ agnostic $ macros $ macros_undef $
+                         cpp_cmd $ syntax_only $ nostdinc $ nolibc $ agnostic $ macros $ macros_undef $
                          runtime_path $ incl_dir $ incl_file $ cpp_only $
                          link_lib_path $ link_core_obj $
                          impl $

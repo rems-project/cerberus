@@ -24,7 +24,7 @@ type io_helpers = {
   run_pp: (string * string) option -> PPrint.document -> (unit, Errors.error) Exception.exceptM;
   print_endline: string -> (unit, Errors.error) Exception.exceptM;
   print_debug: int -> (unit -> string) -> (unit, Errors.error) Exception.exceptM;
-  warn: (unit -> string) -> (unit, Errors.error) Exception.exceptM;
+  warn: ?always:bool -> (unit -> string) -> (unit, Errors.error) Exception.exceptM;
 }
 
 val run_pp: ?remove_path:bool -> (string * string) option -> PPrint.document -> unit
@@ -41,6 +41,15 @@ val load_core_impl:
 val cpp: (configuration * io_helpers) -> filename:string -> (string, Cerb_location.t * Errors.cause) Exception.exceptM
 
 val c_frontend:
+  ?cnnames: (string * Symbol.sym) list ->
+  (configuration * io_helpers) ->
+  (((string, Symbol.sym) Pmap.map * (unit, unit) Core.generic_fun_map) * unit Core.generic_impl) ->
+  filename:string ->
+  ( Cabs.translation_unit
+  * (Cabs_to_ail_effect.markers_env * GenTypes.genTypeCategory AilSyntax.ail_program)
+  , Cerb_location.t * Errors.cause) Exception.exceptM
+
+val c_frontend_and_elaboration:
   ?cnnames: (string * Symbol.sym) list ->
   (configuration * io_helpers) ->
   (((string, Symbol.sym) Pmap.map * (unit, unit) Core.generic_fun_map) * unit Core.generic_impl) ->

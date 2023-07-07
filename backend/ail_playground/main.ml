@@ -53,7 +53,7 @@ let frontend cpp_str filename =
   Cerb_global.(set_cerb_conf "Ail_playground" false Random false Basic false false false false);
   load_core_stdlib ()                                  >>= fun stdlib ->
   load_core_impl stdlib impl_name                      >>= fun impl   ->
-  c_frontend (conf, io) (stdlib, impl) ~filename
+  c_frontend_and_elaboration (conf, io) (stdlib, impl) ~filename
 
 
 let cpp_str =

@@ -34,8 +34,8 @@ let io, get_progress =
                       return ()
       end;
     warn = begin
-      fun mk_str -> Cerb_debug.warn [] mk_str;
-                    return ()
+      fun ?(always=false) mk_str -> Cerb_debug.warn ~always [] mk_str;
+                                    return ()
       end;
   }, fun () -> !progress
 
@@ -45,7 +45,7 @@ let frontend (conf, io) filename core_std =
   if Filename.check_suffix filename ".co" || Filename.check_suffix filename ".o" then
     return @@ read_core_object core_std filename
   else if Filename.check_suffix filename ".c" then
-    c_frontend (conf, io) core_std ~filename >>= fun (_, _, core_file) ->
+    c_frontend_and_elaboration (conf, io) core_std ~filename >>= fun (_, _, core_file) ->
     core_passes (conf, io) ~filename core_file
   else if Filename.check_suffix filename ".core" then
     core_frontend (conf, io) core_std ~filename
@@ -231,7 +231,7 @@ let cerberus debug_level progress core_obj
         begin match files with
           | [filename] ->
             prelude >>= fun core_std ->
-            c_frontend (conf, io) core_std ~filename >>= fun (_, ail_opt, core) ->
+            c_frontend_and_elaboration (conf, io) core_std ~filename >>= fun (_, ail_opt, core) ->
             core_passes (conf, io) ~filename core >>= fun core ->
             ignore @@ Bmc.bmc core (Option.map snd ail_opt);
             return success
@@ -244,7 +244,7 @@ let cerberus debug_level progress core_obj
         begin match files with
           | [filename] ->
             prelude >>= fun core_std ->
-            c_frontend (conf, io) core_std filename >>= fun (_, ail_opt, core) ->
+            c_frontend_and_elaboration (conf, io) core_std filename >>= fun (_, ail_opt, core) ->
             typed_core_passes (conf, io) core >>= fun (core, _) ->
             ignore (Absint.solve absdomain core);
             return success

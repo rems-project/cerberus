@@ -66,7 +66,7 @@ let frontend incl_dirs incl_files astprints filename state_file =
   let@ stdlib = load_core_stdlib () in
   let@ impl = load_core_impl stdlib impl_name in
   let conf = Setup.conf incl_dirs incl_files astprints in
-  let@ (_, ail_prog_opt, prog0) = c_frontend ~cnnames:cn_builtin_fun_names (conf, io) (stdlib, impl) ~filename in
+  let@ (_, ail_prog_opt, prog0) = c_frontend_and_elaboration ~cnnames:cn_builtin_fun_names (conf, io) (stdlib, impl) ~filename in
   let markers_env, (_, ail_prog) = Option.get ail_prog_opt in
   Tags.set_tagDefs prog0.Core.tagDefs;
   let prog1 = Remove_unspecs.rewrite_file prog0 in

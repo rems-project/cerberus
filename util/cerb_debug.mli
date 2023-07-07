@@ -23,7 +23,7 @@ val print_success: string -> unit
 val print_debug: int -> domain list -> (unit -> string) -> unit
 val print_debug_located: int -> domain list -> Cerb_location.t -> (unit -> string) -> unit
 val print_unsupported: string -> unit
-val warn: domain list -> (unit -> string) -> unit
+val warn: ?always:bool -> domain list -> (unit -> string) -> unit
 
 (* val print_deubg2: string -> 'a -> 'a *)
 
