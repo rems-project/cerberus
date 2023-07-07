@@ -146,6 +146,22 @@ let gen_typing_type_of_constant loc iCst =
           E.return (Concrete ity)
   end
 
+(* the GCC documentation says "he compound statement should be an expression followed by a semicolon", otherwise the type is void *)
+val     typeof_statement_as_expression: statement genTypeCategory -> genTypeCategory
+let rec typeof_statement_as_expression (AnnotatedStatement _ _ stmt_) =
+  let void_gtc = GenRValueType GenVoid in
+  match stmt_ with
+    | AilSexpr (AnnotatedExpression gtc _ _ _) ->
+        gtc
+    | AilSlabel _ s _ ->
+        typeof_statement_as_expression s
+    | AilSmarker _ s ->
+        typeof_statement_as_expression s
+    | _ ->
+        void_gtc
+  end
+
+
 (* STD §6.5.16.1#1 *)
 val well_typed_assignment: sigma unit -> bool -> assignment_violation -> Loc.t -> ctype -> genType -> expression genTypeCategory -> E.errorM unit
 let well_typed_assignment s is_init f loc ty1 gty2 e2 =
@@ -484,9 +500,14 @@ let rec typecheck_constant loc cst =
         E.return (GenTypes.GenUnion tag_sym)
   end
 
-val annotate_rvalue: sigma unit -> gamma -> expression unit -> E.errorM (expression genTypeCategory * genType)
-val annotate_assignee: sigma unit -> gamma -> bool -> assignment_violation -> Loc.t -> ctype -> expression unit -> E.errorM (expression genTypeCategory)
+val annotate_rvalue:
+  (sigma unit -> gamma -> bindings -> list (statement unit) -> E.errorM (list (statement genTypeCategory))) ->
+  sigma unit -> gamma -> expression unit -> E.errorM (expression genTypeCategory * genType)
+val annotate_assignee:
+  (sigma unit -> gamma -> bindings -> list (statement unit) -> E.errorM (list (statement genTypeCategory))) ->
+  sigma unit -> gamma -> bool -> assignment_violation -> Loc.t -> ctype -> expression unit -> E.errorM (expression genTypeCategory)
 val annotate_arguments:
+  (sigma unit -> gamma -> bindings -> list (statement unit) -> E.errorM (list (statement genTypeCategory))) ->
   sigma unit -> gamma -> Loc.t -> bool -> list (expression unit) -> maybe (list (qualifiers * ctype * bool)) ->
   E.errorM (list (expression genTypeCategory))
 
@@ -510,20 +531,22 @@ type annotation_context =
     (* otherwise *)
   | CTXother
 
-val     annotate_expression: sigma unit -> gamma -> annotation_context -> expression unit -> E.errorM (expression genTypeCategory)
-let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc expr_) =
-  let annotate_expression = annotate_expression sigm gamm in
-  let annotate_rvalue     = annotate_rvalue sigm gamm     in
-  let annotate_assignee   = annotate_assignee sigm gamm   in
+val annotate_expression:
+  (sigma unit -> gamma -> bindings -> list (statement unit) -> E.errorM (list (statement genTypeCategory))) ->
+  sigma unit -> gamma -> annotation_context -> expression unit -> E.errorM (expression genTypeCategory)
+let rec annotate_expression annotate_block sigm gamm ctx (AnnotatedExpression () std_annots loc expr_) =
+  let annotate_expression = annotate_expression annotate_block sigm gamm in
+  let annotate_rvalue     = annotate_rvalue annotate_block sigm gamm     in
+  let annotate_assignee   = annotate_assignee annotate_block sigm gamm   in
   let annotate_arguments loc is_variadic args = function
     | Just params ->
-        annotate_arguments_aux false sigm gamm (List.length args) (List.length params) loc is_variadic args params
+        annotate_arguments_aux false annotate_block sigm gamm (List.length args) (List.length params) loc is_variadic args params
     | Nothing ->
         error "annotate_arguments ==> no proto"
   end in
   let annotate_and_cast_arguments loc is_variadic args = function
     | Just params ->
-        annotate_arguments_aux true sigm gamm (List.length args) (List.length params) loc is_variadic args params
+        annotate_arguments_aux true annotate_block sigm gamm (List.length args) (List.length params) loc is_variadic args params
     | Nothing ->
         error "annotate_and_cast_arguments ==> no proto"
   end in
@@ -717,7 +740,7 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
         if    (AAux.is_complete sigm ty && AAux.is_object ty)
            || (AAux.is_array_unknown_size ty && not (AAux.is_vla ty)) then
           (* TODO: check that *)
-          annotate_definition_aux sigm gamm (ty, e) >>= fun a_e ->
+          annotate_definition_aux annotate_block sigm gamm (ty, e) >>= fun a_e ->
           E.add "§6.5.2.5#4" >>
           E.return (AilEcompound qs ty a_e, GenLValueType qs ty false)
         else
@@ -1589,8 +1612,20 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
     | AilEatomic _ ->
         (* This should be impossible because the desugaring doesn't emit any AilEatomic *)
         error "annotate_expression(AilEatomic)"
-    | AilEgcc_statement _ _ ->
-        E.return (AilEgcc_statement [] [], GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))) (*TODO*))
+    | AilEgcc_statement bs ss ->
+      AilTyping.well_formed_bindings loc sigm bs >>= fun () ->
+        if sigma_fresh_bindings bs sigm then
+          annotate_block sigm gamm bs ss >>= fun ss' ->
+          match List.dest_init ss' with
+            | Nothing ->
+                E.return (AilEgcc_statement bs [], GenRValueType GenVoid)
+            | Just (ss', last_s') ->
+                (* if last_s is of the form l1: ... ln: E; then we use the type of E otherwise void *)
+                  let gtc = typeof_statement_as_expression last_s' in
+                E.return (AilEgcc_statement bs (ss' ++ [last_s']), gtc)
+          end
+        else
+          error "annotate_statement: sigma_fresh bindings failed in a AilSblock"
   end
   >>= fun (expr_', gtc) ->
   E.unpack >>= fun annots ->
@@ -1764,8 +1799,8 @@ and perform_decays sigm ctx a_expr =
 
 
 
-and annotate_rvalue sigm gamm expr =
-  annotate_expression sigm gamm CTXother expr >>= fun (AnnotatedExpression gtc std_annots loc expr_) ->
+and annotate_rvalue annotate_block sigm gamm expr =
+  annotate_expression annotate_block sigm gamm CTXother expr >>= fun (AnnotatedExpression gtc std_annots loc expr_) ->
    E.return match gtc with
      | GenRValueType gty ->
          (AnnotatedExpression (GenRValueType gty) std_annots loc expr_, gty)
@@ -1774,8 +1809,8 @@ and annotate_rvalue sigm gamm expr =
    end
 
 
-and annotate_assignee sigm gamm is_init a_ctxt loc ty1 e2 =
-  annotate_rvalue sigm gamm e2 >>= fun (e2, gty2) ->
+and annotate_assignee annotate_block sigm gamm is_init a_ctxt loc ty1 e2 =
+  annotate_rvalue annotate_block sigm gamm e2 >>= fun (e2, gty2) ->
   well_typed_assignment sigm is_init a_ctxt loc ty1 gty2 e2 >>
   if AilTypesAux.is_atomic ty1 && not (GenTypesAux.is_atomic gty2) then
     E.return (AnnotatedExpression (GenRValueType (GenAtomic gty2)) [] loc (AilEatomic e2))
@@ -1783,10 +1818,10 @@ and annotate_assignee sigm gamm is_init a_ctxt loc ty1 e2 =
     E.return e2
 
 
-and annotate_arguments_aux add_casts sigm gamm n_args n_params loc is_variadic args params =
-  let annotate_expression = annotate_expression sigm gamm CTXother in
-  let annotate_assignee   = annotate_assignee sigm gamm false FunctionParameterAsSimpleAssignment in
-  let annotate_arguments_aux = annotate_arguments_aux add_casts sigm gamm n_args n_params loc is_variadic in
+and annotate_arguments_aux add_casts annotate_block sigm gamm n_args n_params loc is_variadic args params =
+  let annotate_expression = annotate_expression annotate_block sigm gamm CTXother in
+  let annotate_assignee   = annotate_assignee annotate_block sigm gamm false FunctionParameterAsSimpleAssignment in
+  let annotate_arguments_aux = annotate_arguments_aux add_casts annotate_block sigm gamm n_args n_params loc is_variadic in
   match (args, params) with
     | ([], []) ->
         let () = Debug.print_debug 2 [] (fun () ->
@@ -1918,7 +1953,7 @@ and annotate_initialization sigm gamm ty e =
 
 
 
-and annotate_definition_aux sigm gamm (ty, e) =
+and annotate_definition_aux annotate_block sigm gamm (ty, e) =
   if    (AAux.is_array ty --> AAux.has_unknown_size sigm ty)
      || (AAux.is_complete_object sigm ty --> not (AAux.is_vla ty)) then
     if AAux.atomic_qualified_unqualified AAux.is_scalar ty then
@@ -1926,13 +1961,13 @@ and annotate_definition_aux sigm gamm (ty, e) =
       (* NOTE: since we are not passing a `qs' with `ty' to annotate_assignee,
          we are indeed unqualifying the scalar type *)
       (* TODO: add location *)
-      annotate_assignee sigm gamm true InitializationAsSimpleAssignment Loc.unknown ty e
+      annotate_assignee annotate_block sigm gamm true InitializationAsSimpleAssignment Loc.unknown ty e
       
     (* TODO: "(...) that has automatic storage duration" *)
     else if AAux.atomic_qualified_unqualified AAux.is_struct_or_union ty then
       (* TODO: check *)
       E.add "§6.7.9#13" >>
-      annotate_assignee sigm gamm true InitializationAsSimpleAssignment Loc.unknown ty e
+      annotate_assignee annotate_block sigm gamm true InitializationAsSimpleAssignment Loc.unknown ty e
       (* annotate_rvalue sigm gamm e >>= fun (a_e, gty) ->
       AilEassign
       (* TODO: need to make sure that gty is compatible with ty *)
@@ -1954,7 +1989,7 @@ and annotate_definition_aux sigm gamm (ty, e) =
           CTXarray_init
         else
           CTXother in
-      annotate_expression sigm gamm ctx e >>= fun a_e ->
+      annotate_expression annotate_block sigm gamm ctx e >>= fun a_e ->
         let () = Debug.warn [Debug.DB_ail_typing]
           (fun () -> "(UNSURE) for the definition of arrays the compatilibity of types is checked for they unqualified versions and ignoring the elem_qs") in
       match (ty, GenTypes.genTypeCategoryOf a_e) with
@@ -2009,11 +2044,13 @@ and annotate_definition_aux sigm gamm (ty, e) =
         InitialisedIncomplete ty in
     E.constraint_violation (Loc.locOf e) (IllegalInitialisation kind)
 
-val annotate_definition: sigma unit -> gamma -> (Symbol.sym * expression unit) -> E.errorM (Symbol.sym * expression genTypeCategory)
-let annotate_definition sigm gamm (sym, e) =
+val annotate_definition:
+  (sigma unit -> gamma -> bindings -> list (statement unit) -> E.errorM (list (statement genTypeCategory))) ->
+  sigma unit -> gamma -> (Symbol.sym * expression unit) -> E.errorM (Symbol.sym * expression genTypeCategory)
+let annotate_definition annotate_block sigm gamm (sym, e) =
   match List.lookup sym gamm with
     | Just (_, _, sym_qs, sym_ty) ->
-        annotate_definition_aux sigm gamm (sym_ty, e) >>= fun a_e ->
+        annotate_definition_aux annotate_block sigm gamm (sym_ty, e) >>= fun a_e ->
         E.return (sym, a_e)
     | Nothing ->
         error "annotate_definition: symbol not found in the context"
@@ -2021,32 +2058,23 @@ let annotate_definition sigm gamm (sym, e) =
 
 
 val annotate_definitions:
+  (sigma unit -> gamma -> bindings -> list (statement unit) -> E.errorM (list (statement genTypeCategory))) ->
   sigma unit -> gamma -> list (Symbol.sym * expression unit) -> E.errorM (list (Symbol.sym * expression genTypeCategory))
-let rec annotate_definitions sigm gamm = function
+let rec annotate_definitions annotate_block sigm gamm = function
   | [] ->
       E.return []
   | d :: ds ->
-      annotate_definition  sigm gamm d  >>= fun d  ->
-      annotate_definitions sigm gamm ds >>= fun ds ->
+      annotate_definition  annotate_block sigm gamm d  >>= fun d  ->
+      annotate_definitions annotate_block sigm gamm ds >>= fun ds ->
       E.return (d :: ds)
 end
 
-val sigma_fresh_bindings: forall 'a. bindings -> sigma 'a -> bool
-let sigma_fresh_bindings bs S =
-  List.all (fun (ident, _) ->
-    match List.lookup ident S.declarations with
-      | Just _ -> false
-      | Nothing -> true
-    end) bs
 
 val     annotate_statement_: Loc.t -> sigma unit -> gamma -> ctype -> statement_ unit -> E.errorM (statement_ genTypeCategory)
 let rec annotate_statement_ loc sigm gamm ty stmt =
-  let annotate_expression = annotate_expression sigm gamm CTXother   in
-  let annotate_rvalue     = annotate_rvalue sigm gamm       in
-  let annotate_block bindings =
-    (* WIP *)
-    let add_bindings bs acc = foldl (fun acc b -> b :: acc) bs acc in
-    E.mapM (annotate_statement sigm (add_bindings bindings gamm) ty) in
+  let annotate_block = annotate_block (Just ty) in
+  let annotate_expression = annotate_expression annotate_block sigm gamm CTXother in
+  let annotate_rvalue     = annotate_rvalue annotate_block sigm gamm in
   let annotate_statement  = annotate_statement sigm gamm ty in
   
   match stmt with
@@ -2058,7 +2086,7 @@ let rec annotate_statement_ loc sigm gamm ty stmt =
     | AilSblock bindings ss ->
         AilTyping.well_formed_bindings loc sigm bindings >>
         if sigma_fresh_bindings bindings sigm then
-          annotate_block bindings ss >>= fun ss' ->
+          annotate_block sigm gamm bindings ss >>= fun ss' ->
           E.return (AilSblock bindings ss')
         else
           error "annotate_statement: sigma_fresh bindings failed in a AilSblock"
@@ -2097,7 +2125,7 @@ let rec annotate_statement_ loc sigm gamm ty stmt =
         else
           E.constraint_violation loc NonVoidReturnVoidFunction
     | AilSreturn e ->
-        annotate_assignee sigm gamm false ReturnAsSimpleAssignment (with_cursor_from (locOf e) loc) ty e >>= fun e' ->
+        annotate_assignee annotate_block sigm gamm false ReturnAsSimpleAssignment (with_cursor_from (locOf e) loc) ty e >>= fun e' ->
         E.return (AilSreturn e')
     | AilSswitch e s ->
         annotate_rvalue e >>= fun (e', gty) ->
@@ -2122,7 +2150,7 @@ let rec annotate_statement_ loc sigm gamm ty stmt =
     | AilSgoto sym ->
         E.return (AilSgoto sym)
     | AilSdeclaration sym_es ->
-        annotate_definitions sigm gamm sym_es >>= fun sym_es' ->
+        annotate_definitions annotate_block sigm gamm sym_es >>= fun sym_es' ->
         E.return (AilSdeclaration sym_es')
     | AilSpar ss ->
         E.mapM annotate_statement ss >>= fun ss' ->
@@ -2139,11 +2167,25 @@ and annotate_statement sigm gamm ty (AnnotatedStatement loc attrs stmt) =
   annotate_statement_ loc sigm gamm ty stmt >>= fun stmt' ->
   E.return (AnnotatedStatement loc attrs stmt')
 
+(* ty_opt should be Nothing if the annotate_block is passed to a function
+   annotating outside of the body of a function *)
+and annotate_block ty_opt sigm gamm bs ss =
+  (* WIP *)
+  let add_bindings z acc = foldl (fun acc b -> b :: acc) z acc in
+  match ty_opt with
+    | Nothing ->
+        (* TODO: this should already be caught by the desugaring, but better create a proper constraint violation variant *)
+        error "TODO msg: Statement expressions are only allowed inside functions"
+    | Just ty ->
+        E.mapM (annotate_statement sigm (add_bindings bs gamm) ty) ss
+  end
 
-val annotate_block:
+
+
+(* val annotate_block:
       sigma unit -> gamma -> ctype -> list (statement unit) -> E.errorM (list (statement genTypeCategory))
 let annotate_block sigm gamm ty stmts =
-  E.mapM (annotate_statement sigm gamm ty) stmts
+  E.mapM (annotate_statement sigm gamm ty) stmts *)
 
 val annotate_sigma: sigma unit -> E.errorM (sigma genTypeCategory)
 let annotate_sigma sigm =
@@ -2166,7 +2208,7 @@ let annotate_sigma sigm =
     match List.lookup ident sigm.declarations with
       | Just (loc, _, Decl_object _ _ _ (* qs *) ty) ->
           (* TODO: qualifiers?; storage duration? *)
-          annotate_definition_aux sigm [] (ty, e) >>= fun def ->
+          annotate_definition_aux (annotate_block Nothing) sigm [] (ty, e) >>= fun def ->
           E.return (ident, def)
       | _ ->
           error "annotate_sigma: object definition must have a declaration"

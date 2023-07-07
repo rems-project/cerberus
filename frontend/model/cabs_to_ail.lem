@@ -1488,6 +1488,10 @@ type struct_or_union =
   | UNION
 
 
+type stmt_context = <|
+  (* switch_stack: list switch_info; *)
+  cont_ident_opt: maybe Symbol.identifier; (* Just ..., if inside a loop *)
+|>
 
 
 val     desugar_type_specifiers: list cabs_type_specifier -> E.desugM (Ctype.qualifiers * Ctype.ctype)
@@ -1701,7 +1705,7 @@ let rec desugar_type_specifiers specs =
               desugar_expression e >>= fun d_e  ->
               E.get_sigma_sofar    >>= fun sigm ->
               E.get_gamma_sofar    >>= fun gamm ->
-              match ErrorMonad.runErrorMonad (GenTyping.annotate_expression sigm gamm GenTyping.CTXsizeof d_e) with
+              match ErrorMonad.runErrorMonad (GenTyping.annotate_expression (GenTyping.annotate_block Nothing) sigm gamm GenTyping.CTXsizeof d_e) with
               | Left (loc, err) ->
                   E.fail_ailtyping loc err
               | Right a_expr ->
@@ -2322,7 +2326,7 @@ STD_ "§6.5.3.1#3" $
           desugar_expression e >>= fun d_e  ->
           E.get_sigma_sofar    >>= fun sigm ->
           E.get_gamma_sofar    >>= fun gamm ->
-          match ErrorMonad.runErrorMonad (GenTyping.annotate_expression sigm gamm GenTyping.CTXsizeof d_e) with
+          match ErrorMonad.runErrorMonad (GenTyping.annotate_expression (GenTyping.annotate_block Nothing) sigm gamm GenTyping.CTXsizeof d_e) with
             | Left (loc, err) ->
                 E.fail_ailtyping loc err
             | Right a_expr ->
@@ -2405,7 +2409,9 @@ STD_ "§6.5.3.1#3" $
     | CabsEbmc_assume e ->
         AilEbmc_assume <$> desugar_expression e
     | CabsEgcc_statement ss ->
-        E.return (AilEgcc_statement [] [])
+        let ctx = <| cont_ident_opt= Nothing |> in
+        desugar_block_statement (desugar_statement_aux ctx) ss >>= fun (bs, d_ss) ->
+        E.return (AilEgcc_statement bs d_ss) 
     | CabsEcondGNU e1 e3 ->
         (* TODO: add extension warning *)
         AilEcond
@@ -3439,8 +3445,8 @@ and desugar_and_register_static_assert_declaration sa_decl =
 
 
 (* TODO: this is broken *)
-val desugar_declaration_base: Annot.attributes -> specifiers -> list init_declarator -> E.desugM (list (ail_identifier * expression unit))
-let desugar_declaration_base attrs specifs idecltors =
+(* val desugar_declaration_base: Annot.attributes -> specifiers -> list init_declarator -> E.desugM (list (ail_identifier * expression unit)) *)
+and desugar_declaration_base attrs specifs idecltors =
   E.print_debugM 2 (fun () ->
     "BROKEN: desugar_declaration_base"
   ) >>= fun () ->
@@ -3549,13 +3555,55 @@ let desugar_declaration_base attrs specifs idecltors =
           ) [] idecltors >>= (List.reverse |- E.return)
 
 
+and desugar_block_statement self ss =
+(* TODO: STD check + annot *)
+E.fresh_block_scope >>= fun scope ->
+  E.collect_with_scope scope (
+    E.mapM self ss
+  ) >>= fun (bs_, d_ss) ->
+  
+  let bs = List.filter (fun (_, ((_, dur, _), _, _, _)) ->
+    match dur with
+      | Static ->
+          false
+      | Thread ->
+          false
+      | _ ->
+          true
+    end) bs_ in
+  
+  (* this is removing unnecessary blocks and skips introduced by the desugared.
+      TODO: check carefully that we don't remove source blocks *)
+  let d_ss' =
+    List.foldr (fun z acc ->
+      match z with
+        | (CabsStatement _ _ CabsSnull, AnnotatedStatement _ _ AilSskip) ->
+            (* this is the case of a block already present in the Cabs code. *)
+            snd z :: acc
+        | (CabsStatement _ _ _, AnnotatedStatement _ attrs AilSskip) ->
+            if attrs = Annot.no_attributes then
+              acc
+            else
+              snd z :: acc
+        | (CabsStatement _ _ (CabsSblock _), AnnotatedStatement _ _ (AilSblock _ _)) ->
+            (* this is the case of a block already present in the Cabs code. *)
+            snd z :: acc
+        | (_, AnnotatedStatement _ attrs (AilSblock [] xs)) ->
+            if attrs = Annot.no_attributes then
+              (* here a block with no local variables was introduced by the desugaring *)
+              xs ++ acc
+            else
+              (* we keep it if there are attributes *)
+              snd z :: acc
+        | _ ->
+            snd z :: acc
+      end
+    ) [] (List.zip ss d_ss) in
+  
+  E.return (bs, d_ss')
 
-type stmt_context = <|
-  (* switch_stack: list switch_info; *)
-  cont_ident_opt: maybe Symbol.identifier; (* Just ..., if inside a loop *)
-|>
 
-let rec desugar_statement_aux ctx (CabsStatement loc attrs stmt_) =
+and desugar_statement_aux ctx (CabsStatement loc attrs stmt_) =
   let attrs_outer = attrs in
   let self = desugar_statement_aux ctx in
   AnnotatedStatement loc attrs <$>
@@ -3578,50 +3626,7 @@ let rec desugar_statement_aux ctx (CabsStatement loc attrs stmt_) =
           AilSdefault <$> self s
       
       | CabsSblock ss ->
-          (* TODO: STD check + annot *)
-          E.fresh_block_scope >>= fun scope ->
-          E.collect_with_scope scope (
-            E.mapM self ss
-          ) >>= fun (bs_, d_ss) ->
-          
-          let bs = List.filter (fun (_, ((_, dur, _), _, _, _)) ->
-            match dur with
-              | Static ->
-                  false
-              | Thread ->
-                  false
-              | _ ->
-                  true
-            end) bs_ in
-          
-          (* this is removing unnecessary blocks and skips introduced by the desugared.
-             TODO: check carefully that we don't remove source blocks *)
-          let d_ss' =
-            List.foldr (fun z acc ->
-              match z with
-                | (CabsStatement _ _ CabsSnull, AnnotatedStatement _ _ AilSskip) ->
-                    (* this is the case of a block already present in the Cabs code. *)
-                    snd z :: acc
-                | (CabsStatement _ _ _, AnnotatedStatement _ attrs AilSskip) ->
-                    if attrs = Annot.no_attributes then
-                      acc
-                    else
-                      snd z :: acc
-                | (CabsStatement _ _ (CabsSblock _), AnnotatedStatement _ _ (AilSblock _ _)) ->
-                    (* this is the case of a block already present in the Cabs code. *)
-                    snd z :: acc
-                | (_, AnnotatedStatement _ attrs (AilSblock [] xs)) ->
-                    if attrs = Annot.no_attributes then
-                      (* here a block with no local variables was introduced by the desugaring *)
-                      xs ++ acc
-                    else
-                      (* we keep it if there are attributes *)
-                      snd z :: acc
-                | _ ->
-                    snd z :: acc
-              end
-            ) [] (List.zip ss d_ss) in
-          
+          desugar_block_statement self ss >>= fun (bs, d_ss') ->
           E.return (AilSblock bs d_ss')
       
       | CabsSdecl (Declaration_base attrs specifs idecltors) ->

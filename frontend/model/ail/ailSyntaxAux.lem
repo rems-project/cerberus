@@ -38,4 +38,10 @@ let memory_order_of_expr (AnnotatedExpression _ _ _ expr) =
     | _ -> Nothing
   end
 
-
+val sigma_fresh_bindings: forall 'a. bindings -> sigma 'a -> bool
+let sigma_fresh_bindings bs S =
+  List.all (fun (ident, _) ->
+    match List.lookup ident S.declarations with
+      | Just _ -> false
+      | Nothing -> true
+    end) bs
