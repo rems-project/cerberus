@@ -1589,8 +1589,8 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
     | AilEatomic _ ->
         (* This should be impossible because the desugaring doesn't emit any AilEatomic *)
         error "annotate_expression(AilEatomic)"
-    | AilEgcc_statement ->
-        E.return (AilEgcc_statement, GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))) (*TODO*))
+    | AilEgcc_statement _ _ ->
+        E.return (AilEgcc_statement [] [], GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))) (*TODO*))
   end
   >>= fun (expr_', gtc) ->
   E.unpack >>= fun annots ->

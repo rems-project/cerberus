@@ -2895,7 +2895,7 @@ else
       | A.AilEatomic e ->
           self e
       
-      | A.AilEgcc_statement ->
+      | A.AilEgcc_statement _ _ ->
           E.record_error_at loc "GCC statements as expressions not yet supported" >>= fun () ->
           E.return Caux.mk_skip_e
     end

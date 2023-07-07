@@ -587,15 +587,9 @@ let rec pp_expression_aux mk_pp_annot a_expr =
             pp_ail_keyword "atomic" ^^ P.parens (pp e)
         
         | AilEprint_type e ->
-(*            if !Cerb_debug.debug_level > 5 then
-*)
               pp_ail_keyword "__cerb_printtype" ^^ P.parens (pp e)
-(*
-            else
-              pp e
-*)
-        | AilEgcc_statement ->
-            pp_keyword "gcc_statement" (* TODO *)
+        | AilEgcc_statement (bs, ss) ->
+            P.parens (pp_statement_aux mk_pp_annot (AnnotatedStatement (Cerb_location.unknown, Annot.no_attributes, AilSblock (bs, ss))))
       )) in
   pp None a_expr
 
@@ -606,7 +600,7 @@ and pp_generic_association_aux pp_annot = function
       pp_keyword "default" ^^ P.colon ^^^ pp_expression_aux pp_annot e
 
 
-let rec pp_statement_aux pp_annot (AnnotatedStatement (_, _, stmt_)) =
+and pp_statement_aux pp_annot (AnnotatedStatement (_, _, stmt_)) =
   let pp_statement ?(is_control=false) (AnnotatedStatement (_, _, stmt_) as stmt) =
     begin match stmt_ with
       | AilSblock _ ->

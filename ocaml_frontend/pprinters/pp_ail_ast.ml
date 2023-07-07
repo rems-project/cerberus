@@ -243,28 +243,18 @@ let pp_alignment = function
   | AlignType ty ->
       !^ "align as" ^^ P.colon ^^^ P.squotes (pp_ctype no_qualifiers ty)
 
-let dtree_of_expression pp_annot expr =
+let dtree_of_binding (i, ((_, sd, is_reg), align_opt, qs, ty)) =
+  Dleaf (Pp_ail.pp_id i
+         ^^^ Pp_ail.pp_storageDuration sd
+         ^^^ pp_cond is_reg (pp_type_keyword "register") (P.squotes (pp_ctype qs ty))
+         ^^  P.optional (fun z -> P.space ^^ P.brackets (pp_alignment z)) align_opt)
+
+let rec dtree_of_expression pp_annot expr =
   let rec self (AnnotatedExpression (annot, std_annots, loc, expr_)) =
     let pp_std_annot =
       match std_annots with
         | [] -> P.empty
         | _  -> pp_ansi_format [Bold] (fun () -> P.brackets (semi_list P.string std_annots)) in
-
-(*
-    let dleaf_std_annot =
-      Dleaf (pp_ctor "STD" ^^^ P.brackets (semi_list P.string std_annots))
-    in
-    let add_std_annot ds =
-      match std_annots with
-      | [] -> ds
-      | _  -> dleaf_std_annot :: ds
-    in
-    let add_std_to_leaf pp =
-      match std_annots with
-      | [] -> Dleaf pp
-      | _ -> Dnode (pp, [dleaf_std_annot])
-    in
-*)
     let pp_expr_ctor str =
       pp_std_annot ^^^ pp_stmt_ctor str ^^^ Cerb_location.pp_location ~clever:true loc ^^^ pp_annot annot in
     let pp_implicit_ctor str =
@@ -433,20 +423,13 @@ let dtree_of_expression pp_annot expr =
           let d_ctor = pp_implicit_ctor "AilEatomic" in
           Dnode ( d_ctor
                 , (*add_std_annot*) [self e] )
-      | AilEgcc_statement ->
-          Dleaf ( pp_expr_ctor "AilEgcc_statement" )
+      | AilEgcc_statement (bs, ss) ->
+          Dnode ( pp_expr_ctor "AilEgcc_statement"
+                , Dnode (pp_ctor "Bindings", List.map dtree_of_binding bs) :: List.map (dtree_of_statement pp_annot) ss )
     end in
   self expr
 
-let dtree_of_binding (i, ((_, sd, is_reg), align_opt, qs, ty)) =
-  Dleaf (Pp_ail.pp_id i
-         ^^^ Pp_ail.pp_storageDuration sd
-         ^^^ pp_cond is_reg (pp_type_keyword "register") (P.squotes (pp_ctype qs ty))
-         ^^  P.optional (fun z -> P.space ^^ P.brackets (pp_alignment z)) align_opt)
-
-
-
-let rec dtree_of_statement pp_annot (AnnotatedStatement (loc, attrs, stmt_)) =
+and dtree_of_statement pp_annot (AnnotatedStatement (loc, attrs, stmt_)) =
   let dtree_of_expression = dtree_of_expression pp_annot in
   let dtree_of_statement = dtree_of_statement pp_annot in
   with_attributes attrs
