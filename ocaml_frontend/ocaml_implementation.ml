@@ -1,5 +1,17 @@
 open Ctype
 
+type type_alias_map = {
+  intN_t_alias: int -> integerBaseType option;
+  int_leastN_t_alias: int -> integerBaseType option;
+  int_fastN_t_alias: int -> integerBaseType option;
+  intmax_t_alias: integerBaseType;
+  intptr_t_alias: integerBaseType;
+  wchar_t_alias: integerType;
+  wint_t_alias: integerType;
+  size_t_alias: integerType;
+  ptrdiff_t_alias: integerType;
+}
+
 type implementation = {
   name: string;
   details: string;
@@ -14,8 +26,46 @@ type implementation = {
   alignof_fty: floatingType -> int option;
   register_enum: Symbol.sym -> Nat_big_num.num list -> bool;
   typeof_enum: Symbol.sym -> integerType;
+  type_alias_map: type_alias_map;
 }
 
+module type Implementation = sig
+  val impl: implementation
+end
+
+let normalise_integerType_ type_alias_map typeof_enum ity =
+  let aux_ibty = function
+    | IntN_t n ->
+        Option.get (type_alias_map.intN_t_alias n)
+    | Int_leastN_t n ->
+        Option.get (type_alias_map.int_leastN_t_alias n)
+    | Int_fastN_t n ->
+        Option.get (type_alias_map.int_fastN_t_alias n)
+    | Intmax_t ->
+        type_alias_map.intmax_t_alias
+    | Intptr_t ->
+        type_alias_map.intptr_t_alias
+    | ibty -> ibty in
+match ity with
+  | Signed ibty ->
+      Signed (aux_ibty ibty)
+  | Unsigned ibty ->
+      Unsigned (aux_ibty ibty)
+  | Enum tag_sym ->
+      typeof_enum tag_sym
+  | Wchar_t ->
+      type_alias_map.wchar_t_alias
+  | Wint_t ->
+      type_alias_map.wint_t_alias
+  | Size_t ->
+      type_alias_map.size_t_alias
+  | Ptrdiff_t ->
+      type_alias_map.ptrdiff_t_alias
+  | ity ->
+      ity
+
+let normalise_integerType impl =
+  normalise_integerType_ impl.type_alias_map impl.typeof_enum
 
 module DefaultImpl = struct
   let name = "clang9_x86_64-apple-darwin16.7.0"
@@ -88,42 +138,58 @@ module DefaultImpl = struct
           true
       | Ptraddr_t ->
           false
+  
+  let type_alias_map =
+    let n_t_aliases = function
+    | 8  -> Some Ichar
+    | 16 -> Some Short
+    | 32 -> Some Int_
+    | 64 -> Some Long
+    | _  -> None in
+    {
+    intN_t_alias= n_t_aliases;
+    int_leastN_t_alias= n_t_aliases;
+    int_fastN_t_alias= n_t_aliases;
+    intmax_t_alias= Long;
+    intptr_t_alias= Long;
+    wchar_t_alias= Signed Int_; (*TODO: check *)
+    wint_t_alias= Signed Int_;
+    size_t_alias= Unsigned Long;
+    ptrdiff_t_alias= Signed Long;
+  }
 
-  let sizeof_ity = function
-    | Char
-    | Bool ->
-        Some 1
-    | Signed ibty
-    | Unsigned ibty ->
-        Some begin match ibty with
-          | Ichar ->
-              1
-          | Short ->
-              2
-          | Int_ ->
-              4
-          | Long
-          | LongLong ->
-              8
-          | IntN_t n
-          | Int_leastN_t n
-          | Int_fastN_t n ->
-              n/8
-          | Intmax_t
-          | Intptr_t ->
-              8
-        end
-    | Enum ident ->
-        (* TODO *)
-        Some 4
-    | Wchar_t
-    | Wint_t ->
-        Some 4
-    | Size_t
-    | Ptrdiff_t ->
-        Some 8
-    | Ptraddr_t ->
-        Some 8
+  let sizeof_ity ity =
+    match normalise_integerType_ type_alias_map typeof_enum ity with
+      | Char
+      | Bool ->
+          Some 1
+      | Signed ibty
+      | Unsigned ibty ->
+          Some begin match ibty with
+            | Ichar ->
+                1
+            | Short ->
+                2
+            | Int_ ->
+                4
+            | Long
+            | LongLong ->
+                8
+            | IntN_t _
+            | Int_leastN_t _
+            | Int_fastN_t _
+            | Intmax_t
+            | Intptr_t ->
+                assert false
+          end
+      | Enum _
+      | Wchar_t
+      | Wint_t
+      | Size_t
+      | Ptrdiff_t ->
+          assert false
+      | Ptraddr_t ->
+          Some 8
 
   (* NOTE: the code is bit generic here to allow reusability *)
   let precision_ity ity =
@@ -144,41 +210,38 @@ module DefaultImpl = struct
     | RealFloating LongDouble ->
         Some 8 (* TODO:hack ==> 16 *)
 
-  let alignof_ity = function
-    | Char
-    | Bool ->
-        Some 1
-    | Signed ibty
-    | Unsigned ibty ->
-        Some begin match ibty with
-          | Ichar ->
-              1
-          | Short ->
-              2
-          | Int_ ->
-              4
-          | Long
-          | LongLong ->
-              8
-          | IntN_t n
-          | Int_leastN_t n
-          | Int_fastN_t n ->
-              n/8
-          | Intmax_t
-          | Intptr_t ->
-              8
-        end
-    | Enum ident ->
-        (* TODO *)
-        Some 4
-    | Wchar_t
-    | Wint_t ->
-        Some 4
-    | Size_t
-    | Ptrdiff_t ->
-        Some 8
-    | Ptraddr_t ->
-        Some 8
+  let alignof_ity ity =
+    match normalise_integerType_ type_alias_map typeof_enum ity with
+      | Char
+      | Bool ->
+          Some 1
+      | Signed ibty
+      | Unsigned ibty ->
+          Some begin match ibty with
+            | Ichar ->
+                1
+            | Short ->
+                2
+            | Int_ ->
+                4
+            | Long
+            | LongLong ->
+                8
+            | IntN_t _
+            | Int_leastN_t _
+            | Int_fastN_t _
+            | Intmax_t
+            | Intptr_t ->
+                assert false
+          end
+      | Enum _
+      | Wchar_t
+      | Wint_t
+      | Size_t
+      | Ptrdiff_t ->
+          assert false
+      | Ptraddr_t ->
+          Some 8
 
   let alignof_fty = function
     | RealFloating Float ->
@@ -203,11 +266,12 @@ module DefaultImpl = struct
     alignof_fty;
     register_enum;
     typeof_enum;
+    type_alias_map;
   }
 end
 
 
-module DefactoImpl = struct
+(* module DefactoImpl = struct
   include DefaultImpl
 
   (* TODO:
@@ -223,8 +287,12 @@ module DefactoImpl = struct
   let alignof_ity = function
     | Signed Intptr_t  | Unsigned Intptr_t -> Some 16
     | ity ->  DefaultImpl.alignof_ity ity
-
-end
+  
+  let impl = { DefaultImpl.impl with
+    sizeof_ity;
+    alignof_ity;
+  }
+end *)
 
 module MorelloImpl = struct
   include DefaultImpl
@@ -241,15 +309,21 @@ module MorelloImpl = struct
   let max_alignment =
     16
   
-  let alignof_ity = function
-    | Signed Intptr_t
-    | Unsigned Intptr_t -> Some 16
-    | ity ->  DefaultImpl.sizeof_ity ity
+  let type_alias_map = { DefaultImpl.type_alias_map with
+    intptr_t_alias= LongLong;
+  }
+  
+  let alignof_ity ity =
+    match normalise_integerType_ type_alias_map typeof_enum ity with
+      | Signed LongLong
+      | Unsigned LongLong -> Some 16
+      | ity ->  DefaultImpl.alignof_ity ity
 
-  let sizeof_ity = function
-    | Signed Intptr_t
-    | Unsigned Intptr_t -> Some 16
-    | ity ->  DefaultImpl.sizeof_ity ity
+  let sizeof_ity ity =
+    match normalise_integerType_ type_alias_map typeof_enum ity with
+      | Signed LongLong
+      | Unsigned LongLong -> Some 16
+      | ity ->  DefaultImpl.sizeof_ity ity
 
   let impl: implementation = {
     name;
@@ -265,181 +339,38 @@ module MorelloImpl = struct
     alignof_fty;
     register_enum;
     typeof_enum;
+    type_alias_map;
   }
 end
 
 
 (* LP64 *)
 module HafniumImpl = struct
+  include DefaultImpl
+
   let name = "hafnium_aarch64-none-eabi"
   let details = "TODO"
-  
-  let sizeof_pointer =
-    Some 8
-  
-  let alignof_pointer =
-    Some 8
-  
-  (* INTERNAL *)
-  let registered_enums =
-    ref []
-  
-  (* NOTE: for enums implementation we follow GCC, since Clang doesn't document
-     it's implementation details... *)
-  let register_enum tag_sym ns =
-    (* NOTE: we don't support GCC's -fshort-enums option *)
-    let ity =
-      if List.exists (fun n -> Nat_big_num.less n Nat_big_num.zero) ns then
-        Signed Int_
-      else
-        Unsigned Int_ in
-    if List.exists (fun (z, _) -> Symbol.symbol_compare z tag_sym = 0) !registered_enums then
-      false
-    else begin
-      registered_enums := (tag_sym, ity) :: !registered_enums;
-      true
-    end
-  
-  let typeof_enum tag_sym =
-    match List.find_opt (fun (z, _) -> Symbol.symbol_compare z tag_sym = 0) !registered_enums with
-      | None ->
-          failwith ("Hafnium impl => typeof_enum: '" ^
-                    Symbol.instance_Show_Show_Symbol_sym_dict.show_method tag_sym ^ "' was not registered")
-      | Some (_, z) ->
-          z
-  
-  let max_alignment =
-    8
 
-  let rec is_signed_ity = function
+  let is_signed_ity = function
     | Char ->
         false
-    | Bool ->
-        false
-    | Signed _ ->
-        true
-    | Unsigned _ ->
-        false
-    | Enum tag_sym ->
-        is_signed_ity (typeof_enum tag_sym)
-    | Wchar_t ->
-        true
-    | Wint_t ->
-        failwith "Hafnium is_signed Wint_t"
-    | Size_t ->
-        (* STD *)
-        false
-    | Ptrdiff_t ->
-        (* STD *)
-        true
-    | Ptraddr_t ->
-        (* STD *)
-        false
+    | ity -> DefaultImpl.is_signed_ity ity
 
-  let sizeof_ity = function
-    | Char ->
-        Some 1
-    | Bool ->
-        Some 1
-    | Signed ibty
-    | Unsigned ibty ->
-        Some begin match ibty with
-          | Ichar ->
-              1
-          | Short ->
-              2
-          | Int_ ->
-              4
-          | Long
-          | LongLong ->
-              8
-          | IntN_t n
-          | Int_leastN_t n
-          | Int_fastN_t n ->
-              n/8
-          | Intmax_t
-          | Intptr_t ->
-              8
-        end
-    | Enum _ ->
-        (* signed or unsigned int *)
-        Some 4
-    | Wchar_t ->
-        Some 4
-    | Wint_t ->
-        failwith "Hafnium sizeof Wint_t"
-    | Size_t ->
-        Some 8
-    | Ptrdiff_t ->
-        Some 8
-    | Ptraddr_t ->
-        Some 8
-
-  (* No trap representations *)
-  let precision_ity ity =
-    match sizeof_ity ity with
-    | Some n ->
-      if is_signed_ity ity then
-        Some (8*n-1)
-      else
-        Some (8*n)
-    | None ->
-      None
-  
-  let sizeof_fty = function
+  (* let sizeof_fty = function
     | RealFloating Float ->
         Some 4
     | RealFloating Double ->
         Some 8
     | RealFloating LongDouble ->
-        Some 16
-  
-  let alignof_ity = function
-    | Char ->
-        Some 1
-    | Bool ->
-        Some 1
-    | Signed ibty
-    | Unsigned ibty ->
-        Some begin match ibty with
-          | Ichar ->
-              1
-          | Short ->
-              2
-          | Int_ ->
-              4
-          | Long
-          | LongLong ->
-              8
-          | IntN_t n
-          | Int_leastN_t n
-          | Int_fastN_t n ->
-              n/8
-          | Intmax_t
-          | Intptr_t ->
-              8
-        end
-    | Enum _ ->
-        (* signed or unsigned int *)
-        Some 4
-    | Wchar_t ->
-        Some 4
-    | Wint_t ->
-        failwith "Hafnium alignof Wint_t"
-    | Size_t ->
-        Some 8
-    | Ptrdiff_t ->
-        Some 8
-    | Ptraddr_t ->
-        Some 8
+        Some 16 *)
 
-  let alignof_fty = function
+  (* let alignof_fty = function
     | RealFloating Float ->
         Some 4
     | RealFloating Double ->
         Some 8
     | RealFloating LongDouble ->
-        Some 16
+        Some 16 *)
 
   let impl: implementation = {
     name;
@@ -455,6 +386,7 @@ module HafniumImpl = struct
     alignof_fty;
     register_enum;
     typeof_enum;
+    type_alias_map;
   }
 end
 

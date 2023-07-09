@@ -398,7 +398,7 @@ val format_string_of_float: nat -> Float.float -> string
 declare ocaml target_rep function format_string_of_float = `Decode.format_string_of_float`
 
 let is_illtyped_conversion expected_ty arg_ty =
-  let arg_ty' = Implementation.normalise_enum arg_ty in
+  let arg_ty' = Implementation.normalise_ctype arg_ty in
   if expected_ty = arg_ty' then
     false
   else
@@ -436,10 +436,10 @@ let convert loc eval_conv prec_opt lm_opt cspec flags args =
             | Just expected_pred ->
                 (* let () = Debug.print_debug 0 [] (fun () -> "expected_ty= " ^ Pp.stringFromCore_ctype expected_ty) in *)
                 (* let () = Debug.print_debug 0 [] (fun () -> "arg_ty= " ^ Pp.stringFromCore_ctype arg_ty) in
-                let () = Debug.print_debug 0 [] (fun () -> "arg_ty'= " ^ Pp.stringFromCore_ctype (Implementation.normalise_enum arg_ty)) in *)
-                (* (expected_ty <> Implementation.normalise_enum arg_ty, _conv_ty_opt) *)
+                let () = Debug.print_debug 0 [] (fun () -> "arg_ty'= " ^ Pp.stringFromCore_ctype (Implementation.normalise_ctype arg_ty)) in *)
+                (* (expected_ty <> Implementation.normalise_ctype arg_ty, _conv_ty_opt) *)
                 (* (is_illtyped_conversion expected_ty arg_ty, _conv_ty_opt) *)
-                (not (expected_pred (Implementation.normalise_enum arg_ty)), _conv_ty_opt)
+                (not (expected_pred (Implementation.normalise_ctype arg_ty)), _conv_ty_opt)
             | Nothing ->
                 (false, _conv_ty_opt)
           end in
