@@ -594,13 +594,23 @@ let dtree_of_program pp_annot (_, sigm) =
           ] )
 
 let pp_annot gtc =
+  let mk_pp_alias (Ctype (_, ty_)) =
+    match ty_ with
+      | Basic (Integer ity) ->
+          let ity' = Ocaml_implementation.(normalise_integerType (get ()) ity) in
+          begin if not (Ctype.integerTypeEqual ity ity') then
+            fun z -> z ^^ P.colon ^^ P.squotes (Pp_ail.pp_basicType (Integer ity'))
+          else
+            Fun.id
+          end
+     | _ -> Fun.id in
   match gtc with
     | GenLValueType (qs, ty, isRegister) ->
         let qs_ty_doc =
           (* TODO: do the colour turn off in pp_ansi_format *)
           let saved = !Cerb_colour.do_colour in
           Cerb_colour.do_colour := false;
-          let ret = P.squotes (pp_ctype_human qs ty) in
+          let ret = mk_pp_alias ty (P.squotes (pp_ctype_human qs ty)) in
           Cerb_colour.do_colour := saved;
           ret in
         pp_ansi_format [Green] (fun () -> qs_ty_doc) ^^^
