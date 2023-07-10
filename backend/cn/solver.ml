@@ -632,6 +632,14 @@ module Translate = struct
          term (representable struct_decls ct t)
       | Good (ct, t) ->
          term (good_value struct_decls ct t)
+      | WrapI (ity, arg) ->
+         (* try to follow wrapI from runtime/libcore/std.core *)
+         let maxInt = Memory.max_integer_type ity in
+         let minInt = Memory.min_integer_type ity in
+         let dlt = Z.add (Z.sub maxInt minInt) (Z.of_int 1) in
+         let r = rem_f_ (arg, z_ dlt) in
+         let e = ite_ (le_ (r, z_ maxInt), r, sub_ (r, z_ dlt)) in
+         term e
       | MapConst (abt, t) -> 
          Z3.Z3Array.mk_const_array context (sort abt) (term t)
       | MapSet (t1, t2, t3) -> 
@@ -888,6 +896,7 @@ let provable ~loc ~solver ~global ~assumptions ~simp_ctxt ~pointer_facts lc =
      Cerb_debug.end_csv_timing "Solver.provable shortcut";
      rtrue ()
   | `No_shortcut lc ->
+     (*print stdout (item "lc" (LC.pp lc ^^ hardline));*)
      let Translate.{expr; it; qs} = Translate.goal context global lc in
      let nlc = Z3.Boolean.mk_not context expr in
      let extra1 = pointer_facts @ Translate.extra_assumptions assumptions qs

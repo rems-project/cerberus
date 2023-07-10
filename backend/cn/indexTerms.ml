@@ -68,6 +68,7 @@ let rec free_vars_ = function
   | ArrayToList (arr, i, len) -> free_vars_list [arr; i; len]
   | Representable (_sct, t) -> free_vars t
   | Good (_sct, t) -> free_vars t
+  | WrapI (_ity, t) -> free_vars t
   | Aligned {t; align} -> free_vars_list [t; align]
   | MapConst (_bt, t) -> free_vars t
   | MapSet (t1, t2, t3) -> free_vars_list [t1; t2; t3]
@@ -116,6 +117,7 @@ let rec fold_ f binders acc = function
   | ArrayToList (arr, i, len) -> fold_list f binders acc [arr; i; len]
   | Representable (_sct, t) -> fold f binders acc t
   | Good (_sct, t) -> fold f binders acc t
+  | WrapI (_ity, t) -> fold f binders acc t
   | Aligned {t; align} -> fold_list f binders acc [t; align]
   | MapConst (_bt, t) -> fold f binders acc t
   | MapSet (t1, t2, t3) -> fold_list f binders acc [t1; t2; t3]
@@ -233,6 +235,8 @@ let rec subst (su : typed subst) (IT (it, bt)) =
      IT (Representable (rt, subst su t), bt)
   | Good (rt, t) -> 
      IT (Good (rt, subst su t), bt)
+  | WrapI (ity, t) ->
+     IT (WrapI (ity, subst su t), bt)
   | Nil -> 
      IT (Nil, bt)
   | Cons (it1,it2) -> 
@@ -610,6 +614,8 @@ let representable_ (t, it) =
   IT (Representable (t, it), BT.Bool)
 let good_ (sct, it) =
   IT (Good (sct, it), BT.Bool)
+let wrapI_ (ity, arg) = 
+  IT (WrapI (ity, arg), BT.Integer)
 let alignedI_ ~t ~align =
   IT (Aligned {t; align}, BT.Bool)
 let aligned_ (t, ct) =

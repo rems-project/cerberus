@@ -79,6 +79,7 @@ type 'bt term_ =
   | Representable of Sctypes.t * 'bt term
   | Good of Sctypes.t * 'bt term
   | Aligned of {t : 'bt term; align : 'bt term}
+  | WrapI of Sctypes.IntegerTypes.t * 'bt term
   | MapConst of BaseTypes.t * 'bt term
   | MapSet of 'bt term * 'bt term * 'bt term
   | MapGet of 'bt term * 'bt term
@@ -247,9 +248,11 @@ let pp : 'bt 'a. ?atomic:bool -> ?f:('bt term -> Pp.doc -> Pp.doc) -> 'bt term -
        | Aligned t ->
           c_app !^"aligned" [aux false t.t; aux false t.align]
        | Representable (rt, t) ->
-          c_app !^"repr" [CT.pp rt; aux false t]
+          c_app (!^"repr" ^^ angles (CT.pp rt)) [aux false t]
        | Good (rt, t) ->
-          c_app !^"good" [CT.pp rt; aux false t]
+          c_app (!^"good" ^^ angles (CT.pp rt)) [aux false t]
+       | WrapI (ity, t) ->
+          c_app (!^"wrapI" ^^ angles (CT.pp (Integer ity))) [aux false t]
        (* end *)
     (* | List_op list_op -> *)
     (*    begin match list_op with *)

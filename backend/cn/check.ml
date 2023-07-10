@@ -324,13 +324,7 @@ let warn_uf loc operation =
 
 
 
-let wrapI loc ity arg =
-  (* try to follow wrapI from runtime/libcore/std.core *)
-  let maxInt = Memory.max_integer_type ity in
-  let minInt = Memory.min_integer_type ity in
-  let dlt = Z.add (Z.sub maxInt minInt) (Z.of_int 1) in
-  let r = rem_f_ (arg, z_ dlt) in
-  ite_ (le_ (r, z_ maxInt), r, sub_ (r, z_ dlt))
+
 
 
 (* try to follow is_representable_integer from runtime/libcore/std.core *)
@@ -449,7 +443,7 @@ let check_conv_int loc ~expect (ct : Sctypes.ctype) arg =
        begin match provable (t_ representable) with
        | `True -> return arg
        | `False ->
-          return (ite_ (representable, arg, wrapI loc ity arg))
+          return (ite_ (representable, arg, wrapI_ (ity, arg)))
        end
     | _ ->
        begin match provable (t_ (representable_ (ct, arg))) with
@@ -758,7 +752,7 @@ let rec check_pexpr (pe : 'bty mu_pexpr) ~(expect:BT.t)
      let@ () = WellTyped.ensure_base_type loc ~expect Integer in
      check_pexpr ~expect:Integer pe (fun arg ->
      let ity = Option.get (Sctypes.is_integer_type act.ct) in
-     k (wrapI loc ity arg))
+     k (wrapI_ (ity, arg)))
   | M_PEcatch_exceptional_condition (act, pe) ->
      let@ () = WellTyped.ensure_base_type loc ~expect Integer in
      let ity = Option.get (Sctypes.is_integer_type act.ct) in

@@ -507,6 +507,10 @@ module WIT = struct
           let@ () = WCT.is_ct loc ct in
           let@ t = check loc (BT.of_sct ct) t in
           return (IT (Good (ct, t),BT.Bool))
+       | WrapI (ity, t) ->
+          let@ () = WCT.is_ct loc (Integer ity) in
+          let@ t = check loc Integer t in
+          return (IT (WrapI (ity, t), BT.Integer))
        | Nil -> 
           fail (fun _ -> {loc; msg = Polymorphic_it it_})
        | Cons (t1,t2) ->
