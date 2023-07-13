@@ -1544,7 +1544,7 @@ Module CheriMemory
                            last_used        := Some alloc_id;
                          |})
                ;;
-               (if (CoqSwitches.has_switch (SW.get_swtiches tt) (CoqSwitches.SW_revocation INSTANT))
+               (if (andb is_dyn (CoqSwitches.has_switch (SW.get_swtiches tt) (CoqSwitches.SW_revocation INSTANT)))
                then revoke_pointers alloc_id
                else ret tt)
                ;;
