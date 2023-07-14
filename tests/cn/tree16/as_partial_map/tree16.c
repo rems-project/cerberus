@@ -158,6 +158,7 @@ lookup_rec (tree t, int *path, int i, int path_len, int *v)
     return 1;
   }
   /*@ apply mk_arc_lemma(Xs, i, path_len); @*/
+  /*@ extract Owned<int>, i; @*/
   /*@ instantiate i; @*/
   idx = path[i];
   /*@ extract Indirect_Tree, idx; @*/
