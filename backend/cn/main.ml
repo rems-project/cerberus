@@ -119,6 +119,7 @@ let main
       solver_logging
       output_decorated
       astprints
+      expect_failure
   =
   if json then begin
       if debug_level > 0 then
@@ -185,9 +186,10 @@ let main
        in
        Pp.maybe_close_times_channel ();
        match result with
-       | Ok () -> exit 0
-       | Error e when json -> TypeErrors.report_json ?state_file e; exit 1
-       | Error e -> TypeErrors.report ?state_file e; exit 1
+       | Ok () -> exit (if expect_failure then 1 else 0)
+       | Error e ->
+         if json then TypeErrors.report_json ?state_file e else TypeErrors.report ?state_file e;
+         exit (if expect_failure then 0 else 1)
  with
      | exc -> 
         Cerb_debug.maybe_close_csv_timing_file ();
@@ -292,6 +294,10 @@ let astprints =
   Arg.(value & opt (list (enum [("cabs", Cabs); ("ail", Ail); ("core", Core); ("types", Types)])) [] &
        info ["ast"] ~docv:"LANG1,..." ~doc)
 
+let expect_failure =
+  let doc = "invert return value to 1 if type checks pass and 0 on failure" in
+  Arg.(value & flag & info["expect-failure"] ~doc)
+
 
 let () =
   let open Term in
@@ -316,6 +322,7 @@ let () =
       random_seed $
       solver_logging $
       output_decorated $
-      astprints
+      astprints $
+      expect_failure
   in
   Stdlib.exit @@ Cmd.(eval (v (info "cn") check_t))
