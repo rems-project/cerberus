@@ -6,7 +6,7 @@ DIRNAME=$(dirname $0)
 
 set -e
 
-SUCC=$(find $DIRNAME/cn -name '*.c' | grep -v '\.wrong\.c')
+SUCC=$(find $DIRNAME/cn -name '*.c' | grep -v '\.error\.c')
 
 for TEST in $SUCC
 do
@@ -14,7 +14,7 @@ do
   cn $TEST
 done
 
-FAIL=$(find $DIRNAME/cn -name '*.wrong.c')
+FAIL=$(find $DIRNAME/cn -name '*.error.c')
 
 for TEST in $FAIL
 do
