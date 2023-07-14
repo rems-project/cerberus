@@ -1766,6 +1766,8 @@ and perform_decays sigm ctx a_expr =
                   std_annots (Loc.locOf a_expr) (AilEfunction_decay a_expr)
             | GenArray elem_ty sz_opt ->
               match a_expr with
+                | AnnotatedExpression _ _ _ (AilEconst (ConstantIndeterminate _)) ->
+                    a_expr
                 | AnnotatedExpression _ _ _ (AilEarray false _ _) ->
                     (* NOTE: this case doesn't syntactically exist in C, since
                        array values don't exist *)
@@ -2022,7 +2024,10 @@ and annotate_definition_aux annotate_block sigm gamm (ty, e) =
               error ("WIP: annotate_definition_aux, is_array_of_character ty ==> " ^
                     Pp.stringFromAil_ctype no_qualifiers ty ^ " <===> " ^ Pp.stringFromAil_expression a_e)
             else
-              let () = Debug.print_debug 2 [] (fun () ->
+              let () = Debug.print_debug 0 [] (fun () ->
+                "a_e: " ^ Pp.stringFromAil_expression a_e
+              ) in
+              let () = Debug.print_debug 0 [] (fun () ->
                 "ty: " ^ Pp.stringFromAil_ctype no_qualifiers ty ^ " <--> gty: " ^
                 match GenTypes.genTypeCategoryOf a_e with
                   | GenLValueType qs' ty' _ ->

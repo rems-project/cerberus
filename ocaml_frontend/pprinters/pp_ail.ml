@@ -100,7 +100,6 @@ let pp_storageDuration = function
   | Static    -> pp_keyword "static"
   | Thread    -> pp_keyword "thread"
   | Automatic -> pp_keyword "automatic"
-  | Allocated -> pp_keyword "allocated"
 
 
 let pp_cond switch str =

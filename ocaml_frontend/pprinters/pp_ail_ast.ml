@@ -508,7 +508,6 @@ let pp_storageDuration = function
   | Static    -> pp_type_keyword "static"
   | Thread    -> pp_type_keyword "thread"
   | Automatic -> pp_type_keyword "automatic"
-  | Allocated -> pp_type_keyword "allocated"
 
 let dtree_of_typedef_attributes (sym, attrs) =
   with_attributes attrs begin

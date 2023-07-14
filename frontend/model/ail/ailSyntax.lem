@@ -115,7 +115,6 @@ type storageDuration [name = "^\\([a-z A-Z]*_\\)?dur[0-9]*'?$"] =
  | Static
  | Thread
  | Automatic
- | Allocated
 
 (* the boolean tells whether the object was declared with the register
  * storage-class *)

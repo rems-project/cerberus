@@ -3537,14 +3537,27 @@ and desugar_declaration_base attrs specifs idecltors =
                                 E.return (ty', (sym, d_e) :: acc)
                           end
                       | Nothing ->
-                          if dur = Static && not (List.elem SC_extern specifs.storage_classes) then
-                            E.get_tag_definitions >>= fun tagDefs ->
-                            E.register_global_object_definition sym (E.Definition (mk_zeroInit tagDefs cty)) >>= fun () ->
-                            E.return (cty, acc)
-                          else if dur = Thread then
-                            E.return (cty, acc)
-                          else
-                            E.return (cty, acc)
+                          match dur with
+                            | Static ->
+                                if not (List.elem SC_extern specifs.storage_classes) then
+                                  E.get_tag_definitions >>= fun tagDefs ->
+                                  E.register_global_object_definition sym (E.Definition (mk_zeroInit tagDefs cty)) >>= fun () ->
+                                  E.return (cty, acc)
+                                else
+                                  E.return (cty, acc)
+                            | Automatic ->
+                                if Global.backend_name () = "Cn" then
+                                  E.return (cty, acc)
+                                else
+                                  let d_e =
+                                    AnnotatedExpression () ["§6.2.4#6"] loc (
+                                      AilEconst (ConstantIndeterminate cty)
+                                    ) in
+                                  E.return (cty, (sym, d_e) :: acc)
+                            | Thread ->
+                                (* TODO check *)
+                                E.return (cty, acc)
+                          end
                     end >>= fun (ty', ret) ->
                     E.is_incomplete ty' >>= fun is_incomplete ->
                     if link = Linkage_none && is_incomplete then

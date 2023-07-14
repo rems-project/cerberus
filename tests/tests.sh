@@ -193,6 +193,7 @@ citests=(
   0322-invalid_function_declarators.error.c
   0323-nested_function_declarators.syntax-only.c
   0324-atomics.c
+  0328-indeterminate_block_declaration.c
 )
 
 # TESTS THAT ARE KNOW TO FAIL (for example .error test for which we need to improve the message)

@@ -88,8 +88,6 @@ let string_of_storageDuration = function
       "thread"
   | A.Automatic ->
       "automatic"
-  | A.Allocated ->
-      "allocated"
 end
 
 val desug_get_structDefs: map Symbol.sym tag_definition -> Symbol.sym -> Annot.attributes * bool * list (Symbol.identifier * (Annot.attributes * maybe Ctype.alignment * Ctype.qualifiers * Ctype.ctype)) * maybe Ctype.flexible_array_member
