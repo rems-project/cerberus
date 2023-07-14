@@ -20,7 +20,8 @@ Extraction Blacklist String List Char Core Monad Bool Vector Format Nat Int Opti
 
 (* Debugging print *)
 Extraction NoInline Common.Utils.print_msg.
-Extract Constant Common.Utils.print_msg => "print_endline".
+Extraction NoInline Common.Utils.sprint_msg.
+Extract Constant Common.Utils.print_msg => "Stdlib.prerr_endline".
 Extract Inlined Constant MorelloCapsGS.Capability_GS.strfcap => "strfcap".
 
 (* Used by Coq's Real library *)
