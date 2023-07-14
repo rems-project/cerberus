@@ -1425,6 +1425,7 @@ let normalise_file (markers_env, ail_prog) file =
       mu_call_funinfo = mu_call_funinfo;
     }
   in
+  Print.debug 3 (lazy (Print.headline "done core_to_mucore normalising file"));
   return file
 
 

@@ -1683,6 +1683,7 @@ let record_and_check_logical_functions funs =
      adding them, because they cannot depend on themselves*)
   let@ () =
     ListM.iterM (fun (name, def) -> 
+        debug 2 (lazy (headline ("checking welltypedness of function " ^ Sym.pp_string name)));
         let@ def = WellTyped.WLFD.welltyped def in
         add_logical_function name def
       ) nonrecursive
@@ -1698,6 +1699,7 @@ let record_and_check_logical_functions funs =
       ) recursive
   in
   ListM.iterM (fun (name, def) -> 
+      debug 2 (lazy (headline ("checking welltypedness of function " ^ Sym.pp_string name)));
       let@ def = WellTyped.WLFD.welltyped def in
       add_logical_function name def
     ) recursive
@@ -1708,6 +1710,7 @@ let record_and_check_resource_predicates preds =
     let@ () = ListM.iterM (fun (name, def) ->
         add_resource_predicate name { def with clauses = None }) preds in
     ListM.mapM (fun (name, def) ->
+      debug 2 (lazy (headline ("checking welltypedness of resource pred " ^ Sym.pp_string name)));
       let@ def = WellTyped.WRPD.welltyped def in
       return (name, def)) preds
   end in
@@ -1733,15 +1736,22 @@ let record_globals globs =
     ) globs 
 
 
-let wf_check_and_record_functions mu_funs mu_call_sigs =
-  let add fsym loc ft =
+let register_fun_syms mu_funs =
+  let add fsym loc =
     (* add to context *)
     (* let lc1 = t_ (ne_ (null_, sym_ (fsym, Loc))) in *)
     let lc2 = t_ (representable_ (Pointer Void, sym_ (fsym, Loc))) in
     let@ () = add_l fsym Loc (loc, lazy (Pp.item "global fun-ptr" (Sym.pp fsym))) in
     let@ () = add_cs loc [(* lc1; *) lc2] in
-    add_fun_decl fsym (loc, ft, Pmap.find fsym mu_call_sigs)
+    return ()
   in
+  PmapM.iterM (fun fsym def -> match def with
+    | M_Proc (loc, _, _, _) -> add fsym loc
+    | M_ProcDecl (loc, _) -> add fsym loc
+  ) mu_funs
+
+
+let wf_check_and_record_functions mu_funs mu_call_sigs =
   let welltyped_ping fsym =
     debug 2 (lazy (headline ("checking welltypedness of procedure " ^ Sym.pp_string fsym)))
   in
@@ -1752,7 +1762,7 @@ let wf_check_and_record_functions mu_funs mu_call_sigs =
          let@ args_and_body, ft = WellTyped.WProc.welltyped loc args_and_body in
          debug 6 (lazy (!^"function type" ^^^ Sym.pp fsym));
          debug 6 (lazy (CF.Pp_ast.pp_doc_tree (AT.dtree RT.dtree ft)));
-         let@ () = add fsym loc ft in
+         let@ () = add_fun_decl fsym (loc, ft, Pmap.find fsym mu_call_sigs) in
          begin match tr with
          | Trusted _ -> return ((fsym, (loc, ft)) :: trusted, checked)
          | Checked -> return (trusted, (fsym, (loc, args_and_body)) :: checked)
@@ -1760,7 +1770,7 @@ let wf_check_and_record_functions mu_funs mu_call_sigs =
       | M_ProcDecl (loc, ft) ->
          welltyped_ping fsym;
          let@ ft = WellTyped.WFT.welltyped "function" loc ft in
-         let@ () = add fsym loc ft in
+         let@ () = add_fun_decl fsym (loc, ft, Pmap.find fsym mu_call_sigs) in
          return (trusted, checked)
     ) mu_funs ([], [])
 
@@ -1808,6 +1818,9 @@ let wf_check_and_record_lemma (lemma_s, (loc, lemma_typ)) =
 
 let check mu_file stmt_locs o_lemma_mode = 
   Cerb_debug.begin_csv_timing () (*total*);
+
+  Pp.debug 3 (lazy (Pp.headline "beginning type-checking mucore file."));
+
   let@ () = set_statement_locs stmt_locs in
 
   let@ () = record_tagdefs mu_file.mu_tagDefs in
@@ -1818,12 +1831,23 @@ let check mu_file stmt_locs o_lemma_mode =
   let@ () = ListM.iterM (fun (s,pd) -> add_datatype_constr s pd)
               mu_file.mu_constructors in
 
+  let@ () = record_globals mu_file.mu_globs in
+  let@ () = register_fun_syms mu_file.mu_funs in
+
+  Pp.debug 3 (lazy (Pp.headline "added top-level types and constants."));
+
   let@ () = record_and_check_logical_functions mu_file.mu_logical_predicates in
   let@ () = record_and_check_resource_predicates mu_file.mu_resource_predicates in
-  let@ () = record_globals mu_file.mu_globs in
+
   let@ lemmata = ListM.mapM wf_check_and_record_lemma mu_file.mu_lemmata in
+
+  Pp.debug 3 (lazy (Pp.headline "type-checked CN top-level declarations."));
+
   let@ (_trusted, checked) = wf_check_and_record_functions mu_file.mu_funs
             mu_file.mu_call_funinfo in
+
+  Pp.debug 3 (lazy (Pp.headline "type-checked C functions and specifications."));
+
   Cerb_debug.begin_csv_timing () (*type checking functions*);
   let@ () = check_c_functions checked in
   Cerb_debug.end_csv_timing "type checking functions";
@@ -1834,6 +1858,7 @@ let check mu_file stmt_locs o_lemma_mode =
   | None -> return ()
   in
   Cerb_debug.end_csv_timing "total";
+  Pp.debug 3 (lazy (Pp.headline "done type-checking mucore file."));
   return ()
 
 
