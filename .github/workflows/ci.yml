@@ -6,6 +6,11 @@ on:
       - master
   # pull_request: {}
 
+# cancel in-progress job when a new push is performed
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     strategy:
