@@ -3534,7 +3534,7 @@ and desugar_declaration_base attrs specifs idecltors =
                             | Thread ->
                                 error "TODO: desugar_declaration_base, Thread duration"
                             | _ ->
-                                E.return (ty', (sym, d_e) :: acc)
+                                E.return (ty', (sym, Just d_e) :: acc)
                           end
                       | Nothing ->
                           match dur with
@@ -3549,11 +3549,7 @@ and desugar_declaration_base attrs specifs idecltors =
                                 if Global.backend_name () = "Cn" then
                                   E.return (cty, acc)
                                 else
-                                  let d_e =
-                                    AnnotatedExpression () ["§6.2.4#6"] loc (
-                                      AilEconst (ConstantIndeterminate cty)
-                                    ) in
-                                  E.return (cty, (sym, d_e) :: acc)
+                                  E.return (cty, (sym, Nothing) :: acc)
                             | Thread ->
                                 (* TODO check *)
                                 E.return (cty, acc)
@@ -3810,7 +3806,7 @@ and desugar_statement_aux ctx (CabsStatement loc attrs stmt_) =
                                   E.register_internal_object_declaration sym
                                     (ident_loc, dur, List.elem SC_register specifs.storage_classes, Nothing, qs, ty)
                                 end >>= fun () ->
-                                E.return ( (sym, d_e) :: acc1
+                                E.return ( (sym, Just d_e) :: acc1
                                          , (sym, ((ident_loc, dur, List.elem SC_register specifs.storage_classes), Nothing, qs, ty)) :: acc2 )
                             | Nothing ->
                                 let dur = determinate_storage_duration link specifs.storage_classes in
@@ -4511,7 +4507,7 @@ let desugar_and_register_function_definition (FunDef fundef_loc fundef_attrs spe
   else if specifs.alignment_specifiers <> [] then
     E.constraint_violation fundef_loc (IllegalAlignas IllegalAlignas_function)
   else
-    (* NOTE: §6.9.1#5 is enforces inside the following call to
+    (* NOTE: §6.9.1#5 is enforced inside the following call to
        'desugar_declarator' (see 'desugar_direct_declarator') *)
 
     E.fresh_block_scope >>= fun funblock_scope ->
