@@ -997,9 +997,17 @@ Module CheriMemory
     Z.eqb (AddressValue.to_Z (C.cap_get_value c)) 0.
 
 
+  (* NOTE: this function uses exact comparision of capabilities, including metadata! *)
   Definition is_dynamic c : memM bool :=
     get >>= fun st =>
         ret (List.existsb (C.eqb c) st.(dynamic_addrs)).
+
+  (* private *)
+  Definition is_dynamic_addr (a:Z) : memM bool :=
+    get >>= fun st =>
+        ret (List.existsb
+               (fun c => Z.eqb (AddressValue.to_Z (C.cap_get_value c)) a)
+               st.(dynamic_addrs)).
 
   Definition is_dead (alloc_id : storage_instance_id) : memM bool :=
     get >>= fun st =>
@@ -1442,23 +1450,28 @@ Module CheriMemory
     memM (bool* CapGhostState)
     :=
     (* mprint_msg ("maybe_revoke_pointer "  ++ String.hex_str addr) ;; *)
-    if (negb (fst meta)) then ret meta
+    if (negb (fst meta))
+    then ret meta (* the pointer is already untagged *)
     else
-      let bs := fetch_bytes st.(bytemap) addr IMP.get.(sizeof_pointer) in
-      '(_, mval, _) <-
-        serr2memM (abst DEFAULT_FUEL (fun _ => NoAlloc) st.(funptrmap) (fun _ => meta) addr
-                                                          (CoqCtype.mk_ctype_pointer CoqCtype.no_qualifiers CoqCtype.void) bs)
-      ;;
-      match mval with
-      | MVEpointer _ (PV _ (PVconcrete c)) =>
-          let '(t, gs) := meta  in
-          let ptr_base := fst (Bounds.to_Zs (C.cap_get_bounds c)) in
-          if andb (Z.leb alloc_base ptr_base) (Z.ltb ptr_base alloc_limit)
-          then ret (false, {| tag_unspecified := false; bounds_unspecified := gs.(bounds_unspecified) |})
-          else ret meta (* outside allocation. leave unchanged *)
-      | MVEunspecified _ => raise (InternalErr "unexpected unspec.")
-      | _ => raise (InternalErr "unexpected abst return value. Expecting concrete pointer.")
-      end.
+      is_dyn <- is_dynamic_addr addr ;;
+      if negb is_dyn
+      then ret meta (* pointer at [addr] is not dynamic *)
+      else
+        let bs := fetch_bytes st.(bytemap) addr IMP.get.(sizeof_pointer) in
+        '(_, mval, _) <-
+          serr2memM (abst DEFAULT_FUEL (fun _ => NoAlloc) st.(funptrmap) (fun _ => meta) addr
+                                                            (CoqCtype.mk_ctype_pointer CoqCtype.no_qualifiers CoqCtype.void) bs)
+        ;;
+        match mval with
+        | MVEpointer _ (PV _ (PVconcrete c)) =>
+            let '(t, gs) := meta  in
+            let ptr_base := fst (Bounds.to_Zs (C.cap_get_bounds c)) in
+            if andb (Z.leb alloc_base ptr_base) (Z.ltb ptr_base alloc_limit)
+            then ret (false, {| tag_unspecified := false; bounds_unspecified := gs.(bounds_unspecified) |})
+            else ret meta (* outside allocation. leave unchanged *)
+        | MVEunspecified _ => raise (InternalErr "unexpected unspec.")
+        | _ => raise (InternalErr "unexpected abst return value. Expecting concrete pointer.")
+        end.
 
   (* revoke (clear tag) any pointer in the memory pointing within the bounds of given allocation *)
   Definition revoke_pointers alloc : memM unit
