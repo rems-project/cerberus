@@ -1441,34 +1441,37 @@ Module CheriMemory
     :
     memM (bool* CapGhostState)
     :=
-    let bs := fetch_bytes st.(bytemap) addr IMP.get.(sizeof_pointer) in
-    '(_, mval, _) <-
-      serr2memM (abst DEFAULT_FUEL (fun _ => NoAlloc) st.(funptrmap) (fun _ => meta) addr
-                                                        (CoqCtype.mk_ctype_pointer CoqCtype.no_qualifiers CoqCtype.void) bs)
-    ;;
-    match mval with
-    | MVEpointer _ (PV _ (PVconcrete c)) =>
-        let '(t, gs) := meta  in
-        let ptr_base := fst (Bounds.to_Zs (C.cap_get_bounds c)) in
-        if andb (Z.leb alloc_base ptr_base) (Z.ltb ptr_base alloc_limit)
-        then ret (false, {| tag_unspecified := false; bounds_unspecified := gs.(bounds_unspecified) |})
-        else ret meta (* outside allocation. leave unchanged *)
-    | _ => raise (InternalErr "unexpected abst return value. Expecting concrete pointer.")
-    end.
+    (* mprint_msg ("maybe_revoke_pointer "  ++ String.hex_str addr) ;; *)
+    if (negb (fst meta)) then ret meta
+    else
+      let bs := fetch_bytes st.(bytemap) addr IMP.get.(sizeof_pointer) in
+      '(_, mval, _) <-
+        serr2memM (abst DEFAULT_FUEL (fun _ => NoAlloc) st.(funptrmap) (fun _ => meta) addr
+                                                          (CoqCtype.mk_ctype_pointer CoqCtype.no_qualifiers CoqCtype.void) bs)
+      ;;
+      match mval with
+      | MVEpointer _ (PV _ (PVconcrete c)) =>
+          let '(t, gs) := meta  in
+          let ptr_base := fst (Bounds.to_Zs (C.cap_get_bounds c)) in
+          if andb (Z.leb alloc_base ptr_base) (Z.ltb ptr_base alloc_limit)
+          then ret (false, {| tag_unspecified := false; bounds_unspecified := gs.(bounds_unspecified) |})
+          else ret meta (* outside allocation. leave unchanged *)
+      | MVEunspecified _ => raise (InternalErr "unexpected unspec.")
+      | _ => raise (InternalErr "unexpected abst return value. Expecting concrete pointer.")
+      end.
 
   (* revoke (clear tag) any pointer in the memory pointing within the bounds of given allocation *)
-  Definition revoke_pointers (alloc_id: storage_instance_id) : memM unit
+  Definition revoke_pointers alloc : memM unit
     :=
-    get_allocation alloc_id >>=
-      (fun alloc =>
-         get >>=
-           (fun st =>
-              let base := AddressValue.to_Z alloc.(base) in
-              let limit := base + alloc.(size) in
-              zmap_mmapi
-                (maybe_revoke_pointer base limit st)
-                st.(capmeta)
-      ))
+    let base := AddressValue.to_Z alloc.(base) in
+    let limit := base + alloc.(size) in
+    (* mprint_msg ("revoke_pointers " ++ (String.hex_str base) ++ " - "  ++ (String.hex_str limit)) ;; *)
+    get >>=
+      (fun st =>
+         zmap_mmapi
+           (maybe_revoke_pointer base limit st)
+           st.(capmeta)
+      )
       >>=
       (fun newmeta => update (fun st => mem_state_with_capmeta newmeta st))
     ;; ret tt.
@@ -1522,6 +1525,9 @@ Module CheriMemory
              ret tt) ;;
           resolve_iota precondition iota >>=
             (fun alloc_id =>
+               (if andb is_dyn (CoqSwitches.has_switch (SW.get_swtiches tt) (CoqSwitches.SW_revocation INSTANT))
+                then (get_allocation alloc_id >>= fun alloc => revoke_pointers alloc)
+                else ret tt) ;;
                update (fun st =>
                          {|
                            next_alloc_id    := st.(next_alloc_id);
@@ -1539,13 +1545,10 @@ Module CheriMemory
                            last_used        := Some alloc_id;
                          |})
                ;;
-               (if (andb is_dyn (CoqSwitches.has_switch (SW.get_swtiches tt) (CoqSwitches.SW_revocation INSTANT)))
-               then revoke_pointers alloc_id
-               else ret tt)
-               ;;
-               if CoqSwitches.has_switch (SW.get_swtiches tt) SW_zap_dead_pointers
-               then zap_pointers alloc_id
-               else ret tt)
+               (if CoqSwitches.has_switch (SW.get_swtiches tt) SW_zap_dead_pointers
+                then zap_pointers alloc_id
+                else ret tt)
+            )
     | PV (Prov_some alloc_id) (PVconcrete addr) =>
         (if andb
               (cap_is_null addr)
@@ -1574,6 +1577,9 @@ Module CheriMemory
                    | false =>
                        get_allocation alloc_id >>= fun alloc =>
                            if AddressValue.eqb (C.cap_get_value addr) alloc.(base) then
+                             (if andb is_dyn (CoqSwitches.has_switch (SW.get_swtiches tt) (CoqSwitches.SW_revocation INSTANT))
+                             then revoke_pointers alloc
+                             else ret tt) ;;
                              update
                                (fun st =>
                                   {|
@@ -1591,10 +1597,9 @@ Module CheriMemory
                                     dynamic_addrs    := st.(dynamic_addrs);
                                     last_used        := Some alloc_id;
                                   |}) ;;
-                             if CoqSwitches.has_switch (SW.get_swtiches tt) SW_zap_dead_pointers then
-                               zap_pointers alloc_id
-                             else
-                               ret tt
+                             (if CoqSwitches.has_switch (SW.get_swtiches tt) SW_zap_dead_pointers
+                              then zap_pointers alloc_id
+                              else ret tt)
                            else
                              fail loc (MerrUndefinedFree Free_out_of_bound)
                    end
