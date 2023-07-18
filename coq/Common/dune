@@ -1,4 +1,5 @@
 (coq.theory
+ (mode vo)
  (name Common)
  (package cerberus-cheri)
  (modules SimpleError Utils)

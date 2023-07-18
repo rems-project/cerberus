@@ -46,6 +46,16 @@ depends: [
 
 build: [
   ["dune" "subst"] {pinned}
-  [ make "-j" jobs "install-cheri" ]
+  ["dune"
+    "build"
+    "-p"
+    name
+    "--profile=release"
+    "-j"
+    jobs
+    "@install"
+    "@runtest" {with-test}
+    "@doc" {with-doc}
+  ]
 ]
 dev-repo: "git+https://github.com/rems-project/cerberus.git"

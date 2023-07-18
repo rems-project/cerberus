@@ -25,7 +25,7 @@ Local Open Scope string_scope.
 Local Open Scope Z_scope.
 Local Open Scope bool_scope.
 
-Definition debugging : bool := false.
+Definition debugging : bool := true.
 
 (* this definition will be remapped on extraction to OCaml's print_endline *)
 Definition print_msg (msg : string) : unit := tt.
