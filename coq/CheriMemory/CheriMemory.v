@@ -2699,6 +2699,10 @@ Module CheriMemory
         end
     end.
 
+  (* References:
+       §6.5.3.3, footnote 102 in C11
+       §6.5.3.2, footnote 106 in C17
+   *)
   Definition validForDeref_ptrval
     (ref_ty: CoqCtype.ctype) (ptrval: pointer_value)
     : memM bool
