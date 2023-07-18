@@ -171,6 +171,7 @@ Module CheriMemory
       size : Z;
       ty : option CoqCtype.ctype;
       is_readonly : readonly_status;
+      is_dynamic : bool ;
       taint : allocation_taint
     }.
 
@@ -189,7 +190,7 @@ Module CheriMemory
    *)
 
   Definition allocation_with_prefix prefix (r : allocation) :=
-    Build_allocation prefix r.(base) r.(size) r.(ty) r.(is_readonly) r.(taint).
+    Build_allocation prefix r.(base) r.(size) r.(ty) r.(is_readonly) r.(is_dynamic) r.(taint).
 
   Record AbsByte :=
     {
@@ -220,7 +221,6 @@ Module CheriMemory
       bytemap : ZMap.t AbsByte;
       capmeta : ZMap.t (bool* CapGhostState);
       dead_allocations : list storage_instance_id;
-      dynamic_addrs : list C.t;
       last_used : option storage_instance_id
     }.
 
@@ -239,7 +239,6 @@ Module CheriMemory
                 bytemap          := st.(bytemap);
                 capmeta          := st.(capmeta);
                 dead_allocations := st.(dead_allocations);
-                dynamic_addrs    := st.(dynamic_addrs);
                 last_used        := st.(last_used);
               |}
    *)
@@ -247,28 +246,28 @@ Module CheriMemory
   Definition mem_state := mem_state_r.
 
   Definition mem_state_with_bytemap bytemap (r : mem_state) :=
-    Build_mem_state_r r.(next_alloc_id) r.(next_iota) r.(last_address) r.(allocations) r.(iota_map) r.(funptrmap) r.(varargs) r.(next_varargs_id) bytemap r.(capmeta) r.(dead_allocations) r.(dynamic_addrs) r.(last_used).
+    Build_mem_state_r r.(next_alloc_id) r.(next_iota) r.(last_address) r.(allocations) r.(iota_map) r.(funptrmap) r.(varargs) r.(next_varargs_id) bytemap r.(capmeta) r.(dead_allocations) r.(last_used).
 
   Definition mem_state_with_allocations allocations (r : mem_state) :=
-    Build_mem_state_r r.(next_alloc_id) r.(next_iota) r.(last_address) allocations r.(iota_map) r.(funptrmap) r.(varargs) r.(next_varargs_id) r.(bytemap) r.(capmeta) r.(dead_allocations) r.(dynamic_addrs) r.(last_used).
+    Build_mem_state_r r.(next_alloc_id) r.(next_iota) r.(last_address) allocations r.(iota_map) r.(funptrmap) r.(varargs) r.(next_varargs_id) r.(bytemap) r.(capmeta) r.(dead_allocations) r.(last_used).
 
   Definition mem_state_with_last_used last_used (r : mem_state) :=
-    Build_mem_state_r r.(next_alloc_id) r.(next_iota) r.(last_address) r.(allocations) r.(iota_map) r.(funptrmap) r.(varargs) r.(next_varargs_id) r.(bytemap) r.(capmeta) r.(dead_allocations) r.(dynamic_addrs) last_used.
+    Build_mem_state_r r.(next_alloc_id) r.(next_iota) r.(last_address) r.(allocations) r.(iota_map) r.(funptrmap) r.(varargs) r.(next_varargs_id) r.(bytemap) r.(capmeta) r.(dead_allocations) last_used.
 
   Definition mem_state_with_iota_map iota_map (r : mem_state) :=
-    Build_mem_state_r r.(next_alloc_id) r.(next_iota) r.(last_address) r.(allocations) iota_map r.(funptrmap) r.(varargs) r.(next_varargs_id) r.(bytemap) r.(capmeta) r.(dead_allocations) r.(dynamic_addrs) r.(last_used).
+    Build_mem_state_r r.(next_alloc_id) r.(next_iota) r.(last_address) r.(allocations) iota_map r.(funptrmap) r.(varargs) r.(next_varargs_id) r.(bytemap) r.(capmeta) r.(dead_allocations) r.(last_used).
 
   Definition mem_state_with_next_iota next_iota (r : mem_state) :=
-    Build_mem_state_r r.(next_alloc_id) next_iota r.(last_address) r.(allocations) r.(iota_map) r.(funptrmap) r.(varargs) r.(next_varargs_id) r.(bytemap) r.(capmeta) r.(dead_allocations) r.(dynamic_addrs) r.(last_used).
+    Build_mem_state_r r.(next_alloc_id) next_iota r.(last_address) r.(allocations) r.(iota_map) r.(funptrmap) r.(varargs) r.(next_varargs_id) r.(bytemap) r.(capmeta) r.(dead_allocations) r.(last_used).
 
   Definition mem_state_with_capmeta capmeta (r : mem_state) :=
-    Build_mem_state_r r.(next_alloc_id) r.(next_iota) r.(last_address) r.(allocations) r.(iota_map) r.(funptrmap) r.(varargs) r.(next_varargs_id) r.(bytemap) capmeta r.(dead_allocations) r.(dynamic_addrs) r.(last_used).
+    Build_mem_state_r r.(next_alloc_id) r.(next_iota) r.(last_address) r.(allocations) r.(iota_map) r.(funptrmap) r.(varargs) r.(next_varargs_id) r.(bytemap) capmeta r.(dead_allocations) r.(last_used).
 
   Definition mem_state_with_funptrmap funptrmap (r : mem_state) :=
-    Build_mem_state_r r.(next_alloc_id) r.(next_iota) r.(last_address) r.(allocations) r.(iota_map) funptrmap r.(varargs) r.(next_varargs_id) r.(bytemap) r.(capmeta) r.(dead_allocations) r.(dynamic_addrs) r.(last_used).
+    Build_mem_state_r r.(next_alloc_id) r.(next_iota) r.(last_address) r.(allocations) r.(iota_map) funptrmap r.(varargs) r.(next_varargs_id) r.(bytemap) r.(capmeta) r.(dead_allocations) r.(last_used).
 
   Definition mem_state_with_varargs_next_varargs_id varargs next_varargs_id (r : mem_state) :=
-    Build_mem_state_r r.(next_alloc_id) r.(next_iota) r.(last_address) r.(allocations) r.(iota_map) r.(funptrmap) varargs next_varargs_id r.(bytemap) r.(capmeta) r.(dead_allocations) r.(dynamic_addrs) r.(last_used).
+    Build_mem_state_r r.(next_alloc_id) r.(next_iota) r.(last_address) r.(allocations) r.(iota_map) r.(funptrmap) varargs next_varargs_id r.(bytemap) r.(capmeta) r.(dead_allocations) r.(last_used).
 
 
   Definition initial_address := AddressValue.of_Z (HexString.to_Z "0xFFFFFFFF").
@@ -289,7 +288,6 @@ Module CheriMemory
       bytemap := ZMap.empty AbsByte;
       capmeta := ZMap.empty _;
       dead_allocations := nil;
-      dynamic_addrs := nil;
       last_used := None
     |}.
 
@@ -534,7 +532,6 @@ Module CheriMemory
                 (* tags in newly allocated region are unspecified *)
                 capmeta          := init_ghost_tags (AddressValue.of_Z addr) size st.(capmeta);
                 dead_allocations := st.(dead_allocations);
-                dynamic_addrs    := st.(dynamic_addrs);
                 last_used        := Some alloc_id;
               |}
             ;;
@@ -882,7 +879,7 @@ Module CheriMemory
           *)
          (match init_opt with
           | None =>
-              let alloc := {| prefix := pref; base:= addr; size:= size_n'; ty:= Some ty; is_readonly:= IsWritable; taint:= Unexposed|} in
+              let alloc := {| prefix := pref; base:= addr; size:= size_n'; ty:= Some ty; is_dynamic := false; is_readonly:= IsWritable; taint:= Unexposed|} in
               update (fun st =>
                         {|
                           next_alloc_id    := st.(next_alloc_id);
@@ -896,7 +893,6 @@ Module CheriMemory
                           bytemap          := st.(bytemap);
                           capmeta          := st.(capmeta);
                           dead_allocations := st.(dead_allocations);
-                          dynamic_addrs    := st.(dynamic_addrs);
                           last_used        := st.(last_used);
                         |}) ;; ret false
           | Some mval =>  (* here we allocate an object with initiliazer *)
@@ -906,7 +902,7 @@ Module CheriMemory
                 | _ => (false,IsWritable)
                 end
               in
-              let alloc := {| prefix:= pref; base:= addr; size:= size_n'; ty:= Some ty; is_readonly:= readonly_status; taint:= Unexposed |} in
+              let alloc := {| prefix:= pref; base:= addr; size:= size_n'; ty:= Some ty; is_dynamic := false; is_readonly:= readonly_status; taint:= Unexposed |} in
 
               st <- get ;;
               '(funptrmap, capmeta, pre_bs) <- serr2memM (repr DEFAULT_FUEL st.(funptrmap) st.(capmeta) (AddressValue.to_Z addr) mval) ;;
@@ -925,7 +921,6 @@ Module CheriMemory
                                         ) bs st.(bytemap);
                   capmeta          := capmeta;
                   dead_allocations := st.(dead_allocations);
-                  dynamic_addrs    := st.(dynamic_addrs);
                   last_used        := st.(last_used);
                 |}
               ;;
@@ -944,7 +939,11 @@ Module CheriMemory
                   C.cap_narrow_perms c p
                 else c
               in
-              ret (PV (Prov_some alloc_id) (PVconcrete c))
+              let prov := if CoqSwitches.is_PNVI (SW.get_swtiches tt)
+                          then Prov_some alloc_id
+                          else Prov_none
+              in
+              ret (PV prov (PVconcrete c))
       )).
 
   Definition allocate_region
@@ -968,6 +967,7 @@ Module CheriMemory
              base := addr;
              size := size_n';
              ty := None;
+             is_dynamic := true ;
              is_readonly := IsWritable;
              taint := Unexposed |}
          in
@@ -986,28 +986,51 @@ Module CheriMemory
                 bytemap          := st.(bytemap);
                 capmeta          := st.(capmeta);
                 dead_allocations := st.(dead_allocations);
-                dynamic_addrs    := c_value::st.(dynamic_addrs);
                 last_used        := st.(last_used);
               |})
          ;;
-          ret (PV (Prov_some alloc_id) (PVconcrete c_value)
+         let prov := if CoqSwitches.is_PNVI (SW.get_swtiches tt)
+                     then Prov_some alloc_id
+                     else Prov_none
+         in
+         ret (PV prov (PVconcrete c_value)
       )).
 
   Definition cap_is_null  (c : C.t) : bool :=
     Z.eqb (AddressValue.to_Z (C.cap_get_value c)) 0.
 
-
-  (* NOTE: this function uses exact comparision of capabilities, including metadata! *)
-  Definition is_dynamic c : memM bool :=
+  (* find first allocation with given starting addrress *)
+  Definition find_allocation (addr:AddressValue.t) : memM (option (Z*allocation)) :=
     get >>= fun st =>
-        ret (List.existsb (C.eqb c) st.(dynamic_addrs)).
+        ret
+          (ZMap.fold (fun alloc_id alloc acc =>
+                        match acc with
+                        | None =>
+                            if AddressValue.eqb alloc.(base) addr
+                            then Some (alloc_id,alloc)
+                            else None
+                        | Some _ => acc
+                        end
+             ) st.(allocations) None).
 
   (* private *)
-  Definition is_dynamic_addr (a:Z) : memM bool :=
-    get >>= fun st =>
-        ret (List.existsb
-               (fun c => Z.eqb (AddressValue.to_Z (C.cap_get_value c)) a)
-               st.(dynamic_addrs)).
+  Definition is_dynamic_addr (addr:AddressValue.t) : memM bool :=
+    find_allocation addr >>= fun x =>
+        match x with
+        | None => ret false
+        | Some (_,alloc) =>
+            ret alloc.(is_dynamic)
+        end.
+
+  (* Check if given capabilities matches one of capabilities
+     returned earlier by [allocate_region].
+
+     TODO: check ghost state?
+   *)
+  Definition is_dynamic_cap c : memM bool :=
+    if Permissions.eqb (C.cap_get_perms c) Permissions.perm_alloc
+    then is_dynamic_addr (C.cap_get_value c)
+    else ret false.
 
   Definition is_dead (alloc_id : storage_instance_id) : memM bool :=
     get >>= fun st =>
@@ -1063,7 +1086,6 @@ Module CheriMemory
                     bytemap          := st.(bytemap);
                     capmeta          := st.(capmeta);
                     dead_allocations := st.(dead_allocations);
-                    dynamic_addrs    := st.(dynamic_addrs);
                     last_used        := st.(last_used);
                   |}) ;; ret alloc_id.
 
@@ -1453,7 +1475,7 @@ Module CheriMemory
     if (negb (fst meta))
     then ret meta (* the pointer is already untagged *)
     else
-      is_dyn <- is_dynamic_addr addr ;;
+      is_dyn <- is_dynamic_addr (AddressValue.of_Z addr) ;;
       if negb is_dyn
       then ret meta (* pointer at [addr] is not dynamic *)
       else
@@ -1499,12 +1521,70 @@ Module CheriMemory
     match ptr with
     | PV _ (PVfunction _) =>
         fail loc (MerrOther "attempted to kill with a function pointer")
-    | PV Prov_none (PVconcrete _) =>
-        fail loc (MerrOther "attempted to kill with a pointer lacking a provenance")
+    | PV Prov_none (PVconcrete c) =>
+        (if CoqSwitches.is_PNVI (SW.get_swtiches tt)
+         then fail loc (MerrOther "attempted to kill with a pointer lacking a provenance")
+         else ret tt)
+        ;;
+        (if andb
+              (cap_is_null c)
+              (CoqSwitches.has_switch (SW.get_swtiches tt) CoqSwitches.SW_forbid_nullptr_free)
+         then fail loc MerrFreeNullPtr
+         else ret tt)
+        ;;
+        (find_allocation (C.cap_get_value c) >>=
+           (fun x =>
+              match x with
+              | None => fail loc (MerrOther "attempted to kill with a pointer not matching any allocation")
+              | Some (alloc_id,alloc) =>
+                  if negb (Bool.eqb is_dyn alloc.(is_dynamic))
+                  then fail loc (MerrUndefinedFree Free_non_matching)
+                  else ret (alloc_id,alloc)
+              end
+        ))
+          >>= (fun '(alloc_id,alloc) =>
+                 is_dead alloc_id >>=
+                   fun x => match x with
+                         | true =>
+                             if is_dyn then
+                               fail loc (MerrUndefinedFree Free_dead_allocation)
+                             else
+                               raise (InternalErr "Concrete: FREE was called on a dead allocation")
+                         | false =>
+                             get_allocation alloc_id >>= fun alloc =>
+                                 if AddressValue.eqb (C.cap_get_value c) alloc.(base) then
+                                   (if andb is_dyn (CoqSwitches.has_switch (SW.get_swtiches tt) (CoqSwitches.SW_revocation INSTANT))
+                                    then revoke_pointers alloc
+                                    else ret tt) ;;
+                                   update
+                                     (fun st =>
+                                        {|
+                                          next_alloc_id    := st.(next_alloc_id);
+                                          next_iota        := st.(next_iota);
+                                          last_address     := st.(last_address) ;
+                                          allocations      := ZMap.remove alloc_id st.(allocations);
+                                          iota_map         := st.(iota_map);
+                                          funptrmap        := st.(funptrmap);
+                                          varargs          := st.(varargs);
+                                          next_varargs_id  := st.(next_varargs_id);
+                                          bytemap          := st.(bytemap);
+                                          capmeta          := st.(capmeta);
+                                          dead_allocations := alloc_id :: st.(dead_allocations);
+                                          last_used        := Some alloc_id;
+                                        |}) ;;
+                                   (if CoqSwitches.has_switch (SW.get_swtiches tt) SW_zap_dead_pointers
+                                    then zap_pointers alloc_id
+                                    else ret tt)
+                                 else
+                                   fail loc (MerrUndefinedFree Free_out_of_bound)
+                         end
+          )
+
+
     | PV Prov_device (PVconcrete _) => ret tt
-    | PV (Prov_symbolic iota) (PVconcrete addr) =>
+    | PV (Prov_symbolic iota) (PVconcrete c) =>
         if andb
-             (cap_is_null addr)
+             (cap_is_null c)
              (CoqSwitches.has_switch (SW.get_swtiches tt) CoqSwitches.SW_forbid_nullptr_free)
         then
           fail loc MerrFreeNullPtr
@@ -1512,25 +1592,26 @@ Module CheriMemory
           let precondition (z : storage_instance_id) :=
             is_dead z >>=
               (fun x => match x with
-                        | true =>
-                            ret
-                              (FAIL loc (MerrUndefinedFree Free_dead_allocation))
-                        | false =>
-                            get_allocation z >>=
-                              (fun alloc =>
-                                 if
-                                   AddressValue.eqb
-                                     (C.cap_get_value addr)
-                                     alloc.(base)
-                                 then
-                                   ret OK
-                                 else
-                                   ret
-                                     (FAIL loc (MerrUndefinedFree Free_out_of_bound)))
-                        end)
+                     | true =>
+                         ret
+                           (FAIL loc (MerrUndefinedFree Free_dead_allocation))
+                     | false =>
+                         get_allocation z >>=
+                           (fun alloc =>
+                              if
+                                AddressValue.eqb
+                                  (C.cap_get_value c)
+                                  alloc.(base)
+                              then
+                                ret OK
+                              else
+                                ret
+                                  (FAIL loc (MerrUndefinedFree Free_out_of_bound)))
+                     end)
           in
+
           (if is_dyn then
-             (is_dynamic addr) >>=
+             (is_dynamic_cap c) >>=
                (fun (b : bool) =>
                   if b then ret tt
                   else fail loc (MerrUndefinedFree Free_non_matching))
@@ -1554,7 +1635,6 @@ Module CheriMemory
                            bytemap          := st.(bytemap);
                            capmeta          := st.(capmeta);
                            dead_allocations := alloc_id :: st.(dead_allocations);
-                           dynamic_addrs    := st.(dynamic_addrs);
                            last_used        := Some alloc_id;
                          |})
                ;;
@@ -1562,60 +1642,59 @@ Module CheriMemory
                 then zap_pointers alloc_id
                 else ret tt)
             )
-    | PV (Prov_some alloc_id) (PVconcrete addr) =>
+    | PV (Prov_some alloc_id) (PVconcrete c) =>
         (if andb
-              (cap_is_null addr)
+              (cap_is_null c)
               (CoqSwitches.has_switch (SW.get_swtiches tt) CoqSwitches.SW_forbid_nullptr_free)
          then
            fail loc MerrFreeNullPtr
          else
            if is_dyn then
              (* this kill is dynamic one (i.e. free() or friends) *)
-             is_dynamic addr >>=
+             is_dynamic_cap c >>=
                fun x => match x with
-                        | false =>
-                            fail loc (MerrUndefinedFree Free_non_matching)
-                        | true => ret tt
-                        end
+                     | false =>
+                         fail loc (MerrUndefinedFree Free_non_matching)
+                     | true => ret tt
+                     end
            else
              ret tt)
         ;;
         is_dead alloc_id >>=
           fun x => match x with
-                   | true =>
-                       if is_dyn then
-                         fail loc (MerrUndefinedFree Free_dead_allocation)
-                       else
-                         raise (InternalErr "Concrete: FREE was called on a dead allocation")
-                   | false =>
-                       get_allocation alloc_id >>= fun alloc =>
-                           if AddressValue.eqb (C.cap_get_value addr) alloc.(base) then
-                             (if andb is_dyn (CoqSwitches.has_switch (SW.get_swtiches tt) (CoqSwitches.SW_revocation INSTANT))
-                             then revoke_pointers alloc
-                             else ret tt) ;;
-                             update
-                               (fun st =>
-                                  {|
-                                    next_alloc_id    := st.(next_alloc_id);
-                                    next_iota        := st.(next_iota);
-                                    last_address     := st.(last_address) ;
-                                    allocations      := ZMap.remove alloc_id st.(allocations);
-                                    iota_map         := st.(iota_map);
-                                    funptrmap        := st.(funptrmap);
-                                    varargs          := st.(varargs);
-                                    next_varargs_id  := st.(next_varargs_id);
-                                    bytemap          := st.(bytemap);
-                                    capmeta          := st.(capmeta);
-                                    dead_allocations := alloc_id :: st.(dead_allocations);
-                                    dynamic_addrs    := st.(dynamic_addrs);
-                                    last_used        := Some alloc_id;
-                                  |}) ;;
-                             (if CoqSwitches.has_switch (SW.get_swtiches tt) SW_zap_dead_pointers
-                              then zap_pointers alloc_id
-                              else ret tt)
-                           else
-                             fail loc (MerrUndefinedFree Free_out_of_bound)
-                   end
+                | true =>
+                    if is_dyn then
+                      fail loc (MerrUndefinedFree Free_dead_allocation)
+                    else
+                      raise (InternalErr "Concrete: FREE was called on a dead allocation")
+                | false =>
+                    get_allocation alloc_id >>= fun alloc =>
+                        if AddressValue.eqb (C.cap_get_value c) alloc.(base) then
+                          (if andb is_dyn (CoqSwitches.has_switch (SW.get_swtiches tt) (CoqSwitches.SW_revocation INSTANT))
+                           then revoke_pointers alloc
+                           else ret tt) ;;
+                          update
+                            (fun st =>
+                               {|
+                                 next_alloc_id    := st.(next_alloc_id);
+                                 next_iota        := st.(next_iota);
+                                 last_address     := st.(last_address) ;
+                                 allocations      := ZMap.remove alloc_id st.(allocations);
+                                 iota_map         := st.(iota_map);
+                                 funptrmap        := st.(funptrmap);
+                                 varargs          := st.(varargs);
+                                 next_varargs_id  := st.(next_varargs_id);
+                                 bytemap          := st.(bytemap);
+                                 capmeta          := st.(capmeta);
+                                 dead_allocations := alloc_id :: st.(dead_allocations);
+                                 last_used        := Some alloc_id;
+                               |}) ;;
+                          (if CoqSwitches.has_switch (SW.get_swtiches tt) SW_zap_dead_pointers
+                           then zap_pointers alloc_id
+                           else ret tt)
+                        else
+                          fail loc (MerrUndefinedFree Free_out_of_bound)
+                end
     end.
 
 
@@ -1666,7 +1745,9 @@ Module CheriMemory
   Definition find_overlaping st addr : overlap_ind
     :=
     let (require_exposed, allow_one_past) :=
-      match CoqSwitches.has_switch_pred (SW.get_swtiches tt) (fun x => match x with SW_PNVI _ => true | _ => false end) with
+      match CoqSwitches.has_switch_pred (SW.get_swtiches tt)
+              (fun x => match x with SW_PNVI _ => true | _ => false end)
+      with
       | Some (CoqSwitches.SW_PNVI variant) =>
           match variant with
           | PLAIN => (false, false)
@@ -1715,6 +1796,7 @@ Module CheriMemory
                                           base := alloc.(base);
                                           size := alloc.(size);
                                           ty := alloc.(ty);
+                                          is_dynamic := alloc.(is_dynamic);
                                           is_readonly := alloc.(is_readonly);
                                           taint := Exposed
                                         |}
@@ -1739,6 +1821,7 @@ Module CheriMemory
                                                  base := alloc.(base);
                                                  size := alloc.(size);
                                                  ty := alloc.(ty);
+                                                 is_dynamic := alloc.(is_dynamic);
                                                  is_readonly := alloc.(is_readonly);
                                                  taint := Exposed
                                                |}
@@ -1885,6 +1968,7 @@ Module CheriMemory
         fail loc (MerrAccess LoadAccess FunctionPtr)
     | Prov_none, _ =>
         fail loc (MerrAccess LoadAccess OutOfBoundPtr)
+        (* TODO *)
     | Prov_device, PVconcrete c =>
         if cap_is_null c then
           fail loc (MerrAccess LoadAccess NullPtr)
@@ -2039,7 +2123,6 @@ Module CheriMemory
             bytemap          := bytemap;
             capmeta          := capmeta;
             dead_allocations := st.(dead_allocations);
-            dynamic_addrs    := st.(dynamic_addrs);
             last_used        := alloc_id_opt;
           |}
         ;;
@@ -2056,6 +2139,7 @@ Module CheriMemory
             (MerrAccess
                StoreAccess
                OutOfBoundPtr)
+            (* TODO *)
       | Prov_device, PVconcrete addr =>
           if cap_is_null addr then
             fail loc
@@ -2123,12 +2207,13 @@ Module CheriMemory
                                       | Some a =>
                                           Some
                                             {|
-                                              prefix      := a.(prefix)      ;
-                                              base        := a.(base)        ;
-                                              size        := a.(size)        ;
-                                              ty          := a.(ty)          ;
-                                              is_readonly := IsReadOnly ;
-                                              taint       := a.(taint)       ;
+                                              prefix      := a.(prefix)     ;
+                                              base        := a.(base)       ;
+                                              size        := a.(size)       ;
+                                              ty          := a.(ty)         ;
+                                              is_dynamic  := a.(is_dynamic) ;
+                                              is_readonly := IsReadOnly     ;
+                                              taint       := a.(taint)      ;
                                             |}
                                       | None => None
                                       end) st.(allocations))
@@ -2178,12 +2263,13 @@ Module CheriMemory
                                                            match x with
                                                            | Some a =>
                                                                Some {|
-                                                                   prefix      := a.(prefix)      ;
-                                                                   base        := a.(base)        ;
-                                                                   size        := a.(size)        ;
-                                                                   ty          := a.(ty)          ;
-                                                                   is_readonly := IsReadOnly ;
-                                                                   taint       := a.(taint)       ;
+                                                                   prefix      := a.(prefix)     ;
+                                                                   base        := a.(base)       ;
+                                                                   size        := a.(size)       ;
+                                                                   ty          := a.(ty)         ;
+                                                                   is_dynamic  := a.(is_dynamic) ;
+                                                                   is_readonly := IsReadOnly     ;
+                                                                   taint       := a.(taint)      ;
                                                                  |}
                                                            | None => None
                                                            end) st.(allocations))
@@ -3374,7 +3460,7 @@ Module CheriMemory
           fail loc (MerrWIP "realloc no provenance")
     | PV (Prov_some alloc_id) (PVconcrete c_value) =>
         let addr := (C.cap_get_value c_value) in
-        is_dynamic c_value >>=
+        is_dynamic_cap c_value >>=
           (fun (x : bool) =>
              match x with
              | false => fail loc (MerrUndefinedRealloc Free_non_matching)
