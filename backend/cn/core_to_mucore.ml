@@ -1408,8 +1408,12 @@ let normalise_file (markers_env, ail_prog) file =
 
   let@ lfuns = CLogicalFuns.add_c_fun_defs lfuns mk_functions in
 
-  let mu_call_funinfo = Pmap.map (fun (_, _, ret, args, variadic, has_proto) ->
-    (ret, List.map snd args, variadic, has_proto)) file.mi_funinfo in
+  let mu_call_funinfo = Pmap.mapi (fun fsym (_, _, ret, args, variadic, has_proto) ->
+    Sctypes.{ sig_return_ty = ret; sig_arg_tys = List.map snd args;
+      sig_variadic = variadic; sig_has_proto = has_proto;
+    }) file.mi_funinfo in
+
+  let stdlib_syms = SymSet.of_list (List.map fst (Pmap.bindings_list file.mi_stdlib)) in
 
   let file = {
       mu_main = file.mi_main;
@@ -1417,6 +1421,7 @@ let normalise_file (markers_env, ail_prog) file =
       mu_globs = globs;
       mu_funs = funs;
       mu_extern = file.mi_extern;
+      mu_stdlib_syms = stdlib_syms;
       mu_resource_predicates = preds;
       mu_logical_predicates = lfuns;
       mu_datatypes = SymMap.bindings env.datatypes;

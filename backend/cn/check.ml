@@ -1736,7 +1736,7 @@ let record_globals globs =
     ) globs 
 
 
-let register_fun_syms mu_funs =
+let register_fun_syms mu_file =
   let add fsym loc =
     (* add to context *)
     (* let lc1 = t_ (ne_ (null_, sym_ (fsym, Loc))) in *)
@@ -1745,10 +1745,21 @@ let register_fun_syms mu_funs =
     let@ () = add_cs loc [(* lc1; *) lc2] in
     return ()
   in
-  PmapM.iterM (fun fsym def -> match def with
-    | M_Proc (loc, _, _, _) -> add fsym loc
-    | M_ProcDecl (loc, _) -> add fsym loc
-  ) mu_funs
+  (* merge the symbols from the funinfo and extern (some symbols will be in both) *)
+  let locs = SymMap.empty
+    |> Pmap.fold (fun id (fsyms, _) locs -> List.fold_right (fun fsym locs ->
+        SymMap.add fsym (Id.loc id) locs) fsyms locs) mu_file.mu_extern
+    |> Pmap.fold (fun fsym def locs -> match def with
+      | M_Proc (loc, _, _, _) -> SymMap.add fsym loc locs
+      | M_ProcDecl (loc, _) -> SymMap.add fsym loc locs
+    ) mu_file.mu_funs
+  in
+  (* subtract the globals, which were added by record_globals *)
+  let globs_set = SymSet.of_list (List.map fst mu_file.mu_globs) in
+  let locs2 = SymMap.bindings locs
+    |> List.filter (fun (fsym, _) -> not (SymSet.mem fsym globs_set))
+  in
+  ListM.iterM (fun (fsym, loc) -> add fsym loc) locs2
 
 
 let wf_check_and_record_functions mu_funs mu_call_sigs =
@@ -1832,7 +1843,8 @@ let check mu_file stmt_locs o_lemma_mode =
               mu_file.mu_constructors in
 
   let@ () = record_globals mu_file.mu_globs in
-  let@ () = register_fun_syms mu_file.mu_funs in
+
+  let@ () = register_fun_syms mu_file in
 
   Pp.debug 3 (lazy (Pp.headline "added top-level types and constants."));
 

@@ -6,6 +6,7 @@ open Pp_ast
 
 module Loc = Cerb_location
 module IT = IndexTerms
+module SymSet = Set.Make(Sym)
 type loc = Loc.t
 
 
@@ -404,6 +405,7 @@ type 'TY mu_file = {
   mu_globs   : 'TY mu_globs_list;
   mu_funs    : 'TY mu_fun_map;
   mu_extern  : mu_extern_map;
+  mu_stdlib_syms  : SymSet.t;
   mu_resource_predicates : T.resource_predicates;
   mu_logical_predicates : T.logical_predicates;
   mu_datatypes : (Sym.t * BaseTypes.datatype_info) list;
