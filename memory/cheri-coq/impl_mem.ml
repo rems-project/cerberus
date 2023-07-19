@@ -35,7 +35,7 @@ module CerbSwitchesProxy = struct
     List.fold_left
       (fun s x -> set_add (=) (toCoq_switch x) s) empty_set cs
 
-  let get_swtiches _ = toCoq_switches (Switches.get_switches ())
+  let get_switches _ = toCoq_switches (Switches.get_switches ())
 end
 
 module CerbTagDefs = struct
@@ -936,10 +936,7 @@ module CHERIMorello : Memory = struct
            | MM.Unexposed -> "unexposed"
           )
       ) l;
-    prerr_endline "END Allocations";
-    Printf.fprintf stderr "Dead Allocations: [%s]\n"
-      (String.concat ","
-         (List.map (Z.to_string) st.MM.dead_allocations))
+    prerr_endline "END Allocations"
 
   let print_bytemap str (st:MM.mem_state) =
     Printf.fprintf stderr "BEGIN BYTEMAP ==> %s\n" str;
