@@ -220,7 +220,6 @@ Module CheriMemory
       next_varargs_id : Z;
       bytemap : ZMap.t AbsByte;
       capmeta : ZMap.t (bool* CapGhostState);
-      dead_allocations : list storage_instance_id;
       last_used : option storage_instance_id
     }.
 
@@ -238,7 +237,6 @@ Module CheriMemory
                 next_varargs_id  := st.(next_varargs_id);
                 bytemap          := st.(bytemap);
                 capmeta          := st.(capmeta);
-                dead_allocations := st.(dead_allocations);
                 last_used        := st.(last_used);
               |}
    *)
@@ -246,28 +244,28 @@ Module CheriMemory
   Definition mem_state := mem_state_r.
 
   Definition mem_state_with_bytemap bytemap (r : mem_state) :=
-    Build_mem_state_r r.(next_alloc_id) r.(next_iota) r.(last_address) r.(allocations) r.(iota_map) r.(funptrmap) r.(varargs) r.(next_varargs_id) bytemap r.(capmeta) r.(dead_allocations) r.(last_used).
+    Build_mem_state_r r.(next_alloc_id) r.(next_iota) r.(last_address) r.(allocations) r.(iota_map) r.(funptrmap) r.(varargs) r.(next_varargs_id) bytemap r.(capmeta) r.(last_used).
 
   Definition mem_state_with_allocations allocations (r : mem_state) :=
-    Build_mem_state_r r.(next_alloc_id) r.(next_iota) r.(last_address) allocations r.(iota_map) r.(funptrmap) r.(varargs) r.(next_varargs_id) r.(bytemap) r.(capmeta) r.(dead_allocations) r.(last_used).
+    Build_mem_state_r r.(next_alloc_id) r.(next_iota) r.(last_address) allocations r.(iota_map) r.(funptrmap) r.(varargs) r.(next_varargs_id) r.(bytemap) r.(capmeta) r.(last_used).
 
   Definition mem_state_with_last_used last_used (r : mem_state) :=
-    Build_mem_state_r r.(next_alloc_id) r.(next_iota) r.(last_address) r.(allocations) r.(iota_map) r.(funptrmap) r.(varargs) r.(next_varargs_id) r.(bytemap) r.(capmeta) r.(dead_allocations) last_used.
+    Build_mem_state_r r.(next_alloc_id) r.(next_iota) r.(last_address) r.(allocations) r.(iota_map) r.(funptrmap) r.(varargs) r.(next_varargs_id) r.(bytemap) r.(capmeta) last_used.
 
   Definition mem_state_with_iota_map iota_map (r : mem_state) :=
-    Build_mem_state_r r.(next_alloc_id) r.(next_iota) r.(last_address) r.(allocations) iota_map r.(funptrmap) r.(varargs) r.(next_varargs_id) r.(bytemap) r.(capmeta) r.(dead_allocations) r.(last_used).
+    Build_mem_state_r r.(next_alloc_id) r.(next_iota) r.(last_address) r.(allocations) iota_map r.(funptrmap) r.(varargs) r.(next_varargs_id) r.(bytemap) r.(capmeta) r.(last_used).
 
   Definition mem_state_with_next_iota next_iota (r : mem_state) :=
-    Build_mem_state_r r.(next_alloc_id) next_iota r.(last_address) r.(allocations) r.(iota_map) r.(funptrmap) r.(varargs) r.(next_varargs_id) r.(bytemap) r.(capmeta) r.(dead_allocations) r.(last_used).
+    Build_mem_state_r r.(next_alloc_id) next_iota r.(last_address) r.(allocations) r.(iota_map) r.(funptrmap) r.(varargs) r.(next_varargs_id) r.(bytemap) r.(capmeta) r.(last_used).
 
   Definition mem_state_with_capmeta capmeta (r : mem_state) :=
-    Build_mem_state_r r.(next_alloc_id) r.(next_iota) r.(last_address) r.(allocations) r.(iota_map) r.(funptrmap) r.(varargs) r.(next_varargs_id) r.(bytemap) capmeta r.(dead_allocations) r.(last_used).
+    Build_mem_state_r r.(next_alloc_id) r.(next_iota) r.(last_address) r.(allocations) r.(iota_map) r.(funptrmap) r.(varargs) r.(next_varargs_id) r.(bytemap) capmeta r.(last_used).
 
   Definition mem_state_with_funptrmap funptrmap (r : mem_state) :=
-    Build_mem_state_r r.(next_alloc_id) r.(next_iota) r.(last_address) r.(allocations) r.(iota_map) funptrmap r.(varargs) r.(next_varargs_id) r.(bytemap) r.(capmeta) r.(dead_allocations) r.(last_used).
+    Build_mem_state_r r.(next_alloc_id) r.(next_iota) r.(last_address) r.(allocations) r.(iota_map) funptrmap r.(varargs) r.(next_varargs_id) r.(bytemap) r.(capmeta) r.(last_used).
 
   Definition mem_state_with_varargs_next_varargs_id varargs next_varargs_id (r : mem_state) :=
-    Build_mem_state_r r.(next_alloc_id) r.(next_iota) r.(last_address) r.(allocations) r.(iota_map) r.(funptrmap) varargs next_varargs_id r.(bytemap) r.(capmeta) r.(dead_allocations) r.(last_used).
+    Build_mem_state_r r.(next_alloc_id) r.(next_iota) r.(last_address) r.(allocations) r.(iota_map) r.(funptrmap) varargs next_varargs_id r.(bytemap) r.(capmeta) r.(last_used).
 
 
   Definition initial_address := AddressValue.of_Z (HexString.to_Z "0xFFFFFFFF").
@@ -287,7 +285,6 @@ Module CheriMemory
       next_varargs_id := Z0;
       bytemap := ZMap.empty AbsByte;
       capmeta := ZMap.empty _;
-      dead_allocations := nil;
       last_used := None
     |}.
 
@@ -531,7 +528,6 @@ Module CheriMemory
                 bytemap          := st.(bytemap);
                 (* tags in newly allocated region are unspecified *)
                 capmeta          := init_ghost_tags (AddressValue.of_Z addr) size st.(capmeta);
-                dead_allocations := st.(dead_allocations);
                 last_used        := Some alloc_id;
               |}
             ;;
@@ -892,7 +888,6 @@ Module CheriMemory
                           next_varargs_id  := st.(next_varargs_id);
                           bytemap          := st.(bytemap);
                           capmeta          := st.(capmeta);
-                          dead_allocations := st.(dead_allocations);
                           last_used        := st.(last_used);
                         |}) ;; ret false
           | Some mval =>  (* here we allocate an object with initiliazer *)
@@ -920,7 +915,6 @@ Module CheriMemory
                                                         ZMap.add addr b acc
                                         ) bs st.(bytemap);
                   capmeta          := capmeta;
-                  dead_allocations := st.(dead_allocations);
                   last_used        := st.(last_used);
                 |}
               ;;
@@ -985,7 +979,6 @@ Module CheriMemory
                 next_varargs_id  := st.(next_varargs_id);
                 bytemap          := st.(bytemap);
                 capmeta          := st.(capmeta);
-                dead_allocations := st.(dead_allocations);
                 last_used        := st.(last_used);
               |})
          ;;
@@ -1034,7 +1027,7 @@ Module CheriMemory
 
   Definition is_dead (alloc_id : storage_instance_id) : memM bool :=
     get >>= fun st =>
-        ret (set_mem Z_as_OT.eq_dec alloc_id st.(dead_allocations)).
+        ret (negb (ZMap.mem alloc_id st.(allocations))).
 
   Definition get_allocation (alloc_id : Z) : memM allocation :=
     get >>=
@@ -1085,7 +1078,6 @@ Module CheriMemory
                     next_varargs_id  := st.(next_varargs_id);
                     bytemap          := st.(bytemap);
                     capmeta          := st.(capmeta);
-                    dead_allocations := st.(dead_allocations);
                     last_used        := st.(last_used);
                   |}) ;; ret alloc_id.
 
@@ -1569,7 +1561,6 @@ Module CheriMemory
                                           next_varargs_id  := st.(next_varargs_id);
                                           bytemap          := st.(bytemap);
                                           capmeta          := st.(capmeta);
-                                          dead_allocations := alloc_id :: st.(dead_allocations);
                                           last_used        := Some alloc_id;
                                         |}) ;;
                                    (if CoqSwitches.has_switch (SW.get_swtiches tt) SW_zap_dead_pointers
@@ -1634,7 +1625,6 @@ Module CheriMemory
                            next_varargs_id  := st.(next_varargs_id);
                            bytemap          := st.(bytemap);
                            capmeta          := st.(capmeta);
-                           dead_allocations := alloc_id :: st.(dead_allocations);
                            last_used        := Some alloc_id;
                          |})
                ;;
@@ -1686,7 +1676,6 @@ Module CheriMemory
                                  next_varargs_id  := st.(next_varargs_id);
                                  bytemap          := st.(bytemap);
                                  capmeta          := st.(capmeta);
-                                 dead_allocations := alloc_id :: st.(dead_allocations);
                                  last_used        := Some alloc_id;
                                |}) ;;
                           (if CoqSwitches.has_switch (SW.get_swtiches tt) SW_zap_dead_pointers
@@ -1760,8 +1749,7 @@ Module CheriMemory
     in
     ZMap.fold (fun alloc_id alloc acc =>
                  let new_opt :=
-                   if negb (mem alloc_id st.(dead_allocations))
-                      && Z.leb (AddressValue.to_Z alloc.(base)) addr && Z.ltb addr (Z.add (AddressValue.to_Z alloc.(base)) alloc.(size)) then
+                   if Z.leb (AddressValue.to_Z alloc.(base)) addr && Z.ltb addr (Z.add (AddressValue.to_Z alloc.(base)) alloc.(size)) then
                      (* PNVI-ae, PNVI-ae-udi *)
                      if require_exposed && (negb (allocation_taint_eqb alloc.(taint) Exposed))
                      then None
@@ -2122,7 +2110,6 @@ Module CheriMemory
             next_varargs_id  := st.(next_varargs_id);
             bytemap          := bytemap;
             capmeta          := capmeta;
-            dead_allocations := st.(dead_allocations);
             last_used        := alloc_id_opt;
           |}
         ;;
