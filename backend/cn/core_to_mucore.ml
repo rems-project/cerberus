@@ -1219,7 +1219,7 @@ let normalise_fun_map_decl
 
   | Mi_ProcDecl(loc, ret_bt, bts) -> 
      begin match SymMap.find_opt fname fun_specs with
-     | None -> return None
+     | None -> return (Some (M_ProcDecl (loc, None), []))
      | Some (ail_marker, (spec : (Symbol.sym, Ctype.ctype) cn_fun_spec)) ->
        assertl loc (BT.equal (convert_bt loc ret_bt)
                     (BT.of_sct (convert_ct loc ret_ct)))
@@ -1236,8 +1236,7 @@ let normalise_fun_map_decl
          ) loc env (List.combine spec.cn_spec_args (List.map snd arg_cts)) spec.cn_spec_requires
        in
        let ft = at_of_arguments Tools.id args_and_rt in
-       let@ _ = return (M_ProcDecl (loc, ft)) in
-       return (Some (M_ProcDecl(loc, ft), []))
+       return (Some (M_ProcDecl (loc, Some ft), []))
      end
   | Mi_BuiltinDecl(loc, bt, bts) -> 
      assert false

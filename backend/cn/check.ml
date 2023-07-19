@@ -1301,7 +1301,11 @@ let rec check_expr labels ~(typ:BT.t orFalse) (e : 'bty mu_expr)
        | Some (_, sym) -> return sym
        | _ -> unsupported loc !^"function application of function pointers"
      in
-     let@ (_loc, ft, _) = get_fun_decl loc fsym in
+     let@ (_loc, opt_ft, _) = get_fun_decl loc fsym in
+     let@ ft = match opt_ft with
+       | Some ft -> return ft
+       | None -> fail (fun _ -> {loc; msg = Generic (!^"Call to function with no spec:" ^^^ Sym.pp fsym)})
+     in
 
      Spine.calltype_ft loc ~fsym pes ft (fun (Computational ((_, bt), _, _) as rt) ->
      let@ () = WellTyped.ensure_base_type loc ~expect bt in
@@ -1745,21 +1749,10 @@ let register_fun_syms mu_file =
     let@ () = add_cs loc [(* lc1; *) lc2] in
     return ()
   in
-  (* merge the symbols from the funinfo and extern (some symbols will be in both) *)
-  let locs = SymMap.empty
-    |> Pmap.fold (fun id (fsyms, _) locs -> List.fold_right (fun fsym locs ->
-        SymMap.add fsym (Id.loc id) locs) fsyms locs) mu_file.mu_extern
-    |> Pmap.fold (fun fsym def locs -> match def with
-      | M_Proc (loc, _, _, _) -> SymMap.add fsym loc locs
-      | M_ProcDecl (loc, _) -> SymMap.add fsym loc locs
+  PmapM.iterM (fun fsym def -> match def with
+      | M_Proc (loc, _, _, _) -> add fsym loc
+      | M_ProcDecl (loc, _) -> add fsym loc
     ) mu_file.mu_funs
-  in
-  (* subtract the globals, which were added by record_globals *)
-  let globs_set = SymSet.of_list (List.map fst mu_file.mu_globs) in
-  let locs2 = SymMap.bindings locs
-    |> List.filter (fun (fsym, _) -> not (SymSet.mem fsym globs_set))
-  in
-  ListM.iterM (fun (fsym, loc) -> add fsym loc) locs2
 
 
 let wf_check_and_record_functions mu_funs mu_call_sigs =
@@ -1773,14 +1766,15 @@ let wf_check_and_record_functions mu_funs mu_call_sigs =
          let@ args_and_body, ft = WellTyped.WProc.welltyped loc args_and_body in
          debug 6 (lazy (!^"function type" ^^^ Sym.pp fsym));
          debug 6 (lazy (CF.Pp_ast.pp_doc_tree (AT.dtree RT.dtree ft)));
-         let@ () = add_fun_decl fsym (loc, ft, Pmap.find fsym mu_call_sigs) in
+         let@ () = add_fun_decl fsym (loc, Some ft, Pmap.find fsym mu_call_sigs) in
          begin match tr with
          | Trusted _ -> return ((fsym, (loc, ft)) :: trusted, checked)
          | Checked -> return (trusted, (fsym, (loc, args_and_body)) :: checked)
          end
       | M_ProcDecl (loc, ft) ->
          welltyped_ping fsym;
-         let@ ft = WellTyped.WFT.welltyped "function" loc ft in
+         let@ fts = ListM.mapM (WellTyped.WFT.welltyped "function" loc) (Option.to_list ft) in
+         let ft = List.nth_opt fts 0 in
          let@ () = add_fun_decl fsym (loc, ft, Pmap.find fsym mu_call_sigs) in
          return (trusted, checked)
     ) mu_funs ([], [])

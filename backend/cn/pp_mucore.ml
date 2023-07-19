@@ -918,7 +918,7 @@ module Make (Config: CONFIG) = struct
         (*     P.nest 2 (P.break 1 ^^ pp_pexpr budget pe) *)
         | M_ProcDecl (loc, ft) ->
             pp_cond loc @@
-            pp_keyword "proc" ^^^ pp_symbol sym ^^ Pp.colon ^^^ pp_ft ft
+            pp_keyword "proc" ^^^ pp_symbol sym ^^ Pp.colon ^^^ Pp.option pp_ft "(no spec)" ft
         (* | M_BuiltinDecl (loc, bTy, bTys) -> *)
         (*     pp_cond loc @@ *)
         (*     pp_keyword "builtin" ^^^ pp_symbol sym ^^^ P.parens (comma_list pp_bt bTys) *)

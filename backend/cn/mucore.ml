@@ -371,7 +371,7 @@ type 'TY mu_fun_map_decl =
                 parse_ast_function_specification
       (* recording the desugared parse ast, for generating runtime checks *)
                 
-  | M_ProcDecl of Cerb_location.t * T.ft
+  | M_ProcDecl of Cerb_location.t * T.ft option
   (* | M_BuiltinDecl of Cerb_location.t * T.bt * T.bt list *)
 
 type 'TY mu_fun_map = 
