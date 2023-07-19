@@ -1452,6 +1452,45 @@ Module CheriMemory
     | MVErr err => fail loc err
     end.
 
+  Definition find_overlaping st addr : overlap_ind
+    :=
+    let (require_exposed, allow_one_past) :=
+      match CoqSwitches.has_switch_pred (SW.get_swtiches tt)
+              (fun x => match x with SW_PNVI _ => true | _ => false end)
+      with
+      | Some (CoqSwitches.SW_PNVI variant) =>
+          match variant with
+          | PLAIN => (false, false)
+          | AE => (true, false)
+          | AE_UDI => (true, true)
+          end
+      | Some _ => (false, false) (* impossible case *)
+      | None => (false, false)
+      end
+    in
+    ZMap.fold (fun alloc_id alloc acc =>
+                 let new_opt :=
+                   if Z.leb (AddressValue.to_Z alloc.(base)) addr && Z.ltb addr (Z.add (AddressValue.to_Z alloc.(base)) alloc.(size)) then
+                     (* PNVI-ae, PNVI-ae-udi *)
+                     if require_exposed && (negb (allocation_taint_eqb alloc.(taint) Exposed))
+                     then None
+                     else Some alloc_id
+                   else if allow_one_past then
+                          (* PNVI-ae-udi *)
+                          if Z.eqb addr (Z.add (AddressValue.to_Z alloc.(base)) alloc.(size))
+                             && negb (require_exposed && (negb (allocation_taint_eqb alloc.(taint) Exposed)))
+                          then Some alloc_id
+                          else None
+                        else None
+                 in
+                 match acc, new_opt with
+                 | _, None => acc
+                 | NoAlloc, Some alloc_id => SingleAlloc alloc_id
+                 | SingleAlloc alloc_id1, Some alloc_id2 => DoubleAlloc alloc_id1 alloc_id2
+                 | DoubleAlloc _ _, Some _ => acc
+                 end
+      ) st.(allocations) NoAlloc.
+
   (* If pointer stored at [addr] with meta information [meta] has it's
    base within given [base] and [limit] region, revoke it by returning
    new meta *)
@@ -1473,7 +1512,7 @@ Module CheriMemory
       else
         let bs := fetch_bytes st.(bytemap) addr IMP.get.(sizeof_pointer) in
         '(_, mval, _) <-
-          serr2memM (abst DEFAULT_FUEL (fun _ => NoAlloc) st.(funptrmap) (fun _ => meta) addr
+          serr2memM (abst DEFAULT_FUEL (find_overlaping st) st.(funptrmap) (fun _ => meta) addr
                                                             (CoqCtype.mk_ctype_pointer CoqCtype.no_qualifiers CoqCtype.void) bs)
         ;;
         match mval with
@@ -1730,46 +1769,6 @@ Module CheriMemory
       else
         fail loc
           (MerrCHERI CheriMerrInvalidCap).
-
-  Definition find_overlaping st addr : overlap_ind
-    :=
-    let (require_exposed, allow_one_past) :=
-      match CoqSwitches.has_switch_pred (SW.get_swtiches tt)
-              (fun x => match x with SW_PNVI _ => true | _ => false end)
-      with
-      | Some (CoqSwitches.SW_PNVI variant) =>
-          match variant with
-          | PLAIN => (false, false)
-          | AE => (true, false)
-          | AE_UDI => (true, true)
-          end
-      | Some _ => (false, false) (* impossible case *)
-      | None => (false, false)
-      end
-    in
-    ZMap.fold (fun alloc_id alloc acc =>
-                 let new_opt :=
-                   if Z.leb (AddressValue.to_Z alloc.(base)) addr && Z.ltb addr (Z.add (AddressValue.to_Z alloc.(base)) alloc.(size)) then
-                     (* PNVI-ae, PNVI-ae-udi *)
-                     if require_exposed && (negb (allocation_taint_eqb alloc.(taint) Exposed))
-                     then None
-                     else Some alloc_id
-                   else if allow_one_past then
-                          (* PNVI-ae-udi *)
-                          if Z.eqb addr (Z.add (AddressValue.to_Z alloc.(base)) alloc.(size))
-                             && negb (require_exposed && (negb (allocation_taint_eqb alloc.(taint) Exposed)))
-                          then Some alloc_id
-                          else None
-                        else None
-                 in
-                 match acc, new_opt with
-                 | _, None => acc
-                 | NoAlloc, Some alloc_id => SingleAlloc alloc_id
-                 | SingleAlloc alloc_id1, Some alloc_id2 => DoubleAlloc alloc_id1 alloc_id2
-                 | DoubleAlloc _ _, Some _ => acc
-                 end
-      ) st.(allocations) NoAlloc.
-
 
   Definition expose_allocation (alloc_id : Z)
     : memM unit :=
