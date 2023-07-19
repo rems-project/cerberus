@@ -1,4 +1,4 @@
-int g (int x);
+extern int g (int x);
 
 /*@ spec g (integer x)
   requires
