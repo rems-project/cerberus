@@ -2078,7 +2078,6 @@ Module CheriMemory
     : memM  footprint
     :=
     let '(prov,ptrval_) := break_PV ptr in
-
     cond <- serr2memM (
                 mt <- typeof mval ;;
                 CoqCtype.ctypeEqual DEFAULT_FUEL (CoqCtype.unatomic cty)
@@ -2127,32 +2126,97 @@ Module CheriMemory
         ;;
         ret (FP Write (AddressValue.of_Z addr) nsz)
       in
+      let store_concrete alloc_id c :=
+        if cap_is_null c  then
+          fail loc (MerrAccess StoreAccess NullPtr)
+        else
+          is_within_bound alloc_id cty (cap_to_Z c)
+            >>=
+            (fun (x : bool) =>
+               match x with
+               | false =>
+                   fail loc (MerrAccess StoreAccess OutOfBoundPtr)
+               | true
+                 =>
+                   get_allocation alloc_id >>=
+                     (fun (alloc : allocation) =>
+                        match alloc.(is_readonly) with
+                        | IsReadOnly =>
+                            fail loc (MerrWriteOnReadOnly false)
+                        | IsReadOnly_string_literal =>
+                            fail loc (MerrWriteOnReadOnly true)
+                        | IsWritable =>
+                            is_atomic_member_access alloc_id cty
+                              (cap_to_Z c) >>=
+                              (fun (x : bool) =>
+                                 match x with
+                                 | true =>
+                                     fail loc
+                                       (MerrAccess LoadAccess AtomicMemberof)
+                                 | false =>
+                                     do_store_cap (Some alloc_id) c >>=
+                                       (fun (fp : footprint) =>
+                                          if is_locking then
+                                            update
+                                              (fun (st : mem_state) =>
+                                                 mem_state_with_allocations
+                                                   (zmap_update
+                                                      alloc_id
+                                                      (fun (x:option allocation) =>
+                                                         match x with
+                                                         | Some a =>
+                                                             Some {|
+                                                                 prefix      := a.(prefix)     ;
+                                                                 base        := a.(base)       ;
+                                                                 size        := a.(size)       ;
+                                                                 ty          := a.(ty)         ;
+                                                                 is_dynamic  := a.(is_dynamic) ;
+                                                                 is_readonly := IsReadOnly     ;
+                                                                 taint       := a.(taint)      ;
+                                                               |}
+                                                         | None => None
+                                                         end) st.(allocations))
+                                                   st)
+                                            ;;
+                                            ret fp
+                                          else
+                                            ret fp)
+                                 end)
+                        end)
+               end)
+      in
+
       match prov, ptrval_ with
       | _, PVfunction _ =>
           fail loc
             (MerrAccess
                StoreAccess
                FunctionPtr)
-      | Prov_none, _ =>
-          fail loc
-            (MerrAccess
-               StoreAccess
-               OutOfBoundPtr)
-            (* TODO *)
-      | Prov_device, PVconcrete addr =>
-          if cap_is_null addr then
+      | Prov_none, PVconcrete c =>
+          (if CoqSwitches.is_PNVI (SW.get_swtiches tt)
+           then fail loc (MerrAccess StoreAccess OutOfBoundPtr)
+           else ret tt)
+          ;;
+          get >>= fun st =>
+              match find_overlaping st (cap_to_Z c) with
+              | NoAlloc => fail loc (MerrAccess StoreAccess OutOfBoundPtr)
+              | DoubleAlloc _ _ => fail loc (MerrInternal "DoubleAlloc without PNVI")
+              | SingleAlloc alloc_id => store_concrete alloc_id c
+              end
+      | Prov_device, PVconcrete c =>
+          if cap_is_null c then
             fail loc
               (MerrAccess
                  StoreAccess
                  NullPtr)
           else
-            is_within_device cty (cap_to_Z addr) >>=
+            is_within_device cty (cap_to_Z c) >>=
               (fun (x : bool) =>
                  if x
-                 then do_store_cap None addr
+                 then do_store_cap None c
                  else fail loc (MerrAccess StoreAccess OutOfBoundPtr))
-      | Prov_symbolic iota, PVconcrete addr =>
-          if cap_is_null addr then
+      | Prov_symbolic iota, PVconcrete c =>
+          if cap_is_null c then
             fail loc
               (MerrAccess
                  StoreAccess
@@ -2160,7 +2224,7 @@ Module CheriMemory
           else
             let precondition (z_value : Z) : memM merr
               :=
-              is_within_bound z_value cty (cap_to_Z addr) >>=
+              is_within_bound z_value cty (cap_to_Z c) >>=
                 (fun (x : bool) =>
                    match x with
                    | false =>
@@ -2180,7 +2244,7 @@ Module CheriMemory
                                      (MerrWriteOnReadOnly true))
                             | IsWritable =>
                                 is_atomic_member_access z_value cty
-                                (cap_to_Z addr)
+                                (cap_to_Z c)
                                   >>=
                                   (fun (x : bool) =>
                                      if x
@@ -2194,7 +2258,7 @@ Module CheriMemory
             in
             resolve_iota precondition iota >>=
               (fun (alloc_id : storage_instance_id) =>
-                 do_store_cap (Some alloc_id) addr >>=
+                 do_store_cap (Some alloc_id) c >>=
                    (fun (fp : footprint) =>
                       (if is_locking then
                          update
@@ -2221,65 +2285,8 @@ Module CheriMemory
                          ret tt)
                       ;;
                       ret fp))
-      | Prov_some alloc_id, PVconcrete addr
-        =>
-          if cap_is_null addr then
-            fail loc (MerrAccess StoreAccess NullPtr)
-          else
-            is_within_bound alloc_id cty (cap_to_Z addr)
-              >>=
-              (fun (x : bool) =>
-                 match x with
-                 | false =>
-                     fail loc (MerrAccess StoreAccess OutOfBoundPtr)
-                 | true
-                   =>
-                     get_allocation alloc_id >>=
-                       (fun (alloc : allocation) =>
-                          match alloc.(is_readonly) with
-                          | IsReadOnly =>
-                              fail loc (MerrWriteOnReadOnly false)
-                          | IsReadOnly_string_literal =>
-                              fail loc (MerrWriteOnReadOnly true)
-                          | IsWritable =>
-                              is_atomic_member_access alloc_id cty
-                                (cap_to_Z addr) >>=
-                                (fun (x : bool) =>
-                                   match x with
-                                   | true =>
-                                       fail loc
-                                         (MerrAccess LoadAccess AtomicMemberof)
-                                   | false =>
-                                       do_store_cap (Some alloc_id) addr >>=
-                                         (fun (fp : footprint) =>
-                                            if is_locking then
-                                              update
-                                                (fun (st : mem_state) =>
-                                                   mem_state_with_allocations
-                                                     (zmap_update
-                                                        alloc_id
-                                                        (fun (x:option allocation) =>
-                                                           match x with
-                                                           | Some a =>
-                                                               Some {|
-                                                                   prefix      := a.(prefix)     ;
-                                                                   base        := a.(base)       ;
-                                                                   size        := a.(size)       ;
-                                                                   ty          := a.(ty)         ;
-                                                                   is_dynamic  := a.(is_dynamic) ;
-                                                                   is_readonly := IsReadOnly     ;
-                                                                   taint       := a.(taint)      ;
-                                                                 |}
-                                                           | None => None
-                                                           end) st.(allocations))
-                                                     st)
-                                              ;;
-                                              ret fp
-                                            else
-                                              ret fp)
-                                   end)
-                          end)
-                 end)
+      | Prov_some alloc_id, PVconcrete c
+        => store_concrete alloc_id c
       end.
 
   Definition null_ptrval (_:CoqCtype.ctype) : pointer_value
