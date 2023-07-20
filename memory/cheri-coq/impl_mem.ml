@@ -936,7 +936,7 @@ module CHERIMorello : Memory = struct
     Printf.fprintf stderr "BEGIN Allocation ==> %s\n" str;
     let l = ZMap.elements st.MM.allocations in
     List.iter (fun (aid,a) ->
-        Printf.fprintf stderr "@%s: 0x%s,%s (%s)\n"
+        Printf.fprintf stderr "@%s: 0x%s,%s (%s,%s)\n"
           (Z.format "%d" aid)
           (Z.format "%x" a.MM.base)
           (Z.format "%d" a.size)
@@ -944,6 +944,7 @@ module CHERIMorello : Memory = struct
            | MM.Exposed -> "exposed"
            | MM.Unexposed -> "unexposed"
           )
+          (if a.is_dynamic then "dynamic" else "static")
       ) l;
     prerr_endline "END Allocations"
 
