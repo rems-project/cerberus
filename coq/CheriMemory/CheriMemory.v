@@ -3878,11 +3878,18 @@ Module CheriMemory
         ret (List.length bs)
     end.
 
+  Definition cornucopiaRevoke (_:unit) : memM unit
+    := ret tt. (* TODO *)
+
   Definition call_intrinsic
     (loc : location_ocaml) (name : string) (args : list mem_value)
     : memM (option mem_value)
     :=
-    if String.eqb name "strfcap" then
+    if String.eqb name "cheri_revoke" then
+      if CoqSwitches.has_switch (SW.get_switches tt) (CoqSwitches.SW_revocation CORNUCOPIA)
+      then (cornucopiaRevoke tt ;; ret None)
+      else fail loc (MerrOther "'cheri_revoke' called without 'cornucopia' switch")
+    else if String.eqb name "strfcap" then
       buf_val <- option2memM "missing argument"  (List.nth_error args 0%nat) ;;
       maxsize_val <- option2memM "missing argument"  (List.nth_error args 1%nat) ;;
       format_val <- option2memM "missing argument"  (List.nth_error args 2%nat) ;;
@@ -4224,7 +4231,11 @@ Module CheriMemory
   Definition get_intrinsic_type_spec (name : string)
     : option intrinsics_signature
     :=
-    if String.eqb name "strfcap" then
+    if String.eqb name "cheri_revoke" then
+      if CoqSwitches.has_switch (SW.get_switches tt) (CoqSwitches.SW_revocation CORNUCOPIA)
+      then Some ((ExactRet CoqCtype.void), [])
+      else None
+    else if String.eqb name "strfcap" then
       Some
         ((ExactRet
             CoqCtype.signed_long),
