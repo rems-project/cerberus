@@ -977,11 +977,11 @@ module CHERIMorello : Memory = struct
 
   (* lifting memM *)
 
-  let lift_coq_memM label (m:'a MM.memM): 'a memM =
+  let lift_coq_memM ?(quiet=false) label (m:'a MM.memM): 'a memM =
     ND (fun st ->
         if !Cerb_debug.debug_level >= 2 then
           Printf.fprintf stderr "MEMOP %s\n" label;
-        if !Cerb_debug.debug_level >= 3 then
+        if not quiet && !Cerb_debug.debug_level >= 3 then
           begin
             print_allocations label st ;
             print_bytemap label st ;
@@ -1172,7 +1172,7 @@ module CHERIMorello : Memory = struct
     in
     match prov with
     | Prov_some alloc_id ->
-       bind (lift_coq_memM "get_allocation" (MM.get_allocation alloc_id)) (fun alloc ->
+       bind (lift_coq_memM ~quiet:true "get_allocation" (MM.get_allocation alloc_id)) (fun alloc ->
            begin match pv with
            | PVconcrete addr ->
               if C.cap_get_value addr = alloc.base then
@@ -1189,13 +1189,13 @@ module CHERIMorello : Memory = struct
          begin match pv with
          | PVconcrete c ->
             let addr = C.cap_get_value c in
-            bind (lift_coq_memM "find_overlapping" (MM.find_overlaping addr)) (fun x ->
+            bind (lift_coq_memM ~quiet:true "find_overlapping" (MM.find_overlaping addr)) (fun x ->
                 let loc = Cerb_location.unknown in
                 match x with
                 | MM.NoAlloc -> fail ~loc (MerrAccess (LoadAccess, OutOfBoundPtr))
                 | MM.DoubleAlloc _ -> fail ~loc (MerrInternal "DoubleAlloc without PNVI")
                 | MM.SingleAlloc alloc_id ->
-                   bind (lift_coq_memM "get_allocation" (MM.get_allocation alloc_id)) (fun alloc ->
+                   bind (lift_coq_memM ~quiet:true "get_allocation" (MM.get_allocation alloc_id)) (fun alloc ->
                        if addr = alloc.base then
                          return @@ Some (string_of_prefix (fromCoq_Symbol_prefix alloc.prefix))
                        else
