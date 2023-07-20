@@ -3184,6 +3184,19 @@ Module CheriMemory
     sz <- serr2memM (sizeof DEFAULT_FUEL None ty) ;;
     let offset := Z.mul sz ival
     in
+    let shift_concrete c_value shifted_addr alloc_id :=
+      get_allocation alloc_id >>=
+        (fun (alloc : allocation) =>
+           if Z.leb (AddressValue.to_Z alloc.(base)) shifted_addr
+              && Z.leb (Z.add shifted_addr sz)
+                   (Z.add (Z.add (AddressValue.to_Z alloc.(base)) alloc.(size)) sz)
+           then
+             let c_value := C.cap_set_value c_value (AddressValue.of_Z shifted_addr) in
+             ret (PV (Prov_some alloc_id) (PVconcrete c_value))
+           else
+             fail loc MerrArrayShift
+        )
+    in
     match ptrval with
     | PV _ (PVfunction _) =>
         raise (InternalErr "CHERI.eff_array_shift_ptrval, PVfunction")
@@ -3281,17 +3294,7 @@ Module CheriMemory
         if CoqSwitches.has_switch (SW.get_switches tt) (CoqSwitches.SW_pointer_arith STRICT)
            || negb (CoqSwitches.has_switch (SW.get_switches tt) (SW_pointer_arith PERMISSIVE))
         then
-          get_allocation alloc_id >>=
-            (fun (alloc : allocation) =>
-               if Z.leb (AddressValue.to_Z alloc.(base)) shifted_addr
-                  && Z.leb (Z.add shifted_addr sz)
-                       (Z.add (Z.add (AddressValue.to_Z alloc.(base)) alloc.(size)) sz)
-               then
-                 let c_value := C.cap_set_value c_value (AddressValue.of_Z shifted_addr) in
-                 ret (PV (Prov_some alloc_id) (PVconcrete c_value))
-               else
-                 fail loc MerrArrayShift
-                  )
+          shift_concrete c_value shifted_addr alloc_id
         else
           let c_value := C.cap_set_value c_value (AddressValue.of_Z shifted_addr) in
           ret (PV (Prov_some alloc_id) (PVconcrete c_value))
@@ -3300,7 +3303,16 @@ Module CheriMemory
         if CoqSwitches.has_switch (SW.get_switches tt) (CoqSwitches.SW_pointer_arith STRICT)
            || negb (CoqSwitches.has_switch (SW.get_switches tt) (CoqSwitches.SW_pointer_arith PERMISSIVE))
         then
-          fail loc (MerrOther "out-of-bound pointer arithmetic (Prov_none)")
+          (if CoqSwitches.is_PNVI (SW.get_switches tt)
+           then fail loc (MerrOther "out-of-bound pointer arithmetic (Prov_none)")
+           else ret tt)
+          ;;
+          find_overlaping (cap_to_Z c_value) >>= fun x =>
+              match x with
+              | NoAlloc => fail loc (MerrAccess LoadAccess OutOfBoundPtr)
+              | DoubleAlloc _ _ => fail loc (MerrInternal "DoubleAlloc without PNVI")
+              | SingleAlloc alloc_id => shift_concrete c_value shifted_addr  alloc_id
+              end
         else
           let c_value := C.cap_set_value c_value (AddressValue.of_Z shifted_addr) in
           ret (PV Prov_none (PVconcrete c_value))
