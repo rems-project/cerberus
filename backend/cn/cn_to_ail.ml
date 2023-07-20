@@ -116,13 +116,18 @@ let create_id_from_sym ?(lowercase=false) sym =
   let str = if lowercase then String.lowercase_ascii str else str in
   Id.id str
 
+let create_sym_from_id id = 
+  Sym.fresh_pretty (Id.pp_string id)
 
-let generate_sym_with_suffix ?(suffix="_tag") ?(uppercase=false) constructor =  
+
+let generate_sym_with_suffix ?(suffix="_tag") ?(uppercase=false) ?(lowercase=false) constructor =  
   let doc = 
   CF.Pp_ail.pp_id ~executable_spec:true constructor ^^ (!^ suffix) in 
   let str = 
   CF.Pp_utils.to_plain_string doc in 
   let str = if uppercase then String.uppercase_ascii str else str in
+  let str = if lowercase then String.lowercase_ascii str else str in
+  (* Printf.printf "%s\n" str; *)
   Sym.fresh_pretty str
 
 (* frontend/model/ail/ailSyntax.lem *)
@@ -212,12 +217,23 @@ let rec cn_to_ail_expr_aux
     
     
     | CNExpr_cons (c_nm, exprs) -> 
+      (* exprs currently unused *)
       let tag_sym = generate_sym_with_suffix ~suffix:"" ~uppercase:true c_nm in
+      (* let _generate_assign_stat (id, expr) = 
+        let _s, rhs_ail_expr = cn_to_ail_expr_aux const_prop dts expr PassBack in
+        let sym = create_sym_from_id id in
+        let ail_expr = A.(AilEassign (mk_expr (AilEident sym), mk_expr rhs_ail_expr)) in
+        A.(AilSexpr (mk_expr (ail_expr)))
+      in
+      (match exprs with 
+        | (i, _) :: (i', _) :: _ -> 
+            Printf.printf "%s\n%s\n" (Id.pp_string i) (Id.pp_string i') 
+        | _ -> ()
+      ); *)
       (* Treating enum value as variable name *)
       dest d ([], AilEident tag_sym)   
 
     (* Should only be integer range *)
-    (* TODO: Need to implement CNExpr_match (e, es) - which can be passed via e *)
     | CNExpr_each (sym, _, (r_start, r_end), e) -> 
       let rec create_list_from_range l_start l_end = 
         (if l_start > l_end then 
@@ -246,92 +262,123 @@ let rec cn_to_ail_expr_aux
       )
       in
       let (cases, exprs) = List.split es in
-      (* let lhs = List.map (fun e_ -> cn_to_ail_expr const_prop e_ PassBack) cases in *)
-      let bindings = [] in
-      (* TODO: Return decls too and pass down *)
-      let rec generate_switch_stats rhs = 
-        (match rhs with
+      (* let bindings = [] in *)
+
+     
+      let rec get_members constructor_sym dts = 
+        (let rec get_members_helper dt_cases = 
+          (match dt_cases with
+            | [] -> None
+            | (constr, members) :: cs -> 
+              let eq = String.equal (String.lowercase_ascii (Sym.pp_string constr)) (String.lowercase_ascii (Sym.pp_string constructor_sym)) in
+              if eq then 
+                Some members
+              else 
+                get_members_helper cs
+          )
+        in
+        match dts with 
+        | [] -> failwith "Constructor not found in CN datatypes list" (* Should never reach this case *)
+        | dt :: dts_ -> 
+            let members_from_dt = get_members_helper dt.cn_dt_cases in
+            match members_from_dt with 
+              | None -> get_members constructor_sym dts_
+              | Some members -> members
+        )
+      in
+
+      let rec generate_member_stats lc_c_sym exprs = 
+        match exprs with 
           | [] -> []
-          | (((s :: ss)) :: rs) ->  
-            (* TODO: Add default case for _ pattern match *)
-            let tag_name = "some_tag" in
-            (* Generating extra statements for extracting member information for a given datatype constructor *)
-            (* let constructor_name = String.sub tag_name 0 ((String.length tag_name) - 4) in *)
-            let constructor_sym = CF.Symbol.fresh_pretty tag_name in
-            let lc_constructor_sym = CF.Symbol.fresh_pretty (String.lowercase_ascii tag_name) in
-            let rec get_members constructor_sym dts = 
-              (let rec get_members_helper dt_cases = 
-                (match dt_cases with
-                  | [] -> None
-                  | (constr, members) :: cs -> 
-                    let eq = String.equal (String.lowercase_ascii (Sym.pp_string constr)) (Sym.pp_string lc_constructor_sym) in
-                    if eq then 
-                      Some members
-                    else 
-                      get_members_helper cs
-                )
-              in
-              match dts with 
-              | [] -> failwith "Constructor not found in CN datatypes list" (* Should never reach this case *)
-              | dt :: dts_ -> 
-                  let members_from_dt = get_members_helper dt.cn_dt_cases in
-                  match members_from_dt with 
-                    | None -> get_members constructor_sym dts_
-                    | Some members -> members
-              )
+          | (id, (_, _, e)) :: es -> 
+            let elem = match e with
+              | A.AilEident sym -> 
+                let rhs = A.(AilEmemberof 
+                (mk_expr (AilEident lc_c_sym), id)) in
+                let ail_expr = A.(AilEassign (mk_expr (AilEident sym), mk_expr rhs)) in
+                [mk_stmt A.(AilSexpr (mk_expr ail_expr))]
+              | _ -> []
             in
-            let members = get_members constructor_sym dts in
-            let (member_cn_types, member_ids) = List.split members in
-            let constr_var_sym = lc_constructor_sym in
+            elem @ (generate_member_stats lc_c_sym es)
+      in
 
-            let member_syms = List.map (fun id -> CF.Symbol.fresh_pretty (Id.s id)) member_ids in
-            let member_types_and_syms = List.combine member_cn_types member_syms in
+      (* TODO: Make recursive inside translate_pattern - like Neel's pattern compiler *)
+      (* Needed for bindings/decls - need type information *)
+      let get_member_type id members = 
+        let same_id = List.filter (fun (_, i) -> Id.equal id i) members in 
+        match same_id with
+          | [(t, _)] -> t
+          | _ -> failwith "Error - should be exactly one match between member and type"
+      in
 
-            let rec generate_member_stats member_syms = 
-              (match member_syms with 
-                | [] -> []
-                | sym :: syms -> 
-                  let rhs = A.(AilEmemberof 
-                  (mk_expr (AilEident constr_var_sym), create_id_from_sym sym)) in
-                  let ail_expr = A.(AilEassign (mk_expr (AilEident sym), mk_expr rhs)) in
-                  (mk_stmt A.(AilSexpr (mk_expr ail_expr))) :: (generate_member_stats syms)
-              )
-            in
+      let create_binding sym ctype = 
+        A.(sym, ((Cerb_location.unknown, Automatic, false), None, empty_qualifiers, ctype))
+      in
 
-            let member_stats = generate_member_stats member_syms in
+      let rec create_bindings_for_pattern exprs members = 
+        match exprs with
+        | [] -> []
+        | (id, (_, _, e)) :: es ->
+          let elem = (match e with
+            | A.AilEident sym -> 
+              let member_type = get_member_type id members in
+              [create_binding sym (mk_ctype (cn_to_ail_base_type member_type))]
+            | _ -> []
+            )
+          in
+          elem @ create_bindings_for_pattern es members
+      in
 
-            let create_binding sym ctype = 
-              A.(sym, ((Cerb_location.unknown, Automatic, false), None, empty_qualifiers, ctype))
+      let rec translate_pattern (CNPat (loc, pat_)) = 
+        match pat_ with 
+          | CNPat_sym sym -> ([], [], A.AilEident sym)
+          | CNPat_constructor (c_nm, exprs) ->
+            let tag_sym = generate_sym_with_suffix ~suffix:"" ~uppercase:true c_nm in
+            let lc_c_sym = generate_sym_with_suffix ~suffix:"" ~lowercase:true c_nm in
+            let members = get_members c_nm dts in
+            let ids_and_ail_exprs = List.map (fun (id, expr) -> (id, translate_pattern expr)) exprs in
+            let member_bindings = create_bindings_for_pattern ids_and_ail_exprs members in
+            let constr_struct_type = mk_ctype (Struct lc_c_sym) in
+            let constr_binding = create_binding lc_c_sym constr_struct_type in
+            let bindings = constr_binding :: member_bindings in
+            let member_stats = generate_member_stats lc_c_sym ids_and_ail_exprs in
+            let rhs_memberof_ptr = A.(AilEmemberofptr (mk_expr e1, Id.id "u")) in
+            let rhs_memberof = A.(AilEmemberof (mk_expr rhs_memberof_ptr, create_id_from_sym lc_c_sym)) in
+            let constructor_var_assign = mk_stmt A.(AilSdeclaration [(lc_c_sym, Some (mk_expr rhs_memberof))]) in
+            (bindings, constructor_var_assign :: member_stats, A.AilEident tag_sym)
+          | _ -> 
+            failwith "TODO"
+      in
+      let lhs = List.map translate_pattern cases in
+      let rec generate_switch_stats lhs rhs = 
+        (match (lhs, rhs) with
+          | ([], []) -> []
+          | ((bindings, member_and_constr_stats, e2) :: ls, ((s :: ss)) :: rs) ->  
+            (* Hack *)
+            let tag_name = (match e2 with
+              | A.AilEident tag_sym -> 
+                Sym.pp_string tag_sym
+              | _ -> failwith "Can only pattern match on datatype constructors"
+            )
             in
             (* <constructor>_tag stored in attribute *)
             let attribute : CF.Annot.attribute = {attr_ns = None; attr_id = CF.Symbol.Identifier (Cerb_location.unknown, tag_name); attr_args = []} in
-            let stat_block = 
-              (match member_stats with
-              | [] -> A.AilSblock ([], List.map mk_stmt (s :: ss))
-              | ms -> 
-                let constr_struct_type = mk_ctype (Struct lc_constructor_sym) in
-                let constr_binding = create_binding constr_var_sym constr_struct_type in
-                let member_bindings = List.map (fun (t, s) -> create_binding s (mk_ctype (cn_to_ail_base_type t))) member_types_and_syms in
-                let rhs_memberof_ptr = A.(AilEmemberofptr (mk_expr e1, Id.id "u")) in
-                let rhs_memberof = A.(AilEmemberof (mk_expr rhs_memberof_ptr, create_id_from_sym constr_var_sym)) in
-                let constructor_var_assign = mk_stmt A.(AilSdeclaration [(constr_var_sym, Some (mk_expr rhs_memberof))]) in
-                A.(AilSblock (constr_binding :: member_bindings, constructor_var_assign :: ms @ (List.map mk_stmt (s :: ss)))))
-            in 
+            let stat_block = A.AilSblock (bindings, member_and_constr_stats @ (List.map mk_stmt (s :: ss))) in
             let ail_case = A.(AilScase (Nat_big_num.zero (* placeholder *), mk_stmt stat_block)) in
             let ail_case_stmt = A.(AnnotatedStatement (Cerb_location.unknown, CF.Annot.Attrs [attribute], ail_case)) in
-            ail_case_stmt :: (generate_switch_stats rs)
+            ail_case_stmt :: (generate_switch_stats ls rs)
           | _ -> failwith "Wrong pattern")  
       in
       (match d with 
         | Assert -> 
           let rhs = List.map (fun e_ -> cn_to_ail_expr_aux const_prop dts e_ Assert) exprs in 
-          let stats = generate_switch_stats rhs in
-          let switch = A.(AilSswitch (mk_expr e1_transformed, mk_stmt (AilSblock (bindings, stats)))) in
+          let stats = generate_switch_stats lhs rhs in
+          let switch = A.(AilSswitch (mk_expr e1_transformed, mk_stmt (AilSblock ([], stats)))) in
           s1 @ [switch]
         | Return -> 
           let rhs = List.map (fun e_ -> cn_to_ail_expr_aux const_prop dts e_ Return) exprs in 
-          let stats = generate_switch_stats rhs in
-          let switch = A.(AilSswitch (mk_expr e1_transformed, mk_stmt (AilSblock (bindings, stats)))) in
+          let stats = generate_switch_stats lhs rhs in
+          let switch = A.(AilSswitch (mk_expr e1_transformed, mk_stmt (AilSblock ([], stats)))) in
           s1 @ [switch]
         | AssignVar x -> failwith "TODO"
         | PassBack -> failwith "TODO")
