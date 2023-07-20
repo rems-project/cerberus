@@ -2814,13 +2814,12 @@ Module CheriMemory
     match ptrval with
     | PV _ (PVfunction _) => ret false
     | (PV Prov_device (PVconcrete c_value)) as ptrval =>
-        if cap_is_null c_value then
-          ret false
-        else
-          isWellAligned_ptrval ref_ty ptrval
+        if cap_is_null c_value
+        then ret false
+        else isWellAligned_ptrval ref_ty ptrval
     | PV (Prov_symbolic iota) (PVconcrete c_value) =>
-        if cap_is_null c_value then
-          ret false
+        if cap_is_null c_value
+        then ret false
         else
           lookup_iota iota >>=
             (fun x =>
@@ -2837,7 +2836,18 @@ Module CheriMemory
         if cap_is_null c_value
         then ret false
         else do_test alloc_id
-    | PV Prov_none _ => ret false
+    | PV Prov_none (PVconcrete c_value) =>
+        if CoqSwitches.is_PNVI (SW.get_switches tt)
+        then ret false
+        else if cap_is_null c_value
+             then ret false
+             else
+               find_overlaping (cap_to_Z c_value) >>= fun x =>
+                   match x with
+                   | NoAlloc => fail Loc_unknown (MerrAccess LoadAccess OutOfBoundPtr)
+                   | DoubleAlloc _ _ => fail Loc_unknown (MerrInternal "DoubleAlloc without PNVI")
+                   | SingleAlloc alloc_id => isWellAligned_ptrval ref_ty ptrval
+                   end
     end.
 
   Definition add_iota
