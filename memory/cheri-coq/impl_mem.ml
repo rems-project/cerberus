@@ -313,6 +313,15 @@ module CHERIMorello : Memory = struct
   let get = Nondeterminism.nd_get
   let (>>=) = Nondeterminism.nd_bind
 
+  (* TODO: hackish *)
+  let fail ?(loc=Cerb_location.other "Cheri") err =
+    let open Nondeterminism in
+    match undefinedFromMem_error err with
+      | Some ub ->
+          kill (Undef0 (loc, [ub]))
+      | None ->
+          kill (Other err)
+
   let lift_coq_serr: (string, 'a) Datatypes.sum -> 'a = function
     | Coq_inl errs -> failwith errs
     | Coq_inr v -> v
@@ -1124,6 +1133,8 @@ module CHERIMorello : Memory = struct
      it requires some dependencies and fixpoint magic.  It OK to have
      in in OCaml for now *)
   let prefix_of_pointer (MM.PV (prov, pv)) : string option memM =
+    if !Cerb_debug.debug_level >= 2 then
+      Printf.fprintf stderr "MEMOP prefix_of_pointer\n";
     let open String_symbol in
     let rec aux addr (alloc:MM.allocation) = function
       | None
@@ -1171,6 +1182,29 @@ module CHERIMorello : Memory = struct
            | _ ->
               return None
            end)
+    | Prov_none ->
+       if Switches.is_PNVI ()
+       then return None
+       else
+         begin match pv with
+         | PVconcrete c ->
+            let addr = C.cap_get_value c in
+            bind (lift_coq_memM "find_overlapping" (MM.find_overlaping addr)) (fun x ->
+                let loc = Cerb_location.unknown in
+                match x with
+                | MM.NoAlloc -> fail ~loc (MerrAccess (LoadAccess, OutOfBoundPtr))
+                | MM.DoubleAlloc _ -> fail ~loc (MerrInternal "DoubleAlloc without PNVI")
+                | MM.SingleAlloc alloc_id ->
+                   bind (lift_coq_memM "get_allocation" (MM.get_allocation alloc_id)) (fun alloc ->
+                       if addr = alloc.base then
+                         return @@ Some (string_of_prefix (fromCoq_Symbol_prefix alloc.prefix))
+                       else
+                         return @@ aux addr alloc (Option.map fromCoq_ctype alloc.ty)
+                     )
+              )
+         | _ ->
+            return None
+         end
     | _ ->
        return None
 
