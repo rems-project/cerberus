@@ -2697,11 +2697,11 @@ and desugar_alignment_specifier loc align_spec =
               (* TODO: the type provided to the evaluator should be the integer type
                  compatible with the enum? *)
               evaluate_integer_constant_expression loc Nothing d_e >>= fun n ->
-              if n < 0 || not (is_power_of_two n) then
-                E.constraint_violation loc AlignasInvalidIntegerConstant
-              else if n = 0 then
+              if n = 0 then
                 (* STD (§6.7.5#6, second sentence) *)
                 E.return Nothing
+              else if n < 0 || not (is_power_of_two n) then
+                E.constraint_violation loc AlignasInvalidIntegerConstant
               else
                 E.return (Just (Ctype.AlignInteger n))
         end
