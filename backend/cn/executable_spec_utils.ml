@@ -19,7 +19,8 @@ let mk_expr expr_ =
     CF.GenTypes.GenLValueType (empty_qualifiers, mk_ctype C.Void, false),
      [], Location_ocaml.unknown, expr_)
 
-
+let mk_cn_expr cn_expr_ = 
+  Cn.CNExpr (Location_ocaml.unknown, cn_expr_)
 
 let mk_stmt stmt_ = 
   A.AnnotatedStatement (Location_ocaml.unknown, CF.Annot.Attrs [], stmt_)
