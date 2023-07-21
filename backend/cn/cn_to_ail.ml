@@ -254,15 +254,34 @@ let rec cn_to_ail_expr_aux
       dest d (List.concat ss, ail_expr)
   
     (* TODO: Add proper error messages for cases handled differently (exprs which are statements in C) *)
-    | CNExpr_match (e, es) -> 
-      let (s1, e1) = cn_to_ail_expr_aux const_prop dts e PassBack in
-      let e1_transformed = 
-        A.(AilEmemberofptr 
-        (mk_expr e1, Id.id "tag")
-      )
+    | CNExpr_match (e, es) ->
+      
+      (* PATTERN COMPILER *)
+
+      let _simplify_leading_variable sym (ps, e) =
+        match ps with 
+          (* CNExpr_const = hack for wildcard pattern *)
+          | CNPat_sym sym' :: ps' -> (CNPat_wild :: ps', mk_cn_expr (CNExpr_let (sym', mk_cn_expr (CNExpr_var sym), e)))
+          | p :: ps' -> (p :: ps', e)
+          | [] -> assert false
       in
+
+      (* let translate vars cases = 
+        match vars with 
+          | [] -> failwith "TODO" (* Implement *)
+          | v :: vs ->
+
+      in
+
+      let switch_stat = translate [e] es in *)
+
+      (* /PATTERN COMPILER/ *)
+      let (s1, e1) = cn_to_ail_expr_aux const_prop dts e PassBack in
+      let transform_switch_expr e_
+        = A.(AilEmemberofptr (mk_expr e_, Id.id "tag"))
+      in
+      let e1_transformed = transform_switch_expr e1 in
       let (cases, exprs) = List.split es in
-      (* let bindings = [] in *)
 
      
       let rec get_members constructor_sym dts = 
@@ -329,14 +348,15 @@ let rec cn_to_ail_expr_aux
           elem @ create_bindings_for_pattern es members
       in
 
-      let rec translate_pattern (CNPat (loc, pat_)) = 
+      let rec translate_pattern_aux (CNPat (loc, pat_)) = 
         match pat_ with 
           | CNPat_sym sym -> ([], [], A.AilEident sym)
           | CNPat_constructor (c_nm, exprs) ->
             let tag_sym = generate_sym_with_suffix ~suffix:"" ~uppercase:true c_nm in
             let lc_c_sym = generate_sym_with_suffix ~suffix:"" ~lowercase:true c_nm in
             let members = get_members c_nm dts in
-            let ids_and_ail_exprs = List.map (fun (id, expr) -> (id, translate_pattern expr)) exprs in
+            (* Recursive call *)
+            let ids_and_ail_exprs = List.map (fun (id, expr) -> (id, translate_pattern_aux expr)) exprs in 
             let member_bindings = create_bindings_for_pattern ids_and_ail_exprs members in
             let constr_struct_type = mk_ctype (Struct lc_c_sym) in
             let constr_binding = create_binding lc_c_sym constr_struct_type in
@@ -349,7 +369,10 @@ let rec cn_to_ail_expr_aux
           | _ -> 
             failwith "TODO"
       in
-      let lhs = List.map translate_pattern cases in
+
+
+
+      let lhs = List.map translate_pattern_aux cases in
       let rec generate_switch_stats lhs rhs = 
         (match (lhs, rhs) with
           | ([], []) -> []
