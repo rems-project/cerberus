@@ -611,7 +611,7 @@ let convert loc eval_conv prec_opt lm_opt cspec flags args =
           | Just LM_l ->
               (* wint_t *) error "NOT YET SUPPORTED: %lc"
           | Just _ ->
-              Mem.return (Right (U.undef (Loc.other "printf() CS_c") [U.DUMMY "TODO_find_quote_printf_CS_c"]))
+              Mem.return (Right (U.undef loc [U.DUMMY "TODO_find_quote_printf_CS_c"]))
           | Nothing ->
               aux (Just (fun z -> z = Ctype.signed_int)) (Just Ctype.unsigned_char) (fun n ->
                 [Decode.encode_character_constant n]
@@ -626,14 +626,14 @@ let convert loc eval_conv prec_opt lm_opt cspec flags args =
               match args with
                 | [] ->
                     Mem.return (
-                      Right (U.undef (Loc.other "printf() %s") [U.UB153a_insufficient_arguments_for_format])
+                      Right (U.undef loc [U.UB153a_insufficient_arguments_for_format])
                     )
                 | ((Ctype.Ctype _ (Ctype.Pointer _ ref_ty) as arg_ty), arg_ptr) :: args' ->
                     if not (AilTypesAux.is_character ref_ty) then
                       (* TODO: this is not a strong enough check, we need to point to
                          the "initial element of an array of character type" *)
                       Mem.return (
-                        Right (U.undef (Loc.other "printf() %s") [U.UB153b_illtyped_argument_for_format])
+                        Right (U.undef loc [U.UB153b_illtyped_argument_for_format])
                       )
                     else
                       Mem.load (Loc.other "printf() %s") arg_ty arg_ptr >>= fun (_, mval) ->
@@ -646,7 +646,7 @@ let convert loc eval_conv prec_opt lm_opt cspec flags args =
                             Nothing
                       end in
                       if Mem_aux.isUnspecifiedMemValue mval then
-                        Mem.return (Right (U.undef (Loc.other "printf() %s") [U.UB_unspecified_lvalue]))
+                        Mem.return (Right (U.undef loc [U.UB_unspecified_lvalue]))
                       else
                           match Mem_aux.pointerValueFromMemValue mval with
                           | Just (_, ptrval) ->
@@ -664,7 +664,7 @@ let convert loc eval_conv prec_opt lm_opt cspec flags args =
         let do_common arg_ty arg_ptr args' =
           Mem.load (Loc.other "printf() %p") arg_ty arg_ptr >>= fun (_, mval) ->
           if Mem_aux.isUnspecifiedMemValue mval then
-            Mem.return (Right (U.undef (Loc.other "printf() %s") [U.UB_unspecified_lvalue]))
+            Mem.return (Right (U.undef loc [U.UB_unspecified_lvalue]))
           else
             match Mem_aux.pointerValueFromMemValue mval with
               | Just (_, ptrval) ->
@@ -676,12 +676,12 @@ let convert loc eval_conv prec_opt lm_opt cspec flags args =
             end in
         let do_illtyped =
           Mem.return begin
-            Right (U.undef (Loc.other "printf() %p") [U.UB153b_illtyped_argument_for_format])
+            Right (U.undef loc [U.UB153b_illtyped_argument_for_format])
           end in
         match args with
           | [] ->
               Mem.return (
-                Right (U.undef (Loc.other "printf() %p") [U.UB153a_insufficient_arguments_for_format])
+                Right (U.undef loc [U.UB153a_insufficient_arguments_for_format])
               )
           | ((Ctype.Ctype _ (Ctype.Pointer _ (Ctype.Ctype _ Ctype.Void)) as arg_ty), arg_ptr) :: args' ->
               do_common arg_ty arg_ptr args'
