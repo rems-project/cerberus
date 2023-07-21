@@ -976,9 +976,12 @@ let make_fun_with_spec_args f_i loc env args requires =
     | ((cn_bt, pure_arg), ct_ct) :: rest ->
        let ct = convert_ct loc ct_ct in
        let sbt = SBT.of_sct ct in
-       let sbt2 = C.translate_cn_base_type cn_bt in
-       assert (SBT.equal sbt sbt2);
        let bt = SBT.to_basetype sbt in
+       let sbt2 = C.translate_cn_base_type cn_bt in
+       let@ () = if BT.equal bt (SBT.to_basetype sbt2) then return ()
+         else fail {loc; msg = Generic (!^"Argument-type mismatch between" ^^^
+           (BT.pp bt) ^^^ Print.parens (!^"from" ^^^ Sctypes.pp ct) ^^^ !^ "and" ^^^
+           BT.pp (SBT.to_basetype sbt2))} in
        let env = C.add_computational pure_arg sbt env in
        let good_lc =
          let info = (loc, Some (Sym.pp_string pure_arg ^ " good")) in
