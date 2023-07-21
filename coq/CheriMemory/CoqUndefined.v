@@ -47,6 +47,9 @@ Inductive undefined_behaviour : Type :=
   (* The value of an object with automatic storage duration is used while it is indeterminate
      (6.2.4, 6.7.9, 6.8). *)
   | UB011_use_indeterminate_automatic_object: undefined_behaviour 
+  (* (NOTE: this is missing from Annex J)
+     Any attempt to modify an object with temporary lifetime results in undefined behavior. (6.2.4) *)
+  | UB_modifying_temporary_lifetime: undefined_behaviour
   (* A trap representation is read by an lvalue expression that does not have character type
      (6.2.6.1). *)
   | UB012_lvalue_read_trap_representation: undefined_behaviour 

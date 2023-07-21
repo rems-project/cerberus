@@ -148,8 +148,7 @@ Module CheriMemory
 
   Inductive readonly_status : Set :=
   | IsWritable : readonly_status
-  | IsReadOnly_string_literal : readonly_status
-  | IsReadOnly : readonly_status.
+  | IsReadOnly : readonly_kind -> readonly_status.
 
   Inductive allocation_taint :=
   | Exposed
@@ -862,7 +861,7 @@ Module CheriMemory
           | Some mval =>  (* here we allocate an object with initiliazer *)
               let (ro,readonly_status) :=
                 match pref with
-                | CoqSymbol.PrefStringLiteral _ _ => (true,IsReadOnly_string_literal)
+                | CoqSymbol.PrefStringLiteral _ _ => (true,IsReadOnly ReadonlyStringLiteral)
                 | _ => (false,IsWritable)
                 end
               in
@@ -2001,15 +2000,11 @@ Module CheriMemory
                        get_allocation z_value >>=
                          (fun (alloc : allocation) =>
                             match alloc.(is_readonly) with
-                            | IsReadOnly =>
+                            | IsReadOnly ro_kind =>
                                 ret
                                   (FAIL loc
                                      (MerrWriteOnReadOnly
-                                        false))
-                            | IsReadOnly_string_literal =>
-                                ret
-                                  (FAIL loc
-                                     (MerrWriteOnReadOnly true))
+                                        ro_kind))
                             | IsWritable =>
                                 is_atomic_member_access z_value cty
                                 (AddressValue.to_Z (C.cap_get_value addr))
@@ -2042,7 +2037,7 @@ Module CheriMemory
                                               base        := a.(base)        ;
                                               size        := a.(size)        ;
                                               ty          := a.(ty)          ;
-                                              is_readonly := IsReadOnly ;
+                                              is_readonly := IsReadOnly ReadonlyConstQualified;
                                               taint       := a.(taint)       ;
                                             |}
                                       | None => None
@@ -2068,10 +2063,8 @@ Module CheriMemory
                      get_allocation alloc_id >>=
                        (fun (alloc : allocation) =>
                           match alloc.(is_readonly) with
-                          | IsReadOnly =>
-                              fail loc (MerrWriteOnReadOnly false)
-                          | IsReadOnly_string_literal =>
-                              fail loc (MerrWriteOnReadOnly true)
+                          | IsReadOnly ro_kind =>
+                              fail loc (MerrWriteOnReadOnly ro_kind)
                           | IsWritable =>
                               is_atomic_member_access alloc_id cty
                                 (AddressValue.to_Z (C.cap_get_value addr)) >>=
@@ -2097,7 +2090,7 @@ Module CheriMemory
                                                                    base        := a.(base)        ;
                                                                    size        := a.(size)        ;
                                                                    ty          := a.(ty)          ;
-                                                                   is_readonly := IsReadOnly ;
+                                                                   is_readonly := IsReadOnly ReadonlyConstQualified;
                                                                    taint       := a.(taint)       ;
                                                                  |}
                                                            | None => None

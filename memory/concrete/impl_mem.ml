@@ -362,8 +362,7 @@ module Concrete : Memory = struct
   
   type readonly_status =
     | IsWritable
-    | IsReadOnly_string_literal
-    | IsReadOnly
+    | IsReadOnly of Mem_common.readonly_kind
   (* INTERNAL: allocation *)
   type allocation = {
     base: address;
@@ -1268,9 +1267,11 @@ module Concrete : Memory = struct
           let readonly_status =
             match pref with
               | Symbol.PrefStringLiteral _ ->
-                  IsReadOnly_string_literal
+                  IsReadOnly ReadonlyStringLiteral
+              | Symbol.PrefTemporaryLifetime _ ->
+                  IsReadOnly ReadonlyTemporaryLifetime
               | _ ->
-                  IsReadOnly_string_literal in
+                  IsReadOnly ReadonlyConstQualified in
           let alloc = {prefix= pref; base= addr; size= size; ty= Some ty; is_readonly= readonly_status; taint= `Unexposed} in
           (* TODO: factorise this with do_store inside Concrete.store *)
           update (fun st ->
@@ -1641,6 +1642,13 @@ module Concrete : Memory = struct
         end >>= fun () ->
         print_bytemap ("AFTER STORE => " ^ Cerb_location.location_to_string loc) >>= fun () ->
         return (FP (`W, addr, (sizeof ty))) in
+      let select_ro_kind = function
+        | Symbol.PrefTemporaryLifetime _ ->
+            ReadonlyTemporaryLifetime
+        | Symbol.PrefStringLiteral _ ->
+            ReadonlyStringLiteral
+        | _ ->
+            ReadonlyConstQualified in
       match (prov, ptrval_) with
         | (_, PVnull _) ->
             fail ~loc (MerrAccess (StoreAccess, NullPtr))
@@ -1668,10 +1676,8 @@ module Concrete : Memory = struct
               | true ->
                   get_allocation ~loc z >>= fun alloc ->
                   match alloc.is_readonly with
-                    | IsReadOnly ->
-                        return (`FAIL (loc, MerrWriteOnReadOnly false))
-                    | IsReadOnly_string_literal ->
-                      return (`FAIL (loc, MerrWriteOnReadOnly true))
+                    | IsReadOnly ro_kind ->
+                        return (`FAIL (loc, MerrWriteOnReadOnly ro_kind))
                     | IsWritable ->
                       begin is_atomic_member_access ~loc z ty addr >>= function
                         | true ->
@@ -1685,7 +1691,7 @@ module Concrete : Memory = struct
             Eff.update (fun st ->
               { st with allocations=
                   IntMap.update alloc_id (function
-                    | Some alloc -> Some { alloc with is_readonly= IsReadOnly }
+                    | Some alloc -> Some { alloc with is_readonly= IsReadOnly (select_ro_kind alloc.prefix) }
                     | None       -> None
                   ) st.allocations }
             )
@@ -1701,10 +1707,8 @@ module Concrete : Memory = struct
               | true ->
                   get_allocation ~loc alloc_id >>= fun alloc ->
                   match alloc.is_readonly with
-                    | IsReadOnly ->
-                        fail ~loc (MerrWriteOnReadOnly false)
-                    | IsReadOnly_string_literal ->
-                      fail ~loc (MerrWriteOnReadOnly true)
+                    | IsReadOnly ro_kind ->
+                        fail ~loc (MerrWriteOnReadOnly ro_kind)
                     | IsWritable ->
                         begin is_atomic_member_access ~loc alloc_id ty addr >>= function
                           | true ->
@@ -1715,7 +1719,7 @@ module Concrete : Memory = struct
                                 Eff.update (fun st ->
                                   { st with allocations=
                                       IntMap.update alloc_id (function
-                                        | Some alloc -> Some { alloc with is_readonly= IsReadOnly }
+                                        | Some alloc -> Some { alloc with is_readonly= IsReadOnly (select_ro_kind alloc.prefix) }
                                         | None       -> None
                                       ) st.allocations }
                                 ) >>= fun () ->
@@ -2819,6 +2823,11 @@ let combine_prov prov1 prov2 =
       `Assoc [("kind", `String "string literal");
               ("scope", `Null);
               ("name", `String "literal");
+              ("loc", Cerb_location.to_json loc)]
+    | Symbol.PrefTemporaryLifetime (loc, _) ->
+      `Assoc [("kind", `String "rvalue temporary");
+              ("scope", `Null);
+              ("name", `String "temporary");
               ("loc", Cerb_location.to_json loc)]
     | Symbol.PrefCompoundLiteral (loc, _) ->
       `Assoc [("kind", `String "compound literal");

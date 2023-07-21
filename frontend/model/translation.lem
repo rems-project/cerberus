@@ -2860,10 +2860,10 @@ else (* is_pointer *)
             end
           end
       | A.AilEarray_decay e ->
+          self e >>= fun core_e ->
           match GenTypes.genTypeCategoryOf e with
             | GenTypes.GenLValueType _ _ _ ->
                 (* by Ail typing, [e] is a lvalue. Hence the corresponding Core has a non-loaded type *)
-                self e >>= fun core_e ->
                 E.wrapped_fresh_symbol (C.BTy_object C.OTy_pointer) >>= fun e_wrp   ->
                 E.wrapped_fresh_symbol (C.BTy_object C.OTy_pointer) >>= fun res_wrp ->
                 E.return (
@@ -2888,7 +2888,23 @@ else
                   )
                 )
             | GenTypes.GenRValueType _ ->
-                illTypedAil loc "AilEarray_decay, GenRValueType"
+                (* TODO: this is different from what the standard says in two ways:
+                    1. we should be allocating a object of the whole struct/union
+                       that contains this array (rvalue array_decay only occur when there is such
+                       a struct/union)
+                    2. the allocation should happen at the evaluation of struct/union rvalue, not
+                       at the beginning of the evaluation of the containing full expression *)
+                let oTy = force_core_object_type_of_ctype (ctype_of e) in
+                E.wrapped_fresh_symbol (C.BTy_loaded oTy) >>= fun e_wrp ->
+                E.wrapped_fresh_symbol (C.BTy_object C.OTy_pointer) >>= fun res_wrp ->
+                E.register_temporary_object res_wrp (ctype_of e) >>= fun () ->
+                E.return begin
+                  Caux.mk_wseq_e e_wrp.E.sym_pat core_e (
+                    Caux.mk_wseq_e (Caux.mk_empty_pat C.BTy_unit)
+                      (Caux.add_std "§6.2.4#8" (Caux.pstore_lock loc (Caux.mk_ail_ctype_pe (ctype_of e)) res_wrp.E.sym_pe e_wrp.E.sym_pe Cmm.NA))
+                      (Caux.mk_pure_e (Caux.mk_specified_pe res_wrp.E.sym_pe))
+                  )
+                end
           end
       | A.AilEfunction_decay e ->
           translate_function_designator self stdlib e
@@ -3197,9 +3213,33 @@ type translate_stmt_env = <|
 
 
 let wrapped_translate_expression is_used ctx variadic_env stdlib tagDefs e =
-  translate_expression is_used ctx variadic_env stdlib tagDefs e >>= fun core_e ->  
-  E.return begin
-    C.Expr [Annot.Astd "§6.5#2"] (C.Ebound core_e)
+  E.track_temporary_objects begin
+    translate_expression is_used ctx variadic_env stdlib tagDefs e
+  end >>= fun (xs, core_e) ->
+  let bound_core = C.Expr [Annot.Astd "§6.5#2"] (C.Ebound core_e) in
+  match xs with
+    | [] ->
+        E.return bound_core
+    | _ ->
+        let loc = Loc.locOf e in
+        let (core_creates, core_kills) : list (C.pattern * C.expr unit) * list (C.expr unit) =
+          List.unzip begin
+            List.map (fun (ptr_wrp, ty) ->
+              ( ( ptr_wrp.E.sym_pat
+                , let core_ty = Caux.mk_ail_ctype_pe ty in
+                  Caux.pcreate loc (Caux.mk_alignof_pe core_ty) core_ty (Symbol.PrefTemporaryLifetime loc (Symbol.digest_of_sym ptr_wrp.E.sym_sym)) )
+              , Caux.pkill loc (C.Static ty) ptr_wrp.E.sym_pe )
+            ) xs
+          end in
+        E.wrapped_fresh_symbol (maybe C.BTy_unit C.BTy_loaded (Caux.core_object_type_of_ctype (ctype_of e))) >>= fun e_wrp ->
+        E.return begin
+          Caux.add_std "§6.2.4#8" begin
+            Caux.mk_sseqs core_creates begin
+              Caux.mk_sseq_e e_wrp.E.sym_pat bound_core
+                (Caux.mk_unit_sseq core_kills (Caux.mk_pure_e e_wrp.E.sym_pe))
+            end
+          end
+        end
   end
 
 

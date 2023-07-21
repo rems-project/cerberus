@@ -30,6 +30,11 @@ let serialise_prefix = function
               ("scope", `Null);
               ("name", `String "literal");
               ("loc", Cerb_location.to_json loc)]
+  | Symbol.PrefTemporaryLifetime (loc, _) ->
+      `Assoc [("kind", `String "rvalue temporary");
+              ("scope", `Null);
+              ("name", `String "temporary");
+              ("loc", Cerb_location.to_json loc)]
   | Symbol.PrefFunArg (loc, _, n) ->
       `Assoc [("kind", `String "arg");
               ("scope", `Null);
