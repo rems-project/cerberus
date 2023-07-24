@@ -2292,6 +2292,7 @@ end
           E.wrapped_fresh_symbol (C.BTy_object C.OTy_integer) >>= fun object_from_wrp ->
           E.wrapped_fresh_symbol (C.BTy_loaded C.OTy_pointer) >>= fun loaded_to_wrp   ->
           E.wrapped_fresh_symbol (C.BTy_object C.OTy_pointer) >>= fun object_to_wrp   ->
+          E.wrapped_fresh_symbol (C.BTy_object C.OTy_pointer) >>= fun memop_wrp       ->
           self from_e                                         >>= fun from_e          ->
           self to_e                                           >>= fun to_e            ->
           E.return begin
@@ -2302,7 +2303,8 @@ end
               begin
                 Caux.mk_case_e (Caux.mk_tuple_pe [loaded_from_wrp.E.sym_pe; loaded_to_wrp.E.sym_pe])
                   [ ( Caux.mk_tuple_pat [Caux.mk_specified_pat object_from_wrp.E.sym_pat; Caux.mk_specified_pat object_to_wrp.E.sym_pat]
-                    , Caux.mk_memop_e Mem_common.Copy_alloc_id [object_from_wrp.E.sym_pe; object_to_wrp.E.sym_pe] )
+                    , Caux.mk_wseq_e memop_wrp.E.sym_pat (Caux.mk_memop_e Mem_common.Copy_alloc_id [object_from_wrp.E.sym_pe; object_to_wrp.E.sym_pe])
+                      (Caux.mk_pure_e (Caux.mk_specified_pe memop_wrp.E.sym_pe)) )
                   ; ( Caux.mk_empty_pat (C.BTy_tuple [C.BTy_loaded C.OTy_integer; C.BTy_loaded C.OTy_pointer])
                     , Caux.mk_pure_e (Caux.mk_undef_pe loc (Undefined.UB_CERB004_unspecified Undefined.UB_unspec_copy_alloc_id))) ]
               end
