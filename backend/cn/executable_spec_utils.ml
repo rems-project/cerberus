@@ -22,6 +22,10 @@ let mk_expr expr_ =
 let mk_cn_expr cn_expr_ = 
   Cn.CNExpr (Cerb_location.unknown, cn_expr_)
 
+let rm_cn_expr (Cn.CNExpr (_, cn_expr_))
+  = cn_expr_
+
+
 let mk_stmt stmt_ = 
   A.AnnotatedStatement (Cerb_location.unknown, CF.Annot.Attrs [], stmt_)
 

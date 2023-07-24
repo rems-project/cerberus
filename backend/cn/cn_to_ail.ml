@@ -11,6 +11,13 @@ module A=CF.AilSyntax
 module C=CF.Ctype
 module BT=BaseTypes
 
+module ConstructorPattern = struct
+  type t = C.union_tag
+  let compare (x : t) y = Stdlib.compare x y
+end
+
+module PatternMap = Map.Make(ConstructorPattern)
+
 let generic_cn_dt_sym = Sym.fresh_pretty "cn_datatype"
 
 let rec bt_to_cn_base_type = function
@@ -259,22 +266,69 @@ let rec cn_to_ail_expr_aux
       
       (* PATTERN COMPILER *)
 
-      let _simplify_leading_variable sym (ps, e) =
+      let simplify_leading_variable sym (ps, e) =
         match ps with 
-          (* CNExpr_const = hack for wildcard pattern *)
-          | CNPat_sym sym' :: ps' -> (CNPat_wild :: ps', mk_cn_expr (CNExpr_let (sym', mk_cn_expr (CNExpr_var sym), e)))
+          | CNPat (loc, CNPat_sym sym') :: ps' -> (CNPat (loc, CNPat_wild) :: ps', mk_cn_expr (CNExpr_let (sym', mk_cn_expr (CNExpr_var sym), e)))
           | p :: ps' -> (p :: ps', e)
           | [] -> assert false
       in
 
-      (* let translate vars cases = 
-        match vars with 
-          | [] -> failwith "TODO" (* Implement *)
-          | v :: vs ->
-
+      let leading_wildcard (ps, _) =
+        match ps with
+          | CNPat (loc, CNPat_wild) :: ps' -> true
+          | _ :: ps' -> false
+          | [] -> failwith "Empty patterns not allowed"
       in
 
-      let switch_stat = translate [e] es in *)
+      let rec append_to_all elem bindings m = 
+        match bindings with 
+          | [] -> m
+          | b :: bs ->
+            let curr = PatternMap.find b m in
+            let m' = PatternMap.remove b m in
+            let m' = PatternMap.add b (curr @ [elem]) m' in 
+            append_to_all elem bs m'
+      in 
+
+      let rec split_into_groups cases m =
+          match cases with
+            | [] -> m
+            | ((lhs, rhs) as case) :: cases' -> 
+              let new_m = (match lhs with 
+                | CNPat (_, CNPat_constructor (c_nm, _)) :: _ -> (* Check if constructor already exists in split *)
+                  if (PatternMap.mem c_nm m) then 
+                    let curr = PatternMap.find c_nm m in
+                    let m' = PatternMap.remove c_nm m in
+                    PatternMap.add c_nm (curr @ [case]) m'
+                  else
+                    PatternMap.add c_nm [case] m
+                | CNPat (_, CNPat_sym sym) :: _ ->
+                  let (keys, vals) = List.split (PatternMap.bindings m) in
+                  append_to_all case keys m
+                | _ -> failwith "No other cases allowed on LHS of pattern match")
+              in
+              split_into_groups cases' new_m
+      in
+
+
+      (* Matrix algorithm for pattern compilation *)
+      let rec _translate : (A.ail_identifier * _ Cn.cn_base_type) list -> ((C.union_tag cn_pat) list * (C.union_tag, C.ctype) cn_expr) list -> _ A.statement =
+        fun vars cases -> 
+          match vars with 
+            | [] -> failwith "TODO" (* Implement *)
+            | (v, tp) :: vs -> 
+              (* All leading variables become wildcard patterns *)
+              let cases = List.map (simplify_leading_variable v) cases in
+              (* If all are variables/wildcards, we move onto next pattern *)
+              if List.for_all leading_wildcard cases then
+                let cases = List.map (fun (ps, e) -> (List.tl ps, e)) cases in
+                _translate vs cases
+              else
+                let _m = split_into_groups cases PatternMap.empty in
+                failwith "TODO"
+      in
+
+      (* let switch_stat = translate [e] es in *)
 
       (* /PATTERN COMPILER/ *)
       let (s1, e1) = cn_to_ail_expr_aux const_prop dts e PassBack in
