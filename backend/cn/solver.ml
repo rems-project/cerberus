@@ -247,6 +247,12 @@ module Translate = struct
       z3_exp
     end
 
+  let is_uninterp_bt (bt : BT.t) = match bt with
+    | Unit -> true
+    | CType -> true
+    | List bt -> true
+    | _ -> false
+
   let tuple_field_name bts i = 
     bt_name (Tuple bts) ^ string_of_int i
 
@@ -1176,7 +1182,7 @@ module Eval = struct
         | () when BT.equal Unit expr_bt ->
            unit_
 
-        | () when Option.is_some (BT.is_list_bt expr_bt) && List.length args == 0 ->
+        | () when is_uninterp_bt expr_bt && List.length args == 0 ->
            (* Z3 creates unspecified consts within uninterpreted types - map to vars *)
            let nm = Sym.fresh_named (Z3.Symbol.to_string func_name) in
            Z3Symbol_Table.add z3sym_table func_name (UninterpretedVal {nm});
