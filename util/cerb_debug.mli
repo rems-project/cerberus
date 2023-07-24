@@ -41,3 +41,4 @@ val end_csv_timing: string -> unit
 
 val maybe_open_csv_timing_file: unit -> unit
 val maybe_close_csv_timing_file: unit -> unit
+val maybe_close_csv_timing_file_no_err: unit -> unit

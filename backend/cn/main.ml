@@ -192,10 +192,9 @@ let main
          exit (if expect_failure then 0 else 1)
  with
      | exc -> 
-        Cerb_debug.maybe_close_csv_timing_file ();
         Pp.maybe_close_times_channel ();
-        Printexc.raise_with_backtrace exc (Printexc.get_raw_backtrace ())
-
+        Cerb_debug.maybe_close_csv_timing_file_no_err ();
+        Printexc.raise_with_backtrace exc (Printexc.get_raw_backtrace ());
 
 
 open Cmdliner

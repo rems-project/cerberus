@@ -97,16 +97,20 @@ let maybe_open_csv_timing_file () =
       Printf.fprintf oc "action,time\n";
     end
 
-
-let maybe_close_csv_timing_file () = 
+let maybe_close_csv_timing_file_and_check check = 
   if !debug_level >= 1 then 
     match !csv_timing_stack_file with
     | None -> ()
     | Some oc ->
-       assert (match !csv_timing_stack with [] -> true | _ -> false);
        close_out oc;
-       csv_timing_stack_file := None
+       csv_timing_stack_file := None;
+       if check
+       then
+         assert (match !csv_timing_stack with [] -> true | _ -> false)
+       else ()
 
+let maybe_close_csv_timing_file () = maybe_close_csv_timing_file_and_check true
+let maybe_close_csv_timing_file_no_err () = maybe_close_csv_timing_file_and_check false
 
 let begin_csv_timing () =
   if !debug_level >= 1 then
