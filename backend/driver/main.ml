@@ -96,7 +96,7 @@ let cerberus debug_level progress core_obj
              impl_name
              exec exec_mode iso_switches switches batch concurrency
              astprints pprints ppflags
-             sequentialise_core rewrite_core typecheck_core defacto permissive
+             sequentialise_core rewrite_core typecheck_core defacto permissive ignore_bitfields
              fs_dump fs trace
              output_name
              files args_opt =
@@ -113,7 +113,7 @@ let cerberus debug_level progress core_obj
     | Some args -> Str.split (Str.regexp "[ \t]+") args
   in
   (* set global configuration *)
-  set_cerb_conf "Driver" exec exec_mode concurrency QuoteStd defacto permissive agnostic false;
+  set_cerb_conf "Driver" exec exec_mode concurrency QuoteStd defacto permissive agnostic ignore_bitfields false;
   let conf = { astprints; pprints; ppflags; debug_level; typecheck_core;
                rewrite_core; sequentialise_core; cpp_cmd; cpp_stderr = true } in
   let prelude =
@@ -377,6 +377,14 @@ let agnostic =
              as possible. This makes the pipeline somewhat implementation agnostic." in
   Arg.(value & flag & info ["agnostic"] ~doc)
 
+ let ignore_bitfields =
+  let doc = "(DEBUG) accept and ignore bit-field width specifiers. \
+             CAUTION: the constraints relating to bit-fields are NOT checked, \
+             and the desugaring produces Ail struct/union types with \
+             normal members. This flag will be removed when support \
+             for bit-fields is added." in
+  Arg.(value & flag & info ["dignore-bitfields"] ~doc)
+
 let exec =
   let doc = "Execute the Core program after the elaboration." in
   Arg.(value & flag & info ["exec"] ~doc)
@@ -484,7 +492,7 @@ let () =
                          exec $ exec_mode $ iso $ switches $ batch $
                          concurrency $
                          astprints $ pprints $ ppflags $
-                         sequentialise $ rewrite $ typecheck_core $ defacto $ permissive $
+                         sequentialise $ rewrite $ typecheck_core $ defacto $ permissive $ ignore_bitfields $
                          fs_dump $ fs $ trace $
                          output_file $
                          files $ args) in

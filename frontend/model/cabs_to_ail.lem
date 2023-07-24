@@ -2654,11 +2654,19 @@ and desugar_struct_declarator has_alignment struct_decltor =
   match struct_decltor with
     | SDecl_simple decltor ->
         desugar_declarator NotFunDef decltor
-    | SDecl_bitfield _ (CabsExpression loc _) ->
+    | SDecl_bitfield decltor_opt (CabsExpression loc _) ->
         if has_alignment then
           E.constraint_violation loc (IllegalAlignas IllegalAlignas_bitfield)
+        else if Global.isIgnoreBitfields () then
+          match decltor_opt with
+            | Nothing ->
+                E.fail loc (Errors.Desugar_NotYetSupported "bit-fields")
+            | Just decltor ->
+                E.warnM (fun () -> "ignoring a bit-field declarator at " ^ Loc.stringFromLocation loc) >>= fun () ->
+                desugar_declarator NotFunDef decltor
+          end
         else
-          E.fail loc (Errors.Desugar_NotYetSupported "SDecl_bitfield")
+          E.fail loc (Errors.Desugar_NotYetSupported "bit-fields")
   end
 
 and desugar_enumerator (ident, e_opt) =

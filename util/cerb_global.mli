@@ -17,6 +17,7 @@ type cerberus_conf = {
   defacto:         bool;
   permissive:      bool; (* allows GCC extensions and stuff *)
   agnostic:        bool;
+  ignore_bitfields: bool;
   n1570:           Yojson.Basic.t option;
 }
 
@@ -34,6 +35,7 @@ val set_cerb_conf:
     bool ->
     bool ->
     bool ->
+    bool ->
     unit
 
 (* NOTE: used in driver.lem *)
@@ -45,6 +47,7 @@ val concurrency_mode: unit -> bool
 val isDefacto: unit -> bool
 val isPermissive: unit -> bool
 val isAgnostic: unit -> bool
+val isIgnoreBitfields: unit -> bool
 
 (* NOTE: used in pp_errors.ml *)
 val verbose: unit -> error_verbosity
