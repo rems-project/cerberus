@@ -2308,11 +2308,16 @@ end
               end
           end
 
-      | A.AilEcall (A.AnnotatedExpression _ _ _ (A.AilEbuiltin (A.AilBCHERI str))) es ->
+      | A.AilEcall (A.AnnotatedExpression _ _ _ (A.AilEbuiltin (A.AilBCHERI str))) [] ->
+          E.return begin
+            C.Expr [] (C.Ememop (Mem_common.CHERI_intrinsic str (result_ty, [])) [])
+          end
+      
+      | A.AilEcall (A.AnnotatedExpression _ _ _ (A.AilEbuiltin (A.AilBCHERI str))) (_::_ as es) ->
           E.mapM self es >>= fun core_es ->
-          let oTy_ret = force_core_object_type_of_ctype result_ty in
+          let bTy_ret = maybe C.BTy_unit C.BTy_loaded (Caux.core_object_type_of_ctype result_ty) in
           let oTys = List.map (fun e -> force_core_object_type_of_ctype (ctype_of e)) es in
-          E.wrapped_fresh_symbol (C.BTy_object oTy_ret) >>= fun memop_wrp ->
+          E.wrapped_fresh_symbol bTy_ret >>= fun memop_wrp ->
           (* E.foldlM (fun (sym_pat_acc, sym_pe_acc, obj_pat_acc, obj_pe_acc) oTy ->
             E.wrapped_fresh_symbol (C.BTy_loaded oTy)  >>= fun (_, sym_pat, sym_pe) ->
             E.wrapped_fresh_symbol (C.BTy_object oTy)  >>= fun (_, obj_pat, obj_pe) ->
