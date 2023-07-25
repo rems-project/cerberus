@@ -11,7 +11,7 @@ module C=CF.Ctype
 module BT=BaseTypes
 
 module ConstructorPattern = struct
-  type t = C.union_tag
+  type t = C.union_tag 
   let compare (x : t) y = Stdlib.compare x y
 end
 
@@ -301,17 +301,22 @@ let rec cn_to_ail_expr_aux
                     PatternMap.add c_nm (curr @ [case]) m'
                   else
                     PatternMap.add c_nm [case] m
-                | CNPat (_, CNPat_sym sym) :: _ ->
-                  let (keys, vals) = List.split (PatternMap.bindings m) in
-                  append_to_all case keys m
+                | CNPat (_, CNPat_sym _) :: _ (* This case shouldn't occur because of call to simplify_leading_variable *)
+                | CNPat (_, CNPat_wild) :: _ ->
+                    (* Everything should be a wildcard pattern after functions that have been called *)
+                    (* Above pattern maybe shouldn't exist? *)
+                    let (keys, vals) = List.split (PatternMap.bindings m) in
+                     append_to_all case keys m
                 | _ -> failwith "No other cases allowed on LHS of pattern match")
               in
               split_into_groups cases' new_m
       in
 
 
+      (* TODO: Two implementations: one with the assumption of having type information, and one without *)
+      (* Eventually should always have type information, and None case will become redundant *)
       (* Matrix algorithm for pattern compilation *)
-      let rec _translate : (A.ail_identifier * _ Cn.cn_base_type) list -> ((C.union_tag cn_pat) list * (C.union_tag, C.ctype) cn_expr) list -> _ A.statement =
+      let rec _translate : (A.ail_identifier * (_ Cn.cn_base_type) option) list -> ((C.union_tag cn_pat) list * (C.union_tag, C.ctype) cn_expr) list -> _ A.statement =
         fun vars cases -> 
           match vars with 
             | [] -> failwith "TODO" (* Implement *)
