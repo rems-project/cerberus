@@ -11,7 +11,7 @@ module C=CF.Ctype
 module BT=BaseTypes
 
 module ConstructorPattern = struct
-  type t = C.union_tag * ((C.union_tag, C.ctype) cn_expr_ * (C.union_tag, C.ctype) cn_expr) list
+  type t = C.union_tag 
   let compare (x : t) y = Stdlib.compare x y
 end
 
@@ -285,24 +285,29 @@ let rec cn_to_ail_expr_aux
             | [] -> m
             | ((lhs, rhs) as case) :: cases' -> 
               let new_m = (match lhs with 
-                | CNExpr_cons (c_nm, _) -> (* Check if constructor already exists in split *)
+                | CNExpr_cons (c_nm, _) :: _ -> (* Check if constructor already exists in split *)
                   if (PatternMap.mem c_nm m) then 
                     let curr = PatternMap.find c_nm m in
                     let m' = PatternMap.remove c_nm m in
                     PatternMap.add c_nm (curr @ [case]) m'
                   else
                     PatternMap.add c_nm [case] m
-                | CNExpr_var sym ->
-                  let (keys, vals) = List.split (PatternMap.bindings m) in
-                  append_to_all case keys m
+                | CNExpr_var _ :: _ (* This case shouldn't occur because of call to simplify_leading_variable *)
+                | CNExpr_const CNConst_unit :: _ ->
+                    (* Everything should be a wildcard pattern after functions that have been called *)
+                    (* Above pattern maybe shouldn't exist? *)
+                    let (keys, vals) = List.split (PatternMap.bindings m) in
+                     append_to_all case keys m
                 | _ -> failwith "No other cases allowed on LHS of pattern match")
               in
               split_into_groups cases' new_m
       in
 
 
+      (* TODO: Two implementations: one with the assumption of having type information, and one without *)
+      (* Eventually should always have type information, and None case will become redundant *)
       (* Matrix algorithm for pattern compilation *)
-      let rec translate : (A.ail_identifier * _ Cn.cn_base_type) list -> (((C.union_tag, C.ctype) cn_expr_) list * (C.union_tag, C.ctype) cn_expr) list -> _ A.statement =
+      let rec translate : (A.ail_identifier * (_ Cn.cn_base_type) option) list -> (((C.union_tag, C.ctype) cn_expr_) list * (C.union_tag, C.ctype) cn_expr) list -> _ A.statement =
         fun vars cases -> 
           match vars with 
             | [] -> failwith "TODO" (* Implement *)
