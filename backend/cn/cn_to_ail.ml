@@ -13,7 +13,7 @@ module BT=BaseTypes
 
 module ConstructorPattern = struct
   type t = C.union_tag 
-  let compare (x : t) y = Stdlib.compare x y
+  let compare (x : t) y = Sym.compare_sym x y
 end
 
 module PatternMap = Map.Make(ConstructorPattern)
@@ -290,7 +290,8 @@ let rec cn_to_ail_expr_aux
             append_to_all elem bs m'
       in 
 
-      let rec split_into_groups cases m =
+      (* Used when no type information available (top-level call to translate) *)
+      let rec _split_into_groups cases m =
           match cases with
             | [] -> m
             | ((lhs, rhs) as case) :: cases' -> 
@@ -310,32 +311,23 @@ let rec cn_to_ail_expr_aux
                      append_to_all case keys m
                 | _ -> failwith "No other cases allowed on LHS of pattern match")
               in
-              split_into_groups cases' new_m
+              _split_into_groups cases' new_m
       in
 
 
-      (* TODO: Two implementations: one with the assumption of having type information, and one without *)
-      (* Eventually should always have type information, and None case will become redundant *)
-      (* Matrix algorithm for pattern compilation *)
-      let rec _translate : (A.ail_identifier * (_ Cn.cn_base_type) option) list -> ((C.union_tag cn_pat) list * (C.union_tag, C.ctype) cn_expr) list -> _ A.statement =
-        fun vars cases -> 
-          match vars with 
-            | [] -> failwith "TODO" (* Implement *)
-            | (v, tp) :: vs -> 
-              (* All leading variables become wildcard patterns *)
-              let cases = List.map (simplify_leading_variable v) cases in
-              (* If all are variables/wildcards, we move onto next pattern *)
-              if List.for_all leading_wildcard cases then
-                let cases = List.map (fun (ps, e) -> (List.tl ps, e)) cases in
-                _translate vs cases
-              else
-                let _m = split_into_groups cases PatternMap.empty in
-                failwith "TODO"
-      in
+      let expand_datatype c (ps, e) = 
+        match ps with 
+        | CNPat (loc, CNPat_wild) :: ps' -> Some (CNPat (loc, CNPat_wild) :: ps', e)
+        | CNPat (loc, (CNPat_constructor (c_nm, members))) :: ps' ->
+          if Sym.equal_sym c c_nm then
+            let member_patterns = List.map (fun (id, p) -> p) members in
+            Some (member_patterns @ ps', e)
+          else
+            None
+        | _ :: _ -> failwith "Non-sum pattern" 
+        | [] -> assert false 
+      in 
 
-      (* let switch_stat = translate [e] es in *)
-
-      (* /PATTERN COMPILER/ *)
       let (s1, e1) = cn_to_ail_expr_aux const_prop dts e PassBack in
       let transform_switch_expr e_
         = A.(AilEmemberofptr (mk_expr e_, Id.id "tag"))
@@ -429,6 +421,48 @@ let rec cn_to_ail_expr_aux
           | _ -> 
             failwith "TODO"
       in
+
+
+      (* TODO: Two implementations: one with the assumption of having type information, and one without *)
+      (* Eventually should always have type information, and None case will become redundant *)
+      (* Matrix algorithm for pattern compilation *)
+      let rec _translate : (A.ail_identifier * _ Cn.cn_base_type) list -> ((C.union_tag cn_pat) list * (C.union_tag, C.ctype) cn_expr) list -> _ A.statement =
+        fun vars cases -> 
+          match vars with 
+            | [] -> failwith "TODO" (* Implement *)
+            | (v, tp) :: vs -> 
+              (* All leading variables become wildcard patterns *)
+              let cases = List.map (simplify_leading_variable v) cases in
+              (* If all are variables/wildcards, we move onto next pattern *)
+              if List.for_all leading_wildcard cases then
+                let cases = List.map (fun (ps, e) -> (List.tl ps, e)) cases in
+                _translate vs cases
+              else
+                match tp with
+                  | CN_struct sym -> 
+                    let cn_dt = List.filter (fun dt -> Sym.equal sym dt.cn_dt_name) dts in 
+                    (match cn_dt with 
+                      | [] -> failwith "Datatype not found"
+                      | dt :: _ ->
+                        let _build_case (constr_sym, members_with_types) = 
+                          let x' = Sym.fresh_pretty "_x" in
+                          let cases' = List.filter_map (expand_datatype constr_sym) cases in 
+                          let record_tp = CN_record members_with_types in
+                          let _ail = _translate ((x', record_tp) :: vs) cases' in
+                          failwith "TODO"
+                        in 
+                        (* List.map build_case dt.cn_dt_cases; *)
+                        let _constructors = dt.cn_dt_cases in
+                        failwith "TODO"
+                        (* A.(AilSswitch (mk_expr e1_transformed, mk_stmt (AilSblock ([], stats)))) *)
+                    )
+                  | _ -> 
+                    (* Cannot have non-variable, non-wildcard pattern besides struct *)
+                    failwith "Unexpected pattern"
+      in
+
+      (* let switch_stat = translate [e] es in *)
+
 
 
 
