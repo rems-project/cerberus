@@ -1077,7 +1077,7 @@ module CHERIMorello : Memory = struct
     | MM.PV (_, PVfunction (FP_valid sym)) -> ffun (Some (fromCoq_Symbol_sym sym))
     | PV (_, PVfunction (FP_invalid c)) ->
        if MM.cap_is_null c
-      then fnull Ctype.void
+       then fnull Ctype.void
        else ffun None
     | PV (Prov_none, PVconcrete c) ->
        if MM.cap_is_null c
