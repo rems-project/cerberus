@@ -853,6 +853,8 @@ module CHERIMorello : Memory = struct
   open Cerb_pp_prelude
 
   let string_of_provenance = function
+    | MM.Prov_disabled ->
+       "@disabled"
     | MM.Prov_none ->
        "@empty"
     | Prov_some alloc_id ->
@@ -921,16 +923,6 @@ module CHERIMorello : Memory = struct
   let pp_pretty_mem_value _ = pp_mem_value
 
   (* --- debugging --- *)
-
-  let string_of_provenance = function
-    | MM.Prov_none ->
-       "@empty"
-    | Prov_some alloc_id ->
-       "@" ^ Z.to_string alloc_id
-    | Prov_symbolic iota ->
-       "@iota(" ^ Z.to_string iota ^ ")"
-    | Prov_device ->
-       "@device"
 
   let print_allocations str st =
     Printf.fprintf stderr "BEGIN Allocation ==> %s\n" str;
