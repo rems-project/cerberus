@@ -314,6 +314,20 @@ let rec cn_to_ail_expr_aux
               _split_into_groups cases' new_m
       in
 
+      let expand_record ids (ps, e) =
+        match ps with
+          | CNExpr_const CNConst_unit :: ps' ->
+            let ps'' = List.map (fun _ -> CNExpr_const CNConst_unit) ids in
+            (ps'' @ ps', e)
+          | CNExpr_record members :: ps' ->
+            if List.for_all2 (fun (id, m) id' -> Id.equal id id') members ids then
+              let ps'' = List.map (fun (id, m) -> rm_cn_expr m) members in 
+              (ps'' @ ps', e)
+            else 
+              failwith "Fields in pattern not the same as fields in type"
+          | _ :: _ -> failwith "Non-record pattern"
+          | [] -> assert false
+      in  
 
       let expand_datatype c (ps, e) = 
         match ps with 
@@ -439,6 +453,14 @@ let rec cn_to_ail_expr_aux
                 _translate vs cases
               else
                 match tp with
+                  | CN_record members_with_types ->
+                    let (ids, ts) = List.split members_with_types in
+                    (* TODO: Change? *)
+                    let syms = List.map create_sym_from_id ids in
+                    let vs' = (List.combine syms ts) @ vs in
+                    let cases' = List.map (expand_record ids) cases in
+                    let ail = translate vs' cases' in
+                    failwith "TODO"
                   | CN_struct sym -> 
                     let cn_dt = List.filter (fun dt -> Sym.equal sym dt.cn_dt_name) dts in 
                     (match cn_dt with 
