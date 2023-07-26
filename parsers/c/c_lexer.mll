@@ -11,8 +11,7 @@ type magic_comment_mode =
   | Magic_At of bool
 
 type internal_state = {
-  (* maybe make this 'config' rather than 'internal' *)
-  mutable magic_comment_mode: magic_comment_mode;
+  mutable magic_comment_mode: magic_comment_mode option;
 
   mutable inside_cn: bool;
   (* HACK fo fix col positions when seing CN keywords (look at C_parser_driver) *)
@@ -23,7 +22,7 @@ type internal_state = {
   mutable magic_acc: (Cerb_location.t * string) list;
 }
 let internal_state = {
-  magic_comment_mode= Magic_None;
+  magic_comment_mode= None;
   inside_cn= false;
   cnum_hack= 0;
   start_of_comment= Lexing.dummy_pos;
@@ -32,8 +31,16 @@ let internal_state = {
   magic_acc= [];
 }
 
-let set_magic_comment_mode mode =
-  internal_state.magic_comment_mode <- mode
+let get_magic_comment_mode () = match internal_state.magic_comment_mode with
+  | None ->
+    (* fetch the mode from the global switches and cache for faster lookup *)
+    let mode = if Switches.(has_switch SW_at_magic_comments)
+      then Magic_At (Switches.(has_switch SW_warn_mismatched_magic_comments))
+      else Magic_None
+    in
+    internal_state.magic_comment_mode <- Some mode;
+    mode
+  | Some mode -> mode
 
 let new_line lexbuf =
   (* the hacked col offset MUST be reset after every newline *)
@@ -198,7 +205,7 @@ let magic_token start_pos end_pos chars =
   if len < 2 then None
   else
   let first, last = List.hd chars, List.nth chars (len - 1) in
-  match internal_state.magic_comment_mode with
+  match get_magic_comment_mode () with
   | Magic_At _ when first == '@' && last == '@' ->
     let str = String.init (len - 2) (List.nth (List.tl chars)) in
     internal_state.last_magic_comment <- Some (end_pos, loc);

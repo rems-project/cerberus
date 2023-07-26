@@ -34,6 +34,11 @@ type cerb_switch =
   (* pointer revocation *)
   | SW_revocation of [ `INSTANT | `CORNUCOPIA]
 
+  (* parsing of magic comments (e.g. "/*@ magic() @*/" as statements *)
+  | SW_at_magic_comments
+  | SW_warn_mismatched_magic_comments
+
+
 let internal_ref =
   ref []
 
@@ -83,6 +88,10 @@ let set strs =
         Some (SW_revocation `INSTANT)
     | "cornucopia" ->
         Some (SW_revocation `CORNUCOPIA)
+    | "at_magic_comments" ->
+        Some SW_at_magic_comments
+    | "warn_mismatched_magic_comments" ->
+        Some SW_warn_mismatched_magic_comments
     | _ ->
         None in
   List.iter (fun str ->

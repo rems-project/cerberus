@@ -34,6 +34,10 @@ type cerb_switch =
   (* pointer revocation *)
   | SW_revocation of [ `INSTANT | `CORNUCOPIA]
 
+  (* parsing of magic comments (e.g. "/*@ magic() @*/" as statements *)
+  | SW_at_magic_comments
+  | SW_warn_mismatched_magic_comments
+
 val get_switches: unit -> cerb_switch list
 val has_switch: cerb_switch -> bool
 val has_switch_pred: (cerb_switch -> bool) -> cerb_switch option
