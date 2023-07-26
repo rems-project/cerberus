@@ -1049,12 +1049,20 @@ module CHERIMorello : Memory = struct
     let label = "load "
                 ^ Pp_utils.to_plain_string (pp_pointer_value ~is_verbose:false p)
     in
-    lift_coq_memM label (MM.load (toCoq_location loc) (toCoq_ctype ty) p)
+    bind
+      (lift_coq_memM label (MM.load (toCoq_location loc) (toCoq_ctype ty) p))
+      (fun (fp,mval) ->
+        Cerb_debug.print_debug 4 []
+          (fun () -> "MEMOP_RET load =" ^ Pp_utils.to_plain_string (pp_mem_value mval));
+        return (fp,mval))
 
   let store (loc:Cerb_location.t) (ty:Ctype.ctype) (is_locking:bool) (p:pointer_value) (mval:mem_value): footprint memM
     =
     let label = "store "
                 ^ Pp_utils.to_plain_string (pp_pointer_value ~is_verbose:false p)
+                ^ if !Cerb_debug.debug_level >= 4
+                  then (" value="^ Pp_utils.to_plain_string (pp_mem_value mval))
+                  else ""
     in
     lift_coq_memM label (MM.store (toCoq_location loc) (toCoq_ctype ty) is_locking p mval)
 
