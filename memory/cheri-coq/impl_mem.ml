@@ -1087,7 +1087,8 @@ module CHERIMorello : Memory = struct
        if MM.cap_is_null c
        then fnull Ctype.void
        else ffun None
-    | PV (Prov_none, PVconcrete c) ->
+    | PV (Prov_none, PVconcrete c)
+      | PV (Prov_disabled, PVconcrete c) ->
        if MM.cap_is_null c
        then fconc None (C.cap_get_value c)
        else ffun None
@@ -1183,29 +1184,26 @@ module CHERIMorello : Memory = struct
            | _ ->
               return None
            end)
-    | Prov_none ->
-       if Switches.is_PNVI ()
-       then return None
-       else
-         begin match pv with
-         | PVconcrete c ->
-            let addr = C.cap_get_value c in
-            bind (lift_coq_memM ~quiet:true "find_overlapping" (MM.find_overlaping addr)) (fun x ->
-                let loc = Cerb_location.unknown in
-                match x with
-                | MM.NoAlloc -> fail ~loc (MerrAccess (LoadAccess, OutOfBoundPtr))
-                | MM.DoubleAlloc _ -> fail ~loc (MerrInternal "DoubleAlloc without PNVI")
-                | MM.SingleAlloc alloc_id ->
-                   bind (lift_coq_memM ~quiet:true "get_allocation" (MM.get_allocation alloc_id)) (fun alloc ->
-                       if addr = alloc.base then
-                         return @@ Some (string_of_prefix (fromCoq_Symbol_prefix alloc.prefix))
-                       else
-                         return @@ aux addr alloc (Option.map fromCoq_ctype alloc.ty)
-                     )
-              )
-         | _ ->
-            return None
-         end
+    | Prov_disabled ->
+       begin match pv with
+       | PVconcrete c ->
+          let addr = C.cap_get_value c in
+          bind (lift_coq_memM ~quiet:true "find_overlapping" (MM.find_overlaping addr)) (fun x ->
+              let loc = Cerb_location.unknown in
+              match x with
+              | MM.NoAlloc -> fail ~loc (MerrAccess (LoadAccess, OutOfBoundPtr))
+              | MM.DoubleAlloc _ -> fail ~loc (MerrInternal "DoubleAlloc without PNVI")
+              | MM.SingleAlloc alloc_id ->
+                 bind (lift_coq_memM ~quiet:true "get_allocation" (MM.get_allocation alloc_id)) (fun alloc ->
+                     if addr = alloc.base then
+                       return @@ Some (string_of_prefix (fromCoq_Symbol_prefix alloc.prefix))
+                     else
+                       return @@ aux addr alloc (Option.map fromCoq_ctype alloc.ty)
+                   )
+            )
+       | _ ->
+          return None
+       end
     | _ ->
        return None
 

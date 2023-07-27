@@ -740,16 +740,21 @@ Module CheriMemory
     match fuel with
     | O => raise "out of fuel in repr"
     | S fuel =>
+        let default_prov :=
+          if CoqSwitches.is_PNVI (SW.get_switches tt)
+          then Prov_none
+          else Prov_disabled
+        in
         match mval with
         | MVunspecified ty =>
             sz <- sizeof DEFAULT_FUEL None ty ;;
             ret (funptrmap, (ghost_tags (AddressValue.of_Z addr) sz capmeta),
-                (list_init (Z.to_nat sz) (fun _ => absbyte_v Prov_none None None)))
+                (list_init (Z.to_nat sz) (fun _ => absbyte_v default_prov None None)))
         | MVinteger ity (IV n_value) =>
             iss <- option2serr "Could not get int signedness of a type in repr" (is_signed_ity DEFAULT_FUEL ity) ;;
             sz <- sizeof DEFAULT_FUEL None (CoqCtype.Ctype nil (CoqCtype.Basic (CoqCtype.Integer ity))) ;;
             bs' <- bytes_of_Z iss (Z.to_nat sz) n_value ;;
-            let bs := List.map (fun (x : ascii) => absbyte_v Prov_none None (Some x)) bs' in
+            let bs := List.map (fun (x : ascii) => absbyte_v default_prov None (Some x)) bs' in
             ret (funptrmap, (ghost_tags (AddressValue.of_Z addr) (Z.of_nat (List.length bs)) capmeta), bs)
         | MVinteger ity (IC _ c_value) =>
             '(cb, ct) <- option2serr "int encoding error" (C.encode true c_value) ;;
@@ -760,11 +765,11 @@ Module CheriMemory
             ret (funptrmap, capmeta,
                 (mapi
                    (fun (i_value : nat) (b_value : ascii) =>
-                      absbyte_v Prov_none None (Some b_value)) cb))
+                      absbyte_v default_prov None (Some b_value)) cb))
         | MVfloating fty fval =>
             sz <- sizeof DEFAULT_FUEL None (CoqCtype.Ctype nil (CoqCtype.Basic (CoqCtype.Floating fty))) ;;
             bs' <- bytes_of_Z true (Z.to_nat sz) (bits_of_float fval) ;;
-            let bs := List.map (fun (x : ascii) => absbyte_v Prov_none None (Some x)) bs'
+            let bs := List.map (fun (x : ascii) => absbyte_v default_prov None (Some x)) bs'
             in
             ret (funptrmap, (ghost_tags (AddressValue.of_Z addr) (Z.of_nat (List.length bs)) capmeta), bs)
         | MVpointer ref_ty (PV prov ptrval_) =>
@@ -803,7 +808,7 @@ Module CheriMemory
                 mvals (funptrmap, capmeta, addr, nil) ;;
             ret (funptrmap, capmeta, (List.concat (List.rev bs_s)))
         | MVstruct tag_sym xs =>
-            let padding_byte _ : AbsByte := absbyte_v Prov_none None None in
+            let padding_byte _ : AbsByte := absbyte_v default_prov None None in
             '(offs, last_off) <- offsetsof DEFAULT_FUEL (TD.tagDefs tt) tag_sym ;;
             sz <- sizeof DEFAULT_FUEL None (CoqCtype.Ctype nil (CoqCtype.Struct tag_sym)) ;;
             let final_pad := Z.sub sz last_off in
@@ -833,7 +838,7 @@ Module CheriMemory
             ret (funptrmap', capmeta',
                 (List.app bs
                    (list_init (Nat.sub (Z.to_nat size) (List.length bs))
-                      (fun _ => absbyte_v Prov_none None None))))
+                      (fun _ => absbyte_v default_prov None None))))
         end
     end.
 
@@ -870,7 +875,7 @@ Module CheriMemory
       (fun '(alloc_id, addr) =>
          (*
          mprint_msg
-           ("allocate_object addr="  ++ String.hex_str addr ++
+           ("allocate_object addr="  ++ String.hex_str (AddressValue.to_Z addr) ++
               ", size=" ++ String.dec_str size_n' ++
               ", align=" ++ String.dec_str align_n' ++
               ", alloc_id=" ++ String.dec_str alloc_id
@@ -1140,6 +1145,11 @@ Module CheriMemory
     match bs with
     | [] => raise "CHERI.AbsByte.split_bytes: called on an empty list"
     | bs =>
+        let default_prov :=
+          if CoqSwitches.is_PNVI (SW.get_switches tt)
+          then Prov_none
+          else Prov_disabled
+        in
         '(_prov, rev_values, offset_status) <-
           monadic_fold_left
             (fun '(prov_acc, val_acc, offset_acc) b_value =>
@@ -1170,6 +1180,10 @@ Module CheriMemory
                      raise "TODO(iota) split_bytes 2"
                  | (VALID Prov_none, (Prov_some _) as new_prov), _, _ =>
                      ret (VALID new_prov)
+                 | (VALID Prov_disabled, Prov_some _), _, _ =>
+                     ret INVALID
+                 | (VALID Prov_disabled, Prov_symbolic _), _, _ =>
+                     ret INVALID
                  | (VALID Prov_none, (Prov_symbolic _) as new_prov), _, _ =>
                      ret (VALID new_prov)
                  | (prev_acc, _), _, _ => ret prev_acc
@@ -1188,10 +1202,10 @@ Module CheriMemory
                  end in
 
                ret (prov_acc', (cons b_value.(value) val_acc), offset_acc'))
-            (List.rev bs) ((VALID Prov_none), nil, (PtrBytes 0)) ;;
+            (List.rev bs) ((VALID default_prov), nil, (PtrBytes 0)) ;;
 
         let pvalid := match _prov with
-                      | INVALID => Prov_none
+                      | INVALID => Prov_disabled
                       | VALID z_value => z_value
                       end in
 
@@ -1209,11 +1223,12 @@ Module CheriMemory
         (fun (acc : list storage_instance_id) =>
          fun (b_value : AbsByte) =>
            match b_value.(prov) with
-           | Prov_disabled => acc
-           | Prov_none => acc
+           | Prov_disabled
+           | Prov_none
+           | Prov_symbolic _
+           | Prov_device
+             => acc
            | Prov_some alloc_id => cons alloc_id acc
-           | Prov_symbolic iota => acc
-           | Prov_device => acc
            end) bs nil in
     match xs with
     | [] => NoTaint
@@ -1418,11 +1433,16 @@ Module CheriMemory
     (base_addr : Z)
     (n_bytes : Z) : list AbsByte
     :=
+    let default_prov :=
+      if CoqSwitches.is_PNVI (SW.get_switches tt)
+      then Prov_none
+      else Prov_disabled
+    in
     List.map
       (fun (addr : Z.t) =>
          match ZMap.find addr bytemap with
          | Some b_value => b_value
-         | None => absbyte_v Prov_none None None
+         | None => absbyte_v default_prov None None
          end)
       (list_init (Z.to_nat n_bytes)
          (fun (i : nat) =>
@@ -2290,11 +2310,21 @@ Module CheriMemory
 
   Definition null_ptrval (_:CoqCtype.ctype) : pointer_value
     :=
-    PV Prov_none (PVconcrete (C.cap_c0 tt)).
+    let default_prov :=
+      if CoqSwitches.is_PNVI (SW.get_switches tt)
+      then Prov_none
+      else Prov_disabled
+    in
+    PV default_prov (PVconcrete (C.cap_c0 tt)).
 
   Definition fun_ptrval (sym : CoqSymbol.sym)
     : serr pointer_value :=
-    ret (PV Prov_none (PVfunction (FP_valid sym))).
+    let default_prov :=
+      if CoqSwitches.is_PNVI (SW.get_switches tt)
+      then Prov_none
+      else Prov_disabled
+    in
+    ret (PV default_prov (PVfunction (FP_valid sym))).
 
   Definition concrete_ptrval : Z -> AddressValue.t -> serr pointer_value :=
     fun _ _ =>
@@ -3881,7 +3911,9 @@ Module CheriMemory
     end.
 
   Definition cornucopiaRevoke (_:unit) : memM unit
-    := ret tt. (* TODO *)
+    :=
+    mprint_msg "cornucopiaRevoke" ;;
+    ret tt. (* TODO *)
 
   Definition call_intrinsic
     (loc : location_ocaml) (name : string) (args : list mem_value)
