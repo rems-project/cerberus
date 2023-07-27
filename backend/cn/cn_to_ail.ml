@@ -313,7 +313,7 @@ let rec cn_to_ail_expr_aux
               _split_into_groups cases' new_m
       in
 
-      let expand_record ids (ps, e) =
+      let _expand_record ids (ps, e) =
         match ps with
           | CNExpr_const CNConst_unit :: ps' ->
             let ps'' = List.map (fun _ -> CNExpr_const CNConst_unit) ids in
@@ -341,11 +341,10 @@ let rec cn_to_ail_expr_aux
         | [] -> assert false 
       in 
 
-      let (s1, e1) = cn_to_ail_expr_aux const_prop dts e PassBack in
       let transform_switch_expr e_
         = A.(AilEmemberofptr (mk_expr e_, Id.id "tag"))
       in
-      let e1_transformed = transform_switch_expr e1 in
+
       let (cases, exprs) = List.split es in
 
      
@@ -413,6 +412,9 @@ let rec cn_to_ail_expr_aux
           elem @ create_bindings_for_pattern es members
       in
 
+      let (s1, e1) = cn_to_ail_expr_aux const_prop dts e PassBack in
+      let e1_transformed = transform_switch_expr e1 in
+
       let rec translate_pattern_aux (CNPat (loc, pat_)) = 
         match pat_ with 
           | CNPat_sym sym -> ([], [], A.AilEident sym)
@@ -435,11 +437,8 @@ let rec cn_to_ail_expr_aux
             failwith "TODO"
       in
 
-
-      (* TODO: Two implementations: one with the assumption of having type information, and one without *)
-      (* Eventually should always have type information, and None case will become redundant *)
       (* Matrix algorithm for pattern compilation *)
-      let rec _translate : (A.ail_identifier * _ Cn.cn_base_type) list -> ((C.union_tag cn_pat) list * (C.union_tag, C.ctype) cn_expr) list -> _ A.statement =
+      let rec _translate : (A.ail_identifier * _ Cn.cn_base_type) list -> ((C.union_tag cn_pat) list * (C.union_tag, C.ctype) cn_expr) list -> _ A.statement list =
         fun vars cases -> 
           match vars with 
             | [] -> failwith "TODO" (* Implement *)
@@ -452,29 +451,37 @@ let rec cn_to_ail_expr_aux
                 _translate vs cases
               else
                 match tp with
-                  | CN_record members_with_types ->
-                    let (ids, ts) = List.split members_with_types in
+                  (* | CN_record members_with_types ->
+                    let (ts, ids) = List.split members_with_types in
                     (* TODO: Change? *)
                     let syms = List.map create_sym_from_id ids in
                     let vs' = (List.combine syms ts) @ vs in
-                    let cases' = List.map (expand_record ids) cases in
-                    let ail = translate vs' cases' in
-                    failwith "TODO"
+                    (* let cases' = List.map (expand_record ids) cases in *)
+                    let ail = translate vs' cases in
+                    failwith "TODO" *)
                   | CN_struct sym -> 
                     let cn_dt = List.filter (fun dt -> Sym.equal sym dt.cn_dt_name) dts in 
                     (match cn_dt with 
                       | [] -> failwith "Datatype not found"
                       | dt :: _ ->
-                        let _build_case (constr_sym, members_with_types) = 
+                        let build_case (constr_sym, members_with_types) = 
                           let x' = Sym.fresh_pretty "_x" in
                           let cases' = List.filter_map (expand_datatype constr_sym) cases in 
                           let record_tp = CN_record members_with_types in
-                          let _ail = _translate ((x', record_tp) :: vs) cases' in
-                          failwith "TODO"
+                          let ail_stats = _translate ((x', record_tp) :: vs) cases' in
+                          (* TODO: Add bindings instead of [] *)
+                          let stat_block = A.AilSblock ([], ail_stats) in
+                          let tag_sym = generate_sym_with_suffix ~suffix:"" ~uppercase:true constr_sym in
+                          let attribute : CF.Annot.attribute = {attr_ns = None; attr_id = CF.Symbol.Identifier (Cerb_location.unknown, Sym.pp_string tag_sym); attr_args = []} in
+                          let ail_case = A.(AilScase (Nat_big_num.zero (* placeholder *), mk_stmt stat_block)) in
+                          let ail_case_stmt = A.(AnnotatedStatement (Cerb_location.unknown, CF.Annot.Attrs [attribute], ail_case)) in
+                          ail_case_stmt
                         in 
-                        (* List.map build_case dt.cn_dt_cases; *)
-                        let _constructors = dt.cn_dt_cases in
-                        failwith "TODO"
+                        let (s1, e1) = cn_to_ail_expr_aux const_prop dts e PassBack in
+                        let e1_transformed = transform_switch_expr e1 in
+                        let ail_case_stmts = List.map build_case dt.cn_dt_cases in
+                        let switch = A.(AilSswitch (mk_expr e1_transformed, mk_stmt (AilSblock ([], ail_case_stmts)))) in
+                        List.map mk_stmt (s1 @ [switch])
                         (* A.(AilSswitch (mk_expr e1_transformed, mk_stmt (AilSblock ([], stats)))) *)
                     )
                   | _ -> 
@@ -507,6 +514,7 @@ let rec cn_to_ail_expr_aux
             ail_case_stmt :: (generate_switch_stats ls rs)
           | _ -> failwith "Wrong pattern")  
       in
+
       (match d with 
         | Assert -> 
           let rhs = List.map (fun e_ -> cn_to_ail_expr_aux const_prop dts e_ Assert) exprs in 
