@@ -430,21 +430,15 @@ let apply_substs_expr xs e =
   ) e xs
 
 
+(* FIXME: probably this should be passed like a proper parameter *)
+let config_unfold_stdlib : (Symbol.sym -> bool) ref =
+  ref (fun _ -> false)
+
 
 (* Rewriter doing partial evaluation for Core (pure) expressions *)
 let core_peval file : 'bty RW.rewriter =
 
-  let module StringSet = Set.Make(String) in
-
-  let stdlib_unfold_pred fsym fdecl =
-    match Symbol.symbol_description fsym, fdecl with
-    (* | SD_Id "is_representable_integer", _ *)
-    (* | SD_Id "catch_exceptional_condition", _  *)
-    (*   -> *)
-    (*    true *)
-    | _ ->
-       false
-  in
+  let stdlib_unfold_pred fsym fdecl = (! config_unfold_stdlib) fsym in
 
   let impl_unfold_pred _ fdecl =
     match fdecl with
@@ -464,7 +458,7 @@ let core_peval file : 'bty RW.rewriter =
   let to_unfold_impls =
     (* The list of impl-def functions to be unfolded (see PEcall) *)
     Pmap.filter impl_unfold_pred file.impl in
-  
+
   let check_unfold = function
     | Sym sym ->
         begin match Pmap.lookup sym to_unfold_funs with
@@ -577,7 +571,7 @@ let core_peval file : 'bty RW.rewriter =
                     end
                 
                 | PEcall (nm, pes) ->
-                    (* UNFOLD CALLS TO STDLIB and IMPL-DEF FUNCTIONS TAKING A CTYPE AS PARAMETER *)
+                    (* unfold some calls to stdlib functions *)
                     begin match check_unfold nm with
                       | Some (sym_bTys, body_pe) ->
                           let pats =
