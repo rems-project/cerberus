@@ -37,7 +37,9 @@ let core_stdlib_path () =
 
 (* == load the Core standard library ============================================================ *)
 let load_core_stdlib () =
-  let filepath = Filename.concat (core_stdlib_path ()) "std.core" in
+  let filename =
+      if Switches.(has_switch SW_inner_arg_temps) then "std_inner_arg_temps.core" else "std.core" in
+  let filepath = Filename.concat (core_stdlib_path ()) filename in
   if not (Sys.file_exists filepath) then
     error ("couldn't find the Core standard library file\n (looked at: `" ^ filepath ^ "').")
   else

@@ -59,6 +59,8 @@ let core_libraries incl lib_paths libs =
       if Switches.is_CHERI () then
         let mname = Impl_mem.name in
         ("c-" ^ mname) :: libs
+      else if Switches.(has_switch SW_inner_arg_temps) then
+        "c_inner_arg_temps" :: libs
       else
         "c" :: libs
     else libs in

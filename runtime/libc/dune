@@ -8,11 +8,12 @@
                 --rewrite -o libm.co src/math.c)))
 
 (rule
- (targets libc.co)
+ (targets libc.co libc_inner_arg_temps.co)
  (deps src/ctype.c src/stdio.c src/stdlib.c src/string.c src/time.c
        src/utime.c src/unistd.c src/stat.c src/uio.c src/internal.c
        src/vfscanf.c src/signal.c src/internal.h
        ../libcore/std.core
+       ../libcore/std_inner_arg_temps.core
        ../libcore/impls/gcc_4.9.0_x86_64-apple-darwin10.8.0.impl
        ../libcore/impls/i686-apple-darwin10-gcc-4.2.1.impl
        ; generated with [find * -name "*.h"]
@@ -137,12 +138,18 @@
    (run cerberus --nolibc -I include -I include/posix --sequentialise
                  --rewrite -o libc.co src/ctype.c src/stdio.c src/stdlib.c
                  src/string.c src/time.c src/utime.c src/unistd.c src/stat.c
+                 src/uio.c src/internal.c src/vfscanf.c src/signal.c)
+   (run cerberus --nolibc -I include -I include/posix --sequentialise
+                 --switches=inner_arg_temps
+                 --rewrite -o libc_inner_arg_temps.co src/ctype.c src/stdio.c src/stdlib.c
+                 src/string.c src/time.c src/utime.c src/unistd.c src/stat.c
                  src/uio.c src/internal.c src/vfscanf.c src/signal.c))))
 
 (install
  (files
   (libm.co as runtime/libc/libm.co)
-  (libc.co as runtime/libc/libc.co))
+  (libc.co as runtime/libc/libc.co)
+  (libc_inner_arg_temps.co as runtime/libc/libc_inner_arg_temps.co))
  (section lib)
  (package cerberus))
 
@@ -153,6 +160,7 @@
        src/utime.c src/unistd.c src/stat.c src/uio.c src/internal.c
        src/vfscanf.c src/signal.c src/internal.h
        ../libcore/std.core
+       ../libcore/std_inner_arg_temps.core
        ../libcore/impls/gcc_4.9.0_x86_64-apple-darwin10.8.0.impl
        ../libcore/impls/i686-apple-darwin10-gcc-4.2.1.impl
        ; generated with [find * -name "*.h"]

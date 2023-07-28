@@ -142,6 +142,7 @@
   (libc/src/time.c as runtime/libc/src/time.c)
   (libc/generators/gen_inttypes.c as runtime/libc/generators/gen_inttypes.c)
   (libcore/std.core as runtime/libcore/std.core)
+  (libcore/std_inner_arg_temps.core as runtime/libcore/std_inner_arg_temps.core)
   (libcore/impls/i686-apple-darwin10-gcc-4.2.1.impl as
    runtime/libcore/impls/i686-apple-darwin10-gcc-4.2.1.impl)
   (libcore/impls/gcc_4.9.0_x86_64-apple-darwin10.8.0.impl as
