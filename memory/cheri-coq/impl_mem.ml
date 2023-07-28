@@ -29,6 +29,8 @@ module CerbSwitchesProxy = struct
     | SW_zero_initialised -> SW_zero_initialised
     | SW_revocation `INSTANT -> SW_revocation INSTANT
     | SW_revocation `CORNUCOPIA -> SW_revocation CORNUCOPIA
+    | SW_at_magic_comments -> SW_at_magic_comments
+    | SW_warn_mismatched_magic_comments -> SW_warn_mismatched_magic_comments
 
   let toCoq_switches (cs: cerb_switch list): CoqSwitches.cerb_switches_t =
     let open ListSet in
