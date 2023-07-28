@@ -1168,7 +1168,7 @@ module WithLocations = Make(struct
 end)
 
 
-let pp_budget () = Some ((! Cerb_debug.debug_level))
+let pp_budget () = Some ((! Cerb_debug.debug_level) + (! Pp.print_level))
 let pp_pexpr_w b e = Basic.pp_pexpr b e
 let pp_pexpr e = pp_pexpr_w (pp_budget ()) e
 let pp_expr_w b e = Basic.pp_expr b e
