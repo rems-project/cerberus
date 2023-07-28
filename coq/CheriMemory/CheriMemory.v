@@ -173,6 +173,7 @@ Module CheriMemory
       ty : option CoqCtype.ctype;
       is_readonly : readonly_status;
       is_dynamic : bool ;
+      is_dead : bool ;
       taint : allocation_taint
     }.
 
@@ -191,7 +192,7 @@ Module CheriMemory
    *)
 
   Definition allocation_with_prefix prefix (r : allocation) :=
-    Build_allocation prefix r.(base) r.(size) r.(ty) r.(is_readonly) r.(is_dynamic) r.(taint).
+    Build_allocation prefix r.(base) r.(size) r.(ty) r.(is_readonly) r.(is_dynamic) r.(is_dead) r.(taint).
 
   Record AbsByte :=
     {
@@ -883,7 +884,7 @@ Module CheriMemory
           *)
          (match init_opt with
           | None =>
-              let alloc := {| prefix := pref; base:= addr; size:= size_n'; ty:= Some ty; is_dynamic := false; is_readonly:= IsWritable; taint:= Unexposed|} in
+              let alloc := {| prefix := pref; base:= addr; size:= size_n'; ty:= Some ty; is_dynamic := false; is_dead := false; is_readonly:= IsWritable; taint:= Unexposed|} in
               update (fun st =>
                         {|
                           next_alloc_id    := st.(next_alloc_id);
@@ -905,7 +906,7 @@ Module CheriMemory
                 | _ => (false,IsWritable)
                 end
               in
-              let alloc := {| prefix:= pref; base:= addr; size:= size_n'; ty:= Some ty; is_dynamic := false; is_readonly:= readonly_status; taint:= Unexposed |} in
+              let alloc := {| prefix:= pref; base:= addr; size:= size_n'; ty:= Some ty; is_dynamic := false; is_dead := false; is_readonly:= readonly_status; taint:= Unexposed |} in
 
               st <- get ;;
               '(funptrmap, capmeta, pre_bs) <- serr2memM (repr DEFAULT_FUEL st.(funptrmap) st.(capmeta) (AddressValue.to_Z addr) mval) ;;
@@ -970,6 +971,7 @@ Module CheriMemory
              size := size_n';
              ty := None;
              is_dynamic := true ;
+             is_dead := false ;
              is_readonly := IsWritable;
              taint := Unexposed |}
          in
@@ -1033,10 +1035,6 @@ Module CheriMemory
     then is_dynamic_addr (C.cap_get_value c)
     else ret false.
 
-  Definition is_dead (alloc_id : storage_instance_id) : memM bool :=
-    get >>= fun st =>
-        ret (negb (ZMap.mem alloc_id st.(allocations))).
-
   Definition get_allocation (alloc_id : Z) : memM allocation :=
     get >>=
       (fun st =>
@@ -1048,6 +1046,9 @@ Module CheriMemory
                         (of_Z alloc_id)))
          end
       ).
+
+  Definition is_dead_allocation (alloc_id : storage_instance_id) : memM bool :=
+    get_allocation alloc_id >>= fun alloc => ret alloc.(is_dead).
 
   (* PNVI-ae-udi *)
   Definition lookup_iota iota :=
@@ -1484,18 +1485,21 @@ Module CheriMemory
     in
     ZMap.fold (fun alloc_id alloc acc =>
                  let new_opt :=
-                   if Z.leb (AddressValue.to_Z alloc.(base)) addr && Z.ltb addr (Z.add (AddressValue.to_Z alloc.(base)) alloc.(size)) then
-                     (* PNVI-ae, PNVI-ae-udi *)
-                     if require_exposed && (negb (allocation_taint_eqb alloc.(taint) Exposed))
-                     then None
-                     else Some alloc_id
-                   else if allow_one_past then
-                          (* PNVI-ae-udi *)
-                          if Z.eqb addr (Z.add (AddressValue.to_Z alloc.(base)) alloc.(size))
-                             && negb (require_exposed && (negb (allocation_taint_eqb alloc.(taint) Exposed)))
-                          then Some alloc_id
-                          else None
-                        else None
+                   if alloc.(is_dead)
+                   then None
+                   else if Z.leb (AddressValue.to_Z alloc.(base)) addr && Z.ltb addr (Z.add (AddressValue.to_Z alloc.(base)) alloc.(size))
+                        then
+                          (* PNVI-ae, PNVI-ae-udi *)
+                          if require_exposed && (negb (allocation_taint_eqb alloc.(taint) Exposed))
+                          then None
+                          else Some alloc_id
+                        else if allow_one_past then
+                               (* PNVI-ae-udi *)
+                               if Z.eqb addr (Z.add (AddressValue.to_Z alloc.(base)) alloc.(size))
+                                  && negb (require_exposed && (negb (allocation_taint_eqb alloc.(taint) Exposed)))
+                               then Some alloc_id
+                               else None
+                             else None
                  in
                  match acc, new_opt with
                  | _, None => acc
@@ -1589,7 +1593,7 @@ Module CheriMemory
               end
         ))
           >>= (fun '(alloc_id,alloc) =>
-                 is_dead alloc_id >>=
+                 is_dead_allocation alloc_id >>=
                    fun x => match x with
                          | true =>
                              if is_dyn then
@@ -1635,7 +1639,7 @@ Module CheriMemory
           fail loc MerrFreeNullPtr
         else
           let precondition (z : storage_instance_id) :=
-            is_dead z >>=
+            is_dead_allocation z >>=
               (fun x => match x with
                      | true =>
                          ret
@@ -1704,7 +1708,7 @@ Module CheriMemory
            else
              ret tt)
         ;;
-        is_dead alloc_id >>=
+        is_dead_allocation alloc_id >>=
           fun x => match x with
                 | true =>
                     if is_dyn then
@@ -1799,6 +1803,7 @@ Module CheriMemory
                                           size := alloc.(size);
                                           ty := alloc.(ty);
                                           is_dynamic := alloc.(is_dynamic);
+                                          is_dead := alloc.(is_dead);
                                           is_readonly := alloc.(is_readonly);
                                           taint := Exposed
                                         |}
@@ -1824,6 +1829,7 @@ Module CheriMemory
                                                  size := alloc.(size);
                                                  ty := alloc.(ty);
                                                  is_dynamic := alloc.(is_dynamic);
+                                                 is_dead := alloc.(is_dead);
                                                  is_readonly := alloc.(is_readonly);
                                                  taint := Exposed
                                                |}
@@ -1969,7 +1975,7 @@ Module CheriMemory
       if cap_is_null c then
         fail loc (MerrAccess LoadAccess NullPtr)
       else
-        (is_dead alloc_id) >>=
+        (is_dead_allocation alloc_id) >>=
           (fun (function_parameter : bool) =>
              match function_parameter with
              | true =>
@@ -2030,7 +2036,7 @@ Module CheriMemory
         else
           let precondition (z_value : storage_instance_id) : memM merr
             :=
-            is_dead z_value >>=
+            is_dead_allocation z_value >>=
               (fun (function_parameter : bool) =>
                  if function_parameter
                  then ret (FAIL loc (MerrAccess LoadAccess DeadPtr))
@@ -2182,6 +2188,7 @@ Module CheriMemory
                                                                  size        := a.(size)       ;
                                                                  ty          := a.(ty)         ;
                                                                  is_dynamic  := a.(is_dynamic) ;
+                                                                 is_dead     := a.(is_dead)    ;
                                                                  is_readonly := IsReadOnly     ;
                                                                  taint       := a.(taint)      ;
                                                                |}
@@ -2284,6 +2291,7 @@ Module CheriMemory
                                               size        := a.(size)       ;
                                               ty          := a.(ty)         ;
                                               is_dynamic  := a.(is_dynamic) ;
+                                              is_dead     := a.(is_dead)    ;
                                               is_readonly := IsReadOnly     ;
                                               taint       := a.(taint)      ;
                                             |}
@@ -2815,7 +2823,7 @@ Module CheriMemory
     :=
     let do_test (alloc_id : storage_instance_id): memM bool
       :=
-      is_dead alloc_id >>=
+      is_dead_allocation alloc_id >>=
         (fun (x : bool) =>
            match x with
            | true => ret false
@@ -3508,7 +3516,7 @@ Module CheriMemory
              match x with
              | false => fail loc (MerrUndefinedRealloc Free_non_matching)
              | true =>
-                 is_dead alloc_id >>=
+                 is_dead_allocation alloc_id >>=
                    (fun x => match x with
                           | true =>
                               fail loc (MerrUndefinedRealloc Free_dead_allocation)
