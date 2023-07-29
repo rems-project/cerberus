@@ -1002,14 +1002,15 @@ Module CheriMemory
   Definition cap_is_null  (c : C.t) : bool :=
     Z.eqb (cap_to_Z c) 0.
 
-  (* find first allocation with given starting addrress *)
+  (* find first live allocation with given starting addrress *)
   Definition find_allocation (addr:AddressValue.t) : memM (option (Z*allocation)) :=
     get >>= fun st =>
         ret
           (ZMap.fold (fun alloc_id alloc acc =>
                         match acc with
                         | None =>
-                            if AddressValue.eqb alloc.(base) addr
+                            if andb (negb alloc.(is_dead))
+                                 (AddressValue.eqb alloc.(base) addr)
                             then Some (alloc_id,alloc)
                             else None
                         | Some _ => acc
@@ -1025,10 +1026,7 @@ Module CheriMemory
             ret alloc.(is_dynamic)
         end.
 
-  (* Check if given capabilities matches one of capabilities
-     returned earlier by [allocate_region].
-
-     TODO: check ghost state?
+  (* TODO: check ghost state?
    *)
   Definition is_dynamic_cap c : memM bool :=
     if Permissions.eqb (C.cap_get_perms c) Permissions.perm_alloc
@@ -1547,7 +1545,9 @@ Module CheriMemory
         | _ => raise (InternalErr "unexpected abst return value. Expecting concrete pointer.")
         end.
 
-  (* revoke (clear tag) any pointer in the memory pointing within the bounds of given allocation *)
+  (* revoke (clear tag) any pointer in the memory pointing within the bounds of given allocation.
+     the allocation must be live.
+   *)
   Definition revoke_pointers alloc : memM unit
     :=
     let base := AddressValue.to_Z alloc.(base) in
@@ -1585,7 +1585,7 @@ Module CheriMemory
         (find_allocation (C.cap_get_value c) >>=
            (fun x =>
               match x with
-              | None => fail loc (MerrOther "attempted to kill with a pointer not matching any allocation")
+              | None => fail loc (MerrOther "attempted to kill with a pointer not matching any live allocation")
               | Some (alloc_id,alloc) =>
                   if negb (Bool.eqb is_dyn alloc.(is_dynamic))
                   then fail loc (MerrUndefinedFree Free_non_matching)
