@@ -1248,7 +1248,7 @@ Module CheriMemory
 
   Fixpoint abst
     (fuel: nat)
-    (find_overlaping : Z -> overlap_ind)
+    (find_overlapping : Z -> overlap_ind)
     (funptrmap : ZMap.t (digest * string * C.t))
     (tag_query_f : Z -> (bool* CapGhostState))
     (addr : Z)
@@ -1260,7 +1260,7 @@ Module CheriMemory
     | O => raise "abst out of fuel"
     | S fuel =>
         let '(CoqCtype.Ctype _ ty) := cty in
-        let self f := abst f find_overlaping funptrmap tag_query_f in
+        let self f := abst f find_overlapping funptrmap tag_query_f in
         sz <- sizeof DEFAULT_FUEL None cty ;;
         sassert (negb (Nat.ltb (List.length bs) (Z.to_nat sz))) "abst, |bs| < sizeof(ty)" ;;
         let merge_taint (x_value : taint_ind) (y_value : taint_ind) : taint_ind :=
@@ -1378,7 +1378,7 @@ Module CheriMemory
                           match prov_status with
                           | NotValidPtrProv =>
                               match
-                                find_overlaping
+                                find_overlapping
                                   (cap_to_Z c_value) with
                               | NoAlloc => (default_prov tt)
                               | SingleAlloc alloc_id => Prov_some alloc_id
@@ -1465,7 +1465,7 @@ Module CheriMemory
     | MVErr err => fail loc err
     end.
 
-  Definition find_overlaping_st st addr : overlap_ind
+  Definition find_overlapping_st st addr : overlap_ind
     :=
     let (require_exposed, allow_one_past) :=
       match CoqSwitches.has_switch_pred (SW.get_switches tt)
@@ -1507,8 +1507,8 @@ Module CheriMemory
                  end
       ) st.(allocations) NoAlloc.
 
-  Definition find_overlaping addr : memM overlap_ind
-    :=  get >>= fun st => ret (find_overlaping_st st addr).
+  Definition find_overlapping addr : memM overlap_ind
+    :=  get >>= fun st => ret (find_overlapping_st st addr).
 
   (* If pointer stored at [addr] with meta information [meta] has it's
    base within given [base] and [limit] region, revoke it by returning
@@ -1531,7 +1531,7 @@ Module CheriMemory
       else
         let bs := fetch_bytes st.(bytemap) addr IMP.get.(sizeof_pointer) in
         '(_, mval, _) <-
-          serr2memM (abst DEFAULT_FUEL (find_overlaping_st st) st.(funptrmap) (fun _ => meta) addr
+          serr2memM (abst DEFAULT_FUEL (find_overlapping_st st) st.(funptrmap) (fun _ => meta) addr
                                                             (CoqCtype.mk_ctype_pointer CoqCtype.no_qualifiers CoqCtype.void) bs)
         ;;
         match mval with
@@ -1933,7 +1933,7 @@ Module CheriMemory
                    bounds_unspecified := false |})
            in
            '(taint, mval, bs') <-
-             serr2memM (abst DEFAULT_FUEL (find_overlaping_st st) st.(funptrmap) tag_query addr ty bs)
+             serr2memM (abst DEFAULT_FUEL (find_overlapping_st st) st.(funptrmap) tag_query addr ty bs)
            ;;
            mem_value_strip_err loc mval >>=
              (fun (mval : mem_value) =>
@@ -2008,7 +2008,7 @@ Module CheriMemory
     | Prov_none, PVconcrete c =>
         fail loc (MerrAccess LoadAccess OutOfBoundPtr)
     | Prov_disabled, PVconcrete c =>
-        find_overlaping (cap_to_Z c) >>= fun x =>
+        find_overlapping (cap_to_Z c) >>= fun x =>
             match x with
             | NoAlloc => fail loc (MerrAccess LoadAccess OutOfBoundPtr)
             | DoubleAlloc _ _ => fail loc (MerrInternal "DoubleAlloc without PNVI")
@@ -2213,7 +2213,7 @@ Module CheriMemory
       | Prov_none, PVconcrete c =>
           fail loc (MerrAccess StoreAccess OutOfBoundPtr)
       | Prov_disabled, PVconcrete c =>
-          find_overlaping (cap_to_Z c) >>= fun x =>
+          find_overlapping (cap_to_Z c) >>= fun x =>
               match x with
               | NoAlloc => fail loc (MerrAccess StoreAccess OutOfBoundPtr)
               | DoubleAlloc _ _ => fail loc (MerrInternal "DoubleAlloc without PNVI")
@@ -2861,7 +2861,7 @@ Module CheriMemory
         if cap_is_null c_value
         then ret false
         else
-          find_overlaping (cap_to_Z c_value) >>= fun x =>
+          find_overlapping (cap_to_Z c_value) >>= fun x =>
               match x with
               | NoAlloc => fail Loc_unknown (MerrAccess LoadAccess OutOfBoundPtr)
               | DoubleAlloc _ _ => fail Loc_unknown (MerrInternal "DoubleAlloc without PNVI")
@@ -2895,7 +2895,7 @@ Module CheriMemory
     | CoqCtype.Signed CoqCtype.Intptr_t, IC _ c_value
       =>
         let addr := (cap_to_Z c_value) in
-        find_overlaping addr >>=
+        find_overlapping addr >>=
           (fun x =>
              match x with
              | NoAlloc => ret (default_prov tt)
@@ -2920,7 +2920,7 @@ Module CheriMemory
             then r_value
             else Z.sub r_value dlt
           in
-          find_overlaping addr >>=
+          find_overlapping addr >>=
             (fun x =>
                match x with
                | NoAlloc => ret (default_prov tt)
@@ -3336,7 +3336,7 @@ Module CheriMemory
         let shifted_addr := Z.add (cap_to_Z c_value) offset in
         if is_strict_pointer_arith tt
         then
-          find_overlaping (cap_to_Z c_value) >>= fun x =>
+          find_overlapping (cap_to_Z c_value) >>= fun x =>
               match x with
               | NoAlloc => fail loc (MerrAccess LoadAccess OutOfBoundPtr)
               | DoubleAlloc _ _ => fail loc (MerrInternal "DoubleAlloc without PNVI")
