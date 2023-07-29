@@ -1531,7 +1531,7 @@ Module CheriMemory
       else
         let bs := fetch_bytes st.(bytemap) addr IMP.get.(sizeof_pointer) in
         '(_, mval, _) <-
-          serr2memM (abst DEFAULT_FUEL (find_overlapping_st st) st.(funptrmap) (fun _ => meta) addr
+          serr2memM (abst DEFAULT_FUEL (fun _ => NoAlloc) st.(funptrmap) (fun _ => meta) addr
                                                             (CoqCtype.mk_ctype_pointer CoqCtype.no_qualifiers CoqCtype.void) bs)
         ;;
         match mval with
