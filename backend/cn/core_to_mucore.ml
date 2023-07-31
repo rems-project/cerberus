@@ -1437,82 +1437,131 @@ let normalise_file (markers_env, ail_prog) file =
 
 
 
-type instrumentation = {
-    fn: Sym.t;
-    fn_loc: Loc.t;
+type surface = {
     accesses : (Sym.t * Ctype.ctype) list;
     requires: (Sym.t, Ctype.ctype) Cn.cn_condition list;
     ensures: (Sym.t, Ctype.ctype) Cn.cn_condition list;
     statements: (Sym.t, Ctype.ctype) cn_statement list;
   }
 
-  
+type internal = {
+    pre: unit mu_arguments;
+    post: ReturnTypes.t;
+    (* inv: (Loc.t * unit mu_arguments); *) (* TODO *)
+    statements: Cnprog.cn_prog list;
+  }
 
-let collect_instrumentation file =
+type instrumentation = {
+    fn: Sym.t;
+    fn_loc: Loc.t;
+    surface: surface;
+    internal : internal;
+  }
 
-  let rec in_expr (M_Expr (_, _, e_)) =
-    match e_ with
-    | M_Epure _ -> []
-    | M_Ememop _ -> []
-    | M_Eaction _ -> []
-    | M_Eskip -> []
-    | M_Eccall _ -> []
-    | M_Elet (_, _, e) -> in_expr e
-    | M_Eunseq es -> List.concat_map in_expr es
-    | M_Ewseq (_, e1, e2) -> in_expr e1 @ in_expr e2
-    | M_Esseq (_, e1, e2) -> in_expr e1 @ in_expr e2
-    | M_Eif (_, e1, e2) -> in_expr e1 @ in_expr e2
-    | M_Ebound e -> in_expr e
-    | M_End es -> List.concat_map in_expr es
-    | M_Erun _ -> []
-    | M_CN_progs (stmts, _) -> stmts
+
+let concat2 (x : ('a list * 'b list)) (y : ('a list * 'b list)) : 'a list * 'b list =
+  let a1, b1 = x in
+  let a2, b2 = y in
+  (a1 @ a2, b1 @ b2)
+
+let concat2_map (f : 'a -> ('b list * 'c list)) (xs : 'a list) : ('b list * 'c list) =
+  List.fold_right (fun x acc ->
+      concat2 (f x) acc
+    ) xs ([], [])
+
+let rec stmts_in_expr (M_Expr (_, _, e_)) =
+  match e_ with
+  | M_Epure _ -> ([], [])
+  | M_Ememop _ -> ([], [])
+  | M_Eaction _ -> ([], [])
+  | M_Eskip -> ([], [])
+  | M_Eccall _ -> ([], [])
+  | M_Elet (_, _, e) -> stmts_in_expr e
+  | M_Eunseq es -> concat2_map stmts_in_expr es
+  | M_Ewseq (_, e1, e2) -> concat2 (stmts_in_expr e1) (stmts_in_expr e2)
+  | M_Esseq (_, e1, e2) -> concat2 (stmts_in_expr e1) (stmts_in_expr e2)
+  | M_Eif (_, e1, e2) -> concat2 (stmts_in_expr e1) (stmts_in_expr e2)
+  | M_Ebound e -> stmts_in_expr e
+  | M_End es -> concat2_map stmts_in_expr es
+  | M_Erun _ -> ([], [])
+  | M_CN_progs (stmts_s, stmts_i) -> (stmts_s, stmts_i)
+
+let rec stmts_in_largs f_i = function
+  | M_Define (_, _, a) -> stmts_in_largs f_i a
+  | M_Resource (_, _, a) -> stmts_in_largs f_i a
+  | M_Constraint (_, _, a) -> stmts_in_largs f_i a
+  | M_I i -> f_i i
+
+let rec stmts_in_args f_i = function
+  | M_Computational (_, _, a) -> stmts_in_args f_i a
+  | M_L a -> stmts_in_largs f_i a
+
+let stmts_in_labels labels = 
+  Pmap.fold (fun s def acc ->
+      match def with
+      | M_Return _ -> acc
+      | M_Label (_, a, _, _) -> concat2 (stmts_in_args stmts_in_expr a) acc
+    ) labels ([], [])
+
+let stmts_in_function args_and_body = 
+  stmts_in_args (fun (body, labels, _rt) ->
+      concat2 (stmts_in_expr body) (stmts_in_labels labels)
+    ) args_and_body
+
+
+let pre_post_of_function args_and_body = 
+
+  let rec of_args_l = function
+    | M_Define (bound, info, a_l) ->
+       let pre, post = of_args_l a_l in
+       (M_Define (bound, info, pre), post)
+    | M_Resource (bound, info, a_l) ->
+       let pre, post = of_args_l a_l in
+       (M_Resource (bound, info, pre), post)
+    | M_Constraint (lc, info, a_l) ->
+       let pre, post = of_args_l a_l in
+       (M_Constraint (lc, info, pre), post)
+    | M_I (_, _labels, rt) ->
+       (M_I (), rt)
   in
 
-  let rec in_largs f_i = function
-    | M_Define (_, _, a) -> in_largs f_i a
-    | M_Resource (_, _, a) -> in_largs f_i a
-    | M_Constraint (_, _, a) -> in_largs f_i a
-    | M_I i -> f_i i
+  let rec of_args = function
+    | M_Computational (bound, info, a) ->
+       let pre, post = of_args a in
+       (M_Computational (bound, info, pre), post)
+    | M_L a_l ->
+       let pre, post = of_args_l a_l in
+       (M_L pre, post)
   in
 
-  let rec in_args f_i = function
-    | M_Computational (_, _, a) -> in_args f_i a
-    | M_L a -> in_largs f_i a
-  in
+  of_args args_and_body
 
-  let in_labels labels = 
-    Pmap.fold (fun s def acc ->
-        match def with
-        | M_Return _ -> acc
-        | M_Label (_, a, _, _) -> in_args in_expr a @ acc
-      ) labels []
-  in
 
-  let in_function = 
-    in_args (fun (body, labels, _rt) ->
-        in_expr body @ in_labels labels
-      )
-  in
 
+let collect_instrumentation (file : _ mu_file) =
   let instrs = 
   Pmap.fold (fun fn decl acc ->
       match decl with
       | M_Proc (fn_loc, args_and_body, _trusted, spec) ->
-         { fn = fn;
-           fn_loc = fn_loc; 
-           accesses = spec.accesses;
-           requires = spec.requires;
-           ensures = spec.ensures;
-           statements = in_function args_and_body
-         } :: acc
+         let stmts_s, stmts_i = stmts_in_function args_and_body in
+         let surface = { 
+             accesses = spec.accesses;
+             requires = spec.requires;
+             ensures = spec.ensures;
+             statements = stmts_s;
+           }
+         in
+         let pre, post = pre_post_of_function args_and_body in
+         let internal = {
+             pre = pre;
+             post = post;
+             statements = stmts_i;
+           } 
+         in
+         { fn = fn; fn_loc = fn_loc; surface; internal } :: acc
       | M_ProcDecl (fn_loc, _ft) ->
-         { fn = fn;
-           fn_loc = fn_loc;
-           accesses = [];
-           requires = [];
-           ensures = [];
-           statements = [];
-         } :: acc
+         failwith "todo: support function prototypes"
     ) file.mu_funs []
    in
    (instrs, C.symtable)
+
