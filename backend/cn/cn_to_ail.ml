@@ -263,11 +263,12 @@ let rec cn_to_ail_expr_aux
           | [] -> failwith "Empty patterns not allowed"
       in 
 
-      let simplify_leading_variable (ps, e) =
+      let simplify_leading_variable cn_expr_ (ps, e) =
         match ps with 
           (* CNExpr_const = hack for wildcard pattern *)
-          | (CNExpr_var _) :: ps' -> (CNExpr_const CNConst_unit :: ps', e)
-           (* mk_cn_expr (CNExpr_let (sym', mk_cn_expr (CNExpr_var sym), e))) *)
+          | (CNExpr_var sym') :: ps' -> 
+            (CNExpr_const CNConst_unit :: ps',
+           mk_cn_expr (CNExpr_let (sym', mk_cn_expr cn_expr_, e)))
           | p :: ps' -> (p :: ps', e)
           | [] -> assert false
       in
@@ -454,15 +455,15 @@ let rec cn_to_ail_expr_aux
               (* let cases = List.map simplify_leading_variable cases in *)
               (* If all are variables/wildcards, we move onto next pattern *)
 
-              (* TODO: Change back to original Neel pattern compiler with let exprs being introduced *)
-              (* TODO: Maybe remove bindings completely *)
-              if List.for_all leading_variable_or_wildcard cases then
-                let bindings = List.filter_map (fun (ps, _) -> create_cn_binding ps tp) cases in
+              let cases = List.map (simplify_leading_variable v) cases in
+
+              if List.for_all leading_wildcard cases then
+                (* let bindings = List.filter_map (fun (ps, _) -> create_cn_binding ps tp) cases in *)
                 let cases = List.map (fun (ps, e) -> (List.tl ps, e)) cases in
-                let (bindings', stats') = translate vs cases parent in 
-                (bindings @ bindings', stats')
+                translate vs cases parent
+                (* let (bindings', stats') = translate vs cases parent in  *)
+                (* (bindings @ bindings', stats') *)
               else
-                let cases = List.map simplify_leading_variable cases in
                 match tp with
                   | CN_record members_with_types ->
                     let (ts, ids) = List.split members_with_types in
