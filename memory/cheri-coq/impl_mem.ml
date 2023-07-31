@@ -1188,7 +1188,7 @@ module CHERIMorello : Memory = struct
        begin match pv with
        | PVconcrete c ->
           let addr = C.cap_get_value c in
-          bind (lift_coq_memM ~quiet:true "find_overlapping" (MM.find_overlaping addr)) (fun x ->
+          bind (lift_coq_memM ~quiet:true "find_overlapping" (MM.find_overlapping addr)) (fun x ->
               let loc = Cerb_location.unknown in
               match x with
               | MM.NoAlloc -> fail ~loc (MerrAccess (LoadAccess, OutOfBoundPtr))
