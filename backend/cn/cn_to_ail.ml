@@ -265,7 +265,7 @@ let rec cn_to_ail_expr_aux
       
       (* PATTERN COMPILER *)
 
-      let leading_variable_or_wildcard (ps, _) = 
+      let _leading_variable_or_wildcard (ps, _) = 
         match ps with 
           | CNPat (_, CNPat_sym _) :: _ 
           | CNPat (_, CNPat_wild) :: _ -> true
@@ -273,15 +273,15 @@ let rec cn_to_ail_expr_aux
           | [] -> failwith "Empty patterns not allowed"
       in 
 
-      let simplify_leading_variable (ps, e) =
+      let simplify_leading_variable cn_expr_ (ps, e) =
         match ps with 
-          | CNPat (loc, CNPat_sym sym') :: ps' -> (CNPat (loc, CNPat_wild) :: ps', e)
+          | CNPat (loc, CNPat_sym sym') :: ps' -> (CNPat (loc, CNPat_wild) :: ps', mk_cn_expr (CNExpr_let (sym', mk_cn_expr cn_expr_, e)))
            (* mk_cn_expr (CNExpr_let (sym', mk_cn_expr (CNExpr_var sym), e))) *)
           | p :: ps' -> (p :: ps', e)
           | [] -> assert false
       in
 
-      let _leading_wildcard (ps, _) =
+      let leading_wildcard (ps, _) =
         match ps with
           | CNPat (loc, CNPat_wild) :: ps' -> true
           | _ :: ps' -> false
@@ -407,7 +407,7 @@ let rec cn_to_ail_expr_aux
         A.(sym, ((Cerb_location.unknown, Automatic, false), None, empty_qualifiers, ctype))
       in
 
-      let create_cn_binding ps cn_bt = 
+      let _create_cn_binding ps cn_bt = 
         match ps with 
           | CNPat (_, CNPat_sym sym) :: _ -> 
             let ctype = mk_ctype (cn_to_ail_base_type cn_bt) in
@@ -466,15 +466,15 @@ let rec cn_to_ail_expr_aux
               (* let cases = List.map simplify_leading_variable cases in *)
               (* If all are variables/wildcards, we move onto next pattern *)
 
-              (* TODO: Change back to original Neel pattern compiler with let exprs being introduced *)
-              (* TODO: Maybe remove bindings completely *)
-              if List.for_all leading_variable_or_wildcard cases then
-                let bindings = List.filter_map (fun (ps, _) -> create_cn_binding ps tp) cases in
+              let cases = List.map (simplify_leading_variable v) cases in
+
+              if List.for_all leading_wildcard cases then
+                (* let bindings = List.filter_map (fun (ps, _) -> create_cn_binding ps tp) cases in *)
                 let cases = List.map (fun (ps, e) -> (List.tl ps, e)) cases in
-                let (bindings', stats') = _translate vs cases parent in 
-                (bindings @ bindings', stats')
+                _translate vs cases parent
+                (* let (bindings', stats') = translate vs cases parent in  *)
+                (* (bindings @ bindings', stats') *)
               else
-                let cases = List.map simplify_leading_variable cases in
                 match tp with
                   | CN_record members_with_types ->
                     (* let (ts, ids) = List.split members_with_types in
