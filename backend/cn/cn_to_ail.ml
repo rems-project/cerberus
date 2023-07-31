@@ -266,14 +266,23 @@ let rec cn_to_ail_expr_aux
       
       (* PATTERN COMPILER *)
 
-      let simplify_leading_variable sym (ps, e) =
+      let leading_variable_or_wildcard (ps, _) = 
         match ps with 
-          | CNPat (loc, CNPat_sym sym') :: ps' -> (CNPat (loc, CNPat_wild) :: ps', mk_cn_expr (CNExpr_let (sym', mk_cn_expr (CNExpr_var sym), e)))
+          | CNPat (_, CNPat_sym _) :: _ 
+          | CNPat (_, CNPat_wild) :: _ -> true
+          | _ :: _ -> false
+          | [] -> failwith "Empty patterns not allowed"
+      in 
+
+      let simplify_leading_variable (ps, e) =
+        match ps with 
+          | CNPat (loc, CNPat_sym sym') :: ps' -> (CNPat (loc, CNPat_wild) :: ps', e)
+           (* mk_cn_expr (CNExpr_let (sym', mk_cn_expr (CNExpr_var sym), e))) *)
           | p :: ps' -> (p :: ps', e)
           | [] -> assert false
       in
 
-      let leading_wildcard (ps, _) =
+      let _leading_wildcard (ps, _) =
         match ps with
           | CNPat (loc, CNPat_wild) :: ps' -> true
           | _ :: ps' -> false
@@ -399,6 +408,14 @@ let rec cn_to_ail_expr_aux
         A.(sym, ((Cerb_location.unknown, Automatic, false), None, empty_qualifiers, ctype))
       in
 
+      let create_cn_binding ps cn_bt = 
+        match ps with 
+          | CNPat (_, CNPat_sym sym) :: _ -> 
+            let ctype = mk_ctype (cn_to_ail_base_type cn_bt) in
+            Some (create_binding sym ctype)
+          | _ -> None
+      in
+
       let rec create_bindings_for_pattern exprs members = 
         match exprs with
         | [] -> []
@@ -439,50 +456,61 @@ let rec cn_to_ail_expr_aux
       in
 
       (* Matrix algorithm for pattern compilation *)
-      let rec _translate : (A.ail_identifier * _ Cn.cn_base_type) list -> ((C.union_tag cn_pat) list * (C.union_tag, C.ctype) cn_expr) list -> _ A.statement list =
-        fun vars cases -> 
+      (* TODO: Destination passing *)
+      let rec _translate: (((C.union_tag, C.ctype) cn_expr_) * _ Cn.cn_base_type) list -> ((C.union_tag cn_pat) list * (C.union_tag, C.ctype) cn_expr) list -> ((C.union_tag, C.ctype) cn_expr_) option -> (A.bindings * (_ A.statement_) list) =
+        fun vars cases parent -> 
           match vars with 
             | [] -> failwith "TODO" (* Implement *)
             | (v, tp) :: vs -> 
               (* All leading variables become wildcard patterns *)
-              let cases = List.map (simplify_leading_variable v) cases in
+              (* let cases' = cases in *)
+              (* let cases = List.map simplify_leading_variable cases in *)
               (* If all are variables/wildcards, we move onto next pattern *)
-              if List.for_all leading_wildcard cases then
+
+              (* TODO: Change back to original Neel pattern compiler with let exprs being introduced *)
+              (* TODO: Maybe remove bindings completely *)
+              if List.for_all leading_variable_or_wildcard cases then
+                let bindings = List.filter_map (fun (ps, _) -> create_cn_binding ps tp) cases in
                 let cases = List.map (fun (ps, e) -> (List.tl ps, e)) cases in
-                _translate vs cases
+                let (bindings', stats') = _translate vs cases parent in 
+                (bindings @ bindings', stats')
               else
+                let cases = List.map simplify_leading_variable cases in
                 match tp with
-                  (* | CN_record members_with_types ->
-                    let (ts, ids) = List.split members_with_types in
-                    (* TODO: Change? *)
-                    let syms = List.map create_sym_from_id ids in
-                    let vs' = (List.combine syms ts) @ vs in
-                    (* let cases' = List.map (expand_record ids) cases in *)
-                    let ail = translate vs' cases in
-                    failwith "TODO" *)
-                  | CN_struct sym -> 
+                  | CN_record members_with_types ->
+                    (* let (ts, ids) = List.split members_with_types in
+                    let vars' = List.map (fun id -> CNExpr_memberof (mk_cn_expr v, id)) ids in
+                    let vs' = (List.combine vars' ts) @ vs in
+                    let cases' = List.map (expand_record ids) cases in
+                    let (bindings, ail_stats) = _translatevs' cases' parent in *)
+                    failwith "TODO"
+                  | CN_datatype sym -> 
                     let cn_dt = List.filter (fun dt -> Sym.equal sym dt.cn_dt_name) dts in 
                     (match cn_dt with 
                       | [] -> failwith "Datatype not found"
                       | dt :: _ ->
+                        let (s1, e1) = cn_to_ail_expr_aux const_prop dts (mk_cn_expr v) PassBack in
                         let build_case (constr_sym, members_with_types) = 
-                          let x' = Sym.fresh_pretty "_x" in
+                          (* let x' = Sym.fresh_pretty "_x" in *)
                           let cases' = List.filter_map (expand_datatype constr_sym) cases in 
                           let record_tp = CN_record members_with_types in
-                          let ail_stats = _translate ((x', record_tp) :: vs) cases' in
-                          (* TODO: Add bindings instead of [] *)
-                          let stat_block = A.AilSblock ([], ail_stats) in
+                          let lc_sym = generate_sym_with_suffix ~suffix:"" ~lowercase:true constr_sym in 
+                          let rhs_memberof_ptr = A.(AilEmemberofptr (mk_expr e1, Id.id "u")) in (* TODO: Remove hack *)
+                          let rhs_memberof = A.(AilEmemberof (mk_expr rhs_memberof_ptr, create_id_from_sym lc_sym)) in
+                          let constructor_var_assign = mk_stmt A.(AilSdeclaration [(lc_sym, Some (mk_expr rhs_memberof))]) in
+                          (* let parent' = Some (CNExpr_var lc_sym) in *)
+                          let (bindings, member_stats) = _translate((CNExpr_var lc_sym, record_tp) :: vs) cases' parent in
+                          let stat_block = A.AilSblock (bindings, constructor_var_assign :: (List.map mk_stmt member_stats)) in
                           let tag_sym = generate_sym_with_suffix ~suffix:"" ~uppercase:true constr_sym in
                           let attribute : CF.Annot.attribute = {attr_ns = None; attr_id = CF.Symbol.Identifier (Cerb_location.unknown, Sym.pp_string tag_sym); attr_args = []} in
                           let ail_case = A.(AilScase (Nat_big_num.zero (* placeholder *), mk_stmt stat_block)) in
                           let ail_case_stmt = A.(AnnotatedStatement (Cerb_location.unknown, CF.Annot.Attrs [attribute], ail_case)) in
                           ail_case_stmt
                         in 
-                        let (s1, e1) = cn_to_ail_expr_aux const_prop dts e PassBack in
                         let e1_transformed = transform_switch_expr e1 in
                         let ail_case_stmts = List.map build_case dt.cn_dt_cases in
                         let switch = A.(AilSswitch (mk_expr e1_transformed, mk_stmt (AilSblock ([], ail_case_stmts)))) in
-                        List.map mk_stmt (s1 @ [switch])
+                        ([], s1 @ [switch])
                         (* A.(AilSswitch (mk_expr e1_transformed, mk_stmt (AilSblock ([], stats)))) *)
                     )
                   | _ -> 
@@ -490,7 +518,7 @@ let rec cn_to_ail_expr_aux
                     failwith "Unexpected pattern"
       in
 
-      (* let switch_stat = translate [e] es in *)
+      (* let switch_stat = _translate[e] es in *)
 
 
 
