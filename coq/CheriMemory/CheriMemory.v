@@ -194,6 +194,9 @@ Module CheriMemory
   Definition allocation_with_prefix prefix (r : allocation) :=
     Build_allocation prefix r.(base) r.(size) r.(ty) r.(is_readonly) r.(is_dynamic) r.(is_dead) r.(taint).
 
+  Definition allocation_with_dead (r : allocation) :=
+    Build_allocation r.(prefix) r.(base) r.(size) r.(ty) r.(is_readonly) r.(is_dynamic) true r.(taint).
+
   Record AbsByte :=
     {
       prov : provenance;
@@ -417,6 +420,16 @@ Module CheriMemory
         let m := ZMap.add (Z.add a0 (Z.mul (Z.of_nat n) step)) v m in
         zmap_range_init a0 n step v m
     end.
+
+  (* TODO: see if could be generalized and moved to Utils.v.  *)
+  Definition zmap_update_element
+    {A:Type}
+    (key: Z)
+    (v: A)
+    (m: ZMap.t A)
+    : (ZMap.t A)
+    :=
+    ZMap.add key v (ZMap.remove key m).
 
   (* TODO: see if could be generalized and moved to Utils.v.  *)
   (** [update key f m] returns a map containing the same bindings as
@@ -1026,11 +1039,34 @@ Module CheriMemory
             ret alloc.(is_dynamic)
         end.
 
-  (* TODO: check ghost state?
+  (*
+    Check if given cap is matches exactly a cap retruned by one of
+    previous dynamic allocations.
+
+    0. The allocation must be live (ensured by [find_allocation]
+    1. The allocation must be dynamic
+    2. Bounds must exactly span allocation
+    3. Address must be equal to the beginning of allocation
+    4. Permissions must be the same as returned by allocator
+
+    TODO: check ghost state?
+    TODO: assumes that [C.cap_get_value c = fst (C.cap_get_bounds c) ]
    *)
   Definition is_dynamic_cap c : memM bool :=
     if Permissions.eqb (C.cap_get_perms c) Permissions.perm_alloc
-    then is_dynamic_addr (C.cap_get_value c)
+    then
+      let addr:AddressValue.t := C.cap_get_value c in
+      let zbounds := Bounds.to_Zs (C.cap_get_bounds c) in
+      let csize := (snd zbounds) - (fst zbounds) in
+      find_allocation addr >>= fun x =>
+          match x with
+          | None => ret false
+          | Some (_,alloc) =>
+              ret
+                (alloc.(is_dynamic) &&
+                   (AddressValue.eqb alloc.(base) addr) &&
+                   (Z.eqb alloc.(size) csize))
+          end
     else ret false.
 
   Definition get_allocation (alloc_id : Z) : memM allocation :=
@@ -1511,8 +1547,9 @@ Module CheriMemory
     :=  get >>= fun st => ret (find_overlapping_st st addr).
 
   (* If pointer stored at [addr] with meta information [meta] has it's
-   base within given [base] and [limit] region, revoke it by returning
-   new meta *)
+     base within given [base] and [limit] region, revoke it by returning
+     new meta.
+   *)
   Definition maybe_revoke_pointer
     (alloc_base alloc_limit: Z)
     (st: mem_state)
@@ -1525,44 +1562,43 @@ Module CheriMemory
     if (negb (fst meta))
     then ret meta (* the pointer is already untagged *)
     else
-      is_dyn <- is_dynamic_addr (AddressValue.of_Z addr) ;;
-      if negb is_dyn
-      then ret meta (* pointer at [addr] is not dynamic *)
-      else
-        let bs := fetch_bytes st.(bytemap) addr IMP.get.(sizeof_pointer) in
-        '(_, mval, _) <-
-          serr2memM (abst DEFAULT_FUEL (fun _ => NoAlloc) st.(funptrmap) (fun _ => meta) addr
-                                                            (CoqCtype.mk_ctype_pointer CoqCtype.no_qualifiers CoqCtype.void) bs)
-        ;;
-        match mval with
-        | MVEpointer _ (PV _ (PVconcrete c)) =>
-            let '(t, gs) := meta  in
-            let ptr_base := fst (Bounds.to_Zs (C.cap_get_bounds c)) in
-            if andb (Z.leb alloc_base ptr_base) (Z.ltb ptr_base alloc_limit)
-            then ret (false, {| tag_unspecified := false; bounds_unspecified := gs.(bounds_unspecified) |})
-            else ret meta (* outside allocation. leave unchanged *)
-        | MVEunspecified _ => raise (InternalErr "unexpected unspec.")
-        | _ => raise (InternalErr "unexpected abst return value. Expecting concrete pointer.")
-        end.
+      let bs := fetch_bytes st.(bytemap) addr IMP.get.(sizeof_pointer) in
+      '(_, mval, _) <-
+        serr2memM (abst DEFAULT_FUEL (fun _ => NoAlloc) st.(funptrmap) (fun _ => meta) addr
+                                                          (CoqCtype.mk_ctype_pointer CoqCtype.no_qualifiers CoqCtype.void) bs)
+      ;;
+      match mval with
+      | MVEpointer _ (PV _ (PVconcrete c)) =>
+          let '(t, gs) := meta  in
+          let ptr_base := fst (Bounds.to_Zs (C.cap_get_bounds c)) in
+          if andb (Z.leb alloc_base ptr_base) (Z.ltb ptr_base alloc_limit)
+          then ret (false, {| tag_unspecified := false; bounds_unspecified := gs.(bounds_unspecified) |})
+          else ret meta (* outside allocation. leave unchanged *)
+      | MVEunspecified _ => raise (InternalErr "unexpected unspec.")
+      | _ => raise (InternalErr "unexpected abst return value. Expecting concrete pointer.")
+      end.
 
-  (* revoke (clear tag) any pointer in the memory pointing within the bounds of given allocation.
-     the allocation must be live.
+  (* revoke (clear tag) any pointer in the memory pointing within the
+     bounds of given dynamic allocation.
    *)
   Definition revoke_pointers alloc : memM unit
     :=
-    let base := AddressValue.to_Z alloc.(base) in
-    let limit := base + alloc.(size) in
-    (* mprint_msg ("revoke_pointers " ++ (String.hex_str base) ++ " - "  ++ (String.hex_str limit)) ;; *)
-    get >>=
-      (fun st =>
-         zmap_mmapi
-           (maybe_revoke_pointer base limit st)
-           st.(capmeta)
-      )
-      >>=
-      (fun newmeta => update (fun st => mem_state_with_capmeta newmeta st))
-    ;; ret tt.
-
+    if alloc.(is_dynamic)
+    then
+      let base := AddressValue.to_Z alloc.(base) in
+      let limit := base + alloc.(size) in
+      (* mprint_msg ("revoke_pointers " ++ (String.hex_str base) ++ " - "  ++ (String.hex_str limit)) ;; *)
+      get >>=
+        (fun st =>
+           zmap_mmapi
+             (maybe_revoke_pointer base limit st)
+             st.(capmeta)
+        )
+        >>=
+        (fun newmeta => update (fun st => mem_state_with_capmeta newmeta st))
+      ;; ret tt
+    else
+      ret tt. (* allocation is not dynamic *)
 
   Definition kill
     (loc : location_ocaml)
@@ -1612,7 +1648,10 @@ Module CheriMemory
                                           next_alloc_id    := st.(next_alloc_id);
                                           next_iota        := st.(next_iota);
                                           last_address     := st.(last_address) ;
-                                          allocations      := ZMap.remove alloc_id st.(allocations);
+                                          allocations      := zmap_update_element
+                                                                alloc_id
+                                                                (allocation_with_dead alloc)
+                                                                st.(allocations);
                                           iota_map         := st.(iota_map);
                                           funptrmap        := st.(funptrmap);
                                           varargs          := st.(varargs);
@@ -1628,8 +1667,6 @@ Module CheriMemory
                                    fail loc (MerrUndefinedFree Free_out_of_bound)
                          end
           )
-
-
     | PV Prov_device (PVconcrete _) => ret tt
     | PV (Prov_symbolic iota) (PVconcrete c) =>
         if andb
@@ -3900,8 +3937,14 @@ Module CheriMemory
 
   Definition cornucopiaRevoke (_:unit) : memM unit
     :=
-    mprint_msg "cornucopiaRevoke" ;;
-    ret tt. (* TODO *)
+    st <- get ;;
+    monadic_fold_left
+      (fun _ '(_, alloc) =>
+         if alloc.(is_dead) && alloc.(is_dynamic)
+         then revoke_pointers alloc
+         else ret tt
+      )
+      (ZMap.elements st.(allocations)) tt.
 
   Definition call_intrinsic
     (loc : location_ocaml) (name : string) (args : list mem_value)

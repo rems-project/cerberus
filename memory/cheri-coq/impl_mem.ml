@@ -928,7 +928,7 @@ module CHERIMorello : Memory = struct
     Printf.fprintf stderr "BEGIN Allocation ==> %s\n" str;
     let l = ZMap.elements st.MM.allocations in
     List.iter (fun (aid,a) ->
-        Printf.fprintf stderr "@%s: 0x%s,%s (%s,%s)\n"
+        Printf.fprintf stderr "@%s: 0x%s,%s (%s,%s%s)\n"
           (Z.format "%d" aid)
           (Z.format "%x" a.MM.base)
           (Z.format "%d" a.size)
@@ -937,6 +937,7 @@ module CHERIMorello : Memory = struct
            | MM.Unexposed -> "unexposed"
           )
           (if a.is_dynamic then "dynamic" else "static")
+          (if a.is_dead then ", dead" else "")
       ) l;
     prerr_endline "END Allocations"
 
@@ -970,15 +971,19 @@ module CHERIMorello : Memory = struct
 
   (* lifting memM *)
 
-  let lift_coq_memM ?(quiet=false) label (m:'a MM.memM): 'a memM =
+  let lift_coq_memM ?(print_mem_state=true) label (m:'a MM.memM): 'a memM =
     ND (fun st ->
         if !Cerb_debug.debug_level >= 2 then
           Printf.fprintf stderr "MEMOP %s\n" label;
-        if not quiet && !Cerb_debug.debug_level >= 3 then
+        if print_mem_state then
+          if !Cerb_debug.debug_level >= 2 then
           begin
             print_allocations label st ;
-            print_bytemap label st ;
-            print_captags label st
+            if !Cerb_debug.debug_level >= 3 then
+              begin
+                print_bytemap label st ;
+                print_captags label st
+              end
           end ;
         match m st with
         | (st', Coq_inl e) ->
@@ -1174,7 +1179,7 @@ module CHERIMorello : Memory = struct
     in
     match prov with
     | Prov_some alloc_id ->
-       bind (lift_coq_memM ~quiet:true "get_allocation" (MM.get_allocation alloc_id)) (fun alloc ->
+       bind (lift_coq_memM ~print_mem_state:false "get_allocation" (MM.get_allocation alloc_id)) (fun alloc ->
            begin match pv with
            | PVconcrete addr ->
               if C.cap_get_value addr = alloc.base then
@@ -1188,13 +1193,13 @@ module CHERIMorello : Memory = struct
        begin match pv with
        | PVconcrete c ->
           let addr = C.cap_get_value c in
-          bind (lift_coq_memM ~quiet:true "find_overlapping" (MM.find_overlapping addr)) (fun x ->
+          bind (lift_coq_memM ~print_mem_state:false "find_overlapping" (MM.find_overlapping addr)) (fun x ->
               let loc = Cerb_location.unknown in
               match x with
               | MM.NoAlloc -> fail ~loc (MerrAccess (LoadAccess, OutOfBoundPtr))
               | MM.DoubleAlloc _ -> fail ~loc (MerrInternal "DoubleAlloc without PNVI")
               | MM.SingleAlloc alloc_id ->
-                 bind (lift_coq_memM ~quiet:true "get_allocation" (MM.get_allocation alloc_id)) (fun alloc ->
+                 bind (lift_coq_memM ~print_mem_state:false "get_allocation" (MM.get_allocation alloc_id)) (fun alloc ->
                      if addr = alloc.base then
                        return @@ Some (string_of_prefix (fromCoq_Symbol_prefix alloc.prefix))
                      else
