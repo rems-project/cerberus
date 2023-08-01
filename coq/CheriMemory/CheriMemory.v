@@ -323,30 +323,6 @@ Module CheriMemory
        end.
 
   Definition fail {A:Type} loc err : memM A :=
-    (* let loc :=
-      match err with
-      | MerrAccess loc  _  _
-      | MerrWriteOnReadOnly _ loc
-      | MerrReadUninit loc
-      | MerrUndefinedFree loc _
-      | MerrUndefinedRealloc loc _
-      | MerrFreeNullPtr loc
-      | MerrArrayShift loc
-      | MerrIntFromPtr loc =>
-          loc
-      | MerrOutsideLifetime _
-      | MerrInternal _
-      | MerrOther _
-      | MerrPtrdiff
-      | MerrPtrFromInt
-      | MerrPtrComparison
-      | MerrWIP _
-      | MerrVIP _ =>
-          Loc_other "cherimem"
-      | MerrCHERI loc _ =>
-          loc
-      end
-    in *)
     match undefinedFromMem_error err with
     | Some ub =>
         raise (Undef0 loc [ub])
@@ -943,24 +919,24 @@ Module CheriMemory
               ret ro
           end)
            >>=
-           (fun ro =>
-              let c := C.alloc_cap addr (AddressValue.of_Z size_n') in
-              (* Check here *)
-              let c :=
-                if ro then
-                  let p := C.cap_get_perms c in
-                  let p := Permissions.perm_clear_store p in
-                  let p := Permissions.perm_clear_store_cap p in
-                  let p := Permissions.perm_clear_store_local_cap p in
-                  C.cap_narrow_perms c p
-                else c
-              in
-              let prov := if CoqSwitches.is_PNVI (SW.get_switches tt)
-                          then Prov_some alloc_id
-                          else Prov_disabled
-              in
-              ret (PV prov (PVconcrete c))
-      )).
+           fun ro =>
+             let c := C.alloc_cap addr (AddressValue.of_Z size_n') in
+             (* Check here *)
+             let c :=
+               if ro then
+                 let p := C.cap_get_perms c in
+                 let p := Permissions.perm_clear_store p in
+                 let p := Permissions.perm_clear_store_cap p in
+                 let p := Permissions.perm_clear_store_local_cap p in
+                 C.cap_narrow_perms c p
+               else c
+             in
+             let prov := if CoqSwitches.is_PNVI (SW.get_switches tt)
+                         then Prov_some alloc_id
+                         else Prov_disabled
+             in
+             ret (PV prov (PVconcrete c))
+      ).
 
   Definition allocate_region
     (tid : thread_id)
@@ -977,40 +953,40 @@ Module CheriMemory
       Z.max align_n (Z.succ (AddressValue.to_Z (AddressValue.bitwise_complement (AddressValue.of_Z mask)))) in
 
     allocator size_n' align_n' >>=
-      (fun '(alloc_id, addr) =>
-         let alloc :=
-           {| prefix := CoqSymbol.PrefMalloc;
-             base := addr;
-             size := size_n';
-             ty := None;
-             is_dynamic := true ;
-             is_dead := false ;
-             is_readonly := IsWritable;
-             taint := Unexposed |}
-         in
-         let c_value := C.alloc_cap addr (AddressValue.of_Z size_n') in
-         update
-           (fun (st : mem_state) =>
-              {|
-                next_alloc_id    := st.(next_alloc_id);
-                next_iota        := st.(next_iota);
-                last_address     := st.(last_address) ;
-                allocations      := (ZMap.add alloc_id alloc st.(allocations));
-                iota_map         := st.(iota_map);
-                funptrmap        := st.(funptrmap);
-                varargs          := st.(varargs);
-                next_varargs_id  := st.(next_varargs_id);
-                bytemap          := st.(bytemap);
-                capmeta          := st.(capmeta);
-                last_used        := st.(last_used);
-              |})
-         ;;
-         let prov := if CoqSwitches.is_PNVI (SW.get_switches tt)
-                     then Prov_some alloc_id
-                     else Prov_disabled
-         in
-         ret (PV prov (PVconcrete c_value)
-      )).
+      fun '(alloc_id, addr) =>
+        let alloc :=
+          {| prefix := CoqSymbol.PrefMalloc;
+            base := addr;
+            size := size_n';
+            ty := None;
+            is_dynamic := true ;
+            is_dead := false ;
+            is_readonly := IsWritable;
+            taint := Unexposed |}
+        in
+        let c_value := C.alloc_cap addr (AddressValue.of_Z size_n') in
+        update
+          (fun (st : mem_state) =>
+             {|
+               next_alloc_id    := st.(next_alloc_id);
+               next_iota        := st.(next_iota);
+               last_address     := st.(last_address) ;
+               allocations      := (ZMap.add alloc_id alloc st.(allocations));
+               iota_map         := st.(iota_map);
+               funptrmap        := st.(funptrmap);
+               varargs          := st.(varargs);
+               next_varargs_id  := st.(next_varargs_id);
+               bytemap          := st.(bytemap);
+               capmeta          := st.(capmeta);
+               last_used        := st.(last_used);
+             |})
+        ;;
+        let prov := if CoqSwitches.is_PNVI (SW.get_switches tt)
+                    then Prov_some alloc_id
+                    else Prov_disabled
+        in
+        ret (PV prov (PVconcrete c_value)
+          ).
 
   Definition cap_is_null  (c : C.t) : bool :=
     Z.eqb (cap_to_Z c) 0.
@@ -1022,8 +998,7 @@ Module CheriMemory
           (ZMap.fold (fun alloc_id alloc acc =>
                         match acc with
                         | None =>
-                            if andb (negb alloc.(is_dead))
-                                 (AddressValue.eqb alloc.(base) addr)
+                            if AddressValue.eqb alloc.(base) addr && negb alloc.(is_dead)
                             then Some (alloc_id,alloc)
                             else None
                         | Some _ => acc
@@ -1071,15 +1046,14 @@ Module CheriMemory
 
   Definition get_allocation (alloc_id : Z) : memM allocation :=
     get >>=
-      (fun st =>
-         match ZMap.find alloc_id st.(allocations) with
-         | Some v => ret v
-         | None =>
-             fail_noloc (MerrOutsideLifetime
-                     (String.append "CHERI.get_allocation, alloc_id="
-                        (of_Z alloc_id)))
-         end
-      ).
+      fun st =>
+        match ZMap.find alloc_id st.(allocations) with
+        | Some v => ret v
+        | None =>
+            fail_noloc (MerrOutsideLifetime
+                          (String.append "CHERI.get_allocation, alloc_id="
+                             (of_Z alloc_id)))
+        end.
 
   Definition is_dead_allocation (alloc_id : storage_instance_id) : memM bool :=
     get_allocation alloc_id >>= fun alloc => ret alloc.(is_dead).
@@ -1126,7 +1100,8 @@ Module CheriMemory
 
   (* zap (make unspecified) any pointer in the memory with provenance matching a
      given allocation id *)
-  Definition zap_pointers {A:Type} (_:storage_instance_id) : memM A  := raise (InternalErr "zap_pointers is not supposrted").
+  Definition zap_pointers {A:Type} (_:storage_instance_id) : memM A
+    := raise (InternalErr "zap_pointers is not supported").
 
   Definition is_pointer_algined (a : Z) : bool :=
     let v := IMP.get.(alignof_pointer) in
@@ -1278,7 +1253,7 @@ Module CheriMemory
 
   (** Convert an arbitrary integer value to unsinged cap value *)
   Definition wrap_cap_value (n_value : Z) : Z :=
-    if andb (Z.leb n_value (AddressValue.to_Z C.min_ptraddr)) (Z.leb n_value (AddressValue.to_Z C.max_ptraddr))
+    if Z.leb n_value (AddressValue.to_Z C.min_ptraddr) && Z.leb n_value (AddressValue.to_Z C.max_ptraddr)
     then n_value
     else  wrapI (AddressValue.to_Z C.min_ptraddr) (AddressValue.to_Z C.max_ptraddr) n_value.
 
@@ -1559,7 +1534,7 @@ Module CheriMemory
     memM (bool* CapGhostState)
     :=
     (* mprint_msg ("maybe_revoke_pointer "  ++ String.hex_str addr) ;; *)
-    if (negb (fst meta))
+    if negb (fst meta)
     then ret meta (* the pointer is already untagged *)
     else
       let bs := fetch_bytes st.(bytemap) addr IMP.get.(sizeof_pointer) in
@@ -1571,7 +1546,7 @@ Module CheriMemory
       | MVEpointer _ (PV _ (PVconcrete c)) =>
           let '(t, gs) := meta  in
           let ptr_base := fst (Bounds.to_Zs (C.cap_get_bounds c)) in
-          if andb (Z.leb alloc_base ptr_base) (Z.ltb ptr_base alloc_limit)
+          if Z.leb alloc_base ptr_base && Z.ltb ptr_base alloc_limit
           then ret (false, {| tag_unspecified := false; bounds_unspecified := gs.(bounds_unspecified) |})
           else ret meta (* outside allocation. leave unchanged *)
       | MVEunspecified _ => raise (InternalErr "unexpected unspec.")
@@ -1662,10 +1637,8 @@ Module CheriMemory
             end
     | PV Prov_device (PVconcrete _) => ret tt
     | PV (Prov_symbolic iota) (PVconcrete c) =>
-        if cap_is_null c
-           && (CoqSwitches.has_switch (SW.get_switches tt) CoqSwitches.SW_forbid_nullptr_free)
-        then
-          fail loc MerrFreeNullPtr
+        if cap_is_null c && CoqSwitches.has_switch (SW.get_switches tt) CoqSwitches.SW_forbid_nullptr_free
+        then fail loc MerrFreeNullPtr
         else
           let precondition (z : storage_instance_id) :=
             is_dead_allocation z >>=
@@ -1697,8 +1670,8 @@ Module CheriMemory
              ret tt) ;;
           resolve_iota precondition iota >>=
             (fun alloc_id =>
-               (if is_dyn && (CoqSwitches.has_switch (SW.get_switches tt) (CoqSwitches.SW_revocation INSTANT))
-                then (get_allocation alloc_id >>= fun alloc => revoke_pointers alloc)
+               (if is_dyn && CoqSwitches.has_switch (SW.get_switches tt) (CoqSwitches.SW_revocation INSTANT)
+                then get_allocation alloc_id >>= fun alloc => revoke_pointers alloc
                 else ret tt) ;;
                update (fun st =>
                          {|
@@ -1715,15 +1688,14 @@ Module CheriMemory
                            last_used        := Some alloc_id;
                          |})
                ;;
-               (if CoqSwitches.has_switch (SW.get_switches tt) SW_zap_dead_pointers
-                then zap_pointers alloc_id
-                else ret tt)
+               if CoqSwitches.has_switch (SW.get_switches tt) SW_zap_dead_pointers
+               then zap_pointers alloc_id
+               else ret tt
             )
     | PV (Prov_some alloc_id) (PVconcrete c) =>
         (if cap_is_null c
-            && (CoqSwitches.has_switch (SW.get_switches tt) CoqSwitches.SW_forbid_nullptr_free)
-         then
-           fail loc MerrFreeNullPtr
+            && CoqSwitches.has_switch (SW.get_switches tt) CoqSwitches.SW_forbid_nullptr_free
+         then fail loc MerrFreeNullPtr
          else
            if is_dyn then
              (* this kill is dynamic one (i.e. free() or friends) *)
@@ -1745,7 +1717,8 @@ Module CheriMemory
                       raise (InternalErr "Concrete: FREE was called on a dead allocation")
                 | false =>
                     get_allocation alloc_id >>= fun alloc =>
-                        if AddressValue.eqb (C.cap_get_value c) alloc.(base) then
+                        if AddressValue.eqb (C.cap_get_value c) alloc.(base)
+                        then
                           (if is_dyn && (CoqSwitches.has_switch (SW.get_switches tt) (CoqSwitches.SW_revocation INSTANT))
                            then revoke_pointers alloc
                            else ret tt) ;;
@@ -1764,9 +1737,9 @@ Module CheriMemory
                                  capmeta          := st.(capmeta);
                                  last_used        := Some alloc_id;
                                |}) ;;
-                          (if CoqSwitches.has_switch (SW.get_switches tt) SW_zap_dead_pointers
-                           then zap_pointers alloc_id
-                           else ret tt)
+                          if CoqSwitches.has_switch (SW.get_switches tt) SW_zap_dead_pointers
+                          then zap_pointers alloc_id
+                          else ret tt
                         else
                           fail loc (MerrUndefinedFree Free_out_of_bound)
                 end
@@ -1962,9 +1935,8 @@ Module CheriMemory
            ;;
            mem_value_strip_err loc mval >>=
              (fun (mval : mem_value) =>
-                (if orb
-                      (CoqSwitches.has_switch (SW.get_switches tt) (CoqSwitches.SW_PNVI AE))
-                      (CoqSwitches.has_switch (SW.get_switches tt) (CoqSwitches.SW_PNVI AE_UDI))
+                (if CoqSwitches.has_switch (SW.get_switches tt) (CoqSwitches.SW_PNVI AE)
+                    || CoqSwitches.has_switch (SW.get_switches tt) (CoqSwitches.SW_PNVI AE_UDI)
                  then expose_allocations taint
                  else ret tt) ;;
                 (update (fun (st : mem_state) =>
@@ -2457,7 +2429,7 @@ Module CheriMemory
     let '(prov2, ptrval_2) := break_PV ptr2 in
     match ptrval_1, ptrval_2 with
     | PVconcrete addr1, PVconcrete addr2 =>
-        if orb (cap_is_null addr1) (cap_is_null addr2) then
+        if cap_is_null addr1 || cap_is_null addr2 then
           fail loc (MerrWIP "lt_ptrval ==> one null pointer")
         else if CoqSwitches.has_switch (SW.get_switches tt) CoqSwitches.SW_strict_pointer_relationals then
                match
@@ -2495,7 +2467,7 @@ Module CheriMemory
     let '(prov2, ptrval_2) := break_PV ptr2 in
     match ptrval_1, ptrval_2 with
     | PVconcrete addr1, PVconcrete addr2 =>
-        if orb (cap_is_null addr1) (cap_is_null addr2) then
+        if cap_is_null addr1 || cap_is_null addr2 then
           fail loc (MerrWIP "gt_ptrval ==> one null pointer")
         else if CoqSwitches.has_switch (SW.get_switches tt) CoqSwitches.SW_strict_pointer_relationals then
                match
@@ -2528,9 +2500,10 @@ Module CheriMemory
     let '(prov2, ptrval_2) := break_PV ptr2 in
     match ptrval_1, ptrval_2 with
     | PVconcrete addr1, PVconcrete addr2 =>
-        if orb (cap_is_null addr1) (cap_is_null addr2) then
-          fail loc (MerrWIP "le_ptrval ==> one null pointer")
-        else if CoqSwitches.has_switch (SW.get_switches tt) CoqSwitches.SW_strict_pointer_relationals then
+        if cap_is_null addr1 || cap_is_null addr2
+        then fail loc (MerrWIP "le_ptrval ==> one null pointer")
+        else
+          if CoqSwitches.has_switch (SW.get_switches tt) CoqSwitches.SW_strict_pointer_relationals then
                match
                  prov1, prov2,
                  (match prov1, prov2 with
@@ -2563,7 +2536,7 @@ Module CheriMemory
     let '(prov2, ptrval_2) := break_PV ptr2 in
     match ptrval_1, ptrval_2 with
     | PVconcrete addr1, PVconcrete addr2 =>
-        if orb (cap_is_null addr1) (cap_is_null addr2) then
+        if cap_is_null addr1 || cap_is_null addr2 then
           fail loc (MerrWIP "ge_ptrval ==> one null pointer")
         else if CoqSwitches.has_switch (SW.get_switches tt) CoqSwitches.SW_strict_pointer_relationals then
                match
@@ -2659,7 +2632,7 @@ Module CheriMemory
                    else
                      error_postcond
                | inr (alloc_id1, alloc_id2) =>
-                   if orb (Z.eqb alloc_id1 alloc_id') (Z.eqb alloc_id2 alloc_id')
+                   if Z.eqb alloc_id1 alloc_id' || Z.eqb alloc_id2 alloc_id'
                    then
                      get_allocation alloc_id' >>=
                        (fun (alloc : allocation) =>
