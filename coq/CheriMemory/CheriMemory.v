@@ -400,7 +400,7 @@ Module CheriMemory
     let ptraddr_bits := (Z.of_nat C.sizeof_ptraddr) * 8 in
     let min_v := Z.opp (Z.pow 2 (ptraddr_bits - 1)) in
     let max_v := Z.sub (Z.pow 2 (ptraddr_bits - 1)) 1 in
-    if andb (Z.leb n min_v) (Z.leb n max_v)
+    if Z.leb n min_v && Z.leb n max_v
     then n
     else wrapI min_v max_v n.
 
@@ -1016,7 +1016,7 @@ Module CheriMemory
     Z.eqb (cap_to_Z c) 0.
 
   (* find first live allocation with given starting addrress *)
-  Definition find_allocation (addr:AddressValue.t) : memM (option (Z*allocation)) :=
+  Definition find_live_allocation (addr:AddressValue.t) : memM (option (Z*allocation)) :=
     get >>= fun st =>
         ret
           (ZMap.fold (fun alloc_id alloc acc =>
@@ -1032,7 +1032,7 @@ Module CheriMemory
 
   (* private *)
   Definition is_dynamic_addr (addr:AddressValue.t) : memM bool :=
-    find_allocation addr >>= fun x =>
+    find_live_allocation addr >>= fun x =>
         match x with
         | None => ret false
         | Some (_,alloc) =>
@@ -1043,7 +1043,7 @@ Module CheriMemory
     Check if given cap is matches exactly a cap retruned by one of
     previous dynamic allocations.
 
-    0. The allocation must be live (ensured by [find_allocation]
+    0. The allocation must be live (ensured by [find_live_allocation]
     1. The allocation must be dynamic
     2. Bounds must exactly span allocation
     3. Address must be equal to the beginning of allocation
@@ -1058,7 +1058,7 @@ Module CheriMemory
       let addr:AddressValue.t := C.cap_get_value c in
       let zbounds := Bounds.to_Zs (C.cap_get_bounds c) in
       let csize := (snd zbounds) - (fst zbounds) in
-      find_allocation addr >>= fun x =>
+      find_live_allocation addr >>= fun x =>
           match x with
           | None => ret false
           | Some (_,alloc) =>
@@ -1610,68 +1610,60 @@ Module CheriMemory
     | PV _ (PVfunction _) =>
         fail loc (MerrOther "attempted to kill with a function pointer")
     | PV Prov_none (PVconcrete c) =>
-         fail loc (MerrOther "attempted to kill with a pointer lacking a provenance")
+        fail loc (MerrOther "attempted to kill with a pointer lacking a provenance")
     | PV Prov_disabled (PVconcrete c) =>
-        (if andb
-              (cap_is_null c)
-              (CoqSwitches.has_switch (SW.get_switches tt) CoqSwitches.SW_forbid_nullptr_free)
+        (if (cap_is_null c)
+            && (CoqSwitches.has_switch (SW.get_switches tt) CoqSwitches.SW_forbid_nullptr_free)
          then fail loc MerrFreeNullPtr
          else ret tt)
         ;;
-        (find_allocation (C.cap_get_value c) >>=
-           (fun x =>
-              match x with
-              | None => fail loc (MerrOther "attempted to kill with a pointer not matching any live allocation")
-              | Some (alloc_id,alloc) =>
-                  if negb (Bool.eqb is_dyn alloc.(is_dynamic))
-                  then fail loc (MerrUndefinedFree Free_non_matching)
-                  else ret (alloc_id,alloc)
-              end
-        ))
-          >>= (fun '(alloc_id,alloc) =>
-                 is_dead_allocation alloc_id >>=
-                   fun x => match x with
-                         | true =>
-                             if is_dyn then
-                               fail loc (MerrUndefinedFree Free_dead_allocation)
-                             else
-                               raise (InternalErr "Concrete: FREE was called on a dead allocation")
-                         | false =>
-                             get_allocation alloc_id >>= fun alloc =>
-                                 if AddressValue.eqb (C.cap_get_value c) alloc.(base) then
-                                   (if andb is_dyn (CoqSwitches.has_switch (SW.get_switches tt) (CoqSwitches.SW_revocation INSTANT))
-                                    then revoke_pointers alloc
-                                    else ret tt) ;;
-                                   update
-                                     (fun st =>
-                                        {|
-                                          next_alloc_id    := st.(next_alloc_id);
-                                          next_iota        := st.(next_iota);
-                                          last_address     := st.(last_address) ;
-                                          allocations      := zmap_update_element
-                                                                alloc_id
-                                                                (allocation_with_dead alloc)
-                                                                st.(allocations);
-                                          iota_map         := st.(iota_map);
-                                          funptrmap        := st.(funptrmap);
-                                          varargs          := st.(varargs);
-                                          next_varargs_id  := st.(next_varargs_id);
-                                          bytemap          := st.(bytemap);
-                                          capmeta          := st.(capmeta);
-                                          last_used        := Some alloc_id;
-                                        |}) ;;
-                                   (if CoqSwitches.has_switch (SW.get_switches tt) SW_zap_dead_pointers
-                                    then zap_pointers alloc_id
-                                    else ret tt)
-                                 else
-                                   fail loc (MerrUndefinedFree Free_out_of_bound)
-                         end
-          )
+        find_live_allocation (C.cap_get_value c) >>=
+          fun x =>
+            match x with
+            | None => fail loc (MerrOther "attempted to kill with a pointer not matching any live allocation")
+            | Some (alloc_id,alloc) =>
+                if negb (Bool.eqb is_dyn alloc.(is_dynamic))
+                then fail loc (MerrUndefinedFree Free_non_matching)
+                else
+                  (* TODO: this performs redundant allocation lookup *)
+                  (if is_dyn
+                   then is_dynamic_cap c >>=
+                          (fun (b : bool) =>
+                             if b then ret tt
+                             else fail loc (MerrUndefinedFree Free_non_matching))
+                   else ret tt) ;;
+                  if AddressValue.eqb (C.cap_get_value c) alloc.(base) then
+                    (if is_dyn && CoqSwitches.has_switch (SW.get_switches tt) (CoqSwitches.SW_revocation INSTANT)
+                     then revoke_pointers alloc
+                     else ret tt) ;;
+                    update
+                      (fun st =>
+                         {|
+                           next_alloc_id    := st.(next_alloc_id);
+                           next_iota        := st.(next_iota);
+                           last_address     := st.(last_address) ;
+                           allocations      := zmap_update_element
+                                                 alloc_id
+                                                 (allocation_with_dead alloc)
+                                                 st.(allocations);
+                           iota_map         := st.(iota_map);
+                           funptrmap        := st.(funptrmap);
+                           varargs          := st.(varargs);
+                           next_varargs_id  := st.(next_varargs_id);
+                           bytemap          := st.(bytemap);
+                           capmeta          := st.(capmeta);
+                           last_used        := Some alloc_id;
+                         |}) ;;
+                    (if CoqSwitches.has_switch (SW.get_switches tt) SW_zap_dead_pointers
+                     then zap_pointers alloc_id
+                     else ret tt)
+                  else
+                    fail loc (MerrUndefinedFree Free_out_of_bound)
+            end
     | PV Prov_device (PVconcrete _) => ret tt
     | PV (Prov_symbolic iota) (PVconcrete c) =>
-        if andb
-             (cap_is_null c)
-             (CoqSwitches.has_switch (SW.get_switches tt) CoqSwitches.SW_forbid_nullptr_free)
+        if cap_is_null c
+           && (CoqSwitches.has_switch (SW.get_switches tt) CoqSwitches.SW_forbid_nullptr_free)
         then
           fail loc MerrFreeNullPtr
         else
@@ -1705,7 +1697,7 @@ Module CheriMemory
              ret tt) ;;
           resolve_iota precondition iota >>=
             (fun alloc_id =>
-               (if andb is_dyn (CoqSwitches.has_switch (SW.get_switches tt) (CoqSwitches.SW_revocation INSTANT))
+               (if is_dyn && (CoqSwitches.has_switch (SW.get_switches tt) (CoqSwitches.SW_revocation INSTANT))
                 then (get_allocation alloc_id >>= fun alloc => revoke_pointers alloc)
                 else ret tt) ;;
                update (fun st =>
@@ -1728,9 +1720,8 @@ Module CheriMemory
                 else ret tt)
             )
     | PV (Prov_some alloc_id) (PVconcrete c) =>
-        (if andb
-              (cap_is_null c)
-              (CoqSwitches.has_switch (SW.get_switches tt) CoqSwitches.SW_forbid_nullptr_free)
+        (if cap_is_null c
+            && (CoqSwitches.has_switch (SW.get_switches tt) CoqSwitches.SW_forbid_nullptr_free)
          then
            fail loc MerrFreeNullPtr
          else
@@ -1755,7 +1746,7 @@ Module CheriMemory
                 | false =>
                     get_allocation alloc_id >>= fun alloc =>
                         if AddressValue.eqb (C.cap_get_value c) alloc.(base) then
-                          (if andb is_dyn (CoqSwitches.has_switch (SW.get_switches tt) (CoqSwitches.SW_revocation INSTANT))
+                          (if is_dyn && (CoqSwitches.has_switch (SW.get_switches tt) (CoqSwitches.SW_revocation INSTANT))
                            then revoke_pointers alloc
                            else ret tt) ;;
                           update
@@ -1789,7 +1780,7 @@ Module CheriMemory
     :=
     let '(base, limit) := Bounds.to_Zs bounds in
     fun (addr : Z) (sz : Z) =>
-      andb (Z.leb base addr) (Z.leb (Z.add addr sz) limit).
+      Z.leb base addr && Z.leb (Z.add addr sz) limit.
 
   Definition cap_check
     (loc : location_ocaml)
@@ -1885,11 +1876,10 @@ Module CheriMemory
     get_allocation alloc_id >>=
       (fun (alloc : allocation) =>
          ret
-           (andb
-              (Z.leb (AddressValue.to_Z alloc.(base)) addr)
-              (Z.leb
+           (Z.leb (AddressValue.to_Z alloc.(base)) addr
+            && Z.leb
                  (Z.add addr sz)
-                 (Z.add (AddressValue.to_Z alloc.(base)) alloc.(size))))).
+                 (Z.add (AddressValue.to_Z alloc.(base)) alloc.(size)))).
 
   Definition device_ranges : list (AddressValue.t * AddressValue.t) :=
     [ (AddressValue.of_Z 0x40000000, AddressValue.of_Z 0x40000004)
@@ -1901,11 +1891,9 @@ Module CheriMemory
     ret
       (List.existsb
          (fun '(min, max) =>
-            andb
-              (Z.leb (AddressValue.to_Z min) addr)
-              (Z.leb (Z.add addr sz) (AddressValue.to_Z max)))
+              Z.leb (AddressValue.to_Z min) addr
+              && Z.leb (Z.add addr sz) (AddressValue.to_Z max))
          device_ranges).
-
 
   Definition is_atomic_member_access
     (alloc_id : Z.t)
@@ -3001,13 +2989,9 @@ Module CheriMemory
           else
             1
       | _ =>
-          if
-            andb (Z.leb n_value min_ity2)
-              (Z.leb n_value max_ity2)
-          then
-            n_value
-          else
-            wrapI min_ity2 max_ity2 n_value
+          if Z.leb n_value min_ity2 && Z.leb n_value max_ity2
+          then n_value
+          else wrapI min_ity2 max_ity2 n_value
       end in
     match ival, ity2 with
     | IC false _, CoqCtype.Unsigned CoqCtype.Intptr_t
