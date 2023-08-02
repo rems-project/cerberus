@@ -419,7 +419,7 @@ Module CheriMemory
     let a1 := lower_a (Z.pred (Z.add (AddressValue.to_Z addr) size)) in
     ZMap.mapi
       (fun (a:Z) '(t, gs) =>
-         if ((negb gs.(tag_unspecified)) && t && Z.geb a a0 && Z.leb a a1)%bool
+         if negb gs.(tag_unspecified) && t && Z.geb a a0 && Z.leb a a1
          then
            (true, {| tag_unspecified := true; bounds_unspecified := gs.(bounds_unspecified) |})
          else (t, gs)
@@ -1511,7 +1511,7 @@ Module CheriMemory
     | PV Prov_none (PVconcrete c) =>
         fail loc (MerrOther "attempted to kill with a pointer lacking a provenance")
     | PV Prov_disabled (PVconcrete c) =>
-        (if (cap_is_null c)
+        (if cap_is_null c
             && (CoqSwitches.has_switch (SW.get_switches tt) CoqSwitches.SW_forbid_nullptr_free)
          then fail loc MerrFreeNullPtr
          else ret tt)
