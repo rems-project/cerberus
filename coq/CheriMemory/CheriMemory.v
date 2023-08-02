@@ -3363,25 +3363,47 @@ Module CheriMemory
     (size : integer_value) : memM pointer_value
     :=
     match ptr with
-    | PV Prov_none (PVconcrete c_value)
-    | PV Prov_disabled (PVconcrete c_value) =>
-        (* TODO: need more checks, kick in revocation *)
-        if cap_is_null c_value then
+    | PV Prov_none (PVconcrete c) =>
+        if cap_is_null c  then
           allocate_region tid (CoqSymbol.PrefOther "realloc") align size
         else
           fail loc (MerrWIP "realloc no provenance")
+    | PV Prov_disabled (PVconcrete c) =>
+        if cap_is_null c  then
+          allocate_region tid (CoqSymbol.PrefOther "realloc") align size
+        else
+          find_live_allocation (C.cap_get_value c) >>=
+            fun x =>
+              match x with
+              | None => fail loc (MerrUndefinedFree Free_non_matching)
+              | Some (alloc_id,alloc) =>
+                  if negb (cap_match_dyn_allocation c alloc)
+                  then fail loc (MerrUndefinedFree Free_non_matching)
+                  else
+                    allocate_region tid (CoqSymbol.PrefOther "realloc") align size >>=
+                      (fun (new_ptr : pointer_value) =>
+                         let size_to_copy :=
+                           let size_n := num_of_int size in
+                           IV (Z.min (CheriMemory.size alloc) size_n) in
+                         memcpy new_ptr ptr size_to_copy ;;
+                         kill (Loc_other "realloc") true ptr ;;
+                         ret new_ptr)
+              end
     | PV (Prov_some alloc_id) (PVconcrete c) =>
-        get_allocation alloc_id >>=
-          fun (alloc : allocation) =>
-            if negb (cap_match_dyn_allocation c alloc)
-            then fail loc (MerrUndefinedRealloc Free_non_matching)
-            else
-              if alloc.(is_dead)
-              then fail loc (MerrUndefinedRealloc Free_dead_allocation)
+        if cap_is_null c then
+          allocate_region tid (CoqSymbol.PrefOther "realloc") align size
+        else
+          get_allocation alloc_id >>=
+            fun (alloc : allocation) =>
+              if negb (cap_match_dyn_allocation c alloc)
+              then fail loc (MerrUndefinedRealloc Free_non_matching)
               else
-                if AddressValue.eqb alloc.(base) (C.cap_get_value c)
-                then
-                  allocate_region tid (CoqSymbol.PrefOther "realloc") align size >>=
+                if alloc.(is_dead)
+                then fail loc (MerrUndefinedRealloc Free_dead_allocation)
+                else
+                  if AddressValue.eqb alloc.(base) (C.cap_get_value c)
+                  then
+                    allocate_region tid (CoqSymbol.PrefOther "realloc") align size >>=
                     (fun (new_ptr : pointer_value) =>
                        let size_to_copy :=
                          let size_n := num_of_int size in
@@ -3389,8 +3411,8 @@ Module CheriMemory
                        memcpy new_ptr ptr size_to_copy ;;
                        kill (Loc_other "realloc") true ptr ;;
                        ret new_ptr)
-                else
-                  fail loc (MerrUndefinedRealloc Free_out_of_bound)
+                  else
+                    fail loc (MerrUndefinedRealloc Free_out_of_bound)
     | PV _ _ =>
         fail loc (MerrWIP "realloc: invalid pointer")
     end.
