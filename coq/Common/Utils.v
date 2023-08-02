@@ -294,3 +294,9 @@ Proof.
   rewrite H0, H1.
   apply string_eq_refl.
 Qed.
+
+(** Helper function to split a list at given position.
+      List.split_at in Lem.
+ *)
+Definition split_at {A:Type} (n:nat) (l:list A)
+  := (List.firstn n l, List.skipn n l).

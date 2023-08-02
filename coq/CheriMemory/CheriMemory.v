@@ -1114,12 +1114,6 @@ Module CheriMemory
     | PV prov ptrval => (prov,ptrval)
     end.
 
-  (** Helper function to split a list at given position.
-      List.split_at in Lem.
-   *)
-  Definition split_at {A:Type} (n:nat) (l:list A)
-    := (List.firstn n l, List.skipn n l).
-
   Inductive overlap_ind :=
   | NoAlloc: overlap_ind
   | SingleAlloc: storage_instance_id -> overlap_ind
