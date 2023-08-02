@@ -9,6 +9,7 @@ open CoqImplementation
 open Strfcap
 open CoqSwitches
 open Switches
+open ZMap
 
 module CerbSwitchesProxy = struct
 

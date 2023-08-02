@@ -3,22 +3,18 @@ Require Import Coq.Numbers.BinNums.
 Require Import Coq.ZArith.Zcompare.
 Require Import Coq.Floats.PrimFloat.
 From Coq.Strings Require Import String Ascii HexString.
-Require Import Coq.FSets.FMapAVL.
-Require Import Coq.Structures.OrderedTypeEx.
-Require Coq.Program.Wf.
-Require Recdef.
 Require Import Lia.
 
 From ExtLib.Data Require Import List.
 From ExtLib.Structures Require Import Monad Monads MonadExc MonadState Traversable.
 From ExtLib.Data.Monads Require Import EitherMonad OptionMonad.
 
-From Coq.Lists Require Import List ListSet. (* after exltlib *)
+From Coq.Lists Require Import List. (* after exltlib *)
 
 From CheriCaps.Morello Require Import Capabilities.
 From CheriCaps.Common Require Import Capabilities.
 
-From Common Require Import SimpleError Utils.
+From Common Require Import SimpleError Utils ZMap.
 From Morello Require Import CapabilitiesGS MorelloCapsGS.
 
 Require Import Memory_model CoqMem_common ErrorWithState CoqUndefined ErrorWithState CoqLocation CoqSymbol CoqImplementation CoqTags CoqSwitches CerbSwitches CoqAilTypesAux.
@@ -32,8 +28,6 @@ Local Open Scope bool_scope.
 Require Import AltBinNotations.
 Import ListNotations.
 Import MonadNotation.
-
-Module ZMap := FMapAVL.Make(Z_as_OT).
 
 Module CheriMemory
   (C:CAPABILITY_GS
@@ -387,70 +381,6 @@ Module CheriMemory
         let n := (cap_to_Z c) in
         if is_signed then unwrap_cap_value n else n
     end.
-
-  Fixpoint zmap_range_init {T} (a0:Z) (n:nat) (step:Z) (v:T) (m:ZMap.t T) : ZMap.t T
-    :=
-    match n with
-    | O => m
-    | S n =>
-        let m := ZMap.add (Z.add a0 (Z.mul (Z.of_nat n) step)) v m in
-        zmap_range_init a0 n step v m
-    end.
-
-  (* TODO: see if could be generalized and moved to Utils.v.  *)
-  Definition zmap_update_element
-    {A:Type}
-    (key: Z)
-    (v: A)
-    (m: ZMap.t A)
-    : (ZMap.t A)
-    :=
-    ZMap.add key v (ZMap.remove key m).
-
-  (* TODO: see if could be generalized and moved to Utils.v.  *)
-  (** [update key f m] returns a map containing the same bindings as
-  [m], except for the binding of [key]. Depending on the value of [y]
-  where [y] is [f (find_opt key m)], the binding of [key] is added,
-  removed or updated. If [y] is [None], the binding is removed if it
-  exists; otherwise, if [y] is [Some z] then key is associated to [z]
-  in the resulting map. *)
-  Definition zmap_update
-    {A:Type}
-    (key: Z)
-    (f: option A -> option A)
-    (m: ZMap.t A)
-    : (ZMap.t A)
-    :=
-    let y := f (ZMap.find key m) in
-    let m' := ZMap.remove key m in (* could be optimized, as removal may be unecessary in some cases *)
-    match y with
-    | None => m'
-    | Some z => ZMap.add key z m'
-    end.
-
-  Definition zmap_sequence
-    {A: Type}
-    {m: Type -> Type}
-    {M: Monad m}
-    (mv: ZMap.t (m A)): m (ZMap.t A)
-    :=
-    let fix loop (ls: list (ZMap.key*(m A))) (acc:ZMap.t A) : m (ZMap.t A) :=
-      match ls with
-      | [] => ret acc
-      | (k,mv)::ls => mv >>= (fun v => loop ls (ZMap.add k v acc))
-      end
-    in
-    loop (ZMap.elements mv) (ZMap.empty A).
-
-  (* Monadic mapi *)
-  Definition zmap_mmapi
-    {A B : Type}
-    {m : Type -> Type}
-    {M : Monad m}
-    (f : ZMap.key -> A -> m B) (zm: ZMap.t A)
-    : m (ZMap.t B)
-    :=
-    zmap_sequence (ZMap.mapi f zm).
 
   (* Creare new cap meta for region where all tags are unspecified *)
   Program Definition init_ghost_tags
