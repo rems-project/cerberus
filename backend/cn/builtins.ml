@@ -35,9 +35,13 @@ let div_uf_def = ("div_uf", Sym.fresh_named "div_uf", mk_arg2 div_no_smt_)
 let power_uf_def = ("power_uf", Sym.fresh_named "power_uf", mk_arg2 exp_no_smt_)
 let rem_uf_def = ("rem_uf", Sym.fresh_named "rem_uf", mk_arg2 rem_no_smt_)
 let mod_uf_def = ("mod_uf", Sym.fresh_named "mod_uf", mk_arg2 mod_no_smt_)
-let xor_uf_def = ("xor_uf", Sym.fresh_named "xor_uf", mk_arg2 xor_no_smt_)
-let bw_and_uf_def = ("bw_and_uf", Sym.fresh_named "bw_and_uf", mk_arg2 bw_and_no_smt_)
-let bw_or_uf_def = ("bw_or_uf", Sym.fresh_named "bw_or_uf", mk_arg2 bw_or_no_smt_)
+let xor_uf_def = ("xor_uf", Sym.fresh_named "xor_uf", mk_arg2 (arith_binop XORNoSMT))
+let bw_and_uf_def = ("bw_and_uf", Sym.fresh_named "bw_and_uf", mk_arg2 (arith_binop BWAndNoSMT))
+let bw_or_uf_def = ("bw_or_uf", Sym.fresh_named "bw_or_uf", mk_arg2 (arith_binop BWOrNoSMT))
+
+let bw_clz_uf_def = ("bw_clz_uf", Sym.fresh_named "bw_clz_uf", mk_arg2 (arith_binop BWCLZNoSMT))
+let bw_ctz_uf_def = ("bw_ctz_uf", Sym.fresh_named "bw_ctz_uf", mk_arg2 (arith_binop BWCTZNoSMT))
+let bw_ffs_uf_def = ("bw_ffs_uf", Sym.fresh_named "bw_ffs_uf", mk_arg2 (arith_binop BWFFSNoSMT))
 
 let power_def = ("power", Sym.fresh_named "power", mk_arg2 exp_)
 let rem_def = ("rem", Sym.fresh_named "rem", mk_arg2 rem_)
@@ -57,6 +61,7 @@ let array_to_list_def =
 let in_loc_list_def =
   ("in_loc_list", Sym.fresh_named "in_loc_list",
     mk_arg2_err (fun loc tup -> return (IT.mk_in_loc_list loc tup)))
+
 
 let cellpointer_def =
   ("cellPointer",
@@ -81,6 +86,10 @@ let builtin_funs =
       xor_uf_def;
       bw_and_uf_def;
       bw_or_uf_def;
+
+      bw_clz_uf_def;
+      bw_ctz_uf_def;
+      bw_ffs_uf_def;
 
       power_def;
       rem_def;

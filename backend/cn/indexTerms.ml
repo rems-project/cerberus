@@ -493,9 +493,8 @@ let min_ (it, it') = IT (Binop (Min,it, it'), bt it)
 let max_ (it, it') = IT (Binop (Max,it, it'), bt it)
 let intToReal_ it = IT (Cast (Real, it), BT.Real)
 let realToInt_ it = IT (Cast (Integer, it), BT.Integer)
-let xor_no_smt_ (it, it') = IT (Binop (XORNoSMT,it, it'), bt it)
-let bw_and_no_smt_ (it, it') = IT (Binop (BWAndNoSMT,it, it'), bt it)
-let bw_or_no_smt_ (it, it') = IT (Binop (BWOrNoSMT,it, it'), bt it)
+
+let arith_binop op (it, it') = IT (Binop (op, it, it'), bt it)
 
 let (%+) t t' = add_ (t, t')
 let (%-) t t' = sub_ (t, t')

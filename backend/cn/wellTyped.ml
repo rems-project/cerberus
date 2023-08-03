@@ -281,7 +281,10 @@ module WIT = struct
            | ModNoSMT
            | XORNoSMT
            | BWAndNoSMT
-           | BWOrNoSMT ->
+           | BWOrNoSMT
+           | BWCLZNoSMT
+           | BWCTZNoSMT
+           | BWFFSNoSMT ->
               let@ t = check loc Integer t in
               let@ t' = check loc Integer t' in
               return (IT (Binop (arith_op, t, t'), Integer))
