@@ -47,6 +47,12 @@ type binop =
   | Subset
 [@@deriving eq, ord, show]
 
+type pattern = 
+  | PSym of Sym.t
+  | PWild
+  | PConstructor of Sym.t * (Id.t * pattern) list
+[@@deriving eq, ord, map]
+
 (* over integers and reals *)
 type 'bt term_ =
   | Const of const
@@ -64,9 +70,10 @@ type 'bt term_ =
   | Record of (Id.t * 'bt term) list
   | RecordMember of 'bt term * Id.t
   | RecordUpdate of ('bt term * Id.t) * 'bt term
-  | DatatypeCons of Sym.t * 'bt term
-  | DatatypeMember of 'bt term * Id.t
-  | DatatypeIsCons of Sym.t * 'bt term
+  | DatatypeCons of Sym.t * 'bt term (* TODO: will be removed *)
+  | DatatypeMember of 'bt term * Id.t (* TODO: will be removed *)
+  | DatatypeIsCons of Sym.t * 'bt term (* TODO: will be removed *)
+  | Constructor of Sym.t * (Id.t * 'bt term) list
   | MemberOffset of Sym.t * Id.t
   | ArrayOffset of Sctypes.t (*element ct*) * 'bt term (*index*)
   | Nil
@@ -86,6 +93,7 @@ type 'bt term_ =
   | MapDef of (Sym.t * 'bt) * 'bt term
   | Apply of Sym.t * ('bt term) list
   | Let of (Sym.t * 'bt term) * 'bt term
+  | Match of 'bt term * (pattern * 'bt term) list
   | Cast of BaseTypes.t * 'bt term
 
 and 'bt term =
@@ -96,17 +104,31 @@ and 'bt term =
 let equal = equal_term
 let compare = compare_term
 
+
+
+let rec pp_pattern = function
+  | PSym s -> 
+     Sym.pp s
+  | PWild -> 
+     underscore
+  | PConstructor (c, args) ->
+     Sym.pp c ^^^ 
+       braces (separate_map (comma ^^ space) (fun (id, pat) ->
+                   Id.pp id ^^ colon ^^^ pp_pattern pat
+                 ) args)
+
 let pp : 'bt 'a. ?atomic:bool -> ?f:('bt term -> Pp.doc -> Pp.doc) -> 'bt term -> Pp.doc =
   fun ?(atomic=false) ?(f=fun _ x -> x) ->
   let rec aux atomic (IT (it, _)) =
     let aux b x = f x (aux b x) in
     (* Without the `lparen` inside `nest 2`, the printed `rparen` is indented
        by 2 (wrt to the lparen). I don't quite understand it, but it works. *)
+    let parens pped = 
+      Pp.group ((nest 2 @@ lparen ^^ break 0 ^^ pped) ^^ break 0 ^^ rparen) in
+    let braces pped = 
+      Pp.group ((nest 2 @@ lbrace ^^ break 0 ^^ pped) ^^ break 0 ^^ rbrace) in
     let mparens pped =
-      if atomic then
-        Pp.group ((nest 2 @@ lparen ^^ break 0 ^^ pped) ^^ break 0 ^^ rparen)
-      else
-        Pp.group pped in
+      if atomic then parens pped else Pp.group pped in
     let break_op x = break 1 ^^ x ^^ space in
     match it with
     | Const const ->
@@ -308,6 +330,17 @@ let pp : 'bt 'a. ?atomic:bool -> ?f:('bt term -> Pp.doc -> Pp.doc) -> 'bt term -
        c_app (Sym.pp name) (List.map (aux false) args)
     | Let ((name, x1), x2) -> parens (!^ "let" ^^^ Sym.pp name ^^^ Pp.equals ^^^
         aux false x1 ^^^ !^ "in" ^^^ aux false x2)
+    | Match (e, cases) ->
+        !^"match" ^^^ aux false e ^^^ braces (
+          (* copying from mparens *)
+          Pp.group (nest 2 @@ (
+            separate_map (break 0) (fun (pattern, body) ->
+                pp_pattern pattern ^^^ !^"=>" ^^^ 
+                  braces (aux false body)
+              ) cases))
+        )
+    | Constructor (s, args) ->
+       Sym.pp s ^^^ braces (separate_map (comma ^^ space) (fun (id, e) -> Id.pp id ^^ colon ^^^ aux false e) args)
   in
   fun (it : 'bt term) -> aux atomic it
 

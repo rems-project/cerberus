@@ -586,6 +586,8 @@ module WIT = struct
             let@ t2 = infer loc t2 in
             return (IT (Let ((name, t1), t2), IT.bt t2))
             end
+      | Match _ -> failwith "todo"
+      | Constructor _ -> failwith "todo"
 
     and check =
       fun loc ls it ->

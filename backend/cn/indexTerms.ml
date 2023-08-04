@@ -36,7 +36,13 @@ let pp ?(atomic=false) =
   Terms.pp ~atomic
 
 
-
+let rec bound_by_pattern = function
+  | PSym s -> SymSet.singleton s
+  | PWild -> SymSet.empty
+  | PConstructor (_s, args) -> 
+     List.fold_right SymSet.union 
+       (List.map (fun (_id, pat) -> bound_by_pattern pat) args)
+       SymSet.empty
 
 let rec free_vars_ = function
   | Const _ -> SymSet.empty
@@ -76,6 +82,11 @@ let rec free_vars_ = function
   | MapDef ((s, _bt), t) -> SymSet.remove s (free_vars t)
   | Apply (_pred, ts) -> free_vars_list ts
   | Let ((nm, t1), t2) -> SymSet.union (free_vars t1) (SymSet.remove nm (free_vars t2))
+  | Match (e, cases) ->
+     List.fold_right (fun (pattern, body) acc ->
+         SymSet.union acc (SymSet.diff (free_vars body) (bound_by_pattern pattern))
+       ) cases (free_vars e)
+  | Constructor (_s, args) -> free_vars_list (List.map snd args)
 
 and free_vars (IT (term_, _bt)) =
   free_vars_ term_
@@ -127,6 +138,8 @@ let rec fold_ f binders acc = function
   | Let ((nm, IT (t1_, bt)), t2) ->
     let acc' = fold f binders acc (IT (t1_, bt)) in
     fold f (binders @ [(nm, bt)]) acc' t2
+  | Match _ -> failwith "todo"
+  | Constructor _ -> failwith "todo"
 
 and fold f binders acc (IT (term_, _bt)) =
   let acc' = fold_ f binders acc term_ in
@@ -265,6 +278,10 @@ let rec subst (su : typed subst) (IT (it, bt)) =
   | Let ((name, t1), t2) ->
      let name, t2 = suitably_alpha_rename su.relevant (name, basetype t1) t2 in
      IT (Let ((name, subst su t1), subst su t2), bt)
+  | Match _ ->
+     failwith "todo"
+  | Constructor _ ->
+     failwith "todo"
 
 and alpha_rename (s, bt) body =
   let s' = Sym.fresh_same s in
