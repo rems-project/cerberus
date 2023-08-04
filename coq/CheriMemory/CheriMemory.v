@@ -966,6 +966,22 @@ Module CheriMemory
     && AddressValue.eqb alloc.(base) (C.cap_get_value c)
     && Z.eqb alloc.(size) csize.
 
+  Definition remove_allocation (alloc_id : Z) : memM unit :=
+    update (fun st =>
+              {|
+                next_alloc_id    := st.(next_alloc_id);
+                next_iota        := st.(next_iota);
+                last_address     := st.(last_address) ;
+                allocations      := ZMap.remove alloc_id st.(allocations);
+                iota_map         := st.(iota_map);
+                funptrmap        := st.(funptrmap);
+                varargs          := st.(varargs);
+                next_varargs_id  := st.(next_varargs_id);
+                bytemap          := st.(bytemap);
+                capmeta          := st.(capmeta);
+                last_used        := Some alloc_id;
+              |}).
+
   Definition get_allocation (alloc_id : Z) : memM allocation :=
     get >>=
       fun st =>
@@ -3361,13 +3377,14 @@ Module CheriMemory
     :=
     st <- get ;;
     monadic_fold_left
-      (fun _ '(_, alloc) =>
+      (fun _ '(allloc_id, alloc) =>
          if alloc.(is_dead) && alloc.(is_dynamic)
-         then revoke_pointers alloc
+         then
+           (revoke_pointers alloc ;;
+            remove_allocation allloc_id)
          else ret tt
       )
       (ZMap.elements st.(allocations)) tt.
-
 
   Definition realloc
     (loc : location_ocaml)
