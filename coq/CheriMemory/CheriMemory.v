@@ -3357,11 +3357,26 @@ Module CheriMemory
                              acc)
                         (List.combine bytes1 bytes2) 0)))).
 
+  Definition cornucopiaRevoke (_:unit) : memM unit
+    :=
+    st <- get ;;
+    monadic_fold_left
+      (fun _ '(_, alloc) =>
+         if alloc.(is_dead) && alloc.(is_dynamic)
+         then revoke_pointers alloc
+         else ret tt
+      )
+      (ZMap.elements st.(allocations)) tt.
+
+
   Definition realloc
     (loc : location_ocaml)
     (tid : thread_id) (align : integer_value) (ptr : pointer_value)
     (size : integer_value) : memM pointer_value
     :=
+    (if CoqSwitches.has_switch (SW.get_switches tt) (CoqSwitches.SW_revocation CORNUCOPIA)
+    then cornucopiaRevoke tt
+    else ret tt) ;;
     match ptr with
     | PV Prov_none (PVconcrete c) =>
         if cap_is_null c  then
@@ -3773,17 +3788,6 @@ Module CheriMemory
         ;;
         ret (List.length bs)
     end.
-
-  Definition cornucopiaRevoke (_:unit) : memM unit
-    :=
-    st <- get ;;
-    monadic_fold_left
-      (fun _ '(_, alloc) =>
-         if alloc.(is_dead) && alloc.(is_dynamic)
-         then revoke_pointers alloc
-         else ret tt
-      )
-      (ZMap.elements st.(allocations)) tt.
 
   Definition call_intrinsic
     (loc : location_ocaml) (name : string) (args : list mem_value)
