@@ -219,7 +219,6 @@ Module CheriMemory
       next_varargs_id : Z;
       bytemap : ZMap.t AbsByte;
       capmeta : ZMap.t (bool* CapGhostState);
-      last_used : option storage_instance_id
     }.
 
   (*
@@ -236,35 +235,31 @@ Module CheriMemory
                 next_varargs_id  := st.(next_varargs_id);
                 bytemap          := st.(bytemap);
                 capmeta          := st.(capmeta);
-                last_used        := st.(last_used);
               |}
    *)
 
   Definition mem_state := mem_state_r.
 
   Definition mem_state_with_bytemap bytemap (r : mem_state) :=
-    Build_mem_state_r r.(next_alloc_id) r.(next_iota) r.(last_address) r.(allocations) r.(iota_map) r.(funptrmap) r.(varargs) r.(next_varargs_id) bytemap r.(capmeta) r.(last_used).
+    Build_mem_state_r r.(next_alloc_id) r.(next_iota) r.(last_address) r.(allocations) r.(iota_map) r.(funptrmap) r.(varargs) r.(next_varargs_id) bytemap r.(capmeta).
 
   Definition mem_state_with_allocations allocations (r : mem_state) :=
-    Build_mem_state_r r.(next_alloc_id) r.(next_iota) r.(last_address) allocations r.(iota_map) r.(funptrmap) r.(varargs) r.(next_varargs_id) r.(bytemap) r.(capmeta) r.(last_used).
-
-  Definition mem_state_with_last_used last_used (r : mem_state) :=
-    Build_mem_state_r r.(next_alloc_id) r.(next_iota) r.(last_address) r.(allocations) r.(iota_map) r.(funptrmap) r.(varargs) r.(next_varargs_id) r.(bytemap) r.(capmeta) last_used.
+    Build_mem_state_r r.(next_alloc_id) r.(next_iota) r.(last_address) allocations r.(iota_map) r.(funptrmap) r.(varargs) r.(next_varargs_id) r.(bytemap) r.(capmeta).
 
   Definition mem_state_with_iota_map iota_map (r : mem_state) :=
-    Build_mem_state_r r.(next_alloc_id) r.(next_iota) r.(last_address) r.(allocations) iota_map r.(funptrmap) r.(varargs) r.(next_varargs_id) r.(bytemap) r.(capmeta) r.(last_used).
+    Build_mem_state_r r.(next_alloc_id) r.(next_iota) r.(last_address) r.(allocations) iota_map r.(funptrmap) r.(varargs) r.(next_varargs_id) r.(bytemap) r.(capmeta).
 
   Definition mem_state_with_next_iota next_iota (r : mem_state) :=
-    Build_mem_state_r r.(next_alloc_id) next_iota r.(last_address) r.(allocations) r.(iota_map) r.(funptrmap) r.(varargs) r.(next_varargs_id) r.(bytemap) r.(capmeta) r.(last_used).
+    Build_mem_state_r r.(next_alloc_id) next_iota r.(last_address) r.(allocations) r.(iota_map) r.(funptrmap) r.(varargs) r.(next_varargs_id) r.(bytemap) r.(capmeta).
 
   Definition mem_state_with_capmeta capmeta (r : mem_state) :=
-    Build_mem_state_r r.(next_alloc_id) r.(next_iota) r.(last_address) r.(allocations) r.(iota_map) r.(funptrmap) r.(varargs) r.(next_varargs_id) r.(bytemap) capmeta r.(last_used).
+    Build_mem_state_r r.(next_alloc_id) r.(next_iota) r.(last_address) r.(allocations) r.(iota_map) r.(funptrmap) r.(varargs) r.(next_varargs_id) r.(bytemap) capmeta.
 
   Definition mem_state_with_funptrmap funptrmap (r : mem_state) :=
-    Build_mem_state_r r.(next_alloc_id) r.(next_iota) r.(last_address) r.(allocations) r.(iota_map) funptrmap r.(varargs) r.(next_varargs_id) r.(bytemap) r.(capmeta) r.(last_used).
+    Build_mem_state_r r.(next_alloc_id) r.(next_iota) r.(last_address) r.(allocations) r.(iota_map) funptrmap r.(varargs) r.(next_varargs_id) r.(bytemap) r.(capmeta).
 
   Definition mem_state_with_varargs_next_varargs_id varargs next_varargs_id (r : mem_state) :=
-    Build_mem_state_r r.(next_alloc_id) r.(next_iota) r.(last_address) r.(allocations) r.(iota_map) r.(funptrmap) varargs next_varargs_id r.(bytemap) r.(capmeta) r.(last_used).
+    Build_mem_state_r r.(next_alloc_id) r.(next_iota) r.(last_address) r.(allocations) r.(iota_map) r.(funptrmap) varargs next_varargs_id r.(bytemap) r.(capmeta).
 
 
   Definition initial_address := AddressValue.of_Z (HexString.to_Z "0xFFFFFFFF").
@@ -284,7 +279,6 @@ Module CheriMemory
       next_varargs_id := Z0;
       bytemap := ZMap.empty AbsByte;
       capmeta := ZMap.empty _;
-      last_used := None
     |}.
 
   (* Unfortunate names of two consturctors are mirroring ones from
@@ -451,7 +445,6 @@ Module CheriMemory
                 bytemap          := st.(bytemap);
                 (* tags in newly allocated region are unspecified *)
                 capmeta          := init_ghost_tags (AddressValue.of_Z addr) size st.(capmeta);
-                last_used        := Some alloc_id;
               |}
             ;;
             ret (alloc_id, (AddressValue.of_Z addr)).
@@ -816,7 +809,6 @@ Module CheriMemory
                           next_varargs_id  := st.(next_varargs_id);
                           bytemap          := st.(bytemap);
                           capmeta          := st.(capmeta);
-                          last_used        := st.(last_used);
                         |}) ;; ret false
           | Some mval =>  (* here we allocate an object with initiliazer *)
               let (ro,readonly_status) :=
@@ -843,7 +835,6 @@ Module CheriMemory
                                                         ZMap.add addr b acc
                                         ) bs st.(bytemap);
                   capmeta          := capmeta;
-                  last_used        := st.(last_used);
                 |}
               ;;
               ret ro
@@ -908,7 +899,6 @@ Module CheriMemory
                next_varargs_id  := st.(next_varargs_id);
                bytemap          := st.(bytemap);
                capmeta          := st.(capmeta);
-               last_used        := st.(last_used);
              |})
         ;;
         let prov := if CoqSwitches.is_PNVI (SW.get_switches tt)
@@ -979,7 +969,6 @@ Module CheriMemory
                 next_varargs_id  := st.(next_varargs_id);
                 bytemap          := st.(bytemap);
                 capmeta          := st.(capmeta);
-                last_used        := Some alloc_id;
               |}).
 
   Definition get_allocation (alloc_id : Z) : memM allocation :=
@@ -1033,7 +1022,6 @@ Module CheriMemory
                     next_varargs_id  := st.(next_varargs_id);
                     bytemap          := st.(bytemap);
                     capmeta          := st.(capmeta);
-                    last_used        := st.(last_used);
                   |}) ;; ret alloc_id.
 
   Definition is_pointer_algined (a : Z) : bool :=
@@ -1548,7 +1536,6 @@ Module CheriMemory
                            next_varargs_id  := st.(next_varargs_id);
                            bytemap          := st.(bytemap);
                            capmeta          := st.(capmeta);
-                           last_used        := Some alloc_id;
                          |})
               end
     | PV Prov_device (PVconcrete _) => ret tt
@@ -1588,7 +1575,6 @@ Module CheriMemory
                                   next_varargs_id  := st.(next_varargs_id);
                                   bytemap          := st.(bytemap);
                                   capmeta          := st.(capmeta);
-                                  last_used        := Some alloc_id;
                                 |})
             ))
     | PV (Prov_some alloc_id) (PVconcrete c) =>
@@ -1624,7 +1610,6 @@ Module CheriMemory
                            next_varargs_id  := st.(next_varargs_id);
                            bytemap          := st.(bytemap);
                            capmeta          := st.(capmeta);
-                           last_used        := Some alloc_id;
                          |})
     end.
 
@@ -1822,9 +1807,6 @@ Module CheriMemory
                     || CoqSwitches.has_switch (SW.get_switches tt) (CoqSwitches.SW_PNVI AE_UDI)
                  then expose_allocations taint
                  else ret tt) ;;
-                (update (fun (st : mem_state) =>
-                           mem_state_with_last_used alloc_id_opt st))
-                ;;
                 sz <- serr2memM (sizeof DEFAULT_FUEL None ty) ;;
                 let fp := FP Read (AddressValue.of_Z addr) sz in
                 match bs' with
@@ -2017,7 +1999,6 @@ Module CheriMemory
             next_varargs_id  := st.(next_varargs_id);
             bytemap          := bytemap;
             capmeta          := capmeta;
-            last_used        := alloc_id_opt;
           |}
         ;;
         ret (FP Write (AddressValue.of_Z addr) nsz)
