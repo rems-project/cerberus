@@ -1496,6 +1496,22 @@ Module CheriMemory
     (ptr : pointer_value)
     : memM unit
     :=
+
+    let precond c alloc alloc_id :=
+      if is_dyn && negb (cap_match_dyn_allocation c alloc)
+      then fail loc (MerrUndefinedFree Free_non_matching)
+      else
+        if is_dyn && CoqSwitches.has_switch (SW.get_switches tt) (CoqSwitches.SW_revocation INSTANT)
+        then revoke_pointers alloc ;; remove_allocation alloc_id
+        else ret tt
+    in
+
+    let update_allocations alloc alloc_id all_allocs :=
+      if is_dyn && CoqSwitches.has_switch (SW.get_switches tt) (CoqSwitches.SW_revocation CORNUCOPIA)
+      then zmap_update_element alloc_id (allocation_with_dead alloc) all_allocs
+      else ZMap.remove alloc_id all_allocs
+    in
+
     match ptr with
     | PV _ (PVfunction _) =>
         fail loc (MerrOther "attempted to kill with a function pointer")
@@ -1514,29 +1530,23 @@ Module CheriMemory
                           then (MerrUndefinedFree Free_non_matching)
                           else (MerrOther "attempted to kill with a pointer not matching any live allocation"))
               | Some (alloc_id,alloc) =>
-                  if is_dyn && negb (cap_match_dyn_allocation c alloc)
-                  then fail loc (MerrUndefinedFree Free_non_matching)
-                  else
-                    (if is_dyn && CoqSwitches.has_switch (SW.get_switches tt) (CoqSwitches.SW_revocation INSTANT)
-                     then revoke_pointers alloc
-                     else ret tt) ;;
-                    update
-                      (fun st =>
-                         {|
-                           next_alloc_id    := st.(next_alloc_id);
-                           next_iota        := st.(next_iota);
-                           last_address     := st.(last_address) ;
-                           allocations      := zmap_update_element
-                                                 alloc_id
-                                                 (allocation_with_dead alloc)
-                                                 st.(allocations);
-                           iota_map         := st.(iota_map);
-                           funptrmap        := st.(funptrmap);
-                           varargs          := st.(varargs);
-                           next_varargs_id  := st.(next_varargs_id);
-                           bytemap          := st.(bytemap);
-                           capmeta          := st.(capmeta);
-                         |})
+                  precond c alloc alloc_id ;;
+                  update
+                    (fun st =>
+                       {|
+                         next_alloc_id    := st.(next_alloc_id);
+                         next_iota        := st.(next_iota);
+                         last_address     := st.(last_address) ;
+                         allocations      := update_allocations alloc
+                                               alloc_id
+                                               st.(allocations);
+                         iota_map         := st.(iota_map);
+                         funptrmap        := st.(funptrmap);
+                         varargs          := st.(varargs);
+                         next_varargs_id  := st.(next_varargs_id);
+                         bytemap          := st.(bytemap);
+                         capmeta          := st.(capmeta);
+                       |})
               end
     | PV Prov_device (PVconcrete _) => ret tt
     | PV (Prov_symbolic iota) (PVconcrete c) =>
@@ -1557,25 +1567,22 @@ Module CheriMemory
             (fun alloc_id =>
                get_allocation alloc_id >>=
                  (fun alloc =>
-                    if is_dyn && negb (cap_match_dyn_allocation c alloc)
-                    then fail loc (MerrUndefinedFree Free_non_matching)
-                    else
-                      (if is_dyn && CoqSwitches.has_switch (SW.get_switches tt) (CoqSwitches.SW_revocation INSTANT)
-                       then revoke_pointers alloc
-                       else ret tt) ;;
-                      update (fun st =>
-                                {|
-                                  next_alloc_id    := st.(next_alloc_id);
-                                  next_iota        := st.(next_iota);
-                                  last_address     := st.(last_address) ;
-                                  allocations      := ZMap.remove alloc_id st.(allocations);
-                                  iota_map         := st.(iota_map);
-                                  funptrmap        := st.(funptrmap);
-                                  varargs          := st.(varargs);
-                                  next_varargs_id  := st.(next_varargs_id);
-                                  bytemap          := st.(bytemap);
-                                  capmeta          := st.(capmeta);
-                                |})
+                    precond c alloc alloc_id ;;
+                    update (fun st =>
+                              {|
+                                next_alloc_id    := st.(next_alloc_id);
+                                next_iota        := st.(next_iota);
+                                last_address     := st.(last_address) ;
+                                allocations      := update_allocations alloc
+                                               alloc_id
+                                               st.(allocations) ;
+                                iota_map         := st.(iota_map);
+                                funptrmap        := st.(funptrmap);
+                                varargs          := st.(varargs);
+                                next_varargs_id  := st.(next_varargs_id);
+                                bytemap          := st.(bytemap);
+                                capmeta          := st.(capmeta);
+                              |})
             ))
     | PV (Prov_some alloc_id) (PVconcrete c) =>
         if cap_is_null c
@@ -1591,26 +1598,23 @@ Module CheriMemory
                 if is_dyn && negb (cap_match_dyn_allocation c alloc)
                 then fail loc (MerrUndefinedFree Free_non_matching)
                 else
-                  if negb is_dyn && negb (AddressValue.eqb (C.cap_get_value c) alloc.(base))
-                  then fail loc (MerrUndefinedFree Free_out_of_bound)
-                  else
-                    (if is_dyn && (CoqSwitches.has_switch (SW.get_switches tt) (CoqSwitches.SW_revocation INSTANT))
-                     then revoke_pointers alloc
-                     else ret tt) ;;
-                    update
-                      (fun st =>
-                         {|
-                           next_alloc_id    := st.(next_alloc_id);
-                           next_iota        := st.(next_iota);
-                           last_address     := st.(last_address) ;
-                           allocations      := ZMap.remove alloc_id st.(allocations);
-                           iota_map         := st.(iota_map);
-                           funptrmap        := st.(funptrmap);
-                           varargs          := st.(varargs);
-                           next_varargs_id  := st.(next_varargs_id);
-                           bytemap          := st.(bytemap);
-                           capmeta          := st.(capmeta);
-                         |})
+                  precond c alloc alloc_id ;;
+                  update
+                    (fun st =>
+                       {|
+                         next_alloc_id    := st.(next_alloc_id);
+                         next_iota        := st.(next_iota);
+                         last_address     := st.(last_address) ;
+                         allocations      := update_allocations alloc
+                                               alloc_id
+                                               st.(allocations);
+                         iota_map         := st.(iota_map);
+                         funptrmap        := st.(funptrmap);
+                         varargs          := st.(varargs);
+                         next_varargs_id  := st.(next_varargs_id);
+                         bytemap          := st.(bytemap);
+                         capmeta          := st.(capmeta);
+                       |})
     end.
 
 
