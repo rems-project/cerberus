@@ -354,9 +354,10 @@ let rec cn_to_ail_expr_aux
       in
 
       (* TODO: Incorporate destination passing recursively into this. Might need PassBack throughout, like in cn_to_ail_expr_aux function *)
+      (* TODO: Add map of datatype constructors names to counts (to avoid repetition of variable names) *)
       (* Matrix algorithm for pattern compilation *)
-      let rec translate : (((C.union_tag, C.ctype) cn_expr_) * _ Cn.cn_base_type) list -> ((C.union_tag cn_pat) list * (C.union_tag, C.ctype) cn_expr) list -> (A.bindings list * (_ A.statement_) list) =
-        fun vars cases -> 
+      let rec translate : int -> (((C.union_tag, C.ctype) cn_expr_) * _ Cn.cn_base_type) list -> ((C.union_tag cn_pat) list * (C.union_tag, C.ctype) cn_expr) list -> (A.bindings list * (_ A.statement_) list) =
+        fun count vars cases -> 
           match vars with 
             | [] ->
               (match cases with 
@@ -382,7 +383,7 @@ let rec cn_to_ail_expr_aux
                 let cases = List.map (fun (ps, e) -> (List.tl ps, e)) cases in
                 if (List.length cases != 0) then
                 Printf.printf "Length of patterns: %d\n" (List.length (fst (List.hd cases)));
-                let (bindings', stats') = translate vs cases in 
+                let (bindings', stats') = translate count vs cases in 
                 ([], stats'))
               else
                 match tp with
@@ -398,11 +399,13 @@ let rec cn_to_ail_expr_aux
                             let cases' = List.filter_map (expand_datatype constr_sym) cases in 
                             let record_tp = CN_record members_with_types in
                             Printf.printf "Number of members in datatype: %d\n" (List.length members_with_types);
+                            let suffix = "_" ^ (string_of_int count) in
                             let lc_sym = generate_sym_with_suffix ~suffix:"" ~lowercase:true constr_sym in 
+                            let count_sym = generate_sym_with_suffix ~suffix ~lowercase:true constr_sym in 
                             let rhs_memberof_ptr = A.(AilEmemberofptr (mk_expr e1, Id.id "u")) in (* TODO: Remove hack *)
                             let rhs_memberof = A.(AilEmemberof (mk_expr rhs_memberof_ptr, create_id_from_sym lc_sym)) in
-                            let constructor_var_assign = mk_stmt A.(AilSdeclaration [(lc_sym, Some (mk_expr rhs_memberof))]) in
-                            let (_bindings, member_stats) = translate ((CNExpr_var lc_sym, record_tp) :: vs) cases' in
+                            let constructor_var_assign = mk_stmt A.(AilSdeclaration [(count_sym, Some (mk_expr rhs_memberof))]) in
+                            let (_bindings, member_stats) = translate (count + 1) ((CNExpr_var count_sym, record_tp) :: vs) cases' in
                             (* TODO: Add real bindings instead of [] *)
                             let stat_block = A.AilSblock ([], constructor_var_assign :: (List.map mk_stmt member_stats)) in
                             let tag_sym = generate_sym_with_suffix ~suffix:"" ~uppercase:true constr_sym in
@@ -423,13 +426,12 @@ let rec cn_to_ail_expr_aux
 
       let translate_real : type a. (((C.union_tag, C.ctype) cn_expr_) * _ Cn.cn_base_type) list -> ((C.union_tag) cn_pat list * (C.union_tag, C.ctype) cn_expr) list -> a dest -> a =
         fun vars cases d ->
-          let (bs, ss) = translate vars cases in
+          let (bs, ss) = translate 1 vars cases in
           match d with 
             | Assert -> ss
             | Return -> ss
             | AssignVar x -> failwith "TODO"
             | PassBack -> failwith "TODO"
-
       in 
 
       (* TODO: Make sure recursive pattern matches work now that we are using cnexprs and not vars  *)
