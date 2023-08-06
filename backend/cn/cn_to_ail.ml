@@ -276,40 +276,6 @@ let rec cn_to_ail_expr_aux
           | [] -> failwith "Empty patterns not allowed"
       in
 
-      let rec append_to_all elem bindings m = 
-        match bindings with 
-          | [] -> m
-          | b :: bs ->
-            let curr = PatternMap.find b m in
-            let m' = PatternMap.remove b m in
-            let m' = PatternMap.add b (curr @ [elem]) m' in 
-            append_to_all elem bs m'
-      in 
-
-      (* Used when no type information available (top-level call to translate) *)
-      let rec _split_into_groups cases m =
-          match cases with
-            | [] -> m
-            | ((lhs, rhs) as case) :: cases' -> 
-              let new_m = (match lhs with 
-                | CNExpr_cons (c_nm, _) :: _ -> (* Check if constructor already exists in split *)
-                  if (PatternMap.mem c_nm m) then 
-                    let curr = PatternMap.find c_nm m in
-                    let m' = PatternMap.remove c_nm m in
-                    PatternMap.add c_nm (curr @ [case]) m'
-                  else
-                    PatternMap.add c_nm [case] m
-                | CNExpr_var _ :: _ (* This case shouldn't occur because of call to simplify_leading_variable *)
-                | CNExpr_const CNConst_unit :: _ ->
-                    (* Everything should be a wildcard pattern after functions that have been called *)
-                    (* Above pattern maybe shouldn't exist? *)
-                    let (keys, vals) = List.split (PatternMap.bindings m) in
-                     append_to_all case keys m
-                | _ -> failwith "No other cases allowed on LHS of pattern match")
-              in
-              _split_into_groups cases' new_m
-      in
-
       let expand_record ids (ps, e) =
         match ps with
           | CNExpr_const CNConst_unit :: ps' ->
@@ -343,7 +309,6 @@ let rec cn_to_ail_expr_aux
       in
 
       (* TODO: Incorporate destination passing recursively into this. Might need PassBack throughout, like in cn_to_ail_expr_aux function *)
-      (* TODO: Add map of datatype constructors names to counts (to avoid repetition of variable names) *)
       (* Matrix algorithm for pattern compilation *)
       let rec translate : int -> (((C.union_tag, C.ctype) cn_expr_) * _ Cn.cn_base_type) list -> (((C.union_tag, C.ctype) cn_expr_) list * (C.union_tag, C.ctype) cn_expr) list -> (A.bindings list * (_ A.statement_) list) =
         fun count vars cases -> 
@@ -351,15 +316,18 @@ let rec cn_to_ail_expr_aux
             | [] ->
               (match cases with 
               | ([], e) :: rest -> 
-                (match d with 
-                | Assert -> 
-                  let rhs = cn_to_ail_expr_aux const_prop dts e Assert in
-                  ([], rhs)
-                | Return -> 
-                  let rhs = cn_to_ail_expr_aux const_prop dts e Return in
-                  ([], rhs)
-                | AssignVar x -> failwith "TODO"
-                | PassBack -> failwith "TODO")
+                let rhs = 
+                  (match d with 
+                    | Assert -> 
+                      cn_to_ail_expr_aux const_prop dts e Assert
+                    | Return -> 
+                      cn_to_ail_expr_aux const_prop dts e Return
+                    | AssignVar x -> 
+                      cn_to_ail_expr_aux const_prop dts e (AssignVar x)
+                    | PassBack -> 
+                      failwith "TODO")
+                in 
+                ([], rhs)
               | [] -> failwith "Incomplete pattern match"
               | ((_::_), e) :: rest -> assert false)
 
@@ -368,12 +336,9 @@ let rec cn_to_ail_expr_aux
               let cases = List.map (simplify_leading_variable v) cases in
 
               if List.for_all leading_wildcard cases then
-                (Printf.printf "All leading patterns are wildcards\n";
                 let cases = List.map (fun (ps, e) -> (List.tl ps, e)) cases in
-                if (List.length cases != 0) then
-                Printf.printf "Length of patterns: %d\n" (List.length (fst (List.hd cases)));
                 let (bindings', stats') = translate count vs cases in 
-                ([], stats'))
+                ([], stats')
               else
                 match tp with
                   | CN_record members_with_types ->
@@ -381,9 +346,7 @@ let rec cn_to_ail_expr_aux
                       let (ts, ids) = List.split members_with_types in
                       let vars' = List.map (fun id -> CNExpr_memberof (mk_cn_expr v, id)) ids in
                       let vs' = (List.combine vars' ts) @ vs in
-                      Printf.printf "Length of list vs': %d\n" (List.length vs');
                       let cases' = List.map (expand_record ids) cases in
-                      Printf.printf "Length of list cases': %d\n" (List.length cases');
                       translate count vs' cases'
 
                   | CN_datatype sym -> 
@@ -397,7 +360,6 @@ let rec cn_to_ail_expr_aux
                           let build_case (constr_sym, members_with_types) = 
                             let cases' = List.filter_map (expand_datatype constr_sym) cases in 
                             let record_tp = CN_record members_with_types in
-                            Printf.printf "Number of members in datatype: %d\n" (List.length members_with_types);
                             let suffix = "_" ^ (string_of_int count) in
                             let lc_sym = generate_sym_with_suffix ~suffix:"" ~lowercase:true constr_sym in 
                             let count_sym = generate_sym_with_suffix ~suffix ~lowercase:true constr_sym in 
@@ -433,8 +395,6 @@ let rec cn_to_ail_expr_aux
             | PassBack -> failwith "TODO"
       in 
 
-      (* TODO: Make sure recursive pattern matches work now that we are using cnexprs and not vars  *)
-      
       (* Hack before switching over to CN's internal AST *)
       let tree_sym = Sym.fresh_pretty "tree" in
       let es' = List.map (fun (lhs, rhs) -> ([rm_cn_expr lhs], rhs)) es in
