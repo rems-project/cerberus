@@ -47,10 +47,10 @@ type binop =
   | Subset
 [@@deriving eq, ord, show]
 
-type pattern = 
-  | PSym of Sym.t
-  | PWild
-  | PConstructor of Sym.t * (Id.t * pattern) list
+type 'bt pattern = 
+  | PSym of Sym.t * 'bt
+  | PWild of 'bt
+  | PConstructor of Sym.t * (Id.t * 'bt pattern) list
 [@@deriving eq, ord, map]
 
 (* over integers and reals *)
@@ -93,7 +93,7 @@ type 'bt term_ =
   | MapDef of (Sym.t * 'bt) * 'bt term
   | Apply of Sym.t * ('bt term) list
   | Let of (Sym.t * 'bt term) * 'bt term
-  | Match of 'bt term * (pattern * 'bt term) list
+  | Match of 'bt term * ('bt pattern * 'bt term) list
   | Cast of BaseTypes.t * 'bt term
 
 and 'bt term =
@@ -107,9 +107,9 @@ let compare = compare_term
 
 
 let rec pp_pattern = function
-  | PSym s -> 
+  | PSym (s, _bt) -> 
      Sym.pp s
-  | PWild -> 
+  | PWild _bt -> 
      underscore
   | PConstructor (c, args) ->
      Sym.pp c ^^^ 
