@@ -1648,6 +1648,7 @@ let collect_instrumentation (file : _ mu_file) =
   Pmap.fold (fun fn decl acc ->
       match decl with
       | M_Proc (fn_loc, args_and_body, _trusted, spec) ->
+         Printf.printf "Entered here\n";
          let stmts_s, stmts_i = stmts_in_function args_and_body in
          let surface = {
              accesses = spec.accesses;
@@ -1664,8 +1665,23 @@ let collect_instrumentation (file : _ mu_file) =
            }
          in
          { fn = fn; fn_loc = fn_loc; surface; internal } :: acc
-      | M_ProcDecl (_fn_loc, _ft) ->
-         failwith "todo: support function prototypes"
+      | M_ProcDecl (fn_loc, _fn) ->
+         (* let stmts_s, stmts_i = stmts_in_function args_and_body in *)
+         let surface = { 
+             accesses = [];
+             requires = [];
+             ensures = [];
+             statements = [];
+           }
+         in
+         (* let pre, post = pre_post_of_function args_and_body in *)
+         let internal = {
+             pre = M_L (M_I ());
+             post = Computational ((Sym.fresh_pretty "", Unit), (Cerb_location.unknown, None), I);
+             statements = [];
+           } 
+         in
+         { fn = fn; fn_loc = fn_loc; surface; internal } :: acc
     ) file.mu_funs []
    in
    (instrs, C.symtable)

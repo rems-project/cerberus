@@ -709,13 +709,18 @@ and pp_statement_aux ?(executable_spec=false) pp_annot ~bs (AnnotatedStatement (
         pp_comment "// empty decl"
     | AilSdeclaration defs ->
         comma_list (fun (id, e_opt) ->
-          begin match List.assoc_opt id bs with
-            | Some (_, align_opt, qs, ty) ->
-                pp_alignment_opt align_opt ^^
-                pp_ctype_declaration (pp_id_obj ~executable_spec id) qs ty
-            | None ->
-                !^ "BINDING_NO_FOUND"
-          end
+          let doc = 
+            if executable_spec then 
+              pp_id_obj ~executable_spec id 
+            else
+            (match List.assoc_opt id bs with
+              | Some (_, align_opt, qs, ty) ->
+                  pp_alignment_opt align_opt ^^
+                  pp_ctype_declaration ~executable_spec (pp_id_obj ~executable_spec id) qs ty
+              | None ->
+                  !^ "BINDING_NO_FOUND")
+          in
+          doc
           (*pp_id_obj id*) ^^ P.optional (fun e -> P.space ^^ P.equals ^^^ pp_expression_aux ~executable_spec pp_annot e) e_opt
         ) defs ^^
         P.semi
