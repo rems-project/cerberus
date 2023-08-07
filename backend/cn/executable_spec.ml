@@ -58,29 +58,15 @@ let generate_c_pres_and_posts (instrumentation : Core_to_mucore.instrumentation)
   in
   let pres = List.map (fun i -> generate_condition_str i None) instrumentation.surface.requires in
   let posts = List.map (fun i -> generate_condition_str i (Some arg_names)) instrumentation.surface.ensures in
-  (* let arg_strs = List.fold_left (^) "" arg_strs in *)
   [(instrumentation.fn, (arg_strs @ pres, posts))]
-  (* let function_identifiers = List.map fst function_definitions in *)
-  (* let _pres = List.map generate_c_pre instrumentation.requires in *)
-  (* [(instrumentation.fn, ("some precondition;\n", ""))] *)
-  
-  (* let posts = List.map generate_c_post instrumentation.ensures in *)
-  (* let pres_and_posts = List.combine pres posts in *)
-  (* print_string ((string_of_int (List.length pres_and_posts)) ^ "\n"); *)
-  (* print_string ((string_of_int (List.length function_identifiers)) ^ "\n"); *)
-  (* let pres_and_posts = List.combine function_identifiers pres_and_posts in *)
-  (* pres_and_posts *)
-  (* pres *)
-  (* [(instrumentation.fn, ("pre", "post"))] *)
+
 
 
 (* Core_to_mucore.instrumentation list -> executable_spec *)
 let generate_c_specs instrumentation_list type_map (ail_prog : _ CF.AilSyntax.sigma) =
-  (* let open Core_to_mucore in *)
   let generate_c_spec (instrumentation : Core_to_mucore.instrumentation) =
     let c_pres_and_posts = generate_c_pres_and_posts instrumentation type_map ail_prog in 
     let c_statements = generate_c_statements instrumentation.surface.statements ail_prog.cn_datatypes in
-    (* ([(Sym.fresh_pretty "main", ("int i_old = i;", ""))], generate_c_statements instrumentation.statements) *)
     (c_pres_and_posts, c_statements)
   in
   let specs = List.map generate_c_spec instrumentation_list in 
@@ -120,6 +106,4 @@ let generate_c_functions (ail_prog : CF.GenTypes.genTypeCategory CF.AilSyntax.si
   let (decls, defs) = List.split ail_funs in
   let modified_prog : CF.GenTypes.genTypeCategory CF.AilSyntax.sigma = {ail_prog with declarations = decls; function_definitions = defs} in
   let doc = CF.Pp_ail.pp_program ~executable_spec:true ~show_include:true (None, modified_prog) in
-  (* let docs = List.map (fun s -> CF.Pp_ail.pp_statement ~executable_spec:true s) ail_stats in  *)
   CF.Pp_utils.to_plain_pretty_string doc
-  (* (concat_map_newline docs) *)
